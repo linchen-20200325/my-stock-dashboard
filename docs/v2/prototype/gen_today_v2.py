@@ -1980,7 +1980,7 @@ FIND_LAYER_NOTE: Mapping[int, str] = {
        "這一點是總管 2026-09-16 推翻「結果表要留原始值欄」的決定性依據："
        "三語彙的載體在 n4，與 n3 的結果表**不同層、不同 block**。"
        "⭐ 本塊畫的是 #7 缺漏，那是客戶 2026-09-16 裁示的**現行落地態**，"
-       "以下為**引述**（含內部詞；依客戶 2026-09-22 裁示，層註可引述但須標明「引述」）："
+       "以下為**逐字引述**（含內部詞；依客戶 2026-09-22 裁示，層註可引述但須標明「引述」）："
        "「本益比兩種「沒有」：UI 層先誠實顯示「本機分不出，需 L1 補旗標」。"
        "L1 修改列為獨立任務，等 UI 全部做完再評估解凍。不要假裝做得到。」"
        "⛔ 在 D-08 修完之前不得把 PE≤0 與 NaN 畫成兩種不同符號（見缺口 F8）。",
@@ -3292,7 +3292,7 @@ INSPECT_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
     ),
     (
         "P4",
-        "🔴 **成本口徑（D-2）：本輪畫誠實擬稿版；畫面上⛔ 不得出現規格禁止的口徑宣稱。** "
+        "🔴 **成本口徑（引述：D-2）：本輪畫誠實擬稿版；畫面上⛔ 不得出現規格禁止的口徑宣稱。** "
         "★待拍板（落點）—— 規格既有的四個落點裡**沒有本頁**。",
         "總管拍板（理由逐字）：規格明文「⛔ 畫面不得寫『本系統採加權移動平均法』」"
         "（本條下文**引述**規格與線框的內部詞；依客戶 2026-09-22 裁示，"
@@ -3388,7 +3388,7 @@ INSPECT_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
     ),
     (
         "P9",
-        "⚠️ **線框 8 個 ★待拍板 旗標逐條登記**（本組 node 實測，⛔ 不是轉述）—— "
+        "⚠️ **線框 8 個 ★待拍板 旗標（此詞為引述線框用語）逐條登記**（本組 node 實測，⛔ 不是轉述）—— "
         "本輪**一條都沒有替客戶決定**。",
         "逐條（block ⇒ **引述**線框旗標逐字；依客戶 2026-09-22 裁示，"
         "附錄段引用內部詞須標明「引述」）："
@@ -3698,35 +3698,6 @@ HOLD_LAYER_LABEL: Mapping[int, str] = {
     4: "第四層 展開佐證",
 }
 
-#: 每個 block 所屬的葉 —— 線框 `layers[].blocks[].leaf`（本組 node 實測，逐塊抄下來）。
-#: 🔴 `n3` 的 13 塊裡有 7 塊在 `l1`、6 塊在 `l2`；`n0` 有兩塊是 `leaf: null`（葉外）。
-#: ⚠️ 本表與 `HOLD_LAYOUT` 是兩張手寫表，故 `main()` 另有一道 assert 釘住兩者 key 集合相同。
-_HOLD_BLOCK_LEAF: Mapping[str, str | None] = {
-    "hold.run_scope": None,
-    "hold.scope_note": None,
-    "hold.scale_disclosure": "l1",
-    "hold.cold_start_toc": "l1",
-    "hold.conclusion_cards": "l1",
-    "hold.alloc_deviation": "l1",
-    "hold.war_table": "l1",
-    "hold.swap_compare": "l1",
-    "hold.rebalance_deviation": "l1",
-    "hold.scenario_calc": "l1",
-    "hold.fx_pnl": "l1",
-    "hold.deep_analysis": "l1",
-    "hold.ai_summary": "l1",
-    "hold.setup": "l2",
-    "hold.binding": "l2",
-    "hold.portfolio_count": "l2",
-    "hold.setup.preview": "l2",
-    "hold.setup.pick_sheet": "l2",
-    "hold.setup.watchlist": "l2",
-    "hold.evi_cost": "l1",
-    "hold.evi_take_profit": "l1",
-    "hold.evi_target_pct": "l1",
-    "hold.evi_notready": "l1",
-}
-
 #: 兩葉的名字 —— 線框 `leaves[].name` 逐字（本組 node 實測）。
 HOLD_LEAF_NAME: Mapping[str, str] = {
     "l1": "戰情室（1️⃣~6️⃣ ＋ 80/20 配置偏離）",
@@ -3746,75 +3717,80 @@ HOLD_BADGES_NOT_ON_PAGE: frozenset[int] = frozenset(
 )
 
 #: 本頁的**版面定義**（五層 23 block）。`cols` ＝ `(桌機, 平板, 手機)`。
+#: 🔴 `leaf` ＝ 這一塊住在哪一葉（`None` ＝ 葉外 chrome）。**2026-09-22 併進本表** ——
+#:    它原本是另一張 23 筆的手寫表 `_HOLD_BLOCK_LEAF`（＝第二個真相源，違 CLAUDE.md §2.1），
+#:    而且**值寫錯既沒守衛也不顯形**（實證寫在 `_HOLD_BLOCK_LEAF` 上方）⇒ 併進來、由本表推導出去。
 #: 🔴 每一筆的 `src` 是**出處**，⛔ 不是註解：規格章節名 ＋ 線框 block key，全形｜分隔。
+#:    ⭐ `n3` 的 13 筆另在 `src` 裡帶「列 l1／l2 第 N 塊」的序位 —— `main()` ⑮-a2 拿它
+#:      **交叉檢查 `leaf` 欄**，讓「葉歸屬被改壞」當場變紅（本輪補上的那道守衛）。
 #:    ⛔ **不寫行號**（CLAUDE.md §8.2.A.0 規則 1）—— 規格原文大量帶 `:NNN`，本檔一律不抄。
 HOLD_LAYOUT: tuple[Mapping[str, object], ...] = (
     # ── n0 頁級常駐與入口（前兩塊 leaf: null ＝ 葉外，三塊全 1/1/1）──────────
-    {"block": "hold.run_scope", "n": 0, "cols": (1, 1, 1),
+    {"block": "hold.run_scope", "n": 0, "cols": (1, 1, 1), "leaf": None,
      "src": "UI_PAGE_HOLD ① 五層結構表「第○層」列 ＋ ① 按鈕段主 CTA 那一條"
             "＋ ⑤-G1（第 0 層整層）｜線框 hold.run_scope"},
-    {"block": "hold.scope_note", "n": 0, "cols": (1, 1, 1),
+    {"block": "hold.scope_note", "n": 0, "cols": (1, 1, 1), "leaf": None,
      "src": "UI_PAGE_HOLD ① 五層結構表「第○層」列 ＋ ⑥C 沒綁 Sheet 三態"
             "＋ ⑥C 第四種「這一輪沒讀你的持股」｜線框 hold.scope_note"},
-    {"block": "hold.scale_disclosure", "n": 0, "cols": (1, 1, 1),
+    {"block": "hold.scale_disclosure", "n": 0, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第○層」列 ＋ ① 第○層的兩個特別讀法 (b)"
             "｜線框 hold.scale_disclosure"},
     # ── n1 今日大白話結論（**只有一塊**；t1 是四階裡唯一 2px 框線）────────────
-    {"block": "hold.cold_start_toc", "n": 1, "cols": (1, 1, 1),
+    {"block": "hold.cold_start_toc", "n": 1, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第一層」列（逐字「**只有**這一塊」）"
             "｜線框 hold.cold_start_toc"},
     # ── n2 核心大卡片（兩塊，cols 各不相同）──────────────────────────────
-    {"block": "hold.conclusion_cards", "n": 2, "cols": (3, 2, 1),
+    {"block": "hold.conclusion_cards", "n": 2, "cols": (3, 2, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第二層」列 ＋ ⑧ 命名衝突（客戶 2026-09-16 裁示）"
             "｜線框 hold.conclusion_cards"},
-    {"block": "hold.alloc_deviation", "n": 2, "cols": (2, 1, 1),
+    {"block": "hold.alloc_deviation", "n": 2, "cols": (2, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第二層」列 ＋ ① ⑤-a 與 ⑤-b 並存分層那一段"
             "｜線框 hold.alloc_deviation"},
     # ── n3 葉1｜互動清單／大表（七塊）────────────────────────────────────
-    {"block": "hold.war_table", "n": 3, "cols": (3, 2, 1),
+    {"block": "hold.war_table", "n": 3, "cols": (3, 2, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 1 塊 ＋ ⑥A 燈牆與 VIX 各自判斷"
             "｜線框 hold.war_table"},
-    {"block": "hold.swap_compare", "n": 3, "cols": (1, 1, 1),
+    {"block": "hold.swap_compare", "n": 3, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 2 塊｜線框 hold.swap_compare"},
-    {"block": "hold.rebalance_deviation", "n": 3, "cols": (1, 1, 1),
+    {"block": "hold.rebalance_deviation", "n": 3, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 3 塊 ＋ ③ 三個「零」表"
             "＋ ④ D-3 八處落點表 ＋ ⑤-G2｜線框 hold.rebalance_deviation"},
-    {"block": "hold.scenario_calc", "n": 3, "cols": (1, 1, 1),
+    {"block": "hold.scenario_calc", "n": 3, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 4 塊 ＋ ③ 落地三則 (b) ＋ ⑤-G3"
             "｜線框 hold.scenario_calc"},
-    {"block": "hold.fx_pnl", "n": 3, "cols": (1, 1, 1),
+    {"block": "hold.fx_pnl", "n": 3, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 5 塊 ＋ ⑤-G4｜線框 hold.fx_pnl"},
-    {"block": "hold.deep_analysis", "n": 3, "cols": (3, 2, 1),
+    {"block": "hold.deep_analysis", "n": 3, "cols": (3, 2, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 6 塊 ＋ ⑤-G5｜線框 hold.deep_analysis"},
-    {"block": "hold.ai_summary", "n": 3, "cols": (1, 1, 1),
+    {"block": "hold.ai_summary", "n": 3, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 7 塊 ＋ ③ 落地三則 (c)"
             "｜線框 hold.ai_summary"},
     # ── n3 葉2｜組合設定（六塊）──────────────────────────────────────────
-    {"block": "hold.setup", "n": 3, "cols": (1, 1, 1),
+    {"block": "hold.setup", "n": 3, "cols": (1, 1, 1), "leaf": "l2",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 1 塊｜線框 hold.setup"},
-    {"block": "hold.binding", "n": 3, "cols": (2, 1, 1),
+    {"block": "hold.binding", "n": 3, "cols": (2, 1, 1), "leaf": "l2",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 2 塊 ＋ ⑥C 沒綁 Sheet"
             "｜線框 hold.binding"},
-    {"block": "hold.portfolio_count", "n": 3, "cols": (2, 1, 1),
+    {"block": "hold.portfolio_count", "n": 3, "cols": (2, 1, 1), "leaf": "l2",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 3 塊｜線框 hold.portfolio_count"},
-    {"block": "hold.setup.preview", "n": 3, "cols": (1, 1, 1),
+    {"block": "hold.setup.preview", "n": 3, "cols": (1, 1, 1), "leaf": "l2",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 4 塊 ＋ ④ D-3 落點 #7"
             "｜線框 hold.setup.preview"},
-    {"block": "hold.setup.pick_sheet", "n": 3, "cols": (2, 1, 1),
+    {"block": "hold.setup.pick_sheet", "n": 3, "cols": (2, 1, 1), "leaf": "l2",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 5 塊｜線框 hold.setup.pick_sheet"},
-    {"block": "hold.setup.watchlist", "n": 3, "cols": (2, 1, 1),
+    {"block": "hold.setup.watchlist", "n": 3, "cols": (2, 1, 1), "leaf": "l2",
      "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 6 塊｜線框 hold.setup.watchlist"},
     # ── n4 葉1｜展開佐證（四塊全 1/1/1；t4 是四階裡唯一 dashed）─────────────
-    {"block": "hold.evi_cost", "n": 4, "cols": (1, 1, 1),
+    {"block": "hold.evi_cost", "n": 4, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第四層」列 ＋ ⑦ 成本口徑（客戶 2026-09-16 裁示先不放）"
             "｜線框 hold.evi_cost"},
-    {"block": "hold.evi_take_profit", "n": 4, "cols": (1, 1, 1),
+    {"block": "hold.evi_take_profit", "n": 4, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第四層」列 ＋ ⑧ 末段達門檻那一條"
             "｜線框 hold.evi_take_profit"},
-    {"block": "hold.evi_target_pct", "n": 4, "cols": (1, 1, 1),
+    {"block": "hold.evi_target_pct", "n": 4, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第四層」列 ＋ ④ D-3 落點 #8（技術原因完整版）"
             "｜線框 hold.evi_target_pct"},
-    {"block": "hold.evi_notready", "n": 4, "cols": (1, 1, 1),
+    {"block": "hold.evi_notready", "n": 4, "cols": (1, 1, 1), "leaf": "l1",
      "src": "UI_PAGE_HOLD ① 五層結構表「第四層」列 ＋ ⑤-G6（N 計數器）"
             "｜線框 hold.evi_notready"},
 )
@@ -3825,6 +3801,22 @@ HOLD_BLOCK_COLS: Mapping[str, tuple[int, int, int]] = {
 }
 _HOLD_BLOCK_LAYER: Mapping[str, int] = {
     str(rec["block"]): int(rec["n"]) for rec in HOLD_LAYOUT        # type: ignore[arg-type]
+}
+#: 每個 block 所屬的葉 —— 線框 `layers[].blocks[].leaf`（本組 node 實測）。
+#: 🔴 **2026-09-22 改為由 `HOLD_LAYOUT` 推導，⛔ 不再是第二張手寫表**（CLAUDE.md §2.1 SSOT）。
+#:    **根因（獨立稽核實證，⛔ 不是理論風險）**：舊版把 `leaf` 寫成另一張 23 筆的手寫表，
+#:    而三道既有守衛沒有一道釘得住「**哪一塊屬於哪一葉**」——
+#:    `HOLD_LAYER_LEAF` 只印**每層去重後的葉**（`n3` 本來就同時有 l1/l2，互換被去重吃掉）、
+#:    `set(...) == set(...)` 只比 key、`_hold_leaf_count` 只比總量（互換不改總量）。
+#:    稽核組把 `hold.ai_summary`(l1) 與 `hold.setup`(l2) 的葉值**對調**後重跑，
+#:    **全部守衛仍然全綠、產物逐位元相同** ⇒ **葉歸屬寫錯既沒守衛、也不顯形。**
+#: ⚠️ **本次併入是消滅第二真相源，⛔ 不是行為變更**：23 筆 leaf 值**逐筆與併入前相同**
+#:    （併入腳本直接讀舊表填值；`main()` ⑮-a2 另加一道 `src` 出處交叉檢查釘住它）。
+#: ⚠️ **同病未修者**：「🔬 查一檔」頁的 `_INSPECT_BLOCK_LEAF` **仍是第二張手寫表** ——
+#:    本輪的檔案邊界只到 HOLD（CLAUDE.md §-1.5.A-2）⇒ **登記在缺口 H17，⛔ 本輪不動。**
+_HOLD_BLOCK_LEAF: Mapping[str, str | None] = {
+    str(rec["block"]): (None if rec["leaf"] is None else str(rec["leaf"]))
+    for rec in HOLD_LAYOUT
 }
 HOLD_LAYER_BLOCKS: Mapping[int, tuple[str, ...]] = {
     n: tuple(str(rec["block"]) for rec in HOLD_LAYOUT if int(rec["n"]) == n)  # type: ignore[arg-type]
@@ -4515,7 +4507,7 @@ def build_hold_cards() -> dict[str, list[dict]]:
 #: 🔴 **本頁本輪查到的規格衝突與未決項，逐條登記**（客戶要求 6 逐字：
 #:    「遇到規格衝突 → 就地標明、寫進附錄、⛔ 不自行裁決」）。
 #: ⚠️ **前綴 `H`**（Holdings）—— 本組實測 A-Z 逐字母比對：`H` 在產生器與產出 HTML **皆 0 命中**。
-#: ⚠️ **⛔ 不要把 `H1`~`H15` 與規格引用的外部編號混為一談**：本產生器的慣例是
+#: ⚠️ **⛔ 不要把 `H1`~`H17` 與規格引用的外部編號混為一談**：本產生器的慣例是
 #:    **自己的缺口編號⛔ 不帶連字號**（G1／W5／F17／P1／H1），
 #:    **引用外部編號一律帶連字號**（G-1／G-7／P-1／★-09）—— 兩者靠連字號區分。
 #: ⚠️ 依客戶 2026-09-22 裁示：附錄可引述卡面禁詞，但**必須標明「引述」**
@@ -4639,18 +4631,33 @@ HOLD_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
     (
         "H8",
         "🔴 **卡面禁詞守衛本輪擴大（客戶 2026-09-22 裁示）**：3 詞 → **5 詞 ＋ 一個中譯**；"
-        "但作用域**只到 INSPECT ＋ HOLD 兩頁的卡面** —— 擴到全頁會紅 **2 頁 2 卡 7 處**。",
+        "但作用域**只到 INSPECT ＋ HOLD 兩頁的卡面**。"
+        "⚠️ **另案要修的卡面違規共 2 頁 2 卡 7 處，其中現行禁詞表抓得到 6 處、第 7 處抓不到**"
+        "（兩個數字都對，回答的是不同問題，⛔ 不得簡化成單一數字 —— 口徑見下）。",
         "**客戶 2026-09-22 裁示逐字**：「卡面：⛔ 禁用內部詞（引述：`FIFO`／`加權移動平均`／"
         "`D-2`／`L1`／`旗標`）；附錄／缺口段：✅ 可引述，但**必須標明「引述」**」。"
         "／／**本輪落地**：守衛的禁詞由 3 個（引述：`加權移動平均`／`FIFO`／`先進先出`）擴成 "
         "**6 個**（再加引述：`D-2`／`L1`／`旗標`；`先進先出` 是 `FIFO` 的中譯，原本就在）；"
         "作用域 ＝ **「🔬 查一檔」頁卡面 ＋ 新的「💼 我的持股」頁卡面**。"
         "／／⚠️ **⛔ 不擴到全頁的理由（這一條是本輪的新發現，據實寫）**："
-        "前一組實測擴全頁會紅 **7 處** —— 「🔍 找標的」頁 `find.pe_two_kinds` **一張卡 6 處**"
-        "（引述：`L1` ×3 · `旗標` ×2 · 外部編號 1 處）＋ **「📖 憑什麼」頁 `why.edu.legacy` 的"
-        "一個 fact key（引述：「線框旗標」）1 處**。"
-        "🔴 **後者是本輪才被發現的** —— 客戶裁示「另案」時**只知道「🔍 找標的」那一處** "
-        "⇒ **另案的實際範圍是 2 頁 2 卡 7 處，⛔ 不是 1 頁 1 卡 6 處**。"
+        "🔴 **兩個數字都對，回答的是不同問題 —— ⛔ 不得簡化成單一數字**"
+        "（本條的用途就是替另案定範圍；寫成一個數字，下一輪就會照著錯的數字去找）。"
+        "／／**(甲) 另案要修的卡面違規共 7 處**"
+        "（問的是「**規格禁詞在卡面實際出現幾次**」）—— 「🔍 找標的」頁 `find.pe_two_kinds` "
+        "**一張卡 6 處**（引述：`L1` ×3 · `旗標` ×2 ＋ 外部編號 `D-08` ×1）"
+        "＋「📖 憑什麼」頁 `why.edu.legacy` 的一個 fact key（引述：「線框旗標」）**1 處**。"
+        "／／**(乙) 其中只有 6 處會被現行禁詞表抓到**"
+        "（問的是「**把作用域擴到五頁，守衛實際會紅在哪**」）—— 本組 2026-09-22 把 ⑭-h／⑮-h "
+        "那道守衛的作用域直接改成五頁實測：**禁詞出現 6 次**、**守衛回報 3 條 hit 條目**"
+        "（條目是「每張卡每個詞一條」，⛔ 不是出現次數 —— 兩個口徑都列，免得下一輪對不上帳）。"
+        "／／🔴 **第 7 處 ＝ 外部編號 `D-08`，現行守衛⛔ 抓不到它**：它違反的是 "
+        "`UI_PAGE_FIND.md` ⑤ 自己的禁詞條（該條逐字把「L1」「旗標」「`D-08`」並列為"
+        "⛔ 不得出現在使用者字面上的內部詞），但**不在**客戶 2026-09-22 點名的五個詞裡 "
+        "⇒ `_BANNED_ON_CARD_FACE` 六詞表沒有它（表內是 `D-2`，⛔ 不是 `D-08`）。"
+        "⇒ **另案若要連它一起收，必須先擴禁詞表**；"
+        "⛔ **要不要擴是客戶的決定，本輪⛔ 不自行擴表**（擴表會動到卡面守衛的射程，屬客戶點名過的那份清單本身）。"
+        "／／🔴 **「📖 憑什麼」頁那一處是後來才被發現的** —— 客戶裁示「另案」時"
+        "**只知道「🔍 找標的」那一處** ⇒ **另案的實際範圍是 2 頁 2 卡，⛔ 不是 1 頁 1 卡**。"
         "／／⇒ 本條登記那個差距；⛔ 本輪不動另外兩頁（改它們的卡面會動到前四頁的 body，"
         "超出「先建新頁、再改守衛、最後拆佔位」的本輪範圍）。"
         "／／⚠️ **本頁正是這條裁示最該守的地方**：成本口徑的那個外部編號"
@@ -4748,7 +4755,9 @@ HOLD_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
         "「**INV-8B 單組（線框面，未複驗，⛔ 不得當前提）**」。"
         "／／⭐ **規格自己記了一處重跑不一致**：`try` 的數量「INV-8A2 報 **14**、"
         "WN AST 實測 **13**」⇒ 規格逐字「據實並陳，**分類待判**」。"
-        "／／⚠️ **本產生器自己也一樣**：本頁的 23 筆版面、兩張手寫表（版面／葉）、狀態挑選、"
+        "／／⚠️ **本產生器自己也一樣**：本頁的 23 筆版面表"
+        "（**2026-09-22 起 `leaf` 已併進同一張表 ⇒ ⛔ 不再是兩張手寫表**，"
+        "理由與實證見 `HOLD_LAYOUT` 上方註解；⚠️ 但它仍然是**手抄自線框**、⛔ 沒有機器對帳，見缺口 H16）、狀態挑選、"
         "以及上列各條，都是**本組單組**的 node／import 實測 ＋ 判讀，**⛔ 未經第二組複驗**"
         "（CLAUDE.md §-2 規則 6）。⛔ 不得寫進 commit message 或 PR 描述當成已完成的事實。"
         "／／⚠️ **一條本組沒有查的**：規格 ① 說實作對照檔是 `render_page_hold()`，"
@@ -4771,7 +4780,19 @@ HOLD_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
         "**各多出「引述」二字**，⛔ 不是零變動 —— 本輪的 diff 因此**不是只有 P4／P5**；"
         "(2) 那三段是**本輪掃描才發現的**，派工單寫的是「P4／P5」，"
         "但同一句要求的是「**及所有引述禁詞的附錄／層註段**」⇒ 本輪照後者執行。"
-        "**⛔ 若總管認為只該改 P4／P5，本條即為撤銷依據。**",
+        "**⛔ 若總管認為只該改 P4／P5，本條即為撤銷依據。**"
+        "／／🔴 **2026-09-22 後續更正（獨立 QA 複驗後補；有意識的更正，⛔ 不是漏刪）**："
+        "上面寫的「逐段」，**當時的「段」＝ 一條缺口條目／一則層註**"
+        "（把 title ＋ detail **串起來**判）；但 `build_*_gaps_html()` 把 title 與 detail "
+        "**各畫成一個 `<p>`** ⇒ **畫面上的渲染單位是「段」，⛔ 不是「條目」**。"
+        "⇒ 那一輪**漏掉兩段**：「🔬 查一檔」頁 **P4 的 title**（引述：`D-2`）與"
+        "**同頁 P9 的 title**（引述：`旗標`）—— 兩段都含禁詞、「引述」二字卻只寫在 detail，"
+        "守衛因為先串接才判而**全綠**。"
+        "／／**本輪（VE 修正組）已做兩件事**：(1) 守衛改成**逐段判**（title 一段、detail 一段），"
+        "(2) 把那兩個 title 補上「引述」；另把 F8／P5／H8／H11 四條也用新守衛跑過，"
+        "**⛔ 沒有第三、第四段漏網**（本組實測；⚠️ 單組結論，⛔ 未經第二組複驗）。"
+        "／／⚠️ **上面那句「共 5 段」⛔ 不加刪除線** —— 在它自己的口徑下它是對的；"
+        "錯的是**口徑本身**（分析單位 ≠ 渲染單位），本段即該口徑的更正紀錄。",
     ),
     (
         "H15",
@@ -4787,6 +4808,57 @@ HOLD_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
         "**四段是舊版殘留，改掉**。」⇒ `hold.rebalance_deviation`／`hold.deep_analysis` "
         "兩塊一律照元件規格的三段制，與本頁其餘 21 塊同制。"
         "⚠️ 但**線框端仍寫四段** ⇒ **線框待同步**，⛔ 本輪不改線框。",
+    ),
+    (
+        "H16",
+        "🔴 **產生器與線框之間⛔ 沒有任何機器交叉檢查** —— `HOLD_LAYOUT` 的 23 筆 "
+        "`n`／`cols`／`leaf` 全部**手抄自**線框 `wf_page_hold.js`，而 `main()` 的守衛"
+        "只跟**產生器自己寫死的期望值**比對 ⇒ 線框日後改動，這裡**⛔ 不會紅**。",
+        "**(a) 現況 ＝ 手抄 ＋ 自證。** 本頁的版面定義（23 筆 `block／n／cols／leaf／src`）"
+        "與 `HOLD_LEAF_NAME` 都是人把線框 `docs/v2/wireframe/wf_page_hold.js` 的內容抄進"
+        "產生器的；而 `main()` 釘住它們的那幾道守衛，比對的對象是**產生器自己寫死的期望值**"
+        "（23 筆／層集合 `[0,1,2,3,4]`／葉外 2 · l1 15 · l2 6／欄數分布 1-1-1 共 15 · "
+        "2-1-1 共 5 · 3-2-1 共 3／每層的葉序列）。"
+        "⇒ **被比對的兩邊是同一個人抄的同一份東西** —— 守衛只能證明「產生器內部自洽」，"
+        "**⛔ 證明不了「它跟線框一致」**。"
+        "／／**(b) 後果（這一條真正的風險）**：**線框日後改動，產生器⛔ 不會紅，"
+        "只會安靜地畫一份跟線框不一致的版面。** 對照 CLAUDE.md §-2「沒查證的宣稱比沒有"
+        "宣稱更危險」—— 一份自陳「23 筆逐筆標出處」的版面表，**出處對不對⛔ 沒有任何"
+        "機器在管**。（同理：`leaf` 已於本輪併進 `HOLD_LAYOUT` 並補了三道守衛，"
+        "但那三道釘的仍是**產生器自己的 `src` 字串**，⛔ 不是線框本體。）"
+        "／／**(c) 已做過的人工複驗 —— ⛔ 不能當成守衛。** 獨立稽核組與本修正組**各自**"
+        "用 node 解析 `wf_page_hold.js`，逐項比對 23 筆的 `n`／`cols`／`leaf`，**0 筆不符**。"
+        "⚠️ 但那是**兩次一次性的手動比對**，⛔ 不是持續有效的守衛；**下一個人不見得會做**，"
+        "且依 §-2 規則 6 它終究只是**人工結論**，⛔ 不得被引用為「產生器與線框已經一致」。"
+        "／／**(d) 正解**：在 `main()` 加一道守衛 —— **用 node 解析線框、把 23 筆 "
+        "`block／n／cols／leaf` 讀回來，與 `HOLD_LAYOUT` 逐筆比對**（線框改了會紅、抄錯也會紅）。"
+        "／／**(e) ⛔ 本輪不做的理由（據實寫，⛔ 不是忘了）**："
+        "① **超出本輪範圍** —— 本輪要做的是「把這一頁做完 ＋ 收獨立 QA 找到的缺口」，"
+        "而跨語言的線框對帳是一個**新機制**，⛔ 不是這次任務的收尾（CLAUDE.md §-1 ＋ §-1.5.F 判定 3）；"
+        "② 它會**替這個純 Python 產生器引進 node 相依**（現在 `gen_today_v2.py` 只靠標準"
+        "函式庫 ＋ `src/ui_v2/`），那是**架構決定**，依 §8.1 應先做架構踩點，"
+        "⛔ 不該夾在一次缺口修正裡順手加。"
+        "／／⚠️ **本條的病⛔ 不只本頁** —— 五頁的 `*_LAYOUT` 都是同一招手抄，"
+        "本輪**只就本頁登記**；其餘四頁同病、**⛔ 未逐頁登記**（據實寫明，⛔ 不宣稱已涵蓋全站）。",
+    ),
+    (
+        "H17",
+        "⚠️ **「🔬 查一檔」頁的 `_INSPECT_BLOCK_LEAF` 仍是第二張手寫表** —— "
+        "與本頁本輪修掉的那個病**完全相同**，但⛔ 不在本輪的檔案邊界內 ⇒ **登記，不動**。",
+        "**現況**：本頁（💼 我的持股）的 `leaf` 已於 2026-09-22 併進 `HOLD_LAYOUT`，"
+        "第二張手寫表消滅，並補上三道葉歸屬守衛（`src` 出處交叉檢查／葉⇄層／每層葉序列）。"
+        "**但「🔬 查一檔」頁的 `_INSPECT_BLOCK_LEAF` 一模一樣的病還在**："
+        "它與 `INSPECT_LAYOUT` 是兩張手寫表，而 `main()` 對它的守衛同樣只有"
+        "「key 集合相同」與「`INSPECT_LAYER_LEAF` 去重後的葉」"
+        "⇒ **把兩塊的葉值對調，很可能一樣不會紅。**"
+        "／／⚠️ **「很可能」三個字是刻意的** —— 本組**⛔ 沒有實測**那一頁的對調突變"
+        "（本輪的檔案邊界不含它，要實測就得先改它）。依 CLAUDE.md §-2 規則 6，"
+        "這是**待驗事項**，⛔ 不得被引用為「INSPECT 那一頁也一定不會紅」。"
+        "／／**⛔ 本輪不動的理由**：CLAUDE.md §-1.5.A-2 —— 「內部自修」是**修這次弄到的東西**，"
+        "⛔ 不是趁機清全 repo；INSPECT 那張表在本輪動手前就已經是這樣，"
+        "屬「**登記，不動**」那一類（§-1 動工閘門未觸發）。"
+        "／／**修法（與本頁同）**：把 `leaf` 併進 `INSPECT_LAYOUT` 的每一筆、"
+        "`_INSPECT_BLOCK_LEAF` 改由它推導，並補上等價的葉歸屬守衛。",
     ),
 )
 
@@ -4869,7 +4941,7 @@ def build_hold_html() -> str:
             "「💼 我的持股」頁 ＝ **五層 23 block、兩葉**（n0~n4；⛔ 沒有 n5）。\n"
             "⛔ 本頁的版面定義住在產生器的 `HOLD_LAYOUT`，**不在** `src/ui_v2/` 契約層、\n"
             "  **沒有** `tests/ui_v2/` 的測試守護 —— 同前三頁的作法（客戶拍板的選項 1），\n"
-            "  後果已就地揭露在本頁最上方與附錄 H1~H15。\n"
+            "  後果已就地揭露在本頁最上方與附錄 H1~H17。\n"
             "⭐ 標記怎麼來的：產生期間把 `markup.page_today` **暫時**換成本頁的版面契約，\n"
             "  卡片與網格仍由 `markup.card_html` / `grid_html` 產出；產完**立刻還原**。\n"
             "🔴 **本頁是五頁中買賣建議風險最高的一頁**（規格前言逐字）⇒ 規格 ③ 的三條硬禁令\n"
@@ -4922,10 +4994,15 @@ _ALL_GAPS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
 #: ⚠️ `先進先出` 是 `FIFO` 的中譯，**本來就在舊的三詞清單裡，本輪保留** ——
 #:    客戶列的五個詞是**內部詞的例示**，⛔ 不是「把中譯放行」。
 #: 🔴 **作用域（本輪）＝「🔬 查一檔」＋「💼 我的持股」兩頁的卡面。**
-#:    ⛔ **刻意不擴到全頁** —— 實測擴全頁會紅 **2 頁 2 卡 7 處**
+#:    ⛔ **刻意不擴到全頁** —— 另案要修的卡面違規共 **2 頁 2 卡 7 處**
 #:    （「🔍 找標的」頁 `find.pe_two_kinds` 一張卡 6 處 ＋「📖 憑什麼」頁
-#:      `why.edu.legacy` 的一個 fact key 1 處）；客戶裁示「另案」時只知道前者
-#:    ⇒ 另案的實際範圍已登記在 HOLD 缺口 **H8**。
+#:      `why.edu.legacy` 的一個 fact key 1 處）。
+#: 🔴 **但本表只抓得到其中 6 處，⛔ 不是 7 處** —— 第 7 處是外部編號 `D-08`：
+#:    它違反 `UI_PAGE_FIND.md` ⑤ 自己的禁詞條（該條把「L1」「旗標」「`D-08`」並列），
+#:    但**不在**客戶點名的五個詞裡 ⇒ **本表沒有它**（表內是 `D-2`，⛔ 不是 `D-08`）。
+#:    ⛔ **要不要把 `D-08` 收進本表是客戶的決定，本輪⛔ 不自行擴表。**
+#:    客戶裁示「另案」時只知道「🔍 找標的」那一處
+#:    ⇒ 另案的完整範圍與上述**兩個數字的口徑差異**已登記在 HOLD 缺口 **H8**。
 #: ⚠️ 這份清單**同時**被「附錄／層註必須標明『引述』」那道守衛使用 ——
 #:    同一組詞、**兩種處置**：卡面全禁／附錄可引述但要標明。
 _BANNED_ON_CARD_FACE: tuple[str, ...] = (
@@ -5284,11 +5361,18 @@ def build_header_comment(meta: Mapping[str, str]) -> str:
         "         —— 登記在附錄 H2。",
         "       · ⛔ **一個真時間都沒有填**：線框 23 塊的 asOf 欄全是 null ⇒ 連線框",
         "         hold.scope_note.live 那個帶時間戳的態都**整態不畫**（附錄 H5）。",
-        "       · 本輪查到的規格衝突與未決項共 15 條，逐條畫在該頁附錄（H1~H15）。",
+        "       · 本輪查到的規格衝突與未決項共 17 條，逐條畫在該頁附錄（H1~H17）。",
+        "         ⚠️ H16／H17 是獨立 QA 複驗後補登的兩條「守衛承重不足」：",
+        "            H16 ＝ 產生器與線框之間沒有機器交叉檢查（手抄 ＋ 自證）；",
+        "            H17 ＝「🔬 查一檔」頁的葉表仍是第二張手寫表（本頁的已於",
+        "            本輪併進 HOLD_LAYOUT 並補三道葉歸屬守衛）。",
         "    12. 卡面禁詞守衛（客戶 2026-09-22 裁示）：卡面⛔ 禁用內部詞（6 詞），",
         "        附錄／缺口段可引述但**必須標明「引述」**；兩側各有一道機器守衛。",
         "        ⚠️ 卡面那一側本輪的作用域 ＝ 🔬 查一檔 ＋ 💼 我的持股 兩頁，",
-        "           擴到全頁會紅 2 頁 2 卡 7 處 ⇒ 另案範圍登記在附錄 H8。",
+        "           另案要修的卡面違規共 2 頁 2 卡 7 處，其中現行禁詞表抓得到 6 處；",
+        "           第 7 處是外部編號 D-08 —— 它違反 UI_PAGE_FIND 自己的禁詞條，",
+        "           但不在客戶點名的五個詞裡 ⇒ 本表沒有它、守衛抓不到。要不要擴表",
+        "           收它是客戶的決定 ⇒ 完整範圍與兩個數字的口徑差異登記在附錄 H8。",
         "",
         "⚠️ 例外揭露（依 CLAUDE.md §3.3 反捏造，據實記錄）：",
         "    body 的 font-family 用的是通用系統字堆疊，**沒有契約出處** ——",
@@ -5615,12 +5699,21 @@ def main() -> None:
     #    ⑥-b ⭐ 客戶 2026-09-22 裁示（附錄可引述禁詞，**但必須標明「引述」**）的守衛。
     #         ⚠️ 作用域 ＝ **缺口條目 ＋ 層註**（＝「內部揭露」那一側）；
     #            **卡面**那一側是**全面禁止**，由 ⑭-h／⑮-h 兩道逐張卡的守衛管，⛔ 不是這一道。
+    #         🔴 **2026-09-22 加嚴：分析單位改成「逐段」，⛔ 不再把 title ＋ detail 串起來判。**
+    #            根因（獨立稽核實測）：`build_*_gaps_html()` 把 title 與 detail
+    #            **各畫成一個 `<p>`** ⇒ **渲染單位是「段」**。舊寫法把兩段串起來判，
+    #            只要「引述」二字寫在 detail，title 那一段引了禁詞也會全綠 ——
+    #            **分析單位 ≠ 渲染單位**，畫面上真的有兩段（INSPECT `P4`／`P9` 的 title）
+    #            引了禁詞而沒標「引述」，而守衛全綠。
+    #            ⚠️ 這是**加嚴、⛔ 不是弱化**：舊寫法抓得到的，新寫法一條都不會漏 ——
+    #               串接版判紅 ⇒ 含禁詞的那一段必然也沒有「引述」⇒ 逐段版也判紅；反之不然。
     _quote_offenders: list[str] = []
     for _group_name, _group in _ALL_GAPS:
         for _gid, _gtitle, _gdetail in _group:
-            _text = _gtitle + _gdetail
-            if any(_w in _text for _w in _BANNED_ON_CARD_FACE) and "引述" not in _text:
-                _quote_offenders.append(f"{_group_name} {_gid}")
+            for _seg_name, _seg in (("title", _gtitle), ("detail", _gdetail)):
+                if (any(_w in _seg for _w in _BANNED_ON_CARD_FACE)
+                        and "引述" not in _seg):
+                    _quote_offenders.append(f"{_group_name} {_gid} 的 {_seg_name} 段")
     for _note_name, _notes in (("WHY_LAYER_NOTE", WHY_LAYER_NOTE),
                                ("FIND_LAYER_NOTE", FIND_LAYER_NOTE),
                                ("INSPECT_LAYER_NOTE", INSPECT_LAYER_NOTE),
@@ -6000,7 +6093,10 @@ def main() -> None:
     #    ⚠️ **本頁⛔ 沒有 n5**（規格 ① 標題逐字「五層 23 block」）—— 這一行就是那件事的守衛。
     #       ⚠️ 客戶派工單寫的是「六層」⇒ 差異已登記在缺口 H3，**本輪照規格畫五層**。
     assert 5 not in HOLD_LAYER_BLOCKS, "本頁竟然長出 n5 —— 規格與線框實測都是 5 層 n0~n4"
-    #    ⚠️ 兩張手寫表（版面／葉）的 key 集合必須一致，⛔ 不讓其中一張漏一塊而沒人發現。
+    #    ⚠️ ~~兩張手寫表（版面／葉）的 key 集合必須一致~~ —— **2026-09-22 起 `leaf` 已併進
+    #       `HOLD_LAYOUT`（修 4），這道 assert 因此變成恆真。⛔ 刻意保留、不刪**：
+    #       (a) 拿掉一道守衛就是弱化；(b) 它仍然釘住「`_HOLD_BLOCK_LEAF` 是從 `HOLD_LAYOUT`
+    #       推導的」這件事 —— 哪天有人把推導式改回別的來源，它會立刻再度有意義。
     assert set(_HOLD_BLOCK_LEAF) == set(HOLD_BLOCK_COLS), (
         "_HOLD_BLOCK_LEAF 與 HOLD_LAYOUT 的 block 不一致："
         f"{sorted(set(_HOLD_BLOCK_LEAF) ^ set(HOLD_BLOCK_COLS))}")
@@ -6009,6 +6105,43 @@ def main() -> None:
                         for lf in (None, "l1", "l2")}
     assert _hold_leaf_count == {None: 2, "l1": 15, "l2": 6}, _hold_leaf_count
     assert sorted(HOLD_LEAF_NAME) == ["l1", "l2"], sorted(HOLD_LEAF_NAME)
+    #    ⑮-a2 ⭐ **本輪新增的三道葉歸屬守衛**（修的是「葉值寫錯既沒守衛、也不顯形」）。
+    #         🔴 **為什麼需要它們（獨立稽核實證，⛔ 不是理論風險）**：把 `hold.ai_summary`(l1)
+    #            與 `hold.setup`(l2) 的葉值**對調**後重跑，**舊版全部守衛仍然全綠、
+    #            產物逐位元相同** —— 上面那三道一道都攔不到：`HOLD_LAYER_LEAF` 只印每層
+    #            **去重後**的葉（n3 本來就同時有 l1/l2，互換被去重吃掉）、`set(...)==set(...)`
+    #            只比 key、`_hold_leaf_count` 只比總量（互換不改總量）。下面三道就是那道缺口的防線。
+    #      (1) `src` ⇄ `leaf` 交叉檢查：n3 的 13 筆 `src` 都帶「列 l1／l2 第 N 塊」的
+    #          **出處序位**（抄自規格 ① 五層結構表）⇒ 葉欄與自己的出處字串必須對得上。
+    #          ⚠️ 這**⛔ 不是**新的第二張表：`src` 本來就在同一筆紀錄裡，是這一塊的出處。
+    #          ⚠️ 只覆蓋 n3 的 13 筆（另外 10 筆的規格出處本來就沒有葉序位，⛔ 不自行補造）
+    #             ⇒ 剩下的由 (2)(3) 兩道接手；完整解法（拿 node 解析線框比對）見缺口 H16。
+    _leaf_src_bad: list[str] = []
+    _leaf_ordinals: dict[str, list[int]] = {}
+    for _rec in HOLD_LAYOUT:
+        _m = re.search(r"列 (l[12]) 第 (\d+) 塊", str(_rec["src"]))
+        if _m is None:
+            continue
+        if _m.group(1) != _rec["leaf"]:
+            _leaf_src_bad.append(
+                f"{_rec['block']}：leaf={_rec['leaf']!r} 但 src 的出處序位寫 {_m.group(1)}")
+        _leaf_ordinals.setdefault(_m.group(1), []).append(int(_m.group(2)))
+    assert not _leaf_src_bad, (
+        f"葉歸屬與 src 出處對不上：{_leaf_src_bad} —— "
+        "`leaf` 欄與 `src` 的「列 lN 第 M 塊」抄自同一張規格表，⛔ 不得互相矛盾")
+    assert _leaf_ordinals == {"l1": [1, 2, 3, 4, 5, 6, 7], "l2": [1, 2, 3, 4, 5, 6]}, (
+        f"n3 兩葉的出處序位不連續、少一塊或順序錯了：{_leaf_ordinals}")
+    #      (2) 葉 ⇄ 層：`l2`（組合設定）**只存在於 n3**、葉外（`None`）**只存在於 n0**。
+    #          （本組 node 直接解析線框 `wf_page_hold.js` 的 23 筆 leaf 複驗過這件事。）
+    _leaf_layers: dict[object, set[int]] = {}
+    for _rec in HOLD_LAYOUT:
+        _leaf_layers.setdefault(_rec["leaf"], set()).add(int(_rec["n"]))  # type: ignore[arg-type]
+    assert _leaf_layers == {None: {0}, "l1": {0, 1, 2, 3, 4}, "l2": {3}}, _leaf_layers
+    #      (3) 每層的葉序列**逐層釘死**（⛔ 不是只比去重後的集合有哪些葉）——
+    #          `n0` 的 `(None, "l1")` **順序**也被釘住，葉外那兩塊被換位置一樣會紅。
+    assert dict(HOLD_LAYER_LEAF) == {
+        0: (None, "l1"), 1: ("l1",), 2: ("l1",), 3: ("l1", "l2"), 4: ("l1",)}, (
+        f"每層的葉序列不對：{dict(HOLD_LAYER_LEAF)}")
     for _rec in HOLD_LAYOUT:
         _block = str(_rec["block"])
         _cols = tuple(_rec["cols"])                       # type: ignore[arg-type]
