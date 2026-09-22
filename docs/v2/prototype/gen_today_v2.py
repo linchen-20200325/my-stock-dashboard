@@ -356,23 +356,28 @@ NAV_WHY_SIDEBAR = (
 #: 側欄內那一行短註（⛔ 放長句會把側欄那一欄的 min-content 撐寬）。
 NAV_WHY_SHORT = "⛔ 刻意不做頂部分頁列"
 
-#: 其餘**三**頁的佔位逐字。
-#: ⚠️ **2026-09-22 更新：原句寫「本原型只做了『🚦 今天』」，自本日起不成立** ——
+#: 其餘**兩**頁的佔位逐字。
+#: ⚠️ **2026-09-22 更新（第一次）：原句寫「本原型只做了『🚦 今天』」，自本日起不成立** ——
 #:    客戶同日拍板加做「📖 憑什麼」頁（六層 22 block），佔位頁因此從四頁減為三頁。
-#:    **有意識的更正、⛔ 不是漏刪**；⛔ 這是**事實更正**，不是政策變更 ——
+#: ⚠️ **2026-09-22 更新（第二次，同日）：「兩頁／三頁」自本輪起同樣不成立** ——
+#:    客戶同日再拍板加做「🔍 找標的」頁（六層 14 block），佔位頁因此從三頁再減為**兩頁**
+#:    （客戶逐字：「5. 其他兩頁（查一檔、我的持股）仍顯示「此頁待做」」）。
+#:    **有意識的更正、⛔ 不是漏刪**；⛔ 這兩次都是**事實更正**，不是政策變更 ——
 #:    「⛔ 不讓五頁切換假裝五頁都已完成」那句理由**一個字都沒有被弱化**。
-#:    舊句加刪除線保留於下方 `TODO_BODY_SUPERSEDED`。
+#:    兩次的舊句都加刪除線保留於下方 `TODO_BODY_SUPERSEDED`。
 TODO_HEADLINE = "此頁待做"
 TODO_BODY = (
-    "本原型目前做了「{today}」與「{why}」兩頁。這一頁還沒有任何實作，"
+    "本原型目前做了「{today}」、「{why}」與「{find}」三頁。這一頁還沒有任何實作，"
     "⛔ 不是壞掉、⛔ 也不是載入失敗 —— 畫這塊佔位，是為了不讓五頁切換假裝五頁都已完成"
     "（對照 CLAUDE.md §1：錯誤的數字比沒有數字更危險）。"
 )
-#: 舊句（2026-09-22 之前），加刪除線保留 —— ⛔ 不是漏刪；決策者：客戶。
+#: 歷代舊句，加刪除線保留 —— ⛔ 不是漏刪；決策者：客戶；日期 2026-09-22。
 TODO_BODY_SUPERSEDED = (
     "~~本原型只做了「🚦 今天」。~~"
     "／／舊句在它寫下的當天是對的（那時確實只有一頁）；"
     "被權衡掉的⛔ 不是它的推理，是它的前提（「只有一頁」）。"
+    "　~~本原型目前做了「🚦 今天」與「📖 憑什麼」兩頁。~~"
+    "／／同理：同日再加了「🔍 找標的」，前提（「只有兩頁」）再次過期，推理仍然成立。"
 )
 
 
@@ -665,8 +670,29 @@ _LAYER_NOTE = {
        "同一個 cols 語意問題在 today.statusbar 上的反例已拆為 U-2，仍未判定）。"
        "⚠️ 但 .g-3-2-1 還在用：today.detail（第四層）的 BLOCK_COLS 仍是 3/2/1。"
        "本原型照現行程式碼原樣渲染，⛔ 不代為裁決任何還沒被裁示的項目。",
-    3: "主 CTA 全站唯一一顆，標籤逐字取 page_today.MAIN_CTA['label']；"
-       "可按性取 main_cta_state()。⚠️ 本頁是靜態原型，按下去不會有任何事發生。",
+    # ── 主 CTA 的範圍詞：2026-09-22 由「全站唯一」改為「每頁首屏唯一」──────────
+    # ⚠️ **有意識的政策變更，⛔ 不是漏刪；日期 2026-09-22；決策者：客戶。**
+    # 客戶拍板逐字：「【拍板 2：主 CTA】不是「全站唯一」，是「**每頁首屏唯一**」。」
+    # **舊句加刪除線保留（⛔ 不是漏刪）**：
+    #   ~~"主 CTA 全站唯一一顆，標籤逐字取 page_today.MAIN_CTA['label']；"~~
+    # **兩邊理由並陳**：
+    # ① **舊說法在它寫下的當天是對的（⛔ 不是寫錯）**：本原型當時只有「🚦 今天」一頁，
+    #    「全站唯一」與「每頁首屏唯一」在**只有一頁**時**外延完全相同** ——
+    #    那時兩種寫法指到同一顆鈕，看不出差別，選較強的那個寫法並不造成任何錯誤。
+    # ② **被權衡掉的原因**：五頁逐頁落地之後，「🔍 找標的」有**自己的**主 CTA
+    #    「🎯 開始選股」（線框 `mainCTA.label` 逐字）⇒「全站唯一」變成一句**可以被
+    #    當場否證的假話**，而畫面上寫假話正是 CLAUDE.md §1 要防的那一型。
+    #    範圍詞從「站」收到「頁的首屏」之後，**規則本身沒有被放寬** ——
+    #    每一頁仍然只准有一顆、且必須在預設葉（S2-UI_SPEC.md 的 L0-3）。
+    # ⚠️ **本輪只改得到產生器裡的這 2 處**（本處 ＋ today.actions 卡的 facts）。
+    #    `src/ui_v2/page_today.py`（2 處）與 `docs/v2/spec/UI_COMPONENTS.md` §3
+    #    **不在本組的檔案邊界內**，由另一組同步 ⇒ ⛔ 不得宣稱「已全部同步」。
+    #    四個落點的完整登記見 `FIND_SPEC_GAPS` 的 F1。
+    3: "主 CTA 每頁首屏唯一一顆，標籤逐字取 page_today.MAIN_CTA['label']；"
+       "可按性取 main_cta_state()。⚠️ 本頁是靜態原型，按下去不會有任何事發生。"
+       "⚠️ 範圍詞 2026-09-22 由「全站唯一」改為「每頁首屏唯一」（客戶拍板）——"
+       "「🔍 找標的」頁有自己的主 CTA「🎯 開始選股」，"
+       "「全站唯一」自那一頁落地起就是一句可被否證的假話。",
     4: "t4 是四階裡唯一 dashed 的一階。today.detail 放了 4 張卡、而它的網格是 3 欄 ⇒ "
        "第 4 張換行排下一列（cols ＝ 一列幾格，⛔ 不是加欄）。"
        "這 4 張卡的標題直接取自 components.BADGES 的 name —— "
@@ -778,7 +804,11 @@ def build_cards() -> dict[str, list[dict]]:
         "today.actions": [
             {"state": "live", "title": "today.actions", "value": None, "level": None,
              "badge_n": rb(state="live"),
-             "facts": (("主 CTA", "全站唯一一顆"),
+             # ⚠️ 2026-09-22 客戶拍板：範圍詞由「全站唯一」→「每頁首屏唯一」。
+             #    **有意識的政策變更，⛔ 不是漏刪**；舊值加刪除線保留：
+             #    ~~("主 CTA", "全站唯一一顆")~~
+             #    兩邊理由並陳與四個落點見 `_LAYER_NOTE[3]` 上方註解 ＋ `FIND_SPEC_GAPS` F1。
+             "facts": (("主 CTA", "每頁首屏唯一一顆"),
                        ("停用條件", page_today.MISS_CONTRACT_DRIFT))},
         ],
         "today.warroom": [
@@ -1614,6 +1644,847 @@ def build_why_html() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 4.7 「🔍 找標的」頁 —— 版面定義寫在產生器（沿用 4.6 的「選項 1」作法）
+#
+# 🔴 **客戶 2026-09-22 拍板逐字（本節就是這三條的落地）**：
+#    「【拍板 1：CSS 走 (甲)】在產生器補 `.g-3-3-1` 與 `.g-2-1-1` 兩條 rule。
+#      值用 `components.resolve_cols()` ＋ `BREAKPOINTS` 算。就地揭露「規則形狀複製了一份」。」
+#    「【拍板 2：主 CTA】不是「全站唯一」，是「每頁首屏唯一」。
+#      FIND 的「🎯 開始選股」就是它的每頁唯一主 CTA。」
+#    「2. 6 層 14 block　3. 元件全部從 `src/ui_v2/` 生成　4. 側欄切到「🔍 找標的」可顯示
+#      5. 其他兩頁（查一檔、我的持股）仍顯示「此頁待做」
+#      6. 遇到規格衝突 → 就地標明、寫進附錄、⛔ 不自行裁決」
+#
+# 🔴 **⛔ 不發明 block、⛔ 不發明 cols。** 14 筆每一筆都在 `src` 欄標出處
+#    （規格**章節名** ＋ 線框 **block key**；依 CLAUDE.md §8.2.A.0 規則 1 **⛔ 不寫行號**）。
+#
+# 📌 **兩個來源**（本組各自 node／import 實跑過，⛔ 非讀他組轉述）：
+#    · 規格 `docs/v2/spec/UI_PAGE_FIND.md`（六節 ①~⑥）
+#    · 線框 `docs/v2/wireframe/wf_page_find.js` 的 `id:"find"`
+#      —— block 巢在 `layers[].blocks[]`，本組 node 實測 **6 層 14 block 2 葉**，
+#      `cols` 全集 **4 種**：`1/1/1` 10 塊、`3/2/1` 1 塊、`3/3/1` 1 塊、`2/1/1` 2 塊。
+# ══════════════════════════════════════════════════════════════════
+
+#: 就地揭露的**那一句**（同 `WHY_LAYOUT_DISCLOSURE`：版面不在契約層、無測試守護）。
+FIND_LAYOUT_DISCLOSURE = (
+    "⚠️ 此頁版面定義在產生器內，未進 src/ui_v2/ 契約層、無 tests/ui_v2/ 測試守護。"
+)
+
+#: 上面那句的**後果**（⛔ 不是免責套話，是可查證的差別）。
+FIND_LAYOUT_DISCLOSURE_WHY = (
+    "差別在哪：「🚦 今天」頁的版面（哪個 block 在第幾層、幾欄、哪一階密度）住在 "
+    "src/ui_v2/page_today.py，改壞了 tests/ui_v2/ 會紅燈；本頁的同一組資料住在 "
+    "docs/v2/prototype/gen_today_v2.py 的 FIND_LAYOUT，改壞了⛔ 沒有任何測試會攔。"
+    "⇒ 本頁的版面只有「跟規格與線框對照」這一種查法，⛔ 沒有機器守衛。"
+    "本產生器在結尾自己跑了一輪對照（14 個 block key／層／欄數 class／密度 class 逐一比對，"
+    "另從 CSS 文字量三個斷點的實際欄數），但那是**同一組人寫的自驗**，⛔ 不等於獨立測試。"
+)
+
+#: ⭐ **本頁比「📖 憑什麼」頁多一個缺口**：它用到兩組契約層**沒有產 CSS** 的欄數。
+FIND_GRID_CSS_DISCLOSURE = (
+    "⚠️ 本頁有兩條欄數規則（.g-3-3-1 與 .g-2-1-1）是**產生器自己補的**，⛔ 不在 src/ui_v2/ 契約層。"
+    "非補不可的理由（實測，⛔ 非推測）：markup.page_css() 只產「page_today.BLOCK_COLS 裡真的出現過」"
+    "的欄數 class，而那份查表只有 1/1/1 與 3/2/1 兩種；markup._BLOCK_COLS_USED 是 module-level、"
+    "import 當下就依 page_today 算好了，本頁的代理換不動它。"
+    "而 markup.grid_html() 對「沒有對應 CSS 的欄數」**不報錯**，會照樣吐出 g-3-3-1 這個 class，"
+    "偏偏 .grd 基準規則裡**沒有** grid-template-columns ⇒ 那 3 塊會**靜默塌成單欄**、三個斷點長得一樣。"
+    "這與 .bdg-10「畫得出來但沒有配色」是**同一型的靜默失效**（CLAUDE.md §1 最危險的那一型："
+    "看起來成功、其實是假的）。"
+)
+
+#: 🔴 客戶明示的「就地揭露」那一句 —— **規則的形狀被複製了一份 ⇒ 第二個真相源**。
+FIND_GRID_CSS_DISCLOSURE_WHY = (
+    "🔴 就地揭露（客戶 2026-09-22 拍板 1 明示⛔ 不得省）：**規則的「形狀」被複製了一份，"
+    "這是第二個真相源。** 補的那兩條裡，**數字沒有第二份** —— 欄數一律用公開 API "
+    "components.resolve_cols(cols, components.BREAKPOINTS[…]) 算、斷點值一律取 "
+    "components.BREAKPOINTS，⛔ 沒有寫死 3／2／1／640／880 任何一個。"
+    "被複製的是**形狀**三件事：class 怎麼命名（g-桌-平-手）、宣告怎麼寫"
+    "（grid-template-columns:repeat(N,minmax(0,1fr))）、兩個 @media 的順序（先 880 後 640，"
+    "因為 640 也命中 max-width:880px）。這三件事住在 markup._grid_rules() 與 "
+    "markup._breakpoint_rules()，**是底線開頭的私有函式** ⇒ ⛔ 不得直接呼叫"
+    "（本 repo 登記在案的違憲 V-PICKER-PRIV-1 就是跨層直取私有符號）。"
+    "⇒ **後果**：markup 日後若改了 class 命名或宣告寫法，本檔**不會跟著改，而且沒有任何測試會攔**。"
+    "**真正的解**是把這兩組 cols 放進契約層、讓 page_css() 自己產，那要動 src/ui_v2/ "
+    "⇒ ⛔ 不在本輪授權範圍。本產生器結尾有一道守衛：從產出的 CSS 文字用 regex 量三個斷點的"
+    "實際欄數，3/3/1 與 2/1/1 任一段不符就炸 —— 但那同樣是同一組人寫的自驗，⛔ 不等於獨立測試。"
+)
+
+#: 本頁的**形狀**（本組自己量的，⛔ 不引用他組轉述）。
+FIND_PAGE_SHAPE_NOTE = (
+    "本頁形狀（本組自行實測，⛔ 非引用轉述）：規格 docs/v2/spec/UI_PAGE_FIND.md ＋ 線框 "
+    "docs/v2/wireframe/wf_page_find.js 的 id 為 find 那一頁 —— node 解析結果："
+    "6 層、14 block、2 葉（l1 選股網／l2 板塊地圖，後者是產業熱力圖＋板塊資金潮汐兩個既有分頁併出來的）；"
+    "14 塊的 cols 全集有 4 種，1/1/1 共 10 塊、3/2/1 共 1 塊、3/3/1 共 1 塊、2/1/1 共 2 塊。"
+    "線框 mainCTA 欄位存在且非 null（label 逐字「🎯 開始選股」）⇒ 本頁**有**主 CTA，"
+    "與「📖 憑什麼」頁（mainCTA 為 null）相反。"
+)
+
+#: 六層的層標 —— `UI_PAGE_FIND.md` ① 四層結構表**第一欄逐字**（⛔ 去掉 markdown 粗體記號）。
+FIND_LAYER_LABEL: Mapping[int, str] = {
+    0: "葉外",
+    1: "第一層 條件表單",
+    2: "第二層 總覽卡",
+    3: "第三層 大表＋CSV",
+    4: "第四層 展開佐證",
+    5: "葉2",
+}
+
+#: 每層所屬的葉 —— 線框 `layers[].blocks[].leaf`（本組 node 實測，同層內全同值）。
+#: `None` ＝ 線框 `leaf: null`（葉外 chrome，畫在分頁列之上、兩葉共用）。
+FIND_LAYER_LEAF: Mapping[int, str | None] = {
+    0: None, 1: "l1", 2: "l1", 3: "l1", 4: "l1", 5: "l2",
+}
+
+#: 兩葉的名字 —— 線框 `leaves[].name` 逐字（本組 node 實測）。
+FIND_LEAF_NAME: Mapping[str, str] = {
+    "l1": "選股網",
+    "l2": "板塊地圖（＝產業熱力圖＋板塊資金潮汐）",
+}
+
+#: `n5` 的卡密度。**⭐ 出處就是 `UI_PAGE_FIND.md` ① 表自己那一列**：
+#: 「t2（**WH 本組新訂**：`n5` 超出 `n1~n4` 自動對映，取「核心卡」）」。
+#: 🔴 **⛔ 不得寫成「借「📖 憑什麼」頁的」** —— 方向剛好相反：`UI_PAGE_WHY.md` ② 表的
+#:    `葉3 / n5` 列自己逐字寫「**沿用 `UI_PAGE_FIND` 對 `n5` 的新訂**」
+#:    ⇒ **本頁（FIND）才是原創處**，那一頁是沿用者。
+#: 🔴 契約層 `components.tier_for_layer()` 只認 0 與 1~4（實測 `tier_for_layer(5)` → `ValueError`）
+#:    ⇒ 這一格是**規格有、契約層沒有**的地方，已登記為 `FIND_SPEC_GAPS` 的 F14。
+FIND_N5_TIER = "t2"
+
+#: 本頁**會畫**的徽章。
+#: ⚠️ **⛔ 這不是規格的逐字，是本組自 `UI_PAGE_FIND.md` ② 表「實作」欄推導的**
+#:    —— 該份**沒有**像 `UI_PAGE_WHY.md` ④ 那樣的「會出現在畫面上的是 N 態」總結句。
+#:    推導方式（逐列，⛔ 不是挑的）：② 表「實作」欄 ✅ 的取用（#1 live／#3 idle／#6 error）、
+#:    ⚠️ 的取用（#4 degraded「僅葉2 可達」、#7「實作只有單一 UI_EMPTY」）、
+#:    ❌ 的一律不畫（#2 loading 未落地／#5 unwired 已撤回／#8 na 未拆二／#9 partial 未接線）、
+#:    #10 該表逐字「本頁 emits_level 0 命中 ⇒ **不畫 #10**；⛔ 不得併進 #8」。
+#:    ⇒ 這是**單組判定**，已登記為 `FIND_SPEC_GAPS` 的 F13（CLAUDE.md §-2 規則 6）。
+FIND_BADGES_ON_PAGE: frozenset[int] = frozenset({1, 3, 4, 6, 7})
+FIND_BADGES_NOT_ON_PAGE: frozenset[int] = frozenset(
+    int(b["n"]) for b in components.BADGES if int(b["n"]) not in FIND_BADGES_ON_PAGE
+)
+
+#: 本頁的**版面定義**（六層 14 block）。`cols` ＝ `(桌機, 平板, 手機)`。
+#: 🔴 每一筆的 `src` 是**出處**，⛔ 不是註解：規格章節名 ＋ 線框 block key。
+FIND_LAYOUT: tuple[Mapping[str, object], ...] = (
+    # ── n0 葉外｜全域 chrome（線框 `leaf: null`，兩塊全 1/1/1）─────────────────
+    {"block": "find.statusbar", "n": 0, "cols": (1, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「葉外」列 ＋ ⑤ 反例自檢 A 末條｜線框 find.statusbar"},
+    {"block": "chrome.asof", "n": 0, "cols": (1, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「葉外」列 ＋ ⑤ 反例自檢 A 末條｜線框 chrome.asof"},
+    # ── n1 葉1 選股網｜條件表單（① 表該列 cols 逐字「3/2/1・3/3/1・1/1/1」）─────
+    {"block": "find.screen_form", "n": 1, "cols": (3, 2, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「第一層 條件表單」列（該列 cols 首項 3/2/1）"
+            "｜線框 find.screen_form"},
+    {"block": "find.scenario_quickpick", "n": 1, "cols": (3, 3, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「第一層 條件表單」列（該列 cols 次項 3/3/1）"
+            "｜線框 find.scenario_quickpick"},
+    {"block": "find.wiring_disclosure", "n": 1, "cols": (1, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「第一層 條件表單」列（該列 cols 末項 1/1/1）"
+            "｜線框 find.wiring_disclosure"},
+    # ── n2 葉1｜選股結果總覽卡（① 表逐字 1/1/1）──────────────────────────────
+    {"block": "find.screen_summary", "n": 2, "cols": (1, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「第二層 總覽卡」列｜線框 find.screen_summary"},
+    # ── n3 葉1｜大表＋入選理由＋CSV（① 表逐字三塊全 1/1/1）────────────────────
+    {"block": "find.screen_table", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「第三層 大表＋CSV」列｜線框 find.screen_table"},
+    {"block": "find.pick_reason", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「第三層 大表＋CSV」列｜線框 find.pick_reason"},
+    {"block": "find.csv", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「第三層 大表＋CSV」列｜線框 find.csv"},
+    # ── n4 葉1｜展開佐證（單獨成層；t4 是四階唯一 dashed）───────────────────────
+    {"block": "find.pe_two_kinds", "n": 4, "cols": (1, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「第四層 展開佐證」列 ＋ ④ 全節"
+            "｜線框 find.pe_two_kinds"},
+    # ── n5 葉2 板塊地圖（① 表逐字「1/1/1・2/1/1・2/1/1・1/1/1」）──────────────
+    {"block": "find.map_cta", "n": 5, "cols": (1, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「葉2」列（該列 cols 第 1 項 1/1/1）｜線框 find.map_cta"},
+    {"block": "find.heatmap", "n": 5, "cols": (2, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「葉2」列（該列 cols 第 2 項 2/1/1）｜線框 find.heatmap"},
+    {"block": "find.sector_flow", "n": 5, "cols": (2, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「葉2」列（該列 cols 第 3 項 2/1/1）｜線框 find.sector_flow"},
+    {"block": "find.map_scale_disclosure", "n": 5, "cols": (1, 1, 1),
+     "src": "UI_PAGE_FIND ① 四層結構表「葉2」列（該列 cols 第 4 項 1/1/1）"
+            "｜線框 find.map_scale_disclosure"},
+)
+
+#: 由 `FIND_LAYOUT` **推導**（⛔ 不另手寫一份，否則就是第二個真相源 —— CLAUDE.md §2.1）。
+FIND_BLOCK_COLS: Mapping[str, tuple[int, int, int]] = {
+    str(rec["block"]): tuple(rec["cols"]) for rec in FIND_LAYOUT   # type: ignore[misc]
+}
+_FIND_BLOCK_LAYER: Mapping[str, int] = {
+    str(rec["block"]): int(rec["n"]) for rec in FIND_LAYOUT        # type: ignore[arg-type]
+}
+FIND_LAYER_BLOCKS: Mapping[int, tuple[str, ...]] = {
+    n: tuple(str(rec["block"]) for rec in FIND_LAYOUT if int(rec["n"]) == n)  # type: ignore[arg-type]
+    for n in sorted({int(rec["n"]) for rec in FIND_LAYOUT})                   # type: ignore[arg-type]
+}
+
+
+def find_tier_for_layer(n: int) -> str:
+    """層序 → 卡密度（作法與 `why_tier_for_layer` 完全相同，理由見該函式）。
+
+    · `n0~n4`：**一律走契約層** `components.tier_for_layer()`，⛔ 不在本檔手抄一份。
+    · `n5`：取 `FIND_N5_TIER`（**出處是 `UI_PAGE_FIND.md` ① 表自己那一列**，⛔ 非本檔發明、
+      ⛔ 也不是「借「📖 憑什麼」頁的」—— 方向相反，那一頁才是沿用者）。
+    · 其餘層序 → `ValueError`（⛔ 不猜一階）。
+    """
+    if n == 5:
+        return FIND_N5_TIER
+    return components.tier_for_layer(n)
+
+
+def find_tier_for_block(block_key: str) -> str:
+    """block → 卡密度。**⛔ 刻意不提供 tier 覆寫參數**（同 `page_today.tier_for_block`）。"""
+    try:
+        n = _FIND_BLOCK_LAYER[block_key]
+    except KeyError:
+        raise KeyError(f"未知的 block：{block_key!r}") from None
+    return find_tier_for_layer(n)
+
+
+# ── 本頁欠缺的兩條欄數 CSS（客戶 2026-09-22【拍板 1：CSS 走 (甲)】）──────────
+#
+# 🔴 **就地揭露見 `FIND_GRID_CSS_DISCLOSURE` / `…_WHY`（兩句都畫在本頁最上方）。**
+# ⛔ **不碰任何底線私有符號**：`markup._grid_rules` / `_breakpoint_rules` /
+#    `_block_cols_class` / `_grid_template` 一個都不呼叫；欄數一律走公開 API
+#    `components.resolve_cols()`，斷點一律走 `components.BREAKPOINTS`。
+#: 本頁用到、但**契約層沒有產 CSS** 的欄數組合（**推導，⛔ 不手寫清單**）。
+#: `page_today.BLOCK_COLS` 日後若自己補上 `(3,3,1)`，這裡就自動少一條，⛔ 不會重複宣告。
+_FIND_COLS_NEEDING_CSS: tuple[tuple[int, int, int], ...] = tuple(sorted(
+    set(FIND_BLOCK_COLS.values()) - set(page_today.BLOCK_COLS.values())
+))
+
+
+def _find_cols_class(cols: tuple[int, int, int]) -> str:
+    """`(3,3,1)` → `g-3-3-1`。
+
+    ⚠️ **這就是被複製的「形狀」之一** —— 命名規則與 `markup._block_cols_class` 相同，
+    但那是私有函式（⛔ 不得呼叫）⇒ 這裡另寫一份。見 `FIND_GRID_CSS_DISCLOSURE_WHY`。
+    """
+    return "g-" + "-".join(str(int(c)) for c in cols)
+
+
+def _find_grid_template(n_cols: int) -> str:
+    """欄數 → `grid-template-columns` 宣告。⚠️ 同上，形狀複製自 `markup._grid_template`。"""
+    return f"grid-template-columns:repeat({int(n_cols)},minmax(0,1fr))"
+
+
+def find_grid_css() -> str:
+    """補上 `.g-3-3-1` / `.g-2-1-1`（**只補契約層沒產的那幾條**）。
+
+    三段欄數**全部顯式寫出來**（沿用 `markup._breakpoint_rules` 的紀律）：
+    桌機走基準規則、平板與手機各走一個 `@media (max-width:…)`。
+    ⚠️ 順序**先 880 後 640** —— 640 也命中 `max-width:880px`，後者必須寫在後面才蓋得過。
+    ⚠️ **⛔ 不新增第三個斷點**：兩個 `max-width` 的值直接取自 `components.BREAKPOINTS`，
+       與 `page_css()` 產的那兩個**是同兩個數**（本檔⛔ 沒有寫死 640／880）。
+    """
+    bp = components.BREAKPOINTS
+    if not _FIND_COLS_NEEDING_CSS:
+        # 契約層已經自己產齊了 ⇒ 本函式該退場（⛔ 不留一段沒有對應實體的死 CSS）。
+        return ("/* ══ 5. 「🔍 找標的」頁的欄數 CSS：契約層已自行涵蓋，本輪⛔ 無需補 ══ */")
+    rules = [
+        "/* ══ 5. 「🔍 找標的」頁欠缺的欄數規則（客戶 2026-09-22 拍板 1，走作法(甲)）══ */",
+        "/*    ⚠️ 規則的**形狀**在此被複製了一份 ⇒ 第二個真相源（就地揭露畫在該頁最上方）。 */",
+        "/*    ⛔ 數字沒有第二份：欄數走 components.resolve_cols()、斷點走 components.BREAKPOINTS。 */",
+        "/*    ⛔ 不呼叫 markup 的任何底線私有函式（V-PICKER-PRIV-1 是本 repo 登記在案的違憲）。 */",
+    ]
+    for cols in _FIND_COLS_NEEDING_CSS:
+        n = components.resolve_cols(cols, bp["desktop_min_px"])
+        rules.append(f".{_find_cols_class(cols)}{{{_find_grid_template(n)}}}")
+    for max_px in (bp["tablet_max_px"], bp["mobile_max_px"]):
+        inner = "".join(
+            f".{_find_cols_class(cols)}{{{_find_grid_template(components.resolve_cols(cols, max_px))}}}"
+            for cols in _FIND_COLS_NEEDING_CSS
+        )
+        rules.append(f"@media (max-width:{int(max_px)}px){{{inner}}}")
+    return "\n".join(rules)
+
+
+# ── 代理：把 `markup.page_today` **暫時**換成本頁的版面契約 ──────────────────
+#: 作法、三條紀律與「為何非代理不可」**與 `_WHY_CONTRACT` 完全相同**（見該處長註，⛔ 不重抄）。
+#: ⚠️ 名單由同一個 AST 掃描把關（`_markup_page_today_names()`）——
+#:    本組實跑結果：`markup` 只讀 7 個名字，與「📖 憑什麼」頁**同一組，一個都不用加**。
+_FIND_CONTRACT = types.SimpleNamespace(
+    BLOCK_COLS=FIND_BLOCK_COLS,
+    LAYER_GRID_COLS={},
+    BADGES_ON_PAGE=FIND_BADGES_ON_PAGE,
+    BADGES_NOT_ON_PAGE=FIND_BADGES_NOT_ON_PAGE,
+    tier_for_block=find_tier_for_block,
+    card_value_text=page_today.card_value_text,
+    card_level_text=page_today.card_level_text,
+)
+
+
+@contextlib.contextmanager
+def find_page_contract() -> Iterator[None]:
+    """`with` 期間 `markup` 走「🔍 找標的」的版面查表；離開時**一定**還原。
+
+    三道 assert 與 `why_page_contract()` 同構（⛔ 不是「應該可以」）。
+    """
+    needed = _markup_page_today_names()
+    missing = needed - set(vars(_FIND_CONTRACT))
+    assert not missing, (
+        f"代理少了 markup 會讀的名字：{sorted(missing)} —— "
+        "markup.py 多讀了東西而本檔的代理沒跟上。"
+        "⛔ 不得為了跑得動就隨便補一個值（那會畫出一個編出來的版面，違 CLAUDE.md §1）。"
+    )
+    original = markup.page_today
+    assert original is page_today, (
+        "進場時 markup.page_today 已經不是原物件 —— 上一次替換忘了還原")
+    markup.page_today = _FIND_CONTRACT
+    try:
+        yield
+    finally:
+        markup.page_today = original
+    assert markup.page_today is page_today, "還原失敗：markup.page_today 不是原物件"
+
+
+FIND_LAYER_NOTE: Mapping[int, str] = {
+    0: "兩塊的 leaf 在線框是 null ＝ 葉外 chrome，畫在分頁列之上、兩葉共用。"
+       "⚠️ 規格 ⑤ 反例自檢 A 末條逐字：find.statusbar 與 chrome.asof 兩塊**本頁皆無實作**"
+       "⇒ 失敗時無可顯示；⛔ 不得用總覽卡的紅態冒充一條不存在的狀態列。"
+       "⚠️ 在這份 HTML 原型裡，時點列的**實體**畫在五頁共用的外殼上（頁標題下方第一行），"
+       "本層畫的是它的**版面登記**，⛔ 不是第二份 chrome；頂部狀態列的實體本原型**沒有做**。"
+       "⚠️ 線框 find.statusbar 的 src 指到的那一行，規格 ⑤ 實測是 _load_regime（空頭濾網），"
+       "⛔ 不是狀態列本身 —— 這是已登記的兩個 src 內容漂移之一（見缺口 F16）。",
+    1: "t1 是四階裡唯一 2px 框線、內距最大的一階（手機 ≤640 另有一組覆寫內距，四階中也只有 t1 有）。"
+       "⭐ **本頁的主 CTA「🎯 開始選股」就住在這一層**（線框 mainCTA.label 逐字）——"
+       "客戶 2026-09-22 拍板逐字：主 CTA 不是「全站唯一」，是「**每頁首屏唯一**」，"
+       "而 FIND 的這一顆就是它的每頁唯一主 CTA。規格 ① 另逐字：form 內只有這一顆、住預設葉 l1。"
+       "⚠️ 三塊的 cols 是本頁四種欄數裡**最複雜的一組**：3/2/1、3/3/1、1/1/1 各一。"
+       "其中 3/3/1 是契約層**沒有產 CSS** 的一條，由本產生器補（見本頁最上方的就地揭露）。"
+       "⚠️ 中間那塊（情境快選）本輪**沒有卡、沒有徽章**，理由就地寫在該塊位置上。",
+    2: "只有一塊，1/1/1。本層畫**兩張卡**：冷啟動 #3 與上游失敗 #6 ——"
+       "⛔ 不是挑好看的，兩張都是規格 ⑤ 點名的：⑤B 逐字「冷啟動（還沒點「🎯 開始選股」）："
+       "一律 #3 ⬜ 尚未載入 ＋ 灰色說明，⛔ 不得畫成紅色錯誤」；"
+       "⑤A 逐字「n2 總覽卡：#6 🔴 取得失敗，大字區留白，⛔ 不得顯示 0 或上一輪殘值」。"
+       "⚠️ 大字區留白**不是漏畫**：是 page_today.card_value_text() 依狀態擦掉的。",
+    3: "三塊全 1/1/1。⚠️ 規格 ⑥ 逐字：結果表的欄位是**勾選決定的動態欄**、因子值是"
+       "百分位 0–100 且 1 位小數，**無殖利率欄** —— 線框畫的固定 6 欄原始值模型"
+       "已由總管判定為「設計變更（線框待改）」，且客戶 2026-09-16 裁示「結果表原始值欄：維持不要」。"
+       "⚠️ 中間那塊（入選理由）本輪**沒有卡、沒有徽章**，理由就地寫在該塊位置上。"
+       "⚠️ CSV 那塊畫的是 empty 態：規格 ⑤A 逐字「0 列也是一個結果」"
+       "⇒ 鈕**停用但不隱藏**；現行實作早退會讓它一起消失，屬實作待修（缺口 F10）。",
+    4: "t4 是四階裡唯一 dashed 的一階，且本層**只有一塊**、單獨成層 ——"
+       "這一點是總管 2026-09-16 推翻「結果表要留原始值欄」的決定性依據："
+       "三語彙的載體在 n4，與 n3 的結果表**不同層、不同 block**。"
+       "⭐ 本塊畫的是 #7 缺漏，那是客戶 2026-09-16 裁示的**現行落地態**，逐字："
+       "「本益比兩種「沒有」：UI 層先誠實顯示「本機分不出，需 L1 補旗標」。"
+       "L1 修改列為獨立任務，等 UI 全部做完再評估解凍。不要假裝做得到。」"
+       "⛔ 在 D-08 修完之前不得把 PE≤0 與 NaN 畫成兩種不同符號（見缺口 F8）。",
+    5: "葉2 板塊地圖，四塊：1/1/1、2/1/1、2/1/1、1/1/1。兩個 2/1/1 同樣是契約層**沒有產 CSS** "
+       "的一條，由本產生器補。密度 t2 是**規格 ① 表自己新訂的**（超出 n1~n4 自動對映時取「核心卡」），"
+       "⛔ 不是契約層算出來的（components.tier_for_layer 只認 0 與 1~4）—— 見缺口 F14。"
+       "⚠️ 本頁是 n5 新訂的**原創處**：「📖 憑什麼」頁 ② 表自己逐字寫「沿用 UI_PAGE_FIND 對 n5 的新訂」"
+       "⇒ ⛔ 不得把本頁這一格寫成「借那一頁的」。"
+       "⚠️ 規格 ① 另逐字：n5 的 2/1/1 在實作端**只落地一半**（兩張卡並列，兩張圖上下堆疊）。"
+       "⚠️ 兩張圖**各自判態**（線框層標逐字），所以這裡一張畫 #3 idle、一張畫 #4 degraded ——"
+       "#4 是規格 ② 處置 5 逐字「現僅葉2 可達」的那一顆，葉1 待補。",
+}
+
+#: 兩塊**本輪⛔ 不掛卡、⛔ 不掛徽章**的 block（規格 ② 處置 2(a)）。
+#: 🔴 沿用「📖 憑什麼」頁 `why.edu.table.nolevel` 的同一招：**畫出版面位置，不畫徽章**。
+FIND_NO_CARD_DISCLOSURE: Mapping[str, str] = {
+    "find.scenario_quickpick": (
+        "這一塊本輪⛔ 沒有卡、⛔ 沒有徽章，是刻意的。"
+        "線框 src 為 null；線框 unwired 那一格自己逐字寫「這一格就是現在的真實狀態："
+        "這三顆鈕在現行畫面上不存在。線框畫的是提案，還沒有做」。"
+        "規格 ② 處置 2 逐字：「find.scenario_quickpick／find.pick_reason 線框 src:null、"
+        "畫面上整塊不存在 ⇒ 不畫，⛔ 不得用 #5 冒充「有這塊但沒接線」」。"
+        "⇒ 本輪畫出它的**版面位置**（層 n1／欄數 3/3/1／密度 t1 都在），但⛔ 不掛任何徽章。"
+        "⚠️ 這與客戶本輪「6 層 14 block」的要求有交集，⛔ 本組不自行裁決 —— 見缺口 F3。"
+    ),
+    "find.pick_reason": (
+        "這一塊本輪⛔ 沒有卡、⛔ 沒有徽章，是刻意的。"
+        "線框 src 為 null；線框 live 那一格自己逐字開頭就寫「這一塊還是提案，現在還沒有 ——"
+        "現行畫面點列不會展開」。規格 ② 處置 2 把它與上一塊列在同一條，處置相同。"
+        "⇒ 本輪畫出它的**版面位置**（層 n3／欄數 1/1/1／密度 t3 都在），但⛔ 不掛任何徽章。"
+        "⚠️ ⛔ 不得拿 #5 冒充，也⛔ 不得因為「客戶要 14 block」就給它一顆看起來正常的 #1 ——"
+        "那會把「這塊還沒做」畫成「做好了」（CLAUDE.md §1）。見缺口 F3。"
+    ),
+}
+
+
+def build_find_cards() -> dict[str, list[dict]]:
+    """每個 block 要畫幾張卡、各是什麼狀態。
+
+    🔴 **狀態⛔ 不是挑好看的**，每一塊都同時過兩道（兩道都是本組 node／grep 實測）：
+       ① 線框該塊 `states` 十態格裡**值為 null 的一律不准用**（null ＝ 該情況下結構上不存在）；
+       ② 該態對應的徽章必須在 `FIND_BADGES_ON_PAGE` 內（否則 `markup.card_html` 會 fail loud）。
+       規格點名了該畫哪一態的（⑤A／⑤B／② 處置 5／④(d)），一律照規格。
+    🔴 **每一張渲染得出阿拉伯數字的卡都掛 `("資料來源", DEMO)`**（客戶：示意數字必須標明示意）。
+    """
+    rb = page_today.resolve_badge
+
+    def demo(*rows: tuple[str, str]) -> tuple[tuple[str, str], ...]:
+        return (*rows, ("資料來源", DEMO))
+
+    return {
+        # ── n0 葉外 chrome（規格 ⑤A 末條：兩塊本頁皆無實作）────────────────────
+        "find.statusbar": [
+            {"state": "idle", "title": "（跨頁）頂部狀態列",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("線框 idle 逐字", "09/13 週五 ✅ 交易日　|　⬜ 總經未評估　|　🔗 尚未綁定 Sheet"),
+                 ("那個日期", "線框自註：live／idle 那一行的日期是規格示意值，非實測"),
+                 ("本頁實作", "規格 ⑤ 逐字：本頁無實作 ⇒ 失敗時無可顯示"),
+                 ("誰定義它", "五頁共用 chrome，狀態定義在頁1 的 today.statusbar，本頁不重新定義"))},
+        ],
+        "chrome.asof": [
+            {"state": "idle", "title": "資料時點揭露列（頁標題下方第一行）",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": (
+                 ("線框 idle 逐字", "資料時點：尚未載入，本頁沒有任何本輪資料"),
+                 ("這份原型", "外殼上那一條畫的正是這一態的逐字，⛔ 一個真時間都沒填"),
+                 ("本頁的難處", "一頁之內有三種節奏的時點（收盤日／資料歸屬月／盤後凍結快照），"
+                                "線框逐字⛔ 不可合併成一個日期 ⇒ 本頁常態是「最舊～最新」"))},
+        ],
+        # ── n1 條件表單（主 CTA 住這一層）────────────────────────────────────
+        "find.screen_form": [
+            {"state": "idle", "title": "葉1 條件表單（三格 ＋ 主 CTA 🎯 開始選股）",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("線框 idle 逐字", "表單永遠可見（它就是灰態的出口），三格顯預設值，submit 可按"),
+                 ("規格 ① 逐字", "form 內只有這一顆、住預設葉 l1"),
+                 ("主 CTA 範圍詞", "每頁首屏唯一一顆（客戶 2026-09-22 拍板；舊寫法「全站唯一」已改）"),
+                 ("⛔ 不得", "用表單本身去表示有沒有選過 —— 還沒選過與已經選過，表單長得一樣"))},
+        ],
+        # find.scenario_quickpick：⛔ 沒有卡（見 FIND_NO_CARD_DISCLOSURE）
+        "find.scenario_quickpick": [],
+        "find.wiring_disclosure": [
+            {"state": "live", "title": "取數接線揭露（表單下方常駐 caption）",
+             "value": None, "level": "🟢 常駐，⛔ 不隨狀態消失", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框十態", "十格全部非 null，九格逐字都是「常駐」"),
+                 ("live 那一格", "是 code 端 WIRING_DISCLOSURE 常數的逐字內容"),
+                 ("⚠️ 但它是 code 自己的宣稱", "「五個因子都已接線」是一句全稱句，"
+                                               "線框自陳沒有逐一驗證五條路徑（CLAUDE.md §-2 規則 6）"))},
+        ],
+        # ── n2 總覽卡：兩張卡，兩張都是規格點名的（⑤B 冷啟動 ＋ ⑤A 上游全敗）────
+        "find.screen_summary": [
+            {"state": "idle", "title": "葉1 選股結果 · 總覽卡（冷啟動）",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("規格 ⑤B 逐字", "冷啟動一律 #3 ⬜ 尚未載入 ＋ 灰色說明，⛔ 不得畫成紅色錯誤"),
+                 ("線框 idle 逐字", "在你送出之前，本頁一次 L3 取數都不會發（沒有人叫過它）"),
+                 ("去哪補", "勾好條件後，按「🎯 開始選股」（在表單裡）"))},
+            {"state": "error", "title": "葉1 選股結果 · 總覽卡（上游全敗）",
+             "value": None, "level": None, "badge_n": rb(state="error"),
+             "facts": demo(
+                 ("規格 ⑤A 逐字", "#6 🔴 取得失敗，大字區留白，⛔ 不得顯示 0 或上一輪殘值"),
+                 ("逐源列出", "aux_errors 逐源列出（存活池／估值／缺貨／RS／跨季／總經位階），"
+                              "一源壞⛔ 不染色其餘"),
+                 ("⛔ 不得", "對契約漂移給「可以重跑」指引 —— 重按不會好，給錯指引比不給更糟"))},
+        ],
+        # ── n3 大表＋入選理由＋CSV ─────────────────────────────────────────
+        "find.screen_table": [
+            {"state": "live", "title": "葉1 選股結果 · 大表（桌機表格／手機卡片流）",
+             "value": None, "level": "🟢 這一塊是接上的", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("規格 ⑥ 現況", "欄位是勾選決定的動態欄；因子值是百分位 0–100、1 位小數；無殖利率欄"),
+                 ("客戶 2026-09-16 裁示逐字", "結果表原始值欄：維持不要"),
+                 ("線框待改", "線框畫的固定 6 欄原始值模型已判為設計變更"),
+                 ("手機 ≤640", "規格 ③ 末段新訂卡片流；⛔ 本輪不得照現值落地，"
+                               "該段自帶一條無障礙阻斷（見缺口 F17）"))},
+        ],
+        # find.pick_reason：⛔ 沒有卡（見 FIND_NO_CARD_DISCLOSURE）
+        "find.pick_reason": [],
+        "find.csv": [
+            {"state": "empty", "title": "⬇ 下載結果 CSV（form 外）",
+             "value": None, "level": None, "badge_n": rb(state="empty"),
+             "facts": demo(
+                 ("線框 empty 逐字", "停用但不隱藏 ——「我跑過、結果是 0」本身就是一個要留存的結果"),
+                 ("實作待修", "現行早退會讓 CSV 跟著消失 ⇒ 0 列／錯誤時鈕應留在畫面上走停用態"),
+                 ("⛔ 不得", "在匯出時把 ⚠︎ — 變成空白或 0（線框逐字）"),
+                 ("兩處未決", "檔名不含資料歸屬日（實作待修）＋ 鈕字串兩份真相源（待客戶拍板），"
+                              "見缺口 F10"))},
+        ],
+        # ── n4 展開佐證：本益比的兩種「沒有」（客戶 2026-09-16 已裁示現行態）────
+        "find.pe_two_kinds": [
+            {"state": "missing", "title": "🔴 為什麼有些本益比是空的（PE 兩種「沒有」的分辨）",
+             "value": None, "level": None, "badge_n": rb(state="missing"),
+             "facts": demo(
+                 ("客戶 2026-09-16 裁示逐字", "UI 層先誠實顯示「本機分不出，需 L1 補旗標」。"
+                                              "L1 修改列為獨立任務，等 UI 全部做完再評估解凍。"
+                                              "不要假裝做得到"),
+                 ("線框十態", "十格全部非 null，逐字都是「常駐」—— missing 那格另註「這一態正是它要解釋的」"),
+                 ("上畫面的字面", "一律標 ⚠︎ —，並就地說明「這一欄目前分不出兩種「沒有」」"),
+                 ("⛔ 使用者看到的字面不得出現", "L1／旗標／D-08 這類內部詞，也不得出現「虧損」"))},
+        ],
+        # ── n5 葉2 板塊地圖（兩張圖各自判態）──────────────────────────────
+        "find.map_cta": [
+            {"state": "idle", "title": "葉2 CTA：🗺️ 載入板塊地圖",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("線框 idle 逐字", "鈕常駐可按；下方兩張圖各自顯示自己的灰態（兩張圖不共用同一段文字）"),
+                 ("⛔ 它不是頁主 CTA", "線框自註：form 外、非預設葉 ⇒ 不是頁主 CTA；"
+                                       "本頁的主 CTA 是葉1 的「🎯 開始選股」"))},
+        ],
+        "find.heatmap": [
+            {"state": "idle", "title": "葉2 左｜產業漲跌熱力圖",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("線框 idle 逐字", "⬜ 板塊資料尚未載入"),
+                 ("線框給的原因（逐字）", "熱力圖要批次抓數十檔類股代表"),
+                 ("去哪補", "點「🗺️ 載入板塊地圖」"),
+                 ("線框 degraded 是 null", "本塊結構上就沒有「門檻失準」這一格 ⇒ ⛔ 不得畫 #4"))},
+        ],
+        "find.sector_flow": [
+            {"state": "degraded", "title": "葉2 右｜三大法人資金流向泡泡圖",
+             "value": None, "level": None, "badge_n": rb(state="degraded"),
+             "facts": demo(
+                 ("規格 ② 處置 5 逐字", "#4 degraded：葉1 待補，現僅葉2 可達"),
+                 ("線框 degraded 逐字", "快照是舊的 → 就地寫出它為什麼是舊的"
+                                        "（來源沒給原因時就寫「上游沒有給原因」）"),
+                 ("⛔ 不得", "靜默拿舊快照當今天的值"),
+                 ("畫面行為", "degraded ＝ 觀測照出、判決留白 ⇒ 上面那顆等級⛔ 不會畫出來"))},
+        ],
+        "find.map_scale_disclosure": [
+            {"state": "live", "title": "⭐ 葉2 口徑揭露（常駐小字）",
+             "value": None, "level": "🟢 常駐", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字", "X＝近 5 日累計淨流入（億）· Y＝動能變化 · 泡泡＝近 20 日淨額規模。"
+                                    "面積不等於權重。"),
+                 ("線框 idle 逐字", "常駐 —— 你在看圖之前就該知道這張圖在量什麼"),
+                 ("線框十態", "十格全部非 null，九格逐字都是「常駐」"))},
+        ],
+    }
+
+
+#: 「🔍 找標的」頁**本輪查到的衝突與洞**，逐條登記並**畫在畫面上**（客戶要求 6：就地標明、
+#: 寫進附錄、⛔ 不自行裁決）。🔴 每一條同樣是 **⚠️ 單組／兩組調查結論，未經第三方驗**。
+FIND_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
+    (
+        "F1",
+        "🔴 主 CTA 的範圍詞「全站唯一」**不只四個落點** —— 本組實測至少 **8 處**，"
+        "其中 **3 處到目前為止仍未同步**（且**全部不在本組的檔案邊界內**）"
+        "⇒ ⛔ 不得宣稱「已全部同步」。",
+        "客戶 2026-09-22 拍板逐字：「【拍板 2：主 CTA】不是「全站唯一」，是「每頁首屏唯一」。"
+        "⇒ 產生器裡那 2 處文案改掉。FIND 的「🎯 開始選股」就是它的每頁唯一主 CTA」。"
+        "／／**落點普查（本組 grep 實測，量測日 2026-09-22；⚠️ 單組、⛔ 未窮舉全 repo，只掃了 "
+        "src/ui_v2/ ＋ docs/v2/spec/UI_COMPONENTS.md ＋ 本產生器）**："
+        "已同步 5 處 —— (1) docs/v2/spec/UI_COMPONENTS.md §3 按鈕表該列標題；"
+        "(2) src/ui_v2/page_today.py 第三層註解；(3) 同檔 MAIN_CTA 的鍵"
+        "（unique_per_site → unique_per_first_screen）；(4)(5) 本產生器兩處"
+        "（_LAYER_NOTE[3] ＋ today.actions 卡的 facts）。"
+        "／／🔴 **仍未同步 3 處（本組本輪新發現，⛔ 不在本組檔案邊界內、本組一個字都沒動）**："
+        "(6) src/ui_v2/render.py 的 _MAIN_CTA_LAYERS 註解「UI_PAGE_TODAY ①：全站唯一一顆，掛第三層」；"
+        "(7) 同檔 _render_main_cta() 的 docstring「UI_COMPONENTS §3「主 CTA（全站唯一一顆）」」；"
+        "(8) src/ui_v2/components.py 的 BUTTONS 上方註解「UI_COMPONENTS.md §3 按鈕表"
+        "「主 CTA（全站唯一一顆）」列」。"
+        "／／**本輪本組只動了 (4)(5)**。(1)(2)(3) 由另一組處理 —— 本組**只查證到"
+        "「git log 有一筆訊息寫著鍵名同步改名、且 diff 觸及那三個檔」這件事**，"
+        "**⛔ 沒有逐字複驗它們的內容** ⇒ 依 CLAUDE.md §-2 規則 6，"
+        "⛔ 不得寫成「落點已全部同步」。"
+        "／／**規格端早就有一條否證**：UI_PAGE_FIND ① 逐字「2026-09-16 修正（WJ）："
+        "原寫「全站唯一一顆」主 CTA 不成立 —— 葉2 那顆同為 type=primary…"
+        "可宣稱的是客戶指令原意 ——「選股主 CTA 只有一顆、且在預設葉 l1 可見」；⛔ 不得寫成全站唯一」。"
+        "⇒ 客戶本輪的拍板與這條規格端修正**同向**。"
+        "／／⚠️ 本產生器**不讀** MAIN_CTA 的那個鍵（只讀 MAIN_CTA['label']，本組 grep 實測）"
+        "⇒ 鍵名改名⛔ 不影響本產生器；本檔也因此**沒有**跟著改任何鍵名。",
+    ),
+    (
+        "F2",
+        FIND_GRID_CSS_DISCLOSURE,
+        FIND_GRID_CSS_DISCLOSURE_WHY
+        + "／／來歷：客戶 2026-09-22 拍板逐字「【拍板 1：CSS 走 (甲)】在產生器補 .g-3-3-1 與 "
+          ".g-2-1-1 兩條 rule。值用 components.resolve_cols() ＋ BREAKPOINTS 算。"
+          "就地揭露「規則形狀複製了一份」」⇒ 這是**已拍板的作法**，⛔ 不是偷懶，"
+          "但它的後果必須看得見，所以有這一條。",
+    ),
+    (
+        "F3",
+        "⭐ **本輪最主要的一處衝突**：規格 ② 處置 2(a) 要「不畫」的兩塊，"
+        "與客戶本輪「6 層 14 block」的要求有交集 ⇒ 本組**處置後登記，⛔ 不自行裁決**。",
+        "衝突長這樣：客戶本輪逐字「2. 6 層 14 block」；而 UI_PAGE_FIND ② 處置 2 逐字"
+        "「(a) find.scenario_quickpick／find.pick_reason 線框 src:null、畫面上整塊不存在 ⇒ 不畫，"
+        "⛔ 不得用 #5 冒充「有這塊但沒接線」」。"
+        "／／**本組的處置（⛔ 這是處置，不是裁決）**：沿用「📖 憑什麼」頁 why.edu.table.nolevel "
+        "的同一招 —— **畫出那兩塊的版面位置（層／欄數 class／密度 class 都在），"
+        "但⛔ 不畫卡、⛔ 不畫任何徽章**，並在該位置就地寫明理由。"
+        "／／**理由**：客戶要的「14 block」是**版面**（哪一塊在第幾層、幾欄、哪一階密度），"
+        "規格禁的是**冒充狀態**（給一個它在現行畫面上沒有的徽章）—— 兩者的交集只在「要不要掛徽章」，"
+        "所以只讓徽章退場，版面照畫。"
+        "／／⚠️ **本組可能判錯的地方，據實寫出來**：若客戶本意是「14 block 每一塊都要有卡」，"
+        "那本組的處置就不足；若客戶本意是「整塊連框都不要畫」，那本組畫了版面位置就是超過。"
+        "**兩種可能本組都無法自行排除** ⇒ 依客戶要求 6，登記、⛔ 不裁決。",
+    ),
+    (
+        "F4",
+        "#2 載入中：**實作待補**（⛔ 不是規格待決）⇒ 本頁⛔ 不畫 #2。",
+        "UI_PAGE_FIND ② 處置 1 逐字：「#2 loading：實作待補（不是規格待決）。"
+        "分類器有能力產生（第 3 份已證），缺的是 caller —— 本頁 0 處傳 in_flight=。"
+        "處置：取數段包 st.spinner，並把 in_flight=True 顯式傳進上列三個呼叫點。"
+        "⛔ 在補上之前不得拿 #3「尚未載入」冒充載入中」。"
+        "⇒ 本頁的代理把 2 放進 BADGES_NOT_ON_PAGE，任何一次誤畫都會在產生時變成 ValueError。"
+        "⚠️ 線框十態格裡 loading 全部 14 塊都非 null ⇒ **線框有、實作沒有**，這是本頁"
+        "「線框 states 非 null」與「實作畫得出來」兩道把關**結論不同**的一格。",
+    ),
+    (
+        "F5",
+        "#7／#8：**規格待接線**（該份自稱這是它的主體）⇒ 本頁只畫 #7，⛔ 不畫 #8。",
+        "UI_PAGE_FIND ② 處置 3 逐字：「#7／#8：規格待接線（本份的主體）。"
+        "實作只有單一 UI_EMPTY、glyph ▨「無資料」，未依 miss_reason 拆二。"
+        "處置：依 ③ 的對照表拆 ⚠︎ —／N/A；⛔ 不得為了對齊線框鍵數新造第 11 種徽章；"
+        "⛔ 不得把 missing 畫成 #8（#8 重跑無效，畫錯＝給錯指引）」。"
+        "／／⇒ 本頁畫 #7（現行那顆單一空值就是它），⛔ 不畫 #8。"
+        "⚠️ 本頁**也⛔ 沒有出現 ▨ 符號**：徽章符號一律由 components.BADGES 產出，本檔⛔ 沒有手打任何一顆。",
+    ),
+    (
+        "F6",
+        "🔴 #9 部分計入：**分母對不上表上的列數**，規格明文「擇一處置，⛔ 不得直接貼」"
+        "⇒ 本頁⛔ 不畫 #9、⛔ 不寫任何 N／M。",
+        "UI_PAGE_FIND ② 處置 4 逐字：「本頁 L3 已經算出分母 —— _cov_bits＝…（現只拼進 note 字串）"
+        "⇒ 接到欄標題層即可畫 #9 ◧ N／M，這是接線工作、不是缺資料」，"
+        "但同段 🔴 逐字：「分母對不上表上的列數…_cov_bits 的分母是 len(ids)，而 ids ＝存活池全體；"
+        "表上只有 ranked[:top_n] ⇒ 直接把 N／M 貼到欄標題，使用者會讀成「這 20 列裡有 N 列算得出來」，"
+        "實際講的是「存活池 M 檔裡有 N 檔算得出來」—— 兩個母體差一個數量級，"
+        "⛔ 這正是 §1「錯誤的數字比沒有數字更危險」。處置（擇一，⛔ 不得直接貼）："
+        "(a) 另算表上列的覆蓋數當 N／M，或 (b) 保留存活池分母但在 tooltip 寫死母體」。"
+        "⇒ **擇一由誰決定，規格沒說，本組⛔ 不代決**；在決定之前本頁一個 N／M 都不寫。",
+    ),
+    (
+        "F7",
+        "#4 門檻已失準：**葉1 待補**，現僅葉2 可達 ⇒ 本頁的 #4 只畫在葉2。",
+        "UI_PAGE_FIND ② 處置 5 逐字：「#4 degraded：葉1 待補。現僅葉2 可達（:1329／:1389）。"
+        "線框 screen_table.degraded 要求 🟠 標在該欄標題旁（不是逐格）＋ 就地寫"
+        "「請不要把它當入選理由讀」→ 待接」。"
+        "⇒ 本頁把 #4 畫在 find.sector_flow（葉2）；"
+        "⚠️ **⛔ 不畫在 find.heatmap**：該塊線框的 degraded 那一格是 null（結構上不存在），"
+        "兩道把關任一不過就不畫。",
+    ),
+    (
+        "F8",
+        "🔴 `D-08` 待裁：`MISS_CONTRACT_DRIFT` 被升成 #6，與規格 ④(a)「逾 sanity → #7」對不上。",
+        "UI_PAGE_FIND ④(c) 逐字：「MISS_CONTRACT_DRIFT 落在 FAILED_REASONS 內"
+        "（shared/ui_state.py）⇒ classify_ui_state 會把它升成 #6 🔴（同 ② error 列），"
+        "與 (a) 寫的「逾 sanity → ⚠︎ —」（#7）以及 INDICATOR_SPEC「逾界 → 缺漏」對不上。"
+        "⛔ 不得就地改 FAILED_REASONS（那會動到全站每一盞燈）⇒ 列為 D-08 待裁」。"
+        "／／同節 (d) 是**客戶 2026-09-16 已裁示的現行落地態**，逐字："
+        "「本益比兩種「沒有」：UI 層先誠實顯示「本機分不出，需 L1 補旗標」。"
+        "L1 修改列為獨立任務，等 UI 全部做完再評估解凍。不要假裝做得到」。"
+        "⇒ 本頁 n4 照 (d) 畫成 #7 ＋ 就地誠實說明，⛔ 不畫成分得開的樣子。"
+        "⚠️ (c) 另有一條承重警告（線框逐字）：L1 補旗標與 pe_low 排序端擋非正值**必須同一批落地**，"
+        "否則虧損股會被排成全市場最便宜。⚠️ D-08 的排程狀態⛔ 不得寫成「已排程」或「已核准」。",
+    ),
+    (
+        "F9",
+        "殖利率欄：**2026-09-16 已降級為「待覆核的開放項」**，⇒ ⛔ 不得再寫成「線框待刪該欄」。",
+        "UI_PAGE_FIND ⑥ 第一列逐字：「殖利率欄：⚠️ 2026-09-16 降級為「待覆核的開放項」，本份不下結論（WJ）"
+        "—— 原寫「不加」的依據是「來源端『沒配息』與『還沒公告』分不開 ⇒ 畫不出三語彙」，"
+        "但那正是 ④ 對本益比認定的同型缺陷，而 ④ 的處置是保留該塊 ＋ 誠實寫「目前分不出這兩種」…"
+        "同一條依據不得在 ④ 判「保留」、在此判「刪欄」…依 §-2 規則 6 不硬掰，降為開放項」。"
+        "／／⇒ 本頁**照實作現況畫（無殖利率欄）**，但⛔ 不宣稱「該欄已刪」或「線框待刪」。"
+        "⚠️ 規格同列另註：支撐該判斷的來源端數字（410 檔中 99 檔為空 ≈24%）是**轉錄**，"
+        "**無任何一組獨立查證過來源端** ⇒ ⛔ 不得引用為事實。",
+    ),
+    (
+        "F10",
+        "CSV：**檔名＝實作待修；鈕字串＝待客戶拍板（兩份真相源）** ⇒ 本頁⛔ 不代決字串。",
+        "UI_PAGE_FIND ⑥ 第二列逐字：「檔名寫死 screener_result.csv，不含資料歸屬日 ⇒ 連兩天下載"
+        "得到兩個同名檔；鈕字串 production／線框 states.live 為「💾 下載選股結果 CSV」…"
+        "檔名＝實作待修；鈕字串＝待客戶拍板（兩份真相源）…鈕字串推薦取 production 那串、線框改齊"
+        "（它已是使用者看過的字面）；⛔ 不得兩邊各留一份」。"
+        "／／⇒ 本頁的卡標用**線框的 name 逐字**（⬇ 下載結果 CSV），facts 裡同時寫出兩份都存在這件事，"
+        "⛔ 不替客戶挑一個。⚠️ 檔名規則編號 G-24 **不在** INDICATOR_SPEC §5／DECISION_RULES §8，"
+        "出處是 DRAFT_GAP_AUDIT.md ＋ S1-3B Part 6.3（規格逐字，本組未再獨立查證）。",
+    ),
+    (
+        "F11",
+        "⑤C 兩個原先漏掉的情境：**(1) 改了勾選但沒按送出 (2) 軌 A 會連帶汙染 CSV** ——"
+        "兩條都**未落地**，本頁只登記、⛔ 不畫成已完成。",
+        "UI_PAGE_FIND ⑤C 逐字（兩項）："
+        "(1)「「改了勾選但沒按 🎯 開始選股」在 ② 的十鍵裡沒有對應狀態格…"
+        "使用者眼前是「條件 ≠ 表上結果」。它不是 idle（已經跑過）、不是 degraded、更不是 error。"
+        "處置：⛔ 不得新造第 11 種徽章、⛔ 不得把表清掉（表上的數字仍是真的，只是舊的）⇒ 維持 #1，"
+        "另在總覽卡就地加一行灰色 caption「條件已改，尚未套用 —— 請按 🎯 開始選股」。"
+        "⚠️ 依 §1.A 第 4 點，該提示必須是灰色說明、⛔ 不得畫成紅色錯誤」；"
+        "(2)「③ 軌 A 會連帶讓下載的 CSV 從數值退化成字串…CSV 必須另備一份 df：數值欄保留數值、"
+        "缺值原因另立一欄承載；⛔ 不得直接 to_csv 那份已格式化的表。本項必須與軌 A 同一批落地，"
+        "⛔ 不得延後（延後＝使用者拿到一份看起來正常、卻算不了的檔案）」。",
+    ),
+    (
+        "F12",
+        "#10 ◆：規格 ② 明文**本頁不畫** ⇒ 照辦，且⛔ 不得併進 #8。",
+        "UI_PAGE_FIND ② 表末列逐字：「（線框無此鍵）／emits_level=False／#10／"
+        "**不適用**：本頁 emits_level 0 命中 ⇒ **不畫 #10**；⛔ 不得併進 #8」。"
+        "⇒ 本頁的代理把 10 放進 BADGES_NOT_ON_PAGE；另有一道全檔守衛"
+        "（class 屬性裡的 token 掃描）確認產物裡⛔ 沒有任何 bdg-10。"
+        "⚠️ 這與「📖 憑什麼」頁的 #10 是**兩件不同的事**：那一頁是「有適用對象但尚未徽章化」"
+        "（W5），本頁是「**根本沒有適用對象**」—— ⛔ 不得混為一談。",
+    ),
+    (
+        "F13",
+        "⚠️ 本頁「會畫哪幾顆徽章」是**本組自規格 ② 表推導的單組判定**，"
+        "規格**沒有**像「📖 憑什麼」頁那樣的總結句。",
+        "對照：UI_PAGE_WHY ④ 末句有一句逐字「⇒ 會出現在畫面上的是 6 態：#1／#3／#4／#5／#6／#7」，"
+        "那一頁的可畫集合是**照抄規格**。UI_PAGE_FIND ② **沒有**對應的句子"
+        "（本組通讀六節，0 命中）⇒ 本組只能逐列從「實作」欄推導："
+        "✅ 三列取（#1 live／#3 idle／#6 error）、⚠️ 兩列取（#4 僅葉2 可達／#7 現行單一 UI_EMPTY）、"
+        "❌ 四列不取（#2／#5／#8／#9）、#10 該表明文不適用。"
+        "⇒ FIND_BADGES_ON_PAGE ＝ {1,3,4,6,7}。"
+        "⚠️ 依 CLAUDE.md §-2 規則 6，這是**單組判定、未經第二組複驗**，"
+        "⛔ 不得被引用為「規格就是這樣寫的」。若第二組判讀不同（例如認為 #7 的 ⚠️ 也算未落地），"
+        "本頁的徽章集合要跟著改。",
+    ),
+    (
+        "F14",
+        "n5（葉2）超出契約層的層序對映 ⇒ 它的卡密度 t2 只能寫在本產生器裡。"
+        "⭐ **本頁是這條新訂的原創處，⛔ 不是沿用者。**",
+        "實測：components.tier_for_layer(5) 拋 ValueError「未知的層序 5：只有 0（葉外 chrome）"
+        "與 1~4 四層」。而 UI_PAGE_FIND ① 表「葉2／n5」列逐字給了 t2，並自陳"
+        "「WH 本組新訂：n5 超出 n1~n4 自動對映，取「核心卡」」。"
+        "／／⭐ **方向要講清楚**：UI_PAGE_WHY ② 表的「葉3／n5」列**自己逐字寫**"
+        "「沿用 UI_PAGE_FIND 對 n5 的新訂…⛔ 非本組發明」"
+        "⇒ **FIND 是原創處、WHY 是沿用者**；⛔ 不得把本頁這一格寫成「借「📖 憑什麼」頁的」。"
+        "／／真正的解是契約層補上 n5 的對映，但那要動 src/ui_v2/components.py ⇒ ⛔ 不在本輪授權範圍。"
+        "n0~n4 則一律走 components.tier_for_layer（本產生器結尾逐一 assert 相等），"
+        "⛔ 不在本檔手抄第二份對映表。",
+    ),
+    (
+        "F15",
+        "cols 的語意本身未決（＝「🚦 今天」頁登記的 U-2）；另外 n1 的 3/2/1 在 Streamlit 端"
+        "**tablet=2 未落地** ⇒ 兩條都照實登記，⛔ 不代為裁決。",
+        "(1) cols 語意：契約層把 cols 讀成「卡內網格一列幾格」（markup.grid_html 的 .g-* class），"
+        "但一個 block 只有一張卡時，「3/3/1」也可以被讀成「這三塊並排」。"
+        "「🚦 今天」頁的同一個問題已拆為 U-2 並記為「仍未判定」⇒ 本頁沿用同一處置："
+        "照現行契約層語意原樣渲染，⛔ 不裁決。"
+        "(2) UI_PAGE_FIND ① 逐字：「n1 的 3/2/1 只有 tablet=2 未落地…"
+        "Streamlit 自身帶一條寫死的 columns:640px 斷點…⇒ ≤640 本來就堆成 1 欄（phone=1 已落地），"
+        "641–880 仍恆 3 欄（tablet=2 → 實作待修）。⛔ 該斷點值寫死在 bundle 內，"
+        "本專案改不到、也不得假設它跨版本不變」；同節另逐字「n5 的 2/1/1 只落地一半："
+        "實作兩張卡並列，兩張圖上下堆疊」。"
+        "⚠️ **這份 HTML 原型的 CSS 本身是對的**：.g-3-2-1／.g-3-3-1／.g-2-1-1 三段實測分別為"
+        "3/2/1、3/3/1、2/1/1（產生器結尾有守衛，從 CSS 文字用 regex 量）。"
+        "⚠️ 但**這份原型與 Streamlit 實作不是同一套 CSS** ⇒ 量了這份也⛔ 不能拿去當 Streamlit 端的答案。",
+    ),
+    (
+        "F16",
+        "線框 `src` 有**兩例內容漂移**（已知），其餘 block 的 `src` 內容**無人逐一比對過**。",
+        "UI_PAGE_FIND 檔尾「WH 本組實查」列逐字收窄：「查到的是「每個 block 的 src 字串是什麼」，"
+        "不是「每個 src 指的那一行內容對不對」；已知內容漂移兩例"
+        "（find.statusbar → :796 實為 _load_regime；find.screen_table → :1163 實為 _fmt_count），"
+        "其餘 block 的 src 內容無人逐一比對 ⇒ ⛔ 不得讀成「每個 src 都對過」」。"
+        "⇒ 本檔 FIND_LAYOUT 的 src 欄一律只寫**規格章節名 ＋ 線框 block key**，"
+        "**⛔ 一個行號都沒寫**（CLAUDE.md §8.2.A.0 規則 1：行號是保證會過期的資訊）。",
+    ),
+    (
+        "F17",
+        "手機 ≤640 卡片流規格**自帶一條無障礙阻斷** ⇒ ⛔ 不得照現值落地。",
+        "UI_PAGE_FIND ③ 末段逐字：「⛔ 無障礙阻斷…上句 key 用的 --ink-3 9.5px 在卡面上"
+        "現行未達 WCAG AA 4.5:1 —— dark #73838f on --panel ＝ 4.35:1、on --panel-2 ＝ 4.01:1；"
+        "light #626f7a on --panel ＝ 5.11:1（PASS）、on --panel-2 ＝ 4.36:1 ⇒ 四種組合三種不及格…"
+        "⇒ ⛔ 本段不得照現值落地，須等 --ink-3 修正後才做」；同段另註「token 修正不在本檔範圍」。"
+        "⇒ 本原型**⛔ 沒有實作手機卡片流**（本頁的手機版就是欄數塌成 1 欄），"
+        "n3 那張卡的 facts 已就地標明這條相依。"
+        "⚠️ 規格自註該組對比數字是**總管實算、WH 未重算、僅轉錄** ⇒ ⛔ 不得當成本組量過。",
+    ),
+)
+
+#: **允許清單**：規格／線框**逐字**名稱裡本來就帶「為…什麼」三字的地方（⛔ 不是頁名）。
+#: 🔴 存在理由與處置方式**完全沿用** `WHY_VERBATIM_ALLOW_WEISHENME`（見該處長註）。
+#: ⚠️ 每一條都必須是**線框／規格的逐字**，⛔ 不得拿本檔自己的散文往這裡塞。
+FIND_VERBATIM_ALLOW_WEISHENME: tuple[str, ...] = (
+    # 線框 `find.pe_two_kinds` 的 `name` 逐字（本組 node 實測：14 個 name 裡唯一命中）
+    "🔴 為什麼有些本益比是空的（PE 兩種「沒有」的分辨）",
+    # 線框 `find.sector_flow` 的 `degraded` 格逐字片段（本檔在 n5 層註與該塊卡片各引一次）
+    "就地寫出它為什麼是舊的",
+)
+
+
+def build_find_body() -> str:
+    """「🔍 找標的」頁的整頁標記。**全程在 `find_page_contract()` 之內**。
+
+    🔴 標記一個角括號都不手打卡片：`markup.card_html` / `markup.grid_html` 產。
+    🔴 **⛔ 不呼叫 `markup.layer_html`**：線框 `layers[]` 上⛔ 沒有任何層級網格欄數
+       （本組 node 實測）⇒ 六層一律逐 block 全寬輸出，同 `build_why_body()`。
+    """
+    cards_by_block = build_find_cards()
+    parts: list[str] = [
+        # ── 就地揭露：**收起狀態也看得見**，⛔ 不藏進摺疊器 ──
+        '<section class="pv-layer" id="pv-find-disclosure">',
+        '<div class="pv-layer-label">🔍 找標的 · 六層 14 block（版面定義在產生器內）</div>',
+        f'<p class="pv-disclosure">{esc(FIND_LAYOUT_DISCLOSURE)}</p>',
+        f'<p class="pv-meta">{esc(FIND_LAYOUT_DISCLOSURE_WHY)}</p>',
+        # ⭐ 客戶 2026-09-22【拍板 1】明示的那一句 —— ⛔ 不得省
+        f'<p class="pv-disclosure">{esc(FIND_GRID_CSS_DISCLOSURE)}</p>',
+        f'<p class="pv-meta">{esc(FIND_GRID_CSS_DISCLOSURE_WHY)}</p>',
+        f'<p class="pv-meta">{esc(FIND_PAGE_SHAPE_NOTE)}</p>',
+        "</section>",
+    ]
+
+    with find_page_contract():
+        for n, blocks in FIND_LAYER_BLOCKS.items():
+            tier = find_tier_for_layer(n)
+            leaf = FIND_LAYER_LEAF[n]
+            leaf_text = "葉外（兩葉共用）" if leaf is None else f"{leaf} {FIND_LEAF_NAME[leaf]}"
+            parts.append('<section class="pv-layer">')
+            parts.append(
+                f'<div class="pv-layer-label">{esc(FIND_LAYER_LABEL[n])} · n{n} · '
+                f'{esc(leaf_text)} · 密度 {esc(tier)} · '
+                f'block {len(blocks)} 塊：{esc("、".join(blocks))}</div>'
+            )
+            parts.append(
+                f'<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">'
+                f'{esc(tier)}</span>]：{esc(_tier_caption(tier))}</p>'
+            )
+            parts.append(f'<p class="pv-meta">{esc(FIND_LAYER_NOTE[n])}</p>')
+            for block in blocks:
+                cards = [markup.card_html(block=block, **card)
+                         for card in cards_by_block[block]]
+                if block in FIND_NO_CARD_DISCLOSURE:
+                    # 規格 ② 處置 2(a)：整塊不存在 ⇒ ⛔ 沒有卡、⛔ 沒有徽章（見 F3）。
+                    assert not cards, f"{block} ⛔ 不得有卡：規格 ② 處置 2(a)"
+                    cards = [f'<p class="pv-disclosure">'
+                             f'{esc(FIND_NO_CARD_DISCLOSURE[block])}</p>']
+                parts.append(markup.grid_html(block=block, cards=cards))
+            parts.append("</section>")
+
+    # ── 本頁的衝突與洞，逐條畫出來（客戶要求 6：就地標明、寫進附錄、⛔ 不自行裁決）──
+    parts.append('<section class="pv-layer" id="pv-find-gaps">')
+    parts.append('<div class="pv-layer-label">'
+                 '附錄 · 「🔍 找標的」頁本輪查到的規格衝突與未決項（逐條登記，⛔ 不代為裁決）</div>')
+    parts.append(
+        f'<p class="pv-meta">{esc("每一條都是：" + GAP_CAVEAT + "。⛔ 不得被引用為「已查證的事實」去支撐下一步決策（CLAUDE.md §-2 規則 6）。")}</p>')
+    for gap_id, title, detail in FIND_SPEC_GAPS:
+        parts.append(
+            f'<p class="pv-meta"><span class="pv-mono">{esc(gap_id)}</span>　'
+            f"{esc(title)}　{esc(GAP_CAVEAT)}</p>"
+        )
+        parts.append(f'<p class="pv-meta">{esc(detail)}</p>')
+    parts.append("</section>")
+    return "\n".join(parts)
+
+
+def build_find_html() -> str:
+    """把「🔍 找標的」整頁包成一個可切換的容器（預設 `hidden`，由側欄點出來）。"""
+    return "\n".join([
+        html_comment(
+            "「🔍 找標的」頁 ＝ **六層 14 block**（客戶 2026-09-22 拍板逐字「2. 6 層 14 block」）。\n"
+            "⛔ 本頁的版面定義住在產生器的 `FIND_LAYOUT`，**不在** `src/ui_v2/` 契約層、\n"
+            "  **沒有** `tests/ui_v2/` 的測試守護 —— 同「📖 憑什麼」頁的作法（客戶拍板的選項 1），\n"
+            "  後果已就地揭露在本頁最上方與附錄 F1~F17。\n"
+            "⭐ 標記怎麼來的：產生期間把 `markup.page_today` **暫時**換成本頁的版面契約，\n"
+            "  卡片與網格仍由 `markup.card_html` / `grid_html` 產出；產完**立刻還原**。\n"
+            "⭐ CSS：本頁用到兩組契約層**沒有產**的欄數（3/3/1 與 2/1/1）——\n"
+            "  客戶【拍板 1】選作法 (甲)：由產生器補兩條 rule，值用 `components.resolve_cols()`\n"
+            "  ＋ `components.BREAKPOINTS` 算（⛔ 不寫死數字、⛔ 不碰任何底線私有符號），\n"
+            "  並**就地揭露「規則形狀複製了一份」** ＝ 第二個真相源。\n"
+            "⛔ 本頁**沒有畫** #2 / #5 / #8 / #9 / #10 五顆徽章：規格 ② 逐列判它們未落地或不適用，\n"
+            "  誤畫會在產生時變成 ValueError（代理的 BADGES_NOT_ON_PAGE 擋）。\n"
+            "⛔ 兩塊（情境快選 / 入選理由）**沒有卡、沒有徽章**：規格 ② 處置 2(a) 逐字「整塊不存在\n"
+            "  ⇒ 不畫，⛔ 不得用 #5 冒充」—— 本輪只畫它們的版面位置，衝突登記在附錄 F3。"
+        ),
+        '<div id="pv-page-find" hidden>',
+        "<main>",
+        build_find_body(),
+        "</main>",
+        "</div>",
+    ])
+
+
+
+# ══════════════════════════════════════════════════════════════════
 # 4.5 跨頁 chrome 的標記
 # ══════════════════════════════════════════════════════════════════
 def build_nav_html() -> str:
@@ -1703,18 +2574,23 @@ def build_asof_html() -> str:
 
 
 def build_todo_html() -> str:
-    """其餘**三**頁的「此頁待做」佔位（預設 `hidden`，由側欄點擊切出來）。
+    """其餘**兩**頁的「此頁待做」佔位（預設 `hidden`，由側欄點擊切出來）。
 
-    ⚠️ 2026-09-22 起是**三**頁，⛔ 不是四頁：「📖 憑什麼」已成為可切換的真頁。
+    ⚠️ 2026-09-22 起是**兩**頁，⛔ 不是三頁、更不是四頁：
+       「📖 憑什麼」與「🔍 找標的」都已成為可切換的真頁
+       （客戶逐字：「5. 其他兩頁（查一檔、我的持股）仍顯示「此頁待做」」）。
+    ⚠️ `pv-todo-name` 的**初始值**同步改為「🔬 查一檔」——
+       它原本是「🔍 找標的」，而那一頁本輪已是真頁，留著會讓佔位卡的預設標題
+       指到一個**不會再走到這裡**的頁（JS 每次切頁都會覆寫它，但初值仍應是真的）。
     """
     return "\n".join([
         '<section class="pv-todo" id="pv-page-todo" hidden>',
         '<div class="pv-todo-card">',
         '<div class="pv-todo-title">'
-        f'<span id="pv-todo-name">{esc(PAGE_LABELS[PAGE_FIND])}</span>'
+        f'<span id="pv-todo-name">{esc(PAGE_LABELS[PAGE_INSPECT])}</span>'
         f"　·　{esc(TODO_HEADLINE)}</div>",
         f'<p class="pv-meta">'
-        f'{esc(TODO_BODY.format(today=PAGE_LABELS[PAGE_TODAY], why=PAGE_LABELS[PAGE_WHY]))}</p>',
+        f'{esc(TODO_BODY.format(today=PAGE_LABELS[PAGE_TODAY], why=PAGE_LABELS[PAGE_WHY], find=PAGE_LABELS[PAGE_FIND]))}</p>',
         f'<p class="pv-meta">{esc(TODO_BODY_SUPERSEDED)}</p>',
         f'<p class="pv-meta">{esc(NAV_WHY_SIDEBAR)}</p>',
         '<div class="pv-todo-back">',
@@ -1791,6 +2667,7 @@ _NAV_JS_TEMPLATE = """
 (function () {
   var TODAY = %(today)s;
   var WHY = %(why)s;
+  var FIND = %(find)s;
   var TABLET_MIN = %(tablet_min)s;
   var nav = document.getElementById('pv-nav');
   var mq = window.matchMedia
@@ -1805,20 +2682,24 @@ _NAV_JS_TEMPLATE = """
   //    客戶 2026-09-14「分頁列不得吃掉首屏」在所有斷點都成立。
   // ⚠️ mq 只剩一個用途：下面 show() 判斷「是不是手機寬度」以便選完頁收起。
 
-  // 三向切換（2026-09-22 起）：🚦 今天 / 📖 憑什麼 / 其餘三頁的「此頁待做」佔位。
-  // ⛔ 刻意不用 if-else 串：三個容器各自只看自己那一個布林，
+  // 四向切換（2026-09-22 第二次擴充）：🚦 今天 / 📖 憑什麼 / 🔍 找標的 /
+  //   其餘兩頁（🔬 查一檔 · 💼 我的持股）的「此頁待做」佔位。
+  // ⛔ 刻意不用 if-else 串：四個容器各自只看自己那一個布林，
   //    少一個容器忘了關的機會（兩頁同時 visible 會讓畫面說謊）。
   function show(page, label) {
     var today = document.getElementById('pv-page-today');
     var why = document.getElementById('pv-page-why');
+    var find = document.getElementById('pv-page-find');
     var todo = document.getElementById('pv-page-todo');
     var isToday = (page === TODAY);
     var isWhy = (page === WHY);
+    var isFind = (page === FIND);
     today.hidden = !isToday;
     why.hidden = !isWhy;
-    todo.hidden = isToday || isWhy;
+    find.hidden = !isFind;
+    todo.hidden = isToday || isWhy || isFind;
     document.getElementById('pv-page-name').textContent = label;
-    if (!isToday && !isWhy) {
+    if (!isToday && !isWhy && !isFind) {
       document.getElementById('pv-todo-name').textContent = label;
     }
     var items = document.querySelectorAll('.pv-nav-item');
@@ -1921,7 +2802,23 @@ def build_header_comment(meta: Mapping[str, str]) -> str:
         "         產生器另有一道守衛：今天頁在代理前後各產一次，兩次逐字相同才算過。",
         "       · ⛔ 該頁**沒有畫任何 #10 徽章**：.bdg-10 不在 page_css() 的輸出裡，",
         "         硬畫出來會是一顆無配色的徽章（客戶已裁示該項登記為待修、本輪不動）。",
-        "       · 五頁切換：🚦 今天 與 📖 憑什麼 是可切換的真頁，其餘三頁仍顯示「此頁待做」；",
+        "    10. 「🔍 找標的」頁（2026-09-22 同日新增，沿用同一套作法）：",
+        "       · **六層 14 block**（客戶逐字「2. 6 層 14 block」）。版面定義 ＝ 產生器裡的",
+        "         FIND_LAYOUT，14 筆逐筆標出處（規格 docs/v2/spec/UI_PAGE_FIND.md 的章節名 ＋",
+        "         線框 docs/v2/wireframe/wf_page_find.js 的 block key；⛔ 不寫行號）。",
+        "       · ⭐ **CSS 補了兩條**：本頁用到 3/3/1 與 2/1/1 兩組欄數，而 markup.page_css()",
+        "         只產 page_today.BLOCK_COLS 裡出現過的（1/1/1 與 3/2/1）；grid_html() 對缺 CSS",
+        "         的欄數**不報錯**，會讓那 3 塊**靜默塌成單欄**。客戶【拍板 1】選作法 (甲)：",
+        "         由產生器補兩條 rule，欄數走 components.resolve_cols()、斷點走",
+        "         components.BREAKPOINTS（⛔ 不寫死數字、⛔ 不碰底線私有符號），",
+        "         並**就地揭露「規則形狀複製了一份」＝ 第二個真相源**（該頁最上方 ＋ 附錄 F2）。",
+        "       · ⛔ 該頁**沒有畫** #2 / #5 / #8 / #9 / #10 五顆徽章（規格 ② 逐列判它們未落地",
+        "         或不適用）；**兩塊沒有卡、沒有徽章**（情境快選 / 入選理由 —— 規格 ② 處置 2(a)",
+        "         逐字「整塊不存在 ⇒ 不畫，⛔ 不得用 #5 冒充」），只畫它們的版面位置。",
+        "       · 本輪查到的規格衝突與未決項共 17 條，逐條畫在該頁附錄（F1~F17），",
+        "         客戶要求 6 逐字：「遇到規格衝突 → 就地標明、寫進附錄、⛔ 不自行裁決」。",
+        "       · 五頁切換：🚦 今天 / 📖 憑什麼 / 🔍 找標的 是可切換的真頁，",
+        "         其餘**兩頁**（🔬 查一檔 · 💼 我的持股）仍顯示「此頁待做」；",
         "         時點列與頁尾免責**五頁共用**（畫在外殼上，⛔ 不是每頁各一份）。",
         "",
         "⚠️ 例外揭露（依 CLAUDE.md §3.3 反捏造，據實記錄）：",
@@ -2003,6 +2900,12 @@ def main() -> None:
         chrome_css(),
         "/* ══ 4. 跨頁 chrome（側欄導覽／時點列／待做佔位／頁尾免責）══ */",
         shell_css(),
+        # ⭐ 客戶 2026-09-22【拍板 1：CSS 走 (甲)】—— 「🔍 找標的」頁用到兩組契約層
+        #   沒有產 CSS 的欄數（3/3/1 與 2/1/1）。⚠️ **必須排在 page_css 之後**：
+        #   雖然 class 名不撞（markup 根本沒產這兩條），但同名情形下後寫的才蓋得過。
+        #   ⚠️ **也必須在代理之外產** —— `_BLOCK_COLS_USED` 是 import 當下算好的，
+        #   代理換不動它，所以這裡用的是 `components.*` 公開 API，與代理無關。
+        find_grid_css(),
     ])
 
     # ── 兩頁的內容：順序**刻意**寫死，⛔ 不得交錯 ───────────────────────
@@ -2017,14 +2920,24 @@ def main() -> None:
     why_html = build_why_html()          # ← 代理在這一行之內上場、之內還原
     assert markup.page_today is page_today, (
         "產完「📖 憑什麼」頁後 markup.page_today 不是原物件 —— 代理漏還原")
+    find_html = build_find_html()        # ← 另一個代理，同樣之內上場、之內還原
+    assert markup.page_today is page_today, (
+        "產完「🔍 找標的」頁後 markup.page_today 不是原物件 —— 代理漏還原")
     today_body_after = build_body()
     assert today_body_after == today_body, (
-        "今天頁的輸出在產「📖 憑什麼」頁前後不一致 —— 代理污染了今天頁")
+        "今天頁的輸出在產另外兩頁前後不一致 —— 代理污染了今天頁")
+    # ⭐ 兩頁互不污染也要驗：「📖 憑什麼」在「🔍 找標的」的代理之後再產一次，
+    #    逐字相同才算數（⛔ 不用「看起來沒事」交差）。
+    why_html_after = build_why_html()
+    assert why_html_after == why_html, (
+        "「📖 憑什麼」頁的輸出在產「🔍 找標的」頁前後不一致 —— 兩個代理互相污染")
+    assert markup.page_today is page_today, "重產後 markup.page_today 不是原物件"
 
     # 導覽 JS：頁 id 與斷點都從契約層帶進去，⛔ 不在 JS 裡手打第二份。
     nav_js = _NAV_JS_TEMPLATE % {
         "today": f'"{PAGE_TODAY}"',
         "why": f'"{PAGE_WHY}"',
+        "find": f'"{PAGE_FIND}"',
         "tablet_min": int(components.BREAKPOINTS["tablet_min_px"]),
     }
 
@@ -2046,7 +2959,9 @@ def main() -> None:
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         # ⚠️ 2026-09-22：原標題只寫「🚦 今天」，自本日起不成立（本原型已有兩頁）。
         #    **事實更正，⛔ 不是政策變更**；舊值 `🚦 今天 · 戰情室 v2 靜態原型`。
-        "<title>戰情室 v2 靜態原型 · 🚦 今天 ＋ 📖 憑什麼</title>",
+        # ⚠️ 2026-09-22 第二次：同日再加「🔍 找標的」⇒ 三頁。
+        #    **同樣是事實更正**；上一版值 `戰情室 v2 靜態原型 · 🚦 今天 ＋ 📖 憑什麼`。
+        "<title>戰情室 v2 靜態原型 · 🚦 今天 ＋ 📖 憑什麼 ＋ 🔍 找標的</title>",
         build_header_comment(meta),
         "<style>",
         style,
@@ -2086,9 +3001,11 @@ def main() -> None:
         today_body,
         "</main>",
         "</div>",
-        # 🔴 「📖 憑什麼」頁在**這裡**產 —— 它會暫時替換 markup.page_today，
-        #    所以必須排在 `today_body` 與 `style`（page_css）**之後**，⛔ 不得交錯。
+        # 🔴 「📖 憑什麼」與「🔍 找標的」兩頁在**這裡**擺 —— 兩者都會暫時替換
+        #    markup.page_today，所以它們的**產生**必須排在 `today_body` 與
+        #    `style`（page_css）之後，⛔ 不得交錯（上方 main() 已按序產好）。
         why_html,
+        find_html,
         build_todo_html(),
         build_gaps_html(),
         f'<footer class="pv-meta">{esc(footer)}</footer>',
@@ -2110,9 +3027,17 @@ def main() -> None:
     assert dark_css in written, "page_css('dark') 的輸出沒有逐字出現在檔案裡"
     for forbidden in ("http://", "https://", "@import", "url(", "<script src", "<link "):
         assert forbidden not in written, f"出現外部資源引用：{forbidden}"
-    for cls in (".lg-3-2-1", ".g-3-2-1"):
+    # 🔴 **三個斷點的實際欄數：從 CSS 文字量，⛔ 不是看 class 名字有沒有印出來。**
+    #    ⚠️ 兩條新的（.g-3-3-1 / .g-2-1-1）是產生器補的 —— 這一道就是它們唯一的守衛
+    #    （契約層的那兩條另有 tests/ui_v2/ 守著，新的這兩條⛔ 沒有，見 FIND 缺口 F2）。
+    #    量法：三次命中依 CSS 出現序 ＝ 基準（桌機）→ max-width:880（平板）→ max-width:640（手機）。
+    for cls, want in ((".lg-3-2-1", ["3", "2", "1"]),
+                      (".g-3-2-1", ["3", "2", "1"]),
+                      (".g-1-1-1", ["1", "1", "1"]),
+                      (".g-3-3-1", ["3", "3", "1"]),
+                      (".g-2-1-1", ["2", "1", "1"])):
         found = re.findall(re.escape(cls) + r"\{grid-template-columns:repeat\((\d)", written)
-        assert found == ["3", "2", "1"], f"{cls} 的三段欄數不是 3/2/1：{found}"
+        assert found == want, f"{cls} 的三段欄數不是 {'/'.join(want)}：{found}"
     for block in page_today.blocks_of_layer(2):
         assert f'class="grd grd-t2 ' in written and block in build_cards()
 
@@ -2137,8 +3062,11 @@ def main() -> None:
     #      （下面 HH:MM 那道守衛就是這樣做的）：允許清單只放**逐字出處**，其餘一個都不准。
     #    · 舊規則的理由**仍然成立**：全檔級最簡單，沒有人能偷渡；
     #    · 被權衡掉的原因：它會逼本檔去改一個**規格給的名字**，那是更嚴重的造假（§1）。
+    #    ⚠️ 2026-09-22 第二次擴充：新增的「🔍 找標的」頁又帶進**線框 name 的逐字複本**
+    #       （find.pe_two_kinds）與**線框 states 的逐字片段**（find.sector_flow.degraded）
+    #       ⇒ 允許清單改成**兩份相加**，⛔ 仍然只收逐字出處、⛔ 不收本檔的散文。
     _masked_page_name = written
-    for _verbatim in WHY_VERBATIM_ALLOW_WEISHENME:
+    for _verbatim in WHY_VERBATIM_ALLOW_WEISHENME + FIND_VERBATIM_ALLOW_WEISHENME:
         hits = _masked_page_name.count(esc(_verbatim))
         assert hits >= 1, (
             f"允許清單裡的逐字 {_verbatim!r} 在產物裡 0 命中 —— "
@@ -2165,11 +3093,13 @@ def main() -> None:
     assert not (page_classes & pv_classes), page_classes & pv_classes
     assert not any(c.startswith("pv-") for c in page_classes), sorted(page_classes)
     # ⑥ 規格缺口至少四條，且每一條都掛了「未經第三方驗」的標記。
-    #    ⚠️ 2026-09-22 起共**兩組**缺口：chrome 的（五頁共用）＋「📖 憑什麼」頁自己的。
-    #    每組都是「每條一次 ＋ 該組前言一次」。
+    #    ⚠️ 2026-09-22 起共**三組**缺口：chrome 的（五頁共用）＋「📖 憑什麼」頁
+    #       ＋「🔍 找標的」頁自己的。每組都是「每條一次 ＋ 該組前言一次」。
     assert len(CHROME_SPEC_GAPS) >= 4, len(CHROME_SPEC_GAPS)
     assert len(WHY_SPEC_GAPS) >= 4, len(WHY_SPEC_GAPS)
-    expected_caveats = (len(CHROME_SPEC_GAPS) + 1) + (len(WHY_SPEC_GAPS) + 1)
+    assert len(FIND_SPEC_GAPS) >= 4, len(FIND_SPEC_GAPS)
+    expected_caveats = ((len(CHROME_SPEC_GAPS) + 1) + (len(WHY_SPEC_GAPS) + 1)
+                        + (len(FIND_SPEC_GAPS) + 1))
     assert written.count(esc(GAP_CAVEAT)) == expected_caveats, (
         f"缺口標記數不對：{written.count(esc(GAP_CAVEAT))} ≠ {expected_caveats}"
         "（每組各為：每條一次 ＋ 前言一次）")
@@ -2224,8 +3154,14 @@ def main() -> None:
     assert WHY_BADGES_ON_PAGE <= _drawn_badges, (
         f"「📖 憑什麼」頁該畫的 6 態沒畫齊：少了 "
         f"{sorted(WHY_BADGES_ON_PAGE - _drawn_badges)}")
+    assert FIND_BADGES_ON_PAGE <= _drawn_badges, (
+        f"「🔍 找標的」頁該畫的 5 態沒畫齊：少了 "
+        f"{sorted(FIND_BADGES_ON_PAGE - _drawn_badges)}")
     assert 10 in WHY_BADGES_NOT_ON_PAGE and 10 in page_today.BADGES_NOT_ON_PAGE
     assert sorted(WHY_BADGES_NOT_ON_PAGE) == [2, 8, 9, 10], sorted(WHY_BADGES_NOT_ON_PAGE)
+    #    ⚠️ 「🔍 找標的」頁**多擋一顆 #5**（規格 ② 處置 2：unwired 已撤回、⛔ 不得回填）
+    #       ⇒ 兩頁的可畫集合不同是**規格不同**，⛔ 不是本檔挑的（見 FIND 缺口 F13）。
+    assert sorted(FIND_BADGES_NOT_ON_PAGE) == [2, 5, 8, 9, 10], sorted(FIND_BADGES_NOT_ON_PAGE)
     #    ⑧-b 順手把「待修」釘住：一旦 badge_html(10) 改成會炸，這行會紅
     #        ⇒ 提醒把 W5 從缺口清單移掉（⛔ 不讓已修好的東西繼續掛在缺口表上）。
     try:
@@ -2235,15 +3171,18 @@ def main() -> None:
             "markup.badge_html(10) 現在會炸了 —— 待修項已被修掉，"
             "請把 WHY_SPEC_GAPS 的 W5 改標為已解決（⛔ 不得留一條過期的缺口）") from None
 
-    # ⑨ 五頁切換：兩頁是真頁、三頁是佔位；`aria-current` 恰 1（標記裡的）。
-    for _pid in (PAGE_TODAY, PAGE_WHY):
+    # ⑨ 五頁切換：**三頁是真頁、兩頁是佔位**；`aria-current` 恰 1（標記裡的）。
+    #    ⚠️ 2026-09-22 第二次擴充：`PAGE_FIND` 自本輪起是**真頁**，
+    #       已從下方「⛔ 不得有頁容器」那一組**移出**（客戶逐字：其他兩頁仍顯示「此頁待做」）。
+    for _pid in (PAGE_TODAY, PAGE_WHY, PAGE_FIND):
         assert f'id="pv-page-{_pid}"' in written, f"少了 {_pid} 的頁容器"
     assert 'id="pv-page-why" hidden' in written, "「📖 憑什麼」頁預設⛔ 不是收起的"
+    assert 'id="pv-page-find" hidden' in written, "「🔍 找標的」頁預設⛔ 不是收起的"
     assert 'id="pv-page-todo" hidden' in written, "待做佔位預設⛔ 不是收起的"
     assert written.count(esc(TODO_HEADLINE)) >= 1, "「此頁待做」佔位不見了"
-    for _pid in (PAGE_FIND, PAGE_INSPECT, PAGE_HOLD):
+    for _pid in (PAGE_INSPECT, PAGE_HOLD):
         assert f'id="pv-page-{_pid}"' not in written, (
-            f"{_pid} 竟然有自己的頁容器 —— 那三頁本輪仍是「此頁待做」")
+            f"{_pid} 竟然有自己的頁容器 —— 那兩頁本輪仍是「此頁待做」")
 
     # ⑩ 側欄行為**⛔ 未改動**：仍無 `open`、仍無任何把 `nav.open` 設 true 的路徑。
     #    ⚠️ **只掃 `<script>` 裡的內容，⛔ 不掃全文**：G5 缺口的散文**刻意**引述了被移除的
@@ -2282,11 +3221,93 @@ def main() -> None:
     assert not _unmarked, (
         f"這些卡渲染得出數字卻⛔ 沒有掛「{DEMO}」：{_unmarked}")
 
+    # ══ 「🔍 找標的」頁的自驗（⛔ 不是「應該可以」；量到什麼就寫什麼）══════════
+    # ⑬ 14 個 block **全部**出現，且**逐一**比對層／欄數 class／密度 class。
+    #    ⛔ 不是「數一數有 14 個」——那只證明數量對。這裡比對的是每一塊的**長相**。
+    assert len(FIND_LAYOUT) == 14, len(FIND_LAYOUT)
+    assert len(FIND_BLOCK_COLS) == 14, "FIND_LAYOUT 有重複的 block key"
+    assert sorted(FIND_LAYER_BLOCKS) == [0, 1, 2, 3, 4, 5], sorted(FIND_LAYER_BLOCKS)
+    for _rec in FIND_LAYOUT:
+        _block = str(_rec["block"])
+        _cols = tuple(_rec["cols"])                       # type: ignore[arg-type]
+        _tier = find_tier_for_block(_block)
+        # `grid_html` 產的就是這一串（本檔⛔ 不手打，這裡只是把它算出來比對）
+        _grid_cls = f'class="grd grd-{_tier} g-{_cols[0]}-{_cols[1]}-{_cols[2]}"'
+        assert _grid_cls in written, f"{_block} 的網格 class 不對，預期 {_grid_cls}"
+        assert esc(_block) in written, f"{_block} 這個 block key 沒有出現在畫面上"
+        assert str(_rec["src"]).strip(), f"{_block} ⛔ 沒有標出處"
+        assert ".py:" not in str(_rec["src"]), (
+            f"{_block} 的 src 寫了行號 —— CLAUDE.md §8.2.A.0 規則 1：⛔ 不寫行號")
+    #    ⑬-b cols 全集四種（本組 node 實測線框：1/1/1 共 10、3/2/1 共 1、3/3/1 共 1、2/1/1 共 2）
+    _find_cols_count = {c: sum(1 for v in FIND_BLOCK_COLS.values() if v == c)
+                        for c in sorted(set(FIND_BLOCK_COLS.values()))}
+    assert _find_cols_count == {(1, 1, 1): 10, (2, 1, 1): 2,
+                                (3, 2, 1): 1, (3, 3, 1): 1}, _find_cols_count
+    #    ⑬-c 密度：n0~n4 必須與**契約層**的自動對映一致（⛔ 本檔不得偷偷手選一階）；
+    #         n5 是規格 ① 表自己新訂的 t2（契約層沒有這一格，見缺口 F14）。
+    for _n in (0, 1, 2, 3, 4):
+        assert find_tier_for_layer(_n) == components.tier_for_layer(_n), _n
+    assert find_tier_for_layer(5) == "t2"
+    try:
+        components.tier_for_layer(5)
+    except ValueError:
+        pass
+    else:  # pragma: no cover - 契約層補上 n5 時才會走到
+        raise AssertionError(
+            "components.tier_for_layer(5) 不再拋 ValueError —— 契約層補上 n5 了，"
+            "請把 FIND_N5_TIER 改成直接走契約層，並把缺口 F14 標為已解決")
+    #    ⑬-d 密度與徽章尺寸必須對上規格 ① 表逐字（t3/t1/t2/t3/t4/t2 與 b3/b1/b2/b3/b4/b2）
+    _find_spec_tiers = {0: "t3", 1: "t1", 2: "t2", 3: "t3", 4: "t4", 5: "t2"}
+    _find_spec_badge_sizes = {0: "b3", 1: "b1", 2: "b2", 3: "b3", 4: "b4", 5: "b2"}
+    for _n, _want in _find_spec_tiers.items():
+        assert find_tier_for_layer(_n) == _want, (_n, find_tier_for_layer(_n), _want)
+        _got = str(components.CARD_TIERS[_want]["badge_size"])
+        assert _got == _find_spec_badge_sizes[_n], (_n, _got, _find_spec_badge_sizes[_n])
+    #    ⑬-e 兩塊**⛔ 沒有卡、⛔ 沒有徽章**（規格 ② 處置 2(a)），且就地揭露有畫出來。
+    _find_cards_snapshot = build_find_cards()
+    assert sorted(FIND_NO_CARD_DISCLOSURE) == ["find.pick_reason",
+                                               "find.scenario_quickpick"], \
+        sorted(FIND_NO_CARD_DISCLOSURE)
+    for _block, _text in FIND_NO_CARD_DISCLOSURE.items():
+        assert not _find_cards_snapshot[_block], f"{_block} ⛔ 不得有卡"
+        assert esc(_text) in written, f"{_block} 的就地揭露沒有畫在畫面上"
+    #    ⑬-f ⭐ 客戶【拍板 1】明示的就地揭露**必須在畫面上**（⛔ 不得只留在 .py 裡）。
+    for _needle in (FIND_LAYOUT_DISCLOSURE, FIND_GRID_CSS_DISCLOSURE,
+                    FIND_GRID_CSS_DISCLOSURE_WHY):
+        assert esc(_needle) in written, "「🔍 找標的」頁的就地揭露沒有畫在畫面上"
+    #    ⑬-g ⭐ 本檔補的欄數 CSS：**只補契約層沒產的**，且⛔ 沒有新增第三個斷點。
+    assert set(_FIND_COLS_NEEDING_CSS).isdisjoint(set(page_today.BLOCK_COLS.values())), (
+        "本檔補的欄數與契約層重複了 —— 會有兩條同名規則（第二個真相源）")
+    assert set(_FIND_COLS_NEEDING_CSS) == {(2, 1, 1), (3, 3, 1)}, _FIND_COLS_NEEDING_CSS
+    _max_widths = sorted(set(int(m) for m in re.findall(r"max-width:(\d+)px", written)))
+    assert _max_widths == sorted({int(components.BREAKPOINTS["mobile_max_px"]),
+                                  int(components.BREAKPOINTS["tablet_max_px"])}), (
+        f"全檔的 max-width 斷點不是那兩個：{_max_widths} —— "
+        "補的那兩條 rule⛔ 不得引進第三個斷點")
+    #    ⑬-h 示意值：同 ⑫，**凡是渲染得出阿拉伯數字的卡，一律掛示意標記**。
+    _find_unmarked: list[str] = []
+    with find_page_contract():
+        for _block, _cards in _find_cards_snapshot.items():
+            for _card in _cards:
+                _one = markup.card_html(block=_block, **_card)
+                _text = re.sub(r"<[^>]+>", " ", _one)
+                if re.search(r"\d", _text) and esc(DEMO) not in _one:
+                    _find_unmarked.append(f"{_block} / {_card['title']}")
+    assert not _find_unmarked, (
+        f"這些卡渲染得出數字卻⛔ 沒有掛「{DEMO}」：{_find_unmarked}")
+
     print(f"wrote {OUT} ({len(written.encode('utf-8'))} bytes)")
     print(f"  · 「📖 憑什麼」頁：{len(WHY_LAYOUT)} block / "
           f"{len(WHY_LAYER_BLOCKS)} 層 / 缺口 {len(WHY_SPEC_GAPS)} 條")
-    print(f"  · 本頁畫的徽章：{sorted(WHY_BADGES_ON_PAGE)}；"
+    print(f"    畫的徽章：{sorted(WHY_BADGES_ON_PAGE)}；"
           f"⛔ 不畫：{sorted(WHY_BADGES_NOT_ON_PAGE)}")
+    print(f"  · 「🔍 找標的」頁：{len(FIND_LAYOUT)} block / "
+          f"{len(FIND_LAYER_BLOCKS)} 層 / 缺口 {len(FIND_SPEC_GAPS)} 條")
+    print(f"    畫的徽章：{sorted(FIND_BADGES_ON_PAGE)}；"
+          f"⛔ 不畫：{sorted(FIND_BADGES_NOT_ON_PAGE)}；"
+          f"⛔ 無卡無徽章的 block：{sorted(FIND_NO_CARD_DISCLOSURE)}")
+    print(f"  · 本檔補的欄數 CSS：{[f'g-{a}-{b}-{c}' for a, b, c in _FIND_COLS_NEEDING_CSS]}"
+          f"（⚠️ 規則形狀複製了一份 ＝ 第二個真相源，見缺口 F2）")
 
 
 if __name__ == "__main__":

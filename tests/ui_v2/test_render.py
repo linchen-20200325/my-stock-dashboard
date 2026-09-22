@@ -259,9 +259,20 @@ def test_the_main_cta_is_a_real_button_with_the_exact_label(at):
     label = page_today.MAIN_CTA["label"]
     labels = [b.label for b in at.button]
     assert label in labels, f"主 CTA 不是真 widget（`at.button` 只有 {labels}）"
+    # ⚠️ **2026-09-22 失敗訊息改文案**（有意識的政策變更，⛔ 不是漏刪；決策者**客戶**）：
+    #    ~~「主 CTA（**全站唯一一顆**）」~~ → 「主 CTA（**每頁首屏唯一一顆**）」。
+    #    ⛔ `~~…~~` 刪除線**只寫在本註解**，⛔ 不進失敗訊息字串本身
+    #       （否則每次紅燈都會把刪除線標記印進 pytest 輸出）。
+    #    - **舊文案的理由（仍然成立，⛔ 不是寫錯）**：在只有「🚦 今天」一頁時，
+    #      「全站唯一」與「每頁首屏唯一」**外延相同**。
+    #    - **被權衡掉的原因**：五頁 IA 落地後 🔎 選股頁有自己的主 CTA `🎯 開始選股`
+    #      ⇒「全站唯一」成為**可實測為假**的全稱句（`UI_PAGE_FIND.md` ① 已逐字否證）；
+    #      出處列標題已於 `7f14f68` 同步改名，此處跟著改才對得上出處。
+    #    ⚠️ **只動字串**：斷言式 `labels.count(label) == 1` **一字未動** ——
+    #       本測試 mount 的就是「🚦 今天」**這一頁**，「本頁恰好一顆」的檢查語意未變。
     assert labels.count(label) == 1, (
         f"主 CTA 出現 {labels.count(label)} 顆 —— "
-        "`UI_COMPONENTS.md §3 按鈕表主 CTA 列`「主 CTA（**全站唯一一顆**）」"
+        "`UI_COMPONENTS.md §3 按鈕表主 CTA 列`「主 CTA（**每頁首屏唯一一顆**）」"
     )
 
     blob = "\n".join(_markdown_values(at))

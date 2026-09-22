@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>戰情室 v2 靜態原型 · 🚦 今天 ＋ 📖 憑什麼</title>
+<title>戰情室 v2 靜態原型 · 🚦 今天 ＋ 📖 憑什麼 ＋ 🔍 找標的</title>
 <!--
 本檔是**機器產生**的靜態快照，⛔ 不要手改。
 
-(a) 產生來源：my-stock-dashboard 分支 ui-v2，src/ui_v2/ 於 commit 38039f59ed2340aafac96bbdf9d8c45619a4853a（2026-09-22）
-    產生當下 HEAD ＝ 262d9c4ea6809d388de612fae4c75bcd8e048ac6
+(a) 產生來源：my-stock-dashboard 分支 ui-v2，src/ui_v2/ 於 commit 7f14f68a7bd0f9ac8acc7dbbdecbc243c927b7a1（2026-09-22）
+    產生當下 HEAD ＝ 7f14f68a7bd0f9ac8acc7dbbdecbc243c927b7a1
     src/ui_v2/ 工作區乾淨（無未提交變更）
-    src/ui_v2 底下 7 個 .py 的內容 sha256 ＝ 38791f7e771c6a8b8c105aa22c29481273f885b1bbcc42d72a21183b09a9888a
+    src/ui_v2 底下 7 個 .py 的內容 sha256 ＝ e708aeda4581a0032787d6bfd309d7e3180efad99feb4fb3f70287c876d6d0fd
     （雜湊算法 ＝ 檔名 ＋ 位元組，依檔名排序後依序餵進 sha256；見產生器 main()）
 (b) 產生日期：2026-09-22
 (c) ⚠️ **這是靜態快照：tokens.py / components.py 改了，這個檔不會自動跟著變。**
@@ -70,7 +70,23 @@
          產生器另有一道守衛：今天頁在代理前後各產一次，兩次逐字相同才算過。
        · ⛔ 該頁**沒有畫任何 #10 徽章**：.bdg-10 不在 page_css() 的輸出裡，
          硬畫出來會是一顆無配色的徽章（客戶已裁示該項登記為待修、本輪不動）。
-       · 五頁切換：🚦 今天 與 📖 憑什麼 是可切換的真頁，其餘三頁仍顯示「此頁待做」；
+    10. 「🔍 找標的」頁（2026-09-22 同日新增，沿用同一套作法）：
+       · **六層 14 block**（客戶逐字「2. 6 層 14 block」）。版面定義 ＝ 產生器裡的
+         FIND_LAYOUT，14 筆逐筆標出處（規格 docs/v2/spec/UI_PAGE_FIND.md 的章節名 ＋
+         線框 docs/v2/wireframe/wf_page_find.js 的 block key；⛔ 不寫行號）。
+       · ⭐ **CSS 補了兩條**：本頁用到 3/3/1 與 2/1/1 兩組欄數，而 markup.page_css()
+         只產 page_today.BLOCK_COLS 裡出現過的（1/1/1 與 3/2/1）；grid_html() 對缺 CSS
+         的欄數**不報錯**，會讓那 3 塊**靜默塌成單欄**。客戶【拍板 1】選作法 (甲)：
+         由產生器補兩條 rule，欄數走 components.resolve_cols()、斷點走
+         components.BREAKPOINTS（⛔ 不寫死數字、⛔ 不碰底線私有符號），
+         並**就地揭露「規則形狀複製了一份」＝ 第二個真相源**（該頁最上方 ＋ 附錄 F2）。
+       · ⛔ 該頁**沒有畫** #2 / #5 / #8 / #9 / #10 五顆徽章（規格 ② 逐列判它們未落地
+         或不適用）；**兩塊沒有卡、沒有徽章**（情境快選 / 入選理由 —— 規格 ② 處置 2(a)
+         逐字「整塊不存在 ⇒ 不畫，⛔ 不得用 #5 冒充」），只畫它們的版面位置。
+       · 本輪查到的規格衝突與未決項共 17 條，逐條畫在該頁附錄（F1~F17），
+         客戶要求 6 逐字：「遇到規格衝突 → 就地標明、寫進附錄、⛔ 不自行裁決」。
+       · 五頁切換：🚦 今天 / 📖 憑什麼 / 🔍 找標的 是可切換的真頁，
+         其餘**兩頁**（🔬 查一檔 · 💼 我的持股）仍顯示「此頁待做」；
          時點列與頁尾免責**五頁共用**（畫在外殼上，⛔ 不是每頁各一份）。
 
 ⚠️ 例外揭露（依 CLAUDE.md §3.3 反捏造，據實記錄）：
@@ -229,6 +245,14 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 /*    ⇒ 手機（<= mobile_max_px）是單欄 ＋ details 收起，桌機同樣收起， */
 /*      客戶 2026-09-14「狀態列、時點列、分頁列不得吃掉首屏」在所有斷點都成立。 */
 @media (min-width:641px){.pv-shell{display:grid;grid-template-columns:min-content minmax(0,1fr);gap:var(--sp-6);align-items:start}.pv-nav{position:sticky;top:var(--sp-5)}}
+/* ══ 5. 「🔍 找標的」頁欠缺的欄數規則（客戶 2026-09-22 拍板 1，走作法(甲)）══ */
+/*    ⚠️ 規則的**形狀**在此被複製了一份 ⇒ 第二個真相源（就地揭露畫在該頁最上方）。 */
+/*    ⛔ 數字沒有第二份：欄數走 components.resolve_cols()、斷點走 components.BREAKPOINTS。 */
+/*    ⛔ 不呼叫 markup 的任何底線私有函式（V-PICKER-PRIV-1 是本 repo 登記在案的違憲）。 */
+.g-2-1-1{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g-3-3-1{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:880px){.g-2-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}.g-3-3-1{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.g-2-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}.g-3-3-1{grid-template-columns:repeat(1,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -266,6 +290,7 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 (function () {
   var TODAY = "today";
   var WHY = "why";
+  var FIND = "find";
   var TABLET_MIN = 641;
   var nav = document.getElementById('pv-nav');
   var mq = window.matchMedia
@@ -280,20 +305,24 @@ p{margin-top:var(--sp-2);margin-bottom:0}
   //    客戶 2026-09-14「分頁列不得吃掉首屏」在所有斷點都成立。
   // ⚠️ mq 只剩一個用途：下面 show() 判斷「是不是手機寬度」以便選完頁收起。
 
-  // 三向切換（2026-09-22 起）：🚦 今天 / 📖 憑什麼 / 其餘三頁的「此頁待做」佔位。
-  // ⛔ 刻意不用 if-else 串：三個容器各自只看自己那一個布林，
+  // 四向切換（2026-09-22 第二次擴充）：🚦 今天 / 📖 憑什麼 / 🔍 找標的 /
+  //   其餘兩頁（🔬 查一檔 · 💼 我的持股）的「此頁待做」佔位。
+  // ⛔ 刻意不用 if-else 串：四個容器各自只看自己那一個布林，
   //    少一個容器忘了關的機會（兩頁同時 visible 會讓畫面說謊）。
   function show(page, label) {
     var today = document.getElementById('pv-page-today');
     var why = document.getElementById('pv-page-why');
+    var find = document.getElementById('pv-page-find');
     var todo = document.getElementById('pv-page-todo');
     var isToday = (page === TODAY);
     var isWhy = (page === WHY);
+    var isFind = (page === FIND);
     today.hidden = !isToday;
     why.hidden = !isWhy;
-    todo.hidden = isToday || isWhy;
+    find.hidden = !isFind;
+    todo.hidden = isToday || isWhy || isFind;
     document.getElementById('pv-page-name').textContent = label;
-    if (!isToday && !isWhy) {
+    if (!isToday && !isWhy && !isFind) {
       document.getElementById('pv-todo-name').textContent = label;
     }
     var items = document.querySelectorAll('.pv-nav-item');
@@ -384,8 +413,8 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 <section class="pv-layer">
 <div class="pv-layer-label">第三層 操作列 · 密度 t3 · block：today.actions</div>
 <p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t3</span>]：內距 6px 9px、框線 1px solid、卡標 13px/700、徽章 .sb-b3、卡距 6px</p>
-<p class="pv-meta">主 CTA 全站唯一一顆，標籤逐字取 page_today.MAIN_CTA[&#x27;label&#x27;]；可按性取 main_cta_state()。⚠️ 本頁是靜態原型，按下去不會有任何事發生。</p>
-<div class="grd grd-t3 g-1-1-1"><div class="blk blk-t3"><div class="blk-head"><span class="blk-title">today.actions</span><span class="bdg bdg-1 sb-b3"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">主 CTA</span><span class="blk-fact-v">全站唯一一顆</span></div><div class="blk-fact"><span class="blk-fact-k">停用條件</span><span class="blk-fact-v">MISS_CONTRACT_DRIFT</span></div></div></div></div>
+<p class="pv-meta">主 CTA 每頁首屏唯一一顆，標籤逐字取 page_today.MAIN_CTA[&#x27;label&#x27;]；可按性取 main_cta_state()。⚠️ 本頁是靜態原型，按下去不會有任何事發生。⚠️ 範圍詞 2026-09-22 由「全站唯一」改為「每頁首屏唯一」（客戶拍板）——「🔍 找標的」頁有自己的主 CTA「🎯 開始選股」，「全站唯一」自那一頁落地起就是一句可被否證的假話。</p>
+<div class="grd grd-t3 g-1-1-1"><div class="blk blk-t3"><div class="blk-head"><span class="blk-title">today.actions</span><span class="bdg bdg-1 sb-b3"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">主 CTA</span><span class="blk-fact-v">每頁首屏唯一一顆</span></div><div class="blk-fact"><span class="blk-fact-k">停用條件</span><span class="blk-fact-v">MISS_CONTRACT_DRIFT</span></div></div></div></div>
 <div class="pv-cta">
 <button type="button" class="pv-btn-primary">🚀 更新今日戰情</button>
 <span class="pv-meta">靜態原型：這顆鈕不會觸發任何事。</span>
@@ -555,11 +584,121 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 </section>
 </main>
 </div>
+<!--
+「🔍 找標的」頁 ＝ **六層 14 block**（客戶 2026-09-22 拍板逐字「2. 6 層 14 block」）。
+⛔ 本頁的版面定義住在產生器的 `FIND_LAYOUT`，**不在** `src/ui_v2/` 契約層、
+  **沒有** `tests/ui_v2/` 的測試守護 —— 同「📖 憑什麼」頁的作法（客戶拍板的選項 1），
+  後果已就地揭露在本頁最上方與附錄 F1~F17。
+⭐ 標記怎麼來的：產生期間把 `markup.page_today` **暫時**換成本頁的版面契約，
+  卡片與網格仍由 `markup.card_html` / `grid_html` 產出；產完**立刻還原**。
+⭐ CSS：本頁用到兩組契約層**沒有產**的欄數（3/3/1 與 2/1/1）——
+  客戶【拍板 1】選作法 (甲)：由產生器補兩條 rule，值用 `components.resolve_cols()`
+  ＋ `components.BREAKPOINTS` 算（⛔ 不寫死數字、⛔ 不碰任何底線私有符號），
+  並**就地揭露「規則形狀複製了一份」** ＝ 第二個真相源。
+⛔ 本頁**沒有畫** #2 / #5 / #8 / #9 / #10 五顆徽章：規格 ② 逐列判它們未落地或不適用，
+  誤畫會在產生時變成 ValueError（代理的 BADGES_NOT_ON_PAGE 擋）。
+⛔ 兩塊（情境快選 / 入選理由）**沒有卡、沒有徽章**：規格 ② 處置 2(a) 逐字「整塊不存在
+  ⇒ 不畫，⛔ 不得用 #5 冒充」—— 本輪只畫它們的版面位置，衝突登記在附錄 F3。
+-->
+<div id="pv-page-find" hidden>
+<main>
+<section class="pv-layer" id="pv-find-disclosure">
+<div class="pv-layer-label">🔍 找標的 · 六層 14 block（版面定義在產生器內）</div>
+<p class="pv-disclosure">⚠️ 此頁版面定義在產生器內，未進 src/ui_v2/ 契約層、無 tests/ui_v2/ 測試守護。</p>
+<p class="pv-meta">差別在哪：「🚦 今天」頁的版面（哪個 block 在第幾層、幾欄、哪一階密度）住在 src/ui_v2/page_today.py，改壞了 tests/ui_v2/ 會紅燈；本頁的同一組資料住在 docs/v2/prototype/gen_today_v2.py 的 FIND_LAYOUT，改壞了⛔ 沒有任何測試會攔。⇒ 本頁的版面只有「跟規格與線框對照」這一種查法，⛔ 沒有機器守衛。本產生器在結尾自己跑了一輪對照（14 個 block key／層／欄數 class／密度 class 逐一比對，另從 CSS 文字量三個斷點的實際欄數），但那是**同一組人寫的自驗**，⛔ 不等於獨立測試。</p>
+<p class="pv-disclosure">⚠️ 本頁有兩條欄數規則（.g-3-3-1 與 .g-2-1-1）是**產生器自己補的**，⛔ 不在 src/ui_v2/ 契約層。非補不可的理由（實測，⛔ 非推測）：markup.page_css() 只產「page_today.BLOCK_COLS 裡真的出現過」的欄數 class，而那份查表只有 1/1/1 與 3/2/1 兩種；markup._BLOCK_COLS_USED 是 module-level、import 當下就依 page_today 算好了，本頁的代理換不動它。而 markup.grid_html() 對「沒有對應 CSS 的欄數」**不報錯**，會照樣吐出 g-3-3-1 這個 class，偏偏 .grd 基準規則裡**沒有** grid-template-columns ⇒ 那 3 塊會**靜默塌成單欄**、三個斷點長得一樣。這與 .bdg-10「畫得出來但沒有配色」是**同一型的靜默失效**（CLAUDE.md §1 最危險的那一型：看起來成功、其實是假的）。</p>
+<p class="pv-meta">🔴 就地揭露（客戶 2026-09-22 拍板 1 明示⛔ 不得省）：**規則的「形狀」被複製了一份，這是第二個真相源。** 補的那兩條裡，**數字沒有第二份** —— 欄數一律用公開 API components.resolve_cols(cols, components.BREAKPOINTS[…]) 算、斷點值一律取 components.BREAKPOINTS，⛔ 沒有寫死 3／2／1／640／880 任何一個。被複製的是**形狀**三件事：class 怎麼命名（g-桌-平-手）、宣告怎麼寫（grid-template-columns:repeat(N,minmax(0,1fr))）、兩個 @media 的順序（先 880 後 640，因為 640 也命中 max-width:880px）。這三件事住在 markup._grid_rules() 與 markup._breakpoint_rules()，**是底線開頭的私有函式** ⇒ ⛔ 不得直接呼叫（本 repo 登記在案的違憲 V-PICKER-PRIV-1 就是跨層直取私有符號）。⇒ **後果**：markup 日後若改了 class 命名或宣告寫法，本檔**不會跟著改，而且沒有任何測試會攔**。**真正的解**是把這兩組 cols 放進契約層、讓 page_css() 自己產，那要動 src/ui_v2/ ⇒ ⛔ 不在本輪授權範圍。本產生器結尾有一道守衛：從產出的 CSS 文字用 regex 量三個斷點的實際欄數，3/3/1 與 2/1/1 任一段不符就炸 —— 但那同樣是同一組人寫的自驗，⛔ 不等於獨立測試。</p>
+<p class="pv-meta">本頁形狀（本組自行實測，⛔ 非引用轉述）：規格 docs/v2/spec/UI_PAGE_FIND.md ＋ 線框 docs/v2/wireframe/wf_page_find.js 的 id 為 find 那一頁 —— node 解析結果：6 層、14 block、2 葉（l1 選股網／l2 板塊地圖，後者是產業熱力圖＋板塊資金潮汐兩個既有分頁併出來的）；14 塊的 cols 全集有 4 種，1/1/1 共 10 塊、3/2/1 共 1 塊、3/3/1 共 1 塊、2/1/1 共 2 塊。線框 mainCTA 欄位存在且非 null（label 逐字「🎯 開始選股」）⇒ 本頁**有**主 CTA，與「📖 憑什麼」頁（mainCTA 為 null）相反。</p>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">葉外 · n0 · 葉外（兩葉共用） · 密度 t3 · block 2 塊：find.statusbar、chrome.asof</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t3</span>]：內距 6px 9px、框線 1px solid、卡標 13px/700、徽章 .sb-b3、卡距 6px</p>
+<p class="pv-meta">兩塊的 leaf 在線框是 null ＝ 葉外 chrome，畫在分頁列之上、兩葉共用。⚠️ 規格 ⑤ 反例自檢 A 末條逐字：find.statusbar 與 chrome.asof 兩塊**本頁皆無實作**⇒ 失敗時無可顯示；⛔ 不得用總覽卡的紅態冒充一條不存在的狀態列。⚠️ 在這份 HTML 原型裡，時點列的**實體**畫在五頁共用的外殼上（頁標題下方第一行），本層畫的是它的**版面登記**，⛔ 不是第二份 chrome；頂部狀態列的實體本原型**沒有做**。⚠️ 線框 find.statusbar 的 src 指到的那一行，規格 ⑤ 實測是 _load_regime（空頭濾網），⛔ 不是狀態列本身 —— 這是已登記的兩個 src 內容漂移之一（見缺口 F16）。</p>
+<div class="grd grd-t3 g-1-1-1"><div class="blk blk-t3"><div class="blk-head"><span class="blk-title">（跨頁）頂部狀態列</span><span class="bdg bdg-3 sb-b3"><span aria-hidden="true">⬜</span><span>尚未載入</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">線框 idle 逐字</span><span class="blk-fact-v">09/13 週五 ✅ 交易日　|　⬜ 總經未評估　|　🔗 尚未綁定 Sheet</span></div><div class="blk-fact"><span class="blk-fact-k">那個日期</span><span class="blk-fact-v">線框自註：live／idle 那一行的日期是規格示意值，非實測</span></div><div class="blk-fact"><span class="blk-fact-k">本頁實作</span><span class="blk-fact-v">規格 ⑤ 逐字：本頁無實作 ⇒ 失敗時無可顯示</span></div><div class="blk-fact"><span class="blk-fact-k">誰定義它</span><span class="blk-fact-v">五頁共用 chrome，狀態定義在頁1 的 today.statusbar，本頁不重新定義</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+<div class="grd grd-t3 g-1-1-1"><div class="blk blk-t3"><div class="blk-head"><span class="blk-title">資料時點揭露列（頁標題下方第一行）</span><span class="bdg bdg-3 sb-b3"><span aria-hidden="true">⬜</span><span>尚未載入</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">線框 idle 逐字</span><span class="blk-fact-v">資料時點：尚未載入，本頁沒有任何本輪資料</span></div><div class="blk-fact"><span class="blk-fact-k">這份原型</span><span class="blk-fact-v">外殼上那一條畫的正是這一態的逐字，⛔ 一個真時間都沒填</span></div><div class="blk-fact"><span class="blk-fact-k">本頁的難處</span><span class="blk-fact-v">一頁之內有三種節奏的時點（收盤日／資料歸屬月／盤後凍結快照），線框逐字⛔ 不可合併成一個日期 ⇒ 本頁常態是「最舊～最新」</span></div></div></div></div>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">第一層 條件表單 · n1 · l1 選股網 · 密度 t1 · block 3 塊：find.screen_form、find.scenario_quickpick、find.wiring_disclosure</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t1</span>]：內距 15px 17px、框線 2px solid、卡標 17.5px/700、徽章 .sb-b1、卡距 15px、手機內距 11px 12px</p>
+<p class="pv-meta">t1 是四階裡唯一 2px 框線、內距最大的一階（手機 ≤640 另有一組覆寫內距，四階中也只有 t1 有）。⭐ **本頁的主 CTA「🎯 開始選股」就住在這一層**（線框 mainCTA.label 逐字）——客戶 2026-09-22 拍板逐字：主 CTA 不是「全站唯一」，是「**每頁首屏唯一**」，而 FIND 的這一顆就是它的每頁唯一主 CTA。規格 ① 另逐字：form 內只有這一顆、住預設葉 l1。⚠️ 三塊的 cols 是本頁四種欄數裡**最複雜的一組**：3/2/1、3/3/1、1/1/1 各一。其中 3/3/1 是契約層**沒有產 CSS** 的一條，由本產生器補（見本頁最上方的就地揭露）。⚠️ 中間那塊（情境快選）本輪**沒有卡、沒有徽章**，理由就地寫在該塊位置上。</p>
+<div class="grd grd-t1 g-3-2-1"><div class="blk blk-t1"><div class="blk-head"><span class="blk-title">葉1 條件表單（三格 ＋ 主 CTA 🎯 開始選股）</span><span class="bdg bdg-3 sb-b1"><span aria-hidden="true">⬜</span><span>尚未載入</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">線框 idle 逐字</span><span class="blk-fact-v">表單永遠可見（它就是灰態的出口），三格顯預設值，submit 可按</span></div><div class="blk-fact"><span class="blk-fact-k">規格 ① 逐字</span><span class="blk-fact-v">form 內只有這一顆、住預設葉 l1</span></div><div class="blk-fact"><span class="blk-fact-k">主 CTA 範圍詞</span><span class="blk-fact-v">每頁首屏唯一一顆（客戶 2026-09-22 拍板；舊寫法「全站唯一」已改）</span></div><div class="blk-fact"><span class="blk-fact-k">⛔ 不得</span><span class="blk-fact-v">用表單本身去表示有沒有選過 —— 還沒選過與已經選過，表單長得一樣</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+<div class="grd grd-t1 g-3-3-1"><p class="pv-disclosure">這一塊本輪⛔ 沒有卡、⛔ 沒有徽章，是刻意的。線框 src 為 null；線框 unwired 那一格自己逐字寫「這一格就是現在的真實狀態：這三顆鈕在現行畫面上不存在。線框畫的是提案，還沒有做」。規格 ② 處置 2 逐字：「find.scenario_quickpick／find.pick_reason 線框 src:null、畫面上整塊不存在 ⇒ 不畫，⛔ 不得用 #5 冒充「有這塊但沒接線」」。⇒ 本輪畫出它的**版面位置**（層 n1／欄數 3/3/1／密度 t1 都在），但⛔ 不掛任何徽章。⚠️ 這與客戶本輪「6 層 14 block」的要求有交集，⛔ 本組不自行裁決 —— 見缺口 F3。</p></div>
+<div class="grd grd-t1 g-1-1-1"><div class="blk blk-t1"><div class="blk-head"><span class="blk-title">取數接線揭露（表單下方常駐 caption）</span><span class="bdg bdg-1 sb-b1"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-lvl">🟢 常駐，⛔ 不隨狀態消失</div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">線框十態</span><span class="blk-fact-v">十格全部非 null，九格逐字都是「常駐」</span></div><div class="blk-fact"><span class="blk-fact-k">live 那一格</span><span class="blk-fact-v">是 code 端 WIRING_DISCLOSURE 常數的逐字內容</span></div><div class="blk-fact"><span class="blk-fact-k">⚠️ 但它是 code 自己的宣稱</span><span class="blk-fact-v">「五個因子都已接線」是一句全稱句，線框自陳沒有逐一驗證五條路徑（CLAUDE.md §-2 規則 6）</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">第二層 總覽卡 · n2 · l1 選股網 · 密度 t2 · block 1 塊：find.screen_summary</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t2</span>]：內距 10px 12px、框線 1px solid、卡標 14.5px/700、徽章 .sb-b2、卡距 10px</p>
+<p class="pv-meta">只有一塊，1/1/1。本層畫**兩張卡**：冷啟動 #3 與上游失敗 #6 ——⛔ 不是挑好看的，兩張都是規格 ⑤ 點名的：⑤B 逐字「冷啟動（還沒點「🎯 開始選股」）：一律 #3 ⬜ 尚未載入 ＋ 灰色說明，⛔ 不得畫成紅色錯誤」；⑤A 逐字「n2 總覽卡：#6 🔴 取得失敗，大字區留白，⛔ 不得顯示 0 或上一輪殘值」。⚠️ 大字區留白**不是漏畫**：是 page_today.card_value_text() 依狀態擦掉的。</p>
+<div class="grd grd-t2 g-1-1-1"><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">葉1 選股結果 · 總覽卡（冷啟動）</span><span class="bdg bdg-3 sb-b2"><span aria-hidden="true">⬜</span><span>尚未載入</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">規格 ⑤B 逐字</span><span class="blk-fact-v">冷啟動一律 #3 ⬜ 尚未載入 ＋ 灰色說明，⛔ 不得畫成紅色錯誤</span></div><div class="blk-fact"><span class="blk-fact-k">線框 idle 逐字</span><span class="blk-fact-v">在你送出之前，本頁一次 L3 取數都不會發（沒有人叫過它）</span></div><div class="blk-fact"><span class="blk-fact-k">去哪補</span><span class="blk-fact-v">勾好條件後，按「🎯 開始選股」（在表單裡）</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">葉1 選股結果 · 總覽卡（上游全敗）</span><span class="bdg bdg-6 sb-b2"><span aria-hidden="true">🔴</span><span>取得失敗</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">規格 ⑤A 逐字</span><span class="blk-fact-v">#6 🔴 取得失敗，大字區留白，⛔ 不得顯示 0 或上一輪殘值</span></div><div class="blk-fact"><span class="blk-fact-k">逐源列出</span><span class="blk-fact-v">aux_errors 逐源列出（存活池／估值／缺貨／RS／跨季／總經位階），一源壞⛔ 不染色其餘</span></div><div class="blk-fact"><span class="blk-fact-k">⛔ 不得</span><span class="blk-fact-v">對契約漂移給「可以重跑」指引 —— 重按不會好，給錯指引比不給更糟</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">第三層 大表＋CSV · n3 · l1 選股網 · 密度 t3 · block 3 塊：find.screen_table、find.pick_reason、find.csv</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t3</span>]：內距 6px 9px、框線 1px solid、卡標 13px/700、徽章 .sb-b3、卡距 6px</p>
+<p class="pv-meta">三塊全 1/1/1。⚠️ 規格 ⑥ 逐字：結果表的欄位是**勾選決定的動態欄**、因子值是百分位 0–100 且 1 位小數，**無殖利率欄** —— 線框畫的固定 6 欄原始值模型已由總管判定為「設計變更（線框待改）」，且客戶 2026-09-16 裁示「結果表原始值欄：維持不要」。⚠️ 中間那塊（入選理由）本輪**沒有卡、沒有徽章**，理由就地寫在該塊位置上。⚠️ CSV 那塊畫的是 empty 態：規格 ⑤A 逐字「0 列也是一個結果」⇒ 鈕**停用但不隱藏**；現行實作早退會讓它一起消失，屬實作待修（缺口 F10）。</p>
+<div class="grd grd-t3 g-1-1-1"><div class="blk blk-t3"><div class="blk-head"><span class="blk-title">葉1 選股結果 · 大表（桌機表格／手機卡片流）</span><span class="bdg bdg-1 sb-b3"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-lvl">🟢 這一塊是接上的</div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">規格 ⑥ 現況</span><span class="blk-fact-v">欄位是勾選決定的動態欄；因子值是百分位 0–100、1 位小數；無殖利率欄</span></div><div class="blk-fact"><span class="blk-fact-k">客戶 2026-09-16 裁示逐字</span><span class="blk-fact-v">結果表原始值欄：維持不要</span></div><div class="blk-fact"><span class="blk-fact-k">線框待改</span><span class="blk-fact-v">線框畫的固定 6 欄原始值模型已判為設計變更</span></div><div class="blk-fact"><span class="blk-fact-k">手機 ≤640</span><span class="blk-fact-v">規格 ③ 末段新訂卡片流；⛔ 本輪不得照現值落地，該段自帶一條無障礙阻斷（見缺口 F17）</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+<div class="grd grd-t3 g-1-1-1"><p class="pv-disclosure">這一塊本輪⛔ 沒有卡、⛔ 沒有徽章，是刻意的。線框 src 為 null；線框 live 那一格自己逐字開頭就寫「這一塊還是提案，現在還沒有 ——現行畫面點列不會展開」。規格 ② 處置 2 把它與上一塊列在同一條，處置相同。⇒ 本輪畫出它的**版面位置**（層 n3／欄數 1/1/1／密度 t3 都在），但⛔ 不掛任何徽章。⚠️ ⛔ 不得拿 #5 冒充，也⛔ 不得因為「客戶要 14 block」就給它一顆看起來正常的 #1 ——那會把「這塊還沒做」畫成「做好了」（CLAUDE.md §1）。見缺口 F3。</p></div>
+<div class="grd grd-t3 g-1-1-1"><div class="blk blk-t3"><div class="blk-head"><span class="blk-title">⬇ 下載結果 CSV（form 外）</span><span class="bdg bdg-7 sb-b3"><span aria-hidden="true">⚠︎ —</span><span>缺漏 · 可重跑</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">線框 empty 逐字</span><span class="blk-fact-v">停用但不隱藏 ——「我跑過、結果是 0」本身就是一個要留存的結果</span></div><div class="blk-fact"><span class="blk-fact-k">實作待修</span><span class="blk-fact-v">現行早退會讓 CSV 跟著消失 ⇒ 0 列／錯誤時鈕應留在畫面上走停用態</span></div><div class="blk-fact"><span class="blk-fact-k">⛔ 不得</span><span class="blk-fact-v">在匯出時把 ⚠︎ — 變成空白或 0（線框逐字）</span></div><div class="blk-fact"><span class="blk-fact-k">兩處未決</span><span class="blk-fact-v">檔名不含資料歸屬日（實作待修）＋ 鈕字串兩份真相源（待客戶拍板），見缺口 F10</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">第四層 展開佐證 · n4 · l1 選股網 · 密度 t4 · block 1 塊：find.pe_two_kinds</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t4</span>]：內距 5px 9px、框線 1px dashed、卡標 12.5px/700、徽章 .sb-b4、卡距 5px</p>
+<p class="pv-meta">t4 是四階裡唯一 dashed 的一階，且本層**只有一塊**、單獨成層 ——這一點是總管 2026-09-16 推翻「結果表要留原始值欄」的決定性依據：三語彙的載體在 n4，與 n3 的結果表**不同層、不同 block**。⭐ 本塊畫的是 #7 缺漏，那是客戶 2026-09-16 裁示的**現行落地態**，逐字：「本益比兩種「沒有」：UI 層先誠實顯示「本機分不出，需 L1 補旗標」。L1 修改列為獨立任務，等 UI 全部做完再評估解凍。不要假裝做得到。」⛔ 在 D-08 修完之前不得把 PE≤0 與 NaN 畫成兩種不同符號（見缺口 F8）。</p>
+<div class="grd grd-t4 g-1-1-1"><div class="blk blk-t4"><div class="blk-head"><span class="blk-title">🔴 為什麼有些本益比是空的（PE 兩種「沒有」的分辨）</span><span class="bdg bdg-7 sb-b4"><span aria-hidden="true">⚠︎ —</span><span>缺漏 · 可重跑</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">客戶 2026-09-16 裁示逐字</span><span class="blk-fact-v">UI 層先誠實顯示「本機分不出，需 L1 補旗標」。L1 修改列為獨立任務，等 UI 全部做完再評估解凍。不要假裝做得到</span></div><div class="blk-fact"><span class="blk-fact-k">線框十態</span><span class="blk-fact-v">十格全部非 null，逐字都是「常駐」—— missing 那格另註「這一態正是它要解釋的」</span></div><div class="blk-fact"><span class="blk-fact-k">上畫面的字面</span><span class="blk-fact-v">一律標 ⚠︎ —，並就地說明「這一欄目前分不出兩種「沒有」」</span></div><div class="blk-fact"><span class="blk-fact-k">⛔ 使用者看到的字面不得出現</span><span class="blk-fact-v">L1／旗標／D-08 這類內部詞，也不得出現「虧損」</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+</section>
+<section class="pv-layer">
+<div class="pv-layer-label">葉2 · n5 · l2 板塊地圖（＝產業熱力圖＋板塊資金潮汐） · 密度 t2 · block 4 塊：find.map_cta、find.heatmap、find.sector_flow、find.map_scale_disclosure</div>
+<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">t2</span>]：內距 10px 12px、框線 1px solid、卡標 14.5px/700、徽章 .sb-b2、卡距 10px</p>
+<p class="pv-meta">葉2 板塊地圖，四塊：1/1/1、2/1/1、2/1/1、1/1/1。兩個 2/1/1 同樣是契約層**沒有產 CSS** 的一條，由本產生器補。密度 t2 是**規格 ① 表自己新訂的**（超出 n1~n4 自動對映時取「核心卡」），⛔ 不是契約層算出來的（components.tier_for_layer 只認 0 與 1~4）—— 見缺口 F14。⚠️ 本頁是 n5 新訂的**原創處**：「📖 憑什麼」頁 ② 表自己逐字寫「沿用 UI_PAGE_FIND 對 n5 的新訂」⇒ ⛔ 不得把本頁這一格寫成「借那一頁的」。⚠️ 規格 ① 另逐字：n5 的 2/1/1 在實作端**只落地一半**（兩張卡並列，兩張圖上下堆疊）。⚠️ 兩張圖**各自判態**（線框層標逐字），所以這裡一張畫 #3 idle、一張畫 #4 degraded ——#4 是規格 ② 處置 5 逐字「現僅葉2 可達」的那一顆，葉1 待補。</p>
+<div class="grd grd-t2 g-1-1-1"><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">葉2 CTA：🗺️ 載入板塊地圖</span><span class="bdg bdg-3 sb-b2"><span aria-hidden="true">⬜</span><span>尚未載入</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">線框 idle 逐字</span><span class="blk-fact-v">鈕常駐可按；下方兩張圖各自顯示自己的灰態（兩張圖不共用同一段文字）</span></div><div class="blk-fact"><span class="blk-fact-k">⛔ 它不是頁主 CTA</span><span class="blk-fact-v">線框自註：form 外、非預設葉 ⇒ 不是頁主 CTA；本頁的主 CTA 是葉1 的「🎯 開始選股」</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+<div class="grd grd-t2 g-2-1-1"><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">葉2 左｜產業漲跌熱力圖</span><span class="bdg bdg-3 sb-b2"><span aria-hidden="true">⬜</span><span>尚未載入</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">線框 idle 逐字</span><span class="blk-fact-v">⬜ 板塊資料尚未載入</span></div><div class="blk-fact"><span class="blk-fact-k">線框給的原因（逐字）</span><span class="blk-fact-v">熱力圖要批次抓數十檔類股代表</span></div><div class="blk-fact"><span class="blk-fact-k">去哪補</span><span class="blk-fact-v">點「🗺️ 載入板塊地圖」</span></div><div class="blk-fact"><span class="blk-fact-k">線框 degraded 是 null</span><span class="blk-fact-v">本塊結構上就沒有「門檻失準」這一格 ⇒ ⛔ 不得畫 #4</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+<div class="grd grd-t2 g-2-1-1"><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">葉2 右｜三大法人資金流向泡泡圖</span><span class="bdg bdg-4 sb-b2"><span aria-hidden="true">🟠</span><span>門檻已失準</span></span></div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">規格 ② 處置 5 逐字</span><span class="blk-fact-v">#4 degraded：葉1 待補，現僅葉2 可達</span></div><div class="blk-fact"><span class="blk-fact-k">線框 degraded 逐字</span><span class="blk-fact-v">快照是舊的 → 就地寫出它為什麼是舊的（來源沒給原因時就寫「上游沒有給原因」）</span></div><div class="blk-fact"><span class="blk-fact-k">⛔ 不得</span><span class="blk-fact-v">靜默拿舊快照當今天的值</span></div><div class="blk-fact"><span class="blk-fact-k">畫面行為</span><span class="blk-fact-v">degraded ＝ 觀測照出、判決留白 ⇒ 上面那顆等級⛔ 不會畫出來</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+<div class="grd grd-t2 g-1-1-1"><div class="blk blk-t2"><div class="blk-head"><span class="blk-title">⭐ 葉2 口徑揭露（常駐小字）</span><span class="bdg bdg-1 sb-b2"><span aria-hidden="true">🟢</span><span>運作中</span></span></div><div class="blk-lvl">🟢 常駐</div><div class="blk-facts"><div class="blk-fact"><span class="blk-fact-k">線框 live 逐字</span><span class="blk-fact-v">X＝近 5 日累計淨流入（億）· Y＝動能變化 · 泡泡＝近 20 日淨額規模。面積不等於權重。</span></div><div class="blk-fact"><span class="blk-fact-k">線框 idle 逐字</span><span class="blk-fact-v">常駐 —— 你在看圖之前就該知道這張圖在量什麼</span></div><div class="blk-fact"><span class="blk-fact-k">線框十態</span><span class="blk-fact-v">十格全部非 null，九格逐字都是「常駐」</span></div><div class="blk-fact"><span class="blk-fact-k">資料來源</span><span class="blk-fact-v">⚠️ 示意值 · 未接線</span></div></div></div></div>
+</section>
+<section class="pv-layer" id="pv-find-gaps">
+<div class="pv-layer-label">附錄 · 「🔍 找標的」頁本輪查到的規格衝突與未決項（逐條登記，⛔ 不代為裁決）</div>
+<p class="pv-meta">每一條都是：⚠️ 單組／兩組調查結論，未經第三方驗。⛔ 不得被引用為「已查證的事實」去支撐下一步決策（CLAUDE.md §-2 規則 6）。</p>
+<p class="pv-meta"><span class="pv-mono">F1</span>　🔴 主 CTA 的範圍詞「全站唯一」**不只四個落點** —— 本組實測至少 **8 處**，其中 **3 處到目前為止仍未同步**（且**全部不在本組的檔案邊界內**）⇒ ⛔ 不得宣稱「已全部同步」。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">客戶 2026-09-22 拍板逐字：「【拍板 2：主 CTA】不是「全站唯一」，是「每頁首屏唯一」。⇒ 產生器裡那 2 處文案改掉。FIND 的「🎯 開始選股」就是它的每頁唯一主 CTA」。／／**落點普查（本組 grep 實測，量測日 2026-09-22；⚠️ 單組、⛔ 未窮舉全 repo，只掃了 src/ui_v2/ ＋ docs/v2/spec/UI_COMPONENTS.md ＋ 本產生器）**：已同步 5 處 —— (1) docs/v2/spec/UI_COMPONENTS.md §3 按鈕表該列標題；(2) src/ui_v2/page_today.py 第三層註解；(3) 同檔 MAIN_CTA 的鍵（unique_per_site → unique_per_first_screen）；(4)(5) 本產生器兩處（_LAYER_NOTE[3] ＋ today.actions 卡的 facts）。／／🔴 **仍未同步 3 處（本組本輪新發現，⛔ 不在本組檔案邊界內、本組一個字都沒動）**：(6) src/ui_v2/render.py 的 _MAIN_CTA_LAYERS 註解「UI_PAGE_TODAY ①：全站唯一一顆，掛第三層」；(7) 同檔 _render_main_cta() 的 docstring「UI_COMPONENTS §3「主 CTA（全站唯一一顆）」」；(8) src/ui_v2/components.py 的 BUTTONS 上方註解「UI_COMPONENTS.md §3 按鈕表「主 CTA（全站唯一一顆）」列」。／／**本輪本組只動了 (4)(5)**。(1)(2)(3) 由另一組處理 —— 本組**只查證到「git log 有一筆訊息寫著鍵名同步改名、且 diff 觸及那三個檔」這件事**，**⛔ 沒有逐字複驗它們的內容** ⇒ 依 CLAUDE.md §-2 規則 6，⛔ 不得寫成「落點已全部同步」。／／**規格端早就有一條否證**：UI_PAGE_FIND ① 逐字「2026-09-16 修正（WJ）：原寫「全站唯一一顆」主 CTA 不成立 —— 葉2 那顆同為 type=primary…可宣稱的是客戶指令原意 ——「選股主 CTA 只有一顆、且在預設葉 l1 可見」；⛔ 不得寫成全站唯一」。⇒ 客戶本輪的拍板與這條規格端修正**同向**。／／⚠️ 本產生器**不讀** MAIN_CTA 的那個鍵（只讀 MAIN_CTA[&#x27;label&#x27;]，本組 grep 實測）⇒ 鍵名改名⛔ 不影響本產生器；本檔也因此**沒有**跟著改任何鍵名。</p>
+<p class="pv-meta"><span class="pv-mono">F2</span>　⚠️ 本頁有兩條欄數規則（.g-3-3-1 與 .g-2-1-1）是**產生器自己補的**，⛔ 不在 src/ui_v2/ 契約層。非補不可的理由（實測，⛔ 非推測）：markup.page_css() 只產「page_today.BLOCK_COLS 裡真的出現過」的欄數 class，而那份查表只有 1/1/1 與 3/2/1 兩種；markup._BLOCK_COLS_USED 是 module-level、import 當下就依 page_today 算好了，本頁的代理換不動它。而 markup.grid_html() 對「沒有對應 CSS 的欄數」**不報錯**，會照樣吐出 g-3-3-1 這個 class，偏偏 .grd 基準規則裡**沒有** grid-template-columns ⇒ 那 3 塊會**靜默塌成單欄**、三個斷點長得一樣。這與 .bdg-10「畫得出來但沒有配色」是**同一型的靜默失效**（CLAUDE.md §1 最危險的那一型：看起來成功、其實是假的）。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">🔴 就地揭露（客戶 2026-09-22 拍板 1 明示⛔ 不得省）：**規則的「形狀」被複製了一份，這是第二個真相源。** 補的那兩條裡，**數字沒有第二份** —— 欄數一律用公開 API components.resolve_cols(cols, components.BREAKPOINTS[…]) 算、斷點值一律取 components.BREAKPOINTS，⛔ 沒有寫死 3／2／1／640／880 任何一個。被複製的是**形狀**三件事：class 怎麼命名（g-桌-平-手）、宣告怎麼寫（grid-template-columns:repeat(N,minmax(0,1fr))）、兩個 @media 的順序（先 880 後 640，因為 640 也命中 max-width:880px）。這三件事住在 markup._grid_rules() 與 markup._breakpoint_rules()，**是底線開頭的私有函式** ⇒ ⛔ 不得直接呼叫（本 repo 登記在案的違憲 V-PICKER-PRIV-1 就是跨層直取私有符號）。⇒ **後果**：markup 日後若改了 class 命名或宣告寫法，本檔**不會跟著改，而且沒有任何測試會攔**。**真正的解**是把這兩組 cols 放進契約層、讓 page_css() 自己產，那要動 src/ui_v2/ ⇒ ⛔ 不在本輪授權範圍。本產生器結尾有一道守衛：從產出的 CSS 文字用 regex 量三個斷點的實際欄數，3/3/1 與 2/1/1 任一段不符就炸 —— 但那同樣是同一組人寫的自驗，⛔ 不等於獨立測試。／／來歷：客戶 2026-09-22 拍板逐字「【拍板 1：CSS 走 (甲)】在產生器補 .g-3-3-1 與 .g-2-1-1 兩條 rule。值用 components.resolve_cols() ＋ BREAKPOINTS 算。就地揭露「規則形狀複製了一份」」⇒ 這是**已拍板的作法**，⛔ 不是偷懶，但它的後果必須看得見，所以有這一條。</p>
+<p class="pv-meta"><span class="pv-mono">F3</span>　⭐ **本輪最主要的一處衝突**：規格 ② 處置 2(a) 要「不畫」的兩塊，與客戶本輪「6 層 14 block」的要求有交集 ⇒ 本組**處置後登記，⛔ 不自行裁決**。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">衝突長這樣：客戶本輪逐字「2. 6 層 14 block」；而 UI_PAGE_FIND ② 處置 2 逐字「(a) find.scenario_quickpick／find.pick_reason 線框 src:null、畫面上整塊不存在 ⇒ 不畫，⛔ 不得用 #5 冒充「有這塊但沒接線」」。／／**本組的處置（⛔ 這是處置，不是裁決）**：沿用「📖 憑什麼」頁 why.edu.table.nolevel 的同一招 —— **畫出那兩塊的版面位置（層／欄數 class／密度 class 都在），但⛔ 不畫卡、⛔ 不畫任何徽章**，並在該位置就地寫明理由。／／**理由**：客戶要的「14 block」是**版面**（哪一塊在第幾層、幾欄、哪一階密度），規格禁的是**冒充狀態**（給一個它在現行畫面上沒有的徽章）—— 兩者的交集只在「要不要掛徽章」，所以只讓徽章退場，版面照畫。／／⚠️ **本組可能判錯的地方，據實寫出來**：若客戶本意是「14 block 每一塊都要有卡」，那本組的處置就不足；若客戶本意是「整塊連框都不要畫」，那本組畫了版面位置就是超過。**兩種可能本組都無法自行排除** ⇒ 依客戶要求 6，登記、⛔ 不裁決。</p>
+<p class="pv-meta"><span class="pv-mono">F4</span>　#2 載入中：**實作待補**（⛔ 不是規格待決）⇒ 本頁⛔ 不畫 #2。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND ② 處置 1 逐字：「#2 loading：實作待補（不是規格待決）。分類器有能力產生（第 3 份已證），缺的是 caller —— 本頁 0 處傳 in_flight=。處置：取數段包 st.spinner，並把 in_flight=True 顯式傳進上列三個呼叫點。⛔ 在補上之前不得拿 #3「尚未載入」冒充載入中」。⇒ 本頁的代理把 2 放進 BADGES_NOT_ON_PAGE，任何一次誤畫都會在產生時變成 ValueError。⚠️ 線框十態格裡 loading 全部 14 塊都非 null ⇒ **線框有、實作沒有**，這是本頁「線框 states 非 null」與「實作畫得出來」兩道把關**結論不同**的一格。</p>
+<p class="pv-meta"><span class="pv-mono">F5</span>　#7／#8：**規格待接線**（該份自稱這是它的主體）⇒ 本頁只畫 #7，⛔ 不畫 #8。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND ② 處置 3 逐字：「#7／#8：規格待接線（本份的主體）。實作只有單一 UI_EMPTY、glyph ▨「無資料」，未依 miss_reason 拆二。處置：依 ③ 的對照表拆 ⚠︎ —／N/A；⛔ 不得為了對齊線框鍵數新造第 11 種徽章；⛔ 不得把 missing 畫成 #8（#8 重跑無效，畫錯＝給錯指引）」。／／⇒ 本頁畫 #7（現行那顆單一空值就是它），⛔ 不畫 #8。⚠️ 本頁**也⛔ 沒有出現 ▨ 符號**：徽章符號一律由 components.BADGES 產出，本檔⛔ 沒有手打任何一顆。</p>
+<p class="pv-meta"><span class="pv-mono">F6</span>　🔴 #9 部分計入：**分母對不上表上的列數**，規格明文「擇一處置，⛔ 不得直接貼」⇒ 本頁⛔ 不畫 #9、⛔ 不寫任何 N／M。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND ② 處置 4 逐字：「本頁 L3 已經算出分母 —— _cov_bits＝…（現只拼進 note 字串）⇒ 接到欄標題層即可畫 #9 ◧ N／M，這是接線工作、不是缺資料」，但同段 🔴 逐字：「分母對不上表上的列數…_cov_bits 的分母是 len(ids)，而 ids ＝存活池全體；表上只有 ranked[:top_n] ⇒ 直接把 N／M 貼到欄標題，使用者會讀成「這 20 列裡有 N 列算得出來」，實際講的是「存活池 M 檔裡有 N 檔算得出來」—— 兩個母體差一個數量級，⛔ 這正是 §1「錯誤的數字比沒有數字更危險」。處置（擇一，⛔ 不得直接貼）：(a) 另算表上列的覆蓋數當 N／M，或 (b) 保留存活池分母但在 tooltip 寫死母體」。⇒ **擇一由誰決定，規格沒說，本組⛔ 不代決**；在決定之前本頁一個 N／M 都不寫。</p>
+<p class="pv-meta"><span class="pv-mono">F7</span>　#4 門檻已失準：**葉1 待補**，現僅葉2 可達 ⇒ 本頁的 #4 只畫在葉2。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND ② 處置 5 逐字：「#4 degraded：葉1 待補。現僅葉2 可達（:1329／:1389）。線框 screen_table.degraded 要求 🟠 標在該欄標題旁（不是逐格）＋ 就地寫「請不要把它當入選理由讀」→ 待接」。⇒ 本頁把 #4 畫在 find.sector_flow（葉2）；⚠️ **⛔ 不畫在 find.heatmap**：該塊線框的 degraded 那一格是 null（結構上不存在），兩道把關任一不過就不畫。</p>
+<p class="pv-meta"><span class="pv-mono">F8</span>　🔴 `D-08` 待裁：`MISS_CONTRACT_DRIFT` 被升成 #6，與規格 ④(a)「逾 sanity → #7」對不上。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND ④(c) 逐字：「MISS_CONTRACT_DRIFT 落在 FAILED_REASONS 內（shared/ui_state.py）⇒ classify_ui_state 會把它升成 #6 🔴（同 ② error 列），與 (a) 寫的「逾 sanity → ⚠︎ —」（#7）以及 INDICATOR_SPEC「逾界 → 缺漏」對不上。⛔ 不得就地改 FAILED_REASONS（那會動到全站每一盞燈）⇒ 列為 D-08 待裁」。／／同節 (d) 是**客戶 2026-09-16 已裁示的現行落地態**，逐字：「本益比兩種「沒有」：UI 層先誠實顯示「本機分不出，需 L1 補旗標」。L1 修改列為獨立任務，等 UI 全部做完再評估解凍。不要假裝做得到」。⇒ 本頁 n4 照 (d) 畫成 #7 ＋ 就地誠實說明，⛔ 不畫成分得開的樣子。⚠️ (c) 另有一條承重警告（線框逐字）：L1 補旗標與 pe_low 排序端擋非正值**必須同一批落地**，否則虧損股會被排成全市場最便宜。⚠️ D-08 的排程狀態⛔ 不得寫成「已排程」或「已核准」。</p>
+<p class="pv-meta"><span class="pv-mono">F9</span>　殖利率欄：**2026-09-16 已降級為「待覆核的開放項」**，⇒ ⛔ 不得再寫成「線框待刪該欄」。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND ⑥ 第一列逐字：「殖利率欄：⚠️ 2026-09-16 降級為「待覆核的開放項」，本份不下結論（WJ）—— 原寫「不加」的依據是「來源端『沒配息』與『還沒公告』分不開 ⇒ 畫不出三語彙」，但那正是 ④ 對本益比認定的同型缺陷，而 ④ 的處置是保留該塊 ＋ 誠實寫「目前分不出這兩種」…同一條依據不得在 ④ 判「保留」、在此判「刪欄」…依 §-2 規則 6 不硬掰，降為開放項」。／／⇒ 本頁**照實作現況畫（無殖利率欄）**，但⛔ 不宣稱「該欄已刪」或「線框待刪」。⚠️ 規格同列另註：支撐該判斷的來源端數字（410 檔中 99 檔為空 ≈24%）是**轉錄**，**無任何一組獨立查證過來源端** ⇒ ⛔ 不得引用為事實。</p>
+<p class="pv-meta"><span class="pv-mono">F10</span>　CSV：**檔名＝實作待修；鈕字串＝待客戶拍板（兩份真相源）** ⇒ 本頁⛔ 不代決字串。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND ⑥ 第二列逐字：「檔名寫死 screener_result.csv，不含資料歸屬日 ⇒ 連兩天下載得到兩個同名檔；鈕字串 production／線框 states.live 為「💾 下載選股結果 CSV」…檔名＝實作待修；鈕字串＝待客戶拍板（兩份真相源）…鈕字串推薦取 production 那串、線框改齊（它已是使用者看過的字面）；⛔ 不得兩邊各留一份」。／／⇒ 本頁的卡標用**線框的 name 逐字**（⬇ 下載結果 CSV），facts 裡同時寫出兩份都存在這件事，⛔ 不替客戶挑一個。⚠️ 檔名規則編號 G-24 **不在** INDICATOR_SPEC §5／DECISION_RULES §8，出處是 DRAFT_GAP_AUDIT.md ＋ S1-3B Part 6.3（規格逐字，本組未再獨立查證）。</p>
+<p class="pv-meta"><span class="pv-mono">F11</span>　⑤C 兩個原先漏掉的情境：**(1) 改了勾選但沒按送出 (2) 軌 A 會連帶汙染 CSV** ——兩條都**未落地**，本頁只登記、⛔ 不畫成已完成。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND ⑤C 逐字（兩項）：(1)「「改了勾選但沒按 🎯 開始選股」在 ② 的十鍵裡沒有對應狀態格…使用者眼前是「條件 ≠ 表上結果」。它不是 idle（已經跑過）、不是 degraded、更不是 error。處置：⛔ 不得新造第 11 種徽章、⛔ 不得把表清掉（表上的數字仍是真的，只是舊的）⇒ 維持 #1，另在總覽卡就地加一行灰色 caption「條件已改，尚未套用 —— 請按 🎯 開始選股」。⚠️ 依 §1.A 第 4 點，該提示必須是灰色說明、⛔ 不得畫成紅色錯誤」；(2)「③ 軌 A 會連帶讓下載的 CSV 從數值退化成字串…CSV 必須另備一份 df：數值欄保留數值、缺值原因另立一欄承載；⛔ 不得直接 to_csv 那份已格式化的表。本項必須與軌 A 同一批落地，⛔ 不得延後（延後＝使用者拿到一份看起來正常、卻算不了的檔案）」。</p>
+<p class="pv-meta"><span class="pv-mono">F12</span>　#10 ◆：規格 ② 明文**本頁不畫** ⇒ 照辦，且⛔ 不得併進 #8。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND ② 表末列逐字：「（線框無此鍵）／emits_level=False／#10／**不適用**：本頁 emits_level 0 命中 ⇒ **不畫 #10**；⛔ 不得併進 #8」。⇒ 本頁的代理把 10 放進 BADGES_NOT_ON_PAGE；另有一道全檔守衛（class 屬性裡的 token 掃描）確認產物裡⛔ 沒有任何 bdg-10。⚠️ 這與「📖 憑什麼」頁的 #10 是**兩件不同的事**：那一頁是「有適用對象但尚未徽章化」（W5），本頁是「**根本沒有適用對象**」—— ⛔ 不得混為一談。</p>
+<p class="pv-meta"><span class="pv-mono">F13</span>　⚠️ 本頁「會畫哪幾顆徽章」是**本組自規格 ② 表推導的單組判定**，規格**沒有**像「📖 憑什麼」頁那樣的總結句。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">對照：UI_PAGE_WHY ④ 末句有一句逐字「⇒ 會出現在畫面上的是 6 態：#1／#3／#4／#5／#6／#7」，那一頁的可畫集合是**照抄規格**。UI_PAGE_FIND ② **沒有**對應的句子（本組通讀六節，0 命中）⇒ 本組只能逐列從「實作」欄推導：✅ 三列取（#1 live／#3 idle／#6 error）、⚠️ 兩列取（#4 僅葉2 可達／#7 現行單一 UI_EMPTY）、❌ 四列不取（#2／#5／#8／#9）、#10 該表明文不適用。⇒ FIND_BADGES_ON_PAGE ＝ {1,3,4,6,7}。⚠️ 依 CLAUDE.md §-2 規則 6，這是**單組判定、未經第二組複驗**，⛔ 不得被引用為「規格就是這樣寫的」。若第二組判讀不同（例如認為 #7 的 ⚠️ 也算未落地），本頁的徽章集合要跟著改。</p>
+<p class="pv-meta"><span class="pv-mono">F14</span>　n5（葉2）超出契約層的層序對映 ⇒ 它的卡密度 t2 只能寫在本產生器裡。⭐ **本頁是這條新訂的原創處，⛔ 不是沿用者。**　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">實測：components.tier_for_layer(5) 拋 ValueError「未知的層序 5：只有 0（葉外 chrome）與 1~4 四層」。而 UI_PAGE_FIND ① 表「葉2／n5」列逐字給了 t2，並自陳「WH 本組新訂：n5 超出 n1~n4 自動對映，取「核心卡」」。／／⭐ **方向要講清楚**：UI_PAGE_WHY ② 表的「葉3／n5」列**自己逐字寫**「沿用 UI_PAGE_FIND 對 n5 的新訂…⛔ 非本組發明」⇒ **FIND 是原創處、WHY 是沿用者**；⛔ 不得把本頁這一格寫成「借「📖 憑什麼」頁的」。／／真正的解是契約層補上 n5 的對映，但那要動 src/ui_v2/components.py ⇒ ⛔ 不在本輪授權範圍。n0~n4 則一律走 components.tier_for_layer（本產生器結尾逐一 assert 相等），⛔ 不在本檔手抄第二份對映表。</p>
+<p class="pv-meta"><span class="pv-mono">F15</span>　cols 的語意本身未決（＝「🚦 今天」頁登記的 U-2）；另外 n1 的 3/2/1 在 Streamlit 端**tablet=2 未落地** ⇒ 兩條都照實登記，⛔ 不代為裁決。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">(1) cols 語意：契約層把 cols 讀成「卡內網格一列幾格」（markup.grid_html 的 .g-* class），但一個 block 只有一張卡時，「3/3/1」也可以被讀成「這三塊並排」。「🚦 今天」頁的同一個問題已拆為 U-2 並記為「仍未判定」⇒ 本頁沿用同一處置：照現行契約層語意原樣渲染，⛔ 不裁決。(2) UI_PAGE_FIND ① 逐字：「n1 的 3/2/1 只有 tablet=2 未落地…Streamlit 自身帶一條寫死的 columns:640px 斷點…⇒ ≤640 本來就堆成 1 欄（phone=1 已落地），641–880 仍恆 3 欄（tablet=2 → 實作待修）。⛔ 該斷點值寫死在 bundle 內，本專案改不到、也不得假設它跨版本不變」；同節另逐字「n5 的 2/1/1 只落地一半：實作兩張卡並列，兩張圖上下堆疊」。⚠️ **這份 HTML 原型的 CSS 本身是對的**：.g-3-2-1／.g-3-3-1／.g-2-1-1 三段實測分別為3/2/1、3/3/1、2/1/1（產生器結尾有守衛，從 CSS 文字用 regex 量）。⚠️ 但**這份原型與 Streamlit 實作不是同一套 CSS** ⇒ 量了這份也⛔ 不能拿去當 Streamlit 端的答案。</p>
+<p class="pv-meta"><span class="pv-mono">F16</span>　線框 `src` 有**兩例內容漂移**（已知），其餘 block 的 `src` 內容**無人逐一比對過**。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND 檔尾「WH 本組實查」列逐字收窄：「查到的是「每個 block 的 src 字串是什麼」，不是「每個 src 指的那一行內容對不對」；已知內容漂移兩例（find.statusbar → :796 實為 _load_regime；find.screen_table → :1163 實為 _fmt_count），其餘 block 的 src 內容無人逐一比對 ⇒ ⛔ 不得讀成「每個 src 都對過」」。⇒ 本檔 FIND_LAYOUT 的 src 欄一律只寫**規格章節名 ＋ 線框 block key**，**⛔ 一個行號都沒寫**（CLAUDE.md §8.2.A.0 規則 1：行號是保證會過期的資訊）。</p>
+<p class="pv-meta"><span class="pv-mono">F17</span>　手機 ≤640 卡片流規格**自帶一條無障礙阻斷** ⇒ ⛔ 不得照現值落地。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">UI_PAGE_FIND ③ 末段逐字：「⛔ 無障礙阻斷…上句 key 用的 --ink-3 9.5px 在卡面上現行未達 WCAG AA 4.5:1 —— dark #73838f on --panel ＝ 4.35:1、on --panel-2 ＝ 4.01:1；light #626f7a on --panel ＝ 5.11:1（PASS）、on --panel-2 ＝ 4.36:1 ⇒ 四種組合三種不及格…⇒ ⛔ 本段不得照現值落地，須等 --ink-3 修正後才做」；同段另註「token 修正不在本檔範圍」。⇒ 本原型**⛔ 沒有實作手機卡片流**（本頁的手機版就是欄數塌成 1 欄），n3 那張卡的 facts 已就地標明這條相依。⚠️ 規格自註該組對比數字是**總管實算、WH 未重算、僅轉錄** ⇒ ⛔ 不得當成本組量過。</p>
+</section>
+</main>
+</div>
 <section class="pv-todo" id="pv-page-todo" hidden>
 <div class="pv-todo-card">
-<div class="pv-todo-title"><span id="pv-todo-name">🔍 找標的</span>　·　此頁待做</div>
-<p class="pv-meta">本原型目前做了「🚦 今天」與「📖 憑什麼」兩頁。這一頁還沒有任何實作，⛔ 不是壞掉、⛔ 也不是載入失敗 —— 畫這塊佔位，是為了不讓五頁切換假裝五頁都已完成（對照 CLAUDE.md §1：錯誤的數字比沒有數字更危險）。</p>
-<p class="pv-meta">~~本原型只做了「🚦 今天」。~~／／舊句在它寫下的當天是對的（那時確實只有一頁）；被權衡掉的⛔ 不是它的推理，是它的前提（「只有一頁」）。</p>
+<div class="pv-todo-title"><span id="pv-todo-name">🔬 查一檔</span>　·　此頁待做</div>
+<p class="pv-meta">本原型目前做了「🚦 今天」、「📖 憑什麼」與「🔍 找標的」三頁。這一頁還沒有任何實作，⛔ 不是壞掉、⛔ 也不是載入失敗 —— 畫這塊佔位，是為了不讓五頁切換假裝五頁都已完成（對照 CLAUDE.md §1：錯誤的數字比沒有數字更危險）。</p>
+<p class="pv-meta">~~本原型只做了「🚦 今天」。~~／／舊句在它寫下的當天是對的（那時確實只有一頁）；被權衡掉的⛔ 不是它的推理，是它的前提（「只有一頁」）。　~~本原型目前做了「🚦 今天」與「📖 憑什麼」兩頁。~~／／同理：同日再加了「🔍 找標的」，前提（「只有兩頁」）再次過期，推理仍然成立。</p>
 <p class="pv-meta">⛔ 刻意不做頂部分頁列。app.py 逐字記載：2026-09-07 的 FE-7~FE-16 曾把這五頁掛成第 1~5 個頂層頁籤與舊的 7 個並排 ⇒ 手機上頁籤列 7 變 12，舊的 7 個被擠出可視範圍，客戶回報「很多 Tab 不見了」；2026-09-08 FE-35 客戶拍板方案 A 撤回該掛法，改由側欄 radio 導覽。客戶 2026-09-22 再次拍板「五頁切換：做側欄式，不做頂部分頁（走回三個月前否決過的做法）」。</p>
 <div class="pv-todo-back">
 <button type="button" class="pv-btn-secondary" data-pv-page="today">← 回到 🚦 今天</button>
@@ -580,7 +719,7 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 <p class="pv-meta"><span class="pv-mono">G5</span>　★-08（側欄預設展開還是收起）✅ 已決 —— 客戶 2026-09-22 拍板「側欄預設收起」；本原型現已對齊（三個斷點一律收起，只能手動展開）。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
 <p class="pv-meta">現況：S2-UI_SPEC.md 7.2（★-08）已於 2026-09-22 由客戶拍板定為「側欄預設收起」，狀態自「未決／阻斷」改為「已決」（commit 6035262）。該節同時點名本原型的執行層不一致：JS 的 syncOpen()（nav.open = mq.matches、TABLET_MIN = 641）在 ≥641px 會自動展開 ⇒ 標記層收起、執行層在桌機不收起，並要求原型擁有組回頭對齊。客戶同日對本原型的裁示逐字：「【拍板：桌機自動展開，修掉】理由：規格說收起、畫面卻展開，就是規格與實作打架。」⇒ 本輪已移除產生器裡「依斷點把 nav.open 設為 true」的整段邏輯（syncOpen 的定義、載入時的呼叫、以及 matchMedia 的 change 監聽）；標記層本來就⛔ 不帶 open ⇒ 兩層自本日起給出同一個答案。⚠️ 唯一保留的斷點判斷是「選完頁之後在手機寬度把側欄收起（nav.open = false）」，它只關⛔ 不開。⚠️ ★-15（引導入口放哪裡）⛔ 不受本條影響，而且它自己也已經有答案了：✅ 已決（客戶 2026-09-22 拍板）：(B) 側欄常駐一條入口、不自動展開；客戶理由逐字「與『側欄預設收起』一致」。⚠️ 已決的是「入口放哪裡」這道題，⛔ 不是「現在就去做那條入口」—— 真的做那條側欄入口屬另案，本原型本輪⛔ 沒有新增任何引導入口。／／以下為 2026-09-22 稍早的舊句，有意識的政策變更、⛔ 不是漏刪，日期 2026-09-22、決策者：客戶，加刪除線保留：~~S2-UI_SPEC.md 7.2 逐字「★-08 已於 2026-09-22 單獨解除；★-15 仍未決 · 阻斷，等客戶裁示」。~~／／兩邊理由並陳：舊句在它寫下的那一刻是對的（客戶當時只拍了 ★-08，★-08 與 ★-15 確實是分兩次問、客戶也確實分兩次答）；被權衡掉的⛔ 不是它的推理，是它的前提（「客戶尚未回答 ★-15」）。⚠️ 據實記錄、⛔ 不粉飾 —— 線框檔 docs/v2/wireframe/wf_global.js 的 ★-08／★-15 grade 由另一組負責，⛔ 不在本輪授權內，本輪⛔ 一個字都沒有動它。🔴 本檔因此**兩個方向都不宣稱**：⛔ 不寫「線框已同步」，⛔ 也不寫「線框尚未同步」—— 要知道它現在是什麼值，請**現場開那個檔查**，⛔ 不要引用本行（CLAUDE.md §8.2.A.0 規則 4：會漂移的量測值一律標日期或不寫；本行選擇不寫，因為它在本檔產生的同一天就被另一組動過，寫死任一個值都會在下一次重產時變成假話）。／／以下為 2026-09-22 之前的舊文字，有意識的政策變更、⛔ 不是漏刪，加刪除線保留：~~側欄預設展開還是收起 ⇒ ★-08 規格上仍是未決，本原型的斷點行為是原型自創。實測：S2-UI_SPEC.md 7.2（★-08）於 2026-09-15 由來歷更正組把結論改標「未決」（原本引為「客戶已逐字回覆」的那句，實為 warroom_draft.html 決策卡上一顆未被按下的選項按鈕標籤）；wf_global.js 的 ★-08 grade 已同步改標「阻斷」，並與 ★-15 互指、要求一起問客戶。⇒ 本原型採「640 以下收起、641 以上展開」，是為了滿足客戶 2026-09-14「狀態列、時點列、分頁列不得吃掉首屏」而做的原型決定，⛔ 不是 ★-08 的答案，⛔ 不得被引用為已拍板。~~／／兩邊理由並陳：舊做法的理由在它寫下當天是合理的（桌機橫向空間大、展開較好用、少一次點擊，且手機那半確實滿足了首屏那條）；被權衡掉的原因是客戶原話「規格說收起、畫面卻展開，就是規格與實作打架」。</p>
 </section>
-<footer class="pv-meta">由 src/ui_v2/（commit 38039f5、sha256 38791f7e771c）於 2026-09-22 產生的靜態快照。CSS 由 markup.page_css() 產出並逐字內嵌，卡片由 markup.card_html() / grid_html() / layer_html() / badge_html() 產出。⚠️ tokens 之後改了，這個檔不會自動跟著變，必須重跑產生器 docs/v2/prototype/gen_today_v2.py（與本檔同目錄）。</footer>
+<footer class="pv-meta">由 src/ui_v2/（commit 7f14f68、sha256 e708aeda4581）於 2026-09-22 產生的靜態快照。CSS 由 markup.page_css() 產出並逐字內嵌，卡片由 markup.card_html() / grid_html() / layer_html() / badge_html() 產出。⚠️ tokens 之後改了，這個檔不會自動跟著變，必須重跑產生器 docs/v2/prototype/gen_today_v2.py（與本檔同目錄）。</footer>
 <!--
 頁尾免責：逐字 SSOT ＝ `app.py` 的 `_render_footer()`。
 本檔放的是一份**有守衛的複本** —— 產生時會讀 `app.py` 的原始文字逐字比對，

@@ -47,7 +47,17 @@ _LAYER_OF_BLOCK: Mapping[str, int] = {
 #: 由上而下的層序。
 _LAYER_ORDER: tuple[int, ...] = tuple(layer["layer"] for layer in page_today.LAYERS)
 
-#: 掛主 CTA 的層（`UI_PAGE_TODAY` ①：全站唯一一顆，掛第三層）。⛔ 不寫死 `today.actions`。
+# ⚠️ **2026-09-22 改文案（有意識的政策變更，⛔ 不是漏刪；決策者客戶）**
+#    ~~全站唯一一顆~~ → **每頁首屏唯一一顆**（**語意收窄**，⛔ 不是同義改寫）。
+#    - **舊文案的理由（仍然成立，⛔ 不是寫錯）**：在只有「🚦 今天」一頁時，
+#      「全站唯一」與「每頁首屏唯一」**外延相同** —— 兩句話挑不出差別，寫哪個都對。
+#    - **被權衡掉的原因**：五頁 IA 落地後，🔎 選股頁有自己的主 CTA `🎯 開始選股`
+#      ⇒「全站唯一」變成**可實測為假**的全稱句。`docs/v2/spec/UI_PAGE_FIND.md` ①
+#      已逐字否證：「原寫「**全站唯一一顆**主 CTA」**不成立** —— 葉2 那顆同為
+#      `type="primary"`…⛔ 不得寫成全站唯一。」
+#    ⚠️ 出處 `UI_PAGE_TODAY` ① 本次**同批改名** ⇒ 此處跟著改才對得上出處。
+#: 掛主 CTA 的層（`UI_PAGE_TODAY` ①：~~全站唯一一顆~~ **每頁首屏唯一一顆**，掛第三層）。
+#: ⛔ 不寫死 `today.actions`。
 _MAIN_CTA_LAYERS: frozenset[int] = frozenset(
     layer["layer"] for layer in page_today.LAYERS if layer["has_main_cta"]
 )
@@ -80,7 +90,15 @@ def _group_by_layer(
 
 
 def _render_main_cta(cta: Mapping[str, object]) -> None:
-    """主 CTA —— **真 widget**（`UI_COMPONENTS` §3「主 CTA（全站唯一一顆）」）。
+    """主 CTA —— **真 widget**（`UI_COMPONENTS` §3「主 CTA（~~全站唯一一顆~~ **每頁首屏唯一一顆**）」）。
+
+    ⚠️ **2026-09-22 改文案（有意識的政策變更，⛔ 不是漏刪；決策者客戶）**：
+    **舊文案的理由仍然成立、⛔ 不是寫錯** —— 只有「🚦 今天」一頁時，「全站唯一」
+    與「每頁首屏唯一」**外延相同**。**被權衡掉的原因**：五頁 IA 落地後 🔎 選股頁
+    有自己的主 CTA `🎯 開始選股` ⇒「全站唯一」成為**可實測為假**的全稱句
+    （`docs/v2/spec/UI_PAGE_FIND.md` ① 已逐字否證）。
+    ⚠️ 出處 `UI_COMPONENTS` §3 的列標題已於 `7f14f68` 同步改名 ——
+    此處**跟著改才對得上出處**，⛔ 不是自行改寫引文（留著舊字才會變成假出處）。
 
     ⛔ 不畫成 HTML 假鈕：假鈕按下去不會 rerun、鍵盤 tab 不到、螢幕閱讀器讀不出
     「這是按鈕」—— 而畫面上看起來一模一樣。

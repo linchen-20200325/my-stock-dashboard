@@ -88,8 +88,16 @@
 **第三層 `today.actions`**（線框 `cols 1/1/1`）：主 CTA ＝ `st.form_submit_button("🚀 更新今日戰情", type="primary")`，經 `_ui_kit.py:single_submit_form`，
 字串 SSOT `shared/ia_nav.py:83 ACTION_LABELS[ACTION_UPDATE_TODAY]`，與線框 `mainCTA.label` **逐字相同**。
 按鈕規格取 `UI_COMPONENTS` §3 主 CTA：`min-height:40px`／`padding:6px 16px`／`13.5px/700`／`radius:3px`／底 ~~`--ink`~~ **`--cta-primary-bg`**／框 `2px solid` ~~`--ink`~~ **`--cta-primary-bg`**（**2026-09-22 改；有意識的政策變更，⛔ 不是漏刪；決策者客戶**；新 token 見 `UI_TOKENS` §A-4，非 hover 字色＝ `--cta-primary-fg`；🔴 hover 字色**維持 `--paper` 不變**，因 `#ffffff` on `--ochre` ＝ 2.438 FAIL）／hover 底＋框 `--ochre`、字 `--paper`；焦點環 `2px solid --focus` `offset:2px`。
-同 form 內有 `st.radio("更新模式", horizontal=True)` 兩選項 `正常更新（吃暖快取）`／`強制重抓（清快取）`（`src/ui/tabs/tab_today.py:103-106`）。**全頁 `st.button` 0 命中 ⇒ 全站唯一一顆主 CTA 的規定在本頁成立。**
+同 form 內有 `st.radio("更新模式", horizontal=True)` 兩選項 `正常更新（吃暖快取）`／`強制重抓（清快取）`（`src/ui/tabs/tab_today.py:103-106`）。**全頁 `st.button` 0 命中 ⇒ ~~全站唯一一顆~~ 每頁首屏唯一一顆主 CTA 的規定在本頁成立。**
 停用態（線框 `loading`／`error`-契約漂移）走 §3「停用態」：`13.5px/500`＋`1px dashed --rule-2`＋字 `--sig-grey`。
+
+⚠️ **主 CTA 顆數規定 2026-09-22 改文案（有意識的政策變更，⛔ 不是漏刪；決策者客戶）**
+客戶裁示逐字：「**不是「全站唯一」，是「每頁首屏唯一」。** 理由：客戶原話是『首屏僅允許一顆主 CTA』——是『每屏一顆』。」
+- **舊文案的理由（仍然成立，⛔ 不是寫錯）**：在只有「🚦 今天」一頁時，「全站唯一」與「每頁首屏唯一」**外延相同** —— 兩句話挑不出差別，寫哪個都對。
+- **被權衡掉的原因**：五頁 IA 落地後，🔎 選股頁有自己的主 CTA `🎯 開始選股` ⇒「全站唯一」變成**可實測為假**的全稱句。`docs/v2/spec/UI_PAGE_FIND.md` ① 已逐字否證：「⚠️ **2026-09-16 修正（WJ）**：原寫「**全站唯一一顆**主 CTA」**不成立** —— 葉2 那顆同為 `type="primary"`（見下列）。可宣稱的是客戶指令原意 ——「**選股**主 CTA 只有一顆、且在預設葉 l1 可見」；⛔ 不得寫成全站唯一。」（對照 `CLAUDE.md` §1「錯誤的數字比沒有數字更危險」—— 一句假的全稱句比不寫更危險。）
+- ⚠️ **本頁的實測事實⛔ 未受影響**：「全頁 `st.button` 0 命中」是**量測結果**，改的只是**那條規定的名稱與外延**。本頁仍**恰好一顆**主 CTA ⇒ 新舊文案在本頁的**判定結果相同**。
+- ⛔ **本段上方「第三層」那段所引 `UI_COMPONENTS` §3 的焦點環 `2px solid --focus`⛔ 不在本次射程內** —— 那是**另一個**宣稱（一條 `:focus-visible` 規則，⛔ 不是主 CTA 顆數），其出處原文未改。
+- **同批落點**：`src/ui_v2/render.py`（`_MAIN_CTA_LAYERS` 註解、`_render_main_cta` docstring）、`src/ui_v2/components.py`（`BUTTONS` 主 CTA 出處註解）、`tests/ui_v2/test_render.py`（主 CTA 顆數 assert 失敗訊息）；出處列標題 `UI_COMPONENTS.md` §3 已於 `7f14f68` 先行改名。
 
 **第四層**：`today.warroom`（線框 `cols 1/1/1`，徽章 #1／#3／#5／#6／#7）、`today.detail`（線框 `cols 3/2/1`，徽章 #1／#3／#4／#5／#6／#7／#8／#9）。
 
