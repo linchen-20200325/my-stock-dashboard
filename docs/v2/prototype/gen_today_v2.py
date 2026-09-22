@@ -33,13 +33,16 @@
 from __future__ import annotations
 
 import datetime
+import ast
+import contextlib
 import hashlib
 import pathlib
 import re
 import subprocess
 import sys
+import types
 from html import escape
-from typing import Mapping, Sequence
+from typing import Iterator, Mapping, Sequence
 
 # 本檔位置 ＝ `<repo>/docs/v2/prototype/gen_today_v2.py` ⇒ 往上第 3 層是 repo 根。
 # ⛔ **不寫死絕對路徑**：原版寫死 `/home/user/my-stock-dashboard`，換一台機器／換一個
@@ -353,12 +356,23 @@ NAV_WHY_SIDEBAR = (
 #: 側欄內那一行短註（⛔ 放長句會把側欄那一欄的 min-content 撐寬）。
 NAV_WHY_SHORT = "⛔ 刻意不做頂部分頁列"
 
-#: 其餘四頁的佔位逐字。
+#: 其餘**三**頁的佔位逐字。
+#: ⚠️ **2026-09-22 更新：原句寫「本原型只做了『🚦 今天』」，自本日起不成立** ——
+#:    客戶同日拍板加做「📖 憑什麼」頁（六層 22 block），佔位頁因此從四頁減為三頁。
+#:    **有意識的更正、⛔ 不是漏刪**；⛔ 這是**事實更正**，不是政策變更 ——
+#:    「⛔ 不讓五頁切換假裝五頁都已完成」那句理由**一個字都沒有被弱化**。
+#:    舊句加刪除線保留於下方 `TODO_BODY_SUPERSEDED`。
 TODO_HEADLINE = "此頁待做"
 TODO_BODY = (
-    "本原型只做了「{today}」。這一頁還沒有任何實作，"
+    "本原型目前做了「{today}」與「{why}」兩頁。這一頁還沒有任何實作，"
     "⛔ 不是壞掉、⛔ 也不是載入失敗 —— 畫這塊佔位，是為了不讓五頁切換假裝五頁都已完成"
     "（對照 CLAUDE.md §1：錯誤的數字比沒有數字更危險）。"
+)
+#: 舊句（2026-09-22 之前），加刪除線保留 —— ⛔ 不是漏刪；決策者：客戶。
+TODO_BODY_SUPERSEDED = (
+    "~~本原型只做了「🚦 今天」。~~"
+    "／／舊句在它寫下的當天是對的（那時確實只有一頁）；"
+    "被權衡掉的⛔ 不是它的推理，是它的前提（「只有一頁」）。"
 )
 
 
@@ -473,8 +487,25 @@ CHROME_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
         "標記層本來就⛔ 不帶 open ⇒ 兩層自本日起給出同一個答案。"
         "⚠️ 唯一保留的斷點判斷是「選完頁之後在手機寬度把側欄收起（nav.open = false）」，"
         "它只關⛔ 不開。"
-        "⚠️ ★-15（引導入口放哪裡）⛔ 不受本條影響 —— S2-UI_SPEC.md 7.2 逐字"
-        "「★-08 已於 2026-09-22 單獨解除；★-15 仍未決 · 阻斷，等客戶裁示」。"
+        "⚠️ ★-15（引導入口放哪裡）⛔ 不受本條影響，而且它自己也已經有答案了："
+        "✅ 已決（客戶 2026-09-22 拍板）：(B) 側欄常駐一條入口、不自動展開；"
+        "客戶理由逐字「與『側欄預設收起』一致」。"
+        "⚠️ 已決的是「入口放哪裡」這道題，⛔ 不是「現在就去做那條入口」—— "
+        "真的做那條側欄入口屬另案，本原型本輪⛔ 沒有新增任何引導入口。"
+        "／／以下為 2026-09-22 稍早的舊句，有意識的政策變更、⛔ 不是漏刪，"
+        "日期 2026-09-22、決策者：客戶，加刪除線保留："
+        "~~S2-UI_SPEC.md 7.2 逐字「★-08 已於 2026-09-22 單獨解除；"
+        "★-15 仍未決 · 阻斷，等客戶裁示」。~~"
+        "／／兩邊理由並陳：舊句在它寫下的那一刻是對的（客戶當時只拍了 ★-08，"
+        "★-08 與 ★-15 確實是分兩次問、客戶也確實分兩次答）；"
+        "被權衡掉的⛔ 不是它的推理，是它的前提（「客戶尚未回答 ★-15」）。"
+        "⚠️ 據實記錄、⛔ 不粉飾 —— 線框檔 docs/v2/wireframe/wf_global.js 的 ★-08／★-15 "
+        "grade 由另一組負責，⛔ 不在本輪授權內，本輪⛔ 一個字都沒有動它。"
+        "🔴 本檔因此**兩個方向都不宣稱**：⛔ 不寫「線框已同步」，⛔ 也不寫「線框尚未同步」"
+        "—— 要知道它現在是什麼值，請**現場開那個檔查**，⛔ 不要引用本行"
+        "（CLAUDE.md §8.2.A.0 規則 4：會漂移的量測值一律標日期或不寫；"
+        "本行選擇不寫，因為它在本檔產生的同一天就被另一組動過，"
+        "寫死任一個值都會在下一次重產時變成假話）。"
         "／／以下為 2026-09-22 之前的舊文字，有意識的政策變更、⛔ 不是漏刪，加刪除線保留："
         "~~側欄預設展開還是收起 ⇒ ★-08 規格上仍是未決，本原型的斷點行為是原型自創。"
         "實測：S2-UI_SPEC.md 7.2（★-08）於 2026-09-15 由來歷更正組把結論改標「未決」"
@@ -857,6 +888,732 @@ def build_body() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 4.6 「📖 憑什麼」頁 —— 版面定義寫在產生器（客戶 2026-09-22 拍板「選項 1」）
+#
+# 🔴 **本節就是「選項 1」的落地。** 客戶 2026-09-22 拍板逐字：
+#    「1. 走選項 1：版面定義寫在產生器，畫面上就地揭露缺口」
+#    「2.「憑什麼」頁照規格 **6 層**，⛔ 不是四層（客戶先前記的四層是簡化說法）」
+#    「3. `badge_html(10)` 不報錯 → 登記為待修（**本輪不動**）」
+#    ⇒ `WHY_LAYOUT` 是本頁版面的**唯一定義**；它**不在** `src/ui_v2/` 契約層、
+#      **沒有** `tests/ui_v2/` 的測試守護。**這件事必須畫在畫面上**（`WHY_GAP_W1`）。
+#
+# 🔴 **⛔ 不發明 block、⛔ 不發明 cols。** 22 筆每一筆都在 `src` 欄標出處
+#    （規格**章節名** ＋ 線框 **block key**；依 CLAUDE.md §8.2.A.0 規則 1 **⛔ 不寫行號**）。
+#    規格查不到的一律**登記為洞**（`WHY_SPEC_GAPS`），⛔ 不填一個看起來合理的值（§1）。
+#
+# 📌 **兩個來源**（本組各自 import／node 實跑過，⛔ 非讀他組轉述）：
+#    · 規格 `docs/v2/spec/UI_PAGE_WHY.md`
+#    · 線框 `docs/v2/wireframe/wf_page_why.js` 的 `window.WF_PAGES[0]`（`id:"why"`）
+#      —— block 巢在 `layers[].blocks[]`，本組 node 實測 **6 層 22 block 3 葉**，
+#      `cols` 全集只有 `1/1/1`（14 塊）與 `3/2/1`（8 塊）兩種。
+# ══════════════════════════════════════════════════════════════════
+
+#: R4 就地揭露的**那一句**（客戶明示⛔ 不得省）。畫在「📖 憑什麼」頁的最上方。
+WHY_LAYOUT_DISCLOSURE = (
+    "⚠️ 此頁版面定義在產生器內，未進 src/ui_v2/ 契約層、無 tests/ui_v2/ 測試守護。"
+)
+
+#: 上面那句的**後果**（⛔ 不是免責套話，是可查證的差別）。
+WHY_LAYOUT_DISCLOSURE_WHY = (
+    "差別在哪：「🚦 今天」頁的版面（哪個 block 在第幾層、幾欄、哪一階密度）住在 "
+    "src/ui_v2/page_today.py，改壞了 tests/ui_v2/ 會紅燈；本頁的同一組資料住在 "
+    "docs/v2/prototype/gen_today_v2.py 的 WHY_LAYOUT，改壞了⛔ 沒有任何測試會攔。"
+    "⇒ 本頁的版面只有「跟規格與線框對照」這一種查法，⛔ 沒有機器守衛。"
+    "本產生器在結尾自己跑了一輪對照（22 個 block key／層／欄數 class／密度 class 逐一比對），"
+    "但那是**同一組人寫的自驗**，⛔ 不等於獨立測試。"
+)
+
+#: 本頁的**形狀**（本組自己量的，⛔ 不引用他組轉述）。
+WHY_PAGE_SHAPE_NOTE = (
+    "本頁形狀（本組自行實測，⛔ 非引用轉述）：規格 docs/v2/spec/UI_PAGE_WHY.md ＋ 線框 "
+    "docs/v2/wireframe/wf_page_why.js 的 window.WF_PAGES[0]（id 為 why）—— "
+    "node 解析結果：6 層、22 block、3 葉（l1 教學／l2 資料體檢／l3 AI 問答，五頁唯一的三葉頁）；"
+    "22 塊的 cols 全集只有兩種，1/1/1 共 14 塊、3/2/1 共 8 塊。"
+    "線框 mainCTA 欄位存在且值為 null ⇒ 本頁是五頁唯一沒有主 CTA 的一頁，⛔ 不得為它發明一顆按鈕。"
+)
+
+#: 六層的層標 —— `UI_PAGE_WHY.md` ② 六層結構表**第一欄逐字**（⛔ 去掉 markdown 粗體記號）。
+WHY_LAYER_LABEL: Mapping[int, str] = {
+    0: "葉外 chrome",
+    1: "第一層 四張說明卡",
+    2: "第二層 逐盞門檻表",
+    3: "第三層 資料體檢 · 使用者版",
+    4: "第四層 資料體檢 · 工程師版",
+    5: "葉3",
+}
+
+#: 每層所屬的葉 —— 線框 `layers[].blocks[].leaf`（本組 node 實測，同層內全同值）。
+#: `None` ＝ 線框 `leaf: null`（畫在分頁列之上、三葉共用）。
+WHY_LAYER_LEAF: Mapping[int, str | None] = {
+    0: None, 1: "l1", 2: "l1", 3: "l2", 4: "l2", 5: "l3",
+}
+
+#: 三葉的名字 —— 線框 `leaves[].id`／`UI_PAGE_WHY.md` ① 逐字（`l1` 教學／`l2` 資料體檢／`l3` AI 問答）。
+WHY_LEAF_NAME: Mapping[str, str] = {
+    "l1": "教學", "l2": "資料體檢", "l3": "AI 問答",
+}
+
+#: `n5` 的卡密度。**⛔ 非本檔發明**：`UI_PAGE_WHY.md` ② 表 `葉3 / n5` 列逐字
+#: 「t2（**沿用 `UI_PAGE_FIND` 對 `n5` 的新訂**：超出 `n1~n4` 自動對映時取「核心卡」，⛔ 非本組發明）」。
+#: 🔴 契約層 `components.tier_for_layer()` 只認 0 與 1~4（實測 `tier_for_layer(5)` → `ValueError`）
+#:    ⇒ 這一格是**規格有、契約層沒有**的地方，已登記為 `WHY_GAP_W2`。
+WHY_N5_TIER = "t2"
+
+#: 本頁**會畫**的徽章 —— `UI_PAGE_WHY.md` ④ 末句逐字：
+#: 「⇒ **會出現在畫面上的是 6 態：#1／#3／#4／#5／#6／#7**；#2 未落地、#8／#9 待接線、
+#:   **#10 有對象但尚未徽章化**。」
+#: ⇒ 其餘四顆一律**不畫**，並由下面的代理物件把「不小心畫了」變成 `ValueError`（fail loud）。
+WHY_BADGES_ON_PAGE: frozenset[int] = frozenset({1, 3, 4, 5, 6, 7})
+WHY_BADGES_NOT_ON_PAGE: frozenset[int] = frozenset(
+    int(b["n"]) for b in components.BADGES if int(b["n"]) not in WHY_BADGES_ON_PAGE
+)
+
+#: 本頁的**版面定義**（六層 22 block）。`cols` ＝ `(桌機, 平板, 手機)`。
+#: 🔴 每一筆的 `src` 是**出處**，⛔ 不是註解：規格章節名 ＋ 線框 block key。
+WHY_LAYOUT: tuple[Mapping[str, object], ...] = (
+    # ── n0 葉外｜全域 chrome（線框 `leaf: null`，三塊全 1/1/1）────────────────
+    {"block": "why.statusbar", "n": 0, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ① 差異 3 ＋ ② 六層結構表「葉外 chrome」列｜線框 why.statusbar"},
+    {"block": "why.asof", "n": 0, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ① 差異 3 ＋ ② 六層結構表「葉外 chrome」列｜線框 why.asof"},
+    {"block": "why.footer", "n": 0, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ① 差異 3 ＋ ② 六層結構表「葉外 chrome」列｜線框 why.footer"},
+    # ── n1 葉1 教學 · 上半｜四張說明卡（② 表逐字「四塊全 3/2/1」）──────────────
+    {"block": "why.edu.lights", "n": 1, "cols": (3, 2, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第一層 四張說明卡」列｜線框 why.edu.lights"},
+    {"block": "why.edu.health6", "n": 1, "cols": (3, 2, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第一層 四張說明卡」列｜線框 why.edu.health6"},
+    {"block": "why.edu.scales", "n": 1, "cols": (3, 2, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第一層 四張說明卡」列｜線框 why.edu.scales"},
+    {"block": "why.edu.legacy", "n": 1, "cols": (3, 2, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第一層 四張說明卡」列｜線框 why.edu.legacy"},
+    # ── n2 葉1 教學 · 下半｜逐盞門檻對照表（② 表逐字「全 1/1/1」；5 塊⛔ 不是 3 塊）──
+    #    ⚠️ ① 差異 2 逐字：層標寫「三塊」指的是**三張表**，「5 塊」指的是**五個線框區塊**，
+    #       兩個數字各自都對；⑤-d／⑤-e 是「表格**下方**逐列」的說明區，⛔ 不是第 4、5 張表。
+    {"block": "why.edu.table.macro", "n": 2, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第二層 逐盞門檻表」列｜線框 why.edu.table.macro"},
+    {"block": "why.edu.table.reference", "n": 2, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第二層 逐盞門檻表」列｜線框 why.edu.table.reference"},
+    {"block": "why.edu.table.hold", "n": 2, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第二層 逐盞門檻表」列｜線框 why.edu.table.hold"},
+    {"block": "why.edu.table.caveat", "n": 2, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第二層 逐盞門檻表」列｜線框 why.edu.table.caveat"},
+    {"block": "why.edu.table.nolevel", "n": 2, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第二層 逐盞門檻表」列｜線框 why.edu.table.nolevel"},
+    # ── n3 葉2 資料體檢 · 使用者版（⭐ 常駐，⛔ 不藏在 gate 後面）────────────────
+    {"block": "why.source.wall", "n": 3, "cols": (3, 2, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第三層 …使用者版」列（該列逐字標 3/2/1）｜線框 why.source.wall"},
+    {"block": "why.source.named", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第三層 …使用者版」列｜線框 why.source.named"},
+    {"block": "why.source.cache_semantics", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第三層 …使用者版」列｜線框 why.source.cache_semantics"},
+    {"block": "why.source.unmeasured.finmind_quota", "n": 3, "cols": (3, 2, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第三層 …使用者版」列（該列逐字標 3/2/1）"
+            "｜線框 why.source.unmeasured.finmind_quota"},
+    {"block": "why.spec.flags", "n": 3, "cols": (3, 2, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第三層 …使用者版」列（該列逐字標 3/2/1）｜線框 why.spec.flags"},
+    {"block": "why.source.coverage", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第三層 …使用者版」列｜線框 why.source.coverage"},
+    # ── n4 葉2 資料體檢 · 工程師版（維持現行單一 gate；t4 是四階唯一 dashed）────────
+    {"block": "why.engineer.gate", "n": 4, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第四層 …工程師版」列｜線框 why.engineer.gate"},
+    {"block": "why.engineer.monitor", "n": 4, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第四層 …工程師版」列｜線框 why.engineer.monitor"},
+    {"block": "why.engineer.panels", "n": 4, "cols": (3, 2, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「第四層 …工程師版」列（該列逐字標 3/2/1）｜線框 why.engineer.panels"},
+    # ── n5 葉3 AI 問答（送出就是啟動）────────────────────────────────────────
+    {"block": "why.qa", "n": 5, "cols": (1, 1, 1),
+     "src": "UI_PAGE_WHY ② 六層結構表「葉3」列｜線框 why.qa"},
+)
+
+#: 由 `WHY_LAYOUT` **推導**（⛔ 不另手寫一份，否則就是第二個真相源 —— CLAUDE.md §2.1）。
+WHY_BLOCK_COLS: Mapping[str, tuple[int, int, int]] = {
+    str(rec["block"]): tuple(rec["cols"]) for rec in WHY_LAYOUT   # type: ignore[misc]
+}
+_WHY_BLOCK_LAYER: Mapping[str, int] = {
+    str(rec["block"]): int(rec["n"]) for rec in WHY_LAYOUT        # type: ignore[arg-type]
+}
+WHY_LAYER_BLOCKS: Mapping[int, tuple[str, ...]] = {
+    n: tuple(str(rec["block"]) for rec in WHY_LAYOUT if int(rec["n"]) == n)  # type: ignore[arg-type]
+    for n in sorted({int(rec["n"]) for rec in WHY_LAYOUT})                   # type: ignore[arg-type]
+}
+
+
+def why_tier_for_layer(n: int) -> str:
+    """層序 → 卡密度。
+
+    · `n0~n4`：**一律走契約層** `components.tier_for_layer()`，⛔ 不在本檔手抄一份
+      —— 那正是 `UI_COMPONENTS.md` §1「四層由 `layers[].n` **自動掛**，⛔ 非逐塊手選」
+      的落地形式（本檔照抄一份就等於把「手選」搬回來了）。
+    · `n5`：超出契約層的 `1~4` 自動對映（實測 `components.tier_for_layer(5)` → `ValueError`），
+      取規格 ② 表 `葉3` 列的 `t2`。**⛔ 非本檔發明**，見 `WHY_N5_TIER` 的出處註。
+    · 其餘層序 → `ValueError`（⛔ 不猜一階）。
+    """
+    if n == 5:
+        return WHY_N5_TIER
+    return components.tier_for_layer(n)
+
+
+def why_tier_for_block(block_key: str) -> str:
+    """block → 卡密度。**⛔ 刻意不提供 tier 覆寫參數**（同 `page_today.tier_for_block`）。"""
+    try:
+        n = _WHY_BLOCK_LAYER[block_key]
+    except KeyError:
+        raise KeyError(f"未知的 block：{block_key!r}") from None
+    return why_tier_for_layer(n)
+
+
+# ── 代理：把 `markup.page_today` **暫時**換成本頁的版面契約 ──────────────────
+#
+# 🔴 **何以要代理（R2：作法要寫清楚理由）**
+#    `markup.py` 的五個公開函式**全部**把版面查表寫死在 `page_today` 上
+#    （本組實測，⛔ 非讀轉述）：
+#      · `card_html(block='why.…')` → `KeyError: 未知的 block`（卡在 `page_today.tier_for_block`）
+#      · `grid_html(block='why.…')` → `KeyError`（卡在 `page_today.BLOCK_COLS[block]`）
+#      · `layer_html(layer=5)`      → `KeyError: 第 5 層沒有登記層級網格`
+#      · `components.tier_for_layer(5)` → `ValueError: 只有 0 與 1~4`
+#      · `badge_html(10)`           → **不報錯**，但 `.bdg-10` 不在 `page_css()` 的輸出裡
+#        ⇒ 會畫出一顆**無配色的徽章**（§1 最危險的那一型：看起來成功、實際是假的）
+#    ⇒ 想把「📖 憑什麼」畫出來，只有三條路：
+#      (a) 新增 `src/ui_v2/page_why.py`  —— 客戶本輪⛔ 沒有選這條（選項 1 明說版面寫在產生器）；
+#      (b) 在本檔**手抄**一份 `<div class="blk blk-t1">…` 的標記 —— **那是第二個真相源**：
+#          `markup.card_html` 之後改了，本檔不會跟著改，而且**沒有人會發現**（CLAUDE.md §2.1）；
+#      (c) **代理**：版面查表換成本頁的，**標記仍由 `markup` 的公開函式產出**。
+#    ⇒ 選 (c)。它的產物與「真的有 `page_why.py`」時**逐字相同** —— 因為標記完全是
+#      `markup.card_html` / `grid_html` 自己吐的，本檔一個角括號都沒有手打。
+#
+# ⛔ **三條紀律（缺一不可）**
+#    ① **只在產「📖 憑什麼」頁的期間替換，產完一定還原** —— 「🚦 今天」頁仍走真正的
+#       `page_today`（離場時 assert `markup.page_today is page_today`）。
+#    ② **⛔ 不碰 `markup` 的私有符號**（`_root_rule` / `_px` / `_resolve_palette` …）。
+#       `markup.page_today` 是**公開名字**（無底線）—— 本 repo 登記在案的違憲
+#       `V-PICKER-PRIV-1` 就是跨層直取底線開頭的私有符號，⛔ 不重蹈。
+#    ③ **⛔ 不在代理生效期間呼叫 `markup.page_css()`** —— `markup` 有四個 module-level
+#       常數（`_BLOCK_COLS_USED` / `_LAYER_COLS_USED` / `_TIERS_ON_PAGE` /
+#       `_TIERS_WITH_LAYER_GRID`）是 **import 當下**就依 `page_today` 算好的，
+#       代理換不動它們；CSS 一律在代理**之外**產（`main()` 的順序已保證，另有 assert）。
+def _markup_page_today_names() -> frozenset[str]:
+    """AST 掃 `markup.py`：它到底讀了 `page_today` 的哪幾個名字。
+
+    🔴 **⛔ 不用 grep、⛔ 不憑記憶**：`markup` 日後多讀一個名字，代理就少一塊；
+    少的那一塊會以 `AttributeError` 炸在產生時，⛔ 不會靜默畫出半套版面（§1 Fail Loud）。
+    """
+    tree = ast.parse(pathlib.Path(markup.__file__).read_text(encoding="utf-8"))
+    return frozenset(
+        node.attr for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "page_today"
+    )
+
+
+#: 代理物件。**只提供 `markup` 真的會讀的那幾個名字**（由上面的 AST 掃描把關）。
+#: · `BLOCK_COLS` / `tier_for_block` / `BADGES_*`：本頁自己的（來自 `WHY_LAYOUT` 與規格 ④）。
+#: · `card_value_text` / `card_level_text`：**直接沿用 `page_today` 的原函式** ——
+#:   它們是「灰態紅態一律留白、`degraded` 觀測照出判決留白」這組 §1 規則的落地，
+#:   **與哪一頁無關**，⛔ 不得在本檔另立第二把尺。
+#: · `LAYER_GRID_COLS`：**刻意是空的**。線框只給 block 級 `cols`，**⛔ 沒有給任何層級網格欄數**
+#:   ⇒ 本頁一旦有人呼叫 `markup.layer_html()` 就會炸（這是**要的**，見 `WHY_GAP_W3`）。
+_WHY_CONTRACT = types.SimpleNamespace(
+    BLOCK_COLS=WHY_BLOCK_COLS,
+    LAYER_GRID_COLS={},
+    BADGES_ON_PAGE=WHY_BADGES_ON_PAGE,
+    BADGES_NOT_ON_PAGE=WHY_BADGES_NOT_ON_PAGE,
+    tier_for_block=why_tier_for_block,
+    card_value_text=page_today.card_value_text,
+    card_level_text=page_today.card_level_text,
+)
+
+
+@contextlib.contextmanager
+def why_page_contract() -> Iterator[None]:
+    """`with` 期間 `markup` 走「📖 憑什麼」的版面查表；離開時**一定**還原。
+
+    進場先驗兩件事、離場再驗一件，⛔ 不是「應該可以」：
+      1. 代理**蓋得齊** `markup` 實際會讀的每一個 `page_today.*` 名字（AST 掃出來的）；
+      2. 進場時 `markup.page_today` **本來就是**真的 `page_today`（⛔ 沒有人忘了還原）；
+      3. 離場後 `markup.page_today` **是同一個物件**（`is` 比對，⛔ 不是 `==`）。
+    """
+    needed = _markup_page_today_names()
+    missing = needed - set(vars(_WHY_CONTRACT))
+    assert not missing, (
+        f"代理少了 markup 會讀的名字：{sorted(missing)} —— "
+        "markup.py 多讀了東西而本檔的代理沒跟上。"
+        "⛔ 不得為了跑得動就隨便補一個值（那會畫出一個編出來的版面，違 CLAUDE.md §1）。"
+    )
+    original = markup.page_today
+    assert original is page_today, (
+        "進場時 markup.page_today 已經不是原物件 —— 上一次替換忘了還原")
+    markup.page_today = _WHY_CONTRACT
+    try:
+        yield
+    finally:
+        markup.page_today = original
+    assert markup.page_today is page_today, "還原失敗：markup.page_today 不是原物件"
+
+
+# ── 本頁每一塊要畫成什麼狀態 ────────────────────────────────────────────
+#
+# 🔴 **狀態⛔ 不是挑好看的，是照規格與線框挑的。** 兩道各自獨立的把關：
+#    ① 規格 `UI_PAGE_WHY.md` 有寫該塊是哪一態的，照規格；
+#    ② 線框該塊的 `states` 十態格裡，**值為 `null` 的一律不准用**
+#       —— `null` ＝「這塊在該情況下**結構上不存在**」（規格 ④ 逐字，⛔ 不得畫成空卡）。
+#    兩道都是本組 node／grep 實測，見 `build_why_cards()` 逐塊註解。
+#
+# 🔴 **#4 與 #5 是規格點名「必須畫得出來」的兩顆**（④ 逐字：「畫版面時必須同時畫得出
+#    `unwired`（#5）與 `degraded`（#4）」，⛔ 不得只畫 live 版）—— 本頁各出現兩處以上。
+WHY_LAYER_NOTE: Mapping[int, str] = {
+    0: "三塊的 leaf 在線框是 null ＝ 畫在分頁列之上、三葉共用。statusbar 與 asof 線框自標 "
+       "unwired「本頁目前沒有這一條」；footer 是這三條裡唯一已經在畫面上的"
+       "（由 L6 app.py 在 st.stop() 之前對每一個 IA 頁統一呼叫）。"
+       "⚠️ 在這份 HTML 原型裡，statusbar／asof／footer 三塊的**實體**畫在五頁共用的外殼上"
+       "（時點列在頁標題下方、頁尾免責在最底），本層畫的是它們的**版面登記**，"
+       "⛔ 不是第二份 chrome。",
+    1: "t1 是四階裡唯一 2px 框線、內距最大的一階。四張卡的狀態⛔ 不是挑的 —— "
+       "規格 ③ 規則二 (b) 實跑結果逐字：lights ＝ live／health6 ＝ unwired／"
+       "scales ＝ degraded／legacy ＝ unwired，也就是「這一葉沒有灰態」這句話在**線框文字**上"
+       "成立、在**實作**上不成立（四張中了三張）。"
+       "本組另以 node 實測線框同四塊的 states：health6 與 legacy 十態裡只有 unwired 非 null、"
+       "scales 的 degraded 非 null、lights 的 live 非 null ⇒ **線框與實跑互相對得上**。",
+    2: "五塊全 1/1/1。⚠️ 層標寫「切成三塊」指的是**三張表**（總經／參考走勢／持股），"
+       "「5 塊」指的是**五個線框區塊** —— ⑤-d／⑤-e 是表格**下方**的逐列說明區，"
+       "⛔ 不是第 4、5 張表；兩個數字各自都對（規格 ① 差異 2）。"
+       "⚠️ ⑤-e 整塊**⛔ 沒有徽章**，理由見本頁缺口 W5。",
+    3: "⭐ 這一層是**常駐**的，⛔ 不藏在 gate 後面 —— 另外四頁的「去哪補」指路句終點就在這裡；"
+       "藏起來等於把四頁的指路句指到一個看不見的地方（規格 ① 差異 1）。"
+       "六塊裡有三塊是 3/2/1（wall／finmind_quota／spec.flags），三塊是 1/1/1。",
+    4: "t4 是四階裡唯一 dashed 的一階。整層在實作上鎖在單一 gate 後面"
+       "（未勾選時一次 L0 登錄表都不讀）⇒ 本頁畫的是它的 idle 態。"
+       "⚠️ 與 n3 的可見性**完全相反**，規格 ① 差異 1 逐字⛔ 不得把這兩層合併寫。",
+    5: "五頁唯一的三葉頁，葉3 只有一塊。密度 t2 是規格 ② 表給的，"
+       "⛔ 不是契約層算出來的（components.tier_for_layer 只認 0 與 1~4）—— 見缺口 W2。"
+       "冷啟動是 #3 灰、⛔ 不是紅：線框逐字「第一次進來時是灰的，不是紅的 —— "
+       "即使根本沒有金鑰」；規格 ⑤ (a) 另逐字「送出本身就是啟動」。",
+}
+
+
+def build_why_cards() -> dict[str, list[dict]]:
+    """每個 block 要畫幾張卡、各是什麼狀態。
+
+    🔴 **卡標題規則沿用「🚦 今天」頁的既有做法**：規格／線框給了名字的用它的名字，
+       沒給逐卡名稱的用 `components.badge(n)["name"]`（⛔ 不發明一組沒有出處的中文標題
+       —— 同 `_LAYER_NOTE[4]` 對 `today.detail` 的處置）。
+    🔴 **每一張畫得出數字的卡都掛 `("資料來源", DEMO)`**（客戶：示意數字必須標明示意）。
+    """
+    rb = page_today.resolve_badge
+    bn = lambda n: str(components.badge(n)["name"])   # noqa: E731
+
+    def demo(*rows: tuple[str, str]) -> tuple[tuple[str, str], ...]:
+        """帶數字的卡：事實列 ＋ 一條「⚠️ 示意值 · 未接線」。"""
+        return (*rows, ("資料來源", DEMO))
+
+    return {
+        # ── n0（線框自標 unwired／footer 已在畫面上；規格 ① 差異 3）──────────────
+        "why.statusbar": [
+            {"state": "unwired", "title": "（跨頁）頂部狀態列",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": demo(("線框自標", "unwired ·「本頁目前沒有這一條」"),
+                           ("出處", "UI_PAGE_WHY ① 差異 3"))},
+        ],
+        "why.asof": [
+            {"state": "unwired", "title": "資料時點揭露列（頁標題下方第一行）",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": (("線框自標", "unwired ·「本頁目前沒有這一條」"),
+                       ("這份原型", "外殼上畫了一條示意殼，⛔ 一個真時間都沒填"))},
+        ],
+        "why.footer": [
+            {"state": "live", "title": "頁尾免責（每一頁都要有）",
+             "value": None, "level": None, "badge_n": rb(state="live"),
+             "facts": demo(("出處", "本頁 chrome 三條裡唯一已經在畫面上的"),
+                           ("誰畫的", "L6 app.py 在 st.stop() 之前對每一個 IA 頁統一呼叫"))},
+        ],
+        # ── n1 四張說明卡：狀態 ＝ 規格 ③ 規則二 (b) 的**實跑結果**（⛔ 不是挑的）──────
+        "why.edu.lights": [
+            {"state": "live", "title": "① 紅綠燈怎麼判 · 各門檻的出處",
+             "value": None, "level": "🟢 這一張是接上的", "badge_n": rb(state="live"),
+             "facts": (("實跑狀態", "live（規格 ③ 規則二 (b)）"),
+                       ("線框對照", "十態格裡 live 非 null"))},
+        ],
+        "why.edu.health6": [
+            {"state": "unwired", "title": "② 健康評分六因子",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": (("實跑狀態", "unwired（規格 ③ 規則二 (b)）"),
+                       ("線框對照", "十態格裡只有 unwired 非 null，其餘九格全 null"),
+                       ("要接上需要什麼", "六因子配分 SSOT 真的接進來，"
+                                          "⛔ 不得把 state 寫死成 live 假裝"))},
+        ],
+        "why.edu.scales": [
+            {"state": "degraded", "title": "③ 同一個名詞，兩套刻度",
+             # degraded ＝ 觀測照出、判決留白（page_today.card_level_text 負責擦掉）
+             "value": "2", "level": "🟡 中性", "badge_n": rb(state="degraded"),
+             "facts": demo(("實跑狀態", "degraded（規格 ③ 規則二 (b)）"),
+                           ("畫面行為", "觀測照出、判決留白 ⇒ 上面那顆等級⛔ 不會畫出來"),
+                           ("兩套刻度", "其中已失準的那一側"))},
+        ],
+        "why.edu.legacy": [
+            {"state": "unwired", "title": "④ 完整策略邏輯說明書（既有 📚 教學）",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": (("實跑狀態", "unwired（規格 ③ 規則二 (b)）"),
+                       ("線框旗標", "★待拍板"))},
+        ],
+        # ── n2 逐盞門檻表（三張表 ＋ 兩段表下說明）────────────────────────────
+        "why.edu.table.macro": [
+            {"state": "live", "title": "⑤-a 總經燈（16 盞）",
+             "value": "16", "level": "🟢 盞數取自 L0 常數表", "badge_n": rb(state="live"),
+             "facts": demo(("表格欄數", "7 欄"),
+                           ("欄名逐字", "這一盞／分組／方向／門檻／值從哪來／在防什麼／已知限制"))},
+        ],
+        "why.edu.table.reference": [
+            {"state": "live", "title": "⑤-b 參考走勢（2 條 · 不算燈）",
+             "value": "2", "level": "🟢 不算燈，只是參考", "badge_n": rb(state="live"),
+             "facts": demo(("表格欄數", "4 欄"),
+                           ("欄名逐字", "這一條／單位／這條線在說什麼／值從哪來"))},
+        ],
+        "why.edu.table.hold": [
+            {"state": "live", "title": "⑤-c 持股燈（12 盞）",
+             "value": "12", "level": "🟢 與 ⑤-a 共用同一支表格", "badge_n": rb(state="live"),
+             "facts": demo(("表格欄數", "7 欄（與 ⑤-a 同一支）"),
+                           ("執行時", "4 張表、3 個呼叫點（⑤-a 與 ⑤-c 共用一個）"))},
+        ],
+        "why.edu.table.caveat": [
+            {"state": "live", "title": "⑤-d 被降級的門檻 —— 為什麼現在不能用（表格下方逐列）",
+             "value": None, "level": "🟢 這一段是表格下方的逐列說明",
+             "badge_n": rb(state="live"),
+             "facts": demo(("它不是第 4 張表", "是三張表下方的逐列說明區（規格 ① 差異 2）"),
+                           ("卡標逐字", "本卡標題含「為…什麼」三字，是線框 name 的逐字複本，"
+                                        "⛔ 不是頁名 —— 第五頁的頁名一律是「📖 憑什麼」"))},
+        ],
+        # ⑤-e：**整塊⛔ 不掛徽章**（正確答案是 #10，而 #10 本輪不畫）—— 見 W5。
+        "why.edu.table.nolevel": [],
+        # ── n3 資料體檢 · 使用者版（⭐ 常駐）──────────────────────────────────
+        #    牆是「逐源獨立判態」⇒ 四張卡示範四種**線框十態格非 null** 的態。
+        #    標題取 components.badge(n)["name"]（⛔ 不發明來源名 —— 來源是被用到才登記的）。
+        "why.source.wall": [
+            {"state": "idle", "title": bn(3),
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": (("線框逐字", "⬜ 未檢查 —— 還沒有真的對外抓過"),
+                       ("規格 ④", "這是本頁最常見的一態"),
+                       ("去哪補", "到會用到它的那一頁按更新／載入，讓它真的跑一次"))},
+            {"state": "empty", "title": bn(7),
+             "value": None, "level": None, "badge_n": rb(state="empty"),
+             "facts": (("線框逐字", "名單讀得到、裡面一支都沒有 ——「這是正常的，不是壞掉」"),
+                       ("⛔ 不得", "顯示成一片空白 —— 讀到了沒東西 ≠ 讀不到，兩件事"),
+                       ("範圍", "這是整面牆的態，⛔ 不是某一源的態"))},
+            {"state": "unwired", "title": bn(5),
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": (("線框逐字", "該源未接線（還沒做）＋ 就地寫明原因"),
+                       ("這一態的特點", "沒有你可以做的事 —— 不是你操作的問題"))},
+            {"state": "error", "title": bn(6),
+             "value": None, "level": None, "badge_n": rb(state="error"),
+             "facts": (("線框逐字", "一源紅不會把另外兩源一起染色"),
+                       ("第四種紅", "這一盞的狀態本頁看不懂 → 看不懂一律當紅，絕不當綠"))},
+        ],
+        "why.source.named": [
+            {"state": "live", "title": "⑦ 線框具名三源的狀態一覽（常駐 caption）",
+             "value": "3", "level": "🟢 常駐，⛔ 不藏在 gate 後面",
+             "badge_n": rb(state="live"), "facts": demo(("形式", "常駐 caption"))},
+        ],
+        "why.source.cache_semantics": [
+            {"state": "live", "title": "⑧ 「這面牆上的時間是什麼」（常駐 caption · 誠實揭露）",
+             "value": None, "level": "🟢 常駐", "badge_n": rb(state="live"),
+             "facts": (("線框逐字", "吃快取不算 —— 拿快取回答的，那一盞仍停在「未檢查」"),)},
+        ],
+        "why.source.unmeasured.finmind_quota": [
+            {"state": "unwired", "title": "⑨ 具名、但這面牆量不到的來源（FinMind API 額度）",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": (("線框對照", "十態格裡只有 unwired 非 null，其餘九格全 null"),
+                       ("語意", "線框具名了它，但這面牆量不到 ⇒ 誠實寫「量不到」，"
+                                "⛔ 不編一個數字"))},
+        ],
+        "why.spec.flags": [
+            {"state": "degraded", "title": bn(4),
+             "value": None, "level": None, "badge_n": rb(state="degraded"),
+             "facts": (("線框實況指名", "融資餘額（總經燈）與 財報趨勢（持股燈）"),
+                       ("為何在這一區", "「已失準」走燈號表自己的標記，⛔ 不走牆上的格子"))},
+            {"state": "unwired", "title": bn(5),
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": (("線框實況指名", "外資現貨淨買賣"),)},
+        ],
+        "why.source.coverage": [
+            {"state": "live", "title": "⑪ 涵蓋率揭露（常駐 caption · 本頁最重要的一段話）",
+             "value": "9", "level": "🟢 常駐", "badge_n": rb(state="live"),
+             "facts": demo(("這個 9 是什麼", "被監控的取數點個數；規格檔末「本組實查」段的實跑值，本組另以 grep 自行重測同為 9（量測日 2026-09-22）"),
+                           ("⛔ 不寫成分數", "N／M 是 #9 的語意，而 #9 在本頁待接線 —— "
+                                             "寫成分數等於假裝它已經接上"))},
+        ],
+        # ── n4 資料體檢 · 工程師版（單一 gate）──────────────────────────────
+        "why.engineer.gate": [
+            {"state": "idle", "title": "⑫ 進階診斷（要兩步才打得開）",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(("規格 ④ (ii)", "未勾選時整區 idle —— 一次 L0 登錄表都不讀"),
+                           ("與 n3 的差別", "n3 常駐、n4 在 gate 後面，可見性完全相反"))},
+        ],
+        "why.engineer.monitor": [
+            {"state": "live", "title": "⑬ 🛰️ 取數監控（六個面板中唯一接得上的）",
+             "value": None, "level": "🟢 六個面板裡唯一接得上的", "badge_n": rb(state="live"),
+             "facts": demo(("表格欄數", "8 欄"),
+                           ("欄名逐字", "fetcher／分類／更新頻率／最後一次真實抓取／回了幾列／"
+                                        "耗時(ms)／錯誤／本頁看不懂的狀態"))},
+        ],
+        "why.engineer.panels": [
+            {"state": "unwired", "title": "⑭ 其餘五個面板",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": (("五個面板逐字", "資料源清單／雙演算法對帳／API 根因／原始資料表／門檻校準"),
+                       ("線框對照", "十態格裡 live 為 null ⇒ 結構上就不存在「接上了」這一格"))},
+        ],
+        # ── n5 葉3 AI 問答 ────────────────────────────────────────────────
+        "why.qa": [
+            {"state": "idle", "title": "⑮ AI 問答（對話區 ＋ 狀態卡）",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": (("線框逐字", "第一次進來時是灰的，不是紅的 —— 即使根本沒有金鑰"),
+                       ("規格 ⑤ (a)", "送出本身就是啟動（不需要再按別的鈕）"),
+                       ("⛔ 不得", "在問之前先亮紅燈 —— 那是替一個還沒發生的失敗製造假警報"))},
+        ],
+    }
+
+
+#: ⑤-e 整塊的**就地揭露**（它沒有卡、沒有徽章，只有這一段）。
+WHY_NOLEVEL_DISCLOSURE = (
+    "⑤-e 依規格就不出等級的燈（不是壞掉，是還沒有判燈規則）—— "
+    "⚠️ 這一塊本輪⛔ 沒有卡、⛔ 沒有徽章，是刻意的。"
+    "它的正確徽章是 #10 ◆「只描述，不判等級」（規格 ④ 指名本頁是前六份中第一個有適用對象的，"
+    "實跑 1 項「KD 指標」），但 #10 在本頁**尚未徽章化**，"
+    "而且 markup.page_css() 的輸出裡⛔ 沒有 .bdg-10 這條規則（本組實測 0 命中）"
+    "⇒ 硬畫出來會是一顆**無配色的徽章**，那正是 CLAUDE.md §1 最危險的那一型：看起來成功、其實是假的。"
+    "⛔ 更不得拿 #5／#4／#7 冒充 —— 規格 ④ 三句反面話逐字："
+    "unwired 說它沒接（假的）、degraded 說它門檻失準（假的，它從來沒有門檻）、"
+    "empty 說它沒資料（假的，K、D 都抓得到）。⇒ 三句都不是實情。"
+    "本輪處置：畫出這一塊的版面位置（層／欄數／密度都在），但⛔ 不掛任何徽章。見缺口 W5。"
+)
+
+#: 「📖 憑什麼」頁**本輪查到的缺口**，逐條登記並**畫在畫面上**（客戶：就地揭露）。
+#: 🔴 每一條同樣是 **⚠️ 單組／兩組調查結論，未經第三方驗**（CLAUDE.md §-2 規則 6）。
+WHY_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
+    (
+        "W1",
+        WHY_LAYOUT_DISCLOSURE,
+        WHY_LAYOUT_DISCLOSURE_WHY
+        + "／／來歷：客戶 2026-09-22 拍板逐字「1. 走選項 1：版面定義寫在產生器，"
+          "畫面上就地揭露缺口」⇒ 這是**已拍板的作法**，⛔ 不是偷懶，"
+          "但它的後果必須看得見，所以有這一條。",
+    ),
+    (
+        "W2",
+        "n5（葉3）超出契約層的層序對映 ⇒ 它的卡密度 t2 只能寫在本產生器裡。",
+        "實測：components.tier_for_layer(5) 拋 ValueError「未知的層序 5：只有 0（葉外 chrome）"
+        "與 1~4 四層」。而 UI_PAGE_WHY ② 表「葉3」列逐字給了 t2，並自陳"
+        "「沿用 UI_PAGE_FIND 對 n5 的新訂：超出 n1~n4 自動對映時取「核心卡」，⛔ 非本組發明」。"
+        "⇒ 規格有、契約層沒有。本檔把它寫成 WHY_N5_TIER 常數並標明出處，"
+        "n0~n4 則一律走 components.tier_for_layer（⛔ 不在本檔手抄第二份對映表）。"
+        "真正的解是契約層補上 n5 的對映，但那要動 src/ui_v2/components.py ⇒ ⛔ 不在本輪授權範圍。",
+    ),
+    (
+        "W3",
+        "本頁⛔ 沒有任何「層級網格」的來源 ⇒ 代理的 LAYER_GRID_COLS 是空的，"
+        "markup.layer_html() 在本頁一律會炸（這是要的）。",
+        "實測：線框 22 個 block 都只有 block 級的 cols（desktop／tablet／phone 三鍵），"
+        "layers[] 上⛔ 沒有任何欄數欄位。對照「🚦 今天」頁：它的 LAYER_GRID_COLS 只有第二層，"
+        "而那一格有明確來歷（客戶 2026-09-16「3 張並排卡」＋ 原型 .g3 實測）。"
+        "⇒ 本頁沒有那樣的來歷，就⛔ 不給它一個猜的欄數；六層一律逐 block 全寬輸出。"
+        "markup.layer_html 自己的 docstring 逐字要求同一件事："
+        "「沒有登記層級網格的層 → 炸…⛔ 不得 try/except 吞掉改成預設 1 欄」。",
+    ),
+    (
+        "W4",
+        "cols 的語意本身未決（＝「🚦 今天」頁登記的 U-2）⇒ 本頁 8 塊 3/2/1 照契約層語意原樣渲染，"
+        "⛔ 不代為裁決。",
+        "現況：契約層把 cols 讀成「**卡內**網格一列幾格」（markup.grid_html 的 .g-* class）。"
+        "但本頁 n1 的四塊各自是獨立 block、每塊只有 1 張卡，卻四塊都標 3/2/1 ⇒ "
+        "「3/2/1」也可以被讀成「這四塊並排」。兩種讀法會畫出不一樣的版面。"
+        "「🚦 今天」頁的同一個問題已拆為 U-2 並記為「仍未判定」（見本檔 _LAYER_NOTE[2]）⇒ "
+        "本頁沿用同一處置：照現行契約層語意原樣渲染，⛔ 不裁決。"
+        "／／另轉錄一條**不影響本原型**的：UI_PAGE_WHY ② 逐字記載 3/2/1 的 tablet=2 在 "
+        "Streamlit 實作端未落地（641–880 仍恆 3 欄），並註明「沿用 UI_PAGE_FIND 的實作待修登記，"
+        "⛔ 本頁不另開一筆」⇒ 本檔**也不另開一筆**。"
+        "⚠️ 這份 HTML 原型的 CSS 本身是對的：.g-3-2-1 三段實測 ＝ 3/2/1（產生器結尾有守衛）。",
+    ),
+    (
+        "W5",
+        "#10 ◆ 有適用對象但尚未徽章化；且 markup.badge_html(10) **不報錯** ⇒ 會畫出一顆無配色的徽章。",
+        "實測三件事：(a) UI_PAGE_WHY ④ 逐字「本頁是前六份中第一個有適用對象的」，"
+        "實跑 no_level ＝ 1 項「KD 指標」；同段又逐字「現況以 st.caption 逐列呈現、◆ 0 命中 ⇒ "
+        "徽章化為待補」。(b) markup.page_css('dark') 的輸出裡 .bdg-10 **0 命中**。"
+        "(c) markup.badge_html(10) **不拋例外**，回傳 <span class=\"bdg bdg-10\">…</span> ⇒ "
+        "一顆沒有任何配色規則的徽章。⇒ 客戶 2026-09-22 拍板逐字「3. badge_html(10) 不報錯 → "
+        "登記為待修（**本輪不動**）」。本輪處置：本頁的代理把 10 放進 BADGES_NOT_ON_PAGE，"
+        "任何一次誤畫都會在產生時變成 ValueError；⑤-e 整塊⛔ 不掛徽章"
+        "（⛔ 不得拿 #5／#4／#7 冒充，規格 ④ 三句反面話）。"
+        "真正的解有兩條：補 .bdg-10 的 CSS，或讓 badge_html 對未出現在該頁的徽章 fail loud；"
+        "兩條都要動 src/ui_v2/ ⇒ ⛔ 不在本輪授權範圍。",
+    ),
+    (
+        "W6",
+        "#2（載入中）未落地、#8／#9 待接線 ⇒ 本頁⛔ 不畫這三顆。",
+        "UI_PAGE_WHY ④ 表逐字：#2「Name 0、st.spinner 0 ⇒ 未落地，⛔ 不得拿 #3 冒充載入中」；"
+        "#8「MISS_NOT_APPLICABLE 0 命中 ⇒ #8 未落地，⛔ 不得把 missing 畫成 #8"
+        "（重跑無效，畫錯＝給錯指引）」；#9「◧ 0、「已檢查」0 ⇒ 未落地…分子分母拿不到 → "
+        "一律降 #7，⛔ 不得退回 #1」。同節末句逐字「會出現在畫面上的是 6 態：#1／#3／#4／#5／#6／#7」。"
+        "⇒ 本頁的 WHY_BADGES_ON_PAGE 就是那 6 顆，其餘四顆由代理擋成 ValueError。"
+        "⚠️ 對照「🚦 今天」頁：它畫 #1~#9（只擋 #10）—— 兩頁的可畫集合不同是**規格不同**，"
+        "⛔ 不是本檔挑的。",
+    ),
+    (
+        "W7",
+        "規格三條特殊規則裡的規則二「這頁沒有灰態」在**實作上不成立** ⇒ 版面必須畫得出 #4 與 #5。",
+        "UI_PAGE_WHY ③ 規則二 (b) 的實跑結果逐字：四張教學卡 ＝ live／unwired／degraded／unwired "
+        "⇒ 四張中了三張。同檔 ④ 逐字「畫版面時必須同時畫得出 unwired（#5）與 degraded（#4），"
+        "⛔ 不得只畫 live 版」。本頁照辦：#5 出現在 statusbar／asof／edu.health6／edu.legacy／"
+        "source.wall／finmind_quota／spec.flags／engineer.panels，#4 出現在 edu.scales／spec.flags。"
+        "⛔ 明確不做的事：把那三張卡的 state 寫死成 live 讓畫面好看 —— 規格 ③ (c) 逐字"
+        "「⛔ 不得用『把 state 寫死 live』來假裝 —— 那會把『這項還沒做』畫成『正常』，違 CLAUDE.md §1」。",
+    ),
+    (
+        "W8",
+        "線框對 subtitle 的白話指路句提案 ★待拍板 ⇒ 本頁⛔ 不畫那句。",
+        "UI_PAGE_WHY ③ 規則三逐字：線框記載客戶回饋「有些頁面寫『本頁目前沒有主 CTA』，新手會迷失」，"
+        "線框的做法是**不新增按鈕**、改在 subtitle 加一句白話指路，並自標 ★待拍板"
+        "（flags 含「★待拍板／偏離核准線框／單組結論」）⇒ 規格同段逐字「登記為未決，⛔ 本份不代決、"
+        "⛔ 不得寫成已生效」。本頁照辦：⛔ 不畫該句、⛔ 不發明主 CTA"
+        "（規格 ③ 規則三逐字：線框 mainCTA 值為 null，本組 node 複驗命中）。",
+    ),
+    (
+        "W9",
+        "「無金鑰時要不要就地給設定入口」★待拍板 ⇒ 本頁⛔ 不畫設定入口。",
+        "UI_PAGE_WHY ⑤ 逐字：S1-3B 規格要求「去哪補：本頁就地顯示設定入口與步驟」"
+        "＋ ⛔「不得把使用者指去改 .streamlit/secrets.toml」；線框與實作則寫"
+        "「要開這個入口必須先由客戶拍板『這一頁可以收金鑰』，本批不做」，理由是"
+        "「那等於在畫面上收憑證」。規格判定逐字：兩者都沒有把使用者指去改 toml"
+        "（規格的 ⛔ 沒有被違反），分歧只在要不要就地給入口 ⇒ **登記為未決**。本頁照辦：不畫。",
+    ),
+    (
+        "W10",
+        "線框十態格的有值格數**兩組數字不一致**（114 vs 112）⇒ 本頁畫面上⛔ 一個都不寫。",
+        "UI_PAGE_WHY ④ 逐字：「220 格中 114 有值、106 為 null」，同句又註"
+        "「與 INV-9B 轉述的『112 有值／108 null』差 2 格…**兩組數字不一致，本項待第三方裁定，"
+        "⛔ 不得引用任一數字當前提**」。⇒ 本檔**兩個數字都沒有寫進畫面**，"
+        "也⛔ 沒有拿它們去推導任何版面決定。"
+        "⚠️ 本組確實用 node 自己數了一次（⛔ 不引用他組轉述），但依上引的 ⛔，"
+        "本組的數字同樣**只是第三個單組結論**，⛔ 不足以裁定，故同樣不寫進畫面。"
+        "本頁真正依賴的是**逐格 null / 非 null**（哪一態結構上存在），那是逐塊查的，⛔ 不依賴總數。",
+    ),
+    (
+        "W11",
+        "首屏可見範圍：三個斷點一律「需實機量測」⇒ ⛔ 不猜、⛔ 不寫推導值冒充量測。",
+        "UI_PAGE_WHY ② 逐字：「首屏可見範圍：三個斷點一律『需實機量測』…"
+        "⛔ **不猜、⛔ 不得寫推導值冒充量測**」，並指出實作端另有 st.tabs 頭高與 st.expander 邊框高"
+        "兩個 repo 反解不出的高度來源。⇒ 本檔⛔ 沒有寫任何首屏高度數字。"
+        "⚠️ 這份 HTML 原型的排版與 Streamlit 實作**不是同一套 CSS** ⇒ 即使量了這份，"
+        "也⛔ 不能拿去當 Streamlit 端的答案。",
+    ),
+    (
+        "W12",
+        "線框裡的 ▨ 符號待同步（已自 #7／#8 撤掉）⇒ 本頁⛔ 不出現 ▨，一律用契約層的符號。",
+        "UI_PAGE_WHY ④ 逐字：「▨ 在 wf_page_why.js **11 處**…但依 UI_COMPONENTS 撤銷紀錄，"
+        "▨ 已自 #7／#8 撤掉、改 ⚠︎ — 與 N/A ⇒ 凡屬 #7／#8 語意者一律改用第 2 份符號」，"
+        "同段另註「⛔ 本份不改線框」。⇒ 本頁的徽章符號**一律由 components.BADGES 產出**"
+        "（本檔⛔ 沒有手打任何徽章符號），故不受 ▨ 影響；"
+        "線框端的同步屬另案，⛔ 不在本輪授權範圍（線框檔本輪一個字都沒動）。",
+    ),
+)
+
+#: **允許清單**：規格／線框**逐字**名稱裡本來就帶那三個字的地方（⛔ 不是頁名）。
+#: 🔴 存在理由：`main()` 有一道**全檔級**守衛，禁止「為…什麼」三字出現
+#:    （客戶 2026-09-22 ④ 明示第五頁用 SSOT 的「📖 憑什麼」）。本輪新增的「📖 憑什麼」頁
+#:    帶進一個**線框 `name` 的逐字複本**含那三個字 ⇒ 兩者相撞。
+#: ⛔ **⛔ 不削弱守衛，也⛔ 不竄改規格名**：沿用本檔既有的「先遮掉已知合法、再掃剩下的」
+#:    同一招（HH:MM 那道守衛就是這樣做的），把**逐字出處**列進允許清單，其餘仍然一個都不准。
+#: ⚠️ 每一條都必須是**線框／規格的逐字**，⛔ 不得拿本檔自己的散文往這裡塞。
+WHY_VERBATIM_ALLOW_WEISHENME: tuple[str, ...] = (
+    # 線框 `why.edu.table.caveat` 的 `name` 逐字（本組 node 實測，22 個 name 裡唯一命中）
+    "⑤-d 被降級的門檻 —— 為什麼現在不能用（表格下方逐列）",
+)
+
+
+def build_why_body() -> str:
+    """「📖 憑什麼」頁的整頁標記。**全程在 `why_page_contract()` 之內**。
+
+    🔴 標記一個角括號都不手打卡片：`markup.card_html` / `markup.grid_html` 產。
+    🔴 **⛔ 不呼叫 `markup.layer_html`**：本頁沒有層級網格的來源（見 `WHY_GAP` W3）——
+       六層一律逐 block 全寬輸出，與 `build_body()` 對「沒登記層級網格的層」的處置相同。
+    """
+    cards_by_block = build_why_cards()
+    parts: list[str] = [
+        # ── R4 就地揭露：**收起狀態也看得見**，⛔ 不藏進摺疊器 ──
+        '<section class="pv-layer" id="pv-why-disclosure">',
+        '<div class="pv-layer-label">📖 憑什麼 · 六層 22 block（版面定義在產生器內）</div>',
+        f'<p class="pv-disclosure">{esc(WHY_LAYOUT_DISCLOSURE)}</p>',
+        f'<p class="pv-meta">{esc(WHY_LAYOUT_DISCLOSURE_WHY)}</p>',
+        f'<p class="pv-meta">{esc(WHY_PAGE_SHAPE_NOTE)}</p>',
+        "</section>",
+    ]
+
+    with why_page_contract():
+        for n, blocks in WHY_LAYER_BLOCKS.items():
+            tier = why_tier_for_layer(n)
+            leaf = WHY_LAYER_LEAF[n]
+            leaf_text = "葉外（三葉共用）" if leaf is None else f"{leaf} {WHY_LEAF_NAME[leaf]}"
+            parts.append('<section class="pv-layer">')
+            parts.append(
+                f'<div class="pv-layer-label">{esc(WHY_LAYER_LABEL[n])} · n{n} · '
+                f'{esc(leaf_text)} · 密度 {esc(tier)} · '
+                f'block {len(blocks)} 塊：{esc("、".join(blocks))}</div>'
+            )
+            parts.append(
+                f'<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">'
+                f'{esc(tier)}</span>]：{esc(_tier_caption(tier))}</p>'
+            )
+            parts.append(f'<p class="pv-meta">{esc(WHY_LAYER_NOTE[n])}</p>')
+            for block in blocks:
+                cards = [markup.card_html(block=block, **card)
+                         for card in cards_by_block[block]]
+                if block == "why.edu.table.nolevel":
+                    # ⑤-e：⛔ 沒有卡、⛔ 沒有徽章，只有就地揭露（見 W5）。
+                    assert not cards, "⑤-e ⛔ 不得有卡：它的正確徽章 #10 本輪不畫"
+                    cards = [f'<p class="pv-disclosure">'
+                             f'{esc(WHY_NOLEVEL_DISCLOSURE)}</p>']
+                parts.append(markup.grid_html(block=block, cards=cards))
+            parts.append("</section>")
+
+    # ── 本頁的缺口，逐條畫出來（⛔ 不只留在 .py 裡）──
+    parts.append('<section class="pv-layer" id="pv-why-gaps">')
+    parts.append('<div class="pv-layer-label">附錄 · 「📖 憑什麼」頁本輪查到的缺口（逐條登記）</div>')
+    parts.append(
+        f'<p class="pv-meta">{esc("每一條都是：" + GAP_CAVEAT + "。⛔ 不得被引用為「已查證的事實」去支撐下一步決策（CLAUDE.md §-2 規則 6）。")}</p>')
+    for gap_id, title, detail in WHY_SPEC_GAPS:
+        parts.append(
+            f'<p class="pv-meta"><span class="pv-mono">{esc(gap_id)}</span>　'
+            f"{esc(title)}　{esc(GAP_CAVEAT)}</p>"
+        )
+        parts.append(f'<p class="pv-meta">{esc(detail)}</p>')
+    parts.append("</section>")
+    return "\n".join(parts)
+
+
+def build_why_html() -> str:
+    """把「📖 憑什麼」整頁包成一個可切換的容器（預設 `hidden`，由側欄點出來）。"""
+    return "\n".join([
+        html_comment(
+            "「📖 憑什麼」頁 ＝ **六層 22 block**（⛔ 不是四層）。\n"
+            "客戶 2026-09-22 拍板逐字：\n"
+            "  「2.「憑什麼」頁照規格 6 層，⛔ 不是四層（客戶先前記的四層是簡化說法）」\n"
+            "⛔ 本頁的版面定義住在產生器的 `WHY_LAYOUT`，**不在** `src/ui_v2/` 契約層、\n"
+            "  **沒有** `tests/ui_v2/` 的測試守護 —— 這是客戶拍板的「選項 1」，\n"
+            "  而它的後果已就地揭露在本頁最上方與附錄 W1。\n"
+            "⭐ 標記怎麼來的：產生期間把 `markup.page_today` **暫時**換成本頁的版面契約，\n"
+            "  卡片與網格仍由 `markup.card_html` / `grid_html` 產出 ⇒ 與「真的有 page_why.py」\n"
+            "  的產物逐字相同；產完**立刻還原**，「🚦 今天」頁仍走真正的 `page_today`。\n"
+            "⛔ 本頁⛔ 沒有畫任何 #10 徽章：`.bdg-10` 不在 `page_css()` 的輸出裡，\n"
+            "  硬畫會是一顆無配色的徽章（客戶已裁示該項登記為待修、本輪不動）。"
+        ),
+        '<div id="pv-page-why" hidden>',
+        "<main>",
+        build_why_body(),
+        "</main>",
+        "</div>",
+    ])
+
+
+# ══════════════════════════════════════════════════════════════════
 # 4.5 跨頁 chrome 的標記
 # ══════════════════════════════════════════════════════════════════
 def build_nav_html() -> str:
@@ -946,7 +1703,10 @@ def build_asof_html() -> str:
 
 
 def build_todo_html() -> str:
-    """其餘四頁的「此頁待做」佔位（預設 `hidden`，由側欄點擊切出來）。"""
+    """其餘**三**頁的「此頁待做」佔位（預設 `hidden`，由側欄點擊切出來）。
+
+    ⚠️ 2026-09-22 起是**三**頁，⛔ 不是四頁：「📖 憑什麼」已成為可切換的真頁。
+    """
     return "\n".join([
         '<section class="pv-todo" id="pv-page-todo" hidden>',
         '<div class="pv-todo-card">',
@@ -954,7 +1714,8 @@ def build_todo_html() -> str:
         f'<span id="pv-todo-name">{esc(PAGE_LABELS[PAGE_FIND])}</span>'
         f"　·　{esc(TODO_HEADLINE)}</div>",
         f'<p class="pv-meta">'
-        f'{esc(TODO_BODY.format(today=PAGE_LABELS[PAGE_TODAY]))}</p>',
+        f'{esc(TODO_BODY.format(today=PAGE_LABELS[PAGE_TODAY], why=PAGE_LABELS[PAGE_WHY]))}</p>',
+        f'<p class="pv-meta">{esc(TODO_BODY_SUPERSEDED)}</p>',
         f'<p class="pv-meta">{esc(NAV_WHY_SIDEBAR)}</p>',
         '<div class="pv-todo-back">',
         '<button type="button" class="pv-btn-secondary" '
@@ -1029,6 +1790,7 @@ def build_legal_html() -> str:
 _NAV_JS_TEMPLATE = """
 (function () {
   var TODAY = %(today)s;
+  var WHY = %(why)s;
   var TABLET_MIN = %(tablet_min)s;
   var nav = document.getElementById('pv-nav');
   var mq = window.matchMedia
@@ -1043,14 +1805,22 @@ _NAV_JS_TEMPLATE = """
   //    客戶 2026-09-14「分頁列不得吃掉首屏」在所有斷點都成立。
   // ⚠️ mq 只剩一個用途：下面 show() 判斷「是不是手機寬度」以便選完頁收起。
 
+  // 三向切換（2026-09-22 起）：🚦 今天 / 📖 憑什麼 / 其餘三頁的「此頁待做」佔位。
+  // ⛔ 刻意不用 if-else 串：三個容器各自只看自己那一個布林，
+  //    少一個容器忘了關的機會（兩頁同時 visible 會讓畫面說謊）。
   function show(page, label) {
     var today = document.getElementById('pv-page-today');
+    var why = document.getElementById('pv-page-why');
     var todo = document.getElementById('pv-page-todo');
     var isToday = (page === TODAY);
+    var isWhy = (page === WHY);
     today.hidden = !isToday;
-    todo.hidden = isToday;
+    why.hidden = !isWhy;
+    todo.hidden = isToday || isWhy;
     document.getElementById('pv-page-name').textContent = label;
-    if (!isToday) { document.getElementById('pv-todo-name').textContent = label; }
+    if (!isToday && !isWhy) {
+      document.getElementById('pv-todo-name').textContent = label;
+    }
     var items = document.querySelectorAll('.pv-nav-item');
     for (var i = 0; i < items.length; i++) {
       if (items[i].getAttribute('data-pv-page') === page) {
@@ -1138,6 +1908,21 @@ def build_header_comment(meta: Mapping[str, str]) -> str:
         "          不符就 AssertionError、⛔ 不產出 HTML（見 verbatim_sources()）。",
         "    8. 本輪查到的**規格缺口**畫成附錄一段（見產生器的 CHROME_SPEC_GAPS），",
         "       每條都標「單組／兩組調查結論，未經第三方驗」。",
+        "    9. 「📖 憑什麼」頁（2026-09-22 新增，客戶拍板走「選項 1」）：",
+        "       · **六層 22 block**（⛔ 不是四層；客戶逐字「客戶先前記的四層是簡化說法」）。",
+        "         版面定義 ＝ 產生器裡的 WHY_LAYOUT，22 筆逐筆標出處",
+        "         （規格 docs/v2/spec/UI_PAGE_WHY.md 的章節名 ＋ 線框",
+        "          docs/v2/wireframe/wf_page_why.js 的 block key；⛔ 不寫行號）。",
+        "       · ⭐ **它不在 src/ui_v2/ 契約層、沒有 tests/ui_v2/ 的測試守護** ——",
+        "         這是客戶拍板的作法，而它的後果已**就地揭露在該頁畫面上**（該頁最上方 ＋ 附錄 W1）。",
+        "       · 標記怎麼產的：產該頁期間把 markup.page_today **暫時**換成該頁的版面契約，",
+        "         卡片與網格仍由 markup.card_html() / grid_html() 產出 ⇒ 與「真的有 page_why.py」",
+        "         的產物逐字相同；產完**立刻還原**，「🚦 今天」頁仍走真正的 page_today。",
+        "         產生器另有一道守衛：今天頁在代理前後各產一次，兩次逐字相同才算過。",
+        "       · ⛔ 該頁**沒有畫任何 #10 徽章**：.bdg-10 不在 page_css() 的輸出裡，",
+        "         硬畫出來會是一顆無配色的徽章（客戶已裁示該項登記為待修、本輪不動）。",
+        "       · 五頁切換：🚦 今天 與 📖 憑什麼 是可切換的真頁，其餘三頁仍顯示「此頁待做」；",
+        "         時點列與頁尾免責**五頁共用**（畫在外殼上，⛔ 不是每頁各一份）。",
         "",
         "⚠️ 例外揭露（依 CLAUDE.md §3.3 反捏造，據實記錄）：",
         "    body 的 font-family 用的是通用系統字堆疊，**沒有契約出處** ——",
@@ -1220,9 +2005,26 @@ def main() -> None:
         shell_css(),
     ])
 
+    # ── 兩頁的內容：順序**刻意**寫死，⛔ 不得交錯 ───────────────────────
+    # 🔴 `build_why_body()` 會在自己的 `with` 區塊內把 `markup.page_today` 暫時換成
+    #    「📖 憑什麼」頁的版面契約。CSS（上面的 `page_css`）與「🚦 今天」頁的內容
+    #    **一律先產完**，代理才上場 ⇒ 代理期間**⛔ 沒有任何東西讀得到它**。
+    # ⭐ **污染自驗（⛔ 不是「應該可以」）**：今天頁**產兩次** —— 一次在代理之前、
+    #    一次在代理還原之後 —— 兩次**逐字相同**才算數。
+    #    ⛔ 不用「看起來沒事」交差：`build_body()` 的輸出是純函式的結果，
+    #    若代理漏還原或漏蓋某個名字，第二次就會不同（或直接炸）。
+    today_body = build_body()
+    why_html = build_why_html()          # ← 代理在這一行之內上場、之內還原
+    assert markup.page_today is page_today, (
+        "產完「📖 憑什麼」頁後 markup.page_today 不是原物件 —— 代理漏還原")
+    today_body_after = build_body()
+    assert today_body_after == today_body, (
+        "今天頁的輸出在產「📖 憑什麼」頁前後不一致 —— 代理污染了今天頁")
+
     # 導覽 JS：頁 id 與斷點都從契約層帶進去，⛔ 不在 JS 裡手打第二份。
     nav_js = _NAV_JS_TEMPLATE % {
         "today": f'"{PAGE_TODAY}"',
+        "why": f'"{PAGE_WHY}"',
         "tablet_min": int(components.BREAKPOINTS["tablet_min_px"]),
     }
 
@@ -1242,7 +2044,9 @@ def main() -> None:
         "<head>",
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        "<title>🚦 今天 · 戰情室 v2 靜態原型</title>",
+        # ⚠️ 2026-09-22：原標題只寫「🚦 今天」，自本日起不成立（本原型已有兩頁）。
+        #    **事實更正，⛔ 不是政策變更**；舊值 `🚦 今天 · 戰情室 v2 靜態原型`。
+        "<title>戰情室 v2 靜態原型 · 🚦 今天 ＋ 📖 憑什麼</title>",
         build_header_comment(meta),
         "<style>",
         style,
@@ -1279,9 +2083,12 @@ def main() -> None:
         build_asof_html(),
         '<div id="pv-page-today">',
         "<main>",
-        build_body(),
+        today_body,
         "</main>",
         "</div>",
+        # 🔴 「📖 憑什麼」頁在**這裡**產 —— 它會暫時替換 markup.page_today，
+        #    所以必須排在 `today_body` 與 `style`（page_css）**之後**，⛔ 不得交錯。
+        why_html,
         build_todo_html(),
         build_gaps_html(),
         f'<footer class="pv-meta">{esc(footer)}</footer>',
@@ -1321,9 +2128,26 @@ def main() -> None:
         "current 不是 today")
     # ② 第五頁必須是「📖 憑什麼」，⛔ 全檔不得出現「為什麼」（客戶 2026-09-22 ④）。
     assert esc(PAGE_LABELS[PAGE_WHY]) in written and PAGE_LABELS[PAGE_WHY] == "📖 憑什麼"
-    assert "為什麼" not in written, (
-        "全檔出現「為什麼」—— 客戶 2026-09-22 ④ 明示第五頁用 SSOT 的「📖 憑什麼」，"
-        "⛔ 不改成「為什麼」；本檔連散文都避開這三個字，讓這道守衛可以是全檔級的。")
+    #    ⚠️ **2026-09-22 這道守衛被「縮範圍」，⛔ 沒有被弱化，⛔ 也不是漏改。**
+    #    舊寫法：`assert "為…什麼" not in written`（**全檔級**，連散文都避開那三個字）。
+    #    新增的「📖 憑什麼」頁帶進一個**線框 `name` 的逐字複本**，該名字本身含那三個字
+    #    （`why.edu.table.caveat`，本組 node 實測：22 個 name 裡**唯一**命中）⇒ 兩者相撞。
+    #    **兩條路都不走**：改守衛＝弱化；改規格名＝竄改逐字出處（比弱化更糟）。
+    #    ⇒ 沿用本檔既有的「**先遮掉已知合法、再掃剩下的**」同一招
+    #      （下面 HH:MM 那道守衛就是這樣做的）：允許清單只放**逐字出處**，其餘一個都不准。
+    #    · 舊規則的理由**仍然成立**：全檔級最簡單，沒有人能偷渡；
+    #    · 被權衡掉的原因：它會逼本檔去改一個**規格給的名字**，那是更嚴重的造假（§1）。
+    _masked_page_name = written
+    for _verbatim in WHY_VERBATIM_ALLOW_WEISHENME:
+        hits = _masked_page_name.count(esc(_verbatim))
+        assert hits >= 1, (
+            f"允許清單裡的逐字 {_verbatim!r} 在產物裡 0 命中 —— "
+            "清單過期了（線框改名了？）。⛔ 不得留一條沒有對應實體的豁免。")
+        _masked_page_name = _masked_page_name.replace(esc(_verbatim), "")
+    assert "為什麼" not in _masked_page_name, (
+        "遮掉允許清單後仍出現「為…什麼」—— 客戶 2026-09-22 ④ 明示第五頁用 SSOT 的"
+        "「📖 憑什麼」，⛔ 不改成那三個字；允許清單只收**線框／規格的逐字名稱**，"
+        "⛔ 不得拿本檔自己的散文往清單裡塞。")
     # ③ 頁尾免責逐字（出處比對已在 main() 開頭的 verbatim_sources() 跑過）。
     assert esc(COMPLIANCE_FOOTER_TEXT) in written, "頁尾免責沒有逐字出現"
     # ④ 時點列「尚未載入」逐字 ＋ **全檔⛔ 不得有任何 HH:MM 形狀的假時間**。
@@ -1341,11 +2165,128 @@ def main() -> None:
     assert not (page_classes & pv_classes), page_classes & pv_classes
     assert not any(c.startswith("pv-") for c in page_classes), sorted(page_classes)
     # ⑥ 規格缺口至少四條，且每一條都掛了「未經第三方驗」的標記。
+    #    ⚠️ 2026-09-22 起共**兩組**缺口：chrome 的（五頁共用）＋「📖 憑什麼」頁自己的。
+    #    每組都是「每條一次 ＋ 該組前言一次」。
     assert len(CHROME_SPEC_GAPS) >= 4, len(CHROME_SPEC_GAPS)
-    assert written.count(esc(GAP_CAVEAT)) == len(CHROME_SPEC_GAPS) + 1, (
-        "缺口標記數不對（每條一次 ＋ 前言一次）")
+    assert len(WHY_SPEC_GAPS) >= 4, len(WHY_SPEC_GAPS)
+    expected_caveats = (len(CHROME_SPEC_GAPS) + 1) + (len(WHY_SPEC_GAPS) + 1)
+    assert written.count(esc(GAP_CAVEAT)) == expected_caveats, (
+        f"缺口標記數不對：{written.count(esc(GAP_CAVEAT))} ≠ {expected_caveats}"
+        "（每組各為：每條一次 ＋ 前言一次）")
+
+    # ══ 「📖 憑什麼」頁的自驗（⛔ 不是「應該可以」；量到什麼就寫什麼）══════════
+    # ⑦ 22 個 block **全部**出現，且**逐一**比對層／欄數 class／密度 class。
+    #    ⛔ 不是「數一數有 22 個」——那只證明數量對。這裡比對的是每一塊的**長相**。
+    assert len(WHY_LAYOUT) == 22, len(WHY_LAYOUT)
+    assert len(WHY_BLOCK_COLS) == 22, "WHY_LAYOUT 有重複的 block key"
+    assert sorted(WHY_LAYER_BLOCKS) == [0, 1, 2, 3, 4, 5], sorted(WHY_LAYER_BLOCKS)
+    for _rec in WHY_LAYOUT:
+        _block = str(_rec["block"])
+        _cols = tuple(_rec["cols"])                       # type: ignore[arg-type]
+        _tier = why_tier_for_block(_block)
+        # `grid_html` 產的就是這一串（本檔⛔ 不手打，這裡只是把它算出來比對）
+        _grid_cls = f'class="grd grd-{_tier} g-{_cols[0]}-{_cols[1]}-{_cols[2]}"'
+        assert _grid_cls in written, f"{_block} 的網格 class 不對，預期 {_grid_cls}"
+        assert esc(_block) in written, f"{_block} 這個 block key 沒有出現在畫面上"
+        assert str(_rec["src"]).strip(), f"{_block} ⛔ 沒有標出處"
+    #    ⑦-b cols 全集只有兩種（本組 node 實測線框：1/1/1 共 14、3/2/1 共 8）
+    _cols_count = {c: sum(1 for v in WHY_BLOCK_COLS.values() if v == c)
+                   for c in sorted(set(WHY_BLOCK_COLS.values()))}
+    assert _cols_count == {(1, 1, 1): 14, (3, 2, 1): 8}, _cols_count
+    #    ⑦-c 密度：n0~n4 必須與**契約層**的自動對映一致（⛔ 本檔不得偷偷手選一階）；
+    #         n5 是規格 ② 表給的 t2（契約層沒有這一格，見缺口 W2）。
+    for _n in (0, 1, 2, 3, 4):
+        assert why_tier_for_layer(_n) == components.tier_for_layer(_n), _n
+    assert why_tier_for_layer(5) == "t2"
+    #    ⑦-d 密度與徽章尺寸必須對上規格 ② 表逐字（t3/t1/t2/t3/t4/t2 與 b3/b1/b2/b3/b4/b2）
+    _spec_tiers = {0: "t3", 1: "t1", 2: "t2", 3: "t3", 4: "t4", 5: "t2"}
+    _spec_badge_sizes = {0: "b3", 1: "b1", 2: "b2", 3: "b3", 4: "b4", 5: "b2"}
+    for _n, _want in _spec_tiers.items():
+        assert why_tier_for_layer(_n) == _want, (_n, why_tier_for_layer(_n), _want)
+        _got = str(components.CARD_TIERS[_want]["badge_size"])
+        assert _got == _spec_badge_sizes[_n], (_n, _got, _spec_badge_sizes[_n])
+
+    # ⑧ #10：`.bdg-10` **仍然不在 CSS**，且新頁**⛔ 沒有畫任何一顆 #10**。
+    #    （客戶 2026-09-22 拍板：`badge_html(10)` 不報錯 → 登記為待修，**本輪不動**。）
+    assert ".bdg-10" not in dark_css, (
+        ".bdg-10 竟然在 CSS 裡了 —— 有人動了契約層；本輪的前提（#10 無配色）已改變")
+    #    ⚠️ **比對的是 class 屬性裡的 token，⛔ 不是全文搜字串**：
+    #       本頁**刻意**用散文提到 `.bdg-10` 與 `#10`（就地揭露⛔ 不得省，W5）——
+    #       「畫出一顆 #10」與「解釋何以不畫 #10」是兩件事，守衛必須分得出來。
+    _class_tokens: set[str] = set()
+    for _attr in re.findall(r'class="([^"]*)"', written):
+        _class_tokens.update(_attr.split())
+    assert "bdg-10" not in _class_tokens, (
+        "產物的 class 屬性裡出現 bdg-10 —— ⛔ 那會是一顆無配色的徽章")
+    _drawn_badges = {int(t[4:]) for t in _class_tokens if re.fullmatch(r"bdg-\d+", t)}
+    assert _drawn_badges <= page_today.BADGES_ON_PAGE, (
+        f"畫出了不該畫的徽章：{sorted(_drawn_badges - page_today.BADGES_ON_PAGE)}")
+    assert WHY_BADGES_ON_PAGE <= _drawn_badges, (
+        f"「📖 憑什麼」頁該畫的 6 態沒畫齊：少了 "
+        f"{sorted(WHY_BADGES_ON_PAGE - _drawn_badges)}")
+    assert 10 in WHY_BADGES_NOT_ON_PAGE and 10 in page_today.BADGES_NOT_ON_PAGE
+    assert sorted(WHY_BADGES_NOT_ON_PAGE) == [2, 8, 9, 10], sorted(WHY_BADGES_NOT_ON_PAGE)
+    #    ⑧-b 順手把「待修」釘住：一旦 badge_html(10) 改成會炸，這行會紅
+    #        ⇒ 提醒把 W5 從缺口清單移掉（⛔ 不讓已修好的東西繼續掛在缺口表上）。
+    try:
+        markup.badge_html(10)
+    except Exception:  # noqa: BLE001
+        raise AssertionError(
+            "markup.badge_html(10) 現在會炸了 —— 待修項已被修掉，"
+            "請把 WHY_SPEC_GAPS 的 W5 改標為已解決（⛔ 不得留一條過期的缺口）") from None
+
+    # ⑨ 五頁切換：兩頁是真頁、三頁是佔位；`aria-current` 恰 1（標記裡的）。
+    for _pid in (PAGE_TODAY, PAGE_WHY):
+        assert f'id="pv-page-{_pid}"' in written, f"少了 {_pid} 的頁容器"
+    assert 'id="pv-page-why" hidden' in written, "「📖 憑什麼」頁預設⛔ 不是收起的"
+    assert 'id="pv-page-todo" hidden' in written, "待做佔位預設⛔ 不是收起的"
+    assert written.count(esc(TODO_HEADLINE)) >= 1, "「此頁待做」佔位不見了"
+    for _pid in (PAGE_FIND, PAGE_INSPECT, PAGE_HOLD):
+        assert f'id="pv-page-{_pid}"' not in written, (
+            f"{_pid} 竟然有自己的頁容器 —— 那三頁本輪仍是「此頁待做」")
+
+    # ⑩ 側欄行為**⛔ 未改動**：仍無 `open`、仍無任何把 `nav.open` 設 true 的路徑。
+    #    ⚠️ **只掃 `<script>` 裡的內容，⛔ 不掃全文**：G5 缺口的散文**刻意**引述了被移除的
+    #       那三行（`syncOpen` / `nav.open = mq.matches`），那是**加刪除線保留的紀錄**，
+    #       ⛔ 不是活的程式碼 —— 守衛必須分得出「留著紀錄」與「留著行為」。
+    assert "<details class=\"pv-nav\" id=\"pv-nav\">" in written, "側欄的 details 被動過了"
+    _scripts = "\n".join(re.findall(r"<script>(.*?)</script>", written, flags=re.S))
+    assert _scripts.strip(), "產物裡一段 <script> 都沒有 —— 抽取方式壞了，這道守衛等於沒跑"
+    #       ⚠️ 再剝一層：JS 的 `//` 註解也**刻意**寫了「⛔ 本段沒有任何把 nav.open 設為
+    #       true 的程式碼」—— 那是**說明**，⛔ 不是行為。⇒ 先去註解，再數。
+    #       （去註解用 `//` 切行是安全的：全檔已另有一道守衛禁止任何 `http://` 之類的外部資源。）
+    _js_code = "\n".join(re.sub(r"//.*", "", line) for line in _scripts.splitlines())
+    assert "syncOpen" not in _js_code, "桌機自動展開的 syncOpen 又回來了（★-08 已決為收起）"
+    _opens = re.findall(r"nav\.open\s*=\s*(\w+)", _js_code)
+    assert _opens == ["false"], (
+        f"JS 對 nav.open 的寫入是 {_opens}（預期恰一次，且值為 false）"
+        " —— 側欄行為被改動了；★-08 已決為「預設收起、⛔ 無桌機自動展開」")
+
+    # ⑪ 就地揭露（R4 客戶明示⛔ 不得省）：那句話**必須在畫面上**。
+    assert esc(WHY_LAYOUT_DISCLOSURE) in written, "R4 的就地揭露沒有畫在畫面上"
+    for _needle in ("src/ui_v2/", "tests/ui_v2/"):
+        assert esc(_needle) in written or _needle in written, _needle
+
+    # ⑫ 示意值：「📖 憑什麼」頁**凡是渲染得出阿拉伯數字的卡，一律掛示意標記**。
+    #    ⚠️ 這比客戶的字面要求（「帶數字的卡」）**更嚴**：連「規格 ① 差異 3」這種
+    #       **章節編號**也算數字 —— 分不清「資料的數字」與「出處的數字」時，一律從嚴掛標記。
+    #    ⛔ 不用目視：逐張卡把標籤剝掉再掃，缺一張就炸。
+    _unmarked: list[str] = []
+    with why_page_contract():
+        for _block, _cards in build_why_cards().items():
+            for _card in _cards:
+                _one = markup.card_html(block=_block, **_card)
+                _text = re.sub(r"<[^>]+>", " ", _one)
+                if re.search(r"\d", _text) and esc(DEMO) not in _one:
+                    _unmarked.append(f"{_block} / {_card['title']}")
+    assert not _unmarked, (
+        f"這些卡渲染得出數字卻⛔ 沒有掛「{DEMO}」：{_unmarked}")
 
     print(f"wrote {OUT} ({len(written.encode('utf-8'))} bytes)")
+    print(f"  · 「📖 憑什麼」頁：{len(WHY_LAYOUT)} block / "
+          f"{len(WHY_LAYER_BLOCKS)} 層 / 缺口 {len(WHY_SPEC_GAPS)} 條")
+    print(f"  · 本頁畫的徽章：{sorted(WHY_BADGES_ON_PAGE)}；"
+          f"⛔ 不畫：{sorted(WHY_BADGES_NOT_ON_PAGE)}")
 
 
 if __name__ == "__main__":
