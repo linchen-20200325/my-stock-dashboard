@@ -836,3 +836,141 @@ def test_get_token_still_raises_for_a_tbd_value(monkeypatch):
 def test_get_token_rejects_an_unknown_mode():
     with pytest.raises(ValueError):
         tokens.get_token("--paper", mode="sepia")
+
+
+# ══════════════════════════════════════════════════════════════════
+# A-14 元件色（主 CTA）—— UI_TOKENS.md §A-4 表（2026-09-22 新增，決策者客戶）
+#      客戶裁示逐字：「接受 Streamlit config 的 primaryColor #1f6feb」
+#      ＋【拍板 1】「light CTA 底色：#044cb6」。
+# ══════════════════════════════════════════════════════════════════
+CTA_TOKENS = [
+    # (mode, token, value) —— UI_TOKENS.md §A-4 表兩列
+    ("dark",  "--cta-primary-bg", "#1f6feb"),   # §A-4 表「--cta-primary-bg」列 dark 欄
+    ("dark",  "--cta-primary-fg", "#ffffff"),   # §A-4 表「--cta-primary-fg」列 dark 欄
+    ("light", "--cta-primary-bg", "#044cb6"),   # §A-4 表「--cta-primary-bg」列 light 欄（客戶拍板 1）
+    ("light", "--cta-primary-fg", "#ffffff"),   # §A-4 表「--cta-primary-fg」列 light 欄
+]
+
+
+@pytest.mark.parametrize("mode, name, value", CTA_TOKENS)
+def test_cta_tokens_carry_the_client_ruled_values(mode, name, value):
+    """UI_TOKENS.md §A-4 表兩列逐格。
+
+    ⚠️ `--cta-primary-fg` ⛔ **不是** `--paper` —— 客戶裁示逐字寫「config 藍底／**白字**」，
+       而 `--paper` 在 dark 是近黑 `#0e141b`、light 是近白 `#f6f5f1`，兩者都不是純白。
+    """
+    table = tokens.DARK if mode == "dark" else tokens.LIGHT
+    assert table[name] == value
+    assert tokens.get_token(name, mode=mode) == value
+    assert table[name] is not tokens.TBD
+
+
+def test_cta_tokens_are_not_folded_into_status_pairs():
+    """UI_TOKENS.md §A-2 抬頭：`STATUS_PAIRS` 只收 **§A-2 狀態色**。
+
+    §A-4 是**元件色**，⛔ 不得混進狀態色配對 —— 混進去會讓
+    「六對狀態色 ink-on-own-bg 兩模式全 PASS」那條測試的涵蓋範圍**靜默改變**。
+    """
+    flat = {name for pair in tokens.STATUS_PAIRS for name in pair}
+    assert "--cta-primary-bg" not in flat
+    assert "--cta-primary-fg" not in flat
+    assert len(tokens.STATUS_PAIRS) == 6
+
+
+#: UI_TOKENS.md §A-4 第 2 段「六格對比實測」表，逐格。
+#: 門檻兩種：**文字 AA 小字 4.5**（fg on bg）／**UI 元件 3:1**（bg vs 面色）。
+#: ⛔ 不得對前兩格套大字 3:1 —— 主 CTA 字級 `13.5px/700`（UI_COMPONENTS.md §3），
+#:    遠低於大字門檻（18.66px bold／24px）。
+CTA_SIX_CELLS = [
+    # (mode, fg_token, bg_token, expected, floor, label)
+    ("dark",  "--cta-primary-fg", "--cta-primary-bg", 4.634, AA_SMALL_TEXT, "#1 dark 白字 on 藍底"),
+    ("light", "--cta-primary-fg", "--cta-primary-bg", 7.736, AA_SMALL_TEXT, "#2 light 白字 on 藍底"),
+    ("dark",  "--cta-primary-bg", "--panel",          3.668, 3.0, "#3 dark 藍底 vs --panel"),
+    ("dark",  "--cta-primary-bg", "--paper",          3.994, 3.0, "#4 dark 藍底 vs --paper"),
+    ("light", "--cta-primary-bg", "--panel",          7.675, 3.0, "#5 light 藍底 vs --panel"),
+    ("light", "--cta-primary-bg", "--paper",          7.092, 3.0, "#6 light 藍底 vs --paper"),
+]
+
+
+@pytest.mark.parametrize("mode, fg, bg, expected, floor, label", CTA_SIX_CELLS)
+def test_cta_six_contrast_cells(mode, fg, bg, expected, floor, label):
+    """UI_TOKENS.md §A-4 第 2 段六格表，**實算**（⛔ 不是字串比對）。"""
+    table = tokens.DARK if mode == "dark" else tokens.LIGHT
+    got = contrast_ratio(table[fg], table[bg])
+    assert got == pytest.approx(expected, abs=0.005), label
+    assert got >= floor, f"{label} = {got:.3f} < 門檻 {floor}"
+
+
+#: UI_TOKENS.md §A-4 第 3 段「代價」表：舊契約（`--paper` on `--ink`）的實算值。
+#: ⚠️ 這兩個數字是**已退場契約**的量測，寫死在這裡是為了讓下面那條守衛有對照基準；
+#:    ⛔ 它們**不是**現行契約值。
+RETIRED_INK_CONTRACT = {"dark": 14.513, "light": 13.548}
+
+
+@pytest.mark.parametrize("mode", ["dark", "light"])
+def test_the_new_cta_contract_costs_contrast_versus_the_retired_ink_contract(mode):
+    """⭐ **代價守衛** —— UI_TOKENS.md §A-4 第 3 段。
+
+    這是**客戶 2026-09-22 裁示接受的取捨，⛔ 不是缺陷**：
+    主 CTA 從「`--paper` on `--ink`」（dark **14.513**／light **13.548**）
+    改為「`--cta-primary-fg` on `--cta-primary-bg`」（dark **4.634**／light **7.736**），
+    **對比是大幅下降**，換來的是「契約值＝ Streamlit 實際渲染值」。
+
+    **本條存在的目的是 ⛔ 不讓它被靜默改掉或被誤讀成改善**：
+    - 若有人把新契約調回高對比（例如偷偷改回 `--ink`），本條轉紅 ⇒ 逼他重新走客戶裁示；
+    - 若有人在報告裡把這次改動寫成「對比改善」，本條的數字就是反證。
+    ⚠️ dark 側餘裕只剩 **0.134**（4.634 − 4.5）⇒ ⛔ 這兩碼都不得再往下調。
+    """
+    table = tokens.DARK if mode == "dark" else tokens.LIGHT
+    new = contrast_ratio(table["--cta-primary-fg"], table["--cta-primary-bg"])
+    old = RETIRED_INK_CONTRACT[mode]
+    assert new < old, (
+        f"{mode}：新契約 {new:.3f} 不低於舊契約 {old} —— "
+        "要嘛有人改回高對比值（請走客戶裁示），要嘛這條守衛的前提已變"
+    )
+    assert new >= AA_SMALL_TEXT, f"{mode}：新契約 {new:.3f} 已跌破 AA 4.5"
+    # 舊契約的兩個數字本身也要能被本檔的量尺重現，否則上面的比較沒有意義。
+    assert contrast_ratio(
+        tokens.DARK["--paper"] if mode == "dark" else tokens.LIGHT["--paper"],
+        tokens.DARK["--ink"] if mode == "dark" else tokens.LIGHT["--ink"],
+    ) == pytest.approx(old, abs=0.005)
+
+
+def test_dark_cta_bg_has_only_a_hair_of_headroom_above_aa():
+    """UI_TOKENS.md §A-4 第 3 段逐字：「**dark 側只贏 AA 門檻 0.134**」。
+
+    單獨立一條，是因為這個餘裕小到**任何一碼的變動都可能翻掉它** ——
+    把它藏在六格 parametrize 裡，紅燈時看不出「問題出在餘裕太薄」。
+    """
+    got = contrast_ratio(tokens.DARK["--cta-primary-fg"], tokens.DARK["--cta-primary-bg"])
+    assert got - AA_SMALL_TEXT == pytest.approx(0.134, abs=0.005)
+
+
+def test_light_cta_bg_is_literally_the_same_code_as_light_sig_blue():
+    """⭐ **近色揭露守衛** —— UI_TOKENS.md §A-4 第 4 段。
+
+    light `--cta-primary-bg` 與 light `--sig-blue` **完全同碼 `#044cb6`**（對比 1.000）。
+    ⛔ **這不是巧合，是同一個值** —— 客戶【拍板 1】的理由逐字含「**且是既有 palette 值**」。
+
+    **緩解手段**（⛔ 不是解決）：UI_TOKENS.md §A-2 抬頭的硬規則
+    「⛔ 一律配圖示＋文字，不得只靠顏色」—— 徽章 #10 靠 `◆`＋「已評估 · 中性」承載語意，
+    按鈕側另有高度／字重／2px 框／焦點環等**顏色以外**的載體。
+    ⚠️ 色相衝突**仍然存在**，⛔ 不得因為有緩解就寫成「已解決」。
+
+    本條若轉紅，代表有人動了其中一邊 ⇒ 請回頭確認 §A-4 第 4 段的揭露是否還成立。
+    """
+    assert tokens.LIGHT["--cta-primary-bg"] == tokens.LIGHT["--sig-blue"] == "#044cb6"
+    assert contrast_ratio(
+        tokens.LIGHT["--cta-primary-bg"], tokens.LIGHT["--sig-blue"]
+    ) == pytest.approx(1.0, abs=0.005)
+
+
+def test_dark_cta_bg_is_nearly_the_same_colour_as_dark_sig_blue():
+    """同 §A-4 第 4 段的 dark 側：`#1f6feb` vs `--sig-blue` `#4b8efe` 對比僅 **1.456**。
+
+    ⚠️ dark 兩者**不同碼**（⛔ 不得把 light 那條的「完全同碼」讀到 dark 來），
+    但差距小到肉眼難分 —— 同樣靠 §A-2「配圖示＋文字」擋。
+    """
+    assert tokens.DARK["--cta-primary-bg"] != tokens.DARK["--sig-blue"]
+    got = contrast_ratio(tokens.DARK["--cta-primary-bg"], tokens.DARK["--sig-blue"])
+    assert got == pytest.approx(1.456, abs=0.005)

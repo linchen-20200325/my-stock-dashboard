@@ -55,6 +55,12 @@
     / `text` / `disabled`。欄位：`min_height_px` / `min_width_px`(僅展開佐證)
     / `padding_px` / `font_px` / `font_weight` / `radius_px` / `bg`
     / `border_width_px` / `border_style` / `border_color` / `fg`。
+    ⚠️ 顏色三欄（`bg` / `border_color` / `fg`）一律存 **token 名**，⛔ 不存 hex
+    （UI_COMPONENTS.md §0 SSOT 宣告：顏色的唯一真相源是 `UI_TOKENS.md`）。
+    ⚠️ **2026-09-22（決策者客戶）**：`primary_cta` 的這三欄改為
+    `--cta-primary-bg` / `--cta-primary-bg` / `--cta-primary-fg`（UI_TOKENS.md §A-4）；
+    **`hover` 一字未動**，其 `fg` 仍是 `--paper` —— 🔴 **⛔ 不得跟著改成白**
+    （`#ffffff` on `--ochre` ＝ 2.438 FAIL，見下方 B-4 段守衛）。
 
 `FOCUS_RING : Mapping`
     `outline_width_px` / `outline_style` / `outline_color` / `outline_offset_px`。
@@ -362,16 +368,48 @@ def test_evidence_button_meets_the_44px_touch_target():
     assert spec["min_height_px"] == 44.0 and spec["min_width_px"] == 44.0
 
 
-def test_primary_cta_paints_with_ink_and_hovers_to_ochre():
-    # UI_COMPONENTS.md §3 按鈕表「主 CTA」列：
-    # 底 `--ink`／框 2px solid `--ink`／hover → `--ochre`、字 `--paper`
+def test_primary_cta_paints_with_the_client_ruled_cta_tokens_and_hovers_to_ochre():
+    """UI_COMPONENTS.md §3 按鈕表「主 CTA」列（**2026-09-22 改值，決策者客戶**）。
+
+    現行：底＝框＝ `--cta-primary-bg`（客戶【拍板 2】「border_color 跟隨新 token」，
+    維持「**2px 同色框**」語意）；非 hover 字色＝ `--cta-primary-fg`；
+    hover → `--ochre`、字 `--paper`（**hover 欄一字未動**）。
+
+    ⚠️ 舊契約（已退場）：~~底 `--ink`／框 2px solid `--ink`／字 `--paper`~~ ——
+    **有意識的政策變更，⛔ 不是漏刪**；理由與代價見 `UI_TOKENS.md` §A-4 第 3 段
+    （dark 對比自 14.513 → 4.634）。本測試連同下面那條 hover 守衛，
+    是「⛔ 不讓契約被靜默改回去／⛔ 不讓 hover 跟著改」的兩道鎖。
+    """
     spec = components.BUTTONS["primary_cta"]
-    assert spec["bg"] == "--ink"
+    assert spec["bg"] == "--cta-primary-bg"
     assert spec["border_width_px"] == 2.0 and spec["border_style"] == "solid"
-    assert spec["border_color"] == "--ink"
+    assert spec["border_color"] == "--cta-primary-bg"
+    assert spec["border_color"] == spec["bg"], "「2px **同色**框」語意：框色必須跟著底色"
+    assert spec["fg"] == "--cta-primary-fg"
     assert spec["hover"]["bg"] == "--ochre"
     assert spec["hover"]["border_color"] == "--ochre"
     assert spec["hover"]["fg"] == "--paper"
+
+
+def test_primary_cta_hover_fg_must_stay_paper_because_white_on_ochre_fails_aa():
+    """🔴 **硬約束，⛔ 不是風格選擇** —— hover 的字色 **必須維持 `--paper`**。
+
+    實測（WCAG 2.x 相對亮度，量測日 2026-09-22）：
+      - `--cta-primary-fg` `#ffffff` on dark `--ochre` `#d59a5e` ＝ **2.438 → FAIL**（AA 小字 4.5）
+      - `--paper`          `#0e141b` on dark `--ochre` `#d59a5e` ＝ **7.592 → PASS**
+
+    ⇒ 非 hover 態改用 `--cta-primary-fg` 之後，**最容易犯的錯是「順手把 hover 的字也一起改成白」**
+    （看起來比較一致）—— 那會讓 hover 態當場跌到 2.438。本條就是擋這一刀。
+    ⚠️ 本測試 ⛔ 不在此重算對比（那是 `tests/ui_v2/test_tokens.py` 的職責，本檔測的是**元件契約**）；
+       這裡只釘死「hover 的 fg ⛔ 不得等於非 hover 的 fg、且必須是 `--paper`」。
+    """
+    spec = components.BUTTONS["primary_cta"]
+    assert spec["hover"]["fg"] == "--paper"
+    assert spec["hover"]["fg"] != spec["fg"], (
+        "hover 字色跟著非 hover 一起改了 —— #ffffff on --ochre = 2.438 FAIL，⛔ 不准"
+    )
+    # hover 只改「會變的通道」：bg／border_color／fg 三個，⛔ 不得偷偷帶進幾何值。
+    assert set(spec["hover"]) == {"bg", "border_color", "fg"}
 
 
 def test_disabled_button_is_dashed_and_grey():

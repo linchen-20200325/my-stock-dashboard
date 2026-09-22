@@ -47,6 +47,8 @@ class TokenNotSpecifiedError(KeyError):
 # ══════════════════════════════════════════════════════════════════
 # A-1 主色／輔色／面與墨 —— UI_TOKENS.md §A-1 表
 # A-2 狀態色 —— UI_TOKENS.md §A-2 狀態色表
+# A-4 元件色（主 CTA）—— UI_TOKENS.md §A-4 表（2026-09-22 新增，決策者客戶）
+#     ⛔ A-4 兩筆**不得**併進 `STATUS_PAIRS` —— 那組只收 §A-2 狀態色。
 # ══════════════════════════════════════════════════════════════════
 _DARK: Final[dict[str, str]] = {
     # ── A-1 ──────────────────────────────────────────────────────
@@ -82,6 +84,13 @@ _DARK: Final[dict[str, str]] = {
     # bg 另見 §A-2.1「總管建議值…客戶已於 2026-09-21 採納：#26313d」條
     #（同日自 #1f2a36 改；⛔ 非評估過但未採用的 #2b3947）
     "--sig-neutral-bg": "#26313d",
+    # ── A-4 ──────────────────────────────────────────────────────
+    # 客戶 2026-09-22 裁示逐字：「接受 Streamlit config 的 primaryColor #1f6feb」。
+    # ⚠️ dark 文字對比 #ffffff on #1f6feb ＝ 4.634，只贏 AA 門檻 0.134
+    #    ⇒ ⛔ 這兩碼都不得再往「更亮的底／更暗的字」方向動一碼。
+    "--cta-primary-bg": "#1f6feb",  # UI_TOKENS.md §A-4 表「--cta-primary-bg」列
+    "--cta-primary-fg": "#ffffff",  # UI_TOKENS.md §A-4 表「--cta-primary-fg」列
+    #                                 ⛔ 不是 --paper（dark --paper 是近黑 #0e141b）
 }
 
 _LIGHT: Final[dict[str, object]] = {
@@ -121,6 +130,16 @@ _LIGHT: Final[dict[str, object]] = {
                                     # 狀態色前景 OKLab×100 全 ≥15（最窄 grey 16.02）
     "--sig-neutral-bg": "#d7dce1",  # 附錄 A-2.2：vs --sig-blue-bg ΔE2000 3.669、
                                     # vs --panel 8.406，兩格皆在 2~10 可辨帶
+    # ── A-4 ──────────────────────────────────────────────────────
+    # 客戶 2026-09-22【拍板 1】逐字：「light CTA 底色：#044cb6（理由：7.736:1
+    # 遠優於 4.634，且是既有 palette 值）」。
+    # ⚠️ 決策者＝**客戶**（總管建議、客戶明示採納）—— 與 §A-2.1 那組「總管拍板、
+    #    客戶未指定值」不同級，⛔ 不得混為一談。
+    # 🔴 揭露：本值與 light `--sig-blue` **完全同碼**（對比 1.000）——
+    #    ⛔ 不是巧合，是刻意採用既有 palette 值；緩解靠 §A-2「⛔ 一律配圖示＋文字」，
+    #    ⛔ 不得寫成「已解決」。守衛：tests/ui_v2/test_tokens.py §A-14。
+    "--cta-primary-bg": "#044cb6",  # UI_TOKENS.md §A-4 表「--cta-primary-bg」列
+    "--cta-primary-fg": "#ffffff",  # UI_TOKENS.md §A-4 表「--cta-primary-fg」列
 }
 
 assert set(_DARK) == set(_LIGHT), "dark／light 必須覆蓋同一組 token 名（缺的那邊用 TBD）"

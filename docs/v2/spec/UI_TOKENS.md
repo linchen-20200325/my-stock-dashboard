@@ -11,8 +11,18 @@
 | token 落地 | **新訂** `shared/ui_tokens_v2.py`（本 repo 自有）＋ 單一 `<style>:root{}` 注入；⛔ 不得改 `shared/colors.py` |
 | `shared/colors.py` | 檔頭自陳 AUTO-SYNCED FROM my-fund-dashboard；本 repo 改了會被 `scripts/sync_to_stock.sh` 蓋掉 → **維持鏡像不動** |
 | `.streamlit/config.toml` | 釘死 `base="dark"`。`backgroundColor` 現為 `#0e1117`，與線框 `--paper` dark `#0e141b` 差 3 碼 → **須改的那一鍵＝`backgroundColor` = `#0e141b`**（⛔ 本檔不動它） |
-| 同檔後續鍵 | `secondaryBackgroundColor`→`#151d26`、`textColor`→`#dbe5ef`、`primaryColor`→`#d59a5e`；`font="sans serif"` 是 Streamlit 列舉值、**不是**字型堆疊，堆疊只能由 §B 的 CSS 提供 |
+| 同檔後續鍵 | `secondaryBackgroundColor`→`#151d26`、`textColor`→`#dbe5ef`、~~`primaryColor`→`#d59a5e`~~ ⇒ **現行：`primaryColor` 維持 `#1f6feb`（config 現值），主 CTA 改為對齊它**（**有意識的政策變更，⛔ 不是漏刪；2026-09-22；決策者客戶**；兩邊理由並陳見下方 📌 註）；`font="sans serif"` 是 Streamlit 列舉值、**不是**字型堆疊，堆疊只能由 §B 的 CSS 提供 |
 | `--review-*` | **只在審稿模式渲染**（客戶 2026-09-16 明令）；正式畫面 `[data-review-only]` 一律 `hidden` |
+
+📌 **`primaryColor` 那一鍵的政策變更（2026-09-22；決策者客戶；有意識的政策變更，⛔ 不是漏刪）**
+客戶 2026-09-22 裁示逐字：「**接受 Streamlit config 的 primaryColor #1f6feb**」⇒ 本檔**不再**要求把
+`primaryColor` 改成 `--ochre` `#d59a5e`，改為**讓主 CTA 的契約值對齊 config 現值**（新 token 見 **§A-4**）。
+- **舊規劃的理由（仍然成立，⛔ 不是寫錯）**：把 Streamlit 主色統一到 `--ochre`，可讓 `st.button(type="primary")`
+  自動長成契約指定的赭色，**一鍵換色、零 CSS hack**；這個理由至今成立。
+- **被權衡掉的原因**：那條路要求**改 `.streamlit/config.toml`**，而契約與實際渲染在改到之前**永久打架**
+  （`docs/v2/prototype/STREAMLIT_VS_HTML.md` §2 第 1 點實測：Streamlit 端畫出來就是 `#1f6feb` 藍底白字）。
+  客戶選擇**接受既有藍**以當場消除這個落差。
+⚠️ **本檔 ⛔ 不動 `.streamlit/config.toml`**（§0 表首列既有紀律）—— 該檔現值本來就是 `#1f6feb`（本輪未改、亦未被本輪要求改）。
 
 ## A. 色彩 token
 
@@ -94,6 +104,58 @@ light `--sig-grey` 自線框 `#6c7883` 下修（原對自身 bg 僅 3.71:1）。
 light **無任何對落在 6–8 帶**（最差 protan/deutan 9.4，槽 2↔6）；但**凍結的槽 1↔3** `#2482eb↔#1b9690` tritan **3.5、低於 6**，自 3 槽起就存在 —— 非新槽引入，且 tritan 不在驗證器五項門檻內（故仍 5/5 PASS）→ **light 畫滿 3 槽即已須次要編碼，⛔ 不得引用上面的 ≤3 槽免除。**
 狀態色分離：**新增 4 槽**對狀態色最差 ΔE dark **18.5**、light **16.2**（槽 4/6/7）；⚠️ **light 槽 5 `#5b5e00` 對 `--sig-amber` 僅 7.8** —— light 狀態色已佔滿綠／琥珀／紅／藍／灰五色族，橄欖色無處可退，與既有槽 2 對 `--sig-amber` 9.9 同一性質，靠 A-2「⛔ 一律配圖示＋文字」擋。
 ⚠️ 狀態色的 dark 值是**線框自己選出來的一套**，非 light 值翻轉；綠/紅在 deuteranopia 下 ΔE 3.9 無法靠色相分辨 —— 這正是「⛔ 一律配圖示＋文字」在本專案是硬規則、不是建議的原因。
+
+### A-4 元件色（主 CTA）（2026-09-22 新增；決策者客戶）
+
+| token | dark | light | 用途 | 對應現況 |
+|---|---|---|---|---|
+| `--cta-primary-bg` | `#1f6feb` | `#044cb6` | 主 CTA 底色＋框色（`UI_COMPONENTS` §3「主 CTA」列） | `.streamlit/config.toml:primaryColor` `#1f6feb`（⛔ 本檔不動該檔）；light 為既有 palette 值（＝ §A-2 light `--sig-blue`） |
+| `--cta-primary-fg` | `#ffffff` | `#ffffff` | 主 CTA 字色（非 hover 態） | Streamlit `type="primary"` 實際渲染的字色（`STREAMLIT_VS_HTML.md` §2 第 1 點實測「`#1f6feb` 藍底白字」） |
+
+**1. 來歷（⛔ 兩件事都要寫出來，不得只寫其一）**
+- **dark `#1f6feb`**：客戶 2026-09-22 裁示逐字「**接受 Streamlit config 的 primaryColor #1f6feb**」。
+- **light `#044cb6`**：**客戶拍板**（逐字：「【拍板 1】light CTA 底色：`#044cb6`（理由：7.736:1 遠優於 4.634，且是既有 palette 值）」）。
+  ⚠️ **流程據實記錄**：該值由**總管建議**、**客戶明示採納** —— ⛔ **不是總管自選**，也⛔ **不是客戶憑空指定**。
+  這個區別很重要：它可被客戶一句話改，但改的時候要知道**客戶已經看過這個數字並同意過**（對照 §A-2.1 `--sig-neutral` light 兩碼那一格 —— 那一組**只有總管拍板、客戶未指定值**，兩者不同級）。
+- **`--cta-primary-fg` 兩模式皆 `#ffffff`**：⛔ **不是** `--paper`（`--paper` 在 light 是 `#f6f5f1` 近白、在 dark 是 `#0e141b` 近黑）—— 客戶裁示逐字寫「**config 藍底／白字**」，白字＝ `#ffffff`。
+
+**2. 六格對比實測**（WCAG 2.x 相對亮度公式實算，⛔ 非目測；量測日 2026-09-22；門檻：**文字 AA 小字 4.5**、**UI 元件／非文字 3:1**）
+
+| # | 組合 | 值 | 門檻 | 判定 |
+|---|---|---|---|---|
+| 1 | dark `--cta-primary-fg` `#ffffff` **on** `--cta-primary-bg` `#1f6feb` | **4.634** | 4.5（文字） | ✅ PASS（餘裕僅 **0.134**） |
+| 2 | light `--cta-primary-fg` `#ffffff` **on** `--cta-primary-bg` `#044cb6` | **7.736** | 4.5（文字） | ✅ PASS |
+| 3 | dark `--cta-primary-bg` `#1f6feb` vs `--panel` `#151d26` | **3.668** | 3.0（UI 元件） | ✅ PASS |
+| 4 | dark `--cta-primary-bg` `#1f6feb` vs `--paper` `#0e141b` | **3.994** | 3.0（UI 元件） | ✅ PASS |
+| 5 | light `--cta-primary-bg` `#044cb6` vs `--panel` `#fffefc` | **7.675** | 3.0（UI 元件） | ✅ PASS |
+| 6 | light `--cta-primary-bg` `#044cb6` vs `--paper` `#f6f5f1` | **7.092** | 3.0（UI 元件） | ✅ PASS |
+
+⛔ **不得套 WCAG 大字 3:1 寬鬆標準到第 1／2 格**：主 CTA 字級 `13.5px/700`（`UI_COMPONENTS` §3），遠低於大字門檻（18.66px bold／24px）⇒ 文字那兩格的門檻就是 **4.5**。
+（守衛：`tests/ui_v2/test_tokens.py` §A-14，六格逐格 `pytest.approx(abs=0.005)` 實算，改任一碼即紅燈。）
+
+**3. 🔴 代價（⛔ 不得藏；這是客戶裁示的取捨，⛔ 不是缺陷）**
+
+| 模式 | 舊契約（`--paper` on `--ink`） | 新契約（`#ffffff` on `--cta-primary-bg`） | 差 |
+|---|---|---|---|
+| dark | **14.513** | **4.634** | **−9.879**，餘裕只剩 **0.134** |
+| light | **13.548** | **7.736** | −5.812 |
+
+**dark 側只贏 AA 門檻 0.134** ⇒ ⛔ **不得再往下調任何一碼**（`--cta-primary-bg` 只要稍微變亮、或 `--cta-primary-fg` 離開純白，這一格就會 FAIL）。
+⚠️ **⛔ 不得把這次改動描述成「對比改善」** —— 它是**大幅下降**；換來的是「契約值＝實際渲染值」。
+（守衛：`tests/ui_v2/test_tokens.py::test_the_new_cta_contract_costs_contrast_versus_the_retired_ink_contract`。）
+
+**4. 🔴 與 `--sig-blue` 的近色揭露（⛔ 不得寫成「已解決」）**
+- **light：兩者完全同碼** —— `--cta-primary-bg` `#044cb6` **＝** §A-2 light `--sig-blue` `#044cb6`（對比 **1.000**）。⛔ 這**不是巧合**，是**刻意採用既有 palette 值**（客戶拍板 1 的理由之一）。
+- **dark：近乎同色** —— `#1f6feb` vs `--sig-blue` `#4b8efe` 對比僅 **1.456**。
+- **後果**：`UI_COMPONENTS` §2 徽章 **#10「已評估·結論中性」** 用 `--sig-blue`；若它與主 CTA 同框，**眼睛分不出「這是可按的按鈕」還是「這是一枚徽章」**。
+- **緩解（既有硬規則，⛔ 非本輪新增）**：§A-2 抬頭本來就硬性要求狀態色「**⛔ 一律配圖示＋文字，不得只靠顏色**」⇒ 徽章側靠 `◆`＋「已評估 · 中性」承載語意；按鈕側另有 `min-height:40px`／`13.5px/700`／2px 框／`:focus-visible` 焦點環等**顏色以外**的載體。
+- ⛔ **這只是緩解，⛔ 不是解決** —— 兩者色相衝突**仍然存在**，⛔ 不得因為有緩解手段就寫成「已處理完畢」。
+
+**5. ⚠️ 未驗事項（本輪 ⛔ 沒做，⛔ 不得當成已驗）**
+- **⛔ 未做色盲（CVD）模擬**：`--cta-primary-bg` 對 §A-2 狀態色五枚、對 §A-3 七槽序列色的 protan／deutan／tritan 分離度**本輪一格未算**。
+- **⛔ 未對 §A-3 七槽複跑 `validate_palette.js`**：新增兩個 token 後，序列色的 5/5 PASS 結論**本輪未重驗**（序列色值本身一碼未動，但驗證器涵蓋的對集合可能改變）。
+- **⛔ 未驗 hover 態的落地**：hover 契約仍是 `--ochre`（見 §3 代價段旁的硬約束），但 Streamlit 端 hover **實際仍是藍**（`STREAMLIT_VS_HTML.md` §2 第 1 點）—— **對齊的是非 hover 態的值，⛔ 不是機制**。
+- ⚠️ **本節全部數字為 UB 實作組單組實算，未經第二組獨立複驗**（CLAUDE.md §-2 規則 6）⇒ **待驗事項**，⛔ 不得被引用為「已查證的事實」。
 
 ## B. 字型 token（⚠️ app 端幾乎空白：無全域 `font-family`、無字級 ramp、`11px` 用了 158 次卻從未具名 → 本節**大部分新訂**）
 

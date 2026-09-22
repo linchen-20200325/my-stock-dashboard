@@ -87,7 +87,7 @@
 
 **第三層 `today.actions`**（線框 `cols 1/1/1`）：主 CTA ＝ `st.form_submit_button("🚀 更新今日戰情", type="primary")`，經 `_ui_kit.py:single_submit_form`，
 字串 SSOT `shared/ia_nav.py:83 ACTION_LABELS[ACTION_UPDATE_TODAY]`，與線框 `mainCTA.label` **逐字相同**。
-按鈕規格取 `UI_COMPONENTS` §3 主 CTA：`min-height:40px`／`padding:6px 16px`／`13.5px/700`／`radius:3px`／底 `--ink`／框 `2px solid --ink`／hover 底＋框 `--ochre`、字 `--paper`；焦點環 `2px solid --focus` `offset:2px`。
+按鈕規格取 `UI_COMPONENTS` §3 主 CTA：`min-height:40px`／`padding:6px 16px`／`13.5px/700`／`radius:3px`／底 ~~`--ink`~~ **`--cta-primary-bg`**／框 `2px solid` ~~`--ink`~~ **`--cta-primary-bg`**（**2026-09-22 改；有意識的政策變更，⛔ 不是漏刪；決策者客戶**；新 token 見 `UI_TOKENS` §A-4，非 hover 字色＝ `--cta-primary-fg`；🔴 hover 字色**維持 `--paper` 不變**，因 `#ffffff` on `--ochre` ＝ 2.438 FAIL）／hover 底＋框 `--ochre`、字 `--paper`；焦點環 `2px solid --focus` `offset:2px`。
 同 form 內有 `st.radio("更新模式", horizontal=True)` 兩選項 `正常更新（吃暖快取）`／`強制重抓（清快取）`（`src/ui/tabs/tab_today.py:103-106`）。**全頁 `st.button` 0 命中 ⇒ 全站唯一一顆主 CTA 的規定在本頁成立。**
 停用態（線框 `loading`／`error`-契約漂移）走 §3「停用態」：`13.5px/500`＋`1px dashed --rule-2`＋字 `--sig-grey`。
 

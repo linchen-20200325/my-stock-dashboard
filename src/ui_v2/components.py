@@ -239,25 +239,47 @@ def badge(n: int) -> Mapping[str, object]:
 # ══════════════════════════════════════════════════════════════════
 # 3. 按鈕（五類）—— UI_COMPONENTS.md §3 按鈕
 # ⚠️ 規格的 hover 欄只列「會變的通道」；未列出的通道即**不變**。
-#    因此：主 CTA 的 hover 明列「字 `--paper`」⇒ 非 hover 態的字色同為 `--paper`
-#    （底色是 `--ink`，深色模式下為淺色，字必須是 `--paper` 才讀得到）；
+#    ~~因此：主 CTA 的 hover 明列「字 `--paper`」⇒ 非 hover 態的字色同為 `--paper`
+#      （底色是 `--ink`，深色模式下為淺色，字必須是 `--paper` 才讀得到）；~~
+#    ← **2026-09-22 起不成立（有意識的政策變更，⛔ 不是漏刪；決策者客戶）**：
+#      主 CTA 的底色已改為 `--cta-primary-bg`、**非 hover 態字色由規格直接指定**為
+#      `--cta-primary-fg`（＝ 客戶裁示逐字「config 藍底／白字」）⇒ 該欄**不再靠
+#      hover 欄反推**，上面那句推導的前提（底色是 `--ink`）已經不存在。
+#      ⚠️ 推導**規則本身**（未列出的通道即不變）**未被推翻**，下面兩類仍照此讀。
+#    🔴 **hover 的字色必須維持 `--paper`，⛔ 不得跟著改成 `--cta-primary-fg`** ——
+#      實測 `#ffffff` on dark `--ochre` `#d59a5e` ＝ **2.438 FAIL**（WCAG AA 小字 4.5），
+#      而 `--paper` on `--ochre` ＝ **7.592 PASS**。**這是硬約束，⛔ 不是風格選擇。**
+#      守衛：`tests/ui_v2/test_components.py::test_primary_cta_hover_fg_must_stay_paper_because_white_on_ochre_fails_aa`
 #    而「次級（展開佐證）」與「文字按鈕」的 hover **明列字色會變成 `--ink`**
 #    ⇒ 非 hover 態的字色必然**不是** `--ink`。規格沒有給那個值 ——
 #    本檔取墨階的次一階 `--ink-2`，**此為實作組的決定，非規格值**（見交付報告）。
 # ══════════════════════════════════════════════════════════════════
 BUTTONS: Final[Mapping[str, Mapping[str, object]]] = _frozen({
     # UI_COMPONENTS.md §3 按鈕表「主 CTA（**全站唯一一顆**）」列
+    # 🔴 **2026-09-22 底色／框色／字色改值**（有意識的政策變更，⛔ 不是漏刪；決策者**客戶**）。
+    #    舊值（保留備查）：~~`"bg": "--ink"` / `"border_color": "--ink"` / `"fg": "--paper"`~~
+    #    - **舊契約的理由（仍然成立，⛔ 不是寫錯）**：`--paper` on `--ink` 對比
+    #      dark **14.513**／light **13.548**，**遠優於**新契約的 **4.634**／**7.736**。
+    #    - **被權衡掉的原因**：Streamlit 端主 CTA 是真 `st.button(type="primary")`、
+    #      吃 `.streamlit/config.toml` 的 `primaryColor` ⇒ `--ink` 這個契約值
+    #      **根本畫不出來**（`docs/v2/prototype/STREAMLIT_VS_HTML.md` §2 第 1 點實測）。
+    #      留著等於讓契約與實際渲染**永久打架**。
+    #    ⚠️ 代價已揭露於 `UI_TOKENS.md` §A-4 第 3 段：**dark 側只贏 AA 門檻 0.134**
+    #      ⇒ ⛔ 不得把本次改動描述成「對比改善」，也⛔ 不得再往下調任何一碼。
+    #    ⚠️ 幾何值（高度／內距／字級／字重／圓角）與 `border_width_px`／`border_style`
+    #      **一字未動**；**`hover` 整個 dict 亦一字未動**（見上方 🔴 硬約束）。
     "primary_cta": _frozen({
         "min_height_px": 40.0,
         "padding_px": (6.0, 16.0),
         "font_px": 13.5,
         "font_weight": 700,
         "radius_px": 3.0,
-        "bg": "--ink",
+        "bg": "--cta-primary-bg",            # §3 按鈕表「主 CTA」列 底色欄（2026-09-22 改）
         "border_width_px": 2.0,
         "border_style": "solid",
-        "border_color": "--ink",
-        "fg": "--paper",
+        # 客戶【拍板 2】「border_color 跟隨新 token」⇒ 維持「2px **同色**框」語意。
+        "border_color": "--cta-primary-bg",  # §3 按鈕表「主 CTA」列 框色欄（2026-09-22 改）
+        "fg": "--cta-primary-fg",            # §3 按鈕表 主 CTA 註「非 hover 字色＝--cta-primary-fg」
         "hover": _frozen({"bg": "--ochre", "border_color": "--ochre", "fg": "--paper"}),
     }),
     # UI_COMPONENTS.md §3 按鈕表「次級（說明）」列
