@@ -8,7 +8,7 @@
 本檔是**機器產生**的靜態快照，⛔ 不要手改。
 
 (a) 產生來源：my-stock-dashboard 分支 ui-v2，src/ui_v2/ 於 commit 38039f59ed2340aafac96bbdf9d8c45619a4853a（2026-09-22）
-    產生當下 HEAD ＝ a155e4e312c3f909350512dfedab9a45ac8c01ba
+    產生當下 HEAD ＝ 6035262c1e9eca10cf5253f09dd80210cd2dde5a
     src/ui_v2/ 工作區乾淨（無未提交變更）
     src/ui_v2 底下 7 個 .py 的內容 sha256 ＝ 38791f7e771c6a8b8c105aa22c29481273f885b1bbcc42d72a21183b09a9888a
     （雜湊算法 ＝ 檔名 ＋ 位元組，依檔名排序後依序餵進 sha256；見產生器 main()）
@@ -45,6 +45,9 @@
        ① 五頁切換：**側欄式**（⛔ 不是頂部分頁）。五個頁名 import 自 L0 SSOT
           shared/ia_nav.PAGE_LABELS，**⛔ 一個字都沒有手抄**；dict 宣告序 ＝ 畫面序。
           🚦 今天 ＝ current，其餘四個點下去顯示「此頁待做」佔位。
+          **預設收起**：details ⛔ 不帶 open，且 JS ⛔ 不依斷點自動展開
+          ⇒ 三個斷點一律收起，只能手動點 summary 展開
+          （★-08 已決，客戶 2026-09-22 拍板；同日並拍板移除桌機自動展開）。
        ② 資料時點列：**示意殼**。位置照 S2-UI_SPEC.md 7.1「頁面標題下方第一行、葉外」，
           內容用「尚未載入」態的逐字。⛔ 一個真的日期時間都沒有填，
           因為 L3 契約 get_macro_state() 只有 9 個 key、沒有 as_of
@@ -176,6 +179,8 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 .pv-nav{background:var(--panel);border-width:1px;border-style:solid;border-color:var(--rule);border-radius:3px;padding-top:12px;padding-bottom:12px;padding-left:14px;padding-right:14px}
 /*    summary ＝ 唯一的展開控制，**任何斷點都看得見**： */
 /*    ⛔ 不在桌機把它藏起來 —— 藏了之後若 JS 沒跑，側欄就永遠打不開。 */
+/*    ⚠️ 2026-09-22 桌機自動展開移除後，它是**唯一**能把側欄打開的東西 */
+/*       （★-08 已決：預設收起）⇒ 這條「任何斷點都看得見」更不能省。 */
 .pv-nav-summary{cursor:pointer;color:var(--ink);white-space:nowrap;font-size:13px;font-weight:700;min-height:44px;display:flex;align-items:center;gap:var(--sp-2)}
 .pv-nav-body{margin-top:var(--sp-3)}
 .pv-nav-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--sp-2)}
@@ -204,8 +209,10 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 /* ══ 跨頁 chrome ④：頁尾免責（逐字 SSOT ＝ app.py::_render_footer）════ */
 .pv-legal{margin-top:var(--sp-6);padding-top:var(--sp-4);text-align:center;border-top-width:1px;border-top-style:solid;border-top-color:var(--grid);color:var(--ink-3);font-size:11.5px}
 /* ══ 斷點：兩欄版面只在 >= BREAKPOINTS['tablet_min_px'] 生效 ═════════ */
-/*    ⇒ 手機（<= mobile_max_px）永遠是單欄 ＋ details 收起， */
-/*      滿足客戶 2026-09-14「狀態列、時點列、分頁列不得吃掉首屏」。 */
+/*    ⚠️ 斷點只換**版面**（單欄／兩欄），⛔ 不換側欄的開合：      */
+/*    details 在**每一個斷點**都預設收起（★-08 已決，客戶 2026-09-22 拍板）， */
+/*    ⇒ 手機（<= mobile_max_px）是單欄 ＋ details 收起，桌機同樣收起， */
+/*      客戶 2026-09-14「狀態列、時點列、分頁列不得吃掉首屏」在所有斷點都成立。 */
 @media (min-width:641px){.pv-shell{display:grid;grid-template-columns:min-content minmax(0,1fr);gap:var(--sp-6);align-items:start}.pv-nav{position:sticky;top:var(--sp-5)}}
 </style>
 </head>
@@ -221,6 +228,11 @@ p{margin-top:var(--sp-2);margin-bottom:0}
   ⇒ 本原型刻意不做頂部分頁列。
 ⛔ 五個為何都是 button 而不是連結：另外四頁沒有檔案，
   給一個連不到的 href 等於假裝它存在（CLAUDE.md 1 Fail Loud）。
+⭐ 預設收起：本 details ⛔ 不帶 open ⇒ **三個斷點一律收起，只能手動展開**。
+  ★-08 已決（客戶 2026-09-22 拍板：側欄預設收起，S2-UI_SPEC.md 7.2）。
+  同日客戶另拍板「桌機自動展開，修掉」，理由逐字：
+  「規格說收起、畫面卻展開，就是規格與實作打架」
+  ⇒ 產生器的導覽 JS 已⛔ 不含任何「依斷點把 nav.open 設為 true」的程式碼。
 -->
 <details class="pv-nav" id="pv-nav">
 <summary class="pv-nav-summary">☰ 五頁切換</summary>
@@ -244,13 +256,13 @@ p{margin-top:var(--sp-2);margin-bottom:0}
          ? window.matchMedia('(min-width: ' + TABLET_MIN + 'px)')
          : null;
 
-  // 側欄預設收起（details 沒有 open 屬性）；桌機寬度才自動展開。
-  // ⛔ 刻意不在 CSS 裡把 summary 藏起來：JS 若沒跑，側欄仍要打得開。
-  // ⇒ 最壞情況（JS 全掛）＝ 每個斷點都收起 ＋ 一顆看得見的 summary，
-  //    客戶 2026-09-14「分頁列不得吃掉首屏」在最壞情況下也成立。
-  function syncOpen() { if (mq) { nav.open = mq.matches; } }
-  syncOpen();
-  if (mq && mq.addEventListener) { mq.addEventListener('change', syncOpen); }
+  // 側欄在**每個斷點都預設收起**（details 沒有 open 屬性），只能手動展開
+  // —— ★-08 已決（客戶 2026-09-22 拍板：側欄預設收起）。
+  // ⛔ 本段刻意沒有任何「依斷點把 nav.open 設為 true」的程式碼。
+  // ⛔ 也刻意不在 CSS 裡把 summary 藏起來：JS 若沒跑，側欄仍要打得開。
+  // ⇒ 不管 JS 有沒有跑，每個斷點都是收起 ＋ 一顆看得見的 summary，
+  //    客戶 2026-09-14「分頁列不得吃掉首屏」在所有斷點都成立。
+  // ⚠️ mq 只剩一個用途：下面 show() 判斷「是不是手機寬度」以便選完頁收起。
 
   function show(page, label) {
     var today = document.getElementById('pv-page-today');
@@ -269,6 +281,7 @@ p{margin-top:var(--sp-2);margin-bottom:0}
       }
     }
     // 手機：選完就收起，⛔ 不讓分頁列繼續佔著首屏。
+    // ⚠️ 這裡只會把側欄**關起來**（false），⛔ 永遠不會打開它。
     if (mq && !mq.matches) { nav.open = false; }
     window.scrollTo(0, 0);
   }
@@ -436,8 +449,8 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 <p class="pv-meta">實測：L3 canonical 契約 get_macro_state() 只有 9 個 key、沒有 as_of／timestamp；src/ui_v2/page_today.py 因此把 chrome.asof 放進 WITHDRAWN_BLOCKS（逐字「已撤回、不是待補」），src/ui/views/page_today.py 的 AS_OF_NOT_IN_CONTRACT 逐字「寧可什麼都不寫，也不編一個時間出來」。⇒ 要顯示真實時點，得先擴充 L3 契約；在那之前本列只能是形狀示意。</p>
 <p class="pv-meta"><span class="pv-mono">G4</span>　chrome.footer 在新契約層 code 端 0 命中 ⇒ 頁尾免責由 L6 統一出，⛔ 不是頁面自己畫。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
 <p class="pv-meta">實測：grep -rn chrome.footer src/ 為 0 命中（src/ui_v2/ 沒有頁尾這個 block，page_today.LAYERS 的 n0 只有 today.statusbar）；命中全落在 docs/。UI_PAGE_INSPECT.md 已由總管 2026-09-16 更正為「非缺陷」：頁尾是 L6 app.py 統一出的跨頁 chrome（_render_footer() 於 st.stop() 前對每一個 IA 頁呼叫），頁面 0 命中是正確設計。⇒ 本靜態原型沒有 L6 可以依賴，只能自己畫一份 —— 這是原型與 Streamlit 實作的結構差異，⛔ 不得被讀成「頁面應該自己畫頁尾」（app.py 註解逐字已點名「複製第二份 ＝ 兩邊會漂移」）。</p>
-<p class="pv-meta"><span class="pv-mono">G5</span>　側欄預設展開還是收起 ⇒ ★-08 規格上仍是未決，本原型的斷點行為是原型自創。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
-<p class="pv-meta">實測：S2-UI_SPEC.md 7.2（★-08）於 2026-09-15 由來歷更正組把結論改標「未決」（原本引為「客戶已逐字回覆」的那句，實為 warroom_draft.html 決策卡上一顆未被按下的選項按鈕標籤）；wf_global.js 的 ★-08 grade 已同步改標「阻斷」，並與 ★-15 互指、要求一起問客戶。⇒ 本原型採「640 以下收起、641 以上展開」，是為了滿足客戶 2026-09-14「狀態列、時點列、分頁列不得吃掉首屏」而做的原型決定，⛔ 不是 ★-08 的答案，⛔ 不得被引用為已拍板。</p>
+<p class="pv-meta"><span class="pv-mono">G5</span>　★-08（側欄預設展開還是收起）✅ 已決 —— 客戶 2026-09-22 拍板「側欄預設收起」；本原型現已對齊（三個斷點一律收起，只能手動展開）。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
+<p class="pv-meta">現況：S2-UI_SPEC.md 7.2（★-08）已於 2026-09-22 由客戶拍板定為「側欄預設收起」，狀態自「未決／阻斷」改為「已決」（commit 6035262）。該節同時點名本原型的執行層不一致：JS 的 syncOpen()（nav.open = mq.matches、TABLET_MIN = 641）在 ≥641px 會自動展開 ⇒ 標記層收起、執行層在桌機不收起，並要求原型擁有組回頭對齊。客戶同日對本原型的裁示逐字：「【拍板：桌機自動展開，修掉】理由：規格說收起、畫面卻展開，就是規格與實作打架。」⇒ 本輪已移除產生器裡「依斷點把 nav.open 設為 true」的整段邏輯（syncOpen 的定義、載入時的呼叫、以及 matchMedia 的 change 監聽）；標記層本來就⛔ 不帶 open ⇒ 兩層自本日起給出同一個答案。⚠️ 唯一保留的斷點判斷是「選完頁之後在手機寬度把側欄收起（nav.open = false）」，它只關⛔ 不開。⚠️ ★-15（引導入口放哪裡）⛔ 不受本條影響 —— S2-UI_SPEC.md 7.2 逐字「★-08 已於 2026-09-22 單獨解除；★-15 仍未決 · 阻斷，等客戶裁示」。／／以下為 2026-09-22 之前的舊文字，有意識的政策變更、⛔ 不是漏刪，加刪除線保留：~~側欄預設展開還是收起 ⇒ ★-08 規格上仍是未決，本原型的斷點行為是原型自創。實測：S2-UI_SPEC.md 7.2（★-08）於 2026-09-15 由來歷更正組把結論改標「未決」（原本引為「客戶已逐字回覆」的那句，實為 warroom_draft.html 決策卡上一顆未被按下的選項按鈕標籤）；wf_global.js 的 ★-08 grade 已同步改標「阻斷」，並與 ★-15 互指、要求一起問客戶。⇒ 本原型採「640 以下收起、641 以上展開」，是為了滿足客戶 2026-09-14「狀態列、時點列、分頁列不得吃掉首屏」而做的原型決定，⛔ 不是 ★-08 的答案，⛔ 不得被引用為已拍板。~~／／兩邊理由並陳：舊做法的理由在它寫下當天是合理的（桌機橫向空間大、展開較好用、少一次點擊，且手機那半確實滿足了首屏那條）；被權衡掉的原因是客戶原話「規格說收起、畫面卻展開，就是規格與實作打架」。</p>
 </section>
 <footer class="pv-meta">由 src/ui_v2/（commit 38039f5、sha256 38791f7e771c）於 2026-09-22 產生的靜態快照。CSS 由 markup.page_css() 產出並逐字內嵌，卡片由 markup.card_html() / grid_html() / layer_html() / badge_html() 產出。⚠️ tokens 之後改了，這個檔不會自動跟著變，必須重跑產生器 docs/v2/prototype/gen_today_v2.py（與本檔同目錄）。</footer>
 <!--
