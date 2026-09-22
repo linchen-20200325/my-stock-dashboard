@@ -97,7 +97,13 @@
 
 `BADGES_ON_PAGE / BADGES_NOT_ON_PAGE : frozenset[int]`
 
-`MAIN_CTA : Mapping`  `label` / `button` / `unique_per_site`(True)
+`MAIN_CTA : Mapping`  `label` / `button` / ~~`unique_per_site`~~ **`unique_per_first_screen`**(True)
+    🔵 **2026-09-22 鍵名改（有意識的政策變更，⛔ 不是漏刪；決策者：客戶）**：
+    客戶裁示逐字「**不是「全站唯一」，是「每頁首屏唯一」。**」
+    **舊名的理由仍然成立**：只有「🚦 今天」一頁時兩者**外延相同**，寫哪個都對；
+    **被權衡掉的原因**：五頁 IA 落地後 🔎 選股頁有自己的主 CTA `🎯 開始選股`
+    ⇒「全站唯一」是**假的**，而**鍵名本身在說謊** ——
+    留著它，下一個讀 code 的人會以為契約保證全站只有一顆。
 `MAIN_CTA_RETRY_NOTE : str`
 `MAIN_CTA_CONTRACT_DRIFT_NOTE : str`
 `G3_COLS : tuple[int, int, int]`  ＝ (3, 2, 1)
@@ -541,10 +547,25 @@ def test_main_cta_uses_the_primary_button_class():
 
 
 def test_exactly_one_main_cta_on_the_whole_page():
-    """UI_COMPONENTS.md §3 按鈕表「主 CTA（**全站唯一一顆**）」列；
-    UI_PAGE_TODAY.md ①「第三層 `today.actions`」段
-    「全頁 `st.button` 0 命中 ⇒ 全站唯一一顆主 CTA 的規定在本頁成立」。"""
-    assert page_today.MAIN_CTA["unique_per_site"] is True
+    """~~UI_COMPONENTS.md §3 按鈕表「主 CTA（**全站唯一一顆**）」列~~
+
+    **2026-09-22 有意識的政策變更，⛔ 不是漏刪；決策者：客戶。**
+    **現行：UI_COMPONENTS.md §3 按鈕表「主 CTA（**每頁首屏唯一一顆**）」列。**
+    客戶裁示逐字：「**不是「全站唯一」，是「每頁首屏唯一」。** 理由：客戶原話是
+    『首屏僅允許一顆主 CTA』——是『每屏一顆』。」
+    **舊說法的理由仍然成立，⛔ 不是寫錯**：在只有「🚦 今天」一頁時，「全站唯一」與
+    「每頁首屏唯一」**外延相同**，寫哪個都對。
+    **被權衡掉的原因**：五頁 IA 落地後，🔎 選股頁有自己的主 CTA `🎯 開始選股`
+    ⇒「全站唯一」變成**假的**（`docs/v2/spec/UI_PAGE_FIND.md` ① 2026-09-16 已逐字否證）。
+    ⚠️ **鍵名一併改**（~~`unique_per_site`~~ → **`unique_per_first_screen`**）——
+    **鍵名本身在說謊**：留著它，下一個讀 code 的人會以為契約保證全站只有一顆。
+    ⛔ **本條斷言的意圖一字未改**：仍斷言為 `True`、仍斷言主 CTA 只掛第三層。
+
+    ⚠️ **下面這句逐字引用刻意保留舊措辭、⛔ 未改**：`UI_PAGE_TODAY.md` ①「第三層
+    `today.actions`」段原文為「全頁 `st.button` 0 命中 ⇒ 全站唯一一顆主 CTA 的規定
+    在本頁成立」。改它會讓**引用與被引用的原文對不上**（＝ 捏造出處），而該規格檔
+    **不在本輪檔案邊界內** ⇒ 已列入交總管的「邊界外待同步落點」清單。"""
+    assert page_today.MAIN_CTA["unique_per_first_screen"] is True
     owners = [layer["layer"] for layer in page_today.LAYERS if layer["has_main_cta"]]
     assert owners == [3], f"主 CTA 只能掛在第三層操作列，實際：{owners}"
 
