@@ -356,7 +356,9 @@ NAV_WHY_SIDEBAR = (
 #: 側欄內那一行短註（⛔ 放長句會把側欄那一欄的 min-content 撐寬）。
 NAV_WHY_SHORT = "⛔ 刻意不做頂部分頁列"
 
-#: 其餘**兩**頁的佔位逐字。
+#: ~~其餘**兩**頁的佔位逐字。~~ **2026-09-22 起不成立：佔位頁已歸零、那張卡本輪拆除**
+#: （有意識的變更、⛔ 不是漏刪；決策者：客戶）。下面四段更新紀錄**一字未刪**，
+#: 因為它們記的是「這個數字過期過四次」這個事實 —— 而那正是不寫死頁數的理由。
 #: ⚠️ **2026-09-22 更新（第一次）：原句寫「本原型只做了『🚦 今天』」，自本日起不成立** ——
 #:    客戶同日拍板加做「📖 憑什麼」頁（六層 22 block），佔位頁因此從四頁減為三頁。
 #: ⚠️ **2026-09-22 更新（第二次，同日）：「兩頁／三頁」自本輪起同樣不成立** ——
@@ -368,12 +370,16 @@ NAV_WHY_SHORT = "⛔ 刻意不做頂部分頁列"
 #:    **有意識的更正、⛔ 不是漏刪**；⛔ 這三次都是**事實更正**，不是政策變更 ——
 #:    「⛔ 不讓五頁切換假裝五頁都已完成」那句理由**一個字都沒有被弱化**。
 #:    三次的舊句都加刪除線保留於下方 `TODO_BODY_SUPERSEDED`。
-TODO_HEADLINE = "此頁待做"
-TODO_BODY = (
-    "本原型目前做了「{today}」、「{why}」、「{find}」與「{inspect}」四頁。這一頁還沒有任何實作，"
-    "⛔ 不是壞掉、⛔ 也不是載入失敗 —— 畫這塊佔位，是為了不讓五頁切換假裝五頁都已完成"
-    "（對照 CLAUDE.md §1：錯誤的數字比沒有數字更危險）。"
-)
+#: ⚠️ **2026-09-22 第四次更新：佔位頁本輪整個拆掉，`TODO_HEADLINE` 與 `TODO_BODY`
+#:    兩個常數一併移除（有意識的變更、⛔ 不是漏刪；決策者：客戶）** ——
+#:    五頁**全部**落地之後，那張卡沒有任何一頁會走到它，留著就是一張永遠不會被看見的卡。
+#:    ⚠️ 這仍然是**事實更正**，⛔ 不是政策變更：「⛔ 不讓五頁切換假裝五頁都已完成」那句理由
+#:    **一個字都沒有被弱化** —— 本輪五頁是**真的**都畫出來了，所以不再需要一張卡去講這件事。
+#:    被移除的兩個常數逐字、以及連帶移除的 `build_todo_html()`／四條 `.pv-todo*` CSS rule／
+#:    導覽 JS 的三行 todo 邏輯，全部記在「💼 我的持股」頁附錄的缺口 **H9**。
+#: 🔴 **`TODO_BODY_SUPERSEDED` ⛔ 不得刪除**（總管拍板 5）：本 repo 慣例是
+#:    「舊句保留 ＋ 加刪除線 ＋ 註明理由」，它是三次事實更正的唯一紀錄。
+#:    它自本輪起**不再由佔位卡渲染**，改由缺口 H9 直接引用 ⇒ 仍然畫得出來、仍然查得到。
 #: 歷代舊句，加刪除線保留 —— ⛔ 不是漏刪；決策者：客戶；日期 2026-09-22。
 TODO_BODY_SUPERSEDED = (
     "~~本原型只做了「🚦 今天」。~~"
@@ -451,7 +457,10 @@ CHROME_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
         "（UI_PAGE_HOLD.md：leaf:null ＝「畫在分頁列之上、兩葉共用」），⛔ 不是五頁切換；"
         "(c) 五頁切換機制規格寫的是側欄 radio（docs/v2/wireframe/wf_global.js 的 "
         "global.sidebar，逐字「側欄（五頁共用，預設收起）」；app.py 的 _IA_NAV_KEY radio "
-        "是它的落地）。⇒ 本原型畫的側欄清單 ＋ 待做佔位在規格裡沒有對應元件，"
+        "是它的落地）。⇒ 本原型畫的側欄清單在規格裡沒有對應元件，"
+        "（⚠️ 2026-09-22 更正：原文此處另列「＋ 待做佔位」，那張卡本輪已拆除 ——"
+        "**事實更正、⛔ 不是政策變更**，本條的判定「導覽長相是原型自創」一個字都沒有改；"
+        "被拆掉的佔位卡逐字見「💼 我的持股」頁附錄 H9）"
         "是為了把客戶 2026-09-22 ①「做側欄式」畫出來而自創的形狀。",
     ),
     (
@@ -533,7 +542,11 @@ CHROME_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
 
 
 def shell_css() -> str:
-    """跨頁 chrome（側欄導覽／時點列／待做佔位／頁尾免責）的樣式。
+    """跨頁 chrome（側欄導覽／時點列／頁尾免責）的樣式。
+
+    ⚠️ **2026-09-22：「待做佔位」已從本函式移除**（有意識的變更、⛔ 不是漏刪；
+       決策者：客戶）—— 五頁全部落地之後那張卡沒有任何一頁會走到它，
+       四條 `.pv-todo*` rule 一併退場；逐字與理由見「💼 我的持股」頁附錄 H9。
 
     ⚠️ 與 `chrome_css()` 同一個紀律：**⛔ 不寫任何色碼、⛔ 不寫任何 px 字面值**，
        每一個數字都從 `components.*` / `page_today.*` 取回來（出處逐條寫在 CSS 註解裡）。
@@ -609,18 +622,10 @@ def shell_css() -> str:
         f".pv-fmt li{{color:{paint(disclosure['color'])};"
         f"font-size:{px(disclosure['font_px'])}}}",
 
-        "/* ══ 跨頁 chrome ③：其餘四頁的「此頁待做」佔位 ════════════════════ */",
-        "/*    框線取 t4 的 dashed ＝ 與第四層同一種「這裡還不是實心內容」的語彙 */",
-        ".pv-todo{margin-top:var(--sp-7)}",
-        f".pv-todo-card{{background:{paint(base['background'])};"
-        f"border-width:{px(t4['border_width_px'])};"
-        f"border-style:{t4['border_style']};"
-        f"border-color:{paint(t4['border_color'])};"
-        f"border-radius:{px(base['radius_px'])};"
-        f"{pad(panel['padding_px'])}}}",  # type: ignore[arg-type]
-        f".pv-todo-title{{color:var(--ink);font-size:{px(t1['title_px'])};"
-        f"font-weight:{t1['title_weight']}}}",
-        ".pv-todo-back{margin-top:var(--sp-4)}",
+        "/* ══ 跨頁 chrome ③：「此頁待做」佔位 —— **2026-09-22 整段移除** ═══════ */",
+        "/*    有意識的變更、⛔ 不是漏刪；決策者：客戶。五頁全部落地之後沒有任何一頁 */",
+        "/*    會走到那張卡，四條 rule（.pv-todo / .pv-todo-card / .pv-todo-title /  */",
+        "/*    .pv-todo-back）與 build_todo_html() 一併退場，理由見附錄 H9。        */",
 
         "/* ══ 跨頁 chrome ④：頁尾免責（逐字 SSOT ＝ app.py::_render_footer）════ */",
         f".pv-legal{{margin-top:var(--sp-6);padding-top:var(--sp-4);text-align:center;"
@@ -1974,7 +1979,8 @@ FIND_LAYER_NOTE: Mapping[int, str] = {
     4: "t4 是四階裡唯一 dashed 的一階，且本層**只有一塊**、單獨成層 ——"
        "這一點是總管 2026-09-16 推翻「結果表要留原始值欄」的決定性依據："
        "三語彙的載體在 n4，與 n3 的結果表**不同層、不同 block**。"
-       "⭐ 本塊畫的是 #7 缺漏，那是客戶 2026-09-16 裁示的**現行落地態**，逐字："
+       "⭐ 本塊畫的是 #7 缺漏，那是客戶 2026-09-16 裁示的**現行落地態**，"
+       "以下為**引述**（含內部詞；依客戶 2026-09-22 裁示，層註可引述但須標明「引述」）："
        "「本益比兩種「沒有」：UI 層先誠實顯示「本機分不出，需 L1 補旗標」。"
        "L1 修改列為獨立任務，等 UI 全部做完再評估解凍。不要假裝做得到。」"
        "⛔ 在 D-08 修完之前不得把 PE≤0 與 NaN 畫成兩種不同符號（見缺口 F8）。",
@@ -2288,6 +2294,8 @@ FIND_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
     (
         "F8",
         "🔴 `D-08` 待裁：`MISS_CONTRACT_DRIFT` 被升成 #6，與規格 ④(a)「逾 sanity → #7」對不上。",
+        "（本條全段為**引述**規格與線框逐字，含被點名禁上卡面的內部詞；"
+        "依客戶 2026-09-22 裁示，附錄／缺口段可引述，但必須標明「引述」。）"
         "UI_PAGE_FIND ④(c) 逐字：「MISS_CONTRACT_DRIFT 落在 FAILED_REASONS 內"
         "（shared/ui_state.py）⇒ classify_ui_state 會把它升成 #6 🔴（同 ② error 列），"
         "與 (a) 寫的「逾 sanity → ⚠︎ —」（#7）以及 INDICATOR_SPEC「逾界 → 缺漏」對不上。"
@@ -3286,7 +3294,9 @@ INSPECT_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
         "P4",
         "🔴 **成本口徑（D-2）：本輪畫誠實擬稿版；畫面上⛔ 不得出現規格禁止的口徑宣稱。** "
         "★待拍板（落點）—— 規格既有的四個落點裡**沒有本頁**。",
-        "總管拍板（理由逐字）：規格明文「⛔ 畫面不得寫『本系統採加權移動平均法』」。"
+        "總管拍板（理由逐字）：規格明文「⛔ 畫面不得寫『本系統採加權移動平均法』」"
+        "（本條下文**引述**規格與線框的內部詞；依客戶 2026-09-22 裁示，"
+        "附錄／缺口段可引述，但必須標明「引述」——卡面那一側一個都不准有）。"
         "畫面上⛔ 不得出現該句或任何等義宣稱；登記成缺口（★待拍板・落點）。"
         "／／**三個未解問題（規格 ③② (c) 逐字，⛔ 本組不代為決定）**："
         "(1) **落點偏離** —— D-2 的既有落點是「頁4 葉1／頁4 葉2／Part 5 再平衡區塊」"
@@ -3309,7 +3319,9 @@ INSPECT_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
         "P5",
         "⭐ **本輪自己撞到的新衝突**：成本那一塊的**卡標被截掉後半**，"
         "因為線框給的 name 含規格點名**禁止上畫面**的內部詞。",
-        "**衝突長這樣**：本產生器既有慣例（本檔 §3 註解逐字）是「規格給了名字的用規格的名字，"
+        "**衝突長這樣**（本條全段為**引述**規格與線框逐字，含被點名禁上卡面的內部詞；"
+        "依客戶 2026-09-22 裁示標明）：本產生器既有慣例（本檔 §3 註解逐字）是"
+        "「規格給了名字的用規格的名字，"
         "沒給的直接用 block key…⛔ 不發明一組沒有出處的中文標題」；"
         "而線框該塊的 name 逐字是「〔展開佐證 ▸〕這裡的「成本」怎麼算的"
         "（D-2：加權移動平均 vs FIFO）」，括號那半**同時命中**規格 ③② 的禁令 —— "
@@ -3378,7 +3390,8 @@ INSPECT_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
         "P9",
         "⚠️ **線框 8 個 ★待拍板 旗標逐條登記**（本組 node 實測，⛔ 不是轉述）—— "
         "本輪**一條都沒有替客戶決定**。",
-        "逐條（block ⇒ 旗標逐字）："
+        "逐條（block ⇒ **引述**線框旗標逐字；依客戶 2026-09-22 裁示，"
+        "附錄段引用內部詞須標明「引述」）："
         "(1) chrome.asof ⇒ ★待拍板；"
         "(2) inspect.form ⇒ ★待拍板；"
         "(3) inspect.stock.health ⇒ ★待拍板（三格改名）；"
@@ -3553,14 +3566,1384 @@ def build_inspect_html() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 4.9 「💼 我的持股」頁 —— 版面定義寫在產生器（沿用 4.6／4.7／4.8 的「選項 1」作法）
+#
+# ⭐ 本頁與前四頁的**四個結構差異**（本組 node 實測，⛔ 不是轉述）：
+#    ① **五層 n0~n4，⛔ 沒有 n5**（同「🔬 查一檔」頁）⇒ `hold_tier_for_layer()`
+#      **整段直接委派** `components.tier_for_layer()`，⛔ 不抄前兩頁的 `*_N5_TIER` 繞法。
+#    ② **兩葉頁，且 `n3` 是唯一跨葉的一層**（`l1` 七塊 ＋ `l2` 六塊）——
+#      本頁的 `HOLD_LAYER_LEAF` 回的是**一個 tuple**，⛔ 不是單一字串（同「🔬 查一檔」頁）。
+#    ③ **`n1` 只有一塊**（`hold.cold_start_toc`）—— 全原型最瘦的一層。
+#    ④ **cols 全集三種**（1/1/1 · 2/1/1 · 3/2/1），三種都已經有 CSS
+#      （前兩種來自契約層，`2/1/1` 是「🔍 找標的」頁補的全域規則）
+#      ⇒ 本頁**一條欄數 rule 都不補**，見 `_HOLD_COLS_NEEDING_CSS`。
+# 🔴 **本頁是五頁中買賣建議風險最高的一頁**（規格前言逐字）⇒ 規格 ③ 的三條硬禁令
+#    **凌駕本頁其餘版面規定**，且規格逐字要求「**必須寫進頁面**」——
+#    本檔因此把它們畫成 `HOLD_BAN_DISCLOSURE`，並在 `main()` 加一道守衛釘住。
+# ══════════════════════════════════════════════════════════════════
+
+#: 就地揭露的**那一句**（同前三頁）。
+HOLD_LAYOUT_DISCLOSURE = (
+    "⚠️ 此頁版面定義在產生器內，未進 src/ui_v2/ 契約層、無 tests/ui_v2/ 測試守護。"
+)
+
+#: 上面那句的**後果**（⛔ 不是免責套話，是可查證的差別）。
+HOLD_LAYOUT_DISCLOSURE_WHY = (
+    "差別在哪：「🚦 今天」頁的版面（哪個 block 在第幾層、幾欄、哪一階密度）住在 "
+    "src/ui_v2/page_today.py，改壞了 tests/ui_v2/ 會紅燈；本頁的同一組資料住在 "
+    "docs/v2/prototype/gen_today_v2.py 的 HOLD_LAYOUT，改壞了⛔ 沒有任何測試會攔。"
+    "⇒ 本頁的版面只有「跟規格與線框對照」這一種查法，⛔ 沒有機器守衛。"
+    "本產生器在結尾自己跑了一輪對照（23 個 block key／層／葉／欄數 class／密度 class 逐一比對），"
+    "但那是**同一組人寫的自驗**，⛔ 不等於獨立測試。"
+)
+
+#: 本頁的**形狀**（本組自己 node 量的，⛔ 不引用他組轉述）。
+HOLD_PAGE_SHAPE_NOTE = (
+    "本頁形狀（本組自行實測，⛔ 非引用轉述）：規格 docs/v2/spec/UI_PAGE_HOLD.md ＋ 線框 "
+    "docs/v2/wireframe/wf_page_hold.js 的 id 為 hold 那一頁 —— node 解析結果："
+    "5 層（n0~n4，⛔ 沒有 n5）、23 block、2 葉（l1 戰情室 15 塊／l2 組合設定 6 塊／"
+    "葉外 leaf 為 null 2 塊）；23 塊的 cols 全集三種，1/1/1 共 15 塊、2/1/1 共 5 塊、3/2/1 共 3 塊；"
+    "23 塊的 states 十鍵同名同序，230 格中 186 格有值、44 格為 null"
+    "（null 集中在 na 12／unwired 8／partial 7／degraded 7／missing 6／empty 4；"
+    "live／idle／loading／error 四鍵 0 null）；"
+    "23 塊的 asOf 欄**全部是 null**（⇒ 本頁一個時間都不准填）；src 為 null 的有 7 塊"
+    "（scale_disclosure、cold_start_toc、conclusion_cards、deep_analysis、ai_summary、"
+    "evi_cost、evi_notready）⇒ 它們在現行實作裡沒有對應的程式位置。"
+    "線框 mainCTA 欄位存在且非 null（label 逐字「🚀 跑存股戰情室」）⇒ 本頁**有**主 CTA；"
+    "⚠️ 它是 **page 級欄位、⛔ 不掛在任何 block 上**，實際渲染歸屬 hold.run_scope（規格 ① 按鈕段）。"
+    "葉2 另有一顆「⚡ 生成 AI 總結」，線框自己把它排除在 mainCTA 之外 "
+    "⇒ 符合客戶「每頁首屏唯一」的範圍詞。"
+)
+
+#: 🔴 **總管拍板 1（表格）—— 理由逐字寫在畫面上，⛔ 不得省。**
+#:    （散文常數會直接渲染成畫面上的字，故沿用本檔慣例**去掉 markdown 粗體與反引號**，
+#:      ⛔ 用字一字未改。）
+HOLD_TABLE_DISCLOSURE = (
+    "⚠️ 本頁**五個**需要表格的 block（戰情表／逐檔再平衡偏離提示／情境試算／"
+    "是哪幾檔已達門檻／葉2 持股列預覽）**⛔ 全部沒有畫成真的表格**："
+    "它們的欄位是用 markup.card_html 的 facts 逐列描述掉的。"
+)
+HOLD_TABLE_DISCLOSURE_WHY = (
+    "總管拍板（理由逐字）：這不是三選一：「幫 markup 加 table_html」違反客戶「⛔ 不碰 src/」。"
+    "且 UI_COMPONENTS §4 自己規定手機 ≤640 就是轉卡片流（每卡至多 4 對 k/v）"
+    "⇒ 我們畫的等於規格自己的手機版，不是憑空簡化。必須登記缺口，並寫明："
+    "5 個 block 需要表格、最大 6 欄、另有使用者輸入格（rebalance_deviation）"
+    "與整列可點（war_table）三項在靜態原型上無承載體。"
+    "／／本組實測（⛔ 非推測，量測日 2026-09-22）：src/ui_v2/markup.py 的公開函式**恰 5 個** ——"
+    "page_css／badge_html／card_html／grid_html／layer_html；"
+    "本輪產出的 HTML 六個表格標籤計數**為 0**（產生器結尾有一道全檔級守衛逐一掃它們）。⇒ 缺口編號 H1。"
+)
+
+#: 🔴 **總管拍板 2（層數）—— 5 層，⛔ 不湊 6。**
+HOLD_LAYERS_DISCLOSURE = (
+    "⚠️ 本頁是**五層 23 block**，⛔ 不是六層 —— 規格 ① 標題逐字「五層 23 block」，"
+    "線框 node 實跑也是 5 層（n0~n4）。派工單上寫的「六層」與規格不符，已登記為缺口 H3。"
+)
+
+#: 🔴 **總管拍板 4（主 CTA）—— 理由逐字寫在畫面上，⛔ 不得省。**
+HOLD_CTA_DISCLOSURE = (
+    "⚠️ 本頁的主 CTA「🚀 跑存股戰情室」**⛔ 沒有畫成真的 pv-btn-primary 鈕**，"
+    "沿「🔍 找標的」「🔬 查一檔」兩頁先例以文字呈現。"
+)
+HOLD_CTA_DISCLOSURE_WHY = (
+    "總管拍板（理由逐字）：全檔目前只有 TODAY 一顆 primary 鈕，只補 HOLD 會四頁不一致。"
+    "登記缺口。⚠️ 另登記：規格 ① 寫 CTA 底／框 --ink 是**已知陳舊**"
+    "（UI_COMPONENTS.md 已改 --cta-primary-bg），但同步規格檔**不在本輪授權範圍**"
+    "（⛔ 不碰 docs/v2/spec/）。⇒ 缺口編號 H2。"
+)
+
+#: 🔴 **規格 ③ 三條硬禁令逐字 —— 規格明文「必須寫進頁面」，⛔ 不得省、⛔ 不得摘要。**
+#:    出處：規格 ③（引自 S2-PRD.md ＋ S2-UI_SPEC.md，線框整包收在
+#:    hold.rebalance_deviation 的 evidence）。⚠️ 本檔**只去掉 markdown 粗體記號**，用字一字未改。
+HOLD_BAN_DISCLOSURE = (
+    "🔴 本頁三條硬禁令（規格 ③ 逐字，⛔ 不得以任何理由放寬）："
+    "1. ⛔ 禁止「一鍵再平衡」按鈕。任何會產生下單清單、或一次套用全部調整的按鈕都不得存在。"
+    "2. ⛔ 禁止預設最佳配置推薦。目標比例只能由使用者自己填，"
+    "系統⛔ 不得預填、⛔ 不得建議、⛔ 不得給「參考配置」。"
+    "3. ✅ 只做三件事：偏離提示／客觀對照／情境試算。"
+)
+HOLD_BAN_DISCLOSURE_WHY = (
+    "⇒ 規格 ③ 的落地三則（逐字）：(a) 輸入欄一律空白，要示範只用**不可計算的佔位符**"
+    "〔＿＿＿＿〕，⛔ 不放具名標的；(b) 情境試算兩欄名**刻意選為**「金額變化(TWD)」與"
+    "「換算（參考）」，⛔ 不得叫「動作」「建議股數」；(c) AI 總結⛔ 不得把上述禁令繞過去輸出行動語。"
+    "／／規格 ⑧ 另有一條全頁判準（逐字）：從「畫面顯示 X」到「讀者該做 Y」之間若需代入"
+    "只有讀者知道的變數（資金／期間／風險承受度／既有部位）而規格替他填了，就是買賣建議。"
+    "⇒ 本頁所有輸出一律是**偏離提示／客觀對照／情境試算**三者之一。"
+)
+
+#: 🔴 **規格 ④ D-3 常駐警語**（客戶 2026-09-16 裁示「八處全列、全做」）。
+#:    ⚠️ 本原型是**靜態單一斷點快照**，畫不出「桌機完整版 vs 手機短版」的切換
+#:    ⇒ **兩版都逐字畫出來**（⛔ 不挑一版交差），落點對照表寫進缺口 H12。
+HOLD_D3_FULL = "⚠️ 你在這裡填的目標比例目前不會被保存"
+HOLD_D3_SHORT = "⚠️ 目標比例目前不會被保存（重新整理就要重填）"
+
+#: **允許清單**：線框**逐字**名稱裡本來就帶「為…什麼」三字的地方（⛔ 不是頁名）。
+#: 🔴 沿用 `WHY_VERBATIM_ALLOW_WEISHENME` / `FIND_VERBATIM_ALLOW_WEISHENME` 的同一條紀律：
+#:    ⛔ **不削弱守衛、也⛔ 不竄改規格名**，只把**逐字出處**列進來。
+#: ⚠️ 本組 node 實測：23 個線框 name 裡**唯一**命中的就是下面這一條；
+#:    states 裡另有 14 處命中（多為「為什麼：〈原因〉／去哪補：〈做法〉」這組誠實兩段式句式），
+#:    本檔沿「🔬 查一檔」頁缺口 P8 的同一處置 —— **只引那組句式裡不含那三字的部分**，
+#:    ⛔ 不把 states 往允許清單塞（見缺口 H7）。
+HOLD_VERBATIM_ALLOW_WEISHENME: tuple[str, ...] = (
+    # 線框 `hold.evi_target_pct` 的 `name` 逐字（本組 node 實測：23 個 name 裡唯一命中）
+    "▸ 為什麼目標比例不會被保存",
+)
+
+#: 五層的層標 —— `UI_PAGE_HOLD.md` ① 五層結構表**第一欄逐字**（⛔ 去掉 markdown 粗體記號）。
+HOLD_LAYER_LABEL: Mapping[int, str] = {
+    0: "第○層 頁級常駐與入口",
+    1: "第一層 今日大白話結論",
+    2: "第二層 核心大卡片",
+    3: "第三層 互動清單／大表",
+    4: "第四層 展開佐證",
+}
+
+#: 每個 block 所屬的葉 —— 線框 `layers[].blocks[].leaf`（本組 node 實測，逐塊抄下來）。
+#: 🔴 `n3` 的 13 塊裡有 7 塊在 `l1`、6 塊在 `l2`；`n0` 有兩塊是 `leaf: null`（葉外）。
+#: ⚠️ 本表與 `HOLD_LAYOUT` 是兩張手寫表，故 `main()` 另有一道 assert 釘住兩者 key 集合相同。
+_HOLD_BLOCK_LEAF: Mapping[str, str | None] = {
+    "hold.run_scope": None,
+    "hold.scope_note": None,
+    "hold.scale_disclosure": "l1",
+    "hold.cold_start_toc": "l1",
+    "hold.conclusion_cards": "l1",
+    "hold.alloc_deviation": "l1",
+    "hold.war_table": "l1",
+    "hold.swap_compare": "l1",
+    "hold.rebalance_deviation": "l1",
+    "hold.scenario_calc": "l1",
+    "hold.fx_pnl": "l1",
+    "hold.deep_analysis": "l1",
+    "hold.ai_summary": "l1",
+    "hold.setup": "l2",
+    "hold.binding": "l2",
+    "hold.portfolio_count": "l2",
+    "hold.setup.preview": "l2",
+    "hold.setup.pick_sheet": "l2",
+    "hold.setup.watchlist": "l2",
+    "hold.evi_cost": "l1",
+    "hold.evi_take_profit": "l1",
+    "hold.evi_target_pct": "l1",
+    "hold.evi_notready": "l1",
+}
+
+#: 兩葉的名字 —— 線框 `leaves[].name` 逐字（本組 node 實測）。
+HOLD_LEAF_NAME: Mapping[str, str] = {
+    "l1": "戰情室（1️⃣~6️⃣ ＋ 80/20 配置偏離）",
+    "l2": "組合設定（＝組合管理＋Sheet 綁定）",
+}
+
+#: 本頁**會畫**的徽章。
+#: ⭐ **這一組⛔ 不是本組推導的，是規格 ② 的逐字總結句**：
+#:    「⇒ **會出現在畫面上的是 6 態：#1／#3／#4／#5／#6／#7。** #2 未落地、#8／#9 待接線、
+#:      #10 不適用」，同表末列另逐字「#10 本頁不畫；⛔ 不得併進 #8」。
+#: ⚠️ **#8 在本頁是「待接線」，⛔ 不是「不適用」** —— 規格 ⑤-G4 的總管判定認為
+#:    匯兌損益欄**應該**是 #8（結構上不適用），但 ② 的實作現況是「`N/A` 全頁 0 命中」
+#:    ⇒ **應然是 #8、現況是不畫**。本頁照 ② 的總結句畫（⛔ 不畫 #8），差距登記在缺口 H6。
+HOLD_BADGES_ON_PAGE: frozenset[int] = frozenset({1, 3, 4, 5, 6, 7})
+HOLD_BADGES_NOT_ON_PAGE: frozenset[int] = frozenset(
+    int(b["n"]) for b in components.BADGES if int(b["n"]) not in HOLD_BADGES_ON_PAGE
+)
+
+#: 本頁的**版面定義**（五層 23 block）。`cols` ＝ `(桌機, 平板, 手機)`。
+#: 🔴 每一筆的 `src` 是**出處**，⛔ 不是註解：規格章節名 ＋ 線框 block key，全形｜分隔。
+#:    ⛔ **不寫行號**（CLAUDE.md §8.2.A.0 規則 1）—— 規格原文大量帶 `:NNN`，本檔一律不抄。
+HOLD_LAYOUT: tuple[Mapping[str, object], ...] = (
+    # ── n0 頁級常駐與入口（前兩塊 leaf: null ＝ 葉外，三塊全 1/1/1）──────────
+    {"block": "hold.run_scope", "n": 0, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第○層」列 ＋ ① 按鈕段主 CTA 那一條"
+            "＋ ⑤-G1（第 0 層整層）｜線框 hold.run_scope"},
+    {"block": "hold.scope_note", "n": 0, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第○層」列 ＋ ⑥C 沒綁 Sheet 三態"
+            "＋ ⑥C 第四種「這一輪沒讀你的持股」｜線框 hold.scope_note"},
+    {"block": "hold.scale_disclosure", "n": 0, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第○層」列 ＋ ① 第○層的兩個特別讀法 (b)"
+            "｜線框 hold.scale_disclosure"},
+    # ── n1 今日大白話結論（**只有一塊**；t1 是四階裡唯一 2px 框線）────────────
+    {"block": "hold.cold_start_toc", "n": 1, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第一層」列（逐字「**只有**這一塊」）"
+            "｜線框 hold.cold_start_toc"},
+    # ── n2 核心大卡片（兩塊，cols 各不相同）──────────────────────────────
+    {"block": "hold.conclusion_cards", "n": 2, "cols": (3, 2, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第二層」列 ＋ ⑧ 命名衝突（客戶 2026-09-16 裁示）"
+            "｜線框 hold.conclusion_cards"},
+    {"block": "hold.alloc_deviation", "n": 2, "cols": (2, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第二層」列 ＋ ① ⑤-a 與 ⑤-b 並存分層那一段"
+            "｜線框 hold.alloc_deviation"},
+    # ── n3 葉1｜互動清單／大表（七塊）────────────────────────────────────
+    {"block": "hold.war_table", "n": 3, "cols": (3, 2, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 1 塊 ＋ ⑥A 燈牆與 VIX 各自判斷"
+            "｜線框 hold.war_table"},
+    {"block": "hold.swap_compare", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 2 塊｜線框 hold.swap_compare"},
+    {"block": "hold.rebalance_deviation", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 3 塊 ＋ ③ 三個「零」表"
+            "＋ ④ D-3 八處落點表 ＋ ⑤-G2｜線框 hold.rebalance_deviation"},
+    {"block": "hold.scenario_calc", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 4 塊 ＋ ③ 落地三則 (b) ＋ ⑤-G3"
+            "｜線框 hold.scenario_calc"},
+    {"block": "hold.fx_pnl", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 5 塊 ＋ ⑤-G4｜線框 hold.fx_pnl"},
+    {"block": "hold.deep_analysis", "n": 3, "cols": (3, 2, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 6 塊 ＋ ⑤-G5｜線框 hold.deep_analysis"},
+    {"block": "hold.ai_summary", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l1 第 7 塊 ＋ ③ 落地三則 (c)"
+            "｜線框 hold.ai_summary"},
+    # ── n3 葉2｜組合設定（六塊）──────────────────────────────────────────
+    {"block": "hold.setup", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 1 塊｜線框 hold.setup"},
+    {"block": "hold.binding", "n": 3, "cols": (2, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 2 塊 ＋ ⑥C 沒綁 Sheet"
+            "｜線框 hold.binding"},
+    {"block": "hold.portfolio_count", "n": 3, "cols": (2, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 3 塊｜線框 hold.portfolio_count"},
+    {"block": "hold.setup.preview", "n": 3, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 4 塊 ＋ ④ D-3 落點 #7"
+            "｜線框 hold.setup.preview"},
+    {"block": "hold.setup.pick_sheet", "n": 3, "cols": (2, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 5 塊｜線框 hold.setup.pick_sheet"},
+    {"block": "hold.setup.watchlist", "n": 3, "cols": (2, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第三層」列 l2 第 6 塊｜線框 hold.setup.watchlist"},
+    # ── n4 葉1｜展開佐證（四塊全 1/1/1；t4 是四階裡唯一 dashed）─────────────
+    {"block": "hold.evi_cost", "n": 4, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第四層」列 ＋ ⑦ 成本口徑（客戶 2026-09-16 裁示先不放）"
+            "｜線框 hold.evi_cost"},
+    {"block": "hold.evi_take_profit", "n": 4, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第四層」列 ＋ ⑧ 末段達門檻那一條"
+            "｜線框 hold.evi_take_profit"},
+    {"block": "hold.evi_target_pct", "n": 4, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第四層」列 ＋ ④ D-3 落點 #8（技術原因完整版）"
+            "｜線框 hold.evi_target_pct"},
+    {"block": "hold.evi_notready", "n": 4, "cols": (1, 1, 1),
+     "src": "UI_PAGE_HOLD ① 五層結構表「第四層」列 ＋ ⑤-G6（N 計數器）"
+            "｜線框 hold.evi_notready"},
+)
+
+#: 由 `HOLD_LAYOUT` **推導**（⛔ 不另手寫一份，否則就是第二個真相源 —— CLAUDE.md §2.1）。
+HOLD_BLOCK_COLS: Mapping[str, tuple[int, int, int]] = {
+    str(rec["block"]): tuple(rec["cols"]) for rec in HOLD_LAYOUT   # type: ignore[misc]
+}
+_HOLD_BLOCK_LAYER: Mapping[str, int] = {
+    str(rec["block"]): int(rec["n"]) for rec in HOLD_LAYOUT        # type: ignore[arg-type]
+}
+HOLD_LAYER_BLOCKS: Mapping[int, tuple[str, ...]] = {
+    n: tuple(str(rec["block"]) for rec in HOLD_LAYOUT if int(rec["n"]) == n)  # type: ignore[arg-type]
+    for n in sorted({int(rec["n"]) for rec in HOLD_LAYOUT})                   # type: ignore[arg-type]
+}
+#: 每層有哪幾個葉 —— **由 `_HOLD_BLOCK_LEAF` 推導**，⛔ 不手寫第二份。
+#: ⚠️ 回的是 tuple：`n0` 會回 `(None, "l1")`、`n3` 會回 `("l1", "l2")`。
+HOLD_LAYER_LEAF: Mapping[int, tuple[str | None, ...]] = {
+    n: tuple(dict.fromkeys(_HOLD_BLOCK_LEAF[b] for b in blocks))
+    for n, blocks in HOLD_LAYER_BLOCKS.items()
+}
+
+
+def hold_tier_for_layer(n: int) -> str:
+    """層序 → 卡密度。
+
+    ⭐ **本頁⛔ 沒有任何一層需要繞過契約層** —— 五層恰為 `n0~n4`，
+    `components.tier_for_layer()` 的定義域就是 `0` 與 `1~4`（本組實測）⇒ **整段直接委派**。
+    ⛔ 刻意**不**抄「📖 憑什麼」／「🔍 找標的」兩頁的 `*_N5_TIER` 繞法：
+    那兩頁有 `n5`（契約層沒有那一格），本頁沒有 —— **⛔ 不得為了「看起來一致」多留一個沒有
+    對應實體的分支**（那是 §8.1 step 6「用不到的抽象」的反例）。
+    """
+    return components.tier_for_layer(n)
+
+
+def hold_tier_for_block(block_key: str) -> str:
+    """block → 卡密度。**⛔ 刻意不提供 tier 覆寫參數**（同 `page_today.tier_for_block`）。"""
+    try:
+        n = _HOLD_BLOCK_LAYER[block_key]
+    except KeyError:
+        raise KeyError(f"未知的 block：{block_key!r}") from None
+    return hold_tier_for_layer(n)
+
+
+#: 本頁用到、但**契約層與前面各頁都還沒產 CSS** 的欄數組合（**推導，⛔ 不手寫清單**）。
+#: 🔴 **公式必須同時減掉三個來源**（⛔ 不是只減契約層）：契約層 `page_today.BLOCK_COLS`
+#:    ＋「🔍 找標的」頁已補的 `FIND_BLOCK_COLS` ＋「🔬 查一檔」頁的 `INSPECT_BLOCK_COLS`。
+#:    只減契約層會讓本頁在用到 `(2,1,1)` 時**重複宣告同名 CSS rule** ——
+#:    那正是「第二個真相源」本身（CLAUDE.md §2.1），而且**不會報錯**、只會靜默疊在一起。
+#: ⚠️ 本頁實測結果是**空集合**（1/1/1 與 3/2/1 來自契約層、2/1/1 是 FIND 頁補的全域規則）
+#:    ⇒ 本頁**一條欄數 rule 都不補**。
+#: 🔴 **公式與常數仍照留** —— 它是「靜默塌成單欄」的**唯一防線**：`grid_html()` 對缺 CSS
+#:    的欄數**不報錯**，版面日後若加了新欄數，這裡會自動長出來、`main()` 的守衛會當場紅。
+_HOLD_COLS_NEEDING_CSS: tuple[tuple[int, int, int], ...] = tuple(sorted(
+    set(HOLD_BLOCK_COLS.values())
+    - set(page_today.BLOCK_COLS.values())
+    - set(FIND_BLOCK_COLS.values())
+    - set(INSPECT_BLOCK_COLS.values())
+))
+
+
+# ── 代理：把 `markup.page_today` **暫時**換成本頁的版面契約 ──────────────────
+#: 作法、三條紀律與「為何非代理不可」**與 `_WHY_CONTRACT` 完全相同**（見該處長註，⛔ 不重抄）。
+_HOLD_CONTRACT = types.SimpleNamespace(
+    BLOCK_COLS=HOLD_BLOCK_COLS,
+    LAYER_GRID_COLS={},
+    BADGES_ON_PAGE=HOLD_BADGES_ON_PAGE,
+    BADGES_NOT_ON_PAGE=HOLD_BADGES_NOT_ON_PAGE,
+    tier_for_block=hold_tier_for_block,
+    card_value_text=page_today.card_value_text,
+    card_level_text=page_today.card_level_text,
+)
+
+
+@contextlib.contextmanager
+def hold_page_contract() -> Iterator[None]:
+    """`with` 期間 `markup` 走「💼 我的持股」的版面查表；離開時**一定**還原。
+
+    三道 assert 與 `why_page_contract()` / `find_page_contract()` /
+    `inspect_page_contract()` 同構（⛔ 不是「應該可以」）。
+    """
+    needed = _markup_page_today_names()
+    missing = needed - set(vars(_HOLD_CONTRACT))
+    assert not missing, (
+        f"代理少了 markup 會讀的名字：{sorted(missing)} —— "
+        "markup.py 多讀了東西而本檔的代理沒跟上。"
+        "⛔ 不得為了跑得動就隨便補一個值（那會畫出一個編出來的版面，違 CLAUDE.md §1）。"
+    )
+    original = markup.page_today
+    assert original is page_today, (
+        "進場時 markup.page_today 已經不是原物件 —— 上一次替換忘了還原")
+    markup.page_today = _HOLD_CONTRACT
+    try:
+        yield
+    finally:
+        markup.page_today = original
+    assert markup.page_today is page_today, "還原失敗：markup.page_today 不是原物件"
+
+
+HOLD_LAYER_NOTE: Mapping[int, str] = {
+    0: "三塊裡**前兩塊的 leaf 在線框是 null** ＝ 葉外，畫在分頁列之上、兩葉共用；"
+       "第三塊 scale_disclosure 標 l1 卻列在第○層 —— 規格 ① 逐字：它屬葉1 但"
+       "「**十態全部在場、不隨載入狀態消失**」，⛔ 不是「跑到葉外」"
+       "（本組 node 實測：該塊十格確實 0 null）。"
+       "⭐ **主 CTA「🚀 跑存股戰情室」住這一層**（線框 mainCTA 逐字）—— 規格 ① 逐字："
+       "run_scope／scope_note 的 leaf:null ＝ 畫在分頁列之上、兩葉共用，"
+       "「主 CTA 因此在預設葉可見 —— 靠位置達成，⛔ 不是把 CTA 複製進 l1」。"
+       "⚠️ 規格 ⑤-G1 同時登記：**這一整層在現行實作中不存在**（表單與 radio 都在葉2 內，"
+       "而 Streamlit 預設打開葉1）＋ radio 預設值與線框**相反** ⇒ 兩者皆 ★待拍板，"
+       "本輪**一條都沒有代為決定**（缺口 H12）。"
+       "⚠️ 線框 23 塊的 asOf 欄全是 null ⇒ 本頁⛔ 一個真時間都不准填；"
+       "**scope_note 的 live 格本身帶了一個時間戳，本輪因此不畫該態**（缺口 H5）。",
+    1: "t1 是四階裡唯一 2px 框線、內距最大的一階（手機 ≤640 另有一組覆寫內距，四階中也只有 t1 有）。"
+       "⭐ **本層只有一塊**（規格 ① 該列逐字「**只有** hold.cold_start_toc」）—— 全原型最瘦的一層。"
+       "它的作用是**冷啟動目錄**：線框 name 逐字「按下去會有什麼（冷啟動目錄，取代 14 張同文灰卡）」"
+       "⇒ 它取代的是「十四張寫著同一句『尚未載入』的灰卡」那種畫面。"
+       "⚠️ 線框 unwired 格逐字：「**未接線的那幾項不會被摺起來** —— 可以放進自己的摺疊區，"
+       "但**那個摺疊區的標題永遠看得到**」；error 格逐字「🔴 **取得失敗的項目絕不摺起來**，"
+       "各自一張紅卡 ＋ 原始錯誤訊息」⇒ **冷啟動可以摺，未接線／失準／錯誤三類⛔ 不摺。**",
+    2: "兩塊的 cols **各不相同**：結論三卡 3/2/1、配置偏離 2/1/1 —— 本頁唯一一層出現兩種欄數。"
+       "⭐ **結論三卡的卡名採線框改名版**（客戶 2026-09-16 裁示逐字：「結論三卡：用線框改名版"
+       "（這次讀到的持股／訊號可信度／燈號分布）。**合規理由成立**」）⇒ 實作端現行的"
+       "「該做什麼」「需要處理」**成為待修**，⛔ 不得寫成「實作已符合」。"
+       "理由：「該做什麼」讀起來像指示動作，落在全頁禁止買賣建議的判準射程內。"
+       "⭐ **三張卡各自判態，⛔ 不共用一態**：線框 error 格逐字「🔴 **讀不到持股清單** —— "
+       "另外兩格維持原樣」⇒ 本層三張卡的徽章依序是 #1／#7／#6，讓「一格紅不染另外兩格」"
+       "在畫面上看得出來。"
+       "⭐ **⑤-a 與 ⑤-b 刻意分在不同層**（規格 ① 逐字）：⑤-a 在 n2（目標＝**系統常數** 80／20）、"
+       "⑤-b 在 n3（目標＝**使用者自己輸入**）⇒ 層不同、卡密度不同、天然不會是同一張表。"
+       "⛔ 不得為了版面整齊把兩者併表 —— 併了之後「這個 80% 是誰定的」在畫面上就消失了。"
+       "⚠️ 大字區留白**不是漏畫**：是 page_today.card_value_text() 依狀態擦掉的"
+       "（規格 ② 逐字「⛔ 缺值不得顯示成 0」）。",
+    3: "⭐ **本層是本頁唯一跨葉的一層，也是全頁最大的一層**：l1 七塊（戰情表／換股對照／"
+       "逐檔再平衡偏離提示／情境試算／匯兌損益欄／組合深度分析／AI 戰情總結）"
+       "＋ l2 六塊（葉2 上半／Google 綁定／組合本數／持股列預覽／Sheet 選擇／觀察清單管理）。"
+       "⚠️ 線框葉註逐字「**葉不省執行** —— st.tabs 這一輪會把兩葉的 body 都跑完」"
+       "⇒ ⛔ 不得把「分在兩葉」讀成「另一葉不會跑」。"
+       "🔴 **三個「零」畫在逐檔再平衡偏離提示那一塊，三張卡長相⛔ 不得共用同一寫法**"
+       "（規格 ③ 的硬規則）：狀態 A 尚未設定目標比例 ⇒ ▨ 未設定（沒有值可以算）；"
+       "狀態 B 已設定目標比例 ⇒ 0.00（**有效的零**，真的剛好等於目標）；"
+       "狀態 C 目標比例總和 ≠ 100% ⇒ ▨ 不計算，合計格 ⚠︎ 差 8.00。"
+       "⚠️ 規格逐字：**B 態的 0.00 是三條線裡唯一的真數字，⛔ 不得被「缺值不得填 0」那條誤殺** "
+       "—— 那條管的是 A 與 C。"
+       "⭐ **四處 D-3 常駐警語畫在這一層**（客戶 2026-09-16 裁示「八處全列、全做」）："
+       "A／B／C 三態各一 ＋ 情境試算展開區頂端一處；葉2 持股列預覽與第四層佐證各一，"
+       "合計本原型畫出六處。⚠️ 剩下兩處是**同一塊的不同斷點**（手機短版／平板完整版），"
+       "本原型是單一斷點快照、畫不出斷點切換 ⇒ **兩版逐字都印出來**，差距登記在缺口 H12。"
+       "⚠️ **五塊需要表格的 block 裡有四塊在這一層**（戰情表／逐檔再平衡／情境試算／持股列預覽），"
+       "本輪**⛔ 全部沒有畫成真表格**（總管拍板 1，缺口 H1）。"
+       "⚠️ 匯兌損益欄那一塊的線框十態**全部是 N/A**，但規格 ② 把 #8 列為待接線、不畫 "
+       "⇒ 本輪改畫 live 態（缺口 H6）。",
+    4: "t4 是四階裡唯一 dashed 的一階。四塊全 1/1/1、全在 l1。"
+       "⚠️ 四塊裡有兩塊的線框 src 是 null（成本口徑、有 N 項還沒做好）⇒ 它們在現行實作裡"
+       "**沒有對應的程式位置**。"
+       "⭐ **成本口徑那一塊本輪畫的是「常駐可點」的 idle 態，⛔ 不畫 live 態** —— "
+       "客戶 2026-09-16 裁示逐字：「D-2 逐字文案：**先不放**。畫面不能寫『本系統採加權移動平均法』，"
+       "因為**實作沒有成本計算**。逐字文案**列為獨立任務**，等 L1/L3 補完才放。」"
+       "而線框該塊的 live 格正是那個口徑說明 ⇒ 照畫就會把客戶明令不放的字印上畫面。"
+       "（本段屬附錄／層註的**內部揭露**，依客戶 2026-09-22 裁示已標明為**引述**規格與客戶逐字；"
+       "卡面那一側一個內部詞都沒有。理由與界線見缺口 H11。）"
+       "⭐ **D-3 的第 8 處落點就是這一層的「目標比例不會被保存」那一塊**，規格 ④ 逐字要求"
+       "**技術原因完整版** —— 帳本五欄、存檔時整表清空再照五欄重寫，第 6 欄每存一次被擦一次"
+       "且**不會有任何錯誤訊息**。"
+       "⚠️ 「有 N 項本來就還沒做好」那一塊，線框逐字要求 **N ⛔ 不得寫死**"
+       "（前輪稽核說 4 項，線框自陳**未複驗**）⇒ 本頁**一個 N 都不寫**，同 FIND 缺口 F6 的處置。",
+}
+
+
+def build_hold_cards() -> dict[str, list[dict]]:
+    """每個 block 要畫幾張卡、各是什麼狀態。
+
+    🔴 **狀態⛔ 不是挑好看的**，每一塊都同時過三道（三道都是本組 node／grep 實測）：
+       ① 線框該塊 `states` 十態格裡**值為 null 的一律不准用**（null ＝ 該情況下結構上不存在，
+          規格 ② 逐字：「⛔ 不得畫成空卡」）；
+       ② 該態對應的徽章必須在 `HOLD_BADGES_ON_PAGE` 內
+          （否則 `markup.card_html` 會 fail loud —— 代理的 `BADGES_NOT_ON_PAGE` 擋）；
+       ③ **該態的逐字⛔ 不得帶時間戳**（線框 23 塊 asOf 全 null）——
+          `hold.scope_note.live` 因此**整態不畫**（它逐字含一個 HH 冒號 MM 的時間，見缺口 H5）。
+       規格點名了該畫哪一態的（③ 三個「零」／④ D-3 八處／⑥A⑥B⑥C 三種反例自檢），一律照規格。
+    🔴 **每一張卡都掛 `("資料來源", DEMO)`** —— 比客戶的字面要求（「帶數字的卡」）更嚴：
+       本頁的卡標大量含「葉2-1」「⑤-b」「80/20」這類**含阿拉伯數字**的規格名字，
+       分不清「資料的數字」與「出處的數字」時一律從嚴掛標記。
+    🔴 **⛔ 一個時間都不填**：線框 23 塊的 `asOf` 欄**全是 null**（本組 node 實測）。
+    🔴 **卡面⛔ 不得出現五個內部禁詞**（客戶 2026-09-22 裁示）：
+       FIFO／加權移動平均／D-2／L1／旗標（另含 FIFO 的中譯）——
+       `main()` 有一道守衛逐張卡掃，附錄與層註那一側才可引述（且必須標明「引述」）。
+    ⚠️ **本頁的文字都是從線框／規格摘的片段，⛔ 不是本組編的**；但**刻意避開了
+       線框大量使用的「為…什麼：」句式** —— 那三個字與本產生器的一道全檔守衛相撞。
+       處置與理由見缺口 H7，⛔ 本輪不擴大允許清單（唯一新增的一條是線框 `name` 的逐字）、
+       ⛔ 不弱化守衛。
+    """
+    rb = page_today.resolve_badge
+
+    def demo(*rows: tuple[str, str]) -> tuple[tuple[str, str], ...]:
+        return (*rows, ("資料來源", DEMO))
+
+    return {
+        # ── n0 頁級常駐與入口 ────────────────────────────────────────────
+        "hold.run_scope": [
+            {"state": "idle", "title": "這一輪要看什麼 ＋ 🚀 跑存股戰情室 ＋ 🔒 唯讀承諾",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("線框 idle 逐字", "同上（表單本身沒有「未載入」態，它永遠可按）"),
+                 ("線框 live 逐字（選項）", "◉ 我的持股（連 Google 讀你的持股清單）　"
+                                           "○ 只看市場（不連 Google）"),
+                 ("線框 live 逐字（主 CTA）", "▌ 🚀 跑存股戰情室 ▐"),
+                 ("線框 live 逐字（唯讀承諾）", "🔒 這一頁只讀不寫 —— 不會新增／修改／刪除你 "
+                                               "Sheet 裡的任何一列，畫面上也不會出現你的 Sheet 位址。"),
+                 ("主 CTA 範圍詞", "每頁首屏唯一一顆（客戶 2026-09-22 拍板）"),
+                 ("⚠️ 本輪的限制", "這一顆⛔ 沒有渲成真鈕，沿 FIND／INSPECT 先例以文字呈現 —— 見缺口 H2"),
+                 ("⚠️ 規格 ⑤-G7 逐字", "線框 loading 自陳「這一格目前做不到」—— 現行元件沒有停用按鈕"
+                                        "的能力，停用態在補上該參數前**是規格、不是現況**"))},
+            {"state": "error", "title": "這一輪要看什麼 · 送出後的錯誤（表單本身不會壞）",
+             "value": None, "level": None, "badge_n": rb(state="error"),
+             "facts": demo(
+                 ("線框 error 逐字", "🔴 表單本身不會壞；送出後的錯誤由下方各區塊**各自**顯示"
+                                     "（不會整頁變紅）"),
+                 ("規格 ⑥A 逐字", "四塊佐證常駐可點；⛔ 不得摺起紅卡、⛔ 大字區不得顯示 0 或上一輪殘值"))},
+        ],
+        "hold.scope_note": [
+            {"state": "idle", "title": "這一輪讀了什麼 · 尚未執行",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("線框 idle 逐字", "⬜ **尚未執行** —— 按上面那顆鈕才會開始讀。在你按之前，"
+                                    "這一頁不會發出任何一次網路連線。"),
+                 ("線框 loading 逐字", "⏳ 讀取中…（不顯示上一輪的檔數）"),
+                 ("⚠️ 本輪為何不畫 live 態", "線框該格逐字帶了一個日期與時間戳；"
+                                             "本頁 23 塊的 asOf 欄全是 null ⇒ ⛔ 一個真時間都不准填（缺口 H5）"))},
+            {"state": "empty", "title": "這一輪讀了什麼 · 綁了但帳本裡沒有持股列",
+             "value": None, "level": None, "badge_n": rb(state="empty"),
+             "facts": demo(
+                 ("線框 empty 逐字", "▨ 已讀完，你的帳本裡沒有任何持股列（**這是有效結果**，不是錯誤）"),
+                 ("規格 ⑥C 逐字", "⭐「綁了但空」是第三態、文案完全分開；"
+                                   "⛔ 三者（沒綁／綁了但空／讀取失敗）不得共用同一張卡"))},
+            {"state": "missing", "title": "這一輪讀了什麼 · 你選的是「只看市場」",
+             "value": None, "level": None, "badge_n": rb(state="missing"),
+             "facts": demo(
+                 ("線框 missing 逐字（第一句）", "⬜ **這一輪沒有讀你的持股** —— 你選的是「只看市場」，"
+                                                "所以這一頁**真的沒有去連 Google**"
+                                                "（不是連了失敗，也不是拿上一次的舊資料頂替）。"),
+                 ("線框 missing 逐字（這一輪讀到了）", "✅ 這一輪讀到了（不需要 Google）：VIX · 總經位階"),
+                 ("線框 missing 逐字（最要緊那句）", "⚠️ **這不代表你沒有持股。**"),
+                 ("線框 missing 逐字（一鍵修好）", "▌ 改成讀我的持股，重跑一次 ▐　← 一鍵修好"),
+                 ("規格 ⑥C 逐字", "這是第四種說法，與「沒綁」「綁了但空」「讀取失敗」都不同"))},
+            {"state": "error", "title": "這一輪讀了什麼 · 無法讀取持股清單",
+             "value": None, "level": None, "badge_n": rb(state="error"),
+             "facts": demo(
+                 ("線框 error 逐字", "🔴 **無法讀取持股清單** —— 已綁定的 Google Sheet 讀取失敗"
+                                     "（權限或表被刪）。"),
+                 ("去哪補（線框逐字）", "到本頁「組合設定」重新綁定，或確認該 Sheet 仍有分享權限。"))},
+        ],
+        "hold.scale_disclosure": [
+            {"state": "live", "title": "② 同一個名詞，兩套刻度（常駐揭露 · 不摺疊）",
+             "value": None, "level": "🟢 常駐，⛔ 不隨載入狀態消失", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（第一句）", "⚠️ 「健康度」在本頁與「🔬 查一檔」是"
+                                             "**兩套不同刻度，不可互比**。"),
+                 ("線框 live 逐字（本頁那把尺）", "· 本頁的「健檢」：四燈體檢"
+                                                 "（現金／負債／毛利／盈餘品質）四分法"),
+                 ("線框 live 逐字（查一檔那把尺）", "· 查一檔的「健康度」：六因子加權 0–100 分"),
+                 ("線框 idle／loading／empty 逐字", "**常駐**（不隨載入狀態消失）"),
+                 ("規格 ① 逐字", "它標 l1 卻列在第○層 ＝ 屬葉1 但十態全部在場，⛔ 不是「跑到葉外」"))},
+        ],
+        # ── n1 今日大白話結論（只有一塊）──────────────────────────────────
+        "hold.cold_start_toc": [
+            {"state": "idle", "title": "按下去會有什麼（冷啟動目錄，取代 14 張同文灰卡）",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("線框 idle 逐字（發語）", "按下上面那顆鈕之後，這裡會出現："),
+                 ("線框 idle 逐字（①②）", "① 這次讀到的持股 · 訊號可信度 · 燈號分布　"
+                                           "② 「健康度」在本頁與「🔬 查一檔」是兩套刻度（常駐揭露）"),
+                 ("線框 idle 逐字（③④）", "③ 戰情表（每一檔一列燈）＋ VIX　④ 換股對照 ＋ 總經位階"),
+                 ("線框 idle 逐字（⑤）", "⑤ 配置偏離（80/20）＋ 衛星達門檻 ＋ 逐檔再平衡偏離提示"),
+                 ("線框 idle 逐字（⑥⑦）", "⑥ 組合深度分析（壓力測試 · 風險值 · 配息現金流 · 核心／衛星）　"
+                                           "⑦ AI 戰情總結（要另外按一次才會生成）"),
+                 ("線框 idle 逐字（另一葉）", "📁 **組合設定**（分頁列第二個）：Google 登入與 Sheet 綁定 · "
+                                             "這本 Sheet 裡有幾本組合 · 持股列預覽（唯讀）· "
+                                             "Sheet 選擇與觀察清單管理（**後兩項未接線**，本頁不寫入）"))},
+            {"state": "unwired", "title": "冷啟動目錄 · 未接線那幾項不會被摺起來",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": demo(
+                 ("線框 unwired 逐字", "**未接線的那幾項不會被摺起來** —— 可以放進自己的摺疊區，"
+                                       "但**那個摺疊區的標題永遠看得到**"),
+                 ("線框 error 逐字", "🔴 **取得失敗的項目絕不摺起來**，各自一張紅卡 ＋ 原始錯誤訊息"),
+                 ("邊界（線框逐字）", "冷啟動可以把「⬜ 尚未載入」摺成目錄，"
+                                     "但**未接線／失準／錯誤三類⛔ 不摺**"))},
+        ],
+        # ── n2 核心大卡片 ────────────────────────────────────────────────
+        "hold.conclusion_cards": [
+            {"state": "live", "title": "① 結論三卡之一「這次讀到的持股」",
+             "value": "12 檔", "level": "🟢 運作中", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（這一格）", "這次讀到的持股 **12 檔** · 3 加碼 · 1 汰換"),
+                 ("卡名出處", "客戶 2026-09-16 裁示：用線框改名版（這次讀到的持股／訊號可信度／燈號分布）"),
+                 ("⚠️ 實作端現況", "現行 label 是「該做什麼」⇒ **待改 code**，⛔ 不得寫成「實作已符合」"))},
+            {"state": "missing", "title": "① 結論三卡之二「訊號可信度」· 該格無資料",
+             "value": None, "level": None, "badge_n": rb(state="missing"),
+             "facts": demo(
+                 ("線框 missing 逐字", "▨ 該格無資料 ＋ 那一列寫 `—` ＋ ⚠︎（大字區留空）"),
+                 ("規格 ② 逐字", "⚠︎ 必須是兩碼；`N/A` ⛔ 一律不加 ⚠︎（不適用 ≠ 壞掉）；"
+                                 "⛔ 缺值不得顯示成 `0`"),
+                 ("本輪⛔ 不寫 N／M", "規格 ② 逐字：#9 `partial` 本頁 0 處、待接線 ⇒ ⛔ 不畫 #9；"
+                                      "依 fail-safe「分子分母拿不到 → 降 #7，⛔ 不得退回 #1」"),
+                 ("⚠️ 卡名兩版同名", "「訊號可信度」線框版與實作版同名、**不必動**（客戶裁示原文）"))},
+            {"state": "error", "title": "① 結論三卡之三「燈號分布」· 讀不到持股清單",
+             "value": None, "level": None, "badge_n": rb(state="error"),
+             "facts": demo(
+                 ("線框 error 逐字", "🔴 **讀不到持股清單** —— 另外兩格維持原樣"),
+                 ("規格 ⑥A 逐字", "war_table 紅時 ① 的「燈號分布」卡同步紅，但 VIX 那一格照常顯示"),
+                 ("大字區為何是空的", "那是 page_today.card_value_text() 依狀態擦掉的，⛔ 不是漏畫"),
+                 ("⚠️ 實作端現況", "現行 label 是「需要處理」⇒ **待改 code**，⛔ 不得寫成「實作已符合」"))},
+        ],
+        "hold.alloc_deviation": [
+            {"state": "live", "title": "⑤-a 80/20 配置偏離 ＋ 衛星達門檻檔數（客觀對照）",
+             "value": "核心 76% / 衛星 24%", "level": "🟡 偏離 −4pp", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（對照基準）", "· **對照基準：核心 80% ／ 衛星 20%** —— "
+                                               "這是**系統內建的預設值，不是你設定的**。"),
+                 ("線框 live 逐字（達門檻）", "衛星部位中 **2 檔**的未實現報酬率 **≥ +15%**"
+                                             "（這條門檻同樣是**系統內建的，不是你設定的**）"),
+                 ("線框 live 逐字（這一層的界線）", "**這一層只講「幾檔」與「門檻是多少」，"
+                                                   "不指名是哪幾檔。**"),
+                 ("⛔ 全頁禁止買賣建議", "規格 ⑧ 逐字：「達門檻」是**狀態陳述**，"
+                                         "⛔ 不得延伸為「該賣／該加碼」"),
+                 ("⚠️ 實作端現況", "現行 label 仍是「80/20 配置偏離（該減）」、區段註解仍寫「衛星停利」"
+                                   "⇒ **含動作語，登記為合規待處理（須改 code）**"))},
+            {"state": "missing", "title": "⑤-a 配置偏離 · 缺成本就不判",
+             "value": None, "level": None, "badge_n": rb(state="missing"),
+             "facts": demo(
+                 ("線框 missing 逐字", "▨ 無資料 ＋ ⚠︎ —— **缺成本就不判**：沒有均價就沒有未實現報酬率，"
+                                       "硬判等於**替你編一個報酬率**。"),
+                 ("線框 missing 逐字（關鍵區別）", "**「判不了」不會被寫成「沒達標」** —— "
+                                                  "兩者都是灰的，但缺的是什麼會寫出來。"),
+                 ("線框 empty 逐字（兩半各自判斷）", "· 配置比例那半：**有持股，但沒有任何一列"
+                                                    "同時有張數與現價** → 沒有市值就沒有比例。"
+                                                    "**不會拿「檔數」當比例頂替**"))},
+            {"state": "degraded", "title": "⑤-a 配置偏離 · 門檻已失準（觀測照出、判決留白）",
+             "value": "核心 76% / 衛星 24%", "level": "🟡 這一格會被擦掉", "badge_n": rb(state="degraded"),
+             "facts": demo(
+                 ("線框 degraded 逐字", "🟠 門檻已失準 —— **觀測照出、判決留白**，原因照出，不自己編"),
+                 ("判決為何是空的", "那是 page_today.card_level_text() 依狀態擦掉的 —— "
+                                    "`degraded` 一律留白，⛔ 不是漏畫"),
+                 ("線框 error 逐字（兩半各自判斷）", "🔴 取得失敗（**兩半各自判斷** —— 比例算不出來，"
+                                                    "不會把達門檻那半也一起染紅）"))},
+        ],
+        # ── n3 葉1｜互動清單／大表（七塊）────────────────────────────────
+        "hold.war_table": [
+            {"state": "live", "title": "③ 戰情表（燈牆 ＋ VIX）",
+             "value": "12 檔", "level": "🟢 燈牆已點亮", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（第一句）", "12 檔 × 235 加碼燈 / 3-3-3 判定 —— "
+                                             "**點任一檔（整列可點）就地展開該檔的週線與布林 z**。"),
+                 ("線框 live 逐字（手勢邊界）", "⚠️ **一個邊界**：本表在桌機是 3 欄燈格，"
+                                               "窄螢幕會把一檔渲染成一張**卡** —— 變成卡之後就回到"
+                                               "「卡片不可點」，**整列可點不會延伸到卡片**。"),
+                 ("線框 live 逐字（各自判斷）", "**燈牆與 VIX 各自判斷**（VIX 讀不到不影響燈牆）。"),
+                 ("⚠️ 本輪的限制", "這一塊需要表格 ＋ 整列可點，靜態原型上**兩者都沒有承載體** "
+                                   "⇒ 以卡片的 facts 描述掉（缺口 H1）"),
+                 ("⚠️ 合規待處理", "線框自己登記：指標名「235 加碼燈」**含動作語 · 須改 code**；"
+                                   "線框逐字「沒有既定替代詞，自己造一個就是發明內容」"))},
+            {"state": "error", "title": "③ 戰情表 · 無法讀取持股清單",
+             "value": None, "level": None, "badge_n": rb(state="error"),
+             "facts": demo(
+                 ("線框 error 逐字", "🔴 **無法讀取持股清單**（權限或表被刪）；"
+                                     "⚠️ ① 的「燈號分布」卡同步紅；**VIX 那一格照常顯示**"),
+                 ("線框 empty 逐字（可重跑與不可重跑的差別）", "▨ 該檔該燈無資料"
+                                                              "（歷史太短或這段期間沒有變化 → 去哪補寫"
+                                                              "「**等時間累積**」，**不會叫你重跑** —— "
+                                                              "重跑一百次也一樣）"),
+                 ("線框 missing 逐字（另一種）", "▨ 該檔該燈無資料（這一輪沒拿到輸入 → **可以再抓一次**）"))},
+        ],
+        "hold.swap_compare": [
+            {"state": "live", "title": "④ 換股對照（搭配總經位階）",
+             "value": None, "level": "🟢 已套用總經位階：偏多", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（第一句）", "換出 2 檔（體質轉弱）→ 換入 2 檔（來自你的觀察清單）"),
+                 ("線框 live 逐字（最要緊那句）", "⚠️ **客觀對照，非買賣建議。** "
+                                                 "本站不產生下單清單，也不代為執行。"),
+                 ("線框 degraded 逐字（去哪補那一段）", "去哪補：到「🚦 今天」更新總經後重跑，"
+                                                       "對照會重新排序。"),
+                 ("線框 degraded 逐字（不猜那一句）", "**不會拿「中性」代替，也不猜多空**。"))},
+            {"state": "empty", "title": "④ 換股對照 · 觀察清單是空的",
+             "value": None, "level": None, "badge_n": rb(state="empty"),
+             "facts": demo(
+                 ("線框 empty 逐字", "▨ **觀察清單是空的**"),
+                 ("去哪補（線框 idle 逐字後半）", "先跑戰情室；觀察清單到「🔍 找標的 › 選股網」勾選加入"),
+                 ("線框十態", "三格是 null（missing／na／partial）⇒ 那三種情況下這塊結構上不存在，"
+                              "⛔ 不得畫成空卡"))},
+        ],
+        "hold.rebalance_deviation": [
+            {"state": "missing", "title": "⑤-b 逐檔再平衡偏離提示 · 狀態 A（尚未設定目標比例）",
+             "value": None, "level": None, "badge_n": rb(state="missing"),
+             "facts": demo(
+                 ("線框 missing 逐字（標頭）", "▨ **尚未設定目標比例**"),
+                 ("線框 missing 逐字（現在怎樣）", "現在怎樣：本區塊**沒有任何偏離數字可以顯示**。"),
+                 ("線框 missing 逐字（不預設那一句）", "系統**不會**替你預設一組目標比例 —— "
+                                                     "那會變成一個**沒有依據的配置**。"),
+                 ("線框 missing 逐字（示範列）", "│ 0050 │ 32.10 │ 〔＿＿＿＿〕 │ ▨ 未設定 │"),
+                 ("線框 missing 逐字（輸入欄）", "**輸入欄一律空白 —— 不預填、不建議、不給「參考配置」。**"),
+                 ("線框 missing 逐字（零的長相）", "**目標填完之前，偏離欄一律 `▨ 未設定`，"
+                                                  "不會顯示 `0.00`。**"),
+                 ("D-3 常駐警語（落點 #1 · 完整版）", HOLD_D3_FULL))},
+            {"state": "live", "title": "⑤-b 逐檔再平衡偏離提示 · 狀態 B（已設定目標比例）",
+             "value": "4 檔中 2 檔超出容忍", "level": "🟡 容忍 ±5.0pp", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（標頭）", "🟠 4 檔裡有 2 檔偏離超過你設定的容忍範圍（±5.0pp）。"),
+                 ("線框 live 逐字（五欄表頭）", "│ 標的 │ 目前% │ 目標% │ 偏離(pp) │ 提示 │"),
+                 ("線框 live 逐字（有效的零那一列）", "│ 2330.TW │ 25.00 │ 25.00 │ 0.00 │ 🟢 在容忍內 │"),
+                 ("線框 live 逐字（三個零的分界）", "⭐ 「2330.TW 偏離 `0.00`」是**有效的零**"
+                                                   "（真的剛好等於目標），與狀態 A 的 `▨ 未設定` "
+                                                   "**長相完全不同**。"),
+                 ("線框 live 逐字（客觀對照）", "── 客觀對照 ──　· 你設定的容忍範圍：±5.0pp　"
+                                               "· 超出容忍的檔數：2 / 4　· 最大偏離：0050 +7.10pp"),
+                 ("線框 live 逐字（最要緊那句）", "⚠️ 以上為**客觀對照，非買賣建議**。"),
+                 ("D-3 常駐警語（落點 #2 · 完整版）", HOLD_D3_FULL))},
+            {"state": "degraded", "title": "⑤-b 逐檔再平衡偏離提示 · 狀態 C（目標比例總和 ≠ 100%）",
+             "value": "目標總和 92.00%", "level": "🟡 這一格會被擦掉", "badge_n": rb(state="degraded"),
+             "facts": demo(
+                 ("線框 degraded 逐字（標頭）", "▨ **目標比例總和是 92.00%，不是 100%**"),
+                 ("線框 degraded 逐字（現在怎樣）", "現在怎樣：本區塊**不顯示任何偏離數字**。"),
+                 ("線框 degraded 逐字（去哪補）", "去哪補：調整「目標比例%」欄，使總和為 100.00%"
+                                                 "（容許 ±0.1pp）。"),
+                 ("線框 degraded 逐字（兩格長相）", "偏離欄一律 `▨ 不計算`；"
+                                                   "合計那一格寫 `⚠︎ 差 8.00`。"),
+                 ("容忍值（客戶 2026-09-16 裁示）", "三個數字並陳保留（線框 ±5.0pp／±0.1pp 與實作 1.0pp），"
+                                                   "接線時一律用 1.0pp，判法 abs(...) > tol"),
+                 ("D-3 常駐警語（落點 #3 · 完整版）", HOLD_D3_FULL),
+                 ("D-3 常駐警語（落點 #4 · 手機短版）", HOLD_D3_SHORT))},
+        ],
+        "hold.scenario_calc": [
+            {"state": "idle", "title": "情境試算（勾選後才計算，預設不跑）",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("線框 idle 逐字", "☐ 顯示情境試算（**勾選後才計算，預設不跑**）—— "
+                                    "沒勾之前本區塊不展開，**也不會先算**"),
+                 ("線框 missing 逐字（上游擋住）", "▨ **上游目標比例未設定（狀態 A）→ 本區塊不可用**"
+                                                  "（沒有目標就沒有「回到目標」這件事）"),
+                 ("線框 degraded 逐字（上游擋住）", "▨ **上游目標比例總和 ≠ 100%（狀態 C）→ 本區塊不可用**"),
+                 ("⚠️ 規格 ⑤-G3", "這個勾選閘門在實作中**不存在** ⇒ 整個情境試算區塊亦不存在（缺口 H12）"))},
+            {"state": "live", "title": "情境試算 · 已勾選（試算，不是建議）",
+             "value": None, "level": "🟢 已展開", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（第一句）", "⚠️ 以下為**試算，不是建議**。"
+                                             "系統不產生下單清單，也不代為執行。"),
+                 ("線框 live 逐字（兩欄名）", "│ 標的 │ 金額變化(TWD) │ 換算（參考）│"),
+                 ("規格 ③ 落地三則 (b) 逐字", "兩欄名**刻意選為**「金額變化(TWD)」與「換算（參考）」，"
+                                              "⛔ **不得叫「動作」「建議股數」**"),
+                 ("線框 live 逐字（試算限制）", "· **未計入**手續費、證交稅、匯費　"
+                                               "· **未考慮最小交易單位**　· **此表不是下單清單。** "
+                                               "系統沒有下單功能，也不會有。"),
+                 ("線框 live 逐字（沒有那些鈕）", "本區**沒有**任何「一鍵套用」「全部再平衡」"
+                                                 "「產生委託單」按鈕。"),
+                 ("D-3 常駐警語（落點 #6 · 短版 ＋ 本輪那句）", HOLD_D3_SHORT
+                  + "；⚠️ **本試算用的是你這一輪填的值**"))},
+        ],
+        "hold.fx_pnl": [
+            {"state": "live", "title": "匯兌損益欄（永遠 N/A）",
+             "value": None, "level": "🟢 這一欄沒有「正常值」", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字", "`N/A` —— **本欄在任何情況下都是 `N/A`**"
+                                    "（這一欄沒有「正常值」，原因見「不適用」那一格）"),
+                 ("線框 na 逐字（帳本沒有那筆）", "你的持股帳本**沒有存買入匯率** —— "
+                                                 "帳本只有 名稱／代號／張數／平均成本／更新時間 五欄。"),
+                 ("線框 na 逐字（不估那一句）", "系統**不估、不猜、也不拿今天的匯率頂替** —— "
+                                               "估了就是捏造。"),
+                 ("線框 unwired 逐字（關鍵區別）", "**不會標成「未接線」** —— 未接線代表"
+                                                  "「接上就會有」，本欄**接上也不會有**，缺的是資料本身"),
+                 ("⚠️ 本輪為何不掛 #8", "規格 ⑤-G4 的總管判定認為本欄應為 #8（結構上不適用），"
+                                        "但規格 ② 的總結句把 #8 列為**待接線、本頁不畫** "
+                                        "⇒ 應然與現況有差，見缺口 H6"))},
+        ],
+        "hold.deep_analysis": [
+            {"state": "live", "title": "⑥ 組合深度分析（六項並列，各自 gate）",
+             "value": None, "level": "🟢 六項並列", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字", "六項並列：再平衡 · 核心／衛星 · 壓力測試 · 風險值(VaR) · "
+                                    "配息現金流 · 葡萄串領息　（**各自 gate**）"),
+                 ("線框 empty／error 逐字", "**其餘五項不受影響**"),
+                 ("⚠️ 規格 ⑤-G5", "現況是**六項共用同一個 submit gate**，且實作的說明文字"
+                                   "自己前後矛盾（先寫「各自 gate」、下一句寫「共用送出鈕那一個 gate」）"
+                                   "⇒ 規格逐字要求：⛔ 不得只改 code 留著錯的說明（缺口 H12）"),
+                 ("⛔ 版面不另計偏離", "規格 ⑤-G5 逐字：3 欄 × 2 排的版面本身已在核准線框內"))},
+            {"state": "unwired", "title": "⑥ 組合深度分析 · 該項未接線",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": demo(
+                 ("線框 unwired 逐字", "該項**未接線**（還沒做）＋ 就地寫明原因"),
+                 ("規格 ⑤-G5 逐字", "未接線的是兩項（再平衡＝⑤-b；葡萄串領息），其餘四項已接線"),
+                 ("⚠️ 規格 ⑤-G2 逐字", "⛔ **在輸入端做出來之前不得先接判定 gate** —— "
+                                       "沒有輸入端的 gate 只會回「無法判定」，"
+                                       "而那會被誤讀成「已平衡」"))},
+        ],
+        "hold.ai_summary": [
+            {"state": "live", "title": "⑦ AI 戰情總結（本頁唯一推播出口）",
+             "value": None, "level": "🟢 按一次生成一次", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（鈕）", "▌ ⚡ 生成 AI 總結 ▐　← 單顆 `st.button`，本區塊內"),
+                 ("線框 live 逐字（為何不自動跑）", "按一次生成一次。會用到付費的 AI 服務，"
+                                                   "所以不會自動跑；結果不會存起來，要留請自己複製。"),
+                 ("規格 ③ 落地三則 (c) 逐字", "AI 總結**不得**把三條硬禁令繞過去輸出行動語"),
+                 ("⚠️ 它不是主 CTA", "線框 mainCTA 只列「🚀 跑存股戰情室」一顆 "
+                                     "⇒ 符合客戶「每頁首屏唯一」的範圍詞"))},
+            {"state": "unwired", "title": "⑦ AI 戰情總結 · 未設定 API 金鑰",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": demo(
+                 ("線框 unwired 逐字", "**未設定 API 金鑰** → **就地給設定入口**"
+                                       "（不會叫你去改設定檔）"),
+                 ("線框 error 逐字", "🔴 生成失敗（附錯誤型別）"),
+                 ("線框十態", "五格是 null（empty／missing／na／partial／degraded）"
+                              "⇒ 那五種情況下這塊結構上不存在"))},
+        ],
+        # ── n3 葉2｜組合設定（六塊）──────────────────────────────────────
+        "hold.setup": [
+            {"state": "live", "title": "葉2 上半｜區塊標題 ＋ 兩段常駐揭露（取數接線揭露 · 唯讀宣告）",
+             "value": None, "level": "🟢 兩段揭露常駐", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（葉名）", "**葉2 · 組合設定（＝組合管理＋Sheet 綁定）**"),
+                 ("線框 live 逐字（唯讀那句）", "就地完成，不必去別頁 —— 但本頁對你的持股帳本"
+                                               "**一律唯讀**，需要寫入才做得到的部分會標「**未接線**」"
+                                               "並說明原因。"),
+                 ("線框 live 逐字（揭露②）", "② **唯讀宣告**（常駐）：本頁**只讀不寫** —— "
+                                             "不新增、不修改、不刪除你 Sheet 裡的任何一列，也"
+                                             "**不顯示 Sheet 識別碼或任何憑證**（只顯示「有沒有綁」）。"),
+                 ("線框 error 逐字", "**常駐**（**真故障時更需要看得到「這一頁本來就不寫入」**，"
+                                     "才不會有人以為是寫入失敗）"))},
+        ],
+        "hold.binding": [
+            {"state": "empty", "title": "葉2-1｜你還沒有綁定持股 Sheet（灰的，⛔ 不是紅的）",
+             "value": None, "level": None, "badge_n": rb(state="empty"),
+             "facts": demo(
+                 ("線框 empty 逐字（第一句）", "▨ **你還沒有綁定持股 Sheet** —— "
+                                              "⭐ **這是有效結果**（已經去讀過，不是還沒讀、也不是故障），"
+                                              "不是錯誤。"),
+                 ("線框 empty 逐字（不頂替那句）", "本站**不會拿範例持股頂替** —— "
+                                                  "那會讓你以為畫面上那幾檔是你的。"
+                                                  "**新使用者在這裡看到灰色是正常的。**"),
+                 ("去哪補（線框逐字）", "**先把左邊側欄切回「不使用（用下方原功能）」**，"
+                                       "再到 📁 組合管理用 Google 登入後選一本持股 Sheet。"),
+                 ("⚠️ 規格 ⑥ 末句逐字", "凡指向舊七頁籤的指路句，"
+                                        "⛔ 一律必須寫出「先把左邊側欄切回…」這一步 —— "
+                                        "新五頁與舊七頁互斥，少寫這一步使用者永遠找不到"))},
+            {"state": "error", "title": "葉2-1｜Google 那端讀不到（紅的，與上一張是兩件事）",
+             "value": None, "level": None, "badge_n": rb(state="error"),
+             "facts": demo(
+                 ("線框 error 逐字", "🔴 **Google 那端讀不到** ＋ 原始錯誤訊息"),
+                 ("線框 error 逐字（關鍵區別）", "⚠️ **與上一格的灰是兩件事**：「沒綁」是有效結果（灰）、"
+                                                "「綁了但 Google 掛了」是真故障（紅）。"),
+                 ("規格 ⑥C 逐字", "🔴 沒綁 Sheet ＝ **灰的**，⛔ 不是紅的"))},
+        ],
+        "hold.portfolio_count": [
+            {"state": "empty", "title": "葉2-2｜綁好了，但裡面 0 本組合",
+             "value": None, "level": None, "badge_n": rb(state="empty"),
+             "facts": demo(
+                 ("線框 empty 逐字", "▨ **綁好了，但裡面 0 本組合** —— "
+                                     "⭐ **有效結果**（綁好了但還沒填），不是錯誤"),
+                 ("線框 live 逐字（讀法）", "· 讀法：只數「這本 Sheet 裡有幾本組合」，"
+                                           "**不讀任何一列持股內容**"))},
+            {"state": "missing", "title": "葉2-2｜讀不到本數（⛔ 不會顯示 0）",
+             "value": None, "level": None, "badge_n": rb(state="missing"),
+             "facts": demo(
+                 ("線框 missing 逐字", "▨ **讀不到本數** ＋ ⚠︎ ＋ 就地寫明原因。"
+                                       "**不會顯示 `0`** ——「讀不到」與「真的是 0 本」是**兩件事**。"),
+                 ("線框 idle 逐字（三種來源三句話）", "⚠️ **這一格有三種來源，三句話**："
+                                                    "①冷啟動還沒按；②按了但選「只看市場」；"
+                                                    "③讀了、但你根本還沒綁"),
+                 ("線框 error 逐字（還原被吞掉的失敗）", "⭐ **本頁把被上游吞掉的失敗還原成紅色** —— "
+                                                        "上游為了不擋住全域狀態列把它降級成中性，"
+                                                        "**本頁不沿用那個降級**：真故障要看得見。"))},
+        ],
+        "hold.setup.preview": [
+            {"state": "live", "title": "葉2-3｜持股列預覽（已接線但唯讀 · 能看不能改）",
+             "value": None, "level": "🟢 唯讀", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（六欄表頭）", "│ 代號 │ 名稱 │ 種類 │ 張數 │ 均價 │ 來源 │"),
+                 ("線框 live 逐字（觀察清單那幾列）", "⭐ **觀察清單那幾列的張數／均價顯示「—」，不是 0** "
+                                                    "—— 那份分頁只有「清單名／代號／更新時間」**三欄，"
+                                                    "本來就沒有**張數與均價。寫 0 會讀成"
+                                                    "「持有 0 張、成本 0 元」，**那是一個結論，不是缺值**。"),
+                 ("線框 live 逐字（只取第一本）", "⚠️ **只取第一本組合／第一份觀察清單** —— "
+                                                 "若這本 Sheet 裡還有別的，**就地寫明"
+                                                 "「畫面上這幾檔不是你的全部」**，不會靜默只顯示一部分。"),
+                 ("D-3 常駐警語（落點 #7 · 完整版 ＋ 那一句）", HOLD_D3_FULL
+                  + "；⚠️ **若本表顯示「目標比例」欄，要同時寫出「這一欄不會寫回你的 Sheet」**"),
+                 ("⚠️ 規格漏列一張表", "規格 ① 只點名四張表，但本塊的線框 live 帶了一張**六欄真表格** "
+                                       "⇒ 本頁實得**五張**，差異登記在缺口 H4"))},
+            {"state": "error", "title": "葉2-3｜持股清單讀不出來（⛔ 不顯示半份）",
+             "value": None, "level": None, "badge_n": rb(state="error"),
+             "facts": demo(
+                 ("線框 error 逐字", "🔴 **持股清單讀不出來** ＋ 原始錯誤訊息"),
+                 ("線框 error 逐字（不給半份那句）", "⭐ **本站不顯示半份清單** —— "
+                                                    "少一半算出來的配置比例與損益"
+                                                    "**看起來完全正常、實際上是錯的**，所以整份都不給。"),
+                 ("線框 partial 逐字", "⚠️ **觀察清單那半讀不到**（持股本身不受影響）—— "
+                                       "**不會靜默略過**"))},
+        ],
+        "hold.setup.pick_sheet": [
+            {"state": "unwired", "title": "葉2-4｜Sheet 選擇（未接線 —— 缺的是授權）",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": demo(
+                 ("線框 unwired 逐字（第一句）", "**本頁不提供選 Sheet 的控制項**"),
+                 ("去哪補（線框逐字）", "**本頁刻意沒有這個出口**（這是還沒做的項目，"
+                                       "不是你操作的問題；按「🚀 跑存股戰情室」也不會改變它）。"
+                                       "現行入口：**先把左邊側欄切回「不使用（用下方原功能）」**，"
+                                       "再到 📁 組合管理。"),
+                 ("線框 idle 逐字", "**恆為未接線**（不會因為「還沒按」就改寫成「尚未執行」"
+                                    "—— 按一百次也一樣）"),
+                 ("線框 na 逐字（為何不改標 N/A）", "**恆為未接線**（不會改標 `N/A` —— "
+                                                   "`N/A` 是「結構上不適用」，本項是"
+                                                   "「**該有、但本頁刻意不做**」）"),
+                 ("線框 error 逐字", "**恆為未接線**（**別處出錯不會把這張卡一起染紅** —— "
+                                     "它本來就沒有在跑）"))},
+        ],
+        "hold.setup.watchlist": [
+            {"state": "unwired", "title": "葉2-5｜觀察清單管理（未接線 —— 缺的是授權）",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": demo(
+                 ("線框 unwired 逐字（第一句）", "**本頁不提供觀察清單的新增／刪除**"),
+                 ("去哪補（線框逐字）", "現行入口有兩個：(1) **先把左邊側欄切回"
+                                       "「不使用（用下方原功能）」**，再到 📁 組合管理；"
+                                       "(2) 留在新五頁的話，到「🔍 找標的 › 選股網」用"
+                                       "「加入觀察清單」。"),
+                 ("線框 unwired 逐字（兩個入口都寫）", "⭐ **兩個入口都會寫出來** —— "
+                                                      "第 2 個在新五頁內就走得到，**不必切側欄**。"),
+                 ("線框 loading 逐字", "**恆為未接線**（不畫骨架）"))},
+        ],
+        # ── n4 葉1｜展開佐證（四塊全 1/1/1）──────────────────────────────
+        "hold.evi_cost": [
+            {"state": "idle", "title": "▸ 這裡的「成本」怎麼算的",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("線框 idle 逐字", "展開器**常駐可點**（靜態說明，不依賴本輪資料）"),
+                 ("線框 error 逐字", "常駐可點（**真故障時更需要看得到口徑說明**）"),
+                 ("⚠️ 本輪為何不畫 live 態", "客戶 2026-09-16 裁示逐字「**先不放**」—— "
+                                             "畫面不能寫那句口徑宣稱，因為**實作沒有成本計算**；"
+                                             "而線框該塊的 live 格正是那段口徑說明（缺口 H11）"),
+                 ("⛔ 卡面不得出現的內容", "規格 ⑦ 點名的內部詞與口徑宣稱一律只留在附錄與層註"
+                                           "（那一側依客戶 2026-09-22 裁示標明為**引述**）"))},
+        ],
+        "hold.evi_take_profit": [
+            {"state": "live", "title": "▸ 是哪幾檔的未實現報酬率已達門檻（只在這一層出現）",
+             "value": None, "level": "🟢 門檻：未實現報酬率 ≥ +15%", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（門檻來源）", "· 門檻來源：**系統內建的策略常數，不是你設定的，"
+                                               "畫面上也沒有地方可以改它**。"),
+                 ("線框 live 逐字（只判衛星）", "· 只判**衛星（個股）**：核心（ETF）不套這條規則。"),
+                 ("線框 live 逐字（缺均價不判）", "· **缺均價的那幾檔不判**（沒有均價就沒有報酬率），"
+                                                 "而且**單獨列出**，不會靜默剔除。"),
+                 ("線框 live 逐字（三欄表頭）", "│ 代號 │ 未實現報酬率 │ 超出門檻 │"),
+                 ("線框 live 逐字（最要緊那段）", "⚠️ **這是一張客觀對照表，不是行動清單。** "
+                                                 "它只回答「哪幾檔越過了這條系統內建的線」；"
+                                                 "**越過之後要不要做什麼、做多少，本站不判斷，"
+                                                 "也判斷不了**"),
+                 ("線框 degraded 逐字（觀測與判決分開）", "🟠 常駐可點 —— 門檻已失準時"
+                                                        "**照樣把代號與報酬率列出（觀測）**，"
+                                                        "但**移除「超出門檻」那一欄（判決）**"))},
+        ],
+        "hold.evi_target_pct": [
+            {"state": "live", "title": "▸ 為什麼目標比例不會被保存",
+             "value": None, "level": "🟢 常駐可點", "badge_n": rb(state="live"),
+             "facts": demo(
+                 ("線框 live 逐字（五欄）", "你的持股帳本（Google Sheet 那本）目前是 **5 欄**："
+                                           "名稱／代號／張數／平均成本／更新時間。"
+                                           "**沒有「目標比例」這一欄。**"),
+                 ("線框 live 逐字（第 6 欄會被擦掉）", "⚠️ 而且即使加上第 6 欄，現行的存檔流程仍會"
+                                                     "**把它清空** —— 存檔時是「整表清空、再照 5 欄"
+                                                     "重寫一次」，第 6 欄不在那 5 欄裡，所以"
+                                                     "**每存一次就被擦掉一次，而且不會有任何錯誤訊息**。"),
+                 ("線框 live 逐字（結論）", "⇒ 在存檔流程改成「**依欄名取值**」之前，"
+                                           "這一欄只存在於你這一次的瀏覽器分頁裡。"
+                                           "**關掉就沒了。這不是你操作錯誤。**"),
+                 ("D-3 常駐警語（落點 #8 · 技術原因完整版）", HOLD_D3_FULL),
+                 ("線框 missing 逐字", "常駐可點（**狀態 A 時尤其要看得到**）"))},
+        ],
+        "hold.evi_notready": [
+            {"state": "idle", "title": "▸ 有 N 項本來就還沒做好（逐項展開：未接線／門檻已失準／錯誤）",
+             "value": None, "level": None, "badge_n": rb(state="idle"),
+             "facts": demo(
+                 ("線框 idle 逐字", "▸ 有 N 項本來就還沒做好（點開看是哪些）　"
+                                    "〔摺疊，但**標題本身永遠在**〕"),
+                 ("線框 live 逐字", "（正常時本區塊**不出現** —— 沒有未接線／失準／錯誤的項目可列）"),
+                 ("⛔ 本頁一個 N 都不寫", "線框逐字要求 N ⛔ 不得寫死；"
+                                          "「前輪稽核說 4 項，**本組未複驗**」"
+                                          "⇒ 應由實際盞數即時算出（缺口 H12）"),
+                 ("⚠️ 規格 ⑤-G6 逐字", "N 算不出來時 ⛔ 不得退回「沒有未完成項」—— "
+                                        "那是把缺口掩蓋成完整"))},
+            {"state": "unwired", "title": "▸ 有 N 項還沒做好 · 逐項列出未接線的是哪幾項",
+             "value": None, "level": None, "badge_n": rb(state="unwired"),
+             "facts": demo(
+                 ("線框 unwired 逐字", "逐項列出**未接線**的是哪幾項 ＋ 各自的原因。"
+                                       "**這一態沒有你可以做的事** —— 會寫明「這是還沒做的項目，"
+                                       "不是你操作的問題；重按一百次也一樣」。"),
+                 ("線框 degraded 逐字", "⚠️ 警告會**貼在它要警告的那張表旁邊**，不會只摺進本區。"),
+                 ("線框 error 逐字", "🔴 逐項列出**取得失敗**的是哪幾項 ＋ **原始錯誤訊息**。"
+                                     "**絕不摺起來，各自一張紅卡。**"))},
+        ],
+    }
+
+
+#: 🔴 **本頁本輪查到的規格衝突與未決項，逐條登記**（客戶要求 6 逐字：
+#:    「遇到規格衝突 → 就地標明、寫進附錄、⛔ 不自行裁決」）。
+#: ⚠️ **前綴 `H`**（Holdings）—— 本組實測 A-Z 逐字母比對：`H` 在產生器與產出 HTML **皆 0 命中**。
+#: ⚠️ **⛔ 不要把 `H1`~`H15` 與規格引用的外部編號混為一談**：本產生器的慣例是
+#:    **自己的缺口編號⛔ 不帶連字號**（G1／W5／F17／P1／H1），
+#:    **引用外部編號一律帶連字號**（G-1／G-7／P-1／★-09）—— 兩者靠連字號區分。
+#: ⚠️ 依客戶 2026-09-22 裁示：附錄可引述卡面禁詞，但**必須標明「引述」**
+#:    —— 凡含禁詞的條目都寫了「引述」二字，`main()` 有一道守衛逐條檢查。
+HOLD_SPEC_GAPS: tuple[tuple[str, str, str], ...] = (
+    (
+        "H1",
+        "🔴 **表格能力未落地**：契約層 src/ui_v2/markup.py **⛔ 沒有任何產表格的公開函式** ⇒ "
+        "本頁**五個**需要表格的 block 只能用卡片的 facts 描述掉。",
+        HOLD_TABLE_DISCLOSURE + "／／" + HOLD_TABLE_DISCLOSURE_WHY
+        + "／／**本頁缺的到底是什麼（逐項寫出來，⛔ 不含糊帶過）**："
+          "(1) **五個 block 需要表格** —— 戰情表（燈牆）／逐檔再平衡偏離提示（五欄）／"
+          "情境試算（三欄）／是哪幾檔已達門檻（三欄）／葉2 持股列預覽（**六欄，本頁最大**）；"
+          "(2) **最大 6 欄**（持股列預覽：代號｜名稱｜種類｜張數｜均價｜來源）；"
+          "(3) **另有三項在靜態原型上沒有承載體**：逐檔再平衡的**使用者輸入格**"
+          "（線框逐字「輸入欄一律空白…〔＿＿＿＿〕」）、戰情表的**整列可點**"
+          "（線框逐字「點任一檔（整列可點）就地展開」）、以及**斷點切換**"
+          "（規格 ① 要求桌機／平板走表格、手機 ≤640 轉卡片流）。"
+          "⇒ **真正的解**是把表格能力補進 src/ui_v2/，那要動 src/ 真實作 ⇒ ⛔ 不在本輪授權範圍。"
+          "／／⚠️ **複驗程度，據實寫**：「markup 公開函式恰 5 個／產物表格標籤 0 個」"
+          "由本組實測，前一輪（「🔬 查一檔」頁缺口 P1）另有同向結果 —— "
+          "**但兩輪用的是同一種方法** ⇒ ⛔ 不等於方法獨立的複驗（CLAUDE.md §-2 規則 6）。",
+    ),
+    (
+        "H2",
+        "🔴 **主 CTA「🚀 跑存股戰情室」⛔ 沒有渲成真的 pv-btn-primary 鈕** ⇒ "
+        "**FIND／INSPECT／HOLD 三頁一起缺，⛔ 本輪不單邊補**；另附一條**規格已知陳舊**。",
+        HOLD_CTA_DISCLOSURE + "／／" + HOLD_CTA_DISCLOSURE_WHY
+        + "／／**規格端的樣子（UI_PAGE_HOLD ① 按鈕段逐字）**：主 CTA ＝ UI_COMPONENTS §3 "
+          "主 CTA（min-height:40px／6px 16px／13.5px/700），"
+          "且該顆的線框 mainCTA 是 **page 級欄位、⛔ 不掛在任何 block 上** —— "
+          "本檔把它的渲染歸屬寫在 hold.run_scope（規格 ① 按鈕段把它與 run_scope 綁在一起）。"
+          "／／⚠️ **第二件事：規格 ① 寫的底／框色 `--ink` 已經陳舊。** "
+          "UI_COMPONENTS.md 已於 2026-09-22 由客戶裁示改為 `--cta-primary-bg`，"
+          "該檔自己就逐字點名「docs/v2/spec/UI_PAGE_FIND.md／UI_PAGE_HOLD.md／UI_PAGE_INSPECT.md」"
+          "三份頁規格尚未同步。⇒ **同步規格檔⛔ 不在本輪授權範圍**（客戶硬約束 1：只動 "
+          "docs/v2/prototype/ 相關檔）⇒ 登記，⛔ 不動。"
+          "／／⚠️ **⛔ 不得把本條讀成「已排程」** —— 要補就三頁一起補，屬另一輪。",
+    ),
+    (
+        "H3",
+        "🔴 **層數：規格是五層，派工單寫「六層」** —— 本輪**照規格畫五層**，據實記錄這個差異。",
+        "總管拍板（理由逐字）：層數 **5**，⛔ 不湊 6。規格 ① 標題逐字「五層 23 block」。"
+        "登記一條缺口說明客戶派工單寫「六層」、實際規格是五層，據實記錄。"
+        "／／**本組實測（⛔ 非轉述）**：線框 docs/v2/wireframe/wf_page_hold.js 的 hold 頁 "
+        "node 解析 `layers.length` ＝ **5**（n0~n4），23 個 block 全部落在這五層內；"
+        "規格 UI_PAGE_HOLD.md ① 的標題逐字亦為「五層 23 block」，其結構表恰五列。"
+        "／／⚠️ **⛔ 不得把本條讀成「規格寫錯」或「派工單寫錯」** —— 本組只查證了"
+        "「規格與線框都是 5」這個**事實**；派工單為何寫 6，本組**沒有查**，⛔ 不代為推測。"
+        "同一份派工單的另一句是「**照規格、⛔ 不簡化**」⇒ 兩句相衝時本輪取「照規格」。",
+    ),
+    (
+        "H4",
+        "⚠️ **規格 ① 只點名「四張表」，但線框實測是五張** —— 第五張是葉2 持股列預覽"
+        "（**六欄，本頁最大的一張**）⇒ **規格漏列**。",
+        "**規格端逐字（UI_PAGE_HOLD ① 排列／表格／圖表段）**："
+        "「`war_table`／`rebalance_deviation`／`scenario_calc`／`evi_take_profit` "
+        "**四張表**走第 2 份 §4」。"
+        "／／**本組線框實測（node，⛔ 非轉述）**：`hold.setup.preview` 的 `live` 格帶了一張"
+        "**六欄**的表（逐字表頭「│ 代號 │ 名稱 │ 種類 │ 張數 │ 均價 │ 來源 │」），"
+        "且規格自己在 ④ D-3 落點 #7 逐字寫「葉2 組合設定持股列**預覽**（若該表顯示目標比例欄）」"
+        "—— **規格自己知道那裡有一張表**，只是 ① 的四張表清單沒把它列進去。"
+        "／／⇒ **本頁需要表格的 block 實為五個**，缺口 H1 的數字照五個寫。"
+        "⚠️ **本條是「規格漏列」，⛔ 不是「線框多畫」** —— 但這個分類是**本組的判讀**，"
+        "⛔ 不是規格明寫的；⛔ 不代為裁決該補規格還是該改線框。",
+    ),
+    (
+        "H5",
+        "🔴 **線框 `hold.scope_note.live` 逐字帶一個時間戳**，與本產生器一道**全檔級**守衛相撞 "
+        "⇒ 本輪**整態不畫**，⛔ 不弱化守衛、⛔ 不竄改線框逐字。",
+        "**衝突長這樣**：本產生器有一道全檔守衛 —— 產物裡**不得出現任何「兩位數 冒號 兩位數」"
+        "形狀的時間**（先遮掉 CSS 的間距 token 再掃剩下的）。它存在的理由是 CLAUDE.md §1："
+        "線框 23 塊的 `asOf` 欄**全部是 null**（本組 node 實測）⇒ 這一頁⛔ 不得編造任何時間。"
+        "／／而線框該塊的 `live` 格逐字是「✅ 已讀取你的持股　12 檔　〈日期〉〈時分〉　唯讀」"
+        "—— 那個時分就是一個 HH 冒號 MM ⇒ 逐字照引就會命中守衛。"
+        "／／**本組的處置（⛔ 這是處置，不是裁決）**：**⛔ 不動守衛、⛔ 不改寫線框那一格**，"
+        "改為**這一塊不畫 live 態**，改畫它另外四個**不含時間戳**的態"
+        "（idle／empty／missing／error）—— 那四態同時也是規格 ⑥C 點名"
+        "「三者不得共用同一張卡」＋第四種說法所要求的四張卡，**本來就該畫**。"
+        "／／⚠️ **本組可能判錯的地方，據實寫出來**：若認為「逐字引線框 live」比"
+        "「守衛維持最嚴」重要，正解是把那格改寫成不含具體時間的示意"
+        "（例：「（時點示意，⛔ 不填真時間）」）並在卡上標明改寫 —— "
+        "那等於在畫面上呈現一個**線框沒有寫過的字串**。**兩種可能本組都無法自行排除** "
+        "⇒ 登記、⛔ 不裁決。",
+    ),
+    (
+        "H6",
+        "🔴 **匯兌損益欄的「應然徽章」與「本頁可畫徽章」對不上**：規格 ⑤-G4 判它是 #8，"
+        "規格 ② 卻把 #8 列為**本頁不畫** ⇒ 本輪改畫 `live` 態，⛔ 不硬掛 #7。",
+        "**兩邊逐字**：(a) 規格 ② 表 `na` 列逐字「❌ **`N/A` 全頁 grep 0 命中**，"
+        "缺值一律畫 `—` ⇒ 見 ⑤-G4」，同表總結句逐字「⇒ **會出現在畫面上的是 6 態："
+        "#1／#3／#4／#5／#6／#7。** #2 未落地、#8／#9 待接線、#10 不適用」；"
+        "(b) 規格 ⑤-G4 (c) 逐字（標為**總管判定，本份採用**）「客戶要的『永遠 `N/A`』"
+        "**比現況正確** …… ⇒ **採 `N/A`，並連帶修掉現況的混用**」。"
+        "／／⇒ **應然是 #8、現況是不畫** —— 兩者都是規格自己寫的，**本檔不代為裁決**。"
+        "／／**本組的處置（⛔ 這是處置，不是裁決）**：本頁照 ② 的總結句畫 ⇒ **⛔ 不畫 #8**；"
+        "該塊改畫 `live` 態（它的線框逐字本來就是「本欄在任何情況下都是 `N/A`」，"
+        "是這一塊唯一不需要靠缺值徽章就說得完整的態），`na` 格的逐字則搬進該卡的 facts。"
+        "／／⚠️ **⛔ 為何不畫成 #7**：契約層的 resolve_badge 對 `na`（未帶不適用原因）會回 #7，"
+        "而 #7 的符號帶 ⚠︎ —— 規格 ② 逐字「**`N/A` ⛔ 一律不加 ⚠︎**（不適用 ≠ 壞掉）」"
+        "⇒ 掛 #7 會在畫面上把「結構上不適用」畫成「壞了」，那正是規格點名要防的那個誤讀。",
+    ),
+    (
+        "H7",
+        "⭐ **本輪撞到的第三個「為…什麼」衝突**：線框本頁有 **1 個 block name ＋ 14 處 states** "
+        "命中那三個字 ⇒ 允許清單**只加那一條 name 逐字**，states 一律改引不含那三字的片段。",
+        "**衝突長這樣**：客戶 2026-09-22 ④ 明示第五頁用 SSOT 的「📖 憑什麼」，"
+        "本產生器因此有一道守衛 —— 產物全檔遮掉允許清單後**不得再出現那三個字**，"
+        "而允許清單**只收線框／規格的逐字名稱**、⛔ 不收本檔自己的散文。"
+        "／／**本組 node 實測（⛔ 非轉述）**：本頁 23 個線框 `name` 裡**恰 1 個**命中"
+        "（`hold.evi_target_pct`，逐字「▸ 為什麼目標比例不會被保存」）；"
+        "`states` 另有 **14 處**命中，多半是線框要求的誠實兩段式句式"
+        "「為…什麼：〈原因〉／去哪補：〈做法〉」。"
+        "／／**本組的處置（⛔ 這是處置，不是裁決）**：**卡標那一條逐字進允許清單**"
+        "（它是線框 name，動它就是竄改逐字出處）；**14 處 states 一律只引那組句式裡"
+        "不含那三字的部分**（多半是「去哪補：」那一段與結論句），沿「🔬 查一檔」頁缺口 P8 的同一作法。"
+        "理由：允許清單每多一條，守衛就弱一分。"
+        "／／⚠️ **本組可能判錯的地方**：若認為「逐字引線框 states」比「守衛維持最嚴」重要，"
+        "那正解是把那 14 處 states 逐字加進允許清單。**本組無法自行排除這個可能** ⇒ 登記、⛔ 不裁決。",
+    ),
+    (
+        "H8",
+        "🔴 **卡面禁詞守衛本輪擴大（客戶 2026-09-22 裁示）**：3 詞 → **5 詞 ＋ 一個中譯**；"
+        "但作用域**只到 INSPECT ＋ HOLD 兩頁的卡面** —— 擴到全頁會紅 **2 頁 2 卡 7 處**。",
+        "**客戶 2026-09-22 裁示逐字**：「卡面：⛔ 禁用內部詞（引述：`FIFO`／`加權移動平均`／"
+        "`D-2`／`L1`／`旗標`）；附錄／缺口段：✅ 可引述，但**必須標明「引述」**」。"
+        "／／**本輪落地**：守衛的禁詞由 3 個（引述：`加權移動平均`／`FIFO`／`先進先出`）擴成 "
+        "**6 個**（再加引述：`D-2`／`L1`／`旗標`；`先進先出` 是 `FIFO` 的中譯，原本就在）；"
+        "作用域 ＝ **「🔬 查一檔」頁卡面 ＋ 新的「💼 我的持股」頁卡面**。"
+        "／／⚠️ **⛔ 不擴到全頁的理由（這一條是本輪的新發現，據實寫）**："
+        "前一組實測擴全頁會紅 **7 處** —— 「🔍 找標的」頁 `find.pe_two_kinds` **一張卡 6 處**"
+        "（引述：`L1` ×3 · `旗標` ×2 · 外部編號 1 處）＋ **「📖 憑什麼」頁 `why.edu.legacy` 的"
+        "一個 fact key（引述：「線框旗標」）1 處**。"
+        "🔴 **後者是本輪才被發現的** —— 客戶裁示「另案」時**只知道「🔍 找標的」那一處** "
+        "⇒ **另案的實際範圍是 2 頁 2 卡 7 處，⛔ 不是 1 頁 1 卡 6 處**。"
+        "／／⇒ 本條登記那個差距；⛔ 本輪不動另外兩頁（改它們的卡面會動到前四頁的 body，"
+        "超出「先建新頁、再改守衛、最後拆佔位」的本輪範圍）。"
+        "／／⚠️ **本頁正是這條裁示最該守的地方**：成本口徑的那個外部編號"
+        "（規格 ⑦ 的主題）**原生落點就在本頁**，規格 ⑦ 逐字「先不放」「L1 未補前不得放」"
+        "（此句為**引述**客戶 2026-09-16 裁示）。",
+    ),
+    (
+        "H9",
+        "⚠️ **佔位頁本輪拆除**：`TODO_BODY_SUPERSEDED`（三代舊句的刪除線紀錄）"
+        "**⛔ 不得直接刪除**，已搬進本附錄逐字保留。",
+        "總管拍板（理由逐字）：本 repo 慣例是「舊句保留 ＋ 加刪除線 ＋ 註明理由」。"
+        "搬進 HOLD_SPEC_GAPS 或 chrome 附錄，⛔ 不得銷毀三次事實更正的紀錄。"
+        "／／**被保留的三代舊句（逐字，含原有的刪除線記號；⛔ 不是重打一份 —— "
+        "本條直接引用產生器裡那個常數本身，⛔ 不製造第二份真相源）**："
+        + TODO_BODY_SUPERSEDED
+        + "／／**第四代（本輪，2026-09-22）**：~~本原型目前做了「🚦 今天」、「📖 憑什麼」、"
+        "「🔍 找標的」與「🔬 查一檔」四頁。這一頁還沒有任何實作…~~ —— "
+        "**五頁全部落地 ⇒ 佔位卡本身退場**（連同 `build_todo_html`／`TODO_HEADLINE`／"
+        "`TODO_BODY`／四條 `.pv-todo*` CSS rule 與導覽 JS 的三行 todo 邏輯）。"
+        "／／⚠️ **過期的仍然只是頁數** —— 「⛔ 不讓五頁切換假裝五頁都已完成」那句理由"
+        "**一個字都沒有被弱化**：本輪五頁**真的**都畫出來了，所以不再需要一張卡去說這件事。"
+        "／／⚠️ **一件⛔ 不得一起被丟掉的東西**：佔位卡同時是 `NAV_WHY_SIDEBAR`"
+        "（「為何⛔ 不做頂部分頁列」的完整理由）**在畫面上的唯一出口** ——"
+        "本輪已把它改掛到側欄導覽的說明段，並在 `main()` 加一道守衛釘住它仍在畫面上。",
+    ),
+    (
+        "H10",
+        "⚠️ **`▨` 符號在線框 26 處，但元件規格已把它從 #7／#8 撤掉** —— "
+        "客戶 2026-09-16 已裁示處置；**線框待同步，⛔ 本輪不改線框**。",
+        "**客戶 2026-09-16 裁示逐字**：「符號 ▨：照你處置。#7/#8 語意改用 ⚠︎ — 與 N/A；"
+        "A/C 兩態屬第三類，不發明第 11 種徽章。」"
+        "／／⇒ 規格 ② 的處置：**凡屬 #7／#8 語意者一律改用元件規格的符號**"
+        "（#7 ＝ `⚠︎ —`、#8 ＝ `N/A`）；**唯獨 ③ 的 `▨ 未設定`／`▨ 不計算` 例外** —— "
+        "它們是**第三類**（三個「零」的 A 態與 C 態），⛔ 不發明第 11 種徽章。"
+        "／／**本輪落地**：本頁的 `▨ 未設定`／`▨ 不計算` 兩處**逐字保留**（它們是第三類）；"
+        "其餘引到 `▨` 的地方都是**線框逐字引文**，本檔⛔ 不改寫線框原文。"
+        "／／⚠️ **線框 26 處 `▨` 待同步** —— 規格自己登記為連帶待辦，且逐字註明"
+        "「⛔ **本份不改線框**」（線框是基準檔，無授權）。本輪同樣**一個字都沒有動線框**。",
+    ),
+    (
+        "H11",
+        "🔴 **成本口徑：客戶已裁示「先不放」** ⇒ 本頁該塊**畫 idle 態、⛔ 不畫 live 態**；"
+        "卡面一個內部詞都不准有。",
+        "**客戶 2026-09-16 裁示逐字**：「逐字文案：**先不放**。畫面不能寫"
+        "『本系統採加權移動平均法』（此處為**引述**規格 ⑦ 所引的客戶原話），"
+        "因為**實作沒有成本計算**。逐字文案**列為獨立任務**，等 L1/L3 補完才放。"
+        "寫進規格，標明『**L1 未補前不得放**』。」"
+        "（本段含卡面禁詞，依客戶 2026-09-22 裁示標明為**引述**。）"
+        "／／**本組的處置**：線框 `hold.evi_cost` 的 `live` 格逐字**就是那段口徑說明**"
+        "（含兩個被點名禁上畫面的內部詞）⇒ **本輪畫它的 `idle` 態**"
+        "（逐字「展開器**常駐可點**（靜態說明，不依賴本輪資料）」），"
+        "卡面因此一個內部詞都沒有；被拿掉的那一格逐字記在本條。"
+        "／／⚠️ **落點判定⛔ 不受影響**：規格 ⑦ 逐字「**落點對**與**時機未到**是兩件事；"
+        "本次決的是『什麼時候放』，不是『放哪裡』。L1／L3 補完後，落點仍是本頁 `hold.evi_cost`。」"
+        "（同為**引述**。）⇒ ⛔ 不得把本條讀成「這一塊不該存在」。",
+    ),
+    (
+        "H12",
+        "⚠️ **規格 ⑤ 六處「線框說有、實作沒有」＋ ④ D-3 八處落點，逐條登記** —— "
+        "本輪**一條都沒有替客戶決定**，也**沒有**把任何一條畫成「已做到」。",
+        "**⑤ 六處（規格自己的編號，逐條摘要；⛔ 本組未重跑那些實作面量測）**："
+        "**G1 第 0 層整層**（含 radio 預設值與線框相反）—— 整層在實作中不存在，"
+        "主 CTA 現況在葉2 而 Streamlit 預設打開葉1 ⇒ 線框標 ★待拍板；"
+        "版面異動 ＋ 改預設值落在「草稿先行」，⛔ 本檔不代決。"
+        "**G2 ⑤-b 與狀態 A/B/C** —— 未接線，目標比例**沒有任何輸入來源**；"
+        "規格逐字「⛔ **在輸入端做出來之前不得先接判定 gate**」。"
+        "**G3 情境試算 Checkbox Gate** —— 勾選閘門在實作中 0 處 ⇒ 整個區塊不存在。"
+        "**G4 匯兌損益欄** —— 見缺口 H6。"
+        "**G5 六項「各自 gate」** —— 現況六項共用同一個 gate，且實作的說明文字自相矛盾；"
+        "規格逐字「⛔ 不得只改 code 留著錯的說明」。"
+        "**G6「有 N 項還沒做好」計數器** —— 沒有計數器，畫面上不顯示 N；"
+        "規格逐字「N 算不出來時 ⛔ 不得退回『沒有未完成項』」。"
+        "**G7 `loading` 停用態做不到** —— 現行元件沒有停用參數 ⇒ 停用態**是規格、不是現況**。"
+        "／／**④ D-3 八處落點（客戶 2026-09-16 裁示逐字「全列，全做」「不是只做第 #6 處」）**："
+        "#1~#3 ＝ ⑤-b 三個狀態各一（桌機完整版）；#4 ＝ 三狀態的**手機短版**；"
+        "#5 ＝ 三狀態的**平板完整版**；#6 ＝ 情境試算展開區頂端（短版 ＋「本試算用的是你這一輪填的值」）；"
+        "#7 ＝ 葉2 持股列預覽（完整版 ＋「這一欄不會寫回你的 Sheet」）；"
+        "#8 ＝ 第四層展開佐證（**技術原因完整版**）。"
+        "／／⚠️ **本原型畫得出來的是六處**（#1／#2／#3／#6／#7／#8）—— "
+        "#4 與 #5 是**同一塊在不同斷點**的形態，而本原型是**單一斷點靜態快照**、"
+        "畫不出斷點切換 ⇒ 本輪把**完整版與短版兩段逐字都印出來**（⛔ 不挑一版交差），"
+        "但**⛔ 不得把它讀成「八處都已落地」**。"
+        "／／⚠️ 規格 ④ 另逐字提醒：D-3 的落點表**自陳未窮舉** production 中所有相關畫面落點 "
+        "⇒ 實作時須再獨立掃一次，⛔ 不得把那張表當窮舉。",
+    ),
+    (
+        "H13",
+        "⚠️ **規格自己的複驗分級：本頁的實作面與線框面盤點幾乎全部是單組結論** —— "
+        "⛔ 不得當前提；**本產生器自己也是單組**。",
+        "規格檔尾「複驗分級」逐字（摘要，⛔ 非窮舉）："
+        "「**總管實查**」＝四項（匯兌損益欄採 `N/A` 的判定與依據／第三層現況六項盤點／"
+        "G1 (c) 的技術債判斷／三條硬禁令的**真正逐字**）；"
+        "「**INV-8A1 單組（第 0~2 層實作面，未複驗，⛔ 不得當前提）**」；"
+        "「**INV-8A2 單組（第 3~4 層實作面，未複驗，⛔ 不得當前提）**」；"
+        "「**INV-8B 單組（線框面，未複驗，⛔ 不得當前提）**」。"
+        "／／⭐ **規格自己記了一處重跑不一致**：`try` 的數量「INV-8A2 報 **14**、"
+        "WN AST 實測 **13**」⇒ 規格逐字「據實並陳，**分類待判**」。"
+        "／／⚠️ **本產生器自己也一樣**：本頁的 23 筆版面、兩張手寫表（版面／葉）、狀態挑選、"
+        "以及上列各條，都是**本組單組**的 node／import 實測 ＋ 判讀，**⛔ 未經第二組複驗**"
+        "（CLAUDE.md §-2 規則 6）。⛔ 不得寫進 commit message 或 PR 描述當成已完成的事實。"
+        "／／⚠️ **一條本組沒有查的**：規格 ① 說實作對照檔是 `render_page_hold()`，"
+        "本組**沒有打開過那個實作檔** —— 凡本頁引用的「實作現況」全是**規格與線框的轉述**，"
+        "⛔ 不是本組實測。",
+    ),
+    (
+        "H14",
+        "⚠️ **「引述」標註（客戶 2026-09-22 裁示）本輪的落地範圍比派工單寫的大** —— "
+        "除了「🔬 查一檔」頁的兩條，另有**三段**同樣含禁詞、同樣補了「引述」。",
+        "**客戶裁示逐字**：「卡面：⛔ 禁用內部詞…；附錄／缺口段：✅ 可引述，"
+        "但**必須標明「引述」**」。"
+        "／／**本輪掃描結果（本組實測，⛔ 非轉述）**：全部缺口條目與層註逐段掃六個禁詞，"
+        "命中且**原本沒有「引述」二字**的共 **5 段** —— "
+        "「🔬 查一檔」頁缺口 P4、P5（派工單點名的兩條）＋ **同頁缺口 P9** ＋ "
+        "**「🔍 找標的」頁缺口 F8** ＋ **同頁第四層層註**。"
+        "／／⇒ 本輪**五段全部補上「引述」二字**，並加一道守衛：凡缺口條目／層註含六個禁詞之一，"
+        "該段**必須**含「引述」。"
+        "／／⚠️ **據實記錄的兩件事**：(1) 補後三段會讓「🔍 找標的」與「🔬 查一檔」兩頁的 body "
+        "**各多出「引述」二字**，⛔ 不是零變動 —— 本輪的 diff 因此**不是只有 P4／P5**；"
+        "(2) 那三段是**本輪掃描才發現的**，派工單寫的是「P4／P5」，"
+        "但同一句要求的是「**及所有引述禁詞的附錄／層註段**」⇒ 本輪照後者執行。"
+        "**⛔ 若總管認為只該改 P4／P5，本條即為撤銷依據。**",
+    ),
+    (
+        "H15",
+        "⚠️ **首屏可見範圍與 3/2/1 的平板欄數** —— 規格逐字要求**實機量測**，"
+        "⛔ 不猜、⛔ 不得寫推導值冒充量測。",
+        "規格 ① 逐字：「**首屏可見範圍：三個斷點一律「需實機量測」**（比照第 3~5 份）。"
+        "⛔ 不猜、⛔ 不得寫推導值冒充量測。**唯一可宣稱的是順序**（不含高度）："
+        "頁標題 → 說明 → 兩葉 tab 頭 →〔葉2 表單先**執行**〕→ 葉1 body → 葉2 下半。」"
+        "／／⚠️ **這份 HTML 原型的 CSS 本身是對的**（`.g-3-2-1` 三段實測為 3/2/1、"
+        "`.g-2-1-1` 三段實測為 2/1/1，產生器結尾有守衛從 CSS 文字量），"
+        "**但這份原型與 Streamlit 實作不是同一套 CSS** ⇒ 量了這份也⛔ 不能拿去當 Streamlit 端的答案。"
+        "／／✅ **一條已決**（客戶 2026-09-16 裁示逐字）：「兩塊四段斷點：改成三段制。"
+        "**四段是舊版殘留，改掉**。」⇒ `hold.rebalance_deviation`／`hold.deep_analysis` "
+        "兩塊一律照元件規格的三段制，與本頁其餘 21 塊同制。"
+        "⚠️ 但**線框端仍寫四段** ⇒ **線框待同步**，⛔ 本輪不改線框。",
+    ),
+)
+
+
+def build_hold_body() -> str:
+    """「💼 我的持股」頁的整頁標記。**全程在 `hold_page_contract()` 之內**。
+
+    🔴 標記一個角括號都不手打卡片：`markup.card_html` / `markup.grid_html` 產。
+    🔴 **⛔ 不呼叫 `markup.layer_html`**：線框 `layers[]` 上⛔ 沒有任何層級網格欄數
+       （本組 node 實測）⇒ 五層一律逐 block 全寬輸出，同前三頁。
+    """
+    cards_by_block = build_hold_cards()
+    parts: list[str] = [
+        # ── 就地揭露：**收起狀態也看得見**，⛔ 不藏進摺疊器 ──
+        '<section class="pv-layer" id="pv-hold-disclosure">',
+        '<div class="pv-layer-label">'
+        '💼 我的持股 · 五層 23 block · 兩葉（版面定義在產生器內）</div>',
+        f'<p class="pv-disclosure">{esc(HOLD_LAYOUT_DISCLOSURE)}</p>',
+        f'<p class="pv-meta">{esc(HOLD_LAYOUT_DISCLOSURE_WHY)}</p>',
+        # 🔴 規格 ③ 明文「必須寫進頁面」——**排在所有其他揭露之前**，因為規格逐字
+        #    「③ 的三條硬禁令是全頁最高約束，凌駕本檔其餘版面規定」。
+        f'<p class="pv-disclosure">{esc(HOLD_BAN_DISCLOSURE)}</p>',
+        f'<p class="pv-meta">{esc(HOLD_BAN_DISCLOSURE_WHY)}</p>',
+        # ⭐ 總管本輪拍板 1／2／4 的就地揭露 —— 理由逐字，⛔ 不得省
+        f'<p class="pv-disclosure">{esc(HOLD_LAYERS_DISCLOSURE)}</p>',
+        f'<p class="pv-disclosure">{esc(HOLD_TABLE_DISCLOSURE)}</p>',
+        f'<p class="pv-meta">{esc(HOLD_TABLE_DISCLOSURE_WHY)}</p>',
+        f'<p class="pv-disclosure">{esc(HOLD_CTA_DISCLOSURE)}</p>',
+        f'<p class="pv-meta">{esc(HOLD_CTA_DISCLOSURE_WHY)}</p>',
+        f'<p class="pv-meta">{esc(HOLD_PAGE_SHAPE_NOTE)}</p>',
+        "</section>",
+    ]
+
+    with hold_page_contract():
+        for n, blocks in HOLD_LAYER_BLOCKS.items():
+            tier = hold_tier_for_layer(n)
+            leaves = HOLD_LAYER_LEAF[n]
+            leaf_text = "、".join(
+                "葉外（兩葉共用）" if lf is None else f"{lf} {HOLD_LEAF_NAME[lf]}"
+                for lf in leaves
+            )
+            parts.append('<section class="pv-layer">')
+            parts.append(
+                f'<div class="pv-layer-label">{esc(HOLD_LAYER_LABEL[n])} · n{n} · '
+                f'{esc(leaf_text)} · 密度 {esc(tier)} · '
+                f'block {len(blocks)} 塊：{esc("、".join(blocks))}</div>'
+            )
+            parts.append(
+                f'<p class="pv-meta">components.CARD_TIERS[<span class="pv-mono">'
+                f'{esc(tier)}</span>]：{esc(_tier_caption(tier))}</p>'
+            )
+            parts.append(f'<p class="pv-meta">{esc(HOLD_LAYER_NOTE[n])}</p>')
+            for block in blocks:
+                cards = [markup.card_html(block=block, **card)
+                         for card in cards_by_block[block]]
+                assert cards, f"{block} ⛔ 沒有卡 —— 本頁 23 塊每一塊都要有至少一張"
+                parts.append(markup.grid_html(block=block, cards=cards))
+            parts.append("</section>")
+
+    # ── 本頁的衝突與洞，逐條畫出來（客戶要求：就地標明、寫進附錄、⛔ 不自行裁決）──
+    parts.append('<section class="pv-layer" id="pv-hold-gaps">')
+    parts.append('<div class="pv-layer-label">'
+                 '附錄 · 「💼 我的持股」頁本輪查到的規格衝突與未決項（逐條登記，⛔ 不代為裁決）</div>')
+    parts.append(
+        f'<p class="pv-meta">{esc("每一條都是：" + GAP_CAVEAT + "。⛔ 不得被引用為「已查證的事實」去支撐下一步決策（CLAUDE.md §-2 規則 6）。")}</p>')
+    for gap_id, title, detail in HOLD_SPEC_GAPS:
+        parts.append(
+            f'<p class="pv-meta"><span class="pv-mono">{esc(gap_id)}</span>　'
+            f"{esc(title)}　{esc(GAP_CAVEAT)}</p>"
+        )
+        parts.append(f'<p class="pv-meta">{esc(detail)}</p>')
+    parts.append("</section>")
+    return "\n".join(parts)
+
+
+def build_hold_html() -> str:
+    """把「💼 我的持股」整頁包成一個可切換的容器（預設 `hidden`，由側欄點出來）。"""
+    return "\n".join([
+        html_comment(
+            "「💼 我的持股」頁 ＝ **五層 23 block、兩葉**（n0~n4；⛔ 沒有 n5）。\n"
+            "⛔ 本頁的版面定義住在產生器的 `HOLD_LAYOUT`，**不在** `src/ui_v2/` 契約層、\n"
+            "  **沒有** `tests/ui_v2/` 的測試守護 —— 同前三頁的作法（客戶拍板的選項 1），\n"
+            "  後果已就地揭露在本頁最上方與附錄 H1~H15。\n"
+            "⭐ 標記怎麼來的：產生期間把 `markup.page_today` **暫時**換成本頁的版面契約，\n"
+            "  卡片與網格仍由 `markup.card_html` / `grid_html` 產出；產完**立刻還原**。\n"
+            "🔴 **本頁是五頁中買賣建議風險最高的一頁**（規格前言逐字）⇒ 規格 ③ 的三條硬禁令\n"
+            "  **凌駕本頁其餘版面規定**，且規格逐字要求「必須寫進頁面」\n"
+            "  ⇒ 它們畫在本頁最上方，產生器另有一道守衛釘住它在畫面上。\n"
+            "⭐ **本頁⛔ 沒有補任何一條欄數 CSS**：cols 全集三種（1/1/1 · 2/1/1 · 3/2/1），\n"
+            "  前兩種來自契約層、`2/1/1` 是「🔍 找標的」頁補的全域規則 ⇒ 三種都已經有 CSS。\n"
+            "⭐ **本頁⛔ 沒有 n5**，五層恰落在 `components.tier_for_layer()` 的定義域內\n"
+            "  ⇒ ⛔ 刻意不抄前兩頁的 `*_N5_TIER` 繞法（那是「用不到的抽象」）。\n"
+            "⛔ 本頁**沒有畫** #2 / #8 / #9 / #10 四顆徽章：規格 ② 的總結句逐字\n"
+            "  「會出現在畫面上的是 6 態：#1／#3／#4／#5／#6／#7」，\n"
+            "  誤畫會在產生時變成 ValueError（代理的 BADGES_NOT_ON_PAGE 擋）。\n"
+            "  ⚠️ #8 在本頁是**待接線**（規格 ⑤ 的總管判定認為匯兌損益欄應該是它）\n"
+            "     ⇒ 應然與現況有差，登記在附錄 H6。\n"
+            "⛔ 五個需要表格的 block **沒有畫成真表格**（總管拍板：contract 層無表格能力）——\n"
+            "  登記在附錄 H1；主 CTA 也**沒有渲成真鈕**（三頁一起缺）—— 登記在附錄 H2。\n"
+            "⛔ 本頁**一個真時間都沒有填**：線框 23 塊的 asOf 欄全是 null\n"
+            "  ⇒ 連線框 `hold.scope_note.live` 那個帶時間戳的態都**整態不畫**（附錄 H5）。"
+        ),
+        '<div id="pv-page-hold" hidden>',
+        "<main>",
+        build_hold_body(),
+        "</main>",
+        "</div>",
+    ])
+
+
+# ══════════════════════════════════════════════════════════════════
+# 4.10 五組缺口與「卡面禁詞」的單一真相源
+#
+# 🔴 **存在理由（⛔ 不是為了好看）**：這兩份清單以前散在 `main()` 裡，每新增一頁就得
+#    有人**記得**去補一行 assert／補一個字串。漏補的那一組**不會有人驗、而 CI 全綠** ——
+#    那正是 CLAUDE.md §-2「沒查證的宣稱比沒有宣稱更危險」的機器版。
+#    集中之後，新增一頁只要掛進 `_ALL_GAPS`，`main()` 的四道守衛自動涵蓋。
+# ══════════════════════════════════════════════════════════════════
+
+#: 五組缺口（組名 → 條目）。**畫在畫面上的順序與這裡無關**（各頁自己畫自己的）；
+#: 這份只給 `main()` 的守衛用：條數下限／編號不重複／缺口標記計數／「引述」標註。
+_ALL_GAPS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
+    ("CHROME_SPEC_GAPS", CHROME_SPEC_GAPS),
+    ("WHY_SPEC_GAPS", WHY_SPEC_GAPS),
+    ("FIND_SPEC_GAPS", FIND_SPEC_GAPS),
+    ("INSPECT_SPEC_GAPS", INSPECT_SPEC_GAPS),
+    ("HOLD_SPEC_GAPS", HOLD_SPEC_GAPS),
+)
+
+#: **卡面禁詞**（客戶 2026-09-22 裁示逐字：「卡面：⛔ 禁用內部詞
+#: （`FIFO`／`加權移動平均`／`D-2`／`L1`／`旗標`）；附錄／缺口段：✅ 可引述，
+#: 但**必須標明「引述」**」）。
+#: ⚠️ `先進先出` 是 `FIFO` 的中譯，**本來就在舊的三詞清單裡，本輪保留** ——
+#:    客戶列的五個詞是**內部詞的例示**，⛔ 不是「把中譯放行」。
+#: 🔴 **作用域（本輪）＝「🔬 查一檔」＋「💼 我的持股」兩頁的卡面。**
+#:    ⛔ **刻意不擴到全頁** —— 實測擴全頁會紅 **2 頁 2 卡 7 處**
+#:    （「🔍 找標的」頁 `find.pe_two_kinds` 一張卡 6 處 ＋「📖 憑什麼」頁
+#:      `why.edu.legacy` 的一個 fact key 1 處）；客戶裁示「另案」時只知道前者
+#:    ⇒ 另案的實際範圍已登記在 HOLD 缺口 **H8**。
+#: ⚠️ 這份清單**同時**被「附錄／層註必須標明『引述』」那道守衛使用 ——
+#:    同一組詞、**兩種處置**：卡面全禁／附錄可引述但要標明。
+_BANNED_ON_CARD_FACE: tuple[str, ...] = (
+    "加權移動平均", "FIFO", "先進先出", "D-2", "L1", "旗標",
+)
+
+
+# ══════════════════════════════════════════════════════════════════
 # 4.5 跨頁 chrome 的標記
 # ══════════════════════════════════════════════════════════════════
 def build_nav_html() -> str:
     """五頁切換（側欄式）。標籤**一律取自 `shared.ia_nav.PAGE_LABELS`，⛔ 不手抄**。
 
-    - `today` ＝ current（`aria-current="page"`），其餘四個可點 → 顯示「此頁待做」佔位。
-    - 五個都是 `<button>`，**⛔ 不是 `<a href>`** —— 那四頁沒有檔案，
-      給一個連不到的 href 就是假裝它存在（§1）。
+    - `today` ＝ current（`aria-current="page"`），其餘四個可點 → 切到那一頁的容器。
+      ⚠️ **2026-09-22 起五頁全部是真頁**（原本其餘四個點下去是「此頁待做」佔位，
+      該卡本輪已拆除；**事實更正、⛔ 不是政策變更**，見附錄 H9）。
+    - 五個都是 `<button>`，**⛔ 不是 `<a href>`** —— 五頁都在**同一個檔案**裡，
+      給一個連不到別的檔案的 href 就是假裝有那個檔（§1）。
     - 收合用原生 `<details>`：**⛔ 不依賴 JS 才打得開**（JS 掛了仍是一顆可按的 summary）。
     - **預設收起**：`<details>` ⛔ 不帶 `open`，**三個斷點一律收起，只能手動展開**
       —— ★-08 已決（客戶 2026-09-22 拍板）。桌機自動展開已於同日移除，
@@ -3581,8 +4964,8 @@ def build_nav_html() -> str:
             "  與舊的 7 個並排 ⇒ 手機上頁籤列 7 變 12，舊的 7 個被擠出可視範圍，\n"
             "  客戶回報「很多 Tab 不見了」。2026-09-08 FE-35 客戶拍板方案 A 撤回該掛法。\n"
             "  ⇒ 本原型刻意不做頂部分頁列。\n"
-            "⛔ 五個為何都是 button 而不是連結：另外四頁沒有檔案，\n"
-            "  給一個連不到的 href 等於假裝它存在（CLAUDE.md 1 Fail Loud）。\n"
+            "⛔ 五個為何都是 button 而不是連結：五頁都在同一個檔案裡，\n"
+            "  給一個連不到別的檔案的 href 等於假裝有那個檔（CLAUDE.md 1 Fail Loud）。\n"
             "⭐ 預設收起：本 details ⛔ 不帶 open ⇒ **三個斷點一律收起，只能手動展開**。\n"
             "  ★-08 已決（客戶 2026-09-22 拍板：側欄預設收起，S2-UI_SPEC.md 7.2）。\n"
             "  同日客戶另拍板「桌機自動展開，修掉」，理由逐字：\n"
@@ -3641,46 +5024,28 @@ def build_asof_html() -> str:
     ])
 
 
-def build_todo_html() -> str:
-    """其餘**一**頁的「此頁待做」佔位（預設 `hidden`，由側欄點擊切出來）。
-
-    ⚠️ 2026-09-22 起是**一**頁（「💼 我的持股」），⛔ 不是兩頁、三頁或四頁：
-       「📖 憑什麼」「🔍 找標的」「🔬 查一檔」都已成為可切換的真頁
-       （客戶本輪逐字：「側欄切到「🔬 查一檔」可顯示；
-       其他一頁（💼 我的持股）仍顯示「此頁待做」」）。
-    ⚠️ `pv-todo-name` 的**初始值**同步改為「💼 我的持股」——
-       它原本是「🔬 查一檔」，而那一頁本輪已是真頁，留著會讓佔位卡的預設標題
-       指到一個**不會再走到這裡**的頁（JS 每次切頁都會覆寫它，但初值仍應是真的）。
-       ⚠️ 這是**事實更正**（上一版初值 `PAGE_LABELS[PAGE_INSPECT]`），⛔ 不是政策變更。
-    """
-    return "\n".join([
-        '<section class="pv-todo" id="pv-page-todo" hidden>',
-        '<div class="pv-todo-card">',
-        '<div class="pv-todo-title">'
-        f'<span id="pv-todo-name">{esc(PAGE_LABELS[PAGE_HOLD])}</span>'
-        f"　·　{esc(TODO_HEADLINE)}</div>",
-        f'<p class="pv-meta">'
-        f'{esc(TODO_BODY.format(today=PAGE_LABELS[PAGE_TODAY], why=PAGE_LABELS[PAGE_WHY], find=PAGE_LABELS[PAGE_FIND], inspect=PAGE_LABELS[PAGE_INSPECT]))}</p>',
-        f'<p class="pv-meta">{esc(TODO_BODY_SUPERSEDED)}</p>',
-        f'<p class="pv-meta">{esc(NAV_WHY_SIDEBAR)}</p>',
-        '<div class="pv-todo-back">',
-        '<button type="button" class="pv-btn-secondary" '
-        f'data-pv-page="{esc(PAGE_TODAY)}">← 回到 {esc(PAGE_LABELS[PAGE_TODAY])}</button>',
-        "</div>",
-        "</div>",
-        "</section>",
-    ])
-
-
 def build_gaps_html() -> str:
     """把 `CHROME_SPEC_GAPS` 畫成可見的一段（**⛔ 不只留在 .py 裡**）。
 
     理由：登記在產生器裡只有讀 code 的人看得到；畫出來，看 HTML 的人也查得到
     —— 對照 CLAUDE.md §-2「沒查證的宣稱比沒有宣稱更危險」。
+
+    🔴 **`NAV_WHY_SIDEBAR` 自 2026-09-22 起改掛在這一段**（有意識的變更、⛔ 不是漏刪；
+       決策者：客戶）。它原本**唯一的渲染出口是「此頁待做」佔位卡**，而那張卡本輪已拆掉
+       ⇒ 不改掛的話，「為何⛔ 不做頂部分頁列」（FE-7~FE-16／FE-35 客戶拍板方案 A）的完整理由
+       會**從畫面上無聲蒸發**，而 `verbatim_sources()` 只驗來源檔、CI 會保持全綠
+       —— 那正是 CLAUDE.md §-2「沒查證的宣稱比沒有宣稱更危險」點名的失效模式。
+    ⚠️ **⛔ 刻意不掛進側欄本體**：`.pv-shell` 的側欄欄寬是 `min-content`、項目 `nowrap`，
+       塞一段長句進去會把那一欄撐寬（側欄裡只留 `NAV_WHY_SHORT` 那一行短註）。
+    ⚠️ `main()` 另有一道守衛釘住它**仍然逐字出現在產物裡**。
     """
     parts = ['<section class="pv-layer" id="pv-gaps">',
              '<div class="pv-layer-label">附錄 · 本輪查到的規格缺口（逐條登記）</div>',
-             f'<p class="pv-meta">{esc("每一條都是：" + GAP_CAVEAT + "。⛔ 不得被引用為「已查證的事實」去支撐下一步決策（CLAUDE.md §-2 規則 6）。")}</p>']
+             f'<p class="pv-meta">{esc("每一條都是：" + GAP_CAVEAT + "。⛔ 不得被引用為「已查證的事實」去支撐下一步決策（CLAUDE.md §-2 規則 6）。")}</p>',
+             '<p class="pv-disclosure">'
+             + esc("五頁切換為何是側欄式、⛔ 不是頂部分頁列（客戶 2026-09-22 拍板 ①）：")
+             + "</p>",
+             f'<p class="pv-meta">{esc(NAV_WHY_SIDEBAR)}</p>']
     for gap_id, title, detail in CHROME_SPEC_GAPS:
         parts.append(
             f'<p class="pv-meta"><span class="pv-mono">{esc(gap_id)}</span>　'
@@ -3739,6 +5104,7 @@ _NAV_JS_TEMPLATE = """
   var WHY = %(why)s;
   var FIND = %(find)s;
   var INSPECT = %(inspect)s;
+  var HOLD = %(hold)s;
   var TABLET_MIN = %(tablet_min)s;
   var nav = document.getElementById('pv-nav');
   var mq = window.matchMedia
@@ -3753,8 +5119,11 @@ _NAV_JS_TEMPLATE = """
   //    客戶 2026-09-14「分頁列不得吃掉首屏」在所有斷點都成立。
   // ⚠️ mq 只剩一個用途：下面 show() 判斷「是不是手機寬度」以便選完頁收起。
 
-  // 五向切換（2026-09-22 第三次擴充）：🚦 今天 / 📖 憑什麼 / 🔍 找標的 / 🔬 查一檔 /
-  //   其餘一頁（💼 我的持股）的「此頁待做」佔位。
+  // 五向切換（2026-09-22 第四次擴充，**五頁全部落地**）：
+  //   🚦 今天 / 📖 憑什麼 / 🔍 找標的 / 🔬 查一檔 / 💼 我的持股。
+  // ⚠️ **「此頁待做」佔位已於本輪拆除**（有意識的變更，不是漏刪；決策者：客戶）——
+  //    五頁都是真頁之後，那張卡沒有任何一頁會走到它。
+  //    被移除的三行保留在產生器的政策變更註記裡，理由見附錄 H9。
   // ⛔ 刻意不用 if-else 串：五個容器各自只看自己那一個布林，
   //    少一個容器忘了關的機會（兩頁同時 visible 會讓畫面說謊）。
   function show(page, label) {
@@ -3762,20 +5131,18 @@ _NAV_JS_TEMPLATE = """
     var why = document.getElementById('pv-page-why');
     var find = document.getElementById('pv-page-find');
     var inspect = document.getElementById('pv-page-inspect');
-    var todo = document.getElementById('pv-page-todo');
+    var hold = document.getElementById('pv-page-hold');
     var isToday = (page === TODAY);
     var isWhy = (page === WHY);
     var isFind = (page === FIND);
     var isInspect = (page === INSPECT);
+    var isHold = (page === HOLD);
     today.hidden = !isToday;
     why.hidden = !isWhy;
     find.hidden = !isFind;
     inspect.hidden = !isInspect;
-    todo.hidden = isToday || isWhy || isFind || isInspect;
+    hold.hidden = !isHold;
     document.getElementById('pv-page-name').textContent = label;
-    if (!isToday && !isWhy && !isFind && !isInspect) {
-      document.getElementById('pv-todo-name').textContent = label;
-    }
     var items = document.querySelectorAll('.pv-nav-item');
     for (var i = 0; i < items.length; i++) {
       if (items[i].getAttribute('data-pv-page') === page) {
@@ -3850,7 +5217,10 @@ def build_header_comment(meta: Mapping[str, str]) -> str:
         "    7. 跨頁 chrome 三塊（客戶 2026-09-22 拍板）另外產：",
         "       ① 五頁切換：**側欄式**（⛔ 不是頂部分頁）。五個頁名 import 自 L0 SSOT",
         "          shared/ia_nav.PAGE_LABELS，**⛔ 一個字都沒有手抄**；dict 宣告序 ＝ 畫面序。",
-        "          🚦 今天 ＝ current，其餘四個點下去顯示「此頁待做」佔位。",
+        "          🚦 今天 ＝ current；**五頁全部是真頁**（2026-09-22 起）。",
+        "          ⚠️ 「此頁待做」佔位已於同日拆除（build_todo_html／TODO_HEADLINE／",
+        "             TODO_BODY／四條 .pv-todo CSS rule／導覽 JS 三行 todo 邏輯一併退場），",
+        "             理由與被移除的逐字見「💼 我的持股」頁附錄 H9。",
         "          **預設收起**：details ⛔ 不帶 open，且 JS ⛔ 不依斷點自動展開",
         "          ⇒ 三個斷點一律收起，只能手動點 summary 展開",
         "          （★-08 已決，客戶 2026-09-22 拍板；同日並拍板移除桌機自動展開）。",
@@ -3891,9 +5261,34 @@ def build_header_comment(meta: Mapping[str, str]) -> str:
         "         逐字「整塊不存在 ⇒ 不畫，⛔ 不得用 #5 冒充」），只畫它們的版面位置。",
         "       · 本輪查到的規格衝突與未決項共 17 條，逐條畫在該頁附錄（F1~F17），",
         "         客戶要求 6 逐字：「遇到規格衝突 → 就地標明、寫進附錄、⛔ 不自行裁決」。",
-        "       · 五頁切換：🚦 今天 / 📖 憑什麼 / 🔍 找標的 是可切換的真頁，",
-        "         其餘**兩頁**（🔬 查一檔 · 💼 我的持股）仍顯示「此頁待做」；",
+        "       · 五頁切換：**五頁全部是可切換的真頁**（2026-09-22 第四次擴充後）；",
         "         時點列與頁尾免責**五頁共用**（畫在外殼上，⛔ 不是每頁各一份）。",
+        "         ⚠️ 本行原寫「其餘**兩頁**（🔬 查一檔 · 💼 我的持股）仍顯示『此頁待做』」，",
+        "            該敘述在 🔬 查一檔 落地那一輪就已過期、本輪一併更正（**事實更正**，",
+        "            ⛔ 不是政策變更）。",
+        "    11. 「💼 我的持股」頁（2026-09-22 同日新增，沿用同一套作法）：",
+        "       · **五層 23 block、兩葉**（規格 ① 標題逐字「五層 23 block」）。版面定義 ＝",
+        "         產生器裡的 HOLD_LAYOUT，23 筆逐筆標出處（規格 docs/v2/spec/UI_PAGE_HOLD.md",
+        "         的章節名 ＋ 線框 docs/v2/wireframe/wf_page_hold.js 的 block key；⛔ 不寫行號）。",
+        "         ⚠️ 客戶派工單寫的是「六層」，與規格不符 ⇒ **照規格畫五層**，登記為缺口 H3。",
+        "       · 🔴 **本頁是五頁中買賣建議風險最高的一頁**（規格前言逐字）⇒ 規格 ③ 的",
+        "         三條硬禁令**凌駕本頁其餘版面規定**，且規格逐字要求「必須寫進頁面」",
+        "         ⇒ 它們畫在本頁最上方，產生器另有守衛釘住它在畫面上。",
+        "       · ⭐ **本頁⛔ 沒有補任何一條欄數 CSS**：cols 全集三種（1/1/1 · 2/1/1 · 3/2/1），",
+        "         前兩種來自契約層、2/1/1 是「🔍 找標的」頁補的全域規則。",
+        "       · ⛔ 該頁**沒有畫** #2 / #8 / #9 / #10 四顆徽章（規格 ② 總結句逐字",
+        "         「會出現在畫面上的是 6 態：#1／#3／#4／#5／#6／#7」）。#4 **會**畫 ——",
+        "         與「🔬 查一檔」頁剛好相反，那是規格不同、⛔ 不是產生器挑的。",
+        "       · ⛔ **五個**需要表格的 block **沒有畫成真表格**（契約層無表格能力）——",
+        "         登記在附錄 H1；主 CTA「🚀 跑存股戰情室」也**沒有渲成真鈕**（三頁一起缺）",
+        "         —— 登記在附錄 H2。",
+        "       · ⛔ **一個真時間都沒有填**：線框 23 塊的 asOf 欄全是 null ⇒ 連線框",
+        "         hold.scope_note.live 那個帶時間戳的態都**整態不畫**（附錄 H5）。",
+        "       · 本輪查到的規格衝突與未決項共 15 條，逐條畫在該頁附錄（H1~H15）。",
+        "    12. 卡面禁詞守衛（客戶 2026-09-22 裁示）：卡面⛔ 禁用內部詞（6 詞），",
+        "        附錄／缺口段可引述但**必須標明「引述」**；兩側各有一道機器守衛。",
+        "        ⚠️ 卡面那一側本輪的作用域 ＝ 🔬 查一檔 ＋ 💼 我的持股 兩頁，",
+        "           擴到全頁會紅 2 頁 2 卡 7 處 ⇒ 另案範圍登記在附錄 H8。",
         "",
         "⚠️ 例外揭露（依 CLAUDE.md §3.3 反捏造，據實記錄）：",
         "    body 的 font-family 用的是通用系統字堆疊，**沒有契約出處** ——",
@@ -3972,7 +5367,7 @@ def main() -> None:
         theme_css(),
         "/* ══ 3. 原型外殼（page_css 不產這些；數值出處見各條註解）══ */",
         chrome_css(),
-        "/* ══ 4. 跨頁 chrome（側欄導覽／時點列／待做佔位／頁尾免責）══ */",
+        "/* ══ 4. 跨頁 chrome（側欄導覽／時點列／頁尾免責）══ */",
         shell_css(),
         # ⭐ 客戶 2026-09-22【拍板 1：CSS 走 (甲)】—— 「🔍 找標的」頁用到兩組契約層
         #   沒有產 CSS 的欄數（3/3/1 與 2/1/1）。⚠️ **必須排在 page_css 之後**：
@@ -4000,17 +5395,30 @@ def main() -> None:
     inspect_html = build_inspect_html()  # ← 第三個代理，同樣之內上場、之內還原
     assert markup.page_today is page_today, (
         "產完「🔬 查一檔」頁後 markup.page_today 不是原物件 —— 代理漏還原")
+    hold_html = build_hold_html()        # ← 第四個代理，同樣之內上場、之內還原
+    assert markup.page_today is page_today, (
+        "產完「💼 我的持股」頁後 markup.page_today 不是原物件 —— 代理漏還原")
     today_body_after = build_body()
     assert today_body_after == today_body, (
-        "今天頁的輸出在產另外三頁前後不一致 —— 代理污染了今天頁")
-    # ⭐ 三頁互不污染也要驗：前面兩頁在後面的代理跑完之後**各再產一次**，
+        "今天頁的輸出在產另外四頁前後不一致 —— 代理污染了今天頁")
+    # ⭐ 五頁互不污染也要驗：**每一頁**在後面的代理跑完之後都**再產一次**，
     #    逐字相同才算數（⛔ 不用「看起來沒事」交差）。
+    # 🔴 **`inspect_html_after` 是本輪補上的既有洞**（有意識的補強，⛔ 不是重構）：
+    #    「🔬 查一檔」頁上一輪是**最後一頁**、後面沒有人再跑代理 ⇒ 當時沒有人驗它。
+    #    本輪它後面多了「💼 我的持股」⇒ 少了這一行，HOLD 的代理污染到 INSPECT
+    #    會**完全沒有人察覺**（Python 全綠、畫面靜默變樣）。
     why_html_after = build_why_html()
     assert why_html_after == why_html, (
-        "「📖 憑什麼」頁的輸出在產後面兩頁前後不一致 —— 代理互相污染")
+        "「📖 憑什麼」頁的輸出在產後面三頁前後不一致 —— 代理互相污染")
     find_html_after = build_find_html()
     assert find_html_after == find_html, (
-        "「🔍 找標的」頁的輸出在產「🔬 查一檔」頁前後不一致 —— 兩個代理互相污染")
+        "「🔍 找標的」頁的輸出在產後面兩頁前後不一致 —— 代理互相污染")
+    inspect_html_after = build_inspect_html()
+    assert inspect_html_after == inspect_html, (
+        "「🔬 查一檔」頁的輸出在產「💼 我的持股」頁前後不一致 —— 兩個代理互相污染")
+    hold_html_after = build_hold_html()
+    assert hold_html_after == hold_html, (
+        "「💼 我的持股」頁的輸出重產兩次不一致 —— 它自己的代理沒有還原乾淨")
     assert markup.page_today is page_today, "重產後 markup.page_today 不是原物件"
 
     # 導覽 JS：頁 id 與斷點都從契約層帶進去，⛔ 不在 JS 裡手打第二份。
@@ -4019,6 +5427,7 @@ def main() -> None:
         "why": f'"{PAGE_WHY}"',
         "find": f'"{PAGE_FIND}"',
         "inspect": f'"{PAGE_INSPECT}"',
+        "hold": f'"{PAGE_HOLD}"',
         "tablet_min": int(components.BREAKPOINTS["tablet_min_px"]),
     }
 
@@ -4045,7 +5454,11 @@ def main() -> None:
         # ⚠️ 2026-09-22 第三次：同日再加「🔬 查一檔」⇒ 四頁。
         #    **同樣是事實更正、⛔ 不是政策變更**；
         #    上一版值 `戰情室 v2 靜態原型 · 🚦 今天 ＋ 📖 憑什麼 ＋ 🔍 找標的`。
-        "<title>戰情室 v2 靜態原型 · 🚦 今天 ＋ 📖 憑什麼 ＋ 🔍 找標的 ＋ 🔬 查一檔</title>",
+        # ⚠️ 2026-09-22 第四次：同日再加「💼 我的持股」⇒ **五頁全部落地**。
+        #    **同樣是事實更正、⛔ 不是政策變更**；上一版值
+        #    `戰情室 v2 靜態原型 · 🚦 今天 ＋ 📖 憑什麼 ＋ 🔍 找標的 ＋ 🔬 查一檔`。
+        #    ⭐ 自本輪起**⛔ 不再逐頁列名** —— 五頁已是全部，列名只會再過期一次。
+        "<title>戰情室 v2 靜態原型 · 五頁全數落地</title>",
         build_header_comment(meta),
         "<style>",
         style,
@@ -4085,13 +5498,14 @@ def main() -> None:
         today_body,
         "</main>",
         "</div>",
-        # 🔴 「📖 憑什麼」「🔍 找標的」「🔬 查一檔」三頁在**這裡**擺 —— 三者都會暫時替換
-        #    markup.page_today，所以它們的**產生**必須排在 `today_body` 與
-        #    `style`（page_css）之後，⛔ 不得交錯（上方 main() 已按序產好）。
+        # 🔴 另外四頁在**這裡**擺 —— 四者都會暫時替換 markup.page_today，
+        #    所以它們的**產生**必須排在 `today_body` 與 `style`（page_css）之後，
+        #    ⛔ 不得交錯（上方 main() 已按序產好）。
+        # ⚠️ 2026-09-22：`build_todo_html()` 已從這一串移除（五頁全部落地，佔位卡退場）。
         why_html,
         find_html,
         inspect_html,
-        build_todo_html(),
+        hold_html,
         build_gaps_html(),
         f'<footer class="pv-meta">{esc(footer)}</footer>',
         # ③ 頁尾免責 —— 逐字 SSOT
@@ -4150,8 +5564,13 @@ def main() -> None:
     #    ⚠️ 2026-09-22 第二次擴充：新增的「🔍 找標的」頁又帶進**線框 name 的逐字複本**
     #       （find.pe_two_kinds）與**線框 states 的逐字片段**（find.sector_flow.degraded）
     #       ⇒ 允許清單改成**兩份相加**，⛔ 仍然只收逐字出處、⛔ 不收本檔的散文。
+    #    ⚠️ 2026-09-22 第三次擴充：新增的「💼 我的持股」頁又帶進**線框 name 的逐字複本**
+    #       （hold.evi_target_pct）⇒ 允許清單改成**三份相加**，⛔ 仍然只收逐字出處、
+    #       ⛔ 不收本檔的散文；該頁 states 另有 14 處命中，一律改引不含那三字的片段
+    #       （⛔ 不往清單塞，見 HOLD 缺口 H7）。
     _masked_page_name = written
-    for _verbatim in WHY_VERBATIM_ALLOW_WEISHENME + FIND_VERBATIM_ALLOW_WEISHENME:
+    for _verbatim in (WHY_VERBATIM_ALLOW_WEISHENME + FIND_VERBATIM_ALLOW_WEISHENME
+                      + HOLD_VERBATIM_ALLOW_WEISHENME):
         hits = _masked_page_name.count(esc(_verbatim))
         assert hits >= 1, (
             f"允許清單裡的逐字 {_verbatim!r} 在產物裡 0 命中 —— "
@@ -4178,18 +5597,40 @@ def main() -> None:
     assert not (page_classes & pv_classes), page_classes & pv_classes
     assert not any(c.startswith("pv-") for c in page_classes), sorted(page_classes)
     # ⑥ 規格缺口至少四條，且每一條都掛了「未經第三方驗」的標記。
-    #    ⚠️ 2026-09-22 起共**四組**缺口：chrome 的（五頁共用）＋「📖 憑什麼」頁
-    #       ＋「🔍 找標的」頁 ＋「🔬 查一檔」頁自己的。
+    #    ⚠️ 2026-09-22 起共**五組**缺口：chrome 的（五頁共用）＋「📖 憑什麼」頁
+    #       ＋「🔍 找標的」頁 ＋「🔬 查一檔」頁 ＋「💼 我的持股」頁自己的。
     #       每組都是「每條一次 ＋ 該組前言一次」。
-    assert len(CHROME_SPEC_GAPS) >= 4, len(CHROME_SPEC_GAPS)
-    assert len(WHY_SPEC_GAPS) >= 4, len(WHY_SPEC_GAPS)
-    assert len(FIND_SPEC_GAPS) >= 4, len(FIND_SPEC_GAPS)
-    assert len(INSPECT_SPEC_GAPS) >= 4, len(INSPECT_SPEC_GAPS)
-    expected_caveats = ((len(CHROME_SPEC_GAPS) + 1) + (len(WHY_SPEC_GAPS) + 1)
-                        + (len(FIND_SPEC_GAPS) + 1) + (len(INSPECT_SPEC_GAPS) + 1))
+    #    🔴 **本輪改吃 `_ALL_GAPS` 這個單一真相源**（⛔ 不再每組手寫一行 assert）：
+    #       舊寫法是五個字面名字各寫一遍 —— 新增一頁而忘了補一行，那一組就**沒有人驗**，
+    #       而 CI 全綠（「第五頁可以 0 缺口登記而全綠」正是這種洞）。
+    #       以後加頁只要把它掛進 `_ALL_GAPS`，下面兩道自動涵蓋。
+    for _group_name, _group in _ALL_GAPS:
+        assert len(_group) >= 4, (_group_name, len(_group))
+        _ids = [g[0] for g in _group]
+        assert len(set(_ids)) == len(_ids), f"{_group_name} 有重複的缺口編號：{_ids}"
+    expected_caveats = sum(len(_group) + 1 for _, _group in _ALL_GAPS)
     assert written.count(esc(GAP_CAVEAT)) == expected_caveats, (
         f"缺口標記數不對：{written.count(esc(GAP_CAVEAT))} ≠ {expected_caveats}"
         "（每組各為：每條一次 ＋ 前言一次）")
+    #    ⑥-b ⭐ 客戶 2026-09-22 裁示（附錄可引述禁詞，**但必須標明「引述」**）的守衛。
+    #         ⚠️ 作用域 ＝ **缺口條目 ＋ 層註**（＝「內部揭露」那一側）；
+    #            **卡面**那一側是**全面禁止**，由 ⑭-h／⑮-h 兩道逐張卡的守衛管，⛔ 不是這一道。
+    _quote_offenders: list[str] = []
+    for _group_name, _group in _ALL_GAPS:
+        for _gid, _gtitle, _gdetail in _group:
+            _text = _gtitle + _gdetail
+            if any(_w in _text for _w in _BANNED_ON_CARD_FACE) and "引述" not in _text:
+                _quote_offenders.append(f"{_group_name} {_gid}")
+    for _note_name, _notes in (("WHY_LAYER_NOTE", WHY_LAYER_NOTE),
+                               ("FIND_LAYER_NOTE", FIND_LAYER_NOTE),
+                               ("INSPECT_LAYER_NOTE", INSPECT_LAYER_NOTE),
+                               ("HOLD_LAYER_NOTE", HOLD_LAYER_NOTE)):
+        for _n, _text in _notes.items():
+            if any(_w in _text for _w in _BANNED_ON_CARD_FACE) and "引述" not in _text:
+                _quote_offenders.append(f"{_note_name}[{_n}]")
+    assert not _quote_offenders, (
+        f"這些附錄／層註段引了卡面禁詞卻⛔ 沒有標明「引述」：{_quote_offenders} —— "
+        "客戶 2026-09-22 裁示逐字：附錄／缺口段可引述，但**必須標明「引述」**")
 
     # ══ 「📖 憑什麼」頁的自驗（⛔ 不是「應該可以」；量到什麼就寫什麼）══════════
     # ⑦ 22 個 block **全部**出現，且**逐一**比對層／欄數 class／密度 class。
@@ -4247,6 +5688,9 @@ def main() -> None:
     assert INSPECT_BADGES_ON_PAGE <= _drawn_badges, (
         f"「🔬 查一檔」頁該畫的 5 態沒畫齊：少了 "
         f"{sorted(INSPECT_BADGES_ON_PAGE - _drawn_badges)}")
+    assert HOLD_BADGES_ON_PAGE <= _drawn_badges, (
+        f"「💼 我的持股」頁該畫的 6 態沒畫齊：少了 "
+        f"{sorted(HOLD_BADGES_ON_PAGE - _drawn_badges)}")
     assert 10 in WHY_BADGES_NOT_ON_PAGE and 10 in page_today.BADGES_NOT_ON_PAGE
     assert sorted(WHY_BADGES_NOT_ON_PAGE) == [2, 8, 9, 10], sorted(WHY_BADGES_NOT_ON_PAGE)
     #    ⚠️ 「🔍 找標的」頁**多擋一顆 #5**（規格 ② 處置 2：unwired 已撤回、⛔ 不得回填）
@@ -4259,6 +5703,17 @@ def main() -> None:
     #       （實作檔頭「本頁沒有任何一格會判 UI_DEGRADED，這是刻意的」）。見缺口 P10。
     assert sorted(INSPECT_BADGES_NOT_ON_PAGE) == [2, 4, 8, 9, 10], \
         sorted(INSPECT_BADGES_NOT_ON_PAGE)
+    #    ⚠️ 「💼 我的持股」頁擋的是 **#2／#8／#9／#10** —— **#4 反而會畫**
+    #       （規格 ② 逐字：`degraded` ⇒ `UI_DEGRADED` Name **7 處**，實作有這一態），
+    #       與「🔬 查一檔」頁剛好相反。**四頁的可畫集合各不相同，那是規格不同、
+    #       ⛔ 不是本檔挑的**：本頁規格 ② 的總結句逐字
+    #       「會出現在畫面上的是 6 態：#1／#3／#4／#5／#6／#7」。
+    #       ⚠️ 其中 **#8 在本頁是「待接線」**（規格 ⑤-G4 的總管判定認為匯兌損益欄
+    #          應該是它）⇒ **應然與現況有差**，見缺口 H6。
+    assert sorted(HOLD_BADGES_NOT_ON_PAGE) == [2, 8, 9, 10], \
+        sorted(HOLD_BADGES_NOT_ON_PAGE)
+    assert 4 in HOLD_BADGES_ON_PAGE and 4 in INSPECT_BADGES_NOT_ON_PAGE, (
+        "#4 在這兩頁的處置應該相反 —— 若不再相反，代表某一份規格改了，本輪前提已變")
     #    ⭐ #5（未接線）在本原型**到本輪才第一次真的被畫出來**：
     #       「📖 憑什麼」頁沒有適用對象、「🔍 找標的」頁被規格撤回（F13）。
     assert 5 in _drawn_badges and 5 in INSPECT_BADGES_ON_PAGE
@@ -4271,29 +5726,63 @@ def main() -> None:
             "markup.badge_html(10) 現在會炸了 —— 待修項已被修掉，"
             "請把 WHY_SPEC_GAPS 的 W5 改標為已解決（⛔ 不得留一條過期的缺口）") from None
 
-    # ⑨ 五頁切換：**四頁是真頁、一頁是佔位**；`aria-current` 恰 1（標記裡的）。
-    #    ⚠️ 2026-09-22 第三次擴充：`PAGE_INSPECT` 自本輪起是**真頁**，
-    #       已從下方「⛔ 不得有頁容器」那一組**移出**
-    #       （客戶逐字：「側欄切到「🔬 查一檔」可顯示；
-    #        其他一頁（💼 我的持股）仍顯示「此頁待做」」）。
-    #    ⚠️ 這是**事實更正**（真頁多了一頁），⛔ 不是把守衛放寬 ——
-    #       剩下那一頁仍然一個字都不准有頁容器，下面那一圈照跑。
-    for _pid in (PAGE_TODAY, PAGE_WHY, PAGE_FIND, PAGE_INSPECT):
+    # ⑨ 五頁切換：**五頁全部是真頁**；`aria-current` 恰 1（標記裡的）。
+    #    ⚠️ 2026-09-22 第四次擴充：`PAGE_HOLD` 自本輪起是**真頁** ⇒
+    #       「此頁待做」佔位整個退場（有意識的變更、⛔ 不是漏刪；決策者：客戶）。
+    #    🔴 **⛔ 不是把守衛清空就算** —— 下面三道全部是本輪**重寫過**的：
+    #       (a) 頁容器那一圈改成 `for _pid in PAGE_LABELS:` —— 舊寫法是**字面 tuple**，
+    #           每新增一頁都得有人記得去補一筆；漏補的那一頁**不會有人驗**，而 CI 全綠。
+    #           改吃 SSOT 之後，以後加頁就不可能漏（⛔ 這是加嚴，不是放寬）。
+    #       (b) 舊的「⛔ 不得有頁容器」那一圈**整段刪除，⛔ 不是把 tuple 清空** ——
+    #           空 tuple 的 for 迴圈**不報錯、直接跳過**，留著就是一道**已死的守衛**
+    #           （CI 綠燈，但它其實什麼都沒驗）。
+    #       (c) 佔位卡相關的三道（`pv-page-todo` 隱藏／「此頁待做」逐字／`pv-todo-name`
+    #           初值）隨佔位卡一併移除 —— 它們驗的東西已經不存在了。
+    for _pid in PAGE_LABELS:
         assert f'id="pv-page-{_pid}"' in written, f"少了 {_pid} 的頁容器"
-    assert 'id="pv-page-why" hidden' in written, "「📖 憑什麼」頁預設⛔ 不是收起的"
-    assert 'id="pv-page-find" hidden' in written, "「🔍 找標的」頁預設⛔ 不是收起的"
-    assert 'id="pv-page-inspect" hidden' in written, "「🔬 查一檔」頁預設⛔ 不是收起的"
-    assert 'id="pv-page-todo" hidden' in written, "待做佔位預設⛔ 不是收起的"
-    assert written.count(esc(TODO_HEADLINE)) >= 1, "「此頁待做」佔位不見了"
-    for _pid in (PAGE_HOLD,):
-        assert f'id="pv-page-{_pid}"' not in written, (
-            f"{_pid} 竟然有自己的頁容器 —— 那一頁本輪仍是「此頁待做」")
-    #    ⚠️ 佔位卡的**初值**必須是那一頁（JS 每次切頁都會覆寫，但初值仍應是真的）。
-    assert f'<span id="pv-todo-name">{esc(PAGE_LABELS[PAGE_HOLD])}</span>' in written, (
-        "佔位卡的初始標題不是「💼 我的持股」—— 它指到一個不會再走到這裡的頁")
-    #    ⚠️ 導覽 JS 必須真的認得第四頁（⛔ 不是「應該可以」：少一個布林 ＝ 兩頁同時可見）。
-    for _needle in ("var INSPECT =", "isInspect", "inspect.hidden = !isInspect"):
-        assert _needle in written, f"導覽 JS 少了 {_needle} —— 第四頁切不出來"
+    #    ⚠️ 「🚦 今天」是預設頁 ⇒ **只有它⛔ 不帶 hidden**，其餘四頁一律預設收起。
+    for _pid in PAGE_LABELS:
+        _want_hidden = _pid != PAGE_TODAY
+        _has_hidden = f'id="pv-page-{_pid}" hidden' in written
+        assert _has_hidden == _want_hidden, (
+            f"{_pid} 的頁容器 hidden 狀態不對："
+            f"預期 hidden={_want_hidden}、實得 {_has_hidden}")
+    #    ⚠️ 佔位卡的殘骸**一個都不准留**（⛔ 不是「應該已經刪乾淨了」）。
+    #    🔴 **只掃「會生出實體的字」，⛔ 不掃「此頁待做」四個字本身** ——
+    #       本輪的**移除紀錄**（CSS 註解／JS 註解／檔頭註解／缺口 H9）**刻意**寫出了
+    #       被拿掉的是哪張卡、哪四條 rule、哪三行 JS。守衛必須分得出
+    #       「**留著紀錄**」與「**留著那張卡**」—— 沿用本檔第 ⑩ 道守衛的同一條紀律。
+    for _dead in ('id="pv-page-todo"', 'id="pv-todo-name"', 'class="pv-todo',
+                  "getElementById('pv-page-todo')"):
+        assert _dead not in written, (
+            f"產物裡還留著佔位卡的實體 {_dead!r} —— 本輪已把它整個拆掉（附錄 H9）")
+    #    ⚠️ 導覽 JS 必須真的認得**每一頁**（⛔ 不是「應該可以」：少一個布林 ＝ 兩頁同時可見）。
+    #    🔴 這是 JS 佈線的**唯一**防線 —— Python 這一側的守衛一道都攔不到 JS 少一行。
+    for _js_var, _js_flag, _js_id in (("TODAY", "isToday", "today"),
+                                      ("WHY", "isWhy", "why"),
+                                      ("FIND", "isFind", "find"),
+                                      ("INSPECT", "isInspect", "inspect"),
+                                      ("HOLD", "isHold", "hold")):
+        for _needle in (f"var {_js_var} = ", _js_flag,
+                        f"{_js_id}.hidden = !{_js_flag}"):
+            assert _needle in written, (
+                f"導覽 JS 少了 {_needle} —— 那一頁切不出來（五頁切換會壞）")
+    #    ⚠️ 佔位卡的三行 JS 邏輯**必須真的不在了**（留著第二行 ＝ 每次點側欄都 TypeError，
+    #       而 **Python 這一側的 111 道守衛一道都攔不到**：那是執行期的事）。
+    #       🔴 同 ⑩：**先剝掉 JS 的 `//` 註解再掃**，因為本輪的移除紀錄就寫在那些註解裡。
+    _nav_js_code = "\n".join(
+        re.sub(r"//.*", "", _line)
+        for _line in "\n".join(
+            re.findall(r"<script>(.*?)</script>", written, flags=re.S)).splitlines())
+    for _dead_js in ("var todo ", "todo.hidden", "pv-todo-name", "pv-page-todo"):
+        assert _dead_js not in _nav_js_code, (
+            f"導覽 JS 還留著佔位卡的 {_dead_js!r} —— 它會在執行期炸掉整個 show()（附錄 H9）")
+    #    ⚠️ `NAV_WHY_SIDEBAR` 的**唯一渲染出口**原本在佔位卡裡 ⇒ 拆卡之後必須改掛，
+    #       否則「為何⛔ 不做頂部分頁列」會從畫面上無聲蒸發而 CI 保持全綠。
+    assert esc(NAV_WHY_SIDEBAR) in written, (
+        "NAV_WHY_SIDEBAR 沒有逐字出現在畫面上 —— 它原本的出口（佔位卡）本輪拆掉了，"
+        "改掛的地方也沒了？（見 build_gaps_html 的長註與附錄 H9）")
+    assert esc(NAV_WHY_SHORT) in written, "側欄那一行短註不見了"
 
     # ⑩ 側欄行為**⛔ 未改動**：仍無 `open`、仍無任何把 `nav.open` 設 true 的路徑。
     #    ⚠️ **只掃 `<script>` 裡的內容，⛔ 不掃全文**：G5 缺口的散文**刻意**引述了被移除的
@@ -4467,7 +5956,9 @@ def main() -> None:
             f"產物裡出現 {_tag} —— 契約層 markup 沒有表格能力，"
             "本輪⛔ 不得自寫表格標記（總管拍板 1，缺口 P1）")
     #    ⑭-h/i 逐張卡的兩道守衛 —— **卡片逐張重算，⛔ 不用會吃到附錄的全文 regex**：
-    #      (h) ⭐ 總管拍板 4：規格點名**禁上畫面**的口徑用詞，**卡面**上一個都不准有。
+    #      (h) ⭐ 總管拍板 4 ＋ **客戶 2026-09-22 裁示擴大**：規格點名**禁上畫面**的
+    #          內部詞，**卡面**上一個都不准有。清單自本輪起由 `_BANNED_ON_CARD_FACE`
+    #          統一提供（3 詞 → **6 詞**：加權移動平均／FIFO／先進先出／D-2／L1／旗標）。
     #          ⚠️ **只掃卡面，⛔ 不掃全檔**：附錄與層註是**內部揭露**，本來就要寫出
     #             「被拿掉的是哪半句」「規格禁的是哪一句」（缺口 P4／P5 就地說明了這條界線）。
     #          ⚠️ 這是**縮範圍、⛔ 不是弱化**：卡面那一側一個字都沒有放寬 ——
@@ -4486,7 +5977,7 @@ def main() -> None:
                 _text = re.sub(r"<[^>]+>", " ", _one)
                 if re.search(r"\d", _text) and esc(DEMO) not in _one:
                     _ins_unmarked.append(f"{_block} / {_card['title']}")
-                for _banned in ("加權移動平均", "FIFO", "先進先出"):
+                for _banned in _BANNED_ON_CARD_FACE:
                     if esc(_banned) in _one:
                         _ins_banned_hits.append(
                             f"{_block} / {_card['title']} ⇒ {_banned}")
@@ -4499,6 +5990,128 @@ def main() -> None:
     assert sorted(_ins_cards_snapshot) == sorted(INSPECT_BLOCK_COLS), (
         "build_inspect_cards() 的 block 與 INSPECT_LAYOUT 不一致："
         f"{sorted(set(_ins_cards_snapshot) ^ set(INSPECT_BLOCK_COLS))}")
+
+    # ══ 「💼 我的持股」頁的自驗（⛔ 不是「應該可以」；量到什麼就寫什麼）══════════
+    # ⑮ 23 個 block **全部**出現，且**逐一**比對層／葉／欄數 class／密度 class。
+    #    ⛔ 不是「數一數有 23 個」——那只證明數量對。這裡比對的是每一塊的**長相**。
+    assert len(HOLD_LAYOUT) == 23, len(HOLD_LAYOUT)
+    assert len(HOLD_BLOCK_COLS) == 23, "HOLD_LAYOUT 有重複的 block key"
+    assert sorted(HOLD_LAYER_BLOCKS) == [0, 1, 2, 3, 4], sorted(HOLD_LAYER_BLOCKS)
+    #    ⚠️ **本頁⛔ 沒有 n5**（規格 ① 標題逐字「五層 23 block」）—— 這一行就是那件事的守衛。
+    #       ⚠️ 客戶派工單寫的是「六層」⇒ 差異已登記在缺口 H3，**本輪照規格畫五層**。
+    assert 5 not in HOLD_LAYER_BLOCKS, "本頁竟然長出 n5 —— 規格與線框實測都是 5 層 n0~n4"
+    #    ⚠️ 兩張手寫表（版面／葉）的 key 集合必須一致，⛔ 不讓其中一張漏一塊而沒人發現。
+    assert set(_HOLD_BLOCK_LEAF) == set(HOLD_BLOCK_COLS), (
+        "_HOLD_BLOCK_LEAF 與 HOLD_LAYOUT 的 block 不一致："
+        f"{sorted(set(_HOLD_BLOCK_LEAF) ^ set(HOLD_BLOCK_COLS))}")
+    #    ⚠️ 兩葉的塊數與葉外塊數（本組 node 實測：l1 15／l2 6／葉外 2）。
+    _hold_leaf_count = {lf: sum(1 for v in _HOLD_BLOCK_LEAF.values() if v == lf)
+                        for lf in (None, "l1", "l2")}
+    assert _hold_leaf_count == {None: 2, "l1": 15, "l2": 6}, _hold_leaf_count
+    assert sorted(HOLD_LEAF_NAME) == ["l1", "l2"], sorted(HOLD_LEAF_NAME)
+    for _rec in HOLD_LAYOUT:
+        _block = str(_rec["block"])
+        _cols = tuple(_rec["cols"])                       # type: ignore[arg-type]
+        _tier = hold_tier_for_block(_block)
+        # `grid_html` 產的就是這一串（本檔⛔ 不手打，這裡只是把它算出來比對）
+        _grid_cls = f'class="grd grd-{_tier} g-{_cols[0]}-{_cols[1]}-{_cols[2]}"'
+        assert _grid_cls in written, f"{_block} 的網格 class 不對，預期 {_grid_cls}"
+        assert esc(_block) in written, f"{_block} 這個 block key 沒有出現在畫面上"
+        assert str(_rec["src"]).strip(), f"{_block} ⛔ 沒有標出處"
+        assert ".py:" not in str(_rec["src"]), (
+            f"{_block} 的 src 寫了行號 —— CLAUDE.md §8.2.A.0 規則 1：⛔ 不寫行號")
+        assert "｜線框 " in str(_rec["src"]), (
+            f"{_block} 的 src ⛔ 沒有標線框 block key（格式：規格章節名｜線框 block key）")
+    #    ⑮-b cols 全集**三種**（本組 node 實測線框：1/1/1 共 15、2/1/1 共 5、3/2/1 共 3）
+    _hold_cols_count = {c: sum(1 for v in HOLD_BLOCK_COLS.values() if v == c)
+                        for c in sorted(set(HOLD_BLOCK_COLS.values()))}
+    assert _hold_cols_count == {(1, 1, 1): 15, (2, 1, 1): 5, (3, 2, 1): 3}, _hold_cols_count
+    #    ⑮-c 密度：五層**全部**必須與契約層的自動對映一致 ——
+    #         本頁⛔ 沒有任何一層需要繞過契約層（同「🔬 查一檔」頁）。
+    for _n in sorted(HOLD_LAYER_BLOCKS):
+        assert hold_tier_for_layer(_n) == components.tier_for_layer(_n), _n
+    #    ⑮-d 密度與徽章尺寸必須對上規格 ① 表逐字（t3/t1/t2/t3/t4 與 b3/b1/b2/b3/b4）
+    _hold_spec_tiers = {0: "t3", 1: "t1", 2: "t2", 3: "t3", 4: "t4"}
+    _hold_spec_badge_sizes = {0: "b3", 1: "b1", 2: "b2", 3: "b3", 4: "b4"}
+    for _n, _want in _hold_spec_tiers.items():
+        assert hold_tier_for_layer(_n) == _want, (_n, hold_tier_for_layer(_n), _want)
+        _got = str(components.CARD_TIERS[_want]["badge_size"])
+        assert _got == _hold_spec_badge_sizes[_n], (_n, _got, _hold_spec_badge_sizes[_n])
+    #    ⑮-e ⭐ 本頁**⛔ 沒有補任何一條欄數 CSS**，且公式**同時減掉三個來源**
+    #         （契約層 ＋ FIND 已補 ＋ INSPECT）—— ⛔ 少減一個就會重複宣告同名 rule。
+    #         🔴 **這個常數與守衛⛔ 不得因為「算出來是空的」就拿掉** ——
+    #            `grid_html()` 對缺 CSS 的欄數**不報錯**，只會讓那些塊**靜默塌成單欄**；
+    #            這裡是那件事的**唯一防線**。
+    assert _HOLD_COLS_NEEDING_CSS == (), (
+        f"本頁竟然需要補欄數 CSS：{_HOLD_COLS_NEEDING_CSS} —— "
+        "版面加了新欄數；補之前請先確認⛔ 沒有與 find_grid_css() 重複宣告")
+    assert set(HOLD_BLOCK_COLS.values()) <= (
+        set(page_today.BLOCK_COLS.values()) | set(FIND_BLOCK_COLS.values())
+        | set(INSPECT_BLOCK_COLS.values())), (
+        "本頁用到的欄數不在「契約層 ∪ FIND 已補 ∪ INSPECT」之內")
+    #    ⑮-f ⭐ 總管本輪四項拍板 ＋ 規格 ③ 的就地揭露**必須在畫面上**（⛔ 不得只留在 .py 裡）。
+    #         🔴 規格 ③ 逐字「**必須寫進頁面**」，且「凌駕本檔其餘版面規定」⇒ 這一道⛔ 不得省。
+    for _needle in (HOLD_LAYOUT_DISCLOSURE, HOLD_LAYOUT_DISCLOSURE_WHY,
+                    HOLD_BAN_DISCLOSURE, HOLD_BAN_DISCLOSURE_WHY,
+                    HOLD_LAYERS_DISCLOSURE, HOLD_TABLE_DISCLOSURE,
+                    HOLD_TABLE_DISCLOSURE_WHY, HOLD_CTA_DISCLOSURE,
+                    HOLD_CTA_DISCLOSURE_WHY, HOLD_PAGE_SHAPE_NOTE):
+        assert esc(_needle) in written, "「💼 我的持股」頁的就地揭露沒有畫在畫面上"
+    #    ⑮-g ⭐ 規格 ④ 的 D-3 常駐警語：**完整版與短版兩段逐字都要在畫面上**
+    #         （客戶 2026-09-16 裁示「全列，全做」；本原型是單一斷點快照、畫不出
+    #          桌機／手機切換 ⇒ 兩版都印，差距登記在缺口 H12）。
+    for _needle in (HOLD_D3_FULL, HOLD_D3_SHORT):
+        assert esc(_needle) in written, f"D-3 常駐警語沒有逐字出現：{_needle}"
+    #         ⚠️ 完整版在本頁出現的次數必須 >= 4（⑤-b 三態 ＋ 葉2 預覽 ＋ 第四層佐證）。
+    assert written.count(esc(HOLD_D3_FULL)) >= 4, written.count(esc(HOLD_D3_FULL))
+    #    ⑮-h/i 逐張卡的兩道守衛 —— **卡片逐張重算，⛔ 不用會吃到附錄的全文 regex**：
+    #      (h) 卡面禁詞（客戶 2026-09-22 裁示，6 詞）—— **只掃卡面，⛔ 不掃全檔**：
+    #          附錄與層註是**內部揭露**，可引述但必須標明「引述」（那一側由 ⑥-b 管）。
+    #          🔴 **本頁是這條裁示最該守的地方** —— 成本口徑的內部詞**原生落點就在本頁**
+    #             （規格 ⑦ 逐字「先不放」）。
+    #      (i) 示意值：同 ⑫／⑬-h／⑭-i，**凡是渲染得出阿拉伯數字的卡，一律掛示意標記**。
+    #      另順手釘住：每一張重算出來的卡**逐字出現在產物裡**（⛔ 不是「應該有」）。
+    _hold_cards_snapshot = build_hold_cards()
+    _hold_unmarked: list[str] = []
+    _hold_banned_hits: list[str] = []
+    with hold_page_contract():
+        for _block, _cards in _hold_cards_snapshot.items():
+            assert _cards, f"{_block} ⛔ 沒有卡 —— 本頁 23 塊每一塊都要有至少一張"
+            for _card in _cards:
+                _one = markup.card_html(block=_block, **_card)
+                assert _one in written, f"{_block} 的卡沒有逐字出現在產物裡：{_card['title']}"
+                _text = re.sub(r"<[^>]+>", " ", _one)
+                if re.search(r"\d", _text) and esc(DEMO) not in _one:
+                    _hold_unmarked.append(f"{_block} / {_card['title']}")
+                for _banned in _BANNED_ON_CARD_FACE:
+                    if esc(_banned) in _one:
+                        _hold_banned_hits.append(
+                            f"{_block} / {_card['title']} ⇒ {_banned}")
+    assert not _hold_banned_hits, (
+        f"卡面出現禁用的內部詞：{_hold_banned_hits} —— 客戶 2026-09-22 裁示逐字："
+        "卡面⛔ 禁用內部詞；附錄／缺口段可引述但必須標明「引述」（缺口 H8／H11）")
+    assert not _hold_unmarked, (
+        f"這些卡渲染得出數字卻⛔ 沒有掛「{DEMO}」：{_hold_unmarked}")
+    #    ⑮-j 23 塊**每一塊都有卡**（本頁⛔ 沒有「畫框不畫卡」那種塊 —— 那是 FIND 的處置）。
+    assert sorted(_hold_cards_snapshot) == sorted(HOLD_BLOCK_COLS), (
+        "build_hold_cards() 的 block 與 HOLD_LAYOUT 不一致："
+        f"{sorted(set(_hold_cards_snapshot) ^ set(HOLD_BLOCK_COLS))}")
+    #    ⑮-k ⭐ 本頁**一個真時間都沒有填** —— 全檔 HH:MM 守衛（上面第 ④ 道）已經涵蓋「時分」，
+    #         這裡另釘住那個**被整態捨棄**的線框格：`hold.scope_note` ⛔ 不得畫 `live` 態。
+    #         ⚠️ **只看那一塊畫了哪幾態，⛔ 不掃全文** —— 缺口 H5 的附錄**刻意**引了那一格
+    #            的開頭逐字（那是「被拿掉的是哪一格」的紀錄）；同 ⑩／⑨ 的同一條紀律：
+    #            守衛必須分得出「**留著紀錄**」與「**畫了那一態**」。
+    #         ⚠️ **⛔ 刻意不掃「月/日」形狀** —— 那個形狀在「🚦 今天」頁是**合法的**
+    #            （該頁線框的 idle 逐字本來就帶一個日期，且它不含時分、不觸發第 ④ 道）。
+    _scope_note_states = [c["state"] for c in _hold_cards_snapshot["hold.scope_note"]]
+    assert "live" not in _scope_note_states, (
+        f"hold.scope_note 畫了 live 態（{_scope_note_states}）—— "
+        "那一格的線框逐字帶一個時分戳，而本頁 23 塊的 asOf 全是 null "
+        "⇒ 該態本輪整態不畫（缺口 H5）")
+    assert sorted(_scope_note_states) == ["empty", "error", "idle", "missing"], (
+        f"hold.scope_note 的四態不對：{_scope_note_states} —— "
+        "規格 ⑥C 要求「沒綁／綁了但空／讀取失敗」⛔ 不得共用同一張卡，"
+        "另有第四種「這一輪沒讀你的持股」")
 
     print(f"wrote {OUT} ({len(written.encode('utf-8'))} bytes)")
     print(f"  · 「📖 憑什麼」頁：{len(WHY_LAYOUT)} block / "
@@ -4517,6 +6130,14 @@ def main() -> None:
           f"（其中 #4 是規格明寫的**刻意不出現**，⛔ 與另外三顆「待補」不同類）")
     print(f"    本頁補的欄數 CSS：{list(_INSPECT_COLS_NEEDING_CSS) or '（無，cols 全集契約層都已產）'}；"
           f"表格標籤：0（總管拍板 1 —— 契約層無表格能力，見缺口 P1）")
+    print(f"  · 「💼 我的持股」頁：{len(HOLD_LAYOUT)} block / "
+          f"{len(HOLD_LAYER_BLOCKS)} 層（n0~n4，⛔ 無 n5）/ 2 葉 / 缺口 {len(HOLD_SPEC_GAPS)} 條")
+    print(f"    畫的徽章：{sorted(HOLD_BADGES_ON_PAGE)}；"
+          f"⛔ 不畫：{sorted(HOLD_BADGES_NOT_ON_PAGE)}"
+          f"（其中 #8 是規格 ⑤ 判「應然」、② 判「現況不畫」的那一顆，見缺口 H6）")
+    print(f"    本頁補的欄數 CSS：{list(_HOLD_COLS_NEEDING_CSS) or '（無，cols 全集前面各頁都已產）'}；"
+          f"表格標籤：0（總管拍板 1 —— 契約層無表格能力，見缺口 H1）")
+    print("  · 五頁切換：**五頁全部是真頁**，「此頁待做」佔位本輪拆除（見缺口 H9）")
     print(f"  · 本檔補的欄數 CSS：{[f'g-{a}-{b}-{c}' for a, b, c in _FIND_COLS_NEEDING_CSS]}"
           f"（⚠️ 規則形狀複製了一份 ＝ 第二個真相源，見缺口 F2）")
 
