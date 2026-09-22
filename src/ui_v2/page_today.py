@@ -101,7 +101,22 @@ LAYERS: Final[tuple[Mapping[str, object], ...]] = _build_layers()
 BLOCK_COLS: Final[Mapping[str, tuple[int, int, int]]] = _frozen({
     "today.statusbar":  (1, 1, 1),   # UI_PAGE_TODAY.md ①「葉外 chrome」段
     "today.verdict":    (1, 1, 1),   # UI_PAGE_TODAY.md ①「第一層 today.verdict」段
-    "today.summary":    (3, 2, 1),   # UI_PAGE_TODAY.md ①「第二層」today.summary 條
+    # ⚠️ ~~`"today.summary": (3, 2, 1)`   # UI_PAGE_TODAY.md ①「第二層」today.summary 條~~
+    #   **2026-09-22 有意識的政策變更，⛔ 不是漏刪；決策者：客戶。**
+    #   客戶裁示 B 逐字：「把 today.summary 從「卡內三欄」改成「三張獨立卡」。」
+    #   ⇒ 3/2/1 → 1/1/1。
+    #   **舊值的理由仍然成立**：線框 `wf_page_today.js` 的 `today.summary` block 逐字寫
+    #   `cols: { desktop: 3, tablet: 2, phone: 1 }`，照線框抄是當時**唯一有來歷**的作法。
+    #   **新值為何勝出**：那個 3/2/1 究竟是「卡內欄數」還是「層網格」，本來就是 U-1 的
+    #   **真矛盾**（線框與原型兩端互斥，規格與本檔都只登記、不解）——
+    #   ⛔ 不是實作可以自己挑一邊的事：**版面只有客戶能拍板**
+    #   （CLAUDE.md §-1.5.D §03-2 ①），而客戶 2026-09-22 拍了。
+    # 🔵 **客戶裁示值（⛔ 非線框值）** —— UI_PAGE_TODAY.md ③「U-1 已決」段；
+    #   線框 `wf_page_today.js` 寫 3/2/1，客戶 2026-09-22 裁示 B **覆寫**
+    #   （⛔ 線框檔本身不改 —— 它是客戶審過的版面來源，裁示是覆寫它、⛔ 不是改寫它）。
+    # ⛔ 本筆**刻意不掛**其餘六筆那種 `# UI_PAGE_TODAY.md <章節名>` 的線框出處註解：
+    #    那種註解代表「**線框寫了這個值**」，而線框**沒有**寫 1/1/1。
+    "today.summary":    (1, 1, 1),
     "today.key_banner": (1, 1, 1),   # UI_PAGE_TODAY.md ①「第二層」today.key_banner 條
     "today.actions":    (1, 1, 1),   # UI_PAGE_TODAY.md ①「第三層 today.actions」段
     "today.warroom":    (1, 1, 1),   # UI_PAGE_TODAY.md ①「第四層」段
@@ -119,21 +134,47 @@ G3_COLS: Final[tuple[int, int, int]] = (3, 2, 1)
 # ══════════════════════════════════════════════════════════════════
 # `cols` 的**來歷**（provenance）—— ⛔ 註解不算數，來歷要機器讀得到
 #
-# 為什麼要有這組結構：`BLOCK_COLS` 裡混了兩種東西 ——
-#   · 七筆**線框值**（客戶審過的 `wf_page_today.js` 寫死的）；
-#   · 一筆**總管推導值**（線框沒寫、由 §① 排列段的 `cols` 語意 ＋ 原型形狀推出來的）。
-# 兩者**可信度不同**，⛔ 不得長得一樣。把推導值偽裝成線框值 ＝ CLAUDE.md §1 的造假
-# （「錯誤的數字比沒有數字更危險」的同一族問題：**來歷錯的數字**會讓下一個人
-#   以為它經過客戶審查，從而不敢動、也不去補真正的線框）。
+# 為什麼要有這組結構：`BLOCK_COLS` 裡混了 ~~兩~~ **三**種東西 ——
+#   · ~~七筆~~ **六筆線框值**（客戶審過的 `wf_page_today.js` 寫死的）；
+#   · 一筆**總管推導值**（線框沒寫、由 §① 排列段的 `cols` 語意 ＋ 原型形狀推出來的）；
+#   · 🔵 一筆**客戶裁示值**（線框**有**寫、但被客戶 2026-09-22 裁示 B **覆寫**：
+#     `today.summary` 3/2/1 → 1/1/1）。
+#   **2026-09-22 有意識的政策變更，⛔ 不是漏刪；決策者：客戶。**
+#   **舊句的理由仍然成立**：在客戶裁示之前，`BLOCK_COLS` 真的只有「線框值」與
+#   「總管推導值」兩種，「兩種／七筆」是當時可驗的最誠實寫法。
+#   **被權衡掉的只有那兩個字面數字** —— 客戶裁示 B 生出了第三種來歷；
+#   ⛔ 不把它登記成獨立的一種，就等於讓 1/1/1 看起來像線框值（正是本段要擋的事）。
+# 三者**可信度不同**，⛔ 不得長得一樣。把推導值／裁示值偽裝成線框值
+# ＝ CLAUDE.md §1 的造假（「錯誤的數字比沒有數字更危險」的同一族問題：
+#   **來歷錯的數字**會讓下一個人以為它經過客戶審查，從而不敢動、也不去補真正的線框）。
+# 🔵 ⚠️ 客戶裁示值另有一個**反向**的風險：它確實經過客戶，但**線框仍寫著舊值** ——
+#   若把它登記成線框值，下一個人去讀線框會讀到 3/2/1，以為 code 寫錯而「改回去」。
+#   ⇒ 裁示值必須同時留下 `wireframe_value`（被覆寫掉的那個值），兩邊才對得起來。
 # ══════════════════════════════════════════════════════════════════
-#: 來歷的兩個字面值。⛔ 不得新增第三種而不同步 `COLS_DERIVATION` 與測試。
+#: ~~來歷的兩個字面值。⛔ 不得新增第三種而不同步 `COLS_DERIVATION` 與測試。~~
+#: **2026-09-22 有意識的政策變更，⛔ 不是漏刪；決策者：客戶。**
+#: **現行：來歷的三個字面值。⛔ 不得新增第四種而不同步 `COLS_DERIVATION` 與測試。**
+#: **舊句的理由仍然成立，而且本次正是照它走的**：它要求的從來不是「永遠只能兩種」，
+#: 而是「**新增一種就必須同步 `COLS_DERIVATION` 與測試**」—— 本次新增
+#: `COLS_RULED_BY_CLIENT` 時，`COLS_DERIVATION` 新增一筆、
+#: `tests/ui_v2/test_today_page.py` 的 C-1 段守衛同批一起改，⛔ 沒有繞過這個條件。
+#: **被權衡掉的只有那個字面數字「兩」**（客戶裁示 B 生出了第三種來歷）。
 COLS_FROM_WIREFRAME: Final[str] = "wireframe"
 COLS_DERIVED_BY_LEAD: Final[str] = "derived_by_lead"
+#: 🔵 **第三種來歷（2026-09-22 新增）**：線框**有**定義這個 block 的 `cols`，
+#: 但客戶**明示裁示覆寫**它。
+#: ⚠️ 與 `COLS_DERIVED_BY_LEAD` 的**關鍵差異**（⛔ 不要混用）——
+#:   · 推導值＝**填線框沒寫的洞**（`wireframe_defines_cols=False`、`wireframe_value=None`）；
+#:   · 裁示值＝**推翻線框寫過的值**（`wireframe_defines_cols=True`、`wireframe_value` 是舊值）。
+#: 🔴 **只有客戶能做後者**（CLAUDE.md §-1.5.D §03-2 ①：版面異動必須客戶拍板）——
+#: 總管**只能填洞、⛔ 不能覆寫線框**。守衛見 `tests/ui_v2/test_today_page.py` C-1 段
+#: `test_the_lead_may_only_fill_a_hole_never_override_the_wireframe`。
+COLS_RULED_BY_CLIENT: Final[str] = "client_ruling"
 
 COLS_PROVENANCE: Final[Mapping[str, str]] = _frozen({
     "today.statusbar":  COLS_FROM_WIREFRAME,
     "today.verdict":    COLS_FROM_WIREFRAME,
-    "today.summary":    COLS_FROM_WIREFRAME,
+    "today.summary":    COLS_RULED_BY_CLIENT,   # 🔵 客戶 2026-09-22 裁示 B 覆寫線框 3/2/1
     "today.key_banner": COLS_FROM_WIREFRAME,
     "today.actions":    COLS_FROM_WIREFRAME,
     "today.warroom":    COLS_FROM_WIREFRAME,
@@ -141,13 +182,21 @@ COLS_PROVENANCE: Final[Mapping[str, str]] = _frozen({
     "today.holdings":   COLS_DERIVED_BY_LEAD,   # 🔴 ⛔ 不是線框值
 })
 
-#: 來歷**不是**線框的 block。⛔ 不得漏登（漏登＝那個值看起來就像客戶審過的）。
+#: 來歷**不是**線框的 block（**兩種**：總管推導填洞／🔵 客戶裁示覆寫）。
+#: ⛔ 不得漏登 —— 漏登＝那個值看起來就像線框寫的、像客戶審過的。
+#: ⚠️ **⛔ 刻意不改名**（2026-09-22）：客戶裁示值嚴格說不是「推導」出來的，
+#:   但本常數是 computed（`src != COLS_FROM_WIREFRAME`），改名要動全部 caller 與測試，
+#:   屬 §8.1 step 6 的反例（純 cosmetic、動到一堆 caller）。**語意以本註解為準。**
 DERIVED_COLS: Final[frozenset[str]] = frozenset(
     block for block, src in COLS_PROVENANCE.items() if src != COLS_FROM_WIREFRAME
 )
 
-#: 每一筆推導值的**推導鏈 ＋ 決策者 ＋ 日期**（UI_PAGE_TODAY.md §① holdings cols 段）。
-#: ⛔ 「總管說的」不算來歷 —— 要寫得出**怎麼推出來的**，下一個人才驗得到。
+#: 每一筆**非線框值**的**推導鏈／裁示逐字 ＋ 決策者 ＋ 日期**
+#: （UI_PAGE_TODAY.md §① holdings cols 段 ／ ③「U-1 已決」段）。
+#: ⛔ 「總管說的」不算來歷 —— 要寫得出**怎麼推出來的**，下一個人才驗得到；
+#: 客戶裁示則要**引得出原話**，⛔ 不得改寫語意（改寫＝把客戶的裁示換成自己的版本）。
+#: ⚠️ 兩筆的**鍵集合必須一致**（含 `wireframe_value`）：鍵不齊會讓守衛只對其中一筆生效，
+#:   而「只對一筆生效的守衛」看起來是綠的（CLAUDE.md §-2 規則 6 那個死碼實證的同一族）。
 COLS_DERIVATION: Final[Mapping[str, Mapping[str, object]]] = _frozen({
     "today.holdings": _frozen({
         "value": (1, 1, 1),
@@ -155,6 +204,11 @@ COLS_DERIVATION: Final[Mapping[str, Mapping[str, object]]] = _frozen({
         "decided_on": "2026-09-21",
         "is_wireframe_value": False,
         "wireframe_defines_cols": False,   # 線框 `n2` 未定義此 block 的 cols
+        # 🆕 2026-09-22 補（與 `today.summary` 那筆的鍵集合對齊）：
+        # 線框沒寫 ⇒ **沒有「被覆寫掉的線框值」這種東西**。
+        # ⛔ 不得填一個 tuple 進來：填了就等於宣稱「線框本來寫了 X、我把它改成 Y」，
+        #    而「覆寫線框」是**客戶才能做的事**（CLAUDE.md §-1.5.D §03-2 ①）。
+        "wireframe_value": None,
         "spec_section": "UI_PAGE_TODAY.md §① holdings cols 段",
         "basis": (
             "① `cols` 語意＝block 內部一列幾格：`src/ui/views/_ui_kit.py::grid()` 逐字 —— "
@@ -180,6 +234,50 @@ COLS_DERIVATION: Final[Mapping[str, Mapping[str, object]]] = _frozen({
         #         ::test_rejected_singular_noun_argument_is_not_in_the_derivation_chain
         "rejected_basis": (
             "「卡 `.blk.t2`」是單數 ⇒ 只有一張卡（中文不標複數，⛔ 推不出來，已推翻）",
+        ),
+    }),
+    # ═══════════════════════════════════════════════════════════
+    # 🔵 客戶 2026-09-22 裁示 B —— U-1（`today.summary` 的 3/2/1 是卡內欄數還是
+    #    層網格）結案。原登記見 UI_PAGE_TODAY.md ③ 尚未判定段，現已搬到 ③「U-1 已決」段。
+    #
+    # 🔴 **本筆最重要的一句：客戶裁示的是「第三個形狀」。**
+    #    ⛔ 不得被寫成「客戶選了線框那端」，也⛔ 不得被寫成「客戶選了原型那端」——
+    #      · 線框那端＝「**卡內三欄網格 3/2/1**」：客戶**同意有三個東西**（三張卡），
+    #        但**不同意它們是一張卡內的三欄**（裁示逐字「不卡內三欄」）；
+    #      · 原型那端＝「**一張 `.blk.t2` 卡內三條 `.rowline` 垂直堆疊**」：
+    #        客戶**同意卡內不再有網格**，但**不同意它們共用一張卡**（逐字「三張獨立卡」）。
+    #    ⇒ 兩端**各被採用一半、各被否掉一半**，合起來是一個**兩端都沒有畫過**的形狀。
+    #    ⛔ 日後任何人把這筆改寫成「客戶採用了線框／原型」都是竄改裁示。
+    # ═══════════════════════════════════════════════════════════
+    "today.summary": _frozen({
+        "value": (1, 1, 1),
+        "decided_by": "客戶",
+        "decided_on": "2026-09-22",
+        "is_wireframe_value": False,
+        # 🔵 與 holdings 那筆的**關鍵差異**：線框**有**定義這個 block 的 cols（3/2/1），
+        #    本筆是**覆寫**它、⛔ 不是填洞。⇒ 只有客戶做得到（§-1.5.D §03-2 ①）。
+        "wireframe_defines_cols": True,
+        # 被覆寫掉的那個線框值，逐字留著 —— ⛔ 不得因為「已經不用了」就刪：
+        # **線框檔本身沒有改**，下一個人去讀 `wf_page_today.js` 仍會讀到 3/2/1，
+        # 要靠這一欄才對得起來（否則會以為 code 寫錯而「改回去」）。
+        "wireframe_value": (3, 2, 1),
+        "spec_section": "UI_PAGE_TODAY.md ③「U-1 已決」段",
+        "basis": (
+            "① 客戶 2026-09-22 裁示 B（逐字，⛔ 不得改寫語意）："
+            "「把 today.summary 從「卡內三欄」改成「三張獨立卡」。」",
+            "②「三張卡各自獨立，不互相壓縮」（客戶逐字）⇒ "
+            "`BLOCK_COLS[\"today.summary\"]` 3/2/1 → 1/1/1 —— "
+            "`cols` ＝ block 內部一列幾格，1 ⇒ 每列一格、三張卡在 block 內各佔一列"
+            "垂直堆疊，⛔ 不會被擠成三分之一寬互相壓縮。",
+            "③「layer_html 的 3 欄不變，block 內部不再巢狀網格」（客戶逐字）⇒ "
+            "`LAYER_GRID_COLS[2]` 維持 `(3, 2, 1)`、⛔ 不動 —— "
+            "客戶動的是 **block 內部**那一層網格，⛔ 不是**層級**網格。",
+        ),
+        # ⛔ 兩個**被裁掉**的讀法（＝ U-1 矛盾的兩端），⛔ 不得補回 `basis`：
+        "rejected_basis": (
+            "線框讀法「卡內三欄網格 3/2/1」：客戶裁示不採（逐字「不卡內三欄」）",
+            "舊原型讀法「一張 `.blk.t2` 卡內三條 `.rowline`」：客戶裁示不採"
+            "（逐字「三張獨立卡」—— ⛔ 不是一張卡）",
         ),
     }),
 })
@@ -550,7 +648,7 @@ def holdings_badge(*, n_classified: int) -> int:
 __all__ = [
     "LAYERS", "BLOCK_COLS", "BLOCK_BADGES", "WITHDRAWN_BLOCKS", "OPEN_ITEMS",
     # `cols` 的來歷（⛔ 註解不算數，來歷要機器讀得到）
-    "COLS_FROM_WIREFRAME", "COLS_DERIVED_BY_LEAD",
+    "COLS_FROM_WIREFRAME", "COLS_DERIVED_BY_LEAD", "COLS_RULED_BY_CLIENT",
     "COLS_PROVENANCE", "DERIVED_COLS", "COLS_DERIVATION", "cols_scope",
     # 層級網格（⛔ 與 BLOCK_COLS 是兩個不同的網格）
     "LAYER_GRID_COLS", "blocks_per_row", "rows_of_layer",

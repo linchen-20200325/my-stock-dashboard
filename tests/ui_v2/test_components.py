@@ -421,8 +421,11 @@ def test_three_breakpoints():
      (881, 3), (1440, 3)],    # ≥881 桌機
 )
 def test_resolve_cols_picks_by_breakpoint(viewport, expected):
-    # 線框 cols 記法為 (桌機, 平板, 手機)；此處用 `.g3` 的 3/2/1
-    # （UI_PAGE_TODAY.md ①「第二層」today.summary 條）
+    # 線框 cols 記法為 (桌機, 平板, 手機)；此處用 `.g3` 的 3/2/1 ——
+    # 現行出處＝`today.detail` 的 block cols（UI_PAGE_TODAY.md ①「第四層」段）
+    # ／第二層層級網格 `LAYER_GRID_COLS[2]`（UI_PAGE_TODAY.md ①「第二層」層級網格段）。
+    # ⚠️ ~~（UI_PAGE_TODAY.md ①「第二層」today.summary 條）~~ —— 2026-09-22 客戶裁示 B
+    # 已把 `today.summary` 的 block cols 覆寫為 1/1/1，該處不再是 3/2/1 的出處。
     assert components.resolve_cols((3, 2, 1), viewport) == expected
 
 

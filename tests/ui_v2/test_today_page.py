@@ -40,17 +40,36 @@
     規格洞已補 —— `today.holdings` ＝ `(1, 1, 1)`，但它是**總管推導值、⛔ 不是線框值**，
     故**必須**同時登記在 `COLS_PROVENANCE`／`DERIVED_COLS`／`COLS_DERIVATION`。
     「線框沒定義就不准填」仍然成立於**沒有來歷**的情形。
+    🔵 **2026-09-22 更新（有意識的政策變更，⛔ 不是漏刪；決策者：客戶，裁示 B）**：
+    `today.summary` ＝ `(1, 1, 1)`（原線框值 3/2/1 被客戶**覆寫**）——
+    客戶逐字「把 today.summary 從「卡內三欄」改成「三張獨立卡」」。
+    它是**客戶裁示值、⛔ 不是線框值**，同樣必須登記三處。
+    ⚠️ **這與 holdings 那筆不是同一件事**：holdings 是**填線框沒寫的洞**，
+    summary 是**推翻線框寫過的值** —— 後者**只有客戶做得到**
+    （CLAUDE.md §-1.5.D §03-2 ①：版面異動必須客戶拍板）。
 
-`COLS_PROVENANCE : Mapping[str, str]`   # 每個 `BLOCK_COLS` key → 來歷（兩個字面常數之一）
-`COLS_FROM_WIREFRAME / COLS_DERIVED_BY_LEAD : str`
-`DERIVED_COLS : frozenset[str]`         # 來歷不是線框的 block，⛔ 不得漏登
+`COLS_PROVENANCE : Mapping[str, str]`   # 每個 `BLOCK_COLS` key → 來歷
+                                        # （~~兩~~ **三**個字面常數之一，2026-09-22 起）
+`COLS_FROM_WIREFRAME / COLS_DERIVED_BY_LEAD / COLS_RULED_BY_CLIENT : str`
+    🔵 **第三種（`COLS_RULED_BY_CLIENT`）2026-09-22 新增**：線框**有**定義此 block 的
+    `cols`，但客戶**明示裁示覆寫**。⚠️ 與 `COLS_DERIVED_BY_LEAD` 的關鍵差異 ——
+    推導＝**填線框沒寫的洞**（`wireframe_defines_cols=False`／`wireframe_value=None`）；
+    裁示＝**推翻線框寫過的值**（`wireframe_defines_cols=True`／`wireframe_value` 是舊值）。
+`DERIVED_COLS : frozenset[str]`         # 來歷不是線框的 block（推導填洞／客戶裁示覆寫），
+                                        # ⛔ 不得漏登
 `COLS_DERIVATION : Mapping[str, Mapping]`  # `basis`(tuple) / `decided_by` / `decided_on`
                                            # / `is_wireframe_value` / `wireframe_defines_cols`
+                                           # / 🆕 `wireframe_value`（被覆寫掉的線框值；
+                                           #      填洞那筆為 `None`）/ `spec_section`
+                                           # ⚠️ 兩筆**鍵集合必須一致**，⛔ 不得一筆有一筆沒有
 `cols_scope(block_key) -> str`          # 一律 "inside_block"（⛔ 不是層網格）
 
 `LAYER_GRID_COLS : Mapping[int, tuple[int, int, int]]`
     **同一層的幾個 block 彼此怎麼並排**（⛔ 與 `BLOCK_COLS` 是兩個不同的網格）。
     只登記第二層 ＝ `(3, 2, 1)`（客戶 2026-09-16「3 張並排卡」＋ 原型 `.g3` 實測）。
+    🔵 **2026-09-22 裁示 B 之下本值⛔ 不變**：客戶逐字「layer_html 的 3 欄不變，
+    block 內部不再巢狀網格」—— 改的是 `BLOCK_COLS["today.summary"]`（block 內部），
+    ⛔ 不是本常數（層級網格）。**兩個網格仍是兩件事。**
 `blocks_per_row(layer, viewport_px) -> int`
 `rows_of_layer(layer, viewport_px) -> int`
 
@@ -71,6 +90,10 @@
 `SUMMARY_COLUMNS : tuple[Mapping, ...]`
     第二層 `today.summary` 三欄（位階／動能／風險），每欄：
       `name` / `source`(str|None) / `wired`(bool) / `badge`(int|None)
+    🔵 **2026-09-22 裁示 B 只改「怎麼排」，⛔ 沒有改「有哪幾個」**：三個仍在、名字仍是
+    線框逐字的位階／動能／風險；變的是它們從**一張卡內的三欄**變成**三張獨立卡**
+    （`BLOCK_COLS["today.summary"]` 3/2/1 → 1/1/1）。
+    ⚠️ 線框 `name` 字串「③ 三欄摘要（位階／動能／風險）」是**客戶審過的逐字**，⛔ 不動。
 
 `BADGES_ON_PAGE / BADGES_NOT_ON_PAGE : frozenset[int]`
 
@@ -78,6 +101,9 @@
 `MAIN_CTA_RETRY_NOTE : str`
 `MAIN_CTA_CONTRACT_DRIFT_NOTE : str`
 `G3_COLS : tuple[int, int, int]`  ＝ (3, 2, 1)
+    🔵 **2026-09-22 起 `today.summary` ⛔ 不再等於它**（裁示 B）；
+    本常數**沒有退役** —— `today.detail` 的 block cols 與第二層 `LAYER_GRID_COLS[2]`
+    仍是這個線框值。
 
 `HOLDINGS_DISPLAY_FIELDS : tuple[str, ...]`
     **白名單（准許清單），⛔ 不是必填清單** —— UI_PAGE_TODAY.md ①「第二層」today.holdings 條
@@ -204,6 +230,25 @@ def test_holdings_cols_is_filled_but_must_declare_a_non_wireframe_provenance():
     assert page_today.COLS_PROVENANCE["today.holdings"] != page_today.COLS_FROM_WIREFRAME
 
 
+def test_the_three_provenance_literals_are_distinct_and_exhaustive():
+    """🔵 **2026-09-22 新增（客戶裁示 B 生出第三種來歷）**：三個來歷字面值
+    **互不相等**，且 `COLS_PROVENANCE` 只會用這三個之一。
+
+    為什麼要釘「互不相等」：三者是**靠字串比對**在分辨的
+    （`DERIVED_COLS` ＝ `src != COLS_FROM_WIREFRAME`）。只要有人把其中兩個寫成同一個
+    字串，分類就會**靜默失效** —— 客戶裁示值會被當成線框值、或反之，
+    而**沒有任何測試會紅**（這正是 `CLAUDE.md §-2` 規則 6 那個死碼實證的同一族失效）。
+    """
+    literals = (page_today.COLS_FROM_WIREFRAME,
+                page_today.COLS_DERIVED_BY_LEAD,
+                page_today.COLS_RULED_BY_CLIENT)
+    assert len(set(literals)) == 3, f"來歷字面值撞名：{literals}"
+    assert all(isinstance(x, str) and x.strip() for x in literals)
+    assert set(page_today.COLS_PROVENANCE.values()) <= set(literals), (
+        "出現了三種之外的來歷 —— 新增一種就必須同步 `COLS_DERIVATION` 與本檔守衛"
+    )
+
+
 def test_every_declared_cols_says_where_it_came_from():
     """⛔ 不得有「來歷不明」的 `cols`：`BLOCK_COLS` 的每一個 key 都要有一筆來歷登記，
     且 `DERIVED_COLS` **恰好**等於那些來歷不是線框的 block（⛔ 不得漏登、⛔ 不得多登）。"""
@@ -211,27 +256,166 @@ def test_every_declared_cols_says_where_it_came_from():
     derived = {k for k, v in page_today.COLS_PROVENANCE.items()
                if v != page_today.COLS_FROM_WIREFRAME}
     assert page_today.DERIVED_COLS == frozenset(derived)
-    # 線框值恰為原有七筆（UI_PAGE_TODAY.md ①「葉外 chrome」／「第一層 `today.verdict`」／
-    # 「第二層」today.summary 與 today.key_banner 兩條／「第三層 `today.actions`」／「第四層」各段），
-    # 推導值恰為 `today.holdings` 一筆。
+    # ⚠️ ~~線框值恰為原有七筆（…含 today.summary…），推導值恰為 `today.holdings` 一筆。~~
+    #    ~~assert 集合含 "today.summary"；assert DERIVED_COLS == {"today.holdings"}~~
+    # 🔵 **2026-09-22 有意識的政策變更，⛔ 不是漏刪；決策者：客戶（裁示 B）。**
+    # **舊斷言的理由仍然成立**：在裁示之前，`today.summary` 的值確實逐字來自線框。
+    # **被權衡掉的是那個前提** —— 客戶已覆寫該值，再把它登記成線框值就是造假（§1）。
+    # 現行：線框值**六筆**（UI_PAGE_TODAY.md ①「葉外 chrome」／「第一層 `today.verdict`」／
+    # 「第二層」today.key_banner 條／「第三層 `today.actions`」／「第四層」各段），
+    # 非線框值**兩筆**：`today.holdings`（總管推導填洞）＋ `today.summary`（客戶裁示覆寫）。
     assert set(page_today.BLOCK_COLS) - page_today.DERIVED_COLS == {
-        "today.statusbar", "today.verdict", "today.summary",
+        "today.statusbar", "today.verdict",
         "today.key_banner", "today.actions", "today.warroom", "today.detail",
     }
-    assert page_today.DERIVED_COLS == frozenset({"today.holdings"})
+    assert page_today.DERIVED_COLS == frozenset({"today.holdings", "today.summary"})
 
 
 def test_derived_cols_carry_a_written_derivation_chain():
-    """推導值⛔ 不得只有一句「總管說的」：要寫得出**推導鏈**、決策者與日期，
-    這樣下一個人才驗得到它是怎麼推出來的（§-2 規則 6：來歷要留得住）。"""
+    """非線框值⛔ 不得只有一句「總管說的」／「客戶說的」：要寫得出**推導鏈或裁示逐字**，
+    這樣下一個人才驗得到它是怎麼來的（§-2 規則 6：來歷要留得住）。
+
+    ⚠️ **本條只驗兩種來歷的「共通部分」。** `decided_by`／`decided_on`／
+    `wireframe_defines_cols`／`wireframe_value` 兩者**本來就不同**，
+    ⛔ 不得用一個 loop 對兩種來歷套同一組斷言 —— 那會讓較寬鬆的那一組**掩護**另一組。
+    逐來歷的斷言見下面兩條；逐 block 的明示值見
+    `test_each_non_wireframe_block_is_pinned_to_its_own_provenance`。
+    """
+    keysets = []
     for block in page_today.DERIVED_COLS:
         note = page_today.COLS_DERIVATION[block]
+        keysets.append(frozenset(note))
         assert note["is_wireframe_value"] is False
-        assert note["wireframe_defines_cols"] is False
-        assert note["decided_by"] == "AI 總管"
-        assert note["decided_on"] == "2026-09-21"
+        # 登記的值必須就是實際在用的值 —— 兩邊漂開＝來歷指向一個沒人在用的數字
+        assert note["value"] == page_today.BLOCK_COLS[block], (
+            f"{block}：`COLS_DERIVATION` 登記 {note['value']}，"
+            f"`BLOCK_COLS` 卻是 {page_today.BLOCK_COLS[block]}"
+        )
         assert isinstance(note["basis"], tuple) and len(note["basis"]) >= 3
         assert all(isinstance(line, str) and line.strip() for line in note["basis"])
+        assert isinstance(note["decided_on"], str) and note["decided_on"].strip()
+        assert isinstance(note["spec_section"], str) and note["spec_section"].strip()
+    # 鍵集合必須一致：鍵不齊的那一筆會**悄悄跳過**下面兩條的部分斷言（守衛看起來還是綠的）
+    assert len(set(keysets)) == 1, f"兩筆的鍵集合不一致：{[sorted(k) for k in keysets]}"
+
+
+def test_the_lead_may_only_fill_a_hole_never_override_the_wireframe():
+    """⭐ **總管只能填洞、⛔ 不能覆寫線框** —— `CLAUDE.md §-1.5.D §03-2 ①` 的機器版。
+
+    §03-2 ①：**任何版面佈局（Layout）、欄位增減或分頁動線異動，必須先出線框草稿
+    送客戶拍板** ⇒ 改一個線框**已經寫過**的 `cols`＝版面異動＝**只有客戶能拍板**。
+    總管能做的只有一件事：線框**沒寫**的地方，把洞補起來並寫明來歷。
+
+    ⇒ 可觀測形式：來歷是 `COLS_DERIVED_BY_LEAD` 的那幾筆，
+    `wireframe_defines_cols` 必為 `False`、`wireframe_value` 必為 `None`
+    （線框沒寫 ⇒ **沒有**被覆寫掉的舊值這種東西）。
+    ⛔ 若有人把總管的一筆寫成 `wireframe_defines_cols=True`，那就是總管在覆寫線框。
+    """
+    checked = 0
+    for block, src in page_today.COLS_PROVENANCE.items():
+        if src != page_today.COLS_DERIVED_BY_LEAD:
+            continue
+        note = page_today.COLS_DERIVATION[block]
+        assert note["decided_by"] == "AI 總管", f"{block}：推導值的決策者只能是 AI 總管"
+        assert note["wireframe_defines_cols"] is False, (
+            f"{block}：總管⛔ 不得覆寫線框已定義的 cols（§-1.5.D §03-2 ①，只有客戶能拍板）"
+        )
+        assert note["wireframe_value"] is None, (
+            f"{block}：線框沒定義 ⇒ ⛔ 不得填一個「被覆寫掉的線框值」"
+        )
+        checked += 1
+    assert checked, "一筆總管推導值都沒有 —— 本條這一輪沒有鑑別力，請重看"
+
+
+def test_a_client_ruling_is_always_an_override_of_an_existing_wireframe_value():
+    """⭐ **客戶裁示值＝對「線框已經寫過的值」的覆寫** —— 與上一條互為鏡像。
+
+    這個方向也要釘死，否則 `COLS_RULED_BY_CLIENT` 會變成一個**萬用脫身門**：
+    任何人想繞過「線框沒寫就不准填」，只要把來歷標成「客戶裁示」就通關了。
+    ⇒ 釘住：客戶裁示必須**指得出它覆寫掉的那個線框值**（三元組），
+    而且那個舊值**必須真的不同於**現行值 —— 相同就代表沒有覆寫任何東西，
+    那筆根本不該叫裁示（它就是線框值）。
+    """
+    checked = 0
+    for block, src in page_today.COLS_PROVENANCE.items():
+        if src != page_today.COLS_RULED_BY_CLIENT:
+            continue
+        note = page_today.COLS_DERIVATION[block]
+        assert note["decided_by"] == "客戶", f"{block}：裁示值的決策者只能是客戶"
+        assert note["wireframe_defines_cols"] is True, (
+            f"{block}：線框沒寫的地方⛔ 沒有東西可以「覆寫」——"
+            "那是填洞（`COLS_DERIVED_BY_LEAD`），不是裁示"
+        )
+        wf = note["wireframe_value"]
+        assert isinstance(wf, tuple) and len(wf) == 3 and all(isinstance(n, int) for n in wf), (
+            f"{block}：`wireframe_value` 必須是被覆寫掉的那個線框三元組，收到 {wf!r}"
+        )
+        assert wf != note["value"], (
+            f"{block}：`wireframe_value` 與現行值相同（{wf}）—— 那就沒有覆寫任何東西"
+        )
+        checked += 1
+    assert checked, "一筆客戶裁示值都沒有 —— 本條這一輪沒有鑑別力，請重看"
+
+
+def test_each_non_wireframe_block_is_pinned_to_its_own_provenance():
+    """逐 block 明示（⛔ 不用 loop 套同一組斷言）—— 兩筆的來歷、決策者、日期都不一樣。
+
+    為什麼要逐 block 寫死：上面兩條是**依來歷分派**的，若有人把某一筆的來歷改掉，
+    它就會整筆跳到另一組斷言去、而**兩組都會通過**。本條是那個漏洞的補丁：
+    **哪個 block 該是哪一種來歷**，在這裡釘死。
+    """
+    # ① `today.holdings` ＝ 總管推導填洞（UI_PAGE_TODAY.md §① holdings cols 段）
+    holdings = page_today.COLS_DERIVATION["today.holdings"]
+    assert page_today.COLS_PROVENANCE["today.holdings"] == page_today.COLS_DERIVED_BY_LEAD
+    assert holdings["decided_by"] == "AI 總管"
+    assert holdings["decided_on"] == "2026-09-21"
+    assert holdings["wireframe_defines_cols"] is False
+    assert holdings["wireframe_value"] is None
+    assert holdings["value"] == (1, 1, 1) == page_today.BLOCK_COLS["today.holdings"]
+
+    # ② 🔵 `today.summary` ＝ 客戶 2026-09-22 裁示 B 覆寫（UI_PAGE_TODAY.md ③「U-1 已決」段）
+    summary = page_today.COLS_DERIVATION["today.summary"]
+    assert page_today.COLS_PROVENANCE["today.summary"] == page_today.COLS_RULED_BY_CLIENT
+    assert page_today.COLS_PROVENANCE["today.summary"] != page_today.COLS_FROM_WIREFRAME
+    assert summary["decided_by"] == "客戶"
+    assert summary["decided_on"] == "2026-09-22"
+    assert summary["wireframe_defines_cols"] is True
+    assert summary["wireframe_value"] == (3, 2, 1)     # 線框 `wf_page_today.js` 的舊值
+    assert summary["value"] == (1, 1, 1) == page_today.BLOCK_COLS["today.summary"]
+
+
+def test_the_client_ruling_text_is_not_quietly_rewritten():
+    """🔴 **文字守衛：防裁示被改寫。** 客戶裁示 B 的兩個承重字眼必須留在 `basis` 裡。
+
+    客戶原話：「三張獨立卡，不卡內三欄」＋「layer_html 的 3 欄不變，
+    block 內部**不再巢狀網格**」。這兩句就是「為什麼是 1/1/1」的**全部理由** ——
+    一旦被改寫成「為了版面一致」「為了效能」之類的話，這筆就從**客戶裁示**
+    退化成**某個人的主張**，而值還在（`CLAUDE.md §-2` 規則 6：來歷錯比沒有來歷更危險）。
+    """
+    basis = page_today.COLS_DERIVATION["today.summary"]["basis"]
+    assert any("三張獨立卡" in line for line in basis), (
+        "裁示逐字「三張獨立卡」不見了 —— ⛔ 不得改寫客戶原話"
+    )
+    assert any("巢狀網格" in line for line in basis), (
+        "裁示逐字「block 內部不再巢狀網格」不見了 —— ⛔ 不得改寫客戶原話"
+    )
+
+
+def test_the_client_ruling_changed_the_block_grid_not_the_layer_grid():
+    """🔴 客戶逐字「**layer_html 的 3 欄不變**」—— 裁示只動 block 內部網格。
+
+    ⇒ 兩件事同時成立才算做對：
+      · `BLOCK_COLS["today.summary"]` ＝ `(1, 1, 1)`（卡內各佔一列、⛔ 不互相壓縮）；
+      · `LAYER_GRID_COLS[2]` 仍 ＝ `(3, 2, 1)`（三張卡在第二層仍並排）。
+    只做前者而順手把層網格也改成 1/1/1 ＝ 把三張卡疊成直條，
+    **正面違反客戶 2026-09-16「第二層＝3 張並排卡」的裁示**（兩次裁示要一起成立）。
+    """
+    assert page_today.BLOCK_COLS["today.summary"] == (1, 1, 1)
+    assert page_today.LAYER_GRID_COLS[2] == (3, 2, 1)
+    assert page_today.BLOCK_COLS["today.summary"] != page_today.LAYER_GRID_COLS[2], (
+        "block 網格與層級網格撞成同一個值 —— 兩個網格會分辨不出來"
+    )
+    assert page_today.cols_scope("today.summary") == "inside_block"
 
 
 def test_rejected_singular_noun_argument_is_not_in_the_derivation_chain():
@@ -289,8 +473,15 @@ def test_summary_has_three_columns_named_by_the_wireframe():
     # UI_PAGE_TODAY.md ③「`today.verdict` 形狀」段：線框 `today.summary` 的 name 逐字
     # ＝「③ 三欄摘要（位階／動能／風險）」
     assert tuple(col["name"] for col in page_today.SUMMARY_COLUMNS) == ("位階", "動能", "風險")
-    # ①「第二層」today.summary 條：線框 `cols 3/2/1`
-    assert page_today.BLOCK_COLS["today.summary"] == (3, 2, 1)
+    # ⚠️ ~~①「第二層」today.summary 條：線框 `cols 3/2/1`~~
+    #    ~~assert page_today.BLOCK_COLS["today.summary"] == (3, 2, 1)~~
+    # 🔵 **2026-09-22 有意識的政策變更，⛔ 不是漏刪；決策者：客戶（裁示 B）。**
+    # **舊斷言的理由仍然成立**：它釘的是線框值，而線框 `wf_page_today.js` 的
+    # `today.summary` block 確實逐字寫 `cols: { desktop: 3, tablet: 2, phone: 1 }`。
+    # **被權衡掉的是「線框值＝現行值」這個前提** —— 客戶裁示 B 已覆寫它。
+    # ⚠️ **三欄的「名字」與「有幾個」都沒有變**：客戶改的是它們**怎麼排**
+    #    （一張卡內三欄 → 三張獨立卡），⛔ 不是改名字、⛔ 不是刪欄。
+    assert page_today.BLOCK_COLS["today.summary"] == (1, 1, 1)   # ③「U-1 已決」段
 
 
 def test_regime_column_keeps_its_existing_wiring():
@@ -630,14 +821,29 @@ def test_holdings_with_nothing_classified_is_a_gap_not_perfect_diversification()
 
 
 # ══════════════════════════════════════════════════════════════════
-# C-8 三斷點下的 `.g3` 欄數（UI_PAGE_TODAY.md ①「第二層」today.summary 條／
-#     ①「第四層」段／①「排列（三斷點）」段）
+# C-8 三斷點下的 `.g3` 欄數
+#     ⚠️ ~~（UI_PAGE_TODAY.md ①「第二層」today.summary 條／①「第四層」段／~~
+#         ~~①「排列（三斷點）」段）~~
+#     🔵 **2026-09-22 有意識的政策變更，⛔ 不是漏刪；決策者：客戶（裁示 B）。**
+#     `today.summary` 的 block cols 已被客戶覆寫成 1/1/1 ⇒ 本段 3/2/1 的**來源**改指：
+#       · **UI_PAGE_TODAY.md ①「第四層」段**（`today.detail` 的 block cols），與
+#       · **UI_PAGE_TODAY.md ①「第二層」層級網格段**（`LAYER_GRID_COLS[2]`），
+#       ＋ ①「排列（三斷點）」段（斷點語意）。
+#     **舊出處的理由仍然成立**（當時 summary 確實寫 3/2/1，是最貼近的出處），
+#     只是那個前提已被客戶裁示覆寫。⚠️ **`G3_COLS` 這個常數本身⛔ 沒有退役。**
 # ══════════════════════════════════════════════════════════════════
 def test_g3_cols_declaration():
     # 線框 `cols 3/2/1` ＝ (桌機, 平板, 手機)
     assert page_today.G3_COLS == (3, 2, 1)
-    assert page_today.BLOCK_COLS["today.summary"] == page_today.G3_COLS
+    # ⚠️ ~~assert page_today.BLOCK_COLS["today.summary"] == page_today.G3_COLS~~
+    #    🔵 2026-09-22 客戶裁示 B 覆寫後**改為反向釘住**：summary ⛔ 不再等於 `G3_COLS`。
+    #    ⛔ 不是刪掉這一行了事 —— 直接刪會讓「summary 曾經是 3/2/1」這件事沒人擋得住
+    #    回頭被改回去；反向斷言才會在有人改回去時**變紅**。
+    assert page_today.BLOCK_COLS["today.summary"] != page_today.G3_COLS
+    assert page_today.BLOCK_COLS["today.summary"] == (1, 1, 1)
+    # `G3_COLS` 仍有兩個使用者（⇒ ⛔ 不得因為 summary 不用了就把它拔掉）
     assert page_today.BLOCK_COLS["today.detail"] == page_today.G3_COLS
+    assert page_today.LAYER_GRID_COLS[2] == page_today.G3_COLS
 
 
 @pytest.mark.parametrize(
