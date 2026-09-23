@@ -1314,15 +1314,18 @@ class TestNoHardcodedPositionPct:
             "本頁寫死了持股百分比：\n" + "\n".join(_hits)
             + "\n持股百分比只能來自 `allocation_service.get_allocation()`")
 
-    def test_the_targets_come_from_l0_not_from_literals(self):
-        from shared.dividend_station_thresholds import (
-            CORE_TARGET_PCT,
-            SATELLITE_TAKE_PROFIT_PCT,
-            SATELLITE_TARGET_PCT,
-        )
+    def test_the_take_profit_threshold_comes_from_l0_not_from_literals(self):
+        """停利門檻仍是 L0 SSOT —— **這一條沒有被 D-1(b) 改到。**
 
-        assert P.CORE_TARGET_PCT is CORE_TARGET_PCT
-        assert P.SATELLITE_TARGET_PCT is SATELLITE_TARGET_PCT
+        ⚠️ 原本這裡還釘著 `P.CORE_TARGET_PCT` / `P.SATELLITE_TARGET_PCT`。
+        **契約已由客戶 2026-09-23 裁示 D-1(b) 反轉**：目標比例只能由使用者
+        自己填，本頁**不得**持有那兩個常數（反向守衛見
+        `TestAllocationTargetIsUserSupplied`）。**這是有意識的政策變更，
+        不是把測試改鬆** —— 舊斷言的理由（門檻不得是字面值）仍然成立，
+        只是「目標」這一項已經不該由系統供給，故它連讀都不該讀。
+        """
+        from shared.dividend_station_thresholds import SATELLITE_TAKE_PROFIT_PCT
+
         assert P.SATELLITE_TAKE_PROFIT_PCT is SATELLITE_TAKE_PROFIT_PCT
 
     def test_the_position_range_is_passed_through_from_l3(self):
@@ -1675,6 +1678,184 @@ class TestTheWarroomIsWiredNow:
                        "avg_price": 30.0},)))[1])
         assert any("不是你的全部" in _v for _v in _facts.values())
 
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【11.5】🔴 D-1(b) 反向守衛：⑤ 的目標比例只能由使用者自己填
+# ══════════════════════════════════════════════════════════════════
+#: 本類要擋的那個**回頭路**：有人覺得「空著很醜」，把 L0 的 80/20 填回去
+#: 當預設目標，再拿它算出一個看起來很精確的「偏離 −4.0 個百分點」。
+#: 那是 `UI_PAGE_HOLD.md §③` 硬禁令第 2 條逐字禁止的事，而且沒有任何測試
+#: 會因此變紅 —— 所以才需要這一類。
+class TestAllocationTargetIsUserSupplied:
+    """🔴 客戶 2026-09-23 裁示 **D-1(b)** 的守衛。
+
+    **裁示逐字**：「移 `hold.alloc_deviation` 的 80/20 預填，改由使用者填」。
+    **規格出處** `docs/v2/spec/UI_PAGE_HOLD.md §③` 三條硬禁令第 2 條**逐字**：
+    「⛔ **禁止預設最佳配置推薦。** 目標比例**只能由使用者自己填**，
+    系統⛔ 不得預填、⛔ 不得建議、⛔ 不得給「參考配置」」
+    （該節標題逐字「**不得以任何理由放寬**」，且 `UI_PAGE_HOLD` 前言逐字
+    「**凌駕本檔其餘版面規定**」）。
+
+    ⚠️ **本類刻意不寫死 `80` / `20` 兩個字面數字。** 比對值一律從 L0
+    `shared/dividend_station_thresholds` **現場讀** —— 在測試裡寫死等於開第二個
+    真相源（§2.1 SSOT）：日後 L0 改成 75/25，寫死版會**安靜地失效**，
+    而這正是本守衛最需要擋住的那種失效。
+
+    ⚠️ **L0 常數本身不該被刪，本類也不檢查它被刪。** 配息站台
+    （`ui/etf/etf_tab_dividend_station.py` 的目標配置說明、
+    `render/station_cards.py` 的「兩把尺」揭露表）與 L3
+    `dividend_station_service.compute_allocation_split` 仍在用它 —— 那是另一個
+    題目。被移除的是「**在本頁把它當成使用者的目標**」。
+    """
+
+    #: 實際佔比**一律由 L0 目標推導而來**，確保它永遠不等於目標值
+    #: （寫死 67.5 的話，哪天 L0 改成 67.5/32.5 這道守衛就自己瞎了）。
+    _ACTUAL_OFFSET_PP: float = 12.5
+    #: `core_dev` 的哨兵值：故意挑一個不會從別處長出來的數，
+    #: 它一旦出現在畫面上，就代表有人把「偏離量」印回去了。
+    _DEV_SENTINEL: float = -41.7
+
+    @staticmethod
+    def _l0_targets() -> tuple[float, float]:
+        from shared.dividend_station_thresholds import (
+            CORE_TARGET_PCT,
+            SATELLITE_TARGET_PCT,
+        )
+
+        return float(CORE_TARGET_PCT), float(SATELLITE_TARGET_PCT)
+
+    def _live_station(self) -> P.StationReadout:
+        """**照 L3 真的會回的形狀**餵資料 —— 含 `core_target` / `sat_target` /
+        `core_dev` 三個欄位。
+
+        ⚠️ 這三個欄位**刻意保留**：L3 `compute_allocation_split()` 現在就是
+        這樣回的（本輪的檔案邊界不含 L3）。本頁的義務是「**拿到了也不准印**」，
+        而不是「因為沒拿到所以印不出來」—— 後者測不出任何東西。
+        """
+        _core_t, _sat_t = self._l0_targets()
+        _core_actual = _core_t - self._ACTUAL_OFFSET_PP
+        return _station(
+            bound=True, holdings_n=3, rows=({"代號": "0056"},),
+            split={"core_pct": round(_core_actual, 1),
+                   "sat_pct": round(100.0 - _core_actual, 1),
+                   "core_target": _core_t, "sat_target": _sat_t,
+                   "core_dev": self._DEV_SENTINEL,
+                   "total_value": 1234.0, "partial": False,
+                   "held_n": 3, "valued_n": 3})
+
+    @staticmethod
+    def _blob(built) -> str:
+        """一張卡**印到畫面上的全部文字**：卡名＋大字＋三段 note＋facts＋徽章。"""
+        _card, _facts, _badge = built
+        _parts = [_card.label or "", _card.value or "", _badge or ""]
+        # live 卡沒有 Note 是正常的（鐵律 4 只要求非 live 要有）。
+        if _card.note is not None:
+            _parts += list(_note_triple(_card.note))
+        _parts += [f"{_k}{_v}" for _k, _v in _facts]
+        return "\n".join(_parts)
+
+    @staticmethod
+    def _numbers_in(blob: str) -> set[float]:
+        """畫面文字裡出現的所有數值 token。
+
+        ⚠️ 用 token 相等比對而**不是**子字串比對：子字串版會把「1,80**0**」
+        這種無關的數字誤判成目標值，一旦誤報幾次就會有人把守衛刪掉。
+        """
+        import re
+
+        return {float(_m) for _m in re.findall(r"\d+(?:\.\d+)?", blob)}
+
+    # ── (1) 本頁連讀都不該讀那兩個常數 ────────────────────────────
+    def test_the_page_does_not_hold_the_system_default_targets(self):
+        for _name in ("CORE_TARGET_PCT", "SATELLITE_TARGET_PCT"):
+            assert not hasattr(P, _name), (
+                f"`page_hold` 又把 `{_name}` import 回來了 —— "
+                "本頁一旦持有它，下一步就是把它印成「你的目標」（D-1(b)）。"
+                "配息站台要用請在配息站台那邊 import，不要經過本頁")
+
+    def test_the_source_does_not_mention_the_target_constants_as_code(self):
+        """連 `as _c` 這種改名 import 也一起擋掉（`hasattr` 擋不到）。"""
+        _tree = ast.parse(_VIEW.read_text(encoding="utf-8"))
+        _imported = {
+            _a.name
+            for _n in ast.walk(_tree) if isinstance(_n, ast.ImportFrom)
+            for _a in _n.names}
+        assert not ({"CORE_TARGET_PCT", "SATELLITE_TARGET_PCT"} & _imported), (
+            "本頁的 import 清單裡又出現系統預設目標比例（D-1(b) 禁止）")
+
+    # ── (2) 🔴 核心：`hold.alloc_*` 的輸出不得出現系統預設目標 ─────
+    @pytest.mark.parametrize("builder", ["build_allocation_split_card",
+                                         "build_core_satellite_card"])
+    def test_alloc_cards_never_print_the_system_default_target(self, builder):
+        """⑤ 與 ⑥ **共用 `_split_facts()`**，所以兩張都要測。
+
+        只測 ⑤ 的話，有人把預填加回 `_split_facts()` 時 ⑥ 會照印，
+        而 ⑤ 若剛好自己覆蓋掉就不會紅 —— 守衛要釘在共用的那一層。
+        """
+        _core_t, _sat_t = self._l0_targets()
+        _blob = self._blob(getattr(P, builder)(self._live_station()))
+        _nums = self._numbers_in(_blob)
+        assert _core_t not in _nums, (
+            f"{builder} 把系統預設的核心目標 {_core_t:g} 印到畫面上了 —— "
+            "這就是 D-1(b) 移掉的預填（硬禁令第 2 條：目標只能由使用者自己填）")
+        assert _sat_t not in _nums, (
+            f"{builder} 把系統預設的衛星目標 {_sat_t:g} 印到畫面上了（同上）")
+
+    # ── (3) 🔴 沒有目標就沒有偏離：`core_dev` 不得被印出來 ─────────
+    def test_the_deviation_number_is_never_printed(self):
+        """偏離＝實際 − 目標。**目標是使用者的，系統手上沒有。**
+
+        L3 仍然會回一個 `core_dev`（它拿 L0 的 80/20 算的），本頁**拿到也不准印**
+        —— 印出來等於替使用者編一個目標，再拿它算一個看起來精確的差值（§1）。
+        """
+        _want = f"{abs(self._DEV_SENTINEL):g}"
+        for _b in ("build_allocation_split_card", "build_core_satellite_card"):
+            assert _want not in self._blob(getattr(P, _b)(self._live_station())), (
+                f"{_b} 把 L3 的 `core_dev` 印出來了 —— "
+                "沒有使用者填的目標，「偏離幾個百分點」這個數字並不存在（D-1(b)）")
+
+    def test_the_live_card_carries_no_target_derived_badge(self):
+        """徽章「偏離」／「接近目標」同樣是拿假目標判出來的，一併拿掉。"""
+        _badge = P.build_allocation_split_card(self._live_station())[2]
+        assert _badge == "", (
+            f"⑤ 又長出徽章 {_badge!r} —— 「偏離」與「接近目標」都需要一個目標，"
+            "而目標只能由使用者自己填（D-1(b)）")
+
+    # ── (4) 未設定態要誠實講出來，而且不能講成「建議」 ─────────────
+    def test_the_unset_state_is_disclosed_not_swallowed(self):
+        _blob = self._blob(P.build_allocation_split_card(self._live_station()))
+        assert "尚未設定" in _blob, (
+            "拿掉預填之後沒有任何地方告訴使用者「目標還沒設定」—— "
+            "那是靜默省略，不是誠實的未設定態（§1）")
+        assert "不預填" in _blob or "不替你預填" in _blob, (
+            "沒有講出「本站不替你預填」—— 使用者會以為是系統壞了")
+
+    def test_the_unset_copy_is_not_a_recommendation(self):
+        """⚠️ 引導文案**不得變成建議** —— 那會踩同一條禁令。
+
+        ⚠️ **刻意不用「出現『參考配置』就紅」這種字串黑名單**：本文案正是在
+        **引用禁令原文**（「⛔ 不給「參考配置」」），黑名單會把合規的揭露
+        判成違規，而誤報幾次之後就會有人把守衛刪掉。改釘**實質條件** ——
+        文案裡**一個數字都不准有**。沒有數字，就不可能是預填或建議值。
+        """
+        _nums = self._numbers_in(P.TARGET_NOT_SET)
+        assert not _nums, (
+            f"未設定態的文案裡出現數字 {sorted(_nums)} —— "
+            "不管它是 L0 的目標、是 0、還是自己估的，印出來都是預填（D-1(b)）")
+        assert "不替你預填" in P.TARGET_NOT_SET, (
+            "未設定態的文案沒有講出「本站不替你預填」")
+        assert "不建議" in P.TARGET_NOT_SET, (
+            "未設定態的文案沒有講出「不建議」—— 硬禁令第 2 條連建議都禁")
+
+    # ── (5) 現況佔比**仍要照出**（拿掉預填不等於把整格弄消失）──────
+    def test_the_actual_split_is_still_shown(self):
+        _core_t, _ = self._l0_targets()
+        _card = P.build_allocation_split_card(self._live_station())[0]
+        assert _card.state == UI_LIVE
+        assert f"{_core_t - self._ACTUAL_OFFSET_PP:.1f}" in _card.value, (
+            "連**現況佔比**都不見了 —— D-1(b) 移的是目標預填，"
+            "不是整格的觀測值（§1：該照出的照出，該留白的留白）")
 
 # ══════════════════════════════════════════════════════════════════
 # 【12】新增的那一支 L3 也要唯讀（FE-15）
@@ -3363,7 +3544,7 @@ class TestTheAiIsAlwaysDisclosedAsAi:
             "errors": "整批抓取失敗",
             "total": "有效判斷檔數",
             "vix": "VIX",
-            "allocation": "80/20 實際配置偏離",
+            "allocation": "核心／衛星實際佔比",
             "take_profit": "衛星停利",
         }
         assert _keys == set(_said), (
@@ -3373,6 +3554,30 @@ class TestTheAiIsAlwaysDisclosedAsAi:
         for _k, _zh in _said.items():
             assert _zh in P.AI_INPUT_BLOCKS, (
                 f"digest 的 `{_k}` 沒有出現在畫面上那串輸入清單裡")
+
+    def test_the_input_list_cannot_claim_targets_the_seventh_block_never_gets(self):
+        """🔴 **⑦ 說的與 ⑦ 吃的必須一致** —— 殘留②（方案 B）的接線防呆。
+
+        L3 `dividend_station_service` 自 2026-09-23 起有一個
+        **`with_system_targets=False`** 的出口（`docs/v2/spec/UI_PAGE_HOLD.md §③`
+        硬禁令第 2 條：目標比例只能由使用者自己填）。⑦ **一旦改走那個出口**，
+        AI 就**再也拿不到** L0 的 80/20 目標與據以算出的偏離 ——
+        而 `AI_INPUT_BLOCKS` 是畫在卡上的「**哪幾段真的餵進去了**」，
+        它那句「80/20 實際配置偏離」會**當場變成假話**。
+
+        ⚠️ 本測試**不主張**該不該改走新出口（那是客戶層級的決定）；
+        它只釘住「**兩者不准對不起來**」：改了接線卻沒改文案 → **CI 紅燈**，
+        而不是畫面上悄悄印一個使用者無從察覺的假宣稱
+        （`CLAUDE.md §1`「錯誤的數字比沒有數字更危險」＋
+        `§8.2.A.0` 規則 3「清單由測試強制，漏改＝CI 紅燈」）。
+        """
+        import inspect
+
+        _opts_out = "with_system_targets=False" in inspect.getsource(P.load_station)
+        _claims = [_w for _w in ("80/20", "偏離") if _w in P.AI_INPUT_BLOCKS]
+        assert not (_opts_out and _claims), (
+            f"⑦ 已改走「不含系統目標」的 L3 出口，但 `AI_INPUT_BLOCKS` 還在宣稱 "
+            f"{_claims} 會餵進去 —— 這是印在卡上的假話，請一起改")
 
     def test_the_no_memory_tradeoff_is_written_on_the_card(self):
         """「按一次生成一次、本頁不記住」必須寫在卡上，不能只寫在 docstring。"""
@@ -3390,6 +3595,193 @@ class TestTheAiIsAlwaysDisclosedAsAi:
                 P.AiSummaryReadout(requested=True, text="x"),
                 _station_with_digest())[1])
         assert P.AI_NO_COPY_BUTTON in _blob
+
+
+class TestTheSeventhBlockNeverGetsASystemTarget:
+    """🔴 **殘留② 的反向守衛**（客戶 2026-09-23 裁定「**兩個例外並存**」）。
+
+    ⑦ 的接線自本日起走 L3 的 `with_system_targets=False` 出口 ——
+    `load_station()` **實際跑出來**的 digest 與據以組出的 prompt，
+    **一律不得帶系統預設的目標比例與偏離**
+    （`docs/v2/spec/UI_PAGE_HOLD.md §③` 硬禁令第 2 條「目標比例**只能由使用者
+    自己填**」＋ (c)「**AI ⛔ 不得繞過禁令**」）。
+
+    ⚠️ **本類與既有兩組守衛是三件不同的事，⛔ 不是重複造輪子**：
+      · `tests/test_dividend_station_service.py::TestSystemTargetsOptOut`
+        驗的是 **L3 那個出口本身**（直接呼叫 `build_station_digest(...,
+        with_system_targets=False)`）—— 它**一次都沒碰 `load_station`**，
+        ⑦ 的接線被翻回預設，那一整類**照樣全綠**。
+      · 本檔 `TestTheAiIsAlwaysDisclosedAsAi::
+        test_the_input_list_cannot_claim_targets_the_seventh_block_never_gets`
+        驗的是**文案 vs 接線的一致性**，而且讀的是**原始碼文字**
+        （`inspect.getsource`）：接線翻回 `True` 時它的前提 `_opts_out` 變成
+        `False`，於是 `not (False and ...)` **恆真** —— 它**整條失效而不是轉紅**。
+      · 本類驗的是 **⑦ 這條路實際產出的值**：接線一翻回預設 ⇒ **當場紅**。
+        這是「翻那一行」這個動作唯一擋得住回頭路的守衛。
+
+    ⚠️ **比對值一律從 L0 `shared/dividend_station_thresholds` 現場讀**
+    （§2.1 SSOT／§3.3），⛔ 不寫死 `80` / `20`：L0 哪天改成 75/25，
+    寫死版會**安靜地失效**，而那正是本守衛最該擋住的失效方式。
+    """
+
+    #: prompt 裡配置那一行的行首。兩處比對共用，⛔ 不各寫一份。
+    _ALLOC_PREFIX: str = "- 實際配置："
+    #: 讓「實際佔比」永遠離 L0 目標一段距離。⛔ **不寫死 70/30** ——
+    #: 寫死的話，L0 哪天真的改成 70/30，下面「目標值不准出現」就自己瞎了。
+    _CORE_OFFSET_PP: float = 10.0
+
+    @staticmethod
+    def _l0_targets() -> tuple[float, float]:
+        """L0 的系統預設目標 —— **現場讀**，本檔不留第二份。"""
+        from shared.dividend_station_thresholds import (
+            CORE_TARGET_PCT,
+            SATELLITE_TARGET_PCT,
+        )
+
+        return float(CORE_TARGET_PCT), float(SATELLITE_TARGET_PCT)
+
+    @classmethod
+    def _alloc_line(cls, prompt: str) -> str:
+        """prompt 裡配置那一行。**恰好一行**，多了少了都是壞掉。"""
+        _hit = [_l for _l in prompt.splitlines()
+                if _l.startswith(cls._ALLOC_PREFIX)]
+        assert len(_hit) == 1, f"配置行應恰好一行，實得 {len(_hit)} 行：{_hit}"
+        return _hit[0]
+
+    @staticmethod
+    def _cell():
+        from src.compute.etf.dividend_station import LightCell
+        from shared.station_specs import KEY_HEALTH_A
+
+        return LightCell(key=KEY_HEALTH_A, level="🟢", state="live")
+
+    def _rows_and_vix(self):
+        """一份**算得出配置**的戰情表列（核心＝ETF、衛星＝個股）。
+
+        市值由 L0 目標推導而來，確保「實際佔比」永遠 ≠ 目標值。
+        ⚠️ 刻意**不給 `損益%`** → `flag_take_profit()` 回空清單，
+        prompt 不會多出停利那一行來干擾下面的逐行比對。
+        """
+        _core_t, _sat_t = self._l0_targets()
+        _core_pct = _core_t - self._CORE_OFFSET_PP
+        # §1 前提檢查：實際佔比若撞上 L0 任一目標值，「目標值不准出現」這個
+        # 偵測器就分不出「沒印目標」與「印了但剛好一樣」—— 當場炸掉，⛔ 不要假綠。
+        for _p in (_core_pct, 100.0 - _core_pct):
+            assert _p not in (_core_t, _sat_t), (
+                f"實際佔比 {_p} 撞上 L0 目標值 —— 請改 `_CORE_OFFSET_PP`")
+        _total = 1_000_000.0
+        _core_v = _total * _core_pct / 100.0
+        _cell = self._cell()
+        return ([{"代號": "0056", "名稱": "高股息", "種類": "ETF", "held": True,
+                  "市值": _core_v, "健檢": "🟢", "235 燈號": "", "加碼金": "",
+                  "_lights": (_cell,), "_detail": {}},
+                 {"代號": "2330", "名稱": "台積電", "種類": "個股", "held": True,
+                  "市值": _total - _core_v, "健檢": "🟢", "235 燈號": "",
+                  "加碼金": "", "_lights": (_cell,), "_detail": {}}], 18.0)
+
+    def _wired(self, monkeypatch, rows=None, vix=18.0):
+        """**真的跑一次 `load_station()`** —— 只換掉會打網路的那一支。
+
+        ⚠️ `build_station_digest` 刻意**不**換：本類要驗的就是「⑦ 這條路
+        餵給它的參數」，換掉它等於把待測對象換成假的。
+        """
+        import src.services.dividend_station_service as _svc
+
+        if rows is None:
+            rows, vix = self._rows_and_vix()
+        monkeypatch.setattr(_svc, "get_station_rows", lambda _h: (rows, vix))
+        _st = P.load_station(_holdings(
+            bound=True, holdings=tuple(
+                {"ticker": _r["代號"], "held": True} for _r in rows)))
+        assert _st.error == "", f"前提不成立：⑦ 的上游炸了 —— {_st.error}"
+        return _st, rows, vix
+
+    def test_the_wired_path_really_drops_the_three_target_keys(self, monkeypatch):
+        """🔴 **本輪最核心的一條**：⑦ 拿到的 `allocation` 鍵集
+        ＝ **預設路徑的鍵集減掉 `SYSTEM_TARGET_KEYS`**，用**集合相等**比。
+
+        ⚠️ 刻意**不用** `not in` 逐一檢查：`not in` 在「接線翻回預設」時會紅，
+        但在「L3 日後多回一個新的目標欄位」時**照樣綠**（新欄名不在檢查名單裡）。
+        集合相等兩種都抓得到，而且**多刪一個實測欄位也會紅**（§1 不因合規而少報）。
+        """
+        from src.services.dividend_station_service import (
+            SYSTEM_TARGET_KEYS,
+            build_station_digest,
+        )
+
+        _st, _rows, _vix = self._wired(monkeypatch)
+        _alloc = (_st.digest or {}).get("allocation")
+        assert _alloc, "前提不成立：這組 rows 應該算得出配置"
+        _default = build_station_digest(_rows, _vix)["allocation"]
+        assert set(SYSTEM_TARGET_KEYS) <= set(_default), (
+            f"前提不成立：預設路徑竟然沒有目標欄位 —— {sorted(_default)}")
+        assert set(_alloc) == set(_default) - set(SYSTEM_TARGET_KEYS), (
+            f"⑦ 實際拿到的 allocation 鍵集是 {sorted(_alloc)} —— "
+            "`load_station()` 沒走 `with_system_targets=False`，"
+            "或 L3 又多回了一個沒被關掉的目標欄位")
+
+    def test_the_wired_prompt_line_is_exactly_the_actual_split(self, monkeypatch):
+        """🔴 AI **逐字**收到的配置行 ＝ 只有實際佔比，**一字不多不少**。
+
+        ⚠️ 用**串列相等**，⛔ 不是 `in` 子字串：`in` 只抓得到「整行不見了」，
+        抓不到「後面多接了一段目標括號」—— 而後者正是本輪要防的退化。
+        期望值由 digest **自己的實測值**現場組，⛔ 不寫死 `核心 70% / 衛星 30%`。
+        """
+        from src.services.dividend_station_service import build_summary_prompt
+
+        _st, _, _ = self._wired(monkeypatch)
+        _alloc = _st.digest["allocation"]
+        _lines = [_l for _l in build_summary_prompt(_st.digest).splitlines()
+                  if _l.startswith(self._ALLOC_PREFIX)]
+        assert _lines == [
+            f"{self._ALLOC_PREFIX}核心 {_alloc['core_pct']:.0f}% / "
+            f"衛星 {_alloc['sat_pct']:.0f}%"], f"⑦ 的配置行變了：{_lines}"
+
+    def test_the_wired_prompt_carries_no_l0_target_number_or_word(self, monkeypatch):
+        """🔴 L0 的目標**數字**與「目標／偏離」等**字樣**，⑦ 一次都不准拿到。
+
+        ⚠️ **先證明這個偵測器真的會響**：同一組 rows 走**預設路徑**時，
+        下面每一個待測字樣都**必須**出現。少了這一段前提，本條會在
+        「prompt 根本沒產出配置那一段」時拿到一個**假綠燈**
+        （`CLAUDE.md §-2`：沒查證的宣稱比沒有宣稱更危險）。
+        """
+        from src.services.dividend_station_service import (
+            build_station_digest,
+            build_summary_prompt,
+        )
+
+        _st, _rows, _vix = self._wired(monkeypatch)
+        _core_t, _sat_t = self._l0_targets()
+        _nums = (f"{_core_t:.0f}", f"{_sat_t:.0f}")
+        #: ⛔ 不得改寫成「建議／參考／預設」—— 換個詞只是換個地方預填。
+        _words = ("目標", "偏離", "建議", "參考", "預設")
+        _def_line = self._alloc_line(
+            build_summary_prompt(build_station_digest(_rows, _vix)))
+        _blind = [_n for _n in _nums + ("目標", "偏離") if _n not in _def_line]
+        assert not _blind, f"前提不成立：預設路徑沒有 {_blind}，偵測器是瞎的"
+        _wired_prompt = build_summary_prompt(_st.digest)
+        _leak = [_n for _n in _nums + _words
+                 if _n in self._alloc_line(_wired_prompt)]
+        assert not _leak, (
+            f"⑦ 的配置行仍帶著 {_leak} —— 硬禁令第 2 條 (c)「AI ⛔ 不得繞過禁令」")
+        _leak_all = [_w for _w in ("目標", "偏離") if _w in _wired_prompt]
+        assert not _leak_all, f"⑦ 的 prompt 在別的段落把 {_leak_all} 講回去了"
+
+    def test_the_wired_path_survives_a_portfolio_with_no_market_value(
+            self, monkeypatch):
+        """邊界（§6）：有持股但**一檔都算不出市值** → `allocation is None`。
+
+        ⑦ 這條路**不炸**，也**不補**一個看起來合理的配置（§1 ⛔ 不捏造）。
+        """
+        from src.services.dividend_station_service import build_summary_prompt
+
+        _rows = [{"代號": "0056", "名稱": "高股息", "種類": "ETF", "held": True,
+                  "市值": None, "健檢": "🟢", "235 燈號": "", "加碼金": "",
+                  "_lights": (self._cell(),), "_detail": {}}]
+        _st, _, _ = self._wired(monkeypatch, rows=_rows, vix=None)
+        assert _st.digest["allocation"] is None, "零市值卻算出了配置"
+        _p = build_summary_prompt(_st.digest)        # ⛔ 不得 KeyError
+        assert self._ALLOC_PREFIX not in _p, "沒有可計價持股卻印了一行配置"
 
 
 def gemini_call_for_guard():

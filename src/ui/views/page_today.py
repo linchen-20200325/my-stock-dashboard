@@ -33,10 +33,28 @@
 L0 `shared/ui_state.py` 七態，是線框四態 ＋ 正常態的超集：
 
     灰態（無資料）→ `UI_EMPTY`（已請求但沒回值）／`UI_IDLE`（**還沒有人叫過**）
+                     ⤷ 2026-09-23 起 `UI_EMPTY` 再分出 `UI_MISSING_RETRYABLE`（#7）
+                       與 `UI_NOT_APPLICABLE`（#8），見本節末的 D-3(a) 附註
     未接線        → `UI_UNWIRED`   （`DangerSpec.wired=False`）
     已失準        → `UI_DEGRADED`  （`DangerSpec.discriminative=False`）
     紅態（真故障）→ `UI_FAILED`    （呼叫拋例外 / 來源回錯）
     正常          → `UI_LIVE`
+
+⚠️ **2026-09-23（客戶裁示 D-3(a)）：`UI_EMPTY` 分出三種可分辨的缺值。**
+本頁**判態的寫法一行未改** —— 分辨是 L0 `classify_ui_state()` 依既有的
+`reason=` 自動做掉的（本頁本來就有在傳），畫面因此自動多出一層資訊：
+
+    `MISS_NO_INPUT`       → `UI_MISSING_RETRYABLE`（#7 缺漏）    **再按一次有用**
+    `MISS_NOT_APPLICABLE` → `UI_NOT_APPLICABLE`（#8 結構上不適用）**按幾次都一樣**
+    其餘／沒給原因        → `UI_EMPTY`（無資料）                 **分不出是哪一種**
+
+⛔ **判不出來時不准挑一個看起來合理的**：`MISS_NOT_ENOUGH`（等時間累積）與
+`MISS_NO_VARIATION`（等它開始動）**刻意留在 `UI_EMPTY`** —— 它們重試無用，但也
+**不是**「結構上不適用」，硬塞進 #8 等於對使用者說一句永久性的假話
+（`CLAUDE.md §-2` 記載過同型事故：新上市標的收到「可以重跑一次」的錯誤指引）。
+⛔ **本頁不得出現缺值家族的任何字面 glyph** —— 符號一律由 `state_meta()` 從 L0
+供給一次。守衛 `tests/test_ui_empty_split.py` **整檔掃描、連註解與 docstring 都算**，
+所以本段只寫得出常數名、寫不出符號本身；那是刻意的。
 
 ⚠️ **`idle` 與 `empty` 的分家不准合併** —— 那正是 `CLAUDE.md §1.A` 第 4 點
 「未點擊載入＝灰色說明；系統真出錯＝紅色警示」。

@@ -101,11 +101,38 @@ R-3 明文「灰系**內部**的『不適用』與『缺漏』必須再以符號
 
 | 類 | 高度 | 內距 | 字級 | 圓角 | 底色 | 框色 | hover | 範例 |
 |---|---|---|---|---|---|---|---|---|
-| 主 CTA（**全站唯一一顆**） | `min-height:40px` | `6px 16px` | `13.5px/700` | `3px` | `--ink` | 2px solid `--ink` | bg＋框 → `--ochre`，字 `--paper` | 「載入今日戰情」 |
+| 主 CTA（~~**全站唯一一顆**~~ **每頁首屏唯一一顆**） | `min-height:40px` | `6px 16px` | `13.5px/700` | `3px` | ~~`--ink`~~ **`--cta-primary-bg`** | 2px solid ~~`--ink`~~ **`--cta-primary-bg`** | bg＋框 → `--ochre`，字 `--paper` | 「載入今日戰情」 |
 | 次級（說明） | `min-height:40px` | `6px 16px` | `13.5px/700` | `3px` | `transparent` | 1px solid `--ink` | bg `--panel-2`，框 `--rule-2` | 「這張卡怎麼讀」 |
 | 次級（展開佐證） | `min-height:44px`／`min-width:44px` | `7px 9px` | `12.5px/600` | `3px` | `transparent` | 1px solid `transparent` | bg `--panel-2`，字 `--ink`，框 `--rule` | 「▸ 展開佐證（3）」 |
 | 文字按鈕（表頭明細） | `min-height:28px` | `2px 11px` | `11px/600` | `999px` | `transparent` | 1px solid `--rule` | 字 `--ink`，框 `--rule-2` | 表頭狀態列「看明細」 |
 | 停用態（無主 CTA 時） | `min-height:40px` | `6px 16px` | `13.5px/500` | `3px` | `transparent` | 1px **dashed** `--rule-2`，字 `--sig-grey` | 無 | 「本頁目前沒有主 CTA」 |
+
+⚠️ **主 CTA 列標題 2026-09-22 改文案（有意識的政策變更，⛔ 不是漏刪；決策者客戶）**
+客戶裁示逐字：「**不是「全站唯一」，是「每頁首屏唯一」。** 理由：客戶原話是『首屏僅允許一顆主 CTA』——是『每屏一顆』。」
+現行：本表「主 CTA」列標題讀作 **「主 CTA（每頁首屏唯一一顆）」**。
+- **舊文案的理由（仍然成立，⛔ 不是寫錯）**：在只有「🚦 今天」一頁時，「全站唯一」與「每頁首屏唯一」**外延相同** —— 兩句話挑不出差別，寫哪個都對。
+- **被權衡掉的原因**：五頁 IA 落地後，🔎 選股頁有自己的主 CTA `🎯 開始選股` ⇒「全站唯一」變成**可實測為假**的全稱句。`docs/v2/spec/UI_PAGE_FIND.md` ① 已逐字否證：「⚠️ **2026-09-16 修正（WJ）**：原寫「**全站唯一一顆**主 CTA」**不成立** —— 葉2 那顆同為 `type="primary"`…可宣稱的是…「**選股**主 CTA 只有一顆、且在預設葉 l1 可見」；⛔ 不得寫成全站唯一。」（對照 `CLAUDE.md` §1「錯誤的數字比沒有數字更危險」—— 一句假的全稱句比不寫更危險。）
+- ⚠️ **FIND 規格單方面否證、其餘落點未同步** ⇒ 本輪補的就是這個同步。**連帶改**：`src/ui_v2/page_today.py` 的 `MAIN_CTA` **鍵名** ~~`unique_per_site`~~ → **`unique_per_first_screen`**（客戶裁示逐字「留著會誤導下一個人」——**鍵名本身在說謊**：讀起來像契約保證全站只有一顆）＋ `tests/ui_v2/test_today_page.py` 斷言同步（**斷言意圖未改**，仍為 `True`）。
+- ⚠️ **本輪未同步的已知落點（⛔ 非本輪檔案邊界，⛔ 不是漏改）**：`src/ui_v2/render.py`／`src/ui_v2/components.py`／`tests/ui_v2/test_render.py`／`docs/v2/spec/UI_PAGE_TODAY.md` ①／`docs/v2/prototype/*`。**動到該檔時一併同步**（體例比照本節「已知陳舊登記」段）。
+- ⛔ **本節末「焦點環：全站唯一一條」那句⛔ 不在本次射程內** —— 那是**另一個**宣稱（一條 `:focus-visible` 規則，⛔ 不是主 CTA 顆數），⛔ 不得順手一起改。
+
+⚠️ **主 CTA 底色／框色 2026-09-22 改值（有意識的政策變更，⛔ 不是漏刪；決策者客戶）**
+客戶裁示逐字：「**接受 Streamlit config 的 primaryColor #1f6feb**」＋【拍板 2】「**border_color 跟隨新 token**」。
+現行：底色＝框色＝ **`--cta-primary-bg`**（`UI_TOKENS` §A-4；dark `#1f6feb`／light `#044cb6`），維持「**2px 同色框**」語意；
+**非 hover 態字色＝ `--cta-primary-fg`**（兩模式皆 `#ffffff`）—— 本表無「字色」欄，非 hover 字色一向由 hover 欄反推
+（見 `src/ui_v2/components.py` §3 區塊抬頭註），故在此明寫，⛔ 不要再從 hover 欄反推成 `--paper`。
+- **舊契約的理由（仍然成立，⛔ 不是寫錯）**：`--paper` on `--ink` 對比 dark **14.513**／light **13.548**，遠優於新契約的 **4.634**／**7.736**。
+- **被權衡掉的原因**：Streamlit 端主 CTA 是真 `st.button(type="primary")`、吃 `.streamlit/config.toml` 的 `primaryColor`
+  ⇒ `--ink` 這個契約值**根本畫不出來**（`docs/v2/prototype/STREAMLIT_VS_HTML.md` §2 第 1 點實測）。留著等於讓契約與實際渲染永久打架。
+- 🔴 **hover 欄一字未動，且 ⛔ 不得跟著改**：hover 字色**必須維持 `--paper`** —— 實測 `#ffffff` on dark `--ochre` `#d59a5e` ＝ **2.438 FAIL**，
+  而 `--paper` on `--ochre` ＝ **7.592 PASS**。**這是硬約束，⛔ 不是風格選擇。**
+- ⚠️ **代價已揭露於 `UI_TOKENS` §A-4 第 3 段**（dark 餘裕只剩 0.134），⛔ 不得把本次改動描述成「對比改善」。
+
+⚠️ **已知陳舊登記（客戶 2026-09-22【拍板 3】：「其他三頁留舊值 …⛔ 不碰那三頁」）**
+本表主 CTA 的底色／框色已於 2026-09-22 改為 `--cta-primary-bg`，但 **`docs/v2/spec/UI_PAGE_FIND.md`／`UI_PAGE_HOLD.md`／`UI_PAGE_INSPECT.md`
+三份頁規格內各自**抄了一份**舊值 `--ink`**，本輪依客戶裁示 **⛔ 不碰那三頁** ⇒ **那三處現為已知陳舊**，**動到該頁時一併同步**。
+根因是那三頁**把本表的值複製進去**而非只引用（`CLAUDE.md` §2.1 SSOT 的**既有**違反），**⛔ 不是本次造成的**。
+（`UI_PAGE_TODAY.md` 那一份已於同輪同步。）
 
 焦點環：全站唯一一條 `:focus-visible{outline:2px solid var(--focus);outline-offset:2px}`，⛔ 不准個別 `outline:none`。
 ⚠️ **次級按鈕整類為新訂**：INV-4 實測 app 端 `type="secondary"` **0 處使用**；線框 `.cta.sec` 有 CSS 但查無渲染處，
