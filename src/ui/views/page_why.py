@@ -48,12 +48,29 @@
 ═══ 這個檔**不是**什麼 ═══════════════════════════════════════════════
 - **不是**第二份門檻表：紅綠燈怎麼判、每一盞的門檻與出處，全部逐欄讀 L0
   `shared/macro_buckets.py` 與 `shared/station_specs.py`，**本檔一個門檻數字都沒有**。
-- **不是**新的狀態模型：七態一律走 L0 `shared/ui_state.py::classify_ui_state()`。
+- **不是**新的狀態模型：狀態一律走 L0 `shared/ui_state.py::classify_ui_state()`
+  （2026-09-23 起由七態成為十態，見下方 D-3(a) 附註；**本頁判態寫法未改**）。
 - **不是**新的卡片型別：`Card` / `Note` / `MAX_COLS` 一律 import
   `src/ui/tabs/tab_today.py` 與 `src/ui/views/_ui_kit.py`（**不寫第五份渲染器**）。
 - **不是**診斷面板的搬家：`src/ui/pages/{data_coverage,api_diagnostic,health_inspector,
   data_registry_panel,reconcile_panel,calibration_ui}.py` 一支都**沒有 import**
   （它們自己直接讀 `st.session_state` 或直呼 L1，把它們拉進來等於把違憲一起繼承）。
+
+⚠️ **2026-09-23（客戶裁示 D-3(a)）：`UI_EMPTY` 分出三種可分辨的缺值。**
+本頁**判態的寫法一行未改** —— 分辨是 L0 `classify_ui_state()` 依既有的
+`reason=` 自動做掉的（本頁本來就有在傳），畫面因此自動多出一層資訊：
+
+    `MISS_NO_INPUT`       → `UI_MISSING_RETRYABLE`（#7 缺漏）    **再按一次有用**
+    `MISS_NOT_APPLICABLE` → `UI_NOT_APPLICABLE`（#8 結構上不適用）**按幾次都一樣**
+    其餘／沒給原因        → `UI_EMPTY`（無資料）                 **分不出是哪一種**
+
+⛔ **判不出來時不准挑一個看起來合理的**：`MISS_NOT_ENOUGH`（等時間累積）與
+`MISS_NO_VARIATION`（等它開始動）**刻意留在 `UI_EMPTY`** —— 它們重試無用，但也
+**不是**「結構上不適用」，硬塞進 #8 等於對使用者說一句永久性的假話
+（`CLAUDE.md §-2` 記載過同型事故：新上市標的收到「可以重跑一次」的錯誤指引）。
+⛔ **本頁不得出現缺值家族的任何字面 glyph** —— 符號一律由 `state_meta()` 從 L0
+供給一次。守衛 `tests/test_ui_empty_split.py` **整檔掃描、連註解與 docstring 都算**，
+所以本段只寫得出常數名、寫不出符號本身；那是刻意的。
 
 ~~**本檔沒有 production caller**（`app.py` 掛載另案；本批一個字都沒有碰 `app.py`、
 `page_today.py`、`page_find.py`、`page_inspect.py`、`page_hold.py`、`_ui_kit.py`、

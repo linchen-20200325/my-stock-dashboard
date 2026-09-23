@@ -78,11 +78,14 @@ from shared.station_specs import (
     STATION_SPECS,
 )
 from shared.ui_state import (
+    NO_VALUE_STATES,
     UI_DEGRADED,
     UI_EMPTY,
     UI_FAILED,
     UI_IDLE,
     UI_LIVE,
+    UI_LOADING,
+    UI_STATES,
     UI_UNWIRED,
 )
 from src.ui.tabs.tab_today import Note
@@ -352,7 +355,9 @@ class TestNoFakeGreenLight:
         _scan = P.load_sources()
         assert _scan.readable and _scan.count == 0
         _card, _facts, _sig = P.build_empty_registry_card()
-        assert _card.state in (UI_EMPTY, UI_IDLE)
+        # D-3(a)：上游給的是 `MISS_NO_INPUT` ⇒ 現在畫 #7（`⟳ 缺漏 · 可重跑`），
+        # 與卡上那句「先去任何一個會抓資料的分頁載入一次」正好一致。
+        assert _card.state in NO_VALUE_STATES | {UI_IDLE}
         _now, _why, _where = _note_triple(_card.note)
         assert all((_now.strip(), _why.strip(), _where.strip()))
         assert "為什麼不顯示一片空白" in dict(_facts)
@@ -1535,7 +1540,8 @@ class TestQaLeaf:
         monkeypatch.setitem(sys.modules, "src.services.ai_qa_service", _agent)
         _card, _facts, _sig = P.build_qa_card(
             P.load_qa(P.QaRequest(asked=True, question="q")))
-        assert _card.state == UI_EMPTY, "沒話說被畫成故障（假性錯誤）"
+        assert _card.state in NO_VALUE_STATES, "沒話說被畫成故障（假性錯誤）"
+        assert _card.state != UI_FAILED
 
     def test_a_real_answer_is_live_and_the_tools_are_disclosed(self, monkeypatch):
         _key = type(sys)("src.services.app_ai_service")
@@ -1631,7 +1637,9 @@ class TestSignalChannelIsClean:
                 _note_triple(_card.note)
 
     def test_states_are_all_legal(self):
-        _legal = {UI_IDLE, UI_FAILED, UI_EMPTY, UI_DEGRADED, UI_UNWIRED, UI_LIVE}
+        # D-3(a)：合法集合改由 L0 供給，**不再在測試裡抄一份**（抄的那份
+        # 每次 L0 新增狀態就會過期，而它過期的方式是「莫名轉紅」）。
+        _legal = set(UI_STATES) - {UI_LOADING}
         for _card, _facts, _sig in _every_built():
             assert _card.state in _legal, f"{_card.key} 用了非法狀態"
 
