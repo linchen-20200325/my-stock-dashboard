@@ -44,6 +44,11 @@
     為第二真相源）。這一條直接掃 L0 原始碼，**字面一漂移就 CI 紅燈**。
   · `TestQaLeaf`                 ← 沒金鑰→紅、上游回錯→紅、回空字串→灰（有效結果）、
     沒問→灰。四種**不可混**。
+  · `TestQaDisclosure`           ← **客戶 2026-09-23 裁示 D-4(a)**：葉3 的 AI 回答
+    必須掛 `S1-6 §3.1` 的強制免責，**三件事缺一不可**（三件各一條正向斷言，
+    比對值全部讀 L0 `shared/compliance_copy`）。另有反向斷言釘住規格那句
+    「**只有 🧬 符號……不是免責**」、`page_why.py` 不得手抄免責本文、
+    線框引的那一份必須與 L0 逐字相同，以及「沒有答案就不准印免責」（§1）。
   · `TestNoSessionSubscriptWrite` ← 本頁的 gate 全是 widget 當下值，
     **沒有任何一個 gate 是 session key** → 結構上沒人能偽造「使用者問過了」。
   · `TestSignalChannelIsClean`   ← 鐵律 3：訊號頻道只出中文標籤。
@@ -58,6 +63,7 @@
 from __future__ import annotations
 
 import ast
+import contextlib
 import functools
 import pathlib
 import re
@@ -65,6 +71,7 @@ import sys
 
 import pytest
 
+from shared import compliance_copy as CC
 from shared.macro_buckets import (
     BUCKET_DANGER_SPECS,
     BUCKET_META,
@@ -1573,6 +1580,243 @@ class TestQaLeaf:
         assert P.read_history({P.SS_QA_HISTORY: "not a list"}) == ()
         assert P.read_history({P.SS_QA_HISTORY: [1, {"role": "user"}]}) == (
             {"role": "user"},)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 【14b】葉3 的**強制免責**（客戶 2026-09-23 裁示 D-4(a)）
+# ══════════════════════════════════════════════════════════════════
+class _FakeChatST:
+    """葉3 用得到的那幾支 `st.*` 的錄音替身。
+
+    只實作 `_render_qa_leaf` 真的會碰的東西：`chat_message`（context manager）／
+    `chat_input`／`markdown`／`caption`／`session_state`。
+    多實作一支就是多一個「測試替身與真 streamlit 不一樣」的破口。
+    """
+
+    def __init__(self, typed: str | None = None) -> None:
+        #: ⚠️ 錄音帶與 `st.*` 的**方法名刻意不同名** —— 叫成 `self.markdown`
+        #: 會把方法本身蓋掉，變成「畫不出來卻紅在別的地方」的假錯誤。
+        self.drawn: list[str] = []
+        self.captions: list[str] = []
+        self.session_state: dict = {}
+        self._typed = typed
+
+    def markdown(self, body, **_k):
+        self.drawn.append(str(body))
+
+    def caption(self, body, **_k):
+        self.captions.append(str(body))
+
+    def chat_message(self, _role):
+        return contextlib.nullcontext()
+
+    def chat_input(self, *_a, **_k):
+        return self._typed
+
+
+def _fake_agent(monkeypatch, *, text: str, ok: bool = True):
+    """把兩支下游 L3 換成假的（同 `TestQaLeaf` 的做法）。"""
+    _key = type(sys)("src.services.app_ai_service")
+    _key.get_gemini_api_key = lambda: "k"
+    _agent = type(sys)("src.services.ai_qa_service")
+    _agent.run_agent = lambda *_a, **_k: _FakeQA(ok=ok, text=text)
+    monkeypatch.setitem(sys.modules, "src.services.app_ai_service", _key)
+    monkeypatch.setitem(sys.modules, "src.services.ai_qa_service", _agent)
+
+
+def _render_qa(monkeypatch, fake: _FakeChatST) -> str:
+    """真的跑一次葉3 的渲染，回傳畫面上所有文字。
+
+    ⚠️ 這一支證明的是「**畫得出來**」——
+    只驗 `compose_qa_message()` 的回傳值，證明不了它有沒有被接到 `st.markdown` 上。
+    """
+    monkeypatch.setattr(P, "st", fake)
+    monkeypatch.setattr(P, "section_header", lambda *_a, **_k: None)
+    monkeypatch.setattr(P, "_render_one", lambda *_a, **_k: None)
+    P._render_qa_leaf(fake.session_state)
+    return "\n".join(fake.drawn) + "\n" + "\n".join(fake.captions)
+
+
+class TestQaDisclosure:
+    """`why.qa` 的 AI 回答**必須**掛 `S1-6 §3.1` 的強制免責（三件事缺一不可）。
+
+    ⚠️ **這一類守的是「合規文案沒有被默默拿掉」，不是「這段話寫得好」。**
+    規格 §3.0 的出口盤點表把本葉（**A1** 🧬 AI 問答全文）列在
+    「❌ **完全沒有**」那一列；D-4(a) 就是在補它。
+    這一類存在的理由是：免責是**最容易在後續重構裡被順手刪掉**的東西
+    （它不影響任何計算、拿掉了畫面也不會報錯），所以它必須有機器守衛。
+
+    ⚠️ **比對值一律從 L0 SSOT 讀，不在本檔寫死字面量** ——
+    本檔寫死一份，就成了第三份手抄（§3.1 實作紀律第 1 條點名的失效模式）。
+    """
+
+    # ── 正向：三件事**逐一**存在（三件各一條，刻意不合成一條）──────────
+    def test_thing_1_says_the_text_is_ai_generated(self, monkeypatch):
+        """① 這段是 AI 生成的。"""
+        _fake = _FakeChatST(typed="2330 健康度？")
+        _fake_agent(monkeypatch, text="偏強。")
+        _all = _render_qa(monkeypatch, _fake)
+        assert CC.AI_QA_THING_1_IS_AI_WRITTEN in _all, (
+            f"第 ① 件事不見了（{CC.AI_DISCLOSURE_REQUIRED_THINGS[0]}）—— "
+            "讀者會把模型寫的東西當成本站算出來的結果")
+
+    def test_thing_2_says_it_is_not_investment_advice(self, monkeypatch):
+        """② 它不是投資建議（版本 C 另以「不是本站的結論」交代「以哪裡為準」）。"""
+        _fake = _FakeChatST(typed="2330 健康度？")
+        _fake_agent(monkeypatch, text="偏強。")
+        _all = _render_qa(monkeypatch, _fake)
+        assert CC.AI_QA_THING_2_NOT_ADVICE in _all, (
+            f"第 ② 件事不見了（{CC.AI_DISCLOSURE_REQUIRED_THINGS[1]}）")
+
+    def test_thing_3_says_what_the_model_cannot_see(self, monkeypatch):
+        """③ AI 環節**自己**的失效模式（版本 C：模型手上缺哪些限制條件）。
+
+        ⚠️ 規格說這一條「**是最容易被刪掉的一條**」—— 它是三件裡唯一一件
+        承認我們自己這一段可能出錯的，也是唯一一件刪掉之後**看起來更漂亮**的。
+        """
+        _fake = _FakeChatST(typed="2330 健康度？")
+        _fake_agent(monkeypatch, text="偏強。")
+        _all = _render_qa(monkeypatch, _fake)
+        assert CC.AI_QA_THING_3_MODEL_BLIND_SPOTS in _all, (
+            f"第 ③ 件事不見了（{CC.AI_DISCLOSURE_REQUIRED_THINGS[2]}）")
+
+    # ── 反向：只有 🧬 不算免責 ────────────────────────────────────────
+    def test_the_glyph_alone_is_not_a_disclosure(self, monkeypatch):
+        """規格 §3.0 逐字：「**只有 🧬 符號**」→「⚠️ 半有……**不是免責**」。
+
+        把免責拿掉只留旗標，上面三條正向守衛**必須**全部失守 ——
+        否則那三條其實是被 🧬 或被回答本文誤打誤撞餵飽的，等於假綠。
+        """
+        monkeypatch.setattr(P, "AI_QA_DISCLOSURE", "")
+        _fake = _FakeChatST(typed="2330 健康度？")
+        _fake_agent(monkeypatch, text="偏強。")
+        _all = _render_qa(monkeypatch, _fake)
+        assert CC.AI_NARRATIVE_GLYPH in _all, "反證失效：連旗標都沒畫出來"
+        for _phrase, _thing in zip(CC.AI_QA_DISCLOSURE_PHRASES,
+                                   CC.AI_DISCLOSURE_REQUIRED_THINGS):
+            assert _phrase not in _all, (
+                f"只留 🧬 的情況下居然還找得到「{_thing}」—— "
+                "正向守衛比對的不是免責，而是別的東西（假綠）")
+
+    # ── §1 Fail Loud：沒有答案就不准印免責 ────────────────────────────
+    def test_no_disclosure_when_there_is_no_answer(self, monkeypatch):
+        """`ok=True` 但沒有文字 → 畫面上**沒有** AI 文字，就不該有免責。
+
+        對一段不存在的內容做免責，是替一個沒發生的事情背書；
+        而且會讓使用者以為「上面有東西我沒看到」。
+        """
+        _fake = _FakeChatST(typed="2330 健康度？")
+        _fake_agent(monkeypatch, text="   ")
+        _all = _render_qa(monkeypatch, _fake)
+        assert CC.AI_QA_THING_1_IS_AI_WRITTEN not in _all, (
+            "沒有任何 AI 文字，卻印了一份免責")
+
+    def test_no_disclosure_before_you_ask(self, monkeypatch):
+        """冷啟動（還沒問）同理：沒有被免責的對象。"""
+        _fake = _FakeChatST(typed=None)
+        _all = _render_qa(monkeypatch, _fake)
+        assert CC.AI_QA_THING_1_IS_AI_WRITTEN not in _all
+
+    # ── 免責必須活過 rerun ───────────────────────────────────────────
+    def test_it_survives_a_rerun(self, monkeypatch):
+        """下一次 rerun 是**從對話紀錄重播**的 —— 紀錄裡沒有，免責就會消失。"""
+        _fake = _FakeChatST(typed="2330 健康度？")
+        _fake_agent(monkeypatch, text="偏強。")
+        _render_qa(monkeypatch, _fake)
+
+        _stored = "\n".join(
+            str(_m.get("content") or "")
+            for _m in _fake.session_state.get(P.SS_QA_HISTORY, []))
+        for _phrase, _thing in zip(CC.AI_QA_DISCLOSURE_PHRASES,
+                                   CC.AI_DISCLOSURE_REQUIRED_THINGS):
+            assert _phrase in _stored, (
+                f"對話紀錄裡沒有「{_thing}」—— 使用者按任何一個 widget "
+                "之後重播，免責就自己消失了")
+
+        # 真的重播一次：拿剛才存下來的紀錄當輸入，什麼都不問。
+        _replay = _FakeChatST(typed=None)
+        _replay.session_state[P.SS_QA_HISTORY] = list(
+            _fake.session_state[P.SS_QA_HISTORY])
+        _all = _render_qa(monkeypatch, _replay)
+        for _phrase in CC.AI_QA_DISCLOSURE_PHRASES:
+            assert _phrase in _all, "重播之後免責不見了"
+
+    def test_what_is_drawn_is_what_is_stored(self, monkeypatch):
+        """畫出來的與存進去的是**同一個字串** —— 兩邊各串各的就會漂。"""
+        _fake = _FakeChatST(typed="2330 健康度？")
+        _fake_agent(monkeypatch, text="偏強。")
+        _render_qa(monkeypatch, _fake)
+        _assistant = [str(_m.get("content") or "")
+                      for _m in _fake.session_state[P.SS_QA_HISTORY]
+                      if _m.get("role") == "assistant"]
+        assert _assistant, "沒有任何 assistant 訊息被存下來"
+        for _msg in _assistant:
+            assert _msg in _fake.drawn, (
+                "存進紀錄的那一份與畫出來的那一份不是同一個字串")
+
+    # ── SSOT：不得手抄 ───────────────────────────────────────────────
+    def test_the_view_does_not_hand_copy_it(self):
+        """§3.1 實作紀律 1：「**禁止在各頁手抄免責**」。"""
+        _s = _src()
+        for _line in CC.AI_QA_DISCLOSURE.split("\n"):
+            assert _line not in _s, (
+                f"`page_why.py` 裡出現了免責本文的手抄：{_line[:30]!r} —— "
+                "請改 import `shared.compliance_copy.AI_QA_DISCLOSURE`")
+        assert "from shared.compliance_copy import" in _s, (
+            "本頁沒有 import L0 的免責 SSOT")
+
+    def test_the_template_is_verbatim_from_the_spec(self):
+        """L0 那一份必須與 `S1-6 §3.1` 的**版本 C** 逐字相同。
+
+        ⚠️ 規格訂它為**強制樣板**；就地改一個字等於自己發明第四個版本。
+
+        ⚠️ **這裡比的是「相等」，不是「包含」。** 突變實測（2026-09-23）發現：
+        若改寫成 `AI_QA_DISCLOSURE in 規格全文`，把常數退化成 `"🧬"` 這一種
+        突變**照樣會綠** —— 因為 🧬 剛好也出現在規格裡。
+        一條「什麼都包含得到」的守衛等於沒有守衛。
+        """
+        _text = (_REPO / "docs" / "v2" / "spec"
+                 / "S1-6_COMPLIANCE_COPY_GUIDE.md").read_text(encoding="utf-8")
+        # ⚠️ 用標題定位 + 取其後第一個 fenced block，**不寫行號**
+        #    （`CLAUDE.md §8.2.A.0` 規則 1：行號是保證會過期的資訊）。
+        _heading = "**版本 C｜自由問答型**"
+        assert _heading in _text, (
+            f"規格 §3.1 裡找不到 {_heading} —— 規格改版了，本條要跟著改")
+        _after = _text.split(_heading, 1)[1]
+        _block = _after.split("```")[1].strip("\n")
+        assert CC.AI_QA_DISCLOSURE == _block, (
+            "L0 的 `AI_QA_DISCLOSURE` 與規格 §3.1 的版本 C 已經漂移。\n"
+            f"規格：{_block!r}\nL0  ：{CC.AI_QA_DISCLOSURE!r}\n"
+            "⛔ 請以規格為準改 L0，不要反過來改規格（合規文案屬客戶側）")
+
+    def test_the_three_phrases_really_live_in_the_template(self):
+        """三個比對用的片語必須真的是樣板的子字串（對映不能爛掉）。"""
+        for _phrase, _thing in zip(CC.AI_QA_DISCLOSURE_PHRASES,
+                                   CC.AI_DISCLOSURE_REQUIRED_THINGS):
+            assert _phrase in CC.AI_QA_DISCLOSURE, (
+                f"「{_thing}」的比對片語 {_phrase!r} 不在樣板裡 —— "
+                "上面那三條正向守衛正在比對一個樣板裡沒有的東西")
+
+    def test_the_wireframe_quotes_the_same_ssot(self):
+        """跨檔漂移：線框引的免責必須與 L0 逐字相同。
+
+        線框是 `.js`，import 不到 Python 常數 —— 所以「一處常數兩處引用」
+        在這一對檔案之間**只能靠測試**成立（`CLAUDE.md §8.2.A.0` 規則 3：
+        清單由測試強制，不由人工維護）。
+        """
+        _wf = (_REPO / "docs" / "v2" / "wireframe" / "wf_page_why.js"
+               ).read_text(encoding="utf-8")
+        _escaped = CC.AI_QA_DISCLOSURE.replace("\n", "\\n")
+        assert _escaped in _wf, (
+            "線框 `wf_page_why.js` 引的免責與 L0 "
+            "`shared/compliance_copy.AI_QA_DISCLOSURE` 不一致 —— "
+            "兩邊已經漂移，請以 L0 為準改線框（⛔ 不要反過來改 L0）")
+
+    def test_the_wireframe_no_longer_claims_the_glyph_is_enough(self):
+        """線框必須自己說清楚「🧬 不是免責」，否則下一個人會照著它做回去。"""
+        _wf = (_REPO / "docs" / "v2" / "wireframe" / "wf_page_why.js"
+               ).read_text(encoding="utf-8")
+        assert "🧬 本身不是免責" in _wf
 
 
 # ══════════════════════════════════════════════════════════════════
