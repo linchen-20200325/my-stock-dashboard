@@ -7,12 +7,12 @@
 <!--
 本檔是**機器產生**的靜態快照，⛔ 不要手改。
 
-(a) 產生來源：my-stock-dashboard 分支 ui-v2，src/ui_v2/ 於 commit 01e814e6cee2789d77356ed223483524fc25b2fa（2026-09-22）
-    產生當下 HEAD ＝ d6633cf813b6e90050757ba1bf697f7c68d6d9c3
+(a) 產生來源：my-stock-dashboard 分支 ui-v2，src/ui_v2/ 於 commit e79d493b00e579e4279ec2a37929004ab27ab035（2026-09-23）
+    產生當下 HEAD ＝ e79d493b00e579e4279ec2a37929004ab27ab035
     src/ui_v2/ 工作區乾淨（無未提交變更）
-    src/ui_v2 底下 7 個 .py 的內容 sha256 ＝ 5d402c2669c365c0174a7dbc4de917ead54a7f78c158cd21fad0b6515253f939
+    src/ui_v2 底下 7 個 .py 的內容 sha256 ＝ a230a2e7efe57b86a4a0d08416b20ff36aebc8b12fe1f59b56a4925896c42f12
     （雜湊算法 ＝ 檔名 ＋ 位元組，依檔名排序後依序餵進 sha256；見產生器 main()）
-(b) 產生日期：2026-09-22
+(b) 產生日期：2026-09-23
 (c) ⚠️ **這是靜態快照：tokens.py / components.py 改了，這個檔不會自動跟著變。**
     要它跟上，唯一的方法是重跑產生器（見 d）。
     畫面上所有數字都是示意值，未接任何資料源。
@@ -165,12 +165,13 @@
 .blk-t3 .blk-title{font-size:13px;font-weight:700}
 .blk-t4 .blk-title{font-size:12.5px;font-weight:700;color:var(--ink-2)}
 .blk-val{font-size:24px;font-weight:700;font-family:var(--mono);line-height:1.25;font-variant-numeric:tabular-nums}
+.blk-t4 .blk-val{font-size:22px}
 .blk-lvl{color:var(--ink-2)}
 .blk-facts{margin-top:var(--sp-3)}
 .blk-fact{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);padding-top:var(--sp-1);padding-bottom:var(--sp-1);border-top-width:1px;border-top-style:solid;border-top-color:var(--grid)}
 .blk-fact:first-child{border-top-width:0px}
-.blk-fact-k{color:var(--ink-2)}
-.blk-fact-v{font-variant-numeric:tabular-nums}
+.blk-fact-k{color:var(--ink-3);font-size:11.5px}
+.blk-fact-v{color:var(--ink);font-variant-numeric:tabular-nums}
 /* ── 徽章共用幾何 ── */
 .bdg{display:inline-flex;align-items:center;gap:4px;border-radius:3px;padding-top:1px;padding-bottom:1px;padding-left:7px;padding-right:7px;font-size:11.5px;font-weight:600;white-space:nowrap;border-width:1px;border-style:solid}
 /* ── 徽章編號配色（⛔ #9 與 #1 零共用色 token）── */
@@ -1023,7 +1024,7 @@ p{margin-top:var(--sp-2);margin-bottom:0}
 <p class="pv-meta"><span class="pv-mono">K16</span>　⚠️ **「規格裡只有這 3＋1 條漏收」是獨立稽核組 WD 的單組、單一方法全稱句，⛔ 不得被引用為「已窮舉」** —— WD 自陳的盲點，WE 組據實轉錄。　⚠️ 單組／兩組調查結論，未經第三方驗</p>
 <p class="pv-meta">WD 的方法：**縮排歸屬 ＋ 正則**，掃的範圍是 `UI_PAGE_TODAY.md`／`UI_PAGE_FIND.md`／`UI_PAGE_INSPECT.md`／`UI_PAGE_HOLD.md`／`UI_PAGE_WHY.md` ＋ `S2-UI_SPEC.md`。**⛔ 完全沒掃的**：`S1-3B`、線框 `.js`、`DECISION_RULES.md`、`INDICATOR_SPEC.md`。⇒ 依 `CLAUDE.md §-2 規則 6`，「規格裡只剩這幾條沒收」**只能當待驗事項**，⛔ 不得作為後續動作的前提、⛔ 不得寫進 commit message 當成已完成的事實。⚠️ **WE 組同樣沒有補掃那四處**（本輪授權只到修 WD 點名的 6 項）⇒ **這個盲點在本輪之後仍然存在**，⛔ 不是「已處理」。📌 **要消掉它需要的是另派一組獨立窮舉**（`CLAUDE.md §-2 規則 4`：調查／稽核須多組視角、⛔ 不可由想動手的那一組自己查）。</p>
 </section>
-<footer class="pv-meta">由 src/ui_v2/（commit 01e814e、sha256 5d402c2669c3）於 2026-09-22 產生的靜態快照。CSS 由 markup.page_css() 產出並逐字內嵌，卡片由 markup.card_html() / grid_html() / layer_html() / badge_html() 產出。⚠️ tokens 之後改了，這個檔不會自動跟著變，必須重跑產生器 docs/v2/prototype/gen_today_v2.py（與本檔同目錄）。</footer>
+<footer class="pv-meta">由 src/ui_v2/（commit e79d493、sha256 a230a2e7efe5）於 2026-09-23 產生的靜態快照。CSS 由 markup.page_css() 產出並逐字內嵌，卡片由 markup.card_html() / grid_html() / layer_html() / badge_html() 產出。⚠️ tokens 之後改了，這個檔不會自動跟著變，必須重跑產生器 docs/v2/prototype/gen_today_v2.py（與本檔同目錄）。</footer>
 <!--
 頁尾免責：逐字 SSOT ＝ `app.py` 的 `_render_footer()`。
 本檔放的是一份**有守衛的複本** —— 產生時會讀 `app.py` 的原始文字逐字比對，
