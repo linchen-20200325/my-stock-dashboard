@@ -105,7 +105,7 @@ else:                                    顯示 '⚠︎ —'；tooltip=MISS_TEXT
 | 指標 | 算式（數學式） | 單位 | 門檻 SSOT（檔:符號） | 缺值行為（§1 三態） | 邊界（分母 0／負值／極值） | 應然 vs 實然 |
 |---|---|---|---|---|---|---|
 | 357 殖利率估值 | `y% = div ÷ P × 100`；分界價 `P_k = div ÷ YIELD_k_DEC` | `div` 元/股、`P` 元、`y` % | `shared/thresholds.py:YIELD_HIGH/MID/LOW(_DEC)` | `P<=0 or div<=0` → 不適用；`div is None` → 缺漏 | `y` 無上界 → sanity `(0,50]`，逾界 → `MISS_CONTRACT_DRIFT` | 設計變更 `D-07` |
-| 本益比 PE | 不自算，取交易所公告值 | 倍 | 取數層無門檻 | `<=0` → 不適用；`NaN` → 缺漏 | 無上界 → sanity `(0,200]`，逾界 → 缺漏 | 設計變更 `D-08` |
+| 本益比 PE | 不自算，取交易所公告值 | 倍 | 取數層無門檻 | ~~`<=0` → 不適用；`NaN` → 缺漏~~ → **一律單一「無資料」**（客戶 2026-09-23 裁示 `D-5(b)` 降級；**有意識的政策變更，⛔ 不是漏刪**；理由與解除條件見 §5 表後 📌） | 無上界 → sanity `(0,200]`，逾界 → 缺漏 | 設計變更 `D-08`（**已降級**） |
 | PB 分級 | `PB` 對照產業帶 | 倍 | `shared/stock_buckets.py:PB_BANDS_FINANCIAL/GROWTH/MFG`、`get_pb_bands` | `pb<=0` → 不適用 | 四級只三色 → 便宜／合理須可分辨 | 設計變更 `D-15` |
 | PE 河流帶 | `P_band = TTM_EPS × k`；TTM `min_periods=4`，生效日＝季末+60d | 元 | **應下沉 L0** 並比照 PB 分產業 | TTM 序列空 → 缺漏 | ⛔ 序列空**不得**回 `0` | 實作 bug `D-13`／設計變更 `D-14` |
 | 五桶 16 燈 | 純門檻分級（`high_bad`／`low_bad`／`band`） | 逐燈不同（`DangerSpec.unit`） | `shared/macro_buckets.py:BUCKET_DANGER_SPECS`、`SPECS_BY_KEY` | `None`／型別錯 → 缺漏（灰，不參與 worst 彙總） | `valid_min/max` 逾界 → `MISS_CONTRACT_DRIFT`；`wired=False` → **結構性旗標**（⬜ 尚未接線，⛔ 不併入三態） | 相同（本站最佳樣板） |
@@ -176,7 +176,7 @@ else:
 | D-05 | 應新增「⚪ 未評估」級，與 `🔴 等待` 分離 | `tab_helpers.py:final_recommendation` | 設計變更 |
 | D-06 | 三輸入全缺應回 `(None, MISS_NO_INPUT)`，禁 `or` 預設值（`P1-01`） | `shared/macro_compute.py:evaluate_market_status_v4_final` | 實作 bug |
 | D-07 | 兩支分級函式的分界應真正一致（docstring 已自稱等價）（`P1-05`／`N-5`） | `shared/thresholds.py:classify_yield_zone`／`classify_stock_357_price` | 實作 bug |
-| D-08 | `NaN` 與 `<=0` 應分流為缺漏／不適用（已知問題 #4） | `src/data/stock/yield_pe_fetcher.py:fetch_pe_name_maps` | 設計變更 |
+| D-08 | ~~`NaN` 與 `<=0` 應分流為缺漏／不適用（已知問題 #4）~~ → **降為單一「無資料」**（客戶 2026-09-23 裁示 `D-5(b)`；**有意識的政策變更，⛔ 不是漏刪**；⛔ 需求本身**未刪**，**解除條件見表後 📌**） | `src/data/stock/yield_pe_fetcher.py:fetch_pe_name_maps` | 設計變更（**已降級**） |
 | D-09 | 分母 0 應回 `MISS_NO_VARIATION`，禁 `.replace(0,1)` | `src/compute/strategy/tech_indicators.py:calc_kd` | 實作 bug |
 | D-10 | 缺 `high`／`low` 應回缺漏，禁靜默退回 `close` | `src/compute/scoring/scoring_engine.py:compute_atr` | 實作 bug |
 | D-11 | AUM 型別異常應回缺漏，禁 `except: pass`（`N-10`） | `etf_calc.py:calc_liquidity_score` | 實作 bug |
@@ -197,3 +197,51 @@ else:
 | D-25 | 常數名應編碼單位（比例 vs %，差 100×） | `src/config/config.py:MAX_PORTFOLIO_DRAWDOWN`／`EXPOSURE_*` | 實作 bug |
 | D-26 | 量比視窗應單一具名常數，禁兩處不同窗共用同組門檻 | `tech_indicators.py:calc_volume_ratio` | 實作 bug |
 | D-27 | 多因子切點應引用既有常數（現為 inline 75／55） | `tab_helpers.py:final_recommendation`；`signal_thresholds.py:MULTIFACTOR_GRADE_A_MIN/B_MIN` | 實作 bug |
+
+### 📌 `D-08` 降級為單一「無資料」（客戶 2026-09-23 裁示 `D-5(b)`）
+
+> **裁示逐字（⛔ 不得改寫、⛔ 不得「優化」）**：「**D-5(b)：降為單一「無資料」，規格＋線框同步註記做不到**」
+> **有意識的政策變更，⛔ 不是漏刪** ｜ **日期** 2026-09-23 ｜ **決策者 user**。
+> ⚠️ **這是「現行資料源的限制」，⛔ 不是「這個需求不重要」** —— 原需求**未刪**，只是**暫時做不到**；回頭路見下方「解除條件」。
+
+**① 降級後的契約（⛔ 唯一生效態）**
+
+PE 取不到時**一律**顯示**單一「無資料」**（本站語彙＝ `⚠︎ —`，見 `UI_PAGE_FIND.md ③`）：
+
+- ⛔ **不得**渲染成「**虧損**」—— 系統手上**沒有 EPS、沒有損益表**，說「虧損」＝ 替交易所與公司宣稱一件它們沒說的事（`CLAUDE.md §1`）。
+- ⛔ **不得**寫 `0` —— `0` 在 `pe_low`（值越小分越高）是「全市場最便宜」，把缺值寫成 `0` 會讓它排第一。
+- ⛔ **不得**留白 —— 空格會被讀成 `0` 或「這檔沒問題」。
+- ⛔ **不得**把 `PE<=0` 與 `NaN` 畫成兩種不同符號（那是捏造一個系統做不到的區分）。
+
+**② 為什麼做不到（可複驗出處；⛔ 不寫行號，一律 `全路徑::符號`）**
+
+1. **兩種「沒有」在 L1 就已合流** —— `src/data/stock/yield_pe_fetcher.py::fetch_pe_name_maps` 逐字
+   `if _pe != _pe or _pe <= 0:` → `continue` ⇒ **`NaN`（沒這個數字）與 `<=0`（虧損）走同一個 `continue`**，
+   下游只拿得到「key 不在 `pe_map` 裡」，**L5 沒有第二個資訊源可以反推**。
+2. **更根本：補旗標也補不出來**（登記編號 `ED-4`）—— **同一函式的 docstring 自陳**兩支 OpenAPI
+   **現在根本不吐 `<=0`**（TWSE 給空字串、TPEX 給 `'-'`，**都已是 NaN**；該 `<=0` 檢查的原意只是
+   「對來源改用 `0` 佔位」的防呆）⇒ **只靠 TWSE `BWIBBU_d` ＋ TPEX `tpex_mainboard_peratio_analysis`
+   這兩支源補旗標，仍然分不出「不適用」**。
+   ⇒ 所以本次**⛔ 不改資料源、⛔ 不改取數實作**（客戶明文選 (b) 不選 (a)）。
+
+**③ 兩邊理由並陳**
+
+- **舊規則的理由（仍然成立，⛔ 不是寫錯）**：分辨「**虧損**」與「**沒資料**」對選股判斷**確實有意義** ——
+  前者是**有效觀測**（而且是使用者最想知道的那一種），後者是**沒有觀測**；把有效觀測畫成「沒有資料」，
+  與把「沒有資料」畫成 `0` 是同一種說謊的鏡像。**這條依據沒有被推翻。**
+- **被權衡掉的原因**：**現行資料源做不到** —— 硬做只能靠猜，而猜一個「這家在虧損」正是 `CLAUDE.md §1`
+  明文禁止的造假（**錯誤的數字比沒有數字更危險**）。**寧可誠實說「沒有」，也不要猜一個。**
+
+**④ 解除條件（回頭路；⛔ 不要把需求本身刪掉）**
+
+**若日後接上能分辨這兩者的資料源**（例如**季報 EPS**：`EPS<=0` 才是真正的「虧損／不適用」，
+與「來源這輪沒給 PE」在來源端就是兩件事），**`D-08` 可回復原要求** —— 即上方已加刪除線的
+「`NaN` 與 `<=0` 應分流為缺漏／不適用」，以及 `UI_PAGE_FIND.md ④(a)` 的三分支目標態。
+⚠️ **回復時必須連帶做**：`UI_PAGE_FIND.md ④(c)` 的**承重警告** —— **L1 補旗標 ＋ `pe_low` 排序端擋掉非正值，
+兩件必須同一批落地**，⛔ 不得只加旗標就把非正值放進 `pe_map`／排序輸入（否則虧損股會排名第一）。
+⚠️ 新增／更換取數鏈屬「**核心資料源替代方案**」⇒ 依 `CLAUDE.md §-1.5.D` v3 §03-2 ② **須客戶拍板**；
+且該檔屬資料層，另受 `CLAUDE.md §-1.2` **資料層凍結**拘束。
+
+⚠️ **編號防撞（⛔ 不得補零統一）**：本條是 **`D-08`**（本檔，PE 兩種「沒有」）—— **⛔ 不是** `S2-UI_SPEC.md §9.3` 的 **`D-8`**（本頁 Deep Link 現況，已擱置）。兩套同名不同義，**補零就指到另一條規則**（見 `DATA_MAP_GAPS.md` `F-0-1`）。**本次⛔ 未動 `D-8` 一個字。**
+
+⚠️ **本節落地範圍（據實）**：本輪只改**規格與線框註記**（本檔 ＋ `UI_PAGE_FIND.md ④` ＋ `wf_page_find.js` 的 `find.pe_two_kinds`），**⛔ 一行 `.py` 未動**。
