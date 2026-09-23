@@ -321,7 +321,24 @@ def _card_rules() -> list[str]:
         "padding-top:" + _var("--sp-1") + ";padding-bottom:" + _var("--sp-1") + ";"
         "border-top-width:1px;border-top-style:solid;border-top-color:" + _var("--grid") + "}",
         ".blk-fact:first-child{border-top-width:0px}",
-        ".blk-fact-k{color:" + _var("--ink-3") + ";font-size:11.5px}",
+        # ── 明細列 key 的防擠壓（客戶 2026-09-23 裁示 (a)）──────────
+        # 症狀：`.blk-fact` 是 `display:flex` ＋ `justify-content:space-between`，
+        # 兩個子項的 `flex-shrink` 都是預設 1 ⇒ value 一長就把 key 壓成一條窄欄，
+        # 文字逐字換行成**直排**（實機三張並排、卡寬 ≤400px 的每一個量到的寬度都中招）。
+        # `flex-shrink:0` 讓 key 不被壓到內容寬以下、`white-space:nowrap` 讓它即使
+        # 被壓也不換行 —— 🔴 **兩個要一起下**，只下一個在極窄卡上仍會直排。
+        #
+        # ⚠️ **為什麼這兩項就地寫、⛔ 不進 `components.py`**（據實揭露判斷依據）：
+        #    本檔的分工是「**設計值**走契約層（顏色→token、間距→`SPACING`、幾何數字
+        #    →`components.*`），**版面結構關鍵字**就地寫」。這兩項與同檔既有的
+        #    `.grd>*{min-width:0}`、`.blk-fact{display:flex;…}`、`.blk-head{…;flex-wrap:wrap}`
+        #    同族 —— 都是 flex/grid 的**溢位控制關鍵字**，⛔ 不是可調的設計數字。
+        #    ⛔ **不為它新開一張 `components` 規格表**：`.blk-fact-*` 在契約層**本來就
+        #    沒有**規格 dict（同列的 `--ink-3` 與 11.5px 也是就地寫，出處是客戶指令），
+        #    新開一張表就得把那兩個值一併搬過去，否則同一條規則會長出第二個真相源
+        #    （CLAUDE.md §2.1）—— 那超出本輪「修直排」的範圍。要補請整條一起補，⛔ 不要半套。
+        ".blk-fact-k{color:" + _var("--ink-3") + ";font-size:11.5px;"
+        "flex-shrink:0;white-space:nowrap}",
         ".blk-fact-v{color:" + _var("--ink") + ";font-variant-numeric:tabular-nums}",
     ]
     return out
