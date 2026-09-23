@@ -3544,7 +3544,7 @@ class TestTheAiIsAlwaysDisclosedAsAi:
             "errors": "整批抓取失敗",
             "total": "有效判斷檔數",
             "vix": "VIX",
-            "allocation": "80/20 實際配置偏離",
+            "allocation": "核心／衛星實際佔比",
             "take_profit": "衛星停利",
         }
         assert _keys == set(_said), (
@@ -3595,6 +3595,193 @@ class TestTheAiIsAlwaysDisclosedAsAi:
                 P.AiSummaryReadout(requested=True, text="x"),
                 _station_with_digest())[1])
         assert P.AI_NO_COPY_BUTTON in _blob
+
+
+class TestTheSeventhBlockNeverGetsASystemTarget:
+    """🔴 **殘留② 的反向守衛**（客戶 2026-09-23 裁定「**兩個例外並存**」）。
+
+    ⑦ 的接線自本日起走 L3 的 `with_system_targets=False` 出口 ——
+    `load_station()` **實際跑出來**的 digest 與據以組出的 prompt，
+    **一律不得帶系統預設的目標比例與偏離**
+    （`docs/v2/spec/UI_PAGE_HOLD.md §③` 硬禁令第 2 條「目標比例**只能由使用者
+    自己填**」＋ (c)「**AI ⛔ 不得繞過禁令**」）。
+
+    ⚠️ **本類與既有兩組守衛是三件不同的事，⛔ 不是重複造輪子**：
+      · `tests/test_dividend_station_service.py::TestSystemTargetsOptOut`
+        驗的是 **L3 那個出口本身**（直接呼叫 `build_station_digest(...,
+        with_system_targets=False)`）—— 它**一次都沒碰 `load_station`**，
+        ⑦ 的接線被翻回預設，那一整類**照樣全綠**。
+      · 本檔 `TestTheAiIsAlwaysDisclosedAsAi::
+        test_the_input_list_cannot_claim_targets_the_seventh_block_never_gets`
+        驗的是**文案 vs 接線的一致性**，而且讀的是**原始碼文字**
+        （`inspect.getsource`）：接線翻回 `True` 時它的前提 `_opts_out` 變成
+        `False`，於是 `not (False and ...)` **恆真** —— 它**整條失效而不是轉紅**。
+      · 本類驗的是 **⑦ 這條路實際產出的值**：接線一翻回預設 ⇒ **當場紅**。
+        這是「翻那一行」這個動作唯一擋得住回頭路的守衛。
+
+    ⚠️ **比對值一律從 L0 `shared/dividend_station_thresholds` 現場讀**
+    （§2.1 SSOT／§3.3），⛔ 不寫死 `80` / `20`：L0 哪天改成 75/25，
+    寫死版會**安靜地失效**，而那正是本守衛最該擋住的失效方式。
+    """
+
+    #: prompt 裡配置那一行的行首。兩處比對共用，⛔ 不各寫一份。
+    _ALLOC_PREFIX: str = "- 實際配置："
+    #: 讓「實際佔比」永遠離 L0 目標一段距離。⛔ **不寫死 70/30** ——
+    #: 寫死的話，L0 哪天真的改成 70/30，下面「目標值不准出現」就自己瞎了。
+    _CORE_OFFSET_PP: float = 10.0
+
+    @staticmethod
+    def _l0_targets() -> tuple[float, float]:
+        """L0 的系統預設目標 —— **現場讀**，本檔不留第二份。"""
+        from shared.dividend_station_thresholds import (
+            CORE_TARGET_PCT,
+            SATELLITE_TARGET_PCT,
+        )
+
+        return float(CORE_TARGET_PCT), float(SATELLITE_TARGET_PCT)
+
+    @classmethod
+    def _alloc_line(cls, prompt: str) -> str:
+        """prompt 裡配置那一行。**恰好一行**，多了少了都是壞掉。"""
+        _hit = [_l for _l in prompt.splitlines()
+                if _l.startswith(cls._ALLOC_PREFIX)]
+        assert len(_hit) == 1, f"配置行應恰好一行，實得 {len(_hit)} 行：{_hit}"
+        return _hit[0]
+
+    @staticmethod
+    def _cell():
+        from src.compute.etf.dividend_station import LightCell
+        from shared.station_specs import KEY_HEALTH_A
+
+        return LightCell(key=KEY_HEALTH_A, level="🟢", state="live")
+
+    def _rows_and_vix(self):
+        """一份**算得出配置**的戰情表列（核心＝ETF、衛星＝個股）。
+
+        市值由 L0 目標推導而來，確保「實際佔比」永遠 ≠ 目標值。
+        ⚠️ 刻意**不給 `損益%`** → `flag_take_profit()` 回空清單，
+        prompt 不會多出停利那一行來干擾下面的逐行比對。
+        """
+        _core_t, _sat_t = self._l0_targets()
+        _core_pct = _core_t - self._CORE_OFFSET_PP
+        # §1 前提檢查：實際佔比若撞上 L0 任一目標值，「目標值不准出現」這個
+        # 偵測器就分不出「沒印目標」與「印了但剛好一樣」—— 當場炸掉，⛔ 不要假綠。
+        for _p in (_core_pct, 100.0 - _core_pct):
+            assert _p not in (_core_t, _sat_t), (
+                f"實際佔比 {_p} 撞上 L0 目標值 —— 請改 `_CORE_OFFSET_PP`")
+        _total = 1_000_000.0
+        _core_v = _total * _core_pct / 100.0
+        _cell = self._cell()
+        return ([{"代號": "0056", "名稱": "高股息", "種類": "ETF", "held": True,
+                  "市值": _core_v, "健檢": "🟢", "235 燈號": "", "加碼金": "",
+                  "_lights": (_cell,), "_detail": {}},
+                 {"代號": "2330", "名稱": "台積電", "種類": "個股", "held": True,
+                  "市值": _total - _core_v, "健檢": "🟢", "235 燈號": "",
+                  "加碼金": "", "_lights": (_cell,), "_detail": {}}], 18.0)
+
+    def _wired(self, monkeypatch, rows=None, vix=18.0):
+        """**真的跑一次 `load_station()`** —— 只換掉會打網路的那一支。
+
+        ⚠️ `build_station_digest` 刻意**不**換：本類要驗的就是「⑦ 這條路
+        餵給它的參數」，換掉它等於把待測對象換成假的。
+        """
+        import src.services.dividend_station_service as _svc
+
+        if rows is None:
+            rows, vix = self._rows_and_vix()
+        monkeypatch.setattr(_svc, "get_station_rows", lambda _h: (rows, vix))
+        _st = P.load_station(_holdings(
+            bound=True, holdings=tuple(
+                {"ticker": _r["代號"], "held": True} for _r in rows)))
+        assert _st.error == "", f"前提不成立：⑦ 的上游炸了 —— {_st.error}"
+        return _st, rows, vix
+
+    def test_the_wired_path_really_drops_the_three_target_keys(self, monkeypatch):
+        """🔴 **本輪最核心的一條**：⑦ 拿到的 `allocation` 鍵集
+        ＝ **預設路徑的鍵集減掉 `SYSTEM_TARGET_KEYS`**，用**集合相等**比。
+
+        ⚠️ 刻意**不用** `not in` 逐一檢查：`not in` 在「接線翻回預設」時會紅，
+        但在「L3 日後多回一個新的目標欄位」時**照樣綠**（新欄名不在檢查名單裡）。
+        集合相等兩種都抓得到，而且**多刪一個實測欄位也會紅**（§1 不因合規而少報）。
+        """
+        from src.services.dividend_station_service import (
+            SYSTEM_TARGET_KEYS,
+            build_station_digest,
+        )
+
+        _st, _rows, _vix = self._wired(monkeypatch)
+        _alloc = (_st.digest or {}).get("allocation")
+        assert _alloc, "前提不成立：這組 rows 應該算得出配置"
+        _default = build_station_digest(_rows, _vix)["allocation"]
+        assert set(SYSTEM_TARGET_KEYS) <= set(_default), (
+            f"前提不成立：預設路徑竟然沒有目標欄位 —— {sorted(_default)}")
+        assert set(_alloc) == set(_default) - set(SYSTEM_TARGET_KEYS), (
+            f"⑦ 實際拿到的 allocation 鍵集是 {sorted(_alloc)} —— "
+            "`load_station()` 沒走 `with_system_targets=False`，"
+            "或 L3 又多回了一個沒被關掉的目標欄位")
+
+    def test_the_wired_prompt_line_is_exactly_the_actual_split(self, monkeypatch):
+        """🔴 AI **逐字**收到的配置行 ＝ 只有實際佔比，**一字不多不少**。
+
+        ⚠️ 用**串列相等**，⛔ 不是 `in` 子字串：`in` 只抓得到「整行不見了」，
+        抓不到「後面多接了一段目標括號」—— 而後者正是本輪要防的退化。
+        期望值由 digest **自己的實測值**現場組，⛔ 不寫死 `核心 70% / 衛星 30%`。
+        """
+        from src.services.dividend_station_service import build_summary_prompt
+
+        _st, _, _ = self._wired(monkeypatch)
+        _alloc = _st.digest["allocation"]
+        _lines = [_l for _l in build_summary_prompt(_st.digest).splitlines()
+                  if _l.startswith(self._ALLOC_PREFIX)]
+        assert _lines == [
+            f"{self._ALLOC_PREFIX}核心 {_alloc['core_pct']:.0f}% / "
+            f"衛星 {_alloc['sat_pct']:.0f}%"], f"⑦ 的配置行變了：{_lines}"
+
+    def test_the_wired_prompt_carries_no_l0_target_number_or_word(self, monkeypatch):
+        """🔴 L0 的目標**數字**與「目標／偏離」等**字樣**，⑦ 一次都不准拿到。
+
+        ⚠️ **先證明這個偵測器真的會響**：同一組 rows 走**預設路徑**時，
+        下面每一個待測字樣都**必須**出現。少了這一段前提，本條會在
+        「prompt 根本沒產出配置那一段」時拿到一個**假綠燈**
+        （`CLAUDE.md §-2`：沒查證的宣稱比沒有宣稱更危險）。
+        """
+        from src.services.dividend_station_service import (
+            build_station_digest,
+            build_summary_prompt,
+        )
+
+        _st, _rows, _vix = self._wired(monkeypatch)
+        _core_t, _sat_t = self._l0_targets()
+        _nums = (f"{_core_t:.0f}", f"{_sat_t:.0f}")
+        #: ⛔ 不得改寫成「建議／參考／預設」—— 換個詞只是換個地方預填。
+        _words = ("目標", "偏離", "建議", "參考", "預設")
+        _def_line = self._alloc_line(
+            build_summary_prompt(build_station_digest(_rows, _vix)))
+        _blind = [_n for _n in _nums + ("目標", "偏離") if _n not in _def_line]
+        assert not _blind, f"前提不成立：預設路徑沒有 {_blind}，偵測器是瞎的"
+        _wired_prompt = build_summary_prompt(_st.digest)
+        _leak = [_n for _n in _nums + _words
+                 if _n in self._alloc_line(_wired_prompt)]
+        assert not _leak, (
+            f"⑦ 的配置行仍帶著 {_leak} —— 硬禁令第 2 條 (c)「AI ⛔ 不得繞過禁令」")
+        _leak_all = [_w for _w in ("目標", "偏離") if _w in _wired_prompt]
+        assert not _leak_all, f"⑦ 的 prompt 在別的段落把 {_leak_all} 講回去了"
+
+    def test_the_wired_path_survives_a_portfolio_with_no_market_value(
+            self, monkeypatch):
+        """邊界（§6）：有持股但**一檔都算不出市值** → `allocation is None`。
+
+        ⑦ 這條路**不炸**，也**不補**一個看起來合理的配置（§1 ⛔ 不捏造）。
+        """
+        from src.services.dividend_station_service import build_summary_prompt
+
+        _rows = [{"代號": "0056", "名稱": "高股息", "種類": "ETF", "held": True,
+                  "市值": None, "健檢": "🟢", "235 燈號": "", "加碼金": "",
+                  "_lights": (self._cell(),), "_detail": {}}]
+        _st, _, _ = self._wired(monkeypatch, rows=_rows, vix=None)
+        assert _st.digest["allocation"] is None, "零市值卻算出了配置"
+        _p = build_summary_prompt(_st.digest)        # ⛔ 不得 KeyError
+        assert self._ALLOC_PREFIX not in _p, "沒有可計價持股卻印了一行配置"
 
 
 def gemini_call_for_guard():

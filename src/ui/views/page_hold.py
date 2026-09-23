@@ -1229,7 +1229,7 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
         )
         _rows, _vix = get_station_rows([dict(_h) for _h in holdings.holdings])
         _rows = list(_rows or ())
-        _digest = build_station_digest(_rows, _vix)
+        _digest = build_station_digest(_rows, _vix, with_system_targets=False)
         _totals = compute_portfolio_totals(_rows)
         _cells = [(_r.get("_lights") or ()) for _r in _rows]
         _judged, _total = aggregate_judged(_cells)
@@ -2992,7 +2992,7 @@ AI_DISCLOSURE: str = (
 AI_INPUT_BLOCKS: str = (
     "**逐項列，不寫「幾段」**（寫幾段就要有人去數，而且一定會漂）："
     "健檢紅燈汰弱清單 · 235 加碼觸發清單 · 整批抓取失敗未納入的代號 · "
-    "有效判斷檔數 · VIX · 80/20 實際配置偏離 · 衛星停利清單"
+    "有效判斷檔數 · VIX · 核心／衛星實際佔比 · 衛星停利清單"
     "（以上＝`build_station_digest()` 回的全部欄位），"
     "再加上 ④ 的換出／換入（`build_switch_advice()` 算得出來時才帶進去）。"
     "**沒有進去的**：② 兩套刻度 · ⑥ 壓力測試／VaR／配息現金流 · "
