@@ -901,12 +901,35 @@ def compute_portfolio_totals(rows: list[dict]) -> dict | None:
 
 
 # ── 80/20 配置偏離 + 衛星停利（#38：有張數/均價才算,§1 缺就不算）───────────
-def compute_allocation_split(rows: list[dict]) -> dict | None:
+#: 「**系統預設的**目標配置」那三個欄位。⚠️ 本 tuple 是這三個名字的 **SSOT**
+#: （§2.1）—— `with_system_targets=False` 靠它決定關掉哪幾欄,日後新增 / 更名
+#: 目標欄位只改這裡;散在各處逐一 `pop` 必然會漏掉一欄,而漏掉的那一欄會**靜悄悄
+#: 地**繼續餵給 AI（`docs/v2/spec/UI_PAGE_HOLD.md §③` 硬禁令第 2 條 (c)
+#: 「AI ⛔ 不得繞過禁令」正是在防這個）。
+SYSTEM_TARGET_KEYS: tuple[str, ...] = ("core_target", "sat_target", "core_dev")
+
+
+def compute_allocation_split(rows: list[dict], *,
+                             with_system_targets: bool = True) -> dict | None:
     """80/20 實際配置偏離（純函式）。核心=ETF、衛星=個股（郭俊宏:核心配息ETF/衛星成長股,
     以代號類型近似;主題型 ETF 會被算核心,UI 已註記此近似）。
 
     只納入 **held 且有市值(市值>0)** 的列。§1：部分 held 缺金額 → partial=True(僅供參考);
     全無市值 → None（UI 不顯示、不捏造）。
+
+    Args:
+        with_system_targets: `True`（**預設＝現行行為**）→ 回傳含
+            `SYSTEM_TARGET_KEYS` 三欄（L0 的 80/20 目標與據以算出的偏離）。
+            `False` → **那三個鍵整個不存在**（⛔ 不是 `None`、⛔ 不是 `0`）。
+
+    ⚠️ **預設值必須維持 `True`**：v1 戰情室（`src/ui/etf/etf_tab_dividend_station.py`）
+    與 LINE 推播（`src/compute/notify/holdings_digest_message.py` ←
+    `scripts/push_holdings_daily.py`）都直接下標這三欄,改預設＝當場炸掉兩條
+    production 路徑。要「不含系統目標」的 caller **自己明講**
+    （`tests/test_dividend_station_service.py::TestSystemTargetsOptOut` 反向釘住）。
+
+    ⚠️ **`False` 不是「把目標換成 0」**（§1）：沒有使用者填的目標就沒有目標,
+    也就沒有「偏離」—— 填一個看起來合理的數字＝替使用者做一個沒有依據的決定。
     """
     _core = _sat = 0.0
     _held_n = _valued_n = 0
@@ -926,13 +949,22 @@ def compute_allocation_split(rows: list[dict]) -> dict | None:
     if _total <= 0:
         return None
     _core_pct = _core / _total * 100.0
-    return {
+    _out = {
         "core_pct": round(_core_pct, 1), "sat_pct": round(100.0 - _core_pct, 1),
         "core_target": T.CORE_TARGET_PCT, "sat_target": T.SATELLITE_TARGET_PCT,
         "core_dev": round(_core_pct - T.CORE_TARGET_PCT, 1),
         "total_value": round(_total, 0),
         "partial": _valued_n < _held_n, "held_n": _held_n, "valued_n": _valued_n,
     }
+    if not with_system_targets:
+        # §1：**整個鍵拿掉**,不留 `None` 佔位 —— 留了下游就分不出
+        # 「沒有目標」與「目標是空的」,而 `.get(k)` 會把兩者一起讀成 falsy。
+        # ⚠️ 刻意**不給 `pop` 預設值**：若上面那個 dict literal 的欄名與
+        # `SYSTEM_TARGET_KEYS` 漂移,要在這裡當場 `KeyError` 炸掉。
+        # 給了預設值會變成「沒刪到也不吭聲」—— 那正好是**目標靜悄悄漏給 AI** 的路徑。
+        for _k in SYSTEM_TARGET_KEYS:
+            _out.pop(_k)
+    return _out
 
 
 def flag_take_profit(rows: list[dict]) -> list[dict]:
@@ -954,15 +986,27 @@ def flag_take_profit(rows: list[dict]) -> list[dict]:
 
 
 # ── AI 戰情總結（規則式事實 + AI 潤稿;推播內容來源）──────────────────────
-def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
+def build_station_digest(rows: list[dict], vix: float | None = None, *,
+                         with_system_targets: bool = True) -> dict:
     """戰情表 rows → 可推播的「規則式事實」摘要（純函式,離線可測,§1 不生數字）。
 
     彙整**已算好**的欄位,不重抓、不推估：
     - reds：健檢 🔴 需汰弱（代號 + 建議動作）
     - adds：235 加碼觸發（加碼金非空 = deploy_pct>0）
     - errors：抓取失敗未納入判斷的代號（§1 誠實排除,不當作「無事」）
-    - allocation：80/20 實際配置偏離（有張數/均價才算;缺 → None,#38）
+    - allocation：實際配置（有張數/均價才算;缺 → None,#38）。
+      **含不含「系統預設目標 + 偏離」由 `with_system_targets` 決定**（見下）
     - take_profit：衛星獲利達 15% 嚴格停利清單（有損益%才判;#38）
+
+    Args:
+        with_system_targets: 原樣轉給 `compute_allocation_split()`。
+            `True`（**預設＝現行行為**）→ `allocation` 含 `SYSTEM_TARGET_KEYS`。
+            `False` → 那三個鍵**不存在**,連帶讓 `build_summary_prompt()` 產出的
+            prompt **不會出現任何系統預設的目標比例與偏離**。
+
+    ⚠️ **預設值 `True` 是刻意的**：v1 戰情室與 LINE 推播 cron 走的就是預設,
+    它們**一行都不用改**,行為與本次改動前**一字不差**。
+    只有明講 `with_system_targets=False` 的 caller 才拿到新行為（opt-in）。
     """
     reds: list[dict] = []
     adds: list[dict] = []
@@ -981,7 +1025,8 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
                          "235": str(r.get("235 燈號", "")),
                          "加碼金": str(r.get("加碼金", ""))})
     return {"total": valid, "vix": vix, "reds": reds, "adds": adds, "errors": errors,
-            "allocation": compute_allocation_split(rows),
+            "allocation": compute_allocation_split(
+                rows, with_system_targets=with_system_targets),
             "take_profit": flag_take_profit(rows)}
 
 
@@ -989,6 +1034,13 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
     """digest(+換股建議) → LLM prompt（純字串,數字全來自 digest/switch；AI 僅潤稿,§1/T5）。
 
     switch=build_switch_advice() 的 dict（可選）；帶入時 AI 摘要會含「當前位階 → 換股建議」。
+
+    ⚠️ **配置那一行的目標括號是條件輸出**：digest 由
+    `build_station_digest(..., with_system_targets=False)` 產出時,
+    `allocation` 沒有 `SYSTEM_TARGET_KEYS` 三欄 → **整段括號不印**
+    （§1：⛔ 不補預設、⛔ 不填 0、⛔ 不改寫成「建議」）。
+    三欄齊備時（v1 / LINE cron 的預設路徑）輸出**與 2026-09-23 前一字不差**；
+    只有一半 → `ValueError`（壞掉的 digest ≠ 沒有目標）。
     """
     _vix = digest.get("vix")
     _vix_txt = f"{_vix:.1f}" if isinstance(_vix, (int, float)) else "抓取失敗"
@@ -1009,10 +1061,27 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
     _alloc = digest.get("allocation")
     if _alloc:
         _partial = "（部分持股缺金額,僅供參考）" if _alloc.get("partial") else ""
+        # §1：**沒有目標就沒有偏離** —— `with_system_targets=False` 的 digest
+        # 少了 `SYSTEM_TARGET_KEYS` 三欄,這一整段括號就不輸出。
+        # ⛔ 不補預設、⛔ 不填 0、⛔ 不改寫成「建議」:AI 拿不到的東西就是拿不到,
+        # 改寫成建議只是換個地方繼續預填（硬禁令第 2 條 (c)「AI 不得繞過禁令」）。
+        # ⚠️ 三欄齊備時（v1 / LINE cron 的預設路徑）輸出**與改動前一字不差**。
+        _present = [_k for _k in SYSTEM_TARGET_KEYS if _k in _alloc]
+        if _present and len(_present) != len(SYSTEM_TARGET_KEYS):
+            # §1 Fail Loud：只給一半的目標欄位是**壞掉的 digest**,不是「沒有目標」。
+            # 靜默略過會讓「漏關一欄」看起來像「正常關掉」,正是本次要防的失效模式。
+            raise ValueError(
+                f"digest['allocation'] 的系統目標欄位只有一部分："
+                f"有 {sorted(_present)}、缺 "
+                f"{sorted(set(SYSTEM_TARGET_KEYS) - set(_present))} —— "
+                f"三欄必須同時有或同時無（見 compute_allocation_split）")
+        _targets = (
+            f"（目標 {_alloc['core_target']:.0f}/{_alloc['sat_target']:.0f}，"
+            f"核心偏離 {_alloc['core_dev']:+.0f}%）"
+        ) if _present else ""
         _base += (
             f"- 實際配置：核心 {_alloc['core_pct']:.0f}% / 衛星 {_alloc['sat_pct']:.0f}%"
-            f"（目標 {_alloc['core_target']:.0f}/{_alloc['sat_target']:.0f}，"
-            f"核心偏離 {_alloc['core_dev']:+.0f}%）{_partial}\n"
+            f"{_targets}{_partial}\n"
         )
     _tp = digest.get("take_profit") or []
     if _tp:

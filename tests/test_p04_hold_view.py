@@ -3555,6 +3555,30 @@ class TestTheAiIsAlwaysDisclosedAsAi:
             assert _zh in P.AI_INPUT_BLOCKS, (
                 f"digest 的 `{_k}` 沒有出現在畫面上那串輸入清單裡")
 
+    def test_the_input_list_cannot_claim_targets_the_seventh_block_never_gets(self):
+        """🔴 **⑦ 說的與 ⑦ 吃的必須一致** —— 殘留②（方案 B）的接線防呆。
+
+        L3 `dividend_station_service` 自 2026-09-23 起有一個
+        **`with_system_targets=False`** 的出口（`docs/v2/spec/UI_PAGE_HOLD.md §③`
+        硬禁令第 2 條：目標比例只能由使用者自己填）。⑦ **一旦改走那個出口**，
+        AI 就**再也拿不到** L0 的 80/20 目標與據以算出的偏離 ——
+        而 `AI_INPUT_BLOCKS` 是畫在卡上的「**哪幾段真的餵進去了**」，
+        它那句「80/20 實際配置偏離」會**當場變成假話**。
+
+        ⚠️ 本測試**不主張**該不該改走新出口（那是客戶層級的決定）；
+        它只釘住「**兩者不准對不起來**」：改了接線卻沒改文案 → **CI 紅燈**，
+        而不是畫面上悄悄印一個使用者無從察覺的假宣稱
+        （`CLAUDE.md §1`「錯誤的數字比沒有數字更危險」＋
+        `§8.2.A.0` 規則 3「清單由測試強制，漏改＝CI 紅燈」）。
+        """
+        import inspect
+
+        _opts_out = "with_system_targets=False" in inspect.getsource(P.load_station)
+        _claims = [_w for _w in ("80/20", "偏離") if _w in P.AI_INPUT_BLOCKS]
+        assert not (_opts_out and _claims), (
+            f"⑦ 已改走「不含系統目標」的 L3 出口，但 `AI_INPUT_BLOCKS` 還在宣稱 "
+            f"{_claims} 會餵進去 —— 這是印在卡上的假話，請一起改")
+
     def test_the_no_memory_tradeoff_is_written_on_the_card(self):
         """「按一次生成一次、本頁不記住」必須寫在卡上，不能只寫在 docstring。"""
         _blob = "\n".join(
