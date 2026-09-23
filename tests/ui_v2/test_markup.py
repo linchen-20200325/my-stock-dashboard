@@ -1532,10 +1532,20 @@ def test_the_big_value_declares_the_font_size_from_the_contract():
     ⛔ 「有宣告就好」不夠 —— 要**等於契約值**。契約值的出處是
     `UI_COMPONENTS.md §4`「主數值欄一欄 → 卡內 `24px/700` `--mono` tabular-nums」，
     由 `UI_PRINCIPLES.md` 第 6 條明文指定為 KPI 的字級來源（§B 無 KPI 專屬字級列）。
+
+    ⚠️ **2026-09-23：量測範圍加 `exclude=_all_tier_classes()`，⛔ 不是放寬斷言。**
+    客戶同日指令新增了一條**逐階覆寫** `.blk-t4 .blk-val{font-size:…}`（最密的那一階
+    把大字降一級）。它與 `.blk-val` 是**兩條不同的規則**：本條守的是**基準那一條
+    ＝ 契約值**，`== {want}` 這個等號**一個字都沒放寬** —— 加 `exclude` 只是不要把
+    另一條規則的值混進同一個量測桶裡。這正是 `_px_values_under` docstring 明載的
+    `exclude` 用途（「排掉『選擇器同時點到另一族 class』的規則」，例 `.blk-t1 .sb-b1`）。
+    ⚠️ 覆寫那一條**另有守衛**：`test_the_t4_big_value_override_still_clears_the_kpi_floor`
+    —— ⛔ 不是「排掉就不管了」。
     """
     css = markup.page_css("dark")
     want = float(components.CARD_VALUE["font_px"])
-    got = _px_values_under(css, _value_classes(), ("font-size",))
+    got = _px_values_under(css, _value_classes(), ("font-size",),
+                           exclude=_all_tier_classes())
     assert got, (
         "大字區在 CSS 裡**沒有** `font-size` 宣告 —— 它會承襲卡面字級，"
         "畫面上跟卡標一樣大，而 `UI_PRINCIPLES.md` 第 6 條「KPI ≥ 20px」靠的就是這個值"
@@ -1636,14 +1646,65 @@ def test_mutation_dropping_the_big_value_font_size_turns_the_kpi_guard_red():
 
     ⚠️ 這條驗的是**守衛本身有沒有牙齒**。洞 1 的原始狀態就是「那一行不存在」，
     如果拿掉它測試照樣綠，本節等於白寫。
+
+    ⚠️ **2026-09-23：兩處量測加 `exclude=_all_tier_classes()`，⛔ 不是拔牙。**
+    理由同 `test_the_big_value_declares_the_font_size_from_the_contract` ——
+    客戶同日新增的 `.blk-t4 .blk-val` 覆寫也掛在大字區那個 class 上，
+    不排掉的話，突變（只拿得掉基準那一條）之後仍會量到覆寫的值，
+    末句 `assert not …` 會**恆紅**，本條就從「有牙齒」變成「咬到自己」。
+    🔴 **牙齒一顆沒少**：拿掉基準的 `font-size` ⇒ 基準桶量到空 ⇒ 本條照樣紅。
     """
     css = markup.page_css("dark")
     classes = _value_classes()
     want = float(components.CARD_VALUE["font_px"])
-    assert _px_values_under(css, classes, ("font-size",)) == {want}, "真輸出先要是乾淨的"
+    assert _px_values_under(css, classes, ("font-size",),
+                            exclude=_all_tier_classes()) == {want}, "真輸出先要是乾淨的"
 
     mutated = re.sub(r"font-size\s*:\s*" + f"{want:g}" + r"px\s*;", "", _strip_style_tags(css))
     assert mutated != css, "突變沒有生效（找不到大字區的 font-size）"
-    assert not _px_values_under(mutated, classes, ("font-size",)), (
+    assert not _px_values_under(mutated, classes, ("font-size",),
+                                exclude=_all_tier_classes()), (
         "突變後大字區竟然還量得到 font-size —— 本節的定位方式有問題"
+    )
+
+
+def test_the_t4_big_value_override_still_clears_the_kpi_floor():
+    """⭐ 客戶 2026-09-23 新增的 `.blk-t4 .blk-val` 覆寫的專屬守衛。
+
+    上面兩條把覆寫 `exclude` 掉了（它們守的是**基準**那一條）——
+    ⛔ 不得因此讓覆寫變成一條沒人看的規則。本條補上它的三顆牙：
+      ① **它真的存在**（有人整條刪掉 → 量到空集 → 紅）；
+      ② **它仍守得住 `UI_PRINCIPLES.md` 第 6 條的 KPI ≥ 20px 門檻** ——
+         「最密的那一階把大字降一級」是可以的，**降到不像 KPI 就不行**；
+      ③ **它仍然大於 t4 自己的卡標** —— 否則「大字區」在 t4 上名不副實
+         （同 `test_the_big_value_is_actually_bigger_than_every_card_title` 的理由）。
+
+    ⛔ **本條不寫死 22** —— 沿用本檔既有紀律（檔頭 C-1c 段「⛔ 不寫死任何字級數字」）：
+    寫死會在 `markup.py` 之外開出第二個真相源，客戶下次調字級就得改兩個地方，
+    而**沒改到的那一個會安靜地繼續綠**。本條釘的是**原則**（門檻 20 已是具名常數
+    `KPI_MIN_PX_PER_PRINCIPLE_6`，與卡標值一樣讀 `CARD_TIERS`），⛔ 不是那個數字。
+    ⚠️ 覆寫值**沒有契約層出處**（`CARD_VALUE` 無逐階表、客戶同輪禁動 `components.py`）——
+    `markup.py` 已就地揭露。本條因此**只能**守住門檻，⛔ 守不到「它等於規格值」。
+    """
+    css = markup.page_css("dark")
+    tier = "t4"
+    if tier not in markup._TIERS_ON_PAGE:      # 該階沒有 block 掛著 ⇒ 規則本來就不該產
+        pytest.skip(f"{tier} 沒有 block 掛在頁上，`.blk-{tier} .blk-val` 依設計不輸出")
+
+    # 只取「同時點到大字區 class 與 t4 class」的那條規則 ＝ 覆寫本身。
+    got = _px_values_under(css, _value_classes(), ("font-size",)) - _px_values_under(
+        css, _value_classes(), ("font-size",), exclude=_tier_classes(tier)
+    )
+    assert got, (
+        f"`.blk-{tier} .blk-val` 的 font-size 量不到 —— 覆寫是不是被刪掉了？"
+        f"（`{tier}` 在 `_TIERS_ON_PAGE` 裡，規則本該產出）"
+    )
+    assert min(got) >= KPI_MIN_PX_PER_PRINCIPLE_6, (
+        f"{tier} 的大字覆寫量到 {sorted(got)}，未達 `UI_PRINCIPLES.md` 第 6 條門檻 "
+        f"{KPI_MIN_PX_PER_PRINCIPLE_6}px —— 降一級可以，降到不像 KPI 不行"
+    )
+    title_px = float(components.CARD_TIERS[tier]["title_px"])
+    assert min(got) > title_px, (
+        f"{tier} 的大字覆寫 {sorted(got)} 並沒有比該階卡標 {title_px}px 大 —— "
+        "「大字區」在這一階名不副實"
     )

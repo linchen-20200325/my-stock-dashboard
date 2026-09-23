@@ -275,12 +275,45 @@ def _card_rules() -> list[str]:
     # ⚠️ `font-family` 走 `var(--mono)`：等寬 ＋ `tabular-nums` 是**一組的** ——
     #    只留 `tabular-nums` 而讓字族退回比例字體，數字仍然不會對齊。
     val = components.CARD_VALUE
-    out += [
+    out.append(
         f".blk-val{{font-size:{_px(float(val['font_px']))};"
         f"font-weight:{val['font_weight']};"
         f"font-family:{_var(str(val['font_family']))};"
         f"line-height:{float(val['line_height']):g};"
-        f"font-variant-numeric:{val['font_variant_numeric']}}}",
+        f"font-variant-numeric:{val['font_variant_numeric']}}}"
+    )
+
+    # ── t4（佐證階）的大字區覆寫 ──────────────────────────────────
+    # 客戶 2026-09-23 指令逐字：「新增 `.blk-t4 .blk-val` 22px」。
+    # 🔴 **基準 `.blk-val` 的 24px 一字未動**（同輪客戶拍板「B」：主數字維持 24px）——
+    #    本條只把**最密的那一階**的大字降一級，⛔ 不改 KPI 的契約值。
+    #
+    # ⚠️ **這個 22 是本檔唯一沒有契約層出處的字級，據實揭露（CLAUDE.md §3.3）**：
+    #    `components.CARD_VALUE` 只有單一 `font_px`，沒有「逐階大字」這張表，
+    #    而客戶同輪明文約束 ⛔ 不碰 `components.py` / `tokens.py` ⇒ 本輪無法把它放進契約層。
+    #    **值的出處是客戶指令本身**（⛔ 不是本檔挑的），但它**沒有** `CARD_VALUE` 那樣的
+    #    規格條文背書 ⇒ 要調整請先補契約層（`CARD_TIERS[*]` 增一個 `value_px` 欄），
+    #    ⛔ 不要在本檔長出第二張字級表。
+    # ⛔ **不掛到 `components.BADGE_BASE['font_px']` 之類「剛好也是 11.5／22」的既有常數**
+    #    —— 同數字不同義的耦合正是 `signal_thresholds` 前綴分名要防的事。
+    #
+    # 🔴 **選擇器的兩個前提，缺一這條就是死 CSS**：
+    #    ① `t4` 真的有 block 掛在上面（否則 `.blk-t4` 從不出現在 HTML 上）——
+    #       故與全檔其餘 `.blk-t*` 規則一樣，以 `_TIERS_ON_PAGE` 把關，⛔ 不無條件輸出；
+    #    ② `.blk-val` 是 `.blk-t4` 的**後代**（`card_html` 把大字畫在卡 div 內）。
+    #    特異性 (0,2,0) > 基準 `.blk-val` (0,1,0) ⇒ 與 CSS 出現順序無關，⛔ 不靠排序取勝。
+    if "t4" in _TIERS_ON_PAGE:
+        out.append(".blk-t4 .blk-val{font-size:22px}")
+
+    # ── 明細列（`.blk-fact-*`）的主從對比 ──────────────────────────
+    # 客戶 2026-09-23 指令逐字：key 改 `--ink-3` ＋ `font-size:11.5px`；value 加 `color:var(--ink)`。
+    # 目的是把「鍵弱／值強」的階差做出來（改之前 key 是 `--ink-2`、value 沒有 color ⇒
+    # value 承襲卡面主文字色，兩者對比只剩一階）。
+    # ⚠️ `--ink-3` 的可讀性有守衛：`test_tokens.py` 釘住它對 `--paper`／`--panel`／`--panel-2`
+    #    三個背景都 ≥ WCAG AA 4.5 ⇒ 降一階**不會**把明細鍵降到讀不到。
+    # ⚠️ 11.5px 與 `UI_PRINCIPLES.md` 第 6 條「明細 ≤ 13px」相容；同頁 `page_today`
+    #    的等權揭露句（`--ink-3` ＋ 11.5px）是同一組說明字級的既有先例。
+    out += [
         ".blk-lvl{color:" + _var("--ink-2") + "}",
         ".blk-facts{margin-top:" + _var("--sp-3") + "}",
         ".blk-fact{display:flex;justify-content:space-between;align-items:center;"
@@ -288,8 +321,8 @@ def _card_rules() -> list[str]:
         "padding-top:" + _var("--sp-1") + ";padding-bottom:" + _var("--sp-1") + ";"
         "border-top-width:1px;border-top-style:solid;border-top-color:" + _var("--grid") + "}",
         ".blk-fact:first-child{border-top-width:0px}",
-        ".blk-fact-k{color:" + _var("--ink-2") + "}",
-        ".blk-fact-v{font-variant-numeric:tabular-nums}",
+        ".blk-fact-k{color:" + _var("--ink-3") + ";font-size:11.5px}",
+        ".blk-fact-v{color:" + _var("--ink") + ";font-variant-numeric:tabular-nums}",
     ]
     return out
 
