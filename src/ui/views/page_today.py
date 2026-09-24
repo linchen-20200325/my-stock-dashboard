@@ -286,6 +286,19 @@ from src.ui.tabs.tab_today import (
     #    `EXIT_OUT_OF_REACH`（**接上了，但這一格不在射程內**，那才是實話）。
     #    ⛔ `tab_today.py` 本身一個字都沒動（檔案邊界）：那句話在**它自己那一頁**
     #    仍然為真，`tests/test_p01_today_skeleton.py` 照舊守著它。
+    #
+    # 📌 **2026-09-24 事實更正 —— 有意識的更正，⛔ 不是漏刪；上面整段一字未改。**
+    #    上面那段講的是「**⛔ 不拿它當 `where=` 用**」，那**仍然完全有效** ——
+    #    本檔所有自己寫的 `where=` 照舊只走 `EXIT_*`。
+    #    **變的是它從頭到尾都還在畫面上這個事實**：位階卡 `degraded` 態刻意
+    #    **整份沿用** `build_status_bar_card().note`（§2.1 SSOT：⛔ 不另寫一份文案，
+    #    見下方該分支的註 ＋ `tests/test_p01_today_view.py` 逐欄釘死兩邊相同），
+    #    ⇒ **那一態的 `where` 本來就是對面這個常數**，⛔ 不是本檔的 `EXIT_*`。
+    #    🔴 **為什麼現在非 import 不可**：`_v2_exit_phrase()` 以 `is` 比**物件身分**
+    #    查表，查不到就 `raise` ⇒ 不登記的話，`degraded` 的位階卡會在 v2 卡面
+    #    **當場炸成紅卡**（本輪實跑抓到，⛔ 不是推測）。**import 它是為了「認得它」，
+    #    ⛔ 不是為了「用它」** —— 兩件事不一樣。
+    CONTRACT_NO_EXIT_WHERE,
     LEAF_CONCLUSION,
     LEAF_DETAIL,
     MODE_FORCE,
@@ -1348,6 +1361,14 @@ REGIME_SCOPE_NOTE: str = (
     "**兩邊不一致是預期的；本頁以這張卡為準。**"
 )
 
+#: 上面那段揭露掛在 `facts` 時用的**標籤**。⛔ 不在各處各寫一份字面。
+#:
+#: 🔴 **為什麼非得是一個常數**：`V2_HOVER_ONLY_FACTS`（見下方 v2 卡面段）要拿它
+#: **比對**才知道哪一列該移出卡面。兩邊各寫一份 `"位階的出處"` 的話，
+#: 改了一處就**默默**失配 —— 那一列會悄悄回到卡面（或悄悄兩邊都不見），
+#: 而畫面**看起來仍然正常**，⛔ 沒有人會發現（`CLAUDE.md §1` 靜默失效）。
+REGIME_SCOPE_FACT_KEY: str = "位階的出處"
+
 
 def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                         danger: tuple[str, str] | None, danger_error: str,
@@ -1489,7 +1510,8 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             Card(key="verdict.regime", label=REGIME_CARD_LABEL,
                  state=_regime_state, value=_rlabel),
             signal_text=_rlabel,
-            facts=(("生效分支", _rsource), ("位階的出處", REGIME_SCOPE_NOTE))))
+            facts=(("生效分支", _rsource),
+                   (REGIME_SCOPE_FACT_KEY, REGIME_SCOPE_NOTE))))
     elif _regime_state == UI_DEGRADED:
         # ⚠️ **【FIX-1】2026-09-07：degraded 修前掉進下面那個 `else`。**
         # 修前的判斷是 `if _regime_state == UI_LIVE: ... else: ...` ——
@@ -1526,7 +1548,7 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             # `_facts.insert(0, ("現值", ...))`），不是第二種做法。
             signal_text=_rlabel,
             facts=(("現值", _rlabel), ("生效分支", _rsource),
-                   ("位階的出處", REGIME_SCOPE_NOTE))))
+                   (REGIME_SCOPE_FACT_KEY, REGIME_SCOPE_NOTE))))
     else:
         _tiles.append(Tile(Card(
             key="verdict.regime", label=REGIME_CARD_LABEL,
@@ -1540,7 +1562,7 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                      "**不是** `neutral`；本站不以缺值推導「中性」"),
                 where=(EXIT_OUT_OF_REACH if not regime_error
                        else EXIT_FIX_CODE))),
-            facts=(("位階的出處", REGIME_SCOPE_NOTE),)))
+            facts=((REGIME_SCOPE_FACT_KEY, REGIME_SCOPE_NOTE),)))
     return tuple(_tiles)
 
 
@@ -1647,11 +1669,17 @@ def _load_key_alerts(session: Mapping[str, Any]) -> tuple[Any, bool, str]:
 
 
 # ══════════════════════════════════════════════════════════════════
-# v2 卡面（**樣板**：葉1 ① 只有第一張卡走這條路）
+# v2 卡面（葉1 ① **三張並排的卡全部**走這條路）
 #
-# 客戶要的是「一張給客戶看的樣板」，所以這一段**刻意只接一張卡**：
-# `verdict.exposure`。同一排的另外兩張（`verdict.danger` / `verdict.regime`）
-# 一行都沒動，留著當**對照組** —— 新舊兩種卡面並排，差異一眼看得到。
+# ⚠️ **2026-09-24 客戶裁示批 1：下面那條刪除線是有意識的政策變更，⛔ 不是漏刪。**
+# ~~客戶要的是「一張給客戶看的樣板」，所以這一段**刻意只接一張卡**：~~
+# ~~`verdict.exposure`。同一排的另外兩張（`verdict.danger` / `verdict.regime`）~~
+# ~~一行都沒動，留著當**對照組** —— 新舊兩種卡面並排，差異一眼看得到。~~
+# · **舊做法的理由仍然成立**（在它寫下的那天）：樣板卡就是要讓客戶把新舊兩種卡面
+#   擺在一起比，留兩張舊卡當對照組是**當時唯一看得到差異**的方式。
+# · **被權衡掉的是它的前提**：客戶 2026-09-24 看過對照之後裁示「三張同版」——
+#   對照組的任務結束了，再留著只會讓同一排長出兩種卡面（那本身就是版面不一致）。
+# **現行**：`V2_CARD_BLOCKS` 是 **key → block 的分派表**，日後加卡只要加一列。
 #
 # 🔴 **CSS 一律走 `src/ui_v2/markup.page_css()`，⛔ 不在本檔抄一份。**
 #    抄 ~30 條規則進 L5 ＝ 第二個真相源（§2.1）：`markup.py` 改了色票 / 密度階，
@@ -1662,17 +1690,28 @@ def _load_key_alerts(session: Mapping[str, Any]) -> tuple[Any, bool, str]:
 #    全部由 `markup.page_css()` / `components.*` 供給。本區塊唯一的數字是
 #    `V2_LEVEL_MAX_CHARS`（字數上限，不是視覺單位），其來歷已就地揭露。
 # ══════════════════════════════════════════════════════════════════
-#: 走 v2 卡面的卡 key。**只有這一張**；其餘一律走既有 `_ui_kit.render_card_isolated()`。
-V2_CARD_KEYS: frozenset[str] = frozenset({"verdict.exposure"})
-
-#: 這張卡在 v2 版面契約裡的 block key。
+#: **分派表**：走 v2 卡面的卡 `key` → 它在 v2 版面契約裡的 **block key**。
+#: 不在表內的 key 一律走既有 `_ui_kit.render_card_isolated()`（舊卡面）。
+#:
+#: ⚠️ **2026-09-24 取代舊的「`V2_CARD_KEYS` 單一 key ＋ `V2_BLOCK` 單一常數」**
+#: （有意識的政策變更，⛔ 不是漏刪；決策者：客戶）。**舊寫法的理由仍然成立**：
+#: 只有一張卡時它是最省的寫法。**被權衡掉的是它的擴充成本** —— 加第二張就得同時
+#: 改兩個常數 ＋ 一支只驗一個 block 的斷言；分派表把「加一張卡」收斂成**加一列**。
+#:
 #: 密度階**不由本檔指定** —— `v2_markup.card_html()` 內部呼叫
 #: `v2_page.tier_for_block()` 依「它所在的層」自動決定（該函式刻意沒有 `tier=` 入口）。
-#: 本檔只在 import 時**驗**它真的是 t1（見 `_assert_v2_block_is_tier_one`）。
-V2_BLOCK: str = "today.verdict"
+#: 本檔只在 import 時**逐 block 驗**它真的是 t1（見 `_assert_v2_blocks_are_tier_one`）。
+V2_CARD_BLOCKS: dict[str, str] = {
+    "verdict.exposure": "today.verdict",   # ① 能不能出手 · 出手到幾成
+    "verdict.danger":   "today.verdict",   # ② 指標危險度（不含多空方向）
+    "verdict.regime":   "today.verdict",   # ③ 市場位階
+}
 
-#: 上面那個 block 應該落在的密度階。**這是斷言用的期望值，不是設定值** ——
-#: 本檔沒有任何地方把它傳給 `card_html`（傳不進去，那支函式不收）。
+#: 走 v2 卡面的卡 key。**由分派表推出來，⛔ 不另列一份名單**（那才是第二把尺）。
+V2_CARD_KEYS: frozenset[str] = frozenset(V2_CARD_BLOCKS)
+
+#: 分派表裡**每一個** block 都應該落在的密度階。**這是斷言用的期望值，不是設定值**
+#: —— 本檔沒有任何地方把它傳給 `card_html`（傳不進去，那支函式不收）。
 V2_EXPECTED_TIER: str = "t1"
 
 #: 樣式表模式。出處：`src/ui_v2/render.py::unwired_view_model(*, mode="dark")` 的既有預設值
@@ -1701,12 +1740,46 @@ SRC_V2_MARKUP: str = (
 #: ⚠️ 而且它**保證不了**「恰好一行」—— 實際折幾行取決於欄寬（這張卡住在三欄之一，
 #: 桌機實寬約 1/3 頁 ⇒ 一行大約只放得下 25~30 個中文字），要真的**保證**一行得在
 #: `markup.py` 的 `.blk-lvl` / `.blk-fact-v` 補 `text-overflow` / `white-space`，
-#: **那在本輪的檔案邊界外**。本檔做到的是「**三段 200~320 字壓到這個量級**」，
+#: ~~**那在本輪的檔案邊界外**~~（**2026-09-24 事實更正**：`markup.py` 已在本批邊界內，
+#: 且已補 `.blk-title{flex:1 1 0}` 等條；⚠️ **改的是事實，⛔ 不是這句的結論** ——
+#: 「本常數⛔ 保證不了一行」仍然成立）。本檔做到的是「**三段 200~320 字壓到這個量級**」，
 #: ⛔ 不是「保證一行」—— 兩件事不一樣，⛔ 不混為一談（§-2：不做沒驗過的宣稱）。
+#: 📌 **2026-09-24 起它是「安全網」，⛔ 不再是壓縮的主要手段**（客戶退回截尾）：
+#: 指路那半段改由 `V2_EXIT_PHRASES` 給固定短語 ⇒ 三張卡 idle 實測 20~23 字，
+#: **這條夾子根本不會觸發**。留著是因為 `now`（現況）那半段**仍然沒有上限**。
 V2_LEVEL_MAX_CHARS: int = 46
 
 #: 截斷記號。純排版符號，不屬於 L0 狀態 glyph 家族。
 V2_LEVEL_ELLIPSIS: str = "…"
+
+#: 出口常數 → v2 卡面那一行的**固定短語**。⛔ 不是截斷。
+#:
+#: 🔴 **2026-09-24 客戶退回「截尾＋…」：讀起來是斷句，改成重寫成短語。**
+#: 舊做法（`where.split("。")[0]` ＋ 字數上限）的理由仍然成立 —— 它**不挑字**，
+#: 文案怎麼改都跟得上。**被權衡掉的是它的產出**：首句本身就有 40~90 字，
+#: 夾住之後必然斷在半句話中間，而「讀不完的半句」對使用者等於沒有指路。
+#:
+#: 🔴 **key 是常數物件本身，`_v2_exit_phrase()` 用 `is` 比對**（客戶明示）：
+#: 改成比對字串開頭的話，文案改一個字就**默默**退回長句 —— ⛔ 不會報錯（§1）。
+#: ⚠️ **據實揭露（§3.3）：這四個短語沒有契約層出處，是實作層挑的**
+#: （沿用 `V2_LEVEL_MAX_CHARS` 的既有先例）。客戶只給「≤30 字」這個上限與三個
+#: **舉例**；用字一律沿用對應常數自己的字面（射程／程式要修／只更新得到一半），
+#: ⛔ 不新造名詞。🔴 **⛔ 一個字都沒刪**：完整三段原文照舊掛在外層 `title=`。
+#: ⚠️ `EXIT_ALERTS_PARTIAL` 現在**沒有**卡走到（今日關鍵橫幅不在 `V2_CARD_BLOCKS`
+#: 內）。仍然登記，是因為漏登的後果是**渲染當下才炸**；登記的成本是一行。
+#: 🔴 **`CONTRACT_NO_EXIT_WHERE` 是對面 `tab_today` 的常數，⛔ 不是本檔的 `EXIT_*`**
+#: （2026-09-24 補登；**實跑抓到的漏登**，⛔ 不是預防性登記）：位階卡 `degraded` 態
+#: 刻意**整份沿用** `build_status_bar_card().note`（§2.1 SSOT），所以它的 `where`
+#: 是**那一支**給的物件。三張卡全部改走 v2 卡面之後，這一態會走進 `_v2_exit_phrase()`
+#: ⇒ 漏登＝`KeyError`＝**畫成紅卡**。⚠️ 它的短語沿用該常數自己開頭的
+#: `NO_EXIT_MARKER` 字面（⛔ 不新造名詞）；**完整原文照舊掛在外層 `title=`**。
+V2_EXIT_PHRASES: tuple[tuple[str, str], ...] = (
+    (EXIT_RETRY_HERE,        "按上方 🚀 更新"),
+    (EXIT_OUT_OF_REACH,      "不在本頁射程內"),
+    (EXIT_FIX_CODE,          "需修程式"),
+    (EXIT_ALERTS_PARTIAL,    "只更新得到一半"),
+    (CONTRACT_NO_EXIT_WHERE, NO_EXIT_MARKER),
+)
 
 #: 壓縮後那一行**退而求其次**時掛的 fact 列標籤。用語沿用鐵律 4 的三要素字面。
 #:
@@ -1721,6 +1794,34 @@ V2_LEVEL_ELLIPSIS: str = "…"
 #: 兩條路互斥，⛔ 不會重複印。契約哪天改成灰態也畫判決區，這一行**自動**搬回
 #: `.blk-lvl`，本檔一個字都不用改。
 V2_GUIDE_FACT_KEY: str = "去哪補"
+
+#: **移出卡面、只留 hover** 的 fact 列：`card.key` → 該卡要移出的 fact **標籤**集合。
+#:
+#: 🔴 **2026-09-24 客戶裁示：卡③「位階的出處」那一列不再出現在卡面。**
+#: 🔴 **⛔ 一個字都沒刪** —— 整段 `REGIME_SCOPE_NOTE`（193 字）**原文逐字**改掛該卡的
+#:    `title=`（見 `v2_card_html` 結尾），滑過去就看得到。
+#:    ⚠️ 這**不是**漏渲染：下一個人看到卡③ 少一列時，請先讀本註再動手。
+#:
+#: **為什麼移的是這一列（判準，⛔ 不是「嫌它長」）**：它是**免責說明**，⛔ 不是**觀測值**。
+#: `REGIME_SCOPE_NOTE` 的 docstring 自陳：它是為了**否認**一句 2026-09-07 獨立稽核
+#: **實測為假**的全稱宣稱而寫的**誠實揭露**（被否認的那句話、以及它假在哪裡，
+#: 逐字寫在該常數與 `REGIME_CARD_LABEL` 的註裡 —— 本行⛔ 不複述，複述一次就是
+#: 多一個會漂開的複本，而且會再踩一次
+#: `tests/test_views_no_unverified_universal_claims.py` 的登記制）。
+#: 揭露的職責是「**要看得到**」，
+#: ⛔ 不是「**要佔住第一眼**」—— 三張並排的 t1 結論卡是拿來一眼看結論的，
+#: 193 字的免責擺在那裡會把真正的觀測（現值 / 生效分支）擠掉。
+#: ⇒ **移的是版位，⛔ 不是內容**；內容一字不少地留在 hover。
+#:
+#: ⚠️ **同一張卡 degraded 態的 `("現值", _rlabel)` 是觀測值 ⇒ ⛔ 不在表內，照留卡面。**
+#:    本表比對的是**單一標籤**，⛔ 不是「這張卡的 facts 全部不顯示」。
+#: ⚠️ **表外的卡一行都沒變**（⛔ 不是「所有 fact 都不顯示」）——
+#:    卡① `verdict.exposure` / 卡② `verdict.danger` 的 fact 列原樣照畫。
+#: ⚠️ 日後要再移一列，**先問自己：它是免責 / 出處說明，還是這一眼要看的觀測值？**
+#:    是觀測值 → ⛔ 不准移進來（那就是把使用者該看到的東西藏進 hover）。
+V2_HOVER_ONLY_FACTS: dict[str, frozenset[str]] = {
+    "verdict.regime": frozenset({REGIME_SCOPE_FACT_KEY}),
+}
 
 #: L0 十態 → （`src/ui_v2/page_today.py` 的狀態語彙, `resolve_badge()` 要的缺值原因）。
 #:
@@ -1791,19 +1892,23 @@ def _v2_badge_to_l0_state(badge_n: int) -> str | None:
     return _value if _value in UI_STATES else None
 
 
-def _assert_v2_block_is_tier_one() -> None:
-    """import 時就驗：樣板卡落在 t1（結論層）密度階（§1 Fail Loud）。
+def _assert_v2_blocks_are_tier_one() -> None:
+    """import 時就驗：分派表裡**每一個** block 都落在 t1（結論層）密度階（§1 Fail Loud）。
 
-    沒有這一道的話，對面把 `today.verdict` 搬到別層的那天，這張卡會靜靜地
+    ⚠️ **2026-09-24 由「只驗一個 block」泛化為「逐 block 驗」** ——
+    ⛔ 不是拿掉這道斷言：表能掛多個 block 之後，只驗第一個等於替其餘那些
+    **背書一件沒驗過的事**（`CLAUDE.md §-2` 規則 6）。
+    沒有這一道的話，對面把 `today.verdict` 搬到別層的那天，這些卡會靜靜地
     換成另一個密度階 —— 畫面**看起來仍然正常**，只是與「結論燈」的規格對不上。
     """
-    _tier = v2_page.tier_for_block(V2_BLOCK)
-    if _tier != V2_EXPECTED_TIER:
-        raise RuntimeError(
-            f"v2 樣板卡的 block {V2_BLOCK!r} 現在落在密度階 {_tier!r}，"
-            f"不是結論層的 {V2_EXPECTED_TIER!r} —— "
-            "`src/ui_v2/page_today.py` 的層序很可能動過。"
-            "請確認規格，⛔ 不要把期望值改成現況了事。")
+    for _block in sorted(set(V2_CARD_BLOCKS.values())):
+        _tier = v2_page.tier_for_block(_block)
+        if _tier != V2_EXPECTED_TIER:
+            raise RuntimeError(
+                f"v2 卡面的 block {_block!r} 現在落在密度階 {_tier!r}，"
+                f"不是結論層的 {V2_EXPECTED_TIER!r} —— "
+                "`src/ui_v2/page_today.py` 的層序很可能動過。"
+                "請確認規格，⛔ 不要把期望值改成現況了事。")
 
 
 def _assert_v2_state_vocab_matches_ssot() -> None:
@@ -1834,7 +1939,7 @@ def _assert_v2_state_vocab_matches_ssot() -> None:
             "**並寫明它為什麼分不出來**，⛔ 不要把回推那一段拿掉。")
 
 
-_assert_v2_block_is_tier_one()
+_assert_v2_blocks_are_tier_one()
 _assert_v2_state_vocab_matches_ssot()
 
 
@@ -1849,6 +1954,21 @@ def v2_plain(text: object) -> str:
     return str(text).replace("**", "").replace("`", "")
 
 
+def _v2_exit_phrase(where: str) -> str:
+    """出口文案 → 卡面那一行的固定短語。**`is` 比物件，⛔ 不比字串開頭。**
+
+    查不到 → `raise`（§1）：⛔ 不回一個「看起來合理」的短語（那是捏造），
+    也⛔ 不偷偷退回截斷 —— 那正是客戶 2026-09-24 退回的做法，
+    而退回之後畫面**看起來仍然正常**，沒有人會發現（§1 靜默失效）。
+    """
+    for _const, _phrase in V2_EXIT_PHRASES:
+        if where is _const:
+            return _phrase
+    raise KeyError(
+        f"這段出口文案沒有登記短語（開頭 {where[:16]!r}…）—— "
+        "新增 `EXIT_*` 常數時**必須**同步補一列 `V2_EXIT_PHRASES`。")
+
+
 def v2_level_line(tile: Tile) -> tuple[str | None, str | None, str]:
     """把三段 `Note` 壓成**一行**，外加 hover 用的完整原文。
 
@@ -1860,7 +1980,8 @@ def v2_level_line(tile: Tile) -> tuple[str | None, str | None, str]:
         · **其餘** → `(None, 一行指路, 完整三段原文)`。
 
     ⚠️ **客戶要的是「短」，⛔ 不是「把指路刪掉」**（鐵律 4 空狀態引導三要素）：
-    壓縮之後**必須留下可操作的下一步**，所以這一行固定是 `「現況」· <出口的首句>`。
+    壓縮之後**必須留下可操作的下一步**，所以這一行固定是 `「現況」· <出口短語>`
+    （短語由 `_v2_exit_phrase()` 依**出口常數的物件身分**查表，⛔ 不是截首句）。
     `why`（為什麼沒有）那一段**沒有被丟掉** —— 它連同**完整**的 `where`
     一起掛在 `title=` 上，滑過去就看得到。
     ⛔ 截斷也不是丟棄：截斷的只是**顯示**，原文一字不少地留在 `title=`。
@@ -1874,9 +1995,9 @@ def v2_level_line(tile: Tile) -> tuple[str | None, str | None, str]:
     _now = v2_plain(_note.now)
     _why = v2_plain(_note.why)
     _where = v2_plain(_note.where)
-    # 首句 ＝ 第一個句號之前。沒有句號就是整段（接著會被字數上限夾住）。
-    _where_head = _where.split("。")[0]
-    _guide = f"「{_now}」· {_where_head}"
+    # 出口 → **固定短語**（⛔ 不截首句；見 `V2_EXIT_PHRASES` 的 2026-09-24 註）。
+    # 🔴 比對餵的是 `_note.where`（**原物件**），⛔ 不是 `v2_plain()` 產的新字串。
+    _guide = f"「{_now}」· {_v2_exit_phrase(_note.where)}"
     _full = f"{_now}｜為什麼沒有：{_why}｜去哪補：{_where}"
     if len(_guide) > V2_LEVEL_MAX_CHARS:
         _guide = _guide[:V2_LEVEL_MAX_CHARS] + V2_LEVEL_ELLIPSIS
@@ -1887,12 +2008,15 @@ def v2_card_html(tile: Tile) -> str:
     """一張 `Tile` → v2 卡面的 HTML。**所有文字都由 `card_html()` escape。**
 
     對映（照 v2 結構）：
-      · 卡框 ← `V2_BLOCK` ⇒ t1 密度階（由 `tier_for_block` 決定，本檔只驗不設）
+      · 卡框 ← `V2_CARD_BLOCKS[card.key]` ⇒ t1 密度階
+        （階由 `tier_for_block` 決定，本檔只驗不設；未登記的 key → `KeyError`，⛔ 不猜一個 block）
       · 標題 ← `card.label`
       · 徽章 ← `card.state` 經 `V2_STATE_VOCAB` → `v2_page.resolve_badge()`
       · 大字 ← `card.value`；**非 live 時整塊不渲染**
       · 灰字 ← `v2_level_line()`（三段 `Note` 壓成一行 ＋ hover 原文）
-      · fact 列 ← `tile.facts`（沿用既有的「推導依據」「姿態」…）
+      · fact 列 ← `tile.facts`（沿用既有的「推導依據」「姿態」…），
+        **扣掉 `V2_HOVER_ONLY_FACTS` 登記要移進 hover 的那幾列**
+        （目前只有卡③ `verdict.regime` 的「位階的出處」；⛔ 不是漏渲染，見該表）
 
     ⚠️ **那一行指路走 `.blk-lvl` 還是走 fact 列，由契約自己說了算**：
     v2 對灰態／紅態一律**判決留白**（實測逐態確認），而會帶 `Note` 的正好就是那些態
@@ -1906,6 +2030,10 @@ def v2_card_html(tile: Tile) -> str:
     （⛔ 無 `0`、⛔ 無「尚未評估」代打、⛔ 無上一輪殘值）。本檔只負責
     「非 live 的 `Card.value` 本來就是空字串 ⇒ 傳 `None`」這件**型別**上的事。
 
+    ⚠️ **`title=` 裝兩種東西，⛔ 不是只有 `Note`**：`v2_level_line()` 壓掉的三段原文，
+    ＋ `V2_HOVER_ONLY_FACTS` 從卡面移出來的那幾列（以 `｜` 相接，沿用 `_full` 的接法）。
+    ⛔ 兩者都**一個字都沒刪**，只是換了露出的位置。
+
     ⚠️ `title=` 這個 hover 槽**掛在外層 div**，不是掛在灰字那一行上：
     `card_html()` 把每一段文字都 escape，**沒有**掛屬性的入口，而
     `src/ui_v2/**` 在本輪的檔案邊界外（⛔ 不改它去開一個入口）。
@@ -1917,14 +2045,31 @@ def v2_card_html(tile: Tile) -> str:
     _v2_state, _reason = V2_STATE_VOCAB[_card.state]
     _badge_n = v2_page.resolve_badge(state=_v2_state, miss_reason=_reason)
     _level, _guide, _full = v2_level_line(tile)
-    _facts = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in tile.facts)
+    # 🔴 **移出卡面、只留 hover** 的那幾列（見 `V2_HOVER_ONLY_FACTS` 的判準與理由）。
+    #    🔴 餵進 hover 的是 `tile.facts` 的**原字串**，⛔ 不過 `v2_plain()` ——
+    #       那支會吃掉 `**` 與反引號，**也就是真的刪字**；而 hover 是
+    #       「**完整原文**」那條通道（卡面才是被排版規則夾的那一條）。
+    #    ⚠️ 只比對**標籤**⇒ 同一張卡的其餘 fact（例如 degraded 態的「現值」
+    #       這個**觀測值**）照留卡面；表外的卡一行都沒變。
+    _hover_keys = V2_HOVER_ONLY_FACTS.get(_card.key, frozenset())
+    _moved = tuple(f"{_k}：{_v}" for _k, _v in tile.facts if _k in _hover_keys)
+    if _hover_keys and not _moved:
+        # §1 Fail Loud：登記了要搬、卻一列都沒搬到 ⇒ 那段**揭露兩邊都不見了**
+        # （卡面已經不畫、hover 又沒接到）。⛔ 不靜靜地少一段 ——
+        # `_render_one_v2()` 會把這個例外轉成**看得見的紅卡**，逼人回來看。
+        raise KeyError(
+            f"卡 {_card.key!r} 登記了要移進 hover 的 fact "
+            f"{sorted(_hover_keys)!r}，但這張卡一列都沒有 —— 標籤改過了嗎？"
+            "⛔ 不要把登記拿掉了事，那會讓揭露悄悄消失。")
+    _facts = tuple((v2_plain(_k), v2_plain(_v))
+                   for _k, _v in tile.facts if _k not in _hover_keys)
     if _guide is not None:
         if v2_page.card_level_text(state=_v2_state, level=_guide) is not None:
             _level = _guide                       # 契約願意畫判決區 → 走 `.blk-lvl`
         else:
             _facts = ((V2_GUIDE_FACT_KEY, _guide),) + _facts   # 留白 → 改掛 fact 列
     _html = v2_markup.card_html(
-        block=V2_BLOCK,
+        block=V2_CARD_BLOCKS[_card.key],
         state=_v2_state,
         title=v2_plain(_card.label),
         value=(v2_plain(_card.value) or None),
@@ -1932,9 +2077,11 @@ def v2_card_html(tile: Tile) -> str:
         badge_n=_badge_n,
         facts=_facts,
     )
-    if not _full:
+    # `Note` 原文 ＋ 移出卡面的那幾列，共用同一個 hover 槽（`｜` 沿用 `_full` 的接法）。
+    _hover = "｜".join(_p for _p in (_full, *_moved) if _p)
+    if not _hover:
         return _html
-    return f'<div title="{html_escape(_full, quote=True)}">{_html}</div>'
+    return f'<div title="{html_escape(_hover, quote=True)}">{_html}</div>'
 
 
 def _inject_v2_css() -> None:
@@ -2002,9 +2149,9 @@ def _render_one(tile: Tile) -> None:
     本函式只剩「把本頁專屬的三樣東西綁上去」：
     log 前綴 / 出處文案（【8b】：出事的是哪一層只有本頁知道）/ 去哪補。
 
-    ⚠️ **2026-09-23：`V2_CARD_KEYS` 裡的卡改走 v2 卡面（樣板）。**
-    分派只看 `card.key`，**其餘每一張走的路一行都沒有變** —— 同一排的
-    `verdict.danger` / `verdict.regime` 刻意留著當對照組。
+    ⚠️ **2026-09-23：`V2_CARD_KEYS` 裡的卡改走 v2 卡面；2026-09-24 客戶裁示批 1 起，
+    葉1 ① 三張並排的卡全部在表內**（對照組已完成任務 —— 見 `V2_CARD_BLOCKS` 的更正註）。
+    分派只看 `card.key`，**表外每一張走的路一行都沒有變**。
     兩條路徑**都**被包在「一張卡炸了不影響別張」的機制裡（見 `_render_one_v2`）。
     """
     if tile.card.key in V2_CARD_KEYS:

@@ -253,10 +253,35 @@ def _card_rules() -> list[str]:
             f"border-radius:{_px(float(spec['radius_px']))}}}"
         )
 
+    # ── t1 三張等高（客戶 2026-09-24 裁示 ②）──────────────────────
+    # 實機是 `st.columns` 三個**獨立欄**、⛔ 不是一個 grid ⇒ `align-items` 摸不到跨欄的
+    # 兄弟，只有**下限**能讓三張對齊。實測 138／140／187px（380px 欄寬、idle）⇒ 取 190。
+    # ⚠️ **據實揭露（§3.3）：190 沒有契約層出處，是實作層挑的**（沿用同檔
+    # `FACT_VALUE_MAX_CHARS` 的先例；`CARD_TIERS` 沒有 `min_height_px` 這一欄）。
+    # ⚠️ **影響面已實測**：判給 t1 的 block 只有 `today.verdict` 一個 ⇒ 只碰這一排；
+    # 日後有別的 block 升 t1 要重新量。🔴 **只動 t1**，t2~t4 不給下限（客戶明示 (a)）。
+    if "t1" in _TIERS_ON_PAGE:
+        out.append(".blk-t1{min-height:190px}")
+
     out += [
         "/* ── 卡內結構 ── */",
         ".blk-head{display:flex;justify-content:space-between;align-items:center;"
         "gap:" + _var("--sp-3") + ";flex-wrap:wrap}",
+        # ── 卡頭防換行（客戶 2026-09-24 裁示 ③）──────────────────────
+        # 症狀：`.blk-head` 是 `flex-wrap:wrap`，兩個子項預設 `min-width:auto`
+        # （＝ min-content）⇒ 長標題「指標危險度（不含多空方向）」的 min-content 寬
+        # ＋ gap ＋ 徽章寬 > 卡寬時，**徽章整顆被擠到第二行**。
+        # 🔴 **關鍵是 `flex-basis:0`，⛔ 不是 `min-width:0`（本輪實測踩過）**：
+        # `flex-wrap` 先用**內容寬**把子項分行，分完才在行內壓縮 ⇒ 只給 `min-width:0`
+        # 徽章**照樣換行**（量到 `badgeWrapped: true`）。把標題的 flex 基準設成 0，
+        # 分行階段它就佔 0 寬 ⇒ 兩者永遠同一行，剩餘空間再回頭給標題。
+        # 徽章 `flex-shrink:0` 擋的是另一半：⛔ 不准被壓扁（它 `white-space:nowrap`）。
+        # ⛔ **⛔ 不給標題 `text-overflow:ellipsis`**：縮窄之後標題會**折行**，
+        # 一個字都不會被吃掉；加省略號才是真的把字刪掉（CLAUDE.md §1）。
+        # ⚠️ 與 `.blk-fact-k` 的 `flex-shrink:0` 同族（flex 溢位控制**關鍵字**，⛔ 不是
+        # 設計數字）⇒ 就地寫、⛔ 不進 `components.py`，理由見下方 `.blk-fact-k` 那段。
+        ".blk-head>.bdg{flex-shrink:0}",
+        ".blk-title{flex:1 1 0;min-width:0}",
     ]
     for tier in _TIERS_ON_PAGE:
         spec = components.CARD_TIERS[tier]
@@ -458,6 +483,43 @@ def badge_html(n: int, *, size: str | None = None) -> str:
     )
 
 
+#: 明細列**值**那一格的**顯示**字數上限。超過就截斷，
+#: **完整原文一字不少地掛在該格的 `title=`（hover 看得到）**。
+#:
+#: 🔴 **截斷的是「顯示」，⛔ 不是內容**（CLAUDE.md §1）：⛔ 不得改成「只印前 N 字、
+#: 其餘丟掉」—— 那是無聲丟棄，畫面看起來正常，而使用者永遠不知道後面還有兩百個字。
+#:
+#: ⚠️ **據實揭露（CLAUDE.md §3.3 反捏造）：這個數字沒有契約層出處，是實作層挑的。**
+#: `components.py` 只有幾何與字級，v2 契約層**沒有**「一列幾個字」這張表。處置照
+#: `src/ui/views/page_today.py::V2_LEVEL_MAX_CHARS` 的**既有先例**辦：就地標明它是
+#: 實作層挑的、並沿用同一個量級（46）。
+#: ⛔ **兩者⛔不是同一個真相源**：那一個管整行判決區、這一個管明細列右欄（右欄還要
+#: 和 key 分享同一行），寬度本來就不同；也⛔ 不從對面 import —— 對面是 L5 view，
+#: 在本檔下游，反向依賴。哪天契約層長出「一列幾個字」的表，**兩者一起搬過去**，
+#: ⛔ 不要只搬一半（那會留下一個看起來有出處、其實沒有的值）。
+#: ⚠️ 它**保證不了**「恰好一行」—— 實折幾行取決於欄寬。本常數做到的是
+#: 「把 200+ 字壓到這個量級」，⛔ 不是「保證一行」（§-2：⛔ 不做沒驗過的宣稱）。
+FACT_VALUE_MAX_CHARS: Final[int] = 46
+
+#: 截斷記號。純排版符號，⛔ 不屬於任何狀態 glyph 家族。
+FACT_VALUE_ELLIPSIS: Final[str] = "…"
+
+
+def _fact_value_cell(value: object) -> str:
+    """明細列**值**那一格：長值截斷顯示，完整原文進 `title=`。
+
+    ⚠️ `title` 走 `_esc`（`quote=True`）⇒ 引號也會被轉義，⛔ 不會把屬性提前收掉。
+    ⚠️ 短值**一個字都不動、也不多掛 `title`** —— 沒有被截斷的東西掛 hover
+    只會讓「有 hover ＝ 還有沒顯示完的字」這個訊號失效。
+    """
+    text = str(value)
+    if len(text) <= FACT_VALUE_MAX_CHARS:
+        return f'<span class="blk-fact-v">{_esc(text)}</span>'
+    shown = text[:FACT_VALUE_MAX_CHARS] + FACT_VALUE_ELLIPSIS
+    return (f'<span class="blk-fact-v" title="{_esc(text)}">'
+            f'{_esc(shown)}</span>')
+
+
 def card_html(
     *,
     block: str,
@@ -474,7 +536,8 @@ def card_html(
     · 大字區（觀測值）與判決區（燈號等級）一律以 `page_today.card_value_text` /
       `card_level_text` 為準 ⇒ 灰態紅態**留白**（⛔ 無 `0`、⛔ 無上一輪殘值）、
       `degraded` **觀測照出、判決留白**。⛔ 本檔不另立第二把尺。
-    · `facts` 為 `(標籤, 值)` 序列，渲染成卡內 key-value 列。
+    · `facts` 為 `(標籤, 值)` 序列，渲染成卡內 key-value 列。**值**超過
+      `FACT_VALUE_MAX_CHARS` 時**只截顯示**，完整原文掛在該格 `title=`（⛔ 一個字都沒刪）。
     """
     tier = page_today.tier_for_block(block)   # 未知 block → KeyError（⛔ 不猜一階）
     if badge_n in page_today.BADGES_NOT_ON_PAGE:
@@ -505,8 +568,8 @@ def card_html(
             parts.append(
                 '<div class="blk-fact">'
                 f'<span class="blk-fact-k">{_esc(key)}</span>'
-                f'<span class="blk-fact-v">{_esc(val)}</span>'
-                '</div>'
+                + _fact_value_cell(val)
+                + '</div>'
             )
         parts.append('</div>')
     parts.append('</div>')
