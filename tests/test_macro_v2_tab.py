@@ -1717,67 +1717,67 @@ class TestLayer2FetchesOnlyWhatItDraws:
 
 
 # ════════════════════════════════════════════════════════════════
-# B-4 · 融資餘額：有數字、無圖、明著標原因（2026-08-27 客戶拍板）
+# B-4 · 融資餘額走勢圖恢復（2026-09-24 客戶核准）
 #
-# 本地歷史檔 4,912 列來自 2026-07-11 一次性回補，其中 60.6% 掉到近零、
-# 其餘落在 2,000〜6,300 億（相鄰列 39.5% 機率翻轉）—— 同一欄混用兩種單位。
-# 卡片上的數字走另一條即時路徑，是對的，所以卡片不會變空白。
+# 2026-08-27 起融資卡「只標資料疑義、圖暫不繪製」：當時本地歷史檔 4,912 列
+# 來自 2026-07-11 一次性回補，60.6% 掉到近零、其餘落在 2,000〜6,300 億
+# （相鄰列 39.5% 機率翻轉）—— 同一欄混用兩種單位。
+# 2026-09-24（commit a59ff63）歷史檔重建為乾淨資料，圖恢復，圖樣與 a8759fd
+# 之前相同（與 bias_240 同一支 L4 渲染，黃線 2,500／紅線 3,400 億）。
+# 本組原本釘「圖被暫停」，改寫為釘「圖已恢復」；最後一條從「資料仍髒」的
+# 提醒器改成「資料乾淨」的守衛 —— 髒回補若再回來，它會轉紅。
 # ════════════════════════════════════════════════════════════════
-class TestMarginCardHoldsTheChartOnly:
+_MARGIN_PTS = [("2026-09-22", 6100.0), ("2026-09-23", 6150.0), ("2026-09-24", 5148.0)]
+
+
+class TestMarginChartRestored:
 
     @staticmethod
     def _card():
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
         return next(c for c in _CHART_SPECS if c.key == "margin")
 
-    def test_margin_declares_a_hold_reason(self):
+    def test_margin_has_no_hold_reason(self):
         card = self._card()
-        assert card.hold_reason.strip(), "融資卡必須帶不畫圖的原因"
+        assert card.hold_reason == "", "融資歷史已重建為乾淨資料，圖不該再被暫停"
 
-    def test_hold_reason_states_cause_and_recovery(self):
-        """§1：原因與「重抓後恢復」都要講。只寫「暫不顯示」= 把原因藏起來。"""
-        txt = self._card().hold_reason
-        assert "資料疑義" in txt
-        assert "單位" in txt, "沒講出根因（混用兩種單位）"
-        assert "恢復" in txt, "沒講出復原條件（重抓後恢復）"
-        assert "數字" in txt, "沒講清楚『卡片上的數字仍然是對的』"
+    def test_margin_is_still_a_parquet_light_card(self):
+        """恢復的是「原本那張圖」：仍是 16 盞燈之一、仍走落地長序列、仍換算為億。"""
+        from src.ui.tabs.tab_macro_v2 import KIND_PARQUET
+        card = self._card()
+        assert card.key in SPECS_BY_KEY, "融資卡必須仍是一盞燈"
+        assert card.kind == KIND_PARQUET, "必須與 bias_240 走同一支落地序列渲染"
+        assert card.ref_key == ""
+        assert "億" in card.note, "序列說明必須講清楚已換算為億"
 
-    def test_held_card_still_shows_the_number_and_light(self, monkeypatch):
-        """圖不畫，但**數字與燈照顯示** —— 卡片不會變空白。
-
-        ⚠️ 2026-08-27 收尾改動：原本最後一條斷言是
-        `assert any("資料疑義" in c for c in caps), "原因必須印在卡片下方"`
-        —— 那時原因印在卡片框線**外**（L4 還沒有 `notice` 管道）。
-        管道接上後原因改走 `notice=` 印在**卡片之內**，框線外那句已移除，
-        故這裡改驗 `notice`。**不是把斷言放寬**：印出來的字串一模一樣，
-        只是位置從「卡片外的 st.caption」變成「傳給 L4 的 notice」。
-        「同一段字只印一次」另由 `TestHeldCardNoticeTellsTheTruth` 端到端釘住。
-        """
+    def test_restored_card_shows_number_light_and_series(self, monkeypatch):
+        """數字與燈照顯示，而且序列**原封不動**餵進 L4、不帶任何 notice。"""
         import src.ui.tabs.tab_macro_v2 as m
 
         seen = {}
         monkeypatch.setattr(
             m, "render_chart_card",
-            lambda row, spec, xs, ys, **kw: seen.update(row=row, xs=xs, ys=ys,
-                                                        kw=kw))
+            lambda row, spec, xs, ys, **kw: seen.update(row=row, spec=spec, xs=xs,
+                                                        ys=ys, kw=kw))
         caps = []
         monkeypatch.setattr(m.st, "caption", lambda t, *a, **k: caps.append(t))
 
         rows = m.build_rows(_readiness(cl_data={"margin": 5148.0}))
         m.render_one_card(self._card(), by_key={r.key: r for r in rows},
-                          inputs=None, parquet_series={"margin": [("2026-01-01", 1.0)]},
+                          inputs=None, parquet_series={"margin": _MARGIN_PTS},
                           ohlc_raw={})
-        assert seen["ys"] == [] and seen["xs"] == [], "held 卡不得餵任何序列"
+        assert seen["xs"] == [d for d, _ in _MARGIN_PTS], "日期軸必須原封不動"
+        assert seen["ys"] == [v for _, v in _MARGIN_PTS], "序列必須原封不動、非空"
+        assert seen["spec"] is SPECS_BY_KEY["margin"]
         assert seen["row"].value == 5148.0, "數字必須照顯示"
         assert seen["row"].band != "gray", "燈必須照亮"
-        assert "資料疑義" in seen["row"].label, "標題要看得出來"
-        assert "資料疑義" in seen["kw"].get("notice", ""), "原因必須經 notice 進卡片"
-        assert not caps, "原因已改印在卡片之內，框線外不該再補一次"
+        assert "資料疑義" not in seen["row"].label, "恢復後標題不得再掛疑義徽章"
+        assert "notice" not in seen["kw"], "恢復後不得再傳 hold 原因"
+        assert not caps, "L5 不得在卡片外另補任何說明"
 
-    def test_held_card_label_is_derived_not_hardcoded(self, monkeypatch):
-        """標題徽章是從 `row.label` 衍生的，不是另外寫死一個名字（§3.3）。"""
+    def test_restored_card_label_is_exactly_the_ssot_label(self, monkeypatch):
+        """標題就是 SSOT 的 label —— 不多不少（§3.3）。"""
         import src.ui.tabs.tab_macro_v2 as m
-        from shared.macro_buckets import SPECS_BY_KEY
 
         seen = {}
         monkeypatch.setattr(m, "render_chart_card",
@@ -1785,28 +1785,56 @@ class TestMarginCardHoldsTheChartOnly:
         monkeypatch.setattr(m.st, "caption", lambda *a, **k: None)
         rows = m.build_rows(_readiness())
         m.render_one_card(self._card(), by_key={r.key: r for r in rows},
-                          inputs=None, parquet_series={}, ohlc_raw={})
+                          inputs=None, parquet_series={"margin": _MARGIN_PTS},
+                          ohlc_raw={})
+        assert seen["row"].label == SPECS_BY_KEY["margin"].label
+        assert "資料疑義" not in seen["row"].label
+        # held 機制仍在：held 卡的徽章從 row.label 衍生、不餵序列、原因走 notice。
+        seen.clear()
+        monkeypatch.setattr(
+            m, "render_chart_card",
+            lambda row, spec, xs, ys, **kw: seen.update(row=row, xs=xs, ys=ys, kw=kw))
+        held = _held_margin()
+        m.render_one_card(held, by_key={r.key: r for r in rows},
+                          inputs=None, parquet_series={"margin": _MARGIN_PTS},
+                          ohlc_raw={})
         assert seen["row"].label.startswith(SPECS_BY_KEY["margin"].label)
+        assert "資料疑義" in seen["row"].label
+        assert seen["xs"] == [] and seen["ys"] == [], "held 卡不得餵任何序列"
+        assert seen["kw"].get("notice") == held.hold_reason
 
-    def test_held_card_does_not_trigger_its_fetch(self):
-        """守衛：取數 gating 必須排除 `hold_reason` 非空的卡。
-
-        漏了的話，一張根本不畫的卡照樣會讓整頁去讀 4,900+ 列的 parquet ——
-        花了成本、畫面上零產出。拿掉 `if not c.hold_reason` 這半句會轉紅。
-        """
+    def test_margin_fetch_is_included_in_the_gating_kinds(self):
+        """取數 gating 仍排除 held 卡（機制保留），而融資卡**要**被算進去。"""
         import ast
         import pathlib
+
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS, KIND_PARQUET
         src = pathlib.Path("src/ui/tabs/tab_macro_v2.py").read_text(encoding="utf-8")
         fn = next(n for n in ast.walk(ast.parse(src))
                   if isinstance(n, ast.FunctionDef) and n.name == "render_tab_macro_v2")
         seg = ast.get_source_segment(src, fn)
         assert "_kinds = {c.kind for c in cards if not c.hold_reason}" in seg
+        # 以同一個判斷式重算：融資卡必須落在會被取數的集合裡。
+        fetched = [c for c in _CHART_SPECS if not c.hold_reason]
+        assert self._card() in fetched, "融資卡被 gating 排除 → 圖永遠拿不到序列"
+        assert KIND_PARQUET in {c.kind for c in fetched}
 
-    def test_margin_series_really_is_unusable(self):
-        """把「資料疑義」這個判斷本身釘成可重跑的量測，不是一句宣稱。
+    def test_rendered_margin_card_draws_exactly_one_figure(self, monkeypatch):
+        """端到端（真的 L5→L4）：恰好畫一張圖，且圖上的序列非空、等於輸入。"""
+        fake = _render_card_for_real(monkeypatch, "margin",
+                                     parquet_series={"margin": _MARGIN_PTS})
+        assert len(fake.figs) == 1, f"融資卡應畫 1 張圖，實際 {len(fake.figs)}"
+        line = fake.figs[0].data[0]
+        assert list(line.y) == [v for _, v in _MARGIN_PTS]
+        assert len(line.y) > 0
 
-        相鄰列在「近零」與「千億級」之間翻轉的機率若掉回 0，代表資料已經
-        被清乾淨 —— 那時這條會轉紅，提醒有人把 `hold_reason` 拿掉。
+    def test_margin_series_is_clean(self):
+        """資料乾淨守衛（原「資料仍髒」提醒器的反面）。
+
+        2026-09-24 重建後的歷史檔必須：換算為億後 0 列低於 500 億、全部落在
+        (500, 10000) 億、相鄰列「近零 ↔ 千億級」翻轉率低於當年判髒的 0.10、
+        日期不重複。髒的一次性回補若再回來，這條轉紅 —— 屆時要嘛洗資料、
+        要嘛把 margin 的 `hold_reason` 加回去，**不准放寬這裡的門檻**。
         """
         pd = pytest.importorskip("pandas")
         import pathlib
@@ -1814,12 +1842,30 @@ class TestMarginCardHoldsTheChartOnly:
         if not path.exists():
             pytest.skip("本機無 finmind_margin.parquet")
         df = pd.read_parquet(path)
+        assert len(df) > 0, "融資歷史檔是空的"
         yi = (df["margin_balance"].astype(float) / 1e8).to_numpy()
+        below = int((yi < 500.0).sum())
+        assert below == 0, f"{below} 列低於 500 億 —— 近零的髒回補可能回來了"
+        assert ((yi > 500.0) & (yi < 10000.0)).all(), (
+            f"有值落在 (500, 10000) 億之外：min={yi.min():,.2f} max={yi.max():,.2f}")
         near_zero = yi < 10.0
-        flip = float((near_zero[:-1] != near_zero[1:]).mean())
-        assert flip > 0.10, (
-            f"相鄰列翻轉率僅 {flip:.1%} —— 歷史檔可能已清乾淨，"
-            f"請複驗後把 margin 的 `hold_reason` 拿掉並恢復繪圖。")
+        flip = float((near_zero[:-1] != near_zero[1:]).mean()) if len(yi) > 1 else 0.0
+        assert flip < 0.10, f"相鄰列翻轉率 {flip:.1%} ≥ 10% —— 單位混用又出現了"
+        dup = int(pd.to_datetime(df["date"]).duplicated().sum())
+        assert dup == 0, f"{dup} 個重複日期"
+
+    def test_restored_margin_chart_has_threshold_lines_at_2500_and_3400(self, monkeypatch):
+        """圖樣與 a8759fd 之前相同：黃線 2,500、紅線 3,400 億（值來自 SSOT）。"""
+        fake = _render_card_for_real(monkeypatch, "margin",
+                                     parquet_series={"margin": _MARGIN_PTS})
+        assert len(fake.figs) == 1
+        shapes = fake.figs[0].layout.shapes
+        ys = sorted({float(sh.y0) for sh in shapes if sh.y0 == sh.y1})
+        assert ys == [2500.0, 3400.0], f"門檻線應在 2,500 / 3,400 億，實際 {ys}"
+        spec = SPECS_BY_KEY["margin"]
+        assert (spec.yellow, spec.red) == (2500.0, 3400.0), "前提：SSOT 門檻未變"
+        texts = " ".join(a.text or "" for a in fake.figs[0].layout.annotations)
+        assert "黃線 2,500" in texts and "紅線 3,400" in texts
 
 
 # ════════════════════════════════════════════════════════════════
@@ -2067,11 +2113,22 @@ def _render_card_for_real(monkeypatch, key: str, **kw) -> _FakeST:
     monkeypatch.setattr(m, "st", fake)
     monkeypatch.setattr(C, "st", fake)
     rows = m.build_rows(_readiness(cl_data={"margin": 5148.0}))
-    card = next(c for c in m._CHART_SPECS if c.key == key)
+    card = kw.get("card") or next(c for c in m._CHART_SPECS if c.key == key)
     m.render_one_card(card, by_key={r.key: r for r in rows},
                       inputs=kw.get("inputs"), parquet_series=kw.get("parquet_series", {}),
                       ohlc_raw=kw.get("ohlc_raw", {}))
     return fake
+
+
+def _held_margin():
+    """以 `dataclasses.replace` 建一張 held 融資卡 —— 融資圖已恢復，
+    但 held-notice 機制本身仍需被驗（它是通用機制，不是融資專屬）。"""
+    from dataclasses import replace
+
+    import src.ui.tabs.tab_macro_v2 as m
+    margin = next(c for c in m._CHART_SPECS if c.key == "margin")
+    return replace(margin, hold_reason=(
+        "⚠️ **資料疑義：圖暫不繪製。** 測試用原因 —— 數字走即時路徑，是對的。"))
 
 
 class TestHeldCardNoticeTellsTheTruth:
@@ -2085,32 +2142,52 @@ class TestHeldCardNoticeTellsTheTruth:
         assert _DEFAULT_EMPTY_SENTENCE in src
 
     def test_margin_card_no_longer_claims_a_fetch_failure(self, monkeypatch):
-        """本次收尾的本體：融資卡實際渲染時不准再說「取得失敗」。"""
-        fake = _render_card_for_real(monkeypatch, "margin")
+        """恢復後的融資卡真的畫圖、不說「取得失敗」；held 卡照樣不准說「取得失敗」。"""
+        fake = _render_card_for_real(monkeypatch, "margin",
+                                     parquet_series={"margin": _MARGIN_PTS})
+        assert len(fake.figs) == 1, "恢復後的融資卡必須畫出圖"
         assert "歷史序列取得失敗" not in fake.screen()
+        # held 機制本身仍要誠實（以建構出來的 held 卡驗）
+        held = _render_card_for_real(monkeypatch, "margin", card=_held_margin())
+        assert "歷史序列取得失敗" not in held.screen()
 
     def test_margin_card_states_its_real_reason_instead(self, monkeypatch):
-        """反向守衛：不准用「把那句話刪掉」來通過上一條。"""
-        import src.ui.tabs.tab_macro_v2 as m
-        fake = _render_card_for_real(monkeypatch, "margin")
-        card = next(c for c in m._CHART_SPECS if c.key == "margin")
-        assert card.hold_reason in fake.captions(), "疑義原因必須逐字出現在畫面上"
+        """恢復後畫面上不得殘留任何 hold 原因；held 卡的原因必須逐字上畫面。"""
+        fake = _render_card_for_real(monkeypatch, "margin",
+                                     parquet_series={"margin": _MARGIN_PTS})
+        assert "資料疑義" not in fake.screen(), "恢復後不得再印疑義"
+        assert "圖暫不繪製" not in fake.screen()
+        card = _held_margin()
+        held = _render_card_for_real(monkeypatch, "margin", card=card)
+        assert card.hold_reason in held.captions(), "疑義原因必須逐字出現在畫面上"
 
     def test_the_reason_is_printed_exactly_once(self, monkeypatch):
-        """接上 `notice` 後若沒把框線外那句拿掉，同一段 ~150 字會印兩次。"""
-        import src.ui.tabs.tab_macro_v2 as m
-        fake = _render_card_for_real(monkeypatch, "margin")
-        card = next(c for c in m._CHART_SPECS if c.key == "margin")
-        assert fake.screen().count(card.hold_reason) == 1
+        """恢復卡：hold 原因出現 0 次；held 卡：同一段原因恰好 1 次。"""
+        card = _held_margin()
+        fake = _render_card_for_real(monkeypatch, "margin",
+                                     parquet_series={"margin": _MARGIN_PTS})
+        assert fake.screen().count(card.hold_reason) == 0
+        held = _render_card_for_real(monkeypatch, "margin", card=card)
+        assert held.screen().count(card.hold_reason) == 1
 
     def test_the_number_and_the_threshold_band_are_still_there(self, monkeypatch):
-        """把圖拿掉不等於把卡片挖空 —— 數字、燈、門檻帶都要留著。"""
-        fake = _render_card_for_real(monkeypatch, "margin")
+        """恢復卡：數字、門檻（線＋腳註）、圖都在；held 卡：數字、門檻帶、徽章在、無圖。"""
+        from src.ui.render.macro_v2_cards import threshold_caption
+        fake = _render_card_for_real(monkeypatch, "margin",
+                                     parquet_series={"margin": _MARGIN_PTS})
         screen = fake.screen()
-        assert "5,148" in screen, "上方的即時數字是對的，必須照顯示"
-        assert "門檻帶" in screen
-        assert "資料疑義" in screen, "標題徽章要看得出來"
-        assert not fake.figs, "held 卡不得畫出任何 figure"
+        assert "5,148" in screen, "上方的即時數字必須照顯示"
+        assert len(fake.figs) == 1, "恢復卡必須畫出 figure"
+        assert len(fake.figs[0].layout.shapes) >= 2, "門檻帶（黃／紅線）必須畫在圖上"
+        assert any(threshold_caption(SPECS_BY_KEY["margin"]) in c
+                   for c in fake.captions()), "門檻腳註必須照印"
+        assert "資料疑義" not in screen, "恢復後不得掛疑義徽章"
+        held = _render_card_for_real(monkeypatch, "margin", card=_held_margin())
+        hs = held.screen()
+        assert "5,148" in hs, "held 卡的即時數字也必須照顯示"
+        assert "門檻帶" in hs
+        assert "資料疑義" in hs, "held 卡標題徽章要看得出來"
+        assert not held.figs, "held 卡不得畫出任何 figure"
 
     def test_notice_is_keyword_only_so_it_cannot_collide_with_kind(self):
         """A 段刻意把 `notice` 放在 `*` 之後。改成位置參數會撞到 `kind`。"""
@@ -2173,10 +2250,11 @@ class TestOtherEmptySeriesCardsAreUnchanged:
         assert _DEFAULT_EMPTY_SENTENCE in fake.captions()
 
     def test_every_other_chart_card_has_no_hold_reason(self):
-        """上面兩條只抽驗了兩張卡；這條釘住「只有融資卡走 notice 這條路」。"""
+        """上面兩條只抽驗了兩張卡；這條釘住「現況沒有任何卡走 notice 這條路」
+        （融資圖 2026-09-24 歷史檔重建後已恢復）。"""
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
         held = {c.key for c in _CHART_SPECS if c.hold_reason}
-        assert held == {"margin"}
+        assert held == set()
 
 
 # ════════════════════════════════════════════════════════════════
@@ -2341,8 +2419,9 @@ class TestReferenceCardRejectsHoldReason:
         from dataclasses import replace
         from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
         margin = next(c for c in _CHART_SPECS if c.key == "margin")
-        assert margin.hold_reason, "前提：融資卡本來就帶著 hold_reason"
-        assert replace(margin, hold_reason="換一句原因").hold_reason == "換一句原因"
+        held = replace(margin, hold_reason="x")
+        assert held.hold_reason == "x"
+        assert replace(held, hold_reason="換一句原因").hold_reason == "換一句原因"
 
     def test_the_render_path_never_sees_the_bad_combination(self, monkeypatch):
         """端到端：擋在建構,所以渲染端拿不到這種卡 —— 沒有第二條漏網路徑。
