@@ -230,7 +230,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from html import escape as html_escape
-from typing import Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 import streamlit as st
 
@@ -244,6 +244,11 @@ from shared import ui_state as _ui_state
 # L0 SSOT：regime → 中文。`tab_macro_v2.parallel_verdict()` 讀的也是這一份，
 # 本檔直接讀源頭**不是**第二把尺（見檔頭陷阱 3 的 2026-09-07 修註）。
 from shared.allocation_decision import REGIME_LABEL
+# 燈卡「變化方向」列（2026-09-24）：哪幾盞燈有這一列 ＋ 列標籤。純常數 L0。
+from shared.lamp_direction_thresholds import (
+    LAMP_DIRECTION_FACT_KEY,
+    LAMP_DIRECTION_KEYS,
+)
 from shared.macro_buckets import (
     BUCKET_DANGER_SPECS,
     BUCKET_META,
@@ -353,6 +358,9 @@ from src.ui.views._ui_kit import (
 from src.ui_v2 import components as v2_components
 from src.ui_v2 import markup as v2_markup
 from src.ui_v2 import page_today as v2_page
+
+if TYPE_CHECKING:  # 只為型別標註；執行期在 `_load_lamp_directions()` 內 lazy import
+    from src.compute.macro.lamp_direction import LampDirection
 
 # ══════════════════════════════════════════════════════════════════
 # session key
@@ -1033,7 +1041,8 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
                          requested: bool, error: str,
                          band_label: Any = None,
                          thr_text: Any = None,
-                         l4_error: str = "") -> Tile:
+                         l4_error: str = "",
+                         direction: LampDirection | None = None) -> Tile:
     """一盞燈 → 一張卡。**燈號與門檻全部走 L0 / L4 SSOT，本檔不判燈。**
 
     Args:
@@ -1043,6 +1052,12 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
         band_label: L4 `macro_v2_cards.band_meta` 或 None（載入失敗）。
         thr_text: L4 `macro_v2_cards.threshold_text` 或 None（載入失敗）。
         l4_error: L4 載入失敗時的 `repr(e)`。
+        direction: L2 `lamp_direction.LampDirection` 或 None。None → **不出**
+            「變化方向」列（與加這一列之前逐字相同）。只接受
+            `LAMP_DIRECTION_KEYS` 內的燈，其餘 → `ValueError`。
+            ⚠️ 它**只加一列 fact**，不碰 `_band` / `_state` / 燈號頻道。
+            位置：live → 第一列（判決行正下方）；degraded → 緊接「現值」；
+            其餘狀態（尚未載入 / 失敗 / 未接線…）→ **不出這一列**。
 
     ⚠️ **`classify_danger()` 對沒有門檻的 spec 會 TypeError**（L0 刻意的
     fail loud）。所以一律**先問 `has_thresholds(spec)`** —— 不 guard 的話
@@ -1079,7 +1094,20 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
 
     _shown = fmt_value(_value, _spec) if _value is not None else ""
 
+    # ── 「變化方向」列（2026-09-24）：只加一列 fact，⛔ 不碰 `_band` / `_state` ──
+    _dir_fact: tuple[str, str] | None = None
+    if direction is not None:
+        if key not in LAMP_DIRECTION_KEYS:
+            raise ValueError(f"{key!r} 不在 LAMP_DIRECTION_KEYS，不該帶「變化方向」")
+        from src.compute.macro.lamp_direction import format_direction_text
+        # 只有 live / degraded（有值）才出這一列。尚未載入 / 失敗 / 未接線等灰紅態
+        # 一律不出（v3 §02：「未載入」必須看起來與「有資料」截然不同）。
+        if _state in (UI_LIVE, UI_DEGRADED):
+            _dir_fact = (LAMP_DIRECTION_FACT_KEY, format_direction_text(direction))
+
     if _state == UI_LIVE:
+        if _dir_fact is not None:
+            _facts.insert(0, _dir_fact)        # 判決行正下方的第一列
         return Tile(Card(key=f"detail.{key}", label=_spec.label,
                          state=_state, value=_shown),
                     signal_text=_signal_text, signal_color=_signal_color,
@@ -1089,6 +1117,8 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
     # 所以**已失準**那一態的現值改掛在 facts（它是有值的，不能藏起來）。
     if _state == UI_DEGRADED:
         _facts.insert(0, ("現值", _shown or "—"))
+        if _dir_fact is not None:
+            _facts.insert(1, _dir_fact)        # 緊接「現值」
         _note = Note(
             now=f"{_spec.label}　**有值，但門檻已失去判別力**",
             # §1 + 規格：理由直接讀 SSOT，不自己寫一份。
@@ -1152,13 +1182,20 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
 
 def build_indicator_tiles(readout: MacroReadout, *,
                           band_label: Any = None, thr_text: Any = None,
-                          l4_error: str = "") -> dict[str, list[Tile]]:
+                          l4_error: str = "",
+                          directions: Mapping[str, LampDirection] | None = None,
+                          ) -> dict[str, list[Tile]]:
     """16 盞燈 → 依 `BUCKET_ORDER` 分桶的卡片。**分母恆為 16。**
 
     迭代來源是 L0 `BUCKET_DANGER_SPECS` 而**不是**側車的 key ——
     側車在冷啟動 / 取數失敗時是空的，照它迭代會讓整個葉2 消失，
     而「什麼都不畫」是最糟的一種說謊（線框：未評估 ≠ 沒事）。
+
+    `directions`：`{key: LampDirection}`（2026-09-24「變化方向」列）。
+    **只取 `LAMP_DIRECTION_KEYS` 內的 key**，其餘 key 即使出現在 mapping 裡也不傳
+    ⇒ 其他 12 盞燈的卡與不傳 `directions` 時逐字相同。
     """
+    _dirs = directions or {}
     _out: dict[str, list[Tile]] = {_b: [] for _b in BUCKET_ORDER}
     for _spec in BUCKET_DANGER_SPECS:
         _rec = readout.readiness.get(_spec.key) or {}
@@ -1167,7 +1204,10 @@ def build_indicator_tiles(readout: MacroReadout, *,
                                  requested=readout.requested,
                                  error=readout.error,
                                  band_label=band_label, thr_text=thr_text,
-                                 l4_error=l4_error))
+                                 l4_error=l4_error,
+                                 direction=(_dirs.get(_spec.key)
+                                            if _spec.key in LAMP_DIRECTION_KEYS
+                                            else None)))
     return _out
 
 
@@ -1616,6 +1656,31 @@ def _load_l4_labels() -> tuple[Any, Any, Any, str]:
     except Exception as _e:  # noqa: BLE001 — 轉成可見的說明，不吞
         print(f"[views/page_today] L4 標籤模組載入失敗：{_e!r}")
         return None, None, None, repr(_e)
+
+
+def _load_lamp_directions() -> dict[str, Any]:
+    """燈卡「變化方向」列：L3 取歷史 → L2 算方向。回 `{key: LampDirection}`。
+
+    只算 `LAMP_DIRECTION_KEYS` 那幾盞。某一條序列取不到 ⇒ L2 回 `nodata`
+    （畫面顯示「無資料」），⛔ 不整列消失、⛔ 不編箭頭。
+    整支失敗（例如 L3 / L2 載入失敗）⇒ 印 log、回 `{}` ⇒ 該列不出現，
+    **燈號與其他列不受影響**（它不參與判燈）。
+    """
+    try:
+        from src.compute.macro.lamp_direction import compute_lamp_direction
+        from src.services.macro_v2_service import (
+            get_chart_series,
+            get_monthly_history,
+        )
+        _hist: dict[str, Any] = {}
+        _hist.update(get_chart_series() or {})       # margin / bias_240（交易日）
+        _hist.update(get_monthly_history() or {})    # ism_pmi（月）
+        # ⚠️ m1b_m2_gap 刻意不給序列：歷史檔已知損壞，L2 恆回 nodata。
+        return {_k: compute_lamp_direction(_k, _hist.get(_k))
+                for _k in LAMP_DIRECTION_KEYS}
+    except Exception as _e:  # noqa: BLE001 — 轉成 log，不吞；燈號本身不受影響
+        print(f"[views/page_today] 變化方向計算失敗（該列不顯示）：{_e!r}")
+        return {}
 
 
 def _load_allocation() -> tuple[Any, str]:
@@ -2783,7 +2848,8 @@ def render_page_today() -> None:
     _alerts, _scanned, _alerts_err = _load_key_alerts(_session)
 
     _tiles_by_bucket = build_indicator_tiles(
-        _readout, band_label=_band_label, thr_text=_thr_text, l4_error=_l4_err)
+        _readout, band_label=_band_label, thr_text=_thr_text, l4_error=_l4_err,
+        directions=_load_lamp_directions())
     _cov = coverage(_tiles_by_bucket)
     # 線框七塊全部照算（`build_today_blocks` 是純函式），葉1 ③ 與 ⑤⑥ 各取所需。
     _blocks = {_b.key: _b for _b in build_today_blocks(
