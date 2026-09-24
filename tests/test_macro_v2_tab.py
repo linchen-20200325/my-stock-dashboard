@@ -2162,13 +2162,49 @@ class TestHeldCardNoticeTellsTheTruth:
         assert card.hold_reason in held.captions(), "疑義原因必須逐字出現在畫面上"
 
     def test_the_reason_is_printed_exactly_once(self, monkeypatch):
-        """恢復卡：hold 原因出現 0 次；held 卡：同一段原因恰好 1 次。"""
+        """held 卡：同一段原因恰好印 1 次；**真的**融資卡：held 路徑的標記 0 次、而且真的畫圖。
+
+        標記不是本測試自己寫死的字串 —— 先實際渲染一張 held 卡，從它的輸出
+        擷取 `_render_held_card` 真正會印出的東西（標題徽章後綴、notice 原文），
+        再斷言真卡的輸出裡一個都沒有。margin 若被加回任何 `hold_reason`，
+        真卡會走 held 路徑、印出同一個徽章後綴、而且不畫圖 → 本條轉紅。
+        """
+        import re
+
+        from src.ui.tabs.tab_macro_v2 import _CHART_SPECS
+
+        # ── held 半邊：原因恰好印一次 ──
         card = _held_margin()
-        fake = _render_card_for_real(monkeypatch, "margin",
-                                     parquet_series={"margin": _MARGIN_PTS})
-        assert fake.screen().count(card.hold_reason) == 0
         held = _render_card_for_real(monkeypatch, "margin", card=card)
         assert held.screen().count(card.hold_reason) == 1
+        assert not held.figs, "held 卡不得畫圖"
+
+        # ── 從 held 卡的真實輸出擷取它的標記 ──
+        base = SPECS_BY_KEY["margin"].label
+        titles = [m.group(1) for k, b in held.calls if k == "markdown"
+                  for m in [re.search(r'<p class="v2-t">(.*?)</p>', b)] if m]
+        assert len(titles) == 1 and titles[0].startswith(base), titles
+        suffix = titles[0][len(base):].strip()
+        assert suffix, "held 卡的標題必須帶徽章後綴（否則本測試無從比對）"
+        held_captions = set(held.captions())
+        notice_lines = {c for c in held_captions if card.hold_reason in c}
+        assert notice_lines, "held 卡的 notice 必須以 caption 印出"
+
+        # ── 真卡半邊：上面那些標記 0 次，而且走畫圖路徑 ──
+        real = next(c for c in _CHART_SPECS if c.key == "margin")
+        fake = _render_card_for_real(monkeypatch, "margin",
+                                     parquet_series={"margin": _MARGIN_PTS})
+        screen = fake.screen()
+        assert screen.count(suffix) == 0, (
+            f"真的融資卡印出了 held 徽章 {suffix!r} —— 它走了暫停路徑"
+            f"（hold_reason={real.hold_reason!r}）")
+        assert "資料疑義" not in screen
+        assert not (notice_lines & set(fake.captions()))
+        if real.hold_reason:
+            assert screen.count(real.hold_reason) == 0, "真卡印出了自己的 hold_reason"
+        assert len(fake.figs) == 1, (
+            f"真的融資卡應畫 1 張圖，實際 {len(fake.figs)} —— 走了 held 路徑？")
+        assert _DEFAULT_EMPTY_SENTENCE not in screen
 
     def test_the_number_and_the_threshold_band_are_still_there(self, monkeypatch):
         """恢復卡：數字、門檻（線＋腳註）、圖都在；held 卡：數字、門檻帶、徽章在、無圖。"""
