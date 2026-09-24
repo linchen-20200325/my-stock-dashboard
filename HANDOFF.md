@@ -10,7 +10,7 @@
 
 ## 0. 給接手 AI 的第一件事
 
-**先讀 `CLAUDE.md`（專案憲法，約 700 行）與 `PROCESS.md`。** 最要緊的五條：
+**先讀 `CLAUDE.md`（專案憲法，篇幅以現場 `wc -l` 為準）與 `PROCESS.md`。** 最要緊的五條：
 
 | 條號 | 內容 |
 |---|---|
@@ -50,10 +50,10 @@
 
 ## 3. 已查明的事實（🔴 這些我實測過）
 
-1. **解法早就寫好但沒接線**：`shared/relative_thresholds.py`（448 行）含
+1. **解法早就寫好但沒接線**：`shared/relative_thresholds.py`（448 行，量測日 2026-09-24）含
    `classify_by_pct_rank(series, *, window=756, yellow=0.75, red=0.90, high_bad=True, min_periods=None)`、
    `margin_leverage_ratio(margin_yi, market_cap_yi)`、`vol_normalized_bias`、`foreign_futures_share`；
-   `tests/test_relative_thresholds.py` **33 測試綠**；**0 production caller**。
+   `tests/test_relative_thresholds.py` **綠**；**0 production caller**（⚠️ 單組查證、未經第二組獨立驗 —— 這是取決於「有沒有漏看」的全稱句，**接手請自行複驗**）。
    `macro_buckets` 自陳「尚未接線，屬行為變更需另案」。
 
 2. **🔴 但預覽證明「接線」解決不了問題**：2026 年 122 個有結論日，
@@ -70,7 +70,7 @@
 
 4. **🔴 但 cron 的 code 已經修好了** —— `scripts/update_macro_history.py::fetch_finmind_margin`
    已實際 import 並呼叫 `shared.margin_schema` 的 `extract_margin_money_series` /
-   `margin_twd_sanity_mask`；守衛 `tests/test_b3_margin_schema.py`（33 測試）。
+   `margin_twd_sanity_mask`；守衛 `tests/test_b3_margin_schema.py`。
    修復後寫入的 27 列（`2026-08-06→2026-09-11`，`fetched_at` 自 2026-08-07 起）**全部乾淨**。
    ⇒ **髒的是 2026-08-07 之前舊 code 留下的 4,930 列歷史積欠，不是現在的程式。**
 
