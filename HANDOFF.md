@@ -32,7 +32,7 @@
 |---|---|
 | 工作分支 | `claude/stock-dashboard-handoff-g9dtm0` |
 | HEAD | `f42577d`（與 `origin` 同步，工作樹乾淨） |
-| PR | **#675**（open / **draft**），base `v2`，`mergeable_state=clean`，CI 綠，74 commits／89 檔 |
+| PR | **#675**（open / **draft**），base `v2`。⚠️ commit 數／changed files／`mergeable_state`／CI 狀態**本質會漂移**（本分支每推一次就變，含本交接檔自身的 commit），依 §8.2.A.0 規則 4 **不寫死** —— 請**現場查證**：`GET /repos/linchen-20200325/my-stock-dashboard/pulls/675` 或 GitHub MCP `pull_request_read`。**已知**：head `f42577d` 當時 CI 全綠、`mergeable_state=clean`（量測日 2026-09-24）；其後推入的交接 commit 會觸發 CI 重跑。 |
 | 既有交接檔 | `HANDOFF_MARGIN_RELATIVE.md`（本檔的前身，內容更細，**接手請一併讀**） |
 
 ⚠️ **PR #675 要不要轉 ready 併進 `v2`，客戶尚未裁示 —— ⛔ 不要自行 merge。**
