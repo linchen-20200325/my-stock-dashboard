@@ -1093,6 +1093,12 @@ class TestRenderBoundaryIsShared:
     """
 
     def test_a_broken_card_becomes_a_red_card_not_half_a_page(self, monkeypatch):
+        """舊卡面路徑（未登記 v2 的卡）：共用隔離器把例外轉成紅卡。
+
+        📌 2026-09-25：本頁 4 張卡改走 v2 卡面（客戶裁示 1~4），原本拿熱力圖卡當樣本
+        已經走不到 `render_card`；樣本改成**未登記在 v2 契約的 key**，
+        斷言一字未減。v2 路徑的同一件事見下一條。
+        """
         from src.ui.views import _ui_kit as K
 
         _fake = _FakeST()
@@ -1108,11 +1114,36 @@ class TestRenderBoundaryIsShared:
             return _real(card, **kw)
 
         monkeypatch.setattr(K, "render_card", _boom)
-        P._render_one(P.build_heatmap_card(
-            P.HeatmapReadout(requested=False))[0])
+        _card = P.build_heatmap_card(P.HeatmapReadout(requested=False))[0]
+        _legacy = type(_card)(key="find.not_registered_in_v2", label=_card.label,
+                              state=_card.state, note=_card.note)
+        assert _legacy.key not in P.v2_find.BLOCK_COLS
+        P._render_one(_legacy)
+        assert _calls["n"] >= 1, "樣本沒有走到舊卡面路徑 —— 這條測不到東西"
         _all = "\n".join(_fake.markdown)
         assert "這一格畫不出來" in _all, "半截死頁：例外沒有被轉成看得見的紅卡"
         assert "render exploded" in _all, "原始例外必須看得見（§1）"
+
+    def test_a_broken_v2_card_becomes_a_red_card_not_half_a_page(self, monkeypatch):
+        """v2 卡面路徑：卡面產不出來 → 就地紅卡 ＋ 原始例外（⛔ 不靜默退回舊卡面）。"""
+        from src.ui.views import _ui_kit as K
+
+        _fake = _FakeST()
+        _ns = _record(_fake)
+        _ns.session_state = {}
+        monkeypatch.setattr(K, "st", _ns)
+        monkeypatch.setattr(P, "st", _ns)
+
+        def _boom(**kw):
+            raise RuntimeError("v2 render exploded")
+
+        monkeypatch.setattr(P.v2_markup, "card_html", _boom)
+        P._render_one(P.build_heatmap_card(
+            P.HeatmapReadout(requested=False))[0])
+        _all = "\n".join(_fake.markdown)
+        assert "這一格畫不出來" in _all, "半截死頁：v2 例外沒有被轉成看得見的紅卡"
+        assert "v2 render exploded" in _all, "原始例外必須看得見（§1）"
+        assert 'class="blk ' not in _all, "炸掉的 v2 卡面不該留下半張"
 
     def test_the_page_no_longer_owns_a_second_copy(self):
         """本頁不得再自己 import `render_card` —— 那就是第二把尺長回來了。"""

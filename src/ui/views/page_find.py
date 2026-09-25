@@ -329,6 +329,24 @@ from src.ui.views._ui_kit import (
     render_card_isolated,
     section_header,
 )
+# ── v2 卡面（客戶 2026-09-25 裁示 1~4）──────────────────────────────
+# 契約層：密度階經 `src/ui_v2/blocks.py` 登記處查（本頁的 block 登記在
+# `src/ui_v2/page_find.py`），⛔ 本檔不指定任何一階。
+# 狀態語彙翻譯表 / 去 Markdown 記號 / 三要素列標籤 / 樣式表模式 **沿用「🚦 今天」頁那一份**
+# （⛔ 不在本檔抄第二份 —— 兩頁的卡面要是同一種卡面）。
+# 📌 import 半徑（實測 2026-09-25）：多帶進 `src.ui.views.page_today` ＋ `src.ui_v2.*`，
+#    ⛔ 無 pandas、⛔ 無任何 `src.services.*` / `src.compute.*` / `src.data.*`。
+from src.ui.views.page_today import (
+    V2_CSS_MODE,
+    V2_GUIDE_FACT_KEY,
+    V2_NOW_FACT_KEY,
+    V2_STATE_VOCAB,
+    V2_WHY_FACT_KEY,
+    v2_plain,
+)
+from src.ui_v2 import markup as v2_markup
+from src.ui_v2 import page_find as v2_find
+from src.ui_v2 import page_today as v2_page
 
 # ══════════════════════════════════════════════════════════════════
 # session key（本頁自有前綴 `p02`，不與 `app.py` 選股網的 `screener_*`
@@ -586,6 +604,17 @@ MAP_IDLE_WHY: str = (
 )
 MAP_IDLE_WHERE: str = press(ACTION_LOAD_MAP_LABEL)
 
+#: 以下 `*_NOW` 原本寫在各 `build_*_card()` 函式體內，2026-09-25 上提成常數
+#: （**文字一字未改**）—— 讓 `V2_SHORT_ROWS` 以常數本身當鍵，⛔ 不再手抄一份字串。
+SCREEN_PE_SHORT_NOW: str = "**這份名單少算了一個你勾的因子**（估值／本益比）"
+SCREEN_ABORTED_NOW: str = "**選股中止**"
+SCREEN_DRIFT_NOW: str = "**選股跑完了，但回傳的東西讀不出「有幾檔」**"
+HEATMAP_ERROR_NOW: str = "**熱力圖畫不出來**"
+FLOW_FAILED_NOW: str = "**板塊資金圖無法產生**"
+FLOW_STALE_NOW: str = "**畫的是最後一次成功凍結的快照，不是今天的**"
+FLOW_EMPTY_NOW: str = "**板塊資金快取尚未產生**"
+FORM_UNAVAILABLE_NOW: str = "**條件表單畫不出來**"
+
 #: 板塊資金泡泡圖的口徑揭露（線框葉2 ④，**常駐 caption，不隨狀態消失**）。
 #: 三個視窗長度一律讀 L0 `shared/sector_flow_thresholds`，不手抄數字。
 SECTOR_FLOW_AXIS_NOTE: str = (
@@ -598,6 +627,73 @@ SECTOR_FLOW_AXIS_NOTE: str = (
 
 #: 「這一格的狀態不會因為再按一次而改變」的統一說法（未接線專用）。
 UNKNOWN_ERROR_TEXT: str = "（上游沒有給訊息）"
+
+
+# ══════════════════════════════════════════════════════════════════
+# v2 卡面的短語表（客戶 2026-09-25 裁示 2）
+# ══════════════════════════════════════════════════════════════════
+#: 每一則 `Note` → 卡面上的**三列短句**（現在 / 為什麼 / 去哪補）。
+#:
+#: 🔴 **⛔ 一個字都沒刪**：完整三段原文（含上游例外訊息）放在卡底「▸ 詳細」摺疊區
+#:    （見 `v2_card_html()`；客戶 2026-09-25 最終裁示：⛔ 不得只剩 hover，手機要看得到）。
+#:
+#: 鍵 ＝ `(card.key, Note.now 常數)`。**要帶 card key**：葉2 兩張卡的 idle `now`
+#: 字面相同（`HEATMAP_IDLE_NOW` 與 `MAP_IDLE_NOW` 都是「板塊資料尚未載入」），
+#: 但為什麼 / 去哪補不同（一個要批次冷抓、一個只讀快照）。
+#: 查不到 → `KeyError` → `_render_one_v2()` 轉成**看得見的紅卡**（⛔ 不退回長句、⛔ 不猜一句）。
+#:
+#: 「去哪補」原文含 `NO_EXIT_MARKER` 的，短句就是 `NO_EXIT_MARKER` 本身
+#: （沿用「🚦 今天」頁 `_v2_exit_phrase()` 第 2 段的作法，⛔ 不新造說法）。
+#: 按鈕名一律走 `press()`（⛔ 不手抄按鈕字）。
+#:
+#: ⚠️ **據實揭露（§3.3）**：短句沒有規格出處，是實作層依各則原文濃縮的；
+#:    用字沿用原文自己的字面，⛔ 不新造名詞。
+V2_SHORT_ROWS: dict[tuple[str, str], tuple[str, str, str]] = {
+    # ── 選股結果 ────────────────────────────────────────────────
+    ("find.screen_result", SCREEN_PE_SHORT_NOW):
+        ("少算了估值（本益比）因子", "本輪估值輸入沒拿到，未計入綜合分",
+         f"{press(ACTION_RUN_SCREEN_LABEL)}重跑"),
+    ("find.screen_result", SCREEN_IDLE_NOW):
+        ("尚未選股", "送出前一次取數都不會發",
+         f"表單裡{press(ACTION_RUN_SCREEN_LABEL)}"),
+    ("find.screen_result", SCREEN_ABORTED_NOW):
+        ("選股中止", "L3 選股編排拋出例外（原文在詳細）",
+         "FinMind 額度每日 00:00 重置；其餘看資料體檢"),
+    ("find.screen_result", SCREEN_DRIFT_NOW):
+        ("讀不出結果有幾檔", "回傳形態與約定不符，重跑不會好", NO_EXIT_MARKER),
+    ("find.screen_result", SCREEN_EMPTY_NOW):
+        ("選股完成：0 檔", "有效結果，不是故障、不是還沒跑",
+         f"放寬條件後再{press(ACTION_RUN_SCREEN_LABEL)}"),
+    # ── 產業熱力圖 ──────────────────────────────────────────────
+    ("find.heatmap", HEATMAP_IDLE_NOW):
+        ("板塊資料尚未載入", "要批次抓數十檔，按下前不取數",
+         press(ACTION_LOAD_MAP_LABEL)),
+    ("find.heatmap", HEATMAP_ERROR_NOW):
+        ("熱力圖畫不出來", "L3 產業熱力圖拋出例外（原文在詳細）",
+         "先查網路／NAS proxy，稍後再按"),
+    ("find.heatmap", HEATMAP_FAILED_NOW):
+        ("一個類股都沒抓到", "批次抓取全數失敗，不填 0% 冒充持平",
+         "先查網路／NAS proxy，稍後再按"),
+    ("find.heatmap", HEATMAP_DEGRADED_NOW):
+        ("有幾格缺資料", "缺格留白，不填 0",
+         f"稍後重新{press(ACTION_LOAD_MAP_LABEL)}"),
+    # ── 三大法人資金流向泡泡圖 ──────────────────────────────────
+    ("find.sector_flow", MAP_IDLE_NOW):
+        ("板塊資料尚未載入", "讀快照仍是一次 I/O，按下才跑",
+         press(ACTION_LOAD_MAP_LABEL)),
+    ("find.sector_flow", FLOW_FAILED_NOW):
+        ("板塊資金圖無法產生", "L3 板塊資金拋出例外（原文在詳細）",
+         "先查網路／proxy"),
+    ("find.sector_flow", FLOW_STALE_NOW):
+        ("快照不是今天的", "盤後凍結任務逾時未更新",
+         "等盤後排程；重按不會變新"),
+    ("find.sector_flow", FLOW_EMPTY_NOW):
+        ("板塊資金快取尚未產生", "盤後任務還沒產生，不是故障",
+         "等盤後排程或手動跑該工作流程"),
+    # ── 條件表單（只有「因子清單載不進來」這一種會畫成卡）─────────
+    ("find.screen_form", FORM_UNAVAILABLE_NOW):
+        ("條件表單畫不出來", "L3 因子清單載不進來（原文在詳細）", NO_EXIT_MARKER),
+}
 
 
 def _error_why(source: str, error: Any) -> str:
@@ -1262,7 +1358,7 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
             # 「這份名單少算了一個你勾的因子」。假警報與假數字是同一種說謊
             # （`CLAUDE.md §1.A` 第 4 點：滿版假紅字會讓真正的問題沒人看得見）。
             _note = Note(
-                now="**這份名單少算了一個你勾的因子**（估值／本益比）",
+                now=SCREEN_PE_SHORT_NOW,
                 why=(PE_EMPTY_WHY if result.pe_n == 0
                      else "本輪估值輸入取不到（詳細訊息見上方「估值（本益比）」那一列）"
                           " —— 該因子沒有計入綜合分"),
@@ -1275,7 +1371,7 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
                      where=SCREEN_IDLE_WHERE)
     elif _state == UI_FAILED and result.error:
         _note = Note(
-            now="**選股中止**",
+            now=SCREEN_ABORTED_NOW,
             why=_error_why(SRC_SCREEN, result.error),
             where=("本站不以殘缺資料湊出名單。若是 FinMind 額度用罄，"
                    "額度每日 00:00 重置；其餘請到"
@@ -1285,7 +1381,7 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
         # 沒有例外、卻連「有幾列」都讀不出來 → 回傳契約漂移。
         # **不寫成「0 檔」** —— 那是替上游宣稱一件它沒說的事。
         _note = Note(
-            now="**選股跑完了，但回傳的東西讀不出「有幾檔」**",
+            now=SCREEN_DRIFT_NOW,
             why=(f"{MISS_TEXT.get(MISS_CONTRACT_DRIFT, '回傳形態與約定不符')}"
                  f"　—— {SRC_SCREEN}原本恆回一個 DataFrame，"
                  "本輪回的東西連列數都取不到"),
@@ -1354,7 +1450,7 @@ def build_heatmap_card(hm: HeatmapReadout
         _note = Note(now=HEATMAP_IDLE_NOW, why=HEATMAP_IDLE_WHY,
                      where=HEATMAP_IDLE_WHERE)
     elif _state == UI_FAILED and hm.error:
-        _note = Note(now="**熱力圖畫不出來**",
+        _note = Note(now=HEATMAP_ERROR_NOW,
                      why=_error_why(SRC_HEATMAP, hm.error),
                      where=HEATMAP_FAILED_WHERE)
     elif _state == UI_FAILED:
@@ -1409,13 +1505,13 @@ def build_sector_flow_card(flow: SectorFlowReadout
     if _state == UI_IDLE:
         _note = Note(now=MAP_IDLE_NOW, why=MAP_IDLE_WHY, where=MAP_IDLE_WHERE)
     elif _state == UI_FAILED:
-        _note = Note(now="**板塊資金圖無法產生**",
+        _note = Note(now=FLOW_FAILED_NOW,
                      why=_error_why(SRC_SECTOR_FLOW, flow.error),
                      where=("先確認網路／proxy；細節在"
                             f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
     elif _state == UI_DEGRADED:
         _note = Note(
-            now="**畫的是最後一次成功凍結的快照，不是今天的**",
+            now=FLOW_STALE_NOW,
             why=(f"盤後凍結任務的更新時戳距今已超過門檻"
                  f"（{flow.stale_reason or '上游沒有給原因'}；"
                  f"metadata 時戳 {flow.meta_updated_at or '未知'}）—— "
@@ -1426,7 +1522,7 @@ def build_sector_flow_card(flow: SectorFlowReadout
                     state=UI_DEGRADED, note=_note), tuple(_facts)
     else:   # UI_EMPTY —— 快取還沒產生。灰，不是紅（沒有人壞掉）。
         _note = Note(
-            now="**板塊資金快取尚未產生**",
+            now=FLOW_EMPTY_NOW,
             why=(f"{flow.reason or '讀不到盤後凍結的快照'} —— "
                  "這不是故障，是當日盤後任務還沒產生資料"),
             where=("等當日盤後的「Update Sector Flow」排程；"
@@ -1447,10 +1543,134 @@ def _render_one(card: Card, facts: Sequence[tuple[str, str]] = ()) -> None:
     就是最典型的漂移）。**邏輯一字未改**，本函式只剩「把本頁專屬的三樣東西
     綁上去」：log 前綴 / 出處文案（出事的是哪一層只有本頁知道）/ 去哪補。
     """
+    # 2026-09-25 客戶裁示 1~4：登記在 v2 契約（`src/ui_v2/page_find.py`）的卡改走 v2 卡面。
+    if card.key in v2_find.BLOCK_COLS:
+        _render_one_v2(card, facts)
+        return
     render_card_isolated(
         card, facts=facts,
         owner="views/page_find",
         error_why=lambda _err: _error_why(SRC_RENDER, _err),
+        where=("這是渲染層的問題，不是你操作的問題 —— "
+               f"{NO_EXIT_MARKER}；請把上面那行訊息回報給維護者"))
+
+
+def v2_short_rows(card: Card) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str], ...]]:
+    """一則 `Note` →（卡面三列短句, 摺疊區三列完整原文）。
+
+    · 沒有 `Note`（live 且沒出事）→ `((), ())`（與「🚦 今天」頁對 live 的處理相同）。
+    · 有 `Note` → 查 `V2_SHORT_ROWS`；查不到 → `KeyError`（⛔ 不退回長句、⛔ 不猜一句）。
+    · 完整原文三列沿用**同一組標籤**（現在 / 為什麼 / 去哪補），放進「▸ 詳細」摺疊區
+      （客戶 2026-09-25 最終裁示：⛔ 不得只剩 hover —— 手機沒有 hover）。**一個字都沒刪。**
+    """
+    _note = card.note
+    if _note is None:
+        return (), ()
+    try:
+        _now_s, _why_s, _where_s = V2_SHORT_ROWS[(card.key, _note.now)]
+    except KeyError:
+        raise KeyError(
+            f"卡 {card.key!r} 的這則說明沒有登記短句（現在＝{v2_plain(_note.now)!r}）"
+            " —— 新增一則 `Note` 時**必須**同步補一列 `V2_SHORT_ROWS`。") from None
+    _short = ((V2_NOW_FACT_KEY, _now_s),
+              (V2_WHY_FACT_KEY, _why_s),
+              (V2_GUIDE_FACT_KEY, _where_s))
+    _full = ((V2_NOW_FACT_KEY, v2_plain(_note.now)),
+             (V2_WHY_FACT_KEY, v2_plain(_note.why)),
+             (V2_GUIDE_FACT_KEY, v2_plain(_note.where)))
+    return _short, _full
+
+
+def v2_fold_id(card: Card) -> str:
+    """摺疊開關 `id` ＝ `markup.fold_dom_id(card.key)` ⇒ `fold-find-heatmap` 這樣。
+
+    本頁 4 張卡的 key 都以 `find.` 開頭（`src/ui_v2/page_find.py` 登記）⇒ id 一律 `fold-find-*`，
+    ⛔ 不與「🚦 今天」頁的 `fold-detail-*` 撞名；由 key 決定 ⇒ 每輪 rerun 相同、展開狀態不掉。
+    """
+    return v2_markup.fold_dom_id(card.key)
+
+
+def v2_card_html(card: Card, facts: Sequence[tuple[str, str]] = ()) -> str:
+    """一張本頁的 `Card` → v2 卡面 HTML。**所有文字都由 `card_html()` escape。**
+
+    · 卡框 ← `card.key` 就是 block key（登記在 `src/ui_v2/page_find.py`）；
+      密度階由 `markup.card_html()` 經登記處依**層**決定，⛔ 本檔不指定。
+    · 徽章 ← `card.state` 經 `V2_STATE_VOCAB`（沿用「🚦 今天」頁）→ `resolve_badge()`。
+    · 大字 ← `card.value`（非 live 由契約留白）。
+    · 卡面 fact 列 ← 三列短句**排在最前**，其後是既有的 `facts`（原樣、只拿掉 Markdown 記號）。
+    · 「▸ 詳細」摺疊區（2026-09-25 客戶最終裁示：**⛔ 不得有只活在 hover 的字**）：
+      ① `Note` 三段完整原文（含紅卡的上游例外原文）；
+      ② 卡面上**會被契約層截斷**的 fact（值超過 `FACT_VALUE_MAX_CHARS`）的完整值，標籤照舊。
+      摺疊區**不截斷**（`fold_truncate=False`）；卡面被截的那格仍掛 `title=`，但同一段字在摺疊區看得到。
+      沒有東西要摺 ⇒ 整段不渲染。
+    """
+    _v2_state, _reason = V2_STATE_VOCAB[card.state]   # 未知狀態 → KeyError（⛔ 不兜底）
+    _badge_n = v2_page.resolve_badge(state=_v2_state, miss_reason=_reason)
+    _short, _full = v2_short_rows(card)
+    _plain_facts = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts)
+    _long = tuple(r for r in _plain_facts if len(r[1]) > v2_markup.FACT_VALUE_MAX_CHARS)
+    _folded = tuple(_full) + _long
+    return v2_markup.card_html(
+        block=card.key,
+        state=_v2_state,
+        title=v2_plain(card.label),
+        value=(v2_plain(card.value) or None),
+        level=None,
+        badge_n=_badge_n,
+        facts=tuple(_short) + _plain_facts,
+        folded_facts=_folded,
+        fold_id=(v2_fold_id(card) if _folded else None),
+        fold_truncate=False,
+    )
+
+
+#: v2 卡面產不出來時，例外的出處。
+SRC_V2_MARKUP: str = "L5 `src/ui_v2/markup`（v2 卡面標記層：`page_css` / `card_html`）"
+
+#: 這一次 script run 有沒有吐過 v2 樣式表（本頁自己的旗標，⛔ 不與「🚦 今天」頁共用 ——
+#: 那一頁每輪開頭清**它的**旗標，本頁若借用，切頁之後樣式表就不會再吐）。
+#: `render_page_find()` 每輪開頭清掉；理由同「🚦 今天」頁 `SS_V2_CSS_DONE` 的註。
+SS_V2_CSS_DONE: str = "_p02_v2_css_emitted"
+
+
+#: 本頁「▸ 詳細」摺疊區裡的長值**准許在任意處換行**。
+#: 為什麼非加不可（2026-09-25 手機 390px 實測）：摺疊區放的是**完整原文**（不截斷），
+#: 紅卡的上游例外含 `services.fundamental_screener_service.get_ranked_picks` 這種沒有空白的長串，
+#: 不換行就會**衝出卡片右緣、被螢幕切掉** —— 等於又把字藏起來。
+#: ⚠️ 選擇器**只命中本頁的摺疊區**（id 前綴 `fold-find-`）⇒「🚦 今天」頁一條規則都沒變；
+#:    ⛔ 不改 `markup.page_css()`（那會改掉「🚦 今天」的樣式表輸出）。零顏色、零字級、零 px。
+V2_FOLD_WRAP_CSS: str = (
+    '.blk-fold-i[id^="fold-find-"]~.blk-fold-b .blk-fact-v{overflow-wrap:anywhere}')
+
+
+def _inject_v2_css() -> None:
+    """吐出 v2 樣式表，同一輪 script run 只吐一次。⛔ 不在本檔抄 CSS（契約層那份整段照吐）。"""
+    if st.session_state.get(SS_V2_CSS_DONE):
+        return
+    st.markdown(f"<style>{v2_markup.page_css(V2_CSS_MODE)}\n{V2_FOLD_WRAP_CSS}</style>",
+                unsafe_allow_html=True)
+    st.session_state[SS_V2_CSS_DONE] = True
+
+
+def _render_one_v2(card: Card, facts: Sequence[tuple[str, str]] = ()) -> None:
+    """畫一張 v2 卡面；炸了就**就地轉成看得見的紅卡**（⛔ 不靜默退回舊卡面）。"""
+    try:
+        _inject_v2_css()
+        st.markdown(v2_card_html(card, facts), unsafe_allow_html=True)
+        return
+    except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
+        _err = repr(_e)   # `_e` 在區塊結束時會被 `del`，先取字串
+        print(f"[views/page_find] 卡 {card.key!r} 的 v2 卡面畫不出來 → 轉紅卡：{_err}")
+    _label = scrub_state_glyphs(card.label)[0] or card.key
+    render_card_isolated(
+        Card(key=f"{card.key}.v2_render_failed", label=_label,
+             state=UI_FAILED,
+             note=Note(now=f"{_label}　**這一格畫不出來**",
+                       why=_error_why(SRC_V2_MARKUP, _err),
+                       where=("這是渲染層的問題，不是你操作的問題 —— "
+                              f"{NO_EXIT_MARKER}；請把上面那行訊息回報給維護者"))),
+        owner="views/page_find",
+        error_why=lambda _err2: _error_why(SRC_RENDER, _err2),
         where=("這是渲染層的問題，不是你操作的問題 —— "
                f"{NO_EXIT_MARKER}；請把上面那行訊息回報給維護者"))
 
@@ -1482,7 +1702,7 @@ def build_form_unavailable_card(error: str) -> Card:
         key="find.screen_form", label="條件表單",
         state=UI_FAILED,
         note=Note(
-            now="**條件表單畫不出來**",
+            now=FORM_UNAVAILABLE_NOW,
             why=_error_why(
                 "L3 因子清單（`services.fundamental_screener_service."
                 "SCREEN_ANGLE_LABELS`）", error),
@@ -1633,7 +1853,8 @@ def _render_map_leaf(session: Mapping[str, Any]) -> None:
 
     _cards = (build_heatmap_card(_heatmap), build_sector_flow_card(_flow))
     # 兩張並列（鐵律 1：`grid` 內部硬夾 MAX_COLS，這裡要的是 2 欄）。
-    for _chunk, _columns in grid(_cards, 2):
+    # 桌機欄數讀 v2 契約（`find.heatmap` 2/1/1，UI_PAGE_FIND.md ① 表「葉2」列），⛔ 不寫死 2。
+    for _chunk, _columns in grid(_cards, v2_find.BLOCK_COLS["find.heatmap"][0]):
         for (_card, _facts), _col in zip(_chunk, _columns):
             with _col:
                 _render_one(_card, _facts)
@@ -1698,6 +1919,9 @@ def render_page_find() -> None:
     選到本頁時 late import 並呼叫本函式。理由與守衛見檔頭 FE-36 那段。
     """
     _session = st.session_state
+    # 每一輪開頭清掉 v2 樣式表旗標（見 `SS_V2_CSS_DONE`）：Streamlit 每輪重建元素樹，
+    # 只吐一次的話第二輪起卡片會變成沒有樣式的裸 HTML、而且不會報錯。
+    st.session_state[SS_V2_CSS_DONE] = False
 
     st.markdown(f"## {ia_nav.page_label(ia_nav.PAGE_FIND)}")
     st.caption("從全市場縮到一張候選清單。")
