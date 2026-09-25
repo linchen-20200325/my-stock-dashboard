@@ -492,6 +492,17 @@ merge 與改 base **直接影響線上部署**（`main` 一動，Streamlit Cloud
 **後果**：v2「🚦 今天」燈卡的「變化方向」列，**M1B-M2 固定顯示「無資料」**，程式刻意不讀此檔
 （`shared/lamp_direction_thresholds.py` 檔頭）。**未修**（§-1：無客戶指派；且修法同 §6.5 需重抓歷史）。
 
+**待辦：M1B-M2 燈「替代值未標明」**（**待辦，另開工單；客戶 2026-09-25 裁示**；**登記，未動工**）：
+
+| 項目 | 內容 |
+|---|---|
+| 事實 | 線上 M1B-M2 現值走 `src/data/macro/macro_snapshot.py::fetch_m1b_m2_block` → `src/data/macro/tw_macro.py::fetch_cbc_m1b_m2`（CBC ms1.json → CPX EF15M01 → `^TWII` 代理）→ FRED → IMF |
+| 問題 | 退到 `^TWII` 代理層時，卡片「現值」實為**加權指數動能推算**，但 `hit_source` 標籤仍是通用字串、`is_proxy_tier` 在 `fetch_m1b_m2_block` 重新打包時**被丟掉** ⇒ 使用者看不出是替代值（違 `CLAUDE.md` §1「任何填補必須在輸出帶旗標」精神） |
+| 補充 | 卡片「缺值」文案（`shared/station_specs.py::MISS_TEXT[MISS_NO_INPUT]`，16 盞共用）經查證在**所有來源皆失敗時屬實**，客戶裁示**維持不改**；`docs/v2/prototype/lamp_preview.html` 中 M1B-M2 顯示的「沒抓到」為**預覽腳本自設狀態，非線上現象** |
+| 處置 | 依 §-1：**只登記，未動工** |
+
+⚠️ 上列事實為**程式閱讀，未實跑**；**單組結論，未經第二組驗**（§-2 規則 6），⛔ 不得當既定前提。
+
 ### 6.5 🔴 卡關點與待客戶裁示
 
 **重抓歷史需要 FinMind token，本容器沒有**（見 §5「缺件」）。
