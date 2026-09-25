@@ -512,6 +512,18 @@ merge 與改 base **直接影響線上部署**（`main` 一動，Streamlit Cloud
 | 補法方向 | （**僅登記、未驗**）input 保留可聚焦並加 `aria-expanded`／可見焦點樣式，或改回可存取元件 |
 | 處置 | 依 §-1：**只登記，未動工** |
 
+**待辦：K1 在燈卡上復發 —— 「門檻出處」「命中來源」露出內部識別字**（**客戶 2026-09-25 裁示：K1 由「不修」升級為「需規格補 16 盞對照表」**；**登記，未動工**）：
+
+| 項目 | 內容 |
+|---|---|
+| 事實 | K1 原登記於 `docs/v2/prototype/gen_today_v2.py::COPY_SPEC_GAPS`（鍵 `"K1"`），並渲染進 `docs/v2/prototype/today_v2.html`：「🔴 卡面上有內部函式名／模組名／enum 名，五頁全中 —— ⛔ 本輪不修，因為修它必須發明規格沒給的中文標籤」。2026-09-25 稽核 `origin/main` `8873c9e` 查出：「🚦 今天」→「指標明細」**16 盞燈卡**的「▸ 詳細」內（#685／#686 起），「**門檻出處**」直出 `shared/macro_buckets.py::BUCKET_DANGER_SPECS` 的 `source`（例 `SSOT:HEALTH_DEFENSE_THRESHOLD(35)+DESIGN(50)`、`SSOT:MACRO_THRESHOLDS.VIX`），「**命中來源**」直出 `src/compute/macro/macro_helpers.py::compute_five_bucket_summary` 經 `_traced` 產生的 `hit_source` 標籤（例 `macro_info.vix.current (Yahoo ^VIX → FRED VIXCLS)`）⇒ **K1 在燈卡上復發** |
+| 客戶裁示 | K1 由「不修」升級為「**需規格補 16 盞對照表**」：規格須逐盞提供「門檻出處」與「命中來源」的**使用者白話文案**；⛔ **AI 不得自行發明文案**（＝捏造，違 `CLAUDE.md` §1） |
+| 卡在哪 | **規格（16 盞對照表）尚未提供** |
+| 優先序 | 客戶定序：**四頁卡化 ＞ 今天頁 7 塊未接線 ＞ K1** |
+| 處置 | **本輪未修**；只登記，待規格到位後再動工 |
+
+⚠️ 上列稽核為**單組、唯讀**結論，**未經第二組驗**（§-2 規則 6），⛔ 不得當既定前提。
+
 ### 6.5 🔴 卡關點與待客戶裁示
 
 **重抓歷史需要 FinMind token，本容器沒有**（見 §5「缺件」）。
