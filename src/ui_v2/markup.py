@@ -541,6 +541,10 @@ FACT_VALUE_MAX_CHARS: Final[int] = 46
 #: 截斷記號。純排版符號，⛔ 不屬於任何狀態 glyph 家族。
 FACT_VALUE_ELLIPSIS: Final[str] = "…"
 
+#: 摺疊區（`<details>`）的開關字。客戶 2026-09-25 核可線框逐字「▸ 詳細」。
+#: 原生 `<details><summary>`：⛔ 無 JS、⛔ 無 hover —— 手機點按與桌機點擊同一條路。
+FOLD_SUMMARY_TEXT: Final[str] = "▸ 詳細"
+
 
 def _fact_value_cell(value: object) -> str:
     """明細列**值**那一格：長值截斷顯示，完整原文進 `title=`。
@@ -557,6 +561,20 @@ def _fact_value_cell(value: object) -> str:
             f'{_esc(shown)}</span>')
 
 
+def _facts_block(rows: Sequence[tuple[object, object]]) -> str:
+    """`.blk-facts` 一段（卡面與摺疊區共用同一支 ⇒ 兩邊的列逐 byte 同構）。"""
+    out = ['<div class="blk-facts">']
+    for key, val in rows:
+        out.append(
+            '<div class="blk-fact">'
+            f'<span class="blk-fact-k">{_esc(key)}</span>'
+            + _fact_value_cell(val)
+            + '</div>'
+        )
+    out.append('</div>')
+    return "".join(out)
+
+
 def card_html(
     *,
     block: str,
@@ -566,6 +584,7 @@ def card_html(
     level: object = None,
     badge_n: int,
     facts: Iterable[tuple[object, object]] = (),
+    folded_facts: Iterable[tuple[object, object]] = (),
 ) -> str:
     """一張卡。
 
@@ -575,6 +594,10 @@ def card_html(
       `degraded` **觀測照出、判決留白**。⛔ 本檔不另立第二把尺。
     · `facts` 為 `(標籤, 值)` 序列，渲染成卡內 key-value 列。**值**超過
       `FACT_VALUE_MAX_CHARS` 時**只截顯示**，完整原文掛在該格 `title=`（⛔ 一個字都沒刪）。
+    · `folded_facts`（2026-09-25）：與 `facts` 同型的列，渲染進卡底一個**預設收合**的
+      原生 `<details>`（`<summary>` ＝ `FOLD_SUMMARY_TEXT`，⛔ 無 `open`）。
+      列的畫法與 `facts` **同一支**（同 class、同 escape、同截斷規則）⇒ 展開後長得一樣。
+      **空（預設）⇒ 整段不渲染**，輸出與加這個參數之前逐 byte 相同。
     """
     tier = page_today.tier_for_block(block)   # 未知 block → KeyError（⛔ 不猜一階）
     if badge_n in page_today.BADGES_NOT_ON_PAGE:
@@ -600,15 +623,18 @@ def card_html(
         parts.append(f'<div class="blk-lvl">{_esc(level_text)}</div>')
     rows = tuple(facts)
     if rows:
-        parts.append('<div class="blk-facts">')
-        for key, val in rows:
-            parts.append(
-                '<div class="blk-fact">'
-                f'<span class="blk-fact-k">{_esc(key)}</span>'
-                + _fact_value_cell(val)
-                + '</div>'
-            )
-        parts.append('</div>')
+        parts.append(_facts_block(rows))
+    folded = tuple(folded_facts)
+    if folded:
+        # ⚠️ `list-style:none` 只為拿掉瀏覽器預設的 ▶ 標記（否則與「▸」重複成兩個三角）。
+        #    ⛔ 不動 `page_css()`：那一段是全頁共用字串，改它會波及所有卡。
+        parts.append(
+            '<details class="blk-fold">'
+            '<summary class="blk-fold-s" style="list-style:none;cursor:pointer">'
+            f'{_esc(FOLD_SUMMARY_TEXT)}</summary>'
+            + _facts_block(folded)
+            + '</details>'
+        )
     parts.append('</div>')
     return "".join(parts)
 

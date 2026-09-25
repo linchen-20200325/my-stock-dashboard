@@ -230,7 +230,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from html import escape as html_escape
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Final, Mapping, Sequence
 
 import streamlit as st
 
@@ -2125,6 +2125,16 @@ V2_HOVER_ONLY_FACTS: dict[str, frozenset[str]] = {
     "verdict.regime": frozenset({REGIME_SCOPE_FACT_KEY}),
 }
 
+#: 🔴 **2026-09-25 客戶核可線框：16 盞燈卡（`detail.*`）的三列出處說明收進「▸ 詳細」。**
+#: 摺起來的是這三個**標籤**（`build_indicator_tile` 逐字組的那三列）；
+#: 卡面留：標題＋徽章、大字、判決行、「變化方向」、「門檻帶」；
+#: 非 live 卡的三要素（現在／為什麼／去哪補）與 degraded 的「現值」**照留卡面、⛔ 不摺**。
+#: ⛔ **一個字都沒刪、沒改寫** —— 同一段文字只是換進原生 `<details>`（預設收合，⛔ 無 JS、
+#:    ⛔ 無 hover，手機點按即展開）；列的畫法與卡面同一支（`markup._facts_block`）。
+#: ⚠️ 只作用於 `V2_FOLD_CARD_PREFIX` 開頭的卡 ⇒ 本頁其餘卡與其他四頁**逐 byte 不變**。
+V2_FOLD_CARD_PREFIX: Final[str] = "detail."
+V2_FOLDED_FACT_KEYS: frozenset[str] = frozenset({"命中來源", "門檻出處", "這條線在看什麼"})
+
 #: L0 十態 → （`src/ui_v2/page_today.py` 的狀態語彙, `resolve_badge()` 要的缺值原因）。
 #:
 #: **為什麼需要這張表**：兩邊是**兩套字面**，不通用 ——
@@ -2501,6 +2511,17 @@ def v2_card_html(tile: Tile) -> str:
             _facts = tuple(_guide_rows[1:]) + _facts
         else:
             _facts = tuple(_guide_rows) + _facts          # 留白 → 三列全走 fact
+    # 🔴 16 盞燈卡：三列出處說明移進「▸ 詳細」摺疊區（見 `V2_FOLDED_FACT_KEYS`）。
+    _folded: tuple[tuple[str, str], ...] = ()
+    if _card.key.startswith(V2_FOLD_CARD_PREFIX):
+        _folded = tuple(r for r in _facts if r[0] in V2_FOLDED_FACT_KEYS)
+        if not _folded:
+            # §1 Fail Loud：「命中來源」每張燈卡都有（`build_indicator_tile` 無條件組）。
+            # 一列都沒摺到 ＝ 標籤被改過 ⇒ 摺疊區會靜靜消失，⛔ 不吞。
+            raise KeyError(
+                f"卡 {_card.key!r} 應摺進「▸ 詳細」的 {sorted(V2_FOLDED_FACT_KEYS)!r}"
+                " 一列都沒有 —— 標籤改過了嗎？")
+        _facts = tuple(r for r in _facts if r[0] not in V2_FOLDED_FACT_KEYS)
     _html = v2_markup.card_html(
         block=V2_CARD_BLOCKS[_card.key],
         state=_v2_state,
@@ -2509,6 +2530,7 @@ def v2_card_html(tile: Tile) -> str:
         level=_level,
         badge_n=_badge_n,
         facts=_facts,
+        folded_facts=_folded,
     )
     # `Note` 原文 ＋ 移出卡面的那幾列，共用同一個 hover 槽（`｜` 沿用 `_full` 的接法）。
     _hover = "｜".join(_p for _p in (_full, *_moved) if _p)
