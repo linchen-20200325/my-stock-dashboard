@@ -57,6 +57,7 @@ CSS 裡所有 px / 顏色一律來自契約層：
 """
 from __future__ import annotations
 
+import re
 from html import escape
 from typing import Final, Iterable, Mapping, Sequence
 
@@ -397,6 +398,31 @@ def _card_rules() -> list[str]:
     return out
 
 
+def _fold_rules() -> list[str]:
+    """「▸ 詳細」純 CSS 開關（客戶 2026-09-25 選 (b)，取代原生 `<details>`）。
+
+    🔴 **只新增 `.blk-fold*` 選擇器**，⛔ 不改任何既有規則 ⇒ 非燈卡的卡逐 byte 不受影響
+    （它們的 HTML 裡根本沒有這些 class）。
+    · input 以「視覺隱藏」而非 `display:none` 藏起來：仍可被 label 切換、可鍵盤聚焦；
+      `.blk-fold{position:relative}` 讓它定位在開關旁 ⇒ 聚焦時⛔ 不會把頁面捲走。
+    · body 預設 `display:none`，`:checked ~` 才 `display:block`（⛔ 無 JS）。
+    · label `display:block` ＋ 上下 `--sp-2` 內距 ⇒ 整條卡寬都是觸控區；
+      `-webkit-tap-highlight-color:transparent` 拿掉 iOS 點按的灰框。
+    """
+    return [
+        "/* ── 燈卡「▸ 詳細」純 CSS 開關 ── */",
+        ".blk-fold{position:relative}",
+        ".blk-fold-i{position:absolute;top:0;left:0;width:1px;height:1px;"
+        "margin:0;padding:0;opacity:0;pointer-events:none}",
+        ".blk-fold-s{display:block;cursor:pointer;"
+        "padding-top:" + _var("--sp-2") + ";padding-bottom:" + _var("--sp-2") + ";"
+        "-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}",
+        ".blk-fold-i:focus-visible~.blk-fold-s{outline:1px dotted currentColor}",
+        ".blk-fold-b{display:none}",
+        ".blk-fold-i:checked~.blk-fold-b{display:block}",
+    ]
+
+
 def _badge_rules() -> list[str]:
     """徽章：`.bdg` 共用幾何 ＋ `.bdg-{n}` 編號配色 ＋ `.sb-{key}` 尺寸。
 
@@ -479,6 +505,7 @@ def page_css(mode: str) -> str:
     blocks += _grid_rules()
     blocks += _card_rules()
     blocks += _badge_rules()
+    blocks += _fold_rules()
     blocks += _breakpoint_rules()
     return "\n".join(blocks)
 
@@ -541,9 +568,33 @@ FACT_VALUE_MAX_CHARS: Final[int] = 46
 #: 截斷記號。純排版符號，⛔ 不屬於任何狀態 glyph 家族。
 FACT_VALUE_ELLIPSIS: Final[str] = "…"
 
-#: 摺疊區（`<details>`）的開關字。客戶 2026-09-25 核可線框逐字「▸ 詳細」。
-#: 原生 `<details><summary>`：⛔ 無 JS、⛔ 無 hover —— 手機點按與桌機點擊同一條路。
+#: 摺疊區的開關字。客戶 2026-09-25 核可線框逐字「▸ 詳細」。
+#: 📌 **2026-09-25 更正 —— 有意識的更正，⛔ 不是漏刪；決策者 user（客戶選 (b)）。**
+#: ~~原生 `<details><summary>`：⛔ 無 JS、⛔ 無 hover —— 手機點按與桌機點擊同一條路。~~
+#: 舊做法的理由（無 JS、無 hover）**仍然成立**；被推翻的是「手機點按與桌機同一條路」
+#: 這個前提 —— 客戶實機回報 iPhone（iOS WebKit）點了沒反應。
+#: **現行**：純 CSS 開關 —— 隱藏的 `<input type="checkbox" id=…>` ＋ `<label for=…>`
+#: ＋ 兄弟選擇器 `.blk-fold-i:checked ~ .blk-fold-b{display:block}`（樣式見 `_fold_rules`）。
+#: 仍然 ⛔ 無 JS、⛔ 無 hover。
 FOLD_SUMMARY_TEXT: Final[str] = "▸ 詳細"
+
+#: 摺疊開關 `id` 的前綴；`id` 由卡 key 決定（`fold_dom_id`），**同一張卡每一輪 rerun 都相同**
+#: ⇒ React 比對得到同一個 DOM，展開狀態不會因 rerun 被換掉。
+FOLD_ID_PREFIX: Final[str] = "fold-"
+_FOLD_ID_RE: Final[re.Pattern[str]] = re.compile(r"^[a-z0-9-]+$")
+
+
+def fold_dom_id(key: str) -> str:
+    """卡 key → 摺疊開關的 DOM `id`（決定性、只含 `[a-z0-9-]`）。
+
+    例：`detail.bias_240` → `fold-detail-bias-240`。
+    ⚠️ 不同 key 理論上可能洗成同一個 id（`a.b` 與 `a_b`）—— 本頁 16 張的唯一性由
+    `tests/ui_v2/test_lamp_card_fold.py` 釘住，⛔ 不在這裡假設。
+    """
+    slug = re.sub(r"[^a-z0-9]+", "-", str(key).lower()).strip("-")
+    if not slug:
+        raise ValueError(f"卡 key {key!r} 洗完是空字串，產不出摺疊開關 id")
+    return FOLD_ID_PREFIX + slug
 
 
 def _fact_value_cell(value: object) -> str:
@@ -585,6 +636,7 @@ def card_html(
     badge_n: int,
     facts: Iterable[tuple[object, object]] = (),
     folded_facts: Iterable[tuple[object, object]] = (),
+    fold_id: str | None = None,
 ) -> str:
     """一張卡。
 
@@ -595,9 +647,11 @@ def card_html(
     · `facts` 為 `(標籤, 值)` 序列，渲染成卡內 key-value 列。**值**超過
       `FACT_VALUE_MAX_CHARS` 時**只截顯示**，完整原文掛在該格 `title=`（⛔ 一個字都沒刪）。
     · `folded_facts`（2026-09-25）：與 `facts` 同型的列，渲染進卡底一個**預設收合**的
-      原生 `<details>`（`<summary>` ＝ `FOLD_SUMMARY_TEXT`，⛔ 無 `open`）。
+      純 CSS 開關（隱藏 checkbox ＋ `<label>` ＝ `FOLD_SUMMARY_TEXT`，⛔ 無 `checked`）。
       列的畫法與 `facts` **同一支**（同 class、同 escape、同截斷規則）⇒ 展開後長得一樣。
       **空（預設）⇒ 整段不渲染**，輸出與加這個參數之前逐 byte 相同。
+    · `fold_id`：給了 `folded_facts` 就**必填**（通常是 `fold_dom_id(card.key)`），
+      只准 `[a-z0-9-]`。⛔ 不自己亂生 —— 亂數 id 每輪 rerun 都變，展開狀態會被重設。
     """
     tier = page_today.tier_for_block(block)   # 未知 block → KeyError（⛔ 不猜一階）
     if badge_n in page_today.BADGES_NOT_ON_PAGE:
@@ -626,14 +680,19 @@ def card_html(
         parts.append(_facts_block(rows))
     folded = tuple(folded_facts)
     if folded:
-        # ⚠️ `list-style:none` 只為拿掉瀏覽器預設的 ▶ 標記（否則與「▸」重複成兩個三角）。
-        #    ⛔ 不動 `page_css()`：那一段是全頁共用字串，改它會波及所有卡。
+        # 🔴 2026-09-25 客戶選 (b)：原生 `<details>` 在 iPhone 點了沒反應 ⇒ 改純 CSS 開關。
+        #    input 必須排在 body **之前**（`~` 只往後找兄弟）；label 靠 `for` 綁 input，
+        #    樣式全在 `page_css()` 的 `_fold_rules()`（只新增 `.blk-fold*` 選擇器）。
+        if fold_id is None or not _FOLD_ID_RE.match(fold_id):
+            raise ValueError(
+                f"有摺疊列就必須給合法的 fold_id（[a-z0-9-]+），實得 {fold_id!r}")
         parts.append(
-            '<details class="blk-fold">'
-            '<summary class="blk-fold-s" style="list-style:none;cursor:pointer">'
-            f'{_esc(FOLD_SUMMARY_TEXT)}</summary>'
+            '<div class="blk-fold">'
+            f'<input type="checkbox" class="blk-fold-i" id="{fold_id}">'
+            f'<label class="blk-fold-s" for="{fold_id}">{_esc(FOLD_SUMMARY_TEXT)}</label>'
+            '<div class="blk-fold-b">'
             + _facts_block(folded)
-            + '</details>'
+            + '</div></div>'
         )
     parts.append('</div>')
     return "".join(parts)

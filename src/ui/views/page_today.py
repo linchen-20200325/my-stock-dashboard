@@ -2129,8 +2129,10 @@ V2_HOVER_ONLY_FACTS: dict[str, frozenset[str]] = {
 #: 摺起來的是這三個**標籤**（`build_indicator_tile` 逐字組的那三列）；
 #: 卡面留：標題＋徽章、大字、判決行、「變化方向」、「門檻帶」；
 #: 非 live 卡的三要素（現在／為什麼／去哪補）與 degraded 的「現值」**照留卡面、⛔ 不摺**。
-#: ⛔ **一個字都沒刪、沒改寫** —— 同一段文字只是換進原生 `<details>`（預設收合，⛔ 無 JS、
-#:    ⛔ 無 hover，手機點按即展開）；列的畫法與卡面同一支（`markup._facts_block`）。
+#: ⛔ **一個字都沒刪、沒改寫** —— 同一段文字只是換進 ~~原生 `<details>`~~ 純 CSS 開關
+#:    （2026-09-25 客戶選 (b)：`<details>` 在 iPhone 點了沒反應；現為隱藏 checkbox ＋
+#:    `<label for>`，見 `markup._fold_rules`。預設收合，⛔ 無 JS、⛔ 無 hover）；
+#:    列的畫法與卡面同一支（`markup._facts_block`）。
 #: ⚠️ 只作用於 `V2_FOLD_CARD_PREFIX` 開頭的卡 ⇒ 本頁其餘卡與其他四頁**逐 byte 不變**。
 V2_FOLD_CARD_PREFIX: Final[str] = "detail."
 V2_FOLDED_FACT_KEYS: frozenset[str] = frozenset({"命中來源", "門檻出處", "這條線在看什麼"})
@@ -2531,6 +2533,8 @@ def v2_card_html(tile: Tile) -> str:
         badge_n=_badge_n,
         facts=_facts,
         folded_facts=_folded,
+        # 🔴 id 由卡 key 決定 ⇒ 每輪 rerun 相同（展開狀態不被重設）；非燈卡不給。
+        fold_id=(v2_markup.fold_dom_id(_card.key) if _folded else None),
     )
     # `Note` 原文 ＋ 移出卡面的那幾列，共用同一個 hover 槽（`｜` 沿用 `_full` 的接法）。
     _hover = "｜".join(_p for _p in (_full, *_moved) if _p)
