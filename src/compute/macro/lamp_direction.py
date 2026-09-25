@@ -11,6 +11,9 @@
   除以零或變號）、日期重複或無法解析、月資料中間缺月 → 一律 `nodata`，
   並在 `reason` 寫明原因（畫面只顯示「無資料」，不編一個箭頭）。
 - 未知 key → `KeyError`（不猜一個視窗）。
+- **計算本身失敗**（L3 / L2 丟例外）→ caller 用 `error_direction()` 做出
+  `direction == "error"`，畫面顯示「計算失敗（例外型別）」—— ⛔ 不整列消失、
+  ⛔ 不冒充「無資料」（2026-09-25）。
 
 ⚠️ 本檔的輸出**不是燈號**：不參與 `classify_danger()`、不改燈色 / 等級。
 """
@@ -26,6 +29,8 @@ from shared.lamp_direction_thresholds import (
     DIRECTION_MODE_NONE,
     DIRECTION_MODE_PCT,
     LAMP_DIRECTION_DECIMALS,
+    LAMP_DIRECTION_ERROR_TEMPLATE,
+    LAMP_DIRECTION_ERROR_TEXT,
     LAMP_DIRECTION_FLAT_BAND,
     LAMP_DIRECTION_LABELS,
     LAMP_DIRECTION_NODATA_TEXT,
@@ -36,20 +41,22 @@ DIRECTION_UP = "up"
 DIRECTION_FLAT = "flat"
 DIRECTION_DOWN = "down"
 DIRECTION_NODATA = "nodata"
+DIRECTION_ERROR = "error"
 DIRECTIONS: tuple[str, ...] = (DIRECTION_UP, DIRECTION_FLAT, DIRECTION_DOWN,
-                               DIRECTION_NODATA)
+                               DIRECTION_NODATA, DIRECTION_ERROR)
 
 
 @dataclass(frozen=True)
 class LampDirection:
-    """一盞燈的變化方向。`direction == "nodata"` 時 `delta` / `as_of` 為 None。"""
+    """一盞燈的變化方向。`direction in ("nodata", "error")` 時 `delta` / `as_of` 為 None。"""
 
-    direction: str                 # 'up' | 'flat' | 'down' | 'nodata'
+    direction: str                 # 'up' | 'flat' | 'down' | 'nodata' | 'error'
     delta: Optional[float]         # 變化量（單位見 unit）
     unit: str                      # 變化量單位（'%' / ' 個百分點' / ' 點' / ''）
     window_text: str               # '近 20 交易日' / '較上月' / ''
     as_of: Optional[str]           # 最新一點的日期（ISO）
-    reason: str = ""               # nodata 的原因（給 log / 除錯；畫面不顯示）
+    reason: str = ""               # nodata：原因（給 log，畫面不顯示）；
+                                   # error：簡短原因（例外型別名），畫面會顯示
 
     def __post_init__(self) -> None:
         if self.direction not in DIRECTIONS:
@@ -60,6 +67,18 @@ def _nodata(cfg: dict, reason: str) -> LampDirection:
     return LampDirection(direction=DIRECTION_NODATA, delta=None,
                          unit=str(cfg["unit"]), window_text=str(cfg["window_text"]),
                          as_of=None, reason=reason)
+
+
+def error_direction(key: str, reason: str) -> LampDirection:
+    """方向**計算失敗**（取數 / 計算丟例外、或結果沒回傳）→ `direction == "error"`。
+
+    `reason` 只放簡短原因（例外型別名，如 ``"RuntimeError"``）—— 它會上畫面，
+    ⛔ 不放 stack trace / 例外訊息全文。未知 key → `KeyError`（同 compute）。
+    """
+    cfg = LAMP_DIRECTION_WINDOWS[key]
+    return LampDirection(direction=DIRECTION_ERROR, delta=None,
+                         unit=str(cfg["unit"]), window_text=str(cfg["window_text"]),
+                         as_of=None, reason=str(reason))
 
 
 def _parse_iso(d: object) -> Optional[date]:
@@ -153,8 +172,12 @@ def format_direction_text(d: LampDirection) -> str:
     """LampDirection → 卡面文字。
 
     例：``↗ 上升（近 20 交易日 +9.9%，至 2026-09-24）``；
-    ``→ 持平（較上月 +0.3 點，至 2026-08-01）``；無資料 → ``無資料``（⛔ 無箭頭）。
+    ``→ 持平（較上月 +0.3 點，至 2026-08-01）``；無資料 → ``無資料``（⛔ 無箭頭）；
+    計算失敗 → ``計算失敗（RuntimeError）``（⛔ 無箭頭；無原因 → ``計算失敗``）。
     """
+    if d.direction == DIRECTION_ERROR:
+        return (LAMP_DIRECTION_ERROR_TEMPLATE.format(reason=d.reason) if d.reason
+                else LAMP_DIRECTION_ERROR_TEXT)
     if d.direction == DIRECTION_NODATA or d.delta is None:
         return LAMP_DIRECTION_NODATA_TEXT
     arrow, zh = LAMP_DIRECTION_LABELS[d.direction]

@@ -246,8 +246,10 @@ from shared import ui_state as _ui_state
 from shared.allocation_decision import REGIME_LABEL
 # 燈卡「變化方向」列（2026-09-24）：哪幾盞燈有這一列 ＋ 列標籤。純常數 L0。
 from shared.lamp_direction_thresholds import (
+    LAMP_DIRECTION_ERROR_TEMPLATE,
     LAMP_DIRECTION_FACT_KEY,
     LAMP_DIRECTION_KEYS,
+    LAMP_DIRECTION_MISSING_REASON,
 )
 from shared.macro_buckets import (
     BUCKET_DANGER_SPECS,
@@ -1042,7 +1044,8 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
                          band_label: Any = None,
                          thr_text: Any = None,
                          l4_error: str = "",
-                         direction: LampDirection | None = None) -> Tile:
+                         direction: LampDirection | None = None,
+                         direction_missing: bool = False) -> Tile:
     """一盞燈 → 一張卡。**燈號與門檻全部走 L0 / L4 SSOT，本檔不判燈。**
 
     Args:
@@ -1058,6 +1061,11 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
             ⚠️ 它**只加一列 fact**，不碰 `_band` / `_state` / 燈號頻道。
             位置：live → 第一列（判決行正下方）；degraded → 緊接「現值」；
             其餘狀態（尚未載入 / 失敗 / 未接線…）→ **不出這一列**。
+            `direction.direction == "error"` → 該列顯示「計算失敗（例外型別）」。
+        direction_missing: True ＝ caller **有**給 directions mapping、但裡面缺這盞燈
+            （2026-09-25）。判為**計算失敗**（不是「無資料」—— 缺 key 是程式沒回傳，
+            不是序列不夠），顯示「計算失敗（未回傳）」。⛔ 不讓該列靜默消失。
+            只用 L0 常數組字，不需要 L2（L2 載入失敗時也畫得出來）。
 
     ⚠️ **`classify_danger()` 對沒有門檻的 spec 會 TypeError**（L0 刻意的
     fail loud）。所以一律**先問 `has_thresholds(spec)`** —— 不 guard 的話
@@ -1096,14 +1104,19 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
 
     # ── 「變化方向」列（2026-09-24）：只加一列 fact，⛔ 不碰 `_band` / `_state` ──
     _dir_fact: tuple[str, str] | None = None
-    if direction is not None:
+    if direction is not None or direction_missing:
         if key not in LAMP_DIRECTION_KEYS:
             raise ValueError(f"{key!r} 不在 LAMP_DIRECTION_KEYS，不該帶「變化方向」")
-        from src.compute.macro.lamp_direction import format_direction_text
         # 只有 live / degraded（有值）才出這一列。尚未載入 / 失敗 / 未接線等灰紅態
         # 一律不出（v3 §02：「未載入」必須看起來與「有資料」截然不同）。
         if _state in (UI_LIVE, UI_DEGRADED):
-            _dir_fact = (LAMP_DIRECTION_FACT_KEY, format_direction_text(direction))
+            if direction is not None:
+                from src.compute.macro.lamp_direction import format_direction_text
+                _dir_text = format_direction_text(direction)
+            else:
+                _dir_text = LAMP_DIRECTION_ERROR_TEMPLATE.format(
+                    reason=LAMP_DIRECTION_MISSING_REASON)
+            _dir_fact = (LAMP_DIRECTION_FACT_KEY, _dir_text)
 
     if _state == UI_LIVE:
         if _dir_fact is not None:
@@ -1194,8 +1207,17 @@ def build_indicator_tiles(readout: MacroReadout, *,
     `directions`：`{key: LampDirection}`（2026-09-24「變化方向」列）。
     **只取 `LAMP_DIRECTION_KEYS` 內的 key**，其餘 key 即使出現在 mapping 裡也不傳
     ⇒ 其他 12 盞燈的卡與不傳 `directions` 時逐字相同。
+    - `directions is None` ⇒ 呼叫端**沒要**這一列 ⇒ 4 張卡都不出（與加列前逐字相同）。
+    - `directions` 是 mapping 但**缺**某一盞（或該值為 None）⇒ 該卡顯示「計算失敗（未回傳）」
+      （2026-09-25；判為計算失敗而非無資料 —— 缺 key 是程式沒回傳結果，不是序列不夠）。
+      ⛔ 不讓列靜默消失（空 dict 也一樣：4 張卡都顯示計算失敗）。
     """
-    _dirs = directions or {}
+    _dirs = directions if directions is not None else {}
+    # 缺 key 與「key 在、值是 None」同樣處理 —— 兩者都是沒回傳結果（⛔ 不讓列消失）。
+    _missing = ({_k for _k in LAMP_DIRECTION_KEYS if _dirs.get(_k) is None}
+                if directions is not None else set())
+    if _missing:
+        print(f"[views/page_today] 變化方向結果缺 key（顯示計算失敗）：{sorted(_missing)}")
     _out: dict[str, list[Tile]] = {_b: [] for _b in BUCKET_ORDER}
     for _spec in BUCKET_DANGER_SPECS:
         _rec = readout.readiness.get(_spec.key) or {}
@@ -1207,7 +1229,8 @@ def build_indicator_tiles(readout: MacroReadout, *,
                                  l4_error=l4_error,
                                  direction=(_dirs.get(_spec.key)
                                             if _spec.key in LAMP_DIRECTION_KEYS
-                                            else None)))
+                                            else None),
+                                 direction_missing=_spec.key in _missing))
     return _out
 
 
@@ -1658,29 +1681,66 @@ def _load_l4_labels() -> tuple[Any, Any, Any, str]:
         return None, None, None, repr(_e)
 
 
+#: 「變化方向」各支 L3 loader 負責哪幾盞燈的序列（loader 失敗 ⇒ 只有這幾盞顯示計算失敗）。
+#: m1b_m2_gap 刻意不在任何一支底下（歷史檔已知損壞，恆為無資料，不讀 L3）。
+_LAMP_DIRECTION_LOADERS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("get_chart_series", ("margin", "bias_240")),     # 交易日
+    ("get_monthly_history", ("ism_pmi",)),            # 月
+)
+
+
 def _load_lamp_directions() -> dict[str, Any]:
     """燈卡「變化方向」列：L3 取歷史 → L2 算方向。回 `{key: LampDirection}`。
 
     只算 `LAMP_DIRECTION_KEYS` 那幾盞。某一條序列取不到 ⇒ L2 回 `nodata`
     （畫面顯示「無資料」），⛔ 不整列消失、⛔ 不編箭頭。
-    整支失敗（例如 L3 / L2 載入失敗）⇒ 印 log、回 `{}` ⇒ 該列不出現，
-    **燈號與其他列不受影響**（它不參與判燈）。
+
+    §1 Fail Loud（2026-09-25 修；修前是 `except` → `return {}` ⇒ 列**靜默消失**）：
+    - 某支 L3 loader 丟例外 ⇒ 印 log，**只有序列來自那支 loader 的燈**回 `error`
+      （`_LAMP_DIRECTION_LOADERS`：`get_chart_series` → margin / bias_240；
+      `get_monthly_history` → ism_pmi）。⛔ 不能把它們降成「無資料」冒充序列不夠。
+      m1b_m2_gap 不讀任何 L3（設計上恆為無資料），故不受 L3 失敗影響；
+    - 單一盞的 L2 計算丟例外 ⇒ 印 log，**只有那一盞**回 `error`，其餘照常。
+    - L2 模組本身載入失敗 ⇒ 做不出 `LampDirection`，印 log 回 `{}`；
+      `build_indicator_tiles` 對缺 key 一律顯示「計算失敗（未回傳）」（只用 L0 常數）。
+    畫面顯示「計算失敗（例外型別）」；**燈號與其他列不受影響**（它不參與判燈）。
     """
     try:
-        from src.compute.macro.lamp_direction import compute_lamp_direction
-        from src.services.macro_v2_service import (
-            get_chart_series,
-            get_monthly_history,
+        from src.compute.macro.lamp_direction import (
+            compute_lamp_direction,
+            error_direction,
         )
-        _hist: dict[str, Any] = {}
-        _hist.update(get_chart_series() or {})       # margin / bias_240（交易日）
-        _hist.update(get_monthly_history() or {})    # ism_pmi（月）
-        # ⚠️ m1b_m2_gap 刻意不給序列：歷史檔已知損壞，L2 恆回 nodata。
-        return {_k: compute_lamp_direction(_k, _hist.get(_k))
-                for _k in LAMP_DIRECTION_KEYS}
-    except Exception as _e:  # noqa: BLE001 — 轉成 log，不吞；燈號本身不受影響
-        print(f"[views/page_today] 變化方向計算失敗（該列不顯示）：{_e!r}")
+    except Exception as _e:  # noqa: BLE001 — 轉成 log；缺 key 由 build 端顯示計算失敗
+        print(f"[views/page_today] 變化方向計算失敗（L2 載入失敗）：{_e!r}")
         return {}
+    _hist: dict[str, Any] = {}
+    _failed: dict[str, str] = {}                     # key → 例外型別名
+    try:
+        from src.services import macro_v2_service as _svc
+    except Exception as _e:  # noqa: BLE001 — L3 載入失敗 ⇒ 所有「有 loader」的燈都失敗
+        print(f"[views/page_today] 變化方向計算失敗（L3 載入）：{_e!r}")
+        _svc = None
+        for _name, _keys in _LAMP_DIRECTION_LOADERS:
+            _failed.update({_k: type(_e).__name__ for _k in _keys})
+    if _svc is not None:
+        for _name, _keys in _LAMP_DIRECTION_LOADERS:
+            try:
+                _hist.update(getattr(_svc, _name)() or {})
+            except Exception as _e:  # noqa: BLE001 — 只影響這支 loader 負責的燈
+                print(f"[views/page_today] 變化方向計算失敗（取數 {_name}）：{_e!r}")
+                _failed.update({_k: type(_e).__name__ for _k in _keys})
+    # ⚠️ m1b_m2_gap 刻意不給序列：歷史檔已知損壞，L2 恆回 nodata。
+    _out: dict[str, Any] = {}
+    for _k in LAMP_DIRECTION_KEYS:
+        if _k in _failed:
+            _out[_k] = error_direction(_k, _failed[_k])
+            continue
+        try:
+            _out[_k] = compute_lamp_direction(_k, _hist.get(_k))
+        except Exception as _e:  # noqa: BLE001 — 只影響這一盞
+            print(f"[views/page_today] 變化方向計算失敗（{_k}）：{_e!r}")
+            _out[_k] = error_direction(_k, type(_e).__name__)
+    return _out
 
 
 def _load_allocation() -> tuple[Any, str]:

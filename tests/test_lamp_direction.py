@@ -397,3 +397,201 @@ def test_direction_on_foreign_key_rejected():
     with pytest.raises(ValueError):
         P.build_indicator_tile("vix", {}, requested=False, error="",
                                direction=compute_lamp_direction("m1b_m2_gap", None))
+
+
+# ════════════════════════════════════════════════════════════════
+# 2026-09-25 §1 Fail Loud：方向計算失敗 ⇒ 4 張卡顯示「計算失敗」，⛔ 不靜默消失
+# ════════════════════════════════════════════════════════════════
+from shared.lamp_direction_thresholds import (  # noqa: E402
+    LAMP_DIRECTION_ERROR_TEXT,
+    LAMP_DIRECTION_MISSING_REASON,
+)
+from src.compute.macro.lamp_direction import error_direction  # noqa: E402
+
+
+def _dir_text(tiles, key):
+    return dict(tiles[f"detail.{key}"].facts).get(LAMP_DIRECTION_FACT_KEY)
+
+
+def _patch_loaders(monkeypatch, *, chart=None, monthly=None):
+    from src.services import macro_v2_service as S
+
+    monkeypatch.setattr(S, "get_chart_series", chart or (lambda: {}))
+    monkeypatch.setattr(S, "get_monthly_history", monthly or (lambda: {}))
+
+
+def _boom(*_a, **_k):
+    raise RuntimeError("upstream exploded — long message that must not reach the card")
+
+
+class TestErrorFormat:
+    def test_error_text_constant(self):
+        assert LAMP_DIRECTION_ERROR_TEXT == "計算失敗"
+
+    @pytest.mark.parametrize("key", list(LAMP_DIRECTION_KEYS))
+    def test_error_text_has_no_arrow(self, key):
+        t = format_direction_text(error_direction(key, "RuntimeError"))
+        assert t == "計算失敗（RuntimeError）"
+        assert not any(c in t for c in "↗→↘▲▼🔴🟢🟡")
+
+    def test_error_without_reason(self):
+        assert format_direction_text(error_direction("margin", "")) == "計算失敗"
+
+    def test_error_is_distinct_from_nodata(self):
+        d = error_direction("ism_pmi", "KeyError")
+        assert d.direction == "error" and d.delta is None and d.as_of is None
+        assert format_direction_text(d) != LAMP_DIRECTION_NODATA_TEXT
+
+    def test_error_unknown_key_raises(self):
+        with pytest.raises(KeyError):
+            error_direction("vix", "RuntimeError")
+
+
+class TestLoaderFailLoud:
+    @pytest.mark.parametrize("which", ["both", "chart", "monthly"])
+    def test_loader_raises_its_keys_show_error(self, monkeypatch, capsys, which):
+        from src.ui.views import page_today as P
+
+        if which == "both":
+            _patch_loaders(monkeypatch, chart=_boom, monthly=_boom)
+            err_keys = {"margin", "bias_240", "ism_pmi"}
+        elif which == "chart":
+            _patch_loaders(monkeypatch, chart=_boom,
+                           monthly=lambda: {"ism_pmi": _monthly([50.0, 52.0])})
+            err_keys = {"margin", "bias_240"}
+        else:
+            _patch_loaders(monkeypatch, monthly=_boom,
+                           chart=lambda: {"margin": _daily([100.0] * 20 + [109.9]),
+                                          "bias_240": _daily([5.0] * 20 + [5.5])})
+            err_keys = {"ism_pmi"}
+        dirs = P._load_lamp_directions()
+        assert "變化方向計算失敗" in capsys.readouterr().out      # log 仍在
+        assert set(dirs) == set(LAMP_DIRECTION_KEYS)
+        assert {k for k, d in dirs.items() if d.direction == "error"} == err_keys
+        # m1b 不讀 L3 ⇒ 任何 loader 失敗都仍是「無資料」
+        assert dirs["m1b_m2_gap"].direction == "nodata"
+        for k in set(LAMP_DIRECTION_KEYS) - err_keys - {"m1b_m2_gap"}:
+            assert dirs[k].direction in ("up", "flat", "down")
+
+        from src.ui.views import page_today as P2
+        band_label, thr_text, _, l4_err = P2._load_l4_labels()
+        kw = dict(band_label=band_label, thr_text=thr_text, l4_error=l4_err)
+        with_ = _flat(P2.build_indicator_tiles(_live_readout(), directions=dirs, **kw))
+        without = _flat(P2.build_indicator_tiles(_live_readout(), **kw))
+        for key in err_keys:
+            txt = _dir_text(with_, key)
+            assert txt == "計算失敗（RuntimeError）"
+            assert "upstream exploded" not in txt
+            assert _ROW_SPAN in P2.v2_card_html(with_[f"detail.{key}"])
+        assert _dir_text(with_, "m1b_m2_gap") == LAMP_DIRECTION_NODATA_TEXT
+        others = [k for k in with_ if k.split(".", 1)[1] not in LAMP_DIRECTION_KEYS]
+        assert len(others) == 12
+        for k in others:
+            assert with_[k] == without[k]
+            assert P2.v2_card_html(with_[k]) == P2.v2_card_html(without[k])
+        # 燈號 / 等級不受影響
+        for k in with_:
+            a, b = with_[k], without[k]
+            assert (a.card, a.signal_text, a.signal_color) == (b.card, b.signal_text, b.signal_color)
+
+    def test_per_key_failure_isolated(self, monkeypatch, capsys):
+        from src.compute.macro import lamp_direction as L
+        from src.ui.views import page_today as P
+
+        pmi = _monthly([50.0, 52.0])
+        _patch_loaders(monkeypatch,
+                       chart=lambda: {"margin": _daily([100.0] * 20 + [109.9]),
+                                      "bias_240": _daily([5.0] * 20 + [5.5])},
+                       monthly=lambda: {"ism_pmi": pmi})
+        real = L.compute_lamp_direction
+
+        def flaky(key, pts):
+            if key == "bias_240":
+                raise ZeroDivisionError("x")
+            return real(key, pts)
+
+        monkeypatch.setattr(L, "compute_lamp_direction", flaky)
+        dirs = P._load_lamp_directions()
+        assert "bias_240" in capsys.readouterr().out
+        assert dirs["bias_240"].direction == "error"
+        assert format_direction_text(dirs["bias_240"]) == "計算失敗（ZeroDivisionError）"
+        assert dirs["margin"].direction == "up"
+        assert dirs["ism_pmi"].direction == "up"
+        assert dirs["m1b_m2_gap"].direction == "nodata"
+
+    def test_l2_import_failure_still_shows_error(self, monkeypatch, capsys):
+        import builtins
+
+        from src.ui.views import page_today as P
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *a, **k):
+            if name == "src.compute.macro.lamp_direction":
+                raise ImportError("gone")
+            return real_import(name, *a, **k)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        dirs = P._load_lamp_directions()
+        monkeypatch.setattr(builtins, "__import__", real_import)
+        assert dirs == {}
+        assert "L2 載入失敗" in capsys.readouterr().out
+        band_label, thr_text, _, l4_err = P._load_l4_labels()
+        tiles = _flat(P.build_indicator_tiles(_live_readout(), band_label=band_label,
+                                              thr_text=thr_text, l4_error=l4_err,
+                                              directions=dirs))
+        for key in LAMP_DIRECTION_KEYS:
+            assert _dir_text(tiles, key) == f"計算失敗（{LAMP_DIRECTION_MISSING_REASON}）"
+
+
+class TestMissingKey:
+    def test_missing_one_key_shows_error_not_dropped(self, capsys):
+        from src.ui.views import page_today as P
+
+        band_label, thr_text, _, l4_err = P._load_l4_labels()
+        dirs = {k: v for k, v in _directions().items() if k != "ism_pmi"}
+        tiles = _flat(P.build_indicator_tiles(_live_readout(), band_label=band_label,
+                                              thr_text=thr_text, l4_error=l4_err,
+                                              directions=dirs))
+        assert "ism_pmi" in capsys.readouterr().out
+        assert _dir_text(tiles, "ism_pmi") == "計算失敗（未回傳）"
+        assert _dir_text(tiles, "margin").startswith("↗ 上升")
+        assert _dir_text(tiles, "m1b_m2_gap") == "無資料"
+
+    def test_none_value_treated_as_missing(self, capsys):
+        from src.ui.views import page_today as P
+
+        band_label, thr_text, _, l4_err = P._load_l4_labels()
+        dirs = dict(_directions(), margin=None)
+        tiles = _flat(P.build_indicator_tiles(_live_readout(), band_label=band_label,
+                                              thr_text=thr_text, l4_error=l4_err,
+                                              directions=dirs))
+        assert "margin" in capsys.readouterr().out
+        assert _dir_text(tiles, "margin") == "計算失敗（未回傳）"
+        assert _ROW_SPAN in P.v2_card_html(tiles["detail.margin"])
+        assert _dir_text(tiles, "ism_pmi").startswith("↘ 下降")
+
+    def test_none_directions_still_no_row(self):
+        # directions=None ＝ 呼叫端沒要這一列 ⇒ 仍然不出（既有行為）
+        tiles = _build(_live_readout(), False)
+        for key in LAMP_DIRECTION_KEYS:
+            assert _dir_text(tiles, key) is None
+
+
+@pytest.mark.parametrize("factory", [_cold_readout, _failed_readout],
+                         ids=["cold_start", "failed"])
+@pytest.mark.parametrize("dirs", [
+    {k: error_direction(k, "RuntimeError") for k in LAMP_DIRECTION_KEYS},
+    {},
+], ids=["all_error", "all_missing"])
+def test_not_live_never_shows_error_row(factory, dirs):
+    from src.ui.views import page_today as P
+
+    band_label, thr_text, _, l4_err = P._load_l4_labels()
+    kw = dict(band_label=band_label, thr_text=thr_text, l4_error=l4_err)
+    with_ = _flat(P.build_indicator_tiles(factory(), directions=dirs, **kw))
+    without = _flat(P.build_indicator_tiles(factory(), **kw))
+    for k, t in with_.items():
+        assert all(f[0] != LAMP_DIRECTION_FACT_KEY for f in t.facts)
+        assert t == without[k]
+        assert P.v2_card_html(t) == P.v2_card_html(without[k])

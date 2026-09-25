@@ -1,7 +1,7 @@
 """shared/lamp_direction_thresholds.py — 「變化方向」列的 L0 SSOT（2026-09-24）。
 
 用途：v2「🚦 今天」→「指標明細（五桶逐段）」的燈卡，在判決行下方多一列
-「變化方向」（↗ 上升 / → 持平 / ↘ 下降 / 無資料）。**只**有下列 4 盞燈有這一列，
+「變化方向」（↗ 上升 / → 持平 / ↘ 下降 / 無資料 / 計算失敗）。**只**有下列 4 盞燈有這一列，
 其餘 12 盞燈一個字都不變。
 
 本檔只放常數（§8.2 L0：零 I/O、零 L1+ 依賴）。計算在
@@ -82,6 +82,18 @@ LAMP_DIRECTION_FACT_KEY: str = "變化方向"
 
 #: 無資料時的完整文字（⛔ 不帶箭頭）。
 LAMP_DIRECTION_NODATA_TEXT: str = "無資料"
+
+#: 方向**計算本身失敗**（L3 取數 / L2 計算丟例外、或結果沒回傳）時的文字（⛔ 不帶箭頭）。
+#: 與「無資料」刻意分開（2026-09-25，客戶核准）：「無資料」＝序列不夠 / 不可信，
+#: 「計算失敗」＝程式這一輪沒跑完 —— 兩者原因不同，畫面不得混為一談（§1）。
+#: 修前這種情形是整列**靜默消失**（`except` → `return {}`）。
+LAMP_DIRECTION_ERROR_TEXT: str = "計算失敗"
+
+#: 帶簡短原因的版本（原因只放例外型別名，⛔ 不放 stack trace / 訊息全文）。
+LAMP_DIRECTION_ERROR_TEMPLATE: str = LAMP_DIRECTION_ERROR_TEXT + "（{reason}）"
+
+#: directions mapping 裡**缺了**某一盞燈的 key 時用的原因（判為計算失敗，不判無資料）。
+LAMP_DIRECTION_MISSING_REASON: str = "未回傳"
 
 #: 方向 → (箭頭, 中文)。⛔ 只用 ↗ → ↘；⛔ 不用 ▲▼、⛔ 不上紅綠色。
 LAMP_DIRECTION_LABELS: dict[str, tuple[str, str]] = {
