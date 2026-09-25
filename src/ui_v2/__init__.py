@@ -23,6 +23,10 @@
   `page_today.py`  「🚦 今天」頁版面與狀態契約 —— SSOT `UI_PAGE_TODAY.md`
   `markup.py`      純字串（CSS 文字 ＋ HTML 文字）—— 把上面三層組成標記，⛔ 不碰 `st.*`
 
+  `page_find.py`   「🔍 找標的」頁的版面契約（只登記真的畫成卡的 4 個 block）—— SSOT `UI_PAGE_FIND.md`
+  `blocks.py`      block 登記處：block → 所屬頁 → 該頁 `tier_for_block`（`markup.card_html` 經此查階）
+  📌 2026-09-25 新增上兩行（客戶裁示 1）；上面「六個模組」的計數自本日起為八個，舊字樣照留。
+
 **渲染層（`src/ui_v2/` 裡唯一 import streamlit 的檔）**
   `render.py`      把 `markup` 的字串吐進 `st.markdown`；主 CTA 用真 widget
 
@@ -42,4 +46,4 @@
    本套件只存**常數名字串**（`"UI_LIVE"` …），⛔ 不在此長出第二份（CLAUDE.md §2.1）。
 """
 
-__all__ = ["tokens", "components", "page_today", "markup"]
+__all__ = ["tokens", "components", "page_today", "page_find", "blocks", "markup"]

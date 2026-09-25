@@ -61,7 +61,7 @@ import re
 from html import escape
 from typing import Final, Iterable, Mapping, Sequence
 
-from src.ui_v2 import components, page_today, tokens
+from src.ui_v2 import blocks, components, page_today, tokens
 
 # ══════════════════════════════════════════════════════════════════
 # 0. 取自契約層的清單（⛔ 一律不手抄、⛔ 不寫死）
@@ -86,6 +86,16 @@ _TIERS_ON_PAGE: Final[tuple[str, ...]] = tuple(
     t for t in components.CARD_TIERS
     if any(page_today.tier_for_block(b) == t for b in page_today.BLOCK_COLS)
 )
+
+# 🔴 `card_html()` 經 `blocks` 登記處也畫得出別頁的 block；但卡片 CSS（`.blk-t*`）只產
+#    `_TIERS_ON_PAGE` 那幾階 ⇒ 別頁若用到一階本表沒有的，卡會**沒有樣式而且不報錯**。
+#    import 時就驗（§1）；⛔ 不得為了過關把別頁的階偷偷加進 `_TIERS_ON_PAGE`
+#    （那會改掉「🚦 今天」的樣式表輸出）。
+_MISSING_TIER_CSS = sorted(
+    {blocks.tier_for_block(b) for b in blocks.BLOCK_PAGE} - set(_TIERS_ON_PAGE))
+if _MISSING_TIER_CSS:
+    raise RuntimeError(
+        f"登記的 block 用到了樣式表沒有產的密度階 {_MISSING_TIER_CSS}：卡會畫成沒有樣式的裸 HTML")
 
 #: 真的有層級網格的那幾階（只產這些 `.lyr-t*`，同上不產用不到的）。
 _TIERS_WITH_LAYER_GRID: Final[tuple[str, ...]] = tuple(
@@ -597,7 +607,7 @@ def fold_dom_id(key: str) -> str:
     return FOLD_ID_PREFIX + slug
 
 
-def _fact_value_cell(value: object) -> str:
+def _fact_value_cell(value: object, truncate: bool = True) -> str:
     """明細列**值**那一格：長值截斷顯示，完整原文進 `title=`。
 
     ⚠️ `title` 走 `_esc`（`quote=True`）⇒ 引號也會被轉義，⛔ 不會把屬性提前收掉。
@@ -605,21 +615,23 @@ def _fact_value_cell(value: object) -> str:
     只會讓「有 hover ＝ 還有沒顯示完的字」這個訊號失效。
     """
     text = str(value)
-    if len(text) <= FACT_VALUE_MAX_CHARS:
+    # `truncate=False`（2026-09-25，只給摺疊區用）：整段原文**直接顯示**，不截、不掛 hover ——
+    # 摺疊區就是「完整原文」的落點，手機沒有 hover，截在這裡等於又把字藏回 hover。
+    if not truncate or len(text) <= FACT_VALUE_MAX_CHARS:
         return f'<span class="blk-fact-v">{_esc(text)}</span>'
     shown = text[:FACT_VALUE_MAX_CHARS] + FACT_VALUE_ELLIPSIS
     return (f'<span class="blk-fact-v" title="{_esc(text)}">'
             f'{_esc(shown)}</span>')
 
 
-def _facts_block(rows: Sequence[tuple[object, object]]) -> str:
+def _facts_block(rows: Sequence[tuple[object, object]], truncate: bool = True) -> str:
     """`.blk-facts` 一段（卡面與摺疊區共用同一支 ⇒ 兩邊的列逐 byte 同構）。"""
     out = ['<div class="blk-facts">']
     for key, val in rows:
         out.append(
             '<div class="blk-fact">'
             f'<span class="blk-fact-k">{_esc(key)}</span>'
-            + _fact_value_cell(val)
+            + _fact_value_cell(val, truncate)
             + '</div>'
         )
     out.append('</div>')
@@ -637,10 +649,11 @@ def card_html(
     facts: Iterable[tuple[object, object]] = (),
     folded_facts: Iterable[tuple[object, object]] = (),
     fold_id: str | None = None,
+    fold_truncate: bool = True,
 ) -> str:
     """一張卡。
 
-    · 密度階由**它所在的層**決定（`page_today.tier_for_block`），⛔ 沒有手選的入口。
+    · 密度階由**它所在的層**決定（`blocks.tier_for_block` → 該頁的 `tier_for_block`），⛔ 沒有手選的入口。
     · 大字區（觀測值）與判決區（燈號等級）一律以 `page_today.card_value_text` /
       `card_level_text` 為準 ⇒ 灰態紅態**留白**（⛔ 無 `0`、⛔ 無上一輪殘值）、
       `degraded` **觀測照出、判決留白**。⛔ 本檔不另立第二把尺。
@@ -652,11 +665,16 @@ def card_html(
       **空（預設）⇒ 整段不渲染**，輸出與加這個參數之前逐 byte 相同。
     · `fold_id`：給了 `folded_facts` 就**必填**（通常是 `fold_dom_id(card.key)`），
       只准 `[a-z0-9-]`。⛔ 不自己亂生 —— 亂數 id 每輪 rerun 都變，展開狀態會被重設。
+    · `fold_truncate`（2026-09-25，客戶裁示「完整原文進摺疊、⛔ 不得只剩 hover」）：
+      `False` ⇒ 摺疊區的值**整段顯示**、不截斷。預設 `True` ＝ 加這個參數之前的行為
+      （「🚦 今天」的輸出逐 byte 不變）。⛔ 與密度階無關，不是覆寫入口。
     """
-    tier = page_today.tier_for_block(block)   # 未知 block → KeyError（⛔ 不猜一階）
-    if badge_n in page_today.BADGES_NOT_ON_PAGE:
+    # 2026-09-25 客戶裁示 1：經 `blocks` 登記處查 —— block 屬哪一頁就由那一頁的契約回答
+    # （「🚦 今天」仍是 `page_today.tier_for_block`，⛔ 同一套機制、不是第二套）。
+    tier = blocks.tier_for_block(block)   # 未知 block → KeyError（⛔ 不猜一階）
+    if badge_n in blocks.badges_not_on_page(block):
         raise ValueError(
-            f"#{badge_n} 不畫在這一頁（page_today.BADGES_NOT_ON_PAGE）："
+            f"#{badge_n} 不畫在這一頁（該頁契約的 BADGES_NOT_ON_PAGE）："
             "⛔ 不得為了畫得出來就把它併進別的徽章 —— 要畫請先改規格。"
         )
     badge = badge_html(badge_n, size=str(components.CARD_TIERS[tier]["badge_size"]))
@@ -691,7 +709,7 @@ def card_html(
             f'<input type="checkbox" class="blk-fold-i" id="{fold_id}">'
             f'<label class="blk-fold-s" for="{fold_id}">{_esc(FOLD_SUMMARY_TEXT)}</label>'
             '<div class="blk-fold-b">'
-            + _facts_block(folded)
+            + _facts_block(folded, fold_truncate)
             + '</div></div>'
         )
     parts.append('</div>')
