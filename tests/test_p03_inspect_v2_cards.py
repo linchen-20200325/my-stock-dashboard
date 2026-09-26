@@ -789,8 +789,9 @@ _MUST_KEEP: dict[str, dict[str, tuple[str, ...]]] = {
                          _WHERE: ("新上市或剛換季", "若持續如此", _DH, "備援鏈是否可用")},
     "VALUATION_FAILED_NOW": {_WHY: ("拋出例外",), _WHERE: ("代碼與網路／proxy", _DH)},
     # 「為什麼」隨分支不同（L2 的 msg）→ 逐分支由 `test_valuation_why_follows_the_branch_it_came_from` 驗。
-    "VALUATION_EMPTY_NOW": {_WHERE: ("若是暫時抓不到", _LOAD, "重跑一次",
-                                     "若這一檔近 5 年", "沒有配息", "重按幾次都一樣")},
+    # Q5-r1（2026-09-26）：原文刪掉「若是暫時抓不到，按…重跑一次」那一支（快取期內不成立）
+    # → 必留片語同步只刪那一支；剩下那一支的條件（近 5 年沒有配息）照留。
+    "VALUATION_EMPTY_NOW": {_WHERE: ("若這一檔近 5 年", "沒有配息", "重按幾次都一樣")},
     "CHIPS_FAILED_NOW": {_WHY: ("L3 近 20 日籌碼",), _WHERE: ("代碼與網路／proxy", _DH)},
     "CHIPS_EMPTY_NOW": {_WHY: ("判不出籌碼", "（上游給的原因：", "這是資料缺漏，不是這一檔籌碼不好"),
                         _WHERE: (_LOAD, "重跑一次",

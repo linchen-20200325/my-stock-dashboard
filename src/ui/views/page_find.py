@@ -637,17 +637,32 @@ SNAPSHOT_WAIT_WHERE: str = "要等排程補抓，重按不會改變它"
 
 #: 「選股中止」紅卡「去哪補」的**第一句** —— 2026-09-26 批次 9 自 `SCREEN_ABORTED_WHERE`
 #: 開頭**上提**（字面一字未改；句末的「。」留在 `SCREEN_ABORTED_WHERE` 裡，本常數不帶）。
-#: 它是那一整句裡**對每一種中止都為真**的部分；其後兩個子句點名 FinMind 額度與
-#: MOPS／Goodinfo 備援鏈，只對走 FinMind 的輸入成立（見 `FACTOR_FAILED_WHERE`）。
+#: 它是那一整句裡**對每一種中止都為真**的部分；其後的子句點名 FinMind 額度，
+#: 只對走 FinMind 的輸入成立（見 `FACTOR_FAILED_WHERE`）。
+#: 📌 B9 ⑩ 追加（獨立 QA 非阻擋項，總管裁定併入）：排名例外卡與存活池讀取例外卡（非快照缺）
+#:    的 where 也改指本句 —— 見 `build_screen_result_card` 那兩個分支。
 SCREEN_NO_PARTIAL_WHERE: str = "本站不以殘缺資料湊出名單"
 
-#: 「選股中止」紅卡的「去哪補」（L3 選股編排拋例外／存活池讀取例外／缺貨掃描輸入沒拿到）。
+#: 「選股中止」紅卡的「去哪補」—— ~~（L3 選股編排拋例外／存活池讀取例外／缺貨掃描輸入沒拿到）~~
+#: **B9 ⑩ 起只剩缺貨掃描輸入沒拿到那一種**（`FACTOR_FAILED_WHERE["shortage"]`；有意識的變更，
+#: ⛔ 不是漏刪）。排名例外與存活池讀取例外改指 `SCREEN_NO_PARTIAL_WHERE`：獨立 QA 實測那兩條路
+#: 都不碰 FinMind（存活池只讀本地季快照 parquet ＋ L2 純函式；排名時 `auto_fetch=False`），
+#: 本句剩下的「若是 FinMind 額度用罄…」對它們不成立。
 #: 2026-09-26 批次 9 自 `build_screen_result_card` 函式體內的 `_aborted_where` **上提**
 #: （字面一字未改），讓 `FACTOR_FAILED_WHERE` 讀同一份（⛔ 不手抄第二份）。
+#: 📌 B9 ⑩（獨立 QA 核實，有意識的刪除，⛔ 不是漏刪）：原句尾的
+#:    「；其餘請到「📖 憑什麼 › 資料體檢」看 MOPS／Goodinfo 備援鏈是否可用」**只刪不改**。
+#:    它對原本用到這一句的三張卡（缺貨因子紅卡／排名例外卡／存活池讀取例外卡）**都不成立**
+#:    ——（以下皆限**選股網這幾條取數路徑**與**資料體檢 `@monitored` 牆**的範圍，獨立 QA 核實）：
+#:    缺貨掃描的季財報只走 FinMind、月營收的備援是 TWSE／TPEx OpenAPI；存活池讀的是 cron
+#:    （`scripts/update_fundamentals_snapshot.py` → `mops_bulk_fetcher`）事先抓好的 MOPS 季快照
+#:    parquet，本頁讀取時不連 MOPS、也沒有 MOPS／Goodinfo 備援；這幾條路徑上沒有 Goodinfo
+#:    （repo 他處另有，例如 `fetch_margin_balance` 備援鏈與 `tw_stock_data_fetcher.fetch_goodinfo_financials`，
+#:    都不在選股網路徑上）；資料體檢那面 `@monitored` 牆上也沒有任何一支選股網 fetcher
+#:    —— 指過去等於指錯地方。刪掉後剩下的兩句原文一字未動。
+#:    ⚠️ 「額度每日 00:00 重置」與 repo 其他處的說法有出入 —— **本批不動**，另案處理。
 SCREEN_ABORTED_WHERE: str = (f"{SCREEN_NO_PARTIAL_WHERE}。若是 FinMind 額度用罄，"
-                             "額度每日 00:00 重置；其餘請到"
-                             f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
-                             "看 MOPS／Goodinfo 備援鏈是否可用")
+                             "額度每日 00:00 重置")
 
 #: 勾選因子的輸入這一輪沒拿到 → 「選股中止」紅卡的「去哪補」**依因子分**
 #: （2026-09-26 批次 9，#701 獨立 QA ⑥）。⛔ 一句都不新寫，只指向既有句：
@@ -657,7 +672,8 @@ SCREEN_ABORTED_WHERE: str = (f"{SCREEN_NO_PARTIAL_WHERE}。若是 FinMind 額度
 #:                  兩種月營收抓不到都再退 TWSE／TPEx OpenAPI。
 #:                  ⚠️ 但「MOPS／Goodinfo 備援鏈」那段對缺貨**也不成立**（實測：季財報只走 FinMind、
 #:                  月營收的備援是 TWSE／TPEx OpenAPI），且資料體檢不監控 MOPS／Goodinfo ——
-#:                  已上報，待另案（刪那段屬同一種「只刪」，但不在本批授權的三個因子裡）；
+#:                  已上報，待另案（刪那段屬同一種「只刪」，但不在本批授權的三個因子裡）。
+#:                  📌 B9 ⑩ 已在 `SCREEN_ABORTED_WHERE` 本身刪掉那一段（見該常數），此項結案；
 #:   · `trend`    → `SCREEN_NO_PARTIAL_WHERE`。⚠️ **不是** `SNAPSHOT_WAIT_WHERE`（B9 獨立 QA 阻擋項，
 #:                  有意識的更正，⛔ 不是漏改）：快照**整個**缺時，存活池讀取例外那張卡會先出現
 #:                  （`_surv_failed` 排在前面）；跨季轉強那張卡真正出得來時，多半是**舊季** parquet
@@ -767,8 +783,14 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = {
          # `SCREEN_NO_PARTIAL_WHERE` 原句（同上，整句就是摘錄）。⚠️ 它是 `SCREEN_ABORTED_WHERE`
          # 的**開頭** —— 所以 `_v2_pick_short()` 對「無 GAP 的候選」要求**全等**，否則
          # 那一整句的卡面會被它吃掉、不再是「FinMind 額度每日…」那一格。
+         # B9 ⑩：`SCREEN_ABORTED_WHERE` 刪掉「其餘…資料體檢…備援鏈」那一段 → 本格短句跟著
+         # **只刪**「；其餘看資料體檢」（原文已沒有那一段，⛔ 卡面不得還指過去）。
+         # B9 ⑩ 追加：排名例外卡、存活池讀取例外卡（非快照缺）改指 `SCREEN_NO_PARTIAL_WHERE`
+         # → 命中第二個候選（全等）；最後這一格只剩缺貨因子紅卡會走到。
+         # B9 ⑫：快照**整個**缺（L1 FileNotFoundError）的存活池讀取例外 → where 同樣是
+         # `SNAPSHOT_WAIT_WHERE`，命中第一個候選（全等）。
          (SNAPSHOT_WAIT_WHERE, SCREEN_NO_PARTIAL_WHERE,
-          "FinMind 額度每日 00:00 重置；其餘看資料體檢")),
+          "FinMind 額度每日 00:00 重置")),
     ("find.screen_result", SCREEN_DRIFT_NOW):
         ("讀不出結果有幾檔", "回傳形態與約定不符，重跑不會好", NO_EXIT_MARKER),
     ("find.screen_result", SCREEN_EMPTY_NOW):
@@ -922,6 +944,10 @@ class ScreenResult:
     #: （L3 strict 拋出、帶 `empty_survivor_pool` 屬性；最常見是去年同季快照缺）。
     #: 它與讀取例外**處置不同**：要等排程補抓快照，重按不會變 —— 卡上的「去哪補」因此不同。
     survivors_pool_empty: bool = False
+    #: B9 ⑫（2026-09-26）：`survivors_error` 是不是「季快照**讀不到**」那一種
+    #: （L1 契約 `FileNotFoundError`，L3 strict 在原例外上加 `snapshot_missing` 屬性）。
+    #: 處置與空池相同（要等排程補抓，重按不會變）；與空池**分開存**，因為它不是「池子是空的」。
+    survivors_snapshot_missing: bool = False
     factor_input_failed: tuple[str, ...] = ()
 
     @property
@@ -950,8 +976,8 @@ def _frame_rows(df: Any) -> int | None:
         return None
 
 
-def _load_survivors() -> tuple[Any, int | None, str, bool]:
-    """L3 存活池 → `(df, 檔數, 錯誤字串, 是否為空池)`。失敗 → `(None, None, repr(e), …)`。
+def _load_survivors() -> tuple[Any, int | None, str, bool, bool]:
+    """L3 存活池 → `(df, 檔數, 錯誤字串, 是否為空池, 是否季快照讀不到)`。失敗 → `(None, None, repr(e), …)`。
 
     §1：失敗時檔數回 `None` 而**不是 0** —— 「取不到」與「池子是空的」
     是兩件事，卡上會分別顯示「—」與「0 檔」。
@@ -960,16 +986,21 @@ def _load_survivors() -> tuple[Any, int | None, str, bool]:
     L3 以排名器自己的 note 原文拋出（「基本面存活池為空（季快照未就緒）。」），
     本頁照舊接住、走批次 1 那條紅卡。最常見的成因是**去年同季快照缺**
     → 三率三升全判不過 → 0 檔存活；不拋的話那個 0 會被畫成「選股已完成、0 檔」。
+
+    B9 ⑫（2026-09-26）：季快照**讀不到**（整個目錄缺 / latest.json 缺 / 最新季 parquet 全缺）
+    → L3 strict 在 L1 的 `FileNotFoundError` 上加 `snapshot_missing` 屬性（見 L3 docstring），
+    本頁**只讀那個屬性**（⛔ 不看例外型別名或訊息字面自己判）。
     """
     try:
         from src.services.fundamental_screener_service import (
             get_fundamental_survivors,
         )
         _df, _ = get_fundamental_survivors(strict=True)
-        return _df, _frame_rows(_df), "", False
+        return _df, _frame_rows(_df), "", False, False
     except Exception as _e:  # noqa: BLE001 — 轉成看得見的 facts 列，不吞
         print(f"[views/page_find] 存活池不可用：{_e!r}")
-        return None, None, repr(_e), bool(getattr(_e, "empty_survivor_pool", False))
+        return (None, None, repr(_e), bool(getattr(_e, "empty_survivor_pool", False)),
+                bool(getattr(_e, "snapshot_missing", False)))
 
 
 def _scan_empty_note(meta: Any) -> str:
@@ -1167,7 +1198,7 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
     _factors = list(req.factors)
     _aux: list[tuple[str, str]] = []
 
-    _surv_df, _surv_n, _surv_err, _surv_empty = _load_survivors()
+    _surv_df, _surv_n, _surv_err, _surv_empty, _surv_snap_missing = _load_survivors()
     if _surv_err:
         _aux.append(("存活池", _error_why(SRC_SURVIVORS, _surv_err)))
     _pe_map, _name_map, _pe_err, _pe_failed_markets = _load_pe_name_maps()
@@ -1229,6 +1260,7 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
                             pe_n=_map_len(_pe_map), name_n=_map_len(_name_map),
                             aux_errors=tuple(_aux), survivors_error=_surv_err,
                             survivors_pool_empty=_surv_empty,
+                            survivors_snapshot_missing=_surv_snap_missing,
                             factor_input_failed=_factor_failed)
 
     _hits, _hits_err = _summarize_hits(
@@ -1242,7 +1274,8 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
         rows=_frame_rows(_df), survivors_n=_surv_n,
         pe_n=_map_len(_pe_map), name_n=_map_len(_name_map),
         hits=_hits, aux_errors=tuple(_aux), survivors_error=_surv_err,
-        survivors_pool_empty=_surv_empty, factor_input_failed=_factor_failed)
+        survivors_pool_empty=_surv_empty, survivors_snapshot_missing=_surv_snap_missing,
+        factor_input_failed=_factor_failed)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1592,22 +1625,31 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
         _note = Note(now=SCREEN_IDLE_NOW, why=SCREEN_IDLE_WHY,
                      where=SCREEN_IDLE_WHERE)
     elif _state == UI_FAILED and result.error:
+        # B9 ⑩ 追加（獨立 QA 非阻擋項，總管裁定；有意識的變更，⛔ 不是漏改）：where 原為
+        # `SCREEN_ABORTED_WHERE`。排名時 `auto_fetch=False`、三個掃描由本頁另發 ⇒ 這一步
+        # 不碰 FinMind，「若是 FinMind 額度用罄…」對這張卡不成立 → 改指只剩第一句的既有常數
+        # （同 ⑥ 對估值／RS／跨季轉強的作法；⛔ 不新寫）。原因照舊在「為什麼」（例外原文）。
         _note = Note(
             now=SCREEN_ABORTED_NOW,
             why=_error_why(SRC_SCREEN, result.error),
-            where=SCREEN_ABORTED_WHERE)
+            where=SCREEN_NO_PARTIAL_WHERE)
     elif _state == UI_FAILED and _surv_failed:
         # 存活池取不到 → 這一輪的 0 檔**不是**「選股已完成、0 檔」。
         # 沿用中止那一則的 now / where（既有字句），出處換成真正出事的那一支
         # （`SRC_SURVIVORS`，同上方「存活池」那一列 facts 的講法）。
         # 批次 5：存活池**為空**（季快照未就緒）那一種 → 去哪補改用 `SNAPSHOT_WAIT_WHERE`
-        # （0 檔灰卡原文的那一句）。`SCREEN_ABORTED_WHERE` 講 FinMind 額度與 MOPS／Goodinfo 備援鏈，
-        # 跟「快照要等排程補抓」無關，照舊只留給讀取例外那一種。
+        # （0 檔灰卡原文的那一句）。`SCREEN_ABORTED_WHERE` 講 FinMind 額度，
+        # 跟「快照要等排程補抓」無關，~~照舊只留給其餘讀取例外~~（B9 ⑩ 追加起其餘讀取例外也不用它，見下）。
+        # B9 ⑫：季快照**讀不到**（`survivors_snapshot_missing`，L1 `FileNotFoundError`）同樣
+        # 指 `SNAPSHOT_WAIT_WHERE` —— 修前它落進 `SCREEN_ABORTED_WHERE`，叫人去看 FinMind 額度。
+        # B9 ⑩ 追加：其餘讀取例外的 where 原為 `SCREEN_ABORTED_WHERE`，改指 `SCREEN_NO_PARTIAL_WHERE`
+        # —— 存活池只讀本地季快照 parquet ＋ L2 純函式，不碰 FinMind（獨立 QA 實測）。
         _note = Note(
             now=SCREEN_ABORTED_NOW,
             why=_error_why(SRC_SURVIVORS, result.survivors_error),
             where=(SNAPSHOT_WAIT_WHERE if result.survivors_pool_empty
-                   else SCREEN_ABORTED_WHERE))
+                   or result.survivors_snapshot_missing
+                   else SCREEN_NO_PARTIAL_WHERE))
     elif _state == UI_FAILED and _input_failed:
         # 批次 5：勾選因子的輸入這一輪沒拿到（見上）。now 沿用中止那一則（既有字句）；
         # why ＝ 出事的因子名稱（`FACTOR_INPUT_LABELS`，同 facts 那幾列的標籤）＋ L0 既有那一句
@@ -1616,6 +1658,7 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
         # 指向既有句（`factor_failed_where()`）—— 有意識的變更，⛔ 不是漏改。舊作法的理由
         # （「中止」就用中止那一句，不另寫）仍然成立、新作法也沒有新寫任何一句；被權衡掉的是
         # 那一句點名 FinMind 額度／MOPS–Goodinfo 備援鏈，對估值／RS／跨季轉強是指錯方向。
+        # （B9 ⑩ 起 `SCREEN_ABORTED_WHERE` 已刪掉 MOPS–Goodinfo 那一段；FinMind 額度那句仍指錯方向。）
         _note = Note(
             now=SCREEN_ABORTED_NOW,
             why=f"{'、'.join(_failed_labels)}：{FACTOR_MISS_WHY}",

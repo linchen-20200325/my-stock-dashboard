@@ -119,7 +119,13 @@ def compute_lamp_direction(
         raise ValueError(f"{key}：lookback_rows 必須 ≥ 1，收到 {n}")
 
     if not points:
-        return _nodata(cfg, "沒有歷史序列")
+        # C4（2026-09-26，`reason` 用字更正 —— 它**存在 `LampDirection` 物件上、不進 log**、
+        # 畫面也不顯示（nodata 一律只顯示「無資料」）；非使用者可見）：原寫「沒有歷史序列」不精確 ——
+        # L2 只看得到「沒收到點」；序列可能**存在但被 caller 拒收**（例：page_today
+        # `_session_vix_series` 在長度不一 / 末值 ≠ 燈值時回 None，並在那一行 log 寫明原因）。
+        # L2 分不出兩者 ⇒ 兩種都講、不猜（§1）。
+        return _nodata(cfg, "沒有收到序列（None 或 0 點）—— 上游沒給，"
+                            "或 caller 依自身檢查拒收（拒收原因見 caller 那一行 log）")
     try:
         rows = [(str(d), v) for d, v in points]
     except (TypeError, ValueError):

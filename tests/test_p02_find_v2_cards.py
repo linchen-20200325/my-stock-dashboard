@@ -363,8 +363,12 @@ def test_fold_wrap_css_is_emitted_with_the_contract_sheet(monkeypatch):
 
 
 def test_aborted_short_phrase_keeps_the_original_reset_wording():
-    """短句⛔ 不得改寫原文的事實（原文「額度每日 00:00 重置」，曾被寫成「隔日重置」）。"""
-    card, _ = _screen(error='RuntimeError("x")')
+    """短句⛔ 不得改寫原文的事實（原文「額度每日 00:00 重置」，曾被寫成「隔日重置」）。
+
+    B9 ⑩ 追加（2026-09-26）：排名例外卡的 where 改指 `SCREEN_NO_PARTIAL_WHERE`（不碰 FinMind），
+    這一句只剩缺貨因子紅卡在用 → 本條改用那一張（守的事實不變）。"""
+    card, _ = _screen(factors=("shortage",), df=_Frame(0), rows=0, survivors_n=3,
+                      factor_input_failed=("shortage",))
     assert "每日 00:00 重置" in card.note.where
     assert "每日 00:00 重置" in P.v2_short_rows(card)[0][2][1]
 

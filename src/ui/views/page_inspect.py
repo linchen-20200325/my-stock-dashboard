@@ -271,7 +271,6 @@ from shared import ia_nav
 from shared.station_specs import MISS_NOT_APPLICABLE, MISS_TEXT
 from shared.ui_state import (
     NO_VALUE_STATES,
-    UI_EMPTY,
     UI_FAILED,
     UI_IDLE,
     UI_LIVE,
@@ -511,9 +510,14 @@ UNKNOWN_WHERE: str = (
 #: 重按有機會好。舊句被權衡掉的只有「沒有出口」這半句，
 #: 「不拿缺值湊結論」那半句原封不動搬進了下面的新文案。
 
-#: 357 **算不出來**時的「去哪補」（**有出口**：重按 / 換代碼 / 等資料補齊）。
+#: 357 **算不出來**時的「去哪補」（**有出口**：改看其他格 / 等資料補齊；Q5-r1 起不再叫人重按，見下）。
+#: 📌 Q5-r1（2026-09-26，有意識的刪除，⛔ 不是漏刪）：原句開頭的
+#:    「若是暫時抓不到，{按「載入」}重跑一次；」**只刪不改**（在「；」句界截斷，同 S5-F／Q2 作法）。
+#:    這張灰卡走得到時，上游多半是**回傳值**而不是例外：價格那一腿的「查無資料」被
+#:    `@st.cache_data` 快取 1 小時、`fetch_dividend_data` 快取 30 分 ⇒ 快取期內按重跑，
+#:    卡照樣是灰的 —— 那半句在這裡是**錯的指引**（`CLAUDE.md §-2` 記載的同一個坑）。
+#:    刪掉後剩下的句子原文一字未動（「若這一檔近 5 年真的沒有配息…重按幾次都一樣」仍為真）。
 VALUATION_WHERE: str = (
-    f"若是暫時抓不到，{press(ACTION_LOAD_INSPECT_LABEL)}重跑一次；"
     "若這一檔近 5 年真的沒有配息，357 這套殖利率法則**本來就不適用它**，"
     "重按幾次都一樣 —— 那不是故障，改看健康度與獲利能力那幾格。"
     "配息資料持續抓不到時，到"
@@ -2563,8 +2567,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
             _V2LeadFirstClause(VALUATION_WHY_TAIL)),
            # QA F2：兩個分支**各自帶著自己的條件**（暫時抓不到 → 重跑；近 5 年真的沒配息
            # → 重按幾次都一樣）。⛔ 不再只留「那不是故障」而把它的條件略掉。
-           "若是暫時抓不到，" + _V2_PRESS_LOAD + "重跑一次" + V2_EXCERPT_GAP
-           + "若這一檔近 5 年" + V2_EXCERPT_GAP + "沒有配息" + V2_EXCERPT_GAP
+           # Q5-r1：原文刪掉「暫時抓不到 → 重跑」那一支（快取期內不成立，見 `VALUATION_WHERE`）
+           # → 短句跟著**只刪**那一段；剩下那一支仍帶著自己的條件。
+           "若這一檔近 5 年" + V2_EXCERPT_GAP + "沒有配息" + V2_EXCERPT_GAP
            + "重按幾次都一樣")),
        _v2_rows_for("inspect.stock.chips", CHIPS_FAILED_NOW, (
            None, (_v2_raised(SRC_CHIPS), _v2_raised(SRC_CHIPS, "回報失敗")), _V2_CHECK_NET)),

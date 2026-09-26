@@ -950,6 +950,9 @@ class TestHoverTitleNewline:
 # ⚠️ **刻意不釘 L2 的 reason 字串**：現況被拒時 reason 寫「沒有歷史序列」，
 #    但序列其實存在、只是被拒 —— 那句不精確（已上報，本批不改 src）。
 #    釘它等於把不精確的措辭鎖死，故只釘使用者看得到的「無資料」。
+# 📌 C4（2026-09-26）：上述 L2 reason（存在物件上、不進 log）已更正為「沒有收到序列…或 caller
+#    依自身檢查拒收」；更正後的 reason 與 caller 那一行拒收 print 由下方
+#    `TestC4RejectedVixLogIsPrecise` 釘住。
 # ════════════════════════════════════════════════════════════════
 def _rejected_vix_blocks():
     base = [20.0] * 40 + [26.0]                  # 若被接受 ⇒ ↗ 上升 +6.0 點
@@ -1006,6 +1009,41 @@ class TestRejectedVixSeriesShowsNoDataOnCard:
         assert tiles["detail.vix"].card.state == clean["detail.vix"].card.state
         assert tiles["detail.vix"].signal_text == clean["detail.vix"].signal_text
         assert strip(tiles["detail.vix"]) == strip(clean["detail.vix"])
+
+
+# ════════════════════════════════════════════════════════════════
+# C4（2026-09-26）：vix 序列被拒時，L2 的 `reason` 據實描述（`reason` 存在 `LampDirection` 物件上、
+# **不進 log**、畫面不顯示；非使用者可見）。被拒的**具體原因**由 caller（page_today
+# `_session_vix_series`）那一行 print（stdout）寫明；L2 只看得到「沒收到點」，reason 據實講
+# 「上游沒給，或 caller 拒收」—— ⛔ 不再說「沒有歷史序列」（序列其實存在）。
+# 使用者看得到的「無資料」列不變（上一類已釘）。
+# ════════════════════════════════════════════════════════════════
+_C4_REJECT_LOG = {
+    "dates_shorter": "dates 40 筆 ≠ values 41 筆",
+    "values_shorter": "dates 41 筆 ≠ values 40 筆",
+    "end_value_not_lamp_value": "序列末值 26.0 ≠ 燈值 31.0",
+    "no_lamp_value": "序列末值 26.0 ≠ 燈值 None",
+}
+
+
+class TestC4RejectedVixLogIsPrecise:
+    @pytest.mark.parametrize("case", sorted(_C4_REJECT_LOG))
+    def test_rejection_log_names_the_reason_and_l2_does_not_deny_the_series(
+            self, monkeypatch, capsys, case):
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        d = P._load_lamp_directions(_session(vix=_rejected_vix_blocks()[case]))["vix"]
+        out = capsys.readouterr().out
+        assert f"變化方向 vix：{_C4_REJECT_LOG[case]}" in out and "不給序列" in out, out
+        assert d.direction == "nodata"
+        assert "沒有歷史序列" not in d.reason, "序列其實存在、只是被拒 —— 那句不精確（C4）"
+        assert "caller 依自身檢查拒收" in d.reason and "caller 那一行 log" in d.reason
+
+    def test_absent_series_reason_keeps_both_possibilities(self):
+        for pts in (None, [], ()):
+            r = compute_lamp_direction("vix", pts).reason
+            assert r.startswith("沒有收到序列") and "上游沒給" in r and "拒收" in r, r
 
 
 # ════════════════════════════════════════════════════════════════
