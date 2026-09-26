@@ -184,6 +184,29 @@ def _has_oauth_tokens() -> bool:
     return True
 
 
+def _oauth_import_error() -> str:
+    """`_has_oauth_tokens()` 回 False 時，分出「OAuth 模組根本載不進來」這一種（純讀）。
+
+    `_has_oauth_tokens()` 在 `oauth_state` import 失敗時回 False —— 既有行為，
+    其他 caller（binder / 組合管理 / `_build_client` / list_* 系列）依賴它，**一字不動**。
+    但那會把一次**故障**讀成「沒登入」。本函式只重做同一個 import（沒有 streamlit →
+    同 `_has_oauth_tokens()` 的第一道 gate，回空字串），把被吞掉的例外以 `repr` 交回；
+    載得進來 → 空字串。**不碰 session / secrets / 網路。**
+
+    ⚠️ 「OAuth Client 沒設定」（`is_oauth_configured()` 為 False）**不在這裡** ——
+    那是「還沒設定」，不是讀取失敗（見 `portfolio_binding_service.get_binding_state`）。
+    唯一 caller：L3 `portfolio_binding_service.get_binding_state()`。
+    """
+    if st is None:
+        return ''
+    try:
+        from src.data.portfolio.oauth_state import is_oauth_configured
+    except Exception as _e:  # noqa: BLE001 — 交回字串給 caller 判紅，不吞
+        return repr(_e)
+    del is_oauth_configured   # 只驗「載不載得進來」（與 `_has_oauth_tokens()` 同一行 import）
+    return ''
+
+
 def _build_client():
     """依當前模式建一個 gspread client。OAuth 優先；fallback SA。
 

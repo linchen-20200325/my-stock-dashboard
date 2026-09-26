@@ -995,6 +995,11 @@ def load_binding(req: HoldRequest) -> BindingReadout:
           `status=bound` + `count=None`；本頁**把那個被吞掉的失敗還原成紅色**，
           因為在這一頁它就是「系統真出錯」。
       (d) **L3 自己拋例外** → 兩張卡都 `failed`。
+      (e) **L3 讀登入 token／Sheet 識別碼時拋了例外、自己吞成 `unbound`**
+          （`read_error` 非空；2026-09-26 批次 7）→ 與 (d) **同一個讀數**，兩張卡都 `failed`。
+          ⛔ 不得落到 (b)：(b) 的灰卡寫的是「已經去讀過，不是還沒讀、**也不是故障**」——
+          讀失敗時那句話是假的。L3 為全域狀態列保留 `unbound`（那一條 caller 一字不變），
+          本頁把被吞掉的失敗還原成紅色（同 (c) 的作法）。
     """
     if not req.wants_binding:
         return BindingReadout(requested=False, submitted=req.submitted)
@@ -1013,6 +1018,13 @@ def load_binding(req: HoldRequest) -> BindingReadout:
         #    L0 會當場 `ValueError`（§1 Fail Loud），整頁變成未捕捉例外。
         return BindingReadout(requested=True, submitted=req.submitted,
                               count_requested=True, error=repr(_e))
+
+    # (e)：讀失敗被 L3 降級成 unbound → 還原成 (d) 的讀數（`count_requested=True` 理由同上）。
+    _read_err = str(getattr(_s, "read_error", "") or "")
+    if _read_err:
+        print(f"[views/page_hold] 綁定狀態讀取失敗 → 轉紅態：{_read_err}")
+        return BindingReadout(requested=True, submitted=req.submitted,
+                              count_requested=True, error=_read_err)
 
     _status = str(getattr(_s, "status", "") or "")
     _bound = bool(_status and _status != STATUS_UNBOUND)
