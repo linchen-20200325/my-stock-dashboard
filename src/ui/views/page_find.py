@@ -648,7 +648,10 @@ UNKNOWN_ERROR_TEXT: str = "（上游沒有給訊息）"
 #:
 #: ⚠️ **據實揭露（§3.3）**：短句沒有規格出處，是實作層依各則原文濃縮的；
 #:    用字沿用原文自己的字面，⛔ 不新造名詞。
-V2_SHORT_ROWS: dict[tuple[str, str], tuple[str, str, str]] = {
+#: 摘錄短句裡「中間省略了原文一段」的記號（同「💼 持有」頁 `V2_EXCERPT_GAP`）。
+V2_EXCERPT_GAP: str = "…"
+
+V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = {
     # ── 選股結果 ────────────────────────────────────────────────
     ("find.screen_result", SCREEN_PE_SHORT_NOW):
         ("少算了估值（本益比）因子", "本輪估值輸入沒拿到，未計入綜合分",
@@ -657,7 +660,11 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[str, str, str]] = {
         ("尚未選股", "送出前一次取數都不會發",
          f"表單裡{press(ACTION_RUN_SCREEN_LABEL)}"),
     ("find.screen_result", SCREEN_ABORTED_NOW):
-        ("選股中止", "L3 選股編排拋出例外（原文在詳細）",
+        ("選股中止",
+         # 兩種中止（批次 1，2026-09-26）：本頁存活池取數拋例外 → 摘出處原文；
+         # 否則 → 既有那一句（L3 選股編排拋例外），一字未改。見 `_v2_pick_short()`。
+         (v2_plain(SRC_SURVIVORS).split("（", 1)[0] + V2_EXCERPT_GAP + "拋出例外",
+          "L3 選股編排拋出例外（原文在詳細）"),
          "FinMind 額度每日 00:00 重置；其餘看資料體檢"),
     ("find.screen_result", SCREEN_DRIFT_NOW):
         ("讀不出結果有幾檔", "回傳形態與約定不符，重跑不會好", NO_EXIT_MARKER),
@@ -794,6 +801,11 @@ class ScreenResult:
     hits: tuple[str, ...] = ()
     error: str = ""
     aux_errors: tuple[tuple[str, str], ...] = ()
+    #: 本頁自己那一次存活池取數的例外 `repr(e)`；空字串 = 沒有錯誤。
+    #: ⚠️ 它**已經**以 `aux_errors` 的一列上卡（原樣），這裡另存一份**只為了判定**：
+    #:    L3 `get_ranked_picks` 對存活池失敗是**吞掉**的（回空表 ＋ 「存活池為空」的 note），
+    #:    回來的 0 列因此分不出「真的 0 檔」與「存活池沒拿到」。本頁手上唯一的訊號就是這一個。
+    survivors_error: str = ""
 
     @property
     def has_rows(self) -> bool:
@@ -1035,7 +1047,7 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
         return ScreenResult(requested=True, error=repr(_e),
                             survivors_n=_surv_n,
                             pe_n=_map_len(_pe_map), name_n=_map_len(_name_map),
-                            aux_errors=tuple(_aux))
+                            aux_errors=tuple(_aux), survivors_error=_surv_err)
 
     _hits, _hits_err = _summarize_hits(
         _factors, shortage_rows=_short_rows, rs_rows=_rs_rows,
@@ -1047,7 +1059,7 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
         requested=True, df=_df, note=str(_note or ""),
         rows=_frame_rows(_df), survivors_n=_surv_n,
         pe_n=_map_len(_pe_map), name_n=_map_len(_name_map),
-        hits=_hits, aux_errors=tuple(_aux))
+        hits=_hits, aux_errors=tuple(_aux), survivors_error=_surv_err)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1310,9 +1322,17 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
     # 請求過、沒例外、卻連列數都讀不出來 = 回傳契約漂移（重跑不會好，要改程式）。
     # 用 L0 `station_specs` 的語彙，讓 `FAILED_REASONS` 自己決定要不要升紅 ——
     # 本檔**不自己判「這算不算故障」**。
+    # 請求過、沒例外、0 列，但**本頁自己那一次存活池取數失敗了** → 這個 0 不是有效結果。
+    # L3 對存活池失敗是吞掉的（回空表），所以 0 列本身分不出兩者；本頁唯一的訊號是
+    # 自己抓到的那個例外（`survivors_error`）。走 L0 `MISS_FETCH_FAILED`，讓
+    # `FAILED_REASONS` 決定升紅 —— 本檔同樣**不自己判「這算不算故障」**。
+    # ⚠️ 只在 0 列時才看它：L3 會再試一次存活池，試成功而選出東西的那一輪照常 live。
+    _surv_failed = bool(result.requested and not result.error
+                        and result.rows == 0 and result.survivors_error)
     _reason = (MISS_CONTRACT_DRIFT
                if (result.requested and not result.error
                    and result.rows is None)
+               else MISS_FETCH_FAILED if _surv_failed
                else "")
     _state = classify_ui_state(
         requested=result.requested,
@@ -1366,6 +1386,10 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
         return Card(key="find.screen_result", label="選股結果",
                     state=UI_LIVE, value=_value, note=_note), tuple(_facts)
 
+    _aborted_where = ("本站不以殘缺資料湊出名單。若是 FinMind 額度用罄，"
+                      "額度每日 00:00 重置；其餘請到"
+                      f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
+                      "看 MOPS／Goodinfo 備援鏈是否可用")
     if _state == UI_IDLE:
         _note = Note(now=SCREEN_IDLE_NOW, why=SCREEN_IDLE_WHY,
                      where=SCREEN_IDLE_WHERE)
@@ -1373,10 +1397,15 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
         _note = Note(
             now=SCREEN_ABORTED_NOW,
             why=_error_why(SRC_SCREEN, result.error),
-            where=("本站不以殘缺資料湊出名單。若是 FinMind 額度用罄，"
-                   "額度每日 00:00 重置；其餘請到"
-                   f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
-                   "看 MOPS／Goodinfo 備援鏈是否可用"))
+            where=_aborted_where)
+    elif _state == UI_FAILED and _surv_failed:
+        # 存活池取不到 → 這一輪的 0 檔**不是**「選股已完成、0 檔」。
+        # 沿用中止那一則的 now / where（既有字句），出處換成真正出事的那一支
+        # （`SRC_SURVIVORS`，同上方「存活池」那一列 facts 的講法）。
+        _note = Note(
+            now=SCREEN_ABORTED_NOW,
+            why=_error_why(SRC_SURVIVORS, result.survivors_error),
+            where=_aborted_where)
     elif _state == UI_FAILED:
         # 沒有例外、卻連「有幾列」都讀不出來 → 回傳契約漂移。
         # **不寫成「0 檔」** —— 那是替上游宣稱一件它沒說的事。
@@ -1555,6 +1584,33 @@ def _render_one(card: Card, facts: Sequence[tuple[str, str]] = ()) -> None:
                f"{NO_EXIT_MARKER}；請把上面那行訊息回報給維護者"))
 
 
+def _v2_pick_short(spec: object, full: str) -> str:
+    """一格短句規格 → 卡面上那一段。
+
+    · `str` → 原樣（本頁既有的濃縮短句，行為不變）。
+    · `tuple` → 前面幾個是**原文摘錄**候選（以 `V2_EXCERPT_GAP` 分段，每段須依序出現在
+      原文裡），取第一個對得上的；都對不上 → 用**最後一個**（該格既有的濃縮短句）。
+      ⚠️ **第一段必須是原文的開頭**（位置 0）：出處寫在「為什麼」的最前面，
+      後面接的是上游例外原文 —— 若例外訊息裡碰巧含同一段字，不得因此選中該候選。
+      ⚠️ 摘錄候選排在前面、既有句排最後：既有句不是摘錄、驗不了，
+      排前面就永遠輪不到摘錄 —— 而摘錄只在原文真的有那個出處時才對得上。
+    """
+    if isinstance(spec, str):
+        return spec
+    _alts = tuple(spec)   # type: ignore[arg-type]
+    for _alt in _alts[:-1]:
+        _pos, _ok = 0, True
+        for _i, _piece in enumerate(str(_alt).split(V2_EXCERPT_GAP)):
+            _at = full.find(_piece, _pos) if _piece else -1
+            if _at < 0 or (_i == 0 and _at != 0):
+                _ok = False
+                break
+            _pos = _at + len(_piece)
+        if _ok:
+            return str(_alt)
+    return str(_alts[-1])
+
+
 def v2_short_rows(card: Card) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str], ...]]:
     """一則 `Note` →（卡面三列短句, 摺疊區三列完整原文）。
 
@@ -1572,12 +1628,11 @@ def v2_short_rows(card: Card) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[
         raise KeyError(
             f"卡 {card.key!r} 的這則說明沒有登記短句（現在＝{v2_plain(_note.now)!r}）"
             " —— 新增一則 `Note` 時**必須**同步補一列 `V2_SHORT_ROWS`。") from None
-    _short = ((V2_NOW_FACT_KEY, _now_s),
-              (V2_WHY_FACT_KEY, _why_s),
-              (V2_GUIDE_FACT_KEY, _where_s))
     _full = ((V2_NOW_FACT_KEY, v2_plain(_note.now)),
              (V2_WHY_FACT_KEY, v2_plain(_note.why)),
              (V2_GUIDE_FACT_KEY, v2_plain(_note.where)))
+    _short = tuple((_label, _v2_pick_short(_s, _text))
+                   for _s, (_label, _text) in zip((_now_s, _why_s, _where_s), _full))
     return _short, _full
 
 

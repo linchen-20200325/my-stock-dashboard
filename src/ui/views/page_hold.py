@@ -316,6 +316,7 @@ from shared.station_specs import (
     KEY_STOCK_TREND,
     MISS_FETCH_FAILED,
     MISS_NO_INPUT,
+    MISS_TEXT,
     SPECS_BY_KEY,
 )
 # L0 SSOT：80/20 目標、衛星停利門檻、VIX 三段門檻。**本檔不寫死任何一個數字。**
@@ -1584,6 +1585,15 @@ SRC_AI: str = (
     "注入的 `services.app_ai_service.gemini_call`）")
 
 
+#: 戰情表這一輪出事時的「去哪補」。原本寫在 `_station_note()` 的 error 分支裡，
+#: 上提成常數（**文字一字未改**）—— 衛星停利的「整批抓取失敗」分支沿用同一句。
+STATION_ERROR_WHERE: str = (
+    "先確認網路與 Google 授權是否仍有效；"
+    "持續失敗請把上面那行訊息回報給維護者，"
+    f"來源狀態在"
+    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
+
+
 def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
     """戰情表系列卡片的**非 live** 三要素。四態各自一段，**一段都不共用**。
 
@@ -1594,10 +1604,7 @@ def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
         return _idle_note(station.scope_idle)
     if station.error:
         return Note(now=now, why=_error_why(source, station.error),
-                    where=("先確認網路與 Google 授權是否仍有效；"
-                           "持續失敗請把上面那行訊息回報給維護者，"
-                           f"來源狀態在"
-                           f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+                    where=STATION_ERROR_WHERE)
     if station.holdings_n:
         return Note(now=NO_ROWS_NOW, why=NO_ROWS_WHY, where=NO_ROWS_WHERE)
     if station.bound:
@@ -2130,10 +2137,20 @@ def build_take_profit_card(station: StationReadout) -> _Built:
     ⚠️ **沒有成本就不判**：L3 只對有損益% 的持有衛星列判定 ——
     硬判等於替你編一個報酬率（§1）。
     """
+    # 持有的衛星（個股）裡有**整批抓取失敗**的列 → L3 `flag_take_profit` 對它們是跳過的
+    # （它們沒有被判過），所以「沒有一檔達門檻」在這一輪**不是**有效結果。
+    # 條件與 L3 跳過的那一條逐字對齊（held ＋ 個股 ＋ `_detail.error`），不另立判準。
+    # 走 L0 `MISS_FETCH_FAILED`（「這一檔整批抓取失敗」就是它的定義），由
+    # `FAILED_REASONS` 決定升紅 —— 本檔**不自己判「這算不算故障」**。
+    _fetch_failed = tuple(
+        str(_r.get("代號", "")) for _r in station.rows
+        if _r.get("held") and _r.get("種類") == "個股"
+        and (_r.get("_detail") or {}).get("error"))
     _state = classify_ui_state(
         requested=station.requested,
         error=station.error or None,
-        has_value=bool(station.take_profit))
+        has_value=bool(station.take_profit),
+        reason=MISS_FETCH_FAILED if _fetch_failed else "")
     _facts: list[tuple[str, str]] = [
         ("門檻（L0 SSOT）",
          f"衛星獲利達 {SATELLITE_TAKE_PROFIT_PCT:g} 個百分點即嚴格停利滾回核心"),
@@ -2150,10 +2167,18 @@ def build_take_profit_card(station: StationReadout) -> _Built:
                 tuple(_facts), "可停利")
     if _state == UI_IDLE:
         _note = _idle_note(station.scope_idle)
-    elif _state == UI_FAILED:
+    elif _state == UI_FAILED and station.error:
         _note = Note(now=TP_FAILED_NOW,
                      why=_error_why(SRC_STATION, station.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
+    elif _state == UI_FAILED:
+        # 沒有例外，但有衛星整批抓取失敗（見上）。文字全部沿用既有的：
+        # L0 `MISS_TEXT[MISS_FETCH_FAILED]` ＋ 戰情表出錯時的 `STATION_ERROR_WHERE`。
+        # 前面接的是代號清單（可能多檔），故摘掉 L0 原文開頭的單數「這一檔」—— 只刪、不改寫。
+        _note = Note(now=TP_FAILED_NOW,
+                     why=(f"{'、'.join(_fetch_failed)}："
+                          f"{MISS_TEXT[MISS_FETCH_FAILED].removeprefix('這一檔')}"),
+                     where=STATION_ERROR_WHERE)
     elif not station.has_rows:
         _note = _station_note(station, now=TP_NO_HOLDINGS_NOW,
                               source=SRC_STATION)
@@ -3654,8 +3679,10 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     + [_v2_rows_for(_k, SPLIT_NO_VALUE_NOW, (
            None, "沒有任何一列同時有張數與現價，沒有市值就沒有比例", _V2_FILL_LOTS))
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
+    # 兩個候選：戰情表拋例外（既有）／有衛星整批抓取失敗（摘自 L0 `MISS_TEXT`）。
     + [_v2_rows_for("hold.take_profit", TP_FAILED_NOW, (
-           None, _v2_raised(SRC_STATION), _V2_NO_EXIT_REPORT)),
+           None, (_v2_raised(SRC_STATION), "整批抓取失敗 —— 看該列的錯誤訊息"),
+           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.take_profit", TP_EMPTY_NOW, (
            None, "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此判不了",
            "若你預期應該要有：到 📁 組合管理確認那幾檔個股的均價有填")),
