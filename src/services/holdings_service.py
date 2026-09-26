@@ -164,6 +164,9 @@ def get_holdings() -> HoldingsResult:
         Exception: **投資組合那半**讀取失敗時原樣往上拋（§1 Fail Loud）——
             半份清單算出來的 80/20 與損益看起來正常、實際是錯的。
             觀察清單那半失敗**不會**走到這裡，改記在 `watchlist_error`。
+        RuntimeError: 綁定狀態本身讀失敗（`BindingState.read_error` 非空：讀登入 token /
+            Sheet 識別碼拋例外）—— 那不是「沒有綁 Sheet」，**不得**回 `bound=False` ＋ 空清單
+            冒充有效結果（2026-09-26 批次 7）。訊息＝`read_error` 原文。
 
     ⚠️ 一次呼叫最多打 Google 四次（列組合名 / 讀組合 / 列清單名 / 讀清單），
     四支在 L1 都是 `@st.cache_data(ttl=TTL_15MIN)`，且本檔**顯式帶 `sheet_id=`**
@@ -176,6 +179,10 @@ def get_holdings() -> HoldingsResult:
     )
 
     _state = get_binding_state()
+    # 讀失敗 ≠ 沒綁：綁定那一步就讀不到，持股清單無從談起 → 往上拋（同投資組合那半）。
+    _bind_err = str(getattr(_state, "read_error", "") or "")
+    if _bind_err:
+        raise RuntimeError(_bind_err)
     _sid = str(getattr(_state, "sheet_id", "") or "")
     _bound = bool(_sid) and str(getattr(_state, "status", "")) != STATUS_UNBOUND
     _logged = bool(getattr(_state, "logged_in", False))
