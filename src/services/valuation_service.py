@@ -21,7 +21,9 @@ L1 fetcher，彼此沒有任何呼叫關係：
 **只是騙過靜態檢查、不改變性質**。頁 2 的前一組實作就是為此拒絕接線並把
 理由寫進當時那個 `PE_UNWIRED_WHERE` 常數（**該常數已隨接線改名為
 `PE_MISSING_WHERE` 並改寫內容** —— 未接線與「接了但這一輪沒資料」
-是兩種不同的話）；本檔就是它指名要補的那一支。
+是兩種不同的話；📌 2026-09-26 批次 5 起 `PE_MISSING_WHERE` 也已刪除：勾了估值而
+估值沒拿到改為紅卡「選股中止」，原本用它的那則 live Note 走不到了）；
+本檔就是它指名要補的那一支。
 
 ⚠️ **這裡有一個既有的重複，本檔不解、據實登記**（`CLAUDE.md §-1`：不是本次
 改動造成的，就登記不動；v3 §01-2 的「消除重複取數」要動到既有分頁，落在
@@ -59,11 +61,15 @@ import 都會先跑它。這是 `src/services/` 的既有性質，本批不動�
 
 ⚠️ **但「取不到」與「查得到、只是沒有」是兩件事，本檔用回傳值分開表達**：
   · `get_pe_name_maps()` 回**空 dict** ＝ 兩個市場都沒有給資料。
-    ⚠️ **本檔看不出「只有一邊掛了」** —— L1 的 `fetch_pe_name_maps` 對
+    ~~⚠️ **本檔看不出「只有一邊掛了」** —— L1 的 `fetch_pe_name_maps` 對
     上市/上櫃是各自 `try/except … continue` 的 fail-soft，半邊失敗時它
-    回一份**只有另外半邊**的 map 且不留任何旗標。這是既有 L1 行為，
+    回一份**只有另外半邊**的 map 且不留任何旗標。~~這是既有 L1 行為，
     本檔**不假裝知道**，也不去拆開兩支 fetcher 自己合併（那會複製
     `fetch_pe_name_maps` 的合併規則 ＝ 第二個 SSOT，§2.1）。
+    📌 2026-09-26 批次 5 事實更正（⛔ 不是漏刪）：fail-soft 照舊，但 L1 多了
+    **可選的**附加標記 `failed_markets=`，本檔原樣轉傳（見 `get_pe_name_maps`）——
+    傳了就看得出「只有一邊掛了」；不傳的既有呼叫端行為一字不變。
+    「不拆開兩支 fetcher 自己合併」那一句**仍然成立**：旗標是 L1 自己給的。
   · `get_stock_dividends()` 的 `avg_div_twd` 為 `None` ＝ **備援鏈跑完，
     沒有任何一段給出配息紀錄**，`source` 會是空字串。那**可能**是這一檔
     近 5 年真的沒有配息，也**可能**是每一段這一輪都沒拿到 —— L1 的回傳值
@@ -76,8 +82,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-def get_pe_name_maps() -> tuple[dict, dict]:
+def get_pe_name_maps(*, failed_markets: list[str] | None = None) -> tuple[dict, dict]:
     """全市場（上市 ＋ 上櫃）「代碼 → 本益比 / 名稱」對照表。
+
+    Args:
+        failed_markets: 原樣轉給 L1 的附加標記（語意見 L1 `fetch_pe_name_maps` 的
+            docstring）。**不傳 = 呼叫方式與既有一字不變**（L1 收到的是無引數呼叫）。
 
     Returns:
         `(pe_map, name_map)` —— 與 L1 SSOT `fetch_pe_name_maps()` **逐字同形**：
@@ -96,7 +106,9 @@ def get_pe_name_maps() -> tuple[dict, dict]:
     """
     from src.data.stock.yield_pe_fetcher import fetch_pe_name_maps
 
-    return fetch_pe_name_maps()
+    if failed_markets is None:
+        return fetch_pe_name_maps()
+    return fetch_pe_name_maps(failed_markets=failed_markets)
 
 
 @dataclass(frozen=True)

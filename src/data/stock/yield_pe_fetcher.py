@@ -185,7 +185,7 @@ def fetch_tpex_yield_pe() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def fetch_pe_name_maps() -> tuple[dict, dict]:
+def fetch_pe_name_maps(*, failed_markets: list[str] | None = None) -> tuple[dict, dict]:
     """上市(TWSE BWIBBU) + 上櫃(TPEX peratio) 合併 → (pe_map, name_map)。
 
     選股網 pe_low（估值分）+ 顯示名稱的 **SSOT**：畫面 / 推播 / 前進式凍結 / MCP 四個
@@ -204,13 +204,22 @@ def fetch_pe_name_maps() -> tuple[dict, dict]:
     ⚠️ 兩個 fetcher 刻意在**呼叫時**才從本模組 globals 解析（下面的 tuple 是在函式體內
     建的），測試才 patch 得到（見模組 docstring 的 patch 目標說明）。
 
+    Args:
+        failed_markets: 可選的**附加標記**（v2「🔍 找標的」選股結果卡用；不傳 = 既有行為
+            一字不變）。傳入一個 list → 本輪**連一筆有效本益比都沒給出**的市場（抓取拋例外 /
+            回空 / 缺欄 / 全無有效值 —— 兩支 fetcher 失敗時都回空表，所以四種在這裡同一件事）
+            會把市場名（`'上市 TWSE'` / `'上櫃 TPEX'`）附加進去，依上市、上櫃的順序。
+            fail-soft 照舊（兩個回傳值不受影響），只是讓 caller 分得出「少了半邊」與「全齊」。
+
     Returns:
         (pe_map, name_map)：pe_map = {代碼: 本益比(float > 0)}；
         name_map = {代碼: 名稱}（過濾空字串 / 'nan'，避免畫面顯示 "nan"）。
     """
     pe_map: dict = {}
     name_map: dict = {}
-    for _mkt, _fetch in (('上市 TWSE', fetch_twse_yield_pe), ('上櫃 TPEX', fetch_tpex_yield_pe)):
+    _markets = (('上市 TWSE', fetch_twse_yield_pe), ('上櫃 TPEX', fetch_tpex_yield_pe))
+    _pe_markets: set[str] = set()   # 本輪至少給出一筆有效本益比的市場（只供 failed_markets 用）
+    for _mkt, _fetch in _markets:
         try:
             _df = _fetch()
         except Exception as _e:  # noqa: BLE001 — 任一市場抓不到 → 只少半邊涵蓋,不炸
@@ -227,12 +236,15 @@ def fetch_pe_name_maps() -> tuple[dict, dict]:
                     continue
                 if _pe != _pe or _pe <= 0:      # NaN / ≤0 → 無本益比,不放 key
                     continue
+                _pe_markets.add(_mkt)
                 pe_map.setdefault(_c, _pe)
         if '名稱' in _df.columns:
             for _c, _n in zip(_codes, _df['名稱'].astype(str)):
                 _n = _n.strip()
                 if _n and _n.lower() != 'nan':
                     name_map.setdefault(_c, _n)
+    if failed_markets is not None:
+        failed_markets.extend(_m for _m, _ in _markets if _m not in _pe_markets)
     return pe_map, name_map
 
 

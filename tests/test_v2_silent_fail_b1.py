@@ -112,7 +112,9 @@ class TestFindScreenResult:
         monkeypatch.setattr(S, "get_fundamental_survivors", lambda **_k: _boom())
         monkeypatch.setattr(S, "get_ranked_picks", lambda *a, **k: (
             _Frame(0), "基本面存活池為空（季快照未就緒）。"))
-        monkeypatch.setattr(PF, "_load_pe_name_maps", lambda: ({"1": 1.0}, {"1": "x"}, ""))
+        # 批次 5（2026-09-26）起 `_load_pe_name_maps` 多回第 4 個（沒給本益比的市場）；只補形狀。
+        monkeypatch.setattr(PF, "_load_pe_name_maps",
+                            lambda: ({"1": 1.0}, {"1": "x"}, "", ()))
         monkeypatch.setattr(PF, "_load_regime", lambda: ("bull", ""))
         monkeypatch.setattr(PF, "_load_trend", lambda f: (None, ""))
         monkeypatch.setattr(PF, "_summarize_hits", lambda *a, **k: ((), ""))
@@ -130,9 +132,17 @@ class TestFindScreenResult:
         assert _VALID in card.note.why
 
     def test_b_other_aux_failures_still_leave_a_valid_zero(self):
-        """存活池拿到了、只是某個因子掃描失敗 → 那是「該因子不計入」，0 檔仍是有效結果。"""
+        """存活池拿到了、失敗的只有**不是勾選因子輸入**的週邊取數 → 0 檔仍是有效結果。
+
+        ⚠️ 2026-09-26 批次 5 改寫（有意識的變更，⛔ 不是漏刪）。舊版用「缺貨掃描失敗」當例子，
+        宣稱「那是『該因子不計入』，0 檔仍是有效結果」—— 批次 5 起**勾選因子**的輸入沒拿到
+        一律轉紅（見 `tests/test_v2_silent_fail_b5_find.py`），那句宣稱不再成立。
+        舊例子本身也走不到：它只勾了 `eps_high`，本頁根本不會發缺貨掃描。
+        → 例子換成真的不影響判定的那一種：總經位階取不到 → 空頭濾網未套用。
+        濾網只會剔除、不會補進來，沒套它時排出 0 檔，套了也是 0 檔 ⇒ 這個 0 仍然有效。
+        """
         card, _ = _screen(PF, df=_Frame(0), rows=0, survivors_n=274,
-                          aux_errors=(("缺貨掃描", "失敗，該因子不計入綜合分：E"),))
+                          aux_errors=(("總經位階", "取不到，空頭濾網未套用：E"),))
         assert card.state == UI_EMPTY and card.note.now == PF.SCREEN_EMPTY_NOW
 
     def test_b_survivors_failed_but_l3_retry_picked_rows_stays_live(self):
