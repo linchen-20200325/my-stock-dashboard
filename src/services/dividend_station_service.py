@@ -763,15 +763,29 @@ def get_station_macro() -> dict:
 
 def get_switch_in_candidates(*, regime: str | None = None,
                              exclude: list[str] | None = None,
-                             top_n: int = 5) -> list[dict]:
+                             top_n: int = 5,
+                             strict: bool = False) -> list[dict]:
     """換入候選 ← 選股網「選股池」top（沿用畫面同源 get_ranked_picks,已快取子呼叫）。
 
     §1：選股網不可用 / 空 → 回 []（caller 顯示「選股池暫無候選」）,不捏造標的。
     exclude：已持有代號（不建議換入自己已有的）。regime 傳給選股網套空頭濾網。
+
+    strict（v2「💼 我的持股」換股卡用；預設 False = 既有行為一字不變）：
+      True → **取不到 ≠ 0 檔**。存活池讀取例外、或存活池為空（季快照未就緒）一律
+      `raise`，不回 [] —— 否則 caller 會把「選股池沒拿到」畫成「這一輪沒有候選」
+      （§1 靜默失敗）。存活池有東西、排完 0 檔：非空頭 regime 下只可能是「每一檔都因
+      勾選因子資料不足被排除」→ 同樣 raise；空頭 regime 下分不出是濾網剔光還是缺資料
+      → 回 []（見 `_ranked_picks_strict`）。
+      ⚠️ `get_ranked_picks` 自抓存活池時會吞例外、回空表 + note，0 列因此分不出兩者；
+      故 strict 模式**自己先抓存活池**再傳進去（`survivors_df=`），例外照常往上拋。
+      既有 caller（v1 ETF 戰情室分頁 / 每日推播腳本）不傳 strict，行為不變。
     """
     # §後綴 SSOT:exclude（已持有代號）去 .TW/.TWO 再比對,否則 '2330.TW' 擋不掉 bare '2330'
     # → 已持有卻被推「換入」(稽核 1b)。候選 _code 亦 normalize 後比對。
     _exclude = {T.normalize_ticker(t) for t in (exclude or []) if str(t or "").strip()}
+    if strict:
+        return _pick_candidates(_ranked_picks_strict(regime=regime, top_n=top_n),
+                                _exclude, top_n)
     try:
         from src.services.fundamental_screener_service import (
             SCREEN_ANGLE_LABELS, get_ranked_picks)
@@ -783,7 +797,48 @@ def get_switch_in_candidates(*, regime: str | None = None,
         return []
     if _df is None or getattr(_df, "empty", True):
         return []
+    return _pick_candidates(_df, _exclude, top_n)
 
+
+def _ranked_picks_strict(*, regime: str | None, top_n: int):
+    """strict 版取排名：存活池自己抓（例外不吞）；空池 → raise（訊息用排名器自己的 note 原文）。"""
+    from src.services.fundamental_screener_service import (
+        SCREEN_ANGLE_LABELS, composite_rank_candidates, get_fundamental_survivors,
+        get_ranked_picks)
+    _factors = list(SCREEN_ANGLE_LABELS.values())     # 全角度,同非 strict 路徑
+    _surv, _ = get_fundamental_survivors()
+    if _surv is None or getattr(_surv, "empty", True) or "stock_id" not in _surv.columns:
+        # 空池的說明由排名器自己給（SSOT，本檔不另寫一句）；空池時它不做任何掃描即返回。
+        _, _note = composite_rank_candidates(_surv, factors=_factors)
+        raise RuntimeError(_note)
+    _df, _note = get_ranked_picks(_factors, top_n=max(top_n * 4, 40), survivors_df=_surv,
+                                  regime=regime, auto_fetch=True)
+    # 存活池有東西、排完卻 0 檔，只有兩條路（`get_ranked_picks` 的結構，逐步對過）：
+    #   (1) 綜合排名 `drop_unscored=True` 把**每一檔**都排除（勾選因子資料不足）→ 缺資料；
+    #   (2) 空頭濾網把排名剔光 → 有效結果（濾網只在 regime ∈ THROTTLE_VETO_REGIMES 時動手，
+    #       且對空表直接返回，不會把 (1) 蓋掉）。
+    # regime **不在**否決集 → 濾網根本沒動 → 只可能是 (1) → raise（訊息用排名器自己的 note）。
+    # regime 在否決集 → (1)(2) 從回傳值分不出來（只剩解析 note 散文，那是猜）→ 照舊回 []。
+    if (_df is None or getattr(_df, "empty", True)) and not _is_veto_regime(regime):
+        raise RuntimeError(_note)
+    return _df
+
+
+def _is_veto_regime(regime) -> bool:
+    """同 `fundamental_screener_service._apply_bear_market_filter` 的判定（L0 SSOT 否決集）。"""
+    from shared.position_throttle import THROTTLE_VETO_REGIMES
+    if isinstance(regime, dict):       # 同上游防呆：誤傳整個 macro-state dict
+        regime = regime.get("regime")
+    try:
+        return regime in THROTTLE_VETO_REGIMES
+    except TypeError:
+        return False
+
+
+def _pick_candidates(_df, _exclude: set, top_n: int) -> list[dict]:
+    """排名表 → 換入候選（排除已持有、取前 top_n）。空表 → []。"""
+    if _df is None or getattr(_df, "empty", True):
+        return []
     _out: list[dict] = []
     for _rec in _df.to_dict("records"):
         _code = str(_rec.get("代碼", _rec.get("代號", "")) or "").strip().upper()
