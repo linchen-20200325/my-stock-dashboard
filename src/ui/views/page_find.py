@@ -226,7 +226,7 @@ re-export 繞道**只是騙過 AST、不改性質**」——
     沒勾的（例如沒勾估值時的名稱欄）照舊只上 `aux_errors`、不轉紅。
     舊理由（一個因子掛掉 ≠ 選股掛掉）**仍然成立**：名單照樣排得出來。被權衡掉的是
     「排得出來」不等於「是你要的那一份」—— 缺一個你勾的因子，排序就不是依你的條件，
-    而那份名單原本會以綠燈上桌（同 `_aborted_where`「本站不以殘缺資料湊出名單」）。
+    而那份名單原本會以綠燈上桌（同 `SCREEN_NO_PARTIAL_WHERE`「本站不以殘缺資料湊出名單」）。
   · 回**空 map**（上市與上櫃都沒給資料）→ 同上，卡上寫明「這一輪 0 檔有
     本益比」。⚠️ 這一種 L3 的 note **看不見** ——
     `composite_rank_candidates` 的 `_missing` 只收缺貨與 RS，而它的
@@ -603,7 +603,12 @@ FACTOR_INPUT_LABELS: dict[str, str] = {
 #: ⚠️ 為什麼不用 `MISS_FETCH_FAILED` 那一句：它說「看該列的錯誤訊息」，而「只少了上市或
 #:    上櫃半邊」的估值那一種，facts 裡**沒有**一列錯誤訊息可看。
 #: ⚠️ 狀態鍵（`MISS_FETCH_FAILED`，讓 L0 升紅）與這一句**刻意不同源**（同批次 4 的作法）。
-FACTOR_MISS_WHY: str = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈").split("，", 1)[0]
+#: 📌 2026-09-26 批次 9（#701 獨立 QA ⑦）再**只刪不改**一處：「上游來源**這輪**失敗」的「這輪」。
+#:    它暗示一次性，但這張紅卡的四個因子沒有一個是「這一輪」的事 —— 估值／缺貨失敗快取 1 天、
+#:    RS 1 小時；跨季轉強多半是舊季快照讀不進來（檔案損毀／欄位漂移），重按也不會好。
+#:    刪掉兩個字後句子仍通順、仍為真（「通常」照留）。
+FACTOR_MISS_WHY: str = (MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈")
+                        .split("，", 1)[0].replace("這輪", "", 1))
 
 #: 表單下方常駐的接線揭露（不隨狀態消失）。
 WIRING_DISCLOSURE: str = (
@@ -629,6 +634,62 @@ SCREEN_EMPTY_NOW: str = "**選股已完成，符合條件的標的是 0 檔**"
 #: 「季快照未就緒」時該去哪 —— 2026-09-26 批次 5 自 0 檔灰卡的 where 原文**上提**（字面一字未改），
 #: 讓「存活池為空」那張紅卡讀同一句（⛔ 不手抄第二份）。灰卡的 where 仍是原來那一整句。
 SNAPSHOT_WAIT_WHERE: str = "要等排程補抓，重按不會改變它"
+
+#: 「選股中止」紅卡「去哪補」的**第一句** —— 2026-09-26 批次 9 自 `SCREEN_ABORTED_WHERE`
+#: 開頭**上提**（字面一字未改；句末的「。」留在 `SCREEN_ABORTED_WHERE` 裡，本常數不帶）。
+#: 它是那一整句裡**對每一種中止都為真**的部分；其後兩個子句點名 FinMind 額度與
+#: MOPS／Goodinfo 備援鏈，只對走 FinMind 的輸入成立（見 `FACTOR_FAILED_WHERE`）。
+SCREEN_NO_PARTIAL_WHERE: str = "本站不以殘缺資料湊出名單"
+
+#: 「選股中止」紅卡的「去哪補」（L3 選股編排拋例外／存活池讀取例外／缺貨掃描輸入沒拿到）。
+#: 2026-09-26 批次 9 自 `build_screen_result_card` 函式體內的 `_aborted_where` **上提**
+#: （字面一字未改），讓 `FACTOR_FAILED_WHERE` 讀同一份（⛔ 不手抄第二份）。
+SCREEN_ABORTED_WHERE: str = (f"{SCREEN_NO_PARTIAL_WHERE}。若是 FinMind 額度用罄，"
+                             "額度每日 00:00 重置；其餘請到"
+                             f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
+                             "看 MOPS／Goodinfo 備援鏈是否可用")
+
+#: 勾選因子的輸入這一輪沒拿到 → 「選股中止」紅卡的「去哪補」**依因子分**
+#: （2026-09-26 批次 9，#701 獨立 QA ⑥）。⛔ 一句都不新寫，只指向既有句：
+#:   · `shortage` → `SCREEN_ABORTED_WHERE` 原句，**本批不動**（⑥ 的範圍是估值／RS／跨季轉強）。
+#:                  它的 FinMind 額度子句對缺貨成立：主路徑是「存活池 → 逐檔抓月營收（FinMind 單股）
+#:                  ＋季財報（FinMind）」，存活池取不到時才退回全市場月營收批次（FinMind sponsor）；
+#:                  兩種月營收抓不到都再退 TWSE／TPEx OpenAPI。
+#:                  ⚠️ 但「MOPS／Goodinfo 備援鏈」那段對缺貨**也不成立**（實測：季財報只走 FinMind、
+#:                  月營收的備援是 TWSE／TPEx OpenAPI），且資料體檢不監控 MOPS／Goodinfo ——
+#:                  已上報，待另案（刪那段屬同一種「只刪」，但不在本批授權的三個因子裡）；
+#:   · `trend`    → `SCREEN_NO_PARTIAL_WHERE`。⚠️ **不是** `SNAPSHOT_WAIT_WHERE`（B9 獨立 QA 阻擋項，
+#:                  有意識的更正，⛔ 不是漏改）：快照**整個**缺時，存活池讀取例外那張卡會先出現
+#:                  （`_surv_failed` 排在前面）；跨季轉強那張卡真正出得來時，多半是**舊季** parquet
+#:                  讀不進來（損毀／缺 roc_year・season 欄）或計算本身出錯 —— 排程只補抓本季與去年同季，
+#:                  不會重寫舊季，「要等排程補抓」是錯的指引。原句的 FinMind／MOPS 子句同樣不成立
+#:                  ⇒ 只剩第一句；原因照舊在 facts「跨季轉強」那一列（例外原文）；
+#:   · `pe_low`   → `SCREEN_NO_PARTIAL_WHERE`：來源是 TWSE／TPEX 兩支 OpenAPI，**不走** FinMind、
+#:                  也沒有 MOPS／Goodinfo 備援鏈；本頁沒有講它的既有 where ⇒ 原句**只刪**掉那兩個
+#:                  點名錯來源的子句。「📖 憑什麼 › 資料體檢」那一段也一起刪：那一格只監控 TWSE
+#:                  FMTQIK 一支（`page_why.NAMED_SOURCES`），**看不到**本益比那一支，指過去等於指錯地方。
+#:   · `rs_leader`→ 同 `pe_low`：大盤 ^TWII 與個股 K 線走 Yahoo（NAS proxy），FinMind 只是
+#:                  個股 K 線的第二來源、^TWII 沒有；資料體檢也不監控 Yahoo。
+#: 具體原因（L3 note／例外原文）照舊在 facts 各自那一列 —— where 只負責「不指錯方向」。
+#: 同一張卡**不只一個**因子失敗、而它們的 where 不同 → 用 `SCREEN_NO_PARTIAL_WHERE`
+#: （兩句裡唯一對每一個因子都為真的；見 `factor_failed_where()`）。
+FACTOR_FAILED_WHERE: dict[str, str] = {
+    PE_FACTOR_KEY: SCREEN_NO_PARTIAL_WHERE,
+    "shortage": SCREEN_ABORTED_WHERE,
+    "rs_leader": SCREEN_NO_PARTIAL_WHERE,
+    "trend": SCREEN_NO_PARTIAL_WHERE,
+}
+
+
+def factor_failed_where(keys: Iterable[str]) -> str:
+    """出事的那幾個因子 key → 「選股中止」紅卡的「去哪補」（批次 9，見 `FACTOR_FAILED_WHERE`）。
+
+    全部指向同一句 → 那一句；指向不同句（或 `keys` 為空）→ `SCREEN_NO_PARTIAL_WHERE`
+    —— 拼接兩句會變成一句新寫的話（K1），挑其中一句又會對另一個因子指錯方向。
+    未登記的 key → `KeyError`（⛔ 不猜；`FACTOR_FAILED_WHERE` 必須與 `FACTOR_INPUT_LABELS` 同鍵）。
+    """
+    _wheres = {FACTOR_FAILED_WHERE[_k] for _k in keys}
+    return _wheres.pop() if len(_wheres) == 1 else SCREEN_NO_PARTIAL_WHERE
 
 #: 板塊地圖 idle 態（線框葉2 grey 三要素）。
 MAP_IDLE_NOW: str = "**板塊資料尚未載入**"
@@ -702,7 +763,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = {
           "L3 選股編排拋出例外（原文在詳細）"),
          # 批次 5（2026-09-26）：存活池**為空**（季快照未就緒）那一種的 where 是
          # `SNAPSHOT_WAIT_WHERE` 原句（短、整句就是摘錄）；其餘照舊用既有那一句。
-         (SNAPSHOT_WAIT_WHERE, "FinMind 額度每日 00:00 重置；其餘看資料體檢")),
+         # 批次 9（2026-09-26）：估值／RS／跨季轉強因子失敗（或多個因子失敗、where 不同）的 where 是
+         # `SCREEN_NO_PARTIAL_WHERE` 原句（同上，整句就是摘錄）。⚠️ 它是 `SCREEN_ABORTED_WHERE`
+         # 的**開頭** —— 所以 `_v2_pick_short()` 對「無 GAP 的候選」要求**全等**，否則
+         # 那一整句的卡面會被它吃掉、不再是「FinMind 額度每日…」那一格。
+         (SNAPSHOT_WAIT_WHERE, SCREEN_NO_PARTIAL_WHERE,
+          "FinMind 額度每日 00:00 重置；其餘看資料體檢")),
     ("find.screen_result", SCREEN_DRIFT_NOW):
         ("讀不出結果有幾檔", "回傳形態與約定不符，重跑不會好", NO_EXIT_MARKER),
     ("find.screen_result", SCREEN_EMPTY_NOW):
@@ -1468,8 +1534,9 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
     _failed_keys = set(result.factor_input_failed)
     if result.requested and _pe_broken(result):
         _failed_keys.add(PE_FACTOR_KEY)
-    _failed_labels = tuple(FACTOR_INPUT_LABELS[_k] for _k in FACTOR_INPUT_LABELS
+    _failed_ticked = tuple(_k for _k in FACTOR_INPUT_LABELS
                            if _k in _failed_keys and _k in req.factors)
+    _failed_labels = tuple(FACTOR_INPUT_LABELS[_k] for _k in _failed_ticked)
     _input_failed = bool(result.requested and not result.error
                          and result.rows is not None and _failed_labels)
     _reason = (MISS_CONTRACT_DRIFT
@@ -1520,10 +1587,7 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
         return Card(key="find.screen_result", label="選股結果",
                     state=UI_LIVE, value=_value, note=None), tuple(_facts)
 
-    _aborted_where = ("本站不以殘缺資料湊出名單。若是 FinMind 額度用罄，"
-                      "額度每日 00:00 重置；其餘請到"
-                      f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
-                      "看 MOPS／Goodinfo 備援鏈是否可用")
+    # `_aborted_where` 2026-09-26 批次 9 上提為模組常數 `SCREEN_ABORTED_WHERE`（字面一字未改）。
     if _state == UI_IDLE:
         _note = Note(now=SCREEN_IDLE_NOW, why=SCREEN_IDLE_WHY,
                      where=SCREEN_IDLE_WHERE)
@@ -1531,27 +1595,31 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
         _note = Note(
             now=SCREEN_ABORTED_NOW,
             why=_error_why(SRC_SCREEN, result.error),
-            where=_aborted_where)
+            where=SCREEN_ABORTED_WHERE)
     elif _state == UI_FAILED and _surv_failed:
         # 存活池取不到 → 這一輪的 0 檔**不是**「選股已完成、0 檔」。
         # 沿用中止那一則的 now / where（既有字句），出處換成真正出事的那一支
         # （`SRC_SURVIVORS`，同上方「存活池」那一列 facts 的講法）。
         # 批次 5：存活池**為空**（季快照未就緒）那一種 → 去哪補改用 `SNAPSHOT_WAIT_WHERE`
-        # （0 檔灰卡原文的那一句）。`_aborted_where` 講 FinMind 額度與 MOPS／Goodinfo 備援鏈，
+        # （0 檔灰卡原文的那一句）。`SCREEN_ABORTED_WHERE` 講 FinMind 額度與 MOPS／Goodinfo 備援鏈，
         # 跟「快照要等排程補抓」無關，照舊只留給讀取例外那一種。
         _note = Note(
             now=SCREEN_ABORTED_NOW,
             why=_error_why(SRC_SURVIVORS, result.survivors_error),
             where=(SNAPSHOT_WAIT_WHERE if result.survivors_pool_empty
-                   else _aborted_where))
+                   else SCREEN_ABORTED_WHERE))
     elif _state == UI_FAILED and _input_failed:
-        # 批次 5：勾選因子的輸入這一輪沒拿到（見上）。now / where 沿用中止那一則（既有字句）；
+        # 批次 5：勾選因子的輸入這一輪沒拿到（見上）。now 沿用中止那一則（既有字句）；
         # why ＝ 出事的因子名稱（`FACTOR_INPUT_LABELS`，同 facts 那幾列的標籤）＋ L0 既有那一句
         # （`FACTOR_MISS_WHY`）。各因子的原始錯誤／L3 原文照舊在上方 facts 各自那一列。
+        # 批次 9（2026-09-26，#701 獨立 QA ⑥）：where 原本一律沿用中止那一則，改為**依因子**
+        # 指向既有句（`factor_failed_where()`）—— 有意識的變更，⛔ 不是漏改。舊作法的理由
+        # （「中止」就用中止那一句，不另寫）仍然成立、新作法也沒有新寫任何一句；被權衡掉的是
+        # 那一句點名 FinMind 額度／MOPS–Goodinfo 備援鏈，對估值／RS／跨季轉強是指錯方向。
         _note = Note(
             now=SCREEN_ABORTED_NOW,
             why=f"{'、'.join(_failed_labels)}：{FACTOR_MISS_WHY}",
-            where=_aborted_where)
+            where=factor_failed_where(_failed_ticked))
     elif _state == UI_FAILED:
         # 沒有例外、卻連「有幾列」都讀不出來 → 回傳契約漂移。
         # **不寫成「0 檔」** —— 那是替上游宣稱一件它沒說的事。
@@ -1739,11 +1807,19 @@ def _v2_pick_short(spec: object, full: str) -> str:
       後面接的是上游例外原文 —— 若例外訊息裡碰巧含同一段字，不得因此選中該候選。
       ⚠️ 摘錄候選排在前面、既有句排最後：既有句不是摘錄、驗不了，
       排前面就永遠輪不到摘錄 —— 而摘錄只在原文真的有那個出處時才對得上。
+      ⚠️ **沒有 `V2_EXCERPT_GAP` 的候選＝整句就是摘錄 → 必須與原文全等**（批次 9，2026-09-26）。
+      只比開頭的話，一句「是另一句開頭」的短 where（`SCREEN_NO_PARTIAL_WHERE` 之於
+      `SCREEN_ABORTED_WHERE`）會把長句的卡面也吃掉。改動前唯一的無 GAP 候選
+      （`SNAPSHOT_WAIT_WHERE`）所在那一格，其餘 where 沒有一句以它開頭 ⇒ 那一格行為不變。
     """
     if isinstance(spec, str):
         return spec
     _alts = tuple(spec)   # type: ignore[arg-type]
     for _alt in _alts[:-1]:
+        if V2_EXCERPT_GAP not in str(_alt):
+            if full == str(_alt):
+                return str(_alt)
+            continue
         _pos, _ok = 0, True
         for _i, _piece in enumerate(str(_alt).split(V2_EXCERPT_GAP)):
             _at = full.find(_piece, _pos) if _piece else -1

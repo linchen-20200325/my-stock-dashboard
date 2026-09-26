@@ -59,6 +59,12 @@ def _mutant(mod: types.ModuleType, old: str, new: str) -> types.ModuleType:
     return m
 
 
+def _is_deletion_of(short: str, long: str) -> bool:
+    """`short` 能不能只靠**刪字**從 `long` 得到（子序列）—— K1「只刪不加」的機器檢查。"""
+    _it = iter(long)
+    return all(_ch in _it for _ch in short)
+
+
 # ══════════════════════════════════════════════════════════════════
 # 假世界：每一支上游預設都「正常」，個別測試再把其中一支換成失敗。
 # ══════════════════════════════════════════════════════════════════
@@ -153,9 +159,12 @@ def _assert_valid_zero(card) -> None:
 # ══════════════════════════════════════════════════════════════════
 class TestNoNewWording:
     def test_factor_miss_why_is_the_l0_sentence_cut_delete_only(self):
-        """L0 原句只刪不改：刪主詞「這盞燈」＋刪第一個「，」之後的「可以重跑一次。」。"""
-        assert MISS_TEXT[MISS_NO_INPUT].startswith("這盞燈" + PF.FACTOR_MISS_WHY + "，")
-        assert PF.FACTOR_MISS_WHY == "需要的數字沒抓到 —— 通常是上游來源這輪失敗"
+        """L0 原句只刪不改：刪主詞「這盞燈」＋刪第一個「，」之後的「可以重跑一次。」
+        ＋（批次 9，#701 QA ⑦）刪「上游來源這輪失敗」的「這輪」。"""
+        _l0 = MISS_TEXT[MISS_NO_INPUT]
+        assert _l0.startswith("這盞燈" + "需要的數字沒抓到 —— 通常是上游來源這輪失敗" + "，")
+        assert PF.FACTOR_MISS_WHY == "需要的數字沒抓到 —— 通常是上游來源失敗"
+        assert _is_deletion_of(PF.FACTOR_MISS_WHY, _l0), "只准刪字，不准多出任何一個字"
 
     def test_no_red_path_of_this_batch_promises_a_rerun(self, world):
         """QA 2026-09-26 實測：失敗被快取（估值 1 天、缺貨 1 天、RS 1 小時）、快照缺要等排程
@@ -404,10 +413,11 @@ class TestPathThreeOnlyFactorInputFails:
         assert res.factor_input_failed == (factor,)
         _assert_aborted(card)
         assert card.note.why == f"{label}：{PF.FACTOR_MISS_WHY}"
-        assert card.note.where.startswith("本站不以殘缺資料湊出名單")
+        # 批次 9（#701 QA ⑥）：where 依因子分 —— 逐因子的內容由下方 `TestB9FactorWhere` 釘住。
+        assert card.note.where == PF.FACTOR_FAILED_WHERE[factor]
         face = dict(PF.v2_short_rows(card)[0])
         assert face[PF.V2_WHY_FACT_KEY] == (
-            f"{label}{PF.V2_EXCERPT_GAP}需要的數字沒抓到 —— 通常是上游來源這輪失敗")
+            f"{label}{PF.V2_EXCERPT_GAP}需要的數字沒抓到 —— 通常是上游來源失敗")
         html = PF.v2_card_html(card, facts)
         assert PF.SCREEN_EMPTY_NOW.strip("*") not in html
         assert label in dict(facts), "出事的那一個因子，原文那一列照樣在 facts"
@@ -684,3 +694,187 @@ class TestMutations:
             requested=True, df=_Frame(0), rows=0, survivors_n=3,
             factor_input_failed=("trend",)), req)
         assert card.state == UI_FAILED, "沒勾的因子也被拿來判紅 —— 「只認有勾的」那條守的就是它"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 9. 批次 9（2026-09-26，#701 獨立 QA ⑥⑦）：因子失敗紅卡的「去哪補」依因子分、
+#    「這輪」刪掉。⛔ 一句都不新寫（K1）：只指向既有句，或對既有句只刪不加。
+# ══════════════════════════════════════════════════════════════════
+#: 修前那一整句（`build_screen_result_card` 裡的 `_aborted_where`）—— **逐字**釘住：
+#: 上提成 `SCREEN_ABORTED_WHERE` 之後，它對原本那三種中止必須一字未變。
+_OLD_ABORTED_WHERE = ("本站不以殘缺資料湊出名單。若是 FinMind 額度用罄，額度每日 00:00 重置；"
+                      "其餘請到「📖 憑什麼 › 資料體檢」看 MOPS／Goodinfo 備援鏈是否可用")
+_OLD_ABORTED_FACE = "FinMind 額度每日 00:00 重置；其餘看資料體檢"
+#: 對估值（TWSE／TPEX OpenAPI）與 RS（Yahoo）是**指錯方向**的那幾個字。
+_WRONG_SOURCE_WORDS = ("FinMind", "MOPS", "Goodinfo", "資料體檢")
+
+
+def _where_and_face(card) -> tuple[str, str]:
+    return card.note.where, dict(PF.v2_short_rows(card)[0])[PF.V2_GUIDE_FACT_KEY]
+
+
+class TestB9FactorWhere:
+    def test_new_constants_are_existing_text_delete_only(self):
+        assert PF.SCREEN_ABORTED_WHERE == _OLD_ABORTED_WHERE, "上提後原句一字未變"
+        assert PF.SCREEN_NO_PARTIAL_WHERE == "本站不以殘缺資料湊出名單"
+        assert PF.SCREEN_ABORTED_WHERE.startswith(PF.SCREEN_NO_PARTIAL_WHERE + "。")
+        assert set(PF.FACTOR_FAILED_WHERE) == set(PF.FACTOR_INPUT_LABELS), "每個因子都要登記"
+        assert set(PF.FACTOR_FAILED_WHERE.values()) <= {
+            PF.SCREEN_ABORTED_WHERE, PF.SNAPSHOT_WAIT_WHERE, PF.SCREEN_NO_PARTIAL_WHERE}, (
+            "只准指向既有句")
+        assert PF.FACTOR_FAILED_WHERE["shortage"] == PF.SCREEN_ABORTED_WHERE
+        for _k in ("pe_low", "rs_leader", "trend"):
+            assert PF.FACTOR_FAILED_WHERE[_k] == PF.SCREEN_NO_PARTIAL_WHERE, _k
+
+    @pytest.mark.parametrize("which,factor", [
+        ("pe_both", "pe_low"), ("rs_empty", "rs_leader"), ("rs_raise", "rs_leader")])
+    def test_pe_and_rs_no_longer_point_at_finmind_or_the_mops_chain(self, world, which, factor):
+        _break(world, which)
+        _, card, _ = _run(PF, (factor,))
+        _assert_aborted(card)
+        where, face = _where_and_face(card)
+        assert where == face == PF.SCREEN_NO_PARTIAL_WHERE
+        for _w in _WRONG_SOURCE_WORDS:
+            assert _w not in where and _w not in face, (which, _w)
+
+    def test_pe_half_missing_with_rows_uses_the_pe_where(self, world):
+        _break(world, "pe_tpex")
+        res, card, _ = _run(PF, ("pe_low", "eps_high"))
+        assert res.rows and card.state == UI_FAILED
+        assert _where_and_face(card) == (PF.SCREEN_NO_PARTIAL_WHERE,) * 2
+
+    @pytest.mark.parametrize("trends", [
+        _boom,                                    # 舊季 parquet 讀不進來 / 計算出錯（例外）
+        lambda **_k: pd.DataFrame(columns=["stock_id", "favorable_count", "favorable_of"]),
+    ], ids=["raises", "empty_frame"])
+    def test_trend_does_not_promise_the_schedule_will_fix_it(self, world, trends):
+        """B9 獨立 QA 阻擋項：跨季轉強那張卡出得來時，多半是舊季快照壞掉／欄位漂移／計算錯 ——
+        排程只補抓本季與去年同季，**等排程修不好**。⛔ 不得指「要等排程補抓」，也不得指 FinMind 鏈。"""
+        world.setattr(S, "get_cross_quarter_trends", trends)
+        res, card, _ = _run(PF, ("trend",))
+        assert res.factor_input_failed == ("trend",) and res.survivors_error == "", (
+            "前提：存活池好好的，出事的只有跨季轉強")
+        _assert_aborted(card)
+        where, face = _where_and_face(card)
+        assert where == face == PF.SCREEN_NO_PARTIAL_WHERE
+        assert PF.SNAPSHOT_WAIT_WHERE not in where and "排程" not in face
+        for _w in _WRONG_SOURCE_WORDS:
+            assert _w not in where and _w not in face, _w
+
+    @pytest.mark.parametrize("which", ["shortage_empty", "shortage_raise"])
+    def test_shortage_keeps_the_existing_sentence_verbatim(self, world, which):
+        """缺貨掃描走 FinMind（月營收＋季財報）→ 那一整句對它成立，一字未改、卡面也不變。"""
+        _break(world, which)
+        _, card, _ = _run(PF, ("shortage",))
+        assert _where_and_face(card) == (_OLD_ABORTED_WHERE, _OLD_ABORTED_FACE)
+
+    @pytest.mark.parametrize("breaks,factors", [
+        (("pe_both", "trend"), ("pe_low", "trend")),
+        (("shortage_empty", "trend"), ("shortage", "trend")),
+        (("shortage_raise", "rs_empty"), ("shortage", "rs_leader")),
+    ])
+    def test_mixed_failures_fall_back_to_the_one_clause_true_for_all(self, world, breaks, factors):
+        """where 不同的幾個因子一起失敗 → 只剩對每一個都為真的那一句（⛔ 不拼接、⛔ 不挑一個）。"""
+        for _b in breaks:
+            _break(world, _b)
+        res, card, _ = _run(PF, factors)
+        assert set(res.factor_input_failed) == set(factors)
+        assert _where_and_face(card) == (PF.SCREEN_NO_PARTIAL_WHERE,) * 2
+
+    def test_same_where_factors_keep_it(self, world):
+        _break(world, "pe_both")
+        _break(world, "rs_empty")
+        _, card, _ = _run(PF, ("pe_low", "rs_leader"))
+        assert card.note.where == PF.SCREEN_NO_PARTIAL_WHERE
+
+    def test_where_is_decided_by_ticked_factors_only(self, world):
+        """M7（B9 獨立 QA 測試缺口）：估值壞了但**沒勾**、只勾缺貨（缺貨也壞）→ where 只看勾的那一個。
+        選這一組是因為兩者的 where **不同**（缺貨＝FinMind 那一整句、估值＝只剩第一句）——
+        沒勾的估值若混進來，使用者看到的字就會變。"""
+        _break(world, "shortage_empty")
+        _break(world, "pe_both")
+        res, card, _ = _run(PF, ("shortage",))
+        assert res.pe_n == 0, "前提：估值這一輪真的壞了（`_pe_broken` 為真）"
+        assert res.factor_input_failed == ("shortage",), "前提：loader 只回勾了的那一個"
+        _assert_aborted(card)
+        assert card.note.why == f"缺貨掃描：{PF.FACTOR_MISS_WHY}", "沒勾的估值不上主詞"
+        assert _where_and_face(card) == (_OLD_ABORTED_WHERE, _OLD_ABORTED_FACE)
+
+    def test_the_other_aborts_are_unchanged(self, world):
+        """不是因子輸入的那三種中止（排名例外／存活池讀取例外／空池）：where 與卡面一字未變。"""
+        card, _ = _card(factors=("eps_high",), error="RuntimeError('x')")
+        assert _where_and_face(card) == (_OLD_ABORTED_WHERE, _OLD_ABORTED_FACE)
+        card, _ = _card(factors=("eps_high",), df=_Frame(0), rows=0,
+                        survivors_error="RuntimeError('s')")
+        assert _where_and_face(card) == (_OLD_ABORTED_WHERE, _OLD_ABORTED_FACE)
+        card, _ = _card(factors=("eps_high",), df=_Frame(0), rows=0,
+                        survivors_error="RuntimeError('s')", survivors_pool_empty=True)
+        assert _where_and_face(card) == (PF.SNAPSHOT_WAIT_WHERE,) * 2
+
+    def test_factor_failed_where_edges(self):
+        assert PF.factor_failed_where(()) == PF.SCREEN_NO_PARTIAL_WHERE
+        assert PF.factor_failed_where(("shortage",)) == PF.SCREEN_ABORTED_WHERE
+        with pytest.raises(KeyError):
+            PF.factor_failed_where(("eps_high",))
+
+    def test_whole_sentence_candidate_needs_an_exact_match(self):
+        """無 GAP 的短句候選＝整句摘錄 → 要全等。只比開頭的話，短句會吃掉以它開頭的長句。"""
+        spec = PF.V2_SHORT_ROWS[("find.screen_result", PF.SCREEN_ABORTED_NOW)][2]
+        assert PF._v2_pick_short(spec, PF.SCREEN_NO_PARTIAL_WHERE) == PF.SCREEN_NO_PARTIAL_WHERE
+        assert PF._v2_pick_short(spec, _OLD_ABORTED_WHERE) == _OLD_ABORTED_FACE
+        assert PF._v2_pick_short(spec, PF.SNAPSHOT_WAIT_WHERE) == PF.SNAPSHOT_WAIT_WHERE
+
+    @pytest.mark.parametrize("which,factor", [(w, f) for w, f, _l in _ONLY_FACTOR])
+    def test_q7_no_red_factor_card_says_this_round(self, world, which, factor):
+        """⑦：「這輪」暗示一次性；這四個因子的失敗都會被快取或要等排程。"""
+        _break(world, which)
+        _, card, _ = _run(PF, (factor,))
+        face = dict(PF.v2_short_rows(card)[0])
+        assert "這輪" not in card.note.why and "這輪" not in face[PF.V2_WHY_FACT_KEY]
+
+
+class TestB9Mutations:
+    def test_card_where_reverted_points_pe_rs_trend_at_finmind_again(self, world):
+        m = _mutant(PF, "            where=factor_failed_where(_failed_ticked))",
+                    "            where=SCREEN_ABORTED_WHERE)")
+        for which, factor in (("pe_both", "pe_low"), ("rs_empty", "rs_leader"), ("trend", "trend")):
+            _break(world, which)
+            _, card, _ = _run(m, (factor,))
+            assert card.note.where == _OLD_ABORTED_WHERE, "拿掉後又一律指 FinMind／MOPS 鏈"
+
+    def test_mixed_fallback_to_the_finmind_sentence_is_caught(self, world):
+        """混合失敗改成回 FinMind 那一整句 → 對跨季轉強指錯方向（上面「混合」那條守的就是它）。"""
+        m = _mutant(PF, "return _wheres.pop() if len(_wheres) == 1 else SCREEN_NO_PARTIAL_WHERE",
+                    "return _wheres.pop() if len(_wheres) == 1 else SCREEN_ABORTED_WHERE")
+        _break(world, "shortage_empty")
+        _break(world, "trend")
+        _, card, _ = _run(m, ("shortage", "trend"))
+        assert card.note.where == _OLD_ABORTED_WHERE
+
+    def test_trend_back_to_the_schedule_sentence_is_caught(self, world):
+        m = _mutant(PF, '    "trend": SCREEN_NO_PARTIAL_WHERE,\n}', '    "trend": SNAPSHOT_WAIT_WHERE,\n}')
+        _break(world, "trend")
+        _, card, _ = _run(m, ("trend",))
+        assert card.note.where == PF.SNAPSHOT_WAIT_WHERE, "改回去就又叫人等排程"
+
+    def test_unticked_broken_factor_joining_the_where_is_caught(self, world):
+        """M7：where 改成連「沒勾、但出事」的因子也算進去 → 缺貨那張的去哪補被沒勾的估值改掉。"""
+        m = _mutant(PF, "where=factor_failed_where(_failed_ticked))",
+                    "where=factor_failed_where(_failed_keys))")
+        _break(world, "shortage_empty")
+        _break(world, "pe_both")
+        _, card, _ = _run(m, ("shortage",))
+        assert card.note.where == PF.SCREEN_NO_PARTIAL_WHERE != _OLD_ABORTED_WHERE
+
+    def test_exact_match_rule_removed_eats_the_long_sentences_face(self):
+        m = _mutant(PF, "        if V2_EXCERPT_GAP not in str(_alt):\n"
+                        "            if full == str(_alt):\n"
+                        "                return str(_alt)\n"
+                        "            continue\n", "")
+        card, _ = _card(factors=("eps_high",), error="RuntimeError('x')")
+        assert dict(m.v2_short_rows(card)[0])[m.V2_GUIDE_FACT_KEY] == PF.SCREEN_NO_PARTIAL_WHERE, (
+            "拿掉全等規則 → 排名例外那張的卡面被短句吃掉（上面那條守的就是它）")
+
+    def test_this_round_deletion_removed(self):
+        m = _mutant(PF, '.split("，", 1)[0].replace("這輪", "", 1))', '.split("，", 1)[0])')
+        assert "這輪" in m.FACTOR_MISS_WHY
