@@ -28,18 +28,63 @@ from shared.ttls import TTL_1HOUR
 from src.config import FINMIND_API_URL
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
-def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
+#: 損益表 dataset 名（也是下方 `_ds_ffs` 的第三項，一份字面）。需要分辨「是不是損益表那一腿
+#: 沒拿到」的呼叫端讀 `fetch_financial_statements(..., failed=)` 的鍵時用它比對。
+DATASET_INCOME_STATEMENT = "TaiwanStockFinancialStatements"
+
+#: 快取內層回傳的 dict 裡，「這一輪哪幾個 dataset 沒拿到 FinMind 成功回應」的鍵（私有）。
+#: 值 ＝ `{dataset: 失敗說明}`，**只記失敗**（例外、或 status != 200）；status 200（含
+#: 「200 但 data 空」＝ 真的沒有）不記。公開的 `fetch_financial_statements()` 一律把這個鍵
+#: 拿掉再回傳 —— 不傳 `failed=` 的既有呼叫端拿到的 dict 與改前**逐鍵相同**。
+_FETCH_FAILED_KEY = "_fetch_failed_datasets"
+
+
+def fetch_financial_statements(stock_id: str, token: str = "", *,
+                               failed: dict | None = None) -> dict:
     """
     從 FinMind 抓取最新一季資產負債表、現金流量表、損益表，
     計算財報體檢體系所需指標。
     回傳 dict；失敗時回傳 {"error": "..."}。
+
+    failed（2026-09-26 查一檔靜默失敗批；預設 None ＝ 既有行為一字不變）：
+      傳一個 dict 進來 → 這一輪**沒拿到 FinMind 成功回應**（例外或 status != 200）的
+      dataset 會寫進去（`{dataset: 失敗說明}`）；全部 200（含「200 但沒有資料」）→ 不寫。
+      ⚠️ 為什麼要這個：三個 dataset 任一「連線失敗 / 額度用罄」時，本函式回的
+      `{"error": "…FinMind 無此股票財報資料…"}`（或少了一張表的 dict）與「真的沒有財報」
+      **長得一模一樣** —— 只有 status 分得開。回傳值本身不變，旗標只走這個參數。
+    """
+    _out = _fetch_financial_statements_cached(stock_id, token)
+    if not isinstance(_out, dict) or _FETCH_FAILED_KEY not in _out:
+        return _out
+    _out = dict(_out)              # 不動快取裡那一份
+    _failed = _out.pop(_FETCH_FAILED_KEY)
+    if failed is not None and isinstance(_failed, dict):
+        failed.update(_failed)
+    return _out
+
+
+def _with_fetch_failed(out: dict, failed_ds: dict) -> dict:
+    """有 dataset 沒拿到成功回應 → 在回傳 dict 帶私有鍵（公開函式會拿掉）。"""
+    if failed_ds:
+        out[_FETCH_FAILED_KEY] = dict(failed_ds)
+    return out
+
+
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+def _fetch_financial_statements_cached(stock_id: str, token: str = "") -> dict:
+    """`fetch_financial_statements()` 的快取層（原函式本體，邏輯未改）。
+
+    唯一的差別：哪幾個 dataset 沒拿到 FinMind 成功回應，記在私有鍵 `_FETCH_FAILED_KEY`
+    （和結果一起快取 —— 快取命中時旗標照樣在，不會「第二次看起來就成功了」）。
     """
     import os as _os_ffs, requests as _rq_ffs, datetime as _dt_ffs
 
     _tok = token or _os_ffs.environ.get("FINMIND_TOKEN", "")
     _start = (_dt_ffs.date.today() - _dt_ffs.timedelta(days=730)).strftime("%Y-%m-%d")
     _hdrs = {"Authorization": f"Bearer {_tok}"} if _tok else {}
+
+    # dataset → 失敗說明。**只記失敗**（例外 / status != 200）。各執行緒寫不同的鍵。
+    _failed_ds: dict = {}
 
     def _fm(dataset):
         _p = {"dataset": dataset, "data_id": stock_id, "start_date": _start}
@@ -54,16 +99,20 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
             _st = _j.get("status")
             if _st != 200:
                 print(f"[fetch_fin/{dataset}] 非200回應: status={_st} msg={_j.get('msg','')}")
+                _failed_ds[dataset] = (f"[fetch_fin/{dataset}] 非200回應: status={_st} "
+                                       f"msg={_j.get('msg','')}")
             return _j.get("data", []) if _st == 200 else [], _st
         except Exception as _e:
             print(f"[fetch_fin/{dataset}] {_e}")
+            _failed_ds[dataset] = f"[fetch_fin/{dataset}] {type(_e).__name__}: {_e}"
             return [], None
 
-    # 3 個 dataset 彼此獨立 → 並行抓（_fm 純獨立 requests、無共享可變狀態，線程安全）。
+    # 3 個 dataset 彼此獨立 → 並行抓（_fm 純獨立 requests，線程安全；唯一共享的
+    # `_failed_ds` 各執行緒只寫自己那個 dataset 的鍵）。
     # map 保序，故下方解包順序與 _ds_ffs 一致；總請求數不變（FinMind 限額為每小時制）。
     from concurrent.futures import ThreadPoolExecutor as _TPE_ffs
     _ds_ffs = ("TaiwanStockBalanceSheet", "TaiwanStockCashFlowsStatement",
-               "TaiwanStockFinancialStatements")
+               DATASET_INCOME_STATEMENT)
     with _TPE_ffs(max_workers=3) as _ex_ffs:
         _fm_res = list(_ex_ffs.map(_fm, _ds_ffs))
     (_bs_rows, _bs_st), (_cf_rows, _cf_st), (_is_rows, _is_st) = _fm_res
@@ -78,7 +127,7 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
         else:
             _err = (f"{stock_id}：FinMind 無此股票財報資料"
                     f"（可能為新掛牌、未上市、或 FinMind 資料源尚未收錄）")
-        return {"error": _err}
+        return _with_fetch_failed({"error": _err}, _failed_ds)
 
     def _build(rows):
         """同一 (date,key) 多筆值衝突時取最大絕對值。
@@ -107,7 +156,7 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
 
     _dates = sorted(set(list(_bs.keys()) + list(_cf.keys())))
     if not _dates:
-        return {"error": f"{stock_id}：財報日期解析失敗"}
+        return _with_fetch_failed({"error": f"{stock_id}：財報日期解析失敗"}, _failed_ds)
 
     _lat = _dates[-1]
     _prv = _dates[-2] if len(_dates) >= 2 else _lat
@@ -561,7 +610,7 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
             "is_finance":         stock_id.startswith(('28', '58')),
         }
 
-    return {
+    return _with_fetch_failed({
         "stock_id":         stock_id,
         "period":           _lat,
         "現金佔總資產(%)":  cash_ratio,
@@ -612,4 +661,4 @@ def fetch_financial_statements(stock_id: str, token: str = "") -> dict:
         "fetched_at":        pd.Timestamp.now('UTC').isoformat(),
         # v18.456: 上季關鍵指標，供財報趨勢 bootstrap（ephemeral 重啟後仍可計算 2 季對比）
         "prev_period_data":  _prev_period_data,
-    }
+    }, _failed_ds)

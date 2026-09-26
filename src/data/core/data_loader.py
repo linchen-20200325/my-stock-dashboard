@@ -363,16 +363,23 @@ class StockDataLoader:
 
     # v19.74 review:max_entries=64 — 以 stock_id 為鍵逐檔堆積,LRU 回收控記憶體上界
     # (Streamlit Cloud ~1GB,連續瀏覽數百檔無上界會膨脹到 OOM 重啟)。
-    def get_combined_data(self, stock_id, days, use_adjusted=True):
+    def get_combined_data(self, stock_id, days, use_adjusted=True, *, strict=False):
         """完整數據載入流程(public wrapper,N2a v19.80)。
 
         暫時性失敗(內層 raise _CombinedDataError)在此還原為 (None, err, None),
         **不進 st.cache_data** — 修「一次暫時性失敗被快取 1 小時」。
         成功與確定性負結果(查無資料)仍由內層快取。
+
+        strict(2026-09-26 查一檔靜默失敗批;預設 False = 既有行為一字不變):
+          True → 暫時性失敗**照樣往上拋**(不還原成 (None, err, None))。還原後的
+          `err` 字串與確定性負結果「❌ 查無資料」同形,呼叫端只剩解析字串一途(那是猜);
+          拋出來就分得開。確定性負結果仍照舊回 (None, "❌ 查無資料", None)。
         """
         try:
             return self._get_combined_data_cached(stock_id, days, use_adjusted)
         except _CombinedDataError as _e_gcd:
+            if strict:
+                raise
             return None, str(_e_gcd), None
 
     @st.cache_data(ttl=TTL_1HOUR, max_entries=64)

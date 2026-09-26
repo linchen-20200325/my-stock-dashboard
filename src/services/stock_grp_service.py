@@ -29,8 +29,13 @@ from src.data.core import (
     fetch_industry_category,
     fetch_financial_statements,
 )
+from src.data.core import financial_statements_fetcher as _ffs
 from src.data.etf import _fetch_news_for
 from src.data.stock import fetch_5_years_cash_flow
+
+#: 損益表 dataset 名（L1 SSOT 轉出）。`get_financial_statements(failed=)` 的鍵用它比對
+#: 「是不是損益表那一腿沒拿到」—— L5 不得直呼 L1，故由本 service 轉出。
+DATASET_INCOME_STATEMENT: str = _ffs.DATASET_INCOME_STATEMENT
 
 
 # ── L3 wrapper(thin pass-through)─────────────────────────
@@ -55,9 +60,16 @@ def get_news_for(sid: str, name: str = '', n: int = 3) -> str:
     return _fetch_news_for(sid, name, n)
 
 
-def get_financial_statements(sid: str, fm_token: str = '') -> Any:
-    """取得個股財報 dict(income / balance / cashflow / quarterly_extra)。"""
-    return fetch_financial_statements(sid, fm_token)
+def get_financial_statements(sid: str, fm_token: str = '', *,
+                             failed: dict | None = None) -> Any:
+    """取得個股財報 dict(income / balance / cashflow / quarterly_extra)。
+
+    failed:透傳 L1 `fetch_financial_statements(failed=)`(預設 None = 既有行為一字不變)。
+    傳一個 dict → 這一輪沒拿到 FinMind 成功回應的 dataset 寫進去(`{dataset: 失敗說明}`)。
+    """
+    if failed is None:
+        return fetch_financial_statements(sid, fm_token)
+    return fetch_financial_statements(sid, fm_token, failed=failed)
 
 
 def get_5_years_cash_flow(sid: str, fm_token: str = '') -> Any:
