@@ -246,6 +246,17 @@ def _enumerate():
               {"代號": "2454", "種類": "個股", "held": True, "損益%": None, "現價": None,
                "_detail": {}}),
         take_profit=({"代號": "2330", "損益%": 22.0},)))
+    # Q2（2026-09-26）：持有列取數失敗 → ⑤ 80/20 ＋ ⑥ 核心／衛星的第二種紅（無例外）。
+    # 三例各走短句表的一個候選：只有整批失敗／只有現價抓不到（旁邊一檔已算出比例）／兩者同時。
+    _sp_ok = {"代號": "2330", "種類": "個股", "held": True, "現價": 103.0, "_detail": {}}
+    _sp_err = {"代號": "0056", "種類": "ETF", "held": True, "_detail": {"error": "E"}}
+    _sp_nopx = {"代號": "2454", "種類": "個股", "held": True, "現價": None, "_detail": {}}
+    for _rows, _sp in (((_sp_err,), None), ((_sp_ok, _sp_nopx), split),
+                       ((_sp_err, _sp_nopx), None)):
+        _st = P.StationReadout(requested=True, submitted=True, bound=True, holdings_n=2,
+                               rows=_rows, split=_sp)
+        add(P.build_allocation_split_card, _st)
+        add(P.build_core_satellite_card, _st)
     # 批次 3（2026-09-26）：有持股的配息抓取失敗 → 配息卡的第二種紅（無例外）。
     add(P.build_dividend_cash_card, P.DeepReadout(
         requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,
