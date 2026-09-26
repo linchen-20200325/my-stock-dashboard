@@ -301,16 +301,55 @@ def _all_records(*, sheet_id: str | None = None,
 # `portfolios` / `stock_watchlist` 分頁 records → 乾淨清單。抽出讓 load_portfolio /
 # load_stock_watchlist（OAuth/streamlit 路徑）與 headless SA reader（gsheet_sa_reader,
 # cron 用）共用**同一套** 欄位鍵 + 完整性規則,避免兩邊 schema/濾值邏輯漂移。
-def parse_portfolio_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+#: `_cell_or_none()` 的「這一列要丟」記號（與 `None`＝缺值 分開;不外流）。
+_UNUSABLE = object()
+
+
+def _is_blank_cell(value: Any) -> bool:
+    """Sheet 的**空白格**:`None` 或只含空白的字串（`get_all_records()` 對空白格回 `''`）。"""
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _cell_or_none(value: Any) -> Any:
+    """`keep_blank=True` 用:空白 → `None`（缺值）;非空白 → 與預設路徑**同一條**規則。
+
+    非空白時:轉不成 float 或 `<= 0` → `_UNUSABLE`（整列照舊丟）;否則回 float。
+    ⚠️ 比較式刻意與預設路徑相同（`<= 0` 才丟）—— 兩種模式對「有填值的格子」
+    必須得到同一個結果,只差在空白格。
+    """
+    if _is_blank_cell(value):
+        return None
+    try:
+        _v = float(value)
+    except (TypeError, ValueError):
+        return _UNUSABLE
+    return _UNUSABLE if _v <= 0 else _v
+
+
+def parse_portfolio_records(records: list[dict[str, Any]], *,
+                            keep_blank: bool = False) -> list[dict[str, Any]]:
     """`portfolios` records → `[{ticker, lots, avg_price}, ...]`（純函式,不分 name）。
 
     §1 資料完整性:ticker 非空、lots>0、avg_price>0,否則丟棄（不納入零值/髒列,不捏造）。
     ticker 保留原樣（不改大小寫,與 load_portfolio 既有行為一致）。
+
+    keep_blank（加性參數,預設 False ＝ 既有行為一字不變;Q4 2026-09-26）:
+        True 時,張數／均價是**空白格**的列**不丟**,該欄回 `None`（缺值,⛔ 不是 0）。
+        理由:預設路徑把空白讀成 0 再丟 ⇒ 一本每列都缺張數或均價的組合會**整本消失**,
+        下游看到的是「一列持股都沒有」—— 那是把「有內容但缺欄位」講成「空的」(§1)。
+        ⚠️ **只放寬「空白」這一種**:有填值但讀不出正數（`0`／負數／非數字）照舊丟 ——
+        那是使用者寫了一個值,本層不替它猜意思。
     """
     out: list[dict[str, Any]] = []
     for rec in (records or []):
         tk = str(rec.get('ticker', '')).strip()
         if not tk:
+            continue
+        if keep_blank:
+            _lots = _cell_or_none(rec.get('lots'))
+            _avg = _cell_or_none(rec.get('avg_price'))
+            if _lots is not _UNUSABLE and _avg is not _UNUSABLE:
+                out.append({'ticker': tk, 'lots': _lots, 'avg_price': _avg})
             continue
         try:
             lots = float(rec.get('lots') or 0)
@@ -355,10 +394,13 @@ def list_portfolios(*, sheet_id: str | None = None) -> list[str]:
 
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
-def load_portfolio(name: str, *, sheet_id: str | None = None) -> list[dict[str, Any]]:
+def load_portfolio(name: str, *, sheet_id: str | None = None,
+                   keep_blank: bool = False) -> list[dict[str, Any]]:
     """讀取指定名稱的組合，回傳 `[{ticker, lots, avg_price}, ...]`。
 
     sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
+    keep_blank:透傳 `parse_portfolio_records`（預設 False ＝ 既有行為;True → 張數／均價
+        空白的列保留、該欄 `None`）。它是參數 ⇒ 屬快取鍵,兩種模式不共用快取項。
     ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
     """
     name = (name or '').strip()
@@ -366,6 +408,8 @@ def load_portfolio(name: str, *, sheet_id: str | None = None) -> list[dict[str, 
         return []
     recs = [r for r in _all_records(sheet_id=sheet_id)
             if str(r.get('name', '')).strip() == name]
+    if keep_blank:
+        return parse_portfolio_records(recs, keep_blank=True)
     return parse_portfolio_records(recs)   # §2.1 共用純解析器（同 headless SA reader）
 
 

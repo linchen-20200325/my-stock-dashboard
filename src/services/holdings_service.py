@@ -93,6 +93,8 @@ class HoldingsResult:
             `stock_watchlist` 分頁的 schema 只有 `name` / `ticker` / `updated_at`
             三欄，**根本沒有張數與均價**。填 0 會讓 80/20 與停利把它算成
             「持有 0 張、成本 0 元」（§1 不猜、不填 0）。
+            `get_holdings(keep_blank=True)` 時，**持有列**也可能是 `None`
+            （Sheet 上那一格是空白）—— 同樣是缺值，不是 0。
         bound: 有沒有綁到「投資組合」那本 Sheet（＝ 有沒有可讀的來源）。
             `False` ＋ 空清單 = 你還沒綁，**這是有效結果**。
         logged_in: Google 有沒有登入（由 L3 `get_binding_state()` 帶下來）。
@@ -154,8 +156,16 @@ def _row(ticker: str, *, held: bool, lots=None, avg_price=None) -> dict:
     }
 
 
-def get_holdings() -> HoldingsResult:
+def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
     """讀出目前的持股清單（投資組合 ＋ 觀察清單）。**純讀不寫。**
+
+    Args:
+        keep_blank: 加性參數（Q4 2026-09-26），預設 False ＝ 既有行為一字不變
+            （L1 呼叫連參數都不多帶）。True → 投資組合裡「張數／均價」是**空白格**的列
+            **保留**為持有列，缺的那一欄是 `None`（⛔ 不是 0）；下游
+            `dividend_station_service` / `portfolio_deep_service` 本來就對 `None` 誠實略過
+            並揭露「缺張數／均價」。不開的話，一本每列都缺張數或均價的組合會**整本消失**，
+            呼叫端只能把它講成「Sheet 是空的」。語意見 L1 `parse_portfolio_records`。
 
     Returns:
         `HoldingsResult`。沒有綁 Sheet → `bound=False` ＋ 空清單（**有效結果**）。
@@ -195,11 +205,15 @@ def get_holdings() -> HoldingsResult:
         _names = _gsp.list_portfolios(sheet_id=_sid) or []
         if _names:
             _pf_name, _more_pf = _names[0], len(_names) > 1
-            for _rec in (_gsp.load_portfolio(_pf_name, sheet_id=_sid) or []):
+            # keep_blank 為 False 時**連參數都不帶**：L1 呼叫與改前逐字相同（同一個快取鍵）。
+            _recs = (_gsp.load_portfolio(_pf_name, sheet_id=_sid, keep_blank=True)
+                     if keep_blank else _gsp.load_portfolio(_pf_name, sheet_id=_sid))
+            for _rec in (_recs or []):
                 _tk = str(_rec.get("ticker", "") or "").strip().upper()
                 if not _tk:
                     continue
-                # `parse_portfolio_records` 已保證 lots>0 / avg_price>0 才進來；
+                # `parse_portfolio_records` 已保證 lots>0 / avg_price>0 才進來
+                # （`keep_blank=True` 時空白格是 `None` ＝ 缺值，⛔ 不是 0）；
                 # 這裡原樣搬運，**不補值、不四捨五入**（§1 不加工使用者的成本）。
                 _out.append(_row(_tk, held=True, lots=_rec.get("lots"),
                                  avg_price=_rec.get("avg_price")))
