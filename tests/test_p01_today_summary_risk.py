@@ -12,7 +12,7 @@
 3. **冷啟動是灰，⛔ 不是紅**；
 4. **逐格獨立判態**（④A「一格壞不染色另兩格」）：危險度壞掉不碰位階／動能，
    位階壞掉也不碰風險；「動能」維持未接線；
-5. 畫面端真的走 `build_summary_tiles()`（拔掉接線 ⇒ 本檔轉紅）。
+5. 畫面端真的走 `build_summary_tiles()`（拔掉接線 ⇒ 本檔轉紅；fast lane 見 5b 行為版）。
 """
 from __future__ import annotations
 
@@ -254,14 +254,84 @@ def test_page_renders_the_wired_risk_cell(tmp_path, mode):
             "live 風險格的燈號頻道（L4 BAND_META 中文）沒畫出來")
 
 
-def test_render_path_uses_the_wired_builder():
-    """快速版守衛（fast lane）：畫面端走 `build_summary_tiles()`，⛔ 不是 `_tiles_of_cards()`。
+# ══════════════════════════════════════════════════════════════════
+# 5b. 畫面端真的接上 —— **行為版**快速守衛（fast lane）
+#
+# 📌 2026-09-26 QA 補洞：**取代**原本的 `test_render_path_uses_the_wired_builder`
+# （比對 `inspect.getsource` 的字串，含換行與縮排）。取代理由（實測，非推論）：
+#   · 把 `build_summary_tiles(\n            _summary.cards,` 收成一行（無害重排）⇒ 它轉紅；
+#   · 把 `danger_requested` 寫死 True、漏傳 `band_zh_color`、吞掉 `danger_error`
+#     （真回歸）⇒ 它全綠 —— 它唯一抓得到的「退回 `_tiles_of_cards`」，本組也抓得到。
+# 本組實際跑一次 `render_page_today()`：所有 loader 注入、`st` 換成假物件、
+# `_render_tiles` 換成錄影機，逐態比對「畫面收到的風險格」＝ 純 builder 的產出。
+# ══════════════════════════════════════════════════════════════════
+def _drive_page(monkeypatch, danger: str) -> dict:
+    """跑一次整頁 render（無 Streamlit runtime），回 `{card.key: Tile}`（畫面實際收到的）。"""
+    from unittest import mock
 
-    突變：把 `render_page_today()` 裡那行改回 `_tiles_of_cards(_summary.cards)` ⇒ 本條轉紅
-    （slow lane 的整頁 mount 另外從畫面端驗同一件事）。
-    """
-    import inspect
+    _sc = DANGER_SCENARIOS[danger]
+    _requested = _sc["danger_requested"]
+    _src = _sc.get("danger_source", "") if _sc["danger_error"] else ""
+    _drawn: list = []
 
-    _src = inspect.getsource(P.render_page_today)
-    assert "build_summary_tiles(\n            _summary.cards" in _src
-    assert "_tiles_of_cards(_summary.cards)" not in _src
+    _fake_st = mock.MagicMock(name="st")
+    _fake_st.session_state = {}
+    _fake_st.tabs.side_effect = lambda labels: [mock.MagicMock() for _ in labels]
+    monkeypatch.setattr(P, "st", _fake_st)
+    monkeypatch.setattr(P, "_inject_v2_css", lambda: None)
+    monkeypatch.setattr(P, "_render_update_form", lambda _s: None)
+    monkeypatch.setattr(P, "section_header", lambda *a, **k: None)
+    monkeypatch.setattr(P, "render_note", lambda *a, **k: None)
+    monkeypatch.setattr(P, "load_macro_readout",
+                        lambda _s: P.MacroReadout(requested=_requested))
+    monkeypatch.setattr(P, "_load_l4_labels", lambda: (None, None, BANDS, ""))
+    monkeypatch.setattr(P, "_load_allocation", lambda: (None, ""))
+    monkeypatch.setattr(P, "_load_regime", lambda: (COLD_REGIME, ""))
+    monkeypatch.setattr(P, "_load_danger",
+                        lambda _r: (_sc["danger"], _sc["danger_error"], _src))
+    monkeypatch.setattr(P, "_load_key_alerts", lambda _s: (None, False, ""))
+    monkeypatch.setattr(P, "_load_lamp_directions", lambda _s=None: {})
+    monkeypatch.setattr(P, "_render_tiles",
+                        lambda tiles, cols=None: _drawn.extend(tiles))
+    P.render_page_today()
+    _risk_n = sum(_t.card.key == P.SUMMARY_RISK_KEY for _t in _drawn)
+    assert _risk_n == 1, f"「風險」格應恰畫一次，實際 {_risk_n} 次"
+    return {_t.card.key: _t for _t in _drawn}
+
+
+def _expected_risk(danger: str):
+    _sc = DANGER_SCENARIOS[danger]
+    _src = _sc.get("danger_source", "") if _sc["danger_error"] else ""
+    return {_t.card.key: _t for _t in P.build_summary_tiles(
+        _summary_cards(**REGIME_SCENARIOS["cold"]),
+        danger=_sc["danger"], danger_error=_sc["danger_error"],
+        danger_requested=_sc["danger_requested"], danger_source=_src,
+        band_zh_color=BANDS, l4_error="")}[P.SUMMARY_RISK_KEY]
+
+
+@pytest.mark.parametrize("danger", sorted(DANGER_SCENARIOS))
+def test_render_path_draws_the_wired_risk_tile(monkeypatch, danger):
+    _risk = _drive_page(monkeypatch, danger)[P.SUMMARY_RISK_KEY]
+    assert _risk == _expected_risk(danger)
+    assert _risk.card.state != UI_UNWIRED
+
+
+@pytest.mark.parametrize("danger,state,badge", [
+    ("idle", UI_IDLE, 3), ("live", UI_LIVE, 1),
+    ("failed", UI_FAILED, 6), ("failed_upstream", UI_FAILED, 6),
+])
+def test_render_path_risk_tile_state_and_badge(monkeypatch, danger, state, badge):
+    """直接釘「畫面收到的」狀態與徽章（⛔ 只靠 builder 等式的話，兩邊一起錯看不出來）。"""
+    _risk = _drive_page(monkeypatch, danger)[P.SUMMARY_RISK_KEY]
+    assert _risk.card.state == state
+    assert P.v2_card_badge_n(_risk.card) == badge
+    if danger == "live":
+        assert _risk.signal_text == "黃"
+
+
+def test_render_path_risk_equals_card_two_on_the_same_page(monkeypatch):
+    """同一輪畫面上，「風險」格與卡② 是同一份讀數（只差 key / 標題）。"""
+    _tiles = _drive_page(monkeypatch, "live")
+    _risk, _card2 = _tiles[P.SUMMARY_RISK_KEY], _tiles["verdict.danger"]
+    assert _risk == dataclasses.replace(_card2, card=dataclasses.replace(
+        _card2.card, key=_risk.card.key, label=_risk.card.label))
