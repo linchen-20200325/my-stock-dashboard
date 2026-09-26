@@ -361,3 +361,62 @@ class TestL3StrictAllUnscored:
                             lambda **_k: (_SURV_NO_EPS, {}))
         monkeypatch.setattr(FSS, "get_ranked_picks", _all_unscored)
         assert m.get_switch_in_candidates(strict=True) == []
+
+
+# ══════════════════════════════════════════════════════════════════
+# QA 補洞（2026-09-26）：`_is_veto_regime` 的 dict 分支原本沒有任何測試
+#   （把 `regime = regime.get("regime")` 換成 `pass` 全綠）。
+#   判定必須與選股網空頭濾網自己的 regime 判定**逐輸入一致**，否則兩邊會漂移：
+#   濾網剔光（有效 0 檔）卻被 L3 當成「缺資料」raise，或反之。
+# ══════════════════════════════════════════════════════════════════
+def _fss_veto(regime) -> bool:
+    """選股網濾網自己的 regime 判定（行為觀測，不讀原始碼）：
+
+    `rs_rows=None` 時，否決態會加註「未套用空頭濾網」、非否決態原封不動回 note。
+    """
+    _note = "N"
+    _, _out = FSS._apply_bear_market_filter(pd.DataFrame(), _note,
+                                            regime=regime, rs_rows=None)
+    return _out != _note
+
+
+_VETO_INPUTS = [
+    "bear", "caution", "bull", "neutral", "unknown", "", None,
+    "BEAR", " bear", "Bear",                        # 大小寫 / 空白：兩邊都**不**正規化
+    {"regime": "bear"}, {"regime": "caution"}, {"regime": "bull"},
+    {"regime": None}, {}, {"light": "🔴"},          # 誤傳整個 macro-state dict
+]
+
+
+class TestVetoRegimeMatchesTheBearFilter:
+    @pytest.mark.parametrize("regime", _VETO_INPUTS, ids=repr)
+    def test_same_verdict_as_the_screeners_bear_filter(self, regime):
+        assert DSS._is_veto_regime(regime) is _fss_veto(regime)
+
+    @pytest.mark.parametrize("regime,expected", [
+        ({"regime": "bear"}, True), ({"regime": "caution"}, True),
+        ({"regime": "bull"}, False), ({}, False), (None, False),
+        ("bear", True), ("caution", True), ("bull", False), ("BEAR", False),
+    ], ids=repr)
+    def test_explicit_truth_table(self, regime, expected):
+        assert DSS._is_veto_regime(regime) is expected
+
+    @pytest.mark.parametrize("regime", [["bear"], {"regime": ["bear"]}], ids=repr)
+    def test_unhashable_is_not_veto_and_does_not_raise(self, regime):
+        assert DSS._is_veto_regime(regime) is False
+
+    def test_a_bear_dict_reaches_the_bear_branch_end_to_end(self, monkeypatch):
+        """誤傳整個 dict 的空頭 regime 也走「分不出來 → 回 []」，⛔ 不 raise。"""
+        monkeypatch.setattr(FSS, "get_fundamental_survivors",
+                            lambda **_k: (_SURV_NO_EPS, {}))
+        monkeypatch.setattr(FSS, "get_ranked_picks", _all_unscored)
+        assert DSS.get_switch_in_candidates(strict=True,
+                                            regime={"regime": "bear"}) == []
+        with pytest.raises(RuntimeError, match="未取得綜合分"):
+            DSS.get_switch_in_candidates(strict=True, regime={"regime": "bull"})
+
+    def test_c_mutation_dropping_the_dict_branch_is_caught(self):
+        m = _mutant(DSS, '        regime = regime.get("regime")\n',
+                    "        pass\n")
+        assert m._is_veto_regime({"regime": "bear"}) is False
+        assert m._is_veto_regime({"regime": "bear"}) is not _fss_veto({"regime": "bear"})

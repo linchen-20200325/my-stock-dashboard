@@ -154,6 +154,18 @@ class TestComputeNodata:
         pts = [("2026-07-01", 50.0), ("2026-07-01", 55.0)]
         assert compute_lamp_direction("ism_pmi", pts).direction == "nodata"
 
+    @pytest.mark.parametrize("key", ["margin", "bias_240", "vix"])
+    def test_duplicate_dates_nodata_on_daily_keys(self, key):
+        """QA 補洞（2026-09-26）：上一條的月序列同時被「中間缺月」擋下（gap 0 ≠ 1），
+        重複日期檢查本身在日序列上沒人守（拿掉它全綠）。這裡夠長、端點會算出 ↗，
+        只有重複日期檢查能讓它變 nodata —— ⛔ 不得靜默用錯位的視窗算方向。"""
+        n = LAMP_DIRECTION_WINDOWS[key]["lookback_rows"]
+        pts = _daily([100.0] * (n + 1) + [150.0])
+        pts[-1] = (pts[-2][0], pts[-1][1])            # 最後兩列同一天
+        d = compute_lamp_direction(key, pts)
+        assert d.direction == "nodata" and d.delta is None
+        assert "重複日期" in d.reason
+
 
 class TestComputeDirection:
     def test_vix_diff_points_and_band(self):
@@ -894,3 +906,71 @@ class TestHoverTitleNewline:
         html = self._margin_html()
         tokens = md.MarkdownIt("commonmark").parse(html)
         assert [t.type for t in tokens] == ["html_block"]
+
+
+# ════════════════════════════════════════════════════════════════
+# QA 補洞（2026-09-26）：vix 序列**存在但被拒**（長度不一 / 末值 ≠ 燈值 / 無燈值）
+# ⇒ 使用者在卡面上看到的是「無資料」列 —— 釘住這個**畫面結果**。
+#
+# 既有 `TestSessionSeries` 只驗 `LampDirection.direction == "nodata"`，沒有走到卡面。
+# 下面每組的序列若被「湊」進來（截斷 zip / 忽略燈值），都會算出 ↗ 上升 ——
+# 所以卡面一旦出現箭頭或數值，就是回歸成「填了一個值」。
+# ⚠️ **刻意不釘 L2 的 reason 字串**：現況被拒時 reason 寫「沒有歷史序列」，
+#    但序列其實存在、只是被拒 —— 那句不精確（已上報，本批不改 src）。
+#    釘它等於把不精確的措辭鎖死，故只釘使用者看得到的「無資料」。
+# ════════════════════════════════════════════════════════════════
+def _rejected_vix_blocks():
+    base = [20.0] * 40 + [26.0]                  # 若被接受 ⇒ ↗ 上升 +6.0 點
+    short_dates = _vix_block(base)
+    short_dates["dates"] = short_dates["dates"][1:]           # 40 日期 vs 41 值
+    long_dates = _vix_block(base)
+    long_dates["values"] = long_dates["values"][1:]           # 41 日期 vs 40 值
+    long_dates["current"] = 26.0
+    return {
+        "dates_shorter": short_dates,
+        "values_shorter": long_dates,
+        "end_value_not_lamp_value": _vix_block(base, current=31.0),
+        "no_lamp_value": {**_vix_block(base), "current": None},
+    }
+
+
+class TestRejectedVixSeriesShowsNoDataOnCard:
+    def _card(self, monkeypatch, blk):
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        dirs = P._load_lamp_directions(_session(vix=blk))
+        band_label, thr_text, _, l4_err = P._load_l4_labels()
+        tiles = _flat(P.build_indicator_tiles(_live_readout(), band_label=band_label,
+                                              thr_text=thr_text, l4_error=l4_err,
+                                              directions=dirs))
+        return dirs["vix"], tiles
+
+    def test_control_an_accepted_series_does_show_an_arrow(self, monkeypatch):
+        """對照組：同一組數值若被接受，卡面一定有箭頭（否則下面的「無資料」沒有鑑別力）。"""
+        d, tiles = self._card(monkeypatch, _vix_block([20.0] * 40 + [26.0]))
+        assert d.direction == "up"
+        assert _dir_text(tiles, "vix").startswith("↗ 上升（近 20 交易日 +6.0 點")
+
+    @pytest.mark.parametrize("case", sorted(_rejected_vix_blocks()))
+    def test_rejected_series_is_a_no_data_row(self, monkeypatch, case):
+        from src.ui.views import page_today as P
+
+        d, tiles = self._card(monkeypatch, _rejected_vix_blocks()[case])
+        assert d.direction == "nodata" and d.delta is None
+        txt = _dir_text(tiles, "vix")
+        assert txt == LAMP_DIRECTION_NODATA_TEXT == "無資料"
+        assert not any(c in txt for c in "↗→↘0123456789")
+        html = P.v2_card_html(tiles["detail.vix"])
+        assert _ROW_SPAN in html, "被拒 ⛔ 不得讓整列消失（要誠實顯示無資料）"
+        assert "↗" not in html and "↘" not in html
+
+    @pytest.mark.parametrize("case", sorted(_rejected_vix_blocks()))
+    def test_rejection_does_not_touch_the_lamp_itself(self, monkeypatch, case):
+        """方向被拒只影響那一列；vix 的燈號 / 其他列與「沒給方向」時逐字相同（除方向列）。"""
+        _, tiles = self._card(monkeypatch, _rejected_vix_blocks()[case])
+        _, clean = self._card(monkeypatch, _vix_block([20.0] * 40 + [26.0]))
+        strip = lambda t: [f for f in t.facts if f[0] != LAMP_DIRECTION_FACT_KEY]  # noqa: E731
+        assert tiles["detail.vix"].card.state == clean["detail.vix"].card.state
+        assert tiles["detail.vix"].signal_text == clean["detail.vix"].signal_text
+        assert strip(tiles["detail.vix"]) == strip(clean["detail.vix"])
