@@ -141,7 +141,8 @@ render path 上**沒有 idle 態**，冷啟動會顯示「叫了沒回」而不�
 線框 `PAGES[0]` 葉1 的 ③ 是**三欄摘要（位階 / 動能 / 風險）**。
 
   · **葉1 ③ ＝ 線框的三欄摘要**，直接取用 `tab_today.build_today_blocks()`
-    產出的 `today.summary` block（位階已接線、動能與風險誠實標未接線）。
+    產出的 `today.summary` block（位階已接線、~~動能與風險誠實標未接線~~
+    → 2026-09-26 起「風險」格接上指標危險度、動能仍誠實標未接線；見 `build_summary_tiles()`）。
     **零新增取數** —— 那個 block 本來每一輪就已經算出來了。
   · **五桶摘要移到葉2 的頁首**（葉2 本來就是五桶明細，那才是它的歸屬）。
     **內容一格都沒有刪**，只是換了位置。
@@ -730,7 +731,11 @@ SEGMENT_COVERAGE_NOTE: str = (
 LEAF1_SUMMARY_NOTE: str = (
     "位階 / 動能 / 風險三欄 —— 線框 `PAGES[0]` 葉1 ③ 的原文格式，"
     "直接取用 `tab_today.build_today_blocks()` 的 `today.summary`（**零新增取數**）。"
-    "位階已接上 L3 契約；動能與風險**誠實標未接線**，不拿別的東西頂替。")
+    "位階已接上 L3 契約；動能**誠實標未接線**，不拿別的東西頂替。")
+#: 📌 **2026-09-26 事實更正（有意識的更正，⛔ 不是漏刪）**：上句原為
+#: 「~~動能與風險**誠實標未接線**~~」。「風險」格已依客戶 2026-09-16 裁示
+#: 「風險 ← danger」接上指標危險度（`build_summary_tiles()`），舊句**在它寫下的當天是對的**，
+#: 現在再印就是畫面上的假宣稱（§1）。處置**只刪「與風險」三字**，⛔ 不新增任何字。
 
 #: 五桶摘要搬家的揭露（【5】）。**內容一格都沒刪，只是換位置。**
 BUCKET_SUMMARY_MOVED_NOTE: str = (
@@ -1459,6 +1464,59 @@ REGIME_SCOPE_NOTE: str = (
 REGIME_SCOPE_FACT_KEY: str = "位階的出處"
 
 
+def _danger_tile(*, key: str, label: str,
+                 danger: tuple[str, str] | None, danger_error: str,
+                 danger_requested: bool, danger_source: str,
+                 band_zh_color: Mapping[str, tuple[str, str]] | None,
+                 l4_error: str) -> Tile:
+    """指標危險度（16 盞燈 worst-of，**不含多空方向**）的一張卡。
+
+    📌 **2026-09-26 抽出**：原本寫死在 `build_verdict_tiles()` 卡② 裡；
+    葉1 ③ 三欄摘要的「風險」格依客戶 2026-09-16 裁示
+    「**風險 ← danger（對得上，直接對映）**」（`UI_PAGE_TODAY.md` ③；
+    契約 `src/ui_v2/page_today.py::SUMMARY_COLUMNS`「風險」列
+    `source="verdict.danger"`）要吃**同一份**讀數，所以抽成一支 ——
+    **⛔ 不複寫第二份文案**（兩份會漂開，§2.1）。
+    `key` / `label` 由呼叫端給：卡② 照舊、「風險」格沿用 `tab_today` 那一格
+    自己的 key 與標題（⛔ 不新造標題字串）。
+    判態、三要素文案、出口，**逐字就是卡② 原本那一段**。
+    """
+    _band = danger[0] if danger is not None else "gray"
+    _danger_state = classify_ui_state(
+        requested=(bool(danger_error) or danger_requested),
+        error=danger_error or None,
+        has_value=(danger is not None and _band != "gray"),
+    )
+    if _danger_state == UI_LIVE:
+        _zh, _hex = (band_zh_color or {}).get(_band, ("", ""))
+        _dfacts: tuple[tuple[str, str], ...] = ()
+        if not _zh:
+            # L4 載不進來 → 誠實留白 ＋ 就地說明，不自己編一組中文與色碼。
+            _dfacts = (("燈號", f"{L4_LABEL_UNAVAILABLE}`{l4_error}`"),)
+        return Tile(
+            Card(key=key, label=label,
+                 state=_danger_state, value=str(danger[1])),
+            signal_text=_zh, signal_color=_hex, facts=_dfacts)
+    if danger_error:
+        _why = _error_why(danger_source, danger_error)
+    elif _danger_state == UI_IDLE:
+        _why = ("上游一個總經 session key 都還沒寫進來，"
+                "本頁因此**連 16 盞燈都沒有算** —— "
+                "這是「還沒叫」，不是「叫了沒回」，"
+                "更**不是**「掃過了沒有指標踩線」")
+    else:
+        # 只有真的算過、而且 16 盞全灰時才准講這句話（修前不管有沒有算
+        # 過都印它，那就是在畫面上宣稱一個沒發生過的計算 —— §1 造假）。
+        _why = ("16 盞燈本輪一盞都沒有落在綠 / 黃 / 紅 —— 也就是沒有資料可彙總。"
+                "**灰不是綠**：它的意思是「沒得判斷」，不是「沒有指標踩線」")
+    return Tile(Card(
+        key=key, label=label,
+        state=_danger_state,
+        note=Note(now="**指標危險度：尚未載入**", why=_why,
+                  where=(EXIT_FIX_CODE if danger_error
+                         else EXIT_RETRY_HERE))))
+
+
 def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                         danger: tuple[str, str] | None, danger_error: str,
                         danger_requested: bool,
@@ -1544,41 +1602,13 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
 
     # ② 指標危險度（16 盞燈的 worst-of，**不含多空方向**）。
     #    ⚠️ 這一張**完全不看 regime**；regime 掛掉時它照樣要算得出來。
-    _band = danger[0] if danger is not None else "gray"
-    _danger_state = classify_ui_state(
-        requested=(bool(danger_error) or danger_requested),
-        error=danger_error or None,
-        has_value=(danger is not None and _band != "gray"),
-    )
-    if _danger_state == UI_LIVE:
-        _zh, _hex = (band_zh_color or {}).get(_band, ("", ""))
-        _dfacts: tuple[tuple[str, str], ...] = ()
-        if not _zh:
-            # L4 載不進來 → 誠實留白 ＋ 就地說明，不自己編一組中文與色碼。
-            _dfacts = (("燈號", f"{L4_LABEL_UNAVAILABLE}`{l4_error}`"),)
-        _tiles.append(Tile(
-            Card(key="verdict.danger", label="指標危險度（不含多空方向）",
-                 state=_danger_state, value=str(danger[1])),
-            signal_text=_zh, signal_color=_hex, facts=_dfacts))
-    else:
-        if danger_error:
-            _why = _error_why(danger_source, danger_error)
-        elif _danger_state == UI_IDLE:
-            _why = ("上游一個總經 session key 都還沒寫進來，"
-                    "本頁因此**連 16 盞燈都沒有算** —— "
-                    "這是「還沒叫」，不是「叫了沒回」，"
-                    "更**不是**「掃過了沒有指標踩線」")
-        else:
-            # 只有真的算過、而且 16 盞全灰時才准講這句話（修前不管有沒有算
-            # 過都印它，那就是在畫面上宣稱一個沒發生過的計算 —— §1 造假）。
-            _why = ("16 盞燈本輪一盞都沒有落在綠 / 黃 / 紅 —— 也就是沒有資料可彙總。"
-                    "**灰不是綠**：它的意思是「沒得判斷」，不是「沒有指標踩線」")
-        _tiles.append(Tile(Card(
-            key="verdict.danger", label="指標危險度（不含多空方向）",
-            state=_danger_state,
-            note=Note(now="**指標危險度：尚未載入**", why=_why,
-                      where=(EXIT_FIX_CODE if danger_error
-                             else EXIT_RETRY_HERE)))))
+    #    📌 2026-09-26：本段原樣抽成 `_danger_tile()`（葉1 ③「風險」格共用同一支，
+    #    ⛔ 不複寫第二份文案）；本卡的 key / 標題照舊，輸出逐 byte 不變。
+    _tiles.append(_danger_tile(
+        key="verdict.danger", label="指標危險度（不含多空方向）",
+        danger=danger, danger_error=danger_error,
+        danger_requested=danger_requested, danger_source=danger_source,
+        band_zh_color=band_zh_color, l4_error=l4_error))
 
     # ③ 市場位階 —— 本頁取自 L3 契約（見 `REGIME_CARD_LABEL` /
     #    `REGIME_SCOPE_NOTE`：原標題的唯一性宣稱實測為假，已改）。
@@ -2695,10 +2725,44 @@ def _render_tiles(tiles: Sequence[Tile], cols: int = MAX_COLS) -> None:
                 _render_one(_tile)
 
 
+#: 葉1 ③ 三欄摘要裡**接到指標危險度**的那一格（`tab_today.build_today_blocks()`
+#: 的 key）。客戶 2026-09-16 裁示「**風險 ← danger（對得上，直接對映）**」；
+#: 「動能」維持未接線（「exposure 不是動能，不搬」）、「位階」維持既有接線。
+SUMMARY_RISK_KEY: str = "summary.risk"
+
+
+def build_summary_tiles(cards: Sequence[Card], *,
+                        danger: tuple[str, str] | None, danger_error: str,
+                        danger_requested: bool,
+                        danger_source: str = SRC_DANGER,
+                        band_zh_color: Mapping[str, tuple[str, str]] | None = None,
+                        l4_error: str = "") -> tuple[Tile, ...]:
+    """葉1 ③ 三欄摘要 → `Tile`。**只換「風險」那一格，其餘照 `_tiles_of_cards()`。**
+
+    · 「風險」格 ＝ `_danger_tile()`：與卡② `verdict.danger` **同一份讀數、同一支判態、
+      同一段文案**（⛔ 不另寫一份）；key 與標題沿用 `tab_today` 那一格自己的
+      （`card.key` / `card.label`），⛔ 不新造標題字串。
+    · 位階 / 動能兩格原樣橋接（`Tile(card)`），⛔ 不碰。
+    · **逐格獨立判態**（`UI_PAGE_TODAY.md` ④A「一格壞不染色另兩格」）：
+      危險度的成敗只進「風險」這一格，另兩格的輸入裡根本沒有它。
+    · `tab_today.py` 一個字都沒動（它的 `summary.risk` 仍是 staged 卡，舊分頁與
+      `tests/test_p01_today_skeleton.py` 照舊）—— 接線只發生在本頁這一側。
+    """
+    return tuple(
+        (_danger_tile(key=_c.key, label=_c.label,
+                      danger=danger, danger_error=danger_error,
+                      danger_requested=danger_requested,
+                      danger_source=danger_source,
+                      band_zh_color=band_zh_color, l4_error=l4_error)
+         if _c.key == SUMMARY_RISK_KEY else Tile(_c))
+        for _c in cards)
+
+
 def _tiles_of_cards(cards: Sequence[Card]) -> tuple[Tile, ...]:
     """對面 `tab_today` 的 `Card` → 本頁的 `Tile`。**橋接，⛔ 不是複寫。**
 
-    🔴 **2026-09-24 整頁卡化新增。** 頂部狀態列（3）、葉1 ③ 三欄摘要（3）、
+    🔴 **2026-09-24 整頁卡化新增。** 頂部狀態列（3）、葉1 ③ 三欄摘要（3；📌 2026-09-26 起改走
+    `build_summary_tiles()`：位階／動能兩格仍是這裡的 `Tile(card)`，「風險」格改接危險度）、
     ⑤⑥ 作戰室（2）共 8 張卡的**內容**由 `tab_today.build_status_bar_cards()` /
     `build_today_blocks()` 產出，型別是 `Card`；而 v2 卡面那條路
     （`_render_one()` → `V2_CARD_KEYS`）吃的是 `Tile`。
@@ -3058,12 +3122,18 @@ def render_page_today() -> None:
 
         # ③ **線框原文的三欄摘要（位階 / 動能 / 風險）**，直接取用
         #    `tab_today.build_today_blocks()` 的 `today.summary` block ——
-        #    位階已接線、動能與風險誠實標未接線。**零新增取數**：那個 block
+        #    位階已接線、動能誠實標未接線（風險格見下方 2026-09-26 註）。**零新增取數**：那個 block
         #    本來每一輪就已經算出來了（修前算完丟掉，改成五桶摘要且零揭露）。
         _summary = _blocks["today.summary"]
         section_header(_summary.title, LEAF1_SUMMARY_NOTE)
         # 🔴 2026-09-24 整頁卡化：三欄摘要改走 v2 卡面（同上，內容一字未改）。
-        _render_tiles(_tiles_of_cards(_summary.cards))
+        # 📌 2026-09-26：「風險」格接上指標危險度（客戶裁示「風險 ← danger」）——
+        #    讀數就是上面卡② 用的同一個 `_danger`，**零新增取數**。
+        _render_tiles(build_summary_tiles(
+            _summary.cards,
+            danger=_danger, danger_error=_danger_err,
+            danger_requested=_readout.requested, danger_source=_danger_src,
+            band_zh_color=_band_zh, l4_error=_l4_err))
 
         section_header("④ 今日關鍵橫幅")
         _render_tiles((build_key_alert_tile(
