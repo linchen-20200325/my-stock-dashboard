@@ -275,6 +275,10 @@ from shared.station_specs import (
     MISS_NOT_APPLICABLE,
     MISS_TEXT,
 )
+# L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（SEC-2，2026-09-26；
+# 同 `page_hold` 批次 B 的作法，遮罩沿用 `***`、⛔ 不加說明字）。
+from shared.secret_scrub import MASK as SECRET_MASK
+from shared.secret_scrub import scrub_secrets
 from shared.ui_state import (
     UI_DEGRADED,
     UI_EMPTY,
@@ -795,12 +799,25 @@ def _error_why(source: str, error: Any) -> str:
     `Note.__post_init__` 拒收狀態 glyph，不洗就會把一張該畫出來的紅卡
     變成整頁未捕捉例外（§1：紅態要看得見，不是換一種炸法）。
     """
-    _clean, _n = scrub_state_glyphs(error)
+    # SEC-2：先洗金鑰／Sheet ID／檔案路徑（L0 `scrub_secrets`，同 `page_hold._error_why`）。
+    _clean, _n = scrub_state_glyphs(scrub_secrets(error) if error else error)
     _why = f"{source}拋出例外：{_clean or '（上游沒有給訊息）'}"
     if _n:
         _why += ("（上游訊息裡的狀態符號已移除，"
                  "以免和這張卡自己的狀態燈混成兩個互相矛盾的說法）")
     return _why
+
+
+def _md_scrub(text: Any) -> str:
+    """要交給 Markdown（`st.error` / `st.write` / `st.markdown`）的**混合**字串 → 洗過的字串。
+
+    SEC-2：先 `scrub_secrets`，再**只把遮罩 `***`** 做 Markdown 跳脫。
+    ⚠️ 為什麼不像 L4 `station_cards` 那樣整串 `*` 全跳脫：這裡的字串是 L3 更新報告的
+    `detail`／`failures`，**本身就帶刻意的 `**粗體**`**（例：「**本報告的成敗判定因此不完整**」）——
+    全跳脫會把那些粗體變成字面的星號（一般訊息被改樣）。只跳脫遮罩：值照樣被遮，
+    同一行兩個遮罩也不會被當成粗斜體記號吃掉。沒有命中任何一類的字串**原樣回傳**。
+    """
+    return scrub_secrets(text).replace(SECRET_MASK, "\\*" * len(SECRET_MASK))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1092,7 +1109,7 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
     elif not _has_thr:
         _facts.append(("門檻帶", "這條線沒有門檻，**不判燈**"))
     else:
-        _facts.append(("門檻帶", f"{L4_LABEL_UNAVAILABLE}`{l4_error}`"))
+        _facts.append(("門檻帶", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"))
     _facts.append(("命中來源", str(rec.get("hit_source") or "—　本輪未命中任何源")))
     if _spec.source:
         _facts.append(("門檻出處", _spec.source))
@@ -1105,7 +1122,7 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
         _zh, _hex = band_label(_band, _spec)
         _signal_text, _signal_color = _zh, _hex
     elif _state in (UI_LIVE, UI_DEGRADED):
-        _facts.insert(0, ("燈號", f"{L4_LABEL_UNAVAILABLE}`{l4_error}`"))
+        _facts.insert(0, ("燈號", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"))
 
     _shown = fmt_value(_value, _spec) if _value is not None else ""
 
@@ -1495,7 +1512,7 @@ def _danger_tile(*, key: str, label: str,
         _dfacts: tuple[tuple[str, str], ...] = ()
         if not _zh:
             # L4 載不進來 → 誠實留白 ＋ 就地說明，不自己編一組中文與色碼。
-            _dfacts = (("燈號", f"{L4_LABEL_UNAVAILABLE}`{l4_error}`"),)
+            _dfacts = (("燈號", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"),)
         return Tile(
             Card(key=key, label=label,
                  state=_danger_state, value=str(danger[1])),
@@ -1679,7 +1696,8 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                 now="**市場位階：尚未評估**",
                 # 這一張**真的**是 L3 canonical 契約 → 文案原本就對，
                 # 續用對面的 SSOT `upstream_error_why()`（見 `_error_why` 註）。
-                why=(upstream_error_why(regime_error) if regime_error else
+                # SEC-2：對面那支只洗 glyph，秘密在這裡先洗（⛔ 不改 `tab_today.py`）。
+                why=(upstream_error_why(scrub_secrets(regime_error)) if regime_error else
                      "L3 canonical 契約四條來源本輪皆無值 → 回 `unknown`，"
                      "**不是** `neutral`；本站不以缺值推導「中性」"),
                 where=(EXIT_OUT_OF_REACH if not regime_error
@@ -2964,7 +2982,8 @@ def _run_refresh_now(mode: str) -> Any:
     with st.status(REFRESH_RUNNING_LABEL, expanded=True) as _status:
         def _on_event(kind: str, result: Any) -> None:
             # 顯示名一律取 `result.label`（SSOT 在 L3），本頁不自己翻中文。
-            _detail = getattr(result, "detail", "") or ""
+            # SEC-2：`detail` 可能是例外原文（`f"{type(e).__name__}: {e}"`）→ 先洗秘密。
+            _detail = _md_scrub(getattr(result, "detail", "") or "")
             st.write(f"{_event_icon(result)} **{result.label}**"
                      + (f" — {_detail}" if _detail else ""))
 
@@ -3012,7 +3031,8 @@ def _render_refresh_report(report: Any) -> None:
     if report.failures:
         st.error(
             "**這一輪有取不到的來源 / 跑不完的步驟**：\n\n"
-            + "\n".join(f"- ❌ {_f}" for _f in report.failures)
+            # SEC-2：失敗原因含例外原文（L3 `f"{type(e).__name__}: {e}"`）→ 先洗秘密。
+            + "\n".join(f"- ❌ {_md_scrub(_f)}" for _f in report.failures)
             + f"\n\n{REFRESH_FAILED_WHAT_NOW}", icon="❌")
     # ⚠️ 「回空」與「跑失敗」分開講（2026-09-09）：回空的那幾桶**沒有拋例外**，
     #    它們在上面那段裡只表現成一行稽核結論。使用者要知道的是**哪一塊**
@@ -3079,7 +3099,8 @@ def _render_refresh_report(report: Any) -> None:
                 "\n**逐來源結果**（這一格只說「這個 job 有沒有以例外收場」）：\n\n"
                 + "\n".join(
                     f"- {_event_icon(_r)} {_r.label}"
-                    + (f" — {_r.detail}" if _r.detail else "")
+                    # SEC-2：同上，逐來源／逐步驟的 `detail` 也可能是例外原文。
+                    + (f" — {_md_scrub(_r.detail)}" if _r.detail else "")
                     for _r in tuple(report.sources) + tuple(report.steps)))
             # ⚠️ 上下兩格**不是重複**：上面是「有沒有炸」，下面是「真的收到什麼」。
             #    一個 job 可以不炸而回空 —— 那正是這一段存在的理由。
@@ -3180,8 +3201,11 @@ def render_page_today() -> None:
         directions=_load_lamp_directions(_session))
     _cov = coverage(_tiles_by_bucket)
     # 線框七塊全部照算（`build_today_blocks` 是純函式），葉1 ③ 與 ⑤⑥ 各取所需。
+    # SEC-2：`_regime_err` 經對面 `tab_today.upstream_error_why()` 上狀態列與三欄摘要的
+    #    「位階」格 —— 對面只洗 glyph，秘密在交出去之前先洗（⛔ 不改 `tab_today.py`）。
+    #    非空的例外洗完仍非空（遮罩留 `***`）⇒ 對面的判態不受影響。
     _blocks = {_b.key: _b for _b in build_today_blocks(
-        macro_state=_regime, macro_error=_regime_err or None)}
+        macro_state=_regime, macro_error=scrub_secrets(_regime_err) or None)}
 
     st.markdown(f"## {ia_nav.page_label(ia_nav.PAGE_TODAY)}")
     st.caption("回答「今天能不能出手、出手到幾成」。")
@@ -3203,9 +3227,11 @@ def render_page_today() -> None:
             # 例外原文照印，下一次按更新就會寫入新格式的報告。
             print(f"[views/page_today] 舊格式的更新報告畫不出來：{_e!r}")
             st.session_state.pop(SS_REFRESH_REPORT, None)
+            # SEC-2：例外原文先洗秘密。它在反引號（行內程式碼）裡 —— Markdown 在那裡
+            #    ⛔ 不處理 `*`，所以**不做** `*` 跳脫（跳了反而會把 `\\*` 字面印出來）。
             st.error(
                 "上一次更新的報告畫不出來（多半是程式更新後 session 裡留著舊格式的"
-                f"報告）。**它已經被清掉**，請重新按一次更新。原始例外：`{_e!r}`",
+                f"報告）。**它已經被清掉**，請重新按一次更新。原始例外：`{scrub_secrets(repr(_e))}`",
                 icon="⚠️")
 
     # ── （跨頁）頂部狀態列：常駐一條，位在兩葉之上 ───────────────────
@@ -3215,7 +3241,7 @@ def render_page_today() -> None:
     #    **內容仍然完全復用 `tab_today.build_status_bar_cards()`，本檔一個字都不重寫**；
     #    換的只有畫它的那一層（`render_cards` → `_render_tiles` → v2 卡面）。
     _render_tiles(_tiles_of_cards(
-        build_status_bar_cards(_regime, error=_regime_err or None)))
+        build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None)))
 
     _leaf1, _leaf2 = st.tabs([
         ia_nav.SECTION_LABELS[LEAF_CONCLUSION],
@@ -3273,7 +3299,8 @@ def render_page_today() -> None:
         st.caption(AS_OF_NOT_IN_CONTRACT)
         if _l4_err:
             # §1：載不進來就講出來，不要讓那兩欄默默空白。
-            st.warning(f"{L4_LABEL_UNAVAILABLE}`{_l4_err}`", icon="⚠️")
+            # SEC-2：先洗秘密；在反引號裡，⛔ 不做 `*` 跳脫（理由同頁首那則 `st.error`）。
+            st.warning(f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(_l4_err)}`", icon="⚠️")
         if not _readout.requested:
             render_note(Note(
                 now=f"**{_cov.total} 盞燈全部尚未載入**（還沒有人去取這份資料）",

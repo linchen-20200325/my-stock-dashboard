@@ -267,6 +267,9 @@ from typing import Any, Mapping, Sequence
 import streamlit as st
 
 from shared import ia_nav
+# L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（SEC-2，2026-09-26；
+# 同 `page_hold` 批次 B 的作法，遮罩沿用 `***`、⛔ 不加說明字）。
+from shared.secret_scrub import scrub_secrets
 # L0 SSOT：均線週期。**禁止在 UI 端寫死 20 / 60 / 120 / 240**（§3.3）。
 from shared.station_specs import MISS_NOT_APPLICABLE, MISS_TEXT
 from shared.ui_state import (
@@ -734,7 +737,8 @@ def _error_why(source: str, error: Any, *, verb: str = "拋出例外") -> str:
             「拋出例外」是**替上游宣稱一件它沒做的事**，下一個人會照著去
             traceback 裡找一個根本不存在的例外。傳 `verb="回報失敗"`。
     """
-    _clean, _n = scrub_state_glyphs(error)
+    # SEC-2：先洗金鑰／Sheet ID／檔案路徑（L0 `scrub_secrets`，同 `page_hold._error_why`）。
+    _clean, _n = scrub_state_glyphs(scrub_secrets(error) if error else error)
     _why = f"{source}{verb}：{_clean or UNKNOWN_ERROR_TEXT}"
     if _n:
         _why += ("（上游訊息裡的狀態符號已移除，"
@@ -2014,7 +2018,8 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
     if val.msg:
         # L2 自己寫的一句話（含三檔目標價或「不適用」的理由）。
         # **原樣透傳**：那是 L2 的話，本檔不改寫、不摘要（§2.1）。
-        _facts.append(("L2 說明", val.msg))
+        # SEC-2：只洗秘密（沒有命中就原樣）—— 內容一字不改寫。
+        _facts.append(("L2 說明", scrub_secrets(val.msg)))
 
     if _state == UI_LIVE:
         return (Card(key="inspect.stock.valuation", label="估值（357 評價）",
@@ -2040,7 +2045,7 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
         # 而不是畫出那張灰卡。§1 要的是「狀態看得見」，不是換一種炸法。
         # 洗的動作走 `tab_today.scrub_state_glyphs()` SSOT，不自己列符號表。
         _why = (VALUATION_NO_SOURCE_WHY if not val.source and not val.years_n
-                else (scrub_state_glyphs(val.msg)[0]
+                else (scrub_state_glyphs(scrub_secrets(val.msg))[0]
                       or "357 殖利率法則在這一檔上不適用"))
         _note = Note(now=VALUATION_EMPTY_NOW,
                      why=f"{_why}{VALUATION_WHY_TAIL}",
@@ -2113,7 +2118,8 @@ def build_chips_card(chips: ChipsView) -> _Built:
         _facts.append(_badge)
     if chips.miss_reason:
         # L0 自己給的原因原文（`'df缺法人/量欄'` …）。**不改寫**（§2.1）。
-        _facts.append(("上游說明", chips.miss_reason))
+        # SEC-2：L0 算失敗時這一欄是**例外原文**（`str(e)`，`analyze_20d_chips_from_df`）→ 先洗秘密。
+        _facts.append(("上游說明", scrub_secrets(chips.miss_reason)))
 
     if _state == UI_LIVE:
         return (Card(key="inspect.stock.chips", label="籌碼", state=UI_LIVE,
@@ -2134,7 +2140,7 @@ def build_chips_card(chips: ChipsView) -> _Built:
         _note = Note(
             now=CHIPS_EMPTY_NOW,
             why=(f"{CHIPS_MISS_WHY_HEAD}"
-                 f"{scrub_state_glyphs(chips.miss_reason)[0] or '上游沒有說'}"
+                 f"{scrub_state_glyphs(scrub_secrets(chips.miss_reason))[0] or '上游沒有說'}"
                  f"{CHIPS_MISS_WHY_TAIL}"),
             where=CHIPS_WHERE)
     return (Card(key="inspect.stock.chips", label="籌碼", state=_state,
@@ -2166,7 +2172,8 @@ def build_profit_cards(prof: ProfitabilityReadout) -> tuple[_Built, ...]:
         # 但先洗掉狀態 glyph —— 這裡在 `_render_one()` 的保護圈外，
         # 帶 glyph 的上游字串會讓一張該畫出來的灰卡變成整頁未捕捉例外
         # （同 `build_chips_card` 的 empty 分支）。
-        _facts_list.append(("缺漏原因", scrub_state_glyphs(prof.gap_why)[0]))
+        # SEC-2：上畫面前先洗秘密（沒有命中就原樣）。
+        _facts_list.append(("缺漏原因", scrub_state_glyphs(scrub_secrets(prof.gap_why))[0]))
     _facts: tuple[tuple[str, str], ...] = tuple(_facts_list)
 
     _out: list[_Built] = []
@@ -3068,7 +3075,9 @@ def _render_batch_leaf(session: Mapping[str, Any]) -> None:
           "型別": _r.kind_label,
           "狀態": ("失敗" if not _r.ok else
                    ("判不出型別" if _r.is_unknown else "已算出")),
-          "明細": (scrub_state_glyphs(_r.error)[0] if not _r.ok else
+          # SEC-2：失敗列的「明細」是例外原文（`repr(e)`）→ 先洗秘密。`st.dataframe`
+          #    不走 Markdown，⛔ 不做 `*` 跳脫。
+          "明細": (scrub_state_glyphs(scrub_secrets(_r.error))[0] if not _r.ok else
                    " · ".join(f"{_k}：{_v}" for _k, _v in _r.metrics)
                    or "（此型別不取數）")}
          for _r in _rows],

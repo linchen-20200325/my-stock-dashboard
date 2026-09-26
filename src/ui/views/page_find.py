@@ -326,6 +326,9 @@ from shared.sector_flow_thresholds import (
     WINDOW_Y_PRIOR,
     WINDOW_Y_RECENT,
 )
+# L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（SEC-2，2026-09-26；
+# 同 `page_hold` 批次 B 的作法，遮罩沿用 `***`、⛔ 不加說明字）。
+from shared.secret_scrub import scrub_secrets
 from shared.ui_state import (
     UI_DEGRADED,
     UI_FAILED,
@@ -835,7 +838,8 @@ def _error_why(source: str, error: Any) -> str:
     `Note.__post_init__` 拒收狀態 glyph，不洗就會把一張**該畫出來的紅卡**
     變成**整頁未捕捉例外**（§1：紅態要看得見，不是換一種炸法）。
     """
-    _clean, _n = scrub_state_glyphs(error)
+    # SEC-2：先洗金鑰／Sheet ID／檔案路徑（L0 `scrub_secrets`，同 `page_hold._error_why`）。
+    _clean, _n = scrub_state_glyphs(scrub_secrets(error) if error else error)
     _why = f"{source}拋出例外：{_clean or UNKNOWN_ERROR_TEXT}"
     if _n:
         _why += ("（上游訊息裡的狀態符號已移除，"
@@ -1601,7 +1605,9 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
             f"{_fmt_count(result.pe_n)} 檔有本益比（走 L3 "
             "`valuation_service.get_pe_name_maps`；≤0 的不算，那是缺值不是估值）"))
     _facts.append(("名稱欄", _name_col_fact(result)))
-    _facts.extend(result.aux_errors)
+    # SEC-2：`aux_errors` 裡缺貨／RS／跨季轉強／總經位階／因子命中摘要那幾列是**例外原文**
+    #    （`repr(e)`，沒經過 `_error_why`）→ 上卡前一律先洗秘密（已洗過的再洗一次不變）。
+    _facts.extend((_k, scrub_secrets(_v)) for _k, _v in result.aux_errors)
     if result.note:
         # L3 自己寫的 note（缺貨/RS 未掃、涵蓋門檻、空頭濾網是否套用…）。
         # **原樣透傳**：那是 L3 的話，本檔不改寫、不摘要（§2.1 SSOT）。
@@ -2152,7 +2158,10 @@ def _render_screen_leaf(session: Mapping[str, Any]) -> None:
         _csv = _result.df.to_csv(index=False).encode("utf-8-sig")
     except Exception as _e:  # noqa: BLE001 — 下載不可用不該炸掉整張表
         print(f"[views/page_find] CSV 匯出失敗：{_e!r}")
-        st.caption(f"（CSV 匯出暫不可用：{scrub_state_glyphs(repr(_e))[0]}）")
+        # SEC-2：先洗秘密，再對 `*` 做 Markdown 跳脫（`st.caption` 吃 Markdown；同 L4 `station_cards`
+        #    —— 同一行兩個遮罩 `***` 會被當成粗斜體記號吃掉）。
+        _err = scrub_state_glyphs(scrub_secrets(repr(_e)))[0].replace("*", "\\*")
+        st.caption(f"（CSV 匯出暫不可用：{_err}）")
         return
     st.download_button("💾 下載選股結果 CSV", data=_csv,
                        file_name="screener_result.csv", mime="text/csv",
@@ -2206,9 +2215,11 @@ def _render_map_leaf(session: Mapping[str, Any]) -> None:
             st.plotly_chart(_heatmap.figure, width="stretch")
         except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅字，不吞
             print(f"[views/page_find] 熱力圖繪製失敗：{_e!r}")
+            # SEC-2：先洗秘密，再對 `*` 做 Markdown 跳脫（同上方 CSV 那一則）。
+            _err = scrub_state_glyphs(scrub_secrets(repr(_e)))[0].replace("*", "\\*")
             st.error(
                 "🔴 熱力圖畫不出來（資料讀到了，是繪圖層的問題）："
-                f"{scrub_state_glyphs(repr(_e))[0] or UNKNOWN_ERROR_TEXT}",
+                f"{_err or UNKNOWN_ERROR_TEXT}",
                 icon="🔴")
 
     if _flow.sectors:
@@ -2226,9 +2237,11 @@ def _render_map_leaf(session: Mapping[str, Any]) -> None:
                 width="stretch")
         except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅字，不吞
             print(f"[views/page_find] 泡泡圖繪製失敗：{_e!r}")
+            # SEC-2：先洗秘密，再對 `*` 做 Markdown 跳脫（同上方 CSV 那一則）。
+            _err = scrub_state_glyphs(scrub_secrets(repr(_e)))[0].replace("*", "\\*")
             st.error(
                 "🔴 泡泡圖畫不出來（資料讀到了，是繪圖層的問題）："
-                f"{scrub_state_glyphs(repr(_e))[0] or UNKNOWN_ERROR_TEXT}",
+                f"{_err or UNKNOWN_ERROR_TEXT}",
                 icon="🔴")
 
         # ── 3 欄圖例（線框葉2 的 `n` 原文）。象限名讀資料本身，零轉抄。──
