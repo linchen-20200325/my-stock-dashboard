@@ -552,7 +552,7 @@ merge 與改 base **直接影響線上部署**（`main` 一動，Streamlit Cloud
 
 ⚠️ 納入／排除判定為**單組程式閱讀＋列舉實跑**的結論，**未經第二組驗**（§-2 規則 6），⛔ 不得當既定前提。
 
-**待辦：4 張卡「靜默失敗」—— 讓「抓取失敗」與「真的是 0」分開，才能畫 #11**（**客戶 2026-09-26 裁示：分兩批工單**；**登記，未動工**）：
+**待辦：4 張卡「靜默失敗」—— 讓「抓取失敗」與「真的是 0」分開，才能畫 #11**（**客戶 2026-09-26 裁示：分兩批工單**；~~**登記，未動工**~~ → **2026-09-26 客戶裁示更新：第 1 批已動工，2/3 修好；第 2 批仍未動工**）：
 
 | 項目 | 內容 |
 |---|---|
@@ -561,15 +561,22 @@ merge 與改 base **直接影響線上部署**（`main` 一動，Streamlit Cloud
 | 第 1 批範圍 | **只改「抓取失敗 vs 真的 0」的判定**；⛔ **不動資料層** |
 | 第 1 批證據 | ① `src/ui/views/page_find.py:836-838` 接住存活池例外、回 `None`；② `src/services/fundamental_screener_service.py:493-498` 再吞一次（`survivors_df = None`），之後 `:338-339` 回空表並附誤導說明「**季快照未就緒**」；③ `src/services/dividend_station_service.py:781-785`（`get_switch_in_candidates`）接住例外回 `[]`，且排名表為空時**也**回 `[]`；④ `flag_take_profit`（`dividend_station_service.py:944-952`，`return` 在 `:953`）略過 `_detail.error` 的列；⑤ 卡面文案寫「**這是一個有效的結果**」：`src/ui/views/page_hold.py:1981-1990`（`hold.switch`）、`:2161-2168`（`hold.take_profit`）、`src/ui/views/page_find.py:1393`（`find.screen_result` 的 `why`） |
 | **第 2 批（1 張）** | `hold.deep.dividend_cash`（`CASH_NO_PAYOUT_NOW`） |
+| **第 1 批結果（2026-09-26，客戶裁示）** | 分支 `claude/v2-silent-fail-b1`，PR 目標 `main`。⚠️ 待確認：本組核對時該分支**只在 `/home/user/msd-silent` 本地、改動未 commit**（`page_find.py`／`page_hold.py`／兩支既有測試＋新檔 `tests/test_v2_silent_fail_b1.py`），`git ls-remote origin` **查無此分支** ⇒ PR 尚未開、行號以該工作區為準 |
+| 第 1 批 ✅ `find.screen_result` | **已修**：存活池失敗時卡轉**紅**「**選股中止**」（`SCREEN_ABORTED_NOW`，`page_find.py:610`），卡面點名「**L3 基本面存活池…拋出例外**」（`page_find.py:498`；測試 `test_v2_silent_fail_b1.py:89`） |
+| 第 1 批 ✅ `hold.take_profit` | **已修**：held 個股列帶 `_detail.error` 時卡轉**紅**「**停利判不出來**」（`TP_FAILED_NOW`，`page_hold.py:1530`；判定條件 `:2142-2148` 與 L3 `flag_take_profit` 跳過條件 `dividend_station_service.py:946` 逐字對齊） |
+| 第 1 批 ⛔ `hold.switch` | **未修**：頁面**沒有任何訊號**分得出「抓取失敗」與「真的空」。須改 **L3** `src/services/dividend_station_service.py:781-785`（`get_switch_in_candidates`：`:781` 接住例外、`:783` 回 `[]`；`:785` 排名表空時**也**回 `[]`，且丟掉 `_note`）—— 行號已於 `msd-silent` 與 `origin/main` 兩邊 grep 核對一致。超出第 1 批「只改頁面」範圍 ⇒ **⏸ 待客戶授權改 L3** |
+| QA 殘留 (a)（**僅登記**，既有、不在本批） | `find`：**唯一勾選的因子自己的輸入失敗**時（例：只勾估值且 PE 表失敗；或只勾缺貨／RS／跨季且該掃描失敗），卡顯示 0 檔＋灰色「**有效結果**」。頁面**已有** `aux_errors`（`page_find.py:803`；「不轉紅」設計見 `:220`）⇒ **可在頁面修**。⚠️ 現有測試 `tests/test_v2_silent_fail_b1.py:132` `test_b_other_aux_failures_still_leave_a_valid_zero` **把這個灰色結果鎖住**，修時須一併改。⚠️ 待確認：「唯一因子」情境為 QA 推論，本組只核對到 `aux_errors` 與該測試存在，**未實跑** |
+| QA 殘留 (b)（**僅登記**，既有、不在本批） | `hold.take_profit`：held 個股列**沒有** `_detail.error` 但 `current_price` 為 `None` ⇒ `損益%` 為 `None`（`dividend_station_service.py:442-443`，須 `_avg and _cur` 皆有值）⇒ L3 略過，卡仍寫「**這是一個有效的結果**」；`why` 只怪「沒有均價」（`page_hold.py:2188-2192`），沒提現價缺失。⚠️ 待確認：未實跑 |
 | 第 2 批證據 | `src/data/etf/etf_fetch.py::fetch_etf_dividends` `:293-296` 接住**所有**例外回空 `Series` ⇒ 「真的沒配息」與「抓不到」同形 |
-| 第 2 批閘門 | **需改資料層** ⇒ ⛔ **動工前須先向客戶報告計畫**（資料層凍結，`CLAUDE.md` §-1.2） |
+| 第 2 批閘門 | **需改資料層** ⇒ ⛔ **動工前須先向客戶報告計畫**（資料層凍結，`CLAUDE.md` §-1.2）。**2026-09-26 客戶裁示：不變**，仍須先報告計畫、未動工 |
 | 收尾 | 第 1、2 批修好後，對應 `(key, now)` 才可登記進 `src/ui/views/page_today.py::V2_VALID_EMPTY_SPEC`（`:2207`）取得 #11 |
 | 僅登記、不排程 ① | `load_binding` 契約漂移落空（`src/ui/views/page_hold.py:1003-1018`）：若 L3 漂移，卡會落進 `UI_EMPTY`，#11 就會宣稱「有效的結果」。**現行 L3 不會產出此態** |
 | 僅登記、不排程 ② | 註解寫 `V2_VALID_EMPTY_PAIRS`，實際符號是 `V2_VALID_EMPTY_SPEC`：`src/ui_v2/page_today.py:533`、`src/ui_v2/components.py:212` |
-| 處置 | 依 §-1：**登記，未動工** |
+| 處置 | 依 §-1：~~**登記，未動工**~~ → **2026-09-26（客戶裁示）**：第 1 批已動工（2/3 修好，`hold.switch` 待 L3 授權）；QA 殘留 (a)(b) 與「僅登記 ①②」**登記、不動工**；第 2 批未動工 |
 
 ⚠️ 行號以 `origin/main` `66e4fe0` ＋ PR #689（`claude/v2-badge-vocab` `78d8744`）為準，已於 `/home/user/msd-badge` 逐一 grep 核對命中；⚠️ 待確認：「僅登記 ①」所述「L3 漂移時會落進 `UI_EMPTY`」與「現行 L3 不會產出」為 QA 推論，本組**只核對到行號與程式片段，未實跑驗證該路徑**。
 ⚠️ 上列發現來自**單組 QA、程式閱讀、未實跑**；**未經第二組驗**（§-2 規則 6），⛔ 不得當既定前提。
+⚠️ **2026-09-26 新增列**（第 1 批結果、QA 殘留 (a)(b)）同樣來自**單組 QA**，**未經第二組驗**；行號已於 `/home/user/msd-silent`（未 commit 工作區）與 `origin/main` grep 核對，`dividend_station_service.py:781-785` 兩邊一致；`page_find.py`／`page_hold.py`／新測試檔行號**僅存在於未 commit 的工作區**，合併後可能漂移。
 
 ### 6.5 🔴 卡關點與待客戶裁示
 
