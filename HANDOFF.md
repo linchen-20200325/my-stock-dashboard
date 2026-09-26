@@ -524,19 +524,52 @@ merge 與改 base **直接影響線上部署**（`main` 一動，Streamlit Cloud
 
 ⚠️ 上列稽核為**單組、唯讀**結論，**未經第二組驗**（§-2 規則 6），⛔ 不得當既定前提。
 
-**待辦：標記矛盾：空白卡寫『這是一個有效的結果』卻顯示 #7『缺漏·可重跑』**（**客戶 2026-09-26 裁示：合併為一輪、另開工單，兩頁共用對照一起修；⛔ 不得併入持股頁卡化那一輪**；**登記，未動工**）：
+**~~待辦：~~ 規格變更（⛔ 不是 bug fix）：標記矛盾：空白卡寫『這是一個有效的結果』卻顯示 #7『缺漏·可重跑』**（**客戶 2026-09-26 裁示：合併為一輪、另開工單，兩頁共用對照一起修；⛔ 不得併入持股頁卡化那一輪**；~~**登記，未動工**~~ → **2026-09-26 同日以規格變更處理（新增徽章 #11，見本條末「處理結果」表）—— ⚠️ 只處理了一部分，見下**）：
 
 | 項目 | 內容 |
 |---|---|
-| 受影響卡 | **持股頁（PR #688，分支 `claude/v2-hold-cards` `57b5993`）**：`src/ui/views/page_hold.py` 的 `hold.switch`／`hold.macro_stage`／`hold.take_profit` 空白態（`else:   # UI_EMPTY`，`why` 寫「**這是一個有效的結果**」）。**找股頁**：`src/ui/views/page_find.py` 的 `find.screen_result` 空白態（`SCREEN_EMPTY_NOW`「選股已完成，符合條件的標的是 0 檔」，`why` 寫「這是一個有效的結果」）—— 既有「0 筆結果」徽章 #7 vs 文字「有效結果」（⚠️ 待確認：`src/` 內 grep 不到「0 筆結果」字面，該標籤字樣出處未查到） |
+| 受影響卡 | **持股頁（PR #688，分支 `claude/v2-hold-cards` `57b5993`）**：`src/ui/views/page_hold.py` 的 `hold.switch`／`hold.macro_stage`／`hold.take_profit` 空白態（`else:   # UI_EMPTY`，`why` 寫「**這是一個有效的結果**」）。**找股頁**：`src/ui/views/page_find.py` 的 `find.screen_result` 空白態（`SCREEN_EMPTY_NOW`「選股已完成，符合條件的標的是 0 檔」，`why` 寫「這是一個有效的結果」）—— ~~既有「0 筆結果」徽章 #7 vs 文字「有效結果」（⚠️ 待確認：`src/` 內 grep 不到「0 筆結果」字面，該標籤字樣出處未查到）~~ → **更正（2026-09-26）**：「0 筆結果」是**轉述、不是畫面字面**；畫面上的真實文字是 `SCREEN_EMPTY_NOW`「**選股已完成，符合條件的標的是 0 檔**」（`src/ui/views/page_find.py`），徽章 #7 vs `why`「這是一個有效的結果」 |
 | 真因 | 上列空白態的建構函式呼叫 `shared/ui_state.py::classify_ui_state()` **未帶 `reason`** ⇒ 判為 `UI_EMPTY`；共用對照 `src/ui/views/page_today.py::V2_STATE_VOCAB` 把 `UI_EMPTY` 翻成 `("empty", None)`；`src/ui_v2/page_today.py::resolve_badge()` 對 `empty` 且無 `MISS_NOT_APPLICABLE` ⇒ 回 **#7「缺漏 · 可重跑」**（`src/ui_v2/components.py`） |
 | 徽章缺口 | 現有 10 顆徽章（`src/ui_v2/components.py` `_badge(1..10)`）**沒有一顆**表示「有效的空結果」；#8「不適用 · 重跑無效」語意也不對 |
 | 既有揭露 | `page_today.py` 在 `V2_BADGE_AMBIGUOUS` 旁已註明：裸 `UI_EMPTY` 的徽章文字「比 L0 多講了一句話」（#7 宣稱可重跑），要改須先改 v2 契約層 |
 | 修法方向 | 在**共用徽章集／`V2_STATE_VOCAB`** 層決定（⛔ 不在單頁另發明徽章）；屬**共用元件異動 ⇒ 動工前須客戶核准** |
 | 附記 | 持股頁卡化那一輪的**手機截圖上傳失敗**（檔案過大／過長，伺服器回 400）；客戶表示**不阻擋任何事** |
-| 處置 | 依 §-1：**只登記，未動工** |
+| 處置 | ~~依 §-1：**只登記，未動工**~~ → 2026-09-26 客戶裁示動工，走**規格變更**（見下表） |
 
 ⚠️ 上列事實為**程式閱讀（grep `/home/user/msd-hold` 的 `src/`、`shared/`），未實跑**；**單組結論，未經第二組驗**（§-2 規則 6），⛔ 不得當既定前提。
+
+**處理結果（2026-09-26；性質＝規格變更，⛔ 不是 bug fix；決策者：客戶）**：
+
+| 項目 | 內容 |
+|---|---|
+| 規格變更 | `docs/v2/spec/UI_COMPONENTS.md §2` 徽章 ~~恰 10 種~~ → **11 種**：新增 **#11「▨ 無資料」**＝有效的空結果；圖示／文字**逐字沿用** L0 `shared/ui_state.py` `UI_STATE_META[UI_EMPTY]`（實作直接讀那一格，⛔ 不抄）。舊表述保留加刪除線，理由兩邊並陳於該段 |
+| 射程 | **登記制**：`src/ui/views/page_today.py::V2_VALID_EMPTY_SPEC`，只列「上游成功算完、結果真的是 0／空」且**同一對 `(key, now)` 不會出現在任何缺漏／失敗路徑**的卡；L0 態須恰為 `UI_EMPTY`。其餘一律維持原徽章 |
+| ✅ 納入（1） | `hold.portfolio_count` ＋ `COUNT_EMPTY_NOW`：Sheet 讀成功、`list_portfolios()` 長度 0（L3 `STATUS_BOUND_EMPTY`）；讀取失敗走 `None`＋`MISS_FETCH_FAILED`（紅）、未綁走 idle，兩者都不會產出這一態 |
+| ⛔ 未納入：本條點名的四張卡 | **`find.screen_result`**：`_load_survivors()` 讀取失敗時 L3 回空表＋「季快照未就緒」，畫面同樣落到 `SCREEN_EMPTY_NOW` ⇒ 同一對 `(key, now)` 蓋著真缺漏。**`hold.switch`**：L3 `get_switch_in_candidates()` 讀選股池失敗時**吞例外回 `[]`**，換出端判不出來的燈也不會變紅 ⇒ 「沒有建議換股」可能來自失敗。**`hold.take_profit`**：L3 只判有損益% 的衛星，**全部缺均價時也回 0 檔**（`why` 自陳「也可能是…判不了」）。**`hold.macro_stage`**：「總經本輪未評估」＝未評估，客戶明文排除 |
+| ⛔ 未納入：其他候選 | `hold.deep.dividend_cash`「近一年查不到任何一筆配息」（L3 自陳上游把「真的沒除息」與「抓不到配息」回成同一個空序列）；`hold.position_cap`（未評估）；`hold.deep.stress`／`var`／`dividend_cash` 的「算不出來」、`hold.alloc_split`／`deep.core_satellite`「算不出比例」（缺張數／均價＝真缺漏）；`hold.ai_summary`「AI 回了空白」（異常）；`NOT_BOUND_*`／`EMPTY_SHEET_*`／「這一輪沒有讀 Google Sheet」／`NO_ROWS_NOW`（漂移）／`hold.vix`（稍後再試）／`find.sector_flow`（快取未產生）；今天頁全部 |
+| ⚠️ 原矛盾仍在 | 上列四張點名卡**仍畫 #7**，卡面仍寫「這是一個有效的結果」⇒ **矛盾對它們還沒解**。要讓它們畫 #11，須先在 builder／loader 把「真的是 0」與「失敗被吞成空」分成不同的 `now`（或讓 L3 不吞例外）—— **屬改卡面文案／builder／L3，不在本次授權**（客戶授權範圍＝共用對照表＋規格檔＋對應測試），**待客戶另行裁示** |
+| 程式 | 分支 `claude/v2-badge-vocab`（基於 `66e4fe0`，未 commit）：`src/ui_v2/components.py`（#11）、`src/ui_v2/page_today.py`（`resolve_badge(valid_empty=)`，非 `empty` 態拒收）、`src/ui/views/page_today.py`（登記表＋三頁共用 `v2_card_badge_n()`）、`page_find.py`／`page_hold.py` 各改一個呼叫點＋import、`shared/ui_state.py`（僅註解）、測試 |
+
+⚠️ 納入／排除判定為**單組程式閱讀＋列舉實跑**的結論，**未經第二組驗**（§-2 規則 6），⛔ 不得當既定前提。
+
+**待辦：4 張卡「靜默失敗」—— 讓「抓取失敗」與「真的是 0」分開，才能畫 #11**（**客戶 2026-09-26 裁示：分兩批工單**；**登記，未動工**）：
+
+| 項目 | 內容 |
+|---|---|
+| 背景 | 上條「處理結果」已新增 #11「▨ 無資料」，但點名的卡因**失敗被吞成空**而未納入 `V2_VALID_EMPTY_SPEC`。本條即其後續工單 |
+| **第 1 批（3 張）** | `find.screen_result`（`SCREEN_EMPTY_NOW`）、`hold.switch`（`SWITCH_EMPTY_NOW`）、`hold.take_profit`（`TP_EMPTY_NOW`） |
+| 第 1 批範圍 | **只改「抓取失敗 vs 真的 0」的判定**；⛔ **不動資料層** |
+| 第 1 批證據 | ① `src/ui/views/page_find.py:836-838` 接住存活池例外、回 `None`；② `src/services/fundamental_screener_service.py:493-498` 再吞一次（`survivors_df = None`），之後 `:338-339` 回空表並附誤導說明「**季快照未就緒**」；③ `src/services/dividend_station_service.py:781-785`（`get_switch_in_candidates`）接住例外回 `[]`，且排名表為空時**也**回 `[]`；④ `flag_take_profit`（`dividend_station_service.py:944-952`，`return` 在 `:953`）略過 `_detail.error` 的列；⑤ 卡面文案寫「**這是一個有效的結果**」：`src/ui/views/page_hold.py:1981-1990`（`hold.switch`）、`:2161-2168`（`hold.take_profit`）、`src/ui/views/page_find.py:1393`（`find.screen_result` 的 `why`） |
+| **第 2 批（1 張）** | `hold.deep.dividend_cash`（`CASH_NO_PAYOUT_NOW`） |
+| 第 2 批證據 | `src/data/etf/etf_fetch.py::fetch_etf_dividends` `:293-296` 接住**所有**例外回空 `Series` ⇒ 「真的沒配息」與「抓不到」同形 |
+| 第 2 批閘門 | **需改資料層** ⇒ ⛔ **動工前須先向客戶報告計畫**（資料層凍結，`CLAUDE.md` §-1.2） |
+| 收尾 | 第 1、2 批修好後，對應 `(key, now)` 才可登記進 `src/ui/views/page_today.py::V2_VALID_EMPTY_SPEC`（`:2207`）取得 #11 |
+| 僅登記、不排程 ① | `load_binding` 契約漂移落空（`src/ui/views/page_hold.py:1003-1018`）：若 L3 漂移，卡會落進 `UI_EMPTY`，#11 就會宣稱「有效的結果」。**現行 L3 不會產出此態** |
+| 僅登記、不排程 ② | 註解寫 `V2_VALID_EMPTY_PAIRS`，實際符號是 `V2_VALID_EMPTY_SPEC`：`src/ui_v2/page_today.py:533`、`src/ui_v2/components.py:212` |
+| 處置 | 依 §-1：**登記，未動工** |
+
+⚠️ 行號以 `origin/main` `66e4fe0` ＋ PR #689（`claude/v2-badge-vocab` `78d8744`）為準，已於 `/home/user/msd-badge` 逐一 grep 核對命中；⚠️ 待確認：「僅登記 ①」所述「L3 漂移時會落進 `UI_EMPTY`」與「現行 L3 不會產出」為 QA 推論，本組**只核對到行號與程式片段，未實跑驗證該路徑**。
+⚠️ 上列發現來自**單組 QA、程式閱讀、未實跑**；**未經第二組驗**（§-2 規則 6），⛔ 不得當既定前提。
 
 ### 6.5 🔴 卡關點與待客戶裁示
 

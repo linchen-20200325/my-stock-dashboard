@@ -46,11 +46,13 @@
 面板 `.pan`：`padding:12px 14px`；`border-radius:3px`；`1px solid var(--rule)`；`background:var(--panel)`。
 標記態 `.blk.flagged`：`border-color:var(--ochre-line)` ＋ `dashed`（產品模式下改回 solid）。
 
-## 2. 徽章（10 種）
+## 2. 徽章（~~10 種~~ 11 種）
+
+> 📌 **2026-09-26 有意識的規格變更，⛔ 不是漏刪；決策者：客戶。** 本節由「恰 10 種」改為 **11 種**（新增 **#11「▨ 無資料」**＝有效的空結果）。舊標題與舊表述一律**保留加刪除線**；變更理由兩邊並陳、#11 的語意與射程限制見本節表下「🔴 **第 11 種**」段。
 
 **基底＝既有 L0 `shared/ui_state.py` 七態 SSOT**（已接線，12 個 caller，含 `views/page_today.py`、`page_find.py`；
 `views/_ui_kit.py` 明寫「不定義狀態，唯一真相源是它」）。
-**幾何**（線框 `.bdg`，10 種共用）：`display:inline-flex; gap:4px; border-radius:3px; padding:1px 7px;
+**幾何**（線框 `.bdg`，~~10 種共用~~ **11 種共用**；#11 未新增任何幾何值）：`display:inline-flex; gap:4px; border-radius:3px; padding:1px 7px;
 font-size:11.5px; font-weight:600; white-space:nowrap; border:1px solid`。
 卡片主徽章用 `.sbadge` 四尺寸（`b1` 14.5px/`10px 22px`/min-h 46/border 2px；`b2` 12.5px/`5px 13px`/min-h 36；
 `b3` 11px/`2px 10px`/min-h 28/radius 3px；`b4` 10.5px/`2px 5px`/min-h 26/border 0），依所在卡層 t1→b1 … t4→b4。
@@ -67,6 +69,7 @@ font-size:11.5px; font-weight:600; white-space:nowrap; border:1px solid`。
 | 8 | 結構上不適用 | `UI_EMPTY` ＋ `MISS_NOT_APPLICABLE` | `--sig-grey-bg` | `--sig-grey` | 1px solid `--rule-2` | **`N/A`** | **不適用 · 重跑無效** | 個股沒有折溢價 |
 | 9 | 資料不完整 | **新訂**（七態無 partial） | `--sig-neutral-bg`（中性底） | `--sig-neutral` | 1px **dashed** `--sig-blue` | **`◧`** | **N／M 計入** | 12／18 檔有報價 |
 | 10 | **只描述不判等級** | `emits_level=False` | `--sig-blue-bg` | `--sig-blue` | 1px solid `--sig-blue` | ◆ | **只描述，不判等級** | 個股 KD |
+| 11 | **有效的空結果**（2026-09-26 新增） | `UI_EMPTY` ＋ **登記制**（見下「第 11 種」段） | `--sig-grey-bg` | `--sig-grey` | 1px solid `--rule-2` | **▨**（＝ L0 `UI_STATE_META[UI_EMPTY]`） | **無資料**（＝ L0 同上，⛔ 不另寫文案） | Sheet 讀成功、裡面 0 本組合 |
 
 **拆 `UI_EMPTY` 的依據（#7／#8）**：該模組檔頭自陳「無資料」在某些情況是假話（不是沒有資料，是沒有人去要）；
 拆法照 `INDICATOR_SPEC` 三態 —— 缺漏（該有但沒拿到，重試有用）vs 結構上不適用（`MISS_NOT_APPLICABLE`，重試無用）。
@@ -91,6 +94,18 @@ R-3 明文「灰系**內部**的『不適用』與『缺漏』必須再以符號
 該裁示明文「`wired`／`discriminative`／`emits_level` **三者互相獨立、不可互相替代**」，
 理由是把 KD 標成「不適用」在畫面上**是假話**（KD 完全適用、值照抓照印，缺的是判燈規則本身）。
 客戶若不要，可一句話刪掉本列。
+🔴 **第 11 種：有效的空結果（客戶 2026-09-26 裁示新增；有意識的規格變更，⛔ 不是漏刪）。**
+~~徽章恰 10 種，⛔ 不得新造第 11 種~~（舊表述，原出處 `UI_PAGE_TODAY.md ②` 落差 2、`UI_PAGE_FIND.md ②` 處置 3 —— 兩處原文**一字未動**，各加一行指回本段）。
+**語意**：上游這一輪**成功算完**，結果**真的是 0／空** —— ⛔ 不是缺漏、⛔ 不是還沒去要、⛔ 不是不適用。
+**圖示與文字逐字沿用既有 L0 chip `shared/ui_state.py` `UI_STATE_META[UI_EMPTY]`**（`▨`／「無資料」）—— 客戶明示「⛔ 不發明新文案」；實作端**直接讀 L0 那一格**（`src/ui_v2/components.py`），⛔ 不抄一份字面。
+**為什麼要改（新）**：卡面文字寫「**這是一個有效的結果**」、徽章卻印 #7「缺漏 · 可重跑」—— 同一張卡同時說兩件相反的話；10 顆裡**沒有一顆**說得出「算完了、就是空的」（#8「不適用 · 重跑無效」語意也不對）。這不是為了對齊線框鍵數，是**現有語彙說不出一句真話**。
+**為什麼原本不准（舊，理由仍然成立，⛔ 不是寫錯）**：多一顆徽章＝多一種使用者要學的語彙；而且「新造一顆」很容易變成替一個說不清楚的狀態找地方放。⇒ 本次**只為一個已查證的矛盾**開一顆，**⛔ 仍然不得再新造第 12 種**，舊規則的精神照舊有效。
+**射程限制（硬規則，⛔ 不得擴張）**：
+- **登記制**：只有列在 `src/ui/views/page_today.py::V2_VALID_EMPTY_SPEC` 的 `(card.key, note.now)`、且 L0 態恰為 `UI_EMPTY` 的卡才畫 #11；契約層 `resolve_badge(valid_empty=True)` 對 `empty` 以外的態**直接拒收**（`ValueError`）。
+- **⛔ 不得套用於**：真缺漏（#7）、不適用（#8）、還沒載入（#3）、未評估、未綁定、「這一輪沒有讀 Google Sheet」、契約漂移（#6）、可重試的空（例：VIX「稍後再試」）、快取尚未產生、以及**今天頁全部卡**。這些**一律維持原徽章**。
+- **判準（嚴格）**：同一對 `(key, now)` 只要還會在任何「真缺漏／上游失敗被吞成空」路徑上出現，就⛔ **不得登記** —— 登記＝把 #11 擴散到那條路徑。
+- ⚠️ **與 `UI_PAGE_HOLD.md ③` 的 `▨ 未設定`／`▨ 不計算` 無關**：那兩個是**格內值**的第三類寫法（客戶 2026-09-16 裁示「不發明第 11 種徽章」針對的就是它們），**⛔ 不是 #11**、⛔ 不得據 #11 改畫成徽章；同一個 `▨` 字形出現在兩處是**沿用 L0 chip 的結果**，不是同一件事。
+**首批登記（2026-09-26，逐張審查）**：僅 `hold.portfolio_count`「Sheet 綁好了，但裡面還沒有任何一本組合」。`find.screen_result`「選股已完成…0 檔」、`hold.switch`、`hold.take_profit`、`hold.deep.dividend_cash`「近一年查不到任何一筆配息」**經審查未登記**（同一對 `(key, now)` 也蓋著上游失敗被吞成空或缺輸入的路徑）—— 逐張理由見 `HANDOFF.md §6.4`。⚠️ 審查為**單組**結論，未經第二組驗（`CLAUDE.md §-2` 規則 6）。
 **硬規則**：狀態色**一律配圖示＋文字，⛔ 不得只靠顏色** —— 依據第 1 份實測「綠/紅在 deuteranopia 下 ΔE 3.9 無解」。
 **硬規則**：狀態頻道出「圖示＋中文」，訊號頻道**只出中文標籤**（兩邊都有 🔴，同卡出兩顆等於沒有資訊）；
 `_ui_kit.assert_signal_text_clean()` 已在建構期擋這件事。
