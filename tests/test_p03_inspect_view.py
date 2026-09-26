@@ -41,7 +41,9 @@ import pytest
 
 from shared.station_specs import MISS_NOT_APPLICABLE
 from shared.ui_state import (
+    NO_VALUE_STATES,
     UI_EMPTY,
+    UI_NOT_APPLICABLE,
     UI_FAILED,
     UI_IDLE,
     UI_LIVE,
@@ -99,10 +101,12 @@ class TestFourEmptiesNeverMix:
         _v = _verdict("AAPL")
         assert _v.is_unknown and not _v.is_resolved
         _card, _, _ = P.build_kind_card(_v, _req(ticker="AAPL"))
-        assert _card.state == UI_EMPTY, (
+        # 2026-09-23 D-3(a)：這一態自本日起是 #8（`⊘ 不適用 · 重跑無效`），
+        # **不再**與「查無此代碼」共用 `▨ 無資料`。原意（灰、不是紅）未減。
+        assert _card.state == UI_NOT_APPLICABLE, (
             f"判不出型別被畫成 {_card.state!r} —— "
             "線框葉1-C 明寫「第三條路 · 不是紅態」")
-        assert _card.state != UI_FAILED
+        assert _card.state in NO_VALUE_STATES and _card.state != UI_FAILED
 
     def test_unknown_block_is_also_grey_and_not_unwired(self):
         """獨立的葉1-C 區塊同樣不准是紅、也不准是「未接線」。
@@ -111,7 +115,7 @@ class TestFourEmptiesNeverMix:
         它只是誠實地說判不出來。兩者混用會讓使用者以為這是待開發功能。
         """
         _card, _facts, _ = P.build_unknown_card(_verdict("AAPL"))
-        assert _card.state == UI_EMPTY
+        assert _card.state == UI_NOT_APPLICABLE   # D-3(a)：#8，仍是灰的
         assert _card.state not in (UI_FAILED, UI_UNWIRED)
         assert _facts, "unknown 卡也要讓人看見代碼與系統判型"
 

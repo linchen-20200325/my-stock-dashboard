@@ -194,6 +194,65 @@ else:                               持續 → streak += 1
 | D-33 | 燈號應帶 `prev_level`／`since`／`streak`／`streak_miss` 四欄（R7-1），歷史源用既有 parquet | `shared/macro_buckets.py:DangerSpec`；`shared/regime_arbiter.py:RegimeVerdict` | 設計變更 |
 | D-34 | 教學字串宣告的「持續 3 月」與實作不符，須二選一對齊 | `src/data/core/data_registry.py:FRED_NAPM['how_to_read']` | 實作 bug |
 | D-35 | `D-29`(b) 排名禁令在**下裁示前已存在 7 處違反**（⛔ 非 bug、⛔ 不得寫成 bug —— 是規則變了，這些寫法在 2026-09-16 前不算錯），全部在「🏆 個股組合」批次管線，產生端唯一 `run_batch_fetch`（寫 `健康度`／`評級`／`_health` 進 `session_state['t3_data']`；其 except／空 df 分支塞 `健康度: 0` 佔位＝`P1-03`／`N-2`，該 0 會被下列②當「體質弱」）：①`sort_values('健康度', ascending=False)` 直接排序（`_render_elimination_detail`）②`健康度 < HEALTH_GRADE_B_MIN(50)` 汰弱成 `eliminated_ids`（`summarize_candidates`）③多股表 `健康度`／`評級` 為可排序欄（`_render_master_table`）④等第加權進第一排序鍵 `_p`（`final_recommendation`）⑤多因子分缺席時改由 `_health` 決定名次再餵 LLM（`_ranked_t3`）⑥等第跨軸融合成「🧭統一裁決」可排序欄（`_render_summary_table`）⑦A 級 gate 進「操作狀態」欄（`classify_stock_status_lamp`）。**合規替代路徑已存在、即裁示允許的比法**：`scripts/update_health_history.py`(cron) → `health_history_service.py:HEALTH_HISTORY_PARQUET` → `load_health_history`／`merge_score_history` → `section_kline_chart.py`「📈 健康度走勢（近5日）」＝**單檔跟自己歷史比**。⚠️ **但該路徑至今零資料**（總管實查）：`health_watchlist.json` 的 `stocks` 為 `[]`（檔內自陳「清單為空 ＝ 功能待命不跑（不會腦補您的持股）」）、`health_history.parquet` 從未被 commit、workflow 自陳上線起跑 **33 次全成功但從未 commit 任何東西** → **7 處跨股排名禁掉後，健康分數剩下的唯一合規用途目前無資料可比**。**啟用條件＝把股票代碼填進該 json 的 `stocks` 並 commit，那是使用者的持股決定，⛔ 系統／本檔／任何實作端不得代填** | `src/ui/tabs/stock_grp_sections/section_batch_fetcher.py:run_batch_fetch`；`section_portfolio_summary.py:_render_elimination_detail`／`_render_master_table`；`src/compute/screener/scorability.py:summarize_candidates`；`src/ui/tabs/tab_helpers.py:final_recommendation`／`classify_stock_status_lamp`；`section_ai_portfolio.py:render_ai_portfolio_section`(`_ranked_t3`)；`section_financial_health.py:_render_summary_table`；啟用側 `data_cache/health_watchlist.json`（`stocks`）／`.github/workflows/update_health_history.yml` | **設計變更（user 2026-09-16 裁示）** |
+## §9 客戶裁示：六項策略衝突（`user 2026-09-21` 逐字拍板）
+> 六項衝突原文見 `STRATEGY_INTAKE.md §2`（同批另立；⛔ 本節只收**裁示 ＋ 可照著實作的判定邏輯**，不轉述該檔）。裁示逐字以 **粗體引號** 標明；沿用全檔三態與語氣（免責見檔首，⛔ 不重述），⛔ 不動 §1~§8 任何既有規則、⛔ 不另立 `D-*` 編號（§8 表不動）。
+**R9-1（C1 同一時點三套方法論給相反位階，誰優先）** — **「分層並列，不互相否決。真衝突時總經贏。」** 接 §6 衝突矩陣既有體例（⛔ 既有五列一字不動）：總經配置／財報五大數字選股／週期循環定位**三層各出各的結論、同畫面並列揭露**；只有「同一個欄位只能印一個值」才算**真衝突**，此時取總經 — 與既有「總經 vs 個股技術面 → 總經贏」同向，⛔ 不得反推成「總經可覆寫另兩層的欄位」。
+```
+# layer ∈ {macro 總經配置, fundamental 財報選股, cycle 週期定位}；每個輸出強制帶 layer 欄
+if   三層各有自己的欄位:        三層全印 ＋ 各標 layer 與時間尺度(R9-2)；⛔ 不得以一層否決另一層、⛔ 不得只印贏的那層
+elif 同一欄位被多層爭用:        # ← 只有這一格叫「真衝突」
+     if macro 有值(非三態缺):   該欄取 macro；另兩層結論**原樣並列**同畫面；⛔ 不得隱藏、⛔ 不得生第三顆合併燈
+     else:                      ⚪「未評估」；⛔ 不得由 fundamental／cycle 遞補頂替總經欄位
+```
+**R9-2（C2 時間尺度不一致：財報落後季頻、週期領先月頻）** — **「不合成，各自標時間尺度。」**
+
+| 層 | 指標性質 | 頻率 | 可用日（PIT 對齊鍵，`CLAUDE.md §2.3`） |
+|---|---|---|---|
+| macro 總經配置 | **逐源標註**，⛔ 不得以單一性質概括 | 逐盞不同（16 盞各有來源） | 依各源發布延遲逐項標 |
+| fundamental 財報選股 | **落後** | **季頻** | **公告日（約季後 45 天）**；⛔ 不得用季末日 |
+| cycle 週期定位 | **領先** | **月頻** | 公告日 |
+
+每個輸出**必須**帶 `scale` 三件（頻率 ＋ 落後/同時/領先 ＋ 可用日）；⛔ 不得把不同尺度的結論合成一個數字或一盞燈（同 §1 R1-3「五套合成法各有各的分母、⛔ 不得互餵」）；⛔ 不得拿季頻值去填月頻空格（那是沉默 `ffill`，違 `CLAUDE.md §1`）。
+**R9-3（C3 輸出型別不同：整體曝險 % vs 個股百分位排名）** — **「不相加，不同層級。」**
+```
+# exposure_pct 單位 %（組合層）｜ percentile 單位 pctile（個股層）— 值域同為 [0,100]，但**語意與層級不同**
+if   兩值來自不同層級:        分欄顯示，各標單位 ＋ 層級；⛔ 不得相加／相乘／平均／併進同一排序鍵
+                              ⛔ 不得因「都是 0~100」就當同量綱（`CLAUDE.md §4.1` 量綱陷阱）
+elif 畫面只容得下一個數字:    ⚪「不合併」＋ 兩值並列；⛔ 不得自造轉換係數把百分位換算成曝險 %
+```
+**R9-4（C4 週期定位核心輸入本機無資料源）** — **「標『本機缺資料，暫不啟用』。」** 射程＝該層核心輸入（殖利率利差 10Y-2Y／10Y-3M、Fed 資產負債表 WALCL）；依 `STRATEGY_INTAKE.md §2` C4 查證：全 repo 僅教學字串命中、無任何 fetch。⛔ 不得為此新增資料源、⛔ 不得以中性值／0 頂替（`P1-01`／`D-06` 同族）。
+```
+if   該輸入全 repo 無 fetch 實作:  顯示**「本機缺資料，暫不啟用」**；不進分母、不計未評估
+                                   # ＝ §1 R1-1 結構性旗標①「尚未接線」那一格；⛔ 不得改掛三態「缺漏」（重跑無效）
+elif 有 fetcher 但這輪沒取到:      三態「缺漏」`⚠︎ —`（可重跑）
+else:                              照常判
+# ⛔ 整層停用不得使該層判綠；該層在 R9-1 爭用時視同「無值」，走 else 分支
+```
+**R9-5（C5 同一指標雙軌門檻：VIX）** — **「統一成一套門檻，或明確分工（22 警戒 / 25-30 恐慌分級），寫清楚。」** **總管裁定：選「分工」，不統一**（⛔ 非客戶原文，`CLAUDE.md §-2` 規則 6，客戶一句話即可推翻）。理由：兩軌**目的不同**；強行統一＝改動兩個現行系統的行為，屬程式碼變更、超出本輪射程。
+
+| 軌 | 門檻（檔:符號） | 值 | 管什麼 | 出現在哪 |
+|---|---|---|---|---|
+| **位階軌** | `shared/macro_buckets.py:DangerSpec("vix")` → `MACRO_THRESHOLDS['VIX']`；note 欄逐字 `≥22 警戒 / ≥30 流動性危機強制空手`（**現行 code 字串常數**，原樣引用） | `yellow_above=22`／`red_above=30` | **總經位階燈號**（五桶之一） | 五桶／總經頁抬頭（§1 R1-3） |
+| **雷達軌** | `src/compute/risk/risk_radar.py:VIX_WARN_LEVEL`／`VIX_PANIC_LEVEL` | `25.0`／`30.0` | **事件雷達分級**（單一事件強度） | `src/ui/tabs/macro/helpers.py`（卡片 cut-off 線 ＋ `detect_risk_radar`）／`tab_macro.py` 風險雷達桶 |
+
+```
+# 位階軌燈號判定逐字（`src/data/macro/macro_core.py`）：>red_above(30) ⚫ 極端恐慌／>yellow_above(22) 🟡 波動加劇／其餘 🟢 市場平靜
+if   畫面印的是「總經位階」:      只引位階軌 22/30；⛔ 不得混入 25
+elif 畫面印的是「事件雷達強度」:  只引雷達軌 25/30；⛔ 不得混入 22
+# ⛔ 同一個畫面不得同時引用兩軌 —— 同一天 VIX=23 會同時出現 🟡 與 🟢，兩盞燈互相打臉
+```
+⚠️ **射程僅限本對**（位階軌 vs 雷達軌）：§6／`D-32` 那一對（`MACRO_ALERT_RULES` VIX 30/20 vs `BUCKET_DANGER_SPECS` 30/22）**不在本裁示射程內，仍為實作 bug 待修**，⛔ 不得引本條把 `D-32` 講成「已裁示分工」。
+**R9-6（C6 缺值語意在 repo 內不一致）** — **「全面統一為三態（有值 / 不適用 / 缺漏），違反側列為實作待修。」** 語彙 SSOT：`⚠︎ —` ＝**缺漏・可重跑**；`N/A` ＝**不適用・重跑無效**（`UI_COMPONENTS.md §2` 徽章 #7／#8）；⛔ 兩者不得同形（同 `INDICATOR_SPEC` R-3 ／ §2 R2-2）。 ✅ **已合規樣板（維持，⛔ 不得回頭改成 0）**：`fundamental_prescreen.py:_safe_ratio`（分母 ≤0 → `NaN` ＝**不適用**）／`yield_pe_fetcher.py:get_pb_ratio`（雙源皆敗 → `None` ＝**缺漏**）／`v5_modules.py:calc_dividend_yield_357`（缺 → `est_yield=None` ＋「未評估」，不出分）。
+
+| 違反側（**只登記、本輪不修**） | 現行行為 | 應然（三態） |
+|---|---|---|
+| `C6-①` `tw_stock_data_fetcher.py:calc_financial_metrics` | 六個比率缺分母一律 `else 0.0` | 分母缺／≤0 → **不適用**；⛔ 禁 `0.0` |
+| `C6-②` `financial_statements_fetcher.py:_v()` | 查無永遠回 `0.0` | 查無 → **缺漏**；⛔ 禁 `0.0` |
+| `C6-③` `fuzzy_get_from_df(default=0.0)` | 查無回 `0.0` | 同上；⛔ 預設值不得為 `0.0` |
+| `C6-④` `scoring_engine.py:calc_revenue_yoy_score` | 無資料回 `50.0` | 無資料 → **缺漏**、不出分；⛔ 禁中位分頂替 |
+
+**應然 vs 實然**：C1／C2／C3 的並列與分尺度揭露，與五桶三旗標（§1）、兩把尺（§5）、「刻意並存」（§6）同一手法 → **規格保住（相同）**；C4 的「尚未接線」格已存在（R1-1 旗標①）→ **相同（維持）**；C5 雙軌並存 ＋ C6 四處 `0.0`／`50.0` 頂替 → **實作待修**（⛔ 本輪零程式碼變更）。
+**出處與複驗**：C1~C6 裁示逐字為 `user 2026-09-21`；**C5 的「選分工不統一」是總管裁定、非客戶原文**（`CLAUDE.md §-2` 規則 6）。C5 兩軌常數值／燈號逐字／C6 兩側位置為**總管實查**；C5 表「出現在哪」一欄係本組讀 import 所得、**未實跑畫面**，亦**未查證兩軌現是否已同框**。⛔ 本節未窮舉其他雙軌門檻或其他缺值頂替點，⛔ 不得當「已全數收斂」的前提。
 ## 複驗狀態（`CLAUDE.md §-2` 規則 6）
 - **✅ 總管親自查證，可當事實**：涵蓋門檻真實語意（因子個數 ＋ 嚴格 `>`）與 `INDICATOR_SPEC §4` 點數版不成立；`BUCKET_DANGER_SPECS` 實測 **16 盞**；`station_specs.py` 的 `emits_level` 為 2026-08-26 user 裁示且三旗標不可互相替代；`regime_arbiter.arbitrate_regime` 六分支存在；`concentration.py` 逐字「本模組不提供任何燈號 / 門檻」（2026-08-14 裁示）；`MAX_POSITION_PER_STOCK = 0.10`；`section_357_valuation.py` 的 `else 0`；`MACRO_ALERT_RULES` 兩套門檻並存且有真 caller。**`D-35` 之中 2 處為總管實查活碼**：`_render_elimination_detail` 的 `sort_values('健康度', ascending=False)`（檔內註解自陳「④ 汰弱留強改以『純健康度』排序」）、`summarize_candidates` 的 `health_min=HEALTH_GRADE_B_MIN` 汰弱；合規替代路徑三段 code（cron／service／K 線頁走勢圖）＋ 路徑常數 `HEALTH_HISTORY_PARQUET` 均實測存在，**但該路徑從未產生過資料**（四項皆總管實查，⛔ 非單組推測）：`health_watchlist.json` 受 git 追蹤但 `stocks: []`；`git log --all -- data_cache/health_history.parquet` 回空（從未 commit）；`update_health_history.yml` 檔內自陳跑 33 次全成功、0 commit（原因：parquet 被 `.gitignore` 蓋掉使無 `-f` 的 `add` 從未納管＋watchlist 空時 script 依設計 `exit 0`，現已改「存在才 `git add -f`」）；工作區無該 parquet。
 - **⚠️ 單組調查結論（B1／B2／B3，未經第二組複驗，引用請打折）**：五套合成法「只有五套」；六因子給分規則逐分支還原與「唯一憑空給值分支是 MA」；時間軸機制「只有 5 處」且「無任何一盞燈帶時間欄」；三個上限「全部寫死」；`_SECTOR_CONCENTRATION_MAX_PCT` 等判定為 inline。**`D-35` 其餘 5 處 ＋「共 7 處、且全部集中在個股組合那條管線」** —— INV-1 單組窮舉（上列 2 處除外），未經第二組複驗；其中「多股表欄頭可點擊排序」係依 Streamlit 預設行為推導、**未實跑畫面驗證**，`_render_summary_table`／`classify_stock_status_lamp` 兩處屬「等第門檻進多股表」而非直接 `sort`，射程由本檔一併收錄。

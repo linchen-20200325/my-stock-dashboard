@@ -110,15 +110,22 @@ class TestEtfHelpersSSOT:
         assert 'dividend_health_label' in src
 
     def test_yield_valuation_zone_behavior(self):
+        from shared.thresholds import YIELD_HIGH, YIELD_LOW, YIELD_MID
         from src.compute.etf import yield_valuation_zone
-        # 7%+ 強烈買進
-        assert '強烈買進' in yield_valuation_zone(7.5, 5.0)
-        # 3%- 獲利了結
-        assert '獲利了結' in yield_valuation_zone(2.5, 5.0)
-        # 3-5% 適度減碼
-        assert '適度減碼' in yield_valuation_zone(4.0, 5.0)
-        # 5-7% 中性持有
-        assert '中性持有' in yield_valuation_zone(6.0, 5.0)
+        # 不釘文案,只釘 (a) 下游靠的 emoji、(b) 由 YIELD_* 常數插值的門檻數字
+        _hi, _mid, _lo = f'{YIELD_HIGH:g}', f'{YIELD_MID:g}', f'{YIELD_LOW:g}'
+        # 7%+ 便宜區
+        _z = yield_valuation_zone(7.5, 5.0)
+        assert _z.startswith('🟢') and _hi in _z
+        # 3%- 昂貴區
+        _z = yield_valuation_zone(2.5, 5.0)
+        assert _z.startswith('🔴') and _lo in _z
+        # 3-5%
+        _z = yield_valuation_zone(4.0, 5.0)
+        assert _z.startswith('🟡') and _lo in _z and _mid in _z
+        # 5-7%
+        _z = yield_valuation_zone(6.0, 5.0)
+        assert _z.startswith('⚪') and _mid in _z and _hi in _z
         # 無 avg_yield → 不判定
         assert yield_valuation_zone(5.0, None) == '—'
         assert yield_valuation_zone(5.0, 0) == '—'

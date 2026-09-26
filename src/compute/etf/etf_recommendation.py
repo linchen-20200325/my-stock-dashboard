@@ -110,9 +110,9 @@ def recommend_etf_action(row: dict) -> dict:
         _cheap = ('🟢' in val) or (sigma_z is not None and sigma_z <= SIGMA_Z_CHEAP)
         _rich = ('🔴' in val) or (sigma_z is not None and sigma_z >= SIGMA_Z_RICH)
         if _cheap:
-            reasons.append('價位偏低,分批加碼時機較佳')
+            reasons.append('估值位階偏低')
         elif _rich:
-            reasons.append('價位偏高,續抱可、暫緩加碼')
+            reasons.append('估值位階偏高')
 
     return {
         'verdict': verdict, 'icon': VERDICT_ICONS[verdict],

@@ -526,7 +526,7 @@ def synthesize_dual_verdict(
         "icon"   : str,    # 🟢🟡🟠🔴 之一
         "level"  : str,    # 合議結論短語
         "color"  : str,    # hex
-        "action" : str,    # 行動建議全文（內含分歧/降槓桿等明確指引）
+        "action" : str,    # 觀測敘述全文（風險位階/分歧描述，不含操作指引）
         "mode"   : str,    # "adopt_slow" / "downgrade_1" / "downgrade_2" / "override_defense"
         "third_axis_notes": list[str]  # v18.179 第三維度附加註解（無則 []）
     }
@@ -534,18 +534,18 @@ def synthesize_dual_verdict(
     決策表（雙速 base）：
       radar=None/平靜    → adopt_slow（採用慢總經）
       radar=警戒          → downgrade_1（慢樂觀則維持觀察；慢中性/悲觀則降至中性）
-      radar=警報          → downgrade_2（慢樂觀→降槓桿；慢中性→偏空；慢悲觀→全面防守）
-      radar=極端警報      → override_defense（強制減倉，慢總經暫不採信）
+      radar=警報          → downgrade_2（慢樂觀→位階偏高；慢中性→風險升高；慢悲觀→風險顯著升高）
+      radar=極端警報      → override_defense（短線急殺，慢總經與短線背離）
 
     v18.179 第三維度（兩個皆 Optional，預設 None 時行為與 v18.173 完全一致）
     ----------------
     - ``valuation_level``：估值分位 "便宜" / "合理" / "偏貴" / "極貴"
-        極貴 + 非 override_defense → 追加「估值頂部分位、建議減倉中性」
-        便宜 + 非 adopt_slow → 追加「估值底部分位、可逐步擇機加碼」
+        極貴 + 非 override_defense → 追加「估值位於頂部分位（極貴）」
+        便宜 + 非 adopt_slow → 追加「估值位於底部分位（便宜）」
     - ``event_calendar_level``：事件曆 "順風" / "中性" / "逆風" / "重大事件"
-        重大事件 + adopt_slow → 追加「重大事件臨近、暫緩單筆加碼」
-        逆風 + adopt_slow → 追加「事件曆逆風」
-        順風 + 降級 mode → 追加「事件曆順風、可酌量擇機」
+        重大事件 + adopt_slow → 追加「重大事件臨近，位階偏高」
+        逆風 + adopt_slow → 追加「事件曆逆風，波動放大風險升高」
+        順風 + 降級 mode → 追加「事件曆順風」
 
     第三維度**只 append 到 action 與 third_axis_notes**，不改 mode/icon/color/level
     （保 backward compat，已寫好的下游 UI 可零變動繼續用）。
@@ -559,6 +559,26 @@ def synthesize_dual_verdict(
 
     修法：**全部改為敘事強度詞**（明顯提高現金部位／明顯降低倉位／…），語氣強度
     與原本一一對應，但不再輸出任何競爭性百分比。
+
+    v19.18x 動作下架（合規）
+    ------------------------
+    上一輪留下的「敘事強度詞」仍是**操作指令**（明顯降低倉位／提高現金部位／
+    降槓桿／偏空操作／恢復攻擊…），經 `helpers` →「🤝 雙速合議」卡直接印給
+    使用者 = 投資建議。本輪將**本函式自己生成的** `override_defense` /
+    `downgrade_1` / `downgrade_2` 三個分支文案（`level` 與 `action`）改為純風險
+    位階觀測，**該射程內**不再出現動作動詞。三級強度改以觀測語氣區分（一律不含動作）：
+      警報 × 慢多頭 → 「位階偏高、動能轉弱」    （最輕）
+      警報 × 慢中性 → 「風險升高」              （中）
+      警報 × 慢悲觀 → 「風險顯著升高」          （最重）
+    ⚠️ **射程限定 —— 上一句不是全稱句**：`adopt_slow` 分支（雷達 `None`／「平靜」，
+    以及未知雷達狀態 fallback）**原樣透傳上游 `slow_action`**，本函式不生成該段
+    文字。其文案由 `src/compute/macro/macro_helpers.py::classify_long_term_regime`
+    的 `detail` 決定，**不在本函式射程內**。該上游四個 regime 分支的 `detail`
+    已於同輪一併清理（見 `macro_helpers.py`），但那是**該檔**的修改，
+    不得記為本函式的成果。
+    ⚠️ `adopt_slow` 是雷達平靜時的預設路徑 —— 多數時間使用者看到的就是透傳文案，
+    故日後若上游文案回退，本函式的清理**擋不住**。
+    ⚠️ `mode` / `icon` / `color` / 判斷式一律未動 —— 本輪為純文案變更，行為零變更。
 
     ⚠️ 本檔為 L2 Compute（CLAUDE.md §8.2）：不得 import streamlit、不得 import L3。
     因此**刻意不在此接 allocation_service**——持股數字由 UI 層自行向 SSOT 取得，
@@ -576,12 +596,12 @@ def synthesize_dual_verdict(
     elif radar_level == "極端警報":
         _base = {
             "icon": "🔴",
-            "level": "立即減倉防守",
+            "level": "防守位階",
             "color": "#d32f2f",
             "action": (
-                # v19.170:硬編碼現金百分比 → 敘事詞（原文見上方 docstring）
-                f"短線急殺進行中（雷達 4+ 紅燈）→ 明顯提高現金部位、核心轉投資等級債／防守型；"
-                f"慢總經 {slow_level}({slow_score:+.1f}) 暫不採信，待雷達回到警戒以下再恢復攻擊"
+                # v19.18x:敘事強度詞（仍是動作）→ 純觀測（原文見上方 docstring）
+                f"短線急殺進行中（雷達 4+ 紅燈）；"
+                f"慢總經 {slow_level}({slow_score:+.1f}) 與短線背離，待雷達回到警戒以下"
             ),
             "mode": "override_defense",
         }
@@ -589,36 +609,36 @@ def synthesize_dual_verdict(
         if slow_score >= 5:
             _base = {
                 "icon": "🟠",
-                "level": "雙速分歧：降槓桿",
+                "level": "雙速分歧",
                 "color": "#ef6c00",
                 "action": (
                     f"慢總經 {slow_level}({slow_score:+.1f}) 仍多頭，但短線雷達警報 → "
-                    # v19.170:硬編碼倉位百分比 → 敘事詞（原文見上方 docstring）
-                    f"明顯降低倉位、暫緩定額、停利收緊；觀察 24-48h 雷達是否轉警戒"
+                    # v19.18x:敘事強度詞（仍是動作）→ 純觀測（最輕的一級）
+                    f"位階偏高、動能轉弱；觀察 24-48h 雷達是否轉警戒"
                 ),
                 "mode": "downgrade_2",
             }
         elif slow_score >= -5:
             _base = {
                 "icon": "🔴",
-                "level": "雙線疲弱：偏空操作",
+                "level": "雙線疲弱",
                 "color": "#d84315",
                 "action": (
                     f"慢總經 {slow_level}({slow_score:+.1f}) 本已疲弱，疊加短線警報 → "
-                    # v19.170:硬編碼現金百分比 → 敘事詞（原文見上方 docstring）
-                    f"提高現金部位、停止加碼、衛星部位獲利了結"
+                    # v19.18x:敘事強度詞（仍是動作）→ 純觀測（中間強度）
+                    f"風險升高、衛星位階偏高"
                 ),
                 "mode": "downgrade_2",
             }
         else:
             _base = {
                 "icon": "🔴",
-                "level": "全面防守",
+                "level": "全面防守位階",
                 "color": "#b71c1c",
                 "action": (
                     f"慢總經 {slow_level}({slow_score:+.1f}) 已悲觀，疊加短線警報 → "
-                    # v19.170:硬編碼現金百分比 → 敘事詞（最強防守語氣保留）
-                    f"大幅提高現金部位、核心轉投資等級債／全球均衡"
+                    # v19.18x:敘事強度詞（仍是動作）→ 純觀測（最重，「顯著」拉開強度）
+                    f"風險顯著升高、核心與衛星位階均偏高"
                 ),
                 "mode": "downgrade_2",
             }
@@ -630,7 +650,7 @@ def synthesize_dual_verdict(
                 "color": "#fbc02d",
                 "action": (
                     f"慢總經 {slow_level}({slow_score:+.1f}) 仍主導，但雷達警戒（紅+黃 ≥4 燈）→ "
-                    f"維持持倉、暫緩單筆加碼，留意雷達是否升級至警報"
+                    f"維持觀察、留意風險是否升級"
                 ),
                 "mode": "downgrade_1",
             }
@@ -642,7 +662,7 @@ def synthesize_dual_verdict(
                 "action": (
                     f"慢總經 {slow_level}({slow_score:+.1f}) 疊加雷達警戒 → "
                     # v19.170:硬編碼倉位百分比 → 敘事詞（原文見上方 docstring）
-                    f"分批進場、可維持既有倉位、定期定額減半"
+                    f"風險尚未升級、位階持平"
                 ),
                 "mode": "downgrade_1",
             }
@@ -675,17 +695,17 @@ def _apply_third_axis_overlay(
 
     # valuation 疊加
     if valuation_level == "極貴" and mode != "override_defense":
-        notes.append("估值頂部分位（極貴），建議減倉至中性")
+        notes.append("估值位於頂部分位（極貴）")
     elif valuation_level == "便宜" and mode != "adopt_slow":
-        notes.append("估值底部分位（便宜），可逐步擇機加碼")
+        notes.append("估值位於底部分位（便宜）")
 
     # event_calendar 疊加
     if event_calendar_level == "重大事件" and mode == "adopt_slow":
-        notes.append("重大事件臨近，暫緩單筆加碼")
+        notes.append("重大事件臨近，位階偏高")
     elif event_calendar_level == "逆風" and mode == "adopt_slow":
-        notes.append("事件曆逆風，留意波動放大")
+        notes.append("事件曆逆風，波動放大風險升高")
     elif event_calendar_level == "順風" and mode in ("downgrade_1", "downgrade_2"):
-        notes.append("事件曆順風，可酌量擇機")
+        notes.append("事件曆順風")
 
     out = dict(base)
     out["third_axis_notes"] = notes

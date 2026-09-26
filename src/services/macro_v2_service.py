@@ -191,3 +191,64 @@ def get_twii_ohlc(n_trading_days: int) -> dict:
     except Exception as e:  # noqa: BLE001 — 單張圖取不到不該讓整頁炸
         print(f"[macro_v2_service/get_twii_ohlc] 處理失敗:{e}")
         return {}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 燈卡「變化方向」列：月資料的歷史（2026-09-24）
+# ══════════════════════════════════════════════════════════════════════
+#
+# 為什麼另開一支而不是塞進 `get_chart_series()`：那支的 key 集合有既有消費端
+# （走勢卡）與既有守衛，加一個 key 會讓走勢卡多畫一張圖 —— 那是 UI 變更，不是本批範圍。
+# **本層不新增 L1 程式**，直接用既有的 `macro_cache_reader.load_parquet_safe`。
+#
+# ⚠️ 刻意**不**讀 `finmind_m1m2.parquet`：該檔已知損壞（M1B 出現負值），
+#    M1B-M2 那一列的變化方向固定為「無資料」（見 `shared/lamp_direction_thresholds.py`）。
+
+#: 台灣 PMI 月資料的 parquet 檔名（實測欄位：date / pmi / source / fetched_at，
+#: date 為每月 1 日的 ISO 字串）。
+_TW_PMI_PARQUET_NAME: str = "tw_pmi.parquet"
+
+
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+def get_monthly_history() -> dict[str, list]:
+    """月資料指標的歷史序列，給燈卡「變化方向」列用。
+
+    回傳 ``{"ism_pmi": [(iso_date, float), ...]}``（日期遞增）。
+    讀不到 / 缺欄 / 處理失敗 → 印一行 log 並回 ``{}``（該列顯示「無資料」）；
+    **取不到的 key 不會出現在 dict 裡**（§1：不放空序列冒充有資料）。
+    NaN 列直接丟掉並印出筆數（⛔ 不補值、不內插）。
+
+    TTL 1 小時：來源是 cron 更新的本地 parquet（月資料），一小時內不可能變。
+    """
+    from pathlib import Path
+
+    from src.data.macro.macro_cache_reader import (
+        DEFAULT_PARQUET_CACHE_DIR,
+        load_parquet_safe,
+    )
+
+    out: dict[str, list] = {}
+    _path = Path(DEFAULT_PARQUET_CACHE_DIR) / _TW_PMI_PARQUET_NAME
+    df = load_parquet_safe(_path, {"date", "pmi"})
+    if df is None:
+        print(f"[macro_v2_service/get_monthly_history] {_TW_PMI_PARQUET_NAME} "
+              "讀不到或缺欄（需要 date / pmi）→ 台灣 PMI 變化方向顯示無資料")
+        return out
+    try:
+        import pandas as pd
+
+        _d = df[["date", "pmi"]].copy()
+        _d["date"] = pd.to_datetime(_d["date"], errors="coerce")
+        _d["pmi"] = pd.to_numeric(_d["pmi"], errors="coerce")
+        _before = len(_d)
+        _d = _d.dropna(subset=["date", "pmi"]).sort_values("date")
+        if _before != len(_d):
+            print(f"[macro_v2_service/get_monthly_history] 丟棄 {_before - len(_d)} 列"
+                  "（date 或 pmi 為空 / 無法解析；不補值、不內插）")
+        if len(_d):
+            out["ism_pmi"] = [(d.date().isoformat(), float(v))
+                              for d, v in zip(_d["date"], _d["pmi"])]
+    except Exception as e:  # noqa: BLE001 — 一列取不到不該讓整頁炸
+        print(f"[macro_v2_service/get_monthly_history] 處理失敗:{e}")
+        return {}
+    return out

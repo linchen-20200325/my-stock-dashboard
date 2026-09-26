@@ -3,8 +3,8 @@
 驗證重點：
 1. slow_verdict=None → 不渲染合議 banner（純 10 燈雷達）
 2. slow_verdict 提供 → 呼叫 synthesize_dual_verdict 並渲染 banner
-3. 雷達警報 + 樂觀 slow → 渲染「雙速分歧降槓桿」
-4. 雷達極端警報 + 任意 slow → 強制覆蓋為「立即減倉防守」
+3. 雷達警報 + 樂觀 slow → 渲染「雙速分歧」
+4. 雷達極端警報 + 任意 slow → 強制覆蓋為「防守位階」
 5. 雷達平靜 + slow → adopt_slow 模式，banner 含原 slow level
 6. AppTest 保護門：fred_api_key < 30 字元 → 完全跳過（含 slow_verdict）
 """
@@ -111,7 +111,7 @@ class TestSlowVerdictProvided:
         assert 'adopt_slow' in joined  # mode 字串
 
     def test_alert_radar_with_bull_slow_diverges(self, stub_st):
-        """雷達警報（red=2 或 3，未達極端 ≥4）+ 慢樂觀 → 雙速分歧降槓桿。"""
+        """雷達警報（red=2 或 3，未達極端 ≥4）+ 慢樂觀 → 雙速分歧。"""
         # 構造剛好 2 紅燈：VIX>30, MOVE>130（避免 ≥4 變極端警報）
         def _yf_red(t, **kw):
             if t == '^VIX':
@@ -129,10 +129,10 @@ class TestSlowVerdictProvided:
         joined = ' '.join(md_calls)
         assert '雙速合議' in joined
         # slow_score=10.0 >= 5 → downgrade_2 雙速分歧
-        assert 'downgrade_2' in joined or '雙速分歧' in joined or '降槓桿' in joined
+        assert 'downgrade_2' in joined or '雙速分歧' in joined or '位階偏高' in joined
 
     def test_extreme_radar_overrides_any_slow(self, stub_st):
-        """雷達極端警報（≥4 紅燈）→ 強制覆蓋為立即減倉防守，慢總經暫不採信。"""
+        """雷達極端警報（≥4 紅燈）→ 強制覆蓋為防守位階，慢總經與短線背離。"""
         def _yf_red(t, **kw):
             # 多紅燈確保 ≥4 紅（v18.320：P/C 燈下線，改靠 VIX/MOVE/SOX/亞夜 + HY 湊 5 紅）
             if t == '^VIX':
@@ -154,7 +154,7 @@ class TestSlowVerdictProvided:
         joined = ' '.join(md_calls)
         assert '雙速合議' in joined
         # 雷達極端警報 → override_defense，不採信慢總經
-        assert 'override_defense' in joined or '立即減倉' in joined
+        assert 'override_defense' in joined or '防守位階' in joined
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -292,17 +292,17 @@ class TestThirdAxisOverlay:
         """估值極貴 + adopt_slow → action 追加減倉建議，mode 不變."""
         out = self._call(valuation_level="極貴")
         assert out["mode"] == "adopt_slow"  # mode 仍 unchanged
-        assert "估值頂部分位" in out["action"]
-        assert "估值頂部分位（極貴），建議減倉至中性" in out["third_axis_notes"]
+        assert "估值位於頂部分位" in out["action"]
+        assert "估值位於頂部分位（極貴）" in out["third_axis_notes"]
 
     def test_valuation_cheap_appends_in_downgrade(self):
-        """估值便宜 + 雷達警報 downgrade_2 → 追加擇機加碼建議."""
+        """估值便宜 + 雷達警報 downgrade_2 → 追加估值位階附註."""
         out = self._call(
             radar_level="警報", slow_score=-7.0,
             valuation_level="便宜",
         )
         assert out["mode"] == "downgrade_2"
-        assert "估值底部分位" in out["action"]
+        assert "估值位於底部分位" in out["action"]
         assert any("便宜" in n for n in out["third_axis_notes"])
 
     def test_valuation_expensive_no_override_when_extreme_radar(self):
@@ -343,7 +343,7 @@ class TestThirdAxisOverlay:
             event_calendar_level="重大事件",
         )
         assert len(out["third_axis_notes"]) == 2
-        assert "估值頂部" in out["action"]
+        assert "估值位於頂部" in out["action"]
         assert "重大事件" in out["action"]
 
     def test_neutral_levels_are_noop(self):

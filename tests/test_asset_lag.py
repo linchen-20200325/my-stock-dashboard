@@ -6,6 +6,7 @@ SSOT(不再因 is_active gate 讓個股拿不到燈號);§1 缺資料誠實回�
 from __future__ import annotations
 
 from shared.signal_thresholds import (
+    LAG_ALERT_STREAK_QUARTERS,
     PORTFOLIO_BENCHMARK_TICKER,
     STOCK_BENCHMARK_TICKER,
 )
@@ -54,13 +55,20 @@ def _m(down=0.0, up=0.0, streak=0):
 
 
 def test_verdict_streak_alert_stock_and_etf():
-    """連續 ≥2 季輸盤 → 🚨。個股(無經理人)與 ETF 都亮,建議換大盤被動。"""
+    """連續 ≥2 季輸盤 → 🚨。個股(無經理人)與 ETF 都亮,文案陳述命中的門檻。
+
+    S1-6 合規改寫(2026-09-21):原本釘 `"0050" in 動作建議` —— 那是在釘一句
+    「指名標的 + 動作」的推介(「考慮換到大盤被動式 ETF(如 0050)」)。
+    現改釘**觸發了哪條規則**(連續輸盤季數 ≥ LAG_ALERT_STREAK_QUARTERS),
+    門檻值由 SSOT 反解,不寫死 2。
+    """
     v_stock = classify_lag_verdict(_m(streak=4), is_etf=False)
     assert v_stock["燈號"] == "🚨 連續4季輸盤"
-    assert "0050" in v_stock["動作建議"]
+    assert f"{LAG_ALERT_STREAK_QUARTERS} 季" in v_stock["動作建議"]
+    assert "4" in v_stock["動作建議"]
     v_etf = classify_lag_verdict(_m(streak=2), is_etf=True, tenure_days=800)
     assert v_etf["燈號"] == "🚨 連續2季輸盤"
-    assert "0050" in v_etf["動作建議"]
+    assert f"{LAG_ALERT_STREAK_QUARTERS} 季" in v_etf["動作建議"]
 
 
 def test_verdict_streak_new_manager_only_etf():

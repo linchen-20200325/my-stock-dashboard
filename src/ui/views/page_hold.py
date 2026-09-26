@@ -146,6 +146,22 @@ TestNothingIsCalledBeforeYouAsk` 用不繼承 `Exception` 的毒藥實測，不�
                                      與上一條**不是同一件事**，文案必須分得出來。
     讀了，Google 那端掛了          → `UI_FAILED` 紅。**唯一准用紅色的狀態。**
 
+⚠️ **2026-09-23（客戶裁示 D-3(a)）：`UI_EMPTY` 分出三種可分辨的缺值。**
+本頁**判態的寫法一行未改** —— 分辨是 L0 `classify_ui_state()` 依既有的
+`reason=` 自動做掉的（本頁本來就有在傳），畫面因此自動多出一層資訊：
+
+    `MISS_NO_INPUT`       → `UI_MISSING_RETRYABLE`（#7 缺漏）    **再按一次有用**
+    `MISS_NOT_APPLICABLE` → `UI_NOT_APPLICABLE`（#8 結構上不適用）**按幾次都一樣**
+    其餘／沒給原因        → `UI_EMPTY`（無資料）                 **分不出是哪一種**
+
+⛔ **判不出來時不准挑一個看起來合理的**：`MISS_NOT_ENOUGH`（等時間累積）與
+`MISS_NO_VARIATION`（等它開始動）**刻意留在 `UI_EMPTY`** —— 它們重試無用，但也
+**不是**「結構上不適用」，硬塞進 #8 等於對使用者說一句永久性的假話
+（`CLAUDE.md §-2` 記載過同型事故：新上市標的收到「可以重跑一次」的錯誤指引）。
+⛔ **本頁不得出現缺值家族的任何字面 glyph** —— 符號一律由 `state_meta()` 從 L0
+供給一次。守衛 `tests/test_ui_empty_split.py` **整檔掃描、連註解與 docstring 都算**，
+所以本段只寫得出常數名、寫不出符號本身；那是刻意的。
+
 ⛔ **「空的組合」不是故障。** 一個剛註冊、還沒填任何一列的使用者，看到的應該是
 「你的 Sheet 綁好了，只是還沒有內容」，**不是**一片紅色的錯誤。
 把它畫成紅色 = v3 §02 前半句要杜絕的「假性錯誤滿版」，而且會讓**真的**壞掉那一次
@@ -317,12 +333,21 @@ from shared.station_specs import (
     MISS_NO_INPUT,
     SPECS_BY_KEY,
 )
-# L0 SSOT：80/20 目標、衛星停利門檻、VIX 三段門檻。**本檔不寫死任何一個數字。**
+# L0 SSOT：衛星停利門檻、VIX 三段門檻。**本檔不寫死任何一個數字。**
+#: ⛔ **`CORE_TARGET_PCT` / `SATELLITE_TARGET_PCT` 刻意不在這份 import 裡。**
+#: 客戶 2026-09-23 裁示 **D-1(b)**：⑤ 的目標比例**只能由使用者自己填**。
+#: 本檔只要 import 它們，就會把 L0 那組 80/20 當成「**你的**目標」印到畫面上 ——
+#: 那正是 `docs/v2/spec/UI_PAGE_HOLD.md §③` 硬禁令第 2 條逐字禁止的預填
+#: （「目標比例**只能由使用者自己填**，系統⛔ 不得預填、⛔ 不得建議、
+#: ⛔ 不得給「參考配置」」）。
+#: ⚠️ **L0 常數本身沒有被刪，也不該被刪** —— 配息站台那邊仍有正當用途
+#: （`ui/etf/etf_tab_dividend_station.py` 的目標配置說明、`render/station_cards.py`
+#: 的「兩把尺」揭露表、L3 `dividend_station_service.compute_allocation_split`）。
+#: 本裁示移除的是「**在本頁把它當成使用者的目標**」，不是這個常數的存在。
+#: 守衛：`tests/test_p04_hold_view.py::TestAllocationTargetIsUserSupplied`。
 from shared.dividend_station_thresholds import (
-    CORE_TARGET_PCT,
     KIND_ETF,
     SATELLITE_TAKE_PROFIT_PCT,
-    SATELLITE_TARGET_PCT,
     VIX_LIGHT1,
     VIX_LIGHT2,
     VIX_LIGHT3,
@@ -1204,7 +1229,7 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
         )
         _rows, _vix = get_station_rows([dict(_h) for _h in holdings.holdings])
         _rows = list(_rows or ())
-        _digest = build_station_digest(_rows, _vix)
+        _digest = build_station_digest(_rows, _vix, with_system_targets=False)
         _totals = compute_portfolio_totals(_rows)
         _cells = [(_r.get("_lights") or ()) for _r in _rows]
         _judged, _total = aggregate_judged(_cells)
@@ -1872,7 +1897,7 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
           "少了這個排除，畫面會叫你買你已經有的東西")),
         ("換入的優先序",
          "先看**你自己的觀察清單**裡健檢綠燈的；沒有才 fallback 選股池全自動排名"),
-        ("與 ⑤ 的關係", "⑤ 的 80/20 偏離回答「該減」，本格回答「該換」"),
+        ("與 ⑤ 的關係", "⑤ 照出你**現在**的核心／衛星佔比，本格回答「該換」"),
     ]
     if switch.stance:
         _facts.append(("總經攻守閘門", _STANCE.get(switch.stance, switch.stance)))
@@ -1980,15 +2005,39 @@ def build_macro_stage_card(macro: MacroReadout) -> _Built:
                 state=_state, note=_note), tuple(_facts), ""
 
 
-# ── ⑤ 80/20 配置偏離 ＋ 衛星停利 ──────────────────────────────────
-#: ⚠️ 目標配置與停利門檻**一律讀 L0**（`CORE_TARGET_PCT` / `SATELLITE_TARGET_PCT` /
-#: `SATELLITE_TAKE_PROFIT_PCT`），本檔一個數字都不寫死（§3.3 ＋
-#: `tests/test_no_hardcoded_position_pct.py`）。
+# ── ⑤ 核心／衛星實際佔比 ＋ 衛星停利 ──────────────────────────────
+#: ⚠️ 停利門檻**讀 L0**（`SATELLITE_TAKE_PROFIT_PCT`），本檔一個數字都不寫死
+#: （§3.3 ＋ `tests/test_no_hardcoded_position_pct.py`）。
+#: ⛔ **目標配置刻意不讀 L0** —— 見檔頭 import 區的 D-1(b) 註記。
+
+#: ⑤「你的目標比例」在使用者自己填之前的**唯一**說法（本頁只有這一份，§2.1）。
+#: ⚠️ 這是**未設定態**，⛔ 不是「預設 80/20」、⛔ 不是「建議 0%」。
+#: ⛔ **這句話裡一個百分比數字都不准出現** —— 寫上去就是預填（硬禁令第 2 條）。
+TARGET_NOT_SET: str = (
+    "**尚未設定。** 本站⛔ 不替你預填、⛔ 不建議、⛔ 不給「參考配置」—— "
+    "核心／衛星該擺多少，取決於只有你知道的事（資金、期間、風險承受度），"
+    "系統填一個看起來合理的數字，等於替你做了一個沒有依據的決定")
+
+#: 「那我現在去哪裡填？」—— 誠實回答：**還沒有地方可以填**。
+#: ⚠️ 與 ⑥ 再平衡卡卡的是**同一件事**（帳本沒有目標欄位、要新增輸入元件），
+#: 故**刻意共用同一套說法** —— 同一頁對同一個坑給兩種解釋，使用者只會更亂。
+TARGET_NO_INPUT_YET: str = (
+    "**目前還沒有地方可以填。** 要讓你填目標比例＝**新增一個畫面元件**，"
+    "依 `CLAUDE.md §-1.5` A-8（UI 草稿先行）要先出線框草稿給客戶拍板，"
+    "不在本批 —— 與 ⑥「再平衡」那一格卡住的是同一件事")
+
+#: ⑤ 左半那張卡的卡名。⛔ **不得寫回「80/20 配置偏離（該減）」**：
+#: 「80/20」是系統預填的目標（D-1(b) 已移除）；而**沒有目標就沒有「偏離」**，
+#: 更沒有「該減」（`UI_PAGE_HOLD.md §③` 硬禁令第 3 條：只做偏離提示／
+#: 客觀對照／情境試算，⛔ 不得延伸為「該賣／該加碼」）。
+ALLOC_SPLIT_LABEL: str = "核心／衛星實際佔比"
+
+
 def _split_facts(station: StationReadout) -> list[tuple[str, str]]:
     """核心／衛星那兩張卡共用的中繼資料列（**同一支 L3、同一份數字**）。"""
     _facts: list[tuple[str, str]] = [
-        ("目標（L0 SSOT）",
-         f"核心 {CORE_TARGET_PCT:g}／衛星 {SATELLITE_TARGET_PCT:g}"),
+        ("你的目標比例", TARGET_NOT_SET),
+        ("要去哪裡填", TARGET_NO_INPUT_YET),
         ("近似法的已知限制",
          "核心＝ETF、衛星＝個股是以**代號型別**近似；主題型 ETF 會被算成核心"),
         ("只納入有市值的持有列",
@@ -2004,7 +2053,12 @@ def _split_facts(station: StationReadout) -> list[tuple[str, str]]:
 
 
 def build_allocation_split_card(station: StationReadout) -> _Built:
-    """線框葉1 ⑤ 的「80/20 配置偏離」那一半 —— **已接線**。
+    """線框葉1 ⑤ 的左半（核心／衛星佔比）—— **已接線**。
+
+    ⛔ **本卡不印「偏離幾個百分點」，也不給徽章**（客戶 2026-09-23 裁示
+    **D-1(b)**）。理由不是「沒做」而是「**算不出來**」：偏離＝實際 − 目標，
+    而目標只能由你自己填（`UI_PAGE_HOLD.md §③` 硬禁令第 2 條）。拿 L0 的
+    80/20 頂替，等於替你編一個目標再拿它去算一個看起來精確的差值（§1）。
 
     ⚠️ 它與 `build_position_cap_card()`（建議持股水位）**不是同一件事**：
     本格問的是「你手上那一堆，核心與衛星各佔多少」（**組合內部**的比例），
@@ -2017,9 +2071,14 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
     _facts = _split_facts(station)
     _sp = station.split
     if _state == UI_LIVE and _sp:
-        _dev = float(_sp.get("core_dev", 0.0))
-        _facts.insert(0, ("核心偏離目標", f"{_dev:+.1f} 個百分點"))
-        return (Card(key="hold.alloc_split", label="80/20 配置偏離（該減）",
+        # ⛔ D-1(b)：L3 回的 `core_dev` / `core_target` / `sat_target` 三個欄位
+        #    **刻意不讀**。它們是拿 L0 的 80/20 當「你的目標」算出來的 ——
+        #    沒有你填的目標，「偏離 −4.0 個百分點」這個數字**不存在**。
+        #    徽章（原本的「偏離」／「接近目標」）同理拿掉：那兩個字也是拿
+        #    同一個假目標判出來的，留著等於換個地方繼續預填。
+        _facts.insert(0, ("這個數字是什麼",
+                          "你**現在**的實際佔比 —— **不是**「離目標還差多少」"))
+        return (Card(key="hold.alloc_split", label=ALLOC_SPLIT_LABEL,
                      state=UI_LIVE,
                      # §4.1：單位要寫出來 —— 「核心 100.0」看不出是百分比還是檔數。
                      # ⚠️ 這兩個數字**來自 L3**，不是本檔寫死的持股百分比
@@ -2027,7 +2086,7 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
                      value=(f"核心 {float(_sp.get('core_pct', 0)):.1f}%"
                             f" ／ 衛星 {float(_sp.get('sat_pct', 0)):.1f}%")),
                 tuple(_facts),
-                "偏離" if abs(_dev) >= 1 else "接近目標")
+                "")
     if _state == UI_IDLE:
         _note = _idle_note(station.scope_idle)
     elif _state == UI_FAILED:
@@ -2046,7 +2105,7 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
                  "三檔各一張與三檔各一百張，配置完全不同"),
             where=("到既有的 📁 組合管理分頁把持股的**張數**與**均價**補齊，"
                    f"回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
-    return Card(key="hold.alloc_split", label="80/20 配置偏離（該減）",
+    return Card(key="hold.alloc_split", label=ALLOC_SPLIT_LABEL,
                 state=_state, note=_note), tuple(_facts), ""
 
 
@@ -2100,11 +2159,13 @@ def build_take_profit_card(station: StationReadout) -> _Built:
 def build_position_cap_card(alloc: AllocationReadout) -> _Built:
     """線框葉1 ⑤ 的第三格：**市場端**的建議持股水位 —— **已接線**。
 
-    ⚠️ 它與 80/20 **不是同一件事，不可互相取代**：
-      · 80/20 問的是「你手上那一堆，核心與衛星各佔多少」（**組合內部**的比例）；
+    ⚠️ 它與 ⑤ 的核心／衛星佔比 **不是同一件事，不可互相取代**：
+      · ⑤ 問的是「你手上那一堆，核心與衛星各佔多少」（**組合內部**的比例）；
       · 本格問的是「以現在的總經與風控，整體該擺多少在股票上」（**市場端**的上限）。
-    兩者都關係到「該減」，但分母不同。放在同一區塊是因為線框 ⑤ 的職責是「該減」，
+    **分母不同。** 放在同一區塊是因為線框把它們畫在一起，
     **不是**因為它們可以合併成一個數字。
+    ⚠️ **本格不受 D-1(b) 影響**：它的區間來自 L3 的總經／風控判定，
+    **不是**「你的目標配置」—— 被移除的是後者。
 
     ⚠️ **本頁一個百分比都不寫死。** 區間文字由 L3 `AllocationDecision.range_text`
     原樣供給（`tests/test_no_hardcoded_position_pct.py` 守著這條）。
@@ -2181,9 +2242,10 @@ DEEP_SPECS: tuple[UnwiredSpec, ...] = (
             "要接上需先讓你能填「目標比例%」—— 那是**新增一個畫面元件**，"
             "依 `CLAUDE.md §-1.5` A-8 要先出線框草稿給客戶拍板，不在本批。"
             "**也不會**改用 `compute.strategy.portfolio_manager."
-            "CoreSatelliteManager` 頂替：它的核心比例是另一套（依市場狀態 "
-            "0.60~0.85），與本頁 ⑤／⑥ 用的 L0 80/20 目標不同 —— "
-            "同一頁出現兩個互相矛盾的核心比例，比少一格糟糕得多（§2.1 SSOT）"),
+            "CoreSatelliteManager` 頂替：它會算出一組系統自己的核心比例"
+            "（依市場狀態 0.60~0.85）—— 那同樣是**系統替你決定目標**，"
+            "與 ⑤ 已經移除的預填是同一個病（客戶裁示 D-1(b)）。"
+            "目標比例只能由你自己填，這一格就誠實空著"),
         facts=(("卡住的層", "**不是** L3 —— 是你的帳本沒有「目標比例」這一欄"),
                ("持股清單", "✅ 已接線（`holdings_service`）—— 不是卡在這裡"),
                ("L3 wrapper", "✅ 已補（`portfolio_deep_service`）—— 也不是卡在這裡"),
@@ -2842,9 +2904,12 @@ DEEP_CAPTION: str = (
 def build_core_satellite_card(station: StationReadout) -> _Built:
     """線框 ⑥ 的「核心／衛星」—— **已接線**（與 ⑤ 共用同一支 L3）。
 
-    ⚠️ **與 ⑤ 是同一份數字、不同呈現**：⑤ 講**偏離**（離目標多遠），
-    這裡講**組成**（實際各佔多少、各幾檔）。**刻意不重算** ——
+    ⚠️ **與 ⑤ 是同一份數字、不同呈現**：⑤ 照出**佔比本身**，
+    這裡講**組成**（納入計算的市值有多少）。**刻意不重算** ——
     同一頁上兩個由不同算式得出的核心比例，使用者只會讀成「有一邊錯了」。
+    ⛔ **兩張卡都不印偏離量**：目標比例只能由使用者自己填（D-1(b)），
+    而 `_split_facts()` 的未設定態是兩張卡共用的 —— 只改一張就會變成
+    「同一頁一邊說沒設定、一邊照印 80/20」。
     """
     _state = classify_ui_state(
         requested=station.requested,
@@ -2853,7 +2918,7 @@ def build_core_satellite_card(station: StationReadout) -> _Built:
     _facts = _split_facts(station)
     _facts.insert(0, ("與 ⑤ 的關係",
                       "**同一支 L3 `compute_allocation_split()`、同一份數字** —— "
-                      "⑤ 講偏離，這裡講組成。本頁不重算第二遍"))
+                      "⑤ 照出佔比，這裡講組成。本頁不重算第二遍"))
     _sp = station.split
     if _state == UI_LIVE and _sp:
         _facts.insert(1, ("納入計算的市值（元·張價）",
@@ -2927,7 +2992,7 @@ AI_DISCLOSURE: str = (
 AI_INPUT_BLOCKS: str = (
     "**逐項列，不寫「幾段」**（寫幾段就要有人去數，而且一定會漂）："
     "健檢紅燈汰弱清單 · 235 加碼觸發清單 · 整批抓取失敗未納入的代號 · "
-    "有效判斷檔數 · VIX · 80/20 實際配置偏離 · 衛星停利清單"
+    "有效判斷檔數 · VIX · 核心／衛星實際佔比 · 衛星停利清單"
     "（以上＝`build_station_digest()` 回的全部欄位），"
     "再加上 ④ 的換出／換入（`build_switch_advice()` 算得出來時才帶進去）。"
     "**沒有進去的**：② 兩套刻度 · ⑥ 壓力測試／VaR／配息現金流 · "
@@ -3529,9 +3594,9 @@ def _render_warroom_leaf(req: HoldRequest, holdings: HoldingsReadout) -> None:
     _render_row((build_switch_card(_switch, _station),
                  build_macro_stage_card(_macro)))
 
-    section_header("⑤ 80/20 配置偏離 ＋ 衛星停利",
-                   "線框：它回答「該減」，與 ④ 的「該換」互補 —— "
-                   "兩個都缺，本頁的職責就只剩三分之一。")
+    section_header("⑤ 核心／衛星實際佔比 ＋ 衛星停利",
+                   "⛔ 目標比例本站**不預填**（客戶裁示 D-1(b)）—— 這一格只照出"
+                   "你**現在**的佔比；偏離量要等你自己填了目標才算得出來。")
     _render_row((build_allocation_split_card(_station),
                  build_take_profit_card(_station),
                  build_position_cap_card(load_allocation(req))))
