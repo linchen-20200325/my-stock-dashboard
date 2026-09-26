@@ -530,7 +530,7 @@ def resolve_badge(
     其餘任何狀態帶這個旗標 → `ValueError`（⛔ 不讓 #11 擴散到別的態 —— 客戶裁示逐字：
     真缺漏／還沒載入／未評估／可重試…一律維持原徽章）。
     ⚠️ **誰可以傳 `True` 不由本函式決定**：那是登記制，登記處在
-    `src/ui/views/page_today.py::V2_VALID_EMPTY_PAIRS`（只列經逐張審過的 `(key, now)`）。
+    `src/ui/views/page_today.py::V2_VALID_EMPTY_SPEC`（只列經逐張審過的 `(key, now)`）。
 
     `empty`／`na` 靠 `miss_reason` 分辨 #7 vs #8
     （UI_PAGE_TODAY.md ② 狀態覆蓋表 `empty`／`missing`／`na` 三列）。

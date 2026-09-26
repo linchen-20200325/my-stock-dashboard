@@ -851,7 +851,8 @@ def test_page_mounts_clean(tmp_path):
     _cap = "\n".join(_c.value for _c in _at.caption)
     assert ia_nav.action_label(ia_nav.ACTION_UPDATE_TODAY) in [
         _b.label for _b in _at.button], "submit 沒畫出來"
-    # 葉1 ③ 是線框的三欄摘要（動能 / 風險兩格誠實標未接線）。
+    # 葉1 ③ 是線框的三欄摘要（動能誠實標未接線；風險 2026-09-26 起接指標危險度，
+    # 見 tests/test_p01_today_summary_risk.py）。
     for _label in ("位階", "動能", "風險"):
         assert _label in _md, f"葉1 ③ 的「{_label}」欄沒有畫出來"
     # 尾端的葉2 也要畫到（半截死頁會在這裡斷掉）。
