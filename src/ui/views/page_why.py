@@ -280,6 +280,9 @@ from shared.macro_buckets import (
     REFERENCE_BUCKET,
     REFERENCE_TREND_SPECS,
 )
+# L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（SEC-2，2026-09-26；
+# 同 `page_hold` 批次 B 的作法，遮罩沿用 `***`、⛔ 不加說明字）。
+from shared.secret_scrub import scrub_secrets
 # L0 SSOT：持股／個股燈規格 ＋ 缺值原因語彙。
 from shared.station_specs import (
     KEY_HEALTH_A,
@@ -744,7 +747,8 @@ def _error_why(source: str, error: Any) -> str:
     `Note.__post_init__` 拒收狀態 glyph，不洗就會把一張**該畫出來的紅卡**
     變成**整頁未捕捉例外**（§1：紅態要看得見，不是換一種炸法）。
     """
-    _clean, _n = scrub_state_glyphs(error)
+    # SEC-2：先洗金鑰／Sheet ID／檔案路徑（L0 `scrub_secrets`，同 `page_hold._error_why`）。
+    _clean, _n = scrub_state_glyphs(scrub_secrets(error) if error else error)
     _why = f"{source}拋出例外：{_clean or UNKNOWN_ERROR_TEXT}"
     if _n:
         _why += ("（上游訊息裡的狀態符號已移除，"
@@ -2691,7 +2695,9 @@ def _render_engineer_block() -> None:
                   "最後一次真實抓取": _p.last_called_at or "—",
                   "回了幾列": _p.rows or "—",
                   "耗時(ms)": _p.ms or "—",
-                  "錯誤": _p.error or "",
+                  # SEC-2：`@monitored` 記下的 `last_error` 是**例外原文**（常含請求網址）
+                  #    → 先洗秘密。`st.dataframe` 不走 Markdown，⛔ 不做 `*` 跳脫。
+                  "錯誤": scrub_secrets(_p.error),
                   "本頁看不懂的狀態": _p.unknown_status or ""}
                  for _p in _scan.probes],
                 hide_index=True, width="stretch")
