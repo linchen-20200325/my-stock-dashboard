@@ -141,6 +141,10 @@ L2 `normalize_etf_ticker` 一律補 `.TW`（上市），但 **yfinance 的上櫃
    （L3 `dividend_tax_service._recent_payments_twd`）。本檔分不出來，
    只能把「貢獻 0 元」的代號列進 `no_payout_tickers` 並在 dataclass 說清楚 ——
    **不得**由畫面自行解讀成「這幾檔沒有配息」。
+   📌 **例外（2026-09-26 批次 3）**：L1 `fetch_etf_dividends` **拋例外**的那一種
+   現在分得出來（L1 在空序列的 `attrs` 掛旗標 → L3 `get_dividend_tax_view` 的
+   `fetch_failed`）→ 列進 `failed_tickers`，**不再**列進 `no_payout_tickers`。
+   yfinance 沒拋例外、只回空序列的那一種**仍然分不出來**，照上面的規則處理。
 """
 from __future__ import annotations
 
@@ -849,6 +853,11 @@ class DividendCashResult:
             ⚠️ 上游 `_recent_payments_twd()` 把「**真的沒配息**」與「**抓不到**」
             回成同一個空序列，**本層分不出來** —— 所以這一欄的語意只能是
             「這幾檔貢獻 0 元」，畫面**不得**把它寫成「這幾檔沒有配息」。
+            ⚠️ **不含** `failed_tickers` 裡的代號（那幾檔是已知抓取失敗，不是 0 元）。
+        failed_tickers: L1 配息**抓取失敗**（拋例外）的代號（本檔的身分，不是後綴）。
+            它們的 0 元**不是結果** —— 非空時 `gross_twd` 是缺了這幾檔的總額，
+            畫面必須當成失敗處理，**不得**列為「貢獻 0 元」或「沒有配息」。
+        failed_detail: 與 `failed_tickers` 同序的 `"{代號}: {L1 失敗訊息}"`（給畫面照實顯示）。
         lots_n / held_n: 有張數 / 持有的列數。
         shares_total: 換算後的總股數（**張 × `SHARES_PER_LOT`**，給畫面對帳看）。
     """
@@ -863,6 +872,8 @@ class DividendCashResult:
     overseas: tuple[str, ...] = ()
     excluded_tickers: tuple[str, ...] = ()
     no_payout_tickers: tuple[str, ...] = ()
+    failed_tickers: tuple[str, ...] = ()
+    failed_detail: tuple[str, ...] = ()
     coverage_pct: float = 0.0
     tw_n: int = 0
     lots_n: int = 0
@@ -974,6 +985,15 @@ def get_dividend_cash_flow(rows) -> DividendCashResult:
     # （**沒有**算進總額）、要嘛被上游整筆略過（股數四捨五入成 0）。
     # 後兩者都不在 `gross_twd` 裡 —— 那正是「部分沒算到卻照樣給總額」。
     _counted = tuple(str(_p.get("代號")) for _p in _per)
+    # L1 配息抓取失敗（批次 3）：上游 `fetch_failed` 的鍵是後綴名 → 換回本檔的身分。
+    # 缺這個鍵（舊上游／測試替身）→ 空，行為同修前。
+    _fail_map = ((_view or {}).get("fetch_failed") or {}) if isinstance(_view, dict) else {}
+    _fail_by_id = {str(_back.get(str(_t), str(_t))): str(_m)
+                   for _t, _m in _fail_map.items()}
+    _failed = tuple(sorted(_fail_by_id))
+    _failed_detail = tuple(f"{_t}: {_fail_by_id[_t]}" for _t in _failed)
+    for _d in _failed_detail:
+        print(f"[portfolio_deep/dividend] 配息抓取失敗（不當成 0 筆配息）：{_d}")
     _accounted = set(_counted) | set(_overseas)
     _excluded = tuple(sorted(set(_overseas)
                              | {_s["ticker"] for _s in _shares
@@ -988,7 +1008,10 @@ def get_dividend_cash_flow(rows) -> DividendCashResult:
         overseas=_overseas,
         excluded_tickers=_excluded,
         no_payout_tickers=tuple(str(_p.get("代號")) for _p in _per
-                                if not int(_p.get("配息筆數") or 0)),
+                                if not int(_p.get("配息筆數") or 0)
+                                and str(_p.get("代號")) not in _failed),
+        failed_tickers=_failed,
+        failed_detail=_failed_detail,
         coverage_pct=(len(_counted) / len(_shares) * 100.0) if _shares else 0.0,
         tw_n=int((_view or {}).get("n_tw") or 0),
         **_base)

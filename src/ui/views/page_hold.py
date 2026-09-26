@@ -2875,10 +2875,20 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
     """
     _res = deep.cash
     _degraded = _cash_degraded_bits(_res) if _res is not None else []
+    # 有持股的配息**抓取失敗**（L1 拋例外 → L3 `failed_tickers`；批次 3，2026-09-26）
+    # → 這一輪的總額缺了那幾檔、「近一年查不到任何一筆配息」也**不是**有效結果。
+    # 同 ⑤ 衛星停利（批次 1）／④ 換股（批次 2）：走 L0 `MISS_FETCH_FAILED`，
+    # 由 `FAILED_REASONS` 決定升紅 —— 本檔**不自己判「這算不算故障」**。
+    # ⚠️ 部分失敗也一律紅：算得出來的那幾檔的總額看起來跟完整總額一模一樣（§1）。
+    # 只在沒有例外時才看（有例外走既有那一則）。
+    _cash_failed = (() if (deep.cash_error or deep.error or _res is None)
+                    else tuple(getattr(_res, "failed_tickers", ()) or ()))
     _state = classify_ui_state(
         requested=deep.requested,
         error=deep.cash_error or deep.error or None,
-        has_value=bool(_res is not None and _res.computed and _res.has_payouts),
+        has_value=bool(_res is not None and _res.computed and _res.has_payouts
+                       and not _cash_failed),
+        reason=MISS_FETCH_FAILED if _cash_failed else "",
         discriminative=not _degraded)
     _facts: list[tuple[str, str]] = [
         ("⚠️ 這不是「稅後」",
@@ -2953,8 +2963,16 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
     elif _state == UI_FAILED:
-        _note = _deep_note(deep, now=CASH_FAILED_NOW,
-                           source=SRC_DIV_CASH, error=deep.cash_error)
+        # 兩種失敗都走本卡既有的 error 分支（文字一字未改）：
+        # L3 呼叫期例外 → 原樣；有持股的配息抓取失敗（見上）→ 把 L1 的失敗訊息
+        # （`代號: 例外型別: 訊息`）當成 error 照實印出來 —— 例外確實發生在這一條
+        # 取數鏈裡（L1 `fetch_etf_dividends` 內），只是被 L1 接住轉成旗標。
+        # 不用 `MISS_TEXT[MISS_FETCH_FAILED]`：那一句叫人「看該列的錯誤訊息」，
+        # 而本卡沒有任何一列會顯示錯誤。
+        _note = _deep_note(
+            deep, now=CASH_FAILED_NOW, source=SRC_DIV_CASH,
+            error=deep.cash_error or ("；".join(
+                getattr(_res, "failed_detail", ()) or _cash_failed)))
     elif not deep.has_station_rows:
         _note = _deep_note(deep, now=CASH_NO_HOLDINGS_NOW,
                            source=SRC_DIV_CASH, error="")
