@@ -18,7 +18,7 @@ import datetime as _dt
 
 import pandas as pd
 
-from src.data.etf import fetch_etf_dividends
+from src.data.etf import DIVIDENDS_FETCH_FAILED_ATTR, fetch_etf_dividends
 from src.compute.etf.portfolio_fx import CURRENCY_USD, holding_currency
 from src.compute.etf.dividend_tax import after_tax_dividend, nhi_premium
 
@@ -31,9 +31,20 @@ def _recent_payments_twd(ticker, shares: int) -> list[float]:
     僅台幣 ETF 呼叫(海外已於上層排除)。抓不到/無配息 → []。tz-aware index 先去時區
     (對齊 etf_tab_portfolio 既有處理),避免與 naive cutoff 比較報錯。
     """
+    return _recent_payments_and_failure(ticker, shares)[0]
+
+
+def _recent_payments_and_failure(ticker, shares: int) -> tuple[list[float], str]:
+    """同 `_recent_payments_twd()`，另回 L1 的抓取失敗旗標（`""` = 沒有失敗）。
+
+    ⚠️ 失敗時金額照舊是 `[]`（既有輸出不變）；分辨「抓不到」與「沒配息」
+    只靠 L1 `fetch_etf_dividends` 在空 Series 上掛的 `attrs` 旗標。
+    L1 沒拋例外、只回空序列時旗標為空 —— 那一種本層仍分不出來（§1 不猜）。
+    """
     _div_s = fetch_etf_dividends(ticker)
     if _div_s is None or len(_div_s) == 0:
-        return []
+        _attrs = getattr(_div_s, "attrs", None) or {}
+        return [], str(_attrs.get(DIVIDENDS_FETCH_FAILED_ATTR) or "")
     try:
         _idx = _div_s.index
         if getattr(_idx, "tz", None) is not None:
@@ -41,10 +52,11 @@ def _recent_payments_twd(ticker, shares: int) -> list[float]:
             _div_s.index = _idx.tz_localize(None)
     except Exception as _e:                       # tz 去除失敗 → 不硬比,回空(§1 不猜)
         print(f"[dividend_tax/{ticker}] tz strip 失敗:{type(_e).__name__}: {_e}")
-        return []
+        return [], ""
     _cutoff = pd.Timestamp(_dt.date.today() - _dt.timedelta(days=_LOOKBACK_DAYS))
     _recent = _div_s[_div_s.index >= _cutoff]
-    return [float(_v) * shares for _v in _recent.values if float(_v or 0.0) > 0]
+    return ([float(_v) * shares for _v in _recent.values if float(_v or 0.0) > 0],
+            "")
 
 
 def get_dividend_tax_view(holdings, *, marginal_rate=None) -> dict:
@@ -59,10 +71,14 @@ def get_dividend_tax_view(holdings, *, marginal_rate=None) -> dict:
         per_etf   [{代號, 幣別, 近1年稅前配息, 二代健保, 配息筆數}](僅台幣 ETF)
         overseas  [代號](美元/海外 ETF,已排除稅務計算,僅標記)
         n_tw      納入計算的台幣 ETF 檔數
+        fetch_failed  {代號: 失敗訊息} —— L1 配息**抓取失敗**的台幣 ETF（它們照舊
+                  出現在 per_etf、金額 0；本鍵是**附加**的，既有讀 per_etf/summary 的
+                  caller 不受影響）。空 dict = 沒有抓取失敗。
     """
     _tw_payments_all: list[float] = []
     _per_etf: list[dict] = []
     _overseas: list[str] = []
+    _failed: dict[str, str] = {}
 
     for _h in holdings or []:
         _tk = str((_h or {}).get("ticker") or "").strip()
@@ -75,7 +91,9 @@ def get_dividend_tax_view(holdings, *, marginal_rate=None) -> dict:
         if holding_currency(_tk) == CURRENCY_USD:      # §4.6 海外不適用國內稅制 → 排除標記
             _overseas.append(_tk)
             continue
-        _pays = _recent_payments_twd(_tk, _sh)
+        _pays, _fail = _recent_payments_and_failure(_tk, _sh)
+        if _fail:
+            _failed[_tk] = _fail
         _tw_payments_all.extend(_pays)
         _per_etf.append({
             "代號": _tk,
@@ -91,4 +109,5 @@ def get_dividend_tax_view(holdings, *, marginal_rate=None) -> dict:
         "per_etf": _per_etf,
         "overseas": _overseas,
         "n_tw": len(_per_etf),
+        "fetch_failed": _failed,
     }

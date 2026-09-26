@@ -229,6 +229,10 @@ def _enumerate():
         requested=True, submitted=True, bound=True, holdings_n=2,
         rows=({"代號": "2330", "種類": "個股", "held": True, "_detail": {}},
               {"代號": "2454", "種類": "個股", "held": True, "_detail": {"error": "E"}})))
+    # 批次 3（2026-09-26）：有持股的配息抓取失敗 → 配息卡的第二種紅（無例外）。
+    add(P.build_dividend_cash_card, P.DeepReadout(
+        requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,
+        cash=_cash_res(failed_tickers=("0056",))))
     return notes, builts
 
 

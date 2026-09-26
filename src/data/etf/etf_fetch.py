@@ -27,6 +27,9 @@ except ImportError:
         cache_resource = cache_data
         secrets: dict = {}
     st = _NoOpST()  # noqa
+import threading as _threading_div
+import time as _time_div
+
 import pandas as pd
 import yfinance as yf
 
@@ -272,28 +275,91 @@ def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
     return result
 
 
+#: `fetch_etf_dividends()` 抓取失敗時，回傳的空 Series 在 `attrs` 裡帶的鍵。
+#: 值 ＝ `"{例外型別}: {訊息}"`。**只有失敗才有這個鍵** —— 成功（含「真的沒配息」）一律沒有。
+DIVIDENDS_FETCH_FAILED_ATTR = "fetch_failed"
+
+#: 失敗退避（CLAUDE.md §1.A-3(b)「失敗時退避，不連續轟炸來源」）：某檔配息抓取失敗後，
+#: 這段秒數內 `fetch_etf_dividends()` 直接回帶旗標的空 Series、**不再打 Yahoo**。
+#: ⚠️ 刻意比 `shared/ttls.py` 任何一個 TTL 都短（最短 `TTL_10MIN`）—— 目的只是擋住
+#: 同一輪／連續幾次 rerun 對同一檔的重複打擊，不是把失敗凍成長時間的答案（§1.A-3(a)）。
+#: 故不放進 `shared/ttls.py`（那裡是 `@st.cache_data(ttl=N)` 的 SSOT，語意不同）。
+_DIVIDENDS_FAIL_COOLDOWN_SEC: float = 180.0
+
+#: {ticker: (time.monotonic() 失敗時點, 失敗訊息)}。成功即移除。多 session 共用同一進程 → 加鎖。
+_dividends_fail_until: dict[str, tuple[float, str]] = {}
+#: {ticker: 成功次數}。防競態：A 抓取失敗、B 同時成功並清掉紀錄，之後 A 才寫入失敗
+#: → 下一位會在 B 的成功已快取的情況下拿到 180 秒的假失敗。A 抓之前記下世代，
+#: 寫失敗時世代已變（有人成功過）就不寫。兩個 dict 一律在同一把鎖下讀寫。
+_dividends_success_gen: dict[str, int] = {}
+_dividends_fail_lock = _threading_div.Lock()
+
+
 @st.cache_data(ttl=TTL_1HOUR, max_entries=10)
+def _fetch_etf_dividends_cached(ticker: str) -> pd.Series:
+    """`fetch_etf_dividends()` 的快取層。**抓取失敗一律往上拋，不回空序列。**
+
+    ⚠️ 為什麼要拋（CLAUDE.md §1.A-3(a)「只快取成功結果」）：`st.cache_data`
+    只快取「正常回傳」的值，例外不入快取。原本失敗在這一層就被吞成空 Series，
+    那個空 Series 會被快取 `TTL_1HOUR` —— 一次網路抖動就被凍成一小時的
+    「這檔沒有配息」。拋出去之後下一次呼叫會重抓。
+    ⚠️ yfinance **沒拋例外、只回空的 `.dividends`** 時，本層照舊回空 Series
+    （並快取）—— 那與「真的沒配息」在這一層**分不出來**，不猜（§1）。
+    """
+    # 同 _fetch_etf_price_max:走 NAS proxy(_proxy_env)避開 Yahoo 海外 IP 封鎖。
+    # 否則配息回空 → 葡萄串「月月領」覆蓋全變缺口、每檔 no_data。無 proxy 時 no-op。
+    with _proxy_env():
+        divs = yf.Ticker(ticker).dividends
+    if divs.empty:
+        return pd.Series(dtype=float)
+    divs.index = pd.to_datetime(divs.index).tz_localize(None)
+    # S-PROV-1 v18.251:provenance via Series.attrs
+    divs.attrs["source"] = f"Yahoo:{ticker}:dividends"
+    divs.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+    return divs
+
+
 def fetch_etf_dividends(ticker: str) -> pd.Series:
     """取得 ETF 歷史配息。
 
     S-PROV-1 v18.251:成功時 s.attrs 含 source/fetched_at(§2.2)。
+
+    失敗時仍回空 Series（**既有 caller 行為不變**），但 `attrs` 帶
+    `DIVIDENDS_FETCH_FAILED_ATTR` —— 需要分辨「抓不到」與「沒配息」的 caller
+    讀這個鍵；不需要的 caller 看到的跟以前一模一樣。**本函式本身不快取**
+    （快取在 `_fetch_etf_dividends_cached`），所以失敗不會被凍住、`attrs` 也不會
+    經過快取序列化。失敗後 `_DIVIDENDS_FAIL_COOLDOWN_SEC` 秒內同一檔**不重抓**
+    （退避，§1.A-3(b)），直接回同一則失敗旗標；成功一次即解除。
     """
+    _now = _time_div.monotonic()
+    with _dividends_fail_lock:
+        _prev = _dividends_fail_until.get(ticker)
+        _gen = _dividends_success_gen.get(ticker, 0)
+    if _prev is not None and _now - _prev[0] < _DIVIDENDS_FAIL_COOLDOWN_SEC:
+        # 退避中：不打 Yahoo、不重複 log（那次失敗已經 log 過），旗標照帶同一則訊息。
+        return _failed_dividends(_prev[1])
     try:
-        # 同 _fetch_etf_price_max:走 NAS proxy(_proxy_env)避開 Yahoo 海外 IP 封鎖。
-        # 否則配息回空 → 葡萄串「月月領」覆蓋全變缺口、每檔 no_data。無 proxy 時 no-op。
-        with _proxy_env():
-            divs = yf.Ticker(ticker).dividends
-        if divs.empty:
-            return pd.Series(dtype=float)
-        divs.index = pd.to_datetime(divs.index).tz_localize(None)
-        # S-PROV-1 v18.251:provenance via Series.attrs
-        divs.attrs["source"] = f"Yahoo:{ticker}:dividends"
-        divs.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
-        return divs
+        _divs = _fetch_etf_dividends_cached(ticker)
     except Exception as e:
-        # §1:不靜默吞 —— L1 不可 st.error,改 print log,caller 依 empty Series 判斷
-        print(f'[etf_fetch] ❌ 無法取得 {ticker} 配息:{type(e).__name__}: {e}')
-        return pd.Series(dtype=float)
+        _msg = f"{type(e).__name__}: {e}"
+        with _dividends_fail_lock:
+            if _dividends_success_gen.get(ticker, 0) == _gen:   # 期間沒有人成功過才記
+                _dividends_fail_until[ticker] = (_time_div.monotonic(), _msg)
+        # §1:不靜默吞 —— L1 不可 st.error,改 print log + attrs 旗標（每次真的失敗 log 一次）
+        print(f'[etf_fetch] ❌ 無法取得 {ticker} 配息:{_msg}'
+              f'（{_DIVIDENDS_FAIL_COOLDOWN_SEC:g} 秒內不重抓）')
+        return _failed_dividends(_msg)
+    with _dividends_fail_lock:
+        _dividends_success_gen[ticker] = _dividends_success_gen.get(ticker, 0) + 1
+        _dividends_fail_until.pop(ticker, None)
+    return _divs
+
+
+def _failed_dividends(msg: str) -> pd.Series:
+    """`fetch_etf_dividends()` 失敗時的回傳：空 Series（同修前）＋ `attrs` 失敗旗標。"""
+    _empty = pd.Series(dtype=float)
+    _empty.attrs[DIVIDENDS_FETCH_FAILED_ATTR] = msg
+    return _empty
 
 
 @st.cache_data(ttl=TTL_1HOUR, max_entries=300, show_spinner=False)
