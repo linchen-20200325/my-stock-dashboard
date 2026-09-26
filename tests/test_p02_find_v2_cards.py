@@ -348,3 +348,18 @@ def test_aborted_short_phrase_keeps_the_original_reset_wording():
     card, _ = _screen(error='RuntimeError("x")')
     assert "每日 00:00 重置" in card.note.where
     assert "每日 00:00 重置" in P.V2_SHORT_ROWS[(card.key, card.note.now)][2]
+
+
+# ── #11「▨ 無資料」（客戶 2026-09-26）：本頁**目前沒有任何一張卡登記** ────────────
+def test_no_find_card_draws_badge_11():
+    """⚠️ `find.screen_result` 的「選股已完成…0 檔」**未登記** —— 同一對 `(key, now)` 也會在
+    「存活池讀取失敗」（`_load_survivors()` 回錯 → L3 回空表）與「季快照未就緒」時出現，
+    登記它＝把 #11 擴散到真缺漏上（客戶裁示明文禁止）。理由全文見 `HANDOFF.md §6.4`。
+    ⇒ 本頁每一種情境的徽章與改動前逐一相同（`screen.empty` 仍是 #7）。"""
+    for _name, build, _state in SCENARIOS:
+        card, facts = build()
+        out = P.v2_card_html(card, facts)
+        assert f"bdg bdg-{V2.VALID_EMPTY_BADGE} " not in out, _name
+    card, facts = dict((s[0], s[1]) for s in SCENARIOS)["screen.empty"]()
+    assert card.note.now == P.SCREEN_EMPTY_NOW
+    assert "bdg bdg-7 " in P.v2_card_html(card, facts)

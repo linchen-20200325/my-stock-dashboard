@@ -362,11 +362,11 @@ from src.ui.views.page_today import (
     V2_NOW_FACT_KEY,
     V2_STATE_VOCAB,
     V2_WHY_FACT_KEY,
+    v2_card_badge_n,
     v2_plain,
 )
 from src.ui_v2 import markup as v2_markup
 from src.ui_v2 import page_hold as v2_hold
-from src.ui_v2 import page_today as v2_page
 
 # ══════════════════════════════════════════════════════════════════
 # session key（本頁自有前綴 `p04`，不與既有 `etf_tab_dividend_station` 的
@@ -3836,7 +3836,7 @@ def v2_card_html(card: Card, facts: Sequence[tuple[str, str]] = (),
       摺疊區**不截斷**（`fold_truncate=False`）。沒有東西要摺 ⇒ 整段不渲染。
     """
     _v2_state, _reason = V2_STATE_VOCAB[card.state]   # 未知狀態 → KeyError（⛔ 不兜底）
-    _badge_n = v2_page.resolve_badge(state=_v2_state, miss_reason=_reason)
+    _badge_n = v2_card_badge_n(card)   # 2026-09-26：三頁共用（#11 登記制在 page_today）
     _short, _full = v2_short_rows(card)
     _plain_facts = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts)
     _face_facts = tuple((_k, _v2_face_value(_v)) for _k, _v in _plain_facts)

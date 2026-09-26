@@ -199,7 +199,8 @@ def test_components_does_not_redeclare_the_seven_state_constants():
 
 
 # ══════════════════════════════════════════════════════════════════
-# B-3 徽章 10 種（UI_COMPONENTS.md §2 徽章表 #1~#10）
+# B-3 徽章 ~~10 種~~ 11 種（UI_COMPONENTS.md §2 徽章表 #1~#11）
+#     📌 2026-09-26 客戶新增 #11「▨ 無資料」—— 有意識的規格變更，⛔ 不是漏刪。
 # ══════════════════════════════════════════════════════════════════
 BADGE_TABLE = [
     # n, name,            state_const,  miss_reason,            bg,                  fg,               bw,  style,    border_color,   icon,      text
@@ -213,13 +214,56 @@ BADGE_TABLE = [
     (8, "結構上不適用", "UI_EMPTY", "MISS_NOT_APPLICABLE", "--sig-grey-bg", "--sig-grey", 1.0, "solid", "--rule-2", "N/A", "不適用 · 重跑無效"),
     (9, "資料不完整", None, None, "--sig-neutral-bg", "--sig-neutral", 1.0, "dashed", "--sig-blue", "◧", "N／M 計入"),
     (10, "只描述不判等級", "emits_level=False", None, "--sig-blue-bg", "--sig-blue", 1.0, "solid", "--sig-blue", "◆", "只描述，不判等級"),
+    # #11 的圖示與文字**逐字寫在這裡是故意的**（測試是第二把尺）：實作端讀 L0，這裡釘字面；
+    # 兩邊相等由 `test_badge_11_icon_and_text_are_read_from_l0_not_copied` 另外守。
+    (11, "有效的空結果", "UI_EMPTY", None, "--sig-grey-bg", "--sig-grey", 1.0, "solid", "--rule-2", "▨", "無資料"),
 ]
 
 
-def test_badge_catalog_has_exactly_ten_entries_in_order():
-    # UI_COMPONENTS.md §2 標題「徽章（10 種）」＋ §2 徽章表 #1~#10
-    assert len(components.BADGES) == 10
-    assert [b["n"] for b in components.BADGES] == list(range(1, 11))
+def test_badge_catalog_has_exactly_eleven_entries_in_order():
+    # UI_COMPONENTS.md §2 標題 ~~「徽章（10 種）」~~「徽章（11 種）」＋ §2 徽章表 #1~#11
+    # 📌 2026-09-26：舊名 `..._exactly_ten_...` 隨規格改名；**「恰好 N 枚、依序、不多不少」這道守衛本身未放寬**
+    #    —— 仍然擋「悄悄多出第 12 種」。
+    assert len(components.BADGES) == 11
+    assert [b["n"] for b in components.BADGES] == list(range(1, 12))
+
+
+def test_badge_12_does_not_exist():
+    """⛔ 仍然不得再新造第 12 種（#11 是客戶逐案裁示的例外，不是放寬）。"""
+    with pytest.raises(KeyError):
+        components.badge(12)
+    with pytest.raises(KeyError):
+        components.badge(0)
+
+
+def test_badge_11_icon_and_text_are_read_from_l0_not_copied():
+    """客戶 2026-09-26 裁示：#11 逐字沿用 L0 chip `UI_STATE_META[UI_EMPTY]`，⛔ 不發明新文案。
+
+    驗兩件事：(1) 值相等；(2) **是讀出來的、不是抄的** —— `components.py` 原始碼裡
+    **不得出現** `▨` 與「無資料」這兩個字面（抄一份的話，這裡會抓到；L0 改字時兩邊就會漂移）。
+    """
+    from shared import ui_state
+
+    name, glyph, _hex = ui_state.UI_STATE_META[ui_state.UI_EMPTY]
+    eleven = components.badge(11)
+    assert (eleven["icon"], eleven["text"]) == (glyph, name) == ("▨", "無資料")
+
+    import ast
+    # 只看**程式碼裡的字串常數**（註解可以提到它，⛔ 程式碼不得把它當值寫死）。
+    _literals = [n.value for n in ast.walk(ast.parse(inspect.getsource(components)))
+                 if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+    assert not [v for v in _literals if glyph in v], (
+        "#11 的圖示必須讀 L0 `UI_STATE_META[UI_EMPTY]`，⛔ 不得在元件層抄字面")
+    assert not [v for v in _literals if v == name], (
+        "#11 的文字必須讀 L0 `UI_STATE_META[UI_EMPTY]`，⛔ 不得在元件層抄字面")
+
+
+def test_badge_11_is_separable_from_7_and_8_without_colour():
+    """#7／#8／#11 同屬灰系 ⇒ **圖示與文字兩兩相異**（§2 硬規則「⛔ 不得只靠顏色」）。"""
+    trio = [components.badge(n) for n in (7, 8, 11)]
+    assert len({b["icon"] for b in trio}) == 3
+    assert len({b["text"] for b in trio}) == 3
+    assert "重跑" not in components.badge(11)["text"], "#11 ⛔ 不得對「能不能重試」做任何宣稱"
 
 
 @pytest.mark.parametrize("row", BADGE_TABLE, ids=[f"badge{r[0]}" for r in BADGE_TABLE])
@@ -238,7 +282,7 @@ def test_badge_row_matches_spec(row):
     assert got["text"] == text
 
 
-@pytest.mark.parametrize("n", list(range(1, 11)))
+@pytest.mark.parametrize("n", list(range(1, 12)))
 def test_every_badge_carries_both_icon_and_text(n):
     """UI_COMPONENTS.md §2 硬規則「狀態色**一律配圖示＋文字，⛔ 不得只靠顏色**」
     —— 依據是 UI_TOKENS.md §A-3 實測「綠/紅在 deuteranopia 下 ΔE 3.9 無法靠色相分辨」。"""
@@ -330,8 +374,12 @@ def test_sbadge_sizes_form_a_descending_ladder():
 
 
 def test_unknown_badge_number_raises():
+    # ~~`components.badge(11)` → KeyError~~：2026-09-26 客戶新增 #11（有意識的規格變更）。
+    # 守衛意圖不變 —— **目錄外的號碼一律 KeyError** —— 只是目錄外的第一個號碼變成 12。
     with pytest.raises(KeyError):
-        components.badge(11)
+        components.badge(len(components.BADGES) + 1)
+    with pytest.raises(KeyError):
+        components.badge(12)
 
 
 # ══════════════════════════════════════════════════════════════════

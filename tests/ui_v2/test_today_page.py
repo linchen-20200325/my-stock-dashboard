@@ -641,7 +641,32 @@ def test_missing_is_drawn_as_7_not_8():
     ⛔ 也不得把 `missing` 畫成 #8（#8 專屬 `MISS_NOT_APPLICABLE`，重跑無效，畫錯等於給錯指引）」。"""
     assert page_today.resolve_badge(state="missing") == 7
     assert page_today.resolve_badge(state="missing") != 8
-    assert len(components.BADGES) == 10, "⛔ 不得新造第 11 種徽章"
+    # ~~`assert len(components.BADGES) == 10, "⛔ 不得新造第 11 種徽章"`~~
+    # 📌 2026-09-26 客戶新增 #11「▨ 無資料」（有意識的規格變更，⛔ 不是漏刪）。
+    #    **本條守衛的意圖不變**：`missing`／`empty` **不因為多了一顆徽章就改畫別的** ——
+    #    裸 `missing`／`empty` 仍然是 #7，⛔ 不是 #11（#11 只給登記過的有效空結果）。
+    assert len(components.BADGES) == 11, "⛔ 不得再新造第 12 種徽章"
+    assert page_today.resolve_badge(state="missing") != 11
+    assert page_today.resolve_badge(state="empty") == 7
+    assert page_today.resolve_badge(state="empty") != 11
+
+
+@pytest.mark.parametrize("state, miss_reason", [
+    ("missing", None), ("na", "MISS_NOT_APPLICABLE"), ("empty", "MISS_NOT_APPLICABLE"),
+    ("empty", "MISS_NO_INPUT"), ("idle", None), ("loading", None), ("failed", None),
+    ("error", None), ("unwired", None), ("degraded", None), ("live", None),
+    ("partial", None),
+])
+def test_valid_empty_flag_is_refused_outside_plain_empty(state, miss_reason):
+    """客戶 2026-09-26：#11 ⛔ 不得擴散到任何別的態 —— 契約層直接拒收，⛔ 不是默默忽略旗標。"""
+    with pytest.raises(ValueError):
+        page_today.resolve_badge(state=state, miss_reason=miss_reason, valid_empty=True)
+
+
+def test_valid_empty_flag_on_plain_empty_draws_11():
+    assert page_today.resolve_badge(state="empty", valid_empty=True) == 11
+    assert page_today.VALID_EMPTY_BADGE == 11
+    assert components.badge(page_today.VALID_EMPTY_BADGE)["text"] == "無資料"
 
 
 def test_idle_must_not_be_used_to_fake_loading():

@@ -24,7 +24,7 @@ import textwrap
 
 import pytest
 
-from shared.ui_state import UI_DEGRADED, UI_FAILED, UI_LIVE
+from shared.ui_state import NO_VALUE_STATES, UI_DEGRADED, UI_EMPTY, UI_FAILED, UI_LIVE
 from src.ui.tabs.tab_today import NO_EXIT_MARKER
 from src.ui.views import page_hold as P
 from src.ui_v2 import blocks, components
@@ -234,6 +234,18 @@ _CASES = list(_NOTES.values()) + list(
 _IDS = [f"{b[0].key}:{b[0].state}:{i}" for i, b in enumerate(_CASES)]
 
 _ROW_RE = r'<span class="blk-fact-k">(.*?)</span><span class="blk-fact-v"[^>]*>(.*?)</span>'
+
+#: 本頁**有效的空結果**（#11「▨ 無資料」，客戶 2026-09-26）。**手寫、⛔ 不讀實作的登記表**。
+#: 逐張審查理由見 `HANDOFF.md §6.4`；⛔ 未列者（含 `hold.switch`／`hold.take_profit`／
+#: `hold.deep.dividend_cash` 的空態）一律維持原徽章。
+_VALID_EMPTY_EXPECTED: frozenset[tuple[str, str]] = frozenset({
+    ("hold.portfolio_count", P.COUNT_EMPTY_NOW),
+})
+
+
+def _is_expected_valid_empty(card) -> bool:
+    return (card.state == UI_EMPTY and card.note is not None
+            and (card.key, card.note.now) in _VALID_EMPTY_EXPECTED)
 
 
 def _split(outer: str) -> tuple[str, str]:
@@ -451,7 +463,11 @@ def test_every_state_renders_through_the_v2_face(built):
     out = _html(built)
     assert f'class="blk blk-{_EXPECTED_TIER[card.key]}"' in out
     v2_state, reason = P.V2_STATE_VOCAB[card.state]
-    assert f"bdg bdg-{V2.resolve_badge(state=v2_state, miss_reason=reason)} " in out
+    # 📌 2026-09-26：登記過的有效空結果畫 #11，其餘照舊（期望值用本檔**手寫**的
+    #    `_VALID_EMPTY_EXPECTED`，⛔ 不讀實作的登記表 —— 測試是第二把尺）。
+    _want = (V2.VALID_EMPTY_BADGE if _is_expected_valid_empty(card)
+             else V2.resolve_badge(state=v2_state, miss_reason=reason))
+    assert f"bdg bdg-{_want} " in out
     assert html.escape(P.v2_plain(card.label), quote=True) in out
     if card.state == UI_LIVE:
         assert html.escape(P.v2_plain(card.value), quote=True) in out
@@ -661,3 +677,46 @@ def test_cold_page_mounts_with_23_v2_cards_and_still_two_tables(tmp_path):
     ids = [m.group(1) for c in cards
            for m in [re.search(r'id="(fold-hold-[a-z0-9-]+)"', c)] if m]
     assert len(ids) == len(set(ids)) == 23
+
+
+# ── #11「▨ 無資料」—— 有效的空結果（客戶 2026-09-26 新增；**只給登記的卡**）────────
+def _badge_of(out: str) -> int:
+    _m = re.search(r'class="bdg bdg-(\d+) ', out)
+    assert _m, "卡面上找不到主徽章"
+    return int(_m.group(1))
+
+
+def test_badge_11_appears_exactly_on_the_registered_valid_empty_pairs():
+    """窮舉本頁每一支 builder × 每一組 readout：畫出 #11 的 `(key, now)` 集合 **＝** 登記表，一個不多、一個不少。"""
+    _eleven = {(b[0].key, b[0].note.now) for b in _BUILTS
+               if _badge_of(_html(b)) == V2.VALID_EMPTY_BADGE}
+    assert _eleven == set(_VALID_EMPTY_EXPECTED)
+    # 實作端登記表（本頁那一半）也必須與手寫期望相等 —— 兩把尺對得上。
+    from src.ui.views import page_today as PT
+    assert {p for p in PT.v2_valid_empty_pairs() if p[0].startswith("hold.")} == set(
+        _VALID_EMPTY_EXPECTED)
+
+
+def test_every_other_no_value_card_keeps_its_old_badge():
+    """#11 ⛔ 不得擴散：沒登記的「沒有值」卡（真缺漏／未綁定／這輪沒讀／未評估／算不出來／漂移）
+    徽章與改動前**逐一相同**（＝ `resolve_badge` 不帶旗標的結果；`UI_EMPTY` ⇒ #7）。"""
+    _checked = 0
+    for b in _BUILTS:
+        card = b[0]
+        if card.state not in NO_VALUE_STATES or _is_expected_valid_empty(card):
+            continue
+        v2_state, reason = P.V2_STATE_VOCAB[card.state]
+        _old = V2.resolve_badge(state=v2_state, miss_reason=reason)
+        assert _badge_of(_html(b)) == _old != V2.VALID_EMPTY_BADGE, (card.key, card.note.now)
+        _checked += 1
+    assert _checked > 50, "窮舉沒有打到足夠的空態卡 —— 列舉器壞了？"
+
+
+def test_count_empty_now_under_a_non_empty_state_does_not_get_11():
+    """同一句 `COUNT_EMPTY_NOW` 若出現在 `UI_EMPTY` 以外的態（例：帶 `MISS_NO_INPUT` → #7），⛔ 不畫 #11。"""
+    _hits = [b for b in _BUILTS
+             if b[0].key == "hold.portfolio_count" and b[0].note is not None
+             and b[0].note.now == P.COUNT_EMPTY_NOW and b[0].state != UI_EMPTY]
+    assert _hits, "列舉器沒有打到這個組合（前提）"
+    for b in _hits:
+        assert _badge_of(_html(b)) != V2.VALID_EMPTY_BADGE
