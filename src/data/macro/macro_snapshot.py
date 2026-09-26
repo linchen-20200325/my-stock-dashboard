@@ -667,6 +667,39 @@ def fetch_tw_pmi_block() -> dict:
     return {'_err_pmi': _result.get('_err_pmi', '8 源並行全失敗')}
 
 
+def _ndc_prev_month_keys(df, value_col: str, cur_date: str) -> dict:
+    """同一次抓取、同一份 DataFrame 的「上一列」→ additive 鍵（2026-09-26，燈卡「變化方向」用）。
+
+    只在 FinMind-TBI / 6099-ZIP 兩條分支呼叫（它們手上本來就有整段月序列）；
+    StockFeel / MacroMicro 分支只有單點 → 不帶，方向列顯示無資料。
+    **不新增任何抓取**。回 ``{'prev_score': int, 'prev_date': 'YYYY-MM-DD'}`` 或 ``{}``：
+    - 少於 2 列、上一列非數值、超出 [9,45] sanity → ``{}``（§1：不補值）；
+    - 兩列月份**不相鄰**（中間缺月）→ ``{}`` —— 否則「較上月」其實是較三個月前。
+    ⚠️ 上一列是**本次發布版**的值（官方若回溯修正上月，這裡拿到的是修正後的數字，
+      與燈號同一次發布對齊，無 lookahead；§2.3）。
+    """
+    try:
+        if df is None or len(df) < 2:
+            return {}
+        _row = df.iloc[-2]
+        _v = float(_row[value_col])
+        if _v != _v:                                    # NaN
+            return {}
+        _sc = int(round(_v))
+        if not (9 <= _sc <= 45):
+            return {}
+        _pd_s = str(_row['date'])[:10]
+        _y0, _m0 = int(_pd_s[:4]), int(_pd_s[5:7])
+        _y1, _m1 = int(str(cur_date)[:4]), int(str(cur_date)[5:7])
+        if (_y1 - _y0) * 12 + (_m1 - _m0) != 1:
+            print(f'[NDC] 上一列 {_pd_s} 與最新 {cur_date} 不是相鄰月份 → 不帶上月值')
+            return {}
+        return {'prev_score': _sc, 'prev_date': _pd_s}
+    except (KeyError, TypeError, ValueError, IndexError) as _e:
+        print(f'[NDC] 上月值解析失敗 → 不帶:{type(_e).__name__}: {_e}')
+        return {}
+
+
 @_cache_success_only(ttl=TTL_1HOUR)   # v19.113:失敗不進快取
 def fetch_ndc_block() -> dict:
     """NDC 景氣對策信號(FinMind-TBI + StockFeel + MacroMicro 三源)。
@@ -698,7 +731,9 @@ def fetch_ndc_block() -> dict:
                       f'color={_col_tbi}')
                 return {'ndc_signal': {'score': _sc_tbi, 'signal': _col_tbi,
                                        'date': _d_tbi,
-                                       'source': 'FinMind:TaiwanBusinessIndicator'}}
+                                       'source': 'FinMind:TaiwanBusinessIndicator',
+                                       # 2026-09-26 additive(既有鍵值不變)
+                                       **_ndc_prev_month_keys(_df_tbi, 'monitoring', _d_tbi)}}
             print(f'[NDC/FinMind-TBI] ⚠️ 分數 {_sc_tbi} 超出 [9,45] sanity,跳過')
     except Exception as _e_tbi:
         print(f'[NDC/FinMind-TBI] ❌ {type(_e_tbi).__name__}: {_e_tbi}')
@@ -719,7 +754,9 @@ def fetch_ndc_block() -> dict:
                 _col_z = (str(_row_z.get('color') or '').strip() or None)
                 print(f'[NDC/dgtw-6099-ZIP] ✅ score={_sc_z} date={_d_z} color={_col_z}')
                 return {'ndc_signal': {'score': _sc_z, 'signal': _col_z, 'date': _d_z,
-                                       'source': 'data.gov.tw:6099(景氣指標及燈號)'}}
+                                       'source': 'data.gov.tw:6099(景氣指標及燈號)',
+                                       # 2026-09-26 additive(既有鍵值不變)
+                                       **_ndc_prev_month_keys(_z_ndc, 'value', _d_z)}}
             print(f'[NDC/dgtw-6099-ZIP] ⚠️ 分數 {_sc_z} 超出 [9,45] sanity,跳過')
     except Exception as _e_zip_ndc:
         print(f'[NDC/dgtw-6099-ZIP] ❌ {type(_e_zip_ndc).__name__}: {_e_zip_ndc}')

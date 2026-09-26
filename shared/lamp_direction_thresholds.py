@@ -55,9 +55,48 @@
 - us10y：燈值來自 FRED DGS10 單點（無歷史）；session 的 ^TNX 是另一個源 → 不混源。
 - fut_net：先行指標只保留約 14 個交易日，20 交易日視窗做不到（且不另開「近 13 交易日」這種新文字）。
 - us_core_cpi：只有 prev_yoy 沒有日期 → 不編日期。
-- jingqi：燈值的來源有三條（ADL 5 日均 / 大盤估算 / TWSE 即時單日），且 5 日均的算式只寫在
-  會寫 session 的 L3 函式裡（沒有可重用的純函式）→ 不複製算式、不猜是哪一條。
-- health / ndc_signal / tw_export / news_systemic：session 裡沒有歷史序列。
+- jingqi：見下方「2026-09-26 第二批複查」—— 量測後仍判無資料（5 日均的 20 日差是雜訊）。
+- health / tw_export：見下方「2026-09-26 第二批複查」—— 逐盞查證後仍判無資料。
+- （ndc_signal 已於同日第二批改為真方向，見下方該段。）
+- news_systemic：session 裡沒有歷史序列。
+
+2026-09-26 第二批複查（客戶核准嘗試接 health / jingqi / ndc_signal / tw_export；
+逐盞查證後 **health / jingqi / tw_export 維持無資料**（只更新 `none_reason`，畫面文字不變），
+**ndc_signal 改為真方向**（獨立 QA 複查後的結論，見 ndc_signal 段）：
+- **jingqi（旌旗＝ad_ratio 5 日均）** — 量測腳本 `measure_jingqi_autocorr.py`（scratchpad，
+  量測日 2026-09-26）：本機 `data_cache/twii_ohlcv.parquet`（sha256 c34b92e5…e2283，
+  source = Yahoo:^TWII:chart，4,886 列，2006-09-29 ~ 2026-09-24），套 adl 段同一估算式後取
+  rolling(5).mean()：lag-1 自相關 = 0.789（只是 5 日窗重疊造成的機械相關）、
+  lag-5 = 0.007、**lag-20 = 0.025**（ad_ratio 本身 lag-20 = 0.016）。⇒ 「近 20 交易日」
+  比的是兩段**不重疊**的 5 日窗，彼此幾乎不相關，差值仍是雜訊 → 同 adl 原則不出箭頭。
+  （因此也**沒有**把 `jingqi_calc` 的 5 日均抽成純函式 —— 用不到就不動 L3。）
+- **health（總經健康評分）** — 唯一的歷史是前進式驗證凍結檔
+  `data_cache/macro_forward_test/signals.parquet`（唯讀，24 列，2026-08-20 ~ 09-25）。
+  兩邊都讀 `calc_traffic_light(...)['health']`（ruleset_hash 全為 532c3a57698f），但：
+  (1) `date` 是**cron 執行日**不是交易日（有 2026-08-29 週六列；`inputs_as_of` 24 列全為 None）。
+      對照 twii 交易日曆，檔案區間內缺 **4** 個交易日（08-27 / 08-31 / 09-14 / 09-21）；
+      09-22 不是交易日，且與 09-23 同值（73.3，過期重複列）
+      ⇒「往前 20 列」≠「近 20 交易日」，視窗文字會說謊；
+  (2) 燈值取自 `warroom_summary['health_score']`，該 dict **不帶 `health_partial`**；
+      輸入也不同（cron 走 `fetch_macro_bundle` 自抓一輪、燈值走頁面 session）⇒ 末值一般
+      對不上燈值；且 `page_today.OUT_OF_REACH_LIGHT_KEYS` 本來就列著 health（寫入點不在本頁路徑）。
+- **tw_export（月資料，「較上月」）** — L1 只回最新一點（歷史在 `fetch_export_block` 內被丟掉），
+  但持平帶**量不到**：本機 `data_cache/` 無出口 YoY 歷史檔，且 data.gov.tw / 海關 opendata /
+  FRED 在本環境皆 403（2026-09-26 實測）⇒ 依 §3.3 不猜帶寬 → **L1 不改**。另記：5 路 fallback
+  口徑不一（stat.gov.tw 單點、海關 6053 為新臺幣、FRED 為 OECD 美元序列），且 MOF 月資料會
+  回溯修正（§2.3 ±5%），日後若要接，須限定同一條 fallback、同一次抓取的相鄰兩月。
+- **ndc_signal（NDC 景氣對策信號分數，月資料，「較上月」）— 真方向，帶寬 0**：
+  分數是國發會公布的**整數**（9~45），帶寬 0 是資料本身的解析度（相同分數＝持平，差 1 分
+  就是官方分數真的動了），**不是**猜出來的數字 —— 不需要、也無從另外量測一條帶寬。
+  前例：`src/data/macro/tw_macro.fetch_ndc_signal_history` 早就以 `cur > prev` / `cur < prev`
+  / 相等 判斷拐點（同樣沒有容差帶）。
+  序列來源：L1 `fetch_ndc_block` **只在** FinMind-TBI 與 data.gov.tw 6099-ZIP 兩條分支，從
+  **同一次抓取、同一份 DataFrame** 的上一列帶出 additive 鍵 `prev_score` / `prev_date`
+  （兩月不相鄰 → 不帶）；StockFeel / MacroMicro 分支只有單點 → 不帶 → 無資料。**無新增抓取**，
+  既有鍵值逐字不變。L5 守衛：最新點就是燈值那個 `score`（同一個 dict）。
+  ⚠️ §2.3：上月值是**本次發布版**（若官方回溯修正上月分數，拿到的是修正後的值），
+  與本月燈號同一次發布對齊 ⇒ 無 lookahead；但它可能與上個月畫面當時顯示的數字不同。
+  單位：顯示不帶單位（`unit = ""`，沿用既有字串，不新增「分」這個方向列文字）。
 - foreign_net：決策端未接線（燈永遠不亮），卡上本來就不出這一列。
 """
 from __future__ import annotations
@@ -72,6 +111,7 @@ LAMP_DIRECTION_KEYS: tuple[str, ...] = (
     "adl",
     # 2026-09-26：無歷史 / 量不到帶寬 / 會混源 → 恆為無資料（原因見檔頭）
     "health", "ndc_signal", "us_core_cpi", "tw_export", "us10y", "dxy",
+    # （ndc_signal 2026-09-26 第二批改真方向；位置不動，避免既有順序漂移）
     "fut_net", "jingqi", "foreign_net", "news_systemic",
 )
 
@@ -112,32 +152,42 @@ LAMP_DIRECTION_WINDOWS: dict[str, dict] = {
         "lookback_rows": 20, "mode": DIRECTION_MODE_DIFF,
         "unit": " 點", "window_text": "近 20 交易日", "monthly": False,
     },
+    # ── 2026-09-26 第二批：整數官方分數，帶寬 0＝資料解析度（見檔頭 ndc_signal 段）──
+    "ndc_signal": {
+        "lookback_rows": 1, "mode": DIRECTION_MODE_DIFF,
+        "unit": "", "window_text": "較上月", "monthly": True,
+    },
     # ── 2026-09-26：恆為無資料（`none_reason` 只進 log / 物件，畫面只顯示「無資料」）──
     **{_k: {"lookback_rows": 0, "mode": DIRECTION_MODE_NONE,
             "unit": "", "window_text": "", "monthly": False, "none_reason": _r}
        for _k, _r in (
-           ("health", "session 無總經健康評分的歷史序列"),
-           ("ndc_signal", "session 無 NDC 燈號分數的歷史序列"),
+           ("health", "唯一歷史是前進式驗證凍結檔：date 為 cron 執行日非交易日（區間內缺 4 個交易日、"
+                      "含週六列與 09-22 過期重複列）；兩邊都讀 calc_traffic_light(...)['health']，"
+                      "但燈值 dict 不帶 health_partial、輸入不同（cron fetch_macro_bundle vs session），"
+                      "且 OUT_OF_REACH_LIGHT_KEYS 列著 health（2026-09-26 查證）"),
            ("us_core_cpi", "只有 prev_yoy、沒有日期 —— 不編日期"),
-           ("tw_export", "session 無出口 YoY 的歷史序列"),
+           ("tw_export", "L1 只回最新一點；本機無出口 YoY 歷史、外部源 403 —— 持平帶量不到，不猜；"
+                         "且 5 路 fallback 口徑不一、月資料會回溯修正（2026-09-26 查證）"),
            ("us10y", "燈值來自 FRED DGS10 單點；session 的 ^TNX 是另一個源，不混源"),
            ("adl", "ad_ratio 是單日估算、幾乎無自相關（lag-1 −0.028 / lag-20 0.016，"
                    "twii_ohlcv.parquet 4,886 列，2026-09-26 量測）—— 20 日差是雜訊不是趨勢"),
            ("dxy", "session 有序列，但本機量不到持平帶，且 DX-Y.NYB→DX=F→UUP 備援尺度不同 —— 不猜帶寬"),
            ("fut_net", "先行指標只保留約 14 個交易日，湊不滿 20 交易日視窗"),
-           ("jingqi", "燈值有三條來源、5 日均算式無可重用的純函式 —— 不複製算式"),
+           ("jingqi", "5 日均的 20 日差仍是雜訊（lag-20 自相關 0.025，twii_ohlcv.parquet 4,886 列，"
+                      "2026-09-26 量測）—— 同 adl 不出箭頭"),
            ("foreign_net", "決策端未接線（燈永遠不亮）"),
            ("news_systemic", "session 無新聞則數的歷史序列"),
        )},
 }
 
 #: 持平帶（|變化量| ≤ 帶寬 → 持平；等於帶寬也算持平）。依據見檔頭。
-#: ⚠️ mode = "none" 的燈（m1b_m2_gap 與 2026-09-26 那 11 盞）**刻意不在表內**（恆為無資料）。
+#: ⚠️ mode = "none" 的燈（m1b_m2_gap 與 2026-09-26 那 10 盞）**刻意不在表內**（恆為無資料）。
 LAMP_DIRECTION_FLAT_BAND: dict[str, float] = {
     "margin": 1.0,     # %
     "bias_240": 1.0,   # 百分點
     "ism_pmi": 0.5,    # 點
     "vix": 0.5,        # 點（2026-09-26 量測，見檔頭）
+    "ndc_signal": 0.0,  # 分（整數官方分數；0＝資料解析度，不是猜的，見檔頭）
 }
 
 #: 變化量顯示的小數位數。

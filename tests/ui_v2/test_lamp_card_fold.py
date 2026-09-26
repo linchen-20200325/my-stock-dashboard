@@ -13,6 +13,9 @@
   5. 開關：label 文字「▸ 詳細」、⛔ 無 `checked`（預設收合）、`for` ＝ input `id`
      ＝ `fold_dom_id(卡 key)`（16 張互不相同）、input 排在 body 之前（`~` 才選得到）。
   6. `page_css()` 真的有「body 預設隱藏、`:checked ~` 才顯示」兩條規則。
+  7. 2026-09-26 a11y（客戶核可）：開關可鍵盤聚焦（⛔ display:none／tabindex=-1／disabled）、
+     可及名稱只引用畫面上既有的字（`aria-labelledby` ＝ 開關字 ＋ 卡標題）、
+     `aria-controls` 指向 body、⛔ 無寫死的 `aria-expanded`；拿掉新增屬性後與改前逐 byte 相同。
 """
 from __future__ import annotations
 
@@ -27,13 +30,14 @@ from src.ui_v2 import markup as M
 
 FOLD_KEYS = ("命中來源", "門檻出處", "這條線在看什麼")
 _FOLD_OPEN = '<div class="blk-fold">'
-_BODY_OPEN = '<div class="blk-fold-b">'
+#: body 開標籤的**前綴**（2026-09-26 a11y 起 body 帶 `id=` 供 `aria-controls` 引用 ⇒ 不再寫死 `>`）。
+_BODY_OPEN = '<div class="blk-fold-b"'
 _DIV_TOKEN = re.compile(r"<div\b[^>]*>|</div>")
 _FOLD_HEAD_RE = re.compile(
     r'^<div class="blk-fold">'
     r'<input type="checkbox" class="blk-fold-i" id="(?P<id>[^"]*)"(?P<iattr>[^>]*)>'
-    r'<label class="blk-fold-s" for="(?P<for>[^"]*)">(?P<label>.*?)</label>'
-    r'<div class="blk-fold-b">', re.S)
+    r'<label class="blk-fold-s" id="(?P<lid>[^"]*)" for="(?P<for>[^"]*)">(?P<label>.*?)</label>'
+    r'<div class="blk-fold-b" id="(?P<bid>[^"]*)">', re.S)
 
 
 def _span(key: str) -> str:
@@ -63,10 +67,11 @@ def _fold_parts(html: str) -> dict:
     b_end = _balanced(fold, b)
     # body 是摺疊區**最後一個**子節點（後面只剩摺疊區自己的 `</div>`）
     assert fold[b_end:] == "</div>", fold[b_end:]
-    body = fold[b + len(_BODY_OPEN):b_end - len("</div>")]
+    body = fold[fold.index(">", b) + 1:b_end - len("</div>")]
     return dict(outside=html[:i] + html[j:], fold=fold, body=body,
                 id=head["id"], **{"for": head["for"]},
-                label=head["label"], iattr=head["iattr"])
+                label=head["label"], iattr=head["iattr"],
+                lid=head["lid"], bid=head["bid"])
 
 
 def _split(html: str) -> tuple[str, str]:
@@ -286,3 +291,84 @@ class TestUntouched:
         monkeypatch.setattr(P, "V2_FOLDED_FACT_KEYS", frozenset({"不存在的標籤"}))
         with pytest.raises(KeyError):
             P.v2_card_html(_live_tiles()["detail.vix"])
+
+
+_A11Y_ADDED_ATTR = re.compile(
+    r' (?:aria-labelledby|aria-controls)="[^"]*"'
+    r'|(?<=<span class="blk-title") id="[^"]*"'
+    r'|(?<=<label class="blk-fold-s") id="[^"]*"'
+    r'|(?<=<div class="blk-fold-b") id="[^"]*"')
+
+
+class TestA11y:
+    """2026-09-26 客戶核可：「▸ 詳細」鍵盤與螢幕朗讀可操作（⛔ 無 JS、⛔ 畫面不變、⛔ 無新文案）。"""
+
+    @pytest.mark.parametrize("mode", ["dark", "light"])
+    def test_input_focusable_not_removed_from_tab_order(self, mode):
+        try:
+            css = M.page_css(mode)
+        except Exception:  # noqa: BLE001 — 同 TestToggleCss
+            pytest.skip(f"page_css({mode!r}) 不可產出")
+        compact = re.sub(r"\s+", "", css)
+        rules = re.findall(r"\.blk-fold-i\{([^}]*)\}", compact)
+        assert rules, "找不到 .blk-fold-i 規則"
+        for rule in rules:
+            # display:none / visibility:hidden 會把 input 移出 Tab 順序與無障礙樹
+            assert "display:none" not in rule and "visibility:hidden" not in rule, rule
+        # 鍵盤聚焦時 label 有可見框（只在 :focus-visible，滑鼠點按不觸發 ⇒ 畫面不變）
+        m = re.search(r"\.blk-fold-i:focus-visible~\.blk-fold-s\{([^}]*)\}", compact)
+        assert m and "outline:" in m.group(1) and "outline:none" not in m.group(1)
+        # QA 2026-09-26：負的 outline-offset 會把框畫進 label 盒內、壓到「▸」字形 ⇒ ⛔ 不得為負
+        off = re.search(r"outline-offset:(-?[\d.]+)px", m.group(1))
+        assert off and float(off.group(1)) >= 0, m.group(1)
+
+    @pytest.mark.parametrize(
+        "key", sorted(k for k in P.V2_CARD_BLOCKS if k.startswith("detail.")))
+    def test_accessible_name_reuses_visible_text_only(self, key):
+        tile = _live_tiles()[key]
+        html = P.v2_card_html(tile)
+        p = _fold_parts(html)
+        for bad in ("tabindex", "disabled", "aria-hidden", "aria-expanded", "aria-label="):
+            assert bad not in p["iattr"], bad
+        assert p["label"] == M.FOLD_SUMMARY_TEXT == "▸ 詳細"  # 開關字一字未改
+        fid = p["id"]
+        assert p["lid"] == M.fold_label_id(fid) and p["bid"] == M.fold_body_id(fid)
+        m = re.search(r'aria-labelledby="([^"]*)"', p["iattr"])
+        assert m and m.group(1).split() == [M.fold_label_id(fid), M.fold_title_id(fid)]
+        assert f'aria-controls="{M.fold_body_id(fid)}"' in p["iattr"]
+        # labelledby 引用的標題元素真的在同一張卡上，而且文字就是卡標題（⛔ 無新文案）
+        t = re.search(rf'<span class="blk-title" id="{M.fold_title_id(fid)}">(.*?)</span>', html)
+        assert t and t.group(1) == M._esc(P.v2_plain(tile.card.label))
+
+    def test_all_ids_unique_and_stable_per_run(self):
+        def ids():
+            page = "".join(P.v2_card_html(t) for t in _live_tiles().values())
+            return re.findall(r'\bid="([^"]*)"', page)
+        got = ids()
+        assert len(got) == 16 * 4 and len(set(got)) == len(got)   # input／label／title／body
+        assert got == ids()                                        # rerun 逐字相同
+
+    def test_sub_ids_cannot_collide_with_any_fold_id(self):
+        for fid in ("fold-a", "fold-a-t", "fold-a-s", "fold-a-b"):
+            for sub in (M.fold_label_id(fid), M.fold_title_id(fid), M.fold_body_id(fid)):
+                assert not re.fullmatch(r"[a-z0-9-]+", sub), sub   # 合法 fold_id 不可能長這樣
+
+    def test_markup_identical_to_before_once_a11y_attrs_removed(self):
+        """拿掉本次新增的屬性 ⇒ 與改前的結構逐 byte 相同（展開內容、開關字、順序都沒動）。"""
+        for tile in _live_tiles().values():
+            html = P.v2_card_html(tile)
+            fid = M.fold_dom_id(tile.card.key)
+            legacy = _A11Y_ADDED_ATTR.sub("", html)
+            assert "aria-labelledby" not in legacy and "aria-controls" not in legacy
+            assert f"{fid}_" not in legacy
+            assert (f'<div class="blk-fold"><input type="checkbox" class="blk-fold-i" id="{fid}">'
+                    f'<label class="blk-fold-s" for="{fid}">▸ 詳細</label>'
+                    '<div class="blk-fold-b"><div class="blk-facts">') in legacy
+            assert legacy.count('<span class="blk-title">') == 1
+
+    def test_unfolded_card_gets_no_a11y_ids(self):
+        kw = dict(block=P.V2_CARD_BLOCKS["detail.vix"], state="live", title="t<",
+                  value="1", level="L", badge_n=1, facts=(("a", "b&"),))
+        base = M.card_html(**kw)
+        assert not re.search(r'\bid="', base)          # 標題⛔ 掛 id
+        assert "aria-labelledby" not in base and "aria-controls" not in base
