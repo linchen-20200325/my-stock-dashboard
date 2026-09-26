@@ -45,6 +45,8 @@ from shared.colors import (
     TRAFFIC_RED,
     TRAFFIC_YELLOW,
 )
+# L0：上游例外字串畫上畫面前先洗金鑰／Sheet ID／檔案路徑（Q1-r5，2026-09-26）。
+from shared.secret_scrub import scrub_secrets
 from src.compute.etf.dividend_station import LEVEL_UNJUDGED
 
 # ══════════════════════════════════════════════════════════════════════
@@ -670,7 +672,10 @@ def render_holding_detail(ticker: str, name: str, cells,
     st.markdown(f'{strip_html(cells)}　<span class="dsl-cnt">{_n}/{_m} 盞有判定</span>',
                 unsafe_allow_html=True)
     if error:
-        st.error(f"這一檔整批抓取失敗:{error}", icon="🚨")
+        # 先洗金鑰／路徑（遮罩 `***`），再把 `*` 做 Markdown 跳脫 —— `st.error` 吃 Markdown，
+        # 同一行兩個 `***` 會被當成粗斜體記號吃掉（值仍被遮，但遮罩本身從畫面上消失）。
+        _err = scrub_secrets(error).replace("*", "\\*")
+        st.error(f"這一檔整批抓取失敗:{_err}", icon="🚨")
 
     for _c in cells:
         _spec = SS.SPECS_BY_KEY.get(_c.key)

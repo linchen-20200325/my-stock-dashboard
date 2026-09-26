@@ -31,7 +31,6 @@ Stock adapter(v19.121 Phase 1,已對實際簽名校正,evidence: 驗證 agent + 
 import json
 import math
 import os
-import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional
@@ -521,14 +520,10 @@ def _shape_evidence(path: str, node) -> str:
 # ── 錯誤訊息金鑰洗白 + Gemini 錯誤友善化(v19.128 修 429 錯誤把 ?key=API_KEY 印到 UI)──
 # requests 的 HTTPError str 含完整 URL(含 ?key=<GEMINI_KEY>);直接把 exception 塞進 UI 錯誤字串
 # = 金鑰洩漏。任何要渲染給使用者的錯誤都必須先過 _scrub_secrets。
-_SECRET_QS_RE = re.compile(r"\b(key|token|api[_-]?key|access[_-]?token)=[^&\s\"'<>]+", re.IGNORECASE)
-_GOOGLE_KEY_RE = re.compile(r"AIza[0-9A-Za-z_\-]{10,}")
-
-
-def _scrub_secrets(s) -> str:
-    """移除錯誤訊息可能夾帶的金鑰:URL query 的 key=/token=/api_key= 值 + 裸露的 AIza… 金鑰。"""
-    out = _SECRET_QS_RE.sub(lambda m: m.group(1) + "=***", str(s))
-    return _GOOGLE_KEY_RE.sub("AIza***", out)
+# 2026-09-26:兩條 regex 與函式體**逐字**下沉 L0 `shared/secret_scrub.py`(給 L5 共用,
+# L5 不得跨層取本檔私有符號);本檔名稱照舊,行為對任何輸入 byte-identical
+# (守衛:tests/test_v2_silent_fail_b11_hold_misc.py::TestAiQaByteIdentical)。
+from shared.secret_scrub import scrub_query_secrets as _scrub_secrets  # noqa: E402 — 就地 import,讓這段的來歷留在原處
 
 
 def _fmt_gemini_error(prefix: str, e) -> str:

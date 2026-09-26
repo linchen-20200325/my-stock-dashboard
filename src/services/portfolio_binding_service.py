@@ -46,6 +46,9 @@ def get_binding_state() -> BindingState:
         (token 只由 `handle_oauth_callback` 寫入,它在沒設定時直接 return)。
       · 讀 token / 讀 Sheet 識別碼**拋例外**,或 `oauth_state` 模組載不進來(L1
         `_has_oauth_tokens()` 會把它吞成 False)→ status 照舊 unbound,`read_error` 帶例外 repr。
+      · secrets 檔**格式錯誤**(TOML 解析失敗)或讀取例外 —— L1 `_get_active_sheet_id()` /
+        `oauth_state._safe_secret()` 都會把它吞成「沒設定」→ 同上(L1 `_secrets_read_error()`
+        以 Streamlit 的例外鏈分辨,不比對訊息;「沒有 secrets 檔」仍是有效結果)。
     """
     from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1(正常方向)
 
@@ -66,6 +69,13 @@ def get_binding_state() -> BindingState:
     except Exception as _e:  # noqa: BLE001
         _sid = ""
         _errs.append(repr(_e))
+    if not _logged or not _sid:
+        # secrets 檔格式錯誤時,L1 兩處(Sheet 識別碼 / OAuth Client 設定)都把它吞成「沒設定」
+        # (既有行為不動)—— 只在要回 unbound 時分出那一種。L1 只交型別名;上面讀 Sheet 識別碼
+        # 已經以同一型別記過(repr 以型別名開頭)就不重複記。
+        _sec = _gsp._secrets_read_error()
+        if _sec and not any(_x.startswith(_sec + "(") for _x in _errs):
+            _errs.append(_sec)
     _read_err = "; ".join(_errs)
 
     if not _logged or not _sid:

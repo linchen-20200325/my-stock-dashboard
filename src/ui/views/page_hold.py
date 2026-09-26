@@ -329,6 +329,8 @@ from shared.dividend_station_thresholds import (
     VIX_LIGHT2,
     VIX_LIGHT3,
 )
+# L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（Q1-r5，2026-09-26）。
+from shared.secret_scrub import scrub_secrets
 from shared.ui_state import (
     UI_DEGRADED,
     UI_FAILED,
@@ -588,7 +590,9 @@ def _error_why(source: str, error: Any) -> str:
     `Note.__post_init__` 拒收狀態 glyph，不洗就會把一張**該畫出來的紅卡**
     變成**整頁未捕捉例外**（§1：紅態要看得見，不是換一種炸法）。
     """
-    _clean, _n = scrub_state_glyphs(error)
+    # Q1-r5：先洗金鑰／Sheet ID／檔案路徑（L0 `scrub_secrets`，遮罩沿用既有 `***`、⛔ 不加說明字）——
+    # 例：secrets.toml 解碼失敗時 `UnicodeDecodeError` 的 repr 會帶出整份檔案原文。
+    _clean, _n = scrub_state_glyphs(scrub_secrets(error) if error else error)
     _why = f"{source}拋出例外：{_clean or UNKNOWN_ERROR_TEXT}"
     if _n:
         _why += ("（上游訊息裡的狀態符號已移除，"
@@ -1170,6 +1174,8 @@ class StationReadout:
             ⚠️ 上面那句「這裡刻意沒有 `vix` 欄位」**仍然成立**（本類別沒有那個
             欄位），但 **`digest` 裡面帶著 `get_station_rows()` 當時用的那個
             VIX** —— 它是 digest 的一部分，不是另存一份給畫面用的副本。
+            ⚠️ 例外一處（Q2-r1）：⑤⑥ 分配卡紅時，⑦ 送出的**複本**把 `allocation` 設為 `None`
+            （卡上沒畫的比例，⑦ 也不講；見 `load_ai_summary()`）。本欄位本身不動。
         totals: L3 `compute_portfolio_totals()`；`None` = 算不出來（**不填 0**）。
         split: 80/20 實際配置；`None` = 沒有可計價持股。
         take_profit: 達停利門檻的衛星列（可以是空的 —— 那是**有效結果**）。
@@ -3486,7 +3492,13 @@ def load_ai_summary(pressed: bool, station: StationReadout,
     try:
         from src.services.dividend_station_service import build_ai_summary
         from src.services.app_ai_service import gemini_call
-        _text = build_ai_summary(dict(station.digest), gemini_call,
+        # Q2-r1：⑤⑥ 分配卡紅（有持有列取數失敗、沒被計入 —— `_split_state`）時，卡上不畫那個比例，
+        # ⑦ 也 ⛔ 不把它送進 prompt（只刪不加）：走 L3 既有契約「`allocation` 為 None ＝ 算不出來
+        # → `build_summary_prompt()` 不寫配置那一行」（同 `_switch_payload()` 回 `None` 的作法）。
+        # L3 一行未動；改的是這一份複本，`station.digest` 本身不動（①③⑤ 讀的那一份）。
+        _digest = (dict(station.digest, allocation=None)
+                   if _split_state(station) == UI_FAILED else dict(station.digest))
+        _text = build_ai_summary(_digest, gemini_call,
                                  switch=_switch_payload(switch))
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] AI 戰情總結失敗 → 轉紅態：{_e!r}")
@@ -3744,7 +3756,13 @@ def build_portfolio_count_card(binding: BindingReadout) -> _Built:
                  "L3 為了不讓全域狀態列被擋住，把這次失敗降級成中性回傳；"
                  "**在這一頁它就是「系統真出錯」，所以還原成紅色**。"
                  "常見原因：授權過期、該 Sheet 被移除分享、或 Google 端暫時性錯誤"),
-            where=("重新用 Google 登入授權一次，或確認那本 Sheet 仍然分享給你；"
+            # Q1-r3：`binding.error`（綁定那一步就讀失敗 —— 例：`oauth_state` 載不進來、secrets 檔
+            # 格式錯誤）時，「重新用 Google 登入授權一次」是**不實指引**（登入一百次也一樣），
+            # 「那本 Sheet」也還不存在 → 改指既有常數 `STATION_ERROR_WHERE`（同一次讀失敗在 ① 結論
+            # 三張與燈牆上經 `_station_note()` 本來就用它；⛔ 不新寫）。綁到了、但讀組合清單失敗
+            # （drift）那一種照舊。
+            where=(STATION_ERROR_WHERE if binding.error else
+                   "重新用 Google 登入授權一次，或確認那本 Sheet 仍然分享給你；"
                    f"來源狀態在{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
     else:   # UI_EMPTY —— **綁了但空。這是有效結果，不是故障。**
         _note = Note(
@@ -3811,7 +3829,7 @@ def build_holdings_preview_card(holdings: HoldingsReadout) -> _Built:
         # §1：觀察清單那半失敗**不得靜默** —— 它會影響換股建議的「換入」來源。
         _facts.append((
             "⚠️ 觀察清單這一輪讀不到",
-            f"{holdings.watchlist_error} —— 持股本身不受影響，"
+            f"{scrub_secrets(holdings.watchlist_error)} —— 持股本身不受影響，"
             "但④ 換股建議的「換入」會退回選股池全自動排名"))
     if _state == UI_LIVE:
         return (Card(key="hold.setup.preview", label="持股列預覽", state=UI_LIVE,
@@ -4094,9 +4112,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.portfolio_count", COUNT_DRIFT_NOW, (
            None, "已經綁到一本 Sheet，但向它要組合清單時失敗了",
            "重新用 Google 登入授權一次，或確認那本 Sheet 仍然分享給你")),
+       # Q1-r3：去哪補改指 `STATION_ERROR_WHERE` ⇒ 摘錄同 ① 結論三張／燈牆（`_V2_STATION_ERROR`）。
        _v2_rows_for("hold.portfolio_count", COUNT_FAILED_NOW, (
-           None, _v2_raised(SRC_BINDING),
-           "重新用 Google 登入授權一次，或確認那本 Sheet 仍然分享給你")),
+           None, _v2_raised(SRC_BINDING), _V2_CHECK_NET)),
        _v2_rows_for("hold.portfolio_count", COUNT_EMPTY_NOW, (
            None, "空的組合就是空的，本站不把它畫成紅色錯誤",
            "到既有的 📁 組合管理分頁新增一本組合並填入持股列" + V2_EXCERPT_GAP
