@@ -2184,6 +2184,69 @@ V2_STATE_VOCAB: dict[str, tuple[str, str | None]] = {
 #: 本頁**當場說出來**，⛔ 不會靜靜地給它一顆看起來合理的徽章。
 V2_BADGE_AMBIGUOUS: frozenset[str] = frozenset({UI_EMPTY, UI_PARTIAL})
 
+#: 📌 **2026-09-26 補（上面 `V2_BADGE_AMBIGUOUS` 的註解一字未動）**：客戶同日新增 #11
+#: 「▨ 無資料」（有效的空結果）。它**不是**在本檔另發明一顆徽章 —— 徽章住在
+#: `src/ui_v2/components.py::BADGES`、判定在 `v2_page.resolve_badge(valid_empty=True)`；
+#: 本檔只負責**哪幾張卡有資格**，而且是**登記制**（見下表）。
+#: 裸 `UI_EMPTY` 的預設仍然是 #7 —— 上面那段「徽章文字比 L0 多講了一句話」的揭露，
+#: 對**沒登記**的卡照樣成立、照樣有效。
+#:
+#: **有效的空結果登記處**：`(card.key, 定義 `note.now` 的模組, 常數名)`。
+#: 只有 `card.state == UI_EMPTY` **且** `(card.key, card.note.now)` 在此的卡才畫 #11。
+#:
+#: 🔴 **判準（嚴格）**：上游這一輪**成功算完**、結果**真的是 0／空**；而且**同一個
+#: `(key, now)` 不會在任何別的路徑出現**（真缺漏／上游失敗被吞成空／還沒載入／未評估／
+#: 未綁定／這輪沒讀／契約漂移）。只要同一對 `(key, now)` 還蓋著其中任一條路徑，
+#: 就⛔ **不得登記** —— 登記了＝把 #11 擴散到那條路徑上（客戶裁示明文禁止）。
+#: 逐張審查結果（含排除理由）見 `HANDOFF.md §6.4` 與 `docs/v2/spec/UI_COMPONENTS.md §2` #11 列。
+#:
+#: ⚠️ **為什麼存「模組＋常數名」而不是直接 import 常數**：`page_find`／`page_hold` 在
+#: import 時就 `from src.ui.views.page_today import …`，本檔若在頂層反向 import 它們 ＝ 循環 import。
+#: 故登記用**名字**、第一次查表時才解析（`v2_valid_empty_pairs()`）；解析不到 → `RuntimeError`
+#: （§1：⛔ 不讓一個打錯的常數名靜靜地讓 #11 消失）。⛔ **不抄字串**：比對用的是那個常數的**值**。
+V2_VALID_EMPTY_SPEC: tuple[tuple[str, str, str], ...] = (
+    # 「這本 Sheet 裡的組合」：Sheet 讀成功、組合清單長度 0（L3 `STATUS_BOUND_EMPTY`，
+    # `portfolio_count=0`）。讀取失敗走 `portfolio_count=None` ＋ `MISS_FETCH_FAILED`（紅），
+    # 未綁定走 idle —— 兩者都**不會**產出 `COUNT_EMPTY_NOW` 的 `UI_EMPTY` 卡。
+    ("hold.portfolio_count", "src.ui.views.page_hold", "COUNT_EMPTY_NOW"),
+)
+
+_V2_VALID_EMPTY_CACHE: list[frozenset[tuple[str, str]]] = []
+
+
+def v2_valid_empty_pairs() -> frozenset[tuple[str, str]]:
+    """`V2_VALID_EMPTY_SPEC` → `{(card.key, note.now 的值)}`。第一次呼叫時解析、之後沿用。
+
+    解析不到（模組不在、常數改名、值不是非空字串）→ `RuntimeError`，⛔ 不略過。
+    """
+    if _V2_VALID_EMPTY_CACHE:
+        return _V2_VALID_EMPTY_CACHE[0]
+    import importlib
+    _pairs: set[tuple[str, str]] = set()
+    for _key, _mod_name, _const in V2_VALID_EMPTY_SPEC:
+        _val = getattr(importlib.import_module(_mod_name), _const, None)
+        if not isinstance(_val, str) or not _val.strip():
+            raise RuntimeError(
+                f"#11 登記 {(_key, _mod_name, _const)!r} 解析不到一個非空字串常數 —— "
+                "常數被改名或刪了？⛔ 不要把這一列刪掉了事，先確認那張卡的空結果文案去哪了。")
+        _pairs.add((_key, _val))
+    _V2_VALID_EMPTY_CACHE.append(frozenset(_pairs))
+    return _V2_VALID_EMPTY_CACHE[0]
+
+
+def v2_card_badge_n(card: Card) -> int:
+    """一張 `Card` → v2 徽章號。**三頁共用**（今天／找標的／我的持股都走這一支）。
+
+    ＝ `V2_STATE_VOCAB` 翻字面 → `v2_page.resolve_badge()`；**唯一多做的一件事**是查
+    `v2_valid_empty_pairs()`：登記過的有效空結果 → #11，其餘行為與改動前逐一相同。
+    未知狀態 → `KeyError`（⛔ 不兜底，同改動前）。
+    """
+    _v2_state, _reason = V2_STATE_VOCAB[card.state]
+    _valid_empty = (card.state == UI_EMPTY and card.note is not None
+                    and (card.key, card.note.now) in v2_valid_empty_pairs())
+    return v2_page.resolve_badge(state=_v2_state, miss_reason=_reason,
+                                 valid_empty=_valid_empty)
+
 
 def _v2_badge_to_l0_state(badge_n: int) -> str | None:
     """徽章號 → 它宣稱的 L0 狀態。**用常數名反解，⛔ 不手抄對照表。**
@@ -2484,7 +2547,7 @@ def v2_card_html(tile: Tile) -> str:
     _card = tile.card
     # 未知狀態 → `KeyError`。⛔ 不 `.get()` 兜底（兜底＝挑一顆看起來合理的徽章）。
     _v2_state, _reason = V2_STATE_VOCAB[_card.state]
-    _badge_n = v2_page.resolve_badge(state=_v2_state, miss_reason=_reason)
+    _badge_n = v2_card_badge_n(_card)   # 2026-09-26：改走三頁共用的那一支（#11 登記制）
     _level, _guide_rows, _full = v2_level_line(tile)
     # 🔴 **移出卡面、只留 hover** 的那幾列（見 `V2_HOVER_ONLY_FACTS` 的判準與理由）。
     #    🔴 餵進 hover 的是 `tile.facts` 的**原字串**，⛔ 不過 `v2_plain()` ——

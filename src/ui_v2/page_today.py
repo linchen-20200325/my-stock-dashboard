@@ -511,14 +511,26 @@ MISS_NOT_APPLICABLE: Final[str] = "MISS_NOT_APPLICABLE"
 _KNOWN_STATES: Final[frozenset[str]] = frozenset(_STATE_BADGE) | {"empty", "na", "partial"}
 
 
+#: #11「▨ 無資料」—— 有效的空結果（客戶 2026-09-26 新增，UI_COMPONENTS.md §2 #11 列）。
+VALID_EMPTY_BADGE: Final[int] = 11
+
+
 def resolve_badge(
     *,
     state: str,
     miss_reason: str | None = None,
     numerator: int | None = None,
     denominator: int | None = None,
+    valid_empty: bool = False,
 ) -> int:
-    """狀態（＋缺值原因／分子分母）→ 徽章號 #1~#10。
+    """狀態（＋缺值原因／分子分母／有效空結果旗標）→ 徽章號 ~~#1~#10~~ #1~#11。
+
+    📌 **2026-09-26 客戶新增 #11（有意識的規格變更，⛔ 不是漏刪）**：
+    `valid_empty=True` ⇒ #11「▨ 無資料」。**只接受 `state="empty"`**；
+    其餘任何狀態帶這個旗標 → `ValueError`（⛔ 不讓 #11 擴散到別的態 —— 客戶裁示逐字：
+    真缺漏／還沒載入／未評估／可重試…一律維持原徽章）。
+    ⚠️ **誰可以傳 `True` 不由本函式決定**：那是登記制，登記處在
+    `src/ui/views/page_today.py::V2_VALID_EMPTY_PAIRS`（只列經逐張審過的 `(key, now)`）。
 
     `empty`／`na` 靠 `miss_reason` 分辨 #7 vs #8
     （UI_PAGE_TODAY.md ② 狀態覆蓋表 `empty`／`missing`／`na` 三列）。
@@ -533,6 +545,14 @@ def resolve_badge(
             f"未知的狀態 {state!r}：七態 SSOT 在 shared/ui_state.py，"
             "⛔ 不得為了畫得出來就給它一個近似的徽章"
         )
+
+    if valid_empty:
+        if state != "empty" or miss_reason is not None:
+            raise ValueError(
+                f"#11「有效的空結果」只給 `state='empty'` 且無缺值原因的卡，"
+                f"收到 state={state!r}、miss_reason={miss_reason!r} —— "
+                "⛔ 不得讓 #11 擴散到缺漏／不適用／未載入等其他態（客戶 2026-09-26 裁示）")
+        return VALID_EMPTY_BADGE
 
     if state == "partial":
         if numerator is None or denominator is None:
@@ -688,7 +708,7 @@ __all__ = [
     "HOLDINGS_BASIS", "HOLDINGS_TOP1_LABEL",
     "HOLDINGS_EQUAL_WEIGHT_DISCLOSURE",
     "MISS_CONTRACT_DRIFT", "MISS_NOT_APPLICABLE",
-    "tier_for_block", "blocks_of_layer", "resolve_badge",
+    "tier_for_block", "blocks_of_layer", "resolve_badge", "VALID_EMPTY_BADGE",
     "card_value_text", "card_level_text", "observation_miss_reason",
     "main_cta_state", "holdings_badge",
 ]

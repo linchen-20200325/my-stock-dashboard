@@ -17,6 +17,11 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Final, Mapping
 
+# ⚠️ 只 import **模組**、⛔ 不 import 常數名：`test_components` 守的是「`UI_EMPTY` 等常數
+#    ⛔ 不得在 `src/ui_v2/` 重新宣告」（`hasattr(components, "UI_EMPTY")` 必須為 False）。
+#    #11 的圖示與文字**直接讀** `UI_STATE_META[UI_EMPTY]`（見下方 #11 列），⛔ 不抄一份。
+from shared import ui_state as _ui_state
+
 
 def _frozen(mapping: dict) -> Mapping:
     return MappingProxyType(mapping)
@@ -144,9 +149,13 @@ def tier_for_layer(layer: int) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════
-# 2. 徽章（10 種）—— UI_COMPONENTS.md §2 徽章（10 種）
+# 2. 徽章（~~10 種~~ → 11 種）—— UI_COMPONENTS.md §2 徽章
+#    📌 **2026-09-26 有意識的規格變更，⛔ 不是漏刪；決策者：客戶。**
+#       舊標題「徽章（10 種）」保留在刪除線內供追溯；現行＝11 種（新增 #11「▨ 無資料」）。
+#       理由兩邊並陳見下方 `BADGES` 的註解與 UI_COMPONENTS.md §2 #11 列。
 # ══════════════════════════════════════════════════════════════════
-#: 10 種共用幾何（線框 `.bdg`，UI_COMPONENTS.md §2「幾何（線框 `.bdg`，10 種共用）」）。
+#: 共用幾何（線框 `.bdg`，UI_COMPONENTS.md §2「幾何（線框 `.bdg`，~~10 種~~ 全部共用）」）。
+#: #11 同樣沿用本幾何，⛔ 未新增任何幾何值。
 BADGE_BASE: Final[Mapping[str, object]] = _frozen({
     "display": "inline-flex",
     "gap_px": 4.0,
@@ -189,8 +198,21 @@ def _badge(n, name, state_const, miss_reason, bg, fg,
     })
 
 
-#: 徽章目錄，依 `n` 升冪。⛔ 恰 10 枚，不得新造第 11 種
-#: （UI_PAGE_TODAY.md ② 落差 2「⛔ 不得為了對齊線框鍵數而新造第 11 種徽章」）。
+#: 徽章目錄，依 `n` 升冪。
+#: ~~⛔ 恰 10 枚，不得新造第 11 種~~
+#: ~~（UI_PAGE_TODAY.md ② 落差 2「⛔ 不得為了對齊線框鍵數而新造第 11 種徽章」）。~~
+#: 📌 **2026-09-26 有意識的規格變更，⛔ 不是漏刪；決策者：客戶。現行：恰 11 枚。**
+#:   · **舊規則的理由仍然成立，⛔ 不是寫錯**：它防的是「為了對齊線框的**鍵數**就多造一顆」——
+#:     多一顆徽章＝多一種使用者要學的語彙，且很容易被拿來替一個說不清楚的狀態找地方放。
+#:   · **為什麼這次例外**（客戶 2026-09-26 裁示）：卡面文字寫「**這是一個有效的結果**」、
+#:     徽章卻印 #7「缺漏 · 可重跑」—— **同一張卡同時說兩件相反的話**；10 顆裡**沒有一顆**
+#:     能表示「算完了、結果真的是空的」（#8「不適用 · 重跑無效」語意也不對）。
+#:     ⇒ 這不是對齊鍵數，是**現有語彙說不出一句真話**。
+#:   · **#11 的射程（⛔ 不得擴張）**：**只**給「上游這一輪**成功算完**、結果**真的是 0／空**」的卡，
+#:     且**登記制** —— 只有 `src/ui/views/page_today.py::V2_VALID_EMPTY_PAIRS` 列出的
+#:     `(card.key, note.now)` 才畫 #11。真缺漏／還沒載入／未評估／未綁定／這輪沒讀／
+#:     契約漂移／可重試 —— **一律維持原徽章**。
+#:   · **⛔ 仍然不得再新造第 12 種**；舊規則的精神（不為對齊鍵數造徽章）照舊有效。
 BADGES: Final[tuple[Mapping[str, object], ...]] = (
     # UI_COMPONENTS.md §2 徽章表 #1 正常
     _badge(1, "正常", "UI_LIVE", None,
@@ -223,17 +245,34 @@ BADGES: Final[tuple[Mapping[str, object], ...]] = (
     #（2026-08-26 裁示），⛔ 不得併進 #8
     _badge(10, "只描述不判等級", "emits_level=False", None,
            "--sig-blue-bg", "--sig-blue", 1.0, "solid", "--sig-blue", "◆", "只描述，不判等級"),
+    # UI_COMPONENTS.md §2 徽章表 #11 有效的空結果（客戶 2026-09-26 新增）
+    # 🔴 **圖示與文字⛔ 不在這裡寫字面** —— 直接讀 L0 `UI_STATE_META[UI_EMPTY]`
+    #    （`("無資料", "▨", …)`），客戶裁示逐字「沿用既有 L0 chip」＝**同一個真相源，⛔ 不是抄一份**。
+    #    L0 哪天改字，這顆徽章跟著變；`tests/ui_v2/test_components.py` 釘兩邊相等。
+    # 灰系、1px solid `--rule-2`：與 #7／#8 同色系（三者都是「沒有值」），
+    #    **靠圖示＋文字分辨**（`▨ 無資料` vs `⚠︎ — 缺漏 · 可重跑` vs `N/A 不適用 · 重跑無效`），
+    #    ⛔ 不新增任何色 token（§2 硬規則「⛔ 不得只靠顏色」照舊）。
+    _badge(11, "有效的空結果", "UI_EMPTY", None,
+           "--sig-grey-bg", "--sig-grey", 1.0, "solid", "--rule-2",
+           _ui_state.UI_STATE_META[_ui_state.UI_EMPTY][1],
+           _ui_state.UI_STATE_META[_ui_state.UI_EMPTY][0]),
 )
 
 _BADGE_BY_N: Final[Mapping[int, Mapping[str, object]]] = _frozen({b["n"]: b for b in BADGES})
 
 
 def badge(n: int) -> Mapping[str, object]:
-    """取第 n 枚徽章；n 不在 1..10 → `KeyError`（⛔ 不回傳一個「差不多」的）。"""
+    """取第 n 枚徽章；n 不在 1..11 → `KeyError`（⛔ 不回傳一個「差不多」的）。
+
+    ~~n 不在 1..10~~ → 2026-09-26 客戶新增 #11（有意識的規格變更，⛔ 不是漏刪）。
+    """
     try:
         return _BADGE_BY_N[n]
     except KeyError:
-        raise KeyError(f"徽章只有 #1~#10，收到 #{n}；⛔ 不得新造第 11 種") from None
+        # ~~「徽章只有 #1~#10…⛔ 不得新造第 11 種」~~（2026-09-26 客戶新增 #11 後改寫）
+        raise KeyError(
+            f"徽章只有 #1~#{len(BADGES)}，收到 #{n}；"
+            f"⛔ 不得新造第 {len(BADGES) + 1} 種") from None
 
 
 # ══════════════════════════════════════════════════════════════════
