@@ -995,6 +995,11 @@ class StockReadout:
         name: 中文名（查無 → 空字串，**不拿代號頂替**）。
         price: 現價。`None` = 日線那一腿沒抓到。
         error: 取數本身拋出的例外 `repr(e)`；空字串 = 沒有錯誤。
+        health_error: L3 回報「財報體檢那一腿**抓取失敗**」的說明（三張財報任一沒拿到
+            FinMind 成功回應、或體檢拋例外）。空字串 = 沒有失敗 ——
+            ⚠️ `score_pct is None` 而本欄空 ＝ 真的算不出來（灰），有值 ＝ 抓取失敗（紅）。
+        price_error: L3 回報「日線（現價）那一腿**抓取失敗**」的說明。空字串 = 沒有失敗
+            （`price is None` 而本欄空 ＝ 查無資料，由估值卡照舊講「無股價」）。
     """
 
     requested: bool
@@ -1006,6 +1011,8 @@ class StockReadout:
     name: str = ""
     price: float | None = None
     error: str = ""
+    health_error: str = ""
+    price_error: str = ""
 
 
 def _num(value: Any) -> float | None:
@@ -1018,7 +1025,8 @@ def _num(value: Any) -> float | None:
         return None
 
 
-def _fetch_metrics(code: str, kind: str) -> tuple[Mapping[str, Any], str]:
+def _fetch_metrics(code: str, kind: str, *, failed: dict | None = None
+                   ) -> tuple[Mapping[str, Any], str]:
     """L3 逐檔指標 → `(metrics, 錯誤字串)`。失敗 → `({}, repr(e))`。
 
     **本頁全部的 L3 取數都經過這一支**（葉1 個股 / 葉1 ETF / 葉2 批次三處），
@@ -1026,10 +1034,13 @@ def _fetch_metrics(code: str, kind: str) -> tuple[Mapping[str, Any], str]:
     fail-loud 的（拿不到日線就 `raise`），對**個股**是 best-effort
     （各腿獨立 try，缺的填 `None`）—— 這個差異是 L3 自己的契約，
     本檔**不去抹平它**：抹平就等於替其中一邊宣稱一件它沒說的事。
+
+    failed：透傳 L3 `fetch_metrics(failed=)`（葉1 用；葉2 批次不傳 ＝ 行為一字不變）。
     """
     try:
         from src.services.dividend_station_service import fetch_metrics
-        _m = fetch_metrics(code, kind)
+        _m = (fetch_metrics(code, kind) if failed is None
+              else fetch_metrics(code, kind, failed=failed))
         return (_m if isinstance(_m, Mapping) else {}), ""
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_inspect] {code}（{kind}）指標取數失敗：{_e!r}")
@@ -1044,13 +1055,29 @@ def load_stock_readout(verdict: KindVerdict) -> StockReadout:
       (b) **L3 拋例外**（含 late import 失敗）→ `repr(e)` → 紅態。
       (c) **回來了但 `mj_score_pct` 是 `None`** → `empty`（灰）——
           那是 L3 的 best-effort 契約：財報那一腿沒抓到。**不是紅、也不是 0 分。**
+          ⚠️ 2026-09-26 更正：「財報那一腿沒抓到」只剩「查完了、真的沒有」這一種 ——
+          **抓取失敗**（FinMind 例外／非 200）自本日起由 L3 的 `failed=` 回報，走 (d)。
+      (d) **L3 回報財報那一腿抓取失敗** → `health_error` → 紅態（見下）。
     """
     _requested = bool(verdict.requested and verdict.is_stock)
     if not _requested:
         return StockReadout(requested=False)
-    _m, _err = _fetch_metrics(verdict.code, verdict.kind)
+    _failed: dict = {}
+    _m, _err = _fetch_metrics(verdict.code, verdict.kind, failed=_failed)
     if _err:
         return StockReadout(requested=True, error=_err)
+    from src.services.dividend_station_service import FAILED_PRICE, FAILED_STATEMENTS
+    _price_err = str(_failed.get(FAILED_PRICE) or "")
+    _health_err = str(_failed.get(FAILED_STATEMENTS) or "")
+    if _health_err:
+        # (d) **財報那一腿抓取失敗**（三張表任一沒拿到、或體檢拋例外）→ 紅態。
+        # ⚠️ 分數／等第／總結**一律不帶**：少了一張表時 L3 仍可能算出一個分數，
+        # 但那是少評了幾項之後的分數（缺的項目不計入，分數會往哪邊偏取決於缺了哪幾項）——
+        # 紅卡上不放一個建立在半份財報上的結論。
+        return StockReadout(
+            requested=True, name=str(_m.get("name") or ""),
+            price=_num(_m.get("current_price")),
+            health_error=_health_err, price_error=_price_err)
     _trend = _m.get("trend_verdict")
     return StockReadout(
         requested=True,
@@ -1060,7 +1087,8 @@ def load_stock_readout(verdict: KindVerdict) -> StockReadout:
         fail_items=tuple(str(_f) for _f in (_m.get("mj_fail_items") or ())),
         trend_verdict=_trend if isinstance(_trend, Mapping) else None,
         name=str(_m.get("name") or ""),
-        price=_num(_m.get("current_price")))
+        price=_num(_m.get("current_price")),
+        price_error=_price_err)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1192,6 +1220,8 @@ def load_profitability(verdict: KindVerdict) -> ProfitabilityReadout:
       (d) **某一格的 Status 是 `N/A`** → **只有那一格** `empty`，
           另外兩格照常 live —— 線框 `errCells` 的原文就是這個形狀
           （毛利率⚪ / 營業利益率 42.1% / 安全邊際⚪）。
+      (e) **L1 回報抓取失敗**（FinMind 例外／非 200）且落在損益表或整份財報 →
+          紅態（2026-09-26；原本與 (c) 同形 —— 錯誤 dict 寫的是「無此股票財報資料」）。
     """
     _requested = bool(verdict.requested and verdict.is_stock)
     if not _requested:
@@ -1204,9 +1234,11 @@ def load_profitability(verdict: KindVerdict) -> ProfitabilityReadout:
         print(f"[views/page_inspect] FinMind token 讀取失敗，改用 env fallback：{_e!r}")
         _token = ""
 
+    _fs_failed: dict = {}
     try:
-        from src.services.stock_grp_service import get_financial_statements
-        _fin = get_financial_statements(verdict.code, _token)
+        from src.services.stock_grp_service import (
+            DATASET_INCOME_STATEMENT, get_financial_statements)
+        _fin = get_financial_statements(verdict.code, _token, failed=_fs_failed)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_inspect] 財報取數失敗 → 獲利能力轉紅態：{_e!r}")
         return ProfitabilityReadout(
@@ -1214,6 +1246,20 @@ def load_profitability(verdict: KindVerdict) -> ProfitabilityReadout:
 
     _fin = _fin if isinstance(_fin, Mapping) else {}
     _upstream = str(_fin.get("error") or "")
+    if _fs_failed and (_upstream or DATASET_INCOME_STATEMENT in _fs_failed):
+        # (e) **抓取失敗**（FinMind 例外／非 200）而且它就是三格沒有值的原因 →
+        #     紅態。三格只吃損益表：損益表那一腿失敗，或整份回成錯誤 dict
+        #     （資產負債＋現金流都沒回來，L1 連損益表一起丟掉）才算；只有另外兩張表
+        #     失敗時三格的數字不受影響，照舊畫。
+        #     ⚠️ 這條路**不帶** `upstream_note`：錯誤 dict 的那句「FinMind 無此股票
+        #     財報資料…」正是把失敗講成「沒有」的那一句，放在紅卡上會自相矛盾。
+        #     L3 **回報**失敗而不是拋例外 → 動詞用「回報失敗」（同籌碼卡的判例）。
+        print(f"[views/page_inspect] 財報抓取失敗 → 獲利能力轉紅態：{_fs_failed!r}")
+        return ProfitabilityReadout(
+            requested=True,
+            error=_error_why(SRC_STATEMENTS,
+                             "；".join(str(_v) for _v in _fs_failed.values()),
+                             verb="回報失敗"))
     try:
         from src.services.financial_health_engine import analyze_financial_health
         _fh = analyze_financial_health("", verdict.code, dict(_fin))
@@ -1325,10 +1371,25 @@ def load_valuation(verdict: KindVerdict, stock: StockReadout
           三段都沒拿到，兩種可能都寫在卡上（§1 不猜）。
       (d) **有配息但沒有現價** → 同樣 `na`，L2 的 `msg` 會說是「無股價」——
           本檔把它原樣顯示，**不自己判是哪一種**。
+      (e) **個股那一輪 L3 拋例外、或回報現價那一腿抓取失敗**（`stock.error` /
+          `stock.price_error`）→ 紅態（2026-09-26）。⚠️ 紅路徑只涵蓋 L1 loader
+          **外層拋出**的暫時性失敗（`get_combined_data(strict=True)`）；斷網時多半
+          仍落 (d) 灰卡 —— 例如 yfinance 斷網回空 frame、FinMind 段內部吞錯，全斷網時
+          loader 回的是確定性負結果「查無資料」（並快取 1 小時），本層分不出來。
     """
     _requested = bool(verdict.requested and verdict.is_stock)
     if not _requested:
         return ValuationReadout(requested=False)
+
+    if stock.error or stock.price_error:
+        # (e) **現價那一腿抓取失敗**（2026-09-26）→ 紅態。原本 `price=None` 照樣往下送，
+        #     L2 回「無股價，…不適用」→ 灰 —— 把「抓不到」講成「這一檔不適用」。
+        #     「查無資料」（`price_error` 空）照舊走 (d)。缺一半輸入 ＝ 算不出位階，
+        #     配息那一腿不必再抓。
+        return ValuationReadout(
+            requested=True,
+            error=(_error_why(SRC_METRICS, stock.error) if stock.error
+                   else _error_why(SRC_METRICS, stock.price_error, verb="回報失敗")))
 
     try:
         from src.services.valuation_service import get_stock_dividends
@@ -1501,6 +1562,10 @@ class EtfReadout:
         sharpe / ann_return_3y_pct / inception_years: 其餘可用的中繼資料。
         error: 取數本身拋出的例外 `repr(e)`。**ETF 這一支是 fail-loud 的**：
             拿不到日線 L3 就 `raise`，所以這個欄位比個股那邊常出現。
+        premium_error / dividend_error / peer_error: L3 回報「**這一腿抓取失敗**」的
+            說明（`fetch_metrics(failed=)`）。空字串 = 沒有失敗 ——
+            ⚠️ 值是 `None` 而本欄空 ＝ 真的沒有（無 iNAV／沒配過息／同儕不足，灰）；
+            有值 ＝ 抓取失敗（**只有那一格**紅，另外兩格照常）。
     """
 
     requested: bool
@@ -1512,6 +1577,9 @@ class EtfReadout:
     ann_return_3y_pct: float | None = None
     inception_years: float | None = None
     error: str = ""
+    premium_error: str = ""
+    dividend_error: str = ""
+    peer_error: str = ""
 
 
 def load_etf_readout(verdict: KindVerdict) -> EtfReadout:
@@ -1523,13 +1591,18 @@ def load_etf_readout(verdict: KindVerdict) -> EtfReadout:
           線框 `errCells` 的原文就是這個形狀：折溢價🔴、配息🟢、同儕⬜ ——
           注意**三格不同時轉紅**，因為它們不是同一次取數的成敗。
       (c) **回來了但某一格是 `None`** → **只有那一格** `empty`。
+      (d) **L3 回報某一腿抓取失敗**（`fetch_metrics(failed=)`，2026-09-26）→
+          **只有那一格**紅（原本與 (c) 同形）。
     """
     _requested = bool(verdict.requested and verdict.is_etf)
     if not _requested:
         return EtfReadout(requested=False)
-    _m, _err = _fetch_metrics(verdict.code, verdict.kind)
+    _failed: dict = {}
+    _m, _err = _fetch_metrics(verdict.code, verdict.kind, failed=_failed)
     if _err:
         return EtfReadout(requested=True, error=_err)
+    from src.services.dividend_station_service import (
+        FAILED_DIVIDEND, FAILED_PEER, FAILED_PREMIUM)
     _peer = _m.get("peer_ranks")
     _quality = _m.get("etf_quality")
     return EtfReadout(
@@ -1540,7 +1613,10 @@ def load_etf_readout(verdict: KindVerdict) -> EtfReadout:
         quality=_quality if isinstance(_quality, Mapping) else None,
         sharpe=_num(_m.get("sharpe")),
         ann_return_3y_pct=_num(_m.get("ann_return_3y_pct")),
-        inception_years=_num(_m.get("inception_years")))
+        inception_years=_num(_m.get("inception_years")),
+        premium_error=str(_failed.get(FAILED_PREMIUM) or ""),
+        dividend_error=str(_failed.get(FAILED_DIVIDEND) or ""),
+        peer_error=str(_failed.get(FAILED_PEER) or ""))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1830,7 +1906,7 @@ def build_health_card(stock: StockReadout) -> _Built:
     """
     _state = classify_ui_state(
         requested=stock.requested,
-        error=stock.error or None,
+        error=(stock.error or stock.health_error) or None,
         has_value=(stock.score_pct is not None))
     _facts: list[tuple[str, str]] = []
     if stock.name:
@@ -1856,8 +1932,12 @@ def build_health_card(stock: StockReadout) -> _Built:
         _note = Note(now=SINGLE_IDLE_NOW, why=SINGLE_IDLE_WHY,
                      where=SINGLE_IDLE_WHERE)
     elif _state == UI_FAILED:
+        # L3 **拋例外**（`error`）與 L3 **回報**財報那一腿抓取失敗（`health_error`）
+        # 動詞不同 —— 後者沒有例外可找（`_error_why` 的 docstring）。
         _note = Note(now=HEALTH_FAILED_NOW,
-                     why=_error_why(SRC_METRICS, stock.error),
+                     why=(_error_why(SRC_METRICS, stock.error) if stock.error
+                          else _error_why(SRC_METRICS, stock.health_error,
+                                          verb="回報失敗")),
                      where=("先確認代碼與網路／proxy；細節在"
                             f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
     else:   # UI_EMPTY
@@ -2127,16 +2207,18 @@ def build_profit_cards(prof: ProfitabilityReadout) -> tuple[_Built, ...]:
 def _etf_card(key: str, label: str, etf: EtfReadout, *,
               has_value: bool, value: str, signal: str,
               empty_now: str, empty_why: str, empty_where: str,
-              facts: Sequence[tuple[str, str]] = ()) -> _Built:
+              facts: Sequence[tuple[str, str]] = (), leg_error: str = "") -> _Built:
     """ETF 三格共用的建構器。**三格各自判態**（線框 errCells 的形狀）。
 
     ⚠️ 共用的只有「怎麼判態、怎麼組卡」；每一格的 label / value / 缺值理由
     **全部由呼叫端給** —— 折溢價缺與配息缺是兩件完全不同的事，
     共用一句「資料缺漏」等於對其中一邊說了謊。
+
+    `leg_error`：L3 回報**只有這一格那一腿**抓取失敗（2026-09-26）→ 只有這一格紅。
     """
     _state = classify_ui_state(
         requested=etf.requested,
-        error=etf.error or None,
+        error=(etf.error or leg_error) or None,
         has_value=has_value)
     if _state == UI_LIVE:
         return (Card(key=key, label=label, state=UI_LIVE, value=value),
@@ -2147,9 +2229,14 @@ def _etf_card(key: str, label: str, etf: EtfReadout, *,
     elif _state == UI_FAILED:
         _note = Note(
             now=ETF_FAILED_NOW_TEMPLATE.format(label=label),
-            why=_error_why(SRC_METRICS, etf.error),
-            where=("這一支 L3 對 ETF 是 fail-loud 的（拿不到日線就直接拋）—— "
-                   "先確認代碼與網路／proxy；細節在"
+            why=(_error_why(SRC_METRICS, etf.error) if etf.error
+                 else _error_why(SRC_METRICS, leg_error, verb="回報失敗")),
+            # 「fail-loud（拿不到日線就直接拋）」那段前綴只在 L3 **真的拋了**（`etf.error`）
+            # 時才成立；只有單腿回報失敗時日線有抓到、L3 沒拋 —— 前綴與 why 的「回報失敗」
+            # 自相矛盾，故只刪不加：剩下的就是健康／估值卡既有 where 的逐字句子。
+            where=(("" if (leg_error and not etf.error) else
+                    "這一支 L3 對 ETF 是 fail-loud 的（拿不到日線就直接拋）—— ")
+                   + "先確認代碼與網路／proxy；細節在"
                    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
     else:   # UI_EMPTY
         _note = Note(now=empty_now, why=empty_why, where=empty_where)
@@ -2173,7 +2260,8 @@ def build_premium_card(etf: EtfReadout) -> _Built:
                    "**這是「沒有淨值」，不是「折溢價為 0」**；"
                    "本站不拿最後一次公告的淨值硬戳今天的價格算一個假溢價"),
         empty_where=("等當日官方 iNAV 公告；規模小或剛掛牌的 ETF 常態如此。"
-                     "重按不會讓淨值提早出現"))
+                     "重按不會讓淨值提早出現"),
+        leg_error=etf.premium_error)
 
 
 def build_dividend_card(etf: EtfReadout) -> _Built:
@@ -2189,7 +2277,8 @@ def build_dividend_card(etf: EtfReadout) -> _Built:
                    "因為 0% 是「不配息」這個結論"),
         empty_where=("到公開資訊觀測站或發行商網站對一次配息公告；"
                      "若確定有配過息卻查不到，到"
-                     f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}看來源狀態"))
+                     f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}看來源狀態"),
+        leg_error=etf.dividend_error)
 
 
 def build_peer_card(etf: EtfReadout) -> _Built:
@@ -2218,7 +2307,8 @@ def build_peer_card(etf: EtfReadout) -> _Built:
                    "**不會拿一個中位數頂替**"),
         empty_where=("冷門或剛掛牌的類別常態如此；重按通常不會改變。"
                      "細節在"
-                     f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+                     f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"),
+        leg_error=etf.peer_error)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -2449,14 +2539,16 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("inspect.unknown", UNKNOWN_NOW, _V2_UNKNOWN)]
     # ── 第二層：個股三張判決卡 ─────────────────────────────────────
     + [_v2_rows_for("inspect.stock.health", HEALTH_FAILED_NOW, (
-           None, _v2_raised(SRC_METRICS), _V2_CHECK_NET)),
+           None, (_v2_raised(SRC_METRICS), _v2_raised(SRC_METRICS, "回報失敗")),
+           _V2_CHECK_NET)),
        _v2_rows_for("inspect.stock.health", HEALTH_EMPTY_NOW, (
            None, "多半是這一檔的季報還沒進 FinMind、或該季欄位缺得太多",
            # QA F3：「看…備援鏈」⛔ 不得沒有「到哪裡看」，條件「若持續如此」也一起留。
            "新上市或剛換季的標的等資料補齊；若持續如此，到" + _V2_DATA_HEALTH + "看"
            + V2_EXCERPT_GAP + "備援鏈是否可用")),
        _v2_rows_for("inspect.stock.valuation", VALUATION_FAILED_NOW, (
-           None, (_v2_raised(SRC_DIVIDENDS), _v2_raised(SRC_357)), _V2_CHECK_NET)),
+           None, (_v2_raised(SRC_DIVIDENDS), _v2_raised(SRC_357), _v2_raised(SRC_METRICS),
+                  _v2_raised(SRC_METRICS, "回報失敗")), _V2_CHECK_NET)),
        _v2_rows_for("inspect.stock.valuation", VALUATION_EMPTY_NOW, (
            None,
            # 候選依序（QA F2：「為什麼」⛔ 不得丟掉**原因**）：
@@ -2488,7 +2580,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            + "新上市或長期停牌的標的也可能整段沒有法人資料"))]
     # ── 第二層：ETF 三張判決卡 ─────────────────────────────────────
     + [_v2_rows_for(_k, ETF_FAILED_NOW_TEMPLATE.format(label=_l), (
-           None, _v2_raised(SRC_METRICS), _V2_CHECK_NET)) for _k, _l in _V2_ETF_LABELS]
+           None, (_v2_raised(SRC_METRICS), _v2_raised(SRC_METRICS, "回報失敗")),
+           _V2_CHECK_NET)) for _k, _l in _V2_ETF_LABELS]
     + [_v2_rows_for("inspect.etf.premium", PREMIUM_EMPTY_NOW, (
            # QA F3：「（或三道守門員判定它不可信）」是第二個原因，⛔ 不得略。
            None, "上游拿不到同日的官方 iNAV（或三道守門員判定它不可信）" + V2_EXCERPT_GAP
@@ -2502,7 +2595,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "冷門或剛掛牌的類別常態如此；重按通常不會改變。細節在" + _V2_DATA_HEALTH))]
     # ── 第三層：💰 獲利能力三格 ────────────────────────────────────
     + [_v2_rows_for(_k, PROFIT_FAILED_NOW_TEMPLATE.format(label=_l), (
-           None, (_v2_raised(SRC_STATEMENTS), _v2_raised(SRC_HEALTH)),
+           None, (_v2_raised(SRC_STATEMENTS), _v2_raised(SRC_HEALTH),
+                  _v2_raised(SRC_STATEMENTS, "回報失敗")),
            "先確認代碼與 FinMind 額度；細節在" + _V2_DATA_HEALTH)) for _k, _l in _V2_PROFIT_LABELS]
     + [_v2_rows_for(_k, PROFIT_EMPTY_NOW_TEMPLATE.format(label=_l), (
            None, ("三張財報表裡，損益表這一輪沒有回來",

@@ -492,13 +492,15 @@ def _latest_vix_close() -> float | None:
     return None
 
 
-def _fetch_stock_metrics(ticker: str) -> dict:
+def _fetch_stock_metrics(ticker: str, *, failed: dict | None = None) -> dict:
     """個股汰換指標：財報體檢(no-AI grade) + KD 狀態 + 現價（供市值/損益%）。
 
     §1 best-effort：日線/KD、財報、名稱三者各自獨立 try,任一失敗只 log + 標資料不足,
     **不 raise、不炸整表**。財報走 L1 `fetch_financial_statements` → L3 no-AI
     `analyze_financial_health` + `no_ai_overall_verdict`；KD 走日 OHLC → L2
     `analyze_kd_state` + `kd_cross_state`。⚠️ 需部署端網路（沙箱代理擋 TW/FinMind）。
+
+    failed：見 `fetch_metrics` 的同名參數（None ＝ 既有行為一字不變，回傳 dict 也一樣）。
     """
     code = str(ticker or "").strip().upper()
     for _suf in (".TWO", ".TW"):
@@ -515,7 +517,10 @@ def _fetch_stock_metrics(ticker: str) -> dict:
     #    Yahoo 單源、無 FinMind fallback → 雲端 IP 被擋就整列 error)。回小寫 OHLC df,直接餵 KD。
     try:
         from src.data.core.data_loader import StockDataLoader
-        _df_stk, _err_stk, _ = StockDataLoader().get_combined_data(code, 360, True)
+        # failed 模式：暫時性失敗照樣拋（strict）—— 否則它與「查無資料」同形，分不開。
+        _df_stk, _err_stk, _ = (
+            StockDataLoader().get_combined_data(code, 360, True) if failed is None
+            else StockDataLoader().get_combined_data(code, 360, True, strict=True))
         if (_df_stk is not None and not getattr(_df_stk, "empty", True)
                 and {"close", "high", "low"}.issubset(_df_stk.columns)):
             _ohlc = _df_stk[["close", "high", "low"]].dropna()
@@ -532,6 +537,8 @@ def _fetch_stock_metrics(ticker: str) -> dict:
             print(f"[dividend_station] {ticker} 日線/KD 無資料: {_err_stk}")
     except Exception as _e:  # noqa: BLE001 — 日線/KD 失敗不致命,標資料不足
         print(f"[dividend_station] {ticker} 日線/KD 失敗: {type(_e).__name__}: {_e}")
+        if failed is not None and m["current_price"] is None:   # 現價已到手＝只有 KD 壞
+            failed[FAILED_PRICE] = f"{type(_e).__name__}: {_e}"
 
     # 2) 財報體檢（no-AI grade）
     try:
@@ -545,7 +552,12 @@ def _fetch_stock_metrics(ticker: str) -> dict:
         from src.data.core.financial_statements_fetcher import fetch_financial_statements
         from src.services.financial_health_engine import (
             analyze_financial_health, no_ai_overall_verdict)
-        _fin = fetch_financial_statements(code, _tok)
+        _fs_failed: dict = {}
+        _fin = (fetch_financial_statements(code, _tok) if failed is None
+                else fetch_financial_statements(code, _tok, failed=_fs_failed))
+        if _fs_failed and failed is not None:
+            # 三張表任一沒拿到 FinMind 成功回應 → 體檢分數（整張或少評幾項）都不可信。
+            failed[FAILED_STATEMENTS] = "；".join(str(_v) for _v in _fs_failed.values())
         if isinstance(_fin, dict) and not _fin.get("error"):
             _fh = analyze_financial_health("", code, _fin)   # api_key="" → 純 no-AI 路徑
             _ov = no_ai_overall_verdict(_fin, _fh)
@@ -573,6 +585,8 @@ def _fetch_stock_metrics(ticker: str) -> dict:
             print(f"[dividend_station] {ticker} 財報缺: {_err}")
     except Exception as _e:  # noqa: BLE001 — 財報失敗 → 財報體檢標資料不足,不炸整表
         print(f"[dividend_station] {ticker} 財報健檢失敗: {type(_e).__name__}: {_e}")
+        if failed is not None:
+            failed[FAILED_STATEMENTS] = f"{type(_e).__name__}: {_e}"
 
     # 3) 名稱（get_stock_name 查無回代號本身 → 視為未知留空）
     try:
@@ -586,7 +600,16 @@ def _fetch_stock_metrics(ticker: str) -> dict:
     return m
 
 
-def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
+#: `fetch_metrics(..., failed=)` 寫入的鍵（哪一腿抓取失敗）。**只有失敗才寫。**
+FAILED_PRICE = "price"            # 個股：日線（現價）那一腿
+FAILED_STATEMENTS = "statements"  # 個股：財報體檢那一腿（三張表任一沒拿到 / 例外）
+FAILED_DIVIDEND = "dividend"      # ETF：配息序列
+FAILED_PREMIUM = "premium"        # ETF：折溢價那一腿拋例外
+FAILED_PEER = "peer"              # ETF：同儕排名
+
+
+def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF, *,
+                  failed: dict | None = None) -> dict:
     """逐檔抓 L2 所需指標（best-effort;缺的回 None → 該項標資料不足）。
 
     日線走 L1 `fetch_etf_price`（proxy-aware、auto_adjust；**本質是 yfinance 歷史,個股
@@ -595,9 +618,17 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
     ⚠️ 需部署端網路（沙箱代理擋）。日線為必要,無則 raise（該列標抓取失敗,§1 誠實不假裝）。
     同儕排名（3-3-3 ③）Phase 2 未接 → peer_ranks=None。
     **個股（asset_kind=stock）改走 `_fetch_stock_metrics`（財報體檢 + KD）,不套 235/3-3-3。**
+
+    failed（v2「🔬 查一檔」用；預設 None ＝ 既有行為一字不變，回傳 dict 也一樣）：
+      傳一個 dict 進來 → **抓取失敗**的那幾腿以 `FAILED_*` 為鍵寫進去（值＝失敗說明）；
+      **真的沒有**（沒配過息、沒有 iNAV、同儕不足、查無資料）不寫。回傳值不變 ——
+      否則「抓不到」與「沒有」在回傳值裡長得一模一樣（都是 None），呼叫端分不開。
+      ⚠️ 折溢價只接得到**本層**的例外：`calc_premium_discount` 自己吞掉的例外與
+      「所有路徑都沒給」回的是同一個 dict，本層分不開，照舊不寫。
     """
     if asset_kind == T.KIND_STOCK:
-        return _fetch_stock_metrics(ticker)
+        return (_fetch_stock_metrics(ticker) if failed is None
+                else _fetch_stock_metrics(ticker, failed=failed))
 
     import pandas as pd
     from src.compute.etf import normalize_etf_ticker
@@ -662,13 +693,21 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
     # 2) 年化配息率
     try:
         from src.data.etf.etf_fetch import fetch_etf_dividends
-        _div = pd.Series(fetch_etf_dividends(_yf))
+        _div_raw = fetch_etf_dividends(_yf)
+        if failed is not None:
+            from src.data.etf.etf_fetch import DIVIDENDS_FETCH_FAILED_ATTR
+            _div_fail = getattr(_div_raw, "attrs", {}).get(DIVIDENDS_FETCH_FAILED_ATTR)
+            if _div_fail:     # L1 的失敗旗標（PR #694）；空序列而無旗標 ＝ 真的沒配息
+                failed[FAILED_DIVIDEND] = str(_div_fail)
+        _div = pd.Series(_div_raw)
         if len(_div):
             _div.index = pd.to_datetime(_div.index)
             _ttm = float(_div[_div.index >= (_as_of - pd.Timedelta(days=365))].sum())
             m["annual_yield_pct"] = ds.annual_yield_pct(_ttm, _cur)
     except Exception as _e:  # noqa: BLE001 — 配息缺 → 健檢 A 標資料不足,不炸
         print(f"[dividend_station] {ticker} 配息缺: {type(_e).__name__}")
+        if failed is not None and m.get("annual_yield_pct") is None:
+            failed[FAILED_DIVIDEND] = f"{type(_e).__name__}: {_e}"
 
     # 3) 折溢價 —— 僅 ETF。A2(v19.198):改走 calc_premium_discount SSOT(官方 iNAV 同日
     #    inner-join + 3 守門員 G1/G2/G3 + sanity 上限),與 ETF 單/多檔頁同源。原本直取
@@ -684,6 +723,8 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
                 m["premium_pct"] = float(_pd_res["premium_pct"])
         except Exception as _e:  # noqa: BLE001
             print(f"[dividend_station] {ticker} 折溢價缺: {type(_e).__name__}")
+            if failed is not None and m.get("premium_pct") is None:
+                failed[FAILED_PREMIUM] = f"{type(_e).__name__}: {_e}"
 
     # B4(v19.198):ETF 品質評等（內扣費用率 / AUM 清算風險 / Beta / 殖利率 CV）—— display-only,
     #   對「存股 ETF 定期健檢」補上長期內扣成本 + 清算存續維度（原本整組省略）。§1 抓不到 stars=None。
@@ -696,11 +737,14 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF) -> dict:
 
     # 同儕排名（3-3-3 ③）：僅 ETF 接 compute_etf_peer_ranking（個股 3-3-3 不適用 → None）。
     #   §1 best-effort：同儕不足 / 抓取失敗 → None → 該項顯示「❔ 待資料」不硬判。
-    m["peer_ranks"] = _fetch_peer_ranks(_yf) if asset_kind == T.KIND_ETF else None
+    m["peer_ranks"] = ((_fetch_peer_ranks(_yf) if failed is None
+                        else _fetch_peer_ranks(_yf, failed=failed))
+                       if asset_kind == T.KIND_ETF else None)
     return m
 
 
-def _fetch_peer_ranks(ticker: str) -> dict[int, float] | None:
+def _fetch_peer_ranks(ticker: str, *, failed: dict | None = None
+                      ) -> dict[int, float] | None:
     """接 L2 `compute_etf_peer_ranking` → 3-3-3 kernel 期望的 {月數: 分位(0=最強)}。
 
     轉換（§4.1 語意對齊）：
@@ -708,14 +752,25 @@ def _fetch_peer_ranks(ticker: str) -> dict[int, float] | None:
     - percentile（0~100，贏過同儕的%，**越高越強**）→ 分位 `(100−percentile)/100`
       （0=最強、1=最弱；kernel 的「前 1/3」= 分位 ≤ 1/3 = percentile ≥ 66.7）。
     §1：`_err`（同儕不足/抓取失敗）或某視窗缺 → 該月不填 → kernel peer_ok 維持不可判定。
+
+    failed（見 `fetch_metrics`）：例外 → 寫 `FAILED_PEER`。頂層 `_err` 只在**同儕本來就有
+    ≥ `T.PEER_MIN_GROUP_SIZE` 檔**時才算抓取失敗（L2 的 `_err` 有三種來源：同儕不足門檻 →
+    同儕不足（真的沒有）；
+    同儕夠但批次價格抓空 → 「yfinance 抓不到價格」；批次處理拋例外 → 例外類名。
+    後兩者都是抓取／計算失敗）。以回傳的 `peers` 檔數分，不比對 `_err` 字面。
     """
     try:
         from src.compute.etf.etf_calc import compute_etf_peer_ranking
         _pr = compute_etf_peer_ranking(ticker)
     except Exception as _e:  # noqa: BLE001 — 同儕算不出不擋整檔健檢
         print(f"[dividend_station] {ticker} 同儕排名失敗: {type(_e).__name__}: {_e}")
+        if failed is not None:
+            failed[FAILED_PEER] = f"{type(_e).__name__}: {_e}"
         return None
     if not isinstance(_pr, dict) or _pr.get("_err"):
+        if (failed is not None and isinstance(_pr, dict)
+                and len(_pr.get("peers") or ()) >= T.PEER_MIN_GROUP_SIZE):
+            failed[FAILED_PEER] = str(_pr.get("_err"))
         return None
     _day_to_month = {63: 3, 126: 6, 252: 12}
     _out: dict[int, float] = {}
