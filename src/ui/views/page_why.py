@@ -1918,8 +1918,14 @@ def load_qa(req: QaRequest) -> QaReadout:
       (b) **沒有金鑰** → 紅（線框 err：「🔴 AI 問答未啟用 / 未偵測到 API 金鑰」）。
       (c) **L3 拋例外**（含 late import 失敗）→ 紅。
       (d) **回來了但 `ok=False`** → 紅，並把上游的訊息原樣帶出來。
+          含 **Gemini 回了空的、但它是被擋 / 格式壞掉的**（`finishReason` 非 `STOP`、
+          `promptFeedback.blockReason`、缺 candidates、型別不對）—— 靠
+          `run_agent(fail_on_blocked_reply=True)` 由 L3 回 `ok=False` ＋ 上游原文
+          （2026-09-26 批次 5：原本 L3 `_parts()` 把它們吞成空字串，落到 (e) 被畫成「有效結果」）。
       (e) **回來了、`ok=True`、但沒有內容** → 灰的 `empty`：
           那是**有效結果**（模型真的沒話說），不是故障。
+          （經上一條過濾後，只剩「格式完整、自然結束、就是沒有文字」這一種會走到這裡；
+          含 `STOP` 但沒有 `content`／`parts` —— Gemini REST 把空欄位整個省略，那不是故障。）
     """
     if not req.asked:
         return QaReadout(asked=False)
@@ -1933,7 +1939,8 @@ def load_qa(req: QaRequest) -> QaReadout:
         return QaReadout(asked=True, key_missing=True, error=NO_KEY_ERROR)
     try:
         from src.services.ai_qa_service import run_agent
-        _res = run_agent(req.question, list(req.history), api_key=_key)
+        _res = run_agent(req.question, list(req.history), api_key=_key,
+                         fail_on_blocked_reply=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_why] AI 問答失敗 → 轉紅態：{_e!r}")
         return QaReadout(asked=True, error=repr(_e))
