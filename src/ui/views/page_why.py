@@ -260,7 +260,8 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 from typing import Any, Iterable, Mapping, Sequence
 
 import streamlit as st
@@ -313,6 +314,25 @@ from src.ui.views._ui_kit import (
     render_card_isolated,
     section_header,
 )
+# ── v2 卡面（同「🔬 查一檔」頁、「💼 我的持股」頁 `57b5993`、「🔍 找標的」頁 `8f3f869` 的作法；
+#    客戶 2026-09-25 裁示 1~4）──
+# 契約層：密度階經 `src/ui_v2/blocks.py` 登記處查（本頁的卡登記在
+# `src/ui_v2/page_why.py`），⛔ 本檔不指定任何一階。
+# 狀態語彙翻譯表 / 去 Markdown 記號 / 三要素列標籤 / 樣式表模式 / 徽章號 **沿用「🚦 今天」頁那一份**
+# （⛔ 不在本檔抄第二份 —— 各頁的卡面要是同一種卡面）。
+# 📌 import 半徑：多帶進 `src.ui.views.page_today` ＋ `src.ui_v2.*`（同其他三頁），
+#    ⛔ 不多 import 任何 `src.services.*` / `src.compute.*` / `src.data.*`。
+from src.ui.views.page_today import (
+    V2_CSS_MODE,
+    V2_GUIDE_FACT_KEY,
+    V2_NOW_FACT_KEY,
+    V2_STATE_VOCAB,
+    V2_WHY_FACT_KEY,
+    v2_card_badge_n,
+    v2_plain,
+)
+from src.ui_v2 import markup as v2_markup
+from src.ui_v2 import page_why as v2_why
 
 # ══════════════════════════════════════════════════════════════════
 # session key（本頁自有前綴 `p05`，不與既有 `_diag_adv_on`、
@@ -682,6 +702,36 @@ ENGINEER_CAPTION: str = (
     "勾一次全部載入、取消勾就全部收起來 —— 線框 F7／DECISIONS #7 實測後"
     "**撤回**了「包成 form」的提案：這裡只有一顆 checkbox，包 form 省不到任何一次 rerun。")
 
+#: 以下 `*_NOW` 原本寫在各 `build_*` 函式體／`L0CardSpec(...)` 內，2026-09-26 上提成常數
+#: （**文字一字未改**，同「🔬 查一檔」頁／「💼 我的持股」頁 `57b5993` 的作法）—— 讓 `V2_SHORT_ROWS`
+#: 以常數本身當鍵，⛔ 不再手抄一份字串。帶 `{label}` 的是原本的 f-string，`{label}` 由呼叫端帶
+#: （輸出逐字相同）；`SOURCE_UNKNOWN_NOW_HEAD` 是原本 f-string 的**固定開頭**，
+#: 後面接的 `（L0 回 …）` 仍由呼叫端照原樣組。
+L0_FAILED_NOW_TEMPLATE: str = "**{label}讀不出來**"
+SOURCE_IDLE_NOW: str = "**未檢查**"
+SOURCE_UNKNOWN_NOW_HEAD: str = "**這一盞的狀態本頁看不懂**"
+SOURCE_FAILED_NOW: str = "**最後一次真實抓取失敗了**"
+EMPTY_REGISTRY_NOW: str = "**這個 session 還沒有任何 fetcher 登錄**"
+FINMIND_QUOTA_NOW: str = "**額度這件事本頁看不到**"
+SPEC_FLAG_UNWIRED_NOW: str = "**這一盞刻意沒有接**"
+SPEC_FLAG_DEGRADED_NOW: str = "**這一盞會亮，但別照門檻讀**"
+LIGHTS_EMPTY_NOW: str = "**門檻表讀不出來**"
+HEALTH6_NOW: str = "**六個因子各佔幾分，本頁還說不出來**"
+SCALES_DEGRADED_NOW: str = "**兩套刻度目前有一側已失準，本頁不提供跨頁比較**"
+SCALES_EMPTY_NOW: str = "**兩套刻度的定義讀不出來**"
+LEGACY_NOW: str = "**既有的完整教學內容還沒有搬到這一頁**"
+ENGINEER_IDLE_NOW: str = "**進階診斷未載入**"
+ENGINEER_FAILED_NOW: str = "**進階診斷本身讀不出來**"
+ENGINEER_REGISTRY_NOW: str = "**全站來源清單本頁讀不到**"
+ENGINEER_RECONCILE_NOW: str = "**雙演算法對帳本頁跑不了**"
+ENGINEER_API_ROOT_NOW: str = "**API 根因診斷本頁不做**"
+ENGINEER_RAW_NOW: str = "**原始資料表本頁看不到**"
+ENGINEER_CALIBRATION_NOW: str = "**門檻校準本頁跑不了**"
+QA_IDLE_NOW: str = "**尚未提問**"
+QA_NO_KEY_NOW: str = "**AI 問答未啟用**"
+QA_FAILED_NOW: str = "**這一輪問答失敗了**"
+QA_EMPTY_NOW: str = "**這一輪沒有回答內容**"
+
 # ── 未接線卡的共同語彙 ──────────────────────────────────────────────
 #: 未接線一律沒有使用者可執行的出口（沿用 `tab_today.NO_EXIT_MARKER` SSOT）。
 NO_EXIT_PREFIX: str = f"{NO_EXIT_MARKER} —— 這是待接線項，不是你操作的問題；"
@@ -788,7 +838,7 @@ def build_l0_card(spec: L0CardSpec) -> _Built:
                      value=spec.value),
                 tuple(spec.facts), "")
     if _state == UI_FAILED and spec.error:
-        _note = Note(now=f"**{spec.label}讀不出來**",
+        _note = Note(now=L0_FAILED_NOW_TEMPLATE.format(label=spec.label),
                      why=_error_why(SRC_SPECS, spec.error),
                      where=(f"{NO_EXIT_MARKER} —— 這是規格表本身的問題，"
                             "請把上面那行訊息回報給維護者"))
@@ -974,17 +1024,17 @@ def build_source_card(probe: SourceProbe) -> _Built:
                      state=UI_LIVE, value=_when),
                 tuple(_facts), "")
     if _state == UI_IDLE:
-        _note = Note(now="**未檢查**", why=NEVER_RUN_WHY, where=NEVER_RUN_WHERE)
+        _note = Note(now=SOURCE_IDLE_NOW, why=NEVER_RUN_WHY, where=NEVER_RUN_WHERE)
     elif probe.unknown_status:
         _note = Note(
-            now=f"**這一盞的狀態本頁看不懂**（L0 回 {probe.unknown_status!r}）",
+            now=f"{SOURCE_UNKNOWN_NOW_HEAD}（L0 回 {probe.unknown_status!r}）",
             why=_clean_reason(probe.error),
             where=(f"{NO_EXIT_MARKER} —— 這是 L0 登錄表與本頁之間的契約漂移，"
                    "請把上面那行訊息回報給維護者；"
                    "在確認之前本頁**不會**把它畫成正常"))
     else:
         _note = Note(
-            now="**最後一次真實抓取失敗了**",
+            now=SOURCE_FAILED_NOW,
             why=_error_why(f"{probe.name}（{SRC_MONITOR}）", probe.error),
             where=("這是上游來源的問題，不是你操作的問題 —— "
                    "可以到會用到它的那一頁重按一次更新；"
@@ -999,7 +1049,7 @@ def build_empty_registry_card() -> _Built:
     return build_l0_card(L0CardSpec(
         key="why.source.none", label="登錄表裡目前一支 fetcher 都沒有",
         has_value=False, reason=MISS_NO_INPUT,
-        now="**這個 session 還沒有任何 fetcher 登錄**",
+        now=EMPTY_REGISTRY_NOW,
         why=("`@monitored` 是在**模組被 import 的時候**自我登錄的。"
              "本頁自己**不 import 任何 L1 模組**（L5 不得直呼 L1），"
              "所以如果你是直接打開這一頁、還沒去過任何會取數的分頁，"
@@ -1026,7 +1076,7 @@ UNMEASURED_SOURCES: tuple[L0CardSpec, ...] = (
     L0CardSpec(
         key="why.source.unmeasured.finmind_quota", label="FinMind（API 額度）",
         wired=False,
-        now="**額度這件事本頁看不到**",
+        now=FINMIND_QUOTA_NOW,
         why=(UNMEASURED_WHY +
              "。而且額度**比另外兩個具名來源更卡一層**：它是 FinMind **帳號層級**"
              "的資訊，不在任何一支 fetcher 的回傳裡 —— FE-20 已經幫 FRED 與 TWSE "
@@ -1400,8 +1450,8 @@ def build_spec_flag_card(row: SpecRow) -> _Built:
     這張卡會自己消失 —— 本檔沒有寫死任何一盞。
     """
     _reason = row.unwired_reason if not row.wired else row.degraded_reason
-    _now = ("**這一盞刻意沒有接**" if not row.wired
-            else "**這一盞會亮，但別照門檻讀**")
+    _now = (SPEC_FLAG_UNWIRED_NOW if not row.wired
+            else SPEC_FLAG_DEGRADED_NOW)
     return build_l0_card(L0CardSpec(
         key=f"why.spec.{row.key}", label=f"{row.label}（{row.family_text}）",
         wired=row.wired, discriminative=row.discriminative,
@@ -1440,7 +1490,7 @@ def build_lights_card(scan: SpecScan) -> _Built:
         has_value=scan.has_rows,
         value=f"{_n_macro} 盞總經燈 ＋ {_n_hold} 盞持股燈",
         reason=MISS_NO_INPUT,
-        now="**門檻表讀不出來**",
+        now=LIGHTS_EMPTY_NOW,
         why="L0 規格表這一輪沒有回傳任何一盞燈的定義",
         where=(f"{NO_EXIT_MARKER} —— 這是規格表本身的問題，"
                "請回報給維護者"),
@@ -1488,7 +1538,7 @@ def build_health6_card() -> _Built:
     return build_l0_card(L0CardSpec(
         key="why.edu.health6", label="健康評分六因子",
         wired=False,
-        now="**六個因子各佔幾分，本頁還說不出來**",
+        now=HEALTH6_NOW,
         why=HEALTH6_WHY,
         where=HEALTH6_WHERE,
         facts=(("接線後的樣子", "六個因子逐項列出名稱與配分，合計 100"),
@@ -1583,8 +1633,8 @@ def build_scale_card(disclosure: ScaleDisclosure) -> _Built:
         discriminative=(not disclosure.degraded),
         value="兩套刻度並存 —— 不可互比",
         reason=MISS_NO_INPUT,
-        now=("**兩套刻度目前有一側已失準，本頁不提供跨頁比較**"
-             if disclosure.degraded else "**兩套刻度的定義讀不出來**"),
+        now=(SCALES_DEGRADED_NOW
+             if disclosure.degraded else SCALES_EMPTY_NOW),
         why=("其中一側的門檻來源在 L0 規格表標了 `discriminative=False`"
              "（燈會亮、也有等級，只是**別照門檻讀**）—— "
              "逐盞原因見上方的 facts 與下方對照表，那段文字是 L0 自己寫的，"
@@ -1602,7 +1652,7 @@ def build_legacy_edu_card() -> _Built:
     return build_l0_card(L0CardSpec(
         key="why.edu.legacy", label="完整策略邏輯說明書（既有 📚 教學）",
         wired=False,
-        now="**既有的完整教學內容還沒有搬到這一頁**",
+        now=LEGACY_NOW,
         why=("線框 DECISIONS #9 裁決「**留，原樣搬到「📖 憑什麼 › 教學」**」，"
              "但那是一份 1,582 行的既有靜態內容，搬遷會動到既有分頁與 caller —— "
              "屬 `CLAUDE.md §8.4` step 4 的**範圍**問題，"
@@ -1683,11 +1733,11 @@ def build_engineer_card(req: EngineerRequest, scan: SourceScan) -> _Built:
                      value=f"已載入 · 登錄表有 {_scan.count} 支 fetcher"),
                 _facts, "")
     if _state == UI_IDLE:
-        _note = Note(now="**進階診斷未載入**",
+        _note = Note(now=ENGINEER_IDLE_NOW,
                      why="六個面板各自會組大量表格，預設不跑",
                      where=ENGINEER_WHERE)
     else:
-        _note = Note(now="**進階診斷本身讀不出來**",
+        _note = Note(now=ENGINEER_FAILED_NOW,
                      why=_error_why(SRC_MONITOR, _scan.error),
                      where=(f"{NO_EXIT_MARKER} —— 這是 L0 登錄表的問題，"
                             "不是某一個資料來源壞掉；"
@@ -1696,13 +1746,34 @@ def build_engineer_card(req: EngineerRequest, scan: SourceScan) -> _Built:
                  state=_state, note=_note), _facts, "")
 
 
+#: 使用者版燈牆上那張「登錄表本身讀不出來」紅卡的卡 key（QA 2026-09-26 F1／F2）。
+#: ⚠️ 這張卡的**內容**就是 `build_engineer_card()` 的 failed 那一張（標題／三要素／facts／#6 紅
+#: 一字不差），但它畫在**常駐的燈牆**上 —— 若沿用 `why.engineer.gate`：
+#:   (1) 勾了工程師版時同一輪會有兩張 `id="fold-why-engineer-gate"` 的卡 → 工程師那張的摺疊打不開；
+#:   (2) 它會被歸進工程師版那一層（n4 → t4），而規格 `UI_PAGE_WHY.md` ② 的燈牆是 n3 → t3。
+#: ⇒ 改掛在燈牆容器 `why.source.wall` 的動態前綴底下（`v2_why.block_for_card()` 歸到燈牆 → t3），
+#:   摺疊 id 自成一個。名字裡刻意帶一個 `.`：fetcher 名是 Python 識別字、不含 `.` ⇒ 不會與
+#:   任何一支 `why.source.<fetcher 名>` 撞名（何況這張卡出現時登錄表讀不出來，牆上沒有任何 fetcher 卡）。
+WALL_REGISTRY_FAILED_KEY: str = "why.source.registry.unreadable"
+
+
+def build_wall_registry_failed_card(scan: SourceScan) -> _Built:
+    """燈牆上「L0 登錄表本身讀不出來」那一張 —— **與工程師版 failed 卡同一份內容，只換卡 key**。
+
+    只在 `scan.readable` 為假時呼叫（`_render_user_health_wall`）。內容一字不重寫：
+    直接取 `build_engineer_card(EngineerRequest(opened=True), scan)` 的結果換掉 `key`。
+    """
+    _card, _facts, _signal = build_engineer_card(EngineerRequest(opened=True), scan)
+    return (replace(_card, key=WALL_REGISTRY_FAILED_KEY), _facts, _signal)
+
+
 #: 工程師版六個面板裡**未接線的五個**（線框 live 原文列的六項，扣掉 Fetcher 監控）。
 #: ⚠️ 每一項的「去哪補」都不同 —— 它們卡住的位置不一樣。
 ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
     L0CardSpec(
         key="why.engineer.registry", label="資料源清單",
         wired=False,
-        now="**全站來源清單本頁讀不到**",
+        now=ENGINEER_REGISTRY_NOW,
         why=("清單的 SSOT 住在 L1 `src/data/core/data_registry.py`，"
              "現行的診斷面板是直接讀 `st.session_state['data_registry']`（由總經頁寫入）。"
              "本頁是 L5，既不得直呼 L1，也不想依賴「你得先去過另一頁」"),
@@ -1714,7 +1785,7 @@ ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
     L0CardSpec(
         key="why.engineer.reconcile", label="雙演算法對帳（§4.3）",
         wired=False,
-        now="**雙演算法對帳本頁跑不了**",
+        now=ENGINEER_RECONCILE_NOW,
         why=("對帳的純函式在 L2（`src/compute/risk/reconcile.py` 的"
              "`compute_health_score_arithmetic` / `_min_of_factors`），"
              "但 `src/services/` **沒有**任何一支把它包起來，"
@@ -1727,7 +1798,7 @@ ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
     L0CardSpec(
         key="why.engineer.api_root", label="API 根因診斷",
         wired=False,
-        now="**API 根因診斷本頁不做**",
+        now=ENGINEER_API_ROOT_NOW,
         why=("現行實作（`src/ui/pages/api_diagnostic.py`）會**當場對外送出請求**"
              "來比對「走 proxy vs 直連」。那是 L5 直接打外部 API，"
              "正是 `CLAUDE.md §8.2` 明文禁止的；把它 import 進來"
@@ -1740,7 +1811,7 @@ ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
     L0CardSpec(
         key="why.engineer.raw", label="原始資料表",
         wired=False,
-        now="**原始資料表本頁看不到**",
+        now=ENGINEER_RAW_NOW,
         why=("原始表要的是「這一輪各頁抓回來的 DataFrame 本體」，"
              "而那些只存在於各頁自己的 `st.session_state`。"
              "本頁去翻別頁的 session key 等於跟那些頁面**用約定俗成的字串耦合** —— "
@@ -1752,7 +1823,7 @@ ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
     L0CardSpec(
         key="why.engineer.calibration", label="門檻校準",
         wired=False,
-        now="**門檻校準本頁跑不了**",
+        now=ENGINEER_CALIBRATION_NOW,
         why=("校準是一支 `scripts/` 下的離線工作（季度 cron ＋ PR 審閱後才寫入），"
              "現行面板是從 UI 直接 import `scripts/`。"
              "本頁不從 UI 觸發離線腳本 —— 那會讓一次點擊變成一次可能改到門檻的動作"),
@@ -1909,18 +1980,18 @@ def build_qa_card(qa: QaReadout) -> _Built:
                      value="已回答（內容在上方對話裡）"),
                 tuple(_facts), "")
     if _state == UI_IDLE:
-        _note = Note(now="**尚未提問**", why=QA_IDLE_WHY, where=QA_IDLE_WHERE)
+        _note = Note(now=QA_IDLE_NOW, why=QA_IDLE_WHY, where=QA_IDLE_WHERE)
     elif qa.key_missing:
-        _note = Note(now="**AI 問答未啟用**",
+        _note = Note(now=QA_NO_KEY_NOW,
                      why=NO_KEY_ERROR, where=NO_KEY_WHERE)
     elif _state == UI_FAILED:
-        _note = Note(now="**這一輪問答失敗了**",
+        _note = Note(now=QA_FAILED_NOW,
                      why=_error_why(SRC_QA_AGENT, qa.error),
                      where=("可以換個問法再送一次；"
                             "若持續失敗，請把上面那行訊息回報給維護者。"
                             "**其他分頁的功能完全不受影響**"))
     else:
-        _note = Note(now="**這一輪沒有回答內容**",
+        _note = Note(now=QA_EMPTY_NOW,
                      why=("上游沒有回報錯誤，但也沒有給任何文字 —— "
                           "這是一個**有效結果**（模型真的沒話說），不是故障"),
                      where="換一個更具體的問法再送一次（例如指名一檔代號）")
@@ -1996,6 +2067,398 @@ def _append_history(role: str, content: str) -> None:
 
 
 # ══════════════════════════════════════════════════════════════════
+# v2 卡面的短句表（同「🔬 查一檔」頁／「💼 我的持股」頁 `V2_SHORT_ROWS`；客戶 2026-09-25 裁示 2 ＋ K1）
+# ══════════════════════════════════════════════════════════════════
+#: 短句裡「中間省略了原文一段」的記號。**唯一准許出現、而原文裡沒有的字元。**
+V2_EXCERPT_GAP: str = "…"
+
+#: 每一則 `Note` → 卡面上的**三列短句**（現在 / 為什麼 / 去哪補）。
+#:
+#: 🔴 **K1（客戶裁示：新造白話 ＝ §1 捏造）—— 短句一律是「原文摘錄」，⛔ 不是改寫**：
+#:    每一格都是**該則 `Note` 原文（去 Markdown 記號後）裡連續的一段**；
+#:    要跳過中間一段時以 `V2_EXCERPT_GAP` 隔開，**每一段都必須依序出現在原文裡**。
+#:    這一條**在執行期逐格驗**（`_v2_pick_excerpt()`）：對不上 → `KeyError` → 紅卡，
+#:    ⛔ 不會把一句原文裡沒有的話畫上卡面（測試另外對全部可產生的 Note 窮舉驗一次）。
+#: 🔴 **⛔ 一個字都沒刪**：三段完整原文（含上游例外訊息）放在卡底「▸ 詳細」摺疊區。
+#:
+#: 鍵 ＝ `(登記的卡 key, Note.now)` —— 登記的卡 key 由 `v2_why.block_for_card(card.key)` 給：
+#: 固定卡就是它自己；**動態卡**（每支 fetcher 一張 `why.source.<名>`、每盞被標記的燈一張
+#: `why.spec.<key>`）歸到它的規格容器（`why.source.wall` / `why.spec.flags`）—— 同一容器裡
+#: 每張卡的三要素原文結構相同，只差名字。
+#: 一格可以給**多個候選摘錄**（tuple），取**第一個**能在原文裡依序找到的候選。
+#: 查不到鍵 / 沒有一個候選對得上 → `KeyError` → `_render_one_v2()` 轉成**看得見的紅卡**。
+#:
+#: ⚠️ **據實揭露：`why.spec.flags` 的「為什麼」候選是 L0 原因欄（`unwired_reason` /
+#:    `degraded_reason`）原文的開頭**（同「🔬 查一檔」頁估值卡把 L2 的原句列為候選的先例）。
+#:    L0 改寫那段話、或新標記一盞燈時，這一格會**對不上 → 紅卡**（⛔ 不會靜默退回長句或新寫一句）；
+#:    `tests/test_p05_why_v2_cards.py` 以**當下的 L0 規格表**實跑窮舉，對不上就 CI 紅燈。
+_V2_NO_EXIT_UNWIRED: str = v2_plain(NO_EXIT_PREFIX).rstrip("；")
+_V2_SPEC_REPORT: str = f"{NO_EXIT_MARKER} —— 這是規格表本身的問題，請把上面那行訊息回報給維護者"
+
+
+#: 上游例外的「為什麼」：`{出處}拋出例外：{repr(e)}` 摘成「{出處的前綴}…拋出例外」
+#: （出處全名與例外原文在摺疊區）。出處前綴取該 `SRC_*` 常數本身的開頭（同查一檔頁）。
+def _v2_raised(source: str) -> str:
+    return v2_plain(source).split("（", 1)[0] + V2_EXCERPT_GAP + "拋出例外"
+
+
+#: 兩套刻度卡的「去哪補」（degraded / empty 同一句原文）。QA F4：**條件 ＋ 去處 ＋ 限定**
+#: （要看實際數字 → 兩頁各看各的 → ⛔ 不要放在一起比）⛔ 不得略；「就在這張卡下面，可以逐項對照」
+#: 是這張卡本身的位置說明，46 字放不下時讓位（原文在摺疊區）。
+_V2_SCALES_WHERE: str = ("要看某一檔的實際數字，到「🔬 查一檔」或「💼 我的持股」各看各的，"
+                         "不要把兩邊的數字放在一起比")
+#: 「L0 登錄表本身讀不出來」（工程師版那張 ＋ 燈牆上那張，同一份原文）。
+#: QA F4：升級路徑「請…回報給維護者」⛔ 不得略；「不是某一個資料來源壞掉」是區分兩種紅的關鍵，也留。
+_V2_REGISTRY_FAILED: tuple[object, object, object] = (
+    None, _v2_raised(SRC_MONITOR),
+    NO_EXIT_MARKER + V2_EXCERPT_GAP + "L0 登錄表的問題，不是某一個資料來源壞掉；請" + V2_EXCERPT_GAP
+    + "回報給維護者")
+
+
+#: 動態 `now`（原文後面接一段執行期才知道的字）→ 以**固定開頭**當鍵。
+#: 只收 `SOURCE_UNKNOWN_NOW_HEAD`：`build_source_card()` 組的是
+#: `f"{SOURCE_UNKNOWN_NOW_HEAD}（L0 回 {…!r}）"`。
+V2_SHORT_ROW_HEADS: tuple[tuple[str, str], ...] = (
+    (SOURCE_UNKNOWN_NOW_HEAD, "（L0 回 "),
+)
+
+_V2_UNWIRED_PANELS: tuple[tuple[str, str, str], ...] = (
+    ("why.engineer.registry", ENGINEER_REGISTRY_NOW,
+     # QA nit：「既…也…」⛔ 不得只剩前半句（第二個原因「不想依賴先去過另一頁」也留）。
+     "清單的 SSOT 住在 L1" + V2_EXCERPT_GAP + "本頁是 L5，既不得直呼 L1，也不想依賴「你得先去過另一頁」"),
+    ("why.engineer.reconcile", ENGINEER_RECONCILE_NOW,
+     # QA nit：「沒有任何一支」的主詞（src/services/）⛔ 不得略。
+     "對帳的純函式在 L2" + V2_EXCERPT_GAP + "但 src/services/ 沒有任何一支把它包起來"),
+    ("why.engineer.api_root", ENGINEER_API_ROOT_NOW,
+     # QA F4 同類：本頁**為什麼不做**（L5 直接打外部 API ＝ §8.2 明文禁止）⛔ 不得只剩「它會做什麼」。
+     "會當場對外送出請求" + V2_EXCERPT_GAP + "L5 直接打外部 API，正是 CLAUDE.md §8.2 明文禁止的"),
+    ("why.engineer.raw", ENGINEER_RAW_NOW,
+     # QA F4 同類：耦合的**後果**（對方改一個 key 這裡就靜默變空）⛔ 不得略。
+     "本頁去翻別頁的 session key" + V2_EXCERPT_GAP + "對方改一個 key，這裡就會靜默變空"),
+    ("why.engineer.calibration", ENGINEER_CALIBRATION_NOW,
+     "本頁不從 UI 觸發離線腳本" + V2_EXCERPT_GAP + "那會讓一次點擊變成一次可能改到門檻的動作"),
+)
+
+
+def _v2_rows_for(key: str, now: str, rows: tuple[object, object, object]
+                 ) -> tuple[tuple[str, str], tuple[object, object, object]]:
+    """`now` 摘錄為 `None` ⇒ 取 `now` 原文全句（`now` 本身都很短）。"""
+    return (key, now), ((v2_plain(now) if rows[0] is None else rows[0]),
+                        rows[1], rows[2])
+
+
+V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
+    # ── 葉1 教學：四張說明卡 ────────────────────────────────────────
+    [_v2_rows_for(_k, L0_FAILED_NOW_TEMPLATE.format(label=_l), (
+        None, _v2_raised(SRC_SPECS), _V2_SPEC_REPORT))
+     for _k, _l in (("why.edu.lights", "紅綠燈怎麼判 · 各門檻的出處"),
+                    ("why.edu.scales", "同一個名詞，兩套刻度"))]
+    + [_v2_rows_for("why.edu.lights", LIGHTS_EMPTY_NOW, (
+           None, "L0 規格表這一輪沒有回傳任何一盞燈的定義",
+           NO_EXIT_MARKER + " —— 這是規格表本身的問題，請回報給維護者")),
+       _v2_rows_for("why.edu.health6", HEALTH6_NOW, (
+           None, "因子名與配分沒有任何一份是可讀的資料結構", _V2_NO_EXIT_UNWIRED)),
+       _v2_rows_for("why.edu.scales", SCALES_DEGRADED_NOW, (
+           # QA F4：「逐盞原因見…」是**去處**（原因寫在哪），⛔ 不得略。
+           None, "其中一側" + V2_EXCERPT_GAP + "燈會亮、也有等級，只是別照門檻讀" + V2_EXCERPT_GAP
+           + "逐盞原因見上方的 facts 與下方對照表",
+           _V2_SCALES_WHERE)),
+       _v2_rows_for("why.edu.scales", SCALES_EMPTY_NOW, (
+           None, "L0 規格表這一輪沒有回傳可用的燈號定義", _V2_SCALES_WHERE)),
+       _v2_rows_for("why.edu.legacy", LEGACY_NOW, (
+           None, "搬遷會動到既有分頁與 caller" + V2_EXCERPT_GAP + "本批（只新增這一個檔）刻意不夾帶",
+           "這一項有出口：既有的 📚 教學分頁沒有下架，現在就可以照舊使用"))]
+    # ── 葉2 使用者版：燈牆（每支 fetcher 一張）＋ 空登錄表 ＋ 量不到的來源 ＋ L0 標記 ──
+    + [_v2_rows_for("why.source.wall", SOURCE_IDLE_NOW, (
+           # QA F4：「快取命中點不亮這一盞」是限定條件（別頁拿快取回答時它仍是未檢查），⛔ 不得略。
+           None, "這一支 fetcher 這個 session 還沒有真的對外抓過" + V2_EXCERPT_GAP
+           + "快取命中點不亮這一盞",
+           "到會用到它的那一頁按更新／載入，讓它真的跑一次；跑完" + V2_EXCERPT_GAP + "就會看到時間")),
+       _v2_rows_for("why.source.wall", SOURCE_FAILED_NOW, (
+           None, "拋出例外",
+           # QA F4：升級路徑「若持續失敗請…回報給維護者」⛔ 不得略（重按不是唯一的一步）。
+           "上游來源的問題，不是你操作的問題" + V2_EXCERPT_GAP
+           + "到會用到它的那一頁重按一次更新；若持續失敗請" + V2_EXCERPT_GAP + "回報給維護者")),
+       _v2_rows_for("why.source.wall", SOURCE_UNKNOWN_NOW_HEAD, (
+           v2_plain(SOURCE_UNKNOWN_NOW_HEAD),
+           # 兩種原文各自的原因：不認得的狀態值 ／ 這一列不是 Mapping（QA F4 同類：⛔ 只剩結論沒有原因）。
+           ("L0 登錄表回了本頁不認得的狀態" + V2_EXCERPT_GAP + "本頁一律不把它畫成正常",
+            "這一列不是 Mapping" + V2_EXCERPT_GAP + "本頁讀不出它的狀態"),
+           # QA F4：「請…回報給維護者」⛔ 不得略（只剩「契約漂移」使用者不知道下一步）。
+           NO_EXIT_MARKER + " —— 這是 L0 登錄表與本頁之間的契約漂移，請" + V2_EXCERPT_GAP
+           + "回報給維護者")),
+       _v2_rows_for("why.source.none", EMPTY_REGISTRY_NOW, (
+           # QA F4 同類：「正常」的**條件**（直接打開這一頁、還沒去過會取數的分頁）⛔ 不得略。
+           None, "如果你是直接打開這一頁、還沒去過任何會取數的分頁，登錄表就是空的 —— 這是正常的，不是壞掉",
+           "先去任何一個會抓資料的分頁載入一次，再回到"
+           + v2_plain(DATA_HEALTH_WHERE))),
+       _v2_rows_for("why.source.unmeasured.finmind_quota", FINMIND_QUOTA_NOW, (
+           None, "它是 FinMind 帳號層級的資訊，不在任何一支 fetcher 的回傳裡",
+           _V2_NO_EXIT_UNWIRED)),
+       _v2_rows_for("why.spec.flags", SPEC_FLAG_UNWIRED_NOW, (
+           None, ("FinMind inst net 單位未確認（股 / 千股 / 億元）",),
+           NO_EXIT_MARKER + " —— 這是規格層面的已知限制，不是這一輪抓壞了，重按幾次都一樣")),
+       _v2_rows_for("why.spec.flags", SPEC_FLAG_DEGRADED_NOW, (
+           # QA F4：每盞各自的**原因／去處**⛔ 不得略 —— 融資：固定 3,400 億門檻 vs 長大了的市場；
+           # 財報趨勢：真要看趨勢該去的那一區。候選是 L0 原因欄原文的逐段摘錄（見本表開頭的據實揭露）；
+           # L0 改寫 → 對不上 → 紅卡（⛔ 不退回只剩症狀、沒有原因的那一句）。
+           # QA nit：「幾乎」⛔ 不得略（少了它卡面會說成「每天都紅」，比原文更強）；
+           # 46 字放不下時讓位的是「超過 3,400 億就算過熱」外面那對括號（原文在摺疊區）。
+           None, ("幾乎天天紅，但不代表天天危險" + V2_EXCERPT_GAP + "固定金額" + V2_EXCERPT_GAP
+                  + "超過 3,400 億就算過熱" + V2_EXCERPT_GAP + "台股整體規模長大了不少",
+                  "這格只比較最近兩季，看不出趨勢" + V2_EXCERPT_GAP
+                  + "真要看趨勢請到 🏆 個股組合的「📊 財報趨勢×轉機」區塊"),
+           NO_EXIT_MARKER + " —— 這是規格層面的已知限制，不是這一輪抓壞了，重按幾次都一樣"))]
+    # ── 葉2 工程師版：整段的狀態 ＋ 五個未接線面板 ─────────────────────
+    + [_v2_rows_for("why.engineer.gate", ENGINEER_IDLE_NOW, (
+           None, "六個面板各自會組大量表格，預設不跑",
+           # QA F4：勾選的代價「（較耗時，部分項目會實際打外部 API）」⛔ 不得略。
+           "展開「🔧 進階診斷" + V2_EXCERPT_GAP
+           + "」→ 勾「載入進階診斷（較耗時，部分項目會實際打外部 API）」")),
+       _v2_rows_for("why.engineer.gate", ENGINEER_FAILED_NOW, _V2_REGISTRY_FAILED),
+       # 燈牆上同一張內容的紅卡（卡 key 在燈牆容器底下，見 `WALL_REGISTRY_FAILED_KEY`）。
+       _v2_rows_for("why.source.wall", ENGINEER_FAILED_NOW, _V2_REGISTRY_FAILED)]
+    + [_v2_rows_for(_k, _now, (None, _why, _V2_NO_EXIT_UNWIRED))
+       for _k, _now, _why in _V2_UNWIRED_PANELS]
+    # ── 葉3 AI 問答 ───────────────────────────────────────────────
+    + [_v2_rows_for("why.qa", QA_IDLE_NOW, (
+           None, "AI 只根據本站已經載入的資料作答，不自行上網查",
+           "直接在下方輸入問題並送出，送出本身就是啟動")),
+       _v2_rows_for("why.qa", QA_NO_KEY_NOW, (
+           None, v2_plain(NO_KEY_ERROR),
+           # QA F4：金鑰的**來處**（部署端提供、環境變數名）⛔ 不得略。46 字放不下整句 ＋「沒有出口」
+           # 標記 ⇒ 略過括號裡的 `st.secrets 或`（原文在摺疊區），條件＋來處＋出口標記三者都留。
+           "金鑰目前由部署端提供（" + V2_EXCERPT_GAP + "環境變數的 GEMINI_API_KEY）；" + NO_EXIT_MARKER)),
+       _v2_rows_for("why.qa", QA_FAILED_NOW, (
+           None, _v2_raised(SRC_QA_AGENT),
+           "可以換個問法再送一次；若持續失敗，請把上面那行訊息回報給維護者")),
+       _v2_rows_for("why.qa", QA_EMPTY_NOW, (
+           None, "上游沒有回報錯誤，但也沒有給任何文字" + V2_EXCERPT_GAP + "不是故障",
+           "換一個更具體的問法再送一次（例如指名一檔代號）"))]
+)
+
+
+def _v2_pick_excerpt(spec: object, full: str, *, what: str) -> str:
+    """一格短句規格 → 實際上卡面的那一段。**逐段驗「原文裡依序真的有這幾段」。**
+
+    `spec` 是一段摘錄（`str`）或多個候選（tuple，取第一個對得上的）。
+    ⛔ 一個都對不上 → `KeyError`（§1 ＋ K1：⛔ 不把一句原文裡沒有的話畫上卡面，
+    ⛔ 也不偷偷退回長句 —— 由 `_render_one_v2()` 轉成看得見的紅卡）。
+    """
+    _alts = (spec,) if isinstance(spec, str) else tuple(spec)   # type: ignore[arg-type]
+    for _alt in _alts:
+        _pos, _ok = 0, True
+        for _piece in str(_alt).split(V2_EXCERPT_GAP):
+            _at = full.find(_piece, _pos) if _piece else -1
+            if _at < 0:
+                _ok = False
+                break
+            _pos = _at + len(_piece)
+        if _ok:
+            return str(_alt)
+    raise KeyError(
+        f"{what} 的短句不是原文摘錄（候選 {_alts!r} 在原文裡找不到）—— "
+        "`V2_SHORT_ROWS` 與 Note 原文漂開了；⛔ 不得改成新寫的白話（K1）。")
+
+
+def v2_short_rows_key(card: Card) -> tuple[str, str]:
+    """`card` → `V2_SHORT_ROWS` 的鍵。先查精確的 `(登記 key, now)`，再查 `V2_SHORT_ROW_HEADS`。
+
+    查不到 → `KeyError`（⛔ 不猜一列）。
+    """
+    _block = v2_why.block_for_card(card.key)
+    _now = card.note.now if card.note is not None else ""
+    if (_block, _now) in V2_SHORT_ROWS:
+        return (_block, _now)
+    for _head, _sep in V2_SHORT_ROW_HEADS:
+        if _now.startswith(_head + _sep) and (_block, _head) in V2_SHORT_ROWS:
+            return (_block, _head)
+    raise KeyError(
+        f"卡 {card.key!r} 的這則說明沒有登記短句（現在＝{v2_plain(_now)!r}）"
+        " —— 新增一則 `Note` 時**必須**同步補一列 `V2_SHORT_ROWS`。")
+
+
+def v2_short_rows(card: Card) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str], ...]]:
+    """一則 `Note` →（卡面三列短句, 摺疊區三列完整原文）。同查一檔頁同名函式的行為。
+
+    · 沒有 `Note`（live 且沒出事）→ `((), ())`。
+    · 有 `Note` → 查 `V2_SHORT_ROWS`；查不到 / 摘錄對不上原文 → `KeyError`。
+    · 完整原文三列沿用**同一組標籤**，放進「▸ 詳細」摺疊區。**一個字都沒刪。**
+    """
+    _note = card.note
+    if _note is None:
+        return (), ()
+    _spec = V2_SHORT_ROWS[v2_short_rows_key(card)]
+    _full = ((V2_NOW_FACT_KEY, v2_plain(_note.now)),
+             (V2_WHY_FACT_KEY, v2_plain(_note.why)),
+             (V2_GUIDE_FACT_KEY, v2_plain(_note.where)))
+    _short = tuple(
+        (_label, _v2_pick_excerpt(_s, _text, what=f"{card.key} 的「{_label}」"))
+        for _s, (_label, _text) in zip(_spec, _full))
+    return _short, _full
+
+
+# ── 卡面 fact 列（同查一檔頁／我的持股頁 QA 2026-09-25 四輪的結論：標籤疊在值上方）──────
+#: 卡面值裡「沒有斷點的 ASCII 連續段」超過這個長度、含英文字母或底線、而且不含數字，就以 `V2_EXCERPT_GAP` 略過。
+#: ⚠️ 據實揭露：這個數字是版面挑的**排版參數**（與查一檔頁、我的持股頁同值），⛔ 不是規格值、⛔ 不是門檻。
+V2_FACE_TOKEN_MAX: int = 12
+
+_V2_TOKEN_RE = re.compile(r"[\x21-\x7e]{%d,}" % (V2_FACE_TOKEN_MAX + 1))
+
+
+def _v2_face_value(value: str) -> str:
+    """卡面值：沒有斷點、含英文字母或底線、不含數字的長 ASCII 段以 `V2_EXCERPT_GAP` 略過（其餘一字不動；原文在摺疊區）。
+
+    數字、千分位、小數點、%、正負號**永遠不略**（同我的持股頁 QA 第 2 輪）。
+    ⚠️ **判準是「整段只要含一個數字就不略」**（同查一檔頁 QA F5 的修法）：黏著識別字的門檻值
+    （`why.spec.margin` 的「值從哪來」＝ `SSOT:MARGIN_BALANCE_OVERHEAT(3400)+MARGIN_BALANCE_WARN(2500)`）
+    也含英文字母 —— 只看「有沒有字母」會把整段連同 3400／2500 吃成「…」。
+    寧可讓一段長識別字換行（樣式表准許任意處換行），⛔ 不可讓一個數字從卡面消失。
+    """
+    _out = _V2_TOKEN_RE.sub(
+        lambda _m: (V2_EXCERPT_GAP
+                    if re.search(r"[A-Za-z_]", _m.group(0)) and not re.search(r"\d", _m.group(0))
+                    else _m.group(0)),
+        value)
+    while V2_EXCERPT_GAP * 2 in _out:
+        _out = _out.replace(V2_EXCERPT_GAP * 2, V2_EXCERPT_GAP)
+    return _out
+
+
+#: 摺疊開關 `id` 能直接由卡 key 洗出來的字元範圍。超出這個範圍的 key（例：L0 登錄表日後出現
+#: 中文 fetcher 名）若直接洗，不同的名字會洗成同一個 id（`fold_dom_id` 把非 `[a-z0-9]` 一律換成 `-`）
+#: ⇒ 點一張開另一張。那種 key 改以它的 UTF-8 hex 組 id（決定性，rerun 不變）。
+_V2_FOLD_SAFE_RE = re.compile(r"[a-z0-9._]+")
+
+
+def v2_fold_id(card: Card) -> str:
+    """摺疊開關 `id` ＝ `markup.fold_dom_id(card.key)` ⇒ `fold-why-edu-lights` 這樣。
+
+    本頁的卡 key 都以 `why.` 開頭 ⇒ id 一律 `fold-why-*`，⛔ 不與其他頁撞名；
+    由 key 決定 ⇒ rerun 展開狀態不掉。動態卡 key 帶了洗不乾淨的字元時見 `_V2_FOLD_SAFE_RE`。
+    """
+    if _V2_FOLD_SAFE_RE.fullmatch(card.key):
+        return v2_markup.fold_dom_id(card.key)
+    return v2_markup.fold_dom_id(
+        f"{v2_why.block_for_card(card.key)}.{card.key.encode('utf-8').hex()}")
+
+
+def v2_card_html(card: Card, facts: Sequence[tuple[str, str]] = (),
+                 signal_text: str = "") -> str:
+    """一張本頁的 `Card` → v2 卡面 HTML。**所有文字都由 `card_html()` escape。**
+
+    與查一檔頁／我的持股頁同名函式**同一套組法**：
+    · 卡面 fact 列 ← 三列短句**排在最前**，其後是既有的 `facts`（原樣、只拿掉 Markdown 記號）。
+    · 「▸ 詳細」摺疊區：① `Note` 三段完整原文；② 卡面上被摘過或會被契約層截斷的 fact 的完整值。
+      摺疊區**不截斷**（`fold_truncate=False`）。沒有東西要摺 ⇒ 整段不渲染。
+    · `signal_text`：本頁全部是空字串（見 `_Built` 的註解），照舊掛到判決槽 `level=`（空 ⇒ 不畫）。
+    """
+    _v2_state, _reason = V2_STATE_VOCAB[card.state]   # 未知狀態 → KeyError（⛔ 不兜底）
+    _badge_n = v2_card_badge_n(card)   # 各頁共用（#11 登記制在 page_today；本頁 0 筆登記）
+    _short, _full = v2_short_rows(card)
+    _plain_facts = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts)
+    _face_facts = tuple((_k, _v2_face_value(_v)) for _k, _v in _plain_facts)
+    _long = tuple(_r for _r, _f in zip(_plain_facts, _face_facts)
+                  if _r != _f or len(_r[1]) > v2_markup.FACT_VALUE_MAX_CHARS)
+    _folded = tuple(_full) + _long
+    return v2_markup.card_html(
+        block=v2_why.block_for_card(card.key),
+        state=_v2_state,
+        title=v2_plain(card.label),
+        value=(v2_plain(card.value) or None),
+        level=(v2_plain(signal_text) or None),
+        badge_n=_badge_n,
+        facts=tuple(_short) + _face_facts,
+        folded_facts=_folded,
+        fold_id=(v2_fold_id(card) if _folded else None),
+        fold_truncate=False,
+    )
+
+
+#: v2 卡面產不出來時，例外的出處（同查一檔頁／我的持股頁）。
+SRC_V2_MARKUP: str = "L5 `src/ui_v2/markup`（v2 卡面標記層：`page_css` / `card_html`）"
+
+#: 本頁 v2 卡外層的 class（`_render_one_v2()` 包一層 `<div>`）。**樣式只掛在它底下** ⇒
+#: 其他頁一條規則都沒變；⛔ 不用 `:has()`、⛔ 不改 `markup.page_css()`。
+V2_WHY_CARD_CLASS: str = "p05-v2"
+
+#: 本頁卡面＋摺疊區的 fact 列：**標籤一行、值在下一行**，值准許任意處換行。
+#: 與我的持股頁 `V2_HOLD_CARD_CSS`、查一檔頁 `V2_INSPECT_CARD_CSS` 同三條規則、只換外層 class。
+#: 零顏色、零字級、零 px、零數字。
+V2_WHY_CARD_CSS: str = (
+    f'.{V2_WHY_CARD_CLASS} .blk-fact{{display:block}}'
+    f'.{V2_WHY_CARD_CLASS} .blk-fact-k{{display:block;white-space:normal}}'
+    f'.{V2_WHY_CARD_CLASS} .blk-fact-v{{display:block;overflow-wrap:anywhere}}')
+
+#: v2 卡面的修復指路（渲染層的問題，使用者沒有出口）—— 與 `_render_one()` 舊路的 where 同一句。
+_V2_RENDER_WHERE: str = ("這是渲染層的問題，不是你操作的問題 —— "
+                         f"{NO_EXIT_MARKER}；請把上面那行訊息回報給維護者")
+
+
+def _inject_v2_css() -> None:
+    """每一輪 script run 開頭吐一次 v2 樣式表（`render_page_why()` 呼叫；同查一檔頁）。
+
+    炸了 → **就地畫一張紅卡**（⛔ 不吞；卡片仍照畫，只是沒有樣式）。
+    """
+    try:
+        st.markdown(f"<style>{v2_markup.page_css(V2_CSS_MODE)}\n{V2_WHY_CARD_CSS}</style>",
+                    unsafe_allow_html=True)
+        return
+    except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
+        _err = repr(_e)   # `_e` 在區塊結束時會被 `del`，先取字串
+        print(f"[views/page_why] v2 樣式表產不出來 → 轉紅卡：{_err}")
+    _label = scrub_state_glyphs(v2_plain(SRC_V2_MARKUP))[0]
+    render_card_isolated(
+        Card(key="why.v2_css.render_failed", label=_label, state=UI_FAILED,
+             note=Note(now=f"{_label}　**這一格畫不出來**",
+                       why=_error_why(SRC_V2_MARKUP, _err), where=_V2_RENDER_WHERE)),
+        owner="views/page_why",
+        error_why=lambda _err2: _error_why(SRC_RENDER, _err2),
+        where=_V2_RENDER_WHERE)
+
+
+#: HTML 裡的「空白行」（換行之間只有空白）。
+#: ⚠️ **本頁特有、而且是實跑抓到的**：L0 原因欄原文自帶段落空行（例：融資餘額的
+#: `degraded_reason` 裡有 `\n\n`）。v2 卡面是一段交給 `st.markdown` 的 raw HTML，
+#: 而 Markdown 的 HTML 區塊**遇到空白行就結束** —— 後半張卡會被當成 Markdown 重新解析，
+#: 版面整個散掉。HTML 本來就把連續空白收成一格，所以把空白行收成單一換行**畫面上一個字都不差**；
+#: 只動送去 `st.markdown` 的那一份，`v2_card_html()` 的輸出（摺疊區原文）不動。
+_V2_BLANK_LINE_RE = re.compile(r"\n[ \t]*(?:\n[ \t]*)+")
+
+
+def _render_one_v2(card: Card, facts: Sequence[tuple[str, str]] = (),
+                   signal_text: str = "") -> None:
+    """畫一張 v2 卡面；炸了就**就地轉成看得見的紅卡**（⛔ 不靜默退回舊卡面）。"""
+    try:
+        _html = _V2_BLANK_LINE_RE.sub("\n", v2_card_html(card, facts, signal_text))
+        st.markdown(f'<div class="{V2_WHY_CARD_CLASS}">{_html}</div>',
+                    unsafe_allow_html=True)
+        return
+    except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
+        _err = repr(_e)   # `_e` 在區塊結束時會被 `del`，先取字串
+        print(f"[views/page_why] 卡 {card.key!r} 的 v2 卡面畫不出來 → 轉紅卡：{_err}")
+    _label = scrub_state_glyphs(card.label)[0] or card.key
+    render_card_isolated(
+        Card(key=f"{card.key}.v2_render_failed", label=_label,
+             state=UI_FAILED,
+             note=Note(now=f"{_label}　**這一格畫不出來**",
+                       why=_error_why(SRC_V2_MARKUP, _err),
+                       where=_V2_RENDER_WHERE)),
+        owner="views/page_why",
+        error_why=lambda _err2: _error_why(SRC_RENDER, _err2),
+        where=_V2_RENDER_WHERE)
+
+
+def _is_v2_card(card_key: str) -> bool:
+    """這張卡有沒有登記在 v2 契約（`src/ui_v2/page_why.py`，含動態容器的前綴）。"""
+    try:
+        v2_why.block_for_card(card_key)
+    except KeyError:
+        return False
+    return True
+
+
+# ══════════════════════════════════════════════════════════════════
 # 渲染（薄；所有判斷都在上面的純函式裡）
 # ══════════════════════════════════════════════════════════════════
 def _render_one(built: _Built) -> None:
@@ -2004,8 +2467,14 @@ def _render_one(built: _Built) -> None:
     ⚠️ **本體在共用層** `_ui_kit.render_card_isolated()`（頁 1／2／3／4 已上移，
     本頁**不寫第五份**）。本函式只剩「把本頁專屬的三樣東西綁上去」：
     log 前綴 / 出處文案（出事的是哪一層只有本頁知道）/ 去哪補。
+
+    2026-09-26（同查一檔頁／我的持股頁／找標的頁）：登記在 v2 契約（`src/ui_v2/page_why.py`）的卡
+    改走 v2 卡面；v2 卡面炸了由 `_render_one_v2()` 轉紅卡（紅卡本身走下面這條舊路）。
     """
     _card, _facts, _signal = built
+    if _is_v2_card(_card.key):
+        _render_one_v2(_card, _facts, _signal)
+        return
     render_card_isolated(
         _card, facts=_facts, signal_text=_signal,
         owner="views/page_why",
@@ -2151,7 +2620,8 @@ def _render_user_health_wall() -> None:
     _scan = load_sources()
     if not _scan.readable:
         # 登錄表本身讀不出來 → 一張紅卡把話說完（這時牆上不該有任何綠格子）。
-        _render_one(build_engineer_card(EngineerRequest(opened=True), _scan))
+        # 卡 key 掛在燈牆容器底下（見 `WALL_REGISTRY_FAILED_KEY`：⛔ 不與工程師版那張撞摺疊 id）。
+        _render_one(build_wall_registry_failed_card(_scan))
     elif _scan.probes:
         _render_row(tuple(build_source_card(_p) for _p in _scan.probes))
     else:
@@ -2267,6 +2737,7 @@ def render_page_why() -> None:
     """
     _session = st.session_state
 
+    _inject_v2_css()   # 每輪恰一次（v2 卡面的樣式表；同查一檔頁）
     st.markdown(f"## {ia_nav.page_label(ia_nav.PAGE_WHY)}")
     st.caption("解釋數字怎麼來、資料新不新鮮、以及直接問。")
 

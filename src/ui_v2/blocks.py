@@ -15,7 +15,7 @@ from __future__ import annotations
 from types import MappingProxyType, ModuleType
 from typing import Final, Mapping
 
-from src.ui_v2 import page_find, page_hold, page_today
+from src.ui_v2 import page_find, page_hold, page_inspect, page_today, page_why
 
 #: 登記的頁面契約（頁名 → 模組）。每個模組都必須有 `LAYERS` / `tier_for_block` /
 #: `BADGES_NOT_ON_PAGE`。加一頁 ＝ 加一列。
@@ -23,6 +23,8 @@ PAGES: Final[Mapping[str, ModuleType]] = MappingProxyType({
     "today": page_today,
     "find": page_find,
     "hold": page_hold,
+    "inspect": page_inspect,
+    "why": page_why,
 })
 
 
