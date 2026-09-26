@@ -207,6 +207,41 @@ def _oauth_import_error() -> str:
     return ''
 
 
+def _secrets_read_error() -> str:
+    """分出「secrets 檔**格式錯誤**／**讀取例外**」與「真的沒有 secrets 檔」（純讀）。
+
+    `_get_active_sheet_id()` 把 `FileNotFoundError` 吞成「沒設定」、`oauth_state._safe_secret()`
+    把**所有**例外吞成預設值 —— 兩者都是既有行為、其他 caller 依賴它們，**一字不動**。
+    但 Streamlit 在 secrets.toml **解析失敗**時丟的 `StreamlitSecretNotFoundError` 正是
+    `FileNotFoundError` 的子類（與「檔案不存在」同一類），於是一次**設定壞掉**被讀成「還沒設定」。
+
+    分法**只看 Streamlit 自己的例外鏈，不比對訊息字串**（訊息可被部署端客製）：
+      · 檔案不存在 → Streamlit 直接 `raise`（`__cause__` 為 None）→ 空字串（**真的沒設定**）；
+      · TOML 解析失敗 → Streamlit `raise ... from <TomlDecodeError/TypeError>`（`__cause__` 非 None）
+        → 交回例外**型別名**；
+      · 其他例外（例：編碼錯、權限錯）→ 讀取例外，交回例外**型別名**。
+    ⚠️ **只交型別名、⛔ 不交 `repr` / 訊息**（這一支讀的是金鑰檔）：實測（2026-09-26，
+    streamlit 1.59.2 ＋ toml）TOML 解析器有些錯誤訊息會把**已解析的內容**（含金鑰值）整包串進去；
+    檔案裡有一個非 UTF-8 位元組時，`UnicodeDecodeError` 的 `repr` 會帶出**整段檔案原文**；
+    Streamlit 的訊息本文另含檔案路徑。交回值會被畫在紅卡上，故一律只留型別名。
+    ⚠️ 分不出、照舊當「沒設定」的（據實記錄，不猜）：Streamlit 以 `.format()` 組訊息時
+    訊息本身含大括號（例：TOML 重複的表頭）→ 它自己丟 `KeyError`，被 `Mapping.get` 吞成預設值；
+    以及目錄型 secrets 的路徑錯誤（沒有 `__cause__`）。
+    **不碰 session / 網路。** 唯一 caller：L3 `portfolio_binding_service.get_binding_state()`。
+    """
+    if st is None:
+        return ''
+    try:
+        st.secrets.get(PORTFOLIO_SHEET_KEY, '')
+    except FileNotFoundError as _e:
+        return type(_e).__name__ if _e.__cause__ is not None else ''
+    except (KeyError, AttributeError):
+        return ''   # 同 `_get_active_sheet_id()`：沒有這個 key / 沒有 secrets 物件 ＝ 沒設定
+    except Exception as _e:  # noqa: BLE001 — 交回字串給 caller 判紅，不吞
+        return type(_e).__name__
+    return ''
+
+
 def _build_client():
     """依當前模式建一個 gspread client。OAuth 優先；fallback SA。
 
