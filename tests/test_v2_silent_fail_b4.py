@@ -37,7 +37,9 @@ from src.ui.views import page_hold as PH
 
 _VALID = "有效的結果"
 #: 本批現價抓不到那幾檔的 why（摘自 L0 `MISS_TEXT[MISS_NO_INPUT]`，只刪開頭主詞）。
-_NO_PRICE_TEXT = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈")
+#: ⚠️ Q2（2026-09-26 總管裁定）起**再刪句尾**「，可以重跑一次。」—— 個股現價的「查無資料」
+#:    被 L1 快取 1 小時，那半句在那一小時內不成立（有意識的變更，⛔ 不是漏改；只刪不加）。
+_NO_PRICE_TEXT = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈").split("，", 1)[0]
 #: 批次 1 那一句 —— 對「只有現價抓不到」**不成立**（沒有整批失敗、列上也沒有錯誤訊息）。
 _WHOLE_ROW_TEXT = MISS_TEXT[MISS_FETCH_FAILED].removeprefix("這一檔")
 
@@ -367,6 +369,7 @@ class TestMutations:
         assert card.state == UI_FAILED
 
     def test_c_reusing_the_whole_row_sentence_is_caught(self):
-        m = _mutant(PH, ("{MISS_TEXT[MISS_NO_INPUT].removeprefix('這盞燈')}",
-                         "{MISS_TEXT[MISS_FETCH_FAILED].removeprefix('這一檔')}"))
+        # Q2 起本卡改走共用常數 `NO_PRICE_WHY` → 突變點隨之改成那一處引用。
+        m = _mutant(PH, ("：{NO_PRICE_WHY}\"",
+                         "：{MISS_TEXT[MISS_FETCH_FAILED].removeprefix('這一檔')}\""))
         assert _WHOLE_ROW_TEXT in _tp_no_price(m)[0].note.why

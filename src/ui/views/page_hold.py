@@ -1649,6 +1649,18 @@ STATION_ERROR_WHERE: str = (
     f"來源狀態在"
     f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
 
+#: 持有列「現價抓不到」時接在代號清單後面的那一句 —— ⑤ 衛星停利卡（批次 4）與
+#: ⑤⑥ 核心／衛星（Q2）**共用這一個常數**（同一頁同一檔 ⛔ 不給兩種說法）。
+#: ⛔ 不新寫：逐字取 L0 `MISS_TEXT[MISS_NO_INPUT]`，**只刪不改**兩處（同找標的頁
+#: `FACTOR_MISS_WHY`，S5-F #701）——
+#:   · 開頭的主詞「這盞燈」（前面接的是代號清單，不是一盞燈）；
+#:   · 第一個「，」之後的「可以重跑一次。」—— 個股現價走 L1 `StockDataLoader.get_combined_data`，
+#:     FinMind 與 Yahoo（.TW／.TWO）都回空時它回「查無資料」，那是**回傳值**、會被
+#:     `@st.cache_data(ttl=TTL_1HOUR)` 快取 1 小時 ⇒ 那一小時內按重跑，卡照樣是紅的。
+#:     那半句在這裡是**錯的指引**（`CLAUDE.md §-2` 記載的同一個坑），故截掉、不改寫。
+#: ⚠️ 狀態鍵（`MISS_FETCH_FAILED`，讓 L0 升紅）與這一句**刻意不同源**（同批次 4 的作法）。
+NO_PRICE_WHY: str = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈").split("，", 1)[0]
+
 #: VIX 這一輪沒拿到收盤時的「去哪補」。原本寫在 `build_vix_card()` 的 empty 分支裡，
 #: 2026-09-26（批次 5）上提成常數（**文字一字未改**）—— 「抓不到」改走紅卡後沿用同一句
 #: （它講的「稍後再試、持續拿不到去看 Yahoo 那一源」對「抓不到」本來就成立）。
@@ -2175,12 +2187,56 @@ def _split_facts(station: StationReadout) -> list[tuple[str, str]]:
          "缺張數／均價的持有列**不進分子也不進分母** —— 硬算等於替你編一個比例"),
     ]
     _sp = station.split
-    if _sp and _sp.get("partial"):
+    # Q2（2026-09-26 總管裁定）：紅態（持有列取數失敗，見 `_split_state`）**不畫比例** ⇒
+    # 「這個比例只涵蓋一部分」在紅態下講的是一個卡上看不到的比例，不成立 → 紅態不渲染這一列
+    # （只刪不加）。非紅的既有情境（例：live ＋ 部分持有列缺張數）照舊揭露。
+    if _sp and _sp.get("partial") and _split_state(station) != UI_FAILED:
         _facts.append((
             "⚠️ 這個比例只涵蓋一部分",
             f"{int(_sp.get('held_n', 0))} 檔持有列裡只算了 "
             f"{int(_sp.get('valued_n', 0))} 檔（其餘缺金額）—— **僅供參考**"))
     return _facts
+
+
+def _split_uncounted(station: StationReadout) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """⑤ 80/20 ＋ ⑥ 核心／衛星共用：持有列裡**因取數失敗而沒被 L3 計入**的那幾檔。
+
+    回 `(整批抓取失敗, 現價抓不到)` 兩組代號（Q2，2026-09-26；客戶批次授權「失敗被當成沒結果」）。
+    L3 `compute_allocation_split` 對前者**整列跳過**（連 `held_n` 都不計 → 連 `partial` 都不會標），
+    對後者因 `市值` 為 None 而不進分子分母 —— 兩者原本都讓卡片落在灰卡「有效的結果」
+    （全部失敗），或畫成一個**沒講它漏了哪幾檔**的比例（部分失敗）。L3 一行未動：列上本來就有
+    `_detail.error` 與 `現價` 兩欄，本函式只讀它們。
+    條件與 ⑤ 衛星停利卡（批次 1／4）**同一把尺**，只是不限個股（核心 ETF 也在 80/20 的分母裡）：
+      · `_detail.error` → 整批抓取失敗（L0 `MISS_FETCH_FAILED`）；
+      · 沒有錯誤、但連現價都沒有 → 取數失敗（客戶裁示「現價抓不到 → 紅」，批次 4）；
+      · 有現價、缺張數 → **缺輸入**，⛔ 不在此列（照舊落在灰卡 `SPLIT_NO_VALUE_NOW`）。
+    觀察清單（`held` 為假）本來就不進 80/20，它們抓不到不影響本卡。
+    """
+    _held = [_r for _r in station.rows if _r.get("held")]
+    _failed = tuple(str(_r.get("代號", "")) for _r in _held
+                    if (_r.get("_detail") or {}).get("error"))
+    _unpriced = tuple(
+        str(_r.get("代號", "")) for _r in _held
+        if not (_r.get("_detail") or {}).get("error")
+        and not (isinstance(_r.get("現價"), (int, float)) and _r["現價"] > 0))
+    return _failed, _unpriced
+
+
+def _split_state(station: StationReadout) -> str:
+    """⑤ 與 ⑥ **同一個判定**（同一份輸入不得給兩種狀態）。
+
+    有任一檔沒被計入（見 `_split_uncounted`）→ `has_value` 一律視為 False、原因走 L0
+    `MISS_FETCH_FAILED`，由 `FAILED_REASONS` 升紅（本檔不自己判「這算不算故障」）——
+    就算其他檔已算出比例也一樣（同 ④ 換股／⑤ 停利／⑥ 配息：旁邊還有沒算到的，
+    已算出的比例就不是整個組合的比例）。
+    """
+    _failed, _unpriced = _split_uncounted(station)
+    _uncounted = _failed + _unpriced
+    return classify_ui_state(
+        requested=station.requested,
+        error=station.error or None,
+        has_value=station.split is not None and not _uncounted,
+        reason=MISS_FETCH_FAILED if _uncounted else "")
 
 
 def build_allocation_split_card(station: StationReadout) -> _Built:
@@ -2189,11 +2245,11 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
     ⚠️ 它與 `build_position_cap_card()`（建議持股水位）**不是同一件事**：
     本格問的是「你手上那一堆，核心與衛星各佔多少」（**組合內部**的比例），
     那一格問的是「整體該擺多少在股票上」（**市場端**的上限）。**分母不同。**
+
+    ⚠️ **算不出比例 ≠ 沒有比例**：持有列有整批抓取失敗、或現價抓不到（Q2）時本卡升紅，
+    ⛔ 不落在灰卡 `SPLIT_NO_VALUE_NOW`「有效的結果」；部分失敗時 ⛔ 不畫那個不完整的比例。
     """
-    _state = classify_ui_state(
-        requested=station.requested,
-        error=station.error or None,
-        has_value=station.split is not None)
+    _state = _split_state(station)
     _facts = _split_facts(station)
     _sp = station.split
     if _state == UI_LIVE and _sp:
@@ -2210,10 +2266,26 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
                 "偏離" if abs(_dev) >= 1 else "接近目標")
     if _state == UI_IDLE:
         _note = _idle_note(station.scope_idle)
-    elif _state == UI_FAILED:
+    elif _state == UI_FAILED and station.error:
         _note = Note(now=SPLIT_FAILED_NOW,
                      why=_error_why(SRC_STATION, station.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
+    elif _state == UI_FAILED:
+        # 沒有例外，但有持有列沒被計入（見 `_split_uncounted`）。文字全部沿用既有的、
+        # 且與 ⑤ 衛星停利卡同一條失敗路徑**逐字同一套**（同一頁同一檔 ⛔ 不給兩種說法）：
+        # L0 `MISS_TEXT`（摘掉開頭的單數主詞 —— 只刪、不改寫）＋ `STATION_ERROR_WHERE`。
+        # 現價抓不到那一半走 `NO_PRICE_WHY`（與停利卡共用同一個常數；句尾「，可以重跑一次。」
+        # 在快取 1 小時內不成立，已截掉 —— 理由見該常數）。
+        _failed, _unpriced = _split_uncounted(station)
+        _note = Note(
+            now=SPLIT_FAILED_NOW,
+            why="".join(
+                f"{'、'.join(_codes)}：{_sentence}"
+                for _codes, _sentence in (
+                    (_failed, MISS_TEXT[MISS_FETCH_FAILED].removeprefix("這一檔")),
+                    (_unpriced, NO_PRICE_WHY))
+                if _codes),
+            where=STATION_ERROR_WHERE)
     elif not station.has_rows:
         _note = _station_note(station, now=SPLIT_NO_HOLDINGS_NOW,
                               source=SRC_STATION)
@@ -2301,14 +2373,15 @@ def build_take_profit_card(station: StationReadout) -> _Built:
         # ⚠️ 現價抓不到的那幾檔**不用** `MISS_TEXT[MISS_FETCH_FAILED]`：那一句說「整批抓取失敗、
         #    看該列的錯誤訊息」，而那幾檔的財報／名稱可能都抓到了、列上也**沒有**錯誤訊息
         #    （同 ⑥ 配息卡（批次 3）不用它的理由）。改用 L0 `MISS_NO_INPUT` 那一句
-        #    （「需要的數字沒抓到 —— 通常是上游來源這輪失敗，可以重跑一次」）。
+        #    （「需要的數字沒抓到 —— 通常是上游來源這輪失敗」）。
+        # ⚠️ Q2（2026-09-26 總管裁定）起改走 `NO_PRICE_WHY`：原句尾「，可以重跑一次。」在快取
+        #    1 小時內不成立 → 截掉（只刪不加；理由見該常數）。與 ⑤⑥ 核心／衛星共用同一句。
         _why = ""
         if _fetch_failed:
             _why += (f"{'、'.join(_fetch_failed)}："
                      f"{MISS_TEXT[MISS_FETCH_FAILED].removeprefix('這一檔')}")
         if _no_price:
-            _why += (f"{'、'.join(_no_price)}："
-                     f"{MISS_TEXT[MISS_NO_INPUT].removeprefix('這盞燈')}")
+            _why += f"{'、'.join(_no_price)}：{NO_PRICE_WHY}"
         _note = Note(now=TP_FAILED_NOW, why=_why, where=STATION_ERROR_WHERE)
     elif not station.has_rows:
         _note = _station_note(station, now=TP_NO_HOLDINGS_NOW,
@@ -3092,11 +3165,9 @@ def build_core_satellite_card(station: StationReadout) -> _Built:
     ⚠️ **與 ⑤ 是同一份數字、不同呈現**：⑤ 講**偏離**（離目標多遠），
     這裡講**組成**（實際各佔多少、各幾檔）。**刻意不重算** ——
     同一頁上兩個由不同算式得出的核心比例，使用者只會讀成「有一邊錯了」。
+    ⚠️ **狀態也與 ⑤ 同一個判定**（`_split_state`，Q2）：持有列取數失敗 → 兩張一起紅。
     """
-    _state = classify_ui_state(
-        requested=station.requested,
-        error=station.error or None,
-        has_value=station.split is not None)
+    _state = _split_state(station)
     _facts = _split_facts(station)
     _facts.insert(0, ("與 ⑤ 的關係",
                       "**同一支 L3 `compute_allocation_split()`、同一份數字** —— "
@@ -3829,7 +3900,15 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            None, "本站不以「中性」代替未評估：多空是一個結論，缺值不是",
            "到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN))]
     # ── ⑤ 80/20 偏離 ＋ 衛星停利 ＋ 建議持股水位（核心／衛星與 80/20 同一則 Note）──
-    + [_v2_rows_for(_k, SPLIT_FAILED_NOW, (None, _v2_raised(SRC_STATION), _V2_NO_EXIT_REPORT))
+    # 四個候選（Q2 起）：戰情表拋例外（既有）／持有列整批抓取失敗 ＋ 現價抓不到（兩者同時）／
+    # 只有前者／只有後者 —— 後三個與下方停利卡**逐字同一組摘錄**（同一條失敗路徑、同一段 L0 原文）。
+    + [_v2_rows_for(_k, SPLIT_FAILED_NOW, (
+           None, (_v2_raised(SRC_STATION),
+                  "整批抓取失敗 —— 看該列的錯誤訊息" + V2_EXCERPT_GAP
+                  + "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
+                  "整批抓取失敗 —— 看該列的錯誤訊息",
+                  "需要的數字沒抓到 —— 通常是上游來源這輪失敗"),
+           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET)))
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
     + [_v2_rows_for(_k, SPLIT_NO_VALUE_NOW, (
            None, "沒有任何一列同時有張數與現價，沒有市值就沒有比例", _V2_FILL_LOTS))
