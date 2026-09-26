@@ -452,23 +452,43 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
 
 
 # ── 真實抓取（部署端網路才跑得到；沙箱代理擋 TW/yfinance）────────────────
-def fetch_vix() -> float | None:
+def fetch_vix(*, strict: bool = False) -> float | None:
     """最新 VIX（^VIX 收盤）。抓不到 → None（§1 不猜,235 該條件不觸發）。
 
     D1(v19.198):改走 `macro_core.fetch_yf_close`（全站唯一 Yahoo 抓取點 —— NAS proxy +
     module-level cache）。原本直呼 yfinance 繞過此點 → 雲端節點 IP 常被 429 靜默降級,
     且同 process 同日 ^VIX 被抓兩次不共享（§2.4）。range_="6mo" 對齊 risk_radar 同源快取。
+
+    `None` **只有一個意思：抓不到**（2026-09-26 批次 5 查證）。它**不**代表休市／假日／
+    還沒去要 —— `fetch_yf_close` 底層固定抓 2 年、切 6 個月，休市日照樣拿得到最後一根收盤；
+    「還沒去要」由呼叫端自己的 gate 管（本函式被呼叫就是要了）。`fetch_yf_close` 的契約是
+    **一切抓取失敗都回空 Series、不拋**（proxy 失敗／429／JSON 壞皆然）→ 那一種在這裡變成 `None`。
+
+    strict（v2「💼 我的持股」VIX 卡用；預設 False = 既有行為一字不變）：
+      True → **例外不吞**，原樣往上拋（不印本檔那行 log）；`None` 的語意同上（抓不到）。
+      會穿過來的例外依上段契約**不是**「抓不到」，而是程式／部署層的錯（如 late import
+      失敗）—— 併成 `None` 會讓畫面把它講成「上游這輪失敗、重跑一次」，那是錯的指引。
+      既有 caller（`get_station_rows` → v1 ETF 戰情室分頁／每日推播腳本／v2 戰情表）
+      不傳 strict，行為不變（同 `get_switch_in_candidates(strict=)` 的作法，PR #693）。
     """
+    if strict:
+        return _latest_vix_close()
     try:
-        from src.data.macro.macro_core import fetch_yf_close
-        _s = fetch_yf_close("^VIX", range_="6mo")
-        if _s is not None and len(_s):
-            import pandas as pd
-            _v = pd.Series(_s).dropna()
-            if len(_v):
-                return float(_v.iloc[-1])
+        return _latest_vix_close()
     except Exception as _e:  # noqa: BLE001
         print(f"[dividend_station] VIX 抓取失敗: {type(_e).__name__}: {_e}")
+    return None
+
+
+def _latest_vix_close() -> float | None:
+    """`fetch_vix()` 的本體（**不吞例外**）。上游沒回任何可用收盤 → `None`。"""
+    from src.data.macro.macro_core import fetch_yf_close
+    _s = fetch_yf_close("^VIX", range_="6mo")
+    if _s is not None and len(_s):
+        import pandas as pd
+        _v = pd.Series(_s).dropna()
+        if len(_v):
+            return float(_v.iloc[-1])
     return None
 
 

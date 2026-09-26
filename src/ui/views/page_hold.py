@@ -739,16 +739,26 @@ class VixReadout:
         requested: 由 `HoldRequest.submitted` 帶下來（**不是**從 `vix` 反推）。
         vix: 最新 VIX 收盤。`None` = L3 這一輪拿不到（**不是 0**）。
         error: 呼叫期例外 `repr(e)`；空字串 = 沒有錯誤。
+        fetch_failed: 已經去要過、L3 回 `None`（**抓不到**）。`load_vix()` 依 L3 契約寫入，
+            ⛔ 不從 `vix is None` 在卡片端反推（那分不出「直接構造的空讀數」）。
 
-    ⚠️ L3 `fetch_vix()` 的契約是「抓不到 → `None`」（它自己吞掉網路例外並印 log）。
+    ~~⚠️ L3 `fetch_vix()` 的契約是「抓不到 → `None`」（它自己吞掉網路例外並印 log）。
     所以本頁看得到的 `error` 只會是 **late import 失敗**那一類。
     這代表：**「VIX 抓不到」在本頁一律是灰的 `empty`，不是紅的 `failed`** ——
-    那是 L3 說的，不是本頁判的，本檔不去替它加一種它沒有的區分。
+    那是 L3 說的，不是本頁判的，本檔不去替它加一種它沒有的區分。~~
+    ← **2026-09-26 批次 5（客戶授權）更正，有意識的更正，⛔ 不是漏刪**：
+    L3 的原話是「**抓不到** → `None`」—— `None` 就是抓取失敗（L3 docstring 已補查證：
+    休市也拿得到最後收盤、沒有「還沒去要」這一種）。舊讀法把 L3 說的「抓不到」畫成
+    灰卡「這是一個有效的結果」，**那才是替它加了一種它沒有的區分**。現行：
+      · `fetch_failed=True`（L3 回 `None`）→ **紅**，`VIX_FAILED_NOW` ＋ 重試指路；
+      · `error`（L3 `strict=True` 不再吞的例外，或 late import 失敗）→ 紅（既有那一則）；
+      · 舊理由（「不替 L3 加區分」）仍然成立 —— 本頁**沒有**加區分，只是照 L3 的原話讀。
     """
 
     requested: bool
     vix: float | None = None
     error: str = ""
+    fetch_failed: bool = False
 
 
 def load_vix(req: HoldRequest) -> VixReadout:
@@ -757,11 +767,14 @@ def load_vix(req: HoldRequest) -> VixReadout:
         return VixReadout(requested=False)
     try:
         from src.services.dividend_station_service import fetch_vix
-        _v = fetch_vix()
+        _v = fetch_vix(strict=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] VIX 取數失敗 → 轉紅態：{_e!r}")
         return VixReadout(requested=True, error=repr(_e))
-    return VixReadout(requested=True, vix=_num(_v))
+    # 批次 5：L3 回 `None` ＝「抓不到」（L3 契約）→ 標 `fetch_failed`，卡片升紅。
+    # 以 `_num()` 之後為準：非數字／NaN 同樣是「沒拿到可用的值」，⛔ 不落到灰卡「有效的結果」。
+    _vx = _num(_v)
+    return VixReadout(requested=True, vix=_vx, fetch_failed=_vx is None)
 
 
 @dataclass(frozen=True)
@@ -1624,6 +1637,15 @@ STATION_ERROR_WHERE: str = (
     f"來源狀態在"
     f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
 
+#: VIX 這一輪沒拿到收盤時的「去哪補」。原本寫在 `build_vix_card()` 的 empty 分支裡，
+#: 2026-09-26（批次 5）上提成常數（**文字一字未改**）—— 「抓不到」改走紅卡後沿用同一句
+#: （它講的「稍後再試、持續拿不到去看 Yahoo 那一源」對「抓不到」本來就成立）。
+VIX_RETRY_WHERE: str = (
+    f"稍後{press(ACTION_RUN_WARROOM_LABEL)}再試一次；"
+    "持續拿不到請到"
+    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
+    "看 Yahoo 那一源的狀態")
+
 
 def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
     """戰情表系列卡片的**非 live** 三要素。四態各自一段，**一段都不共用**。
@@ -1898,17 +1920,28 @@ def build_lightwall_card(station: StationReadout) -> _Built:
 def build_vix_card(vix: VixReadout) -> _Built:
     """線框葉1 ③ 的「＋ VIX」那一半 —— **已接線**。
 
-    ⚠️ **VIX 拿不到是 `empty`（灰），不是 `failed`（紅）。** L3 `fetch_vix()`
+    ~~⚠️ **VIX 拿不到是 `empty`（灰），不是 `failed`（紅）。** L3 `fetch_vix()`
     自己吞掉網路例外並回 `None`，它的 docstring 明寫「抓不到 → None
     （§1 不猜，235 該條件不觸發）」。本頁**不去替它加一種它沒有的區分** ——
-    把「上游說沒有」畫成紅色故障，就是 v3 §02 要杜絕的假性錯誤。
+    把「上游說沒有」畫成紅色故障，就是 v3 §02 要杜絕的假性錯誤。~~
+    ← **2026-09-26 批次 5（客戶授權）更正，⛔ 不是漏刪**：L3 說的是「**抓不到** → None」，
+    不是「上游說沒有」—— VIX 沒有「這一輪真的沒有值」這種有效結果（休市也有最後收盤）。
+    v3 §02 要杜絕的是「**還沒載入**畫成紅」；**已經去要了、抓不到**正是它說的「系統真出錯」。
+    現行：`fetch_failed` → 紅（`VIX_FAILED_NOW`）；狀態鍵走 L0 `MISS_FETCH_FAILED`
+    （`FAILED_REASONS` 決定升紅，本檔不自己判），卡上的句子則是 L0 `MISS_TEXT[MISS_NO_INPUT]`
+    （「需要的數字沒抓到 —— 通常是上游來源這輪失敗」）＋ 本卡原本的重試指路 `VIX_RETRY_WHERE`
+    —— 狀態鍵與顯示句**刻意不同源**（同 ⑤ 衛星停利卡批次 4 的作法）。
+    `error`（例外）那一則原文不動：L3 `strict=True` 只讓例外穿過來，「抓不到」仍回 `None`，
+    所以那一則的「這不是取數失敗（L3 取不到時回的是「沒有值」而不是例外）」照舊成立。
+    empty 分支保留（直接構造 `VixReadout(requested=True)` 仍走得到），但 `load_vix()` 不再產生它。
 
     ⚠️ **門檻三段一律讀 L0**（`VIX_LIGHT1/2/3`），本檔不寫死數字。
     """
     _state = classify_ui_state(
         requested=vix.requested,
         error=vix.error or None,
-        has_value=(vix.vix is not None))
+        has_value=(vix.vix is not None),
+        reason=MISS_FETCH_FAILED if vix.fetch_failed else "")
     _facts: tuple[tuple[str, str], ...] = (
         ("235 加碼燈的 VIX 門檻",
          f"< {VIX_LIGHT1:g} 巡航　{VIX_LIGHT1:g}–{VIX_LIGHT2:g} 燈一　"
@@ -1922,6 +1955,13 @@ def build_vix_card(vix: VixReadout) -> _Built:
                 _facts, "")
     if _state == UI_IDLE:
         _note = Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
+    elif _state == UI_FAILED and not vix.error:
+        # 批次 5：已經去要、L3 回 `None`（抓不到）。文字全部沿用既有的（⛔ 不新造）：
+        # L0 `MISS_TEXT[MISS_NO_INPUT]`（摘掉開頭主詞「這盞燈」—— 只刪、不改寫）
+        # ＋ 本卡原本 empty 分支的重試指路（上提成 `VIX_RETRY_WHERE`，一字未改）。
+        _note = Note(now=VIX_FAILED_NOW,
+                     why=MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈"),
+                     where=VIX_RETRY_WHERE)
     elif _state == UI_FAILED:
         _note = Note(
             now=VIX_FAILED_NOW,
@@ -1935,10 +1975,7 @@ def build_vix_card(vix: VixReadout) -> _Built:
             why=("**這是一個有效的結果**（已經去要過，不是還沒去要）—— "
                  "上游這一輪沒有回最新收盤。本站不拿舊值或 0 頂替："
                  "0 在 VIX 的刻度上是「市場完全無波動」，那是一個結論、不是缺值"),
-            where=(f"稍後{press(ACTION_RUN_WARROOM_LABEL)}再試一次；"
-                   "持續拿不到請到"
-                   f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
-                   "看 Yahoo 那一源的狀態"))
+            where=VIX_RETRY_WHERE)
     return Card(key="hold.vix", label="VIX（市場恐慌指數）",
                 state=_state, note=_note), _facts, ""
 
@@ -3755,8 +3792,11 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "兩套刻度各自的出處與門檻就在這張卡下面"))]
     # ── ③ 燈牆 ＋ VIX ────────────────────────────────────────────
     + [_v2_rows_for("hold.lightwall", LIGHTWALL_FAILED_NOW, _V2_STATION_ERROR),
+       # 兩個候選：VIX L3 拋例外（既有）／抓不到（批次 5：why 摘自 L0 `MISS_TEXT`，
+       # where 同 empty 那一則 —— 兩段摘錄都是本表既有的字串）。
        _v2_rows_for("hold.vix", VIX_FAILED_NOW, (
-           None, _v2_raised(SRC_VIX), _V2_NO_EXIT_REPORT)),
+           None, (_v2_raised(SRC_VIX), "需要的數字沒抓到 —— 通常是上游來源這輪失敗"),
+           (_V2_NO_EXIT_REPORT, "稍後" + _V2_PRESS_RUN + "再試一次"))),
        _v2_rows_for("hold.vix", VIX_EMPTY_NOW, (
            None, "上游這一輪沒有回最新收盤。本站不拿舊值或 0 頂替",
            "稍後" + _V2_PRESS_RUN + "再試一次"))]

@@ -525,8 +525,9 @@ class TestThreeEmptiesNeverMix:
         assert _card.value == "", "未評估卻給了結論文字"
         assert "不以「中性」代替" in _card.note.why
 
-    def test_missing_vix_is_grey_not_red_and_is_never_zero(self):
-        _card = P.build_vix_card(P.VixReadout(requested=True, vix=None))[0]
+    def test_hand_built_missing_vix_readout_is_grey_and_never_zero(self):
+        """只驗手工構造的空讀數；`load_vix` 真的取數抓不到時已改走紅卡（見 `test_v2_silent_fail_b5_vix`）。"""
+        _card =P.build_vix_card(P.VixReadout(requested=True, vix=None))[0]
         assert _card.state == UI_EMPTY
         assert "0" not in _card.value
         assert "不拿舊值或 0 頂替" in _card.note.why

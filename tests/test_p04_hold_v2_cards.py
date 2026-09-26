@@ -173,6 +173,8 @@ def _enumerate():
         add(P.build_scale_card, sd)
     for rq, er, v in itertools.product((False, True), ("", _E), (None, 18.0)):
         add(P.build_vix_card, P.VixReadout(requested=rq, error=er, vix=v))
+    # 批次 5（2026-09-26）：已經去要、L3 回 None（抓不到）→ VIX 卡的第二種紅（無例外）。
+    add(P.build_vix_card, P.VixReadout(requested=True, fetch_failed=True))
     for rq, er, ld in itertools.product((False, True), ("", _E), (False, True)):
         add(P.build_macro_stage_card,
             P.MacroReadout(requested=rq, error=er, loaded=ld, regime="bull"))
