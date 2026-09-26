@@ -230,6 +230,7 @@ L3 `macro_refresh_service` 當然會去打 L1 fetcher —— 那正是分層要�
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 from html import escape as html_escape
 from typing import TYPE_CHECKING, Any, Final, Mapping, Sequence
@@ -2731,6 +2732,20 @@ def _inject_v2_css() -> None:
     st.session_state[SS_V2_CSS_DONE] = True
 
 
+#: HTML 裡的「空白行」（換行之間只有空白）—— 同「💡 為什麼」頁 `page_why._V2_BLANK_LINE_RE`。
+#: v2 卡面是一段交給 `st.markdown` 的 raw HTML，而 CommonMark 的 HTML 區塊**遇到空白行就結束**
+#: —— 卡內任何一段含 `\n\n` 的文字（fact 值、摺疊區原文、`title=` 屬性）都會讓後半張卡
+#: 被當成 Markdown 段落重新解析：字漏到卡外、尾巴多一個 `">`。
+#: 本頁 hover 槽已在 `v2_card_html()` 轉成 `&#10;`（2026-09-26）；這一道補的是其餘格子
+#: （fact 值、截斷值的 `title=`、摺疊區原文）—— 現況無 `\n\n` 流入，屬預防。
+#: HTML 本來就把連續空白收成一格（卡面／摺疊區皆無 `pre`／`pre-wrap`），所以把空白行收成
+#: 單一換行，卡面／摺疊區**畫面上一個字都不差**（例外：`title=` 的原生提示框會把段落空行顯示成單一換行 —— 字一個不少，只少一行空白）；
+#: 只動送去 `st.markdown` 的那一份，`v2_card_html()` 的輸出不動。
+#: 換行一律照 CommonMark 認：`\n`、`\r\n`、單獨的 `\r` 都算一個行尾（`"\r\n\r\n"`、`"\r\r"`、
+#: `"\n\r\n"` 同樣是空白行）。只換「含空白行的那一串行尾」⇒ 沒有空白行的卡面逐 byte 不變。
+_V2_BLANK_LINE_RE = re.compile(r"(?:\r\n|\r(?!\n)|\n)[ \t]*(?:(?:\r\n|\r(?!\n)|\n)[ \t]*)+")
+
+
 def _render_one_v2(tile: Tile) -> None:
     """畫一張 v2 卡面，**並且不讓它把整頁畫到一半就死掉**。
 
@@ -2746,7 +2761,7 @@ def _render_one_v2(tile: Tile) -> None:
     """
     try:
         _inject_v2_css()
-        st.markdown(v2_card_html(tile), unsafe_allow_html=True)
+        st.markdown(_V2_BLANK_LINE_RE.sub("\n", v2_card_html(tile)), unsafe_allow_html=True)
         return
     except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
         # ⚠️ `except ... as _e` 的 `_e` 在區塊結束時會被 `del`，先把字串取出來

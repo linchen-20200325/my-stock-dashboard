@@ -2693,12 +2693,24 @@ def _inject_v2_css() -> None:
         where=_V2_RENDER_WHERE)
 
 
+#: HTML 裡的「空白行」（換行之間只有空白）—— 同「💡 為什麼」頁 `page_why._V2_BLANK_LINE_RE`。
+#: v2 卡面是一段交給 `st.markdown` 的 raw HTML，而 CommonMark 的 HTML 區塊**遇到空白行就結束**
+#: —— 卡內任何一段含 `\n\n` 的文字（fact 值、摺疊區原文、`title=` 屬性）都會讓後半張卡
+#: 被當成 Markdown 段落重新解析：字漏到卡外、尾巴多一個 `">`。
+#: HTML 本來就把連續空白收成一格（卡面／摺疊區皆無 `pre`／`pre-wrap`），所以把空白行收成
+#: 單一換行，卡面／摺疊區**畫面上一個字都不差**（例外：`title=` 的原生提示框會把段落空行顯示成單一換行 —— 字一個不少，只少一行空白）；
+#: 只動送去 `st.markdown` 的那一份，`v2_card_html()` 的輸出不動。
+#: 換行一律照 CommonMark 認：`\n`、`\r\n`、單獨的 `\r` 都算一個行尾（`"\r\n\r\n"`、`"\r\r"`、
+#: `"\n\r\n"` 同樣是空白行）。只換「含空白行的那一串行尾」⇒ 沒有空白行的卡面逐 byte 不變。
+_V2_BLANK_LINE_RE = re.compile(r"(?:\r\n|\r(?!\n)|\n)[ \t]*(?:(?:\r\n|\r(?!\n)|\n)[ \t]*)+")
+
+
 def _render_one_v2(card: Card, facts: Sequence[tuple[str, str]] = (),
                    signal_text: str = "") -> None:
     """畫一張 v2 卡面；炸了就**就地轉成看得見的紅卡**（⛔ 不靜默退回舊卡面）。"""
     try:
-        st.markdown(f'<div class="{V2_INSPECT_CARD_CLASS}">'
-                    f"{v2_card_html(card, facts, signal_text)}</div>",
+        _html = _V2_BLANK_LINE_RE.sub("\n", v2_card_html(card, facts, signal_text))
+        st.markdown(f'<div class="{V2_INSPECT_CARD_CLASS}">{_html}</div>',
                     unsafe_allow_html=True)
         return
     except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
