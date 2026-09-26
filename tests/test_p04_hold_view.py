@@ -1898,11 +1898,19 @@ class TestTheDeepAnalysisIsWiredNow:
             "取價那一層整個掛掉卻畫成灰的 —— 真的壞掉那一次就沒有人看得見")
 
     def test_a_partial_fetch_failure_is_not_called_a_dead_source(self):
-        """有一部分抓成功 → **不算掛掉**，只是部分缺料（由 facts 揭露）。"""
+        """有一部分抓成功 → L3 **不算掛掉**（`upstream_down` 語意未變）。
+
+        ~~卡面：只是部分缺料（由 facts 揭露）→ `UI_LIVE`~~ ← Q3（2026-09-26）有意識的變更，
+        ⛔ 不是漏刪：實測那幾檔**沒有任何一處揭露**（不在 `no_price`、橘卡失準因子也不看
+        `fetch_errors`）⇒ 綠卡上是一個悄悄漏掉那幾檔的 VaR。同 ⑤⑥ Q2／⑥ 配息批次 3：
+        部分失敗一律紅，錯誤原文照實印在 why（完整守衛見 `test_v2_silent_fail_b9_deep.py`）。
+        """
         _partial = _var_res(fetch_errors=("2330.TW：RuntimeError: boom",),
                             tickers_used=("0056.TW",))
         assert _partial.upstream_down is False
-        assert P.build_var_card(_deep(var=_partial))[0].state == UI_LIVE
+        _card = P.build_var_card(_deep(var=_partial))[0]
+        assert _card.state == UI_FAILED
+        assert "2330.TW：RuntimeError: boom" in _card.note.why
 
     def test_imputed_beta_is_disclosed(self):
         """§1：Beta 是估的就要說 —— 不說的話那個虧損看起來是實測值。"""

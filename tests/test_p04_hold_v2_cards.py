@@ -261,6 +261,17 @@ def _enumerate():
     add(P.build_dividend_cash_card, P.DeepReadout(
         requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,
         cash=_cash_res(failed_tickers=("0056",))))
+    # Q3（2026-09-26）：持有列取數失敗 → ⑥ 壓測／VaR／配息的另一種紅（無例外）。
+    # 三例各走短句表的一個候選：只有整批失敗／只有現價抓不到／兩者同時
+    # （配息只收整批失敗 —— 「只有現價抓不到」那一例它照舊是 live）。
+    for _fr, _up in ((("0056",), ()), ((), ("2454",)), (("0056",), ("2454",))):
+        _dq = P.DeepReadout(
+            requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,
+            stress=_stress_res(), var=_var_res(), cash=_cash_res(),
+            failed_rows=_fr, unpriced_rows=_up)
+        add(P.build_stress_card, _dq)
+        add(P.build_var_card, _dq)
+        add(P.build_dividend_cash_card, _dq)
     return notes, builts
 
 

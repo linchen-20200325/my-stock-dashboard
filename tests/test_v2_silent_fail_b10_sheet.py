@@ -160,7 +160,10 @@ def sheet(monkeypatch):
                         lambda hold: (S.build_station_rows(hold, vix=18.0, metrics_fn=_metrics), 18.0))
     monkeypatch.setattr(S, "get_switch_in_candidates", lambda **_k: [])
     for _fn in ("get_portfolio_stress", "get_portfolio_var", "get_dividend_cash_flow"):
-        monkeypatch.setattr(D, _fn, lambda rows: None)
+        # `**_k`：Q3 起頁面以 `get_portfolio_var(rows, strict=True)` 呼叫（加性參數）——
+        # 替身不收它的話會 TypeError，VaR 那格被悄悄換成「拋例外」紅卡，不再是本替身想模擬的「回 None」
+        # （同 `test_v2_silent_fail_b7_binding.py` 的同一處）。
+        monkeypatch.setattr(D, _fn, lambda rows, **_k: None)
     monkeypatch.setattr(A, "gemini_call", lambda *_a, **_k: "推播文字")
 
     def _use(*, records=(), logged=True, sid=_SID, mods=(GSP,)):

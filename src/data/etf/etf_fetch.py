@@ -242,20 +242,44 @@ def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
     except Exception as e:
         # S-H3 v18.244:L1 不可 st.error → 改 print log,caller 依 empty DataFrame 判斷
         print(f'[etf_fetch] ❌ 無法取得 {ticker} 價格:{type(e).__name__}: {e}')
-        return pd.DataFrame()
+        # Q3(2026-09-26):回傳照舊是空 df,**快取行為一字未改**(這個空 df 照樣被快取
+        # TTL_1HOUR —— §1.A-3(a)「只快取成功結果」那半句本批未處理,是既有狀況)。
+        # 只多在 `attrs` 掛失敗旗標,讓**要求分辨**的 caller(`fetch_etf_price(..., failed=[])`)
+        # 分得出「抓取失敗」與「yfinance 回空」;不要求的 caller 拿到的跟修前一樣(見下)。
+        _empty = pd.DataFrame()
+        _empty.attrs[PRICE_FETCH_FAILED_ATTR] = f'{type(e).__name__}: {e}'
+        return _empty
 
 
-def fetch_etf_price(ticker: str, period: str = '5y') -> pd.DataFrame:
+#: `_fetch_etf_price_max()` 接住例外時,回傳的空 DataFrame 在 `attrs` 裡帶的鍵。
+#: 值 ＝ `"{例外型別}: {訊息}"`。**只有拋過例外才有** —— yfinance 沒拋例外、只回空的那一種
+#: **沒有**(那與「這檔沒有那段歷史」在這一層分不出來,不猜;同 `DIVIDENDS_FETCH_FAILED_ATTR`)。
+PRICE_FETCH_FAILED_ATTR = "fetch_failed"
+
+
+def fetch_etf_price(ticker: str, period: str = '5y', *,
+                    failed: list | None = None) -> pd.DataFrame:
     """取得 ETF 歷史價格（auto_adjust=True 還原權息）。
 
     v18.228 起改為共用 'max' 底層 + 記憶體切片。公開簽章不變，呼叫端 0 改動。
     S-PROV-1 v18.251:provenance attrs 從底層繼承(切片後顯式 copy 保留)。
     Phase 2 pandera Priority 1 v18.433:log-mode schema validation(yfinance 大寫,
     normalize_case=True);失敗只 stderr log,不擋 caller。
+
+    Q3(2026-09-26)`failed=`:**加性參數;預設 `None` → 回傳值與修前逐位元組相同**
+    (抓取失敗時照舊回一個 `attrs` 為空的空 DataFrame)。傳一個 list 進來 → 抓取
+    **拋過例外**(含快取中的那一次失敗)時把 `"{例外型別}: {訊息}"` append 進去,
+    回傳值不變。yfinance 只回空、沒拋例外 → **不 append**(分不出來,不猜)。
+    ⚠️ 不改快取鍵(仍是 `_fetch_etf_price_max(ticker)`),一次都不多打上游。
     """
     df = _fetch_etf_price_max(ticker)
     if df.empty:
-        return df
+        _fail = df.attrs.get(PRICE_FETCH_FAILED_ATTR)
+        if not _fail:
+            return df
+        if failed is not None:
+            failed.append(str(_fail))
+        return pd.DataFrame()       # 修前的失敗回傳就是它(`attrs` 為空)
     days = _PERIOD_TO_DAYS.get(period, 365 * 5)
     if days is None or len(df) == 0:
         result = df
