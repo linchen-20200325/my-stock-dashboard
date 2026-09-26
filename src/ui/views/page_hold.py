@@ -2187,32 +2187,55 @@ def build_take_profit_card(station: StationReadout) -> _Built:
     ⚠️ **「沒有一檔達門檻」是 `empty`（灰），而且是好消息，不是故障。**
     ⚠️ **沒有成本就不判**：L3 只對有損益% 的持有衛星列判定 ——
     硬判等於替你編一個報酬率（§1）。
+    ⚠️ **沒被判過 ≠ 沒達標**：持有的衛星有整批抓取失敗、或現價抓不到（批次 4）時，
+    本卡升紅 —— 就算其他檔已有達標的也一樣（達標的照樣列在 facts）。
     """
     # 持有的衛星（個股）裡有**整批抓取失敗**的列 → L3 `flag_take_profit` 對它們是跳過的
     # （它們沒有被判過），所以「沒有一檔達門檻」在這一輪**不是**有效結果。
     # 條件與 L3 跳過的那一條逐字對齊（held ＋ 個股 ＋ `_detail.error`），不另立判準。
     # 走 L0 `MISS_FETCH_FAILED`（「這一檔整批抓取失敗」就是它的定義），由
-    # `FAILED_REASONS` 決定升紅 —— 本檔**不自己判「這算不算故障」**。
+    # `FAILED_REASONS` 決定升紅 —— 這一半本檔**不自己判「這算不算故障」**。
+    # ⚠️ 批次 4 的「現價抓不到」那一半**不是**這樣：`MISS_FETCH_FAILED` 是**本卡自己挑**的鍵，
+    #    目的就是讓它升紅（客戶裁示：現價抓不到 → 紅）；卡上顯示的句子卻是 `MISS_TEXT[MISS_NO_INPUT]`
+    #    （理由見下方 UI_FAILED 分支）。狀態鍵與顯示句**刻意不同源**，改任一邊前先看兩處。
     _fetch_failed = tuple(
         str(_r.get("代號", "")) for _r in station.rows
         if _r.get("held") and _r.get("種類") == "個股"
         and (_r.get("_detail") or {}).get("error"))
+    # 批次 4（客戶 2026-09-26）：持有的衛星**現價抓不到**（但沒有整批失敗）→ 同樣沒被判過。
+    # 根因在 L3 `_fetch_stock_metrics`：日線抓取失敗只 log、`current_price` 留 None、
+    # **不寫 `_detail.error`** → 該列 `現價` 與 `損益%` 皆 None → `flag_take_profit` 跳過它
+    # → 本卡原本畫成「沒有一檔達門檻」（有效結果）。本卡只讀列上既有的兩個欄位，L3 一行未動。
+    # 條件＝L3 跳過的那一條（`損益%` 非數字）再切出「連現價都沒有」的那一半：
+    #   · 有現價、缺均價 → **缺輸入**，照舊落在灰卡（灰卡原文已講「沒有均價因此判不了」）；
+    #   · 連現價都沒有  → **取數失敗**，升紅。
+    _no_price = tuple(
+        str(_r.get("代號", "")) for _r in station.rows
+        if _r.get("held") and _r.get("種類") == "個股"
+        and not (_r.get("_detail") or {}).get("error")
+        and not isinstance(_r.get("損益%"), (int, float))
+        and not (isinstance(_r.get("現價"), (int, float)) and _r.get("現價") > 0))
+    # 兩種都是「這一檔沒被判過」→ 有任一檔時 `has_value` 一律視為 False
+    # （同 ④ 換股（批次 2）：旁邊還有沒判過的，已列出的達標清單就不是完整的結論；
+    #  已算出的達標檔照樣列在 facts，不藏）。
+    _unjudged = _fetch_failed + _no_price
     _state = classify_ui_state(
         requested=station.requested,
         error=station.error or None,
-        has_value=bool(station.take_profit),
-        reason=MISS_FETCH_FAILED if _fetch_failed else "")
+        has_value=bool(station.take_profit) and not _unjudged,
+        reason=MISS_FETCH_FAILED if _unjudged else "")
     _facts: list[tuple[str, str]] = [
         ("門檻（L0 SSOT）",
          f"衛星獲利達 {SATELLITE_TAKE_PROFIT_PCT:g} 個百分點即嚴格停利滾回核心"),
         ("為什麼缺成本就不判", "沒有均價就沒有損益%，硬判等於替你編一個報酬率"),
         ("只判衛星（個股）", "核心（ETF）走定期定額，不套這條停利規則"),
     ]
-    if _state == UI_LIVE:
+    if station.take_profit and not station.error:
         _facts.insert(0, ("達門檻的衛星",
                           "、".join(f"{_d.get('代號', '')}"
                                     f"（{_d.get('損益%', '')}%）"
                                     for _d in station.take_profit)))
+    if _state == UI_LIVE:
         return (Card(key="hold.take_profit", label="衛星停利", state=UI_LIVE,
                      value=f"{len(station.take_profit)} 檔達停利門檻"),
                 tuple(_facts), "可停利")
@@ -2223,13 +2246,21 @@ def build_take_profit_card(station: StationReadout) -> _Built:
                      why=_error_why(SRC_STATION, station.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
     elif _state == UI_FAILED:
-        # 沒有例外，但有衛星整批抓取失敗（見上）。文字全部沿用既有的：
-        # L0 `MISS_TEXT[MISS_FETCH_FAILED]` ＋ 戰情表出錯時的 `STATION_ERROR_WHERE`。
-        # 前面接的是代號清單（可能多檔），故摘掉 L0 原文開頭的單數「這一檔」—— 只刪、不改寫。
-        _note = Note(now=TP_FAILED_NOW,
-                     why=(f"{'、'.join(_fetch_failed)}："
-                          f"{MISS_TEXT[MISS_FETCH_FAILED].removeprefix('這一檔')}"),
-                     where=STATION_ERROR_WHERE)
+        # 沒有例外，但有衛星沒被判過（見上）。文字全部沿用既有的：
+        # L0 `MISS_TEXT` ＋ 戰情表出錯時的 `STATION_ERROR_WHERE`。
+        # 前面接的是代號清單（可能多檔），故摘掉 L0 原文開頭的單數主詞 —— 只刪、不改寫。
+        # ⚠️ 現價抓不到的那幾檔**不用** `MISS_TEXT[MISS_FETCH_FAILED]`：那一句說「整批抓取失敗、
+        #    看該列的錯誤訊息」，而那幾檔的財報／名稱可能都抓到了、列上也**沒有**錯誤訊息
+        #    （同 ⑥ 配息卡（批次 3）不用它的理由）。改用 L0 `MISS_NO_INPUT` 那一句
+        #    （「需要的數字沒抓到 —— 通常是上游來源這輪失敗，可以重跑一次」）。
+        _why = ""
+        if _fetch_failed:
+            _why += (f"{'、'.join(_fetch_failed)}："
+                     f"{MISS_TEXT[MISS_FETCH_FAILED].removeprefix('這一檔')}")
+        if _no_price:
+            _why += (f"{'、'.join(_no_price)}："
+                     f"{MISS_TEXT[MISS_NO_INPUT].removeprefix('這盞燈')}")
+        _note = Note(now=TP_FAILED_NOW, why=_why, where=STATION_ERROR_WHERE)
     elif not station.has_rows:
         _note = _station_note(station, now=TP_NO_HOLDINGS_NOW,
                               source=SRC_STATION)
@@ -3751,9 +3782,14 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     + [_v2_rows_for(_k, SPLIT_NO_VALUE_NOW, (
            None, "沒有任何一列同時有張數與現價，沒有市值就沒有比例", _V2_FILL_LOTS))
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
-    # 兩個候選：戰情表拋例外（既有）／有衛星整批抓取失敗（摘自 L0 `MISS_TEXT`）。
+    # 四個候選：戰情表拋例外（既有）／有衛星整批抓取失敗 ＋ 有衛星現價抓不到（兩者同時）／
+    # 只有前者／只有後者（批次 4）—— 後三個都摘自 L0 `MISS_TEXT`。
     + [_v2_rows_for("hold.take_profit", TP_FAILED_NOW, (
-           None, (_v2_raised(SRC_STATION), "整批抓取失敗 —— 看該列的錯誤訊息"),
+           None, (_v2_raised(SRC_STATION),
+                  "整批抓取失敗 —— 看該列的錯誤訊息" + V2_EXCERPT_GAP
+                  + "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
+                  "整批抓取失敗 —— 看該列的錯誤訊息",
+                  "需要的數字沒抓到 —— 通常是上游來源這輪失敗"),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.take_profit", TP_EMPTY_NOW, (
            None, "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此判不了",
