@@ -229,6 +229,21 @@ def _enumerate():
         requested=True, submitted=True, bound=True, holdings_n=2,
         rows=({"代號": "2330", "種類": "個股", "held": True, "_detail": {}},
               {"代號": "2454", "種類": "個股", "held": True, "_detail": {"error": "E"}})))
+    # 批次 4（2026-09-26）：上面那一例的 2330 沒有損益%／現價 ⇒ 自批次 4 起它本身就是「現價抓不到」，
+    # 那一例因此走的是「兩者同時」的 why。再補兩例，讓短句表的另外兩個候選也各有一則 Note 走到：
+    # 只有整批失敗（其餘衛星有現價、判過了）／只有現價抓不到（旁邊還有一檔已達標）。
+    _tp_ok = {"代號": "2330", "種類": "個股", "held": True, "損益%": 3.0, "現價": 103.0,
+              "_detail": {}}
+    add(P.build_take_profit_card, P.StationReadout(
+        requested=True, submitted=True, bound=True, holdings_n=2,
+        rows=(_tp_ok, {"代號": "2454", "種類": "個股", "held": True,
+                       "_detail": {"error": "E"}})))
+    add(P.build_take_profit_card, P.StationReadout(
+        requested=True, submitted=True, bound=True, holdings_n=2,
+        rows=(dict(_tp_ok, **{"損益%": 22.0}),
+              {"代號": "2454", "種類": "個股", "held": True, "損益%": None, "現價": None,
+               "_detail": {}}),
+        take_profit=({"代號": "2330", "損益%": 22.0},)))
     # 批次 3（2026-09-26）：有持股的配息抓取失敗 → 配息卡的第二種紅（無例外）。
     add(P.build_dividend_cash_card, P.DeepReadout(
         requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,

@@ -202,15 +202,23 @@ class TestHoldTakeProfit:
         card = PH.build_take_profit_card(_station(PH, (_SAT_OK, row)))[0]
         assert card.state == UI_EMPTY and card.note.now == PH.TP_EMPTY_NOW
 
-    def test_b_a_hit_alongside_an_error_row_stays_live(self):
-        card = PH.build_take_profit_card(PH.StationReadout(
+    # ⚠️ 批次 4（客戶 2026-09-26「衛星現價抓不到 → 紅」）起**改判，有意識的變更，⛔ 不是漏改**：
+    #    原本這條叫 `test_b_a_hit_alongside_an_error_row_stays_live`（有達標、旁邊有一檔整批失敗 → live）。
+    #    整批失敗的那一檔現價同樣抓不到 ⇒ 同一條客戶規則；且與 ④ 換股（批次 2）／⑥ 配息（批次 3）
+    #    「部分失敗 ⛔ 不是 live」一致。已算出的達標檔**照樣列在 facts**（不藏）。
+    def test_a_a_hit_alongside_an_error_row_is_red_not_a_partial_list(self):
+        built = PH.build_take_profit_card(PH.StationReadout(
             requested=True, submitted=True, bound=True, holdings_n=2,
             rows=(_SAT_OK, _SAT_ERR),
-            take_profit=({"代號": "2330", "損益%": 22.0},)))[0]
-        assert card.state == UI_LIVE
+            take_profit=({"代號": "2330", "損益%": 22.0},)))
+        card = built[0]
+        assert card.state == UI_FAILED and card.note.now == PH.TP_FAILED_NOW
+        assert card.value == ""
+        assert dict(built[1])["達門檻的衛星"] == "2330（22.0%）"
 
     def test_c_mutation_removing_the_check_turns_a_red(self):
-        m = _mutant(PH, 'reason=MISS_FETCH_FAILED if _fetch_failed else "")', 'reason="")')
+        # 批次 4 起判定併進 `_unjudged`（整批失敗 ＋ 現價抓不到）→ 突變點改成「只拿掉整批失敗那一半」。
+        m = _mutant(PH, "_unjudged = _fetch_failed + _no_price", "_unjudged = _no_price")
         card = _tp_failed(m)[0]
         assert card.state == UI_EMPTY and _VALID in card.note.why, (
             "拿掉新判定後 (a) 必須失敗 —— 否則 (a) 沒有守到東西")
