@@ -224,6 +224,11 @@ def _enumerate():
             add(P.build_stress_card, d)
             add(P.build_var_card, d)
             add(P.build_dividend_cash_card, d)
+    # 批次 1（2026-09-26）：持有的衛星有整批抓取失敗列 → 停利卡的第二種紅（無例外）。
+    add(P.build_take_profit_card, P.StationReadout(
+        requested=True, submitted=True, bound=True, holdings_n=2,
+        rows=({"代號": "2330", "種類": "個股", "held": True, "_detail": {}},
+              {"代號": "2454", "種類": "個股", "held": True, "_detail": {"error": "E"}})))
     return notes, builts
 
 

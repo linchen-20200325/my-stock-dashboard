@@ -48,6 +48,9 @@ SCENARIOS = [
     ("screen.empty", lambda: _screen(df=_Frame(0), rows=0, survivors_n=274), UI_EMPTY),
     ("screen.failed", lambda: _screen(error='RuntimeError("finmind quota")'), UI_FAILED),
     ("screen.drift", lambda: _screen(rows=None), UI_FAILED),
+    # 批次 1（2026-09-26）：本頁存活池取數失敗、L3 吞掉回空表 → 紅，不是「0 檔」。
+    ("screen.survivors_failed", lambda: _screen(
+        df=_Frame(0), rows=0, survivors_error="RuntimeError('snapshot')"), UI_FAILED),
     ("screen.live", lambda: _screen(df=_Frame(3), rows=3, survivors_n=10), UI_LIVE),
     ("screen.live_pe_failed", lambda: _screen(
         factors=(P.PE_FACTOR_KEY,), df=_Frame(3), rows=3, pe_n=None), UI_LIVE),
@@ -185,7 +188,8 @@ def test_an_unregistered_note_raises_and_renders_as_a_red_card(monkeypatch):
 def test_short_rows_are_short_and_never_truncated():
     for (key, now), rows in P.V2_SHORT_ROWS.items():
         assert len(rows) == 3
-        for s in rows:
+        # 一格可以是多個候選（tuple；見 `P._v2_pick_short`）→ 每個候選都要守這些規則。
+        for s in (c for r in rows for c in ((r,) if isinstance(r, str) else r)):
             assert s.strip(), f"{key}: 空短句"
             assert len(s) <= M.FACT_VALUE_MAX_CHARS, f"{key}: 短句會被契約層截斷：{s}"
             assert "**" not in s and "`" not in s
@@ -198,7 +202,11 @@ def test_short_rows_are_first_and_come_from_the_table(name, build, state):
     if card.note is None:
         assert P.V2_NOW_FACT_KEY not in [k for k, _ in rows]
         return
-    now_s, why_s, where_s = P.V2_SHORT_ROWS[(card.key, card.note.now)]
+    now_s, why_s, where_s = (_s for _l, _s in P.v2_short_rows(card)[0])
+    for _i, (_cell, _got) in enumerate(zip(P.V2_SHORT_ROWS[(card.key, card.note.now)],
+                                           (now_s, why_s, where_s))):
+        _alts = (_cell,) if isinstance(_cell, str) else tuple(_cell)
+        assert _got in _alts, f"第 {_i} 格短句 {_got!r} 不是表裡第 {_i} 格的候選 {_alts!r}"
     assert rows[:3] == [(P.V2_NOW_FACT_KEY, now_s), (P.V2_WHY_FACT_KEY, why_s),
                         (P.V2_GUIDE_FACT_KEY, where_s)]
 
@@ -209,7 +217,7 @@ def test_no_exit_stays_no_exit():
         card, _ = build()
         if card.note is None:
             continue
-        where_s = P.V2_SHORT_ROWS[(card.key, card.note.now)][2]
+        where_s = P.v2_short_rows(card)[0][2][1]
         assert (where_s == NO_EXIT_MARKER) == (NO_EXIT_MARKER in card.note.where), _name
 
 
@@ -347,7 +355,7 @@ def test_aborted_short_phrase_keeps_the_original_reset_wording():
     """短句⛔ 不得改寫原文的事實（原文「額度每日 00:00 重置」，曾被寫成「隔日重置」）。"""
     card, _ = _screen(error='RuntimeError("x")')
     assert "每日 00:00 重置" in card.note.where
-    assert "每日 00:00 重置" in P.V2_SHORT_ROWS[(card.key, card.note.now)][2]
+    assert "每日 00:00 重置" in P.v2_short_rows(card)[0][2][1]
 
 
 # ── #11「▨ 無資料」（客戶 2026-09-26）：本頁**目前沒有任何一張卡登記** ────────────
