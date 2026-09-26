@@ -1058,6 +1058,7 @@ class HoldingsReadout:
             `asset_class` / `lots` / `avg_price`）。
             ⚠️ 觀察清單那些列的 `lots` / `avg_price` 是 `None` —— 那份分頁的
             schema **只有三欄**，本來就沒有張數與均價。**它們不是 0。**
+            持有列在 Sheet 上那一格是空白時也是 `None`（見 `load_holdings`）。
         bound: 有沒有綁到投資組合 Sheet。`False` ＋ 空清單 = 你還沒綁（**有效結果**）。
         portfolio_name / watchlist_name: 實際讀到的那一本／那一份的名字。
         more_portfolios / more_watchlists: 那本 Sheet 裡**還有別本沒讀**
@@ -1117,12 +1118,19 @@ def load_holdings(req: HoldRequest) -> HoldingsReadout:
           **與 (b) 不是同一件事**，指路句不同（去綁 vs 去填）。
       (d) L3 拋例外                    → `failed`（紅）。L3 對「投資組合」那半
           **刻意 fail loud**：半份清單算出來的 80/20 與損益看起來正常、實際是錯的。
+
+    ⚠️ **`keep_blank=True`（Q4 2026-09-26）**：Sheet 上「張數／均價」是空白格的列
+    **照樣帶進來**（該欄 `None`，⛔ 不是 0）。不帶的話 L1 會把它們整列丟掉 ——
+    一本每列都缺張數或均價的組合就會落進 (c)「綁好了，但一列持股都沒有」，
+    那句話是假的。帶進來之後，下游各卡走的全是**既有**的「有持股、缺張數／均價」
+    那一套（例：⑤ 80/20「有持股，但算不出核心／衛星的比例」、金額列「N/M 檔持股
+    缺張數或均價，沒有納入」），本檔不為它新寫一句話。
     """
     if not req.wants_binding:
         return HoldingsReadout(requested=False, submitted=req.submitted)
     try:
         from src.services.holdings_service import get_holdings
-        _h = get_holdings()
+        _h = get_holdings(keep_blank=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] 持股清單讀取失敗 → 轉紅態：{_e!r}")
         return HoldingsReadout(requested=True, submitted=req.submitted,
