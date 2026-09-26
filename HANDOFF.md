@@ -524,6 +524,20 @@ merge 與改 base **直接影響線上部署**（`main` 一動，Streamlit Cloud
 
 ⚠️ 上列稽核為**單組、唯讀**結論，**未經第二組驗**（§-2 規則 6），⛔ 不得當既定前提。
 
+**待辦：標記矛盾：空白卡寫『這是一個有效的結果』卻顯示 #7『缺漏·可重跑』**（**客戶 2026-09-26 裁示：合併為一輪、另開工單，兩頁共用對照一起修；⛔ 不得併入持股頁卡化那一輪**；**登記，未動工**）：
+
+| 項目 | 內容 |
+|---|---|
+| 受影響卡 | **持股頁（PR #688，分支 `claude/v2-hold-cards` `57b5993`）**：`src/ui/views/page_hold.py` 的 `hold.switch`／`hold.macro_stage`／`hold.take_profit` 空白態（`else:   # UI_EMPTY`，`why` 寫「**這是一個有效的結果**」）。**找股頁**：`src/ui/views/page_find.py` 的 `find.screen_result` 空白態（`SCREEN_EMPTY_NOW`「選股已完成，符合條件的標的是 0 檔」，`why` 寫「這是一個有效的結果」）—— 既有「0 筆結果」徽章 #7 vs 文字「有效結果」（⚠️ 待確認：`src/` 內 grep 不到「0 筆結果」字面，該標籤字樣出處未查到） |
+| 真因 | 上列空白態的建構函式呼叫 `shared/ui_state.py::classify_ui_state()` **未帶 `reason`** ⇒ 判為 `UI_EMPTY`；共用對照 `src/ui/views/page_today.py::V2_STATE_VOCAB` 把 `UI_EMPTY` 翻成 `("empty", None)`；`src/ui_v2/page_today.py::resolve_badge()` 對 `empty` 且無 `MISS_NOT_APPLICABLE` ⇒ 回 **#7「缺漏 · 可重跑」**（`src/ui_v2/components.py`） |
+| 徽章缺口 | 現有 10 顆徽章（`src/ui_v2/components.py` `_badge(1..10)`）**沒有一顆**表示「有效的空結果」；#8「不適用 · 重跑無效」語意也不對 |
+| 既有揭露 | `page_today.py` 在 `V2_BADGE_AMBIGUOUS` 旁已註明：裸 `UI_EMPTY` 的徽章文字「比 L0 多講了一句話」（#7 宣稱可重跑），要改須先改 v2 契約層 |
+| 修法方向 | 在**共用徽章集／`V2_STATE_VOCAB`** 層決定（⛔ 不在單頁另發明徽章）；屬**共用元件異動 ⇒ 動工前須客戶核准** |
+| 附記 | 持股頁卡化那一輪的**手機截圖上傳失敗**（檔案過大／過長，伺服器回 400）；客戶表示**不阻擋任何事** |
+| 處置 | 依 §-1：**只登記，未動工** |
+
+⚠️ 上列事實為**程式閱讀（grep `/home/user/msd-hold` 的 `src/`、`shared/`），未實跑**；**單組結論，未經第二組驗**（§-2 規則 6），⛔ 不得當既定前提。
+
 ### 6.5 🔴 卡關點與待客戶裁示
 
 **重抓歷史需要 FinMind token，本容器沒有**（見 §5「缺件」）。
