@@ -87,8 +87,19 @@ def get_fundamental_survivors(*, refresh: bool = False,
       拋出的例外帶 `empty_survivor_pool = True` 屬性,讓 caller 分得出「空池」與讀取例外
       (兩者處置不同:空池要等排程補抓快照,重按不會變)。刻意不另立例外子類別 ——
       那會讓畫面上印出來的 repr 多一個新名字;屬性不改變 repr。
+      B9 ⑫(2026-09-26):季快照**讀不到**(L1 `load_fundamentals_snapshot` 的契約:
+      latest.json 不存在 / 最新季 parquet 全缺 → `FileNotFoundError`)時,strict 下在
+      **原例外**上加 `snapshot_missing = True` 後原樣往上拋(型別 / 訊息 / repr 都不變),
+      讓 caller 分得出「快照缺(要等排程補抓)」與其他讀取例外。只認**這一次快照讀取**
+      (`get_fundamental_prescreen` = L1 讀快照 + L2 純函式初篩)拋出的 `FileNotFoundError`
+      —— 那一段唯一碰檔案系統的就是 L1 讀快照;⛔ 不從訊息字面反推。非 strict:不加屬性。
     """
-    df, meta = get_fundamental_prescreen(refresh=refresh)
+    try:
+        df, meta = get_fundamental_prescreen(refresh=refresh)
+    except FileNotFoundError as _e:
+        if strict:
+            _e.snapshot_missing = True
+        raise
     surv = survivors_only(df)
     if strict and (surv is None or surv.empty or "stock_id" not in surv.columns):
         _, _note = composite_rank_candidates(surv, factors=[])

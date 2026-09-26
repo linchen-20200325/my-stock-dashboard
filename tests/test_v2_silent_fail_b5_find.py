@@ -321,13 +321,14 @@ class TestPathTwoSnapshotMissing:
         assert "FinMind" not in card.note.where
 
     def test_survivors_read_error_keeps_the_existing_where(self, world):
-        """讀取例外（批次 1 那一種）→ where 照舊是 FinMind／備援鏈那一句，一字未改。"""
+        """讀取例外（批次 1 那一種）→ ~~where 照舊是 FinMind／備援鏈那一句，一字未改~~。
+        B9 ⑩ 追加起改指 `SCREEN_NO_PARTIAL_WHERE`（存活池不碰 FinMind；有意識的變更，⛔ 不是漏改）。"""
         world.setattr(S, "get_fundamental_prescreen", _boom)
         res, card, _ = _run(PF, ("eps_high",))
         assert res.survivors_error and not res.survivors_pool_empty
         assert card.note.where.startswith("本站不以殘缺資料湊出名單")
         face = dict(PF.v2_short_rows(card)[0])
-        assert face[PF.V2_GUIDE_FACT_KEY] == "FinMind 額度每日 00:00 重置；其餘看資料體檢"
+        assert card.note.where == face[PF.V2_GUIDE_FACT_KEY] == PF.SCREEN_NO_PARTIAL_WHERE
 
     def test_c_mutation_l3_flag_dropped_sends_it_to_the_wrong_where(self, world):
         m = _mutant(S, "        _err.empty_survivor_pool = True\n", "")
@@ -705,6 +706,11 @@ class TestMutations:
 _OLD_ABORTED_WHERE = ("本站不以殘缺資料湊出名單。若是 FinMind 額度用罄，額度每日 00:00 重置；"
                       "其餘請到「📖 憑什麼 › 資料體檢」看 MOPS／Goodinfo 備援鏈是否可用")
 _OLD_ABORTED_FACE = "FinMind 額度每日 00:00 重置；其餘看資料體檢"
+#: B9 ⑩（2026-09-26）起的現行句：修前那一整句**只刪**句尾「；其餘請到…資料體檢…看 MOPS／Goodinfo
+#: 備援鏈是否可用」（對缺貨／排名例外／存活池讀取例外三張卡都不成立，見 `SCREEN_ABORTED_WHERE`）。
+#: ⚠️ 上面兩個 `_OLD_*` 保留作「只刪不加」的比對基準，⛔ 不是現行行為。
+_ABORTED_WHERE = "本站不以殘缺資料湊出名單。若是 FinMind 額度用罄，額度每日 00:00 重置"
+_ABORTED_FACE = "FinMind 額度每日 00:00 重置"
 #: 對估值（TWSE／TPEX OpenAPI）與 RS（Yahoo）是**指錯方向**的那幾個字。
 _WRONG_SOURCE_WORDS = ("FinMind", "MOPS", "Goodinfo", "資料體檢")
 
@@ -715,7 +721,10 @@ def _where_and_face(card) -> tuple[str, str]:
 
 class TestB9FactorWhere:
     def test_new_constants_are_existing_text_delete_only(self):
-        assert PF.SCREEN_ABORTED_WHERE == _OLD_ABORTED_WHERE, "上提後原句一字未變"
+        # B9 ⑩：上提後的原句再**只刪**句尾那一段（⛔ 不新寫、⛔ 不改寫剩下的字）。
+        assert PF.SCREEN_ABORTED_WHERE == _ABORTED_WHERE
+        assert _OLD_ABORTED_WHERE.startswith(_ABORTED_WHERE + "；"), "刪的只是句尾那一段"
+        assert _is_deletion_of(_ABORTED_FACE, _OLD_ABORTED_FACE), "卡面短句同樣只刪不加"
         assert PF.SCREEN_NO_PARTIAL_WHERE == "本站不以殘缺資料湊出名單"
         assert PF.SCREEN_ABORTED_WHERE.startswith(PF.SCREEN_NO_PARTIAL_WHERE + "。")
         assert set(PF.FACTOR_FAILED_WHERE) == set(PF.FACTOR_INPUT_LABELS), "每個因子都要登記"
@@ -763,10 +772,11 @@ class TestB9FactorWhere:
 
     @pytest.mark.parametrize("which", ["shortage_empty", "shortage_raise"])
     def test_shortage_keeps_the_existing_sentence_verbatim(self, world, which):
-        """缺貨掃描走 FinMind（月營收＋季財報）→ 那一整句對它成立，一字未改、卡面也不變。"""
+        """缺貨掃描走 FinMind（月營收＋季財報）→ FinMind 額度那一句對它成立。
+        （B9 ⑩ 起句尾的 MOPS／Goodinfo 那一段已刪 —— 對缺貨同樣不成立；其餘一字未改。）"""
         _break(world, which)
         _, card, _ = _run(PF, ("shortage",))
-        assert _where_and_face(card) == (_OLD_ABORTED_WHERE, _OLD_ABORTED_FACE)
+        assert _where_and_face(card) == (_ABORTED_WHERE, _ABORTED_FACE)
 
     @pytest.mark.parametrize("breaks,factors", [
         (("pe_both", "trend"), ("pe_low", "trend")),
@@ -798,15 +808,17 @@ class TestB9FactorWhere:
         assert res.factor_input_failed == ("shortage",), "前提：loader 只回勾了的那一個"
         _assert_aborted(card)
         assert card.note.why == f"缺貨掃描：{PF.FACTOR_MISS_WHY}", "沒勾的估值不上主詞"
-        assert _where_and_face(card) == (_OLD_ABORTED_WHERE, _OLD_ABORTED_FACE)
+        assert _where_and_face(card) == (_ABORTED_WHERE, _ABORTED_FACE)
 
     def test_the_other_aborts_are_unchanged(self, world):
-        """不是因子輸入的那三種中止（排名例外／存活池讀取例外／空池）：where 與卡面一字未變。"""
+        """不是因子輸入的那三種中止（排名例外／存活池讀取例外／空池）：where 與卡面沿用既有句
+        （B9 ⑩ 追加起排名例外與存活池讀取例外改指 `SCREEN_NO_PARTIAL_WHERE` —— 兩條路都不碰
+        FinMind；空池照舊是 `SNAPSHOT_WAIT_WHERE`）。"""
         card, _ = _card(factors=("eps_high",), error="RuntimeError('x')")
-        assert _where_and_face(card) == (_OLD_ABORTED_WHERE, _OLD_ABORTED_FACE)
+        assert _where_and_face(card) == (PF.SCREEN_NO_PARTIAL_WHERE,) * 2
         card, _ = _card(factors=("eps_high",), df=_Frame(0), rows=0,
                         survivors_error="RuntimeError('s')")
-        assert _where_and_face(card) == (_OLD_ABORTED_WHERE, _OLD_ABORTED_FACE)
+        assert _where_and_face(card) == (PF.SCREEN_NO_PARTIAL_WHERE,) * 2
         card, _ = _card(factors=("eps_high",), df=_Frame(0), rows=0,
                         survivors_error="RuntimeError('s')", survivors_pool_empty=True)
         assert _where_and_face(card) == (PF.SNAPSHOT_WAIT_WHERE,) * 2
@@ -821,7 +833,7 @@ class TestB9FactorWhere:
         """無 GAP 的短句候選＝整句摘錄 → 要全等。只比開頭的話，短句會吃掉以它開頭的長句。"""
         spec = PF.V2_SHORT_ROWS[("find.screen_result", PF.SCREEN_ABORTED_NOW)][2]
         assert PF._v2_pick_short(spec, PF.SCREEN_NO_PARTIAL_WHERE) == PF.SCREEN_NO_PARTIAL_WHERE
-        assert PF._v2_pick_short(spec, _OLD_ABORTED_WHERE) == _OLD_ABORTED_FACE
+        assert PF._v2_pick_short(spec, _ABORTED_WHERE) == _ABORTED_FACE
         assert PF._v2_pick_short(spec, PF.SNAPSHOT_WAIT_WHERE) == PF.SNAPSHOT_WAIT_WHERE
 
     @pytest.mark.parametrize("which,factor", [(w, f) for w, f, _l in _ONLY_FACTOR])
@@ -840,7 +852,7 @@ class TestB9Mutations:
         for which, factor in (("pe_both", "pe_low"), ("rs_empty", "rs_leader"), ("trend", "trend")):
             _break(world, which)
             _, card, _ = _run(m, (factor,))
-            assert card.note.where == _OLD_ABORTED_WHERE, "拿掉後又一律指 FinMind／MOPS 鏈"
+            assert card.note.where == _ABORTED_WHERE, "拿掉後又一律指 FinMind 額度那一句"
 
     def test_mixed_fallback_to_the_finmind_sentence_is_caught(self, world):
         """混合失敗改成回 FinMind 那一整句 → 對跨季轉強指錯方向（上面「混合」那條守的就是它）。"""
@@ -849,7 +861,7 @@ class TestB9Mutations:
         _break(world, "shortage_empty")
         _break(world, "trend")
         _, card, _ = _run(m, ("shortage", "trend"))
-        assert card.note.where == _OLD_ABORTED_WHERE
+        assert card.note.where == _ABORTED_WHERE
 
     def test_trend_back_to_the_schedule_sentence_is_caught(self, world):
         m = _mutant(PF, '    "trend": SCREEN_NO_PARTIAL_WHERE,\n}', '    "trend": SNAPSHOT_WAIT_WHERE,\n}')
@@ -864,17 +876,231 @@ class TestB9Mutations:
         _break(world, "shortage_empty")
         _break(world, "pe_both")
         _, card, _ = _run(m, ("shortage",))
-        assert card.note.where == PF.SCREEN_NO_PARTIAL_WHERE != _OLD_ABORTED_WHERE
+        assert card.note.where == PF.SCREEN_NO_PARTIAL_WHERE != _ABORTED_WHERE
 
     def test_exact_match_rule_removed_eats_the_long_sentences_face(self):
         m = _mutant(PF, "        if V2_EXCERPT_GAP not in str(_alt):\n"
                         "            if full == str(_alt):\n"
                         "                return str(_alt)\n"
                         "            continue\n", "")
-        card, _ = _card(factors=("eps_high",), error="RuntimeError('x')")
+        # B9 ⑩ 追加起排名例外卡的 where 本身就是 `SCREEN_NO_PARTIAL_WHERE`（沒有鑑別力）→
+        # 改用唯一還用長句的缺貨因子紅卡。
+        card, _ = _card(factors=("shortage",), df=_Frame(0), rows=0, survivors_n=3,
+                        factor_input_failed=("shortage",))
+        assert _where_and_face(card) == (_ABORTED_WHERE, _ABORTED_FACE), "前提：原模組的卡面是長句那一格"
         assert dict(m.v2_short_rows(card)[0])[m.V2_GUIDE_FACT_KEY] == PF.SCREEN_NO_PARTIAL_WHERE, (
-            "拿掉全等規則 → 排名例外那張的卡面被短句吃掉（上面那條守的就是它）")
+            "拿掉全等規則 → 缺貨因子紅卡的卡面被短句吃掉（上面那條守的就是它）")
 
     def test_this_round_deletion_removed(self):
         m = _mutant(PF, '.split("，", 1)[0].replace("這輪", "", 1))', '.split("，", 1)[0])')
         assert "這輪" in m.FACTOR_MISS_WHY
+
+
+# ══════════════════════════════════════════════════════════════════
+# 10. B9 ⑩⑫（2026-09-26，獨立 QA 核實後的小項批次 A）
+#   ⑩ `SCREEN_ABORTED_WHERE` 句尾「其餘請到…資料體檢…看 MOPS／Goodinfo 備援鏈是否可用」只刪不加
+#      —— 對缺貨因子紅卡／排名例外卡／存活池讀取例外卡都不成立。以下皆限**選股網這幾條取數路徑**
+#      與**資料體檢 `@monitored` 牆**的範圍（獨立 QA 核實）：缺貨掃描的季財報只走 FinMind、月營收
+#      備援是 TWSE／TPEx OpenAPI；存活池讀 cron（`mops_bulk_fetcher`）事先抓好的 MOPS 季快照 parquet，
+#      本頁讀取時不連 MOPS；這幾條路徑上沒有 Goodinfo（repo 他處另有：`fetch_margin_balance` 備援鏈、
+#      `tw_stock_data_fetcher.fetch_goodinfo_financials`）；牆上沒有任何一支選股網 fetcher。
+#   ⑩ 追加（獨立 QA 非阻擋項，總管裁定併入）：排名例外卡、存活池讀取例外卡（非快照缺）改指
+#      `SCREEN_NO_PARTIAL_WHERE` —— 兩條路都不碰 FinMind（存活池只讀本地 parquet ＋ L2 純函式；
+#      排名時 `auto_fetch=False`），剩下的 FinMind 額度那句對它們不成立。缺貨因子卡維持 FinMind 那句。
+#   ⑫ 季快照**讀不到**（L1 `FileNotFoundError`）的存活池讀取例外卡 → where 指 `SNAPSHOT_WAIT_WHERE`
+#      （L3 strict 在原例外上加 `snapshot_missing`；本頁只讀那個屬性，⛔ 不從字面反推）。
+#      **只有** `FileNotFoundError` 才標（QA 存活突變 M3：同屬 `OSError` 的 PermissionError／
+#      IsADirectoryError ⛔ 不標 —— 那是快照**在**、但讀不進來，等排程不會好）。
+# ⛔ 一句都不新寫（K1）：只刪既有句的字、或指向既有常數。
+# ══════════════════════════════════════════════════════════════════
+#: ⑩ 刪掉的那一段裡、現行句**不得再出現**的字（指錯方向的來源與去處）。
+_B9_10_GONE = ("MOPS", "Goodinfo", "資料體檢", "備援鏈")
+#: 模組載入時（`world` fixture 換掉之前）的真 L3 —— ⑫ 要讓它真的去讀 L1 快照。
+_REAL_PRESCREEN = S.get_fundamental_prescreen
+
+
+def _assert_b9_10_where(card) -> None:
+    """缺貨因子紅卡：FinMind 額度那一句（⑩ 刪掉句尾後），⛔ 不再指 MOPS／Goodinfo／資料體檢。"""
+    where, face = _where_and_face(card)
+    assert (where, face) == (_ABORTED_WHERE, _ABORTED_FACE)
+    for _w in _B9_10_GONE:
+        assert _w not in where and _w not in face, _w
+
+
+def _assert_no_partial_where(card) -> None:
+    """排名例外卡／存活池讀取例外卡（非快照缺）：只剩第一句，⛔ 不指 FinMind 額度、也不指 MOPS 鏈。"""
+    where, face = _where_and_face(card)
+    assert where == face == PF.SCREEN_NO_PARTIAL_WHERE
+    for _w in ("FinMind", "額度", *_B9_10_GONE):
+        assert _w not in where and _w not in face, _w
+
+
+class TestB9Q10AbortedWhereDropsTheMopsChain:
+    def test_constant_is_the_old_sentence_with_its_tail_deleted(self):
+        assert PF.SCREEN_ABORTED_WHERE == _ABORTED_WHERE
+        assert _is_deletion_of(PF.SCREEN_ABORTED_WHERE, _OLD_ABORTED_WHERE), "只刪不加"
+        assert _OLD_ABORTED_WHERE.startswith(PF.SCREEN_ABORTED_WHERE), "刪的是句尾，前面一字未動"
+        spec = PF.V2_SHORT_ROWS[("find.screen_result", PF.SCREEN_ABORTED_NOW)][2]
+        assert spec[-1] == _ABORTED_FACE and _is_deletion_of(spec[-1], _OLD_ABORTED_FACE)
+
+    @pytest.mark.parametrize("which", ["shortage_empty", "shortage_raise"])
+    def test_shortage_factor_red_card(self, world, which):
+        """缺貨因子紅卡：真的走 load → 卡片 → 卡面短句。"""
+        _break(world, which)
+        res, card, _ = _run(PF, ("shortage",))
+        assert res.factor_input_failed == ("shortage",)
+        _assert_aborted(card)
+        _assert_b9_10_where(card)
+
+    def test_ranking_exception_card(self, world):
+        """排名例外卡：L3 `get_ranked_picks` 拋例外（`result.error`）→ ⑩ 追加：只剩第一句。"""
+        world.setattr(S, "get_ranked_picks", _boom)
+        res, card, _ = _run(PF, ("eps_high",))
+        assert res.error and "upstream boom" in res.error
+        _assert_aborted(card)
+        _assert_no_partial_where(card)
+
+    def test_survivors_read_exception_card(self, world):
+        """存活池讀取例外卡（非快照缺的那一種）→ ⑩ 追加：只剩第一句（不再指 FinMind 額度）。"""
+        world.setattr(S, "get_fundamental_prescreen", _boom)
+        res, card, _ = _run(PF, ("eps_high",))
+        assert res.survivors_error and not res.survivors_snapshot_missing
+        _assert_aborted(card)
+        _assert_no_partial_where(card)
+        face = dict(PF.v2_short_rows(card)[0])
+        assert face[PF.V2_WHY_FACT_KEY] == "L3 基本面存活池…拋出例外", "卡面「為什麼」照舊命中"
+
+    def test_c_mutation_ranking_back_to_the_finmind_sentence_is_caught(self, world):
+        m = _mutant(PF, "            why=_error_why(SRC_SCREEN, result.error),\n"
+                        "            where=SCREEN_NO_PARTIAL_WHERE)",
+                    "            why=_error_why(SRC_SCREEN, result.error),\n"
+                    "            where=SCREEN_ABORTED_WHERE)")
+        world.setattr(S, "get_ranked_picks", _boom)
+        _, card, _ = _run(m, ("eps_high",))
+        assert card.note.where == _ABORTED_WHERE, "改回去就又叫人看 FinMind 額度（上面那條守的就是它）"
+
+    def test_c_mutation_survivors_back_to_the_finmind_sentence_is_caught(self, world):
+        m = _mutant(PF, "                   or result.survivors_snapshot_missing\n"
+                        "                   else SCREEN_NO_PARTIAL_WHERE))",
+                    "                   or result.survivors_snapshot_missing\n"
+                    "                   else SCREEN_ABORTED_WHERE))")
+        world.setattr(S, "get_fundamental_prescreen", _boom)
+        _, card, _ = _run(m, ("eps_high",))
+        assert card.note.where == _ABORTED_WHERE
+
+    def test_c_mutation_restoring_the_tail_is_caught(self, world):
+        m = _mutant(PF, '"額度每日 00:00 重置")\n',
+                    '"額度每日 00:00 重置；其餘請到"\n'
+                    '    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"\n'
+                    '    "看 MOPS／Goodinfo 備援鏈是否可用")\n')
+        assert m.SCREEN_ABORTED_WHERE == _OLD_ABORTED_WHERE, "前提：突變＝改回修前那一整句"
+        _break(world, "shortage_empty")
+        _, card, _ = _run(m, ("shortage",))
+        assert "MOPS" in card.note.where, "改回去就又指 MOPS／Goodinfo 鏈（上面幾條守的就是它）"
+
+
+@pytest.fixture()
+def snapshot_dir(world, tmp_path):
+    """⑫：讓 L3 **真的**去讀 L1 快照，快照目錄指到 `tmp_path` 底下（預設不存在）。快取前後都清。"""
+    import src.data.stock.fundamentals_snapshot_loader as FSL
+
+    world.setattr(S, "get_fundamental_prescreen", _REAL_PRESCREEN)
+    _d = tmp_path / "fundamentals"
+    world.setattr(FSL, "FUNDAMENTALS_CACHE_DIR", _d)
+
+    def _clear_all() -> None:
+        S._clear(S._prescreen_cached)
+        S._clear(FSL.load_fundamentals_snapshot)
+
+    _clear_all()
+    yield _d
+    _clear_all()
+
+
+def _write_latest(d: pathlib.Path, text: str) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "latest.json").write_text(text, encoding="utf-8")
+
+
+class TestB9Q12SnapshotMissingPointsAtTheSchedule:
+    @pytest.mark.parametrize("layout", ["no_dir", "latest_but_no_parquet"])
+    def test_a_snapshot_missing_is_the_schedule_where(self, snapshot_dir, layout):
+        """快照整個缺 / latest.json 指向的季 parquet 全缺 → L1 `FileNotFoundError` → 等排程那一句。"""
+        if layout == "latest_but_no_parquet":
+            _write_latest(snapshot_dir, '{"roc_year": 115, "season": 1}')
+        res, card, _ = _run(PF, ("eps_high",))
+        assert "FileNotFoundError" in res.survivors_error, "前提：真的是 L1 讀快照拋的"
+        assert res.survivors_snapshot_missing and not res.survivors_pool_empty
+        _assert_aborted(card)
+        where, face = _where_and_face(card)
+        assert where == face == PF.SNAPSHOT_WAIT_WHERE
+        assert "FinMind" not in where
+        assert dict(PF.v2_short_rows(card)[0])[PF.V2_WHY_FACT_KEY] == "L3 基本面存活池…拋出例外"
+
+    def test_b_other_read_errors_are_not_the_schedule_where(self, snapshot_dir):
+        """快照**在**、但讀壞了（latest.json 不是 JSON）→ 不是「快照缺」→ 只剩第一句（⑩ 追加）。"""
+        _write_latest(snapshot_dir, "{not json")
+        res, card, _ = _run(PF, ("eps_high",))
+        assert res.survivors_error and "FileNotFoundError" not in res.survivors_error
+        assert not res.survivors_snapshot_missing
+        _assert_no_partial_where(card)
+
+    def test_b_m3_latest_json_is_a_directory_is_not_tagged(self, snapshot_dir):
+        """QA 存活突變 M3（真的讀 L1）：latest.json 是個**目錄** → `IsADirectoryError`（同屬 OSError）
+        → ⛔ 不標 `snapshot_missing`、⛔ 不叫人等排程。"""
+        (snapshot_dir / "latest.json").mkdir(parents=True)
+        res, card, _ = _run(PF, ("eps_high",))
+        assert "IsADirectoryError" in res.survivors_error, "前提：真的是 L1 讀快照拋的"
+        assert not res.survivors_snapshot_missing
+        _assert_no_partial_where(card)
+
+    @pytest.mark.parametrize("exc", [PermissionError, IsADirectoryError, OSError])
+    def test_b_m3_only_file_not_found_is_tagged(self, world, exc):
+        """QA 存活突變 M3（L3 層）：只有 `FileNotFoundError` 才標；其他 `OSError` 原樣往上拋、不標。"""
+        def _raise(**_k):
+            raise exc("snapshot unreadable")
+        world.setattr(S, "get_fundamental_prescreen", _raise)
+        with pytest.raises(exc) as ei:
+            S.get_fundamental_survivors(strict=True)
+        assert type(ei.value) is exc and not hasattr(ei.value, "snapshot_missing")
+        res, card, _ = _run(PF, ("eps_high",))
+        assert exc.__name__ in res.survivors_error and not res.survivors_snapshot_missing
+        _assert_no_partial_where(card)
+
+    def test_c_m3_mutation_widening_to_oserror_is_caught(self, world):
+        """M3 突變：`except FileNotFoundError` 放寬成 `except OSError` → PermissionError 也被標成「快照缺」。"""
+        m = _mutant(S, "    except FileNotFoundError as _e:\n", "    except OSError as _e:\n")
+
+        def _raise(**_k):
+            raise PermissionError("snapshot unreadable")
+        world.setattr(m, "get_fundamental_prescreen", _raise)
+        with pytest.raises(PermissionError) as ei:
+            m.get_fundamental_survivors(strict=True)
+        assert getattr(ei.value, "snapshot_missing", False), "放寬之後就標錯了（上面那條守的就是它）"
+
+    def test_b_l3_default_call_is_unchanged(self, snapshot_dir):
+        """非 strict：例外照舊拋、**不**加屬性；strict：型別與 repr 不變，只多一個屬性。"""
+        with pytest.raises(FileNotFoundError) as e1:
+            S.get_fundamental_survivors()
+        assert not hasattr(e1.value, "snapshot_missing")
+        with pytest.raises(FileNotFoundError) as e2:
+            S.get_fundamental_survivors(strict=True)
+        assert e2.value.snapshot_missing is True
+        assert repr(e2.value) == repr(e1.value)
+
+    def test_c_mutation_l3_attribute_removed(self, snapshot_dir):
+        m = _mutant(S, "            _e.snapshot_missing = True\n", "            pass\n")
+        with pytest.raises(FileNotFoundError) as ei:
+            m.get_fundamental_survivors(strict=True)
+        assert not getattr(ei.value, "snapshot_missing", False)
+
+    def test_c_mutation_page_ignores_the_attribute(self, snapshot_dir):
+        m = _mutant(PF, 'bool(getattr(_e, "snapshot_missing", False))', "False")
+        _, card, _ = _run(m, ("eps_high",))
+        assert card.note.where == PF.SCREEN_NO_PARTIAL_WHERE != PF.SNAPSHOT_WAIT_WHERE, (
+            "拿掉判定 → 快照缺也不再指等排程")
+
+    def test_c_mutation_card_ignores_the_flag(self, snapshot_dir):
+        m = _mutant(PF, "                   or result.survivors_snapshot_missing\n", "")
+        _, card, _ = _run(m, ("eps_high",))
+        assert card.note.where == PF.SCREEN_NO_PARTIAL_WHERE != PF.SNAPSHOT_WAIT_WHERE

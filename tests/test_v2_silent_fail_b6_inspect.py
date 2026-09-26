@@ -884,3 +884,83 @@ class TestPeerThresholdIsOneNumber:
         m = _mutant(EC, ("    if len(_peers) < 3:\n", "    if len(_peers) < 4:\n"))
         monkeypatch.setattr(EC, "compute_etf_peer_ranking", m.compute_etf_peer_ranking)
         assert not _peer_threshold_consistent(monkeypatch)
+
+
+# ══════════════════════════════════════════════════════════════════
+# Q5-r1（2026-09-26）：估值灰卡「去哪補」刪掉「若是暫時抓不到，按…重跑一次；」
+# 快取期內不成立（價格「查無資料」快取 1 小時、`fetch_dividend_data` 快取 30 分）
+# ⇒ 只刪那一句（在「；」句界截斷），⛔ 不新寫；剩下的句子一字未動，卡面短句仍命中。
+# ══════════════════════════════════════════════════════════════════
+#: 修前（baseline `60b0cd9`）`VALUATION_WHERE` 的**字面**（渲染後），逐字抄自當時的模組值 ——
+#: ⛔ 不由現行常數組出來（組出來的話，「只刪不加」的檢查恆為真，守不到東西；QA 2026-09-26）。
+_Q5R1_OLD_WHERE = (
+    "若是暫時抓不到，按「🔍 載入完整分析」重跑一次；若這一檔近 5 年真的沒有配息，"
+    "357 這套殖利率法則**本來就不適用它**，重按幾次都一樣 —— 那不是故障，改看健康度與獲利能力那幾格。"
+    "配息資料持續抓不到時，到「📖 憑什麼 › 資料體檢」看 FinMind／yfinance／TWSE 三段備援鏈是否可用")
+#: 修前的卡面短句（baseline 字面，同上理由）。
+_Q5R1_OLD_FACE_SPEC = "若是暫時抓不到，按「🔍 載入完整分析」重跑一次…若這一檔近 5 年…沒有配息…重按幾次都一樣"
+#: 被刪掉的那一段（字面）。
+_Q5R1_GONE_HEAD = "若是暫時抓不到，按「🔍 載入完整分析」重跑一次；"
+_Q5R1_FACE = ("若這一檔近 5 年" + P.V2_EXCERPT_GAP + "沒有配息" + P.V2_EXCERPT_GAP
+              + "重按幾次都一樣")
+
+
+def _is_deletion_of(short: str, long: str) -> bool:
+    _it = iter(long)
+    return all(_ch in _it for _ch in short)
+
+
+def _grey_where_and_face(built) -> tuple[str, str]:
+    card = built[0]
+    assert card.state == UI_EMPTY and card.note.now == P.VALUATION_EMPTY_NOW, card.state
+    face = dict(P.v2_short_rows(card)[0])[P.V2_GUIDE_FACT_KEY]
+    P.v2_card_html(*built)            # 整張卡畫得出來（摘錄對不上會 KeyError）
+    return card.note.where, face
+
+
+class TestQ5r1ValuationGreyNoRerun:
+    def test_constant_is_the_old_sentence_with_its_head_deleted(self):
+        assert _Q5R1_GONE_HEAD == f"若是暫時抓不到，{P._V2_PRESS_LOAD}重跑一次；", "前提：按鈕字沒變"
+        assert P.VALUATION_WHERE == _Q5R1_OLD_WHERE.removeprefix(_Q5R1_GONE_HEAD), (
+            "只刪開頭那一句，其餘與 baseline 逐字相同")
+        assert P.VALUATION_WHERE != _Q5R1_OLD_WHERE and _is_deletion_of(P.VALUATION_WHERE, _Q5R1_OLD_WHERE)
+        assert P.VALUATION_WHERE.startswith("若這一檔近 5 年真的沒有配息")
+        assert "重跑" not in P.VALUATION_WHERE and "暫時抓不到" not in P.VALUATION_WHERE
+        spec = P.V2_SHORT_ROWS[("inspect.stock.valuation", P.VALUATION_EMPTY_NOW)][2]
+        assert spec == _Q5R1_FACE and _is_deletion_of(spec, _Q5R1_OLD_FACE_SPEC)
+
+    def test_no_price_on_record_grey_card(self, stock_env, monkeypatch):
+        """真的走 load：價格那一腿「查無資料」（L1 回傳值、會被快取）→ 灰卡，⛔ 不叫人重跑。"""
+        stock_env(_ALL_OK, price="none")
+        import src.services.valuation_service as VS
+        monkeypatch.setattr(VS, "get_stock_dividends",
+                            lambda code: VS.StockDividends(avg_div_twd=3.0, paying_years=5,
+                                                           years=({"year": 2025, "cash": 3.0},),
+                                                           source="FinMind"))
+        where, face = _grey_where_and_face(_valuation())
+        assert where == P.VALUATION_WHERE and "重跑" not in where
+        assert face == _Q5R1_FACE
+
+    def test_no_dividend_source_grey_card(self, stock_env, monkeypatch):
+        """真的走 load：配息備援鏈三段都沒給（`fetch_dividend_data` 快取 30 分）→ 同一句、同一格短句。"""
+        stock_env(_ALL_OK)
+        import src.services.valuation_service as VS
+        monkeypatch.setattr(VS, "get_stock_dividends", lambda code: VS.StockDividends())
+        built = _valuation()
+        assert built[0].note.why.startswith(P.VALUATION_NO_SOURCE_WHY.split("**", 1)[0])
+        where, face = _grey_where_and_face(built)
+        assert where == P.VALUATION_WHERE and "重跑" not in where
+        assert face == _Q5R1_FACE
+
+    def test_c_mutation_restoring_the_head_is_caught(self, stock_env, monkeypatch):
+        _line = '    "若這一檔近 5 年真的沒有配息，357 這套殖利率法則**本來就不適用它**，"\n'
+        m = _mutant(P, (_line, '    f"若是暫時抓不到，{press(ACTION_LOAD_INSPECT_LABEL)}重跑一次；"\n'
+                               + _line))
+        stock_env(_ALL_OK, price="none")
+        import src.services.valuation_service as VS
+        monkeypatch.setattr(VS, "get_stock_dividends",
+                            lambda code: VS.StockDividends(avg_div_twd=3.0, paying_years=5,
+                                                           years=({"year": 2025, "cash": 3.0},),
+                                                           source="FinMind"))
+        card = _valuation(m)[0]
+        assert card.note.where.startswith(_Q5R1_GONE_HEAD), "改回去就又叫人重跑（上面幾條守的就是它）"
