@@ -37,7 +37,7 @@
 | B3 | 方向列其餘「無資料」—— **逐盞見下方 B3 子表**（含 #697 查證後維持無資料的 `health`／`jingqi`／`tw_export`） | 「無資料」 | 見子表 | 見子表 | 見子表 |
 | B4 | 今天頁 6 塊未接線（§6.4 舊寫「7 塊」，「風險」格已由 #692 接上） | unwired | **交易日**：無台股假日曆（也需源）；**Sheet 綁定**：`bound_empty`／`failed` 無文案、live 需 sheet 名；**動能**：客戶裁示維持不接（無公式）；**今天該做的事**：無推導規格；**AI 摘要**：無 prompt／規格，須點擊才跑；**外資淨買賣**：單位未定 | 客戶給文案／規格（動能除外） | 客戶 |
 | B5 | K1：燈卡「門檻出處」「命中來源」露出內部識別字（來源 §6.4；相關台帳 `docs/v2/prototype/FIELD_LABELS_TODO.md`） | 未修 | 客戶的 **16 盞白話對照表**未到；⛔ AI 不得自擬 | 等對照表 | 客戶 |
-| B6 | 標記矛盾：#7「缺漏·可重跑」vs 文字「重按也一樣」／「有效的結果」—— hold／inspect／why 其餘卡**合一條**（客戶：不另開單）。含已修靜默失敗卡（`find.screen_result`／`hold.take_profit`／`hold.switch`／`hold.deep.dividend_cash`）尚未登記進 `V2_VALID_EMPTY_SPEC`（main `f14c5fd` 上仍只登記 `hold.portfolio_count`） | 未修 | 與持股頁同一根因；改 builder／文案需授權 | 客戶授權後一次修 | 客戶 |
+| B6 | 標記矛盾：#7「缺漏·可重跑」vs 文字「重按也一樣」／「有效的結果」—— hold／inspect／why 其餘卡**合一條**（客戶：不另開單）。含已修靜默失敗卡（`find.screen_result`／`hold.take_profit`／`hold.switch`／`hold.deep.dividend_cash`）尚未登記進 `V2_VALID_EMPTY_SPEC`（main `f14c5fd` 上仍只登記 `hold.portfolio_count`）。📌 **2026-09-26 客戶核准的逐卡審查已完成（兩組獨立、結論一致）：沒有任何新的 `(卡, now)` 對符合 #11「▨ 無資料」登記條件**，上列四張卡**不得登記**；`V2_VALID_EMPTY_SPEC` 維持只登記 `(hold.portfolio_count, COUNT_EMPTY_NOW)`；**本輪零程式變更**。逐卡理由見下方 **B6 子表** | ~~未修~~ → 審查完成、**矛盾未解** | 與持股頁同一根因；改 builder／文案需授權。審查確認：每一對 `(卡, now)` 都還蓋著至少一條歧義路徑（上游失敗被吞成空／未載入／未評估），**現有常數拆不開任何一對** ⇒ 登記＝把 #11 擴散到真缺漏 | ~~客戶授權後一次修~~ → 客戶二擇一：(1) 逐卡修上游讓失敗轉紅 (2) 新文案拆「真零 vs 歧義」（見 B6 子表下「解法」） | 客戶（(1) 需逐卡授權動 L1／L3；(2) 需文案／規格） |
 | B7 | 資料污染：`finmind_margin.parquet` 單位混用；`finmind_m1m2.parquet` 負值；M1B-M2 退到代理層未標明（`is_proxy_tier` 被丟）（來源 §6.4／§6.5） | 未修 | FinMind token＋資料層凍結；刪資料可能**不可逆** | 客戶選 §6.5 (A) 給 token 重抓 / (B) 刪列 | 客戶 |
 | B8 | 融資「趨勢燈」後續方向 (a′)(b)(c)（來源 §6.5） | 未動 | 相對分位實測無鑑別力 | 客戶決定要不要做、走哪條 | 客戶 |
 | B9 | QA 殘留（需文案／需確認）：① `find` 唯一勾選因子自身輸入失敗 → 灰色「有效的結果」；② `hold.take_profit` 在 `current_price` 為 `None` 時；③ 配息卡 `why` 寫「L3…拋出例外」但錯在 L1（既有文案限制）；④ `vix` 平盤帶用 GitHub `datasets/finance-vix`（CBOE 鏡像，僅校準）量測 —— 請客戶確認源可接受 | 未修 | 需客戶文案／確認 | 等客戶 | 客戶 |
@@ -62,6 +62,33 @@
 | `us10y`／`dxy` | ② | 見 B1／B2 | 見 B1／B2 | 客戶 |
 
 ⚠️ `fut_net` 列的更正（「等累積」→ 不會累積、誰決定改客戶）為**編修組 2026-09-26 程式閱讀**（`build_leading_fast` 的 14 天抓取窗＋`git ls-tree origin/main data_cache/` 無對應檔），**未經第二組驗**；原文保留加刪除線。類別歸屬中 `health`／`jingqi`／`tw_export` 依總管 2026-09-26 指示，其餘為編修組歸類。
+
+**B6 子表：標記矛盾逐卡審查（2026-09-26，客戶核准；兩組獨立審查、結論一致）**
+**結論**：**無新增 #11 登記** —— `src/ui/views/page_today.py::V2_VALID_EMPTY_SPEC` 維持只有 `("hold.portfolio_count", "src.ui.views.page_hold", "COUNT_EMPTY_NOW")`；**本輪零程式變更**。登記門檻（該符號註解明文）：同一對 `(key, now)` ⛔ 不得再蓋著任何一條「真缺漏／上游失敗被吞成空／還沒載入／未評估／未綁定」路徑。
+
+| 卡（`key`／`now` 常數） | 為什麼不能登記（這個「空」還蓋著哪條歧義路徑） | 相關 |
+|---|---|---|
+| `find.screen_result`／`SCREEN_EMPTY_NOW` | ① 表單允許一個因子都不勾 → L3 回空＋「請至少勾選」；② 去年季快照缺 → 存活 0 檔＋「季快照未就緒」，**不報錯**；③ 唯一勾選因子自身掃描失敗 → 靜默為空 | ③＝B9 ① |
+| `find.sector_flow`／`FLOW_EMPTY_NOW` | 快取尚未產出 ≠ 真的沒有資金流 | — |
+| 持股頁 `EMPTY_SHEET_NOW` | Sheet 列若「張數／均價」空白，被 `parse_portfolio_records` **靜默丟掉** ⇒「空」可能是整張被丟光 | — |
+| 持股頁 `NOT_BOUND_NOW`（含 `hold.binding`） | token／sheet-id 讀取錯誤被吞成「未綁定」；`hold.binding` 另經客戶排除 | — |
+| `hold.take_profit`／`TP_EMPTY_NOW` | 抓價失敗靜默 → `current_price` 為 `None`、該列無錯誤 → 被跳過；「沒有一檔達門檻」可能是價格沒抓到 | ＝B9 ② |
+| `hold.switch`／`SWITCH_EMPTY_NOW` | 否決 regime 嚴格模式缺資料時回 `[]`；未判定燈號被排除在換出候選外 | 同 C2 |
+| `hold.deep.dividend_cash`／`CASH_NO_PAYOUT_NOW` | yfinance 回空但**不拋例外** ⇒ 分不出「沒配息」與「沒抓到」 | 同 C3 |
+| 拆分／壓力／VaR／現金 空態（`hold.alloc_split` `SPLIT_NO_VALUE_NOW`／`hold.deep.stress` `STRESS_EMPTY_NOW`／`hold.deep.var` `VAR_EMPTY_NOW`／`hold.deep.dividend_cash` `CASH_EMPTY_NOW`） | 空＝輸入缺漏，不是有效的零 | — |
+| `hold.macro_stage` `MACRO_EMPTY_NOW`／`hold.position_cap` `CAP_EMPTY_NOW` | 未評估 ≠ 有效的空 | — |
+| `hold.vix`／`VIX_EMPTY_NOW` | 抓取未命中 | — |
+| 查一檔（inspect）各卡 | 抓取失敗時欄位為 `None`，與「真的沒有」同一條路徑；批次卡＝輸入空或格式錯 | — |
+| `why.qa`／`QA_EMPTY_NOW` | Gemini 安全封鎖／回覆格式錯被吞成「成功＋空」；且此態屬「缺漏·可重跑」⇒ #11 不適用 | — |
+| `why.source.none`／`EMPTY_REGISTRY_NOW` | 未載入（缺漏·可重跑）⇒ #11 不適用 | — |
+| 今天頁 | 客戶排除；其空態屬未評估／未知 | — |
+
+**解法（二選一，客戶決定；⛔ 均未動工）**：現有 `*_NOW` 常數**拆不開任何一對**（同一個常數同時蓋著「真的零」與「歧義」），要解 B6 只剩兩條路 ——
+1. **先修上游歧義路徑，讓失敗轉紅**（逐卡動 L1／L3，例：`hold.take_profit` 缺價列、`parse_portfolio_records` 靜默丟列、`why.qa` 吞掉安全封鎖、`find` 不勾因子／季快照缺）⇒ 修完後剩下的「真零」子路徑才可能單獨登記 #11。**需客戶逐卡授權動 L1／L3**（§-1.2 資料層凍結＋§-1）。
+2. **新文案**把「真零」與「歧義」分成不同 `now`（規格／文案決定）⇒ **需客戶給文案**。
+
+📌 **順帶登記（不修）**：`docs/v2/spec/UI_PAGE_FIND.md`「逐項處置」第 3 點的 2026-09-26 補註，把 `find.screen_result` 不能登記的理由之一寫成「存活池讀取失敗（`_load_survivors()` 回錯 → L3 回空表）」—— **自 #690 起該理由已過期**；結論「不得登記」仍成立（改由上表 ①②③ 支撐）。**僅登記，規格文件本輪未動。**
+⚠️ 本子表的逐卡路徑分析為**兩組獨立審查一致**的結論（總管轉述）；編修組只核對了符號名（`V2_VALID_EMPTY_SPEC` 內容、各 `*_NOW` 常數、卡 key）在 `origin/main` `35d8cc3`（＝`f14c5fd`＋一筆機器人資料 commit）上存在，**未重做路徑分析**。拆分／壓力／VaR／現金、macro／cap、vix 三列的 `key`↔常數對映由編修組依常數名補上，**未經第二組驗**。
 
 **C. 登記不做／僅登記（總管）**
 
@@ -97,6 +124,7 @@
 | 測試缺口補齊（僅測試） | #696 `6ec1cb9` |
 | （原 A1）「▸ 詳細」a11y：可及名稱改為「▸ 詳細 ＋ 卡片標題」（`aria-labelledby`）、`aria-controls` 指向內容區、鍵盤焦點框 1px 點線 → 2px 實線並外移（`outline-offset:2px`，不壓「▸」）；⛔ 刻意不用 `aria-expanded`（無 JS 無法隨勾選更新，寫死會對朗讀說謊，§1）；5 頁滑鼠／觸控零像素差異。📌 開關在此之前**本來就能用鍵盤聚焦**（§6.4 舊「鍵盤點不到」已加註更正）。⚠️ 實機未驗 → D1 | #697 `f14c5fd` |
 | （原 A2）方向列：`ndc_signal` 改真方向（官方整數 9–45、帶寬 0、「較上月」；L1 `fetch_ndc_block` 只在 FinMind／6099 分支從同一次抓取附帶上月值，純新增欄位、不新增抓取）；`health`／`jingqi`／`tw_export` 經量測＋獨立複查**維持「無資料」**（原因見 B3 子表）。⚠️ 未對真資料實測 → D2 | #697 `f14c5fd` |
+| B6 逐卡審查完成（兩組獨立一致）：無新增登記（B6 本身**仍未結案**，矛盾待客戶二擇一，見 B6 子表） | 2026-09-26（零程式變更，無 merge） |
 
 ---
 
