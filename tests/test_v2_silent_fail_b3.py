@@ -436,8 +436,17 @@ class TestL5Card:
                                           error="RuntimeError('x')")
 
     def test_b_the_short_rows_are_back_to_the_baseline_single_candidate(self):
+        # ~~單一候選 `(_v2_raised(SRC_DIV_CASH), _V2_NO_EXIT_REPORT)`~~ ← Q3（2026-09-26）
+        # 有意識的變更，⛔ 不是漏刪：配息卡多了第三種紅（持有列整批抓取失敗，與 ⑤⑥ Q2 同一套
+        # 文字）⇒ 短句表**追加**第二個候選。**本批（L1 失敗）那一則仍然只會命中第一個候選**
+        # —— 下一條 `test_the_new_note_has_a_short_row` 之外，這裡直接釘住它挑到的是哪一段。
         assert PH.V2_SHORT_ROWS[("hold.deep.dividend_cash", PH.CASH_FAILED_NOW)][1:] == (
-            PH._v2_raised(PH.SRC_DIV_CASH), PH._V2_NO_EXIT_REPORT)
+            (PH._v2_raised(PH.SRC_DIV_CASH), "整批抓取失敗 —— 看該列的錯誤訊息"),
+            (PH._V2_NO_EXIT_REPORT, PH._V2_CHECK_NET))
+        card = PH.build_dividend_cash_card(_deep(_cash(failed_tickers=("0056",))))[0]
+        short = dict(PH.v2_short_rows(card)[0])
+        assert short[PH.V2_WHY_FACT_KEY] == PH._v2_raised(PH.SRC_DIV_CASH)
+        assert short[PH.V2_GUIDE_FACT_KEY] == PH._V2_NO_EXIT_REPORT
 
     def test_the_new_note_has_a_short_row(self):
         card, _f, _b = PH.build_dividend_cash_card(_deep(_cash(failed_tickers=("0056",))))

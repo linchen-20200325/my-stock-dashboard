@@ -302,8 +302,12 @@ def _ticker_of(row: dict) -> str:
 # ══════════════════════════════════════════════════════════════════
 # 上市 / 上櫃後綴判定（**本檔唯一一處決定要拿哪個後綴去打 yfinance**）
 # ══════════════════════════════════════════════════════════════════
-def _fetch_price_with_otc_fallback(ticker: str):
+def _fetch_price_with_otc_fallback(ticker: str, *, failed: list | None = None):
     """`(真的有資料的代號, 價格 DataFrame)`；`.TW` / `.TWO` 都空 → `(None, None)`。
+
+    `failed=`（Q3，2026-09-26，**加性參數**）：`None`（預設）→ 呼叫 L1 的方式與修前
+    **一字不差**（不帶這個關鍵字）；傳一個 list → 原樣轉給 L1 `fetch_etf_price(failed=)`，
+    L1 那一次（含快取中的）**抓取失敗**會 append 進去（「回空」不會）。本函式不判讀它。
 
     ⚠️ **「本檔唯一」而已**：同樣的 `.TW` → `.TWO` 規則在
     `src/services/dividend_station_service.py`（`fetch_metrics()`）也有一份 ——
@@ -330,13 +334,15 @@ def _fetch_price_with_otc_fallback(ticker: str):
     """
     from src.data.etf import fetch_etf_price     # L3 → L1（正常方向）
 
-    _df = fetch_etf_price(ticker, period=_VAR_PRICE_PERIOD)
+    # 不傳 `failed=` 時一個關鍵字都不多帶 —— 既有呼叫形狀（含測試替身）逐字不變。
+    _kw = {} if failed is None else {"failed": failed}
+    _df = fetch_etf_price(ticker, period=_VAR_PRICE_PERIOD, **_kw)
     if _df is not None and not getattr(_df, "empty", True):
         return ticker, _df
     if not ticker.endswith(_SUFFIX_TWSE):
         return None, None                       # 美股 / 已是 .TWO → 沒有第二個猜法
     _alt = ticker[:-len(_SUFFIX_TWSE)] + _SUFFIX_TPEX
-    _df2 = fetch_etf_price(_alt, period=_VAR_PRICE_PERIOD)
+    _df2 = fetch_etf_price(_alt, period=_VAR_PRICE_PERIOD, **_kw)
     if _df2 is not None and not getattr(_df2, "empty", True):
         return _alt, _df2
     return None, None
@@ -665,8 +671,16 @@ class VarResult:
         return bool(self.computed) and _is_full(self.coverage_pct)
 
 
-def _daily_returns(tickers) -> tuple[dict, list[str], list[str]]:
+def _daily_returns(tickers, *, strict: bool = False) -> tuple[dict, list[str], list[str]]:
     """`{ticker: 日報酬 Series}` ＋ 沒有資料的代號 ＋ **拋了例外**的代號。
+
+    `strict=`（Q3，2026-09-26，**加性參數；預設 `False` → 行為與修前逐位元組相同**）：
+    `True` → L1 `fetch_etf_price` **自己接住的例外**（它回空 df、在 `attrs` 掛旗標，見
+    L1 `PRICE_FETCH_FAILED_ATTR`）也歸進**例外**那一組，不再混進「沒有資料」。
+    格式與既有例外那一行**逐字同一套**（`"{代號}：{例外型別}: {訊息}"`）。
+    `.TW` 失敗但 `.TWO` 抓到資料 → 算成功（那一檔就是上櫃）；`.TW` 失敗、`.TWO` 回空
+    → 仍算失敗（`.TW` 那一次**沒有答案**，不能當成「沒有歷史」）。
+    yfinance 只回空、沒拋例外的那一種**照舊**進「沒有資料」（分不出來，不猜）。
 
     §1：抓不到就**不放進去**（不是放一條 0% 報酬）—— 補 0 會稀釋波動、
     讓尾部 VaR 看起來比實際小，那正是「錯的數字比沒有數字更危險」。
@@ -685,12 +699,20 @@ def _daily_returns(tickers) -> tuple[dict, list[str], list[str]]:
     _missing: list[str] = []
     _errors: list[str] = []
     for _tk in tickers:
+        _l1_failed: list[str] = []      # 只有 strict 才會被 L1 填（見 docstring）
         try:
-            _used, _df = _fetch_price_with_otc_fallback(_tk)     # .TW → 空才試 .TWO
+            _used, _df = (_fetch_price_with_otc_fallback(_tk, failed=_l1_failed) if strict
+                          else _fetch_price_with_otc_fallback(_tk))   # .TW → 空才試 .TWO
         except Exception as _e:     # noqa: BLE001 — 單檔失敗不擋整組，但要記
             print(f"[portfolio_deep/var] {_tk} 價格抓取失敗："
                   f"{type(_e).__name__}: {_e}")
             _errors.append(f"{_tk}：{type(_e).__name__}: {_e}")
+            continue
+        if _df is None and _l1_failed:
+            # L1 接住的例外（`.TW`／`.TWO` 兩次都沒拿到資料，且至少一次是例外）。
+            print(f"[portfolio_deep/var] {_tk} 價格抓取失敗（L1 已接住）："
+                  f"{'；'.join(_l1_failed)}")
+            _errors.append(f"{_tk}：{'；'.join(_l1_failed)}")
             continue
         if _df is None or getattr(_df, "empty", True) or "Close" not in _df:
             _missing.append(_tk)
@@ -725,11 +747,14 @@ def _day_str(value) -> str:
         return ""
 
 
-def get_portfolio_var(rows) -> VarResult:
+def get_portfolio_var(rows, *, strict: bool = False) -> VarResult:
     """戰情表列 → VaR（歷史模擬法 ＋ 參數法）。**純讀不寫。**
 
     Args:
         rows: 同 `get_portfolio_stress()`。
+        strict: Q3（2026-09-26）**加性參數；預設 `False` → 回傳值與修前逐位元組相同**。
+            `True` → L1 取價**自己接住的例外**（回空 df ＋ 失敗旗標）改列進 `fetch_errors`，
+            不再混進 `no_price`（「這檔沒有那段歷史」）。細節見 `_daily_returns()`。
 
     Returns:
         `VarResult`。共同交易日不足一個月 → `computed=False` ＋
@@ -760,7 +785,9 @@ def get_portfolio_var(rows) -> VarResult:
              "reconciled": _ok, "reference_value_twd": _ref}
 
     _value = _value_by_ticker(_priced)
-    _rets, _missing, _errors = _daily_returns(list(_w))
+    # 不傳 strict 時呼叫形狀逐字同修前（不多帶關鍵字）。
+    _rets, _missing, _errors = (_daily_returns(list(_w), strict=True) if strict
+                                else _daily_returns(list(_w)))
     if not _rets:
         # 一檔都沒抓成：有例外 → `upstream_down` 為真（呼叫端判紅）；
         # 全是空資料 → 灰（「這幾檔沒有那段歷史」是有效結果）。

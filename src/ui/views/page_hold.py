@@ -2537,6 +2537,12 @@ class DeepReadout:
         stress_error / var_error / cash_error: 各自的呼叫期例外。
         error: **上游**（戰情表／持股清單）帶下來的例外 —— 這一種是三格全紅，
             因為三格的輸入都沒有了。
+        failed_rows / unpriced_rows: Q3（2026-09-26）—— 持有列裡**因取數失敗而沒被 L3 計入**
+            的代號（整批抓取失敗／現價抓不到），由 `_split_uncounted(station)` 帶下來
+            （與 ⑤⑥ 核心／衛星 Q2 **同一把尺**）。L3 對這兩種列都是**靜靜跳過**
+            （`priced_rows()`／`_shares_of()` 不收 `_detail.error` 的列，壓測／VaR 也不收沒現價的列；
+            前者連 `held_n` 都不計）—— 不帶下來的話，三格會把「抓不到」畫成灰卡
+            「有效的結果」，或畫成一個**沒講它漏了哪幾檔**的數字。預設空 = 修前行為。
     """
 
     requested: bool
@@ -2551,6 +2557,8 @@ class DeepReadout:
     var_error: str = ""
     cash_error: str = ""
     error: str = ""
+    failed_rows: tuple[str, ...] = ()
+    unpriced_rows: tuple[str, ...] = ()
 
     @property
     def scope_idle(self) -> bool:
@@ -2580,6 +2588,9 @@ def load_deep(station: StationReadout) -> DeepReadout:
         return DeepReadout(requested=True, error=station.error, **_shared)
     if not station.has_rows:
         return DeepReadout(requested=True, **_shared)
+    # Q3：持有列取數失敗的那幾檔（見 `DeepReadout.failed_rows`）。只讀列上既有的兩欄，零 L3 呼叫。
+    _failed_rows, _unpriced_rows = _split_uncounted(station)
+    _shared = {**_shared, "failed_rows": _failed_rows, "unpriced_rows": _unpriced_rows}
 
     # ⚠️ **三支各自具名 import，不用 `getattr(module, name)`**：
     # 動態取屬性會直接繞過 `tests/test_p04_hold_view.py::TestReadOnly` 的
@@ -2597,7 +2608,9 @@ def load_deep(station: StationReadout) -> DeepReadout:
                            cash_error=repr(_e))
     _rows = [dict(_r) for _r in station.rows]
     _stress, _stress_err = _guarded(get_portfolio_stress, _rows, "壓力測試")
-    _var, _var_err = _guarded(get_portfolio_var, _rows, "VaR")
+    # Q3：`strict=True` —— L1 取價**自己接住的例外**改列進 `fetch_errors`（→ 紅），
+    # 不再混進 `no_price`（→ 灰「這檔沒有那段歷史」）。L3 預設 `False`，其他呼叫端不受影響。
+    _var, _var_err = _guarded(lambda _r: get_portfolio_var(_r, strict=True), _rows, "VaR")
     _cash, _cash_err = _guarded(get_dividend_cash_flow, _rows, "配息現金流")
     return DeepReadout(
         requested=True, has_station_rows=True, **_shared,
@@ -2642,6 +2655,19 @@ def _deep_note(deep: DeepReadout, *, now: str, source: str,
     return Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
 
 
+def _deep_uncounted_why(failed: Sequence[str], unpriced: Sequence[str]) -> str:
+    """Q3：⑥ 三格「持有列取數失敗」的 why —— 與 ⑤⑥ 核心／衛星（Q2）、⑤ 停利卡**逐字同一套**
+    （同一頁、同一檔、同一條失敗路徑 ⛔ 不給兩種說法）。⛔ 不新寫：L0 `MISS_TEXT` 摘掉開頭
+    單數主詞（只刪不改）＋ `NO_PRICE_WHY`（已截掉在快取內不成立的「可以重跑一次」）。
+    """
+    return "".join(
+        f"{'、'.join(_codes)}：{_sentence}"
+        for _codes, _sentence in (
+            (failed, MISS_TEXT[MISS_FETCH_FAILED].removeprefix("這一檔")),
+            (unpriced, NO_PRICE_WHY))
+        if _codes)
+
+
 def _deep_reason(result: Any) -> str:
     """L3 給的「算不出來的原因」。**沒有給就誠實說沒有給**，不留一個空句。
 
@@ -2651,20 +2677,32 @@ def _deep_reason(result: Any) -> str:
     return str(getattr(result, "reason", "") or "") or UNKNOWN_ERROR_TEXT
 
 
-def _valued_facts(result: Any) -> list[tuple[str, str]]:
+def _valued_facts(result: Any, *, coverage: bool = True,
+                  red: bool = False) -> list[tuple[str, str]]:
     """「這個數字涵蓋了你幾檔持股」——`partial` 時**必須講**（§1）。
 
     不講的話，使用者會把「三檔裡只算了一檔」的風險數字當成整個組合的風險。
+
+    `coverage=False`（Q3 N1，2026-09-26 總管裁定，只刪不加）：不出「涵蓋範圍」那一列。
+    用於「持有列取數失敗」觸發的紅卡 —— L3 `_held_n()` **不計**整批失敗的列，那一列會寫出
+    「1 檔持有列裡納入了 1 檔」，而同一張卡的 why 正在說「00878：整批抓取失敗」（自相矛盾）；
+    且紅卡不畫數字，「這個數字涵蓋了幾檔」講的是一個卡上看不到的數字（同 Q2 ⑤⑥ 紅態刪
+    「這個比例只涵蓋一部分」）。預設 `True` ＝ 修前行為（既有紅態／橘／綠一律不變）。
+
+    `red=True`（Q3 合併前，2026-09-26 總管裁定，只刪不加）：卡片是紅態 → 不出「⚠️ 兩套算法
+    對不起來」那一列。那一列的結語是「這一格因此判『已失準』（橘），不是『運作中』（綠）」——
+    掛在紅卡上＝同一張卡說兩句相反的話。**任何紅**都一樣（含本批之前就有的 VaR `upstream_down`
+    紅卡，那張寫「橘」本來就不實）。預設 `False` ＝ 修前行為（橘／灰／綠照舊出）。
     """
     _facts: list[tuple[str, str]] = []
     _valued = getattr(result, "valued_n", None)
     _held = getattr(result, "held_n", None)
-    if isinstance(_valued, int) and isinstance(_held, int) and _held:
+    if coverage and isinstance(_valued, int) and isinstance(_held, int) and _held:
         _facts.append(("涵蓋範圍",
                        f"{_held} 檔持有列裡納入了 {_valued} 檔"
                        + ("（其餘缺張數／均價／現價 —— **不進分子也不進分母**）"
                           if _valued < _held else "")))
-    if getattr(result, "reconciled", True) is False:
+    if not red and getattr(result, "reconciled", True) is False:
         _facts.append((
             "⚠️ 兩套算法對不起來",
             _reconcile_gap_text(result)
@@ -2852,10 +2890,15 @@ def build_stress_card(deep: DeepReadout) -> _Built:
     """
     _res = deep.stress
     _degraded = _degraded_bits(_res) if _res is not None else []
+    # Q3（2026-09-26）：持有列**取數失敗**（整批失敗／現價抓不到）→ L3 靜靜跳過那幾列 ⇒
+    # 全部失敗時落在灰卡「有效的結果」、部分失敗時畫一個漏了那幾檔的虧損。一律升紅
+    # （同 ⑤⑥ 核心／衛星 Q2：旁邊還有沒算到的，算出來的就不是整個組合的數字）。
+    _stress_skipped = deep.failed_rows + deep.unpriced_rows
     _state = classify_ui_state(
         requested=deep.requested,
         error=deep.stress_error or deep.error or None,
-        has_value=bool(_res is not None and _res.computed),
+        has_value=bool(_res is not None and _res.computed and not _stress_skipped),
+        reason=MISS_FETCH_FAILED if _stress_skipped else "",
         discriminative=not _degraded)
     _facts: list[tuple[str, str]] = [
         ("這不是預測", "它回答的是「同樣的跌幅打在**你這個組合**上會是多少」，"
@@ -2868,7 +2911,10 @@ def build_stress_card(deep: DeepReadout) -> _Built:
         _facts.insert(0, ("情境（L0 SSOT）",
                           f"假設大盤下跌 {abs(float(_res.drop_pct)):g} 個百分點，"
                           "以各檔 Beta 加權估算回撤"))
-    _facts += _valued_facts(_res)
+    # Q3 N1：持有列取數失敗觸發的紅 → 不出「涵蓋範圍」；任何紅 → 不出「兩套算法對不起來」
+    # （它的結語是「判已失準（橘）」）。理由見 `_valued_facts()`。
+    _facts += _valued_facts(_res, coverage=not _stress_skipped,
+                            red=_state == UI_FAILED)
     if _res is not None and getattr(_res, "beta_imputed", ()):
         _facts.append((
             "⚠️ 這幾檔的 Beta 是估的",
@@ -2896,6 +2942,11 @@ def build_stress_card(deep: DeepReadout) -> _Built:
                 tuple(_facts), "")
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
+    elif _state == UI_FAILED and not (deep.stress_error or deep.error):
+        # Q3：沒有例外、但有持有列取數失敗（見上）。why／where 與 ⑤⑥ Q2 同一套既有文字。
+        _note = Note(now=STRESS_FAILED_NOW,
+                     why=_deep_uncounted_why(deep.failed_rows, deep.unpriced_rows),
+                     where=STATION_ERROR_WHERE)
     elif _state == UI_FAILED:
         _note = _deep_note(deep, now=STRESS_FAILED_NOW, source=SRC_STRESS,
                            error=deep.stress_error)
@@ -2929,16 +2980,24 @@ def build_var_card(deep: DeepReadout) -> _Built:
     # （上游壞了 → 紅）分成兩個欄位。混成一種的話，Yahoo 掛掉的那一天
     # 使用者會以為「我的股票太新所以算不出來」，而**真的**壞掉那一次
     # 沒有人看得見 —— 那是「假性錯誤滿版」的反面：**假性正常**。
+    # ~~只在 `upstream_down`（一檔都沒抓成）時才走紅~~ ← Q3（2026-09-26）有意識的變更，
+    # ⛔ 不是漏刪：**任一檔**取價拋例外就紅。舊判定下「部分拋例外」是 live 綠卡 ——
+    # 那幾檔悄悄掉出分布（`excluded_tickers`），卡上**一個字都沒講**（它們不在 `no_price`，
+    # 橘卡的失準因子也不看 `fetch_errors`）。同 ⑤⑥ Q2／⑥ 配息批次 3：部分失敗一律紅。
+    # （L3 `upstream_down` 屬性本身未動；它仍正確描述「整個掛掉」，只是本卡不再只看它。）
     _dead_src = ("；".join(_res.fetch_errors)
-                 if _res is not None and _res.upstream_down else "")
+                 if _res is not None and _res.fetch_errors else "")
     # ⚠️ **「部分沒價格」與「上游整個掛掉」是兩件事，兩件都不吞。**
     # 上一段的 `_dead_src` 走 error → 紅；這裡的 `no_price` 走 discriminative
     # → 橘（有值、但涵蓋不到那幾檔）。混成同一種，其中一件必然被另一件蓋掉。
     _degraded = _degraded_bits(_res) if _res is not None else []
+    # Q3：持有列取數失敗 → 升紅（同壓測那一格，理由見 `build_stress_card()`）。
+    _var_skipped = deep.failed_rows + deep.unpriced_rows
     _state = classify_ui_state(
         requested=deep.requested,
         error=deep.var_error or deep.error or _dead_src or None,
-        has_value=bool(_res is not None and _res.computed),
+        has_value=bool(_res is not None and _res.computed and not _var_skipped),
+        reason=MISS_FETCH_FAILED if _var_skipped else "",
         discriminative=not _degraded)
     _facts: list[tuple[str, str]] = [
         ("這個數字的意思",
@@ -2947,7 +3006,11 @@ def build_var_card(deep: DeepReadout) -> _Built:
                        "缺的日子一律剔除，**不補 0、不 ffill**（補了會低估尾部風險）"),
         ("已知限制", "日報酬是**原幣別**報酬；外幣計價的持股未含匯率變動"),
     ]
-    _facts += _valued_facts(_res)
+    # Q3 N1：持有列取數失敗觸發的紅 → 不出「涵蓋範圍」（理由見 `_valued_facts()`）。
+    # ③④（取價例外）觸發、且沒有持有列失敗的既有紅態 → 「涵蓋範圍」照舊出。
+    # 任何紅（含 ③④ 與既有 `upstream_down`）→ 不出「兩套算法對不起來」（它寫「判已失準（橘）」）。
+    _facts += _valued_facts(_res, coverage=not _var_skipped,
+                            red=_state == UI_FAILED)
     if _res is not None and getattr(_res, "no_price", ()):
         _facts.append(("⚠️ 這幾檔沒有價格序列",
                        "、".join(_res.no_price)
@@ -2988,6 +3051,11 @@ def build_var_card(deep: DeepReadout) -> _Built:
                 tuple(_facts), "")
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
+    elif _state == UI_FAILED and not (deep.var_error or deep.error or _dead_src):
+        # Q3：沒有例外、但有持有列取數失敗。why／where 與 ⑤⑥ Q2 同一套既有文字。
+        _note = Note(now=VAR_FAILED_NOW,
+                     why=_deep_uncounted_why(deep.failed_rows, deep.unpriced_rows),
+                     where=STATION_ERROR_WHERE)
     elif _state == UI_FAILED:
         _note = _deep_note(deep, now=VAR_FAILED_NOW, source=SRC_VAR,
                            error=deep.var_error or _dead_src)
@@ -3042,8 +3110,15 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
     # 由 `FAILED_REASONS` 決定升紅 —— 本檔**不自己判「這算不算故障」**。
     # ⚠️ 部分失敗也一律紅：算得出來的那幾檔的總額看起來跟完整總額一模一樣（§1）。
     # 只在沒有例外時才看（有例外走既有那一則）。
-    _cash_failed = (() if (deep.cash_error or deep.error or _res is None)
-                    else tuple(getattr(_res, "failed_tickers", ()) or ()))
+    _cash_l1_failed = (() if (deep.cash_error or deep.error or _res is None)
+                       else tuple(getattr(_res, "failed_tickers", ()) or ()))
+    # Q3（2026-09-26）：持有列**整批抓取失敗**（`_detail.error`）的那幾檔 —— L3 `_shares_of()`
+    # 靜靜跳過（連 `held_n`／`lots_n` 都不計 ⇒ 覆蓋率看起來是 100%）⇒ 全部失敗時落在灰卡
+    # 「有效的結果」，部分失敗時是一個漏了那幾檔的 live 總額。同上，一律紅。
+    # ⚠️ 只收整批失敗、⛔ 不收「現價抓不到」：配息這一路不需要現價（`_shares_of()` 只看張數），
+    #    沒現價的列**照樣進了總額** —— 把它算成失敗是假警報。
+    _cash_skipped = () if (deep.cash_error or deep.error) else deep.failed_rows
+    _cash_failed = _cash_l1_failed + _cash_skipped
     _state = classify_ui_state(
         requested=deep.requested,
         error=deep.cash_error or deep.error or None,
@@ -3074,7 +3149,11 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
                        + " —— 海外所得走最低稅負制，與國內二代健保**不混算**"))
     _held = getattr(_res, "held_n", 0) or 0
     _lots = getattr(_res, "lots_n", 0) or 0
-    if _res is not None and _held and _lots < _held:
+    # Q3 N1（同壓測／VaR，理由見 `_valued_facts()`）：持有列整批失敗觸發的紅 → 下面兩列都不出。
+    # 兩列的分母都**不含**失敗列（L3 `_held_n()`／`_shares_of()` 跳過它們）⇒「2 檔裡納入了 1 檔」
+    # ／「覆蓋率 50%」都會少算那幾檔，與 why 的「整批抓取失敗」自相矛盾；且紅卡不畫總額。
+    # 只刪不加；L1 配息抓取失敗（批次 3）等既有紅態、橘、灰一律照舊。
+    if _res is not None and _held and _lots < _held and not _cash_skipped:
         _facts.append((
             "涵蓋範圍",
             f"{_held} 檔持有列裡納入了 {_lots} 檔 —— "
@@ -3085,7 +3164,7 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
     # 讓那句「近一年查不到任何一筆配息」看起來涵蓋了全部持股（§1）。
     # ⚠️ 條件**直接用 `_degraded`**，不另寫一份 `not full_coverage` ——
     # 同一個判定寫兩次，改一次就會漂成「橘卡講、灰卡不講」。
-    if _degraded:
+    if _degraded and not _cash_skipped:
         _out = tuple(getattr(_res, "excluded_tickers", ()) or ())
         _facts.append((
             "⚠️ 這個總額只涵蓋一部分持股",
@@ -3123,6 +3202,12 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
                 tuple(_facts), "")
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
+    elif _state == UI_FAILED and not (deep.cash_error or deep.error or _cash_l1_failed):
+        # Q3：只有持有列整批抓取失敗（見上）。why／where 與 ⑤⑥ Q2、⑤ 停利卡同一套既有文字
+        # （這一條失敗在戰情表那一層，⛔ 不掛到 L3 配息現金流的「拋出例外」名下）。
+        _note = Note(now=CASH_FAILED_NOW,
+                     why=_deep_uncounted_why(_cash_skipped, ()),
+                     where=STATION_ERROR_WHERE)
     elif _state == UI_FAILED:
         # 兩種失敗都走本卡既有的 error 分支（文字一字未改）：
         # L3 呼叫期例外 → 原樣；有持股的配息抓取失敗（見上）→ 把 L1 的失敗訊息
@@ -3133,7 +3218,7 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
         _note = _deep_note(
             deep, now=CASH_FAILED_NOW, source=SRC_DIV_CASH,
             error=deep.cash_error or ("；".join(
-                getattr(_res, "failed_detail", ()) or _cash_failed)))
+                getattr(_res, "failed_detail", ()) or _cash_l1_failed)))
     elif not deep.has_station_rows:
         _note = _deep_note(deep, now=CASH_NO_HOLDINGS_NOW,
                            source=SRC_DIV_CASH, error="")
@@ -3945,20 +4030,34 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.deep.grape", GRAPE_UNWIRED_NOW, (
            None, "這一格的實作住在 L5" + V2_EXCERPT_GAP + "而且它自帶寫死的 widget key",
            _V2_NO_EXIT_UNWIRED)),
+       # 壓測／VaR 四個候選（Q3 起）：該支 L3 拋例外（既有）／持有列整批抓取失敗 ＋ 現價抓不到
+       # （兩者同時）／只有前者／只有後者 —— 後三個與 ⑤⑥ 核心／衛星（Q2）**逐字同一組摘錄**。
+       # 配息只有前兩種（配息不需要現價，見 `build_dividend_cash_card()`）。
        _v2_rows_for("hold.deep.stress", STRESS_FAILED_NOW, (
-           None, _v2_raised(SRC_STRESS), _V2_NO_EXIT_REPORT)),
+           None, (_v2_raised(SRC_STRESS),
+                  "整批抓取失敗 —— 看該列的錯誤訊息" + V2_EXCERPT_GAP
+                  + "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
+                  "整批抓取失敗 —— 看該列的錯誤訊息",
+                  "需要的數字沒抓到 —— 通常是上游來源這輪失敗"),
+           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.deep.stress", STRESS_EMPTY_NOW, (
            None, "這是一個有效的結果" + V2_EXCERPT_GAP + "本站不用檔數當權重頂替",
            _V2_FILL_LOTS)),
        _v2_rows_for("hold.deep.var", VAR_FAILED_NOW, (
-           None, _v2_raised(SRC_VAR), _V2_NO_EXIT_REPORT)),
+           None, (_v2_raised(SRC_VAR),
+                  "整批抓取失敗 —— 看該列的錯誤訊息" + V2_EXCERPT_GAP
+                  + "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
+                  "整批抓取失敗 —— 看該列的錯誤訊息",
+                  "需要的數字沒抓到 —— 通常是上游來源這輪失敗"),
+           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.deep.var", VAR_EMPTY_NOW, (
            None, "這是一個有效的結果" + V2_EXCERPT_GAP
            + "本站寧可不給，也不給一個用補值撐出來的尾部估計",
            "若是新上市／剛買進的標的，等歷史累積" + V2_EXCERPT_GAP
            + "若是缺張數／均價，到既有的 📁 組合管理分頁補齊")),
        _v2_rows_for("hold.deep.dividend_cash", CASH_FAILED_NOW, (
-           None, _v2_raised(SRC_DIV_CASH), _V2_NO_EXIT_REPORT)),
+           None, (_v2_raised(SRC_DIV_CASH), "整批抓取失敗 —— 看該列的錯誤訊息"),
+           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.deep.dividend_cash", CASH_NO_PAYOUT_NOW, (
            None, "可能是你手上這幾檔近一年真的沒有除息，也可能是上游沒有這幾檔的配息紀錄",
            "若你確定收過息：先確認代號是否正確")),
