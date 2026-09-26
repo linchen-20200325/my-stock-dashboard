@@ -217,8 +217,16 @@ re-export 繞道**只是騙過 AST、不改性質**」——
 以 AST 釘住）。
 
 ⚠️ **接上不等於一定有資料**，三態仍然分開講（§1）：
-  · 取數拋例外 → 上 `aux_errors`，**該因子不計入**，卡上寫明（不轉紅：
-    一個因子掛掉不等於選股掛掉，這與缺貨 / RS 的既有處置一致）；
+  · 取數拋例外 → 上 `aux_errors`，**該因子不計入**，卡上寫明（~~不轉紅：
+    一個因子掛掉不等於選股掛掉，這與缺貨 / RS 的既有處置一致~~）；
+    📌 **2026-09-26 批次 5 —— 有意識的政策變更，⛔ 不是漏刪；決策者：客戶
+    （「本批放行『失敗被當成沒結果』的所有卡」），判讀：總管（部分失敗 → 紅，比照批次 2～4）。**
+    **你勾的**因子這一輪輸入沒拿到 → 整張卡轉紅「選股中止」（`factor_input_failed`，
+    見 `build_screen_result_card`），**就算其他因子還排得出名單也一樣**；
+    沒勾的（例如沒勾估值時的名稱欄）照舊只上 `aux_errors`、不轉紅。
+    舊理由（一個因子掛掉 ≠ 選股掛掉）**仍然成立**：名單照樣排得出來。被權衡掉的是
+    「排得出來」不等於「是你要的那一份」—— 缺一個你勾的因子，排序就不是依你的條件，
+    而那份名單原本會以綠燈上桌（同 `_aborted_where`「本站不以殘缺資料湊出名單」）。
   · 回**空 map**（上市與上櫃都沒給資料）→ 同上，卡上寫明「這一輪 0 檔有
     本益比」。⚠️ 這一種 L3 的 note **看不見** ——
     `composite_rank_candidates` 的 `_missing` 只收缺貨與 RS，而它的
@@ -226,13 +234,19 @@ re-export 繞道**只是騙過 AST、不改性質**」——
     不會印**。所以「估值全空」這句話**只能本頁自己講**；
   · 拿到 N 檔 → **不再畫那則「少算了一個你勾的因子」的 Note**
     （留著就是假警告 —— `CLAUDE.md §1.A` 第 4 點的假性錯誤）。
+    📌 2026-09-26 批次 5：那則 Note（`SCREEN_PE_SHORT_NOW` ＋ `PE_MISSING_WHERE`）**整則刪除**
+    —— 勾了估值而估值沒拿到（含只少半邊）一律升紅「選股中止」，live 那一格走不到了。
     部分覆蓋（例如只有上市有）由 L3 自己的「因子實際覆蓋：估值分 N/M」
     那句話揭露，本檔**原樣透傳、不改寫**（§2.1 那是 L3 的話）。
 
-⚠️ **本檔看不出「只有上市或只有上櫃掛了」**：L1 對兩個市場是各自
+~~⚠️ **本檔看不出「只有上市或只有上櫃掛了」**：L1 對兩個市場是各自
 `try/except … continue` 的 fail-soft，半邊失敗時回一份只有另外半邊的 map
 且不留旗標。L3 `get_pe_name_maps()` 的 docstring 已據實標明，本頁不假裝
-知道（會反映在 L3 那句「估值分 N/M」的覆蓋率上，但那是**推論**不是**事實**）。
+知道（會反映在 L3 那句「估值分 N/M」的覆蓋率上，但那是**推論**不是**事實**）。~~
+📌 **2026-09-26 批次 5 事實更正（⛔ 不是漏刪）**：L1 `fetch_pe_name_maps(failed_markets=)`
+與 L3 `get_pe_name_maps(failed_markets=)` 新增**附加標記**（不傳＝既有呼叫一字不變），
+本頁傳一個 list 進去，拿回「連一筆有效本益比都沒給出」的市場 → 本頁**看得出**只少半邊了。
+fail-soft 本身沒變（兩份 map 照舊），變的只有本頁拿不拿得到這個事實。
 
 ═══ 這個檔擋得住什麼、擋不住什麼（誠實邊界）═══════════════════════════
 `load_screen_result()` / `load_sector_flow()` 的 `try/except` 擋得住的是
@@ -297,6 +311,7 @@ from shared.fundamental_prescreen_thresholds import (
 from shared.station_specs import (
     MISS_CONTRACT_DRIFT,
     MISS_FETCH_FAILED,
+    MISS_NO_INPUT,
     MISS_TEXT,
 )
 # L0 SSOT：熱力圖的區間標籤與「台股是單一代表股不是類股平均」那段揭露。
@@ -548,19 +563,9 @@ HEATMAP_SWITCH_HINT: str = (
 #: 估值取數的**出處**（`_error_why()` 用）。本批新增的那一支 L3。
 SRC_PE: str = "L3 估值輸入（`services.valuation_service.get_pe_name_maps`）"
 
-#: 估值因子**這一輪沒有資料**時的「去哪補」。
-#: ⚠️ **與未接線那一種不同，這一種是有出口的** —— 東西已經接上了，
-#: 拿不到是這一輪的事（上游掛了 / 兩個市場都沒給），重按有機會好。
-#: 前一批的 `PE_UNWIRED_WHERE` 用 `NO_EXIT_MARKER`（「沒有使用者出口」）
-#: 是對的，因為那時候按幾次都不會變；**接上之後照抄那句話就會變成說謊**。
-PE_MISSING_WHERE: str = (
-    f"{press(ACTION_RUN_SCREEN_LABEL)}重跑一次；"
-    "TWSE / TPEX 的 OpenAPI 偶發不通時本頁會拿到空的對照表。"
-    "若持續如此，到"
-    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
-    "看那兩支 OpenAPI 與 NAS proxy 是否可用；"
-    "在拿到之前**這個因子不計入綜合分，也不會被當成 0 分**"
-)
+# `PE_MISSING_WHERE`（估值沒拿到時 live Note 的「去哪補」）2026-09-26 批次 5 刪除：
+# 唯一使用處（`SCREEN_PE_SHORT_NOW` 那則 live Note）已走不到。⚠️ 它原文第一句「重跑一次」
+# 在估值那一種其實也不成立 —— 兩支 fetcher 失敗時回空表並被 `@st.cache_data` 快取 1 天。
 
 #: 估值因子取數**拋例外**時的「為什麼沒有」前綴。實際訊息由 `_error_why()` 接。
 PE_FAILED_WHY_HEAD: str = "本輪估值輸入取不到 —— "
@@ -575,6 +580,30 @@ PE_EMPTY_WHY: str = (
     "這不是「這些股票都很貴」，是**沒有數字**；"
     "L3 會讓缺料的因子不計入平均，**不會**拿 0 分頂替"
 )
+
+#: 需要**額外取數**的四個因子 → 它在卡片 facts「週邊取數失敗」那一列的標籤。
+#: 2026-09-26 批次 5 自 `load_screen_result()` 函式體內**上提**（字面一字未改），
+#: 讓那幾列 facts 與「選股中止」紅卡的主詞讀同一份（⛔ 不手抄第二份）。
+#: 順序＝本頁取數順序，也是紅卡主詞的排列順序（短句表依第一個主詞摘錄）。
+#: `eps_high` 不在表內：它讀存活池自己的 `eps` 欄，沒有另一輪取數會失敗。
+FACTOR_INPUT_LABELS: dict[str, str] = {
+    PE_FACTOR_KEY: "估值（本益比）",
+    "shortage": "缺貨掃描",
+    "rs_leader": "抗跌 RS 掃描",
+    "trend": "跨季轉強",
+}
+
+#: 「選股中止」紅卡在**勾選因子的輸入這一輪沒拿到**時，接在因子名稱後面的那一句。
+#: ⛔ 不新寫：逐字取 L0 `MISS_TEXT[MISS_NO_INPUT]`，**只刪不改**兩處 ——
+#:   · 開頭的主詞「這盞燈」（本卡不是燈；前面接的是因子名稱），同「💼 持有」頁批次 4；
+#:   · 第一個「，」之後的「可以重跑一次。」（QA 2026-09-26 實測：**重跑不會好**）。
+#:     估值兩支 fetcher 失敗時回空表、被 `@st.cache_data` 快取 1 天；缺貨／RS 的空排行
+#:     各快取 1 天／1 小時；季快照缺要等排程 —— 上游恢復後按重跑，卡照樣是紅的。
+#:     那半句在這裡是**錯的指引**（`CLAUDE.md §-2` 記載的同一個坑），故截掉、不改寫。
+#: ⚠️ 為什麼不用 `MISS_FETCH_FAILED` 那一句：它說「看該列的錯誤訊息」，而「只少了上市或
+#:    上櫃半邊」的估值那一種，facts 裡**沒有**一列錯誤訊息可看。
+#: ⚠️ 狀態鍵（`MISS_FETCH_FAILED`，讓 L0 升紅）與這一句**刻意不同源**（同批次 4 的作法）。
+FACTOR_MISS_WHY: str = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈").split("，", 1)[0]
 
 #: 表單下方常駐的接線揭露（不隨狀態消失）。
 WIRING_DISCLOSURE: str = (
@@ -597,6 +626,10 @@ SCREEN_IDLE_WHERE: str = f"勾好條件後，{press(ACTION_RUN_SCREEN_LABEL)}（
 #: 選股跑完但 0 檔 —— **這是一個有效的結果**，不是故障、也不是還沒跑。
 SCREEN_EMPTY_NOW: str = "**選股已完成，符合條件的標的是 0 檔**"
 
+#: 「季快照未就緒」時該去哪 —— 2026-09-26 批次 5 自 0 檔灰卡的 where 原文**上提**（字面一字未改），
+#: 讓「存活池為空」那張紅卡讀同一句（⛔ 不手抄第二份）。灰卡的 where 仍是原來那一整句。
+SNAPSHOT_WAIT_WHERE: str = "要等排程補抓，重按不會改變它"
+
 #: 板塊地圖 idle 態（線框葉2 grey 三要素）。
 MAP_IDLE_NOW: str = "**板塊資料尚未載入**"
 MAP_IDLE_WHY: str = (
@@ -607,7 +640,7 @@ MAP_IDLE_WHERE: str = press(ACTION_LOAD_MAP_LABEL)
 
 #: 以下 `*_NOW` 原本寫在各 `build_*_card()` 函式體內，2026-09-25 上提成常數
 #: （**文字一字未改**）—— 讓 `V2_SHORT_ROWS` 以常數本身當鍵，⛔ 不再手抄一份字串。
-SCREEN_PE_SHORT_NOW: str = "**這份名單少算了一個你勾的因子**（估值／本益比）"
+# `SCREEN_PE_SHORT_NOW` 2026-09-26 批次 5 刪除（孤兒；理由見 `build_screen_result_card` live 分支）。
 SCREEN_ABORTED_NOW: str = "**選股中止**"
 SCREEN_DRIFT_NOW: str = "**選股跑完了，但回傳的東西讀不出「有幾檔」**"
 HEATMAP_ERROR_NOW: str = "**熱力圖畫不出來**"
@@ -654,9 +687,6 @@ V2_EXCERPT_GAP: str = "…"
 
 V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = {
     # ── 選股結果 ────────────────────────────────────────────────
-    ("find.screen_result", SCREEN_PE_SHORT_NOW):
-        ("少算了估值（本益比）因子", "本輪估值輸入沒拿到，未計入綜合分",
-         f"{press(ACTION_RUN_SCREEN_LABEL)}重跑"),
     ("find.screen_result", SCREEN_IDLE_NOW):
         ("尚未選股", "送出前一次取數都不會發",
          f"表單裡{press(ACTION_RUN_SCREEN_LABEL)}"),
@@ -664,9 +694,15 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = {
         ("選股中止",
          # 兩種中止（批次 1，2026-09-26）：本頁存活池取數拋例外 → 摘出處原文；
          # 否則 → 既有那一句（L3 選股編排拋例外），一字未改。見 `_v2_pick_short()`。
+         # 批次 5（2026-09-26）第三種：勾選因子的輸入這一輪沒拿到 → 摘「第一個主詞 … L0 那一句」
+         # （主詞依 `FACTOR_INPUT_LABELS` 順序排，故每個主詞一個候選；原文逐字在詳細）。
          (v2_plain(SRC_SURVIVORS).split("（", 1)[0] + V2_EXCERPT_GAP + "拋出例外",
+          *(_label + V2_EXCERPT_GAP + FACTOR_MISS_WHY
+            for _label in FACTOR_INPUT_LABELS.values()),
           "L3 選股編排拋出例外（原文在詳細）"),
-         "FinMind 額度每日 00:00 重置；其餘看資料體檢"),
+         # 批次 5（2026-09-26）：存活池**為空**（季快照未就緒）那一種的 where 是
+         # `SNAPSHOT_WAIT_WHERE` 原句（短、整句就是摘錄）；其餘照舊用既有那一句。
+         (SNAPSHOT_WAIT_WHERE, "FinMind 額度每日 00:00 重置；其餘看資料體檢")),
     ("find.screen_result", SCREEN_DRIFT_NOW):
         ("讀不出結果有幾檔", "回傳形態與約定不符，重跑不會好", NO_EXIT_MARKER),
     ("find.screen_result", SCREEN_EMPTY_NOW):
@@ -788,8 +824,17 @@ class ScreenResult:
         hits: `summarize_factor_hits()` 的片語（掃失敗的因子不產生片語）。
         error: 排名本身拋出的例外 `repr(e)`；空字串 = 沒有錯誤。
         aux_errors: 週邊取數（存活池 / 三個掃描 / 總經）的失敗訊息。
-            **它們不讓整張卡轉紅** —— 一個因子掛掉不等於選股掛掉，
-            L3 會讓該因子「缺料不計入」；但**必須看得見**，故上卡片的 facts。
+            ~~**它們不讓整張卡轉紅** —— 一個因子掛掉不等於選股掛掉，
+            L3 會讓該因子「缺料不計入」；~~但**必須看得見**，故上卡片的 facts。
+            📌 2026-09-26 批次 5（有意識的變更，⛔ 不是漏刪）：這一欄本身**仍然不參與**
+            判定（它是給人看的原文）；轉不轉紅改由下面兩個專用欄位決定 ——
+            `survivors_error`（批次 1）與 `factor_input_failed`（批次 5）。
+        factor_input_failed: **你勾的**因子裡，這一輪輸入沒拿到的那幾個 key
+            （依 `FACTOR_INPUT_LABELS` 的順序；沒勾的因子不會出現在這裡）。
+            非空 → 卡片轉紅「選股中止」，**就算其他因子排得出名單也一樣**
+            （部分失敗 → 紅，比照「💼 持有」頁批次 2～4）。
+            ⚠️ 它是判定用的**事實**，不是從 `aux_errors` 的字面反推的
+            （估值只少上市或上櫃半邊的那一種，`aux_errors` 裡根本沒有一列）。
     """
 
     requested: bool
@@ -807,6 +852,11 @@ class ScreenResult:
     #:    L3 `get_ranked_picks` 對存活池失敗是**吞掉**的（回空表 ＋ 「存活池為空」的 note），
     #:    回來的 0 列因此分不出「真的 0 檔」與「存活池沒拿到」。本頁手上唯一的訊號就是這一個。
     survivors_error: str = ""
+    #: 批次 5（2026-09-26）：`survivors_error` 是不是「存活池**為空**」那一種
+    #: （L3 strict 拋出、帶 `empty_survivor_pool` 屬性；最常見是去年同季快照缺）。
+    #: 它與讀取例外**處置不同**：要等排程補抓快照，重按不會變 —— 卡上的「去哪補」因此不同。
+    survivors_pool_empty: bool = False
+    factor_input_failed: tuple[str, ...] = ()
 
     @property
     def has_rows(self) -> bool:
@@ -834,21 +884,38 @@ def _frame_rows(df: Any) -> int | None:
         return None
 
 
-def _load_survivors() -> tuple[Any, int | None, str]:
-    """L3 存活池 → `(df, 檔數, 錯誤字串)`。失敗 → `(None, None, repr(e))`。
+def _load_survivors() -> tuple[Any, int | None, str, bool]:
+    """L3 存活池 → `(df, 檔數, 錯誤字串, 是否為空池)`。失敗 → `(None, None, repr(e), …)`。
 
     §1：失敗時檔數回 `None` 而**不是 0** —— 「取不到」與「池子是空的」
     是兩件事，卡上會分別顯示「—」與「0 檔」。
+
+    ⚠️ 批次 5（2026-09-26）起傳 `strict=True`：存活池**為空**也算失敗 ——
+    L3 以排名器自己的 note 原文拋出（「基本面存活池為空（季快照未就緒）。」），
+    本頁照舊接住、走批次 1 那條紅卡。最常見的成因是**去年同季快照缺**
+    → 三率三升全判不過 → 0 檔存活；不拋的話那個 0 會被畫成「選股已完成、0 檔」。
     """
     try:
         from src.services.fundamental_screener_service import (
             get_fundamental_survivors,
         )
-        _df, _ = get_fundamental_survivors()
-        return _df, _frame_rows(_df), ""
+        _df, _ = get_fundamental_survivors(strict=True)
+        return _df, _frame_rows(_df), "", False
     except Exception as _e:  # noqa: BLE001 — 轉成看得見的 facts 列，不吞
         print(f"[views/page_find] 存活池不可用：{_e!r}")
-        return None, None, repr(_e)
+        return None, None, repr(_e), bool(getattr(_e, "empty_survivor_pool", False))
+
+
+def _scan_empty_note(meta: Any) -> str:
+    """L3 掃描回**空排行**時的失敗訊息 ＝ L3 自己在 meta 裡寫的 note **原文**。
+
+    ⛔ 本頁不另寫一句（§2.1：為什麼是空的，只有 L3 知道）。L3 沒給 note →
+    `UNKNOWN_ERROR_TEXT`（既有那一句）—— 失敗訊息**不可以是空字串**，
+    空字串在本頁的語意是「沒有錯誤」。
+    """
+    _note = meta.get("note") if isinstance(meta, Mapping) else None
+    _text = str(_note).strip() if _note else ""
+    return _text or UNKNOWN_ERROR_TEXT
 
 
 def _load_shortage(factors: Sequence[str]) -> tuple[list | None, str]:
@@ -857,12 +924,19 @@ def _load_shortage(factors: Sequence[str]) -> tuple[list | None, str]:
     ⚠️ `None` 與 `[]` 的差別是 `summarize_factor_hits()` 契約的一部分：
     `None` = 沒掃 / 掃失敗 → **不產生片語**；`[]` = 掃了但零結果 → 印 `0/0`。
     §1：掃失敗不假報 0。
+
+    ⚠️ 批次 5（2026-09-26）：L3 回**空排行**也算失敗（回 `None` ＋ L3 自己的 note 原文）。
+    L3 `_scan_cached` 在兩個候選池都取不到、或深掃的每一檔都判「資料不足／不適用」時
+    **不拋例外、回 `[]` ＋ 一句 note**（每一檔只要資料夠就至少是「弱」級、會進排行）
+    —— 那個 `[]` 不是「掃了但沒有缺貨股」，是這個因子這一輪**沒有可用的輸入**。
     """
     if "shortage" not in factors:
         return None, ""
     try:
         from src.services.shortage_screener_service import run_shortage_scan
-        _rows, _ = run_shortage_scan()
+        _rows, _meta = run_shortage_scan()
+        if not _rows:
+            return None, _scan_empty_note(_meta)
         return _rows, ""
     except Exception as _e:  # noqa: BLE001 — 該因子缺料，不炸整體
         print(f"[views/page_find] 缺貨掃描失敗：{_e!r}")
@@ -877,13 +951,20 @@ def _load_rs(factors: Sequence[str]) -> tuple[list | None, str]:
     改成 `beat_only=True` 會讓落後股從 `rs_map` 消失 → 對它們而言 RS 變成
     「缺料」→ 依規則**不計入**平均 → 綜合分反而**上升**（幫落後股加分），
     與意圖完全相反（`_apply_bear_market_filter` 的 docstring 明文警告）。
+
+    ⚠️ 批次 5（2026-09-26）：L3 回**空排行**也算失敗（回 `None` ＋ L3 自己的 note 原文）。
+    `beat_only=False` 時每一檔**量測成功**的都會進排行（分級含「落後大盤」），所以空排行
+    只會來自：大盤 ^TWII 抓不到、存活池為空、或一檔都沒量測成功（L3 `_scan_cached` ／
+    `_empty_scan_note` 的四條路，逐條對過）—— 沒有一條是「掃了、真的沒有」。
     """
     if "rs_leader" not in factors:
         return None, ""
     try:
         from shared.rs_screen_thresholds import RS_SCAN_MAX
         from src.services.rs_leader_service import run_rs_leader_scan
-        _rows, _ = run_rs_leader_scan(beat_only=False, top_n=RS_SCAN_MAX)
+        _rows, _meta = run_rs_leader_scan(beat_only=False, top_n=RS_SCAN_MAX)
+        if not _rows:
+            return None, _scan_empty_note(_meta)
         return _rows, ""
     except Exception as _e:  # noqa: BLE001 — 該因子缺料，不炸整體
         print(f"[views/page_find] 抗跌 RS 掃描失敗：{_e!r}")
@@ -891,12 +972,17 @@ def _load_rs(factors: Sequence[str]) -> tuple[list | None, str]:
 
 
 def _load_trend(factors: Sequence[str]) -> tuple[dict | None, str]:
-    """勾了「跨季轉強」才算（從季快照算，非掃描）。`None` = 沒算 / 失敗。"""
+    """勾了「跨季轉強」才算（從季快照算，非掃描）。`None` = 沒算 / 失敗。
+
+    ⚠️ 批次 5（2026-09-26）起傳 `strict=True`：快照缺 / 計算失敗 / 趨勢表整張是空的時
+    L3 **往上拋**，不再吞成 `{}`（吞掉的話本頁分不出「算失敗」與「算了、沒有一檔有證據」，
+    後者是季數不足 —— 仍回 `{}`、不算失敗，見 L3 `build_trend_map` 的 docstring）。
+    """
     if "trend" not in factors:
         return None, ""
     try:
         from src.services.fundamental_screener_service import build_trend_map
-        return build_trend_map(), ""
+        return build_trend_map(strict=True), ""
     except Exception as _e:  # noqa: BLE001 — 該因子缺料，不炸整體
         print(f"[views/page_find] 跨季趨勢計算失敗：{_e!r}")
         return None, repr(_e)
@@ -925,8 +1011,12 @@ def _load_regime() -> tuple[str | None, str]:
         return None, repr(_e)
 
 
-def _load_pe_name_maps() -> tuple[dict | None, dict | None, str]:
-    """L3 估值輸入 → `(pe_map, name_map, 錯誤字串)`。失敗 → `(None, None, repr(e))`。
+def _load_pe_name_maps() -> tuple[dict | None, dict | None, str, tuple[str, ...]]:
+    """L3 估值輸入 → `(pe_map, name_map, 錯誤字串, 沒給本益比的市場)`。
+
+    失敗 → `(None, None, repr(e), ())`。第 4 個（批次 5，2026-09-26）是 L3／L1
+    `failed_markets=` 標記回來的市場名 —— 這一輪**連一筆有效本益比都沒給出**的
+    上市／上櫃（L1 對兩邊各自 fail-soft，不看這個就分不出「只少半邊」）。
 
     **一律呼叫，不看勾了哪些因子**（與既有選股網 `app.py` 同行為）：
     `name_map` 撐的是結果表的「名稱」欄，那一欄跟勾不勾估值因子無關。
@@ -940,11 +1030,12 @@ def _load_pe_name_maps() -> tuple[dict | None, dict | None, str]:
     """
     try:
         from src.services.valuation_service import get_pe_name_maps
-        _pe, _name = get_pe_name_maps()
-        return (dict(_pe or {}), dict(_name or {}), "")
+        _failed: list[str] = []
+        _pe, _name = get_pe_name_maps(failed_markets=_failed)
+        return (dict(_pe or {}), dict(_name or {}), "", tuple(_failed))
     except Exception as _e:  # noqa: BLE001 — 該因子缺料，不炸整體
         print(f"[views/page_find] 估值／名稱對照表取不到：{_e!r}")
-        return None, None, repr(_e)
+        return None, None, repr(_e), ()
 
 
 def _summarize_hits(factors: Sequence[str], *, shortage_rows: list | None,
@@ -988,7 +1079,7 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
     （`_missing` 只收缺貨與 RS；「因子實際覆蓋」那句有 `if _col_scores[_f]`
     的前提，整個因子全空時不印）。
 
-    邊界（四個都真的走得到）：
+    邊界（五個都真的走得到）：
       (a) **冷啟動 / 還沒送出** → `ScreenResult(requested=False)`，
           全部格子 `idle`（**還沒有人叫**），不是 `empty`（叫了但沒值）。
       (b) **L3 在呼叫期拋例外**（含 late import 失敗）→ `repr(e)` 帶回 →
@@ -996,7 +1087,13 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
       (c) **回空表 / `None` / 0 筆** → `rows` 分別是 `0` / `None` / `0`，
           `has_rows` 為 False → `empty`（灰）。**不是綠燈、也不是紅燈。**
       (d) **估值那一輪失敗或回空** → 排名照跑（少一個因子不等於選不出東西），
-          但 `pe_n` 帶回 `None` / `0`，卡上明講。**不讓整張卡轉紅。**
+          但 `pe_n` 帶回 `None` / `0`，卡上明講。~~**不讓整張卡轉紅。**~~
+          📌 批次 5（2026-09-26，有意識的變更，⛔ 不是漏刪）：**有勾估值**時改為轉紅
+          （見 (e)）；沒勾估值時照舊只在 facts 講、不轉紅（它只影響「名稱」欄）。
+      (e) **（批次 5）你勾的因子，這一輪輸入沒拿到**（估值拋例外或上市／上櫃任一邊
+          沒給；缺貨／RS 拋例外或回空排行；跨季轉強拋例外或趨勢表整張是空的）→ `factor_input_failed`
+          帶回那幾個 key → 結果卡轉**紅態**「選股中止」。排名照跑、原文照樣上 facts；
+          (c) 的「0 筆 ＝ 灰」只剩在**勾選因子的輸入都拿到了**時才成立。
     """
     if not req.submitted:
         return ScreenResult(requested=False)
@@ -1004,25 +1101,41 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
     _factors = list(req.factors)
     _aux: list[tuple[str, str]] = []
 
-    _surv_df, _surv_n, _surv_err = _load_survivors()
+    _surv_df, _surv_n, _surv_err, _surv_empty = _load_survivors()
     if _surv_err:
         _aux.append(("存活池", _error_why(SRC_SURVIVORS, _surv_err)))
-    _pe_map, _name_map, _pe_err = _load_pe_name_maps()
+    _pe_map, _name_map, _pe_err, _pe_failed_markets = _load_pe_name_maps()
     if _pe_err:
-        _aux.append(("估值（本益比）",
+        _aux.append((FACTOR_INPUT_LABELS[PE_FACTOR_KEY],
                      f"{PE_FAILED_WHY_HEAD}{_error_why(SRC_PE, _pe_err)}"
                      "；該因子不計入綜合分，「名稱」欄也會是空的"))
     elif not _pe_map:
-        _aux.append(("估值（本益比）", PE_EMPTY_WHY))
+        _aux.append((FACTOR_INPUT_LABELS[PE_FACTOR_KEY], PE_EMPTY_WHY))
     _short_rows, _short_err = _load_shortage(_factors)
     if _short_err:
-        _aux.append(("缺貨掃描", f"失敗，該因子不計入綜合分：{_short_err}"))
+        _aux.append((FACTOR_INPUT_LABELS["shortage"],
+                     f"失敗，該因子不計入綜合分：{_short_err}"))
     _rs_rows, _rs_err = _load_rs(_factors)
     if _rs_err:
-        _aux.append(("抗跌 RS 掃描", f"失敗，該因子不計入綜合分：{_rs_err}"))
+        _aux.append((FACTOR_INPUT_LABELS["rs_leader"],
+                     f"失敗，該因子不計入綜合分：{_rs_err}"))
     _trend_map, _trend_err = _load_trend(_factors)
     if _trend_err:
-        _aux.append(("跨季轉強", f"失敗，該因子不計入綜合分：{_trend_err}"))
+        _aux.append((FACTOR_INPUT_LABELS["trend"],
+                     f"失敗，該因子不計入綜合分：{_trend_err}"))
+    # 批次 5（2026-09-26）：**你勾的**因子，這一輪輸入沒拿到的那幾個（判定用的事實，
+    # 不從上面 `_aux` 的字面反推）。三支掃描只在勾了才發，所以它們的錯誤本來就只屬於勾選因子；
+    # 估值那一支**不看勾選一律發**（名稱欄要用），故要另外檢查有沒有勾。
+    # 估值算失敗的兩種：取數拋例外，或上市／上櫃任一邊**連一筆有效本益比都沒給出**
+    # （兩邊都沒給＝上面 `PE_EMPTY_WHY` 那一種，也落在這裡）。
+    _input_errs = {
+        PE_FACTOR_KEY: bool(_pe_err or _pe_failed_markets),
+        "shortage": bool(_short_err),
+        "rs_leader": bool(_rs_err),
+        "trend": bool(_trend_err),
+    }
+    _factor_failed = tuple(_k for _k in FACTOR_INPUT_LABELS
+                           if _k in _factors and _input_errs[_k])
     _regime, _regime_err = _load_regime()
     if _regime_err:
         _aux.append(("總經位階", f"取不到，空頭濾網未套用：{_regime_err}"))
@@ -1048,7 +1161,9 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
         return ScreenResult(requested=True, error=repr(_e),
                             survivors_n=_surv_n,
                             pe_n=_map_len(_pe_map), name_n=_map_len(_name_map),
-                            aux_errors=tuple(_aux), survivors_error=_surv_err)
+                            aux_errors=tuple(_aux), survivors_error=_surv_err,
+                            survivors_pool_empty=_surv_empty,
+                            factor_input_failed=_factor_failed)
 
     _hits, _hits_err = _summarize_hits(
         _factors, shortage_rows=_short_rows, rs_rows=_rs_rows,
@@ -1060,7 +1175,8 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
         requested=True, df=_df, note=str(_note or ""),
         rows=_frame_rows(_df), survivors_n=_surv_n,
         pe_n=_map_len(_pe_map), name_n=_map_len(_name_map),
-        hits=_hits, aux_errors=tuple(_aux), survivors_error=_surv_err)
+        hits=_hits, aux_errors=tuple(_aux), survivors_error=_surv_err,
+        survivors_pool_empty=_surv_empty, factor_input_failed=_factor_failed)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1275,10 +1391,12 @@ def _fmt_count(n: int | None) -> str:
 def _pe_broken(result: ScreenResult) -> bool:
     """這一輪的估值輸入**有沒有出事**（取不到，或拿到 0 檔）。
 
-    ⚠️ 兩者合成一個布林**只用在「要不要另外畫一則說明」這個問題上** ——
-    「是哪一種」仍然分開：理由句由 `load_screen_result` 依 `pe_err` /
-    `not _pe_map` 分成兩段不同的文字放進 `aux_errors`，數字由 `pe_n` 的
-    `None` / `0` 分辨。這裡只是問「畫不畫」，不是把兩件事講成一件。
+    ⚠️ 兩者合成一個布林只用在「有沒有出事」這個問題上（facts 要不要補一列檔數、
+    批次 5 起勾了估值時要不要升紅）—— 「是哪一種」仍然分開：理由句由
+    `load_screen_result` 依 `pe_err` / `not _pe_map` 分成兩段不同的文字放進
+    `aux_errors`，數字由 `pe_n` 的 `None` / `0` 分辨。
+    ⚠️ 它看不到「只少上市或上櫃半邊」（那時 `pe_n > 0`）—— 那一種靠
+    `ScreenResult.factor_input_failed`（L1 `failed_markets=` 標記）。
     """
     return not result.pe_n
 
@@ -1319,6 +1437,14 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
     DataFrame，所以走到這裡代表回傳契約變了）→ 走 `MISS_CONTRACT_DRIFT`
     → L0 把它**升成紅態**。修前兩者都被畫成「0 檔」，等於**替上游宣稱
     一件它沒說的事**（§1：錯誤的數字比沒有數字更危險）。
+
+    ⚠️ **「0 檔」也不一定是有效結果**（批次 1、5，2026-09-26）：存活池沒拿到
+    （含「季快照未就緒」的空池）、或**你勾的**因子這一輪輸入沒拿到 → 紅「選股中止」；
+    後者有列時同樣轉紅（部分失敗，比照「💼 持有」頁批次 2～4）。灰的「0 檔」只剩
+    「輸入都拿到了、排完就是沒有」（例如空頭濾網把候選全部剔除）。
+    ⚠️ 一個因子都沒勾（或 session 值形狀壞掉）時 L3 回「請至少勾選一個選股因子」＋空表 ——
+    那是使用者輸入、不是失敗，**本批未改**：現有狀態裡沒有一則講得對它（灰卡的
+    「有效的結果」／「放寬條件」都不對題），⛔ 不新寫字句，已上報為規格缺口。
     """
     # 請求過、沒例外、卻連列數都讀不出來 = 回傳契約漂移（重跑不會好，要改程式）。
     # 用 L0 `station_specs` 的語彙，讓 `FAILED_REASONS` 自己決定要不要升紅 ——
@@ -1330,15 +1456,32 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
     # ⚠️ 只在 0 列時才看它：L3 會再試一次存活池，試成功而選出東西的那一輪照常 live。
     _surv_failed = bool(result.requested and not result.error
                         and result.rows == 0 and result.survivors_error)
+    # 批次 5（2026-09-26）：**你勾的**因子這一輪輸入沒拿到 → 這一輪的名單不是依你的條件排的。
+    # 0 列時它**不是**有效的 0（那個因子若拿到了，可能就排得出東西）；有列時它是**部分失敗**
+    # —— 比照「💼 持有」頁批次 2～4（旁邊還有沒算到的，已算出的就不是完整的結論）一律升紅，
+    # 名單不上桌（同中止那一則原文「本站不以殘缺資料湊出名單」）。
+    # 只認 `FACTOR_INPUT_LABELS` 裡、而且**這一次有勾**的 key：判定的是「你要的那一份」。
+    # 走 L0 `MISS_FETCH_FAILED` 讓 `FAILED_REASONS` 決定升紅 —— 本檔同樣不自己判「算不算故障」。
+    # ⚠️ `rows is None`（契約漂移）排在它前面：那是程式要修的訊號，比「這輪沒拿到」更根本。
+    # 估值另外直接看 `_pe_broken`（取不到／0 檔）：不靠 loader 的旗標也不會漏 ——
+    # 原本那則 live「少算了一個你勾的因子」Note 就是看它，刪掉那則之後這裡要接得住。
+    _failed_keys = set(result.factor_input_failed)
+    if result.requested and _pe_broken(result):
+        _failed_keys.add(PE_FACTOR_KEY)
+    _failed_labels = tuple(FACTOR_INPUT_LABELS[_k] for _k in FACTOR_INPUT_LABELS
+                           if _k in _failed_keys and _k in req.factors)
+    _input_failed = bool(result.requested and not result.error
+                         and result.rows is not None and _failed_labels)
     _reason = (MISS_CONTRACT_DRIFT
                if (result.requested and not result.error
                    and result.rows is None)
                else MISS_FETCH_FAILED if _surv_failed
+               else MISS_FETCH_FAILED if _input_failed
                else "")
     _state = classify_ui_state(
         requested=result.requested,
         error=result.error or None,
-        has_value=result.has_rows,
+        has_value=result.has_rows and not _input_failed,
         reason=_reason,
     )
 
@@ -1368,24 +1511,14 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
         # 線框 live 原文的格式：`🔭 存活池 274 檔 → 綜合入選前 50 名`
         _value = (f"🔭 存活池 {_fmt_count(result.survivors_n)} 檔 "
                   f"→ 綜合入選 {result.rows} 檔")
-        _note = None
-        if PE_FACTOR_KEY in req.factors and _pe_broken(result):
-            # live 也要畫 Note —— `render_card` 已改成「只要有 Note 就畫」。
-            # 靜默丟棄「你勾的因子其實沒算」這種說明 ＝ §1 禁止的掩蓋問題。
-            #
-            # ⚠️ **接線之後這則 Note 只在真的出事時才畫**（2026-09-07 FE-18）。
-            # 前一批它是無條件畫的，因為那時候 `pe_map` 恆為 `None`；接上之後
-            # 照樣無條件畫就變成**假警告** —— 名單明明算了估值，卻對使用者說
-            # 「這份名單少算了一個你勾的因子」。假警報與假數字是同一種說謊
-            # （`CLAUDE.md §1.A` 第 4 點：滿版假紅字會讓真正的問題沒人看得見）。
-            _note = Note(
-                now=SCREEN_PE_SHORT_NOW,
-                why=(PE_EMPTY_WHY if result.pe_n == 0
-                     else "本輪估值輸入取不到（詳細訊息見上方「估值（本益比）」那一列）"
-                          " —— 該因子沒有計入綜合分"),
-                where=PE_MISSING_WHERE)
+        # 2026-09-26 批次 5 刪除（⛔ 不是漏刪）：原本這裡在「勾了估值、估值沒拿到」時
+        # 畫一則 live Note（`SCREEN_PE_SHORT_NOW`「這份名單少算了一個你勾的因子」，
+        # where＝`PE_MISSING_WHERE`）。批次 5 起那種情形一律升紅「選股中止」（部分失敗 → 紅，
+        # 見上方 `_input_failed`，且它也直接看 `_pe_broken`）→ live 這一格再也走不到，
+        # 依 `CLAUDE.md §-1.5.F` 判定 3(4)（本次改動造成的孤兒，本次清掉）連同兩個常數一起刪。
+        # 那則 Note 原本要防的「靜默少算一個勾選因子」，現在由紅卡防，而且防得更嚴。
         return Card(key="find.screen_result", label="選股結果",
-                    state=UI_LIVE, value=_value, note=_note), tuple(_facts)
+                    state=UI_LIVE, value=_value, note=None), tuple(_facts)
 
     _aborted_where = ("本站不以殘缺資料湊出名單。若是 FinMind 額度用罄，"
                       "額度每日 00:00 重置；其餘請到"
@@ -1403,9 +1536,21 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
         # 存活池取不到 → 這一輪的 0 檔**不是**「選股已完成、0 檔」。
         # 沿用中止那一則的 now / where（既有字句），出處換成真正出事的那一支
         # （`SRC_SURVIVORS`，同上方「存活池」那一列 facts 的講法）。
+        # 批次 5：存活池**為空**（季快照未就緒）那一種 → 去哪補改用 `SNAPSHOT_WAIT_WHERE`
+        # （0 檔灰卡原文的那一句）。`_aborted_where` 講 FinMind 額度與 MOPS／Goodinfo 備援鏈，
+        # 跟「快照要等排程補抓」無關，照舊只留給讀取例外那一種。
         _note = Note(
             now=SCREEN_ABORTED_NOW,
             why=_error_why(SRC_SURVIVORS, result.survivors_error),
+            where=(SNAPSHOT_WAIT_WHERE if result.survivors_pool_empty
+                   else _aborted_where))
+    elif _state == UI_FAILED and _input_failed:
+        # 批次 5：勾選因子的輸入這一輪沒拿到（見上）。now / where 沿用中止那一則（既有字句）；
+        # why ＝ 出事的因子名稱（`FACTOR_INPUT_LABELS`，同 facts 那幾列的標籤）＋ L0 既有那一句
+        # （`FACTOR_MISS_WHY`）。各因子的原始錯誤／L3 原文照舊在上方 facts 各自那一列。
+        _note = Note(
+            now=SCREEN_ABORTED_NOW,
+            why=f"{'、'.join(_failed_labels)}：{FACTOR_MISS_WHY}",
             where=_aborted_where)
     elif _state == UI_FAILED:
         # 沒有例外、卻連「有幾列」都讀不出來 → 回傳契約漂移。
@@ -1425,8 +1570,7 @@ def build_screen_result_card(result: ScreenResult, req: ScreenRequest
                  "或空頭濾網把候選全部剔除。上面的「L3 說明」寫的是哪一種"),
             where=("放寬條件（少勾幾個因子）後再"
                    f"{press(ACTION_RUN_SCREEN_LABEL)}；"
-                   "若「L3 說明」指向季快照未就緒，那要等排程補抓，"
-                   "重按不會改變它"))
+                   f"若「L3 說明」指向季快照未就緒，那{SNAPSHOT_WAIT_WHERE}"))
     return Card(key="find.screen_result", label="選股結果",
                 state=_state, note=_note), tuple(_facts)
 

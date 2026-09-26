@@ -861,6 +861,7 @@ def _facts_nonempty(facts) -> bool:
 
 # ══════════════════════════════════════════════════════════════════
 # 【6】勾了估值因子 → 一定要看得見「少算了一個你勾的因子」
+#     （2026-09-26 批次 5 起：看得見的方式從「綠卡上的一則 Note」改為「紅卡『選股中止』」）
 # ══════════════════════════════════════════════════════════════════
 class TestCheckedFactorIsNeverSilentlyDropped:
     """L3 `composite_rank_candidates` 的 note **看不見**「估值整個因子全空」
@@ -878,18 +879,24 @@ class TestCheckedFactorIsNeverSilentlyDropped:
       · 拿到 N 檔 → **不准講** ←← 這一條是新的，也是最容易寫錯的：
         照抄接線前那句無條件的 Note，畫面就會對一份**明明算了估值**的名單
         說「這份名單少算了一個你勾的因子」= 假警告（`CLAUDE.md §1.A` 第 4 點）。
+
+    📌 **2026-09-26 批次 5 —— 有意識的變更，⛔ 不是漏刪**（客戶授權「失敗被當成沒結果」
+    的卡一律修；部分失敗 → 紅為總管判讀，比照「💼 持有」頁批次 2～4）：前兩種
+    （取不到／空 map）**不再是綠卡＋Note**，一律升紅「選股中止」、名單不上桌 ——
+    那則 live Note（`SCREEN_PE_SHORT_NOW` ＋ `PE_MISSING_WHERE`）因此走不到、已刪除。
+    下面前三條原本釘的是那則 Note，改釘**現在真的會發生的樣子**（紅卡、點名估值），
+    射程不變：「勾了估值卻沒算到」依舊**不可能靜默**。第三種（拿到 N 檔 → 不准喊）照舊。
     """
 
     def test_live_card_carries_the_note_when_the_fetch_failed(self):
-        """勾了、而且取數失敗 → 一定要看得見。"""
+        """勾了、而且取數失敗 → 一定要看得見（批次 5 起：紅卡，就算其他因子排得出 12 檔）。"""
         _card, _facts = _screen(
             df=_Frame(12), rows=12, survivors_n=274, pe_n=None, name_n=None,
             factors=("eps_high", P.PE_FACTOR_KEY),
             aux_errors=(("估值（本益比）", "取不到：RuntimeError('boom')"),))
-        assert _card.state == UI_LIVE
-        assert _card.note is not None, (
-            "live 卡沒有帶 Note —— 「少算了一個你勾的因子」被靜默丟棄了")
-        assert "少算了一個你勾的因子" in _card.note.now
+        assert _card.state == UI_FAILED, "勾了估值卻沒算到，名單不得以綠燈上桌"
+        assert _card.note.now == P.SCREEN_ABORTED_NOW
+        assert _card.note.why.startswith(P.FACTOR_INPUT_LABELS[P.PE_FACTOR_KEY])
         assert _facts["估值（本益比）"].startswith("取不到")
 
     def test_the_pe_note_still_has_all_three_elements(self):
@@ -899,23 +906,30 @@ class TestCheckedFactorIsNeverSilentlyDropped:
         **兩種缺料版本**，射程不能跟著消失 —— 這裡對兩種各驗一次。
         （`Note.__post_init__` 本來就會擋空欄位，但那是結構保證；
         寫出來是為了讓「PE 這則 Note 有沒有被驗過」在檔案裡看得見。）
+        📌 批次 5 起兩種都是紅卡「選股中止」的 Note；三要素與「不宣稱沒有出口」照驗。
         """
         for _pe_n, _tag in ((0, "空 map"), (None, "取不到")):
             _card, _ = _screen(df=_Frame(3), rows=3, pe_n=_pe_n, name_n=_pe_n,
                                factors=(P.PE_FACTOR_KEY,))
+            assert _card.state == UI_FAILED, _tag
             _now, _why, _where = _note_triple(_card.note)
             assert _now.strip() and _why.strip() and _where.strip(), _tag
             assert P.NO_EXIT_MARKER not in _where, (
                 f"{_tag}：接線後仍宣稱沒有出口 —— 重按其實有機會好")
 
     def test_live_card_carries_the_note_when_the_map_is_empty(self):
-        """勾了、拿到了、但**是空的** → 同樣要看得見，而且要說是上游沒給。"""
-        _card, _ = _screen(df=_Frame(12), rows=12, survivors_n=274,
-                           pe_n=0, name_n=0,
-                           factors=("eps_high", P.PE_FACTOR_KEY))
-        assert _card.state == UI_LIVE and _card.note is not None
-        assert "少算了一個你勾的因子" in _card.note.now
-        assert "都沒有給資料" in _card.note.why, _card.note.why
+        """勾了、拿到了、但**是空的** → 同樣要看得見，而且要說是上游沒給。
+
+        📌 批次 5 起是紅卡；「上游沒給」那一句（`PE_EMPTY_WHY`）照舊在 facts 的估值那一列
+        （由 loader 放進 `aux_errors`，這裡照 loader 的形狀手組）。
+        """
+        _card, _facts = _screen(df=_Frame(12), rows=12, survivors_n=274,
+                                pe_n=0, name_n=0,
+                                factors=("eps_high", P.PE_FACTOR_KEY),
+                                aux_errors=(("估值（本益比）", P.PE_EMPTY_WHY),))
+        assert _card.state == UI_FAILED and _card.note.now == P.SCREEN_ABORTED_NOW
+        assert _card.note.why.startswith(P.FACTOR_INPUT_LABELS[P.PE_FACTOR_KEY])
+        assert "都沒有給資料" in _facts["估值（本益比）"], _facts["估值（本益比）"]
 
     def test_a_successful_fetch_produces_no_false_alarm(self):
         """⭐ **接上之後最容易寫錯的一條**：算到了就**不准**再喊少算。

@@ -51,11 +51,21 @@ SCENARIOS = [
     # 批次 1（2026-09-26）：本頁存活池取數失敗、L3 吞掉回空表 → 紅，不是「0 檔」。
     ("screen.survivors_failed", lambda: _screen(
         df=_Frame(0), rows=0, survivors_error="RuntimeError('snapshot')"), UI_FAILED),
+    # 批次 5（2026-09-26）：你勾的因子這一輪輸入沒拿到 → 紅（有列也一樣），不是「0 檔」／綠燈。
+    ("screen.factor_input_failed", lambda: _screen(
+        factors=("eps_high", "trend"), df=_Frame(3), rows=3, survivors_n=10,
+        factor_input_failed=("trend",)), UI_FAILED),
     ("screen.live", lambda: _screen(df=_Frame(3), rows=3, survivors_n=10), UI_LIVE),
-    ("screen.live_pe_failed", lambda: _screen(
-        factors=(P.PE_FACTOR_KEY,), df=_Frame(3), rows=3, pe_n=None), UI_LIVE),
-    ("screen.live_pe_empty", lambda: _screen(
-        factors=(P.PE_FACTOR_KEY,), df=_Frame(3), rows=3, pe_n=0), UI_LIVE),
+    # 批次 5（2026-09-26）：原 `screen.live_pe_failed` / `screen.live_pe_empty`（UI_LIVE ＋
+    # 「少算了一個你勾的因子」Note）—— 那則 Note 已刪（走不到），同兩個輸入現在是紅卡。
+    ("screen.pe_failed", lambda: _screen(
+        factors=(P.PE_FACTOR_KEY,), df=_Frame(3), rows=3, pe_n=None), UI_FAILED),
+    ("screen.pe_empty", lambda: _screen(
+        factors=(P.PE_FACTOR_KEY,), df=_Frame(3), rows=3, pe_n=0), UI_FAILED),
+    # 批次 5：存活池**為空**（季快照未就緒）→ 紅，去哪補用 `SNAPSHOT_WAIT_WHERE`。
+    ("screen.survivors_pool_empty", lambda: _screen(
+        df=_Frame(0), rows=0, survivors_error="RuntimeError('基本面存活池為空（季快照未就緒）。')",
+        survivors_pool_empty=True), UI_FAILED),
     # 產業熱力圖
     ("heat.idle", lambda: P.build_heatmap_card(P.HeatmapReadout(requested=False)), UI_IDLE),
     ("heat.error", lambda: P.build_heatmap_card(

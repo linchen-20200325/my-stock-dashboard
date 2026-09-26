@@ -75,10 +75,27 @@ def get_fundamental_prescreen(*, refresh: bool = False) -> tuple[pd.DataFrame, d
     return _prescreen_cached()
 
 
-def get_fundamental_survivors(*, refresh: bool = False) -> tuple[pd.DataFrame, dict]:
-    """四項全過的存活池子集(依 eps 由大到小)+ meta。"""
+def get_fundamental_survivors(*, refresh: bool = False,
+                              strict: bool = False) -> tuple[pd.DataFrame, dict]:
+    """四項全過的存活池子集(依 eps 由大到小)+ meta。
+
+    strict(v2「🔍 找標的」選股結果卡用;預設 False = 既有行為一字不變):
+      True → 存活池為空一律 `raise RuntimeError`,訊息用排名器自己的 note 原文
+      (SSOT,本函式不另寫一句;做法同 `dividend_station_service._ranked_picks_strict`)。
+      否則 caller 拿到空表,會把「去年同季快照缺 → 三率三升全判不過 → 0 檔存活」
+      畫成「選股完成、0 檔」(§1 靜默失敗)。空池時排名器不做任何掃描即返回。
+      拋出的例外帶 `empty_survivor_pool = True` 屬性,讓 caller 分得出「空池」與讀取例外
+      (兩者處置不同:空池要等排程補抓快照,重按不會變)。刻意不另立例外子類別 ——
+      那會讓畫面上印出來的 repr 多一個新名字;屬性不改變 repr。
+    """
     df, meta = get_fundamental_prescreen(refresh=refresh)
-    return survivors_only(df), meta
+    surv = survivors_only(df)
+    if strict and (surv is None or surv.empty or "stock_id" not in surv.columns):
+        _, _note = composite_rank_candidates(surv, factors=[])
+        _err = RuntimeError(_note)
+        _err.empty_survivor_pool = True
+        raise _err
+    return surv, meta
 
 
 def get_survivor_ids(*, refresh: bool = False) -> list[str]:
@@ -107,11 +124,17 @@ def get_cross_quarter_trends(*, refresh: bool = False) -> pd.DataFrame:
     return _cross_quarter_trends_cached()
 
 
-def build_trend_map(*, refresh: bool = False) -> dict[str, int]:
+def build_trend_map(*, refresh: bool = False, strict: bool = False) -> dict[str, int]:
     """{stock_id: favorable_count} 供選股網 composite「跨季轉強」因子用。
 
     favorable_count ∈ [0,4] = 毛利/營益率升·負債降·營收增 中「方向為佳」的個數。
     快照缺 / 計算失敗 → 回空 dict(不炸選股;§1 缺料下游不計入該因子)。
+    strict=True(v2「🔍 找標的」用;預設 False = 既有行為一字不變)→ 快照缺 / 計算失敗
+    照樣 log,但**往上拋**、不回空 dict —— caller 才分得出「算失敗」與「算了但沒有證據」。
+    ⚠️ 「算了但沒有證據」(下方 favorable_of == 0 全數不放 key → {})strict 下**照舊回 {}**:
+    那是季數不足,不是取數失敗;當成失敗拋出去,caller 會給出「重跑一次」這種錯的指引。
+    ⚠️ 但趨勢表**整張是空的**(一列都沒有)strict 下**拋**(QA 2026-09-26):那不是「沒有證據」,
+    是季快照讀進來沒有一列可用 —— 回 {} 會被 caller 畫成「有效的 0 檔」。
 
     §1 B6-b(2026-08):**favorable_of == 0 的檔不放 key**。favorable_of 是「算得出來的
     因子數」,為 0 代表四個趨勢因子全 NaN(季數不足 / 營收·資產為 0 → 比率算不出),
@@ -123,8 +146,17 @@ def build_trend_map(*, refresh: bool = False) -> dict[str, int]:
         _df = get_cross_quarter_trends(refresh=refresh)
     except Exception as _e:  # noqa: BLE001 — 快照缺不炸選股
         print(f"[fund_screener_service] 跨季趨勢不可用:{type(_e).__name__}: {_e}")
+        if strict:
+            raise
         return {}
     if _df is None or _df.empty:
+        if strict:
+            # 全市場**一列都沒有**(季快照 parquet 讀得到、但沒有一列可用:空檔 / 季別欄全壞)
+            # ≠「算了但沒有證據」(那是有列、favorable_of 全 0,見下)。strict 下當失敗往上拋。
+            # 例外刻意**不帶訊息**:畫面會原樣印 repr,帶一句話＝新寫一句文案;診斷寫進 log。
+            print("[fund_screener_service] 跨季趨勢為空表(strict → raise):"
+                  f"{None if _df is None else list(_df.columns)}")
+            raise RuntimeError()
         return {}
     if "favorable_of" not in _df.columns:      # 舊 schema → 保守全收(不靜默丟資料)
         return {str(s): int(c) for s, c in zip(_df["stock_id"], _df["favorable_count"])}
