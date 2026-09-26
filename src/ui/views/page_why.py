@@ -2421,9 +2421,12 @@ def _inject_v2_css() -> None:
 #: ⚠️ **本頁特有、而且是實跑抓到的**：L0 原因欄原文自帶段落空行（例：融資餘額的
 #: `degraded_reason` 裡有 `\n\n`）。v2 卡面是一段交給 `st.markdown` 的 raw HTML，
 #: 而 Markdown 的 HTML 區塊**遇到空白行就結束** —— 後半張卡會被當成 Markdown 重新解析，
-#: 版面整個散掉。HTML 本來就把連續空白收成一格，所以把空白行收成單一換行**畫面上一個字都不差**；
+#: 版面整個散掉。HTML 本來就把連續空白收成一格，所以把空白行收成單一換行，卡面／摺疊區**畫面上一個字都不差**
+#: （例外：`title=` 的原生提示框會把段落空行顯示成單一換行 —— 字一個不少，只少一行空白）；
 #: 只動送去 `st.markdown` 的那一份，`v2_card_html()` 的輸出（摺疊區原文）不動。
-_V2_BLANK_LINE_RE = re.compile(r"\n[ \t]*(?:\n[ \t]*)+")
+#: 換行一律照 CommonMark 認：`\n`、`\r\n`、單獨的 `\r` 都算一個行尾（`"\r\n\r\n"`、`"\r\r"`、
+#: `"\n\r\n"` 同樣是空白行）。只換「含空白行的那一串行尾」⇒ 沒有空白行的卡面逐 byte 不變。
+_V2_BLANK_LINE_RE = re.compile(r"(?:\r\n|\r(?!\n)|\n)[ \t]*(?:(?:\r\n|\r(?!\n)|\n)[ \t]*)+")
 
 
 def _render_one_v2(card: Card, facts: Sequence[tuple[str, str]] = (),
