@@ -1424,16 +1424,14 @@ class TestSignalChannelAndRenderBoundary:
         _ns.caption = lambda _s, **_k: _md.append(str(_s))
         monkeypatch.setattr(K, "st", _ns)
 
-        _calls = {"n": 0}
-        _real = K.render_card
+        # 2026-09-25：本頁的卡改走 v2 卡面（`_render_one_v2()`），渲染期會炸的是
+        # v2 那一支 —— 讓它炸，照樣要轉成看得見的紅卡（語意不變，只換了炸點）。
+        monkeypatch.setattr(P, "st", _ns)
 
-        def _boom(card, **kw):
-            _calls["n"] += 1
-            if _calls["n"] == 1:
-                raise RuntimeError("render exploded")
-            return _real(card, **kw)
+        def _boom(*_a, **_kw):
+            raise RuntimeError("render exploded")
 
-        monkeypatch.setattr(K, "render_card", _boom)
+        monkeypatch.setattr(P, "v2_card_html", _boom)
         P._render_one(P.build_lightwall_card(P.StationReadout(requested=False)))
         _all = "\n".join(_md)
         assert "這一格畫不出來" in _all, "半截死頁：例外沒有被轉成看得見的紅卡"
