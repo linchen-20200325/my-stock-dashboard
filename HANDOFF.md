@@ -57,7 +57,8 @@
 
 > 📌 **清點日 2026-09-26，基準 `origin/main` `84f58ea`**（PR #698 merge；前兩版基準 `07f8800` → `f14c5fd`）。開發線 `claude/stock-dashboard-handoff-g9dtm0` `7f87f41`（＝ PR #675 head）。
 > 📌 **2026-09-26 更新**：`origin/main` 已前進到 **`bd6ceec`**（PR #699 merge ＝ **S5-H `hold.vix` 已完**）；下方各處「已對 `origin/main` `84f58ea` 核對」仍指當時基準，未重核。
-> 📌 **2026-09-26 再更新**：`origin/main` 已前進到 **`3f4493c`**（PR #700 merge ＝ **S5-W `why.qa` 已完**）；**S5-F** 稽核通過、**PR #701 待合併**（等 CI）。
+> 📌 **2026-09-26 再更新**：`origin/main` 已前進到 **`3f4493c`**（PR #700 merge ＝ **S5-W `why.qa` 已完**）；**S5-F** 稽核通過、~~**PR #701 待合併**（等 CI）~~（→ 下行：已 merge）。
+> 📌 **2026-09-26 三更新**：`origin/main` 已前進到 **`2810064`**（完整 `281006489e60909b03aec07e7005cea52063d79a`；PR #701 merge ＝ **S5-F `find.screen_result` 已完**；CI「Fast checks」「Slow tests」check run 皆 success —— 編修組經 GitHub API 實測）。**Q1** 獨立 QA 通過、PR 準備中（未開）；**Q2** 已派工；**Q5** 獨立 QA 回報 1 項阻擋、發回實作組修正中。
 > 📌 客戶 2026-09-26【交接表 · 維護時機】所稱「**HANDOFF 第一節**」＝**本節**（進度總表）；檔首【給下一個 AI 的說明】是客戶頒布的導讀，不是登記本 —— ⚠️ 總管判讀。本節末尾固定附「**給下一個 AI**」段。
 > ⭐ **規則（客戶 2026-09-26）**：每一輪**先讀本節**；發現過期 → **先更新本節再動工**；項目結案 → 移到文末「已完成（近期）」並附 merge hash。
 > 📌 **2026-09-26 清點輪（客戶令）**：下方 (a)(b)(c) 三張主表改為**全量清點、四欄**（含已完列），**主表即現行真相源**；B3／B6 子表保留為**明細**，文末「已完成（近期）」照舊保留作流水。
@@ -74,20 +75,21 @@
 - **卡住**：卡在客戶的內容決定，或卡在實機／線上環境（沙箱驗不到）。
 - **⚠️單組**：該列結論（狀態判定、原因、key↔常數對映或分類）只經一組、未經第二組獨立驗；無此標者＝有 merge hash 或已有兩組獨立複查。
 
-**計數**（清點日 2026-09-26；編修組清點，**2026-09-26 二組複核更正**：B7a 待辦→已完、新增 DOC2 待辦；其餘列數與狀態二組逐列重算一致；commit 前依更新觸發點 ③ 將 (d)「清點交接本」稽核中→已完）
+**計數**（清點日 2026-09-26；編修組清點，**2026-09-26 二組複核更正**：B7a 待辦→已完、新增 DOC2 待辦；其餘列數與狀態二組逐列重算一致；commit 前依更新觸發點 ③ 將 (d)「清點交接本」稽核中→已完）；⚠️ 單組 —— 現行數字為 2026-09-26 三更新逐列重數（方法見表下）
 
 | 類別 | 已完 | 進行中 | 待辦 | 卡住 | 合計 |
 |---|---|---|---|---|---|
 | (a) 五頁卡化 | 11 | 0 | 0 | 1 | 12 |
 | (b) 燈號「變化方向」（16 盞） | 7（真方向 5＋定案不做 2） | 0 | 0 | 9 | 16 |
-| (c) 其他 | ~~7~~ ~~8~~ ~~9~~ **10**（含定案不做 2；+S5-H；+S5-W） | ~~3~~ ~~4~~ **3**（S5-F／Q1／Q5） | ~~10~~ ~~8~~ **13**（−Q1 −Q5；+B9 ⑥⑦⑧⑨ +S4-T） | ~~12~~ **13**（+B9 ⑤） | ~~32~~ ~~33~~ ~~34~~ **39** |
-| (d) 派工追蹤 | ~~1~~ ~~2~~ **3**（+S5-H；+S5-W） | ~~0~~ ~~3~~ ~~4~~ **3**（S5-F 稽核通過→PR #701 待合併；Q1／Q5 稽核中） | 0 | 0 | ~~1~~ ~~4~~ **6** |
-| **合計** | ~~25~~ ~~27~~ ~~29~~ **31** | ~~**3**~~ ~~6~~ ~~8~~ **6** | ~~10~~ ~~8~~ **13** | ~~22~~ **23** | ~~61~~ ~~62~~ ~~65~~ ~~68~~ **73** |
+| (c) 其他 | ~~7~~ ~~8~~ ~~9~~ ~~10~~ **11**（含定案不做 2；+S5-H；+S5-W；+S5-F） | ~~3~~ ~~4~~ ~~3~~ **3**（Q1／Q2／Q5） | ~~10~~ ~~8~~ ~~13~~ **17**（含 Q1-r2～r5、Q5-r1） | ~~12~~ ~~13~~ **15**（含 Q1-r1、Q5-r2） | ~~32~~ ~~33~~ ~~34~~ ~~39~~ **46** |
+| (d) 派工追蹤 | ~~1~~ ~~2~~ ~~3~~ **4**（+S5-H；+S5-W；+S5-F） | ~~0~~ ~~3~~ ~~4~~ ~~3~~ **3**（Q1 稽核通過、PR 準備中；Q5 發回修正中；Q2 派工中） | 0 | 0 | ~~1~~ ~~4~~ ~~6~~ **7** |
+| **合計** | ~~25~~ ~~27~~ ~~29~~ ~~31~~ **33** | ~~**3**~~ ~~6~~ ~~8~~ ~~6~~ **6** | ~~10~~ ~~8~~ ~~13~~ **17** | ~~22~~ ~~23~~ **25** | ~~61~~ ~~62~~ ~~65~~ ~~68~~ ~~73~~ **81** |
 
 📌 **2026-09-26 更新**（S5-H 已完 #699 `bd6ceec`；派工 Q1／Q5；新登記 B9 ⑤）：編修組依上列異動重算（(a)(b) 無異動），單組。
 📌 **2026-09-26 再更新**（S5-W 已完 #700 `3f4493c`；S5-F PR #701 待合併；Q1／Q5 稽核中；新登記 B9 ⑥⑦⑧⑨〔S5-F QA 非阻擋殘留〕＋ S4-T〔停利卡 why 句〕共 5 列待辦）：編修組依上列異動重算（(a)(b) 無異動），單組。
+📌 **2026-09-26 三更新**（S5-F 已完 #701 `2810064`；Q1 稽核通過、PR 準備中；Q2 已派工；Q5 發回修正中；新登記 Q1-r1～r5、Q5-r1、Q5-r2 共 7 列）：**逐列重數，未用加減推** —— 方法：以腳本逐列讀 (a)(b)(c)(d) 四張主表每一列的「狀態」欄，去掉 `~~…~~` 刪除線內的舊字後取第一個狀態詞（已完／進行中／待辦／卡住；(d) 的「派工中」「稽核中」歸進行中），指向列 B9 ①②排除；(a) 12、(b) 16、(c) 46、(d) 7 列，合計 81。⚠️ 單組（編修組一組重數，未經第二組驗；狀態歸類沿用各列現有文字）。
 
-計數規則：(c) 的 B9 ①（→ 併入 S5-F）與 B9 ②（→ S4 結案）是**指向列、不計**；其餘每列計 1。⚠️ (d) 的派工列與 (c) c-1 的同名列追的是**同一份工作**（(d) 追派工進度、(c) 追項目本身），依 (d) 慣例各計 1 ⇒ ~~「進行中 6」**不是 6 件獨立工作**，實為 3 件~~ → ~~「進行中 8」**不是 8 件獨立工作**，實為 4 件（S5-W／S5-F／Q1／Q5）~~ →「進行中 6」**不是 6 件獨立工作**，實為 3 件（S5-F／Q1／Q5）；「已完」中 S5-H、S5-W 同樣在 (c)(d) 各計 1。
+計數規則：(c) 的 B9 ①（→ 併入 S5-F）與 B9 ②（→ S4 結案）是**指向列、不計**；其餘每列計 1。⚠️ (d) 的派工列與 (c) c-1 的同名列追的是**同一份工作**（(d) 追派工進度、(c) 追項目本身），依 (d) 慣例各計 1 ⇒ ~~「進行中 6」**不是 6 件獨立工作**，實為 3 件~~ → ~~「進行中 8」**不是 8 件獨立工作**，實為 4 件（S5-W／S5-F／Q1／Q5）~~ →~~「進行中 6」**不是 6 件獨立工作**，實為 3 件（S5-F／Q1／Q5）；「已完」中 S5-H、S5-W 同樣在 (c)(d) 各計 1。~~ →（2026-09-26 三更新）「進行中 6」**不是 6 件獨立工作**，實為 3 件（Q1／Q2／Q5）；「已完」中 S5-H、S5-W、S5-F 同樣在 (c)(d) 各計 1。
 
 **(d) 派工追蹤**（依檔首【給下一個 AI 的說明】更新觸發點 ①②③：派工 →「已派工 X，等回報」；收到回報 →「稽核中」；commit 前 → 移到「已完成」）
 
@@ -96,9 +98,10 @@
 | 清點交接本（本輪） | **已完**（~~稽核中~~；編修組交回 → 第二組獨立複驗交回、更正已寫入本檔〔各處標「2026-09-26 二組複核更正」〕→ 總管複驗接受 → commit） | 見本 commit（docs(handoff): 全面清點…；未走 PR，本行無法自引 hash） | 無。本檔＋`docs/v2/wip_patches/` 同一 commit 入庫。總管 |
 | 已派工 S5-H hold.vix 恢復（從 msd-h／patch 續做）~~，等回報~~ | **已完**（~~派工中~~ → 回報 → 獨立 QA 通過 → merge；2026-09-26；已移「已完成（近期）」） | #699 `bd6ceec` | 無。細節見 (c) c-1 S5-H 列；非阻擋殘留（文案）→ **B9 ⑤**。~~起點：工作區 `/home/user/msd-h` 或 `docs/v2/wip_patches/S5-H_84f58ea.patch`（在 `84f58ea` 上 `git apply`）。回報後 → 稽核中 → 獨立 QA → merge → 移「已完成」附 hash。~~ 授權：批 5（見 c-1 表下 📌）＋本節檔首解除暫停令。總管 |
 | 已派工 S5-W why.qa 恢復~~，等回報~~ | **已完**（~~稽核中：獨立 QA 抓到 blocker〔「`STOP`＋無 `parts` 顯示成紅」〕，修正中~~ → blocker 已修 → 第二輪獨立 QA 通過 → merge；2026-09-26；已移「已完成（近期）」） | #700 `3f4493c` | 無。細節見 (c) c-1 S5-W 列。~~修掉 blocker → 重跑獨立 QA → merge → 移「已完成」附 hash。起點：`/home/user/msd-w` 或 `docs/v2/wip_patches/S5-W_84f58ea.patch`（修正中的改動位置以執行 AI 回報為準，本編修組未查證）。~~ 總管 |
-| 已派工 S5-F find.screen_result 恢復~~，等回報~~ | **稽核中 → PR #701 待合併**（~~派工中~~ → ~~獨立 QA 中~~ → 2026-09-26 **稽核通過**、PR #701 已開，等 CI；未 merge） | —（PR #701 待合併） | CI 綠 → merge → **立刻**移「已完成」附 hash。QA 非阻擋殘留已登記 **B9 ⑥⑦⑧⑨**（(c) c-2）。~~起點：`/home/user/msd-f` 或 `docs/v2/wip_patches/S5-F_84f58ea.patch`（含 L1 `yield_pe_fetcher.py`，在批 5 授權射程內；**尚無測試**〔派工前狀態；現況以 QA 回報為準〕）。~~ 總管 |
-| 已派工 Q5 查一檔各卡~~，等回報~~ | **稽核中**（~~派工中~~；2026-09-26） | — | 獨立 QA → merge → 移「已完成」附 hash。授權：批 5（見 c-1 表下 2026-09-26 總管判讀）。總管 |
-| 已派工 Q1 NOT_BOUND token 吞錯~~，等回報~~ | **稽核中**（~~派工中~~；2026-09-26） | — | 同上（持股頁 `NOT_BOUND_NOW`：token／sheet-id 讀取錯誤被吞成「未綁定」）。總管 |
+| 已派工 S5-F find.screen_result 恢復~~，等回報~~ | **已完**（~~稽核中 → PR #701 待合併~~；~~派工中~~ → ~~獨立 QA 中~~ → 稽核通過 → PR #701 → CI 綠 → merge；2026-09-26；已移「已完成（近期）」） | #701 `2810064` | 無。細節見 (c) c-1 S5-F 列。QA 非阻擋殘留 **B9 ⑥⑦⑧⑨**（(c) c-2，待辦；收尾前提「PR #701 merge 後」已成立）。~~CI 綠 → merge → **立刻**移「已完成」附 hash。~~ ~~起點：`/home/user/msd-f` 或 `docs/v2/wip_patches/S5-F_84f58ea.patch`（含 L1 `yield_pe_fetcher.py`，在批 5 授權射程內；**尚無測試**〔派工前狀態；現況以 QA 回報為準〕）。~~ 總管 |
+| 已派工 Q5 查一檔各卡~~，等回報~~ | **稽核中（發回修正中）**（~~派工中~~ → 稽核中 → 2026-09-26 獨立 QA 回報 **1 項阻擋**〔B1〕→ 發回實作組修正中；未 merge） | —（待合併） | 修掉 B1 ＋ 3 個測試缺口 ＋ 2 處註解言過其實 → 重跑獨立 QA → PR → CI 綠 → merge → 移「已完成」附 hash。細節見 (c) c-1 Q5 列；非阻擋新待辦 **Q5-r1／Q5-r2**（c-2）。授權：批 5（見 c-1 表下 2026-09-26 總管判讀）。總管 |
+| 已派工 Q1 NOT_BOUND token 吞錯~~，等回報~~ | **稽核中 → 稽核通過、PR 準備中**（~~派工中~~ → 稽核中 → 2026-09-26 獨立 QA **通過、無阻擋**〔單組 QA〕；已套上新 main；PR 尚未開） | —（PR 準備中） | 開 PR → CI 綠 → merge → **立刻**移「已完成」附 hash。QA 非阻擋殘留 **Q1-r1～r5**（c-2）。（持股頁 `NOT_BOUND_NOW`：token／sheet-id 讀取錯誤被吞成「未綁定」）。總管 |
+| 已派工 Q2 `hold.alloc_split`／`hold.deep.core_satellite` 全部失敗仍落空態，等回報 | **派工中**（2026-09-26） | —（待合併） | 回報 → 稽核中 → 獨立 QA → PR → CI 綠 → merge → 移「已完成」附 hash。工作區 `/home/user/msd-q2`（基底＝`origin/main` `3f4493c` ＋ Q1 本地 commit；編修組實測 HEAD `623e326`「local: Q1 base (not pushed)」，其父＝`3f4493c`）。授權：批 5（見 c-1 表下 2026-09-26 總管判讀）。總管 |
 
 **~~A. 本輪進行中~~**（**2026-09-26 清點輪：本區併入 (c) c-1 的 S5-F／S5-W／S5-H 三列**；原文保留）
 
@@ -113,9 +116,9 @@
 | 項目 | 狀態 | merge hash | 還缺什麼＋誰決定 |
 |---|---|---|---|
 | a1 🚦 今天 `today`（整頁 33 張卡） | 已完 | #678 `2292644`（v2 卡面樣板上線）→ #680 `2b53ba0`（葉1 ① 三張）→ #681 `bcd46c7`（整頁） | 卡化本身無。殘留：**B4**（本表末列，卡住）、**B5** K1（(c) c-3，卡住）；燈卡方向列見 (b)。⚠️單組彙整 |
-| a2 🔍 找標的 `find`（4 張卡） | 已完 | #687 `83e0f47` | 殘留：**S5-F**（進行中；~~暫停~~ → 2026-09-26 已派工恢復 → 稽核中 → 稽核通過、PR #701 待合併）、**B9 ⑥～⑨**（S5-F QA 殘留，待辦）、**B6**（`find.screen_result`／`find.sector_flow`）。⚠️單組彙整 |
-| a3 🔬 查一檔 `inspect`（14 張卡；批次表與下鑽格照舊） | 已完 | #691 `f38dbd4` | 殘留：**Q5** 各卡靜默失敗（~~待辦~~ → 2026-09-26 進行中，~~已派工~~ → 稽核中）、**B6**、**C5b** 未用 `UI_EMPTY` import。⚠️單組彙整 |
-| a4 💼 我的持股 `hold`（23 張卡） | 已完 | #688 `66e4fe0` | 殘留：**S5-H**（~~進行中；暫停 → 2026-09-26 已派工恢復~~ → **已完** #699 `bd6ceec`，2026-09-26）、~~**Q1～Q4**（待辦）~~ →**Q1**（進行中，~~已派工~~ → 稽核中）、**Q2～Q4**（待辦）、**S4-T**（停利卡 why 句，待辦）、**B6**、**B9 ③**。⚠️單組彙整 |
+| a2 🔍 找標的 `find`（4 張卡） | 已完 | #687 `83e0f47` | 殘留：**S5-F**（~~進行中；暫停 → 2026-09-26 已派工恢復 → 稽核中 → 稽核通過、PR #701 待合併~~ → **已完** #701 `2810064`，2026-09-26）、**B9 ⑥～⑨**（S5-F QA 殘留，待辦；前提「PR #701 merge 後」已成立）、**B6**（`find.screen_result`／`find.sector_flow`）。⚠️單組彙整 |
+| a3 🔬 查一檔 `inspect`（14 張卡；批次表與下鑽格照舊） | 已完 | #691 `f38dbd4` | 殘留：**Q5** 各卡靜默失敗（~~待辦~~ → 2026-09-26 進行中，~~已派工~~ → 稽核中 → QA 回報 1 項阻擋、發回修正中）、**Q5-r1**（待辦）／**Q5-r2**（卡住）、**B6**、**C5b** 未用 `UI_EMPTY` import。⚠️單組彙整 |
+| a4 💼 我的持股 `hold`（23 張卡） | 已完 | #688 `66e4fe0` | 殘留：**S5-H**（~~進行中；暫停 → 2026-09-26 已派工恢復~~ → **已完** #699 `bd6ceec`，2026-09-26）、~~**Q1～Q4**（待辦）~~ →**Q1**（進行中，~~已派工~~ → 稽核中 → 2026-09-26 稽核通過、PR 準備中）、~~**Q2～Q4**（待辦）~~ → **Q2**（2026-09-26 進行中，已派工）、**Q3～Q4**（待辦）、**Q1-r1**（卡住）／**Q1-r2～r5**（待辦）、**S4-T**（停利卡 why 句，待辦）、**B6**、**B9 ③**。⚠️單組彙整 |
 | a5 📖 憑什麼 `why`（教學／資料體檢／工程診斷／AI 問答各卡；3 張表照舊） | 已完 | #691 `f38dbd4` | 殘留：**S5-W**（~~進行中；暫停 → 2026-09-26 已派工恢復 → 稽核中，QA blocker 修正中~~ → **已完** #700 `3f4493c`，2026-09-26）、**B6**（`why.qa`／`why.source.none`）。⚠️單組彙整 |
 | a6 今天頁「風險」格接上 danger（客戶裁示「風險 ← danger」；零新增取數） | 已完 | #692 `10f385c` | 無（「動能」格維持未接線，見 B4） |
 | a7 今天頁 16 張燈卡「▸ 詳細」折疊（客戶核准線框）＋改樣式開關修 iPhone 點不動 | 已完 | #685 `9fe19fd`、#686 `8873c9e` | 原生 `<details>` 在 iPhone 點不動的**真因未確認**（沙箱無 WebKit）；實機驗證併 **D1** |
@@ -160,14 +163,14 @@ SSOT `shared/lamp_direction_thresholds.py`（`LAMP_DIRECTION_WINDOWS`／`LAMP_DI
 | S2 批 2：`hold.switch`（客戶特許動 L3：`get_switch_in_candidates(strict=)` 選股池失敗／空池拋出 → `SWITCH_FAILED_NOW` 紅） | 已完 ⚠️單組 | #693 `ac96000` | 否決 regime 缺資料的殘留見 C2 |
 | S3 批 3：`hold.deep.dividend_cash`（客戶特許只動 L1 `fetch_etf_dividends`：失敗不入快取、帶 `attrs['fetch_failed']`、每檔 180s 失敗冷卻；任一檔失敗 → `CASH_FAILED_NOW` 紅） | 已完 ⚠️單組 | #694 `d48709b` | yfinance 回空不拋例外見 C3；卡面出處寫 L3 見 B9 ③ |
 | S4 批 4：`hold.take_profit` 持有個股無現價 → 既有 `TP_FAILED_NOW` 紅（只改 L5）＝原 **B9 ②** | 已完 ⚠️單組 | #698 `84f58ea` | 無 |
-| S5-F 批 5：`find.screen_result` 其餘歧義路徑（＝ **B9 ①** ＋ B6 子表 find ②③：唯一勾選因子自身輸入失敗、季快照缺） | **進行中**（~~暫停，~~ 2026-09-26 已派工恢復 → ~~**稽核中**：獨立 QA 中~~ → **稽核通過、PR #701 待合併**（等 CI）；未 merge） | —（PR #701 待合併） | 📌 **2026-09-26 現況**：獨立 QA 通過、PR #701 已開等 CI → merge 後**立刻**本節寫一行含 hash。QA 非阻擋殘留 4 項已登記 **B9 ⑥⑦⑧⑨**（c-2）。以下為進行中時的描述（保留作歷史，改動內容以 PR #701 為準）：工作區 `/home/user/msd-f`（detached `84f58ea`）改 4 檔：L1 `src/data/stock/yield_pe_fetcher.py::fetch_pe_name_maps(failed_markets=)`、L3 `src/services/fundamental_screener_service.py`（`get_fundamental_survivors(strict=)`／`build_trend_map(strict=)`）、L3 `src/services/valuation_service.py::get_pe_name_maps(failed_markets=)`、L5 `src/ui/views/page_find.py`；**尚無測試**；既有 `tests/test_v2_silent_fail_b1.py::test_b_other_aux_failures_still_leave_a_valid_zero` 鎖住灰色結果、**未改**。~~⚠️ 動到 L1（§-1.2 資料層凍結）—— 本組**未查到**本批的 L1 特許紀錄 ⇒ 恢復前須確認。~~ → **2026-09-26 二組複核更正**：L1 改動**在批 5 授權射程內**（授權原文見本表下方 📌）；現況＝**依清點令暫停**，不是「缺授權」。持久副本：`docs/v2/wip_patches/S5-F_84f58ea.patch`。~~恢復與否：**客戶**（解除清點令暫停）~~ → **2026-09-26 客戶令已解除暫停（原文見上）；已派工，恢復中** |
+| S5-F 批 5：`find.screen_result` 其餘歧義路徑（＝ **B9 ①** ＋ B6 子表 find ②③：唯一勾選因子自身輸入失敗、季快照缺） | **已完**（2026-09-26；~~**進行中**（暫停，2026-09-26 已派工恢復 → **稽核中**：獨立 QA 中 → **稽核通過、PR #701 待合併**（等 CI）；未 merge）~~；獨立 QA 一組通過 → PR #701 → CI 綠 → merge）⚠️單組（一組 QA） | #701 `2810064`（完整 `281006489e60909b03aec07e7005cea52063d79a`） | ⭐ **結果（2026-09-26）**：PR #701 merge ＝ `2810064`；CI「Fast checks」「Slow tests」check run 皆 success（編修組經 GitHub API 實測）。實際 merge 改 **8 檔**（編修組 `git diff --stat 3f4493c 2810064` 實測）：L1 `src/data/stock/yield_pe_fetcher.py`、L3 `src/services/fundamental_screener_service.py`、L3 `src/services/valuation_service.py`、L5 `src/ui/views/page_find.py`、測試 `tests/test_p02_find_v2_cards.py`／`tests/test_p02_find_view.py`／`tests/test_v2_silent_fail_b1.py`（⚠️ 下文「未改」為進行中時的描述，merge 時**已改**）、新測試 `tests/test_v2_silent_fail_b5_find.py`。QA 非阻擋殘留 4 項＝ **B9 ⑥⑦⑧⑨**（c-2，待辦；收尾前提「PR #701 merge 後」已成立）。~~📌 **2026-09-26 現況**：獨立 QA 通過、PR #701 已開等 CI → merge 後**立刻**本節寫一行含 hash。QA 非阻擋殘留 4 項已登記 **B9 ⑥⑦⑧⑨**（c-2）。~~ ｜以下為進行中時的描述（保留作歷史，改動內容以 PR #701 為準）：工作區 `/home/user/msd-f`（detached `84f58ea`）改 4 檔：L1 `src/data/stock/yield_pe_fetcher.py::fetch_pe_name_maps(failed_markets=)`、L3 `src/services/fundamental_screener_service.py`（`get_fundamental_survivors(strict=)`／`build_trend_map(strict=)`）、L3 `src/services/valuation_service.py::get_pe_name_maps(failed_markets=)`、L5 `src/ui/views/page_find.py`；**尚無測試**；既有 `tests/test_v2_silent_fail_b1.py::test_b_other_aux_failures_still_leave_a_valid_zero` 鎖住灰色結果、**未改**。~~⚠️ 動到 L1（§-1.2 資料層凍結）—— 本組**未查到**本批的 L1 特許紀錄 ⇒ 恢復前須確認。~~ → **2026-09-26 二組複核更正**：L1 改動**在批 5 授權射程內**（授權原文見本表下方 📌）；現況＝**依清點令暫停**，不是「缺授權」。持久副本：`docs/v2/wip_patches/S5-F_84f58ea.patch`。~~恢復與否：**客戶**（解除清點令暫停）~~ → **2026-09-26 客戶令已解除暫停（原文見上）；已派工，恢復中** |
 | S5-W 批 5：`why.qa` Gemini 安全封鎖／格式錯被吞成「成功＋空」 | **已完**（2026-09-26；~~進行中（暫停，2026-09-26 已派工恢復 → 稽核中：獨立 QA 抓到 blocker〔「`STOP`＋無 `parts` 顯示成紅」〕，修正中；未 merge）~~；獨立 QA 兩輪，第 1 輪 blocker 已修、第 2 輪通過）⚠️單組（每輪一組 QA） | #700 `3f4493c` | ⭐ **結果**：L3 `src/services/ai_qa_service.py::run_agent(fail_on_blocked_reply=)`（預設 False ⇒ 其他 caller 行為不變），**只有** L5 `src/ui/views/page_why.py` opt in；`blockReason`／非 `STOP` 的 `finishReason`／缺 `finishReason`／格式錯 → 既有紅態 `QA_FAILED_NOW`；**明確 `STOP` ＋ 無文字 → 灰**（第 1 輪 QA blocker「`STOP` 無 `parts` 顯示成紅」即此路徑，已修）；錯誤文字只列 key／型別、內容已遮蔽。實際 merge 改 3 檔（`ai_qa_service.py`、`page_why.py`、新測試 `tests/test_v2_silent_fail_b5_why.py`）。｜（以下為進行中時的描述，保留作歷史）工作區 `/home/user/msd-w`（detached `84f58ea`）：L3 `src/services/ai_qa_service.py`（新增 `_reply_failure`、`run_agent(fail_on_blocked_reply=)`，預設 False）、L5 `src/ui/views/page_why.py`、新測試 `tests/test_v2_silent_fail_b5_why.py`（未追蹤）。持久副本：`docs/v2/wip_patches/S5-W_84f58ea.patch`。~~恢復與否：**客戶**（解除清點令暫停）~~ → **2026-09-26 客戶令已解除暫停（原文見上）；已派工，恢復中** |
 | S5-H 批 5：`hold.vix` 抓不到被畫成灰「有效的結果」（`VIX_EMPTY_NOW`） | **已完**（2026-09-26；~~進行中（暫停，2026-09-26 已派工恢復；未 QA、未提交）~~；獨立 QA 一組通過） | #699 `bd6ceec` | ⭐ **結果**：L3 `src/services/dividend_station_service.py::fetch_vix(*, strict=False)`（`strict=True` 例外上拋；預設路徑〔v1 ETF 戰情室／每日推播／v2 戰情表〕輸出與 log 不變）＋ L5 `src/ui/views/page_hold.py::load_vix` 用 strict、`None`／NaN → 既有紅態 `VIX_FAILED_NOW`；版面不變。**獨立 QA 通過**：17 個情境、其他持股卡 5 萬張輸出逐位元組相同、19 個突變全數被測試抓到。實際 merge 另改 `tests/test_p04_hold_view.py`（patch 未列）。**非阻擋殘留**：例外分支註記「…是那一支 L3 自己載不進來」對 runtime bug 不精確 → 登記 **B9 ⑤**（文案＝客戶決定）。｜（以下為進行中時的描述，保留作歷史）工作區 `/home/user/msd-h`（detached `84f58ea`）：L3 `src/services/dividend_station_service.py::fetch_vix(strict=)`、L5 `src/ui/views/page_hold.py`、改 `tests/test_p04_hold_v2_cards.py`、新測試 `tests/test_v2_silent_fail_b5_vix.py`（未追蹤）。持久副本：`docs/v2/wip_patches/S5-H_84f58ea.patch`。~~恢復與否：**客戶**（解除清點令暫停）~~ → **2026-09-26 客戶令已解除暫停（原文見上）；已派工，恢復中** |
-| Q1 持股頁 `NOT_BOUND_NOW`（含 `hold.binding`）：token／sheet-id 讀取錯誤被吞成「未綁定」 | **進行中（稽核中）**（~~待辦（佇列）~~ → ~~已派工~~；2026-09-26，見 (d)） | — | ~~客戶排批；須動 L1／L3 者須逐卡特許（§-1.2）。~~ → 2026-09-26 批 5 授權涵蓋、排在 S5 之後依序做（見本表下 📌 總管判讀）。`hold.binding` 另經客戶排除 |
-| Q2 `hold.alloc_split`（`SPLIT_NO_VALUE_NOW`）／`hold.deep.core_satellite`「算不出比例」：全部失敗時仍落空態 | 待辦（佇列）⚠️單組（key↔常數對映） | — | 同 Q1 |
+| Q1 持股頁 `NOT_BOUND_NOW`（含 `hold.binding`）：token／sheet-id 讀取錯誤被吞成「未綁定」 | **進行中（稽核通過、PR 準備中）**（~~待辦（佇列）~~ → ~~已派工~~ → ~~稽核中~~；2026-09-26 獨立 QA **通過、無阻擋**，見 (d)）⚠️單組（一組 QA） | —（PR 準備中） | 📌 **2026-09-26**：已套上新 main、準備開 PR（尚未開）→ CI 綠 → merge → **立刻**本節寫一行含 hash。QA 非阻擋殘留 5 項已登記 **Q1-r1～r5**（c-2）。改動檔以執行 AI 回報為準（編修組未查證）。~~客戶排批；須動 L1／L3 者須逐卡特許（§-1.2）。~~ → 2026-09-26 批 5 授權涵蓋、排在 S5 之後依序做（見本表下 📌 總管判讀）。`hold.binding` 另經客戶排除 |
+| Q2 `hold.alloc_split`（`SPLIT_NO_VALUE_NOW`）／`hold.deep.core_satellite`「算不出比例」：全部失敗時仍落空態 | **進行中（派工中）**（~~待辦（佇列）~~；2026-09-26 已派工，等回報，見 (d)）⚠️單組（key↔常數對映） | —（待合併） | 工作區 `/home/user/msd-q2`（基底＝`origin/main` `3f4493c` ＋ Q1 本地 commit `623e326`）。回報 → 獨立 QA → PR → merge。授權同 Q1（批 5） |
 | Q3 `hold.deep.stress`（`STRESS_EMPTY_NOW`）／`hold.deep.var`（`VAR_EMPTY_NOW`）／`hold.deep.dividend_cash`（`CASH_EMPTY_NOW`）「算不出來」 | 待辦（佇列）⚠️單組（key↔常數對映） | — | 同 Q1 |
 | Q4 持股頁 `EMPTY_SHEET_NOW`：Sheet 列「張數／均價」空白被 L1 `src/data/portfolio/gsheet_portfolio.py::parse_portfolio_records` **靜默丟掉** ⇒「空」可能是整張被丟光 | 待辦（佇列） | — | ~~修在 L1 ⇒ 客戶排批＋特許~~ → 修在 L1；2026-09-26 批 5 授權涵蓋、排在 S5 之後依序做（見本表下 📌 總管判讀） |
-| Q5 查一檔（inspect）各卡：抓取失敗時欄位為 `None`，與「真的沒有」同一條路徑；批次卡＝輸入空或格式錯 | **進行中（稽核中）**（~~待辦（佇列）~~ → ~~已派工~~；2026-09-26，見 (d)） | — | 同 Q1 |
+| Q5 查一檔（inspect）各卡：抓取失敗時欄位為 `None`，與「真的沒有」同一條路徑；批次卡＝輸入空或格式錯 | **進行中（稽核中 → 發回修正中）**（~~待辦（佇列）~~ → ~~已派工~~ → 稽核中；2026-09-26 獨立 QA 回報 **1 項阻擋**，見 (d)）⚠️單組（一組 QA） | —（待合併） | 📌 **2026-09-26 QA 回報（總管轉述，編修組未查證）**：**阻擋 B1**＝ETF 紅卡只有單腿（配息／溢價／同儕）失敗時，where 句仍寫「這一支 L3 對 ETF 是 fail-loud 的（拿不到日線就直接拋）」，與同卡 why「回報失敗」矛盾；修法只刪該前綴。另有 **3 個測試缺口**、**2 處註解言過其實** ⇒ 全數**發回實作組修正中**，修完重跑獨立 QA。⛔ **兩條「修了但 production 幾乎不會觸發」的路徑，不得對客戶宣稱已修**：① 估值卡價格（`yf.download` 斷網回空表、FinMind 段吞錯 ⇒ 仍落灰「無股價」並快取 1 小時）；② ETF 溢價（下層全吞網路錯）。非阻擋新待辦 **Q5-r1／Q5-r2**（c-2）。授權同 Q1（批 5） |
 | S4-T `hold.take_profit`（#698）紅卡 why 句「…可以重跑一次」**不實**：L1 `src/data/core/data_loader.py::StockDataLoader._get_combined_data_cached`（`@st.cache_data(ttl=TTL_1HOUR)`）會把確定性負結果「查無資料」快取 1 小時 ⇒ 1 小時內重跑結果相同（同 `CLAUDE.md` §-2 記載的「可以重跑一次」錯誤指引事故型） | 待辦（佇列）⚠️單組 | — | 修法：**只刪句**（同 S5-F 作法，⛔ 不新增文案）；排在持股頁 `hold` 軌（與 Q2～Q4 同軌，見本表下 📌）。總管 |
 | C2 `hold.switch` 嚴格模式：空頭／警戒下所有存活者都未評分時漏紅（否決 regime 缺資料回 `[]`） | 已完 · **定案不做** ⚠️單組 | — | 不猜就分不出來。總管 |
 | C3 配息：yfinance `.dividends` 空但未拋例外 ⇒ 仍視為「沒配息」 | 已完 · **定案不做** ⚠️單組 | — | 分不出來。總管 |
@@ -175,10 +178,12 @@ SSOT `shared/lamp_direction_thresholds.py`（`LAMP_DIRECTION_WINDOWS`／`LAMP_DI
 📌 **2026-09-26 總管判讀（Q1～Q5）**：客戶 2026-09-26 批次授權「**本批放行『失敗被當成沒結果』的所有卡，不用每張問我**」（原文見本表下「S5 批次的授權」）涵蓋 Q1～Q5 所需的 L1／L3 改動（含 Q4 的 L1 `gsheet_portfolio.py::parse_portfolio_records`）⇒ **不需逐卡特許**；排在 S5-H／W／F 之後依序做：**Q1 → Q2 → Q3 → Q4**（持股頁 `hold`，依序、一次一張）→ **Q5**（查一檔 `inspect`）；每張走「實作 → 獨立 QA（§-2 規則 4）→ merge → 本節寫一行含 hash」。⚠️ 此為**總管判讀**（承接下方二組判讀），⛔ 非客戶逐字明示；客戶一句話可推翻。
 📌 **2026-09-26 派工更新**：**Q1**、**Q5** 已派工（與 S5-W／S5-F 並行，見 (d)）；剩 **Q2 → Q3 → Q4** 依序。
 📌 **2026-09-26 再更新**：S5-W 已完 #700 `3f4493c`；S5-F PR #701 待合併；Q1／Q5 稽核中；持股頁軌新增 **S4-T**（停利卡 why 句刪減）⇒ 剩 **Q2 → Q3 → Q4 ＋ S4-T**。
+📌 **2026-09-26 三更新**：**S5-F 已完 #701 `2810064`**（S5 三軌至此全數 merge：#699／#700／#701）；**Q1** 稽核通過、PR 準備中；**Q2** 已派工（`/home/user/msd-q2`）；**Q5** QA 回報 1 項阻擋、發回修正中 ⇒ 持股頁軌剩 **Q3 → Q4 ＋ S4-T**。
 
 📌 其餘 11 個工作區（`/home/user/msd-{badge,base,cards2,dirfail,find,fold,hold,lamp,mainfix,silent,toggle}`）2026-09-26 核對：**皆無未提交改動、HEAD 皆已是 `origin/main` 的祖先** ⇒ 過期，無待救工作（二組 2026-09-26 逐一重跑 `git status`／`merge-base --is-ancestor`，一致）。~~⚠️ **S5-F／W／H 的改動只存在本容器的本地工作區**（未 commit、未 push），換容器即消失。~~
 
 📌 **2026-09-26 二組複核更正 —— 持久副本**：S5-F／W／H 三軌的未提交改動已存成 `docs/v2/wip_patches/S5-F_84f58ea.patch`／`S5-W_84f58ea.patch`／`S5-H_84f58ea.patch`（含未追蹤的新測試檔）。二組實測：三份 patch 在 `84f58ea` 上 `git apply --check` 皆可乾淨套用，套用後 11 個檔與三個工作區**逐位元組相同**。⇒ **工作區（`/home/user/msd-{f,w,h}`）是一次性的、換容器即消失；patch 才是持久副本** —— ⚠️ 前提是 patch 檔**隨本檔一起 commit**（本輪清點時仍為未追蹤檔）。恢復方式：從 `84f58ea` 開新分支 → `git apply docs/v2/wip_patches/S5-X_84f58ea.patch`。
+📌 **2026-09-26 更新**：S5-H #699 `bd6ceec`、S5-W #700 `3f4493c`、S5-F #701 `2810064` **三軌皆已 merge** ⇒ 三份 patch 與工作區 `/home/user/msd-{f,w,h}` 均已是**歷史**，⛔ 不要再套用（現行以 `origin/main` 為準）。
 
 📌 **2026-09-26 二組複核更正 —— S5 批次的授權**（客戶原文由總管轉述；二組無從由 repo 查證原文，只核對到 S5-H patch 內註解「批次 5（客戶授權）」與之相符）：
 - 停利卡那一令（→ S4／#698）的射程是「只動停利卡相關 L3／資料層」（#698 實際只改 L5）；
@@ -190,16 +195,23 @@ SSOT `shared/lamp_direction_thresholds.py`（`LAMP_DIRECTION_WINDOWS`／`LAMP_DI
 
 | 項目 | 狀態 | merge hash | 還缺什麼＋誰決定 |
 |---|---|---|---|
-| B6 標記矛盾：#7「缺漏·可重跑」vs 文字「重按也一樣」／「有效的結果」—— hold／inspect／why 其餘卡**合一條**（客戶：不另開單）。已修靜默失敗卡（`find.screen_result`／`hold.take_profit`／`hold.switch`／`hold.deep.dividend_cash`）仍未登記進 `V2_VALID_EMPTY_SPEC`（`origin/main` `84f58ea` 上仍只登記 `hold.portfolio_count`）。📌 2026-09-26 客戶核准的逐卡審查已完成（**兩組獨立、結論一致**）：沒有任何新的 `(卡, now)` 對符合 #11 登記條件，上列四張卡**不得登記**；該輪零程式變更。逐卡理由見下方 **B6 子表** | ~~未修~~ → 審查完成、**矛盾未解** ⇒ **卡住** | — | 與持股頁同一根因；改 builder／文案需授權；現有常數拆不開任何一對 ⇒ 登記＝把 #11 擴散到真缺漏。~~客戶授權後一次修~~ → **客戶二擇一**：(1) 逐卡修上游讓失敗轉紅（需逐卡授權動 L1／L3）(2) 新文案拆「真零 vs 歧義」（需文案／規格）（見 B6 子表下「解法」）。⚠️單組判讀：批 4（#698）與批 5（S5-F／W／H）逐卡修的正是 B6 子表列出的歧義路徑 ⇒ **實質上在走解法 (1)**，但客戶是否正式選 (1)、修完後是否登記 #11，**未見明示**。📌 2026-09-26 二組複核補註：客戶「【授權：逐卡修失敗源頭，連跑】」（原文見 c-1 表下）字面上即解法 (1) ⇒ **「選 (1) 還是 (2)」已由該令回答**（⚠️ 二組判讀）；仍未明示的只剩「修完後是否登記 #11」。📌 2026-09-26：`hold.vix` 亦已由 #699 `bd6ceec` 修成失敗轉紅（S5-H）；#699 未動 `src/ui/views/page_today.py` ⇒ `V2_VALID_EMPTY_SPEC` 不變、`hold.vix` 未登記 #11。📌 2026-09-26：`why.qa` 亦已由 #700 `3f4493c` 修成失敗轉紅（S5-W）；#700 只改 3 檔、未動 `page_today.py` ⇒ `V2_VALID_EMPTY_SPEC` 不變 |
-| B9 ① `find` 唯一勾選因子自身輸入失敗 → 灰色「有效的結果」 | → 併入 **S5-F**（進行中；2026-09-26 稽核通過、PR #701 待合併） | — | 見 S5-F |
+| B6 標記矛盾：#7「缺漏·可重跑」vs 文字「重按也一樣」／「有效的結果」—— hold／inspect／why 其餘卡**合一條**（客戶：不另開單）。已修靜默失敗卡（`find.screen_result`／`hold.take_profit`／`hold.switch`／`hold.deep.dividend_cash`）仍未登記進 `V2_VALID_EMPTY_SPEC`（`origin/main` `84f58ea` 上仍只登記 `hold.portfolio_count`）。📌 2026-09-26 客戶核准的逐卡審查已完成（**兩組獨立、結論一致**）：沒有任何新的 `(卡, now)` 對符合 #11 登記條件，上列四張卡**不得登記**；該輪零程式變更。逐卡理由見下方 **B6 子表** | ~~未修~~ → 審查完成、**矛盾未解** ⇒ **卡住** | — | 與持股頁同一根因；改 builder／文案需授權；現有常數拆不開任何一對 ⇒ 登記＝把 #11 擴散到真缺漏。~~客戶授權後一次修~~ → **客戶二擇一**：(1) 逐卡修上游讓失敗轉紅（需逐卡授權動 L1／L3）(2) 新文案拆「真零 vs 歧義」（需文案／規格）（見 B6 子表下「解法」）。⚠️單組判讀：批 4（#698）與批 5（S5-F／W／H）逐卡修的正是 B6 子表列出的歧義路徑 ⇒ **實質上在走解法 (1)**，但客戶是否正式選 (1)、修完後是否登記 #11，**未見明示**。📌 2026-09-26 二組複核補註：客戶「【授權：逐卡修失敗源頭，連跑】」（原文見 c-1 表下）字面上即解法 (1) ⇒ **「選 (1) 還是 (2)」已由該令回答**（⚠️ 二組判讀）；仍未明示的只剩「修完後是否登記 #11」。📌 2026-09-26：`hold.vix` 亦已由 #699 `bd6ceec` 修成失敗轉紅（S5-H）；#699 未動 `src/ui/views/page_today.py` ⇒ `V2_VALID_EMPTY_SPEC` 不變、`hold.vix` 未登記 #11。📌 2026-09-26：`why.qa` 亦已由 #700 `3f4493c` 修成失敗轉紅（S5-W）；#700 只改 3 檔、未動 `page_today.py` ⇒ `V2_VALID_EMPTY_SPEC` 不變。📌 2026-09-26：`find.screen_result` 的 B6 子表 ②③ 路徑亦已由 #701 `2810064` 修成失敗轉紅（S5-F）；#701 改 8 檔、未動 `page_today.py`（編修組 `git diff --stat` 實測）⇒ `V2_VALID_EMPTY_SPEC` 不變；① 一個因子都沒勾仍未處理（→ B9 ⑨） |
+| B9 ① `find` 唯一勾選因子自身輸入失敗 → 灰色「有效的結果」 | → 併入 **S5-F**（~~進行中；2026-09-26 稽核通過、PR #701 待合併~~ → **已完**，2026-09-26） | #701 `2810064` | 見 S5-F |
 | B9 ~~② `hold.take_profit` 在 `current_price` 為 `None` 時~~ | → **S4** 結案 | #698 `84f58ea` | 無 |
 | B9 ③ 配息卡 `why` 寫「L3…拋出例外」但錯在 L1（既有文案限制）；2026-09-26 核對 `origin/main` `src/ui/views/page_hold.py::SRC_DIV_CASH` 仍寫「L3 配息現金流」 | 卡住 ⚠️單組 | — | 客戶文案 |
 | B9 ④ `vix` 平盤帶用 GitHub `datasets/finance-vix`（CBOE 鏡像，僅校準）量測 —— 請客戶確認源可接受 | 卡住 | — | 客戶確認 |
 | B9 ⑤ `hold.vix` 例外分支註記「這不是取數失敗（L3 取不到時回的是「沒有值」而不是例外），是那一支 L3 自己載不進來」（`src/ui/views/page_hold.py::build_vix_card` 的 `UI_FAILED` 分支，#699 前既有文案）—— S5-H 改 `fetch_vix(strict=True)` 後，L3 本體的 runtime 例外（程式層錯誤；取數失敗依 `fetch_yf_close` 契約回空、不拋）也會走這一支 ⇒ 「L3 自己載不進來」只貼合 import 失敗，對 runtime bug **不精確**（S5-H 獨立 QA 非阻擋發現，2026-09-26 登記） | 卡住 ⚠️單組（一組 QA） | — | 文案＝客戶決定（同 B9 ③）。客戶 |
-| B9 ⑥ S5-F（PR #701）因子失敗紅卡的 where 句，對 PE／RS／趨勢因子仍指向「FinMind 額度／MOPS–Goodinfo 鏈」⇒ **誤導**（S5-F 獨立 QA 非阻擋發現，2026-09-26 登記）；趨勢因子較貼切的是既有 `SNAPSHOT_WAIT_WHERE` | 待辦 ⚠️單組（一組 QA） | — | 依因子改指既有 where 常數（趨勢 → `SNAPSHOT_WAIT_WHERE`）；PR #701 merge 後在 `src/ui/views/page_find.py` 收尾。總管 |
-| B9 ⑦ S5-F 紅卡用語「這輪失敗」暗示一次性；但季快照缺是**持續性**的，重跑不會好（S5-F 獨立 QA 非阻擋發現，2026-09-26 登記） | 待辦 ⚠️單組（一組 QA） | — | 用語措辭。總管 |
-| B9 ⑧ S5-F 紅卡事實列顯示「`RuntimeError()`」—— 對使用者無資訊量；可改沿用 L3 log 既有用語「跨季趨勢為空表」（S5-F 獨立 QA 非阻擋發現，2026-09-26 登記） | 待辦 ⚠️單組（一組 QA） | — | 措辭決定（沿用 L3 log 用語與否）。總管 |
-| B9 ⑨ S5-F 規格缺口（S5-F 獨立 QA 非阻擋發現，2026-09-26 登記）：紅卡未提示「取消勾選這個因子」；未點名是**哪個市場**失敗；① 一個因子都沒勾（＝B6 子表 find ①）未處理 | 待辦 ⚠️單組（一組 QA） | — | 規格補齊。總管 |
+| B9 ⑥ S5-F（PR #701）因子失敗紅卡的 where 句，對 PE／RS／趨勢因子仍指向「FinMind 額度／MOPS–Goodinfo 鏈」⇒ **誤導**（S5-F 獨立 QA 非阻擋發現，2026-09-26 登記）；趨勢因子較貼切的是既有 `SNAPSHOT_WAIT_WHERE` | 待辦（📌 2026-09-26 收尾前提「PR #701 merge 後」**已成立**：#701 `2810064`）⚠️單組（一組 QA） | —（待合併） | 依因子改指既有 where 常數（趨勢 → `SNAPSHOT_WAIT_WHERE`）；PR #701 merge 後在 `src/ui/views/page_find.py` 收尾。總管 |
+| B9 ⑦ S5-F 紅卡用語「這輪失敗」暗示一次性；但季快照缺是**持續性**的，重跑不會好（S5-F 獨立 QA 非阻擋發現，2026-09-26 登記） | 待辦（📌 2026-09-26 收尾前提「PR #701 merge 後」**已成立**：#701 `2810064`）⚠️單組（一組 QA） | —（待合併） | 用語措辭。總管 |
+| B9 ⑧ S5-F 紅卡事實列顯示「`RuntimeError()`」—— 對使用者無資訊量；可改沿用 L3 log 既有用語「跨季趨勢為空表」（S5-F 獨立 QA 非阻擋發現，2026-09-26 登記） | 待辦（📌 2026-09-26 收尾前提「PR #701 merge 後」**已成立**：#701 `2810064`）⚠️單組（一組 QA） | —（待合併） | 措辭決定（沿用 L3 log 用語與否）。總管 |
+| B9 ⑨ S5-F 規格缺口（S5-F 獨立 QA 非阻擋發現，2026-09-26 登記）：紅卡未提示「取消勾選這個因子」；未點名是**哪個市場**失敗；① 一個因子都沒勾（＝B6 子表 find ①）未處理 | 待辦（📌 2026-09-26 收尾前提「PR #701 merge 後」**已成立**：#701 `2810064`）⚠️單組（一組 QA） | —（待合併） | 規格補齊。總管 |
+| Q1-r1 讀取失敗（token／sheet-id）時，**全域狀態列**仍顯示「未綁定」（Q1 獨立 QA 非阻擋發現，2026-09-26 登記） | 卡住 ⚠️單組（一組 QA） | —（待合併） | 要改需新標籤字樣 ⇒ K1 新文案 ⇒ **規格洞**，卡住待客戶給字樣。是否修＝總管；字樣＝客戶（K1）—— ⚠️ 總管指示「誰決定＝總管」與本列「待客戶」並陳，編修組依 B9 ⑤ 前例歸卡住 |
+| Q1-r2 `secrets.toml` 格式錯誤被 `_safe_secret`／`_get_active_sheet_id` 吞成灰（「未綁定」）（Q1 獨立 QA 非阻擋發現，2026-09-26 登記） | 待辦 ⚠️單組（一組 QA） | —（待合併） | 總管 |
+| Q1-r3 `oauth_state` import 失敗時，持股數卡建議「重新登入」＝**不實指引**（Q1 獨立 QA 非阻擋發現，2026-09-26 登記） | 待辦 ⚠️單組（一組 QA） | —（待合併） | 總管 |
+| Q1-r4 station 家族把持股錯誤歸到**錯的來源**（既有問題，非 Q1 造成；Q1 獨立 QA 非阻擋發現，2026-09-26 登記） | 待辦 ⚠️單組（一組 QA） | —（待合併） | 總管 |
+| Q1-r5 例外 `repr` 未經清洗直接上頁面（**潛在**，QA 未實測到外洩；Q1 獨立 QA 非阻擋發現，2026-09-26 登記） | 待辦 ⚠️單組（一組 QA） | —（待合併） | 總管 |
+| Q5-r1 估值卡灰態「若是暫時抓不到，按…重跑一次」在快取期內（價格 1 小時、配息 30 分）**不實**（Q5 獨立 QA 非阻擋發現，2026-09-26 登記） | 待辦 ⚠️單組（一組 QA） | —（待合併） | 修法：**只刪句**（同 S4-T／S5-F 作法，⛔ 不新增文案）。總管 |
+| Q5-r2 三條**無法不猜就分辨**「失敗 vs 無資料」的路徑 —— ETF 溢價（需改 L2）、配息鏈與籌碼（需改 L1）—— ＋ 估值價格「查無資料」路徑（Q5 獨立 QA 非阻擋發現，2026-09-26 登記） | 卡住 ⚠️單組（一組 QA） | —（待合併） | 需改計算層／資料層讓上游分辨「失敗」與「無資料」。誰決定＝總管：批 5 授權是否涵蓋 L2 改動**待判讀**（⚠️單組）；若判不涵蓋 ⇒ 須客戶授權。⚠️ 依總管指示歸「卡住」—— 與本節「卡住」定義（卡在客戶內容決定／實機）字面不完全相符，並陳 |
 
 **c-3 規格／文件債**
 
@@ -277,17 +289,17 @@ SSOT `shared/lamp_direction_thresholds.py`（`LAMP_DIRECTION_WINDOWS`／`LAMP_DI
 
 | 卡（`key`／`now` 常數） | 為什麼不能登記（這個「空」還蓋著哪條歧義路徑） | 相關 |
 |---|---|---|
-| `find.screen_result`／`SCREEN_EMPTY_NOW` | ① 表單允許一個因子都不勾 → L3 回空＋「請至少勾選」；② 去年季快照缺 → 存活 0 檔＋「季快照未就緒」，**不報錯**；③ 唯一勾選因子自身掃描失敗 → 靜默為空 | ③＝B9 ① |
+| `find.screen_result`／`SCREEN_EMPTY_NOW` | ① 表單允許一個因子都不勾 → L3 回空＋「請至少勾選」；② 去年季快照缺 → 存活 0 檔＋「季快照未就緒」，**不報錯**；③ 唯一勾選因子自身掃描失敗 → 靜默為空 | ③＝B9 ①；2026-09-26 S5-F 已修 ②③：#701 `2810064`（失敗 → 紅；① 仍未處理 → B9 ⑨；#11 仍未登記） |
 | `find.sector_flow`／`FLOW_EMPTY_NOW` | 快取尚未產出 ≠ 真的沒有資金流 | — |
 | 持股頁 `EMPTY_SHEET_NOW` | Sheet 列若「張數／均價」空白，被 `parse_portfolio_records` **靜默丟掉** ⇒「空」可能是整張被丟光 | — |
-| 持股頁 `NOT_BOUND_NOW`（含 `hold.binding`） | token／sheet-id 讀取錯誤被吞成「未綁定」；`hold.binding` 另經客戶排除 | — |
+| 持股頁 `NOT_BOUND_NOW`（含 `hold.binding`） | token／sheet-id 讀取錯誤被吞成「未綁定」；`hold.binding` 另經客戶排除 | ＝Q1（2026-09-26 稽核通過、PR 準備中；—（PR 準備中）） |
 | `hold.take_profit`／`TP_EMPTY_NOW` | 抓價失敗靜默 → `current_price` 為 `None`、該列無錯誤 → 被跳過；「沒有一檔達門檻」可能是價格沒抓到 | ＝B9 ② |
 | `hold.switch`／`SWITCH_EMPTY_NOW` | 否決 regime 嚴格模式缺資料時回 `[]`；未判定燈號被排除在換出候選外 | 同 C2 |
 | `hold.deep.dividend_cash`／`CASH_NO_PAYOUT_NOW` | yfinance 回空但**不拋例外** ⇒ 分不出「沒配息」與「沒抓到」 | 同 C3 |
-| 拆分／壓力／VaR／現金 空態（`hold.alloc_split` `SPLIT_NO_VALUE_NOW`／`hold.deep.stress` `STRESS_EMPTY_NOW`／`hold.deep.var` `VAR_EMPTY_NOW`／`hold.deep.dividend_cash` `CASH_EMPTY_NOW`） | 空＝輸入缺漏，不是有效的零 | — |
+| 拆分／壓力／VaR／現金 空態（`hold.alloc_split` `SPLIT_NO_VALUE_NOW`／`hold.deep.stress` `STRESS_EMPTY_NOW`／`hold.deep.var` `VAR_EMPTY_NOW`／`hold.deep.dividend_cash` `CASH_EMPTY_NOW`） | 空＝輸入缺漏，不是有效的零 | 拆分＝Q2（2026-09-26 已派工，—（待合併））；壓力／VaR／現金＝Q3（待辦） |
 | `hold.macro_stage` `MACRO_EMPTY_NOW`／`hold.position_cap` `CAP_EMPTY_NOW` | 未評估 ≠ 有效的空 | — |
 | `hold.vix`／`VIX_EMPTY_NOW` | 抓取未命中 | 2026-09-26 S5-H 已修：#699 `bd6ceec`（抓不到 → 紅 `VIX_FAILED_NOW`；#11 仍未登記） |
-| 查一檔（inspect）各卡 | 抓取失敗時欄位為 `None`，與「真的沒有」同一條路徑；批次卡＝輸入空或格式錯 | — |
+| 查一檔（inspect）各卡 | 抓取失敗時欄位為 `None`，與「真的沒有」同一條路徑；批次卡＝輸入空或格式錯 | ＝Q5（2026-09-26 進行中：QA 回報 1 項阻擋、發回修正中；—（待合併）） |
 | `why.qa`／`QA_EMPTY_NOW` | Gemini 安全封鎖／回覆格式錯被吞成「成功＋空」；且此態屬「缺漏·可重跑」⇒ #11 不適用 | 2026-09-26 S5-W 已修：#700 `3f4493c`（封鎖／格式錯 → 紅 `QA_FAILED_NOW`；明確 `STOP` 無文字仍灰；#11 仍未登記） |
 | `why.source.none`／`EMPTY_REGISTRY_NOW` | 未載入（缺漏·可重跑）⇒ #11 不適用 | — |
 | 今天頁 | 客戶排除；其空態屬未評估／未知 | — |
@@ -322,23 +334,30 @@ SSOT `shared/lamp_direction_thresholds.py`（`LAMP_DIRECTION_WINDOWS`／`LAMP_DI
 | 清點交接本（本輪，(d) 派工追蹤）：四欄進度總表＋給下一個 AI＋常設規矩；暫停中工作留 patch（`docs/v2/wip_patches/`）；二組複核更正 | 見本 commit（docs(handoff): 全面清點…；開發線 `claude/stock-dashboard-handoff-g9dtm0`，非 merge） |
 | S5-H `hold.vix`（💼 我的持股 VIX 卡）抓不到 → 紅 `VIX_FAILED_NOW`（不再畫成灰色「有效的結果」）＝靜默失敗批 5 第 1 項：L3 `fetch_vix(strict=)`＋L5 `load_vix` 用 strict；獨立 QA 通過（17 情境、其他持股卡 5 萬張逐位元組相同、19 突變全殺）；非阻擋文案殘留 → B9 ⑤ | #699 `bd6ceec` |
 | S5-W `why.qa`（📖 憑什麼 AI 問答卡）Gemini 封鎖／格式錯 → 紅 `QA_FAILED_NOW`（不再當成「有效結果」）＝靜默失敗批 5 第 2 項：L3 `run_agent(fail_on_blocked_reply=)`（預設 False）只有 `page_why` opt in；`blockReason`／非 `STOP`／缺 `finishReason`／格式錯 → 紅，明確 `STOP` 無文字 → 灰；錯誤文字只列 key／型別、已遮蔽；獨立 QA 兩輪（第 1 輪 blocker「`STOP` 無 `parts` 顯示成紅」已修） | #700 `3f4493c` |
+| S5-F `find.screen_result`（🔍 找標的選股結果卡）唯一勾選因子自身輸入失敗／季快照缺 → 紅卡（不再當成「有效結果」）＝靜默失敗批 5 第 3 項（＝B9 ① ＋ B6 子表 find ②③）：改 L1 `yield_pe_fetcher.py`、L3 `fundamental_screener_service.py`／`valuation_service.py`、L5 `page_find.py` ＋ 4 個測試檔（共 8 檔，編修組 `git diff --stat` 實測）；獨立 QA 一組通過；CI Fast／Slow check run 皆 success（GitHub API 實測）；非阻擋殘留 → B9 ⑥～⑨ | #701 `2810064` |
 
 📌 2026-09-26 清點輪起，**狀態以上方 (a)(b)(c)(d) 主表為準**（主表已含全部「已完」列與 hash）；本表照客戶規則保留作流水。
 📌 **2026-09-26 每 5 項自檢**（常設規矩 §7「拿 git log 對 HANDOFF，補漏」）：`git log --merges --oneline origin/main -15`（#685～#699）逐一比對 hash —— #687～#698 皆在本表；**#699 `bd6ceec` 本次補**；**#685 `9fe19fd`／#686 `8873c9e` 只在主表 a7、本表漏列 ⇒ 已補登**；其餘無缺。⚠️ 編修組機械比對，單組。
 
 ### 給下一個 AI
 
-> 固定格式（客戶 2026-09-26【交接表 · 維護時機】「交接段」）；**每次更新本節時同步改這五點**。以下據 2026-09-26 清點實況填寫（**第 1～2 點於 2026-09-26 派工 S5-H／W／F 時更新**；**2026-09-26 S5-H 已完 #699 `bd6ceec`／派工 Q1、Q5 時再更新第 1～5 點**；**2026-09-26 S5-W 已完 #700 `3f4493c`／S5-F PR #701 時再更新第 1～5 點**）；⚠️ 工作區內容為編修組讀 diff 所得，**單組、未 QA**。
+> 固定格式（客戶 2026-09-26【交接表 · 維護時機】「交接段」）；**每次更新本節時同步改這五點**。以下據 2026-09-26 清點實況填寫（**第 1～2 點於 2026-09-26 派工 S5-H／W／F 時更新**；**2026-09-26 S5-H 已完 #699 `bd6ceec`／派工 Q1、Q5 時再更新第 1～5 點**；**2026-09-26 S5-W 已完 #700 `3f4493c`／S5-F PR #701 時再更新第 1～5 點**；**2026-09-26 S5-F 已完 #701 `2810064`／Q1 稽核通過／Q2 派工／Q5 發回修正時三更新第 1～5 點**）；⚠️ 工作區內容為編修組讀 diff 所得，**單組、未 QA**。
 
-1. **從哪項接手（一項）**：📌 **2026-09-26 現況（S5-W 已完 #700 `3f4493c` 後更新）**：進行中三軌 —— **S5-F**（稽核通過、**PR #701 待合併**，等 CI）、**Q1**（`NOT_BOUND_NOW` token 吞錯，稽核中）、**Q5**（查一檔各卡，稽核中），見 (d)。**接手一項：S5-F**（PR #701 CI 綠 → merge → **立刻**本節寫一行含 hash；其餘兩軌照 (d) 追 QA）。**三軌之後的順序**：持股頁 `hold` 軌 **Q2 → Q3 → Q4 ＋ S4-T**（停利卡 why 句「可以重跑一次」只刪句）→ 小項 **C4／C5b／DOC1／DOC2／C6（查證）**；S5-F 的 QA 殘留 **B9 ⑥～⑨**（c-2，待辦）於 PR #701 merge 後碰到 `page_find.py` 時收尾（⚠️ 排序為編修組依總管指示轉述，未另排；B9 ⑥～⑨ 的插入位置總管未指定）。
+1. **從哪項接手（一項）**：📌 **2026-09-26 現況（S5-F 已完 #701 `2810064` 後三更新）**：**接手一項＝Q1**（`NOT_BOUND_NOW`：token／sheet-id 讀取錯誤被吞成「未綁定」；獨立 QA **通過、無阻擋**〔單組 QA〕、已套上新 main）→ **開 PR → CI 綠 → merge → 立刻本節寫一行含 hash**。**並行中**：**Q2**（實作中，工作區 `/home/user/msd-q2`）、**Q5**（QA 阻擋 B1 修正中），見 (d)。**之後的順序**：**Q3 → Q4 ＋ S4-T**（持股頁 `hold` 軌）→ **B9 ⑥～⑨**（`page_find.py` 收尾；前提「PR #701 merge 後」已成立）→ **Q5-r1**（只刪句）→ 小項 **C4／C5b／DOC1／DOC2／C6（查證）**。Q1-r2～r5 為新登記待辦（c-2），總管指示的順序未列入 ⇒ 位置未定（⚠️ 編修組照總管指示轉述，未另排）。
+   ~~（歷史，S5-F 已結案 #701 `2810064`）📌 **2026-09-26 現況（S5-W 已完 #700 `3f4493c` 後更新）**：進行中三軌 —— **S5-F**（稽核通過、**PR #701 待合併**，等 CI）、**Q1**（`NOT_BOUND_NOW` token 吞錯，稽核中）、**Q5**（查一檔各卡，稽核中），見 (d)。**接手一項：S5-F**（PR #701 CI 綠 → merge → **立刻**本節寫一行含 hash；其餘兩軌照 (d) 追 QA）。**三軌之後的順序**：持股頁 `hold` 軌 **Q2 → Q3 → Q4 ＋ S4-T**（停利卡 why 句「可以重跑一次」只刪句）→ 小項 **C4／C5b／DOC1／DOC2／C6（查證）**；S5-F 的 QA 殘留 **B9 ⑥～⑨**（c-2，待辦）於 PR #701 merge 後碰到 `page_find.py` 時收尾（⚠️ 排序為編修組依總管指示轉述，未另排；B9 ⑥～⑨ 的插入位置總管未指定）。~~
    ~~（歷史，S5-W 已結案）📌 **2026-09-26 現況（S5-H 已完 #699 `bd6ceec` 後更新）**：進行中四軌 —— **S5-W**（稽核中：獨立 QA 抓到 blocker，總管轉述「`STOP`＋無 `parts` 顯示成紅」，修正中）、**S5-F**（稽核中：獨立 QA 中）、**Q5**（查一檔各卡，派工中）、**Q1**（`NOT_BOUND_NOW` token 吞錯，派工中），見 (d)。**接手一項：S5-W**（四軌中唯一已知有 blocker 待修的一項；其餘三軌照 (d) 追回報）。**四軌之後的順序**：**Q2 → Q3 → Q4**（持股頁 `hold`，依序、一次一張）→ 小項 **C4／C5b／DOC1／DOC2／C6（查證）**（Q1～Q5 的授權見 (c) c-1 表下 2026-09-26 總管判讀）。~~
    ~~（歷史，S5-H 已結案）📌 **2026-09-26 現況**：S5-H／S5-W／S5-F 三軌已依客戶解除暫停令（原文見本節檔首）**派工恢復（派工中，等回報）**，見 (d)。**三軌之後的順序**：**Q1 → Q2 → Q3 → Q4**（持股頁 `hold`，依序、一次一張）→ **Q5**（查一檔 `inspect`）→ 小項 **C4／C5b／DOC1／DOC2／C6（查證）**（Q1～Q5 的授權見 (c) c-1 表下 2026-09-26 總管判讀）。若接手時三軌尚未回報／merge，仍從 **S5-H** 接（原描述保留如下）：**S5-H —— `hold.vix`（💼 我的持股「VIX（市場恐慌指數）」卡）靜默失敗**（(c) c-1）。問題：L3 `fetch_vix()` 吞掉例外、抓不到回 `None`，卡片把它畫成灰卡「這是一個**有效的結果**」（`VIX_EMPTY_NOW`）；應改走既有紅態 `VIX_FAILED_NOW`。~~
 
-2. **那項做到哪、下一步是什麼**（📌 2026-09-26 再改寫為 **S5-F**；S5-W 已結案 #700 `3f4493c`、S5-H 已結案 #699 `bd6ceec`，其描述保留於本點下方作歷史）：
-   - **做到哪（S5-F）**：獨立 QA **通過**、**PR #701 已開，等 CI**；未 merge。QA 的 4 項**非阻擋**殘留已登記 **B9 ⑥～⑨**（(c) c-2，待辦）。
-   - **下一步（S5-F）**：PR #701 CI 綠 → merge → **立刻**在本節寫一行（含 hash）→ (d)、c-1、「已完成（近期）」同步移列。
-   - **同時在跑**：**Q1**、**Q5**（稽核中 → 獨立 QA 通過 → PR → merge）。每項 merge 完**立刻**在本節寫一行含 hash。
-   - **三軌之後（2026-09-26 排程）**：持股頁 `hold` 軌 **Q2 → Q3 → Q4 ＋ S4-T**（停利卡 why 句「可以重跑一次」不實 ⇒ 只刪句，同 S5-F 作法）→ 小項 **C4／C5b／DOC1／DOC2／C6（查證）**；每項同樣走「實作 → 獨立 QA → merge → 本節寫一行含 hash」。依客戶令：全部待辦做完或只剩卡住的，才停一次回報。
+2. **那項做到哪、下一步是什麼**（📌 2026-09-26 三改寫為 **Q1**；S5-F 已結案 #701 `2810064`、S5-W 已結案 #700 `3f4493c`、S5-H 已結案 #699 `bd6ceec`，其描述保留於本點下方作歷史）：
+   - **做到哪（Q1）**：獨立 QA **通過、無阻擋**（單組 QA）；已套上新 main；**PR 尚未開**（—（PR 準備中））。改動檔以執行 AI 回報為準（編修組未查證）。QA 的 5 項**非阻擋**殘留已登記 **Q1-r1～r5**（(c) c-2；r1 卡住〔K1 新文案〕、r2～r5 待辦）。
+   - **下一步（Q1）**：開 PR → CI 綠（fast lane 擋 merge；slow lane 要看 check run／job log）→ merge → **立刻**在本節寫一行（含 hash）→ (d)、c-1、「已完成（近期）」同步移列。
+   - **同時在跑**：**Q2**（派工中，`/home/user/msd-q2`；回報 → 稽核中 → 獨立 QA → PR → merge）、**Q5**（獨立 QA 回報阻擋 B1 ＋ 3 個測試缺口 ＋ 2 處註解言過其實 → 發回修正中 → 重跑獨立 QA → PR → merge；⛔ 估值卡價格、ETF 溢價兩條「修了但 production 幾乎不會觸發」的路徑**不得對客戶宣稱已修**）。每項 merge 完**立刻**在本節寫一行含 hash。
+   - **之後（2026-09-26 排程）**：**Q3 → Q4 ＋ S4-T**（停利卡 why 句「可以重跑一次」不實 ⇒ 只刪句）→ **B9 ⑥～⑨**（`page_find.py` 收尾，前提已成立）→ **Q5-r1**（只刪句）→ 小項 **C4／C5b／DOC1／DOC2／C6（查證）**；每項同樣走「實作 → 獨立 QA → merge → 本節寫一行含 hash」。依客戶令：全部待辦做完或只剩卡住的，才停一次回報。
+   - 📌 **（歷史）S5-F —— 已結案 #701 `2810064`（2026-09-26）**；以下四項為其進行中時的描述，保留、⛔ 不是現行待辦：
+   - ~~**做到哪（S5-F）**：獨立 QA **通過**、**PR #701 已開，等 CI**；未 merge。QA 的 4 項**非阻擋**殘留已登記 **B9 ⑥～⑨**（(c) c-2，待辦）。~~
+   - ~~**下一步（S5-F）**：PR #701 CI 綠 → merge → **立刻**在本節寫一行（含 hash）→ (d)、c-1、「已完成（近期）」同步移列。~~
+   - ~~**同時在跑**：**Q1**、**Q5**（稽核中 → 獨立 QA 通過 → PR → merge）。每項 merge 完**立刻**在本節寫一行含 hash。~~
+   - ~~**三軌之後（2026-09-26 排程）**：持股頁 `hold` 軌 **Q2 → Q3 → Q4 ＋ S4-T**（停利卡 why 句「可以重跑一次」不實 ⇒ 只刪句，同 S5-F 作法）→ 小項 **C4／C5b／DOC1／DOC2／C6（查證）**；每項同樣走「實作 → 獨立 QA → merge → 本節寫一行含 hash」。依客戶令：全部待辦做完或只剩卡住的，才停一次回報。~~
    - 📌 **（歷史）S5-W —— 已結案 #700 `3f4493c`（2026-09-26）**；以下四項為其進行中時的描述，保留、⛔ 不是現行待辦：
    - ~~**做到哪（S5-W）**：已依解除暫停令派工恢復並回報；**獨立 QA 抓到 blocker**（總管轉述：「`STOP`＋無 `parts` 顯示成紅」），執行 AI **修正中**。派工前的持久副本＝`docs/v2/wip_patches/S5-W_84f58ea.patch`（L3 `src/services/ai_qa_service.py` 新增 `_reply_failure`、`run_agent(fail_on_blocked_reply=)`〔預設 False〕；L5 `src/ui/views/page_why.py`；新測試 `tests/test_v2_silent_fail_b5_why.py`）；修正中的改動位置以執行 AI 回報為準（本編修組未查證）。~~
    - ~~**下一步（S5-W）**：修掉 blocker → 重跑獨立 QA（§-2 規則 4）→ PR → CI 綠 → merge → **立刻**在本節寫一行（含 hash）。~~
@@ -360,6 +379,7 @@ SSOT `shared/lamp_direction_thresholds.py`（`LAMP_DIRECTION_WINDOWS`／`LAMP_DI
      S5-H `/home/user/msd-h`：`src/services/dividend_station_service.py`、`src/ui/views/page_hold.py`、`tests/test_p04_hold_v2_cards.py`、新檔 `tests/test_v2_silent_fail_b5_vix.py`。
    - 📌 **2026-09-26 更新**：**S5-H 已 merge**（#699 `bd6ceec`；實際改 5 檔＝上列 4 檔＋`tests/test_p04_hold_view.py`）⇒ 其 patch／工作區已是歷史；**S5-W／S5-F 仍未 merge**（稽核中）；**Q1／Q5** 派工中，改動檔以執行 AI 回報為準（本編修組未查證）。
    - 📌 **2026-09-26 再更新**：**S5-W 已 merge**（#700 `3f4493c`；實改 3 檔＝上列 S5-W 3 檔）⇒ 其 patch／工作區已是歷史；**S5-F** 在 PR #701（未 merge，改動以 PR 為準）；**Q1／Q5** 稽核中，改動檔以執行 AI 回報為準（本編修組未查證）。
+   - 📌 **2026-09-26 三更新**：**S5-F 已 merge**（#701 `2810064`；實改 **8 檔**＝上列 S5-F 4 檔 ＋ `tests/test_p02_find_v2_cards.py`、`tests/test_p02_find_view.py`、`tests/test_v2_silent_fail_b1.py`、新檔 `tests/test_v2_silent_fail_b5_find.py`，編修組 `git diff --stat 3f4493c 2810064` 實測）⇒ S5 三軌的 patch／工作區**全部**已是歷史。**Q1**（稽核通過、PR 準備中）／**Q5**（發回修正中）改動檔以執行 AI 回報為準（編修組未查證）；**Q2** 工作區 `/home/user/msd-q2`（HEAD `623e326`「local: Q1 base (not pushed)」，父＝`3f4493c`；編修組實測當下另有未追蹤 `tests/test_v2_silent_fail_b7_binding.py`，屬誰的改動未查證）。
    - **⛔ 不准動**：`docs/v2/prototype/lamp_preview.html`；凍結快照 `data_cache/forward_test/picks.parquet`、`data_cache/macro_forward_test/signals.parquet`；PR #675（⛔ merge／轉 ready／改 base）；資料層（資料庫／Schema／遷移檔／資料源，`CLAUDE.md` §-1.2）—— 除非客戶逐任務明示授權；（本輪工單）本工作區未追蹤的 `docs/v2/screens_r4/`、`docs/v2/screens_r5/` 不 stage。
 
 4. **待你裁的五類各幾項**（⚠️單組：編修組分類，每列只計一個主類；五類的定義與「只有三類拿去問」見文末「常設規矩」§2）：
@@ -367,11 +387,13 @@ SSOT `shared/lamp_direction_thresholds.py`（`LAMP_DIRECTION_WINDOWS`／`LAMP_DI
    → **2026-09-26 二組複核更正**：**版面異動 0**｜**不可逆 2**（B10 PR #675／分支、C6 刪分支；B7b 移出 —— 它的解法是改 cron 解析、資料可由 CBC 重建，見 c-4）｜**動 L3 或資料層 10**（Q1～Q5〔⚠️ 二組判讀：疑已在批 5 授權射程內，見 c-1 表下〕、B7b〔改 L1 cron 解析〕、B7c、`health`、`fut_net`、`m1b_m2_gap`〔依 B7b〕）｜**需新源 5**（同上）｜**規格有洞 9**（同上）｜**另：~~暫停待解除~~ 已派工恢復 3**（S5-F／S5-W／S5-H —— 批 5 已授權，~~只差客戶解除清點令暫停，~~ 2026-09-26 客戶已解除暫停；不是待裁五類；Q1～Q5 見 c-1 表下 2026-09-26 總管判讀）。合計 0+2+10+5+9+3＝29，與原 29 一致。
    → 📌 **2026-09-26 更新**（S5-H 已完、Q1／Q5 已派工、新登記 B9 ⑤）：**版面異動 0**｜**不可逆 2**（同上）｜**動 L3 或資料層 8**（Q2～Q4、B7b、B7c、`health`、`fut_net`、`m1b_m2_gap`）｜**需新源 5**（同上）｜**規格有洞 10**（上列 9 ＋ **B9 ⑤** 文案）｜**另：已派工 4**（S5-F／S5-W／Q1／Q5；不是待裁五類）。合計 0+2+8+5+10+4＝29（原 29 − S5-H 已完 ＋ B9 ⑤）。⚠️ 單組。
    → 📌 **2026-09-26 再更新**（S5-W 已完 #700 `3f4493c`）：**另：已派工 3**（S5-F／Q1／Q5）；五類各數不變 ⇒ 合計 0+2+8+5+10+3＝**28**。新登記的 B9 ⑥～⑨、S4-T 狀態為**待辦**、「誰決定」＝總管（依總管指示）⇒ **不計入待裁五類**。⚠️ 單組。
+   → 📌 **2026-09-26 三更新**（S5-F 已完 #701 `2810064`；Q2 已派工；新登記 Q1-r1～r5、Q5-r1、Q5-r2）：**版面異動 0**｜**不可逆 2**（B10 PR #675／分支、C6 刪分支）｜**動 L3 或資料層 8**（Q3、Q4、B7b、B7c、`health`、`fut_net`、`m1b_m2_gap`、**Q5-r2**〔需改 L2／L1 分辨失敗與無資料〕）｜**需新源 5**（`us10y`、`dxy`、`us_core_cpi`、`tw_export`、B9 ④）｜**規格有洞 11**（B4、B5、B6、B9 ③、B9 ⑤、B12、B8、B11、`news_systemic`、`foreign_net`、**Q1-r1**〔K1 新文案〕）｜**另：已派工 3**（Q1／Q2／Q5；不是待裁五類）。合計 0+2+8+5+11+3＝**29**（逐項列名重數）。Q1-r2～r5、Q5-r1 為**待辦**、誰決定＝總管 ⇒ 不計入五類（同 B9 ⑥～⑨ 前例）。⚠️ 單組（五類歸屬為編修組分類）。
 
 5. **開場該讀哪些檔**：
    - `HANDOFF.md`（本檔）：檔首【給下一個 AI 的說明】→ 本節（進度總表）→ 文末「常設規矩」。
    - `CLAUDE.md`：§-2（派工／複驗／單組揭露）、§-1.5.H（回覆紀律）、§-1.2（分支政策、資料層凍結）、§1（Fail Loud）、§-1（沒指派不動工）。
-   - 接 **S5-F** 時（2026-09-26 再更新起；S5-W 已結案 #700）：PR #701 的 diff、`docs/v2/spec/UI_PAGE_FIND.md`、`docs/v2/spec/DATA_MAP_FIND.md`、`docs/v2/spec/UI_COMPONENTS.md` §2；前例 `tests/test_v2_silent_fail_b5_why.py`（S5-W，#700）、`tests/test_v2_silent_fail_b5_vix.py`（S5-H，#699）。⚠️ `docs/v2/spec/` 只在開發線，`origin/main` 沒有（§4.2 第 3 點）。
+   - 接 **Q1** 時（2026-09-26 三更新起；S5-F 已結案 #701）：Q1 執行 AI 的回報與 diff（PR 準備中，尚無 PR 號）、`docs/v2/spec/UI_PAGE_HOLD.md`、`docs/v2/spec/DATA_MAP_HOLD.md`、`docs/v2/spec/UI_COMPONENTS.md` §2（徽章 11 種、#11 射程）；前例 `tests/test_v2_silent_fail_b5_find.py`（S5-F，#701）、`tests/test_v2_silent_fail_b5_vix.py`（S5-H，#699）。⚠️ `docs/v2/spec/` 只在開發線，`origin/main` 沒有（§4.2 第 3 點）。
+   - ~~接 **S5-F** 時（2026-09-26 再更新起；S5-W 已結案 #700）：PR #701 的 diff、`docs/v2/spec/UI_PAGE_FIND.md`、`docs/v2/spec/DATA_MAP_FIND.md`、`docs/v2/spec/UI_COMPONENTS.md` §2；前例 `tests/test_v2_silent_fail_b5_why.py`（S5-W，#700）、`tests/test_v2_silent_fail_b5_vix.py`（S5-H，#699）。⚠️ `docs/v2/spec/` 只在開發線，`origin/main` 沒有（§4.2 第 3 點）。~~（S5-F 已結案 #701 `2810064`）
    - ~~接 **S5-W** 時（2026-09-26 起）：`docs/v2/spec/UI_PAGE_WHY.md`、`docs/v2/spec/DATA_MAP_WHY.md`、`docs/v2/spec/UI_COMPONENTS.md` §2（徽章 11 種、#11 射程）；前例 `tests/test_v2_silent_fail_b5_vix.py`（S5-H，#699）、`tests/test_v2_silent_fail_b2.py`（`strict=` 作法）。⚠️ `docs/v2/spec/` 只在開發線，`origin/main` 沒有（§4.2 第 3 點）。~~（S5-W 已結案 #700 `3f4493c`）
    - ~~接 S5-H 時：`docs/v2/spec/UI_PAGE_HOLD.md`、`docs/v2/spec/DATA_MAP_HOLD.md`、`docs/v2/spec/UI_COMPONENTS.md` §2（徽章 11 種、#11 射程）；前例 `tests/test_v2_silent_fail_b2.py`（`strict=` 作法）、`tests/test_v2_silent_fail_b4.py`（停利卡批 4）。⚠️ `docs/v2/spec/` 只在開發線，`origin/main` 沒有（§4.2 第 3 點）。~~（S5-H 已結案 #699 `bd6ceec`）
 
