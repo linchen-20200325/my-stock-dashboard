@@ -107,7 +107,8 @@ def _fold_rows(outer: str) -> list[tuple[str, str]]:
 
 
 def _fold_id(outer: str) -> str | None:
-    m = re.search(r'<input type="checkbox" class="blk-fold-i" id="([^"]+)">', outer)
+    # 2026-09-26 a11y：input 另帶 `aria-labelledby` / `aria-controls` ⇒ id 之後允許其他屬性。
+    m = re.search(r'<input type="checkbox" class="blk-fold-i" id="([^"]+)"[^>]*>', outer)
     return m.group(1) if m else None
 
 

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import math
+import re
 
 import pytest
 
@@ -64,7 +65,7 @@ class TestL0:
 
     def test_flat_band_values(self):
         assert LAMP_DIRECTION_FLAT_BAND == {"margin": 1.0, "bias_240": 1.0, "ism_pmi": 0.5,
-                                            "vix": 0.5}
+                                            "vix": 0.5, "ndc_signal": 0.0}
 
     def test_band_exactly_for_computed_keys(self):
         # 有帶寬 ⇔ 會算方向（mode != none）—— 不得有「算方向卻沒量過帶寬」的燈
@@ -82,7 +83,7 @@ class TestL0:
 
     @pytest.mark.parametrize("key", sorted(set(LAMP_DIRECTION_KEYS) - {"margin", "bias_240",
                                                                      "ism_pmi", "m1b_m2_gap",
-                                                                     "vix"}))
+                                                                     "vix", "ndc_signal"}))
     def test_none_keys_have_reason_and_no_band(self, key):
         c = LAMP_DIRECTION_WINDOWS[key]
         assert c["mode"] == "none" and key not in LAMP_DIRECTION_FLAT_BAND
@@ -181,6 +182,26 @@ class TestComputeDirection:
         d = compute_lamp_direction("adl", _daily([50.0] * 20 + [80.0]))
         assert d.direction == "nodata" and "自相關" in d.reason
         assert "adl" not in LAMP_DIRECTION_FLAT_BAND
+
+    def test_jingqi_is_nodata_even_with_clean_series(self):
+        # 2026-09-26 第二批：5 日均的 lag-20 自相關 0.025（量測見 L0 檔頭）⇒ 不出箭頭
+        d = compute_lamp_direction("jingqi", _daily([50.0] * 20 + [80.0]))
+        assert d.direction == "nodata" and "自相關" in d.reason and "0.025" in d.reason
+        assert "jingqi" not in LAMP_DIRECTION_FLAT_BAND
+
+    @pytest.mark.parametrize("key,needle", [
+        ("health", "health_partial"),      # 凍結檔 date 非交易日 + 燈值不帶 partial 旗標
+        ("tw_export", "持平帶量不到"),
+    ])
+    def test_second_batch_stays_nodata_with_reason(self, key, needle):
+        # 2026-09-26 第二批：逐盞查證後維持無資料；給乾淨序列也不能冒出箭頭
+        monthly = [(f"2025-{m:02d}-01", float(m)) for m in range(1, 13)]
+        for pts in (_daily([1.0] * 20 + [99.0]), monthly):
+            d = compute_lamp_direction(key, pts)
+            assert d.direction == "nodata" and d.delta is None, (key, d)
+            assert needle in d.reason, d.reason
+            assert format_direction_text(d) == LAMP_DIRECTION_NODATA_TEXT
+        assert key not in LAMP_DIRECTION_FLAT_BAND
 
     @pytest.mark.parametrize("key", ["vix"])
     def test_new_keys_need_21_rows(self, key):
@@ -342,7 +363,7 @@ def _live_readout():
 
 
 #: 會算真方向的燈（其餘 mode = "none"）。
-_REAL_KEYS = ("margin", "bias_240", "ism_pmi", "vix")
+_REAL_KEYS = ("margin", "bias_240", "ism_pmi", "vix", "ndc_signal")
 #: 首批 4 盞（2026-09-24），卡面必須與擴充前逐字相同。
 _FIRST_FOUR = ("margin", "bias_240", "m1b_m2_gap", "ism_pmi")
 
@@ -450,8 +471,18 @@ class TestRenderLive:
         band_label, thr_text, _, l4_err = P._load_l4_labels()
         kw = dict(band_label=band_label, thr_text=thr_text, l4_error=l4_err)
         full = _flat(P.build_indicator_tiles(_live_readout(), directions=_directions(), **kw))
+        # 2026-09-26 a11y（客戶核可）：「▸ 詳細」開關加了 `aria-labelledby`／`aria-controls`，
+        # 並在標題／label／body 掛 `id`（純屬性、⛔ 畫面與文字不變）。黃金值**不重算**：
+        # 先拿掉這幾個新增屬性再比 ⇒ 仍證明卡片其餘部分與 10f385c 逐字相同。
+        _a11y = re.compile(
+            r' (?:aria-labelledby|aria-controls)="[^"]*"'
+            r'|(?<=<span class="blk-title") id="[^"]*"'
+            r'|(?<=<label class="blk-fold-s") id="[^"]*"'
+            r'|(?<=<div class="blk-fold-b") id="[^"]*"')
         for key in _FIRST_FOUR:
-            html = P.v2_card_html(full[f"detail.{key}"])
+            raw = P.v2_card_html(full[f"detail.{key}"])
+            assert "aria-labelledby" in raw, key       # a11y 屬性確實在（不是剝了個空）
+            html = _a11y.sub("", raw)
             assert hashlib.sha256(html.encode()).hexdigest() == _GOLDEN_10F385C[key], key
             assert dict(full[f"detail.{key}"].facts)[LAMP_DIRECTION_FACT_KEY] == _GOLDEN_ROW[key]
 
@@ -827,7 +858,7 @@ class TestSessionSeries:
         monkeypatch.setattr(SI, "load_section_inputs", _boom)
         dirs = P._load_lamp_directions({"macro_info": {}})
         assert "session 序列" in capsys.readouterr().out
-        assert {k for k, d in dirs.items() if d.direction == "error"} == {"vix"}
+        assert {k for k, d in dirs.items() if d.direction == "error"} == {"vix", "ndc_signal"}
         assert dirs["adl"].direction == "nodata"
         assert format_direction_text(dirs["vix"]) == "計算失敗（RuntimeError）"
         assert dirs["margin"].direction == "up" and dirs["ism_pmi"].direction == "up"
@@ -866,6 +897,7 @@ class TestSessionSeries:
         assert _dir_text(tiles, "vix").startswith("→ 持平（近 20 交易日 +0.3 點")
         for k in ("adl", "dxy", "us10y", "jingqi", "fut_net", "health", "ndc_signal",
                   "us_core_cpi", "tw_export", "news_systemic", "m1b_m2_gap"):
+            # ndc_signal：這個 session 沒帶 ndc_signal ⇒ 無資料（有帶的情形見 TestNdcSignal）
             assert _dir_text(tiles, k) == "無資料", k
         assert _dir_text(tiles, "foreign_net") is None
 
@@ -974,3 +1006,201 @@ class TestRejectedVixSeriesShowsNoDataOnCard:
         assert tiles["detail.vix"].card.state == clean["detail.vix"].card.state
         assert tiles["detail.vix"].signal_text == clean["detail.vix"].signal_text
         assert strip(tiles["detail.vix"]) == strip(clean["detail.vix"])
+
+
+# ════════════════════════════════════════════════════════════════
+# 2026-09-26 第二批：ndc_signal 真方向（整數官方分數，帶寬 0＝資料解析度）
+# L1 additive（prev_score / prev_date）→ L5 session 抽取 → L2 較上月
+# ════════════════════════════════════════════════════════════════
+_NDC_EXISTING_KEYS = {"score", "signal", "date", "source"}
+
+
+def _tbi_df(dates, scores, colors=None):
+    import pandas as pd
+
+    return pd.DataFrame({"date": dates, "monitoring": [float(x) for x in scores],
+                         "monitoring_color": colors or ["綠燈"] * len(dates)})
+
+
+def _zip_df(dates, scores, colors=None):
+    import pandas as pd
+
+    return pd.DataFrame({"date": dates, "value": scores,
+                         "color": colors or ["綠燈"] * len(dates)})
+
+
+def _call_ndc_block(monkeypatch, *, tbi=None, zdf=None, fetch_url=None):
+    import src.data.macro.macro_snapshot as ms
+    import src.data.macro.tw_macro as tw
+
+    monkeypatch.setattr(tw, "fetch_business_indicator_series", lambda **_k: tbi)
+    monkeypatch.setattr(tw, "_dgtw_ndc_signal_from_zip", lambda label="ndc_signal": zdf)
+    if fetch_url is not None:
+        # 同 test_ndc_official_zip_fallback：patch 真正持有者，不 patch PEP 562 轉發器
+        monkeypatch.setattr("src.data.proxy.proxy_helper.fetch_url", fetch_url)
+    ms.fetch_ndc_block.clear()
+    try:
+        return ms.fetch_ndc_block()
+    finally:
+        ms.fetch_ndc_block.clear()
+
+
+class TestNdcSignalL1:
+    def test_tbi_branch_carries_prev_month_additively(self, monkeypatch):
+        out = _call_ndc_block(monkeypatch, tbi=_tbi_df(
+            ["2026-06-01", "2026-07-01", "2026-08-01"], [30, 33.4, 36.6],
+            ["黃藍燈", "綠燈", "黃紅燈"]))
+        sig = out["ndc_signal"]
+        # 既有鍵值逐字不變（與加鍵前的回傳相同）
+        assert {k: sig[k] for k in _NDC_EXISTING_KEYS} == {
+            "score": 37, "signal": "黃紅燈", "date": "2026-08-01",
+            "source": "FinMind:TaiwanBusinessIndicator"}
+        assert sig["prev_score"] == 33 and sig["prev_date"] == "2026-07-01"
+        assert set(sig) == _NDC_EXISTING_KEYS | {"prev_score", "prev_date"}
+
+    def test_zip_branch_carries_prev_month_additively(self, monkeypatch):
+        out = _call_ndc_block(monkeypatch, zdf=_zip_df(
+            ["2026-05-01", "2026-06-01"], [28, 31], ["黃藍燈", "綠燈"]))
+        sig = out["ndc_signal"]
+        assert {k: sig[k] for k in _NDC_EXISTING_KEYS} == {
+            "score": 31, "signal": "綠燈", "date": "2026-06-01",
+            "source": "data.gov.tw:6099(景氣指標及燈號)"}
+        assert sig["prev_score"] == 28 and sig["prev_date"] == "2026-05-01"
+
+    @pytest.mark.parametrize("dates", [["2026-05-01", "2026-08-01"],   # 中間缺月
+                                       ["2025-08-01", "2026-08-01"]])  # 同月不同年
+    def test_non_adjacent_months_carry_nothing(self, monkeypatch, dates):
+        out = _call_ndc_block(monkeypatch, tbi=_tbi_df(dates, [30, 33]))
+        sig = out["ndc_signal"]
+        assert set(sig) == _NDC_EXISTING_KEYS and sig["score"] == 33
+
+    @pytest.mark.parametrize("prev", [float("nan"), 50.0, 3.0])
+    def test_bad_prev_row_carries_nothing(self, monkeypatch, prev):
+        out = _call_ndc_block(monkeypatch, zdf=_zip_df(["2026-05-01", "2026-06-01"], [prev, 31]))
+        assert set(out["ndc_signal"]) == _NDC_EXISTING_KEYS
+
+    def test_single_row_carries_nothing(self, monkeypatch):
+        out = _call_ndc_block(monkeypatch, zdf=_zip_df(["2026-06-01"], [31]))
+        assert set(out["ndc_signal"]) == _NDC_EXISTING_KEYS
+
+    def test_stockfeel_branch_carries_nothing(self, monkeypatch):
+        html = "<html><body>2026 年 7 月 景氣對策信號 綜合分數 為 33 分</body></html>"
+
+        class _R:
+            status_code = 200
+            text = html
+            encoding = "utf-8"
+
+        out = _call_ndc_block(monkeypatch, fetch_url=lambda *a, **k: _R())
+        sig = out["ndc_signal"]
+        assert sig["source"] == "StockFeel" and sig["score"] == 33
+        assert "prev_score" not in sig and "prev_date" not in sig
+
+
+class TestNdcSignalDirection:
+    def _dirs(self, monkeypatch, ndc):
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        return P._load_lamp_directions({"macro_info": {"ndc_signal": ndc}})
+
+    def test_up_down_flat_with_band_zero(self, monkeypatch):
+        base = {"signal": "綠燈", "source": "FinMind:TaiwanBusinessIndicator",
+                "date": "2026-08-01", "prev_date": "2026-07-01", "prev_score": 33}
+        for cur, exp, txt in ((34, "up", "↗ 上升（較上月 +1.0，至 2026-08-01）"),
+                              (32, "down", "↘ 下降（較上月 -1.0，至 2026-08-01）"),
+                              (33, "flat", "→ 持平（較上月 +0.0，至 2026-08-01）")):
+            d = self._dirs(monkeypatch, {**base, "score": cur})["ndc_signal"]
+            assert d.direction == exp, (cur, d)
+            assert format_direction_text(d) == txt
+
+    def test_last_point_is_the_lamp_value(self, monkeypatch):
+        # 守衛：序列最新點就是燈值讀的那個 `score`（同一個 dict）
+        from src.services.section_inputs import load_section_inputs
+        from src.ui.views import page_today as P
+
+        ndc = {"score": 36, "date": "2026-08-01", "prev_score": 35, "prev_date": "2026-07-01"}
+        pts = P._session_ndc_series(load_section_inputs({"macro_info": {"ndc_signal": ndc}}))
+        assert pts[-1] == ("2026-08-01", 36.0)
+        assert pts[-1][1] == float(ndc["score"])
+
+    @pytest.mark.parametrize("ndc", [
+        {"score": 33, "date": "2026-08-01", "source": "StockFeel"},          # 單點分支
+        {"score": 33, "date": "2026-08-01", "prev_score": 30},               # 缺 prev_date
+        {"score": 33, "date": "2026-08-01", "prev_score": 30, "prev_date": "2026-05-01"},  # 缺月
+        {"score": None, "date": "2026-08-01", "prev_score": 30, "prev_date": "2026-07-01"},
+    ])
+    def test_nodata_cases(self, monkeypatch, ndc):
+        d = self._dirs(monkeypatch, ndc)["ndc_signal"]
+        assert d.direction == "nodata" and format_direction_text(d) == LAMP_DIRECTION_NODATA_TEXT
+
+    def test_malformed_prev_only_fails_ndc(self, monkeypatch):
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        dirs = P._load_lamp_directions({"macro_info": {
+            "ndc_signal": {"score": 33, "date": "2026-08-01",
+                           "prev_score": "abc", "prev_date": "2026-07-01"},
+            "vix": _vix_block([20.0] * 30 + [26.0])}})
+        assert {k for k, d in dirs.items() if d.direction == "error"} == {"ndc_signal"}
+        assert dirs["vix"].direction == "up"
+
+    def test_card_row_end_to_end(self, monkeypatch):
+        from src.ui.views import page_today as P
+
+        dirs = self._dirs(monkeypatch, {"score": 36, "date": "2026-08-01",
+                                        "prev_score": 33, "prev_date": "2026-07-01"})
+        band_label, thr_text, _, l4_err = P._load_l4_labels()
+        tiles = _flat(P.build_indicator_tiles(_live_readout(), band_label=band_label,
+                                              thr_text=thr_text, l4_error=l4_err,
+                                              directions=dirs))
+        assert _dir_text(tiles, "ndc_signal") == "↗ 上升（較上月 +3.0，至 2026-08-01）"
+
+
+# ── 2026-09-26 QA 追加：跨年相鄰（N1）與「燈值、方向同一個 dict」端到端（N2）──
+class TestNdcSignalQaAdditions:
+    @pytest.mark.parametrize("branch", ["tbi", "zip"])
+    def test_dec_to_jan_is_adjacent(self, monkeypatch, branch):
+        # N1：2025-12 → 2026-01 是相鄰月（跨年）；忽略年份只比月份的寫法會判成「不相鄰」
+        dates, scores = ["2025-11-01", "2025-12-01", "2026-01-01"], [30, 32, 35]
+        kw = ({"tbi": _tbi_df(dates, scores)} if branch == "tbi"
+              else {"zdf": _zip_df(dates, scores)})
+        sig = _call_ndc_block(monkeypatch, **kw)["ndc_signal"]
+        assert sig["score"] == 35 and sig["date"] == "2026-01-01"
+        assert sig["prev_score"] == 32 and sig["prev_date"] == "2025-12-01"
+        # 而且 L2 的「較上月」也承認它（monthly 相鄰檢查同樣跨年）
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        d = P._load_lamp_directions({"macro_info": {"ndc_signal": sig}})["ndc_signal"]
+        assert d.direction == "up" and math.isclose(d.delta, 3.0)
+        assert d.as_of == "2026-01-01"
+
+    def test_lamp_value_and_direction_from_same_dict(self, monkeypatch):
+        # N2：同一個 session、同一個 macro_info dict 同時餵燈值（真的 load_macro_readout
+        #     → compute_five_bucket_summary）與方向（_load_lamp_directions）——
+        #     卡上顯示的分數必須就是方向序列的最新點。
+        from src.ui.views import page_today as P
+        from src.services.section_inputs import load_section_inputs
+
+        _patch_loaders(monkeypatch)
+        ndc = {"score": 36, "signal": "黃紅燈", "date": "2026-01-01",
+               "source": "FinMind:TaiwanBusinessIndicator",
+               "prev_score": 33, "prev_date": "2025-12-01"}
+        session = {"macro_info": {"ndc_signal": ndc}}
+        readout = P.load_macro_readout(session)
+        assert readout.requested and not readout.error
+        lamp_value = readout.readiness["ndc_signal"]["value"]
+        dirs = P._load_lamp_directions(session)
+        d = dirs["ndc_signal"]
+        pts = P._session_ndc_series(load_section_inputs(session))
+        assert math.isclose(lamp_value, pts[-1][1]) and math.isclose(lamp_value, 36.0)
+        assert d.as_of == pts[-1][0] == ndc["date"]
+        assert math.isclose(d.delta, lamp_value - ndc["prev_score"])
+        band_label, thr_text, _, l4_err = P._load_l4_labels()
+        tiles = _flat(P.build_indicator_tiles(readout, band_label=band_label,
+                                              thr_text=thr_text, l4_error=l4_err,
+                                              directions=dirs))
+        html = P.v2_card_html(tiles["detail.ndc_signal"])
+        assert "36" in html
+        assert _dir_text(tiles, "ndc_signal") == "↗ 上升（較上月 +3.0，至 2026-01-01）"

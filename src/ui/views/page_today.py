@@ -1748,11 +1748,31 @@ def _session_vix_series(si: Any) -> list | None:
     return [(str(_d)[:10], _v) for _d, _v in zip(_ds, _vs)]
 
 
+def _session_ndc_series(si: Any) -> list | None:
+    """ndc_signal 的方向序列（2026-09-26 第二批），取自 `SectionInputs.macro_info['ndc_signal']`。
+
+    L1 `fetch_ndc_block` 只在 FinMind-TBI / 6099-ZIP 分支、從**同一次抓取的同一份表**帶出
+    `prev_score` / `prev_date`（相鄰月才帶）；最新點就是燈值那個 `score`（同一個 dict ⇒ 必然
+    等於燈值，⛔ 不另找別的源湊）。沒帶上月 / 缺日期 ⇒ 回 None（L2 回無資料）。
+    值本身壞掉（`float()` 失敗）⇒ **丟例外**，由 caller 判為這一盞計算失敗（⛔ 不補值）。
+    相鄰月的檢查 L2 會再做一次（`monthly=True`），這裡不重寫一份。
+    """
+    _ndc = si.macro_info.get("ndc_signal") if isinstance(si.macro_info, Mapping) else None
+    if not isinstance(_ndc, Mapping):
+        return None
+    _cur, _d = _ndc.get("score"), _ndc.get("date")
+    _prev, _pd = _ndc.get("prev_score"), _ndc.get("prev_date")
+    if _cur is None or _prev is None or not _d or not _pd:
+        return None
+    return [(str(_pd)[:10], float(_prev)), (str(_d)[:10], float(_cur))]
+
+
 #: 2026-09-26：序列來自**本輪 session**（經 L3 `load_section_inputs`，與燈值同一條取數路徑、
 #: 同一次抓取）的燈 → 各自的抽取函式。**每盞各自 try**：一盞的值壞掉只讓那一盞計算失敗。
 #: （adl 刻意不在這裡：單日估算無自相關，恆為無資料 —— 見 L0 檔頭。）
 _SESSION_DIRECTION_EXTRACTORS: tuple[tuple[str, Any], ...] = (
     ("vix", _session_vix_series),
+    ("ndc_signal", _session_ndc_series),
 )
 _LAMP_DIRECTION_SESSION_KEYS: tuple[str, ...] = tuple(
     _k for _k, _ in _SESSION_DIRECTION_EXTRACTORS)
@@ -1800,7 +1820,7 @@ def _load_lamp_directions(session: Mapping[str, Any] | None = None) -> dict[str,
     - 單一盞的 L2 計算丟例外 ⇒ 印 log，**只有那一盞**回 `error`，其餘照常。
     - L2 模組本身載入失敗 ⇒ 做不出 `LampDirection`，印 log 回 `{}`；
       `build_indicator_tiles` 對缺 key 一律顯示「計算失敗（未回傳）」（只用 L0 常數）。
-    - 2026-09-26：`session` → `_session_direction_series()`（vix）。L3 讀 session 丟例外
+    - 2026-09-26：`session` → `_session_direction_series()`（vix / ndc_signal）。L3 讀 session 丟例外
       ⇒ 印 log，**只有** `_LAMP_DIRECTION_SESSION_KEYS` 回 `error`；單一盞的值壞掉
       ⇒ **只有那一盞** `error`。`session=None` ⇒ 沒有序列 ⇒ 無資料（L2 nodata）。
     畫面顯示「計算失敗（例外型別）」；**燈號與其他列不受影響**（它不參與判燈）。

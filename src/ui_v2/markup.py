@@ -416,6 +416,11 @@ def _fold_rules() -> list[str]:
     · input 以「視覺隱藏」而非 `display:none` 藏起來：仍可被 label 切換、可鍵盤聚焦；
       `.blk-fold{position:relative}` 讓它定位在開關旁 ⇒ 聚焦時⛔ 不會把頁面捲走。
     · body 預設 `display:none`，`:checked ~` 才 `display:block`（⛔ 無 JS）。
+    · 鍵盤聚焦時（`:focus-visible`，滑鼠／觸控點按**不會**觸發）label 畫 2px 內縮實線框
+      （2026-09-26 a11y，自 1px 點線加粗 —— 原本在深色卡上幾乎看不見）；
+      `outline-offset:2px` 畫在 label 盒**外** 2px（outline 本來就⛔ 不佔版面）⇒ ⛔ 不壓到「▸」字形；
+      外擴 4px 落在卡片內距裡（四階左右內距最小 9px、上下最小 5px，`.blk` 無 `overflow:hidden`）
+      ⇒ ⛔ 不被卡片裁切。（QA 2026-09-26：原 `-2px` 內縮會蓋住半個「▸」。）
     · label `display:block` ＋ 上下 `--sp-2` 內距 ⇒ 整條卡寬都是觸控區；
       `-webkit-tap-highlight-color:transparent` 拿掉 iOS 點按的灰框。
     """
@@ -427,7 +432,7 @@ def _fold_rules() -> list[str]:
         ".blk-fold-s{display:block;cursor:pointer;"
         "padding-top:" + _var("--sp-2") + ";padding-bottom:" + _var("--sp-2") + ";"
         "-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}",
-        ".blk-fold-i:focus-visible~.blk-fold-s{outline:1px dotted currentColor}",
+        ".blk-fold-i:focus-visible~.blk-fold-s{outline:2px solid currentColor;outline-offset:2px}",
         ".blk-fold-b{display:none}",
         ".blk-fold-i:checked~.blk-fold-b{display:block}",
     ]
@@ -607,6 +612,26 @@ def fold_dom_id(key: str) -> str:
     return FOLD_ID_PREFIX + slug
 
 
+#: 摺疊區內附屬元素的 `id` 後綴分隔字。🔴 用 `_`：`fold_id` 只准 `[a-z0-9-]`（`_FOLD_ID_RE`），
+#: ⇒ 帶 `_` 的 id **不可能**與任何一張卡的 `fold_id` 撞名（`-` 做分隔就可能：卡 key `a.t` → `fold-a-t`）。
+_FOLD_SUB_SEP: Final[str] = "_"
+
+
+def fold_label_id(fold_id: str) -> str:
+    """開關 `<label>` 的 `id`（供 `aria-labelledby` 引用）。"""
+    return f"{fold_id}{_FOLD_SUB_SEP}s"
+
+
+def fold_title_id(fold_id: str) -> str:
+    """有摺疊區的卡，其標題 `<span class="blk-title">` 的 `id`（供 `aria-labelledby` 引用）。"""
+    return f"{fold_id}{_FOLD_SUB_SEP}t"
+
+
+def fold_body_id(fold_id: str) -> str:
+    """被開關控制的 `.blk-fold-b` 的 `id`（供 `aria-controls` 引用）。"""
+    return f"{fold_id}{_FOLD_SUB_SEP}b"
+
+
 def _fact_value_cell(value: object, truncate: bool = True) -> str:
     """明細列**值**那一格：長值截斷顯示，完整原文進 `title=`。
 
@@ -681,10 +706,18 @@ def card_html(
     value_text = page_today.card_value_text(state=state, value=value)
     level_text = page_today.card_level_text(state=state, level=level)
 
+    folded = tuple(folded_facts)
+    if folded and (fold_id is None or not _FOLD_ID_RE.match(fold_id)):
+        raise ValueError(
+            f"有摺疊列就必須給合法的 fold_id（[a-z0-9-]+），實得 {fold_id!r}")
+    # 🔴 2026-09-26 a11y（客戶核可）：有摺疊區的卡，標題掛 `id` 供開關的 `aria-labelledby` 引用
+    #    ⇒ 螢幕朗讀念「▸ 詳細 ＋ 卡標題」，16 個開關不再同名。⛔ 無新文案（只引用畫面上既有的字）；
+    #    無摺疊區的卡**逐 byte 不變**（不掛 id）。
+    title_id_attr = f' id="{fold_title_id(fold_id)}"' if folded else ""
     parts = [
         f'<div class="blk blk-{tier}">',
         '<div class="blk-head">',
-        f'<span class="blk-title">{_esc(title)}</span>',
+        f'<span class="blk-title"{title_id_attr}>{_esc(title)}</span>',
         badge,
         '</div>',
     ]
@@ -696,19 +729,23 @@ def card_html(
     rows = tuple(facts)
     if rows:
         parts.append(_facts_block(rows))
-    folded = tuple(folded_facts)
     if folded:
         # 🔴 2026-09-25 客戶選 (b)：原生 `<details>` 在 iPhone 點了沒反應 ⇒ 改純 CSS 開關。
         #    input 必須排在 body **之前**（`~` 只往後找兄弟）；label 靠 `for` 綁 input，
         #    樣式全在 `page_css()` 的 `_fold_rules()`（只新增 `.blk-fold*` 選擇器）。
-        if fold_id is None or not _FOLD_ID_RE.match(fold_id):
-            raise ValueError(
-                f"有摺疊列就必須給合法的 fold_id（[a-z0-9-]+），實得 {fold_id!r}")
+        # 🔴 2026-09-26 a11y：input 是**視覺隱藏但可聚焦**的原生 checkbox（⛔ 非 display:none）⇒
+        #    Tab 聚焦、Space 切換、朗讀「核取方塊／已勾選」都是瀏覽器原生行為（⛔ 無 JS）。
+        #    `aria-labelledby` ＝ 開關字 ＋ 卡標題（兩個都是畫面上既有的元素）⇒ 可及名稱
+        #    「▸ 詳細 〈卡標題〉」；`aria-controls` 指向被控制的 body。
+        #    ⛔ 不用 `aria-expanded`：無 JS 就無法隨勾選更新，寫死的值會對朗讀說謊（§1）。
         parts.append(
             '<div class="blk-fold">'
-            f'<input type="checkbox" class="blk-fold-i" id="{fold_id}">'
-            f'<label class="blk-fold-s" for="{fold_id}">{_esc(FOLD_SUMMARY_TEXT)}</label>'
-            '<div class="blk-fold-b">'
+            f'<input type="checkbox" class="blk-fold-i" id="{fold_id}"'
+            f' aria-labelledby="{fold_label_id(fold_id)} {fold_title_id(fold_id)}"'
+            f' aria-controls="{fold_body_id(fold_id)}">'
+            f'<label class="blk-fold-s" id="{fold_label_id(fold_id)}" for="{fold_id}">'
+            f'{_esc(FOLD_SUMMARY_TEXT)}</label>'
+            f'<div class="blk-fold-b" id="{fold_body_id(fold_id)}">'
             + _facts_block(folded, fold_truncate)
             + '</div></div>'
         )
