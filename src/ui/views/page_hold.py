@@ -297,6 +297,7 @@ L3 的 `full_coverage=False` —— 有張數的持股沒有全部進到 `gross_
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
@@ -348,6 +349,24 @@ from src.ui.views._ui_kit import (
     section_header,
     single_submit_form,
 )
+# ── v2 卡面（同「🔍 找標的」頁 `8f3f869` 的作法；客戶 2026-09-25 裁示 1~4）──────────
+# 契約層：密度階經 `src/ui_v2/blocks.py` 登記處查（本頁的卡登記在
+# `src/ui_v2/page_hold.py`），⛔ 本檔不指定任何一階。
+# 狀態語彙翻譯表 / 去 Markdown 記號 / 三要素列標籤 / 樣式表模式 **沿用「🚦 今天」頁那一份**
+# （⛔ 不在本檔抄第二份 —— 三頁的卡面要是同一種卡面）。
+# 📌 import 半徑：多帶進 `src.ui.views.page_today` ＋ `src.ui_v2.*`（同找標的頁），
+#    ⛔ 不多 import 任何 `src.services.*` / `src.compute.*` / `src.data.*`（唯讀白名單不變）。
+from src.ui.views.page_today import (
+    V2_CSS_MODE,
+    V2_GUIDE_FACT_KEY,
+    V2_NOW_FACT_KEY,
+    V2_STATE_VOCAB,
+    V2_WHY_FACT_KEY,
+    v2_plain,
+)
+from src.ui_v2 import markup as v2_markup
+from src.ui_v2 import page_hold as v2_hold
+from src.ui_v2 import page_today as v2_page
 
 # ══════════════════════════════════════════════════════════════════
 # session key（本頁自有前綴 `p04`，不與既有 `etf_tab_dividend_station` 的
@@ -1488,6 +1507,60 @@ NO_ROWS_WHERE: str = (
     f"{NO_EXIT_MARKER} —— 這不是你操作的問題；請把這一句連同你的持股檔數"
     "回報給維護者")
 
+#: 以下 `*_NOW` 原本寫在各 `build_*_card()` 函式體內，2026-09-25 上提成常數
+#: （**文字一字未改**，同找標的頁 `8f3f869` 的作法）—— 讓 `V2_SHORT_ROWS` 以常數本身當鍵，
+#: ⛔ 不再手抄一份字串。
+ACTION_FAILED_NOW: str = "**本頁還算不出「今天該做什麼」**"
+CONF_NO_LIGHTS_NOW: str = "**有持股，但這一輪算不出訊號可信度**"
+CONF_FAILED_NOW: str = "**本頁還算不出「幾盞燈判得出來」**"
+TODO_FAILED_NOW: str = "**本頁還列不出「有幾檔需要你處理」**"
+SCALE_FAILED_NOW: str = "**兩套刻度的定義讀不出來**"
+LIGHTWALL_FAILED_NOW: str = "**燈牆點不亮**"
+VIX_FAILED_NOW: str = "**VIX 這一格畫不出來**"
+VIX_EMPTY_NOW: str = "**這一輪拿不到 VIX**"
+SWITCH_FAILED_NOW: str = "**換股建議算不出來**"
+SWITCH_NO_HOLDINGS_NOW: str = "**還沒有可以換的持股**"
+SWITCH_EMPTY_NOW: str = "**這一輪沒有建議換股**"
+MACRO_FAILED_NOW: str = "**總經位階讀不出來**"
+MACRO_EMPTY_NOW: str = "**總經本輪未評估**"
+SPLIT_FAILED_NOW: str = "**核心／衛星的實際配置算不出來**"
+SPLIT_NO_HOLDINGS_NOW: str = "**還沒有可以拆的持股**"
+SPLIT_NO_VALUE_NOW: str = "**有持股，但算不出核心／衛星的比例**"
+TP_FAILED_NOW: str = "**停利判不出來**"
+TP_NO_HOLDINGS_NOW: str = "**還沒有可以判停利的持股**"
+TP_EMPTY_NOW: str = "**沒有任何一檔衛星達停利門檻**"
+CAP_FAILED_NOW: str = "**建議持股水位讀不出來**"
+CAP_EMPTY_NOW: str = "**總經未評估，本站不給建議水位**"
+REBALANCE_UNWIRED_NOW: str = "**再平衡未接線**"
+GRAPE_UNWIRED_NOW: str = "**葡萄串領息未接線**"
+STRESS_FAILED_NOW: str = "**壓力測試算不出來**"
+STRESS_NO_HOLDINGS_NOW: str = "**還沒有可以壓測的持股**"
+STRESS_EMPTY_NOW: str = "**有持股，但壓力測試算不出來**"
+VAR_FAILED_NOW: str = "**VaR 算不出來**"
+VAR_NO_HOLDINGS_NOW: str = "**還沒有可以算 VaR 的持股**"
+VAR_EMPTY_NOW: str = "**有持股，但 VaR 算不出來**"
+CASH_FAILED_NOW: str = "**配息現金流算不出來**"
+CASH_NO_HOLDINGS_NOW: str = "**還沒有可以算配息的持股**"
+CASH_NO_PAYOUT_NOW: str = "**近一年查不到任何一筆配息**"
+CASH_EMPTY_NOW: str = "**有持股，但配息現金流算不出來**"
+AI_UPSTREAM_NOW: str = "**沒有生成 —— 上游的戰情表這一輪就壞了**"
+AI_UNAVAILABLE_NOW: str = "**AI 服務這一輪不可用**"
+AI_DRIFT_NOW: str = "**上游回來的東西不是一段文字**"
+AI_EMPTY_NOW: str = "**AI 回了空白**"
+AI_FAILED_NOW: str = "**AI 總結生成失敗**"
+AI_NO_STATION_NOW: str = "**沒有可以當輸入的戰情表**"
+BINDING_FAILED_NOW: str = "**綁定狀態讀不出來**"
+COUNT_NOT_BOUND_NOW: str = "**還沒有可以數的 Sheet**"
+COUNT_DRIFT_NOW: str = "**綁定看起來正常，但讀不到組合清單**"
+COUNT_FAILED_NOW: str = "**組合本數讀不出來**"
+COUNT_EMPTY_NOW: str = "**Sheet 綁好了，但裡面還沒有任何一本組合**"
+PICK_SHEET_UNWIRED_NOW: str = "**本頁不提供選 Sheet 的控制項**"
+WATCHLIST_UNWIRED_NOW: str = "**本頁不提供觀察清單的新增／刪除**"
+PREVIEW_FAILED_NOW: str = "**持股清單讀不出來**"
+#: ⑥ 三格「有值但失準」的 `now`。**原本是 `_degraded_note()` 裡的 f-string，字一字未改**；
+#: `{label}` 由呼叫端帶（`壓力測試` / `VaR（風險值）` / `配息現金流`）。
+DEGRADED_NOW_TEMPLATE: str = "{label}　**算得出來，但這個數字已經失準** —— 現值見上方「現值」列"
+
 #: 上游（持股／戰情表）出事時的出處字串。
 SRC_HOLDINGS: str = "L3 持股清單（`services.holdings_service.get_holdings`）"
 SRC_STATION: str = (
@@ -1575,7 +1648,7 @@ def build_action_card(station: StationReadout) -> _Built:
                    "適用燈都判得出來」才准說"))
     if _state != UI_LIVE:
         return (Card(key=CONCLUSION_ACTION_KEY, label="該做什麼", state=_state,
-                     note=_station_note(station, now="**本頁還算不出「今天該做什麼」**",
+                     note=_station_note(station, now=ACTION_FAILED_NOW,
                                         source=SRC_STATION)),
                 tuple(_facts), "")
     _parts = ([f"{station.cut_n} 檔亮汰弱紅燈"] if station.cut_n else []) + \
@@ -1622,7 +1695,7 @@ def build_confidence_card(station: StationReadout) -> _Built:
         # ⚠️ **「有列、但沒有逐盞燈資料」是另一種空，不可以借用上面那三句。**
         #    （實跑抓到的：借用之後畫面會說「戰情表一列都沒有回來」，
         #    而其實回來了 N 列 —— 那是一句**當場可以被使用者否證的假話**。）
-        _note = (Note(now="**有持股，但這一輪算不出訊號可信度**",
+        _note = (Note(now=CONF_NO_LIGHTS_NOW,
                       why=("戰情表回來了，但每一列都沒有帶逐盞燈的判定資料 —— "
                            "**這通常代表這份結果是舊版執行留下的**，"
                            "或上游換了形狀。本站不畫一個 0/0 假裝算過"),
@@ -1630,7 +1703,7 @@ def build_confidence_card(station: StationReadout) -> _Built:
                              "仍然沒有請把這一句回報給維護者"))
                  if (station.has_rows and not station.error)
                  else _station_note(station,
-                                    now="**本頁還算不出「幾盞燈判得出來」**",
+                                    now=CONF_FAILED_NOW,
                                     source=SRC_STATION))
         return (Card(key=CONCLUSION_CONFIDENCE_KEY, label="訊號可信度", state=_state,
                      note=_note),
@@ -1658,7 +1731,7 @@ def build_todo_card(station: StationReadout) -> _Built:
     if _state != UI_LIVE:
         return (Card(key=CONCLUSION_TODO_KEY, label="需要處理", state=_state,
                      note=_station_note(
-                         station, now="**本頁還列不出「有幾檔需要你處理」**",
+                         station, now=TODO_FAILED_NOW,
                          source=SRC_STATION)),
                 tuple(_facts), "")
     return (Card(key=CONCLUSION_TODO_KEY, label="需要處理", state=UI_LIVE,
@@ -1718,7 +1791,7 @@ def build_scale_card(disclosure: ScaleDisclosure) -> _Built:
                      state=UI_LIVE, value=SCALE_LIVE_VALUE),
                 tuple(_facts), "兩套並存")
     if _state == UI_FAILED:
-        _note = Note(now="**兩套刻度的定義讀不出來**",
+        _note = Note(now=SCALE_FAILED_NOW,
                      why=_error_why("L0 燈號規格表（`shared/station_specs.py`）",
                                     disclosure.error),
                      where=(f"{NO_EXIT_MARKER} —— 這是規格表本身的問題，"
@@ -1770,7 +1843,7 @@ def build_lightwall_card(station: StationReadout) -> _Built:
     if _state != UI_LIVE:
         return (Card(key="hold.lightwall",
                      label="燈牆（235 加碼燈 · 3-3-3 · 健檢四盞）", state=_state,
-                     note=_station_note(station, now="**燈牆點不亮**",
+                     note=_station_note(station, now=LIGHTWALL_FAILED_NOW,
                                         source=SRC_STATION)),
                 tuple(_facts), "")
     # ⚠️ **`0/0 盞有判定` 是一句沒有意義的話**（分母 0 不是「都判不出來」，
@@ -1813,14 +1886,14 @@ def build_vix_card(vix: VixReadout) -> _Built:
         _note = Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
     elif _state == UI_FAILED:
         _note = Note(
-            now="**VIX 這一格畫不出來**",
+            now=VIX_FAILED_NOW,
             why=_error_why(SRC_VIX, vix.error),
             where=(f"{NO_EXIT_MARKER} —— 這不是取數失敗（L3 取不到時回的是"
                    "「沒有值」而不是例外），是那一支 L3 自己載不進來；"
                    "請把上面那行訊息回報給維護者"))
     else:   # UI_EMPTY
         _note = Note(
-            now="**這一輪拿不到 VIX**",
+            now=VIX_EMPTY_NOW,
             why=("**這是一個有效的結果**（已經去要過，不是還沒去要）—— "
                  "上游這一輪沒有回最新收盤。本站不拿舊值或 0 頂替："
                  "0 在 VIX 的刻度上是「市場完全無波動」，那是一個結論、不是缺值"),
@@ -1896,18 +1969,18 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
     if _state == UI_IDLE:
         _note = _idle_note(switch.scope_idle)
     elif _state == UI_FAILED:
-        _note = Note(now="**換股建議算不出來**",
+        _note = Note(now=SWITCH_FAILED_NOW,
                      why=_error_why(SRC_SWITCH, switch.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者；"
                             "換出那一半只需要你的持股，換入那一半還要選股池，"
                             "兩者任一失敗都會走到這裡"))
     elif not station.has_rows:
         # 沒有持股 ≠ 沒有一檔要換。三種「沒有」在這裡照樣不可以混。
-        _note = _station_note(station, now="**還沒有可以換的持股**",
+        _note = _station_note(station, now=SWITCH_NO_HOLDINGS_NOW,
                               source=SRC_STATION)
     else:   # UI_EMPTY —— **有持股，但沒有一檔要換，也是一個結論。**
         _note = Note(
-            now="**這一輪沒有建議換股**",
+            now=SWITCH_EMPTY_NOW,
             why=("**這是一個有效的結果**（已經算過，不是還沒算）—— "
                  "你持有的部位裡沒有健檢紅燈可換出，而且觀察清單與選股池"
                  "這一輪也沒有給出可換入的標的。"
@@ -1963,14 +2036,14 @@ def build_macro_stage_card(macro: MacroReadout) -> _Built:
     if _state == UI_IDLE:
         _note = Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
     elif _state == UI_FAILED:
-        _note = Note(now="**總經位階讀不出來**",
+        _note = Note(now=MACRO_FAILED_NOW,
                      why=_error_why(SRC_MACRO, macro.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者；"
                             f"總經本身的狀態在"
                             f"{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}"))
     else:   # UI_EMPTY
         _note = Note(
-            now="**總經本輪未評估**",
+            now=MACRO_EMPTY_NOW,
             why=("**這是一個有效的結果**（已經去讀過，不是還沒讀）—— "
                  "本站**不以「中性」代替未評估**：多空是一個結論，缺值不是。"
                  "接線後的換股建議在這種情況下只做汰弱，不套攻守"),
@@ -2031,15 +2104,15 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
     if _state == UI_IDLE:
         _note = _idle_note(station.scope_idle)
     elif _state == UI_FAILED:
-        _note = Note(now="**核心／衛星的實際配置算不出來**",
+        _note = Note(now=SPLIT_FAILED_NOW,
                      why=_error_why(SRC_STATION, station.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
     elif not station.has_rows:
-        _note = _station_note(station, now="**還沒有可以拆的持股**",
+        _note = _station_note(station, now=SPLIT_NO_HOLDINGS_NOW,
                               source=SRC_STATION)
     else:   # 有列、但一列都沒有市值
         _note = Note(
-            now="**有持股，但算不出核心／衛星的比例**",
+            now=SPLIT_NO_VALUE_NOW,
             why=("**這是一個有效的結果**（已經算過，不是還沒算）—— "
                  "你的持有列裡沒有任何一列同時有張數與現價，"
                  "沒有市值就沒有比例。本站**不用檔數當比例頂替** —— "
@@ -2078,15 +2151,15 @@ def build_take_profit_card(station: StationReadout) -> _Built:
     if _state == UI_IDLE:
         _note = _idle_note(station.scope_idle)
     elif _state == UI_FAILED:
-        _note = Note(now="**停利判不出來**",
+        _note = Note(now=TP_FAILED_NOW,
                      why=_error_why(SRC_STATION, station.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
     elif not station.has_rows:
-        _note = _station_note(station, now="**還沒有可以判停利的持股**",
+        _note = _station_note(station, now=TP_NO_HOLDINGS_NOW,
                               source=SRC_STATION)
     else:
         _note = Note(
-            now="**沒有任何一檔衛星達停利門檻**",
+            now=TP_EMPTY_NOW,
             why=("**這是一個有效的結果**（已經逐檔判過，不是還沒判）—— "
                  "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此**判不了**。"
                  "本站不把「判不了」講成「沒達標」：兩者在這張卡上都是灰的，"
@@ -2143,12 +2216,12 @@ def build_position_cap_card(alloc: AllocationReadout) -> _Built:
     if _state == UI_IDLE:
         _note = Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
     elif _state == UI_FAILED:
-        _note = Note(now="**建議持股水位讀不出來**",
+        _note = Note(now=CAP_FAILED_NOW,
                      why=_error_why(SRC_ALLOC, alloc.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
     else:   # UI_EMPTY
         _note = Note(
-            now="**總經未評估，本站不給建議水位**",
+            now=CAP_EMPTY_NOW,
             why=("**這是一個有效的結果**：SSOT 的契約就是「未評估時 `final_*` 為 "
                  "`None`，畫面須誠實顯示未評估」。填一個看起來合理的區間，"
                  "等於替你做了一個沒有依據的決定"),
@@ -2168,7 +2241,7 @@ def build_position_cap_card(alloc: AllocationReadout) -> _Built:
 DEEP_SPECS: tuple[UnwiredSpec, ...] = (
     UnwiredSpec(
         key="hold.deep.rebalance", label="再平衡",
-        now="**再平衡未接線**",
+        now=REBALANCE_UNWIRED_NOW,
         why=("**這一格缺的不是 L3 wrapper** —— 本批補的 "
              "`services.portfolio_deep_service` 就在那裡，隔壁的壓力測試與 VaR "
              "走的就是它。缺的是**目標權重**：再平衡是「實際權重 vs "
@@ -2192,7 +2265,7 @@ DEEP_SPECS: tuple[UnwiredSpec, ...] = (
                 "那個綠燈代表「沒算」而不是「已平衡」（§1）"))),
     UnwiredSpec(
         key="hold.deep.grape", label="葡萄串領息",
-        now="**葡萄串領息未接線**",
+        now=GRAPE_UNWIRED_NOW,
         why=("這一格的實作**住在 L5**（`tabs.grape_ladder`）而不是 L3，"
              "而且它自帶寫死的 widget key —— 在本頁再掛一次會撞 "
              "`DuplicateWidgetID`，那不是「畫得醜」，是**整頁當場拋例外**"),
@@ -2449,7 +2522,7 @@ def _degraded_note(label: str, bits: Sequence[tuple[str, str]]) -> Note:
         if _where not in _wheres:      # 兩個原因同時成立時不重複同一句出口
             _wheres.append(_where)
     return Note(
-        now=f"{label}　**算得出來，但這個數字已經失準** —— 現值見上方「現值」列",
+        now=DEGRADED_NOW_TEMPLATE.format(label=label),
         why="；又，".join(_why for _why, _ in bits),
         where="；".join(_wheres))
 
@@ -2587,14 +2660,14 @@ def build_stress_card(deep: DeepReadout) -> _Built:
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
     elif _state == UI_FAILED:
-        _note = _deep_note(deep, now="**壓力測試算不出來**", source=SRC_STRESS,
+        _note = _deep_note(deep, now=STRESS_FAILED_NOW, source=SRC_STRESS,
                            error=deep.stress_error)
     elif not deep.has_station_rows:
-        _note = _deep_note(deep, now="**還沒有可以壓測的持股**",
+        _note = _deep_note(deep, now=STRESS_NO_HOLDINGS_NOW,
                            source=SRC_STRESS, error="")
     else:
         _note = Note(
-            now="**有持股，但壓力測試算不出來**",
+            now=STRESS_EMPTY_NOW,
             why=("**這是一個有效的結果**（已經算過，不是還沒算）—— "
                  + _deep_reason(_res)
                  + "。本站不用檔數當權重頂替：三檔各一張與三檔各一百張，"
@@ -2679,14 +2752,14 @@ def build_var_card(deep: DeepReadout) -> _Built:
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
     elif _state == UI_FAILED:
-        _note = _deep_note(deep, now="**VaR 算不出來**", source=SRC_VAR,
+        _note = _deep_note(deep, now=VAR_FAILED_NOW, source=SRC_VAR,
                            error=deep.var_error or _dead_src)
     elif not deep.has_station_rows:
-        _note = _deep_note(deep, now="**還沒有可以算 VaR 的持股**",
+        _note = _deep_note(deep, now=VAR_NO_HOLDINGS_NOW,
                            source=SRC_VAR, error="")
     else:
         _note = Note(
-            now="**有持股，但 VaR 算不出來**",
+            now=VAR_EMPTY_NOW,
             why=("**這是一個有效的結果**（已經算過，不是還沒算）—— "
                  + _deep_reason(_res)
                  + "。本站寧可不給，也不給一個用補值撐出來的尾部估計："
@@ -2804,14 +2877,14 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
     elif _state == UI_FAILED:
-        _note = _deep_note(deep, now="**配息現金流算不出來**",
+        _note = _deep_note(deep, now=CASH_FAILED_NOW,
                            source=SRC_DIV_CASH, error=deep.cash_error)
     elif not deep.has_station_rows:
-        _note = _deep_note(deep, now="**還沒有可以算配息的持股**",
+        _note = _deep_note(deep, now=CASH_NO_HOLDINGS_NOW,
                            source=SRC_DIV_CASH, error="")
     elif _res is not None and _res.computed:
         _note = Note(
-            now="**近一年查不到任何一筆配息**",
+            now=CASH_NO_PAYOUT_NOW,
             why=("**這是一個有效的結果**（已經逐檔查過，不是還沒查）—— "
                  "可能是你手上這幾檔近一年真的沒有除息，"
                  "也可能是上游沒有這幾檔的配息紀錄。"
@@ -2821,7 +2894,7 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
                    f"代號），再{press(ACTION_RUN_WARROOM_LABEL)}試一次"))
     else:
         _note = Note(
-            now="**有持股，但配息現金流算不出來**",
+            now=CASH_EMPTY_NOW,
             why=("**這是一個有效的結果**（已經算過，不是還沒算）—— "
                  + _deep_reason(_res)),
             where=("到既有的 📁 組合管理分頁把持股的**張數**補齊，"
@@ -3108,7 +3181,7 @@ def _ai_failed_note(ai: AiSummaryReadout) -> Note:
     """
     if ai.error_kind == AI_ERR_UPSTREAM:
         return Note(
-            now="**沒有生成 —— 上游的戰情表這一輪就壞了**",
+            now=AI_UPSTREAM_NOW,
             why=_error_why(SRC_STATION, ai.error),
             where=("AI 總結吃的是戰情表已經算好的結論；"
                    "**上面那幾張卡這一輪也會是紅的** —— "
@@ -3124,7 +3197,7 @@ def _ai_failed_note(ai: AiSummaryReadout) -> Note:
                      "以免和這張卡自己的狀態燈混成兩個互相矛盾的說法）"
                      if _n else "")
         return Note(
-            now="**AI 服務這一輪不可用**",
+            now=AI_UNAVAILABLE_NOW,
             why=(f"{SRC_AI}**沒有丟例外**，而是回了一句服務說明："
                  f"{_clean or UNKNOWN_ERROR_TEXT}{_stripped}。"
                  "本站**不把這句話當成今天的總結畫成綠卡** —— "
@@ -3133,7 +3206,7 @@ def _ai_failed_note(ai: AiSummaryReadout) -> Note:
                    f"{NO_EXIT_MARKER}；請把上面那行訊息回報給維護者"))
     if ai.error_kind == AI_ERR_DRIFT:
         return Note(
-            now="**上游回來的東西不是一段文字**",
+            now=AI_DRIFT_NOW,
             why=(f"{SRC_AI}的契約是回一段字串，這一輪回的是別的型別："
                  f"{ai.error}。**本站不把它 `str()` 一下照畫** —— "
                  "那會讓一個資料結構被印成今天的操作建議（§1：資料長得不對，"
@@ -3142,14 +3215,14 @@ def _ai_failed_note(ai: AiSummaryReadout) -> Note:
                    f"{NO_EXIT_MARKER}；請把上面那一行回報給維護者"))
     if ai.error_kind == AI_ERR_EMPTY:
         return Note(
-            now="**AI 回了空白**",
+            now=AI_EMPTY_NOW,
             why=(f"{SRC_AI}呼叫成功、但回來的文字是空的（不是抓不到資料，"
                  "是這一次潤稿沒有產出）。**本站不拿上一輪的殘留頂替**，"
                  "也不自己寫一段假的總結"),
             where=(f"可以再{press(AI_SUMMARY_LABEL)}一次；"
                    "連續空白請把這一句回報給維護者"))
     return Note(
-        now="**AI 總結生成失敗**",
+        now=AI_FAILED_NOW,
         why=_error_why(SRC_AI, ai.error),
         where=(f"可以再{press(AI_SUMMARY_LABEL)}一次；"
                "持續失敗請把上面那行訊息回報給維護者"))
@@ -3206,7 +3279,7 @@ def build_ai_summary_card(ai: AiSummaryReadout,
         _note = _ai_failed_note(ai)
     else:   # UI_EMPTY —— 按了、沒有錯、但沒有戰情表可以當輸入。**沒有花錢。**
         _note = _station_note(
-            station, now="**沒有可以當輸入的戰情表**", source=SRC_STATION)
+            station, now=AI_NO_STATION_NOW, source=SRC_STATION)
     return Card(key="hold.ai_summary", label="AI 戰情總結（唯一推播出口）",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -3249,7 +3322,7 @@ def build_binding_card(binding: BindingReadout) -> _Built:
             _note = Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
     elif _state == UI_FAILED:
         _note = Note(
-            now="**綁定狀態讀不出來**",
+            now=BINDING_FAILED_NOW,
             why=_error_why(SRC_BINDING, binding.error),
             where=("先確認網路與 Google 授權是否仍有效；"
                    f"細節在{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
@@ -3318,15 +3391,15 @@ def build_portfolio_count_card(binding: BindingReadout) -> _Built:
         _note = Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
     elif _state == UI_IDLE:
         _note = Note(
-            now="**還沒有可以數的 Sheet**",
+            now=COUNT_NOT_BOUND_NOW,
             why=("上一張卡顯示你**還沒有綁定** —— "
                  "沒有那一本，就沒有人問過「那一本裡有幾本組合」。"
                  "**這不是失敗，是這個問題還沒有成立**"),
             where="先完成上一張卡說的綁定，這一格會自己有東西")
     elif _state == UI_FAILED:
         _note = Note(
-            now=("**綁定看起來正常，但讀不到組合清單**"
-                 if not binding.error else "**組合本數讀不出來**"),
+            now=(COUNT_DRIFT_NOW
+                 if not binding.error else COUNT_FAILED_NOW),
             why=(_error_why(SRC_BINDING, binding.error) if binding.error else
                  "已經綁到一本 Sheet，但向它要組合清單時失敗了 —— "
                  "L3 為了不讓全域狀態列被擋住，把這次失敗降級成中性回傳；"
@@ -3336,7 +3409,7 @@ def build_portfolio_count_card(binding: BindingReadout) -> _Built:
                    f"來源狀態在{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
     else:   # UI_EMPTY —— **綁了但空。這是有效結果，不是故障。**
         _note = Note(
-            now="**Sheet 綁好了，但裡面還沒有任何一本組合**",
+            now=COUNT_EMPTY_NOW,
             why=("**這是一個有效的結果**（已經讀完，不是還沒讀、也不是故障）—— "
                  "空的組合就是空的，本站不把它畫成紅色錯誤。"
                  "剛建好 Sheet 還沒填內容時，這裡本來就該是灰的"),
@@ -3353,13 +3426,13 @@ def build_portfolio_count_card(binding: BindingReadout) -> _Built:
 SETUP_UNWIRED_SPECS: tuple[UnwiredSpec, ...] = (
     UnwiredSpec(
         key="hold.setup.pick_sheet", label="Sheet 選擇",
-        now="**本頁不提供選 Sheet 的控制項**",
+        now=PICK_SHEET_UNWIRED_NOW,
         why=READONLY_WHY, where=READONLY_WHERE,
         facts=(("為什麼", "選 Sheet 會改寫你的綁定設定 —— 那是寫入"),
                ("現行入口", "既有的 📁 組合管理分頁"))),
     UnwiredSpec(
         key="hold.setup.watchlist", label="觀察清單管理",
-        now="**本頁不提供觀察清單的新增／刪除**",
+        now=WATCHLIST_UNWIRED_NOW,
         why=READONLY_WHY, where=READONLY_WHERE,
         facts=(("為什麼", "新增或移除觀察清單會寫回你的 Sheet —— 那是寫入"),
                ("現行入口", "既有的 📁 組合管理分頁 ／ 選股網的「加入觀察清單」"))),
@@ -3411,7 +3484,7 @@ def build_holdings_preview_card(holdings: HoldingsReadout) -> _Built:
         _note = _idle_note(holdings.scope_idle)
     elif _state == UI_FAILED:
         _note = Note(
-            now="**持股清單讀不出來**",
+            now=PREVIEW_FAILED_NOW,
             why=_error_why(SRC_HOLDINGS, holdings.error),
             where=("先確認網路與 Google 授權是否仍有效；"
                    "**本站不顯示半份清單** —— 少一半算出來的配置比例與損益"
@@ -3435,6 +3508,427 @@ def build_setup_unwired_cards(requested: bool) -> tuple[_Built, ...]:
 
 
 # ══════════════════════════════════════════════════════════════════
+# v2 卡面的短句表（同找標的頁 `V2_SHORT_ROWS`；客戶 2026-09-25 裁示 2 ＋ K1）
+# ══════════════════════════════════════════════════════════════════
+#: 短句裡「中間省略了原文一段」的記號。**唯一准許出現、而原文裡沒有的字元。**
+V2_EXCERPT_GAP: str = "…"
+
+#: 每一則 `Note` → 卡面上的**三列短句**（現在 / 為什麼 / 去哪補）。
+#:
+#: 🔴 **K1（客戶裁示：新造白話 ＝ §1 捏造）—— 短句一律是「原文摘錄」，⛔ 不是改寫**：
+#:    每一格都是**該則 `Note` 原文（去 Markdown 記號後）裡連續的一段**；
+#:    要跳過中間一段時以 `V2_EXCERPT_GAP` 隔開，**每一段都必須依序出現在原文裡**。
+#:    這一條**在執行期逐格驗**（`_v2_pick_excerpt()`）：對不上 → `KeyError` → 紅卡，
+#:    ⛔ 不會把一句原文裡沒有的話畫上卡面（測試另外對全部可產生的 Note 窮舉驗一次）。
+#:    原文本身 ≤ `FACT_VALUE_MAX_CHARS` 的，短句就是原文全句（⛔ 不再裁）。
+#: 🔴 **⛔ 一個字都沒刪**：三段完整原文（含上游例外訊息）放在卡底「▸ 詳細」摺疊區。
+#:
+#: 鍵 ＝ `(card.key, Note.now)`（同找標的頁）。一格可以給**多個候選摘錄**（tuple）——
+#: 同一個 `(key, now)` 的原文會隨分支而不同（例：⑥ 失準原因可能是「兩套算法對不起來」、
+#: 「抓不到價格序列」或兩者同時成立），取**第一個**能在原文裡依序找到的候選。
+#: 查不到鍵 / 沒有一個候選對得上 → `KeyError` → `_render_one_v2()` 轉成**看得見的紅卡**。
+#:
+#: 「去哪補」原文含 `NO_EXIT_MARKER` 的，短句就是 `NO_EXIT_MARKER` 本身
+#: （它本來就是原文的一段；同找標的頁／「🚦 今天」頁 `_v2_exit_phrase()` 第 2 段）。
+_V2_PRESS_RUN: str = press(ACTION_RUN_WARROOM_LABEL)
+_V2_PRESS_AI: str = press(AI_SUMMARY_LABEL)
+_V2_CHECK_NET: str = "先確認網路與 Google 授權是否仍有效"
+#: 「沒有出口」的指路 ⛔ 只留那個標記 —— 原文接著寫的「回報給維護者」／「待接線項」一併摘上卡面
+#: （QA 2026-09-25：只剩標記會把原文的下一步吞掉）。
+_V2_NO_EXIT_REPORT: str = NO_EXIT_MARKER + V2_EXCERPT_GAP + "請把上面那行訊息回報給維護者"
+_V2_NO_EXIT_UNWIRED: str = NO_EXIT_MARKER + " —— 這是待接線項，不是你操作的問題"
+_V2_FILL_LOTS: str = "到既有的 📁 組合管理分頁把持股的張數與均價補齊，回本頁" + _V2_PRESS_RUN
+
+#: 上游例外的「為什麼」：`{出處}拋出例外：{repr(e)}` 摘成「{出處的前綴}…拋出例外」
+#: （出處全名與例外原文在摺疊區）。出處前綴取該 `SRC_*` 常數本身的開頭。
+def _v2_raised(source: str) -> str:
+    return v2_plain(source).split("（", 1)[0] + V2_EXCERPT_GAP + "拋出例外"
+
+
+#: 幾則**跨卡共用**的 Note（同一組常數、同一段原文）→ 同一組摘錄。
+_V2_SHARED_SHORT: dict[str, tuple[object, object, object]] = {
+    IDLE_NOW: ("尚未執行",
+               "在你送出之前，本頁一次 L3 取數都不會發",
+               v2_plain(IDLE_WHERE)),
+    GOOGLE_NOT_ASKED_NOW: (
+        "這一輪沒有讀 Google Sheet",
+        "本頁因此真的沒有發那一次網路呼叫，不是發了失敗",
+        "到" + SETUP_WHERE + "把選項改成「加讀 Google Sheet" + V2_EXCERPT_GAP + "」"),
+    NOT_BOUND_NOW: ("你還沒有綁定持股 Sheet",
+                    "這是一個有效的結果" + V2_EXCERPT_GAP + "沒有綁定就沒有清單可讀",
+                    "用 Google 登入後選一本持股 Sheet —— 現行入口在既有的 📁 組合管理分頁"),
+    EMPTY_SHEET_NOW: ("Sheet 綁好了，但裡面還沒有任何一列持股",
+                      "這是一個有效的結果" + V2_EXCERPT_GAP + "你已經綁好了，缺的是內容",
+                      "到既有的 📁 組合管理分頁新增一本組合並填入持股列"
+                      + V2_EXCERPT_GAP + "填完回本頁" + _V2_PRESS_RUN),
+    NO_ROWS_NOW: ("讀到了持股，但戰情表一列都沒有回來",
+                  "持股清單讀到了，但 L3 戰情表對它回了空的一批 —— 這不該發生",
+                  NO_EXIT_MARKER + V2_EXCERPT_GAP + "請把這一句連同你的持股檔數回報給維護者"),
+}
+
+#: 戰情表出錯時各卡自己的 `now`（`_station_note()` 的 error 分支）→ 同一組摘錄。
+_V2_STATION_ERROR: tuple[object, object, object] = (
+    None, _v2_raised(SRC_STATION), _V2_CHECK_NET)
+
+#: 各「沒有持股」系列 Note 由哪幾張卡產生（窮舉由測試對帳，見 `tests/test_p04_hold_v2_cards.py`）。
+_V2_STATION_EMPTY_KEYS: tuple[str, ...] = (
+    CONCLUSION_ACTION_KEY, CONCLUSION_CONFIDENCE_KEY, CONCLUSION_TODO_KEY,
+    "hold.lightwall", "hold.switch", "hold.alloc_split", "hold.take_profit",
+    "hold.deep.core_satellite", "hold.deep.stress", "hold.deep.var",
+    "hold.deep.dividend_cash", "hold.ai_summary")
+_V2_IDLE_KEYS: tuple[str, ...] = _V2_STATION_EMPTY_KEYS + (
+    "hold.binding", "hold.portfolio_count", "hold.setup.preview",
+    "hold.vix", "hold.macro_stage", "hold.position_cap")
+_V2_GOOGLE_NOT_ASKED_KEYS: tuple[str, ...] = _V2_STATION_EMPTY_KEYS + (
+    "hold.binding", "hold.portfolio_count", "hold.setup.preview")
+_V2_NOT_BOUND_KEYS: tuple[str, ...] = _V2_STATION_EMPTY_KEYS + (
+    "hold.binding", "hold.setup.preview")
+_V2_EMPTY_SHEET_KEYS: tuple[str, ...] = _V2_STATION_EMPTY_KEYS + ("hold.setup.preview",)
+
+#: ⑥ 三格「有值但失準」—— 失準原因可能一條或兩條同時成立，候選依「兩條都在」→ 單條排。
+_V2_DEGRADED_WHY: tuple[str, ...] = (
+    "兩套算法對不起來" + V2_EXCERPT_GAP + "抓不到價格序列",
+    "兩套算法對不起來", "抓不到價格序列", "這個總額只涵蓋一部分持股")
+_V2_DEGRADED_WHERE: tuple[str, ...] = (
+    "到既有的 📁 組合管理分頁把持股的張數／均價補齊" + V2_EXCERPT_GAP + "先確認這幾檔的代號是否正確",
+    "到既有的 📁 組合管理分頁把持股的張數／均價補齊",
+    "先確認這幾檔的代號是否正確",
+    "到既有的 📁 組合管理分頁確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + "海外那幾檔請另按最低稅負制自行計算",
+    "到既有的 📁 組合管理分頁確認上面那幾檔的代號與張數")
+
+
+def _v2_rows_for(key: str, now: str, rows: tuple[object, object, object]
+                 ) -> tuple[tuple[str, str], tuple[object, object, object]]:
+    """`now` 摘錄為 `None` ⇒ 取 `now` 原文全句（`now` 本身都很短）。"""
+    return (key, now), ((v2_plain(now) if rows[0] is None else rows[0]),
+                        rows[1], rows[2])
+
+
+V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
+    [_v2_rows_for(_k, IDLE_NOW, _V2_SHARED_SHORT[IDLE_NOW]) for _k in _V2_IDLE_KEYS]
+    + [_v2_rows_for(_k, GOOGLE_NOT_ASKED_NOW, _V2_SHARED_SHORT[GOOGLE_NOT_ASKED_NOW])
+       for _k in _V2_GOOGLE_NOT_ASKED_KEYS]
+    + [_v2_rows_for(_k, NOT_BOUND_NOW, _V2_SHARED_SHORT[NOT_BOUND_NOW])
+       for _k in _V2_NOT_BOUND_KEYS]
+    + [_v2_rows_for(_k, EMPTY_SHEET_NOW, _V2_SHARED_SHORT[EMPTY_SHEET_NOW])
+       for _k in _V2_EMPTY_SHEET_KEYS]
+    + [_v2_rows_for(_k, NO_ROWS_NOW, _V2_SHARED_SHORT[NO_ROWS_NOW])
+       for _k in _V2_STATION_EMPTY_KEYS]
+    # ── ① 結論三張 ──────────────────────────────────────────────
+    + [_v2_rows_for(CONCLUSION_ACTION_KEY, ACTION_FAILED_NOW, _V2_STATION_ERROR),
+       _v2_rows_for(CONCLUSION_CONFIDENCE_KEY, CONF_FAILED_NOW, _V2_STATION_ERROR),
+       _v2_rows_for(CONCLUSION_CONFIDENCE_KEY, CONF_NO_LIGHTS_NOW, (
+           None, "每一列都沒有帶逐盞燈的判定資料", _V2_PRESS_RUN + "重跑一次")),
+       _v2_rows_for(CONCLUSION_TODO_KEY, TODO_FAILED_NOW, _V2_STATION_ERROR)]
+    # ── ② 兩套刻度 ──────────────────────────────────────────────
+    + [_v2_rows_for("hold.scales", SCALE_FAILED_NOW, (
+           None, _v2_raised("L0 燈號規格表（`shared/station_specs.py`）"), _V2_NO_EXIT_REPORT)),
+       _v2_rows_for("hold.scales", SCALE_DEGRADED_NOW, (
+           None, ("其中一側的門檻來源" + V2_EXCERPT_GAP + "燈會亮、也有等級，只是別照門檻讀",
+                  "L0 規格表這一輪沒有回傳可用的燈號定義"),
+           "兩套刻度各自的出處與門檻就在這張卡下面"))]
+    # ── ③ 燈牆 ＋ VIX ────────────────────────────────────────────
+    + [_v2_rows_for("hold.lightwall", LIGHTWALL_FAILED_NOW, _V2_STATION_ERROR),
+       _v2_rows_for("hold.vix", VIX_FAILED_NOW, (
+           None, _v2_raised(SRC_VIX), _V2_NO_EXIT_REPORT)),
+       _v2_rows_for("hold.vix", VIX_EMPTY_NOW, (
+           None, "上游這一輪沒有回最新收盤。本站不拿舊值或 0 頂替",
+           "稍後" + _V2_PRESS_RUN + "再試一次"))]
+    # ── ④ 換股建議 ＋ 總經位階 ────────────────────────────────────
+    + [_v2_rows_for("hold.switch", SWITCH_FAILED_NOW, (
+           None, _v2_raised(SRC_SWITCH), _V2_NO_EXIT_REPORT)),
+       _v2_rows_for("hold.switch", SWITCH_NO_HOLDINGS_NOW, _V2_STATION_ERROR),
+       _v2_rows_for("hold.switch", SWITCH_EMPTY_NOW, (
+           None, "你持有的部位裡沒有健檢紅燈可換出" + V2_EXCERPT_GAP
+           + "這一輪也沒有給出可換入的標的",
+           "若你預期應該要有：先看上面 ① 的「訊號可信度」")),
+       _v2_rows_for("hold.macro_stage", MACRO_FAILED_NOW, (
+           None, _v2_raised(SRC_MACRO),
+           _V2_NO_EXIT_REPORT + V2_EXCERPT_GAP + "總經本身的狀態在「🚦 今天」")),
+       _v2_rows_for("hold.macro_stage", MACRO_EMPTY_NOW, (
+           None, "本站不以「中性」代替未評估：多空是一個結論，缺值不是",
+           "到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN))]
+    # ── ⑤ 80/20 偏離 ＋ 衛星停利 ＋ 建議持股水位（核心／衛星與 80/20 同一則 Note）──
+    + [_v2_rows_for(_k, SPLIT_FAILED_NOW, (None, _v2_raised(SRC_STATION), _V2_NO_EXIT_REPORT))
+       for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
+    + [_v2_rows_for(_k, SPLIT_NO_VALUE_NOW, (
+           None, "沒有任何一列同時有張數與現價，沒有市值就沒有比例", _V2_FILL_LOTS))
+       for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
+    + [_v2_rows_for("hold.take_profit", TP_FAILED_NOW, (
+           None, _v2_raised(SRC_STATION), _V2_NO_EXIT_REPORT)),
+       _v2_rows_for("hold.take_profit", TP_EMPTY_NOW, (
+           None, "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此判不了",
+           "若你預期應該要有：到 📁 組合管理確認那幾檔個股的均價有填")),
+       _v2_rows_for("hold.position_cap", CAP_FAILED_NOW, (
+           None, _v2_raised(SRC_ALLOC), _V2_NO_EXIT_REPORT)),
+       _v2_rows_for("hold.position_cap", CAP_EMPTY_NOW, (
+           None, "填一個看起來合理的區間，等於替你做了一個沒有依據的決定",
+           "到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN))]
+    # ── ⑥ 組合深度分析 ──────────────────────────────────────────
+    + [_v2_rows_for("hold.deep.rebalance", REBALANCE_UNWIRED_NOW, (
+           None, "缺的是目標權重" + V2_EXCERPT_GAP + "你的持股帳本那張表" + V2_EXCERPT_GAP
+           + "沒有目標比例", _V2_NO_EXIT_UNWIRED)),
+       _v2_rows_for("hold.deep.grape", GRAPE_UNWIRED_NOW, (
+           None, "這一格的實作住在 L5" + V2_EXCERPT_GAP + "而且它自帶寫死的 widget key",
+           _V2_NO_EXIT_UNWIRED)),
+       _v2_rows_for("hold.deep.stress", STRESS_FAILED_NOW, (
+           None, _v2_raised(SRC_STRESS), _V2_NO_EXIT_REPORT)),
+       _v2_rows_for("hold.deep.stress", STRESS_EMPTY_NOW, (
+           None, "這是一個有效的結果" + V2_EXCERPT_GAP + "本站不用檔數當權重頂替",
+           _V2_FILL_LOTS)),
+       _v2_rows_for("hold.deep.var", VAR_FAILED_NOW, (
+           None, _v2_raised(SRC_VAR), _V2_NO_EXIT_REPORT)),
+       _v2_rows_for("hold.deep.var", VAR_EMPTY_NOW, (
+           None, "這是一個有效的結果" + V2_EXCERPT_GAP
+           + "本站寧可不給，也不給一個用補值撐出來的尾部估計",
+           "若是新上市／剛買進的標的，等歷史累積" + V2_EXCERPT_GAP
+           + "若是缺張數／均價，到既有的 📁 組合管理分頁補齊")),
+       _v2_rows_for("hold.deep.dividend_cash", CASH_FAILED_NOW, (
+           None, _v2_raised(SRC_DIV_CASH), _V2_NO_EXIT_REPORT)),
+       _v2_rows_for("hold.deep.dividend_cash", CASH_NO_PAYOUT_NOW, (
+           None, "可能是你手上這幾檔近一年真的沒有除息，也可能是上游沒有這幾檔的配息紀錄",
+           "若你確定收過息：先確認代號是否正確")),
+       _v2_rows_for("hold.deep.dividend_cash", CASH_EMPTY_NOW, (
+           None, "這是一個有效的結果（已經算過，不是還沒算）",
+           "到既有的 📁 組合管理分頁把持股的張數補齊，回本頁" + _V2_PRESS_RUN))]
+    + [_v2_rows_for(_k, DEGRADED_NOW_TEMPLATE.format(label=_label), (
+           None, _V2_DEGRADED_WHY, _V2_DEGRADED_WHERE))
+       for _k, _label in (("hold.deep.stress", "壓力測試"),
+                          ("hold.deep.var", "VaR（風險值）"),
+                          ("hold.deep.dividend_cash", "配息現金流"))]
+    # ── ⑦ AI 戰情總結 ────────────────────────────────────────────
+    + [_v2_rows_for("hold.ai_summary", AI_IDLE_NOW, (
+           None, "它每按一次就打一次付費 API，所以不會自動生成", v2_plain(AI_IDLE_WHERE))),
+       _v2_rows_for("hold.ai_summary", AI_NO_STATION_NOW, _V2_STATION_ERROR),
+       _v2_rows_for("hold.ai_summary", AI_UPSTREAM_NOW, (
+           None, _v2_raised(SRC_STATION),
+           "先讓戰情表跑起來（到" + SETUP_WHERE + _V2_PRESS_RUN + "）")),
+       _v2_rows_for("hold.ai_summary", AI_UNAVAILABLE_NOW, (
+           None, "沒有丟例外，而是回了一句服務說明",
+           "這是部署端的金鑰或額度問題，不是你操作的問題：" + NO_EXIT_MARKER)),
+       _v2_rows_for("hold.ai_summary", AI_DRIFT_NOW, (
+           None, "這一輪回的是別的型別",
+           "這是上下游契約漂移，不是你操作的問題：" + NO_EXIT_MARKER)),
+       _v2_rows_for("hold.ai_summary", AI_EMPTY_NOW, (
+           None, "呼叫成功、但回來的文字是空的", "可以再" + _V2_PRESS_AI + "一次")),
+       _v2_rows_for("hold.ai_summary", AI_FAILED_NOW, (
+           None, _v2_raised(SRC_AI), "可以再" + _V2_PRESS_AI + "一次"))]
+    # ── 葉2 組合設定 ────────────────────────────────────────────
+    + [_v2_rows_for("hold.binding", BINDING_FAILED_NOW, (
+           None, _v2_raised(SRC_BINDING), _V2_CHECK_NET)),
+       _v2_rows_for("hold.portfolio_count", COUNT_NOT_BOUND_NOW, (
+           None, "這不是失敗，是這個問題還沒有成立", "先完成上一張卡說的綁定，這一格會自己有東西")),
+       _v2_rows_for("hold.portfolio_count", COUNT_DRIFT_NOW, (
+           None, "已經綁到一本 Sheet，但向它要組合清單時失敗了",
+           "重新用 Google 登入授權一次，或確認那本 Sheet 仍然分享給你")),
+       _v2_rows_for("hold.portfolio_count", COUNT_FAILED_NOW, (
+           None, _v2_raised(SRC_BINDING),
+           "重新用 Google 登入授權一次，或確認那本 Sheet 仍然分享給你")),
+       _v2_rows_for("hold.portfolio_count", COUNT_EMPTY_NOW, (
+           None, "空的組合就是空的，本站不把它畫成紅色錯誤",
+           "到既有的 📁 組合管理分頁新增一本組合並填入持股列" + V2_EXCERPT_GAP
+           + "填完回本頁" + _V2_PRESS_RUN)),
+       _v2_rows_for("hold.setup.preview", PREVIEW_FAILED_NOW, (
+           None, _v2_raised(SRC_HOLDINGS), _V2_CHECK_NET))]
+    + [_v2_rows_for(_k, _now, (
+           None, "這一項本質上是寫入" + V2_EXCERPT_GAP + "本頁對你的持股帳本一律唯讀",
+           NO_EXIT_MARKER + V2_EXCERPT_GAP + "現行入口仍在既有的 📁 組合管理分頁"))
+       for _k, _now in (("hold.setup.pick_sheet", PICK_SHEET_UNWIRED_NOW),
+                        ("hold.setup.watchlist", WATCHLIST_UNWIRED_NOW))]
+)
+
+
+def _v2_pick_excerpt(spec: object, full: str, *, what: str) -> str:
+    """一格短句規格 → 實際上卡面的那一段。**逐段驗「原文裡依序真的有這幾段」。**
+
+    `spec` 是一段摘錄（`str`）或多個候選（tuple，取第一個對得上的）。
+    ⛔ 一個都對不上 → `KeyError`（§1 ＋ K1：⛔ 不把一句原文裡沒有的話畫上卡面，
+    ⛔ 也不偷偷退回長句 —— 由 `_render_one_v2()` 轉成看得見的紅卡）。
+    """
+    _alts = (spec,) if isinstance(spec, str) else tuple(spec)   # type: ignore[arg-type]
+    for _alt in _alts:
+        _pos, _ok = 0, True
+        for _piece in str(_alt).split(V2_EXCERPT_GAP):
+            _at = full.find(_piece, _pos) if _piece else -1
+            if _at < 0:
+                _ok = False
+                break
+            _pos = _at + len(_piece)
+        if _ok:
+            return str(_alt)
+    raise KeyError(
+        f"{what} 的短句不是原文摘錄（候選 {_alts!r} 在原文裡找不到）—— "
+        "`V2_SHORT_ROWS` 與 Note 原文漂開了；⛔ 不得改成新寫的白話（K1）。")
+
+
+def v2_short_rows(card: Card) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str], ...]]:
+    """一則 `Note` →（卡面三列短句, 摺疊區三列完整原文）。同找標的頁同名函式的行為。
+
+    · 沒有 `Note`（live 且沒出事）→ `((), ())`。
+    · 有 `Note` → 查 `V2_SHORT_ROWS`；查不到 / 摘錄對不上原文 → `KeyError`。
+    · 完整原文三列沿用**同一組標籤**，放進「▸ 詳細」摺疊區。**一個字都沒刪。**
+    """
+    _note = card.note
+    if _note is None:
+        return (), ()
+    try:
+        _spec = V2_SHORT_ROWS[(card.key, _note.now)]
+    except KeyError:
+        raise KeyError(
+            f"卡 {card.key!r} 的這則說明沒有登記短句（現在＝{v2_plain(_note.now)!r}）"
+            " —— 新增一則 `Note` 時**必須**同步補一列 `V2_SHORT_ROWS`。") from None
+    _full = ((V2_NOW_FACT_KEY, v2_plain(_note.now)),
+             (V2_WHY_FACT_KEY, v2_plain(_note.why)),
+             (V2_GUIDE_FACT_KEY, v2_plain(_note.where)))
+    _short = tuple(
+        (_label, _v2_pick_excerpt(_s, _text, what=f"{card.key} 的「{_label}」"))
+        for _s, (_label, _text) in zip(_spec, _full))
+    return _short, _full
+
+
+# ── 卡面 fact 列（QA 2026-09-25 四輪：桌機 3 欄窄卡溢出）──────────────────────
+#: 契約層 `.blk-fact` 是「標籤｜值」左右並排，`.blk-fact-k` 又 `flex-shrink:0; white-space:nowrap`
+#: ⇒ 窄卡裡**標籤越長，值那一欄越窄**（實測只剩 2~4 字一行），值裡沒有斷點的識別字還會衝出卡緣。
+#: ~~第 2、3 輪：把卡面標籤改放「原文摘錄」（`V2_FACE_LABELS`，寬度上限 9 → 12）~~
+#: ← **第 4 輪撤掉，有意識的更正，⛔ 不是漏刪**：摘錄標籤兩輪都被 QA 抓到**丟限定詞**
+#:   （「納入計算的」「來源」「為什麼」「已排除」…），上限放寬又擠回來 —— 兩頭都不行。
+#: **現行**：本頁的卡面**把標籤疊在值的上方**（樣式見 `V2_HOLD_CARD_CSS`，只命中本頁卡外層的
+#: `V2_HOLD_CARD_CLASS`）⇒ 標籤**整句原文**上卡面、值拿到整張卡寬。⛔ 不動契約層。
+#: 值裡「沒有斷點、含英文字母或底線」的長段（識別字）仍以 `V2_EXCERPT_GAP` 略過（原文在摺疊區）。
+
+#: 卡面值裡「沒有斷點的 ASCII 連續段」超過這個長度、而且含英文字母或底線，就以 `V2_EXCERPT_GAP` 略過。
+#: ⚠️ 據實揭露：這個數字是本頁為版面挑的**排版參數**，⛔ 不是規格值、⛔ 不是門檻。
+V2_FACE_TOKEN_MAX: int = 12
+
+_V2_TOKEN_RE = re.compile(r"[\x21-\x7e]{%d,}" % (V2_FACE_TOKEN_MAX + 1))
+
+
+def _v2_face_value(value: str) -> str:
+    """卡面值：沒有斷點、含英文字母或底線的長 ASCII 段以 `V2_EXCERPT_GAP` 略過（其餘一字不動；原文在摺疊區）。"""
+    # QA 第 2 輪：只略過「含英文字母或底線」的段（識別字）—— 數字、千分位、小數點、%、
+    # 正負號**永遠不略**（`1,234,567,890` 或「差 109999900.0%」被略成「…」＝把數字藏起來）。
+    _out = _V2_TOKEN_RE.sub(
+        lambda _m: V2_EXCERPT_GAP if re.search(r"[A-Za-z_]", _m.group(0)) else _m.group(0),
+        value)
+    while V2_EXCERPT_GAP * 2 in _out:
+        _out = _out.replace(V2_EXCERPT_GAP * 2, V2_EXCERPT_GAP)
+    return _out
+
+
+def v2_fold_id(card: Card) -> str:
+    """摺疊開關 `id` ＝ `markup.fold_dom_id(card.key)` ⇒ `fold-hold-conclusion-action` 這樣。
+
+    本頁的卡 key 都以 `hold.` 開頭 ⇒ id 一律 `fold-hold-*`，⛔ 不與「🚦 今天」
+    （`fold-detail-*`）／「🔍 找標的」（`fold-find-*`）撞名；由 key 決定 ⇒ rerun 展開狀態不掉。
+    """
+    return v2_markup.fold_dom_id(card.key)
+
+
+def v2_card_html(card: Card, facts: Sequence[tuple[str, str]] = (),
+                 signal_text: str = "") -> str:
+    """一張本頁的 `Card` → v2 卡面 HTML。**所有文字都由 `card_html()` escape。**
+
+    與找標的頁同名函式**同一套組法**；本頁多一個 `signal_text`（舊卡面的訊號頻道，
+    ⛔ 不是新判斷）→ 契約層的判決槽 `level=`（`card_level_text()` 對 degraded／非 live
+    自己留白；本頁非 live 一律傳空字串）。
+    · 卡面 fact 列 ← 三列短句**排在最前**，其後是既有的 `facts`（原樣、只拿掉 Markdown 記號）。
+    · 「▸ 詳細」摺疊區：① `Note` 三段完整原文；② 卡面上會被契約層截斷的 fact 的完整值。
+      摺疊區**不截斷**（`fold_truncate=False`）。沒有東西要摺 ⇒ 整段不渲染。
+    """
+    _v2_state, _reason = V2_STATE_VOCAB[card.state]   # 未知狀態 → KeyError（⛔ 不兜底）
+    _badge_n = v2_page.resolve_badge(state=_v2_state, miss_reason=_reason)
+    _short, _full = v2_short_rows(card)
+    _plain_facts = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts)
+    _face_facts = tuple((_k, _v2_face_value(_v)) for _k, _v in _plain_facts)
+    # 卡面值被摘過或會被契約層截斷的列 → 整列原文進摺疊區。
+    _long = tuple(_r for _r, _f in zip(_plain_facts, _face_facts)
+                  if _r != _f or len(_r[1]) > v2_markup.FACT_VALUE_MAX_CHARS)
+    _folded = tuple(_full) + _long
+    return v2_markup.card_html(
+        block=card.key,
+        state=_v2_state,
+        title=v2_plain(card.label),
+        value=(v2_plain(card.value) or None),
+        level=(v2_plain(signal_text) or None),
+        badge_n=_badge_n,
+        facts=tuple(_short) + _face_facts,
+        folded_facts=_folded,
+        fold_id=(v2_fold_id(card) if _folded else None),
+        fold_truncate=False,
+    )
+
+
+#: v2 卡面產不出來時，例外的出處（同找標的頁）。
+SRC_V2_MARKUP: str = "L5 `src/ui_v2/markup`（v2 卡面標記層：`page_css` / `card_html`）"
+
+#: 本頁 v2 卡外層的 class（`_render_one_v2()` 包一層 `<div>`）。**樣式只掛在它底下** ⇒
+#: 「🚦 今天」／「🔍 找標的」一條規則都沒變；⛔ 不用 `:has()`、⛔ 不改 `markup.page_css()`。
+V2_HOLD_CARD_CLASS: str = "p04-v2"
+
+#: 本頁卡面＋摺疊區的 fact 列：**標籤一行、值在下一行**，值准許任意處換行（摺疊區放的是完整原文，
+#: 上游例外裡沒有空白的長串也要留在卡內）。零顏色、零字級、零 px、零數字。
+#: 📌 取代第 2~3 輪只命中摺疊區（`[id^="fold-hold-"]`）的那一版：卡面也要同一種排法（QA 第 4 輪）。
+V2_HOLD_CARD_CSS: str = (
+    f'.{V2_HOLD_CARD_CLASS} .blk-fact{{display:block}}'
+    f'.{V2_HOLD_CARD_CLASS} .blk-fact-k{{display:block;white-space:normal}}'
+    f'.{V2_HOLD_CARD_CLASS} .blk-fact-v{{display:block;overflow-wrap:anywhere}}')
+
+#: v2 卡面的修復指路（渲染層的問題，使用者沒有出口）。
+_V2_RENDER_WHERE: str = ("這是渲染層的問題，不是你操作的問題 —— "
+                         f"{NO_EXIT_MARKER}；請把上面那行訊息回報給維護者")
+
+
+def _inject_v2_css() -> None:
+    """每一輪 script run 開頭吐一次 v2 樣式表（`render_page_hold()` 呼叫）。
+
+    ⚠️ **為什麼不照找標的頁用 session 旗標「第一張卡才吐」**：本頁由
+    `tests/test_p04_hold_view.py::TestRequestedIsNotDerivedFromData::
+    test_the_gate_key_is_written_by_the_shared_form_only` 禁止**任何** session 下標指派
+    （gate 的唯一寫入點在共用層）。改成「整頁開頭無條件吐一次」—— 每輪只跑一次，
+    ⛔ 不需要旗標。
+    炸了 → **就地畫一張紅卡**（⛔ 不吞；卡片仍照畫，只是沒有樣式）。
+    """
+    try:
+        st.markdown(f"<style>{v2_markup.page_css(V2_CSS_MODE)}\n{V2_HOLD_CARD_CSS}</style>",
+                    unsafe_allow_html=True)
+        return
+    except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
+        _err = repr(_e)   # `_e` 在區塊結束時會被 `del`，先取字串
+        print(f"[views/page_hold] v2 樣式表產不出來 → 轉紅卡：{_err}")
+    _label = scrub_state_glyphs(v2_plain(SRC_V2_MARKUP))[0]
+    render_card_isolated(
+        Card(key="hold.v2_css.render_failed", label=_label, state=UI_FAILED,
+             note=Note(now=f"{_label}　**這一格畫不出來**",
+                       why=_error_why(SRC_V2_MARKUP, _err), where=_V2_RENDER_WHERE)),
+        owner="views/page_hold",
+        error_why=lambda _err2: _error_why(SRC_RENDER, _err2),
+        where=_V2_RENDER_WHERE)
+
+
+def _render_one_v2(card: Card, facts: Sequence[tuple[str, str]] = (),
+                   signal_text: str = "") -> None:
+    """畫一張 v2 卡面；炸了就**就地轉成看得見的紅卡**（⛔ 不靜默退回舊卡面）。"""
+    try:
+        st.markdown(f'<div class="{V2_HOLD_CARD_CLASS}">'
+                    f"{v2_card_html(card, facts, signal_text)}</div>",
+                    unsafe_allow_html=True)
+        return
+    except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
+        _err = repr(_e)   # `_e` 在區塊結束時會被 `del`，先取字串
+        print(f"[views/page_hold] 卡 {card.key!r} 的 v2 卡面畫不出來 → 轉紅卡：{_err}")
+    _label = scrub_state_glyphs(card.label)[0] or card.key
+    render_card_isolated(
+        Card(key=f"{card.key}.v2_render_failed", label=_label,
+             state=UI_FAILED,
+             note=Note(now=f"{_label}　**這一格畫不出來**",
+                       why=_error_why(SRC_V2_MARKUP, _err),
+                       where=_V2_RENDER_WHERE)),
+        owner="views/page_hold",
+        error_why=lambda _err2: _error_why(SRC_RENDER, _err2),
+        where=_V2_RENDER_WHERE)
+
+
+# ══════════════════════════════════════════════════════════════════
 # 渲染（薄；所有判斷都在上面的純函式裡）
 # ══════════════════════════════════════════════════════════════════
 def _render_one(built: _Built) -> None:
@@ -3443,8 +3937,14 @@ def _render_one(built: _Built) -> None:
     ⚠️ **本體在共用層** `_ui_kit.render_card_isolated()`（頁 1／2／3 已上移，
     本頁**不寫第四份**）。本函式只剩「把本頁專屬的三樣東西綁上去」：
     log 前綴 / 出處文案（出事的是哪一層只有本頁知道）/ 去哪補。
+
+    2026-09-25（同找標的頁）：登記在 v2 契約（`src/ui_v2/page_hold.py`）的卡改走 v2 卡面；
+    v2 卡面炸了由 `_render_one_v2()` 轉紅卡（紅卡本身走下面這條舊路）。
     """
     _card, _facts, _signal = built
+    if _card.key in v2_hold.BLOCK_COLS:
+        _render_one_v2(_card, _facts, _signal)
+        return
     render_card_isolated(
         _card, facts=_facts, signal_text=_signal,
         owner="views/page_hold",
@@ -3725,6 +4225,8 @@ def render_page_hold() -> None:
 
     st.markdown(f"## {ia_nav.page_label(ia_nav.PAGE_HOLD)}")
     st.caption("我已經持有的，該加、該換、該減。")
+    # v2 卡面的樣式表：每輪開頭吐一次（理由見 `_inject_v2_css()`）。
+    _inject_v2_css()
 
     _leaf1, _leaf2 = st.tabs([LEAF_WARROOM_TITLE, LEAF_SETUP_TITLE])
 
