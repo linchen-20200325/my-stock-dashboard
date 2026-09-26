@@ -229,6 +229,7 @@ L3 `macro_refresh_service` 當然會去打 L1 fetcher —— 那正是分層要�
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from html import escape as html_escape
 from typing import TYPE_CHECKING, Any, Final, Mapping, Sequence
@@ -1210,12 +1211,13 @@ def build_indicator_tiles(readout: MacroReadout, *,
     而「什麼都不畫」是最糟的一種說謊（線框：未評估 ≠ 沒事）。
 
     `directions`：`{key: LampDirection}`（2026-09-24「變化方向」列）。
-    **只取 `LAMP_DIRECTION_KEYS` 內的 key**，其餘 key 即使出現在 mapping 裡也不傳
-    ⇒ 其他 12 盞燈的卡與不傳 `directions` 時逐字相同。
-    - `directions is None` ⇒ 呼叫端**沒要**這一列 ⇒ 4 張卡都不出（與加列前逐字相同）。
+    **只取 `LAMP_DIRECTION_KEYS` 內的 key**，其餘 key 即使出現在 mapping 裡也不傳。
+    （2026-09-24 首批 4 盞；2026-09-26 起 `LAMP_DIRECTION_KEYS` ＝ 全部 16 盞，
+    沒有歷史的燈顯示「無資料」。未接線 / 尚未載入 / 失敗的卡仍不出這一列。）
+    - `directions is None` ⇒ 呼叫端**沒要**這一列 ⇒ 所有卡都不出（與加列前逐字相同）。
     - `directions` 是 mapping 但**缺**某一盞（或該值為 None）⇒ 該卡顯示「計算失敗（未回傳）」
       （2026-09-25；判為計算失敗而非無資料 —— 缺 key 是程式沒回傳結果，不是序列不夠）。
-      ⛔ 不讓列靜默消失（空 dict 也一樣：4 張卡都顯示計算失敗）。
+      ⛔ 不讓列靜默消失（空 dict 也一樣：所有 live / degraded 卡都顯示計算失敗）。
     """
     _dirs = directions if directions is not None else {}
     # 缺 key 與「key 在、值是 None」同樣處理 —— 兩者都是沒回傳結果（⛔ 不讓列消失）。
@@ -1718,8 +1720,72 @@ _LAMP_DIRECTION_LOADERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("get_monthly_history", ("ism_pmi",)),            # 月
 )
 
+def _session_vix_series(si: Any) -> list | None:
+    """vix 的方向序列，取自 `SectionInputs.macro_info['vix']`（與燈值同一次抓取）。
 
-def _load_lamp_directions() -> dict[str, Any]:
+    **與燈值同源**（見 `macro_helpers.compute_five_bucket_summary` 的 values dict）：
+    `dates` / `values` 與燈值 `current` 住在同一個 dict。兩條長度不一、或末值 ≠ `current`
+    ⇒ 回 None（印 log；L2 回無資料）—— ⛔ 不截斷湊長度、⛔ 不拿別次抓取的序列配這一次的燈值。
+    值本身壞掉（`float()` 失敗）⇒ **丟例外**，由 caller 判為**這一盞**計算失敗（⛔ 不補值）。
+    """
+    _vix = si.macro_info.get("vix") if isinstance(si.macro_info, Mapping) else None
+    if not isinstance(_vix, Mapping):
+        return None
+    _ds, _vs = _vix.get("dates"), _vix.get("values")
+    if not (_ds and _vs):
+        return None
+    _cur = _vix.get("current")
+    if len(_ds) != len(_vs):
+        print(f"[views/page_today] 變化方向 vix：dates {len(_ds)} 筆 ≠ values "
+              f"{len(_vs)} 筆 → 不給序列（顯示無資料）")
+        return None
+    if _cur is None or not math.isclose(float(_vs[-1]), float(_cur),
+                                        rel_tol=1e-9, abs_tol=1e-9):
+        print(f"[views/page_today] 變化方向 vix：序列末值 {_vs[-1]!r} ≠ 燈值 "
+              f"{_cur!r} → 不給序列（顯示無資料，不混抓取批次）")
+        return None
+    return [(str(_d)[:10], _v) for _d, _v in zip(_ds, _vs)]
+
+
+#: 2026-09-26：序列來自**本輪 session**（經 L3 `load_section_inputs`，與燈值同一條取數路徑、
+#: 同一次抓取）的燈 → 各自的抽取函式。**每盞各自 try**：一盞的值壞掉只讓那一盞計算失敗。
+#: （adl 刻意不在這裡：單日估算無自相關，恆為無資料 —— 見 L0 檔頭。）
+_SESSION_DIRECTION_EXTRACTORS: tuple[tuple[str, Any], ...] = (
+    ("vix", _session_vix_series),
+)
+_LAMP_DIRECTION_SESSION_KEYS: tuple[str, ...] = tuple(
+    _k for _k, _ in _SESSION_DIRECTION_EXTRACTORS)
+
+
+def _session_direction_series(
+        session: Mapping[str, Any] | None) -> tuple[dict[str, list], dict[str, str]]:
+    """回 `(series, failed)`：`series` ＝ `{key: [(iso_date, value), ...]}`；
+    `failed` ＝ `{key: 例外型別名}`（**只有**抽取丟例外的那幾盞）。
+
+    取不到的 key 不放進 `series`（§1：不放空序列冒充有資料）。session 為 None ⇒ `({}, {})`。
+    `load_section_inputs` 本身丟例外 ⇒ 往上拋（caller 判所有 session 燈計算失敗）。
+    取數只經 L3 `load_section_inputs`（本檔唯一的 session 取數路徑），⛔ 不直抽 session。
+    """
+    if session is None:
+        return {}, {}
+    from src.services.section_inputs import load_section_inputs
+
+    _si = load_section_inputs(dict(session))
+    _out: dict[str, list] = {}
+    _failed: dict[str, str] = {}
+    for _k, _fn in _SESSION_DIRECTION_EXTRACTORS:
+        try:
+            _pts = _fn(_si)
+        except Exception as _e:  # noqa: BLE001 — 只影響這一盞；⛔ 不補值
+            print(f"[views/page_today] 變化方向計算失敗（session 序列 {_k}）：{_e!r}")
+            _failed[_k] = type(_e).__name__
+            continue
+        if _pts:
+            _out[_k] = _pts
+    return _out, _failed
+
+
+def _load_lamp_directions(session: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """燈卡「變化方向」列：L3 取歷史 → L2 算方向。回 `{key: LampDirection}`。
 
     只算 `LAMP_DIRECTION_KEYS` 那幾盞。某一條序列取不到 ⇒ L2 回 `nodata`
@@ -1733,6 +1799,9 @@ def _load_lamp_directions() -> dict[str, Any]:
     - 單一盞的 L2 計算丟例外 ⇒ 印 log，**只有那一盞**回 `error`，其餘照常。
     - L2 模組本身載入失敗 ⇒ 做不出 `LampDirection`，印 log 回 `{}`；
       `build_indicator_tiles` 對缺 key 一律顯示「計算失敗（未回傳）」（只用 L0 常數）。
+    - 2026-09-26：`session` → `_session_direction_series()`（vix）。L3 讀 session 丟例外
+      ⇒ 印 log，**只有** `_LAMP_DIRECTION_SESSION_KEYS` 回 `error`；單一盞的值壞掉
+      ⇒ **只有那一盞** `error`。`session=None` ⇒ 沒有序列 ⇒ 無資料（L2 nodata）。
     畫面顯示「計算失敗（例外型別）」；**燈號與其他列不受影響**（它不參與判燈）。
     """
     try:
@@ -1759,7 +1828,14 @@ def _load_lamp_directions() -> dict[str, Any]:
             except Exception as _e:  # noqa: BLE001 — 只影響這支 loader 負責的燈
                 print(f"[views/page_today] 變化方向計算失敗（取數 {_name}）：{_e!r}")
                 _failed.update({_k: type(_e).__name__ for _k in _keys})
-    # ⚠️ m1b_m2_gap 刻意不給序列：歷史檔已知損壞，L2 恆回 nodata。
+    try:
+        _s_hist, _s_failed = _session_direction_series(session)
+        _hist.update(_s_hist)
+        _failed.update(_s_failed)
+    except Exception as _e:  # noqa: BLE001 — L3 讀 session 失敗 ⇒ 只影響序列來自 session 的燈
+        print(f"[views/page_today] 變化方向計算失敗（session 序列）：{_e!r}")
+        _failed.update({_k: type(_e).__name__ for _k in _LAMP_DIRECTION_SESSION_KEYS})
+    # ⚠️ m1b_m2_gap 與其餘 mode = "none" 的燈刻意不給序列：L2 恆回 nodata。
     _out: dict[str, Any] = {}
     for _k in LAMP_DIRECTION_KEYS:
         if _k in _failed:
@@ -2633,7 +2709,11 @@ def v2_card_html(tile: Tile) -> str:
     _hover = "｜".join(_p for _p in (_full, *_moved) if _p)
     if not _hover:
         return _html
-    return f'<div title="{html_escape(_hover, quote=True)}">{_html}</div>'
+    # 🔴 2026-09-26 修：hover 內的換行一律轉成 `&#10;`（屬性內的換行字元參照，瀏覽器提示框照樣換行）。
+    #    修前 margin 的 degraded `why` 含 "\n\n"，空行會**結束 CommonMark 的 HTML 區塊**，
+    #    後半段被當成一般 Markdown 段落 ⇒ 卡片文字漏到卡外、尾巴多出一個 `">`。
+    _title = html_escape(_hover, quote=True).replace("\n", "&#10;")
+    return f'<div title="{_title}">{_html}</div>'
 
 
 def _inject_v2_css() -> None:
@@ -3062,7 +3142,7 @@ def render_page_today() -> None:
 
     _tiles_by_bucket = build_indicator_tiles(
         _readout, band_label=_band_label, thr_text=_thr_text, l4_error=_l4_err,
-        directions=_load_lamp_directions())
+        directions=_load_lamp_directions(_session))
     _cov = coverage(_tiles_by_bucket)
     # 線框七塊全部照算（`build_today_blocks` 是純函式），葉1 ③ 與 ⑤⑥ 各取所需。
     _blocks = {_b.key: _b for _b in build_today_blocks(

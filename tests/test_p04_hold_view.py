@@ -1578,9 +1578,11 @@ class TestTheWarroomIsWiredNow:
 
         _seen: dict = {}
 
-        def _fake_candidates(*, regime=None, exclude=None, top_n=5):
+        # strict：批次 2（2026-09-26）起 v2 換股卡以 strict=True 呼叫（取不到 → 拋例外，不回 []）。
+        def _fake_candidates(*, regime=None, exclude=None, top_n=5, strict=False):
             _seen["regime"] = regime
             _seen["exclude"] = list(exclude or [])
+            _seen["strict"] = strict
             return [{"代碼": "2412", "名稱": "中華電", "綜合分": 80}]
 
         monkeypatch.setattr(DSS, "get_switch_in_candidates", _fake_candidates)

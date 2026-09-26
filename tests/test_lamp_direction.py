@@ -7,6 +7,9 @@
 - L3 `macro_v2_service.get_monthly_history`：缺檔 → {}，NaN 列丟棄不補。
 - L5 `page_today`：16 張燈卡裡只有 4 張出「變化方向」，且其餘 12 張、燈號、
   等級與不傳 directions 時**逐字相同**。
+- 2026-09-26 擴到 16 盞：vix 有真方向（序列取自本輪 session，經 L3
+  `load_section_inputs`）；其餘 11 盞（含 adl：單日估算無自相關）恆為「無資料」；
+  foreign_net（未接線）不出列；首批 4 盞的卡面與 origin/main 10f385c 的黃金雜湊逐字相同。
 """
 from __future__ import annotations
 
@@ -47,8 +50,11 @@ def _monthly(values, year=2025, month=1):
 # L0
 # ════════════════════════════════════════════════════════════════
 class TestL0:
-    def test_keys_exactly_four(self):
-        assert set(LAMP_DIRECTION_KEYS) == {"margin", "bias_240", "m1b_m2_gap", "ism_pmi"}
+    def test_keys_are_all_sixteen_lamps(self):
+        # 2026-09-26：擴到全部 16 盞；首批 4 盞的順序不動
+        assert set(LAMP_DIRECTION_KEYS) == {s.key for s in BUCKET_DANGER_SPECS}
+        assert len(LAMP_DIRECTION_KEYS) == len(set(LAMP_DIRECTION_KEYS)) == 16
+        assert LAMP_DIRECTION_KEYS[:4] == ("margin", "bias_240", "m1b_m2_gap", "ism_pmi")
 
     def test_keys_are_real_lamps(self):
         assert set(LAMP_DIRECTION_KEYS) <= set(SPECS_BY_KEY)
@@ -57,7 +63,34 @@ class TestL0:
         assert set(LAMP_DIRECTION_WINDOWS) == set(LAMP_DIRECTION_KEYS)
 
     def test_flat_band_values(self):
-        assert LAMP_DIRECTION_FLAT_BAND == {"margin": 1.0, "bias_240": 1.0, "ism_pmi": 0.5}
+        assert LAMP_DIRECTION_FLAT_BAND == {"margin": 1.0, "bias_240": 1.0, "ism_pmi": 0.5,
+                                            "vix": 0.5}
+
+    def test_band_exactly_for_computed_keys(self):
+        # 有帶寬 ⇔ 會算方向（mode != none）—— 不得有「算方向卻沒量過帶寬」的燈
+        computed = {k for k, c in LAMP_DIRECTION_WINDOWS.items() if c["mode"] != "none"}
+        assert computed == set(LAMP_DIRECTION_FLAT_BAND) == set(_REAL_KEYS)
+
+    def test_new_windows_use_existing_texts_only(self):
+        # ⛔ 不新增使用者看得到的文字：視窗 / 單位只能是首批已用過的那幾種
+        first = ("margin", "bias_240", "ism_pmi", "m1b_m2_gap")
+        texts = {LAMP_DIRECTION_WINDOWS[k]["window_text"] for k in first}
+        units = {LAMP_DIRECTION_WINDOWS[k]["unit"] for k in first}
+        for k, c in LAMP_DIRECTION_WINDOWS.items():
+            assert c["window_text"] in texts, k
+            assert c["unit"] in units, k
+
+    @pytest.mark.parametrize("key", sorted(set(LAMP_DIRECTION_KEYS) - {"margin", "bias_240",
+                                                                     "ism_pmi", "m1b_m2_gap",
+                                                                     "vix"}))
+    def test_none_keys_have_reason_and_no_band(self, key):
+        c = LAMP_DIRECTION_WINDOWS[key]
+        assert c["mode"] == "none" and key not in LAMP_DIRECTION_FLAT_BAND
+        assert c["none_reason"]
+        d = compute_lamp_direction(key, _daily([1.0] * 10 + [99.0] * 21))
+        assert d.direction == "nodata" and d.delta is None
+        assert c["none_reason"] in d.reason
+        assert format_direction_text(d) == LAMP_DIRECTION_NODATA_TEXT
 
     def test_m1b_has_no_band_and_no_history(self):
         assert "m1b_m2_gap" not in LAMP_DIRECTION_FLAT_BAND
@@ -106,7 +139,12 @@ class TestComputeNodata:
 
     def test_unknown_key_raises(self):
         with pytest.raises(KeyError):
-            compute_lamp_direction("vix", _daily([1.0] * 30))
+            compute_lamp_direction("usdtwd", _daily([1.0] * 30))   # 參考走勢，不是燈
+
+    def test_m1b_reason_unchanged(self):
+        # 2026-09-26 L2 加 `none_reason` 後，m1b 的原因字串逐字不變
+        assert (compute_lamp_direction("m1b_m2_gap", None).reason
+                == "m1b_m2_gap：歷史資料已知不可信，刻意不算方向")
 
     def test_pmi_missing_month_is_nodata(self):
         pts = [("2026-05-01", 50.0), ("2026-07-01", 55.0)]
@@ -118,6 +156,25 @@ class TestComputeNodata:
 
 
 class TestComputeDirection:
+    def test_vix_diff_points_and_band(self):
+        # 帶寬 0.5 點（含等於）：+0.5 持平、+0.6 上升、-0.6 下降
+        for new, exp in ((20.5, "flat"), (20.6, "up"), (19.4, "down"), (19.5, "flat")):
+            d = compute_lamp_direction("vix", _daily([20.0] * 20 + [new]))
+            assert d.direction == exp, (new, d)
+        d = compute_lamp_direction("vix", _daily([20.0] * 20 + [25.0]))
+        assert format_direction_text(d).startswith("↗ 上升（近 20 交易日 +5.0 點，至 ")
+
+    def test_adl_is_nodata_even_with_clean_series(self):
+        # 2026-09-26 QA：ad_ratio 單日估算無自相關（lag-1 −0.028 / lag-20 0.016）⇒ 不出箭頭
+        d = compute_lamp_direction("adl", _daily([50.0] * 20 + [80.0]))
+        assert d.direction == "nodata" and "自相關" in d.reason
+        assert "adl" not in LAMP_DIRECTION_FLAT_BAND
+
+    @pytest.mark.parametrize("key", ["vix"])
+    def test_new_keys_need_21_rows(self, key):
+        assert compute_lamp_direction(key, _daily([1.0] * 20)).direction == "nodata"
+        assert compute_lamp_direction(key, _daily([1.0] * 19 + [9.0, 9.0])).direction == "up"
+
     def test_margin_up_down_pct(self):
         up = compute_lamp_direction("margin", _daily([100.0] * 20 + [109.9]))
         assert up.direction == "up" and math.isclose(up.delta, 9.9, rel_tol=1e-9)
@@ -272,15 +329,44 @@ def _live_readout():
     return P.MacroReadout(requested=True, readiness=rd)
 
 
-def _directions():
+#: 會算真方向的燈（其餘 mode = "none"）。
+_REAL_KEYS = ("margin", "bias_240", "ism_pmi", "vix")
+#: 首批 4 盞（2026-09-24），卡面必須與擴充前逐字相同。
+_FIRST_FOUR = ("margin", "bias_240", "m1b_m2_gap", "ism_pmi")
+
+
+def _first_four_directions():
     return {
         "margin": compute_lamp_direction("margin", _daily([100.0] * 20 + [109.9])),
         "bias_240": compute_lamp_direction("bias_240", _daily([5.0] * 20 + [5.5])),
         "ism_pmi": compute_lamp_direction("ism_pmi", _monthly([50.0, 48.0])),
         "m1b_m2_gap": compute_lamp_direction("m1b_m2_gap", None),
-        # 不在 LAMP_DIRECTION_KEYS 的 key 就算塞進來也不得出列
-        "vix": LampDirection("up", 5.0, "%", "近 20 交易日", "2026-09-24"),
     }
+
+
+def _directions():
+    d = _first_four_directions()
+    d["vix"] = compute_lamp_direction("vix", _daily([20.0] * 20 + [25.0]))
+    for k in LAMP_DIRECTION_KEYS:
+        d.setdefault(k, compute_lamp_direction(k, None))
+    # 不在 LAMP_DIRECTION_KEYS 的 key（參考走勢）就算塞進來也不得出列
+    d["taiex"] = LampDirection("up", 5.0, "%", "近 20 交易日", "2026-09-24")
+    return d
+
+
+#: origin/main 10f385c 的首批 4 張卡（見 `test_first_four_match_origin_main_golden`）。
+_GOLDEN_10F385C = {
+    "margin": "6306261e4ef22d50adf63221f7178ca4dea2a09a1ca30f612bd3862e25c844a0",
+    "bias_240": "13492b2a500fc1e67bacfee820c14c5d0e94a190d255af196f261545a53325e9",
+    "m1b_m2_gap": "b0726ac01d187ef6647f5a87e20b97dc502ac79127d37ae6708251890c7643bc",
+    "ism_pmi": "6f4a0a50abae3854e86e5f5629fc22f457fdb6724ac400dc1867dc413391731f",
+}
+_GOLDEN_ROW = {
+    "margin": "↗ 上升（近 20 交易日 +9.9%，至 2026-01-21）",
+    "bias_240": "→ 持平（近 20 交易日 +0.5 個百分點，至 2026-01-21）",
+    "m1b_m2_gap": "無資料",
+    "ism_pmi": "↘ 下降（較上月 -2.0 點，至 2025-02-01）",
+}
 
 
 def _flat(tiles_by_bucket):
@@ -320,23 +406,42 @@ class TestRenderLive:
 
         return P, _build(_live_readout(), False), _build(_live_readout(), True)
 
-    def test_row_only_on_four_keys(self):
+    def test_row_on_every_live_or_degraded_card(self):
         P, _, with_ = self._both()
         assert len(with_) == 16
         has = {k.split(".", 1)[1] for k, t in with_.items()
                if any(f[0] == LAMP_DIRECTION_FACT_KEY for f in t.facts)}
-        assert has == set(LAMP_DIRECTION_KEYS)
+        # foreign_net 未接線 ⇒ 不出列；其餘 15 盞（live / degraded）都有
+        assert has == set(LAMP_DIRECTION_KEYS) - {"foreign_net"}
+        assert with_["detail.foreign_net"].card.state == P.UI_UNWIRED
         for k, t in with_.items():
             html = P.v2_card_html(t)
-            assert (_ROW_SPAN in html) == (k.split(".", 1)[1] in LAMP_DIRECTION_KEYS)
+            assert (_ROW_SPAN in html) == (k.split(".", 1)[1] in has)
 
-    def test_other_twelve_identical(self):
+    def test_unwired_card_identical(self):
         P, without, with_ = self._both()
-        others = [k for k in with_ if k.split(".", 1)[1] not in LAMP_DIRECTION_KEYS]
-        assert len(others) == 12
-        for k in others:
-            assert with_[k] == without[k]
-            assert P.v2_card_html(with_[k]) == P.v2_card_html(without[k])
+        k = "detail.foreign_net"
+        assert with_[k] == without[k]
+        assert P.v2_card_html(with_[k]) == P.v2_card_html(without[k])
+
+    def test_first_four_match_origin_main_golden(self):
+        # 首批 4 盞：與 origin/main 10f385c（擴充前）產出的卡面 HTML 黃金雜湊逐字相同。
+        # 黃金值取得方式（2026-09-26）：在 10f385c 以本檔 `_live_readout()` ＋
+        # `_first_four_directions()` 呼叫 `build_indicator_tiles` → `v2_card_html`，取 sha256。
+        # margin 的 hover `title` 含 "\n\n"（同日修的 HTML 區塊外洩 bug）：它的黃金值 ＝
+        # 10f385c 原字串**只把 title 屬性內的 "\n" 換成 "&#10;"** 後的 sha256
+        # （原始 10f385c 雜湊 0bc5bb1f…b7a678；卡片本體一個字元都不變）。
+        import hashlib
+
+        from src.ui.views import page_today as P
+
+        band_label, thr_text, _, l4_err = P._load_l4_labels()
+        kw = dict(band_label=band_label, thr_text=thr_text, l4_error=l4_err)
+        full = _flat(P.build_indicator_tiles(_live_readout(), directions=_directions(), **kw))
+        for key in _FIRST_FOUR:
+            html = P.v2_card_html(full[f"detail.{key}"])
+            assert hashlib.sha256(html.encode()).hexdigest() == _GOLDEN_10F385C[key], key
+            assert dict(full[f"detail.{key}"].facts)[LAMP_DIRECTION_FACT_KEY] == _GOLDEN_ROW[key]
 
     def test_band_level_state_unchanged(self):
         _, without, with_ = self._both()
@@ -348,7 +453,7 @@ class TestRenderLive:
 
     def test_position(self):
         P, _, with_ = self._both()
-        for key in LAMP_DIRECTION_KEYS:
+        for key in set(LAMP_DIRECTION_KEYS) - {"foreign_net"}:
             t = with_[f"detail.{key}"]
             state = t.card.state
             assert state in (P.UI_LIVE, P.UI_DEGRADED)
@@ -371,6 +476,11 @@ class TestRenderLive:
         assert txt["margin"].startswith("↗ 上升（近 20 交易日 +9.9%")
         assert txt["bias_240"].startswith("→ 持平（近 20 交易日 +0.5 個百分點")
         assert txt["ism_pmi"].startswith("↘ 下降（較上月 -2.0 點")
+        assert txt["vix"].startswith("↗ 上升（近 20 交易日 +5.0 點")
+        assert txt["adl"] == "無資料"
+        assert txt["foreign_net"] is None
+        for k in set(LAMP_DIRECTION_KEYS) - set(_REAL_KEYS) - {"foreign_net"}:
+            assert txt[k] == "無資料", k
 
 
 @pytest.mark.parametrize("factory", [_cold_readout, _failed_readout],
@@ -391,9 +501,11 @@ class TestRenderNotLive:
             assert P.v2_card_html(t) == P.v2_card_html(without[k])
 
 
-def test_direction_on_foreign_key_rejected():
+def test_direction_on_foreign_key_rejected(monkeypatch):
+    # 2026-09-26 起 16 盞全在 LAMP_DIRECTION_KEYS；守衛本身仍要在（把 keys 縮回首批驗證）
     from src.ui.views import page_today as P
 
+    monkeypatch.setattr(P, "LAMP_DIRECTION_KEYS", _FIRST_FOUR)
     with pytest.raises(ValueError):
         P.build_indicator_tile("vix", {}, requested=False, error="",
                                direction=compute_lamp_direction("m1b_m2_gap", None))
@@ -444,7 +556,7 @@ class TestErrorFormat:
 
     def test_error_unknown_key_raises(self):
         with pytest.raises(KeyError):
-            error_direction("vix", "RuntimeError")
+            error_direction("usdtwd", "RuntimeError")
 
 
 class TestLoaderFailLoud:
@@ -468,10 +580,12 @@ class TestLoaderFailLoud:
         assert "變化方向計算失敗" in capsys.readouterr().out      # log 仍在
         assert set(dirs) == set(LAMP_DIRECTION_KEYS)
         assert {k for k, d in dirs.items() if d.direction == "error"} == err_keys
-        # m1b 不讀 L3 ⇒ 任何 loader 失敗都仍是「無資料」
+        # m1b（與其餘 mode = none）不讀 L3 ⇒ 任何 loader 失敗都仍是「無資料」
         assert dirs["m1b_m2_gap"].direction == "nodata"
-        for k in set(LAMP_DIRECTION_KEYS) - err_keys - {"m1b_m2_gap"}:
+        for k in {"margin", "bias_240", "ism_pmi"} - err_keys:
             assert dirs[k].direction in ("up", "flat", "down")
+        for k in set(LAMP_DIRECTION_KEYS) - {"margin", "bias_240", "ism_pmi"}:
+            assert dirs[k].direction == "nodata", k       # session=None ⇒ vix/adl 也無資料
 
         from src.ui.views import page_today as P2
         band_label, thr_text, _, l4_err = P2._load_l4_labels()
@@ -484,11 +598,8 @@ class TestLoaderFailLoud:
             assert "upstream exploded" not in txt
             assert _ROW_SPAN in P2.v2_card_html(with_[f"detail.{key}"])
         assert _dir_text(with_, "m1b_m2_gap") == LAMP_DIRECTION_NODATA_TEXT
-        others = [k for k in with_ if k.split(".", 1)[1] not in LAMP_DIRECTION_KEYS]
-        assert len(others) == 12
-        for k in others:
-            assert with_[k] == without[k]
-            assert P2.v2_card_html(with_[k]) == P2.v2_card_html(without[k])
+        # 未接線的卡不受影響
+        assert with_["detail.foreign_net"] == without["detail.foreign_net"]
         # 燈號 / 等級不受影響
         for k in with_:
             a, b = with_[k], without[k]
@@ -540,8 +651,9 @@ class TestLoaderFailLoud:
         tiles = _flat(P.build_indicator_tiles(_live_readout(), band_label=band_label,
                                               thr_text=thr_text, l4_error=l4_err,
                                               directions=dirs))
-        for key in LAMP_DIRECTION_KEYS:
+        for key in set(LAMP_DIRECTION_KEYS) - {"foreign_net"}:
             assert _dir_text(tiles, key) == f"計算失敗（{LAMP_DIRECTION_MISSING_REASON}）"
+        assert _dir_text(tiles, "foreign_net") is None
 
 
 class TestMissingKey:
@@ -595,3 +707,190 @@ def test_not_live_never_shows_error_row(factory, dirs):
         assert all(f[0] != LAMP_DIRECTION_FACT_KEY for f in t.facts)
         assert t == without[k]
         assert P.v2_card_html(t) == P.v2_card_html(without[k])
+
+
+# ════════════════════════════════════════════════════════════════
+# 2026-09-26：vix / adl 序列取自本輪 session（經 L3 load_section_inputs）
+# ════════════════════════════════════════════════════════════════
+def _vix_block(values, current=None, dates=None):
+    import pandas as pd
+
+    dates = dates or [d.date().isoformat()
+                      for d in pd.bdate_range(end="2026-09-25", periods=len(values))]
+    return {"current": values[-1] if current is None else current,
+            "dates": dates, "values": list(values)}
+
+
+def _adl_df(ratios):
+    import pandas as pd
+
+    return pd.DataFrame({"date": pd.date_range("2026-07-01", periods=len(ratios), freq="B"),
+                         "ad_ratio": ratios})
+
+
+def _session(vix=None, adl=None):
+    s = {}
+    if vix is not None:
+        s["macro_info"] = {"vix": vix}
+    if adl is not None:
+        s["cl_data"] = {"adl": adl}
+    return s
+
+
+class TestSessionSeries:
+    def test_live_directions_from_session(self, monkeypatch):
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        dirs = P._load_lamp_directions(_session(
+            vix=_vix_block([20.0] * 40 + [26.0]),
+            adl=_adl_df([50.0] * 40 + [44.0])))
+        assert dirs["vix"].direction == "up"
+        assert math.isclose(dirs["vix"].delta, 6.0)            # 26 − 20（往前第 20 列）
+        assert dirs["vix"].as_of == "2026-09-25"
+        # adl 有乾淨序列也不出箭頭（單日估算無自相關）
+        assert dirs["adl"].direction == "nodata"
+
+    def test_session_none_or_empty_is_nodata(self, monkeypatch):
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        for sess in (None, {}):
+            dirs = P._load_lamp_directions(sess)
+            assert dirs["vix"].direction == "nodata"
+            assert dirs["adl"].direction == "nodata"
+
+    def test_vix_length_mismatch_is_nodata(self, monkeypatch, capsys):
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        blk = _vix_block([20.0] * 30)
+        blk["dates"] = blk["dates"][:-1]
+        dirs = P._load_lamp_directions(_session(vix=blk))
+        assert dirs["vix"].direction == "nodata"
+        assert "dates 29 筆 ≠ values 30 筆" in capsys.readouterr().out
+
+    def test_vix_series_not_matching_lamp_value_is_nodata(self, monkeypatch, capsys):
+        # 序列末值 ≠ 燈值 ⇒ 不是同一次抓取，⛔ 不拿來配
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        dirs = P._load_lamp_directions(_session(vix=_vix_block([20.0] * 30, current=31.0)))
+        assert dirs["vix"].direction == "nodata"
+        assert "不混抓取批次" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("bad", ["abc", None, [1]])
+    def test_malformed_vix_value_only_fails_vix(self, monkeypatch, capsys, bad):
+        # F2：一盞的值壞掉只讓那一盞計算失敗，⛔ 不連坐、⛔ 不補值
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch,
+                       chart=lambda: {"margin": _daily([100.0] * 20 + [109.9]),
+                                      "bias_240": _daily([5.0] * 20 + [5.5])},
+                       monthly=lambda: {"ism_pmi": _monthly([50.0, 52.0])})
+        blk = _vix_block([20.0] * 29 + [bad], current=20.0)
+        dirs = P._load_lamp_directions(_session(vix=blk, adl=_adl_df([50.0] * 30)))
+        assert "session 序列 vix" in capsys.readouterr().out
+        assert {k for k, d in dirs.items() if d.direction == "error"} == {"vix"}
+        assert dirs["vix"].delta is None
+        assert dirs["adl"].direction == "nodata"
+        assert dirs["margin"].direction == "up" and dirs["ism_pmi"].direction == "up"
+
+    def test_nan_vix_end_is_nodata_not_filled(self, monkeypatch):
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        dirs = P._load_lamp_directions(_session(
+            vix=_vix_block([20.0] * 30 + [float("nan")], current=float("nan"))))
+        assert dirs["vix"].direction == "nodata"
+
+    def test_session_read_failure_only_hits_session_keys(self, monkeypatch, capsys):
+        from src.services import section_inputs as SI
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch,
+                       chart=lambda: {"margin": _daily([100.0] * 20 + [109.9]),
+                                      "bias_240": _daily([5.0] * 20 + [5.5])},
+                       monthly=lambda: {"ism_pmi": _monthly([50.0, 52.0])})
+        monkeypatch.setattr(SI, "load_section_inputs", _boom)
+        dirs = P._load_lamp_directions({"macro_info": {}})
+        assert "session 序列" in capsys.readouterr().out
+        assert {k for k, d in dirs.items() if d.direction == "error"} == {"vix"}
+        assert dirs["adl"].direction == "nodata"
+        assert format_direction_text(dirs["vix"]) == "計算失敗（RuntimeError）"
+        assert dirs["margin"].direction == "up" and dirs["ism_pmi"].direction == "up"
+
+    def test_does_not_mutate_session(self, monkeypatch):
+        import copy
+
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        blk = _vix_block([20.0] * 30)
+        sess = _session(vix=blk)
+        before = copy.deepcopy(sess)
+        P._load_lamp_directions(sess)
+        assert sess == before
+
+    def test_render_page_passes_session(self):
+        # 呼叫點一定要把本輪 session 傳下去（否則 vix / adl 永遠是無資料）
+        import inspect
+
+        from src.ui.views import page_today as P
+
+        src = inspect.getsource(P.render_page_today)
+        assert "directions=_load_lamp_directions(_session)" in src
+
+    def test_live_card_texts_end_to_end(self, monkeypatch):
+        from src.ui.views import page_today as P
+
+        _patch_loaders(monkeypatch)
+        dirs = P._load_lamp_directions(_session(
+            vix=_vix_block([20.0] * 40 + [20.3]), adl=_adl_df([50.0] * 40 + [58.0])))
+        band_label, thr_text, _, l4_err = P._load_l4_labels()
+        tiles = _flat(P.build_indicator_tiles(_live_readout(), band_label=band_label,
+                                              thr_text=thr_text, l4_error=l4_err,
+                                              directions=dirs))
+        assert _dir_text(tiles, "vix").startswith("→ 持平（近 20 交易日 +0.3 點")
+        for k in ("adl", "dxy", "us10y", "jingqi", "fut_net", "health", "ndc_signal",
+                  "us_core_cpi", "tw_export", "news_systemic", "m1b_m2_gap"):
+            assert _dir_text(tiles, k) == "無資料", k
+        assert _dir_text(tiles, "foreign_net") is None
+
+
+# ════════════════════════════════════════════════════════════════
+# 2026-09-26：hover title 內的換行不得結束 HTML 區塊（margin degraded 卡外洩 bug）
+# ════════════════════════════════════════════════════════════════
+class TestHoverTitleNewline:
+    def _margin_html(self):
+        from src.ui.views import page_today as P
+
+        band_label, thr_text, _, l4_err = P._load_l4_labels()
+        tiles = _flat(P.build_indicator_tiles(_live_readout(), band_label=band_label,
+                                              thr_text=thr_text, l4_error=l4_err,
+                                              directions=_directions()))
+        t = tiles["detail.margin"]
+        assert t.card.state == P.UI_DEGRADED
+        assert "\n\n" in (t.card.note.why or "")          # 前提：why 真的含空行
+        return P.v2_card_html(t)
+
+    def test_title_has_no_raw_newline(self):
+        import re
+
+        html = self._margin_html()
+        m = re.match(r'<div title="([^"]*)">', html)
+        assert m, html[:80]
+        assert "\n" not in m.group(1)
+        assert "&#10;&#10;" in m.group(1)                   # 換行保留成字元參照，沒被吃掉
+
+    def test_single_html_block(self):
+        # CommonMark：HTML 區塊遇到空行即結束 ⇒ 整張卡不得含空行
+        html = self._margin_html()
+        assert "\n\n" not in html
+        assert not any(line.strip() == "" for line in html.split("\n")[1:-1])
+
+    def test_markdown_render_keeps_card_inside_block(self):
+        md = pytest.importorskip("markdown_it")
+        html = self._margin_html()
+        tokens = md.MarkdownIt("commonmark").parse(html)
+        assert [t.type for t in tokens] == ["html_block"]

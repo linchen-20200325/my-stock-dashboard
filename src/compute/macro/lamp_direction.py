@@ -108,7 +108,9 @@ def compute_lamp_direction(
     cfg = LAMP_DIRECTION_WINDOWS[key]          # 未知 key → KeyError（刻意）
     mode = cfg["mode"]
     if mode == DIRECTION_MODE_NONE:
-        return _nodata(cfg, f"{key}：歷史資料已知不可信，刻意不算方向")
+        # 2026-09-26：各盞「無資料」的原因不同（無歷史 / 量不到帶寬 / 會混源），
+        # 由 L0 `none_reason` 帶；沒填者沿用 m1b_m2_gap 原本那句（逐字不變）。
+        return _nodata(cfg, f"{key}：{cfg.get('none_reason') or '歷史資料已知不可信，刻意不算方向'}")
     if mode not in (DIRECTION_MODE_PCT, DIRECTION_MODE_DIFF):
         raise ValueError(f"{key}：未知的 mode {mode!r}")
     band = LAMP_DIRECTION_FLAT_BAND[key]       # 有算方向的 key 一定要有帶寬

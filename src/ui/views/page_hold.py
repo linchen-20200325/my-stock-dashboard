@@ -1289,11 +1289,22 @@ class SwitchReadout:
     stance: str = ""
     excluded_n: int = 0
     error: str = ""
+    #: 戰情表裡**整批抓取失敗**（`_detail.error`）的列代號 —— L3 `build_switch_advice`
+    #: 對它們是略過的（沒被判過換出／換入）。由 `load_switch()` 判一次，卡與 ⑦ 都讀這一份。
+    rows_failed: tuple[str, ...] = ()
 
     @property
     def scope_idle(self) -> bool:
         """同 `HoldingsReadout.scope_idle` —— 只做 idle 的**文案**分流。"""
         return bool(self.submitted and not self.requested)
+
+    @property
+    def failed(self) -> bool:
+        """這一輪換股建議**算不完整**（呼叫期例外，或有列整批抓取失敗）。
+
+        ④ 卡的紅態與 ⑦ 摘要「不帶換股段」都看這一個 —— 同一個判定，不各寫一份。
+        """
+        return bool(self.error or self.rows_failed)
 
     @property
     def has_advice(self) -> bool:
@@ -1330,22 +1341,42 @@ def load_switch(station: StationReadout, macro: MacroReadout,
             build_switch_advice,
             get_switch_in_candidates,
         )
-        _cands = get_switch_in_candidates(
-            regime=(macro.regime or None) if macro.loaded else None,
-            exclude=_exclude)
+        # strict=True（批次 2，2026-09-26）：選股池取不到時 L3 **拋例外**，不回 [] ——
+        # 否則「選股池沒拿到」會被畫成「這一輪沒有候選」（灰「有效的結果」）或
+        # 「換入 0 檔」（live）。先接住，因為換入**不一定**要用到選股池：
+        # 觀察清單有綠燈時 L3 根本不看 candidates（見下）。
+        _cands_err = ""
+        try:
+            _cands = get_switch_in_candidates(
+                regime=(macro.regime or None) if macro.loaded else None,
+                exclude=_exclude, strict=True)
+        except Exception as _ce:  # noqa: BLE001 — 下方依是否用到選股池決定轉紅
+            _cands, _cands_err = [], repr(_ce)
         _adv = build_switch_advice(list(station.rows), _macro_payload(macro), _cands)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] 換股建議失敗 → 轉紅態：{_e!r}")
         return SwitchReadout(requested=True, submitted=station.submitted,
                              error=repr(_e))
     _adv = _adv if isinstance(_adv, Mapping) else {}
+    # 換入真的走了選股池（`switch_in_src == "screener"`，由 L3 自己判，本檔不重寫規則）
+    # 而選股池那一次失敗了 → 這一半算不出來 → 整張卡轉紅（出處仍是 SRC_SWITCH）。
+    # 換出那一半已經算出來了 → 照樣帶著（facts 會列出來；有 error 時 AI 摘要不帶換股段）。
+    _in_failed = bool(_cands_err and _adv.get("switch_in_src") == "screener")
+    if _in_failed:
+        print(f"[views/page_hold] 換入選股池失敗 → 轉紅態：{_cands_err}")
+    elif _cands_err:
+        print(f"[views/page_hold] 換入選股池失敗（本輪換入取自觀察清單，未用到選股池）：{_cands_err}")
     return SwitchReadout(
         requested=True, submitted=station.submitted,
         switch_out=tuple(dict(_d) for _d in (_adv.get("switch_out") or ())),
-        switch_in=tuple(dict(_d) for _d in (_adv.get("switch_in") or ())),
-        switch_in_src=str(_adv.get("switch_in_src") or ""),
+        switch_in=() if _in_failed else tuple(
+            dict(_d) for _d in (_adv.get("switch_in") or ())),
+        switch_in_src="" if _in_failed else str(_adv.get("switch_in_src") or ""),
         stance=str(_adv.get("stance") or ""),
-        excluded_n=len(_exclude))
+        excluded_n=len(_exclude),
+        error=_cands_err if _in_failed else "",
+        rows_failed=tuple(str(_r.get("代號", "")) for _r in station.rows
+                          if (_r.get("_detail") or {}).get("error")))
 
 
 def _macro_payload(macro: MacroReadout) -> dict:
@@ -1933,10 +1964,20 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
       · 「有持股，但這一輪沒有一檔要換」→ 那是**好消息**，要你去看可信度。
     只看 `switch` 的話兩者都是「沒有建議換股」，等於對其中一半的人指錯路。
     """
+    # 有列**整批抓取失敗**（`_detail.error`）→ L3 `build_switch_advice` 對它們是略過的：
+    # 持有的那幾檔沒被判過能不能換出、觀察清單的那幾檔沒被判過能不能換入。
+    # 這一輪的「沒有建議換股」／「換出 N 檔」因此都**不是**有效結果（批次 2，2026-09-26）。
+    # 同 ⑤ 衛星停利（批次 1）：走 L0 `MISS_FETCH_FAILED`，由 `FAILED_REASONS` 決定升紅。
+    # 只在沒有例外時才看（有例外走既有那一則）。
+    # ⚠️ 有抓取失敗的列時 `has_value` 一律視為 False —— 「換出 1 檔」旁邊還有一檔
+    #    根本沒判過，那不是完整的建議；已算出的換出／換入照樣列在 facts（不藏）。
+    # 判定本身在 `load_switch()`（`SwitchReadout.rows_failed`），本卡只讀。
+    _rows_failed = () if switch.error else switch.rows_failed
     _state = classify_ui_state(
         requested=switch.requested,
         error=switch.error or None,
-        has_value=switch.has_advice)
+        has_value=switch.has_advice and not _rows_failed,
+        reason=MISS_FETCH_FAILED if _rows_failed else "")
     _STANCE = {"defensive": "轉守 → 換入從嚴（少給候選）",
                "aggressive": "偏多 → 換入給滿",
                "neutral": "中性 → 換入給滿",
@@ -1976,11 +2017,21 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
     if _state == UI_IDLE:
         _note = _idle_note(switch.scope_idle)
     elif _state == UI_FAILED:
-        _note = Note(now=SWITCH_FAILED_NOW,
-                     why=_error_why(SRC_SWITCH, switch.error),
-                     where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者；"
-                            "換出那一半只需要你的持股，換入那一半還要選股池，"
-                            "兩者任一失敗都會走到這裡"))
+        # 兩種失敗共用既有的 now（一字未改）。
+        # 呼叫期例外 → 既有 why / where；
+        # 整批抓取失敗的列 → 同 ⑤ 停利卡：why 摘自 L0 `MISS_TEXT`、where 用 `STATION_ERROR_WHERE`
+        #   （原因多半是代號或來源，指路是確認網路／授權、看資料體檢 —— 不是「沒有出口」）。
+        if switch.error:
+            _note = Note(now=SWITCH_FAILED_NOW,
+                         why=_error_why(SRC_SWITCH, switch.error),
+                         where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者；"
+                                "換出那一半只需要你的持股，換入那一半還要選股池，"
+                                "兩者任一失敗都會走到這裡"))
+        else:
+            _note = Note(now=SWITCH_FAILED_NOW,
+                         why=(f"{'、'.join(_rows_failed)}："
+                              f"{MISS_TEXT[MISS_FETCH_FAILED].removeprefix('這一檔')}"),
+                         where=STATION_ERROR_WHERE)
     elif not station.has_rows:
         # 沒有持股 ≠ 沒有一檔要換。三種「沒有」在這裡照樣不可以混。
         _note = _station_note(station, now=SWITCH_NO_HOLDINGS_NOW,
@@ -3128,7 +3179,8 @@ def _switch_payload(switch: SwitchReadout) -> dict | None:
     把 L3 的 dict 拆成具名欄位（見該類別），這裡照 `_macro_payload()` 的先例
     再包回去。**只重組已經拿到的欄位，不新增任何一個數字。**
     """
-    if switch.error or not switch.has_advice:
+    # `failed` 與 ④ 卡轉紅是同一個判定（含「有列整批抓取失敗」—— 那一輪的換出／換入不完整）。
+    if switch.failed or not switch.has_advice:
         return None
     return {"switch_out": [dict(_d) for _d in switch.switch_out],
             "switch_in": [dict(_d) for _d in switch.switch_in],
@@ -3660,8 +3712,10 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            None, "上游這一輪沒有回最新收盤。本站不拿舊值或 0 頂替",
            "稍後" + _V2_PRESS_RUN + "再試一次"))]
     # ── ④ 換股建議 ＋ 總經位階 ────────────────────────────────────
+    # 兩個候選：換股 L3 拋例外（既有）／有列整批抓取失敗（沿用 ⑤ 停利卡同一句短句）。
     + [_v2_rows_for("hold.switch", SWITCH_FAILED_NOW, (
-           None, _v2_raised(SRC_SWITCH), _V2_NO_EXIT_REPORT)),
+           None, (_v2_raised(SRC_SWITCH), "整批抓取失敗 —— 看該列的錯誤訊息"),
+           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.switch", SWITCH_NO_HOLDINGS_NOW, _V2_STATION_ERROR),
        _v2_rows_for("hold.switch", SWITCH_EMPTY_NOW, (
            None, "你持有的部位裡沒有健檢紅燈可換出" + V2_EXCERPT_GAP

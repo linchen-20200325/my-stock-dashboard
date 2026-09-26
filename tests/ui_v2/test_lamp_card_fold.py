@@ -92,10 +92,8 @@ def _readout(state: str = "ok", value_of=lambda s: float(s.yellow)):
 
 
 def _live_tiles():
-    dirs = {"margin": compute_lamp_direction("margin", None),
-            "bias_240": compute_lamp_direction("bias_240", None),
-            "ism_pmi": compute_lamp_direction("ism_pmi", None),
-            "m1b_m2_gap": compute_lamp_direction("m1b_m2_gap", None)}
+    # 2026-09-26：16 盞都有「變化方向」列（沒歷史的顯示無資料）
+    dirs = {k: compute_lamp_direction(k, None) for k in P.LAMP_DIRECTION_KEYS}
     return _flat(P.build_indicator_tiles(_readout(), directions=dirs, **_kw()))
 
 
@@ -134,7 +132,8 @@ class TestLiveFold:
             assert _span(k) not in outside, k
         # 卡面保留：門檻帶（＋有方向的四盞：變化方向）
         assert _span("門檻帶") in outside and _span("門檻帶") not in inside
-        if key.split(".", 1)[1] in P.LAMP_DIRECTION_KEYS:
+        if (key.split(".", 1)[1] in P.LAMP_DIRECTION_KEYS
+                and tile.card.state in (P.UI_LIVE, P.UI_DEGRADED)):
             assert _span(P.LAMP_DIRECTION_FACT_KEY) in outside
             assert _span(P.LAMP_DIRECTION_FACT_KEY) not in inside
 
