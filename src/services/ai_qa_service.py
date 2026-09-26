@@ -454,6 +454,70 @@ def _parts(resp: dict) -> list:
         return []
 
 
+def _reply_failure(resp) -> Optional[str]:
+    """一份**沒有文字**的 Gemini 回覆，是「模型真的沒話說」還是「被擋 / 格式壞掉」。
+
+    回 `None` ＝ 格式完整、**明講 `finishReason == "STOP"`** —— 這才是**有效的空回答**；
+    `content` / `content.parts` **缺席也算**（Gemini REST 會把空 list / 空物件整個省略，
+    自然結束的空回答常長成 `{"content":{"role":"model"},"finishReason":"STOP"}` —— 那不是故障）。
+    其餘一律回一段**上游原文**當證據（⛔ 不自己寫一句解釋）：
+      · `promptFeedback.blockReason`（問題本身被擋，通常連 candidates 都沒有）；
+      · `candidates[0].finishReason` 不是 `STOP`（SAFETY / RECITATION / MAX_TOKENS /
+        MALFORMED_FUNCTION_CALL / OTHER …：回答被擋或被截斷成空）；
+      · `finishReason` **缺席**（＝ FINISH_REASON_UNSPECIFIED，模型沒有說它停了）、
+        或結構缺件／型別不對（沒有 / 空的 candidates、候選不是物件、content 不是物件、
+        parts 不是 list）→ `_shape_evidence`：出事那一層**實際收到的形狀**。
+
+    ⚠️ **只給 `run_agent(fail_on_blocked_reply=True)` 用，`_parts()` 一字未動**：
+    `_parts()` 把上述三種都吞成 `[]`（「📖 憑什麼」頁 AI 問答卡因此把被擋畫成
+    「有效結果」）；它另外還被 `_gemini_text()`（分析師 panel）用，本批 ⛔ 不動那些呼叫端。
+    """
+    if not isinstance(resp, dict):
+        return _shape_evidence("", resp)
+    _pf = resp.get("promptFeedback")
+    if isinstance(_pf, dict) and _pf.get("blockReason"):
+        return json.dumps({"promptFeedback": {k: _pf[k] for k in ("blockReason", "blockReasonMessage")
+                                              if k in _pf}},
+                          ensure_ascii=False, default=str)
+    if "candidates" not in resp:
+        return _shape_evidence("", resp)
+    _cands = resp["candidates"]
+    if not isinstance(_cands, list) or not _cands:
+        return _shape_evidence("candidates", _cands)
+    _cand = _cands[0]
+    if not isinstance(_cand, dict):
+        return _shape_evidence("candidates[0]", _cand)
+    _fr = _cand.get("finishReason")
+    if _fr and _fr != "STOP":
+        return json.dumps({k: _cand[k] for k in ("finishReason", "finishMessage") if k in _cand},
+                          ensure_ascii=False, default=str)
+    if _fr != "STOP":
+        return _shape_evidence("candidates[0]", _cand)
+    _c = _cand.get("content", {})
+    if not isinstance(_c, dict):
+        return _shape_evidence("candidates[0].content", _c)
+    _p = _c.get("parts", [])
+    if not isinstance(_p, list):
+        return _shape_evidence("candidates[0].content.parts", _p)
+    return None
+
+
+def _shape_evidence(path: str, node) -> str:
+    """`_reply_failure` 的結構證據：出事那一層（`path` ＝ 上游 JSON 欄位路徑，根層留空）**實際收到什麼**。
+
+    物件列成 `{key: 型別名}`（空物件 `{}`，⛔ 不帶內容）；`null` / 空值 / 數字照原值；
+    其餘（非空 list、字串）只列型別名 —— ⛔ 不把一整包上游內容倒進錯誤訊息。
+    全部是上游收到的東西，⛔ 沒有一句自寫的解釋。
+    """
+    if isinstance(node, dict):
+        _v = {k: type(node[k]).__name__ for k in sorted(node)}
+    elif not node or isinstance(node, (bool, int, float)):
+        _v = node
+    else:
+        _v = type(node).__name__
+    return json.dumps({path: _v} if path else _v, ensure_ascii=False, default=str)
+
+
 # ── 錯誤訊息金鑰洗白 + Gemini 錯誤友善化(v19.128 修 429 錯誤把 ?key=API_KEY 印到 UI)──
 # requests 的 HTTPError str 含完整 URL(含 ?key=<GEMINI_KEY>);直接把 exception 塞進 UI 錯誤字串
 # = 金鑰洩漏。任何要渲染給使用者的錯誤都必須先過 _scrub_secrets。
@@ -692,7 +756,16 @@ def _history_to_contents(history: Optional[list], max_turns: int = 8) -> list:
 
 def run_agent(question: str, history: Optional[list] = None, *, api_key: Optional[str] = None,
               gemini_http: Optional[Callable[[dict], dict]] = None, tools: Optional[dict] = None,
-              model: str = DEFAULT_MODEL, max_rounds: int = 4) -> QAResult:
+              model: str = DEFAULT_MODEL, max_rounds: int = 4,
+              fail_on_blocked_reply: bool = False) -> QAResult:
+    """自由問答(tool-calling 迴圈)。
+
+    fail_on_blocked_reply:
+        True → 最後一輪**沒有文字**且回覆被擋 / 格式壞掉(判定見 `_reply_failure`)時回
+        `ok=False` ＋ 上游原文,⛔ 不再回 `ok=True` ＋ 空字串冒充「模型沒話說」(§1)。
+        格式完整、自然結束的空回答照舊 `ok=True, text=""`;有文字的回答一律不受影響。
+        預設 False = 本參數出現之前的行為,一個 byte 不差(🧬 AI 問答舊分頁 `tab_ai_chat` 不傳)。
+    """
     tools = tools if tools is not None else REAL_TOOLS
     http = gemini_http or _make_default_http(api_key or "", model)
     contents = _history_to_contents(history) + [{"role": "user", "parts": [{"text": question}]}]
@@ -716,6 +789,12 @@ def run_agent(question: str, history: Optional[list] = None, *, api_key: Optiona
             contents.append({"role": "user", "parts": rparts})
             continue
         text = "".join(p.get("text", "") for p in parts if isinstance(p, dict) and "text" in p).strip()
+        if fail_on_blocked_reply and not text:
+            _why = _reply_failure(resp)
+            if _why is not None:
+                _why = _scrub_secrets(_why)
+                print(f"[ai_qa run_agent] 空回覆且被擋/格式異常 → ok=False:{_why}")
+                return QAResult(ok=False, error=f"Gemini 呼叫失敗:{_why}", model=model, tool_calls=tool_calls)
         return QAResult(ok=True, text=text, model=model, tool_calls=tool_calls)
     return QAResult(ok=True, text="(已達最大工具呼叫輪數;請看下方工具結果。)", model=model, tool_calls=tool_calls)
 
