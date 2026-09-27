@@ -249,6 +249,15 @@ def load_macro_state(state_file_path: str = "macro_state.json") -> dict:
     `exposure_limit_pct` 契約（v19.171）：檔內有值 → int；**缺 key → None**，
     語意是「本次沒有硬否決天花板」，而**不是**「天花板 = 0%」。
     """
+    return _load_macro_state_checked(state_file_path)[0]
+
+
+def _load_macro_state_checked(state_file_path: str = "macro_state.json"):
+    """`load_macro_state` 的本體：回 (state, 讀檔/解析例外或 None)。
+
+    B6-r5(2026-09-27):讀檔／JSON 失敗時 `load_macro_state` 降級成 `_DEFAULT_STATE`
+    (行為不變),但 strict 呼叫端要的是**原始例外**,不是降級後的「系統異常」。
+    """
     try:
         with open(state_file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -264,9 +273,9 @@ def load_macro_state(state_file_path: str = "macro_state.json") -> dict:
         _exposure_raw = data.get("exposure_limit_pct")
         data["exposure_limit_pct"] = (
             int(_exposure_raw) if _exposure_raw is not None else None)
-        return data
-    except Exception:
-        return _DEFAULT_STATE.copy()
+        return data, None
+    except Exception as _e:  # noqa: BLE001 — 降級同修前;例外交給 strict 呼叫端
+        return _DEFAULT_STATE.copy(), _e
 
 
 # ── ① 總經→選股 接線（v19.148）：canonical macro_state 契約 ──────────────
@@ -365,8 +374,13 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     from shared import regime_arbiter as _RA
 
     _wr = warroom_summary or {}
+    _read_exc = None   # B6-r5:只在 strict 取原始讀檔／解析例外
     try:
-        _file = load_macro_state(state_file_path) or {}
+        if strict:
+            _file, _read_exc = _load_macro_state_checked(state_file_path)
+            _file = _file or {}
+        else:
+            _file = load_macro_state(state_file_path) or {}
     except Exception:  # noqa: BLE001 — 檔讀不到當未評估,不炸
         _file = {}
 
@@ -376,10 +390,14 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     _wr_ok = bool(_wr) and _is_finite_number(_wr.get("health_score"))
     _file_ok = bool(_file) and _file.get("market_regime") not in (None, "系統異常")
     _is_loaded = _wr_ok or _file_ok
+    # B6-r5:讀檔／JSON 失敗 → 帶原始例外 repr(檔名＋例外),不帶降級後的「系統異常」;
+    # 讀得出來但內容不可用(Fail-safe／缺鍵)→ 同修前帶 market_regime。
+    _strict_detail = (
+        f"{os.path.basename(state_file_path)}: "
+        + (repr(_read_exc) if _read_exc is not None
+           else f"market_regime={_file.get('market_regime')!r}"))
     if strict and not _is_loaded and os.path.exists(state_file_path):
-        raise RuntimeError(
-            f"{os.path.basename(state_file_path)}: "
-            f"market_regime={_file.get('market_regime')!r}")
+        raise RuntimeError(_strict_detail)
 
     # B6-r4（加性）：strict ＋ warroom 可用 ＋ 檔**存在**卻不可用 → 位階照算（warroom 撐得住），
     # 但「macro_state 曝險上限」那條輸入是**讀壞了**、不是「本次沒有天花板」。
@@ -387,8 +405,7 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     # 檔不存在、檔可用 → 一個鍵都不多（逐位元組同修前）。
     _file_error = ""
     if strict and _wr_ok and not _file_ok and os.path.exists(state_file_path):
-        _file_error = (f"{os.path.basename(state_file_path)}: "
-                       f"market_regime={_file.get('market_regime')!r}")
+        _file_error = _strict_detail
 
     _health = _wr.get("health_score") if _wr_ok else None
     _exposure = _file.get("exposure_limit_pct") if _file_ok else None

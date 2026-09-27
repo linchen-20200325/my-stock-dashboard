@@ -55,6 +55,7 @@ from shared.signal_thresholds import (  # v18.242 W3b SSOT consume
 )
 from shared.data_categories import CAT_US_MACRO  # FE-20:@monitored category SSOT
 from shared.fetch_monitor import monitored  # v19.96 批次4 Item1:fetcher 自我登錄
+from shared.fail_cooldown import FAIL_COOLDOWN_SEC as _FAIL_COOLDOWN_SEC  # Q2-r2 2026-09-27
 
 __version__ = "1.0.0"
 
@@ -425,6 +426,11 @@ _YF_RANGE_TO_DAYS = {
 }
 _YF_CLOSE_CACHE: dict[tuple[str, str], tuple[float, pd.Series]] = {}
 _YF_CLOSE_TTL = 3600.0  # 1hr，與 st.cache_data 對齊
+#: Q2-r2(2026-09-27,§1.A-3):Yahoo 回 200 但收盤全 null(dropna 後空)的退避紀錄。
+#: 值 = 失敗時點;`_FAIL_COOLDOWN_SEC` 秒內同一鍵不重打,之後重抓;成功即清。
+#: 刻意與 `_YF_CLOSE_CACHE` 分開 —— 失敗**不入** 1hr 成功快取。名稱以 `_CACHE` 結尾,
+#: 讓 tests/conftest 的 module-cache 清空 fixture 一併清掉。
+_YF_CLOSE_EMPTY_FAIL_CACHE: dict[tuple[str, str], float] = {}
 
 
 def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
@@ -438,8 +444,12 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
     now = _time.time()
     with _YF_CLOSE_CACHE_LOCK:   # S9 v19.78
         cached = _YF_CLOSE_CACHE.get(key)
+        _empty_at = _YF_CLOSE_EMPTY_FAIL_CACHE.get(key)
     if cached is not None and (now - cached[0]) < _YF_CLOSE_TTL:
         return cached[1].copy()
+    if _empty_at is not None and (now - _empty_at) < _FAIL_COOLDOWN_SEC:
+        # Q2-r2:全 null 失敗的冷卻期內不重打上游,回同形空 Series(與修前失敗回傳一致)
+        return pd.Series(dtype=float, name=ticker)
 
     url = f"{YF_CHART_BASE}/{ticker}"
     r = fetch_url(
@@ -456,6 +466,14 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
         close = result["indicators"]["quote"][0]["close"]
         s = pd.Series(close, index=pd.to_datetime(ts, unit="s"), dtype=float).dropna()
         s.name = ticker
+        if s.empty:
+            # Q2-r2(2026-09-27,§1.A-3(a)):HTTP 200 但收盤全 null → 等同抓取失敗,
+            # **不入** 1hr 成功快取(修前:空序列被快取整個 TTL,來源恢復後仍空 1 小時);
+            # 記退避(§1.A-3(b)),冷卻期過後重抓。回傳形狀同修前。
+            print(f"[macro_core/yf] {ticker} 收盤全為空值(不快取,冷卻 {_FAIL_COOLDOWN_SEC:.0f}s)")
+            with _YF_CLOSE_CACHE_LOCK:
+                _YF_CLOSE_EMPTY_FAIL_CACHE[key] = now
+            return pd.Series(dtype=float, name=ticker)
         # v18.246 S-PROV-1 phase 2:provenance via Series.attrs(§2.2)
         # Series 無 column 概念,改用 pandas 內建 attrs dict 承載血緣。
         # caller 不存取 attrs 時無感;需要追溯時 s.attrs["source"] / s.attrs["fetched_at"]。
@@ -463,6 +481,7 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
         s.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
         with _YF_CLOSE_CACHE_LOCK:   # S9 v19.78
             _YF_CLOSE_CACHE[key] = (now, s.copy())
+            _YF_CLOSE_EMPTY_FAIL_CACHE.pop(key, None)
         return s
     except Exception as e:
         print(f"[macro_core/yf] {ticker} 解析失敗: {e}")
