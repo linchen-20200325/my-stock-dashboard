@@ -48,6 +48,7 @@ from __future__ import annotations
 import datetime as _dt
 
 import streamlit as st
+from shared.secret_scrub import scrub_secrets  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑（HTML 欄位：先洗再截，不做 Markdown 跳脫）
 
 # 色票走 shared.colors SSOT(L0)。原本本檔內聯的 #3fb950/#d29922/#f85149/#6e7681
 # 是 v19.68 前的 GitHub 舊色,全站早已改 Tailwind,只有這張表沒跟上 → 同一個
@@ -557,7 +558,7 @@ def compute_tab_coverage(state: dict | None = None,
         # D-5:tab_stock 無條件寫 t2_data(含 err),失敗時 dict 仍非空 →
         #      原本照樣 🟢「已載入(28 欄)」。抓取失敗必須看起來就是失敗。
         _e2, _ratio2 = "🔴", "抓取失敗"
-        _detail2 = f"❌ {_t2.get('sid', '?')} 價格抓取失敗：{str(_t2_err)[:70]}"
+        _detail2 = f"❌ {_t2.get('sid', '?')} 價格抓取失敗：{scrub_secrets(_t2_err)[:70]}"
     elif not _has_value(_t2_df):
         _e2, _ratio2 = "🔴", "無 K 線"
         _detail2 = ("個股 dict 已寫入但價格序列為空 —— 技術指標 / 健康評分全部"
@@ -672,7 +673,7 @@ def compute_tab_coverage(state: dict | None = None,
     if _etf_loaded and _err_nav:
         # NAV 抓不到 = 折溢價整段不可信(v18.442 假折溢價事故的入口),不得純綠燈
         _e4 = downgrade_to_warn(_e4)
-        _detail4 += f" ｜ ⚠️ NAV 缺:{str(_err_nav)[:50]}"
+        _detail4 += f" ｜ ⚠️ NAV 缺:{scrub_secrets(_err_nav)[:50]}"
     # D-4:nav_date **巢狀在 premium 內**,原本讀 top-level `nav_date` → 永遠 ⬜。
     _a4, _lag4, _rsn4 = _asof_of_mapping(_e1d, _ASOF_PATHS_ETF,
                                          tab="ETF etf_single_data", today=today)

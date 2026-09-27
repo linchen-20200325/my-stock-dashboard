@@ -17,6 +17,7 @@ import datetime
 
 import plotly.graph_objects as go
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from src.ui.render import STRATEGY_TECHNICAL, plot_combined_chart, strategy_conclusion  # v19.174 去識別化
@@ -113,7 +114,7 @@ def render_kline_chart_section(sid2: str, name2: str, df2, price2,
                                 'modeBarButtonsToRemove': ['lasso2d', 'select2d']})
     else:
         if t2d.get('err'):
-            st.error(f'❌ {t2d["err"]}')
+            st.error(f'❌ {scrub_md(t2d["err"])}')
     # ── K線動態趨勢建議(SSOT: tab_helpers.classify_trend_4tier,組合 Tab 共用)──
     # D1 v19.185(§1):顯式初始化。下方結論條原本用 `'_trend_msg' in dir()` 判斷
     # 「有沒有算過」—— 但 dir() 查的是**當前作用域現有哪些名字**,而非本次是否賦值。

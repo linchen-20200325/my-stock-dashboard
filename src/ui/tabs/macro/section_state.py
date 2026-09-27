@@ -12,6 +12,7 @@ closure params(4 explicit pass):
 from __future__ import annotations
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.calc_helpers import calc_bias_pct  # R-CALC-3 v18.412
 from shared.colors import (  # noqa: F401
@@ -481,7 +482,7 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
                         _twd_df, FINMIND_TOKEN, key_prefix="tab_macro_hm",
                         requested=_requested)
                 except Exception as _hme:
-                    st.error(f"熱錢監測渲染失敗：[{type(_hme).__name__}] {_hme}")
+                    st.error(f"熱錢監測渲染失敗：[{type(_hme).__name__}] {scrub_md(_hme)}")
     
     elif not cd:
         # ── v3 §02「介面狀態嚴格分離」(2026-08-27) ───────────────────────────

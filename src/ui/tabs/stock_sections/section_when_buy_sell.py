@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import plotly.graph_objects as go
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.signal_thresholds import (
@@ -185,7 +186,7 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
                 f'三維計分(利空新聞為 Gemini 情緒判讀,6h 快取);下方為各策略詳細訊號</div>'
                 f'</div>', unsafe_allow_html=True)
         except Exception as _ex_err:
-            st.caption(f'⚪ 出場點綜合提示暫不可用：{_ex_err}')
+            st.caption(f'⚪ 出場點綜合提示暫不可用：{scrub_md(_ex_err)}')
 
         # ── 💰 總資金輸入（算「建議買幾張」用；session 記住，跨股共用）──────
         # 斷鏈② 接線 v19.146：把已寫好但零呼叫的 calculate_position_size 接進 UI。
@@ -398,7 +399,7 @@ def render_when_buy_sell_section(sid2: str, name2: str, df2, bb2, k2, d2,
             st.plotly_chart(_fig_kl, use_container_width=True,
                             config={'displayModeBar': False})
         except Exception as _kl_err:
-            st.caption(f'⚠️ K 線繪製失敗：{_kl_err}')
+            st.caption(f'⚠️ K 線繪製失敗：{scrub_md(_kl_err)}')
 
     else:
         st.info('載入個股資料後顯示進出場訊號')

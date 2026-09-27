@@ -17,6 +17,7 @@ AI 摘要實際讀 `_xsec["con20"/"cty20"/"sig20"]`(_precompute_xsec 預算),
 from __future__ import annotations
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.colors import TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.stock_buckets import section_header_html
@@ -39,7 +40,7 @@ def render_chips_20d_section(df2, sec_lv_chips: dict) -> None:
                '負值＝倒貨；延續性＝最近多少比例的交易日持續買超。資料直接取自下方 K 線的三大法人/成交量。')
     _chip20 = analyze_20d_chips_from_df(df2)
     if _chip20.get('error'):
-        st.caption(f'⚫ 籌碼集中度取得失敗：{_chip20["error"]}')
+        st.caption(f'⚫ 籌碼集中度取得失敗：{scrub_md(_chip20["error"])}')
         return
     _sig20  = _chip20['signal']
     _con20  = _chip20['concentration']   # % 集中度

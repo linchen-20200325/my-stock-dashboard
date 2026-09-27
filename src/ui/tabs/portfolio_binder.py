@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 # 貼 URL 解析用（與 app.py 側欄同一條正則 → 行為一致,§4.1）
 _SHEET_URL_RE = re.compile(r'/spreadsheets/d/([a-zA-Z0-9_-]+)')
@@ -113,7 +114,7 @@ def render_drive_picker(_gsp, *, key_prefix: str) -> None:
             st.success('已建立新 Sheet 並設為投組資料庫（ETF + 個股共用）。')
             st.rerun()
         except Exception as _e:  # noqa: BLE001 — 建立失敗誠實報
-            st.error(f'建立新 Sheet 失敗：{_e}')
+            st.error(f'建立新 Sheet 失敗：{scrub_md(_e)}')
 
     _sheets = st.session_state.get(f'{key_prefix}sheets')
     if _sheets is None:

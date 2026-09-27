@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 import pandas as pd
 
 # v18.426 Phase 2 Batch 3b:fetch_chip_concentration + 7 parsing helpers + 2 constants
@@ -133,7 +134,7 @@ def render_chip_radar(ticker: str = '') -> str:
     if _df is None or _df.empty:
         st.warning('⚠️ 無法解析籌碼資料，請確認目標網站結構或連線狀態')
         if _err:
-            st.caption(f'🛈 診斷訊息：{_err}')
+            st.caption(f'🛈 診斷訊息：{scrub_md(_err)}')
         if st.button('🗑️ 清快取重試', key='chip_radar_clear'):
             fetch_chip_concentration.clear()
             st.rerun()

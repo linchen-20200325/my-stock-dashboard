@@ -18,6 +18,7 @@ import datetime
 
 import pandas as pd
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from src.compute.scoring.scoring_helpers import health_grade
@@ -192,7 +193,7 @@ def render_macro_compass() -> None:
     # v19.170:抓取失敗要說出來(§1 Fail Loud) — 有 _err 就顯示原因,
     # 部分成功(有 data 也有 _err)同樣提示,避免誤以為畫面上的是完整資料。
     if _fetch_err:
-        st.warning(f'⚠️ 抓取失敗：{_fetch_err}，請稍後重試')
+        st.warning(f'⚠️ 抓取失敗：{scrub_md(_fetch_err)}，請稍後重試')
 
     if not _has_data:
         if not _fetch_err:

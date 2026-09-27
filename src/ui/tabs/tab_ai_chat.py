@@ -14,6 +14,7 @@ tab_ai_chat.py — AI 分析師 panel + 問答(L5 UI)
 import os
 
 import streamlit as st
+from shared.secret_md import scrub_md_mask  # SEC-3：錯誤字串上畫面前先洗（只跳脫遮罩，保留 L3 刻意的 **粗體**）
 
 try:
     from src.services.ai_qa_service import run_agent, summarize_tab
@@ -45,7 +46,7 @@ def _render_bundle(bundle: dict):
     for name, r in (bundle or {}).items():
         with st.expander(f"🔧 {name}", expanded=False):
             if not r.get("ok"):
-                st.error(r.get("error", "(缺資料)"))
+                st.error(scrub_md_mask(r.get("error", "(缺資料)")))
                 continue
             prov = r.get("provenance", {})
             cap = f"來源:{prov.get('source', '?')}　as_of:{prov.get('as_of', '?')}"
@@ -60,7 +61,7 @@ def _render_bundle(bundle: dict):
 def _render_panel(res):
     """渲染 panel 結果(分析師 → 辯論 → 風控 → 報告)。"""
     if not getattr(res, "ok", False):
-        st.error(getattr(res, "error", "(失敗)"))
+        st.error(scrub_md_mask(getattr(res, "error", "(失敗)")))
         _render_bundle(getattr(res, "data_bundle", {}))
         return
     _render_bundle(res.data_bundle)                      # 1) 權威數字
@@ -139,6 +140,6 @@ def render():
             body = (f"### 🧬 AI 解讀｜使用模型:{res.model}\n\n{_text}" if _text
                     else "🧬 AI 已完成工具查詢,但未產生文字解讀;請見上方工具結果。")
         else:
-            body = f"⚠️ {res.error}"
+            body = f"⚠️ {scrub_md_mask(res.error)}"
         st.markdown(body)
         st.session_state.ai_qa_history.append({"role": "assistant", "content": body})

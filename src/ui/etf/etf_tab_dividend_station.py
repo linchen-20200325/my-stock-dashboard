@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Callable
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared import dividend_station_thresholds as T
 from shared import station_specs as SS
@@ -216,9 +217,9 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
                         _rows, _macro, _cands)
                 except Exception as _se:  # noqa: BLE001 — 換股建議失敗不擋戰情表
                     st.session_state["_station_switch"] = None
-                    st.caption(f"（換股建議暫略：{type(_se).__name__}: {_se}）")
+                    st.caption(f"（換股建議暫略：{type(_se).__name__}: {scrub_md(_se)}）")
             except Exception as _e:  # noqa: BLE001 — 整批失敗誠實報,不假裝成功
-                st.error(f"戰情室運算失敗（Fail Loud）：{type(_e).__name__}: {_e}")
+                st.error(f"戰情室運算失敗（Fail Loud）：{type(_e).__name__}: {scrub_md(_e)}")
 
     # ── 3️⃣ 結果 ────────────────────────────────────────────────────────
     _rows = st.session_state.get("_station_rows")
@@ -276,13 +277,13 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
             from src.ui.etf.etf_tab_portfolio import render_etf_portfolio
             render_etf_portfolio(gemini_fn=gemini_fn)
         except Exception as _e_pf:  # noqa: BLE001 — §1 單區失敗不吃掉後面
-            st.error(f"組合深度分析載入失敗（Fail Loud）：{type(_e_pf).__name__}: {_e_pf}")
+            st.error(f"組合深度分析載入失敗（Fail Loud）：{type(_e_pf).__name__}: {scrub_md(_e_pf)}")
         st.markdown('<hr style="margin:24px 0;border-color:#30363d;">', unsafe_allow_html=True)
         try:
             from src.ui.tabs.grape_ladder import render_grape_ladder
             render_grape_ladder(gemini_fn=gemini_fn)
         except Exception as _e_gl:  # noqa: BLE001
-            st.error(f"葡萄串領息法載入失敗（Fail Loud）：{type(_e_gl).__name__}: {_e_gl}")
+            st.error(f"葡萄串領息法載入失敗（Fail Loud）：{type(_e_gl).__name__}: {scrub_md(_e_gl)}")
 
     # ── 6️⃣ AI 戰情總結（規則事實 always;AI 潤稿需金鑰;含換股建議）──────────
     _render_ai_summary(_rows, _vix, gemini_fn, _switch)
@@ -653,7 +654,7 @@ def _render_ai_summary(rows: list[dict], vix, gemini_fn: Callable[..., str] | No
                 st.session_state["_station_ai_text"] = build_ai_summary(
                     digest, gemini_fn, switch=switch)
         except Exception as _e:  # noqa: BLE001 — §1 AI 失敗誠實報,不回假摘要
-            st.error(f"AI 摘要失敗（Fail Loud）：{type(_e).__name__}: {_e}")
+            st.error(f"AI 摘要失敗（Fail Loud）：{type(_e).__name__}: {scrub_md(_e)}")
     _ai = st.session_state.get("_station_ai_text")
     if _ai:
         st.info(_ai)
@@ -679,7 +680,7 @@ def _load_holdings_from_portfolio() -> list[dict]:
         _etf_sid = _gsp._get_active_sheet_id()
     except Exception as _e:  # noqa: BLE001 — §1 不靜默:accessor 理應回 '' 不 raise,真炸也留痕
         _etf_sid = None
-        st.caption(f"（投資組合 Portfolio Sheet 判定略過：{type(_e).__name__}：{_e}）")
+        st.caption(f"（投資組合 Portfolio Sheet 判定略過：{type(_e).__name__}：{scrub_md(_e)}）")
     if _etf_sid:
         try:
             _names = _gsp.list_portfolios(sheet_id=_etf_sid)
@@ -700,13 +701,13 @@ def _load_holdings_from_portfolio() -> list[dict]:
                 _more = "；此 Sheet 有多本組合,只取第一本" if len(_names) > 1 else ""
                 st.caption(f"✅ 帶入 投資組合 Portfolio「{_names[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」
-            st.warning(f"投資組合 Portfolio讀取失敗：{type(_e).__name__}：{_e}")
+            st.warning(f"投資組合 Portfolio讀取失敗：{type(_e).__name__}：{scrub_md(_e)}")
     # 觀察清單 Watchlist（種類=個股,預設衛星）
     try:
         _stk_sid = _gsp._get_active_stock_sheet_id()
     except Exception as _e:  # noqa: BLE001 — §1 不靜默:同上,真炸也留痕
         _stk_sid = None
-        st.caption(f"（觀察清單 Watchlist Sheet 判定略過：{type(_e).__name__}：{_e}）")
+        st.caption(f"（觀察清單 Watchlist Sheet 判定略過：{type(_e).__name__}：{scrub_md(_e)}）")
     if _stk_sid:
         try:
             _snames = _gsp.list_stock_watchlists(sheet_id=_stk_sid)
@@ -726,7 +727,7 @@ def _load_holdings_from_portfolio() -> list[dict]:
                 _more = "；此 Sheet 有多份清單,只取第一份" if len(_snames) > 1 else ""
                 st.caption(f"✅ 帶入 觀察清單 Watchlist「{_snames[0]}」（{len(_out) - _n0} 檔）{_more}")
         except Exception as _e:  # noqa: BLE001 — §1 讀取失敗要看得見,不被誤當「沒持股」
-            st.warning(f"觀察清單 Watchlist讀取失敗：{type(_e).__name__}：{_e}")
+            st.warning(f"觀察清單 Watchlist讀取失敗：{type(_e).__name__}：{scrub_md(_e)}")
 
     # 補中文名（ETF→fetch_etf_zh_name、個股→get_stock_name;§1 抓不到留空不捏造）。
     # 讓預覽表 + 戰情表兩處都顯示名稱（原本兩處 name 都寫死空字串）。best-effort。

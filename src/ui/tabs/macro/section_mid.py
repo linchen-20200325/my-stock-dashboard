@@ -9,6 +9,7 @@ closure params(explicit pass):
 from __future__ import annotations
 
 import streamlit as st
+from shared.secret_scrub import scrub_secrets  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑（反引號內，不跳脫）
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
 from src.ui.render.macro_ui_components import section_header
@@ -283,11 +284,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             if _macro_errs:
                 st.markdown('- **各 fetcher 回報的錯誤碼**：')
                 for _ek, _ev in _macro_errs.items():
-                    st.markdown(f'  - **{_err_label_map.get(_ek, _ek)}**：`{_ev}`')
+                    st.markdown(f'  - **{_err_label_map.get(_ek, _ek)}**：`{scrub_secrets(_ev)}`')
     elif _macro_errs:
         with st.expander(f'🔍 部分指標載入失敗（{len(_macro_errs)} 項）— 點開看錯誤碼', expanded=False):
             for _ek, _ev in _macro_errs.items():
-                st.markdown(f'- **{_err_label_map.get(_ek, _ek)}**：`{_ev}`')
+                st.markdown(f'- **{_err_label_map.get(_ek, _ek)}**：`{scrub_secrets(_ev)}`')
             st.caption('💡 截圖此面板回報 → 可定位是 API timeout / proxy / FRED key / data source down')
     
     # ── 總經基本面否決檢查（v19.176 P0-D 正名，原名「v4.0 總經否決權」）──

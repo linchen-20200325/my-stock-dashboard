@@ -47,6 +47,7 @@ Stage 3：AI 綜合建議
 from __future__ import annotations
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.thresholds import YIELD_HIGH
 # F1 v19.184 §3.3：全台股基本面初篩的說明文字改吃同一份 SSOT（原手抄 50% / EPS>0 / 四項）
@@ -1304,4 +1305,4 @@ def _generate_ai_report(gemini_fn, qualified: list[dict], all_results: list[dict
         _r = gemini_fn(_prompt)
         return _r if _r else '⚠️ AI 回傳為空，請確認 GEMINI_API_KEY'
     except Exception as e:
-        return f'❌ AI 生成失敗：{type(e).__name__}: {e}'
+        return f'❌ AI 生成失敗：{type(e).__name__}: {scrub_md(e)}'

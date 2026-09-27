@@ -37,9 +37,17 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _SCAN_DIRS = ['src', 'shared']
 
 
+#: 根目錄的 Streamlit 入口（SEC-3 2026-09-26 納入：`app.py` 是腳本、無法 import，
+#: 漏 import 只有在該分支真的跑到時才會 NameError —— 例：刪掉 `scrub_md` 的 import，
+#: 分頁外殼的錯誤處理本身就會炸，把「隔離分頁例外」變成整頁崩潰）。
+_SCAN_ROOT_FILES = ['app.py']
+
+
 def _iter_py_files():
     for _d in _SCAN_DIRS:
         yield from (_REPO_ROOT / _d).rglob('*.py')
+    for _f in _SCAN_ROOT_FILES:
+        yield _REPO_ROOT / _f
 
 
 def _find_undefined_names(path: Path) -> list[str]:
@@ -75,6 +83,11 @@ def test_no_undefined_names_anywhere_in_src_or_shared():
 @pytest.mark.skipif(not _HAS_PYFLAKES, reason='pyflakes 未安裝(pip install pyflakes)')
 class TestSpecificRegressions:
     """逐一釘住這輪修復的 6 處,防止未來重構又漏改。"""
+
+    def test_app_py_is_scanned_and_clean(self):
+        """SEC-3：`app.py` 在掃描範圍內，且沒有 undefined name。"""
+        assert _REPO_ROOT / 'app.py' in set(_iter_py_files())
+        assert not _find_undefined_names(_REPO_ROOT / 'app.py')
 
     def test_section_357_valuation_clean(self):
         assert not _find_undefined_names(

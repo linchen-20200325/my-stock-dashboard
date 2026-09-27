@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 # FIX(§3.3 SSOT / CLAUDE.md V-SMART-CACHE-1):
 #   本檔原有 5 個 `@st.cache_data(ttl=<數字字面量>)`（1800/3600/3600/7200/86400），
@@ -136,7 +137,7 @@ def render_std_band_section(ticker: str | None = None, key_suffix: str = '') -> 
             try:
                 _df = _cached_price(_ticker)
             except Exception as _e:
-                st.error(f'價格資料載入失敗：{_e}')
+                st.error(f'價格資料載入失敗：{scrub_md(_e)}')
                 return
 
         if _df is None or _df.empty:
@@ -244,7 +245,7 @@ def render_std_band_section(ticker: str | None = None, key_suffix: str = '') -> 
         except ImportError:
             st.caption('⚠️ plotly 未安裝，跳過圖表')
         except Exception as _fe:
-            st.caption(f'圖表渲染失敗：{_fe}')
+            st.caption(f'圖表渲染失敗：{scrub_md(_fe)}')
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -296,7 +297,7 @@ def render_correlation_finder(ticker: str | None = None, key_suffix: str = '') -
             try:
                 _price_pivot = _cached_peer_prices(_universe_tuple)
             except Exception as _e:
-                st.error(f'批次價格資料載入失敗：{_e}')
+                st.error(f'批次價格資料載入失敗：{scrub_md(_e)}')
                 return
 
         if _price_pivot is None or _price_pivot.empty:
@@ -375,7 +376,7 @@ def _render_cat_diversifier_chart(cat_name: str, cdf, input_ticker: str) -> None
     except ImportError:
         pass
     except Exception as _fe:
-        st.caption(f'圖表渲染失敗：{_fe}')
+        st.caption(f'圖表渲染失敗：{scrub_md(_fe)}')
 
     # ⚠️ 價格 / 空頭相關警示(v19.63):分散指數是綜合的,可能掩蓋「價格其實高度同向」;
     # 且分散在**崩盤時常失效**(相關趨近 1)→ 用「空頭相關」揭穿假分散。
@@ -507,7 +508,7 @@ def render_333_section(ticker: str | None = None, key_suffix: str = '') -> None:
             try:
                 _price_df = _cached_price_long(_ticker)
             except Exception as _e:
-                st.error(f'價格資料載入失敗：{_e}')
+                st.error(f'價格資料載入失敗：{scrub_md(_e)}')
                 return
 
         if _price_df is None or _price_df.empty:
@@ -526,7 +527,7 @@ def render_333_section(ticker: str | None = None, key_suffix: str = '') -> None:
                 try:
                     _peer_prices = _cached_peer_prices(_universe_tuple)
                 except Exception as _e2:
-                    st.warning(f'同儕資料載入失敗（{_e2}），跳過 C3 排名')
+                    st.warning(f'同儕資料載入失敗（{scrub_md(_e2)}），跳過 C3 排名')
 
         # 計算
         with st.spinner('計算 3-3-3 指標中…'):
