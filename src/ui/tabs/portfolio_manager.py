@@ -15,6 +15,7 @@ try:
     import streamlit as st
 except ImportError:            # 純 .py 測試環境
     st = None                  # noqa: N816
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 
 # ── 純資料轉換(可單測;st 無關)──────────────────────────────────────────
@@ -166,7 +167,7 @@ def _render_etf_section(_gsp, pd) -> None:
     try:
         _names = _gsp.list_portfolios(sheet_id=sid)
     except Exception as _e:                        # §1 讀取失敗誠實報,不捏造清單
-        st.error(f"讀取投資組合清單失敗：{type(_e).__name__}：{_e}")
+        st.error(f"讀取投資組合清單失敗：{type(_e).__name__}：{scrub_md(_e)}")
         _sheet_api_error_hint(_e)
         return
 
@@ -223,7 +224,7 @@ def _render_etf_section(_gsp, pd) -> None:
             _n = _gsp.save_portfolio(_name, _rows, sheet_id=sid)
             st.success(f"已儲存「{_name}」共 {_n} 檔到你的 Google Sheet。")
         except Exception as _e:                    # ValueError(空名/無效) 等 → 誠實提示
-            st.warning(f"儲存失敗：{_e}")
+            st.warning(f"儲存失敗：{scrub_md(_e)}")
 
 
 def _render_stock_section(_gsp, pd) -> None:
@@ -235,7 +236,7 @@ def _render_stock_section(_gsp, pd) -> None:
     try:
         _names = _gsp.list_stock_watchlists(sheet_id=sid)
     except Exception as _e:
-        st.error(f"讀取觀察清單失敗：{type(_e).__name__}：{_e}")
+        st.error(f"讀取觀察清單失敗：{type(_e).__name__}：{scrub_md(_e)}")
         _sheet_api_error_hint(_e)
         return
 
@@ -288,4 +289,4 @@ def _render_stock_section(_gsp, pd) -> None:
                 _n = _gsp.save_stock_watchlist(_name, _codes, sheet_id=sid)
                 st.success(f"已儲存「{_name}」共 {_n} 檔到你的 Google Sheet。")
         except Exception as _e:
-            st.warning(f"儲存失敗：{_e}")
+            st.warning(f"儲存失敗：{scrub_md(_e)}")

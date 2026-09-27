@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import streamlit as st
+from shared.secret_scrub import scrub_secrets  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 # v18.406 R4:3 fetcher L3 wrapper(EX-PASSTHRU-1 Group A 升級觸發)。
 from src.services.etf_grp_compare_service import (
@@ -96,7 +97,7 @@ def _fetch_one_etf(ticker: str) -> dict:
                                      quality=_quality, tracking_error=_te, zh_name=_zh_name)
     except Exception as _e:
         _r = build_etf_score_row(ticker, None, None, None)
-        _r['error'] = f'{type(_e).__name__}: {str(_e)[:50]}'
+        _r['error'] = f'{type(_e).__name__}: {scrub_secrets(_e)[:50]}'
     # v18.356 PR-Q5b S-PROV-1 phase 19:aggregator 級 audit trail
     prov_log('_fetch_one_etf', 'etf_fetch(7-metrics aggregator)',
              f'dict:error={_r.get("error") or "OK"}', ticker=ticker)
@@ -149,7 +150,7 @@ def render_etf_grp_compare() -> None:
                     rows.append(_fut.result())
                 except Exception as _e:
                     rows.append({'ticker': _futs[_fut],
-                                 'error': f'{type(_e).__name__}: {str(_e)[:50]}'})
+                                 'error': f'{type(_e).__name__}: {scrub_secrets(_e)[:50]}'})
         prog.empty()
         # 維持輸入順序排列（as_completed 是完成順序）
         _order = {_t: _i for _i, _t in enumerate(tickers)}

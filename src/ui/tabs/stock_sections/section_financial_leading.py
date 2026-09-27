@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_YELLOW
 from shared.signal_thresholds import (
@@ -176,7 +177,7 @@ def render_financial_leading_section(sid2: str, cl2, cx2,
             # 顯示具體錯誤給使用者
             _err_src = (_cl_src2 + '/' + _cx_src2).strip('/')
             _err_msg = '; '.join(_fin_errs2) if _fin_errs2 else '抓取失敗'
-            st.error(f'❌ 財報資料抓取失敗 — 來源:{_err_src or "三源均未命中"} | 錯誤:{_err_msg}')
+            st.error(f'❌ 財報資料抓取失敗 — 來源:{_err_src or "三源均未命中"} | 錯誤:{scrub_md(_err_msg)}')
             st.caption('💡 可能原因：① FinMind Token 失效 ② MOPS 暫時無回應 ③ 個股無此財報')
         else:
             st.info('ℹ️ 查無揭露：服務業/軟體業通常無此數據，可跳過')

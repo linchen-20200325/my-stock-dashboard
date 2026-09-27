@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 
 def _show_threshold_status():
@@ -110,10 +111,10 @@ def render_calibration_panel():
                         build_report)
                     _df = fetch_twii_ohlcv(_range)
                 except ImportError as _e:
-                    st.error(f'匯入校準模組失敗：{_e}')
+                    st.error(f'匯入校準模組失敗：{scrub_md(_e)}')
                     return
                 except Exception as _e:
-                    st.error(f'抓 ^TWII 異常：{type(_e).__name__}: {_e}')
+                    st.error(f'抓 ^TWII 異常：{type(_e).__name__}: {scrub_md(_e)}')
                     return
 
             if _df is None or _df.empty:
@@ -132,7 +133,7 @@ def render_calibration_panel():
                         _metrics, _df,
                         mode='TWII-only (Streamlit Cloud 真資料)')
                 except Exception as _e:
-                    st.error(f'回測異常：{type(_e).__name__}: {_e}')
+                    st.error(f'回測異常：{type(_e).__name__}: {scrub_md(_e)}')
                     return
 
             _ts = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.colors import TRAFFIC_NEUTRAL
 
@@ -131,13 +132,13 @@ def _render_global_risk_bucket(fred_api_key: str = "",
     try:
         from src.compute.risk import detect_risk_radar, summarize_radar
     except Exception as _e_imp:
-        st.warning(f'⚠️ 風險雷達模組載入失敗：{_e_imp}')
+        st.warning(f'⚠️ 風險雷達模組載入失敗：{scrub_md(_e_imp)}')
         return
     try:
         _radar = detect_risk_radar(fred_api_key)
         _rs = summarize_radar(_radar)
     except Exception as _e_rd:
-        st.warning(f'⚠️ 風險雷達抓取失敗：{type(_e_rd).__name__}: {_e_rd}')
+        st.warning(f'⚠️ 風險雷達抓取失敗：{type(_e_rd).__name__}: {scrub_md(_e_rd)}')
         return
 
     # ── 🌍 全球風險桶群組 banner（與其他桶一致的分隔條）──
@@ -312,7 +313,7 @@ def _render_china_drag_panel(fred_api_key: str = "",
         _multiplier = _mod["multiplier"]
         _composite = _mod["composite"]
     except Exception as _e:  # noqa: BLE001
-        st.caption(f"🇨🇳 中國拖累 China Drag:⚠️ 取數失敗 {type(_e).__name__}: {_e}")
+        st.caption(f"🇨🇳 中國拖累 China Drag:⚠️ 取數失敗 {type(_e).__name__}: {scrub_md(_e)}")
         return
 
     # ── 渲染:標題列 + 4-column 唯讀卡 ─────────────────────────────

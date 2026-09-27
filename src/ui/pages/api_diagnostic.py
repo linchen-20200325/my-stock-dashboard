@@ -15,6 +15,8 @@ from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 import os
 import time
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
+from shared.secret_scrub import scrub_secrets  # SEC-3：`_probe` 截斷前先洗
 
 
 def _mask(val: str) -> str:
@@ -74,7 +76,8 @@ def _probe(label: str, url: str, params: dict | None = None,
         snippet = (r.text or '')[:80].replace('\n', ' ')
         return (r.status_code < 400, f'HTTP {r.status_code} {snippet}')
     except Exception as e:
-        return False, f'{type(e).__name__}: {str(e)[:120]}'
+        # SEC-3：先洗再截 —— 先截會把秘密截成半截、對不上清洗規則（畫面端另外再洗一次＋跳脫）。
+        return False, f'{type(e).__name__}: {scrub_secrets(e)[:120]}'
 
 
 def render_api_diagnostic():
@@ -104,7 +107,7 @@ def render_api_diagnostic():
     c3.metric('Secrets keys 數', len(sec_keys))
 
     if sec_parse_err:
-        st.error(f'⚠️ st.secrets 解析失敗：{sec_parse_err}\n\n'
+        st.error(f'⚠️ st.secrets 解析失敗：{scrub_md(sec_parse_err)}\n\n'
                  f'→ 通常是 TOML 格式錯（缺引號／用了 export／特殊字元未跳脫）。\n'
                  f'→ Streamlit Cloud 後台 App settings → Secrets 重貼一次，記得每個值都加雙引號。')
     if sec_keys:
@@ -198,15 +201,15 @@ def render_api_diagnostic():
                 if not proxy_cfg:
                     st.info('未設定 proxy，略過')
                 elif ok_p:
-                    st.success(msg_p)
+                    st.success(scrub_md(msg_p))
                 else:
-                    st.error(msg_p)
+                    st.error(scrub_md(msg_p))
             with col2:
                 st.markdown(f'**{label} — 直連** ({t_d:.1f}s)')
                 if ok_d:
-                    st.success(msg_d)
+                    st.success(scrub_md(msg_d))
                 else:
-                    st.error(msg_d)
+                    st.error(scrub_md(msg_d))
 
         st.markdown('---')
         st.markdown('#### 📌 結果判讀指南')

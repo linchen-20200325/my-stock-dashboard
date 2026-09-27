@@ -39,6 +39,7 @@ magic number（§3.3）。故本區塊只呈現事實，判讀交給使用者。
 from __future__ import annotations
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 __all__ = [
     'render_industry_concentration_section',
@@ -118,7 +119,7 @@ def render_industry_concentration_section(stock_list: list[str] | None) -> None:
         _c = get_portfolio_concentration(stock_list)
     except Exception as _e:  # noqa: BLE001 — §1：算不出來就說算不出來
         st.warning(
-            f'⚠️ 產業集中度計算失敗（{type(_e).__name__}: {_e}）。\n\n'
+            f'⚠️ 產業集中度計算失敗（{type(_e).__name__}: {scrub_md(_e)}）。\n\n'
             '產業別來自 FinMind `TaiwanStockInfo`；若持續失敗，'
             '請檢查 `FINMIND_TOKEN` 是否設定、或該來源是否暫時無回應。'
         )

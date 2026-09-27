@@ -1,4 +1,5 @@
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 import os
 import re
 
@@ -501,7 +502,7 @@ def _render_tab_isolated(_render, _label):
     except Exception as _e_tab:
         import sys as _sys_t, traceback as _tb_t
         st.error(f'⚠️ 「{_label}」分頁渲染異常,已隔離(其他分頁不受影響):'
-                 f'{type(_e_tab).__name__}: {str(_e_tab)[:300]}')
+                 f'{type(_e_tab).__name__}: {scrub_md(_e_tab, 300)}')
         print(f'[tab:{_label}] render error:\n{_tb_t.format_exc()}', file=_sys_t.stderr)
 
 
@@ -910,7 +911,7 @@ with tab_stocks:
                                 st.success(f'✅ 已把 {len(_codes_add)} 檔加入「{_wl_final.strip()}」'
                                            f'（現共 {_n_wl} 檔）。到 💼 戰情室按 🔄 重新載入即生效。')
                             except Exception as _e_add:  # noqa: BLE001 — §1 失敗誠實報
-                                st.error(f'加入失敗：{type(_e_add).__name__}: {_e_add}')
+                                st.error(f'加入失敗：{type(_e_add).__name__}: {scrub_md(_e_add)}')
                 # ── 🧊 前進式驗證：凍結本次選股（FT-2 v19.142）→ 存 Google Sheet，日後對帳 vs 0050 ──
                 st.markdown('##### 🧊 前進式驗證：凍結本次選股')
                 st.caption('把前 20 名凍結存進你的 Google Sheet（含當下進場價 + 勾選因子），'
@@ -937,7 +938,7 @@ with tab_stocks:
                             _ft_msg += f'（{_ft_miss} 檔抓不到進場價已略過）'
                         st.success(_ft_msg)
                     except Exception as _e_fz:  # noqa: BLE001 — 存檔失敗顯示不炸頁
-                        st.error(f'❌ 凍結失敗：{type(_e_fz).__name__}: {_e_fz}')
+                        st.error(f'❌ 凍結失敗：{type(_e_fz).__name__}: {scrub_md(_e_fz)}')
                 # ── 📊 前進式驗證對帳（FT-3 v19.143）：讀凍結 + 現價 → vs 0050 ──
                 with st.expander('📊 前進式驗證對帳：這套選股實際贏 0050 嗎？', expanded=False):
                     st.caption('讀你 Google Sheet 的凍結紀錄、抓現價算「各期報酬 vs 0050」。'

@@ -15,6 +15,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.station_specs import MISS_CONTRACT_DRIFT
 from shared.ui_state import UI_FAILED, UI_IDLE, classify_ui_state
@@ -237,7 +238,7 @@ def render_hot_money_section(twd_df: pd.DataFrame, token: str = "",
                        "熱錢三角交叉會在匯率到位後自動出現。")
         elif _fx_state == UI_FAILED:
             st.error("🔴 新台幣匯率（TWD=X）取得失敗"
-                     + (f"：{fx_error}" if fx_error else
+                     + (f"：{scrub_md(fx_error)}" if fx_error else
                         "：上游回傳的資料解析不出匯率序列（形態與約定不符）")
                      + " — 熱錢訊號無法計算。**重按更新對這個原因不一定有效**，"
                        "請到「🔎 資料診斷」確認 TWD=X 這一列。")
@@ -261,7 +262,7 @@ def render_hot_money_section(twd_df: pd.DataFrame, token: str = "",
     with st.spinner("📡 抓 FinMind 外資買賣超..."):
         flow_df, ferr = fetch_foreign_flow_series(days, token)
     if ferr:
-        st.warning(ferr)
+        st.warning(scrub_md(ferr))
     if flow_df.empty:
         st.info("無法取得外資資料；請確認 FINMIND_TOKEN 與網路。")
         return

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.colors import MATERIAL_GREEN, MATERIAL_ORANGE, MATERIAL_RED
 from shared.financial_health_thresholds import (  # 策略2 章節門檻 SSOT（§3.3）
@@ -620,7 +621,7 @@ def render_tab_edu():
                     st.markdown(render_edu_card_html(_e, _edu),
                                 unsafe_allow_html=True)
         except ImportError as _ie:
-            st.error(f'❌ 無法載入 data_registry：{_ie}')
+            st.error(f'❌ 無法載入 data_registry：{scrub_md(_ie)}')
 
     # ── 策略章節導讀（v19.175：解「三章都叫策略3」的閱讀困惑）────────
     st.markdown('---')

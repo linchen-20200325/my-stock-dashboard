@@ -21,6 +21,8 @@
 from __future__ import annotations
 
 import streamlit as st
+from shared.secret_scrub import scrub_secrets  # SEC-3：新聞抓取診斷（st.code，不跳脫）
+from shared.secret_md import scrub_md_mask  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_NEUTRAL, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.stock_buckets import (
@@ -1041,7 +1043,7 @@ padding:14px 18px;margin-bottom:12px;">
             if _fh is None:
                 pass   # v19.134:尚未生成(按鈕 + info 已顯示於上),不渲染分析區
             elif _fh.get('error'):
-                st.error(_fh.get('ai_insight', '財報體檢失敗，請確認 FINMIND_TOKEN 已設定。'))
+                st.error(scrub_md_mask(_fh.get('ai_insight', '財報體檢失敗，請確認 FINMIND_TOKEN 已設定。')))
             else:
                 # ── 第一關：三大生死燈號 ────────────────────
                 st.markdown('#### 🛡️ 第一關：生死與體質防禦')
@@ -1523,7 +1525,7 @@ padding:14px 18px;margin-bottom:12px;">
                     st.info('本次未取得個股新聞 — 可能 Google News RSS 暫時限流/封鎖（雲端海外 IP）或近期無相關報導；可稍後重試。')
                     if _diag:
                         st.caption('🔬 抓取診斷（proxy/直連 · HTTP · entries · 錯誤）：')
-                        st.code('\n'.join(_diag), language='text')
+                        st.code(scrub_secrets('\n'.join(_diag)), language='text')
 
         _ai_sum_c1, _ai_sum_c2 = st.columns([3, 1])
         with _ai_sum_c1:

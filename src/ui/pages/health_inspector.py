@@ -12,6 +12,8 @@ import datetime as _dt
 from typing import Optional
 
 import streamlit as st
+from shared.secret_md import scrub_md, scrub_md_mask  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
+from shared.secret_scrub import scrub_secrets  # SEC-3：診斷表 error_msg 欄（表格，不走 Markdown）
 from shared.colors import MATERIAL_ORANGE, TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.data_freshness import (
     freshness_level,
@@ -307,6 +309,9 @@ def render_data_health_raw():
           'fail' → 🔴 fetch 失敗（真異常）
           'ok'   → 套既有 _light 流程
         """
+        # SEC-3：錯誤原文進表格前先洗（截斷在下面，必須在清洗之後）。
+        if error_msg:
+            error_msg = scrub_secrets(error_msg)
         _fl = _FREQ_LBL.get(freq, freq)
         _px = '✅' if proxy else '—'
         _base = {'資料名稱': name, '頻率': _fl, '來源': source or '—',
@@ -406,7 +411,7 @@ def render_data_health_raw():
             if _diag_msg.startswith('✅'):
                 st.success(_diag_msg)
             else:
-                st.error(_diag_msg)
+                st.error(scrub_md_mask(_diag_msg))
 
     # ── 🛰️ NAS 代理 + ETF 成分股抓取自我檢測（確認 PROXY_URL 是否生效）──
     _px_c1, _px_c2 = st.columns([3, 7])
@@ -480,7 +485,7 @@ def render_data_health_raw():
     with _px_c2:
         _pm = st.session_state.get('_diag_proxy_msg')
         if _pm:
-            (st.success if st.session_state.get('_diag_proxy_ok') else st.warning)(_pm)
+            (st.success if st.session_state.get('_diag_proxy_ok') else st.warning)(scrub_md_mask(_pm))
 
     # ══════════════════════════════════════════════════════════════
     # 📊 全域資料健康總表（統一視圖）
@@ -1419,7 +1424,7 @@ def render_data_health_raw():
                                 else:
                                     st.error(f'❌ {_msg} — MoneyDJ 擋了 NAS IP 或回了空頁')
                         except Exception as _ep_d:
-                            st.error(f'❌ proxy_helper 例外：{type(_ep_d).__name__}: {_ep_d}')
+                            st.error(f'❌ proxy_helper 例外：{type(_ep_d).__name__}: {scrub_md(_ep_d)}')
                         # 源 2：curl_cffi 直連
                         try:
                             from curl_cffi import requests as _cffi_d
@@ -1431,7 +1436,7 @@ def render_data_health_raw():
                             else:
                                 st.warning(f'⚠️ {_msg}（fallback 也失敗，預期 — 海外 IP 被擋）')
                         except Exception as _ec_d:
-                            st.warning(f'⚠️ curl_cffi 例外：{type(_ec_d).__name__}: {_ec_d}')
+                            st.warning(f'⚠️ curl_cffi 例外：{type(_ec_d).__name__}: {scrub_md(_ec_d)}')
 
                 _probe_rows = []
                 _tk_seen: set[str] = set()
