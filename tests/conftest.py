@@ -213,3 +213,31 @@ def minimal_df():
     """恰好 20 天 DataFrame——大多數評分函數的最小有效輸入。"""
     prices = [float(100 + i) for i in range(20)]
     return _make_ohlcv(prices)
+
+
+@pytest.fixture
+def synthetic_unwired_lamp():
+    """把 `foreign_net` **在測試期間**合成為 `wired=False` 的燈，結束後原樣還原。
+
+    為什麼需要（2026-09-27）：`foreign_net` 接線後，16 盞燈裡已**沒有**任何一盞
+    `wired=False` —— 但「未接線」這一態的畫面 / 分母 / 側車防覆寫守衛仍是生產碼的
+    契約（L0 日後可能再標一盞）。與其讓那些守衛變成空轉，改用合成 spec 驗。
+
+    ⚠️ **原地**改 `shared.macro_buckets.SPECS_BY_KEY`（dict）與 `BUCKET_DANGER_SPECS`
+    （list）—— 各模組 `from shared.macro_buckets import ...` 拿到的是同一個物件，
+    所以一處改、處處生效；還原也是原地還原。回傳合成後的 spec。
+    """
+    import dataclasses
+    from shared import macro_buckets as _mb
+    _key = "foreign_net"
+    _orig = _mb.SPECS_BY_KEY[_key]
+    _idx = next(_i for _i, _s in enumerate(_mb.BUCKET_DANGER_SPECS) if _s.key == _key)
+    _fake = dataclasses.replace(_orig, wired=False,
+                                unwired_reason="（測試用合成未接線理由）")
+    _mb.SPECS_BY_KEY[_key] = _fake
+    _mb.BUCKET_DANGER_SPECS[_idx] = _fake
+    try:
+        yield _fake
+    finally:
+        _mb.SPECS_BY_KEY[_key] = _orig
+        _mb.BUCKET_DANGER_SPECS[_idx] = _orig

@@ -20,6 +20,8 @@
 from __future__ import annotations
 
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
+from shared.margin_schema import TWD_PER_YI  # 元 → 億 換算 SSOT(L0,§4.1)
+from shared.inst_net import InstNetDict  # 2026-09-27 外資「未觀測」旗標(加性,L0)
 
 import datetime as _dt
 import time as _time
@@ -308,9 +310,21 @@ def fetch_macro_bundle(
                     _df_i = _pd.DataFrame(_ji['data'])
                     _ld_i = _df_i['date'].max()
                     _df_i = _df_i[_df_i['date'] == _ld_i]
+                    # 2026-09-27(加性,⛔ 不改下兩行的 fillna(0)):buy / sell 欄缺席或
+                    #   外資列不可解析時,下面會算出「假淨額」(缺 buy → 淨額=−sell;兩欄都缺 → 0)。
+                    #   既有消費點照舊拿那個值;只把外資格標成「未觀測」給 foreign_net 燈
+                    #   (→ 灰燈,⛔ 不畫假數字)。見 shared/inst_net.py。
+                    _fm_foreign_rows = _df_i['name'].astype(str).map(
+                        lambda _n: 'foreign' in _n.lower() or '外資' in _n)
+                    if 'buy' in _df_i.columns and 'sell' in _df_i.columns:
+                        _fm_bad_rows = (_pd.to_numeric(_df_i['buy'], errors='coerce').isna()
+                                        | _pd.to_numeric(_df_i['sell'], errors='coerce').isna())
+                        _fm_foreign_unobserved = bool((_fm_bad_rows & _fm_foreign_rows).any())
+                    else:
+                        _fm_foreign_unobserved = bool(_fm_foreign_rows.any())
                     _df_i['buy'] = _pd.to_numeric(_df_i.get('buy', 0), errors='coerce').fillna(0)
                     _df_i['sell'] = _pd.to_numeric(_df_i.get('sell', 0), errors='coerce').fillna(0)
-                    _df_i['_net'] = ((_df_i['buy'] - _df_i['sell']) / 1e8).round(2)
+                    _df_i['_net'] = ((_df_i['buy'] - _df_i['sell']) / TWD_PER_YI).round(2)  # 元 → 億(§4.1)
                     # FinMind name 欄為英文 key(Foreign_Investor / Investment_Trust / Dealer_*)
                     # 與 tw_macro.py:151 / hot_money.py:157 一致採英文匹配,中文為向下相容
                     inst = {}
@@ -328,6 +342,13 @@ def fetch_macro_bundle(
                         inst['外資及陸資'] = {'net': inst.pop('_f')}
                     if '_d' in inst:
                         inst['自營商'] = {'net': inst.pop('_d')}
+                    if _fm_foreign_unobserved and '外資及陸資' in inst:
+                        print('[FinMind-Inst] ⚠️ 外資列 buy/sell 缺值 → 淨額為 fillna(0) 推出的'
+                              '假值;foreign_net 燈視為缺值(既有消費點照舊)')
+                    inst = InstNetDict(
+                        inst, unobserved_net=(('外資及陸資',)
+                                              if (_fm_foreign_unobserved and '外資及陸資' in inst)
+                                              else ()))
                     inst_date = _ld_i
                     print(f'[FinMind-Inst] ✅ {inst}')
             except Exception as _ei:

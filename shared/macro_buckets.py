@@ -85,11 +85,19 @@ _USDTWD_RED         = 33.0   # 對齊 MACRO_THRESHOLDS['USDTWD']['red_above']
 #
 # ⚠️ 刻意**只**掛在 us10y / dxy 兩條 spec 上(valid_min/max 預設 None = 不檢查)。
 #   其餘 14 條的判級行為與本版前完全一致,零回歸。
+#   (2026-09-27:foreign_net 接線時一併掛上 ±9999 億,見下方常數;其餘 13 條仍不檢查。)
 # ════════════════════════════════════════════════════════════════
 _US10Y_VALID_MIN = 0.0     # CLAUDE.md §3.2「US10Y (%) [0, 20]」
 _US10Y_VALID_MAX = 20.0
 _DXY_VALID_MIN   = 70.0    # CLAUDE.md §3.2「DXY（美元指數）[70, 130]」
 _DXY_VALID_MAX   = 130.0
+# 2026-09-27 foreign_net 接線:外資現貨淨買賣(億 TWD)合理範圍 ±9999 億。
+#   範圍值取自既有 L0 `shared/schemas.py::_make_foreign_flow_schema` 的
+#   `foreign_net_yi` in_range(-9999, 9999)(該 schema 註明「防 unit confusion,
+#   爆界很可能單位寫錯」),**非本檔腦補**。作用同 us10y / dxy:上游若回「元」
+#   (如 -2.5e10)/「千元」/「百萬元」尺度,一律越界 → gray + log,**不猜換算**(§4.1)。
+_FOREIGN_NET_YI_VALID_MIN = -9999.0
+_FOREIGN_NET_YI_VALID_MAX = 9999.0
 
 # ── cl_data['intl'] 的中文 key 鏡像(SSOT: services/daily_checklist.INTL_MAP)──
 # L0 不可 import L3(§8.2 跨層上行),故在此鏡像 2 個 key 名,
@@ -388,18 +396,22 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                     "（此值為上漲佔比的 5 日均,不是「站上均線的家數比」——"
                     "本專案並未計算後者）",
                source="DESIGN:廣度佔比經驗切點(60/40)"),
-    # ⚠️ 2026-08-20:標記為**未接線**。`macro_helpers.compute_five_bucket_summary`
-    #    的 values dict 對本 key 寫死 `None`(§4.1 FinMind inst net 單位未確認),
-    #    所以這盞燈**自註冊以來從未亮過**。原本它靜靜地是一盞永久灰燈,
-    #    使用者無從分辨「今天沒資料」與「這個功能根本沒接」。
+    # ⚠️ 2026-08-20 ~ 2026-09-26:本條曾標 `wired=False`(「FinMind inst net 單位未確認」)。
+    # 2026-09-27 接線 —— 單位已由 repo 內證據確定(§4.1),**門檻 0 / -200 一字未動**:
+    #   取值 = `cl_data['inst']['外資及陸資']['net']`,**已是「億元」**:
+    #   ① 主源 TWSE BFI82U:`daily_data_fetchers._parse_bfi82u_rows` 取「買賣差額」欄
+    #      (元,帶千分位)÷ `shared.margin_schema.TWD_PER_YI`(1e8)→ 億;
+    #   ② 備援 FinMind `TaiwanStockTotalInstitutionalInvestors`(大盤合計,**不是**舊理由
+    #      點名的個股 dataset `TaiwanStockInstitutionalInvestorsBuySell`):buy/sell 為元,
+    #      `macro_fetch_orchestrator` 同樣 ÷ TWD_PER_YI → 億(同源 `foreign_flow_fetcher`
+    #      ÷1e8 → `foreign_net_yi`、`tw_macro.fetch_finmind_foreign_investor` docstring「元」)。
+    #   兩源同刻度,且同一數值早已以「億」印在籌碼卡(section_chips `_fn3 >= 100`)。
+    #   ±9999 億範圍守衛擋「元 / 千元 / 百萬元」尺度混入(→ gray,不猜換算)。
     DangerSpec("foreign_net", "外資現貨淨買賣", "chips", "億", "low_bad",
                yellow=0.0, red=-200.0, decimals=0,
                note=">0 買超 / <0 賣超 / <-200 大賣（軟線）", source="DESIGN:外資現貨流向",
-               wired=False,
-               unwired_reason=(
-                   "FinMind inst net 單位未確認（股 / 千股 / 億元）—— §4.1。"
-                   "確認前填值會直接誤判紅綠燈，故決策端刻意回 None（§1 寧缺勿錯）。"
-               )),
+               valid_min=_FOREIGN_NET_YI_VALID_MIN,
+               valid_max=_FOREIGN_NET_YI_VALID_MAX),
 
     # ── 📰 新聞：系統性風險掃描 ──
     DangerSpec("news_systemic", "系統性風險新聞數", "news", "則", "high_bad",

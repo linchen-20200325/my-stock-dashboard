@@ -223,7 +223,9 @@ class TestNoCollateralDamage:
     def test_only_us10y_dxy_have_valid_range(self):
         _with_range = {s.key for s in mb.BUCKET_DANGER_SPECS
                        if s.valid_min is not None or s.valid_max is not None}
-        assert _with_range == {'us10y', 'dxy'}, (
+        # 2026-09-27：foreign_net 接線時比照本批先例（新接線的燈掛 §3.2 範圍），
+        #   範圍 ±9999 億取自既有 shared/schemas.py ForeignFlowSchema。其餘 13 條仍無。
+        assert _with_range == {'us10y', 'dxy', 'foreign_net'}, (
             '本次刻意只給新接線的兩條掛 §3.2 範圍；替其他 spec 加範圍屬行為變更，'
             '需獨立提案（例如 PMI 已有 signal_thresholds.PMI_VALID_MIN/MAX）'
         )

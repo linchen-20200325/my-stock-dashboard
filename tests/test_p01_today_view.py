@@ -203,8 +203,13 @@ class TestRequestedIsAGateNotATautology:
 # ══════════════════════════════════════════════════════════════════
 # 【3】側車不得覆寫 L0 SSOT
 # ══════════════════════════════════════════════════════════════════
+@pytest.mark.usefixtures("synthetic_unwired_lamp")
 class TestSidecarCannotOverrideSSOT:
     """紅隊只改側車一筆、L0 一個字沒動：
+
+    ⚠️ 2026-09-27：foreign_net 已接線（production 已無 wired=False 的燈）；本組改由
+    conftest `synthetic_unwired_lamp` 在測試期間把它合成回未接線，守衛的契約不變。
+
 
         rd["foreign_net"].update(wired=True, state="ok", value=100.0, reason=None)
 
@@ -364,25 +369,39 @@ class TestSignalChannelFailsAtBuildTime:
 # 分母與冷啟動
 # ══════════════════════════════════════════════════════════════════
 class TestColdStartCoverage:
+    """⚠️ 2026-09-27：foreign_net 接線後，production 冷啟動是 `未接線 0 · 無資料 16`
+    （線框灰態原文 `（無資料 15 · 未接線 1）` 的 1 是當時的 L0 現況，文字模板未動）。
+    「未接線在冷啟動就看得見」這條契約改由 `*_with_an_unwired_lamp` 以合成 spec 守。
+    """
 
     def test_cold_start_is_zero_of_sixteen(self):
         _cov = P.coverage(P.build_indicator_tiles(
             P.MacroReadout(requested=False)))
         assert (_cov.live, _cov.total) == (0, 16)
-        assert _cov.unwired == 1, "未接線在冷啟動就該看得見（線框灰態原文）"
+        assert _cov.unwired == 0, "2026-09-27 起 16 盞全接線"
         assert _cov.fault == 0, "冷啟動不是故障 —— 假紅字會蓋掉真的錯誤"
-        assert _cov.stale == 0 and _cov.gray == 15
+        assert _cov.stale == 0 and _cov.gray == 16
 
     def test_cold_start_text_matches_the_wireframe_shape(self):
         _txt = P.coverage(P.build_indicator_tiles(
             P.MacroReadout(requested=False))).text()
-        assert "0／16" in _txt and "未接線 1" in _txt and "故障 0" in _txt
+        assert "0／16" in _txt and "未接線 0" in _txt and "故障 0" in _txt
 
     def test_cold_start_lights_are_idle_not_empty(self):
         _t = P.build_indicator_tiles(P.MacroReadout(requested=False))
         _states = {_x.card.state for _b in _t.values() for _x in _b}
-        assert _states == {UI_IDLE, UI_UNWIRED}, (
-            f"冷啟動只該有 idle ＋ unwired，實際 {sorted(_states)}")
+        assert _states == {UI_IDLE}, (
+            f"冷啟動只該有 idle（16 盞全接線），實際 {sorted(_states)}")
+
+    @pytest.mark.usefixtures("synthetic_unwired_lamp")
+    def test_cold_start_with_an_unwired_lamp(self):
+        """契約守衛：L0 一旦再標一盞 wired=False，冷啟動就得看得見（不得被當成 idle）。"""
+        _t = P.build_indicator_tiles(P.MacroReadout(requested=False))
+        _cov = P.coverage(_t)
+        assert _cov.unwired == 1 and _cov.gray == 15
+        assert "未接線 1" in _cov.text()
+        _states = {_x.card.state for _b in _t.values() for _x in _b}
+        assert _states == {UI_IDLE, UI_UNWIRED}
 
 
 class TestDenominatorIsAlwaysSixteen:

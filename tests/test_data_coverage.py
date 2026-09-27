@@ -152,6 +152,8 @@ class TestComputeTabCoverage:
                 "intl": {"美元指數 DXY": pd.DataFrame({"close": [104.2]})},
                 "adl": pd.DataFrame({"ad_ratio": [53.1]}),
                 "margin": 2480.0,
+                # 2026-09-27：foreign_net 接線 → 分母 16；「全有值」要含三大法人外資（億）
+                "inst": {"外資及陸資": {"net": 35.2}},
             },
             "_macro_news_items": [],
         })

@@ -22,11 +22,11 @@
 3. **§3.2 範圍外**：`^TNX` 回 46.3（殖利率 ×10 慣例）→ `us10y` 必須跳過該源
    而不是拿 46.3 去判紅燈。這是 `_first_sane` 存在的全部理由
 4. **多源賽跑**：主源缺、備源有 → 取備源
-5. **`foreign_net` 恆 None**：決策端寫死，任何輸入都不得讓它變非 gray
+5. ~~**`foreign_net` 恆 None**~~：2026-09-27 已接線（單位證據見 `shared/macro_buckets.py`），
+   其行為守衛移至 `tests/test_lamp_foreign_net_wiring.py`
 """
 from __future__ import annotations
 
-import pytest
 
 from shared.macro_buckets import BUCKET_DANGER_SPECS
 from src.compute.macro import compute_five_bucket_summary
@@ -94,8 +94,10 @@ class TestNormalValues:
         lights = _lights(compute_five_bucket_summary(**self._fixture()))
         # 每盞燈都必須有結論（非 gray）—— 輸入是完整的
         gray = {k: v for k, v in lights.items() if v[1] == "gray"}
+        # 2026-09-27：foreign_net 已接線，但本 fixture 沒給 `cl_data['inst']` → 仍灰（缺值）。
+        #   其餘 15 盞的 value_str / danger 與接線前逐位相同（見 test_lamp_foreign_net_wiring）。
         assert set(gray) == {"foreign_net"}, (
-            f"輸入完整時不該有灰燈（foreign_net 除外，它決策端寫死 None）：{gray}")
+            f"輸入完整時不該有灰燈（foreign_net 除外，本 fixture 未給三大法人）：{gray}")
         assert len(lights) == 16
 
 
@@ -137,17 +139,6 @@ class TestValidRangeGuardIsTheWholePoint:
         assert _lights(out)["us10y"][1] != "gray", "備源沒被取用"
 
 
-class TestForeignNetIsHardcodedNone:
-    """`foreign_net` 在決策端寫死 None（§4.1 單位未確認）。
-
-    這條釘住的不是「它應該是 None」，而是「**任何輸入都不能讓它變成有結論**」——
-    在單位確認之前填值會直接誤判紅綠燈。改造時若不小心把它接上，這裡會紅。
-    """
-
-    @pytest.mark.parametrize("inst_val", [0, 100, -100, 99999])
-    def test_never_leaves_gray(self, inst_val):
-        out = compute_five_bucket_summary(
-            cl_data={"inst": {"外資": {"net": inst_val}}, "foreign_net": inst_val},
-        )
-        assert _lights(out)["foreign_net"][1] == "gray", (
-            f"foreign_net 被接上了（inst={inst_val}）—— 單位未確認前不得填值")
+# 2026-09-27：原 `TestForeignNetIsHardcodedNone`（釘住「任何輸入都不得讓 foreign_net 非 gray」）
+# 隨 foreign_net 接線退役 —— 那條測試存在的目的正是「讓『單位已確認』這個決定被看見」。
+# 接線後的行為（單位 / 範圍守衛 / 缺值不當 0 / 門檻邊界）見 tests/test_lamp_foreign_net_wiring.py。

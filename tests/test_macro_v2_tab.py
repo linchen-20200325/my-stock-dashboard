@@ -65,11 +65,16 @@ class TestReadinessCarriesValue:
         assert rd["health"]["value"] == pytest.approx(52.0)
         assert rd["vix"]["state"] == "ok"
 
-    def test_unwired_stays_none(self):
-        """wired=False 的燈永遠沒有值 —— 就算上游硬塞也一樣。"""
-        rd = _readiness()
+    def test_unwired_stays_none(self, synthetic_unwired_lamp):
+        """wired=False 的燈永遠沒有值 —— 就算上游硬塞也一樣。
+
+        2026-09-27：foreign_net 已接線，改用合成未接線 spec（conftest），
+        並**真的**硬塞一筆合法值 —— 驗的是 L2 取值端以 L0 旗標為權威。
+        """
+        rd = _readiness(cl_data={"inst": {"外資及陸資": {"net": -50.0}}})
         assert rd["foreign_net"]["wired"] is False
         assert rd["foreign_net"]["value"] is None
+        assert rd["foreign_net"]["reason"] == "not_wired"
 
     def test_out_of_range_is_rejected_not_clamped(self):
         """§3.2:超出合理範圍的值要被擋成 None，**不是**夾到邊界。
@@ -100,6 +105,9 @@ class TestReadinessCarriesValue:
         _FEED = {
             "us10y": lambda v, c="close": _feed_macro_info("us10y", v),
             "dxy": lambda v, c="close": _feed_intl_df(CL_INTL_KEY_DXY, v, c),
+            # 2026-09-27 接線:cl_data.inst[外資及陸資].net(億);欄名參數與本源無關
+            "foreign_net": lambda v, c="close": {
+                "cl_data": {"inst": {"外資及陸資": {"net": v}}}},
         }
         no_feed = [s.key for s in ranged if s.key not in _FEED]
         assert not no_feed, (
@@ -372,6 +380,7 @@ class TestSessionSeriesUsesClose:
 # ════════════════════════════════════════════════════════════════
 class TestFourStatesAreDistinguishable:
 
+    @pytest.mark.usefixtures("synthetic_unwired_lamp")   # 2026-09-27:已無真實未接線燈
     def test_unwired_and_degraded_are_not_conflated(self):
         """`未接線` 與 `門檻已失準` 是兩種完全不同的「別信這盞燈」。
 
@@ -428,11 +437,14 @@ class TestFourStatesAreDistinguishable:
 # ⚠️ `build_rows` **刻意複製**了 SSOT 的順序而非呼叫它(型別不同,理由見該處
 #    註解),所以這裡另外加一條交叉比對:哪天有人只改了一邊,這組就紅。
 # ════════════════════════════════════════════════════════════════
+@pytest.mark.usefixtures("synthetic_unwired_lamp")   # 2026-09-27:foreign_net 已接線 → 合成
 class TestFourStateOrderMatchesL0SSOT:
 
     #: 這盞燈 discriminative=False（門檻已失準），是本組的主角。
     _DEGRADED_KEY = "margin"
     #: 這盞燈 wired=False（決策端刻意沒接）。
+    #: 2026-09-27 起 production 已無 wired=False 的燈 → 由 conftest `synthetic_unwired_lamp`
+    #: 在本組期間合成（class 級 usefixtures），前提檢查照舊。
     _UNWIRED_KEY = "foreign_net"
 
     def test_the_fixture_keys_still_have_the_flags_this_class_assumes(self):
@@ -678,6 +690,7 @@ class TestLayer3Filtering:
         assert filter_rows(rows, chip="chips", query="VIX") == []
 
     # ── 「只看有問題的」 ─────────────────────────────────────────
+    @pytest.mark.usefixtures("synthetic_unwired_lamp")   # 2026-09-27:已無真實未接線燈
     def test_problem_chip_is_the_union_of_market_and_system(self):
         """定義:黃/紅燈(市場有問題) ∪ state != live(系統有問題)。
 
@@ -1124,6 +1137,7 @@ class TestStateColumnDualCoding:
         for r, cell in zip(visible, table["狀態"]):
             assert cell == state_cell(r.state), f"{r.key} 的狀態欄與 SSOT 不同"
 
+    @pytest.mark.usefixtures("synthetic_unwired_lamp")   # 2026-09-27:已無真實未接線燈
     def test_table_covers_all_four_states_with_emoji(self):
         """端到端:一份四態齊備的 readiness，總表的狀態欄要四種都出現且帶 emoji。"""
         from src.ui.tabs.tab_macro_v2 import build_rows, visible_table

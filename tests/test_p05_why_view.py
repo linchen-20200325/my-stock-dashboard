@@ -1381,6 +1381,9 @@ class TestUnwiredStaysUnwired:
 class TestSpecFlagsComeFromL0:
     """線框葉2 note：「`unwired_reason` / `degraded_reason` **直接讀自 SSOT**」。"""
 
+    # 2026-09-27：foreign_net 接線後 L0 已無 wired=False 的燈 → 以 conftest 合成一盞，
+    #   仍驗「掃描確實掃得到未接線」這個反證（否則下游守衛空轉）。
+    @pytest.mark.usefixtures("synthetic_unwired_lamp")
     def test_the_repo_currently_has_something_to_show(self):
         """反證：L0 現在真的有被標記的燈，否則下面幾條會空轉而假綠。"""
         _scan = P.load_specs()
@@ -2010,6 +2013,7 @@ def _assert_flagged_thresholds_are_downgraded(scan: "P.SpecScan") -> None:
 
 class TestFlaggedThresholdsAreDowngradedNotHidden:
 
+    @pytest.mark.usefixtures("synthetic_unwired_lamp")   # 2026-09-27：同上，合成未接線
     def test_the_repo_currently_has_both_kinds(self):
         """反證：現在真的同時有「未接線」與「已失準」兩種，否則下面只測到一半。"""
         _scan = P.load_specs()
