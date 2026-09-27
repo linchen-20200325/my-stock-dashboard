@@ -30,11 +30,15 @@
        → **整段遮到引號／行尾**（路徑可含空白，結尾界定不了就寧可多遮）；
        POSIX 絕對路徑與 `~/…` → 目錄換成遮罩、保留**檔名**，而且**只在合理起點**才算路徑
        （行首、空白、引號、`(`、`=`、`:` 等分隔之後）—— `元/股/張` 這種中文之間的斜線 ⛔ 不動。
+    9. 補洞（SEC-r1／SEC-r2-f1，2026-09-27，`_RULES_POST`，**最後才跑** ⇒ 不會比舊版少遮）：全形 `：`／`＝`、
+       `%3D`、「欄位＋遮罩＋說明字＋權杖」、無 `/` 的 `bot<數字>:<token>`、`open?id=`、`//server/…`、
+       `@`／`→`／`—` 起點的路徑。
   遮罩一律沿用既有的 `***`（`MASK`）。**⛔ 不新增任何說明文字** —— 看得到 `***` 就知道有東西被遮。
 
 ⚠️ 據實揭露的邊界（**不是**全稱「洗乾淨了」）：
   · 裸露、沒有任何前後文的 Sheet ID（例如一句「找不到 1AbC…」）**分不出來**，不遮 ——
-    硬遮任何 44 字元英數串會把一般訊息洗壞；Drive 的 `open?id=<id>` 同理（`id=` 太泛用）；
+    硬遮任何 44 字元英數串會把一般訊息洗壞；泛用的 `id=` 同理（`open?id=`／`uc?id=` 已由第 9 類遮）；
+  · SEC-r1 仍未處理（2026-09-27）：目錄名含空白的 POSIX 路徑、無標頭的 PEM 本體、第 5 層巢狀 `repr`；
   · 相對路徑（`a/b/c.toml`）不遮；緊貼中文字的絕對路徑（`檔案/home/x`）也不遮（為了不誤遮 `元/股`）；
   · 帶主機名的 URL 路徑（`https://host/a/b`）不當檔案路徑遮；**不帶主機名**的路徑
     （例：requests 的 `…with url: /v4/…`）長得跟檔案路徑一樣，會被遮成 `***/<末段>`；
@@ -200,6 +204,42 @@ def _mask_value(m: re.Match) -> str:
     return m.group("pre") + MASK
 
 
+#: 恰好兩個 `*`（`***` 遮罩不算粗體標記）。
+_BOLD_RE = re.compile(r"(?<!\*)\*\*(?!\*)")
+_BOLD_LOOKBACK: int = 512
+
+
+def _mask_assign(m: re.Match) -> str:
+    """TOML／INI 賦值：值換成遮罩。
+
+    SEC-r10（2026-09-27）：值一路吃到行尾，會把同行的**收尾粗體標記**一起吃掉
+    （`- **client_secret = abc** — 說明` → `- **client_secret = ***`，粗體沒收尾）。
+    只在「欄位名前、同一行裡有一個**未收尾**的 `**`」時，把值裡的第一個 `**` 當收尾標記留下：
+    `遮罩 ＋ ** ＋（後面若還有字 → 遮罩；只剩空白 → 原樣）`。
+    ⛔ **不放寬**：`**` 與空白以外的字一個都不露（`**` 後面的字仍整段遮）；值是引號字串時，
+    `**` 必須在收尾引號之後（引號內的 `**` 可能是秘密本身）→ 否則照舊整段遮。
+    """
+    _pre, _val = m.group("pre"), m.group(0)[len(m.group("pre")):]
+    if m.group("tq") is None:
+        _s, _p = m.string, m.start()
+        #: 這一行的起點（真換行，或 repr 裡的 `\n`／`\r` 跳脫）。⚠️ 只往回看 `_BOLD_LOOKBACK` 字 ——
+        #: 不設上限時，同一行上百萬字、每個賦值都往回掃到行首 ⇒ O(n²)（實測 2MB 跑 100 秒）。
+        #: 看不到行首就以視窗起點為準；算錯頂多多留／少留一個 `**`，秘密字元照樣全遮。
+        _lo = max(0, _p - _BOLD_LOOKBACK)
+        _line0 = max([_s.rfind(_c, _lo, _p) + len(_c) for _c in ("\n", "\r", "\\n", "\\r")
+                      if _s.rfind(_c, _lo, _p) >= 0] or [_lo])
+        if len(_BOLD_RE.findall(_s, _line0, _p)) % 2 == 1:
+            _b = _BOLD_RE.search(_val)
+            if _b is not None:
+                _a, _rest = _val[:_b.start()].rstrip(" \t"), _val[_b.end():]
+                _body = _a.lstrip("\\")
+                _q = _body[:1]
+                if _body and (_q not in "\"'" or (len(_body) >= 2 and _body.endswith(_q))):
+                    _ws = _rest[:len(_rest) - len(_rest.lstrip(" \t"))]
+                    return _pre + MASK + "**" + (_rest if _ws == _rest else _ws + MASK)
+    return _pre + MASK
+
+
 #: （規則, 取代）—— 依序套用。
 _RULES: tuple[tuple[re.Pattern, object], ...] = (
     (_CONTENT_BEARING_EXC_RE, r"\1"),
@@ -209,7 +249,7 @@ _RULES: tuple[tuple[re.Pattern, object], ...] = (
     (_BEARER_RE, lambda m: m.group(1) + " " + MASK),
     (_JWT_RE, MASK),
     (_USERINFO_RE, lambda m: m.group(1) + ":" + MASK + "@"),
-    (_ASSIGN_RE, lambda m: m.group("pre") + MASK),
+    (_ASSIGN_RE, _mask_assign),
     (_COLON_QUOTED_RE, _mask_value),
     (_COLON_BARE_RE, _mask_value),
     (_EXTRA_QUERY_SECRET_RE, lambda m: m.group(1) + "=" + MASK),
@@ -221,6 +261,64 @@ _RULES_AFTER_QUERY: tuple[tuple[re.Pattern, object], ...] = (
     (_WIN_PATH_RE, MASK),
     (_POSIX_PATH_RE, lambda m: MASK + "/" + (m.group(1) or "")),
 )
+
+
+# ══════════════════════════════════════════════════════════════════
+# 3. 補洞規則（SEC-r1／SEC-r2-f1，2026-09-27）—— **在上面全部跑完之後**才套用
+# ══════════════════════════════════════════════════════════════════
+#: ⚠️ 為什麼放在最後、而不是塞進上面的規則：新規則若先搶走一段字，原本會由後面規則
+#: 「遮到行尾／遮到引號」的較大範圍就對不上，結果反而**遮得比以前少**（語料實測踩過）。
+#: 放在最後 ⇒ 輸入就是舊版的輸出，每一條只會把字換成遮罩 ⇒ 不會比舊版少遮。
+#: 全形分隔（`password：X`、`password＝X`）—— 同上面三條，只是分隔符換成全形。
+_FW_ASSIGN_RE = re.compile(
+    r"(?P<pre>" + _TB_FIELD + r"(?P<fq>(?:(?<!\\)\\{1,4})?[\"']?)(?:" + _FIELDS_STRICT + "|" + _FIELDS_QUOTED_EXTRA
+    + r")(?P=fq)[ \t]{0,16}＝[ \t]{0,16})"
+    r"(?:(?P<tq>\"\"\"|''')[\s\S]*?(?:(?P=tq)|\Z)|(?:\\[^nr\r\n]|[^\\\r\n])*)", _I)
+_FW_COLON_QUOTED_RE = re.compile(
+    r"(?P<pre>(?P<fq>(?<!\\)\\{0,4}[\"'])(?:" + _FIELDS_STRICT + "|" + _FIELDS_QUOTED_EXTRA + r")(?P=fq)"
+    r"[ \t]{0,16}：[ \t]{0,16})" + _VALUE, _I)
+_FW_COLON_BARE_RE = re.compile(
+    r"(?P<pre>" + _TB_FIELD + "(?:" + _FIELDS_STRICT + r")[ \t]{0,16}：[ \t]{0,16})" + _VALUE, _I)
+#: URL 編碼的等號（`password%3Dhunter2`）。
+_PCT_QUERY_SECRET_RE = re.compile(
+    _TB_FIELD + r"(" + _FIELDS_STRICT + r"|spreadsheet[_-]?id|file[_-]?id|key|token)(%3[Dd])[^&\s\"'<>]+", _I)
+#: SEC-r2-f1：`password: no bot123456789:<token>` —— 舊版只把第一個說明字遮掉（`password: *** bot…`），
+#: 後面的權杖外露。「欄位名＋分隔＋遮罩」之後 ≤3 個短英文字，再接一個「像權杖」的字串
+#: （16～256 字、含數字）→ 整段併進遮罩。長度皆有上限 ⇒ 線性。
+_CRED_AFTER_MASK_RE = re.compile(
+    r"(" + _TB_FIELD + r"(?:" + _FIELDS_STRICT + r")[\"']?[ \t]{0,16}[:：=＝][ \t]{0,16}[\"']?)"
+    + re.escape(MASK) + r"(?!\*)[ \t]{1,4}(?:[A-Za-z]{1,16}[ \t]{1,4}){0,3}"
+    r"(?=[A-Za-z0-9_\-.:+/=]{0,256}\d)[A-Za-z0-9_\-.:+/=]{16,256}(?![A-Za-z0-9_\-.:+/=])", _I)
+#: 不帶 `/` 的 `bot<數字>:<token>`（舊版只認 `/bot` 與前面非英數兩種起點；`/bot` 仍由舊規則負責）。
+_TG_BOT_PREFIX_RE = re.compile(r"(?<=[Bb][Oo][Tt])(?<!/[Bb][Oo][Tt])[0-9]{5,12}:[0-9A-Za-z_\-]{30,}")
+#: Drive 的 `open?id=<id>`／`uc?id=<id>`（只認這兩個固定字面，`id=` 本身太泛用）。
+_DRIVE_OPEN_ID_RE = re.compile(r"(?<![A-Za-z0-9_])((?:open|uc)\?id=)[A-Za-z0-9_\-]{10,}")
+#: 正斜線 UNC `//server/share/…` → 同 POSIX：目錄遮、留末段。起點**不含** `:`／`/`
+#: （`https://host/…` 的 `//` 前面是 `:`，⛔ 不動）。
+_FWD_UNC_RE = re.compile(
+    r"(?:^|(?<=[\s'\"(\[{=,;<>|`@])|(?<=\\[nrt])|(?<=[：（「『，、；→—]))"
+    r"//[A-Za-z0-9][A-Za-z0-9_.$\-]{0,255}(?:/" + _PATH_SEG + r"){0,64}/(" + _PATH_SEG + r")?",
+    re.MULTILINE)
+#: `@`／`→`／`—` 之後的 POSIX 路徑（`see @/home/…`、`→/etc/…`）。
+_POSIX_PATH_EXTRA_RE = re.compile(
+    r"(?<=[@→—])(?:~[0-9A-Za-z_.\-]{0,64})?/(?:" + _PATH_SEG + r"/)+(" + _PATH_SEG + r")?")
+_RULES_POST: tuple[tuple[re.Pattern, object], ...] = (
+    (_FW_ASSIGN_RE, _mask_assign),
+    (_FW_COLON_QUOTED_RE, _mask_value),
+    (_FW_COLON_BARE_RE, _mask_value),
+    (_PCT_QUERY_SECRET_RE, lambda m: m.group(1) + m.group(2) + MASK),
+    (_CRED_AFTER_MASK_RE, lambda m: m.group(1) + MASK),
+    (_TG_BOT_PREFIX_RE, MASK),
+    (_DRIVE_OPEN_ID_RE, lambda m: m.group(1) + MASK),
+    (_FWD_UNC_RE, lambda m: MASK + "/" + (m.group(1) or "")),
+    (_POSIX_PATH_EXTRA_RE, lambda m: MASK + "/" + (m.group(1) or "")),
+)
+#: 預先過濾：字串裡連必要字面都沒有，就不必讓該條規則掃一遍（純效能；有字面才跑，行為不變）。
+_POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
+    _FW_ASSIGN_RE: ("＝",), _FW_COLON_QUOTED_RE: ("：",), _FW_COLON_BARE_RE: ("：",),
+    _PCT_QUERY_SECRET_RE: ("%3",), _CRED_AFTER_MASK_RE: (MASK,), _DRIVE_OPEN_ID_RE: ("id=",),
+    _FWD_UNC_RE: ("//",), _POSIX_PATH_EXTRA_RE: ("@", "→", "—"),
+}
 
 
 def scrub_secrets(text) -> str:
@@ -237,4 +335,8 @@ def scrub_secrets(text) -> str:
     out = scrub_query_secrets(out)
     for _re, _rep in _RULES_AFTER_QUERY:
         out = _re.sub(_rep, out)
+    for _re, _rep in _RULES_POST:
+        _needles = _POST_NEEDLES.get(_re)
+        if _needles is None or any(_n in out for _n in _needles):
+            out = _re.sub(_rep, out)
     return out

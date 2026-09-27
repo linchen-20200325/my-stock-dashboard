@@ -699,7 +699,7 @@ _RULE_MUTANTS = {
     "M4_password": (("|secret|password|passwd\")", "|secret|passwd\")"), "password_assign"),
     "M4_password_dict": (("|secret|password|passwd\")", "|secret|passwd\")"), "password_dict"),
     "M4_password_query": (("|secret|password|passwd\")", "|secret|passwd\")"), "password_query"),
-    "assign_rule": (("    (_ASSIGN_RE, lambda m: m.group(\"pre\") + MASK),\n", ""),
+    "assign_rule": (("    (_ASSIGN_RE, _mask_assign),\n", ""),
                     "toml_assign_bytes_repr"),
     "newline_escape_boundary": (('_TB_FIELD: str = r"(?:(?<![A-Za-z0-9])|(?<=\\\\[nrt]))"',
                                  '_TB_FIELD: str = r"(?<![A-Za-z0-9])"'), "toml_assign_bytes_repr"),
