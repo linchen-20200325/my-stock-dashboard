@@ -1040,8 +1040,10 @@ def _load_shortage(factors: Sequence[str]) -> tuple[list | None, str]:
             return None, _scan_empty_note(_meta)
         return _rows, ""
     except Exception as _e:  # noqa: BLE001 — 該因子缺料，不炸整體
-        print(f"[views/page_find] 缺貨掃描失敗：{_e!r}")
-        return None, repr(_e)
+        # E3-r2／E3-r3（2026-09-27）：卡面改用訊息文字（同跨季轉強列、#711）；log 不呼叫
+        # `__repr__`（它自己拋錯會把整頁炸掉）。
+        print(f"[views/page_find] 缺貨掃描失敗：{type(_e).__name__}: {_safe_msg(_e)}")
+        return None, (_safe_msg(_e) or UNKNOWN_ERROR_TEXT)
 
 
 def _load_rs(factors: Sequence[str]) -> tuple[list | None, str]:
@@ -1068,8 +1070,10 @@ def _load_rs(factors: Sequence[str]) -> tuple[list | None, str]:
             return None, _scan_empty_note(_meta)
         return _rows, ""
     except Exception as _e:  # noqa: BLE001 — 該因子缺料，不炸整體
-        print(f"[views/page_find] 抗跌 RS 掃描失敗：{_e!r}")
-        return None, repr(_e)
+        # E3-r2／E3-r3（2026-09-27）：卡面改用訊息文字（同跨季轉強列、#711）；log 不呼叫
+        # `__repr__`（它自己拋錯會把整頁炸掉）。
+        print(f"[views/page_find] 抗跌 RS 掃描失敗：{type(_e).__name__}: {_safe_msg(_e)}")
+        return None, (_safe_msg(_e) or UNKNOWN_ERROR_TEXT)
 
 
 def _safe_msg(e: BaseException) -> str:
@@ -1096,7 +1100,8 @@ def _load_trend(factors: Sequence[str]) -> tuple[dict | None, str]:
         from src.services.fundamental_screener_service import build_trend_map
         return build_trend_map(strict=True), ""
     except Exception as _e:  # noqa: BLE001 — 該因子缺料，不炸整體
-        print(f"[views/page_find] 跨季趨勢計算失敗：{_e!r}")
+        # E3-r3：log 不呼叫 `__repr__`（它自己拋錯會把整頁炸掉）。
+        print(f"[views/page_find] 跨季趨勢計算失敗：{type(_e).__name__}: {_safe_msg(_e)}")
         return None, (_safe_msg(_e) or UNKNOWN_ERROR_TEXT)
 
 
