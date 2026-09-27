@@ -1377,6 +1377,8 @@ def load_valuation(verdict: KindVerdict, stock: StockReadout
       (c) **三段備援都沒有配息紀錄** → `avg_div_twd=None` → L2 回 `na` →
           **`empty`（灰）**。**這是一個有效結果**：可能真的沒配息、也可能
           三段都沒拿到，兩種可能都寫在卡上（§1 不猜）。
+          ⚠️ 2026-09-27 Q5-r2：三段**都確定抓取失敗**（L3 `strict=True` 拋例外）改走 (b)
+          紅態；只要有一段分不出來（例如 yfinance 回空不拋），照舊走本條。
       (d) **有配息但沒有現價** → 同樣 `na`，L2 的 `msg` 會說是「無股價」——
           本檔把它原樣顯示，**不自己判是哪一種**。
       (e) **個股那一輪 L3 拋例外、或回報現價那一腿抓取失敗**（`stock.error` /
@@ -1401,7 +1403,9 @@ def load_valuation(verdict: KindVerdict, stock: StockReadout
 
     try:
         from src.services.valuation_service import get_stock_dividends
-        _div = get_stock_dividends(verdict.code)
+        # strict（Q5-r2）：三段備援**都確定抓取失敗**時 L3 拋 `DividendFetchError` → 下方紅態；
+        # 不然它與「近 5 年真的沒配息」同形 → (c) 灰卡。分不出來的照舊走 (c)。
+        _div = get_stock_dividends(verdict.code, strict=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_inspect] 配息取數失敗 → 估值轉紅態：{_e!r}")
         return ValuationReadout(
@@ -1523,7 +1527,9 @@ def load_chips(verdict: KindVerdict, req: InspectRequest) -> ChipsView:
 
     try:
         from src.services.stock_chips_service import get_chips_readout
-        _c = get_chips_readout(verdict.code, days=req.period_days)
+        # strict（Q5-r2）：法人那一腿**每一段都確定抓取失敗**時，L3 回 `error`（下方紅態），
+        # 不再讓它落成 L0 的「法人欄缺」灰態。分不出來的照舊灰。
+        _c = get_chips_readout(verdict.code, days=req.period_days, strict=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_inspect] 籌碼取數失敗 → 轉紅態：{_e!r}")
         return ChipsView(requested=True, days_loaded=req.period_days,

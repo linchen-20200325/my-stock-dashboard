@@ -623,8 +623,8 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF, *,
       傳一個 dict 進來 → **抓取失敗**的那幾腿以 `FAILED_*` 為鍵寫進去（值＝失敗說明）；
       **真的沒有**（沒配過息、沒有 iNAV、同儕不足、查無資料）不寫。回傳值不變 ——
       否則「抓不到」與「沒有」在回傳值裡長得一模一樣（都是 None），呼叫端分不開。
-      ⚠️ 折溢價只接得到**本層**的例外：`calc_premium_discount` 自己吞掉的例外與
-      「所有路徑都沒給」回的是同一個 dict，本層分不開，照舊不寫。
+      ⚠️ 折溢價：本層的例外，以及 `calc_premium_discount` 自己吞掉的例外（Q5-r2 起由
+      L2 `failed=` 回報）才寫；「所有路徑都沒給」本層分不開，照舊不寫。
     """
     if asset_kind == T.KIND_STOCK:
         return (_fetch_stock_metrics(ticker) if failed is None
@@ -718,9 +718,17 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF, *,
         try:
             from src.compute.etf.etf_calc import calc_premium_discount
             from src.data.etf.etf_fetch import fetch_etf_info
-            _pd_res = calc_premium_discount(fetch_etf_info(_yf) or {}, _px, _yf)
+            # failed 模式（Q5-r2）：L2 自己的 `except` 吞掉的例外也要接得到 —— 否則它與
+            # 「所有路徑都沒給」回的是同一個 dict。L2 只記例外，不記「沒給」（見其 docstring）。
+            _pd_failed: dict = {}
+            _pd_res = (calc_premium_discount(fetch_etf_info(_yf) or {}, _px, _yf)
+                       if failed is None else
+                       calc_premium_discount(fetch_etf_info(_yf) or {}, _px, _yf,
+                                             failed=_pd_failed))
             if isinstance(_pd_res, dict) and _pd_res.get("premium_pct") is not None:
                 m["premium_pct"] = float(_pd_res["premium_pct"])
+            elif failed is not None and _pd_failed:
+                failed[FAILED_PREMIUM] = "；".join(str(_v) for _v in _pd_failed.values())
         except Exception as _e:  # noqa: BLE001
             print(f"[dividend_station] {ticker} 折溢價缺: {type(_e).__name__}")
             if failed is not None and m.get("premium_pct") is None:

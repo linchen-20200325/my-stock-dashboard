@@ -150,7 +150,14 @@ class StockDividends:
         return bool(self.avg_div_twd)
 
 
-def get_stock_dividends(code: str) -> StockDividends:
+class DividendFetchError(RuntimeError):
+    """`get_stock_dividends(strict=True)`：三段備援**都確定抓取失敗**、沒有任何紀錄。
+
+    訊息 ＝ L1 逐段的失敗說明（`{段}: {說明}` 以「；」串接），不另寫文字。
+    """
+
+
+def get_stock_dividends(code: str, *, strict: bool = False) -> StockDividends:
     """單檔個股近 5 年配息 → 357 估值要的兩個輸入。
 
     路徑：L1 `app_stock_fetchers.fetch_dividend_data(sid)`
@@ -166,11 +173,18 @@ def get_stock_dividends(code: str) -> StockDividends:
         `StockDividends`。**備援鏈跑完、沒有任何一段給出紀錄，是一個有效
         結果**（`avg_div_twd=None` ＋ `source=""`），不是故障。
 
+        strict: （2026-09-27 Q5-r2；預設 False ＝ 既有行為一字不變。）True → 向 L1
+            要逐段失敗標記（`fetch_dividend_data(failed=)`）；**三段都確定抓取失敗**
+            而且沒有任何紀錄時拋 `DividendFetchError`，不回「沒有紀錄」—— 否則它與
+            「近 5 年真的沒配息」回的是同一個值。只要有一段不是「確定失敗」
+            （給了回答、或 yfinance 回空不拋這種分不出來的），照舊回沒有紀錄（不猜）。
+
     Raises:
         Exception: L1 / L2 拋什麼就往上拋什麼（§1）。
             ⚠️ L1 那支對**每一段備援**都自己 `try/except` 並落 log，
             所以「某一段掛了」不會走到這裡 —— 走到這裡代表的是
             late import 失敗、或四段嘗試之外的東西壞了。
+        DividendFetchError: 僅 `strict=True`，見上。
 
     ⚠️ **本檔不呼叫 `calc_dividend_yield_357`**：357 的位階判定需要**現價**，
     而現價是呼叫端從**另一支** L3（`dividend_station_service.fetch_metrics`）
@@ -181,7 +195,9 @@ def get_stock_dividends(code: str) -> StockDividends:
     from src.data.stock.app_stock_fetchers import fetch_dividend_data
 
     _sid = str(code or "").strip().upper()
-    _avg, _yearly, _source = fetch_dividend_data(_sid)
+    _legs: dict = {}
+    _avg, _yearly, _source = (fetch_dividend_data(_sid) if not strict
+                              else fetch_dividend_data(_sid, failed=_legs))
 
     # §1：L1 用 `0.0` 當「什麼都沒找到」的哨兵值 —— 轉成 `None`。
     # 留著 0.0 會讓下游看到「平均股利 0 元」這個**結論**，而事實是「沒有數字」。
@@ -193,6 +209,11 @@ def get_stock_dividends(code: str) -> StockDividends:
         _avg_f = None
 
     _rows = tuple(_r for _r in (_yearly or ()) if isinstance(_r, dict))
+    if strict and _avg_f is None and not _rows:
+        from src.data.stock.app_stock_fetchers import DIVIDEND_LEGS
+        if all(_leg in _legs for _leg in DIVIDEND_LEGS):
+            raise DividendFetchError(
+                "；".join(f"{_leg}: {_legs[_leg]}" for _leg in DIVIDEND_LEGS))
     return StockDividends(
         avg_div_twd=_avg_f,
         # 逐年明細為空時 L2 回 `None`（未知），**不是** 0 —— 沿用它的契約。
