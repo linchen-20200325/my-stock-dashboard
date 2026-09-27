@@ -56,7 +56,7 @@
 my-stock-dashboard/
 ├── app.py                     # L6 唯一入口(989 行 @2026-08-07;原記 642 已過期。
 │                              #   ⚠️ 尚非純 orchestrator,見 CLAUDE.md V-APP-1)
-├── README.md / CLAUDE.md / PROCESS.md / STATE.md / SPEC.md /
+├── CLAUDE.md / PROCESS.md / STATE.md / SPEC.md /
 ├── ARCHITECTURE.md / DATASTATION.md / STRATEGY_MANUAL.md /
 ├── ARCHIVED_FEATURES.md
 ├── pytest.ini / requirements.txt / .gitignore
