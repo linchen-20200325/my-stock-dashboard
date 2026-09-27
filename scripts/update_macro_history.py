@@ -321,6 +321,180 @@ def fetch_finmind_margin(start: _dt.date, end: _dt.date, token: str) -> pd.DataF
     return out[["date", "margin_balance", "source", "fetched_at"]]
 
 
+# ════════════════════════════════════════════════════════════════
+# B7b（2026-09-27）：CBC PXWeb「存量 vs 流量」欄位辨識
+# ════════════════════════════════════════════════════════════════
+# 根因：舊解析寫死「row[1] = 主數值」，但 EF19M01／EF21M01 的 row[1] 實測是
+# **月變動額（流量）**—— 2026-09-24 cron 整檔重抓後 238 列仍有 87 列 M1B 或 M2
+# 為負（貨幣供給額是存量，不可能為負）。再對會變號的序列算 YoY → gap ∈ ±13,976。
+#
+# 修法（**不猜欄位位置**）：
+#   ① 先用回應內的欄位標籤找「餘額」欄（排除 變動／增減／年增／率 等流量／比率欄）；
+#   ② 標籤不在 → 以**定義**驗證每一欄（全 > 0 ＋ 月變動 ≤ 20%），**恰好一欄**過才用；
+#   ③ 0 欄或 ≥ 2 欄都過 → **fail loud**（回 None ＋ 印結構 dump），**不挑一個**。
+# 最後合併後再過一次 `_m1m2_level_sanity`（與 `export_stock_db._money_supply_sanity_gate`
+# 同一組定義常數），不過就整表拒寫 —— 寧可缺席，不寫錯的量（§1）。
+_CBC_LEVEL_LABEL_KEYS = ("餘額", "outstanding", "level", "amount")
+_CBC_FLOW_LABEL_KEYS = ("變動", "增減", "增加", "減少", "年增", "月增", "成長",
+                        "率", "change", "growth", "rate", "%", "flow")
+# 存量序列的月變動上限（相對值）。M1B／M2 月增率歷史極值約 ±5%；20% 是寬鬆上界，
+# 目的是把「月變動額」這種會跨 0 的流量序列排除，不是攔真實波動。
+_CBC_LEVEL_MAX_MOM_ABS = 0.20
+
+
+def _to_float(v):
+    try:
+        return float(str(v).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _cbc_label_text(x) -> str | None:
+    if isinstance(x, str):
+        return x
+    if isinstance(x, dict):
+        for k in ("label", "name", "text", "title", "valueTexts", "id"):
+            v = x.get(k)
+            if isinstance(v, str) and v.strip():
+                return v
+    return None
+
+
+def _cbc_find_column_labels(obj, n_value_cols: int, _depth: int = 0) -> list | None:
+    """在回應 JSON 內找一串長度 = 欄數（含或不含期間欄）的欄位標籤。找不到回 None。"""
+    if _depth > 6 or obj is None:
+        return None
+    if isinstance(obj, list):
+        texts = [_cbc_label_text(x) for x in obj]
+        if texts and all(t is not None for t in texts):
+            if len(texts) == n_value_cols + 1:
+                return texts[1:]
+            if len(texts) == n_value_cols:
+                return texts
+        for x in obj:
+            if isinstance(x, (dict, list)):
+                hit = _cbc_find_column_labels(x, n_value_cols, _depth + 1)
+                if hit is not None:
+                    return hit
+        return None
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in ("dataSets", "value"):  # 資料列本身不是標籤
+                continue
+            hit = _cbc_find_column_labels(v, n_value_cols, _depth + 1)
+            if hit is not None:
+                return hit
+    return None
+
+
+def _is_level_series(vals: list) -> bool:
+    """定義檢查：存量序列 → 全數可解析、全 > 0、相鄰月相對變動 ≤ 上限。"""
+    if len(vals) < 13 or any(v is None for v in vals):
+        return False
+    if any(v <= 0 for v in vals):
+        return False
+    for a, b in zip(vals, vals[1:]):
+        if abs(b / a - 1) > _CBC_LEVEL_MAX_MOM_ABS:
+            return False
+    return True
+
+
+def _cbc_norm_label(t: str) -> str:
+    """標籤正規化：全形→半形（NFKC）、大寫、去空白（比對序列名用）。"""
+    import unicodedata
+    return "".join(unicodedata.normalize("NFKC", str(t)).upper().split())
+
+
+def _parse_cbc_pxweb_level(sdmx, label: str, series: str | None = None):
+    """CBC PXWeb 回應 → [{"period_raw", "value"}]（**餘額欄**）或 None（fail loud）。
+
+    `series`（"M1B"／"M2"）：回應帶欄位標籤時，選中的餘額欄標籤**必須含該序列名**
+    （全半形／大小寫不拘）—— 防止表內另有 M1A 等餘額欄時選錯序列卻照樣通過存量檢查。
+    有標籤但沒有一欄含序列名 → fail loud（不寫）。
+
+    回 (rows, col_desc)；失敗回 (None, 原因)。純函式,無 I/O（只 print 診斷）。
+    """
+    raw_rows = []
+    if isinstance(sdmx, dict):
+        _data = sdmx.get("data")
+        if isinstance(_data, dict):
+            raw_rows = _data.get("dataSets") or _data.get("value") or []
+        elif isinstance(_data, list):
+            raw_rows = _data
+    rows = [r for r in raw_rows if isinstance(r, list) and len(r) >= 2]
+    if not rows:
+        return None, "dataSets 空"
+    n_val = min(len(r) for r in rows) - 1
+    labels = _cbc_find_column_labels(sdmx, n_val)
+    chosen = None
+    col_desc = ""
+    if labels is not None:
+        lv = [i for i, t in enumerate(labels)
+              if any(k in t.lower() for k in _CBC_LEVEL_LABEL_KEYS)
+              and not any(k in t.lower() for k in _CBC_FLOW_LABEL_KEYS)]
+        if series:
+            _sn = _cbc_norm_label(series)
+            lv_s = [i for i in lv if _sn in _cbc_norm_label(labels[i])]
+            if not lv_s:
+                print(f"[finmind_m1m2/{label}] 餘額欄標籤皆不含序列名 {series!r} → 不猜"
+                      f" labels={labels}")
+                return None, f"標籤無 {series} 餘額欄"
+            lv = lv_s
+        if len(lv) > 1:
+            # CBC 官方貨幣供給年增率以「日平均」餘額計 → 同時有日平均／月底時取日平均
+            lv_avg = [i for i in lv if "日平均" in labels[i] or "average" in labels[i].lower()]
+            if len(lv_avg) == 1:
+                lv = lv_avg
+        if len(lv) == 1:
+            chosen = lv[0]
+            col_desc = f"label={labels[chosen]}"
+        else:
+            print(f"[finmind_m1m2/{label}] 欄位標籤無法唯一辨識餘額欄"
+                  f"（候選 {len(lv)}）labels={labels}")
+            return None, f"標籤候選 {len(lv)} 欄"
+    else:
+        cand = []
+        for i in range(n_val):
+            vals = [_to_float(r[i + 1]) for r in rows]
+            if _is_level_series(vals):
+                cand.append(i)
+        if len(cand) != 1:
+            print(f"[finmind_m1m2/{label}] 無欄位標籤,且符合存量定義的欄數={len(cand)}"
+                  f"（須恰為 1）→ 不猜。首列={rows[0][:12]} 末列={rows[-1][:12]}"
+                  f" top-keys={list(sdmx.keys())[:10] if isinstance(sdmx, dict) else type(sdmx).__name__}")
+            return None, f"定義候選 {len(cand)} 欄"
+        chosen = cand[0]
+        col_desc = f"col={chosen + 1}(定義辨識)"
+    out = [{"period_raw": str(r[0]), "value": r[chosen + 1]} for r in rows]
+    if not _is_level_series([_to_float(x["value"]) for x in out]):
+        print(f"[finmind_m1m2/{label}] 選定欄 {col_desc} 不符存量定義（有 ≤0 或跳動過大）→ 拒用")
+        return None, f"{col_desc} 非存量"
+    return out, col_desc
+
+
+def _m1m2_level_sanity(df: pd.DataFrame) -> tuple[bool, str]:
+    """寫檔前守門（整表判定,不逐列剔除）。定義同 `export_stock_db._money_supply_sanity_gate`。"""
+    from shared.signal_thresholds import (
+        M1B_M2_GAP_SANITY_ABS_MAX_PP,
+        MONEY_SUPPLY_LEVEL_MIN,
+    )
+    if df is None or df.empty:
+        return False, "空表"
+    for c in ("m1b", "m2", "m1b_m2_gap"):
+        if c not in df.columns:
+            return False, f"缺欄 {c}"
+    _lv = (df["m1b"] <= MONEY_SUPPLY_LEVEL_MIN) | (df["m2"] <= MONEY_SUPPLY_LEVEL_MIN)
+    _ord = df["m2"] < df["m1b"]
+    _g = df["m1b_m2_gap"]
+    _gap = _g.notna() & (_g.abs() > M1B_M2_GAP_SANITY_ABS_MAX_PP)
+    bad = _lv | _ord | _gap
+    if not bad.any():
+        return True, f"{len(df)} 列通過"
+    return False, (f"{int(bad.sum())}/{len(df)} 列不合格（餘額≤0:{int(_lv.sum())}、"
+                   f"m2<m1b:{int(_ord.sum())}、|gap|>{M1B_M2_GAP_SANITY_ABS_MAX_PP:.0f}pp:"
+                   f"{int(_gap.sum())}）→ 疑似月變動額而非餘額")
+
+
 def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
     """M1B / M2 月頻（改抓 CBC 中央銀行 ms1.json，FinMind 無對應 dataset）。
 
@@ -342,6 +516,7 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     # ── Tier 1: ms1.json（共用 tw_macro.CBC_MS1_URLS SSOT + fetch_cbc_ms1_rows kernel）──
     # v18.240：URL 清單從 tw_macro import，dead Attachment URL（v18.231 確認 404）已移除
     data = None
+    _col_desc: dict = {}  # B7b provenance：各表選用的餘額欄說明
     for url in CBC_MS1_URLS:
         try:
             rows = fetch_cbc_ms1_rows(url, log_label='finmind_m1m2/ms1',
@@ -360,7 +535,7 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
         for fname, label, target in [
             ("EF19M01", "M1B", m1b_rows),
             ("EF21M01", "M2", m2_rows),
-            ("EF15M01", "M1M2合表", None),
+            # EF15M01 合表（多欄結構不同）不處理 —— B7b 起不再白打一次請求
         ]:
             try:
                 r = _fu_cbc("https://cpx.cbc.gov.tw/API/DataAPI/Get",
@@ -369,36 +544,18 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
                     continue
                 try:
                     sdmx = r.json()
-                    # CBC PXWeb 實際結構：sdmx["data"]["dataSets"] = [[period, val, "-", val, ...], ...]
-                    # 每 row：第 0 欄是 'YYYYMmm' 期間字串，第 1 欄是該表的主數值（百萬元）
-                    raw_rows = []
-                    if isinstance(sdmx, dict):
-                        _data = sdmx.get("data")
-                        if isinstance(_data, dict):
-                            raw_rows = _data.get("dataSets") or _data.get("value") or []
-                        elif isinstance(_data, list):
-                            raw_rows = _data
-                    if not raw_rows:
-                        print(f"[finmind_m1m2/{fname}] dataSets 空 body={r.text[:300]}")
-                        continue
-                    print(f"[finmind_m1m2/{fname}] ✅ {label} 取到 {len(raw_rows)} 行 raw")
-                    # 標準化：每 row 轉成 {period, value}
-                    parsed = []
-                    for row in raw_rows:
-                        if not isinstance(row, list) or len(row) < 2:
-                            continue
-                        parsed.append({"period_raw": str(row[0]), "value": row[1]})
-                    if target is m1b_rows:
-                        for p in parsed:
-                            target.append({"period_raw": p["period_raw"], "m1b": p["value"]})
-                    elif target is m2_rows:
-                        for p in parsed:
-                            target.append({"period_raw": p["period_raw"], "m2": p["value"]})
-                    else:
-                        # EF15M01 合表結構不同（多欄），暫不處理
-                        pass
                 except Exception:
                     print(f"[finmind_m1m2/{fname}] JSON 解析失敗 body={r.text[:300]}")
+                    continue
+                parsed, _desc = _parse_cbc_pxweb_level(sdmx, fname, series=label)
+                if parsed is None:
+                    print(f"[finmind_m1m2/{fname}] ❌ 無法取得{label}餘額欄：{_desc}")
+                    continue
+                print(f"[finmind_m1m2/{fname}] ✅ {label} 餘額 {len(parsed)} 行（{_desc}）")
+                _col_desc[label] = _desc
+                _key = "m1b" if label == "M1B" else "m2"
+                for p in parsed:
+                    target.append({"period_raw": p["period_raw"], _key: p["value"]})
             except Exception as e:
                 print(f"[finmind_m1m2/{fname}] ❌ {type(e).__name__}: {e}")
 
@@ -462,9 +619,21 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     out = out[(out["date"] >= start) & (out["date"] <= end)]
     print(f"[finmind_m1m2] ✅ CBC PXWeb {len(out)} rows")
     out = out[["date", "m1b", "m2", "m1b_m2_gap"]].copy()
+    # B7b：寫檔前守門 —— 存量定義不過就整表拒寫（寧缺勿錯,§1）
+    if not out.empty:
+        _ok, _msg = _m1m2_level_sanity(out)
+        if not _ok:
+            print(f"[finmind_m1m2] ❌ sanity 不過,拒寫：{_msg}")
+            return pd.DataFrame()
+        print(f"[finmind_m1m2] sanity：{_msg}")
     # S-PROV-1 phase 14 v18.260 — provenance(schema-additive)
     if not out.empty:
-        out["source"] = "CBC:PXWeb:EF19M01+EF21M01"
+        if {"period_raw", "m1b", "m2"}.issubset(set(df.columns)):
+            _d = _col_desc
+            out["source"] = ("CBC:PXWeb:EF19M01+EF21M01:level"
+                             f"[M1B {_d.get('M1B', '?')}; M2 {_d.get('M2', '?')}]")
+        else:
+            out["source"] = "CBC:ms1.json"
         out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
     return out
 
@@ -620,6 +789,11 @@ def fetch_tw_pmi_history(start: _dt.date, end: _dt.date) -> pd.DataFrame:
     return pd.DataFrame(columns=["date", "pmi"])
 
 
+# B7b：既有 Parquet 的定義守門（name → fn(df) -> (ok, msg)）。不過 → update_one 整段重建。
+_EXISTING_SANITY_GATES = {
+    "finmind_m1m2": _m1m2_level_sanity,
+}
+
 FETCHERS = {
     "twii_ohlcv": (fetch_twii_ohlcv, False),       # (fn, needs_token)
     "finmind_inst": (fetch_finmind_inst, True),
@@ -644,6 +818,16 @@ def update_one(name: str, today: _dt.date, bootstrap: bool, years: int,
         return meta
 
     existing = None if bootstrap else _load_existing(name)
+    # B7b：既有歷史若違反該表的定義守門（例：m1m2 存了流量）→ 不得在壞歷史上增量
+    # 疊加（會產出「新舊兩種量混在一張表」）；改整段重抓，成功才整檔取代。
+    _corrupt_existing = None
+    _gate = _EXISTING_SANITY_GATES.get(name)
+    if _gate is not None and existing is not None and not existing.empty:
+        _ok_ex, _msg_ex = _gate(existing)
+        if not _ok_ex:
+            print(f"[{name}] ⚠️ 既有檔 sanity 不過（{_msg_ex}）→ 改整段重建")
+            _corrupt_existing, existing = existing, None
+            bootstrap = True
     last = _last_date(existing)
     if last is None or bootstrap:
         start = today - _dt.timedelta(days=years * 365)
@@ -660,11 +844,21 @@ def update_one(name: str, today: _dt.date, bootstrap: bool, years: int,
         new = fn(start, today, token) if needs_token else fn(start, today)
     except Exception as e:
         meta["last_error"] = f"{type(e).__name__}: {e}"
+        if _corrupt_existing is not None:
+            # 重建途中拋例外：壞檔原樣保留，metadata 誠實標壞
+            meta["last_error"] += "；既有檔 sanity 不過,待重建"
+            meta["row_count"] = len(_corrupt_existing)
         print(f"[{name}] ❌ {meta['last_error']}")
         return meta
 
     if new.empty:
         meta["last_error"] = "抓取結果為空"
+        if _corrupt_existing is not None:
+            # 重建失敗：壞檔原樣保留（不刪、不回填），但 metadata 誠實標壞,不假裝最新
+            meta["last_error"] = "抓取結果為空；既有檔 sanity 不過,待重建"
+            meta["row_count"] = len(_corrupt_existing)
+            print(f"[{name}] ⚠️ 重建失敗，既有（已知不合格）檔原樣保留")
+            return meta
         print(f"[{name}] ⚠️ 抓取結果為空，保留現有資料")
         if existing is not None and not existing.empty:
             meta["last_updated"] = _last_date(existing).isoformat()
