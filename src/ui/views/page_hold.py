@@ -1672,11 +1672,11 @@ SRC_AI: str = (
 
 #: 戰情表這一輪出事時的「去哪補」。原本寫在 `_station_note()` 的 error 分支裡，
 #: 上提成常數（**文字一字未改**）—— 衛星停利的「整批抓取失敗」分支沿用同一句。
+#: 📌 SA-r2-f2（2026-09-27，有意識的刪除，⛔ 不是漏刪）：句尾「，來源狀態在{資料體檢}」指向資料體檢的子句已刪（只刪不改）——
+#:    戰情表鏈（Google Sheet／個股·ETF 報價／VIX）沒掛 `@monitored`，資料體檢那面牆上看不到它（同 SA-r2 #718／SA-r2-f1 #723）。
 STATION_ERROR_WHERE: str = (
     "先確認網路與 Google 授權是否仍有效；"
-    "持續失敗請把上面那行訊息回報給維護者，"
-    f"來源狀態在"
-    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
+    "持續失敗請把上面那行訊息回報給維護者")
 
 #: 持有列「現價抓不到」時接在代號清單後面的那一句 —— ⑤ 衛星停利卡（批次 4）與
 #: ⑤⑥ 核心／衛星（Q2）**共用這一個常數**（同一頁同一檔 ⛔ 不給兩種說法）。
@@ -1698,11 +1698,10 @@ NO_PRICE_WHY: str = "這檔查不到報價 —— 可能是已下市，也可能
 #: VIX 這一輪沒拿到收盤時的「去哪補」。原本寫在 `build_vix_card()` 的 empty 分支裡，
 #: 2026-09-26（批次 5）上提成常數（**文字一字未改**）—— 「抓不到」改走紅卡後沿用同一句
 #: （它講的「稍後再試、持續拿不到去看 Yahoo 那一源」對「抓不到」本來就成立）。
+#: 📌 SA-r2-f2（2026-09-27，有意識的刪除，⛔ 不是漏刪）：「；持續拿不到請到{資料體檢}看 Yahoo 那一源的狀態」指向資料體檢的子句已刪（只刪不改）——
+#:    VIX（`fetch_yf_close`）沒掛 `@monitored`，資料體檢那面牆上看不到它（同 SA-r2 #718／SA-r2-f1 #723）。
 VIX_RETRY_WHERE: str = (
-    f"稍後{press(ACTION_RUN_WARROOM_LABEL)}再試一次；"
-    "持續拿不到請到"
-    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
-    "看 Yahoo 那一源的狀態")
+    f"稍後{press(ACTION_RUN_WARROOM_LABEL)}再試一次")
 
 
 def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
@@ -3747,8 +3746,7 @@ def build_binding_card(binding: BindingReadout) -> _Built:
         _note = Note(
             now=BINDING_FAILED_NOW,
             why=_error_why(SRC_BINDING, binding.error),
-            where=("先確認網路與 Google 授權是否仍有效；"
-                   f"細節在{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+            where="先確認網路與 Google 授權是否仍有效")
     else:   # UI_EMPTY —— **還沒綁。這是有效結果，不是故障。**
         # ⚠️ 與戰情室那幾張空卡**共用同一組常數**：同一件事在同一頁上寫兩份，
         #    改的時候一定會漏改一份，於是兩張卡對同一個狀況給出兩種說法。
@@ -3834,8 +3832,7 @@ def build_portfolio_count_card(binding: BindingReadout) -> _Built:
             # 三張與燈牆上經 `_station_note()` 本來就用它；⛔ 不新寫）。綁到了、但讀組合清單失敗
             # （drift）那一種照舊。
             where=(STATION_ERROR_WHERE if binding.error else
-                   "重新用 Google 登入授權一次，或確認那本 Sheet 仍然分享給你；"
-                   f"來源狀態在{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+                   "重新用 Google 登入授權一次，或確認那本 Sheet 仍然分享給你"))
     else:   # UI_EMPTY —— **綁了但空。這是有效結果，不是故障。**
         _note = Note(
             now=COUNT_EMPTY_NOW,

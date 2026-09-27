@@ -1957,8 +1957,7 @@ def build_health_card(stock: StockReadout) -> _Built:
                      why=(_error_why(SRC_METRICS, stock.error) if stock.error
                           else _error_why(SRC_METRICS, stock.health_error,
                                           verb="回報失敗")),
-                     where=("先確認代碼與網路／proxy；細節在"
-                            f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+                     where="先確認代碼與網路／proxy")
     else:   # UI_EMPTY
         _note = Note(
             now=HEALTH_EMPTY_NOW,
@@ -2044,8 +2043,7 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
                      where=SINGLE_IDLE_WHERE)
     elif _state == UI_FAILED:
         _note = Note(now=VALUATION_FAILED_NOW, why=val.error,
-                     where=("先確認代碼與網路／proxy；細節在"
-                            f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+                     where="先確認代碼與網路／proxy")
     else:   # UI_EMPTY —— **有效結果**：這套法則不適用這一檔，或缺一半輸入。
         # 「是缺股價還是缺配息」由 L2 的 `msg` 說（它已經寫明），本檔不再判一次；
         # 只有「三段備援都沒給」這一種 L2 講不出來（它看不到來源），本檔補。
@@ -2145,8 +2143,7 @@ def build_chips_card(chips: ChipsView) -> _Built:
                      where=SINGLE_IDLE_WHERE)
     elif _state == UI_FAILED:
         _note = Note(now=CHIPS_FAILED_NOW, why=chips.error,
-                     where=("先確認代碼與網路／proxy；細節在"
-                            f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+                     where="先確認代碼與網路／proxy")
     else:   # UI_EMPTY —— 日線回來了，但判不出籌碼。**資料缺漏，不是故障。**
         # ⚠️ 洗 glyph 的理由同 `build_valuation_card` 的 empty 分支：
         # 這句話會把**上游的原文**插進 `Note`，而本函式在 `_render_one()` 的
@@ -2207,8 +2204,7 @@ def build_profit_cards(prof: ProfitabilityReadout) -> tuple[_Built, ...]:
                          where=SINGLE_IDLE_WHERE)
         elif _state == UI_FAILED:
             _note = Note(now=PROFIT_FAILED_NOW_TEMPLATE.format(label=_label), why=prof.error,
-                         where=("先確認代碼與 FinMind 額度；細節在"
-                                f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+                         where="先確認代碼與 FinMind 額度")
         else:   # UI_EMPTY —— **這一格就是線框點名要修的那一格。**
             # ⚠️ **兩種缺值，兩句話**：整張損益表沒回來（`PROFIT_GAP_WHY`，
             #    客戶核准的線框原文）vs 單一欄位沒抓到／單位異常
@@ -2261,8 +2257,7 @@ def _etf_card(key: str, label: str, etf: EtfReadout, *,
             # 自相矛盾，故只刪不加：剩下的就是健康／估值卡既有 where 的逐字句子。
             where=(("" if (leg_error and not etf.error) else
                     "這一支 L3 對 ETF 是 fail-loud 的（拿不到日線就直接拋）—— ")
-                   + "先確認代碼與網路／proxy；細節在"
-                   f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+                   + "先確認代碼與網路／proxy"))
     else:   # UI_EMPTY
         _note = Note(now=empty_now, why=empty_why, where=empty_where)
     return Card(key=key, label=label, state=_state, note=_note), tuple(facts), ""
@@ -2300,9 +2295,7 @@ def build_dividend_card(etf: EtfReadout) -> _Built:
         empty_why=("**這是一個有效的結果**：可能它真的沒配過息（累積型／剛掛牌），"
                    "也可能上游這一輪沒回配息序列。本站不把兩者都寫成 0%，"
                    "因為 0% 是「不配息」這個結論"),
-        empty_where=("到公開資訊觀測站或發行商網站對一次配息公告；"
-                     "若確定有配過息卻查不到，到"
-                     f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}看來源狀態"),
+        empty_where="到公開資訊觀測站或發行商網站對一次配息公告",
         leg_error=etf.dividend_error)
 
 
@@ -2330,9 +2323,7 @@ def build_peer_card(etf: EtfReadout) -> _Built:
         empty_why=("同類 ETF 的檔數不足以排名，或同儕那一腿這一輪抓取失敗 —— "
                    "L3 對這一格是 best-effort（算不出就回 `None`），"
                    "**不會拿一個中位數頂替**"),
-        empty_where=("冷門或剛掛牌的類別常態如此；重按通常不會改變。"
-                     "細節在"
-                     f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"),
+        empty_where="冷門或剛掛牌的類別常態如此；重按通常不會改變。",
         leg_error=etf.peer_error)
 
 
@@ -2448,8 +2439,9 @@ _V2_PRESS_BATCH: str = press(ACTION_RUN_BATCH_LABEL)
 #: 「沒有出口」的指路 ⛔ 只留那個標記 —— 原文接著寫的「回報給維護者」一併摘上卡面
 #: （同我的持股頁 QA 2026-09-25：只剩標記會把原文的下一步吞掉）。
 _V2_NO_EXIT_REPORT: str = NO_EXIT_MARKER + "，請把上面那行訊息回報給維護者"
-_V2_DATA_HEALTH: str = v2_plain(ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH))
-_V2_CHECK_NET: str = "先確認代碼與網路／proxy；細節在" + _V2_DATA_HEALTH
+#: 📌 SA-r2-f2（2026-09-27，有意識的刪除，⛔ 不是漏刪）：本常數與健康度／估值／籌碼／獲利／ETF 紅卡、ETF 配息／同儕空態的指向資料體檢的子句已刪（只刪不改）——
+#:    這幾條鏈（`StockDataLoader`／財報／配息／T86／ETF `etf_fetch`）全都沒掛 `@monitored`，資料體檢那面牆上看不到它（同 SA-r2 #718／SA-r2-f1 #723）。
+_V2_CHECK_NET: str = "先確認代碼與網路／proxy"
 
 
 #: 上游例外的「為什麼」：`{出處}拋出例外：{repr(e)}` 摘成「{出處的前綴}…拋出例外」
@@ -2618,12 +2610,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "到公開資訊觀測站或發行商網站對一次配息公告")),
        _v2_rows_for("inspect.etf.peer", PEER_EMPTY_NOW, (
            None, "同類 ETF 的檔數不足以排名，或同儕那一腿這一輪抓取失敗",
-           "冷門或剛掛牌的類別常態如此；重按通常不會改變。細節在" + _V2_DATA_HEALTH))]
+           "冷門或剛掛牌的類別常態如此；重按通常不會改變。"))]
     # ── 第三層：💰 獲利能力三格 ────────────────────────────────────
     + [_v2_rows_for(_k, PROFIT_FAILED_NOW_TEMPLATE.format(label=_l), (
            None, (_v2_raised(SRC_STATEMENTS), _v2_raised(SRC_HEALTH),
                   _v2_raised(SRC_STATEMENTS, "回報失敗")),
-           "先確認代碼與 FinMind 額度；細節在" + _V2_DATA_HEALTH)) for _k, _l in _V2_PROFIT_LABELS]
+           "先確認代碼與 FinMind 額度")) for _k, _l in _V2_PROFIT_LABELS]
     + [_v2_rows_for(_k, PROFIT_EMPTY_NOW_TEMPLATE.format(label=_l), (
            None, ("三張財報表裡，損益表這一輪沒有回來",
                   "這一格的欄位這一季沒抓到、或上游判定單位異常標了 N/A"),

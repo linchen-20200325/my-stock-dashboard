@@ -282,12 +282,16 @@ class TestFetchFailureIsRed:
         assert ("hold.vix", PH.VIX_FAILED_NOW, _NO_CLOSE_WHY, PH.VIX_RETRY_WHERE) in E._NOTES
 
     def test_a_retry_where_is_the_old_empty_where_verbatim(self):
-        """上提成常數時一字未改：用同一組原料重組一次，逐字相等。"""
-        assert PH.VIX_RETRY_WHERE == (
-            f"稍後{PH.press(PH.ACTION_RUN_WARROOM_LABEL)}再試一次；"
-            "持續拿不到請到"
-            f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
-            "看 Yahoo 那一源的狀態")
+        """上提成常數時一字未改：用同一組原料重組一次，逐字相等。
+
+        SA-r2-f2（2026-09-27）：「；持續拿不到請到{資料體檢}看 Yahoo 那一源的狀態」已刪
+        （VIX 走 `fetch_yf_close`，沒掛 `@monitored`）⇒ 新值＝舊值在「；」之前那一段。
+        """
+        _old = (f"稍後{PH.press(PH.ACTION_RUN_WARROOM_LABEL)}再試一次；"
+                "持續拿不到請到"
+                f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
+                "看 Yahoo 那一源的狀態")
+        assert PH.VIX_RETRY_WHERE == _old.split("；", 1)[0] != _old
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -542,9 +542,10 @@ HEATMAP_FAILED_WHY: str = (
     "或整批被限速／擋掉）。**畫面上不會出現任何一格**，"
     "本頁也**不會**拿 0% 把格子填滿冒充「全部持平」"
 )
+#: 📌 SA-r2-f2（2026-09-27，有意識的刪除，⛔ 不是漏刪）：「；細節在{資料體檢}」指向資料體檢的子句已刪（只刪不改）——
+#:    熱力圖 yfinance 批次鏈（`_fetch_sector_returns`）沒掛 `@monitored`，資料體檢那面牆上看不到它（同 SA-r2 #718／SA-r2-f1 #723）。
 HEATMAP_FAILED_WHERE: str = (
-    "先確認網路／NAS proxy；細節在"
-    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}。"
+    "先確認網路／NAS proxy。"
     f"稍後重新{press(ACTION_LOAD_MAP_LABEL)}可再試一次"
 )
 
