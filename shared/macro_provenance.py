@@ -79,3 +79,19 @@ def is_m1b_m2_proxy(info: Optional[dict]) -> bool:
         if info.get(_k) is True:
             return True
     return str(info.get('source') or '') in M1B_PROXY_SOURCE_LABELS
+
+
+#: M1B/M2 為代理值時，貼在數字後面的短註記。
+#: **字面沿用 v1** `src/ui/tabs/macro/section_long.py` 長期桶 KPI 卡（v19.183 D2）
+#: 既有的那一串 —— B7c 上提到 L0 讓 v1 KPI 卡與 v2 今天頁 m1b 燈共用同一個真相源，
+#: ⛔ 不是新文案（K1）。
+M1B_PROXY_VALUE_NOTE: str = '（大盤動能代理估算）'
+
+
+def m1b_m2_proxy_badge(info: Optional[dict]) -> str:
+    """代理值 → `M1B_PROXY_VALUE_NOTE`；否則 `''`（可直接串在數字後面）。
+
+    形狀對齊 `macro_helpers.bias_estimated_badge()`：非代理時回空字串，
+    呼叫端串接後輸出與未接線前**逐字元相同**。
+    """
+    return M1B_PROXY_VALUE_NOTE if is_m1b_m2_proxy(info) else ''

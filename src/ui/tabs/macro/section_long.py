@@ -33,7 +33,7 @@ from src.services.daily_checklist import (
 # v19.170 P1-4 死區判定（L0 純函式，無 I/O）
 from shared.stats_helpers import ewma_vol, signal_with_deadband
 # v19.183 D2:M1B/M2 是否為「^TWII 動能代理」的判定 SSOT(原用從未被寫入的 is_proxy 鍵)。
-from shared.macro_provenance import is_m1b_m2_proxy
+from shared.macro_provenance import M1B_PROXY_VALUE_NOTE, is_m1b_m2_proxy
 from shared.ui_state import UI_IDLE, classify_ui_state
 # I2(2026-08-10):`bias_240` 估算揭露文案 SSOT(L5 → L2 合法下行)。本檔原本是全 repo
 # 唯一有揭露的地方,但那兩句是 inline 字面 —— 其餘 9 個消費點要一起揭露就得複製,
@@ -291,7 +291,8 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
             # 這行註記一次都沒出現過** —— 揭露機制寫了但永遠不啟動(§1 降級須可見)。
             # 判定改走 L0 SSOT,並把提示從括號註記升級為獨立警語(括號太容易被略過)。
             _is_m1b_proxy = is_m1b_m2_proxy(_m1b_info)
-            _proxy_note = '（大盤動能代理估算）' if _is_m1b_proxy else ''
+            # B7c：字面上提 L0 `M1B_PROXY_VALUE_NOTE`（與 v2 今天頁 m1b 燈共用），輸出逐字不變。
+            _proxy_note = M1B_PROXY_VALUE_NOTE if _is_m1b_proxy else ''
             st.markdown(kpi('M1B-M2 差距', f'{_diff:+.2f}%{_proxy_note}',
                             f'M1B:{_m1b_info.get("m1b_yoy",0):.1f}%  M2:{_m1b_info.get("m2_yoy",0):.1f}%  {_ml}', _mc, '#0d1117'), unsafe_allow_html=True)
             if _is_m1b_proxy:

@@ -1860,6 +1860,19 @@ def compute_five_bucket_summary(
     # 輸出與本次改動前**逐字元相同**。
     _bias_badge = bias_estimated_badge(bias_info)
 
+    # B7c：M1B-M2 退到 Tier 3（^TWII 動能代理）時，比照上面 bias 估算徽章
+    # **只在顯示字串後綴**既有 v1 註記（L0 `M1B_PROXY_VALUE_NOTE`）。
+    # 判定沿用 v1 長期桶 KPI 卡的處理：**只揭露、不改燈** —— `classify_danger`
+    # 吃的仍是 `values[...]` 原始數值，燈號 / 桶等級 / headline 主因挑選逐位不變。
+    # 非代理時 badge 為空字串 → 輸出與本次改動前逐字元相同。
+    # 側車同步帶 `is_proxy=True`（**只在代理時才加這個欄位**，非代理時側車逐鍵不變），
+    # 讓 v2 今天頁的 m1b 燈與五桶明細讀同一個判定，不另開取數路徑。
+    from shared.macro_provenance import m1b_m2_proxy_badge
+    _m1b_badge = m1b_m2_proxy_badge(m1b_m2_info)
+    if (_m1b_badge and isinstance(_rd.get("m1b_m2_gap"), dict)
+            and _rd["m1b_m2_gap"].get("state") == "ok"):   # 無值時不貼（同 bias「—（估算）」的理由）
+        _rd["m1b_m2_gap"]["is_proxy"] = True
+
     out: dict = {}
     for bucket in BUCKET_ORDER:
         details = []
@@ -1870,6 +1883,8 @@ def compute_five_bucket_summary(
                 # v is None 時 fmt_value 已回「—」，再貼「（估算）」只會變成
                 # 「—（估算）」這種沒有意義的組合 → 只在真有數字時貼。
                 _value_str = f"{_value_str}{_bias_badge}"
+            if s.key == "m1b_m2_gap" and v is not None and _m1b_badge:
+                _value_str = f"{_value_str}{_m1b_badge}"
             details.append({
                 "key": s.key, "label": s.label,
                 "value_str": _value_str,
