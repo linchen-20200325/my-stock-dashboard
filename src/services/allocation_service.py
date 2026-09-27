@@ -248,7 +248,8 @@ def get_allocation(*, strict: bool = False) -> AllocationDecision:
         `final_*` 為 None，UI 須誠實顯示未評估(§1 Fail Loud)。
 
     strict（v2「💼 我的持股」建議水位卡用；預設 False = 既有行為一字不變）：
-    True → `get_macro_state(strict=True)` 的例外**不吞**（「總經讀壞了」≠「未評估」）。
+    True → `get_macro_state(strict=True)` 的例外**不吞**（「總經讀壞了」≠「未評估」）；
+    且 warroom 可用、`macro_state.json` 存在卻不可用（回傳帶 `file_error`，B6-r4）→ 也拋。
     """
     _wr = st.session_state.get('warroom_summary') or {}
     _extra = st.session_state.get(_EXTRA_CAPS_KEY) or {}
@@ -262,6 +263,10 @@ def get_allocation(*, strict: bool = False) -> AllocationDecision:
         print(f'[allocation] get_macro_state failed: {type(_e).__name__}: {_e}')
         _ms = {'is_loaded': False, 'regime': 'unknown', 'health': None,
                'defense': False, 'exposure_limit_pct': None}
+    if strict and _ms.get('file_error'):
+        # B6-r4：warroom 可用、但 macro_state.json 存在卻讀壞了 → 仲裁少了「曝險上限」
+        # 那條輸入；照算會畫出一個**悄悄少一條天花板**的區間。strict 下改拋（caller 轉紅）。
+        raise RuntimeError(str(_ms['file_error']))
 
     _intrinsic, _auto_conf = _derive_intrinsic_caps()
     _conf = tuple(_auto_conf) + _current_conflicts()

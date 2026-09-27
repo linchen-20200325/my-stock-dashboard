@@ -2637,11 +2637,15 @@ def load_deep(station: StationReadout) -> DeepReadout:
                            stress_error=repr(_e), var_error=repr(_e),
                            cash_error=repr(_e))
     _rows = [dict(_r) for _r in station.rows]
-    _stress, _stress_err = _guarded(get_portfolio_stress, _rows, "壓力測試")
+    # Q3-r3：壓測／配息也 `strict=True` —— 後綴判定時**被接住的例外**（原本吞成 `.TW`）
+    # 改帶回結果（壓測 `fetch_errors`、配息併進 `failed_tickers`）→ 各自既有紅態。
+    _stress, _stress_err = _guarded(lambda _r: get_portfolio_stress(_r, strict=True),
+                                    _rows, "壓力測試")
     # Q3：`strict=True` —— L1 取價**自己接住的例外**改列進 `fetch_errors`（→ 紅），
     # 不再混進 `no_price`（→ 灰「這檔沒有那段歷史」）。L3 預設 `False`，其他呼叫端不受影響。
     _var, _var_err = _guarded(lambda _r: get_portfolio_var(_r, strict=True), _rows, "VaR")
-    _cash, _cash_err = _guarded(get_dividend_cash_flow, _rows, "配息現金流")
+    _cash, _cash_err = _guarded(lambda _r: get_dividend_cash_flow(_r, strict=True),
+                                _rows, "配息現金流")
     return DeepReadout(
         requested=True, has_station_rows=True, **_shared,
         stress=_stress, var=_var, cash=_cash,
@@ -2926,9 +2930,14 @@ def build_stress_card(deep: DeepReadout) -> _Built:
     # 全部失敗時落在灰卡「有效的結果」、部分失敗時畫一個漏了那幾檔的虧損。一律升紅
     # （同 ⑤⑥ 核心／衛星 Q2：旁邊還有沒算到的，算出來的就不是整個組合的數字）。
     _stress_skipped = deep.failed_rows + deep.unpriced_rows
+    # Q3-r3：後綴判定時被接住的例外（L3 `strict=True` 帶回；只在沒有呼叫期例外時才看）
+    # → 那幾檔的 Beta 是拿錯後綴查的，走本卡既有的例外紅卡（錯誤原文照印）。
+    _stress_fetch_err = "；".join(
+        () if (deep.stress_error or deep.error or _res is None)
+        else (getattr(_res, "fetch_errors", ()) or ()))
     _state = classify_ui_state(
         requested=deep.requested,
-        error=deep.stress_error or deep.error or None,
+        error=deep.stress_error or deep.error or _stress_fetch_err or None,
         has_value=bool(_res is not None and _res.computed and not _stress_skipped),
         reason=MISS_FETCH_FAILED if _stress_skipped else "",
         discriminative=not _degraded)
@@ -2974,14 +2983,14 @@ def build_stress_card(deep: DeepReadout) -> _Built:
                 tuple(_facts), "")
     if _state == UI_IDLE:
         _note = _idle_note(deep.scope_idle)
-    elif _state == UI_FAILED and not (deep.stress_error or deep.error):
+    elif _state == UI_FAILED and not (deep.stress_error or deep.error or _stress_fetch_err):
         # Q3：沒有例外、但有持有列取數失敗（見上）。why／where 與 ⑤⑥ Q2 同一套既有文字。
         _note = Note(now=STRESS_FAILED_NOW,
                      why=_deep_uncounted_why(deep.failed_rows, deep.unpriced_rows),
                      where=STATION_ERROR_WHERE)
     elif _state == UI_FAILED:
         _note = _deep_note(deep, now=STRESS_FAILED_NOW, source=SRC_STRESS,
-                           error=deep.stress_error)
+                           error=deep.stress_error or _stress_fetch_err)
     elif not deep.has_station_rows:
         _note = _deep_note(deep, now=STRESS_NO_HOLDINGS_NOW,
                            source=SRC_STRESS, error="")
