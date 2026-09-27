@@ -789,24 +789,29 @@ def get_station_rows(holdings: list[dict]) -> tuple[list[dict], float | None]:
 
 
 # ── 換股建議（換出=持有🔴汰弱 · 換入=選股池候選 · 總經位階當攻守閘門）──────────
-def get_station_macro() -> dict:
+def get_station_macro(*, strict: bool = False) -> dict:
     """取當前總經位階（唯讀,不打 API;§1 讀不到標未評估,不瞎給攻守）。
 
     session 內走 `allocation_service.get_macro_regime()`（併本 session warroom,是全站
     唯一 regime 橋樑）;退化 `macro_state_locker.get_macro_state()`（只讀 macro_state.json
     快照）。攻守姿態沿用 `position_throttle`（不自創刻度）。回正規化 dict。
+
+    strict（v2「💼 我的持股」總經位階卡用；預設 False = 既有行為一字不變）：
+    True → 兩條讀取都走 `strict=True`，退化路徑的例外**不吞** ——「讀壞了」≠「未評估」。
     """
     _state = None
     try:
         from src.services.allocation_service import get_macro_regime
-        _state = get_macro_regime()
+        _state = get_macro_regime(strict=True) if strict else get_macro_regime()
     except Exception:  # noqa: BLE001 — 無 session / 匯入失敗 → 退離線快照
         _state = None
     if not isinstance(_state, dict) or not _state:
         try:
             from src.services.macro_state_locker import get_macro_state
-            _state = get_macro_state()
+            _state = get_macro_state(strict=True) if strict else get_macro_state()
         except Exception as _e:  # noqa: BLE001 — §1 讀不到當未評估,不炸
+            if strict:
+                raise
             print(f"[dividend_station] 位階讀取失敗: {type(_e).__name__}: {_e}")
             _state = None
     if not isinstance(_state, dict):

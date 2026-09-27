@@ -55,7 +55,8 @@ def _collect_stock_watchlist_tickers(stock_sheet_id) -> list[str]:
 
 
 def get_sector_flow_view(*, etf_tickers=None, stock_sheet_id=None,
-                         include_stock_watchlists: bool = True) -> dict:
+                         include_stock_watchlists: bool = True,
+                         strict: bool = False) -> dict:
     """讀快取 + 疊加持股 → 板塊 highlight,回 UI-ready view。
 
     Args:
@@ -63,6 +64,8 @@ def get_sector_flow_view(*, etf_tickers=None, stock_sheet_id=None,
                      可能帶 .TW/.TWO 後綴)。
         stock_sheet_id: 個股組合 gsheet 的 sheet_id(由 L5 從 session_state 取);None → 跳過。
         include_stock_watchlists: 是否額外抓個股 gsheet watchlist(預設 True)。
+        strict: 透傳 reader 的 `strict`(預設 False = 既有行為一字不變)。True →
+                快取檔**存在但壞掉**時例外往上拋,不回「尚未產生」的 ok=False。
 
     Returns:
         reader.read_sector_flow_cache() 的 dict 疊加兩欄:
@@ -74,7 +77,7 @@ def get_sector_flow_view(*, etf_tickers=None, stock_sheet_id=None,
     from src.compute.sector_flow import map_tickers_to_sectors
     from shared.sector_flow_thresholds import SECTOR_UNCLASSIFIED, canonical_sector
 
-    view = read_sector_flow_cache()
+    view = read_sector_flow_cache(strict=True) if strict else read_sector_flow_cache()
     if not view.get("ok"):
         view.setdefault("highlight_sectors", set())
         view.setdefault("holding_sectors", {})

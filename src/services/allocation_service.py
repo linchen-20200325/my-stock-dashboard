@@ -218,7 +218,7 @@ def _invalidate() -> None:
 
 
 # ── 對外：唯一取數入口 ─────────────────────────────────────────────
-def get_allocation() -> AllocationDecision:
+def get_allocation(*, strict: bool = False) -> AllocationDecision:
     """回傳全站唯一的建議持股決策(唯讀)。
 
     來源鏈(§2.1 上層贏、不平均)::
@@ -246,14 +246,19 @@ def get_allocation() -> AllocationDecision:
     Returns:
         AllocationDecision。總經未評估時 `is_loaded=False`，
         `final_*` 為 None，UI 須誠實顯示未評估(§1 Fail Loud)。
+
+    strict（v2「💼 我的持股」建議水位卡用；預設 False = 既有行為一字不變）：
+    True → `get_macro_state(strict=True)` 的例外**不吞**（「總經讀壞了」≠「未評估」）。
     """
     _wr = st.session_state.get('warroom_summary') or {}
     _extra = st.session_state.get(_EXTRA_CAPS_KEY) or {}
 
     try:
         from src.services.macro_state_locker import get_macro_state
-        _ms = get_macro_state(_wr)
+        _ms = get_macro_state(_wr, strict=True) if strict else get_macro_state(_wr)
     except Exception as _e:  # noqa: BLE001 — 讀檔/匯入失敗當未評估，不炸畫面
+        if strict:
+            raise
         print(f'[allocation] get_macro_state failed: {type(_e).__name__}: {_e}')
         _ms = {'is_loaded': False, 'regime': 'unknown', 'health': None,
                'defense': False, 'exposure_limit_pct': None}
@@ -294,7 +299,7 @@ def get_allocation() -> AllocationDecision:
     return _decision
 
 
-def get_macro_regime() -> dict:
+def get_macro_regime(*, strict: bool = False) -> dict:
     """回傳全站唯一的大盤 regime 契約（C1 v19.182；唯讀）。
 
     這是 `macro_state_locker.get_macro_state()`（L3 純函式）與 Streamlit
@@ -320,8 +325,14 @@ def get_macro_regime() -> dict:
         `get_macro_state()` 的 dict。取數失敗一律降級為未評估
         （`is_loaded=False` / `regime='unknown'` / `light='⬜'`），
         **不回填任何預設多空**（§1 Fail Loud）。
+
+    strict（預設 False = 既有行為一字不變）：True → 透傳 `get_macro_state(strict=True)`，
+    例外**不吞**、不降級成未評估（「讀壞了」≠「未評估」）。
     """
     _wr = st.session_state.get('warroom_summary') or {}
+    if strict:
+        from src.services.macro_state_locker import get_macro_state
+        return get_macro_state(_wr, strict=True)
     try:
         from src.services.macro_state_locker import get_macro_state
         return get_macro_state(_wr)

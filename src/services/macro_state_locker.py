@@ -312,7 +312,8 @@ def normalize_regime(value) -> str:
 
 
 def get_macro_state(warroom_summary: dict | None = None, *,
-                    state_file_path: str = "macro_state.json") -> dict:
+                    state_file_path: str = "macro_state.json",
+                    strict: bool = False) -> dict:
     """『總經 tab 已算好的狀態』→ 全站唯一的 canonical 總經契約（① 接線 + C1 仲裁）。
 
     來源優先序（§2.1 上層贏、**禁止平均**）::
@@ -350,6 +351,13 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     —— 把「不知道」偽裝成「判斷為震盪」。現改回 `'unknown'` + `light='⬜'`。
 
     純函式:warroom_summary 由 caller 從 session 傳入(本層不碰 session_state);只讀檔。
+
+    strict(v2「💼 我的持股」總經位階／建議水位卡用;預設 False = 既有行為一字不變):
+      True → **讀不出來 ≠ 未評估**。warroom 不可用、且 `state_file_path` **存在**卻不可用
+      (讀檔／JSON 失敗被 `load_macro_state` 降級成 `_DEFAULT_STATE`、或檔內就是
+      `execute_and_lock` 失敗時寫下的 Fail-safe「系統異常」、或缺 `market_regime`)
+      → `raise`,不回 is_loaded=False —— 否則 caller 會把「總經讀壞了」畫成
+      「本輪未評估」(§1 靜默失敗)。檔案**不存在**仍回未評估(那才是真的還沒評估)。
     """
     from shared import regime_arbiter as _RA
 
@@ -365,6 +373,10 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     _wr_ok = bool(_wr) and _is_finite_number(_wr.get("health_score"))
     _file_ok = bool(_file) and _file.get("market_regime") not in (None, "系統異常")
     _is_loaded = _wr_ok or _file_ok
+    if strict and not _is_loaded and os.path.exists(state_file_path):
+        raise RuntimeError(
+            f"{os.path.basename(state_file_path)}: "
+            f"market_regime={_file.get('market_regime')!r}")
 
     _health = _wr.get("health_score") if _wr_ok else None
     _exposure = _file.get("exposure_limit_pct") if _file_ok else None
