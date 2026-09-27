@@ -32,6 +32,7 @@ _QE_MAP = {'1': '03-31', '2': '06-30', '3': '09-30', '4': '12-31'}
 # S-GRAY-1 v18.244:loader I/O 已下沉 `shared/macro_calibration.py`(L0 Infra),
 # 本檔僅做 module-level call 後 expose 常數,符合 L2 「純函式 / 無 I/O」邊界。
 from shared.macro_calibration import load_calibrated_thresholds as _load_calibrated_thresholds
+from shared.inst_net import is_net_observed  # 2026-09-27 foreign_net 燈:預填/補零值不當觀測
 
 HEALTH_DEFENSE_THRESHOLD, BULL_MIN_SCORE = _load_calibrated_thresholds()
 
@@ -1614,7 +1615,9 @@ def compute_five_bucket_summary(
           bucket ∈ long/mid/short/chips/news。
 
     §1 Fail Loud：缺值 → 該指標 gray（未載入），桶全 gray → ⬜，**不**偽綠。
-    §4.1：foreign_net 因 inst net 單位待確認，v1 暫不接（保持 gray 不誤判）。
+    §4.1：foreign_net 2026-09-27 接線 —— `cl_data['inst']` 外資 net 已是**億元**
+    （BFI82U 買賣差額 元÷TWD_PER_YI；FinMind TotalInstitutional 備援同），
+    另掛 ±9999 億範圍守衛擋尺度混入；缺值 / 越界 → gray，**不**當 0。
 
     v19.175 P0-B（**行為變更**）：`us10y` / `dxy` 兩條 spec 自 v18.286 註冊起
     就沒有對應取值（values dict 無此 key）→ 永久 ⬜ gray。本版接上
@@ -1694,6 +1697,27 @@ def compute_five_bucket_summary(
                 return _v_intl
         return None
 
+    def _foreign_net_yi(cd):
+        """`cl_data['inst']` 外資現貨淨買賣(**億元**,不換算)→ float / None。
+
+        key 挑法對齊 section_chips(先找「外資」且「陸資」,再退「外資」);
+        生產端兩條路徑都只產 `外資及陸資`。任何一層缺 → None(§1,不回填 0)。
+        """
+        _inst_fn = coerce_inst_dict(cd, where="compute_five_bucket_summary")
+        _fk_fn = (next((k for k in _inst_fn if "外資" in str(k) and "陸資" in str(k)), None)
+                  or next((k for k in _inst_fn if "外資" in str(k)), None))
+        if _fk_fn is None:
+            return None
+        _row_fn = _inst_fn.get(_fk_fn)
+        if not isinstance(_row_fn, dict):
+            return None
+        # 2026-09-27:上游預填 0.0 / fillna(0) 推出的淨額**不是觀測值**(shared/inst_net.py)。
+        #   既有消費點照舊讀它;本燈一律當缺值 → gray(no_value),⛔ 不畫「0億」。
+        if not is_net_observed(_inst_fn, _fk_fn):
+            print(f"[五桶/foreign_net] ⚠️ {_fk_fn} 列上游未觀測到(預填/補零值)→ 視為缺值")
+            return None
+        return _row_fn.get("net")
+
     _SENTINEL = object()   # 「沒傳 container」與「傳了 None」要分得開
 
     # ── readiness 側車(2026-08-20)──────────────────────────────────────
@@ -1765,6 +1789,12 @@ def compute_five_bucket_summary(
         沒有第二份東西可以漂移。
         """
         _spec_fs = SPECS_BY_KEY.get(key)
+        # 2026-09-27(foreign_net 接線時補):L0 `wired=False` 對**所有**取值路徑都是權威 ——
+        #   原本只有「寫死 `_unwired(key)`」那一行擋得住;改成取值端一律先看旗標,
+        #   L0 日後把任一盞標回未接線,上游就算有值也不得被畫成有結論(§1)。
+        #   現行 16 盞全為 wired=True ⇒ 本分支不觸發,既有輸出逐位不變。
+        if _spec_fs is not None and not getattr(_spec_fs, "wired", True):
+            return _unwired(key)
         _cands = [_lbl for _lbl, _ in sources]
         _rejected: list = []
         for _src_label, _raw in sources:
@@ -1833,12 +1863,13 @@ def compute_five_bucket_summary(
         "fut_net":       _traced("fut_net", "li_latest[外資大小] (FinMind 期貨 + TAIFEX)", _df_last(li_latest, "外資大小"), li_latest),
         "margin":        _traced("margin", "cl_data.margin (TWSE → HiStock → Wearn)", _g(cl_data, "margin"), cl_data),
         "jingqi":        _traced("jingqi", "jingqi_info.avg (ad_ratio 5 日均)", _g(jingqi_info, "avg"), jingqi_info),
-        # §4.1 inst net 單位待確認 → 故意回 None(§1 fail-safe:寧缺勿錯)。
-        # v18.436 #20:此為「外部資訊阻斷」項,非程式 bug。啟用前置條件:
-        #   確認 FinMind TaiwanStockInstitutionalInvestorsBuySell 的 buy/sell 單位
-        #   (股 vs 千股 vs 億元)→ 才能對齊 spec 門檻判讀。在確認前 None 是正解,
-        #   不可猜單位填值(會誤判紅綠燈)。ForeignFlowSchema(71b310c)已備 schema。
-        "foreign_net":   _unwired("foreign_net"),
+        # 2026-09-27 接線(原 `_unwired`,理由「FinMind inst net 單位未確認」)。
+        # 單位證據與範圍守衛見 shared/macro_buckets.py foreign_net 條註解:
+        # `cl_data['inst'][外資].net` 在兩條生產路徑都**已是億元**,本行不做任何換算。
+        # §1:inst 缺 / 無外資 key / net 為 None → None(gray),**絕不**回填 0 ——
+        #     0 在 low_bad(yellow=0)下會變成「🟡 賣超邊緣」,是捏造的觀測。
+        # container 傳 cl_data:整包沒來 → not_loaded;來了但沒外資值 → no_value。
+        "foreign_net":   _traced("foreign_net", "cl_data.inst[外資及陸資].net 億 (TWSE BFI82U → FinMind TotalInstitutional)", _foreign_net_yi(cl_data), cl_data),
         "news_systemic": _traced("news_systemic", "_macro_news_items (RSS 系統性風險掃描)", _news_sys, news_items),
     }
 

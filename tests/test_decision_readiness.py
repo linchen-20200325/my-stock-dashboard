@@ -75,13 +75,19 @@ class TestUnwiredMustDeclareReason:
                 assert rd[s.key]["reason"] == MISSING_NOT_WIRED, (
                     f"{s.key} 未接線卻被報成 {rd[s.key]['reason']}")
 
-    def test_foreign_net_stays_unwired(self):
-        """釘住現況：`foreign_net` 在 FinMind 單位確認前不得接上（§4.1）。
+    def test_foreign_net_is_now_wired(self):
+        """2026-09-27 翻轉：`foreign_net` 單位已由 repo 內證據確定（§4.1），接線。
 
-        這條不是說它永遠不能接，是說**接上時必須同時改這裡**，
-        讓「單位已確認」這個決定被看見，而不是靜靜地把 wired 翻成 True。
+        原測試 `test_foreign_net_stays_unwired` 的註解要求「接上時必須同時改這裡，
+        讓『單位已確認』這個決定被看見」—— 本條即該決定的落點。單位證據、
+        範圍守衛與行為守衛見 `shared/macro_buckets.py` foreign_net 條註解與
+        `tests/test_lamp_foreign_net_wiring.py`。
         """
-        assert SPECS_BY_KEY["foreign_net"].wired is False
+        _sp = SPECS_BY_KEY["foreign_net"]
+        assert _sp.wired is True
+        assert (_sp.valid_min, _sp.valid_max) == (-9999.0, 9999.0)
+        rd = _readiness()
+        assert rd["foreign_net"]["reason"] != MISSING_NOT_WIRED
 
 
 class TestWiredSpecsDeclareUpstream:

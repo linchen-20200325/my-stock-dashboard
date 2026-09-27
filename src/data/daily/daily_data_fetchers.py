@@ -51,6 +51,7 @@ from shared.signal_thresholds import (  # v19.74 融資餘額 §3.2 合理區間
     MARGIN_BALANCE_SANITY_MIN_YI,
 )
 from shared.ttls import TTL_30MIN, TTL_1HOUR
+from shared.inst_net import InstNetDict  # 2026-09-27 三大法人「未觀測」旗標(加性,L0)
 from src.config import TTL_CONFIG as _TTL_CFG
 
 
@@ -242,6 +243,10 @@ def _parse_bfi82u_rows(fields: list, data: list) -> dict | None:
     if _net_idx is None:
         return None
     _inst = {'外資及陸資': {'net': 0.0}, '投信': {'net': 0.0}, '自營商': {'net': 0.0}}
+    # 2026-09-27(加性):記下哪幾格**真的**有觀測到一列可解析的買賣差額。
+    #   預填 0.0 對既有消費點原樣保留;沒觀測到的 key 另記在 `InstNetDict.unobserved_net`,
+    #   只有 foreign_net 燈讀它(缺外資列 ⇒ 灰燈,⛔ 不顯示「0億」)。見 shared/inst_net.py。
+    _seen: set = set()
     for _row in data:
         if not _row or len(_row) <= _net_idx:
             continue
@@ -250,14 +255,21 @@ def _parse_bfi82u_rows(fields: list, data: list) -> dict | None:
         _vs = str(_row[_net_idx]).replace(',', '').strip()
         if not _vs.lstrip('-').isdigit():
             continue
-        _net = round(int(_vs) / 1e8, 2)  # 元 → 億元
+        _net = round(int(_vs) / TWD_PER_YI, 2)  # 元 → 億元(§4.1,L0 SSOT 1e8)
         if '外資及陸資' in _nm:
             _inst['外資及陸資']['net'] = _net
+            _seen.add('外資及陸資')
         elif '投信' in _nm:
             _inst['投信']['net'] = _net
+            _seen.add('投信')
         elif '自營' in _nm:
             _inst['自營商']['net'] += _net
-    return _inst
+            _seen.add('自營商')
+    _unobs = frozenset(_k for _k in _inst if _k not in _seen)
+    if _unobs:
+        print(f'[三大法人/BFI82U] ⚠️ 以下列未觀測到(預填 0.0 保留給既有消費點;'
+              f'foreign_net 燈視為缺值): {sorted(_unobs)}')
+    return InstNetDict(_inst, unobserved_net=_unobs)
 
 
 @st.cache_data(ttl=TTL_30MIN, show_spinner=False)

@@ -2206,9 +2206,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("why.source.unmeasured.finmind_quota", FINMIND_QUOTA_NOW, (
            None, "它是 FinMind 帳號層級的資訊，不在任何一支 fetcher 的回傳裡",
            _V2_NO_EXIT_UNWIRED)),
-       _v2_rows_for("why.spec.flags", SPEC_FLAG_UNWIRED_NOW, (
-           None, ("FinMind inst net 單位未確認（股 / 千股 / 億元）",),
-           NO_EXIT_MARKER + " —— 這是規格層面的已知限制，不是這一輪抓壞了，重按幾次都一樣")),
+       # 2026-09-27：原 `SPEC_FLAG_UNWIRED_NOW` 那一列（唯一候選是 foreign_net 的
+       #   `unwired_reason`「FinMind inst net 單位未確認…」）隨 foreign_net 接線成為死列，刪除。
+       #   L0 日後再標一盞 `wired=False` → 查不到鍵 → 紅卡 + 本檔測試紅燈（設計如此，⛔ 不預留空列）。
        _v2_rows_for("why.spec.flags", SPEC_FLAG_DEGRADED_NOW, (
            # QA F4：每盞各自的**原因／去處**⛔ 不得略 —— 融資：固定 3,400 億門檻 vs 長大了的市場；
            # 財報趨勢：真要看趨勢該去的那一區。候選是 L0 原因欄原文的逐段摘錄（見本表開頭的據實揭露）；

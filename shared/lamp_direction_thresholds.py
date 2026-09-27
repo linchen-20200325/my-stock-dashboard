@@ -5,7 +5,7 @@
 2026-09-24 首批 4 盞（margin / bias_240 / ism_pmi / m1b_m2_gap）；
 2026-09-26（客戶核准）擴到**全部 16 盞**：有乾淨歷史且持平帶量得到的燈算真方向
 （新增 vix），其餘一律「無資料」（原因見下方「無資料的其餘盞」段）。
-⚠️ 列只出現在 live / degraded 卡上；未接線（foreign_net）/ 尚未載入 / 失敗的卡不出列。
+⚠️ 列只出現在 live / degraded 卡上；未接線 / 尚未載入 / 失敗的卡不出列。
 
 本檔只放常數（§8.2 L0：零 I/O、零 L1+ 依賴）。計算在
 `src/compute/macro/lamp_direction.py`（L2 純函式），本檔不含任何判斷邏輯。
@@ -97,7 +97,8 @@
   ⚠️ §2.3：上月值是**本次發布版**（若官方回溯修正上月分數，拿到的是修正後的值），
   與本月燈號同一次發布對齊 ⇒ 無 lookahead；但它可能與上個月畫面當時顯示的數字不同。
   單位：顯示不帶單位（`unit = ""`，沿用既有字串，不新增「分」這個方向列文字）。
-- foreign_net：決策端未接線（燈永遠不亮），卡上本來就不出這一列。
+- foreign_net：2026-09-27 接線（燈會亮），但 `cl_data['inst']` 只帶最新一個交易日、
+  session 無歷史序列 ⇒ mode = "none"，方向列恆為「無資料」（不發明歷史）。
 """
 from __future__ import annotations
 
@@ -175,7 +176,7 @@ LAMP_DIRECTION_WINDOWS: dict[str, dict] = {
            ("fut_net", "先行指標只保留約 14 個交易日，湊不滿 20 交易日視窗"),
            ("jingqi", "5 日均的 20 日差仍是雜訊（lag-20 自相關 0.025，twii_ohlcv.parquet 4,886 列，"
                       "2026-09-26 量測）—— 同 adl 不出箭頭"),
-           ("foreign_net", "決策端未接線（燈永遠不亮）"),
+           ("foreign_net", "cl_data.inst 只帶最新一個交易日，session 無外資淨買賣歷史序列（2026-09-27 接線時查證）"),
            ("news_systemic", "session 無新聞則數的歷史序列"),
        )},
 }

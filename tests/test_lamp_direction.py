@@ -9,7 +9,7 @@
   等級與不傳 directions 時**逐字相同**。
 - 2026-09-26 擴到 16 盞：vix 有真方向（序列取自本輪 session，經 L3
   `load_section_inputs`）；其餘 11 盞（含 adl：單日估算無自相關）恆為「無資料」；
-  foreign_net（未接線）不出列；首批 4 盞的卡面與 origin/main 10f385c 的黃金雜湊逐字相同。
+  foreign_net（2026-09-26 時未接線、不出列；2026-09-27 接線後恆為「無資料」）；首批 4 盞的卡面與 origin/main 10f385c 的黃金雜湊逐字相同。
 """
 from __future__ import annotations
 
@@ -444,15 +444,18 @@ class TestRenderLive:
         assert len(with_) == 16
         has = {k.split(".", 1)[1] for k, t in with_.items()
                if any(f[0] == LAMP_DIRECTION_FACT_KEY for f in t.facts)}
-        # foreign_net 未接線 ⇒ 不出列；其餘 15 盞（live / degraded）都有
-        assert has == set(LAMP_DIRECTION_KEYS) - {"foreign_net"}
-        assert with_["detail.foreign_net"].card.state == P.UI_UNWIRED
+        # 2026-09-27：foreign_net 已接線 ⇒ live ⇒ 16 盞（live / degraded）都出列
+        #   （foreign_net mode = none ⇒ 恆為「無資料」，見 test_texts）
+        assert has == set(LAMP_DIRECTION_KEYS)
+        assert with_["detail.foreign_net"].card.state == P.UI_LIVE
         for k, t in with_.items():
             html = P.v2_card_html(t)
             assert (_ROW_SPAN in html) == (k.split(".", 1)[1] in has)
 
+    @pytest.mark.usefixtures("synthetic_unwired_lamp")   # 2026-09-27:已無真實未接線燈
     def test_unwired_card_identical(self):
         P, without, with_ = self._both()
+        assert with_["detail.foreign_net"].card.state == P.UI_UNWIRED
         k = "detail.foreign_net"
         assert with_[k] == without[k]
         assert P.v2_card_html(with_[k]) == P.v2_card_html(without[k])
@@ -496,7 +499,7 @@ class TestRenderLive:
 
     def test_position(self):
         P, _, with_ = self._both()
-        for key in set(LAMP_DIRECTION_KEYS) - {"foreign_net"}:
+        for key in set(LAMP_DIRECTION_KEYS):
             t = with_[f"detail.{key}"]
             state = t.card.state
             assert state in (P.UI_LIVE, P.UI_DEGRADED)
@@ -521,8 +524,8 @@ class TestRenderLive:
         assert txt["ism_pmi"].startswith("↘ 下降（較上月 -2.0 點")
         assert txt["vix"].startswith("↗ 上升（近 20 交易日 +5.0 點")
         assert txt["adl"] == "無資料"
-        assert txt["foreign_net"] is None
-        for k in set(LAMP_DIRECTION_KEYS) - set(_REAL_KEYS) - {"foreign_net"}:
+        assert txt["foreign_net"] == "無資料"     # 2026-09-27 接線：無歷史 ⇒ 無資料（不發明）
+        for k in set(LAMP_DIRECTION_KEYS) - set(_REAL_KEYS):
             assert txt[k] == "無資料", k
 
 
@@ -641,8 +644,8 @@ class TestLoaderFailLoud:
             assert "upstream exploded" not in txt
             assert _ROW_SPAN in P2.v2_card_html(with_[f"detail.{key}"])
         assert _dir_text(with_, "m1b_m2_gap") == LAMP_DIRECTION_NODATA_TEXT
-        # 未接線的卡不受影響
-        assert with_["detail.foreign_net"] == without["detail.foreign_net"]
+        # 2026-09-27：foreign_net 已接線（mode = none、不讀 L3）⇒ loader 失敗仍是「無資料」
+        assert _dir_text(with_, "foreign_net") == LAMP_DIRECTION_NODATA_TEXT
         # 燈號 / 等級不受影響
         for k in with_:
             a, b = with_[k], without[k]
@@ -694,9 +697,8 @@ class TestLoaderFailLoud:
         tiles = _flat(P.build_indicator_tiles(_live_readout(), band_label=band_label,
                                               thr_text=thr_text, l4_error=l4_err,
                                               directions=dirs))
-        for key in set(LAMP_DIRECTION_KEYS) - {"foreign_net"}:
+        for key in set(LAMP_DIRECTION_KEYS):      # 2026-09-27：foreign_net 已接線，同列
             assert _dir_text(tiles, key) == f"計算失敗（{LAMP_DIRECTION_MISSING_REASON}）"
-        assert _dir_text(tiles, "foreign_net") is None
 
 
 class TestMissingKey:
@@ -896,10 +898,10 @@ class TestSessionSeries:
                                               directions=dirs))
         assert _dir_text(tiles, "vix").startswith("→ 持平（近 20 交易日 +0.3 點")
         for k in ("adl", "dxy", "us10y", "jingqi", "fut_net", "health", "ndc_signal",
-                  "us_core_cpi", "tw_export", "news_systemic", "m1b_m2_gap"):
+                  "us_core_cpi", "tw_export", "news_systemic", "m1b_m2_gap",
+                  "foreign_net"):   # 2026-09-27 接線：無歷史 ⇒ 無資料
             # ndc_signal：這個 session 沒帶 ndc_signal ⇒ 無資料（有帶的情形見 TestNdcSignal）
             assert _dir_text(tiles, k) == "無資料", k
-        assert _dir_text(tiles, "foreign_net") is None
 
 
 # ════════════════════════════════════════════════════════════════

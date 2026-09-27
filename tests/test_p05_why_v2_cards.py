@@ -289,7 +289,14 @@ def test_every_note_now_in_the_module_is_a_registered_constant():
     local = {n for n in names if n.startswith("_")}
     assert local == {"_now"}, local        # `build_spec_flag_card` 的區域變數（兩個常數二選一）
     names -= local
-    names |= {"SPEC_FLAG_UNWIRED_NOW", "SPEC_FLAG_DEGRADED_NOW"}
+    # 2026-09-27：foreign_net 接線後 L0 已無 wired=False 的燈 ⇒ `SPEC_FLAG_UNWIRED_NOW`
+    #   產生不出來，其短句列依「沒有死列」守衛刪除；故只強制**當下 L0 產得出**的旗標常數。
+    #   L0 日後再標一盞未接線 ⇒ 本條要求它登記 ＋ 上一條窮舉也會因查不到鍵而紅。
+    from shared.macro_buckets import BUCKET_DANGER_SPECS as _DS
+    from shared.station_specs import STATION_SPECS as _SS
+    if any(not getattr(_s, "wired", True) for _s in (*_DS, *_SS)):
+        names.add("SPEC_FLAG_UNWIRED_NOW")
+    names.add("SPEC_FLAG_DEGRADED_NOW")
     assert len(names) >= 20 and templates == {"L0_FAILED_NOW_TEMPLATE"}, (sorted(names), templates)
     registered = {now for (_k, now) in P.V2_SHORT_ROWS}
     for n in sorted(names):
@@ -906,7 +913,7 @@ _UNKNOWN_WHY_ANY: tuple[tuple[str, ...], ...] = (
     ("不認得的狀態", "不把它畫成正常"), ("不是 Mapping", "讀不出它的狀態"))
 #: L0 規格標記：逐盞的必留片語（**當下的 L0 規格表**；L0 新標一盞而沒補這裡 ⇒ 紅燈）。
 _SPEC_WHY: dict[str, tuple[str, ...]] = {
-    "why.spec.foreign_net": ("單位未確認",),
+    # 2026-09-27：`why.spec.foreign_net`（「單位未確認」）隨 foreign_net 接線消失（L0 旗標翻回 True）。
     # 原因：固定 3,400 億門檻 vs 已經長大的市場 —— ⛔ 不得只剩「天天紅但不危險」。
     # 「幾乎」⛔ 不得略：少了它卡面比原文更強（「每天都紅」）。
     "why.spec.margin": ("幾乎天天紅", "不代表天天危險", "固定金額", "3,400 億", "台股整體規模長大了不少"),
