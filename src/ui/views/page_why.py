@@ -283,6 +283,7 @@ from shared.macro_buckets import (
 # L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（SEC-2，2026-09-26；
 # 同 `page_hold` 批次 B 的作法，遮罩沿用 `***`、⛔ 不加說明字）。
 from shared.secret_scrub import scrub_secrets
+from shared.secret_md import scrub_md_mask
 # L0 SSOT：持股／個股燈規格 ＋ 缺值原因語彙。
 from shared.station_specs import (
     KEY_HEALTH_A,
@@ -2055,6 +2056,17 @@ def compose_qa_message(text: str) -> str:
     return f"{AI_QA_DISCLOSURE}\n\n{AI_NARRATIVE_GLYPH} {text}"
 
 
+def scrub_qa_text(text: str) -> str:
+    """SEC-r7（2026-09-27）：AI 回答上畫面／寫進對話紀錄前，先過 L0 `scrub_secrets`。
+
+    沒命中任何規則 → **原字串逐字回傳**（回答常有 `**粗體**`／`***粗斜體***`，一個字都不動）；
+    有命中 → `scrub_md_mask`（同 `shared/secret_md` 慣例：只跳脫遮罩 `***`，保留原句粗體）。
+    寫進紀錄的就是洗過的字串 ⇒ rerun 重播的對話紀錄也是洗過的。
+    """
+    _raw = str(text or "")
+    return _raw if scrub_secrets(_raw) == _raw else scrub_md_mask(_raw)
+
+
 def read_history(session: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
     """讀對話紀錄。形狀怪的一律當成空（**不猜**）。"""
     _raw = session.get(SS_QA_HISTORY)
@@ -2734,7 +2746,8 @@ def _render_qa_leaf(session: Mapping[str, Any]) -> None:
             # 對一段不存在的內容做免責，等於替一個沒發生的事情背書（§1）。
             # ⚠️ **畫出來的與存進紀錄的是同一個字串**：下一次 rerun 從紀錄重播，
             # 兩邊若各串各的，免責會在重播時消失（見 `compose_qa_message`）。
-            _body = compose_qa_message(_qa.text)
+            # SEC-r7：AI 回答在 L5 也洗一次（L3 `ai_qa_service` 只洗 URL query 與 `AIza…`）。
+            _body = compose_qa_message(scrub_qa_text(_qa.text))
             with st.chat_message("assistant"):
                 st.markdown(_body)
             _append_history("assistant", _body)

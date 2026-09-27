@@ -46,6 +46,7 @@ inline 門檻與色票改吃 SSOT(shared.staleness / shared.colors),詳見下方
 from __future__ import annotations
 
 import datetime as _dt
+from html import escape as _html_escape  # SEC-r9：detail 欄進 unsafe_allow_html 前先跳脫
 
 import streamlit as st
 from shared.secret_scrub import scrub_secrets  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑（HTML 欄位：先洗再截，不做 Markdown 跳脫）
@@ -745,7 +746,7 @@ def render_data_coverage() -> None:
             f"<span style='{_td};text-align:center;color:{r['color']};font-size:14px'>{r['emoji']}</span>"
             f"<span style='{_td};color:{r['color']};font-weight:600'>{r['ratio_txt']}</span>"
             f"<span style='{_td};color:{_fc};font-weight:600'>{_fe} {_fl}{_fa_html}</span>"
-            f"<span style='{_td};color:#bbb'>{r['detail']}</span>"
+            f"<span style='{_td};color:#bbb'>{_html_escape(str(r['detail']))}</span>"
             f"<span style='{_td};color:#888;font-size:10px'>{r['action']}</span>"
             f"</div>"
         )

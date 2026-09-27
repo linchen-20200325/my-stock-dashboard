@@ -2529,8 +2529,25 @@ def v2_plain(text: object) -> str:
     v2 卡面是 `card_html()` 產的 **raw HTML**、而且它把所有文字都 `escape` 過 ——
     同一串 `**今天能不能出手：尚未評估**` 在 v2 卡上會**原樣印出星號**。
     ⛔ 不是為了好看才改：印出裸星號會讓使用者以為畫面壞了。
+
+    SEC-r3（2026-09-27）：遮罩 `***`（`SECRET_MASK`）**原樣保留**。原本 `.replace("**", "")`
+    會把 `***` 吃成 `*`（值仍被遮，但看起來不像遮罩）。改成逐段看連續星號：
+    偶數長度 ＝ 純粗體記號 → 拿掉（同原本）；1 顆 → 留著（同原本）；
+    奇數且 ≥ 3 ＝ 遮罩（可能緊貼粗體記號，例 `**key=*****`）→ 拿掉粗體、留一個遮罩。
     """
-    return str(text).replace("**", "").replace("`", "")
+    return _V2_STAR_RUN_RE.sub(_v2_star_run, str(text)).replace("`", "")
+
+
+#: 連續星號（`v2_plain` 用；單一字元類重複 ⇒ 線性）。
+_V2_STAR_RUN_RE: Final = re.compile(r"\*+")
+
+
+def _v2_star_run(m: "re.Match[str]") -> str:
+    """一段連續星號 → 見 `v2_plain` 的 SEC-r3 說明。"""
+    _n = len(m.group(0))
+    if _n >= len(SECRET_MASK) and _n % 2:
+        return SECRET_MASK
+    return "*" * (_n % 2)
 
 
 def _v2_exit_phrase(where: str) -> str:
