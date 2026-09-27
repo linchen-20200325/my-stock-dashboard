@@ -252,7 +252,7 @@ class TestNotEmptyAnymore:
         sheet(records=_PARTIAL)
         new = dict(_page(PH)[1][1])
         assert new["⚠️ 上面兩個金額只涵蓋一部分"].startswith(
-            "1/2 檔持股缺張數或均價，**沒有**納入 —— 上面兩個數字只涵蓋其餘 1 檔")
+            "1/2 檔持股缺張數／均價／現價，**沒有**納入 —— 上面兩個數字只涵蓋其餘 1 檔")
         old = dict(_page(_mutant(PH, _PH_KEEP))[1][1])
         assert "⚠️ 上面兩個金額只涵蓋一部分" not in old, "對照組失效：改前就已經揭露了？"
 

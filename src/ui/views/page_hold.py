@@ -1324,6 +1324,8 @@ class SwitchReadout:
         excluded_n: 傳給 `get_switch_in_candidates(exclude=…)` 的已持有檔數。
             ⚠️ 這個數字要顯示出來 —— 少了 exclude，換入候選會**叫你買你已經有的東西**。
         error: 呼叫期例外，或上游帶下來的例外。
+        error_src: 上游帶下來的例外的出處（同 `StationReadout.error_src`；Q1-r4-f1）。
+            `None` ＝ 本卡自己（`SRC_SWITCH`）。
     """
 
     requested: bool
@@ -1337,6 +1339,7 @@ class SwitchReadout:
     #: 戰情表裡**整批抓取失敗**（`_detail.error`）的列代號 —— L3 `build_switch_advice`
     #: 對它們是略過的（沒被判過換出／換入）。由 `load_switch()` 判一次，卡與 ⑦ 都讀這一份。
     rows_failed: tuple[str, ...] = ()
+    error_src: str | None = None
 
     @property
     def scope_idle(self) -> bool:
@@ -1377,7 +1380,7 @@ def load_switch(station: StationReadout, macro: MacroReadout,
         return SwitchReadout(requested=False, submitted=station.submitted)
     if station.error:
         return SwitchReadout(requested=True, submitted=station.submitted,
-                             error=station.error)
+                             error=station.error, error_src=station.error_src)
     if not station.has_rows:
         return SwitchReadout(requested=True, submitted=station.submitted)
     _exclude = list(holdings.held_tickers)
@@ -1740,9 +1743,10 @@ def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
         _codes = _unvalued_codes(station)
         _out.append((
             "⚠️ 上面兩個金額只涵蓋一部分",
-            f"{_held_n - _valued_n}/{_held_n} 檔持股缺張數或均價，**沒有**納入 —— "
+            f"{_held_n - _valued_n}/{_held_n} 檔持股缺張數／均價／現價，**沒有**納入 —— "
             f"上面兩個數字只涵蓋其餘 {_valued_n} 檔。到 📁 組合管理補齊即可"
-            + ("；沒有納入：" + "、".join(_codes)
+            # P1a-f2：檔數核對用**去重前**的原清單（L3 按列數）；顯示時同代號只列一次。
+            + ("；沒有納入：" + "、".join(dict.fromkeys(_codes))
                if _codes and len(_codes) == _held_n - _valued_n else "")))
     return _out
 
@@ -2133,7 +2137,7 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
         #   （原因多半是代號或來源，指路是確認網路／授權、看資料體檢 —— 不是「沒有出口」）。
         if switch.error:
             _note = Note(now=SWITCH_FAILED_NOW,
-                         why=_error_why(SRC_SWITCH, switch.error),
+                         why=_error_why(switch.error_src or SRC_SWITCH, switch.error),
                          where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者；"
                                 "換出那一半只需要你的持股，換入那一半還要選股池，"
                                 "兩者任一失敗都會走到這裡"))
@@ -2579,6 +2583,8 @@ class DeepReadout:
         stress_error / var_error / cash_error: 各自的呼叫期例外。
         error: **上游**（戰情表／持股清單）帶下來的例外 —— 這一種是三格全紅，
             因為三格的輸入都沒有了。
+        error_src: `error` 的出處（同 `StationReadout.error_src`；Q1-r4-f1）。
+            `None` ＝ 各格自己的 `SRC_*`。
         failed_rows / unpriced_rows: Q3（2026-09-26）—— 持有列裡**因取數失敗而沒被 L3 計入**
             的代號（整批抓取失敗／現價抓不到），由 `_split_uncounted(station)` 帶下來
             （與 ⑤⑥ 核心／衛星 Q2 **同一把尺**）。L3 對這兩種列都是**靜靜跳過**
@@ -2601,6 +2607,7 @@ class DeepReadout:
     error: str = ""
     failed_rows: tuple[str, ...] = ()
     unpriced_rows: tuple[str, ...] = ()
+    error_src: str | None = None
 
     @property
     def scope_idle(self) -> bool:
@@ -2627,7 +2634,8 @@ def load_deep(station: StationReadout) -> DeepReadout:
     if not station.requested:
         return DeepReadout(requested=False, submitted=station.submitted)
     if station.error:
-        return DeepReadout(requested=True, error=station.error, **_shared)
+        return DeepReadout(requested=True, error=station.error,
+                           error_src=station.error_src, **_shared)
     if not station.has_rows:
         return DeepReadout(requested=True, **_shared)
     # Q3：持有列取數失敗的那幾檔（見 `DeepReadout.failed_rows`）。只讀列上既有的兩欄，零 L3 呼叫。
@@ -2689,7 +2697,9 @@ def _deep_note(deep: DeepReadout, *, now: str, source: str,
     if not deep.requested:
         return _idle_note(deep.scope_idle)
     if error or deep.error:
-        return Note(now=now, why=_error_why(source, error or deep.error),
+        # Q1-r4-f1：上游（持股那一層）帶下來的例外 → 出處照實寫持股清單；本格自己的例外仍寫 `source`。
+        return Note(now=now, why=_error_why(source if error else (deep.error_src or source),
+                                            error or deep.error),
                     where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者；"
                            "若只有這一格紅、其餘幾格正常，"
                            "那就是這一條上游單獨掛了，不是整個組合分析壞掉"))
@@ -3592,7 +3602,9 @@ def _ai_failed_note(ai: AiSummaryReadout) -> Note:
     """
     if ai.error_kind == AI_ERR_UPSTREAM:
         return Note(
-            now=AI_UPSTREAM_NOW,
+            # P1a-f1：持股清單讀不出來 → now 沿用預覽卡既有 `PREVIEW_FAILED_NOW`（⛔ 不新寫），
+            #   不說「上游的戰情表這一輪就壞了」（那一輪戰情表根本沒跑）。
+            now=(PREVIEW_FAILED_NOW if ai.error_src == SRC_HOLDINGS else AI_UPSTREAM_NOW),
             why=_error_why(ai.error_src or SRC_STATION, ai.error),
             where=("AI 總結吃的是戰情表已經算好的結論；"
                    "**上面那幾張卡這一輪也會是紅的** —— "
@@ -4060,7 +4072,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     # ── ④ 換股建議 ＋ 總經位階 ────────────────────────────────────
     # 兩個候選：換股 L3 拋例外（既有）／有列整批抓取失敗（沿用 ⑤ 停利卡同一句短句）。
     + [_v2_rows_for("hold.switch", SWITCH_FAILED_NOW, (
-           None, (_v2_raised(SRC_SWITCH), "整批抓取失敗 —— 看該列的錯誤訊息"),
+           None, (_v2_raised(SRC_SWITCH), _v2_raised(SRC_HOLDINGS),
+                  "整批抓取失敗 —— 看該列的錯誤訊息"),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.switch", SWITCH_NO_HOLDINGS_NOW, _V2_STATION_ERROR),
        _v2_rows_for("hold.switch", SWITCH_EMPTY_NOW, (
@@ -4123,7 +4136,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        # （兩者同時）／只有前者／只有後者 —— 後三個與 ⑤⑥ 核心／衛星（Q2）**逐字同一組摘錄**。
        # 配息只有前兩種（配息不需要現價，見 `build_dividend_cash_card()`）。
        _v2_rows_for("hold.deep.stress", STRESS_FAILED_NOW, (
-           None, (_v2_raised(SRC_STRESS),
+           None, (_v2_raised(SRC_STRESS), _v2_raised(SRC_HOLDINGS),
                   "整批抓取失敗 —— 看該列的錯誤訊息",
                   NO_PRICE_WHY),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
@@ -4131,7 +4144,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            None, "這是一個有效的結果" + V2_EXCERPT_GAP + "本站不用檔數當權重頂替",
            _V2_FILL_LOTS)),
        _v2_rows_for("hold.deep.var", VAR_FAILED_NOW, (
-           None, (_v2_raised(SRC_VAR),
+           None, (_v2_raised(SRC_VAR), _v2_raised(SRC_HOLDINGS),
                   "整批抓取失敗 —— 看該列的錯誤訊息",
                   NO_PRICE_WHY),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
@@ -4141,7 +4154,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "若是新上市／剛買進的標的，等歷史累積" + V2_EXCERPT_GAP
            + "若是缺張數／均價，到既有的 📁 組合管理分頁補齊")),
        _v2_rows_for("hold.deep.dividend_cash", CASH_FAILED_NOW, (
-           None, (_v2_raised(SRC_DIV_CASH), "整批抓取失敗 —— 看該列的錯誤訊息"),
+           None, (_v2_raised(SRC_DIV_CASH), _v2_raised(SRC_HOLDINGS),
+                  "整批抓取失敗 —— 看該列的錯誤訊息"),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.deep.dividend_cash", CASH_NO_PAYOUT_NOW, (
            None, "可能是你手上這幾檔近一年真的沒有除息，也可能是上游沒有這幾檔的配息紀錄",
@@ -4163,6 +4177,10 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.ai_summary", AI_NO_STATION_NOW, _V2_STATION_ERROR),
        _v2_rows_for("hold.ai_summary", AI_UPSTREAM_NOW, (
            None, _V2_STATION_RAISED,
+           "先讓戰情表跑起來（到" + SETUP_WHERE + _V2_PRESS_RUN + "）")),
+       # P1a-f1：持股清單讀不出來 → now 為 `PREVIEW_FAILED_NOW`（why／where 摘錄同上一則）。
+       _v2_rows_for("hold.ai_summary", PREVIEW_FAILED_NOW, (
+           None, _v2_raised(SRC_HOLDINGS),
            "先讓戰情表跑起來（到" + SETUP_WHERE + _V2_PRESS_RUN + "）")),
        _v2_rows_for("hold.ai_summary", AI_UNAVAILABLE_NOW, (
            None, "沒有丟例外，而是回了一句服務說明",
