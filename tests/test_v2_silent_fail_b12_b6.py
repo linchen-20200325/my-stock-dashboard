@@ -175,11 +175,15 @@ class TestMacroStageAndCap:
         assert _c.state == UI_FAILED and _c.note.now == PH.CAP_FAILED_NOW
 
     def test_b_partial_warroom_ok_file_broken_not_raised(self, macro_dir):
-        """部分失敗：warroom 可用 → 位階仍評估得出（檔壞只少 exposure 那半），不拋。"""
+        """部分失敗：warroom 可用 → 位階仍評估得出（檔壞只少 exposure 那半），不拋。
+
+        B6-r4 起 strict 多帶一個 `file_error` 鍵（其餘欄位與預設逐一相同；見 test_v2_hold_p1c）。
+        """
         _write(macro_dir / "macro_state.json", "{bad json")
         _wr = {"health_score": 70.0, "effective_regime": "bull"}
-        assert (MSL.get_macro_state(_wr, strict=True)
-                == MSL.get_macro_state(_wr))
+        _s = MSL.get_macro_state(_wr, strict=True)
+        assert _s.pop("file_error")
+        assert _s == MSL.get_macro_state(_wr)
 
     def test_c_missing_file_is_byte_identical_gray(self, macro_dir):
         assert (MSL.get_macro_state({}, strict=True) == MSL.get_macro_state({}))

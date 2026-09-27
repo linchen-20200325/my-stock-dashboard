@@ -358,6 +358,9 @@ def get_macro_state(warroom_summary: dict | None = None, *,
       `execute_and_lock` 失敗時寫下的 Fail-safe「系統異常」、或缺 `market_regime`)
       → `raise`,不回 is_loaded=False —— 否則 caller 會把「總經讀壞了」畫成
       「本輪未評估」(§1 靜默失敗)。檔案**不存在**仍回未評估(那才是真的還沒評估)。
+      warroom **可用**、檔存在卻不可用(B6-r4)→ 不拋(位階由 warroom 撐得住),
+      但回傳多一個 `file_error` 鍵(str)—— 曝險上限那條輸入是讀壞了,不是「沒有天花板」。
+      只有這一種情形才有該鍵;strict=False 一律沒有。
     """
     from shared import regime_arbiter as _RA
 
@@ -377,6 +380,15 @@ def get_macro_state(warroom_summary: dict | None = None, *,
         raise RuntimeError(
             f"{os.path.basename(state_file_path)}: "
             f"market_regime={_file.get('market_regime')!r}")
+
+    # B6-r4（加性）：strict ＋ warroom 可用 ＋ 檔**存在**卻不可用 → 位階照算（warroom 撐得住），
+    # 但「macro_state 曝險上限」那條輸入是**讀壞了**、不是「本次沒有天花板」。
+    # 回傳 dict 多帶 `file_error`（**只在這一種情形才有這個鍵**）；預設 strict=False、
+    # 檔不存在、檔可用 → 一個鍵都不多（逐位元組同修前）。
+    _file_error = ""
+    if strict and _wr_ok and not _file_ok and os.path.exists(state_file_path):
+        _file_error = (f"{os.path.basename(state_file_path)}: "
+                       f"market_regime={_file.get('market_regime')!r}")
 
     _health = _wr.get("health_score") if _wr_ok else None
     _exposure = _file.get("exposure_limit_pct") if _file_ok else None
@@ -424,7 +436,7 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     _defense = (_regime in ("bear", "caution")) or (
         _health is not None and float(_health) < float(_HD))
 
-    return {
+    _out = {
         "regime": _regime,
         "light": _light,
         "source": _source,
@@ -435,6 +447,9 @@ def get_macro_state(warroom_summary: dict | None = None, *,
         "traffic_light": (_wr.get("traffic_light") if _wr_ok else None),
         "is_loaded": bool(_is_loaded),
     }
+    if _file_error:
+        _out["file_error"] = _file_error
+    return _out
 
 
 # ── 理科引擎：Python 規則計算總經狀態 ─────────────────────

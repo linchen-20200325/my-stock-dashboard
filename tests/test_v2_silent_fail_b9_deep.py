@@ -394,8 +394,13 @@ class TestExistingCallersUnchanged:
         p = inspect.signature(PDS.get_portfolio_var).parameters
         assert list(p) == ["rows", "strict"]
         assert p["strict"].kind is inspect.Parameter.KEYWORD_ONLY and p["strict"].default is False
-        assert list(inspect.signature(PDS.get_portfolio_stress).parameters) == ["rows", "drop_pct"]
-        assert list(inspect.signature(PDS.get_dividend_cash_flow).parameters) == ["rows"]
+        # Q3-r3 起兩支各多一個 keyword-only `strict=False`（加性；預設行為不變，見 test_v2_hold_p1c）。
+        p = inspect.signature(PDS.get_portfolio_stress).parameters
+        assert list(p) == ["rows", "drop_pct", "strict"]
+        assert p["strict"].kind is inspect.Parameter.KEYWORD_ONLY and p["strict"].default is False
+        p = inspect.signature(PDS.get_dividend_cash_flow).parameters
+        assert list(p) == ["rows", "strict"]
+        assert p["strict"].kind is inspect.Parameter.KEYWORD_ONLY and p["strict"].default is False
 
     def test_d_l1_without_failed_returns_the_same_clean_empty_frame(self, world):
         prices, _ = world

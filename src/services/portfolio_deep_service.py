@@ -149,7 +149,7 @@ L2 `normalize_etf_ticker` 一律補 `.TW`（上市），但 **yfinance 的上櫃
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # L3 → L0（正常方向）。張→股 的 1000 一律取自這裡，本檔不寫死（§3.3）。
 from shared.sector_flow_thresholds import SHARES_PER_LOT
@@ -347,7 +347,7 @@ def _fetch_price_with_otc_fallback(ticker: str, *, failed: list | None = None):
     return None, None
 
 
-def _resolve_yf_ticker(ticker: str) -> str | None:
+def _resolve_yf_ticker(ticker: str, *, failed: list | None = None) -> str | None:
     """正規化代號 → **真的抓得到歷史價**的 yfinance 代號；都抓不到 → `None`。
 
     **本檔要打 yfinance 的地方一律走這裡**（單一入口）—— 取價、Beta、配息三條路
@@ -357,23 +357,52 @@ def _resolve_yf_ticker(ticker: str) -> str | None:
     回 `None` ＝「這個代號在 yfinance 兩個後綴都沒有資料」。**不是**「這檔不存在」
     —— 沙箱無外網時每一檔都會是 `None`。所以呼叫端**不得**拿 `None` 當「代號有錯」
     的結論，只能當「這一檔這次沒抓到」（§1 誠實）。
+
+    `failed=`（Q3-r3，**加性參數**）：`None`（預設）→ 與修前**一字不差**（呼叫 L1
+    不帶任何多餘關鍵字、回傳值相同）。傳一個 list → 解不出來（回 `None`）**而且**
+    過程中有**被接住的例外**（本函式的 except，或 L1 `fetch_etf_price(failed=)` 回報的
+    抓取失敗）時 append `"{例外型別}: {訊息}"`（代號由呼叫端自己加）。只回空、沒拋例外 → **不 append**
+    （那與「這檔沒有那段歷史」在這一層分不出來，不猜）；某個後綴拋過例外但另一個後綴
+    抓到了 → 也不 append（解出來了就不是失敗）。
     """
+    _l1: list[str] = []
     try:
-        return _fetch_price_with_otc_fallback(ticker)[0]
+        if failed is None:
+            return _fetch_price_with_otc_fallback(ticker)[0]
+        _used = _fetch_price_with_otc_fallback(ticker, failed=_l1)[0]
     except Exception as _e:     # noqa: BLE001 — 判後綴失敗不擋主計算，但要記
         print(f"[portfolio_deep] {ticker} 後綴判定時取價失敗："
               f"{type(_e).__name__}: {_e}")
+        if failed is not None:
+            failed.append(f"{type(_e).__name__}: {_e}")
         return None
+    if _used is None and _l1:
+        print(f"[portfolio_deep] {ticker} 後綴判定時取價失敗：{'；'.join(_l1)}")
+        failed.extend(_l1)
+    return _used
 
 
-def _yf_tickers(tickers) -> dict[str, str]:
+def _yf_tickers(tickers, *, failed: dict | None = None) -> dict[str, str]:
     """`{正規化代號: 真的拿去打 yfinance 的代號}`。
 
     解不出來（兩個後綴都沒資料）→ **原樣保留正規化代號**，不從結果裡刪掉：
     刪掉會讓那一檔的市值悄悄從分母消失，而「這檔抓不到」該由**下游的覆蓋率欄位**
     誠實講出來，不是在這裡偷偷抹掉（§1）。
+
+    `failed=`（Q3-r3，**加性參數**）：`None`（預設）→ 與修前一字不差。傳一個 dict →
+    後綴判定**因被接住的例外**而解不出來的那幾檔寫進去：`{正規化代號: 失敗訊息}`
+    （見 `_resolve_yf_ticker(failed=)`）。那幾檔照舊原樣保留（同上理由），
+    但它們的 `.TW` **不是**判出來的後綴 —— 下游的「沒配息」「Beta 查無」都不可信。
     """
-    return {_t: (_resolve_yf_ticker(_t) or _t) for _t in dict.fromkeys(tickers)}
+    if failed is None:
+        return {_t: (_resolve_yf_ticker(_t) or _t) for _t in dict.fromkeys(tickers)}
+    _out: dict[str, str] = {}
+    for _t in dict.fromkeys(tickers):
+        _f: list[str] = []
+        _out[_t] = _resolve_yf_ticker(_t, failed=_f) or _t
+        if _f:
+            failed[_t] = "；".join(_f)
+    return _out
 
 
 def priced_rows(rows) -> list[dict]:
@@ -494,6 +523,11 @@ class StressResult:
     held_n: int = 0
     reconciled: bool = True
     reference_value_twd: float | None = None
+    #: Q3-r3（加性；只有 `get_portfolio_stress(strict=True)` 會填）：後綴判定時
+    #: **被接住的例外**而解不出後綴的那幾檔，`"{代號}: {例外型別}: {訊息}"`。
+    #: 非空 → 那幾檔的 Beta 是拿錯後綴去查的（查無 → 1.0 估算），數字不可信 → 畫面轉紅。
+    #: `repr=False, compare=False`：預設呼叫端的 repr／相等比較與修前逐位元組相同。
+    fetch_errors: tuple[str, ...] = field(default=(), repr=False, compare=False)
 
     @property
     def partial(self) -> bool:
@@ -510,7 +544,8 @@ class StressResult:
         return bool(self.computed) and _is_full(self.coverage_pct)
 
 
-def get_portfolio_stress(rows, *, drop_pct: float | None = None) -> StressResult:
+def get_portfolio_stress(rows, *, drop_pct: float | None = None,
+                         strict: bool = False) -> StressResult:
     """戰情表列 → 壓力測試。**純讀不寫。**
 
     Args:
@@ -526,6 +561,9 @@ def get_portfolio_stress(rows, *, drop_pct: float | None = None) -> StressResult
     兩支在 L1 都有 `@st.cache_data`，本檔不自建第二層。
     ⚠️ **Beta 是估的那幾檔要看 `coverage_pct` / `imputed_value_twd`**：
     虧損總額**看不出任何缺口**，缺口只在這兩個欄位裡。
+
+    strict（Q3-r3，預設 False = 既有行為一字不變）：True → 後綴判定因**被接住的例外**
+    而解不出來的那幾檔列進 `fetch_errors`（畫面轉紅）；只回空、沒拋例外的照舊。
     """
     from src.compute.etf.etf_calc import calc_portfolio_stress_test   # L3 → L2
 
@@ -542,7 +580,8 @@ def get_portfolio_stress(rows, *, drop_pct: float | None = None) -> StressResult
     _value = _value_by_ticker(_priced)
     # 上市 / 上櫃後綴：L2 內部會拿這個字串去 `fetch_etf_info` 查 Beta ——
     # 上櫃股補成 `.TW` 查不到，就會靜靜落進 `beta_imputed=1.0`（FIX-1）。
-    _yf = _yf_tickers(_w)
+    _yf_failed: dict[str, str] | None = {} if strict else None
+    _yf = (_yf_tickers(_w, failed=_yf_failed) if strict else _yf_tickers(_w))
     _back = {_v: _k for _k, _v in _yf.items()}      # L2 回來的名字 → 本檔的身分
     _res = calc_portfolio_stress_test(
         [{"ticker": _yf[_t], "actual_pct": _p} for _t, _p in _w.items()],
@@ -564,7 +603,9 @@ def get_portfolio_stress(rows, *, drop_pct: float | None = None) -> StressResult
         coverage_pct=(((_total - _imputed_value) / _total * 100.0)
                       if _total > 0 else 0.0),
         valued_n=len(_w), held_n=_held,
-        reconciled=_ok, reference_value_twd=_ref)
+        reconciled=_ok, reference_value_twd=_ref,
+        **({"fetch_errors": tuple(f"{_t}: {_yf_failed[_t]}" for _t in sorted(_yf_failed))}
+           if _yf_failed else {}))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -947,7 +988,7 @@ def _shares_of(rows) -> list[dict]:
     return _out
 
 
-def get_dividend_cash_flow(rows) -> DividendCashResult:
+def get_dividend_cash_flow(rows, *, strict: bool = False) -> DividendCashResult:
     """戰情表列 → 近一年配息現金流（稅前 ＋ 二代健保）。**純讀不寫。**
 
     Args:
@@ -964,6 +1005,10 @@ def get_dividend_cash_flow(rows) -> DividendCashResult:
     `excluded_tickers`，不要把這個總額讀成「整個組合的年配息」。
     ⚠️ **上游 summary 缺欄 → `computed=False`**（`REASON_DIVIDEND_CONTRACT_DRIFT`），
     不補 0：補 0 之後「契約漂移」會長得跟「你真的沒有配息」一模一樣。
+
+    strict（Q3-r3，預設 False = 既有行為一字不變）：True → 後綴判定因**被接住的例外**
+    而解不出來的那幾檔併進 `failed_tickers`／`failed_detail`（它們被拿 `.TW` 去抓配息，
+    空序列會被讀成「沒配息」）；只回空、沒拋例外的照舊。
     """
     from src.services.dividend_tax_service import (        # L3 → L3
         get_dividend_tax_view,
@@ -976,7 +1021,9 @@ def get_dividend_cash_flow(rows) -> DividendCashResult:
 
     # 上市 / 上櫃後綴：L3 `dividend_tax_service` 會拿這個字串去 `fetch_etf_dividends`
     # —— 上櫃股補成 `.TW` 抓回空序列，會被算成「近一年沒有配息」（FIX-1）。
-    _yf = _yf_tickers(_s["ticker"] for _s in _shares)
+    _yf_failed: dict[str, str] | None = {} if strict else None
+    _yf = (_yf_tickers((_s["ticker"] for _s in _shares), failed=_yf_failed) if strict
+           else _yf_tickers(_s["ticker"] for _s in _shares))
     _back = {_v: _k for _k, _v in _yf.items()}      # 上游回來的名字 → 本檔的身分
     _base = {"lots_n": len(_shares), "held_n": _held,
              "shares_total": sum(_s["shares"] for _s in _shares),
@@ -1016,6 +1063,8 @@ def get_dividend_cash_flow(rows) -> DividendCashResult:
     _fail_map = ((_view or {}).get("fetch_failed") or {}) if isinstance(_view, dict) else {}
     _fail_by_id = {str(_back.get(str(_t), str(_t))): str(_m)
                    for _t, _m in _fail_map.items()}
+    for _t, _m in (_yf_failed or {}).items():     # Q3-r3（只有 strict 才非空）
+        _fail_by_id[_t] = (f"{_fail_by_id[_t]}；{_m}" if _t in _fail_by_id else _m)
     _failed = tuple(sorted(_fail_by_id))
     _failed_detail = tuple(f"{_t}: {_fail_by_id[_t]}" for _t in _failed)
     for _d in _failed_detail:
