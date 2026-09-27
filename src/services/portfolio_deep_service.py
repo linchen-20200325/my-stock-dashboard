@@ -198,8 +198,7 @@ _SUFFIX_TPEX: str = ".TWO"
 # ── `computed=False` 的原因（機器可讀；畫面另有自己的文案）─────────────
 REASON_NO_PRICED_ROWS: str = (
     "沒有任何一列同時有張數、均價與現價 —— 沒有市值就算不出組合層的風險")
-REASON_NO_LOTS_ROWS: str = (
-    "沒有任何一列有張數 —— 觀察清單那幾列本來就沒有張數（那份分頁只有三欄）")
+REASON_NO_LOTS_ROWS: str = "沒有任何一列有張數"
 REASON_NO_RETURNS: str = "一檔的歷史價格都抓不到，沒有日報酬可以算"
 REASON_NO_COMMON_DAYS: str = "各檔沒有共同交易日（不補值、不 ffill）"
 REASON_SHORT_SAMPLE: str = "共同交易日不足一個月，樣本太短的尾部估計會過度樂觀"

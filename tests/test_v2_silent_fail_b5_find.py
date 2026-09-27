@@ -444,7 +444,9 @@ class TestPathThreeOnlyFactorInputFails:
         assert res.rows == 0 and res.factor_input_failed == ("trend",)
         _assert_aborted(card)
         assert card.note.why.startswith("跨季轉強：")
-        assert dict(facts)["跨季轉強"] == "失敗，該因子不計入綜合分：RuntimeError()"
+        # B9 ⑧：L3 拋的是**無訊息**的 `RuntimeError()` → 事實列給既有的 `UNKNOWN_ERROR_TEXT`，
+        # ⛔ 不再把 `repr` 的「RuntimeError()」這種程式字樣搬上卡。
+        assert dict(facts)["跨季轉強"] == f"失敗，該因子不計入綜合分：{PF.UNKNOWN_ERROR_TEXT}"
 
     def test_pe_only_twse_missing_and_the_pool_is_all_twse(self, world):
         """只少上市半邊、存活池剛好全是上市 → 0 列。原本連一列 facts 都不會出現。"""
