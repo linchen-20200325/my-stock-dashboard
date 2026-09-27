@@ -147,10 +147,42 @@ def fetch_price_data(sid, days):
     return result, name, None
 
 
+#: `fetch_dividend_data(..., failed=)` 寫入的鍵：三段備援各一（2026-09-27 Q5-r2）。
+#: **只記確定是抓取失敗的那一段**（見 `fetch_dividend_data` docstring）。
+DIVIDEND_LEG_FINMIND = 'FinMind'
+DIVIDEND_LEG_YFINANCE = 'yfinance'
+DIVIDEND_LEG_TWSE = 'TWSE'
+#: 三段備援全體（呼叫端判「三段都確定失敗」時比對用）。
+DIVIDEND_LEGS = (DIVIDEND_LEG_FINMIND, DIVIDEND_LEG_YFINANCE, DIVIDEND_LEG_TWSE)
+
+
+def fetch_dividend_data(sid, *, failed=None):
+    """5 年配息(FinMind REST → SDK → yfinance → TWSE 4-fallback)。
+
+    failed(2026-09-27 Q5-r2;預設 None = 既有行為一字不變,回傳 3-tuple 也一樣):
+      傳一個 dict 進來 → **確定是抓取失敗**的那幾段以 `DIVIDEND_LEG_*` 為鍵寫進去
+      (值 = 失敗說明)。「確定」的定義(拿不準的一律不寫,不猜 §1):
+        FinMind  — 整段拋例外,且 REST 沒有回 status 200(200 但空 = 真的沒有);
+        yfinance — L1 `cached_dividends` 拋例外(空 Series 帶失敗旗標)或本段拋例外;
+                   yfinance **沒拋、只回空**分不出來 → 不寫;
+        TWSE     — 本段拋例外;`stat != 'OK'` 同時用於「沒有」與錯誤 → 不寫。
+      ⚠️ 旗標與結果一起快取(TTL_30MIN)—— 快取命中時照樣在,不會「第二次就成功了」。
+    """
+    _avg, _yearly, _source, _legs = _fetch_dividend_data_cached(sid)
+    if failed is not None and _legs:
+        failed.update(_legs)
+    return _avg, _yearly, _source
+
+
 @st.cache_data(ttl=TTL_30MIN, max_entries=10)
-def fetch_dividend_data(sid):
-    """5 年配息(FinMind REST → SDK → yfinance → TWSE 4-fallback)。"""
+def _fetch_dividend_data_cached(sid):
+    """`fetch_dividend_data()` 的快取層(原函式本體,邏輯未改)。
+
+    唯一的差別:多回第 4 項 `{DIVIDEND_LEG_*: 失敗說明}`(只記確定失敗的段)。
+    """
     avg_div, yearly, source = 0.0, [], ''
+    _legs = {}                 # Q5-r2:確定失敗的段(見 fetch_dividend_data docstring)
+    _fm_rest_status = None     # FinMind REST 回的 status(200 = 有回答,含「空」)
     try:
         try:
             from FinMind.data import DataLoader as FM
@@ -173,6 +205,7 @@ def fetch_dividend_data(sid):
                     'start_date': (end - datetime.timedelta(days=365 * 6)).strftime('%Y-%m-%d')},
             headers=_fm_hdrs_div(_get_finmind_token()), timeout=20)
         _div_jd = _div_resp.json()
+        _fm_rest_status = _div_jd.get('status')
         print(f'[股利REST] {sid} status={_div_jd.get("status")}')
         ddf = pd.DataFrame(_div_jd['data']) if _div_jd.get('status') == 200 and _div_jd.get('data') else None
         if ddf is None or ddf.empty:
@@ -197,11 +230,17 @@ def fetch_dividend_data(sid):
     except Exception as _e_div_fm:
         # §1:不靜默吞;FinMind 路徑失敗落 log 後走 yfinance/TWSE 備援
         print(f'[股利] {sid} FinMind 路徑失敗: {type(_e_div_fm).__name__}: {_e_div_fm}')
+        if _fm_rest_status != 200:
+            _legs[DIVIDEND_LEG_FINMIND] = f'{type(_e_div_fm).__name__}: {_e_div_fm}'
     # ── 備援2: yfinance(v18.209 K5:改走 yf_proxy.cached_dividends,proxy+cache 統一)──
     if avg_div == 0:
         try:
             from src.data.proxy import cached_dividends as _yp_div
+            from src.data.proxy.yf_proxy import DIVIDENDS_FETCH_FAILED_ATTR as _YP_FAIL
             divs = _yp_div(f'{sid}.TW')
+            _yp_fail = getattr(divs, 'attrs', {}).get(_YP_FAIL)
+            if _yp_fail:
+                _legs[DIVIDEND_LEG_YFINANCE] = str(_yp_fail)
             if divs is not None and len(divs) > 0:
                 divs.index = pd.DatetimeIndex(divs.index).tz_localize(None)
                 rec = divs[divs.index >= pd.Timestamp.now() - pd.DateOffset(years=5)]
@@ -216,6 +255,7 @@ def fetch_dividend_data(sid):
         except Exception as _e_div_yf:
             # §1:不靜默吞;yfinance 備援失敗落 log 後走 TWSE 備援
             print(f'[股利] {sid} yfinance 備援失敗: {type(_e_div_yf).__name__}: {_e_div_yf}')
+            _legs[DIVIDEND_LEG_YFINANCE] = f'{type(_e_div_yf).__name__}: {_e_div_yf}'
 
     # ── 備援3: TWSE 除權息資料(官方,免Token)──
     if avg_div == 0:
@@ -256,6 +296,7 @@ def fetch_dividend_data(sid):
         except Exception as _e_div_tw:
             # §1 v19.80(N5):四源鏈最後一段原靜默吞 — 補 log,行為不變(回無股利)
             print(f'[股利] {sid} TWSE 備援失敗: {type(_e_div_tw).__name__}: {_e_div_tw}')
+            _legs[DIVIDEND_LEG_TWSE] = f'{type(_e_div_tw).__name__}: {_e_div_tw}'
 
     # v18.351 PR-Q1 S-PROV-1 phase 19:stderr 記 provenance(§2.2 audit trail)。
     # 介面 0 改:return 仍是 (avg_div, yearly, source) 3-tuple,caller 由 source 欄已可追溯;
@@ -268,7 +309,7 @@ def fetch_dividend_data(sid):
               file=_sys_prov.stderr)
     except Exception:
         pass
-    return avg_div, yearly, source
+    return avg_div, yearly, source, _legs
 
 
 @st.cache_data(ttl=TTL_1HOUR, max_entries=10)

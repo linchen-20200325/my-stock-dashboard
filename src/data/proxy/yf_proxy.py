@@ -91,12 +91,19 @@ def cached_history(ticker: str, period: str = "1y") -> pd.DataFrame:
         return pd.DataFrame()
 
 
+#: `cached_dividends()` **拋例外**時，回傳的空 Series 在 `attrs` 裡帶的鍵（值 ＝
+#: `"{例外型別}: {訊息}"`）。**只有例外才有**（2026-09-27 Q5-r2）—— yfinance **沒拋、只回空**
+#: 時照舊回無旗標的空 Series：那與「真的沒配息」在這一層分不出來，不猜（§1）。
+DIVIDENDS_FETCH_FAILED_ATTR = "fetch_failed"
+
+
 @st.cache_data(ttl=TTL_1HOUR, max_entries=200, show_spinner=False)
 def cached_dividends(ticker: str) -> pd.Series:
     """yfinance Ticker.dividends with NAS proxy + 1h cache。
 
     Returns:
-        pd.Series；抓不到回空 Series（不爆例外）。
+        pd.Series；抓不到回空 Series（不爆例外）。拋例外那一種，空 Series 的 `attrs`
+        帶 `DIVIDENDS_FETCH_FAILED_ATTR`（值與內容其餘不變；不讀 attrs 的 caller 無感）。
     """
     import yfinance as yf
     try:
@@ -107,4 +114,6 @@ def cached_dividends(ticker: str) -> pd.Series:
         return _s
     except Exception as _e:
         print(f"[yf_proxy.dividends] {ticker}: {type(_e).__name__}: {_e}")
-        return pd.Series(dtype=float)
+        _empty = pd.Series(dtype=float)
+        _empty.attrs[DIVIDENDS_FETCH_FAILED_ATTR] = f"{type(_e).__name__}: {_e}"
+        return _empty

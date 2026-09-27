@@ -369,7 +369,12 @@ def check_vcp_signal(df: pd.DataFrame) -> dict:
     return r
 
 
-def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> dict:
+#: `calc_premium_discount(..., failed=)` 寫入的鍵（本函式自己的 `except` 接到例外時）。
+PREMIUM_CALC_FAILED_KEY = "premium"
+
+
+def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '', *,
+                          failed: dict | None = None) -> dict:
     """折溢價率 = (市價 - 淨值) / 淨值 × 100
     核心原則：NAV 與市價必須來自同一日，避免跨來源日期錯位。
     主動式 ETF（代號末碼字母 e.g. 00980A）NAV 公布常 T+1 延遲，加三守門員：
@@ -379,6 +384,13 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
     資料來源：1. TWSE OpenAPI 直讀（同日 NAV+市價+折溢價率）
               2. FinMind NAV history + df 同日 inner join（精確日期配對）
               3. yfinance info navPrice
+
+    failed（2026-09-27 Q5-r2；預設 None ＝ 既有行為一字不變，回傳 dict 也一樣）：
+      傳一個 dict 進來 → 本函式最外層 `except` 接到例外時寫入
+      `{PREMIUM_CALC_FAILED_KEY: "{例外型別}: {訊息}"}`。⚠️ 只記**例外**：
+      「所有路徑都沒給」（中繼站未設定／NAV 鏈各段回空）與三道守門員判 stale
+      一律不寫 —— 下層 L1 各段自己吞掉網路錯、yfinance 回空不拋，本層分不出
+      「抓不到」與「沒有」，不猜（§1）。
     """
     import pandas as _pd_prem
     import re as _re_prem
@@ -532,6 +544,8 @@ def calc_premium_discount(info: dict, df: "pd.DataFrame", ticker: str = '') -> d
         print(f'[折溢價] {ticker}: 所有路徑失敗，回傳 N/A')
     except Exception as _ep:
         import traceback as _tb_p; print(f'[折溢價] 錯誤: {_ep}'); _tb_p.print_exc()
+        if failed is not None:
+            failed[PREMIUM_CALC_FAILED_KEY] = f'{type(_ep).__name__}: {_ep}'
     return {'nav': None, 'price': None, 'premium_pct': None, 'warning': False}
 
 

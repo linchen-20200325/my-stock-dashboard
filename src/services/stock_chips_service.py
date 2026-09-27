@@ -268,7 +268,7 @@ def _outlier_fields(df) -> dict:
     }
 
 
-def get_chips_readout(code: str, *, days: int) -> ChipsReadout:
+def get_chips_readout(code: str, *, days: int, strict: bool = False) -> ChipsReadout:
     """一檔個股的近 20 日籌碼判讀。
 
     路徑：L1 `app_stock_fetchers.fetch_price_data(sid, days)`
@@ -281,6 +281,11 @@ def get_chips_readout(code: str, *, days: int) -> ChipsReadout:
             —— 這個數字是呼叫端的畫面參數（使用者選的期間），本層不替它
             決定一個「看起來合理」的值。⚠️ **它不是判讀窗**：近 20 日那個
             窗長度由 L0 自己決定（見檔頭）。
+        strict: （2026-09-27 Q5-r2；預設 False ＝ 既有行為一字不變。）True →
+            日線回來了、但三大法人那一腿**每一段都確定抓取失敗**（L1 在 df
+            `attrs` 帶 `INST_FETCH_FAILED_ATTR`）而 L0 因此判不出來時，回 `error`
+            （L1 的逐段失敗說明原文），不回 `miss_reason` —— 否則它與「這一檔
+            真的沒有法人資料」同形。沒有旗標（任一段有回答、或分不出來）照舊。
 
     Returns:
         `ChipsReadout`。三種結果各自可辨（有結論 / 判不出 / 取數失敗），
@@ -321,6 +326,12 @@ def get_chips_readout(code: str, *, days: int) -> ChipsReadout:
     _chip = analyze_20d_chips_from_df(_df)
     _chip = _chip if isinstance(_chip, dict) else {}
     _miss = str(_chip.get("error") or "")
+    if _miss and strict:
+        from src.data.core.data_loader import INST_FETCH_FAILED_ATTR
+        _inst_fail = str((getattr(_df, "attrs", None) or {}).get(INST_FETCH_FAILED_ATTR) or "")
+        if _inst_fail:
+            # 法人那一腿全段確定失敗 ⇒ 判不出來的原因是**抓取失敗**，不是資料缺漏。
+            return ChipsReadout(name=str(_name or ""), rows=_rows, error=_inst_fail)
     if _miss:
         # 判不出來 ≠ 壞掉。訊號字面（`'⚫ 資料不足'`）照樣帶回去，
         # 讓呼叫端在灰態裡也能顯示 L0 自己的說法。

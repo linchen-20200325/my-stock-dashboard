@@ -239,10 +239,15 @@ def _fetch_finmind_margin_raw(stock_id: str, df: pd.DataFrame, start_str: str) -
     return df, 'missing'
 
 
-def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> pd.DataFrame:
+def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str, *,
+                            failed: dict | None = None) -> pd.DataFrame:
     """FinMind 原始 API 備援（不依賴 Python SDK）
     - 有 FINMIND_TOKEN: 使用 token 提高速率限制
     - 無 token: 匿名請求（FinMind 公開資料，限速 3 req/min，仍可取得）
+
+    failed（2026-09-27 Q5-r2；預設 None ＝ 既有行為一字不變）：傳一個 dict →
+    **確定抓取失敗**（例外、或 status != 200）時寫 `failed['finmind_raw']`；
+    status 200（含「200 但沒有資料」＝ 真的沒有）不寫。
     """
     import os
     _token = _FINMIND_TOKEN_CFG or os.environ.get('FINMIND_TOKEN', '')
@@ -274,8 +279,13 @@ def _fetch_finmind_inst_raw(stock_id: str, df: pd.DataFrame, start_str: str) -> 
             print(f'[FM-Raw] {stock_id}: ✅ {len(_j["data"])} 筆 → {len(_pv)} 日  外資非零={_nz}')
         else:
             print(f'[FM-Raw] {stock_id}: status={_j.get("status")} msg={_j.get("msg","")}')
+            if failed is not None and _j.get('status') != 200:
+                failed['finmind_raw'] = (f'[FM-Raw] {stock_id}: status={_j.get("status")} '
+                                         f'msg={_j.get("msg","")}')
     except Exception as _e:
         print(f'[FM-Raw] {stock_id}: ❌ {_e}')
+        if failed is not None:
+            failed['finmind_raw'] = f'[FM-Raw] {stock_id}: {type(_e).__name__}: {_e}'
     return df
 
 
@@ -316,6 +326,13 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
 # @st.cache_resource 的 cache key。避免線上 hot-reload 後仍用到舊實例的舊方法碼
 # （PR #44 修了 NoneType 但 cache_resource 舊實例殘留 → 仍崩，即此故）。
 _LOADER_VERSION = 'v3-no-negative-cache'  # N2a v19.80:bump 讓 @st.cache_resource loader 換新
+
+
+#: `get_combined_data()` 回的 df 在 `attrs` 裡帶的鍵（2026-09-27 Q5-r2）：三大法人那一腿
+#: **每一段都確定抓取失敗**（值 ＝ 逐段失敗說明，以「；」串接）。**只有那一種才有這個鍵** ——
+#: 任一段給了回答（含「沒有這一檔的法人資料」）、或回空而分不出是不是失敗（SDK），都沒有。
+#: `inst_src='missing'` 同時涵蓋「真的沒有」與「全失敗」，需要分辨的 caller 讀這個鍵。
+INST_FETCH_FAILED_ATTR = "inst_fetch_failed"
 
 
 class _CombinedDataError(Exception):
@@ -602,7 +619,11 @@ class StockDataLoader:
                 df[f'MA{period}'] = df['close'].rolling(window=period).mean()
 
             # ========== 4. 三大法人 ==========
+            # Q5-r2:逐段記「有沒有試」與「是不是確定失敗」(只記確定失敗;見 INST_FETCH_FAILED_ATTR)
+            _inst_tried: list = []
+            _inst_failed: dict = {}
             if _self.dl is not None:
+                _inst_tried.append('finmind_sdk')
                 try:
                     df_inst = _self.dl.taiwan_stock_institutional_investors(
                         stock_id=stock_id,
@@ -628,21 +649,26 @@ class StockDataLoader:
                 except Exception as _e_sdk:
                     # v19.105 §3.3:原靜默吞 → 補 log(仍走 raw fallback,行為不變)
                     print(f'[法人] FinMind SDK 路徑失敗,改走 raw:{type(_e_sdk).__name__}: {_e_sdk}')
+                    _inst_failed['finmind_sdk'] = (f'[法人] FinMind SDK 路徑失敗,改走 raw:'
+                                                   f'{type(_e_sdk).__name__}: {_e_sdk}')
                     _sdk_used = False
             else:
                 _sdk_used = False
 
             if not _sdk_used:
                 # SDK 不可用 → FinMind Raw HTTP API（不依賴 SDK）
-                df = _fetch_finmind_inst_raw(stock_id, df, start_str)
+                _inst_tried.append('finmind_raw')
+                df = _fetch_finmind_inst_raw(stock_id, df, start_str, failed=_inst_failed)
                 if '外資' in df.columns:
                     _inst_src = 'finmind_raw'
                 if '外資' not in df.columns:
-                    df = _fetch_twse_inst_fallback(stock_id, df)
+                    _inst_tried.append('twse')
+                    df = _fetch_twse_inst_fallback(stock_id, df, failed=_inst_failed)
                     if '外資' in df.columns:
                         _inst_src = 'twse'
                 if '外資' not in df.columns:
-                    df = _fetch_tpex_inst_fallback(stock_id, df)
+                    _inst_tried.append('tpex')
+                    df = _fetch_tpex_inst_fallback(stock_id, df, failed=_inst_failed)
                     if '外資' in df.columns:
                         _inst_src = 'tpex'
                 if _inst_src == 'unknown':
@@ -732,6 +758,11 @@ class StockDataLoader:
                 df.attrs['price_src'] = _price_src
                 df.attrs['inst_src'] = _inst_src
                 df.attrs['margin_src'] = _margin_src
+                # Q5-r2:法人那一腿每一段都確定失敗 → 帶旗標(其餘情形一律不帶,attrs 與改前相同)
+                if (_inst_src == 'missing' and _inst_tried
+                        and all(_k in _inst_failed for _k in _inst_tried)):
+                    df.attrs[INST_FETCH_FAILED_ATTR] = '；'.join(
+                        str(_inst_failed[_k]) for _k in _inst_tried)
                 # v18.201 D2：FinMind dataset 後台 update 時間 + 客戶端抓取 wallclock
                 for _k in ('price', 'inst', 'margin'):
                     _meta = _FINMIND_META.get(_k, {}) or {}

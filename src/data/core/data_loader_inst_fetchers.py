@@ -76,8 +76,17 @@ def _get_t86_day(ds: str) -> dict:
         return {}
 
 
-def _fetch_twse_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
-    """TWSE T86 備援：T86 一次抓全市場，多股共用同一份進程快取，不重複發請求。"""
+def _fetch_twse_inst_fallback(stock_id: str, df: pd.DataFrame, *,
+                              failed: dict | None = None) -> pd.DataFrame:
+    """TWSE T86 備援：T86 一次抓全市場，多股共用同一份進程快取，不重複發請求。
+
+    failed（2026-09-27 Q5-r2；預設 None ＝ 既有行為一字不變）：傳一個 dict →
+    **確定抓取失敗**時寫 `failed['twse']`：本段拋例外，或查過的每一天都沒拿到
+    TWSE 的回答（日資料沒進 `_T86_DAY_CACHE` ＝ 網路／例外／短 TTL 負快取；
+    `stat != OK` 與「有資料但沒有這一檔」都是回答，不算失敗）。
+    """
+    _answered = False       # Q5-r2:有沒有任何一天拿到 TWSE 的回答
+    _asked: list = []
     try:
         rows = []
         base = datetime.date.today()
@@ -86,7 +95,11 @@ def _fetch_twse_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
             if checked >= 10: break
             d = base - datetime.timedelta(days=delta)
             if d.weekday() >= 5: continue
-            day = _get_t86_day(d.strftime('%Y%m%d'))
+            _ds_q = d.strftime('%Y%m%d')
+            day = _get_t86_day(_ds_q)
+            _asked.append(_ds_q)
+            if _ds_q in _T86_DAY_CACHE:
+                _answered = True
             checked += 1
             if stock_id in day:
                 rows.append({'date': d, **day[stock_id]})
@@ -95,8 +108,12 @@ def _fetch_twse_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
             _df_tw['主力合計'] = _df_tw['外資'] + _df_tw['投信'] + _df_tw['自營商']
             df = pd.merge(df, _df_tw, on='date', how='left')
             print(f'[TWSE T86] {stock_id} 補充 {len(rows)} 日')
+        elif failed is not None and _asked and not _answered:
+            failed['twse'] = f'[TWSE T86] {stock_id} 失敗: {",".join(_asked)}'
     except Exception as e:
         print(f'[TWSE T86] {stock_id} 失敗: {e}')
+        if failed is not None:
+            failed['twse'] = f'[TWSE T86] {stock_id} 失敗: {type(e).__name__}: {e}'
     # v18.356 PR-Q5b S-PROV-1 phase 19:DataFrame 走 attrs
     try:
         if hasattr(df, 'attrs'):
@@ -190,8 +207,14 @@ def _get_tpex_day(ds: str) -> dict:
         return {}
 
 
-def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
-    """TPEx 上櫃股法人備援，邏輯同 TWSE T86，使用 TPEx 三大法人 API。"""
+def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame, *,
+                              failed: dict | None = None) -> pd.DataFrame:
+    """TPEx 上櫃股法人備援，邏輯同 TWSE T86，使用 TPEx 三大法人 API。
+
+    failed：同 `_fetch_twse_inst_fallback`（鍵 `'tpex'`；回答 ＝ 日資料進了 `_TPEX_DAY_CACHE`）。
+    """
+    _answered = False       # Q5-r2:有沒有任何一天拿到 TPEx 的回答
+    _asked: list = []
     try:
         rows = []
         base = datetime.date.today()
@@ -200,7 +223,11 @@ def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
             if checked >= 10: break
             d = base - datetime.timedelta(days=delta)
             if d.weekday() >= 5: continue
-            day = _get_tpex_day(d.strftime('%Y%m%d'))
+            _ds_q = d.strftime('%Y%m%d')
+            day = _get_tpex_day(_ds_q)
+            _asked.append(_ds_q)
+            if _ds_q in _TPEX_DAY_CACHE:
+                _answered = True
             checked += 1
             if stock_id in day:
                 rows.append({'date': d, **day[stock_id]})
@@ -209,8 +236,12 @@ def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame) -> pd.DataFrame:
             _df_tp['主力合計'] = _df_tp['外資'] + _df_tp['投信'] + _df_tp['自營商']
             df = pd.merge(df, _df_tp, on='date', how='left')
             print(f'[TPEx] {stock_id} 補充 {len(rows)} 日')
+        elif failed is not None and _asked and not _answered:
+            failed['tpex'] = f'[TPEx] {stock_id} 失敗: {",".join(_asked)}'
     except Exception as e:
         print(f'[TPEx] {stock_id} 失敗: {e}')
+        if failed is not None:
+            failed['tpex'] = f'[TPEx] {stock_id} 失敗: {type(e).__name__}: {e}'
     # v18.356 PR-Q5b S-PROV-1 phase 19:DataFrame 走 attrs
     try:
         if hasattr(df, 'attrs'):

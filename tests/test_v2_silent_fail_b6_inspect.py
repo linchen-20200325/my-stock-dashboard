@@ -205,7 +205,7 @@ def etf_env(monkeypatch):
         fake.fetch_etf_info = lambda t, *a, **k: {}
         monkeypatch.setitem(sys.modules, "src.data.etf.etf_fetch", fake)
 
-        def _prem(info, df, tk=""):
+        def _prem(info, df, tk="", **_kw):   # Q5-r2：L3 在 failed 模式多傳 failed=
             if premium == "raise":
                 raise TimeoutError("iNAV relay timeout")
             return {"premium_pct": 0.4 if premium == "ok" else None}
@@ -440,7 +440,7 @@ class TestValuationCard:
         stock_env(_ALL_OK, price="none")
         import src.services.valuation_service as VS
         monkeypatch.setattr(VS, "get_stock_dividends",
-                            lambda code: VS.StockDividends(avg_div_twd=3.0, paying_years=5,
+                            lambda code, **_kw: VS.StockDividends(avg_div_twd=3.0, paying_years=5,
                                                            years=({"year": 2025, "cash": 3.0},),
                                                            source="FinMind"))
         card, _, _ = _valuation()
@@ -564,7 +564,7 @@ class TestByteIdentical:
                              ids=["no-statements", "all-ok", "no-is-no-price"])
     def test_b_genuine_stock_results_are_identical(self, stock_env, monkeypatch, plan, price):
         import src.services.valuation_service as VS
-        monkeypatch.setattr(VS, "get_stock_dividends", lambda code: VS.StockDividends())
+        monkeypatch.setattr(VS, "get_stock_dividends", lambda code, **_kw: VS.StockDividends())
         old = _mutant(P, *_REVERT_L5)
         stock_env(plan, price=price)
         a = [_health(old), _valuation(old), *_profit(old)]
@@ -681,7 +681,7 @@ class TestMutations:
 
     def test_c_valuation_without_the_price_gate_is_grey(self, stock_env, monkeypatch):
         import src.services.valuation_service as VS
-        monkeypatch.setattr(VS, "get_stock_dividends", lambda code: VS.StockDividends(
+        monkeypatch.setattr(VS, "get_stock_dividends", lambda code, **_kw: VS.StockDividends(
             avg_div_twd=3.0, paying_years=5, years=({"year": 2025, "cash": 3.0},),
             source="FinMind"))
         m = _mutant(P, ("    if stock.error or stock.price_error:\n", "    if False:\n"))
@@ -798,7 +798,7 @@ class TestKdOnlyFailureKeepsValuation:
         def _boom(*_a, **_k):
             raise ValueError("kd boom")
         monkeypatch.setattr(TI, "analyze_kd_state", _boom)
-        monkeypatch.setattr(VS, "get_stock_dividends", lambda code: VS.StockDividends(
+        monkeypatch.setattr(VS, "get_stock_dividends", lambda code, **_kw: VS.StockDividends(
             avg_div_twd=3.0, paying_years=5, years=({"year": 2025, "cash": 3.0},),
             source="FinMind"))
         stock_env(_ALL_OK, price="ok")
@@ -934,7 +934,7 @@ class TestQ5r1ValuationGreyNoRerun:
         stock_env(_ALL_OK, price="none")
         import src.services.valuation_service as VS
         monkeypatch.setattr(VS, "get_stock_dividends",
-                            lambda code: VS.StockDividends(avg_div_twd=3.0, paying_years=5,
+                            lambda code, **_kw: VS.StockDividends(avg_div_twd=3.0, paying_years=5,
                                                            years=({"year": 2025, "cash": 3.0},),
                                                            source="FinMind"))
         where, face = _grey_where_and_face(_valuation())
@@ -945,7 +945,7 @@ class TestQ5r1ValuationGreyNoRerun:
         """真的走 load：配息備援鏈三段都沒給（`fetch_dividend_data` 快取 30 分）→ 同一句、同一格短句。"""
         stock_env(_ALL_OK)
         import src.services.valuation_service as VS
-        monkeypatch.setattr(VS, "get_stock_dividends", lambda code: VS.StockDividends())
+        monkeypatch.setattr(VS, "get_stock_dividends", lambda code, **_kw: VS.StockDividends())
         built = _valuation()
         assert built[0].note.why.startswith(P.VALUATION_NO_SOURCE_WHY.split("**", 1)[0])
         where, face = _grey_where_and_face(built)
@@ -959,7 +959,7 @@ class TestQ5r1ValuationGreyNoRerun:
         stock_env(_ALL_OK, price="none")
         import src.services.valuation_service as VS
         monkeypatch.setattr(VS, "get_stock_dividends",
-                            lambda code: VS.StockDividends(avg_div_twd=3.0, paying_years=5,
+                            lambda code, **_kw: VS.StockDividends(avg_div_twd=3.0, paying_years=5,
                                                            years=({"year": 2025, "cash": 3.0},),
                                                            source="FinMind"))
         card = _valuation(m)[0]
