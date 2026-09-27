@@ -786,7 +786,7 @@ _MUST_KEEP: dict[str, dict[str, tuple[str, ...]]] = {
                         _WHERE: ("手動覆寫也救不回來", NO_EXIT_MARKER, "回報給維護者")},
     "HEALTH_FAILED_NOW": {_WHY: ("拋出例外",), _WHERE: ("代碼與網路／proxy", _DH)},
     "HEALTH_EMPTY_NOW": {_WHY: ("多半是", "季報還沒進 FinMind", "或該季欄位缺得太多"),
-                         _WHERE: ("新上市或剛換季", "若持續如此", _DH, "備援鏈是否可用")},
+                         _WHERE: ("新上市或剛換季", "等資料補齊")},
     "VALUATION_FAILED_NOW": {_WHY: ("拋出例外",), _WHERE: ("代碼與網路／proxy", _DH)},
     # 「為什麼」隨分支不同（L2 的 msg）→ 逐分支由 `test_valuation_why_follows_the_branch_it_came_from` 驗。
     # Q5-r1（2026-09-26）：原文刪掉「若是暫時抓不到，按…重跑一次」那一支（快取期內不成立）
@@ -846,3 +846,22 @@ def test_face_rows_keep_the_qualifiers_of_their_full_text(key):
             assert ph in face[label], f"{card.key}「{label}」卡面少了「{ph}」：{face[label]!r}"
     if name == "PROFIT_EMPTY_NOW_TEMPLATE":
         assert any(all(ph in face[_WHY] for ph in grp) for grp in _PROFIT_EMPTY_WHY_ANY), face[_WHY]
+
+
+# ── SA-r2-f1（2026-09-27）：健康度／獲利能力「查無」的去哪補 ⛔ 不得再指向資料體檢 ──
+#    財報（FinMind／MOPS）那條鏈沒掛 `@monitored`，資料體檢那面牆上看不到它（同 SA-r2 #718）。
+_F1_EMPTY_KEYS = sorted(
+    k for k, b in _NOTES.items()
+    if _const_name_of(b[0].note.now) in ("HEALTH_EMPTY_NOW", "PROFIT_EMPTY_NOW_TEMPLATE"))
+
+
+def test_f1_empty_cases_are_enumerated():
+    assert {_const_name_of(_NOTES[k][0].note.now) for k in _F1_EMPTY_KEYS} == {
+        "HEALTH_EMPTY_NOW", "PROFIT_EMPTY_NOW_TEMPLATE"}
+
+
+@pytest.mark.parametrize("key", _F1_EMPTY_KEYS)
+def test_f1_health_and_profit_empty_do_not_point_to_data_health(key):
+    card = _NOTES[key][0]
+    for bad in ("資料體檢", "備援鏈", "MOPS"):
+        assert bad not in card.note.where, f"{card.key} 去哪補仍指向「{bad}」：{card.note.where!r}"
