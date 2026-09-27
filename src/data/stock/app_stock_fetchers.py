@@ -48,6 +48,8 @@ from shared.app_cache import _load_cache, _save_cache
 from shared.signal_thresholds import PRICE_CACHE_HOLIDAY_TOLERANCE_CALENDAR_DAYS
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 from shared.ttls import TTL_30MIN, TTL_1HOUR
+from shared.fail_cooldown import (CachedFailure as _CachedFailure, FailCooldown as _FailCooldown,
+                                  NO_HIT as _FC_NO_HIT)
 from src.data.core import StockDataLoader, _LOADER_VERSION
 
 
@@ -104,12 +106,33 @@ def _expected_latest_trading_date():
     return expected_latest_trading_day()
 
 
-@st.cache_data(ttl=TTL_30MIN, max_entries=10)
 def fetch_price_data(sid, days):
-    """股價歷史(本地 pkl cache → StockDataLoader.get_combined_data)。"""
+    """股價歷史(本地 pkl cache → StockDataLoader.get_combined_data)。
+
+    Q5-r2-r3(2026-09-27):三大法人那一腿全段確定失敗(df `attrs` 帶
+    `INST_FETCH_FAILED_ATTR`)的結果**不入** st.cache_data(30 分)、**不寫** pkl(0.5 小時);
+    退避由下層 `StockDataLoader._get_combined_data_cached` 負責(冷卻期內不重抓)。
+    其餘路徑、回傳形狀與 TTL 同修前。`.clear()` 同修前(清快取層)。
+    """
+    try:
+        return _fetch_price_data_body(sid, days)
+    except _CachedFailure as _cf:
+        return _cf.payload
+
+
+def _inst_failed_flag(df) -> bool:
+    from src.data.core.data_loader import INST_FETCH_FAILED_ATTR
+    return INST_FETCH_FAILED_ATTR in (getattr(df, 'attrs', None) or {})
+
+
+@st.cache_data(ttl=TTL_30MIN, max_entries=10)
+def _fetch_price_data_body(sid, days):
+    """`fetch_price_data()` 的快取層(原函式本體)。"""
     _c = _load_cache('price', sid, str(days), ttl_hours=0.5)
     if _c is not None:
         df_c, name_c = _c
+        if df_c is not None and _inst_failed_flag(df_c):
+            df_c = None    # Q5-r2-r3:修前寫入的「法人全段失敗」pkl 不沿用,重抓
         if df_c is not None and not df_c.empty and float(df_c['close'].max()) > 0:
             try:
                 _latest = df_c['date'].iloc[-1]
@@ -143,8 +166,18 @@ def fetch_price_data(sid, days):
         result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
     except Exception:
         pass
+    if _inst_failed_flag(result):
+        # Q5-r2-r3:法人腿全段確定失敗 → 不寫 pkl、不入快取(外層回同一份結果)
+        raise _CachedFailure((result, name, None))
     _save_cache('price', sid, (result, name), str(days))
     return result, name, None
+
+
+def _clear_fetch_price_data() -> None:
+    getattr(_fetch_price_data_body, "clear", lambda: None)()
+
+
+fetch_price_data.clear = _clear_fetch_price_data
 
 
 #: `fetch_dividend_data(..., failed=)` 寫入的鍵：三段備援各一（2026-09-27 Q5-r2）。
@@ -166,7 +199,8 @@ def fetch_dividend_data(sid, *, failed=None):
         yfinance — L1 `cached_dividends` 拋例外(空 Series 帶失敗旗標)或本段拋例外;
                    yfinance **沒拋、只回空**分不出來 → 不寫;
         TWSE     — 本段拋例外;`stat != 'OK'` 同時用於「沒有」與錯誤 → 不寫。
-      ⚠️ 旗標與結果一起快取(TTL_30MIN)—— 快取命中時照樣在,不會「第二次就成功了」。
+      ⚠️ Q5-r2-r3(2026-09-27):「沒拿到配息且有段確定失敗」**不入快取**;失敗後短冷卻期內
+      回同一份結果(旗標照帶),冷卻期過後重抓。有資料的結果(即使某段失敗)照舊快取 TTL_30MIN。
     """
     _avg, _yearly, _source, _legs = _fetch_dividend_data_cached(sid)
     if failed is not None and _legs:
@@ -175,43 +209,65 @@ def fetch_dividend_data(sid, *, failed=None):
 
 
 @st.cache_data(ttl=TTL_30MIN, max_entries=10)
-def _fetch_dividend_data_cached(sid):
-    """`fetch_dividend_data()` 的快取層(原函式本體,邏輯未改)。
+def _fetch_dividend_data_body(sid):
+    """`fetch_dividend_data()` 的快取層(原函式本體)。
+
+    Q5-r2-r1:FinMind REST 與 SDK 拆成兩段(REST 不再依賴 SDK import)。
+    Q5-r2-r3:沒拿到配息且有段確定失敗 → 拋 `_CachedFailure`(不入快取)。
 
     唯一的差別:多回第 4 項 `{DIVIDEND_LEG_*: 失敗說明}`(只記確定失敗的段)。
     """
     avg_div, yearly, source = 0.0, [], ''
     _legs = {}                 # Q5-r2:確定失敗的段(見 fetch_dividend_data docstring)
     _fm_rest_status = None     # FinMind REST 回的 status(200 = 有回答,含「空」)
+    _fm_errs: list = []        # FinMind 段(REST / SDK / 解析)的失敗說明
+    _fm_sdk_answered = False   # SDK 有回答(含回空、沒拋例外)→ 分不出是不是失敗
+    ddf = None
+    end = datetime.date.today()
+    _fm_start = (end - datetime.timedelta(days=365 * 6)).strftime('%Y-%m-%d')
+    # ── 1a: FinMind REST(不需 SDK)──
+    # Q5-r2-r1(2026-09-27):修前 REST 與 `from FinMind.data import DataLoader` 同在一個 try,
+    # 而 requirements 已移除 SDK(v19.79)→ production 恆 ModuleNotFoundError,REST **從未執行**。
+    # 拆開:REST 自成一段(端點/參數/標頭與修前逐字相同,同 data_loader 其他 FinMind REST 用法),
+    # 鏈順序不變:REST → SDK → yfinance → TWSE。
     try:
-        try:
-            from FinMind.data import DataLoader as FM
-        except ImportError:
-            from finmind.data import DataLoader as FM
-        dl = FM()
-        _fm_tok_div = _get_finmind_token()
-        if _fm_tok_div:
-            try:
-                dl.login_by_token(api_token=_fm_tok_div)
-            except Exception:
-                pass
-        end = datetime.date.today()
-        # First try REST API with proper auth
         # S8 v19.78:補 UA(原僅 Authorization → python-requests 預設 UA 易被限流)
         from src.data.core.data_loader import _fm_raw_headers as _fm_hdrs_div
         _div_resp = _make_proxy_session().get(
             FINMIND_API_URL,
             params={'dataset': 'TaiwanStockDividend', 'data_id': sid,
-                    'start_date': (end - datetime.timedelta(days=365 * 6)).strftime('%Y-%m-%d')},
+                    'start_date': _fm_start},
             headers=_fm_hdrs_div(_get_finmind_token()), timeout=20)
         _div_jd = _div_resp.json()
         _fm_rest_status = _div_jd.get('status')
         print(f'[股利REST] {sid} status={_div_jd.get("status")}')
         ddf = pd.DataFrame(_div_jd['data']) if _div_jd.get('status') == 200 and _div_jd.get('data') else None
-        if ddf is None or ddf.empty:
-            ddf = dl.taiwan_stock_dividend(
-                stock_id=sid,
-                start_date=(end - datetime.timedelta(days=365 * 6)).strftime('%Y-%m-%d'))
+        if _fm_rest_status != 200:
+            _fm_errs.append(f'REST status={_fm_rest_status} msg={_div_jd.get("msg", "")}')
+    except Exception as _e_div_rest:
+        # §1:不靜默吞;REST 失敗落 log 後走 SDK / yfinance / TWSE 備援
+        print(f'[股利] {sid} FinMind REST 失敗: {type(_e_div_rest).__name__}: {_e_div_rest}')
+        _fm_errs.append(f'{type(_e_div_rest).__name__}: {_e_div_rest}')
+    # ── 1b: FinMind SDK(REST 沒給資料才試;production 未安裝 → ImportError)──
+    if ddf is None or ddf.empty:
+        try:
+            try:
+                from FinMind.data import DataLoader as FM
+            except ImportError:
+                from finmind.data import DataLoader as FM
+            dl = FM()
+            _fm_tok_div = _get_finmind_token()
+            if _fm_tok_div:
+                try:
+                    dl.login_by_token(api_token=_fm_tok_div)
+                except Exception:
+                    pass
+            ddf = dl.taiwan_stock_dividend(stock_id=sid, start_date=_fm_start)
+            _fm_sdk_answered = True
+        except Exception as _e_div_sdk:
+            print(f'[股利] {sid} FinMind SDK 路徑失敗: {type(_e_div_sdk).__name__}: {_e_div_sdk}')
+            _fm_errs.append(f'{type(_e_div_sdk).__name__}: {_e_div_sdk}')
+    try:
         if ddf is not None and not ddf.empty:
             cash_col = next((c for c in ['CashDividend', 'cash_dividend', 'StockEarningsDistribution']
                              if c in ddf.columns), None)
@@ -228,10 +284,13 @@ def _fetch_dividend_data_cached(sid):
                 yearly = yr.to_dict('records')
                 source = 'FinMind'
     except Exception as _e_div_fm:
-        # §1:不靜默吞;FinMind 路徑失敗落 log 後走 yfinance/TWSE 備援
+        # §1:不靜默吞;FinMind 解析失敗落 log 後走 yfinance/TWSE 備援
         print(f'[股利] {sid} FinMind 路徑失敗: {type(_e_div_fm).__name__}: {_e_div_fm}')
-        if _fm_rest_status != 200:
-            _legs[DIVIDEND_LEG_FINMIND] = f'{type(_e_div_fm).__name__}: {_e_div_fm}'
+        _fm_errs.append(f'{type(_e_div_fm).__name__}: {_e_div_fm}')
+        _fm_sdk_answered = False
+    # 「確定失敗」:REST 沒回 200(200 但空 = 真的沒有)且 SDK 也沒有回答(拋例外/未安裝)。
+    if source != 'FinMind' and _fm_rest_status != 200 and not _fm_sdk_answered and _fm_errs:
+        _legs[DIVIDEND_LEG_FINMIND] = '；'.join(_fm_errs)
     # ── 備援2: yfinance(v18.209 K5:改走 yf_proxy.cached_dividends,proxy+cache 統一)──
     if avg_div == 0:
         try:
@@ -309,7 +368,41 @@ def _fetch_dividend_data_cached(sid):
               file=_sys_prov.stderr)
     except Exception:
         pass
+    if not source and _legs:
+        # Q5-r2-r3:沒拿到任何配息且有段確定失敗 → 拋出(不入 st.cache_data),外層回同一份結果
+        raise _CachedFailure((avg_div, yearly, source, _legs))
     return avg_div, yearly, source, _legs
+
+
+#: Q5-r2-r3:配息鏈失敗退避(§1.A-3(b))。冷卻期內同一檔不重跑整條鏈,回同一份失敗結果。
+_dividend_fail_cooldown = _FailCooldown()
+
+
+def _fetch_dividend_data_cached(sid):
+    """`fetch_dividend_data()` 的快取入口(**本函式不快取**;快取在 `_fetch_dividend_data_body`)。
+
+    Q5-r2-r3(2026-09-27):修前「沒拿到配息且有段確定失敗」的結果連同旗標被快取 TTL_30MIN
+    → 來源恢復後紅卡仍維持 30 分。現在那一種不入快取;失敗後
+    `shared.fail_cooldown.FAIL_COOLDOWN_SEC` 秒內同一檔不重跑(退避),回同一份結果;
+    成功(或沒有確定失敗的「真的沒有」)照舊快取 TTL_30MIN。`.clear()` 同清快取與退避紀錄。
+    """
+    _hit, _gen = _dividend_fail_cooldown.begin(sid)
+    if _hit is not _FC_NO_HIT:
+        return _hit
+    try:
+        _res = _fetch_dividend_data_body(sid)
+    except _CachedFailure as _cf:
+        return _dividend_fail_cooldown.fail(sid, _gen, _cf.payload)
+    _dividend_fail_cooldown.success(sid)
+    return _res
+
+
+def _clear_fetch_dividend_data() -> None:
+    getattr(_fetch_dividend_data_body, "clear", lambda: None)()
+    _dividend_fail_cooldown.clear()
+
+
+_fetch_dividend_data_cached.clear = _clear_fetch_dividend_data
 
 
 @st.cache_data(ttl=TTL_1HOUR, max_entries=10)

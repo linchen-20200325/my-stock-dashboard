@@ -143,7 +143,9 @@ def test_no_import_cycle():
 def test_source_wraps_history_in_proxy_env():
     """靜態鎖:原始碼中 history('max') 呼叫必須被 _proxy_env 包住(防回歸裸抓)。"""
     import inspect
-    src = inspect.getsource(etf_fetch._fetch_etf_price_max)
+    # Q3-r5(2026-09-27):上游呼叫移到快取層 `_fetch_etf_price_max_cached`(失敗往上拋、不入快取),
+    # `_fetch_etf_price_max` 只剩「接例外＋退避」的外層 → 靜態鎖改看快取層。
+    src = inspect.getsource(etf_fetch._fetch_etf_price_max_cached)
     assert 'with _proxy_env():' in src, '_fetch_etf_price_max 未用 _proxy_env 包 history'
     # _proxy_env 的 with 必須出現在 history 呼叫之前
     assert src.index('with _proxy_env():') < src.index(".history(period='max'"), \
@@ -218,7 +220,9 @@ def test_source_pins_auto_adjust_true():
     環境剛好是 True、在 production 可能不是,比直接改成 False 更難查)。
     """
     import inspect
-    src = inspect.getsource(etf_fetch._fetch_etf_price_max)
+    # Q3-r5(2026-09-27):上游呼叫移到快取層 `_fetch_etf_price_max_cached`(失敗往上拋、不入快取),
+    # `_fetch_etf_price_max` 只剩「接例外＋退避」的外層 → 靜態鎖改看快取層。
+    src = inspect.getsource(etf_fetch._fetch_etf_price_max_cached)
     assert "auto_adjust=True" in src, (
         '_fetch_etf_price_max 不再寫死 auto_adjust=True —— '
         '含息總報酬(etf_calc.calc_total_return_1y / dividend_station.total_return_pct '

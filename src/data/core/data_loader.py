@@ -44,6 +44,8 @@ _urllib3_dl.disable_warnings(_urllib3_dl.exceptions.InsecureRequestWarning)
 from src.data.proxy import fetch_url as _fetch_url_dl
 from src.data.core.finmind_client import _UA as _FM_UA  # S8 v19.78:raw REST UA 對齊 SSOT client
 from shared.ttls import TTL_1DAY, TTL_1HOUR, TTL_3DAY  # v19.105 補 TTL_3DAY(get_quarterly_data 快取)
+from shared.fail_cooldown import (CachedFailure as _CachedFailure, FailCooldown as _FailCooldown,
+                                  NO_HIT as _FC_NO_HIT)  # Q5-r2-r3
 
 # v18.201 D2：FinMind dataset 後台 update 時間追蹤
 # raw fetcher 從 response top-level 取 `last_update`，SDK 路徑無此欄位故留空
@@ -325,7 +327,7 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
 # 版本鍵：改動 StockDataLoader 邏輯時 bump 此字串，供 app._get_loader 作為
 # @st.cache_resource 的 cache key。避免線上 hot-reload 後仍用到舊實例的舊方法碼
 # （PR #44 修了 NoneType 但 cache_resource 舊實例殘留 → 仍崩，即此故）。
-_LOADER_VERSION = 'v3-no-negative-cache'  # N2a v19.80:bump 讓 @st.cache_resource loader 換新
+_LOADER_VERSION = 'v4-no-inst-fail-cache'  # Q5-r2-r3 2026-09-27(前:v3-no-negative-cache,N2a v19.80):bump 讓 @st.cache_resource loader 換新
 
 
 #: `get_combined_data()` 回的 df 在 `attrs` 裡帶的鍵（2026-09-27 Q5-r2）：三大法人那一腿
@@ -345,6 +347,10 @@ class _CombinedDataError(Exception):
     0 改變,但失敗結果不再進快取。「查無資料」類的確定性負結果仍走 return
     (快取合理:重打也不會變出資料)。
     """
+
+
+#: Q5-r2-r3:法人腿全段失敗的退避紀錄(鍵 = (stock_id, days, use_adjusted))。
+_combined_inst_fail_cooldown = _FailCooldown()
 
 
 class StockDataLoader:
@@ -399,8 +405,30 @@ class StockDataLoader:
                 raise
             return None, str(_e_gcd), None
 
+    def _get_combined_data_cached(self, stock_id, days, use_adjusted=True):
+        """快取入口(**本函式不快取**;快取在 `_get_combined_data_body`)。
+
+        Q5-r2-r3(2026-09-27):三大法人那一腿**每一段都確定失敗**(df 帶
+        `INST_FETCH_FAILED_ATTR`)的結果修前連同旗標被快取 TTL_1HOUR → 來源恢復後
+        籌碼卡仍紅最長 1 小時。現在那一種不入快取(內層拋 `_CachedFailure`),
+        失敗後 `shared.fail_cooldown.FAIL_COOLDOWN_SEC` 秒內同一鍵不重抓(退避),
+        回同一份結果(旗標照帶);成功一次即解除。其餘結果(含「真的沒有」)照舊快取。
+        `_CombinedDataError`(暫時性整體失敗)照舊往上拋、不入快取(N2a v19.80)。
+        `.clear()` 同清快取與退避紀錄。
+        """
+        _key = (str(stock_id), days, bool(use_adjusted))
+        _hit, _gen = _combined_inst_fail_cooldown.begin(_key)
+        if _hit is not _FC_NO_HIT:
+            return _hit
+        try:
+            _res = self._get_combined_data_body(stock_id, days, use_adjusted)
+        except _CachedFailure as _cf:
+            return _combined_inst_fail_cooldown.fail(_key, _gen, _cf.payload)
+        _combined_inst_fail_cooldown.success(_key)
+        return _res
+
     @st.cache_data(ttl=TTL_1HOUR, max_entries=64)
-    def _get_combined_data_cached(_self, stock_id, days, use_adjusted=True):
+    def _get_combined_data_body(_self, stock_id, days, use_adjusted=True):
         """完整數據載入流程
 
         Args:
@@ -771,8 +799,13 @@ class StockDataLoader:
             except Exception:
                 pass
 
+            if INST_FETCH_FAILED_ATTR in getattr(df, 'attrs', {}):
+                # Q5-r2-r3:法人腿全段確定失敗 → 不入快取(見 `_get_combined_data_cached`)
+                raise _CachedFailure((df, None, stock_name))
             return df, None, stock_name
 
+        except _CachedFailure:
+            raise
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -1626,6 +1659,15 @@ class StockDataLoader:
 # ── fetch_financial_statements(財報體檢原始數據)已於 B8-a v19.155 拆至
 #    src/data/core/financial_statements_fetcher.py(降 data_loader 體積);
 #    caller 走 src.data.core 套件 __getattr__ 轉發,介面不變。
+
+
+def _clear_combined_data() -> None:
+    """`StockDataLoader._get_combined_data_cached.clear()`:同清快取層與退避紀錄(Q5-r2-r3)。"""
+    getattr(StockDataLoader._get_combined_data_body, "clear", lambda: None)()
+    _combined_inst_fail_cooldown.clear()
+
+
+StockDataLoader._get_combined_data_cached.clear = _clear_combined_data
 
 
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)

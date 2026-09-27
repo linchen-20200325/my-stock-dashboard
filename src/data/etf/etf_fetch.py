@@ -47,6 +47,7 @@ from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 # _proxy_env SSOT(env backup/restore context manager),不重寫。yf_proxy 僅 lazy import
 # src.data.stock._load_proxy_config,不 import 本檔 → 無 import cycle。
 from src.data.proxy.yf_proxy import _proxy_env
+from shared.fail_cooldown import FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT
 
 
 # v18.352 PR-Q2 — S-PROV-1 phase 19 helper
@@ -204,8 +205,14 @@ _PERIOD_TO_DAYS = {
 
 
 @st.cache_data(ttl=TTL_1HOUR, max_entries=20)
-def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
-    """共用底層 — 一次抓 period='max'，供 fetch_etf_price 切片。
+def _fetch_etf_price_max_cached(ticker: str) -> pd.DataFrame:
+    """`_fetch_etf_price_max()` 的快取層。**抓取拋例外一律往上拋,不回空 df**
+    （Q3-r5 2026-09-27,CLAUDE.md §1.A-3(a)「只快取成功結果」;st.cache_data 不快取例外）。
+    成功路徑與 TTL 與修前逐字相同。yfinance 沒拋、只回空 → 照舊回空 df（並快取;分不出來,不猜）。
+
+    以下為原 docstring。
+
+    共用底層 — 一次抓 period='max'，供 fetch_etf_price 切片。
 
     v18.228 集中化：portfolio / single / grp_compare / backtest 跨 tab 同檔
     ETF 從 2~3 次 yfinance call → 1 次（cache key 只剩 ticker）。
@@ -223,32 +230,59 @@ def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
     價格必須來自帶本標記的來源;新來源要進 allow-list 就得**實際被執行**
     並證明自己既蓋章、又真的向上游要了還原價)。
     """
+    # 走 NAS proxy(_proxy_env:臨時設 HTTPS/HTTP_PROXY,finally 還原)避開
+    # Yahoo 海外 IP 封鎖 → 原本直呼致 0050.TW 空 df「找不到歷史/價格資料」。
+    with _proxy_env():
+        df = yf.Ticker(ticker).history(period='max', auto_adjust=True)
+    if df.empty:
+        return pd.DataFrame()
+    df.index = pd.to_datetime(df.index).tz_localize(None)
+    out = df.ffill()
+    # S-PROV-1 v18.251:provenance via DataFrame.attrs(§2.2)
+    out.attrs["source"] = f"Yahoo:{ticker}:history_max_adj"
+    out.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+    # 還原價標記 —— 蓋在「向上游要 auto_adjust=True 的**同一個函式**」裡,
+    # 這樣「有標記」與「真的要了還原價」不會各自漂移(§2.2 血緣)。
+    out.attrs["price_basis"] = PRICE_BASIS_ADJUSTED
+    return out
+
+
+#: Q3-r5:取價失敗的退避（§1.A-3(b)）。冷卻期內同一檔不重打 Yahoo,回同一則失敗旗標。
+_price_fail_cooldown = _FailCooldown()
+
+
+def _fetch_etf_price_max(ticker: str) -> pd.DataFrame:
+    """共用底層(取價) —— 快取在 `_fetch_etf_price_max_cached`;**本函式不快取**。
+
+    Q3-r5(2026-09-27):修前失敗的空 df 被快取 TTL_1HOUR（Yahoo 恢復後 VaR 卡最長紅
+    1 小時）。現在失敗不入快取;失敗後 `shared.fail_cooldown.FAIL_COOLDOWN_SEC` 秒內
+    同一檔不重抓（退避）,直接回同一則失敗旗標;成功一次即解除。回傳形狀與修前相同：
+    成功 → 快取的 df;失敗 → 空 df ＋ `attrs[PRICE_FETCH_FAILED_ATTR]`。
+    `.clear()` 同時清快取層與退避紀錄。
+    """
+    _hit, _gen = _price_fail_cooldown.begin(ticker)
+    if _hit is not _FC_NO_HIT:
+        return _hit
     try:
-        # 走 NAS proxy(_proxy_env:臨時設 HTTPS/HTTP_PROXY,finally 還原)避開
-        # Yahoo 海外 IP 封鎖 → 原本直呼致 0050.TW 空 df「找不到歷史/價格資料」。
-        with _proxy_env():
-            df = yf.Ticker(ticker).history(period='max', auto_adjust=True)
-        if df.empty:
-            return pd.DataFrame()
-        df.index = pd.to_datetime(df.index).tz_localize(None)
-        out = df.ffill()
-        # S-PROV-1 v18.251:provenance via DataFrame.attrs(§2.2)
-        out.attrs["source"] = f"Yahoo:{ticker}:history_max_adj"
-        out.attrs["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
-        # 還原價標記 —— 蓋在「向上游要 auto_adjust=True 的**同一個函式**」裡,
-        # 這樣「有標記」與「真的要了還原價」不會各自漂移(§2.2 血緣)。
-        out.attrs["price_basis"] = PRICE_BASIS_ADJUSTED
-        return out
+        _df = _fetch_etf_price_max_cached(ticker)
     except Exception as e:
         # S-H3 v18.244:L1 不可 st.error → 改 print log,caller 依 empty DataFrame 判斷
         print(f'[etf_fetch] ❌ 無法取得 {ticker} 價格:{type(e).__name__}: {e}')
-        # Q3(2026-09-26):回傳照舊是空 df,**快取行為一字未改**(這個空 df 照樣被快取
-        # TTL_1HOUR —— §1.A-3(a)「只快取成功結果」那半句本批未處理,是既有狀況)。
-        # 只多在 `attrs` 掛失敗旗標,讓**要求分辨**的 caller(`fetch_etf_price(..., failed=[])`)
+        # Q3(2026-09-26):在 `attrs` 掛失敗旗標,讓**要求分辨**的 caller(`fetch_etf_price(..., failed=[])`)
         # 分得出「抓取失敗」與「yfinance 回空」;不要求的 caller 拿到的跟修前一樣(見下)。
         _empty = pd.DataFrame()
         _empty.attrs[PRICE_FETCH_FAILED_ATTR] = f'{type(e).__name__}: {e}'
-        return _empty
+        return _price_fail_cooldown.fail(ticker, _gen, _empty)
+    _price_fail_cooldown.success(ticker)
+    return _df
+
+
+def _clear_etf_price_max() -> None:
+    getattr(_fetch_etf_price_max_cached, "clear", lambda: None)()
+    _price_fail_cooldown.clear()
+
+
+_fetch_etf_price_max.clear = _clear_etf_price_max
 
 
 #: `_fetch_etf_price_max()` 接住例外時,回傳的空 DataFrame 在 `attrs` 裡帶的鍵。

@@ -143,13 +143,19 @@ class _FakeSession:
         return B6._Resp(v)
 
 
-def _fake_finmind_pkg(monkeypatch):
-    """讓 `from FinMind.data import DataLoader` 成功（沙箱／production 皆未安裝），REST 才走得到。"""
+def _fake_finmind_pkg(monkeypatch, sdk_down: bool = False):
+    """讓 `from FinMind.data import DataLoader` 成功（沙箱／production 皆未安裝）。
+
+    Q5-r2-r1（2026-09-27）起 REST 不再依賴 SDK import；本替身只模擬 SDK 那一段。
+    `sdk_down=True`：SDK 自己也打不到上游（真實 SDK 底層就是同一支 REST）→ 拋例外。
+    """
     class _DL:
         def login_by_token(self, api_token=None):
             pass
 
         def taiwan_stock_dividend(self, **_k):
+            if sdk_down:
+                raise ConnectionError("proxy down")
             return pd.DataFrame()
     pkg = types.ModuleType("FinMind")
     sub = types.ModuleType("FinMind.data")
@@ -174,11 +180,14 @@ def div_env(monkeypatch):
     """`div_env(fm=, yf=, twse=)`：三段各自的行為。fm: 'import'(未安裝＝production)/'down'/'none'。"""
     def _set(fm="import", yf="raise", twse="down"):
         if fm != "import":
-            _fake_finmind_pkg(monkeypatch)
+            _fake_finmind_pkg(monkeypatch, sdk_down=(fm == "down"))
         else:
             monkeypatch.setitem(sys.modules, "FinMind", None)
             monkeypatch.setitem(sys.modules, "finmind", None)
-        plan = {"finmind": ConnectionError("proxy down") if fm == "down" else {"status": 200, "data": []},
+        # Q5-r2-r1：REST 現在真的會跑（修前 "import" 情境下 REST 從未執行）。
+        # "import"（production：SDK 未安裝）與 "down" 皆代表 REST 打不到上游。
+        plan = {"finmind": ConnectionError("proxy down") if fm in ("down", "import")
+                else {"status": 200, "data": []},
                 "twse": ConnectionError("twse down") if twse == "down"
                 else {"stat": "很抱歉，沒有符合條件的資料!"}}
         monkeypatch.setattr(A, "_make_proxy_session", lambda: _FakeSession(plan))

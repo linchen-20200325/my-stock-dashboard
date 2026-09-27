@@ -36,6 +36,7 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.ttls import TTL_1HOUR
+from shared.fail_cooldown import FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT
 
 
 _PROXY_ENV_KEYS = ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy")
@@ -98,22 +99,47 @@ DIVIDENDS_FETCH_FAILED_ATTR = "fetch_failed"
 
 
 @st.cache_data(ttl=TTL_1HOUR, max_entries=200, show_spinner=False)
+def _cached_dividends_cached(ticker: str) -> pd.Series:
+    """`cached_dividends()` 的快取層。**拋例外一律往上拋**（Q5-r2-r3 2026-09-27,
+    §1.A-3(a)「只快取成功結果」;st.cache_data 不快取例外）。成功與「只回空」路徑與 TTL 同修前。"""
+    import yfinance as yf
+    with _proxy_env():
+        _s = yf.Ticker(ticker).dividends
+    if _s is None or _s.empty:
+        return pd.Series(dtype=float)
+    return _s
+
+
+#: Q5-r2-r3:配息失敗退避（§1.A-3(b)）—— 冷卻期內同一檔不重打 Yahoo,回同一則失敗旗標。
+_dividends_fail_cooldown = _FailCooldown()
+
+
 def cached_dividends(ticker: str) -> pd.Series:
-    """yfinance Ticker.dividends with NAS proxy + 1h cache。
+    """yfinance Ticker.dividends with NAS proxy + 1h cache（**只快取成功**）。
 
     Returns:
         pd.Series；抓不到回空 Series（不爆例外）。拋例外那一種，空 Series 的 `attrs`
         帶 `DIVIDENDS_FETCH_FAILED_ATTR`（值與內容其餘不變；不讀 attrs 的 caller 無感）。
+        Q5-r2-r3:失敗**不入快取**;失敗後 `shared.fail_cooldown.FAIL_COOLDOWN_SEC` 秒內
+        同一檔不重抓,回同一則失敗旗標;成功一次即解除。`.clear()` 同清快取與退避紀錄。
     """
-    import yfinance as yf
+    _hit, _gen = _dividends_fail_cooldown.begin(ticker)
+    if _hit is not _FC_NO_HIT:
+        return _hit
     try:
-        with _proxy_env():
-            _s = yf.Ticker(ticker).dividends
-        if _s is None or _s.empty:
-            return pd.Series(dtype=float)
-        return _s
+        _s = _cached_dividends_cached(ticker)
     except Exception as _e:
         print(f"[yf_proxy.dividends] {ticker}: {type(_e).__name__}: {_e}")
         _empty = pd.Series(dtype=float)
         _empty.attrs[DIVIDENDS_FETCH_FAILED_ATTR] = f"{type(_e).__name__}: {_e}"
-        return _empty
+        return _dividends_fail_cooldown.fail(ticker, _gen, _empty)
+    _dividends_fail_cooldown.success(ticker)
+    return _s
+
+
+def _clear_cached_dividends() -> None:
+    getattr(_cached_dividends_cached, "clear", lambda: None)()
+    _dividends_fail_cooldown.clear()
+
+
+cached_dividends.clear = _clear_cached_dividends
