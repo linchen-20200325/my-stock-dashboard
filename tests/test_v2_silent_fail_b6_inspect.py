@@ -921,8 +921,11 @@ def _grey_where_and_face(built) -> tuple[str, str]:
 class TestQ5r1ValuationGreyNoRerun:
     def test_constant_is_the_old_sentence_with_its_head_deleted(self):
         assert _Q5R1_GONE_HEAD == f"若是暫時抓不到，{P._V2_PRESS_LOAD}重跑一次；", "前提：按鈕字沒變"
-        assert P.VALUATION_WHERE == _Q5R1_OLD_WHERE.removeprefix(_Q5R1_GONE_HEAD), (
-            "只刪開頭那一句，其餘與 baseline 逐字相同")
+        # SA-r2（2026-09-27）再刪句尾指向資料體檢那一整句（見 `test_v2_find_inspect_p23.py`）。
+        _sa_r2_tail = "配息資料持續抓不到時，到「📖 憑什麼 › 資料體檢」看 FinMind／yfinance／TWSE 三段備援鏈是否可用"
+        assert P.VALUATION_WHERE == (_Q5R1_OLD_WHERE.removeprefix(_Q5R1_GONE_HEAD)
+                                     .removesuffix(_sa_r2_tail)), (
+            "只刪開頭那一句（與 SA-r2 的句尾），其餘與 baseline 逐字相同")
         assert P.VALUATION_WHERE != _Q5R1_OLD_WHERE and _is_deletion_of(P.VALUATION_WHERE, _Q5R1_OLD_WHERE)
         assert P.VALUATION_WHERE.startswith("若這一檔近 5 年真的沒有配息")
         assert "重跑" not in P.VALUATION_WHERE and "暫時抓不到" not in P.VALUATION_WHERE

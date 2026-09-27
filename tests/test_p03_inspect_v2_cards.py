@@ -413,7 +413,7 @@ def test_valuation_why_follows_the_branch_it_came_from():
     # 三段備援都沒給：**兩種可能一起上卡面**（QA F2）。
     w = why_of()
     assert w.startswith("配息備援鏈")
-    assert "近 5 年真的沒有配息" in w and "也可能是三段這一輪都沒拿到" in w, w
+    assert "近 5 年真的沒有配息" in w and "也可能是三段都沒拿到" in w, w
     # L2 的兩種 `msg`（`v5_modules.calc_dividend_yield_357` 的 `_why` 兩支）：**原因在句首，⛔ 不得略**。
     for cause in ("無股價", "無配息記錄"):
         msg = f"{cause}，357 殖利率法則不適用（不以 0% 代替，避免誤判為超貴）"
