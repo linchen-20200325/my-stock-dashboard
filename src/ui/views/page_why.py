@@ -2737,9 +2737,13 @@ def _render_qa_leaf(session: Mapping[str, Any]) -> None:
     _qa = load_qa(_req)
 
     if _req.asked:
+        # SEC-r7-f1（2026-09-27）：使用者自己的提問也先洗再上畫面／寫進紀錄（同 AI 回答，
+        # 走 `scrub_qa_text`）—— 貼進來的金鑰／路徑原本會進對話紀錄、每次 rerun 重播。
+        # ⚠️ 只洗「畫面與紀錄」；送給 L3 的 `_req.question` 維持原文（本項範圍外）。
+        _shown_q = scrub_qa_text(_question)
         with st.chat_message("user"):
-            st.markdown(_question)
-        _append_history("user", _question)
+            st.markdown(_shown_q)
+        _append_history("user", _shown_q)
         if _qa.answered:
             # ⚠️ **只有真的拿到 AI 文字時才掛免責**（`_qa.answered`）。
             # 失敗態／空回答態走的是下方的狀態卡，畫面上**一個字的 AI 文字都沒有** ——
