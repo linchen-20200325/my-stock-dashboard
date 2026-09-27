@@ -1961,9 +1961,10 @@ def build_health_card(stock: StockReadout) -> _Built:
             why=("**這是一個有效的結果**（已經查完，不是還沒查、也不是故障）—— "
                  "多半是這一檔的季報還沒進 FinMind、或該季欄位缺得太多；"
                  "本站不拿 0 分頂替，0 分是一個結論、不是缺值"),
-            where=("新上市或剛換季的標的等資料補齊；若持續如此，到"
-                   f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
-                   "看 FinMind／MOPS 備援鏈是否可用"))
+            # 📌 SA-r2-f1（2026-09-27，有意識的刪除，⛔ 不是漏刪）：句尾「；若持續如此，到{資料體檢}
+            #    看 FinMind／MOPS 備援鏈是否可用」整段刪除（在「；」子句界截斷，只刪不改）——
+            #    財報那條鏈沒掛 `@monitored`，資料體檢那面牆上看不到它 ⇒ 那句指路是錯的（同 SA-r2 #718）。
+            where="新上市或剛換季的標的等資料補齊")
     return Card(key="inspect.stock.health", label="健康度", state=_state,
                 note=_note), tuple(_facts), ""
 
@@ -2210,10 +2211,10 @@ def build_profit_cards(prof: ProfitabilityReadout) -> tuple[_Built, ...]:
                 now=PROFIT_EMPTY_NOW_TEMPLATE.format(label=_label),
                 why=(PROFIT_GAP_WHY if prof.income_statement_missing
                      else PROFIT_MISS_WHY),
+                # 📌 SA-r2-f1（2026-09-27，有意識的刪除）：句尾「持續缺漏請到{資料體檢}看 FinMind／MOPS
+                #    備援鏈」整句刪除（「。」句界，只刪不改）—— 財報鏈沒掛 `@monitored`（同上）。
                 where=("其餘兩格若有值就照常顯示，不必重按；"
-                       "季報補齊後這一格會自己回來。持續缺漏請到"
-                       f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"
-                       "看 FinMind／MOPS 備援鏈"))
+                       "季報補齊後這一格會自己回來。"))
         _out.append((Card(key=f"inspect.profit.{_key}", label=_label,
                           state=_state, note=_note), _facts, ""))
     return tuple(_out)
@@ -2561,9 +2562,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            _V2_CHECK_NET)),
        _v2_rows_for("inspect.stock.health", HEALTH_EMPTY_NOW, (
            None, "多半是這一檔的季報還沒進 FinMind、或該季欄位缺得太多",
-           # QA F3：「看…備援鏈」⛔ 不得沒有「到哪裡看」，條件「若持續如此」也一起留。
-           "新上市或剛換季的標的等資料補齊；若持續如此，到" + _V2_DATA_HEALTH + "看"
-           + V2_EXCERPT_GAP + "備援鏈是否可用")),
+           # SA-r2-f1：原文已刪「若持續如此…備援鏈」那段 → 卡面跟著只留剩下的整句。
+           "新上市或剛換季的標的等資料補齊")),
        _v2_rows_for("inspect.stock.valuation", VALUATION_FAILED_NOW, (
            None, (_v2_raised(SRC_DIVIDENDS), _v2_raised(SRC_357), _v2_raised(SRC_METRICS),
                   _v2_raised(SRC_METRICS, "回報失敗")), _V2_CHECK_NET)),
