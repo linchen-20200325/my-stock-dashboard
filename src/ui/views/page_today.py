@@ -247,6 +247,7 @@ from shared import ui_state as _ui_state
 # L0 SSOT：regime → 中文。`tab_macro_v2.parallel_verdict()` 讀的也是這一份，
 # 本檔直接讀源頭**不是**第二把尺（見檔頭陷阱 3 的 2026-09-07 修註）。
 from shared.allocation_decision import REGIME_LABEL
+from shared.macro_provenance import M1B_PROXY_VALUE_NOTE
 # 燈卡「變化方向」列（2026-09-24）：哪幾盞燈有這一列 ＋ 列標籤。純常數 L0。
 from shared.lamp_direction_thresholds import (
     LAMP_DIRECTION_ERROR_TEMPLATE,
@@ -1125,6 +1126,11 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
         _facts.insert(0, ("燈號", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"))
 
     _shown = fmt_value(_value, _spec) if _value is not None else ""
+    # B7c：M1B-M2 退到 ^TWII 動能代理時，數字後綴 v1 既有註記（L0 SSOT）。
+    # 判定來自 L2 側車 `is_proxy`（L2 以 L0 `is_m1b_m2_proxy` 判），本檔不自己判；
+    # 只動顯示字串，⛔ 不碰 `_band` / `_state`（沿用 v1：只揭露、不改燈）。
+    if key == "m1b_m2_gap" and _shown and rec.get("is_proxy") is True:
+        _shown = f"{_shown}{M1B_PROXY_VALUE_NOTE}"
 
     # ── 「變化方向」列（2026-09-24）：只加一列 fact，⛔ 不碰 `_band` / `_state` ──
     _dir_fact: tuple[str, str] | None = None
