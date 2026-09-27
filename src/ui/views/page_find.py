@@ -692,11 +692,17 @@ SCREEN_ABORTED_WHERE: str = (f"{SCREEN_NO_PARTIAL_WHERE}。若是 FinMind 額度
 #: 具體原因（L3 note／例外原文）照舊在 facts 各自那一列 —— where 只負責「不指錯方向」。
 #: 同一張卡**不只一個**因子失敗、而它們的 where 不同 → 用 `SCREEN_NO_PARTIAL_WHERE`
 #: （兩句裡唯一對每一個因子都為真的；見 `factor_failed_where()`）。
+#: B9 ⑪（客戶 2026-09-27 逐字提供，⛔ 一字不改）：估值／RS／跨季轉強三因子紅卡的「去哪補」。
+#: 修前這三個因子只剩原則句 `SCREEN_NO_PARTIAL_WHERE`、沒有可操作指路（B9 ⑥⑦ 獨立 QA 非阻擋發現）。
+#: 有意識的改指，⛔ 不是漏改：`SCREEN_NO_PARTIAL_WHERE` 本身保留（排名例外／存活池讀取例外、
+#: 以及多個因子 where 不同時的退路照舊用它）。
+SCREEN_FACTOR_RELAX_WHERE: str = "先放寬條件（少勾幾個因子）再按「🎯 開始選股」；若仍失敗，稍後再試一次。"
+
 FACTOR_FAILED_WHERE: dict[str, str] = {
-    PE_FACTOR_KEY: SCREEN_NO_PARTIAL_WHERE,
+    PE_FACTOR_KEY: SCREEN_FACTOR_RELAX_WHERE,
     "shortage": SCREEN_ABORTED_WHERE,
-    "rs_leader": SCREEN_NO_PARTIAL_WHERE,
-    "trend": SCREEN_NO_PARTIAL_WHERE,
+    "rs_leader": SCREEN_FACTOR_RELAX_WHERE,
+    "trend": SCREEN_FACTOR_RELAX_WHERE,
 }
 
 
@@ -727,6 +733,10 @@ HEATMAP_ERROR_NOW: str = "**熱力圖畫不出來**"
 FLOW_FAILED_NOW: str = "**板塊資金圖無法產生**"
 FLOW_STALE_NOW: str = "**畫的是最後一次成功凍結的快照，不是今天的**"
 FLOW_EMPTY_NOW: str = "**板塊資金快取尚未產生**"
+#: 泡泡圖快照「去哪補」—— 2026-09-27 B6-r1 自灰態（快取尚未產生）where 原文**上提**（字面一字未改），
+#: 讓紅態（快照壞檔）讀同一句（⛔ 不手抄第二份）。
+FLOW_REGEN_WHERE: str = ("等當日盤後的「Update Sector Flow」排程；"
+                         "或在 GitHub Actions 手動跑一次該工作流程")
 FORM_UNAVAILABLE_NOW: str = "**條件表單畫不出來**"
 
 #: 板塊資金泡泡圖的口徑揭露（線框葉2 ④，**常駐 caption，不隨狀態消失**）。
@@ -792,7 +802,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = {
          # → 命中第二個候選（全等）；最後這一格只剩缺貨因子紅卡會走到。
          # B9 ⑫：快照**整個**缺（L1 FileNotFoundError）的存活池讀取例外 → where 同樣是
          # `SNAPSHOT_WAIT_WHERE`，命中第一個候選（全等）。
-         (SNAPSHOT_WAIT_WHERE, SCREEN_NO_PARTIAL_WHERE,
+         # B9 ⑪：估值／RS／跨季轉強因子紅卡改指 `SCREEN_FACTOR_RELAX_WHERE`（客戶逐字句）→
+         # 整句就是摘錄（全等；長度在卡面上限內，⛔ 不縮寫客戶原文）。
+         (SNAPSHOT_WAIT_WHERE, SCREEN_NO_PARTIAL_WHERE, SCREEN_FACTOR_RELAX_WHERE,
           "FinMind 額度每日 00:00 重置")),
     ("find.screen_result", SCREEN_DRIFT_NOW):
         ("讀不出結果有幾檔", "回傳形態與約定不符，重跑不會好", NO_EXIT_MARKER),
@@ -818,7 +830,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = {
          press(ACTION_LOAD_MAP_LABEL)),
     ("find.sector_flow", FLOW_FAILED_NOW):
         ("板塊資金圖無法產生", "L3 板塊資金拋出例外（原文在詳細）",
-         "先查網路／proxy"),
+         "等盤後排程或手動跑該工作流程"),   # B6-r1：取自下方灰態那列既有短句（同長句改指）
     ("find.sector_flow", FLOW_STALE_NOW):
         ("快照不是今天的", "盤後凍結任務逾時未更新",
          "等盤後排程；重按不會變新"),
@@ -1228,6 +1240,13 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
                      "；該因子不計入綜合分，「名稱」欄也會是空的"))
     elif not _pe_map:
         _aux.append((FACTOR_INPUT_LABELS[PE_FACTOR_KEY], PE_EMPTY_WHY))
+    elif _pe_failed_markets:
+        # B9 ⑨（2026-09-27 客戶裁示 D11「套現有字樣照做」）：只少上市或上櫃**半邊**時，
+        # 原本 facts 一列都沒有、紅卡也沒點名是哪個市場。⛔ 不新寫：市場名＝L1 `failed_markets=`
+        # 標記原樣（「上市 TWSE」／「上櫃 TPEX」，同 `PE_EMPTY_WHY` 的標籤）＋ 下面三支掃描既有那句
+        # 「失敗，該因子不計入綜合分」（冒號後的例外原文這裡沒有 —— L1 對兩邊各自 fail-soft、只留標記）。
+        _aux.append((FACTOR_INPUT_LABELS[PE_FACTOR_KEY],
+                     f"{'、'.join(_pe_failed_markets)}失敗，該因子不計入綜合分"))
     _short_rows, _short_err = _load_shortage(_factors)
     if _short_err:
         _aux.append((FACTOR_INPUT_LABELS["shortage"],
@@ -1814,10 +1833,14 @@ def build_sector_flow_card(flow: SectorFlowReadout
     if _state == UI_IDLE:
         _note = Note(now=MAP_IDLE_NOW, why=MAP_IDLE_WHY, where=MAP_IDLE_WHERE)
     elif _state == UI_FAILED:
+        # B6-r1（2026-09-27 客戶裁示「套現有字樣照做」；有意識的改指，⛔ 不是漏改）：where 原為
+        # 「先確認網路／proxy；細節在資料體檢」。走得到紅態的只有 L3 `strict=True` 讀本地快照
+        # （`bubble_latest.json` 壞檔／格式不符）與 late import —— 讀快照不碰網路，個股 watchlist
+        # 那一支在 L3 自己吞掉 ⇒「網路／proxy」指錯方向。改指下方灰態既有那一句
+        # （`FLOW_REGEN_WHERE`，字面一字未改）：排程 `scripts/update_sector_flow.py` 每次都重寫該檔。
         _note = Note(now=FLOW_FAILED_NOW,
                      why=_error_why(SRC_SECTOR_FLOW, flow.error),
-                     where=("先確認網路／proxy；細節在"
-                            f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"))
+                     where=FLOW_REGEN_WHERE)
     elif _state == UI_DEGRADED:
         _note = Note(
             now=FLOW_STALE_NOW,
@@ -1834,8 +1857,7 @@ def build_sector_flow_card(flow: SectorFlowReadout
             now=FLOW_EMPTY_NOW,
             why=(f"{flow.reason or '讀不到盤後凍結的快照'} —— "
                  "這不是故障，是當日盤後任務還沒產生資料"),
-            where=("等當日盤後的「Update Sector Flow」排程；"
-                   "或在 GitHub Actions 手動跑一次該工作流程"))
+            where=FLOW_REGEN_WHERE)
     return Card(key="find.sector_flow", label="三大法人資金流向泡泡圖",
                 state=_state, note=_note), tuple(_facts)
 

@@ -261,6 +261,11 @@ def _enumerate():
     add(P.build_dividend_cash_card, P.DeepReadout(
         requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,
         cash=_cash_res(failed_tickers=("0056",))))
+    # E3-r1（2026-09-27）：只有觀察清單（戰情表有列、持有列 0）→ 配息卡 `CASH_NO_HOLDINGS_NOW`
+    # ＋ 客戶逐字 where（修前落在 `CASH_EMPTY_NOW`「有持股…」）。
+    add(P.build_dividend_cash_card, P.DeepReadout(
+        requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,
+        cash=_cash_res(computed=False, reason="沒有任何一列有張數", held_n=0, lots_n=0)))
     # Q3（2026-09-26）：持有列取數失敗 → ⑥ 壓測／VaR／配息的另一種紅（無例外）。
     # 三例各走短句表的一個候選：只有整批失敗／只有現價抓不到／兩者同時
     # （配息只收整批失敗 —— 「只有現價抓不到」那一例它照舊是 live）。
@@ -437,7 +442,9 @@ def test_every_note_now_in_the_module_is_a_registered_constant():
 #: ⛔ 不為它們登記短句（那會是短句表的死列）。
 _UNREACHABLE_NOW = frozenset({
     "SPLIT_NO_HOLDINGS_NOW", "TP_NO_HOLDINGS_NOW", "STRESS_NO_HOLDINGS_NOW",
-    "VAR_NO_HOLDINGS_NOW", "CASH_NO_HOLDINGS_NOW",
+    "VAR_NO_HOLDINGS_NOW",
+    # E3-r1（2026-09-27）起 `CASH_NO_HOLDINGS_NOW` 由「只有觀察清單」那一支直接建 Note（⛔ 不經
+    # `_deep_note`）⇒ 產得出來、已登記短句，移出本集合（有意識的移除，⛔ 不是漏列）。
 })
 
 

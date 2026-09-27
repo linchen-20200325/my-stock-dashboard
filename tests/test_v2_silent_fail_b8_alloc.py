@@ -47,7 +47,8 @@ _SPLIT_KEYS = ("hold.alloc_split", "hold.deep.core_satellite")
 #: 兩句 why（摘自 L0 `MISS_TEXT`，只刪開頭的單數主詞）—— 與 ⑤ 衛星停利卡同一套。
 #: 現價抓不到那一句**另刪句尾**「，可以重跑一次。」（總管裁定：快取 1 小時內那半句不成立）。
 _WHOLE_ROW_TEXT = MISS_TEXT[MISS_FETCH_FAILED].removeprefix("這一檔")
-_NO_PRICE_TEXT = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈").split("，", 1)[0]
+#: 📌 Q2-r3（2026-09-27）：`NO_PRICE_WHY` 改為客戶逐字句（⛔ 不再是 L0 `MISS_TEXT` 的摘錄）。
+_NO_PRICE_TEXT = "這檔查不到報價 —— 可能是已下市，也可能是上游這輪抓取失敗。本站分不出這兩種，不替你猜。"
 
 
 def _mutant(mod: types.ModuleType, *pairs: tuple[str, str]) -> types.ModuleType:
@@ -157,8 +158,9 @@ class TestAllFailedIsRed:
         face = dict(PH.v2_short_rows(
             PH.build_allocation_split_card(_station(PH, (_SAT_ERR, _SAT_NO_PRICE)))[0])[0])
         assert face[PH.V2_WHY_FACT_KEY] == (
-            "整批抓取失敗 —— 看該列的錯誤訊息" + PH.V2_EXCERPT_GAP
-            + "需要的數字沒抓到 —— 通常是上游來源這輪失敗")
+            "整批抓取失敗 —— 看該列的錯誤訊息")
+        # Q2-r3：客戶逐字句放不下「兩者同時」的卡面 → 該候選已刪（⛔ 不縮寫客戶原文），
+        # 卡面落到整批失敗那一句；現價那一半照舊在摺疊區原文。
         assert face[PH.V2_GUIDE_FACT_KEY] == "先確認網路與 Google 授權是否仍有效"
 
     def test_a_same_page_same_failure_same_words_as_take_profit(self):
@@ -241,12 +243,10 @@ _PARTIAL_LABEL = "⚠️ 這個比例只涵蓋一部分"
 
 class TestRerunClauseTruncated:
     def test_1_the_sentence_is_the_l0_text_cut_at_the_first_comma_only(self):
-        full = MISS_TEXT[MISS_NO_INPUT]
-        assert PH.NO_PRICE_WHY == "需要的數字沒抓到 —— 通常是上游來源這輪失敗"
-        # 只刪不加：是原文去掉開頭主詞後的**逐字前綴**，且剛好停在第一個「，」前。
-        assert full.removeprefix("這盞燈").startswith(PH.NO_PRICE_WHY)
-        assert full.removeprefix("這盞燈")[len(PH.NO_PRICE_WHY)] == "，"
-        assert "，" not in PH.NO_PRICE_WHY and "重跑" not in PH.NO_PRICE_WHY
+        # Q2-r3（2026-09-27）：常數改為客戶逐字句 —— 不再是 L0 摘錄，但「重跑」子句照樣不在。
+        assert PH.NO_PRICE_WHY == "這檔查不到報價 —— 可能是已下市，也可能是上游這輪抓取失敗。本站分不出這兩種，不替你猜。"
+        assert "重跑" not in PH.NO_PRICE_WHY
+        assert PH.NO_PRICE_WHY not in MISS_TEXT[MISS_NO_INPUT]
 
     def test_1_split_cards_and_take_profit_say_the_same_truncated_sentence(self):
         st_ = _station(PH, (_SAT_NO_PRICE,))
@@ -259,7 +259,7 @@ class TestRerunClauseTruncated:
     def test_1_both_failures_together_still_read_as_two_sentences(self):
         why = PH.build_allocation_split_card(_station(PH, (_SAT_ERR, _SAT_NO_PRICE)))[0].note.why
         assert why == ("6505：整批抓取失敗 —— 看該列的錯誤訊息，多半是代號或來源問題。"
-                       "2454：需要的數字沒抓到 —— 通常是上游來源這輪失敗")
+                       "2454：這檔查不到報價 —— 可能是已下市，也可能是上游這輪抓取失敗。本站分不出這兩種，不替你猜。")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -437,14 +437,15 @@ class TestMutations:
             _station(m, (_SAT_NO_PRICE,)))[0].note.why
 
     def test_e_1_restoring_the_rerun_clause_is_caught_on_both_places(self):
-        """裁定 1 的突變：常數不截斷 → ⑤⑥ 與停利卡**兩處**都回到「可以重跑一次」。"""
-        m = _mutant(PH, ('NO_PRICE_WHY: str = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈")'
-                         '.split("，", 1)[0]',
+        """裁定 1 的突變（Q2-r3 起改寫）：常數退回 L0 未截斷原文 → ⑤⑥ 與停利卡**兩處**都回到
+        「可以重跑一次」、且客戶逐字句消失。"""
+        m = _mutant(PH, ('NO_PRICE_WHY: str = "這檔查不到報價 —— 可能是已下市，也可能是上游這輪抓取失敗。本站分不出這兩種，不替你猜。"',
                          'NO_PRICE_WHY: str = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈")'))
         st_ = _station(m, (_SAT_NO_PRICE,))
         for card in (m.build_allocation_split_card(st_)[0], m.build_core_satellite_card(st_)[0],
                      m.build_take_profit_card(st_)[0]):
             assert "可以重跑一次" in card.note.why, "裁定 1 的測試必須抓到這個退回"
+            assert "這檔查不到報價 —— 可能是已下市，也可能是上游這輪抓取失敗。本站分不出這兩種，不替你猜。" not in card.note.why
 
     def test_e_2_dropping_the_red_guard_on_the_partial_line_is_caught(self):
         """裁定 2 的突變：拿掉紅態判定 → 紅卡上又出現「這個比例只涵蓋一部分」。"""

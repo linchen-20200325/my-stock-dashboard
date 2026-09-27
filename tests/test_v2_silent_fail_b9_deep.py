@@ -46,14 +46,15 @@ import src.compute.etf.etf_calc as EC
 import src.data.etf.etf_fetch as F
 import src.services.dividend_tax_service as DTS
 import src.services.portfolio_deep_service as PDS
-from shared.station_specs import MISS_FETCH_FAILED, MISS_NO_INPUT, MISS_TEXT
+from shared.station_specs import MISS_FETCH_FAILED, MISS_TEXT
 from shared.ui_state import UI_DEGRADED, UI_EMPTY, UI_FAILED, UI_IDLE, UI_LIVE
 from src.ui.views import page_hold as PH
 
 _VALID = "有效的結果"
 _DEEP_KEYS = ("hold.deep.stress", "hold.deep.var", "hold.deep.dividend_cash")
 _WHOLE = MISS_TEXT[MISS_FETCH_FAILED].removeprefix("這一檔")
-_NO_PX = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈").split("，", 1)[0]
+#: 📌 Q2-r3（2026-09-27）：`NO_PRICE_WHY` 改為客戶逐字句（⛔ 不再是 L0 `MISS_TEXT` 的摘錄）。
+_NO_PX = "這檔查不到報價 —— 可能是已下市，也可能是上游這輪抓取失敗。本站分不出這兩種，不替你猜。"
 
 
 def _mutant(mod: types.ModuleType, *pairs: tuple[str, str]) -> types.ModuleType:

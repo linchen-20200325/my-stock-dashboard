@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from shared.ui_state import UI_FAILED, UI_STATE_META
 from src.services.portfolio_binding_service import (
     STATUS_BOUND,
     STATUS_BOUND_EMPTY,
@@ -61,6 +62,14 @@ def _label_for(_bs) -> "tuple[str, str]":
     if _bs.status == STATUS_BOUND_EMPTY:
         return ("🟡 我的組合：已綁定,但還沒有組合資料",
                 f"Sheet：{_bs.sheet_id[:16]}…")
+    if getattr(_bs, "read_error", ""):
+        # Q1-r1（2026-09-27 客戶裁示 D12「套現有字樣照做」）：token／sheet-id **讀取失敗**
+        # （L3 `read_error` 非空）⛔ 不再印「未綁定」—— 那是替一輪讀失敗的取數宣稱「你沒綁」。
+        # 字樣與 glyph 逐字取 L0 `UI_STATE_META[UI_FAILED]`（「取得失敗」／🔴），⛔ 不新寫；
+        # tooltip 沿用下一行既有那句（popover 內容照舊是就地綁定元件）。
+        _name, _glyph, _ = UI_STATE_META[UI_FAILED]
+        return (f"{_glyph} 我的組合：{_name}",
+                "點開登入 + 選一份 Google Sheet,之後各頁自動載入")
     return ("⚪ 我的組合：未綁定", "點開登入 + 選一份 Google Sheet,之後各頁自動載入")
 
 

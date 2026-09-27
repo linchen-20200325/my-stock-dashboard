@@ -526,6 +526,10 @@ UNKNOWN_WHERE: str = (
 VALUATION_WHERE: str = (
     "若這一檔近 5 年真的沒有配息，357 這套殖利率法則**本來就不適用它**，"
     "重按幾次都一樣 —— 那不是故障，改看健康度與獲利能力那幾格。")
+#: SA-r3（客戶 2026-09-27 逐字提供，⛔ 一字不改）：估值灰卡「**無股價**」那一支的「去哪補」。
+#: 修前這一支也用 `VALUATION_WHERE`（只講配息、沒講價格；SA-r3／SA-r5①）。判定「無股價」的條件
+#: 與 L2 `v5_modules` 357 那支**同一個**（`not price or price <= 0` → msg「無股價」），⛔ 不另立第二把尺。
+VALUATION_NO_PRICE_WHERE: str = "先確認代號是否正確；確認後重新載入，仍抓不到就是上游沒給這檔的日線。"
 #: 357 算不出來的「為什麼」**由 L2 自己說**（它回的 `msg` 已經寫明是無股價
 #: 還是無配息紀錄），本檔只補「本站的處置」。**不自己判是哪一種**（§2.1）。
 VALUATION_WHY_TAIL: str = (
@@ -2055,9 +2059,11 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
         _why = (VALUATION_NO_SOURCE_WHY if not val.source and not val.years_n
                 else (scrub_state_glyphs(scrub_secrets(val.msg))[0]
                       or "357 殖利率法則在這一檔上不適用"))
+        # SA-r3：無股價那一支 → 客戶逐字 where（條件同 L2 的「無股價」判定，見 `VALUATION_NO_PRICE_WHERE`）。
+        _no_price = not val.price or val.price <= 0
         _note = Note(now=VALUATION_EMPTY_NOW,
                      why=f"{_why}{VALUATION_WHY_TAIL}",
-                     where=VALUATION_WHERE)
+                     where=(VALUATION_NO_PRICE_WHERE if _no_price else VALUATION_WHERE))
     return (Card(key="inspect.stock.valuation", label="估值（357 評價）",
                  state=_state, note=_note), tuple(_facts), "")
 
@@ -2583,8 +2589,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            # → 重按幾次都一樣）。⛔ 不再只留「那不是故障」而把它的條件略掉。
            # Q5-r1：原文刪掉「暫時抓不到 → 重跑」那一支（快取期內不成立，見 `VALUATION_WHERE`）
            # → 短句跟著**只刪**那一段；剩下那一支仍帶著自己的條件。
-           "若這一檔近 5 年" + V2_EXCERPT_GAP + "沒有配息" + V2_EXCERPT_GAP
-           + "重按幾次都一樣")),
+           # SA-r3：無股價那一支的 where ＝ 客戶逐字句（34 字，整句就是摘錄，⛔ 不縮寫）。
+           ("若這一檔近 5 年" + V2_EXCERPT_GAP + "沒有配息" + V2_EXCERPT_GAP
+            + "重按幾次都一樣", VALUATION_NO_PRICE_WHERE))),
        _v2_rows_for("inspect.stock.chips", CHIPS_FAILED_NOW, (
            None, (_v2_raised(SRC_CHIPS), _v2_raised(SRC_CHIPS, "回報失敗")), _V2_CHECK_NET)),
        _v2_rows_for("inspect.stock.chips", CHIPS_EMPTY_NOW, (
