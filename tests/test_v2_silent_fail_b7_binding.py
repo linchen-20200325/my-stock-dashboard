@@ -396,10 +396,12 @@ class TestGlobalStatusBarByteIdentical:
             bs = svc.get_binding_state()
         return fst.calls, seen, (bs.logged_in, bs.sheet_id, bs.portfolio_count, bs.status)
 
-    @pytest.mark.parametrize("case", sorted(_FAILURES) + sorted(_GENUINE))
+    # Q1-r1（2026-09-27 客戶裁示 D12）：讀失敗那幾種**有意識地**不再一字不變 —— 改印既有字樣
+    # 「取得失敗」（見下一個 class）；真的結果（`_GENUINE`）照舊一字不變。⛔ 不是漏改。
+    @pytest.mark.parametrize("case", sorted(_GENUINE))
     def test_b_status_bar_is_byte_identical_with_or_without_this_batch(self, l1, monkeypatch,
                                                                        case):
-        l1(**(_FAILURES[case][0] if case in _FAILURES else _GENUINE[case]))
+        l1(**_GENUINE[case])
         new = self._render(monkeypatch, SVC)
         old = self._render(monkeypatch, _mutant(SVC, _SVC_FIELD))
         assert new == old
@@ -410,6 +412,32 @@ class TestGlobalStatusBarByteIdentical:
         assert bs.read_error == ""
         assert BAR._label_for(bs) == ("⚪ 我的組合：未綁定",
                                       "點開登入 + 選一份 Google Sheet,之後各頁自動載入")
+
+
+class TestQ1r1StatusBarReadFailure:
+    """Q1-r1：token／sheet-id 讀取失敗 → 狀態列印 L0 既有字樣「取得失敗」，⛔ 不再印「未綁定」。"""
+
+    @pytest.mark.parametrize("case", sorted(_FAILURES))
+    def test_read_failure_shows_failed_not_unbound(self, l1, monkeypatch, case):
+        from shared.ui_state import UI_FAILED, UI_STATE_META
+        l1(**_FAILURES[case][0])
+        calls, seen, state = TestGlobalStatusBarByteIdentical._render(monkeypatch, SVC)
+        _name, _glyph, _ = UI_STATE_META[UI_FAILED]
+        assert calls[0] == ("popover", f"{_glyph} 我的組合：{_name}")
+        assert "未綁定" not in str(calls[0])
+        assert state[3] == SVC.STATUS_UNBOUND and seen, "popover 內仍是就地綁定元件"
+
+    def test_label_reuses_existing_wording_only(self):
+        bs = SVC.BindingState(False, "", None, SVC.STATUS_UNBOUND, read_error="RuntimeError('x')")
+        label, help_ = BAR._label_for(bs)
+        assert label == "🔴 我的組合：取得失敗"
+        assert help_ == BAR._label_for(SVC.BindingState(False, "", None, SVC.STATUS_UNBOUND))[1]
+
+    def test_mutation_dropping_branch_is_caught(self):
+        m = _mutant(BAR, ('    if getattr(_bs, "read_error", ""):\n', "    if False:\n"))
+        bs = SVC.BindingState(False, "", None, SVC.STATUS_UNBOUND, read_error="RuntimeError('x')")
+        assert m._label_for(bs)[0] == "⚪ 我的組合：未綁定"   # 突變體退回舊行為 → 上一個測試會紅
+        assert BAR._label_for(bs)[0] != m._label_for(bs)[0]
 
 
 class TestOtherHoldCardsByteIdentical:
@@ -455,7 +483,9 @@ class TestCallSites:
     def test_only_the_hold_page_path_reads_read_error(self):
         assert self._refs("read_error") == {
             "src/services/portfolio_binding_service.py", "src/services/holdings_service.py",
-            "src/ui/views/page_hold.py"}
+            "src/ui/views/page_hold.py",
+            # Q1-r1（2026-09-27 D12）：全域狀態列讀它來改印既有字樣「取得失敗」（有意識的新增讀者）
+            "src/ui/tabs/portfolio_status_bar.py"}
 
     def test_only_l3_binding_calls_the_new_l1_probe(self):
         assert self._refs("_oauth_import_error") == {

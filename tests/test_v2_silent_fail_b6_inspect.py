@@ -930,7 +930,9 @@ class TestQ5r1ValuationGreyNoRerun:
         assert P.VALUATION_WHERE.startswith("若這一檔近 5 年真的沒有配息")
         assert "重跑" not in P.VALUATION_WHERE and "暫時抓不到" not in P.VALUATION_WHERE
         spec = P.V2_SHORT_ROWS[("inspect.stock.valuation", P.VALUATION_EMPTY_NOW)][2]
-        assert spec == _Q5R1_FACE and _is_deletion_of(spec, _Q5R1_OLD_FACE_SPEC)
+        # SA-r3（2026-09-27）：格子改為兩個候選 —— 既有摘錄 ＋ 無股價那一支的客戶逐字句。
+        assert spec == (_Q5R1_FACE, P.VALUATION_NO_PRICE_WHERE)
+        assert _is_deletion_of(spec[0], _Q5R1_OLD_FACE_SPEC)
 
     def test_no_price_on_record_grey_card(self, stock_env, monkeypatch):
         """真的走 load：價格那一腿「查無資料」（L1 回傳值、會被快取）→ 灰卡，⛔ 不叫人重跑。"""
@@ -941,8 +943,8 @@ class TestQ5r1ValuationGreyNoRerun:
                                                            years=({"year": 2025, "cash": 3.0},),
                                                            source="FinMind"))
         where, face = _grey_where_and_face(_valuation())
-        assert where == P.VALUATION_WHERE and "重跑" not in where
-        assert face == _Q5R1_FACE
+        # SA-r3（2026-09-27）：無股價那一支改走客戶逐字句（⛔ 仍不叫人「重跑」）。
+        assert where == face == P.VALUATION_NO_PRICE_WHERE and "重跑" not in where
 
     def test_no_dividend_source_grey_card(self, stock_env, monkeypatch):
         """真的走 load：配息備援鏈三段都沒給（`fetch_dividend_data` 快取 30 分）→ 同一句、同一格短句。"""
@@ -959,11 +961,9 @@ class TestQ5r1ValuationGreyNoRerun:
         _line = '    "若這一檔近 5 年真的沒有配息，357 這套殖利率法則**本來就不適用它**，"\n'
         m = _mutant(P, (_line, '    f"若是暫時抓不到，{press(ACTION_LOAD_INSPECT_LABEL)}重跑一次；"\n'
                                + _line))
-        stock_env(_ALL_OK, price="none")
+        # SA-r3 起無股價那一支不用 `VALUATION_WHERE` → 改走配息三段皆無那一支（仍用它）。
+        stock_env(_ALL_OK)
         import src.services.valuation_service as VS
-        monkeypatch.setattr(VS, "get_stock_dividends",
-                            lambda code, **_kw: VS.StockDividends(avg_div_twd=3.0, paying_years=5,
-                                                           years=({"year": 2025, "cash": 3.0},),
-                                                           source="FinMind"))
+        monkeypatch.setattr(VS, "get_stock_dividends", lambda code, **_kw: VS.StockDividends())
         card = _valuation(m)[0]
         assert card.note.where.startswith(_Q5R1_GONE_HEAD), "改回去就又叫人重跑（上面幾條守的就是它）"

@@ -31,7 +31,7 @@ import pytest
 
 import src.services.dividend_station_service as S
 from shared import dividend_station_thresholds as T
-from shared.station_specs import MISS_FETCH_FAILED, MISS_NO_INPUT, MISS_TEXT
+from shared.station_specs import MISS_FETCH_FAILED, MISS_TEXT
 from shared.ui_state import UI_EMPTY, UI_FAILED, UI_LIVE
 from src.ui.views import page_hold as PH
 
@@ -39,7 +39,8 @@ _VALID = "有效的結果"
 #: 本批現價抓不到那幾檔的 why（摘自 L0 `MISS_TEXT[MISS_NO_INPUT]`，只刪開頭主詞）。
 #: ⚠️ Q2（2026-09-26 總管裁定）起**再刪句尾**「，可以重跑一次。」—— 個股現價的「查無資料」
 #:    被 L1 快取 1 小時，那半句在那一小時內不成立（有意識的變更，⛔ 不是漏改；只刪不加）。
-_NO_PRICE_TEXT = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈").split("，", 1)[0]
+#: 📌 Q2-r3（2026-09-27）：`NO_PRICE_WHY` 改為客戶逐字句（⛔ 不再是 L0 `MISS_TEXT` 的摘錄）。
+_NO_PRICE_TEXT = "這檔查不到報價 —— 可能是已下市，也可能是上游這輪抓取失敗。本站分不出這兩種，不替你猜。"
 #: 批次 1 那一句 —— 對「只有現價抓不到」**不成立**（沒有整批失敗、列上也沒有錯誤訊息）。
 _WHOLE_ROW_TEXT = MISS_TEXT[MISS_FETCH_FAILED].removeprefix("這一檔")
 
@@ -175,7 +176,7 @@ class TestNoPriceIsRed:
 
     def test_a_face_names_the_no_input_excerpt(self):
         face = dict(PH.v2_short_rows(_tp_no_price(PH)[0])[0])
-        assert face[PH.V2_WHY_FACT_KEY] == "需要的數字沒抓到 —— 通常是上游來源這輪失敗"
+        assert face[PH.V2_WHY_FACT_KEY] == "這檔查不到報價 —— 可能是已下市，也可能是上游這輪抓取失敗。本站分不出這兩種，不替你猜。"
         assert face[PH.V2_GUIDE_FACT_KEY] == "先確認網路與 Google 授權是否仍有效"
 
     def test_a_several_codes_are_listed_and_not_called_one(self):
@@ -210,8 +211,9 @@ class TestNoPriceIsRed:
         assert card.note.why == f"6505：{_WHOLE_ROW_TEXT}2454：{_NO_PRICE_TEXT}"
         face = dict(PH.v2_short_rows(card)[0])
         assert face[PH.V2_WHY_FACT_KEY] == (
-            "整批抓取失敗 —— 看該列的錯誤訊息" + PH.V2_EXCERPT_GAP
-            + "需要的數字沒抓到 —— 通常是上游來源這輪失敗")
+            "整批抓取失敗 —— 看該列的錯誤訊息")
+        # Q2-r3：客戶逐字句放不下「兩者同時」的卡面 → 該候選已刪（⛔ 不縮寫客戶原文），
+        # 卡面落到整批失敗那一句；現價那一半照舊在摺疊區原文。
 
     def test_a_station_exception_still_wins_and_keeps_its_note(self):
         """戰情表本身拋例外 → 仍是既有那一則（例外原文看得見），不被本批的 why 取代。"""

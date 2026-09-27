@@ -731,11 +731,12 @@ class TestB9FactorWhere:
         assert PF.SCREEN_ABORTED_WHERE.startswith(PF.SCREEN_NO_PARTIAL_WHERE + "。")
         assert set(PF.FACTOR_FAILED_WHERE) == set(PF.FACTOR_INPUT_LABELS), "每個因子都要登記"
         assert set(PF.FACTOR_FAILED_WHERE.values()) <= {
-            PF.SCREEN_ABORTED_WHERE, PF.SNAPSHOT_WAIT_WHERE, PF.SCREEN_NO_PARTIAL_WHERE}, (
-            "只准指向既有句")
+            PF.SCREEN_ABORTED_WHERE, PF.SNAPSHOT_WAIT_WHERE, PF.SCREEN_NO_PARTIAL_WHERE,
+            PF.SCREEN_FACTOR_RELAX_WHERE}, (
+            "只准指向既有句（B9 ⑪ 起多一句客戶逐字提供的 `SCREEN_FACTOR_RELAX_WHERE`）")
         assert PF.FACTOR_FAILED_WHERE["shortage"] == PF.SCREEN_ABORTED_WHERE
         for _k in ("pe_low", "rs_leader", "trend"):
-            assert PF.FACTOR_FAILED_WHERE[_k] == PF.SCREEN_NO_PARTIAL_WHERE, _k
+            assert PF.FACTOR_FAILED_WHERE[_k] == PF.SCREEN_FACTOR_RELAX_WHERE, _k
 
     @pytest.mark.parametrize("which,factor", [
         ("pe_both", "pe_low"), ("rs_empty", "rs_leader"), ("rs_raise", "rs_leader")])
@@ -744,7 +745,7 @@ class TestB9FactorWhere:
         _, card, _ = _run(PF, (factor,))
         _assert_aborted(card)
         where, face = _where_and_face(card)
-        assert where == face == PF.SCREEN_NO_PARTIAL_WHERE
+        assert where == face == PF.SCREEN_FACTOR_RELAX_WHERE   # B9 ⑪
         for _w in _WRONG_SOURCE_WORDS:
             assert _w not in where and _w not in face, (which, _w)
 
@@ -752,7 +753,7 @@ class TestB9FactorWhere:
         _break(world, "pe_tpex")
         res, card, _ = _run(PF, ("pe_low", "eps_high"))
         assert res.rows and card.state == UI_FAILED
-        assert _where_and_face(card) == (PF.SCREEN_NO_PARTIAL_WHERE,) * 2
+        assert _where_and_face(card) == (PF.SCREEN_FACTOR_RELAX_WHERE,) * 2   # B9 ⑪
 
     @pytest.mark.parametrize("trends", [
         _boom,                                    # 舊季 parquet 讀不進來 / 計算出錯（例外）
@@ -767,7 +768,7 @@ class TestB9FactorWhere:
             "前提：存活池好好的，出事的只有跨季轉強")
         _assert_aborted(card)
         where, face = _where_and_face(card)
-        assert where == face == PF.SCREEN_NO_PARTIAL_WHERE
+        assert where == face == PF.SCREEN_FACTOR_RELAX_WHERE   # B9 ⑪
         assert PF.SNAPSHOT_WAIT_WHERE not in where and "排程" not in face
         for _w in _WRONG_SOURCE_WORDS:
             assert _w not in where and _w not in face, _w
@@ -781,7 +782,7 @@ class TestB9FactorWhere:
         assert _where_and_face(card) == (_ABORTED_WHERE, _ABORTED_FACE)
 
     @pytest.mark.parametrize("breaks,factors", [
-        (("pe_both", "trend"), ("pe_low", "trend")),
+        # B9 ⑪ 起估值＋跨季轉強 where 相同 → 那一組移到 `test_b9_11_pe_and_trend_together_…`。
         (("shortage_empty", "trend"), ("shortage", "trend")),
         (("shortage_raise", "rs_empty"), ("shortage", "rs_leader")),
     ])
@@ -793,11 +794,18 @@ class TestB9FactorWhere:
         assert set(res.factor_input_failed) == set(factors)
         assert _where_and_face(card) == (PF.SCREEN_NO_PARTIAL_WHERE,) * 2
 
+    def test_b9_11_pe_and_trend_together_share_the_client_where(self, world):
+        _break(world, "pe_both")
+        _break(world, "trend")
+        res, card, _ = _run(PF, ("pe_low", "trend"))
+        assert set(res.factor_input_failed) == {"pe_low", "trend"}
+        assert _where_and_face(card) == (PF.SCREEN_FACTOR_RELAX_WHERE,) * 2
+
     def test_same_where_factors_keep_it(self, world):
         _break(world, "pe_both")
         _break(world, "rs_empty")
         _, card, _ = _run(PF, ("pe_low", "rs_leader"))
-        assert card.note.where == PF.SCREEN_NO_PARTIAL_WHERE
+        assert card.note.where == PF.SCREEN_FACTOR_RELAX_WHERE   # B9 ⑪
 
     def test_where_is_decided_by_ticked_factors_only(self, world):
         """M7（B9 獨立 QA 測試缺口）：估值壞了但**沒勾**、只勾缺貨（缺貨也壞）→ where 只看勾的那一個。
@@ -866,7 +874,7 @@ class TestB9Mutations:
         assert card.note.where == _ABORTED_WHERE
 
     def test_trend_back_to_the_schedule_sentence_is_caught(self, world):
-        m = _mutant(PF, '    "trend": SCREEN_NO_PARTIAL_WHERE,\n}', '    "trend": SNAPSHOT_WAIT_WHERE,\n}')
+        m = _mutant(PF, '    "trend": SCREEN_FACTOR_RELAX_WHERE,\n}', '    "trend": SNAPSHOT_WAIT_WHERE,\n}')
         _break(world, "trend")
         _, card, _ = _run(m, ("trend",))
         assert card.note.where == PF.SNAPSHOT_WAIT_WHERE, "改回去就又叫人等排程"

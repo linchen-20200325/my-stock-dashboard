@@ -1618,6 +1618,12 @@ VAR_NO_HOLDINGS_NOW: str = "**還沒有可以算 VaR 的持股**"
 VAR_EMPTY_NOW: str = "**有持股，但 VaR 算不出來**"
 CASH_FAILED_NOW: str = "**配息現金流算不出來**"
 CASH_NO_HOLDINGS_NOW: str = "**還沒有可以算配息的持股**"
+#: E3-r1（客戶 2026-09-27 逐字提供，⛔ 一字不改）：配息卡**只有觀察清單、沒有任何持有列**
+#: （L3 `held_n == 0`）時的「去哪補」。修前這一種落在 `CASH_EMPTY_NOW`「有持股，但…」＋
+#: 「把持股的**張數**補齊」—— 兩句都在替一份沒有持股的清單宣稱「有持股」。
+#: ⚠️ ⛔ 不走 `_deep_note(now=CASH_NO_HOLDINGS_NOW)`：它在有持股檔數時回 `NO_ROWS_NOW`
+#:    「戰情表一列都沒有回來」—— 而這一種戰情表是有列的（觀察列），那句是假的。
+CASH_WATCHLIST_ONLY_WHERE: str = "到「💼 我的持股 › 組合設定」，在你的持股表新增至少一列持股（要有代號、張數、均價）。"
 CASH_NO_PAYOUT_NOW: str = "**近一年查不到任何一筆配息**"
 CASH_EMPTY_NOW: str = "**有持股，但配息現金流算不出來**"
 AI_UPSTREAM_NOW: str = "**沒有生成 —— 上游的戰情表這一輪就壞了**"
@@ -1679,7 +1685,12 @@ STATION_ERROR_WHERE: str = (
 #:     `@st.cache_data(ttl=TTL_1HOUR)` 快取 1 小時 ⇒ 那一小時內按重跑，卡照樣是紅的。
 #:     那半句在這裡是**錯的指引**（`CLAUDE.md §-2` 記載的同一個坑），故截掉、不改寫。
 #: ⚠️ 狀態鍵（`MISS_FETCH_FAILED`，讓 L0 升紅）與這一句**刻意不同源**（同批次 4 的作法）。
-NO_PRICE_WHY: str = MISS_TEXT[MISS_NO_INPUT].removeprefix("這盞燈").split("，", 1)[0]
+#: 📌 Q2-r3（客戶 2026-09-27 逐字提供，⛔ 一字不改；有意識的更正，⛔ 不是漏改）：上面那段是
+#:    修前的來歷（L0 `MISS_TEXT[MISS_NO_INPUT]` 只刪不改），**已不再是本常數的值**。舊句「需要的數字
+#:    沒抓到 —— 通常是上游來源這輪失敗」對已下市逾 360 天／興櫃個股（現價**永久** `None`）**不準**
+#:    ——（Q2 獨立 QA 非阻擋發現）。舊作法「⛔ 不新寫、只摘 L0」的理由仍然成立，被權衡掉的是
+#:    它在這裡講錯原因；新句由客戶逐字提供（K1 由客戶拍板），同樣只講確定的事：分不出兩種、不猜。
+NO_PRICE_WHY: str = "這檔查不到報價 —— 可能是已下市，也可能是上游這輪抓取失敗。本站分不出這兩種，不替你猜。"
 
 #: VIX 這一輪沒拿到收盤時的「去哪補」。原本寫在 `build_vix_card()` 的 empty 分支裡，
 #: 2026-09-26（批次 5）上提成常數（**文字一字未改**）—— 「抓不到」改走紅卡後沿用同一句
@@ -2414,6 +2425,7 @@ def build_take_profit_card(station: StationReadout) -> _Built:
         #    （「需要的數字沒抓到 —— 通常是上游來源這輪失敗」）。
         # ⚠️ Q2（2026-09-26 總管裁定）起改走 `NO_PRICE_WHY`：原句尾「，可以重跑一次。」在快取
         #    1 小時內不成立 → 截掉（只刪不加；理由見該常數）。與 ⑤⑥ 核心／衛星共用同一句。
+        # 📌 Q2-r3（2026-09-27）：`NO_PRICE_WHY` 改為客戶逐字提供的句子（理由見該常數）。
         _why = ""
         if _fetch_failed:
             _why += (f"{'、'.join(_fetch_failed)}："
@@ -3273,6 +3285,16 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
                  "沒有收到的錢"),
             where=("若你確定收過息：先確認代號是否正確（本頁顯示的是正規化後的"
                    f"代號），再{press(ACTION_RUN_WARROOM_LABEL)}試一次"))
+    elif (_res is not None and not _res.computed
+          and not (getattr(_res, "held_n", 0) or 0)):
+        # E3-r1（2026-09-27 客戶逐字句；有意識的改指，⛔ 不是漏改）：戰情表有列、但一列持有都沒有
+        # （只有觀察清單）。now 用既有 `CASH_NO_HOLDINGS_NOW`（直接建 Note，⛔ 不經 `_deep_note`，
+        # 理由見 `CASH_WATCHLIST_ONLY_WHERE`）；why 沿用下一支既有那一句（L3 reason 原文照印）。
+        _note = Note(
+            now=CASH_NO_HOLDINGS_NOW,
+            why=("**這是一個有效的結果**（已經算過，不是還沒算）—— "
+                 + _deep_reason(_res)),
+            where=CASH_WATCHLIST_ONLY_WHERE)
     else:
         _note = Note(
             now=CASH_EMPTY_NOW,
@@ -4052,27 +4074,31 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            None, "本站不以「中性」代替未評估：多空是一個結論，缺值不是",
            "到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN))]
     # ── ⑤ 80/20 偏離 ＋ 衛星停利 ＋ 建議持股水位（核心／衛星與 80/20 同一則 Note）──
+    # 📌 Q2-r3（2026-09-27，有意識的刪除，⛔ 不是漏刪）：`NO_PRICE_WHY` 改為客戶逐字句（45 字）後，
+    #    「兩者同時」那個候選（整批失敗句 ＋ GAP ＋ 現價句）放不下卡面上限 → **刪掉、⛔ 不縮寫客戶原文**；
+    #    兩者同時時卡面落到「整批抓取失敗」那一個候選（現價那一半照舊在摺疊區原文）。
+    #    「只有現價抓不到」那個候選改為 `NO_PRICE_WHY` 本身（整句就是摘錄）。
     # 四個候選（Q2 起）：戰情表拋例外（既有）／持有列整批抓取失敗 ＋ 現價抓不到（兩者同時）／
     # 只有前者／只有後者 —— 後三個與下方停利卡**逐字同一組摘錄**（同一條失敗路徑、同一段 L0 原文）。
     + [_v2_rows_for(_k, SPLIT_FAILED_NOW, (
            None, (*_V2_STATION_RAISED,
-                  "整批抓取失敗 —— 看該列的錯誤訊息" + V2_EXCERPT_GAP
-                  + "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
                   "整批抓取失敗 —— 看該列的錯誤訊息",
-                  "需要的數字沒抓到 —— 通常是上游來源這輪失敗"),
+                  NO_PRICE_WHY),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET)))
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
     + [_v2_rows_for(_k, SPLIT_NO_VALUE_NOW, (
            None, "沒有任何一列同時有張數與現價，沒有市值就沒有比例", _V2_FILL_LOTS))
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
+    # 📌 Q2-r3（2026-09-27，有意識的刪除，⛔ 不是漏刪）：`NO_PRICE_WHY` 改為客戶逐字句（45 字）後，
+    #    「兩者同時」那個候選（整批失敗句 ＋ GAP ＋ 現價句）放不下卡面上限 → **刪掉、⛔ 不縮寫客戶原文**；
+    #    兩者同時時卡面落到「整批抓取失敗」那一個候選（現價那一半照舊在摺疊區原文）。
+    #    「只有現價抓不到」那個候選改為 `NO_PRICE_WHY` 本身（整句就是摘錄）。
     # 四個候選：戰情表拋例外（既有）／有衛星整批抓取失敗 ＋ 有衛星現價抓不到（兩者同時）／
     # 只有前者／只有後者（批次 4）—— 後三個都摘自 L0 `MISS_TEXT`。
     + [_v2_rows_for("hold.take_profit", TP_FAILED_NOW, (
            None, (*_V2_STATION_RAISED,
-                  "整批抓取失敗 —— 看該列的錯誤訊息" + V2_EXCERPT_GAP
-                  + "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
                   "整批抓取失敗 —— 看該列的錯誤訊息",
-                  "需要的數字沒抓到 —— 通常是上游來源這輪失敗"),
+                  NO_PRICE_WHY),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.take_profit", TP_EMPTY_NOW, (
            None, "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此判不了",
@@ -4089,25 +4115,25 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.deep.grape", GRAPE_UNWIRED_NOW, (
            None, "這一格的實作住在 L5" + V2_EXCERPT_GAP + "而且它自帶寫死的 widget key",
            _V2_NO_EXIT_UNWIRED)),
+       # 📌 Q2-r3（2026-09-27，有意識的刪除，⛔ 不是漏刪）：`NO_PRICE_WHY` 改為客戶逐字句（45 字）後，
+       #    「兩者同時」那個候選（整批失敗句 ＋ GAP ＋ 現價句）放不下卡面上限 → **刪掉、⛔ 不縮寫客戶原文**；
+       #    兩者同時時卡面落到「整批抓取失敗」那一個候選（現價那一半照舊在摺疊區原文）。
+       #    「只有現價抓不到」那個候選改為 `NO_PRICE_WHY` 本身（整句就是摘錄）。
        # 壓測／VaR 四個候選（Q3 起）：該支 L3 拋例外（既有）／持有列整批抓取失敗 ＋ 現價抓不到
        # （兩者同時）／只有前者／只有後者 —— 後三個與 ⑤⑥ 核心／衛星（Q2）**逐字同一組摘錄**。
        # 配息只有前兩種（配息不需要現價，見 `build_dividend_cash_card()`）。
        _v2_rows_for("hold.deep.stress", STRESS_FAILED_NOW, (
            None, (_v2_raised(SRC_STRESS),
-                  "整批抓取失敗 —— 看該列的錯誤訊息" + V2_EXCERPT_GAP
-                  + "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
                   "整批抓取失敗 —— 看該列的錯誤訊息",
-                  "需要的數字沒抓到 —— 通常是上游來源這輪失敗"),
+                  NO_PRICE_WHY),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.deep.stress", STRESS_EMPTY_NOW, (
            None, "這是一個有效的結果" + V2_EXCERPT_GAP + "本站不用檔數當權重頂替",
            _V2_FILL_LOTS)),
        _v2_rows_for("hold.deep.var", VAR_FAILED_NOW, (
            None, (_v2_raised(SRC_VAR),
-                  "整批抓取失敗 —— 看該列的錯誤訊息" + V2_EXCERPT_GAP
-                  + "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
                   "整批抓取失敗 —— 看該列的錯誤訊息",
-                  "需要的數字沒抓到 —— 通常是上游來源這輪失敗"),
+                  NO_PRICE_WHY),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.deep.var", VAR_EMPTY_NOW, (
            None, "這是一個有效的結果" + V2_EXCERPT_GAP
@@ -4120,6 +4146,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.deep.dividend_cash", CASH_NO_PAYOUT_NOW, (
            None, "可能是你手上這幾檔近一年真的沒有除息，也可能是上游沒有這幾檔的配息紀錄",
            "若你確定收過息：先確認代號是否正確")),
+       # E3-r1：只有觀察清單 → `CASH_NO_HOLDINGS_NOW` ＋ 客戶逐字 where（44 字，整句就是摘錄，⛔ 不縮寫）。
+       _v2_rows_for("hold.deep.dividend_cash", CASH_NO_HOLDINGS_NOW, (
+           None, "這是一個有效的結果（已經算過，不是還沒算）", CASH_WATCHLIST_ONLY_WHERE)),
        _v2_rows_for("hold.deep.dividend_cash", CASH_EMPTY_NOW, (
            None, "這是一個有效的結果（已經算過，不是還沒算）",
            "到既有的 📁 組合管理分頁把持股的張數補齊，回本頁" + _V2_PRESS_RUN))]
