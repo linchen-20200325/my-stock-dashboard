@@ -2005,7 +2005,7 @@ def build_vix_card(vix: VixReadout) -> _Built:
             now=VIX_FAILED_NOW,
             why=_error_why(SRC_VIX, vix.error),
             where=(f"{NO_EXIT_MARKER} —— 這不是取數失敗（L3 取不到時回的是"
-                   "「沒有值」而不是例外），是那一支 L3 自己載不進來；"
+                   "「沒有值」而不是例外）；"
                    "請把上面那行訊息回報給維護者"))
     else:   # UI_EMPTY
         _note = Note(
@@ -3163,7 +3163,7 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
         _facts.append((
             "涵蓋範圍",
             f"{_held} 檔持有列裡納入了 {_lots} 檔 —— "
-            "沒有張數的列不算（觀察清單那幾列本來就沒有張數，**不是 0 張**）"))
+            "沒有張數的列不算"))
     # ⚠️ 覆蓋率**在灰態（一筆配息都查不到）也要印**：`discriminative` 只有在
     # 有值時才輪得到（`classify_ui_state` 判定順序 5 在 6 之前），
     # 但「有幾檔根本沒被算進來」這件事在灰態一樣成立。只掛在橘卡上等於

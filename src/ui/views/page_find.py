@@ -1072,6 +1072,17 @@ def _load_rs(factors: Sequence[str]) -> tuple[list | None, str]:
         return None, repr(_e)
 
 
+def _safe_msg(e: BaseException) -> str:
+    """例外的訊息文字；`__str__` 自己拋錯時回空字串（由呼叫端退回 `UNKNOWN_ERROR_TEXT`）。
+
+    ⚠️ 在 `except` 區塊內呼叫 `str(e)`，若 `__str__` 拋錯會把整個 `load_screen_result` 炸掉。
+    """
+    try:
+        return str(e).strip()
+    except Exception:  # noqa: BLE001 — 取不到訊息不該讓失敗路徑本身失敗
+        return ""
+
+
 def _load_trend(factors: Sequence[str]) -> tuple[dict | None, str]:
     """勾了「跨季轉強」才算（從季快照算，非掃描）。`None` = 沒算 / 失敗。
 
@@ -1086,7 +1097,7 @@ def _load_trend(factors: Sequence[str]) -> tuple[dict | None, str]:
         return build_trend_map(strict=True), ""
     except Exception as _e:  # noqa: BLE001 — 該因子缺料，不炸整體
         print(f"[views/page_find] 跨季趨勢計算失敗：{_e!r}")
-        return None, repr(_e)
+        return None, (_safe_msg(_e) or UNKNOWN_ERROR_TEXT)
 
 
 def _load_regime() -> tuple[str | None, str]:
