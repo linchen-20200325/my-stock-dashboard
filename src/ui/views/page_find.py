@@ -1359,7 +1359,8 @@ def load_sector_flow(session: Mapping[str, Any], *,
 
     邊界：
       (a) **未按載入鈕** → `requested=False`（idle，還沒有人叫）。
-      (b) **L3 拋例外**（含 late import 失敗）→ `repr(e)` → 紅態。
+      (b) **L3 拋例外**（含 late import 失敗；`strict=True` 下另含「快取檔存在但
+          讀不出來／格式不符」—— 壞檔不是「還沒產生」）→ `repr(e)` → 紅態。
       (c) **`ok=False`**（快取還沒產生）→ **灰態 `empty`**，理由用 L3 給的
           `reason` 原文。**不是紅態** —— 沒有人壞掉，只是東西還沒生出來。
       (d) **`is_stale`** → **`degraded`**（有值、可讀，但它是上一次凍結的快照）。
@@ -1374,6 +1375,7 @@ def load_sector_flow(session: Mapping[str, Any], *,
             etf_tickers=_etf_tickers(session),
             stock_sheet_id=(str(session.get(SS_STOCK_SHEET_ID) or "").strip()
                             or None),
+            strict=True,
         )
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_find] 板塊資金取數失敗 → 轉紅態：{_e!r}")

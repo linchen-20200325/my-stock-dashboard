@@ -70,8 +70,14 @@ def _compute_staleness(meta) -> tuple[bool, str | None, str | None]:
     return False, None, _upd
 
 
-def read_sector_flow_cache() -> dict:
+def read_sector_flow_cache(*, strict: bool = False) -> dict:
     """讀三個本地快取檔 → 結構化 view dict。
+
+    strict(v2「🔍 找標的」泡泡圖卡用;預設 False = 既有行為一字不變):
+      True → **壞檔 ≠ 還沒產生**。`bubble_latest.json` **存在**但讀不出來(JSON 壞)
+      或格式不符(非 dict / `sectors` 非 list)→ `raise`,不回 ok=False sentinel ——
+      否則 caller 會把「快取壞了」畫成「快取尚未產生」(§1 靜默失敗)。
+      檔案**不存在**仍回 ok=False(那才是真的還沒產生)。
 
     Returns
     -------
@@ -90,7 +96,15 @@ def read_sector_flow_cache() -> dict:
     缺 bubble_latest.json / 壞檔 / schema 不符:
         {'ok': False, 'reason': str}
     """
-    bubble = _load_json(BUBBLE_PATH)
+    if strict and BUBBLE_PATH.exists():
+        bubble = json.loads(BUBBLE_PATH.read_text(encoding="utf-8"))
+        if not isinstance(bubble, dict) or not isinstance(bubble.get("sectors"), list):
+            _sec = bubble.get("sectors") if isinstance(bubble, dict) else None
+            raise ValueError(
+                f"{BUBBLE_PATH.name}: {type(bubble).__name__}, "
+                f"sectors={type(_sec).__name__}")
+    else:
+        bubble = _load_json(BUBBLE_PATH)
     if not isinstance(bubble, dict) or not isinstance(bubble.get("sectors"), list):
         return {"ok": False,
                 "reason": "板塊資金快取尚未產生(缺 bubble_latest.json 或格式不符)"}

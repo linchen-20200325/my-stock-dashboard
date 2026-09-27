@@ -809,7 +809,8 @@ def load_macro(req: HoldRequest) -> MacroReadout:
 
     邊界：
       (a) **冷啟動** → `requested=False` → idle。
-      (b) **L3 拋例外**（含 late import 失敗）→ 紅態。
+      (b) **L3 拋例外**（含 late import 失敗；`strict=True` 下另含「總經快照存在但
+          讀不出來／是 Fail-safe」—— 讀壞了不是未評估）→ 紅態。
       (c) **回來了但 `loaded=False`** → `empty`（灰）——「總經本輪未評估」是一個
           **有效的結果**，不是故障；而且**不得**拿「中性」頂替（§1）。
     """
@@ -817,7 +818,7 @@ def load_macro(req: HoldRequest) -> MacroReadout:
         return MacroReadout(requested=False)
     try:
         from src.services.dividend_station_service import get_station_macro
-        _m = get_station_macro()
+        _m = get_station_macro(strict=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] 總經位階取數失敗 → 轉紅態：{_e!r}")
         return MacroReadout(requested=True, error=repr(_e))
@@ -895,7 +896,7 @@ def load_allocation(req: HoldRequest) -> AllocationReadout:
         return AllocationReadout(requested=False)
     try:
         from src.services.allocation_service import get_allocation
-        _a = get_allocation()
+        _a = get_allocation(strict=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] 建議持股水位取數失敗 → 轉紅態：{_e!r}")
         return AllocationReadout(requested=True, error=repr(_e))
