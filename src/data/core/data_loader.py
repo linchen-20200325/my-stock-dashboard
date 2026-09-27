@@ -327,7 +327,7 @@ def _fetch_finmind_price_raw(stock_id: str, start_str: str, end_str: str) -> pd.
 # 版本鍵：改動 StockDataLoader 邏輯時 bump 此字串，供 app._get_loader 作為
 # @st.cache_resource 的 cache key。避免線上 hot-reload 後仍用到舊實例的舊方法碼
 # （PR #44 修了 NoneType 但 cache_resource 舊實例殘留 → 仍崩，即此故）。
-_LOADER_VERSION = 'v4-no-inst-fail-cache'  # Q5-r2-r3 2026-09-27(前:v3-no-negative-cache,N2a v19.80):bump 讓 @st.cache_resource loader 換新
+_LOADER_VERSION = 'v5-combined-err-backoff'  # DL-f4 2026-09-27(前:v4-no-inst-fail-cache,Q5-r2-r3;v3-no-negative-cache,N2a v19.80):bump 讓 @st.cache_resource loader 換新
 
 
 #: `get_combined_data()` 回的 df 在 `attrs` 裡帶的鍵（2026-09-27 Q5-r2）：三大法人那一腿
@@ -414,16 +414,23 @@ class StockDataLoader:
         失敗後 `shared.fail_cooldown.FAIL_COOLDOWN_SEC` 秒內同一鍵不重抓(退避),
         回同一份結果(旗標照帶);成功一次即解除。其餘結果(含「真的沒有」)照舊快取。
         `_CombinedDataError`(暫時性整體失敗)照舊往上拋、不入快取(N2a v19.80)。
+        DL-f4(2026-09-27,§1.A-3(b)):該錯誤也記入同一份退避紀錄,冷卻期內同一鍵
+        **不重抓**、直接再拋同一則錯誤(型別與訊息同原錯誤);仍不入快取。
         `.clear()` 同清快取與退避紀錄。
         """
         _key = (str(stock_id), days, bool(use_adjusted))
         _hit, _gen = _combined_inst_fail_cooldown.begin(_key)
         if _hit is not _FC_NO_HIT:
+            if isinstance(_hit, _CombinedDataError):
+                raise _hit
             return _hit
         try:
             _res = self._get_combined_data_body(stock_id, days, use_adjusted)
         except _CachedFailure as _cf:
             return _combined_inst_fail_cooldown.fail(_key, _gen, _cf.payload)
+        except _CombinedDataError as _cde:
+            _combined_inst_fail_cooldown.fail(_key, _gen, _cde)
+            raise
         _combined_inst_fail_cooldown.success(_key)
         return _res
 
