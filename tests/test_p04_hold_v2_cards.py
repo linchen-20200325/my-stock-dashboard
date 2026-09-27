@@ -130,6 +130,10 @@ def _enumerate():
                 (True, _E, P.AI_ERR_EXCEPTION, "")):
             add(P.build_ai_summary_card,
                 P.AiSummaryReadout(requested=arq, error=aer, error_kind=kind, text=txt), st_)
+        # P1a-f1：持股那一層帶下來的例外 → now 走 `PREVIEW_FAILED_NOW`。
+        add(P.build_ai_summary_card,
+            P.AiSummaryReadout(requested=True, error=_E, error_kind=P.AI_ERR_UPSTREAM,
+                               error_src=P.SRC_HOLDINGS), st_)
     # 只在特定條件才長出來的 fact 列（部分涵蓋、抓取失敗、估算 Beta、樣本壓縮…）——
     # 窄卡標籤摘錄表要涵蓋它們，所以窮舉也要走到它們。
     rich = P.StationReadout(

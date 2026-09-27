@@ -441,7 +441,9 @@ class TestL5Card:
         # 文字）⇒ 短句表**追加**第二個候選。**本批（L1 失敗）那一則仍然只會命中第一個候選**
         # —— 下一條 `test_the_new_note_has_a_short_row` 之外，這裡直接釘住它挑到的是哪一段。
         assert PH.V2_SHORT_ROWS[("hold.deep.dividend_cash", PH.CASH_FAILED_NOW)][1:] == (
-            (PH._v2_raised(PH.SRC_DIV_CASH), "整批抓取失敗 —— 看該列的錯誤訊息"),
+            # Q1-r4-f1（2026-09-27）：追加持股清單出處候選（上游持股讀不到時）；本批仍命中第一個。
+            (PH._v2_raised(PH.SRC_DIV_CASH), PH._v2_raised(PH.SRC_HOLDINGS),
+             "整批抓取失敗 —— 看該列的錯誤訊息"),
             (PH._V2_NO_EXIT_REPORT, PH._V2_CHECK_NET))
         card = PH.build_dividend_cash_card(_deep(_cash(failed_tickers=("0056",))))[0]
         short = dict(PH.v2_short_rows(card)[0])

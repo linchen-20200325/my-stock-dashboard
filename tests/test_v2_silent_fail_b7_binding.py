@@ -224,7 +224,7 @@ _EXPECTED_RED_NOW = {
     "hold.deep.stress": PH.STRESS_FAILED_NOW,
     "hold.deep.var": PH.VAR_FAILED_NOW,
     "hold.deep.dividend_cash": PH.CASH_FAILED_NOW,
-    "hold.ai_summary": PH.AI_UPSTREAM_NOW,
+    "hold.ai_summary": PH.PREVIEW_FAILED_NOW,   # P1a-f1：持股讀不到 ⇒ ⛔ 不說戰情表壞了
 }
 
 
