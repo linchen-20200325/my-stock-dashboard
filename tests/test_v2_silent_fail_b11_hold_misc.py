@@ -766,34 +766,85 @@ _ADVERSARIAL_PREFIXED = (
     ("password = ", "x"), ("password: '", "a"), ('password: "', "a"), ("password: \\", "\\"),
     ("a://", "x:"), ("eyJ", "a"), ("Bearer ", "a"), ("C:\\", "a"), ("\\\\", "a"), ("123456:", "a"))
 
+#: SEC-r5：每組開跑前先在 stderr 印一行 `_REDOS_START_TAG + json(name)` 並 flush ——
+#: 子程序逾時被砍時，最後一行開跑標記就是**卡住的那一組**，逾時訊息據此點名。
+_REDOS_START_TAG = "REDOS-START "
 _REDOS_SCRIPT = (
     "import json, sys, time\n"
     "from shared.secret_scrub import scrub_secrets\n"
     "out = {}\n"
     "for name, text in json.load(sys.stdin):\n"
+    f"    sys.stderr.write({_REDOS_START_TAG!r} + json.dumps(name) + '\\n')\n"
+    "    sys.stderr.flush()\n"
     "    t = time.perf_counter()\n"
     "    scrub_secrets(text)\n"
     "    out[name] = time.perf_counter() - t\n"
     "print(json.dumps(out))\n")
 
 
+def _redos_last_started(stderr) -> str | None:
+    """從（可能被截斷、可能是 bytes 的）stderr 取出最後一組開跑的名稱；沒有就回 None。"""
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", "replace")
+    last = None
+    for line in (stderr or "").splitlines():
+        if line.startswith(_REDOS_START_TAG):
+            try:
+                last = json.loads(line[len(_REDOS_START_TAG):])
+            except ValueError:
+                continue
+    return last
+
+
+def _run_redos_cases(cases: list, *, script: str = _REDOS_SCRIPT,
+                     timeout_s: float = _REDOS_TOTAL_TIMEOUT_S) -> dict:
+    """在子程序跑 `cases`，回 `{name: 秒}`；逾時 → `pytest.fail`，訊息點名卡住的那一組（SEC-r5）。"""
+    env = {**os.environ, "PYTHONPATH": str(_REPO), "PYTHONDONTWRITEBYTECODE": "1"}
+    try:
+        proc = subprocess.run([sys.executable, "-c", script], input=json.dumps(cases),
+                              capture_output=True, text=True, cwd=str(_REPO), env=env,
+                              timeout=timeout_s)
+    except subprocess.TimeoutExpired as exc:
+        stuck = _redos_last_started(exc.stderr)
+        where = (f"卡在第 {[c[0] for c in cases].index(stuck) + 1}/{len(cases)} 組：{stuck}"
+                 if stuck in {c[0] for c in cases} else "（子程序沒來得及回報開跑到哪一組）")
+        pytest.fail(f"清洗函式在 {len(cases)} 組 {_REDOS_N} 字元對抗輸入上超過 "
+                    f"{timeout_s} 秒 —— 疑似回溯爆炸（ReDoS）；{where}")
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    return json.loads(proc.stdout.strip().splitlines()[-1])
+
+
 class TestQ1r5NoReDoS:
     def test_every_adversarial_input_is_linear_and_fails_fast(self):
         cases = ([[f"unit {u!r}", _rep(u, _REDOS_N)] for u in _ADVERSARIAL_UNITS]
                  + [[f"prefix {p!r}", p + _rep(u, _REDOS_N)] for p, u in _ADVERSARIAL_PREFIXED])
-        env = {**os.environ, "PYTHONPATH": str(_REPO), "PYTHONDONTWRITEBYTECODE": "1"}
-        try:
-            proc = subprocess.run([sys.executable, "-c", _REDOS_SCRIPT], input=json.dumps(cases),
-                                  capture_output=True, text=True, cwd=str(_REPO), env=env,
-                                  timeout=_REDOS_TOTAL_TIMEOUT_S)
-        except subprocess.TimeoutExpired:
-            pytest.fail(f"清洗函式在 {len(cases)} 組 {_REDOS_N} 字元對抗輸入上超過 "
-                        f"{_REDOS_TOTAL_TIMEOUT_S} 秒 —— 疑似回溯爆炸（ReDoS）")
-        assert proc.returncode == 0, proc.stderr[-2000:]
-        times = json.loads(proc.stdout.strip().splitlines()[-1])
+        times = _run_redos_cases(cases)
         assert set(times) == {c[0] for c in cases}
         slow = {k: round(v, 2) for k, v in times.items() if v > _REDOS_PER_CASE_S}
         assert not slow, slow
+
+    # ── SEC-r5：逾時訊息要點名是哪一組 ────────────────────────────────
+    def test_timeout_message_names_the_stuck_case(self):
+        """把第 2 組換成會睡死的替身：逾時訊息必須點名第 2 組，而不是只說「有一組太慢」。"""
+        hang = _REDOS_SCRIPT.replace(
+            "    scrub_secrets(text)\n",
+            "    scrub_secrets(text) if name != 'unit \\'HANG\\'' else time.sleep(60)\n")
+        assert hang != _REDOS_SCRIPT, "前提：替身腳本真的換到了呼叫那一行"
+        cases = [["unit 'a'", "a"], ["unit 'HANG'", "x"], ["unit 'b'", "b"]]
+        with pytest.raises(pytest.fail.Exception) as ei:
+            _run_redos_cases(cases, script=hang, timeout_s=3.0)
+        msg = str(ei.value)
+        assert "ReDoS" in msg
+        assert "unit 'HANG'" in msg and "第 2/3 組" in msg, msg
+        assert "unit 'a'" not in msg and "unit 'b'" not in msg, msg
+
+    def test_last_started_parser(self):
+        tag = _REDOS_START_TAG
+        assert _redos_last_started(None) is None
+        assert _redos_last_started("") is None
+        assert _redos_last_started(f'{tag}"x"\n{tag}"y"\n') == "y"
+        assert _redos_last_started(f'{tag}"x"\n{tag}"y"\n'.encode()) == "y"
+        assert _redos_last_started(f'noise\n{tag}"x"\n{tag}"y') == "x"   # 截斷的最後一行不算
 
 
 # ── `ai_qa_service._scrub_secrets` 改引用 L0 後 byte-identical ─────────────────

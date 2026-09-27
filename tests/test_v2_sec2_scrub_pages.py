@@ -808,3 +808,72 @@ def test_no_new_visible_words():
         for out in (PT._error_why("", raw), PF._error_why("", raw), PI._error_why("", raw),
                     PW._error_why("", raw)):
             assert set(out.replace(MASK, "")) <= set("拋出例外：" + raw), out
+
+
+# ══════════════════════════════════════════════════════════════════
+# SEC-r8：`today` 反引號內的出口「⛔ 不跳脫遮罩」—— 行為斷言（原本只有錨點字串檢查）
+# ══════════════════════════════════════════════════════════════════
+#: 五個出口都把洗過的例外包在行內程式碼（反引號）裡。Markdown 在反引號內 ⛔ 不處理 `*`，
+#: 所以這裡**不該**像 `_md_scrub` 那樣把遮罩跳成 `\*\*\*` —— 跳了反而會把反斜線字面印出來。
+#: `test_every_mutation_point_is_present_exactly_once` 只證明那串原始碼還在；本段證明**畫出來的字**：
+#: (1) 反引號內恰為 `scrub_secrets(raw)`；(2) 遮罩原樣 `***`、全部落在反引號內；(3) 沒有 `\*`。
+_SEC_R8_RAW = repr(_TWO_MASKS)
+
+
+def _assert_backtick_exit(text: str, raw: str) -> None:
+    """出口字串以 `` `{scrub_secrets(raw)}` `` 收尾（前綴標籤本身可能也有反引號，只看最後一段）。"""
+    want = scrub_secrets(raw)
+    assert want.count(MASK) >= 2 and "`" not in want, "前提：樣本真的有兩個遮罩、且不含反引號"
+    parts = text.split("`")
+    assert len(parts) % 2 == 1 and parts[-1] == "", f"反引號不成對或不在結尾：{text!r}"
+    assert parts[-2] == want, (parts[-2], want)
+    assert "\\*" not in text, f"反引號內的遮罩被跳脫了（會把 \\* 字面印出來）：{text!r}"
+    outside = "".join(parts[:-2][0::2])
+    assert MASK not in outside, f"遮罩跑到反引號外（會被 Markdown 吃成粗斜體）：{text!r}"
+
+
+def _pt_sec_r8_texts(mod, monkeypatch_) -> dict[str, str]:
+    """五個反引號出口各自畫出的字。"""
+    _c, said = _pt_drive(mod, monkeypatch_, l4_error=_SEC_R8_RAW)
+    warn = [t for n, t in said if n == "warning" and mod.L4_LABEL_UNAVAILABLE in t]
+    _c2, said2 = _pt_drive(mod, monkeypatch_, old_report_exc=RuntimeError(str(_TWO_MASKS)))
+    err = [t for n, t in said2 if n == "error" and "原始例外" in t]
+    assert len(warn) == 1 and len(err) == 1, (warn, err)
+    return {"l4_warn": warn[0], "old_report": err[0], **_pt_l4_texts(mod, _SEC_R8_RAW)}
+
+
+#: 把五個反引號出口改成 `_md_scrub`（整個「跳脫遮罩」的選擇翻過來）的突變。
+_SEC_R8_MD_MUT = (
+    ("原始例外：`{scrub_secrets(repr(_e))}`", "原始例外：`{_md_scrub(repr(_e))}`"),
+    ('st.warning(f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(_l4_err)}`"',
+     'st.warning(f"{L4_LABEL_UNAVAILABLE}`{_md_scrub(_l4_err)}`"'),
+    ('("門檻帶", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`")',
+     '("門檻帶", f"{L4_LABEL_UNAVAILABLE}`{_md_scrub(l4_error)}`")'),
+    ('(0, ("燈號", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"))',
+     '(0, ("燈號", f"{L4_LABEL_UNAVAILABLE}`{_md_scrub(l4_error)}`"))'),
+    ('(("燈號", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"),)',
+     '(("燈號", f"{L4_LABEL_UNAVAILABLE}`{_md_scrub(l4_error)}`"),)'),
+)
+
+
+class TestSecR8BacktickMasksNotEscaped:
+    def test_each_backtick_exit_keeps_masks_literal_inside_backticks(self, monkeypatch):
+        texts = _pt_sec_r8_texts(PT, monkeypatch)
+        assert set(texts) == {"l4_warn", "old_report", "l4_thr", "l4_lamp", "l4_danger"}
+        for where, text in texts.items():
+            raw = repr(RuntimeError(str(_TWO_MASKS))) if where == "old_report" else _SEC_R8_RAW
+            try:
+                _assert_backtick_exit(text, raw)
+            except AssertionError as e:
+                raise AssertionError(f"{where}: {e}") from e
+
+    @pytest.mark.parametrize("idx,where", [(0, "old_report"), (1, "l4_warn"), (2, "l4_thr"),
+                                           (3, "l4_lamp"), (4, "l4_danger")])
+    def test_c_escaping_inside_backticks_turns_red(self, idx, where, monkeypatch):
+        """突變：該出口改走 `_md_scrub`（遮罩被跳成 `\\*`）→ 上一條的行為斷言必須抓到。"""
+        m = _load_mutant(PT, (_SEC_R8_MD_MUT[idx],))
+        text = _pt_sec_r8_texts(m, monkeypatch)[where]
+        assert "\\*\\*\\*" in text, text
+        with pytest.raises(AssertionError):
+            raw = repr(RuntimeError(str(_TWO_MASKS))) if where == "old_report" else _SEC_R8_RAW
+            _assert_backtick_exit(text, raw)

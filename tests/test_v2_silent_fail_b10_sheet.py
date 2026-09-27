@@ -417,3 +417,46 @@ class TestMutations:
     def test_d_every_mutation_point_still_exists_exactly_once(self):
         for mod, pair in ((PH, _PH_KEEP), (HS, _HS_PASS), (GSP, _GSP_PASS), (GSP, _GSP_BLANK)):
             _mutant(mod, pair)
+
+
+# ══════════════════════════════════════════════════════════════════
+# Q3-r8：`sheet` fixture 的深度分析替身（`lambda rows, **_k: None`）要真的模擬「回 None」
+# ══════════════════════════════════════════════════════════════════
+#: Q3 起頁面以 `get_portfolio_var(rows, strict=True)` 呼叫；替身若不收 `strict`，
+#: `_guarded` 會把 TypeError 轉成 `var_error` —— VaR 那格被**悄悄**換成「拋例外」紅卡，
+#: 本檔所有經過 `_page()` 的比對就不再是在測「回 None」那條路。本段守住替身的前提本身。
+class TestQ3r8DeepDoublesReturnNone:
+    def _deep(self, sheet):
+        sheet(**_GENUINE["bound_all_valid"])
+        h = PH.load_holdings(_REQ)
+        return PH.load_deep(PH.load_station(h))
+
+    def test_all_three_doubles_ran_and_returned_none(self, sheet):
+        dp = self._deep(sheet)
+        assert dp.requested and dp.has_station_rows, "前提：真的走到三支 L3（有戰情表列）"
+        assert (dp.stress_error, dp.var_error, dp.cash_error) == ("", "", ""), (
+            "替身拋例外了（多半是頁面呼叫多了參數、替身沒收）："
+            f"stress={dp.stress_error!r} var={dp.var_error!r} cash={dp.cash_error!r}")
+        assert (dp.stress, dp.var, dp.cash) == (None, None, None)
+
+    def test_var_card_is_not_the_raised_red_card(self, sheet):
+        dp = self._deep(sheet)
+        card = PH.build_var_card(dp)[0]
+        assert "TypeError" not in repr(card), card
+
+    def test_doubles_accept_every_kwarg_the_page_passes(self, sheet, monkeypatch):
+        """頁面對三支 L3 傳的關鍵字參數，替身都要收（逐支記錄實際呼叫）。"""
+        import src.services.portfolio_deep_service as D
+        sheet(**_GENUINE["bound_all_valid"])
+        seen: dict = {}
+        for fn in ("get_portfolio_stress", "get_portfolio_var", "get_dividend_cash_flow"):
+            double = getattr(D, fn)
+
+            def _rec(rows, _fn=fn, _d=double, **kw):
+                seen[_fn] = kw
+                return _d(rows, **kw)
+            monkeypatch.setattr(D, fn, _rec)
+        dp = PH.load_deep(PH.load_station(PH.load_holdings(_REQ)))
+        assert set(seen) == {"get_portfolio_stress", "get_portfolio_var", "get_dividend_cash_flow"}
+        assert seen["get_portfolio_var"] == {"strict": True}, seen
+        assert dp.var_error == "", dp.var_error
