@@ -1016,7 +1016,8 @@ def load_binding(req: HoldRequest) -> BindingReadout:
         )
         _s = get_binding_state()
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
-        print(f"[views/page_hold] 綁定狀態讀取失敗 → 轉紅態：{_e!r}")
+        # SEC-r4①：log 也先洗（L0 `scrub_secrets`）—— 例外原文可含 secrets 檔內容。
+        print(f"[views/page_hold] 綁定狀態讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
         # ⚠️ `count_requested=True` 是必要的，不是順手填的：這一輪確實**問過**
         #    「那本裡有幾本組合」（問題包在同一次讀取裡），只是整支炸了。
         #    填 False 會讓第二張卡拿到「requested=False 卻帶 error」——
@@ -1027,7 +1028,7 @@ def load_binding(req: HoldRequest) -> BindingReadout:
     # (e)：讀失敗被 L3 降級成 unbound → 還原成 (d) 的讀數（`count_requested=True` 理由同上）。
     _read_err = str(getattr(_s, "read_error", "") or "")
     if _read_err:
-        print(f"[views/page_hold] 綁定狀態讀取失敗 → 轉紅態：{_read_err}")
+        print(f"[views/page_hold] 綁定狀態讀取失敗 → 轉紅態：{scrub_secrets(_read_err)}")
         return BindingReadout(requested=True, submitted=req.submitted,
                               count_requested=True, error=_read_err)
 
@@ -1137,7 +1138,7 @@ def load_holdings(req: HoldRequest) -> HoldingsReadout:
         from src.services.holdings_service import get_holdings
         _h = get_holdings(keep_blank=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
-        print(f"[views/page_hold] 持股清單讀取失敗 → 轉紅態：{_e!r}")
+        print(f"[views/page_hold] 持股清單讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
         return HoldingsReadout(requested=True, submitted=req.submitted,
                                error=repr(_e))
     return HoldingsReadout(
@@ -1190,6 +1191,8 @@ class StationReadout:
         tally: 四態各有幾格（分母口徑與 `judged` 同一把尺）。
         cruise_text: L4 巡航 gate 的那一句（**顯示層 SSOT，本檔不自己寫**）。
         error: 呼叫期例外，或持股那一層帶下來的例外。
+        error_src: `error` 的出處（`SRC_*`）。`None` ＝ 戰情表自己（卡片走 `SRC_STATION`）；
+            持股那一層帶下來的例外 → `SRC_HOLDINGS`（Q1-r4：⛔ 不把持股讀不到記在戰情表名下）。
     """
 
     requested: bool
@@ -1214,6 +1217,7 @@ class StationReadout:
     tally: Mapping[str, int] = field(default_factory=dict)
     cruise_text: str = ""
     error: str = ""
+    error_src: str | None = None
 
     @property
     def has_rows(self) -> bool:
@@ -1245,7 +1249,8 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
         return StationReadout(requested=False, submitted=holdings.submitted)
     if holdings.error:
         return StationReadout(requested=True, submitted=holdings.submitted,
-                              bound=holdings.bound, error=holdings.error)
+                              bound=holdings.bound, error=holdings.error,
+                              error_src=SRC_HOLDINGS)
     if not holdings.has_holdings:
         return StationReadout(requested=True, submitted=holdings.submitted,
                               bound=holdings.bound)
@@ -1695,7 +1700,8 @@ def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
     if not station.requested:
         return _idle_note(station.scope_idle)
     if station.error:
-        return Note(now=now, why=_error_why(source, station.error),
+        # Q1-r4：持股那一層帶下來的例外 → 出處照實寫持股清單（呼叫端的 `source` 只是戰情表預設）。
+        return Note(now=now, why=_error_why(station.error_src or source, station.error),
                     where=STATION_ERROR_WHERE)
     if station.holdings_n:
         return Note(now=NO_ROWS_NOW, why=NO_ROWS_WHY, where=NO_ROWS_WHERE)
@@ -1716,11 +1722,28 @@ def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
             ("總市值（元）", f"{_t.get('value_twd', 0):,.0f}")]
     if _t.get("partial"):
         _held_n, _valued_n = int(_t.get("held_n", 0)), int(_t.get("valued_n", 0))
+        # Q4-r2（規格 ⑥B「缺的那幾檔一律單獨列出」）：代號接在句尾，字樣沿用本檔配息卡既有的
+        # 「；沒有納入：」（⛔ 不新寫）。代號由列上既有欄位照 L3 `compute_portfolio_totals()` 的
+        # 納入條件反推；**數出來的檔數與 L3 的 `held_n - valued_n` 對不上就不列**（只給檔數，
+        # 同修前）—— ⛔ 不列一份與旁邊檔數矛盾的清單。
+        _codes = _unvalued_codes(station)
         _out.append((
             "⚠️ 上面兩個金額只涵蓋一部分",
             f"{_held_n - _valued_n}/{_held_n} 檔持股缺張數或均價，**沒有**納入 —— "
-            f"上面兩個數字只涵蓋其餘 {_valued_n} 檔。到 📁 組合管理補齊即可"))
+            f"上面兩個數字只涵蓋其餘 {_valued_n} 檔。到 📁 組合管理補齊即可"
+            + ("；沒有納入：" + "、".join(_codes)
+               if _codes and len(_codes) == _held_n - _valued_n else "")))
     return _out
+
+
+def _unvalued_codes(station: StationReadout) -> tuple[str, ...]:
+    """金額列沒納入的持有列代號。條件照抄 L3 `compute_portfolio_totals()`（持有、非整批失敗、
+    張數／均價／現價三者皆 > 0 才納入）；呼叫端以 L3 的檔數核對，對不上就不用。"""
+    return tuple(
+        str(_r.get("代號", "")) for _r in station.rows
+        if _r.get("held") and not (_r.get("_detail") or {}).get("error")
+        and not all(isinstance(_r.get(_k), (int, float)) and _r.get(_k) > 0
+                    for _k in ("張數", "均價", "現價")))
 
 
 def build_action_card(station: StationReadout) -> _Built:
@@ -2283,7 +2306,7 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
         _note = _idle_note(station.scope_idle)
     elif _state == UI_FAILED and station.error:
         _note = Note(now=SPLIT_FAILED_NOW,
-                     why=_error_why(SRC_STATION, station.error),
+                     why=_error_why(station.error_src or SRC_STATION, station.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
     elif _state == UI_FAILED:
         # 沒有例外，但有持有列沒被計入（見 `_split_uncounted`）。文字全部沿用既有的、
@@ -2379,7 +2402,7 @@ def build_take_profit_card(station: StationReadout) -> _Built:
         _note = _idle_note(station.scope_idle)
     elif _state == UI_FAILED and station.error:
         _note = Note(now=TP_FAILED_NOW,
-                     why=_error_why(SRC_STATION, station.error),
+                     why=_error_why(station.error_src or SRC_STATION, station.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
     elif _state == UI_FAILED:
         # 沒有例外，但有衛星沒被判過（見上）。文字全部沿用既有的：
@@ -2700,6 +2723,8 @@ def _valued_facts(result: Any, *, coverage: bool = True,
     對不起來」那一列。那一列的結語是「這一格因此判『已失準』（橘），不是『運作中』（綠）」——
     掛在紅卡上＝同一張卡說兩句相反的話。**任何紅**都一樣（含本批之前就有的 VaR `upstream_down`
     紅卡，那張寫「橘」本來就不實）。預設 `False` ＝ 修前行為（橘／灰／綠照舊出）。
+    ⚠️ Q3-r6（只刪不加）：呼叫端傳的是「**不是** 綠／橘」（`_state not in (UI_LIVE, UI_DEGRADED)`）——
+    灰卡（例：VaR 共同交易日不足、但對帳對不上）寫「判『已失準』（橘）」同樣是一張卡兩種說法。
     """
     _facts: list[tuple[str, str]] = []
     _valued = getattr(result, "valued_n", None)
@@ -2921,7 +2946,7 @@ def build_stress_card(deep: DeepReadout) -> _Built:
     # Q3 N1：持有列取數失敗觸發的紅 → 不出「涵蓋範圍」；任何紅 → 不出「兩套算法對不起來」
     # （它的結語是「判已失準（橘）」）。理由見 `_valued_facts()`。
     _facts += _valued_facts(_res, coverage=not _stress_skipped,
-                            red=_state == UI_FAILED)
+                            red=_state not in (UI_LIVE, UI_DEGRADED))
     if _res is not None and getattr(_res, "beta_imputed", ()):
         _facts.append((
             "⚠️ 這幾檔的 Beta 是估的",
@@ -3017,7 +3042,7 @@ def build_var_card(deep: DeepReadout) -> _Built:
     # ③④（取價例外）觸發、且沒有持有列失敗的既有紅態 → 「涵蓋範圍」照舊出。
     # 任何紅（含 ③④ 與既有 `upstream_down`）→ 不出「兩套算法對不起來」（它寫「判已失準（橘）」）。
     _facts += _valued_facts(_res, coverage=not _var_skipped,
-                            red=_state == UI_FAILED)
+                            red=_state not in (UI_LIVE, UI_DEGRADED))
     if _res is not None and getattr(_res, "no_price", ()):
         _facts.append(("⚠️ 這幾檔沒有價格序列",
                        "、".join(_res.no_price)
@@ -3428,12 +3453,14 @@ class AiSummaryReadout:
             窮舉交給 `tests/test_p04_hold_view.py::TestTheAiSummaryStates
             ::test_the_failures_do_not_share_a_single_sentence`
             （它從 `AI_ERR_*` 逐一建卡、比對 `now` / `where` 全部互異）。
+        error_src: 上游帶下來的例外的出處（同 `StationReadout.error_src`；Q1-r4）。
     """
 
     requested: bool
     text: str = ""
     error: str = ""
     error_kind: str = ""
+    error_src: str | None = None
 
 
 def _switch_payload(switch: SwitchReadout) -> dict | None:
@@ -3486,7 +3513,8 @@ def load_ai_summary(pressed: bool, station: StationReadout,
         return AiSummaryReadout(requested=False)
     if station.error:
         return AiSummaryReadout(requested=True, error=station.error,
-                                error_kind=AI_ERR_UPSTREAM)
+                                error_kind=AI_ERR_UPSTREAM,
+                                error_src=station.error_src)
     if not station.digest:
         # 按了、沒有錯、就是沒有輸入 → `empty`（灰）。**這一步不花錢。**
         return AiSummaryReadout(requested=True)
@@ -3534,7 +3562,7 @@ def _ai_failed_note(ai: AiSummaryReadout) -> Note:
     if ai.error_kind == AI_ERR_UPSTREAM:
         return Note(
             now=AI_UPSTREAM_NOW,
-            why=_error_why(SRC_STATION, ai.error),
+            why=_error_why(ai.error_src or SRC_STATION, ai.error),
             where=("AI 總結吃的是戰情表已經算好的結論；"
                    "**上面那幾張卡這一輪也會是紅的** —— "
                    f"先讓戰情表跑起來（到{SETUP_WHERE}"
@@ -3925,8 +3953,11 @@ _V2_SHARED_SHORT: dict[str, tuple[object, object, object]] = {
 }
 
 #: 戰情表出錯時各卡自己的 `now`（`_station_note()` 的 error 分支）→ 同一組摘錄。
+#: Q1-r4：持股那一層帶下來的例外，出處是 `SRC_HOLDINGS`（見 `StationReadout.error_src`）⇒ 第二個候選
+#: （摘錄沿用葉2 預覽卡既有的那一段）。
+_V2_STATION_RAISED: tuple[str, str] = (_v2_raised(SRC_STATION), _v2_raised(SRC_HOLDINGS))
 _V2_STATION_ERROR: tuple[object, object, object] = (
-    None, _v2_raised(SRC_STATION), _V2_CHECK_NET)
+    None, _V2_STATION_RAISED, _V2_CHECK_NET)
 
 #: 各「沒有持股」系列 Note 由哪幾張卡產生（窮舉由測試對帳，見 `tests/test_p04_hold_v2_cards.py`）。
 _V2_STATION_EMPTY_KEYS: tuple[str, ...] = (
@@ -4015,7 +4046,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     # 四個候選（Q2 起）：戰情表拋例外（既有）／持有列整批抓取失敗 ＋ 現價抓不到（兩者同時）／
     # 只有前者／只有後者 —— 後三個與下方停利卡**逐字同一組摘錄**（同一條失敗路徑、同一段 L0 原文）。
     + [_v2_rows_for(_k, SPLIT_FAILED_NOW, (
-           None, (_v2_raised(SRC_STATION),
+           None, (*_V2_STATION_RAISED,
                   "整批抓取失敗 —— 看該列的錯誤訊息" + V2_EXCERPT_GAP
                   + "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
                   "整批抓取失敗 —— 看該列的錯誤訊息",
@@ -4028,7 +4059,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     # 四個候選：戰情表拋例外（既有）／有衛星整批抓取失敗 ＋ 有衛星現價抓不到（兩者同時）／
     # 只有前者／只有後者（批次 4）—— 後三個都摘自 L0 `MISS_TEXT`。
     + [_v2_rows_for("hold.take_profit", TP_FAILED_NOW, (
-           None, (_v2_raised(SRC_STATION),
+           None, (*_V2_STATION_RAISED,
                   "整批抓取失敗 —— 看該列的錯誤訊息" + V2_EXCERPT_GAP
                   + "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
                   "整批抓取失敗 —— 看該列的錯誤訊息",
@@ -4093,7 +4124,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            None, "它每按一次就打一次付費 API，所以不會自動生成", v2_plain(AI_IDLE_WHERE))),
        _v2_rows_for("hold.ai_summary", AI_NO_STATION_NOW, _V2_STATION_ERROR),
        _v2_rows_for("hold.ai_summary", AI_UPSTREAM_NOW, (
-           None, _v2_raised(SRC_STATION),
+           None, _V2_STATION_RAISED,
            "先讓戰情表跑起來（到" + SETUP_WHERE + _V2_PRESS_RUN + "）")),
        _v2_rows_for("hold.ai_summary", AI_UNAVAILABLE_NOW, (
            None, "沒有丟例外，而是回了一句服務說明",

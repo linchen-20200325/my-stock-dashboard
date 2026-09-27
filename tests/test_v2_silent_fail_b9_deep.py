@@ -923,9 +923,9 @@ class TestMutations:
 
     # ── 合併前：紅卡不出「兩套算法對不起來」的突變 ─────────────────────────────
     @pytest.mark.parametrize("old,new,key", [
-        ("coverage=not _stress_skipped,\n                            red=_state == UI_FAILED)",
+        ("coverage=not _stress_skipped,\n                            red=_state not in (UI_LIVE, UI_DEGRADED))",
          "coverage=not _stress_skipped,\n                            red=False)", "hold.deep.stress"),
-        ("coverage=not _var_skipped,\n                            red=_state == UI_FAILED)",
+        ("coverage=not _var_skipped,\n                            red=_state not in (UI_LIVE, UI_DEGRADED))",
          "coverage=not _var_skipped,\n                            red=False)", "hold.deep.var"),
     ])
     def test_e_recon_call_site_not_passing_red_is_caught(self, world, unreconciled, old, new, key):
