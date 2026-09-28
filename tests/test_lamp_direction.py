@@ -81,8 +81,9 @@ class TestL0:
             assert c["window_text"] in texts, k
             assert c["unit"] in units, k
 
+    # DL-f1-s36（2026-09-28）：m1b_m2_gap 已補 `none_reason`，移出排除集 ⇒ 本測試守住「mode="none" 的盞都有填」。
     @pytest.mark.parametrize("key", sorted(set(LAMP_DIRECTION_KEYS) - {"margin", "bias_240",
-                                                                     "ism_pmi", "m1b_m2_gap",
+                                                                     "ism_pmi",
                                                                      "vix", "ndc_signal"}))
     def test_none_keys_have_reason_and_no_band(self, key):
         c = LAMP_DIRECTION_WINDOWS[key]
@@ -142,10 +143,15 @@ class TestComputeNodata:
         with pytest.raises(KeyError):
             compute_lamp_direction("usdtwd", _daily([1.0] * 30))   # 參考走勢，不是燈
 
-    def test_m1b_reason_unchanged(self):
-        # 2026-09-26 L2 加 `none_reason` 後，m1b 的原因字串逐字不變
-        assert (compute_lamp_direction("m1b_m2_gap", None).reason
-                == "m1b_m2_gap：歷史資料已知不可信，刻意不算方向")
+    def test_m1b_reason_uses_l0_none_reason(self):
+        # DL-f1-s36（2026-09-28；原名 test_m1b_reason_unchanged，逐字釘住 L2 預設句「歷史資料已知不可信，
+        # 刻意不算方向」—— 該檔已由排程 `2aed087` 重建，那句不再成立）：改由 L0 `none_reason` 帶現行理由。
+        r = compute_lamp_direction("m1b_m2_gap", None).reason
+        assert r == "m1b_m2_gap：" + LAMP_DIRECTION_WINDOWS["m1b_m2_gap"]["none_reason"]
+        assert "歷史資料已知不可信" not in r
+        # 理由寫「腿停用中」：旗標翻 True 時本測試轉紅，提醒同批改 `none_reason`（別讓理由再過期一次）
+        from shared.signal_thresholds import M1B_M2_LEG_ENABLED
+        assert M1B_M2_LEG_ENABLED is False and "停用中" in r
 
     def test_pmi_missing_month_is_nodata(self):
         pts = [("2026-05-01", 50.0), ("2026-07-01", 55.0)]

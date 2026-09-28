@@ -160,6 +160,12 @@ LAMP_DIRECTION_WINDOWS: dict[str, dict] = {
     "m1b_m2_gap": {
         "lookback_rows": 0, "mode": DIRECTION_MODE_NONE,
         "unit": "", "window_text": "", "monthly": False,
+        # DL-f1-s36（2026-09-28）：補 `none_reason`。修前沒填 ⇒ L2 用預設句「歷史資料已知不可信，刻意不算方向」，
+        # `finmind_m1m2.parquet` 已由排程 `2aed087` 重建、那句不再成立。下面三條＝檔頭 m1b_m2_gap 段 (a)(b)(c)；
+        # 本字串只進 L2 `LampDirection.reason`，畫面只顯示「無資料」（2026-09-28 查證消費端）。
+        "none_reason": "不讀歷史檔 finmind_m1m2.parquet：gap 定義與燈值不同（燈值依取數層而異且捨入到 2 位，"
+                       "檔內由餘額自算、不捨入）、持平帶無量測紀錄，且 M1B-M2 腿停用中（M1B_M2_LEG_ENABLED = False，"
+                       "復活評估待 DL-f1-s8）—— 詳見 shared/lamp_direction_thresholds.py 檔頭 m1b_m2_gap 段（2026-09-28 查證）",
     },
     # ── 2026-09-26：真方向（持平帶量測見檔頭）──
     "vix": {

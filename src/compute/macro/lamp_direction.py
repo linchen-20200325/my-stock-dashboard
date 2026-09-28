@@ -110,6 +110,8 @@ def compute_lamp_direction(
     if mode == DIRECTION_MODE_NONE:
         # 2026-09-26：各盞「無資料」的原因不同（無歷史 / 量不到帶寬 / 會混源），
         # 由 L0 `none_reason` 帶；沒填者沿用 m1b_m2_gap 原本那句（逐字不變）。
+        # 📌 2026-09-28（DL-f1-s36）：m1b_m2_gap 也已在 L0 填 `none_reason`（下行預設句「歷史資料已知不可信」在
+        #    `finmind_m1m2.parquet` 由 `2aed087` 重建後不再成立）⇒ 現行 mode="none" 的盞都有填、預設句只剩後備；新增這類盞務必填。
         return _nodata(cfg, f"{key}：{cfg.get('none_reason') or '歷史資料已知不可信，刻意不算方向'}")
     if mode not in (DIRECTION_MODE_PCT, DIRECTION_MODE_DIFF):
         raise ValueError(f"{key}：未知的 mode {mode!r}")
