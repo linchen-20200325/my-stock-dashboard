@@ -34,7 +34,7 @@ class TestCalibratedConstants:
         assert math.isclose(HEALTH_WEIGHT_JQ + HEALTH_WEIGHT_SCORE, 1.0, abs_tol=1e-9)
 
     def test_proposal_doc_exists_as_evidence(self):
-        # 採納證據鏈:提案檔須在 repo(由 Calibrate workflow commit)
+        # 採納證據鏈:方法論定案檔須在 repo(非 workflow 產物;calibrate_health_weights.yml 只 commit MACRO_HEALTH_WEIGHT_PROPOSAL.md)
         assert (REPO / "MACRO_HEALTH_REWEIGHT_PROPOSAL.md").exists()
 
 
