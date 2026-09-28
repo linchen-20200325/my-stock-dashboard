@@ -18,6 +18,7 @@ import pandas as pd
 import pytest
 
 import scripts.update_macro_history as umh
+from src.data.macro import cbc_ef15m01 as ef15
 from tests.test_b7b_r1_ef15m01_level import (
     I_M1B,
     I_M2,
@@ -26,6 +27,7 @@ from tests.test_b7b_r1_ef15m01_level import (
     ef15_rows,
     patch_ef15,
 )
+from tests.test_dl_f1_r2_batch import _off_by, _t12_at_or_below_half_step
 
 _TODAY = dt.date(2026, 9, 28)
 _ALL = (dt.date(1980, 1, 1), dt.date(2030, 1, 1))
@@ -347,3 +349,65 @@ class TestS43ForeignNetNeverFabricated:
         meta = umh.update_one("finmind_inst", dt.date(2026, 9, 28), False, 20, "tok")
         assert meta["last_error"].startswith("RuntimeError: 缺欄"), meta
         assert (tmp_path / "finmind_inst.parquet").read_bytes() == before
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DL-f1-s41：致命範圍之前對帳不符（只警示）那一行 —— 不再印 infpp、依原因分類
+# ═════════════════════════════════════════════════════════════════════════════
+_WHY_T12 = "t−12 餘額 ≤ 捨入半階,無法對帳"                # cbc_ef15m01 對帳段既有字樣，逐字
+_WHY_TOL = "自算年增率 vs 表內官方年增率，超出捨入容差"      # DL-f1-s19 拒用句既有字樣，逐字
+_TAG = "[cbc_ef15m01/EF15M01]"
+
+
+def _warn_line(rows, fatal_from, capsys) -> str:
+    capsys.readouterr()
+    df, why = ef15.parse_cbc_ef15m01(ef15_body(rows), fatal_from)
+    out = capsys.readouterr().out
+    assert df is not None, why                                    # 範圍前不符只警示，照樣產出
+    lines = [ln for ln in out.splitlines() if "之前對帳不符" in ln]
+    assert len(lines) == 1, out
+    assert "inf" not in lines[0].split(" first10=")[0], lines[0]  # 摘要段不得出現 inf
+    assert "infpp" not in out
+    return lines[0]
+
+
+class TestS41PreFatalWarnLine:
+    def test_only_t12_rows_name_the_cause_not_infpp(self, capsys):
+        rows = ef15_rows()
+        _t12_at_or_below_half_step(rows, "2025M01", I_M1B, "0")        # 致命範圍 ≥ 2025-02 之前
+        line = _warn_line(rows, dt.date(2025, 2, 1), capsys)
+        assert line.startswith(f"{_TAG} ⚠️ 致命範圍（≥ 2025-02）之前對帳不符 1 列（不影響寫入的資料，"
+                               f"只警示、不拒用）：{_WHY_T12} first10=["), line
+        assert "max|Δ|" not in line                                    # 沒有可算差值的列 → 不印 max|Δ|
+
+    def test_only_tolerance_rows_line_is_unchanged(self, capsys):
+        """只有容差類：與修正前逐字相同（`max|Δ|={max(第 5 格):.6f}pp first10=…`）。"""
+        import ast
+        rows = ef15_rows()
+        _off_by(rows, "2025M01", I_M2)
+        line = _warn_line(rows, dt.date(2025, 2, 1), capsys)
+        first10 = ast.literal_eval(line.split(" first10=", 1)[1])
+        mx = max(w[4] for w in first10)
+        assert line == (f"{_TAG} ⚠️ 致命範圍（≥ 2025-02）之前對帳不符 1 列（不影響寫入的資料，"
+                        f"只警示、不拒用）：max|Δ|={mx:.6f}pp first10={first10!r}"), line
+        assert 0.015 < mx < 0.025
+
+    def test_both_causes_listed_with_counts_and_max_over_tolerance_rows_only(self, capsys):
+        rows = ef15_rows()
+        _off_by(rows, "2025M06", I_M1B)                                   # |Δ| ≈ 0.02
+        _off_by(rows, "2025M07", I_M2, by=0.05)                           # |Δ| ≈ 0.05（最大）
+        _t12_at_or_below_half_step(rows, "2025M03", I_M2, "0")
+        line = _warn_line(rows, dt.date(2026, 5, 1), capsys)              # 致命範圍 ≥ 2026-05 之前
+        summary = line.split(" first10=")[0]
+        assert summary.startswith(f"{_TAG} ⚠️ 致命範圍（≥ 2026-05）之前對帳不符 3 列（不影響寫入的資料，"
+                                  f"只警示、不拒用）：{_WHY_TOL} 2 列（max|Δ|=0.0"), summary
+        assert summary.endswith(f"pp）；{_WHY_T12} 1 列"), summary
+        mx = float(summary.split("max|Δ|=")[1].split("pp")[0])
+        assert 0.045 < mx < 0.055                                         # 只在容差類裡取，不是 inf
+
+    def test_two_t12_rows_single_cause_no_count(self, capsys):
+        rows = ef15_rows()
+        _t12_at_or_below_half_step(rows, "2025M03", I_M1B, "0")
+        _t12_at_or_below_half_step(rows, "2025M04", I_M2, "-3")
+        line = _warn_line(rows, dt.date(2026, 5, 1), capsys)
+        assert f"之前對帳不符 2 列（不影響寫入的資料，只警示、不拒用）：{_WHY_T12} first10=[" in line, line
