@@ -314,6 +314,12 @@ MACRO_THRESHOLDS: dict = {
 # 不用 @st.cache_data 是因為 macro_core 規定不依賴 streamlit，須能在 CLI/pytest 直接 import。
 _FRED_CACHE: dict[tuple[str, str, int], tuple[float, pd.DataFrame]] = {}
 _FRED_TTL = 1800.0  # 30min，FRED 日頻足夠
+#: D2-f6(2026-09-28,§1.A-3(b)):fetch_fred 抓取失敗的退避紀錄(寫法同下方 `_YF_CLOSE_EMPTY_FAIL_CACHE`)。
+#: 鍵 = 與 `_FRED_CACHE` 同一個鍵 (series_id, api_key, n);值 = 失敗時點(本次呼叫的 now)。
+#: `_FAIL_COOLDOWN_SEC` 秒內同一鍵不重打上游、回同形空 DataFrame;期滿重抓;成功即清。
+#: 刻意與 `_FRED_CACHE` 分開 —— 失敗**不入** 30min 成功快取。名稱以 `_CACHE` 結尾,
+#: 讓 tests/conftest 的 module-cache 清空 fixture 一併清掉。讀寫一律持 `_FRED_CACHE_LOCK`。
+_FRED_FAIL_CACHE: dict[tuple[str, str, int], float] = {}
 # S9 v19.78(第二份 review):fetch_china_macro(tw_macro)以 ThreadPoolExecutor(5)
 # 併發呼叫 fetch_fred → module dict 無鎖 check-then-set 為 TOCTOU race
 # (CPython dict 單操作原子不會壞結構,但重複抓取/覆寫)。補鎖保護讀寫臨界區。
@@ -331,6 +337,8 @@ _YF_CLOSE_CACHE_LOCK = _th_mc.Lock()
 # ⚠️ success_check 治假綠燈(同 fetch_tw_pmi v19.118):本函式四條失敗路徑
 #    (無 api_key / fetch_url 回 None / JSON 壞 / observations 空)一律回**空
 #    DataFrame 且不拋例外** → 沒有 success_check 會恆綠。
+# ⚠️ D2-f6(2026-09-28):後三條(真的打過上游的)另記退避;冷卻期內回的是**同一種**
+#    空 DataFrame → 本裝飾器照樣記 failed(資料體檢不會因為「沒打上游」就亮綠)。
 @monitored('fetch_fred', category=CAT_US_MACRO, frequency='daily',
            # 一支 fetcher 服務多個 series(DGS10 / CPI / NAPM …),落點動態 per
            # series_id;固定填一個 registry key 必然孤兒誤報 → 誠實 None。
@@ -356,6 +364,11 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     v18.246 S-PROV-1(§2.2 provenance):新增 `source` + `fetched_at` 兩欄,
     讓下游能追溯資料來源 + 抓取時間。schema-additive,既有 caller(讀 date/value)
     無需修改;新 caller 可選用 provenance 欄位做血緣追蹤。
+
+    D2-f6(2026-09-28,§1.A-3(b)「失敗要退避」):打過上游的三個失敗出口(fetch_url 回
+    None / JSON 解析失敗 / observations 為空)記退避(`_FRED_FAIL_CACHE`),
+    `_FAIL_COOLDOWN_SEC` 秒內同一鍵不重打上游、回與修前相同的空 DataFrame;期滿重抓;
+    成功即清。成功路徑、30min TTL、回傳形狀不變。
     """
     if not api_key:
         # W5-2 §1: 沉默 return empty 改補 log,但不 raise(caller 已透過 empty 判斷 fallback)
@@ -367,8 +380,16 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     now = _time.time()
     with _FRED_CACHE_LOCK:   # S9 v19.78
         cached = _FRED_CACHE.get(key)
+        _failed_at = _FRED_FAIL_CACHE.get(key)
     if cached is not None and (now - cached[0]) < _FRED_TTL:
         return cached[1].copy()
+    if _failed_at is not None and (now - _failed_at) < _FAIL_COOLDOWN_SEC:
+        # D2-f6:冷卻期內不重打上游,回與修前三個失敗出口相同的空 DataFrame。
+        # 先查成功快取、再查退避(同 _fetch_yf_close_base):並行時晚一步寫入的失敗紀錄
+        # 擋不住已經快取的成功。
+        print(f"[macro_core/fred] {series_id} 退避中(上次失敗 {now - _failed_at:.0f}s 前,"
+              f"冷卻 {_FAIL_COOLDOWN_SEC:.0f}s),不重打上游")
+        return pd.DataFrame()
 
     r = fetch_url(
         FRED_BASE,
@@ -384,15 +405,29 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     if r is None:
         # W5-2 §1: fetch 失敗補 log(caller 走 fallback 鏈,故不 raise)
         print(f"[macro_core/fred] {series_id} fetch_url 回 None(network/timeout)")
+        # D2-f6(2026-09-28,§1.A-3(b)):記退避 —— 修前每呼叫一次就重打上游一次
+        # (v1 風險雷達每輪 rerun 呼叫 2 次、每次 timeout 20s)。寫法同 D2-f2:
+        # 同一把鎖、同一個鍵、同一個時點(本次呼叫的 now);不入成功快取;回傳同修前。
+        with _FRED_CACHE_LOCK:
+            _FRED_FAIL_CACHE[key] = now
         return pd.DataFrame()
     try:
         obs = r.json().get("observations", [])
     except Exception as e:
         print(f"[macro_core/fred] {series_id} JSON 解析失敗: {e}")
+        with _FRED_CACHE_LOCK:   # D2-f6:解析失敗同樣記退避(寫法同上)
+            _FRED_FAIL_CACHE[key] = now
         return pd.DataFrame()
     if not obs:
         # W5-2 §1: FRED 回 200 但 observations 空 — 補 log
         print(f"[macro_core/fred] {series_id} observations 為空(可能新 series 尚未發布)")
+        # D2-f6:算失敗、記退避 —— 依既有語意:(1) 上方 FE-20 註把它列為四條「失敗路徑」
+        # 之一、@monitored 的 success_check 也把它記 failed;(2) 修前就不寫入 30min 成功
+        # 快取(不被當成功答案);(3) 與 Q2-r2「HTTP 200 但收盤全 null → 等同抓取失敗」同形。
+        # 冷卻期內重問也只會得到同一個空答案(這是 HTTP 200 回應,本就被 fetch_url 快取 300 秒),
+        # 不必每次 rerun 都再走一次 fetch_url 與解析。回傳同修前。
+        with _FRED_CACHE_LOCK:
+            _FRED_FAIL_CACHE[key] = now
         return pd.DataFrame()
     df = pd.DataFrame(obs)
     df = df[df["value"] != "."].copy()
@@ -412,6 +447,7 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         pass
     with _FRED_CACHE_LOCK:   # S9 v19.78
         _FRED_CACHE[key] = (now, out.copy())
+        _FRED_FAIL_CACHE.pop(key, None)   # D2-f6:成功即解除退避
     return out
 
 
@@ -553,6 +589,19 @@ def fetch_yf_latest(tickers: tuple[str, ...]) -> dict[str, Optional[float]]:
     return out
 
 
+#: D2-f10(2026-09-28,§1.A-3(b)):fetch_yf_ohlcv 抓取失敗的退避紀錄。
+#: 鍵 = (ticker, range_, interval)(＝打出去的那組 URL 參數);值 = 失敗時點(本次呼叫的 now)。
+#: `_FAIL_COOLDOWN_SEC` 秒內同一鍵不重打上游、回與修前相同的空 DataFrame;期滿重抓;成功即清。
+#: 本函式**沒有**成功快取(成功回應由 fetch_url 的 300 秒 URL 快取承接;本次不加),所以不能像
+#: fetch_fred／_fetch_yf_close_base 靠「先查成功快取」擋掉並行時晚一步寫入的失敗紀錄 —— 改用
+#: 成功世代(`_YF_OHLCV_OK_GEN_CACHE`,同 shared/fail_cooldown.FailCooldown 的競態說明):
+#: 呼叫開始時記下世代,失敗時世代已變(期間有人成功過)就不寫。兩個 dict 名稱皆以 `_CACHE`
+#: 結尾,讓 tests/conftest 的 module-cache 清空 fixture 一併清掉。讀寫一律持 `_YF_OHLCV_FAIL_LOCK`。
+_YF_OHLCV_FAIL_CACHE: dict[tuple[str, str, str], float] = {}
+_YF_OHLCV_OK_GEN_CACHE: dict[tuple[str, str, str], int] = {}
+_YF_OHLCV_FAIL_LOCK = _th_mc.Lock()
+
+
 def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd.DataFrame:
     """
     抓取 Yahoo Finance OHLCV 序列(走 NAS proxy)。提供 Close + Volume 給
@@ -566,10 +615,32 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
         columns = ['Open', 'High', 'Low', 'Close', 'Volume']
         + S-PROV-1 phase 16 v18.262 schema-additive 'source' + 'fetched_at'
         失敗時回傳空 DataFrame。
+
+    D2-f10(2026-09-28,§1.A-3(b)「失敗要退避」):fetch_url 回 None／回應解析失敗兩個出口
+    記退避(`_YF_OHLCV_FAIL_CACHE`),`_FAIL_COOLDOWN_SEC` 秒內同一鍵不重打上游、回與修前
+    相同的空 DataFrame;期滿重抓;成功即清。成功路徑與回傳形狀不變(仍不加成功快取)。
     """
+    import time as _time
+    key = (ticker, range_, interval)
+    now = _time.time()
+    with _YF_OHLCV_FAIL_LOCK:
+        _failed_at = _YF_OHLCV_FAIL_CACHE.get(key)
+        _gen = _YF_OHLCV_OK_GEN_CACHE.get(key, 0)
+    if _failed_at is not None and (now - _failed_at) < _FAIL_COOLDOWN_SEC:
+        # D2-f10:冷卻期內不重打上游,回與修前兩個失敗出口相同的空 DataFrame
+        print(f"[macro_core/yf_ohlcv] {ticker} 退避中(上次失敗 {now - _failed_at:.0f}s 前,"
+              f"冷卻 {_FAIL_COOLDOWN_SEC:.0f}s),不重打上游")
+        return pd.DataFrame()
+
     url = f"{YF_CHART_BASE}/{ticker}"
     r = fetch_url(url, params={"interval": interval, "range": range_}, timeout=15)
     if r is None:
+        # D2-f10:抓取失敗(網路／逾時／proxy 全敗)記退避 —— 修前沒有任何快取也沒有退避,
+        # 每呼叫一次就重打上游一次(失敗細節由 fetch_url 自己的 log 交代,此處同修前不另印)。
+        # 時點＝本次呼叫的 now(同 D2-f2);期間有人成功過(世代已變)就不記。
+        with _YF_OHLCV_FAIL_LOCK:
+            if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:
+                _YF_OHLCV_FAIL_CACHE[key] = now
         return pd.DataFrame()
     try:
         result = r.json()["chart"]["result"][0]
@@ -596,9 +667,16 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
                                        normalize_case=True)
         except Exception:
             pass
+        with _YF_OHLCV_FAIL_LOCK:   # D2-f10:成功即解除退避、推進成功世代
+            _YF_OHLCV_OK_GEN_CACHE[key] = _YF_OHLCV_OK_GEN_CACHE.get(key, 0) + 1
+            _YF_OHLCV_FAIL_CACHE.pop(key, None)
         return df
     except Exception as e:
         print(f"[macro_core/yf_ohlcv] {ticker} 解析失敗: {e}")
+        # D2-f10:解析失敗(JSON 壞／結構不符／長度對不上)同樣記退避(寫法同上)
+        with _YF_OHLCV_FAIL_LOCK:
+            if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:
+                _YF_OHLCV_FAIL_CACHE[key] = now
         return pd.DataFrame()
 
 
