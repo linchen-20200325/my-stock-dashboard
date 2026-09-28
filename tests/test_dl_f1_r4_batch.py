@@ -5,10 +5,19 @@ DL-f1-s40（中）：`update_macro_history.fetch_finmind_m1m2` 的 Tier 1 ms1.js
 EF15M01。修正後：寫出的列只來自 EF15M01（每次都請求）；ms1 只做形狀／量級檢查、結果只進 log（不同
 來源／口徑的列不得疊進同一份 parquet —— 現行 parquet 全出自 EF15M01）；寫檔前守門多一條百萬元量級帶
 （沿用 `MONEY_SUPPLY_LEVEL_SANITY_*_YI` 換算，不新增常數），同一條也是既有檔守門。
+DL-f1-s43：`fetch_finmind_inst` 的 buy／sell 原本 `fillna(0)` 後相減 → 改為某日任一外資組成列缺值就整日
+不產出（log 剔除日期數）、缺欄 raise；有值的日子以修正前算式當對照組，逐位相同。
+DL-f1-s41：`parse_cbc_ef15m01` 範圍前對帳警示原本印 `infpp`、不分原因 → 依原因分類（比照 DL-f1-s19）；
+只有容差類時整行與修正前逐字相同。
+DL-f1-s39：`update_macro_history` 檔頭 docstring 四處照實更正（與程式碼互相對照）。
+DL-f1-s42：缺 token 被跳過的表，metadata 的 row_count／last_updated 改描述現有 parquet；讀取端判定不變。
+DL-f1-s34：`calibrate_macro_traffic.emit_thresholds_json` 寫檔保留未知鍵與既有註解；讀檔失敗不再靜默。
 
 fixture：EF15M01 回應沿用 `tests/test_b7b_r1_ef15m01_level.py` 的 `ef15_body()`／`ef15_rows()`／
-`patch_ef15()`（真實三列 ＋ 自洽合成序列，說明見該檔檔頭）。ms1.json 形狀沿用既有測試（`年月`／`M1B`／`M2`）。
-無網路：CBC／FinMind 回應一律 monkeypatch；寫檔一律導到 `tmp_path`，不碰 repo 的 `data_cache/`。
+`patch_ef15()`（真實三列 ＋ 自洽合成序列，說明見該檔檔頭）；對帳 helper 沿用 `tests/test_dl_f1_r2_batch.py`。
+ms1.json 形狀沿用既有測試（`年月`／`M1B`／`M2`）。
+無網路：CBC／FinMind 回應一律 monkeypatch；寫檔一律導到 `tmp_path`，不碰 repo 的 `data_cache/` 與
+根目錄 `macro_thresholds.json`（只讀、複製到 tmp）。
 """
 from __future__ import annotations
 
