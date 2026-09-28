@@ -411,3 +411,143 @@ class TestS41PreFatalWarnLine:
         _t12_at_or_below_half_step(rows, "2025M04", I_M2, "-3")
         line = _warn_line(rows, dt.date(2026, 5, 1), capsys)
         assert f"之前對帳不符 2 列（不影響寫入的資料，只警示、不拒用）：{_WHY_T12} first10=[" in line, line
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DL-f1-s39：update_macro_history 檔頭 docstring 四處照實更正（與程式碼互相對照）
+# ═════════════════════════════════════════════════════════════════════════════
+class TestS39HeaderDocstringMatchesCode:
+    @staticmethod
+    def _line(prefix: str) -> str:
+        """檔頭「data_cache/… ← …」那一列（含續行）。"""
+        lines = umh.__doc__.splitlines()
+        i = next(k for k, ln in enumerate(lines) if ln.startswith(prefix))
+        out = [lines[i]]
+        for ln in lines[i + 1:]:
+            if not ln.startswith(" " * 20):
+                break
+            out.append(ln.strip())
+        return "".join(out)
+
+    def test_twii_is_the_yahoo_chart_api_not_yfinance(self):
+        import inspect
+        line = self._line("data_cache/twii_ohlcv.parquet")
+        assert "query1.finance.yahoo.com/v8/finance/chart" in line and "yfinance via" not in line, line
+        assert "query1.finance.yahoo.com/v8/finance/chart" in inspect.getsource(umh.fetch_twii_ohlcv)
+        assert "import yfinance" not in inspect.getsource(umh)
+
+    def test_inst_is_foreign_net_only(self):
+        import inspect
+        line = self._line("data_cache/finmind_inst.parquet")
+        assert "外資淨買賣超" in line and "Foreign_Investor" in line and "Foreign_Dealer_Self" in line, line
+        assert "三大法人總買賣超" not in umh.__doc__
+        assert "外資淨買賣超" in umh.fetch_finmind_inst.__doc__
+        assert "三大法人總買賣超" not in umh.fetch_finmind_inst.__doc__
+        assert 'str.contains("Foreign"' in inspect.getsource(umh.fetch_finmind_inst)
+
+    def test_finmind_tables_are_direct_not_proxy(self):
+        import inspect
+        doc = " ".join(umh.__doc__.split())
+        assert "FinMind 兩張表（finmind_inst、finmind_margin）直連" in doc, doc
+        src = inspect.getsource(umh._finmind_get)
+        assert "requests.get(" in src and "fetch_url" not in src.split('"""')[-1]   # 函式本體直連
+
+    def test_macro_last_good_is_listed(self):
+        import inspect
+        import os
+
+        import src.data.macro.macro_core as mc
+        line = self._line("data_cache/macro_last_good/tw_pmi.json")
+        assert "durable" in line and "fetch_tw_pmi" in line and "_macro_durable_save" in line, line
+        assert mc._MACRO_DURABLE_DIR == os.path.join("data_cache", "macro_last_good")
+        assert '_macro_durable_save("tw_pmi"' in inspect.getsource(umh.main)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DL-f1-s42：因缺 token 被跳過的表，metadata 的 row_count／last_updated 描述現有 parquet
+# ═════════════════════════════════════════════════════════════════════════════
+def _inst_parquet(path, dates) -> None:
+    pd.DataFrame({"date": [dt.date.fromisoformat(d) for d in dates],
+                  "foreign_buy": [1.5 * (k + 1) for k in range(len(dates))],
+                  "source": [_INST_SRC] * len(dates),
+                  "fetched_at": ["2026-09-26T09:00:00+00:00"] * len(dates)}).to_parquet(path, index=False)
+
+
+class TestS42SkippedTableMetadata:
+    def test_docstring_no_longer_claims_only_run_tables_are_written(self):
+        doc = " ".join(umh.__doc__.split())
+        assert "只寫本次有跑的表" not in doc
+        assert "因缺 FINMIND_TOKEN 被跳過的表**也會寫進去**" in doc, doc
+        assert "row_count／last_updated 描述磁碟上現有的 parquet" in doc, doc
+
+    def test_skip_describes_the_existing_parquet(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(umh, "CACHE_DIR", tmp_path)
+        _inst_parquet(tmp_path / "finmind_inst.parquet", _INST_DATES[:3])
+
+        def _must_not_fetch(*a, **k):
+            raise AssertionError("缺 token 時不得呼叫抓取函式")
+        monkeypatch.setitem(umh.FETCHERS, "finmind_inst", (_must_not_fetch, True))
+        meta = umh.update_one("finmind_inst", _TODAY, False, 20, "")
+        assert meta == {"name": "finmind_inst", "last_updated": "2026-09-23", "row_count": 3,
+                        "last_error": "FINMIND_TOKEN 未設定"}
+
+    def test_skip_without_parquet_stays_zero_and_null(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(umh, "CACHE_DIR", tmp_path)
+        meta = umh.update_one("finmind_inst", _TODAY, False, 20, "")
+        assert meta == {"name": "finmind_inst", "last_updated": None, "row_count": 0,
+                        "last_error": "FINMIND_TOKEN 未設定"}
+
+    def test_skip_with_unreadable_parquet_stays_zero_and_null(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setattr(umh, "CACHE_DIR", tmp_path)
+        (tmp_path / "finmind_inst.parquet").write_bytes(b"not a parquet")
+        meta = umh.update_one("finmind_inst", _TODAY, False, 20, "")
+        assert (meta["row_count"], meta["last_updated"]) == (0, None)
+        assert "讀現有 Parquet 失敗" in capsys.readouterr().out            # 讀不到照舊 log，不假裝有資料
+
+    def test_skip_does_not_vouch_for_a_known_bad_file(self, monkeypatch, tmp_path):
+        """需要 token、又有既有檔守門的表（目前沒有 —— 以測試用表模擬）：守門不過 → 不背書 last_updated。"""
+        monkeypatch.setattr(umh, "CACHE_DIR", tmp_path)
+        _inst_parquet(tmp_path / "zz_probe.parquet", _INST_DATES[:2])
+        monkeypatch.setitem(umh.FETCHERS, "zz_probe", (lambda *a, **k: pd.DataFrame(), True))
+        monkeypatch.setitem(umh._EXISTING_SANITY_GATES, "zz_probe", lambda df: (False, "壞"))
+        meta = umh.update_one("zz_probe", _TODAY, False, 20, "")
+        assert meta == {"name": "zz_probe", "last_updated": None, "row_count": 2,
+                        "last_error": "FINMIND_TOKEN 未設定；既有檔 sanity 不過,待重建"}
+        monkeypatch.setitem(umh._EXISTING_SANITY_GATES, "zz_probe", lambda df: (True, "ok"))
+        assert umh.update_one("zz_probe", _TODAY, False, 20, "")["last_updated"] == "2026-09-22"
+
+    def test_main_only_run_and_readers_see_the_same_verdict(self, monkeypatch, tmp_path):
+        """`--only` 無 token 端到端：metadata 的跳過表有真實 row_count／last_updated；讀取端的判定不變
+        （last_error 仍是「FINMIND_TOKEN 未設定」→ 校準閘門照樣擋下）。"""
+        import json
+
+        import scripts.calibrate_health_weights as chw
+        import src.data.macro.macro_core as mc
+        from src.data.macro.macro_cache_reader import compute_cache_staleness
+        monkeypatch.delenv("FINMIND_TOKEN", raising=False)
+        monkeypatch.setattr("sys.argv", ["update_macro_history.py", "--only", "finmind_inst,finmind_margin"])
+        monkeypatch.setattr(umh, "CACHE_DIR", tmp_path)
+        monkeypatch.setattr(umh, "META_PATH", tmp_path / "metadata.json")
+        monkeypatch.setattr(mc, "fetch_tw_pmi", lambda **k: {"value": None, "is_stale": False})
+        _inst_parquet(tmp_path / "finmind_inst.parquet", _INST_DATES)
+        assert umh.main() == 0
+        ds = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))["datasets"]
+        assert ds == {
+            "finmind_inst": {"name": "finmind_inst", "last_updated": "2026-09-25",
+                             "row_count": len(_INST_DATES), "last_error": "FINMIND_TOKEN 未設定"},
+            "finmind_margin": {"name": "finmind_margin", "last_updated": None, "row_count": 0,
+                               "last_error": "FINMIND_TOKEN 未設定"},
+        }
+        st = compute_cache_staleness("finmind_inst", cache_dir=tmp_path, today=dt.date(2026, 9, 26))
+        assert st["upstream_error"] == "FINMIND_TOKEN 未設定" and st["meta_last_updated"] == "2026-09-25"
+        bad = {s["dataset"]: s for s in chw.check_inputs_fresh(tmp_path, today=dt.date(2026, 9, 26))}
+        assert "finmind_inst" in bad                                 # 跳過的表照樣擋下（因 last_error）
+        assert bad["finmind_inst"]["is_stale"] is False
+        # 對照組：把 metadata 換回修正前的寫法（row_count 0、last_updated null），判定逐欄相同
+        # （只有顯示用的 meta_last_updated 不同）
+        ds["finmind_inst"].update(row_count=0, last_updated=None)
+        (tmp_path / "metadata.json").write_text(json.dumps({"datasets": ds}), encoding="utf-8")
+        st0 = compute_cache_staleness("finmind_inst", cache_dir=tmp_path, today=dt.date(2026, 9, 26))
+        assert {**st, "meta_last_updated": None} == st0
+        bad0 = {s["dataset"] for s in chw.check_inputs_fresh(tmp_path, today=dt.date(2026, 9, 26))}
+        assert bad0 == set(bad)

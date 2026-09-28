@@ -2,13 +2,18 @@
 
 資料流（與 update_etf_managers.py 同模式，但抓多個 dataset）
 =========================================================
-data_cache/twii_ohlcv.parquet              ← ^TWII 日 K（yfinance via NAS proxy）
-data_cache/finmind_inst.parquet            ← 三大法人總買賣超（FinMind）
+data_cache/twii_ohlcv.parquet              ← ^TWII 日 K（Yahoo Chart API `query1.finance.yahoo.com/v8/finance/chart`，
+                                             經 proxy_helper；不經 yfinance 套件）
+data_cache/finmind_inst.parquet            ← 外資淨買賣超（億元；FinMind TaiwanStockTotalInstitutionalInvestors 的
+                                             Foreign_Investor ＋ Foreign_Dealer_Self；投信、自營商不取）
 data_cache/finmind_margin.parquet          ← 融資餘額（FinMind）
 data_cache/finmind_m1m2.parquet            ← M1B／M2 餘額 ＋ M1B 年增率 − M2 年增率（CBC；FinMind 無此資料，
                                              表名 finmind_ 為歷史沿用；細節見下）
 data_cache/tw_pmi.parquet                  ← 台灣製造業 PMI 月頻（data.gov.tw dataset/6100，國發會提供）
-data_cache/metadata.json                   ← 各表 last_updated + row_count
+data_cache/metadata.json                   ← 各表 last_updated／row_count／last_error（本輪自陳狀態，各分支寫法見 `update_one`）
+data_cache/macro_last_good/tw_pmi.json     ← PMI durable「上次已知值」快照（v19.118；`main()` 末段跑 runtime
+                                             `macro_core.fetch_tw_pmi()`，只存 live hit、不存過期 fallback；
+                                             寫檔者 `macro_core._macro_durable_save`）
 
 finmind_m1m2（`fetch_finmind_m1m2`）欄位：date（資料月月初）／m1b／m2／m1b_m2_gap／source／fetched_at
 - 寫出的列只來自 CBC PXWeb EF15M01（貨幣總計數-日平均數），每次都請求；source 欄
@@ -22,7 +27,9 @@ finmind_m1m2（`fetch_finmind_m1m2`）欄位：date（資料月月初）／m1b�
 
 每日跑一次（TW 17:00 收盤後）
 - 對每個 Parquet：讀取 last_date → 抓 [last_date+1, today] → append + dedupe → 寫回
-- 走 proxy_helper.fetch_url（NAS Squid → 直連 → NAS 中繼站 fallback）解海外 IP 封鎖
+- twii_ohlcv、finmind_m1m2（CBC）、tw_pmi 走 proxy_helper.fetch_url（NAS Squid → 直連 → NAS 中繼站
+  fallback）解海外 IP 封鎖；FinMind 兩張表（finmind_inst、finmind_margin）直連（`_finmind_get`，
+  理由見該函式）
 - 任一資料源失敗：log 警告但不中止；metadata 記 last_error 供後續排查
 
 刻意維持「無 streamlit 相依」（與 update_etf_managers.py 同款），
@@ -35,8 +42,12 @@ CLI（在 repo 根目錄執行 —— `CACHE_DIR` 是相對路徑 `data_cache/`�
     python scripts/update_macro_history.py --years 10           # 歷史長度（預設 20）：bootstrap、無既有資料、
                                                                 #   或既有檔守門不過而整段重建時用
     python scripts/update_macro_history.py --only finmind_m1m2  # 只跑指定 dataset（debug 用，逗號分隔多個）
-⚠️ --only：metadata.json 只寫本次有跑的表（整檔覆寫，沒跑的表的紀錄不保留）；未註冊的名稱印
-   「[main] 未知 dataset」後略過；PMI durable 快照步驟（`main()` 末段）不受 --only 限制，照跑。
+⚠️ --only：metadata.json 整檔覆寫，只含 --only 列出、且已註冊的表 —— 沒列出的表的紀錄不保留
+   （見 DL-f1-s35）。列出、但因缺 FINMIND_TOKEN 被跳過的表**也會寫進去**（不是「只寫有跑的表」）：
+   last_error 記「FINMIND_TOKEN 未設定」，row_count／last_updated 描述磁碟上現有的 parquet
+   （DL-f1-s42；原本停在 0／null，看起來像表是空的）—— 不帶 --only、缺 token 的一般執行也一樣。
+   未註冊的名稱印「[main] 未知 dataset」後略過；PMI durable 快照步驟（`main()` 末段）不受 --only
+   限制，照跑。
 """
 from __future__ import annotations
 
@@ -889,6 +900,21 @@ def update_one(name: str, today: _dt.date, bootstrap: bool, years: int,
     if needs_token and not token:
         meta["last_error"] = "FINMIND_TOKEN 未設定"
         print(f"[{name}] ⏭ 跳過：{meta['last_error']}")
+        # DL-f1-s42：跳過 ≠ 表是空的。row_count／last_updated 比照「抓取結果為空，保留現有資料」分支，
+        # 描述磁碟上現有的 parquet（原本停在初始值 0／null —— 此時 parquet 其實有資料）。
+        # last_error 照舊記跳過原因：讀取端（macro_cache_reader.compute_cache_staleness →
+        # calibrate_health_weights.check_inputs_fresh）只拿 last_error 判定、判定結果不變；
+        # row_count／last_updated 只用於顯示（analyze_ring1_gate、校準提案的 as-of 表）。
+        # 既有檔守門不過 → 比照重建失敗分支：不替已知不合格的檔背書 last_updated，last_error 標明。
+        _ex = _load_existing(name)
+        if _ex is not None and not _ex.empty:
+            meta["row_count"] = len(_ex)
+            _gate = _EXISTING_SANITY_GATES.get(name)
+            if _gate is not None and not _gate(_ex)[0]:
+                meta["last_error"] += "；既有檔 sanity 不過,待重建"
+            else:
+                _ld = _last_date(_ex)
+                meta["last_updated"] = None if _ld is None else _ld.isoformat()
         return meta
 
     existing = None if bootstrap else _load_existing(name)
