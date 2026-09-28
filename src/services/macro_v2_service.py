@@ -201,7 +201,8 @@ def get_twii_ohlc(n_trading_days: int) -> dict:
 # （走勢卡）與既有守衛，加一個 key 會讓走勢卡多畫一張圖 —— 那是 UI 變更，不是本批範圍。
 # **本層不新增 L1 程式**，直接用既有的 `macro_cache_reader.load_parquet_safe`。
 #
-# ⚠️ 刻意**不**讀 `finmind_m1m2.parquet`：該檔已知損壞（M1B 出現負值），
+# ⚠️ 刻意**不**讀 `finmind_m1m2.parquet`：~~該檔已知損壞（M1B 出現負值）~~（2026-09-28 事實更正，⛔ 非漏刪：
+#    該檔已由排程 `2aed087` 整檔重建、損壞不再成立；仍不讀＝gap 定義與燈值不同／持平帶未量測／M1B-M2 腿停用，詳見 L0 檔頭），
 #    M1B-M2 那一列的變化方向固定為「無資料」（見 `shared/lamp_direction_thresholds.py`）。
 
 #: 台灣 PMI 月資料的 parquet 檔名（實測欄位：date / pmi / source / fetched_at，
