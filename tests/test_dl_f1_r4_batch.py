@@ -228,3 +228,122 @@ class TestS40LevelBand:
         assert after["m1b"].between(lo, hi).all() and after["m2"].between(lo, hi).all()
         assert after["source"].str.startswith(_EF15_SRC_PREFIX).all()
         assert meta["last_error"] is None and len(after) == meta["row_count"] == len(good)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DL-f1-s43：外資淨買賣超不以 0 代入缺值；缺欄 fail loud
+# ═════════════════════════════════════════════════════════════════════════════
+_INST_NAMES = ("Foreign_Investor", "Foreign_Dealer_Self", "Investment_Trust", "Dealer_self",
+               "Dealer_Hedging", "total")                  # FinMind 實際 name 值（見 fetch_finmind_inst 註解）
+_INST_DATES = ("2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25")
+_INST_SRC = "FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign"
+
+
+def _raw_inst(seed: int = 20260928) -> pd.DataFrame:
+    """FinMind TaiwanStockTotalInstitutionalInvestors 形狀（buy／sell 單位：元，量級 1e9～3e11）。"""
+    import random
+    rnd = random.Random(seed)
+    rows = [{"buy": rnd.randrange(10**9, 3 * 10**11), "date": d, "name": n,
+             "sell": rnd.randrange(10**9, 3 * 10**11)}
+            for d in _INST_DATES for n in _INST_NAMES]
+    return pd.DataFrame(rows)[["buy", "date", "name", "sell"]]
+
+
+def _pre_s43_formula(raw: pd.DataFrame) -> pd.DataFrame:
+    """修正前的算式（逐字；`fillna(0)` 在此只當對照組 —— 有值的日子，修正後必須與它逐位相同）。"""
+    fi = raw[raw["name"].astype(str).str.contains("Foreign", na=False)].copy()
+    fi["foreign_buy"] = (pd.to_numeric(fi.get("buy"), errors="coerce").fillna(0)
+                         - pd.to_numeric(fi.get("sell"), errors="coerce").fillna(0)) / 1e8
+    out = fi.groupby("date", as_index=False)["foreign_buy"].sum()
+    out["date"] = pd.to_datetime(out["date"]).dt.date
+    return out
+
+
+def _run_inst(monkeypatch, raw: pd.DataFrame) -> pd.DataFrame:
+    monkeypatch.setattr(umh, "_finmind_get", lambda *a, **k: raw.copy())
+    return umh.fetch_finmind_inst(dt.date(2026, 9, 21), dt.date(2026, 9, 28), "tok")
+
+
+def _assert_bitwise(got: pd.DataFrame, exp: pd.DataFrame) -> None:
+    pd.testing.assert_frame_equal(got[["date", "foreign_buy"]].reset_index(drop=True),
+                                  exp[["date", "foreign_buy"]].reset_index(drop=True), check_exact=True)
+    assert (got["foreign_buy"].to_numpy().view("i8") == exp["foreign_buy"].to_numpy().view("i8")).all()
+
+
+class TestS43ForeignNetNeverFabricated:
+    def test_all_values_present_output_is_bitwise_unchanged(self, monkeypatch, capsys):
+        raw = _raw_inst()
+        got = _run_inst(monkeypatch, raw)
+        _assert_bitwise(got, _pre_s43_formula(raw))
+        assert list(got.columns) == ["date", "foreign_buy", "source", "fetched_at"]
+        assert (got["source"] == _INST_SRC).all()
+        assert "剔除" not in capsys.readouterr().out
+
+    @pytest.mark.parametrize("col", ["buy", "sell"])
+    @pytest.mark.parametrize("name", ["Foreign_Investor", "Foreign_Dealer_Self"])
+    @pytest.mark.parametrize("bad", [None, float("nan"), "--"], ids=["None", "NaN", "非數值"])
+    def test_one_missing_component_drops_the_whole_day(self, monkeypatch, capsys, col, name, bad):
+        clean = _raw_inst()
+        raw = clean.astype({col: object})
+        day = _INST_DATES[2]
+        raw.loc[(raw["date"] == day) & (raw["name"] == name), col] = bad
+        # 修正前：該日照樣產出一個數（缺的那格當 0 → 賣超缺值捏成大正數、買超缺值捏成大負數）
+        pre = _pre_s43_formula(raw).set_index("date")["foreign_buy"]
+        clean_val = _pre_s43_formula(clean).set_index("date")["foreign_buy"][dt.date(2026, 9, 23)]
+        assert pre[dt.date(2026, 9, 23)] != clean_val
+        assert bool(pre[dt.date(2026, 9, 23)] > clean_val) is (col == "sell")
+        got = _run_inst(monkeypatch, raw)
+        out = capsys.readouterr().out
+        assert dt.date(2026, 9, 23) not in set(got["date"])                 # 整日不產出，不做部分加總
+        exp = _pre_s43_formula(clean)
+        _assert_bitwise(got, exp[exp["date"] != dt.date(2026, 9, 23)])   # 其餘日子逐位不變
+        assert "剔除 1 個日期" in out and day in out and "1 列缺值" in out, out
+
+    def test_counts_every_dropped_day(self, monkeypatch, capsys):
+        raw = _raw_inst().astype({"sell": object})
+        for d in _INST_DATES[:2] + _INST_DATES[3:4]:
+            raw.loc[(raw["date"] == d) & (raw["name"] == "Foreign_Dealer_Self"), "sell"] = None
+        raw.loc[(raw["date"] == _INST_DATES[0]) & (raw["name"] == "Foreign_Investor"), "sell"] = None
+        got = _run_inst(monkeypatch, raw)
+        out = capsys.readouterr().out
+        assert [str(d) for d in got["date"]] == [_INST_DATES[2], _INST_DATES[4]]
+        assert "剔除 3 個日期" in out and "4 列缺值" in out, out
+
+    def test_every_day_missing_gives_empty_frame(self, monkeypatch, capsys):
+        raw = _raw_inst().astype({"buy": object})
+        raw.loc[raw["name"] == "Foreign_Investor", "buy"] = None
+        got = _run_inst(monkeypatch, raw)
+        assert got.empty
+        assert f"剔除 {len(_INST_DATES)} 個日期" in capsys.readouterr().out
+
+    def test_missing_value_outside_foreign_rows_changes_nothing(self, monkeypatch, capsys):
+        """只有外資的組成列算數：投信／自營商列缺值不影響外資淨額，該日照常產出。"""
+        clean = _raw_inst()
+        raw = clean.astype({"sell": object})
+        raw.loc[(raw["date"] == _INST_DATES[1]) & (raw["name"] == "Investment_Trust"), "sell"] = None
+        got = _run_inst(monkeypatch, raw)
+        _assert_bitwise(got, _pre_s43_formula(clean))
+        assert "剔除" not in capsys.readouterr().out
+
+    def test_day_without_a_dealer_self_row_is_summed_as_before(self, monkeypatch):
+        """某日根本沒有 Foreign_Dealer_Self 列 —— 不是缺值，照舊以有的列加總（與修正前逐位相同）。"""
+        raw = _raw_inst()
+        raw = raw[~((raw["date"] == _INST_DATES[1]) & (raw["name"] == "Foreign_Dealer_Self"))]
+        got = _run_inst(monkeypatch, raw)
+        assert len(got) == len(_INST_DATES)
+        _assert_bitwise(got, _pre_s43_formula(raw))
+
+    @pytest.mark.parametrize("drop", ["buy", "sell", "date"])
+    def test_missing_column_raises_and_update_one_keeps_the_parquet(self, monkeypatch, tmp_path, drop):
+        raw = _raw_inst().drop(columns=[drop])
+        with pytest.raises(RuntimeError, match=rf"缺欄 \['{drop}'\]"):
+            _run_inst(monkeypatch, raw)
+        # 經 update_one：last_error 記下真正原因（不是「抓取結果為空」），既有 parquet 一個 byte 不動
+        monkeypatch.setattr(umh, "CACHE_DIR", tmp_path)
+        pd.DataFrame({"date": [dt.date(2026, 9, 18)], "foreign_buy": [12.5], "source": [_INST_SRC],
+                      "fetched_at": ["2026-09-18T12:00:00+00:00"]}).to_parquet(
+            tmp_path / "finmind_inst.parquet", index=False)
+        before = (tmp_path / "finmind_inst.parquet").read_bytes()
+        meta = umh.update_one("finmind_inst", dt.date(2026, 9, 28), False, 20, "tok")
+        assert meta["last_error"].startswith("RuntimeError: 缺欄"), meta
+        assert (tmp_path / "finmind_inst.parquet").read_bytes() == before

@@ -227,12 +227,24 @@ def fetch_twii_ohlcv(start: _dt.date, end: _dt.date) -> pd.DataFrame:
 
 
 def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
-    """三大法人總買賣超（FinMind TaiwanStockTotalInstitutionalInvestors）。
+    """外資淨買賣超（FinMind TaiwanStockTotalInstitutionalInvestors；只取外資，投信、自營商不取）。
 
-    輸出欄位：date, foreign_buy（億，外資淨買賣超）
-    FinMind 實際欄位：['buy', 'date', 'name', 'sell']
-    `name` 欄含投資人類型（外資、投信、自營商）；篩 '外資' 後算淨買賣超。
+    輸出欄位：date、foreign_buy（億元，外資淨買賣超）、source、fetched_at。
+    FinMind 實際欄位：['buy', 'date', 'name', 'sell']（buy／sell 單位：元）。`name` 是英文投資人類型；
+    篩含 'Foreign' 的列（外資總額 = Foreign_Investor ＋ Foreign_Dealer_Self），每列 buy − sell，
+    依日加總後 ÷ `TWD_PER_YI` 換成億元。
+
+    DL-f1-s43（2026-09-28）：原本 buy／sell 先 `fillna(0)` 再相減（違 CLAUDE.md §1）—— sell 缺值時
+    當日淨額被捏成大正數、buy 缺值時捏成大負數；缺整欄時 `fi.get()` 回 None → AttributeError。改為：
+    - 缺 date／buy／sell 欄 → raise（`update_one` 接住 → metadata 記 last_error、既有檔原封不動）。
+      上游 schema 漂移是系統性問題；回空表會被記成「抓取結果為空」，讀取端會當成「沒有新資料」。
+    - 某日任一外資組成列的 buy 或 sell 缺值（含轉不成數值）→ **該日整日不產出**（不以 0 代入、
+      不做部分加總），log 剔除的日期數與樣本；其餘日子的算式、輸出逐位不變。
+    - ⚠️ 某日「根本沒有」某一組成列（例：只有 Foreign_Investor）不在此列，照舊以有的列加總 ——
+      這不是缺值；若也剔除，會連帶改掉有值日子的輸出。
     """
+    from shared.margin_schema import TWD_PER_YI
+
     raw = _finmind_get("TaiwanStockTotalInstitutionalInvestors",
                        "", start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), token)
     if raw.empty:
@@ -247,9 +259,23 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     if fi.empty:
         print(f"[finmind_inst] name 欄位無 'Foreign' 列，unique={list(raw['name'].unique())[:10]}")
         return pd.DataFrame()
+    _missing = [c for c in ("date", "buy", "sell") if c not in fi.columns]
+    if _missing:
+        raise RuntimeError(
+            f"缺欄 {_missing}（欄位={list(raw.columns)}）→ 算不出外資淨買賣超；"
+            "不寫入 parquet（§1：不以 0 代入、不猜欄位）")
     fi = fi.copy()
-    fi["foreign_buy"] = (pd.to_numeric(fi.get("buy"), errors="coerce").fillna(0)
-                        - pd.to_numeric(fi.get("sell"), errors="coerce").fillna(0)) / 1e8
+    _buy = pd.to_numeric(fi["buy"], errors="coerce")
+    _sell = pd.to_numeric(fi["sell"], errors="coerce")
+    fi["foreign_buy"] = (_buy - _sell) / TWD_PER_YI      # 缺值列 → NaN（不以 0 代入）
+    _nan_rows = _buy.isna() | _sell.isna()
+    if _nan_rows.any():
+        # §1／§3.3：顯式剔除 + log 筆數。整日剔除：只加有值的列 = 產出一個「部分加總」，比缺席更危險。
+        _bad_days = pd.unique(fi.loc[_nan_rows, "date"])
+        print(f"[finmind_inst] ⚠️ 剔除 {len(_bad_days)} 個日期（該日有外資組成列 buy 或 sell 缺值"
+              f" → 整日不產出；不以 0 代入、不做部分加總），{int(_nan_rows.sum())} 列缺值"
+              f"（樣本日期={sorted(str(d) for d in _bad_days)[:5]}）")
+        fi = fi[~fi["date"].isin(_bad_days)]
     out = fi.groupby("date", as_index=False)["foreign_buy"].sum()
     out["date"] = pd.to_datetime(out["date"]).dt.date
     # S-PROV-1 phase 13 v18.259 — provenance(schema-additive)
