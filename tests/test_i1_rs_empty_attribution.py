@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """I1 ③：抗跌 RS 排行為空時，note 不得把原因寫死。
 
-修掉的原始碼（`src/services/rs_leader_service.py::_scan_cached`）::
+修掉的原始碼（`src/services/rs_leader_service.py::_scan_body`；當時名為 `_scan_cached`，
+2026-09-28 D2-f7 改名 —— `_scan_cached` 現為外層退避入口，本檔 `.clear()` 呼叫照舊清得到兩層）::
 
     note = (f"⚠️ 掃描 {len(stocks)} 檔後無可排名標的：其中資料不足 {_insuff} 檔"
             f"（歷史 < lookback 或 yfinance 抓不到價）"
