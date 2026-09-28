@@ -1130,7 +1130,7 @@ def load_holdings(req: HoldRequest) -> HoldingsReadout:
     一本每列都缺張數或均價的組合就會落進 (c)「綁好了，但一列持股都沒有」，
     那句話是假的。帶進來之後，下游各卡走的全是**既有**的「有持股、缺張數／均價」
     那一套（例：⑤ 80/20「有持股，但算不出核心／衛星的比例」、金額列「N/M 檔持股
-    缺張數或均價，沒有納入」），本檔不為它新寫一句話。
+    缺張數／均價／現價，沒有納入」），本檔不為它新寫一句話。
     """
     if not req.wants_binding:
         return HoldingsReadout(requested=False, submitted=req.submitted)
