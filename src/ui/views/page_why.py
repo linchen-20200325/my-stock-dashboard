@@ -1465,9 +1465,12 @@ def build_spec_flag_card(row: SpecRow) -> _Built:
         has_value=True,
         now=_now,
         why=_clean_reason(_reason),
+        # 📌 SA2-f4（2026-09-28，有意識的刪除，⛔ 不是漏刪）：句尾「；下方的門檻對照表有這一盞的完整規格」
+        #    已在子句界刪掉（只刪不改；同 SA-r2-f2 #729）—— 這張卡只畫在葉2「資料體檢」
+        #    （`_render_user_health_wall()`），「逐盞門檻對照表」畫在葉1「教學」（`_render_edu_leaf()`），
+        #    兩葉是不同的 `st.tabs` 分頁 ⇒ 卡片所在那一葉的下方沒有對照表。
         where=(f"{NO_EXIT_MARKER} —— 這是**規格層面**的已知限制，"
-               "不是這一輪抓壞了，重按幾次都一樣；"
-               "下方的門檻對照表有這一盞的完整規格"),
+               "不是這一輪抓壞了，重按幾次都一樣"),
         # ⚠️ 門檻走 `threshold_display` 而不是 `threshold_text`：這張卡的存在理由
         #    就是「這一盞不能信」，旁邊卻印一組乾乾淨淨的門檻數字，等於當場自打嘴巴。
         facts=((L0_REASON_FACT_LABEL, L0_REASON_FACT_TEXT),
