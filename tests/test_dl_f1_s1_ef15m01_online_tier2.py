@@ -32,9 +32,12 @@ from tests.test_b7b_r1_ef15m01_level import (
     I_M1B,
     I_M2,
     _lv_col,
+    _p,
     _row_of,
+    _shift,
     _yy_col,
     ef15_body,
+    ef15_body_from_levels,
     ef15_rows,
 )
 
@@ -146,6 +149,34 @@ class TestStepBack:
         out = capsys.readouterr().out
         assert "2025-06" in out and "早於對帳窗口" in out
 
+    def test_available_month_equal_to_window_start_is_accepted(self, monkeypatch):
+        """（批 M QA QM5）可用的最新月份**恰好等於**窗口起點 2025-07 → 它本身在致命範圍內
+        （已以致命規則對帳）→ 採用；判定是「早於」窗口才拒用，等於不算早於。
+        窗口內 2025-08～2026-07 每月只缺一個序列的官方年增率（輪流缺），2025-07 兩者都有。"""
+        rows = ef15_rows()
+        for r in rows:
+            if r[0] > "2025M07":
+                r[_yy_col(I_M1B) if int(r[0][5:]) % 2 else _yy_col(I_M2)] = "-"
+        r07 = _row_of(rows, "2025M07")
+        _patch(monkeypatch, ef15_body(rows))
+        assert ef15.ef15_fatal_from(dt.date(2026, 7, 1)) == dt.date(2025, 7, 1)   # 前提：窗口起點
+        assert tw_macro._try_cbc_ef15m01() == (float(r07[_yy_col(I_M1B)]),
+                                               float(r07[_yy_col(I_M2)]))
+
+    def test_official_yoy_exactly_zero_is_a_value_not_missing(self, monkeypatch):
+        """（批 M QA QM13）官方年增率剛好 "0.00"（與同月去年同額，持平）是有效觀測，
+        **不是缺值** —— 不得被當成 "-" 而往前退一個月。"""
+        n = 30
+        periods = [_p(*_shift(2024, 2, k)) for k in range(n)]             # 2024-02 … 2026-07
+        m1b = [round(20_000_000 * 1.006 ** k) for k in range(n)]
+        m1b[-1] = m1b[-13]                                                 # 最新月 = 同月去年
+        m2 = [round(60_000_000 * 1.005 ** k) for k in range(n)]
+        body = ef15_body_from_levels(periods, m1b, m2)
+        last = body["data"]["dataSets"][-1]
+        assert last[0] == "2026M07" and last[_yy_col(I_M1B)] == "0.00"   # 前提
+        _patch(monkeypatch, body)
+        assert tw_macro._try_cbc_ef15m01() == (0.0, float(last[_yy_col(I_M2)]))
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 class TestLabels:
@@ -224,6 +255,32 @@ class TestFormatMismatch:
         assert "解析例外 ValueError" in capsys.readouterr().out
         assert tw_macro.fetch_cbc_m1b_m2()["tier_used"] == 3
 
+    @pytest.mark.parametrize("periods", [["0001M05"], ["0000M12", "0001M01"]])
+    def test_latest_period_year_0001_does_not_leak_exception(self, monkeypatch, capsys, periods):
+        """（批 M QA 實測重現）表內最新期間是 0001 年 → 推對帳窗口時 `ef15_fatal_from` 要回
+        0000 年 → `datetime.date` 拋 ValueError。它發生在「推窗口」這一步（解析之前），
+        須與其他解析失敗一樣攔下、印出、回 None → Tier 3，**不得冒出 `fetch_cbc_m1b_m2`**。"""
+        rows = [[p] + ["-"] * 30 for p in periods]
+        _patch(monkeypatch, ef15_body(rows))
+        assert tw_macro._try_cbc_ef15m01() is None
+        assert "解析例外 ValueError" in capsys.readouterr().out
+        r = tw_macro.fetch_cbc_m1b_m2()
+        assert r["tier_used"] == 3 and r["is_proxy_tier"] is True
+
+    def test_parser_overflow_is_contained(self, monkeypatch, capsys):
+        """（批 M QA QM7）餘額極大（> int64 上限 9.22e18）但彼此自洽 → 對帳放行，建 int64 欄時
+        解析器拋 OverflowError；線上路徑須攔下、回 None → Tier 3。"""
+        n = 30
+        periods = [_p(*_shift(2024, 2, k)) for k in range(n)]
+        body = ef15_body_from_levels(periods, [10 ** 19] * n, [3 * 10 ** 19] * n)
+        with pytest.raises(OverflowError):          # 前提：解析器本身確實拋 OverflowError
+            ef15.parse_cbc_ef15m01(body)
+        _patch(monkeypatch, body)
+        assert tw_macro._try_cbc_ef15m01() is None
+        assert "解析例外 OverflowError" in capsys.readouterr().out
+        r = tw_macro.fetch_cbc_m1b_m2()
+        assert r["tier_used"] == 3 and r["is_proxy_tier"] is True
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 class TestReconcileWindow:
@@ -279,6 +336,15 @@ class TestSharedParserSSOT:
     ])
     def test_script_old_names_are_the_shared_objects(self, old, new):
         assert getattr(umh, old) is getattr(ef15, new)
+
+    def test_script_getattr_unknown_name_raises_attribute_error(self):
+        """（批 M QA QM19）腳本的 PEP 562 `__getattr__` 只轉發登記過的舊名；
+        未知名稱照常拋 AttributeError（不得回 None 之類的預設值，否則拼錯字會靜默變成 None）。"""
+        with pytest.raises(AttributeError, match="_no_such_ef15_name"):
+            getattr(umh, "_no_such_ef15_name")
+        assert not hasattr(umh, "_EF15_NOT_A_REAL_NAME")
+        with pytest.raises(ImportError):
+            exec("from scripts.update_macro_history import _no_such_ef15_name", {})
 
     def test_script_parser_delegates_and_keeps_its_contract(self, capsys):
         body = ef15_body()

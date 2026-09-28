@@ -322,7 +322,8 @@ DATA_REGISTRY: list[dict[str, Any]] = [
     # 🇹🇼 六、台灣總經
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # DL-f1-s4(2026-09-28):endpoint／ping_url 原為 ~~`cbc.gov.tw/public/Attachment/ms1.json`~~
-    # (v18.231 確認 404,`tw_macro.CBC_MS1_URLS` 已於 v18.240 移除);另兩個 ms1.json 網址亦未命中
+    # (v18.231 確認 404;v18.240 已自 `tw_macro.CBC_MS1_URLS` 移除這個 Attachment 網址 —— 常數仍在,
+    # 現存 `/public/data/` 與 `/tw/public/data/` 兩個 ms1.json 網址);這兩個網址亦未命中
     # (探針 run 36408641177)。實際可用源是 CBC PXWeb EF15M01(貨幣總計數-日平均數),排程
     # `scripts/update_macro_history` 與線上 `tw_macro._try_cbc_ef15m01` 共用
     # `src/data/macro/cbc_ef15m01.py` 解析 → 改指 EF15M01。本註冊表這兩欄無執行期讀者(純文件)。

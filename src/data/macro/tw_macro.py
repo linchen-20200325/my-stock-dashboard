@@ -326,12 +326,15 @@ def _try_cbc_ef15m01() -> Optional[tuple]:
     except Exception as e:  # noqa: BLE001 — 非 JSON 即本層失敗;印出後回 None 交給下一層
         print(f'{tag} ❌ JSON 解析失敗 {type(e).__name__}: {e} → 往下一層')
         return None
-    latest = ef15_latest_month(sdmx)
-    fatal_from = ef15_fatal_from(latest) if latest is not None else None
     try:
+        # 推對帳窗口也在 try 內(批 M QA):表內最新期間是 0001 年時 `ef15_fatal_from` 要回
+        # 0000 年 → `datetime.date` 拋 ValueError,不得冒出 `fetch_cbc_m1b_m2`。
+        latest = ef15_latest_month(sdmx)
+        fatal_from = ef15_fatal_from(latest) if latest is not None else None
         df, _why = parse_cbc_ef15m01(sdmx, fatal_from, log_tag=tag)
     except (ValueError, TypeError, OverflowError) as e:
-        # 解析器對極端壞值(例:期間年份 0000、超出 int64 的餘額)會拋例外 → 視同拒用
+        # 期間／餘額的極端壞值(例:期間年份 0000／0001、超出 int64 的餘額)會讓推窗口或解析
+        # 拋例外 → 視同拒用
         print(f'{tag} ❌ 解析例外 {type(e).__name__}: {e} → 拒用,往下一層')
         return None
     if df is None:
