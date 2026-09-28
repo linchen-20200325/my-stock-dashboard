@@ -31,6 +31,7 @@ except ImportError:
 
 import pandas as pd
 
+from shared.fail_cooldown import CachedFailure as _CachedFailure  # D2-f5 2026-09-28
 from shared.shortage_screen_thresholds import (
     SHORTAGE_DEEP_SCAN_MAX,
     SHORTAGE_TIER_MID_MIN,
@@ -52,6 +53,31 @@ from src.data.stock.monthly_revenue_fetcher import (
     fetch_monthly_revenue,
 )
 from src.data.stock.quarterly_financials_fetcher import fetch_quarterly_shortage_frame
+
+
+class _CandidatePoolFetchFailed(_CachedFailure):
+    """`_scan_cached` ②「兩個候選池來源都取不到」且全市場月營收是 L1 判定的**確定抓取失敗**
+    那條出口專用(D2-f5 2026-09-28,§1.A-3(a))。
+
+    `st.cache_data` 不快取例外 → 這一份不會被凍成 1 天;`run_shortage_scan` 只接住本類別,
+    取 `.payload` 回傳與修前逐字相同的 (rows, meta)。刻意用私有子類別、不直接接
+    `CachedFailure`(同 rs_leader_service D2-f1 的理由):別的模組的 `CachedFailure` 若從
+    下層漏出來,不會在這裡被誤當成 (rows, meta) 拆開。
+    """
+
+
+def _batch_revenue_with_status(months: int) -> tuple[pd.DataFrame, bool]:
+    """L1 全市場月營收 +「這一份是不是 L1 判定的確定抓取失敗」(D2-f5 2026-09-28)。
+
+    走 L1 `fetch_batch_monthly_revenue.with_status`:同一次呼叫回 (df, 是否確定失敗),df 與
+    `fetch_batch_monthly_revenue(months=months)` 逐字相同(不多打一次、也不必事後查 L1 退避表)。
+    `fetch_batch_monthly_revenue` 沒有 `.with_status`(例:被換成純函式)→ 照修前呼叫,
+    一律當「非確定失敗」(照舊快取,不猜)。
+    """
+    _with_status = getattr(fetch_batch_monthly_revenue, "with_status", None)
+    if callable(_with_status):
+        return _with_status(months)
+    return fetch_batch_monthly_revenue(months=months), False
 
 
 def _clear(fn) -> None:
@@ -148,6 +174,12 @@ def _scan_cached(max_scan: int) -> tuple[list[dict], dict]:
     候選池來源(依 tier 相容性排序):
       ① 基本面存活池(免費離線快照,你的環境確定能跑) — 逐檔單抓月營收
       ② 全市場月營收批次(需 FinMind sponsor tier) — fallback,動能排序更佳
+
+    D2-f5（2026-09-28）：②「兩個候選池來源都取不到」那一條，**只有**全市場月營收是 L1 判定的
+    **確定抓取失敗**時改**拋** `_CandidatePoolFetchFailed`（不入快取），由 `run_shortage_scan` 接住
+    回同一份 (rows, meta)；其餘分支（含 L1 沒有確定失敗的空表、存活池路徑的各種結果）照舊回傳、
+    照舊快取。本層不另記退避：這條路唯一會打上游的是 L1 全市場月營收，它自己有冷卻
+    （`FAIL_COOLDOWN_SEC` 秒內不重打）；這條路也不會跑到逐檔深掃（深掃在它之後）。
     """
     _fetched_at = pd.Timestamp.now("UTC").isoformat()
 
@@ -164,13 +196,21 @@ def _scan_cached(max_scan: int) -> tuple[list[dict], dict]:
             "fetched_at": _fetched_at, "version": SHORTAGE_VERSION}
 
     # ── ② fallback：全市場月營收批次（需 sponsor tier）──────────
-    _batch = fetch_batch_monthly_revenue(months=18)
+    _batch, _batch_failed = _batch_revenue_with_status(months=18)   # D2-f5：df 同修前的呼叫
     if _batch is None or _batch.empty:
-        return [], {
+        _empty = ([], {
             "candidates": 0, "deep_scanned": 0, "scored": 0, "pool_source": "（無）",
             "note": ("⚠️ 兩個候選池來源都取不到：基本面快照為空（選股網初篩需先跑 cron 快照），"
                      "且全市場月營收批次不可用（此呼叫需 FinMind sponsor tier，你的方案不支援）。"),
-            "source": "none", "fetched_at": _fetched_at, "version": SHORTAGE_VERSION}
+            "source": "none", "fetched_at": _fetched_at, "version": SHORTAGE_VERSION})
+        if _batch_failed:
+            # D2-f5(2026-09-28,§1.A-3(a)「只快取成功結果」):全市場月營收是 L1 判定的確定抓取失敗
+            # (OpenAPI 備援打不到,判準見 L1 `fetch_batch_monthly_revenue`)—— 修前這份結果被
+            # @st.cache_data 快取 1 天,來源恢復後使用者仍一直看到「兩個候選池來源都取不到」。
+            # 改為拋出(st.cache_data 不快取例外),由 run_shortage_scan 接住、回傳內容不變。
+            # 退避(§1.A-3(b))由 L1 負責:冷卻期內再呼叫不重打上游(本層不另記退避)。
+            raise _CandidatePoolFetchFailed(_empty)
+        return _empty
 
     _pool = _candidate_pool(_batch, max_n=max_scan)
     _pairs = [(c["stock_id"], c["revenue_yoy_last3"]) for c in _pool]
@@ -193,18 +233,28 @@ def run_shortage_scan(
 
     Args:
         refresh: True → 清 L1 月營收/季報 cache + 本層 cache 重掃（UI「重新整理」用）。
+            （D2-f5：全市場月營收的 `.clear()` 同清它的失敗退避紀錄 → refresh 照舊一定重抓。）
         max_scan: 深掃候選池上限（預設 50，比照選股網界定 FinMind 用量）。
         name_map: 可選 {代碼: 名稱}（於快取外套用，避免大 dict 進 cache key）。
 
     Returns:
         (rows, meta):rows 為 shortage_screener.to_rows 輸出（依缺貨分數降冪）。
+
+    D2-f5（2026-09-28）：「兩個候選池來源都取不到」且全市場月營收是 L1 確定抓取失敗的結果
+    不入快取（下次呼叫重算；L1 冷卻期內重算不打上游）；每一次的回傳內容與修前同一次計算逐字相同
+    （唯 `fetched_at` 是當次重算的時點 —— 修前是被快取那一次的時點；同 D2-f1 大盤失敗那條）。
+    已知代價（與 #741 列的 D2-f8／D2-f11 同型）：全站 `st.cache_data.clear()`（例：v1 側欄「強制刷新」）
+    清不掉 L1 冷卻，失敗後 `FAIL_COOLDOWN_SEC` 秒內按它不會重抓全市場月營收；`refresh=True` 則會。
     """
     if refresh:
         _clear(fetch_batch_monthly_revenue)
         _clear(fetch_quarterly_shortage_frame)
         _clear(_scan_cached)
 
-    rows, meta = _scan_cached(max_scan)
+    try:
+        rows, meta = _scan_cached(max_scan)
+    except _CandidatePoolFetchFailed as _cf:
+        rows, meta = _cf.payload     # D2-f5:這一份沒進快取;以下的快取外注入照舊套用
     # 存活池涵蓋率診斷（§5，快取外注入以反映最新快照）
     try:
         from src.services.fundamental_screener_service import get_snapshot_coverage_note
