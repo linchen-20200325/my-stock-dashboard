@@ -19,7 +19,10 @@ fallback 僅「最新月快照」(每股 1 列),非歷史序列 → 降級補位
   兩者皆 FinMind 主 → OpenAPI fallback;私有實作 `_single_finmind` / `_batch_finmind`。
   D2-f5(2026-09-28):全市場那支「只快取成功」—— 快取在 `_fetch_batch_monthly_revenue_cached`,
   確定抓取失敗不入快取、外層以 `shared.fail_cooldown` 退避;公開名稱、簽名、回傳與 `.clear()` 不變
-  (另掛 `.with_status` 給 L3 缺貨掃描判斷「這一份是不是確定失敗」)。單股那支本次未動。
+  (另掛 `.with_status` 給 L3 缺貨掃描判斷「這一份是不是確定失敗」)。單股那支 D2-f5 未動。
+  批 D3e(2026-09-28):單股那支比照拆層(快取在 `_fetch_monthly_revenue_cached`,D2-f22);全市場那支
+  「上市／上櫃一邊確定失敗、只拿到一半」也不入快取(D2-f23)、失敗冷卻改遞增(D2-f25);`_batch_finmind`
+  的 schema 樣本改為真的只取首檔(D2-f21)。兩支的公開名稱、簽名、回傳與 `.clear()` 皆不變。
 """
 from __future__ import annotations
 
@@ -41,7 +44,7 @@ except ImportError:
         secrets: dict = {}
     st = _NoOpST()  # noqa
 
-from shared.ttls import TTL_6HOUR
+from shared.ttls import TTL_1HOUR, TTL_6HOUR
 from shared.fail_cooldown import (CachedFailure as _CachedFailure,  # D2-f5 2026-09-28
                                   FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT)
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
@@ -174,9 +177,15 @@ def _batch_finmind(months: int = 18) -> pd.DataFrame:
         # D13 v19.75(review,user 核准):log-mode → blocking(batch 含 stock_id 多檔)。
         # 取首檔 36 列當代表驗(完整驗會誤判 date dup 跨股);樣本違反 = 系統性 shape
         # 問題 → 整批棄用回空(§1),下游走既有「無資料」路徑。
+        # D2-f21(2026-09-28 批 D3e):修前實際取的是「排序後前 36 列」—— 每檔約 months+1 列,兩檔
+        # 以上時樣本必然跨檔、date 不單調 → 樣本恆判違反 → 整批恆被丟棄(恆落到 OpenAPI 單月快照)。
+        # 改為真的只取首檔(排序後第一個 stock_id)的前 36 列;schema 本身與「樣本違反 → 整批棄用」皆不變。
         try:
             from shared.schemas import validate_or_reject, MonthlyRevenueSchema
-            _sample_v = validate_or_reject(_result_b.head(36), MonthlyRevenueSchema,
+            _sample = _result_b.head(36)
+            if not _sample.empty:   # D2-f21:只留首檔的列(已依 stock_id、date 排序 → 首檔在最前面)
+                _sample = _sample[_sample["stock_id"] == _sample["stock_id"].iloc[0]]
+            _sample_v = validate_or_reject(_sample, MonthlyRevenueSchema,
                                            label='fetch_batch_monthly_revenue:sample')
             if _sample_v.empty and not _result_b.empty:
                 print('[mrev-fetcher] batch 樣本 schema 違反 → 整批棄用(§1 錯值比缺值危險)')
@@ -268,7 +277,7 @@ def _batch_twse_openapi(*, failed: list | None = None) -> pd.DataFrame:
     致命03 去 FinMind 單點:無 token,走 NAS proxy。單股/全市場 fallback 共用此入口。
     失敗回空 df(§1,上游 source_health 顯示 absent,不造假)。
 
-    failed(D2-f5 2026-09-28;預設 None = 既有行為一字不變,單股 fallback 不傳):傳一個 list
+    failed(D2-f5 2026-09-28;預設 None = 既有行為一字不變;單股 fallback 自 D2-f22〔批 D3e〕起也傳):傳一個 list
     進來 → **確定是抓取失敗**的市場各寫一筆說明(「上市: …」/「上櫃: …」)。「確定」的定義
     (拿不準的一律不寫,不猜 §1):
       · `fetch_url` 回 None(代理/直連/NAS 中繼全敗;它對非 200 也回 None)或回非 200 ⇒ 寫;
@@ -316,23 +325,47 @@ def _batch_twse_openapi(*, failed: list | None = None) -> pd.DataFrame:
     return _df
 
 
-@st.cache_data(ttl=TTL_6HOUR, show_spinner=False)
-def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
-    """單股近 N 月營收。FinMind 主 → TWSE/TPEx OpenAPI keyless fallback(致命03 去單點)。
+def _cooldown_note(cd: _FailCooldown) -> str:
+    """log 用(批 D3e):一個 `FailCooldown` 的冷卻設定白話(固定 or 遞增),不會因設定不同而拋錯。"""
+    if cd.max_seconds is None:
+        return f"{cd.seconds:.0f}s 內不重打上游"
+    return (f"冷卻期內不重打上游(冷卻由 {cd.seconds:.0f}s 起、連續失敗加倍、"
+            f"上限 {cd.max_seconds:.0f}s)")
 
-    Returns:
-        DataFrame columns: date / revenue / revenue_year / revenue_month;失敗回空。
-        fallback 僅提供最新月(OpenAPI 快照特性),歷史序列仍以 FinMind 為主。
+
+class _SingleRevenueFetchFailed(_CachedFailure):
+    """`_fetch_monthly_revenue_cached` 的「確定抓取失敗」出口專用(D2-f22 2026-09-28 批 D3e,§1.A-3(a))。
+
+    同下方 `_BatchRevenueFetchFailed`:`st.cache_data` 不快取例外 → 失敗的空表不會被凍成 6 小時;
+    外層 `fetch_monthly_revenue` 只接住本類別,取 `.payload`(＝修前會回傳的同一份空表)。刻意用私有
+    子類別、不直接接 `CachedFailure`:別處的 `CachedFailure` 若從下層漏出來,不會在這裡被誤當成
+    DataFrame 回傳。
+    """
+
+
+@st.cache_data(ttl=TTL_6HOUR, show_spinner=False)
+def _fetch_monthly_revenue_cached(stock_id: str, months: int = 18) -> pd.DataFrame:
+    """`fetch_monthly_revenue()` 的快取層(原函式本體;TTL、參數、回傳同修前)。
+
+    D2-f22(2026-09-28 批 D3e,§1.A-3(a)「只快取成功結果」):FinMind 無資料後改走 OpenAPI 時傳
+    `failed`;**這一檔沒拿到資料**且 OpenAPI 有市場**確定抓取失敗**(判準見 `_batch_twse_openapi`)
+    → **拋** `_SingleRevenueFetchFailed`(不入快取),`.payload` 即修前會回傳的那一份空表。
+    這一層不知道該股在上市還是上櫃 —— 有一邊確定失敗、這檔又沒拿到,它就可能正在失敗的那一邊,
+    不猜(§1),一律不入快取。其餘結果照舊回傳、照舊快取:FinMind 有資料;OpenAPI 拿到這一檔(即使
+    另一邊失敗 —— 一檔只在其中一個市場);沒有確定失敗的空表(與真的沒資料分不出來)。
+    ⚠️ 本批不處理(照舊快取,等 D2-f24 的 FinMind 狀態入口):FinMind 掛掉、OpenAPI 正常時的降級 1 列。
     """
     _df = _single_finmind(stock_id, months)
     if _df is not None and not _df.empty:
         return _df
     print(f"[mrev-fetcher] {stock_id} FinMind 無資料 → TWSE/TPEx OpenAPI fallback(單股篩)")
-    _batch = _batch_twse_openapi()
-    if _batch.empty:
-        return pd.DataFrame()
-    _one = _batch[_batch["stock_id"] == str(stock_id)].copy()
+    _failed: list[str] = []                           # D2-f22:確定抓取失敗的市場(判準同全市場那支)
+    _batch = _batch_twse_openapi(failed=_failed)
+    _one = (_batch[_batch["stock_id"] == str(stock_id)].copy() if not _batch.empty
+            else pd.DataFrame())
     if _one.empty:
+        if _failed:   # D2-f22:這一檔沒拿到,且有市場確定抓取失敗 → 不入快取
+            raise _SingleRevenueFetchFailed(pd.DataFrame(), "；".join(_failed))
         return pd.DataFrame()
     _one["revenue_year"] = _one["date"].dt.year
     _one["revenue_month"] = _one["date"].dt.month
@@ -345,12 +378,60 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
     return _one
 
 
+#: D2-f22(2026-09-28 批 D3e,§1.A-3(b)):單股月營收的失敗退避。鍵 ＝ (stock_id, months)(與快取層的
+#: 快取鍵同義)。冷卻設定同全市場那支(`_batch_fail_cooldown`,見其註解):起點 `FAIL_COOLDOWN_SEC`、
+#: 連續失敗加倍、上限 `TTL_1HOUR` —— 這裡重打一次 ＝ FinMind 1 次 ＋ OpenAPI 上市／上櫃各 1 次全市場快照,
+#: 與全市場那支是同一組上游、同一組逾時(上游只收連線、不回應時一輪可卡數分鐘,D2-f25)。
+#: ⚠️ 本表只擋「同一檔」重打;檔與檔之間不共用 OpenAPI 快照、也不共用冷卻(另案 D2-f29,本批不處理)。
+_single_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)
+
+
+def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
+    """單股近 N 月營收。FinMind 主 → TWSE/TPEx OpenAPI keyless fallback(致命03 去單點)。
+
+    Returns:
+        DataFrame columns: date / revenue / revenue_year / revenue_month;失敗回空。
+        fallback 僅提供最新月(OpenAPI 快照特性),歷史序列仍以 FinMind 為主。
+        回傳內容同修前(失敗也是無旗標的空表)。
+
+    D2-f22(2026-09-28 批 D3e,§1.A-3「只快取成功結果;失敗時退避」):修前 FinMind 無資料、OpenAPI
+    備援又**確定抓取失敗**(或該股所在的那一邊失敗)時回的空表被快取 6 小時 —— 來源恢復後同參數仍回
+    空表。現在那一種**不入快取**(判準見 `_fetch_monthly_revenue_cached`);失敗後同一個
+    (stock_id, months) 在冷卻期內不重打上游、回同一份空表 —— 冷卻由 `FAIL_COOLDOWN_SEC` 起、連續
+    失敗加倍、上限 `TTL_1HOUR`;成功一次即歸零。**本函式不快取**;`.clear()` 同清快取層與退避紀錄。
+    已知代價(與 D2-f5／#741 的 D2-f8、D2-f11 同型):全站 `st.cache_data.clear()`(例:v1 側欄「強制刷新
+    數據」、個股頁「強制重抓」)清不掉這張退避表 —— 失敗後的冷卻期內按它不會重抓這一檔(修前按它會);
+    `fetch_monthly_revenue.clear()` 則會。
+    """
+    _key = (stock_id, months)
+    _hit, _gen = _single_fail_cooldown.begin(_key)
+    if _hit is not _FC_NO_HIT:
+        return _hit
+    try:
+        _df = _fetch_monthly_revenue_cached(stock_id, months)
+    except _SingleRevenueFetchFailed as _sf:
+        print(f"[mrev-fetcher] {stock_id} 無資料且 OpenAPI 確定抓取失敗({_sf})→ 不入快取,"
+              f"{_cooldown_note(_single_fail_cooldown)}")
+        return _single_fail_cooldown.fail(_key, _gen, _sf.payload)
+    _single_fail_cooldown.success(_key)
+    return _df
+
+
+def _clear_fetch_monthly_revenue() -> None:
+    """`fetch_monthly_revenue.clear()`:同清快取層與退避紀錄(D2-f22)。"""
+    getattr(_fetch_monthly_revenue_cached, "clear", lambda: None)()
+    _single_fail_cooldown.clear()
+
+
+fetch_monthly_revenue.clear = _clear_fetch_monthly_revenue
+
+
 class _BatchRevenueFetchFailed(_CachedFailure):
     """`_fetch_batch_monthly_revenue_cached` 的「確定抓取失敗」出口專用(D2-f5 2026-09-28,§1.A-3(a))。
 
-    `st.cache_data` 不快取例外 → 失敗的空表不會被凍成 6 小時;外層
+    `st.cache_data` 不快取例外 → 失敗的結果不會被凍成 6 小時;外層
     `_fetch_batch_monthly_revenue_with_status` 只接住本類別,取 `.payload`(＝修前會回傳的
-    同一份空表)。刻意用私有子類別、不直接接 `CachedFailure`(同 rs_leader_service D2-f1 的
+    同一份表:全空,或 D2-f23 起的半邊表)。刻意用私有子類別、不直接接 `CachedFailure`(同 rs_leader_service D2-f1 的
     理由):別處的 `CachedFailure` 若從下層漏出來,不會在這裡被誤當成 DataFrame 回傳。
     """
 
@@ -359,10 +440,11 @@ class _BatchRevenueFetchFailed(_CachedFailure):
 def _fetch_batch_monthly_revenue_cached(months: int = 18) -> pd.DataFrame:
     """`fetch_batch_monthly_revenue()` 的快取層(原函式本體;TTL、參數、回傳同修前)。
 
-    D2-f5(2026-09-28,§1.A-3(a)「只快取成功結果」):結果為空**且** OpenAPI 備援有市場
-    **確定抓取失敗**(判準見 `_batch_twse_openapi` 的 `failed`)→ **拋** `_BatchRevenueFetchFailed`
-    (不入快取),`.payload` 即修前會回傳的那一份空表。其餘結果(成功;以及沒有確定失敗的
-    空表)照舊回傳、照舊快取。
+    §1.A-3(a)「只快取成功結果」:OpenAPI 備援有市場**確定抓取失敗**(判準見 `_batch_twse_openapi`
+    的 `failed`)→ **拋** `_BatchRevenueFetchFailed`(不入快取),`.payload` 即修前會回傳的那一份表
+    (全空,或只拿到另一邊的半邊表)。其餘結果(成功;沒有確定失敗的空表)照舊回傳、照舊快取。
+    沿革:D2-f5(2026-09-28)只處理「結果為空**且**有市場確定失敗」;D2-f23(2026-09-28 批 D3e)拿掉
+    「結果為空」這個前提 —— 一邊確定失敗、另一邊有資料(修前照舊快取 6 小時)也不入快取。
     """
     _df = _batch_finmind(months)
     if _df is not None and not _df.empty:
@@ -370,25 +452,30 @@ def _fetch_batch_monthly_revenue_cached(months: int = 18) -> pd.DataFrame:
     print("[mrev-fetcher] batch FinMind 無資料/失敗 → TWSE+TPEx OpenAPI keyless fallback")
     _failed: list[str] = []
     _out = _batch_twse_openapi(failed=_failed)
-    if _out.empty and _failed:
+    if _failed:   # D2-f23:有市場確定抓取失敗就不入快取,不論空不空(修前 D2-f5:只有「空＋失敗」)
         raise _BatchRevenueFetchFailed(_out, "；".join(_failed))
     return _out
 
 
 #: D2-f5(2026-09-28,§1.A-3(b)):全市場月營收的失敗退避。鍵 ＝ `months`(與快取層的快取鍵同義)。
-#: 單鍵取數 → 固定冷卻 `FAIL_COOLDOWN_SEC`(不開遞增;遞增只給「一次重抓就要打數百次上游」的
-#: 掃描層,這裡一次重抓 ＝ FinMind 1 次 ＋ OpenAPI 上市／上櫃各 1 次)。
-_batch_fail_cooldown = _FailCooldown()
+#: D2-f25(2026-09-28 批 D3e):冷卻由固定 `FAIL_COOLDOWN_SEC` 改**遞增** —— 同一個 `months` 連續失敗時
+#: 由 `FAIL_COOLDOWN_SEC` 起、每次加倍,上限 `TTL_1HOUR`(比照 RS 掃描層 `_scan_fail_cooldown`;刻意短於
+#: 本函式成功快取的 `TTL_6HOUR`:長時間中斷恢復後最慢 1 小時就重抓 —— D2-f5 以前失敗是凍 6 小時);
+#: 一次成功即歸零。原因(D2-f25 登記):上游只收連線、不回應時一輪重抓可卡數分鐘(批 D3c QA 在無代理
+#: 環境量到約 264 秒),冷卻又從該輪結束才起算 → 固定 180 秒時,走缺貨掃描後備 ② 的頁面約每 7.4 分鐘
+#: (264 ＋ 180 秒)再被卡一次。
+_batch_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)
 
 
 def _fetch_batch_monthly_revenue_with_status(months: int = 18) -> tuple[pd.DataFrame, bool]:
     """(全市場月營收, 這一份是不是**確定抓取失敗**)。**本函式不快取**;快取在 `_fetch_batch_monthly_revenue_cached`。
 
     第 1 項與 `fetch_batch_monthly_revenue(months)` 回的逐字相同。第 2 項為 True ＝ 本次(或冷卻期內
-    記下的那次)是快取層判定的確定失敗 —— 給 L3 `shortage_screener_service` 判斷「兩個候選池來源都
-    取不到」那一份能不能入它自己的快取(同一次呼叫取得,不必事後查退避表,沒有競態)。
-    失敗後 `FAIL_COOLDOWN_SEC` 秒內同一個 `months` 不重打上游,回同一份空表;成功(含沒有確定
-    失敗的空表)一次即解除;並行時期間有人成功過,較晚到的失敗不記(`FailCooldown` 世代)。
+    記下的那次)是快取層判定的確定失敗 —— 給 L3 `shortage_screener_service` 判斷它自己的結果(「兩個
+    候選池來源都取不到」,或 D2-f23 起的半邊表候選池)能不能入它自己的快取(同一次呼叫取得,不必事後查
+    退避表,沒有競態)。失敗後冷卻期內同一個 `months` 不重打上游,回同一份表(冷卻由 `FAIL_COOLDOWN_SEC`
+    起、連續失敗加倍、上限 `TTL_1HOUR`,D2-f25);成功(含沒有確定失敗的空表)一次即解除並歸零;
+    並行時期間有人成功過,較晚到的失敗不記(`FailCooldown` 世代)。
     """
     _hit, _gen = _batch_fail_cooldown.begin(months)
     if _hit is not _FC_NO_HIT:
@@ -396,8 +483,8 @@ def _fetch_batch_monthly_revenue_with_status(months: int = 18) -> tuple[pd.DataF
     try:
         _df = _fetch_batch_monthly_revenue_cached(months)
     except _BatchRevenueFetchFailed as _bf:
-        print(f"[mrev-fetcher] batch 全源無資料且 OpenAPI 確定抓取失敗({_bf})→ 不入快取,"
-              f"{_batch_fail_cooldown.seconds:.0f}s 內不重打上游")
+        print(f"[mrev-fetcher] batch {'全源無資料且 ' if _bf.payload.empty else '只拿到一半、'}"
+              f"OpenAPI 確定抓取失敗({_bf})→ 不入快取,{_cooldown_note(_batch_fail_cooldown)}")
         return _batch_fail_cooldown.fail(months, _gen, _bf.payload), True
     _batch_fail_cooldown.success(months)
     return _df, False
@@ -413,18 +500,21 @@ def fetch_batch_monthly_revenue(months: int = 18) -> pd.DataFrame:
 
     D2-f5(2026-09-28,§1.A-3「只快取成功結果;失敗時退避」):修前 OpenAPI 備援**確定抓取失敗**
     時回的空表被快取 6 小時 —— 來源恢復後同參數仍回空表、上游 0 次呼叫(L3 缺貨掃描的
-    「全市場月營收動能候選池」吃這一支)。現在那一種**不入快取**;失敗後
-    `shared.fail_cooldown.FAIL_COOLDOWN_SEC` 秒內同一個 `months` 不重打上游,回同一份空表;
-    成功一次即解除。**失敗 vs 真的沒資料的判準**(只認這一層看得到的訊號,拿不準一律照舊快取):
-      · **確定失敗** ＝ 結果為空,且 OpenAPI 上市／上櫃至少一邊「`fetch_url` 回 None／非 200、
-        或抓取／解 JSON 拋例外」(`_batch_twse_openapi` 的 `failed`)。TWSE/TPEx keyless 快照
-        是整個上市／上櫃市場的最新月營收,打得到就不會是空的,所以「空＋有一邊確定打不到」
-        歸因在抓取失敗。
+    「全市場月營收動能候選池」吃這一支)。現在那一種**不入快取**;失敗後冷卻期內同一個 `months`
+    不重打上游,回同一份表;成功一次即解除。冷卻由 `shared.fail_cooldown.FAIL_COOLDOWN_SEC` 起、
+    連續失敗加倍、上限 `TTL_1HOUR`(D2-f25,2026-09-28 批 D3e;修前固定 `FAIL_COOLDOWN_SEC`)。
+    **失敗 vs 真的沒資料的判準**(只認這一層看得到的訊號,拿不準一律照舊快取):
+      · **確定失敗** ＝ OpenAPI 上市／上櫃至少一邊「`fetch_url` 回 None／非 200、或抓取／解 JSON
+        拋例外」(`_batch_twse_openapi` 的 `failed`),**不論結果空不空**:
+        - 結果為空(D2-f5):TWSE/TPEx keyless 快照是整個上市／上櫃市場的最新月營收,打得到就不會
+          是空的,所以「空＋有一邊確定打不到」歸因在抓取失敗;
+        - 結果不空、只拿到另一邊(D2-f23,批 D3e):確定少了一整個市場 —— 修前這種半邊表照舊快取
+          6 小時,現在同樣不入快取;回傳的仍是那一份半邊表(對呼叫端的回傳不變)。
       · FinMind 那一段**不計**:`finmind_client.finmind_get` 對非 200(含額度用罄／方案不支援)、
         逾時、連線錯誤一律回空表、**不拋例外** —— 這一層看到的只有「空」,與真的沒資料分不出來,
         不猜(§1);`_batch_finmind` 自己的 `except` 只接得到「已收到並解開的 JSON 在整理時出錯」
         這種確定性錯誤(同一份回應重抓也一樣),不是暫時性抓取失敗。無 token 也不計(設定,不是上游)。
-      · 有資料的結果(即使某一邊市場失敗、只拿到一半)照舊快取 —— 本項只處理「失敗的空表」。
+      · 兩邊都有回 200、只是其中一邊(或兩邊)解析後 0 筆 ⇒ 不是確定失敗,照舊快取。
     `.clear()` 同清快取層與退避紀錄。`.with_status(months)` 給 L3 用(見
     `_fetch_batch_monthly_revenue_with_status`)。
     """

@@ -56,13 +56,14 @@ from src.data.stock.quarterly_financials_fetcher import fetch_quarterly_shortage
 
 
 class _CandidatePoolFetchFailed(_CachedFailure):
-    """`_scan_cached` ②「兩個候選池來源都取不到」且全市場月營收是 L1 判定的**確定抓取失敗**
-    那條出口專用(D2-f5 2026-09-28,§1.A-3(a))。
+    """`_scan_cached` ② 在全市場月營收是 L1 判定的**確定抓取失敗**時的出口專用(§1.A-3(a)):
+    「兩個候選池來源都取不到」(D2-f5 2026-09-28),以及上市／上櫃一邊確定失敗、只拿到半邊表時
+    算出的候選池結果(D2-f23 2026-09-28 批 D3e)。
 
     `st.cache_data` 不快取例外 → 這一份不會被凍成 1 天;`run_shortage_scan` 只接住本類別,
     取 `.payload` 回傳與修前逐字相同的 (rows, meta)。刻意用私有子類別、不直接接
     `CachedFailure`(同 rs_leader_service D2-f1 的理由):別的模組的 `CachedFailure` 若從
-    下層漏出來,不會在這裡被誤當成 (rows, meta) 拆開。
+    下層漏出來,不會在這裡被誤當成 (rows, meta) 拆開(D2-f26:測試守住這個範圍)。
     """
 
 
@@ -179,7 +180,11 @@ def _scan_cached(max_scan: int) -> tuple[list[dict], dict]:
     **確定抓取失敗**時改**拋** `_CandidatePoolFetchFailed`（不入快取），由 `run_shortage_scan` 接住
     回同一份 (rows, meta)；其餘分支（含 L1 沒有確定失敗的空表、存活池路徑的各種結果）照舊回傳、
     照舊快取。本層不另記退避：這條路唯一會打上游的是 L1 全市場月營收，它自己有冷卻
-    （`FAIL_COOLDOWN_SEC` 秒內不重打）；這條路也不會跑到逐檔深掃（深掃在它之後）。
+    （冷卻期內不重打；D2-f25 起遞增）；這條路也不會跑到逐檔深掃（深掃在它之後）。
+    D2-f23（2026-09-28 批 D3e）：② 拿到的全市場月營收若是 L1 判定的確定失敗但**不空**（上市／上櫃
+    一邊確定失敗、只拿到另一邊的半邊表），算完候選池後同樣改拋 `_CandidatePoolFetchFailed`（不入
+    快取），回傳內容不變。本層同樣不另記退避：L1 冷卻期內重算不打上游；半邊表是 OpenAPI 單月快照
+    （每檔 1 列、算不出年增率）→ 候選池為 0 檔、逐檔深掃 0 次，重算只花在本機的候選池分類。
     """
     _fetched_at = pd.Timestamp.now("UTC").isoformat()
 
@@ -215,12 +220,15 @@ def _scan_cached(max_scan: int) -> tuple[list[dict], dict]:
     _pool = _candidate_pool(_batch, max_n=max_scan)
     _pairs = [(c["stock_id"], c["revenue_yoy_last3"]) for c in _pool]
     _rows, _note = _score_and_diagnose(_pairs)
-    return _rows, {
+    _result = (_rows, {
         "candidates": len(_pool), "deep_scanned": len(_pairs), "scored": len(_rows),
         "pool_source": "全市場月營收動能候選池（sponsor tier）",
         "note": _note,
         "source": "FinMind:MonthRevenue(batch)+FS+BS",
-        "fetched_at": _fetched_at, "version": SHORTAGE_VERSION}
+        "fetched_at": _fetched_at, "version": SHORTAGE_VERSION})
+    if _batch_failed:   # D2-f23(批 D3e):L1 判定一邊市場確定失敗、只拿到半邊表 → 不入快取(同上)
+        raise _CandidatePoolFetchFailed(_result)
+    return _result
 
 
 def run_shortage_scan(
@@ -243,8 +251,11 @@ def run_shortage_scan(
     D2-f5（2026-09-28）：「兩個候選池來源都取不到」且全市場月營收是 L1 確定抓取失敗的結果
     不入快取（下次呼叫重算；L1 冷卻期內重算不打上游）；每一次的回傳內容與修前同一次計算逐字相同
     （唯 `fetched_at` 是當次重算的時點 —— 修前是被快取那一次的時點；同 D2-f1 大盤失敗那條）。
+    D2-f23（2026-09-28 批 D3e）：全市場月營收是 L1 判定失敗的**半邊表**（上市／上櫃一邊確定失敗）時，
+    算出的結果同樣不入快取、回傳內容同上。
     已知代價（與 #741 列的 D2-f8／D2-f11 同型）：全站 `st.cache_data.clear()`（例：v1 側欄「強制刷新」）
-    清不掉 L1 冷卻，失敗後 `FAIL_COOLDOWN_SEC` 秒內按它不會重抓全市場月營收；`refresh=True` 則會。
+    清不掉 L1 冷卻，失敗後的冷卻期內按它不會重抓全市場月營收（冷卻由 `FAIL_COOLDOWN_SEC` 起；D2-f25
+    起連續失敗時加倍、最長 `TTL_1HOUR`）；`refresh=True` 則會。
     """
     if refresh:
         _clear(fetch_batch_monthly_revenue)
