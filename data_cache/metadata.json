@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-27T14:38:22.709019+00:00",
+  "updated_at": "2026-09-28T17:31:34.078060+00:00",
   "datasets": {
     "twii_ohlcv": {
       "name": "twii_ohlcv",
@@ -21,9 +21,9 @@
     },
     "finmind_m1m2": {
       "name": "finmind_m1m2",
-      "last_updated": null,
-      "row_count": 238,
-      "last_error": "抓取結果為空；既有檔 sanity 不過,待重建"
+      "last_updated": "2026-07-01",
+      "row_count": 237,
+      "last_error": null
     },
     "tw_pmi": {
       "name": "tw_pmi",
