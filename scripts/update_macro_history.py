@@ -801,7 +801,8 @@ def update_one(name: str, today: _dt.date, bootstrap: bool, years: int,
         return meta
 
     if new.empty:
-        meta["last_error"] = "抓取結果為空"
+        from shared.staleness import EMPTY_FETCH_MARKER  # DL-f1-s6：與讀取端共用同一常數
+        meta["last_error"] = EMPTY_FETCH_MARKER
         if _corrupt_existing is not None:
             # 重建失敗：壞檔原樣保留（不刪、不回填），但 metadata 誠實標壞,不假裝最新
             meta["last_error"] = "抓取結果為空；既有檔 sanity 不過,待重建"
