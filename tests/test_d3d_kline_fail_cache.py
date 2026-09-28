@@ -1137,6 +1137,118 @@ class TestD2f20CachedHistoryBehaviour:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 隨機操作序列 × 獨立參考模型（property-based 的精神；固定 seed、不引入新依賴，同 #741 測試手法）
+# ══════════════════════════════════════════════════════════════════
+_FAILS = ("net_down", "timeout", "rate_limited")          # 抓取失敗：不入快取、記冷卻
+_NO_DATA = ("no_data", "tz_missing", "bad_period", "legacy_no_data", "empty", "none")   # 照舊快取
+
+
+class _HistoryModel:
+    """`cached_history` 應有的語意（獨立寫出，不讀被測碼）：成功／真的沒資料 → 1 小時快取（測試內不過期）；
+    失敗 → 不入快取、`FAIL_COOLDOWN_SEC` 內同鍵回空表且不打上游；任何一次正常回傳清掉該鍵冷卻。"""
+
+    def __init__(self, fake, clock):
+        self.fake, self.clock = fake, clock
+        self.cache: dict = {}
+        self.cool: dict = {}
+        self.upstream = 0
+
+    def expire(self) -> None:
+        """快取到期／v2「強制重抓」清掉 `st.cache_data`：成功快取清空，冷卻不受影響。"""
+        self.cache.clear()
+
+    def call(self, ticker: str, period: str):
+        """回 (kind, failed)；kind ∈ {"ok", "empty"}。"""
+        key = (ticker, period)
+        if key in self.cache:
+            return self.cache[key], False
+        t0 = self.cool.get(key)
+        if t0 is not None and self.clock["now"] - t0 < FAIL_COOLDOWN_SEC:
+            return "empty", True
+        self.upstream += 1
+        mode = self.fake.per.get(ticker, self.fake.mode)
+        if mode in _FAILS:
+            self.cool[key] = self.clock["now"]
+            return "empty", True
+        self.cool.pop(key, None)
+        self.cache[key] = "ok" if mode == "ok" else "empty"
+        return self.cache[key], False
+
+
+class TestModelBased:
+    @pytest.mark.parametrize("seed", range(8))
+    def test_cached_history_matches_model(self, yfh, fc_clock, seed):
+        import random
+        rng = random.Random(seed)
+        model = _HistoryModel(yfh, fc_clock)
+        keys = [(f"{t}.TW", p) for t in ("A", "B", "C", "D", "E") for p in ("1y", "60d")]
+        for step in range(500):
+            op = rng.choices(["tick", "mode", "expire", "call"], weights=[3, 2, 1, 8])[0]
+            if op == "tick":
+                fc_clock["now"] += rng.choice([0, 1, 30, 179, 180, 181, 600])
+            elif op == "mode":
+                yfh.mode = rng.choice(("ok",) + _FAILS + _NO_DATA)
+            elif op == "expire":
+                YP._cached_history_cached.clear()
+                model.expire()
+            else:
+                t, p = rng.choice(keys)
+                kind, failed = model.call(t, p)
+                got, got_failed = YP.cached_history.with_status(t, p)
+                where = f"seed={seed} step={step} {t}/{p} mode={yfh.mode}"
+                if kind == "ok":
+                    pd.testing.assert_frame_equal(got, _ok_frame(t), obj=where)
+                else:
+                    _assert_bare_empty(got)
+                assert got_failed is failed, where
+                assert len(yfh.calls) == model.upstream, where
+
+    @pytest.mark.parametrize("seed", range(8))
+    def test_fetch_single_matches_model(self, yfh, fc_clock, seed):
+        """`fetch_single` 應有的語意：成功與「每一檔都真的沒資料」快取；「全空且至少一檔抓取失敗」不快取。"""
+        import random
+        rng = random.Random(1000 + seed)
+        hist = _HistoryModel(yfh, fc_clock)
+        chain = {"DX-Y.NYB": ["DX-Y.NYB", "DX=F", "UUP"]}
+        cached: dict = {}                                    # symbol → None | 命中的代號
+        upstream_syms = ["^DJI", "DX-Y.NYB", "DX=F", "UUP", "TSM"]
+        for step in range(400):
+            op = rng.choices(["tick", "mode", "force", "call"], weights=[3, 2, 1, 8])[0]
+            if op == "tick":
+                fc_clock["now"] += rng.choice([0, 1, 60, 179, 180, 181, 600])
+            elif op == "mode":
+                yfh.per = {s: rng.choice(("ok", "net_down", "rate_limited", "no_data", "empty"))
+                           for s in upstream_syms}
+            elif op == "force":                              # v2「強制重抓」：清 pkl 與兩層 st.cache_data，清不到冷卻
+                CL._pkl_clear_all()
+                DDF._fetch_single_cached.clear()
+                YP._cached_history_cached.clear()
+                cached.clear()
+                hist.expire()
+            else:
+                sym = rng.choice(["^DJI", "DX-Y.NYB", "TSM"])
+                if sym in cached:
+                    exp = cached[sym]
+                else:
+                    exp, failed_any = None, False
+                    for s in chain.get(sym, [sym]):
+                        kind, failed = hist.call(s, "60d")
+                        if kind == "ok":
+                            exp = s
+                            break
+                        failed_any = failed_any or failed
+                    if exp is not None or not failed_any:
+                        cached[sym] = exp
+                got = DDF.fetch_single(sym)
+                where = f"seed={seed} step={step} {sym} per={yfh.per}"
+                if exp is None:
+                    assert got is None, where
+                else:
+                    pd.testing.assert_frame_equal(got, _fs_expected(exp), obj=where)
+                assert len(yfh.calls) == hist.upstream, where
+
+
+# ══════════════════════════════════════════════════════════════════
 # 突變：逐一拿掉每一處修正 → 本檔對應的共用檢查轉紅
 # ══════════════════════════════════════════════════════════════════
 _YP_STRICT_CALL = "        return tk.history(period=period, raise_errors=True)\n"
