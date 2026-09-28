@@ -11,6 +11,8 @@ Streamlit Cloud 海外 IP 常被 Yahoo 403/rate-limit；既有 NAS Squid Proxy �
   - cached_history(ticker, period): @st.cache_data(ttl=TTL_1HOUR) 包 yf.Ticker.history
   - cached_dividends(ticker): @st.cache_data(ttl=TTL_1HOUR) 包 yf.Ticker.dividends
 proxy env 由模組內 try/finally 統一處理，caller 零樣板。
+（兩者自 Q5-r2-r3／D2-f4 起皆「只快取成功」：快取在內層 `_cached_*_cached`，拋例外不入快取、
+外層以 `shared.fail_cooldown` 退避；公開名稱與 `.clear()` 不變。）
 
 設計：純函式 wrapper + st.cache_data；caller 用 from src.data.proxy import ... 即可。
 """
@@ -70,26 +72,58 @@ def _proxy_env():
 
 
 @st.cache_data(ttl=TTL_1HOUR, max_entries=200, show_spinner=False)
+def _cached_history_cached(ticker: str, period: str = "1y") -> pd.DataFrame:
+    """`cached_history()` 的快取層。**拋例外一律往上拋**（D2-f4 2026-09-28，同
+    `_cached_dividends_cached`；§1.A-3(a)「只快取成功結果」；st.cache_data 不快取例外）。
+    成功與「沒拋、只回 None／空表」兩條路徑、TTL、max_entries 同修前（照舊快取）。"""
+    import yfinance as yf
+    with _proxy_env():
+        _df = yf.Ticker(ticker).history(period=period)
+    if _df is None or _df.empty:
+        return pd.DataFrame()
+    return _df
+
+
+#: D2-f4：K 線失敗退避（§1.A-3(b)）—— 冷卻期內同一 (ticker, period) 不重打 Yahoo，回同一份空表。
+_history_fail_cooldown = _FailCooldown()
+
+
 def cached_history(ticker: str, period: str = "1y") -> pd.DataFrame:
-    """yfinance Ticker.history with NAS proxy + 1h cache。
+    """yfinance Ticker.history with NAS proxy + 1h cache（**只快取成功**）。
 
     Args:
         ticker: yfinance 標的代碼，例 "2330.TW"
         period: "5d"/"1mo"/"3mo"/"1y"/"5y"/"max"
 
     Returns:
-        pd.DataFrame；抓不到回空 DataFrame（不爆例外）。
+        pd.DataFrame；抓不到回空 DataFrame（不爆例外）。回傳內容同修前（失敗也是無旗標的空表）。
+
+    D2-f4（2026-09-28）：修前 yfinance **拋例外**（例：429 `YFRateLimitError`）時回的空表被
+    快取 1 小時 —— Yahoo 恢復後同參數仍回空表。現在拋例外那一種**不入快取**；失敗後
+    `shared.fail_cooldown.FAIL_COOLDOWN_SEC` 秒內同一 (ticker, period) 不重抓，回同一份空表；
+    成功一次即解除。**失敗 vs 真的沒資料的判準**：yfinance **拋例外**＝失敗；**沒拋、只回
+    None／空表**＝照舊快取 —— 那與「這檔真的沒有資料」在這一層分不出來，不猜（§1；同
+    `cached_dividends` 的 Q5-r2 判準）。`.clear()` 同清快取與退避紀錄。
     """
-    import yfinance as yf
+    _key = (ticker, period)
+    _hit, _gen = _history_fail_cooldown.begin(_key)
+    if _hit is not _FC_NO_HIT:
+        return _hit
     try:
-        with _proxy_env():
-            _df = yf.Ticker(ticker).history(period=period)
-        if _df is None or _df.empty:
-            return pd.DataFrame()
-        return _df
+        _df = _cached_history_cached(ticker, period=period)
     except Exception as _e:
         print(f"[yf_proxy.history] {ticker}: {type(_e).__name__}: {_e}")
-        return pd.DataFrame()
+        return _history_fail_cooldown.fail(_key, _gen, pd.DataFrame())
+    _history_fail_cooldown.success(_key)
+    return _df
+
+
+def _clear_cached_history() -> None:
+    getattr(_cached_history_cached, "clear", lambda: None)()
+    _history_fail_cooldown.clear()
+
+
+cached_history.clear = _clear_cached_history
 
 
 #: `cached_dividends()` **拋例外**時，回傳的空 Series 在 `attrs` 裡帶的鍵（值 ＝

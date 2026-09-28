@@ -32,6 +32,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 
 from shared.fail_cooldown import CachedFailure as _CachedFailure  # D2-f1 2026-09-28
+from shared.fail_cooldown import FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT  # D2-f7 2026-09-28
 from shared.rs_screen_thresholds import (
     RS_DEFAULT_LOOKBACK,
     RS_LEADER_TOP_N,
@@ -61,12 +62,23 @@ _TWII_TICKER = "^TWII"
 
 
 class _UpstreamFetchFailed(_CachedFailure):
-    """`_scan_cached` 自標「上游抓取失敗」那條出口專用(D2-f1 2026-09-28,§1.A-3(a))。
+    """`_scan_body` 自標「上游抓取失敗」那條出口專用(D2-f1 2026-09-28,§1.A-3(a))。
 
     `st.cache_data` 不快取例外 → 失敗結果不會被凍成 1 小時;`run_rs_leader_scan` 只接住
     本類別,取 `.payload` 回傳與修前逐字相同的 (rows, meta)。刻意用私有子類別、不直接接
     `CachedFailure`:別的模組的 `CachedFailure` 若從下層漏出來,不會在這裡被誤當成
     (rows, meta) 拆開。
+    D2-f7(2026-09-28)另有子類別 `_PoolPricesFetchFailed`(個股全抓不到價),由 `_scan_cached`
+    先接住並記掃描層退避;大盤那一條(本類別本身)照 D2-f1 原樣穿過 `_scan_cached`。
+    """
+
+
+class _PoolPricesFetchFailed(_UpstreamFetchFailed):
+    """`_scan_body` ③ 裡「大盤正常、存活池**每一檔**都完全抓不到 K 線」那條出口專用(D2-f7 2026-09-28)。
+
+    修前這一種空排行被 `@st.cache_data` 快取 1 小時 —— 個股恢復後仍原樣回傳失敗。
+    現在拋出(不入快取),由 `_scan_cached` 接住、記掃描層退避(§1.A-3(b)):一次掃描要打
+    數百檔上游,冷卻期內同一組參數不重掃,回同一份 (rows, meta)。判準見 `_all_price_fetches_failed`。
     """
 
 
@@ -229,16 +241,38 @@ def _empty_scan_note(stocks: list[dict], df_market: pd.DataFrame, *,
     return _note
 
 
+def _all_price_fetches_failed(stocks: list[dict], df_market: pd.DataFrame,
+                              lookback: int) -> bool:
+    """③ 空排行裡「大盤正常、個股全失敗」那一種(D2-f7 2026-09-28)。True ＝ 當成**抓取失敗**。
+
+    **失敗 vs 真的沒資料的判準**(本層只看得到每檔 `df` 是不是 None／空):
+      · **每一檔**都完全沒有 K 線(`_has_price` 全 False)且大盤基準可用 ⇒ 抓取失敗 ——
+        存活池是數百檔基本面過篩的既有上市櫃公司,不可能同時「真的沒有」K 線;
+        `_empty_scan_note` 對這一種寫的也是「N 檔完全抓不到 K 線(yfinance 回空)」。
+      · 只要有**任何一檔**拿到 K 線(只是與大盤對齊後交易日不足)⇒ **不**當失敗、照舊快取:
+        上游有回應,「歷史太短 / 日期對不上」重抓也不會變;混合情形(部分抓不到 + 部分太短)
+        在這一層分不出抓不到的那幾檔是失敗還是真的沒有,不猜(§1)。
+      · 大盤基準不可用(σ 不成立)⇒ 歸因在大盤側(`_empty_scan_note` 的大盤分支),不在本判準內。
+    """
+    if not stocks or any(_has_price(s) for s in stocks):
+        return False
+    return not _market_baseline_unusable(df_market, lookback)
+
+
 @st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
-def _scan_cached(lookback: int, max_scan: int, beat_only: bool,
-                 top_n: int = RS_LEADER_TOP_N) -> tuple[list[dict], dict]:
+def _scan_body(lookback: int, max_scan: int, beat_only: bool,
+               top_n: int = RS_LEADER_TOP_N) -> tuple[list[dict], dict]:
     """存活池 → 抓價 → L2 排名 → (前 N rows, meta)。快取集中點（無名稱）。
 
     top_n：排行取幾檔。選股網綜合評分需**全存活池** RS 分位（top_n 給大值 + beat_only=False），
     避免只回 top-50 → 綜合分那邊 274 檔 RS 記 0 的失真。
 
     D2-f1（2026-09-28）：大盤 ^TWII 抓取失敗那一條改**拋** `_UpstreamFetchFailed`（不入快取），
-    由 `run_rs_leader_scan` 接住回同一份 (rows, meta)；其餘分支（含正當的空排行）照舊回傳、照舊快取。
+    由 `run_rs_leader_scan` 接住回同一份 (rows, meta)。
+    D2-f7（2026-09-28）：本函式原名 `_scan_cached`（快取層改名，同 Q5-r2-r3 的 `*_body` 慣例；
+    `_scan_cached` 現為外層入口，負責掃描層退避）。③ 裡「大盤正常、每一檔都完全抓不到 K 線」
+    那一種空排行改**拋** `_PoolPricesFetchFailed`（不入快取），由 `_scan_cached` 接住並記退避；
+    其餘分支（存活池為空、其他各種空排行、部分個股缺價的排行）照舊回傳、照舊快取。
     """
     _fetched_at = pd.Timestamp.now("UTC").isoformat()
     _base_meta = {"lookback": lookback, "top_n": top_n,
@@ -252,10 +286,11 @@ def _scan_cached(lookback: int, max_scan: int, beat_only: bool,
                       "pool_source": "（無）", "market": {"banner": ""},
                       "note": "⚠️ 大盤 ^TWII 抓取失敗（Yahoo 暫時不可用），無基準可比較 RS，稍後再試。"})
         # D2-f1(2026-09-28,§1.A-3(a)「只快取成功結果」):這一條是程式自己標示「抓取失敗
-        # (Yahoo 暫時不可用)…稍後再試」的出口;下方其餘分支(存活池為空、各種空排行)照舊回傳、照舊快取。
+        # (Yahoo 暫時不可用)…稍後再試」的出口;下方其餘分支(存活池為空、各種空排行)照舊回傳、照舊快取
+        # (D2-f7 起例外一種:③ 的「個股全抓不到價」,見本函式末)。
         # 修前這份結果被 @st.cache_data 快取 1 小時 —— Yahoo 恢復後使用者仍一直看到失敗。
-        # 改為拋出(st.cache_data 不快取例外),由 run_rs_leader_scan 接住、回傳內容不變。
-        # 退避(§1.A-3(b))由 L1 fetch_yf_close 負責:冷卻期內再呼叫不重打上游。
+        # 改為拋出(st.cache_data 不快取例外),穿過 _scan_cached、由 run_rs_leader_scan 接住、回傳內容不變。
+        # 退避(§1.A-3(b))由 L1 fetch_yf_close 負責:冷卻期內再呼叫不重打上游(本層不另記退避)。
         raise _UpstreamFetchFailed(_fail)
 
     # ── ② 存活池 ──────────────────────────────────────────────
@@ -277,9 +312,52 @@ def _scan_cached(lookback: int, max_scan: int, beat_only: bool,
     if not rows:
         note = _empty_scan_note(stocks, dfm, lookback=lookback, beat_only=beat_only)
 
-    return rows, {**_base_meta, "candidates": len(survivors), "scanned": len(stocks),
-                  "scored": len(rows), "pool_source": "基本面存活池（免費離線快照）",
-                  "market": market, "note": note}
+    _result = (rows, {**_base_meta, "candidates": len(survivors), "scanned": len(stocks),
+                      "scored": len(rows), "pool_source": "基本面存活池（免費離線快照）",
+                      "market": market, "note": note})
+    if not rows and _all_price_fetches_failed(stocks, dfm, lookback):
+        # D2-f7(2026-09-28,§1.A-3(a)):大盤正常、存活池每一檔都完全抓不到 K 線 —— 修前這份空排行
+        # 被 @st.cache_data 快取 1 小時,個股恢復後仍原樣回傳失敗。改為拋出(不入快取),
+        # 由 _scan_cached 接住並記掃描層退避(§1.A-3(b)),回傳內容與修前逐字相同。
+        raise _PoolPricesFetchFailed(_result)
+    return _result
+
+
+#: D2-f7:掃描層失敗退避(§1.A-3(b))。鍵 ＝ `_scan_cached` 的四個參數(與 `_scan_body` 快取鍵同義)。
+#: 一次掃描要對數百檔打上游(超過 L1 `cached_history` 的快取上限),不能讓每次 rerun 都重掃。
+_scan_fail_cooldown = _FailCooldown()
+
+
+def _scan_cached(lookback: int, max_scan: int, beat_only: bool,
+                 top_n: int = RS_LEADER_TOP_N) -> tuple[list[dict], dict]:
+    """掃描入口(**本函式不快取**;快取在 `_scan_body`,D2-f7 2026-09-28 起)。
+
+    `_scan_body` 拋 `_PoolPricesFetchFailed`(大盤正常、個股全抓不到價)→ 不入快取;
+    失敗後 `shared.fail_cooldown.FAIL_COOLDOWN_SEC` 秒內同一組參數**不重掃**(退避),
+    回同一份 (rows, meta);冷卻期過才重掃;成功一次即解除。其餘結果(含正當的空排行)照舊
+    由 `_scan_body` 快取。大盤抓取失敗(`_UpstreamFetchFailed` 本身,D2-f1)不在這裡接,
+    照原樣往上拋給 `run_rs_leader_scan`(退避由 L1 `fetch_yf_close` 負責)。
+    `.clear()` 同清快取層與退避紀錄。
+    """
+    _key = (lookback, max_scan, beat_only, top_n)
+    _hit, _gen = _scan_fail_cooldown.begin(_key)
+    if _hit is not _FC_NO_HIT:
+        return _hit
+    try:
+        _res = _scan_body(lookback, max_scan, beat_only, top_n)
+    except _PoolPricesFetchFailed as _pf:
+        return _scan_fail_cooldown.fail(_key, _gen, _pf.payload)
+    _scan_fail_cooldown.success(_key)
+    return _res
+
+
+def _clear_scan_cached() -> None:
+    """`_scan_cached.clear()`:同清快取層(`_scan_body`)與掃描層退避紀錄(D2-f7)。"""
+    getattr(_scan_body, "clear", lambda: None)()
+    _scan_fail_cooldown.clear()
+
+
+_scan_cached.clear = _clear_scan_cached
 
 
 def run_rs_leader_scan(
@@ -296,15 +374,18 @@ def run_rs_leader_scan(
     Args:
         lookback: 區間交易日數（20/60/120）。
         beat_only: True → 只留「贏過大盤」的（excess>0）。
-        refresh: True → 清 L1 大盤/個股 cache + 本層 cache 重掃。
+        refresh: True → 清**本層**（`_scan_cached.clear()`：掃描結果快取＋D2-f7 掃描層退避紀錄）
+            後重掃。**不清** L1 大盤／個股快取 —— `fetch_yf_close`、`fetch_stock_history_1y`
+            都沒有 `.clear`（D2-f9 2026-09-28 查證，死碼登記 `DEAD_CODE.md` D-015：修前那兩行
+            `_clear(...)` 一直是空操作，已刪，零行為變更）；重掃時兩者照各自的 L1 快取／退避行事。
         max_scan: 深掃存活池上限（預設 RS_SCAN_MAX）。
         name_map: {代碼: 名稱}（於快取外套用，避免大 dict 進 cache key）。
 
     D2-f1（2026-09-28）：大盤抓取失敗的結果不入快取（下次呼叫重算）；回傳內容與修前逐字相同。
+    D2-f7（2026-09-28）：「大盤正常、個股全抓不到價」的結果不入快取，改由掃描層退避
+    （冷卻期內同一組參數回同一份結果、不重掃）；回傳內容與修前逐字相同。
     """
     if refresh:
-        _clear(fetch_yf_close)
-        _clear(fetch_stock_history_1y)
         _clear(_scan_cached)
 
     try:

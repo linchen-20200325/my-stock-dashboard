@@ -457,6 +457,9 @@ _NORMAL_CASES = {
     "frozen_market": {"pool": ["A", "B"], "market": _frozen_market, "kwargs": {},
                       "note_has": "問題指向大盤側"},
     # ③d 大盤正常、個股全抓不到價 —— 程式標的是「個股側的資料問題」（非「上游抓取失敗」分支）
+    # ⚠️ D2-f7（2026-09-28）起這一種**不再入快取**，改由掃描層退避擋重打；下方「TTL 內第二次上游
+    # 呼叫數不變」在冷卻期內仍成立（由退避達成，不是快取）。不入快取的證明見
+    # tests/test_d3b_backoff_d2f4_d2f7_d2f9.py。
     "all_prices_missing": {"pool": ["X", "Y"], "market": _market, "kwargs": {},
                            "note_has": "完全抓不到 K 線"},
     # ④ 只有部分個股缺價的正常排行
@@ -526,9 +529,11 @@ class TestD2f1NormalResultsStillCached:
         assert RS.run_rs_leader_scan(lookback=_LB) == first
         assert calls == before, "TTL 內第二次呼叫：上游呼叫數不變"
         # TTL 同修前（1 小時）：讀裝飾器原文，不依賴 streamlit 的私有屬性
+        # （D2-f7 2026-09-28：快取層由 `_scan_cached` 改名 `_scan_body`，`_scan_cached` 改為不快取的
+        #  退避入口 —— 故改查 `_scan_body`；斷言內容〔裝飾器原文逐字〕不變。）
         tree = ast.parse(pathlib.Path(RS.__file__).read_text(encoding="utf-8"))
         fn = next(n for n in tree.body
-                  if isinstance(n, ast.FunctionDef) and n.name == "_scan_cached")
+                  if isinstance(n, ast.FunctionDef) and n.name == "_scan_body")
         assert [ast.unparse(d) for d in fn.decorator_list] == \
             ["st.cache_data(ttl=TTL_1HOUR, show_spinner=False)"]
 
