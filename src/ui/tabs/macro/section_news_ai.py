@@ -17,6 +17,7 @@ import json
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
+from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
 # v19.178 AI-SSOT:餵給 LLM 的門檻一律引 SSOT,不在 prompt 內寫死(§3.3)。
 # 五桶危險門檻 SSOT = shared/macro_buckets.BUCKET_DANGER_SPECS(畫面燈號同源),
 # 由 L3 共用 prompt 元件 ai_structured_summary 轉成判讀句(個股 Tab 共用同一份)。
@@ -274,9 +275,14 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                         f'負乖離＝低於年線,系統視為超賣機會而非危險,不設危險門檻）')
                 if _mi_d.get('m1b_yoy') is not None:
                     _gap_v = round(float(_mi_d['m1b_yoy']) - float(_mi_d.get('m2_yoy') or 0), 2)
+                    # DL-f1-s5：Tier 3（^TWII 動能代理）時只送數字，Gemini 沒有任何依據分辨
+                    # 「央行 M1B/M2」與「大盤動能硬湊的代理值」，只能當真值寫進裁決（§1）。
+                    # 數字後綴 L0 既有註記（K1 不自擬）；非代理時為空字串 → 這一行逐字不變。
+                    # 只揭露：`_macro_numbers` / `calculate_system_state` 一位未動。
                     _ctx.append(
                         f'• M1B={_mi_d["m1b_yoy"]:.1f}%  M2={_mi_d.get("m2_yoy",0):.1f}%  '
-                        f'差額={_gap_v:+.2f}%（正=資金行情啟動；{_danger_rule("m1b_m2_gap")}）')
+                        f'差額={_gap_v:+.2f}%{m1b_m2_proxy_badge(_mi_d)}'
+                        f'（正=資金行情啟動；{_danger_rule("m1b_m2_gap")}）')
                 if _fnet_v is not None:
                     _ctx.append(f'• 外資現貨買賣超：{_fnet_v:+.1f}億（{_danger_rule("foreign_net")}）')
                 if _tnet_v is not None:

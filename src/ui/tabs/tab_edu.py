@@ -43,6 +43,7 @@ from shared.macro_buckets import (  # F1 v19.184：cl_data['intl'] key 鏡像（
     CL_INTL_KEY_DXY as _CL_INTL_KEY_DXY,
     CL_INTL_KEY_US10Y as _CL_INTL_KEY_US10Y,
 )
+from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
 from shared.signal_thresholds import (  # B6-a v19.181:VCP 章風控數字改吃 SSOT
     ATR_STOP_MULTIPLIER,
     RR_DEFAULT_TARGET_GAIN,
@@ -568,6 +569,10 @@ def render_tab_edu():
 {_edu_orphan_note}
 """)
             st.markdown('---')
+            # DL-f1-s5：ms1.json（M1B-M2）退到 ^TWII 動能代理時，即時值後綴 L0 既有註記
+            # （K1 不自擬）；只在真有數字時貼（同 B7c：不出現「—」＋註記的假讀數組合）。
+            # 非代理時為空字串 → chip 逐字不變。
+            _m1b_edu_badge = m1b_m2_proxy_badge(st.session_state.get('m1b_m2_info'))
             for _cat, _edu_pairs in _cat_pairs:
                 st.markdown(f'### {_cat}')
                 for _e, _edu in _edu_pairs:
@@ -579,6 +584,8 @@ def render_tab_edu():
                     if _val is not None or _series is not None:
                         _val_str = (f"{_val:.2f}" if isinstance(_val, (int, float))
                                     else "—")
+                        if _id == 'ms1.json' and isinstance(_val, (int, float)):
+                            _val_str = f"{_val_str}{_m1b_edu_badge}"
                         _z_str   = f"  Z={_z:+.2f}" if _z is not None else ""
                         _z_color = (MATERIAL_RED if _z is not None and abs(_z) >= 2 and
                                     ((_hib and _z > 0) or (_hib is False and _z < 0))
