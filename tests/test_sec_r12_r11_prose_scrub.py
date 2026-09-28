@@ -9,6 +9,9 @@
   畫面／紀錄用 Markdown 版（分工同前）。
 - **SEC-r11**：v1 `src/ui/tabs/tab_ai_chat.py::render`（側欄預設畫面）提問以原文上畫面、存進
   `ai_qa_history`、送 `run_agent`，下一題又隨 history 再送一次；AI 回答也沒洗。修法：比照 v2。
+- **批 Q 獨立 QA 追加（2026-09-28）**：(1) toml 0.10.2 重複表錯誤把已解析的整包 dict 串進訊息 → 散文版
+  仍從大括號起截掉（section 1b；有裝 `toml` 就用真的 `toml.loads`，沒有就用逐字錄下的字串）；
+  (2) 少遮邊界 (b) 補第二種例子；(3) v1 在第一題之後也斷言畫面（只在「本輪剛畫」外露的突變直接抓到）。
 
 測法：全部是**行為**測試（真的呼叫函式／真的跑渲染；v1 用 `AppTest`＋假 `run_agent`），
 每一個修法點都有**突變驗證**（拔掉 → 本檔對應那一組斷言轉紅）。
@@ -116,6 +119,41 @@ def _colon_first(x: str) -> bool:
     return m is not None and SSC._CONTENT_BEARING_EXC_REPR_RE.match(x, m.start()) is None
 
 
+_TOML_NAME = "TomlDecodeError"
+_TOML_EXISTS = "already exists?"
+_TOML_GAP_MAX = 512
+
+
+def _oracle_toml_cut(x: str) -> str:
+    """批 Q QA 加固（`_TOML_DUP_TABLE_DICT_RE`）的**獨立實作**：逐字元掃描，不借用產品 regex。
+
+    依序看每一個「`TomlDecodeError`＋空白／tab＋冒號」；冒號之後 0～512 字內（可跨行）最早出現的
+    「`already exists?`＋0～4 個空白字元＋左大括號」→ 從那個大括號起整段拿掉；這一個找不到就看下一個。
+    """
+    start = x.find(_TOML_NAME)
+    while start >= 0:
+        j = start + len(_TOML_NAME)
+        while j < len(x) and x[j] in " \t":
+            j += 1
+        if j < len(x) and x[j] == ":":
+            for gap in range(_TOML_GAP_MAX + 1):
+                k = j + 1 + gap
+                if k > len(x):
+                    break
+                if x.startswith(_TOML_EXISTS, k):
+                    m = k + len(_TOML_EXISTS)
+                    for n in range(5):
+                        if m + n < len(x) and x[m + n] == "{" and all(c.isspace() for c in x[m:m + n]):
+                            return x[:m + n]
+        start = x.find(_TOML_NAME, start + 1)
+    return x
+
+
+def _expected_prose(x: str) -> str:
+    """散文版的「應有輸出」：先套 toml 重複表加固（獨立實作），再把散文形的型別名當普通字交給 `scrub_secrets`。"""
+    return _unmap(scrub_secrets(_defuse(_oracle_toml_cut(x))))
+
+
 def _mutant(mod: types.ModuleType, *pairs: tuple[str, str]) -> types.ModuleType:
     """把 `mod` 原始碼裡每一組 `old` **恰好一處**換成 `new`，載成獨立的新模組（同本 repo 其他 `_mutant`）。"""
     src = pathlib.Path(mod.__file__).read_text(encoding="utf-8")
@@ -199,6 +237,145 @@ class TestProseScrubUnit:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 1b. 批 Q QA 加固：toml 0.10.2 重複表錯誤把已解析的整包 dict 串進訊息 → 散文版仍從大括號起截掉
+# ══════════════════════════════════════════════════════════════════
+#: 觸發重複表錯誤的 secrets.toml（值全是假的；`private_key` 裡的反斜線 n 在 TOML 是換行跳脫）。
+_TOML_DOC = (
+    'GEMINI_API_KEY = "AIzaSyTomlR12AbCdEfGhIjKlMnOpQrStUv"\n'
+    "[gcp_service_account]\n"
+    'type = "service_account"\n'
+    'project_id = "proj-r12-toml"\n'
+    'private_key_id = "pkidR12toml"\n'
+    'private_key = "-----BEGIN PRIVATE KEY-----\\nMIIEvR12toml\\n-----END PRIVATE KEY-----\\n"\n'
+    'client_email = "svc-r12@proj-r12-toml.iam.gserviceaccount.com"\n'
+    'client_id = "109876543210987654321"\n'
+    'my_api_pw = "hunter2customR12"\n'
+    "\n"
+    "[gcp_service_account]\n"
+    "x = 1\n")
+#: toml 0.10.2 對 `_TOML_DOC` 的 `str(e)`，逐字錄下（2026-09-28）—— 沒裝 toml 時用這一份
+#: （有裝時 `test_recorded_messages_match_real_toml` 逐字核對，錄的跟真的不一樣就紅）。
+_TOML_DUP_RECORDED = (
+    "What? gcp_service_account already exists?{'GEMINI_API_KEY': 'AIzaSyTomlR12AbCdEfGhIjKlMnOpQrStUv', "
+    "'gcp_service_account': {'type': 'service_account', 'project_id': 'proj-r12-toml', "
+    "'private_key_id': 'pkidR12toml', 'private_key': '-----BEGIN PRIVATE KEY-----\\nMIIEvR12toml\\n"
+    "-----END PRIVATE KEY-----\\n', 'client_email': 'svc-r12@proj-r12-toml.iam.gserviceaccount.com', "
+    "'client_id': '109876543210987654321', 'my_api_pw': 'hunter2customR12'}} (line 11 column 1 char 380)")
+#: dict 裡的值（`client_email`／`project_id`／`client_id`／自訂欄位 `my_api_pw` 不在秘密欄位清單上）。
+_TOML_LEAKS = ("proj-r12-toml", "svc-r12@", "109876543210987654321", "hunter2customR12", "pkidR12toml",
+               "MIIEvR12toml", "AIzaSyTomlR12")
+#: 其他種類的 toml 0.10.2 錯誤（不帶已解析內容）：(觸發文件, 逐字錄下的 `str(e)`)。
+_TOML_OTHER = {
+    "dup_keys": ("a = 1\na = 2\n", "Duplicate keys! (line 2 column 1 char 6)"),
+    "unbalanced": ('token = "abc\n', "Unbalanced quotes (line 1 column 13 char 12)"),
+    "bad_group": ("[a b]\nx = 1\n", "Invalid group name 'a b'. Try quoting it. (line 1 column 1 char 0)"),
+    "no_value": ("justakey\n", "Key name found without value. Reached end of line. (line 1 column 9 char 8)"),
+}
+#: 使用者會怎麼貼：traceback 最後一行、只貼型別名＋訊息、冒號前有空白、夾在問句／回答裡、整段 traceback。
+_TOML_WRAPS = (
+    "toml.decoder.TomlDecodeError: {}",
+    "TomlDecodeError : {}",
+    "為什麼出現 toml.decoder.TomlDecodeError: {}，怎麼解？",
+    "你看到的是 TomlDecodeError: {}。解法：刪掉重複的 [gcp_service_account] 表。",
+    "Traceback (most recent call last):\n  File \"app.py\", line 9, in <module>\ntoml.decoder.TomlDecodeError: {}",
+)
+_TOML_CUT_MUT = ('    out = _TOML_DUP_TABLE_DICT_RE.sub(r"\\1", out)\n', "")
+
+
+def _toml_message(doc: str, recorded: str) -> str:
+    """有裝 toml → 真的 `toml.loads(doc)` 拿 `str(e)`；沒裝 → 逐字錄下的那一份。"""
+    try:
+        import toml
+    except ImportError:
+        return recorded
+    try:
+        toml.loads(doc)
+    except toml.TomlDecodeError as e:
+        return str(e)
+    raise AssertionError("前提：這份 TOML 應該讓 toml.loads 拋錯")
+
+
+def _assert_toml_dup_dict_is_cut(fn) -> None:
+    """（被突變測試重用）重複表錯誤的每一種貼法：從大括號起全部拿掉（前面的問句、型別名、表名照留）。"""
+    msg = _toml_message(_TOML_DOC, _TOML_DUP_RECORDED)
+    assert "already exists?{" in msg, "前提：真的是重複表錯誤、而且串了 dict"
+    for wrap in _TOML_WRAPS:
+        for m in (msg, msg.replace("What? ", "What?\n", 1)):     # 第二種：終端機把長行折在表名前
+            x = wrap.format(m)
+            out = fn(x)
+            assert out == x[:x.index(_TOML_EXISTS) + len(_TOML_EXISTS)], (wrap[:30], out[-150:])
+            assert not [leak for leak in _TOML_LEAKS if leak in out], out[-150:]
+
+
+class TestTomlDuplicateTableHardening:
+    def test_recorded_messages_match_real_toml(self):
+        toml = pytest.importorskip("toml")
+        with pytest.raises(toml.TomlDecodeError) as ei:
+            toml.loads(_TOML_DOC)
+        assert str(ei.value) == _TOML_DUP_RECORDED
+        for name, (doc, recorded) in _TOML_OTHER.items():
+            with pytest.raises(toml.TomlDecodeError) as ei:
+                toml.loads(doc)
+            assert str(ei.value) == recorded, name
+
+    def test_premise_error_scrubber_cut_it_and_prose_without_the_hardening_leaks(self):
+        """修前實況（批 Q QA 重現）：錯誤字串那支（＝ `7020d13` v2 問答用的）整段截；散文版拿掉加固 → dict 的值外露。"""
+        x = f"toml.decoder.TomlDecodeError: {_toml_message(_TOML_DOC, _TOML_DUP_RECORDED)}"
+        assert scrub_secrets(x) == "toml.decoder.TomlDecodeError"
+        leaked = {leak for leak in _TOML_LEAKS if leak in _mutant(SSC, _TOML_CUT_MUT).scrub_prose_secrets(x)}
+        assert leaked >= {"proj-r12-toml", "svc-r12@", "109876543210987654321", "hunter2customR12"}, leaked
+
+    def test_the_whole_parsed_dict_is_cut_in_prose_and_markdown(self):
+        _assert_toml_dup_dict_is_cut(scrub_prose_secrets)
+        _assert_toml_dup_dict_is_cut(scrub_qa_text)
+
+    @pytest.mark.parametrize("name", sorted(_TOML_OTHER))
+    def test_other_toml_errors_quoted_in_prose_are_kept_whole(self, name):
+        """反例：其他 toml 錯誤（不帶已解析內容）照舊只走散文版 —— 一個字都不截。"""
+        msg = _toml_message(*_TOML_OTHER[name])
+        for x in (f"為什麼出現 TomlDecodeError: {msg}，怎麼解？", f"toml.decoder.TomlDecodeError: {msg}"):
+            assert scrub_prose_secrets(x) == x
+            assert scrub_secrets(x) != x, "前提：錯誤字串那支會截"
+
+    @pytest.mark.parametrize("x", [
+        "TomlDecodeError: What? g already exists? 這是什麼意思",           # 沒有大括號
+        "TomlDecodeError: What? g already exists? 我該刪掉 {重複的} 表嗎",  # 大括號前面不只空白
+        f"{_UDE}: What? g already exists?{{'g': 1}}",                     # 不是 TomlDecodeError
+    ])
+    def test_other_prose_is_not_affected(self, x):
+        assert scrub_prose_secrets(x) == x
+
+    @pytest.mark.parametrize("x", [
+        "What? g already exists?{'g': {'client_email': 'z@y'}}",                           # 沒帶型別名
+        "TomlDecodeError: What? g already\n exists?{'g': {'client_email': 'z@y'}}",        # 折行拆開了關鍵字
+        "TomlDecodeError: " + "x" * 513 + "already exists?{'g': {'client_email': 'z@y'}}",  # 超過 512 字
+        "TomlDecodeError: What? g already exists?     {'g': {'client_email': 'z@y'}}",     # 大括號前 5 個空白
+    ])
+    def test_documented_boundaries_are_not_cut(self, x):
+        """據實揭露：這幾種形狀 ⛔ 不截（見 `_TOML_DUP_TABLE_DICT_RE` 註解）；沒帶型別名那一種 `scrub_secrets` 也不截。"""
+        assert "{'g'" in scrub_prose_secrets(x)
+        assert scrub_prose_secrets(x) == _expected_prose(x)
+
+    def test_matches_the_independent_implementation(self):
+        """產品 regex 與 `_oracle_toml_cut`（逐字元掃描的獨立實作）在邊界與隨機組合上逐字相同。"""
+        rnd = random.Random(20260929)
+        atoms = [_TOML_NAME, ":", " ", "\t", "\n", _TOML_EXISTS, "{", "}", "What? g ", "x" * 97, "y", "'",
+                 "already exists", "?", _UDE, "(", "TomlDecode", "：", "　"]
+        cases = ["".join(rnd.choice(atoms) for _ in range(rnd.randint(1, 14))) for _ in range(5000)]
+        for gap in (0, 1, 511, 512, 513):
+            for ws in ("", " ", "\t\n", "    ", "     ", "　"):
+                cases.append(f"{_TOML_NAME}:{'z' * gap}{_TOML_EXISTS}{ws}{{'k': 'v'}} tail")
+                cases.append(f"{_TOML_NAME} \t:{'z' * gap}{_TOML_EXISTS}{ws}{{")
+        for x in cases:
+            assert SSC._TOML_DUP_TABLE_DICT_RE.sub(r"\1", x) == _oracle_toml_cut(x), repr(x[:120])
+
+    def test_the_rule_is_pinned(self):
+        r = SSC._TOML_DUP_TABLE_DICT_RE
+        assert r.pattern == r"(TomlDecodeError[ \t]*:.{0,512}?already exists\?\s{0,4})\{.*"
+        assert r.flags & re.DOTALL and SSC._TOML_DUP_GAP_MAX == _TOML_GAP_MAX
+
+
+# ══════════════════════════════════════════════════════════════════
 # 2. 引用的錯誤訊息裡夾金鑰／路徑／帳密：其餘規則照遮
 #    （`_LEAKY` 扣掉只靠散文形擋的 3 筆，其餘每一筆逐一嵌進三種散文形）
 # ══════════════════════════════════════════════════════════════════
@@ -220,7 +397,7 @@ def test_secrets_quoted_inside_the_colon_form_are_still_masked(case, wrap):
         assert g not in out, (case, out)
     for k in kept:
         assert k in out, (case, k, out)
-    assert scrub_prose_secrets(x) == _unmap(scrub_secrets(_defuse(x)))
+    assert scrub_prose_secrets(x) == _expected_prose(x)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -228,6 +405,8 @@ def test_secrets_quoted_inside_the_colon_form_are_still_masked(case, wrap):
 # ══════════════════════════════════════════════════════════════════
 _SWAP = ("(_CONTENT_BEARING_EXC_REPR_RE if _re is _CONTENT_BEARING_EXC_RE else _re).sub(_rep, out)",
          "_re.sub(_rep, out)")
+#: 批 Q QA 加固那一行（toml 重複表）—— 以同一段原始碼解析後的正規形式比對，不手寫跳脫。
+_TOML_CUT_STMT = ast.unparse(ast.parse('out = _TOML_DUP_TABLE_DICT_RE.sub(r"\\1", out)').body[0])
 
 
 def _stmts(fn) -> list[str]:
@@ -260,6 +439,9 @@ def _augmented() -> tuple[str, ...]:
             "UnicodeDecodeError: " + b, f"為什麼出現 UnicodeEncodeError : {b} 怎麼解？",
             b + " TomlDecodeError: x", b[:h] + "TomlDecodeError:" + b[h:],
             f"UnicodeTranslateError\t: a {b} UnicodeDecodeError('utf-8', b'password = \"zz\"')",
+            # toml 重複表形狀（批 Q QA 加固）：型別名之後夾著 b、跨行、大括號前有空白
+            f"TomlDecodeError: What? {b[:40]} already exists?{{'k': '{b}'}}",
+            f"{b} toml.decoder.TomlDecodeError: What? t already exists?\n {{'k': '{b}'}} 怎麼辦",
         })
     return tuple(sorted(x for x in out if not _has_sentinel(x)))
 
@@ -274,14 +456,19 @@ class TestExactScope:
         assert new.flags & re.DOTALL
         assert [r for r, _rep in SSC._RULES].count(old) == 1, "被替換的那一條要真的在規則表裡、而且只有一條"
 
-    def test_prose_pipeline_is_scrub_secrets_with_exactly_one_rule_swapped(self):
-        """AST：散文版的函式體 ＝ `scrub_secrets` 的函式體，只有第 1 圈迴圈裡那一個 regex 換掉。
+    def test_prose_pipeline_is_scrub_secrets_with_one_rule_swapped_plus_the_toml_cut(self):
+        """AST：散文版的函式體 ＝ `scrub_secrets` 的函式體，只有第 1 圈迴圈裡那一個 regex 換掉，
+        外加**恰好一行**批 Q QA 加固（toml 重複表），而且排在第 1 圈迴圈**之前**。
 
         日後 `scrub_secrets` 多加一個步驟（新迴圈／新呼叫）而散文版沒跟上 → 這裡紅（其他規則一條不少）。
         """
         old, new = _stmts(scrub_secrets), _stmts(scrub_prose_secrets)
-        assert sum(_SWAP[0] in s for s in new) == 1
-        assert [s.replace(*_SWAP) for s in new] == old
+        assert new.count(_TOML_CUT_STMT) == 1
+        loop = next(i for i, s in enumerate(new) if s.startswith("for _re, _rep in _RULES:"))
+        assert new.index(_TOML_CUT_STMT) < loop, "toml 加固要在第 1 類之前跑"
+        rest = [s for s in new if s != _TOML_CUT_STMT]
+        assert sum(_SWAP[0] in s for s in rest) == 1
+        assert [s.replace(*_SWAP) for s in rest] == old
 
     def test_identical_to_scrub_secrets_unless_the_first_hit_is_the_colon_form(self):
         rows = _fast_results()
@@ -292,25 +479,44 @@ class TestExactScope:
 
     def test_prose_equals_scrub_secrets_with_the_colon_form_defused(self):
         """蛻變關係：散文版 ＝ `scrub_secrets` 把散文形的型別名當成普通字 —— 少遮的就只有「那個型別名不再觸發截斷」。"""
-        bad = [x for x, p, s in _fast_results() if p != (s if _defuse(x) == x else _unmap(scrub_secrets(_defuse(x))))]
-        bad += [x for x in _augmented() if scrub_prose_secrets(x) != _unmap(scrub_secrets(_defuse(x)))]
+        bad = [x for x, p, s in _fast_results()
+               if p != (s if _defuse(x) == x and _oracle_toml_cut(x) == x else _expected_prose(x))]
+        bad += [x for x in _augmented() if scrub_prose_secrets(x) != _expected_prose(x)]
         assert not bad, [b[:100] for b in bad[:5]]
         assert sum(_colon_first(x) for x in _augmented()) > 2000
 
-    @pytest.mark.parametrize("case", sorted(_COLON_FIRST_LEAKY))
+    @pytest.mark.parametrize("case", sorted(_COLON_FIRST_LEAKY - {"toml_colon_form"}))
     def test_scope_a_the_colon_form_tail_is_left_to_the_other_rules(self, case):
-        """據實揭露 (a)：`_LEAKY` 裡只靠第 1 類散文形擋的三筆，後文沒有任何其他規則命中 → 散文版原樣留著。"""
+        """據實揭露 (a)：`_LEAKY` 裡只靠第 1 類散文形擋的筆數中，**不是** toml 重複表形狀的兩筆：
+        後文沒有任何其他規則命中 → 散文版原樣留著。"""
         raw, gone, _kept = _LEAKY[case]
         assert all(g not in scrub_secrets(raw) for g in gone), "錯誤字串那支照舊擋"
         assert scrub_prose_secrets(raw) == raw
 
-    def test_scope_b_text_glued_to_the_type_name(self):
-        """據實揭露 (b)：與型別名黏在一起、合計超過 256 字上限的權杖串，原本靠「字串在型別名處結束」才遮到。"""
-        tok = "a1" * 100
-        x = f"password: no {tok}{_UDE}:{'b2' * 40} end"
-        assert tok not in scrub_secrets(x)
-        assert tok in scrub_prose_secrets(x)
-        assert scrub_prose_secrets(x) == _unmap(scrub_secrets(_defuse(x)))
+    def test_scope_a_the_toml_duplicate_table_sample_is_cut_by_the_hardening(self):
+        """`_LEAKY["toml_colon_form"]` 正是 toml 重複表形狀 → 批 Q QA 加固從大括號起截掉（dict 裡的值不外露）。"""
+        raw, gone, _kept = _LEAKY["toml_colon_form"]
+        out = scrub_prose_secrets(raw)
+        assert out == "TomlDecodeError: What? g already exists?"
+        assert not [g for g in gone if g != "What?" and g in out]
+
+    @pytest.mark.parametrize("x,leak", [
+        # 與型別名黏在一起、合計超過 256 字上限的權杖串
+        (f"password: no {'a1' * 100}{_UDE}:{'b2' * 40} end", "a1" * 100),
+        # `no`／`not` 後面緊黏型別名的純字母（批 Q QA 補）
+        (f"password: no hunter{_UDE}: 'utf-8' codec can't decode", "hunter"),
+        (f"api_key: not hunter{_TOML_NAME}: x", "hunter"),
+    ])
+    def test_scope_b_text_glued_to_the_type_name(self, x, leak):
+        """據實揭露 (b)：原本靠「字串在型別名處結束」才遮到的前文，散文版不遮（兩種例子，docstring 同列）。"""
+        assert leak not in scrub_secrets(x)
+        assert leak in scrub_prose_secrets(x)
+        assert scrub_prose_secrets(x) == _expected_prose(x)
+
+    def test_scope_b_a_space_before_the_type_name_keeps_it_masked(self):
+        """反例：否定片語與型別名之間有空白 → 兩支都遮到 `no hunter`（(b) 只限緊黏）。"""
+        x = f"password: no hunter {_UDE}: x"
+        assert "hunter" not in scrub_secrets(x) and "hunter" not in scrub_prose_secrets(x)
 
     def test_scope_streamlit_parse_message_is_still_cut(self):
         """第 1 類的另一條（Streamlit 解析錯誤）散文版**照舊截斷**（沒有散文形可放；本批不放寬）。"""
@@ -327,7 +533,8 @@ def test_full_ui_and_secret_corpus_identical_or_defused_equal():
     bad = []
     for x in sorted(x for x in (_ui_corpus() | _secret_corpus()) if not _has_sentinel(x)):
         p, s = scrub_prose_secrets(x), scrub_secrets(x)
-        if (not _colon_first(x) and p != s) or p != (s if _defuse(x) == x else _unmap(scrub_secrets(_defuse(x)))):
+        if (not _colon_first(x) and p != s) or p != (
+                s if _defuse(x) == x and _oracle_toml_cut(x) == x else _expected_prose(x)):
             bad.append(x)
     assert not bad, [b[:100] for b in bad[:5]]
 
@@ -437,6 +644,20 @@ class TestV2PageWhy:
         assert [c["question"] for c in calls] == [_CLEAN_Q]
         assert _v2_user_history(PW, fake) == [_CLEAN_Q] and _CLEAN_Q in fake.drawn
 
+    def test_pasted_toml_duplicate_table_error_is_cut_in_all_three_places(self, monkeypatch):
+        """批 Q QA 加固：貼 toml 重複表錯誤發問 → 送出／畫面／紀錄都截在大括號前，dict 裡的值一個都不外露。"""
+        from src.ui.views import page_why as PW
+
+        x = f"為什麼出現 toml.decoder.TomlDecodeError: {_toml_message(_TOML_DOC, _TOML_DUP_RECORDED)}，怎麼解？"
+        head = x[:x.index(_TOML_EXISTS) + len(_TOML_EXISTS)]
+        calls = _capture_agent(monkeypatch)
+        fake = _FakeChatST(typed=x)
+        _render_qa_on(PW, monkeypatch, fake)
+        assert [c["question"] for c in calls] == [head]
+        assert head in fake.drawn and _v2_user_history(PW, fake) == [head]
+        blob = "\n".join([*fake.drawn, calls[0]["question"], *_v2_user_history(PW, fake)])
+        assert not [leak for leak in _TOML_LEAKS if leak in blob]
+
 
 # ══════════════════════════════════════════════════════════════════
 # 6. v1 `tab_ai_chat.render`：AppTest ＋ 假 `run_agent`
@@ -517,25 +738,32 @@ def _screen(at) -> list[str]:
 
 
 def _v1_secret_flow(monkeypatch, tmp_path, mod: str | None = None):
-    """問一題含秘密的、AI 回一則含秘密的，再問第二題 → (第一輪紀錄, 全部送出, 最後的畫面, 最後的紀錄)。"""
+    """問一題含秘密的、AI 回一則含秘密的，再問第二題
+    → (第一輪紀錄, 第一題之後的畫面, 全部送出, 最後的畫面, 最後的紀錄)。"""
     at = _v1_app(monkeypatch, tmp_path, answer=_V1_A, mod=mod)
     assert _calls(at) == [], "還沒問 → 一次都不送（「這一輪有沒有問」以原文判斷）"
     _ask(at, _V1_Q)
-    first = _history(at)
+    first, screen1 = _history(at), _screen(at)
     _ask(at, "第二題：那 2330 呢？")
-    return first, _calls(at), _screen(at), _history(at)
+    return first, screen1, _calls(at), _screen(at), _history(at)
 
 
-def _assert_v1_all_scrubbed(first, calls, screen, history) -> None:
-    """（被突變測試重用）送出的提問、畫面、紀錄、下一題隨 history 再送的內容：一個秘密都不外露。"""
+def _assert_v1_all_scrubbed(first, screen1, calls, screen, history) -> None:
+    """（被突變測試重用）送出的提問、兩輪的畫面、紀錄、下一題隨 history 再送的內容：一個秘密都不外露。
+
+    ⚠️ 第一題之後的畫面要**單獨**看（批 Q QA）：那一輪的提問與回答是「本輪剛畫」的，第二輪起畫面上的
+    是從紀錄重播的 —— 只看最後的畫面，「本輪剛畫時用原文、紀錄照洗」這種外露會漏掉。
+    """
     assert len(calls) == 2
     sent = calls[0]["question"]
     assert sent == scrub_prose_secrets(_V1_Q) and MASK in sent and "\\*" not in sent, "送出：純文字版散文清洗"
     assert first[0] == {"role": "user", "content": scrub_qa_text(_V1_Q)}, "紀錄：Markdown 版散文清洗"
     assert first[1] == {"role": "assistant", "content": _V1_HEAD + scrub_qa_text(_V1_A)}, "紀錄：回答也洗"
     assert calls[1]["history"] == first, "下一題隨 history 送出的就是洗過的紀錄"
-    assert first[0]["content"] in screen and first[1]["content"] in screen, "畫面（含下一輪重播）"
-    blob = json.dumps({"calls": calls, "screen": screen, "history": history}, ensure_ascii=False)
+    assert first[0]["content"] in screen1 and first[1]["content"] in screen1, "第一題之後的畫面（本輪剛畫）"
+    assert first[0]["content"] in screen and first[1]["content"] in screen, "第二題之後的畫面（重播）"
+    blob = json.dumps({"calls": calls, "screen1": screen1, "screen": screen, "history": history},
+                      ensure_ascii=False)
     for leak in _V1_LEAKS:
         assert leak not in blob, f"秘密 {leak!r} 外露"
 
@@ -570,6 +798,17 @@ class TestV1AiChat:
         calls = _calls(at)
         assert [(c["question"], c["history"], c["kw"]) for c in calls] == [("6239 評分?", [], ["api_key"])]
 
+    def test_pasted_toml_duplicate_table_error_is_cut(self, monkeypatch, tmp_path):
+        """批 Q QA 加固（v1 端）：貼 toml 重複表錯誤發問 → 送出／畫面／紀錄都截在大括號前。"""
+        x = f"為什麼出現 toml.decoder.TomlDecodeError: {_toml_message(_TOML_DOC, _TOML_DUP_RECORDED)}，怎麼解？"
+        head = x[:x.index(_TOML_EXISTS) + len(_TOML_EXISTS)]
+        at = _v1_app(monkeypatch, tmp_path, answer="請刪掉重複的表。")
+        _ask(at, x)
+        assert [c["question"] for c in _calls(at)] == [head]
+        assert _history(at)[0]["content"] == head and head in _screen(at)
+        blob = json.dumps({"calls": _calls(at), "screen": _screen(at), "history": _history(at)}, ensure_ascii=False)
+        assert not [leak for leak in _TOML_LEAKS if leak in blob]
+
 
 # ══════════════════════════════════════════════════════════════════
 # 7. 突變驗證：拔掉每一個修法點 → 上面對應那一組斷言轉紅
@@ -577,6 +816,7 @@ class TestV1AiChat:
 _L0_SWAP_MUT = ("(_CONTENT_BEARING_EXC_REPR_RE if _re is _CONTENT_BEARING_EXC_RE else _re)", "_re")
 _MD_MUT = ("    _out = scrub_prose_secrets(_raw)\n", "    _out = scrub_secrets(_raw)\n")
 _V2_SEND_MUT = ("question=scrub_prose_secrets(_question)", "question=scrub_secrets(_question)")
+_V2_SEND_RAW_MUT = ("question=scrub_prose_secrets(_question)", "question=_question")
 _V2_SHOW_MUT = ("from shared.secret_md import scrub_qa_text\n",
                 "from shared.secret_md import scrub_md_mask as scrub_qa_text\n")
 _V1_MUTANTS = {
@@ -590,6 +830,11 @@ _V1_MUTANTS = {
     "shown_raw": ("    _shown_q = scrub_qa_text(q)\n", "    _shown_q = q\n"),
     # AI 回答不洗
     "answer_raw": ('_text = scrub_qa_text((res.text or "").strip())', '_text = (res.text or "").strip()'),
+    # 只有「本輪剛畫」的那一次用原文、紀錄照洗（批 Q QA 突變 ML／MP 一類：修前各只被 1 條測試附帶抓到）
+    "screen_only_raw_q": ("        st.markdown(_shown_q)\n", "        st.markdown(q)\n"),
+    "screen_only_raw_a": ("        st.markdown(body)\n",
+                          '        st.markdown(f"### 🧬 AI 解讀｜使用模型:{res.model}\\n\\n{res.text}" '
+                          "if res.ok else body)\n"),
 }
 
 
@@ -624,11 +869,24 @@ class TestMutants:
         with pytest.raises(AssertionError, match="畫面"):
             _assert_v2_question_kept(_mutant(PW, _V2_SHOW_MUT), monkeypatch)
 
-    def test_c_v1_dropping_the_send_scrub_leaks_the_key(self, monkeypatch, tmp_path):
-        first, calls, screen, history = _v1_secret_flow(monkeypatch, tmp_path, _v1_mutant(monkeypatch, "send_raw"))
-        assert _V1_KEY in calls[0]["question"], "突變版應把原文送出"
+    def test_c_v2_sending_the_raw_question_is_caught(self, monkeypatch):
+        """「送原文」的退回（S2-f3 之前的狀態）→ 送出那一條轉紅。"""
+        from src.ui.views import page_why as PW
+
+        with pytest.raises(AssertionError, match="送出"):
+            _assert_v2_question_kept(_mutant(PW, _V2_SEND_RAW_MUT), monkeypatch)
+
+    def test_c_l0_dropping_the_toml_cut_leaks_the_parsed_dict(self):
+        """批 Q QA 加固拿掉 → 重複表錯誤的 dict 值外露，`_assert_toml_dup_dict_is_cut` 轉紅。"""
+        m = _mutant(SSC, _TOML_CUT_MUT)
         with pytest.raises(AssertionError):
-            _assert_v1_all_scrubbed(first, calls, screen, history)
+            _assert_toml_dup_dict_is_cut(m.scrub_prose_secrets)
+
+    def test_c_v1_dropping_the_send_scrub_leaks_the_key(self, monkeypatch, tmp_path):
+        flow = _v1_secret_flow(monkeypatch, tmp_path, _v1_mutant(monkeypatch, "send_raw"))
+        assert _V1_KEY in flow[2][0]["question"], "突變版應把原文送出"
+        with pytest.raises(AssertionError):
+            _assert_v1_all_scrubbed(*flow)
 
     def test_c_v1_sending_with_the_error_scrubber_cuts_the_question(self, monkeypatch, tmp_path):
         at = _v1_app(monkeypatch, tmp_path, answer="偏強。", mod=_v1_mutant(monkeypatch, "send_error_scrubber"))
@@ -637,12 +895,21 @@ class TestMutants:
 
     @pytest.mark.parametrize("key,where", [("shown_raw", _V1_KEY), ("answer_raw", _V1_TOKEN)])
     def test_c_v1_dropping_the_screen_or_answer_scrub_leaks(self, monkeypatch, tmp_path, key, where):
-        first, calls, screen, history = _v1_secret_flow(monkeypatch, tmp_path, _v1_mutant(monkeypatch, key))
+        first, screen1, calls, screen, history = _v1_secret_flow(monkeypatch, tmp_path, _v1_mutant(monkeypatch, key))
         assert where in json.dumps(first, ensure_ascii=False), "突變版應把秘密寫進紀錄"
         assert any(where in s for s in screen), "突變版應把秘密畫上畫面"
         assert where in json.dumps(calls[1]["history"], ensure_ascii=False), "下一題隨 history 再送一次"
         with pytest.raises(AssertionError):
-            _assert_v1_all_scrubbed(first, calls, screen, history)
+            _assert_v1_all_scrubbed(first, screen1, calls, screen, history)
+
+    @pytest.mark.parametrize("key,where", [("screen_only_raw_q", _V1_KEY), ("screen_only_raw_a", _V1_TOKEN)])
+    def test_c_v1_raw_text_only_on_the_first_turns_screen_is_caught(self, monkeypatch, tmp_path, key, where):
+        """批 Q QA：只在「本輪剛畫」時用原文、紀錄照洗 → 靠「第一題之後的畫面」那一條直接抓到。"""
+        first, screen1, calls, screen, history = _v1_secret_flow(monkeypatch, tmp_path, _v1_mutant(monkeypatch, key))
+        assert any(where in s for s in screen1), "突變版在第一題那一輪把原文畫上畫面"
+        assert where not in json.dumps(first, ensure_ascii=False), "紀錄照洗（只有那一輪的畫面外露）"
+        with pytest.raises(AssertionError, match="第一題之後的畫面"):
+            _assert_v1_all_scrubbed(first, screen1, calls, screen, history)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -664,8 +931,11 @@ _PROSE_REDOS_SCRIPT = (
     "print(json.dumps(out))\n")
 _COLON_HEADS = ("UnicodeDecodeError: ", "TomlDecodeError: ", "UnicodeEncodeError\t: ", "UnicodeTranslateError :")
 #: 只衝第 1 類散文版那條 regex 本身：大量型別名、型別名後大量空白卻沒有括號／冒號。
+#: 後半是批 Q QA 加固（toml 重複表）那條：大量起點、每個起點都得往後看滿 512 字才放棄、關鍵字後面接一長串空白。
 _RULE1_UNITS = ("UnicodeDecodeError: ", "UnicodeDecodeError ", "TomlDecodeError\t", "UnicodeDecodeError(",
-                "UnicodeDecodeError" + " " * 50, "TomlDecodeError:a", "Error parsing secrets file ")
+                "UnicodeDecodeError" + " " * 50, "TomlDecodeError:a", "Error parsing secrets file ",
+                "TomlDecodeError: ", "TomlDecodeError:\n", "TomlDecodeError:already exists?     ",
+                "already exists?{", "TomlDecodeError \t:" + "x" * 600, "TomlDecodeError:" + " " * 520)
 _N = 50_000
 
 

@@ -34,7 +34,7 @@ import sys
 import pytest
 
 from shared import secret_scrub as SSC
-from shared.secret_scrub import MASK, scrub_secrets
+from shared.secret_scrub import MASK, scrub_prose_secrets, scrub_secrets
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -693,7 +693,10 @@ def test_f3_question_sent_to_l3_is_scrubbed(monkeypatch):
     for leak in (_Q_KEY, _Q_PW, f"password={_Q_PW}", _Q_USER, f"/home/{_Q_USER}"):
         assert leak not in sent, (leak, sent)
     #: 純文字版（⛔ 不是 Markdown 跳脫版）：遮罩是 `***`，不是 `\*\*\*`。
-    assert sent == scrub_secrets(_Q) and MASK in sent and "\\*" not in sent
+    #: ~~`sent == scrub_secrets(_Q)`~~ → SEC-r12（2026-09-28）起送出走**散文版**，改和 `scrub_prose_secrets` 比對
+    #: （批 Q QA 意見；有意識的修改，不是漏改）。本樣本不含散文形，兩支結果本來就相同 —— 改的是規格的寫法；
+    #: 「送原文」的退回仍由上面的外露斷言與這一行一起擋（`page_why` 改回 `question=_question` → 本條轉紅）。
+    assert sent == scrub_prose_secrets(_Q) and MASK in sent and "\\*" not in sent
 
 
 def test_f3_clean_question_sent_byte_identical(monkeypatch):
