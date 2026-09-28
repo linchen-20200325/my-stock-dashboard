@@ -134,7 +134,8 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     # ── 2026-08-19：本條腿已停用（`M1B_M2_LEG_ENABLED = False`）────────────
     # 停用理由與復活條件全寫在 `shared/signal_thresholds.M1B_M2_LEG_ENABLED`
     # 的 docstring（AUC 0.5366、lift 1.019 vs 0.984、方向與設計假設相反，
-    # 且來源資料量綱本身就是壞的）。**計分邏輯刻意保留**，同
+    # ~~且來源資料量綱本身就是壞的~~（2026-09-28 事實更正 DL-f1-s33，⛔ 非漏刪：`finmind_m1m2.parquet` 已由排程 `2aed087` 整檔重建，此句不再成立；
+    #    前述 AUC／lift 為重建前資料所量、待 DL-f1-s8 重跑；下方 chip「來源量綱異常」另案 DL-f1-s23））。**計分邏輯刻意保留**，同
     # `HEALTH_FNET_BONUS = 0` 的處置 —— 刪掉會讓「評估過、結論是無預測力」
     # 這件事從程式碼裡消失。開關在 L0，離線校準與線上畫面**同一個開關**，
     # 不會再出現「校準與線上是兩套系統」（本次修正的問題之一）。
