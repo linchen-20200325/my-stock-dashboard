@@ -1070,8 +1070,9 @@ def _load_rs(factors: Sequence[str]) -> tuple[list | None, str]:
 
     ⚠️ 批次 5（2026-09-26）：L3 回**空排行**也算失敗（回 `None` ＋ L3 自己的 note 原文）。
     `beat_only=False` 時每一檔**量測成功**的都會進排行（分級含「落後大盤」），所以空排行
-    只會來自：大盤 ^TWII 抓不到、存活池為空、或一檔都沒量測成功（L3 `_scan_cached` ／
-    `_empty_scan_note` 的四條路，逐條對過）—— 沒有一條是「掃了、真的沒有」。
+    只會來自：大盤 ^TWII 抓不到、存活池為空、或一檔都沒量測成功（L3 `_scan_body` ／
+    `_empty_scan_note` 的四條路，逐條對過；`_scan_body` 即 D2-f7 前的 `_scan_cached`，
+    2026-09-28 改名）—— 沒有一條是「掃了、真的沒有」。
     """
     if "rs_leader" not in factors:
         return None, ""

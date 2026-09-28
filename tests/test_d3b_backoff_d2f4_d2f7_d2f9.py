@@ -13,6 +13,11 @@
     改拋 `_PoolPricesFetchFailed`（`_UpstreamFetchFailed` 子類別，不入快取），外層 `_scan_cached`
     接住並記**掃描層退避**（一次掃描要打數百檔上游，不能每次 rerun 都重掃）。其餘結果（含混合／
     太短／大盤凍結／存活池為空／beat_only 後 0 檔等空排行）照舊快取。
+    **批 D3b QA N1（同日）**：固定 180 秒冷卻在「Yahoo＋FinMind 持續全失敗、每 60 秒 rerun」下
+    1 小時會重掃 21 次（修前 1 次）→ 掃描層改**遞增退避**：`shared.fail_cooldown.FailCooldown`
+    新增選用參數 `max_seconds`（**預設 None ＝ 關閉，行為逐字不變**，`TestFailCooldownDefaultUnchanged`
+    以新增前的原始實作當參考模型逐步比對），RS 掃描層開啟：`FAIL_COOLDOWN_SEC` 起每次失敗加倍、
+    上限 `TTL_1HOUR`、成功即歸零。負載測試見 `TestQaN1LoadAmplification`。
   · **D2-f9** `run_rs_leader_scan(refresh=True)`：刪掉兩行空操作 `_clear(fetch_yf_close)`、
     `_clear(fetch_stock_history_1y)`（兩者都沒有 `.clear`），docstring 改成實情；零行為變更
     （`TestD2f9RefreshUnchanged` 以「修前那兩行放回去」的對照模組逐項比對）。
@@ -28,6 +33,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import pathlib
+import random
 import sys
 import threading
 import time
@@ -51,6 +57,7 @@ from shared.rs_screen_thresholds import (
     RS_MIN_ALIGNED_ROWS,
     RS_SCAN_MAX,
 )
+from shared.ttls import TTL_1HOUR
 from src.compute.screener.rs_leader_screener import (
     market_interval_return,
     rank_rs_leaders,
@@ -92,9 +99,9 @@ _FAIL_NOTE = "⚠️ 大盤 ^TWII 抓取失敗（Yahoo 暫時不可用），無�
 def fc_clock(monkeypatch):
     """可手動推進的假 monotonic 時鐘 —— **只**換 `shared.fail_cooldown` 模組裡的 `time`。
 
-    起點取真實 monotonic（萬一某個退避表沒清乾淨，殘留的時點也不會離真實時間太遠）；
-    所有用到的退避表都在各夾具收尾時清掉。"""
-    t = {"now": time.monotonic()}
+    起點取真實 monotonic 的**整數秒**（萬一某個退避表沒清乾淨，殘留的時點也不會離真實時間太遠；
+    取整數是為了讓「剛好滿冷卻期」的邊界比較不受浮點捨入影響）；所有用到的退避表都在各夾具收尾時清掉。"""
+    t = {"now": float(int(time.monotonic()))}
     monkeypatch.setattr(FC, "time", types.SimpleNamespace(monotonic=lambda: t["now"]))
     return t
 
@@ -405,15 +412,19 @@ class TestD2f7AllPricesMissingNotCached:
         assert RS.run_rs_leader_scan(lookback=_LB) == (rows2, meta2)
         assert calls == {"market": 2, "pool": 2, "price": 6}, "恢復後的成功照舊入快取"
 
-    def test_persistent_failure_rescans_once_per_cooldown(self, rs, fc_clock):
-        """持續失敗：每個冷卻期重掃 1 次 —— 證明不在 1 小時快取裡（在的話推過冷卻期也不會重掃）。"""
+    def test_persistent_failure_rescans_with_doubling_cooldown(self, rs, fc_clock):
+        """持續失敗：每個冷卻期期滿重掃 1 次（證明不在 1 小時快取裡），且冷卻每次加倍到 1 小時封頂
+        （QA N1；原「固定 180 秒」版本的斷言因規格改為遞增退避而改寫）。"""
         plan, calls = rs
-        for i in range(1, 4):
-            for _ in range(3):
-                rows, meta = RS.run_rs_leader_scan(lookback=_LB)
-                assert rows == [] and meta["note"] == _d3d_note(3)
-            assert calls == {"market": i, "pool": i, "price": 3 * i}
-            fc_clock["now"] += FAIL_COOLDOWN_SEC
+        for i in range(1, 8):
+            window = min(FAIL_COOLDOWN_SEC * 2 ** (i - 1), TTL_1HOUR)
+            rows, meta = RS.run_rs_leader_scan(lookback=_LB)
+            assert rows == [] and meta["note"] == _d3d_note(3)
+            assert calls == {"market": i, "pool": i, "price": 3 * i}, f"第 {i} 次失敗才重掃第 {i} 次"
+            fc_clock["now"] += window - 1
+            RS.run_rs_leader_scan(lookback=_LB)
+            assert calls["pool"] == i, f"第 {i} 次失敗後的冷卻（{window:.0f} 秒）期內不重掃"
+            fc_clock["now"] += 1
 
     @pytest.mark.parametrize("kwargs", [
         {"beat_only": False, "top_n": RS_SCAN_MAX},                   # app.py／page_find／get_ranked_picks
@@ -569,7 +580,7 @@ _REFRESH_PREFIX = ("    if refresh:\n        _clear(fetch_yf_close)\n"
 
 
 class TestD2f9RefreshUnchanged:
-    """D2-f9（死碼登記 `DEAD_CODE.md` D-015）。既有 `tests/test_d3_backoff_d2f1_d2f2.py` 的
+    """D2-f9（死碼登記見交接本〔開發線〕的 `DEAD_CODE.md` D-015；main 上沒有該檔）。既有 `tests/test_d3_backoff_d2f1_d2f2.py` 的
     `[refresh]` 參數化案例（refresh=True、大盤失敗路徑）在刪行前後都通過 —— 它的 `_install_world`
     也把兩支 L1 換成沒有 `.clear` 的純函式，那兩行在該測試裡同樣是空操作，斷言不依賴它們。"""
 
@@ -634,6 +645,369 @@ class TestD2f9RefreshUnchanged:
         RS._scan_cached.clear()
         RS.run_rs_leader_scan(lookback=_LB)
         assert calls["pool"] == 4, "_scan_cached.clear() 清掉成功快取"
+
+
+# ══════════════════════════════════════════════════════════════════
+# QA N1 ① `FailCooldown(max_seconds=None)`（預設）與新增前**逐字相同** —— 以原始實作當參考模型逐步比對
+# ══════════════════════════════════════════════════════════════════
+#: 新增 `max_seconds` 之前的 `shared/fail_cooldown.py`（origin/main `3f001cd`）實作，逐字抄錄（含註解）當參考模型。
+_FC_BEFORE_SRC = '''
+import copy
+import threading
+import time
+
+#: 失敗後冷卻秒數（見檔頭）。
+FAIL_COOLDOWN_SEC: float = 180.0
+
+#: 失敗紀錄的鍵數上限（長時間斷線時不無限成長；`_combined_inst_fail_cooldown` 每鍵存一整張 df）。
+#: 取 64 ＝ 原 `StockDataLoader.get_combined_data` 快取的 `max_entries`。超過時逐出最舊的紀錄。
+FAIL_COOLDOWN_MAX_ENTRIES: int = 64
+
+#: 成功世代計數表的鍵數上限（每鍵只存一個 int；超過時逐出最早插入者）。
+_GEN_MAX_ENTRIES: int = 4096
+
+_NO_HIT = object()
+
+
+class FailCooldown:
+    """每個鍵：最近一次失敗的時點與回傳值；成功世代計數防競態。
+
+    競態：A 抓取失敗、B 同時成功並清掉紀錄,之後 A 才寫入失敗 → 下一位在 B 的成功
+    已快取的情況下拿到假失敗。A 抓之前記下世代（`begin`）,寫失敗時世代已變就不寫。
+    """
+
+    def __init__(self, seconds: float = FAIL_COOLDOWN_SEC,
+                 max_entries: int = FAIL_COOLDOWN_MAX_ENTRIES):
+        self.seconds = float(seconds)
+        self.max_entries = int(max_entries)
+        self._fail: dict = {}
+        self._gen: dict = {}
+        self._lock = threading.Lock()
+
+    def _prune_locked(self, now: float) -> None:
+        """（持鎖呼叫）清掉已過冷卻期的紀錄；仍超過上限則逐出最舊者。"""
+        for k in [k for k, v in self._fail.items() if now - v[0] >= self.seconds]:
+            del self._fail[k]
+        while len(self._fail) > self.max_entries:
+            oldest = min(self._fail, key=lambda k: self._fail[k][0])
+            del self._fail[oldest]
+        while len(self._gen) > _GEN_MAX_ENTRIES:
+            del self._gen[next(iter(self._gen))]
+
+    def begin(self, key):
+        """回 (冷卻中的失敗結果或 `NO_HIT`, 世代)。"""
+        now = time.monotonic()
+        with self._lock:
+            self._prune_locked(now)
+            prev = self._fail.get(key)
+            gen = self._gen.get(key, 0)
+        if prev is not None and now - prev[0] < self.seconds:
+            return copy.deepcopy(prev[1]), gen
+        return _NO_HIT, gen
+
+    def fail(self, key, gen, payload):
+        """記下失敗（期間沒有人成功過才記）；回傳 payload 的複本給呼叫端。"""
+        with self._lock:
+            if self._gen.get(key, 0) == gen:
+                _now = time.monotonic()
+                self._fail[key] = (_now, copy.deepcopy(payload))
+                self._prune_locked(_now)
+        return payload
+
+    def success(self, key):
+        with self._lock:
+            self._gen[key] = self._gen.get(key, 0) + 1
+            self._fail.pop(key, None)
+            self._prune_locked(time.monotonic())
+
+    def clear(self):
+        with self._lock:
+            self._fail.clear()
+            self._gen.clear()
+
+    def __len__(self):
+        with self._lock:
+            return len(self._fail)
+
+    def __contains__(self, key):
+        with self._lock:
+            return key in self._fail
+'''
+
+
+def _fc_pair(monkeypatch, **kwargs):
+    """(新實作, 新增前的參考實作, 參考實作的 NO_HIT, 共用假時鐘)。兩邊吃同一個 monotonic。"""
+    clock = {"now": 10_000.0}
+    fake = types.SimpleNamespace(monotonic=lambda: clock["now"])
+    monkeypatch.setattr(FC, "time", fake)
+    ns: dict = {"__name__": "_fail_cooldown_before_max_seconds"}
+    exec(compile(_FC_BEFORE_SRC, "<shared/fail_cooldown.py@3f001cd>", "exec"), ns)
+    ns["time"] = fake
+    return FC.FailCooldown(**kwargs), ns["FailCooldown"](**kwargs), ns["_NO_HIT"], clock
+
+
+class TestFailCooldownDefaultUnchanged:
+    @pytest.mark.parametrize("seed", range(6))
+    @pytest.mark.parametrize("kwargs", [{}, {"seconds": 30.0, "max_entries": 3}], ids=["defaults", "small"])
+    def test_random_ops_match_pre_change_model(self, monkeypatch, kwargs, seed):
+        """隨機操作序列（固定 seed）：begin／fail（含舊世代＝晚到的並行失敗）／success／clear／
+        推時鐘／把 seconds 設 0 再改回（既有測試手法）。每一步的回傳與內部狀態都必須與參考模型相同。"""
+        new, old, old_no_hit, clock = _fc_pair(monkeypatch, **kwargs)
+        rng = random.Random(seed)
+        keys = ["a", "b", ("2330.TW", "1y"), ("2330.TW", "5d"), 7, (60, RS_SCAN_MAX, False, RS_SCAN_MAX)]
+        gens: dict = {}
+        for step in range(600):
+            op = rng.choices(["tick", "begin", "fail", "success", "clear", "seconds"],
+                             weights=[5, 6, 5, 2, 0.3, 0.6])[0]
+            k = rng.choice(keys)
+            if op == "tick":
+                clock["now"] += rng.choice([0, 1, 29, 30, 31, 90, 179, 180, 181, 400, 3600])
+            elif op == "begin":
+                (hn, gn), (ho, go) = new.begin(k), old.begin(k)
+                assert gn == go and (hn is FC.NO_HIT) == (ho is old_no_hit)
+                if hn is not FC.NO_HIT:
+                    assert hn == ho
+                gens.setdefault(k, []).append(gn)
+            elif op == "fail":
+                g = rng.choice(gens.get(k) or [0])
+                payload = {"k": repr(k), "step": step, "rows": [step]}
+                assert new.fail(k, g, dict(payload)) == old.fail(k, g, dict(payload))
+            elif op == "success":
+                new.success(k)
+                old.success(k)
+            elif op == "clear":
+                new.clear()
+                old.clear()
+            else:
+                new.seconds = old.seconds = rng.choice([0.0, float(kwargs.get("seconds", FAIL_COOLDOWN_SEC))])
+            assert len(new) == len(old)
+            assert new._fail == old._fail and new._gen == old._gen, f"第 {step} 步（{op}）內部狀態分岔"
+            assert all((kk in new) == (kk in old) for kk in keys)
+            assert new._streak == {}, "預設關閉：遞增退避的狀態永不寫入"
+
+    def test_generation_table_eviction_matches(self, monkeypatch):
+        new, old, _no_hit, _clock = _fc_pair(monkeypatch)
+        for i in range(FC._GEN_MAX_ENTRIES + 50):
+            new.success(i)
+            old.success(i)
+        assert new._gen == old._gen and len(new._gen) == FC._GEN_MAX_ENTRIES
+
+    def test_signature_backward_compatible_and_existing_users_do_not_opt_in(self):
+        import inspect
+
+        import src.data.etf.etf_fetch as F
+        import src.data.stock.app_stock_fetchers as A
+        params = inspect.signature(FC.FailCooldown).parameters
+        assert list(params) == ["seconds", "max_entries", "max_seconds"], "既有的位置參數順序不變"
+        assert params["max_seconds"].default is None
+        for name, inst in {"yf_proxy._dividends_fail_cooldown": YP._dividends_fail_cooldown,
+                           "yf_proxy._history_fail_cooldown": YP._history_fail_cooldown,
+                           "etf_fetch._price_fail_cooldown": F._price_fail_cooldown,
+                           "data_loader._combined_inst_fail_cooldown": DL._combined_inst_fail_cooldown,
+                           "app_stock_fetchers._dividend_fail_cooldown": A._dividend_fail_cooldown}.items():
+            assert inst.max_seconds is None and inst.seconds == FAIL_COOLDOWN_SEC, f"{name} 不得開遞增退避"
+        assert RS._scan_fail_cooldown.max_seconds == TTL_1HOUR, "只有 RS 掃描層開（上限＝成功快取 TTL）"
+        assert RS._scan_fail_cooldown.seconds == FAIL_COOLDOWN_SEC
+
+
+# ══════════════════════════════════════════════════════════════════
+# QA N1 ② `FailCooldown(max_seconds=...)` 遞增退避本身
+# ══════════════════════════════════════════════════════════════════
+def _fail_once(c, key, payload="x"):
+    _hit, g = c.begin(key)
+    assert _hit is FC.NO_HIT, "前提：此刻不在冷卻期"
+    c.fail(key, g, payload)
+
+
+class TestFailCooldownEscalation:
+    def test_doubles_from_base_up_to_cap(self, fc_clock):
+        c = FC.FailCooldown(max_seconds=TTL_1HOUR)
+        windows = [min(FAIL_COOLDOWN_SEC * 2 ** i, TTL_1HOUR) for i in range(9)]
+        assert windows[:6] == [180, 360, 720, 1440, 2880, 3600], "以現行常數即 QA 給的序列"
+        for w in windows:
+            _fail_once(c, "k", {"w": w})
+            fc_clock["now"] += w - 1
+            assert c.begin("k")[0] == {"w": w}, f"冷卻 {w:.0f} 秒：期滿前 1 秒仍在冷卻"
+            fc_clock["now"] += 1
+            assert c.begin("k")[0] is FC.NO_HIT, f"冷卻 {w:.0f} 秒：期滿即過期"
+        assert c._streak["k"] == 6, "封頂後不再累加（不會無限成長）"
+
+    def test_success_resets_to_base(self, fc_clock):
+        c = FC.FailCooldown(max_seconds=TTL_1HOUR)
+        _fail_once(c, "k")
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        _fail_once(c, "k")                                    # 第 2 次：冷卻 2×
+        c.success("k")
+        _fail_once(c, "k")
+        fc_clock["now"] += FAIL_COOLDOWN_SEC - 1
+        assert c.begin("k")[0] == "x"
+        fc_clock["now"] += 1
+        assert c.begin("k")[0] is FC.NO_HIT, "一次成功即歸零：下一次失敗又從 FAIL_COOLDOWN_SEC 起"
+
+    def test_same_wave_failures_escalate_once(self, fc_clock):
+        c = FC.FailCooldown(max_seconds=TTL_1HOUR)
+        (h1, g1), (h2, g2) = c.begin("k"), c.begin("k")      # 兩個 session 同時錯過冷卻
+        assert h1 is FC.NO_HIT and h2 is FC.NO_HIT
+        c.fail("k", g1, "a")
+        fc_clock["now"] += 30
+        c.fail("k", g2, "b")                                 # 同一波晚 30 秒到的失敗
+        fc_clock["now"] += FAIL_COOLDOWN_SEC - 1
+        assert c.begin("k")[0] == "b", "晚到的失敗只更新時點"
+        fc_clock["now"] += 1
+        assert c.begin("k")[0] is FC.NO_HIT, "同一波只算一次：冷卻仍是基準值，不是加倍"
+
+    def test_stale_generation_neither_records_nor_escalates(self, fc_clock):
+        c = FC.FailCooldown(max_seconds=TTL_1HOUR)
+        _fail_once(c, "k")
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        _h, g = c.begin("k")
+        c.success("k")                                       # 期間有人成功
+        c.fail("k", g, "late")
+        assert "k" not in c and c._streak == {}
+
+    def test_clear_resets_streak(self, fc_clock):
+        c = FC.FailCooldown(max_seconds=TTL_1HOUR)
+        for _ in range(3):
+            _fail_once(c, "k")
+            fc_clock["now"] += TTL_1HOUR
+        c.clear()
+        _fail_once(c, "k")
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        assert c.begin("k")[0] is FC.NO_HIT
+
+    def test_escalation_is_per_key(self, fc_clock):
+        c = FC.FailCooldown(max_seconds=TTL_1HOUR)
+        for _ in range(3):
+            _fail_once(c, "a")
+            fc_clock["now"] += TTL_1HOUR
+        _fail_once(c, "b")
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        assert c.begin("b")[0] is FC.NO_HIT, "別的鍵不受連坐"
+
+    def test_seconds_zero_idiom_still_expires(self, fc_clock):
+        c = FC.FailCooldown(max_seconds=TTL_1HOUR)
+        for _ in range(4):
+            _fail_once(c, "k")
+            fc_clock["now"] += TTL_1HOUR
+        _fail_once(c, "k")
+        c.seconds = 0
+        assert c.begin("k")[0] is FC.NO_HIT, "既有測試手法（seconds 設 0 讓紀錄立即過期）在遞增模式仍有效"
+
+
+# ══════════════════════════════════════════════════════════════════
+# QA N1 ③ 負載放大：Yahoo＋FinMind 持續全失敗、每 60 秒 rerun、1 小時
+# ══════════════════════════════════════════════════════════════════
+_QA_POOL = [str(1101 + i) for i in range(324)]      # QA 模擬的存活池規模（全規模重現，slow lane）
+_FAST_POOL = _QA_POOL[:12]                           # fast lane 用：重掃「次數」與池子大小無關，呼叫數按檔數等比
+_QA_STEP = 60                                        # QA：每 60 秒 rerun 一次
+_QA_HORIZON = TTL_1HOUR                              # QA：持續 1 小時（含 t=3600 那一次，共 61 次呼叫）
+
+
+def _expected_scan_times(base: float, cap: float) -> list[int]:
+    """獨立參考模型：每次重掃都失敗 → 下次最早 t＋w，w 每次加倍到 cap（base＝cap 即固定冷卻）。"""
+    times, next_at, w = [], 0, base
+    for t in range(0, _QA_HORIZON + 1, _QA_STEP):
+        if t >= next_at:
+            times.append(t)
+            next_at, w = t + w, min(w * 2, cap)
+    return times
+
+
+def _drive_qa_scenario(mod, calls: dict, fc_clock, pool: list[str]) -> list[int]:
+    """照 QA 情境呼叫 `run_rs_leader_scan`；回傳真的重掃（`_survivor_pool` 被叫）的時點。"""
+    scans_at, t0 = [], fc_clock["now"]
+    for t in range(0, _QA_HORIZON + 1, _QA_STEP):
+        fc_clock["now"] = t0 + t
+        before = calls["pool"]
+        rows, meta = mod.run_rs_leader_scan(lookback=_LB)
+        assert rows == [] and meta["note"] == _d3d_note(len(pool))
+        if calls["pool"] > before:
+            scans_at.append(t)
+    return scans_at
+
+
+def _install_real_l1_scan(mod, monkeypatch, pool: list[str]) -> dict:
+    """RS 走**真的** L1（`fetch_stock_history_1y` → `cached_history`），只換大盤／存活池／涵蓋率。"""
+    calls = {"pool": 0}
+
+    def _pool(max_n):
+        calls["pool"] += 1
+        return pool[:max_n]
+    monkeypatch.setattr(mod, "fetch_yf_close", lambda tk, range_="2y": _market())
+    monkeypatch.setattr(mod, "_survivor_pool", _pool)
+    monkeypatch.setattr(FSS, "get_snapshot_coverage_note", lambda: _COVERAGE)
+    mod._scan_cached.clear()
+    return calls
+
+
+class TestQaN1LoadAmplification:
+    def test_hour_of_reruns_every_60s_scans_single_digit_times(self, rs, fc_clock):
+        plan, calls = rs
+        plan["pool"] = list(_FAST_POOL)                       # prices 空 ＝ 每一檔都抓不到
+        scans_at = _drive_qa_scenario(RS, calls, fc_clock, _FAST_POOL)
+        assert scans_at == _expected_scan_times(FAIL_COOLDOWN_SEC, TTL_1HOUR) == [0, 180, 540, 1260, 2700]
+        assert len(scans_at) <= 9, "1 小時內重掃次數落在個位數（固定 180 秒冷卻是 21 次，見 TestMutations M7）"
+        n = len(scans_at)
+        assert calls == {"market": n, "pool": n, "price": n * len(_FAST_POOL)}, \
+            "逐檔抓價呼叫 ＝ 重掃次數 × 存活池檔數"
+
+    def test_upstream_calls_over_real_l1(self, yfh, fc_clock, finmind_down, monkeypatch):
+        """同一情境走真的 L1，數 Yahoo／FinMind 實際呼叫：每次重掃 ＝ 每檔（.TW ＋ .TWO ＋ FinMind）。
+        全規模 324 檔的數字（含拿掉遞增的對照）見 slow lane 的 `TestQaN1FullScale`。"""
+        calls = _install_real_l1_scan(RS, monkeypatch, _FAST_POOL)
+        try:
+            scans_at = _drive_qa_scenario(RS, calls, fc_clock, _FAST_POOL)
+            n = len(scans_at)
+            assert n == len(_expected_scan_times(FAIL_COOLDOWN_SEC, TTL_1HOUR)) == 5
+            assert len(yfh.calls) == n * 2 * len(_FAST_POOL), "Yahoo：每次重掃每檔 .TW＋.TWO 各 1 次"
+            assert finmind_down["n"] == n * len(_FAST_POOL), "FinMind：每次重掃每檔 1 次（本身沒有快取）"
+        finally:
+            RS._scan_cached.clear()
+
+    def test_brief_outage_recovers_after_base_cooldown_and_success_resets(self, rs, fc_clock):
+        plan, calls = rs
+        RS.run_rs_leader_scan(lookback=_LB)                   # 失敗 1 次
+        plan["prices"] = dict(_RECOVERED)                     # 隨即恢復
+        fc_clock["now"] += FAIL_COOLDOWN_SEC - 1
+        assert RS.run_rs_leader_scan(lookback=_LB)[0] == []
+        fc_clock["now"] += 1
+        rows, meta = RS.run_rs_leader_scan(lookback=_LB)
+        assert len(rows) == 3 and meta["note"] == "", "短暫中斷：180 秒後即拿到新排行（不因遞增而變慢）"
+        assert calls["pool"] == 2
+        # 成功一次即歸零：成功結果的快取過期後（此處以 _scan_body.clear() 模擬）又壞 → 冷卻從基準值起
+        RS._scan_body.clear()
+        plan["prices"] = {}
+        RS.run_rs_leader_scan(lookback=_LB)
+        assert calls["pool"] == 3
+        fc_clock["now"] += FAIL_COOLDOWN_SEC - 1
+        RS.run_rs_leader_scan(lookback=_LB)
+        assert calls["pool"] == 3
+        fc_clock["now"] += 1
+        RS.run_rs_leader_scan(lookback=_LB)
+        assert calls["pool"] == 4, "成功歸零：之後的失敗冷卻又從 FAIL_COOLDOWN_SEC 起，不是接著加倍"
+
+
+@pytest.mark.slow
+class TestQaN1FullScale:
+    """QA N1 全規模重現（324 檔、真的 L1；單測數十秒 → slow lane）：遞增退避 vs 拿掉遞增的對照。"""
+
+    def test_qa_numbers_reproduced_before_and_after(self, yfh, fc_clock, finmind_down, monkeypatch):
+        no_escalation = _mutant(RS, ("_scan_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)",
+                                     "_scan_fail_cooldown = _FailCooldown()"), tag="fullscale_fixed")
+        results = {}
+        for label, mod in (("escalating", RS), ("fixed_180s", no_escalation)):
+            YP.cached_history.clear()
+            yfh.calls.clear()
+            finmind_down["n"] = 0
+            calls = _install_real_l1_scan(mod, monkeypatch, _QA_POOL)
+            try:
+                scans_at = _drive_qa_scenario(mod, calls, fc_clock, _QA_POOL)
+                results[label] = (len(scans_at), len(yfh.calls), finmind_down["n"])
+            finally:
+                mod._scan_cached.clear()
+            fc_clock["now"] += 10 * TTL_1HOUR              # 兩輪之間拉開，避免 L1 退避紀錄互相影響
+        assert results["fixed_180s"] == (21, 13_608, 6_804), "QA 量到的固定冷卻版本（修後、本次修正前）"
+        assert results["escalating"] == (5, 3_240, 1_620), "遞增退避：1 小時重掃 5 次"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -759,4 +1133,19 @@ class TestMutations:
             assert rows == [] and calls["pool"] == 1, "refresh 被退避擋住（修前 refresh 一定重掃）"
         finally:
             m._scan_fail_cooldown.clear()
+            m._scan_cached.clear()
+
+    def test_m7_no_escalation_amplifies_load(self, monkeypatch, fc_clock):
+        """M7（QA N1）：拿掉遞增、回到固定 FAIL_COOLDOWN_SEC → QA 情境 1 小時重掃 21 次（負載測試轉紅）。"""
+        m = _mutant(RS, ("_scan_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)",
+                         "_scan_fail_cooldown = _FailCooldown()"), tag="m7")
+        plan = {"market": _market(), "pool": list(_FAST_POOL), "prices": {}}
+        calls = {"market": 0, "pool": 0, "price": 0}
+        _install_rs_world(m, monkeypatch, plan, calls)
+        try:
+            scans_at = _drive_qa_scenario(m, calls, fc_clock, _FAST_POOL)
+            assert scans_at == _expected_scan_times(FAIL_COOLDOWN_SEC, FAIL_COOLDOWN_SEC)
+            assert len(scans_at) == 21 and calls["price"] == 21 * len(_FAST_POOL), \
+                "固定冷卻：1 小時重掃 21 次（全規模即 QA 量到的 13,608 次 Yahoo ／ 6,804 次 FinMind）"
+        finally:
             m._scan_cached.clear()

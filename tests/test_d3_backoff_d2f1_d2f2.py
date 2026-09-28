@@ -8,12 +8,17 @@
     `(ticker, interval)`、同一個冷卻期 `FAIL_COOLDOWN_SEC`、同一個時點＝本次呼叫的 now）
     寫進 `_YF_CLOSE_EMPTY_FAIL_CACHE`：冷卻期內不重打、期滿重抓、成功即清。
     成功路徑、TTL、回傳形狀不變。
-  · **D2-f1** `rs_leader_service._scan_cached`（`@st.cache_data`，TTL 1 小時）：
+  · **D2-f1** `rs_leader_service` 的 RS 掃描快取層（`@st.cache_data`，TTL 1 小時；本檔寫成時名為
+    `_scan_cached`，2026-09-28 D2-f7 起改名 `_scan_body`，`_scan_cached` 改為不快取的外層退避入口）：
     大盤 ^TWII 抓取失敗的結果修前被快取 1 小時 → Yahoo 恢復後使用者仍一直看到失敗。
     現在那一條出口改拋私有例外（`st.cache_data` 不快取例外），由 `run_rs_leader_scan`
     接住，回傳與修前**逐字相同**的 (rows, meta)。正常結果（含正當的空排行、部分個股缺價）
     照舊快取。L3 不另加冷卻層：失敗那條路唯一的上游就是 L1 `fetch_yf_close`，D2-f2 之後
     它的每一種失敗都有退避（`TestD2f1NoBombardment` 以真的 L1 驗證）。
+    📌 D2-f7（2026-09-28，另見 `tests/test_d3b_backoff_d2f4_d2f7_d2f9.py`）：③d「大盤正常、個股全抓不到價」
+    自此**不再入快取**，改由 `_scan_cached` 的掃描層遞增退避擋重打 —— 本檔 `_NORMAL_CASES` 的
+    `all_prices_missing` 仍在「第二次不打上游」的斷言下通過，但那是**冷卻**達成的，不是快取。
+    上面「L3 不另加冷卻層」只指 D2-f1（大盤失敗）這一條，至今不變。
 
 「修前」的回傳一律用**獨立寫出的期望值**比對（不從被測檔推導），來源是 origin/main 修前
 原始碼的字面：失敗回 `pd.Series(dtype=float, name=ticker)`；RS 失敗 meta 見 `_fail_meta()`。
@@ -354,7 +359,9 @@ def _default_prices() -> dict:
 
 
 def _install_world(mod, monkeypatch, plan: dict, calls: dict) -> None:
-    assert hasattr(mod._scan_cached, "clear"), "前提：_scan_cached 是真的 st.cache_data（否則驗不到快取）"
+    assert hasattr(mod._scan_cached, "clear"), (
+        "前提：_scan_cached 有 .clear()（D2-f7 起它是外層退避入口，.clear() 同清快取層 `_scan_body` 的 "
+        "st.cache_data 與退避紀錄；快取是否真的在作用，由各「照舊快取」斷言驗證）")
     lock = threading.Lock()
 
     def _bump(k):
@@ -446,7 +453,7 @@ class TestD2f1MarketFailNotCached:
 # ══════════════════════════════════════════════════════════════════
 # D2-f1 ② 正常結果照舊快取、輸出同修前
 # ══════════════════════════════════════════════════════════════════
-#: 非失敗分支（逐條對 `_scan_cached` 讀過，理由見交付報告的判定表）。
+#: 非失敗分支（逐條對當時的 `_scan_cached`〔今快取層 `_scan_body`〕讀過，理由見交付報告的判定表）。
 _NORMAL_CASES = {
     # ② 存活池為空：來源是本機季快照（不觸網），程式標的是「快照未就緒」，不是上游抓取失敗
     "survivor_pool_empty": {"pool": [], "market": _market, "kwargs": {}, "note_has": "存活池為空"},
@@ -457,7 +464,7 @@ _NORMAL_CASES = {
     "frozen_market": {"pool": ["A", "B"], "market": _frozen_market, "kwargs": {},
                       "note_has": "問題指向大盤側"},
     # ③d 大盤正常、個股全抓不到價 —— 程式標的是「個股側的資料問題」（非「上游抓取失敗」分支）
-    # ⚠️ D2-f7（2026-09-28）起這一種**不再入快取**，改由掃描層退避擋重打；下方「TTL 內第二次上游
+    # ⚠️ D2-f7（2026-09-28）起這一種**不再入快取**，改由掃描層遞增退避擋重打；下方「TTL 內第二次上游
     # 呼叫數不變」在冷卻期內仍成立（由退避達成，不是快取）。不入快取的證明見
     # tests/test_d3b_backoff_d2f4_d2f7_d2f9.py。
     "all_prices_missing": {"pool": ["X", "Y"], "market": _market, "kwargs": {},
@@ -471,6 +478,9 @@ _NORMAL_CASES = {
 class TestD2f1NormalResultsStillCached:
     @pytest.mark.parametrize("case", sorted(_NORMAL_CASES))
     def test_normal_results_cached_within_ttl(self, rs_world, case):
+        """第二次呼叫不打上游。⚠️ `[all_prices_missing]`（③d 個股全抓不到價）自 D2-f7（2026-09-28）起
+        靠的是 `_scan_cached` 的掃描層**冷卻**（第二次呼叫落在冷卻期內），**不是**快取 —— 它已不入
+        `_scan_body` 的快取；其餘參數照舊靠快取。見 tests/test_d3b_backoff_d2f4_d2f7_d2f9.py。"""
         plan, calls = rs_world
         spec = _NORMAL_CASES[case]
         plan["pool"], plan["market"] = spec["pool"], spec["market"]()
@@ -540,6 +550,7 @@ class TestD2f1NormalResultsStillCached:
 
 # ══════════════════════════════════════════════════════════════════
 # D2-f1 ③ 為何 L3 不另加 FailCooldown：走真的 L1，失敗期間不轟炸上游
+#   （只指「大盤失敗」這一條；③d 個股全抓不到價自 D2-f7 起另有 `_scan_cached` 的掃描層遞增退避）
 # ══════════════════════════════════════════════════════════════════
 class TestD2f1NoBombardment:
     @pytest.mark.parametrize("fail_resp", [None, _PARSE_FAILURES["json_decode"], _Resp([None] * 5)],
