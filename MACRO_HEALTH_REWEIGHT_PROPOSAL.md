@@ -87,6 +87,7 @@ data_cache/{twii_ohlcv, finmind_inst, finmind_m1m2}.parquet  (update_macro_histo
 - **依賴方向**：L2 純函式無上行 import；**score 重建含 L3 呼叫,故置於 scripts 層**（L2 不得 import L3）；不碰 L4+。
 - **失敗降級（§1）**：labeled 樣本不足 / fold 太少 / 單一類別 / 缺 parquet → **raise / SystemExit**，不輸出擬合值、不用合成資料。
 - **過度設計自評（§8.1 step6）**：v19.93 **砍掉原規劃的 `update_breadth_history.py` + `breadth_history.parquet`** — jqavg 由 `twii_ohlcv.parquet`（既有）O(n) 即時重算,獨立 parquet+cron = 用不到的抽象（反例）。最小版＝proxy breadth + 3 特徵 logistic + walk-forward;**不**做精確漲跌家數回填、**不**加特徵、**不**加 sklearn。
+- 📌 **2026-09-28 補註（DL-f1-s37；上圖一字未改）**：上圖寫出的 `MACRO_HEALTH_WEIGHT_PROPOSAL.md` 每季（cron `0 10 1 1,4,7,10 *`）由 `.github/workflows/calibrate_health_weights.yml` 重跑本管線後**整檔覆寫**（`scripts/calibrate_health_weights.py` 以 `write_text` 寫入，workflow 再 `git add` 該檔、有變化才 commit）—— 現行檔不一定還是 v19.102 採納時那一版。§5 Phase 3 引用的 v19.102 證據請看 `git show cd3ec21:MACRO_HEALTH_WEIGHT_PROPOSAL.md`（blob `2784cef`）。
 
 ## 5. 落地階段
 
@@ -94,7 +95,7 @@ data_cache/{twii_ohlcv, finmind_inst, finmind_m1m2}.parquet  (update_macro_histo
 |---|---|---|---|
 | **1** | `health_calibration.py` L2 純函式 + 單測（機器） | in-session（可驗） | ✅ v19.92 |
 | **2** | `scripts/calibrate_health_weights.py`（讀 parquet → 重建 3 特徵 → walk-forward 擬合 → 寫提案）+ L2 `ad_ratio_from_twii` | 純函式 in-session 單測；真實跑在部署 cron | ✅ v19.93 |
-| **3** | 部署跑 `python scripts/calibrate_health_weights.py` 產出 `MACRO_HEALTH_WEIGHT_PROPOSAL.md` → 人審（AUC/overfit_flag）→ 小 commit 改 `signal_thresholds` 3 權重 + 修 /5 錯配 | 部署 cron + 人工 | ✅ v19.102 **已收官**：Actions 實跑（真實 20 年、n=4748）→ AUC **0.753**／overfit **False**／方向正確／本地復算一致 → user 核准**方案 B** → `HEALTH_WEIGHT_JQ=0.6`／`HEALTH_WEIGHT_SCORE=0.4`／`HEALTH_FNET_BONUS=0`＋health 正規化改 `/max_score`＋對帳 Method B 同步。**−0.452 正式結案**（合成資料假象）。後續：季度 recalibrate 會對新分布重調 35/4 門檻 |
+| **3** | 部署跑 `python scripts/calibrate_health_weights.py` 產出 `MACRO_HEALTH_WEIGHT_PROPOSAL.md` → 人審（AUC/overfit_flag）→ 小 commit 改 `signal_thresholds` 3 權重 + 修 /5 錯配 | 部署 cron + 人工 | ✅ v19.102 **已收官**：Actions 實跑（真實 20 年、n=4748）→ AUC **0.753**／overfit **False**／方向正確／本地復算一致〔證據：`git show cd3ec21:MACRO_HEALTH_WEIGHT_PROPOSAL.md`（v19.102 證據版，內容與上列 n=4748／AUC 0.753／overfit False 相符，blob `2784cef`；DL-f1-s37 2026-09-28 釘版 —— 該檔每季由 `.github/workflows/calibrate_health_weights.yml` 直接覆寫，現行檔不一定還是這一版）〕 → user 核准**方案 B** → `HEALTH_WEIGHT_JQ=0.6`／`HEALTH_WEIGHT_SCORE=0.4`／`HEALTH_FNET_BONUS=0`＋health 正規化改 `/max_score`＋對帳 Method B 同步。**−0.452 正式結案**（合成資料假象）。後續：季度 recalibrate 會對新分布重調 35/4 門檻 |
 
 ## 6. 已知近似與誠實限制
 
