@@ -282,8 +282,10 @@ from shared.macro_buckets import (
 )
 # L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（SEC-2，2026-09-26；
 # 同 `page_hold` 批次 B 的作法，遮罩沿用 `***`、⛔ 不加說明字）。
-from shared.secret_scrub import scrub_secrets
-from shared.secret_md import scrub_md_mask
+# 問答散文（提問／AI 回答）走**散文版**（SEC-r12，2026-09-28）：送 L3 的純文字版 `scrub_prose_secrets`、
+# 上畫面／寫紀錄的 Markdown 版 `scrub_qa_text` —— 錯誤字串那支的第 1 類截法會把引用錯誤訊息的提問與解法截掉。
+from shared.secret_scrub import scrub_prose_secrets, scrub_secrets
+from shared.secret_md import scrub_qa_text
 # L0 SSOT：持股／個股燈規格 ＋ 缺值原因語彙。
 from shared.station_specs import (
     KEY_HEALTH_A,
@@ -2056,15 +2058,9 @@ def compose_qa_message(text: str) -> str:
     return f"{AI_QA_DISCLOSURE}\n\n{AI_NARRATIVE_GLYPH} {text}"
 
 
-def scrub_qa_text(text: str) -> str:
-    """SEC-r7（2026-09-27）：AI 回答上畫面／寫進對話紀錄前，先過 L0 `scrub_secrets`。
-
-    沒命中任何規則 → **原字串逐字回傳**（回答常有 `**粗體**`／`***粗斜體***`，一個字都不動）；
-    有命中 → `scrub_md_mask`（同 `shared/secret_md` 慣例：只跳脫遮罩 `***`，保留原句粗體）。
-    寫進紀錄的就是洗過的字串 ⇒ rerun 重播的對話紀錄也是洗過的。
-    """
-    _raw = str(text or "")
-    return _raw if scrub_secrets(_raw) == _raw else scrub_md_mask(_raw)
+# ⚠️ `scrub_qa_text`（SEC-r7：AI 回答／提問上畫面、寫進對話紀錄前的清洗）原本定義在這裡；
+# SEC-r12／SEC-r11（2026-09-28）下沉 L0 `shared/secret_md.scrub_qa_text`（洗法改散文版，v1 `tab_ai_chat`
+# 共用），本檔改 import（見檔頭 import 區）—— `page_why.scrub_qa_text` 這個名字照舊可用。
 
 
 def read_history(session: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
@@ -2732,11 +2728,14 @@ def _render_qa_leaf(session: Mapping[str, Any]) -> None:
 
     _typed = st.chat_input(QA_PLACEHOLDER, key="p05v_qa_input")
     _question = str(_typed or "").strip()
-    # S2-f3（2026-09-28）：送給 L3（→ Gemini）的提問先過 L0 `scrub_secrets` —— 原本送的是原文，
+    # S2-f3（2026-09-28）：送給 L3（→ Gemini）的提問先過 L0 ~~`scrub_secrets`~~ —— 原本送的是原文，
     # 貼進來的金鑰／帳密／家目錄路徑會原樣出站，畫面上的紀錄反而是洗過的。
+    # → SEC-r12（2026-09-28）：改用**散文版** `scrub_prose_secrets`（依型別分流：`Unicode*Error` 的散文形保留、
+    #   `TomlDecodeError` 照截；錯誤字串那支會把
+    #   「為什麼出現 型別名＋冒號＋…怎麼解？」截成只剩型別名，連問題本身都送不出去）。
     # 用**純文字版**（⛔ 不是 `scrub_qa_text` 的 Markdown 跳脫版：模型收到的是文字，不渲染 Markdown）；
     # 「這一輪有沒有問」仍以原文判斷（`asked` 不變）；沒命中任何規則的提問逐字不變。
-    _req = QaRequest(asked=bool(_question), question=scrub_secrets(_question),
+    _req = QaRequest(asked=bool(_question), question=scrub_prose_secrets(_question),
                      history=_history)
     _qa = load_qa(_req)
 

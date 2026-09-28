@@ -9,10 +9,15 @@
 全站原本唯一的洗法是 L3 `services/ai_qa_service._scrub_secrets`（私有、只洗 URL query 與
 `AIza…` 金鑰），L5 不得跨層取私有符號，而且它不涵蓋上面那一種。故下沉成本檔的公開函式。
 
-═══ 兩支，分工不同 ═══════════════════════════════════════════════════
+═══ 三支，分工不同 ═══════════════════════════════════════════════════
 - `scrub_query_secrets()`：**逐字**搬自 `ai_qa_service._scrub_secrets`（regex 一字未改）——
   `ai_qa_service` 改引用它，對任何輸入 **byte-identical**（它原本的行為不在本批改動範圍）。
-- `scrub_secrets()`：要畫上畫面的錯誤字串用這一支。= 上一支 ＋ 下列各類（`_RULES` 的順序即執行順序）：
+- `scrub_prose_secrets()`（SEC-r12，2026-09-28）：**問答散文**（使用者的提問、AI 的回答）用這一支。
+  ＝ 下一支一字不差（同一份規則表、同一個順序），**只有第 1 類的解碼例外那一條依型別分流**：
+  三種 `Unicode*Error` 改為只截 repr 形（型別名＋左括號），散文形（型別名＋冒號）保留後文、照樣過其餘
+  每一條規則；`TomlDecodeError` 兩種形都照舊整段截（它的訊息本身會串入內容；批 Q QA）。
+  錯誤字串 ⛔ 不要用它。少遮的確切範圍見該函式的 docstring。
+- `scrub_secrets()`：要畫上畫面的錯誤字串用這一支。= 第一支 ＋ 下列各類（`_RULES` 的順序即執行順序）：
     1. 會把**原始內容**帶出來的例外 —— `UnicodeDecodeError` 等解碼例外（`repr` 含被解碼的整段位元組）、
        `TomlDecodeError`（訊息會串入已解析的整包內容）、Streamlit 的「Error parsing secrets file at …」——
        `型別名(` 或 `型別名:` 起到字串結尾全部拿掉，**只留型別名**（巢狀 `repr` 的跳脫不固定，⛔ 不賭括號配對）；
@@ -105,6 +110,21 @@ _CONTENT_BEARING_EXC_RE = re.compile(
     r"(Unicode(?:Decode|Encode|Translate)Error|TomlDecodeError)[ \t]*[(:].*", re.DOTALL)
 #: Streamlit `SecretErrorMessages.error_parsing_file_at_path` 的預設措辭（訊息本文含路徑與 TOML 錯誤）。
 _STREAMLIT_PARSE_RE = re.compile(r"(Error parsing secrets file)\b.*", re.DOTALL)
+#: SEC-r12（2026-09-28；批 Q QA 依型別分流）：**問答散文版**（`scrub_prose_secrets`）專用的第 1 類。
+#: 依型別分流：
+#:   · 三種 `Unicode*Error`（`_PROSE_RELAXED_EXC`）→ **只截 repr 形**（型別名＋可有空白＋左括號起到字串結尾；
+#:     repr 才帶被解碼／編碼的原始內容）；散文形（型別名＋冒號…）⛔ 不截 —— 它們的 `str()` 只有編碼名、
+#:     位置與至多一個字元／位元組值（實測），而使用者引用它們發問、AI 回答寫出它們時，冒號後面是問題本身與解法。
+#:   · `TomlDecodeError`（以及放寬清單以外、日後新增進上一條的任何型別）→ **兩種形都照舊整段截**
+#:     （同 `scrub_secrets`）：toml 0.10.2 的訊息會串入內容 —— 重複表錯誤串入已解析的整包 dict、
+#:     數字轉換失敗（`could not convert string to float: '<值>'`／`invalid literal for int() …: '<值>'`）
+#:     帶出出錯那一行的原始值（批 Q QA 以真實 `toml.loads` 重現）；還沒列舉到的訊息也一併擋。
+#: 推導：上一條的 pattern 前面加一個「放寬清單＋冒號」的否定前瞻 —— 型別名清單仍只有一份，
+#: 不在放寬清單上的型別一律照截（安全側）；推導結果由 `tests/test_sec_r12_r11_prose_scrub.py` 逐字釘住。
+#: ⚠️ `_STREAMLIT_PARSE_RE` 散文版**照用、不放寬**（它沒有「型別名＋冒號」這種散文形；見 `scrub_prose_secrets`）。
+_PROSE_RELAXED_EXC: str = r"Unicode(?:Decode|Encode|Translate)Error"
+_CONTENT_BEARING_EXC_PROSE_RE = re.compile(
+    r"(?!" + _PROSE_RELAXED_EXC + r"[ \t]*:)" + _CONTENT_BEARING_EXC_RE.pattern, _CONTENT_BEARING_EXC_RE.flags)
 
 # ── (2) PEM ──────────────────────────────────────────────────────────
 _PEM_RE = re.compile(
@@ -530,6 +550,56 @@ def scrub_secrets(text) -> str:
     out = str(text)
     for _re, _rep in _RULES:
         out = _re.sub(_rep, out)
+    out = scrub_query_secrets(out)
+    for _re, _rep in _RULES_AFTER_QUERY:
+        out = _re.sub(_rep, out)
+    for _re, _rep in _RULES_POST:
+        _needles = _POST_NEEDLES.get(_re)
+        if _needles is None or any(_n in out for _n in _needles):
+            out = _re.sub(_rep, out)
+    return out
+
+
+def scrub_prose_secrets(text) -> str:
+    """SEC-r12（2026-09-28）：**問答散文**（使用者的提問、AI 的回答）→ 洗掉金鑰／識別碼／路徑（純函式）。
+
+    ⛔ **錯誤字串不要用這一支**（仍用 `scrub_secrets`）。
+
+    與 `scrub_secrets` **完全相同** —— 同一份 `_RULES`／`_RULES_AFTER_QUERY`／`_RULES_POST`（執行時才讀，
+    與 `scrub_secrets` 讀的是同一批物件）、同一個順序、同一個 `scrub_query_secrets` —— **只差一條**：
+    第 1 類的解碼例外那一條（`_CONTENT_BEARING_EXC_RE`）換成 `_CONTENT_BEARING_EXC_PROSE_RE`，**依型別分流**：
+      · 三種 `Unicode*Error`（`_PROSE_RELAXED_EXC`）：**只截 repr 形**（左括號）；散文形（冒號）**保留後文**；
+      · `TomlDecodeError`（與放寬清單以外的任何型別）：兩種形都照舊整段截，同 `scrub_secrets`。
+    實證（SEC-r12）：提問「為什麼出現 型別名＋冒號＋錯誤訊息，怎麼解？」原本在畫面、紀錄、送出三處都被截成
+    「為什麼出現 型別名」；AI 回答「你看到的是 型別名＋冒號＋…解法：…」整段解法消失。
+    分流理由（批 Q QA，2026-09-28）：`Unicode*Error` 只有 repr 形帶原始內容；`TomlDecodeError` 的訊息本身就會
+    串入內容（重複表錯誤串入已解析的整包 dict、數字轉換失敗帶出那一行的原始值），詳見該 regex 的註解。
+
+    ⚠️ 據實揭露（比 `scrub_secrets` 少遮的**確切範圍**，只限 `Unicode*Error` 的散文形）：
+      只有一種輸入會不同 ——「**第一個**命中第 1 類的位置是 `Unicode*Error` 的散文形（型別名＋可有空白＋冒號）」；
+      其餘輸入逐字相同（那一條在這些輸入上取代結果相同 ⇒ 之後每一步吃到的字串都一樣）。
+      不同的那一種：輸出 ＝ `scrub_secrets` 把「那些 `Unicode*Error` 散文形的型別名」當成普通字時的輸出 ——
+      (a) 冒號起到下一個照截的位置（repr 形、或任何 `TomlDecodeError`；沒有就到字串結尾）⛔ 不再整段拿掉，
+          改由其餘每一條規則處理（金鑰、帳密、路徑、Sheet ID、權杖照遮），但**不在任何規則裡的內容會留在畫面上**
+          （例：引用的 `UnicodeDecodeError` 訊息裡的一般文字）；
+      (b) 原本靠「字串在型別名處結束」才遮得到的**前文**也跟著不遮，兩種例子：
+          · 與型別名黏在一起、中間沒有分隔、合計超過長度上限的權杖串（`_CRED_AFTER_MASK_RE` 有 256 字上限）；
+          · `no`／`not` 後面緊黏型別名的純字母（例 `password: no hunterUnicodeDecodeError: …` → 露出
+            `hunter`：錯誤字串那支截在型別名處，`no hunterUnicodeDecodeError` 整段算否定片語、整段遮；
+            散文版後面還接著冒號，否定片語那個分支不成立，只遮得到 `no`）。
+      （本實作組自測：`tests/test_sec_r12_r11_prose_scrub.py` 以 AST、語料、蛻變關係三種方式驗證。
+       批 Q 獨立 QA（2026-09-28，PASS-with-notes）驗的是分流之前的版本；分流與 (b) 第二例依其意見修，尚未經 QA 複驗。）
+    ⚠️ 代價（據實揭露）：`TomlDecodeError` 的散文形照舊整段截 —— 引用 toml 錯誤訊息發問、AI 回答寫出
+      「TomlDecodeError: …」時，冒號後面（含問題本身與解法）仍會被截掉，與 `scrub_secrets` 相同。
+    ⚠️ Streamlit「Error parsing secrets file …」那一條（第 1 類的另一條）**照舊截斷**：它沒有散文形可放，
+      放寬它 ＝ 多開一個少遮的口（其訊息本文會串入已解析的 TOML 內容）→ 本批不做；問答裡引用那句
+      Streamlit 訊息時仍會被截（已知邊界）。
+    """
+    if text is None:
+        return ""
+    out = str(text)
+    for _re, _rep in _RULES:
+        out = (_CONTENT_BEARING_EXC_PROSE_RE if _re is _CONTENT_BEARING_EXC_RE else _re).sub(_rep, out)
     out = scrub_query_secrets(out)
     for _re, _rep in _RULES_AFTER_QUERY:
         out = _re.sub(_rep, out)
