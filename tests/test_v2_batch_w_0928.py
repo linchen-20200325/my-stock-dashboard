@@ -1,6 +1,19 @@
 """批 W（2026-09-28）持股頁／今天頁文字指引修正的守衛：H1-f1／H1-f3／H1-f4／SA2-f1。
 
-每一條都以「修前行為會紅」為準（突變驗證見交付報告）。
+~~每一條都以「修前行為會紅」為準（突變驗證見交付報告）。~~
+← 2026-09-28 更正（有意識的更正，⛔ 不是漏刪）：上句是錯的全稱句 —— 批 W 獨立 QA 在修前的
+origin/main（`d61a1fd`）上實跑本檔的原 22 條，結果 16 紅 6 綠；追加第 7 條守衛後，實作組在同一版本
+重跑本檔 23 條：16 紅 7 綠。**現行如實描述**（本檔兩類測試）：
+  · **修前會紅**（16 條）：直接釘住本批修掉的錯誤行為。
+  · **修後不變守衛**（7 條，修前本來就綠）：釘住本批 ⛔ 不准順手改到的既有文字／行為，
+    有效性靠**突變驗證**（改動守衛目標就轉紅；見交付報告）。每一條的 docstring 以
+    「修後不變守衛」開頭標明，名單：
+      `test_var_card_where_is_unchanged`、`test_var_short_row_is_unchanged`、
+      `test_station_own_error_keeps_the_original_sentence`、
+      `test_other_error_src_keeps_the_original_sentence[none]`／`[station]`、
+      `test_v2_short_rows_calls_do_not_raise`（以上 6 條為 QA 點名），
+      `test_exit_alerts_partial_tail_is_verbatim`（本次追加，QA 突變 Q13 的缺口）。
+  ⚠️ 兩類的條數是**量測值**（2026-09-28，修前 `d61a1fd` 上實跑本檔）；增刪測試時請重跑、⛔ 不要沿用。
 
   · H1-f1：`page_hold._totals_facts()`「⚠️ 上面兩個金額只涵蓋一部分」—— 只缺**現價**的列
     （L3 `compute_portfolio_totals()` 三者缺一就不納入）在 📁 組合管理補不了，
@@ -14,6 +27,7 @@
 """
 from __future__ import annotations
 
+import ast
 import contextlib
 import pathlib
 import re
@@ -53,6 +67,23 @@ def _partial_fact(rows, totals=None) -> str:
     st_ = P.StationReadout(requested=True, submitted=True, bound=True,
                            holdings_n=len(rows), rows=tuple(rows), totals=_t)
     return dict(P._totals_facts(st_))[_PARTIAL_KEY]
+
+
+def _code_str_literals(path: pathlib.Path) -> list[str]:
+    """`path` 裡**程式碼**的字串常值（`ast.Constant` 且值為 `str`）。
+
+    · 註解本來就不在 AST 裡 ⇒ 天然排除。
+    · 單獨成句的字串（module／class／function docstring，以及其他 `ast.Expr` 字串陳述）也排除 ——
+      它們是文件，不會被程式拿去用。
+    · 隱式相接的字面（`"a" "b"`）在 AST 裡已併成一個常值；f-string 的字面片段是 `JoinedStr` 底下的
+      `ast.Constant`，照樣收進來。
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    _docs = {id(_n.value) for _n in ast.walk(tree)
+             if isinstance(_n, ast.Expr) and isinstance(_n.value, ast.Constant)
+             and isinstance(_n.value.value, str)}
+    return [_n.value for _n in ast.walk(tree)
+            if isinstance(_n, ast.Constant) and isinstance(_n.value, str) and id(_n) not in _docs]
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -97,6 +128,7 @@ class TestH1f1ExistingUsesUnchanged:
         assert P.IF_LOTS_AVG_MISSING_WHERE.encode("utf-8") == _CLAUSE.encode("utf-8")
 
     def test_var_card_where_is_unchanged(self):
+        """修後不變守衛（修前也綠；有效性靠突變驗證）：VaR 灰卡 where 逐字不變。"""
         card = self._var_empty()[0]
         assert card.state == UI_EMPTY and card.note.now == P.VAR_EMPTY_NOW
         assert card.note.where == (
@@ -104,6 +136,7 @@ class TestH1f1ExistingUsesUnchanged:
             "再回本頁" + P.press(P.ACTION_RUN_WARROOM_LABEL) + "；" + _CLAUSE)
 
     def test_var_short_row_is_unchanged(self):
+        """修後不變守衛（修前也綠；有效性靠突變驗證）：VaR 灰卡的卡面短句逐字不變。"""
         spec = P.V2_SHORT_ROWS[("hold.deep.var", P.VAR_EMPTY_NOW)]
         assert spec == (
             "有持股，但 VaR 算不出來",
@@ -114,9 +147,13 @@ class TestH1f1ExistingUsesUnchanged:
         assert dict(short)[P.V2_GUIDE_FACT_KEY] == spec[2]
 
     def test_the_clause_is_written_once_in_page_hold(self):
-        """三處共用同一個常數 —— 原文只准在常數定義那一處出現。"""
-        src = pathlib.Path(P.__file__).read_text(encoding="utf-8")
-        assert src.count(_CLAUSE) == 1, "條件子句又被逐字抄了一份（應共用 `IF_LOTS_AVG_MISSING_WHERE`）"
+        """三處共用同一個常數 —— 原文只准在**程式碼**的常數定義那一處出現。
+
+        只數程式碼裡的字串常值（`_code_str_literals()`）：註解引用這句子句、docstring 裡舉例
+        ⛔ 不算（2026-09-28 QA 建議：修前的全文字面計數會把註解也數進去 ⇒ 誤報）。
+        """
+        n = sum(_s.count(_CLAUSE) for _s in _code_str_literals(pathlib.Path(P.__file__)))
+        assert n == 1, "條件子句又被逐字抄了一份（應共用 `IF_LOTS_AVG_MISSING_WHERE`）"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -163,6 +200,7 @@ class TestH1f3AiGuideOnHoldingsError:
         assert _ai[P.V2_GUIDE_FACT_KEY] == _pv[P.V2_GUIDE_FACT_KEY]
 
     def test_station_own_error_keeps_the_original_sentence(self):
+        """修後不變守衛（修前也綠；有效性靠突變驗證）：戰情表本身出錯時原句與短句不變。"""
         card = _ai_card_on_station_error()[0]
         assert card.note.now == P.AI_UPSTREAM_NOW
         assert card.note.where == _old_ai_where()
@@ -172,12 +210,14 @@ class TestH1f3AiGuideOnHoldingsError:
 
     @pytest.mark.parametrize("src", [None, P.SRC_STATION], ids=["none", "station"])
     def test_other_error_src_keeps_the_original_sentence(self, src):
+        """修後不變守衛（修前也綠；有效性靠突變驗證）：非持股的 `error_src` 維持原句。"""
         note = P._ai_failed_note(P.AiSummaryReadout(
             requested=True, error=_E, error_kind=P.AI_ERR_UPSTREAM, error_src=src))
         assert note.now == P.AI_UPSTREAM_NOW
         assert note.where == _old_ai_where()
 
     def test_v2_short_rows_calls_do_not_raise(self):
+        """修後不變守衛（修前也綠；有效性靠突變驗證）：兩種上游錯誤的短句查表都不拋錯。"""
         for built in (_ai_card_on_holdings_error(), _ai_card_on_station_error()):
             short, full = P.v2_short_rows(built[0])
             assert len(short) == len(full) == 3
@@ -261,3 +301,16 @@ class TestSa2f1ExitFixCode:
         assert tile.card.note.where is T.EXIT_FIX_CODE
         html = T.v2_card_html(tile)
         assert "需修程式" in html and "資料體檢" not in html
+
+
+class TestSa2f1LeavesExitAlertsPartialAlone:
+    """批 W 規格：`EXIT_ALERTS_PARTIAL` ⛔ 不動（SA2-f1 只刪 `EXIT_FIX_CODE` 的尾句）。
+
+    QA 突變 Q13：拿掉 `EXIT_ALERTS_PARTIAL` 的尾句，整條 fast lane 沒有任何一條測試轉紅 ⇒ 補這一條。
+    ⚠️ 它只釘「本批沒有動到它」：日後有意識地改這一句（另案）時，連同本條一起改。
+    """
+
+    def test_exit_alerts_partial_tail_is_verbatim(self):
+        """修後不變守衛（修前也綠；有效性靠突變驗證）：尾句（最後一個「。」之後）逐字不變。"""
+        assert T.EXIT_ALERTS_PARTIAL.rsplit("。", 1)[-1] == (
+            f"要看門檻層到底怎麼了，去 {ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
