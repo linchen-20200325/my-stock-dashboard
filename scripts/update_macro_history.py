@@ -27,9 +27,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import math
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -333,16 +331,11 @@ def fetch_finmind_margin(start: _dt.date, end: _dt.date, token: str) -> pd.DataF
 # run 36408641177 實測 EF19M01／EF21M01 是「變動因素分析」表、**根本沒有餘額欄**，
 # 整段重建因此天天失敗。DL-f1-r1 改取 EF15M01（見下方 `_parse_cbc_ef15m01_levels`），
 # B7b 的欄位辨識解析器與其專用 helper 隨之成為 0 caller，已於同批 QA 修正時刪除
-# （逐一列在該 commit 訊息）。本段保留兩個仍在用的函式：
-#   - `_cbc_norm_label`：標籤正規化，新解析器比對序列名／量度名／單位用；
+# （逐一列在該 commit 訊息）。本段原保留兩個仍在用的函式：
+#   - `_cbc_norm_label`：標籤正規化 —— DL-f1-s1（2026-09-28）起隨 EF15M01 解析器搬到
+#     `src/data/macro/cbc_ef15m01.py`（公開名 `cbc_norm_label`），本檔舊名仍可 import（見下段）；
 #   - `_m1m2_level_sanity`：寫檔前最後守門（與 `export_stock_db._money_supply_sanity_gate`
 #     同一組定義常數），也判定既有檔是否需整段重建 —— 不過就整表拒寫（§1 寧缺勿錯）。
-
-
-def _cbc_norm_label(t: str) -> str:
-    """標籤正規化：全形→半形（NFKC）、大寫、去空白（比對序列名用）。"""
-    import unicodedata
-    return "".join(unicodedata.normalize("NFKC", str(t)).upper().split())
 
 
 def _m1m2_level_sanity(df: pd.DataFrame) -> tuple[bool, str]:
@@ -373,272 +366,91 @@ def _m1m2_level_sanity(df: pd.DataFrame) -> tuple[bool, str]:
 
 # ════════════════════════════════════════════════════════════════
 # DL-f1-r1（2026-09-28）：M1B／M2 餘額改取 CBC EF15M01（貨幣總計數-日平均數）
+# DL-f1-s1（2026-09-28）：解析本體搬到 L1 共用模組 `src/data/macro/cbc_ef15m01.py`
 # ════════════════════════════════════════════════════════════════
 # 根因（GitHub Actions run 36408641177 實測）：EF19M01／EF21M01 是「貨幣供給額 M1B／M2
 # **變動因素分析**」表 —— 每一欄都是變動額（流量），根本沒有餘額欄；B7b 的欄位辨識解析器
-# （已刪除，見上段）正確地拒絕它們，於是每天排程的整段重建都失敗。同一個 API 的 EF15M01 才有餘額：
-#   meta.title = "5.貨幣總計數-A.日平均數依期間"、meta.units = "新台幣百萬元,%"
-#   data.structure.Table1 = 15 個序列標籤（M1A、M1B、M2 各一；標籤是全形字）
-#   data.structure.Table2 = ["原始值", "年增率"]
-#   data.dataSets 每列 = [期間, 序列0 原始值, 序列0 年增率, 序列1 原始值, …]；缺值是字串 "-"
-# 解析原則（**依標籤成對，不猜欄位位置**）：
-#   ① 值欄數必須 = len(Table1) × len(Table2)，任一列不符 → 整表拒用並印出標籤；
-#   ② 序列以 NFKC 正規化後的**完整名稱**唯一命中（M1A 不得冒充 M1B；0 或 ≥2 命中都拒用）；
-#   ③ 量度以 Table2 標籤找「原始值」（= 餘額）與「年增率」（官方值，只拿來對帳）；
-#   ④ "-" = 缺值，**不填 0**；餘額缺值的月份顯式剔除並逐月印出；
-#   ⑤ 對帳：由餘額自算的年增率須與表內官方年增率一致（容差推導見 `_ef15_yoy_tolerance_pp`）。
-#      **致命範圍**（`fatal_from` 起的月份 = 寫入窗口 ＋ gap 需要的 t−12 基期，由 fetch 依 start
-#      推出，見 `_ef15_fatal_from`）內任一列超出 → 整表拒用（選錯欄、配錯對、表內自相矛盾都不得寫入）；
-#      更早的列照樣對帳，但只印 ⚠️（筆數、max|Δ|、前 10 筆）不拒用 —— 它們不影響寫入的資料，
-#      而每天的增量都會重解析全表，一筆舊歷史被修訂到不一致就會天天擋住。
-#      M1B、M2 在致命範圍內各自至少要有 1 列對帳通過，否則拒用（無從驗證欄位配對）。
-# 單位：meta.units 的「原始值」單位必須等於 `MONEY_SUPPLY_CACHE_UNIT_LABEL`（新台幣百萬元），
-# 不一致就拒用 —— parquet 對讀取端承諾的是百萬元（`export_stock_db` 再 ÷100 成億元外送）。
-_EF15_FILE = "EF15M01"
-_EF15_TITLE_KEY = "日平均"                  # source 字串宣稱「日平均餘額」的依據，必須在 meta.title 內
-_EF15_SERIES = (("m1b", "M1B", "貨幣總計數-M1B"),   # (輸出欄, 簡稱, NFKC＋去空白後的完整序列名)
-                ("m2", "M2", "貨幣總計數-M2"))
-_EF15_MEASURE_LEVEL = "原始值"
-_EF15_MEASURE_YOY = "年增率"
-_EF15_UNIT_YOY = "%"
-_EF15_MISSING = "-"
-_EF15_PERIOD_RE = re.compile(r"^(\d{4})M(\d{2})$")
-# 對帳容差的三個來源（推導見 `_ef15_yoy_tolerance_pp`）：
-_EF15_YOY_DECIMALS = 2          # 表內官方年增率只到小數兩位（實測 "7.34"、"10.00"）
-_EF15_LEVEL_STEP = 1.0          # 餘額以「百萬元」整數發布 → 相鄰可表示值的間距 = 1 百萬元
-_EF15_FLOAT_EPS_PP = 1e-9       # 十進位字串 → 二進位浮點的表示誤差（遠小於前兩項）
+# （已刪除，見上段）正確地拒絕它們，於是每天排程的整段重建都失敗。同一個 API 的 EF15M01 才有餘額。
+# 回應形狀與解析規則（依標籤成對、NFKC 完整序列名、單位／標題檢查、"-" 為缺值、官方年增率對帳
+# 與「致命範圍」）原文隨解析器搬進 `src/data/macro/cbc_ef15m01.py` 的模組 docstring，
+# **本檔不再重述** —— 同一條規則寫在兩處遲早分岔（§2.1）。
+#
+# DL-f1-s1 為何搬：線上 `tw_macro._try_cbc_ef15m01` 仍讀頂層 `DataSet`／`Structure`（舊格式）
+# → 恆回 None → 線上 M1B／M2 落到 Tier 3 `^TWII` 動能代理。修法是讓兩條路徑共吃同一個解析器，
+# 不是在 tw_macro 再寫第二套。
+#
+# 本檔保留舊名（re-export），既有測試與呼叫端一字不改：
+#   - `_parse_cbc_ef15m01_levels`：薄轉接 —— 診斷前綴維持 `[finmind_m1m2/EF15M01]`、只回
+#     date／m1b／m2 三欄（共用解析器另帶官方年增率兩欄，給線上路徑用）→ 回傳與搬移前相同；
+#   - `_ef15_cell`：薄轉接，且是 `_parse_cbc_ef15m01_levels` 的單格解析注入點
+#     （`test_mq3_reconcile_comparison_is_nan_safe` 在本檔命名空間替換它，必須對解析生效）；
+#   - 其餘舊名（`_EF15_*` 常數、`_cbc_norm_label`、`_ef15_yoy_tolerance_pp`、`_ef15_labels`、
+#     `_ef15_fatal_from`）經下方 PEP 562 `__getattr__` 延遲轉發。
+# ⚠️ 為何一律「用到才 import」、不放檔頭：本腳本對 `src.*` 一律延遲 import，單一 dataset 的
+#    import 失敗只讓該 dataset 失敗（見 `fetch_finmind_m1m2` 的 ImportError 分支、v19.101 病史）；
+#    `src.data.macro` 套件一被 import 就 eager 載入 5 個子模組，放檔頭會把它的故障半徑擴大到
+#    整支腳本（連 twii／法人／融資／PMI 都跑不了）。
+_EF15_REEXPORTS = {                       # 本檔舊名 → `src.data.macro.cbc_ef15m01` 公開名
+    "_EF15_FILE": "EF15_FILE",
+    "_EF15_TITLE_KEY": "EF15_TITLE_KEY",
+    "_EF15_SERIES": "EF15_SERIES",
+    "_EF15_MEASURE_LEVEL": "EF15_MEASURE_LEVEL",
+    "_EF15_MEASURE_YOY": "EF15_MEASURE_YOY",
+    "_EF15_UNIT_YOY": "EF15_UNIT_YOY",
+    "_EF15_MISSING": "EF15_MISSING",
+    "_EF15_PERIOD_RE": "EF15_PERIOD_RE",
+    "_EF15_YOY_DECIMALS": "EF15_YOY_DECIMALS",
+    "_EF15_LEVEL_STEP": "EF15_LEVEL_STEP",
+    "_EF15_FLOAT_EPS_PP": "EF15_FLOAT_EPS_PP",
+    "_cbc_norm_label": "cbc_norm_label",
+    "_ef15_yoy_tolerance_pp": "ef15_yoy_tolerance_pp",
+    "_ef15_labels": "ef15_labels",
+    "_ef15_fatal_from": "ef15_fatal_from",
+}
 
 
-def _ef15_yoy_tolerance_pp(level_t: float, level_t12: float) -> float:
-    """|自算年增率 − 表內官方年增率| 的容許上界（百分點）。三項相加：
+def __getattr__(name: str):
+    """PEP 562：EF15M01 舊名延遲轉發到 `src.data.macro.cbc_ef15m01`（DL-f1-s1，見上段）。
 
-    (1) 官方年增率只到小數兩位：表內值 = 四捨五入(真值, 2) → 誤差 ≤ 半個最小位數
-        = 0.5 × 10⁻² = **0.005 pp**。前提「四捨五入、不是截斷」的依據是**真實全表實測**
-        （GitHub Actions run 36419092722，EF15M01 全表 1987-05～2026-07）：M1B、M2 各 459 列
-        可對帳，自算年增率四捨五入到兩位後與官方 **459/459** 列相同，截斷到兩位只有 233/459、
-        222/459 列相同；|自算 − 官方| 最大 **0.004993**（M1B，2010-12）、**0.004999** pp
-        （M2，2024-09），全數落在本容差內。
-        ⚠️ 探針三列真實資料的恆等式（M1B＝M1A＋活期儲蓄、M2＝M1B＋準貨幣）**本身無法區分捨入方式**
-        —— 四捨五入、截斷、floor、ceil 在那三列都有可行解（QA 以 Fourier–Motzkin 消去法驗證）；
-        實作組先前據此寫的「截斷無解」不成立，已撤回，改以上述全表實測為依據。
-    (2) 餘額以百萬元整數發布：每個餘額的捨入誤差 ≤ δ = 0.5 × `_EF15_LEVEL_STEP`。
-        自算 r = (a/b − 1)×100；a、b 各偏離 ≤ δ 時
-        |Δr| = 100·|b·εa − a·εb| / (b·(b+εb)) ≤ **100·δ·(a + b) / (b·(b − δ))**（精確上界，非近似）。
-        本表最小的 M1B 餘額約 1.26e6 百萬元 → 此項 < 1e-4 pp；仍逐列計入，不假設可忽略。
-    (3) 浮點表示誤差 → `_EF15_FLOAT_EPS_PP`。
-    超出三者之和 = 不是捨入能解釋的差 → 選錯欄／配錯對／表內自相矛盾 → fail loud。
-    呼叫端須保證 level_t12 > δ（否則無法對帳，由呼叫端直接判不符）。
-    """
-    _delta = 0.5 * _EF15_LEVEL_STEP
-    _half_ulp = 0.5 * 10.0 ** (-_EF15_YOY_DECIMALS)
-    _rounding = 100.0 * _delta * (abs(level_t) + abs(level_t12)) / (level_t12 * (level_t12 - _delta))
-    return _half_ulp + _rounding + _EF15_FLOAT_EPS_PP
-
-
-def _ef15_labels(seq) -> list | None:
-    """PXWeb `structure.TableN`（[{"data": "…"}, …]）→ 標籤字串 list；任一項取不到字串 → None。"""
-    if not isinstance(seq, list) or not seq:
-        return None
-    out = []
-    for x in seq:
-        t = x.get("data") if isinstance(x, dict) else x
-        if not isinstance(t, str) or not t.strip():
-            return None
-        out.append(t)
-    return out
+    只管 `_EF15_REEXPORTS` 列出的名字；其他名字照常拋 AttributeError。
+    ⚠️ 模組內的函式以裸名稱取全域變數時**不會**經過這裡（Python 的全域查找不呼叫
+    `__getattr__`）—— 所以本檔自己的函式一律直接 import 共用模組，不引用這些舊名。"""
+    _target = _EF15_REEXPORTS.get(name)
+    if _target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from src.data.macro import cbc_ef15m01 as _ef15
+    return getattr(_ef15, _target)
 
 
 def _ef15_cell(v):
-    """值欄字串 → float；"-" → None（缺值，**不是 0**）；其他無法解析的內容 → ValueError（不猜）。"""
-    s = str(v).replace(",", "").strip()
-    if s == _EF15_MISSING:
-        return None
-    x = float(s)
-    if not math.isfinite(x):
-        raise ValueError(f"非有限數值 {v!r}")
-    return x
+    """（DL-f1-s1 re-export）值欄字串 → float；"-" → None；其餘解析不了 → ValueError。
 
-
-def _ef15_fatal_from(start: _dt.date) -> _dt.date:
-    """寫入窗口起點 `start` → 對帳「致命範圍」的第一個資料月（月初）。
-
-    寫入的是 date ≥ start 的月份；每一列的 gap 還要用到同月去年（t−12）的餘額。
-    所以會影響寫入結果的月份 = 第一個寫入月往前推 12 個月起的全部月份
-    （等價於「d ≥ start − 12 個月」；資料月以月初表示）。
-    例：start=2006-10-03 → 第一個寫入月 2006-11-01 → 回 2005-11-01；
-        start=2026-07-01 → 回 2025-07-01。
-    """
-    y, m = start.year, start.month
-    if start.day > 1:                        # 當月月初 < start → 當月不寫入，第一個寫入月是下個月
-        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
-    return _dt.date(y - 1, m, 1)
+    實作見 `src.data.macro.cbc_ef15m01.ef15_cell`。寫成本檔的函式、而非經 `__getattr__` 轉發，
+    是因為 `_parse_cbc_ef15m01_levels` 以本檔全域名稱取它當單格解析函式（注入點，見上段）。"""
+    from src.data.macro.cbc_ef15m01 import ef15_cell
+    return ef15_cell(v)
 
 
 def _parse_cbc_ef15m01_levels(sdmx, fatal_from: _dt.date | None = None
                               ) -> tuple[pd.DataFrame | None, str]:
     """CBC EF15M01 回應 → (DataFrame[date, m1b, m2], 說明) 或 (None, 拒用原因)。
 
-    純函式（無 I/O，只 print 診斷）。date = 資料月月初（datetime.date）；m1b／m2 = 日平均餘額，
-    單位新台幣百萬元，int（與既有 parquet schema 的 int64 一致）。規則見本段上方註解。
+    DL-f1-s1 起為薄轉接：解析、驗證、對帳全部由 `src.data.macro.cbc_ef15m01.parse_cbc_ef15m01`
+    執行（SSOT；規則見該模組 docstring）。本函式只做兩件事 ——
+    (1) 診斷前綴維持 `[finmind_m1m2/EF15M01]`；(2) 只回 date／m1b／m2 三欄（與搬移前的回傳相同）。
+    date = 資料月月初（datetime.date）；m1b／m2 = 日平均餘額，單位新台幣百萬元，int64。
 
-    `fatal_from`：對帳「致命範圍」的第一個資料月（fetch 以 `_ef15_fatal_from(start)` 傳入）。
+    `fatal_from`：對帳「致命範圍」的第一個資料月（fetch 以 `ef15_fatal_from(start)` 傳入）。
     d ≥ fatal_from 的列對帳不符 → 整表拒用；更早的列不符 → 只印 ⚠️。
     None = 全表都是致命範圍（最嚴；直接呼叫本函式時的預設）。
     ⚠️ 只有「對帳不符」分範圍；格式錯誤（期間、欄數、無法解析的值、非整數餘額）一律整表拒用。
     """
-    from shared.signal_thresholds import MONEY_SUPPLY_CACHE_UNIT_LABEL
-
-    tag = f"[finmind_m1m2/{_EF15_FILE}]"
-
-    def _fail(reason: str, **dump):
-        _extra = "".join(f" {k}={v!r}" for k, v in dump.items())
-        print(f"{tag} ❌ 拒用：{reason}{_extra}")
-        return None, reason
-
-    if not isinstance(sdmx, dict):
-        return _fail(f"回應不是 JSON 物件（{type(sdmx).__name__}）")
-    _data = sdmx.get("data")
-    _struct = _data.get("structure") if isinstance(_data, dict) else None
-    rows = _data.get("dataSets") if isinstance(_data, dict) else None
-    t1 = _ef15_labels(_struct.get("Table1")) if isinstance(_struct, dict) else None
-    t2 = _ef15_labels(_struct.get("Table2")) if isinstance(_struct, dict) else None
-    if t1 is None or t2 is None or not isinstance(rows, list) or not rows:
-        return _fail("缺 data.structure.Table1／Table2（字串標籤）或 data.dataSets",
-                     top_keys=list(sdmx.keys())[:10],
-                     data_keys=(list(_data.keys())[:10] if isinstance(_data, dict)
-                                else type(_data).__name__),
-                     Table1=t1, Table2=t2)
-
-    # ① 值欄數 = len(Table1) × len(Table2)（每一列都要成立）
-    n_val = len(t1) * len(t2)
-    bad_len = [(i, len(r) if isinstance(r, list) else type(r).__name__)
-               for i, r in enumerate(rows) if not (isinstance(r, list) and len(r) == n_val + 1)]
-    if bad_len:
-        return _fail(f"值欄數 ≠ len(Table1)×len(Table2) = {len(t1)}×{len(t2)} = {n_val}"
-                     f"（含期間欄每列應為 {n_val + 1} 格；不符 {len(bad_len)} 列，"
-                     f"前 5 =(列號, 格數) {bad_len[:5]}）", Table1=t1, Table2=t2)
-
-    # ③ 量度：Table2 須恰有一個「原始值」、一個「年增率」
-    t2n = [_cbc_norm_label(t) for t in t2]
-    j_lv = [j for j, t in enumerate(t2n) if t == _cbc_norm_label(_EF15_MEASURE_LEVEL)]
-    j_yy = [j for j, t in enumerate(t2n) if t == _cbc_norm_label(_EF15_MEASURE_YOY)]
-    if len(j_lv) != 1 or len(j_yy) != 1:
-        return _fail(f"Table2 須各恰有一個「{_EF15_MEASURE_LEVEL}」與「{_EF15_MEASURE_YOY}」"
-                     f"（實得 {len(j_lv)}／{len(j_yy)}）", Table2=t2)
-    j_lv, j_yy = j_lv[0], j_yy[0]
-
-    # 表頭：日平均（source 宣稱的依據）＋ 單位（與 parquet 單位契約一致）
-    _meta = sdmx.get("meta") if isinstance(sdmx.get("meta"), dict) else {}
-    if _EF15_TITLE_KEY not in _cbc_norm_label(_meta.get("title") or ""):
-        return _fail(f"meta.title 不含「{_EF15_TITLE_KEY}」→ 不能宣稱是日平均餘額",
-                     title=_meta.get("title"))
-    _units = _cbc_norm_label(_meta.get("units") or "").split(",")
-    if (len(_units) != len(t2)
-            or _units[j_lv] != _cbc_norm_label(MONEY_SUPPLY_CACHE_UNIT_LABEL)
-            or _units[j_yy] != _EF15_UNIT_YOY):
-        return _fail(f"meta.units 與量度不對應（須 {_EF15_MEASURE_LEVEL}＝"
-                     f"{MONEY_SUPPLY_CACHE_UNIT_LABEL}、{_EF15_MEASURE_YOY}＝{_EF15_UNIT_YOY}）",
-                     units=_meta.get("units"), Table2=t2)
-
-    # ② 序列：NFKC 正規化後的完整名稱唯一命中；欄位 = 1 + i × len(Table2) + j
-    t1n = [_cbc_norm_label(t) for t in t1]
-    cols = {}
-    for key, short, name in _EF15_SERIES:
-        hits = [i for i, t in enumerate(t1n) if t == _cbc_norm_label(name)]
-        if len(hits) != 1:
-            return _fail(f"序列「{name}」須以完整名稱唯一命中，實得 {len(hits)} 個", Table1=t1)
-        i = hits[0]
-        cols[key] = (short, t1n[i], 1 + i * len(t2) + j_lv, 1 + i * len(t2) + j_yy)
-
-    # ④ 逐列解析："-" = 缺值；其他解析不了的內容 → 拒用（不猜）
-    recs: dict = {}
-    for r in rows:
-        _p = str(r[0]).strip()
-        _m = _EF15_PERIOD_RE.match(_p)
-        if not _m or not 1 <= int(_m.group(2)) <= 12:
-            return _fail(f"期間格式不是 YYYYMmm：{_p!r}")
-        d = _dt.date(int(_m.group(1)), int(_m.group(2)), 1)
-        if d in recs:
-            return _fail(f"期間重複：{_p}")
-        vals = {}
-        for key, (short, _lab, c_lv, c_yy) in cols.items():
-            try:
-                lv, yy = _ef15_cell(r[c_lv]), _ef15_cell(r[c_yy])
-            except (TypeError, ValueError) as e:
-                return _fail(f"{_p} {short} 值無法解析（{e}）",
-                             level_raw=r[c_lv], yoy_raw=r[c_yy])
-            if lv is not None and not float(lv).is_integer():
-                return _fail(f"{_p} {short} 餘額不是整數百萬元（格式或單位變了？）",
-                             level_raw=r[c_lv])
-            vals[key] = (lv, yy)
-        recs[d] = vals
-
-    _miss = {key: sorted(d for d, v in recs.items() if v[key][0] is None) for key in cols}
-    dropped = sorted(set(_miss["m1b"]) | set(_miss["m2"]))
-    if dropped:
-        print(f"{tag} ⚠️ 餘額欄為「{_EF15_MISSING}」→ 剔除 {len(dropped)} 個月（不填 0、不補值）："
-              + "；".join(f"{cols[k][0]} 缺 {[d.strftime('%Y-%m') for d in v]}"
-                         for k, v in _miss.items() if v))
-    keep = {d: v for d, v in recs.items() if d not in set(dropped)}
-    if not keep:
-        return _fail("剔除缺值月份後無任何月份")
-
-    # ⑤ 對帳：自算年增率（t ÷ t−12 − 1，t−12 = 同月去年）vs 表內官方年增率
-    #    致命範圍（d ≥ fatal_from；None = 全表）不符 → 拒用；更早的列不符 → 只警示。
-    _delta = 0.5 * _EF15_LEVEL_STEP
-    _scope = "全表" if fatal_from is None else f"≥ {fatal_from:%Y-%m}"
-    n_ok = {k: 0 for k in cols}          # 致命範圍內對帳通過
-    n_ok_early = {k: 0 for k in cols}    # 致命範圍之前對帳通過
-    n_skip = {k: 0 for k in cols}
-    worst = {k: 0.0 for k in cols}
-    bad, warn = [], []                   # (期間, 序列, 自算年增率 | 原因, 官方, |Δ|)
-    for d in sorted(keep):
-        _prev = keep.get(_dt.date(d.year - 1, d.month, 1))
-        _fatal = fatal_from is None or d >= fatal_from
-        for key, (short, _lab, _c1, _c2) in cols.items():
-            a, off = keep[d][key]
-            if off is None or _prev is None:
-                n_skip[key] += 1                    # 無官方年增率 或 t−12 無餘額 → 無從對帳
-                continue
-            b = _prev[key][0]
-            if b <= _delta:
-                (bad if _fatal else warn).append(
-                    (d.strftime("%Y-%m"), short, "t−12 餘額 ≤ 捨入半階,無法對帳", off, math.inf))
-                continue
-            calc = (a / b - 1) * 100
-            diff = abs(calc - off)
-            # 寫成「不是 ≤ 容差」而非「> 容差」：任何 NaN 都判不符（fail-safe），不會被靜默算成通過
-            if not diff <= _ef15_yoy_tolerance_pp(a, b):
-                (bad if _fatal else warn).append(
-                    (d.strftime("%Y-%m"), short, round(calc, 6), off, round(diff, 6)))
-            else:
-                (n_ok if _fatal else n_ok_early)[key] += 1
-                worst[key] = max(worst[key], diff)
-    if bad:
-        return _fail(f"對帳不符 {len(bad)} 列（致命範圍 {_scope}；自算年增率 vs 表內官方年增率，"
-                     f"超出捨入容差）", first10=bad[:10])
-    for key, (short, _lab, _c1, _c2) in cols.items():
-        if n_ok[key] == 0:
-            return _fail(f"{short} 在致命範圍（{_scope}）內無任何可對帳的列 → 無法驗證欄位配對")
-    if warn:
-        print(f"{tag} ⚠️ 致命範圍（{_scope}）之前對帳不符 {len(warn)} 列（不影響寫入的資料，"
-              f"只警示、不拒用）：max|Δ|={max(w[4] for w in warn):.6f}pp first10={warn[:10]!r}")
-
-    ds = sorted(keep)
-    out = pd.DataFrame({
-        "date": ds,
-        "m1b": pd.array([int(keep[d]["m1b"][0]) for d in ds], dtype="int64"),
-        "m2": pd.array([int(keep[d]["m2"][0]) for d in ds], dtype="int64"),
-    })
-    desc = "; ".join(f"{short} label={lab}" for short, lab, _c1, _c2 in cols.values())
-    print(f"{tag} ✅ 日平均餘額 {len(out)} 個月（{ds[0]:%Y-%m}～{ds[-1]:%Y-%m}，{desc}）；"
-          f"對帳（致命範圍 {_scope}）" + "、".join(
-              f"{cols[k][0]} {n_ok[k]} 列＋範圍前 {n_ok_early[k]} 列 max|Δ|={worst[k]:.4f}pp"
-              for k in cols)
-          + f"；範圍前不符（只警示）{len(warn)} 列"
-          + "；無從對帳（無官方年增率或無 t−12 餘額）"
-          + "、".join(f"{cols[k][0]} {n_skip[k]} 列" for k in cols))
-    return out, desc
+    from src.data.macro.cbc_ef15m01 import EF15_FILE, parse_cbc_ef15m01
+    df, desc = parse_cbc_ef15m01(sdmx, fatal_from, log_tag=f"[finmind_m1m2/{EF15_FILE}]",
+                                 cell=_ef15_cell)
+    if df is None:
+        return None, desc
+    return df[["date", "m1b", "m2"]], desc
 
 
 def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
@@ -658,6 +470,9 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
         from src.data.proxy.proxy_helper import fetch_url as _fu_cbc  # noqa: F401
         from src.data.macro.tw_macro import CBC_MS1_URLS, fetch_cbc_ms1_rows
         from src.data.macro.tw_macro import CBC_EF15M01_URL   # DL-f1-r1：Tier 2 端點 SSOT
+        # DL-f1-s1：EF15M01 解析 SSOT（與線上 tw_macro Tier 2 共用；舊名見本檔 re-export 段）
+        from src.data.macro.cbc_ef15m01 import (EF15_FILE as _EF15_FILE,
+                                                ef15_fatal_from as _ef15_fatal_from)
     except ImportError as e:
         # §1:印出真正缺什麼,不再吞成固定字串誤導診斷
         print(f"[finmind_m1m2] import 失敗,無法抓 CBC:{type(e).__name__}: {e}")
@@ -691,7 +506,8 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
                 print(f"[finmind_m1m2/{_EF15_FILE}] ❌ JSON 解析失敗 {type(e).__name__}: {e}"
                       f" body={r.text[:300]}")
             else:
-                # 對帳的致命範圍 = 寫入窗口 ＋ gap 的 t−12 基期（更早的列只警示，見解析器註解）
+                # 對帳的致命範圍 = 寫入窗口 ＋ gap 的 t−12 基期（更早的列只警示，
+                # 見 `src/data/macro/cbc_ef15m01.py` 模組 docstring）
                 ef15, ef15_desc = _parse_cbc_ef15m01_levels(
                     sdmx, fatal_from=_ef15_fatal_from(start))
 

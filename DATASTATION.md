@@ -499,7 +499,7 @@ print(report)
 
 | 名稱 | 來源 | 識別 | 端點 | 頻率 | API Key | 狀態連動 | 用途 |
 |---|---|---|---|---|---|---|---|
-| M1B / M2 貨幣供給 (✓可測試) | CBC | `ms1.json` | `cbc.gov.tw/public/Attachment/ms1.json` | monthly | — | `m1b_m2_info.m1b_yoy` | 資金動能（M1B-M2 黃金交叉） |
+| M1B / M2 貨幣供給 (✓可測試) | CBC | `ms1.json` | ~~`cbc.gov.tw/public/Attachment/ms1.json`~~（v18.231 起 404）→ `cpx.cbc.gov.tw/API/DataAPI/Get?FileName=EF15M01`（DL-f1-s4，2026-09-28；識別 `ms1.json` 是教學卡 join key，刻意保留） | monthly | — | `m1b_m2_info.m1b_yoy` | 資金動能（M1B-M2 黃金交叉） |
 | 央行貨幣供給 API | CBC | `cpx-api` | `cpx.cbc.gov.tw/API/DataAPI/Get` | monthly | — | `—` | CBC 官方 API 備援 |
 | 國發會景氣燈號 (✓可測試) | NDC | `NDC_signal` | `index.ndc.gov.tw/n/api/zh_tw/data/eco/signal` | monthly | — | `macro_info.ndc_signal.score` | 台灣景氣綜合分數（45 分制） |
 | NDC 景氣指標 | NDC | `composite` | `index.ndc.gov.tw/app/data/indicator/composite` | monthly | — | `—` | 景氣領先/同時/落後指標 |
