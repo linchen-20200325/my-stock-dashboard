@@ -36,6 +36,13 @@ import pandas as pd
 from shared.fetch_monitor import monitored  # v19.96 批次4 Item1(純 stdlib,無 streamlit)
 from shared.ttls import TTL_10MIN, TTL_15MIN, TTL_30MIN, TTL_1HOUR
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
+# DL-f1-s1:EF15M01 解析 SSOT(與排程 scripts/update_macro_history 共用同一份,§2.1)
+from src.data.macro.cbc_ef15m01 import (
+    EF15_FILE,
+    ef15_fatal_from,
+    ef15_latest_month,
+    parse_cbc_ef15m01,
+)
 from src.data.proxy import fetch_url
 
 __version__ = "1.1.0"
@@ -286,50 +293,63 @@ def _try_cbc_ms1(url: str) -> Optional[tuple]:
 
 
 def _try_cbc_ef15m01() -> Optional[tuple]:
-    """嘗試抓 CBC SDMX EF15M01,回傳 (m1b_yoy, m2_yoy) 或 None。"""
-    r = fetch_url(CBC_EF15M01_URL, params={'FileName': 'EF15M01'}, timeout=15)
+    """Tier 2:CBC PXWeb EF15M01(貨幣總計數-日平均數)→ (m1b_yoy, m2_yoy) 或 None。
+
+    DL-f1-s1(2026-09-28)改寫。舊版讀頂層 `DataSet`／`Structure`(舊格式),CBC 現行回應是
+    `{meta, data:{dataSets, structure}}` ⇒ 恆回 None,線上一直落到 Tier 3 `^TWII` 動能代理
+    (探針 GitHub Actions run 36408641177:代理回 m1b 3.65／m2 0.91／gap +2.74,央行 EF15M01
+    2026M07 實值 7.34／7.42／−0.08 —— 方向相反)。
+    取數照舊(同網址、同參數、同 timeout);解析一律交給共用的
+    `src.data.macro.cbc_ef15m01.parse_cbc_ef15m01`(與排程 `update_macro_history` 同一份,§2.1 SSOT),
+    **本函式不自己解析任何一格**。
+
+    回傳:「M1B、M2 官方年增率都有值」的最新資料月之 CBC **官方年增率**(%,T1 權威值;
+    四捨五入到 2 位,與既有回傳一致)—— 不由餘額自算。最新月任一欄為 "-" → 往前退到兩者都有值
+    的月份(餘額為 "-" 的月份解析器已整月剔除,同樣往前退)。
+
+    對帳窗口(致命範圍)沿用排程路徑同一條規則 `ef15_fatal_from`:把「表內最新資料月」當作唯一的
+    寫入月 ⇒ 最新月往前 12 個月(= 最新月官方年增率的 t−12 基期)起的每一列,自算年增率與官方
+    年增率超出捨入容差 → 整表拒用;更早的列不符只印 ⚠️、不拒用(不影響本函式輸出,而每次都重解析
+    全表,一筆舊歷史被修訂就會天天擋住)。對帳驗的是「標籤 → 欄位」配對;回傳月份若恰好無 t−12
+    餘額可對帳,採用的仍是同一組已在窗口內驗過配對的欄位。
+
+    任一步拒用(無回應、非 JSON、格式不符、序列名不唯一、單位／標題不符、對帳不符、可用月份早於
+    對帳窗口)→ 回 None → caller 照舊往 Tier 3 走(Tier 3 帶 `is_proxy_tier=True`)。
+    寧可降級,不可沉默給錯值(§1)。拒用原因由解析器或本函式印出。
+    """
+    tag = f'[tw_macro/{EF15_FILE}]'
+    r = fetch_url(CBC_EF15M01_URL, params={'FileName': EF15_FILE}, timeout=15)
     if r is None:
         return None
     try:
-        data = r.json()
-    except Exception:
+        sdmx = r.json()
+    except Exception as e:  # noqa: BLE001 — 非 JSON 即本層失敗;印出後回 None 交給下一層
+        print(f'{tag} ❌ JSON 解析失敗 {type(e).__name__}: {e} → 往下一層')
         return None
-    rows = data.get('DataSet', [])
-    if not rows:
+    latest = ef15_latest_month(sdmx)
+    fatal_from = ef15_fatal_from(latest) if latest is not None else None
+    try:
+        df, _why = parse_cbc_ef15m01(sdmx, fatal_from, log_tag=tag)
+    except (ValueError, TypeError, OverflowError) as e:
+        # 解析器對極端壞值(例:期間年份 0000、超出 int64 的餘額)會拋例外 → 視同拒用
+        print(f'{tag} ❌ 解析例外 {type(e).__name__}: {e} → 拒用,往下一層')
         return None
-    dims = (data.get('Structure') or {}).get('Dimensions', [])
-    cmap: dict = {}
-    for dim in (dims if isinstance(dims, list) else []):
-        if isinstance(dim, dict):
-            cmap[str(dim.get('id', ''))] = str(dim.get('name', ''))
-    if not cmap:
-        cmap = {k: k for k in (rows[0] if isinstance(rows[0], dict) else {})}
-    ck1 = next((k for k, v in cmap.items() if 'M1B' in v.upper()), None)
-    ck2 = next((k for k, v in cmap.items()
-                if v.strip().upper() in ('M2', 'M2 ')), None)
-    if not ck1:
-        ck1 = next((k for k in (rows[0] if isinstance(rows[0], dict) else {})
-                    if 'M1B' in k.upper()), None)
-    if not ck2:
-        ck2 = next((k for k in (rows[0] if isinstance(rows[0], dict) else {})
-                    if k.strip().upper() == 'M2'), None)
-    if not (ck1 and ck2) or len(rows) < 13:
+    if df is None:
+        return None                     # 拒用原因解析器已印出
+    both = df[df['m1b_yoy'].notna() & df['m2_yoy'].notna()]
+    if both.empty:
+        print(f'{tag} ❌ 無任何月份同時有 M1B、M2 官方年增率 → 拒用,往下一層')
         return None
-    sv1, sv2 = [], []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        try:
-            sv1.append(float(str(row.get(ck1, '')).replace(',', '')))
-            sv2.append(float(str(row.get(ck2, '')).replace(',', '')))
-        except Exception:
-            pass
-    if len(sv1) < 13 or len(sv2) < 13:
+    last = both.iloc[-1]
+    as_of = last['date']
+    if fatal_from is not None and as_of < fatal_from:
+        print(f'{tag} ❌ 可用的最新月份 {as_of:%Y-%m} 早於對帳窗口(≥ {fatal_from:%Y-%m})'
+              f' → 拒用,往下一層')
         return None
-    return (
-        round((sv1[-1] / sv1[-13] - 1) * 100, 2),
-        round((sv2[-1] / sv2[-13] - 1) * 100, 2),
-    )
+    m1b_yoy = round(float(last['m1b_yoy']), 2)
+    m2_yoy = round(float(last['m2_yoy']), 2)
+    print(f'{tag} ✅ {as_of:%Y-%m} 官方年增率 M1B={m1b_yoy:.2f}% M2={m2_yoy:.2f}%')
+    return (m1b_yoy, m2_yoy)
 
 
 def _try_twii_proxy() -> Optional[tuple]:
@@ -352,8 +372,14 @@ def fetch_cbc_m1b_m2() -> dict:
     抓中央銀行 M1B / M2 月資料 YoY 變動率。三層備援:
 
     - Tier 1: CBC public/data/ms1.json(官方公開 JSON)
-    - Tier 2: cpx.cbc.gov.tw SDMX EF15M01
+    - Tier 2: cpx.cbc.gov.tw PXWeb EF15M01 —— DL-f1-s1 起由共用解析器
+      `cbc_ef15m01.parse_cbc_ef15m01` 解析,回 CBC 官方年增率(見 `_try_cbc_ef15m01`)
     - Tier 3: ^TWII 動能代理(走 macro_core 經 NAS proxy)
+
+    ⚠️ DL-f1-s1(2026-09-28)探針 run 36408641177 實測:Tier 1 未命中(`/public/data/ms1.json`
+    回 HTTP 404;`/tw/public/data/ms1.json` 有回應但未通過 `fetch_cbc_ms1_rows` 檢查),Tier 2 在
+    本次修正前恆回 None(讀舊格式)→ 線上實際落在 Tier 3(tier_used=3)。修正後 Tier 2 可用時,
+    `m1b_yoy`／`m2_yoy` 是央行官方年增率(不是 ^TWII 報酬)。
 
     Returns
     -------

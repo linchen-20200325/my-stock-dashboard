@@ -321,12 +321,20 @@ DATA_REGISTRY: list[dict[str, Any]] = [
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 🇹🇼 六、台灣總經
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # DL-f1-s4(2026-09-28):endpoint／ping_url 原為 ~~`cbc.gov.tw/public/Attachment/ms1.json`~~
+    # (v18.231 確認 404,`tw_macro.CBC_MS1_URLS` 已於 v18.240 移除);另兩個 ms1.json 網址亦未命中
+    # (探針 run 36408641177)。實際可用源是 CBC PXWeb EF15M01(貨幣總計數-日平均數),排程
+    # `scripts/update_macro_history` 與線上 `tw_macro._try_cbc_ef15m01` 共用
+    # `src/data/macro/cbc_ef15m01.py` 解析 → 改指 EF15M01。本註冊表這兩欄無執行期讀者(純文件)。
+    # ⚠️ identifier 'ms1.json' 刻意保留、不是漏改:它同時是本檔 EDU_GUIDE 的 key(`tab_edu` 以
+    #    identifier 對 EDU_GUIDE join,教學卡上也顯示它;`macro_v2_service._EDU_KEY` 也指向這個 key),
+    #    改名會讓 `tab_edu` 的「M1B-M2」教學卡對不到本列而不再渲染。
     {'category':'🇹🇼 台灣總經', 'name':'M1B / M2 貨幣供給', 'source':'CBC',
-     'endpoint':'cbc.gov.tw/public/Attachment/ms1.json', 'identifier':'ms1.json',
+     'endpoint':'cpx.cbc.gov.tw/API/DataAPI/Get?FileName=EF15M01', 'identifier':'ms1.json',
      'frequency':'monthly', 'requires_key':None,
      'usage':'資金動能（M1B-M2 黃金交叉）',
      'state_key':'m1b_m2_info.m1b_yoy', 'pingable':True,
-     'ping_url':'https://www.cbc.gov.tw/public/Attachment/ms1.json'},
+     'ping_url':'https://cpx.cbc.gov.tw/API/DataAPI/Get?FileName=EF15M01'},
     {'category':'🇹🇼 台灣總經', 'name':'央行貨幣供給 API', 'source':'CBC',
      'endpoint':'cpx.cbc.gov.tw/API/DataAPI/Get', 'identifier':'cpx-api',
      'frequency':'monthly', 'requires_key':None,
