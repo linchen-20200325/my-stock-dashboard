@@ -15,6 +15,11 @@ import os
 
 import streamlit as st
 from shared.secret_md import scrub_md_mask  # SEC-3：錯誤字串上畫面前先洗（只跳脫遮罩，保留 L3 刻意的 **粗體**）
+# SEC-r11（2026-09-28）：問答散文（提問／AI 回答）比照 v2 `page_why`，走 L0 散文版清洗 ——
+# 上畫面／寫紀錄用 Markdown 版 `scrub_qa_text`、送 `run_agent` 用純文字版 `scrub_prose_secrets`
+# （⛔ 不 import v2 view 模組；兩邊都從 L0 取）。
+from shared.secret_md import scrub_qa_text
+from shared.secret_scrub import scrub_prose_secrets
 
 try:
     from src.services.ai_qa_service import run_agent, summarize_tab
@@ -118,24 +123,30 @@ def render():
             st.markdown(m["content"])
 
     q = st.chat_input("例如:2330 評分多少?現在大盤多頭嗎?台積電財務健不健康?")
-    if not q:
+    if not q:                                              # 「這一輪有沒有問」仍以原文判斷
         return
+    # SEC-r11(2026-09-28):提問原本以原文上畫面、存進 ai_qa_history、送給 run_agent,下一題又隨
+    # history 再送一次 —— 貼進來的金鑰／帳密／家目錄路徑原樣出站。比照 v2 `page_why._render_qa_leaf`:
+    # 畫面與紀錄用 Markdown 版(`scrub_qa_text`),送出用純文字版(`scrub_prose_secrets`);
+    # 兩支都是散文版(⛔ 不截「為什麼出現 型別名＋冒號…」這種引用錯誤訊息的提問)。沒命中規則的提問逐字不變。
+    _shown_q = scrub_qa_text(q)
     with st.chat_message("user"):
-        st.markdown(q)
+        st.markdown(_shown_q)
     # run_agent 內部會自行把本次 question 當成新的 user turn 接在 history 之後
     #(ai_qa_service.run_agent: contents = _history_to_contents(history) + [question])。
     # 因此傳給 run_agent 的必須是「append 本次問題之前」的歷史快照,否則同一句會送兩次
     #(Gemini 收到連續兩個相同 user turn → 例如輸入「6239」被串成「62396239」)。
     _prior = list(st.session_state.ai_qa_history)          # 快照:不含本次 q
-    st.session_state.ai_qa_history.append({"role": "user", "content": q})
+    st.session_state.ai_qa_history.append({"role": "user", "content": _shown_q})
 
     with st.chat_message("assistant"):
         with st.spinner("查詢中…"):
-            res = run_agent(q, _prior, api_key=key)        # 傳快照,q 只由 run_agent 接一次
+            res = run_agent(scrub_prose_secrets(q), _prior, api_key=key)  # 傳快照,q 只由 run_agent 接一次
         if res.tool_calls:
             _render_bundle({tc["name"]: tc["result"] for tc in res.tool_calls})
         if res.ok:
-            _text = (res.text or "").strip()
+            # SEC-r11:AI 回答上畫面、存進紀錄(下一題隨 history 再送)前也洗(L3 只洗錯誤字串)。
+            _text = scrub_qa_text((res.text or "").strip())
             # 空文字不可只留一個裸標題(否則畫面出現空的「🧬 AI 解讀」);顯式回報
             body = (f"### 🧬 AI 解讀｜使用模型:{res.model}\n\n{_text}" if _text
                     else "🧬 AI 已完成工具查詢,但未產生文字解讀;請見上方工具結果。")

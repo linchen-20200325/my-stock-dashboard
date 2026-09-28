@@ -724,7 +724,14 @@ def test_f3_not_asked_sends_nothing(monkeypatch):
 
 
 def test_f3_request_shape_asked_from_raw_question_from_scrubbed():
-    """規格：`asked` 照原文判斷；`question` ＝ `scrub_secrets(原文)`（純文字版，⛔ 不是 `scrub_qa_text`）。"""
+    """規格：`asked` 照原文判斷；`question` ＝ ~~`scrub_secrets(原文)`~~ `scrub_prose_secrets(原文)`
+    （純文字版，⛔ 不是 `scrub_qa_text`）。
+
+    ⚠️ SEC-r12（2026-09-28）更新本條最後一個斷言 —— 有意識的修改，不是漏改：原斷言釘住的函式名
+    `scrub_secrets` 正是 SEC-r12 的病灶（它的第 1 類把「為什麼出現 型別名＋冒號…怎麼解？」截成只剩型別名，
+    連問題都送不出去）。改釘散文版；「純文字版、⛔ 不是 Markdown 版」與 `asked` 照原文判斷兩點不變。
+    行為面見 `tests/test_sec_r12_r11_prose_scrub.py`（送出的提問保留引用的錯誤訊息、秘密照遮）。
+    """
     from src.ui.views import page_why as P
 
     fn = next(n for n in ast.walk(ast.parse(pathlib.Path(P.__file__).read_text(encoding="utf-8")))
@@ -733,4 +740,4 @@ def test_f3_request_shape_asked_from_raw_question_from_scrubbed():
     assert len(reqs) == 1
     kw = {k.arg: ast.unparse(k.value) for k in reqs[0].keywords}
     assert kw["asked"] == "bool(_question)"
-    assert kw["question"] == "scrub_secrets(_question)"
+    assert kw["question"] == "scrub_prose_secrets(_question)"
