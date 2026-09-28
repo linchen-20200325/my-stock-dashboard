@@ -1,11 +1,11 @@
 {
-  "updated_at": "2026-09-27T14:47:37.178905+00:00",
+  "updated_at": "2026-09-28T17:46:33.006630+00:00",
   "last_updated": "2026-09-24",
   "row_count": 2286,
   "n_days": 54,
   "fetch_diag": {
     "days_fetched": 0,
-    "days_holiday_or_empty": 1,
+    "days_holiday_or_empty": 2,
     "days_missing_price": 0
   },
   "coverage": {},
