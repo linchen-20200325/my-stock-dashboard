@@ -8,6 +8,8 @@ closure params(7 explicit pass + ~13 re-import):
 """
 from __future__ import annotations
 
+import math
+
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
@@ -198,6 +200,30 @@ def _fx_card(name: str, stats, unit: str) -> str:
             f'<div style="font-size:10px;color:#484f58;">{implies}</div></div>')
 
 
+def _finite_yoy(info, key: str):
+    """`m1b_m2_info[key]` 是**有限實數** → 回原值；否則 → None（§1：不捏 0）。
+
+    DL-f1-s24：§七 結論卡與同頁 KPI 卡原用 `.get(key, 0)` 取 M1B／M2 年增率 ——
+    缺鍵時靜默代入 0%（缺 m2 ⇒ 差額就是 M1B 年增率本身 →「正值 → 大膽做多！」；
+    代理源卻缺數字 ⇒「+0.00% 接近0 → 減碼」還附代理警語）；值為 None 時 §七
+    直接 TypeError（`tab_macro.py` 的呼叫處沒有 try）；NaN／±inf 則一路算進分支，
+    印成「+nan% 負值」「+inf% 正值」。
+
+    缺鍵／None／NaN／±inf／非數值（含 bool）一律算缺，回 None。
+    **回原值、不轉型**：非缺值路徑的相減、round、格式化吃的是與改動前同一個物件，
+    輸出逐字不變。
+    """
+    if not isinstance(info, dict):
+        return None
+    _v = info.get(key)
+    if _v is None or isinstance(_v, bool):
+        return None
+    try:
+        return _v if math.isfinite(_v) else None
+    except (TypeError, ValueError, OverflowError):   # 非實數 / 轉不成 float → 當缺
+        return None
+
+
 def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
                         tech: dict, tech_s: dict, tw: dict, tw_s: dict) -> None:
     """渲染長期桶 LONG(§七 + 國際/技術市場列,原 tab_macro line 2580-2978)。"""
@@ -235,7 +261,14 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     # ── M1B-M2 年增率（FinMind）──────────────────────────────
     _m1b_info = st.session_state.get('m1b_m2_info')
     _bias_info = st.session_state.get('bias_info')
-    
+    # DL-f1-s24（§1 不捏 0）：M1B／M2 任一不是有限數值 → 兩張卡都不算差額。
+    #   §七：不列 M1B-M2 那條（與 `_m1b_info` 為空時同一個樣子）；
+    #   KPI：走灰態「待取得」；代理警語只在有數字時出現。
+    # 兩個都有值時照舊（同一組物件、同一段算式 → 輸出逐字不變）。
+    _m1b_v = _finite_yoy(_m1b_info, 'm1b_yoy')
+    _m2_v = _finite_yoy(_m1b_info, 'm2_yoy')
+    _m1b_ok = _m1b_v is not None and _m2_v is not None
+
     # ── 策略3 × 策略1 結論（標題下方直接顯示）──────────────────
     # v19.176 修兩個缺陷（v19.174 去識別化的殘留）:
     #   (1) **代號重複渲染**:原本把「策略N：」寫死在文案裡,又把「→」右半段整段丟給
@@ -244,8 +277,8 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     #       任何人改寫文案拿掉「M1B」字樣,卡片就會靜默翻成策略1(§1:降級要看得見,不靜默)。
     # 改法:代號當**資料**帶著走 (code, 指標, 結論, 色),文案內不再出現代號字面值。
     _macro_concl = []
-    if _m1b_info:
-        _diff2 = _m1b_info.get('m1b_yoy', 0) - _m1b_info.get('m2_yoy', 0)
+    if _m1b_ok:
+        _diff2 = _m1b_v - _m2_v
         # DL-f1-s5：同頁下方 KPI 卡（v19.183 D2）早已標代理，這張結論卡印的是同一個
         # 數字卻沒標 —— 退到 ^TWII 動能代理時，指標數字後綴 L0 既有註記（K1 不自擬）。
         # 只揭露：三段分支（>0 / >-2 / 其餘）、結論文案、顏色一位未動；非代理時為空字串。
@@ -278,9 +311,7 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     # v18.169：3 卡 → 2 卡精簡（月線乖離併入年線副標；詳細訊號歸頂部拐點面板）
     _m_cols = st.columns(2)
     with _m_cols[0]:
-        if _m1b_info:
-            _m1b_v  = _m1b_info.get('m1b_yoy', 0)
-            _m2_v   = _m1b_info.get('m2_yoy', 0)
+        if _m1b_ok:
             _diff   = round(_m1b_v - _m2_v, 2)
             _mc     = '#da3633' if _diff > 0 else '#2ea043'
             _ml     = '✅ 資金流入股市' if _diff > 0 else '🔴 資金撤離股市'
@@ -297,11 +328,15 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
             # B7c：字面上提 L0 `M1B_PROXY_VALUE_NOTE`（與 v2 今天頁 m1b 燈共用），輸出逐字不變。
             _proxy_note = M1B_PROXY_VALUE_NOTE if _is_m1b_proxy else ''
             st.markdown(kpi('M1B-M2 差距', f'{_diff:+.2f}%{_proxy_note}',
-                            f'M1B:{_m1b_info.get("m1b_yoy",0):.1f}%  M2:{_m1b_info.get("m2_yoy",0):.1f}%  {_ml}', _mc, '#0d1117'), unsafe_allow_html=True)
+                            f'M1B:{_m1b_v:.1f}%  M2:{_m2_v:.1f}%  {_ml}', _mc, '#0d1117'), unsafe_allow_html=True)
             if _is_m1b_proxy:
                 st.caption('⚠️ 央行 M1B/M2 三層來源全部失敗，上方兩個數字是以 '
                            '**^TWII 20/60 日動量反推的代理估算**，'
                            '不是真實貨幣供給年增率 —— 請勿據此判斷資金行情。')
+        elif _m1b_info:
+            # DL-f1-s24：有 dict、缺數字 → 灰態「待取得」（K1：值沿用 section_mid VIX 卡
+            # 同一個 kpi 灰態字樣；副標沿用本卡既有）。不寫「抓取中」—— 已抓回，只是沒數字。
+            st.markdown(kpi('M1B-M2 差距', '待取得', '更新總經數據後自動計算', '#484f58', '#0d1117'), unsafe_allow_html=True)
         else:
             st.markdown(kpi('M1B-M2 差距', '抓取中', '更新總經數據後自動計算', '#484f58', '#0d1117'), unsafe_allow_html=True)
     
