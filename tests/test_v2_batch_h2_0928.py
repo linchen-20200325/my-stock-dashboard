@@ -15,8 +15,8 @@
   · **修前會紅**：直接釘住本批修掉的錯誤字樣／行為。
   · **修後不變守衛**（修前本來就綠）：釘住本批 ⛔ 不准順手改到的既有文字／行為，
     有效性靠**突變驗證**；每一條的 docstring 以「修後不變守衛」開頭標明。
-  ⚠️ 修前（`7020d13`）上實跑本檔 18 條：14 紅 4 綠（4 綠即標明的修後不變守衛）——
-     這是**量測值**（2026-09-28）；增刪測試時請重跑、⛔ 不要沿用。
+  ⚠️ 修前（`7020d13`）上實跑本檔 19 條：15 紅 4 綠（4 綠即標明的修後不變守衛）——
+     這是**量測值**（2026-09-28，含 QA N2 補的一條）；增刪測試時請重跑、⛔ 不要沿用。
 
 列一律走**真的** L3 `build_station_rows()`（`metrics_fn` 注入、全離線、不打網路）——
 市值 / 張數 / 均價 / 現價 / 整批抓取失敗列都由 L3 產生，本檔不手捏 row 的形狀。
@@ -186,6 +186,28 @@ class TestH1f6Card1TotalsNone:
         """還有沒失敗的持有列（只缺現價）⇒「持股缺資料」那一句要留，失敗那一句接在後面。"""
         rows = _rows(("0050.TW", _E, True, 10.0, 140.0, 150.0, True),
                      ("2330", _S, True, 2.0, 500.0, None, False))
+        note = _card1_note(monkeypatch, rows)
+        assert note == _TOTALS_NONE + "　⚠️ 另有 1 檔整批抓取失敗，未納入任何判斷。", note
+
+    def test_held_rows_fetched_but_watchlist_failed_keeps_the_sentence(self, monkeypatch):
+        """持有列都抓到了（只缺現價）、觀察清單那檔整批抓取失敗 ⇒「持股缺資料」那一句要留，
+        失敗那一句接在後面（批 H2 QA N2）。
+
+        ⚠️ 檔數刻意取「失敗列數 ≥ 持有列數，但沒有一列持有列失敗」：判的是**持有列本身**失敗與否
+        （照抄 L3 跳過條件），⛔ 不是拿失敗列數去比持有列數 —— QA 突變 M5
+        （判法改成 `_err_n >= len(_held)`）在本檔其他條都存活，這一條會轉紅。
+        """
+        rows = _rows(("0050.TW", _E, True, 10.0, 140.0, None, False),
+                     ("0056.TW", _E, False, None, None, 35.0, True))
+        _held = [r for r in rows if r.get("held")]
+        _failed = [r for r in rows if (r.get("_detail") or {}).get("error")]
+        # 前提：持有列沒有一列失敗、只缺現價；失敗的那一列是觀察清單；兩邊檔數相等。
+        assert [r["代號"] for r in _held] == ["0050.TW"]
+        assert not (_held[0].get("_detail") or {}).get("error")
+        assert _held[0]["張數"] and _held[0]["均價"] and _held[0]["現價"] is None
+        assert [(r["代號"], r["held"]) for r in _failed] == [("0056.TW", False)]
+        assert len(_failed) >= len(_held)
+        assert svc.compute_portfolio_totals(rows) is None          # 走「算不出來」
         note = _card1_note(monkeypatch, rows)
         assert note == _TOTALS_NONE + "　⚠️ 另有 1 檔整批抓取失敗，未納入任何判斷。", note
 
