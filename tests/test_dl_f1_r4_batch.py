@@ -551,3 +551,134 @@ class TestS42SkippedTableMetadata:
         assert {**st, "meta_last_updated": None} == st0
         bad0 = {s["dataset"] for s in chw.check_inputs_fresh(tmp_path, today=dt.date(2026, 9, 26))}
         assert bad0 == set(bad)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DL-f1-s34：季校準寫 macro_thresholds.json 時保留未知鍵與既有註解；讀檔失敗不靜默
+# ═════════════════════════════════════════════════════════════════════════════
+_OLD_DEFAULT_COMMENT = "By recalibrate_macro Actions workflow. PR-reviewed before applied."
+_FROZEN_NOW = "2026-10-01 00:00:05"
+
+
+def _old_writer_text(h: int, s: int, method: str) -> str:
+    """修正前 `emit_thresholds_json` 寫出的全文（固定 5 鍵；時戳為凍結值）—— 新建檔時須逐字相同。"""
+    import json
+    return json.dumps({"HEALTH_DEFENSE_THRESHOLD": h, "BULL_MIN_SCORE": s,
+                       "last_calibrated": _FROZEN_NOW, "method": method,
+                       "_comment": _OLD_DEFAULT_COMMENT}, indent=2, ensure_ascii=False) + "\n"
+
+
+@pytest.fixture
+def cmt(monkeypatch):
+    """`scripts.calibrate_macro_traffic`，`_dt.datetime.now()` 凍結在 2026-10-01 00:00:05。"""
+    import types
+
+    import scripts.calibrate_macro_traffic as mod
+
+    class _Frozen:
+        @staticmethod
+        def now():
+            return dt.datetime(2026, 10, 1, 0, 0, 5)
+    monkeypatch.setattr(mod, "_dt", types.SimpleNamespace(datetime=_Frozen))
+    return mod
+
+
+class TestS34EmitThresholdsJson:
+    def test_new_file_is_byte_identical_to_pre_fix(self, cmt, tmp_path, capsys):
+        p = tmp_path / "macro_thresholds.json"
+        assert cmt.emit_thresholds_json(37, 4, method="m", path=str(p)) is True
+        assert p.read_text(encoding="utf-8") == _old_writer_text(37, 4, "m")
+        assert "不存在" in capsys.readouterr().out                        # 缺檔：照舊以預設值比較，但要出聲
+
+    def test_rewriting_a_pre_fix_file_is_byte_identical(self, cmt, tmp_path):
+        p = tmp_path / "macro_thresholds.json"
+        p.write_text(_old_writer_text(37, 4, "m1"), encoding="utf-8")
+        assert cmt.emit_thresholds_json(38, 5, method="m2", path=str(p)) is True
+        assert p.read_text(encoding="utf-8") == _old_writer_text(38, 5, "m2")
+
+    def test_unknown_keys_and_comment_text_are_kept_in_place(self, cmt, tmp_path):
+        import json
+        orig = {"HEALTH_DEFENSE_THRESHOLD": 35, "BULL_MIN_SCORE": 4, "last_calibrated": None,
+                "method": "default (uncalibrated)",
+                "_comment": "By recalibrate_macro Actions workflow. Override calc_traffic_light "
+                            "thresholds. PR-reviewed before applied.",
+                "_comment_v19_173": "校準狀態誠實化（只是說明，未動任何數值）：…待辦：以同一份樣本跑 ROC。"}
+        p = tmp_path / "macro_thresholds.json"
+        p.write_text(json.dumps(orig, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        assert cmt.emit_thresholds_json(36, 5, method="walk-forward 4 folds (x)", path=str(p)) is True
+        exp = dict(orig, HEALTH_DEFENSE_THRESHOLD=36, BULL_MIN_SCORE=5, last_calibrated=_FROZEN_NOW,
+                   method="walk-forward 4 folds (x)")
+        text = p.read_text(encoding="utf-8")
+        assert text == json.dumps(exp, indent=2, ensure_ascii=False) + "\n"   # 鍵、順序、註解原文都在
+        assert list(json.loads(text)) == list(orig)
+
+    def test_live_repo_file_keeps_every_key(self, cmt, tmp_path):
+        """現行 repo 的 macro_thresholds.json（只讀、複製到 tmp）：寫回後每個既有鍵都在、順序不變，
+        本函式不負責的鍵一字不動。"""
+        import json
+        from pathlib import Path
+        live = Path(__file__).resolve().parent.parent / "macro_thresholds.json"
+        if not live.exists():
+            pytest.skip("repo 無 macro_thresholds.json")
+        orig = json.loads(live.read_text(encoding="utf-8"))
+        p = tmp_path / "macro_thresholds.json"
+        p.write_text(live.read_text(encoding="utf-8"), encoding="utf-8")
+        h = int(orig.get("HEALTH_DEFENSE_THRESHOLD", 35)) + 1
+        assert cmt.emit_thresholds_json(h, 4, method="t", path=str(p)) is True
+        new = json.loads(p.read_text(encoding="utf-8"))
+        owned = {"HEALTH_DEFENSE_THRESHOLD", "BULL_MIN_SCORE", "last_calibrated", "method"}
+        assert list(new)[:len(orig)] == list(orig)
+        assert {k: v for k, v in new.items() if k not in owned} == \
+               {k: v for k, v in orig.items() if k not in owned} | {"_comment": orig.get("_comment", _OLD_DEFAULT_COMMENT)}
+
+    def test_no_change_returns_false_and_leaves_the_bytes(self, cmt, tmp_path):
+        p = tmp_path / "macro_thresholds.json"
+        p.write_text(_old_writer_text(35, 4, "old").replace(_FROZEN_NOW, "2025-01-01 00:00:00"),
+                     encoding="utf-8")
+        before = p.read_bytes()
+        assert cmt.emit_thresholds_json(35, 4, method="new", path=str(p)) is False
+        assert p.read_bytes() == before
+
+    def test_missing_file_with_default_values_creates_nothing(self, cmt, tmp_path, capsys):
+        p = tmp_path / "macro_thresholds.json"
+        assert cmt.emit_thresholds_json(35, 4, method="m", path=str(p)) is False
+        assert not p.exists()
+        assert "不存在" in capsys.readouterr().out
+
+    def test_defaults_come_from_the_ssot(self, cmt, tmp_path, monkeypatch):
+        import shared.macro_calibration as mcal
+        monkeypatch.setattr(mcal, "HEALTH_DEFENSE_THRESHOLD_DEFAULT", 40)
+        monkeypatch.setattr(mcal, "BULL_MIN_SCORE_DEFAULT", 3)
+        p = tmp_path / "macro_thresholds.json"
+        assert cmt.emit_thresholds_json(40, 3, method="m", path=str(p)) is False   # 缺檔 → 與預設值比較
+        assert cmt.emit_thresholds_json(35, 4, method="m", path=str(p)) is True
+
+    @pytest.mark.parametrize("content,why", [
+        (b"{not json", "讀不了現行門檻檔"),
+        (b"", "讀不了現行門檻檔"),
+        (b"\xff\xfe\x00\x01", "讀不了現行門檻檔"),                 # 非 UTF-8
+        (b"[35, 4]", "頂層不是 JSON 物件"),
+        (b'"35"', "頂層不是 JSON 物件"),
+    ], ids=["壞JSON", "空檔", "非UTF8", "頂層是陣列", "頂層是字串"])
+    def test_unreadable_file_raises_and_is_not_overwritten(self, cmt, tmp_path, content, why):
+        p = tmp_path / "macro_thresholds.json"
+        p.write_bytes(content)
+        with pytest.raises(RuntimeError, match=why):
+            cmt.emit_thresholds_json(37, 4, method="m", path=str(p))
+        assert p.read_bytes() == content
+
+    def test_path_is_a_directory_raises(self, cmt, tmp_path):
+        d = tmp_path / "macro_thresholds.json"
+        d.mkdir()
+        with pytest.raises(RuntimeError, match="讀不了現行門檻檔"):
+            cmt.emit_thresholds_json(37, 4, method="m", path=str(d))
+
+    def test_missing_keys_compare_against_defaults_and_keep_the_rest(self, cmt, tmp_path):
+        import json
+        p = tmp_path / "macro_thresholds.json"
+        p.write_text(json.dumps({"_comment": "手寫說明", "foo": 1}, ensure_ascii=False), encoding="utf-8")
+        assert cmt.emit_thresholds_json(35, 4, method="m", path=str(p)) is False   # 缺鍵 = 預設值 35／4
+        assert cmt.emit_thresholds_json(36, 4, method="m", path=str(p)) is True
+        assert json.loads(p.read_text(encoding="utf-8")) == {
+            "_comment": "手寫說明", "foo": 1, "HEALTH_DEFENSE_THRESHOLD": 36, "BULL_MIN_SCORE": 4,
+            "last_calibrated": _FROZEN_NOW, "method": "m"}

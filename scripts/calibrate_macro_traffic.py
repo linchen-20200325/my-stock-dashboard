@@ -846,26 +846,48 @@ def build_proposal_report(wf: dict, df_twii: pd.DataFrame, mode: str,
 
 def emit_thresholds_json(rec_h: int, rec_s: int, method: str,
                          path: str = 'macro_thresholds.json') -> bool:
-    """寫 macro_thresholds.json；若值未變回 False（避免空 commit）。"""
+    """寫 macro_thresholds.json；若值未變回 False（避免空 commit）。
+
+    DL-f1-s34（2026-09-28）兩處修正（「值未變 → 回 False、不寫檔」這條判定不變）：
+    - 寫檔：只更新本函式負責的 4 個鍵（HEALTH_DEFENSE_THRESHOLD、BULL_MIN_SCORE、last_calibrated、
+      method）；其餘鍵（例 `_comment_v19_173`）與 `_comment` 原文一字不動、順序不變。原本以固定 5 鍵
+      整份改寫 —— 丟掉未知鍵、`_comment` 原文也被換掉。`_comment` 不存在時才補預設句
+      （新建檔的內容與原本逐字相同）。
+    - 讀現行檔：檔案不存在 → 印出，並以 `shared.macro_calibration` 的預設值比較（runtime loader 缺檔時
+      用的也是這兩個值；原本在此寫死 35／4）；檔案在但讀不了／不是合法 JSON／頂層不是物件 → raise，
+      不比較、不覆寫。原本 `except Exception: pass`（違 §1／§3.3）靜默改用預設值比較、接著整份覆寫
+      —— 內容不明的檔連同未知鍵一起被蓋掉，而且沒人知道。
+    """
     import json as _json
     import os as _os
-    current = {'HEALTH_DEFENSE_THRESHOLD': 35, 'BULL_MIN_SCORE': 4}
+    from shared.macro_calibration import BULL_MIN_SCORE_DEFAULT, HEALTH_DEFENSE_THRESHOLD_DEFAULT
     if _os.path.exists(path):
         try:
             with open(path, 'r', encoding='utf-8') as fp:
                 current = _json.load(fp)
-        except Exception:
-            pass
-    if (int(current.get('HEALTH_DEFENSE_THRESHOLD', 35)) == rec_h
-            and int(current.get('BULL_MIN_SCORE', 4)) == rec_s):
+        except (OSError, ValueError) as e:        # ValueError 含 JSONDecodeError、UnicodeDecodeError
+            raise RuntimeError(
+                f"讀不了現行門檻檔 {path}（{type(e).__name__}: {e}）→ 不比較、不覆寫；"
+                "請先修好該檔（§1：不拿預設值蓋掉內容不明的檔）") from e
+        if not isinstance(current, dict):
+            raise RuntimeError(f"現行門檻檔 {path} 的頂層不是 JSON 物件"
+                               f"（{type(current).__name__}）→ 不比較、不覆寫")
+    else:
+        print(f"[calibrate/emit_json] {path} 不存在 → 以預設值 HEALTH_DEFENSE_THRESHOLD="
+              f"{HEALTH_DEFENSE_THRESHOLD_DEFAULT}、BULL_MIN_SCORE={BULL_MIN_SCORE_DEFAULT} 比較"
+              "（runtime loader 缺檔時用的也是這兩個值）")
+        current = {}
+    if (int(current.get('HEALTH_DEFENSE_THRESHOLD', HEALTH_DEFENSE_THRESHOLD_DEFAULT)) == rec_h
+            and int(current.get('BULL_MIN_SCORE', BULL_MIN_SCORE_DEFAULT)) == rec_s):
         return False
-    payload = {
+    payload = dict(current)                    # 保留未知鍵與原有順序；下面只改本函式負責的鍵
+    payload.update({
         'HEALTH_DEFENSE_THRESHOLD': rec_h,
         'BULL_MIN_SCORE': rec_s,
         'last_calibrated': _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'method': method,
-        '_comment': 'By recalibrate_macro Actions workflow. PR-reviewed before applied.',
-    }
+    })
+    payload.setdefault('_comment', 'By recalibrate_macro Actions workflow. PR-reviewed before applied.')
     with open(path, 'w', encoding='utf-8') as fp:
         _json.dump(payload, fp, indent=2, ensure_ascii=False)
         fp.write('\n')
