@@ -170,6 +170,28 @@ def stale_days_threshold(cadence: str = "daily") -> int:
     return _STALE_DAYS_BY_CADENCE.get(cadence, STALE_DAYS_DAILY)
 
 
+# ── cron 自陳狀態:「本輪抓取結果為空」標記(DL-f1-s6 2026-09-28)──────────────────
+#
+# 寫入端:`scripts/update_macro_history.py::update_one` 在 fetcher 回空表時,把本字串寫進
+#         `data_cache/metadata.json` 的 `datasets[<name>].last_error`,既有 parquet 原封不動。
+# 讀取端:`scripts/calibrate_health_weights.py::check_inputs_fresh` 以**完全相等**比對它。
+# 兩端都從這裡取(SSOT):改字只改這一行,寫入端與讀取端一起變。
+#
+# ⚠️ 它的語意是「這一輪 fetcher 沒回任何列」,**不是**「上游沒壞」的證明:
+#   - 多數時候是真的沒有新資料 —— 週末、休市、月頻表兩次發布之間
+#     (2026-09-28 讀 origin/main 上 metadata.json 近 10 版〔09-20～09-27〕:tw_pmi 9 版、
+#      finmind_m1m2 8 版是它〔其餘為整段重建成功的 null,與 m1m2 最新一版的複合字串〕;
+#      finmind_inst 4 版是它,其中 3 版在週末);
+#   - 但 fetcher 把上游失敗吞成空表時,寫出來的**也是**它
+#     (2026-09-28 讀碼:`fetch_finmind_m1m2` 在來源全敗、sanity 拒寫時都回空表)。
+# ⇒ 讀取端只能在「新鮮度判定為不過期」時容忍它;上游真的壞了,資料會一路變舊,
+#    最後由新鮮度判定擋下。複合字串(例:「抓取結果為空；既有檔 sanity 不過,待重建」)
+#    **不等於**本標記 → 照舊當錯誤。
+# ⚠️ 已落地的 metadata.json 都是以這個字面值寫入的 —— 改字前先想遷移,否則舊檔在下一次
+#    cron 重寫前會被當成「上游錯誤」。
+EMPTY_FETCH_MARKER = "抓取結果為空"
+
+
 # ── 月頻總經指標:發布延遲 SSOT + 「as_of 還算當期」門檻(G1 2026-08-07)────────
 #
 # 【為什麼不能拿 STALE_DAYS_MONTHLY(45) 去量這些指標】
@@ -203,7 +225,20 @@ MACRO_PUBLICATION_LAG_DAYS: dict[str, int] = {
     "ndc_signal": 27,    # 國發會景氣對策信號:月後 ~27 天
     # ── G2 2026-08-08 補登(健診儀表板的月頻列亦需精確判定)────────────
     "tw_monthly_revenue": 10,  # 個股月營收(FinMind/MOPS):月後 ~10 天(CLAUDE.md §2.3)
-    "m1b_m2":              7,  # CBC M1B/M2:月後 ~5-7 天(取上界,CLAUDE.md §2.3)
+    # ── m1b_m2:DL-f1-s7 2026-09-28 依 EF15M01 實測更正(事實更正,非政策變更)──────
+    # 舊值 7,舊註解逐字:「CBC M1B/M2:月後 ~5-7 天(取上界,CLAUDE.md §2.3)」。
+    # 與現行取數源不符:批 R(#732)起 cron 的 m1m2 取 CBC EF15M01。探針 run 36419092722
+    # (2026-09-28 20:00 台北)讀到 EF15M01 `meta.last_updated`='2026-08-27'、末列期間 '2026M07':
+    #   ① 2026-07 資料最晚 08-27 上架 = 月底(07-31)後 27 天 → 依本表慣例「自月底起算的
+    #      日曆天」取 27。判準 due = 次月 1 日 + 27 = 08-28(比 ① 多 1 天),再加
+    #      `MONTHLY_PUBLICATION_MARGIN_DAYS`(7)⇒ 6 月資料要到 09-04 仍無 7 月才判「落後 1 期」。
+    #      舊值 7:due 08-08、08-15 起就判落後 —— 比 ① 的上架日早了 12 天(每月約兩週誤判)。
+    #   ② 同一回應 09-28 20:00 仍停在 2026M07 ⇒ 2026-08 資料 ≥ 月底後 28 天(設限觀測,實際日未知)。
+    # ⚠️ 完整觀測點只有 ① 一個(② 只是下界)。② 已超過 27 ⇒ 8 月資料若在 10-05 前上架,
+    #    只會落在「逾原定發布日、仍在緩衝內」,10-05 起仍未上架才判落後 1 期。央行發布行事曆
+    #    沙箱連不到(cbc.gov.tw egress 403),未核對。有新觀測點時請重估本值 —— **勿**以調大
+    #    `MONTHLY_PUBLICATION_MARGIN_DAYS` 代替(那會放寬所有月頻指標)。
+    "m1b_m2":             27,
 }
 
 #: as_of(月初)→ 下一期公布的最大跨度(31 天 × 2 個月)。

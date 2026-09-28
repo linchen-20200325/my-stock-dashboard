@@ -24,6 +24,13 @@ score_norm = score / max_score × 100（用真 max_score 4/6,**修正 health 原
 三個月前的 M1B-M2 gap 擬權重,產出的提案看起來完全正常。
 現行:過期 / 上游自陳失敗 → **`SystemExit` 擋下**(§1,理由與「為何不留旁路」
 見 `check_inputs_fresh` docstring);能跑時,提案尾端會自動附上每個輸入的 as-of。
+
+⚠️ **2026-09-28 閘門更正(DL-f1-s6,行為變更)**:`last_error`「抓取結果為空」是 cron 在
+「這一輪沒抓到新列」時寫的(週末、休市、月頻表兩次發布之間天天如此),舊閘門一律當上游
+錯誤擋 ⇒ 季排程當天只要任一輸入正好沒新列就被擋。
+現行:**完全等於** `shared.staleness.EMPTY_FETCH_MARKER` 且新鮮度判定**不過期** → 可用;
+過期照擋;其他任何錯誤字串照擋(規則見 `check_inputs_fresh`)。
+同日 DL-f1-s7 另把 m1b_m2 的發布延遲依 EF15M01 實測更正(`shared/staleness.py`)。
 """
 from __future__ import annotations
 
@@ -199,7 +206,15 @@ _REQUIRED_DATASETS = ("twii_ohlcv", "finmind_inst", "finmind_m1m2")
 
 
 def check_inputs_fresh(cache_dir: Path = _CACHE, *, today=None) -> list:
-    """回「不可用」的輸入清單(過期 or 上游自陳抓取失敗)。全新鮮 → 空 list。
+    """回「不可用」的輸入清單(過期 or 上游自陳錯誤)。全部可用 → 空 list。
+
+    判定(DL-f1-s6 2026-09-28 起;三條缺一不可):
+      1. 新鮮度判定過期(`is_stale`)→ 不可用 —— 不論 `last_error` 寫什麼;
+      2. `last_error` **完全等於** `shared.staleness.EMPTY_FETCH_MARKER`(「抓取結果為空」,
+         寫入端 `update_macro_history.update_one` 用同一個常數)且**不過期** → 可用;
+      3. 其他任何非空 `last_error` → 不可用(含「抓取結果為空；既有檔 sanity 不過,待重建」
+         這種複合字串)。**只認完全相等**:不去空白、不比前綴、不比包含 ——
+         寬鬆比對會把「既有檔已知不合格」一起放過。
 
     ═══ 為什麼要有這道閘門(2026-08-27 新增,這是行為變更,不是重構)═══════════
     原本 `main()` 只擋「**檔案不存在**」。實測:`finmind_m1m2.parquet` 檔案在、
@@ -217,13 +232,29 @@ def check_inputs_fresh(cache_dir: Path = _CACHE, *, today=None) -> list:
 
     門檻與頻率判定全部委派 `macro_cache_reader.compute_cache_staleness`
     (它再委派 L0 `shared/staleness.py`),本檔**不自己訂任何天數**(§3.3)。
+
+    ═══ 2026-09-28 更正(DL-f1-s6):「抓取結果為空」不是上游錯誤 ═══════════════
+    上面第一段「`last_error` 是『抓取結果為空』,也就是上游已經連續幾個月沒成功寫進去了」
+    這個推論**不成立**,原文保留、在此更正:
+      - 「抓取結果為空」只代表**這一輪 fetcher 沒回任何列** —— `update_one` 在週末、休市、
+        月頻表兩次發布之間天天寫它(2026-09-28 讀 origin/main 上 metadata.json 近 10 版
+        〔09-20～09-27〕:tw_pmi 9 版、finmind_m1m2 8 版、finmind_inst 4 版是它)。
+        一律擋 ⇒ 季排程當天只要任一輸入正好是這個狀態就被擋(月頻表幾乎天天是)。
+      - 它也**證明不了**上游沒壞:fetcher 把上游失敗吞成空表時寫的也是它。所以只在
+        **不過期**時放行 —— 上游真的壞了,資料會一路變舊,由判定 1 擋下。
+      - 「最新資料月 2026-06-01 = 三個月前」是用舊的 m1b_m2 發布延遲(7 天)量的;
+        DL-f1-s7 依 EF15M01 實測(2026-07 資料最晚 08-27 上架)更正後,08-27 當下 6 月
+        尚未「落後 1 期」。過期就擋的規則本身不變,變的是「多久算過期」的量尺。
     """
+    from shared.staleness import EMPTY_FETCH_MARKER
     from src.data.macro.macro_cache_reader import compute_cache_staleness
 
     bad = []
     for _name in _REQUIRED_DATASETS:
         _st = compute_cache_staleness(_name, cache_dir=cache_dir, today=today)
-        if _st["is_stale"] or _st["upstream_error"]:
+        _err = _st["upstream_error"]
+        # 判定 1:過期一律擋;判定 2/3:沒過期時,只有「完全等於」標記的空抓取才放行。
+        if _st["is_stale"] or (_err and _err != EMPTY_FETCH_MARKER):
             bad.append(_st)
     return bad
 

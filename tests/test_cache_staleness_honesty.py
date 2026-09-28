@@ -113,6 +113,11 @@ class TestCadenceAware:
 
         2026-06 這一期在 2026-07-20 仍是**當期**(87 天前的同一筆到 08-27 才落後一期)。
         若有人把月頻改成日曆天判定,第一個 assert 會轉紅。
+
+        ⚠️ 2026-09-28 更正(DL-f1-s7,事實更正):上句括號「到 08-27 才落後一期」是依舊的
+        m1b_m2 發布延遲 7 天算的。依 EF15M01 實測(2026-07 資料最晚 08-27 才上架)更正後,
+        08-27 當下 6 月仍是當期(緩衝用完才算落後)。**斷言一字未改**;「落後」那一段的量測日
+        由 08-27 改為 09-28 —— 那天 7 月早已上架、6 月確實落後一期,守的仍是同一件事。
         """
         _write_monthly(tmp_path, "finmind_m1m2", dt.date(2026, 6, 1))
         fresh = compute_cache_staleness(
@@ -120,8 +125,9 @@ class TestCadenceAware:
         assert fresh["is_stale"] is False, fresh["reason"]
         assert fresh["age_days"] == 49          # 日曆天已 49 天,但仍是當期
 
+        # 原量測日 2026-08-27(依舊 lag 7 推得);DL-f1-s7 起改 09-28,理由見 docstring。
         stale = compute_cache_staleness(
-            "finmind_m1m2", cache_dir=tmp_path, today=dt.date(2026, 8, 27))
+            "finmind_m1m2", cache_dir=tmp_path, today=dt.date(2026, 9, 28))
         assert stale["is_stale"] is True
         assert stale["periods_behind"] >= 1
         assert "落後" in stale["reason"]
@@ -206,20 +212,33 @@ class TestCalibrationInputGate:
             tmp_path, today=dt.date(2026, 8, 27)) == []
 
     def test_stale_monthly_input_is_blocked(self, tmp_path):
-        """這就是實際發生的那一種:檔案在、讀得到,但資料月停在三個月前。"""
+        """這就是實際發生的那一種:檔案在、讀得到,但資料月停在三個月前。
+
+        ⚠️ 2026-09-28 更正(DL-f1-s7,事實更正):m1m2 的資料月原為 2026-06-01。依 EF15M01
+        實測(2026-07 資料最晚 08-27 才上架)更正 m1b_m2 發布延遲後,08-27 當下 6 月仍是當期
+        (舊結論來自舊的 7 天延遲),已不是「過期輸入」的例子 → 改用確實落後一期的 2026-05-01。
+        **斷言一字未改**。
+        """
         _write_daily(tmp_path, "twii_ohlcv", dt.date(2026, 8, 25))
         _write_daily(tmp_path, "finmind_inst", dt.date(2026, 8, 25))
-        _write_monthly(tmp_path, "finmind_m1m2", dt.date(2026, 6, 1))
+        _write_monthly(tmp_path, "finmind_m1m2", dt.date(2026, 5, 1))   # 原 2026-06-01
         bad = self._gate().check_inputs_fresh(tmp_path, today=dt.date(2026, 8, 27))
         assert [b["dataset"] for b in bad] == ["finmind_m1m2"]
 
     def test_upstream_error_alone_is_blocked(self, tmp_path):
-        """資料日期還新,但 metadata 自陳抓取失敗 → 同樣擋(§1 保守側)。"""
+        """資料日期還新,但 metadata 自陳抓取失敗 → 同樣擋(§1 保守側)。
+
+        ⚠️ 2026-09-28 更正(DL-f1-s6,行為變更):`last_error` 原用「抓取結果為空」當上游失敗的例子。
+        那個字串是 cron 在「這一輪沒抓到新列」時寫的(週末、休市、月頻表兩次發布之間),
+        現行規則在資料不過期時放行它(守衛見 tests/test_dl_f1_s6_s7_calibrate_gate.py)。
+        本條守的「上游自陳錯誤 → 擋」不變,例子改為真正的錯誤字串;**斷言一字未改**。
+        """
         _write_daily(tmp_path, "twii_ohlcv", dt.date(2026, 8, 25))
         _write_daily(tmp_path, "finmind_inst", dt.date(2026, 8, 25))
         _write_monthly(tmp_path, "finmind_m1m2", dt.date(2026, 7, 1))
         _write_meta(tmp_path, {"finmind_inst": {
-            "last_updated": "2026-08-25", "row_count": 1, "last_error": "抓取結果為空"}})
+            "last_updated": "2026-08-25", "row_count": 1,
+            "last_error": "HTTPError: 503 Server Error"}})   # 原「抓取結果為空」
         bad = self._gate().check_inputs_fresh(tmp_path, today=dt.date(2026, 8, 27))
         assert [b["dataset"] for b in bad] == ["finmind_inst"]
 
