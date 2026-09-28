@@ -173,6 +173,40 @@ M1B_M2_GAP_SANITY_ABS_MAX_PP: float = 30.0
 
 實測觸發(同上):**188 列(78.7%)的 |gap| > 30**,最極端為 -13,976 / +36,034。"""
 
+# ── 貨幣供給單位契約 + 外送量級帶(DL-f1-r1,2026-09-28)─────────────────────
+MONEY_SUPPLY_CACHE_UNIT_LABEL: str = "新台幣百萬元"
+"""`data_cache/finmind_m1m2.parquet` 的 m1b / m2 **單位契約**(寫入端與讀取端共用)。
+
+來源:CBC EF15M01(貨幣總計數-日平均數)的 `meta.units` 第一個量度(原始值)原樣
+(GitHub Actions run 36408641177 實測 `"新台幣百萬元,%"`)。寫入端
+`scripts/update_macro_history._parse_cbc_ef15m01_levels` 會逐次比對回應的單位字串,
+不一致就整表拒用 —— 單位變了卻照樣寫入,會讓下游差上千倍(§4.1)。"""
+
+MONEY_SUPPLY_TWD_PER_CACHE_UNIT: float = 1e6
+"""`MONEY_SUPPLY_CACHE_UNIT_LABEL` 的一單位 = 新台幣 1,000,000 元(百萬元)。
+
+換成億元:`值 × MONEY_SUPPLY_TWD_PER_CACHE_UNIT ÷ shared.margin_schema.TWD_PER_YI`
+(= 值 ÷ 100)。`scripts/export_stock_db.write_money_supply` 對下游承諾的是**億元**,
+換算只在該處做一次(parquet 本身維持百萬元,不改 schema)。"""
+
+MONEY_SUPPLY_LEVEL_SANITY_MIN_YI: float = 1e4
+"""外送下游的 M1B / M2 餘額**量級帶下界**(億元,閉區間)= 1 兆元。
+
+目的只有一個:攔「單位換算錯」,不是攔真實波動。依據(probe run 36408641177,
+EF15M01 全表 1987-05 ~ 2026-07,百萬元 ÷ 100 → 億元):
+  - 真值:M1B ∈ [12,552, 307,489] 億、M2 ∈ [34,321, 702,903] 億 → 全在帶內;
+  - 重複換算(再 ÷100):M2 ≤ 7,029 億、M1B ≤ 3,075 億 → **每一列**都低於本下界;
+  - 把百萬元當元再 ÷1e8:值 < 1 → 同樣攔下。"""
+
+MONEY_SUPPLY_LEVEL_SANITY_MAX_YI: float = 5e6
+"""外送下游的 M1B / M2 餘額**量級帶上界**(億元,閉區間)= 500 兆元。
+
+  - 漏換算(百萬元原值直接當億元):任何 M2 > 5,000,000 百萬元(5 兆元)的列即超出
+    本上界;2026-07 的 M2 原值是 70,224,762 百萬元,近期列必然超出 ——
+    守門是整表判定,一列超出即整表不外送;
+  - 成長餘裕:2026-07 M2 = 702,248 億,距本上界約 7.1 倍(年增 7% 約 29 年),
+    不會把真實成長誤判成單位錯。"""
+
 M1B_M2_LEG_ENABLED: bool = False
 """M1B-M2 資金活水是否計入 `market_regime` 評分。**2026-08-19 校準後歸零。**
 

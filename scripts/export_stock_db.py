@@ -13,6 +13,10 @@
                             B3 v19.179 加 §3.2 sanity gate：全列須 ∈[500,10000]億,
                             否則整表略過 + 警告,不把混口徑序列外送下游）
     - `money_supply`        M1B/M2 月供給（finmind_m1m2.parquet,億元 level + gap 點差）
+                            DL-f1-r1:parquet 的 m1b/m2 是 CBC EF15M01 日平均餘額,**單位百萬元**;
+                            本檔寫入前 ÷100 → **億元**(先前無此換算,宣告與實值差 100 倍),
+                            §3.2 gate 另加億元量級帶,攔「漏換算／重複換算」。
+                            m1b／m2 以億元 REAL 寫出（2026-09-28 起）；先前的 INTEGER 內容是被誤當餘額的月變動額，已由守門擋下不外送。
     - `macro_tw_pmi`        台灣 PMI 最後良值（macro_last_good/tw_pmi.json,**單位 指數**；
                             2026-08-27 加月頻新鮮度 gate：as_of 落後 ≥1 個發布期
                             → 整表略過 + 警告,不把過期良值當當期外送下游）
@@ -197,27 +201,35 @@ def _money_supply_sanity_gate(df: pd.DataFrame) -> tuple[bool, str]:
     完全比照 `_margin_sanity_gate`：**整表**判定，不做逐列剔除 ——
     逐列剔除會產出一張「看起來有效但其實是另一個量」的表，比整表缺席更危險。
 
-    三條檢查，前兩條是**定義**不是可調參數：
+    四條檢查，前兩條是**定義**不是可調參數：
       ① `m1b > 0` 且 `m2 > 0` —— 貨幣供給額是存量（某時點餘額），不可能為負
       ② `m2 >= m1b`           —— M2 依定義涵蓋 M1B
       ③ `|gap| <= 30` pp      —— 真實量綱 ±10；攔「量綱壞掉」非「數值偏高」
+      ④ m1b／m2 ∈ [1e4, 5e6] **億元**（DL-f1-r1）—— 攔「單位換算錯」：百萬元漏 ÷100、
+         或重複 ÷100（帶寬推導見 `shared.signal_thresholds.MONEY_SUPPLY_LEVEL_SANITY_*_YI`）。
+         ⚠️ 本 gate 吃的是**已換成億元**的表（`write_money_supply` 先換算再判定）。
 
     2026-08-19 實測（n=239）：**201 列（84.1%）任一不過**（① 86 列、② 63 列、
     ③ 188 列）。且通過的 38 列也不可信 —— 2006-12 的 m1b=325,888 與
     2007-04 的 22,383 相差 15 倍，那是**月變動額**不是餘額，只是剛好落在
     合理區間。根因在 `scripts/update_macro_history.fetch_finmind_m1m2` 的
-    CBC PXWeb 解析把「流量」當「存量」。
+    CBC PXWeb 解析把「流量」當「存量」（DL-f1-r1 改取 EF15M01 日平均餘額）。
     """
     from shared.signal_thresholds import (
         M1B_M2_GAP_SANITY_ABS_MAX_PP,
         MONEY_SUPPLY_LEVEL_MIN,
+        MONEY_SUPPLY_LEVEL_SANITY_MAX_YI,
+        MONEY_SUPPLY_LEVEL_SANITY_MIN_YI,
     )
     if df.empty:
         return False, "空表"
     _lv = (df["m1b"] <= MONEY_SUPPLY_LEVEL_MIN) | (df["m2"] <= MONEY_SUPPLY_LEVEL_MIN)
     _ord = df["m2"] < df["m1b"]
     _gap = df["m1b_m2_gap"].abs() > M1B_M2_GAP_SANITY_ABS_MAX_PP
-    bad = _lv | _ord | _gap
+    _mag = pd.Series(False, index=df.index)
+    for _c in ("m1b", "m2"):
+        _mag |= ~df[_c].between(MONEY_SUPPLY_LEVEL_SANITY_MIN_YI, MONEY_SUPPLY_LEVEL_SANITY_MAX_YI)
+    bad = _lv | _ord | _gap | _mag
     if not bad.any():
         return True, f"{len(df)} 列全數通過"
     _s = df.loc[bad, ["date", "m1b", "m2", "m1b_m2_gap"]].head(3)
@@ -225,9 +237,11 @@ def _money_supply_sanity_gate(df: pd.DataFrame) -> tuple[bool, str]:
         f"{int(bad.sum())}/{len(df)} 列不合格"
         f"（餘額 ≤ {MONEY_SUPPLY_LEVEL_MIN:.0f}：{int(_lv.sum())} 列、"
         f"m2 < m1b：{int(_ord.sum())} 列、"
-        f"|gap| > {M1B_M2_GAP_SANITY_ABS_MAX_PP:.0f}pp：{int(_gap.sum())} 列）"
+        f"|gap| > {M1B_M2_GAP_SANITY_ABS_MAX_PP:.0f}pp：{int(_gap.sum())} 列、"
+        f"億元量級帶外 [{MONEY_SUPPLY_LEVEL_SANITY_MIN_YI:.0e}, "
+        f"{MONEY_SUPPLY_LEVEL_SANITY_MAX_YI:.0e}]：{int(_mag.sum())} 列）"
         f"；樣本={_s.to_dict('records')}"
-        " → 疑似抓到「月變動額」而非「餘額」,不外送下游"
+        " → 疑似抓到「月變動額」而非「餘額」、或單位換算錯,不外送下游"
     )
 
 
@@ -240,8 +254,20 @@ def write_money_supply(conn: sqlite3.Connection) -> int:
     ⚠️ 2026-08-19 加此 gate 前，本函式是**無條件外送** —— 而同一個檔案裡的
     `write_margin` 早有 gate。兩套標準。實測當時的 parquet 有 36% 的列
     貨幣供給額為負，每日經 `data` 分支送到下游 repo。
+
+    單位（§4.1，DL-f1-r1）：parquet 的 m1b／m2 契約單位是**新台幣百萬元**
+    （`shared.signal_thresholds.MONEY_SUPPLY_CACHE_UNIT_LABEL`，寫入端逐次比對 CBC
+    `meta.units`）；本表對下游承諾的是**億元**（檔頭單位鐵則）→ 此處換算一次：
+    × `MONEY_SUPPLY_TWD_PER_CACHE_UNIT`（1e6）÷ `TWD_PER_YI`（1e8）= ÷100。
+    gap 是百分點，不換算。換算後才過 gate（gate 的量級帶以億元訂界）。
     """
+    from shared.margin_schema import TWD_PER_YI
+    from shared.signal_thresholds import MONEY_SUPPLY_TWD_PER_CACHE_UNIT
+
     df = _read_cache_parquet("finmind_m1m2", ["date", "m1b", "m2", "m1b_m2_gap"])
+    for _c in ("m1b", "m2"):
+        if _c in df.columns:
+            df[_c] = df[_c] * MONEY_SUPPLY_TWD_PER_CACHE_UNIT / TWD_PER_YI
     ok, msg = _money_supply_sanity_gate(df)
     if not ok:
         _log(f"⚠️ 略過 money_supply：{msg}")

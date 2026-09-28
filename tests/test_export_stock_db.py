@@ -109,6 +109,16 @@ def test_durable_export_from_real_parquet(tmp_path):
         _ms = pd.read_sql("SELECT date, m1b, m2, m1b_m2_gap FROM money_supply", conn)
         _ok, _msg = _money_supply_sanity_gate(_ms)
         assert _ok, f"落地的 money_supply 必須全列通過 §3.2：{_msg}"
+    # DL-f1-r1：parquet 本身若已是合格存量（排程改取 EF15M01 重建後），就**必須**外送，
+    # 且值 = parquet（百萬元）÷ 100（億元）—— 好檔被換算錯擋下，等於下游永遠缺這一維
+    # 而沒人發現。壞檔（現況）時本段不適用，由上方不變量把關（兩態皆有斷言，不 skip）。
+    import scripts.update_macro_history as _umh
+    _pq = pd.read_parquet(E._DATA_CACHE / "finmind_m1m2.parquet")
+    if _umh._m1m2_level_sanity(_pq)[0]:
+        assert res["money_supply"] > 0, "parquet 已是合格存量，money_supply 卻沒外送"
+        _m2_yi = pd.read_sql("SELECT m2 FROM money_supply ORDER BY date", conn)["m2"]
+        assert (_m2_yi.to_numpy() == _pq.sort_values("date")["m2"].to_numpy() / 100).all(), \
+            "money_supply.m2 必須是 parquet 百萬元 ÷ 100 = 億元"
 
     cols = [d[1] for d in conn.execute("PRAGMA table_info(stock_fundamentals)")]
     assert {"stock_id", "revenue", "eps", "total_equity"}.issubset(cols)
