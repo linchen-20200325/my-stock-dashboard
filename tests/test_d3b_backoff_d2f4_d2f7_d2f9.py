@@ -1041,11 +1041,13 @@ class TestEndToEndNoBombardment:
 # ══════════════════════════════════════════════════════════════════
 # 突變：把修復改回修前 → 本檔所擋的失效確實出現
 # ══════════════════════════════════════════════════════════════════
+# D2-f16（批 D3d，2026-09-28）：快取層改經 `_history_or_raise` 呼叫 yfinance，突變點隨原始碼同步；
+# M1 的語意不變（快取層自己吞例外 ＝ 修前結構）。
 _YP_CALL = ("    with _proxy_env():\n"
-            "        _df = yf.Ticker(ticker).history(period=period)\n")
+            "        _df = _history_or_raise(yf.Ticker(ticker), ticker, period)\n")
 _YP_CALL_SWALLOW = ("    try:\n"
                     "        with _proxy_env():\n"
-                    "            _df = yf.Ticker(ticker).history(period=period)\n"
+                    "            _df = _history_or_raise(yf.Ticker(ticker), ticker, period)\n"
                     "    except Exception:\n"
                     "        return pd.DataFrame()\n")
 

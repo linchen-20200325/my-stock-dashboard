@@ -51,6 +51,7 @@ from shared.signal_thresholds import (  # v19.74 融資餘額 §3.2 合理區間
     MARGIN_BALANCE_SANITY_MIN_YI,
 )
 from shared.ttls import TTL_30MIN, TTL_1HOUR
+from shared.fail_cooldown import CachedFailure as _CachedFailure  # D2-f15 2026-09-28
 from shared.inst_net import InstNetDict  # 2026-09-27 三大法人「未觀測」旗標(加性,L0)
 from src.config import TTL_CONFIG as _TTL_CFG
 
@@ -101,11 +102,35 @@ FINMIND_TOKEN = _get_finmind_token()
 # ═══════════════════════════════════════════════
 # yfinance 單檔 + 並行批次
 # ═══════════════════════════════════════════════
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
-def fetch_single(symbol, period: str = "60d"):
-    """yfinance 單檔抓取(走 yf_proxy 內含 proxy env + cache_data 1h)+ /tmp pickle 30 分快取。
+class _SingleFetchFailed(_CachedFailure):
+    """`_fetch_single_cached` 的「確定失敗」出口專用(D2-f15 2026-09-28,§1.A-3(a))。
 
-    跨 process 重啟存活(pkl)+ 同 process 內秒讀(yf_proxy cache_data)兩層保護。
+    `st.cache_data` 不快取例外 → 失敗的 None 不會被凍成 1 小時;外層 `fetch_single` 只接住本類別,
+    取 `.payload`(＝修前會回傳的同一個 None)。刻意用私有子類別、不直接接 `CachedFailure`
+    (同 monthly_revenue_fetcher D2-f5 的理由):別處的 `CachedFailure` 若從下層漏出來,
+    不會在這裡被誤當成回傳值。
+    """
+
+
+def _history_with_status(hist, sym, period):
+    """(K 線, 是否確定抓取失敗)。`hist` 沒有 `.with_status`(被換成純函式)→ 一律當非失敗(照舊快取)。"""
+    _ws = getattr(hist, 'with_status', None)
+    if _ws is None:
+        return hist(sym, period=period), False
+    return _ws(sym, period=period)
+
+
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+def _fetch_single_cached(symbol, period: str = "60d"):
+    """`fetch_single()` 的快取層(原函式本體;TTL、參數、成功與「真的沒資料」的回傳同修前)。
+
+    D2-f15(2026-09-28,§1.A-3(a)「只快取成功結果」):**確定失敗**時拋 `_SingleFetchFailed`
+    (不入快取),`.payload` 即修前會回傳的 None。確定失敗 ＝ 下列兩種之一:
+      · 備援清單每一檔都沒有 K 線,**且**至少一檔是 `yf_proxy.cached_history` 判定的抓取失敗
+        (含冷卻期內回的那一份失敗空表;`.with_status` 同一次呼叫取得);
+      · 本體拋例外(修前 print ＋ `_prov_log('None:exc:…')` 後回 None 並入快取)—— log 照舊。
+    每一檔都「真的沒資料」(上游有回應、只是空)、或清掉 close 為 NaN 的列後變空 → 照舊回 None、
+    照舊快取。本層不另記退避:會打上游的只有 `cached_history`,它自己以 (ticker, period) 冷卻。
     """
     import hashlib as _hs2
     # D3 v18.437:pkl 快取改用 cache_layer SSOT(_pkl_get/_pkl_put,同檔 fetch_institutional 模式);
@@ -123,12 +148,17 @@ def fetch_single(symbol, period: str = "60d"):
     try:
         from src.data.proxy import cached_history as _yp_hist
         h = None
+        _failed = []   # D2-f15:本輪確定抓取失敗的代號
         for _sym in _sym_list:
-            _h = _yp_hist(_sym, period=period)
+            _h, _f = _history_with_status(_yp_hist, _sym, period)
             if _h is not None and not _h.empty:
                 h = _h
                 break
+            if _f:
+                _failed.append(_sym)
         if h is None or h.empty:
+            if _failed:
+                raise _SingleFetchFailed(None, f"抓取失敗:{'、'.join(_failed)}")
             return None
         h.index = pd.DatetimeIndex(h.index).tz_localize(None)
         h.columns = [c.lower().replace(' ', '_') for c in h.columns]
@@ -142,11 +172,39 @@ def fetch_single(symbol, period: str = "60d"):
         _pkl_put(_ck2, h)
         _prov_log('fetch_single', 'yf_proxy.cached_history', symbol, f'df:{len(h)}rows')
         return h
+    except _SingleFetchFailed:
+        raise
     except Exception as e:
         print(f'[yf:{symbol}] {e}')
         _prov_log('fetch_single', 'yf_proxy.cached_history', symbol,
                   f'None:exc:{type(e).__name__}')
-        return None
+        raise _SingleFetchFailed(None, f'{type(e).__name__}: {e}') from e
+
+
+def fetch_single(symbol, period: str = "60d"):
+    """yfinance 單檔抓取(走 yf_proxy 內含 proxy env + cache_data 1h)+ /tmp pickle 30 分快取。
+
+    跨 process 重啟存活(pkl)+ 同 process 內秒讀(yf_proxy cache_data)兩層保護。
+    回傳同修前:成功 → 欄名小寫化的 DataFrame;抓不到 / 沒資料 / 例外 → None(不爆例外)。
+
+    D2-f15(2026-09-28,§1.A-3「只快取成功結果」):修前本函式自己的 `st.cache_data`(1 小時)
+    連失敗的 None 也快取 —— 上游恢復、`cached_history` 冷卻解除之後仍回 None 最長 1 小時;
+    冷卻期內按 v2「強制重抓」(清 `st.cache_data`、清不到冷卻)更會把冷卻期回的失敗再凍 1 小時。
+    現在快取在 `_fetch_single_cached`,**確定失敗不入快取**(判準見該函式);成功與「真的沒資料」
+    照舊快取 1 小時。`.clear()` 清快取層。
+    """
+    try:
+        return _fetch_single_cached(symbol, period=period)
+    except _SingleFetchFailed as _sf:
+        return _sf.payload
+
+
+def _clear_fetch_single() -> None:
+    """`fetch_single.clear()`:清快取層(D2-f15;修前 `st.cache_data` 自帶的 `.clear` 同義)。"""
+    getattr(_fetch_single_cached, 'clear', lambda: None)()
+
+
+fetch_single.clear = _clear_fetch_single
 
 
 @st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
