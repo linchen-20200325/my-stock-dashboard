@@ -12,8 +12,9 @@ meta 全文、data.structure 全文、以及 5 列真實資料（列 0、1、468
   - 其餘月份平滑成長；每一列合成資料的官方年增率 = 由合成餘額自算後**四捨五入到小數兩位**
     （與 CBC 發布精度一致），t−12 不在 fixture 內的月份則用同一成長率推算。
   - 各序列成長率刻意不同 → M1A 與 M1B 的年增率不同，配錯欄時對帳必然抓得到。
-  ⚠️ 真實三列能對帳，是因為它們的 t−12 由它們自己倒推 —— 這**不是**對真實資料的對帳驗證；
-     真實全表（459×2 列）是否都落在容差內，本容器連不到 CBC（egress 403），只能等排程實跑。
+  ⚠️ 真實三列能對帳，是因為它們的 t−12 由它們自己倒推 —— 這**不是**對真實資料的對帳驗證。
+     真實全表的對帳另由探針 GitHub Actions run 36419092722 實測：M1B、M2 各 459 列全數落在
+     容差內（max|Δ| 0.004993／0.004999 pp）。本容器連不到 CBC（egress 403），本檔只測規則。
 
 無網路：`fetch_url` 以 monkeypatch 回應；寫檔一律導到 `tmp_path`，不碰 repo 的 `data_cache/`。
 """
@@ -465,6 +466,151 @@ class TestParseEF15:
         assert 0.005 < t < 0.005 + 1e-5             # 近期量級：幾乎只剩半個最小位數
         t_small = umh._ef15_yoy_tolerance_pp(1282249, 1255199)
         assert 0.005 + 5e-5 < t_small < 0.005 + 1e-4
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+class TestQAGuards:
+    """批 R 獨立 QA：7 個突變存活的缺口（MQ1、MQ2、MQ3、MQ4、MQ6、MQ7、MQ10）各補一條守衛。"""
+
+    def test_mq1_duplicate_period_fails_loud(self):
+        # ① 一模一樣的重複列：若不檢查，後列會靜默覆蓋前列、對帳照樣通過 —— 最危險的一種
+        rows = ef15_rows()
+        rows.insert(len(rows) - 1, list(_row_of(rows, "2026M06")))
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(rows))
+        assert df is None and "期間重複" in why and "2026M06" in why
+        # ② 期間標錯成前一個月（內容不同）→ 同樣以「重複」拒用，不是靠對帳碰巧擋下
+        rows = ef15_rows()
+        rows[-1][0] = rows[-2][0]
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(rows))
+        assert df is None and "期間重複" in why
+
+    @pytest.mark.parametrize("period", ["2026M7", "2026M13", "2026M00", "2026-07", "115M07",
+                                        "2026 M07", ""])
+    def test_mq2_period_format_and_month_range(self, period):
+        rows = ef15_rows()
+        rows[-1][0] = period
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(rows))
+        assert df is None and "期間" in why, period
+
+    @pytest.mark.parametrize("col,value", [("yoy", "nan"), ("yoy", "NaN"), ("yoy", "inf"),
+                                           ("yoy", "-inf"), ("level", "nan"), ("level", "inf")])
+    def test_mq3_non_finite_values_fail_loud(self, col, value):
+        """官方年增率或餘額是 nan／inf → 在解析那一步就以「非有限」拒用（不能靠後面碰巧擋下）。"""
+        rows = ef15_rows()
+        rows[-1][_yy_col(I_M2) if col == "yoy" else _lv_col(I_M2)] = value
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(rows))
+        assert df is None and "非有限" in why, (col, value)
+
+    def test_mq3_reconcile_comparison_is_nan_safe(self, monkeypatch):
+        """第二道：就算上游解析日後漏了有限檢查而放過 nan，對帳比較也必須判不符。
+        nan 與任何數比較都是 False —— 寫成「diff > 容差」會把 nan 靜默算成對帳通過。"""
+        real = umh._ef15_cell
+
+        def leaky(v):
+            return float("nan") if str(v).strip() == "nan" else real(v)
+        monkeypatch.setattr(umh, "_ef15_cell", leaky)
+        rows = ef15_rows()
+        rows[-1][_yy_col(I_M2)] = "nan"
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(rows))
+        assert df is None and "對帳不符" in why
+
+    @pytest.mark.parametrize("idx,short", [(I_M1B, "M1B"), (I_M2, "M2")])
+    def test_mq4_each_series_needs_its_own_reconciled_row(self, idx, short):
+        rows = ef15_rows()
+        for r in rows:
+            r[_yy_col(idx)] = "-"
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(rows))
+        assert df is None and short in why and "對帳" in why
+
+    @pytest.mark.parametrize("m1b,m2", [
+        ([3074.89, 3053.09], [702903.31, 702247.62]),        # 只有 m1b 重複換算
+        ([307488.57, 305309.48], [70290331.0, 70224762.0]),  # 只有 m2 漏換算
+    ])
+    def test_mq6_export_band_checks_m1b_and_m2_each(self, m1b, m2):
+        """m2 ≥ m1b、gap 正常 → 只剩量級帶攔得住；帶子必須兩欄各自檢查。"""
+        ok, msg = E._money_supply_sanity_gate(_ms_df(m1b, m2))
+        assert not ok and "量級" in msg
+
+    @pytest.mark.parametrize("units,accepted", [("新台幣百萬元,百分比", False),
+                                                ("新台幣百萬元,‰", False),
+                                                ("新台幣百萬元,pp", False),
+                                                ("新台幣百萬元，％", True)])     # 全形（NFKC）仍算 %
+    def test_mq7_yoy_unit_must_be_percent(self, units, accepted):
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(meta=dict(EF15_META, units=units)))
+        assert (df is not None) is accepted, (units, why)
+        if not accepted:
+            assert "units" in why
+
+    @pytest.mark.parametrize("units", ["新台幣百萬元,%,%", "新台幣百萬元", ""])
+    def test_mq10_unit_count_must_equal_measure_count(self, units):
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(meta=dict(EF15_META, units=units)))
+        assert df is None and "units" in why, units
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+class TestFatalRange:
+    """QA 建議 2（總管採納）：只有「致命範圍」＝寫入窗口 ＋ gap 的 t−12 基期內的對帳不符才整表拒用；
+    更早的列照樣對帳、只印 ⚠️ —— 它們不影響寫入的資料，而每天增量都重解析全表，
+    一筆舊歷史被修訂到不一致就會天天擋住。"""
+
+    @staticmethod
+    def _off(rows, per, idx=I_M2, by=0.02):
+        r = _row_of(rows, per)
+        r[_yy_col(idx)] = f"{float(r[_yy_col(idx)]) + by:.2f}"
+
+    def test_fatal_from_helper_boundaries(self):
+        f = umh._ef15_fatal_from
+        assert f(dt.date(2006, 10, 3)) == dt.date(2005, 11, 1)    # 第一個寫入月 2006-11 往前 12 個月
+        assert f(dt.date(2026, 7, 2)) == dt.date(2025, 8, 1)      # 增量：last=2026-07 → start 07-02
+        assert f(dt.date(2026, 7, 1)) == dt.date(2025, 7, 1)      # start 恰為月初 → 當月就寫入
+        assert f(dt.date(2026, 12, 15)) == dt.date(2026, 1, 1)    # 跨年
+
+    def test_mismatch_before_fatal_range_warns_and_passes(self, capsys):
+        base, _ = umh._parse_cbc_ef15m01_levels(ef15_body())
+        rows = ef15_rows()
+        self._off(rows, "2025M03")
+        capsys.readouterr()
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(rows), fatal_from=dt.date(2025, 6, 1))
+        out = capsys.readouterr().out
+        assert df is not None, why
+        pd.testing.assert_frame_equal(df, base)                  # 資料照樣產出，一列不少
+        assert "⚠️" in out and "只警示" in out and "對帳不符 1 列" in out and "2025-03" in out
+        assert "max|Δ|=" in out
+        # 同一份表不給 fatal_from（＝全表致命）→ 拒用：證明放行靠的是範圍，不是容差變寬
+        assert umh._parse_cbc_ef15m01_levels(ef15_body(rows))[0] is None
+
+    @pytest.mark.parametrize("per", ["2025M06", "2026M07"])      # 邊界月（= fatal_from）與最新月
+    def test_mismatch_inside_fatal_range_rejects(self, per):
+        rows = ef15_rows()
+        self._off(rows, per)
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(rows), fatal_from=dt.date(2025, 6, 1))
+        assert df is None and "對帳不符" in why and "致命範圍" in why, per
+
+    def test_fatal_range_needs_a_reconciled_row_for_each_series(self):
+        rows = ef15_rows()
+        for r in rows:
+            if r[0] >= "2026M05":
+                r[_yy_col(I_M2)] = "-"                          # 致命範圍內 M2 沒有官方年增率
+        df, why = umh._parse_cbc_ef15m01_levels(ef15_body(rows), fatal_from=dt.date(2026, 5, 1))
+        assert df is None and "M2" in why and "致命範圍" in why
+        # 同一份表、致命範圍放寬到 2025-06 → M2 有可對帳列 → 放行（證明擋下的原因是範圍內無可對帳列）
+        assert umh._parse_cbc_ef15m01_levels(ef15_body(rows),
+                                             fatal_from=dt.date(2025, 6, 1))[0] is not None
+
+    def test_fetch_derives_fatal_range_from_start(self, monkeypatch, capsys):
+        start, end = dt.date(2026, 2, 1), dt.date(2026, 9, 28)   # 致命範圍 ≥ 2025-02
+        # ① 範圍前（2025-01）不符 → 照樣寫出 2026-02～07，並印 ⚠️
+        rows = ef15_rows()
+        self._off(rows, "2025M01")
+        patch_ef15(monkeypatch, ef15_body(rows))
+        df = umh.fetch_finmind_m1m2(start, end, "")
+        out = capsys.readouterr().out
+        assert len(df) == 6 and "只警示" in out and "2025-01" in out   # 不符的月份必須被點名
+        # ② 2025-02 是第一個寫入月（2026-02）gap 的 t−12 基期 → 屬致命範圍 → 整表拒用
+        rows = ef15_rows()
+        self._off(rows, "2025M02")
+        patch_ef15(monkeypatch, ef15_body(rows))
+        assert umh.fetch_finmind_m1m2(start, end, "").empty
 
 
 # ═════════════════════════════════════════════════════════════════════════════

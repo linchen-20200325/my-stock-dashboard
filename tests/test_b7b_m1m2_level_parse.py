@@ -1,12 +1,13 @@
 """B7b：`update_macro_history.fetch_finmind_m1m2` 不得再把 CBC PXWeb 的月變動額（流量）
 當成餘額（存量）寫進 `finmind_m1m2.parquet`。
 
-合成回應（**無網路**）：真實 CBC 回應的欄位順序未能在本容器實測（cpx.cbc.gov.tw 被
-egress 拒絕），故測的是**解析規則**：標籤優先、無標籤時以定義辨識且須唯一、否則 fail loud。
+合成回應（**無網路**）：cpx.cbc.gov.tw 被本容器 egress 拒絕，故全部以合成回應測試。
 
 DL-f1-r1（2026-09-28）：`fetch_finmind_m1m2` 的 Tier 2 改取 EF15M01（run 36408641177 實測：
-EF19M01／EF21M01 沒有餘額欄）。`_parse_cbc_pxweb_level` 的直接單測不變；端到端測試改餵
-EF15M01 形狀回應（builder 取自 `tests/test_b7b_r1_ef15m01_level.py`），斷言維持原義。
+EF19M01／EF21M01 沒有餘額欄）。端到端測試改餵 EF15M01 形狀回應（builder 取自
+`tests/test_b7b_r1_ef15m01_level.py`），斷言維持原義。B7b 的欄位辨識解析器與其專用
+helper 因此成為 0 caller，已於同批 QA 修正時連同其 9 條直接單測刪除（清單見該 commit 訊息）；
+新解析器的單測在 `tests/test_b7b_r1_ef15m01_level.py`。
 """
 from __future__ import annotations
 
@@ -46,55 +47,11 @@ M1B = _levels(N, 1_000_000, 0.006)
 M2 = _levels(N, 3_000_000, 0.004)
 
 
-def _resp(cols, labels=None):
-    rows = [[p] + [c[i] for c in cols] for i, p in enumerate(_periods(N))]
-    body = {"meta": {"title": "x", "filename": "EF19M01.px"}, "data": {"dataSets": rows}}
-    if labels is not None:
-        body["data"]["structure"] = {"columns": labels}
-    return body
-
-
 def _flow_with_sign_change(lv):
     # 流量：刻意讓部分月份為負（真實 CBC 月變動額會變號）
     f = [str(b - a) for a, b in zip(lv, lv[1:])]
     f = [str(-int(x)) if i % 3 == 0 else x for i, x in enumerate(f)]
     return [f[0]] + f
-
-
-class TestParseLevelColumn:
-    def test_labels_pick_level_not_flow(self):
-        body = _resp([_flow_with_sign_change(M1B), [str(v) for v in M1B]],
-                     labels=["期間", "M1B 月變動額", "M1B 日平均餘額"])
-        rows, desc = umh._parse_cbc_pxweb_level(body, "EF19M01")
-        assert rows is not None and "餘額" in desc
-        assert [float(r["value"]) for r in rows] == [float(v) for v in M1B]
-
-    def test_labels_prefer_daily_average_when_two_levels(self):
-        body = _resp([[str(v) for v in M1B], [str(v * 1.01) for v in M1B]],
-                     labels=["期間", "M1B 月底餘額", "M1B 日平均餘額"])
-        rows, desc = umh._parse_cbc_pxweb_level(body, "EF19M01")
-        assert "日平均" in desc
-        assert float(rows[0]["value"]) == pytest.approx(M1B[0] * 1.01)
-
-    def test_no_labels_unique_definitional_candidate(self):
-        body = _resp([_flow_with_sign_change(M1B), [str(v) for v in M1B]])
-        rows, desc = umh._parse_cbc_pxweb_level(body, "EF19M01")
-        assert rows is not None and "col=2" in desc
-
-    def test_no_labels_flow_only_fails_loud(self):
-        body = _resp([_flow_with_sign_change(M1B)])
-        rows, desc = umh._parse_cbc_pxweb_level(body, "EF19M01")
-        assert rows is None
-
-    def test_no_labels_two_level_like_columns_does_not_guess(self):
-        body = _resp([[str(v) for v in M1B], [str(v * 1.01) for v in M1B]])
-        rows, desc = umh._parse_cbc_pxweb_level(body, "EF19M01")
-        assert rows is None and "2" in desc
-
-    def test_label_says_level_but_values_negative_rejected(self):
-        body = _resp([_flow_with_sign_change(M1B)], labels=["期間", "M1B 餘額"])
-        rows, _ = umh._parse_cbc_pxweb_level(body, "EF19M01")
-        assert rows is None
 
 
 def _patch_cbc(monkeypatch, ef15):
@@ -240,25 +197,6 @@ class TestFinalGate:
 
 class TestSeriesNameOnLabels:
     """QA 2026-09-27：有標籤時，選中的餘額欄必須是目標序列（防 M1A 冒充 M1B）。"""
-
-    def test_m1a_only_balance_column_rejected(self):
-        body = _resp([_flow_with_sign_change(M1B), [str(v) for v in M1B]],
-                     labels=["期間", "M1B 月變動額", "M1A 日平均餘額"])
-        rows, desc = umh._parse_cbc_pxweb_level(body, "EF19M01", series="M1B")
-        assert rows is None and "M1B" in desc
-
-    def test_m1b_and_m1a_both_balance_picks_m1b(self):
-        m1a = _levels(N, 800_000, 0.005)
-        body = _resp([[str(v) for v in m1a], [str(v) for v in M1B]],
-                     labels=["期間", "M1A 日平均餘額", "Ｍ１Ｂ 日平均餘額"])   # 全形也要認得
-        rows, desc = umh._parse_cbc_pxweb_level(body, "EF19M01", series="M1B")
-        assert rows is not None and "１Ｂ" in desc
-        assert [float(r["value"]) for r in rows] == [float(v) for v in M1B]
-
-    def test_m2_label_lowercase_ok(self):
-        body = _resp([[str(v) for v in M2]], labels=["期間", "m2 餘額"])
-        rows, _ = umh._parse_cbc_pxweb_level(body, "EF21M01", series="M2")
-        assert rows is not None
 
     def test_end_to_end_m1a_table_writes_nothing(self, monkeypatch):
         m1a = _levels(N, 800_000, 0.005)
