@@ -1747,7 +1747,10 @@ def _load_l4_labels() -> tuple[Any, Any, Any, str]:
 
 
 #: 「變化方向」各支 L3 loader 負責哪幾盞燈的序列（loader 失敗 ⇒ 只有這幾盞顯示計算失敗）。
-#: m1b_m2_gap 刻意不在任何一支底下（歷史檔已知損壞，恆為無資料，不讀 L3）。
+#: m1b_m2_gap 刻意不在任何一支底下（~~歷史檔已知損壞~~，恆為無資料，不讀 L3）。
+#: 📌 2026-09-28 事實更正（DL-f1-s28，⛔ 不是漏刪）：該歷史檔已由排程 `2aed087` 整檔重建，「已知損壞」
+#:    不再成立；行為不變。仍不讀的現行理由（gap 定義與燈值不同／持平帶未量測／M1B-M2 腿停用）
+#:    見 `shared/lamp_direction_thresholds.py` 檔頭 m1b_m2_gap 段。
 _LAMP_DIRECTION_LOADERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("get_chart_series", ("margin", "bias_240")),     # 交易日
     ("get_monthly_history", ("ism_pmi",)),            # 月

@@ -79,7 +79,9 @@ EFFICIENT_FRONTIER_N_BINS: int = 25
 #
 # ② 內部不一致（**權重已校準、決策門檻沒有**）：
 #    下方兩個**權重**是 v19.102 用真實 2006–2026 資料擬合出來的
-#    （n=4748、val AUC 0.753、overfit_flag=False，見 MACRO_HEALTH_WEIGHT_PROPOSAL.md）；
+#    （n=4748、val AUC 0.753、overfit_flag=False，見 `git show cd3ec21:MACRO_HEALTH_WEIGHT_PROPOSAL.md`
+#     〔v19.102 證據版，blob `2784cef`；DL-f1-s29 2026-09-28 釘版 —— 該檔每季由
+#     `.github/workflows/calibrate_health_weights.yml` 直接覆寫，現行檔不一定還是這一版〕）；
 #    但吃這個分數做決策的兩個**切點** —— `HEALTH_DEFENSE_THRESHOLD`(35) 與
 #    `BULL_MIN_SCORE`(4)，見專案根目錄 `macro_thresholds.json` —— 至今仍是手訂，
 #    該檔 `"last_calibrated": null` / `"method": "default (uncalibrated)"` 就是證據。
@@ -91,7 +93,9 @@ EFFICIENT_FRONTIER_N_BINS: int = 25
 
 HEALTH_WEIGHT_JQ: float = 0.6
 """景氣廣度 (jqavg) 在健康評分的權重。
-v19.102 校準採納(user 核准方案 B):MACRO_HEALTH_WEIGHT_PROPOSAL.md
+v19.102 校準採納(user 核准方案 B):`git show cd3ec21:MACRO_HEALTH_WEIGHT_PROPOSAL.md`
+(v19.102 證據版,blob 2784cef;2026-09-28 釘版 —— 該檔每季由 calibrate_health_weights.yml
+覆寫,現行檔不一定還是這一版)
 (真實 2006~2026 二十年、n=4748、val AUC 0.753、overfit_flag=False)
 顯示 jqavg:score 相對重要性 ≈ 0.0337:0.0228 ≈ 60:40 → 自 0.4 升 0.6。
 權重和 = 0.6+0.4 = 1.0(同步治癒 CLAUDE.md §4.2「權重和=1」漂移)。

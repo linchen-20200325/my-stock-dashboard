@@ -366,7 +366,8 @@ def calc_traffic_light(
     # 本函式回傳的 canonical 結論改看 `effective_regime`（見下方 arbiter）。
     _regime  = _mkt.get('regime', 'neutral')
     # v18.241 E1: 健康評分權重從 SSOT 引入（原 0.4/0.4/20 inline）
-    # v19.102 校準採納(方案 B,MACRO_HEALTH_WEIGHT_PROPOSAL.md AUC 0.753):
+    # v19.102 校準採納(方案 B,`git show cd3ec21:MACRO_HEALTH_WEIGHT_PROPOSAL.md` AUC 0.753;
+    # 2026-09-28 釘版:該檔每季由 calibrate_health_weights.yml 覆寫,現行檔不一定還是這一版):
     # ① 權重 0.6/0.4/0(SSOT 已改);② score 正規化除數自 CONFIDENCE_SOURCE_COUNT(5,
     # 借用錯配)改用 market_regime 回傳的真 max_score(預設 4.0 = market_regime 基本
     # 滿分,ad_ratio/m1b_m2 有傳才升 5/6)— 修「預設模式 score 永遠到不了 100」。

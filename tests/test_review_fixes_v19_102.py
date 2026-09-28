@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """v19.102 — 紅綠燈權重校準採納(Phase 3 收官,user 核准方案 B)。
 
-依 MACRO_HEALTH_WEIGHT_PROPOSAL.md(真實 2006~2026、n=4748、val AUC 0.753、
-overfit_flag=False;本地復算一字不差):
+依 `git show cd3ec21:MACRO_HEALTH_WEIGHT_PROPOSAL.md`(v19.102 證據版;2026-09-28 釘版,
+該檔每季由 calibrate_health_weights.yml 覆寫,現行檔不一定還是這一版)
+(真實 2006~2026、n=4748、val AUC 0.753、overfit_flag=False;本地復算一字不差):
 - HEALTH_WEIGHT_JQ 0.4→0.6(jqavg:score 相對重要性 ≈ 60:40)
 - HEALTH_FNET_BONUS 20→0(fnet 對 20 日回撤零預測力)
 - score 正規化 /CONFIDENCE_SOURCE_COUNT(5,錯配)→ /mkt_info['max_score'](4/6)

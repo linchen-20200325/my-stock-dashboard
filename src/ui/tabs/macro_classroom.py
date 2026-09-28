@@ -42,9 +42,11 @@ _JQ_PCT = round(HEALTH_WEIGHT_JQ * 100)      # 旌旗指數(廣度)佔比 → 60
 _SC_PCT = round(HEALTH_WEIGHT_SCORE * 100)   # 大盤評分佔比 → 40
 _FNET_BONUS = HEALTH_FNET_BONUS              # 外資加分「分數」(不是佔比) → 0
 
-# ── 校準 provenance(說明文字用,非門檻;來源 MACRO_HEALTH_WEIGHT_PROPOSAL.md）──
+# ── 校準 provenance(說明文字用,非門檻;來源 `git show cd3ec21:MACRO_HEALTH_WEIGHT_PROPOSAL.md`）──
 # 教室頁要說服讀者「0 不是 bug」就必須把證據強度講出來,故一併具名常數化,
 # 避免下次有人只改敘述、忘了證據對不對得上。
+# 2026-09-28 釘版(DL-f1-s29):該檔每季由 calibrate_health_weights.yml 覆寫;下面兩個常數記的是
+# v19.102 採納現行權重時的證據(blob 2784cef),對證據請對上面那個版本,⛔ 別對現行檔。
 _CAL_N = 4748                 # v19.102 校準樣本數(2006~2026 交易日)
 _CAL_AUC = 0.753              # 驗證集 AUC(overfit_flag=False)
 _FNET_BONUS_LEGACY = 20       # v19.102 校準**前**的外資加分,歸零前的舊值

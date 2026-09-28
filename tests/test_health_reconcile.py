@@ -3,7 +3,8 @@
 健康評分 method A(生產 calc_traffic_light)vs method B(對照演算法)
 abs diff <= 5 視為對齊。
 
-v19.102 校準採納(方案 B,MACRO_HEALTH_WEIGHT_PROPOSAL.md):
+v19.102 校準採納(方案 B,`git show cd3ec21:MACRO_HEALTH_WEIGHT_PROPOSAL.md`;
+2026-09-28 釘版:該檔每季由 calibrate_health_weights.yml 覆寫,現行檔不一定還是這一版):
 - Method A 權重 0.6/0.4/0(fnet bonus 歸零)+ score/max_score 正規化
 - Method B 同步改「兩組件等權平均」:(jqavg + score/max*100)/2,fnet 不計分
   (參數保留向後相容),max_score 預設 4(market_regime 基本滿分)。
