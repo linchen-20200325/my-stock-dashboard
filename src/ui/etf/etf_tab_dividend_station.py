@@ -308,6 +308,8 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
 #    `scripts/push_holdings_daily.py` 的 LINE 推播，在那裡加 gate 是行為變更。
 
 #: 卡①金額「只涵蓋一部分」時的去哪補（批 W H1-f4，2026-09-28）。
+#: 批 H2（H1-f5／H1-f6，2026-09-28）起本檔共三處用它：卡① partial 註記、卡①「算不出來」那一句、
+#: 80/20 算不出來那一句 —— 三處的「缺的若是現價，組合管理補不了」同一個理由。
 #: **逐字同** `src.ui.views.page_hold.IF_LOTS_AVG_MISSING_WHERE`（⛔ 不新寫）；兩份逐字相同由
 #: `tests/test_v2_batch_w_0928.py` 斷言。
 #: ⛔ 刻意不從 `page_hold` import：它在模組層就 import 整個 v2 View 層（`page_today`／`tab_today`／
@@ -365,8 +367,17 @@ def _render_layer1(rows: list[dict], vix) -> None:
                      f"持股缺張數／均價／現價，**沒有**納入損益與市值 —— 上面兩個金額只涵蓋"
                      f"其餘 {_totals['valued_n']} 檔。{_IF_LOTS_AVG_MISSING_WHERE}。")
     else:
-        _note = ("未實現損益與總市值算不出來：持股沒有張數／均價／現價。"
-                 "§1 這裡**不填 0** —— 到 📁 組合管理的 Portfolio 補齊才會出現。")
+        # 批 H2 H1-f6：修前句尾「到 📁 組合管理的 Portfolio 補齊才會出現。」在兩種情形是錯的指引 ——
+        #   (1) 全部只缺**現價**：組合管理補不了現價 ⇒ 句尾換成條件子句 ＋「。」（同 H1-f4，⛔ 不新寫）；
+        #   (2) 持有列**全部**整批抓取失敗：L3 `compute_portfolio_totals()` 把它們整列跳過，
+        #       算不出來是因為抓不到、不是持股缺資料 ⇒ 這一句整句不出，只留下面既有的
+        #       「⚠️ 另有 N 檔整批抓取失敗，未納入任何判斷。」（⛔ 不新寫）。
+        #   (2) 的判法照抄 L3 的跳過條件（`held` ＋ `_detail.error`），⛔ 不另立一套；
+        #   沒有任何持有列時照修前出這一句（只換句尾；該情形不在本批範圍）。
+        _held = [r for r in _rows if r.get("held")]
+        if not (_held and all((r.get("_detail") or {}).get("error") for r in _held)):
+            _note = ("未實現損益與總市值算不出來：持股沒有張數／均價／現價。"
+                     f"§1 這裡**不填 0** —— {_IF_LOTS_AVG_MISSING_WHERE}。")
     if _err_n:
         _note += f"{'　' if _note else ''}⚠️ 另有 {_err_n} 檔整批抓取失敗，未納入任何判斷。"
 
@@ -578,12 +589,19 @@ def _render_allocation_take_profit(rows: list[dict]) -> None:
             st.warning(_msg + "（核心偏高 → 衛星部位不足）")
         _note = "核心=ETF、衛星=個股（依代號近似;若你把主題型 ETF 當衛星,此偏離僅供參考）。"
         if _alloc.get("partial"):
+            # 批 H2 H1-f5：L3 `compute_allocation_split()` 看的是「市值 > 0」，市值 = 張數 × 現價
+            #   ⇒ 缺**現價**的不納入、只缺**均價**的照樣納入 —— 修前「缺張數/均價」兩頭都錯。
+            #   改用同檔卡① partial 註記既有的「缺張數／均價／現價」（源自
+            #   `page_hold._totals_facts()`；⛔ 不新寫）。
             _note += (f"　⚠️ 另有 {_alloc['held_n'] - _alloc['valued_n']}/{_alloc['held_n']} 檔"
-                      "缺張數/均價未納入計算。")
+                      "缺張數／均價／現價未納入計算。")
         st.caption(_note)
     else:
+        # 批 H2 H1-f5：修前句尾「到 📁 組合管理的 Portfolio 填張數/均價即可顯示。」對「全部只缺現價」
+        #   是錯的指引（組合管理補不了現價，填了張數／均價也不會顯示）⇒ 換成同檔既有的條件子句 ＋「。」
+        #   （同 H1-f4，⛔ 不新寫）。前一句一字未動。
         st.caption("📊 80/20 配置偏離：你的持股未帶張數/均價（或無市值）→ 無法計算實際佔比。"
-                   "到 📁 組合管理的 Portfolio 填張數/均價即可顯示。")
+                   f"{_IF_LOTS_AVG_MISSING_WHERE}。")
 
     if _tp:
         st.info(f"💰 **衛星停利**（獲利達 {T.SATELLITE_TAKE_PROFIT_PCT:.0f}% 建議嚴格停利、滾回核心）："
