@@ -307,6 +307,15 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
 #    一個字都沒動 —— 它同時餵著主表「建議動作」欄與
 #    `scripts/push_holdings_daily.py` 的 LINE 推播，在那裡加 gate 是行為變更。
 
+#: 卡①金額「只涵蓋一部分」時的去哪補（批 W H1-f4，2026-09-28）。
+#: **逐字同** `src.ui.views.page_hold.IF_LOTS_AVG_MISSING_WHERE`（⛔ 不新寫）；兩份逐字相同由
+#: `tests/test_v2_batch_w_0928.py` 斷言。
+#: ⛔ 刻意不從 `page_hold` import：它在模組層就 import 整個 v2 View 層（`page_today`／`tab_today`／
+#:    `src.ui_v2.*`；實測本檔載入後再 import 它，`sys.modules` 多出 20 個 `src.*`／`shared.*`
+#:    模組（含它自己；量測日 2026-09-28）—— 為一句字把舊版分頁的載入綁在 v2 View 層上，
+#:    那一層 import 期任何一處出錯，舊版分頁就跟著打不開。
+_IF_LOTS_AVG_MISSING_WHERE = "若是缺張數／均價，到既有的 📁 組合管理分頁補齊"
+
 
 def _render_layer1(rows: list[dict], vix) -> None:
     """1️⃣ 結論 —— 三張卡（該做什麼 / 訊號可信度 / 需要處理的檔數）。"""
@@ -349,9 +358,12 @@ def _render_layer1(rows: list[dict], vix) -> None:
                          f"未實現損益（元）{_totals['pnl_pct']:+.1f}%"))
         _figs.append((f"{_totals['value_twd']:,.0f}", "總市值（元）"))
         if _totals["partial"]:
+            # 批 W H1-f4：L3 `compute_portfolio_totals()` 張數／均價／現價缺一就不納入（含只缺現價）
+            #   ⇒ 「缺張數或均價」改為 `page_hold._totals_facts()` 既有的「持股缺張數／均價／現價」；
+            #   句尾「到 📁 組合管理補齊即可。」對只缺現價的列是錯的指引 ⇒ 換成條件子句 ＋「。」。
             _note = (f"⚠️ {_totals['held_n'] - _totals['valued_n']}/{_totals['held_n']} 檔"
-                     f"持股缺張數或均價，**沒有**納入損益與市值 —— 上面兩個金額只涵蓋"
-                     f"其餘 {_totals['valued_n']} 檔。到 📁 組合管理補齊即可。")
+                     f"持股缺張數／均價／現價，**沒有**納入損益與市值 —— 上面兩個金額只涵蓋"
+                     f"其餘 {_totals['valued_n']} 檔。{_IF_LOTS_AVG_MISSING_WHERE}。")
     else:
         _note = ("未實現損益與總市值算不出來：持股沒有張數／均價／現價。"
                  "§1 這裡**不填 0** —— 到 📁 組合管理的 Portfolio 補齊才會出現。")
