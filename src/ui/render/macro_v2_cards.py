@@ -255,6 +255,10 @@ class Row:
     source: str
     note: str
     decimals: int
+    # DL-f1-s5：**只給顯示用**的數值後綴 —— 目前唯一用途是 M1B-M2 退到 ^TWII 動能
+    # 代理時的 L0 既有註記（L5 `build_rows` 自 readiness 側車 `is_proxy` 組出）。
+    # 判燈 / 篩選 / 排序一律不讀它；預設空字串 → 既有呼叫端與畫面逐字不變。
+    value_note: str = ""
 
 
 def fmt_value(value: float | None, unit: str, decimals: int) -> str:
@@ -600,7 +604,7 @@ def render_detail(row: Row, spec: DangerSpec, edu: dict | None = None,
                 unsafe_allow_html=True)
     st.markdown(
         f'<div style="font-size:34px;font-weight:700;margin:8px 0 2px;color:{color}">'
-        f'{fmt_value(row.value, row.unit, row.decimals)}</div>',
+        f'{fmt_value(row.value, row.unit, row.decimals)}{row.value_note}</div>',
         unsafe_allow_html=True)
     st.caption(f"門檻帶　{row.thr_text}")
     if row.hit_source:

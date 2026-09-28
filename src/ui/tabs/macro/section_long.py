@@ -33,7 +33,7 @@ from src.services.daily_checklist import (
 # v19.170 P1-4 死區判定（L0 純函式，無 I/O）
 from shared.stats_helpers import ewma_vol, signal_with_deadband
 # v19.183 D2:M1B/M2 是否為「^TWII 動能代理」的判定 SSOT(原用從未被寫入的 is_proxy 鍵)。
-from shared.macro_provenance import M1B_PROXY_VALUE_NOTE, is_m1b_m2_proxy
+from shared.macro_provenance import M1B_PROXY_VALUE_NOTE, is_m1b_m2_proxy, m1b_m2_proxy_badge
 from shared.ui_state import UI_IDLE, classify_ui_state
 # I2(2026-08-10):`bias_240` 估算揭露文案 SSOT(L5 → L2 合法下行)。本檔原本是全 repo
 # 唯一有揭露的地方,但那兩句是 inline 字面 —— 其餘 9 個消費點要一起揭露就得複製,
@@ -246,7 +246,10 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     _macro_concl = []
     if _m1b_info:
         _diff2 = _m1b_info.get('m1b_yoy', 0) - _m1b_info.get('m2_yoy', 0)
-        _ind_m1b = f'M1B-M2={_diff2:+.2f}%'
+        # DL-f1-s5：同頁下方 KPI 卡（v19.183 D2）早已標代理，這張結論卡印的是同一個
+        # 數字卻沒標 —— 退到 ^TWII 動能代理時，指標數字後綴 L0 既有註記（K1 不自擬）。
+        # 只揭露：三段分支（>0 / >-2 / 其餘）、結論文案、顏色一位未動；非代理時為空字串。
+        _ind_m1b = f'M1B-M2={_diff2:+.2f}%{m1b_m2_proxy_badge(_m1b_info)}'
         if _diff2 > 0:
             _macro_concl.append((STRATEGY_TECHNICAL, f'{_ind_m1b} 正值',
                                  '資金行情啟動，大膽做多！（領先大盤3~6月）', TRAFFIC_GREEN))

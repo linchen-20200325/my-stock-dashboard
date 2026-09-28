@@ -1,4 +1,4 @@
-"""tests/test_dl_f1_s5_m1b_proxy_label.py — DL-f1-s5：M1B／M2 落在代理層時必須標示（5 處／6 檔）。
+"""tests/test_dl_f1_s5_m1b_proxy_label.py — DL-f1-s5：M1B／M2 落在代理層時必須標示（批 P）。
 
 病史（本檔存在的理由）
 ────────────────────────────────────────────────────────────────
@@ -14,6 +14,14 @@
     ④ src/ui/tabs/stock_sections/section_op_recommendation.py
        → L3 src/services/app_ai_service.generate_ai_comment（個股即時操作建議文案）
     ⑤ src/ui/tabs/tab_edu.py                       指標解讀手冊 ms1.json「📈 即時值」chip
+
+第三個 commit（獨立 QA 以真 AppTest 另找到，同一件事）：
+    ⑥ src/ui/tabs/macro/section_long.py            §七「策略3 × 策略1 結論」卡的 M1B-M2 數字
+                                                    （同頁 KPI 卡早已有標，這張沒標）
+    ⑦ src/ui/tabs/tab_macro_v2.py（＋ L4 src/ui/render/macro_v2_cards.py `Row.value_note`）
+       總經 v2：總表「目前值」、桶摘要「最差項」、右側明細的數值
+    （QA 另點名的頂部紅綠燈 chip —— `market_strategy` 產的 `mkt_info['signals']` ——
+     在 L3 1～3 行內／L5 不嗅探字串的前提下做不到，**本批未改**，已停手回報。）
 
 已有標示的前例：v1 `section_long` KPI 卡、L2 `compute_five_bucket_summary`、
 v2 `page_today`（B7c）—— 一律後綴 L0 `shared.macro_provenance.M1B_PROXY_VALUE_NOTE`。
@@ -64,6 +72,10 @@ _TOUCHED = (
     "src/ui/tabs/stock_sections/section_op_recommendation.py",
     "src/services/app_ai_service.py",
     "src/ui/tabs/tab_edu.py",
+    # 第三個 commit（獨立 QA 以真 AppTest 找到的另外兩處）
+    "src/ui/tabs/macro/section_long.py",
+    "src/ui/tabs/tab_macro_v2.py",
+    "src/ui/render/macro_v2_cards.py",
 )
 
 
@@ -296,6 +308,38 @@ def run(monkeypatch):
             M.render_tab_edu()
             return fake
 
+        # ⑥ §七 長期桶（「策略3 × 策略1 結論」卡）
+        @staticmethod
+        def long(info) -> _FakeST:
+            import src.ui.tabs.macro.section_long as M
+
+            def _no_bar(*a, **k):                # 五桶 bar 另有自己的 st，非本批範圍
+                _hit("bucket_bar")
+            fake = _FakeST({"m1b_m2_info": info})
+            monkeypatch.setattr(M, "st", fake)
+            monkeypatch.setattr(M, "render_macro_bucket_summary_bar", _no_bar)
+            M.render_section_long(False, {}, {}, {}, {}, {}, {})
+            return fake
+
+        # ⑦ 總經 v2：L2 側車 → L5 `build_rows`（純函式，不需 st）
+        @staticmethod
+        def v2_rows(info) -> list:
+            import src.ui.tabs.tab_macro_v2 as V
+            from src.compute.macro.macro_helpers import compute_five_bucket_summary
+            rd: dict = {}
+            compute_five_bucket_summary(m1b_m2_info=info, readiness_out=rd)
+            return V.build_rows(rd)
+
+        # ⑦ 總經 v2：L4 右側明細面板
+        @staticmethod
+        def v2_detail(row) -> _FakeST:
+            import src.ui.render.macro_v2_cards as C
+            from shared.macro_buckets import SPECS_BY_KEY
+            fake = _FakeST({})
+            monkeypatch.setattr(C, "st", fake)
+            C.render_detail(row, SPECS_BY_KEY[row.key], edu=None, reason_text="")
+            return fake
+
     return _Runner()
 
 
@@ -413,13 +457,36 @@ class TestNewsAiPrompt:
         assert NOTE not in prompt
 
     @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    def test_only_difference_is_the_note_and_rule_engine_unchanged(self, run, how):
-        """整份 prompt 拿掉註記後逐字相同；規則引擎寫進狀態鎖的結果也完全相同。"""
-        p_prompt, p_state = run.news(_proxy("negative", how))
-        r_prompt, r_state = run.news(_real("negative"))
+    @pytest.mark.parametrize("scn", ["strong", "negative"])
+    def test_only_difference_is_the_note_and_rule_engine_unchanged(self, run, scn, how):
+        """整份 prompt 拿掉註記後逐字相同；規則引擎寫進狀態鎖的結果也完全相同。
+
+        兩個情境（第三個 commit 依獨立 QA 建議補 strong）：
+          · strong（gap +3.10）：M1B 讓分數 +15 → 狀態**成為多頭**；
+          · negative（gap −3.80）：M1B 讓分數 −10 並加註「資金緊縮」。
+        ⚠️ 「只在代理時把 M1B 從引擎拿掉（M2 照送）」這種偷改計分，**只有 strong 抓得到**
+        —— negative 情境拿掉 M1B 後 spread 變 −5.00，仍 < −3，分數與標籤碰巧相同
+        （實測：只跑 negative 時該突變不會轉紅）。前提見下一條守衛。
+        """
+        p_prompt, p_state = run.news(_proxy(scn, how))
+        r_prompt, r_state = run.news(_real(scn))
         assert p_prompt.replace(NOTE, "") == r_prompt
         assert p_prompt != r_prompt, "反向對照：代理時 prompt 必須真的多出註記"
         assert p_state == r_state, "只准揭露：calculate_system_state 的結果不得因代理而變"
+
+    def test_strong_scenario_is_sensitive_to_m1b_only_removal(self, run):
+        """前提守衛（QA 的 M10）：上一條要抓得到「只在代理時把 M1B 從引擎拿掉」，
+        strong 情境本身必須對「只拿掉 M1B、M2 照送」敏感 —— 否則 `p_state == r_state`
+        就算引擎被偷改也照樣綠。
+        """
+        from src.services.macro_state_locker import calculate_system_state
+        _, r_state = run.news(_real("strong"))
+        assert r_state["market_regime"] == "多頭", r_state
+        m1b, m2 = _GAPS["strong"]
+        with_m1b = calculate_system_state({"M1B_YoY_pct": m1b, "M2_YoY_pct": m2})
+        m1b_removed = calculate_system_state({"M1B_YoY_pct": None, "M2_YoY_pct": m2})
+        assert with_m1b == r_state, "前提：prompt 流程送進引擎的就是這組 M1B/M2"
+        assert m1b_removed["market_regime"] != "多頭", m1b_removed
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -523,6 +590,164 @@ class TestMidRing2DBadge:
         """代理源但缺數字 → 仍是「D M1B-M2未知」，不得貼註記。"""
         _span, text = _d_badge(run.mid(_NO_NUMBER))
         assert text == "D M1B-M2未知", text
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ⑥ §七「策略3 × 策略1 結論」卡（第三個 commit；獨立 QA 以真 AppTest 找到）
+# ══════════════════════════════════════════════════════════════════════════
+#: 本組另加一個「接近 0」情境，讓 §七 的三段分支（>0 / >-2 / 其餘）全部走到
+_S7_GAPS = {**_GAPS, "near_zero": (1.0, 2.0)}
+#: 改動前（a2cf529）實際輸出：strategy_conclusion 的指標段（含結尾「 → 」）
+_ORIG_S7 = {
+    "strong": "M1B-M2=+3.10% 正值 → ",
+    "mild": "M1B-M2=+0.50% 正值 → ",
+    "negative": "M1B-M2=-3.80% 負值 → ",
+    "near_zero": "M1B-M2=-1.00% 接近0 → ",
+}
+_S7_TAIL = {"strong": " 正值 → ", "mild": " 正值 → ", "negative": " 負值 → ",
+            "near_zero": " 接近0 → "}
+#: 同頁 KPI 卡在代理時**本來就**多印一行獨立警語（v19.183 D2，不是本批加的）。
+#: 差分比對前把它拿掉 —— 用它的具名開頭定位，且斷言恰好拿掉一行。
+_D2_PROXY_CAPTION_HEAD = "⚠️ 央行 M1B/M2 三層來源全部失敗"
+
+
+def _s7_info(scn, proxy_how=None, source="CBC-tier1"):
+    m1b, m2 = _S7_GAPS[scn]
+    return (_info(m1b, m2, **_PROXY_KW[proxy_how]) if proxy_how
+            else _info(m1b, m2, source=source))
+
+
+def _s7_card(fake: _FakeST) -> str:
+    hits = [t for _, t in fake.out if "🎯 策略3" in t and "M1B-M2=" in t]
+    assert len(hits) == 1, f"§七 M1B 結論卡應恰 1 張，實得 {len(hits)}"
+    return hits[0]
+
+
+class TestSection7ConclusionCard:
+
+    def test_harness_reaches_the_card(self, run):
+        card = _s7_card(run.long(_s7_info("strong")))
+        # 本 section 會畫不只一條桶 bar（長期 + 中期）→ 只斷言替身確實被呼叫過
+        assert run.calls_seen.get("bucket_bar", 0) >= 1, "五桶 bar 替身沒被呼叫到 —— patch 失效"
+        assert f">{_ORIG_S7['strong']}</span>" in card, card
+
+    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
+    @pytest.mark.parametrize("scn", sorted(_S7_GAPS))
+    def test_proxy_value_has_note(self, run, scn, how):
+        card = _s7_card(run.long(_s7_info(scn, how)))
+        m1b, m2 = _S7_GAPS[scn]
+        assert f">M1B-M2={m1b - m2:+.2f}%{NOTE}{_S7_TAIL[scn]}</span>" in card, card
+
+    @pytest.mark.parametrize("source", _REAL_SOURCES)
+    @pytest.mark.parametrize("scn", sorted(_S7_GAPS))
+    def test_non_proxy_is_byte_identical_to_before(self, run, scn, source):
+        fake = run.long(_s7_info(scn, source=source))
+        assert f">{_ORIG_S7[scn]}</span>" in _s7_card(fake)
+        assert NOTE not in fake.text
+
+    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
+    @pytest.mark.parametrize("scn", sorted(_S7_GAPS))
+    def test_only_difference_is_the_note(self, run, scn, how):
+        """結論文案、顏色、同頁其餘卡片：拿掉註記（與 D2 既有警語）後逐字相同。"""
+        p = run.long(_s7_info(scn, how)).out
+        r = run.long(_s7_info(scn)).out
+        p_wo_d2 = [x for x in p if not x[1].startswith(_D2_PROXY_CAPTION_HEAD)]
+        assert len(p) - len(p_wo_d2) == 1, "D2 既有警語應恰好一行（定位失準會讓差分失真）"
+        assert _strip_note(p_wo_d2) == r
+        assert p_wo_d2 != r, "反向對照：代理時必須真的多出註記"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ⑦ 總經 v2：總表「目前值」、桶摘要「最差項」、右側明細（第三個 commit）
+# ══════════════════════════════════════════════════════════════════════════
+#: 改動前（a2cf529）實際輸出：`fmt_value` 的結果（負號為 U+2212）
+_ORIG_V2_VALUE = {"strong": "3.10%", "mild": "0.50%", "negative": "−3.80%"}
+
+
+def _v2_m1b(rows):
+    hits = [r for r in rows if r.key == "m1b_m2_gap"]
+    assert len(hits) == 1, f"m1b_m2_gap 應恰 1 列，實得 {len(hits)}"
+    return hits[0]
+
+
+def _v2_views(rows):
+    """(總表 m1b 的「目前值」, 長期桶摘要, 整張表, 整份摘要)。"""
+    import src.ui.tabs.tab_macro_v2 as V
+    vis, table = V.visible_table(rows)
+    i = [r.key for r in vis].index("m1b_m2_gap")
+    summary = V.bucket_summary(rows)
+    long_b = [b for b in summary if b["name"] == "長期"]
+    assert len(long_b) == 1, summary
+    return table["目前值"][i], long_b[0], table, summary
+
+
+def _v2_big_value(fake: _FakeST) -> str:
+    hits = [t for _, t in fake.out if "font-size:34px" in t]
+    assert len(hits) == 1, f"右側明細的大字數值應恰 1 個，實得 {len(hits)}"
+    return hits[0]
+
+
+class TestMacroV2Page:
+
+    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
+    @pytest.mark.parametrize("scn", sorted(_GAPS))
+    def test_proxy_table_summary_and_detail_have_note(self, run, scn, how):
+        rows = run.v2_rows(_proxy(scn, how))
+        cur, long_b, _t, _s = _v2_views(rows)
+        want = f"{_ORIG_V2_VALUE[scn]}{NOTE}"
+        assert cur == want, cur
+        # 只餵 M1B → 長期桶其餘燈無資料 → 最差項必為 M1B（前提照實斷言）
+        assert long_b["worst_label"] == "M1B-M2 資金動能", long_b
+        assert long_b["worst_value"] == want, long_b
+        assert f">{want}</div>" in _v2_big_value(run.v2_detail(_v2_m1b(rows)))
+
+    @pytest.mark.parametrize("source", _REAL_SOURCES)
+    @pytest.mark.parametrize("scn", sorted(_GAPS))
+    def test_non_proxy_is_byte_identical_to_before(self, run, scn, source):
+        """只看畫面字串（改動前後都能跑）：與 a2cf529 實際輸出逐字相同。"""
+        rows = run.v2_rows(_real(scn, source))
+        cur, long_b, table, summary = _v2_views(rows)
+        assert cur == _ORIG_V2_VALUE[scn] and long_b["worst_value"] == _ORIG_V2_VALUE[scn]
+        assert NOTE not in str(table) and NOTE not in str(summary)
+        assert f">{_ORIG_V2_VALUE[scn]}</div>" in _v2_big_value(run.v2_detail(_v2_m1b(rows)))
+
+    @pytest.mark.parametrize("source", _REAL_SOURCES)
+    def test_non_proxy_rows_carry_no_note(self, run, source):
+        assert all(r.value_note == "" for r in run.v2_rows(_real("strong", source)))
+
+    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
+    @pytest.mark.parametrize("scn", sorted(_GAPS))
+    def test_only_difference_is_the_note(self, run, scn, how):
+        """燈色 / 狀態 / 桶等級 / 指標危險度：代理與非代理完全相同，差別只有註記。"""
+        import dataclasses
+
+        import src.ui.tabs.tab_macro_v2 as V
+        p_rows = run.v2_rows(_proxy(scn, how))
+        r_rows = run.v2_rows(_real(scn))
+        assert [dataclasses.replace(r, value_note="") for r in p_rows] == r_rows
+        _pc, _pl, p_table, p_summary = _v2_views(p_rows)
+        _rc, _rl, r_table, r_summary = _v2_views(r_rows)
+        strip = {k: [str(v).replace(NOTE, "") for v in vs] for k, vs in p_table.items()}
+        assert strip == {k: [str(v) for v in vs] for k, vs in r_table.items()}
+        assert [{k: (v.replace(NOTE, "") if isinstance(v, str) else v) for k, v in b.items()}
+                for b in p_summary] == r_summary
+        assert V.overall_verdict(p_summary) == V.overall_verdict(r_summary)
+        assert p_table != r_table, "反向對照：代理時總表必須真的多出註記"
+
+    def test_no_note_without_a_number(self, run):
+        """代理源但缺數字 → 那一列是「無資料」，不得貼註記。"""
+        rows = run.v2_rows(_NO_NUMBER)
+        cur, _long_b, table, summary = _v2_views(rows)
+        assert cur == "無資料"
+        assert NOTE not in str(table) and NOTE not in str(summary)
+
+    def test_value_note_is_display_only_default(self):
+        """L4 `Row.value_note` 預設空字串 —— 既有呼叫端（不帶此欄）行為不變。"""
+        from src.ui.render.macro_v2_cards import Row
+        r = Row(key="vix", label="VIX", bucket="short", unit="", value=20.0, band="green",
+                state="live", reason=None, hit_source=None, thr_text="—", source="—",
+                note="", decimals=1)
+        assert r.value_note == ""
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -708,10 +933,20 @@ _APP_TARGETS = {
            "render_op_recommendation_section\n"
            "render_op_recommendation_section('2330', 82.0, {'contracting': True}, "
            "5.0, 100.0, 55.0, 0, 0)"),
+    # 第三個 commit
+    "long": ("from src.ui.tabs.macro.section_long import render_section_long\n"
+             "render_section_long(False, {}, {}, {}, {}, {}, {})"),
+    "macro_v2": ("from src.ui.tabs.tab_macro_v2 import render_tab_macro_v2\n"
+                 "render_tab_macro_v2()"),
 }
 
 
 def _app_markdown(target: str, info: dict) -> list[str]:
+    """真 render 後的 markdown 文字 ＋ 所有 `st.dataframe` 儲存格（總經 v2 總表住在那裡）。
+
+    同頁 §七 KPI 卡在代理時本來就多一行 D2 獨立警語（不是本批加的）—— 不論該版本
+    Streamlit 把 caption 放進哪個集合，一律依具名開頭排除，差分才比得準。
+    """
     pytest.importorskip("streamlit.testing.v1")
     from streamlit.testing.v1 import AppTest
     body = (
@@ -723,14 +958,16 @@ def _app_markdown(target: str, info: dict) -> list[str]:
         "st.session_state['cl_data'] = {'inst': {}}\n"
         f"{_APP_TARGETS[target]}\n"
     )
-    at = AppTest.from_string(body, default_timeout=60)
+    at = AppTest.from_string(body, default_timeout=90)
     at.run()
     if at.exception:
         pytest.fail("render 有 uncaught exception:\n" + "\n".join(
             f"{e.type}: {str(e.value)[:300]}" for e in at.exception))
     out = [str(m.value) for m in at.markdown]
     assert out, "render 完全沒有 markdown 輸出 —— driver 沒跑到 section"
-    return out
+    for d in at.dataframe:
+        out.extend(str(x) for x in d.value.astype(str).to_numpy().ravel())
+    return [t for t in out if not t.startswith(_D2_PROXY_CAPTION_HEAD)]
 
 
 @pytest.mark.slow
@@ -743,3 +980,18 @@ class TestRealStreamlitRender:
         assert any(NOTE in t for t in p), f"{target}: 代理時畫面上找不到註記"
         assert not any(NOTE in t for t in r), f"{target}: 非代理卻出現註記"
         assert [t.replace(NOTE, "") for t in p] == r, f"{target}: 註記以外還有其他差異"
+
+    def test_section7_card_itself_is_labelled(self):
+        """§七 同頁 KPI 卡本來就有註記 → 上一條的「找得到註記」對 long 不夠具體，這裡點名那張卡。"""
+        p = [t for t in _app_markdown("long", _proxy("strong")) if "🎯 策略3" in t and "M1B-M2=" in t]
+        r = [t for t in _app_markdown("long", _real("strong")) if "🎯 策略3" in t and "M1B-M2=" in t]
+        assert len(p) == len(r) == 1, (p, r)
+        assert f"M1B-M2=+3.10%{NOTE} 正值" in p[0], p[0]
+        assert f">{_ORIG_S7['strong']}</span>" in r[0], r[0]
+
+    def test_macro_v2_table_and_bucket_summary_are_labelled(self):
+        """總經 v2 真 render：總表儲存格與桶摘要「最差項」兩處都帶註記。"""
+        p = _app_markdown("macro_v2", _proxy("strong"))
+        want = f"{_ORIG_V2_VALUE['strong']}{NOTE}"
+        assert want in p, "總表（st.dataframe）「目前值」沒有註記"
+        assert any(f"M1B-M2 資金動能 {want}" in t for t in p), "桶摘要「最差項」沒有註記"
