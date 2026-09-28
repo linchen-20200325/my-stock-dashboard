@@ -453,16 +453,19 @@ def _parse_cbc_ef15m01_levels(sdmx, fatal_from: _dt.date | None = None
     return df[["date", "m1b", "m2"]], desc
 
 
-def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
+def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str = "") -> pd.DataFrame:
     """M1B / M2 月頻（CBC 中央銀行；FinMind 無對應 dataset，表名為歷史沿用）。
 
     走 proxy_helper.fetch_url（PROXY_URL）→ CBC 擋海外 IP 必須過台灣中繼。
     輸出：date / m1b / m2 / m1b_m2_gap（M1B YoY − M2 YoY，pp）/ source / fetched_at。
     Tier 2（EF15M01，DL-f1-r1 起）的 m1b／m2 = 日平均餘額，單位新台幣百萬元
     （`shared.signal_thresholds.MONEY_SUPPLY_CACHE_UNIT_LABEL`）。
+
+    `token`：不使用（CBC 不需要 FinMind token）。DL-f1-s9 起 `FETCHERS` 標 needs_token=False，
+    `update_one` 以 `fn(start, end)` 兩參數呼叫 → 本參數改為選填（預設空字串）；
+    保留它只為相容既有的三參數呼叫端（`fetch_finmind_m1m2(start, end, "")`）。
     """
-    # token 參數忽略不用（CBC 不需要），但維持 signature 統一
-    _ = token
+    _ = token   # 不使用（見 docstring）
     try:
         # v19.101 真因修正:原 `from proxy_helper import ...` / `from tw_macro import ...`
         # 是 v18.359 檔案搬家前的舊頂層路徑,根目錄 shim 已刪 → 本段自搬家起
@@ -747,7 +750,10 @@ FETCHERS = {
     "twii_ohlcv": (fetch_twii_ohlcv, False),       # (fn, needs_token)
     "finmind_inst": (fetch_finmind_inst, True),
     "finmind_margin": (fetch_finmind_margin, True),
-    "finmind_m1m2": (fetch_finmind_m1m2, True),
+    # DL-f1-s9：資料來自 CBC、不需要 FinMind token（表名 finmind_ 為歷史沿用）→ False。
+    # 原標 True：沒有 token 的執行會把本表白白跳過。update_one 對 False 以 fn(start, end) 呼叫
+    # —— `fetch_finmind_m1m2` 的 token 參數已改為選填，不會 TypeError。
+    "finmind_m1m2": (fetch_finmind_m1m2, False),
     "tw_pmi": (fetch_tw_pmi_history, False),       # v18.176 Phase D PMI Parquet
 }
 
@@ -835,10 +841,16 @@ def main():
     CACHE_DIR.mkdir(exist_ok=True)
     today = _dt.date.today()
     token = os.environ.get("FINMIND_TOKEN", "")
-    if not token:
-        print("⚠️ FINMIND_TOKEN 未設定，FinMind 表全跳過（僅更新 TWII）")
-
     datasets = args.only.split(",") if args.only else DATASETS
+    if not token:
+        # DL-f1-s9：由 FETCHERS 的 needs_token 推導實際會跑／會跳過的表（不寫死表名）。
+        # 原句「FinMind 表全跳過（僅更新 TWII）」不精確：tw_pmi、finmind_m1m2 不需 token，照跑。
+        # 只列已註冊的表；未知表名由下方主迴圈另行印出。
+        _known = [n for n in datasets if n in FETCHERS]
+        _skip = [n for n in _known if FETCHERS[n][1]]
+        _run = [n for n in _known if not FETCHERS[n][1]]
+        print(f"⚠️ FINMIND_TOKEN 未設定 → 跳過需要 token 的表：{', '.join(_skip) or '（無）'}；"
+              f"照常執行：{', '.join(_run) or '（無）'}")
 
     print(f"\n📊 update_macro_history.py 起跑（today={today}, bootstrap={args.bootstrap}）\n")
     metadata = {}
