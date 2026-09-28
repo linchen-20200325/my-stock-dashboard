@@ -430,6 +430,8 @@ _YF_CLOSE_TTL = 3600.0  # 1hr，與 st.cache_data 對齊
 #: 值 = 失敗時點;`_FAIL_COOLDOWN_SEC` 秒內同一鍵不重打,之後重抓;成功即清。
 #: 刻意與 `_YF_CLOSE_CACHE` 分開 —— 失敗**不入** 1hr 成功快取。名稱以 `_CACHE` 結尾,
 #: 讓 tests/conftest 的 module-cache 清空 fixture 一併清掉。
+#: D2-f2(2026-09-28,§1.A-3(b)):`fetch_url` 回 None 與回應解析失敗兩個出口也寫進這裡
+#: (同一把鎖、同一個鍵、同一個冷卻期)。名稱沿用(既有測試與 fixture 依賴),實際涵蓋三種抓取失敗。
 _YF_CLOSE_EMPTY_FAIL_CACHE: dict[tuple[str, str], float] = {}
 
 
@@ -449,6 +451,7 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
         return cached[1].copy()
     if _empty_at is not None and (now - _empty_at) < _FAIL_COOLDOWN_SEC:
         # Q2-r2:全 null 失敗的冷卻期內不重打上游,回同形空 Series(與修前失敗回傳一致)
+        # D2-f2:fetch_url 回 None／解析失敗記下的退避同樣在這裡生效(三種失敗同一個冷卻期)
         return pd.Series(dtype=float, name=ticker)
 
     url = f"{YF_CHART_BASE}/{ticker}"
@@ -458,6 +461,12 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
         timeout=15,
     )
     if r is None:
+        # D2-f2(2026-09-28,§1.A-3(b)):抓取失敗(網路／逾時／proxy 全敗)也記退避 ——
+        # 修前只有下方「全 null」那條記,這條每呼叫一次就重打上游一次。寫法同 Q2-r2:
+        # 同一把鎖、同一個鍵、同一個時點(本次呼叫的 now);不入 1hr 成功快取;回傳形狀同修前。
+        print(f"[macro_core/yf] {ticker} fetch_url 回 None(不快取,冷卻 {_FAIL_COOLDOWN_SEC:.0f}s)")
+        with _YF_CLOSE_CACHE_LOCK:
+            _YF_CLOSE_EMPTY_FAIL_CACHE[key] = now
         return pd.Series(dtype=float, name=ticker)
     try:
         d = r.json()
@@ -484,7 +493,11 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
             _YF_CLOSE_EMPTY_FAIL_CACHE.pop(key, None)
         return s
     except Exception as e:
+        # D2-f2(2026-09-28,§1.A-3(b)):解析失敗(JSON 壞／結構不符／長度對不上)同樣記退避,
+        # 寫法同 Q2-r2(同一把鎖、同一個鍵、同一個時點);回傳形狀同修前。
         print(f"[macro_core/yf] {ticker} 解析失敗: {e}")
+        with _YF_CLOSE_CACHE_LOCK:
+            _YF_CLOSE_EMPTY_FAIL_CACHE[key] = now
         return pd.Series(dtype=float, name=ticker)
 
 

@@ -31,6 +31,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 
+from shared.fail_cooldown import CachedFailure as _CachedFailure  # D2-f1 2026-09-28
 from shared.rs_screen_thresholds import (
     RS_DEFAULT_LOOKBACK,
     RS_LEADER_TOP_N,
@@ -57,6 +58,16 @@ from src.data.macro import fetch_yf_close
 from src.data.stock.picker_fetcher import fetch_stock_history_1y
 
 _TWII_TICKER = "^TWII"
+
+
+class _UpstreamFetchFailed(_CachedFailure):
+    """`_scan_cached` 自標「上游抓取失敗」那條出口專用(D2-f1 2026-09-28,§1.A-3(a))。
+
+    `st.cache_data` 不快取例外 → 失敗結果不會被凍成 1 小時;`run_rs_leader_scan` 只接住
+    本類別,取 `.payload` 回傳與修前逐字相同的 (rows, meta)。刻意用私有子類別、不直接接
+    `CachedFailure`:別的模組的 `CachedFailure` 若從下層漏出來,不會在這裡被誤當成
+    (rows, meta) 拆開。
+    """
 
 
 def _clear(fn) -> None:
@@ -225,6 +236,9 @@ def _scan_cached(lookback: int, max_scan: int, beat_only: bool,
 
     top_n：排行取幾檔。選股網綜合評分需**全存活池** RS 分位（top_n 給大值 + beat_only=False），
     避免只回 top-50 → 綜合分那邊 274 檔 RS 記 0 的失真。
+
+    D2-f1（2026-09-28）：大盤 ^TWII 抓取失敗那一條改**拋** `_UpstreamFetchFailed`（不入快取），
+    由 `run_rs_leader_scan` 接住回同一份 (rows, meta)；其餘分支（含正當的空排行）照舊回傳、照舊快取。
     """
     _fetched_at = pd.Timestamp.now("UTC").isoformat()
     _base_meta = {"lookback": lookback, "top_n": top_n,
@@ -234,9 +248,15 @@ def _scan_cached(lookback: int, max_scan: int, beat_only: bool,
     # ── ① 大盤基準（先抓；抓不到直接 fail-loud，沒有大盤就無從比較）──
     dfm = _market_frame()
     if dfm.empty:
-        return [], {**_base_meta, "candidates": 0, "scanned": 0, "scored": 0,
-                    "pool_source": "（無）", "market": {"banner": ""},
-                    "note": "⚠️ 大盤 ^TWII 抓取失敗（Yahoo 暫時不可用），無基準可比較 RS，稍後再試。"}
+        _fail = ([], {**_base_meta, "candidates": 0, "scanned": 0, "scored": 0,
+                      "pool_source": "（無）", "market": {"banner": ""},
+                      "note": "⚠️ 大盤 ^TWII 抓取失敗（Yahoo 暫時不可用），無基準可比較 RS，稍後再試。"})
+        # D2-f1(2026-09-28,§1.A-3(a)「只快取成功結果」):這一條是程式自己標示「抓取失敗
+        # (Yahoo 暫時不可用)…稍後再試」的出口;下方其餘分支(存活池為空、各種空排行)照舊回傳、照舊快取。
+        # 修前這份結果被 @st.cache_data 快取 1 小時 —— Yahoo 恢復後使用者仍一直看到失敗。
+        # 改為拋出(st.cache_data 不快取例外),由 run_rs_leader_scan 接住、回傳內容不變。
+        # 退避(§1.A-3(b))由 L1 fetch_yf_close 負責:冷卻期內再呼叫不重打上游。
+        raise _UpstreamFetchFailed(_fail)
 
     # ── ② 存活池 ──────────────────────────────────────────────
     survivors = _survivor_pool(max_scan)
@@ -279,13 +299,18 @@ def run_rs_leader_scan(
         refresh: True → 清 L1 大盤/個股 cache + 本層 cache 重掃。
         max_scan: 深掃存活池上限（預設 RS_SCAN_MAX）。
         name_map: {代碼: 名稱}（於快取外套用，避免大 dict 進 cache key）。
+
+    D2-f1（2026-09-28）：大盤抓取失敗的結果不入快取（下次呼叫重算）；回傳內容與修前逐字相同。
     """
     if refresh:
         _clear(fetch_yf_close)
         _clear(fetch_stock_history_1y)
         _clear(_scan_cached)
 
-    rows, meta = _scan_cached(int(lookback), int(max_scan), bool(beat_only), int(top_n))
+    try:
+        rows, meta = _scan_cached(int(lookback), int(max_scan), bool(beat_only), int(top_n))
+    except _UpstreamFetchFailed as _uf:
+        rows, meta = _uf.payload     # D2-f1:這一份沒進快取；以下的快取外注入照舊套用
     # 存活池涵蓋率診斷（§5，快取外注入以反映最新快照；淺拷貝避免污染 cache 內 dict）
     try:
         from src.services.fundamental_screener_service import get_snapshot_coverage_note
