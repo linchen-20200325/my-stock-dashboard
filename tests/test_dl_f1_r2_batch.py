@@ -52,12 +52,16 @@ from tests.test_b7b_r1_ef15m01_level import (
 # ═════════════════════════════════════════════════════════════════════════════
 # DL-f1-s9：finmind_m1m2 不需要 token
 # ═════════════════════════════════════════════════════════════════════════════
-def _run_main(monkeypatch, tmp_path, argv: list[str]) -> list[str]:
-    """無 FINMIND_TOKEN 跑 `main()`，回「抓取函式真的被呼叫」的表名（依呼叫順序）。
+def _run_main(monkeypatch, tmp_path, argv: list[str], *, token: str | None = None) -> list[str]:
+    """跑 `main()`（`token` 為 None → 無 FINMIND_TOKEN；否則設成該值），回「抓取函式真的被呼叫」
+    的表名（依呼叫順序）。
 
     `update_one` 用真的（token 閘門就在裡面）；每張表的抓取函式換成記名樁、**保留原本的
     needs_token 旗標**（樁回空表 → update_one 不寫檔）；PMI durable 步驟換樁（不打網路）。"""
-    monkeypatch.delenv("FINMIND_TOKEN", raising=False)
+    if token is None:
+        monkeypatch.delenv("FINMIND_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("FINMIND_TOKEN", token)
     monkeypatch.setattr(sys, "argv", ["update_macro_history.py", *argv])
     monkeypatch.setattr(umh, "CACHE_DIR", tmp_path)
     monkeypatch.setattr(umh, "META_PATH", tmp_path / "metadata.json")
@@ -139,6 +143,13 @@ class TestS9M1m2NeedsNoToken:
         assert called == ["zz_probe_free"]
         assert "[main] 未知 dataset: no_such_table" in out
 
+    def test_main_with_token_prints_no_missing_token_notice(self, monkeypatch, tmp_path, capsys):
+        """（批 R2 QA）有 token 時不得印缺 token 提示，也沒有任何表因 token 被跳過 —— 全部照常執行。"""
+        called = _run_main(monkeypatch, tmp_path, [], token="tok-for-test")
+        out = capsys.readouterr().out
+        assert "FINMIND_TOKEN 未設定" not in out, out
+        assert called == list(umh.DATASETS)
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # DL-f1-s10：致命範圍內「t−12 餘額 ≤ 捨入半階 → 無法對帳」
@@ -147,54 +158,61 @@ _START = dt.date(2026, 2, 1)                  # 寫入窗口起點 → 第一個
 _FATAL = ef15.ef15_fatal_from(_START)        # 致命範圍 ≥ 2025-02（寫入窗口往前 12 個月）
 
 
-def _t12_at_or_below_half_step(rows, per: str, level: str) -> None:
-    """把 `per` 的 t−12 月 M1B 餘額改成 `level`（≤ 捨入半階），並把 **t−12 那個月** 的官方年增率
-    設成 "-"（它自己的對帳才不會另外判不符 → 只剩本檢查觸發）。"""
+def _t12_at_or_below_half_step(rows, per: str, idx: int, level: str) -> None:
+    """把 `per` 的 t−12 月、序列 `idx` 的餘額改成 `level`（≤ 捨入半階），並把 **t−12 那個月** 該序列
+    的官方年增率設成 "-"（它自己的對帳才不會另外判不符 → 只剩本檢查觸發）。"""
     y, m = int(per[:4]), int(per[5:])
     r12 = _row_of(rows, _p(*_shift(y, m, -12)))
-    r12[_lv_col(I_M1B)] = level
-    r12[_yy_col(I_M1B)] = "-"
-    assert _row_of(rows, per)[_yy_col(I_M1B)] != "-"   # 被檢查的月份要有官方年增率，才走得到本檢查
+    r12[_lv_col(idx)] = level
+    r12[_yy_col(idx)] = "-"
+    assert _row_of(rows, per)[_yy_col(idx)] != "-"     # 被檢查的月份要有官方年增率，才走得到本檢查
+
+
+# （批 R2 QA）兩個序列都測：「t−12 檢查只對其中一個序列生效」這種突變也要轉紅
+_SERIES = [pytest.param(I_M1B, "m1b", "M1B", id="M1B"),
+           pytest.param(I_M2, "m2", "M2", id="M2")]
 
 
 class TestS10T12AtOrBelowHalfStep:
     def test_fatal_from_is_write_window_minus_12_months(self):
         assert _FATAL == dt.date(2025, 2, 1)
 
+    @pytest.mark.parametrize("idx,key,short", _SERIES)
     @pytest.mark.parametrize("level", ["0", "-3"])
-    def test_inside_fatal_range_rejects_whole_table(self, level, capsys):
+    def test_inside_fatal_range_rejects_whole_table(self, level, idx, key, short, capsys):
         # 2026-02 = 第一個寫入月（致命範圍內）；它的 t−12 = 2025-02（= 致命範圍起點）
         rows = ef15_rows()
-        _t12_at_or_below_half_step(rows, "2026M02", level)
+        _t12_at_or_below_half_step(rows, "2026M02", idx, level)
         capsys.readouterr()
         df, why = ef15.parse_cbc_ef15m01(ef15_body(rows), _FATAL)
         out = capsys.readouterr().out
         assert df is None
         assert why.startswith("對帳不符 1 列") and "致命範圍 ≥ 2025-02" in why, why
-        assert "捨入半階" in out and "無法對帳" in out and "'2026-02', 'M1B'" in out, out
+        assert "捨入半階" in out and "無法對帳" in out and f"'2026-02', '{short}'" in out, out
         # 對照組：同一份表只把 t−12 餘額還原（官方年增率仍是 "-"）→ 放行 —— 擋下它的是那筆餘額
         rows_ok = ef15_rows()
-        _row_of(rows_ok, "2025M02")[_yy_col(I_M1B)] = "-"
+        _row_of(rows_ok, "2025M02")[_yy_col(idx)] = "-"
         assert ef15.parse_cbc_ef15m01(ef15_body(rows_ok), _FATAL)[0] is not None
 
+    @pytest.mark.parametrize("idx,key,short", _SERIES)
     @pytest.mark.parametrize("level", ["0", "-3"])
-    def test_before_fatal_range_only_warns_and_still_outputs(self, level, capsys):
+    def test_before_fatal_range_only_warns_and_still_outputs(self, level, idx, key, short, capsys):
         # 2025-01 = 致命範圍（≥ 2025-02）之前的最後一個月；它的 t−12 = 2024-01
         base, _ = ef15.parse_cbc_ef15m01(ef15_body(), _FATAL)
         rows = ef15_rows()
-        _t12_at_or_below_half_step(rows, "2025M01", level)
+        _t12_at_or_below_half_step(rows, "2025M01", idx, level)
         capsys.readouterr()
         df, why = ef15.parse_cbc_ef15m01(ef15_body(rows), _FATAL)
         out = capsys.readouterr().out
         assert df is not None, why
         assert "之前對帳不符 1 列" in out and "只警示" in out, out
-        assert "無法對帳" in out and "'2025-01', 'M1B'" in out, out
+        assert "無法對帳" in out and f"'2025-01', '{short}'" in out, out
         assert "範圍前不符（只警示）1 列" in out
-        # 照樣產出：只有被改的兩格（2024-01 的 M1B 餘額與官方年增率）不同，其餘一格不變
+        # 照樣產出：只有被改的兩格（2024-01 該序列的餘額與官方年增率）不同，其餘一格不變
         exp = base.copy()
         i = exp.index[exp["date"] == dt.date(2024, 1, 1)][0]
-        exp.loc[i, "m1b"] = int(level)
-        exp.loc[i, "m1b_yoy"] = math.nan
+        exp.loc[i, key] = int(level)
+        exp.loc[i, f"{key}_yoy"] = math.nan
         pd.testing.assert_frame_equal(df, exp)
 
 
