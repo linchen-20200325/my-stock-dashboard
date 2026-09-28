@@ -235,7 +235,8 @@ def fetch_cbc_ms1_rows(url: str, *, min_rows: int = 1,
 
     Consumers:
       - tw_macro._try_cbc_ms1（即時三層備援 Tier 1）
-      - update_macro_history.fetch_finmind_m1m2（歷史 bootstrap ms1 分支）
+      - update_macro_history.fetch_finmind_m1m2（排程 ms1 分支；DL-f1-s40 起只做形狀／量級檢查、
+        結果只進 log，**不寫進** finmind_m1m2.parquet —— 該表的列只收 EF15M01）
 
     `**fetch_kwargs` 透傳 fetch_url（timeout / attempts 等），caller 控制 IO 參數。
     `log_label` 給時印詳細 debug log（update_macro_history 模式），否則 silent（tw_macro 模式）。

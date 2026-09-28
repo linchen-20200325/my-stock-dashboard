@@ -22,6 +22,8 @@ DL-f1-s21：兩個突變在既有測試下全綠（兩組分類實跑）—— �
 （突變：先判半階 → 原本放行的表整表拒用）；②「逐字相同的重複標籤」要拒用（突變：依原始標籤去重後再比對
 → 靜默放行，且取到的是另一欄的數字）。
 DL-f1-s25：排程成功 log 原本寫死「CBC PXWeb」，走 ms1.json 也印同一句 → 改印實際寫進 source 欄的值。
+（批 R4 DL-f1-s40：寫出的列改為只來自 EF15M01、ms1 只檢查不寫出 → s25 那條測試改寫為「ms1 有回應時
+成功 log 仍印寫進 source 欄的 EF15M01 字串」；改寫理由見該測試 docstring。）
 
 fixture：沿用 `tests/test_b7b_r1_ef15m01_level.py`（#732）的 `ef15_body()`／`ef15_rows()`／`patch_ef15()`
 —— meta／structure 全文與 2026M05～07 三列逐字轉錄自探針 log，其餘為自洽合成序列（說明見該檔
@@ -355,7 +357,8 @@ class TestS21ReconcileOrderAndExactDuplicateLabel:
 # 批 R3 DL-f1-s25：排程成功 log 印實際來源
 # ═════════════════════════════════════════════════════════════════════════════
 def _ms1_rows(n: int = 26) -> list[dict]:
-    """Tier 1 ms1.json 形狀（同 `test_b7b_r1_ef15m01_level.py::test_tier1_ms1_success_skips_ef15`）。"""
+    """Tier 1 ms1.json 形狀（同 `test_b7b_r1_ef15m01_level.py::test_tier1_ms1_success_still_requests_ef15_and_writes_only_ef15`，
+    批 R4 前名 `test_tier1_ms1_success_skips_ef15`）。"""
     return [{"年月": f"{2023 + k // 12}-{k % 12 + 1:02d}",
              "M1B": 20_000_000 + 100_000 * k, "M2": 60_000_000 + 200_000 * k} for k in range(n)]
 
@@ -371,13 +374,18 @@ class TestS25SuccessLogNamesActualSource:
         assert len(ok) == 1, out
         return calls, df, ok[0]
 
-    def test_ms1_and_ef15_branches_print_different_sources(self, monkeypatch, capsys):
+    def test_success_log_prints_the_written_source_even_when_ms1_answers(self, monkeypatch, capsys):
+        """批 R4 DL-f1-s40 改寫（原名 `test_ms1_and_ef15_branches_print_different_sources`）。
+        原本讓 ms1、EF15M01 兩支各寫出一次、比對兩句 log 不同；DL-f1-s40 起寫出的列只來自 EF15M01
+        （ms1 只檢查、不寫出），「ms1 寫出的那一句」已不存在。s25 要釘的仍在：成功 log 印的是寫進
+        source 欄的同一個值、不是寫死的字串 —— ms1 有回應時也一樣（寫死「CBC PXWeb」會轉紅）。"""
         calls1, df1, line1 = self._run(monkeypatch, capsys, ms1_rows=_ms1_rows())
         calls2, df2, line2 = self._run(monkeypatch, capsys, ms1_rows=None)
-        assert calls1 == [] and calls2 == ["EF15M01"]              # 兩支真的各走一次
+        assert calls1 == calls2 == ["EF15M01"]                    # ms1 有沒有回應，EF15M01 都請求
         src1, src2 = df1["source"].iloc[0], df2["source"].iloc[0]
-        assert src1 == "CBC:ms1.json" and src2.startswith("CBC:PXWeb:EF15M01:")
-        # log 印的就是寫進 source 欄的值（兩支不同）；原本寫死的「CBC PXWeb」不得出現在 ms1 分支
+        assert src1 == src2 and src1.startswith("CBC:PXWeb:EF15M01:daily_avg_level[")
+        assert (df1["source"] == src1).all()
+        # log 印的就是寫進 source 欄的值
         assert line1 == f"[finmind_m1m2] ✅ {src1} {len(df1)} rows"
         assert line2 == f"[finmind_m1m2] ✅ {src2} {len(df2)} rows"
-        assert line1 != line2 and "PXWeb" not in line1
+        assert "ms1" not in line1

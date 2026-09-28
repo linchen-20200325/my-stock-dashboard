@@ -107,7 +107,10 @@ class TestSanityGate:
         assert umh._m1m2_level_sanity(df)[0] is False
 
     def test_nan_gap_first_year_ok(self):
-        df = pd.DataFrame({"m1b": [1.0, 2.0], "m2": [5.0, 6.0], "m1b_m2_gap": [None, 1.0]})
+        # 批 R4 DL-f1-s40：守門多了百萬元量級帶 [1e6, 5e8]，原本的玩具值（1.0／2.0／5.0／6.0）
+        # 落在帶外 → 改用 EF15M01 量級的值。本測試要釘的「首年 gap 為 NaN 不算違規」與斷言不變。
+        df = pd.DataFrame({"m1b": [30_000_000.0, 30_500_000.0], "m2": [70_000_000.0, 70_200_000.0],
+                           "m1b_m2_gap": [None, 1.0]})
         assert umh._m1m2_level_sanity(df)[0] is True
 
     def test_committed_file_is_flagged_corrupt(self):
