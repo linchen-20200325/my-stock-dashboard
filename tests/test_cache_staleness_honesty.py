@@ -26,7 +26,6 @@ import datetime as dt
 import json
 
 import pandas as pd
-import pytest
 
 from src.data.macro.macro_cache_reader import (
     CACHE_DATASET_CADENCE,
@@ -239,8 +238,22 @@ def test_real_repo_cache_m1m2_is_currently_stale_or_fixed():
     2026-08-27 現況:`finmind_m1m2` 落後 ≥1 期且 `last_error='抓取結果為空'`。
     若上游修好、本測試的 xfail 條件不再成立,pytest 會報 XPASS ——
     那時請把本測試改成正向斷言,**不要**直接刪掉(它是這件事的唯一 CI 痕跡)。
+
+    DL-f1-r1(2026-09-28)收斂:取數改 CBC EF15M01 後,排程會整段重建本檔 → 之後可能判為新鮮。
+    原本新鮮時 `pytest.skip`(等於什麼都不守),改為兩態都斷言:
+      - 過期 / 上游自陳失敗 → 必須講得出理由(原斷言不變);
+      - 判為新鮮 → 必須拿得出新鮮的證據(as_of、落後期數 ≤ 0),且內容本身是合格存量
+        (新鮮的壞檔比過期的壞檔更危險 —— 下游會信它)。
     """
     r = compute_cache_staleness("finmind_m1m2")
-    if not (r["is_stale"] or r["upstream_error"]):
-        pytest.skip("finmind_m1m2 已恢復新鮮 —— 上游修好了,請回頭收斂本測試")
-    assert r["reason"] or r["upstream_error"], "判為過期卻講不出理由 = 沒有誠實揭露"
+    if r["is_stale"] or r["upstream_error"]:
+        assert r["reason"] or r["upstream_error"], "判為過期卻講不出理由 = 沒有誠實揭露"
+        return
+    assert r["as_of"] is not None and r["periods_behind"] is not None, r
+    assert r["periods_behind"] <= 0, r
+    import scripts.update_macro_history as _umh
+    from src.data.macro.macro_cache_reader import DEFAULT_PARQUET_CACHE_DIR
+
+    _ok, _msg = _umh._m1m2_level_sanity(
+        pd.read_parquet(DEFAULT_PARQUET_CACHE_DIR / "finmind_m1m2.parquet"))
+    assert _ok, f"判為新鮮的 finmind_m1m2 內容卻不合格:{_msg}"
