@@ -2732,14 +2732,19 @@ def _render_qa_leaf(session: Mapping[str, Any]) -> None:
 
     _typed = st.chat_input(QA_PLACEHOLDER, key="p05v_qa_input")
     _question = str(_typed or "").strip()
-    _req = QaRequest(asked=bool(_question), question=_question,
+    # S2-f3（2026-09-28）：送給 L3（→ Gemini）的提問先過 L0 `scrub_secrets` —— 原本送的是原文，
+    # 貼進來的金鑰／帳密／家目錄路徑會原樣出站，畫面上的紀錄反而是洗過的。
+    # 用**純文字版**（⛔ 不是 `scrub_qa_text` 的 Markdown 跳脫版：模型收到的是文字，不渲染 Markdown）；
+    # 「這一輪有沒有問」仍以原文判斷（`asked` 不變）；沒命中任何規則的提問逐字不變。
+    _req = QaRequest(asked=bool(_question), question=scrub_secrets(_question),
                      history=_history)
     _qa = load_qa(_req)
 
     if _req.asked:
         # SEC-r7-f1（2026-09-27）：使用者自己的提問也先洗再上畫面／寫進紀錄（同 AI 回答，
         # 走 `scrub_qa_text`）—— 貼進來的金鑰／路徑原本會進對話紀錄、每次 rerun 重播。
-        # ⚠️ 只洗「畫面與紀錄」；送給 L3 的 `_req.question` 維持原文（本項範圍外）。
+        # ~~⚠️ 只洗「畫面與紀錄」；送給 L3 的 `_req.question` 維持原文（本項範圍外）。~~
+        # → S2-f3（2026-09-28）起送給 L3 的也洗過（見上方建 `QaRequest` 處）；這裡洗的是畫面與紀錄。
         _shown_q = scrub_qa_text(_question)
         with st.chat_message("user"):
             st.markdown(_shown_q)

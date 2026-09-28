@@ -1,3 +1,11 @@
+# ═══ 凍結副本（tests 專用，⛔ 不得修改、⛔ 不得被 production 程式 import）════════════════
+# 來源：commit d61a1fd 的 `shared/secret_scrub.py`（git blob 1e495faefc055bbd9e2efef98fb9570d019fe90b），
+#       「原檔開始」那一行之後逐位元組照抄、一字未改（sha256 見 `tests/test_sec_s3_0928.py` 的
+#       `_D61_SHA256`，該檔有測試逐位元組核對）。
+# 用途：`tests/test_sec_s3_0928.py` 的「不得比舊版少遮」回歸基準 —— 固定在批 S 動工前的版本，
+#       不隨 `shared/secret_scrub.py` 變動（批 S QA N5：用「目前檔案拔掉新規則」當基準是自我參照，
+#       舊規則被改壞時基準會跟著壞，測不出來）。CI 是淺層 checkout，拿不到舊 commit，所以放實體副本。
+# ═══ 原檔開始 ═══
 """shared/secret_scrub.py — L0：要畫上畫面的錯誤字串，先洗掉金鑰／識別碼／路徑（2026-09-26）。
 
 **純函式，零 I/O、零 streamlit、不 import 任何 L1+。**
@@ -33,38 +41,19 @@
     9. 補洞（SEC-r1／SEC-r2-f1，2026-09-27，`_RULES_POST`，**最後才跑** ⇒ 不會比舊版少遮）：全形 `：`／`＝`、
        `%3D`、「欄位＋遮罩＋說明字＋權杖」、無 `/` 的 `bot<數字>:<token>`、`open?id=`、`//server/…`、
        `@`／`→`／`—` 起點的路徑。
-   10. 補洞 S2-f2（2026-09-28，同樣排在 `_RULES_POST` 的最後 ⇒ 不會比舊版少遮）：
-       (a) 目錄名含空白的 POSIX 路徑（`/Users/Jane Doe/app/…/secrets.toml` → 目錄整串遮、只留末段）；
-           含空白的目錄名只認「≤5 個字、每字 ≤40、⛔ 不含中文與全形標點」（批 S QA N1：路徑後的說明字不吞）；
-       (b) 沒有標頭的 PEM／DER base64 本體（`MIIEvQ…`，`M[A-P]` 開頭、合計 ≥60 字，可跨行）→ 整段遮；
-           另須通過行結構與 DER 標頭解碼驗證（批 S QA N2：均線／代號清單、搜尋網址、大寫長字不遮）；
-       (c) 深層巢狀的秘密欄位：引號前 5～32 個反斜線（`repr` 第 5～7 層、JSON 第 4～6 層）的
-           `{'password': …}`／`"password" = …`，以及「`password=` 緊接深層跳脫引號」這種值外露的賦值。
   遮罩一律沿用既有的 `***`（`MASK`）。**⛔ 不新增任何說明文字** —— 看得到 `***` 就知道有東西被遮。
 
 ⚠️ 據實揭露的邊界（**不是**全稱「洗乾淨了」）：
   · 裸露、沒有任何前後文的 Sheet ID（例如一句「找不到 1AbC…」）**分不出來**，不遮 ——
     硬遮任何 44 字元英數串會把一般訊息洗壞；泛用的 `id=` 同理（`open?id=`／`uc?id=` 已由第 9 類遮）；
-  · ~~SEC-r1 仍未處理（2026-09-27）：目錄名含空白的 POSIX 路徑、無標頭的 PEM 本體、第 5 層巢狀 `repr`；~~
-    → S2-f2（2026-09-28）已補這三種（第 10 類），但各自仍有邊界：
-    目錄名裡有連續空白、開頭／結尾是空白、超過 5 個字、單字超過 40 字元、含中文或全形標點（`王 小明`）、
-    或含 `'`／`,`／`;`／`:`／`[]{}`／反引號等字元 → 那一段起仍外露（同 d61a1fd；為了不吞說明字）；
-    PEM／DER 只認得**從開頭**（`M[A-P]…`）起、開頭 16 字完好、解得出 DER 標頭的本體 —— 只截到中間幾行、
-    非 DER 格式（OpenSSH 的 `b3BlbnNzaC1rZXkt…`、PGP）、或換行寬度 <40 字的多行本體認不出來；
-    貼成一行（空白分隔）時，最後一段若 <16 字又沒有 `=` 補位，分不出是不是說明字 → 那一段（≤15 字）外露；
-    引號前的反斜線超過 32 個（`repr` 第 8 層、JSON 第 7 層起）仍外露；
-    「`password=` 緊接深層跳脫引號」那一條只往後看 256 字找收尾；
-  · 第 10 類 (a) 的反方向（多遮，安全側）：路徑後面 5 個英文字內又出現 `/` 時，中間那段會被當成目錄遮掉
-    （`***/x.toml or y/z` → `***/z`；中文說明字不會，見 N1）；(b) 的反方向：`M[A-P]` 開頭、≥60 字、
-    開頭剛好解得出合法 DER 標頭的 base64 形字串會被遮（一般文字做成的 base64 極少同時滿足）；
+  · SEC-r1 仍未處理（2026-09-27）：目錄名含空白的 POSIX 路徑、無標頭的 PEM 本體、第 5 層巢狀 `repr`；
   · 相對路徑（`a/b/c.toml`）不遮；緊貼中文字的絕對路徑（`檔案/home/x`）也不遮（為了不誤遮 `元/股`）；
   · 帶主機名的 URL 路徑（`https://host/a/b`）不當檔案路徑遮；**不帶主機名**的路徑
     （例：requests 的 `…with url: /v4/…`）長得跟檔案路徑一樣，會被遮成 `***/<末段>`；
   · 兩層以上的巢狀 `repr` 裡、值本身又含同種引號時，引號配對可能提早結束（只剩值的後半段外露）；
   · 秘密欄位只認下面 `_FIELDS_*` 列出的名字；不在清單上的欄位名（例：自訂的 `my_api_pw`）不遮。
 
-⚠️ 效能：全部規則都是線性掃描（量測見 `tests/test_v2_silent_fail_b11_hold_misc.py` 的 ReDoS 守衛；
-    第 10 類另見 `tests/test_sec_s3_0928.py`）——
+⚠️ 效能：全部規則都是線性掃描（量測見 `tests/test_v2_silent_fail_b11_hold_misc.py` 的 ReDoS 守衛）——
     有「前綴 ＋ 不定長 ＋ 必要結尾」形狀的都設了長度上限或以固定字面錨定起點。
 """
 from __future__ import annotations
@@ -321,179 +310,6 @@ _FWD_UNC_RE = re.compile(
 #: `@`／`→`／`—` 之後的 POSIX 路徑（`see @/home/…`、`→/etc/…`）。
 _POSIX_PATH_EXTRA_RE = re.compile(
     r"(?<=[@→—])(?:~[0-9A-Za-z_.\-]{0,64})?/(?:" + _PATH_SEG + r"/)+(" + _PATH_SEG + r")?")
-
-# ── 補洞 S2-f2（2026-09-28）：三種少遮形態 —— 同樣排在最後，輸入就是上面全部跑完的輸出 ──
-#: (c) 深層巢狀 `repr`／JSON 的 `{'password': …}`：每多包一層，引號前的反斜線變成 2n+1 個
-#: （0、1、3、7、15、31…）。上面的規則只認 ≤4 個 ⇒ 7 個起（`repr` 第 5 層、JSON 第 4 層）整段外露。
-#: 本條只認「5～32 個反斜線＋引號」包住的欄位名（上限 32 ⇒ 多涵蓋 3 層；再深仍外露，見檔頭邊界），
-#: 分隔 `:`／`：`／`=`／`＝`；值 ＝ 同一串「反斜線＋引號」包住的字串，找不到收尾就遮到行尾。
-#: 收尾必須是**剛好**同長的反斜線串（前一個字不是反斜線）—— 值裡更深一層的引號（反斜線更多）不算收尾。
-#: 線性：起點要求前一個字不是反斜線、反斜線串長度有上限；值掃到收尾或行尾就整段吃掉，不會重掃。
-_DEEP_QUOTED_FIELD_RE = re.compile(
-    r"(?P<pre>(?<!\\)(?P<bs>\\{5,32})(?P<qc>[\"'])(?:" + _FIELDS_STRICT + "|" + _FIELDS_QUOTED_EXTRA
-    + r"|authorization)(?P=bs)(?P=qc)[ \t]{0,16}[:：=＝][ \t]{0,16})"
-    r"(?:(?P<eq>(?P=bs)(?P=qc)(?:(?!(?<!\\)(?P=bs)(?P=qc))[^\r\n])*(?<!\\)(?P=bs)(?P=qc))|[^\r\n]*)", _I)
-#: (c) 同一類的 `password=\\\\\\\'x\\\\\\\'`（欄位名不加引號、`=` 兩側無空白、值的引號是深層跳脫）：
-#: `_ASSIGN_RE` 的前瞻只認 ≤4 個反斜線 → 落到 URL query 那條，它只吃到引號前（`password=***'x…`），值外露。
-#: 本條認「欄位＝遮罩＋引號」之後、256 字內以「5～32 個反斜線＋同一種引號」收尾的那一段 → 併進遮罩。
-#: 256 字上限 ⇒ 每個起點最多掃 256 字 ⇒ 線性。
-_DEEP_ASSIGN_TAIL_RE = re.compile(
-    r"(" + _TB_FIELD + r"(?:" + _FIELDS_STRICT + r"|spreadsheet[_-]?id|file[_-]?id|key|token)(?:=|%3[Dd]))"
-    + re.escape(MASK) + r"(?P<qc>[\"'])[^\r\n]{0,256}?(?<!\\)\\{5,32}(?P=qc)", _I)
-#: (b) 沒有 `-----BEGIN …-----` 標頭的 PEM／DER base64 本體（`MIIEvQIBADANBgkq…`）。
-#: DER 一律以 SEQUENCE（0x30）開頭 ⇒ base64 第一個字必為 `M`、第二個字落在 `A`～`P`。
-#: 可跨行：真換行、`repr`／JSON 的 `\n` 跳脫（反斜線 ≤32 個）、或貼成一行時「空白＋下一段」。
-#: base64 字元合計 ≥ `_DER_B64_MIN` 才遮；整段換成一個遮罩。另有兩道結構判別（批 S QA N2，2026-09-28），
-#: 排除「`M[A-P]` 開頭、湊滿 60 字」的一般文字（均線／代號清單、搜尋網址、大寫長字、文字做成的 base64）：
-#:   (i) 行結構（寫在規則裡）：多行時，除了最後一行，每行都要 ≥ `_DER_B64_LINE_MIN` 字
-#:       —— 一行太短就停在那裡，後面不再接（`MAR\nAAPL\n…` 只比對到 `MAR`）。
-#:       行內有前面規則留下的遮罩 `***` → 原本多長已不可知，一律算夠長（實作時實際踩過：以 `/` 開頭的那一行
-#:       先被路徑規則遮成 `***/…`、只剩幾個字，本體就在那裡斷掉、後面各行外露）；
-#:   (ii) 解碼驗證（`_looks_like_der`）：第一行開頭解得出 DER 的 SEQUENCE 標頭，見該函式。
-#: ⚠️ 本體裡**已經被前面規則換成遮罩的片段**（`***`）也算本體的一部分：base64 含 `/`，某一行剛好以 `/`
-#: 開頭（每行約 1/64）時，前面的路徑規則會先把它遮成 `***/…`；不把 `***` 收進來，本體就在那裡斷掉、
-#: 後面各行外露（`1//…`、`4/…`、`eyJ…`、`AIza…` 同理）。
-#: 空白續行（貼成一行）的最後一段須「≥16 個 base64 字」、「前 16 字內有 `***`」（`4/***`、`1//***`）、
-#: 或「短段以 `=` 補位收尾」—— 否則當成後面的說明字，不吃。
-#: 線性：每一輪的開頭（換行／反斜線／空白）都不在本體字元（base64 或 `***`）裡 ⇒ 切法唯一，沒有回溯分岔；
-#: 空白續行的前瞻最多看 18 字。
-_DER_B64_MIN: int = 60
-_DER_B64_LINE_MIN: int = 40
-_B64_CHUNK: str = r"(?:[A-Za-z0-9+/]|\*\*\*)"
-_B64_NL: str = r"(?:\r?\n|(?:\\{1,32}r)?\\{1,32}n)[ \t]{0,16}"
-_B64_SP: str = r"[ \t]{1,4}"
-_B64_SP_LAST: str = _B64_SP + r"(?=[A-Za-z0-9+/]{16}|[A-Za-z0-9+/]{0,15}\*\*\*|[A-Za-z0-9+/]{1,15}=)"
-
-
-def _b64_long_line(n: int) -> str:
-    """「夠長的一行」：開頭連續 ≥n 個 base64 字，或行內有遮罩；之後同一行剩下的字照收。"""
-    return r"(?:[A-Za-z0-9+/]{%d,}|[A-Za-z0-9+/]*\*\*\*)" % n + _B64_CHUNK + r"*"
-
-
-_DER_B64_RE = re.compile(
-    r"(?:(?<![A-Za-z0-9+/])|(?<=\\[nrt]))M[A-P]"
-    r"(?:" + _b64_long_line(_DER_B64_LINE_MIN - 2)                              # 第一行夠長，才准接下一行
-    + r"(?:(?:" + _B64_NL + "|" + _B64_SP + r")" + _b64_long_line(_DER_B64_LINE_MIN) + r")*"
-    r"(?:" + _B64_NL + _B64_CHUNK + r"+|" + _B64_SP_LAST + _B64_CHUNK + r"+)?"   # 最後一行可以短
-    r"|" + _B64_CHUNK + r"*)"                                                   # 或只有一行
-    r"={0,2}")
-#: 把比對到的本體切成一行一行（真換行、跳脫換行、空白）。
-_B64_LINE_SPLIT_RE = re.compile(r"(?:\r?\n|(?:\\+r)?\\+n)[ \t]*|[ \t]+")
-_B64_HEAD_RE = re.compile(r"[A-Za-z0-9+/]*")
-#: (ii) 只解第一行開頭 16 個 base64 字（12 位元組）：外層標籤＋長度（≤6）＋內層標籤＋長度（≤6）剛好判得完。
-_B64_HEAD_CHARS: int = 16
-_B64_VALUE: dict[str, int] = {
-    _c: _i for _i, _c in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")}
-#: 第一個內層元素的標籤：INTEGER（私鑰的版本號）、OID（PKCS#7）、SEQUENCE（加密私鑰、憑證）。
-_DER_INNER_TAGS: frozenset[int] = frozenset({0x02, 0x06, 0x30})
-#: (a) 目錄名含空白的 POSIX 路徑（`/Users/Jane Doe/app/.streamlit/secrets.toml`）：舊版路徑段不收空白，
-#: 只遮到第一個空白（`***/Jane Doe/app/.streamlit/secrets.toml`）。本條在「路徑遮罩 `***` 之後」
-#: 或「合理起點」（同 `_PATH_START`，另加 `@`／`→`／`—`）接一串**以 `/` 收尾**的目錄段，整串併進遮罩、
-#: 只留末段（末段不吃空白：`***/x.toml 讀取失敗` 不動）。目錄段兩種：
-#:   · 不含空白 → 同舊規則的 `_PATH_SEG`（什麼字都收，行為與舊版路徑規則一致）；
-#:   · 含空白 → 2～5 個「字」、單一半形空白隔開；每個字 ≤ `_SP_DIR_WORD_MAX` 字元，而且
-#:     ⛔ 不收 CJK 字元、全形標點（`_CJK_PUNCT`）與反引號（批 S QA N1，2026-09-28）——
-#:     否則一整句中文說明（`… 顯示殖利率 4.5%，配息 3 元/股`）會被算成一個「字」、當成目錄名吞掉。
-#:     字可以含 `(`／`)`（`Dropbox (Personal)`、`Program Files (x86)`）；末段仍用 `_PATH_SEG`，
-#:     所以 `(see /a/b)` 的 `)` 照舊不算進路徑。`@`／`→`／`—` 不算字（它們是上面 `_POSIX_PATH_EXTRA_RE`
-#:     的路徑起點：`x.toml @/home/…` 的 `@` 後面是另一條路徑，⛔ 不是「`x.toml @`」這個目錄名）。
-#: ⚠️ 只在「某個目錄段真的含空白」時才遮（`_mask_space_dirs`）；沒有空白的路徑原樣交還 ——
-#: 那是上面各條路徑規則的職責，本條 ⛔ 不重複遮（否則拔掉舊規則也看不出外露，舊規則的守衛就失效）。
-#: 線性：兩種目錄段互斥（有沒有空白），段內「空白＋字」與段尾的 `/` 開頭互斥，每個字有長度上限；
-#: 比對一律成功並吃掉整段，不會重掃。
-#: CJK 字元與全形標點：一般標點與箭頭（含 `—`／`→`／`…`／彎引號）、CJK 部首～統一表意文字（含假名、注音、
-#: `、。「」` 等全形標點）、韓文、相容表意文字、直排／小型／全形字形（`，：；（）％` 等）、擴充 B 以後。
-_CJK_PUNCT: str = (r"\u2000-\u206F\u2190-\u21FF\u2E80-\u9FFF\uA960-\uA97F\uAC00-\uD7AF\uF900-\uFAFF"
-                   r"\uFE10-\uFE1F\uFE30-\uFE6F\uFF00-\uFFEF\U00020000-\U0003FFFF")
-_SP_DIR_WORD_MAX: int = 40
-_SP_DIR_WORD: str = r"[^\s/\\'\"<>|:;,\[\]{}*?@`" + _CJK_PUNCT + r"]{1,%d}" % _SP_DIR_WORD_MAX
-_SP_DIR_MULTI: str = _SP_DIR_WORD + r"(?: " + _SP_DIR_WORD + r"){1,4}"
-_POSIX_SPACE_DIR_RE = re.compile(
-    r"(?:(?:(?<![*A-Za-z0-9_])|(?<=\\[nrt]))" + re.escape(MASK) + r"|(?:" + _PATH_START
-    + r"|(?<=[@→—]))(?:~[A-Za-z0-9_.\-]{0,64})?)"
-    r"/(?:(?:" + _PATH_SEG + r"|" + _SP_DIR_MULTI + r")/)+(" + _PATH_SEG + r")?", re.MULTILINE)
-
-
-def _mask_deep_value(m: re.Match) -> str:
-    """`_DEEP_QUOTED_FIELD_RE`：保留欄位名與分隔；值有收尾 → 保留同一串反斜線＋引號，否則遮到行尾。"""
-    if m.group("eq"):
-        _q = m.group("bs") + m.group("qc")
-        return m.group("pre") + _q + MASK + _q
-    return m.group("pre") + MASK
-
-
-def _der_length(b: bytes, i: int) -> tuple[int, int] | None:
-    """讀 `b[i]` 起的 DER 長度欄位 → `(內容長度, 長度欄位之後的位置)`。
-
-    不合 DER 的一律 `None`：不定長（`0x80`）、超過 4 位元組、位元組不夠、非最短編碼
-    （長格式卻 <0x80，或有前導 0）。
-    """
-    if i >= len(b):
-        return None
-    if b[i] < 0x80:
-        return b[i], i + 1
-    _n = b[i] & 0x7F
-    if not 1 <= _n <= 4 or i + 1 + _n > len(b):
-        return None
-    _v = int.from_bytes(b[i + 1:i + 1 + _n], "big")
-    if b[i + 1] == 0 or _v < 0x80:
-        return None
-    return _v, i + 1 + _n
-
-
-def _looks_like_der(head_b64: str, seen: int) -> bool:
-    """(ii) 解碼驗證：`head_b64`（第一行開頭的 base64）解得出 DER 的 SEQUENCE 標頭嗎？
-
-    條件全部成立才算：首位元組 `0x30`；長度欄位合 DER；**宣告的總長 ≥ 實際看到的長度 `seen`**
-    （截斷的本體可以，宣告得比看到的還短就不是）；第一個內層元素的標籤在 `_DER_INNER_TAGS`，
-    而且它的長度欄位合 DER、裝得進外層。只解開頭 `_B64_HEAD_CHARS` 個字（12 位元組）就判得完；
-    不到這麼長 → 判不了 → 不是。
-    自己查表解碼（本檔只准 import `re`）：`head_b64` 只含 base64 字元（`_B64_HEAD_RE` 取出）⇒ 查表不會落空。
-    """
-    if len(head_b64) < _B64_HEAD_CHARS:
-        return False
-    _b = bytearray()
-    for _i in range(0, _B64_HEAD_CHARS, 4):
-        _v = 0
-        for _c in head_b64[_i:_i + 4]:
-            _v = (_v << 6) | _B64_VALUE[_c]
-        _b += _v.to_bytes(3, "big")
-    if _b[0] != 0x30:
-        return False
-    _outer = _der_length(_b, 1)
-    if _outer is None:
-        return False
-    _total = _outer[1] + _outer[0]
-    _pos = _outer[1]
-    if _total < seen or _pos >= len(_b) or _b[_pos] not in _DER_INNER_TAGS:
-        return False
-    _inner = _der_length(_b, _pos + 1)
-    return _inner is not None and _inner[1] + _inner[0] <= _total
-
-
-def _mask_der_b64(m: re.Match) -> str:
-    """`_DER_B64_RE`：base64 字元（不算換行／跳脫／空白／`=`／遮罩）合計 ≥ `_DER_B64_MIN`，
-    而且通過 (ii) 解碼驗證 → 整段遮；否則原樣。
-
-    「實際看到的長度」＝最後一行以外各行解碼後的位元組數（只有一行就算那一行）——
-    最後一行可能是被一起吃進來的說明字（例如金鑰後面換行接著 `What`）；拿它來比，
-    會讓「宣告長度 < 實際長度」把真金鑰判成不是、整段外露。
-    """
-    _body = m.group(0)
-    _lines = _B64_LINE_SPLIT_RE.split(_body.rstrip("="))
-    _counts = [len(_l.replace("*", "")) for _l in _lines]
-    if sum(_counts) < _DER_B64_MIN:
-        return _body
-    _seen = sum(_counts[:-1] if len(_counts) > 1 else _counts) * 3 // 4
-    return MASK if _looks_like_der(_B64_HEAD_RE.match(_lines[0]).group(0), _seen) else _body
-
-
-def _mask_space_dirs(m: re.Match) -> str:
-    """`_POSIX_SPACE_DIR_RE`：目錄段含空白 → 目錄整串換成遮罩、留末段；否則原樣（末段本身不含空白）。"""
-    _body = m.group(0)
-    return MASK + "/" + (m.group(1) or "") if " " in _body else _body
-
-
 _RULES_POST: tuple[tuple[re.Pattern, object], ...] = (
     (_FW_ASSIGN_RE, _mask_assign),
     (_FW_COLON_QUOTED_RE, _mask_value),
@@ -504,18 +320,12 @@ _RULES_POST: tuple[tuple[re.Pattern, object], ...] = (
     (_DRIVE_OPEN_ID_RE, lambda m: m.group(1) + MASK),
     (_FWD_UNC_RE, lambda m: MASK + "/" + (m.group(1) or "")),
     (_POSIX_PATH_EXTRA_RE, lambda m: MASK + "/" + (m.group(1) or "")),
-    (_DEEP_QUOTED_FIELD_RE, _mask_deep_value),
-    (_DEEP_ASSIGN_TAIL_RE, lambda m: m.group(1) + MASK),
-    (_DER_B64_RE, _mask_der_b64),
-    (_POSIX_SPACE_DIR_RE, _mask_space_dirs),
 )
 #: 預先過濾：字串裡連必要字面都沒有，就不必讓該條規則掃一遍（純效能；有字面才跑，行為不變）。
 _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
     _FW_ASSIGN_RE: ("＝",), _FW_COLON_QUOTED_RE: ("：",), _FW_COLON_BARE_RE: ("：",),
     _PCT_QUERY_SECRET_RE: ("%3",), _CRED_AFTER_MASK_RE: (MASK,), _DRIVE_OPEN_ID_RE: ("id=",),
     _FWD_UNC_RE: ("//",), _POSIX_PATH_EXTRA_RE: ("@", "→", "—"),
-    _DEEP_QUOTED_FIELD_RE: ("\\" * 5,), _DEEP_ASSIGN_TAIL_RE: (MASK + "'", MASK + '"'),
-    _DER_B64_RE: ("M",), _POSIX_SPACE_DIR_RE: ("/",),
 }
 
 
