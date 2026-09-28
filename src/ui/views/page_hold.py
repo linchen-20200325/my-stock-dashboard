@@ -1703,6 +1703,15 @@ NO_PRICE_WHY: str = "這檔查不到報價 —— 可能是已下市，也可能
 VIX_RETRY_WHERE: str = (
     f"稍後{press(ACTION_RUN_WARROOM_LABEL)}再試一次")
 
+#: 「缺的是張數／均價才去 📁 組合管理補」的**條件子句**（去哪補）。
+#: 批 W H1-f1（2026-09-28）上提成常數（**文字一個位元組都沒改**）：修前逐字寫在兩處 ——
+#: `build_var_card()` 灰態的 where 與 `V2_SHORT_ROWS` 那一列 VaR 灰態的摘錄；
+#: 現在三處共用（第三處是 `_totals_facts()`「⚠️ 上面兩個金額只涵蓋一部分」）。
+#: ⚠️ 為什麼 `_totals_facts()` 要用**條件**子句：L3 `compute_portfolio_totals()` 張數／均價／現價
+#:    缺一就不納入 ⇒ 沒納入的列可能**只缺現價**，那一種在 📁 組合管理補不了 ——
+#:    修前那句「到 📁 組合管理補齊即可」對它是錯的指引（§1）。
+IF_LOTS_AVG_MISSING_WHERE: str = "若是缺張數／均價，到既有的 📁 組合管理分頁補齊"
+
 
 def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
     """戰情表系列卡片的**非 live** 三要素。四態各自一段，**一段都不共用**。
@@ -1743,7 +1752,10 @@ def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
         _out.append((
             "⚠️ 上面兩個金額只涵蓋一部分",
             f"{_held_n - _valued_n}/{_held_n} 檔持股缺張數／均價／現價，**沒有**納入 —— "
-            f"上面兩個數字只涵蓋其餘 {_valued_n} 檔。到 📁 組合管理補齊即可"
+            # 批 W H1-f1：修前句尾「到 📁 組合管理補齊即可」對只缺現價的列是錯的指引
+            # （組合管理補不了現價）⇒ 換成同檔既有的條件子句 `IF_LOTS_AVG_MISSING_WHERE`
+            # （⛔ 不新寫；接「；沒有納入：」的標點照修前，⛔ 不另加）。
+            f"上面兩個數字只涵蓋其餘 {_valued_n} 檔。{IF_LOTS_AVG_MISSING_WHERE}"
             # P1a-f2：檔數核對用**去重前**的原清單（L3 按列數）；顯示時同代號只列一次。
             + ("；沒有納入：" + "、".join(dict.fromkeys(_codes))
                if _codes and len(_codes) == _held_n - _valued_n else "")))
@@ -3131,9 +3143,10 @@ def build_var_card(deep: DeepReadout) -> _Built:
                  + _deep_reason(_res)
                  + "。本站寧可不給，也不給一個用補值撐出來的尾部估計："
                    "把缺的交易日填成 0% 報酬會讓風險看起來比實際小（§1）"),
+            # 批 W H1-f1：句尾那段上提成 `IF_LOTS_AVG_MISSING_WHERE`（字一個位元組都沒改）。
             where=("若是新上市／剛買進的標的，等歷史累積到至少一個月的共同交易日"
                    f"再回本頁{press(ACTION_RUN_WARROOM_LABEL)}；"
-                   "若是缺張數／均價，到既有的 📁 組合管理分頁補齊"))
+                   + IF_LOTS_AVG_MISSING_WHERE))
     return Card(key="hold.deep.var", label="VaR（風險值）",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -3600,15 +3613,20 @@ def _ai_failed_note(ai: AiSummaryReadout) -> Note:
     上游戰情表壞掉的人該去看戰情表、例外的人手上那行訊息才是唯一線索。
     """
     if ai.error_kind == AI_ERR_UPSTREAM:
+        _holdings_err = ai.error_src == SRC_HOLDINGS
         return Note(
             # P1a-f1：持股清單讀不出來 → now 沿用預覽卡既有 `PREVIEW_FAILED_NOW`（⛔ 不新寫），
             #   不說「上游的戰情表這一輪就壞了」（那一輪戰情表根本沒跑）。
-            now=(PREVIEW_FAILED_NOW if ai.error_src == SRC_HOLDINGS else AI_UPSTREAM_NOW),
+            now=(PREVIEW_FAILED_NOW if _holdings_err else AI_UPSTREAM_NOW),
             why=_error_why(ai.error_src or SRC_STATION, ai.error),
-            where=("AI 總結吃的是戰情表已經算好的結論；"
-                   "**上面那幾張卡這一輪也會是紅的** —— "
-                   f"先讓戰情表跑起來（到{SETUP_WHERE}"
-                   f"{press(ACTION_RUN_WARROOM_LABEL)}），這一格才有東西可以摘要"))
+            # 批 W H1-f3：持股清單讀不出來時，出事的是持股那一層，「先讓戰情表跑起來」把人指向戰情表
+            #   ⇒ 改用既有 `STATION_ERROR_WHERE`（同一次失敗在 ① 結論卡 `_station_note()` 的說法，⛔ 不新寫；
+            #   葉2 預覽卡同樣先叫人查網路與 Google 授權）；戰情表本身出錯（其他 `error_src`）維持原句。
+            where=(STATION_ERROR_WHERE if _holdings_err else
+                   ("AI 總結吃的是戰情表已經算好的結論；"
+                    "**上面那幾張卡這一輪也會是紅的** —— "
+                    f"先讓戰情表跑起來（到{SETUP_WHERE}"
+                    f"{press(ACTION_RUN_WARROOM_LABEL)}），這一格才有東西可以摘要")))
     if ai.error_kind == AI_ERR_UNAVAILABLE:
         # 洗 glyph 走同一個 SSOT（`Note.__post_init__` 拒收狀態 glyph）。
         # ⚠️ **`_n` 不准丟掉**：訊息被改過就要說（§1「修改過的訊息不能假裝
@@ -4145,11 +4163,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
                   "整批抓取失敗 —— 看該列的錯誤訊息",
                   NO_PRICE_WHY),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
+       # 批 W H1-f1：摘錄末段改引 `IF_LOTS_AVG_MISSING_WHERE`（字一個位元組都沒改）。
        _v2_rows_for("hold.deep.var", VAR_EMPTY_NOW, (
            None, "這是一個有效的結果" + V2_EXCERPT_GAP
            + "本站寧可不給，也不給一個用補值撐出來的尾部估計",
            "若是新上市／剛買進的標的，等歷史累積" + V2_EXCERPT_GAP
-           + "若是缺張數／均價，到既有的 📁 組合管理分頁補齊")),
+           + IF_LOTS_AVG_MISSING_WHERE)),
        _v2_rows_for("hold.deep.dividend_cash", CASH_FAILED_NOW, (
            None, (_v2_raised(SRC_DIV_CASH), _v2_raised(SRC_HOLDINGS),
                   "整批抓取失敗 —— 看該列的錯誤訊息"),
@@ -4175,10 +4194,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.ai_summary", AI_UPSTREAM_NOW, (
            None, _V2_STATION_RAISED,
            "先讓戰情表跑起來（到" + SETUP_WHERE + _V2_PRESS_RUN + "）")),
-       # P1a-f1：持股清單讀不出來 → now 為 `PREVIEW_FAILED_NOW`（why／where 摘錄同上一則）。
+       # P1a-f1：持股清單讀不出來 → now 為 `PREVIEW_FAILED_NOW`（why 摘錄同上一則）。
+       # 批 W H1-f3：where 改走 `STATION_ERROR_WHERE`（見 `_ai_failed_note()`）⇒ 摘錄改用既有
+       # `_V2_CHECK_NET`（同 ① 結論三張／葉2 預覽卡）。這個鍵只有持股錯誤走得到：
+       # `now=PREVIEW_FAILED_NOW` 只在 `error_src == SRC_HOLDINGS` 時產生，戰情表本身出錯是上一則。
        _v2_rows_for("hold.ai_summary", PREVIEW_FAILED_NOW, (
-           None, _v2_raised(SRC_HOLDINGS),
-           "先讓戰情表跑起來（到" + SETUP_WHERE + _V2_PRESS_RUN + "）")),
+           None, _v2_raised(SRC_HOLDINGS), _V2_CHECK_NET)),
        _v2_rows_for("hold.ai_summary", AI_UNAVAILABLE_NOW, (
            None, "沒有丟例外，而是回了一句服務說明",
            "這是部署端的金鑰或額度問題，不是你操作的問題：" + NO_EXIT_MARKER)),

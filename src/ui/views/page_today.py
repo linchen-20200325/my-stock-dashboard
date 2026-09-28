@@ -540,11 +540,16 @@ EXIT_RETRY_HERE: str = (
     "要繞過快取請把更新模式切到「強制重抓」")
 
 #: (b) 重抓沒有用 —— 這是**程式**要修的，不是資料問題。
+#: 📌 SA2-f1（批 W，2026-09-28，有意識的刪除，⛔ 不是漏刪）：句尾「要看它到底怎麼了，去{資料體檢}」
+#:    已刪（只刪不改；其餘一字未動，`NO_EXIT_MARKER` 保留）—— 本常數自己說問題「不在今天有沒有資料」，
+#:    而資料體檢那面牆讀的是 L0 fetcher 登錄表（`page_why.load_sources()` → `get_monitor_registry()`）
+#:    與靜態燈號規格；`page_why.py` 對 readiness 側車的缺值原因（`no_extraction`／`out_of_range`）
+#:    0 引用（本組 grep，量測日 2026-09-28，未經第二組驗）。
+#:    ⚠️ 同檔 `EXIT_ALERTS_PARTIAL`／`EXIT_DEGRADED_READ_DIRECTION` 的資料體檢指路**本批未動**。
 EXIT_FIX_CODE: str = (
     f"{NO_EXIT_MARKER} —— **這一格重抓沒有用**：問題不在「今天有沒有資料」，"
     "而在取值路徑本身（值不在約定的形態裡、或這盞燈根本沒有取值程式）。"
-    f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}按一百次也一樣。"
-    f"要看它到底怎麼了，去 {ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
+    f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}按一百次也一樣。")
 
 #: (c) 本頁按鈕**摸不到**這一格 —— 它的寫入點在別的地方。
 EXIT_OUT_OF_REACH: str = (
