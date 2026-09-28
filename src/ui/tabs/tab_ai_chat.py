@@ -128,7 +128,8 @@ def render():
     # SEC-r11(2026-09-28):提問原本以原文上畫面、存進 ai_qa_history、送給 run_agent,下一題又隨
     # history 再送一次 —— 貼進來的金鑰／帳密／家目錄路徑原樣出站。比照 v2 `page_why._render_qa_leaf`:
     # 畫面與紀錄用 Markdown 版(`scrub_qa_text`),送出用純文字版(`scrub_prose_secrets`);
-    # 兩支都是散文版(⛔ 不截「為什麼出現 型別名＋冒號…」這種引用錯誤訊息的提問)。沒命中規則的提問逐字不變。
+    # 兩支都是散文版(⛔ 不截「為什麼出現 UnicodeDecodeError: …」這種引用解碼錯誤訊息的提問;
+    # TomlDecodeError 的訊息會串入設定值,照舊整段截——見 L0 `_CONTENT_BEARING_EXC_PROSE_RE`)。沒命中規則的提問逐字不變。
     _shown_q = scrub_qa_text(q)
     with st.chat_message("user"):
         st.markdown(_shown_q)

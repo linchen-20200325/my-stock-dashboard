@@ -14,7 +14,8 @@ Markdown 版本（另把散文版 `scrub_prose_secrets` 包成一個，見 `scru
   含刻意 `**粗體**` 的訊息。
 - `scrub_qa_text(x)`（SEC-r12／SEC-r11，2026-09-28 自 `src/ui/views/page_why.py` 下沉）：**問答散文**
   （使用者的提問、AI 的回答）上 Markdown 畫面／寫進對話紀錄用這一支 —— 洗法是**散文版**
-  `scrub_prose_secrets`（⛔ 不是 `scrub_secrets`：錯誤字串的第 1 類截法會把引用錯誤訊息的提問與解法截掉）。
+  `scrub_prose_secrets`（⛔ 不是 `scrub_secrets`：錯誤字串的第 1 類截法會把引用 `Unicode*Error` 訊息的提問與解法
+  截掉；`TomlDecodeError` 則兩支都照截 —— 它的訊息會串入設定值）。
   v2 `page_why` 與 v1 `tab_ai_chat` 共用（v1 L5 ⛔ 不得 import v2 view 模組，故放 L0）。
   送給 L3（→ 模型）的純文字版直接用 `shared.secret_scrub.scrub_prose_secrets`（模型收到的是文字，不渲染 Markdown）。
 ⚠️ 要截斷（`[:300]` 之類）一律用 `scrub_md(x, limit)`，⛔ 不要在外面先截再洗 ——

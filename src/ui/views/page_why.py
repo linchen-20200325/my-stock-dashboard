@@ -2730,7 +2730,8 @@ def _render_qa_leaf(session: Mapping[str, Any]) -> None:
     _question = str(_typed or "").strip()
     # S2-f3（2026-09-28）：送給 L3（→ Gemini）的提問先過 L0 ~~`scrub_secrets`~~ —— 原本送的是原文，
     # 貼進來的金鑰／帳密／家目錄路徑會原樣出站，畫面上的紀錄反而是洗過的。
-    # → SEC-r12（2026-09-28）：改用**散文版** `scrub_prose_secrets`（錯誤字串那支會把
+    # → SEC-r12（2026-09-28）：改用**散文版** `scrub_prose_secrets`（依型別分流：`Unicode*Error` 的散文形保留、
+    #   `TomlDecodeError` 照截；錯誤字串那支會把
     #   「為什麼出現 型別名＋冒號＋…怎麼解？」截成只剩型別名，連問題本身都送不出去）。
     # 用**純文字版**（⛔ 不是 `scrub_qa_text` 的 Markdown 跳脫版：模型收到的是文字，不渲染 Markdown）；
     # 「這一輪有沒有問」仍以原文判斷（`asked` 不變）；沒命中任何規則的提問逐字不變。
