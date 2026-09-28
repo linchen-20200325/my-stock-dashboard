@@ -108,6 +108,11 @@ def render_op_recommendation_section(sid2: str, health2,
             'foreign_buy': _inst_g.get(_fk_g, {}).get('net', 0) if _fk_g else 0,
             'trust_buy':   _inst_g.get(_tk_g, {}).get('net', 0) if _tk_g else 0,
             'm1b_diff':    _m1b_diff_g,
+            # DL-f1-s5:同 I2 `bias_info` 的作法,整包帶進去只為了讓 generate_ai_comment
+            # 在「【景氣環境】M1B-M2…」那兩句後綴 L0 既有代理註記(^TWII 動能代理時)。
+            # **不影響任何判定分支**(`m1b_diff` 與其門檻未動);非代理 / 缺值時註記為
+            # 空字串,輸出與本次改動前逐字元相同。
+            'm1b_m2_info': _m1b_top_g,
         }
         _comment_txt = generate_ai_comment(_comment_data)
         if _comment_txt:

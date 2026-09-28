@@ -12,6 +12,7 @@ import streamlit as st
 from shared.secret_scrub import scrub_secrets  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑（反引號內，不跳脫）
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
+from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
 from src.ui.render.macro_ui_components import section_header
 # v19.174 去識別化：改用策略代號常數 + 新函式名 strategy_conclusion（原 teacher_conclusion）
 from src.ui.render.ui_widgets import (
@@ -440,19 +441,23 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             _m1b8 = float(_m1b8_info.get('m1b_yoy', 0))
             _m2b8 = float(_m1b8_info.get('m2_yoy', 0))
             _gap8 = round(_m1b8 - _m2b8, 2)
+            # DL-f1-s5：Tier 3（^TWII 動能代理）時，gap 數字後綴 L0 既有註記（K1 不自擬），
+            # 否則「積極作多強勢股」會被讀成央行真實資金行情的結論。
+            # 只揭露：三段分支 / 顏色 / 結論文案一位未動；非代理時為空字串 → 逐字不變。
+            _m1b8_badge = m1b_m2_proxy_badge(_m1b8_info)
             if _gap8 >= 1.0:
                 _m1bc8 = TRAFFIC_GREEN
-                _m1bi8 = f'M1B-M2 Gap = +{_gap8:.2f}%（黃金交叉·熱錢狂潮）'
+                _m1bi8 = f'M1B-M2 Gap = +{_gap8:.2f}%{_m1b8_badge}（黃金交叉·熱錢狂潮）'
                 _m1bt8 = (f'🔥 資金動能強勁（M1B={_m1b8:.1f}% > M2={_m2b8:.1f}%），'
                           '熱錢湧入股市，積極作多強勢股。')
             elif _gap8 >= 0:
                 _m1bc8 = TRAFFIC_GREEN
-                _m1bi8 = f'M1B-M2 Gap = +{_gap8:.2f}%（資金溫和·中性擴張）'
+                _m1bi8 = f'M1B-M2 Gap = +{_gap8:.2f}%{_m1b8_badge}（資金溫和·中性擴張）'
                 _m1bt8 = (f'💧 資金動能溫和（M1B={_m1b8:.1f}% ≥ M2={_m2b8:.1f}%），'
                           '無失血風險，回歸個股基本面與籌碼面操作。')
             else:
                 _m1bc8 = TRAFFIC_YELLOW
-                _m1bi8 = f'M1B-M2 Gap = {_gap8:.2f}%（死亡交叉·資金退潮）'
+                _m1bi8 = f'M1B-M2 Gap = {_gap8:.2f}%{_m1b8_badge}（死亡交叉·資金退潮）'
                 _m1bt8 = (f'📉 資金動能趨緩（M1B={_m1b8:.1f}% < M2={_m2b8:.1f}%），'
                           '資金轉向定存或匯出，減碼等待訊號確認。')
             st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _m1bi8, _m1bt8, color=_m1bc8), unsafe_allow_html=True)
@@ -572,6 +577,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                                    float(_m1b8_info['m2_yoy']), 2)
                 except Exception:
                     pass
+            # DL-f1-s5：第二環 D 徽章印的是同一個 M1B-M2 數字 → 代理時同樣後綴 L0 既有註記
+            # （K1 不自擬）。刻意在此處自取、不沿用上面策略3 的 `_m1b8_badge`
+            # （那個變數只在策略3 分支內才有定義，跨區塊借用 = 日後條件一改就 NameError）。
+            # 只揭露：`_cD` 判定、徽章顏色、第二環計數與火力分級一位未動；非代理時為空字串。
+            _gap8c_badge = m1b_m2_proxy_badge(_m1b8_info)
     
             # 三環條件評估
             _cA = _vix_now8 is not None and _vix_now8 < 20
@@ -616,7 +626,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             _r1_html = (cond_badge(_cA, f'A VIX={_vix_now8:.1f}<20' if _vix_now8 is not None else 'A VIX未知') + ' ' +
                         cond_badge(_cB, f'B 期貨={_fut8:,.0f}口' if _fut8 is not None else 'B 期貨未知'))
             _r2_html = (cond_badge(_cC, f'C 出口={_exp_c:+.1f}%' if _exp_c is not None else 'C 出口未知') + ' ' +
-                        cond_badge(_cD, f'D M1B-M2={_gap8c:+.2f}%' if _gap8c is not None else 'D M1B-M2未知'))
+                        cond_badge(_cD, f'D M1B-M2={_gap8c:+.2f}%{_gap8c_badge}' if _gap8c is not None else 'D M1B-M2未知'))
             # v19.170 P0-1 順手修 bug:原三元運算兩邊字串相同(True/False 都印「F 股匯雙漲」),
             # 條件未成立時等於謊報。改成未成立顯示「F 股匯未雙漲」。
             # v19.183 D2 補完 —— 上一版只修了 F 的兩態,漏了兩件事:

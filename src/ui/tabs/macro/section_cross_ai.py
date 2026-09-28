@@ -22,6 +22,7 @@ from __future__ import annotations
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
 from src.ui.render.macro_ui_components import section_header
 
 
@@ -79,6 +80,11 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
     _ai_m1b  = _num(_ai_mi8, 'm1b_yoy')
     _ai_m2   = _num(_ai_mi8, 'm2_yoy')
     _ai_gap  = round(_ai_m1b - _ai_m2, 2) if (_ai_m1b is not None and _ai_m2 is not None) else None
+    # DL-f1-s5：M1B/M2 退到 Tier 3（^TWII 動能代理）時，③ 卡的數字與 ⑤ 結論裡據它產生的
+    # 條列，一律後綴 L0 既有註記（`M1B_PROXY_VALUE_NOTE`，v1 長期桶 KPI 卡同一串，K1 不自擬）。
+    # **只揭露、不改判** —— `_ai_gap` 照舊進 ③ 分段與 ⑤ 多空計分，一位都沒動
+    # （「代理值要不要排除計分」屬邏輯變更，不在本批）。非代理時為空字串 → 輸出逐字不變。
+    _ai_m1b_badge = m1b_m2_proxy_badge(_ai_mi8)
     # `st.session_state.get('bias_info', {})` 的預設同樣只在 key 不存在時生效 ——
     # key 在、值為 None 時原碼會 `None.get(...)` → AttributeError 炸掉整個 §九。
     # 改 `or {}` 同時涵蓋兩種缺法;乖離拿不到就是 None,不是 0%(0% 會被下方
@@ -186,7 +192,7 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
     # ── ③ 目前貨幣流向 ──────────────────────────────────────────
     _ai3_lbl, _ai3_clr, _ai3_desc = '待取得 M1B/M2', '#484f58', '央行貨幣數據載入中'
     if _ai_gap is not None:
-        _gap_str = f'M1B={_ai_m1b:.1f}% M2={_ai_m2:.1f}% Gap={_ai_gap:+.2f}%'
+        _gap_str = f'M1B={_ai_m1b:.1f}% M2={_ai_m2:.1f}% Gap={_ai_gap:+.2f}%{_ai_m1b_badge}'
         if _ai_gap >= 2.0:
             _ai3_lbl, _ai3_clr = '🔥 熱錢大量流入股市', TRAFFIC_RED
             _ai3_desc = f'{_gap_str} — 黃金交叉大幅擴散，投機資金湧入，活絡貨幣遠超廣義貨幣'
@@ -203,7 +209,7 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
             _ai3_lbl, _ai3_clr = '📉 資金明顯外逃', '#8b949e'
             _ai3_desc = f'{_gap_str} — 死亡交叉，資金轉向固定收益，股市失血，謹慎操作'
     elif _ai_m1b is not None:
-        _ai3_lbl, _ai3_clr = f'M1B={_ai_m1b:.1f}% M2待取得', '#484f58'
+        _ai3_lbl, _ai3_clr = f'M1B={_ai_m1b:.1f}%{_ai_m1b_badge} M2待取得', '#484f58'
         _ai3_desc = 'M2 數據未就緒，暫無法判斷 Gap'
 
     # ── ④ 美股動態 ──────────────────────────────────────────────
@@ -253,9 +259,9 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
         _ai5_pts.append('景氣收縮，防禦優先')
     if _ai_gap is not None:
         if _ai_gap >= 1.0:
-            _ai5_pts.append(f'M1B-M2 Gap=+{_ai_gap:.1f}% 資金動能正向共振')
+            _ai5_pts.append(f'M1B-M2 Gap=+{_ai_gap:.1f}%{_ai_m1b_badge} 資金動能正向共振')
         elif _ai_gap < 0:
-            _ai5_pts.append('M1B-M2死亡交叉，貨幣資金外逃')
+            _ai5_pts.append(f'M1B-M2{_ai_m1b_badge}死亡交叉，貨幣資金外逃')
     if _ai_vix is not None:
         if _ai_vix < 15:
             _ai5_pts.append(f'VIX={_ai_vix:.1f} 極度平靜')

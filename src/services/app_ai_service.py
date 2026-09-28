@@ -43,6 +43,7 @@ except ImportError:
         session_state: dict = {}
     st = _NoOpST()  # noqa
 
+from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 既有字樣）
 from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA
 
 
@@ -279,11 +280,11 @@ def generate_ai_comment(data: dict) -> str:
         # v19.170 P0-1:移除硬編碼持股%(原「30%以下」)。本函式產出的文字會餵給
         # AI prompt 與個股卡片,與 🎚️ 建議持股油門(建議持股 SSOT)打架。
         # 敘事保留(資金縮減期該偏保守),數字一律交給 SSOT。
-        lines.append('🌐 【景氣環境】M1B-M2為負，目前處於資金縮減期。'
+        lines.append(f'🌐 【景氣環境】M1B-M2{m1b_m2_proxy_badge(data.get("m1b_m2_info"))}為負，目前處於資金縮減期。'
                      '建議偏保守、降低持股比重，優先選擇低位階、高股利標的'
                      '（實際持股水位見 🎚️ 建議持股油門）。')
     elif m1b > 2:
-        lines.append('🌐 【景氣環境】M1B-M2為正且強勁，資金行情啟動中，可積極持股。')
+        lines.append(f'🌐 【景氣環境】M1B-M2{m1b_m2_proxy_badge(data.get("m1b_m2_info"))}為正且強勁，資金行情啟動中，可積極持股。')
 
     fin_msg = []
     if cl > 0:

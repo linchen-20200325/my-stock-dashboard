@@ -63,6 +63,7 @@ from shared.macro_buckets import (
     classify_danger,
     has_thresholds,
 )
+from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
 from src.compute.macro.macro_helpers import compute_five_bucket_summary
 from src.services.macro_v2_service import get_chart_series, get_edu, get_twii_ohlc
 from src.services.section_inputs import load_section_inputs
@@ -424,6 +425,12 @@ def build_rows(readiness: dict) -> list[Row]:
             source=spec.source or "—",
             note=spec.note or "",
             decimals=spec.decimals,
+            # DL-f1-s5：M1B-M2 退到 ^TWII 動能代理時，L2 側車帶 `is_proxy=True`
+            # （L2 以 L0 `is_m1b_m2_proxy` 判，同 v2 今天頁）；本層只把 L0 既有註記
+            # 交給顯示端（表格「目前值」、桶摘要「最差項」、右側明細）。
+            # 只揭露：`band` / `state` 一位未動；無值不貼；非代理時為空字串。
+            value_note=(m1b_m2_proxy_badge(rec)
+                        if spec.key == "m1b_m2_gap" and has_value else ""),
         ))
     order = {b: i for i, b in enumerate(_BUCKET_ORDER)}
     out.sort(key=lambda r: (order.get(r.bucket, 99), r.label))
@@ -501,8 +508,8 @@ def bucket_summary(rows: list[Row]) -> list[dict]:
             "name": _BUCKET_ZH.get(bkey, bkey),
             "band": worst.band if worst else "gray",
             "worst_label": worst.label if worst else "全部無資料",
-            "worst_value": (fmt_value(worst.value, worst.unit, worst.decimals)
-                            if worst else "—"),
+            "worst_value": (f"{fmt_value(worst.value, worst.unit, worst.decimals)}"
+                            f"{worst.value_note}" if worst else "—"),
             "n": len(members),
             "n_bad": sum(1 for r in members if r.state != "live"),
         })
@@ -782,7 +789,7 @@ def _table_columns(visible: list[Row]) -> dict[str, list]:
     return {
         "桶": [_BUCKET_ZH.get(r.bucket, r.bucket) for r in visible],
         "指標": [r.label for r in visible],
-        "目前值": [fmt_value(r.value, r.unit, r.decimals) for r in visible],
+        "目前值": [f"{fmt_value(r.value, r.unit, r.decimals)}{r.value_note}" for r in visible],
         # ⚠️ **走 `band_meta`,不直讀 `BAND_META`**(`build_reference_row`
         # 的 docstring 明文要求)。直讀會讓無門檻的參考列印「無資料」,而正解
         # 是「不判燈」—— 與 A 段才修掉的那個右上角灰標是**同一個 bug 的另一
