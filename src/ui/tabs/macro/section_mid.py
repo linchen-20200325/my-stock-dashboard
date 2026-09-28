@@ -577,6 +577,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                                    float(_m1b8_info['m2_yoy']), 2)
                 except Exception:
                     pass
+            # DL-f1-s5：第二環 D 徽章印的是同一個 M1B-M2 數字 → 代理時同樣後綴 L0 既有註記
+            # （K1 不自擬）。刻意在此處自取、不沿用上面策略3 的 `_m1b8_badge`
+            # （那個變數只在策略3 分支內才有定義，跨區塊借用 = 日後條件一改就 NameError）。
+            # 只揭露：`_cD` 判定、徽章顏色、第二環計數與火力分級一位未動；非代理時為空字串。
+            _gap8c_badge = m1b_m2_proxy_badge(_m1b8_info)
     
             # 三環條件評估
             _cA = _vix_now8 is not None and _vix_now8 < 20
@@ -621,7 +626,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             _r1_html = (cond_badge(_cA, f'A VIX={_vix_now8:.1f}<20' if _vix_now8 is not None else 'A VIX未知') + ' ' +
                         cond_badge(_cB, f'B 期貨={_fut8:,.0f}口' if _fut8 is not None else 'B 期貨未知'))
             _r2_html = (cond_badge(_cC, f'C 出口={_exp_c:+.1f}%' if _exp_c is not None else 'C 出口未知') + ' ' +
-                        cond_badge(_cD, f'D M1B-M2={_gap8c:+.2f}%' if _gap8c is not None else 'D M1B-M2未知'))
+                        cond_badge(_cD, f'D M1B-M2={_gap8c:+.2f}%{_gap8c_badge}' if _gap8c is not None else 'D M1B-M2未知'))
             # v19.170 P0-1 順手修 bug:原三元運算兩邊字串相同(True/False 都印「F 股匯雙漲」),
             # 條件未成立時等於謊報。改成未成立顯示「F 股匯未雙漲」。
             # v19.183 D2 補完 —— 上一版只修了 F 的兩態,漏了兩件事:

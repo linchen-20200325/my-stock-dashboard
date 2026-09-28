@@ -10,6 +10,7 @@
     ① src/ui/tabs/macro/section_cross_ai.py        §九「③ 目前貨幣流向」卡 + 「⑤ 結論」條列
     ② src/ui/tabs/macro/section_news_ai.py         §十一 送 Gemini 的裁決 prompt（`_ctx` 那一行）
     ③ src/ui/tabs/macro/section_mid.py             §八 策略3「M1B-M2 資金動能」（gap≥1 → 積極作多）
+       ＋（第二個 commit 補）同檔 ⚔️ 三環第二環「D M1B-M2=+x.xx%」徽章
     ④ src/ui/tabs/stock_sections/section_op_recommendation.py
        → L3 src/services/app_ai_service.generate_ai_comment（個股即時操作建議文案）
     ⑤ src/ui/tabs/tab_edu.py                       指標解讀手冊 ms1.json「📈 即時值」chip
@@ -41,6 +42,7 @@ v2 `page_today`（B7c）—— 一律後綴 L0 `shared.macro_provenance.M1B_PROX
 from __future__ import annotations
 
 import ast
+import re
 import types
 from pathlib import Path
 
@@ -473,6 +475,54 @@ class TestMidStrategy3:
         r = run.mid(_real(scn)).out
         assert _strip_note(p) == r
         assert p != r
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ③' §八 ⚔️ 三環第二環「D M1B-M2」徽章（同一個 M1B-M2 數字，第二個 commit 補）
+# ══════════════════════════════════════════════════════════════════════════
+#: 改動前（7020d13）實際輸出：徽章 span 內文就是 `D M1B-M2=+3.10%`，後面緊接 `</span>`
+_ORIG_D_TEXT = {"strong": "D M1B-M2=+3.10%", "mild": "D M1B-M2=+0.50%",
+                "negative": "D M1B-M2=-3.80%"}
+_D_SPAN = re.compile(r'<span style="[^"]*">(D M1B-M2[^<]*)</span>')
+
+
+def _d_badge(fake: _FakeST) -> tuple[str, str]:
+    """回 (徽章完整 span HTML, 徽章文字)；三環卡應恰有一張、D 徽章恰一個。"""
+    cards = [t for _, t in fake.out if "第二環（確認燃料）" in t]
+    assert len(cards) == 1, f"⚔️ 三環火力分級卡應恰 1 張，實得 {len(cards)}"
+    hits = list(_D_SPAN.finditer(cards[0]))
+    assert len(hits) == 1, f"D 徽章應恰 1 個，實得 {len(hits)}：{cards[0]}"
+    return hits[0].group(0), hits[0].group(1)
+
+
+class TestMidRing2DBadge:
+
+    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
+    @pytest.mark.parametrize("scn", sorted(_GAPS))
+    def test_proxy_d_badge_has_note(self, run, scn, how):
+        _span, text = _d_badge(run.mid(_proxy(scn, how)))
+        assert text == f"{_ORIG_D_TEXT[scn]}{NOTE}", text
+
+    @pytest.mark.parametrize("source", _REAL_SOURCES)
+    @pytest.mark.parametrize("scn", sorted(_GAPS))
+    def test_non_proxy_d_badge_is_byte_identical_to_before(self, run, scn, source):
+        span, text = _d_badge(run.mid(_real(scn, source)))
+        assert text == _ORIG_D_TEXT[scn], text
+        assert span.endswith(f">{_ORIG_D_TEXT[scn]}</span>"), span
+
+    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
+    @pytest.mark.parametrize("scn", sorted(_GAPS))
+    def test_badge_color_and_condition_unchanged(self, run, scn, how):
+        """`_cD` 判定（徽章綠／灰）不因代理而變：span 拿掉註記後與非代理逐字相同。"""
+        p_span, _ = _d_badge(run.mid(_proxy(scn, how)))
+        r_span, _ = _d_badge(run.mid(_real(scn)))
+        assert p_span.replace(NOTE, "") == r_span
+        assert p_span != r_span, "反向對照：代理時徽章必須真的多出註記"
+
+    def test_unknown_badge_has_no_note(self, run):
+        """代理源但缺數字 → 仍是「D M1B-M2未知」，不得貼註記。"""
+        _span, text = _d_badge(run.mid(_NO_NUMBER))
+        assert text == "D M1B-M2未知", text
 
 
 # ══════════════════════════════════════════════════════════════════════════
