@@ -322,8 +322,17 @@ def parse_cbc_ef15m01(sdmx, fatal_from: _dt.date | None = None, *,
                 (n_ok if _fatal else n_ok_early)[key] += 1
                 worst[key] = max(worst[key], diff)
     if bad:
-        return _fail(f"對帳不符 {len(bad)} 列（致命範圍 {_scope}；自算年增率 vs 表內官方年增率，"
-                     f"超出捨入容差）", first10=bad[:10])
+        # DL-f1-s19：拒用原因依實際原因分類（只改訊息；上面的拒用／放行判定一字未動）。
+        # 原本一律寫「超出捨入容差」—— 致命範圍內只剩「t−12 餘額 ≤ 捨入半階」的列時，
+        # 精確原因只出現在同一行的前 10 筆明細。分類依 `bad` 每筆第 3 格（上方註解「自算年增率 | 原因」）：
+        # 數值 = 自算年增率 → 超出捨入容差；字串 = 無法對帳的原因 → 直接沿用該字串（不在此重打一份）。
+        # 只有一種原因：句型與原本相同（不另標列數）；多種並存：逐一寫出、各標列數。前綴「對帳不符 N 列」不變。
+        _n_tol = sum(not isinstance(e[2], str) for e in bad)
+        _other = [e[2] for e in bad if isinstance(e[2], str)]
+        _causes = [("自算年增率 vs 表內官方年增率，超出捨入容差", _n_tol)] if _n_tol else []
+        _causes += [(w, _other.count(w)) for w in dict.fromkeys(_other)]
+        _why = "；".join(c if len(_causes) == 1 else f"{c} {n} 列" for c, n in _causes)
+        return _fail(f"對帳不符 {len(bad)} 列（致命範圍 {_scope}；{_why}）", first10=bad[:10])
     for key, (short, _lab, _c1, _c2) in cols.items():
         if n_ok[key] == 0:
             return _fail(f"{short} 在致命範圍（{_scope}）內無任何可對帳的列 → 無法驗證欄位配對")

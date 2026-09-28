@@ -5,8 +5,18 @@
 data_cache/twii_ohlcv.parquet              ← ^TWII 日 K（yfinance via NAS proxy）
 data_cache/finmind_inst.parquet            ← 三大法人總買賣超（FinMind）
 data_cache/finmind_margin.parquet          ← 融資餘額（FinMind）
-data_cache/finmind_m1m2.parquet            ← M1B / M2 月差（FinMind）
+data_cache/finmind_m1m2.parquet            ← M1B／M2 餘額 ＋ M1B 年增率 − M2 年增率（CBC；FinMind 無此資料，
+                                             表名 finmind_ 為歷史沿用；細節見下）
+data_cache/tw_pmi.parquet                  ← 台灣製造業 PMI 月頻（data.gov.tw dataset/6100，國發會提供）
 data_cache/metadata.json                   ← 各表 last_updated + row_count
+
+finmind_m1m2（`fetch_finmind_m1m2`）欄位：date（資料月月初）／m1b／m2／m1b_m2_gap／source／fetched_at
+- 來源依序：Tier 1 CBC ms1.json（`tw_macro.CBC_MS1_URLS`；程式內註記「已不再可用，留邏輯防禦」）→
+  Tier 1 沒取到 ≥ 13 列才請求 Tier 2 CBC PXWeb EF15M01（貨幣總計數-日平均數）。
+  實際走哪一支記在 source 欄：`CBC:ms1.json` 或 `CBC:PXWeb:EF15M01:daily_avg_level[…]`。
+- EF15M01 分支：m1b／m2 = 日平均餘額，新台幣百萬元（int64）；解析、單位檢查與官方年增率對帳
+  見 `src/data/macro/cbc_ef15m01.py`。ms1.json 分支不比對單位。
+- m1b_m2_gap = M1B 年增率 − M2 年增率（pp），由 m1b／m2 餘額以同月去年自算。
 
 每日跑一次（TW 17:00 收盤後）
 - 對每個 Parquet：讀取 last_date → 抓 [last_date+1, today] → append + dedupe → 寫回
@@ -16,11 +26,15 @@ data_cache/metadata.json                   ← 各表 last_updated + row_count
 刻意維持「無 streamlit 相依」（與 update_etf_managers.py 同款），
 在 Actions runner 上 pip install -r requirements.txt 即可跑。
 
-CLI
+CLI（在 repo 根目錄執行 —— `CACHE_DIR` 是相對路徑 `data_cache/`；排程 workflow 也是這樣跑）
 ===
-    python update_macro_history.py             # 增量更新
-    python update_macro_history.py --bootstrap # 砍掉重抓全部 20 年（初次部署用）
-    python update_macro_history.py --years 10  # 自訂歷史長度（預設 20）
+    python scripts/update_macro_history.py                      # 增量更新（DATASETS 全部）
+    python scripts/update_macro_history.py --bootstrap          # 不讀既有檔、整段重抓，抓到才整檔覆寫（初次部署用）
+    python scripts/update_macro_history.py --years 10           # 歷史長度（預設 20）：bootstrap、無既有資料、
+                                                                #   或既有檔守門不過而整段重建時用
+    python scripts/update_macro_history.py --only finmind_m1m2  # 只跑指定 dataset（debug 用，逗號分隔多個）
+⚠️ --only：metadata.json 只寫本次有跑的表（整檔覆寫，沒跑的表的紀錄不保留）；未註冊的名稱印
+   「[main] 未知 dataset」後略過；PMI durable 快照步驟（`main()` 末段）不受 --only 限制，照跑。
 """
 from __future__ import annotations
 
@@ -574,7 +588,9 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str = "") -> pd.Da
            (_cal["m2"] / _cal["m2"].shift(12) - 1) * 100
     out["m1b_m2_gap"] = _gap.reindex(_ts).to_numpy()
     out = out[(out["date"] >= start) & (out["date"] <= end)]
-    print(f"[finmind_m1m2] ✅ CBC PXWeb {len(out)} rows")
+    # DL-f1-s25：印實際來源（= 下方寫進 source 欄的同一個值）。原本寫死「CBC PXWeb」，
+    # 走 ms1.json 或 EF15M01 都印同一句。
+    print(f"[finmind_m1m2] ✅ {_source} {len(out)} rows")
     out = out[["date", "m1b", "m2", "m1b_m2_gap"]].copy()
     # B7b：寫檔前守門 —— 存量定義不過就整表拒寫（寧缺勿錯,§1）
     if not out.empty:
