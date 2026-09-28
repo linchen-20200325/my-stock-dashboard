@@ -18,6 +18,7 @@ except ImportError:
 
 # ── NAS Proxy 遷移：所有 yfinance 抓取改走 macro_core.fetch_yf_latest ──
 from src.data.macro.macro_core import fetch_yf_latest as _macro_core_yf_latest
+from shared.fail_cooldown import CachedFailure as _CachedFailure  # D2-f3 2026-09-28
 
 
 # ── Streamlit 快取工具（非 Streamlit 環境自動退化為無快取）──────────
@@ -201,6 +202,16 @@ def alert_summary(alerts: list[dict]) -> dict:
 # Step 2 — 資料擷取適配器
 # ══════════════════════════════════════════════════════════════
 
+class _YfLatestIncomplete(_CachedFailure):
+    """`_yf_latest` 結果含抓不到的檔(值為 None)時專用(D2-f3 2026-09-28,§1.A-3(a))。
+
+    `st.cache_data` 不快取例外 → 含 None 的結果不會被凍成 30 分鐘;`fetch_macro_snapshot`
+    只接住本類別,取 `.payload`(＝修前 `_yf_latest` 會回傳的同一個 dict)。刻意用私有子類別、
+    不直接接 `CachedFailure`(同 rs_leader_service D2-f1 的理由):別的模組的 `CachedFailure`
+    若從下層漏出來,不會在這裡被誤當成 {ticker: 值} 使用。
+    """
+
+
 @_safe_cache(ttl=TTL_30MIN, show_spinner=False)
 def _yf_latest(tickers: tuple) -> dict:
     """
@@ -220,12 +231,22 @@ def _yf_latest(tickers: tuple) -> dict:
     -------
     dict  { ticker: float | None }
         取不到資料的 ticker 值為 None。
+        D2-f3(2026-09-28):只要有任一檔取不到,**不回傳而是拋** `_YfLatestIncomplete`
+        (`.payload` 即上述 dict,內容不變)→ 不入本層快取;全部取到才正常回傳、照舊快取。
 
     Note
     ----
     雙層快取:本層 streamlit 1800s + proxy_helper 內部 300s URL Storm Shield。
+    D2-f3:含 None 的結果不入本層快取;下次呼叫重算時不會轟炸上游 —— 已取到的檔命中
+    L1 `macro_core._fetch_yf_close_base` 的 1hr 成功快取,抓不到的檔落在同一層的失敗退避
+    (`FAIL_COOLDOWN_SEC` 秒內不重打)。
     """
-    return _macro_core_yf_latest(tickers)
+    out = _macro_core_yf_latest(tickers)
+    # D2-f3(§1.A-3(a)「只快取成功結果」):修前含 None 的結果也被快取 30 分鐘 —— 上游恢復後
+    # 同參數呼叫仍回 None、上游 0 次呼叫,v1 總經頁 10Y／DXY 門檻警示最長悄悄消失 30 分鐘。
+    if any(out.get(t) is None for t in tickers):
+        raise _YfLatestIncomplete(out)
+    return out
 
 
 def fetch_macro_snapshot(
@@ -307,7 +328,10 @@ def fetch_macro_snapshot(
         _need_yf.append('^VIX')
 
     try:
-        _yf_data = _yf_latest(tuple(_need_yf))
+        try:
+            _yf_data = _yf_latest(tuple(_need_yf))
+        except _YfLatestIncomplete as _yf_inc:
+            _yf_data = _yf_inc.payload   # D2-f3:含抓不到的檔 → 這一份沒進快取;內容同修前
         if _yf_data.get('^TNX') is not None:
             snap['us10y'] = _yf_data['^TNX']
         if _yf_data.get('DX-Y.NYB') is not None:
