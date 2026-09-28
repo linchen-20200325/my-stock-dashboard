@@ -254,6 +254,44 @@ class TestMarkerSharedByWriterAndReader:
 
 
 # ══════════════════════════════════════════════════════════════════════
+# s6. 不變量:fetcher 拋例外 → ⛔ 不得寫成 EMPTY_FETCH_MARKER
+# ══════════════════════════════════════════════════════════════════════
+class TestFetcherExceptionIsNeverTheMarker:
+    """閘門在「不過期」時放行 `EMPTY_FETCH_MARKER`。例外一旦被寫成標記,真的上游錯誤
+    就會被當成「這一輪沒有新列」放過 —— 資料還沒過期的那段期間完全看不見。
+
+    (批 C QA 2026-09-28:這條不變量原本只被 tests/test_b3_margin_schema.py 偶然抓到 ——
+     那條斷言的是例外訊息裡恰好有 "sanity" 字樣,換一個例外訊息就抓不到。)
+    """
+    _TODAY = dt.date(2026, 9, 27)
+
+    @pytest.mark.parametrize("exc", [
+        ConnectionError("CBC 逾時"),
+        ValueError(""),                   # 空訊息:型別名仍須留下
+        RuntimeError("抓取結果為空"),      # 訊息恰好等於標記文字:仍不得變成標記
+    ])
+    def test_exception_is_recorded_as_itself_and_gate_blocks(self, monkeypatch, tmp_path, exc):
+        import scripts.update_macro_history as umh
+
+        _write_daily(tmp_path, "twii_ohlcv", dt.date(2026, 9, 25))
+        _write_daily(tmp_path, "finmind_inst", dt.date(2026, 9, 25))
+        _write_m1m2(tmp_path, dt.date(2026, 8, 1))
+        monkeypatch.setattr(umh, "CACHE_DIR", tmp_path)
+
+        def _boom(start, end, token):
+            raise exc
+        monkeypatch.setitem(umh.FETCHERS, "finmind_inst", (_boom, True))
+        meta = umh.update_one("finmind_inst", self._TODAY, False, 1, "tok")
+        assert meta["last_error"] != EMPTY_FETCH_MARKER, "例外被寫成了「抓取結果為空」"
+        assert type(exc).__name__ in (meta["last_error"] or ""), meta["last_error"]
+        # 端到端:資料本身新鮮(09-25),仍必須被閘門擋下,而且擋它的是錯誤字串
+        _write_meta(tmp_path, {**_meta_all(None), "finmind_inst": meta})
+        bad = _gate().check_inputs_fresh(tmp_path, today=self._TODAY)
+        assert [b["dataset"] for b in bad] == ["finmind_inst"]
+        assert bad[0]["is_stale"] is False
+
+
+# ══════════════════════════════════════════════════════════════════════
 # s7. m1b_m2 發布延遲:涵蓋 EF15M01 實測上架日,且真漏期仍會被抓到
 # ══════════════════════════════════════════════════════════════════════
 class TestM1bM2PublicationLag:
@@ -284,16 +322,31 @@ class TestM1bM2PublicationLag:
     def test_genuinely_missed_month_is_still_caught(self):
         """放寬 lag 不得變成永遠不過期:6 月卡住、7 月早已上架 → 緩衝用完那天起落後 1 期。
 
-        邊界兩側都測(只測「很久以後會紅」抓不到 off-by-one),且發現時點不得晚於
-        上架後一個月(否則等於要等到下一期都該出了才發現這一期漏了)。
+        邊界兩側都測(只測「很久以後會紅」抓不到 off-by-one)。
+        上限原本在這裡(「發現時點不晚於上架後 31 天」,等於容許 lag 到 50),
+        批 C QA(2026-09-28)突變 lag=45 存活 → 收緊並移到下一條
+        `test_lag_slack_over_observation_does_not_exceed_the_grace`。
         """
         _first_red = monthly_publication_due(
             _JULY, indicator="m1b_m2", grace_days=MONTHLY_PUBLICATION_MARGIN_DAYS)
         assert monthly_periods_behind(
             _JUNE, indicator="m1b_m2", today=_first_red - dt.timedelta(days=1)) == 0
         assert monthly_periods_behind(_JUNE, indicator="m1b_m2", today=_first_red) == 1
-        assert _first_red <= _JULY_2026_RELEASED + dt.timedelta(days=31), (
-            f"真的漏掉 7 月要到 {_first_red} 才發現 —— lag／緩衝放太寬")
+
+    def test_lag_slack_over_observation_does_not_exceed_the_grace(self):
+        """lag 的上限:應發布日比實測上架日多出來的天數,不得超過緩衝本身。
+
+        分工:lag 描述「正常上架日」;上游遲到的容忍由 `MONTHLY_PUBLICATION_MARGIN_DAYS`
+        負責。lag 若再多留超過緩衝的餘裕 = 把緩衝重複算一次 —— 真的漏期要多拖一整個緩衝才被發現。
+        ⇒ 0 ≤ 應發布日 − 實測上架日 ≤ 緩衝。現值 27 → 多 1 天;容許的 lag = 26～33:
+        容得下「8 月 ≥ 月底後 28 天」這個設限觀測帶來的不確定,但擋得住 45 這種明顯過寬的值
+        (批 C QA 2026-09-28:原上限容許到 50,突變 lag=45 存活)。
+        """
+        _slack = (monthly_publication_due(_JULY, indicator="m1b_m2")
+                  - _JULY_2026_RELEASED).days
+        assert 0 <= _slack <= MONTHLY_PUBLICATION_MARGIN_DAYS, (
+            f"應發布日比實測上架日晚 {_slack} 天,超過緩衝 {MONTHLY_PUBLICATION_MARGIN_DAYS} 天"
+            " —— lag 放太寬")
 
     def test_cache_reader_follows_the_same_rule(self, tmp_path):
         """`compute_cache_staleness`(閘門實際呼叫的那一層)對同一組日期給同一個答案。"""
@@ -342,3 +395,38 @@ class TestGateScenarios:
         bad = _gate().check_inputs_fresh(tmp_path, today=today)
         assert [b["dataset"] for b in bad] == ["finmind_m1m2"]
         assert bad[0]["is_stale"] is False, "日期是當期 —— 擋它的必須是複合錯誤字串"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# s6. `main()` 被擋時的操作訊息(排程 log／開發者訊息,不是畫面文案)
+# ══════════════════════════════════════════════════════════════════════
+class TestMainBlockedMessage:
+    """s6 之後,被擋訊息要講對兩件事(批 C QA 2026-09-28):
+      ① 資料沒過期、純因錯誤字串被擋 → 不得寫「判為過期」;過期的照樣講出舊到哪;
+      ② 修法不得再要求 last_error「一定是 null」—— 標記＋不過期現在是可接受的。"""
+
+    def test_blocked_message_is_accurate(self, monkeypatch, tmp_path):
+        mod = _gate()
+        today = dt.date(2026, 9, 27)
+        _write_daily(tmp_path, "twii_ohlcv", dt.date(2026, 9, 25))
+        _write_daily(tmp_path, "finmind_inst", dt.date(2026, 9, 25))
+        _write_m1m2(tmp_path, dt.date(2026, 5, 1))                     # 真的落後
+        _write_meta(tmp_path, _meta({"finmind_inst": "HTTPError: 503 Server Error",
+                                      "finmind_m1m2": EMPTY_FETCH_MARKER}))
+        states = mod.check_inputs_fresh(tmp_path, today=today)
+        assert [s["dataset"] for s in states] == ["finmind_inst", "finmind_m1m2"]
+        assert [s["is_stale"] for s in states] == [False, True]
+
+        # main() 讀的是模組層 `_CACHE`(真實 data_cache),改指 tmp;閘門結果用上面算好的。
+        monkeypatch.setattr(mod, "_CACHE", tmp_path)
+        monkeypatch.setattr(mod, "check_inputs_fresh", lambda *a, **k: states)
+        with pytest.raises(SystemExit) as ei:
+            mod.main()
+        lines = str(ei.value).splitlines()
+        _inst = next(ln for ln in lines if "finmind_inst" in ln)
+        _m1m2 = next(ln for ln in lines if "finmind_m1m2" in ln)
+        _fix = next(ln for ln in lines if "修法" in ln)
+        assert "判為過期" not in _inst and "未過期" in _inst, _inst       # ①
+        assert "HTTPError" in _inst, _inst
+        assert "落後" in _m1m2, _m1m2
+        assert EMPTY_FETCH_MARKER in _fix, _fix                           # ②

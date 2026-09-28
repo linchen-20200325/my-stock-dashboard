@@ -284,8 +284,12 @@ def main() -> None:
     # §1 Fail Loud(2026-08-27):檔案「在」不等於「可用」——過期同樣擋下。
     stale = check_inputs_fresh()
     if stale:
+        from shared.staleness import EMPTY_FETCH_MARKER
+        # DL-f1-s6 起「沒過期、純因錯誤字串被擋」也會進來 —— 那一種不得寫成「判為過期」。
         _lines = "\n".join(
-            f"  - {s['dataset']}:{s['reason'] or '判為過期'}"
+            f"  - {s['dataset']}:"
+            + ((s['reason'] or '判為過期') if s["is_stale"]
+               else "資料未過期,擋下的原因是上游自陳錯誤")
             + (f"（metadata.last_error={s['upstream_error']!r}）"
                if s["upstream_error"] else "")
             for s in stale
@@ -294,7 +298,8 @@ def main() -> None:
             "[calibrate] ❌ 輸入資料過期 / 上游抓取失敗,拒絕用它擬權重:\n"
             f"{_lines}\n"
             "  修法:先讓 scripts/update_macro_history.py 在部署環境成功寫入上述資料集,"
-            "確認 data_cache/metadata.json 的 last_error 為 null 後再跑本 script。\n"
+            "確認資料不再過期、且 data_cache/metadata.json 的 last_error 為 null"
+            f" 或恰為 {EMPTY_FETCH_MARKER!r}(該輪沒抓到新列)後再跑本 script。\n"
             "  ⚠️ 不要改門檻或加旁路來繞過這道檢查 —— 那只是把過期資料換個方式吃進來。"
         )
     twii = pd.read_parquet(_CACHE / "twii_ohlcv.parquet")
