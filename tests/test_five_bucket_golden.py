@@ -5,10 +5,13 @@
 即將把 `compute_five_bucket_summary` 的 16 條取值統一改走 `_first_sane`
 （好處：來源標籤寫在取值那一行，readiness 側車才有東西可記）。
 
-設計審查者推導「零行為位移」的依據是：`within_valid_range` 在
-`valid_min is None and valid_max is None` 時恆回 True，而 16 條 spec
+設計審查者推導「零行為位移」的依據是：~~`within_valid_range` 在
+`valid_min is None and valid_max is None` 時恆回 True~~，而 16 條 spec
 只有 `us10y` / `dxy` 設了範圍。**但那是讀碼推導，不是實測。**
 它自己也寫明「實作時應該先寫一條 golden test 逐位比對，不要相信我這段推導」。
+（2026-09-29 批 NF-a 事實更正，有意識的更正、不是漏刪；決策者 AI 總管：
+「恆回 True」只對**有限值**成立 —— 非有限值（NaN／±inf）不論有無範圍一律回 False
+（NaN 在本批前即如此，±inf 自本批起）。）
 
 本檔就是那條 golden test：**在改動前先跑一次、把輸出釘住**。
 改動後若有任何一盞燈的 `value_str` / `danger` 變了，這裡會紅。
