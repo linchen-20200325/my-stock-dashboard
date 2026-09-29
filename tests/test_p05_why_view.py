@@ -1419,10 +1419,18 @@ class TestSpecFlagsComeFromL0:
             assert dict(_facts)[P.L0_REASON_FACT_LABEL] == P.L0_REASON_FACT_TEXT
 
     def test_a_reason_with_state_glyphs_does_not_blow_up_the_note(self):
-        """實測：L0 `stock_kd.no_level_reason` 裡就有 2 個狀態 glyph。
+        """~~實測：L0 `stock_kd.no_level_reason` 裡就有 2 個狀態 glyph。~~
 
-        不洗 → `Note.__post_init__` 直接 `ValueError` → **整段揭露消失**，
-        而畫面上一句解釋都沒有（§1：紅態要看得見，不是換一種炸法）。
+        ~~不洗 → `Note.__post_init__` 直接 `ValueError` → **整段揭露消失**，
+        而畫面上一句解釋都沒有~~（§1：紅態要看得見，不是換一種炸法）。
+
+        📌 SA2-f8 續（2026-09-29，事實更正；刪除線有意識保留，⛔ 不是漏刪）：劃掉的例子不經過
+        `_clean_reason()`。`stock_kd.no_level_reason` 確實有 2 個狀態 glyph，但那一欄只在葉1 以
+        `st.caption` 原文印出，從來不是 `_clean_reason()` 的輸入；它的兩個呼叫端
+        （`build_spec_flag_card()`、`build_source_card()` 的 unknown-status 分支）當下的輸入實測皆不含
+        glyph（2026-09-29 讀碼，⚠️ 單組）⇒ 洗 glyph 是防禦。本測試餵的是**合成**的含 glyph 原因，
+        驗的正是那道防禦：洗過之後放得進 `Note`，而且有說「已移除」。
+        詳見 `src/ui/views/page_why.py::_clean_reason` 的 docstring（SA2-f8 續）。
         """
         _dirty = "抓不到 🔴 而且 🟢 也不對"
         _clean = P._clean_reason(_dirty)

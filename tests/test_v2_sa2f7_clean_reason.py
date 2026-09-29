@@ -15,7 +15,8 @@ SA2-f8 續：同一段 docstring 拿 `stock_kd.no_level_reason` 當「為什麼�
 
 (a) 含狀態 glyph → 揭露句在（「原文裡的燈號符號已移除」）、⛔ 沒有「對照表」；逐字 ＝ 修前只少「；」＋那一句。
 (b) 不含 glyph → 原文原樣（含當下 L0 被標記的燈的原因原文）。
-(c) 空值（空字串／全空白；以及洗完才變空的「只有 glyph」）→ `UNKNOWN_ERROR_TEXT`（⛔ 不接揭露句）。
+(c) 空值（空字串／全空白）→ `UNKNOWN_ERROR_TEXT`。洗完才變空的「只有 glyph」只驗不拋例外、回非空字串
+    （⛔ 不釘現行輸出：它不接揭露句，違反「洗過就要說」—— 已登記 SA2-f13，範圍外、未修）。
 (d) 兩個呼叫端各實跑一次（含 glyph 的原因）→ why ⛔ 沒有「對照表」；v2 卡面與「▸ 詳細」摺疊區也沒有；
     另以整頁實跑（AppTest，合成注入 glyph）驗葉2 畫出來的樣子。
 (e) 突變：把刪掉的那段加回去 → (a)(d) 的判準必須轉紅。
@@ -111,9 +112,11 @@ def test_c_empty_reason_is_the_unknown_text(raw):
 
 
 @pytest.mark.parametrize("raw", ["🔴", " 🟠 ⛔ "])
-def test_c_a_reason_that_is_only_glyphs_is_also_the_unknown_text(raw):
-    """洗完才變空 → 同一句 `UNKNOWN_ERROR_TEXT`（修前修後同樣⛔ 不接揭露句，自然也沒有指路）。"""
-    assert P._clean_reason(raw) == P.UNKNOWN_ERROR_TEXT
+def test_c_a_reason_that_is_only_glyphs_does_not_raise(raw):
+    """洗完才變空：只驗「不拋例外、回非空字串」—— ⛔ 不釘現行的輸出內容。"""
+    # ⚠️ 現行回「（上游沒有給訊息）」且不接揭露句，違反本函式自己的「洗過就要說」→ 已登記 SA2-f13（範圍外、未修）。
+    out = P._clean_reason(raw)
+    assert isinstance(out, str) and out.strip()
 
 
 # ── (d) 兩個呼叫端各實跑一次 ───────────────────────────────────────────────

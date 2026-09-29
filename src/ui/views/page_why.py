@@ -773,12 +773,13 @@ def _clean_reason(reason: Any) -> str:
     那段），不進 `Note`，從來不是本函式的輸入 ⇒ 劃掉的那條「不洗就炸」描述的不是任何一條實際路徑。
     **現況**（2026-09-29 讀碼所見，⚠️ 單組）：兩個呼叫端的輸入實測皆不含 glyph ——
     ① `build_spec_flag_card()`：當下被 L0 標記的只有 `margin`、`stock_trend` 兩盞（皆 degraded），
-    兩段 `degraded_reason` 都沒有狀態 glyph；總經燈／持股燈／參考走勢三張 L0 表的原因類欄位裡，
-    帶狀態 glyph 的只有上面那一欄。
+    兩段 `degraded_reason` 都沒有狀態 glyph；總經燈／持股燈／參考走勢三張 L0 表的 `*_reason` 欄
+    （`unwired_reason`／`degraded_reason`，持股表另有 `no_level_reason`）裡，帶狀態 glyph 的只有上面那一欄
+    （`why`、`threshold_text` 等其他欄另有帶 glyph 的，例：`stock_swap.why`，但都不是本函式的輸入）。
     ② `build_source_card()` 的 unknown-status 分支：L0 `shared/fetch_monitor.py` 只寫「未執行」「ok」
     「failed」三種狀態，`get_monitor_registry()` 回的每一列都是 dict ⇒ 以當下 L0 走不到；
-    `src/` 裡 9 支 `@monitored` 的登錄名也都不含 glyph。
-    ⇒ **洗 glyph 是防禦**：防的是日後被標記的燈，原因欄寫進狀態 glyph（L0 同一張表的原因類欄位
+    `src/` 裡掛了 `@monitored` 的那幾支（支數由本檔 `MONITORED_FETCHER_COUNT` 單一持有）的登錄名也都不含 glyph。
+    ⇒ **洗 glyph 是防禦**：防的是日後被標記的燈，原因欄寫進狀態 glyph（L0 同一張表的 `*_reason` 欄
     確實會這樣寫，見上面那一欄），或登錄表冒出名字帶 glyph、形狀又不是 Mapping 的一列。那時不洗，
     `Note.__post_init__` 會直接 `ValueError`；而這兩個呼叫端的卡都是在 `_render_one()` 的隔離之外建的
     （`_render_user_health_wall()` 先建好整列再畫），例外會一路穿出這一葉。
