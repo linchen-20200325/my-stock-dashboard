@@ -621,15 +621,24 @@ class TestFetchEF15:
         assert not df.empty
         assert calls == ["EF15M01"]
 
-    def test_tier1_ms1_success_skips_ef15(self, monkeypatch):
+    def test_tier1_ms1_success_still_requests_ef15_and_writes_only_ef15(self, monkeypatch):
+        """批 R4 DL-f1-s40 改寫（原名 `test_tier1_ms1_success_skips_ef15`）。
+
+        原斷言「ms1 回 ≥ 13 列 → 不請求 EF15M01、source 全是 `CBC:ms1.json`」釘住的正是 DL-f1-s40
+        的缺陷：ms1 沒有標題／單位 meta、口徑無從驗證，一復活就自動、靜默換掉整條序列的來源。
+        改為：ms1 同樣有回應（同一份 26 列），EF15M01 仍被請求恰一次，寫出的列全出自 EF15M01，
+        且與 ms1 失敗時的輸出逐欄相同（fetched_at 為抓取時戳，除外）。"""
         n = 26
         ms1 = [{"年月": f"{2023 + k // 12}-{k % 12 + 1:02d}",
                 "M1B": 20_000_000 + 100_000 * k, "M2": 60_000_000 + 200_000 * k}
                for k in range(n)]
+        patch_ef15(monkeypatch, ef15_body())
+        base = _fetch_all()
         calls = patch_ef15(monkeypatch, ef15_body(), ms1_rows=ms1)
         df = _fetch_all()
-        assert calls == [] and not df.empty
-        assert (df["source"] == "CBC:ms1.json").all()
+        assert calls == ["EF15M01"] and not df.empty
+        assert df["source"].str.startswith("CBC:PXWeb:EF15M01:daily_avg_level[").all()
+        pd.testing.assert_frame_equal(df.drop(columns="fetched_at"), base.drop(columns="fetched_at"))
 
     def test_output_levels_source_and_2026_07_gap(self, monkeypatch):
         patch_ef15(monkeypatch, ef15_body())

@@ -337,8 +337,25 @@ def parse_cbc_ef15m01(sdmx, fatal_from: _dt.date | None = None, *,
         if n_ok[key] == 0:
             return _fail(f"{short} 在致命範圍（{_scope}）內無任何可對帳的列 → 無法驗證欄位配對")
     if warn:
+        # DL-f1-s41：比照 DL-f1-s19（上方拒用句）依原因分類（只改訊息；上面的警示／放行判定一字未動）。
+        # 原本 max|Δ| 取全部 warn 的第 5 格 ——「t−12 餘額 ≤ 捨入半階」的列在那一格記 math.inf ⇒
+        # 只要有這類列就印成「infpp」，也分不出是哪一種不符。分類同上方：第 3 格是數值 = 自算年增率
+        # → 超出捨入容差類，max|Δ| 只在這一類裡取；是字串 = 無法對帳的原因 → 直接沿用該字串。
+        # 只有容差類：整行與原本逐字相同；只有一種無法對帳原因：寫該原因（不標列數）；多種並存：
+        # 逐一寫出、各標列數（容差類附 max|Δ|）。前綴「對帳不符 N 列」與 first10 明細不變。
+        _tol = [w for w in warn if not isinstance(w[2], str)]
+        _other = [w[2] for w in warn if isinstance(w[2], str)]
+        _mx = f"max|Δ|={max(w[4] for w in _tol):.6f}pp" if _tol else ""
+        _parts = ([f"自算年增率 vs 表內官方年增率，超出捨入容差 {len(_tol)} 列（{_mx}）"] if _tol else [])
+        _parts += [f"{c} {_other.count(c)} 列" for c in dict.fromkeys(_other)]
+        if not _other:
+            _why = _mx
+        elif len(_parts) == 1:
+            _why = _other[0]
+        else:
+            _why = "；".join(_parts)
         print(f"{tag} ⚠️ 致命範圍（{_scope}）之前對帳不符 {len(warn)} 列（不影響寫入的資料，"
-              f"只警示、不拒用）：max|Δ|={max(w[4] for w in warn):.6f}pp first10={warn[:10]!r}")
+              f"只警示、不拒用）：{_why} first10={warn[:10]!r}")
 
     ds = sorted(keep)
     out = pd.DataFrame({

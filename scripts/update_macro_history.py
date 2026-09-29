@@ -2,25 +2,36 @@
 
 資料流（與 update_etf_managers.py 同模式，但抓多個 dataset）
 =========================================================
-data_cache/twii_ohlcv.parquet              ← ^TWII 日 K（yfinance via NAS proxy）
-data_cache/finmind_inst.parquet            ← 三大法人總買賣超（FinMind）
+data_cache/twii_ohlcv.parquet              ← ^TWII 日 K（Yahoo Chart API `query1.finance.yahoo.com/v8/finance/chart`，
+                                             經 proxy_helper；不經 yfinance 套件）
+data_cache/finmind_inst.parquet            ← 外資淨買賣超（億元；FinMind TaiwanStockTotalInstitutionalInvestors 的
+                                             Foreign_Investor ＋ Foreign_Dealer_Self；投信、自營商不取）
 data_cache/finmind_margin.parquet          ← 融資餘額（FinMind）
 data_cache/finmind_m1m2.parquet            ← M1B／M2 餘額 ＋ M1B 年增率 − M2 年增率（CBC；FinMind 無此資料，
                                              表名 finmind_ 為歷史沿用；細節見下）
 data_cache/tw_pmi.parquet                  ← 台灣製造業 PMI 月頻（data.gov.tw dataset/6100，國發會提供）
-data_cache/metadata.json                   ← 各表 last_updated + row_count
+data_cache/metadata.json                   ← 各表 last_updated／row_count／last_error（本輪自陳狀態，各分支寫法見 `update_one`）
+data_cache/macro_last_good/tw_pmi.json     ← PMI durable「上次已知值」快照（v19.118；`main()` 末段跑 runtime
+                                             `macro_core.fetch_tw_pmi()`，只存 live hit、不存過期 fallback；
+                                             寫檔者 `macro_core._macro_durable_save`）
 
 finmind_m1m2（`fetch_finmind_m1m2`）欄位：date（資料月月初）／m1b／m2／m1b_m2_gap／source／fetched_at
-- 來源依序：Tier 1 CBC ms1.json（`tw_macro.CBC_MS1_URLS`；程式內註記「已不再可用，留邏輯防禦」）→
-  Tier 1 沒取到 ≥ 13 列才請求 Tier 2 CBC PXWeb EF15M01（貨幣總計數-日平均數）。
-  實際走哪一支記在 source 欄：`CBC:ms1.json` 或 `CBC:PXWeb:EF15M01:daily_avg_level[…]`。
-- EF15M01 分支：m1b／m2 = 日平均餘額，新台幣百萬元（int64）；解析、單位檢查與官方年增率對帳
-  見 `src/data/macro/cbc_ef15m01.py`。ms1.json 分支不比對單位。
+- 寫出的列只來自 CBC PXWeb EF15M01（貨幣總計數-日平均數），每次都請求；source 欄
+  `CBC:PXWeb:EF15M01:daily_avg_level[…]`（DL-f1-s40）。
+- CBC ms1.json（`tw_macro.CBC_MS1_URLS` 兩個網址；DL-f1-s1 探針 run 36408641177 實測兩個都未命中：
+  `/public/data/ms1.json` 回 HTTP 404、`/tw/public/data/ms1.json` 有回應但未通過 `fetch_cbc_ms1_rows`
+  檢查 —— 出處見 `tw_macro.fetch_cbc_m1b_m2` docstring）仍先請求，但只做形狀與量級檢查、結果只進 log，
+  **不寫出**：它沒有標題／單位 meta，口徑（日平均或月底）無從驗證，而不同來源／口徑的列不得疊進
+  同一份 parquet（DL-f1-s40）。EF15M01 失敗 → 本輪不寫，不以 ms1 替代。
+- m1b／m2 = 日平均餘額，新台幣百萬元（int64）；解析、單位檢查與官方年增率對帳見
+  `src/data/macro/cbc_ef15m01.py`；寫檔前守門 `_m1m2_level_sanity` 另有百萬元量級帶（任何來源都要過）。
 - m1b_m2_gap = M1B 年增率 − M2 年增率（pp），由 m1b／m2 餘額以同月去年自算。
 
 每日跑一次（TW 17:00 收盤後）
 - 對每個 Parquet：讀取 last_date → 抓 [last_date+1, today] → append + dedupe → 寫回
-- 走 proxy_helper.fetch_url（NAS Squid → 直連 → NAS 中繼站 fallback）解海外 IP 封鎖
+- twii_ohlcv、finmind_m1m2（CBC）、tw_pmi 走 proxy_helper.fetch_url（NAS Squid → 直連 → NAS 中繼站
+  fallback）解海外 IP 封鎖；FinMind 兩張表（finmind_inst、finmind_margin）直連（`_finmind_get`，
+  理由見該函式）
 - 任一資料源失敗：log 警告但不中止；metadata 記 last_error 供後續排查
 
 刻意維持「無 streamlit 相依」（與 update_etf_managers.py 同款），
@@ -33,8 +44,12 @@ CLI（在 repo 根目錄執行 —— `CACHE_DIR` 是相對路徑 `data_cache/`�
     python scripts/update_macro_history.py --years 10           # 歷史長度（預設 20）：bootstrap、無既有資料、
                                                                 #   或既有檔守門不過而整段重建時用
     python scripts/update_macro_history.py --only finmind_m1m2  # 只跑指定 dataset（debug 用，逗號分隔多個）
-⚠️ --only：metadata.json 只寫本次有跑的表（整檔覆寫，沒跑的表的紀錄不保留）；未註冊的名稱印
-   「[main] 未知 dataset」後略過；PMI durable 快照步驟（`main()` 末段）不受 --only 限制，照跑。
+⚠️ --only：metadata.json 整檔覆寫，只含 --only 列出、且已註冊的表 —— 沒列出的表的紀錄不保留
+   （見 DL-f1-s35）。列出、但因缺 FINMIND_TOKEN 被跳過的表**也會寫進去**（不是「只寫有跑的表」）：
+   last_error 記「FINMIND_TOKEN 未設定」，row_count／last_updated 描述磁碟上現有的 parquet
+   （DL-f1-s42；原本停在 0／null，看起來像表是空的）—— 不帶 --only、缺 token 的一般執行也一樣。
+   未註冊的名稱印「[main] 未知 dataset」後略過；PMI durable 快照步驟（`main()` 末段）不受 --only
+   限制，照跑。
 """
 from __future__ import annotations
 
@@ -225,12 +240,24 @@ def fetch_twii_ohlcv(start: _dt.date, end: _dt.date) -> pd.DataFrame:
 
 
 def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFrame:
-    """三大法人總買賣超（FinMind TaiwanStockTotalInstitutionalInvestors）。
+    """外資淨買賣超（FinMind TaiwanStockTotalInstitutionalInvestors；只取外資，投信、自營商不取）。
 
-    輸出欄位：date, foreign_buy（億，外資淨買賣超）
-    FinMind 實際欄位：['buy', 'date', 'name', 'sell']
-    `name` 欄含投資人類型（外資、投信、自營商）；篩 '外資' 後算淨買賣超。
+    輸出欄位：date、foreign_buy（億元，外資淨買賣超）、source、fetched_at。
+    FinMind 實際欄位：['buy', 'date', 'name', 'sell']（buy／sell 單位：元）。`name` 是英文投資人類型；
+    篩含 'Foreign' 的列（外資總額 = Foreign_Investor ＋ Foreign_Dealer_Self），每列 buy − sell，
+    依日加總後 ÷ `TWD_PER_YI` 換成億元。
+
+    DL-f1-s43（2026-09-28）：原本 buy／sell 先 `fillna(0)` 再相減（違 CLAUDE.md §1）—— sell 缺值時
+    當日淨額被捏成大正數、buy 缺值時捏成大負數；缺整欄時 `fi.get()` 回 None → AttributeError。改為：
+    - 缺 date／buy／sell 欄 → raise（`update_one` 接住 → metadata 記 last_error、既有檔原封不動）。
+      上游 schema 漂移是系統性問題；回空表會被記成「抓取結果為空」，讀取端會當成「沒有新資料」。
+    - 某日任一外資組成列的 buy 或 sell 缺值（含轉不成數值）→ **該日整日不產出**（不以 0 代入、
+      不做部分加總），log 剔除的日期數與樣本；其餘日子的算式、輸出逐位不變。
+    - ⚠️ 某日「根本沒有」某一組成列（例：只有 Foreign_Investor）不在此列，照舊以有的列加總 ——
+      這不是缺值；若也剔除，會連帶改掉有值日子的輸出。
     """
+    from shared.margin_schema import TWD_PER_YI
+
     raw = _finmind_get("TaiwanStockTotalInstitutionalInvestors",
                        "", start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), token)
     if raw.empty:
@@ -245,9 +272,23 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     if fi.empty:
         print(f"[finmind_inst] name 欄位無 'Foreign' 列，unique={list(raw['name'].unique())[:10]}")
         return pd.DataFrame()
+    _missing = [c for c in ("date", "buy", "sell") if c not in fi.columns]
+    if _missing:
+        raise RuntimeError(
+            f"缺欄 {_missing}（欄位={list(raw.columns)}）→ 算不出外資淨買賣超；"
+            "不寫入 parquet（§1：不以 0 代入、不猜欄位）")
     fi = fi.copy()
-    fi["foreign_buy"] = (pd.to_numeric(fi.get("buy"), errors="coerce").fillna(0)
-                        - pd.to_numeric(fi.get("sell"), errors="coerce").fillna(0)) / 1e8
+    _buy = pd.to_numeric(fi["buy"], errors="coerce")
+    _sell = pd.to_numeric(fi["sell"], errors="coerce")
+    fi["foreign_buy"] = (_buy - _sell) / TWD_PER_YI      # 缺值列 → NaN（不以 0 代入）
+    _nan_rows = _buy.isna() | _sell.isna()
+    if _nan_rows.any():
+        # §1／§3.3：顯式剔除 + log 筆數。整日剔除：只加有值的列 = 產出一個「部分加總」，比缺席更危險。
+        _bad_days = pd.unique(fi.loc[_nan_rows, "date"])
+        print(f"[finmind_inst] ⚠️ 剔除 {len(_bad_days)} 個日期（該日有外資組成列 buy 或 sell 缺值"
+              f" → 整日不產出；不以 0 代入、不做部分加總），{int(_nan_rows.sum())} 列缺值"
+              f"（樣本日期={sorted(str(d) for d in _bad_days)[:5]}）")
+        fi = fi[~fi["date"].isin(_bad_days)]
     out = fi.groupby("date", as_index=False)["foreign_buy"].sum()
     out["date"] = pd.to_datetime(out["date"]).dt.date
     # S-PROV-1 phase 13 v18.259 — provenance(schema-additive)
@@ -352,11 +393,42 @@ def fetch_finmind_margin(start: _dt.date, end: _dt.date, token: str) -> pd.DataF
 #     同一組定義常數），也判定既有檔是否需整段重建 —— 不過就整表拒寫（§1 寧缺勿錯）。
 
 
-def _m1m2_level_sanity(df: pd.DataFrame) -> tuple[bool, str]:
-    """寫檔前守門（整表判定,不逐列剔除）。三條定義檢查同 `export_stock_db._money_supply_sanity_gate`。
+def _m1m2_level_band() -> tuple[float, float]:
+    """本表 m1b／m2 的單位量級帶（新台幣百萬元，閉區間）→ (下界, 上界)。
 
-    （DL-f1-r1：匯出端另有「億元量級帶」—— 那是換算後的單位檢查,本檔 parquet 為百萬元,
-    單位改由 `_parse_cbc_ef15m01_levels` 比對回應 `meta.units` 把關,不在此重複。）"""
+    DL-f1-s40：**不另訂數值** —— 沿用匯出端的億元量級帶常數
+    `shared.signal_thresholds.MONEY_SUPPLY_LEVEL_SANITY_MIN_YI`／`_MAX_YI`（帶寬推導見該常數），
+    換成本表契約單位 `MONEY_SUPPLY_CACHE_UNIT_LABEL`（百萬元）：× `TWD_PER_YI`（1e8）
+    ÷ `MONEY_SUPPLY_TWD_PER_CACHE_UNIT`（1e6）＝ ×100 ⇒ [1e6, 5e8] 百萬元。
+    """
+    from shared.margin_schema import TWD_PER_YI
+    from shared.signal_thresholds import (
+        MONEY_SUPPLY_LEVEL_SANITY_MAX_YI,
+        MONEY_SUPPLY_LEVEL_SANITY_MIN_YI,
+        MONEY_SUPPLY_TWD_PER_CACHE_UNIT,
+    )
+    _to_unit = TWD_PER_YI / MONEY_SUPPLY_TWD_PER_CACHE_UNIT          # 億元 → 百萬元（= 100）
+    return (MONEY_SUPPLY_LEVEL_SANITY_MIN_YI * _to_unit,
+            MONEY_SUPPLY_LEVEL_SANITY_MAX_YI * _to_unit)
+
+
+def _m1m2_level_sanity(df: pd.DataFrame) -> tuple[bool, str]:
+    """寫檔前守門（整表判定,不逐列剔除）。四條檢查同 `export_stock_db._money_supply_sanity_gate`：
+    ① 餘額 > 0 ② m2 ≥ m1b ③ |gap| ≤ 30pp ④ m1b／m2 落在單位量級帶內（本表以百萬元訂界，
+    見 `_m1m2_level_band`；匯出端吃的是換成億元的表，同一組常數）。
+
+    ④ 是 DL-f1-s40（2026-09-28）補的。原文「（DL-f1-r1：匯出端另有『億元量級帶』—— 那是換算後的
+    單位檢查,本檔 parquet 為百萬元,單位改由 `_parse_cbc_ef15m01_levels` 比對回應 `meta.units` 把關,
+    不在此重複。）」只對 EF15M01 那一支成立：ms1.json 分支沒有 meta、不比對單位，億元資料原本會一路
+    放行，到匯出端才被量級帶擋下（整張 `money_supply` 被 DROP，parquet 本身不會自癒）。寫檔前的最後
+    一道守門不能假設資料來自哪一支 ⇒ 任何來源都過同一條量級帶。
+    本函式同時是既有檔守門（`_EXISTING_SANITY_GATES`）⇒ 既有 parquet 混進量級不符的列 → 下一次排程
+    整段重建。餘額為 NaN 也判帶外（`between` 對 NaN 為 False；① ② 對 NaN 原本都判通過）。
+
+    ⚠️ 量級帶只攔得住「差 100 倍以上」的單位錯。億元資料被當成百萬元時，值 = 真值（元）÷ 1e8，要真值
+    < 100 兆元才會落到下界（1e6）之下：2026-07 M2 約 70.2 兆元（EF15M01），以年增 7% 估約 5 年後破
+    100 兆，屆時單靠本帶攔不住 M2 的億元列（M1B 約 30.5 兆元，餘裕較大）。本表另一道防線是「寫入的列
+    只來自 EF15M01」（`fetch_finmind_m1m2`，DL-f1-s40）。"""
     from shared.signal_thresholds import (
         M1B_M2_GAP_SANITY_ABS_MAX_PP,
         MONEY_SUPPLY_LEVEL_MIN,
@@ -370,12 +442,15 @@ def _m1m2_level_sanity(df: pd.DataFrame) -> tuple[bool, str]:
     _ord = df["m2"] < df["m1b"]
     _g = df["m1b_m2_gap"]
     _gap = _g.notna() & (_g.abs() > M1B_M2_GAP_SANITY_ABS_MAX_PP)
-    bad = _lv | _ord | _gap
+    _lo, _hi = _m1m2_level_band()
+    _mag = ~(df["m1b"].between(_lo, _hi) & df["m2"].between(_lo, _hi))
+    bad = _lv | _ord | _gap | _mag
     if not bad.any():
         return True, f"{len(df)} 列通過"
     return False, (f"{int(bad.sum())}/{len(df)} 列不合格（餘額≤0:{int(_lv.sum())}、"
                    f"m2<m1b:{int(_ord.sum())}、|gap|>{M1B_M2_GAP_SANITY_ABS_MAX_PP:.0f}pp:"
-                   f"{int(_gap.sum())}）→ 疑似月變動額而非餘額")
+                   f"{int(_gap.sum())}、百萬元量級帶外 [{_lo:.0e}, {_hi:.0e}]:{int(_mag.sum())}）"
+                   f"→ 疑似月變動額而非餘額、或單位不是百萬元")
 
 
 # ════════════════════════════════════════════════════════════════
@@ -467,13 +542,80 @@ def _parse_cbc_ef15m01_levels(sdmx, fatal_from: _dt.date | None = None
     return df[["date", "m1b", "m2"]], desc
 
 
+def _m1m2_ms1_candidate(data) -> tuple[pd.DataFrame | None, str]:
+    """Tier 1 ms1.json 的回應 → (DataFrame[date, m1b, m2], 說明) 或 (None, 不採用原因)。
+
+    DL-f1-s40：**結果只進 log，不進 parquet**（理由見 `fetch_finmind_m1m2`）。依序檢查：
+    ① 是 ≥ 13 列的 list；② 形狀：辨識得出 M1B、M2 與日期三欄；③ 解析後至少一列；
+    ④ 單位量級：m1b／m2 全落在 `_m1m2_level_band`（百萬元）內。
+    ②③ 的欄位辨識、日期正規化、去千分位逐字沿用原 ms1 分支（原本寫在 `fetch_finmind_m1m2` 內）。
+    ms1 沒有標題／單位 meta：④ 通過只代表「量級像百萬元」，**口徑（日平均或月底）無從驗證**。
+    """
+    if not isinstance(data, list) or len(data) < 13:
+        _n = len(data) if isinstance(data, list) else "—"
+        return None, f"回應不是 ≥ 13 列的 list（{type(data).__name__}，{_n} 列）"
+    df = pd.DataFrame(data)
+    c1 = next((c for c in df.columns
+               if "M1B" in str(c).upper() or "貨幣供給額M1B" in str(c)), None)
+    c2 = next((c for c in df.columns
+               if str(c).strip().upper() == "M2" or "貨幣供給額M2" in str(c)), None)
+    date_col = next((c for c in df.columns
+                     if str(c).strip() in ("年月", "date", "yearMonth", "Date",
+                                            "PERIOD", "TIME_PERIOD")), None)
+    if not (c1 and c2 and date_col):
+        return None, f"形狀不符：欄位對應失敗（欄位={list(df.columns)[:15]}）"
+    out = df[[date_col, c1, c2]].copy()
+    out.columns = ["date_raw", "m1b", "m2"]
+    # 日期 normalize：支援 'YYYYMmm'（CBC PXWeb）/ 'YYYY-MM' / 'YYYY/MM' / 'YYYYMM'
+    import re as _re
+
+    def _norm(s):
+        s = str(s).strip()
+        m = _re.search(r"(20\d{2})\s*M\s*(\d{1,2})", s, _re.IGNORECASE)
+        if m:
+            return _dt.date(int(m.group(1)), int(m.group(2)), 1)
+        m = _re.search(r"(20\d{2})[-/年]?(\d{1,2})", s)
+        if not m:
+            return None
+        return _dt.date(int(m.group(1)), int(m.group(2)), 1)
+    out["date"] = out["date_raw"].apply(_norm)
+    out = out.dropna(subset=["date"]).drop(columns=["date_raw"])
+    # SDMX 數字可能含 thousand separator，先去掉再轉
+    out["m1b"] = pd.to_numeric(
+        out["m1b"].astype(str).str.replace(",", ""), errors="coerce")
+    out["m2"] = pd.to_numeric(
+        out["m2"].astype(str).str.replace(",", ""), errors="coerce")
+    out = out.dropna().sort_values("date").reset_index(drop=True)
+    if out.empty:
+        return None, "日期或數值全數無法解析"
+    _lo, _hi = _m1m2_level_band()
+    _off = ~(out["m1b"].between(_lo, _hi) & out["m2"].between(_lo, _hi))
+    if _off.any():
+        _s = out.loc[_off, ["date", "m1b", "m2"]].head(3)
+        return None, (f"量級不符：{int(_off.sum())}/{len(out)} 列 m1b／m2 不在百萬元量級帶 "
+                      f"[{_lo:.0e}, {_hi:.0e}]（疑似單位不是百萬元；樣本={_s.to_dict('records')}）")
+    return out, (f"形狀與百萬元量級皆通過（{len(out)} 列，"
+                 f"{out['date'].iloc[0]:%Y-%m}～{out['date'].iloc[-1]:%Y-%m}）")
+
+
 def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str = "") -> pd.DataFrame:
     """M1B / M2 月頻（CBC 中央銀行；FinMind 無對應 dataset，表名為歷史沿用）。
 
     走 proxy_helper.fetch_url（PROXY_URL）→ CBC 擋海外 IP 必須過台灣中繼。
     輸出：date / m1b / m2 / m1b_m2_gap（M1B YoY − M2 YoY，pp）/ source / fetched_at。
-    Tier 2（EF15M01，DL-f1-r1 起）的 m1b／m2 = 日平均餘額，單位新台幣百萬元
+    m1b／m2 = EF15M01 日平均餘額，單位新台幣百萬元
     （`shared.signal_thresholds.MONEY_SUPPLY_CACHE_UNIT_LABEL`）。
+
+    DL-f1-s40（2026-09-28）：寫出的列**只來自 EF15M01**，且每次都請求它。
+    原本 Tier 1 ms1.json 只要回 ≥ 13 列就直接寫出、不再請求 EF15M01 —— ms1 分支不驗單位量級，也沒有
+    標題／單位 meta 可驗口徑；它一旦復活，切換就自動、靜默發生：單位不同 → 匯出端量級帶擋下、整張
+    `money_supply` 被 DROP；單位相同但口徑不同（月底 vs 日平均，約差 3%）→ 靜默混口徑；ms1 欄位形狀
+    一變則直接回空表、不退到 EF15M01。現行 parquet 的列全出自 EF15M01（2026-09-28 main 237 列），
+    不同來源／口徑的列不得疊進同一份 parquet ⇒ ms1 **不寫出**。它仍照舊先請求（`tw_macro.CBC_MS1_URLS`），
+    由 `_m1m2_ms1_candidate` 做形狀與量級檢查，結果只進 log（它若復活，log 看得出它長什麼樣）；
+    ms1 失敗、形狀不符、量級不符、或通過檢查 → 一律接著請求 EF15M01（不再回空表）。
+    EF15M01 失敗 → 回空表（`update_one` 保留既有檔、記 last_error），不以 ms1 替代。
+    寫檔前守門 `_m1m2_level_sanity` 另含百萬元量級帶（任何來源都要過）。
 
     `token`：不使用（CBC 不需要 FinMind token）。DL-f1-s9 起 `FETCHERS` 標 needs_token=False，
     `update_one` 以 `fn(start, end)` 兩參數呼叫 → 本參數改為選填（預設空字串）；
@@ -496,6 +638,7 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str = "") -> pd.Da
         return pd.DataFrame()
     # ── Tier 1: ms1.json（共用 tw_macro.CBC_MS1_URLS SSOT + fetch_cbc_ms1_rows kernel）──
     # v18.240：URL 清單從 tw_macro import，dead Attachment URL（v18.231 確認 404）已移除
+    # DL-f1-s40：只檢查、只進 log，**不寫出**（理由見 docstring）；不論結果如何都接著請求 EF15M01。
     data = None
     for url in CBC_MS1_URLS:
         try:
@@ -506,71 +649,44 @@ def fetch_finmind_m1m2(start: _dt.date, end: _dt.date, token: str = "") -> pd.Da
                 break
         except Exception as e:
             print(f"[finmind_m1m2/ms1] {url[-40:]} ❌ {type(e).__name__}: {e}")
+    if data is not None:
+        try:
+            _ms1, _ms1_why = _m1m2_ms1_candidate(data)
+        except Exception as e:  # noqa: BLE001 — 外部回應解析不了不得擋住 EF15M01（DL-f1-s40）；原因照印
+            _ms1, _ms1_why = None, f"解析例外 {type(e).__name__}: {e}"
+        if _ms1 is None:
+            print(f"[finmind_m1m2/ms1] ❌ 不採用：{_ms1_why} → 改取 {_EF15_FILE}")
+        else:
+            print(f"[finmind_m1m2/ms1] ⚠️ {_ms1_why}；仍不寫出 —— 本表的列只收 {_EF15_FILE}"
+                  "（日平均餘額、百萬元），ms1 沒有標題／單位 meta、口徑無從驗證，"
+                  f"不同來源／口徑不得疊進同一份 parquet（DL-f1-s40）→ 改取 {_EF15_FILE}")
 
-    # ── Tier 2: CBC PXWeb EF15M01（貨幣總計數-日平均數；DL-f1-r1）──
+    # ── Tier 2: CBC PXWeb EF15M01（貨幣總計數-日平均數；DL-f1-r1；DL-f1-s40 起每次都請求）──
     # **只請求一次**，M1B／M2 依標籤成對取「原始值」（= 餘額），並以表內官方年增率對帳。
     # EF19M01／EF21M01 是變動因素分析表、沒有餘額欄（run 36408641177 實測），不再請求。
     ef15, ef15_desc = None, ""
-    if not isinstance(data, list) or len(data) < 13:
-        r = _fu_cbc(CBC_EF15M01_URL, params={"FileName": _EF15_FILE}, timeout=20, attempts=2)
-        if r is None or r.status_code != 200:
-            print(f"[finmind_m1m2/{_EF15_FILE}] ❌ 無回應或非 200"
-                  f"（status={getattr(r, 'status_code', None)}）")
-        else:
-            try:
-                sdmx = r.json()
-            except ValueError as e:
-                print(f"[finmind_m1m2/{_EF15_FILE}] ❌ JSON 解析失敗 {type(e).__name__}: {e}"
-                      f" body={r.text[:300]}")
-            else:
-                # 對帳的致命範圍 = 寫入窗口 ＋ gap 的 t−12 基期（更早的列只警示，
-                # 見 `src/data/macro/cbc_ef15m01.py` 模組 docstring）
-                ef15, ef15_desc = _parse_cbc_ef15m01_levels(
-                    sdmx, fatal_from=_ef15_fatal_from(start))
-
-    if ef15 is not None:
-        out = ef15[["date", "m1b", "m2"]].copy()
-        _source = f"CBC:PXWeb:{_EF15_FILE}:daily_avg_level[{ef15_desc}]"
+    r = _fu_cbc(CBC_EF15M01_URL, params={"FileName": _EF15_FILE}, timeout=20, attempts=2)
+    if r is None or r.status_code != 200:
+        print(f"[finmind_m1m2/{_EF15_FILE}] ❌ 無回應或非 200"
+              f"（status={getattr(r, 'status_code', None)}）")
     else:
-        if not isinstance(data, list) or len(data) < 13:
-            print("[finmind_m1m2] CBC 全來源失敗")
-            return pd.DataFrame()
-        print(f"[finmind_m1m2] 抓到欄位：{list(pd.DataFrame(data).columns)[:15]}")
+        try:
+            sdmx = r.json()
+        except ValueError as e:
+            print(f"[finmind_m1m2/{_EF15_FILE}] ❌ JSON 解析失敗 {type(e).__name__}: {e}"
+                  f" body={r.text[:300]}")
+        else:
+            # 對帳的致命範圍 = 寫入窗口 ＋ gap 的 t−12 基期（更早的列只警示，
+            # 見 `src/data/macro/cbc_ef15m01.py` 模組 docstring）
+            ef15, ef15_desc = _parse_cbc_ef15m01_levels(
+                sdmx, fatal_from=_ef15_fatal_from(start))
 
-        df = pd.DataFrame(data)
-        # 舊 ms1.json 路徑（已不再可用，留邏輯防禦）
-        c1 = next((c for c in df.columns
-                   if "M1B" in str(c).upper() or "貨幣供給額M1B" in str(c)), None)
-        c2 = next((c for c in df.columns
-                   if str(c).strip().upper() == "M2" or "貨幣供給額M2" in str(c)), None)
-        date_col = next((c for c in df.columns
-                         if str(c).strip() in ("年月", "date", "yearMonth", "Date",
-                                                "PERIOD", "TIME_PERIOD")), None)
-        if not (c1 and c2 and date_col):
-            print(f"[finmind_m1m2] CBC 欄位對應失敗：{list(df.columns)[:10]}")
-            return pd.DataFrame()
-        out = df[[date_col, c1, c2]].copy()
-        out.columns = ["date_raw", "m1b", "m2"]
-        # 日期 normalize：支援 'YYYYMmm'（CBC PXWeb）/ 'YYYY-MM' / 'YYYY/MM' / 'YYYYMM'
-        import re as _re
-        def _norm(s):
-            s = str(s).strip()
-            m = _re.search(r"(20\d{2})\s*M\s*(\d{1,2})", s, _re.IGNORECASE)
-            if m:
-                return _dt.date(int(m.group(1)), int(m.group(2)), 1)
-            m = _re.search(r"(20\d{2})[-/年]?(\d{1,2})", s)
-            if not m:
-                return None
-            return _dt.date(int(m.group(1)), int(m.group(2)), 1)
-        out["date"] = out["date_raw"].apply(_norm)
-        out = out.dropna(subset=["date"]).drop(columns=["date_raw"])
-        # SDMX 數字可能含 thousand separator，先去掉再轉
-        out["m1b"] = pd.to_numeric(
-            out["m1b"].astype(str).str.replace(",", ""), errors="coerce")
-        out["m2"] = pd.to_numeric(
-            out["m2"].astype(str).str.replace(",", ""), errors="coerce")
-        out = out.dropna().sort_values("date").reset_index(drop=True)
-        _source = "CBC:ms1.json"
+    if ef15 is None:
+        print(f"[finmind_m1m2] ❌ {_EF15_FILE} 無可用資料 → 本輪不寫出"
+              "（ms1 不作替代來源，DL-f1-s40）")
+        return pd.DataFrame()
+    out = ef15[["date", "m1b", "m2"]].copy()
+    _source = f"CBC:PXWeb:{_EF15_FILE}:daily_avg_level[{ef15_desc}]"
     # M1B YoY − M2 YoY（黃金交叉指標）。算式不變；DL-f1-r1 起先補齊日曆月再 shift(12)，
     # t−12 一定是「同月去年」—— 月份被剔除（例：EF15M01 餘額為 "-"）時不會錯配成 t−13；
     # 月份連續時與原本的逐列 shift(12) 逐位相同。期間重複則無從對齊 → 拒寫（§1）。
@@ -786,6 +902,21 @@ def update_one(name: str, today: _dt.date, bootstrap: bool, years: int,
     if needs_token and not token:
         meta["last_error"] = "FINMIND_TOKEN 未設定"
         print(f"[{name}] ⏭ 跳過：{meta['last_error']}")
+        # DL-f1-s42：跳過 ≠ 表是空的。row_count／last_updated 比照「抓取結果為空，保留現有資料」分支，
+        # 描述磁碟上現有的 parquet（原本停在初始值 0／null —— 此時 parquet 其實有資料）。
+        # last_error 照舊記跳過原因：讀取端（macro_cache_reader.compute_cache_staleness →
+        # calibrate_health_weights.check_inputs_fresh）只拿 last_error 判定、判定結果不變；
+        # row_count／last_updated 只用於顯示（analyze_ring1_gate、校準提案的 as-of 表）。
+        # 既有檔守門不過 → 比照重建失敗分支：不替已知不合格的檔背書 last_updated，last_error 標明。
+        _ex = _load_existing(name)
+        if _ex is not None and not _ex.empty:
+            meta["row_count"] = len(_ex)
+            _gate = _EXISTING_SANITY_GATES.get(name)
+            if _gate is not None and not _gate(_ex)[0]:
+                meta["last_error"] += "；既有檔 sanity 不過,待重建"
+            else:
+                _ld = _last_date(_ex)
+                meta["last_updated"] = None if _ld is None else _ld.isoformat()
         return meta
 
     existing = None if bootstrap else _load_existing(name)
