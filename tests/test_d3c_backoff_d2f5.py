@@ -33,7 +33,10 @@ origin/main `efca639` 原文的同一份模組）逐項對照。
 📌 批 D3e（2026-09-28）同步改（本檔其餘測試一字未動；各改動處皆標「D3e」）：上文「固定冷卻」自 D2-f25 起
 改為遞增（起點 `FAIL_COOLDOWN_SEC`、上限 `TTL_1HOUR`）；「結果為空 **且** 有一邊確定失敗」自 D2-f23 起拿掉
 「結果為空」（半邊表也不入快取）；單股 `fetch_monthly_revenue` 自 D2-f22 起也拆層。修前模型（`_prefix_mr`／
-`_prefix_svc`）照舊是 `efca639` 原文 —— 因檔案結構改變而改用逐字常數重建。D3e 本身的測試在
+`_prefix_svc`）因檔案結構改變而改用逐字常數重建，程式行為照舊等同 `efca639`：去掉 docstring 後與 `efca639` 的 AST
+逐節點比對（2026-09-29，QA N7 更正），只多出修前程式用不到的節點 —— L1：`import sys` 與 `TTL_1HOUR` 的 import
+（D3e 新增）、`shared.fail_cooldown` 三個名稱的 import（D2-f5）；L3：`CachedFailure` 的 import、
+`_CandidatePoolFetchFailed`、`_batch_revenue_with_status`（D2-f5）；其餘節點相同。D3e 本身的測試在
 `tests/test_d3e_mrev_fail_cache.py`。
 """
 from __future__ import annotations

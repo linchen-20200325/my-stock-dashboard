@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import sys
 
 import pandas as pd
 
@@ -383,7 +384,20 @@ def _fetch_monthly_revenue_cached(stock_id: str, months: int = 18) -> pd.DataFra
 #: 連續失敗加倍、上限 `TTL_1HOUR` —— 這裡重打一次 ＝ FinMind 1 次 ＋ OpenAPI 上市／上櫃各 1 次全市場快照,
 #: 與全市場那支是同一組上游、同一組逾時(上游只收連線、不回應時一輪可卡數分鐘,D2-f25)。
 #: ⚠️ 本表只擋「同一檔」重打;檔與檔之間不共用 OpenAPI 快照、也不共用冷卻(另案 D2-f29,本批不處理)。
-_single_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)
+#:
+#: 筆數上限(批 D3e QA 必修,2026-09-29):**對齊成功快取 `_fetch_monthly_revenue_cached` 的容量** —— 那一層的
+#: `st.cache_data` 沒設 `max_entries`(不限筆數、只靠 TTL 過期),修前失敗的空表也存在那裡 6 小時、不限筆數。
+#: 所以本表同樣不限筆數,只靠冷卻期滿清掉(`FailCooldown` 每次存取都先清過期紀錄)⇒ 冷卻期內的失敗紀錄不會被
+#: 逐出、不會因為「同時失敗的鍵太多」而每輪重打(§1.A-3(b))。若沿用預設 `FAIL_COOLDOWN_MAX_ENTRIES`(64):
+#: 冷卻期內失敗的不同鍵超過 64 時會逐出最舊紀錄,被逐出的鍵下一次呼叫就重打上游。
+#: 為何不取「單一使用者動作最多會產生的鍵數」(本組 grep 所見,⚠️ 未經第二組驗證):缺貨掃描 ① 存活池一次最多
+#: `SHORTAGE_DEEP_SCAN_MAX`(50)鍵、v1 組合頁最多 10 鍵(`parse_stocks(...)[:10]`)、個股頁 1 鍵,同一次 rerun
+#: 合計也不到 64 —— 會超過的是**跨 session 的累積**:本表整個行程共用、紀錄最長留 `TTL_1HOUR`,冷卻期內不同
+#: 使用者查的不同股票一路累積,沒有哪個單一動作的數字框得住。記憶體:本表每筆 payload 恆為空表(實測約 1 KB/筆),
+#: 只留到冷卻期滿(最長 `TTL_1HOUR`);修前同一批失敗則是存在不限筆數的 `st.cache_data` 裡留 6 小時。
+#: `sys.maxsize` 在這裡的意思就是「不設筆數上限」(`FailCooldown` 的 `max_entries` 只收整數)。
+_SINGLE_FAIL_COOLDOWN_MAX_ENTRIES: int = sys.maxsize
+_single_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR, max_entries=_SINGLE_FAIL_COOLDOWN_MAX_ENTRIES)
 
 
 def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:

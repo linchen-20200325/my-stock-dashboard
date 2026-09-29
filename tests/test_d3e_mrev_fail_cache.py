@@ -23,7 +23,8 @@
     突變「放寬成接 `CachedFailure`」必須轉紅。L1 兩處同型的 `except` 一併守住。
 
 「修前」＝ origin/main `b2dafba`：把本次改動的區段換回 b2dafba 原文（逐字常數）的同一份模組（修前模型，
-`_prefix_mr`／`_prefix_svc`；去掉 docstring 後與 b2dafba 的 AST 逐節點相同，唯多一個沒用到的 `TTL_1HOUR` import）。
+`_prefix_mr`／`_prefix_svc`；去掉 docstring 後與 b2dafba 的 AST 逐節點比對：L3 完全相同；L1 只差 import ——
+多出修前程式用不到的 `import sys` 與 `TTL_1HOUR`，其餘節點相同）。
 D2-f21／f22／f23／f25 都先以修前模型跑同一個共用檢查、證明修前會錯（`TestPrefixReproducesBug`），再以現行跑同一個
 檢查、證明修後正確；D2-f26 只補測試，以突變（`TestMutations.test_m14_*`）證明新測試抓得到。
 不觸網：一律換掉 `finmind_get`／`proxy_helper.fetch_url`／存活池／逐檔季報／涵蓋率。
@@ -182,6 +183,11 @@ _TWSE_ROWS = [{"公司代號": "2330", "公司名稱": "台積電", "資料年�
 _TPEX_ROWS = [{"公司代號": "6488", "公司名稱": "環球晶", "資料年月": "11508", "營業收入-當月營收": "1,000"}]
 #: 獨立寫出的「千元 × 1000 ＝ 元」期望值。
 _OPENAPI_YUAN = {"2330": 263_714_000.0 * 1000, "2317": 500_000.0 * 1000, "6488": 1_000.0 * 1000}
+#: QA N6（2026-09-29）：「多月份」上櫃快照 —— 6488 連續 19 個月（民國 114/02～115/08）、逐月成長（千元）。
+#: production 的 OpenAPI 每檔只有最新 1 個月；這份是回歸守衛用：讓半邊表算得出候選池、排行不是空的，
+#: 半邊失敗那一份的 rows 才看得出有沒有被原樣回傳（否則「rows 換成 []」是等價突變）。
+_TPEX_MULTI_ROWS = [{"公司代號": "6488", "公司名稱": "環球晶", "資料年月": f"{114 + (1 + i) // 12}{(1 + i) % 12 + 1:02d}",
+                     "營業收入-當月營收": str(1000 + 80 * i)} for i in range(19)]
 
 
 class _Resp:
@@ -225,7 +231,8 @@ class _World:
     `fm_single`：empty（回空表 —— 失敗或真的沒有，這一層分不出來）／ok。
     `fm_batch`：empty／ok（1 檔 1001）／("multi", n)／一張 DataFrame（原樣回傳）。
     `twse`／`tpex`：ok／none（`fetch_url` 回 None）／non200／json_err（回應不是 JSON）／raise（抓取拋例外）／
-    empty200（200 但 0 筆）。`delay`：每打一次 OpenAPI 就把假時鐘往前推幾秒（D2-f25：上游只收連線、不回應）。
+    empty200（200 但 0 筆）／ok_multi（只給上櫃用：6488 連續 19 個月，見 `_TPEX_MULTI_ROWS`）。
+    `delay`：每打一次 OpenAPI 就把假時鐘往前推幾秒（D2-f25：上游只收連線、不回應）。
     """
 
     def __init__(self, clock: dict):
@@ -276,6 +283,8 @@ class _World:
             raise ConnectionError("proxy down")
         if mode == "empty200":
             return _Resp([])
+        if mode == "ok_multi" and side == "tpex":
+            return _Resp([dict(r) for r in _TPEX_MULTI_ROWS])
         raise AssertionError(mode)
 
     def upstream(self) -> int:
@@ -480,6 +489,22 @@ def _check_single_success_bumps_generation(mod, w: _World, clock: dict) -> None:
     _assert_single_openapi_row(mod.fetch_monthly_revenue("2330"), "2330")
 
 
+def _check_single_many_failing_keys_back_off(mod, w: _World, clock: dict, n: int) -> None:
+    """QA 必修（2026-09-29）：同一冷卻期內 n 個不同的鍵都失敗 → 第二、三輪 0 次上游。
+    退避表若有筆數上限且 n 超過它，最舊的紀錄被逐出 → 被逐出的鍵下一次就重打（逐出後再失敗又擠掉下一個，
+    整輪都重打 ＝ 轟炸上游，違反 §1.A-3(b)）。修前（失敗凍在 6 小時快取、不限筆數）不會有這個問題。"""
+    sids = [str(10000 + i) for i in range(n)]
+    for sid in sids:
+        mod.fetch_monthly_revenue(sid)
+    n1 = dict(w.calls)
+    assert n1["twse"] == n and n1["tpex"] == n, "前提：第一輪每一個鍵都打過上游、都失敗"
+    for rnd in (2, 3):
+        clock["now"] += 1                                    # 仍在冷卻期內
+        outs = [mod.fetch_monthly_revenue(sid) for sid in sids]
+        assert w.calls == n1, f"第 {rnd} 輪：{n} 個失敗鍵都還在冷卻 → 0 次上游"
+        assert all(df.empty and df.attrs == {} for df in outs), "冷卻期內回的是同一份失敗空表"
+
+
 # ── D2-f23 半邊失敗（L1）────────────────────────────────────────
 def _check_batch_partial_not_cached_then_recovers(mod, w: _World, clock: dict, *, twse: str = "none",
                                                   tpex: str = "ok") -> None:
@@ -534,6 +559,23 @@ def _check_l3_partial_not_cached_then_recovers(svc_mod, w: _World, side: dict, c
     clock["now"] += 100 * FAIL_COOLDOWN_SEC
     assert svc_mod.run_shortage_scan() == (rows2, meta2)
     assert w.calls == n2 and side == s2, "恢復後的成功照舊入快取"
+
+
+def _check_l3_multi_month_partial_rows_preserved(svc_mod, w: _World, side: dict, clock: dict) -> tuple:
+    """QA N6（2026-09-29）回歸守衛：半邊表若有多個月份（算得出候選池），L3 半邊失敗那一份的排行必須**原樣**回傳
+    （不是空排行），且冷卻期內每一次都一樣、都不入快取。"""
+    w.twse, w.tpex = "none", "ok_multi"                      # 上市確定失敗、上櫃給 6488 連續 19 個月
+    first = svc_mod.run_shortage_scan()
+    rows, meta = first
+    assert [r["代碼"] for r in rows] == ["6488"] and meta["candidates"] == 1 and meta["deep_scanned"] == 1, \
+        "半邊表算出的排行原樣回傳（不是空排行）"
+    assert meta["pool_source"] == "全市場月營收動能候選池（sponsor tier）" and meta["note"] == ""
+    n1 = dict(w.calls)
+    within = [svc_mod.run_shortage_scan() for _ in range(2)]
+    assert w.calls == n1, "L1 冷卻期內 0 次上游呼叫"
+    assert side["pool"] == 3 and side["qtr"] == 3, "L3 沒有快取這一份（每次都重算，含逐檔深掃）"
+    assert all(_sans_time(r) == _sans_time(first) for r in within), "冷卻期內回同一份排行"
+    return first
 
 
 # ── D2-f21 FinMind 全市場批次的 schema 樣本 ──────────────────────
@@ -765,6 +807,23 @@ class TestD2f22SingleFailureNotCached:
         fc_clock["now"] += FAIL_COOLDOWN_SEC
         _assert_single_openapi_row(MR.fetch_monthly_revenue("2330"), "2330")
 
+    def test_capacity_aligned_with_success_cache(self):
+        """QA 必修（2026-09-29）：單股退避表的筆數上限對齊成功快取 —— 快取層 `st.cache_data` 沒設 `max_entries`
+        （不限筆數、只靠 TTL 過期），退避表同樣不限筆數、只靠冷卻期滿清掉（不再沿用預設 64）。"""
+        assert MR._SINGLE_FAIL_COOLDOWN_MAX_ENTRIES == sys.maxsize
+        assert MR._single_fail_cooldown.max_entries == MR._SINGLE_FAIL_COOLDOWN_MAX_ENTRIES
+        assert MR._single_fail_cooldown.max_entries > FC.FAIL_COOLDOWN_MAX_ENTRIES
+        tree = ast.parse(pathlib.Path(MR.__file__).read_text(encoding="utf-8"))
+        fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_fetch_monthly_revenue_cached")
+        (dec,) = fn.decorator_list
+        assert "max_entries" not in ast.unparse(dec), "前提：成功快取不限筆數（日後若加上限，退避表要跟著改）"
+
+    @pytest.mark.parametrize("n", [FC.FAIL_COOLDOWN_MAX_ENTRIES + 1, 500, 2000],
+                             ids=["65_default_cap_plus_1", "500", "2000_about_whole_market"])
+    def test_many_failing_keys_all_back_off(self, world, fc_clock, n):
+        """65 ＝ 預設上限 64 ＋ 1；2000 ≈ 全市場（交接本 export_db log：上市 1,083 ＋ 上櫃 888 檔）。"""
+        _check_single_many_failing_keys_back_off(MR, world, fc_clock, n)
+
     def test_escalating_cooldown(self, world, fc_clock):
         assert MR._single_fail_cooldown.seconds == FAIL_COOLDOWN_SEC
         assert MR._single_fail_cooldown.max_seconds == TTL_1HOUR
@@ -978,6 +1037,31 @@ class TestD2f23ScanPartialNotCached:
         assert SVC.run_shortage_scan() == first
         assert world.calls == n1 and side == s1
 
+    def test_multi_month_partial_rows_preserved(self, sv, world, fc_clock):
+        """QA N6 回歸守衛：半邊表有多個月份時，半邊失敗那一份的排行原樣回傳、不入快取。"""
+        _plan, side = sv
+        _check_l3_multi_month_partial_rows_preserved(SVC, world, side, fc_clock)
+
+    def test_multi_month_partial_identical_to_prefix(self, sv, world, monkeypatch, frozen_now):
+        """同上情境：現行（第一次＋冷卻期內）與修前模型的第一次逐字相同（排行非空）。"""
+        world.twse, world.tpex = "none", "ok_multi"
+        now = [SVC.run_shortage_scan() for _ in range(2)]
+        pre_mr, pre_svc = _prefix_mr("scan_multi"), _prefix_svc("scan_multi")
+        world2 = _World(world.clock)
+        world2.twse, world2.tpex = "none", "ok_multi"
+        monkeypatch.setattr(PH, "fetch_url", world2.fetch_url)
+        _install_mr(pre_mr, monkeypatch, world2)
+        _install_svc(pre_svc, monkeypatch, {"pool": [], "qtr": "strong"}, {"pool": 0, "qtr": 0, "mrev": 0})
+        monkeypatch.setattr(pre_svc, "fetch_batch_monthly_revenue", pre_mr.fetch_batch_monthly_revenue)
+        try:
+            want = pre_svc.run_shortage_scan()
+            assert [r["代碼"] for r in want[0]] == ["6488"]
+            for got in now:
+                assert repr(got) == repr(want)
+        finally:
+            pre_svc._scan_cached.clear()
+            pre_mr.fetch_batch_monthly_revenue.clear()
+
     def test_refresh_during_partial_backoff_refetches(self, sv, world):
         world.twse, world.tpex = "none", "ok"
         SVC.run_shortage_scan()
@@ -1060,7 +1144,8 @@ class TestD2f25BatchEscalatingCooldown:
         tree = ast.parse(pathlib.Path(MR.__file__).read_text(encoding="utf-8"))
         calls = {t.id: ast.unparse(n.value) for n in tree.body if isinstance(n, ast.Assign)
                  for t in n.targets if isinstance(t, ast.Name) and t.id.endswith("_fail_cooldown")}
-        assert calls == {"_single_fail_cooldown": "_FailCooldown(max_seconds=TTL_1HOUR)",
+        assert calls == {"_single_fail_cooldown":
+                         "_FailCooldown(max_seconds=TTL_1HOUR, max_entries=_SINGLE_FAIL_COOLDOWN_MAX_ENTRIES)",
                          "_batch_fail_cooldown": "_FailCooldown(max_seconds=TTL_1HOUR)"}, \
             "沿用既有常數（FAIL_COOLDOWN_SEC 為預設起點、TTL_1HOUR 為上限），不新增數字"
 
@@ -1411,11 +1496,24 @@ class TestMutations:
             m.fetch_monthly_revenue.clear()
 
     def test_m8_single_fixed_cooldown(self, world, fc_clock, monkeypatch):
-        m = _mr_mutant("m8", monkeypatch, world, ("_single_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)",
-                                                  "_single_fail_cooldown = _FailCooldown()"))
+        m = _mr_mutant("m8", monkeypatch, world, (
+            "_FailCooldown(max_seconds=TTL_1HOUR, max_entries=_SINGLE_FAIL_COOLDOWN_MAX_ENTRIES)",
+            "_FailCooldown(max_entries=_SINGLE_FAIL_COOLDOWN_MAX_ENTRIES)"))
         try:
             with pytest.raises(AssertionError, match="單股冷卻與全市場同設定"):
                 _check_single_escalating_schedule(m, world, fc_clock)
+        finally:
+            m.fetch_monthly_revenue.clear()
+
+    def test_m18_single_capacity_back_to_default_64(self, world, fc_clock, monkeypatch):
+        """QA 必修：退避表容量改回預設 64 → 65 個失敗鍵時第二輪整輪重打（轟炸上游）。"""
+        m = _mr_mutant("m18", monkeypatch, world, (
+            "_FailCooldown(max_seconds=TTL_1HOUR, max_entries=_SINGLE_FAIL_COOLDOWN_MAX_ENTRIES)",
+            "_FailCooldown(max_seconds=TTL_1HOUR)"))
+        try:
+            with pytest.raises(AssertionError, match="第 2 輪"):
+                _check_single_many_failing_keys_back_off(m, world, fc_clock, FC.FAIL_COOLDOWN_MAX_ENTRIES + 1)
+            assert world.calls["twse"] == 2 * (FC.FAIL_COOLDOWN_MAX_ENTRIES + 1), "突變體：第二輪每一個鍵都重打"
         finally:
             m.fetch_monthly_revenue.clear()
 
@@ -1454,6 +1552,19 @@ class TestMutations:
                                                    "            if True:   # D2-f21"))
         with pytest.raises(AssertionError, match="樣本取首檔前要先擋空表"):
             _check_all_rows_dropped_keeps_columns(m, world)
+
+    def test_m19_scan_partial_payload_rows_dropped(self, world, fc_clock, monkeypatch):
+        """QA N6（Q22）：L3 半邊失敗那一份的 rows 被換成 [] —— 單月快照下是等價突變（候選池本來就 0 檔），
+        多月份半邊表下必須轉紅。"""
+        m = _mutant(SVC, ("        raise _CandidatePoolFetchFailed(_result)",
+                          "        raise _CandidatePoolFetchFailed(([], _result[1]))"), tag="m19")
+        side = {"pool": 0, "qtr": 0, "mrev": 0}
+        _install_svc(m, monkeypatch, {"pool": [], "qtr": "strong"}, side)
+        try:
+            with pytest.raises(AssertionError, match="原樣回傳"):
+                _check_l3_multi_month_partial_rows_preserved(m, world, side, fc_clock)
+        finally:
+            m._scan_cached.clear()
 
     # ── D2-f25 ──
     def test_m12_batch_fixed_cooldown(self, world, fc_clock, monkeypatch):
