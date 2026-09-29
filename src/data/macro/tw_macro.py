@@ -50,8 +50,15 @@ __version__ = "1.1.0"
 
 # ── v1.1 輕量 TTL cache（純 stdlib，不依賴 streamlit）──────────
 # 雙 repo 共用設計約束：本模組嚴禁 import streamlit，故自帶 cache decorator。
-def _ttl_cache(ttl_sec: int, maxsize: int = 32):
-    """TTL+LRU cache。cache key=(args, sorted kwargs)；unhashable 引數 bypass。"""
+def _ttl_cache(ttl_sec: int, maxsize: int = 32, cache_if=None):
+    """TTL+LRU cache。cache key=(args, sorted kwargs)；unhashable 引數 bypass。
+
+    D2-f13(2026-09-29,§1.A-3(a)「只快取成功結果」):`cache_if` 為選用的 `callable(result) -> bool`,
+    由被裝飾的函式自己給判定式(寫法同 `shared.fetch_monitor.monitored(success_check=...)`)。
+    給了且這次結果判為 False → 結果**照常回傳、不入快取**(下次同參數呼叫重算)。
+    預設 None ＝ 一律入快取(修前行為;沒給 `cache_if` 的函式行為不變)。
+    ⚠️ 不入快取 ≠ 可以轟炸上游:給 `cache_if` 的函式須確認底層抓取已有退避(見各函式註解)。
+    """
     def decorator(fn):
         _cache: dict = {}
 
@@ -67,6 +74,8 @@ def _ttl_cache(ttl_sec: int, maxsize: int = 32):
             if hit and (now - hit[0]) < ttl_sec:
                 return hit[1]
             result = fn(*args, **kwargs)
+            if cache_if is not None and not cache_if(result):
+                return result   # D2-f13:判為失敗／不完整 → 不入快取(回傳內容不變)
             _cache[key] = (now, result)
             if len(_cache) > maxsize:
                 oldest = min(_cache.items(), key=lambda kv: kv[1][0])[0]
@@ -1308,7 +1317,12 @@ def fetch_cbc_discount_rate(months_back: int = 24, fred_api_key: str = "") -> Op
     return out
 
 
-@_ttl_cache(ttl_sec=TTL_1HOUR, maxsize=4)
+def _usdtwd_ok(result) -> bool:
+    """D2-f13 `fetch_usdtwd_close` 的入快取判準:回 None(抓不到／sanity 過濾後為空)＝ 失敗 → 不入快取。"""
+    return result is not None
+
+
+@_ttl_cache(ttl_sec=TTL_1HOUR, maxsize=4, cache_if=_usdtwd_ok)
 def fetch_usdtwd_close(days_back: int = 180) -> Optional[pd.DataFrame]:
     """抓 USD/TWD 日匯率收盤序列。
 
@@ -1324,6 +1338,12 @@ def fetch_usdtwd_close(days_back: int = 180) -> Optional[pd.DataFrame]:
     -----
     `daily_checklist.py` 既有用 yfinance 直抓 TWD=X,此 fetcher 走 macro_core 的
     proxy 化 Chart API path,作 macro 模組統一入口。caller 兩種皆可用。
+
+    D2-f13(2026-09-29,§1.A-3(a)):回 None 時**不入** 1 小時快取(修前連 None 一起凍 1 小時,
+    Yahoo 恢復後同參數仍回 None、上游 0 次呼叫);有資料的結果照舊快取 1 小時、回傳不變。
+    退避(§1.A-3(b))由底層 `macro_core._fetch_yf_close_base` 承擔:抓取失敗三個出口記
+    `FAIL_COOLDOWN_SEC` 秒退避;sanity 過濾後為空時,底層那份序列在它自己的 1 小時成功快取裡
+    —— 兩種情形重算都不會重打上游。
     """
     # lazy import 避免 import loop
     from src.data.macro import fetch_yf_close  # noqa: PLC0415
@@ -1379,7 +1399,17 @@ def _china_fred_specs():
     ]
 
 
-@_ttl_cache(ttl_sec=TTL_30MIN, maxsize=4)  # OECD 月頻發布
+def _china_macro_complete(result: dict) -> bool:
+    """D2-f13 `fetch_china_macro` 的入快取判準:每條序列都有資料才算成功。
+
+    任一條為空(`fetch_fred` 失敗出口／退避中回的空表、執行緒例外補的空表)＝ 結果不完整 →
+    不入 30 分鐘快取、回傳內容照舊(同 D2-f23「半邊失敗不入快取」的判準)。
+    api_key 空時回的 `{}` 沒有任何序列 → 照舊入快取(那是設定狀態、不是抓取失敗;修前同)。
+    """
+    return all(df is not None and not df.empty for df in result.values())
+
+
+@_ttl_cache(ttl_sec=TTL_30MIN, maxsize=4, cache_if=_china_macro_complete)  # OECD 月頻發布
 def fetch_china_macro(fred_api_key: str = "") -> dict:
     """並行抓 5 條 China macro FRED series。
 
@@ -1391,6 +1421,12 @@ def fetch_china_macro(fred_api_key: str = "") -> dict:
 
     §1 fail loud:單條失敗回空 DataFrame + caller 自己判 .empty,
     不偽造數值。
+
+    D2-f13(2026-09-29,§1.A-3(a)):任一條序列為空 → 這一份**不入** 30 分鐘快取(修前整包照存:
+    FRED 恢復後 30 分鐘內仍 0/5、上游 0 次請求);5 條全有資料才照舊快取、回傳不變。
+    退避(§1.A-3(b))由底層 `macro_core.fetch_fred` 承擔:有資料(及 HTTP 200 但全為 '.')的序列在它的
+    30 分鐘成功快取、三個失敗出口在它的 `FAIL_COOLDOWN_SEC` 秒退避;HTTP 200 之後才在 fetch_fred 內
+    拋例外的那條不在退避裡,由 `fetch_url` 的 300 秒 URL 快取擋住。重算都不會每次重打上游。
     """
     if not fred_api_key:
         print('[tw_macro/china_macro] fred_api_key 空,跳過')

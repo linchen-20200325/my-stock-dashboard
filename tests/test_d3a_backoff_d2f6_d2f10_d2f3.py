@@ -992,24 +992,29 @@ class TestRandomizedModel:
 # ══════════════════════════════════════════════════════════════════
 # 突變：把修復改回修前 → 本檔所擋的失效確實出現
 # ══════════════════════════════════════════════════════════════════
+#: 批 D3g（2026-09-29，D2-f14）起，五個退避寫入改為「與既有紀錄取 max」—— 突變點只跟著換掉寫入那一行的字面，
+#: 突變內容不變（仍是「拔掉該出口的退避寫入」）。
+_FRED_FAIL_WRITE = "            _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f14:與既有紀錄取 max\n"
+_OHLCV_FAIL_WRITE = ("                _YF_OHLCV_FAIL_CACHE[key] = max(now, _YF_OHLCV_FAIL_CACHE.get(key, now))"
+                     "   # D2-f14:取 max\n")
 _FRED_NONE_WRITE = ("同一把鎖、同一個鍵、同一個時點(本次呼叫的 now);不入成功快取;回傳同修前。\n"
                     "        with _FRED_CACHE_LOCK:\n"
-                    "            _FRED_FAIL_CACHE[key] = now\n")
+                    + _FRED_FAIL_WRITE)
 _FRED_PARSE_WRITE = ("        with _FRED_CACHE_LOCK:   # D2-f6:解析失敗同樣記退避(寫法同上)\n"
-                     "            _FRED_FAIL_CACHE[key] = now\n")
+                     + _FRED_FAIL_WRITE)
 _FRED_OBS_WRITE = ("不必每次 rerun 都再走一次 fetch_url 與解析。回傳同修前。\n"
                    "        with _FRED_CACHE_LOCK:\n"
-                   "            _FRED_FAIL_CACHE[key] = now\n")
+                   + _FRED_FAIL_WRITE)
 _FRED_GATE = ("    if _failed_at is not None and (now - _failed_at) < _FAIL_COOLDOWN_SEC:\n"
               "        # D2-f6:冷卻期內")
 _OHLCV_NONE_WRITE = ("# 時點＝本次呼叫的 now(同 D2-f2);期間有人成功過(世代已變)就不記。\n"
                      "        with _YF_OHLCV_FAIL_LOCK:\n"
                      "            if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:\n"
-                     "                _YF_OHLCV_FAIL_CACHE[key] = now\n")
+                     + _OHLCV_FAIL_WRITE)
 _OHLCV_PARSE_WRITE = ("# D2-f10:解析失敗(JSON 壞／結構不符／長度對不上)同樣記退避(寫法同上)\n"
                       "        with _YF_OHLCV_FAIL_LOCK:\n"
                       "            if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:\n"
-                      "                _YF_OHLCV_FAIL_CACHE[key] = now\n")
+                      + _OHLCV_FAIL_WRITE)
 _OHLCV_NONE_GEN_GUARD = ("世代已變)就不記。\n"
                          "        with _YF_OHLCV_FAIL_LOCK:\n"
                          "            if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:\n")

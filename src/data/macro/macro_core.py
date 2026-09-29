@@ -319,6 +319,9 @@ _FRED_TTL = 1800.0  # 30min，FRED 日頻足夠
 #: `_FAIL_COOLDOWN_SEC` 秒內同一鍵不重打上游、回同形空 DataFrame;期滿重抓;成功即清。
 #: 刻意與 `_FRED_CACHE` 分開 —— 失敗**不入** 30min 成功快取。名稱以 `_CACHE` 結尾,
 #: 讓 tests/conftest 的 module-cache 清空 fixture 一併清掉。讀寫一律持 `_FRED_CACHE_LOCK`。
+#: D2-f14(2026-09-29):寫入時與既有紀錄取 max —— 並行時「較早開始、較晚失敗」的呼叫不得用
+#: 較舊的 now 蓋掉較新的紀錄(否則冷卻提早結束)。時點仍取「呼叫開始」的 now,不改成失敗當下
+#: (那會拉長冷卻、屬行為變更)。
 _FRED_FAIL_CACHE: dict[tuple[str, str, int], float] = {}
 # S9 v19.78(第二份 review):fetch_china_macro(tw_macro)以 ThreadPoolExecutor(5)
 # 併發呼叫 fetch_fred → module dict 無鎖 check-then-set 為 TOCTOU race
@@ -409,14 +412,14 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         # (v1 風險雷達每輪 rerun 呼叫 2 次、每次 timeout 20s)。寫法同 D2-f2:
         # 同一把鎖、同一個鍵、同一個時點(本次呼叫的 now);不入成功快取;回傳同修前。
         with _FRED_CACHE_LOCK:
-            _FRED_FAIL_CACHE[key] = now
+            _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f14:與既有紀錄取 max
         return pd.DataFrame()
     try:
         obs = r.json().get("observations", [])
     except Exception as e:
         print(f"[macro_core/fred] {series_id} JSON 解析失敗: {e}")
         with _FRED_CACHE_LOCK:   # D2-f6:解析失敗同樣記退避(寫法同上)
-            _FRED_FAIL_CACHE[key] = now
+            _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f14:與既有紀錄取 max
         return pd.DataFrame()
     if not obs:
         # W5-2 §1: FRED 回 200 但 observations 空 — 補 log
@@ -427,7 +430,7 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         # 冷卻期內重問也只會得到同一個空答案(這是 HTTP 200 回應,本就被 fetch_url 快取 300 秒),
         # 不必每次 rerun 都再走一次 fetch_url 與解析。回傳同修前。
         with _FRED_CACHE_LOCK:
-            _FRED_FAIL_CACHE[key] = now
+            _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f14:與既有紀錄取 max
         return pd.DataFrame()
     df = pd.DataFrame(obs)
     df = df[df["value"] != "."].copy()
@@ -597,6 +600,7 @@ def fetch_yf_latest(tickers: tuple[str, ...]) -> dict[str, Optional[float]]:
 #: 成功世代(`_YF_OHLCV_OK_GEN_CACHE`,同 shared/fail_cooldown.FailCooldown 的競態說明):
 #: 呼叫開始時記下世代,失敗時世代已變(期間有人成功過)就不寫。兩個 dict 名稱皆以 `_CACHE`
 #: 結尾,讓 tests/conftest 的 module-cache 清空 fixture 一併清掉。讀寫一律持 `_YF_OHLCV_FAIL_LOCK`。
+#: D2-f14(2026-09-29):寫入時與既有紀錄取 max(理由同 `_FRED_FAIL_CACHE`;時點仍取呼叫開始的 now)。
 _YF_OHLCV_FAIL_CACHE: dict[tuple[str, str, str], float] = {}
 _YF_OHLCV_OK_GEN_CACHE: dict[tuple[str, str, str], int] = {}
 _YF_OHLCV_FAIL_LOCK = _th_mc.Lock()
@@ -640,7 +644,7 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
         # 時點＝本次呼叫的 now(同 D2-f2);期間有人成功過(世代已變)就不記。
         with _YF_OHLCV_FAIL_LOCK:
             if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:
-                _YF_OHLCV_FAIL_CACHE[key] = now
+                _YF_OHLCV_FAIL_CACHE[key] = max(now, _YF_OHLCV_FAIL_CACHE.get(key, now))   # D2-f14:取 max
         return pd.DataFrame()
     try:
         result = r.json()["chart"]["result"][0]
@@ -676,7 +680,7 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
         # D2-f10:解析失敗(JSON 壞／結構不符／長度對不上)同樣記退避(寫法同上)
         with _YF_OHLCV_FAIL_LOCK:
             if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:
-                _YF_OHLCV_FAIL_CACHE[key] = now
+                _YF_OHLCV_FAIL_CACHE[key] = max(now, _YF_OHLCV_FAIL_CACHE.get(key, now))   # D2-f14:取 max
         return pd.DataFrame()
 
 
