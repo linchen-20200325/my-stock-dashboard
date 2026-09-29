@@ -762,10 +762,26 @@ def _error_why(source: str, error: Any) -> str:
 def _clean_reason(reason: Any) -> str:
     """L0 的原因欄 → 可以放進 `Note.why` 的字串。**內容不改寫，只洗 glyph。**
 
-    ⚠️ 為什麼一定要洗：實測（2026-09-07）L0 `station_specs` 的
+    ⚠️ 為什麼一定要洗：~~實測（2026-09-07）L0 `station_specs` 的
     `stock_kd.no_level_reason` 裡就有 **2 個**狀態 glyph（`🟢` / `🔴`）。
     不洗 → `Note.__post_init__` 直接 `ValueError` → **整段規格揭露消失**，
-    而畫面上一句解釋都沒有。§1 要的是「說得出來」，不是「換一種炸法」。
+    而畫面上一句解釋都沒有。~~§1 要的是「說得出來」，不是「換一種炸法」。
+
+    📌 **SA2-f8 續（2026-09-29，事實更正；刪除線有意識保留，⛔ 不是漏刪）**：劃掉的例子不經過本函式。
+    `stock_kd.no_level_reason` 裡確實有 2 個狀態 glyph（2026-09-29 仍實測為真），但那一欄從本檔第一版
+    （#665 `340be68`）起就只在葉1 以 `st.caption` 原文印出（`_render_edu_leaf()`「依規格就不出等級的燈」
+    那段），不進 `Note`，從來不是本函式的輸入 ⇒ 劃掉的那條「不洗就炸」描述的不是任何一條實際路徑。
+    **現況**（2026-09-29 讀碼所見，⚠️ 單組）：兩個呼叫端的輸入實測皆不含 glyph ——
+    ① `build_spec_flag_card()`：當下被 L0 標記的只有 `margin`、`stock_trend` 兩盞（皆 degraded），
+    兩段 `degraded_reason` 都沒有狀態 glyph；總經燈／持股燈／參考走勢三張 L0 表的原因類欄位裡，
+    帶狀態 glyph 的只有上面那一欄。
+    ② `build_source_card()` 的 unknown-status 分支：L0 `shared/fetch_monitor.py` 只寫「未執行」「ok」
+    「failed」三種狀態，`get_monitor_registry()` 回的每一列都是 dict ⇒ 以當下 L0 走不到；
+    `src/` 裡 9 支 `@monitored` 的登錄名也都不含 glyph。
+    ⇒ **洗 glyph 是防禦**：防的是日後被標記的燈，原因欄寫進狀態 glyph（L0 同一張表的原因類欄位
+    確實會這樣寫，見上面那一欄），或登錄表冒出名字帶 glyph、形狀又不是 Mapping 的一列。那時不洗，
+    `Note.__post_init__` 會直接 `ValueError`；而這兩個呼叫端的卡都是在 `_render_one()` 的隔離之外建的
+    （`_render_user_health_wall()` 先建好整列再畫），例外會一路穿出這一葉。
 
     ⚠️ **洗過就要說**（§1：修改過的訊息不能假裝自己是原文）。
     ~~完整原文仍可在下方的門檻對照表看到（那是 `st.dataframe`，不受 `Note` 拘束）。~~

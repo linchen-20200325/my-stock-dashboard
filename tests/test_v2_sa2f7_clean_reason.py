@@ -6,9 +6,12 @@
 分頁，卡片所在那一葉的下方沒有對照表 ⇒ 那句只要出現就是把人帶去一個不存在的地方（同 SA2-f4 #742 的病）。
 括號內句尾「；完整原文見下方對照表」已在子句界刪掉（只刪不改，K1；同 SA2-f4 #742、SA-r2-f2 #729）。
 SA2-f8：同函式 docstring「完整原文仍可在下方的門檻對照表看到」是同一個不成立的前提 —— 加刪除線保留並補事實更正。
+SA2-f8 續：同一段 docstring 拿 `stock_kd.no_level_reason` 當「為什麼要洗」的例子，但那一欄從來不經過本函式
+（葉1 以 `st.caption` 原文印出）—— 同樣加刪除線保留並補事實更正（洗 glyph 是防禦）。
 
 ⚠️ 目前潛伏：當下 L0 兩盞被標記的燈（`margin`、`stock_trend`）的原因欄都沒有狀態符號，來源卡那一支
-只在 L0 登錄表回了本頁不認得的狀態時才走到 —— 所以下面凡是要走「洗過 glyph」那條路的，都是**合成輸入**。
+只在 L0 登錄表回了本頁不認得的狀態、或某一列不是 Mapping 時才走到（以當下 L0 兩種都走不到）——
+所以下面凡是要走「洗過 glyph」那條路的，都是**合成輸入**。
 
 (a) 含狀態 glyph → 揭露句在（「原文裡的燈號符號已移除」）、⛔ 沒有「對照表」；逐字 ＝ 修前只少「；」＋那一句。
 (b) 不含 glyph → 原文原樣（含當下 L0 被標記的燈的原因原文）。
@@ -18,7 +21,8 @@ SA2-f8：同函式 docstring「完整原文仍可在下方的門檻對照表看�
 (e) 突變：把刪掉的那段加回去 → (a)(d) 的判準必須轉紅。
 (f) 前提守衛（結構版）：呼叫端與各自所在的分頁 —— 哪天卡與表同葉，刪句的理由就不成立 → 紅燈，請重評
     （⛔ 不自己新寫一句指路，K1）。
-(g) SA2-f8：docstring 的那句舊前提只准留在刪除線裡（病史保留的標準寫法）。
+(g) SA2-f8（含 SA2-f8 續）：docstring 的兩處舊前提只准留在刪除線裡（病史保留的標準寫法）；
+    另以結構版前提守衛釘住「`no_level_reason` 不是本函式的輸入」。
 """
 from __future__ import annotations
 
@@ -356,12 +360,31 @@ def test_f_the_table_cells_never_held_the_reason_text():
 
 
 # ── (g) SA2-f8：docstring 的舊前提只准留在刪除線裡 ─────────────────────────
-_STALE_PREMISE = "完整原文仍可在下方的門檻對照表看到"
+#: `(舊句的穩定片段（逐字抄）, 為什麼不成立)`。
+_STALE_PREMISES: tuple[tuple[str, str], ...] = (
+    ("完整原文仍可在下方的門檻對照表看到",
+     "SA2-f8：兩個呼叫端都在葉2、對照表在葉1"),
+    # SA2-f8 續（2026-09-29）：拿來當「為什麼要洗」例子的 `stock_kd.no_level_reason` 從來不經過本函式。
+    ("整段規格揭露消失",
+     "SA2-f8 續：那個例子（`stock_kd.no_level_reason`）只在葉1 以 `st.caption` 原文印出，不是本函式的輸入"),
+)
 
 
-def test_g_the_stale_premise_survives_only_inside_a_strikethrough():
+@pytest.mark.parametrize(("stale", "reason"), _STALE_PREMISES, ids=["SA2-f8", "SA2-f8-cont"])
+def test_g_the_stale_premise_survives_only_inside_a_strikethrough(stale, reason):
     doc = P._clean_reason.__doc__ or ""
     assert "SA2-f8" in doc, "事實更正不見了"
-    assert _STALE_PREMISE not in re.sub(r"~~.*?~~", "", doc, flags=re.S), (
-        "`_clean_reason` 的 docstring 又在主張「完整原文仍可在下方的門檻對照表看到」—— "
-        "兩個呼叫端都在葉2、對照表在葉1；要留舊句當病史 → 包進刪除線")
+    assert stale not in re.sub(r"~~.*?~~", "", doc, flags=re.S), (
+        f"`_clean_reason` 的 docstring 又在主張「{stale}」—— {reason}；"
+        "要留舊句當病史 → 包進刪除線")
+
+
+def test_g_the_no_level_reason_never_reaches_this_function():
+    """SA2-f8 續的前提（結構版）：兩個呼叫端的函式體裡都沒有碰 `no_level_reason`。
+    哪天有人把它接進來 → 紅燈，docstring 那段更正要重評（劃掉的例子會變成真的）。"""
+    callers = _callers_of("_clean_reason")
+    assert callers == {"build_spec_flag_card", "build_source_card"}, callers
+    for fn in _module_tree().body:
+        if isinstance(fn, ast.FunctionDef) and fn.name in callers:
+            touched = {n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute)}
+            assert "no_level_reason" not in touched, fn.name
