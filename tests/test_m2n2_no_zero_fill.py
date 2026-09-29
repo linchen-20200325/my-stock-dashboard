@@ -33,12 +33,15 @@
   B. 修後缺值契約：每個出口 × 每種缺值 → 不拋、完整輸出 ＝ `m1b_m2_info` 為空時的完整輸出；
      §十一 另驗 prompt 無「M2=0.0%」、規則引擎收到兩個 None。
   C. 修前確實出事：還原體（反向替換回修前碼）在每個出口的「出事集合」與修前實跑相符。
-  D. 非缺值：完整輸出與還原體逐字相同（16 種數值 × 非代理／代理共 7 種來源形狀）＋修前實跑 golden；
+  D. 非缺值：完整輸出與還原體逐字相同（19 種數值 × 非代理／代理共 7 種來源形狀）＋修前實跑 golden
+     （還原體由現行檔反向替換產生，看不到寫進原始檔本身的非缺值改動 —— 那部分只靠 golden，
+     含驗收組非阻擋 1 補的小數第 2 位差額與零差額）；
      D-2：唯一差異（M1B、M2 皆為負零時 §十一 差額的零號）照實釘住。
   E. 不複製判斷邏輯：4 檔都從 section_long 取 `_finite_yoy`，檔內無自寫的有限值判斷。
   F. K1：4 檔字串常數集合與修前完全相同（不新增、不改寫任何字）。
   G. 突變：拿掉守衛／只清一個值／只驗一邊／登記移回閘門外 … 每個都讓 B 轉紅；
-     非缺值路徑的突變讓 D 轉紅。
+     非缺值路徑的突變讓 D 轉紅；寫進原始檔本身的非缺值突變（驗收組點名的 §八 `_gap8` 少一位、
+     §二 `> 0` 改 `>= 0`）讓 golden 轉紅。
   H. slow lane：真 Streamlit（AppTest）render 4 個出口（§十一 真按「執行 AI 裁決」）。
 
 ⚠️ harness：`_FakeST` 以 monkeypatch 換掉**被測模組**（本尊或還原體／突變體）的 module-level
@@ -459,6 +462,11 @@ _GAPS = {
     "large": (123.456, -78.9),
     "neg_zero_m2": (1.5, -0.0),        # 負零只在一邊 → 逐字相同
     "neg_zero_m1b": (-0.0, 0.8),
+    # 以下 3 組為驗收組非阻擋 1 補的 golden 輸入：差額要到小數第 2 位才看得出差別，
+    # 「差額四捨五入少一位」這類改動才會露出來（golden 值見下方 `_GOLDEN_*` 的補充段）。
+    "gap_2dp_713": (9.33, 2.2),        # +7.13（§八 ≥1 那段）
+    "gap_2dp_pos004": (2.04, 2.0),     # +0.04（§八 0~1 那段、§二 黃金交叉）
+    "gap_2dp_neg104": (1.0, 2.04),     # −1.04（§二 `< -1` 剛成立 → 死亡交叉）
 }
 
 
@@ -650,18 +658,36 @@ class TestNonMissingUnchanged:
             assert _view(ek, now) == _view(ek, pre)
 
 
-#: 修前（da4eb94）以同一個 harness 實跑擷取的關鍵字串（防「兩邊一起錯」）
+#: 修前（da4eb94）實跑擷取的關鍵字串（防「兩邊一起錯」）。
+#: ⚠️ 為什麼 D 類之外還要 golden：D 類的還原體是由「現行檔」反向替換 `_REVERT` 那幾段產生，
+#:    替換片段以外的改動（例：§八 `_gap8` 四捨五入改一位、§二 `> 0` 改 `>= 0`）會同時出現在
+#:    本尊與還原體 → D 類看不到。golden 取自修前實跑、與現行檔無關，才抓得到（見 G 類
+#:    `test_source_level_mutant_is_caught_by_golden`）。
+#: 取得方式：
+#:  · 每個 dict 的前段（strong／negative／near_zero／m2_is_zero／both_negative）：本批實作期
+#:    在尚未改動的 da4eb94 工作樹上，以同構 harness（本檔 `_run_*` 的前身，只在批次暫存區、
+#:    未入庫）實跑擷取。
+#:  · 標「驗收組非阻擋 1 補」的後段：2026-09-29 在本 worktree `git checkout --detach da4eb94`
+#:   （修前樹，本檔尚不存在）後，匯入本檔 4043cb7 版的副本、呼叫其 `_run_mid`／`_run_state`／
+#:    `_run_news`／`_run_op` 實跑擷取；同一組輸入切回 4043cb7 重跑，32 組輸出逐字相同。
 _GOLDEN_NEWS = {
     ("strong", "CBC-tier1"): "• M1B=5.1%  M2=2.0%  差額=+3.10%（正=資金行情啟動；",
     ("strong", "proxy_label"): f"• M1B=5.1%  M2=2.0%  差額=+3.10%{NOTE}（正=資金行情啟動；",
     ("negative", "CBC-tier1"): "• M1B=1.2%  M2=5.0%  差額=-3.80%（正=資金行情啟動；",
     ("m2_is_zero", "CBC-tier1"): "• M1B=1.5%  M2=0.0%  差額=+1.50%（正=資金行情啟動；",
     ("both_negative", "proxy_label"): f"• M1B=-1.5%  M2=-3.0%  差額=+1.50%{NOTE}（正=資金行情啟動；",
+    # ── 驗收組非阻擋 1 補（da4eb94 樹實跑）──
+    ("gap_2dp_713", "CBC-tier1"): "• M1B=9.3%  M2=2.2%  差額=+7.13%（正=資金行情啟動；",
+    ("gap_2dp_neg104", "proxy_label"): f"• M1B=1.0%  M2=2.0%  差額=-1.04%{NOTE}（正=資金行情啟動；",
+    ("zero", "CBC-tier1"): "• M1B=2.0%  M2=2.0%  差額=+0.00%（正=資金行情啟動；",
 }
 _GOLDEN_OP = {
     ("strong", "CBC-tier1"): "• 🌐 【景氣環境】M1B-M2為正且強勁，資金行情啟動中，可積極持股。",
     ("strong", "proxy_label"): f"• 🌐 【景氣環境】M1B-M2{NOTE}為正且強勁，資金行情啟動中，可積極持股。",
     ("negative", "CBC-tier1"): "• 🌐 【景氣環境】M1B-M2為負，目前處於資金縮減期。",
+    # ── 驗收組非阻擋 1 補（da4eb94 樹實跑）──
+    ("gap_2dp_713", "CBC-tier1"): "• 🌐 【景氣環境】M1B-M2為正且強勁，資金行情啟動中，可積極持股。",
+    ("gap_2dp_neg104", "CBC-tier1"): "• 🌐 【景氣環境】M1B-M2為負，目前處於資金縮減期。",
 }
 _GOLDEN_STATE = {
     ("strong", "CBC-tier1"): [("M1B>M2 黃金交叉", "✅", "#22c55e",
@@ -670,6 +696,16 @@ _GOLDEN_STATE = {
                                  "M1B(1.2%) < M2(5.0%) → 資金撤離股市，長線起跌警示")],
     ("near_zero", "CBC-tier1"): [],
     ("strong", "proxy_label"): [],      # 代理值不產生交叉訊號（v19.183 D2，照舊）
+    # ── 驗收組非阻擋 1 補（da4eb94 樹實跑）──
+    # 零差額：`_diff > 0` 是嚴格大於 → M1B＝M2 不出任何交叉（改成 `>= 0` 會多出黃金交叉）
+    ("zero", "CBC-tier1"): [],
+    # 2 位小數差額：+0.04 剛好 > 0、−1.04 剛好 < −1（差額若被四捨五入到 1 位，兩條都會消失）
+    ("gap_2dp_pos004", "CBC-tier1"): [("M1B>M2 黃金交叉", "✅", "#22c55e",
+                                       "M1B(2.0%) > M2(2.0%) → 資金由定存轉入股市，長線起漲徵兆")],
+    ("gap_2dp_neg104", "CBC-tier1"): [("M1B<M2 死亡交叉", "❌", "#ef4444",
+                                       "M1B(1.0%) < M2(2.0%) → 資金撤離股市，長線起跌警示")],
+    ("gap_2dp_713", "CBC-tier1"): [("M1B>M2 黃金交叉", "✅", "#22c55e",
+                                    "M1B(9.3%) > M2(2.2%) → 資金由定存轉入股市，長線起漲徵兆")],
 }
 _GOLDEN_MID = {
     ("strong", "CBC-tier1"): ("M1B-M2 Gap = +3.10%（黃金交叉·熱錢狂潮）",
@@ -681,6 +717,22 @@ _GOLDEN_MID = {
     ("negative", "CBC-tier1"): ("M1B-M2 Gap = -3.80%（死亡交叉·資金退潮）",
                                 "📉 資金動能趨緩（M1B=1.2% < M2=5.0%），資金轉向定存或匯出，減碼等待訊號確認。",
                                 "D M1B-M2=-3.80%"),
+    # ── 驗收組非阻擋 1 補（da4eb94 樹實跑）：差額到小數第 2 位（策略3 卡與三環 D 徽章各一個數字）──
+    ("gap_2dp_713", "CBC-tier1"): ("M1B-M2 Gap = +7.13%（黃金交叉·熱錢狂潮）",
+                                   "🔥 資金動能強勁（M1B=9.3% > M2=2.2%），熱錢湧入股市，積極作多強勢股。",
+                                   "D M1B-M2=+7.13%"),
+    ("gap_2dp_713", "proxy_label"): (f"M1B-M2 Gap = +7.13%{NOTE}（黃金交叉·熱錢狂潮）",
+                                     "🔥 資金動能強勁（M1B=9.3% > M2=2.2%），熱錢湧入股市，積極作多強勢股。",
+                                     f"D M1B-M2=+7.13%{NOTE}"),
+    ("gap_2dp_pos004", "CBC-tier1"): ("M1B-M2 Gap = +0.04%（資金溫和·中性擴張）",
+                                      "💧 資金動能溫和（M1B=2.0% ≥ M2=2.0%），無失血風險，回歸個股基本面與籌碼面操作。",
+                                      "D M1B-M2=+0.04%"),
+    ("gap_2dp_neg104", "CBC-tier1"): ("M1B-M2 Gap = -1.04%（死亡交叉·資金退潮）",
+                                      "📉 資金動能趨緩（M1B=1.0% < M2=2.0%），資金轉向定存或匯出，減碼等待訊號確認。",
+                                      "D M1B-M2=-1.04%"),
+    ("zero", "CBC-tier1"): ("M1B-M2 Gap = +0.00%（資金溫和·中性擴張）",
+                            "💧 資金動能溫和（M1B=2.0% ≥ M2=2.0%），無失血風險，回歸個股基本面與籌碼面操作。",
+                            "D M1B-M2=+0.00%"),
 }
 _D_SPAN = re.compile(r'<span style="[^"]*">(D M1B-M2[^<]*)</span>')
 
@@ -767,6 +819,14 @@ class TestNegativeZeroCorner:
 # E：不複製判斷邏輯 —— 4 檔都從 section_long 取 `_finite_yoy`
 # ══════════════════════════════════════════════════════════════════════════
 class TestSharedFiniteYoy:
+    """`_finite_yoy` 的位置（section_long）目前被兩處綁住 —— 日後若要搬到共用模組，兩處要一起改：
+
+    1. 本類：import 來源與 `__module__` 都指定 section_long。
+    2. #746 的 tests/test_dl_f1_s24_m2_missing.py：`_REVERT_PAIRS` 定位的是 `render_section_long`
+       裡的**呼叫點**（搬移不受影響）；但 `_MUTANTS` 的 3 個 helper 突變與
+       `test_non_missing_mutant_breaks_golden` 的 zero_as_missing，定位字串是 `_finite_yoy`
+       **函式本體**的行、比對對象是 section_long.py 原文（搬走即「突變點不唯一或已不存在」）。
+    """
 
     @pytest.mark.parametrize("ek", _EXITS)
     def test_imported_from_section_long_not_redefined(self, ek):
@@ -892,6 +952,20 @@ _MUTANTS = {
 }
 
 
+#: 驗收組（非阻擋 1）實測在原始檔上做、當時新測試全綠的兩個突變 → 名稱 → (出口, 替換組, 必須轉紅的 golden 鍵)
+_SOURCE_LEVEL_MUTANTS = {
+    # §八 策略3 卡的差額四捨五入少一位：+7.13 → +7.10、+0.04 → +0.00、−1.04 → −1.00
+    "mid_gap8_round_1dp": ("mid", (("            _gap8 = round(_m1b8 - _m2b8, 2)\n",
+                                    "            _gap8 = round(_m1b8 - _m2b8, 1)\n"),),
+                           {("gap_2dp_713", "CBC-tier1"), ("gap_2dp_713", "proxy_label"),
+                            ("gap_2dp_pos004", "CBC-tier1"), ("gap_2dp_neg104", "CBC-tier1")}),
+    # §二 黃金交叉由嚴格大於改成大於等於：M1B＝M2 會多出一條黃金交叉
+    "state_golden_cross_ge0": ("state", (("            if _diff > 0:\n",
+                                          "            if _diff >= 0:\n"),),
+                               {("zero", "CBC-tier1")}),
+}
+
+
 class TestMutantsAreCaught:
 
     @pytest.mark.parametrize("name", sorted(_MUTANTS))
@@ -915,11 +989,28 @@ class TestMutantsAreCaught:
                   "_gap8c = round(float(_m1b8_v) - float(_m2b8_v), 1)"),)),
     ], ids=["news_m2_format", "op_diff_sign", "state_zero_as_missing", "mid_d_rounding"])
     def test_non_missing_mutant_breaks_identity_or_golden(self, ek, pairs, pre_fix, monkeypatch):
+        # 突變體只在記憶體裡、比對基準是「未突變現行檔」的還原體 → D 類抓得到。
+        # 突變若直接寫進原始檔，基準會一起被帶歪 —— 那種情形見下一條（靠 golden）。
         m = _load(ek, _apply(_source(ek), pairs), "non_missing")
         broken = [(g, s) for g in _GAPS for s in ("CBC-tier1", "proxy_label")
                   if _view(ek, _RUN[ek](m, _info(g, s), monkeypatch))
                   != _view(ek, _RUN[ek](pre_fix[ek], _info(g, s), monkeypatch))]
         assert broken, "非缺值路徑的突變沒被 D 抓到"
+
+    @pytest.mark.parametrize("name", sorted(_SOURCE_LEVEL_MUTANTS))
+    def test_source_level_mutant_is_caught_by_golden(self, name, monkeypatch):
+        """驗收組非阻擋 1：突變**寫進原始檔本身**時，D 類看不到，golden（修前實跑）抓得到。"""
+        ek, pairs, must_break = _SOURCE_LEVEL_MUTANTS[name]
+        mutated = _apply(_source(ek), pairs)
+        m = _load(ek, mutated, name)
+        own_pre = _load(ek, _apply(mutated, _REVERT[ek]), f"{name}_pre")
+        # 前提照實釘住：以「突變後的檔」反向替換出的還原體同樣帶著突變 → D 類比不出差別
+        for gap, source in sorted(must_break):
+            info = _info(gap, source)
+            assert _view(ek, _RUN[ek](m, info, monkeypatch)) == \
+                _view(ek, _RUN[ek](own_pre, info, monkeypatch))
+        broken = set(_GOLDEN[ek](m, monkeypatch))
+        assert must_break <= broken, f"golden 應讓 {sorted(must_break - broken)} 轉紅"
 
 
 # ══════════════════════════════════════════════════════════════════════════
