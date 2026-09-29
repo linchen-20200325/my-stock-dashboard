@@ -19,6 +19,7 @@ test_macro_buckets.py 斷言相等（drift-safe，CI 擋漂移），非無據腦
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -86,6 +87,9 @@ _USDTWD_RED         = 33.0   # 對齊 MACRO_THRESHOLDS['USDTWD']['red_above']
 # ⚠️ 刻意**只**掛在 us10y / dxy 兩條 spec 上(valid_min/max 預設 None = 不檢查)。
 #   其餘 14 條的判級行為與本版前完全一致,零回歸。
 #   (2026-09-27:foreign_net 接線時一併掛上 ±9999 億,見下方常數;其餘 13 條仍不檢查。)
+#   (2026-09-29 NF-a:上句的「不檢查」指**數值範圍**。非有限值(NaN / ±inf)
+#    自本日起**不論有無範圍**一律不算在範圍內 —— 那不是範圍問題,是「沒有觀測值」。
+#    見 `within_valid_range` / `classify_danger`。**未**替任何一條新增範圍數字。)
 # ════════════════════════════════════════════════════════════════
 _US10Y_VALID_MIN = 0.0     # CLAUDE.md §3.2「US10Y (%) [0, 20]」
 _US10Y_VALID_MAX = 20.0
@@ -209,6 +213,8 @@ class DangerSpec:
     # v19.175 §3.2 合理範圍：None = 不檢查（維持既有行為）。
     # 兩者皆非 None 且值落在區間外 → within_valid_range() 回 False，
     # 取值端應改回 gray + log（§1 不猜尺度、不偽綠/偽紅）。
+    # 2026-09-29 NF-a：「None = 不檢查」只指**數值範圍**；非有限值（NaN / ±inf）
+    # 不論本欄為何，within_valid_range() 一律回 False（與 None 同等對待）。
     valid_min: Optional[float] = None
     valid_max: Optional[float] = None
     # ── 2026-08-20:接線狀態(readiness 側車用)────────────────────────────
@@ -520,17 +526,25 @@ def specs_for_bucket(bucket: str) -> list[DangerSpec]:
 def within_valid_range(value: Optional[float], spec: DangerSpec) -> bool:
     """值是否落在 spec 的 §3.2 合理範圍內（v19.175）。
 
-    語意（三態，caller 須分辨）::
+    語意（四種情形，caller 須分辨）::
 
-        value=None          → False（沒有值本來就不算「在範圍內」）
-        spec 無 valid_*     → True （未設範圍 = 不檢查，維持既有行為）
-        有範圍且值越界      → False（caller 應退回 gray + log，**不得**猜尺度換算）
+        value=None            → False（沒有值本來就不算「在範圍內」）
+        非有限值(NaN / ±inf)  → False（不是觀測值；與 None 同等對待，**不看** valid_*）
+        spec 無 valid_*       → True （未設範圍 = 不檢查數值範圍，維持既有行為）
+        有範圍且值越界        → False（caller 應退回 gray + log，**不得**猜尺度換算）
 
     §1 Fail Loud / §4.1 量綱：本函式**只判斷不修正**。上游若把「美元指數」
     換成 UUP(ETF ~27)或把殖利率換成 ×10 慣例(46.3)，正確處置是誠實顯示
     「未載入」並留 log，而不是除以 10 假裝算對 —— 猜錯即造假。
 
     NaN 一律 False（NaN 的任何比較皆 False，此處顯式處理避免誤讀）。
+
+    ±inf 一律 False（2026-09-29 NF-a）：修前只擋 NaN，而未設 `valid_*` 的 spec
+    會把 ±inf 放行 —— 例：`m1b_m2_gap`（low_bad、無範圍）遇 +inf 時本函式回 True，
+    `classify_danger(+inf)` 再判成 **green**（−inf 判 red），五桶長期桶亮出一盞
+    沒有任何觀測支撐的綠燈（§1：錯的數字比沒有數字更危險）。
+    ⚠️ 修法是「非有限值不是觀測值」，**不是**替該 spec 發明 `valid_min/max` ——
+    那是門檻規格，憑空訂一個數字就是捏造（§3.3）。
     """
     if value is None:
         return False
@@ -538,7 +552,7 @@ def within_valid_range(value: Optional[float], spec: DangerSpec) -> bool:
         v = float(value)
     except (TypeError, ValueError):
         return False
-    if v != v:   # NaN
+    if not math.isfinite(v):   # NaN / +inf / -inf —— 與 None 同等對待
         return False
     if spec.valid_min is not None and v < spec.valid_min:
         return False
@@ -548,15 +562,27 @@ def within_valid_range(value: Optional[float], spec: DangerSpec) -> bool:
 
 
 def classify_danger(value: Optional[float], spec: DangerSpec) -> str:
-    """依 DangerSpec 將值分級。回 'green' | 'yellow' | 'red' | 'gray'(None/不可解析)。
+    """依 DangerSpec 將值分級。回 'green' | 'yellow' | 'red' | 'gray'(None/不可解析/非有限值)。
 
     §1 Fail Loud：None → 'gray'（未載入），**不**偽綠。
+
+    非有限值（NaN / ±inf）同一精神 → 'gray'（2026-09-29 NF-a）。修前 NaN 在三種
+    direction 全落到 'green'（NaN 的任何比較皆 False → 走到最後的 return），
+    ±inf 則依方向被判成 green 或 red —— 都是沒有觀測支撐的結論。
+    `within_valid_range` 擋得住的只有**經過它**的取值路徑；直接呼叫本函式的
+    消費端（推播 VIX、參考走勢卡）沒有那層，故本函式自己也要擋。
+
+    ⚠️ 與無門檻 spec 的關係：None 與非有限值都在比大小**之前**就回 'gray'，
+    所以不會走到 TypeError；**有限值**遇無門檻 spec 仍照舊 TypeError
+    （`has_thresholds` 那段刻意的 fail loud 不變）。
     """
     if value is None:
         return "gray"
     try:
         v = float(value)
     except (TypeError, ValueError):
+        return "gray"
+    if not math.isfinite(v):   # NaN / ±inf：不是觀測值 → 未載入，不偽綠、不偽紅
         return "gray"
 
     if spec.direction == "high_bad":
