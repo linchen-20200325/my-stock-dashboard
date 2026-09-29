@@ -261,9 +261,12 @@ class TestD2f4SuccessAndEmptyUnchanged:
         assert yfh.calls == [("2330.TW", "1y")], "TTL 內第二次命中快取"
         tree = ast.parse(pathlib.Path(YP.__file__).read_text(encoding="utf-8"))
         fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+        # 批 D3d N1（2026-09-29）：inline 的 200 改成具名常數 `_HISTORY_CACHE_MAX_ENTRIES`（失敗冷卻共用），
+        # 值不變 —— 這裡改成「引用該常數 ＋ 常數值＝修前的 200」，本條「參數同修前」的意思不變。
         assert [ast.unparse(d) for d in fns["_cached_history_cached"].decorator_list] == \
-            ["st.cache_data(ttl=TTL_1HOUR, max_entries=200, show_spinner=False)"], \
-            "快取層參數同修前（修前掛在 cached_history 上的那一行逐字搬下來）"
+            ["st.cache_data(ttl=TTL_1HOUR, max_entries=_HISTORY_CACHE_MAX_ENTRIES, show_spinner=False)"], \
+            "快取層參數同修前（修前掛在 cached_history 上的那一行逐字搬下來，max_entries 改具名）"
+        assert YP._HISTORY_CACHE_MAX_ENTRIES == 200, "max_entries 的值同修前"
         assert fns["cached_history"].decorator_list == [], "外層不快取 —— 失敗才不會被凍住"
 
     @pytest.mark.parametrize("mode", ["empty", "none"])
@@ -1041,11 +1044,13 @@ class TestEndToEndNoBombardment:
 # ══════════════════════════════════════════════════════════════════
 # 突變：把修復改回修前 → 本檔所擋的失效確實出現
 # ══════════════════════════════════════════════════════════════════
+# D2-f16（批 D3d，2026-09-28）：快取層改經 `_history_or_raise` 呼叫 yfinance，突變點隨原始碼同步；
+# M1 的語意不變（快取層自己吞例外 ＝ 修前結構）。
 _YP_CALL = ("    with _proxy_env():\n"
-            "        _df = yf.Ticker(ticker).history(period=period)\n")
+            "        _df = _history_or_raise(yf.Ticker(ticker), ticker, period)\n")
 _YP_CALL_SWALLOW = ("    try:\n"
                     "        with _proxy_env():\n"
-                    "            _df = yf.Ticker(ticker).history(period=period)\n"
+                    "            _df = _history_or_raise(yf.Ticker(ticker), ticker, period)\n"
                     "    except Exception:\n"
                     "        return pd.DataFrame()\n")
 
