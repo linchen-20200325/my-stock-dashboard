@@ -471,6 +471,7 @@ _YF_CLOSE_TTL = 3600.0  # 1hr，與 st.cache_data 對齊
 #: 讓 tests/conftest 的 module-cache 清空 fixture 一併清掉。
 #: D2-f2(2026-09-28,§1.A-3(b)):`fetch_url` 回 None 與回應解析失敗兩個出口也寫進這裡
 #: (同一把鎖、同一個鍵、同一個冷卻期)。名稱沿用(既有測試與 fixture 依賴),實際涵蓋三種抓取失敗。
+#: D2-f14(2026-09-29):三個出口寫入時與既有紀錄取 max(理由同 `_FRED_FAIL_CACHE`;時點仍取呼叫開始的 now)。
 _YF_CLOSE_EMPTY_FAIL_CACHE: dict[tuple[str, str], float] = {}
 
 
@@ -505,7 +506,7 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
         # 同一把鎖、同一個鍵、同一個時點(本次呼叫的 now);不入 1hr 成功快取;回傳形狀同修前。
         print(f"[macro_core/yf] {ticker} fetch_url 回 None(不快取,冷卻 {_FAIL_COOLDOWN_SEC:.0f}s)")
         with _YF_CLOSE_CACHE_LOCK:
-            _YF_CLOSE_EMPTY_FAIL_CACHE[key] = now
+            _YF_CLOSE_EMPTY_FAIL_CACHE[key] = max(now, _YF_CLOSE_EMPTY_FAIL_CACHE.get(key, now))   # D2-f14:取 max
         return pd.Series(dtype=float, name=ticker)
     try:
         d = r.json()
@@ -520,7 +521,7 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
             # 記退避(§1.A-3(b)),冷卻期過後重抓。回傳形狀同修前。
             print(f"[macro_core/yf] {ticker} 收盤全為空值(不快取,冷卻 {_FAIL_COOLDOWN_SEC:.0f}s)")
             with _YF_CLOSE_CACHE_LOCK:
-                _YF_CLOSE_EMPTY_FAIL_CACHE[key] = now
+                _YF_CLOSE_EMPTY_FAIL_CACHE[key] = max(now, _YF_CLOSE_EMPTY_FAIL_CACHE.get(key, now))   # D2-f14:取 max
             return pd.Series(dtype=float, name=ticker)
         # v18.246 S-PROV-1 phase 2:provenance via Series.attrs(§2.2)
         # Series 無 column 概念,改用 pandas 內建 attrs dict 承載血緣。
@@ -536,7 +537,7 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
         # 寫法同 Q2-r2(同一把鎖、同一個鍵、同一個時點);回傳形狀同修前。
         print(f"[macro_core/yf] {ticker} 解析失敗: {e}")
         with _YF_CLOSE_CACHE_LOCK:
-            _YF_CLOSE_EMPTY_FAIL_CACHE[key] = now
+            _YF_CLOSE_EMPTY_FAIL_CACHE[key] = max(now, _YF_CLOSE_EMPTY_FAIL_CACHE.get(key, now))   # D2-f14:取 max
         return pd.Series(dtype=float, name=ticker)
 
 

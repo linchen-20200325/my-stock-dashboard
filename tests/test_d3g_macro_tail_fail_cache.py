@@ -14,9 +14,10 @@
     `_fetch_yf_close_base`（成功 1 小時快取／失敗 FAIL_COOLDOWN_SEC 退避）；唯一不在 180 秒退避裡的是
     `fetch_fred` 在 HTTP 200 之後拋例外那條（合成情境），由 fetch_url 的 300 秒 URL 快取擋住
     （`TestUpstreamHttpCount` 走真的 fetch_url 數實際 GET）。
-  · **D2-f14 ①** `macro_core.fetch_fred` 三個失敗出口、`fetch_yf_ohlcv` 兩個失敗出口：寫退避紀錄時與既有
-    紀錄取 max —— 並行時「較早開始、較晚失敗」的呼叫不再用較舊的 now 蓋掉較新的紀錄（冷卻提早結束）。
-    時點仍取「呼叫開始」的 now（不改成失敗當下 —— 那會拉長冷卻）。
+  · **D2-f14 ①** `macro_core.fetch_fred` 三個失敗出口、`fetch_yf_ohlcv` 兩個失敗出口，以及同檔同一缺陷的
+    `_fetch_yf_close_base` 三個失敗出口（fetch_url 回 None／收盤全 null／解析失敗；總管 2026-09-29 裁定併入
+    本列）：寫退避紀錄時與既有紀錄取 max —— 並行時「較早開始、較晚失敗」的呼叫不再用較舊的 now 蓋掉較新的
+    紀錄（冷卻提早結束）。時點仍取「呼叫開始」的 now（不改成失敗當下 —— 那會拉長冷卻）。
   · **D2-f14 ②** `macro_alert._yf_latest` 以 `is None` 判缺值：補測試釘住「0.0 算有值」
     （批 D3a QA：把 `is None` 突變成 falsy 判斷，相關既有測試全綠 —— 突變存活）。
 
@@ -550,14 +551,45 @@ class TestTtlCacheHook:
 # ══════════════════════════════════════════════════════════════════
 _FRED_KEY = ("DGS10", "k-test", 120)
 _OHLCV_KEY = ("^TWII", "9mo", "1d")
-#: 五個失敗出口 → (哪支函式, 讓「較早開始的 A」走到該出口的回應)
+_YFC_TICKER = "^VIX"
+_YFC_KEY = (_YFC_TICKER, "1d")                        # _fetch_yf_close_base 的鍵 (ticker, interval)
+_ALL_NULL_CLOSE = _Raw({"chart": {"result": [{"timestamp": [_T0, _T0 + _DAY],
+                                              "indicators": {"quote": [{"close": [None, None]}]}}]}})
+#: 八個失敗出口 → (哪支函式, 讓「較早開始的 A」走到該出口的回應)
 _EXITS = {
     "fred_none": ("fred", None),
     "fred_parse": ("fred", _Raw(exc=ValueError("Expecting value: line 1 column 1 (char 0)"))),
     "fred_obs_empty": ("fred", _Raw({"observations": []})),
     "ohlcv_none": ("ohlcv", None),
     "ohlcv_parse": ("ohlcv", _Raw(exc=ValueError("Expecting value: line 1 column 1 (char 0)"))),
+    "yfc_none": ("yfc", None),
+    "yfc_all_null": ("yfc", _ALL_NULL_CLOSE),
+    "yfc_parse": ("yfc", _Raw(exc=ValueError("Expecting value: line 1 column 1 (char 0)"))),
 }
+
+
+def _assert_empty_close(s) -> None:
+    """`_fetch_yf_close_base` 三個失敗出口都是 `pd.Series(dtype=float, name=ticker)` —— 逐字比。"""
+    ref = pd.Series(dtype=float, name=_YFC_TICKER)
+    assert type(s) is pd.Series
+    pd.testing.assert_series_equal(s, ref)
+    assert s.attrs == {}
+
+
+def _target(mc, kind: str, monkeypatch):
+    """(呼叫, 鍵, 讀退避紀錄, 失敗回傳的逐字檢查)；並清空該函式用到的快取。"""
+    if kind == "fred":
+        names, rec_name = ("_FRED_CACHE", "_FRED_FAIL_CACHE"), "_FRED_FAIL_CACHE"
+        call, key, check = (lambda: mc.fetch_fred(*_FRED_KEY)), _FRED_KEY, _assert_empty_df
+    elif kind == "ohlcv":
+        names, rec_name = ("_YF_OHLCV_FAIL_CACHE", "_YF_OHLCV_OK_GEN_CACHE"), "_YF_OHLCV_FAIL_CACHE"
+        call, key, check = (lambda: mc.fetch_yf_ohlcv(*_OHLCV_KEY)), _OHLCV_KEY, _assert_empty_df
+    else:
+        names, rec_name = ("_YF_CLOSE_CACHE", "_YF_CLOSE_EMPTY_FAIL_CACHE"), "_YF_CLOSE_EMPTY_FAIL_CACHE"
+        call, key, check = (lambda: mc.fetch_yf_close(_YFC_TICKER)), _YFC_KEY, _assert_empty_close
+    for name in names:
+        monkeypatch.setattr(mc, name, {})
+    return call, key, (lambda: dict(getattr(mc, rec_name))), check
 
 
 def _check_late_failure_keeps_newer_record(mc, exit_name: str, clock, monkeypatch) -> None:
@@ -565,16 +597,7 @@ def _check_late_failure_keeps_newer_record(mc, exit_name: str, clock, monkeypatc
     寫入取 max → 紀錄仍是 t0+10：B 的冷卻期內（t0+189）不重打；t0+190 期滿即重打
     （時點仍是「呼叫開始」—— 沒改成失敗當下 t0+15，冷卻沒被拉長）。"""
     kind, a_resp = _EXITS[exit_name]
-    if kind == "fred":
-        call, key = (lambda: mc.fetch_fred(*_FRED_KEY)), _FRED_KEY
-        monkeypatch.setattr(mc, "_FRED_CACHE", {})
-        monkeypatch.setattr(mc, "_FRED_FAIL_CACHE", {})
-        rec = lambda: dict(mc._FRED_FAIL_CACHE)            # noqa: E731
-    else:
-        call, key = (lambda: mc.fetch_yf_ohlcv(*_OHLCV_KEY)), _OHLCV_KEY
-        monkeypatch.setattr(mc, "_YF_OHLCV_FAIL_CACHE", {})
-        monkeypatch.setattr(mc, "_YF_OHLCV_OK_GEN_CACHE", {})
-        rec = lambda: dict(mc._YF_OHLCV_FAIL_CACHE)        # noqa: E731
+    call, key, rec, check = _target(mc, kind, monkeypatch)
     t0 = clock["now"]
     st = {"n": 0}
 
@@ -582,19 +605,19 @@ def _check_late_failure_keeps_newer_record(mc, exit_name: str, clock, monkeypatc
         st["n"] += 1
         if st["n"] == 1:                                   # A 還在路上
             clock["now"] = t0 + 10
-            _assert_empty_df(call())                       # B：晚開始、先失敗
+            check(call())                                  # B：晚開始、先失敗
             assert rec() == {key: t0 + 10}
             clock["now"] = t0 + 15                         # A 的失敗晚到
             return a_resp
         return None
     monkeypatch.setattr(mc, "fetch_url", _fetch)
-    _assert_empty_df(call())                               # A
+    check(call())                                          # A
     assert rec() == {key: t0 + 10}, "較早開始、較晚失敗的 A 不得用較舊的 t0 蓋掉 B 的 t0+10"
     clock["now"] = t0 + 10 + FAIL_COOLDOWN_SEC - 1
-    _assert_empty_df(call())
+    check(call())
     assert st["n"] == 2, "B 的冷卻期內不重打（修前：紀錄被蓋回 t0，t0+180 起就重打）"
     clock["now"] = t0 + 10 + FAIL_COOLDOWN_SEC
-    _assert_empty_df(call())
+    check(call())
     assert st["n"] == 3, "冷卻期從 B 的「呼叫開始」起算、期滿即重打（沒改成失敗當下 → 冷卻沒被拉長）"
     assert rec() == {key: t0 + 10 + FAIL_COOLDOWN_SEC}
 
@@ -614,15 +637,15 @@ class TestD2f14MaxOnWrite:
             n["n"] += 1
             return resp
         monkeypatch.setattr(MC, "fetch_url", _fetch)
-        for name in ("_FRED_CACHE", "_FRED_FAIL_CACHE", "_YF_OHLCV_FAIL_CACHE", "_YF_OHLCV_OK_GEN_CACHE"):
-            monkeypatch.setattr(MC, name, {})
-        call = (lambda: MC.fetch_fred(*_FRED_KEY)) if kind == "fred" else (lambda: MC.fetch_yf_ohlcv(*_OHLCV_KEY))
-        rec, key = (MC._FRED_FAIL_CACHE, _FRED_KEY) if kind == "fred" else (MC._YF_OHLCV_FAIL_CACHE, _OHLCV_KEY)
-        call()
-        assert rec == {key: clock["now"]}
-        clock["now"] += FAIL_COOLDOWN_SEC
-        call()
-        assert n["n"] == 2 and rec == {key: clock["now"]}
+        call, key, rec, check = _target(MC, kind, monkeypatch)
+        check(call())
+        assert rec() == {key: clock["now"]}
+        clock["now"] += FAIL_COOLDOWN_SEC - 1
+        check(call())
+        assert n["n"] == 1, "冷卻期內不重打（同修前）"
+        clock["now"] += 1
+        check(call())
+        assert n["n"] == 2 and rec() == {key: clock["now"]}
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -812,9 +835,17 @@ class TestUpstreamHttpCount:
 #: tw_macro：`_ttl_cache` 拿掉判定兩行 ≡ 修前的無條件存入（判定式照傳、但沒人看）
 _TTL_CHECK = ("            if cache_if is not None and not cache_if(result):\n"
               "                return result   # D2-f13:判為失敗／不完整 → 不入快取(回傳內容不變)\n")
-#: macro_core：五個寫入換回修前字面 `= now`
+#: macro_core：八個寫入換回修前字面 `= now`
 _FRED_WRITE = "_FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f14:與既有紀錄取 max\n"
 _OHLCV_WRITE = "_YF_OHLCV_FAIL_CACHE[key] = max(now, _YF_OHLCV_FAIL_CACHE.get(key, now))   # D2-f14:取 max\n"
+_YFC_WRITE = ("_YF_CLOSE_EMPTY_FAIL_CACHE[key] = max(now, _YF_CLOSE_EMPTY_FAIL_CACHE.get(key, now))"
+              "   # D2-f14:取 max\n")
+#: 出口種類 → (修後寫入字面, 修前寫入字面)
+_WRITES = {
+    "fred": (_FRED_WRITE, "_FRED_FAIL_CACHE[key] = now\n"),
+    "ohlcv": (_OHLCV_WRITE, "_YF_OHLCV_FAIL_CACHE[key] = now\n"),
+    "yfc": (_YFC_WRITE, "_YF_CLOSE_EMPTY_FAIL_CACHE[key] = now\n"),
+}
 
 
 def _prefix_tw(tag: str) -> types.ModuleType:
@@ -822,8 +853,8 @@ def _prefix_tw(tag: str) -> types.ModuleType:
 
 
 def _prefix_mc(tag: str) -> types.ModuleType:
-    return _mutant(MC, (_FRED_WRITE, "_FRED_FAIL_CACHE[key] = now\n", 3),
-                   (_OHLCV_WRITE, "_YF_OHLCV_FAIL_CACHE[key] = now\n", 2), tag=f"prefix_{tag}")
+    return _mutant(MC, (*_WRITES["fred"], 3), (*_WRITES["ohlcv"], 2), (*_WRITES["yfc"], 3),
+                   tag=f"prefix_{tag}")
 
 
 class TestPrefixReproducesBug:
@@ -854,8 +885,8 @@ class TestPrefixReproducesBug:
 # ══════════════════════════════════════════════════════════════════
 # 突變：逐一拿掉每一處修正 → 對應的檢查轉紅（其餘不受影響）
 # ══════════════════════════════════════════════════════════════════
-#: 各出口寫入前的唯一前文（取自 D2-f6／D2-f10 的註解字面）
-_FRED_CTX = {
+#: 各出口寫入前的唯一前文（取自 D2-f6／D2-f10／D2-f2／Q2-r2 的註解與 log 字面）
+_EXIT_CTX = {
     "fred_none": "同一把鎖、同一個鍵、同一個時點(本次呼叫的 now);不入成功快取;回傳同修前。\n"
                  "        with _FRED_CACHE_LOCK:\n            ",
     "fred_parse": "        with _FRED_CACHE_LOCK:   # D2-f6:解析失敗同樣記退避(寫法同上)\n            ",
@@ -867,13 +898,18 @@ _FRED_CTX = {
     "ohlcv_parse": "# D2-f10:解析失敗(JSON 壞／結構不符／長度對不上)同樣記退避(寫法同上)\n"
                    "        with _YF_OHLCV_FAIL_LOCK:\n"
                    "            if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:\n                ",
+    "yfc_none": "fetch_url 回 None(不快取,冷卻 {_FAIL_COOLDOWN_SEC:.0f}s)\")\n"
+                "        with _YF_CLOSE_CACHE_LOCK:\n            ",
+    "yfc_all_null": "收盤全為空值(不快取,冷卻 {_FAIL_COOLDOWN_SEC:.0f}s)\")\n"
+                    "            with _YF_CLOSE_CACHE_LOCK:\n                ",
+    "yfc_parse": "解析失敗: {e}\")\n"
+                 "        with _YF_CLOSE_CACHE_LOCK:\n            ",
 }
 
 
 def _one_exit_reverted(exit_name: str) -> types.ModuleType:
-    ctx = _FRED_CTX[exit_name]
-    new, old = ((_FRED_WRITE, "_FRED_FAIL_CACHE[key] = now\n") if exit_name.startswith("fred")
-                else (_OHLCV_WRITE, "_YF_OHLCV_FAIL_CACHE[key] = now\n"))
+    ctx = _EXIT_CTX[exit_name]
+    new, old = _WRITES[_EXITS[exit_name][0]]
     return _mutant(MC, (ctx + new, ctx + old), tag=f"one_{exit_name}")
 
 
