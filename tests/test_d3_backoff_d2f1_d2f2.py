@@ -620,12 +620,16 @@ class TestD2f1NoBombardment:
 # ══════════════════════════════════════════════════════════════════
 # 突變：把修復改回修前 → 本檔所擋的失效確實出現
 # ══════════════════════════════════════════════════════════════════
+#: 批 D3g（2026-09-29，D2-f14）起，退避寫入改為「與既有紀錄取 max」—— 突變點只跟著換掉寫入那一行的字面，
+#: 突變內容不變（仍是「拔掉該出口的退避寫入」）。
+_MC_FAIL_WRITE = ('            _YF_CLOSE_EMPTY_FAIL_CACHE[key] = '
+                  'max(now, _YF_CLOSE_EMPTY_FAIL_CACHE.get(key, now))   # D2-f14:取 max\n')
 _MC_NONE_WRITE = ('fetch_url 回 None(不快取,冷卻 {_FAIL_COOLDOWN_SEC:.0f}s)")\n'
                   '        with _YF_CLOSE_CACHE_LOCK:\n'
-                  '            _YF_CLOSE_EMPTY_FAIL_CACHE[key] = now\n')
+                  + _MC_FAIL_WRITE)
 _MC_PARSE_WRITE = ('解析失敗: {e}")\n'
                    '        with _YF_CLOSE_CACHE_LOCK:\n'
-                   '            _YF_CLOSE_EMPTY_FAIL_CACHE[key] = now\n')
+                   + _MC_FAIL_WRITE)
 
 
 def _drop_write(snippet: str) -> tuple[str, str]:
