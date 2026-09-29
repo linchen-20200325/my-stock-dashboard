@@ -12,8 +12,11 @@
     釘住「只有這兩支啟用」）。
     退避：不入快取後重算也不打上游 —— 底層 `fetch_fred`（成功 30 分鐘快取／失敗 FAIL_COOLDOWN_SEC 退避）、
     `_fetch_yf_close_base`（成功 1 小時快取／失敗 FAIL_COOLDOWN_SEC 退避）；唯一不在 180 秒退避裡的是
-    `fetch_fred` 在 HTTP 200 之後拋例外那條（合成情境），由 fetch_url 的 300 秒 URL 快取擋住
-    （`TestUpstreamHttpCount` 走真的 fetch_url 數實際 GET）。
+    `fetch_fred` 在 HTTP 200 之後拋例外那條（合成情境），只靠 fetch_url 的 URL 快取擋
+    （`proxy_helper._URL_CACHE`：`_URL_CACHE_TTL` 300 秒、`_URL_CACHE_MAX` 256 筆、全程序共用）：
+    該筆沒被擠出或清空時每 300 秒至多 1 次 GET（`TestUpstreamHttpCount` 走真的 fetch_url 數實際 GET）；
+    每次重算前該筆都被擠出時，每次重算都會 GET —— `fetch_fred` 的既有缺口（`risk_radar` 直呼
+    `fetch_fred` 同樣如此），本檔不測擠出情境、本批不修。
   · **D2-f14 ①** `macro_core.fetch_fred` 三個失敗出口、`fetch_yf_ohlcv` 兩個失敗出口，以及同檔同一缺陷的
     `_fetch_yf_close_base` 三個失敗出口（fetch_url 回 None／收盤全 null／解析失敗；總管 2026-09-29 裁定併入
     本列）：寫退避紀錄時與既有紀錄取 max —— 並行時「較早開始、較晚失敗」的呼叫不再用較舊的 now 蓋掉較新的
@@ -799,7 +802,9 @@ class TestUpstreamHttpCount:
 
     def test_china_post_200_exception_path_bounded_by_url_cache(self, http, clock, sync_pool):
         """合成情境（真實 FRED 不會回）：HTTP 200 但 fetch_fred 解析時拋例外 —— 這條**不在** 180 秒退避裡，
-        重算時由 fetch_url 的 300 秒 URL 快取擋住（每 300 秒至多 1 次 GET），不是每次 rerun 都重打。"""
+        只靠 fetch_url 的 URL 快取擋。本測試獨佔一份空的 `_URL_CACHE`、只有這 5 條寫入，該筆擠不出去 ⇒
+        每 300 秒至多 1 次 GET、不是每次 rerun 都重打；每次重算前該筆都被擠出時就是每次都 GET
+        （既有缺口，見檔頭），本測試不涵蓋。"""
         routes, gets, relay = http
         for sid in _SIDS:
             routes[sid] = (200, _fred_body(sid))

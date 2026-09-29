@@ -1425,8 +1425,14 @@ def fetch_china_macro(fred_api_key: str = "") -> dict:
     D2-f13(2026-09-29,§1.A-3(a)):任一條序列為空 → 這一份**不入** 30 分鐘快取(修前整包照存:
     FRED 恢復後 30 分鐘內仍 0/5、上游 0 次請求);5 條全有資料才照舊快取、回傳不變。
     退避(§1.A-3(b))由底層 `macro_core.fetch_fred` 承擔:有資料(及 HTTP 200 但全為 '.')的序列在它的
-    30 分鐘成功快取、三個失敗出口在它的 `FAIL_COOLDOWN_SEC` 秒退避;HTTP 200 之後才在 fetch_fred 內
-    拋例外的那條不在退避裡,由 `fetch_url` 的 300 秒 URL 快取擋住。重算都不會每次重打上游。
+    30 分鐘成功快取、三個失敗出口在它的 `FAIL_COOLDOWN_SEC` 秒退避 —— 期內重算都不重打上游。
+    例外是 HTTP 200 之後才在 fetch_fred 內拋例外(缺欄的 KeyError、日期解析失敗、pandera SchemaError 等)
+    的那條:不在退避裡、也不入成功快取,只靠 `fetch_url` 的 URL 快取擋 —— `proxy_helper._URL_CACHE`
+    (TTL `_URL_CACHE_TTL` = 300 秒、上限 `_URL_CACHE_MAX` = 256 筆,全程序所有 `fetch_url` 呼叫共用;
+    寫入時先清過期項、仍滿就逐出最早寫入的一筆,命中不續命;「強制重抓」會整包清空)。該筆還在時重算
+    不打上游;過期、被其他取數擠出或被清空後,下一次重算就再打一次上游 —— 每次重算前都被擠出時,
+    就是每次重算都重打上游。這是 `fetch_fred` 的既有缺口(`risk_radar` 的 HY OAS／10Y 兩燈直呼
+    `fetch_fred`,同樣如此;本函式修前被 30 分鐘快取整包蓋住才沒露出),本次不修,已交總管另登待辦。
     """
     if not fred_api_key:
         print('[tw_macro/china_macro] fred_api_key 空,跳過')
