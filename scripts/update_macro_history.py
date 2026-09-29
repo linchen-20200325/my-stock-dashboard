@@ -18,9 +18,11 @@ data_cache/macro_last_good/tw_pmi.json     ← PMI durable「上次已知值」�
 finmind_m1m2（`fetch_finmind_m1m2`）欄位：date（資料月月初）／m1b／m2／m1b_m2_gap／source／fetched_at
 - 寫出的列只來自 CBC PXWeb EF15M01（貨幣總計數-日平均數），每次都請求；source 欄
   `CBC:PXWeb:EF15M01:daily_avg_level[…]`（DL-f1-s40）。
-- CBC ms1.json（`tw_macro.CBC_MS1_URLS`；程式內註記「已不再可用，留邏輯防禦」）仍先請求，但只做形狀與
-  量級檢查、結果只進 log，**不寫出**：它沒有標題／單位 meta，口徑（日平均或月底）無從驗證，而不同
-  來源／口徑的列不得疊進同一份 parquet（DL-f1-s40）。EF15M01 失敗 → 本輪不寫，不以 ms1 替代。
+- CBC ms1.json（`tw_macro.CBC_MS1_URLS` 兩個網址；DL-f1-s1 探針 run 36408641177 實測兩個都未命中：
+  `/public/data/ms1.json` 回 HTTP 404、`/tw/public/data/ms1.json` 有回應但未通過 `fetch_cbc_ms1_rows`
+  檢查 —— 出處見 `tw_macro.fetch_cbc_m1b_m2` docstring）仍先請求，但只做形狀與量級檢查、結果只進 log，
+  **不寫出**：它沒有標題／單位 meta，口徑（日平均或月底）無從驗證，而不同來源／口徑的列不得疊進
+  同一份 parquet（DL-f1-s40）。EF15M01 失敗 → 本輪不寫，不以 ms1 替代。
 - m1b／m2 = 日平均餘額，新台幣百萬元（int64）；解析、單位檢查與官方年增率對帳見
   `src/data/macro/cbc_ef15m01.py`；寫檔前守門 `_m1m2_level_sanity` 另有百萬元量級帶（任何來源都要過）。
 - m1b_m2_gap = M1B 年增率 − M2 年增率（pp），由 m1b／m2 餘額以同月去年自算。

@@ -241,6 +241,60 @@ class TestS40LevelBand:
         assert meta["last_error"] is None and len(after) == meta["row_count"] == len(good)
 
 
+def _gate(m1b, m2, gap):
+    return umh._m1m2_level_sanity(pd.DataFrame({"m1b": m1b, "m2": m2, "m1b_m2_gap": gap}))
+
+
+_OK_M1B = [30_000_000.0, 30_500_000.0]          # EF15M01 量級（百萬元），全在量級帶內
+_OK_M2 = [70_000_000.0, 70_200_000.0]
+_OK_GAP = [float("nan"), 1.0]
+
+
+def _verdict(n_bad, n_rows=2, *, lv=0, order=0, gap=0, band=0) -> str:
+    """`_m1m2_level_sanity` 拒寫訊息裡的四條計數（依序 ①②③④）。"""
+    return (f"{n_bad}/{n_rows} 列不合格（餘額≤0:{lv}、m2<m1b:{order}、|gap|>30pp:{gap}、"
+            f"百萬元量級帶外 [1e+06, 5e+08]:{band}）")
+
+
+class TestS40EachGateConditionStillDiscriminates:
+    """批 R4 獨立 QA（B1／N2）：新加的④（量級帶）不得遮住既有三條。每條各用一組「只違反它、其餘三條
+    都通過」的帶內輸入單獨釘住 —— 刪掉哪一條，哪一條測試轉紅。
+    ①（餘額 ≤ 0）目前被④完全涵蓋：帶下界 1e6 百萬元 > 0，任何 ≤ 0 的餘額必在帶外 ⇒ 找不到「只違反①」
+    的輸入，刪掉①屬等價突變（量級帶常數未被調到 ≤ 0 之前）；①仍保留作定義層的防線。"""
+
+    def test_baseline_passes_all_four(self):
+        ok, msg = _gate(_OK_M1B, _OK_M2, _OK_GAP)
+        assert ok is True, msg
+
+    def test_only_m2_ge_m1b_violated(self):
+        """②：M1B／M2 兩欄對調 —— 兩欄都在帶內、都 > 0、gap 正常，只有 m2 ≥ m1b 攔得住。"""
+        ok, msg = _gate(_OK_M2, _OK_M1B, _OK_GAP)
+        assert ok is False
+        assert _verdict(2, order=2) in msg, msg
+
+    @pytest.mark.parametrize("gap,ok", [(30.0, True), (-30.0, True), (30.5, False), (-30.5, False),
+                                        (13976.0, False)],
+                             ids=["正30邊界", "負30邊界", "正30.5", "負30.5", "流量量級"])
+    def test_only_gap_bound_violated(self, gap, ok):
+        """③：|gap| ≤ 30pp（恰 30 通過）—— 餘額在帶內、m2 ≥ m1b，只有 ③ 攔得住。"""
+        got, msg = _gate(_OK_M1B, _OK_M2, [float("nan"), gap])
+        assert got is ok, msg
+        if not ok:
+            assert _verdict(1, gap=1) in msg, msg
+
+    def test_only_band_violated(self):
+        """④：一列略低於帶下界（999,999 百萬元）—— > 0、m2 ≥ m1b、gap 正常，只有 ④ 攔得住。"""
+        ok, msg = _gate([999_999.0, _OK_M1B[1]], _OK_M2, _OK_GAP)
+        assert ok is False
+        assert _verdict(1, band=1) in msg, msg
+
+    def test_nonpositive_level_is_always_out_of_band_too(self):
+        """①被④涵蓋的佐證：餘額 ≤ 0 的列，兩條同時計數（找不到只觸發①的輸入）。"""
+        ok, msg = _gate([0.0, _OK_M1B[1]], _OK_M2, _OK_GAP)
+        assert ok is False
+        assert _verdict(1, lv=1, band=1) in msg, msg
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # DL-f1-s43：外資淨買賣超不以 0 代入缺值；缺欄 fail loud
 # ═════════════════════════════════════════════════════════════════════════════
@@ -470,6 +524,24 @@ class TestS39HeaderDocstringMatchesCode:
         assert "durable" in line and "fetch_tw_pmi" in line and "_macro_durable_save" in line, line
         assert mc._MACRO_DURABLE_DIR == os.path.join("data_cache", "macro_last_good")
         assert '_macro_durable_save("tw_pmi"' in inspect.getsource(umh.main)
+
+    def test_ms1_status_citation_points_to_a_record_that_exists(self):
+        """批 R4 獨立 QA N1：檔頭原本引用「程式內註記『已不再可用，留邏輯防禦』」，那句註解已隨 DL-f1-s40
+        移除 → 只剩檔頭自己引用自己。改引 `tw_macro.fetch_cbc_m1b_m2` docstring 的探針紀錄；被引用的
+        事實必須真的在該處，檔頭若再引用「程式內註記」，引用的字句必須真的在程式本體裡。"""
+        import inspect
+        import re
+
+        from src.data.macro import tw_macro
+        doc = " ".join(umh.__doc__.split())
+        body = inspect.getsource(umh).split('"""', 2)[2]          # 檔頭 docstring 之後的程式本體
+        for quoted in re.findall(r"程式內註記「([^」]+)」", doc):
+            assert quoted in body, f"檔頭引用的程式內註記「{quoted}」在程式本體裡找不到"
+        tw_doc = " ".join(tw_macro.fetch_cbc_m1b_m2.__doc__.split())
+        assert "`tw_macro.fetch_cbc_m1b_m2` docstring" in doc, doc
+        for fact in ("run 36408641177", "`/public/data/ms1.json` 回 HTTP 404",
+                     "`/tw/public/data/ms1.json` 有回應但未通過 `fetch_cbc_ms1_rows`"):
+            assert fact in doc and fact in tw_doc, fact
 
 
 # ═════════════════════════════════════════════════════════════════════════════

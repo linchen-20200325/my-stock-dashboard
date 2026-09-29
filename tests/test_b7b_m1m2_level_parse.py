@@ -186,16 +186,28 @@ class TestUpdateOneRebuild:
 
 
 class TestFinalGate:
-    def test_levels_parse_but_violate_m2_ge_m1b_rejected(self, monkeypatch):
+    def test_levels_parse_but_violate_m2_ge_m1b_rejected(self, monkeypatch, capsys):
         """兩表各自像存量、但合起來違反定義（M2 < M1B）→ 整表拒寫（最後一道守門）。"""
-        small_m2 = _levels(N, 500_000, 0.004)
+        # 批 R4（DL-f1-s40 獨立 QA B1）：M2 起點由 500,000 改 1,000,000 百萬元。500,000 低於 DL-f1-s40
+        # 新增的量級帶下界（1e6 百萬元）→ 量級帶先把整表擋下，刪掉「m2 ≥ m1b」這條本測試照樣綠，
+        # 等於不再鑑別它。改到帶內後，擋得住這張表的只剩「m2 ≥ m1b」（M2 成長較慢 → 第 2 個月起
+        # M2 < M1B）；下面兩行斷言釘住這個前提，免得日後又被改回帶外。
+        small_m2 = _levels(N, 1_000_000, 0.004)
+        lo, hi = umh._m1m2_level_band()
+        assert all(lo <= v <= hi for v in M1B + small_m2)
+        assert sum(b > s for b, s in zip(M1B, small_m2)) == N - 1
         # DL-f1-r1：改以 EF15M01 形狀提供；先確認解析與對帳本身放行（證明擋下它的是最後
         # 一道守門，而不是新流程拿不到資料而空轉通過），再斷言整表拒寫（原斷言不變）。
         body = ef15_body_from_levels(_periods(N), M1B, small_m2)
         assert umh._parse_cbc_ef15m01_levels(body)[0] is not None
         _patch_cbc(monkeypatch, body)
+        capsys.readouterr()
         df = umh.fetch_finmind_m1m2(dt.date(2000, 1, 1), dt.date(2030, 1, 1), "")
         assert df.empty
+        out = capsys.readouterr().out
+        # 批 R4：拒寫原因只有「m2<m1b」一項（其餘三條各 0 列）
+        assert (f"{N - 1}/{N} 列不合格（餘額≤0:0、m2<m1b:{N - 1}、|gap|>30pp:0、"
+                f"百萬元量級帶外 [1e+06, 5e+08]:0）") in out, out
 
 
 class TestSeriesNameOnLabels:
