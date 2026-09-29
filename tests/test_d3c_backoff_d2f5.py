@@ -29,6 +29,15 @@ origin/main `efca639` 原文的同一份模組）逐項對照。
 冷卻期用假時鐘：**只換 `shared.fail_cooldown` 的 `time`**（`st.cache_data` 的 TTL 不受影響，
 故「把假時鐘推過冷卻期仍不重打」＝ 真的在快取裡，不是在退避裡）。
 突變（`TestMutations`）：每一個突變體都讓本檔對應的共用檢查（`_check_*`）轉紅。
+
+📌 批 D3e（2026-09-28）同步改（本檔其餘測試一字未動；各改動處皆標「D3e」）：上文「固定冷卻」自 D2-f25 起
+改為遞增（起點 `FAIL_COOLDOWN_SEC`、上限 `TTL_1HOUR`）；「結果為空 **且** 有一邊確定失敗」自 D2-f23 起拿掉
+「結果為空」（半邊表也不入快取）；單股 `fetch_monthly_revenue` 自 D2-f22 起也拆層。修前模型（`_prefix_mr`／
+`_prefix_svc`）因檔案結構改變而改用逐字常數重建，程式行為照舊等同 `efca639`：去掉 docstring 後與 `efca639` 的 AST
+逐節點比對（2026-09-29，QA N7 更正），只多出修前程式用不到的節點 —— L1：`import sys` 與 `TTL_1HOUR` 的 import
+（D3e 新增）、`shared.fail_cooldown` 三個名稱的 import（D2-f5）；L3：`CachedFailure` 的 import、
+`_CandidatePoolFetchFailed`、`_batch_revenue_with_status`（D2-f5）；其餘節點相同。D3e 本身的測試在
+`tests/test_d3e_mrev_fail_cache.py`。
 """
 from __future__ import annotations
 
@@ -153,21 +162,75 @@ _PREFIX_SCAN_EXIT = '''    _batch = fetch_batch_monthly_revenue(months=18)
             "source": "none", "fetched_at": _fetched_at, "version": SHORTAGE_VERSION}
 '''
 
+#: D3e（2026-09-28）：efca639 `monthly_revenue_fetcher.fetch_monthly_revenue`（逐字；D2-f22 起改名為快取層
+#: `_fetch_monthly_revenue_cached`、外層另包冷卻 → 修前模型不能再從現行檔案切出來）。
+_PREFIX_SINGLE = '''@st.cache_data(ttl=TTL_6HOUR, show_spinner=False)
+def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
+    """單股近 N 月營收。FinMind 主 → TWSE/TPEx OpenAPI keyless fallback(致命03 去單點)。
+
+    Returns:
+        DataFrame columns: date / revenue / revenue_year / revenue_month;失敗回空。
+        fallback 僅提供最新月(OpenAPI 快照特性),歷史序列仍以 FinMind 為主。
+    """
+    _df = _single_finmind(stock_id, months)
+    if _df is not None and not _df.empty:
+        return _df
+    print(f"[mrev-fetcher] {stock_id} FinMind 無資料 → TWSE/TPEx OpenAPI fallback(單股篩)")
+    _batch = _batch_twse_openapi()
+    if _batch.empty:
+        return pd.DataFrame()
+    _one = _batch[_batch["stock_id"] == str(stock_id)].copy()
+    if _one.empty:
+        return pd.DataFrame()
+    _one["revenue_year"] = _one["date"].dt.year
+    _one["revenue_month"] = _one["date"].dt.month
+    _one = _one[["date", "revenue", "revenue_year", "revenue_month"]].reset_index(drop=True)
+    try:
+        _one.attrs["source"] = "TWSE-OpenAPI:t187ap05_L(keyless fallback,單股)"
+        _one.attrs["fetched_at"] = pd.Timestamp.now("UTC").isoformat()
+    except Exception:
+        pass
+    return _one
+
+
+'''
+
+#: D3e：efca639 `_batch_finmind` 的 schema 樣本那一句（逐字；D2-f21 起改為只取首檔）。
+_PREFIX_SAMPLE = ("            _sample_v = validate_or_reject(_result_b.head(36), MonthlyRevenueSchema,\n"
+                  "                                           label='fetch_batch_monthly_revenue:sample')\n")
+
+#: D3e：efca639 `_scan_cached` ② 的尾段（逐字；D2-f23 起在這裡多了「半邊表不入快取」）。
+_PREFIX_SCAN_TAIL = '''
+    _pool = _candidate_pool(_batch, max_n=max_scan)
+    _pairs = [(c["stock_id"], c["revenue_yoy_last3"]) for c in _pool]
+    _rows, _note = _score_and_diagnose(_pairs)
+    return _rows, {
+        "candidates": len(_pool), "deep_scanned": len(_pairs), "scored": len(_rows),
+        "pool_source": "全市場月營收動能候選池（sponsor tier）",
+        "note": _note,
+        "source": "FinMind:MonthRevenue(batch)+FS+BS",
+        "fetched_at": _fetched_at, "version": SHORTAGE_VERSION}
+'''
+
 
 def _prefix_mr(tag: str) -> types.ModuleType:
     src = pathlib.Path(MR.__file__).read_text(encoding="utf-8")
+    # D3e：`_batch_finmind` 的樣本換回 efca639 原文；`_batch_twse_openapi` 之後整段以逐字常數重建
+    # （efca639 在那之後只有：`_batch_twse_openapi` → 單股 → 全市場，兩支都直接掛 `st.cache_data`）。
+    s0 = src.index("            _sample = _result_b.head(36)\n")
+    s1 = src.index("label='fetch_batch_monthly_revenue:sample')\n", s0) + \
+        len("label='fetch_batch_monthly_revenue:sample')\n")
+    src = src[:s0] + _PREFIX_SAMPLE + src[s1:]
     a = src.index("def _batch_twse_openapi(")
-    b = src.index("@st.cache_data(ttl=TTL_6HOUR, show_spinner=False)\ndef fetch_monthly_revenue(")
-    src = src[:a] + _PREFIX_TWSE_OPENAPI + src[b:]
-    src = src[:src.index("class _BatchRevenueFetchFailed(")] + _PREFIX_BATCH
+    src = src[:a] + _PREFIX_TWSE_OPENAPI + _PREFIX_SINGLE + _PREFIX_BATCH
     return _load(src, f"_prefix_d3c_{tag}_monthly_revenue_fetcher", MR.__file__)
 
 
 def _prefix_svc(tag: str) -> types.ModuleType:
     src = pathlib.Path(SVC.__file__).read_text(encoding="utf-8")
     a = src.index("    _batch, _batch_failed = _batch_revenue_with_status(months=18)")
-    b = src.index("        return _empty\n") + len("        return _empty\n")
-    src = src[:a] + _PREFIX_SCAN_EXIT + src[b:]
+    b = src.index("\n\ndef run_shortage_scan(")         # D3e：② 的尾段也換回 efca639 原文
+    src = src[:a] + _PREFIX_SCAN_EXIT + _PREFIX_SCAN_TAIL + src[b:]
     c = src.index("    try:\n        rows, meta = _scan_cached(max_scan)\n")
     d = src.index("\n", src.index("rows, meta = _cf.payload")) + 1
     src = src[:c] + "    rows, meta = _scan_cached(max_scan)\n" + src[d:]
@@ -221,7 +284,9 @@ def _fm_one_stock(sid: str = "1001", n: int = 19) -> pd.DataFrame:
     """FinMind 全市場月營收的成功回應（單一檔、n 個月、逐月成長）。
 
     刻意只放一檔：`_batch_finmind` 以前 36 列當 schema 樣本，兩檔以上會跨檔（日期不單調）→
-    整批棄用（既有行為，非本次範圍）。"""
+    整批棄用（既有行為，非本次範圍）。
+    （D3e：該既有問題即 D2-f21，批 D3e 已改為只取首檔；本檔照舊用一檔即可，多檔見
+    `tests/test_d3e_mrev_fail_cache.py`。）"""
     dates = pd.date_range("2025-01-01", periods=n, freq="MS").strftime("%Y-%m-%d")
     return pd.DataFrame({"stock_id": [sid] * n, "date": list(dates),
                          "revenue": [float(100 + i * 8) for i in range(n)]})
@@ -350,12 +415,17 @@ def _check_l1_ambiguous_still_cached(mod, w: _MrWorld, clock: dict) -> None:
 
 
 def _check_l1_persistent_failure_once_per_cooldown(mod, w: _MrWorld, clock: dict) -> None:
+    # D3e（D2-f25）：冷卻由固定改遞增 —— 第 i 段冷卻 ＝ FAIL_COOLDOWN_SEC × 2^(i−1)（這 3 段都未達上限
+    # TTL_1HOUR）；每一段照舊只打 1 次，且該段最後一秒仍不重打。
     for i in range(1, 4):
+        window = FAIL_COOLDOWN_SEC * 2 ** (i - 1)
         for _ in range(4):
             _assert_prefix_failure_frame(mod.fetch_batch_monthly_revenue())
+        clock["now"] += window - 1
+        _assert_prefix_failure_frame(mod.fetch_batch_monthly_revenue())
         assert w.calls["twse"] == i and w.calls["tpex"] == i, \
-            "持續失敗：每個冷卻期只打 1 次（不入快取、也不轟炸）"
-        clock["now"] += FAIL_COOLDOWN_SEC
+            "持續失敗：每一段冷卻只打 1 次（不入快取、也不轟炸）"
+        clock["now"] += 1
 
 
 def _check_l1_cooldown_is_per_months(mod, w: _MrWorld, clock: dict) -> None:
@@ -467,7 +537,8 @@ class TestD2f5BatchFailureNotCached:
         _assert_prefix_failure_frame(MR.fetch_batch_monthly_revenue())
         assert 18 in MR._batch_fail_cooldown, "失敗記進退避表（鍵＝months）"
         assert MR._batch_fail_cooldown.seconds == FAIL_COOLDOWN_SEC
-        assert MR._batch_fail_cooldown.max_seconds is None, "單鍵取數：固定冷卻，不開遞增"
+        # D3e（D2-f25）：原斷言「max_seconds is None（固定冷卻，不開遞增）」→ 改為遞增、上限 TTL_1HOUR。
+        assert MR._batch_fail_cooldown.max_seconds == TTL_1HOUR, "D2-f25：遞增退避，上限 TTL_1HOUR"
 
     def test_persistent_failure_hits_upstream_once_per_cooldown(self, mr, fc_clock):
         _check_l1_persistent_failure_once_per_cooldown(MR, mr, fc_clock)
@@ -523,8 +594,10 @@ class TestD2f5BatchFailureNotCached:
         MR.fetch_batch_monthly_revenue()
         out = capsys.readouterr().out
         assert "[mrev-fetcher] TWSE fallback 上市 非200: status=None" in out, "修前的失敗 log 照印"
+        # D3e（D2-f25）：冷卻改遞增，log 尾巴由「{秒}s 內不重打上游」改成寫出起點與上限（固定秒數已不成立）。
         assert ("[mrev-fetcher] batch 全源無資料且 OpenAPI 確定抓取失敗(上市: status=None；上櫃: status=None)"
-                f"→ 不入快取,{FAIL_COOLDOWN_SEC:.0f}s 內不重打上游") in out
+                f"→ 不入快取,冷卻期內不重打上游(冷卻由 {FAIL_COOLDOWN_SEC:.0f}s 起、連續失敗加倍、"
+                f"上限 {TTL_1HOUR:.0f}s)") in out
         MR.fetch_batch_monthly_revenue()
         assert capsys.readouterr().out == "", "冷卻期內不重打，也就不再印失敗 log"
 
@@ -563,16 +636,19 @@ class TestD2f5BatchStillCached:
             ["st.cache_data(ttl=TTL_6HOUR, show_spinner=False)"], "快取層參數同修前（原本掛在公開函式上那一行）"
         assert fns["fetch_batch_monthly_revenue"].decorator_list == [], "外層不快取 —— 失敗才不會被凍住"
 
-    def test_partial_market_failure_with_data_still_cached(self, mr, fc_clock):
-        """範圍外（照舊）：一邊市場失敗、另一邊有資料 ⇒ 不是「失敗的空表」，照舊快取。"""
+    def test_partial_market_failure_with_data_not_cached_d3e(self, mr, fc_clock):
+        """D3e（D2-f23）：原本這條是「範圍外（照舊）：一邊市場失敗、另一邊有資料 ⇒ 不是『失敗的空表』，照舊
+        快取」（原名 `test_partial_market_failure_with_data_still_cached`）。批 D3e 起改為**不入快取**：回傳同一份
+        半邊表並記退避，冷卻期過後重抓拿到兩邊。完整檢查見 `tests/test_d3e_mrev_fail_cache.py`。"""
         mr.twse, mr.tpex = "none", "ok"
         first = MR.fetch_batch_monthly_revenue()
         assert list(first["stock_id"]) == ["6488"]
+        assert 18 in MR._batch_fail_cooldown, "半邊失敗記進退避表（鍵＝months）"
         n1 = dict(mr.calls)
         mr.recover()
-        fc_clock["now"] += 100 * FAIL_COOLDOWN_SEC
-        pd.testing.assert_frame_equal(MR.fetch_batch_monthly_revenue(), first)
-        assert mr.calls == n1 and len(MR._batch_fail_cooldown) == 0
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        _assert_openapi_frame(MR.fetch_batch_monthly_revenue())
+        assert mr.calls["twse"] == n1["twse"] + 1 and len(MR._batch_fail_cooldown) == 0
 
     def test_clear_resets_cache_and_backoff(self, mr, fc_clock):
         _check_l1_clear_resets_both(MR, mr, fc_clock)
@@ -585,10 +661,12 @@ class TestD2f5BatchStillCached:
         assert MR.fetch_batch_monthly_revenue.with_status is MR._fetch_batch_monthly_revenue_with_status
         (name, p), = inspect.signature(MR._batch_twse_openapi).parameters.items()
         assert (name, p.kind, p.default) == ("failed", p.KEYWORD_ONLY, None), \
-            "私有函式只多一個選用關鍵字參數（預設不傳＝修前；單股 fallback 不傳）"
+            "私有函式只多一個選用關鍵字參數（預設不傳＝修前；D3e 起單股 fallback 也傳）"
 
-    def test_single_stock_fetcher_untouched(self, mr, fc_clock):
-        """範圍外（照舊，未改）：單股 `fetch_monthly_revenue` 的 OpenAPI 備援仍是修前行為（不傳 `failed`）。"""
+    def test_single_stock_first_call_same_as_prefix_d3e(self, mr, fc_clock):
+        """D3e（D2-f22）：原本這條是「範圍外（照舊，未改）：單股 `fetch_monthly_revenue` 的 OpenAPI 備援仍是修前
+        行為（不傳 `failed`）」（原名 `test_single_stock_fetcher_untouched`）。批 D3e 起單股也拆層、傳 `failed`
+        （完整檢查見 `tests/test_d3e_mrev_fail_cache.py`）；這裡只留：第一次呼叫的回傳仍與修前模型逐字相同。"""
         pre = _prefix_mr("single")
         pre.finmind_get = mr.finmind_get
         try:
@@ -598,8 +676,8 @@ class TestD2f5BatchStillCached:
             b = pre.fetch_monthly_revenue("2330")
             assert repr(a) == repr(b) and a.attrs == b.attrs
             src = pathlib.Path(MR.__file__).read_text(encoding="utf-8")
-            body = src[src.index("def fetch_monthly_revenue("):src.index("class _BatchRevenueFetchFailed(")]
-            assert "_batch_twse_openapi()" in body and "failed=" not in body
+            body = src[src.index("def _fetch_monthly_revenue_cached("):src.index("class _BatchRevenueFetchFailed(")]
+            assert "_batch_twse_openapi(failed=_failed)" in body
         finally:
             MR.fetch_monthly_revenue.clear()
             pre.fetch_monthly_revenue.clear()
@@ -708,11 +786,15 @@ class TestD2f5ScanFailureNotCached:
     def test_persistent_failure_upstream_once_per_l1_cooldown(self, sv, mr, fc_clock):
         _plan, side = sv
         for i in range(1, 4):
+            window = FAIL_COOLDOWN_SEC * 2 ** (i - 1)        # D3e（D2-f25）：L1 冷卻遞增（原為固定 FAIL_COOLDOWN_SEC）
             for _ in range(4):
                 rows, meta = SVC.run_shortage_scan()
                 assert rows == [] and meta["note"] == _FAIL_NOTE
-            assert mr.calls == {"fm": i, "twse": i, "tpex": i}, "每個 L1 冷卻期只打上游 1 次"
-            fc_clock["now"] += FAIL_COOLDOWN_SEC
+            fc_clock["now"] += window - 1
+            rows, meta = SVC.run_shortage_scan()
+            assert rows == [] and meta["note"] == _FAIL_NOTE
+            assert mr.calls == {"fm": i, "twse": i, "tpex": i}, "每一段 L1 冷卻只打上游 1 次"
+            fc_clock["now"] += 1
         assert side["qtr"] == 0 and side["mrev"] == 0, "失敗那條路 0 次逐檔深掃"
 
     @pytest.mark.parametrize("kwargs", [{}, {"name_map": {"1001": "甲"}}, {"max_scan": 10},
@@ -967,26 +1049,29 @@ def _expected_hits(base: float, cap: float) -> list[int]:
     return times
 
 
-class TestD2f5LoadNoEscalation:
+class TestD2f5LoadFixedVsEscalating:
+    """D3e（D2-f25）：原類別名 `TestD2f5LoadNoEscalation` —— 當時現行是固定冷卻、遞增只是對照組。批 D3e 起現行
+    改為遞增（正是本測試原本的「對照一」設定），故兩組對調：現行 ＝ 遞增；固定冷卻改由突變體（換回 D2-f5 的
+    `_FailCooldown()`）重現。三組期望值一字未改。"""
+
     def test_hour_of_reruns_fixed_vs_escalating_vs_prefix(self, sv, mr, fc_clock, monkeypatch):
         plan, side = sv
-        out = {"fixed": _drive_hour(SVC, mr, side, fc_clock)}
+        out = {"escalating": _drive_hour(SVC, mr, side, fc_clock)}
 
-        # 對照一：L1 冷卻改遞增（比照 RS：起點 FAIL_COOLDOWN_SEC、上限 TTL_1HOUR）
-        esc = _mutant(MR, ("from shared.ttls import TTL_6HOUR\n", "from shared.ttls import TTL_6HOUR, TTL_1HOUR\n"),
-                      ("_batch_fail_cooldown = _FailCooldown()", "_batch_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)"),
-                      tag="escalating")
+        # 對照一：D2-f5 時的固定冷卻（D3e 前的現行設定）
+        fixed = _mutant(MR, ("_batch_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)",
+                             "_batch_fail_cooldown = _FailCooldown()"), tag="fixed")
         w2, side2 = _MrWorld(), {"pool": 0, "qtr": 0, "mrev": 0}
         monkeypatch.setattr(PH, "fetch_url", w2.fetch_url)
-        _install_mr(esc, monkeypatch, w2)
+        _install_mr(fixed, monkeypatch, w2)
         _install_svc(SVC, monkeypatch, plan, side2)
-        monkeypatch.setattr(SVC, "fetch_batch_monthly_revenue", esc.fetch_batch_monthly_revenue)
+        monkeypatch.setattr(SVC, "fetch_batch_monthly_revenue", fixed.fetch_batch_monthly_revenue)
         fc_clock["now"] += 10 * _HORIZON
         try:
-            out["escalating"] = _drive_hour(SVC, w2, side2, fc_clock)
+            out["fixed"] = _drive_hour(SVC, w2, side2, fc_clock)
         finally:
             SVC._scan_cached.clear()
-            esc.fetch_batch_monthly_revenue.clear()
+            fixed.fetch_batch_monthly_revenue.clear()
 
         # 對照二：修前（L1 凍 6 小時、L3 凍 1 天）
         pre_mr, pre_svc = _prefix_mr("load"), _prefix_svc("load")
@@ -1088,8 +1173,9 @@ class TestMutations:
             m.fetch_batch_monthly_revenue.clear()
 
     def test_m4_l1_classification_too_broad(self, monkeypatch, fc_clock, mr):
-        """M4：判準放寬成「空就算失敗」→ 分不出失敗的空表也不快取、每個冷卻期被重打。"""
-        m, w = _l1_mutant_world("m4", monkeypatch, ("    if _out.empty and _failed:", "    if _out.empty:"))
+        """M4：判準放寬成「空就算失敗」→ 分不出失敗的空表也不快取、每個冷卻期被重打。
+        （D3e：D2-f23 起判準本體改為 `if _failed:`，突變點隨之改為在其上加「或空」。）"""
+        m, w = _l1_mutant_world("m4", monkeypatch, ("    if _failed:   # D2-f23", "    if _failed or _out.empty:   # D2-f23"))
         w.twse = w.tpex = "empty200"
         try:
             with pytest.raises(AssertionError, match="照舊入 6 小時快取"):
