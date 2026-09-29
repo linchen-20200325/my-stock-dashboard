@@ -39,6 +39,8 @@ from src.services.ai_structured_summary import (
 )
 from src.ui.render.macro_ui_components import section_header
 from src.ui.tabs.macro.helpers import render_macro_bucket_summary_bar  # noqa: F401
+# DL-f1-s16（§1 不捏 0）：M1B／M2 年增率「可用」＝有限數值 —— 沿用 #746 同一個函式，不另寫一份。
+from src.ui.tabs.macro.section_long import _finite_yoy
 # v19.175 P0:`cl_data['inst']` 型別收斂 SSOT(L5 → L2,合法下行依賴)
 # I2(2026-08-10):BIAS240 估算揭露 SSOT 同樣在 L2(說明見 macro_helpers 的 I2 區塊)。
 from src.compute.macro import (
@@ -210,10 +212,20 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 _pmi_prev_v = st.session_state.get('_s10_prev_pmi_value')
                 if _pmi_cur is not None:
                     st.session_state['_s10_prev_pmi_value'] = _pmi_cur
+                # DL-f1-s16（§1 不捏 0）：M1B 或 M2 任一不是有限數值（缺鍵／None／NaN／±inf／
+                # 非數值）→ 兩個一起當缺：規則引擎兩個都收 None（走引擎既有的缺值路徑：
+                # 資金項不加不扣、不貼「資金緊縮」），下方 prompt 不送 M1B 那一行。
+                # ⛔ 不可只拿掉缺的那一個：另一個照送 ⇒ spread 變成單邊值（缺 M1B ⇒ −M2 ⇒
+                # 扣分並貼「資金緊縮」；缺 M2 ⇒ +M1B ⇒ 加分）。
+                # 兩個都有值時照舊送原物件 ⇒ 引擎輸入與改動前相同。
+                _m1b_ai = _finite_yoy(_mi_d, 'm1b_yoy')
+                _m2_ai  = _finite_yoy(_mi_d, 'm2_yoy')
+                if _m1b_ai is None or _m2_ai is None:
+                    _m1b_ai = _m2_ai = None
                 _macro_numbers = {
                     'VIX_Index':           _vix_d.get('current'),
-                    'M1B_YoY_pct':         _mi_d.get('m1b_yoy'),
-                    'M2_YoY_pct':          _mi_d.get('m2_yoy'),
+                    'M1B_YoY_pct':         _m1b_ai,
+                    'M2_YoY_pct':          _m2_ai,
                     'TW_Export_YoY_pct':   _exp_d.get('yoy'),
                     'ISM_PMI_or_OECD_CLI': _pmi_cur,
                     'PMI_Prev_Month':       _pmi_prev_v,
@@ -273,14 +285,17 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                         f'{_bi_d["bias_240"]:+.1f}%'
                         f'（{_danger_rule("bias_240")}；'
                         f'負乖離＝低於年線,系統視為超賣機會而非危險,不設危險門檻）')
-                if _mi_d.get('m1b_yoy') is not None:
-                    _gap_v = round(float(_mi_d['m1b_yoy']) - float(_mi_d.get('m2_yoy') or 0), 2)
+                # DL-f1-s16（K1）：M1B／M2 任一不可用 → 整行不送 —— 本行在 M1B 缺時本來就不送，
+                # 沿用同一個處置，不自擬「待取得」之類的替代句。兩個都有值時數字照舊；差額改由
+                # 兩個已驗證值直接相減（原式 `float(m2 or 0)` 的 `or 0` 正是缺 M2 時捏 0 的來源）。
+                if _m1b_ai is not None and _m2_ai is not None:
+                    _gap_v = round(float(_m1b_ai) - float(_m2_ai), 2)
                     # DL-f1-s5：Tier 3（^TWII 動能代理）時只送數字，Gemini 沒有任何依據分辨
                     # 「央行 M1B/M2」與「大盤動能硬湊的代理值」，只能當真值寫進裁決（§1）。
                     # 數字後綴 L0 既有註記（K1 不自擬）；非代理時為空字串 → 這一行逐字不變。
                     # 只揭露：`_macro_numbers` / `calculate_system_state` 一位未動。
                     _ctx.append(
-                        f'• M1B={_mi_d["m1b_yoy"]:.1f}%  M2={_mi_d.get("m2_yoy",0):.1f}%  '
+                        f'• M1B={_m1b_ai:.1f}%  M2={_m2_ai:.1f}%  '
                         f'差額={_gap_v:+.2f}%{m1b_m2_proxy_badge(_mi_d)}'
                         f'（正=資金行情啟動；{_danger_rule("m1b_m2_gap")}）')
                 if _fnet_v is not None:

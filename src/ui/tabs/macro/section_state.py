@@ -30,6 +30,8 @@ from shared.station_specs import MISS_FETCH_FAILED
 from shared.ui_state import UI_IDLE, classify_ui_state
 from src.compute.macro import calc_traffic_light  # noqa: F401
 from src.ui.tabs.macro.handlers import _render_traffic_light  # noqa: F401
+# DL-f1-s16（§1 不捏 0）：M1B／M2 年增率「可用」＝有限數值 —— 沿用 #746 同一個函式，不另寫一份。
+from src.ui.tabs.macro.section_long import _finite_yoy
 
 
 def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
@@ -167,10 +169,18 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
         # 「M1B>M2 黃金交叉 → 資金由定存轉入股市，長線起漲徵兆」。
         # 判定改走 L0 SSOT `shared.macro_provenance.is_m1b_m2_proxy()`（同時吃
         # 布林旗標與 source 標籤，精確比對不做 substring 嗅探）。
-        if _m1b2 and not is_m1b_m2_proxy(_m1b2):
+        # ── DL-f1-s16（§1 不捏 0）：原本兩鍵各 `.get(..., 0)` ────────────────────────
+        # 缺 M2 ⇒「M1B(4.2%) > M2(0.0%) 黃金交叉」、缺 M1B ⇒「M1B(0.0%) < M2 死亡交叉」、
+        # 值為 None ⇒ `None - x` 直接炸掉 §二（此處沒有 try）；NaN／缺數字時仍把資金群
+        # 登記成「可評估」⇒ 畫面印「資金：中性」並算進分母。
+        # 改為：M1B 或 M2 任一不是有限數值 → 不算差額、不出交叉訊號，資金群也不因
+        # M1B/M2 登記（與代理值同一待遇 —— 沒有數字＝未評估，不是中性；台幣那一路照舊
+        # 可登記）。兩個都有值時照舊：同一組物件、同一段算式 ⇒ 輸出與改動前相同。
+        _m1b_y = _finite_yoy(_m1b2, 'm1b_yoy')
+        _m2_y  = _finite_yoy(_m1b2, 'm2_yoy')
+        if (_m1b2 and not is_m1b_m2_proxy(_m1b2)
+                and _m1b_y is not None and _m2_y is not None):
             _fam_ok.add('liquidity')   # v19.173：M1B/M2 到位 → 資金群可評估
-            _m1b_y = _m1b2.get('m1b_yoy', 0)
-            _m2_y  = _m1b2.get('m2_yoy', 0)
             _diff  = _m1b_y - _m2_y
             if _diff > 0:
                 pivot_signals.append(('M1B>M2 黃金交叉','✅',TRAFFIC_GREEN,

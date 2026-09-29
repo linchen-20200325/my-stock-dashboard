@@ -18,6 +18,8 @@ from shared.thresholds import YIELD_MID_DEC
 from src.compute.macro import bias_estimated_note as _bias_est_note
 from src.services.app_ai_service import generate_ai_comment
 from src.ui.render import STRATEGY_TECHNICAL, strategy_conclusion  # v19.174 去識別化
+# DL-f1-s44（§1 不捏 0）：M1B／M2 年增率「可用」＝有限數值 —— 沿用 #746 同一個函式，不另寫一份。
+from src.ui.tabs.macro.section_long import _finite_yoy
 
 
 def render_op_recommendation_section(sid2: str, health2,
@@ -81,8 +83,16 @@ def render_op_recommendation_section(sid2: str, health2,
     try:
         _mkt_top_g = st.session_state.get('mkt_info', {})
         _m1b_top_g = st.session_state.get('m1b_m2_info', {})
-        _m1b_diff_g = (_m1b_top_g.get('m1b_yoy', 0) - _m1b_top_g.get('m2_yoy', 0)
-                       if _m1b_top_g else 0)
+        # DL-f1-s44（§1 不捏 0）：原本兩鍵各 `.get(..., 0)` 相減 —— 缺 M2 ⇒ 差額＝M1B 本身
+        #（→「M1B-M2為正且強勁」）、缺 M1B ⇒ 差額＝−M2（→「為負，資金縮減期」）、值為 None
+        # ⇒ TypeError 被下方 except 吞成「AI 分析暫時無法使用」。改為：任一不是有限數值 →
+        # 差額送 None，L3 `generate_ai_comment` 走它既有的缺值路徑（不出 M1B-M2 那句）。
+        # 兩個都有值時照舊：同一組物件相減 ⇒ 輸出與改動前相同（沒有 m1b_m2_info 時原送 0、
+        # 現送 None —— L3 對兩者走同一條 `or 0` 路徑，文案逐字相同）。
+        _m1b_g = _finite_yoy(_m1b_top_g, 'm1b_yoy')
+        _m2_g = _finite_yoy(_m1b_top_g, 'm2_yoy')
+        _m1b_diff_g = (_m1b_g - _m2_g
+                       if _m1b_g is not None and _m2_g is not None else None)
         # 取 Tab3 最近分析的外資資料
         _cd_g = st.session_state.get('cl_data', {})
         _inst_g = _cd_g.get('inst', {})

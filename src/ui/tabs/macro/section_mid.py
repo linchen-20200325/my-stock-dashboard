@@ -23,6 +23,8 @@ from src.ui.render.ui_widgets import (
     strategy_conclusion,
 )
 from src.ui.tabs.macro.helpers import add_danger_hlines  # noqa: F401
+# DL-f1-s16（§1）：M1B／M2 年增率「可用」＝有限數值 —— 沿用 #746 同一個函式，不另寫一份。
+from src.ui.tabs.macro.section_long import _finite_yoy
 # v19.175 P0:`cl_data['inst']` 型別收斂 SSOT(L5 → L2,合法下行依賴)
 # I2(2026-08-10):`bias_240` 估算揭露文案 SSOT(同上,L5 → L2)。
 from src.compute.macro import bias_estimated_note as _bias_est_note
@@ -437,9 +439,16 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
 
         # ── 策略3：M1B-M2 資金動能（三段公式）────────────────────
         _m1b8_info = st.session_state.get('m1b_m2_info', {})
-        if _m1b8_info and _m1b8_info.get('m1b_yoy') is not None and _m1b8_info.get('m2_yoy') is not None:
-            _m1b8 = float(_m1b8_info.get('m1b_yoy', 0))
-            _m2b8 = float(_m1b8_info.get('m2_yoy', 0))
+        # DL-f1-s16（§1）：原閘門只判 `is not None`，NaN／±inf 照樣算進下面三段分支
+        #（nan ⇒ 落到「死亡交叉·資金退潮」、+inf ⇒「黃金交叉·熱錢狂潮」，數字印成 nan／inf）。
+        # 閘門改用 `_finite_yoy`（None／NaN／±inf／非數值一律算缺，與 §七 同一個判定）⇒ 走既有
+        #「載入後自動顯示」那一枝；下方三環 D 徽章共用同一組值 ⇒ 走既有「D M1B-M2未知」。
+        # 分支、門檻、文案一位未動；兩個都有值時照舊（同一組物件）。
+        _m1b8_v = _finite_yoy(_m1b8_info, 'm1b_yoy')
+        _m2b8_v = _finite_yoy(_m1b8_info, 'm2_yoy')
+        if _m1b8_v is not None and _m2b8_v is not None:
+            _m1b8 = float(_m1b8_v)
+            _m2b8 = float(_m2b8_v)
             _gap8 = round(_m1b8 - _m2b8, 2)
             # DL-f1-s5：Tier 3（^TWII 動能代理）時，gap 數字後綴 L0 既有註記（K1 不自擬），
             # 否則「積極作多強勢股」會被讀成央行真實資金行情的結論。
@@ -570,11 +579,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             _nvda8    = tech_s.get('輝達 NVDA', {})
             _exp_c    = float(_m8_exp.get('yoy', 0)) if _m8_exp else None
             _gap8c    = None
-            if (_m1b8_info and _m1b8_info.get('m1b_yoy') is not None and
-                    _m1b8_info.get('m2_yoy') is not None):
+            # DL-f1-s16：與上方策略3 同一組有限值（`_m1b8_v`／`_m2b8_v` 與 `_m1b8_info` 同層
+            # 定義，不是策略3 分支內的變數）。
+            if _m1b8_v is not None and _m2b8_v is not None:
                 try:
-                    _gap8c = round(float(_m1b8_info['m1b_yoy']) -
-                                   float(_m1b8_info['m2_yoy']), 2)
+                    _gap8c = round(float(_m1b8_v) - float(_m2b8_v), 2)
                 except Exception:
                     pass
             # DL-f1-s5：第二環 D 徽章印的是同一個 M1B-M2 數字 → 代理時同樣後綴 L0 既有註記
