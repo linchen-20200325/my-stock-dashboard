@@ -1432,7 +1432,7 @@ def fetch_china_macro(fred_api_key: str = "") -> dict:
     寫入時先清過期項、仍滿就逐出最早寫入的一筆,命中不續命;「強制重抓」會整包清空)。該筆還在時重算
     不打上游;過期、被其他取數擠出或被清空後,下一次重算就再打一次上游 —— 每次重算前都被擠出時,
     就是每次重算都重打上游。這是 `fetch_fred` 的既有缺口(`risk_radar` 的 HY OAS／10Y 兩燈直呼
-    `fetch_fred`,同樣如此;本函式修前被 30 分鐘快取整包蓋住才沒露出),本次不修,已交總管另登待辦。
+    `fetch_fred`,同樣如此;本函式修前被 30 分鐘快取整包蓋住才沒露出),本次不修,已另登待辦（交接本 D2-f49）。
     """
     if not fred_api_key:
         print('[tw_macro/china_macro] fred_api_key 空,跳過')

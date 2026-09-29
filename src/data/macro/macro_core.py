@@ -427,7 +427,8 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         # D2-f6:算失敗、記退避 —— 依既有語意:(1) 上方 FE-20 註把它列為四條「失敗路徑」
         # 之一、@monitored 的 success_check 也把它記 failed;(2) 修前就不寫入 30min 成功
         # 快取(不被當成功答案);(3) 與 Q2-r2「HTTP 200 但收盤全 null → 等同抓取失敗」同形。
-        # 冷卻期內重問也只會得到同一個空答案(這是 HTTP 200 回應,本就被 fetch_url 快取 300 秒),
+        # 冷卻期內重問:URL 快取裡那份還在(沒過期、沒被擠出或清空)時只會拿到同一個空答案(HTTP 200 回應
+        # 會進 fetch_url 的 URL 快取),被擠出或清空後則會真的再打一次上游;記了退避,這段期間就
         # 不必每次 rerun 都再走一次 fetch_url 與解析。回傳同修前。
         with _FRED_CACHE_LOCK:
             _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f14:與既有紀錄取 max
