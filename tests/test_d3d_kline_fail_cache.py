@@ -305,6 +305,10 @@ def _respond(mode: str, ticker: str, period: str, raise_errors: bool):
         "tz_missing": lambda: _exc(YFE.YFTzMissingError, f"${ticker}: possibly delisted; no timezone found"),
         "bad_period": lambda: _exc(YFE.YFInvalidPeriodError, f"{ticker}: Period '{period}' is invalid"),
         "legacy_no_data": lambda: Exception(f"{ticker}: No data found, symbol may be delisted"),
+        # 維護頁（"Will be right back"）：1.x 拋 YFDataException、0.2.x 拋 RuntimeError —— 皆為抓取失敗
+        "yahoo_down": lambda: _exc(getattr(YFE, "YFDataException", RuntimeError),
+                                   "*** YAHOO! FINANCE IS CURRENTLY DOWN! ***"),
+        "yahoo_down_legacy": lambda: RuntimeError("*** YAHOO! FINANCE IS CURRENTLY DOWN! ***"),
     }[mode]()
     if raise_errors:
         raise exc
@@ -316,6 +320,7 @@ class _FakeYF:
 
     mode（`per` 可逐檔覆寫）：ok／none／empty（兩種呼叫都回帶欄位空表）／rate_limited（兩種呼叫都拋 429）／
     net_down・timeout（`raise_errors=True` 拋 requests 例外；預設吞成帶欄位空表）／
+    yahoo_down・yahoo_down_legacy（維護頁：`raise_errors=True` 拋 YFDataException／RuntimeError；預設吞成空表）／
     no_data・tz_missing・bad_period（`raise_errors=True` 拋 yfinance 型別例外；預設帶欄位空表）／
     legacy_no_data（同上，裸 `Exception`：0.2.36～0.2.38）。記下每一次 `history()` 的
     (ticker, period, raise_errors)。
@@ -708,11 +713,72 @@ def _check_cooldown_key(yp, fake, clock) -> None:
     pd.testing.assert_frame_equal(yp.cached_history("2330.TW", period="1y"), _ok_frame("2330.TW"))
 
 
+def _check_cooldown_capacity(yp, fake, clock, n: int = 65) -> None:
+    """批 D3d N1：同一冷卻期內 n 個 (ticker, period) 都抓取失敗，連掃 3 輪 —— 第二、三輪上游 0 次
+    （n ≤ 成功快取上限 200；修前這些失敗被當成「沒資料」存進上限 200 的成功快取，同樣 0 次）。"""
+    _fresh(yp.cached_history)
+    fake.mode, fake.per = "net_down", {}
+    tickers = [f"{1000 + i}.TW" for i in range(n)]
+    rounds: list = []
+    for _ in range(3):
+        start = len(fake.calls)
+        for t in tickers:
+            _assert_bare_empty(yp.cached_history(t, period="1y"))
+        rounds.append(len(fake.calls) - start)
+        clock["now"] += 1                                     # 仍在同一冷卻期
+    assert rounds == [n, 0, 0], f"n={n}：三輪各打上游 {rounds} 次（冷卻表容量不足會一邊記一邊逐出）"
+
+
+_COPY_SEQ = iter(range(10**9))
+
+
+def _fresh_copy(mod: types.ModuleType) -> types.ModuleType:
+    """同一份原始碼另建一個模組（新模組名 → `st.cache_data` 在第一次呼叫時才建新的儲存）。"""
+    src = pathlib.Path(mod.__file__).read_text(encoding="utf-8")
+    return _load(src, f"_copy_d3d_{next(_COPY_SEQ)}_{mod.__name__.rsplit('.', 1)[-1]}", mod.__file__)
+
+
+def _check_fetch_single_ttl(ddf) -> None:
+    """D2-f15 快取層 `_fetch_single_cached` 的 TTL ＝ 1 小時（行為）：第 31 分鐘（pkl 的 30 分鐘已過）仍由
+    `fetch_single` 自己的快取回應、不再往下問 K 線層；第 61 分鐘才重算。
+
+    時鐘：換 streamlit 建 TTLCache 時讀的 `cache_utils.TTLCACHE_TIMER` —— 只對**第一次呼叫才建儲存**的
+    模組有效，故真模組一律用 `_fresh_copy` 的同源副本（突變體本來就是新模組）。下層換成不快取的
+    `cached_history` 替身，才看得到每一次重算。"""
+    from streamlit.runtime.caching import cache_utils
+    if ddf is DDF:
+        ddf = _fresh_copy(DDF)
+    now = {"t": 10_000.0}
+    calls: list = []
+
+    def _hist(sym, period="60d"):
+        calls.append(sym)
+        return _ok_frame(sym)
+    _hist.with_status = lambda sym, period="60d": (_hist(sym, period), False)
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(cache_utils, "TTLCACHE_TIMER", lambda: now["t"])
+            mp.setattr(YP, "cached_history", _hist)
+            CL._pkl_clear_all()
+            pd.testing.assert_frame_equal(ddf.fetch_single("^DJI"), _fs_expected("^DJI"))
+            assert calls == ["^DJI"]
+            now["t"] += 31 * 60
+            CL._pkl_clear_all()                                  # pkl 的 30 分鐘 TTL 已過
+            pd.testing.assert_frame_equal(ddf.fetch_single("^DJI"), _fs_expected("^DJI"))
+            assert calls == ["^DJI"], "第 31 分鐘：仍在 fetch_single 自己的 1 小時快取裡（不重算）"
+            now["t"] += 30 * 60
+            CL._pkl_clear_all()
+            pd.testing.assert_frame_equal(ddf.fetch_single("^DJI"), _fs_expected("^DJI"))
+            assert calls == ["^DJI", "^DJI"], "第 61 分鐘：1 小時到期、重算"
+    finally:
+        _clear(ddf.fetch_single)
+
+
 # ══════════════════════════════════════════════════════════════════
 # D2-f16 ① 吞成空表的抓取失敗：不入快取、冷卻、恢復；真的沒資料照舊
 # ══════════════════════════════════════════════════════════════════
 class TestD2f16SwallowedFailureNotCached:
-    @pytest.mark.parametrize("mode", ["net_down", "timeout"])
+    @pytest.mark.parametrize("mode", ["net_down", "timeout", "yahoo_down", "yahoo_down_legacy"])
     def test_swallowed_error_backs_off_then_recovers(self, yfh, fc_clock, capsys, mode):
         _check_swallowed_error_not_cached(YP, yfh, fc_clock, mode)
         assert all(c[2] is True for c in yfh.calls), "一律以 raise_errors=True 呼叫"
@@ -838,6 +904,8 @@ def real_yf(monkeypatch, fc_clock):
             return _Resp(404, _CHART_404)
         if mode == "html":
             return _Resp(503, text="<html><body>503 Service Unavailable</body></html>")
+        if mode == "maint":                                   # Yahoo 維護頁（yfinance 認 "Will be right back"）
+            return _Resp(200, text="<html><body>Will be right back ... Thank you for your patience.</body></html>")
         return _Resp(200, _chart_ok(url.rsplit("/", 1)[-1], p.get("range", "1y")))
 
     monkeypatch.setattr(yfd.YfData, "get", _get)
@@ -847,15 +915,17 @@ def real_yf(monkeypatch, fc_clock):
 
 @pytest.mark.filterwarnings("ignore:'raise_errors' deprecated:DeprecationWarning")
 class TestRealYfinancePremise:
-    def test_premise_default_call_swallows_network_error(self, real_yf):
-        """修前那種呼叫（沒帶 raise_errors）：網路錯誤被吞成空表，不拋 —— D2-f16 的根因。"""
-        real_yf["mode"] = "down"
+    @pytest.mark.parametrize("mode", ["down", "html", "maint"])
+    def test_premise_default_call_swallows_network_error(self, real_yf, mode):
+        """修前那種呼叫（沒帶 raise_errors）：網路錯誤／非 JSON／維護頁被吞成空表，不拋 —— D2-f16 的根因。"""
+        real_yf["mode"] = mode
         df = yfinance.Ticker("PRE1.TW").history(period="1y")
         assert isinstance(df, pd.DataFrame) and df.empty
         assert real_yf["urls"], "確實打過（替身）上游"
 
     @pytest.mark.parametrize("mode,exc", [("down", requests.exceptions.ConnectionError),
-                                          ("html", ValueError)])
+                                          ("html", ValueError),
+                                          ("maint", (RuntimeError, getattr(YFE, "YFDataException", RuntimeError)))])
     def test_premise_raise_errors_surfaces_it(self, real_yf, mode, exc):
         real_yf["mode"] = mode
         with pytest.raises(exc):
@@ -892,6 +962,20 @@ class TestRealYfinancePremise:
         df, failed = YP.cached_history.with_status("PRE6.TW", "60d")
         _assert_bare_empty(df)
         assert failed is False and ("PRE6.TW", "60d") not in YP._history_fail_cooldown
+
+    def test_end_to_end_maintenance_page_is_failure(self, real_yf, fc_clock):
+        """N4(b)：Yahoo 維護頁 ＝ 抓取失敗（不是「沒資料」）—— 不入快取、冷卻期內不重打、期滿即取得資料。"""
+        real_yf["mode"] = "maint"
+        df, failed = YP.cached_history.with_status("PRE7.TW", "1y")
+        _assert_bare_empty(df)
+        assert failed is True and ("PRE7.TW", "1y") in YP._history_fail_cooldown
+        n = len(real_yf["urls"])
+        real_yf["mode"] = "ok"
+        df, failed = YP.cached_history.with_status("PRE7.TW", "1y")
+        assert failed is True and len(real_yf["urls"]) == n, "冷卻期內不打上游"
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        df, failed = YP.cached_history.with_status("PRE7.TW", "1y")
+        assert failed is False and len(df) == 40, "修前（若歸成沒資料）：空表凍 1 小時"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1137,9 +1221,51 @@ class TestD2f20CachedHistoryBehaviour:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 批 D3d 複驗補修（2026-09-29）：N1 冷卻表容量、N4(a) fetch_single 的 TTL（N4(b) 維護頁見上方
+# TestD2f16*／TestRealYfinancePremise 的 yahoo_down／maint 情境）
+# ══════════════════════════════════════════════════════════════════
+class TestN1CooldownCapacity:
+    """QA 重現：同一冷卻期內連掃 3 輪，65 個失敗鍵時上游呼叫 修後（冷卻表上限 64）65／65／65、修前 65／0／0。"""
+
+    @pytest.mark.parametrize("n", [64, 65, 200])
+    def test_failed_keys_no_upstream_in_rounds_2_and_3(self, yfh, fc_clock, n):
+        _check_cooldown_capacity(YP, yfh, fc_clock, n)
+
+    @pytest.mark.parametrize("n", [64, 65, 200])
+    def test_same_upstream_calls_as_prefix(self, yfh, fc_clock, prefix, n):
+        _check_cooldown_capacity(prefix.yp, yfh, fc_clock, n)       # 修前：吞掉的錯誤進成功快取（上限 200）
+        prefix_calls = [c[:2] for c in yfh.calls]
+        yfh.calls.clear()
+        _check_cooldown_capacity(YP, yfh, fc_clock, n)
+        assert [c[:2] for c in yfh.calls] == prefix_calls
+
+    def test_bound_shared_with_success_cache(self):
+        assert YP._history_fail_cooldown.max_entries == YP._HISTORY_CACHE_MAX_ENTRIES == 200
+
+    def test_reconcile_like_scan_over_64_keys(self, yfh, fc_clock, monkeypatch):
+        """前進式驗證對帳（`forward_test_service.reconcile_all`）的取數路徑：逐檔 `.TW`＋`.TWO` 備援 ——
+        40 檔 ＝ 80 個失敗鍵（> 64）。同一冷卻期內第二輪 Yahoo 0 次（修前也是 0）。"""
+        import src.data.core.data_loader as DL
+        from src.data.stock.picker_fetcher import fetch_stock_history_1y
+        monkeypatch.setattr(DL, "_fetch_finmind_price_raw", lambda *a, **k: pd.DataFrame())
+        yfh.mode = "net_down"
+        codes = [str(2000 + i) for i in range(40)]
+        for rnd in range(2):
+            start = len(yfh.calls)
+            assert [fetch_stock_history_1y(c) for c in codes] == [(None, None)] * len(codes)
+            assert len(yfh.calls) - start == (80 if rnd == 0 else 0), f"第 {rnd + 1} 輪"
+            fc_clock["now"] += 1
+
+
+class TestN4aFetchSingleTtl:
+    def test_ttl_is_one_hour(self):
+        _check_fetch_single_ttl(DDF)
+
+
+# ══════════════════════════════════════════════════════════════════
 # 隨機操作序列 × 獨立參考模型（property-based 的精神；固定 seed、不引入新依賴，同 #741 測試手法）
 # ══════════════════════════════════════════════════════════════════
-_FAILS = ("net_down", "timeout", "rate_limited")          # 抓取失敗：不入快取、記冷卻
+_FAILS = ("net_down", "timeout", "rate_limited", "yahoo_down", "yahoo_down_legacy")   # 抓取失敗：不入快取、記冷卻
 _NO_DATA = ("no_data", "tz_missing", "bad_period", "legacy_no_data", "empty", "none")   # 照舊快取
 
 
@@ -1324,6 +1450,22 @@ _MUTATIONS = [
      [(_YP_EMPTY_RULE, "    if _df is None:\n        return pd.DataFrame()\n    return _df\n")], "column_empty"),
     ("f20_key_ticker_only", "yp", [("    _key = (ticker, period)\n", "    _key = ticker\n")], "cooldown_key"),
     ("f20_key_period_only", "yp", [("    _key = (ticker, period)\n", "    _key = period\n")], "cooldown_key"),
+    # ── 批 D3d 複驗補修（2026-09-29）──
+    ("n1_cooldown_cap_default_64", "yp",
+     [("_history_fail_cooldown = _FailCooldown(max_entries=_HISTORY_CACHE_MAX_ENTRIES)",
+       "_history_fail_cooldown = _FailCooldown()")], "capacity"),
+    ("n4a_fetch_single_ttl_30min", "ddf",
+     [("@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)\ndef _fetch_single_cached(",
+       "@st.cache_data(ttl=TTL_30MIN, show_spinner=False)\ndef _fetch_single_cached(")], "fs_ttl"),
+    ("n4a_fetch_single_ttl_2h", "ddf",
+     [("@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)\ndef _fetch_single_cached(",
+       "@st.cache_data(ttl=2 * TTL_1HOUR, show_spinner=False)\ndef _fetch_single_cached(")], "fs_ttl"),
+    ("n4b_maintenance_page_is_no_data", "yp",
+     [('"YFChartError", "YFInvalidPeriodError")', '"YFChartError", "YFInvalidPeriodError", "YFDataException")')],
+     "yahoo_down"),
+    ("n4b_runtime_error_is_no_data", "yp",
+     [("    if type(exc) is Exception:\n", "    if type(exc) in (Exception, RuntimeError):\n")],
+     "yahoo_down_legacy"),
 ]
 
 
@@ -1347,6 +1489,10 @@ def _run_check(name: str, yp, ddf, fcm, fake, clock, capsys) -> None:
         "proxy": lambda: _check_cache_layer_applies_proxy(yp),
         "column_empty": lambda: _check_column_bearing_empty(yp, fake, clock),
         "cooldown_key": lambda: _check_cooldown_key(yp, fake, clock),
+        "capacity": lambda: _check_cooldown_capacity(yp, fake, clock, 65),
+        "fs_ttl": lambda: _check_fetch_single_ttl(ddf),
+        "yahoo_down": lambda: _check_swallowed_error_not_cached(yp, fake, clock, "yahoo_down"),
+        "yahoo_down_legacy": lambda: _check_swallowed_error_not_cached(yp, fake, clock, "yahoo_down_legacy"),
     }[name]()
 
 

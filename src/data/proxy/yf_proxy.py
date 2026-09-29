@@ -97,7 +97,8 @@ def _is_yf_no_data(exc: BaseException) -> bool:
     · 429（`YFRateLimitError`，0.2.52 起）一律**不是** —— 確定的抓取失敗（防日後型別階層變動）。
     · 型別**恰為** `Exception`：0.2.36～0.2.38 還沒有型別，`history(raise_errors=True)` 把「沒資料」
       一律拋成裸 `Exception("{ticker}: {原因}")`；網路／代理錯誤則是原樣往上拋、帶自己的型別
-      （requests／curl_cffi 例外），不會是裸 `Exception`。
+      （requests／curl_cffi 例外），不會是裸 `Exception`。0.2.x 全系列另有一處也拋裸 `Exception`：
+      還原權息（auto_adjust）失敗 —— 同樣落在這一類（見 `_history_or_raise` 末段）。
     · 其餘：`_yf_no_data_exc_types()` 的實例。
     """
     try:
@@ -131,8 +132,10 @@ def _history_or_raise(tk, ticker: str, period: str):
     相容防線（兩者都退回**修前呼叫**：分不出失敗與沒資料 → 照舊，不會比修前差）：
     · 日後版本移除 `raise_errors`（`TypeError` 且訊息提到它）→ 改用修前呼叫；
     · `DeprecationWarning` 被設定成例外（`-W error`；1.x 在發出 K 線請求前就警告）→ 同上。
-    已知沒有照修前的一條：`raise_errors=True` 時 yfinance 的還原權息（auto_adjust）若失敗會拋出，
-    修前是回未還原的價格。各版 `parse_quotes` 恆補 `Adj Close`，該路徑實務上到不了。
+    已知沒有照修前的一條 —— 還原權息（auto_adjust）失敗（修前回的是**未還原**的價格），修後依版本不同：
+    0.2.36～0.2.66 拋裸 `Exception` → 歸「沒資料」（回空表、照舊快取）；1.0～1.7.0 原樣拋出原例外
+    → 失敗（不入快取、冷卻）。各版 `parse_quotes` 恆補 `Adj Close`，該路徑實務上到不了。
+    （2026-09-29 更正：前一版此處寫成不分版本的「會拋出」，0.2.x 並非如此。）
     """
     try:
         return tk.history(period=period, raise_errors=True)
@@ -149,7 +152,16 @@ def _history_or_raise(tk, ticker: str, period: str):
         return None
 
 
-@st.cache_data(ttl=TTL_1HOUR, max_entries=200, show_spinner=False)
+#: K 線快取的鍵數上限 —— 成功快取（`_cached_history_cached` 的 `max_entries`）與失敗冷卻
+#: （`_history_fail_cooldown`）共用這一個值（批 D3d N1，2026-09-29）。值 200 ＝ 修前掛在快取層上的
+#: inline `max_entries=200`（原值不變，只是具名）。為何兩者必須一致：D2-f16 之後，網路／代理錯誤、
+#: 維護頁、非 JSON 回應改走失敗冷卻；修前這些被當成「沒資料」存進成功快取（上限 200）。冷卻表若沿用
+#: `shared.fail_cooldown.FAIL_COOLDOWN_MAX_ENTRIES`（64），同一冷卻期內失敗鍵超過 64 個時會一邊記、
+#: 一邊逐出最舊的，下一輪每一鍵都重打上游（實例：RS 掃描、前進式驗證對帳逐檔＋`.TWO` 備援）。
+_HISTORY_CACHE_MAX_ENTRIES: int = 200
+
+
+@st.cache_data(ttl=TTL_1HOUR, max_entries=_HISTORY_CACHE_MAX_ENTRIES, show_spinner=False)
 def _cached_history_cached(ticker: str, period: str = "1y") -> pd.DataFrame:
     """`cached_history()` 的快取層。**拋例外一律往上拋**（D2-f4 2026-09-28，同
     `_cached_dividends_cached`；§1.A-3(a)「只快取成功結果」；st.cache_data 不快取例外）。
@@ -164,7 +176,8 @@ def _cached_history_cached(ticker: str, period: str = "1y") -> pd.DataFrame:
 
 
 #: D2-f4：K 線失敗退避（§1.A-3(b)）—— 冷卻期內同一 (ticker, period) 不重打 Yahoo，回同一份空表。
-_history_fail_cooldown = _FailCooldown()
+#: 鍵數上限＝成功快取的上限（批 D3d N1，理由見 `_HISTORY_CACHE_MAX_ENTRIES`）；冷卻秒數不變。
+_history_fail_cooldown = _FailCooldown(max_entries=_HISTORY_CACHE_MAX_ENTRIES)
 
 
 def _cached_history_with_status(ticker: str, period: str = "1y") -> tuple[pd.DataFrame, bool]:
