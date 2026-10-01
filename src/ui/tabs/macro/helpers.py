@@ -301,6 +301,14 @@ def _render_china_drag_panel(fred_api_key: str = "",
 
         _china_sub = compute_china_subscore(_snap)
         _china_score = _china_sub.get("score") if _china_sub else None
+        # D2-f42（批 CN）：L2 `china_macro_snapshot` 恆回非空 dict（5 個 key 皆在、
+        # 失敗者 value=None），上面 `if not _snap` 只擋得住缺 key 的 `{}`，擋不到
+        # 「5 條 series 全敗」。全敗時 `compute_china_subscore` 回 None（§1：不偽 50 中性），
+        # 舊版仍往下畫 4 張卡 —— 乘子 1.000、折扣後＝主分、delta +0.0，看起來像
+        # 「中國沒拖累」的有效觀測（§1.A-1 假地平線）。改在此誠實回報資料不足。
+        if _china_score is None:
+            st.caption("🇨🇳 中國拖累 China Drag:⬜ 中國資料不足(5 條 series 全敗)")
+            return
         _regime = classify_china_regime(_china_sub) if _china_sub else None
         _regime_label = _regime.get("regime") if _regime else "—"
         _regime_color = _regime.get("color") if _regime else "#888"
