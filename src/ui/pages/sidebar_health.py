@@ -240,7 +240,9 @@ def render_sidebar_data_health(session_state) -> None:
         unsafe_allow_html=True,
     )
     if _headline in ("🔴", "🟠"):
-        st.caption("🟠 部分資料偏舊 / 走備援源，可按上方「🔄 強制刷新數據」重抓")
+        # W2-f1（批 SD，2026-10-01；有意識的刪除，⛔ 不是漏刪）：純刪「，可按上方「🔄 強制刷新數據」重抓」
+        # —— 清不到 L1 失敗冷卻表，冷卻期內按下不一定重抓。
+        st.caption("🟠 部分資料偏舊 / 走備援源")
         _render_data_health_ai(_lines)
 
 

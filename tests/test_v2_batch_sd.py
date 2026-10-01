@@ -23,3 +23,25 @@ def test_wf5_valuation_why_tail_has_no_internal_doc_ref():
     assert P.VALUATION_WHY_TAIL == (
         "　本站**不以 0% 殖利率頂替** —— 0% 會被同一套門檻判成「超貴」，"
         "那是拿缺資料當看空結論"), "只刪尾句括號，其餘一字未動"
+
+
+# ── W2-f1（3 處純刪）────────────────────────────────────────────────
+def test_w2f1_tab_stock_degraded_caption_pure_delete():
+    s = _src("src/ui/tabs/tab_stock.py")
+    assert "'建議按右側 🔄 強制重抓 重試主源。'" not in s
+    assert "'🟠 主資料來源失敗已降級，技術指標 / 籌碼 / 融資數值可能與正常情況不同。'" in s
+
+
+def test_w2f1_sidebar_health_caption_pure_delete():
+    s = _src("src/ui/pages/sidebar_health.py")
+    assert 'st.caption("🟠 部分資料偏舊 / 走備援源，可按上方「🔄 強制刷新數據」重抓")' not in s
+    assert 'st.caption("🟠 部分資料偏舊 / 走備援源")' in s
+
+
+def test_w2f1_tab_macro_force_help_pure_delete():
+    s = _src("src/ui/tabs/tab_macro.py")
+    assert "確保零殘留；'" not in s
+    assert "help='完全清除快取（pkl + st.cache_data + proxy）後重抓；'" in s
+    # 句子其餘兩段原文未動
+    assert "'實測冷載約 75 秒（逾時上限同上，最長 300 秒 ≈ 5 分鐘），'" in s
+    assert "'且會一併清掉個股 / ETF 等其他頁快取。'," in s
