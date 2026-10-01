@@ -48,7 +48,21 @@ _SCAN_DIRS = ("src", "shared", "scripts", "infra", "tools", "mcp_server")
 #: src / shared / scripts / infra / tools / mcp_server,`stock_etf_dashboard/` 是
 #: 頂層目錄、從來不在任一 scan 根底下,故該字串從加入起就沒有濾掉過任何一個檔案。
 #: 移除它因此**不改變本測試掃描到的檔案集合**(掃描集合的變化全部來自目錄本身被刪)。
-_SKIP_PARTS = ("__pycache__", ".git", "scratchpad", "wt-")
+_SKIP_NAMES = ("__pycache__", ".git", "scratchpad")   # 路徑段全名相符才跳
+_SKIP_PREFIX = "wt-"                                   # 路徑段以此開頭才跳
+
+
+def _skipped(f: pathlib.Path) -> bool:
+    """DL-f1-s62(2026-10-01):只看**相對 `_REPO` 的路徑段**,不看絕對路徑字串。
+
+    修前是 `any(s in str(f) for s in ("__pycache__", ".git", "scratchpad", "wt-"))` —— repo 本身放在含 `scratchpad` / `wt-`
+    字樣的路徑底下(例:代理的暫存工作區、`git worktree` 的 `wt-*` 目錄)時,**每個檔都被濾掉**,
+    掃描集合變成空集合、`test_accepted_table_has_no_stale_entries` 因此假失敗(且其餘斷言假通過)。
+    現在:`__pycache__` / `.git` / `scratchpad` 須是 repo 內某一段的全名,`wt-` 須是某一段的開頭。
+    """
+    parts = f.relative_to(_REPO).parts
+    return any(p in _SKIP_NAMES or p.startswith(_SKIP_PREFIX) for p in parts)
+
 
 #: 「這東西已經廢棄」的**強標記**。刻意不收「舊版」「legacy」——
 #: 本 repo 有大量「舊版寫錯,已修」的歷史說明句,收進來會全是雜訊。
@@ -93,7 +107,7 @@ def _py_files():
         if not base.exists():
             continue
         for f in base.rglob("*.py"):
-            if any(s in str(f) for s in _SKIP_PARTS):
+            if _skipped(f):
                 continue
             yield f
     app = _REPO / "app.py"
