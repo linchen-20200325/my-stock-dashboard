@@ -634,10 +634,11 @@ _DER_LOOSE_TIDY_MIN: int = 40
 _DERL_RUN: str = r"[A-Za-z0-9+/*]*(?:\\/[A-Za-z0-9+/*]*)*" + _POSS
 _DERL_LINE: str = (r"(?=(?:[A-Za-z0-9+/*]|\\/){%d}|(?:[A-Za-z0-9+/]|\\/){0,4096}\*\*\*)" % _DER_LOOSE_LINE_MIN
                    + _DERL_RUN)
-_DERL_NL: str = r"[ \t]{0,16}(?:\r\n|\r|\n|(?:\\{1,32}r)?\\{1,32}n)[ \t]{0,16}"
+#: 換行：行尾空白、真換行／只用 CR／`repr`・JSON 的跳脫換行、行首縮排；另收 Markdown 引用的 `> `（最多 8 層，S3 QA 第三輪 2(a)）。
+_DERL_NL: str = r"[ \t]{0,16}(?:\r\n|\r|\n|(?:\\{1,32}r)?\\{1,32}n)[ \t]{0,16}(?:>[ \t]{0,4}){0,8}"
 _DER_B64_LOOSE_RE = re.compile(
     r"(?:(?<![A-Za-z0-9+/*])|(?<=\\[nrt]))(?:M[A-P]|\*\*\*)" + _DERL_RUN
-    + r"(?:" + _DERL_NL + _DERL_LINE + r"){1,4096}" + _POSS
+    + r"(?:" + _DERL_NL + _DERL_LINE + r"){0,4096}" + _POSS
     + r"(?:" + _DERL_NL + r"(?:[A-Za-z0-9+/]|\\/){1,15}(?![A-Za-z0-9+/*\\]))?={0,2}")
 _DERL_NL_RE = re.compile(_DERL_NL)
 
@@ -668,38 +669,39 @@ def _der_head_total(head_b64: str) -> int | None:
     return _total if _inner is not None and _inner[1] + _inner[0] <= _total else None
 
 
-def _der_strict_block(body: str) -> list[tuple[int, int]]:
+def _der_strict_block(m: re.Match) -> list[tuple[int, int]]:
     """第一道（`_DER_B64_RE`）的判法不變（`_mask_der_b64`）；判為金鑰 → 整段一個遮罩範圍。"""
-    return [(0, len(body))] if body != MASK and _mask_der_b64(_WholeMatch(body)) == MASK else []
+    return [(0, len(m.group(0)))] if _mask_der_b64(m) == MASK else []
 
 
-class _WholeMatch:
-    """讓 `_mask_der_b64` 能吃一段字串（它只讀 `group(0)`）。"""
-    __slots__ = ("_s",)
-
-    def __init__(self, s: str) -> None:
-        self._s = s
-
-    def group(self, _i: int = 0) -> str:
-        return self._s
+#: 一行「到此結束」：之後（可有行尾空白）是換行／跳脫換行／字串結尾，或引號、逗號、括號、句讀這類收尾字元。
+_LINE_DONE_RE = re.compile(r"[ \t]{0,16}(?:[\r\n]|\\{1,32}[nr]|\Z)|[\"'`,;:.)\]}。，、；：）」』]")
 
 
 def _is_der_start(line: str) -> bool:
     return line.startswith(MASK) or (line[:1] == "M" and "A" <= line[1:2] <= "P")
 
 
-def _der_loose_block(body: str) -> list[tuple[int, int]]:
+def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
     """`_DER_B64_LOOSE_RE` 比對到的一整塊 → 要遮的範圍（相對 `body`）。⛔ 不遞迴：逐行往下走一次。
 
     每個可能的起點（`M[A-P]` 或 `***` 開頭的行）各自判一段：解得出標頭 → 宣告涵蓋到的行；判不了標頭
     （開頭 16 字內有遮罩）→ 只在整齊本體時遮；判完跳到該段之後繼續。涵蓋終點以二分搜尋前綴和找，
     「中間各行同寬」以事先算好的「同寬延伸到哪一行」查表 ⇒ 每個起點 O(log n)，整塊 O(n log n)。
+
+    ⚠️ 本道在**原文**上判（與第一道取聯集），而後面還有路徑規則要跑：比對到的最後一行若**沒有在行尾結束**
+    （後面同一行還接著字，例：`***/Jane` 後面是 ` Doe/x.toml`），那一行 ⛔ 不得遮 —— 否則把路徑的開頭吃掉，
+    後面的「含空白目錄名」規則就認不出這條路徑，`Doe` 外露（S3 QA 第三輪：比 e23ff2f 少遮）。
+    其餘各行本來就以換行收尾（規則的結構保證）。
     """
+    body = m.group(0)
     _ends, _starts = [], [0]
     for _sep in _DERL_NL_RE.finditer(body):
         _ends.append(_sep.start())
         _starts.append(_sep.end())
     _ends.append(len(body))
+    if _LINE_DONE_RE.match(m.string, m.end()) is None:
+        _starts, _ends = _starts[:-1], _ends[:-1]
     _lines = [body[_a:_b].replace("\\/", "/").rstrip("=") for _a, _b in zip(_starts, _ends)]
     _n = len(_lines)
     _masked = ["*" in _l for _l in _lines]
@@ -773,7 +775,7 @@ def _der_loose_block(body: str) -> list[tuple[int, int]]:
                 else:
                     _lo = _mid + 1
         _k = _hi
-        if _cum(_k) < _DER_B64_MIN or (_k - 1 >= _i + 1 and _run[_i + 1] < _k - 1):
+        if min(_cum(_k), _need) < _DER_B64_MIN or (_k - 1 >= _i + 1 and _run[_i + 1] < _k - 1):
             _i += 1
             continue
         _out.append((_starts[_i], _ends[_k]))
@@ -796,7 +798,7 @@ class _DerPass:
         _spans: list[tuple[int, int]] = []
         for _rx, _block in _DER_PARTS:
             for _m in _rx.finditer(text):
-                _spans.extend((_m.start() + _a, _m.start() + _b) for _a, _b in _block(_m.group(0)))
+                _spans.extend((_m.start() + _a, _m.start() + _b) for _a, _b in _block(_m))
         if not _spans:
             return text
         _spans.sort()

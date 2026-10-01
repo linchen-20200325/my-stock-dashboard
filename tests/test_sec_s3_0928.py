@@ -529,7 +529,7 @@ def test_c_ordinary_text_not_masked_more(raw):
 _RULE_SAMPLE = {
     "deep_quoted": (_levels({"password": _SECRET}, 5, repr)[5], _SECRET),
     "deep_assign": (_levels("password='%s'" % _SECRET, 5, repr)[5], _SECRET),
-    "der_b64": (_B64, _LINES[3]),                 # 一整行：第二道（多行）認不到 ⇒ 仍只靠這一條
+    "der_b64": (" ".join(_LINES), _LINES[3]),     # 空白接成一行：第二道不認空白續行 ⇒ 仍只靠這一條（批 S3）
     "space_dir": ("/Users/Jane Doe/app/.streamlit/secrets.toml", "Jane Doe"),
 }
 
