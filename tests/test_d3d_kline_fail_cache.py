@@ -27,6 +27,7 @@
 """
 from __future__ import annotations
 
+import ast
 import contextlib
 import importlib.util
 import json
@@ -52,6 +53,7 @@ import src.data.proxy as PX
 import src.data.proxy.yf_proxy as YP
 import src.data.stock.tw_stock_data_fetcher as TSF
 from shared.fail_cooldown import FAIL_COOLDOWN_SEC
+from shared.ttls import TTL_1HOUR
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -738,6 +740,16 @@ def _fresh_copy(mod: types.ModuleType) -> types.ModuleType:
     return _load(src, f"_copy_d3d_{next(_COPY_SEQ)}_{mod.__name__.rsplit('.', 1)[-1]}", mod.__file__)
 
 
+def _check_fetch_single_ttl_exact(ddf) -> None:
+    """D2-f45（2026-10-01）：快取層實際生效的參數＝`ttl` 3600 秒、`max_entries` 無上限、不顯示 spinner。
+
+    讀 streamlit 掛在 `CachedFunc` 上的設定（`_info`），突變體（原始碼字面替換後另建的模組）一樣適用 ——
+    故 TTL 改成 59 分鐘這種落在行為測試 31～61 分鐘窗內的突變也擋得住。"""
+    info = ddf._fetch_single_cached._info
+    assert (info.ttl, info.max_entries, info.show_spinner) == (3600, None, False), \
+        f"_fetch_single_cached 快取參數漂移：ttl={info.ttl!r} max_entries={info.max_entries!r} show_spinner={info.show_spinner!r}"
+
+
 def _check_fetch_single_ttl(ddf) -> None:
     """D2-f15 快取層 `_fetch_single_cached` 的 TTL ＝ 1 小時（行為）：第 31 分鐘（pkl 的 30 分鐘已過）仍由
     `fetch_single` 自己的快取回應、不再往下問 K 線層；第 61 分鐘才重算。
@@ -1261,6 +1273,19 @@ class TestN4aFetchSingleTtl:
     def test_ttl_is_one_hour(self):
         _check_fetch_single_ttl(DDF)
 
+    def test_decorator_pinned_verbatim(self):
+        """D2-f45（2026-10-01）：比照 #741 對 `yf_proxy._cached_history_cached` 的逐字斷言。
+
+        上一條行為測試只把 TTL 夾在 31～61 分鐘之間 —— TTL 改成 59 分鐘的突變照樣存活。
+        這裡逐字釘住裝飾器（修前掛在 `fetch_single` 上的那一行原樣搬下來），並確認 `TTL_1HOUR` 仍是 3600 秒。"""
+        tree = ast.parse(pathlib.Path(DDF.__file__).read_text(encoding="utf-8"))
+        fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+        assert [ast.unparse(d) for d in fns["_fetch_single_cached"].decorator_list] == \
+            ["st.cache_data(ttl=TTL_1HOUR, show_spinner=False)"], "快取層參數同修前（逐字）"
+        assert fns["fetch_single"].decorator_list == [], "外層不快取 —— 失敗才不會被凍住"
+        assert TTL_1HOUR == 3600, "TTL_1HOUR 的值同修前"
+        _check_fetch_single_ttl_exact(DDF)
+
 
 # ══════════════════════════════════════════════════════════════════
 # 隨機操作序列 × 獨立參考模型（property-based 的精神；固定 seed、不引入新依賴，同 #741 測試手法）
@@ -1460,6 +1485,17 @@ _MUTATIONS = [
     ("n4a_fetch_single_ttl_2h", "ddf",
      [("@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)\ndef _fetch_single_cached(",
        "@st.cache_data(ttl=2 * TTL_1HOUR, show_spinner=False)\ndef _fetch_single_cached(")], "fs_ttl"),
+    # ── D2-f45（2026-10-01）：落在行為測試 31～61 分鐘窗內的 TTL 突變（修前存活）──
+    ("d2f45_fetch_single_ttl_59min", "ddf",
+     [("@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)\ndef _fetch_single_cached(",
+       "@st.cache_data(ttl=TTL_1HOUR - 60, show_spinner=False)\ndef _fetch_single_cached(")], "fs_ttl_exact"),
+    ("d2f45_fetch_single_ttl_45min", "ddf",
+     [("@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)\ndef _fetch_single_cached(",
+       "@st.cache_data(ttl=45 * 60, show_spinner=False)\ndef _fetch_single_cached(")], "fs_ttl_exact"),
+    ("d2f45_fetch_single_max_entries", "ddf",
+     [("@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)\ndef _fetch_single_cached(",
+       "@st.cache_data(ttl=TTL_1HOUR, max_entries=200, show_spinner=False)\ndef _fetch_single_cached(")],
+     "fs_ttl_exact"),
     ("n4b_maintenance_page_is_no_data", "yp",
      [('"YFChartError", "YFInvalidPeriodError")', '"YFChartError", "YFInvalidPeriodError", "YFDataException")')],
      "yahoo_down"),
@@ -1491,6 +1527,7 @@ def _run_check(name: str, yp, ddf, fcm, fake, clock, capsys) -> None:
         "cooldown_key": lambda: _check_cooldown_key(yp, fake, clock),
         "capacity": lambda: _check_cooldown_capacity(yp, fake, clock, 65),
         "fs_ttl": lambda: _check_fetch_single_ttl(ddf),
+        "fs_ttl_exact": lambda: _check_fetch_single_ttl_exact(ddf),
         "yahoo_down": lambda: _check_swallowed_error_not_cached(yp, fake, clock, "yahoo_down"),
         "yahoo_down_legacy": lambda: _check_swallowed_error_not_cached(yp, fake, clock, "yahoo_down_legacy"),
     }[name]()
