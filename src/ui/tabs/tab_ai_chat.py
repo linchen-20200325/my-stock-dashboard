@@ -70,18 +70,20 @@ def _render_panel(res):
         _render_bundle(getattr(res, "data_bundle", {}))
         return
     _render_bundle(res.data_bundle)                      # 1) 權威數字
+    # SEC-r19（2026-10-01）：AI 產出的各段散文（分析師／多空辯論／風控／報告）上畫面前
+    # 一律過 `scrub_qa_text`（同 SEC-r11 問答回答）：沒命中規則 → 原字串逐字回傳。
     if res.per_analyst:                                  # 2) 分析師觀點
         with st.expander("🧑‍💼 分析師觀點", expanded=False):
             for v in res.per_analyst:
-                st.markdown(f"**{v['role']}**:{v['text']}")
+                st.markdown(f"**{v['role']}**:{scrub_qa_text(v['text'])}")
     if res.debate:                                       # 3) 多空辯論
         with st.expander("⚖️ 多空辯論", expanded=False):
-            st.markdown(f"**多方**:{res.debate.get('bull', '')}")
-            st.markdown(f"**空方**:{res.debate.get('bear', '')}")
-            st.markdown(f"**裁判**:{res.debate.get('verdict', '')}")
+            st.markdown(f"**多方**:{scrub_qa_text(res.debate.get('bull', ''))}")
+            st.markdown(f"**空方**:{scrub_qa_text(res.debate.get('bear', ''))}")
+            st.markdown(f"**裁判**:{scrub_qa_text(res.debate.get('verdict', ''))}")
     if res.risk_review:                                  # 4) 風控
-        st.caption(f"🛡️ 風控(資料完整度 {res.risk_review.get('data_ok', '')}):{res.risk_review.get('text', '')}")
-    st.markdown(f"### 🧬 AI 總結｜使用模型:{res.model}\n\n{res.text}")   # 5) 報告(帶旗標)
+        st.caption(f"🛡️ 風控(資料完整度 {res.risk_review.get('data_ok', '')}):{scrub_qa_text(res.risk_review.get('text', ''))}")
+    st.markdown(f"### 🧬 AI 總結｜使用模型:{res.model}\n\n{scrub_qa_text(res.text)}")   # 5) 報告(帶旗標)
 
 
 # ---- ① 每個 Tab:AI 總結本頁(Phase 2 逐 tab 接)---------------------------
