@@ -491,6 +491,13 @@ def build_reference_row(key: str, value: float | None) -> Row:
         # `state` 對這兩張卡的渲染函式而言是不讀的欄位,但仍誠實填 ——
         # 填一個假值等於留一顆定時炸彈給下一個開始讀它的人。
         state="live" if value is not None else "missing",
+        # NF-f3-n1:非有限值在這裡被上方改成 None,原因碼因此是 `MISSING_NO_VALUE`;
+        #   燈那條路(L2 `macro_helpers.compute_five_bucket_summary` 的 `_first_sane`)
+        #   對同一種值是經 `within_valid_range` 擋下 → `MISSING_OUT_OF_RANGE`。
+        #   兩邊不一致是**已知且可接受**:本列只餵參考走勢卡(`render_dual_axis_card`
+        #   右軸 / `render_candlestick_card`),這兩張卡**都不讀 `reason`**(只讀
+        #   label / value / band / thr_text);缺值說明走 `AxisSeries.miss_reason`。
+        #   日後若有參考卡開始顯示 `reason`,這裡要先對齊燈的原因碼。
         reason=None if value is not None else MISSING_NO_VALUE,
         hit_source=None,
         thr_text=threshold_text(spec),   # 無門檻 → "—"
