@@ -99,9 +99,10 @@
     第 10 類另見 `tests/test_sec_s3_0928.py`，第 11 類另見 `tests/test_sec_s3_batch_s3.py`）——
     有「前綴 ＋ 不定長 ＋ 必要結尾」形狀的都設了長度上限或以固定字面錨定起點。
 ⚠️ 記憶體（SEC-r13 (d)，據實揭露；**只對量過的輸入形態成立，⛔ 不是上限**）：`re` 對「迴圈本體不是單一字元類別」的
-    重複會逐圈留回溯點，峰值隨輸入長度成長。批 S QA 實測第 10 類在 40 萬字時記憶體峰值多 33～96 MB（本批未重現
-    該輸入形態）。第 11 類的迴圈改用佔有型量詞（`_POSS`）：40 萬字、本批自選 21 種形態，峰值比舊版多 ≤ 2 MB；
-    Python 3.10 沒有佔有型量詞 → 退回一般量詞（比對結果相同），同樣形態實測最多多 ~90 MB（未收尾的
+    重複會逐圈留回溯點，峰值隨輸入長度成長。舊規則（批 S3 未改）40 萬字時實測：第 10 類 (c) 深層巢狀的未收尾值
+    +47 MB、第 5 類 `'password': '` 未收尾 +93 MB（批 S QA 量到 33～96 MB，同一族）。
+    第 11 類的迴圈改用佔有型量詞（`_POSS`）：40 萬字、本批自選 21 種形態，峰值比 e23ff2f 多 ≤ 2 MB（`tracemalloc`）；
+    Python 3.10 沒有佔有型量詞 → 退回一般量詞（比對結果相同），同樣形態實測最多多 ~95 MB（未收尾的
     方括號 `Authorization` 值、目錄名夾 tab 的長路徑）。
 """
 from __future__ import annotations
@@ -579,14 +580,15 @@ _AUTH_SUBSCRIPT_RE = re.compile(
 #: 每多包一層 `repr` 反斜線變多 → 收 1～32 個反斜線＋`t`）：舊路徑段不收空白與反斜線，只遮到 tab 之前。
 #: ⚠️ **整條路徑一起判**：只要比對到的目錄段裡**任一段**含 tab，就把整串目錄換成一個遮罩、只留末段
 #: （同 `_POSIX_SPACE_DIR_RE` 的處置）；沒有任何目錄段含 tab → 原樣交還（那是舊路徑規則的職責）。
-#: 起點同 `_POSIX_SPACE_DIR_RE`（前面規則留下的 `***`、`_PATH_START`、`@`／`→`／`—`）。
+#: 起點同 `_POSIX_SPACE_DIR_RE`（前面規則留下的 `***`、`_PATH_START`、`@`／`→`／`—`）；目錄段也收
+#: `_POSIX_SPACE_DIR_RE` 的「含空白的目錄名」（tab 與空白目錄夾在同一條路徑裡時，兩條規則各遮一半會留下中間那段）。
 #: 線性：段內「路徑字元串」與「tab」互斥（`_PATH_SEG` 不收空白與反斜線），反斜線串有上限。
 _TAB_ESC: str = r"(?:\t|\\{1,32}t)"
 _TAB_SEG: str = r"(?:" + _TAB_ESC + r")?" + _PATH_SEG + r"(?:" + _TAB_ESC + _PATH_SEG + r")*" + _POSS
 _POSIX_TAB_DIR_RE = re.compile(
     r"(?:(?:(?<![*A-Za-z0-9_])|(?<=\\[nrt]))" + re.escape(MASK) + r"|(?:" + _PATH_START
     + r"|(?<=[@→—]))(?:~[A-Za-z0-9_.\-]{0,64})?)"
-    r"/(?P<dirs>(?:" + _TAB_SEG + r"/)+" + _POSS + r")(" + _PATH_SEG + r")?", re.MULTILINE)
+    r"/(?P<dirs>(?:(?:" + _TAB_SEG + "|" + _SP_DIR_MULTI + r")/)+" + _POSS + r")(" + _PATH_SEG + r")?", re.MULTILINE)
 _TAB_IN_DIR_RE = re.compile(r"\t|\\{1,32}t")
 
 
