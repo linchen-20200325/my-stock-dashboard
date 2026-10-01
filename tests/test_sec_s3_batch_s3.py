@@ -363,6 +363,39 @@ def test_f1_untidy_lines_after_a_mask_unchanged():
         assert scrub_secrets(raw) == _OLD(raw), raw[:40]
 
 
+def test_tidy_needs_3_plain_lines_of_the_same_width():
+    """判不了標頭時，「整齊」至少要 3 行同寬（中間行）—— 只有 1～2 行照原樣。"""
+    for raw in ("***\n" + "A" * 40 + "\n" + "B" * 40, "***\n" + "A" * 40 + "\n" + "B" * 40 + "\n" + "C" * 40):
+        assert scrub_secrets(raw) == _OLD(raw) == raw
+    raw4 = "***\n" + "\n".join(c * 40 for c in "ABCD") + "\nE"
+    assert scrub_secrets(raw4) == MASK
+
+
+def test_loose_middle_lines_must_share_width():
+    """解得出標頭、但中間各行寬度不一（不像換行排版的本體）→ 原樣。"""
+    head = _b64(_pkcs8(11))[:20]
+    raw = "\n".join([head, "A" * 30, "B" * 45, "C" * 20, "D" * 33])
+    assert scrub_secrets(raw) == _OLD(raw) == raw
+    tidy = "\n".join([head, "A" * 30, "B" * 30, "C" * 30, "D" * 33])
+    assert scrub_secrets(tidy) == MASK
+
+
+def test_one_line_key_followed_by_other_base64_lines():
+    """一行就是一把完整金鑰（Ed25519，64 字）、後面再接別的 base64 行 → 只遮那一行（宣告只涵蓋第一行也算）。"""
+    ed = _b64(bytes.fromhex("302e020100300506032b657004220420") + random.Random(7).randbytes(32))
+    tail = ["Q" + _b64(random.Random(s).randbytes(48))[1:] for s in range(3)]
+    raw = "\n".join([ed] + tail)
+    assert ed in _OLD(raw), "前提：e23ff2f 外露（第一道規則看到宣告 < 實際，整段放行）"
+    assert scrub_secrets(raw) == "\n".join([MASK] + tail)
+
+
+def test_tab_rule_only_acts_when_a_directory_has_a_tab():
+    """沒有 tab 的路徑原樣交還（那是舊規則的職責）—— 拔掉舊的 `@` 規則，`@/home/…` 仍外露。"""
+    m = _mutant(("    (_POSIX_PATH_EXTRA_RE, lambda m: MASK + \"/\" + (m.group(1) or \"\")),\n", ""))
+    #: 字串裡另有一個 tab（不在目錄名裡）⇒ tab 規則確實會跑，但不得替舊規則遮。
+    assert "aliceS3" in m.scrub_secrets("see @/home/aliceS3/.streamlit/secrets.toml\tok")
+
+
 # ══════════════════════════════════════════════════════════════════
 # 一般文字 ⛔ 不誤遮
 # ══════════════════════════════════════════════════════════════════

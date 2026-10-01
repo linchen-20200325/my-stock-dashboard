@@ -610,7 +610,8 @@ def _mask_tab_dirs(m: re.Match) -> str:
 #:     宣告長度比看到的還長（截短的本體）→ 看到的整段都遮；
 #:   · 開頭 16 字內已有前面規則留下的遮罩（判不了標頭）→ 只有在「≥3 行、同寬 ≥40 字」的整齊本體時整段遮
 #:     （批 S3 QA F1：前兩行先被路徑等規則遮成 `***…`、第一行又短於 16 字時整把外露）—— **只加遮罩**；
-#:   · 共同下限：涵蓋到的 base64 字合計 ≥ `_DER_B64_MIN`、至少兩行；中間各行（第一行與涵蓋終點那行以外、
+#:   · 共同下限：涵蓋到的 base64 字合計 ≥ `_DER_B64_MIN`（宣告只涵蓋第一行也算：一行的 Ed25519 金鑰後面接著
+#:     別的 base64 時，第一道規則因「宣告 < 實際」放行，這裡只遮那一行）；中間各行（第一行與涵蓋終點那行以外、
 #:     沒有遮罩的行）必須同寬 —— 一般文字（清單、說明）幾乎不會同時滿足「同寬多行」與「解得出 DER 標頭」。
 #: 線性：每行用單一字元類別吃（`\/` 與換行以反斜線後一字區分），行數有上限；逐段判是對比對結果的後處理。
 _DER_LOOSE_LINE_MIN: int = 16
@@ -667,7 +668,7 @@ def _mask_der_loose(m: re.Match) -> str:
     _head = "".join(_lines).split("*", 1)[0][:_B64_HEAD_CHARS]
     if len(_head) < _B64_HEAD_CHARS:
         _tidy = len(_plain) >= 3 and _w >= _DER_LOOSE_TIDY_MIN and all(_n == _w for _n in _plain)
-        return MASK if _tidy and len(_lines) >= 3 and "*" in "".join(_lines)[:_B64_HEAD_CHARS + 3] else _body
+        return MASK if _tidy and len(_lines) >= 3 else _body
     _total = _der_head_total(_head)
     if _total is None:
         return _body
@@ -679,7 +680,7 @@ def _mask_der_loose(m: re.Match) -> str:
             break
     _covered = sum(_counts[:_k + 1])
     _mid = [len(_l) for _l in _lines[1:_k] if "*" not in _l]
-    if _k < 1 or _covered < _DER_B64_MIN or len(set(_mid)) > 1:
+    if _covered < _DER_B64_MIN or len(set(_mid)) > 1:
         return _body
     _rest = _body[_ends[_k]:]
     return MASK + (_DER_B64_LOOSE_RE.sub(_mask_der_loose, _rest) if "M" in _rest else _rest)
@@ -710,7 +711,7 @@ _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
     _FWD_UNC_RE: ("//",), _POSIX_PATH_EXTRA_RE: ("@", "→", "—"),
     _DEEP_QUOTED_FIELD_RE: ("\\" * 5,), _DEEP_ASSIGN_TAIL_RE: (MASK + "'", MASK + '"'),
     _DER_B64_RE: ("M",), _POSIX_SPACE_DIR_RE: ("/",),
-    _DER_B64_LOOSE_RE: ("M",), _POSIX_TAB_DIR_RE: ("\t", "\\t"), _AUTH_SUBSCRIPT_RE: ("]",),
+    _DER_B64_LOOSE_RE: ("M", MASK), _POSIX_TAB_DIR_RE: ("\t", "\\t"), _AUTH_SUBSCRIPT_RE: ("]",),
 }
 
 
