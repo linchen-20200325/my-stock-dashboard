@@ -50,6 +50,8 @@ def _render(macro_info: dict, monkeypatch) -> _CapST:
         # ⚔️ 三環 `_exp_c = float(_m8_exp.get('yoy', 0))`：台灣出口值為 None → TypeError、
         # 非數字字串（'-'）→ ValueError（修前同一輸入先炸在否決檢查，故只見 TypeError）。
         # KPI 卡在它之前已渲染完畢，本檔只驗 KPI 卡；三環另案。
+        # 📌 批 P3 M2N-f7：三環已改用有限值 `_ey8_v`，上述 TypeError／ValueError 不再發生；
+        # 此 except 保留作防線（不影響本檔斷言）。
         fake.exc = e
     return fake
 

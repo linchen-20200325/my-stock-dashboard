@@ -114,11 +114,10 @@ def test_none_or_string_no_longer_crashes(key, inner, bad, pre_fix, monkeypatch)
     info = {key: {inner: bad}}
     assert _run(pre_fix, info, monkeypatch)["exc"] is not None      # 前提：修前真的炸
     now = _run(_mod("mid"), info, monkeypatch)
-    if key == "tw_export" and bad != "31":
-        # ⚠️ 範圍外（未動）：下方 ⚔️ 三環 `_exp_c = float(_m8_exp.get('yoy', 0))` 對 None／
-        # 非數字字串仍會崩潰 —— 那是三環、不是否決檢查。這裡只釘「不再炸在否決檢查的比較」。
-        assert now["exc"] is not None and "not supported between" not in now["exc"][1]
-        return
+    # 📌 批 P3 M2N-f7（有意識的更正，⛔ 不是漏刪）：原本此處對 tw_export 的 None／非數字字串
+    # 另開一枝，釘「仍炸在下游 ⚔️ 三環 `_exp_c = float(_m8_exp.get('yoy', 0))`」（範圍外）。
+    # 三環已改用同一組有限值 `_ey8_v` → 不再崩潰，該分枝移除，tw_export 與其他鍵同一契約。
+    # 三環 C 徽章本身的缺值契約見 tests/test_p3_m2n_f7_ring_c_export.py。
     assert now["exc"] is None
     assert not _ok_line(now)        # 唯一來源不可評估 → 不下「無觸發」結論
 
