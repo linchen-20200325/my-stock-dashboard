@@ -1,0 +1,36 @@
+"""批 SA5（B5-f1）：📖 憑什麼頁「值從哪來」對 `DangerSpec.source` 是**欄名錯** —— 那一欄實為**門檻出處**。
+
+- 總經燈與參考走勢的 `source` 讀自 `shared/macro_buckets.py::DangerSpec.source`（L0 註解「門檻來源」）
+  ⇒ 欄名「門檻出處」（沿用今天頁「▸ 詳細」同一欄位的既有字樣，⛔ 不是新字）。
+- 持股燈的 `source` 讀自 `shared/station_specs.py`（L0 註解「這盞燈的值從哪來」）⇒ 原樣「值從哪來」。
+"""
+from __future__ import annotations
+
+import inspect
+
+import src.ui.views.page_today as T
+import src.ui.views.page_why as P
+
+
+def test_the_reused_label_already_exists_verbatim_on_the_today_page():
+    """K1：「門檻出處」是既有字樣（今天頁標同一個 `DangerSpec.source`），不是新造的字。"""
+    assert '("門檻出處", _spec.source)' in inspect.getsource(T)
+    assert P.SOURCE_LABEL_THRESHOLD == "門檻出處"
+    assert P.SOURCE_LABEL_VALUE == "值從哪來"
+
+
+def test_source_label_by_family():
+    assert P.source_label(P.FAMILY_MACRO) == "門檻出處"
+    assert P.source_label(P.REFERENCE_FAMILY) == "門檻出處"
+    assert P.source_label(P.FAMILY_HOLD) == "值從哪來"
+
+
+def test_macro_table_says_threshold_source_and_hold_table_keeps_value_source():
+    scan = P.load_specs()
+    macro = [r for r in scan.rows if r.family == P.FAMILY_MACRO]
+    hold = [r for r in scan.rows if r.family == P.FAMILY_HOLD]
+    assert macro and hold
+    for d, r in zip(P._spec_table_rows(macro), macro):
+        assert "值從哪來" not in d and d["門檻出處"] == (r.source or "—"), d
+    for d, r in zip(P._spec_table_rows(hold), hold):
+        assert "門檻出處" not in d and d["值從哪來"] == (r.source or "—"), d

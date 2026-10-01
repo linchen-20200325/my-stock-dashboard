@@ -504,6 +504,26 @@ FAMILY_HOLD: str = "持股"
 #: 理想位置仍在 L0 那個哨兵值旁邊，但本批不動 `shared/macro_buckets.py`（授權範圍），故留紀錄。
 REFERENCE_FAMILY: str = "參考走勢"
 
+#: B5-f1（批 SA5，2026-10-01）：「來源」那一欄 / 那一列的欄名**依 family 而定**。
+#: - 總經燈與參考走勢的 `source` 讀自 `shared/macro_buckets.py::DangerSpec.source`，
+#:   L0 自己的註解是「**門檻來源**（SSOT:... 或 DESIGN）」⇒ 印「門檻出處」。
+#:   這四個字**沿用既有字樣**（今天頁「▸ 詳細」同一欄位 `DangerSpec.source` 就標「門檻出處」，
+#:   見 `page_today.py`），⛔ 不是新字。
+#: - 持股燈的 `source` 讀自 `shared/station_specs.py`，L0 註解是「這盞燈的**值從哪來**」⇒ 原樣保留。
+#: 📌 有意識的更正，⛔ 不是漏改：2026-09-27 十四更新撤回過「整欄改名」——
+#:    那次會把持股燈 12 列也改掉；本次只改 `DangerSpec` 那幾處，持股燈一字不動。
+SOURCE_LABEL_THRESHOLD: str = "門檻出處"
+SOURCE_LABEL_VALUE: str = "值從哪來"
+
+#: `source` 讀自 `DangerSpec.source`（＝門檻來源）的 family。
+_THRESHOLD_SOURCE_FAMILIES: frozenset[str] = frozenset({FAMILY_MACRO, REFERENCE_FAMILY})
+
+
+def source_label(family: str) -> str:
+    """這一列 `source` 的欄名：`DangerSpec` 那兩個 family →「門檻出處」，其餘（持股燈）→「值從哪來」。"""
+    return (SOURCE_LABEL_THRESHOLD if family in _THRESHOLD_SOURCE_FAMILIES
+            else SOURCE_LABEL_VALUE)
+
 #: 門檻「現在不能拿來用」的兩種說法。兩者都是 **L0 自己標的旗標**的畫面說法，
 #: 本檔不判定任何一盞燈能不能信。
 THRESHOLD_FLAG_UNWIRED: str = "尚未生效"
@@ -2574,7 +2594,9 @@ def _spec_table_rows(rows: Iterable[SpecRow]) -> list[dict]:
         "分組": _r.group_text,
         "方向": _r.direction_text,
         "門檻": _r.threshold_display,
-        "值從哪來": _r.source or "—",
+        # B5-f1（批 SA5）：欄名依 family —— 總經燈「門檻出處」、持股燈「值從哪來」（見 `source_label`）。
+        #    兩個 family 各畫一張表（`_render_edu_leaf()` 逐 family 呼叫），一張表內欄名一致。
+        source_label(_r.family): _r.source or "—",
         "在防什麼": _r.why or "—",
         "已知限制": _r.flag_text,
     } for _r in rows]

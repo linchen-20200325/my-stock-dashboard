@@ -1462,9 +1462,12 @@ class TestSpecFlagsComeFromL0:
             assert _needle not in _code, f"門檻數字 {_needle} 被寫死在本頁的程式碼裡"
 
     def test_the_spec_table_passes_l0_columns_through(self):
-        _rows = P._spec_table_rows(P.load_specs().rows[:3])
-        assert _rows and set(_rows[0]) == {
-            "這一盞", "分組", "方向", "門檻", "值從哪來", "在防什麼", "已知限制"}
+        # B5-f1（批 SA5）：「來源」欄名依 family —— 總經燈「門檻出處」、持股燈「值從哪來」。
+        _scan = P.load_specs()
+        for _family, _src_col in ((P.FAMILY_MACRO, "門檻出處"), (P.FAMILY_HOLD, "值從哪來")):
+            _rows = P._spec_table_rows([_r for _r in _scan.rows if _r.family == _family][:3])
+            assert _rows and set(_rows[0]) == {
+                "這一盞", "分組", "方向", "門檻", _src_col, "在防什麼", "已知限制"}, _family
 
     def test_an_unknown_direction_is_shown_verbatim(self):
         """L0 多一個方向字面值 → 原樣顯示，不編一個看起來合理的說法。"""
