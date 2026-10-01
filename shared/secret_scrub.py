@@ -47,14 +47,17 @@
            `{'password': …}`／`"password" = …`，以及「`password=` 緊接深層跳脫引號」這種值外露的賦值。
    11. 補洞 批 S3（SEC-r13／SEC-r14／SEC-r17，2026-09-28 派工；2026-10-01 重做；同樣排在 `_RULES_POST` 的最後
        ⇒ 不會比舊版少遮）：
-       (a) 方括號取值的 `Authorization`（`headers['Authorization'] = '…'`、`h[b"Authorization"] == …`）→ 值遮掉；
+       (a) 方括號取值的 `Authorization`（`headers['Authorization'] = '…'`、`h[b"Authorization"] == …`、`+=`、
+           三引號值、`'Bearer ' + tok` 這種 `+` 串接）→ 值與串接的各段遮掉；
        (b) 目錄名含 tab 的 POSIX 路徑（真 tab，或 `repr` 裡 1～32 個反斜線＋`t`）→ **整條路徑一起判**：
            任一目錄段含 tab，就把整串目錄換成一個遮罩、只留末段；
-       (c) 第二道無標頭 DER（`_DER_B64_LOOSE_RE`）：第 10 類 (b) 整段原樣交還的多行本體，再以較寬的排版認一次
+       (c) 第二道無標頭 DER（`_DER_B64_LOOSE_RE`）：與第 10 類 (b) **在同一份輸入上各自判、遮罩範圍取聯集**
+           （`_DerPass`；第 10 類 (b) 遮的範圍一字不少），以較寬的排版認一次
            （換行寬度 16～39、第一行被前綴折短、行尾空白、只用 CR、JSON 的 `\/`），並**依宣告長度逐段判**：
            只遮宣告涵蓋到的行、其餘各行另判（後面接著的憑證／憑證鏈各自再判；不是 DER 的長 base64 照原樣）——
-           「金鑰後接長 base64」「私鑰＋憑證相接」不再整把外露（SEC-r14）。起點也可以是前面規則留下的 `***`
-           （第一行先被遮掉時，後面各行才接得上）；開頭 16 字判不了標頭時，只在「≥3 行同寬 ≥40 字」的整齊
+           「金鑰後接長 base64」「私鑰＋憑證相接」不再整把外露（SEC-r14）；一行一把的清單（Ed25519）每一把各自判、最後一把也遮。
+           逐行走一次、⛔ 不遞迴（S3 QA F1：舊寫法每段遞迴一層，500 把就 RecursionError）。
+           起點也可以是前面規則（路徑等）留下的 `***`；開頭 16 字判不了標頭時，只在「≥3 行同寬 ≥40 字」的整齊
            本體才整段遮（批 S3 QA F1）。附帶效果：欄位名後面直接接多行金鑰（`private_key: MIIE…`，SEC-r22 的
            形態）時，第一行被第 5 類遮掉後，其餘整齊的行（≥3 行同寬 ≥40 字）也會一併遮；SEC-r22 其餘形態未處理。
   遮罩一律沿用既有的 `***`（`MASK`）。**⛔ 不新增任何說明文字** —— 看得到 `***` 就知道有東西被遮。
@@ -88,6 +91,8 @@
     - 第 11 類 (c) 仍認不出：換行寬度 <16、第一行只剩 1 個字（`M` 之後就換行）、行首縮排超過 16 個空白
       （SEC-r27）、base64url 編碼；
     - 方括號取值只認 `[…]` 內**直接**是 `Authorization` 字串的寫法（`headers[AUTH_KEY] = …` 這種變數取值不認）；
+      值被括號包住（`= ( 'tok' )`）、`=` 後面先換行、`headers.__setitem__('Authorization', 'tok')` 這三種仍外露
+      （S3 QA F3；與舊版相同）；
       目錄名 tab 規則只認合理起點（同 `_POSIX_SPACE_DIR_RE`）之後的路徑。
   · 批 S3 的多遮方向（安全側）：
     - 方括號取值的裸值（`headers['Authorization'] = token_var`）連變數名一起遮；
@@ -103,7 +108,7 @@
     重複會逐圈留回溯點，峰值隨輸入長度成長。舊規則（批 S3 未改）40 萬字時實測：第 10 類 (c) 深層巢狀的未收尾值
     +47 MB、第 5 類 `'password': '` 未收尾 +93 MB（批 S QA 量到 33～96 MB，同一族）。
     第 11 類的迴圈改用佔有型量詞（`_POSS`）：40 萬字、本批自選 21 種形態，峰值比 e23ff2f 多 ≤ 2 MB（`tracemalloc`）；
-    Python 3.10 沒有佔有型量詞 → 退回一般量詞（比對結果相同），同樣形態實測最多多 ~95 MB（未收尾的
+    Python 3.10 沒有佔有型量詞 → 退回一般量詞（比對結果相同），同樣形態實測最多多 ~120 MB（未收尾的
     方括號 `Authorization` 值、目錄名夾 tab 的長路徑）。
 """
 from __future__ import annotations
@@ -568,14 +573,23 @@ _STR_PFX: str = r"(?:[bBrRuUfF]{1,2}(?=\\{0,4}[\"']))?"
 #: 值：同 `_VALUE` 的引號／跳脫引號／未收尾／裸值四種（不收 `neg`：方括號取值不會寫成「not set」），
 #: 但引號字串的迴圈用 `_POSS`（佔有型量詞，見下）—— 40 萬字的未收尾值不再逐字留回溯點。
 _AUTH_VALUE: str = (
-    r"(?:(?P<dq>\"(?:\\.|[^\"\\\r\n])*" + _POSS + r"\")"
+    r"(?:(?P<tq3>\"\"\"[^\r\n]{0,4096}?(?:\"\"\"|(?=[\r\n]|\Z))|'''[^\r\n]{0,4096}?(?:'''|(?=[\r\n]|\Z)))"   # S3 QA F3：三引號
+    r"|(?P<dq>\"(?:\\.|[^\"\\\r\n])*" + _POSS + r"\")"
     r"|(?P<sq>'(?:\\.|[^'\\\r\n])*" + _POSS + r"')"
     r"|(?P<eq>(?P<bs>\\{1,4})(?P<qc>[\"'])(?:(?!(?P=bs)(?P=qc))[^\r\n])*" + _POSS + r"(?P=bs)(?P=qc))"
     r"|(?P<open>[\"'\\][^\r\n]*)"
     r"|(?P<bare>[^\s,;&'\"<>(){}\[\]\\]+))")
 _AUTH_SUBSCRIPT_RE = re.compile(
     r"(?P<pre>\[[ \t]{0,16}" + _STR_PFX + r"(?P<fq>(?<!\\)\\{0,4}[\"'])Authorization(?P=fq)[ \t]{0,16}\]"
-    r"[ \t]{0,16}(?:[=!]=|=)[ \t]{0,16}" + _STR_PFX + r")" + _AUTH_VALUE, _I)
+    r"[ \t]{0,16}(?:[=!]=|\+=|=)[ \t]{0,16}" + _STR_PFX + r")" + _AUTH_VALUE
+    #: S3 QA F3：值後面再用 `+` 串接的各段（`'Bearer ' + 'tok'`、`'Bearer ' + tok_var`）也遮，每段有長度上限。
+    + r"(?P<cat>(?:[ \t]{0,16}\+[ \t]{0,16}" + _STR_PFX
+    + r"(?:'[^'\r\n]{0,4096}'|\"[^\"\r\n]{0,4096}\"|[A-Za-z0-9_.]{1,256})){1,16})?", _I)
+
+
+def _mask_auth_subscript(m: re.Match) -> str:
+    """`_AUTH_SUBSCRIPT_RE`：同 `_mask_value`；後面有 `+` 串接時，串接的部分整段換成「 + 遮罩」。"""
+    return _mask_value(m) + (" + " + MASK if m.group("cat") else "")
 
 #: SEC-r13 (b) 目錄名含 tab 的 POSIX 路徑（`/home/u/my<tab>dir/secrets.toml`；`repr` 裡是 `\t`，
 #: 每多包一層 `repr` 反斜線變多 → 收 1～32 個反斜線＋`t`）：舊路徑段不收空白與反斜線，只遮到 tab 之前。
@@ -600,8 +614,8 @@ def _mask_tab_dirs(m: re.Match) -> str:
     return MASK + "/" + (m.group(2) or "")
 
 
-#: SEC-r14／SEC-r17 第二道無標頭 DER（`_DER_B64_LOOSE_RE`）：上面 `_DER_B64_RE` 認不出、整段原樣交還的
-#: 多行本體，在這裡用較寬的排版再認一次，並**依宣告長度逐段判**：
+#: SEC-r14／SEC-r17 第二道無標頭 DER（`_DER_B64_LOOSE_RE`）：與上面 `_DER_B64_RE` 在**同一份輸入**上各自判
+#: （`_DerPass` 取聯集），用較寬的排版再認一次，並**依宣告長度逐段判**：
 #:   · 排版：換行寬度 ≥ `_DER_LOOSE_LINE_MIN`（16）字、第一行被前綴折短（第一行只要 `M[A-P]` 起頭即可）、
 #:     行尾空白、只用 CR 換行、JSON 的 `\/` 跳脫、行首縮排 ≤16 個空白；
 #:   · 判法：開頭 16 個 base64 字（跨行串起來）解得出 DER 標頭（`_der_head_total`，條件同 `_looks_like_der`、
@@ -654,37 +668,157 @@ def _der_head_total(head_b64: str) -> int | None:
     return _total if _inner is not None and _inner[1] + _inner[0] <= _total else None
 
 
-def _mask_der_loose(m: re.Match) -> str:
-    """`_DER_B64_LOOSE_RE`：依宣告長度逐段判（見規則註解）；判不出來的段原樣。"""
-    _body = m.group(0)
+def _der_strict_block(body: str) -> list[tuple[int, int]]:
+    """第一道（`_DER_B64_RE`）的判法不變（`_mask_der_b64`）；判為金鑰 → 整段一個遮罩範圍。"""
+    return [(0, len(body))] if body != MASK and _mask_der_b64(_WholeMatch(body)) == MASK else []
+
+
+class _WholeMatch:
+    """讓 `_mask_der_b64` 能吃一段字串（它只讀 `group(0)`）。"""
+    __slots__ = ("_s",)
+
+    def __init__(self, s: str) -> None:
+        self._s = s
+
+    def group(self, _i: int = 0) -> str:
+        return self._s
+
+
+def _is_der_start(line: str) -> bool:
+    return line.startswith(MASK) or (line[:1] == "M" and "A" <= line[1:2] <= "P")
+
+
+def _der_loose_block(body: str) -> list[tuple[int, int]]:
+    """`_DER_B64_LOOSE_RE` 比對到的一整塊 → 要遮的範圍（相對 `body`）。⛔ 不遞迴：逐行往下走一次。
+
+    每個可能的起點（`M[A-P]` 或 `***` 開頭的行）各自判一段：解得出標頭 → 宣告涵蓋到的行；判不了標頭
+    （開頭 16 字內有遮罩）→ 只在整齊本體時遮；判完跳到該段之後繼續。涵蓋終點以二分搜尋前綴和找，
+    「中間各行同寬」以事先算好的「同寬延伸到哪一行」查表 ⇒ 每個起點 O(log n)，整塊 O(n log n)。
+    """
     _ends, _starts = [], [0]
-    for _sep in _DERL_NL_RE.finditer(_body):
+    for _sep in _DERL_NL_RE.finditer(body):
         _ends.append(_sep.start())
         _starts.append(_sep.end())
-    _ends.append(len(_body))
-    _lines = [_body[_a:_b].replace("\\/", "/").rstrip("=") for _a, _b in zip(_starts, _ends)]
-    _plain = [len(_l) for _l in _lines[1:-1] if "*" not in _l]
-    _w = max(set(_plain), key=_plain.count) if _plain else max(len(_l) for _l in _lines)
-    _counts = [_w if "*" in _l else len(_l) for _l in _lines]
-    _head = "".join(_lines).split("*", 1)[0][:_B64_HEAD_CHARS]
-    if len(_head) < _B64_HEAD_CHARS:
-        _tidy = len(_plain) >= 3 and _w >= _DER_LOOSE_TIDY_MIN and all(_n == _w for _n in _plain)
-        return MASK if _tidy and len(_lines) >= 3 else _body
-    _total = _der_head_total(_head)
-    if _total is None:
-        return _body
-    _need, _cum, _k = -(-_total * 4 // 3), 0, len(_lines) - 1
-    for _i, _n in enumerate(_counts):
-        _cum += _n
-        if _cum >= _need:
-            _k = _i
-            break
-    _covered = sum(_counts[:_k + 1])
-    _mid = [len(_l) for _l in _lines[1:_k] if "*" not in _l]
-    if _covered < _DER_B64_MIN or len(set(_mid)) > 1:
-        return _body
-    _rest = _body[_ends[_k]:]
-    return MASK + (_DER_B64_LOOSE_RE.sub(_mask_der_loose, _rest) if "M" in _rest else _rest)
+    _ends.append(len(body))
+    _lines = [body[_a:_b].replace("\\/", "/").rstrip("=") for _a, _b in zip(_starts, _ends)]
+    _n = len(_lines)
+    _masked = ["*" in _l for _l in _lines]
+    _len = [len(_l) for _l in _lines]
+    _ps, _mc = [0] * (_n + 1), [0] * (_n + 1)
+    for _x in range(_n):
+        _ps[_x + 1] = _ps[_x] + (0 if _masked[_x] else _len[_x])
+        _mc[_x + 1] = _mc[_x] + _masked[_x]
+    #: `_run[x]`：從第 x 行起，「沒有遮罩的行都同寬」一路延伸到哪一行（有遮罩的行不論寬度）；`_pw[x]`：那個寬度。
+    _run, _pw, _np = [0] * _n, [None] * _n, [_n] * (_n + 1)
+    for _x in range(_n - 1, -1, -1):
+        _np[_x] = _np[_x + 1] if _masked[_x] else _x
+        _nx_pw = _pw[_x + 1] if _x + 1 < _n else None
+        _nx_run = _run[_x + 1] if _x + 1 < _n else _x
+        if _masked[_x]:
+            _run[_x], _pw[_x] = _nx_run, _nx_pw
+        elif _nx_pw is None or _nx_pw == _len[_x]:
+            _run[_x], _pw[_x] = _nx_run, _len[_x]
+        else:
+            _run[_x], _pw[_x] = _np[_x + 1] - 1, _len[_x]
+    _out: list[tuple[int, int]] = []
+    _i = 0
+    while _i < _n:
+        if not _is_der_start(_lines[_i]):
+            _i += 1
+            continue
+        #: 被前面規則遮掉的行，原本多寬已不可知 → 以附近（本行起 4 行內）沒遮罩的行的**最大**寬度估：
+        #: 中間行一定是滿行（最寬），首行可能被前綴折短、末行可能是短行；高估只會讓涵蓋提早一點結束在
+        #: 「本來就該是最後一行」的那行，低估才會吃進下一段的第一行（S3 QA F2 實例）。
+        _near = [_len[_x] for _x in range(_i, min(_i + 4, _n)) if not _masked[_x]]
+        _w = max(_near) if _near else (_pw[_i] or _len[_i])
+        _head, _x, _hit_mask = "", _i, False
+        while _x < _n and len(_head) < _B64_HEAD_CHARS:
+            _seg, _star, _ = _lines[_x].partition("*")
+            _head += _seg
+            if _star:
+                _hit_mask = True
+                break
+            _x += 1
+        _head = _head[:_B64_HEAD_CHARS]
+        if len(_head) < _B64_HEAD_CHARS:
+            #: 判不了標頭（批 S3 QA F1）：從下一行起「≥3 行沒遮罩、同寬 ≥40」的整齊本體 → 連同最後一行短行一起遮。
+            if not _hit_mask or _i + 1 >= _n:
+                _i += 1
+                continue
+            _re = _run[_i + 1]
+            _top = min(_re, _n - 2)                    # 整塊的最後一行不算（可能是說明字或短行）
+            _plain = (_top - _i) - (_mc[_top + 1] - _mc[_i + 1])
+            if _plain < 3 or _w < _DER_LOOSE_TIDY_MIN:
+                _i += 1
+                continue
+            _k = _re + 1 if _re + 1 < _n and not _masked[_re + 1] and _len[_re + 1] < _w else _re
+            _out.append((_starts[_i], _ends[_k]))
+            _i += 1
+            continue
+        _total = _der_head_total(_head)
+        if _total is None:
+            _i += 1
+            continue
+        _need = -(-_total * 4 // 3)
+
+        def _cum(_k: int) -> int:
+            return _ps[_k + 1] - _ps[_i] + _w * (_mc[_k + 1] - _mc[_i])
+
+        _lo, _hi = _i, _n - 1
+        if _cum(_hi) >= _need:
+            while _lo < _hi:
+                _mid = (_lo + _hi) // 2
+                if _cum(_mid) >= _need:
+                    _hi = _mid
+                else:
+                    _lo = _mid + 1
+        _k = _hi
+        if _cum(_k) < _DER_B64_MIN or (_k - 1 >= _i + 1 and _run[_i + 1] < _k - 1):
+            _i += 1
+            continue
+        _out.append((_starts[_i], _ends[_k]))
+        #: 下一個起點從**下一行**找（不是跳到涵蓋終點之後）：涵蓋終點若因行寬估錯而吃進下一段的第一行，
+        #: 那一段仍會從它自己的第一行再判一次；重疊的範圍在 `_DerPass` 取聯集。每行至多當一次起點 ⇒ 仍是 O(n log n)。
+        _i += 1
+    return _out
+
+
+class _DerPass:
+    """無標頭 DER 的兩道規則**在同一份輸入上各自判**，遮罩範圍取聯集（S3 QA 意見 F1／F2 之後的寫法）。
+
+    為什麼不再「第一道跑完、第二道吃第一道的輸出」：第一道常常只遮到第一行（行尾空白、JSON `\\/` 讓它在第一行
+    就收尾），第二道接手時標頭已被遮掉、判不了宣告長度，金鑰其餘各行外露。各自在原文上判 ⇒ 第二道看得到標頭；
+    取聯集 ⇒ 第一道遮的範圍一個字都不少（**不會比舊版少遮**）。
+    與 `re.Pattern` 同介面（`sub(rep, text)`），以便照舊放在 `_RULES_POST` 裡依序執行；`rep` 不用。
+    """
+
+    def sub(self, _rep, text: str) -> str:
+        _spans: list[tuple[int, int]] = []
+        for _rx, _block in _DER_PARTS:
+            for _m in _rx.finditer(text):
+                _spans.extend((_m.start() + _a, _m.start() + _b) for _a, _b in _block(_m.group(0)))
+        if not _spans:
+            return text
+        _spans.sort()
+        _parts, _pos, _cur = [], 0, None
+        for _a, _b in _spans:
+            if _cur is not None and _a <= _cur[1]:
+                _cur = (_cur[0], max(_cur[1], _b))
+                continue
+            if _cur is not None:
+                _parts += [text[_pos:_cur[0]], MASK]
+                _pos = _cur[1]
+            _cur = (_a, _b)
+        _parts += [text[_pos:_cur[0]], MASK, text[_cur[1]:]]
+        return "".join(_parts)
+
+
+#: 兩道各自的（規則, 判段函式）。拿掉任一行 ＝ 拿掉那一道（突變測試用的錨點）。
+_DER_PARTS: tuple[tuple[re.Pattern, object], ...] = (
+    (_DER_B64_RE, _der_strict_block),
+    (_DER_B64_LOOSE_RE, _der_loose_block),
+)
+_DER_PASS = _DerPass()
 
 
 _RULES_POST: tuple[tuple[re.Pattern, object], ...] = (
@@ -699,11 +833,10 @@ _RULES_POST: tuple[tuple[re.Pattern, object], ...] = (
     (_POSIX_PATH_EXTRA_RE, lambda m: MASK + "/" + (m.group(1) or "")),
     (_DEEP_QUOTED_FIELD_RE, _mask_deep_value),
     (_DEEP_ASSIGN_TAIL_RE, lambda m: m.group(1) + MASK),
-    (_DER_B64_RE, _mask_der_b64),
+    (_DER_PASS, None),
     (_POSIX_SPACE_DIR_RE, _mask_space_dirs),
-    (_DER_B64_LOOSE_RE, _mask_der_loose),
     (_POSIX_TAB_DIR_RE, _mask_tab_dirs),
-    (_AUTH_SUBSCRIPT_RE, _mask_value),
+    (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),
 )
 #: 預先過濾：字串裡連必要字面都沒有，就不必讓該條規則掃一遍（純效能；有字面才跑，行為不變）。
 _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
@@ -711,8 +844,8 @@ _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
     _PCT_QUERY_SECRET_RE: ("%3",), _CRED_AFTER_MASK_RE: (MASK,), _DRIVE_OPEN_ID_RE: ("id=",),
     _FWD_UNC_RE: ("//",), _POSIX_PATH_EXTRA_RE: ("@", "→", "—"),
     _DEEP_QUOTED_FIELD_RE: ("\\" * 5,), _DEEP_ASSIGN_TAIL_RE: (MASK + "'", MASK + '"'),
-    _DER_B64_RE: ("M",), _POSIX_SPACE_DIR_RE: ("/",),
-    _DER_B64_LOOSE_RE: ("M", MASK), _POSIX_TAB_DIR_RE: ("\t", "\\t"), _AUTH_SUBSCRIPT_RE: ("]",),
+    _DER_PASS: ("M", MASK), _POSIX_SPACE_DIR_RE: ("/",),
+    _POSIX_TAB_DIR_RE: ("\t", "\\t"), _AUTH_SUBSCRIPT_RE: ("]",),
 }
 
 

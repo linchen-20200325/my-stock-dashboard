@@ -133,7 +133,7 @@ def _mutant(*pairs: tuple[str, str]):
 _NEW_LINE = {
     "deep_quoted": "    (_DEEP_QUOTED_FIELD_RE, _mask_deep_value),\n",
     "deep_assign": "    (_DEEP_ASSIGN_TAIL_RE, lambda m: m.group(1) + MASK),\n",
-    "der_b64": "    (_DER_B64_RE, _mask_der_b64),\n",
+    "der_b64": "    (_DER_B64_RE, _der_strict_block),\n",          # 批 S3：第一道移進 `_DER_PARTS`（判法不變）
     "space_dir": "    (_POSIX_SPACE_DIR_RE, _mask_space_dirs),\n",
 }
 

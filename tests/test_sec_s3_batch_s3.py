@@ -415,10 +415,10 @@ def test_loose_der_ordinary_text_unchanged(raw):
 # 每條新規則都是承重的（N5：外露方向的突變要抓得到）
 # ══════════════════════════════════════════════════════════════════
 _NEW_LINE = {
-    "der_loose": ("    (_DER_B64_LOOSE_RE, _mask_der_loose),\n",
+    "der_loose": ("    (_DER_B64_LOOSE_RE, _der_loose_block),\n",
                   lambda: ("\n".join(_wrap(_b64(_pkcs8(1)), 32)), _b64(_pkcs8(1)))),
     "tab_dir": ("    (_POSIX_TAB_DIR_RE, _mask_tab_dirs),\n", lambda: (_TAB_PATH, "dirS3")),
-    "auth_sub": ("    (_AUTH_SUBSCRIPT_RE, _mask_value),\n", lambda: (_AUTH_SUB[0][0], _TOK)),
+    "auth_sub": ("    (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),\n", lambda: (_AUTH_SUB[0][0], _TOK)),
 }
 
 
@@ -434,12 +434,10 @@ def test_dropping_each_new_rule_leaks(rule):
 
 
 @pytest.mark.parametrize("old,new", [
-    ("    _need, _cum, _k = -(-_total * 4 // 3), 0, len(_lines) - 1",
-     "    _need, _cum, _k = -(-_total * 2 // 3), 0, len(_lines) - 1"),                 # 涵蓋行數少算
-    ("    return MASK + (_DER_B64_LOOSE_RE.sub(_mask_der_loose, _rest) if \"M\" in _rest else _rest)",
-     "    return MASK + _rest"),                                                      # 其餘不另判
-    ("    _w = max(set(_plain), key=_plain.count) if _plain else max(len(_l) for _l in _lines)",
-     "    _w = 1"),                                                                   # 遮罩行寬估錯
+    ("        _need = -(-_total * 4 // 3)", "        _need = -(-_total * 2 // 3)"),   # 涵蓋行數少算
+    ("        _i += 1\n    return _out", "        _i = _n\n    return _out"),        # 其餘不另判
+    ("            return _ps[_k + 1] - _ps[_i] + _w * (_mc[_k + 1] - _mc[_i])",
+     "            return _ps[_k + 1] - _ps[_i] + 999 * (_mc[_k + 1] - _mc[_i])"),         # 遮罩行寬估錯
 ])
 def test_exposure_direction_mutants_are_caught(old, new):
     """外露方向的突變（N5）：每一個都至少讓一個樣本外露。"""
@@ -451,6 +449,11 @@ def test_exposure_direction_mutants_are_caught(old, new):
             hit += any(_leak(out, b) for b in must)
         for raw, b in _f1_samples(3):
             hit += _leak(m.scrub_secrets(raw), b) > 0
+        #: S3 QA F2：EC 金鑰＋憑證、行尾空白（金鑰第二行常先被路徑規則遮掉 ⇒ 涵蓋長度要靠行寬估計）。
+        for enc in _F2_LAYOUTS.values():
+            key, cert = _ec_p256(seed), _ec_cert(seed)
+            out = m.scrub_secrets(enc(_wrap(_b64(key)) + _wrap(_b64(cert))))
+            hit += _leak(out, _b64(key)) > 0 or _leak(out, _b64(cert)) > 0
         if hit:
             break
     assert hit, (old, new)
@@ -554,8 +557,8 @@ _UNITS = (
 )
 _SCRIPT = (
     "import json, sys, time\nimport shared.secret_scrub as S\nout = {}\n"
-    "rules = {'loose': (S._DER_B64_LOOSE_RE, S._mask_der_loose), 'tab': (S._POSIX_TAB_DIR_RE, S._mask_tab_dirs),\n"
-    "         'auth': (S._AUTH_SUBSCRIPT_RE, S._mask_value)}\n"
+    "rules = {'der': (S._DER_PASS, None), 'tab': (S._POSIX_TAB_DIR_RE, S._mask_tab_dirs),\n"
+    "         'auth': (S._AUTH_SUBSCRIPT_RE, S._mask_auth_subscript)}\n"
     "def cpu(f):\n"
     "    best = None\n"
     "    for _ in range(3):\n"
@@ -574,7 +577,11 @@ def test_new_rules_are_linear():
     key = "\n".join(_wrap(_b64(_pkcs8(9)), 20))
     cases += [["keys", (key + "\n") * (_REDOS_N // len(key))],
               ["key_lines_masked", ("***" + "A" * 61 + "\n") * (_REDOS_N // 65)],
-              ["auth_open", "h['Authorization'] = '" + "x" * _REDOS_N]]
+              ["auth_open", "h['Authorization'] = '" + "x" * _REDOS_N],
+              ["auth_concat", "h['Authorization'] = 'x'" + " + 'y'" * (_REDOS_N // 6)],
+              ["auth_tq", 'h["Authorization"] = """' + "x" * _REDOS_N],
+              #: S3 QA F1：一行一把的 Ed25519 清單（舊寫法遞迴、且比 e23ff2f 慢數倍）。
+              ["ed25519_rows", "\n".join(["MC4CAQAwBQYDK2VwBCIEI" + "A" * 43] * (_REDOS_N // 65))]]
     r = subprocess.run([sys.executable, "-c", _SCRIPT], input=json.dumps(cases), capture_output=True,
                        text=True, timeout=300, cwd=str(_ROOT))
     assert r.returncode == 0, r.stderr[-2000:]
@@ -635,9 +642,130 @@ def test_r13d_new_rules_add_little_memory_on_measured_forms():
 
 @pytest.mark.slow
 def test_r13d_python310_fallback_memory_matches_the_disclosure():
-    """模擬 3.10（沒有佔有型量詞）：檔頭寫「最多多 ~95 MB」—— 量到的最大增量落在 (30, 95] MB。"""
+    """模擬 3.10（沒有佔有型量詞）：檔頭寫「最多多 ~120 MB」—— 量到的最大增量落在 (30, 120] MB。"""
     m = _mutant(('    re.compile(r"a*+")\n', '    re.compile(r"a*+(")\n'))
     assert m._POSS == ""
     forms = _mem_forms()
     worst = max(_peak_mb(m.scrub_secrets, t) - _peak_mb(_OLD, t) for t in forms.values())
-    assert 30 < worst <= 95 and "~95 MB" in _DOC, worst
+    assert 30 < worst <= 120 and "~120 MB" in _DOC, worst
+
+
+# ══════════════════════════════════════════════════════════════════
+# S3 QA 第二輪（F1／F2／F3）
+# ══════════════════════════════════════════════════════════════════
+_ED25519_KEY = _b64(bytes.fromhex("302e020100300506032b657004220420") + random.Random(7).randbytes(32))
+
+
+def _cpu_min3(fn, text: str) -> float:
+    import time
+    best = None
+    for _ in range(3):
+        t = time.process_time()
+        fn(text)
+        d = time.process_time() - t
+        best = d if best is None else min(best, d)
+    return best
+
+
+@pytest.mark.parametrize("n", [500, 6000])
+def test_f1_many_one_line_keys_no_recursion_and_linear(n):
+    """F1：一行一把的 Ed25519 清單 —— 舊寫法每段遞迴一層，500 把就 RecursionError。現在逐行走一次。"""
+    raw = "\n".join([_ED25519_KEY] * n)
+    out = scrub_secrets(raw)
+    assert _ED25519_KEY[:20] not in out and set(out.split("\n")) == {MASK}
+    new, old = _cpu_min3(scrub_secrets, raw), _cpu_min3(_OLD, raw)
+    assert new <= max(3 * old, 0.5), (new, old)
+
+
+def test_f1_masking_is_iterative_not_recursive():
+    """結構守衛：`_der_loose_block` 不呼叫自己、也不再呼叫 `_DER_B64_LOOSE_RE.sub`。"""
+    import ast
+    import inspect
+    src = inspect.getsource(SSC._der_loose_block)
+    names = {n.id for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Name)}
+    attrs = {n.attr for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Attribute)}
+    assert "_der_loose_block" not in names and "sub" not in attrs
+
+
+@pytest.mark.parametrize("count", [1, 2, 3, 5])
+def test_f3_last_key_of_a_one_line_key_list_masked(count):
+    raw = "\n".join([_ED25519_KEY] * count)
+    out = scrub_secrets(raw)
+    assert _ED25519_KEY[:16] not in out and set(out.split("\n")) == {MASK}, out
+    if count >= 3:
+        assert _ED25519_KEY in _OLD(raw).split("\n")[-1], "前提：e23ff2f 最後一把整把外露"
+
+
+def _ec_p256(seed: int) -> bytes:
+    """結構一致的仿 EC P-256 PKCS#8（138 位元組，`MIGHAgEAMBMG…`；固定種子，⛔ 不是真金鑰）。"""
+    r = random.Random(seed)
+    ecpk = _seq(bytes.fromhex("020101") + b"\x04\x20" + r.randbytes(32) + bytes.fromhex("a144034200") + b"\x04"
+                + r.randbytes(64))
+    return _seq(bytes.fromhex("020100301306072a8648ce3d020106082a8648ce3d030107") + b"\x04" + bytes([len(ecpk)])
+                + ecpk)
+
+
+def _ec_cert(seed: int) -> bytes:
+    r = random.Random(seed + 500)
+    return _seq(_seq(r.randbytes(300)) + bytes.fromhex("300a06082a8648ce3d040302") + b"\x03\x48\x00"
+                + r.randbytes(71))
+
+
+_F2_LAYOUTS = {
+    "trailing_space": lambda ls: "\n".join(ln + "  " for ln in ls),
+    "json_slash": lambda ls: json.dumps("\n".join(ls)).replace("/", "\\/"),
+}
+
+
+@pytest.mark.parametrize("width", [64, 76])
+@pytest.mark.parametrize("layout", sorted(_F2_LAYOUTS))
+@pytest.mark.parametrize("kind", ["ec_p256", "rsa"])
+def test_f2_key_plus_cert_leaks_nothing(kind, layout, width):
+    """F2：金鑰＋憑證 × {行尾空白, JSON `\\/`} × {64, 76}：金鑰與憑證都 0 外露（20 個固定種子）。"""
+    enc = _F2_LAYOUTS[layout]
+    before = 0
+    for seed in range(20):
+        key, cert = (_ec_p256(seed), _ec_cert(seed)) if kind == "ec_p256" else (_pkcs8(seed), _cert(seed))
+        raw = enc(_wrap(_b64(key), width) + _wrap(_b64(cert), width))
+        out = scrub_secrets(raw)
+        assert _leak(out, _b64(key)) == 0 and _leak(out, _b64(cert)) == 0, (seed, out[:120])
+        assert _is_masking_of(out, _OLD(raw))
+        before += _leak(_OLD(raw), _b64(key)) > 0
+    assert before >= 1, "前提：e23ff2f 在這種排列確實外露"
+
+
+def test_f2_ec_sample_really_looks_like_p256():
+    assert len(_ec_p256(0)) == 138 and _b64(_ec_p256(0)).startswith("MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEH")
+
+
+_TOK3 = "tOk9S3qaF3AbCdEfGh"
+
+
+@pytest.mark.parametrize("raw,want", [
+    (f"headers['Authorization'] = 'Bearer ' + '{_TOK3}'", "headers['Authorization'] = '***' + ***"),
+    (f"headers['Authorization'] = 'Bearer ' + {_TOK3} + ''", "headers['Authorization'] = '***' + ***"),
+    (f'headers["Authorization"] = """{_TOK3}"""', 'headers["Authorization"] = ***'),
+    (f"headers['Authorization'] = '''{_TOK3}\nnext", "headers['Authorization'] = ***\nnext"),
+    (f"headers['Authorization'] += '{_TOK3}'", "headers['Authorization'] += '***'"),
+])
+def test_f3_authorization_forms_fixed(raw, want):
+    assert scrub_secrets(raw) == want
+    assert _TOK3 in _OLD(raw), "前提：e23ff2f 外露"
+
+
+@pytest.mark.parametrize("raw", [
+    f"headers['Authorization'] = ( '{_TOK3}' )",
+    f"headers['Authorization'] =\n'{_TOK3}'",
+    f"headers.__setitem__('Authorization', '{_TOK3}')",
+])
+def test_f3_disclosed_authorization_forms_still_leak(raw):
+    """檔頭揭露的三種：仍外露（與 e23ff2f 相同）—— 改了請同步改檔頭。"""
+    assert _TOK3 in scrub_secrets(raw) and scrub_secrets(raw) == _OLD(raw)
+    assert "`= ( 'tok' )`" in _DOC and "`headers.__setitem__('Authorization', 'tok')`" in _DOC
+
+
+def test_f3_concat_tail_is_load_bearing():
+    raw = f"headers['Authorization'] = 'Bearer ' + '{_TOK3}'"
+    m = _mutant(('    return _mask_value(m) + (" + " + MASK if m.group("cat") else "")',
+                 '    return _mask_value(m) + (m.group("cat") or "")'))
+    assert _TOK3 in m.scrub_secrets(raw)
