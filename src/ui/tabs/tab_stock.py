@@ -524,8 +524,12 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                         '數值可能與主源略有差異；hover chip 看資料源與抓取時間。'
                     )
         with _fresh_cols[1]:
+            # D2-f11：help 原有尾句「保證下次載入抓最新資料」已刪 —— 這顆按鈕只清 st.cache_data
+            # 與下列 session 鍵，清不到 L1 的失敗冷卻表（例：
+            # monthly_revenue_fetcher._single_fail_cooldown），冷卻期內按下月營收並不會重抓，該句不成立。
+            # 剩下的前半句與下方實作一致（純刪、未新增字樣）。
             if st.button('🔄 強制重抓', key='t2_force_refresh',
-                         help='清除所有 @st.cache_data 快取 + 清 session 殘留值，保證下次載入抓最新資料'):
+                         help='清除所有 @st.cache_data 快取 + 清 session 殘留值'):
                 try:
                     st.cache_data.clear()
                 except Exception:
