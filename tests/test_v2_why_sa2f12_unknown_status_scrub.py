@@ -87,3 +87,35 @@ def test_mapping_row_name_with_glyph_is_not_washed_without_disclosure():
     """名字不在 why 的揭露範圍內（Mapping 列的 error 只帶狀態字面值）⇒ 不洗（洗過就要說）。"""
     card = P.build_source_card(P.probe_from_entry("f🟢x", _entry("zz")))[0]
     assert card.label == "f🟢x"
+
+
+# ── 批 P2 SA2-f12-n1：閘門改為「本卡 why 真的接了揭露句」—— 補 (b)(c) 兩個漏網 ─────────────
+@pytest.mark.parametrize("glyph", _GLYPHS)
+def test_non_str_key_with_glyph_is_washed_in_title(glyph, monkeypatch):
+    """(b) 非 str 的登錄鍵：error 裡是 `repr(key)`、`probe.name` 是 `str(key)` ⇒ 修前比對不到、標題原樣帶燈。"""
+    key = (f"f{glyph}x",)
+    probe = _non_mapping_probe(key, monkeypatch)
+    assert probe.name == str(key) and repr(probe.name) not in probe.error   # 前提：修前閘門不成立
+    built = P.build_source_card(probe)
+    card = built[0]
+    assert card.label == "('fx',)" and card.key == f"why.source.{key}"
+    assert _DISCLOSURE in card.note.why
+    assert str(key) not in P.v2_card_html(*built)
+
+
+@pytest.mark.parametrize("glyph", _GLYPHS)
+def test_mapping_row_name_and_status_with_glyph_is_washed_in_title(glyph):
+    """(c) Mapping 列名字與狀態都帶 glyph：揭露句因狀態而在 ⇒ 標題同洗，不與揭露句矛盾。"""
+    probe = P.probe_from_entry(f"f{glyph}x", _entry(f"怪{glyph}"))
+    assert repr(probe.name) not in probe.error                            # 前提：修前閘門不成立
+    built = P.build_source_card(probe)
+    card = built[0]
+    assert card.label == "fx" and card.key == f"why.source.f{glyph}x"
+    assert _DISCLOSURE in card.note.why
+    assert f"f{glyph}x" not in P.v2_card_html(*built)
+
+
+def test_plain_name_with_glyph_status_keeps_title():
+    """名字沒 glyph：標題逐字不變（即使揭露句因狀態而在）。"""
+    card = P.build_source_card(P.probe_from_entry(" f x ", _entry("怪🔴")))[0]
+    assert card.label == " f x " and _DISCLOSURE in card.note.why
