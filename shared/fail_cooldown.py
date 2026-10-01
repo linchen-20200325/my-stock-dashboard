@@ -75,7 +75,7 @@ class FailCooldown:
         #: 遞增退避用：鍵 → 最近一次記下失敗的時點（D2-f38 衰減判斷用）。`max_seconds` 為 None 時永不寫入。
         self._last_fail: dict = {}
         # D2-f48（2026-10-01）：`_prune_locked` 不再每次整表掃描。兩個延遲刪除的 heap：
-        #   `_exp_heap`（到期時點, 推入序, 鍵, 失敗時點）—— 依到期先後清過期紀錄；
+        #   `_exp_heap`（到期時點, 推入序, 鍵, 失敗時點, 鍵的插入序）—— 依到期先後清過期紀錄；
         #   `_age_heap`（失敗時點, 鍵的插入序, 推入序, 鍵）—— 超過上限時逐出最舊者
         #   （同時點時取插入序最小者 ＝ 修前 `min(self._fail, ...)` 依 dict 順序取第一個）。
         # 過時的項目（鍵已被移除或之後又失敗過）浮到頂端時才丟掉。冷卻秒數只在 `seconds`／
@@ -122,7 +122,7 @@ class FailCooldown:
             self._ins[key] = next(self._push_seq)
         self._fail[key] = (now, payload)
         seq = next(self._push_seq)
-        heapq.heappush(self._exp_heap, (now + self._window_locked(key), seq, key, now))
+        heapq.heappush(self._exp_heap, (now + self._window_locked(key), seq, key, now, self._ins[key]))
         heapq.heappush(self._age_heap, (now, self._ins[key], seq, key))
 
     def _drop_locked(self, key) -> None:
@@ -130,7 +130,7 @@ class FailCooldown:
         self._ins.pop(key, None)
 
     def _rebuild_exp_locked(self) -> None:
-        self._exp_heap = [(v[0] + self._window_locked(k), next(self._push_seq), k, v[0])
+        self._exp_heap = [(v[0] + self._window_locked(k), next(self._push_seq), k, v[0], self._ins[k])
                           for k, v in self._fail.items()]
         heapq.heapify(self._exp_heap)
         self._heap_params = (self.seconds, self.max_seconds)
@@ -149,10 +149,10 @@ class FailCooldown:
             heapq.heapify(self._age_heap)
         heap = self._exp_heap
         while heap:
-            _exp, _seq, k, ts = heap[0]
+            _exp, _seq, k, ts, ins = heap[0]
             cur = self._fail.get(k)
-            if cur is None or cur[0] != ts:
-                heapq.heappop(heap)                       # 過時項目
+            if cur is None or cur[0] != ts or self._ins.get(k) != ins:
+                heapq.heappop(heap)                       # 過時項目（含同一時點被逐出後又重新插入）
             elif now - ts >= self._window_locked(k):
                 heapq.heappop(heap)
                 self._drop_locked(k)

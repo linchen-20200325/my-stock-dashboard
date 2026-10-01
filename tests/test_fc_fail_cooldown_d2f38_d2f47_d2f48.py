@@ -478,6 +478,68 @@ class TestD2f48HeapRebuildTriggers:
         assert len(c._exp_heap) <= bound and len(c._age_heap) <= bound
 
 
+class TestD2f48EqualTimestampReinsert:
+    """QA FAIL（2026-10-01）：同一時點「被移除後又重新插入」的鍵，舊 heap 項目時點相同 → 須以插入序判過時。"""
+
+    def _pair(self, **kw):
+        return FC.FailCooldown(**kw), _BruteForce(**kw)
+
+    def test_exp_heap_evicted_then_refailed_same_instant(self, fc_clock):
+        """max_entries=2：t=0 依序失敗 A、B、C（A 被逐出）、再失敗 A（連續次數 +1 → 冷卻不同）。"""
+        new, ref = self._pair(seconds=10.0, max_entries=2, max_seconds=100.0)
+        t0 = fc_clock["now"]
+        for c in (new, ref):
+            fc_clock["now"] = t0
+            for k in ("A", "B", "C", "A"):
+                _h, g = c.begin(k)
+                c.fail(k, g, k)
+        fc_clock["now"] = t0 + 15
+        for c in (new, ref):
+            c.begin("probe")
+        assert new._fail == ref._fail and len(new) == len(ref)
+        assert "C" not in new, "C 冷卻 10 秒，t=15 已過期，不得被 A 的過時項目擋住"
+
+    def test_age_heap_removed_then_refailed_same_instant(self, fc_clock):
+        """success 移除 A 後同一時點又失敗 A：逐出最舊者須依**新的**插入序（B 先於新 A）。"""
+        new, ref = self._pair(max_entries=2)
+        for c in (new, ref):
+            for k in ("A", "B"):
+                _fail_once(c, k)
+            c.success("A")
+            for k in ("A", "C"):
+                _fail_once(c, k)
+        assert new._fail == ref._fail
+        assert set(new._fail) == {"A", "C"}, "應逐出 B（插入序最早），不是重新插入的 A"
+
+    @pytest.mark.parametrize("seed", range(40))
+    @pytest.mark.parametrize("kw", [{"seconds": 10.0, "max_entries": 2, "max_seconds": 100.0},
+                                    {"seconds": 10.0, "max_entries": 2}], ids=["backoff", "fixed"])
+    def test_frozen_clock_differential(self, monkeypatch, kw, seed):
+        """凍結時鐘為主（多數操作在同一時點）＋極小上限：逐步與整表掃描參考模型比對內部狀態。"""
+        clock, _ = _clocked(monkeypatch)
+        new, ref = FC.FailCooldown(**kw), _BruteForce(**kw)
+        rng = random.Random(seed)
+        gens: dict = {}
+        keys = ["A", "B", "C", "D"]
+        for step in range(400):
+            op = rng.choices(["tick", "begin", "fail", "success"], weights=[1, 4, 6, 2])[0]
+            k = rng.choice(keys)
+            if op == "tick":
+                clock["now"] += rng.choice([0, 0, 5, 10, 15, 25])
+            elif op == "begin":
+                (hn, gn), (ho, go) = new.begin(k), ref.begin(k)
+                assert gn == go and (hn is FC.NO_HIT) == (ho is FC.NO_HIT) and (hn == ho or hn is FC.NO_HIT)
+                gens.setdefault(k, []).append(gn)
+            elif op == "fail":
+                g = rng.choice(gens.get(k) or [0])
+                new.fail(k, g, step)
+                ref.fail(k, g, step)
+            else:
+                new.success(k)
+                ref.success(k)
+            assert new._fail == ref._fail and new._streak == ref._streak, f"第 {step} 步（{op}）分岔"
+
+
 class _Counting(FC.FailCooldown):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
@@ -560,7 +622,8 @@ class TestThreadSafety:
         assert not errors
         with c._lock:
             assert len(c._fail) <= 50 and set(c._ins) == set(c._fail)
-            live_exp = {k for _e, _s, k, ts_ in c._exp_heap if k in c._fail and c._fail[k][0] == ts_}
+            live_exp = {k for _e, _s, k, ts_, ins in c._exp_heap
+                        if k in c._fail and c._fail[k][0] == ts_ and c._ins[k] == ins}
             live_age = {k for ts_, ins, _s, k in c._age_heap
                         if k in c._fail and c._fail[k][0] == ts_ and c._ins[k] == ins}
             assert live_exp == set(c._fail) == live_age, "每筆紀錄在兩個 heap 都有有效項目"
