@@ -25,6 +25,8 @@
 from __future__ import annotations
 
 import copy
+import heapq
+import itertools
 import threading
 import time
 
@@ -35,7 +37,9 @@ FAIL_COOLDOWN_SEC: float = 180.0
 #: 取 64 ＝ 原 `StockDataLoader.get_combined_data` 快取的 `max_entries`。超過時逐出最舊的紀錄。
 FAIL_COOLDOWN_MAX_ENTRIES: int = 64
 
-#: 成功世代計數表的鍵數上限（每鍵只存一個 int；超過時逐出最早插入者）。
+#: 成功世代計數表（及遞增退避的連續次數表）的鍵數**下限**（每鍵只存一個 int；超過時逐出最早插入者）。
+#: 實際上限 ＝ max(`max_entries`, 本值)（D2-f47，2026-10-01）：跟著失敗紀錄的上限走，
+#: 但不低於 4096（既有 `max_entries ≤ 4096` 的使用者逐字不變）。
 _GEN_MAX_ENTRIES: int = 4096
 
 _NO_HIT = object()
@@ -52,6 +56,10 @@ class FailCooldown:
     「上一筆冷卻已過期（或已被逐出）之後又失敗」時加一 —— 冷卻期內同一波並行呼叫晚到的失敗
     只更新時點、不再加倍；世代已變（期間有人成功）的失敗照舊不記、也不加。`success`／`clear` 歸零。
     冷卻秒數在查詢時才由**當下**的 `seconds` 算出（測試把 `seconds` 設 0 仍能讓紀錄立即過期）。
+
+    連續失敗次數**隨時間衰減**（D2-f38，2026-10-01）：新一波失敗時，若距上一次失敗已超過
+    「上一次的冷卻秒數 ＋ `max_seconds`」（冷卻結束後整整一個上限期間都沒再失敗），視為新的一串，
+    連續次數從頭算（冷卻回到 `seconds`）。冷卻一過期就再失敗的正常遞增路徑不受影響。
     """
 
     def __init__(self, seconds: float = FAIL_COOLDOWN_SEC,
@@ -64,7 +72,26 @@ class FailCooldown:
         self._gen: dict = {}
         #: 遞增退避用：鍵 → 連續失敗次數。`max_seconds` 為 None 時**永不寫入**（恆為空）。
         self._streak: dict = {}
+        #: 遞增退避用：鍵 → 最近一次記下失敗的時點（D2-f38 衰減判斷用）。`max_seconds` 為 None 時永不寫入。
+        self._last_fail: dict = {}
+        # D2-f48（2026-10-01）：`_prune_locked` 不再每次整表掃描。兩個延遲刪除的 heap：
+        #   `_exp_heap`（到期時點, 推入序, 鍵, 失敗時點, 鍵的插入序）—— 依到期先後清過期紀錄；
+        #   `_age_heap`（失敗時點, 鍵的插入序, 推入序, 鍵）—— 超過上限時逐出最舊者
+        #   （同時點時取插入序最小者 ＝ 修前 `min(self._fail, ...)` 依 dict 順序取第一個）。
+        # 過時的項目（鍵已被移除或之後又失敗過）浮到頂端時才丟掉。冷卻秒數只在 `seconds`／
+        # `max_seconds` 被改、或仍有紀錄的鍵的連續次數被逐出時改變 → 那時整個重建到期 heap。
+        self._ins: dict = {}
+        self._exp_heap: list = []
+        self._age_heap: list = []
+        self._push_seq = itertools.count()
+        self._heap_params = (self.seconds, self.max_seconds)
+        self._exp_dirty = False
         self._lock = threading.Lock()
+
+    @property
+    def _gen_cap(self) -> int:
+        """`_gen`／`_streak`／`_last_fail` 的鍵數上限（D2-f47：跟著 `max_entries` 走）。"""
+        return max(self.max_entries, _GEN_MAX_ENTRIES)
 
     def _window_locked(self, key) -> float:
         """（持鎖呼叫）這個鍵目前的冷卻秒數。未開遞增退避 → 恆為 `seconds`（既有行為）。"""
@@ -82,21 +109,71 @@ class FailCooldown:
         prev = self._fail.get(key)
         if prev is not None and now - prev[0] < self._window_locked(key):
             return                                        # 同一波（冷卻期內晚到的失敗）不加倍
+        last = self._last_fail.get(key)
+        if last is not None and now - last >= self._window_locked(key) + self.max_seconds:
+            self._streak.pop(key, None)                   # D2-f38：沉寂超過一個上限期間 → 從頭算
         n = self._streak.get(key, 0)
         if n == 0 or self._window_locked(key) < self.max_seconds:
             self._streak[key] = n + 1
 
+    def _record_locked(self, key, now: float, payload) -> None:
+        """（持鎖呼叫）寫入失敗紀錄並推入兩個 heap（冷卻秒數須已依本次失敗更新）。"""
+        if key not in self._fail:
+            self._ins[key] = next(self._push_seq)
+        self._fail[key] = (now, payload)
+        seq = next(self._push_seq)
+        heapq.heappush(self._exp_heap, (now + self._window_locked(key), seq, key, now, self._ins[key]))
+        heapq.heappush(self._age_heap, (now, self._ins[key], seq, key))
+
+    def _drop_locked(self, key) -> None:
+        self._fail.pop(key, None)
+        self._ins.pop(key, None)
+
+    def _rebuild_exp_locked(self) -> None:
+        self._exp_heap = [(v[0] + self._window_locked(k), next(self._push_seq), k, v[0], self._ins[k])
+                          for k, v in self._fail.items()]
+        heapq.heapify(self._exp_heap)
+        self._heap_params = (self.seconds, self.max_seconds)
+        self._exp_dirty = False
+
     def _prune_locked(self, now: float) -> None:
-        """（持鎖呼叫）清掉已過冷卻期的紀錄；仍超過上限則逐出最舊者。"""
-        for k in [k for k, v in self._fail.items() if now - v[0] >= self._window_locked(k)]:
-            del self._fail[k]
+        """（持鎖呼叫）清掉已過冷卻期的紀錄；仍超過上限則逐出最舊者。
+
+        結果與修前「每次整表掃描」逐字相同；成本為攤銷 O(log n)（D2-f48）。"""
+        bloat = 2 * len(self._fail) + 64                  # 過時項目太多 → 壓實（攤銷 O(1)）
+        if (self._exp_dirty or self._heap_params != (self.seconds, self.max_seconds)
+                or len(self._exp_heap) > bloat):
+            self._rebuild_exp_locked()
+        if len(self._age_heap) > bloat:
+            self._age_heap = [(v[0], self._ins[k], next(self._push_seq), k) for k, v in self._fail.items()]
+            heapq.heapify(self._age_heap)
+        heap = self._exp_heap
+        while heap:
+            _exp, _seq, k, ts, ins = heap[0]
+            cur = self._fail.get(k)
+            if cur is None or cur[0] != ts or self._ins.get(k) != ins:
+                heapq.heappop(heap)                       # 過時項目（含同一時點被逐出後又重新插入）
+            elif now - ts >= self._window_locked(k):
+                heapq.heappop(heap)
+                self._drop_locked(k)
+            else:
+                break                                     # 其餘紀錄都還在冷卻期內
+        age = self._age_heap
         while len(self._fail) > self.max_entries:
-            oldest = min(self._fail, key=lambda k: self._fail[k][0])
-            del self._fail[oldest]
-        while len(self._gen) > _GEN_MAX_ENTRIES:
+            ts, ins, _seq, k = heapq.heappop(age)
+            cur = self._fail.get(k)
+            if cur is not None and cur[0] == ts and self._ins.get(k) == ins:
+                self._drop_locked(k)
+        cap = self._gen_cap
+        while len(self._gen) > cap:
             del self._gen[next(iter(self._gen))]
-        while len(self._streak) > _GEN_MAX_ENTRIES:
-            del self._streak[next(iter(self._streak))]
+        while len(self._streak) > cap:
+            k = next(iter(self._streak))
+            del self._streak[k]
+            if k in self._fail:
+                self._exp_dirty = True                    # 這個鍵的冷卻秒數變了 → 下次重建
+        while len(self._last_fail) > cap:
+            del self._last_fail[next(iter(self._last_fail))]
 
     def begin(self, key):
         """回 (冷卻中的失敗結果或 `NO_HIT`, 世代)。"""
@@ -117,15 +194,18 @@ class FailCooldown:
                 _now = time.monotonic()
                 if self.max_seconds is not None:
                     self._escalate_locked(key, _now)
-                self._fail[key] = (_now, copy.deepcopy(payload))
+                    self._last_fail.pop(key, None)        # 重新插入：表內維持「最近失敗在後」的順序
+                    self._last_fail[key] = _now
+                self._record_locked(key, _now, copy.deepcopy(payload))
                 self._prune_locked(_now)
         return payload
 
     def success(self, key):
         with self._lock:
             self._gen[key] = self._gen.get(key, 0) + 1
-            self._fail.pop(key, None)
+            self._drop_locked(key)
             self._streak.pop(key, None)
+            self._last_fail.pop(key, None)
             self._prune_locked(time.monotonic())
 
     def clear(self):
@@ -133,6 +213,11 @@ class FailCooldown:
             self._fail.clear()
             self._gen.clear()
             self._streak.clear()
+            self._last_fail.clear()
+            self._ins.clear()
+            self._exp_heap = []
+            self._age_heap = []
+            self._exp_dirty = False
 
     def __len__(self):
         with self._lock:
