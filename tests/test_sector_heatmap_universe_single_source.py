@@ -39,7 +39,20 @@ from shared import sector_heatmap as SH
 
 _REPO = pathlib.Path(__file__).resolve().parents[1]
 _SCAN_DIRS = ("src", "shared", "scripts", "app.py")
-_SKIP_PARTS = ("__pycache__", ".git", "scratchpad", "wt-")
+_SKIP_NAMES = ("__pycache__", ".git", "scratchpad")   # 路徑段全名相符才跳
+_SKIP_PREFIX = "wt-"                                   # 路徑段以此開頭才跳
+
+
+def _skipped(f: pathlib.Path) -> bool:
+    """DL-f1-s62(2026-10-01):只看**相對 `_REPO` 的路徑段**,不看絕對路徑字串。
+
+    修前是 `any(s in str(f) for s in ("__pycache__", ".git", "scratchpad", "wt-"))` —— repo 放在含 `scratchpad` / `wt-` 字樣的
+    路徑底下時整棵被濾掉,`test_the_one_place_is_l0` 因此假失敗。現在:`__pycache__` / `.git` /
+    `scratchpad` 須是 repo 內某一段的全名,`wt-` 須是某一段的開頭。
+    """
+    parts = f.relative_to(_REPO).parts
+    return any(p in _SKIP_NAMES or p.startswith(_SKIP_PREFIX) for p in parts)
+
 
 #: 熱力圖用的四個名字（含舊分頁沿用的底線私有別名）。
 _HEATMAP_NAMES = (
@@ -77,7 +90,7 @@ def _py_files():
         if not _base.exists():
             continue
         for _f in _base.rglob("*.py"):
-            if any(_s in str(_f) for _s in _SKIP_PARTS):
+            if _skipped(_f):
                 continue
             yield _f
 
