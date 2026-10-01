@@ -415,7 +415,7 @@ def test_loose_der_ordinary_text_unchanged(raw):
 # 每條新規則都是承重的（N5：外露方向的突變要抓得到）
 # ══════════════════════════════════════════════════════════════════
 _NEW_LINE = {
-    "der_loose": ("    (_DER_B64_LOOSE_RE, _der_loose_block),\n",
+    "der_loose": ("_der_loose_spans(_t0))",
                   lambda: ("\n".join(_wrap(_b64(_pkcs8(1)), 32)), _b64(_pkcs8(1)))),
     "tab_dir": ("    (_POSIX_TAB_DIR_RE, _mask_tab_dirs),\n", lambda: (_TAB_PATH, "dirS3")),
     "auth_sub": ("    (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),\n", lambda: (_AUTH_SUB[0][0], _TOK)),
@@ -426,7 +426,7 @@ _NEW_LINE = {
 def test_dropping_each_new_rule_leaks(rule):
     line, sample = _NEW_LINE[rule]
     raw, gone = sample()
-    m = _mutant((line, ""))
+    m = _mutant((line, "[])" if rule == "der_loose" else ""))
     if rule == "der_loose":
         assert _leak(scrub_secrets(raw), gone) == 0 and _leak(m.scrub_secrets(raw), gone) > 0
     else:
@@ -559,8 +559,8 @@ _UNITS = (
 )
 _SCRIPT = (
     "import json, sys, time\nimport shared.secret_scrub as S\nout = {}\n"
-    "rules = {'der': (S._DER_PASS, None), 'tab': (S._POSIX_TAB_DIR_RE, S._mask_tab_dirs),\n"
-    "         'auth': (S._AUTH_SUBSCRIPT_RE, S._mask_auth_subscript)}\n"
+    "rules = {'der': lambda t: S._der_loose_spans(t), 'tab': lambda t: S._POSIX_TAB_DIR_RE.sub(S._mask_tab_dirs, t),\n"
+    "         'auth': lambda t: S._AUTH_SUBSCRIPT_RE.sub(S._mask_auth_subscript, t)}\n"
     "def cpu(f):\n"
     "    best = None\n"
     "    for _ in range(3):\n"
@@ -569,8 +569,8 @@ _SCRIPT = (
     "    return best\n"
     "for name, text in json.load(sys.stdin):\n"
     "    out[name] = cpu(lambda: S.scrub_secrets(text))\n"
-    "    for rn, (rx, rep) in rules.items():\n"
-    "        out[name + '/' + rn] = cpu(lambda: rx.sub(rep, text))\n"
+    "    for rn, fn in rules.items():\n"
+    "        out[name + '/' + rn] = cpu(lambda: fn(text))\n"
     "print(json.dumps(out))\n")
 
 
@@ -752,8 +752,8 @@ _TOK3 = "tOk9S3qaF3AbCdEfGh"
 
 
 @pytest.mark.parametrize("raw,want", [
-    (f"headers['Authorization'] = 'Bearer ' + '{_TOK3}'", "headers['Authorization'] = '***' + ***"),
-    (f"headers['Authorization'] = 'Bearer ' + {_TOK3} + ''", "headers['Authorization'] = '***' + ***"),
+    (f"headers['Authorization'] = 'Bearer ' + '{_TOK3}'", "headers['Authorization'] = '***'***"),
+    (f"headers['Authorization'] = 'Bearer ' + {_TOK3} + ''", "headers['Authorization'] = '***'***"),
     (f'headers["Authorization"] = """{_TOK3}"""', 'headers["Authorization"] = ***'),
     (f"headers['Authorization'] = '''{_TOK3}\nnext", "headers['Authorization'] = ***\nnext"),
     (f"headers['Authorization'] += '{_TOK3}'", "headers['Authorization'] += '***'"),
@@ -776,7 +776,7 @@ def test_f3_disclosed_authorization_forms_still_leak(raw):
 
 def test_f3_concat_tail_is_load_bearing():
     raw = f"headers['Authorization'] = 'Bearer ' + '{_TOK3}'"
-    m = _mutant(('    return _mask_value(m) + (" + " + MASK if m.group("cat") else "")',
+    m = _mutant(('    return _mask_value(m) + (MASK if m.group("cat") else "")',
                  '    return _mask_value(m) + (m.group("cat") or "")'))
     assert _TOK3 in m.scrub_secrets(raw)
 
@@ -829,10 +829,13 @@ def test_r3_the_reported_repro():
     assert scrub_secrets(raw) == _OLD(raw) == "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n***/x.toml"
 
 
-def test_r3_last_line_not_ending_the_line_is_load_bearing():
-    raw = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n/Users/Jane Doe/x.toml"
-    m = _mutant(("    if _LINE_DONE_RE.match(m.string, m.end()) is None:\n", "    if False:\n"))
-    assert "Doe" in m.scrub_secrets(raw), "前提：拿掉「最後一行要在行尾結束」，`Doe` 外露"
+def test_r4_old_part_is_exactly_e23ff2f():
+    """結構保證：關掉新規則（第二道 DER、`_RULES_NEW`）後，輸出與 e23ff2f 逐字相同 ⇒ 新規則只能在其上多遮。"""
+    m = _mutant(("_der_loose_spans(_t0))", "[])"),
+                ("    (_POSIX_TAB_DIR_RE, _mask_tab_dirs),\n    (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),\n", ""))
+    corpus = sorted(_batch_corpus() | _ui_corpus())[::3] + _r4_cases(3000)
+    diff = [r for r in corpus if m.scrub_secrets(r) != _OLD(r)]
+    assert not diff, [(d[:60], _OLD(d)[:60], m.scrub_secrets(d)[:60]) for d in diff[:5]]
 
 
 @pytest.mark.parametrize("prefix", ["> ", "> > ", ">", ">  "])
@@ -880,3 +883,86 @@ _TOK4 = "tOk9S3qaR3AbCdEfGh"
 ])
 def test_r3_authorization_percent_format_continuation(raw):
     assert _TOK4 not in scrub_secrets(raw) and _TOK4 in _OLD(raw)
+
+
+# ══════════════════════════════════════════════════════════════════
+# S3 QA 第四輪：同一族的少遮（DER 範圍吃掉路徑開頭）—— 改成結構保證，並以隨機生成器驗證
+# ══════════════════════════════════════════════════════════════════
+_R4_REPROS = [
+    ("MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n/Users/Jane.Doe Smith/x.toml", "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n***/x.toml"),
+    ("MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n/a/b.c d/x.toml", "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n***/x.toml"),
+    ("MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n/Users/Jane)Doe x/y", "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n***/y"),
+]
+
+
+@pytest.mark.parametrize("raw,want", _R4_REPROS)
+def test_r4_reported_repros(raw, want):
+    assert _OLD(raw) == want and _is_masking_of(scrub_secrets(raw), want)
+    assert "Doe" not in scrub_secrets(raw) and "c d" not in scrub_secrets(raw)
+
+
+_R4_PUNCT = list(".):,;]}\"'`") + list("。，、；：）」』．")
+
+
+def _r4_cases(n: int, seed: int = 20261001) -> list[str]:
+    """DER 開頭（各種金鑰的完整行／截短行／跨行）× 分隔 × 路徑／說明字尾巴（路徑名裡夾各種半形與全形標點、空白、tab）。"""
+    rnd = random.Random(seed)
+    keys = [_b64(_pkcs8(i)) for i in range(4)] + [_b64(_ec_p256(i)) for i in range(4)] + [_b64(_cert(1)), _ED25519_KEY]
+    seps = ["\n", "\r\n", "\r", "\\n", " \n", "\n> ", "  ", "\t", ""]
+    words = ["Jane", "Doe", "My", "Docs", "a", "b", "x y", "Program Files", "王 小明", "dir"]
+
+    def path() -> str:
+        segs = []
+        for _ in range(rnd.randint(1, 4)):
+            w = rnd.choice(words)
+            if rnd.random() < 0.6:
+                w = w + rnd.choice(_R4_PUNCT + [" ", "\t", ""]) + rnd.choice(words)
+            segs.append(w)
+        lead = rnd.choice(["/", "/Users/", "~/", "/home/", "C:\\Users\\", "//nas/", "@/", "\\\\srv\\"])
+        return lead + "/".join(segs) + "/" + rnd.choice(["x.toml", "y", "secrets.toml", "a b.txt"])
+
+    out = []
+    for _ in range(n):
+        k = rnd.choice(keys)
+        w = rnd.choice([16, 24, 32, 40, 64, 76])
+        lines = [k[i:i + w] for i in range(0, len(k), w)][: rnd.randint(1, 4)]
+        lines[-1] = lines[-1][: rnd.randint(1, len(lines[-1]))]
+        head = rnd.choice(["\n", "\\n", "\r\n"]).join(lines)
+        tail = path() if rnd.random() < 0.8 else rnd.choice(["對嗎？", "What is it", "password: x"] + _R4_PUNCT)
+        tail += rnd.choice(["", " 讀不到", rnd.choice(_R4_PUNCT), "\n" + path()])
+        out.append(rnd.choice(["", "x ", "私鑰 ", "> "]) + head + rnd.choice(seps) + tail)
+    return out
+
+
+def test_r4_property_never_masks_less_than_e23ff2f():
+    """隨機生成 20,000 筆（固定種子）：DER 開頭 × 分隔 × 夾標點的路徑／說明字 —— 一筆都不得比 e23ff2f 少遮。"""
+    cases = _r4_cases(20_000)
+    assert len(set(cases)) > 15_000
+    bad = [r for r in cases if not _is_masking_of(scrub_secrets(r), _OLD(r))]
+    assert not bad, [(b[-50:], _OLD(b)[-40:], scrub_secrets(b)[-40:]) for b in bad[:5]]
+
+
+def test_r4_tracked_mapping_only_masks_copied_chars():
+    """`_mask_orig_spans` 只遮照抄自基準的字：規則產生的 `***/x.toml` 不受影響。"""
+    out, segs = SSC._sub_tracked(SSC._POSIX_SPACE_DIR_RE, SSC._mask_space_dirs, "AB\n/Users/Jane Doe/x.toml",
+                                 [(0, 24, 0)])
+    assert out == "AB\n***/x.toml" and segs == [(0, 3, 0)]
+    assert SSC._mask_orig_spans(out, segs, [(0, 24)]) == "******/x.toml"     # 換行也是照抄的字
+    assert SSC._mask_orig_spans(out, segs, [(0, 2)]) == "***\n***/x.toml"
+    assert SSC._mask_orig_spans(out, segs, [(1, 2)]) == "A***\n***/x.toml"
+
+
+_TQ = "'" * 3
+
+
+@pytest.mark.parametrize("raw", [
+    f"h['Authorization'] = 'Bearer ' + \\\n    '{_TOK4}'",
+    f"h['Authorization'] = 'Bearer %s' % tok['{_TOK4}']",
+    f"h['Authorization'] = 'B' + '{_TOK4}" + "x" * 5000 + "'",
+    f"h['Authorization'] = {_TQ}{_TOK4}" + "x" * 5000 + _TQ,
+    f"h['Authorization'] = 'B {{}}'.format('{_TOK4}" + "x" * 5000 + "')",
+])
+def test_r4_authorization_continuation_subscript_and_long_values(raw):
+    """續行夾在串接中、`% tok['x']`、超過 4096 字的串接段／三引號值：都遮到（超過上限 → 遮到行尾，檔頭同）。"""
+    out = scrub_secrets(raw)
+    assert _TOK4 not in out and _is_masking_of(out, _OLD(raw))

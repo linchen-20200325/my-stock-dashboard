@@ -577,25 +577,31 @@ _STR_PFX: str = r"(?:[bBrRuUfF]{1,2}(?=\\{0,4}[\"']))?"
 #: 值：同 `_VALUE` 的引號／跳脫引號／未收尾／裸值四種（不收 `neg`：方括號取值不會寫成「not set」），
 #: 但引號字串的迴圈用 `_POSS`（佔有型量詞，見下）—— 40 萬字的未收尾值不再逐字留回溯點。
 _AUTH_VALUE: str = (
-    r"(?:(?P<tq3>\"\"\"[^\r\n]{0,4096}?(?:\"\"\"|(?=[\r\n]|\Z))|'''[^\r\n]{0,4096}?(?:'''|(?=[\r\n]|\Z)))"   # S3 QA F3：三引號
+    #: 三引號（S3 QA F3）：4096 字內找得到收尾就到收尾，否則遮到行尾（超過上限也一樣 —— 檔頭所說的「遮到行尾」）。
+    r"(?:(?P<tq3>\"\"\"(?:[^\r\n]{0,4096}?\"\"\"|[^\r\n]*)|'''(?:[^\r\n]{0,4096}?'''|[^\r\n]*))"
     r"|(?P<dq>\"(?:\\.|[^\"\\\r\n]){0,4096}" + _POSS + r"\")"
     r"|(?P<sq>'(?:\\.|[^'\\\r\n]){0,4096}" + _POSS + r"')"
     r"|(?P<eq>(?P<bs>\\{1,4})(?P<qc>[\"'])(?:(?!(?P=bs)(?P=qc))[^\r\n]){0,4096}" + _POSS + r"(?P=bs)(?P=qc))"
     r"|(?P<open>[\"'\\][^\r\n]*)"
     r"|(?P<bare>[^\s,;&'\"<>(){}\[\]\\]+))")
+#: 反斜線續行（`\` ＋ 換行）。
+_PY_CONT: str = r"(?:\\\r?\n[ \t]{0,16})?"
+#: 串接的一段：引號字串／括號（4096 字內收尾；否則遮到行尾）、或識別字（可接 ≤8 層 `[…]` 取值）。
+_AUTH_OPERAND: str = (
+    r"(?:'[^'\r\n]{0,4096}'|'[^\r\n]*|\"[^\"\r\n]{0,4096}\"|\"[^\r\n]*"
+    r"|\([^)\r\n]{0,4096}\)|\([^\r\n]*|[A-Za-z0-9_.]{1,256}(?:\[[^\]\r\n]{0,256}\]){0,8})")
 _AUTH_SUBSCRIPT_RE = re.compile(
     r"(?P<pre>\[[ \t]{0,16}" + _STR_PFX + r"(?P<fq>(?<!\\)\\{0,4}[\"'])Authorization(?P=fq)[ \t]{0,16}\]"
-    r"[ \t]{0,16}(?:[=!]=|\+=|=)[ \t]{0,16}(?:\\\r?\n[ \t]{0,16})?" + _STR_PFX + r")" + _AUTH_VALUE
-    #: S3 QA F3／第三輪 2(c)：值後面再用 `+`／`%` 串接的各段（`'Bearer ' + 'tok'`、`'Bearer %s' % tok`、
-    #: `% ('a', tok)`）與 `.format(…)` 也遮；`=` 後面接反斜線續行也認。每段有長度上限。
-    + r"(?P<cat>(?:[ \t]{0,16}[+%][ \t]{0,16}" + _STR_PFX
-    + r"(?:'[^'\r\n]{0,4096}'|\"[^\"\r\n]{0,4096}\"|\([^)\r\n]{0,4096}\)|[A-Za-z0-9_.]{1,256})"
-    + r"|\.format\([^)\r\n]{0,4096}\)){1,16})?", _I)
+    r"[ \t]{0,16}(?:[=!]=|\+=|=)[ \t]{0,16}" + _PY_CONT + _STR_PFX + r")" + _AUTH_VALUE
+    #: S3 QA F3／第三輪 2(c)／第四輪：值後面再用 `+`／`%` 串接的各段（`'Bearer ' + 'tok'`、`'Bearer %s' % tok`、
+    #: `% ('a', tok)`、`% tok['x']`，運算子前後可有反斜線續行）與 `.format(…)` 也遮。每段有長度上限，超過遮到行尾。
+    + r"(?P<cat>(?:[ \t]{0,16}" + _PY_CONT + r"[+%][ \t]{0,16}" + _PY_CONT + _STR_PFX + _AUTH_OPERAND
+    + r"|\.format(?:\([^)\r\n]{0,4096}\)|\([^\r\n]*)){1,16})?", _I)
 
 
 def _mask_auth_subscript(m: re.Match) -> str:
-    """`_AUTH_SUBSCRIPT_RE`：同 `_mask_value`；後面有 `+` 串接時，串接的部分整段換成「 + 遮罩」。"""
-    return _mask_value(m) + (" + " + MASK if m.group("cat") else "")
+    """`_AUTH_SUBSCRIPT_RE`：同 `_mask_value`；後面有串接時，串接的部分（含運算子）整段換成一個遮罩。"""
+    return _mask_value(m) + (MASK if m.group("cat") else "")
 
 #: SEC-r13 (b) 目錄名含 tab 的 POSIX 路徑（`/home/u/my<tab>dir/secrets.toml`；`repr` 裡是 `\t`，
 #: 每多包一層 `repr` 反斜線變多 → 收 1～32 個反斜線＋`t`）：舊路徑段不收空白與反斜線，只遮到 tab 之前。
@@ -675,15 +681,6 @@ def _der_head_total(head_b64: str) -> int | None:
     return _total if _inner is not None and _inner[1] + _inner[0] <= _total else None
 
 
-def _der_strict_block(m: re.Match) -> list[tuple[int, int]]:
-    """第一道（`_DER_B64_RE`）的判法不變（`_mask_der_b64`）；判為金鑰 → 整段一個遮罩範圍。"""
-    return [(0, len(m.group(0)))] if _mask_der_b64(m) == MASK else []
-
-
-#: 一行「到此結束」：之後（可有行尾空白）是換行／跳脫換行／字串結尾，或引號、逗號、括號、句讀這類收尾字元。
-_LINE_DONE_RE = re.compile(r"[ \t]{0,16}(?:[\r\n]|\\{1,32}[nr]|\Z)|[\"'`,;:.)\]}。，、；：）」』]")
-
-
 def _is_der_start(line: str) -> bool:
     return line.startswith(MASK) or (line[:1] == "M" and "A" <= line[1:2] <= "P")
 
@@ -695,10 +692,7 @@ def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
     （開頭 16 字內有遮罩）→ 只在整齊本體時遮；判完跳到該段之後繼續。涵蓋終點以二分搜尋前綴和找，
     「中間各行同寬」以事先算好的「同寬延伸到哪一行」查表 ⇒ 每個起點 O(log n)，整塊 O(n log n)。
 
-    ⚠️ 本道在**原文**上判（與第一道取聯集），而後面還有路徑規則要跑：比對到的最後一行若**沒有在行尾結束**
-    （後面同一行還接著字，例：`***/Jane` 後面是 ` Doe/x.toml`），那一行 ⛔ 不得遮 —— 否則把路徑的開頭吃掉，
-    後面的「含空白目錄名」規則就認不出這條路徑，`Doe` 外露（S3 QA 第三輪：比 e23ff2f 少遮）。
-    其餘各行本來就以換行收尾（規則的結構保證）。
+    本函式只算範圍、不改字串；範圍怎麼落到輸出上見 `_run_post`（不會比舊版少遮的結構保證在那裡）。
     """
     body = m.group(0)
     _ends, _starts = [], [0]
@@ -706,8 +700,6 @@ def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
         _ends.append(_sep.start())
         _starts.append(_sep.end())
     _ends.append(len(body))
-    if _LINE_DONE_RE.match(m.string, m.end()) is None:
-        _starts, _ends = _starts[:-1], _ends[:-1]
     _lines = [body[_a:_b].replace("\\/", "/").rstrip("=") for _a, _b in zip(_starts, _ends)]
     _n = len(_lines)
     _masked = ["*" in _l for _l in _lines]
@@ -786,49 +778,101 @@ def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
             continue
         _out.append((_starts[_i], _ends[_k]))
         #: 下一個起點從**下一行**找（不是跳到涵蓋終點之後）：涵蓋終點若因行寬估錯而吃進下一段的第一行，
-        #: 那一段仍會從它自己的第一行再判一次；重疊的範圍在 `_DerPass` 取聯集。每行至多當一次起點 ⇒ 仍是 O(n log n)。
+        #: 那一段仍會從它自己的第一行再判一次；重疊的範圍在 `_mask_orig_spans` 合併。每行至多當一次起點 ⇒ 仍是 O(n log n)。
         _i += 1
     return _out
 
 
-class _DerPass:
-    """無標頭 DER 的兩道規則**在同一份輸入上各自判**，遮罩範圍取聯集（S3 QA 意見 F1／F2 之後的寫法）。
+def _der_loose_spans(text: str) -> list[tuple[int, int]]:
+    """第二道無標頭 DER：在 `text` 上算出要遮的範圍（不改字串）。不到 `_DER_B64_MIN` 字的塊必定判不成，直接略過（純效能）。"""
+    _spans: list[tuple[int, int]] = []
+    for _m in _DER_B64_LOOSE_RE.finditer(text):
+        if _m.end() - _m.start() >= _DER_B64_MIN:
+            _spans.extend((_m.start() + _a, _m.start() + _b) for _a, _b in _der_loose_block(_m))
+    return _spans
 
-    為什麼不再「第一道跑完、第二道吃第一道的輸出」：第一道常常只遮到第一行（行尾空白、JSON `\\/` 讓它在第一行
-    就收尾），第二道接手時標頭已被遮掉、判不了宣告長度，金鑰其餘各行外露。各自在原文上判 ⇒ 第二道看得到標頭；
-    取聯集 ⇒ 第一道遮的範圍一個字都不少（**不會比舊版少遮**）。
-    與 `re.Pattern` 同介面（`sub(rep, text)`），以便照舊放在 `_RULES_POST` 裡依序執行；`rep` 不用。
+
+def _sub_tracked(rx, rep, text: str, segs: list[tuple[int, int, int]]) -> tuple[str, list[tuple[int, int, int]]]:
+    """＝ `rx.sub(rep, text)`（`rep` 為函式），另外把「哪些字是從基準字串照抄來的」對照表 `segs` 換算到輸出上。
+
+    `segs`：一串 `(輸出起, 輸出迄, 基準起)`，依位置排序；不在任何一段裡的字是規則產生的（遮罩、保留的檔名等）。
+    取代結果與原文相同的比對視同照抄。
     """
+    _out: list[str] = []
+    _new: list[tuple[int, int, int]] = []
+    _olen, _pos, _k = 0, 0, 0
 
-    def sub(self, _rep, text: str) -> str:
-        _spans: list[tuple[int, int]] = []
-        for _rx, _block in _DER_PARTS:
-            for _m in _rx.finditer(text):
-                _spans.extend((_m.start() + _a, _m.start() + _b) for _a, _b in _block(_m))
-        if not _spans:
-            return text
-        _spans.sort()
-        _parts, _pos, _cur = [], 0, None
-        for _a, _b in _spans:
-            if _cur is not None and _a <= _cur[1]:
-                _cur = (_cur[0], max(_cur[1], _b))
-                continue
-            if _cur is not None:
-                _parts += [text[_pos:_cur[0]], MASK]
-                _pos = _cur[1]
-            _cur = (_a, _b)
-        _parts += [text[_pos:_cur[0]], MASK, text[_cur[1]:]]
-        return "".join(_parts)
+    def _carry(_a: int, _b: int) -> None:
+        nonlocal _olen, _k
+        while _k < len(segs) and segs[_k][1] <= _a:
+            _k += 1
+        _j = _k
+        while _j < len(segs) and segs[_j][0] < _b:
+            _lo, _hi = max(_a, segs[_j][0]), min(_b, segs[_j][1])
+            if _lo < _hi:
+                _new.append((_olen + _lo - _a, _olen + _hi - _a, segs[_j][2] + _lo - segs[_j][0]))
+            _j += 1
+        _out.append(text[_a:_b])
+        _olen += _b - _a
+
+    for _m in rx.finditer(text):
+        _r = rep(_m)
+        if _r == _m.group(0):
+            continue
+        _carry(_pos, _m.start())
+        _out.append(_r)
+        _olen += len(_r)
+        _pos = _m.end()
+    _carry(_pos, len(text))
+    return "".join(_out), _new
 
 
-#: 兩道各自的（規則, 判段函式）。拿掉任一行 ＝ 拿掉那一道（突變測試用的錨點）。
-_DER_PARTS: tuple[tuple[re.Pattern, object], ...] = (
-    (_DER_B64_RE, _der_strict_block),
-    (_DER_B64_LOOSE_RE, _der_loose_block),
-)
-_DER_PASS = _DerPass()
+def _mask_orig_spans(out: str, segs: list[tuple[int, int, int]], spans: list[tuple[int, int]]) -> str:
+    """把「基準字串上的範圍」`spans` 落到 `out` 上：只遮 `out` 裡**照抄自基準、且落在範圍內**的字（換成一個遮罩）；
+    規則產生的字（遮罩、保留的檔名）一律不動 ⇒ 結果必定是「`out` 把若干段換成遮罩」。"""
+    if not spans:
+        return out
+    _spans = sorted(spans)
+    _merged: list[list[int]] = []
+    for _a, _b in _spans:
+        if _merged and _a <= _merged[-1][1]:
+            _merged[-1][1] = max(_merged[-1][1], _b)
+        else:
+            _merged.append([_a, _b])
+    _hits: list[list[int]] = []
+    _s = 0
+    for _ca, _cb, _oa in segs:
+        _ob = _oa + (_cb - _ca)
+        while _s < len(_merged) and _merged[_s][1] <= _oa:
+            _s += 1
+        _t = _s
+        while _t < len(_merged) and _merged[_t][0] < _ob:
+            _lo, _hi = max(_oa, _merged[_t][0]), min(_ob, _merged[_t][1])
+            if _lo < _hi:
+                _a, _b = _ca + _lo - _oa, _ca + _hi - _oa
+                if _hits and _a <= _hits[-1][1]:
+                    _hits[-1][1] = max(_hits[-1][1], _b)
+                else:
+                    _hits.append([_a, _b])
+            _t += 1
+    if not _hits:
+        return out
+    _parts, _pos = [], 0
+    for _a, _b in _hits:
+        _parts += [out[_pos:_a], MASK]
+        _pos = _b
+    _parts.append(out[_pos:])
+    return "".join(_parts)
 
 
+#: ⚠️ 下面三組的分工就是「不會比 e23ff2f 少遮」的**結構保證**（S3 QA 第四輪：前三輪的少遮全是同一族 ——
+#: 新規則先改寫了字串，後面的舊規則就認不出原本認得的東西）：
+#:   · `_RULES_POST` ＋ `_RULES_POST_TRACKED` ＝ e23ff2f 的 `_RULES_POST`（同樣的規則、同樣的順序、同樣的程式）
+#:     ⇒ 跑完的結果 ＝ e23ff2f 的輸出，一字不差；
+#:   · 新規則只准**在那個結果上再遮**：第二道 DER 在**舊的 DER 規則之前的字串**（`t0`）上算範圍（看得到標頭），
+#:     再經 `_sub_tracked` 的對照表落到結果上，只遮照抄過來的字（`_mask_orig_spans`）；`_RULES_NEW` 的每一條
+#:     都是「把一段換成遮罩」的改寫，排在全部舊規則之後。
+#:   ⇒ 新規則不論怎麼判，都只能在 e23ff2f 的輸出上**多遮**，不可能讓任何舊規則少遮。
 _RULES_POST: tuple[tuple[re.Pattern, object], ...] = (
     (_FW_ASSIGN_RE, _mask_assign),
     (_FW_COLON_QUOTED_RE, _mask_value),
@@ -841,8 +885,14 @@ _RULES_POST: tuple[tuple[re.Pattern, object], ...] = (
     (_POSIX_PATH_EXTRA_RE, lambda m: MASK + "/" + (m.group(1) or "")),
     (_DEEP_QUOTED_FIELD_RE, _mask_deep_value),
     (_DEEP_ASSIGN_TAIL_RE, lambda m: m.group(1) + MASK),
-    (_DER_PASS, None),
+)
+#: e23ff2f `_RULES_POST` 的最後兩條（順序不變）；跑的時候記下照抄對照表，供第二道 DER 落範圍。
+_RULES_POST_TRACKED: tuple[tuple[re.Pattern, object], ...] = (
+    (_DER_B64_RE, _mask_der_b64),
     (_POSIX_SPACE_DIR_RE, _mask_space_dirs),
+)
+#: 批 S3 新規則：排在全部舊規則之後，每條都只把一段換成遮罩。
+_RULES_NEW: tuple[tuple[re.Pattern, object], ...] = (
     (_POSIX_TAB_DIR_RE, _mask_tab_dirs),
     (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),
 )
@@ -852,9 +902,27 @@ _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
     _PCT_QUERY_SECRET_RE: ("%3",), _CRED_AFTER_MASK_RE: (MASK,), _DRIVE_OPEN_ID_RE: ("id=",),
     _FWD_UNC_RE: ("//",), _POSIX_PATH_EXTRA_RE: ("@", "→", "—"),
     _DEEP_QUOTED_FIELD_RE: ("\\" * 5,), _DEEP_ASSIGN_TAIL_RE: (MASK + "'", MASK + '"'),
-    _DER_PASS: ("M", MASK), _POSIX_SPACE_DIR_RE: ("/",),
+    _DER_B64_RE: ("M",), _POSIX_SPACE_DIR_RE: ("/",),
     _POSIX_TAB_DIR_RE: ("\t", "\\t"), _AUTH_SUBSCRIPT_RE: ("]",),
 }
+
+
+def _run_post(out: str) -> str:
+    """`_RULES_POST` → `_RULES_POST_TRACKED`（記對照表）→ 第二道 DER 落範圍 → `_RULES_NEW`。分工見上方註解。"""
+    for _re, _rep in _RULES_POST:
+        _needles = _POST_NEEDLES.get(_re)
+        if _needles is None or any(_n in out for _n in _needles):
+            out = _re.sub(_rep, out)
+    _t0, _segs = out, [(0, len(out), 0)]
+    for _re, _rep in _RULES_POST_TRACKED:
+        if any(_n in out for _n in _POST_NEEDLES[_re]):
+            out, _segs = _sub_tracked(_re, _rep, out, _segs)
+    if "M" in _t0 or MASK in _t0:
+        out = _mask_orig_spans(out, _segs, _der_loose_spans(_t0))
+    for _re, _rep in _RULES_NEW:
+        if any(_n in out for _n in _POST_NEEDLES[_re]):
+            out = _re.sub(_rep, out)
+    return out
 
 
 def scrub_secrets(text) -> str:
@@ -871,11 +939,7 @@ def scrub_secrets(text) -> str:
     out = scrub_query_secrets(out)
     for _re, _rep in _RULES_AFTER_QUERY:
         out = _re.sub(_rep, out)
-    for _re, _rep in _RULES_POST:
-        _needles = _POST_NEEDLES.get(_re)
-        if _needles is None or any(_n in out for _n in _needles):
-            out = _re.sub(_rep, out)
-    return out
+    return _run_post(out)
 
 
 def scrub_prose_secrets(text) -> str:
@@ -921,8 +985,4 @@ def scrub_prose_secrets(text) -> str:
     out = scrub_query_secrets(out)
     for _re, _rep in _RULES_AFTER_QUERY:
         out = _re.sub(_rep, out)
-    for _re, _rep in _RULES_POST:
-        _needles = _POST_NEEDLES.get(_re)
-        if _needles is None or any(_n in out for _n in _needles):
-            out = _re.sub(_rep, out)
-    return out
+    return _run_post(out)
