@@ -1089,7 +1089,12 @@ def build_source_card(probe: SourceProbe) -> _Built:
         _note = Note(now=SOURCE_IDLE_NOW, why=NEVER_RUN_WHY, where=NEVER_RUN_WHERE)
     elif probe.unknown_status:
         _note = Note(
-            now=f"{SOURCE_UNKNOWN_NOW_HEAD}（L0 回 {probe.unknown_status!r}）",
+            # SA2-f12（2026-10-01）：狀態字面值是**上游原文**，先過 `scrub_state_glyphs()` SSOT 再放進 `now`
+            #   —— 不洗，字面值帶狀態 glyph 時 `Note.__post_init__` 直接 `ValueError`，而本卡建在
+            #   `_render_one()` 的隔離之外（見 `_clean_reason()` docstring）。洗掉的揭露由下面 `why`
+            #   那句承擔：`probe.error` 內含同一個字面值，`_clean_reason()` 洗到就接揭露句。
+            now=(f"{SOURCE_UNKNOWN_NOW_HEAD}"
+                 f"（L0 回 {scrub_state_glyphs(probe.unknown_status)[0]!r}）"),
             why=_clean_reason(probe.error),
             where=(f"{NO_EXIT_MARKER} —— 這是 L0 登錄表與本頁之間的契約漂移，"
                    "請把上面那行訊息回報給維護者；"
