@@ -94,9 +94,20 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     )
     _s8c1 = st.columns(3)
 
+    # M2N-f1（§1 不捏值）：以下 KPI 卡原以 `.get(key, 0／50)` 取值 —— dict 在、值缺時
+    # 印成「0 分」「+0.0%」「50.0」並給燈色。改用 `_finite_yoy`（缺鍵／None／NaN／±inf／
+    # 非數值一律算缺）判定，缺值走各卡**既有**的「待取得」灰卡（`unified_indicator_card_pending`
+    # ／`kpi('…','待取得',…)`），不新增文案；有值時取到的是同一個物件，輸出逐字不變。
+    _sc8_v = _finite_yoy(_m8_ndc, 'score')
+    _ey8_v = _finite_yoy(_m8_exp, 'yoy')
+    _pv8_v = _finite_yoy(_m8_pmi, 'value')
+    _cy8_v = _finite_yoy(_m8_cpi, 'yoy')
+    _fc8_v = _finite_yoy(_m8_fed, 'current')
+    _vcur8_v = _finite_yoy(_m8_vix, 'current')
+
     with _s8c1[0]:
-        if _m8_ndc:
-            _sc8 = float(_m8_ndc.get('score', 0))
+        if _m8_ndc and _sc8_v is not None:
+            _sc8 = float(_sc8_v)
             st.markdown(unified_indicator_card(
                 title='NDC 景氣燈號', nickname='台灣景氣紅綠燈',
                 value_str=f'{_sc8:.0f} 分',
@@ -113,8 +124,8 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
 
     with _s8c1[1]:
         # v19.85 正名:本卡資料鍵 tw_export = 海關出口年增率(財政部),非經濟部外銷訂單。
-        if _m8_exp:
-            _ey8 = _m8_exp.get('yoy', 0)
+        if _m8_exp and _ey8_v is not None:
+            _ey8 = _ey8_v
             st.markdown(unified_indicator_card(
                 title='台灣出口 YoY', nickname='外需動能溫度計',
                 value_str=f'{_ey8:+.1f}%',
@@ -130,8 +141,8 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             ), unsafe_allow_html=True)
 
     with _s8c1[2]:
-        if _m8_pmi:
-            _pv8 = _m8_pmi.get('value', 50)
+        if _m8_pmi and _pv8_v is not None:
+            _pv8 = _pv8_v
             st.markdown(unified_indicator_card(
                 title='🇹🇼 台灣 PMI', nickname='製造業景氣問卷',
                 value_str=f'{_pv8:.1f}',
@@ -154,9 +165,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     _s8c2 = st.columns([1, 1, 2])
 
     with _s8c2[0]:
-        if _m8_cpi:
-            _cy8 = _m8_cpi.get('yoy', 0)
-            _cpv8 = _m8_cpi.get('prev_yoy')  # v18.169
+        if _m8_cpi and _cy8_v is not None:
+            _cy8 = _cy8_v
+            _cpv8 = _finite_yoy(_m8_cpi, 'prev_yoy')  # v18.169（M2N-f1：NaN／±inf 上月值 → 不印趨勢）
             _ctrend = ''
             if _cpv8 is not None:
                 _cdelta = _cy8 - _cpv8
@@ -189,12 +200,15 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     with _s8c2[1]:
         # v18.169：美國 Fed Funds Rate（CPI 配對 → 「CPI×Fed 雙頂回落」判讀）
         # v19.173 正名:原稱「MK 黃金拐點」(非 Mann-Kendall,見上方 Row 2 註解)。
-        if _m8_fed:
-            _fc = _m8_fed.get('current', 0)
-            _fp = _m8_fed.get('prev', 0)
-            _fdelta = _fc - _fp
-            _farrow = '↓' if _fdelta < -0.05 else ('↑' if _fdelta > 0.05 else '→')
-            _ftrend = f"上月 {_fp:.2f}% ({_farrow}{abs(_fdelta):.2f})"
+        if _m8_fed and _fc8_v is not None:
+            _fc = _fc8_v
+            # M2N-f1：上月值缺 → 不印趨勢（同 CPI 卡 `prev_yoy` 缺時的既有作法），⛔ 不捏「上月 0.00%」。
+            _fp = _finite_yoy(_m8_fed, 'prev')
+            _ftrend = ''
+            if _fp is not None:
+                _fdelta = _fc - _fp
+                _farrow = '↓' if _fdelta < -0.05 else ('↑' if _fdelta > 0.05 else '→')
+                _ftrend = f"上月 {_fp:.2f}% ({_farrow}{abs(_fdelta):.2f})"
             st.markdown(unified_indicator_card(
                 title='美國 Fed Funds Rate', nickname='美元資金成本錨',
                 value_str=f'{_fc:.2f}%',
@@ -214,9 +228,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             ), unsafe_allow_html=True)
     
     with _s8c2[2]:
-        if _m8_vix and _m8_vix.get('dates'):
-            _vcur8 = _m8_vix.get('current', 0)
-            _vma8  = _m8_vix.get('ma20', 0)
+        if _m8_vix and _m8_vix.get('dates') and _vcur8_v is not None:
+            _vcur8 = _vcur8_v
+            # M2N-f1：MA20 缺 → 標題拿掉「（MA20=…）」那段（只刪不加字），⛔ 不捏「MA20=0」。
+            _vma8  = _finite_yoy(_m8_vix, 'ma20')
+            _vma8_txt = f'（MA20={_vma8}）' if _vma8 is not None else ''
             # v18.284：VIX 燈號門檻統一至 SSOT（macro_buckets / MACRO_THRESHOLDS：22 黃 / 30 紅）
             # ⚠️ 2026-08-27：上面那句在本版之前是**假的** —— 它宣稱「統一至 SSOT」，
             #    下一行卻是 `_vcur8 >= 30` / `>= 22` 兩個字面值，全檔只 import 了
@@ -251,7 +267,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 font=dict(color='#8b949e', size=10), showlegend=False,
                 xaxis=dict(showgrid=False, color='#484f58'),
                 yaxis=dict(showgrid=True, gridcolor='#21262d', color='#484f58'),
-                title=dict(text=f'VIX 恐慌指數 {_vcur8}（MA20={_vma8}）— {_vl8}',
+                title=dict(text=f'VIX 恐慌指數 {_vcur8}{_vma8_txt}— {_vl8}',
                            font=dict(size=11, color=_vc8), x=0))
             st.plotly_chart(_vfig8, width='stretch')
         else:

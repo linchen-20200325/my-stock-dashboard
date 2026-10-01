@@ -234,7 +234,9 @@ _REVERT = {
          "            _m2_y  = _m1b2.get('m2_yoy', 0)\n"),
     ),
     "mid": (
-        (_IMPORT_LINE, ""),
+        # 批 MAC M2N-f1（2026-10-01）起 §八 KPI 卡（替換片段以外）也用 `_finite_yoy`，
+        # 還原體若拿掉 import 會 NameError → mid 不再移除 import 行。還原的 M1B／M2 片段
+        # 本身不呼叫 `_finite_yoy`，故對本檔比對的 M1B-M2 路徑等價於修前。
         ("        _m1b8_v = _finite_yoy(_m1b8_info, 'm1b_yoy')\n"
          "        _m2b8_v = _finite_yoy(_m1b8_info, 'm2_yoy')\n"
          "        if _m1b8_v is not None and _m2b8_v is not None:\n"
@@ -948,7 +950,8 @@ _MUTANTS = {
          "            _m1b8 = float(_m1b8_v)\n"),
     ), _M2_SIDE),
     # 三環 D 徽章退回讀原始 dict（策略3 仍是修後）
-    "mid_ring_d_reverted": ("mid", _REVERT["mid"][2:3], _NON_FINITE),
+    # 批 MAC：mid 還原組已不含 import 行 → 三環 D 片段索引由 [2:3] 改 [1:2]（同一片段）。
+    "mid_ring_d_reverted": ("mid", _REVERT["mid"][1:2], _NON_FINITE),
 }
 
 
