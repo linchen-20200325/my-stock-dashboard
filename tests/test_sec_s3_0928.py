@@ -74,6 +74,10 @@ def _is_masking_of(new: str, old: str) -> bool:
     """
     if new == old:
         return True
+    if MASK not in new:
+        #: SEC-r18（批 S3）：沒有遮罩時只能逐字相同。原本快路只比頭尾，沒有遮罩時 `parts` 只有一段，
+        #: 頭、尾比的是同一段 ⇒ `("ab", "abXab")` 誤判 True（比文件寬鬆）。
+        return False
     parts = new.split(MASK)
     if old.startswith(parts[0]) and old.endswith(parts[-1]) and len(parts[0]) + len(parts[-1]) <= len(old):
         pos, ok = len(parts[0]), True
@@ -107,6 +111,8 @@ def _is_masking_of(new: str, old: str) -> bool:
     ("x*****y", "x**SECRETy", True), ("***", "a/b", True), ("***abc", "abc", True),
     ("abd", "abc", False), ("ba", "ab", False), ("abcd", "abc", False), ("***/y", "***/x", False),
     ("a***c", "abc", True), ("a***c", "ab", False),
+    #: SEC-r18（批 S3）：沒有遮罩 ⇒ 只能逐字相同。
+    ("ab", "abXab", False), ("", "x", False), ("a", "aXa", False), ("", "", True),
 ])
 def test_masking_criterion_itself(new, old, want):
     assert _is_masking_of(new, old) is want
@@ -224,6 +230,16 @@ def test_n1_word_length_cap_is_40():
     raw = "讀不到 /home/u/x.toml " + "A" * 41 + "/y"
     assert scrub_secrets(raw) == _D61.scrub_secrets(raw) == "讀不到 ***/x.toml " + "A" * 41 + "/y"
     assert scrub_secrets("/Users/Jane Doe/" + "A" * 40 + " B/x.toml") == "***/x.toml"
+
+
+def test_n1_space_directory_is_at_most_5_words():
+    """SEC-r18（批 S3）：含空白的目錄段最多 5 個字 —— 5 個字照遮；6 個字那一段起照舊外露（同 d61a1fd）。"""
+    assert scrub_secrets("a /Users/a b c d e/x.toml") == "a ***/x.toml"
+    raw6 = "a /Users/a b c d e f/x.toml"
+    assert scrub_secrets(raw6) == _D61.scrub_secrets(raw6) == "a ***/a b c d e f/x.toml"
+    m = _mutant(('_SP_DIR_MULTI: str = _SP_DIR_WORD + r"(?: " + _SP_DIR_WORD + r"){1,4}"',
+                 '_SP_DIR_MULTI: str = _SP_DIR_WORD + r"(?: " + _SP_DIR_WORD + r"){1,5}"'))
+    assert m.scrub_secrets(raw6) == "a ***/x.toml", "前提：上限放寬一個字，這個測試就會紅"
 
 
 def test_n1_backtick_is_not_a_directory_word():
@@ -513,7 +529,7 @@ def test_c_ordinary_text_not_masked_more(raw):
 _RULE_SAMPLE = {
     "deep_quoted": (_levels({"password": _SECRET}, 5, repr)[5], _SECRET),
     "deep_assign": (_levels("password='%s'" % _SECRET, 5, repr)[5], _SECRET),
-    "der_b64": ("\n".join(_LINES), _LINES[3]),
+    "der_b64": (" ".join(_LINES), _LINES[3]),     # 空白接成一行：第二道不認空白續行 ⇒ 仍只靠這一條（批 S3）
     "space_dir": ("/Users/Jane Doe/app/.streamlit/secrets.toml", "Jane Doe"),
 }
 
