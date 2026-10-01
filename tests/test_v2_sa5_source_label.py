@@ -44,3 +44,28 @@ def test_reference_table_says_threshold_source():
     for d, r in zip(P._reference_table_rows(refs), refs):
         assert set(d) == {"這一條", "單位", "這條線在說什麼", "門檻出處"}, d
         assert d["門檻出處"] == (r.source or "—")
+
+
+def test_spec_flag_card_source_label_follows_family():
+    """規格標記卡：總經燈（`why.spec.margin`）→「門檻出處」；持股燈 → 仍「值從哪來」。
+
+    以 L0 當下真實列各取一盞改成 degraded 來建卡（⛔ 不依賴當下 L0 剛好標記了哪一盞）。
+    """
+    import dataclasses
+    scan = P.load_specs()
+    for family, want, other in ((P.FAMILY_MACRO, "門檻出處", "值從哪來"),
+                                (P.FAMILY_HOLD, "值從哪來", "門檻出處")):
+        row = next(r for r in scan.rows if r.family == family and r.source)
+        row = dataclasses.replace(row, wired=True, discriminative=False,
+                                  degraded_reason="一段 L0 寫的原因")
+        facts = dict(P.build_spec_flag_card(row)[1])
+        assert facts.get(want) == row.source, (family, facts)
+        assert other not in facts, (family, facts)
+
+
+def test_live_margin_flag_card_says_threshold_source():
+    built = [b for b in P.build_spec_flag_cards(P.load_specs()) if b[0].key == "why.spec.margin"]
+    assert built, "L0 目前沒有標記融資那一盞 —— 這一條沒有東西可驗"
+    facts = dict(built[0][1])
+    assert facts.get("門檻出處", "").startswith("SSOT:MARGIN_BALANCE_OVERHEAT"), facts
+    assert "值從哪來" not in facts

@@ -1530,7 +1530,9 @@ def build_spec_flag_card(row: SpecRow) -> _Built:
         #    就是「這一盞不能信」，旁邊卻印一組乾乾淨淨的門檻數字，等於當場自打嘴巴。
         facts=((L0_REASON_FACT_LABEL, L0_REASON_FACT_TEXT),
                ("這一盞的門檻", row.threshold_display),
-               ("值從哪來", row.source or "—"))))
+               # B5-f1（批 SA5）：欄名依 family —— 總經燈（如 `why.spec.margin`）的 `source`
+               #    是 `DangerSpec.source`（門檻來源）⇒「門檻出處」；持股燈仍「值從哪來」。
+               (source_label(row.family), row.source or "—"))))
 
 
 def build_spec_flag_cards(scan: SpecScan) -> tuple[_Built, ...]:
@@ -2388,7 +2390,7 @@ def _v2_face_value(value: str) -> str:
 
     數字、千分位、小數點、%、正負號**永遠不略**（同我的持股頁 QA 第 2 輪）。
     ⚠️ **判準是「整段只要含一個數字就不略」**（同查一檔頁 QA F5 的修法）：黏著識別字的門檻值
-    （`why.spec.margin` 的「值從哪來」＝ `SSOT:MARGIN_BALANCE_OVERHEAT(3400)+MARGIN_BALANCE_WARN(2500)`）
+    （`why.spec.margin` 的「門檻出處」〔批 SA5 前叫「值從哪來」〕＝ `SSOT:MARGIN_BALANCE_OVERHEAT(3400)+MARGIN_BALANCE_WARN(2500)`）
     也含英文字母 —— 只看「有沒有字母」會把整段連同 3400／2500 吃成「…」。
     寧可讓一段長識別字換行（樣式表准許任意處換行），⛔ 不可讓一個數字從卡面消失。
     """

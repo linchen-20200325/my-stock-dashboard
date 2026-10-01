@@ -507,18 +507,18 @@ def test_a_token_with_a_digit_is_never_elided(glued):
 
 
 def test_the_live_margin_threshold_source_keeps_its_numbers_on_the_face():
-    """實跑當下的 L0：`why.spec.margin` 的「值從哪來」上卡面時 3400 與 2500 都還在。"""
+    """實跑當下的 L0：`why.spec.margin` 的「門檻出處」（批 SA5 前叫「值從哪來」）上卡面時 3400 與 2500 都還在。"""
     built = [b for b in _BUILTS if b[0].key == "why.spec.margin"]
     assert built, "L0 目前沒有標記融資那一盞 —— 這一條沒有東西可驗"
     raw = dict((P.v2_plain(k), P.v2_plain(v)) for k, v in built[0][1])
-    assert raw.get("值從哪來") == _MARGIN_SSOT, raw.get("值從哪來")
+    assert raw.get("門檻出處") == _MARGIN_SSOT, raw.get("門檻出處")
     out = _html(built[0])
-    face_v = [v for k, v in _face_rows(out) if k == "值從哪來"][0]
+    face_v = [v for k, v in _face_rows(out) if k == "門檻出處"][0]
     # 本頁 ⛔ 不再把它吃成「…」；超過 `FACT_VALUE_MAX_CHARS` 的部分由**契約層**截顯示
     # （`markup._fact_value_cell`：截斷處補「…」、完整值掛 `title=`），完整值另進摺疊區。
     assert face_v != P.V2_EXCERPT_GAP and "3400" in face_v, face_v
     assert _MARGIN_SSOT.startswith(face_v.rstrip(M.FACT_VALUE_ELLIPSIS)), face_v
-    assert ("值從哪來", _MARGIN_SSOT) in _fold_rows(out), "超過卡面寬度的完整值要在摺疊區"
+    assert ("門檻出處", _MARGIN_SSOT) in _fold_rows(out), "超過卡面寬度的完整值要在摺疊區"
 
 
 @pytest.mark.parametrize("built", _CASES, ids=_IDS)
