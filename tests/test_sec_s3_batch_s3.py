@@ -32,6 +32,7 @@ import pytest
 
 from shared import secret_scrub as SSC
 from shared.secret_scrub import MASK, scrub_prose_secrets, scrub_secrets
+from tests._git_tracked import only_tracked
 from tests.test_sec_s3_0928 import _is_masking_of, _mutant, _secret_corpus, _ui_corpus
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -532,7 +533,8 @@ def _tracked_md_lines() -> tuple[str, ...]:
     ⚠️ 只掃這兩處（都是 repo 追蹤的文件區），不 `rglob` 整個工作目錄 —— 未追蹤檔混進語料會讓本機與 CI 結果不同
     （SEC-r26 指出的同型問題）。
     """
-    files = [*sorted(_ROOT.glob("*.md")), *sorted(_ROOT.joinpath("docs").rglob("*.md"))]
+    #: SEC-r26 餘項（批 S4）：兩處底下的未追蹤檔（`docs/` 裡的暫存筆記等）也排除 —— 讀 git 索引檔、⛔ 不呼叫 git。
+    files = only_tracked(_ROOT, [*sorted(_ROOT.glob("*.md")), *sorted(_ROOT.joinpath("docs").rglob("*.md"))])
     out: list[str] = []
     for p in files:
         out.extend(p.read_text(encoding="utf-8", errors="replace").split("\n\n"))

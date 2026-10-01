@@ -424,3 +424,112 @@ def test_r27_indented_ordinary_text_unchanged(raw):
 _S4_EXTRA_CORPUS.extend(
     _indent(_b64(_pkcs8(s)), " " * ind) + tail
     for s in range(2) for ind in (17, 40, 256, 257) for tail in ("", "\n" + " " * ind + "說明字", "\n/home/u/x.toml"))
+
+
+# ══════════════════════════════════════════════════════════════════
+# SEC-r26：語料只收 git 追蹤中的檔案（讀索引檔、⛔ 不呼叫 git）—— `tests/_git_tracked.py`
+# ══════════════════════════════════════════════════════════════════
+def _entry(path: str, ver: int, prev: str = "", extended: bool = False, mode: int = 0o100644) -> bytes:
+    """合成一個索引項目（欄位值除 mode／flags 外都填 0）。"""
+    raw = path.encode()
+    head = bytes(24) + mode.to_bytes(4, "big") + bytes(12) + bytes(20)
+    flags = min(len(raw), 0x0FFF) | (0x4000 if extended else 0)
+    body = head + flags.to_bytes(2, "big") + (b"\0\0" if extended else b"")
+    if ver == 4:
+        common = 0
+        while common < min(len(prev), len(raw)) and prev.encode()[common] == raw[common]:
+            common += 1
+        strip = len(prev.encode()) - common
+        #: git 的 offset varint（多位元組時每多一組先減 1）。
+        enc = [strip & 0x7F]
+        strip >>= 7
+        while strip:
+            strip -= 1
+            enc.insert(0, 0x80 | (strip & 0x7F))
+            strip >>= 7
+        return body + bytes(enc) + raw[common:] + b"\0"
+    n = len(body) + len(raw)
+    return body + raw + b"\0" * (8 - n % 8)
+
+
+def _index(paths: list[str], ver: int, ext: bytes = b"", extended_at: int = -1, mode_at: int = -1) -> bytes:
+    out = b"DIRC" + ver.to_bytes(4, "big") + len(paths).to_bytes(4, "big")
+    prev = ""
+    for k, p in enumerate(paths):
+        out += _entry(p, ver, prev, extended=(k == extended_at), mode=(0o040000 if k == mode_at else 0o100644))
+        prev = p
+    return out + ext + bytes(20)
+
+
+#: 含 >127 位元組的前綴刪除（v4 多位元組 varint）、>0xFFF 的超長路徑（flags 名長飽和）、非 ASCII。
+_PATHS = ["app.py", "docs/a.md", "docs/ab.md", "shared/secret_scrub.py", "tests/x" * 40 + ".py", "中文/檔.md",
+          "z/" + "y" * 5000 + ".md", "zz.md"]
+
+
+@pytest.mark.parametrize("ver", [2, 3, 4])
+def test_r26_parse_synthetic_index(ver):
+    from tests._git_tracked import parse_index
+    assert parse_index(_index(_PATHS, ver)) == frozenset(_PATHS)
+    if ver >= 3:
+        assert parse_index(_index(_PATHS, ver, extended_at=2)) == frozenset(_PATHS)
+
+
+@pytest.mark.parametrize("data", [
+    b"", b"XXXX" + bytes(8), _index(_PATHS, 5), _index(_PATHS, 2)[:-40],            # 簽章錯、版本、截斷
+    _index(_PATHS, 2, extended_at=1),                                                 # v2 不該有 extended
+    _index(_PATHS, 2, ext=b"link" + (4).to_bytes(4, "big") + bytes(4)),               # split index
+    _index(_PATHS, 2, mode_at=1),                                                     # sparse index 目錄項目
+])
+def test_r26_unsupported_index_returns_none(data):
+    from tests._git_tracked import parse_index
+    assert parse_index(data) is None
+
+
+def test_r26_only_tracked_filters_untracked_files(tmp_path):
+    from tests._git_tracked import only_tracked, tracked_paths
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "index").write_bytes(_index(["docs/a.md", "src/x.py"], 2))
+    for rel in ("docs/a.md", "docs/scratch.md", "src/x.py", "src/tmp_untracked.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("x", encoding="utf-8")
+    files = sorted(tmp_path.joinpath("docs").glob("*.md")) + sorted(tmp_path.joinpath("src").glob("*.py"))
+    assert [f.name for f in only_tracked(tmp_path, files)] == ["a.md", "x.py"]
+    #: worktree：`.git` 是一行 `gitdir:` 的檔案
+    wt = tmp_path / "wt"
+    (wt / "docs").mkdir(parents=True)
+    (wt / "docs" / "a.md").write_text("x", encoding="utf-8")
+    (wt / "docs" / "b.md").write_text("x", encoding="utf-8")
+    gd = tmp_path / "gd"
+    gd.mkdir()
+    (gd / "index").write_bytes(_index(["docs/b.md"], 4))
+    (wt / ".git").write_text(f"gitdir: {gd}\n", encoding="utf-8")
+    assert [f.name for f in only_tracked(wt, sorted((wt / "docs").glob("*.md")))] == ["b.md"]
+    #: 沒有 `.git`（例：`git archive` 解開的副本）→ 讀不了 → 原樣全留（同修前）
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    (bare / "z.md").write_text("x", encoding="utf-8")
+    assert tracked_paths(bare) is None and only_tracked(bare, [bare / "z.md"]) == [bare / "z.md"]
+
+
+def test_r26_this_checkout_reads_its_index():
+    """本 repo（CI 與本機皆為 git checkout）：讀得到索引，且含本檔與受測模組。"""
+    from tests._git_tracked import tracked_paths
+    if not (_ROOT / ".git").exists():
+        pytest.skip("非 git checkout（例：git archive 副本）→ 依設計退回檔案系統掃描")
+    t = tracked_paths(_ROOT)
+    assert t is not None and "shared/secret_scrub.py" in t and len(t) > 500
+
+
+@pytest.mark.parametrize("mod,fn", [("tests.test_sec_s3_0928", "_ui_corpus"), ("tests.test_sec_s3_0928", "_secret_corpus"),
+                                    ("tests.test_sec_s3_batch_s3", "_tracked_md_lines"),
+                                    ("tests.test_sec_s2_scrub_gaps", "_corpus")])
+def test_r26_every_scrub_corpus_goes_through_only_tracked(mod, fn):
+    """結構守衛：每個語料函式都經過 `only_tracked`（拿掉 → 這裡紅）。"""
+    import ast
+    import importlib
+    import inspect
+    import textwrap
+    f = getattr(importlib.import_module(mod), fn)
+    src = textwrap.dedent(inspect.getsource(getattr(f, "__wrapped__", f)))
+    calls = {n.func.id for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    assert "only_tracked" in calls, (mod, fn)

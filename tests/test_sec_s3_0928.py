@@ -35,6 +35,7 @@ import pytest
 
 from shared import secret_scrub as SSC
 from shared.secret_scrub import MASK, scrub_prose_secrets, scrub_secrets
+from tests._git_tracked import only_tracked
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -570,14 +571,16 @@ def _consts(files) -> set[str]:
 
 @functools.lru_cache(maxsize=1)
 def _ui_corpus() -> frozenset[str]:
-    files = [*_ROOT.joinpath("src").rglob("*.py"), *_ROOT.joinpath("shared").rglob("*.py"), _ROOT / "app.py"]
+    #: SEC-r26（批 S4）：只收 git 追蹤中的檔案（讀索引檔、⛔ 不呼叫 git；讀不了就同修前），見 `tests/_git_tracked.py`。
+    files = only_tracked(_ROOT, [*_ROOT.joinpath("src").rglob("*.py"), *_ROOT.joinpath("shared").rglob("*.py"),
+                                 _ROOT / "app.py"])
     return frozenset(_consts(files))
 
 
 @functools.lru_cache(maxsize=1)
 def _secret_corpus() -> frozenset[str]:
     """既有測試裡的秘密樣本 ＋ 本批形態與 QA 實例的組合 ＋ 固定種子的隨機字串。"""
-    out = _consts(f for f in _ROOT.joinpath("tests").glob("test_*.py")
+    out = _consts(f for f in only_tracked(_ROOT, _ROOT.joinpath("tests").glob("test_*.py"))   # SEC-r26
                   if "scrub" in f.read_text(encoding="utf-8"))
     fields = ["password", "client_secret", "token", "Authorization", "api_key", "user"]
     vals = [_SECRET, "/Users/Jane Doe/x.toml", _B64[:80], "'x'", "\\n" + _B64[:70]]
