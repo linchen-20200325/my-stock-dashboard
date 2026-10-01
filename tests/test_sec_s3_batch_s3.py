@@ -508,6 +508,8 @@ def _batch_corpus() -> frozenset[str]:
                                                           "/home/u/", "headers[", "] = ", "A" * 16, "A" * 40])
     for _ in range(6000):
         out.add("".join(rnd.choice(alpha) for _ in range(rnd.randint(1, 40))))
+    #: S3 QA 第三輪：DER 行之後緊接路徑（含空白／tab／Windows／UNC／`~/`）—— 這一類不得再比 e23ff2f 少遮。
+    out.update(_r3_cases())
     return frozenset(out)
 
 
@@ -632,22 +634,30 @@ def _peak_mb(fn, text: str) -> float:
 
 @pytest.mark.slow
 def test_r13d_new_rules_add_little_memory_on_measured_forms():
-    """檔頭寫的「21 種形態」＝ `_mem_forms()` 全部；每一種都比 e23ff2f 多 ≤ 2 MB（檔頭同數字）。"""
+    """檔頭寫的「21 種形態」＝ `_mem_forms()` 全部；每一種都比 e23ff2f 多 ≤ 5 MB（檔頭同數字）。
+
+    量測紀錄（2026-10-01，tracemalloc）：Python 3.11 最大 +1.9 MB（auth_many）；真 Python 3.10 最大 +4.8 MB（json_slash）。
+    上限 5 MB 對 3.11 留 2.6 倍餘裕。
+    """
     forms = _mem_forms()
-    assert len(forms) == 21 and "21 種形態" in _DOC and "≤ 2 MB" in _DOC
+    assert len(forms) == 21 and "21 種形態" in _DOC and "≤ 5 MB" in _DOC
     worse = {n: (_peak_mb(_OLD, t), _peak_mb(scrub_secrets, t)) for n, t in forms.items()}
-    worse = {n: v for n, v in worse.items() if v[1] - v[0] > 2}
+    worse = {n: v for n, v in worse.items() if v[1] - v[0] > 5}
     assert not worse, worse
 
 
 @pytest.mark.slow
 def test_r13d_python310_fallback_memory_matches_the_disclosure():
-    """模擬 3.10（沒有佔有型量詞）：檔頭寫「最多多 ~120 MB」—— 量到的最大增量落在 (30, 120] MB。"""
+    """模擬 3.10（沒有佔有型量詞；以 3.11 編譯一般量詞版）：每種形態比 e23ff2f 多 ≤ 10 MB。
+
+    量測紀錄（2026-10-01，tracemalloc）：本模擬最大 +4.0 MB（json_slash）；真 Python 3.10.20 跑同一份 21 種形態
+    最大 +4.8 MB（json_slash）。上限 10 MB ＝ 實測的 2 倍以上餘裕；圈數上限拿掉時本模擬會到 ~118 MB（S3 QA 第三輪）。
+    """
     m = _mutant(('    re.compile(r"a*+")\n', '    re.compile(r"a*+(")\n'))
     assert m._POSS == ""
     forms = _mem_forms()
     worst = max(_peak_mb(m.scrub_secrets, t) - _peak_mb(_OLD, t) for t in forms.values())
-    assert 30 < worst <= 120 and "~120 MB" in _DOC, worst
+    assert worst <= 10 and "真 Python 3.10" in _DOC, worst
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -791,3 +801,82 @@ def test_masked_line_width_estimate_does_not_eat_the_next_block():
         out = scrub_secrets(raw)
         assert _leak(out, _b64(key)) == 0 and out.split("\n")[-3:] == [t + "  " for t in tail], out
     assert found >= 1, "前提：樣本裡要有金鑰第二行先被遮掉的"
+
+
+# ══════════════════════════════════════════════════════════════════
+# S3 QA 第三輪
+# ══════════════════════════════════════════════════════════════════
+#: 1. 回歸：第二道在原文上判、最後一行（短行）吃掉路徑開頭 → 含空白目錄名的規則認不出 → 比 e23ff2f 少遮。
+_R3_DER_HEADS = [_b64(_pkcs8(1))[:32], _b64(_pkcs8(1))[:64], "\n".join(_wrap(_b64(_pkcs8(1)))[:2]),
+                 _b64(_ec_p256(1))[:64]]
+_R3_PATHS = ["/Users/Jane Doe/x.toml", "~/My Docs/a b/x.toml", "/home/x y/z.toml", "C:\\Users\\Jane Doe\\x.toml",
+             "\\\\srv\\share x\\y.toml", "/home/u/my\tdir/x.toml", "/Users/JaneDoeLongName1 Doe/x.toml",
+             "//nas01/My Share/jane/x.toml", "see @/Users/Jane Doe/x.toml"]
+_R3_SEPS = ["\n", "\r\n", "\\n", "\r"]
+
+
+def _r3_cases() -> list[str]:
+    return [h + sep + p for h in _R3_DER_HEADS for p in _R3_PATHS for sep in _R3_SEPS]
+
+
+def test_r3_path_after_a_der_line_never_masks_less():
+    bad = [r for r in _r3_cases() if not _is_masking_of(scrub_secrets(r), _OLD(r))]
+    assert not bad, [(b[-40:], _OLD(b)[-30:], scrub_secrets(b)[-30:]) for b in bad[:5]]
+
+
+def test_r3_the_reported_repro():
+    raw = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n/Users/Jane Doe/x.toml"
+    assert scrub_secrets(raw) == _OLD(raw) == "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n***/x.toml"
+
+
+def test_r3_last_line_not_ending_the_line_is_load_bearing():
+    raw = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n/Users/Jane Doe/x.toml"
+    m = _mutant(("    if _LINE_DONE_RE.match(m.string, m.end()) is None:\n", "    if False:\n"))
+    assert "Doe" in m.scrub_secrets(raw), "前提：拿掉「最後一行要在行尾結束」，`Doe` 外露"
+
+
+@pytest.mark.parametrize("prefix", ["> ", "> > ", ">", ">  "])
+@pytest.mark.parametrize("kind", ["pkcs8", "ec_p256", "cert"])
+def test_r3_markdown_quote_prefix_masked(prefix, kind):
+    """2(a)：Markdown 引用 `> ` 行首的金鑰／憑證（e23ff2f 全數外露）。"""
+    mk = {"pkcs8": _pkcs8, "ec_p256": _ec_p256, "cert": _cert}[kind]
+    for seed in range(10):
+        b = _b64(mk(seed))
+        raw = prefix + ("\n" + prefix).join(_wrap(b))
+        assert _leak(scrub_secrets(raw), b) == 0, (seed, scrub_secrets(raw)[:80])
+    assert _leak(_OLD(prefix + ("\n" + prefix).join(_wrap(_b64(mk(0))))), _b64(mk(0))) > 0
+
+
+def _ed_cert(seed: int) -> bytes:
+    r = random.Random(seed + 900)
+    return _seq(_seq(r.randbytes(200 + seed % 48)) + bytes.fromhex("300506032b6570") + b"\x03\x41\x00" + r.randbytes(64))
+
+
+def test_r3_ed25519_cert_then_one_line_key_json_slash():
+    """2(b)：Ed25519 憑證（最後一行短）＋一行 Ed25519 金鑰、JSON `\\n` 且 `/` 跳脫成 `\\/`：金鑰那一行也遮。"""
+    hit = before = 0
+    for seed in range(200):
+        key = _b64(bytes.fromhex("302e020100300506032b657004220420") + random.Random(seed).randbytes(32))
+        cert = _wrap(_b64(_ed_cert(seed)))
+        if "/" not in key or len(cert[-1]) >= 16:
+            continue
+        hit += 1
+        raw = json.dumps("\n".join(cert + [key])).replace("/", "\\/")
+        out = scrub_secrets(raw)
+        assert _leak(out, key) == 0 and _leak(out, _b64(_ed_cert(seed))) == 0, out[-90:]
+        before += _leak(_OLD(raw), key) > 0
+    assert hit >= 5 and before >= 1, (hit, before)
+
+
+_TOK4 = "tOk9S3qaR3AbCdEfGh"
+
+
+@pytest.mark.parametrize("raw", [
+    f"h['Authorization'] = 'Bearer %s' % '{_TOK4}'",
+    f"h['Authorization'] = 'Bearer %s' % ('{_TOK4}',)",
+    f"h['Authorization'] = 'Bearer {{}}'.format('{_TOK4}')",
+    f"h['Authorization'] = \\\n    '{_TOK4}'",
+    f"h['Authorization'] = 'Bearer %s' % {_TOK4}",
+])
+def test_r3_authorization_percent_format_continuation(raw):
+    assert _TOK4 not in scrub_secrets(raw) and _TOK4 in _OLD(raw)
