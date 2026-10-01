@@ -8,12 +8,16 @@
     持有列全部整批抓取失敗時刪去歸因「你的持股未帶張數/均價（或無市值）→ 」與去哪補子句，
     改接同檔卡①既有的「⚠️ 另有 N 檔整批抓取失敗，未納入任何判斷。」；其餘情形只把半形
     「張數/均價」統一為全形「張數／均價」。
+  · H1-f10：內部註解／docstring「有張數/均價才算」（L5 與測試檔）改成實際條件；
+    L3 `dividend_station_service.py` 的 2 處待 ③（動 L3）答覆，本批 ⛔ 未動。
 
 列一律走**真的** L3 `build_station_rows()`（`metrics_fn` 注入、全離線、不打網路），
 夾具沿用批 H2 `tests/test_v2_batch_h2_0928.py`（⛔ 不另捏 row 的形狀）。
 每一條的有效性已做突變驗證（把修正改回修前 → 本檔對應測試轉紅）。
 """
 from __future__ import annotations
+
+import pathlib
 
 from shared import dividend_station_thresholds as T
 from src.services import dividend_station_service as svc
@@ -130,3 +134,24 @@ class TestH1f9V1AllocationNone:
         """沒有任何持有列 ⇒ 原句照留（`all([])` 為真的陷阱）。"""
         rows = _rows(("0056.TW", _E, False, None, None, 35.0, True))
         assert _captions(_alloc_out(monkeypatch, rows)) == [_ALLOC_NONE_V1]
+
+
+# ══════════════════════════════════════════════════════════════════
+# H1-f10：L5 與測試檔的註解／docstring 不再寫「有張數/均價才算」
+# ══════════════════════════════════════════════════════════════════
+_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+class TestH1f10Comments:
+    def test_v1_view_comments_no_longer_say_lots_avg_only(self):
+        _src = (_ROOT / "src/ui/etf/etf_tab_dividend_station.py").read_text(encoding="utf-8")
+        assert "有張數/均價才算" not in _src
+
+    def test_service_test_comment_no_longer_says_lots_avg_only(self):
+        _src = (_ROOT / "tests/test_dividend_station_service.py").read_text(encoding="utf-8")
+        assert "有張數/均價才算" not in _src
+
+    def test_v1_docstring_names_the_real_conditions(self):
+        from src.ui.etf import etf_tab_dividend_station as V1
+        _doc = V1._render_allocation_take_profit.__doc__ or ""
+        assert "張數×現價" in _doc and "均價＋現價" in _doc, _doc

@@ -253,7 +253,7 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     if not _etf_rows and not _stock_rows:
         st.info("無可顯示的持股列。")
 
-    # ── 📊 80/20 實際配置偏離 + 衛星停利（#38,有張數/均價才算）─────────────
+    # ── 📊 80/20 實際配置偏離 + 衛星停利（#38；80/20 看市值＝張數×現價，停利看損益%＝均價＋現價）──
     _render_allocation_take_profit(_rows)
 
     # ── 2️⃣ 同一個名詞，兩套刻度（階段 C；純揭露，不改任何判定）────────────
@@ -570,7 +570,12 @@ def _render_light_detail(rows: list[dict]) -> None:
 
 
 def _render_allocation_take_profit(rows: list[dict]) -> None:
-    """📊 80/20 實際配置偏離 + 衛星停利（有張數/均價才算;§1 缺金額誠實標,不捏造）。"""
+    """📊 80/20 實際配置偏離 + 衛星停利（§1 缺金額誠實標,不捏造）。
+
+    80/20 只納入市值（張數×現價）> 0 的持有列（只缺均價照樣納入）；停利看損益%（要均價＋現價）。
+    整批抓取失敗的持有列兩者都跳過（L3 `compute_allocation_split()`／`flag_take_profit()`）。
+    批 H3 H1-f10：修前寫成只看張數與均價 —— 正是造成 H1-f5 的同一個誤解。
+    """
     from src.services.dividend_station_service import (
         compute_allocation_split, flag_take_profit)
     _alloc = compute_allocation_split(rows)
