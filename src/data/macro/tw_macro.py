@@ -366,7 +366,15 @@ def _try_cbc_ef15m01() -> Optional[tuple]:
 
 
 def _try_twii_proxy() -> Optional[tuple]:
-    """Tier 3:^TWII 動能代理(走 macro_core 經 NAS proxy)。"""
+    """Tier 3:^TWII 動能代理(走 macro_core 經 NAS proxy)。
+
+    回傳 `(chg20, chg60 / 3)`(單位 %,各取 2 位小數),資料不足 60 列回 None:
+      - 第一個值 = ^TWII 20 日報酬 → caller 寫進 `m1b_yoy`;
+      - 第二個值 = ^TWII **60 日報酬除以 3**(不是 60 日報酬本身)→ caller 寫進 `m2_yoy`。
+    ⚠️ 兩者都是股價動能,不是貨幣供給年增率(代理值;見
+    `shared/signal_thresholds.M1B_M2_LEG_ENABLED` docstring「線上路徑另有獨立問題」段)。
+    (2026-10-01 DL-f1-s54 補述;只補 docstring,行為不變。)
+    """
     try:
         from src.data.macro import fetch_yf_close
     except ImportError:
