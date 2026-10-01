@@ -37,12 +37,15 @@ def _ok_df(value: float, n: int = 30) -> pd.DataFrame:
 @pytest.fixture
 def run_panel(monkeypatch):
     from src.ui.tabs.macro import helpers as h
-    import src.data.macro as dm
 
     def _run(china_dict: dict):
         fake = _fake_st()
         monkeypatch.setattr(h, "st", fake)
-        monkeypatch.setattr(dm, "fetch_china_macro", lambda _k: china_dict, raising=False)
+        # 打真正的查找點（barrel 走 PEP 562 __getattr__ 即時轉發至 tw_macro）；
+        # ⛔ 不可在 barrel 上 setattr —— undo 會把真函式寫進 barrel __dict__，
+        # 之後其他測試對 tw_macro 的 patch 會被繞過（順序相依洩漏）。
+        monkeypatch.setattr("src.data.macro.tw_macro.fetch_china_macro",
+                            lambda _k: china_dict)
         h._render_china_drag_panel(_KEY, main_health=60.0)
         captions = [str(c.args[0]) for c in fake.caption.call_args_list]
         return fake, captions
