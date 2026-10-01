@@ -364,9 +364,10 @@ def test_f1_untidy_lines_after_a_mask_unchanged():
 
 
 def test_tidy_needs_3_plain_lines_of_the_same_width():
-    """判不了標頭時，「整齊」至少要 3 行同寬（中間行）—— 只有 1～2 行照原樣。"""
-    for raw in ("***\n" + "A" * 40 + "\n" + "B" * 40, "***\n" + "A" * 40 + "\n" + "B" * 40 + "\n" + "C" * 40):
+    """判不了標頭時，「整齊」至少要 3 行同寬（含整塊最後一行，S3 QA 第五輪）—— 只有 1～2 行照原樣。"""
+    for raw in ("***\n" + "A" * 40, "***\n" + "A" * 40 + "\n" + "B" * 40):
         assert scrub_secrets(raw) == _OLD(raw) == raw
+    assert scrub_secrets("***\n" + "A" * 40 + "\n" + "B" * 40 + "\n" + "C" * 40) == MASK
     raw4 = "***\n" + "\n".join(c * 40 for c in "ABCD") + "\nE"
     assert scrub_secrets(raw4) == MASK
 
@@ -826,7 +827,9 @@ def test_r3_path_after_a_der_line_never_masks_less():
 
 def test_r3_the_reported_repro():
     raw = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n/Users/Jane Doe/x.toml"
-    assert scrub_secrets(raw) == _OLD(raw) == "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n***/x.toml"
+    assert _OLD(raw) == "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n***/x.toml"
+    #: 第五輪起：截短的金鑰行後面接著（前面規則遮掉的）路徑 → 金鑰那行也遮（多遮、安全側）；路徑的遮法與 e23ff2f 相同。
+    assert scrub_secrets(raw) in (_OLD(raw), "***" + "***/x.toml") and _is_masking_of(scrub_secrets(raw), _OLD(raw))
 
 
 def test_r4_old_part_is_exactly_e23ff2f():
@@ -982,3 +985,86 @@ def test_r4_cpu_within_2x_of_e23ff2f(form):
     }[form][:n]
     new, old = _cpu_min3(scrub_secrets, text), _cpu_min3(_OLD, text)
     assert new <= max(2 * old, 0.05), (new, old)
+
+
+# ══════════════════════════════════════════════════════════════════
+# S3 QA 第五輪
+# ══════════════════════════════════════════════════════════════════
+@pytest.mark.parametrize("prefix", ["private_key: ", "key=", "client_secret = "])
+@pytest.mark.parametrize("trail", ["", "\n請檢查", " end"])
+def test_r5_field_then_exactly_three_tidy_lines(prefix, trail):
+    """1：欄位名後接金鑰、第一行 20 字（被第 5 類遮掉）＋剛好 3 行 48 字 —— 原本少算最後一行，3 行整段外露。"""
+    key = _b64(_pkcs8(5))
+    lines = [key[20 + 48 * j:20 + 48 * (j + 1)] for j in range(3)]
+    raw = prefix + key[:20] + "\n" + "\n".join(lines) + trail
+    out = scrub_secrets(raw)
+    assert not [ln for ln in lines if ln in out], out
+    assert _is_masking_of(out, _OLD(raw)) and all(ln in _OLD(raw) for ln in lines)
+
+
+def test_r5_premasked_middle_line_counts_toward_tidy():
+    """1：3 行 64 字＋短的最後一行，中間一行以 `/` 開頭（先被路徑規則遮成 `***/…`）—— 遮罩行也算進「3 行」。"""
+    found = 0
+    for seed in range(400):
+        lines = _wrap(_b64(_pkcs8(seed)))
+        if not lines[2].startswith("/"):
+            continue
+        raw = "private_key: " + lines[0] + "\n" + "\n".join(lines[1:4]) + "\n" + lines[-1][:10]
+        if "***" not in _OLD(raw).split("\n")[2]:
+            continue
+        found += 1
+        out = scrub_secrets(raw)
+        assert not [ln for ln in lines[1:4] if ln[-20:] in out], out
+        assert _is_masking_of(out, _OLD(raw))
+    assert found >= 1
+
+
+@pytest.mark.parametrize("rows", [2, 3, 4, 5])
+@pytest.mark.parametrize("width", [40, 48, 64, 76])
+@pytest.mark.parametrize("trail", ["", "\n請檢查", " end", "\nAB==", "\n" + "Q" * 80])
+def test_r5_tidy_property(rows, width, trail):
+    """1 的性質：判不了標頭時（前一行已遮），≥3 行同寬 ≥40 字一律遮；2 行不遮。永不比 e23ff2f 少遮。"""
+    for seed in range(4):
+        key = _b64(_pkcs8(seed + 30))
+        lines = [key[16 + width * j:16 + width * (j + 1)] for j in range(rows)]
+        raw = "private_key: " + key[:16] + "\n" + "\n".join(lines) + trail
+        out = scrub_secrets(raw)
+        assert _is_masking_of(out, _OLD(raw))
+        if rows >= 3:
+            assert not [ln for ln in lines if ln in out], (rows, width, seed, out[:120])
+        else:
+            assert out == _OLD(raw), (rows, width, seed, out[:120])
+
+
+def test_r5_tidy_count_mutants_are_caught():
+    """突變：少算最後一行／只數沒遮罩的行 —— 各自至少一個樣本外露。"""
+    raw = "private_key: " + _b64(_pkcs8(5))[:20] + "\n" + "\n".join(
+        _b64(_pkcs8(5))[20 + 48 * j:20 + 48 * (j + 1)] for j in range(3))
+    m = _mutant(("            _rows = _re - _i\n", "            _rows = min(_re, _n - 2) - _i\n"))
+    assert _b64(_pkcs8(5))[20:68] in m.scrub_secrets(raw)
+    m = _mutant(("            if _rows < 3 or _plain < 1", "            if _plain < 3 or _plain < 1"))
+    for seed in range(400):
+        lines = _wrap(_b64(_pkcs8(seed)))
+        if lines[2].startswith("/"):
+            raw = "private_key: " + lines[0] + "\n" + "\n".join(lines[1:4]) + "\n" + lines[-1][:10]
+            if "***" in _OLD(raw).split("\n")[2]:
+                assert lines[1][-20:] in m.scrub_secrets(raw)
+                return
+    pytest.fail("找不到樣本")
+
+
+def test_r5_double_repr_ed25519_first_line():
+    """2(QA1)：兩層 `repr` 的 Ed25519 金鑰後面接著別的行 —— 第 2 行起先被 UNC 規則遮掉，第一行原本外露。"""
+    k = "MC4CAQAwBQYDK2VwBCIEICn0P0kf2SZB/d1OBOTFbgp7rln+\n0aqtJqmEn3YKvm6y\nfoo"
+    for raw in (repr(repr(k)), repr(repr(repr(k)))):
+        out = scrub_secrets(raw)
+        assert "MC4CAQAwBQYDK2VwBCIE" not in out and _is_masking_of(out, _OLD(raw))
+        assert "MC4CAQAwBQYDK2VwBCIE" in _OLD(raw)
+
+
+def test_r5_continuation_inside_repr():
+    """2(QA2)：`repr()` 裡的反斜線續行（`\\\\\\n`）夾在 `+` 前面。"""
+    src = "h['Authorization']='Bearer ' \\\n + tokS3r5secret"
+    for raw in (src, repr(src), repr(repr(src))):
+        out = scrub_secrets(raw)
+        assert "tokS3r5secret" not in out and _is_masking_of(out, _OLD(raw))
