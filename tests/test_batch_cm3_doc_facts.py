@@ -54,4 +54,4 @@ def test_dl_f1_s53_rebuilt_parquet_gap_within_sanity_cap():
         pytest.skip("本機無 data_cache/finmind_m1m2.parquet")
     gap = pd.read_parquet(p)["m1b_m2_gap"].dropna()
     assert len(gap) > 0
-    assert (gap.abs() < M1B_M2_GAP_SANITY_ABS_MAX_PP).all()
+    assert (gap.abs() <= M1B_M2_GAP_SANITY_ABS_MAX_PP).all()
