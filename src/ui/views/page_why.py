@@ -1085,16 +1085,26 @@ def build_source_card(probe: SourceProbe) -> _Built:
         return (Card(key=f"why.source.{probe.name}", label=probe.name,
                      state=UI_LIVE, value=_when),
                 tuple(_facts), "")
+    _label = probe.name
     if _state == UI_IDLE:
         _note = Note(now=SOURCE_IDLE_NOW, why=NEVER_RUN_WHY, where=NEVER_RUN_WHERE)
     elif probe.unknown_status:
+        # SA2-f12（2026-10-01）：狀態字面值是**上游原文**，帶狀態 glyph 時先過 `scrub_state_glyphs()`
+        #   SSOT 再放進 `now` —— 不洗，`Note.__post_init__` 直接 `ValueError`，而本卡建在
+        #   `_render_one()` 的隔離之外（見 `_clean_reason()` docstring）。⚠️ **只在真的有 glyph 時才用洗過的字**：
+        #   該 SSOT 另會去頭尾空白、併連續空白（`'ok '` 會變成看似合法的 `'ok'`）⇒ 沒 glyph 一律原樣 `!r`。
+        #   洗掉的揭露由下面 `why` 那句承擔：`probe.error` 內含同一個字面值，`_clean_reason()` 洗到就接揭露句。
+        _us_clean, _us_n = scrub_state_glyphs(probe.unknown_status)
+        _us = _us_clean if _us_n else probe.unknown_status
+        # SA2-f12 QA：不是 Mapping 的那一列，`probe.error` 句子裡帶著列名 ⇒ `why` 已接「已移除」揭露；
+        #   卡標題同一個名字若帶 glyph 也洗（只在有 glyph、且揭露真的蓋得到它時），⛔ 不讓標題原樣帶燈
+        #   與揭露句互相矛盾。key 不動（`why.source.<原名>`）。
+        _nm_clean, _nm_n = scrub_state_glyphs(probe.name)
+        if _nm_n and _nm_clean and repr(probe.name) in probe.error:
+            _label = _nm_clean
         _note = Note(
-            # SA2-f12（2026-10-01）：狀態字面值是**上游原文**，先過 `scrub_state_glyphs()` SSOT 再放進 `now`
-            #   —— 不洗，字面值帶狀態 glyph 時 `Note.__post_init__` 直接 `ValueError`，而本卡建在
-            #   `_render_one()` 的隔離之外（見 `_clean_reason()` docstring）。洗掉的揭露由下面 `why`
-            #   那句承擔：`probe.error` 內含同一個字面值，`_clean_reason()` 洗到就接揭露句。
             now=(f"{SOURCE_UNKNOWN_NOW_HEAD}"
-                 f"（L0 回 {scrub_state_glyphs(probe.unknown_status)[0]!r}）"),
+                 f"（L0 回 {_us!r}）"),
             why=_clean_reason(probe.error),
             where=(f"{NO_EXIT_MARKER} —— 這是 L0 登錄表與本頁之間的契約漂移，"
                    "請把上面那行訊息回報給維護者；"
@@ -1106,7 +1116,7 @@ def build_source_card(probe: SourceProbe) -> _Built:
             where=("這是上游來源的問題，不是你操作的問題 —— "
                    "可以到會用到它的那一頁重按一次更新；"
                    "若持續失敗請把上面那行訊息回報給維護者"))
-    return (Card(key=f"why.source.{probe.name}", label=probe.name,
+    return (Card(key=f"why.source.{probe.name}", label=_label,
                  state=_state, note=_note),
             tuple(_facts), "")
 

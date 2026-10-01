@@ -47,3 +47,43 @@ def test_plain_unknown_status_output_is_unchanged():
     """無 glyph 的字面值：輸出逐字同修前（只洗不改）。"""
     card = P.build_source_card(P.probe_from_entry("fetch_x", _entry("zz")))[0]
     assert card.note.now == "**這一盞的狀態本頁看不懂**（L0 回 'zz'）"
+
+
+# ── QA（2026-10-01）：沒 glyph ⇒ 原樣 `!r`，逐字同修前（⛔ 不去空白、不併空白）─────────────
+@pytest.mark.parametrize("status", ["ok ", "  ", "a\tb  c", " 怪 "])
+def test_no_glyph_status_is_byte_identical_to_base(status):
+    card = P.build_source_card(P.probe_from_entry("fetch_x", _entry(status)))[0]
+    assert card.note.now == f"{P.SOURCE_UNKNOWN_NOW_HEAD}（L0 回 {status!r}）"
+
+
+def test_glyph_status_with_spaces_is_washed():
+    card = P.build_source_card(P.probe_from_entry("fetch_x", _entry(" ok 🟢 ")))[0]
+    assert card.note.now == f"{P.SOURCE_UNKNOWN_NOW_HEAD}（L0 回 'ok'）"
+    assert _DISCLOSURE in card.note.why
+
+
+# ── QA：不是 Mapping 的那一列，名字帶 glyph ⇒ 卡標題也洗（揭露句本來就在 why）──────────────
+def _non_mapping_probe(name, monkeypatch):
+    monkeypatch.setattr(P, "get_monitor_registry", lambda: {name: [1]})
+    return P.load_sources().probes[0]
+
+
+@pytest.mark.parametrize("glyph", _GLYPHS)
+def test_non_mapping_row_name_with_glyph_is_washed_in_title(glyph, monkeypatch):
+    probe = _non_mapping_probe(f"f{glyph}x", monkeypatch)
+    built = P.build_source_card(probe)
+    card = built[0]
+    assert card.label == "fx" and card.key == f"why.source.f{glyph}x"
+    assert _DISCLOSURE in card.note.why
+    assert f"f{glyph}x" not in P.v2_card_html(*built)      # 卡自己的紅燈徽章不算
+
+
+def test_non_mapping_row_plain_name_is_unchanged(monkeypatch):
+    probe = _non_mapping_probe(" f x ", monkeypatch)
+    assert P.build_source_card(probe)[0].label == " f x "
+
+
+def test_mapping_row_name_with_glyph_is_not_washed_without_disclosure():
+    """名字不在 why 的揭露範圍內（Mapping 列的 error 只帶狀態字面值）⇒ 不洗（洗過就要說）。"""
+    card = P.build_source_card(P.probe_from_entry("f🟢x", _entry("zz")))[0]
+    assert card.label == "f🟢x"
