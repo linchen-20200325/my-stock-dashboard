@@ -2634,7 +2634,9 @@ def _reference_table_rows(rows: Iterable[SpecRow]) -> list[dict]:
         "這一條": _r.label,
         "單位": _r.unit or "—",
         "這條線在說什麼": _r.why or "—",
-        "值從哪來": _r.source or "—",
+        # B5-f1（批 SA5）：參考走勢的 `source` 同樣讀自 `DangerSpec.source`（＝門檻來源）
+        #    ⇒ 欄名「門檻出處」（見 `source_label`）；本表仍**沒有**「門檻」欄（欄位數不變）。
+        source_label(_r.family): _r.source or "—",
     } for _r in rows]
 
 

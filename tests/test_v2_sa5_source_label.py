@@ -34,3 +34,13 @@ def test_macro_table_says_threshold_source_and_hold_table_keeps_value_source():
         assert "值從哪來" not in d and d["門檻出處"] == (r.source or "—"), d
     for d, r in zip(P._spec_table_rows(hold), hold):
         assert "門檻出處" not in d and d["值從哪來"] == (r.source or "—"), d
+
+
+def test_reference_table_says_threshold_source():
+    """參考走勢的 `source` 也是 `DangerSpec.source` ⇒「門檻出處」；欄位數仍是四欄、仍無「門檻」欄。"""
+    scan = P.load_specs()
+    refs = scan.reference_rows
+    assert refs
+    for d, r in zip(P._reference_table_rows(refs), refs):
+        assert set(d) == {"這一條", "單位", "這條線在說什麼", "門檻出處"}, d
+        assert d["門檻出處"] == (r.source or "—")
