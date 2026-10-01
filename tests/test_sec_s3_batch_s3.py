@@ -1124,3 +1124,27 @@ def test_r6_width_with_padding_is_load_bearing():
     raw, lines = _r6_sample(3, 43, 2, 0)
     m = _mutant(("    _wid = [len(_l) for _l in _raw]\n", "    _wid = [len(_l) for _l in _lines]\n"))
     assert [ln for ln in lines if ln in m.scrub_secrets(raw)], "前提：用去掉 `=` 的長度判同寬 → 外露"
+
+
+#: S3 QA 第六輪複驗（第 2 組）：行寬估計（`_near`）與同寬延伸（`_run`）都要用含 `=` 補位的行寬 ——
+#: 改回去掉 `=` 的長度，下面兩例就外露（逐字釘住完整輸出，讓兩個突變都被抓到）。
+_R6_WIDTH_CASES = [
+    ("password: vMJEy3QISJkD9jaCL7YAdafHR\n/+Rh/lSGMkDph7R9vkHp4bAnkoS9Pp01zVurdh0Z\n"
+     "/1OO/++tIPEKBJx1rMkskORHCn2FKwoaqx8uZzW7\nlQWiVb2y+oMYvFZLmYxj7px9tP8x1anwb5hFEfu=\n請檢查",
+     "password: ***\n請檢查",
+     ("        _near = [_wid[_x] for _x", "        _near = [_len[_x] for _x")),
+    ("錯誤：\n/z6T/7kCcbUdATkecMMBUmPBDKQirwSC7cbr6cMm8NQJtN\n/wtO/itcbM1GZylOzIwlWuFQVdkv6D6qSRhaKhNdF6OFiA\n"
+     "sHUmKPBb3haoATWFqnQwfZAWqoaNRkpLq0FvsHi55PcD1V\nYvNHG5Ia1ktb+dUkXYPQLRWOeQEyqXRzazRaU+RJqbsZo= end",
+     "錯誤：\n*** end",
+     #: `_run` 整段改回去掉 `=` 的長度（比較與兩處指定一起改）。
+     ("        elif _nx_pw is None or _nx_pw == _wid[_x]:\n            _run[_x], _pw[_x] = _nx_run, _wid[_x]\n"
+      "        else:\n            _run[_x], _pw[_x] = _np[_x + 1] - 1, _wid[_x]",
+      "        elif _nx_pw is None or _nx_pw == _len[_x]:\n            _run[_x], _pw[_x] = _nx_run, _len[_x]\n"
+      "        else:\n            _run[_x], _pw[_x] = _np[_x + 1] - 1, _len[_x]")),
+]
+
+
+@pytest.mark.parametrize("raw,want,mutation", _R6_WIDTH_CASES)
+def test_r6_padded_width_in_estimate_and_run(raw, want, mutation):
+    assert scrub_secrets(raw) == want and _is_masking_of(want, _OLD(raw))
+    assert _mutant(mutation).scrub_secrets(raw) != want, "前提：改回去掉 `=` 的長度就外露"
