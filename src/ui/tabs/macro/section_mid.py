@@ -500,7 +500,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         # ── 策略1：BIAS240 × 台灣出口 二維矩陣（v5.0）──────────────
         if _bias_info8:
             _sql_b    = _b240_8
-            _exp_yoy8 = float(_m8_exp.get('yoy', 0)) if _m8_exp else None
+            # M2N-f8：原 `float(_m8_exp.get('yoy', 0)) if _m8_exp else None` —— 缺鍵捏成
+            # 「台灣出口 YoY=+0.0%」進矩陣、None／'-' 崩潰、NaN／±inf 印 nan／inf 並落錯格。
+            # 改沿用 KPI 卡同一組有限值 `_ey8_v` ⇒ 不可用時走下方既有「Export 無資料 → 降級用 CLI」
+            # 分枝（文案一字未動）；有限值時 `float()` 作用在同一個物件 ⇒ 矩陣判定與文字逐字不變。
+            _exp_yoy8 = float(_ey8_v) if _ey8_v is not None else None
             _exp_dt8  = _m8_exp.get('date', '') if _m8_exp else ''
             if _exp_yoy8 is not None:
                 _exp_txt8 = f'台灣出口 YoY={_exp_yoy8:+.1f}%（{_exp_dt8}）'
