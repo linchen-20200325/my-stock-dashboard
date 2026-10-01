@@ -19,6 +19,8 @@ flow_dir = _B12.flow_dir
 
 _PE = "估值（本益比）"
 _SUFFIX = "失敗，該因子不計入綜合分"
+#: 批 B9f（B9 ⑨-f1，2026-10-01）：半邊失敗那一列純刪「，該因子不計入綜合分」→ 只剩「失敗」。
+_HALF_SUFFIX = "失敗"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -29,12 +31,12 @@ class TestB9n9MarketNamed:
         _break(world, "pe_tpex")
         res, card, facts = _run(PF, ("pe_low", "eps_high"))
         assert card.state == UI_FAILED
-        assert dict(facts)[_PE] == f"上櫃 TPEX{_SUFFIX}"
+        assert dict(facts)[_PE] == f"上櫃 TPEX{_HALF_SUFFIX}"
 
     def test_twse_half_missing_names_twse(self, world):
         _break(world, "pe_twse")
         res, _card, facts = _run(PF, ("pe_low",))
-        assert dict(facts)[_PE] == f"上市 TWSE{_SUFFIX}"
+        assert dict(facts)[_PE] == f"上市 TWSE{_HALF_SUFFIX}"
 
     def test_both_missing_keeps_existing_empty_why(self, world):
         _break(world, "pe_both")
@@ -43,7 +45,7 @@ class TestB9n9MarketNamed:
 
     def test_nothing_missing_adds_no_row(self, world):
         _res, _card, facts = _run(PF, ("pe_low",))
-        assert not any(v.endswith(_SUFFIX) for k, v in facts if k == _PE)
+        assert not any(v.endswith(_HALF_SUFFIX) for k, v in facts if k == _PE)
 
     def test_wording_is_existing(self):
         src = open(PF.__file__, encoding="utf-8").read()
@@ -54,7 +56,7 @@ class TestB9n9MarketNamed:
         m = _mutant(PF, ("    elif _pe_failed_markets:\n", "    elif False:\n"))
         _break(world, "pe_tpex")
         _res, _card, facts = _run(m, ("pe_low", "eps_high"))
-        assert not any(v.endswith(_SUFFIX) for k, v in facts if k == _PE), \
+        assert not any(v.endswith(_HALF_SUFFIX) for k, v in facts if k == _PE), \
             "突變體退回修前（沒點名市場）→ 上面那條會紅"
 
 

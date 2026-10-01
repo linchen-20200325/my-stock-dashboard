@@ -1247,8 +1247,12 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
         # 原本 facts 一列都沒有、紅卡也沒點名是哪個市場。⛔ 不新寫：市場名＝L1 `failed_markets=`
         # 標記原樣（「上市 TWSE」／「上櫃 TPEX」，同 `PE_EMPTY_WHY` 的標籤）＋ 下面三支掃描既有那句
         # 「失敗，該因子不計入綜合分」（冒號後的例外原文這裡沒有 —— L1 對兩邊各自 fail-soft、只留標記）。
+        # 📌 批 B9f（B9 ⑨-f1，2026-10-01；有意識的刪字，⛔ 不是漏刪）：純刪「，該因子不計入綜合分」子句。
+        #    只少半邊時 L3 `composite_rank_candidates` 仍用剩下那半邊的本益比算「估值分」並計入綜合分
+        #    （`pe_map` 非空 → `_col_scores["pe_low"]` 非空），舊子句不成立，且與同卡
+        #    「N 檔有本益比」互相矛盾。⛔ 沒有補新字（K1）。
         _aux.append((FACTOR_INPUT_LABELS[PE_FACTOR_KEY],
-                     f"{'、'.join(_pe_failed_markets)}失敗，該因子不計入綜合分"))
+                     f"{'、'.join(_pe_failed_markets)}失敗"))
     _short_rows, _short_err = _load_shortage(_factors)
     if _short_err:
         _aux.append((FACTOR_INPUT_LABELS["shortage"],
