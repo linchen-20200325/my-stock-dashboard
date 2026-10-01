@@ -253,7 +253,7 @@ def render_dividend_station(gemini_fn: Callable[..., str] | None = None) -> None
     if not _etf_rows and not _stock_rows:
         st.info("無可顯示的持股列。")
 
-    # ── 📊 80/20 實際配置偏離 + 衛星停利（#38,有張數/均價才算）─────────────
+    # ── 📊 80/20 實際配置偏離 + 衛星停利（#38；80/20 看市值＝張數×現價，停利看損益%＝均價＋現價）──
     _render_allocation_take_profit(_rows)
 
     # ── 2️⃣ 同一個名詞，兩套刻度（階段 C；純揭露，不改任何判定）────────────
@@ -570,7 +570,12 @@ def _render_light_detail(rows: list[dict]) -> None:
 
 
 def _render_allocation_take_profit(rows: list[dict]) -> None:
-    """📊 80/20 實際配置偏離 + 衛星停利（有張數/均價才算;§1 缺金額誠實標,不捏造）。"""
+    """📊 80/20 實際配置偏離 + 衛星停利（§1 缺金額誠實標,不捏造）。
+
+    80/20 只納入市值（張數×現價）> 0 的持有列（只缺均價照樣納入）；停利看損益%（要均價＋現價）。
+    整批抓取失敗的持有列兩者都跳過（L3 `compute_allocation_split()`／`flag_take_profit()`）。
+    批 H3 H1-f10：修前寫成只看張數與均價 —— 正是造成 H1-f5 的同一個誤解。
+    """
     from src.services.dividend_station_service import (
         compute_allocation_split, flag_take_profit)
     _alloc = compute_allocation_split(rows)
@@ -600,8 +605,20 @@ def _render_allocation_take_profit(rows: list[dict]) -> None:
         # 批 H2 H1-f5：修前句尾「到 📁 組合管理的 Portfolio 填張數/均價即可顯示。」對「全部只缺現價」
         #   是錯的指引（組合管理補不了現價，填了張數／均價也不會顯示）⇒ 換成同檔既有的條件子句 ＋「。」
         #   （同 H1-f4，⛔ 不新寫）。前一句一字未動。
-        st.caption("📊 80/20 配置偏離：你的持股未帶張數/均價（或無市值）→ 無法計算實際佔比。"
-                   f"{_IF_LOTS_AVG_MISSING_WHERE}。")
+        # 批 H3 H1-f9：
+        #   (1) 持有列**全部**整批抓取失敗：L3 `compute_allocation_split()` 把它們整列跳過，
+        #       算不出來是因為抓不到、不是缺張數／均價 ⇒ 刪去歸因「你的持股未帶張數/均價（或無市值）→ 」
+        #       與「去哪補」子句（只刪不改），改接同檔卡①既有的「⚠️ 另有 N 檔整批抓取失敗，
+        #       未納入任何判斷。」（⛔ 不新寫；分隔照卡①用全形空白）—— 修前 80/20 區塊內沒有任何失敗說明。
+        #       判法照抄 L3 的跳過條件（`held` ＋ `_detail.error`），同卡① H1-f6，⛔ 不另立一套。
+        #   (2) 其餘情形照修前，只把半形「張數/均價」統一為同段既有的全形「張數／均價」（標點，字未動）。
+        _held = [r for r in (rows or []) if r.get("held")]
+        if _held and all((r.get("_detail") or {}).get("error") for r in _held):
+            st.caption("📊 80/20 配置偏離：無法計算實際佔比。"
+                       f"　⚠️ 另有 {len(_held)} 檔整批抓取失敗，未納入任何判斷。")
+        else:
+            st.caption("📊 80/20 配置偏離：你的持股未帶張數／均價（或無市值）→ 無法計算實際佔比。"
+                       f"{_IF_LOTS_AVG_MISSING_WHERE}。")
 
     if _tp:
         st.info(f"💰 **衛星停利**（獲利達 {T.SATELLITE_TAKE_PROFIT_PCT:.0f}% 建議嚴格停利、滾回核心）："

@@ -411,7 +411,7 @@ def test_fetch_peer_ranks_swallows_exception(monkeypatch):
     assert svc._fetch_peer_ranks("0056.TW") is None
 
 
-# ── #38：80/20 配置偏離 + 衛星停利（有張數/均價才算）────────────────────────
+# ── #38：80/20 配置偏離 + 衛星停利（80/20 看市值＝張數×現價，停利看損益%＝均價＋現價）──
 def _alloc_rows():
     return [
         {"代號": "0056", "種類": "ETF", "held": True, "市值": 800000.0, "損益%": 5.0,

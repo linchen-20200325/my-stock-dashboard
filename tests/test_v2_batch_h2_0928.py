@@ -44,7 +44,9 @@ _CLAUSE = "若是缺張數／均價，到既有的 📁 組合管理分頁補齊
 _TOTALS_NONE = ("未實現損益與總市值算不出來：持股沒有張數／均價／現價。"
                 "§1 這裡**不填 0** —— " + _CLAUSE + "。")
 #: 80/20 算不出來那一句（批 H2 後；前一句一字未動）。
-_ALLOC_NONE = ("📊 80/20 配置偏離：你的持股未帶張數/均價（或無市值）→ 無法計算實際佔比。"
+#: 批 H3 H1-f9（2026-10-01）：半形「張數/均價」統一為全形「張數／均價」；
+#:    持有列全部整批抓取失敗的那一種改走另一句，守衛移到 `tests/test_v2_batch_h3_1001.py`。
+_ALLOC_NONE = ("📊 80/20 配置偏離：你的持股未帶張數／均價（或無市值）→ 無法計算實際佔比。"
                + _CLAUSE + "。")
 #: 80/20 算得出來時的近似法說明（修前修後一字未動）。
 _ALLOC_APPROX = "核心=ETF、衛星=個股（依代號近似;若你把主題型 ETF 當衛星,此偏離僅供參考）。"
@@ -268,9 +270,7 @@ class TestH1f5AllocationNone:
          ("2330", _S, True, None, None, 600.0, False)),
         (("0050.TW", _E, True, 10.0, 140.0, None, False),
          ("2330", _S, True, 2.0, 500.0, None, False)),
-        (("0050.TW", _E, True, 10.0, 140.0, 150.0, True),
-         ("2330", _S, True, 2.0, 500.0, 600.0, True)),
-    ], ids=["all_missing_lots_avg", "all_missing_price", "all_fetch_failed"])
+    ], ids=["all_missing_lots_avg", "all_missing_price"])
     def test_caption_ends_on_the_conditional_clause(self, monkeypatch, spec):
         rows = _rows(*spec)
         assert svc.compute_allocation_split(rows) is None           # 前提：走「算不出來」
