@@ -285,6 +285,61 @@ def test_s4_ui_string_constants_unchanged_vs_bf0ada3():
 
 
 # ══════════════════════════════════════════════════════════════════
+# 批 S4 QA F3：前面的規則吃掉 toml 錨點（`?token=abc\ncould …` 經 repr 後同一行）→ 在原始文字上判一次；HTML 跳脫引號
+# ══════════════════════════════════════════════════════════════════
+_F3_EATEN = [
+    repr("GET https://x.com/v1?token=abc\ncould not convert string to float: '1.2SEC' (line 1 column 1 char 0)"),
+    repr("GET https://x.com/v1?key=abc\n\ninvalid literal for int() with base 0: '0x1SEC' (line 1 column 1 char 0)"),
+    "x?api_key=abc\\ncould not convert string to float: '9.9SEC'\nTomlDecodeError",
+]
+_F3_HTML = [f"{_c}{_q}{_v}{_q} (line 1 column 1 char 0)" for _c in ("could not convert string to float: ",
+            "invalid literal for int() with base 0: ") for _q in ("&#x27;", "&#39;", "&quot;") for _v in ("1.2SEC",)]
+
+
+@pytest.mark.parametrize("fn", [scrub_secrets, scrub_prose_secrets], ids=["errors", "prose"])
+@pytest.mark.parametrize("x", _F3_EATEN + _F3_HTML)
+def test_f3_toml_value_masked_even_when_anchor_eaten_or_html_quoted(x, fn):
+    assert "SEC" in _BF0.scrub_secrets(x) or "SEC" in _BF0.scrub_prose_secrets(x), "前提：main 外露"
+    assert "SEC" not in fn(x), fn(x)
+    _never_less(x)
+
+
+def test_f3_plain_float_error_still_untouched():
+    for x in ("ValueError: could not convert string to float: '1.2SEC'", "could not convert string to float: &#x27;a&#x27;",
+              "invalid literal for int() with base 10: &quot;x&quot;"):
+        assert scrub_secrets(x) == x == scrub_prose_secrets(x)
+
+
+def test_f3_mutant_without_original_text_pass_leaks():
+    m = _mutant_ss(("    return _mask_toml_orig(_toml_vals, _run_post(out))\n\n\ndef scrub_prose_secrets",
+                    "    return _run_post(out)\n\n\ndef scrub_prose_secrets"))
+    assert "1.2SEC" in m.scrub_secrets(_F3_EATEN[0]) and "1.2SEC" not in scrub_secrets(_F3_EATEN[0])
+
+
+def test_f3_disclosed_boundary_over_cap_still_leaks_when_anchor_eaten():
+    """檔頭揭露的邊界：超過 `_TOML_ORIG_MAX` 個不同值時，第 65 個起錨點被吃掉就外露（同 main）。"""
+    from shared import secret_scrub as SSC
+    head = "".join(f"could not convert string to float: 'v{k}' (line 1 column 1 char 0)\n" for k in range(SSC._TOML_ORIG_MAX))
+    x = head + _F3_EATEN[0]
+    assert "1.2SEC" in scrub_secrets(x) and "第 65 個起只靠最後一道" in (SSC.__doc__ or "")
+    _never_less(x)
+
+
+@pytest.mark.slow
+def test_f3_cpu_400k_within_2x_main_and_1_5s():
+    """400k 字：本批全部對抗形態（含 F3）—— 每種 ≤ 1.5 秒（CPU），且 ≤ 2 倍 main（下限 0.05 秒，量測雜訊）。"""
+    import json
+    import subprocess
+    import sys
+    cases = [[k, v] for k, v in _s4_forms(400_000).items()]
+    r = subprocess.run([sys.executable, "-c", _CPU_SCRIPT], input=json.dumps(cases), capture_output=True,
+                       text=True, timeout=1200, cwd=str(_ROOT))
+    assert r.returncode == 0, r.stderr[-2000:]
+    bad = {k: v for k, v in json.loads(r.stdout).items() if max(v[:2]) > 1.5 or max(v[:2]) > max(2 * v[2], 0.05)}
+    assert not bad, bad
+
+
+# ══════════════════════════════════════════════════════════════════
 # ReDoS／CPU（子程序、CPU 時間取三次最小值）與記憶體峰值（slow）—— 本批新增的形態
 # ══════════════════════════════════════════════════════════════════
 _CONV = "could not convert string to float: "
@@ -310,7 +365,11 @@ def _S4_EXTRA_FORMS(n: int) -> dict[str, str]:  # noqa: N802 —— 後面各項
     return {"indent_runs": ("MA" + "A" * 62 + "\n" + " " * 300) * (n // 365),
             "indent_then_text": ("MA" + "A" * 62 + "\n" + " " * 255 + "~") * (n // 320),
             "trail_spaces": ("MA" + "A" * 62 + " " * 255 + "\n") * (n // 320),
-            "space_nl_runs": (" " * 200 + "\n") * (n // 201), "indent_keys": _r27_indented(n)}
+            "space_nl_runs": (" " * 200 + "\n") * (n // 201), "indent_keys": _r27_indented(n),
+            #: 批 S4 QA F3：原始文字那一道（不同值很多、錨點被吃掉、HTML 跳脫引號）。
+            "conv_distinct": "".join(f"{_CONV}'v{k}' (line 1 column 1 char 0)\n" for k in range(n // 50)),
+            "conv_eaten": "".join(f"?token=a\\n{_CONV}'w{k}' (line 1 column 1 char 0) " for k in range(n // 60)),
+            "conv_html_open": _CONV + "&#x27;" + "x" * n, "conv_html_many": (_CONV + "&quot;x&quot; ") * (n // 45)}
 
 
 def _r27_indented(n: int) -> str:
@@ -478,6 +537,74 @@ def test_f1_mutant_without_bf0_pass_masks_less_than_main(form):
     assert _is_masking_of(scrub_secrets(raw), _BF0.scrub_secrets(raw))
 
 
+#: 批 S4 QA 第 1 組（2026-10-01）的兩種形態：截斷的金鑰（標頭宣告 ~1004 位元組、只留 6 行）後面接縮排 ≥17 的另一塊 →
+#: 修前兩塊併成一塊、涵蓋寬度判不過、截斷那把外露（bf0 遮 6 行中的 6 行，修前分支只遮 1 行）；LF／CR／CRLF／repr 的 `\\n`
+#: 都會。第二種：repr 跳脫的金鑰、每行行尾空白＋下一行縮排 ≥17。
+def _der_b64(n: int, rnd) -> str:
+    """開頭是合法 DER 標頭（PKCS#8 外層 SEQUENCE＋版本＋演算法）的 base64；本體 `n` 位元組隨機。"""
+    from tests.test_sec_s3_batch_s3 import _seq
+    return _b64(_seq(bytes.fromhex("020100300d06092a864886f70d0101010500") + rnd.randbytes(n)))
+
+
+_F1_SEPS = {"lf": "\n", "cr": "\r", "crlf": "\r\n", "repr": "\\n"}
+
+
+def _f1_qa1_truncated_then_indented(sep: str, ind: int) -> tuple[str, list[str]]:
+    import random
+    rnd = random.Random(7)
+    a = _wrap(_der_b64(1000, rnd), 64)[:6]
+    b = _wrap(_der_b64(400, rnd), 40)
+    return sep.join(a) + sep + sep.join(" " * ind + ln for ln in b), a
+
+
+def _f1_qa1_random(seed: int):
+    """QA 第 1 組兩種形態的隨機產生器（固定種子）：截斷的金鑰（2～8 行）＋可選行尾空白＋換行（LF／CR／CRLF／repr `\\n`）
+    ＋縮排 ≥17 的另一塊；前面可接欄位名（`private_key:  `、`key=`）。回傳 (換行, 有無行尾空白, 原文)。"""
+    import random
+    rnd = random.Random(seed)
+    sep = rnd.choice(list(_F1_SEPS.values()))
+    ind, tr = rnd.choice([17, 18, 20, 32, 64, 200, 256]), rnd.choice([0, 0, 1, 2, 17, 20])
+    a = _wrap(_der_b64(rnd.choice([300, 600, 1000, 1200]), rnd), rnd.choice([40, 64, 76]))[:rnd.randint(2, 8)]
+    b = _wrap(_der_b64(rnd.choice([100, 400]), rnd), rnd.choice([20, 40, 64]))[:rnd.randint(1, 6)]
+    pre = rnd.choice(["", "private_key:  ", "key="])
+    return sep, tr > 0, pre + (" " * tr + sep).join(a) + " " * tr + sep + (" " * tr + sep).join(" " * ind + ln for ln in b)
+
+
+@pytest.mark.parametrize("ind", [16, 17, 20, 64, 256, 257])
+@pytest.mark.parametrize("sep", list(_F1_SEPS.values()), ids=list(_F1_SEPS))
+def test_f1_qa1_truncated_key_then_indented_block(sep, ind):
+    raw, a = _f1_qa1_truncated_then_indented(sep, ind)
+    _never_less(raw)
+    if ind == 20:
+        assert sum(ln in _BF0.scrub_secrets(raw) for ln in a) == 0, "前提：main 遮掉截斷那把的 6 行"
+    for fn in (scrub_secrets, scrub_prose_secrets):
+        assert sum(ln in fn(raw) for ln in a) <= sum(ln in _BF0.scrub_secrets(raw) for ln in a)
+
+
+def test_f1_qa1_mutant_without_bf0_pass_masks_less_on_both_shapes():
+    """突變（拿掉 bf0 那一道）在 QA 第 1 組兩種形態上都比 main 少遮：CR 的 QA 原例（截斷那把外露 ≥5／6 行），
+    以及產生器裡的 repr `\\n`＋行尾空白形態；修後兩者都不少遮。"""
+    from tests.test_sec_s3_0928 import _mutant
+    m = _mutant(("_passes.append((_DER_B64_LOOSE_BF0_RE, _DERL_NL_BF0_RE))", "pass"))
+    raw, a = _f1_qa1_truncated_then_indented("\r", 20)
+    assert sum(ln in m.scrub_secrets(raw) for ln in a) >= 5 and sum(ln in scrub_secrets(raw) for ln in a) == 0
+    hit = set()
+    for seed in range(3000):
+        sep, trail, raw = _f1_qa1_random(seed)
+        if (sep, trail) in hit or not (sep == "\\n" and trail):
+            continue
+        if not _is_masking_of(m.scrub_secrets(raw), _BF0.scrub_secrets(raw)):
+            hit.add((sep, trail))
+            _never_less(raw)
+            break
+    assert ("\\n", True) in hit, "前提：產生器裡有 repr＋行尾空白的少遮例"
+
+
+def test_f1_qa1_random_shapes_never_less_sampled():
+    for seed in range(300):
+        _never_less(_f1_qa1_random(seed)[2])
+
+
 def _f1_fragments() -> list[str]:
     """DER 片段：QA 的兩個重現 ＋ 真金鑰（PKCS#8／PKCS#1，固定種子）的頭兩行、頭三行（截短）、末兩行、窄換行頭四行。"""
     out = [_F1_KEY.split("\n{sp}")[0], _F1_NONKEY.split("\n{sp}")[0],
@@ -498,6 +625,12 @@ def _f1_property(indents) -> None:
             for tail in _F1_TAILS:
                 for nl in ("\n", "\r\n"):
                     _never_less(frag + nl + " " * ind + tail)
+    #: QA 第 1 組兩種形態（截斷金鑰＋縮排塊 × 4 種換行；repr 金鑰＋行尾空白＋縮排）。
+    for ind in indents:
+        for sep in _F1_SEPS.values():
+            _never_less(_f1_qa1_truncated_then_indented(sep, ind)[0])
+    for seed in range(len(indents) * 10):                   # fast 80 組／slow 3010 組
+        _never_less(_f1_qa1_random(seed)[2])
 
 
 def test_f1_property_never_less_than_main_or_e23_sampled_indents():
@@ -682,18 +815,38 @@ def test_r26_only_tracked_filters_untracked_files(tmp_path):
     (gd / "index").write_bytes(_index(["docs/b.md"], 4))
     (wt / ".git").write_text(f"gitdir: {gd}\n", encoding="utf-8")
     assert [f.name for f in only_tracked(wt, sorted((wt / "docs").glob("*.md")))] == ["b.md"]
-    #: 沒有 `.git`（例：`git archive` 解開的副本）→ 讀不了 → 原樣全留（同修前）
+    #: 沒有 `.git`（例：`git archive` 解開的副本）→ 讀不了 → 大聲失敗（批 S4 QA 第 1 組：⛔ 不退回檔案系統掃描）
     bare = tmp_path / "bare"
     bare.mkdir()
     (bare / "z.md").write_text("x", encoding="utf-8")
-    assert tracked_paths(bare) is None and only_tracked(bare, [bare / "z.md"]) == [bare / "z.md"]
+    from tests._git_tracked import IndexUnavailable
+    assert tracked_paths(bare) is None
+    with pytest.raises(IndexUnavailable):
+        only_tracked(bare, [bare / "z.md"])
+
+
+@pytest.mark.parametrize("kind", ["no-index", "split", "sparse", "version-5", "sha256-repo"])
+def test_r26_unsupported_never_falls_back_to_filesystem_scan(tmp_path, kind):
+    """批 S4 QA 第 1 組：格式不支援 ⇒ `only_tracked` 大聲失敗（修前：安靜退回檔案系統掃描 ＝ 未追蹤檔回到語料）。"""
+    from tests._git_tracked import IndexUnavailable, only_tracked, tracked_paths
+    tracked_paths.cache_clear()
+    (tmp_path / ".git").mkdir()
+    data = {"split": _index(_PATHS, 2, ext=b"link" + (4).to_bytes(4, "big") + bytes(4)),
+            "sparse": _index(_PATHS, 2, mode_at=1), "version-5": _index(_PATHS, 5),
+            "sha256-repo": _index(_PATHS, 2)}.get(kind)
+    if data is not None:
+        (tmp_path / ".git" / "index").write_bytes(data)
+    if kind == "sha256-repo":
+        (tmp_path / ".git" / "config").write_text("[extensions]\n\tobjectFormat = sha256\n", encoding="utf-8")
+    (tmp_path / "untracked.md").write_text("x", encoding="utf-8")
+    with pytest.raises(IndexUnavailable, match="不退回檔案系統掃描"):
+        only_tracked(tmp_path, [tmp_path / "untracked.md"])
 
 
 def test_r26_this_checkout_reads_its_index():
     """本 repo（CI 與本機皆為 git checkout）：讀得到索引，且含本檔與受測模組。"""
     from tests._git_tracked import tracked_paths
-    if not (_ROOT / ".git").exists():
-        pytest.skip("非 git checkout（例：git archive 副本）→ 依設計退回檔案系統掃描")
+    #: ⛔ 不 skip（批 S4 QA 第 1 組）：讀不到就失敗 —— 語料測試已不再退回檔案系統掃描。
     t = tracked_paths(_ROOT)
     assert t is not None and "shared/secret_scrub.py" in t and len(t) > 500
 
@@ -720,13 +873,13 @@ def test_r26_every_scrub_corpus_goes_through_only_tracked(mod, fn):
 @pytest.mark.parametrize("mod,fn", [("tests.test_sec_s3_0928", "_ui_corpus"), ("tests.test_sec_s3_0928", "_secret_corpus"),
                                     ("tests.test_sec_s3_batch_s3", "_tracked_md_lines"),
                                     ("tests.test_sec_s2_scrub_gaps", "_corpus")])
-def test_r26_corpus_fails_instead_of_vacuous_when_index_reads_empty(monkeypatch, mod, fn):
-    """索引讀出來是空集合（例：項目數被改成 0 又剛好通過檢查）→ 語料函式失敗，⛔ 不回傳空語料讓測試空轉。"""
+@pytest.mark.parametrize("reads", [frozenset(), frozenset({"a.md"}), None], ids=["empty", "tiny", "unavailable"])
+def test_r26_corpus_fails_instead_of_vacuous_when_index_reads_empty(monkeypatch, mod, fn, reads):
+    """索引讀出來是空集合／過小（例：項目數被改小又剛好通過檢查）、或讀不到 → 語料函式失敗，
+    ⛔ 不回傳空語料讓測試空轉、⛔ 不退回檔案系統掃描。"""
     import importlib
     from tests import _git_tracked
-    if not (_ROOT / ".git").exists():
-        pytest.skip("非 git checkout")
-    monkeypatch.setattr(_git_tracked, "tracked_paths", lambda root: frozenset())
+    monkeypatch.setattr(_git_tracked, "tracked_paths", lambda root: reads)
     f = getattr(importlib.import_module(mod), fn)
     f = getattr(f, "__wrapped__", f)
     with pytest.raises(_git_tracked.IndexCorrupt):

@@ -8,10 +8,10 @@
 （`.git/index`；worktree 的 `.git` 是一行 `gitdir: …` 的檔案，照著找），取出其中的路徑 ＝ `git ls-files` 的集合
 （含已暫存未 commit 的檔；衝突的多個 stage 只算一次）。
 
-**格式不支援**時回傳 `None`，呼叫端退回原本的檔案系統掃描（行為同修前，不會比修前更糟）：
+**格式不支援**時 `parse_index`／`tracked_paths` 回傳 `None`；~~呼叫端退回原本的檔案系統掃描~~（批 S4 QA 第 1 組
+後改為 `only_tracked` 一律丟 `IndexUnavailable`，見該函式說明 —— 退回會把未追蹤檔安靜地帶回語料）。不支援的情形：
 沒有 `.git`（例：`git archive` 解開的副本）、沒有索引檔、索引版本不是 2／3／4、SHA-256 物件格式、
-split index（`link` 擴充）、sparse index（目錄型的項目）。⚠️ 這些情形本機與 CI 仍可能不同 —— 退回是為了不讓測試在
-非 git 環境直接壞掉。
+split index（`link` 擴充）、sparse index（目錄型的項目）。
 
 批 S4 QA（SEC-r26 修正，2026-10-01）：**格式壞掉**一律 `raise IndexCorrupt`（⛔ 不退回、⛔ 不回傳殘缺集合）——
 原本不核對檔尾 SHA-1、照單全收項目數：項目數改成 0 得到空集合、改小得到殘缺集合、路徑翻一個位元得到錯的路徑，
@@ -38,6 +38,10 @@ REPO_MIN_TRACKED = 500
 
 class IndexCorrupt(ValueError):
     """索引檔／`.git` 指標檔內容壞掉（與「格式不支援 → `None`」不同：壞掉一律大聲失敗）。"""
+
+
+class IndexUnavailable(IndexCorrupt):
+    """讀不到追蹤清單（格式不支援或不是 git checkout）；`only_tracked` 一律丟這個，⛔ 不退回檔案系統掃描。"""
 
 
 def _read_utf8(f: pathlib.Path) -> str:
@@ -187,7 +191,12 @@ def tracked_paths(root: pathlib.Path) -> frozenset[str] | None:
 
 
 def only_tracked(root: pathlib.Path, files, *, min_tracked: int = 1, min_kept: int = 0) -> list[pathlib.Path]:
-    """`files` 裡留下 git 追蹤中的檔案（保留順序）；追蹤清單格式不支援 → 原樣全留（同修前）。
+    """`files` 裡留下 git 追蹤中的檔案（保留順序）。追蹤清單讀不了（`tracked_paths` 回 `None`）→ `IndexUnavailable`。
+
+    批 S4 QA 第 1 組（2026-10-01）決定：`None` ⛔ 不再退回檔案系統掃描 —— 退回會把 SEC-r26 要排除的未追蹤檔帶回語料，
+    而且是安靜地帶回。CI（`actions/checkout@v4`）與一般 clone／worktree 都是 v2～v4、非 split／sparse 的索引，讀得到；
+    讀不到的環境（`git archive` 副本、split／sparse index、SHA-256 repo）跑這些語料測試會**失敗並寫明原因**，
+    要跑請改用一般 checkout。
 
     ⛔ 不空轉：追蹤集合少於 `min_tracked`（預設 1 ＝ 空集合就失敗）、或留下的檔案少於 `min_kept` → `IndexCorrupt`。
     語料呼叫端傳 repo 規模的下限（見 `REPO_MIN_TRACKED`）。
@@ -195,9 +204,8 @@ def only_tracked(root: pathlib.Path, files, *, min_tracked: int = 1, min_kept: i
     files = list(files)
     tracked = tracked_paths(root)
     if tracked is None:
-        if len(files) < min_kept:
-            raise IndexCorrupt(f"{root}：語料只有 {len(files)} 個檔，少於下限 {min_kept}")
-        return files
+        raise IndexUnavailable(f"{root}：讀不到 git 追蹤清單（沒有 .git／沒有索引檔／索引版本不支援／split 或 sparse index／"
+                               "SHA-256 repo）—— ⛔ 不退回檔案系統掃描（會帶回未追蹤檔）；請在一般 git checkout 裡跑")
     if len(tracked) < max(min_tracked, 1):
         raise IndexCorrupt(f"{root}：索引只有 {len(tracked)} 個追蹤檔，少於下限 {max(min_tracked, 1)}（語料不得空轉）")
     base = root.absolute()

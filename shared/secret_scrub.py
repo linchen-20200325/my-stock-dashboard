@@ -74,7 +74,9 @@
        (b) 數字轉換失敗 `could not convert string to float: '<值>'`／`invalid literal for int() with base N: '<值>'`
        → 值遮掉，但只在「值後面緊接 toml 位置字尾 `(line N column M char K)`」或「同一段文字有 `TomlDecodeError`」時
        （一般 `float()`／`int()` 錯誤一字不動）。只貼訊息本文、traceback 裡排在型別名之前的 `ValueError` 行、
-       散文版 `Unicode*Error` 散文形之後的 toml 訊息，值都不再外露。
+       散文版 `Unicode*Error` 散文形之後的 toml 訊息，值都不再外露。值的引號也認 HTML 跳脫（`&#x27;`／`&#39;`／`&quot;`）。
+       (b) 的條件也在**原始文字**上判一次（批 S4 QA F3）：前面的規則把錨點字面吃掉時（例：`?token=abc\ncould not
+       convert …` 經 `repr` 後查詢參數那條把 `abc\ncould` 當值遮掉），記下的「引號＋值＋引號」若仍出現在輸出，整段遮。
   遮罩一律沿用既有的 `***`（`MASK`）。**⛔ 不新增任何說明文字** —— 看得到 `***` 就知道有東西被遮。
 
 ⚠️ 據實揭露的邊界（**不是**全稱「洗乾淨了」）：
@@ -112,6 +114,9 @@
   · 批 S4 之後仍然外露（第 12 類 (b) 的邊界）：數字轉換訊息**既沒有** toml 位置字尾、同一段文字**也沒有**
     `TomlDecodeError`（例：只貼 `could not convert string to float: '<值>'` 這一句、把位置字尾刪掉）→ 分不出是
     toml 還是一般錯誤，值照原樣（為了不改一般錯誤訊息）。
+  · 第 12 類 (b) 原始文字那一道的邊界（批 S4 QA F3）：只認得**完整、未被改動**的「引號＋值＋引號」——值本身
+    被前面規則改掉一部分（例：值裡含路徑或權杖、只遮了一段）、或值沒有收尾引號而同一行後文被改過時，剩下的部分
+    照原樣；同一段文字超過 64 個不同的值時，第 65 個起只靠最後一道（錨點被吃掉就外露）。
   · 批 S3 的多遮方向（安全側）：
     - 方括號取值的裸值（`headers['Authorization'] = token_var`）連變數名一起遮；
     - tab 規則以整條路徑判：`/a/x.toml<tab>note/b` 這種「路徑後面接 tab 再接含 `/` 的字」會被當成目錄遮成 `***/b`；
@@ -939,10 +944,42 @@ _TOML_CONV_RE = re.compile(
     r"(?P<pre>(?:could not convert string to float|invalid literal for int\(\) with base \d{1,2}):[ \t]{0,4}b?)"
     r"(?:'(?:\\.|[^'\\\r\n]){0,4096}" + _POSS + r"'|\"(?:\\.|[^\"\\\r\n]){0,4096}" + _POSS + r"\""
     r"|(?P<bs>\\{1,4})(?P<qc>[\"'])(?:(?!(?P=bs)(?P=qc))[^\r\n]){0,4096}" + _POSS + r"(?P=bs)(?P=qc)"
+    #: 批 S4 QA F3：HTML 跳脫的引號（`&#x27;`／`&#39;`／`&quot;`；網頁上複製下來的訊息）。
+    r"|(?P<he>&#x27;|&#39;|&quot;)(?:(?!(?P=he))[^\r\n]){0,4096}" + _POSS + r"(?P=he)"
     r"|[\"'\\][^\r\n]*)"
     r"(?P<suf>" + _TOML_POS + r")?")
 _TOML_TYPE_NAME: str = "TomlDecodeError"
 _TOML_POS_RE = re.compile(_TOML_POS)
+
+
+#: 批 S4 QA F3（2026-10-01）：前面的規則可能把 toml 訊息的錨點字面吃掉（例：`?token=abc\ncould not convert …` 在
+#: `repr` 後是同一行，查詢參數那一條把 `abc\ncould` 當成值遮掉 ⇒ 最後一道找不到 `could not convert`，值外露；main 亦然）。
+#: 補法：在**原始文字**上先找一次（同一套條件），記下要遮的「引號＋值＋引號」字面；全部規則跑完後，輸出裡還看得到的
+#: 同一段字面整段換成遮罩 ⇒ 只加遮罩。上限 `_TOML_ORIG_MAX` 個不同的值（線性：每個值一次 `str.replace`）。
+_TOML_ORIG_MAX: int = 64
+
+
+def _toml_orig_values(text: str) -> list[str]:
+    if not any(_n in text for _n in _POST_NEEDLES[_TOML_CONV_RE]):
+        return []
+    _rep = _mask_toml_conv_for(text)
+    _out: list[str] = []
+    for _m in _TOML_CONV_RE.finditer(text):
+        if _rep(_m) == _m.group(0):
+            continue                                        # 一般 float()／int() 錯誤：同最後一道，不動
+        _tok = text[_m.end("pre"):_m.start("suf") if _m.group("suf") is not None else _m.end()]
+        if len(_tok) >= 3 and MASK not in _tok and _tok not in _out:
+            _out.append(_tok)
+            if len(_out) >= _TOML_ORIG_MAX:
+                break
+    return _out
+
+
+def _mask_toml_orig(orig_vals: list[str], out: str) -> str:
+    for _tok in orig_vals:
+        if _tok in out:
+            out = out.replace(_tok, MASK)
+    return out
 
 
 def _mask_toml_conv_for(text: str):
@@ -1036,12 +1073,13 @@ def scrub_secrets(text) -> str:
     if text is None:
         return ""
     out = str(text)
+    _toml_vals = _toml_orig_values(out)                     # 批 S4 QA F3：原始文字上的 toml 值（見 `_TOML_ORIG_MAX`）
     for _re, _rep in _RULES:
         out = _re.sub(_rep, out)
     out = scrub_query_secrets(out)
     for _re, _rep in _RULES_AFTER_QUERY:
         out = _re.sub(_rep, out)
-    return _run_post(out)
+    return _mask_toml_orig(_toml_vals, _run_post(out))
 
 
 def scrub_prose_secrets(text) -> str:
@@ -1082,9 +1120,10 @@ def scrub_prose_secrets(text) -> str:
     if text is None:
         return ""
     out = str(text)
+    _toml_vals = _toml_orig_values(out)                     # 批 S4 QA F3（同 `scrub_secrets`）
     for _re, _rep in _RULES:
         out = (_CONTENT_BEARING_EXC_PROSE_RE if _re is _CONTENT_BEARING_EXC_RE else _re).sub(_rep, out)
     out = scrub_query_secrets(out)
     for _re, _rep in _RULES_AFTER_QUERY:
         out = _re.sub(_rep, out)
-    return _run_post(out)
+    return _mask_toml_orig(_toml_vals, _run_post(out))
