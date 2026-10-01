@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+import math
 from dataclasses import dataclass
 
 from shared.macro_buckets import (
@@ -474,6 +475,11 @@ def build_reference_row(key: str, value: float | None) -> Row:
     讓後人知道「為什麼這裡填 gray 曾經會在畫面上讀成無資料」。
     """
     spec = REF_SPECS_BY_KEY[key]
+    # NF-f3(2026-10-01):±inf / NaN 不是觀測值 —— 一律當缺值(value=None)。
+    #   修前只判 `value is not None`,inf 走 live、L4 印出「inf TWD/USD」;
+    #   燈雖已由 L0 判灰,state / 數字卻仍當成有值。⛔ 不填 0(§1)。
+    if value is not None and not math.isfinite(value):
+        value = None
     band = classify_danger(value, spec) if has_thresholds(spec) else "gray"
     return Row(
         key=spec.key,

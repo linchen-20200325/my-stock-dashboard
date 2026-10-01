@@ -1755,6 +1755,17 @@ def compute_five_bucket_summary(
             "rejected": list(rejected or []),
         }
 
+    def _container_empty(container):
+        """容器「不在/空」判定。NF-f1(2026-10-01):原寫 `not container`,
+        但 fut_net 的 container 是 `li_latest`(DataFrame)→ `not df` 拋
+        ValueError(truth value ambiguous),整個五桶摘要炸掉。
+        pandas 物件改看 `.empty`;其餘(dict / list / None)維持原 `not` 語意。"""
+        if container is None:
+            return True
+        if isinstance(container, (pd.DataFrame, pd.Series)):
+            return container.empty
+        return not container
+
     def _traced(key, label, raw, container=_SENTINEL):
         """單源取值 + 記錄。等價於原本的 `_num(raw)`(單源、無 valid range 時)。
 
@@ -1764,7 +1775,7 @@ def compute_five_bucket_summary(
         不傳 container 時退回 `no_value`(保守:不宣稱「按更新就好」)。
         """
         _v = _first_sane(key, (label, raw))
-        if _v is None and container is not _SENTINEL and not container:
+        if _v is None and container is not _SENTINEL and _container_empty(container):
             _r = _rd.get(key)
             if _r is not None and _r.get("reason") == MISSING_NO_VALUE:
                 _r["reason"] = MISSING_NOT_LOADED
