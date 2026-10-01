@@ -520,15 +520,15 @@ def test_real_ui_string_constants_unchanged_vs_e23ff2f():
 
 @functools.lru_cache(maxsize=1)
 def _tracked_md_lines() -> tuple[str, ...]:
-    """git 追蹤中的 `.md`（依追蹤清單，不掃工作目錄 —— 未追蹤檔不算進語料，本機與 CI 一致）。"""
-    r = subprocess.run(["git", "ls-files", "*.md"], capture_output=True, text=True, cwd=str(_ROOT))
-    if r.returncode != 0:  # pragma: no cover —— 沒有 git 的環境
-        pytest.skip("git ls-files 不可用")
+    """根目錄與 `docs/` 底下的 `.md` 段落（純 Python 掃描；`tests/test_zz_test_portability` 禁止呼叫 git）。
+
+    ⚠️ 只掃這兩處（都是 repo 追蹤的文件區），不 `rglob` 整個工作目錄 —— 未追蹤檔混進語料會讓本機與 CI 結果不同
+    （SEC-r26 指出的同型問題）。
+    """
+    files = [*sorted(_ROOT.glob("*.md")), *sorted(_ROOT.joinpath("docs").rglob("*.md"))]
     out: list[str] = []
-    for f in r.stdout.split():
-        p = _ROOT / f
-        if p.is_file():
-            out.extend(p.read_text(encoding="utf-8", errors="replace").split("\n\n"))
+    for p in files:
+        out.extend(p.read_text(encoding="utf-8", errors="replace").split("\n\n"))
     return tuple(out)
 
 
