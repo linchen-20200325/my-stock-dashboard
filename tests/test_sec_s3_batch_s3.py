@@ -769,3 +769,25 @@ def test_f3_concat_tail_is_load_bearing():
     m = _mutant(('    return _mask_value(m) + (" + " + MASK if m.group("cat") else "")',
                  '    return _mask_value(m) + (m.group("cat") or "")'))
     assert _TOK3 in m.scrub_secrets(raw)
+
+
+def test_tidy_does_not_swallow_a_wide_line_after_the_run():
+    """整齊本體之後若接著一行**不比它短**的別的字串 → 那行不算本體的最後一行，照原樣。"""
+    raw = "***\n" + "\n".join(c * 40 for c in "ABCD") + "\n" + "Z" * 60
+    assert scrub_secrets(raw) == "***\n" + "Z" * 60
+
+
+def test_masked_line_width_estimate_does_not_eat_the_next_block():
+    """金鑰中間一行先被路徑規則遮掉（寬度不可知）→ 以附近最寬的行估；估小了會把後面不是 DER 的 base64 吃掉一行。"""
+    found = 0
+    for seed in range(200):
+        key = _ec_p256(seed)
+        kl = _wrap(_b64(key))
+        tail = ["Zz" + _b64(random.Random(10_000 + 3 * seed + j).randbytes(48))[2:] for j in range(3)]
+        raw = "\n".join(ln + "  " for ln in kl + tail)
+        if not kl[1].startswith("/") or "***" not in _OLD(raw).split("\n")[1] or any(t.startswith("/") for t in tail):
+            continue
+        found += 1
+        out = scrub_secrets(raw)
+        assert _leak(out, _b64(key)) == 0 and out.split("\n")[-3:] == [t + "  " for t in tail], out
+    assert found >= 1, "前提：樣本裡要有金鑰第二行先被遮掉的"

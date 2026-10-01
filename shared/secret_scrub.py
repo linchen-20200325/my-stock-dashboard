@@ -646,7 +646,7 @@ def _der_head_total(head_b64: str) -> int | None:
     """開頭 16 個 base64 字解得出 DER 標頭 → 宣告的總長（位元組，含外層標籤與長度欄位）；否則 `None`。
 
     條件同 `_looks_like_der`（首位元組 `0x30`、長度欄位合 DER、內層標籤在 `_DER_INNER_TAGS` 且裝得進外層），
-    只是**不比「宣告 ≥ 實際看到的長度」** —— 那一項由 `_mask_der_loose` 改成「只遮宣告涵蓋的行」。
+    只是**不比「宣告 ≥ 實際看到的長度」** —— 那一項由 `_der_loose_block` 改成「只遮宣告涵蓋的行」。
     """
     if len(head_b64) < _B64_HEAD_CHARS:
         return None
@@ -731,18 +731,18 @@ def _der_loose_block(body: str) -> list[tuple[int, int]]:
         #: 「本來就該是最後一行」的那行，低估才會吃進下一段的第一行（S3 QA F2 實例）。
         _near = [_len[_x] for _x in range(_i, min(_i + 4, _n)) if not _masked[_x]]
         _w = max(_near) if _near else (_pw[_i] or _len[_i])
-        _head, _x, _hit_mask = "", _i, False
+        _head, _x = "", _i
         while _x < _n and len(_head) < _B64_HEAD_CHARS:
             _seg, _star, _ = _lines[_x].partition("*")
             _head += _seg
             if _star:
-                _hit_mask = True
                 break
             _x += 1
         _head = _head[:_B64_HEAD_CHARS]
         if len(_head) < _B64_HEAD_CHARS:
             #: 判不了標頭（批 S3 QA F1）：從下一行起「≥3 行沒遮罩、同寬 ≥40」的整齊本體 → 連同最後一行短行一起遮。
-            if not _hit_mask or _i + 1 >= _n:
+            #: （除了「開頭 16 字內有遮罩」，只有本行就是整塊最後一行時才會不到 16 字 —— 下一行起的行都 ≥16 字。）
+            if _i + 1 >= _n:
                 _i += 1
                 continue
             _re = _run[_i + 1]
