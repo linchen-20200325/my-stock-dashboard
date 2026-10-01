@@ -115,3 +115,51 @@ class TestD2f38StreakDecay:
         assert "a" not in c._last_fail and "b" in c._last_fail
         c.clear()
         assert c._last_fail == {}
+
+
+# ══════════════════════════════════════════════════════════════════
+# D2-f47 `_gen`／`_streak` 上限跟著 max_entries 走
+# ══════════════════════════════════════════════════════════════════
+class TestD2f47GenCapFollowsMaxEntries:
+    N = FC._GEN_MAX_ENTRIES + 500
+
+    def test_unbounded_table_keeps_escalating_past_4096_keys(self, fc_clock):
+        """單股月營收的設定（`max_entries=sys.maxsize`）：超過 4096 個不同鍵後，最早的鍵仍照常加倍。"""
+        import sys
+        c = FC.FailCooldown(max_seconds=TTL_1HOUR, max_entries=sys.maxsize)
+        _fail_once(c, 0)
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        for i in range(1, self.N):
+            _fail_once(c, i)
+        _fail_once(c, 0)                                     # 鍵 0 的第 2 次失敗
+        assert _window_now(c, 0, fc_clock) == 2 * FAIL_COOLDOWN_SEC, "修前退回基準 180 秒"
+        assert len(c._streak) == self.N and len(c._gen) == 0
+
+    def test_success_generation_survives_past_4096_keys(self):
+        import sys
+        c = FC.FailCooldown(max_entries=sys.maxsize)
+        for i in range(self.N):
+            c.success(i)
+        assert len(c._gen) == self.N and c.begin(0)[1] == 1
+
+    @pytest.mark.parametrize("max_entries", [64, 200, FC._GEN_MAX_ENTRIES])
+    def test_small_max_entries_keep_4096_floor(self, max_entries):
+        """既有使用者（預設 64、K 線 200）：上限仍是 4096，逐出順序不變（最早插入者先出）。"""
+        c = FC.FailCooldown(max_entries=max_entries)
+        for i in range(self.N):
+            c.success(i)
+        assert list(c._gen) == list(range(self.N - FC._GEN_MAX_ENTRIES, self.N))
+
+    def test_cap_between_follows_max_entries(self, fc_clock):
+        c = FC.FailCooldown(max_seconds=TTL_1HOUR, max_entries=5000)
+        for i in range(6000):
+            c.success(i)
+            _fail_once(c, ("s", i))
+        assert len(c._gen) == 5000 and len(c._streak) == 5000 and len(c._last_fail) == 5000
+
+    def test_live_instances(self):
+        import sys
+
+        import src.data.stock.monthly_revenue_fetcher as MR
+        assert MR._single_fail_cooldown._gen_cap == sys.maxsize
+        assert MR._batch_fail_cooldown._gen_cap == FC._GEN_MAX_ENTRIES

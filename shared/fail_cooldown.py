@@ -35,7 +35,9 @@ FAIL_COOLDOWN_SEC: float = 180.0
 #: 取 64 ＝ 原 `StockDataLoader.get_combined_data` 快取的 `max_entries`。超過時逐出最舊的紀錄。
 FAIL_COOLDOWN_MAX_ENTRIES: int = 64
 
-#: 成功世代計數表的鍵數上限（每鍵只存一個 int；超過時逐出最早插入者）。
+#: 成功世代計數表（及遞增退避的連續次數表）的鍵數**下限**（每鍵只存一個 int；超過時逐出最早插入者）。
+#: 實際上限 ＝ max(`max_entries`, 本值)（D2-f47，2026-10-01）：跟著失敗紀錄的上限走，
+#: 但不低於 4096（既有 `max_entries ≤ 4096` 的使用者逐字不變）。
 _GEN_MAX_ENTRIES: int = 4096
 
 _NO_HIT = object()
@@ -72,6 +74,11 @@ class FailCooldown:
         self._last_fail: dict = {}
         self._lock = threading.Lock()
 
+    @property
+    def _gen_cap(self) -> int:
+        """`_gen`／`_streak`／`_last_fail` 的鍵數上限（D2-f47：跟著 `max_entries` 走）。"""
+        return max(self.max_entries, _GEN_MAX_ENTRIES)
+
     def _window_locked(self, key) -> float:
         """（持鎖呼叫）這個鍵目前的冷卻秒數。未開遞增退避 → 恆為 `seconds`（既有行為）。"""
         if self.max_seconds is None:
@@ -102,11 +109,12 @@ class FailCooldown:
         while len(self._fail) > self.max_entries:
             oldest = min(self._fail, key=lambda k: self._fail[k][0])
             del self._fail[oldest]
-        while len(self._gen) > _GEN_MAX_ENTRIES:
+        cap = self._gen_cap
+        while len(self._gen) > cap:
             del self._gen[next(iter(self._gen))]
-        while len(self._streak) > _GEN_MAX_ENTRIES:
+        while len(self._streak) > cap:
             del self._streak[next(iter(self._streak))]
-        while len(self._last_fail) > _GEN_MAX_ENTRIES:
+        while len(self._last_fail) > cap:
             del self._last_fail[next(iter(self._last_fail))]
 
     def begin(self, key):
