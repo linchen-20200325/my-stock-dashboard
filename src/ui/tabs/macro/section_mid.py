@@ -601,7 +601,12 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             _twd8     = tw_s.get('新台幣匯率', {})
             _sox8     = intl_s.get('費城半導體 SOX', {})
             _nvda8    = tech_s.get('輝達 NVDA', {})
-            _exp_c    = float(_m8_exp.get('yoy', 0)) if _m8_exp else None
+            # M2N-f7：原 `float(_m8_exp.get('yoy', 0)) if _m8_exp else None` —— 缺鍵捏成
+            # 「C 出口=+0.0%」、None → TypeError、'-' → ValueError（炸出 render_section_mid）、
+            # NaN →「+nan%」。改沿用 KPI 卡同一組有限值 `_ey8_v` ⇒ 一律走既有「C 出口未知」。
+            # 有限值時 `float()` 作用在同一個物件 ⇒ `_cC` 判定與徽章文字逐字不變。
+            # 產線來源（macro_snapshot 六條出口路徑）一律給 Python float，無數字字串。
+            _exp_c    = float(_ey8_v) if _ey8_v is not None else None
             _gap8c    = None
             # DL-f1-s16：與上方策略3 同一組有限值（`_m1b8_v`／`_m2b8_v` 與 `_m1b8_info` 同層
             # 定義，不是策略3 分支內的變數）。
