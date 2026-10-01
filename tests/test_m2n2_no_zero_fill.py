@@ -246,14 +246,19 @@ _REVERT = {
          " and _m1b8_info.get('m2_yoy') is not None:\n"
          "            _m1b8 = float(_m1b8_info.get('m1b_yoy', 0))\n"
          "            _m2b8 = float(_m1b8_info.get('m2_yoy', 0))\n"),
+        # 批 P2 M2N-f5 起該行帶註解 + `+ 0.0`（−0.0 正規化），錨點同步。還原端同樣保留
+        # `+ 0.0`（比照 M2N-f2：策略3 的 `_gap8` 行不在還原組內、還原體本就帶 `+ 0.0`），
+        # 本組只還原「取值來源」（有限值守衛 → 原始 dict），還原語意不變。
         ("            if _m1b8_v is not None and _m2b8_v is not None:\n"
          "                try:\n"
-         "                    _gap8c = round(float(_m1b8_v) - float(_m2b8_v), 2)\n",
+         "                    # M2N-f5：同策略3 M2N-f2 —— round 可產生 −0.0，`{:+.2f}` 會印成「-0.00%」。\n"
+         "                    # `+ 0.0` 把 −0.0 正規化為 +0.0；其餘值不變、`_cD` 判定不變。\n"
+         "                    _gap8c = round(float(_m1b8_v) - float(_m2b8_v), 2) + 0.0\n",
          "            if (_m1b8_info and _m1b8_info.get('m1b_yoy') is not None and\n"
          "                    _m1b8_info.get('m2_yoy') is not None):\n"
          "                try:\n"
          "                    _gap8c = round(float(_m1b8_info['m1b_yoy']) -\n"
-         "                                   float(_m1b8_info['m2_yoy']), 2)\n"),
+         "                                   float(_m1b8_info['m2_yoy']), 2) + 0.0\n"),
     ),
 }
 

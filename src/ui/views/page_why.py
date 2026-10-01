@@ -1099,8 +1099,15 @@ def build_source_card(probe: SourceProbe) -> _Built:
         # SA2-f12 QA：不是 Mapping 的那一列，`probe.error` 句子裡帶著列名 ⇒ `why` 已接「已移除」揭露；
         #   卡標題同一個名字若帶 glyph 也洗（只在有 glyph、且揭露真的蓋得到它時），⛔ 不讓標題原樣帶燈
         #   與揭露句互相矛盾。key 不動（`why.source.<原名>`）。
+        # SA2-f12-n1（批 P2）：閘門由「`repr(probe.name)` 出現在 `probe.error`」改為「本卡的 `why`
+        #   **真的接了**『已移除』揭露句」（＝ `_clean_reason()` 接句的同一個條件：`probe.error` 洗出
+        #   glyph 且洗後非空）。修前漏兩種：(b) 非 str 的登錄鍵 —— error 裡是 `repr(key)`、
+        #   `probe.name` 是 `str(key)`，`repr(str(key))` 對不上；(c) Mapping 列名字與狀態都帶 glyph ——
+        #   揭露句因狀態而在，標題卻原樣帶燈。⛔ 沒有揭露句時一律不洗（洗過就要說）。
+        #   名字整串都是 glyph（洗後為空）照舊不洗（另案）。
         _nm_clean, _nm_n = scrub_state_glyphs(probe.name)
-        if _nm_n and _nm_clean and repr(probe.name) in probe.error:
+        _err_clean, _err_n = scrub_state_glyphs(probe.error)
+        if _nm_n and _nm_clean and _err_n and _err_clean:
             _label = _nm_clean
         _note = Note(
             now=(f"{SOURCE_UNKNOWN_NOW_HEAD}"

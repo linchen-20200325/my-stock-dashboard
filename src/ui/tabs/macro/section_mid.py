@@ -332,23 +332,29 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         VETO_FUNDAMENTAL_SCOPE_NOTE,
         VETO_V4_ENGINE_NAME,
     )
+    # M2N-f4（§1）：原以 `.get(k, default) < x` 比較 —— 值為 None／字串時 TypeError 炸掉 §八；
+    # 改沿用上方 KPI 卡已算好的有限值（`_vcur8_v`／`_pv8_v`／`_cy8_v`／`_ey8_v`／`_sc8_v`，
+    # 缺鍵／None／NaN／±inf／非數值一律為 None）。值非有限 → 該條件略過（同缺鍵時的既有行為）；
+    # 分支、門檻、文案一字未動，訊息仍印原 dict 的值（有限時與比較用的是同一個物件）。
     _veto8 = []
-    if _m8_vix and _m8_vix.get('current', 0) >= 30:
+    if _vcur8_v is not None and _vcur8_v >= 30:
         _veto8.append(('🚨', f'VIX={_m8_vix["current"]} ≥ 30：全球流動性危機，無視所有技術面買訊，強制空手！', TRAFFIC_RED))
-    if _m8_pmi and _m8_pmi.get('value', 55) < 48:
+    if _pv8_v is not None and _pv8_v < 48:
         _veto8.append(('⚠️', f'🇹🇼 台灣 PMI={_m8_pmi["value"]} < 48：在地製造業需求急凍，若 SOX 仍漲為「無基之彈」，降低持股水位', TRAFFIC_YELLOW))
-    if _m8_cpi and _m8_cpi.get('yoy', 0) > 4.0:
+    if _cy8_v is not None and _cy8_v > 4.0:
         _veto8.append(('⚠️', f'核心CPI={_m8_cpi["yoy"]:.1f}% > 4%：通膨嚴峻，外資提款風險升高，注意匯率變動', TRAFFIC_YELLOW))
-    if _m8_exp and _m8_exp.get('yoy', 0) < -5:
+    if _ey8_v is not None and _ey8_v < -5:
         _veto8.append(('⚠️', f'台灣出口 YoY={_m8_exp["yoy"]:.1f}%：連續衰退，股價與基本面嚴重背離，謹慎追高', TRAFFIC_YELLOW))
-    _crisis_buy = _m8_ndc and _m8_ndc.get('score', 25) <= 16
+    _crisis_buy = _sc8_v is not None and _sc8_v <= 16
     if _crisis_buy:
         _veto8.append(('💡', f'NDC燈號={_m8_ndc["score"]:.0f}分（藍燈）：實體景氣衰退但為左側交易黃金布局時機！低基期好股勇敢建倉', TRAFFIC_GREEN))
     
     # `💡` 是「危機入市」機會訊號，不算否決 → 只有非 💡 才算真的觸發。
     _has_veto = any(e[0] != '💡' for e in _veto8)
     # 四個來源任一有資料才算「本檢查可評估」；全空時不下任何結論（§1）。
-    _fund_evaluable = any([_m8_vix, _m8_pmi, _m8_cpi, _m8_ndc])
+    # M2N-f4：只算**有限值** —— 原判 dict 真值，dict 在、值為 None／NaN 時也算可評估，
+    # 會印出假的「✅ 無觸發」。
+    _fund_evaluable = any(_v is not None for _v in (_vcur8_v, _pv8_v, _cy8_v, _sc8_v))
     if _veto8:
         _exp_title = (f'🚨 {VETO_FUNDAMENTAL_NAME}已觸發（展開看詳情）' if _has_veto else
                       '💡 危機入市訊號（展開看詳情）')
@@ -601,7 +607,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             # 定義，不是策略3 分支內的變數）。
             if _m1b8_v is not None and _m2b8_v is not None:
                 try:
-                    _gap8c = round(float(_m1b8_v) - float(_m2b8_v), 2)
+                    # M2N-f5：同策略3 M2N-f2 —— round 可產生 −0.0，`{:+.2f}` 會印成「-0.00%」。
+                    # `+ 0.0` 把 −0.0 正規化為 +0.0；其餘值不變、`_cD` 判定不變。
+                    _gap8c = round(float(_m1b8_v) - float(_m2b8_v), 2) + 0.0
                 except Exception:
                     pass
             # DL-f1-s5：第二環 D 徽章印的是同一個 M1B-M2 數字 → 代理時同樣後綴 L0 既有註記
