@@ -1736,9 +1736,17 @@ def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
     """金額那幾列。**算不出來就不放這個數字，不填 0**（§1）。"""
     _t = station.totals
     if not _t:
+        # 批 H3 H1-f8（v2 版的 H1-f6）：持有列**全部**整批抓取失敗時，L3 `compute_portfolio_totals()`
+        #   把它們整列跳過 ⇒ 算不出來是因為抓不到、不是持股缺資料 ⇒ 歸因子句「 —— 持股缺張數／均價／現價」
+        #   整段不出（只刪不改，⛔ 不新寫）；失敗原因由呼叫端既有的「⚠️ 未納入任何判斷」那一列交代。
+        #   判法照抄 L3 的跳過條件（`held` ＋ `_detail.error`），⛔ 不另立一套；
+        #   沒有任何持有列、或還有沒失敗的持有列時照修前。
+        _held = [_r for _r in station.rows if _r.get("held")]
+        _all_failed = bool(_held) and all((_r.get("_detail") or {}).get("error") for _r in _held)
         return [("未實現損益／總市值",
-                 "**算不出來** —— 持股缺張數／均價／現價。"
-                 "本站在這裡**不填 0**：0 元損益是一個結論，缺值不是")]
+                 "**算不出來**"
+                 + ("。" if _all_failed else " —— 持股缺張數／均價／現價。")
+                 + "本站在這裡**不填 0**：0 元損益是一個結論，缺值不是")]
     _out = [("未實現損益（元）",
              f"{_t.get('pnl_twd', 0):+,.0f}　（{_t.get('pnl_pct', 0):+.1f}%）"),
             ("總市值（元）", f"{_t.get('value_twd', 0):,.0f}")]
