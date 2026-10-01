@@ -635,11 +635,13 @@ def _check_streak_capped(fcm) -> None:
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(fcm, "time", types.SimpleNamespace(monotonic=lambda: now["t"]))
         c = fcm.FailCooldown(seconds=10.0, max_seconds=80.0)
-        for _ in range(3):                                     # "old" 連續 3 波失敗 → 冷卻 40 秒
+        # 批 FC（2026-10-01）：每波冷卻一過期就再失敗（原為每次 +100 秒 —— D2-f38 之後
+        # 「冷卻結束後沉寂 ≥ max_seconds」會讓連續次數歸零，那樣就測不到「被逐出才歸零」）。
+        for w in (10, 20, 40):                                 # "old" 連續 3 波失敗 → 冷卻 40 秒
             hit, g = c.begin("old")
             assert hit is fcm.NO_HIT
             c.fail("old", g, "x")
-            now["t"] += 100
+            now["t"] += w
         cap = fcm._GEN_MAX_ENTRIES
         for i in range(cap):                                   # 之後 cap 個別的鍵各失敗一次
             _hit, g = c.begin(i)
@@ -1431,8 +1433,8 @@ _DDF_OUTER = ("    except _SingleFetchFailed as _sf:\n"
 _DDF_FAILED_APPEND = ("            if _f:\n"
                       "                _failed.append(_sym)\n")
 
-_FC_STREAK_CAP = ("        while len(self._streak) > _GEN_MAX_ENTRIES:\n"
-                  "            del self._streak[next(iter(self._streak))]\n")
+#: 批 FC（2026-10-01）：上限改為 `self._gen_cap`（D2-f47）、逐出時另標記到期 heap 重建（D2-f48）→ 突變點跟著改。
+_FC_STREAK_CAP = "        while len(self._streak) > cap:\n"
 
 #: (標籤, 被突變的模組, 替換, 哪一個檢查必須轉紅)
 _MUTATIONS = [
@@ -1468,7 +1470,7 @@ _MUTATIONS = [
     ("f15_outer_not_catching", "ddf", [(_DDF_OUTER, "    except ZeroDivisionError as _sf:\n        return _sf.payload\n")],
      "fs_never_raises"),
     # ── D2-f20：既有程式碼被改壞時，新補的行為測試擋得住 ──
-    ("f20_no_streak_cap", "fc", [(_FC_STREAK_CAP, "")], "streak"),
+    ("f20_no_streak_cap", "fc", [(_FC_STREAK_CAP, "        while False:\n")], "streak"),
     ("f20_no_proxy_env", "yp", [("    with _proxy_env():\n" + _YP_LAYER_CALL, "    if True:\n" + _YP_LAYER_CALL)],
      "proxy"),
     ("f20_column_empty_passthrough", "yp",
