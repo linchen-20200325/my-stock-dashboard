@@ -35,6 +35,8 @@ from shared.macro_buckets import (
     BUCKET_LEVEL_LABEL,
     LEVEL_COLOR,
     LEVEL_EMOJI,
+    MISSING_NO_VALUE,
+    MISSING_NOT_LOADED,
     MISSING_OUT_OF_RANGE,
     SPECS_BY_KEY,
     classify_danger,
@@ -319,18 +321,30 @@ class TestV1FiveBucket:
         for b in ("long", "mid", "chips"):              # 三桶的燈全在上面 14 盞裡
             assert out[b]["level"] == "gray", (b, out[b]["level"])
 
-    @pytest.mark.xfail(
-        strict=True, raises=ValueError,
-        reason="⚠️ 已知 L2 既有 bug（NF-a 範圍外，未修）：`compute_five_bucket_summary."
-               "_traced` 在取不到值時對 container 做 `not container`，fut_net 的 container "
-               "是 `li_latest`（DataFrame）→ ValueError（truth value ambiguous）。"
-               "改前 NaN / '-' / 缺欄 / 空表就會炸；NF-a 後 ±inf 也走進同一條"
-               "（改前是 +inf 綠 / −inf 紅）。L2 修好後本條會 XPASS → strict 轉紅，屆時拆掉標記。")
     @pytest.mark.parametrize("value", [INF, NINF, NAN], ids=["+inf", "-inf", "nan"])
     def test_fut_net_non_finite_is_gray(self, value):
         _, lights, rd = self._all_lamps(value, li_latest=pd.DataFrame({"外資大小": [value]}))
+        """NF-f1（2026-10-01 修）：原為 strict xfail（L2 `_traced` 對 DataFrame 做
+        `not container` → ValueError）。L2 改看 `.empty` 後轉為正式測試。"""
         assert lights["fut_net"] == "gray"
         assert rd["fut_net"]["reason"] == MISSING_OUT_OF_RANGE
+
+    @pytest.mark.parametrize("li_latest, reason", [
+        (pd.DataFrame({"外資大小": ["-"]}), MISSING_NO_VALUE),       # tab_macro 全 '-' 也存入
+        (pd.DataFrame({"其他欄": [1.0]}), MISSING_NO_VALUE),         # 缺欄
+        (pd.DataFrame(), MISSING_NOT_LOADED),                         # 空表 = 容器空
+        (pd.DataFrame({"外資大小": []}), MISSING_NOT_LOADED),        # 有欄無列 = 容器空
+        (None, MISSING_NOT_LOADED),                                   # 沒載入
+    ], ids=["dash", "no-col", "empty-df", "empty-rows", "none"])
+    def test_fut_net_missing_dataframe_does_not_crash(self, li_latest, reason):
+        """NF-f1：fut_net 的 container 是 DataFrame；取不到值時 L2 不得拋
+        ValueError（修前 '-' / 缺欄 / 空表全炸），而是回灰燈並給正確缺值原因。
+        ⛔ 不得捏 0（0 在 fut_net 會被判成某個燈色）。"""
+        _, lights, rd = self._all_lamps(1.0, li_latest=li_latest)
+        assert lights["fut_net"] == "gray"
+        assert rd["fut_net"]["state"] == "missing"
+        assert rd["fut_net"]["value"] is None
+        assert rd["fut_net"]["reason"] == reason
 
     def test_v1_bar_render_shows_gray_not_green(self, monkeypatch):
         """真的呼叫 v1 `render_five_bucket_bar`（攔 st），確認長期桶那格印的是灰燈。"""
