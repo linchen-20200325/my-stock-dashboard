@@ -240,7 +240,11 @@ class TestNothingLost:
 
     def test_same_rows_same_order_just_relocated(self, monkeypatch):
         """摺疊版把 `<details>…</details>` 換回它的列 ⇒ 與「全攤平」版逐 byte 相同。"""
+        # SA2-f14（2026-10-01）：摺疊區改不截斷（`fold_truncate=False`），卡面仍截 ⇒ 長值兩邊字面不同。
+        # 本條守的是「一列不少、字一個不差」，故兩邊都關掉截斷再比（截斷規則本身不是本條的對象；
+        # 摺疊區不截斷另由 `test_today_fold_no_truncate.py` 守）。
         for tile in self._all_tiles():
+            monkeypatch.setattr(M, "FACT_VALUE_MAX_CHARS", 10 ** 9)   # 迴圈內：下面的 undo() 會一併還原
             folded = P.v2_card_html(tile)
             monkeypatch.setattr(P, "V2_FOLD_CARD_PREFIX", "\0never")
             flat = P.v2_card_html(tile)

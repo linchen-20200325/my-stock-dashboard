@@ -466,7 +466,7 @@ class TestRenderLive:
         assert with_[k] == without[k]
         assert P.v2_card_html(with_[k]) == P.v2_card_html(without[k])
 
-    def test_first_four_match_origin_main_golden(self):
+    def test_first_four_match_origin_main_golden(self, monkeypatch):
         # 首批 4 盞：與 origin/main 10f385c（擴充前）產出的卡面 HTML 黃金雜湊逐字相同。
         # 黃金值取得方式（2026-09-26）：在 10f385c 以本檔 `_live_readout()` ＋
         # `_first_four_directions()` 呼叫 `build_indicator_tiles` → `v2_card_html`，取 sha256。
@@ -480,6 +480,13 @@ class TestRenderLive:
         band_label, thr_text, _, l4_err = P._load_l4_labels()
         kw = dict(band_label=band_label, thr_text=thr_text, l4_error=l4_err)
         full = _flat(P.build_indicator_tiles(_live_readout(), directions=_directions(), **kw))
+        # SA2-f14（2026-10-01）：今天頁摺疊區改 `fold_truncate=False`（不截斷，同另四頁）。
+        # 黃金值**不重算**（同下方 a11y 的作法）：比對時把該旗標壓回預設 `True` ⇒ 仍證明
+        # 卡片其餘部分與 10f385c 逐字相同；「摺疊區不截斷」本身另由
+        # `tests/ui_v2/test_today_fold_no_truncate.py` 守。
+        _orig_card_html = P.v2_markup.card_html
+        monkeypatch.setattr(P.v2_markup, "card_html",
+                            lambda **k: _orig_card_html(**{**k, "fold_truncate": True}))
         # 2026-09-26 a11y（客戶核可）：「▸ 詳細」開關加了 `aria-labelledby`／`aria-controls`，
         # 並在標題／label／body 掛 `id`（純屬性、⛔ 畫面與文字不變）。黃金值**不重算**：
         # 先拿掉這幾個新增屬性再比 ⇒ 仍證明卡片其餘部分與 10f385c 逐字相同。
