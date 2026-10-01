@@ -426,6 +426,91 @@ _S4_EXTRA_CORPUS.extend(
     for s in range(2) for ind in (17, 40, 256, 257) for tail in ("", "\n" + " " * ind + "說明字", "\n/home/u/x.toml"))
 
 
+#: 批 S4 QA（自驗 fuzz 找到）：上限放寬後一塊多接進後面的短行 → 「涵蓋終點那一行含遮罩」不再是最後一行 →
+#: 整塊不遮，比 bf0ada3 少遮。修法：bf0ada3 上限 16 那一道照跑、範圍取聯集（`_DERL_INDENT_MAX_BF0`）。
+_R27_SHORT_TAIL = "k = \tMC4CAQAw\nabcDEF0123456789+/AIzaSyA1234567890abcdefghijklmnopqrstu{nl}{sp}MIIpassword: x"
+
+
+@pytest.mark.parametrize("sp", [17, 20, 64, 255, 256])
+@pytest.mark.parametrize("nl", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_r27_short_tail_after_wide_gap_not_less_than_bf0(nl, sp):
+    raw = _R27_SHORT_TAIL.format(nl=nl, sp=" " * sp)
+    assert "MC4CAQAw" not in _BF0.scrub_secrets(raw), "前提：bf0ada3 遮掉這一塊"
+    _never_less(raw)
+    assert "MC4CAQAw" not in scrub_secrets(raw) and "MC4CAQAw" not in scrub_prose_secrets(raw)
+
+
+def test_r27_mutant_without_bf0_pass_masks_less():
+    from tests.test_sec_s3_0928 import _mutant
+    m = _mutant(("_passes.append((_DER_B64_LOOSE_BF0_RE, _DERL_NL_BF0_RE))", "pass"))
+    raw = _R27_SHORT_TAIL.format(nl="\r\n", sp=" " * 20)
+    assert "MC4CAQAw" in m.scrub_secrets(raw) and "MC4CAQAw" not in scrub_secrets(raw)
+
+
+_S4_EXTRA_CORPUS.extend(_R27_SHORT_TAIL.format(nl=nl, sp=" " * sp) for nl in ("\n", "\r\n") for sp in (16, 17, 40, 256, 257))
+
+
+#: 批 S4 QA 第 2 組（F1，2026-10-01）回報的兩個重現：DER 片段之後隔 17～256 個空白接一行 → 修前（只跑上限 256 那一道）
+#: 那一行併進塊、整塊不遮，比 main 少遮；16／257 個空白時與 main 相同。
+#: ⚠️ main `b6e4409` 的 `shared/secret_scrub.py` 與 `bf0ada3` 逐位元組相同（`git show b6e4409:shared/secret_scrub.py
+#: | sha256sum` ＝ `_BF0_SHA256`，2026-10-01 實測）⇒ `_BF0` 凍結副本**就是**現行 main 的行為。
+_F1_KEY = "MH\ncCAQEEIBNVy3UGbn+XBg\n/MV/Z81pxZy/d1AvMoBJ\n{sp}" + "x" * 15
+_F1_NONKEY = "MIIIjA\nIw0BAQEFAAOCAQ8A\n6fb92427ae41e4649b934ca495991b7852b855\n{sp}5"
+
+
+@pytest.mark.parametrize("sp", [0, 1, 15, 16, 17, 18, 40, 128, 255, 256, 257, 300])
+@pytest.mark.parametrize("form", [_F1_KEY, _F1_NONKEY], ids=["key", "nonkey"])
+def test_f1_qa_repro_never_less_than_main(form, sp):
+    raw = form.format(sp=" " * sp)
+    _never_less(raw)
+    if sp == 17 and form is _F1_KEY:
+        assert _BF0.scrub_secrets(raw).startswith("***\n"), "前提：main 把整塊遮掉"
+        assert scrub_secrets(raw).startswith("***\n") and scrub_prose_secrets(raw).startswith("***\n")
+
+
+@pytest.mark.parametrize("form", [_F1_KEY, _F1_NONKEY], ids=["key", "nonkey"])
+def test_f1_mutant_without_bf0_pass_masks_less_than_main(form):
+    """突變：拿掉 bf0ada3（上限 16）那一道 → 兩個重現都比 main 少遮（＝ QA 回報的原始現象）。"""
+    from tests.test_sec_s3_0928 import _mutant
+    m = _mutant(("_passes.append((_DER_B64_LOOSE_BF0_RE, _DERL_NL_BF0_RE))", "pass"))
+    raw = form.format(sp=" " * 17)
+    assert not _is_masking_of(m.scrub_secrets(raw), _BF0.scrub_secrets(raw))
+    assert _is_masking_of(scrub_secrets(raw), _BF0.scrub_secrets(raw))
+
+
+def _f1_fragments() -> list[str]:
+    """DER 片段：QA 的兩個重現 ＋ 真金鑰（PKCS#8／PKCS#1，固定種子）的頭兩行、頭三行（截短）、末兩行、窄換行頭四行。"""
+    out = [_F1_KEY.split("\n{sp}")[0], _F1_NONKEY.split("\n{sp}")[0],
+           "k = \tMC4CAQAw\nabcDEF0123456789+/AIzaSyA1234567890abcdefghijklmnopqrstu"]
+    for kind in (_pkcs8, _pkcs1):
+        lines = _wrap(_b64(kind(0)))
+        out += ["\n".join(lines[:2]), "\n".join(lines[:3])[:150], "\n".join(lines[-2:]),
+                "\n".join(_wrap(_b64(kind(0)), 20)[:4])]
+    return out
+
+
+_F1_TAILS = ("x" * 15, "5", "MIIpassword: x", "說明字", "abc==", "AAAA", "", "/home/u/x.toml", "MIIB" + "A" * 40)
+
+
+def _f1_property(indents) -> None:
+    for frag in _f1_fragments():
+        for ind in indents:
+            for tail in _F1_TAILS:
+                for nl in ("\n", "\r\n"):
+                    _never_less(frag + nl + " " * ind + tail)
+
+
+def test_f1_property_never_less_than_main_or_e23_sampled_indents():
+    """性質（fast）：DER 片段 × 縮排（邊界取樣）× 尾行 × LF／CRLF：兩支函式都不比 e23ff2f、也不比 main 少遮。"""
+    _f1_property((0, 15, 16, 17, 18, 64, 256, 257))
+
+
+@pytest.mark.slow
+def test_f1_property_never_less_than_main_or_e23_all_indents_0_to_300():
+    """性質（slow）：同上，縮排 0～300 全部（2026-10-01 實測：同形態 19 片段 × 301 × 9 × 2 ＝ 102,942 組 0 例少遮）。"""
+    _f1_property(range(301))
+
+
 # ══════════════════════════════════════════════════════════════════
 # SEC-r26：語料只收 git 追蹤中的檔案（讀索引檔、⛔ 不呼叫 git）—— `tests/_git_tracked.py`
 # ══════════════════════════════════════════════════════════════════

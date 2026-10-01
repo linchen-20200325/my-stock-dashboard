@@ -669,13 +669,31 @@ _DERL_LINE: str = (r"(?=(?:[A-Za-z0-9+/*]|\\/){%d}|(?:[A-Za-z0-9+/]|\\/){0,4096}
 #: 換行之後的空白吃不完、下一行接不上，整塊只剩第一行（實測 17／20 個空白：24 行外露 23 行）。
 #: 線性：空白串前後都是互斥的字面（換行、`>`、base64 字元），用 `_POSS`；失敗的一圈最多回看 256 個空白。
 _DERL_INDENT_MAX: int = 256
-_DERL_NL: str = (r"[ \t]{0,%d}" % _DERL_INDENT_MAX + _POSS + r"(?:\r\n|\r|\n|(?:\\{1,32}r)?\\{1,32}n)"
-                 r"[ \t]{0,%d}" % _DERL_INDENT_MAX + _POSS + r"(?:>[ \t]{0,4}){0,8}")
-_DER_B64_LOOSE_RE = re.compile(
-    r"(?:(?<![A-Za-z0-9+/*])|(?<=\\[nrt]))(?:M[A-P]|\*\*\*)" + _DERL_RUN
-    + r"(?:" + _DERL_NL + _DERL_LINE + r"){0,4096}" + _POSS
-    + r"(?:" + _DERL_NL + r"(?:[A-Za-z0-9+/]|\\/){1,15}(?![A-Za-z0-9+/*\\]))?={0,2}")
+#: 批 S4 QA（SEC-r27 修正，2026-10-01）：bf0ada3 的上限 16 那一道**照跑**、範圍與 256 那一道取聯集。
+#: 理由：上限放寬後，一塊可能多接進後面的短行（例：`AIza***` 收尾的行之後隔 20 個空白接 `MIIpassword`），
+#: 「涵蓋終點那一行含遮罩 → 視為涵蓋到宣告長度」不再落在最後一行 ⇒ 那一塊整段不遮 —— 比 bf0ada3 少遮。
+#: 取聯集 ⇒ 結構上必定 ⊇ bf0ada3。文字裡沒有連續 ≥17 個空白／tab 時兩道比對結果相同 → 只跑 256 那一道（純效能）。
+_DERL_INDENT_MAX_BF0: int = 16
+
+
+def _derl_nl(cap: int) -> str:
+    return (r"[ \t]{0,%d}" % cap + _POSS + r"(?:\r\n|\r|\n|(?:\\{1,32}r)?\\{1,32}n)"
+            r"[ \t]{0,%d}" % cap + _POSS + r"(?:>[ \t]{0,4}){0,8}")
+
+
+def _derl_loose_re(nl: str) -> re.Pattern:
+    return re.compile(
+        r"(?:(?<![A-Za-z0-9+/*])|(?<=\\[nrt]))(?:M[A-P]|\*\*\*)" + _DERL_RUN
+        + r"(?:" + nl + _DERL_LINE + r"){0,4096}" + _POSS
+        + r"(?:" + nl + r"(?:[A-Za-z0-9+/]|\\/){1,15}(?![A-Za-z0-9+/*\\]))?={0,2}")
+
+
+_DERL_NL: str = _derl_nl(_DERL_INDENT_MAX)
+_DER_B64_LOOSE_RE = _derl_loose_re(_DERL_NL)
 _DERL_NL_RE = re.compile(_DERL_NL)
+_DER_B64_LOOSE_BF0_RE = _derl_loose_re(_derl_nl(_DERL_INDENT_MAX_BF0))
+_DERL_NL_BF0_RE = re.compile(_derl_nl(_DERL_INDENT_MAX_BF0))
+_LONG_BLANK_RE = re.compile(r"[ \t]{%d}" % (_DERL_INDENT_MAX_BF0 + 1))
 
 
 def _der_head_total(head_b64: str) -> int | None:
@@ -708,7 +726,7 @@ def _is_der_start(line: str) -> bool:
     return line.startswith(MASK) or (line[:1] == "M" and "A" <= line[1:2] <= "P")
 
 
-def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
+def _der_loose_block(m: re.Match, nl_re: re.Pattern = _DERL_NL_RE) -> list[tuple[int, int]]:
     """`_DER_B64_LOOSE_RE` 比對到的一整塊 → 要遮的範圍（相對 `body`）。⛔ 不遞迴：逐行往下走一次。
 
     每個可能的起點（`M[A-P]` 或 `***` 開頭的行）各自判一段：解得出標頭 → 宣告涵蓋到的行；判不了標頭
@@ -719,7 +737,7 @@ def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
     """
     body = m.group(0)
     _ends, _starts = [], [0]
-    for _sep in _DERL_NL_RE.finditer(body):
+    for _sep in nl_re.finditer(body):
         _ends.append(_sep.start())
         _starts.append(_sep.end())
     _ends.append(len(body))
@@ -819,9 +837,13 @@ def _der_loose_spans(text: str) -> list[tuple[int, int]]:
     """第二道無標頭 DER：在 `text` 上算出要遮的範圍（不改字串）。不到 `_DER_B64_MIN` 字、又沒有遮罩的塊必定判不成，
     直接略過（純效能；含遮罩的塊原本多長不可知，照判）。"""
     _spans: list[tuple[int, int]] = []
-    for _m in _DER_B64_LOOSE_RE.finditer(text):
-        if _m.end() - _m.start() >= _DER_B64_MIN or MASK in _m.group(0):
-            _spans.extend((_m.start() + _a, _m.start() + _b) for _a, _b in _der_loose_block(_m))
+    _passes = [(_DER_B64_LOOSE_RE, _DERL_NL_RE)]
+    if _DERL_INDENT_MAX != _DERL_INDENT_MAX_BF0 and _LONG_BLANK_RE.search(text):
+        _passes.append((_DER_B64_LOOSE_BF0_RE, _DERL_NL_BF0_RE))     # bf0ada3 那一道（見 `_DERL_INDENT_MAX_BF0`）
+    for _rx, _nl in _passes:
+        for _m in _rx.finditer(text):
+            if _m.end() - _m.start() >= _DER_B64_MIN or MASK in _m.group(0):
+                _spans.extend((_m.start() + _a, _m.start() + _b) for _a, _b in _der_loose_block(_m, _nl))
     return _spans
 
 
