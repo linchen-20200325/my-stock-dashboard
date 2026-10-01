@@ -537,18 +537,26 @@ def _entry(path: str, ver: int, prev: str = "", extended: bool = False, mode: in
     return body + raw + b"\0" * (8 - n % 8)
 
 
-def _index(paths: list[str], ver: int, ext: bytes = b"", extended_at: int = -1, mode_at: int = -1) -> bytes:
-    out = b"DIRC" + ver.to_bytes(4, "big") + len(paths).to_bytes(4, "big")
+def _index(paths: list[str], ver: int, ext: bytes = b"", extended_at: int = -1, mode_at: int = -1,
+           count: int | None = None) -> bytes:
+    """合成索引檔；檔尾是真的 SHA-1（批 S4 QA：`parse_index` 會核對）。`count` 可謊報項目數（檔尾照樣算對）。"""
+    out = b"DIRC" + ver.to_bytes(4, "big") + (len(paths) if count is None else count).to_bytes(4, "big")
     prev = ""
     for k, p in enumerate(paths):
         out += _entry(p, ver, prev, extended=(k == extended_at), mode=(0o040000 if k == mode_at else 0o100644))
         prev = p
-    return out + ext + bytes(20)
+    return _seal(out + ext)
+
+
+def _seal(body: bytes) -> bytes:
+    return body + hashlib.sha1(body).digest()
 
 
 #: 含 >127 位元組的前綴刪除（v4 多位元組 varint）、>0xFFF 的超長路徑（flags 名長飽和）、非 ASCII。
 _PATHS = ["app.py", "docs/a.md", "docs/ab.md", "shared/secret_scrub.py", "tests/x" * 40 + ".py", "中文/檔.md",
           "z/" + "y" * 5000 + ".md", "zz.md"]
+#: git 依路徑位元組嚴格遞增排序（批 S4 QA：`parse_index` 會核對排序）。
+_PATHS.sort(key=lambda p: p.encode())
 
 
 @pytest.mark.parametrize("ver", [2, 3, 4])
@@ -560,18 +568,103 @@ def test_r26_parse_synthetic_index(ver):
 
 
 @pytest.mark.parametrize("data", [
-    b"", b"XXXX" + bytes(8), _index(_PATHS, 5), _index(_PATHS, 2)[:-40],            # 簽章錯、版本、截斷
-    _index(_PATHS, 2, extended_at=1),                                                 # v2 不該有 extended
+    _index(_PATHS, 5),                                                                # 版本不支援
     _index(_PATHS, 2, ext=b"link" + (4).to_bytes(4, "big") + bytes(4)),               # split index
+    _index(_PATHS, 2, ext=b"sdir" + (4).to_bytes(4, "big") + bytes(4)),               # 看不懂的必要擴充
     _index(_PATHS, 2, mode_at=1),                                                     # sparse index 目錄項目
-])
+], ids=["version-5", "split-link", "required-ext", "sparse-dir"])
 def test_r26_unsupported_index_returns_none(data):
     from tests._git_tracked import parse_index
     assert parse_index(data) is None
 
 
+def _flip(data: bytes, at: int) -> bytes:
+    return data[:at] + bytes([data[at] ^ 0x01]) + data[at + 1:]
+
+
+_GOOD2 = _index(_PATHS, 2)
+_GOOD4 = _index(_PATHS, 4)
+
+
+#: 批 S4 QA（SEC-r26 修正）：內容壞掉 ⇒ 一律 `IndexCorrupt`（修前：0 項 → 空集合、項目數改小 → 殘缺集合、
+#: 路徑翻一個位元 → 錯的路徑，全都「成功」回傳）。
+@pytest.mark.parametrize("data", [
+    pytest.param(b"", id="empty-file"),
+    pytest.param(_seal(b"XXXX" + bytes(8)), id="bad-signature"),
+    pytest.param(_GOOD2[:-40], id="truncated"),
+    pytest.param(_GOOD2[:-20] + bytes(20), id="zero-trailer"),
+    pytest.param(_flip(_GOOD2, 12 + 62 + 2), id="flipped-path-bit-v2"),
+    pytest.param(_flip(_GOOD4, len(_GOOD4) - 30), id="flipped-path-bit-v4"),
+    pytest.param(_flip(_GOOD2, len(_GOOD2) - 1), id="flipped-trailer-bit"),
+    pytest.param(_index(_PATHS, 2, count=0), id="count-0-sha-ok"),
+    pytest.param(_index(_PATHS, 2, count=len(_PATHS) - 1), id="count-short-sha-ok"),
+    pytest.param(_index(_PATHS, 4, count=len(_PATHS) - 3), id="count-short-v4-sha-ok"),
+    pytest.param(_index(_PATHS, 2, count=len(_PATHS) + 1), id="count-long-sha-ok"),
+    pytest.param(_index(_PATHS, 2, count=469), id="count-469-sha-ok"),
+    pytest.param(_index(list(reversed(_PATHS)), 2), id="unsorted"),
+    pytest.param(_index(["a.md", "a.md"], 2), id="duplicate"),
+    pytest.param(_index(_PATHS, 2, extended_at=1), id="v2-extended-flag"),
+    pytest.param(_index(_PATHS, 2, ext=b"TREE" + (999).to_bytes(4, "big")), id="ext-overruns"),
+])
+def test_r26_corrupt_index_raises(data):
+    from tests._git_tracked import IndexCorrupt, parse_index
+    with pytest.raises(IndexCorrupt):
+        parse_index(data)
+
+
+def test_r26_valid_index_with_optional_extension_and_zero_trailer_flag():
+    from tests._git_tracked import parse_index
+    assert parse_index(_index(_PATHS, 2, ext=b"TREE" + (3).to_bytes(4, "big") + b"abc")) == frozenset(_PATHS)
+    #: `index.skipHash` 開著時 git 寫全 0 檔尾 → 僅在呼叫端說明允許時接受。
+    assert parse_index(_GOOD2[:-20] + bytes(20), allow_zero_trailer=True) == frozenset(_PATHS)
+
+
+def test_r26_valid_empty_index_is_empty_but_only_tracked_refuses_it(tmp_path):
+    """合法的空索引：`parse_index` 照實回傳空集合；`only_tracked` 拒絕（語料 ⛔ 不空轉）。"""
+    from tests._git_tracked import IndexCorrupt, only_tracked, parse_index, tracked_paths
+    assert parse_index(_index([], 2)) == frozenset()
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "index").write_bytes(_index([], 2))
+    (tmp_path / "a.md").write_text("x", encoding="utf-8")
+    tracked_paths.cache_clear()
+    with pytest.raises(IndexCorrupt, match="少於下限"):
+        only_tracked(tmp_path, [tmp_path / "a.md"])
+
+
+def test_r26_below_repo_minimum_or_nothing_kept_raises(tmp_path):
+    from tests._git_tracked import REPO_MIN_TRACKED, IndexCorrupt, only_tracked, tracked_paths
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "index").write_bytes(_index(["docs/a.md", "src/x.py"], 2))
+    for rel in ("docs/a.md", "src/y.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("x", encoding="utf-8")
+    tracked_paths.cache_clear()
+    with pytest.raises(IndexCorrupt, match="少於下限"):
+        only_tracked(tmp_path, [tmp_path / "docs/a.md"], min_tracked=REPO_MIN_TRACKED)
+    with pytest.raises(IndexCorrupt, match="只留下 0 個"):
+        only_tracked(tmp_path, [tmp_path / "src/y.py"], min_kept=1)
+    assert only_tracked(tmp_path, [tmp_path / "docs/a.md"], min_kept=1) == [tmp_path / "docs/a.md"]
+
+
+@pytest.mark.parametrize("which", [".git", "commondir"])
+def test_r26_non_utf8_git_pointer_raises_clear_error(tmp_path, which):
+    from tests._git_tracked import IndexCorrupt, tracked_paths
+    tracked_paths.cache_clear()
+    gd = tmp_path / "gd"
+    gd.mkdir()
+    (gd / "index").write_bytes(_GOOD2)
+    if which == ".git":
+        (tmp_path / ".git").write_bytes(b"gitdir: /tmp/\xff\xfe\n")
+    else:
+        (tmp_path / ".git").write_text(f"gitdir: {gd}\n", encoding="utf-8")
+        (gd / "commondir").write_bytes(b"\xff..\n")
+    with pytest.raises(IndexCorrupt, match="不是 UTF-8"):
+        tracked_paths(tmp_path)
+
+
 def test_r26_only_tracked_filters_untracked_files(tmp_path):
     from tests._git_tracked import only_tracked, tracked_paths
+    tracked_paths.cache_clear()
     (tmp_path / ".git").mkdir()
     (tmp_path / ".git" / "index").write_bytes(_index(["docs/a.md", "src/x.py"], 2))
     for rel in ("docs/a.md", "docs/scratch.md", "src/x.py", "src/tmp_untracked.py"):
@@ -618,3 +711,23 @@ def test_r26_every_scrub_corpus_goes_through_only_tracked(mod, fn):
     src = textwrap.dedent(inspect.getsource(getattr(f, "__wrapped__", f)))
     calls = {n.func.id for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
     assert "only_tracked" in calls, (mod, fn)
+    #: 批 S4 QA：每個語料都帶 repo 規模的下限（索引讀錯 → 失敗，⛔ 不空轉）。
+    kws = {kw.arg for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+           and n.func.id == "only_tracked" for kw in n.keywords}
+    assert {"min_tracked", "min_kept"} <= kws, (mod, fn, kws)
+
+
+@pytest.mark.parametrize("mod,fn", [("tests.test_sec_s3_0928", "_ui_corpus"), ("tests.test_sec_s3_0928", "_secret_corpus"),
+                                    ("tests.test_sec_s3_batch_s3", "_tracked_md_lines"),
+                                    ("tests.test_sec_s2_scrub_gaps", "_corpus")])
+def test_r26_corpus_fails_instead_of_vacuous_when_index_reads_empty(monkeypatch, mod, fn):
+    """索引讀出來是空集合（例：項目數被改成 0 又剛好通過檢查）→ 語料函式失敗，⛔ 不回傳空語料讓測試空轉。"""
+    import importlib
+    from tests import _git_tracked
+    if not (_ROOT / ".git").exists():
+        pytest.skip("非 git checkout")
+    monkeypatch.setattr(_git_tracked, "tracked_paths", lambda root: frozenset())
+    f = getattr(importlib.import_module(mod), fn)
+    f = getattr(f, "__wrapped__", f)
+    with pytest.raises(_git_tracked.IndexCorrupt):
+        f()

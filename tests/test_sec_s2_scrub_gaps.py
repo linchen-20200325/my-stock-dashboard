@@ -26,7 +26,7 @@ import pytest
 
 from shared import secret_scrub as SSC
 from shared.secret_scrub import scrub_query_secrets, scrub_secrets
-from tests._git_tracked import only_tracked
+from tests._git_tracked import REPO_MIN_TRACKED, only_tracked
 
 _TOK = "Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9St0Uv1Wx"   # 36 字、含數字（Telegram token 形狀）
 
@@ -158,7 +158,7 @@ def _ctr(s: str) -> collections.Counter:
 def _corpus() -> set[str]:
     out: set[str] = set()
     _tests = pathlib.Path(__file__).resolve().parent
-    for f in only_tracked(_tests.parent, _tests.glob("test_*.py")):     # SEC-r26（批 S4）：只收 git 追蹤中的檔案
+    for f in only_tracked(_tests.parent, _tests.glob("test_*.py"), min_tracked=REPO_MIN_TRACKED, min_kept=200):     # SEC-r26（批 S4）：只收 git 追蹤中的檔案
         src = f.read_text(encoding="utf-8")
         if "scrub" not in src:
             continue
