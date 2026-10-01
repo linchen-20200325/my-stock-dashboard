@@ -55,7 +55,8 @@ class LampDirection:
     unit: str                      # 變化量單位（'%' / ' 個百分點' / ' 點' / ''）
     window_text: str               # '近 20 交易日' / '較上月' / ''
     as_of: Optional[str]           # 最新一點的日期（ISO）
-    reason: str = ""               # nodata：原因（給 log，畫面不顯示）；
+    reason: str = ""               # nodata：原因（~~給 log~~ 只存在本物件上、不進 log，畫面不顯示；
+                                   #   2026-10-01 事實更正 DL-f1-s51：無任何路徑印出 nodata 的 reason）；
                                    # error：簡短原因（例外型別名），畫面會顯示
 
     def __post_init__(self) -> None:

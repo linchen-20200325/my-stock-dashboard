@@ -60,7 +60,10 @@
   lag-20 = 0.016。⇒ 「近 20 交易日」的差只是**兩個互不相關的單日**相減，畫成 ↗ / ↘ 等於把
   雜訊講成趨勢（§1 / v3 §02「無誤導」）。⛔ 不要為了「讓它有箭頭」而加回帶寬。
 
-無資料的其餘盞（mode = "none"，**不讀任何歷史**；原因寫在 `none_reason`，只進 log）：
+無資料的其餘盞（mode = "none"，**不讀任何歷史**；原因寫在 `none_reason`，~~只進 log~~）：
+（2026-10-01 事實更正 DL-f1-s51，⛔ 非漏刪：`none_reason` 只存在 L2 `LampDirection.reason` 物件上，
+**不進 log**、畫面也不顯示 —— 消費端 `format_direction_text` 在 nodata 時只回「無資料」，
+`page_today` 只在例外時印 repr，沒有任何路徑印出 nodata 的 reason。）
 - adl：單日估算、無自相關（量測見上方 adl 段）→ 20 日差是雜訊。
 - dxy：session **有**約 60 天的序列（`cl_data['intl']['美元指數 DXY']`），但 (1) 持平帶量不到
   （本機無 DXY 歷史、無外網）→ 不猜數字；(2) 該序列走 DX-Y.NYB → DX=F → UUP 備援，
@@ -177,7 +180,8 @@ LAMP_DIRECTION_WINDOWS: dict[str, dict] = {
         "lookback_rows": 1, "mode": DIRECTION_MODE_DIFF,
         "unit": "", "window_text": "較上月", "monthly": True,
     },
-    # ── 2026-09-26：恆為無資料（`none_reason` 只進 log / 物件，畫面只顯示「無資料」）──
+    # ── 2026-09-26：恆為無資料（`none_reason` ~~只進 log /~~ 物件，畫面只顯示「無資料」）──
+    #    （2026-10-01 事實更正 DL-f1-s51：只存在 `LampDirection.reason` 物件上、不進 log；見檔頭同段）
     **{_k: {"lookback_rows": 0, "mode": DIRECTION_MODE_NONE,
             "unit": "", "window_text": "", "monthly": False, "none_reason": _r}
        for _k, _r in (
