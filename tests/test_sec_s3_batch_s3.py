@@ -1068,3 +1068,59 @@ def test_r5_continuation_inside_repr():
     for raw in (src, repr(src), repr(repr(src))):
         out = scrub_secrets(raw)
         assert "tokS3r5secret" not in out and _is_masking_of(out, _OLD(raw))
+
+
+# ══════════════════════════════════════════════════════════════════
+# S3 QA 第六輪：整齊本體的最後一行以 `=`／`==` 補位收尾
+# ══════════════════════════════════════════════════════════════════
+def test_r6_padded_last_line_counts_as_full_width():
+    """repro：121 位元組 EC SEC1 金鑰（`==` 收尾），`password: ` ＋ 前 35 字，其後 3 行 43 字 —— 原本 3 行全外露。"""
+    r = random.Random(3)
+    der = _seq(bytes.fromhex("020101") + b"\x04\x20" + r.randbytes(32) + bytes.fromhex("a00a06082a8648ce3d030107")
+               + bytes.fromhex("a144034200") + b"\x04" + r.randbytes(64))
+    s = _b64(der)
+    assert len(der) == 121 and s.endswith("==")
+    lines = [s[35 + 43 * j:35 + 43 * (j + 1)] for j in range(3)]
+    raw = "password: " + s[:35] + "\n" + "\n".join(lines)
+    out = scrub_secrets(raw)
+    assert not [ln for ln in lines if ln in out] and _is_masking_of(out, _OLD(raw))
+    assert all(ln in _OLD(raw) for ln in lines)
+
+
+def _r6_sample(rows: int, width: int, pad: int, seed: int) -> tuple[str, list[str]] | None:
+    """`password: ` ＋ 首段（被欄位規則遮掉）＋ `rows` 行寬 `width` 的 base64，最後一行以 `pad` 個 `=` 收尾。"""
+    for n in range(rows * width * 3 // 4, rows * width * 3 // 4 + 60):
+        if (3 - n % 3) % 3 != pad:
+            continue
+        total = 4 * (-(-n // 3))
+        first = total - rows * width
+        if 8 <= first <= 60:
+            s = _b64(random.Random(seed * 1000 + n).randbytes(n))
+            lines = [s[first + width * j:first + width * (j + 1)] for j in range(rows)]
+            return "password: " + s[:first] + "\n" + "\n".join(lines), lines
+    return None
+
+
+@pytest.mark.parametrize("pad", [0, 1, 2])
+@pytest.mark.parametrize("rows", [3, 4, 5])
+def test_r6_padding_property(pad, rows):
+    """{0,1,2} 個 `=` × 寬 40～80 × 3/4/5 行：整齊本體一律遮（不論最後一行有沒有補位），永不比 e23ff2f 少遮。"""
+    seen = 0
+    for width in range(40, 81):
+        for seed in range(2):
+            got = _r6_sample(rows, width, pad, seed)
+            if got is None:
+                continue
+            raw, lines = got
+            assert lines[-1].endswith("=" * pad) and (pad == 0 or not lines[-1].endswith("=" * (pad + 1)))
+            out = scrub_secrets(raw)
+            assert not [ln for ln in lines if ln in out], (width, seed, out[:100])
+            assert _is_masking_of(out, _OLD(raw))
+            seen += 1
+    assert seen >= 40
+
+
+def test_r6_width_with_padding_is_load_bearing():
+    raw, lines = _r6_sample(3, 43, 2, 0)
+    m = _mutant(("    _wid = [len(_l) for _l in _raw]\n", "    _wid = [len(_l) for _l in _lines]\n"))
+    assert [ln for ln in lines if ln in m.scrub_secrets(raw)], "前提：用去掉 `=` 的長度判同寬 → 外露"

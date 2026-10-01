@@ -66,7 +66,7 @@
            都不會讓任何舊規則（例如含空白目錄名的路徑）少遮。
            起點也可以是前面規則（路徑等）留下的 `***`；開頭 16 字判不了標頭時，只在「≥3 行同寬 ≥40 字」的整齊
            本體才整段遮（批 S3 QA F1；「3 行」含整塊的最後一行、也含已被前面規則遮成 `***…` 的行，但至少要有一行
-           沒遮罩的行定出寬度）。附帶效果：欄位名後面直接接多行金鑰（`private_key: MIIE…`，SEC-r22 的形態）時，
+           沒遮罩的行定出寬度；「同寬」連 `=`／`==` 補位一起算，補位收尾的最後一行也算滿行）。附帶效果：欄位名後面直接接多行金鑰（`private_key: MIIE…`，SEC-r22 的形態）時，
            第一行被第 5 類遮掉後，其餘整齊的行（≥3 行同寬 ≥40 字）也會一併遮；只剩 1～2 行、或行寬 <40、
            或各行不同寬時仍外露（SEC-r22 其餘形態未處理）。
   遮罩一律沿用既有的 `***`（`MASK`）。**⛔ 不新增任何說明文字** —— 看得到 `***` 就知道有東西被遮。
@@ -709,10 +709,14 @@ def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
         _ends.append(_sep.start())
         _starts.append(_sep.end())
     _ends.append(len(body))
-    _lines = [body[_a:_b].replace("\\/", "/").rstrip("=") for _a, _b in zip(_starts, _ends)]
+    _raw = [body[_a:_b].replace("\\/", "/") for _a, _b in zip(_starts, _ends)]
+    _lines = [_l.rstrip("=") for _l in _raw]
     _n = len(_lines)
     _masked = ["*" in _l for _l in _lines]
-    _len = [len(_l) for _l in _lines]
+    _len = [len(_l) for _l in _lines]          # base64 字數（不含 `=` 補位）：算涵蓋長度用
+    #: 行寬（含 `=` 補位）：判「同寬」用 —— 補位的最後一行與其他滿行同寬（S3 QA 第六輪：用去掉 `=` 的長度判，
+    #: 以 `==` 收尾的那一行看起來比較短，剛好 3 行時整段外露）。
+    _wid = [len(_l) for _l in _raw]
     _ps, _mc = [0] * (_n + 1), [0] * (_n + 1)
     for _x in range(_n):
         _ps[_x + 1] = _ps[_x] + (0 if _masked[_x] else _len[_x])
@@ -725,10 +729,10 @@ def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
         _nx_run = _run[_x + 1] if _x + 1 < _n else _x
         if _masked[_x]:
             _run[_x], _pw[_x] = _nx_run, _nx_pw
-        elif _nx_pw is None or _nx_pw == _len[_x]:
-            _run[_x], _pw[_x] = _nx_run, _len[_x]
+        elif _nx_pw is None or _nx_pw == _wid[_x]:
+            _run[_x], _pw[_x] = _nx_run, _wid[_x]
         else:
-            _run[_x], _pw[_x] = _np[_x + 1] - 1, _len[_x]
+            _run[_x], _pw[_x] = _np[_x + 1] - 1, _wid[_x]
     _out: list[tuple[int, int]] = []
     _i = 0
     while _i < _n:
@@ -738,8 +742,8 @@ def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
         #: 被前面規則遮掉的行，原本多寬已不可知 → 以附近（本行起 4 行內）沒遮罩的行的**最大**寬度估：
         #: 中間行一定是滿行（最寬），首行可能被前綴折短、末行可能是短行；高估只會讓涵蓋提早一點結束在
         #: 「本來就該是最後一行」的那行，低估才會吃進下一段的第一行（S3 QA F2 實例）。
-        _near = [_len[_x] for _x in range(_i, min(_i + 4, _n)) if not _masked[_x]]
-        _w = max(_near) if _near else (_pw[_i] or _len[_i])
+        _near = [_wid[_x] for _x in range(_i, min(_i + 4, _n)) if not _masked[_x]]
+        _w = max(_near) if _near else (_pw[_i] or _wid[_i])
         _head, _x = "", _i
         while _x < _n and len(_head) < _B64_HEAD_CHARS:
             _seg, _star, _ = _lines[_x].partition("*")
@@ -762,7 +766,7 @@ def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
             if _rows < 3 or _plain < 1 or _w < _DER_LOOSE_TIDY_MIN:
                 _i += 1
                 continue
-            _k = _re + 1 if _re + 1 < _n and not _masked[_re + 1] and _len[_re + 1] < _w else _re
+            _k = _re + 1 if _re + 1 < _n and not _masked[_re + 1] and _wid[_re + 1] < _w else _re
             _out.append((_starts[_i], _ends[_k]))
             _i += 1
             continue
