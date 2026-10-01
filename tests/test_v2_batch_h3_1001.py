@@ -4,6 +4,10 @@
     `compute_portfolio_totals()` 把它們整列跳過 ⇒ 算不出來是因為抓不到、不是持股缺資料
     ⇒ 歸因子句「 —— 持股缺張數／均價／現價」整段不出（只刪不改）；失敗原因由卡上既有的
     「⚠️ 未納入任何判斷」那一列交代。v1 同型已由 #734（H1-f6）修。
+  · H1-f9：v1 `etf_tab_dividend_station._render_allocation_take_profit()` 80/20 算不出來那一句 ——
+    持有列全部整批抓取失敗時刪去歸因「你的持股未帶張數/均價（或無市值）→ 」與去哪補子句，
+    改接同檔卡①既有的「⚠️ 另有 N 檔整批抓取失敗，未納入任何判斷。」；其餘情形只把半形
+    「張數/均價」統一為全形「張數／均價」。
 
 列一律走**真的** L3 `build_station_rows()`（`metrics_fn` 注入、全離線、不打網路），
 夾具沿用批 H2 `tests/test_v2_batch_h2_0928.py`（⛔ 不另捏 row 的形狀）。
@@ -14,7 +18,7 @@ from __future__ import annotations
 from shared import dividend_station_thresholds as T
 from src.services import dividend_station_service as svc
 from src.ui.views import page_hold as P
-from tests.test_v2_batch_h2_0928 import _rows
+from tests.test_v2_batch_h2_0928 import _CLAUSE, _alloc_out, _captions, _rows
 
 _E, _S = T.KIND_ETF, T.KIND_STOCK
 
@@ -81,3 +85,48 @@ class TestH1f8V2TotalsNone:
         """修後不變守衛：沒有任何持有列 ⇒ 照修前（`all([])` 為真的陷阱）。"""
         rows = _rows(("0056.TW", _E, False, None, None, 35.0, True))
         assert _action_facts(rows)["未實現損益／總市值"] == _TOTALS_NONE_V2
+
+
+# ══════════════════════════════════════════════════════════════════
+# H1-f9：v1 80/20 算不出來 —— 持有列全部整批抓取失敗 ⇒ 不歸因成缺張數／均價；半形→全形
+# ══════════════════════════════════════════════════════════════════
+_ALLOC_NONE_V1 = ("📊 80/20 配置偏離：你的持股未帶張數／均價（或無市值）→ 無法計算實際佔比。"
+                  + _CLAUSE + "。")
+
+
+def _alloc_failed(n: int) -> str:
+    return f"📊 80/20 配置偏離：無法計算實際佔比。　⚠️ 另有 {n} 檔整批抓取失敗，未納入任何判斷。"
+
+
+class TestH1f9V1AllocationNone:
+    def test_all_held_failed_says_fetch_failed(self, monkeypatch):
+        rows = _rows(("0050.TW", _E, True, 10.0, 140.0, 150.0, True),
+                     ("2330", _S, True, 2.0, 500.0, 600.0, True))
+        assert svc.compute_allocation_split(rows) is None          # 前提：走「算不出來」
+        caps = _captions(_alloc_out(monkeypatch, rows))
+        assert caps == [_alloc_failed(2)], caps
+        assert "張數" not in caps[0]
+
+    def test_held_all_failed_while_watchlist_failed_counts_held_only(self, monkeypatch):
+        """檔數只數持有列（80/20 只看持有列）—— 觀察清單那檔失敗 ⛔ 不算進來。"""
+        rows = _rows(("0050.TW", _E, True, 10.0, 140.0, 150.0, True),
+                     ("0056.TW", _E, False, None, None, 35.0, True))
+        caps = _captions(_alloc_out(monkeypatch, rows))
+        assert caps == [_alloc_failed(1)], caps
+
+    def test_missing_lots_uses_full_width_slash(self, monkeypatch):
+        rows = _rows(("0050.TW", _E, True, None, None, 150.0, False))
+        caps = _captions(_alloc_out(monkeypatch, rows))
+        assert caps == [_ALLOC_NONE_V1], caps
+        assert "張數/均價" not in caps[0]
+
+    def test_some_held_not_failed_keeps_the_sentence(self, monkeypatch):
+        """還有沒失敗的持有列（只缺現價）⇒ 原句照留（只換全形）。"""
+        rows = _rows(("0050.TW", _E, True, 10.0, 140.0, 150.0, True),
+                     ("2330", _S, True, 2.0, 500.0, None, False))
+        assert _captions(_alloc_out(monkeypatch, rows)) == [_ALLOC_NONE_V1]
+
+    def test_no_held_rows_keeps_the_sentence(self, monkeypatch):
+        """沒有任何持有列 ⇒ 原句照留（`all([])` 為真的陷阱）。"""
+        rows = _rows(("0056.TW", _E, False, None, None, 35.0, True))
+        assert _captions(_alloc_out(monkeypatch, rows)) == [_ALLOC_NONE_V1]
