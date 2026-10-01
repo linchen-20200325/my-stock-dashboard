@@ -631,7 +631,7 @@ def _mask_tab_dirs(m: re.Match) -> str:
 
 
 #: SEC-r14／SEC-r17 第二道無標頭 DER（`_DER_B64_LOOSE_RE`）：與上面 `_DER_B64_RE` 在**同一份輸入**上各自判
-#: （`_DerPass` 取聯集），用較寬的排版再認一次，並**依宣告長度逐段判**：
+#: （`_run_post`：在舊規則的結果上再遮），用較寬的排版再認一次，並**依宣告長度逐段判**：
 #:   · 排版：換行寬度 ≥ `_DER_LOOSE_LINE_MIN`（16）字、第一行被前綴折短（第一行只要 `M[A-P]` 起頭即可）、
 #:     行尾空白、只用 CR 換行、JSON 的 `\/` 跳脫、行首縮排 ≤16 個空白；
 #:   · 判法：開頭 16 個 base64 字（跨行串起來）解得出 DER 標頭（`_der_head_total`，條件同 `_looks_like_der`、

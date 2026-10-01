@@ -960,6 +960,8 @@ _TQ = "'" * 3
     f"h['Authorization'] = 'Bearer %s' % tok['{_TOK4}']",
     f"h['Authorization'] = 'B' + '{_TOK4}" + "x" * 5000 + "'",
     f"h['Authorization'] = {_TQ}{_TOK4}" + "x" * 5000 + _TQ,
+    'h["Authorization"] = ' + '"' * 3 + _TOK4 + "x" * 5000 + '"' * 3,
+    f"h['Authorization'] = 'Bearer ' \\\n    + '{_TOK4}'",
     f"h['Authorization'] = 'B {{}}'.format('{_TOK4}" + "x" * 5000 + "')",
 ])
 def test_r4_authorization_continuation_subscript_and_long_values(raw):
