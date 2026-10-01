@@ -449,7 +449,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         if _m1b8_v is not None and _m2b8_v is not None:
             _m1b8 = float(_m1b8_v)
             _m2b8 = float(_m2b8_v)
-            _gap8 = round(_m1b8 - _m2b8, 2)
+            # M2N-f2：round 會產生 −0.0（例 3.001−3.004）→ `>= 0` 成立、印成「+-0.00%」。
+            # `+ 0.0` 把 −0.0 正規化為 +0.0（IEEE 754：-0.0 + 0.0 == +0.0）；其餘值不變、分支不變。
+            _gap8 = round(_m1b8 - _m2b8, 2) + 0.0
             # DL-f1-s5：Tier 3（^TWII 動能代理）時，gap 數字後綴 L0 既有註記（K1 不自擬），
             # 否則「積極作多強勢股」會被讀成央行真實資金行情的結論。
             # 只揭露：三段分支 / 顏色 / 結論文案一位未動；非代理時為空字串 → 逐字不變。

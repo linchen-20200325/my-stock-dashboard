@@ -955,8 +955,9 @@ _MUTANTS = {
 #: 驗收組（非阻擋 1）實測在原始檔上做、當時新測試全綠的兩個突變 → 名稱 → (出口, 替換組, 必須轉紅的 golden 鍵)
 _SOURCE_LEVEL_MUTANTS = {
     # §八 策略3 卡的差額四捨五入少一位：+7.13 → +7.10、+0.04 → +0.00、−1.04 → −1.00
-    "mid_gap8_round_1dp": ("mid", (("            _gap8 = round(_m1b8 - _m2b8, 2)\n",
-                                    "            _gap8 = round(_m1b8 - _m2b8, 1)\n"),),
+    # 批 MAC M2N-f2 起該行帶 `+ 0.0`（−0.0 正規化），錨點同步；突變語意不變（只改位數）。
+    "mid_gap8_round_1dp": ("mid", (("            _gap8 = round(_m1b8 - _m2b8, 2) + 0.0\n",
+                                    "            _gap8 = round(_m1b8 - _m2b8, 1) + 0.0\n"),),
                            {("gap_2dp_713", "CBC-tier1"), ("gap_2dp_713", "proxy_label"),
                             ("gap_2dp_pos004", "CBC-tier1"), ("gap_2dp_neg104", "CBC-tier1")}),
     # §二 黃金交叉由嚴格大於改成大於等於：M1B＝M2 會多出一條黃金交叉
