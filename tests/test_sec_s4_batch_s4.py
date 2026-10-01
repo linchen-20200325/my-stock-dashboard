@@ -211,6 +211,7 @@ def test_r21_disclosed_boundary_bare_conversion_without_suffix_still_leaks():
 _S4_OFF: list[tuple[str, str]] = [
     ("    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),\n", ""),
     ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""),
+    ("_DERL_INDENT_MAX: int = 256", "_DERL_INDENT_MAX: int = 16"),           # SEC-r27
 ]
 
 
@@ -305,7 +306,16 @@ def _s4_forms(n: int) -> dict[str, str]:
 
 
 def _S4_EXTRA_FORMS(n: int) -> dict[str, str]:  # noqa: N802 —— 後面各項擴充
-    return {}
+    #: SEC-r27：長空白串夾在換行之間、縮排後接非 base64、多層 `> ` 引用。
+    return {"indent_runs": ("MA" + "A" * 62 + "\n" + " " * 300) * (n // 365),
+            "indent_then_text": ("MA" + "A" * 62 + "\n" + " " * 255 + "~") * (n // 320),
+            "trail_spaces": ("MA" + "A" * 62 + " " * 255 + "\n") * (n // 320),
+            "space_nl_runs": (" " * 200 + "\n") * (n // 201), "indent_keys": _r27_indented(n)}
+
+
+def _r27_indented(n: int) -> str:
+    b = _b64(_pkcs8(5))
+    return (("\n" + " " * 200).join(_wrap(b)) + "\n") * (n // (len(b) * 5) + 1)
 
 
 _CPU_SCRIPT = (
@@ -352,3 +362,65 @@ def test_s4_new_rules_add_little_memory():
         if new - old > 5:
             worse[name] = (old, new)
     assert not worse, worse
+
+
+# ══════════════════════════════════════════════════════════════════
+# SEC-r27：無標頭金鑰的行首縮排超過 16 個空白 → 上限調到 256（`_DERL_INDENT_MAX`）
+# ══════════════════════════════════════════════════════════════════
+def _indent(b: str, ind: str, tail: str = "", sep: str = "\n") -> str:
+    return ind + (tail + sep + ind).join(_wrap(b))
+
+
+@pytest.mark.parametrize("ind", [17, 20, 32, 64, 128, 256])
+@pytest.mark.parametrize("kind", [_pkcs8, _pkcs1], ids=["pkcs8", "pkcs1"])
+@pytest.mark.parametrize("sep", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_r27_deep_indent_masked(sep, kind, ind):
+    leaked_before = 0
+    for seed in range(4):
+        b = _b64(kind(seed))
+        for raw in (_indent(b, " " * ind, sep=sep), _indent(b, "\t" * (ind // 4), sep=sep),
+                    "private_key: " + _indent(b, " " * ind, sep=sep).lstrip(" ")):
+            out = scrub_secrets(raw)
+            assert _leak(out, b) == 0, (ind, seed, out[:200])
+            assert _leak(scrub_prose_secrets(raw), b) == 0
+            _never_less(raw)
+            leaked_before += _leak(_BF0.scrub_secrets(raw), b) > 0
+    assert leaked_before >= 8, "前提：bf0ada3 在縮排 >16 時外露"
+
+
+@pytest.mark.parametrize("trail", [17, 100, 256])
+def test_r27_trailing_spaces_over_16_masked(trail):
+    """同一個上限也用在行尾空白（批 S3 只收 ≤16）。"""
+    b = _b64(_pkcs8(2))
+    raw = _indent(b, "", tail=" " * trail)
+    assert _leak(scrub_secrets(raw), b) == 0
+    _never_less(raw)
+
+
+def test_r27_boundary_257_still_leaks_and_disclosed():
+    from shared import secret_scrub as SSC
+    b = _b64(_pkcs8(3))
+    assert _leak(scrub_secrets(_indent(b, " " * 257)), b) > 0
+    assert "超過 256 個空白" in (SSC.__doc__ or "") and SSC._DERL_INDENT_MAX == 256
+
+
+def test_r27_mutant_cap_16_leaks():
+    from tests.test_sec_s3_0928 import _mutant
+    m = _mutant(("_DERL_INDENT_MAX: int = 256", "_DERL_INDENT_MAX: int = 16"))
+    b = _b64(_pkcs8(1))
+    raw = _indent(b, " " * 20)
+    assert _leak(scrub_secrets(raw), b) == 0 and _leak(m.scrub_secrets(raw), b) > 0
+
+
+@pytest.mark.parametrize("raw", [
+    "MA20 與 MA60\n" + " " * 40 + "均線糾結",                                # 縮排後接一般文字
+    "說明：\n" + " " * 30 + "A" * 50 + "\n" + " " * 30 + "B" * 50,           # 縮排的長字（不是 DER）
+    "    code:\n" + " " * 24 + "MIIsomething_not_base64 here",
+])
+def test_r27_indented_ordinary_text_unchanged(raw):
+    assert scrub_secrets(raw) == _BF0.scrub_secrets(raw)
+
+
+_S4_EXTRA_CORPUS.extend(
+    _indent(_b64(_pkcs8(s)), " " * ind) + tail
+    for s in range(2) for ind in (17, 40, 256, 257) for tail in ("", "\n" + " " * ind + "說明字", "\n/home/u/x.toml"))

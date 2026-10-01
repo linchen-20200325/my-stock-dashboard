@@ -306,13 +306,14 @@ def test_r17_layouts_masked(layout):
 @pytest.mark.parametrize("layout,enc", [
     ("width12", lambda b: "\n".join(_wrap(b, 12))),
     ("first_line_1_char", lambda b: "\n".join(_first_short(b, 1))),
-    ("indent20", lambda b: ("\n" + " " * 20).join(_wrap(b))),
+    #: ~~`indent20`（縮排 >16）~~ —— 批 S4（SEC-r27）把上限調到 256（`_DERL_INDENT_MAX`），邊界移到 257。
+    ("indent257", lambda b: ("\n" + " " * 257).join(_wrap(b))),
 ])
 def test_r17_disclosed_boundaries_still_leak(layout, enc):
-    """檔頭揭露的邊界（寬度 <16、第一行只剩 1 字、縮排 >16）：仍外露 —— 改了請同步改檔頭。"""
+    """檔頭揭露的邊界（寬度 <16、第一行只剩 1 字、縮排 >256）：仍外露 —— 改了請同步改檔頭。"""
     b = _b64(_pkcs8(3))
     assert _leak(scrub_secrets(enc(b)), b) > 0
-    assert "換行寬度 <16" in _DOC and "第一行只剩 1 個字" in _DOC and "縮排超過 16 個空白" in _DOC
+    assert "換行寬度 <16" in _DOC and "第一行只剩 1 個字" in _DOC and "超過 256 個空白" in _DOC
 
 
 def test_r17_line_min_is_16():
