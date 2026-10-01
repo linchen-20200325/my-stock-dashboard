@@ -601,7 +601,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             # 定義，不是策略3 分支內的變數）。
             if _m1b8_v is not None and _m2b8_v is not None:
                 try:
-                    _gap8c = round(float(_m1b8_v) - float(_m2b8_v), 2)
+                    # M2N-f5：同策略3 M2N-f2 —— round 可產生 −0.0，`{:+.2f}` 會印成「-0.00%」。
+                    # `+ 0.0` 把 −0.0 正規化為 +0.0；其餘值不變、`_cD` 判定不變。
+                    _gap8c = round(float(_m1b8_v) - float(_m2b8_v), 2) + 0.0
                 except Exception:
                     pass
             # DL-f1-s5：第二環 D 徽章印的是同一個 M1B-M2 數字 → 代理時同樣後綴 L0 既有註記
