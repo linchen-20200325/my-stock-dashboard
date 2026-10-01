@@ -2054,11 +2054,18 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
         # 上游哪天在 `msg` 裡放一個 `🔴`，這裡就會拋 `ValueError` 並炸掉**整頁**，
         # 而不是畫出那張灰卡。§1 要的是「狀態看得見」，不是換一種炸法。
         # 洗的動作走 `tab_today.scrub_state_glyphs()` SSOT，不自己列符號表。
-        _why = (VALUATION_NO_SOURCE_WHY if not val.source and not val.years_n
-                else (scrub_state_glyphs(scrub_secrets(val.msg))[0]
-                      or "357 殖利率法則在這一檔上不適用"))
         # SA-r3：無股價那一支 → 客戶逐字 where（條件同 L2 的「無股價」判定，見 `VALUATION_NO_PRICE_WHERE`）。
         _no_price = not val.price or val.price <= 0
+        _l2_why = scrub_state_glyphs(scrub_secrets(val.msg))[0]
+        # W-f2（批 W3）：「無股價**且**無配息源」時 why 改讀 L2 的原因句（「無股價，…」），
+        # 與 where（日線）同指一處 —— 修前 why 走 `VALUATION_NO_SOURCE_WHY`（講配息）、
+        # where 講日線，兩欄指向不一。只換「用哪一句既有文字」，⛔ 不新增文案（K1）；
+        # L2 沒給 `msg` 時退回原判斷（不拿空字串當原因）。
+        if _no_price and _l2_why:
+            _why = _l2_why
+        else:
+            _why = (VALUATION_NO_SOURCE_WHY if not val.source and not val.years_n
+                    else (_l2_why or "357 殖利率法則在這一檔上不適用"))
         _note = Note(now=VALUATION_EMPTY_NOW,
                      why=f"{_why}{VALUATION_WHY_TAIL}",
                      where=(VALUATION_NO_PRICE_WHERE if _no_price else VALUATION_WHERE))
