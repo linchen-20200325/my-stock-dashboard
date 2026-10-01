@@ -515,8 +515,9 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
                 )
                 if _degraded:
                     st.caption(
-                        '🟠 主資料來源失敗已降級，技術指標 / 籌碼 / 融資數值可能與正常情況不同；'
-                        '建議按右側 🔄 強制重抓 重試主源。'
+                        # W2-f1（批 SD，2026-10-01；有意識的刪除，⛔ 不是漏刪）：純刪尾句「；建議按右側
+                        # 🔄 強制重抓 重試主源」—— 那顆按鈕只清 st.cache_data 與 session 鍵（見下方 D2-f11 註），不保證重試主源。
+                        '🟠 主資料來源失敗已降級，技術指標 / 籌碼 / 融資數值可能與正常情況不同。'
                     )
                 if _fin_degraded:
                     st.caption(
@@ -526,7 +527,11 @@ K線+均線(FinMind) · 三大法人籌碼 · 融資融券 · 357股利評價 ·
         with _fresh_cols[1]:
             # D2-f11：help 原有尾句「保證下次載入抓最新資料」已刪 —— 這顆按鈕只清 st.cache_data
             # 與下列 session 鍵，清不到 L1 的失敗冷卻表（例：
-            # monthly_revenue_fetcher._single_fail_cooldown），冷卻期內按下月營收並不會重抓，該句不成立。
+            # monthly_revenue_fetcher._single_fail_cooldown），冷卻期內按下並不會重抓，該句不成立。
+            # W2-f2（2026-10-01 更正）：那張冷卻表只在下方「財報趨勢分數」區
+            # （section_strategy_conclusion → compute_one_stock_trend → fetch_monthly_revenue）用到；
+            # 本頁月營收主路徑（app_stock_fetchers.fetch_revenue → data_loader.get_monthly_revenue）
+            # 沒有失敗冷卻。
             # 剩下的前半句與下方實作一致（純刪、未新增字樣）。
             if st.button('🔄 強制重抓', key='t2_force_refresh',
                          help='清除所有 @st.cache_data 快取 + 清 session 殘留值'):

@@ -745,7 +745,16 @@ def _check_fetch_single_ttl_exact(ddf) -> None:
 
     讀 streamlit 掛在 `CachedFunc` 上的設定（`_info`），突變體（原始碼字面替換後另建的模組）一樣適用 ——
     故 TTL 改成 59 分鐘這種落在行為測試 31～61 分鐘窗內的突變也擋得住。"""
-    info = ddf._fetch_single_cached._info
+    # T-f1（2026-10-01）：`_info` 是 streamlit `CachedFunc` 的**私有**屬性。若日後 streamlit 拿掉它，
+    # 這裡改為 skip 並講明原因，而不是以看不出原因的 AttributeError 失敗。只認「屬性不在」這一種；
+    # `_fetch_single_cached` 本身不在照樣失敗（那是被測程式變了，不是 streamlit 變了）。
+    # 逐字釘裝飾器的 `test_decorator_pinned_verbatim` 前半段不依賴 `_info`，參數漂移仍由它擋。
+    _cached = ddf._fetch_single_cached
+    if not hasattr(_cached, "_info"):
+        import streamlit as _st_ver
+        pytest.skip(f"streamlit {_st_ver.__version__} 的 CachedFunc 沒有私有屬性 `_info`，"
+                    "無法讀取快取層實際生效的 ttl／max_entries／show_spinner；本檢查需改寫")
+    info = _cached._info
     assert (info.ttl, info.max_entries, info.show_spinner) == (3600, None, False), \
         f"_fetch_single_cached 快取參數漂移：ttl={info.ttl!r} max_entries={info.max_entries!r} show_spinner={info.show_spinner!r}"
 
@@ -1285,6 +1294,12 @@ class TestN4aFetchSingleTtl:
         assert fns["fetch_single"].decorator_list == [], "外層不快取 —— 失敗才不會被凍住"
         assert TTL_1HOUR == 3600, "TTL_1HOUR 的值同修前"
         _check_fetch_single_ttl_exact(DDF)
+
+    def test_exact_check_skips_with_reason_when_private_info_missing(self):
+        """T-f1：streamlit 若拿掉私有 `CachedFunc._info`，逐值檢查改為 skip 並講明原因（不是 AttributeError）。"""
+        fake = types.SimpleNamespace(_fetch_single_cached=object())
+        with pytest.raises(pytest.skip.Exception, match="沒有私有屬性 `_info`"):
+            _check_fetch_single_ttl_exact(fake)
 
 
 # ══════════════════════════════════════════════════════════════════
