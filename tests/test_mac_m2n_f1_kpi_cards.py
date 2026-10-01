@@ -43,10 +43,13 @@ def _render(macro_info: dict, monkeypatch) -> _CapST:
     monkeypatch.setattr(SC, "read_v4_macro_veto", lambda *a, **k: None)
     try:
         mod.render_section_mid(False, {}, {}, {})
-    except TypeError as e:
-        # ⚠️ 範圍外的既有問題（非 KPI 卡）：下游「總經基本面否決檢查」以
-        # `.get(key, 預設) <比較>` 判定，值為 None／字串時拋 TypeError。KPI 卡在它之前
-        # 已渲染完畢，本檔只驗 KPI 卡；該處另案（M2N-f1 的非 KPI 部分）。
+    except (TypeError, ValueError) as e:
+        # ⚠️ 範圍外的既有問題（非 KPI 卡）：~~下游「總經基本面否決檢查」以
+        # `.get(key, 預設) <比較>` 判定，值為 None／字串時拋 TypeError。~~
+        # 📌 批 P2 M2N-f4 已修否決檢查（有意識的更正，⛔ 不是漏刪）。剩下的是更下游
+        # ⚔️ 三環 `_exp_c = float(_m8_exp.get('yoy', 0))`：台灣出口值為 None → TypeError、
+        # 非數字字串（'-'）→ ValueError（修前同一輸入先炸在否決檢查，故只見 TypeError）。
+        # KPI 卡在它之前已渲染完畢，本檔只驗 KPI 卡；三環另案。
         fake.exc = e
     return fake
 
