@@ -8,6 +8,9 @@
     「缺張數或均價，沒有納入」改成現行字樣「缺張數／均價／現價，沒有納入」（逐字取自
     `page_hold._totals_facts()`；同 H1-f7 對 `load_holdings()` docstring 的修法）。
     同檔其餘「缺張數或均價」是情境描述、非畫面引文，未動。
+  · H1-f14（測試缺口，產品碼未動）：v1 80/20 部分納入註記「另有 {held_n − valued_n}/{held_n} 檔」
+    的既有測試資料對稱（2 持有、1 納入 ⇒ 「持有−納入」與「納入」都是 1），算式沒被釘住
+    ⇒ 補一組不對稱資料（3 持有、1 納入 ⇒ 「2/3 檔」）。
 
 列一律走**真的** L3 `build_station_rows()`（`metrics_fn` 注入、全離線、不打網路），
 夾具沿用批 H2 `tests/test_v2_batch_h2_0928.py`（⛔ 不另捏 row 的形狀）。
@@ -22,7 +25,8 @@ import re
 from shared import dividend_station_thresholds as T
 from src.services import dividend_station_service as svc
 from src.ui.views import page_hold as P
-from tests.test_v2_batch_h2_0928 import _FULL, _rows
+from src.ui.etf import etf_tab_dividend_station as V1  # noqa: F401（`_alloc_out` 會 patch 它）
+from tests.test_v2_batch_h2_0928 import _ALLOC_APPROX, _FULL, _alloc_out, _captions, _rows
 
 _E, _S = T.KIND_ETF, T.KIND_STOCK
 
@@ -80,3 +84,19 @@ class TestH1f12B10Docstring:
                                totals=svc.compute_portfolio_totals(_rows_))
         _live = dict(P._totals_facts(st_))["⚠️ 上面兩個金額只涵蓋一部分"].replace("**", "")
         assert _quote in _live, _live
+
+
+# ══════════════════════════════════════════════════════════════════
+# H1-f14：v1 80/20 部分納入註記的檔數算式（不對稱資料釘住「持有−納入」）
+# ══════════════════════════════════════════════════════════════════
+class TestH1f14AllocationPartialCount:
+    def test_count_is_held_minus_valued_over_held(self, monkeypatch):
+        """修後不變守衛（產品碼未動；有效性靠突變驗證）：3 持有、1 納入 ⇒「2/3 檔」。"""
+        rows = _rows(_FULL,
+                     ("2330", _S, True, 2.0, 500.0, None, False),    # 缺現價 → 不納入
+                     ("2317", _S, True, None, 100.0, 120.0, False))  # 缺張數 → 不納入
+        _a = svc.compute_allocation_split(rows)
+        # 前提：資料不對稱 —— 「持有−納入」(2) ≠「納入」(1)，兩種算法數字分得開。
+        assert (_a["held_n"], _a["valued_n"], _a["partial"]) == (3, 1, True)
+        caps = _captions(_alloc_out(monkeypatch, rows))
+        assert caps == [_ALLOC_APPROX + "　⚠️ 另有 2/3 檔缺張數／均價／現價未納入計算。"], caps
