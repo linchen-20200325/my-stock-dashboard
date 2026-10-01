@@ -184,8 +184,11 @@ def test_market_regime_max_score_accounts_for_enabled_optional_factors():
 
     ⚠️ 2026-08-19 改述：原標題/斷言寫死 `== 6.0`（「兩條選填腿都算」）。
     同日 `M1B_M2_LEG_ENABLED = False` 把 m1b_m2 腿停用（AUC 0.5366、
-    lift 1.019 vs 0.984、來源資料量綱本身就是壞的 —— 完整證據在
+    lift 1.019 vs 0.984、~~來源資料量綱本身就是壞的~~ —— 完整證據在
     `shared/signal_thresholds.M1B_M2_LEG_ENABLED` 的 docstring）。
+    （2026-10-01 事實更正 DL-f1-s50，⛔ 非漏刪：`finmind_m1m2.parquet` 已由排程
+    `2aed087` 整檔重建，「量綱壞」不再成立；前述 AUC／lift 為重建前資料所量、
+    待 DL-f1-s8 重跑。同句另兩處已由 DL-f1-s33〔#747〕更正。）
 
     這裡**不寫死 5.0**，而是讓斷言跟著開關走：若日後滿足復活條件把旗標翻回
     True，本測試會自動改回期望 6.0，不需要有人記得回來改它。
