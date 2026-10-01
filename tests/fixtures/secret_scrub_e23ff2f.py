@@ -1,3 +1,10 @@
+# ═══ 凍結副本（tests 專用，⛔ 不得修改、⛔ 不得被 production 程式 import）════════════════
+# 來源：commit e23ff2f 的 `shared/secret_scrub.py`（git blob 4d49be42351e472edef71dee678d428bd2232c54；
+#       批 S3 動工時 `origin/main` a9b327e 的同一個 blob），「原檔開始」那一行之後逐位元組照抄、一字未改
+#       （sha256 見 `tests/test_sec_s3_batch_s3.py` 的 `_E23_SHA256`，該檔有測試逐位元組核對）。
+# 用途：`tests/test_sec_s3_batch_s3.py` 的「不得比舊版少遮」回歸基準 —— 固定在批 S3 動工前的版本，
+#       不隨 `shared/secret_scrub.py` 變動（理由同 `secret_scrub_d61a1fd.py`：自我參照的基準測不出舊規則被改壞）。
+# ═══ 原檔開始 ═══
 """shared/secret_scrub.py — L0：要畫上畫面的錯誤字串，先洗掉金鑰／識別碼／路徑（2026-09-26）。
 
 **純函式，零 I/O、零 streamlit、不 import 任何 L1+。**
@@ -45,17 +52,6 @@
            另須通過行結構與 DER 標頭解碼驗證（批 S QA N2：均線／代號清單、搜尋網址、大寫長字不遮）；
        (c) 深層巢狀的秘密欄位：引號前 5～32 個反斜線（`repr` 第 5～7 層、JSON 第 4～6 層）的
            `{'password': …}`／`"password" = …`，以及「`password=` 緊接深層跳脫引號」這種值外露的賦值。
-   11. 補洞 批 S3（SEC-r13／SEC-r14／SEC-r17，2026-09-28 派工；2026-10-01 重做；同樣排在 `_RULES_POST` 的最後
-       ⇒ 不會比舊版少遮）：
-       (a) 方括號取值的 `Authorization`（`headers['Authorization'] = '…'`、`h[b"Authorization"] == …`）→ 值遮掉；
-       (b) 目錄名含 tab 的 POSIX 路徑（真 tab，或 `repr` 裡 1～32 個反斜線＋`t`）→ **整條路徑一起判**：
-           任一目錄段含 tab，就把整串目錄換成一個遮罩、只留末段；
-       (c) 第二道無標頭 DER（`_DER_B64_LOOSE_RE`）：第 10 類 (b) 整段原樣交還的多行本體，再以較寬的排版認一次
-           （換行寬度 16～39、第一行被前綴折短、行尾空白、只用 CR、JSON 的 `\/`），並**依宣告長度逐段判**：
-           只遮宣告涵蓋到的行、其餘各行另判（後面接著的憑證／憑證鏈各自再判；不是 DER 的長 base64 照原樣）——
-           「金鑰後接長 base64」「私鑰＋憑證相接」不再整把外露（SEC-r14）。起點也可以是前面規則留下的 `***`
-           （第一行先被遮掉時，後面各行才接得上）；開頭 16 字判不了標頭時，只在「≥3 行同寬 ≥40 字」的整齊
-           本體才整段遮（批 S3 QA F1）。
   遮罩一律沿用既有的 `***`（`MASK`）。**⛔ 不新增任何說明文字** —— 看得到 `***` 就知道有東西被遮。
 
 ⚠️ 據實揭露的邊界（**不是**全稱「洗乾淨了」）：
@@ -66,8 +62,7 @@
     目錄名裡有連續空白、開頭／結尾是空白、超過 5 個字、單字超過 40 字元、含中文或全形標點（`王 小明`）、
     或含 `'`／`,`／`;`／`:`／`[]{}`／反引號等字元 → 那一段起仍外露（同 d61a1fd；為了不吞說明字）；
     PEM／DER 只認得**從開頭**（`M[A-P]…`）起、開頭 16 字完好、解得出 DER 標頭的本體 —— 只截到中間幾行、
-    非 DER 格式（OpenSSH 的 `b3BlbnNzaC1rZXkt…`、PGP）~~、或換行寬度 <40 字的多行本體~~認不出來；
-    （~~換行寬度 <40~~ 那半句自批 S3 起不成立：第 11 類 (c) 認得 16～39；**現行邊界見下方「批 S3 之後仍然外露」**）
+    非 DER 格式（OpenSSH 的 `b3BlbnNzaC1rZXkt…`、PGP）、或換行寬度 <40 字的多行本體認不出來；
     貼成一行（空白分隔）時，最後一段若 <16 字又沒有 `=` 補位，分不出是不是說明字 → 那一段（≤15 字）外露；
     引號前的反斜線超過 32 個（`repr` 第 8 層、JSON 第 7 層起）仍外露；
     「`password=` 緊接深層跳脫引號」那一條只往後看 256 字找收尾；
@@ -79,30 +74,10 @@
     （例：requests 的 `…with url: /v4/…`）長得跟檔案路徑一樣，會被遮成 `***/<末段>`；
   · 兩層以上的巢狀 `repr` 裡、值本身又含同種引號時，引號配對可能提早結束（只剩值的後半段外露）；
   · 秘密欄位只認下面 `_FIELDS_*` 列出的名字；不在清單上的欄位名（例：自訂的 `my_api_pw`）不遮。
-  · 批 S3 之後仍然外露（據實揭露；皆與舊版相同、不是本批引入）：
-    - 沒有結尾斜線、最後一段含空白的路徑（`/Users/Jane Doe`）→ `***/Jane Doe`：末段一律當檔名保留（設計如此，
-      同 d61a1fd）—— 使用者名稱會留在畫面上（SEC-r13 (c)）；
-    - BER 不定長格式（`30 80` 開頭，例：`openssl cms -stream`、部分 PKCS#12 匯出檔）兩道 DER 規則都認不出
-      （DER 不允許不定長，`_der_length` 回 `None`；SEC-r15）；
-    - 第 11 類 (c) 仍認不出：換行寬度 <16、第一行只剩 1 個字（`M` 之後就換行）、行首縮排超過 16 個空白
-      （SEC-r27）、base64url 編碼；
-    - 方括號取值只認 `[…]` 內**直接**是 `Authorization` 字串的寫法（`headers[AUTH_KEY] = …` 這種變數取值不認）；
-      目錄名 tab 規則只認合理起點（同 `_POSIX_SPACE_DIR_RE`）之後的路徑。
-  · 批 S3 的多遮方向（安全側）：
-    - 方括號取值的裸值（`headers['Authorization'] = token_var`）連變數名一起遮；
-    - tab 規則以整條路徑判：`/a/x.toml<tab>note/b` 這種「路徑後面接 tab 再接含 `/` 的字」會被當成目錄遮成 `***/b`；
-    - 第 11 類 (c)：一行一個的 base64 清單裡，**任何一行**（不限第一行）以 `M[A-P]` 開頭、開頭 16 字又解得出
-      DER 標頭 → 那一行起、宣告長度涵蓋到的幾行被遮；遮罩 `***` 後面接著「≥3 行同寬 ≥40 字」的 base64 形
-      字串（雜湊清單等）會整段遮。
 
 ⚠️ 效能：全部規則都是線性掃描（量測見 `tests/test_v2_silent_fail_b11_hold_misc.py` 的 ReDoS 守衛；
-    第 10 類另見 `tests/test_sec_s3_0928.py`，第 11 類另見 `tests/test_sec_s3_batch_s3.py`）——
+    第 10 類另見 `tests/test_sec_s3_0928.py`）——
     有「前綴 ＋ 不定長 ＋ 必要結尾」形狀的都設了長度上限或以固定字面錨定起點。
-⚠️ 記憶體（SEC-r13 (d)，據實揭露；**只對量過的輸入形態成立，⛔ 不是上限**）：`re` 對「迴圈本體不是單一字元類別」的
-    重複會逐圈留回溯點，峰值隨輸入長度成長。批 S QA 實測第 10 類在 40 萬字時記憶體峰值多 33～96 MB（本批未重現
-    該輸入形態）。第 11 類的迴圈改用佔有型量詞（`_POSS`）：40 萬字、本批自選 21 種形態，峰值比舊版多 ≤ 2 MB；
-    Python 3.10 沒有佔有型量詞 → 退回一般量詞（比對結果相同），同樣形態實測最多多 ~90 MB（未收尾的
-    方括號 `Authorization` 值、目錄名夾 tab 的長路徑）。
 """
 from __future__ import annotations
 
@@ -546,143 +521,6 @@ def _mask_space_dirs(m: re.Match) -> str:
     return MASK + "/" + (m.group(1) or "") if " " in _body else _body
 
 
-# ── 補洞 批 S3（SEC-r13／SEC-r14／SEC-r17，2026-09-28；重做 2026-10-01）：同樣排在最後 ⇒ 不會比舊版少遮 ──
-#: 佔有型量詞（`*+`／`++`，Python 3.11 起）：只用在「迴圈本體與迴圈之後的字面互斥」的位置（回溯不會
-#: 找到別的切法 ⇒ 比對結果相同），作用是讓 `re` 不必為每一圈留回溯點 —— 40 萬字輸入的記憶體峰值
-#: 不隨長度膨脹（量測見 `tests/test_sec_s3_batch_s3.py`）。Python 3.10 編譯 `*+` 會直接報錯
-#: （使用者本機的 MCP server 未釘版本）→ 以**實際編譯**探測（本檔只准 import `re`，不讀 `sys.version_info`），
-#: 不支援就退回一般量詞：比對結果相同，只是記憶體峰值較高。
-try:
-    re.compile(r"a*+")
-    _POSS: str = "+"
-except re.error:  # pragma: no cover —— Python 3.10 以前
-    _POSS = ""
-#: SEC-r13 (a) 方括號取值的 `Authorization`（`headers['Authorization'] = '…'`、`h[b"Authorization"] == …`）：
-#: `_AUTH_HEADER_RE` 要求欄位名後面直接接 `:`／`=`，中間夾了 `]` 就比對不到。
-#: 起點是固定字面 `[`；欄位名與值的引號前都可有 Python 字串前綴（`b`／`r`／`u`／`f`、兩字組合），
-#: 前綴只在**緊接引號**時才算（`[ b'…` 不收 `b` 以外的字 ⇒ `headers[name]` 這類一般取值不動）。
-#: 分隔 `=`／`==`／`!=`；值同 `_VALUE`（引號字串只遮引號內、找不到收尾就遮到行尾、裸值遮到空白）。
-_STR_PFX: str = r"(?:[bBrRuUfF]{1,2}(?=\\{0,4}[\"']))?"
-#: 值：同 `_VALUE` 的引號／跳脫引號／未收尾／裸值四種（不收 `neg`：方括號取值不會寫成「not set」），
-#: 但引號字串的迴圈用 `_POSS`（佔有型量詞，見下）—— 40 萬字的未收尾值不再逐字留回溯點。
-_AUTH_VALUE: str = (
-    r"(?:(?P<dq>\"(?:\\.|[^\"\\\r\n])*" + _POSS + r"\")"
-    r"|(?P<sq>'(?:\\.|[^'\\\r\n])*" + _POSS + r"')"
-    r"|(?P<eq>(?P<bs>\\{1,4})(?P<qc>[\"'])(?:(?!(?P=bs)(?P=qc))[^\r\n])*" + _POSS + r"(?P=bs)(?P=qc))"
-    r"|(?P<open>[\"'\\][^\r\n]*)"
-    r"|(?P<bare>[^\s,;&'\"<>(){}\[\]\\]+))")
-_AUTH_SUBSCRIPT_RE = re.compile(
-    r"(?P<pre>\[[ \t]{0,16}" + _STR_PFX + r"(?P<fq>(?<!\\)\\{0,4}[\"'])Authorization(?P=fq)[ \t]{0,16}\]"
-    r"[ \t]{0,16}(?:[=!]=|=)[ \t]{0,16}" + _STR_PFX + r")" + _AUTH_VALUE, _I)
-
-#: SEC-r13 (b) 目錄名含 tab 的 POSIX 路徑（`/home/u/my<tab>dir/secrets.toml`；`repr` 裡是 `\t`，
-#: 每多包一層 `repr` 反斜線變多 → 收 1～32 個反斜線＋`t`）：舊路徑段不收空白與反斜線，只遮到 tab 之前。
-#: ⚠️ **整條路徑一起判**：只要比對到的目錄段裡**任一段**含 tab，就把整串目錄換成一個遮罩、只留末段
-#: （同 `_POSIX_SPACE_DIR_RE` 的處置）；沒有任何目錄段含 tab → 原樣交還（那是舊路徑規則的職責）。
-#: 起點同 `_POSIX_SPACE_DIR_RE`（前面規則留下的 `***`、`_PATH_START`、`@`／`→`／`—`）。
-#: 線性：段內「路徑字元串」與「tab」互斥（`_PATH_SEG` 不收空白與反斜線），反斜線串有上限。
-_TAB_ESC: str = r"(?:\t|\\{1,32}t)"
-_TAB_SEG: str = r"(?:" + _TAB_ESC + r")?" + _PATH_SEG + r"(?:" + _TAB_ESC + _PATH_SEG + r")*" + _POSS
-_POSIX_TAB_DIR_RE = re.compile(
-    r"(?:(?:(?<![*A-Za-z0-9_])|(?<=\\[nrt]))" + re.escape(MASK) + r"|(?:" + _PATH_START
-    + r"|(?<=[@→—]))(?:~[A-Za-z0-9_.\-]{0,64})?)"
-    r"/(?P<dirs>(?:" + _TAB_SEG + r"/)+" + _POSS + r")(" + _PATH_SEG + r")?", re.MULTILINE)
-_TAB_IN_DIR_RE = re.compile(r"\t|\\{1,32}t")
-
-
-def _mask_tab_dirs(m: re.Match) -> str:
-    """`_POSIX_TAB_DIR_RE`：任一目錄段含 tab → 目錄整串換成遮罩、留末段；否則原樣。"""
-    if _TAB_IN_DIR_RE.search(m.group("dirs")) is None:
-        return m.group(0)
-    return MASK + "/" + (m.group(2) or "")
-
-
-#: SEC-r14／SEC-r17 第二道無標頭 DER（`_DER_B64_LOOSE_RE`）：上面 `_DER_B64_RE` 認不出、整段原樣交還的
-#: 多行本體，在這裡用較寬的排版再認一次，並**依宣告長度逐段判**：
-#:   · 排版：換行寬度 ≥ `_DER_LOOSE_LINE_MIN`（16）字、第一行被前綴折短（第一行只要 `M[A-P]` 起頭即可）、
-#:     行尾空白、只用 CR 換行、JSON 的 `\/` 跳脫、行首縮排 ≤16 個空白；
-#:   · 判法：開頭 16 個 base64 字（跨行串起來）解得出 DER 標頭（`_der_head_total`，條件同 `_looks_like_der`、
-#:     但**不比「宣告 ≥ 實際」**）→ 只遮**宣告長度涵蓋到的那幾行**（含涵蓋終點所在的那一整行），
-#:     其餘各行**另判**（例如後面接著的憑證／憑證鏈各自從 `M[A-P]` 再判一次；不是 DER 的長 base64 照原樣）——
-#:     「金鑰後接長 base64」「私鑰＋憑證相接」不再因為「宣告 < 實際」整把外露（SEC-r14）；
-#:     宣告長度比看到的還長（截短的本體）→ 看到的整段都遮；
-#:   · 開頭 16 字內已有前面規則留下的遮罩（判不了標頭）→ 只有在「≥3 行、同寬 ≥40 字」的整齊本體時整段遮
-#:     （批 S3 QA F1：前兩行先被路徑等規則遮成 `***…`、第一行又短於 16 字時整把外露）—— **只加遮罩**；
-#:   · 共同下限：涵蓋到的 base64 字合計 ≥ `_DER_B64_MIN`、至少兩行；中間各行（第一行與涵蓋終點那行以外、
-#:     沒有遮罩的行）必須同寬 —— 一般文字（清單、說明）幾乎不會同時滿足「同寬多行」與「解得出 DER 標頭」。
-#: 線性：每行用單一字元類別吃（`\/` 與換行以反斜線後一字區分），行數有上限；逐段判是對比對結果的後處理。
-_DER_LOOSE_LINE_MIN: int = 16
-_DER_LOOSE_TIDY_MIN: int = 40
-_DERL_RUN: str = r"[A-Za-z0-9+/*]*(?:\\/[A-Za-z0-9+/*]*)*" + _POSS
-_DERL_LINE: str = (r"(?=(?:[A-Za-z0-9+/*]|\\/){%d}|(?:[A-Za-z0-9+/]|\\/){0,4096}\*\*\*)" % _DER_LOOSE_LINE_MIN
-                   + _DERL_RUN)
-_DERL_NL: str = r"[ \t]{0,16}(?:\r\n|\r|\n|(?:\\{1,32}r)?\\{1,32}n)[ \t]{0,16}"
-_DER_B64_LOOSE_RE = re.compile(
-    r"(?:(?<![A-Za-z0-9+/*])|(?<=\\[nrt]))(?:M[A-P]|\*\*\*)" + _DERL_RUN
-    + r"(?:" + _DERL_NL + _DERL_LINE + r"){1,4096}" + _POSS
-    + r"(?:" + _DERL_NL + r"(?:[A-Za-z0-9+/]|\\/){1,15}(?![A-Za-z0-9+/*\\]))?={0,2}")
-_DERL_NL_RE = re.compile(_DERL_NL)
-
-
-def _der_head_total(head_b64: str) -> int | None:
-    """開頭 16 個 base64 字解得出 DER 標頭 → 宣告的總長（位元組，含外層標籤與長度欄位）；否則 `None`。
-
-    條件同 `_looks_like_der`（首位元組 `0x30`、長度欄位合 DER、內層標籤在 `_DER_INNER_TAGS` 且裝得進外層），
-    只是**不比「宣告 ≥ 實際看到的長度」** —— 那一項由 `_mask_der_loose` 改成「只遮宣告涵蓋的行」。
-    """
-    if len(head_b64) < _B64_HEAD_CHARS:
-        return None
-    _b = bytearray()
-    for _i in range(0, _B64_HEAD_CHARS, 4):
-        _v = 0
-        for _c in head_b64[_i:_i + 4]:
-            _v = (_v << 6) | _B64_VALUE[_c]
-        _b += _v.to_bytes(3, "big")
-    if _b[0] != 0x30:
-        return None
-    _outer = _der_length(_b, 1)
-    if _outer is None:
-        return None
-    _total, _pos = _outer[1] + _outer[0], _outer[1]
-    if _pos >= len(_b) or _b[_pos] not in _DER_INNER_TAGS:
-        return None
-    _inner = _der_length(_b, _pos + 1)
-    return _total if _inner is not None and _inner[1] + _inner[0] <= _total else None
-
-
-def _mask_der_loose(m: re.Match) -> str:
-    """`_DER_B64_LOOSE_RE`：依宣告長度逐段判（見規則註解）；判不出來的段原樣。"""
-    _body = m.group(0)
-    _ends, _starts = [], [0]
-    for _sep in _DERL_NL_RE.finditer(_body):
-        _ends.append(_sep.start())
-        _starts.append(_sep.end())
-    _ends.append(len(_body))
-    _lines = [_body[_a:_b].replace("\\/", "/").rstrip("=") for _a, _b in zip(_starts, _ends)]
-    _plain = [len(_l) for _l in _lines[1:-1] if "*" not in _l]
-    _w = max(set(_plain), key=_plain.count) if _plain else max(len(_l) for _l in _lines)
-    _counts = [_w if "*" in _l else len(_l) for _l in _lines]
-    _head = "".join(_lines).split("*", 1)[0][:_B64_HEAD_CHARS]
-    if len(_head) < _B64_HEAD_CHARS:
-        _tidy = len(_plain) >= 3 and _w >= _DER_LOOSE_TIDY_MIN and all(_n == _w for _n in _plain)
-        return MASK if _tidy and len(_lines) >= 3 and "*" in "".join(_lines)[:_B64_HEAD_CHARS + 3] else _body
-    _total = _der_head_total(_head)
-    if _total is None:
-        return _body
-    _need, _cum, _k = -(-_total * 4 // 3), 0, len(_lines) - 1
-    for _i, _n in enumerate(_counts):
-        _cum += _n
-        if _cum >= _need:
-            _k = _i
-            break
-    _covered = sum(_counts[:_k + 1])
-    _mid = [len(_l) for _l in _lines[1:_k] if "*" not in _l]
-    if _k < 1 or _covered < _DER_B64_MIN or len(set(_mid)) > 1:
-        return _body
-    _rest = _body[_ends[_k]:]
-    return MASK + (_DER_B64_LOOSE_RE.sub(_mask_der_loose, _rest) if "M" in _rest else _rest)
-
-
 _RULES_POST: tuple[tuple[re.Pattern, object], ...] = (
     (_FW_ASSIGN_RE, _mask_assign),
     (_FW_COLON_QUOTED_RE, _mask_value),
@@ -697,9 +535,6 @@ _RULES_POST: tuple[tuple[re.Pattern, object], ...] = (
     (_DEEP_ASSIGN_TAIL_RE, lambda m: m.group(1) + MASK),
     (_DER_B64_RE, _mask_der_b64),
     (_POSIX_SPACE_DIR_RE, _mask_space_dirs),
-    (_DER_B64_LOOSE_RE, _mask_der_loose),
-    (_POSIX_TAB_DIR_RE, _mask_tab_dirs),
-    (_AUTH_SUBSCRIPT_RE, _mask_value),
 )
 #: 預先過濾：字串裡連必要字面都沒有，就不必讓該條規則掃一遍（純效能；有字面才跑，行為不變）。
 _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
@@ -708,7 +543,6 @@ _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
     _FWD_UNC_RE: ("//",), _POSIX_PATH_EXTRA_RE: ("@", "→", "—"),
     _DEEP_QUOTED_FIELD_RE: ("\\" * 5,), _DEEP_ASSIGN_TAIL_RE: (MASK + "'", MASK + '"'),
     _DER_B64_RE: ("M",), _POSIX_SPACE_DIR_RE: ("/",),
-    _DER_B64_LOOSE_RE: ("M",), _POSIX_TAB_DIR_RE: ("\t", "\\t"), _AUTH_SUBSCRIPT_RE: ("]",),
 }
 
 
