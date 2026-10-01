@@ -458,6 +458,26 @@ class TestOtherCallers:
         assert T.build_reference_row("usdtwd", value).band == classify_danger(value, _spec)
         assert classify_danger(value, _spec) != "gray"
 
+    @pytest.mark.parametrize("key", ["usdtwd", "taiex"])
+    @pytest.mark.parametrize("value", [INF, NINF, NAN], ids=["+inf", "-inf", "nan"])
+    def test_reference_row_non_finite_same_as_missing(self, key, value):
+        """NF-f3：參考走勢遇非有限值 → 與「沒有值」完全同一條既有呈現
+        （state=missing、reason=MISSING_NO_VALUE、數字印「無資料」），
+        修前 state=live、L4 印出「inf TWD/USD」。⛔ 不捏 0。"""
+        from src.ui.tabs import tab_macro_v2 as T
+        from src.ui.render.macro_v2_cards import fmt_value
+        r, miss = T.build_reference_row(key, value), T.build_reference_row(key, None)
+        assert r == miss
+        assert r.value is None and r.state == "missing" and r.reason == MISSING_NO_VALUE
+        assert fmt_value(r.value, r.unit, r.decimals) == "無資料"
+
+    @pytest.mark.parametrize("key,value", [("usdtwd", 32.5), ("taiex", 22000.0), ("usdtwd", 0.0)])
+    def test_reference_row_finite_stays_live(self, key, value):
+        """有限值（含 0）照舊 live，不被誤當缺值。"""
+        from src.ui.tabs import tab_macro_v2 as T
+        r = T.build_reference_row(key, value)
+        assert r.value == value and r.state == "live" and r.reason is None
+
     @pytest.mark.parametrize("value", [INF, NINF, NAN], ids=["+inf", "-inf", "nan"])
     def test_digest_vix_non_finite_same_as_missing(self, value):
         """推播 VIX 行：修前 +inf「🔴 市場恐慌」、−inf / NaN「🟢 市場平靜」（給了操作建議）。
