@@ -73,7 +73,7 @@ _B10 = pathlib.Path(__file__).with_name("test_v2_silent_fail_b10_sheet.py")
 
 class TestH1f12B10Docstring:
     def test_docstring_quotes_the_live_totals_wording(self):
-        _doc = re.sub(r"\n\s*", "", ast.get_docstring(ast.parse(_B10.read_text("utf-8"))) or "")
+        _doc = re.sub(r"\n\s*", "", ast.get_docstring(ast.parse(_B10.read_text(encoding="utf-8"))) or "")
         assert "缺張數或均價，沒有納入" not in _doc
         _quote = "檔持股缺張數／均價／現價，沒有納入"
         assert _quote in _doc, _doc
