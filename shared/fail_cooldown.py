@@ -52,6 +52,10 @@ class FailCooldown:
     「上一筆冷卻已過期（或已被逐出）之後又失敗」時加一 —— 冷卻期內同一波並行呼叫晚到的失敗
     只更新時點、不再加倍；世代已變（期間有人成功）的失敗照舊不記、也不加。`success`／`clear` 歸零。
     冷卻秒數在查詢時才由**當下**的 `seconds` 算出（測試把 `seconds` 設 0 仍能讓紀錄立即過期）。
+
+    連續失敗次數**隨時間衰減**（D2-f38，2026-10-01）：新一波失敗時，若距上一次失敗已超過
+    「上一次的冷卻秒數 ＋ `max_seconds`」（冷卻結束後整整一個上限期間都沒再失敗），視為新的一串，
+    連續次數從頭算（冷卻回到 `seconds`）。冷卻一過期就再失敗的正常遞增路徑不受影響。
     """
 
     def __init__(self, seconds: float = FAIL_COOLDOWN_SEC,
@@ -64,6 +68,8 @@ class FailCooldown:
         self._gen: dict = {}
         #: 遞增退避用：鍵 → 連續失敗次數。`max_seconds` 為 None 時**永不寫入**（恆為空）。
         self._streak: dict = {}
+        #: 遞增退避用：鍵 → 最近一次記下失敗的時點（D2-f38 衰減判斷用）。`max_seconds` 為 None 時永不寫入。
+        self._last_fail: dict = {}
         self._lock = threading.Lock()
 
     def _window_locked(self, key) -> float:
@@ -82,6 +88,9 @@ class FailCooldown:
         prev = self._fail.get(key)
         if prev is not None and now - prev[0] < self._window_locked(key):
             return                                        # 同一波（冷卻期內晚到的失敗）不加倍
+        last = self._last_fail.get(key)
+        if last is not None and now - last >= self._window_locked(key) + self.max_seconds:
+            self._streak.pop(key, None)                   # D2-f38：沉寂超過一個上限期間 → 從頭算
         n = self._streak.get(key, 0)
         if n == 0 or self._window_locked(key) < self.max_seconds:
             self._streak[key] = n + 1
@@ -97,6 +106,8 @@ class FailCooldown:
             del self._gen[next(iter(self._gen))]
         while len(self._streak) > _GEN_MAX_ENTRIES:
             del self._streak[next(iter(self._streak))]
+        while len(self._last_fail) > _GEN_MAX_ENTRIES:
+            del self._last_fail[next(iter(self._last_fail))]
 
     def begin(self, key):
         """回 (冷卻中的失敗結果或 `NO_HIT`, 世代)。"""
@@ -117,6 +128,8 @@ class FailCooldown:
                 _now = time.monotonic()
                 if self.max_seconds is not None:
                     self._escalate_locked(key, _now)
+                    self._last_fail.pop(key, None)        # 重新插入：表內維持「最近失敗在後」的順序
+                    self._last_fail[key] = _now
                 self._fail[key] = (_now, copy.deepcopy(payload))
                 self._prune_locked(_now)
         return payload
@@ -126,6 +139,7 @@ class FailCooldown:
             self._gen[key] = self._gen.get(key, 0) + 1
             self._fail.pop(key, None)
             self._streak.pop(key, None)
+            self._last_fail.pop(key, None)
             self._prune_locked(time.monotonic())
 
     def clear(self):
@@ -133,6 +147,7 @@ class FailCooldown:
             self._fail.clear()
             self._gen.clear()
             self._streak.clear()
+            self._last_fail.clear()
 
     def __len__(self):
         with self._lock:
