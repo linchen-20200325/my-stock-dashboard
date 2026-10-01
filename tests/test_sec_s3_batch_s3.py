@@ -634,13 +634,13 @@ def _peak_mb(fn, text: str) -> float:
 
 @pytest.mark.slow
 def test_r13d_new_rules_add_little_memory_on_measured_forms():
-    """檔頭寫的「21 種形態」＝ `_mem_forms()` 全部；每一種都比 e23ff2f 多 ≤ 5 MB（檔頭同數字）。
+    """檔頭寫的「21 種形態」＝ `_mem_forms()` 全部；每一種都比 e23ff2f 多 ≤ 5 MB（檔頭寫的測試上限）。
 
-    量測紀錄（2026-10-01，tracemalloc）：Python 3.11 最大 +1.9 MB（auth_many）；真 Python 3.10 最大 +4.8 MB（json_slash）。
+    量測紀錄（2026-10-01，tracemalloc）：Python 3.11 最大 +1.9 MB（auth_many）；真 Python 3.10.20 最大 +4.83 MB（json_slash，不在本測試範圍）。
     上限 5 MB 對 3.11 留 2.6 倍餘裕。
     """
     forms = _mem_forms()
-    assert len(forms) == 21 and "21 種形態" in _DOC and "≤ 5 MB" in _DOC
+    assert len(forms) == 21 and "21 種形態" in _DOC and "測試上限 5 MB" in _DOC and "+1.9 MB" in _DOC
     worse = {n: (_peak_mb(_OLD, t), _peak_mb(scrub_secrets, t)) for n, t in forms.items()}
     worse = {n: v for n, v in worse.items() if v[1] - v[0] > 5}
     assert not worse, worse
@@ -651,13 +651,13 @@ def test_r13d_python310_fallback_memory_matches_the_disclosure():
     """模擬 3.10（沒有佔有型量詞；以 3.11 編譯一般量詞版）：每種形態比 e23ff2f 多 ≤ 10 MB。
 
     量測紀錄（2026-10-01，tracemalloc）：本模擬最大 +4.0 MB（json_slash）；真 Python 3.10.20 跑同一份 21 種形態
-    最大 +4.8 MB（json_slash）。上限 10 MB ＝ 實測的 2 倍以上餘裕；圈數上限拿掉時本模擬會到 ~118 MB（S3 QA 第三輪）。
+    最大 +4.83 MB（json_slash）。上限 10 MB ＝ 實測的 2 倍以上餘裕；圈數上限拿掉時本模擬會到 ~118 MB（S3 QA 第三輪）。
     """
     m = _mutant(('    re.compile(r"a*+")\n', '    re.compile(r"a*+(")\n'))
     assert m._POSS == ""
     forms = _mem_forms()
     worst = max(_peak_mb(m.scrub_secrets, t) - _peak_mb(_OLD, t) for t in forms.values())
-    assert worst <= 10 and "真 Python 3.10" in _DOC, worst
+    assert worst <= 10 and "測試上限 10 MB" in _DOC and "+4.83 MB" in _DOC, worst
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -966,3 +966,17 @@ def test_r4_authorization_continuation_subscript_and_long_values(raw):
     """續行夾在串接中、`% tok['x']`、超過 4096 字的串接段／三引號值：都遮到（超過上限 → 遮到行尾，檔頭同）。"""
     out = scrub_secrets(raw)
     assert _TOK4 not in out and _is_masking_of(out, _OLD(raw))
+
+
+
+@pytest.mark.parametrize("form", ["MA_nl", "MA_esc", "M16_lines", "ed25519_rows", "posix_many", "space_after_der"])
+def test_r4_cpu_within_2x_of_e23ff2f(form):
+    """S3 QA 第四輪：40 萬字形態的 CPU 時間（三次取最小）不超過 e23ff2f 的 2 倍（`"MA\\n"` 重複曾到 2.25 倍）。"""
+    n = _REDOS_N * 8
+    text = {
+        "MA_nl": "MA\n" * (n // 3), "MA_esc": "MA\\n" * (n // 4), "M16_lines": ("MA" + "A" * 14 + "\n") * (n // 17),
+        "ed25519_rows": "\n".join([_ED25519_KEY] * (n // 65)), "posix_many": "/a/b/c/d.toml " * (n // 14),
+        "space_after_der": ("MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n/Users/Jane Doe/x.toml\n") * (n // 56),
+    }[form][:n]
+    new, old = _cpu_min3(scrub_secrets, text), _cpu_min3(_OLD, text)
+    assert new <= max(2 * old, 0.05), (new, old)
