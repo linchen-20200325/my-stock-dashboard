@@ -2777,6 +2777,9 @@ def v2_card_html(tile: Tile) -> str:
         folded_facts=_folded,
         # 🔴 id 由卡 key 決定 ⇒ 每輪 rerun 相同（展開狀態不被重設）；非燈卡不給。
         fold_id=(v2_markup.fold_dom_id(_card.key) if _folded else None),
+        # SA2-f14（2026-10-01）：摺疊區不截斷，與查一檔／我的持股／找標的／憑什麼四頁對齊
+        #   （客戶 2026-09-25 裁示「完整原文進摺疊、⛔ 不得只剩 hover」）。
+        fold_truncate=False,
     )
     # `Note` 原文 ＋ 移出卡面的那幾列，共用同一個 hover 槽（`｜` 沿用 `_full` 的接法）。
     _hover = "｜".join(_p for _p in (_full, *_moved) if _p)

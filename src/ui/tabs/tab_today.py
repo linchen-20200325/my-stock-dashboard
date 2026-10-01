@@ -165,7 +165,10 @@ def scrub_state_glyphs(text: str) -> tuple[str, int]:
     """
     _n = 0
     _out = []
-    for _ch in str(text):
+    # SA2-f13（2026-10-01）：`None` ＝ 上游沒給訊息 ⇒ 回空字串，交給呼叫端既有的「沒有訊息」兜底
+    #   （`UNKNOWN_ERROR_TEXT`／`'（上游沒有給訊息）'`／`or card.key`…）。修前 `str(None)` 回字面「None」，
+    #   被當成一則上游訊息原樣印出。⛔ 只管 `None`，其餘型別照舊 `str()`。
+    for _ch in ("" if text is None else str(text)):
         if _ch in _STATE_GLYPHS:
             _n += 1
             continue
