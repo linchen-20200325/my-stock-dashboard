@@ -100,3 +100,17 @@ class TestH1f14AllocationPartialCount:
         assert (_a["held_n"], _a["valued_n"], _a["partial"]) == (3, 1, True)
         caps = _captions(_alloc_out(monkeypatch, rows))
         assert caps == [_ALLOC_APPROX + "　⚠️ 另有 2/3 檔缺張數／均價／現價未納入計算。"], caps
+
+    def test_count_with_two_or_more_valued(self, monkeypatch):
+        """批 P2 H1-f14-n1：上一條 valued_n＝1 ⇒ 突變 `held_n - 1` 與正解同為 2，殺不掉。
+        補 5 持有、2 納入 ⇒「3/5 檔」；三種錯算各自分得開：
+        `held_n - 1`＝4、`valued_n`＝2、`held_n - valued_n`＝3（正解）。"""
+        rows = _rows(_FULL,
+                     ("2317", _S, True, 1.0, 100.0, 120.0, False),   # 納入
+                     ("2330", _S, True, 2.0, 500.0, None, False),    # 缺現價 → 不納入
+                     ("2454", _S, True, None, 900.0, 1000.0, False),  # 缺張數 → 不納入
+                     ("2603", _S, True, 3.0, 50.0, None, False))     # 缺現價 → 不納入
+        _a = svc.compute_allocation_split(rows)
+        assert (_a["held_n"], _a["valued_n"], _a["partial"]) == (5, 2, True)
+        caps = _captions(_alloc_out(monkeypatch, rows))
+        assert caps == [_ALLOC_APPROX + "　⚠️ 另有 3/5 檔缺張數／均價／現價未納入計算。"], caps
