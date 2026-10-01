@@ -1142,6 +1142,26 @@ def _load_regime() -> tuple[str | None, str]:
         return None, repr(_e)
 
 
+#: 批 B9f：估值只少半邊時，那一列可被純刪掉的子句（既有字樣的一段，不是新字）。
+PE_EXCLUDED_CLAUSE = "，該因子不計入綜合分"
+
+
+def _pe_scored(df: Any) -> bool:
+    """L3 回的結果表裡「估值分」**至少有一個值**（＝估值因子真的計入了綜合分）。
+
+    沒有這一欄（沒勾估值）、表是 `None`／空表、或整欄都是缺值 → False。
+    ⚠️ 只看得到 `top_n` 截斷後的那幾列；整欄缺值時保守留原句。
+    """
+    try:
+        _col = df["估值分"]
+    except Exception:  # noqa: BLE001 — None／沒這欄 → 視為沒計入
+        return False
+    try:
+        return bool(_col.notna().any())
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _load_pe_name_maps() -> tuple[dict | None, dict | None, str, tuple[str, ...]]:
     """L3 估值輸入 → `(pe_map, name_map, 錯誤字串, 沒給本益比的市場)`。
 
@@ -1236,6 +1256,7 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
     if _surv_err:
         _aux.append(("存活池", _error_why(SRC_SURVIVORS, _surv_err)))
     _pe_map, _name_map, _pe_err, _pe_failed_markets = _load_pe_name_maps()
+    _pe_half_idx: int | None = None
     if _pe_err:
         _aux.append((FACTOR_INPUT_LABELS[PE_FACTOR_KEY],
                      f"{PE_FAILED_WHY_HEAD}{_error_why(SRC_PE, _pe_err)}"
@@ -1247,6 +1268,12 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
         # 原本 facts 一列都沒有、紅卡也沒點名是哪個市場。⛔ 不新寫：市場名＝L1 `failed_markets=`
         # 標記原樣（「上市 TWSE」／「上櫃 TPEX」，同 `PE_EMPTY_WHY` 的標籤）＋ 下面三支掃描既有那句
         # 「失敗，該因子不計入綜合分」（冒號後的例外原文這裡沒有 —— L1 對兩邊各自 fail-soft、只留標記）。
+        # 📌 批 B9f（B9 ⑨-f1，2026-10-01；有意識的刪字，⛔ 不是漏刪）：這裡先放**原句**（一字未改），
+        #    排名跑完後**只在**結果的「估值分」至少有一個值時，才純刪「，該因子不計入綜合分」子句 ——
+        #    那時 L3 `composite_rank_candidates` 確實用剩下那半邊的本益比計入綜合分，舊子句不成立，
+        #    且與同卡「N 檔有本益比」矛盾。剩下那半邊的代碼若一檔都不在存活池（QA 1a），
+        #    L3 整個因子不計 → 原句成立、照留。⛔ 沒有補新字（K1）。見下方 `_pe_half_idx`。
+        _pe_half_idx = len(_aux)
         _aux.append((FACTOR_INPUT_LABELS[PE_FACTOR_KEY],
                      f"{'、'.join(_pe_failed_markets)}失敗，該因子不計入綜合分"))
     _short_rows, _short_err = _load_shortage(_factors)
@@ -1303,6 +1330,11 @@ def load_screen_result(req: ScreenRequest) -> ScreenResult:
                             survivors_pool_empty=_surv_empty,
                             survivors_snapshot_missing=_surv_snap_missing,
                             factor_input_failed=_factor_failed)
+
+    if _pe_half_idx is not None and _pe_scored(_df):
+        # 批 B9f：估值分真的有值 ⇒ 該因子有計入綜合分 ⇒ 純刪那個子句（只刪不加）。
+        _k, _v = _aux[_pe_half_idx]
+        _aux[_pe_half_idx] = (_k, _v.removesuffix(PE_EXCLUDED_CLAUSE))
 
     _hits, _hits_err = _summarize_hits(
         _factors, shortage_rows=_short_rows, rs_rows=_rs_rows,
