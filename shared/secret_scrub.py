@@ -69,6 +69,12 @@
            沒遮罩的行定出寬度；「同寬」連 `=`／`==` 補位一起算，補位收尾的最後一行也算滿行）。附帶效果：欄位名後面直接接多行金鑰（`private_key: MIIE…`，SEC-r22 的形態）時，
            第一行被第 5 類遮掉後，其餘整齊的行（≥3 行同寬 ≥40 字）也會一併遮；只剩 1～2 行、或行寬 <40、
            或各行不同寬時仍外露（SEC-r22 其餘形態未處理）。
+   12. 補洞 批 S4（SEC-r20／SEC-r21，2026-10-01；排在 `_RULES_NEW` 的最後 ⇒ 只加遮罩，不會比 e23ff2f／bf0ada3 少遮）：
+       toml 帶值的訊息**不論前面有沒有型別名**：(a) 重複表 `already exists?{'…` 的 dict → `{` 起到行尾遮；
+       (b) 數字轉換失敗 `could not convert string to float: '<值>'`／`invalid literal for int() with base N: '<值>'`
+       → 值遮掉，但只在「值後面緊接 toml 位置字尾 `(line N column M char K)`」或「同一段文字有 `TomlDecodeError`」時
+       （一般 `float()`／`int()` 錯誤一字不動）。只貼訊息本文、traceback 裡排在型別名之前的 `ValueError` 行、
+       散文版 `Unicode*Error` 散文形之後的 toml 訊息，值都不再外露。
   遮罩一律沿用既有的 `***`（`MASK`）。**⛔ 不新增任何說明文字** —— 看得到 `***` 就知道有東西被遮。
 
 ⚠️ 據實揭露的邊界（**不是**全稱「洗乾淨了」）：
@@ -103,6 +109,9 @@
       值被括號包住（`= ( 'tok' )`）、`=` 後面先換行、`headers.__setitem__('Authorization', 'tok')` 這三種仍外露
       （S3 QA F3；與舊版相同）；
       目錄名 tab 規則只認合理起點（同 `_POSIX_SPACE_DIR_RE`）之後的路徑。
+  · 批 S4 之後仍然外露（第 12 類 (b) 的邊界）：數字轉換訊息**既沒有** toml 位置字尾、同一段文字**也沒有**
+    `TomlDecodeError`（例：只貼 `could not convert string to float: '<值>'` 這一句、把位置字尾刪掉）→ 分不出是
+    toml 還是一般錯誤，值照原樣（為了不改一般錯誤訊息）。
   · 批 S3 的多遮方向（安全側）：
     - 方括號取值的裸值（`headers['Authorization'] = token_var`）連變數名一起遮；
     - tab 規則以整條路徑判：`/a/x.toml<tab>note/b` 這種「路徑後面接 tab 再接含 `/` 的字」會被當成目錄遮成 `***/b`；
@@ -884,6 +893,47 @@ def _mask_orig_spans(out: str, segs: list[tuple[int, int, int]], spans: list[tup
     return "".join(_parts)
 
 
+# ── 補洞 批 S4（SEC-r20／SEC-r21，2026-10-01）：toml 帶值的訊息，不論前面有沒有型別名 —— 同樣排在最後 ⇒ 只加遮罩 ──
+#: toml 0.10.2 有兩種訊息會把 secrets 的**原始值**串進訊息本文（見 `_CONTENT_BEARING_EXC_PROSE_RE` 的註解）：
+#: 重複表（`What? <表名> already exists?{<已解析的整包 dict>} (line …)`）與數字轉換失敗
+#: （`could not convert string to float: '<值>'`／`invalid literal for int() with base 0: '<值>'`）。
+#: 第 1 類只在**型別名**（`TomlDecodeError`）之後整段截 —— 只貼訊息本文、或訊息排在型別名之前時認不出來：
+#:   SEC-r21 (i) 只貼訊息本文；(ii) traceback 裡串接的 `ValueError: could not convert …: '<值>'` 排在
+#:   `TomlDecodeError` 之前；SEC-r20 散文版先出現 `Unicode*Error` 散文形（不截）、後面接不帶型別名的訊息。
+#: (a) 重複表：`already exists?{` 後面緊接引號（dict 的第一個鍵）是 toml 專屬的形狀 → **一律**把 `{` 起到行尾換成遮罩
+#:     （dict 的 repr 不含真換行；引號前可有 ≤4 個反斜線＝外面又包了一層 `repr`）。
+#: (b) 數字轉換：同樣的句子也是一般 `float()`／`int()` 的錯誤（`_PLAIN` 釘住 `ValueError('invalid literal for int()
+#:     with base 10: 'x'')` 一字不動），故**只在兩種情形**遮引號內的值（連引號整段換成遮罩）：值後面緊接 toml 的
+#:     位置字尾 `(line N column M char K)`，或同一段文字裡出現 `TomlDecodeError`。值找不到收尾 → 遮到行尾。
+#: 線性：兩條都以固定字面錨定起點；值的迴圈有上限（4096 字）並用 `_POSS`，超過上限遮到行尾。
+_TOML_EXISTS_DICT_RE = re.compile(r"(already exists\?)\{(?=\\{0,4}['\"])[^\r\n]*")
+_TOML_POS: str = r"[ \t]{0,4}\(line \d{1,9} column \d{1,9} char \d{1,12}\)"
+_TOML_CONV_RE = re.compile(
+    r"(?P<pre>(?:could not convert string to float|invalid literal for int\(\) with base \d{1,2}):[ \t]{0,4}b?)"
+    r"(?:'(?:\\.|[^'\\\r\n]){0,4096}" + _POSS + r"'|\"(?:\\.|[^\"\\\r\n]){0,4096}" + _POSS + r"\""
+    r"|(?P<bs>\\{1,4})(?P<qc>[\"'])(?:(?!(?P=bs)(?P=qc))[^\r\n]){0,4096}" + _POSS + r"(?P=bs)(?P=qc)"
+    r"|[\"'\\][^\r\n]*)"
+    r"(?P<suf>" + _TOML_POS + r")?")
+_TOML_TYPE_NAME: str = "TomlDecodeError"
+_TOML_POS_RE = re.compile(_TOML_POS)
+
+
+def _mask_toml_conv_for(text: str):
+    """`_TOML_CONV_RE` 的取代函式工廠：先看一次整段文字有沒有 `TomlDecodeError`（整段只掃一次 ⇒ 線性；
+    在每個比對裡各掃一次會變成 O(n²)），回傳真正的取代函式。
+
+    取代規則：同一段文字有 `TomlDecodeError`、或比對到的那一段有 toml 位置字尾 → 值換成遮罩；否則原樣（一般錯誤訊息）。
+    位置字尾在比對到的那一段裡找（值有收尾時是 `suf` 群組；值超過上限或找不到收尾時，比對一路吃到行尾、字尾也在裡面）。
+    """
+    _named = _TOML_TYPE_NAME in text
+
+    def _rep(m: re.Match) -> str:
+        if not _named and _TOML_POS_RE.search(m.group(0), len(m.group("pre"))) is None:
+            return m.group(0)
+        return m.group("pre") + MASK + (m.group("suf") or "")
+    return _rep
+
+
 #: ⚠️ 下面三組的分工就是「不會比 e23ff2f 少遮」的**結構保證**（S3 QA 第四輪：前三輪的少遮全是同一族 ——
 #: 新規則先改寫了字串，後面的舊規則就認不出原本認得的東西）：
 #:   · `_RULES_POST` ＋ `_RULES_POST_TRACKED` ＝ e23ff2f 的 `_RULES_POST`（同樣的規則、同樣的順序、同樣的程式）
@@ -914,7 +964,12 @@ _RULES_POST_TRACKED: tuple[tuple[re.Pattern, object], ...] = (
 _RULES_NEW: tuple[tuple[re.Pattern, object], ...] = (
     (_POSIX_TAB_DIR_RE, _mask_tab_dirs),
     (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),
+    #: 批 S4（SEC-r20／SEC-r21）。
+    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),
+    (_TOML_CONV_RE, _mask_toml_conv_for),
 )
+#: 取代函式是「工廠」的規則：`rep(text)` 先看一次整段文字，再回傳真正的取代函式（見 `_mask_toml_conv_for`）。
+_TEXT_AWARE_RULES: frozenset[re.Pattern] = frozenset({_TOML_CONV_RE})
 #: 預先過濾：字串裡連必要字面都沒有，就不必讓該條規則掃一遍（純效能；有字面才跑，行為不變）。
 _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
     _FW_ASSIGN_RE: ("＝",), _FW_COLON_QUOTED_RE: ("：",), _FW_COLON_BARE_RE: ("：",),
@@ -923,6 +978,7 @@ _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
     _DEEP_QUOTED_FIELD_RE: ("\\" * 5,), _DEEP_ASSIGN_TAIL_RE: (MASK + "'", MASK + '"'),
     _DER_B64_RE: ("M",), _POSIX_SPACE_DIR_RE: ("/",),
     _POSIX_TAB_DIR_RE: ("\t", "\\t"), _AUTH_SUBSCRIPT_RE: ("]",),
+    _TOML_EXISTS_DICT_RE: ("already exists?{",), _TOML_CONV_RE: ("could not convert", "invalid literal for int"),
 }
 
 
@@ -940,7 +996,7 @@ def _run_post(out: str) -> str:
         out = _mask_orig_spans(out, _segs, _der_loose_spans(_t0))
     for _re, _rep in _RULES_NEW:
         if any(_n in out for _n in _POST_NEEDLES[_re]):
-            out = _re.sub(_rep, out)
+            out = _re.sub(_rep(out) if _re in _TEXT_AWARE_RULES else _rep, out)
     return out
 
 

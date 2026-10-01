@@ -835,7 +835,10 @@ def test_r3_the_reported_repro():
 def test_r4_old_part_is_exactly_e23ff2f():
     """結構保證：關掉新規則（第二道 DER、`_RULES_NEW`）後，輸出與 e23ff2f 逐字相同 ⇒ 新規則只能在其上多遮。"""
     m = _mutant(("_der_loose_spans(_t0))", "[])"),
-                ("    (_POSIX_TAB_DIR_RE, _mask_tab_dirs),\n    (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),\n", ""))
+                ("    (_POSIX_TAB_DIR_RE, _mask_tab_dirs),\n    (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),\n", ""),
+                #: 批 S4（SEC-r20／SEC-r21）加進 `_RULES_NEW` 的兩條，一併關掉。
+                ("    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),\n", ""),
+                ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""))
     corpus = sorted(_batch_corpus() | _ui_corpus())[::3] + _r4_cases(3000)
     diff = [r for r in corpus if m.scrub_secrets(r) != _OLD(r)]
     assert not diff, [(d[:60], _OLD(d)[:60], m.scrub_secrets(d)[:60]) for d in diff[:5]]

@@ -276,6 +276,10 @@ _TOML_WRAPS = (
 _TOML_RELAX_MUT = ('_PROSE_RELAXED_EXC: str = r"Unicode(?:Decode|Encode|Translate)Error"',
                    '_PROSE_RELAXED_EXC: str = r"(?:Unicode(?:Decode|Encode|Translate)Error|TomlDecodeError)"')
 
+#: 突變：拿掉批 S4 的兩條 toml 帶值規則（SEC-r20／SEC-r21）。
+_S4_TOML_DROP = (("    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),\n", ""),
+                 ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""))
+
 
 def _toml_message(doc: str, recorded: str) -> str:
     """有裝 toml → 真的 `toml.loads(doc)` 拿 `str(e)`；沒裝 → 逐字錄下的那一份。"""
@@ -317,7 +321,9 @@ class TestTomlColonFormStillCut:
     def test_premise_relaxing_toml_too_leaks_both_known_shapes(self):
         """修前實況（批 Q QA 重現）：`TomlDecodeError` 也只截 repr 形時，重複表 dict 的值與數字轉換的原始值都外露；
         錯誤字串那支（＝ `7020d13` v2 問答用的）兩種都整段截。"""
-        m = _mutant(SSC, _TOML_RELAX_MUT)
+        #: 批 S4（SEC-r20／SEC-r21）起，toml 帶值訊息另有不靠型別名的兩條規則（`_TOML_EXISTS_DICT_RE`／`_TOML_CONV_RE`）——
+        #: 修前實況要把那兩條一併拿掉才看得到（兩層各自承重：只放寬第 1 類時值仍被遮，見 `tests/test_sec_s4_batch_s4.py`）。
+        m = _mutant(SSC, _TOML_RELAX_MUT, *_S4_TOML_DROP)
         for name, want in (("dup_table", {"proj-r12-toml", "svc-r12@", "109876543210987654321", "hunter2customR12"}),
                            ("num_float", {"9f86d081884c7d659a2f"}), ("num_int", {"9f86d081884c7d659a2f"})):
             x = f"toml.decoder.TomlDecodeError: {_toml_message(*_TOML_ALL[name])}"
@@ -339,7 +345,9 @@ class TestTomlColonFormStillCut:
 
     @pytest.mark.parametrize("x", [
         _Q_ERR, _A_ERR,
-        f"{_UDE}: What? g already exists?{{'g': 1}}",                     # Unicode 散文形後面接什麼都照留
+        #: ~~`f"{_UDE}: What? g already exists?{{'g': 1}}"`~~（Unicode 散文形後面接什麼都照留）—— 批 S4（SEC-r20）起
+        #: toml 重複表的 dict 不論前面有沒有型別名一律遮（`tests/test_sec_s4_batch_s4.py`），改用不含 toml 形狀的後文：
+        f"{_UDE}: invalid start byte {{'g': 1}}",                          # Unicode 散文形後面接什麼都照留
         "UnicodeEncodeError: 'ascii' codec can't encode character '\\xe9' in position 3，怎麼解？",
     ])
     def test_unicode_colon_form_prose_is_still_kept(self, x):
@@ -349,10 +357,13 @@ class TestTomlColonFormStillCut:
 
     @pytest.mark.parametrize("name", ["dup_table", "num_float", "num_int"])
     def test_boundary_message_without_the_type_name_is_cut_by_neither(self, name):
-        """據實揭露：只貼訊息、不帶型別名 → 第 1 類認不出來，兩支都不截、結果相同（`7020d13` 亦同；非本批引入）。"""
+        """只貼訊息、不帶型別名 → 第 1 類認不出來，兩支都不截、結果相同（`7020d13` 亦同）。
+
+        ~~據實揭露：值外露~~ —— 批 S4（SEC-r21 (i)）起由 `_TOML_EXISTS_DICT_RE`／`_TOML_CONV_RE` 遮掉值
+        （兩支同一份規則，結果仍相同）；原本「前提：真的外露」的斷言改為「值不外露」。"""
         x = f"這是什麼意思：{_toml_message(*_TOML_ALL[name])}"
         assert scrub_prose_secrets(x) == scrub_secrets(x)
-        assert [leak for leak in _TOML_LEAKS if leak in scrub_prose_secrets(x)], "前提：真的外露（兩支一樣）"
+        assert not [leak for leak in _TOML_LEAKS if leak in scrub_prose_secrets(x)], "SEC-r21 (i)：值不外露（兩支一樣）"
 
 
 # ══════════════════════════════════════════════════════════════════
