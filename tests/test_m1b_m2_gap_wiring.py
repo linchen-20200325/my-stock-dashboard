@@ -74,8 +74,15 @@ class TestTier1FredGap:
 
         # D3（DL-f1-s12／s13）：FRED 多了資料月過期閘 → 測資改成「20 個連續月、止於今天應有的
         # 最新資料月」（原寫死 2024 年、月份還會回捲）。
-        from shared.staleness import MACRO_PUBLICATION_LAG_DAYS, expected_latest_data_month
-        _last = expected_latest_data_month(lag_days=MACRO_PUBLICATION_LAG_DAYS['m1b_m2'])
+        # Re-QA：基準日釘死（測資與 production 閘吃同一個固定日，不吃執行當天）
+        import datetime as _dtx
+        from shared.staleness import (MACRO_PUBLICATION_LAG_DAYS, expected_latest_data_month,
+                                      monthly_periods_behind as _mpb)
+        _today = _dtx.date(2026, 10, 2)
+        monkeypatch.setattr(ms, 'monthly_periods_behind',
+                            lambda *a, **k: _mpb(*a, **{**k, 'today': _today}))
+        _last = expected_latest_data_month(lag_days=MACRO_PUBLICATION_LAG_DAYS['m1b_m2'],
+                                           today=_today)
         _idx0 = _last.year * 12 + _last.month - 1 - 19
         _dates = [f'{(_idx0 + i) // 12}-{(_idx0 + i) % 12 + 1:02d}-01' for i in range(20)]
 

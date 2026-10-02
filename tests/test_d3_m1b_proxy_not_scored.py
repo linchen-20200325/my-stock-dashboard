@@ -403,6 +403,8 @@ class TestQaOfficialMonthGateBoundaries:
                       ms1=(9.9, 8.8, _dt.date(2026, 7, 1)))
         r = _call(TW)
         assert r["tier_used"] == 1 and r["data_month"] == "2026-07"
+        # 值與差額方向（Re-QA：m2 寫成 m1b、gap 正負號顛倒的突變要轉紅）
+        assert (r["m1b_yoy"], r["m2_yoy"], r["gap"]) == (9.9, 8.8, 1.1)
 
 
 class TestQaMs1BadMonthFallsThrough:
@@ -476,9 +478,21 @@ def _imf_resp(y_m1, y_m2):
     return _R
 
 
-def _expected_month():
+#: Re-QA：FRED／IMF 資料月閘的基準日一律釘死（不吃執行當天 —— 否則 1 月～2 月中年資料測試會翻紅）。
+_FIX_TODAY = _dt.date(2026, 10, 2)
+
+
+def _expected_month(today=_FIX_TODAY):
     from shared.staleness import MACRO_PUBLICATION_LAG_DAYS, expected_latest_data_month
-    return expected_latest_data_month(lag_days=MACRO_PUBLICATION_LAG_DAYS["m1b_m2"])
+    return expected_latest_data_month(lag_days=MACRO_PUBLICATION_LAG_DAYS["m1b_m2"], today=today)
+
+
+def _pin_snapshot_today(monkeypatch, today=_FIX_TODAY):
+    """macro_snapshot 的 FRED／IMF 閘呼叫 `monthly_periods_behind` 不帶 today → 測試注入固定日。"""
+    import src.data.macro.macro_snapshot as S
+    from shared.staleness import monthly_periods_behind as _real
+    monkeypatch.setattr(S, "monthly_periods_behind",
+                        lambda *a, **k: _real(*a, **{**k, "today": today}))
 
 
 def _prev_month(d):
@@ -487,6 +501,10 @@ def _prev_month(d):
 
 class TestQaSnapshotFredImfGates:
     _EMPTY = {"m1b_yoy": None, "m2_yoy": None, "gap": None}
+
+    @pytest.fixture(autouse=True)
+    def _pinned(self, monkeypatch):
+        _pin_snapshot_today(monkeypatch)
 
     def _run(self, monkeypatch, **kw):
         return TestSnapshotOrder()._run(monkeypatch, cbc=self._EMPTY, **kw)
@@ -514,26 +532,36 @@ class TestQaSnapshotFredImfGates:
         assert r["source"] == "TWII-proxy"
 
     def test_imf_real_but_stale_annual_rejected(self, monkeypatch):
-        y = _dt.date.today().year - 1
+        y = 2025                                # 基準日 2026-10-02 → 落後 7 期
         r, order = self._run(monkeypatch, fred_ok=None, imf_ok=_imf_resp(y, y))
         assert "imf" in order and r["source"] == "TWII-proxy"
 
     def test_imf_current_accepted_with_month(self, monkeypatch):
-        y = _dt.date.today().year + 1          # 年資料 → 資料月 y-12，不落後
+        y = 2026                                # 年資料 → 資料月 2026-12，不落後
         r, _ = self._run(monkeypatch, fred_ok=None, imf_ok=_imf_resp(y, y))
         assert r["source"] == f"IMF({y})" and r["data_month"] == f"{y}-12"
 
     def test_imf_asof_is_older_of_two_series(self, monkeypatch):
-        y = _dt.date.today().year + 1
+        y = 2026
         r, _ = self._run(monkeypatch, fred_ok=None, imf_ok=_imf_resp(y, y - 3))
         assert r["source"] == "TWII-proxy"
 
     def test_imf_unknown_month_rejected(self, monkeypatch):
         import src.data.macro.macro_snapshot as S
         monkeypatch.setattr(S, "monthly_periods_behind", lambda *a, **k: None)
-        y = _dt.date.today().year + 1
+        y = 2026
         r, _ = self._run(monkeypatch, fred_ok=None, imf_ok=_imf_resp(y, y))
         assert r["source"] == "TWII-proxy"
+
+    @pytest.mark.parametrize("today, accepted", [
+        (_dt.date(2026, 3, 1), True),     # 預期最新月 2025-12 → 2025 年資料（資料月 2025-12）當期
+        (_dt.date(2026, 3, 10), False),   # 預期最新月 2026-01（02-01+27+7=03-07 已過）→ 恰落後 1 期
+    ])
+    def test_imf_exactly_one_period_behind_rejected(self, monkeypatch, today, accepted):
+        _pin_snapshot_today(monkeypatch, today)
+        r, _ = self._run(monkeypatch, fred_ok=None, imf_ok=_imf_resp(2025, 2025))
+        assert (r["source"] == "IMF(2025)") is accepted
+        assert (r["source"] == "TWII-proxy") is not accepted
 
     @pytest.mark.parametrize("bad", [(float("nan"), 1.0), (1.0, float("inf"))])
     def test_non_finite_proxy_is_dropped(self, monkeypatch, bad):
