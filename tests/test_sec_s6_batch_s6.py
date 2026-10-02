@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import pathlib
+import warnings
 
 import pytest
 
@@ -30,7 +31,12 @@ _MAIN_SHA256 = "b6a612c5ba1b0d98a8d2e5b53a9ccb6631c374b6847fbce6e93c733b15153e66
 def _load_main():
     spec = importlib.util.spec_from_file_location("_secret_scrub_792c7a2", _MAIN_FIXTURE)
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    #: 批 S7（S6-n5）：凍結副本的 docstring 含 `\/`（Python 3.11 DeprecationWarning、3.12+ SyntaxWarning）。
+    #: 副本逐位元組凍結、⛔ 不得改 —— 只在載入當下壓掉這一則警告（訊息比對 invalid escape sequence），其餘照常。
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=r"invalid escape sequence", category=DeprecationWarning)
+        warnings.filterwarnings("ignore", message=r"invalid escape sequence", category=SyntaxWarning)
+        spec.loader.exec_module(mod)
     return mod
 
 
