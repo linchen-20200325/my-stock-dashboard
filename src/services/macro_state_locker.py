@@ -271,7 +271,7 @@ def _load_macro_state_checked(state_file_path: str = "macro_state.json"):
         # 原本 `int(data.get(..., 0))` 的災難路徑:macro_state.json 有合法
         # market_regime 但缺這個欄位(手改 / 部分寫入 / 舊版格式)時 →
         # get_macro_state 會回 exposure_limit_pct=0 →
-        # `Cap('系統風險上限', 0, 'macro_state 規則引擎（薩姆／PMI／外資期貨硬否決）')`
+        # `Cap('系統風險上限', 0, 'macro_state 規則引擎（分數計算：VIX／PMI／M1B-M2／BIAS240／PCR；三大硬否決紅線：薩姆／PMI／外資期貨）')`
         # → 全站顯示「最終建議持股 0%」,而且理由文案**謊稱**是規則引擎的硬否決。
         # 真實的 0% 只能來自 `calculate_system_state` 實際算出 0(它一定寫這個 key),
         # 不能來自「欄位缺失」。None → 下游 `get_macro_state` 視為「無 cap」。

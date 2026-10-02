@@ -479,6 +479,17 @@ class TestRenderLive:
 
         band_label, thr_text, _, l4_err = P._load_l4_labels()
         kw = dict(band_label=band_label, thr_text=thr_text, l4_error=l4_err)
+        # 批 D4 B5（客戶 2026-10-02 採用）：「門檻出處」由代號改白話。黃金值**不重算**
+        # （同下方兩則作法）：把這 4 盞的 `source` 壓回 10f385c 當時的原字串再比 ⇒ 仍證明
+        # 卡片其餘部分逐字相同；新字句本身另由 `tests/test_d4_wording.py` 逐字守。
+        import dataclasses
+        _old_src = {"margin": "SSOT:MARGIN_BALANCE_OVERHEAT(3400)+MARGIN_BALANCE_WARN(2500)",
+                    "bias_240": "SSOT:macro_helpers ±20 + DESIGN(10)",
+                    "m1b_m2_gap": "DESIGN:資金動能交叉慣例",
+                    "ism_pmi": "SSOT:MACRO_THRESHOLDS.PMI"}
+        monkeypatch.setattr(P, "SPECS_BY_KEY", {
+            k: (dataclasses.replace(v, source=_old_src[k]) if k in _old_src else v)
+            for k, v in P.SPECS_BY_KEY.items()})
         full = _flat(P.build_indicator_tiles(_live_readout(), directions=_directions(), **kw))
         # SA2-f14（2026-10-01）：今天頁摺疊區改 `fold_truncate=False`（不截斷，同另四頁）。
         # 黃金值**不重算**（同下方 a11y 的作法）：比對時把該旗標壓回預設 `True` ⇒ 仍證明

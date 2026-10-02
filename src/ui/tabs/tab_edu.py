@@ -350,13 +350,15 @@ def render_tab_edu():
              '月後第 1 營業日',
              'PMI_SOURCE_REGISTRY 順序賽跑,取第一命中（禁止平均）'),
             ('🏦 CBC M1B / M2', '🌍 總經',
-             'CBC ms1.json（央行）',
-             '月後 ~5-7 天,90 天 cache',
-             'CBC（TWD）→ IMF（USD,僅 fallback,禁跨幣別平均）'),
+             # 批 D4 DL-f1-s14 ①～③（客戶 2026-10-02 採用）：取數鏈與更新頻率對齊程式。
+             'CBC ms1.json → EF15M01（央行）',
+             '月後 ~27 天,1hr cache',
+             'CBC ms1.json → EF15M01 → ^TWII 動能代理 → FRED → IMF（USD,僅 fallback,禁跨幣別平均）'),
             ('🇨🇳 中國拖累 modifier', '🌍 總經',
-             'FRED（CNCPIALLMINMEI / IRLTCT01CNM156N / MYAGM3CNM189N / XTEXVA01CNM664S）',
-             '月頻,90 天 cache',
-             '全敗 → modifier = 1.0 中性'),
+             # 批 D4 DL-f1-s14 ⑤～⑦：序列代碼取自 shared/fred_series.py（舊四碼程式裡不存在）。
+             'FRED（DEXCHUS / CHNLOLITONOSTSAM / CPALTT01CNM659N / MABMM301CNM189S / BSCICP03CNM665S）',
+             '月頻,30min cache',
+             '全敗 → ⬜ 中國資料不足'),
             # B6-a v19.181:Tab 名對齊 app.py:476/568/584/809/870 的真實 label。
             # 原寫「📈 個股」「💰 籌碼」—— 前者 emoji 錯(真名 🔬 個股),
             # 後者根本不是 Tab(籌碼是 🌍 總經 底下的 §三 區塊),照著找找不到。
@@ -1460,7 +1462,7 @@ GDP 動能 = sign(GDP_QoQ_annualized 趨勢 over 6M)
 **經典訊號**:M1B YoY > M2 YoY 持續 ≥ 3 個月 → **黃金交叉**,台股歷史上 6-12 月平均
 報酬 +20%(2009 / 2017 / 2020 都觸發)。**死亡交叉**反之。
 
-**資料源**:央行 CBC ms1.json 月公布,本系統 90 天 cache fallback。
+**資料源**:央行 CBC ms1.json → EF15M01 月公布（月後 ~27 天）,備援 ^TWII 動能代理 → FRED → IMF。
 
 📐 **數學定義**
 

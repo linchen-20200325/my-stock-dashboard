@@ -20,6 +20,8 @@ from shared.fred_series import (
 
 _KEY = "a" * 32
 _ALL_FAIL_MSG = "中國資料不足(5 條 series 全敗)"
+#: 批 D4 D2-f42-n1：score 為 None 那一支（全敗＋抓到但值全空）改說「全缺」；空結果那支維持「全敗」。
+_ALL_MISSING_MSG = "中國資料不足(5 條 series 全缺)"
 _SIDS = (FRED_CHN_OECD_CLI, FRED_CHN_PMI, FRED_CHN_CPI, FRED_CHN_M2, FRED_USDCNY)
 
 
@@ -60,13 +62,13 @@ def test_l2_snapshot_is_truthy_even_when_all_fail():
     assert compute_china_subscore(snap) is None
 
 
-@pytest.mark.parametrize("china_dict", [
-    {sid: pd.DataFrame() for sid in _SIDS},   # fetch_china_macro 失敗形狀：5 條空表
-    {},                                        # 整包空
+@pytest.mark.parametrize("china_dict,msg", [
+    ({sid: pd.DataFrame() for sid in _SIDS}, _ALL_MISSING_MSG),  # fetch_china_macro 失敗形狀：5 條空表
+    ({}, _ALL_MISSING_MSG),  # 整包空（L2 仍回 5 個 key 皆 None 的非空 dict ⇒ 同走 score None 那支）
 ])
-def test_all_fail_shows_caption_and_no_cards(run_panel, china_dict):
+def test_all_fail_shows_caption_and_no_cards(run_panel, china_dict, msg):
     fake, captions = run_panel(china_dict)
-    assert any(_ALL_FAIL_MSG in c for c in captions), captions
+    assert any(msg in c for c in captions), captions
     fake.metric.assert_not_called()       # 不畫乘子 1.000／折扣後＝主分 的假卡
     fake.markdown.assert_not_called()
 
@@ -76,5 +78,5 @@ def test_partial_data_still_renders_cards(run_panel):
     china = {sid: pd.DataFrame() for sid in _SIDS}
     china[FRED_CHN_OECD_CLI] = _ok_df(101.0)
     fake, captions = run_panel(china)
-    assert not any(_ALL_FAIL_MSG in c for c in captions), captions
+    assert not any(_ALL_FAIL_MSG in c or _ALL_MISSING_MSG in c for c in captions), captions
     assert fake.metric.call_count == 4

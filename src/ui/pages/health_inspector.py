@@ -582,7 +582,7 @@ def render_data_health_raw():
     # P3-D(v19.199,§1 誠實性):原餵 `cl_ts`(抓取時間)當 as_of → monthly 新鮮度規則量抓取
     #    時間恆綠(假🟢當期),掩蓋實際落後 1-2 月。改:有值時標「⬜ 有值·無資料日期」不冒充新鮮,
     #    無值才 🔴未取得。根治仍待 m1b_m2 fetcher 帶出資料月 as_of(§2.2 provenance,另案)。
-    _g_add('台灣 M1B / M2',    'CBC + FinMind 雙源',         'monthly',
+    _g_add('台灣 M1B / M2',    'CBC ms1.json+EF15M01+^TWII 動能代理+FRED+IMF 5段',         'monthly',
            date_str=None, has_value_no_date=(_mi_g.get('m1b_yoy') is not None),
            indicator='m1b_m2')
 
@@ -818,16 +818,16 @@ def render_data_health_raw():
             # ⚠️ 同上方全域表:_mi_date 目前是抓取時間(cl_ts)而非資料月 as_of,
             #    屬 §2.2 provenance 另案(G2 記錄,未修)。
             rows.append(_row('M1B / M2 貨幣供給', _mi_date, 'monthly',
-                             source='CBC + FinMind 雙源',
-                             endpoint='cbc.gov.tw / TaiwanStockMonetaryAggregates',
+                             source='CBC ms1.json+EF15M01+^TWII 動能代理+FRED+IMF 5段',
+                             endpoint='cbc.gov.tw / cpx.cbc.gov.tw / Yahoo / FRED / IMF DataMapper',
                              proxy=True, indicator='m1b_m2'))
         else:
             # m1b_m2_info 尚未抓取 → 黃燈提示，與上方 5 個 macro 一致
             _m1b_never = not _mi
             rows.append({'資料名稱': 'M1B / M2 貨幣供給',
                          '頻率': _FREQ_LBL.get('monthly', 'monthly'),
-                         '來源': 'CBC + FinMind 雙源',
-                         '端點': 'cbc.gov.tw / TaiwanStockMonetaryAggregates',
+                         '來源': 'CBC ms1.json+EF15M01+^TWII 動能代理+FRED+IMF 5段',
+                         '端點': 'cbc.gov.tw / cpx.cbc.gov.tw / Yahoo / FRED / IMF DataMapper',
                          'Proxy': '✅',
                          '最後更新': ('🟡 待補抓（系統下次背景輪詢自動處理）'
                                       if _m1b_never else '❌ 抓取失敗'),

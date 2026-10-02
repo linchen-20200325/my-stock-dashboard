@@ -793,7 +793,7 @@ class TestValuation357IsHonest:
     def test_l2_message_is_passed_through_verbatim(self):
         """「是缺股價還是缺配息」由 L2 的 `msg` 說，本頁不改寫（§2.1）。"""
         _, _facts, _ = P.build_valuation_card(_live_valuation())
-        assert dict(_facts)["L2 說明"] == _live_valuation().msg
+        assert dict(_facts)["上游說明"] == _live_valuation().msg  # 批 D4 W-f5
 
     def test_failure_names_the_layer(self):
         """紅態要講出**是哪一層**出事，否則等於對使用者謊報出事的層。"""

@@ -2033,7 +2033,7 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
         # L2 自己寫的一句話（含三檔目標價或「不適用」的理由）。
         # **原樣透傳**：那是 L2 的話，本檔不改寫、不摘要（§2.1）。
         # SEC-2：只洗秘密（沒有命中就原樣）—— 內容一字不改寫。
-        _facts.append(("L2 說明", scrub_secrets(val.msg)))
+        _facts.append(("上游說明", scrub_secrets(val.msg)))  # 批 D4 W-f5：標籤同 build_chips_card
 
     if _state == UI_LIVE:
         return (Card(key="inspect.stock.valuation", label="估值（357 評價）",

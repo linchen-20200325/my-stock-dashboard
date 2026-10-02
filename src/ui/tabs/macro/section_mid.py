@@ -366,7 +366,17 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                     f'margin:4px 0;color:{_col8};font-size:13px;">{_icon8} {_msg8}</div>',
                     unsafe_allow_html=True)
     elif _fund_evaluable:
-        st.success(f'✅ {VETO_FUNDAMENTAL_NAME}：無觸發 — 景氣／通膨／外需面無系統性風險訊號')
+        # 批 D4 M2N-f6（客戶 2026-10-02 選 C2＝A）：五項有缺時把沒檢查到的項目講出來，
+        #   ⛔ 不再一律宣稱「景氣／通膨／外需面無系統性風險訊號」。項目名取自
+        #   `VETO_FUNDAMENTAL_INPUTS` 既有字樣；五項皆有值時原句一字不動。
+        _fund_missing8 = [_nm for _vv, _nm in ((_vcur8_v, 'VIX'), (_pv8_v, '台灣 PMI'),
+                                               (_cy8_v, '美國核心 CPI'), (_ey8_v, '台灣出口 YoY'),
+                                               (_sc8_v, 'NDC 燈號')) if _vv is None]
+        if _fund_missing8:
+            st.success(f'✅ {VETO_FUNDAMENTAL_NAME}：無觸發'
+                       f'（⚠️ {"／".join(_fund_missing8)}待取得，未納入任何判斷）')
+        else:
+            st.success(f'✅ {VETO_FUNDAMENTAL_NAME}：無觸發 — 景氣／通膨／外需面無系統性風險訊號')
     if _veto8 or _fund_evaluable:
         st.caption(f'📌 {VETO_FUNDAMENTAL_SCOPE_NOTE}')
 
@@ -409,7 +419,10 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
 
     # ── Section 八 v4.0 動態結論（VIX 否決權 × 估值/CLI 矩陣）────
     _bias_info8 = st.session_state.get('bias_info') or {}
-    _b240_8     = float(_bias_info8.get('bias_240', 0))
+    # 批 D4 M2N-f1 (a)：原 `.get('bias_240', 0)` 缺鍵捏成 0 → 矩陣印「年線乖離 0.0%」並落格給結論。
+    #   改走同頁 `_finite_yoy`（缺鍵／None／NaN／±inf → None）；None 時改顯示載入提示（見下）。
+    _b240_8_raw = _finite_yoy(_bias_info8, 'bias_240')
+    _b240_8     = float(_b240_8_raw) if _b240_8_raw is not None else None
     # v19.170 一致性:缺值一律回 None,不得回 0.0。
     # 原式 `float(_m8_vix.get('current', 0)) if _m8_vix else None` 在
     # `macro_info['vix']` 存在但缺 'current' 時回 **0.0**,下游
@@ -424,7 +437,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     # CLI：OECD CLI 榮枯線 = 100，取自 _m8_pmi（is_oecd_cli=True 時）
     _cli_8 = None
     if _m8_pmi and _m8_pmi.get('is_oecd_cli'):
-        _cli_8 = float(_m8_pmi.get('value', 100))
+        # 批 D4 M2N-f1 (b)：原 `.get('value', 100)` 缺鍵捏成 100 →「CLI=100.0（擴張）」。
+        #   改有限值或 None ⇒ 走既有「CLI未知」。
+        _cli_8 = float(_pv8_v) if _pv8_v is not None else None
     
     # VIX 防呆：若值 > 100 代表 API 錯置
     if _vix_now8 is not None and _vix_now8 > 100:
@@ -504,7 +519,10 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             st.info('M1B/M2 數據載入後自動顯示資金動能判斷')
     
         # ── 策略1：BIAS240 × 台灣出口 二維矩陣（v5.0）──────────────
-        if _bias_info8:
+        if _bias_info8 and _b240_8 is None:
+            # 批 D4 M2N-f1 (a)：句型同上方 M1B/M2 的載入提示。
+            st.info('年線乖離數據載入後自動顯示 BIAS240 × 台灣出口判斷')
+        elif _bias_info8:
             _sql_b    = _b240_8
             # M2N-f8：原 `float(_m8_exp.get('yoy', 0)) if _m8_exp else None` —— 缺鍵捏成
             # 「台灣出口 YoY=+0.0%」進矩陣、None／'-' 崩潰、NaN／±inf 印 nan／inf 並落錯格。
@@ -596,7 +614,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             _fut8     = None
             if _li8 is not None and hasattr(_li8, 'empty') and not _li8.empty and '外資大小' in _li8.columns:
                 try:
-                    _fut8 = float(_li8.iloc[-1].get('外資大小', 0))
+                    # 批 D4 M2N-f1 (c)：NaN／±inf → None ⇒ 走既有「B 期貨未知」（原印「B 期貨=nan口」）。
+                    _fut8_raw = _finite_yoy({'v': _li8.iloc[-1].get('外資大小', 0)}, 'v')
+                    _fut8 = float(_fut8_raw) if _fut8_raw is not None else None
                 except Exception:
                     pass
             _cl8d     = st.session_state.get('cl_data', {})
