@@ -1847,12 +1847,12 @@ def compute_five_bucket_summary(
             _news_sys = None
 
     values = {
-        "health":        _traced("health", "warroom_summary.health_score (calc_traffic_light)", _g(warroom_summary, "health_score"), warroom_summary),
-        "ndc_signal":    _traced("ndc_signal", "macro_info.ndc_signal.score (FinMind TaiwanBusinessIndicator)", _g(macro_info, "ndc_signal", "score"), macro_info),
-        "m1b_m2_gap":    _traced("m1b_m2_gap", "m1b_m2_info.gap (CBC ms1 → EF15M01 → ^TWII proxy → FRED → IMF)", _g(m1b_m2_info, "gap"), m1b_m2_info),
-        "ism_pmi":       _traced("ism_pmi", "macro_info.ism_pmi.value (PMI_SOURCE_REGISTRY 多源賽跑)", _g(macro_info, "ism_pmi", "value"), macro_info),
-        "us_core_cpi":   _traced("us_core_cpi", "macro_info.us_core_cpi.yoy (FRED CPILFESL)", _g(macro_info, "us_core_cpi", "yoy"), macro_info),
-        "tw_export":     _traced("tw_export", "macro_info.tw_export.yoy (MOF 進出口)", _g(macro_info, "tw_export", "yoy"), macro_info),
+        "health":        _traced("health", f"計算值：旌旗指數（上漲佔比 5 日均）{HEALTH_WEIGHT_JQ * 100:g}% ＋ 大盤評分 {HEALTH_WEIGHT_SCORE * 100:g}%", _g(warroom_summary, "health_score"), warroom_summary),
+        "ndc_signal":    _traced("ndc_signal", "國發會景氣對策信號，依序：FinMind（國發會官方鏡像）→ data.gov.tw 官方「景氣指標及燈號」→ StockFeel 股感 → MacroMicro 財經 M 平方", _g(macro_info, "ndc_signal", "score"), macro_info),
+        "m1b_m2_gap":    _traced("m1b_m2_gap", "M1B 年增率減 M2 年增率，依序：央行公開 JSON → 央行 EF15M01 → FRED → IMF → 大盤動能代理估算", _g(m1b_m2_info, "gap"), m1b_m2_info),
+        "ism_pmi":       _traced("ism_pmi", "台灣製造業 PMI（中華經濟研究院 CIER 等 8 源並行，依優先序取第一個有效值；全敗時沿用 90 天內舊值）", _g(macro_info, "ism_pmi", "value"), macro_info),
+        "us_core_cpi":   _traced("us_core_cpi", "美國核心 CPI 年增率，依序：FRED 公開檔（無需 key）→ FRED API → BLS 備援", _g(macro_info, "us_core_cpi", "yoy"), macro_info),
+        "tw_export":     _traced("tw_export", "財政部海關出口金額年增率，依序：中華民國統計資訊網 → FRED（OECD）→ 海關出口統計 → FRED → 財政部進出口統計", _g(macro_info, "tw_export", "yoy"), macro_info),
         # ⚠️ H2 2026-08 揭露 → I2 2026-08-10 接線（**判定仍不變**）：
         #   `bias_info` 由 `src/data/macro/macro_snapshot.compute_twii_bias` 產生，
         #   它在 TWII 歷史 < 240 天時**用現有天數的均值當 MA240**
@@ -1864,32 +1864,32 @@ def compute_five_bucket_summary(
         #   `classify_danger` / `aggregate_level` 逐位不變。
         #   → 若改成「is_estimated 時回 None」會**改變五桶燈號**（行為變更），
         #     依 §-1 需 user 指派才動；本批明確不做（見 PR 說明的「若要改判定」清單）。
-        "bias_240":      _traced("bias_240", "bias_info.bias_240 (compute_twii_bias ← ^TWII)", _g(bias_info, "bias_240"), bias_info),
+        "bias_240":      _traced("bias_240", "計算值：加權指數（Yahoo）對年線的乖離；不足 240 天時改抓 2 年補，仍不足則標「（估算）」", _g(bias_info, "bias_240"), bias_info),
         # v19.175 P0-B:接線(原本 values 完全沒有這兩個 key → 永久 gray)。
         # 單位皆與 spec 門檻同刻度:us10y=百分點(4.5/5.0)、dxy=指數點(105/110)。
         "us10y":         _first_sane(
             "us10y",
-            ("FRED:DGS10(macro_info)", _g(macro_info, "us10y", "current")),
-            ("FRED:DGS10(macro_info.value)", _g(macro_info, "us10y", "value")),
-            ("Yahoo:^TNX(cl_data.intl)", _intl_close(CL_INTL_KEY_US10Y)),
+            ("FRED 美 10 年期殖利率", _g(macro_info, "us10y", "current")),
+            ("FRED 美 10 年期殖利率", _g(macro_info, "us10y", "value")),
+            ("Yahoo 美債 10Y 殖利率（FRED 抓不到時的備援）", _intl_close(CL_INTL_KEY_US10Y)),
         ),
         "dxy":           _first_sane(
             "dxy",
-            ("Yahoo:DX-Y.NYB(cl_data.intl)", _intl_close(CL_INTL_KEY_DXY)),
+            ("Yahoo 美元指數 → 美元指數期貨（ETF 備援尺度不同，一律擋下不用）", _intl_close(CL_INTL_KEY_DXY)),
         ),
-        "vix":           _traced("vix", "macro_info.vix.current (Yahoo ^VIX → FRED VIXCLS)", _g(macro_info, "vix", "current"), macro_info),
-        "adl":           _traced("adl", "cl_data.adl[ad_ratio] (fetch_adl ← ^TWII 估算)", _df_last(_g(cl_data, "adl"), "ad_ratio"), cl_data),
-        "fut_net":       _traced("fut_net", "li_latest[外資大小] (FinMind 期貨 + TAIFEX)", _df_last(li_latest, "外資大小"), li_latest),
-        "margin":        _traced("margin", "cl_data.margin (TWSE → HiStock → Wearn)", _g(cl_data, "margin"), cl_data),
-        "jingqi":        _traced("jingqi", "jingqi_info.avg (ad_ratio 5 日均)", _g(jingqi_info, "avg"), jingqi_info),
+        "vix":           _traced("vix", "Yahoo VIX 日線（主源，無備援）", _g(macro_info, "vix", "current"), macro_info),
+        "adl":           _traced("adl", "估算值：由加權指數（Yahoo）漲跌幅反推上漲家數，非真實統計", _df_last(_g(cl_data, "adl"), "ad_ratio"), cl_data),
+        "fut_net":       _traced("fut_net", "FinMind 期貨法人資料：外資大台淨口 ＋ 小台淨口 × 0.25（大台當量口數；純 FinMind）", _df_last(li_latest, "外資大小"), li_latest),
+        "margin":        _traced("margin", "全市場融資餘額（億元），依序：FinMind → 證交所 → HiStock → Goodinfo → Yahoo 股市 → 鉅亨網", _g(cl_data, "margin"), cl_data),
+        "jingqi":        _traced("jingqi", "計算值：ADL 上漲佔比的 5 日平均（ADL 本身是大盤估算）；ADL 缺時改用近 5 日大盤上漲天數估算；舊總經分頁另可能以證交所即時單日上漲佔比頂替（非 5 日均）", _g(jingqi_info, "avg"), jingqi_info),
         # 2026-09-27 接線(原 `_unwired`,理由「FinMind inst net 單位未確認」)。
         # 單位證據與範圍守衛見 shared/macro_buckets.py foreign_net 條註解:
         # `cl_data['inst'][外資].net` 在兩條生產路徑都**已是億元**,本行不做任何換算。
         # §1:inst 缺 / 無外資 key / net 為 None → None(gray),**絕不**回填 0 ——
         #     0 在 low_bad(yellow=0)下會變成「🟡 賣超邊緣」,是捏造的觀測。
         # container 傳 cl_data:整包沒來 → not_loaded;來了但沒外資值 → no_value。
-        "foreign_net":   _traced("foreign_net", "cl_data.inst[外資及陸資].net 億 (TWSE BFI82U → FinMind TotalInstitutional)", _foreign_net_yi(cl_data), cl_data),
-        "news_systemic": _traced("news_systemic", "_macro_news_items (RSS 系統性風險掃描)", _news_sys, news_items),
+        "foreign_net":   _traced("foreign_net", "外資及陸資現貨淨買賣（億元），依序：證交所三大法人表 → FinMind 三大法人合計", _foreign_net_yi(cl_data), cl_data),
+        "news_systemic": _traced("news_systemic", "財經新聞 RSS（中央社財經、經濟日報、Google News 中英、Yahoo Finance、CNBC）取 5 則，標題＋摘要命中系統性風險關鍵字（戰爭／倒閉／崩盤等）的則數", _news_sys, news_items),
     }
 
     # ── no_extraction 掃描(2026-08-20)──────────────────────────────────
