@@ -88,7 +88,10 @@ class TestCeilingRender:
         """
         _f = tmp_path / "macro_state.json"
         _f.write_text(
-            json.dumps({"market_regime": "🟡 震盪整理", "exposure_limit_pct": 40},
+            # D3（DL-f1-s65）：裁決有有效期限 → 測資帶當下 timestamp
+            json.dumps({"market_regime": "🟡 震盪整理", "exposure_limit_pct": 40,
+                        "timestamp": __import__("src.services.macro_state_locker",
+                                                fromlist=["_now_str"])._now_str()},
                        ensure_ascii=False),
             encoding="utf-8")
         _patch_state_file(monkeypatch, _f)

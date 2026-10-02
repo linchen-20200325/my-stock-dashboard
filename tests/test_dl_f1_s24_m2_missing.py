@@ -677,6 +677,7 @@ class TestRealStreamlitRender:
 
     def test_numbers_still_render_with_proxy_disclosure(self):
         texts = _texts(_app({"m1b_yoy": 5.1, "m2_yoy": 2.0, "source": M1B_PROXY_SOURCE_LABEL}))
-        assert any(f"M1B-M2=+3.10%{NOTE} 正值 → " in t for t in texts)
+        # D3（DL-f1-s17）：代理值不進 §七 結論卡；KPI 照樣顯示數字＋註記＋D2 警語
+        assert not any("M1B-M2=+3.10%" in t and "正值" in t for t in texts)
         assert any(f">+3.10%{NOTE}</div>" in t for t in texts)
         assert any(t.startswith(_PROXY_CAPTION_HEAD) for t in texts)
