@@ -146,3 +146,24 @@ def test_c1_finite_out_of_range_still_dimension_anomaly():
     detail = _coverage_macro_detail(46.3)
     assert "📐 量綱異常(1):us10y" in detail, detail
     assert "46.3" in detail
+
+
+def test_dl_f1_s14_edu_source_table_and_m1b_card():
+    """DL-f1-s14 ①～⑦：說明書資料源表 M1B／中國拖累兩列＋M1B 說明卡「資料源」行。"""
+    import inspect as _inspect
+
+    from shared import fred_series as F
+    from src.ui.tabs import tab_edu as E
+    src = _inspect.getsource(E)
+    for want in ("'CBC ms1.json → EF15M01（央行）'",
+                 "'月後 ~27 天,1hr cache'",
+                 "'CBC ms1.json → EF15M01 → ^TWII 動能代理 → FRED → IMF（USD,僅 fallback,禁跨幣別平均）'",
+                 "'月頻,30min cache'",
+                 "'全敗 → ⬜ 中國資料不足'",
+                 "**資料源**:央行 CBC ms1.json → EF15M01 月公布（月後 ~27 天）,備援 ^TWII 動能代理 → FRED → IMF。"):
+        assert want in src, want
+    china = (f"FRED（{F.FRED_USDCNY} / {F.FRED_CHN_OECD_CLI} / {F.FRED_CHN_CPI} / "
+             f"{F.FRED_CHN_M2} / {F.FRED_CHN_PMI}）")
+    assert f"'{china}'" in src
+    for gone in ("CNCPIALLMINMEI", "90 天 cache", "modifier = 1.0 中性", "月後 ~5-7 天"):
+        assert gone not in src, gone
