@@ -219,6 +219,8 @@ _S4_OFF: list[tuple[str, str]] = [
     ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""),
     ("_DERL_INDENT_MAX: int = 256", "_DERL_INDENT_MAX: int = 16"),           # SEC-r27
     _TOML_ORIG_OFF, _TOML_HTML_OFF,                                           # 批 S4 QA F3
+    #: 批 S6：新增的遮罩全部集中在 `_mask_s6`，同樣登記，讓「關掉 ⇒ 與 bf0ada3 逐字相同」繼續成立（批 S6 自己的基準見 test_sec_s6_batch_s6）。
+    ("    return _mask_s6(orig_vals, out)\n", "    return out\n"),
 ]
 
 
@@ -714,7 +716,8 @@ def test_r26_parse_synthetic_index(ver):
 
 @pytest.mark.parametrize("data", [
     _index(_PATHS, 5),                                                                # 版本不支援
-    _index(_PATHS, 2, ext=b"link" + (4).to_bytes(4, "big") + bytes(4)),               # split index
+    #: 批 S6（SEC-r30）：link 擴充至少 20 位元組（共用索引的 SHA-1）；原樣本長 4 ⇒ 現在算壞掉，改成合法長度。
+    _index(_PATHS, 2, ext=b"link" + (20).to_bytes(4, "big") + bytes(20)),             # split index
     _index(_PATHS, 2, ext=b"sdir" + (4).to_bytes(4, "big") + bytes(4)),               # 看不懂的必要擴充
     _index(_PATHS, 2, mode_at=1),                                                     # sparse index 目錄項目
 ], ids=["version-5", "split-link", "required-ext", "sparse-dir"])
@@ -737,7 +740,9 @@ _GOOD4 = _index(_PATHS, 4)
     pytest.param(b"", id="empty-file"),
     pytest.param(_seal(b"XXXX" + bytes(8)), id="bad-signature"),
     pytest.param(_GOOD2[:-40], id="truncated"),
-    pytest.param(_GOOD2[:-20] + bytes(20), id="zero-trailer"),
+    #: ~~`pytest.param(_GOOD2[:-20] + bytes(20), id="zero-trailer")`~~ ← 批 S6（SEC-r30，2026-10-02）移出，有意識的更正、
+    #: 不是漏刪：檔尾全 0 ＝ git 的 skipHash 形（git 自己讀到全 0 就不核對雜湊、不看設定），結構合法即接受；
+    #: 結構壞掉＋檔尾全 0 的各種形態見 `tests/test_sec_s6_batch_s6.py::test_r30_corrupt_index_raises_with_either_trailer`。
     pytest.param(_flip(_GOOD2, 12 + 62 + 2), id="flipped-path-bit-v2"),
     pytest.param(_flip(_GOOD4, len(_GOOD4) - 30), id="flipped-path-bit-v4"),
     pytest.param(_flip(_GOOD2, len(_GOOD2) - 1), id="flipped-trailer-bit"),
@@ -760,8 +765,8 @@ def test_r26_corrupt_index_raises(data):
 def test_r26_valid_index_with_optional_extension_and_zero_trailer_flag():
     from tests._git_tracked import parse_index
     assert parse_index(_index(_PATHS, 2, ext=b"TREE" + (3).to_bytes(4, "big") + b"abc")) == frozenset(_PATHS)
-    #: `index.skipHash` 開著時 git 寫全 0 檔尾 → 僅在呼叫端說明允許時接受。
-    assert parse_index(_GOOD2[:-20] + bytes(20), allow_zero_trailer=True) == frozenset(_PATHS)
+    #: `index.skipHash` 開著時 git 寫全 0 檔尾 → 接受（批 S6 SEC-r30 起不論設定寫在哪、不必呼叫端說明）。
+    assert parse_index(_GOOD2[:-20] + bytes(20)) == frozenset(_PATHS)
 
 
 def test_r26_valid_empty_index_is_empty_but_only_tracked_refuses_it(tmp_path):
@@ -843,7 +848,7 @@ def test_r26_unsupported_never_falls_back_to_filesystem_scan(tmp_path, kind):
     from tests._git_tracked import IndexUnavailable, only_tracked, tracked_paths
     tracked_paths.cache_clear()
     (tmp_path / ".git").mkdir()
-    data = {"split": _index(_PATHS, 2, ext=b"link" + (4).to_bytes(4, "big") + bytes(4)),
+    data = {"split": _index(_PATHS, 2, ext=b"link" + (20).to_bytes(4, "big") + bytes(20)),
             "sparse": _index(_PATHS, 2, mode_at=1), "version-5": _index(_PATHS, 5),
             "sha256-repo": _index(_PATHS, 2)}.get(kind)
     if data is not None:

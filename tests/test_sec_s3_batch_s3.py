@@ -843,6 +843,8 @@ def test_r4_old_part_is_exactly_e23ff2f():
                 #: 批 S4（SEC-r20／SEC-r21）加進 `_RULES_NEW` 的兩條，一併關掉。
                 ("    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),\n", ""),
                 ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""),
+                #: 批 S6：新增的遮罩全部集中在 `_mask_s6`（排在原始文字那一道之後），一併關掉。
+                ("    return _mask_s6(orig_vals, out)\n", "    return out\n"),
                 #: 批 S4 QA F3：原始文字那一道一併關掉。
                 ("    if not any(_n in text for _n in _POST_NEEDLES[_TOML_CONV_RE]):\n        return []",
                  "    if True:\n        return []"))
