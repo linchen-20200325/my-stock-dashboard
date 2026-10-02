@@ -604,12 +604,12 @@ class TestVixPlainLanguageAdvice:
         與波動度判讀無關,不該被這條守衛掃到。"""
         from src.compute.notify.holdings_digest_message import _vix_line
         _lines = _vix_line(None, 14)
-        assert "抓取失敗" in _lines[0]
+        assert "無資料" in _lines[0]
         assert "不是「市場平靜」" in _lines[1]
         _joined = "".join(_lines)
         assert "定期定額" not in _joined and "分批" not in _joined, \
             "缺值時 VIX 段不得給任何動作建議"
-        assert "抓取失敗" in self._msg(None), "整則訊息仍須印出這行"
+        assert "VIX：無資料" in self._msg(None), "整則訊息仍須印出這行"
 
     def test_thresholds_come_from_ssot_not_inline(self):
         """VIX 分級必須走全站 SSOT（黃 22 / 紅 30），不可在推播模組另寫一套 ——
