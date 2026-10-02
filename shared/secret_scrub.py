@@ -961,28 +961,100 @@ _TOML_POS_RE = re.compile(_TOML_POS)
 #: 補法：在**原始文字**上先找一次（同一套條件），記下要遮的「引號＋值＋引號」字面；全部規則跑完後，輸出裡還看得到的
 #: 同一段字面整段換成遮罩 ⇒ 只加遮罩。上限 `_TOML_ORIG_MAX` 個不同的值（線性：每個值一次 `str.replace`）。
 _TOML_ORIG_MAX: int = 64
+#: 批 S6（SEC-r29 (c)，2026-10-02）：前面的規則（實證：DER 那一條）除了吃掉錨點，還把**值的一部分**（或開頭引號的反斜線）
+#: 一起遮掉 —— 例：DER 金鑰行緊接訊息、值是「像金鑰的字＋空白＋秘密」時，輸出是 `*** not convert …: '*** <秘密>' (line …)`；
+#: 整段 repr 兩次時 `\\\'` 的反斜線被吃掉。「引號＋值＋引號」字面已不完整 ⇒ 上面那一道找不到，秘密外露（main 亦然）。
+#: 補法（只加遮罩）：在輸出裡找「收尾引號＋同一個位置字尾」（強錨點；沒有字尾時改用原文緊接在後的 ≤16 字、再試「收尾引號＋遮罩」），
+#: 從它往左逐段比對：
+#: 以遮罩切段，最靠近錨點的一段必須是「開頭引號＋值」的**結尾**，再往左每一段都必須依序出現在它左邊；比對得上的那幾段
+#: 連同中間的遮罩整段換成遮罩，第一個比對不上的段落（訊息的其他文字）停手、不動。
+#: 線性：每個值的每個錨點只看錨點左邊 `2×len(值)＋_TOML_REM_PAD` 字；每個值最多 `_TOML_REM_MAX` 個錨點。
+_TOML_REM_PAD: int = 64
+_TOML_REM_MAX: int = 256
 
 
-def _toml_orig_values(text: str) -> list[str]:
+def _toml_orig_values(text: str) -> list[tuple[str, str, str, bool]]:
+    """原始文字上要遮的 toml 值：（「引號＋值＋引號」字面, 收尾引號字面（找不到收尾為空字串）, 錨點後半（見下）, 有沒有位置字尾）。"""
     if not any(_n in text for _n in _POST_NEEDLES[_TOML_CONV_RE]):
         return []
     _rep = _mask_toml_conv_for(text)
-    _out: list[str] = []
+    _out: list[tuple[str, str, str, bool]] = []
+    _seen: set[str] = set()
     for _m in _TOML_CONV_RE.finditer(text):
         if _rep(_m) == _m.group(0):
             continue                                        # 一般 float()／int() 錯誤：同最後一道，不動
         _tok = text[_m.end("pre"):_m.start("suf") if _m.group("suf") is not None else _m.end()]
-        if len(_tok) >= 3 and MASK not in _tok and _tok not in _out:
-            _out.append(_tok)
+        if len(_tok) >= 3 and MASK not in _tok and _tok not in _seen:
+            _seen.add(_tok)
+            _close = ((_m.group("bs") or "") + (_m.group("qc") or "")) or _m.group("he") or ""
+            if not _close and _tok[0] in "'\"" and len(_tok) >= 2 and _tok[-1] == _tok[0]:
+                _close = _tok[0]
+            #: 錨點的後半：位置字尾；沒有字尾（同段有 `TomlDecodeError`）時用原文裡緊接在後的 ≤16 字（到字串結尾則為空）。
+            _ctx = _m.group("suf") or text[_m.end():_m.end() + 16]
+            _out.append((_tok, _close if _tok.endswith(_close) else "", _ctx, _m.group("suf") is not None))
             if len(_out) >= _TOML_ORIG_MAX:
                 break
     return _out
 
 
-def _mask_toml_orig(orig_vals: list[str], out: str) -> str:
-    for _tok in orig_vals:
+def _mask_toml_remnant(head: str, close: str, ctx: str, out: str) -> str:
+    """批 S6（SEC-r29 (c)）：值的字面被前面的規則改掉一部分之後，剩下的片段（見 `_TOML_REM_PAD` 上方註解）。
+
+    錨點 ＝ 收尾引號＋`ctx`（位置字尾，或原文緊接在後的字）；`ctx` 為空（值在字串結尾）→ 只認輸出結尾的收尾引號。
+    """
+    if not close or len(head) <= len(close):
+        return out
+    _anchor, _left = close + ctx, head
+    if not ctx:                                             # 字串結尾：哨兵字元不會出現在遮罩或錨點裡
+        out = out + "\x00"
+        _anchor += "\x00"
+    _cap = 2 * len(_left) + _TOML_REM_PAD
+    _spans: list[tuple[int, int]] = []
+    _pos, _n = 0, 0
+    while _n < _TOML_REM_MAX:
+        _p = out.find(_anchor, _pos)
+        if _p < 0:
+            break
+        _n += 1
+        _pos = _p + len(_anchor)
+        _win0 = max(0, _p - _cap)
+        _segs = out[_win0:_p].split(MASK)
+        _lim, _start, _hit, _first = len(_left), _p, False, len(_segs)
+        for _k in range(len(_segs) - 1, -1, -1):
+            _sg = _segs[_k]
+            _at = (len(_left) - len(_sg)) if _k == len(_segs) - 1 and _left.endswith(_sg) else (
+                _left.rfind(_sg, 0, _lim) if _k != len(_segs) - 1 else -1)
+            if _at < 0 or (_k == 0 and _win0 > 0):
+                break
+            _lim = _at
+            _start -= len(_sg) + (len(MASK) if _k != len(_segs) - 1 else 0)
+            _hit = _hit or any(_c.isalnum() for _c in _sg)
+            _first = _k
+        if _hit:
+            #: 最左邊比對上的段落前面若是遮罩，一併併進來（`***` 與 `***` 不連成 `******`）。
+            _spans.append((_start - (len(MASK) if 0 < _first < len(_segs) else 0), _p))
+    if not _spans:
+        return out if ctx else out[:-1]
+    _parts, _q = [], 0
+    for _a, _b in _spans:
+        _a = max(_a, _q)                                    # 與前一段重疊：接著前一段的結尾遮
+        if _a >= _b:
+            continue
+        _parts += [out[_q:_a], MASK]
+        _q = _b
+    _parts.append(out[_q:])
+    return "".join(_parts) if ctx else "".join(_parts)[:-1]
+
+
+def _mask_toml_orig(orig_vals: list[tuple[str, str, str, bool]], out: str) -> str:
+    for _tok, _close, _ctx, _has_suf in orig_vals:
         if _tok in out:
             out = out.replace(_tok, MASK)
+        _head = _tok[:len(_tok) - len(_close)]
+        out = _mask_toml_remnant(_head, _close, _ctx, out)
+        if not _has_suf:
+            #: 沒有位置字尾時，緊接在後的原文本身也可能被遮掉（實證：`\nTomlDecodeError` 整段換成遮罩）→ 再以「收尾引號＋遮罩」當錨點。
+            out = _mask_toml_remnant(_head, _close, MASK, out)
     return out
 
 

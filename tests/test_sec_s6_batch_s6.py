@@ -11,7 +11,7 @@ import pathlib
 
 import pytest
 
-from shared.secret_scrub import scrub_prose_secrets, scrub_secrets
+from shared.secret_scrub import MASK, scrub_prose_secrets, scrub_secrets
 from tests.test_sec_s3_0928 import _is_masking_of, _mutant
 from tests.test_sec_s3_batch_s3 import _FIXTURE_MARKER
 from tests.test_sec_s4_batch_s4 import _index
@@ -172,7 +172,7 @@ def test_r29b_mutant_without_html_quotes_leaks():
 # ⭐ 結構保證：關掉本批新增的部分 → 輸出與 main 792c7a2 逐字相同；且本批任何樣本都不比 main／bf0ada3／e23ff2f 少遮
 # ══════════════════════════════════════════════════════════════════
 #: 本批每一項的「關掉」突變（後面各項完成時一併登記）。
-_S6_OFF: list[tuple[str, str]] = [_R29B_OFF]
+_S6_OFF: list[tuple[str, str]] = [_R29B_OFF]  # SEC-r29 (c) 的關掉突變在檔尾登記（_R29C_OFF）
 #: 本批新增的樣本（一併涵蓋於結構保證與「不少遮」）。
 _S6_EXTRA_CORPUS: list[str] = _R28_TWO_EATEN.splitlines() + [_R28_TWO_EATEN] + _R29B_HTML + _R29B_PLAIN + _R29B_ORDER
 
@@ -237,7 +237,17 @@ def _s6_forms(n: int) -> dict[str, str]:
 
 
 def _S6_EXTRA_FORMS(n: int) -> dict[str, str]:  # noqa: N802 —— 後面各項擴充
-    return {}
+    #: SEC-r29 (c)：剩餘片段那一道 —— 錨點很多、值很長、64 個不同的長值各帶大量錨點、DER 行吃掉錨點。
+    from tests.test_sec_s3_batch_s3 import _b64, _pkcs8, _wrap
+    key = _wrap(_b64(_pkcs8(5)))[0]
+    conv = "could not convert string to float: "
+    anchor = "' (line 1 column 1 char 0)"
+    longv = key + "\n" + conv + "'" + "A" * 4000 + " S" + anchor
+    many_vals = "".join(f"{key}\n{conv}'{'B' * 3000}{k:04d} S{anchor}" + ("x" + anchor) * 300 for k in range(64))
+    return {"rem_anchor_flood": longv + ("y" * 3 + anchor) * (n // 30),
+            "rem_anchor_mask_flood": longv.replace(anchor, "'\nTomlDecodeError") + ("'" + MASK + "zzzz") * (n // 8),
+            "rem_many_long_values": many_vals * (n // len(many_vals) + 1),
+            "rem_der_eaten_lines": (key + "\n" + conv + "'" + key + " S" + anchor + "\n") * (n // 200)}
 
 
 _CPU_SCRIPT_MAIN = (
@@ -513,3 +523,81 @@ def test_r30_current_module_passes_suite():
 def test_r30_each_mutant_is_killed(name):
     from tests.test_sec_s6_batch_s6 import _gt_mutant
     assert _r30_suite(_gt_mutant(*_R30_MUTANTS[name])), name
+
+
+# ══════════════════════════════════════════════════════════════════
+# SEC-r29 (c)：DER 金鑰行緊接 toml 訊息 —— DER 那一條吃掉 `could`（或 repr 兩次後吃掉 `\\\'` 的反斜線），
+# 值是「像金鑰的字＋空白＋秘密」時，原始文字那一道的完整字面已不在輸出裡 ⇒ 秘密外露（main 亦然）
+# ══════════════════════════════════════════════════════════════════
+def _r29c_cases() -> list[str]:
+    from tests.test_sec_s3_batch_s3 import _b64, _pkcs1, _pkcs8, _wrap
+    keyline = _wrap(_b64(_pkcs8(5)))[0]
+    keylike = _wrap(_b64(_pkcs8(7)))[0]
+    out = []
+    for msg in ("could not convert string to float: {q}{v}{q} (line 1 column 1 char 0)",
+                "invalid literal for int() with base 0: {q}{v}{q} (line 1 column 1 char 0)",
+                "could not convert string to float: {q}{v}{q}\nTomlDecodeError",
+                "TomlDecodeError: x\ncould not convert string to float: {q}{v}{q}"):
+        for v in (f"{keylike} R29CSECRET", f"{_wrap(_b64(_pkcs1(4)))[0]} R29CSECRET", "MIIB R29CSECRET", "R29CSECRET",
+                  f"{keylike} R29CSECRET {keylike}"):
+            for q in ("'", '"'):
+                for sep in ("\n", "\r\n", " "):
+                    out.append(keyline + sep + msg.format(q=q, v=v))
+    return out
+
+
+_R29C = _r29c_cases()
+_R29C_FORMS = [(n, f(x)) for x in _R29C for n, f in (("raw", str), ("repr", repr), ("rr", lambda t: repr(repr(t))))]
+
+
+def test_r29c_premise_main_leaks_in_raw_repr_and_double_repr():
+    forms = {n for n, t in _R29C_FORMS if "R29CSECRET" in _MAIN.scrub_secrets(t)}
+    assert forms == {"raw", "repr", "rr"}, forms
+
+
+@pytest.mark.parametrize("fn", [scrub_secrets, scrub_prose_secrets], ids=["errors", "prose"])
+def test_r29c_der_line_before_toml_message_value_masked(fn):
+    leaks = [t for _, t in _R29C_FORMS if "R29CSECRET" in fn(t)]
+    assert not leaks, [(t[-120:], fn(t)[-120:]) for t in leaks[:3]]
+
+
+def test_r29c_never_masks_less():
+    for _, t in _R29C_FORMS:
+        _never_less(t)
+
+
+@pytest.mark.parametrize("x", [
+    "could not convert string to float: 'abc' (line 1 column 1 char 0)\n說明：abc 是範例",          # 錨點完整 → 照舊
+    "ValueError: could not convert string to float: 'abc def'\n下一行 def' (line 1 column 1 char 0)",  # 一般錯誤 → 不動
+    "x' (line 1 column 1 char 0)",
+])
+def test_r29c_unrelated_text_unchanged_vs_main(x):
+    assert scrub_secrets(x) == _MAIN.scrub_secrets(x) and scrub_prose_secrets(x) == _MAIN.scrub_prose_secrets(x)
+
+
+_R29C_OFF = ("        out = _mask_toml_remnant(_head, _close, _ctx, out)\n"
+             "        if not _has_suf:\n", "        if False:\n")
+
+
+def test_r29c_mutant_without_remnant_pass_leaks():
+    m = _mutant(_R29C_OFF)
+    assert any("R29CSECRET" in m.scrub_secrets(t) for _, t in _R29C_FORMS)
+
+
+def test_r29c_mutant_without_mask_anchor_leaks_double_repr():
+    """沒有位置字尾、緊接在後的 `\\\\nTomlDecodeError` 也被遮掉 → 只靠「收尾引號＋遮罩」那個錨點。"""
+    m = _mutant(("            out = _mask_toml_remnant(_head, _close, MASK, out)", "            pass"))
+    assert any("R29CSECRET" in m.scrub_secrets(t) for n, t in _R29C_FORMS if n == "rr")
+
+
+def test_r29c_mutant_last_segment_not_required_as_suffix_masks_unrelated_text():
+    """反方向：最靠近錨點那一段不要求是值的結尾 → 錨點前的無關文字也被遮（條件是承重的）。"""
+    x = ("could not convert string to float: 'R29CSECRET0123456789abcdefghij0123456789' (line 1 column 1 char 0)\n"
+         "ab' (line 1 column 1 char 0)")
+    m = _mutant(("_left.endswith(_sg) else (", "True else ("))
+    assert scrub_secrets(x) == _MAIN.scrub_secrets(x) and "\nab'" in scrub_secrets(x)
+    assert "\nab'" not in m.scrub_secrets(x)
+
+
+_S6_OFF.append(_R29C_OFF)
+_S6_EXTRA_CORPUS.extend(_R29C[::3] + [repr(x) for x in _R29C[1::7]] + [repr(repr(x)) for x in _R29C[2::7]])
