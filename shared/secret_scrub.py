@@ -159,7 +159,6 @@
 from __future__ import annotations
 
 import re
-from itertools import compress as _compress
 
 #: 遮罩字元（沿用 `ai_qa_service._scrub_secrets` 既有的 `***`）。
 MASK: str = "***"
@@ -1087,7 +1086,8 @@ def _toml_remnant_spans(head: str, close: str, ctx: str, out: str, budget: list[
         _f, _open = -1, -1                                  # 第一個比對不上的段；開頭片段的起點
         _over = False
         #: 只走非空段（空段＝相鄰的遮罩，一定比對得上）；每一段的起點由「右邊那一段的起點 − 遮罩長度 × 間隔 − 本段長度」推回。
-        for _k in reversed(list(_compress(range(_n - 1), map(len, _segs)))):
+        budget[0] -= 8 * _n                                 # 下一行挑非空段：每段一圈
+        for _k in [_k for _k in range(_n - 2, -1, -1) if _segs[_k]]:
             _sg = _segs[_k]
             budget[0] -= _lim + _TOML_REM_STEP
             if budget[0] < 0:
