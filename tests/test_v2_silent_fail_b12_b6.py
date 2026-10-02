@@ -140,7 +140,9 @@ class TestSectorFlow:
 # hold.macro_stage ／ hold.position_cap
 # ══════════════════════════════════════════════════════════════════
 _FAILSAFE = {"market_regime": "系統異常", "exposure_limit_pct": 0}
-_GOOD_STATE = {"market_regime": "多頭", "exposure_limit_pct": 80}
+# D3（DL-f1-s65）：裁決有有效期限 → 測資帶當下 timestamp（模組載入時取，測試期間遠小於期限）
+_GOOD_STATE = {"market_regime": "多頭", "exposure_limit_pct": 80,
+               "timestamp": MSL._now_str()}
 
 
 @pytest.fixture
@@ -219,7 +221,9 @@ class TestMacroStageAndCap:
 
     def test_e_mutant_locker_without_raise(self, macro_dir, monkeypatch):
         _write(macro_dir / "macro_state.json", _FAILSAFE)
-        _m = _mutant(MSL, ("    if strict and not _is_loaded and os.path.exists(state_file_path):",
+        # D3（DL-f1-s65）起該行多一個「過期裁決不算讀壞」子句，錨點同步（突變語意不變）。
+        _m = _mutant(MSL, ("    if strict and not _is_loaded and os.path.exists(state_file_path)"
+                           " and not _file_expired:",
                            "    if False:"))
         monkeypatch.setattr(MSL, "get_macro_state", _m.get_macro_state)
         assert _macro_card().state == UI_EMPTY
