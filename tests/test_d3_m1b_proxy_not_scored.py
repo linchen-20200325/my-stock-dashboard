@@ -359,3 +359,209 @@ class TestSnapshotOrder:
         r, order = self._run(monkeypatch, cbc=empty,
                              fred_ok=lambda p: _R(p["series_id"]), imf_ok=None)
         assert r["source"] == "TWII-proxy" and "proxy" in order
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# D3 QA 修正（2026-10-02 對抗式 QA on 093267d）：殺掉存活突變 ＋ 兩個修正
+# ══════════════════════════════════════════════════════════════════════════
+class TestQaOfficialMonthGateBoundaries:
+    """`_official_month_ok`：恰好落後 1 期要拒（`>= 1`，不是 `> 1`）；判不出資料月要拒。"""
+
+    def _tw(self, monkeypatch, *, today, ms1=None, ef15=None, proxy=(3.65, 0.91)):
+        from src.data.macro import tw_macro as TW
+        monkeypatch.setattr(TW, "_today_tw", lambda: today)
+        monkeypatch.setattr(TW, "_try_cbc_ms1_dated", lambda url: ms1)
+        monkeypatch.setattr(TW, "_try_cbc_ef15m01_dated", lambda: ef15)
+        monkeypatch.setattr(TW, "_try_twii_proxy", lambda: proxy)
+        return TW
+
+    def test_exactly_one_period_behind_is_rejected(self, monkeypatch):
+        # 2026-10-10：8 月資料應已發布（09-01+27+7 緩衝 = 10-05）→ 7 月＝落後恰 1 期
+        TW = self._tw(monkeypatch, today=_dt.date(2026, 10, 10),
+                      ef15=(7.34, 7.42, _dt.date(2026, 7, 1)))
+        assert _call(TW)["tier_used"] == 3
+
+    def test_same_month_before_grace_is_accepted(self, monkeypatch):
+        TW = self._tw(monkeypatch, today=_dt.date(2026, 10, 4),
+                      ef15=(7.34, 7.42, _dt.date(2026, 7, 1)))
+        assert _call(TW)["tier_used"] == 2
+
+    def test_unknown_month_is_rejected(self, monkeypatch):
+        TW = self._tw(monkeypatch, today=_dt.date(2026, 10, 2), ef15=(7.34, 7.42, None))
+        r = _call(TW)
+        assert r["tier_used"] == 3 and r["m1b_yoy"] == 3.65
+
+    def test_tier1_stale_falls_to_tier2(self, monkeypatch):
+        TW = self._tw(monkeypatch, today=_dt.date(2026, 10, 2),
+                      ms1=(9.9, 9.9, _dt.date(2026, 5, 1)),
+                      ef15=(7.34, 7.42, _dt.date(2026, 7, 1)))
+        r = _call(TW)
+        assert r["tier_used"] == 2 and r["m1b_yoy"] == 7.34
+
+    def test_tier1_current_carries_data_month(self, monkeypatch):
+        TW = self._tw(monkeypatch, today=_dt.date(2026, 10, 2),
+                      ms1=(9.9, 8.8, _dt.date(2026, 7, 1)))
+        r = _call(TW)
+        assert r["tier_used"] == 1 and r["data_month"] == "2026-07"
+
+
+class TestQaMs1BadMonthFallsThrough:
+    """QA B1：ms1 出現壞月份（2026M13／M00／2026-0）→ 拒用 Tier 1，照常試 EF15M01。"""
+
+    @pytest.mark.parametrize("bad", ["2026M13", "2026M00", "2026-0"])
+    def test_bad_month_rejects_tier1_then_tries_ef15(self, monkeypatch, bad):
+        from src.data.macro import tw_macro as TW
+        rows = _ms1_rows(_yms(2025, 7, 13))
+        rows[3]["年月"] = bad
+        monkeypatch.setattr(TW, "fetch_cbc_ms1_rows", lambda *a, **k: rows)
+        assert TW._try_cbc_ms1_dated("https://x/ms1.json") is None
+        monkeypatch.setattr(TW, "_today_tw", lambda: _dt.date(2026, 10, 2))
+        tried = []
+        monkeypatch.setattr(TW, "_try_cbc_ef15m01_dated",
+                            lambda: tried.append(1) or (7.34, 7.42, _dt.date(2026, 7, 1)))
+        r = _call(TW)
+        assert tried and r["tier_used"] == 2
+
+
+class TestQaVerdictFutureTimestamp:
+    """QA B2：未來時間戳（例 2099）不得永不過期。"""
+
+    def test_skew_constant(self):
+        from shared.staleness import MACRO_VERDICT_FUTURE_SKEW_DAYS
+        assert MACRO_VERDICT_FUTURE_SKEW_DAYS == 1
+
+    @pytest.mark.parametrize("ahead, expired", [
+        (_dt.timedelta(hours=23), False),
+        (_dt.timedelta(days=1), False),
+        (_dt.timedelta(days=1, seconds=1), True),
+        (_dt.timedelta(days=365 * 73), True),           # 2099 年
+    ])
+    def test_future_boundary(self, ahead, expired):
+        from src.services.macro_state_locker import macro_state_is_expired
+        assert macro_state_is_expired({"timestamp": _ts(_NOW + ahead)}, now=_NOW) is expired
+
+    def test_far_future_file_gives_no_cap(self, tmp_path):
+        from src.services.macro_state_locker import get_macro_state
+        f = tmp_path / "macro_state.json"
+        _write_state(f, timestamp="2099-01-01 00:00:00")
+        ms = get_macro_state(None, state_file_path=str(f), now=_NOW)
+        assert ms["is_loaded"] is False and ms["exposure_limit_pct"] is None
+
+
+def _fred_resp(m1_last, m2_last, n=20):
+    """FRED 兩條序列，各 n 個連續月、分別止於 m1_last／m2_last（date 月初）。"""
+    class _R:
+        status_code = 200
+
+        def __init__(self, last):
+            i0 = last.year * 12 + last.month - 1 - (n - 1)
+            self._obs = [{"date": f"{(i0 + i) // 12}-{(i0 + i) % 12 + 1:02d}-01",
+                          "value": str(100 + i)} for i in range(n)]
+
+        def json(self):
+            return {"observations": self._obs}
+    return lambda p: _R(m1_last if p["series_id"] == "MYAGM1TWA189S" else m2_last)
+
+
+def _imf_resp(y_m1, y_m2):
+    class _R:
+        status_code = 200
+
+        def __init__(self, url):
+            self.code = "MANMM101" if "MANMM101" in url else "MABMM301"
+            self.y = y_m1 if self.code == "MANMM101" else y_m2
+
+        def json(self):
+            return {"values": {self.code: {"TW": {str(self.y - 1): 1.0, str(self.y): 5.0}}}}
+    return _R
+
+
+def _expected_month():
+    from shared.staleness import MACRO_PUBLICATION_LAG_DAYS, expected_latest_data_month
+    return expected_latest_data_month(lag_days=MACRO_PUBLICATION_LAG_DAYS["m1b_m2"])
+
+
+def _prev_month(d):
+    return _dt.date(d.year - (d.month == 1), 12 if d.month == 1 else d.month - 1, 1)
+
+
+class TestQaSnapshotFredImfGates:
+    _EMPTY = {"m1b_yoy": None, "m2_yoy": None, "gap": None}
+
+    def _run(self, monkeypatch, **kw):
+        return TestSnapshotOrder()._run(monkeypatch, cbc=self._EMPTY, **kw)
+
+    def test_fred_current_accepted_with_month(self, monkeypatch):
+        e = _expected_month()
+        r, _ = self._run(monkeypatch, fred_ok=_fred_resp(e, e), imf_ok=None)
+        assert r["source"] == "FRED" and r["data_month"] == f"{e:%Y-%m}"
+
+    def test_fred_exactly_one_behind_rejected(self, monkeypatch):
+        p = _prev_month(_expected_month())
+        r, _ = self._run(monkeypatch, fred_ok=_fred_resp(p, p), imf_ok=None)
+        assert r["source"] == "TWII-proxy"
+
+    def test_fred_asof_is_older_of_two_series(self, monkeypatch):
+        e = _expected_month()
+        r, _ = self._run(monkeypatch, fred_ok=_fred_resp(e, _prev_month(e)), imf_ok=None)
+        assert r["source"] == "TWII-proxy"
+
+    def test_fred_unknown_month_rejected(self, monkeypatch):
+        import src.data.macro.macro_snapshot as S
+        monkeypatch.setattr(S, "monthly_periods_behind", lambda *a, **k: None)
+        e = _expected_month()
+        r, _ = self._run(monkeypatch, fred_ok=_fred_resp(e, e), imf_ok=None)
+        assert r["source"] == "TWII-proxy"
+
+    def test_imf_real_but_stale_annual_rejected(self, monkeypatch):
+        y = _dt.date.today().year - 1
+        r, order = self._run(monkeypatch, fred_ok=None, imf_ok=_imf_resp(y, y))
+        assert "imf" in order and r["source"] == "TWII-proxy"
+
+    def test_imf_current_accepted_with_month(self, monkeypatch):
+        y = _dt.date.today().year + 1          # 年資料 → 資料月 y-12，不落後
+        r, _ = self._run(monkeypatch, fred_ok=None, imf_ok=_imf_resp(y, y))
+        assert r["source"] == f"IMF({y})" and r["data_month"] == f"{y}-12"
+
+    def test_imf_asof_is_older_of_two_series(self, monkeypatch):
+        y = _dt.date.today().year + 1
+        r, _ = self._run(monkeypatch, fred_ok=None, imf_ok=_imf_resp(y, y - 3))
+        assert r["source"] == "TWII-proxy"
+
+    def test_imf_unknown_month_rejected(self, monkeypatch):
+        import src.data.macro.macro_snapshot as S
+        monkeypatch.setattr(S, "monthly_periods_behind", lambda *a, **k: None)
+        y = _dt.date.today().year + 1
+        r, _ = self._run(monkeypatch, fred_ok=None, imf_ok=_imf_resp(y, y))
+        assert r["source"] == "TWII-proxy"
+
+    @pytest.mark.parametrize("bad", [(float("nan"), 1.0), (1.0, float("inf"))])
+    def test_non_finite_proxy_is_dropped(self, monkeypatch, bad):
+        r, _ = self._run(monkeypatch, fred_ok=None, imf_ok=None, proxy=bad)
+        assert r is None
+
+
+class TestQaChipProxyFlagWired:
+    """`market_assessment_apply` 必須把代理旗標交給 L3（否則 chip 不標代理、腿啟用時會計分）。"""
+
+    @pytest.mark.parametrize("info, want", [(_PROXY, True), (_REAL, False)])
+    def test_flag_forwarded(self, monkeypatch, info, want):
+        import types
+
+        import pandas as pd
+
+        import src.services.market_assessment_apply as maa
+        seen = {}
+
+        def _gma(**kw):
+            seen.update(kw)
+            return {"signals": [], "label": "x", "score": 1}
+        monkeypatch.setattr("src.services.get_market_assessment", _gma)
+        monkeypatch.setattr(maa, "st", types.SimpleNamespace(session_state={"m1b_m2_info": info}))
+        idx = pd.date_range(end=pd.Timestamp("2026-10-01"), periods=130, freq="D")
+        maa.compute_and_apply_market_assessment(
+            inst={"外資": {"net": 1.0}},
+            tw_raw={"台股加權指數": pd.DataFrame({"Close": [1.0] * 130, "Volume": [1.0] * 130},
+                                                index=idx)},
+            margin=None)
+        assert seen["m1b_m2_is_proxy"] is want
