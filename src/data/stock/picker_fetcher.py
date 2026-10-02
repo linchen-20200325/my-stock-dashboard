@@ -35,7 +35,19 @@ def _finmind_raw_to_close_df(raw):
 
 
 def fetch_stock_history_1y(ticker: str):
-    """個股 1 年 K 線 fallback。
+    """個股 1 年 K 線 fallback(回傳與修前相同;`.with_status` 見 `_fetch_stock_history_1y_with_status`)。"""
+    return _fetch_stock_history_1y_with_status(ticker)[0]
+
+
+def _fetch_stock_history_1y_with_status(ticker: str):
+    """((df, resolved_ticker), 是否確定抓取失敗)。第 1 項同 `fetch_stock_history_1y`(D2-f17,批 D2)。
+
+    確定失敗 ＝ 沒拿到任何 K 線,且 Yahoo 至少一個後綴是 `cached_history.with_status` 判定的抓取失敗
+    (FinMind 備援回空在這一層分不出失敗與沒資料,不計)。`cached_history` 沒有 `.with_status` → 不計。
+
+    以下為原 docstring。
+
+    個股 1 年 K 線 fallback。
 
     .TW(上市)→ .TWO(上櫃)雙後綴重試;任一回 >= 60 筆即視為有效,回 (df, resolved_ticker)。
     resolved_ticker 為成功命中的完整代號(如 "6239.TW"),供呼叫端重用同一檔
@@ -50,17 +62,26 @@ def fetch_stock_history_1y(ticker: str):
     # Yahoo 擋 IP、選股批次重複抓。改走 yf_proxy.cached_history(NAS proxy +
     # 1h cache,抓不到回空 df 不爆例外),回傳契約(df, resolved)不變。
     from src.data.proxy.yf_proxy import cached_history as _yf_hist
+    _ws = getattr(_yf_hist, 'with_status', None)
+    _yf_failed = False     # D2-f17:任一後綴確定抓取失敗
+    _got_any = False       # D2-f17:任一後綴拿到 K 線(即使不足 60 筆)
     for _sfx in ('.TW', '.TWO'):
         try:
             _resolved = f'{ticker}{_sfx}'
-            df = _yf_hist(_resolved, period='1y')
+            if callable(_ws):
+                df, _f = _ws(_resolved, period='1y')
+                _yf_failed = _yf_failed or bool(_f)
+            else:
+                df = _yf_hist(_resolved, period='1y')
+            if df is not None and not df.empty:
+                _got_any = True
             if df is not None and not df.empty and len(df) >= 60:
                 try:
                     df.attrs.setdefault('source', f'yf_proxy.cached_history({_resolved},1y)')
                     df.attrs.setdefault('fetched_at', _pd.Timestamp.now('UTC').isoformat())
                 except Exception:
                     pass
-                return df, _resolved
+                return (df, _resolved), False
         except Exception:
             continue
 
@@ -80,7 +101,10 @@ def fetch_stock_history_1y(ticker: str):
                 _fm.attrs.setdefault("fetched_at", _pd.Timestamp.now("UTC").isoformat())
             except Exception:
                 pass
-            return _fm, str(ticker)
+            return (_fm, str(ticker)), False
     except Exception as _e_fm:
         print(f"[picker_fetcher] FinMind 備援失敗 {ticker}: {type(_e_fm).__name__}: {_e_fm}")
-    return None, None
+    return (None, None), (_yf_failed and not _got_any)
+
+
+fetch_stock_history_1y.with_status = _fetch_stock_history_1y_with_status

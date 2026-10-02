@@ -201,7 +201,7 @@ class _Features:
     ma60_prev: float
     vol_today: float
     avg_vol_20: float
-    # Enriched (cache 載入時填；缺檔則 NaN，後續用中性值代入)
+    # Enriched (cache 載入時填；缺檔則 NaN，後續以 None 傳入、不以中性值代入 —— DL-f1-s61)
     foreign_buy: float = float("nan")
     m1b_m2_gap: float = float("nan")
     m1b_m2_prev: float = float("nan")
@@ -322,7 +322,7 @@ def _features_to_traffic_light(f: _Features) -> dict:
     """以特徵組成 mkt_info → 呼叫 calc_traffic_light（cache 模式餵真實值）。"""
     from src.services import market_regime
     from src.compute.macro import calc_traffic_light
-    fb = 0 if pd.isna(f.foreign_buy) else float(f.foreign_buy)
+    fb = None if pd.isna(f.foreign_buy) else float(f.foreign_buy)   # DL-f1-s61:缺值不以 0 代入
     mg = None if pd.isna(f.m1b_m2_gap) else float(f.m1b_m2_gap)
     mp = None if pd.isna(f.m1b_m2_prev) else float(f.m1b_m2_prev)
     mkt = market_regime(
@@ -551,7 +551,7 @@ def _backtest_with_inputs_cache(df: pd.DataFrame) -> list[dict]:
         f = _build_features_at(df, t)
         if f is None:
             continue
-        fb = 0 if pd.isna(f.foreign_buy) else float(f.foreign_buy)
+        fb = None if pd.isna(f.foreign_buy) else float(f.foreign_buy)   # DL-f1-s61:缺值不以 0 代入
         mg = None if pd.isna(f.m1b_m2_gap) else float(f.m1b_m2_gap)
         mp = None if pd.isna(f.m1b_m2_prev) else float(f.m1b_m2_prev)
         mkt = market_regime(

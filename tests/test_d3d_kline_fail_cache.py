@@ -197,12 +197,60 @@ def _prefix_yp() -> types.ModuleType:
     return _load(src[:a] + _PREFIX_YP_BLOCK + src[b:], "_prefix_d3d_yf_proxy", YP.__file__)
 
 
+#: 批 D2（D2-f31）前 `daily_data_fetchers.py` 的 `fetch_flow_snapshot`（逐字）—— 修後版本改呼叫
+#: `_fetch_single_cached`（修前模型沒有），故修前模型連同本段一起換回修前原文。
+_PREFIX_FLOW_BLOCK = '''@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+def fetch_flow_snapshot(period: str = "2y"):
+    """全球資金流向所需的區域 / 跨資產 ETF 收盤序列:並行抓取 + /tmp pickle 快取 30 分。
+
+    回 {顯示名: DataFrame}(沿用 fetch_single 結構)。只在核心 SPY 抓到時才寫快取,
+    避免暫時性全失敗被黏住。供總經 tab「全球資金流向」一節使用。
+    """
+    from concurrent.futures import ThreadPoolExecutor as _TPE_fl
+    from shared.etf_universe import all_symbols as _all_fl  # Phase 2 Batch 2b v18.424:L1→L0 直 import,解 L1→L2 反向違規
+
+    # D3 v18.437:pkl 快取改用 cache_layer SSOT(key=_flow_snapshot,TTL 30 分)。
+    _c_fl = _pkl_get('_flow_snapshot', TTL_30MIN)
+    if _c_fl is not _CACHE_SENTINEL:
+        return _c_fl
+
+    _syms = _all_fl()                      # {名稱: 代號}
+    _uniq = sorted(set(_syms.values()))    # 去重後實際抓取(SPY 等共用代號只抓一次)
+
+    def _one(sym):
+        return sym, fetch_single(sym, period=period)
+
+    _by_sym = {}
+    try:
+        with _TPE_fl(max_workers=min(8, len(_uniq))) as _ex_fl:
+            for _sym, _df in _ex_fl.map(_one, _uniq):
+                _by_sym[_sym] = _df
+    except Exception as _e_fl:
+        print(f'[flow] ❌ 並行抓取異常: {_e_fl}')
+
+    out = {name: _by_sym.get(sym) for name, sym in _syms.items()}
+
+    if _by_sym.get('SPY') is not None:     # 核心抓到才快取(避免暫時全失敗被黏住)
+        _pkl_put('_flow_snapshot', out)
+    _prov_log('fetch_flow_snapshot', 'flow_engine+yf_proxy(parallel)',
+              f'period={period}', f'dict:{sum(1 for v in out.values() if v is not None)}/{len(out)}symbols')
+    return out
+
+
+'''
+
+
 def _prefix_ddf() -> types.ModuleType:
     src = pathlib.Path(DDF.__file__).read_text(encoding="utf-8")
     a = src.index("class _SingleFetchFailed(")
     end = "fetch_single.clear = _clear_fetch_single\n"
     b = src.index(end) + len(end)
-    return _load(src[:a] + _PREFIX_DDF_BLOCK + src[b:], "_prefix_d3d_daily_data_fetchers", DDF.__file__)
+    src = src[:a] + _PREFIX_DDF_BLOCK + src[b:]
+    # D2-f31：flow snapshot 段換回修前原文
+    c = src.index("class _FlowSnapshotFailed(")
+    end2 = "fetch_flow_snapshot.clear = lambda: getattr(_fetch_flow_snapshot_cached, 'clear', lambda: None)()\n\n\n"
+    d = src.index(end2) + len(end2)
+    return _load(src[:c] + _PREFIX_FLOW_BLOCK + src[d:], "_prefix_d3d_daily_data_fetchers", DDF.__file__)
 
 
 def _clear(fn) -> None:

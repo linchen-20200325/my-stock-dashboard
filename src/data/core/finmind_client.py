@@ -68,8 +68,19 @@ def _to_dash(d) -> str | None:
     return s
 
 
+#: D2-f24:確定是暫時性抓取失敗的狀態碼(HTTP 或 JSON `status`)。額度用罄(402)、限流(429)、伺服器錯誤(5xx)。
+#: 其餘非 200(400/401/403/422…:方案不支援 / token / 參數)與「真的沒資料」在這一層分不出來 → 不算(不猜 §1)。
+def _is_transient_status(code) -> bool:
+    try:
+        c = int(code)
+    except (TypeError, ValueError):
+        return False
+    return c in (402, 429) or c >= 500
+
+
 def finmind_get(dataset: str, *, data_id=None, start_date=None, end_date=None,
-                token: str = "", timeout: int = 20, retries: int = 1) -> "pd.DataFrame":
+                token: str = "", timeout: int = 20, retries: int = 1,
+                failed: list | None = None) -> "pd.DataFrame":
     """FinMind v4 `data` endpoint 統一查詢。
 
     Args:
@@ -80,6 +91,9 @@ def finmind_get(dataset: str, *, data_id=None, start_date=None, end_date=None,
         token:      FinMind API token;空 → 不送(免費額度)。
         timeout:    單次請求秒數(預設 20,對齊多數 fetcher)。
         retries:    嘗試次數(預設 1 = 不重試;leading_indicators 等傳 2)。
+        failed:     (D2-f24;預設 None = 既有行為一字不變)傳一個 list 進來 → **確定抓取失敗**時
+                    寫一筆說明:最後一次嘗試拋例外(連線/逾時/回應不是 JSON…),或 HTTP／JSON 狀態為
+                    402／429／5xx。回傳值不變(仍是空表)。
 
     Returns:
         status==200 → `pd.DataFrame(data)`(可能空);否則 / 例外 / 無 requests → 空 DataFrame。
@@ -115,10 +129,15 @@ def finmind_get(dataset: str, *, data_id=None, start_date=None, end_date=None,
                 return df
             print(f"[FinMind] {dataset} HTTP={r.status_code} "
                   f"status={d.get('status')} msg={d.get('msg', '')}")
+            if failed is not None and (_is_transient_status(r.status_code)
+                                       or _is_transient_status(d.get("status"))):
+                failed.append(f"{dataset}: HTTP={r.status_code} status={d.get('status')}")
             return pd.DataFrame()
         except Exception as _e:
             print(f"[FinMind] {dataset} attempt {_i + 1} ❌ {type(_e).__name__}: {_e}")
             if _i == _attempts - 1:
+                if failed is not None:   # D2-f24:確定抓取失敗
+                    failed.append(f"{dataset}: {type(_e).__name__}")
                 return pd.DataFrame()
             time.sleep(1)
     return pd.DataFrame()

@@ -82,6 +82,15 @@ class _PoolPricesFetchFailed(_UpstreamFetchFailed):
     """
 
 
+class _PartialPricesFetchFailed(_PoolPricesFetchFailed):
+    """③ 排行不空(或空但非「每一檔都抓不到」),卻有個股是 L1 判定的**確定抓取失敗**(D2-f17,批 D2)。
+
+    修前這份部分失敗的排行被 `@st.cache_data` 快取 1 小時。現在同 `_PoolPricesFetchFailed` 拋出
+    (不入快取),由 `_scan_cached` 接住並記掃描層遞增退避,回傳內容不變。判準見 L1
+    `fetch_stock_history_1y.with_status`(沒拿到任何 K 線、且 Yahoo 至少一個後綴確定抓取失敗)。
+    """
+
+
 def _clear(fn) -> None:
     clear = getattr(fn, "clear", None)
     if callable(clear):
@@ -106,23 +115,38 @@ def _market_frame() -> pd.DataFrame:
     return s.rename("close").to_frame()
 
 
-def _fetch_one(sid: str) -> dict:
-    """逐檔抓 1y K 線 → {stock_id, name, df}（df=None 代表抓不到，下游標資料不足）。"""
+def _fetch_one_with_status(sid: str) -> tuple[dict, bool]:
+    """(_fetch_one 的回傳, 這一檔是不是 L1 判定的確定抓取失敗)(D2-f17)。
+    L1 沒有 `.with_status`(例:被換成純函式)→ 照修前呼叫、當非失敗(不猜)。"""
+    _failed = False
     try:
-        df, _resolved = fetch_stock_history_1y(sid)
+        _ws = getattr(fetch_stock_history_1y, "with_status", None)
+        if callable(_ws):
+            (df, _resolved), _failed = _ws(sid)
+        else:
+            df, _resolved = fetch_stock_history_1y(sid)
     except Exception as _e:  # noqa: BLE001 — 單檔失敗不拖垮整批
         print(f"[rs-svc] {sid} 抓價失敗:{type(_e).__name__}: {_e}")
         df = None
-    return {"stock_id": str(sid), "name": "", "df": df}
+    return {"stock_id": str(sid), "name": "", "df": df}, bool(_failed)
 
 
-def _fetch_pool_prices(ids: list[str]) -> list[dict]:
-    """並行抓整個存活池的個股 K 線（fetch_stock_history_1y 無 st.cache、thread-safe）。"""
+def _fetch_one(sid: str) -> dict:
+    """逐檔抓 1y K 線 → {stock_id, name, df}（df=None 代表抓不到，下游標資料不足）。"""
+    return _fetch_one_with_status(sid)[0]
+
+
+def _fetch_pool_prices(ids: list[str], *, failed: list | None = None) -> list[dict]:
+    """並行抓整個存活池的個股 K 線（fetch_stock_history_1y 無 st.cache、thread-safe）。
+    failed（D2-f17）：傳 list 進來 → 確定抓取失敗的股號各寫一筆（回傳不變）。"""
     out: list[dict] = []
     with ThreadPoolExecutor(max_workers=RS_MAX_WORKERS) as ex:
-        _futs = {ex.submit(_fetch_one, sid): sid for sid in ids}
+        _futs = {ex.submit(_fetch_one_with_status, sid): sid for sid in ids}
         for _f in as_completed(_futs):
-            out.append(_f.result())
+            _stock, _fl = _f.result()
+            out.append(_stock)
+            if _fl and failed is not None:
+                failed.append(_stock["stock_id"])
     return out
 
 
@@ -302,7 +326,8 @@ def _scan_body(lookback: int, max_scan: int, beat_only: bool,
                              "快照就緒後即可掃描。")}
 
     # ── ③ 逐檔抓價 + L2 排名 ──────────────────────────────────
-    stocks = _fetch_pool_prices(survivors)
+    _price_failed: list[str] = []   # D2-f17
+    stocks = _fetch_pool_prices(survivors, failed=_price_failed)
     ranked = rank_rs_leaders(stocks, dfm, lookback=lookback,
                              top_n=top_n, beat_only=beat_only)
     rows = to_rows(ranked)
@@ -320,6 +345,10 @@ def _scan_body(lookback: int, max_scan: int, beat_only: bool,
         # 被 @st.cache_data 快取 1 小時,個股恢復後仍原樣回傳失敗。改為拋出(不入快取),
         # 由 _scan_cached 接住並記掃描層遞增退避(§1.A-3(b)),回傳內容與修前逐字相同。
         raise _PoolPricesFetchFailed(_result)
+    if _price_failed:
+        # D2-f17(批 D2,§1.A-3(a)):有個股確定抓取失敗 —— 修前這份部分失敗的排行照舊快取 1 小時。
+        # 改為拋出(不入快取),由 _scan_cached 接住並記掃描層遞增退避,回傳內容不變。
+        raise _PartialPricesFetchFailed(_result)
     return _result
 
 

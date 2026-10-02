@@ -950,6 +950,12 @@ def update_one(name: str, today: _dt.date, bootstrap: bool, years: int,
             # 重建途中拋例外：壞檔原樣保留，metadata 誠實標壞
             meta["last_error"] += "；既有檔 sanity 不過,待重建"
             meta["row_count"] = len(_corrupt_existing)
+        elif existing is not None and not existing.empty:
+            # DL-f1-s55：抓取拋例外 ≠ 表是空的。row_count／last_updated 比照「抓取結果為空，保留現有資料」
+            # 分支描述現有 parquet（原本停在初始值 0／null）；last_error 照舊記例外（讀取端判定不變）。
+            _ld_ex = _last_date(existing)   # 無 date 欄／日期解析不了 → None(同 DL-f1-s42 分支)
+            meta["last_updated"] = None if _ld_ex is None else _ld_ex.isoformat()
+            meta["row_count"] = len(existing)
         print(f"[{name}] ❌ {meta['last_error']}")
         return meta
 
