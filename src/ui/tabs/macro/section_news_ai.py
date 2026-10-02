@@ -18,6 +18,7 @@ import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
 from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
+from shared.macro_provenance import m1b_m2_for_scoring  # DL-f1-s17：代理值不計分（L0 SSOT）
 # v19.178 AI-SSOT:餵給 LLM 的門檻一律引 SSOT,不在 prompt 內寫死(§3.3)。
 # 五桶危險門檻 SSOT = shared/macro_buckets.BUCKET_DANGER_SPECS(畫面燈號同源),
 # 由 L3 共用 prompt 元件 ai_structured_summary 轉成判讀句(個股 Tab 共用同一份)。
@@ -222,6 +223,11 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 _m2_ai  = _finite_yoy(_mi_d, 'm2_yoy')
                 if _m1b_ai is None or _m2_ai is None:
                     _m1b_ai = _m2_ai = None
+                # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理
+                # → 經 L0 `m1b_m2_for_scoring` 當缺 —— 規則引擎（→ macro_state.json → 全站建議持股上限）
+                # 與下方 prompt 那一行都走上面同一條既有缺值路徑。非代理時本段不動任何值。
+                if m1b_m2_for_scoring(_mi_d) is None:
+                    _m1b_ai = _m2_ai = None
                 _macro_numbers = {
                     'VIX_Index':           _vix_d.get('current'),
                     'M1B_YoY_pct':         _m1b_ai,
@@ -402,7 +408,13 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                     _v_macro_ctx = '{}\n\n{}'.format('\n'.join(_ctx_legends),
                                                      _v_macro_ctx)
                 _locker = MacroStateLocker()
-                _locker.lock_system_state_only(_system_state)
+                # DL-f1-s13／s65：落檔的裁決多帶 M1B/M2 資料月（只在它真的進了計分時；代理／缺值
+                # → None）。只加在寫檔那份 dict；下方送 AI 的 `_v_state_json` 仍用原 `_system_state`。
+                _locker.lock_system_state_only({
+                    **_system_state,
+                    'm1b_m2_data_month': (_mi_d.get('data_month')
+                                          if _m1b_ai is not None else None),
+                })
                 # 組裝 Markdown 提示語（不依賴 JSON 解析，與 Tab 2 AI 首席顧問同風格）
                 _v_state_json = json.dumps(_system_state, ensure_ascii=False, indent=2)
                 # 將新聞標題與摘要一併傳給 AI（提升黑天鵝偵測準確度）

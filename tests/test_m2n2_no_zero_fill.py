@@ -188,6 +188,53 @@ def _load(ek: str, code: str, tag: str):
 
 _IMPORT_LINE = "from src.ui.tabs.macro.section_long import _finite_yoy\n"
 
+# ── 批 D3（DL-f1-s17，客戶 2026-10-02「M1B 代理值：只顯示不計分」）────────────────
+# 下列片段是 D3 加的；還原體一併拿掉，才仍等於修前碼 da4eb94。代理來源在 news／op／mid
+# 三個出口的輸出自 D3 起**刻意**改成「＝空值輸出」（見 `_D3_PROXY_SOURCES` 的處置與
+# tests/test_d3_m1b_proxy_not_scored.py）；非代理來源的比對完全不變。
+_D3_IMPORT = ("from shared.macro_provenance import m1b_m2_for_scoring"
+              "  # DL-f1-s17：代理值不計分（L0 SSOT）\n")
+_D3_REVERT = {
+    "news": (
+        (_D3_IMPORT, ""),
+        ("                # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理\n"
+         "                # → 經 L0 `m1b_m2_for_scoring` 當缺 —— 規則引擎（→ macro_state.json → 全站建議持股上限）\n"
+         "                # 與下方 prompt 那一行都走上面同一條既有缺值路徑。非代理時本段不動任何值。\n"
+         "                if m1b_m2_for_scoring(_mi_d) is None:\n"
+         "                    _m1b_ai = _m2_ai = None\n", ""),
+        ("                # DL-f1-s13／s65：落檔的裁決多帶 M1B/M2 資料月（只在它真的進了計分時；代理／缺值\n"
+         "                # → None）。只加在寫檔那份 dict；下方送 AI 的 `_v_state_json` 仍用原 `_system_state`。\n"
+         "                _locker.lock_system_state_only({\n"
+         "                    **_system_state,\n"
+         "                    'm1b_m2_data_month': (_mi_d.get('data_month')\n"
+         "                                          if _m1b_ai is not None else None),\n"
+         "                })\n",
+         "                _locker.lock_system_state_only(_system_state)\n"),
+    ),
+    "op": (
+        (_D3_IMPORT, ""),
+        ("        # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理 →\n"
+         "        # 差額送 None，走上面同一條既有缺值路徑（L3 不出【景氣環境】那句）。非代理時不動。\n"
+         "        if m1b_m2_for_scoring(_m1b_top_g) is None:\n"
+         "            _m1b_diff_g = None\n", ""),
+    ),
+    "mid": (
+        (_D3_IMPORT, ""),
+        ("        # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理 →\n"
+         "        # 當缺（＝空 dict）：策略3 走既有「載入後自動顯示」、下方三環 D 走既有「D M1B-M2未知」。\n"
+         "        # 非代理時不動（同一個物件）。\n"
+         "        if m1b_m2_for_scoring(_m1b8_info) is None:\n"
+         "            _m1b8_info = {}\n", ""),
+    ),
+    "state": (),
+}
+#: D3 起 news／op／mid 對這幾種代理來源的輸出 ＝ 空值輸出（不再與修前比對）。
+_D3_PROXY_SOURCES = {"proxy_label", "proxy_label_raw",
+                     "proxy_flag_is_proxy_tier", "proxy_flag_is_proxy"}
+_D3_EXITS = {"news", "op", "mid"}
+#: D3 在 news 加的兩個**非畫面**字面（落檔 dict 的鍵）；K1 比對時排除。
+_D3_NON_UI_LITERALS = {"m1b_m2_data_month", "data_month"}
+
 #: 反向替換：把本批改動還原成修前碼（＝da4eb94）。
 #: 本實作組另做過一次性驗證（不在本檔重跑）：4 個還原體與 da4eb94 的 AST 完全相同；
 #: 並以同一個 harness 在修前工作樹實跑擷取 696 組輸出（4 出口 ×〔17 種數值 × 9 種來源形狀
@@ -264,7 +311,7 @@ _REVERT = {
 
 
 def _revert_source(ek: str) -> str:
-    return _apply(_source(ek), _REVERT[ek])
+    return _apply(_source(ek), _REVERT[ek] + _D3_REVERT[ek])
 
 
 @pytest.fixture(scope="module")
@@ -382,7 +429,10 @@ def _exc(r):
 def _view(ek: str, r: dict):
     """「完整輸出」：畫面記錄 ＋ 該出口送進 L3／Gemini 的東西（比對用）。"""
     if ek == "news":
-        return (_exc(r), r["n_prompts"], r["prompt"], r["numbers"], r["locked"], r["out"])
+        # D3：落檔 dict 多一個 `m1b_m2_data_month`（加性；值另由 test_d3 驗）→ 比對時拿掉
+        _locked = [{k: v for k, v in d.items() if k != "m1b_m2_data_month"}
+                   for d in r["locked"]]
+        return (_exc(r), r["n_prompts"], r["prompt"], r["numbers"], _locked, r["out"])
     if ek == "op":
         return (_exc(r), r["m1b_diff"], r["out"])
     if ek == "state":
@@ -648,6 +698,12 @@ class TestNonMissingUnchanged:
         for source in _SOURCES:
             info = _info(gap, source)
             now = _RUN[ek](_mod(ek), info, monkeypatch)
+            if ek in _D3_EXITS and source in _D3_PROXY_SOURCES:
+                # D3：代理值不計分 → 完整輸出＝空值輸出（既有缺值路徑）
+                empty = _RUN[ek](_mod(ek), {}, monkeypatch)
+                assert now["exc"] is None
+                assert _view(ek, now) == _view(ek, empty), f"{ek}/{gap}/{source}：代理值仍被計分"
+                continue
             pre = _RUN[ek](pre_fix[ek], info, monkeypatch)
             assert now["exc"] is None and pre["exc"] is None
             assert _view(ek, now) == _view(ek, pre), f"{ek}/{gap}/{source}：完整輸出與修前不同"
@@ -679,18 +735,14 @@ class TestNonMissingUnchanged:
 #:    `_run_news`／`_run_op` 實跑擷取；同一組輸入切回 4043cb7 重跑，32 組輸出逐字相同。
 _GOLDEN_NEWS = {
     ("strong", "CBC-tier1"): "• M1B=5.1%  M2=2.0%  差額=+3.10%（正=資金行情啟動；",
-    ("strong", "proxy_label"): f"• M1B=5.1%  M2=2.0%  差額=+3.10%{NOTE}（正=資金行情啟動；",
     ("negative", "CBC-tier1"): "• M1B=1.2%  M2=5.0%  差額=-3.80%（正=資金行情啟動；",
     ("m2_is_zero", "CBC-tier1"): "• M1B=1.5%  M2=0.0%  差額=+1.50%（正=資金行情啟動；",
-    ("both_negative", "proxy_label"): f"• M1B=-1.5%  M2=-3.0%  差額=+1.50%{NOTE}（正=資金行情啟動；",
     # ── 驗收組非阻擋 1 補（da4eb94 樹實跑）──
     ("gap_2dp_713", "CBC-tier1"): "• M1B=9.3%  M2=2.2%  差額=+7.13%（正=資金行情啟動；",
-    ("gap_2dp_neg104", "proxy_label"): f"• M1B=1.0%  M2=2.0%  差額=-1.04%{NOTE}（正=資金行情啟動；",
     ("zero", "CBC-tier1"): "• M1B=2.0%  M2=2.0%  差額=+0.00%（正=資金行情啟動；",
 }
 _GOLDEN_OP = {
     ("strong", "CBC-tier1"): "• 🌐 【景氣環境】M1B-M2為正且強勁，資金行情啟動中，可積極持股。",
-    ("strong", "proxy_label"): f"• 🌐 【景氣環境】M1B-M2{NOTE}為正且強勁，資金行情啟動中，可積極持股。",
     ("negative", "CBC-tier1"): "• 🌐 【景氣環境】M1B-M2為負，目前處於資金縮減期。",
     # ── 驗收組非阻擋 1 補（da4eb94 樹實跑）──
     ("gap_2dp_713", "CBC-tier1"): "• 🌐 【景氣環境】M1B-M2為正且強勁，資金行情啟動中，可積極持股。",
@@ -718,9 +770,6 @@ _GOLDEN_MID = {
     ("strong", "CBC-tier1"): ("M1B-M2 Gap = +3.10%（黃金交叉·熱錢狂潮）",
                               "🔥 資金動能強勁（M1B=5.1% > M2=2.0%），熱錢湧入股市，積極作多強勢股。",
                               "D M1B-M2=+3.10%"),
-    ("strong", "proxy_label"): (f"M1B-M2 Gap = +3.10%{NOTE}（黃金交叉·熱錢狂潮）",
-                                "🔥 資金動能強勁（M1B=5.1% > M2=2.0%），熱錢湧入股市，積極作多強勢股。",
-                                f"D M1B-M2=+3.10%{NOTE}"),
     ("negative", "CBC-tier1"): ("M1B-M2 Gap = -3.80%（死亡交叉·資金退潮）",
                                 "📉 資金動能趨緩（M1B=1.2% < M2=5.0%），資金轉向定存或匯出，減碼等待訊號確認。",
                                 "D M1B-M2=-3.80%"),
@@ -728,9 +777,6 @@ _GOLDEN_MID = {
     ("gap_2dp_713", "CBC-tier1"): ("M1B-M2 Gap = +7.13%（黃金交叉·熱錢狂潮）",
                                    "🔥 資金動能強勁（M1B=9.3% > M2=2.2%），熱錢湧入股市，積極作多強勢股。",
                                    "D M1B-M2=+7.13%"),
-    ("gap_2dp_713", "proxy_label"): (f"M1B-M2 Gap = +7.13%{NOTE}（黃金交叉·熱錢狂潮）",
-                                     "🔥 資金動能強勁（M1B=9.3% > M2=2.2%），熱錢湧入股市，積極作多強勢股。",
-                                     f"D M1B-M2=+7.13%{NOTE}"),
     ("gap_2dp_pos004", "CBC-tier1"): ("M1B-M2 Gap = +0.04%（資金溫和·中性擴張）",
                                       "💧 資金動能溫和（M1B=2.0% ≥ M2=2.0%），無失血風險，回歸個股基本面與籌碼面操作。",
                                       "D M1B-M2=+0.04%"),
@@ -741,6 +787,8 @@ _GOLDEN_MID = {
                             "💧 資金動能溫和（M1B=2.0% ≥ M2=2.0%），無失血風險，回歸個股基本面與籌碼面操作。",
                             "D M1B-M2=+0.00%"),
 }
+# D3（2026-10-02）：news／op／mid 的代理來源 golden 已移除 —— 修前實跑擷取的是「代理照樣計分」，
+# 客戶裁 ③ 起代理值不計分，那幾格改由 D 類「＝空值輸出」與 tests/test_d3_m1b_proxy_not_scored.py 守。
 _D_SPAN = re.compile(r'<span style="[^"]*">(D M1B-M2[^<]*)</span>')
 
 
@@ -802,13 +850,13 @@ class TestNegativeZeroCorner:
     只差這一個字元；規則引擎輸入、鎖定狀態、畫面其餘部分逐字相同。
     """
 
-    @pytest.mark.parametrize("source", sorted(_SOURCES))
+    @pytest.mark.parametrize("source", sorted(set(_SOURCES) - _D3_PROXY_SOURCES))
     def test_only_the_sign_of_zero_differs(self, source, pre_fix, monkeypatch):
         info = {"m1b_yoy": -0.0, "m2_yoy": -0.0, **_SOURCES[source]}
         now = _run_news(_mod("news"), info, monkeypatch)
         pre = _run_news(pre_fix["news"], info, monkeypatch)
         assert now["exc"] is None and pre["exc"] is None
-        assert (now["numbers"], now["locked"], now["out"]) == (pre["numbers"], pre["locked"], pre["out"])
+        assert _view("news", now)[3:] == _view("news", pre)[3:]   # numbers／locked（去 D3 鍵）／out
         (ln_now,), (ln_pre,) = _m1b_lines(now["prompt"]), _m1b_lines(pre["prompt"])
         assert "差額=-0.00%" in ln_pre and "差額=+0.00%" in ln_now
         assert ln_now.replace("差額=+0.00%", "差額=-0.00%") == ln_pre
@@ -817,6 +865,8 @@ class TestNegativeZeroCorner:
     @pytest.mark.parametrize("ek", ["op", "state", "mid"])
     def test_other_exits_identical(self, ek, pre_fix, monkeypatch):
         for source in _SOURCES:
+            if ek in _D3_EXITS and source in _D3_PROXY_SOURCES:
+                continue        # D3：代理值不計分（D 類已驗＝空值輸出）
             info = {"m1b_yoy": -0.0, "m2_yoy": -0.0, **_SOURCES[source]}
             assert _view(ek, _RUN[ek](_mod(ek), info, monkeypatch)) == \
                 _view(ek, _RUN[ek](pre_fix[ek], info, monkeypatch))
@@ -877,7 +927,7 @@ class TestK1NoNewCopy:
 
     @pytest.mark.parametrize("ek", _EXITS)
     def test_string_literals_identical_to_pre_fix(self, ek):
-        now = _str_literals(_source(ek))
+        now = _str_literals(_source(ek)) - _D3_NON_UI_LITERALS
         pre = _str_literals(_revert_source(ek))
         assert now - pre == set(), f"新增了本檔原本沒有的字面：{sorted(now - pre)}"
         assert pre - now == set(), f"刪掉了既有字面：{sorted(pre - now)}"
@@ -901,7 +951,10 @@ _MUTANTS = {
     ), _M2_SIDE | _M1B_SIDE),
     # 只清 M1B（M2 照送）→ 缺 M1B 時 spread＝−M2（test_strong_scenario_is_sensitive_to_m1b_only_removal 那一型）
     "news_clear_only_m1b": ("news", (
-        ("                    _m1b_ai = _m2_ai = None\n", "                    _m1b_ai = None\n"),
+        ("                if _m1b_ai is None or _m2_ai is None:\n"
+         "                    _m1b_ai = _m2_ai = None\n",
+         "                if _m1b_ai is None or _m2_ai is None:\n"
+         "                    _m1b_ai = None\n"),
     ), _M1B_SIDE),
     # prompt 那一行退回讀原始 dict（`or 0`）；引擎輸入仍是修後
     "news_prompt_reverted": ("news", _REVERT["news"][3:5],
@@ -966,7 +1019,7 @@ _SOURCE_LEVEL_MUTANTS = {
     # 批 MAC M2N-f2 起該行帶 `+ 0.0`（−0.0 正規化），錨點同步；突變語意不變（只改位數）。
     "mid_gap8_round_1dp": ("mid", (("            _gap8 = round(_m1b8 - _m2b8, 2) + 0.0\n",
                                     "            _gap8 = round(_m1b8 - _m2b8, 1) + 0.0\n"),),
-                           {("gap_2dp_713", "CBC-tier1"), ("gap_2dp_713", "proxy_label"),
+                           {("gap_2dp_713", "CBC-tier1"),
                             ("gap_2dp_pos004", "CBC-tier1"), ("gap_2dp_neg104", "CBC-tier1")}),
     # §二 黃金交叉由嚴格大於改成大於等於：M1B＝M2 會多出一條黃金交叉
     "state_golden_cross_ge0": ("state", (("            if _diff > 0:\n",
@@ -980,6 +1033,10 @@ class TestMutantsAreCaught:
     @pytest.mark.parametrize("name", sorted(_MUTANTS))
     def test_mutant_turns_missing_contract_red(self, name, monkeypatch):
         ek, pairs, must_be_red = _MUTANTS[name]
+        if ek in _D3_EXITS:
+            # D3：代理來源（含「代理但缺數字」）在 news／op／mid 先被 L0 `m1b_m2_for_scoring`
+            # 當缺 → 這幾個突變碰不到它們；其餘情境的要求不變。
+            must_be_red = must_be_red - _PROXY_MISSING
         m = _load(ek, _apply(_source(ek), pairs), name)
         red = _red_cases(ek, m, monkeypatch)
         assert red, f"突變「{name}」沒讓任何缺值情境轉紅 —— 新測試抓不到它"
@@ -1089,15 +1146,21 @@ class TestRealStreamlitRender:
 
     @pytest.mark.parametrize("ek", ["op", "state", "mid"])
     def test_numbers_still_render(self, ek):
-        at = _app(ek, {"m1b_yoy": 5.1, "m2_yoy": 2.0, "source": M1B_PROXY_SOURCE_LABEL})
+        # D3（2026-10-02）：原以代理來源驗「數字照樣畫」；客戶裁 ③ 起代理值不計分 →
+        # 數字照樣畫改以央行來源驗，代理來源改驗「不出結論句」（state 照舊本來就不出）。
+        at = _app(ek, {"m1b_yoy": 5.1, "m2_yoy": 2.0, "source": "CBC-tier1"})
         _app_fail_on_exception(at)
         texts = "\n".join(_app_texts(at))
-        want = {"op": f"【景氣環境】M1B-M2{NOTE}為正且強勁",
-                "state": "",                         # 代理值不產生交叉訊號（照舊）
-                "mid": f"M1B-M2 Gap = +3.10%{NOTE}（黃金交叉·熱錢狂潮）"}[ek]
+        want = {"op": "【景氣環境】M1B-M2為正且強勁",
+                "state": "M1B>M2 黃金交叉",
+                "mid": "M1B-M2 Gap = +3.10%（黃金交叉·熱錢狂潮）"}[ek]
         assert want in texts
-        if ek == "state":
-            assert "M1B>M2 黃金交叉" not in texts
+        at_p = _app(ek, {"m1b_yoy": 5.1, "m2_yoy": 2.0, "source": M1B_PROXY_SOURCE_LABEL})
+        _app_fail_on_exception(at_p)
+        texts_p = "\n".join(_app_texts(at_p))
+        assert "【景氣環境】" not in texts_p and "黃金交叉" not in texts_p
+        if ek == "mid":
+            assert _MID_PENDING in texts_p and _MID_D_UNKNOWN in texts_p
 
     @pytest.mark.parametrize("name", ["m2_key_absent", "m2_none", "both_nan", "m1b_key_absent"])
     def test_news_verdict_button_real_click(self, name, monkeypatch):

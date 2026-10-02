@@ -20,6 +20,7 @@ from src.services.app_ai_service import generate_ai_comment
 from src.ui.render import STRATEGY_TECHNICAL, strategy_conclusion  # v19.174 去識別化
 # DL-f1-s44（§1 不捏 0）：M1B／M2 年增率「可用」＝有限數值 —— 沿用 #746 同一個函式，不另寫一份。
 from src.ui.tabs.macro.section_long import _finite_yoy
+from shared.macro_provenance import m1b_m2_for_scoring  # DL-f1-s17：代理值不計分（L0 SSOT）
 
 
 def render_op_recommendation_section(sid2: str, health2,
@@ -93,6 +94,10 @@ def render_op_recommendation_section(sid2: str, health2,
         _m2_g = _finite_yoy(_m1b_top_g, 'm2_yoy')
         _m1b_diff_g = (_m1b_g - _m2_g
                        if _m1b_g is not None and _m2_g is not None else None)
+        # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理 →
+        # 差額送 None，走上面同一條既有缺值路徑（L3 不出【景氣環境】那句）。非代理時不動。
+        if m1b_m2_for_scoring(_m1b_top_g) is None:
+            _m1b_diff_g = None
         # 取 Tab3 最近分析的外資資料
         _cd_g = st.session_state.get('cl_data', {})
         _inst_g = _cd_g.get('inst', {})
