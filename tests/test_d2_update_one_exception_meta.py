@@ -9,7 +9,6 @@
 """
 from __future__ import annotations
 
-import pandas as pd
 
 import scripts.update_macro_history as umh
 from tests.test_dl_f1_r4_batch import _INST_DATES, _TODAY, _inst_parquet

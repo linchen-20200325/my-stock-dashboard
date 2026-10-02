@@ -13,7 +13,7 @@ import pytest
 import src.data.stock.monthly_revenue_fetcher as MR
 from shared.fail_cooldown import FAIL_COOLDOWN_SEC
 from tests.test_d3e_mrev_fail_cache import (  # noqa: F401 — fixture 由 pytest 依名稱取用
-    _assert_single_openapi_row, _fm_single_frame, fc_clock, world,
+    _assert_single_openapi_row, fc_clock, world,
 )
 
 
