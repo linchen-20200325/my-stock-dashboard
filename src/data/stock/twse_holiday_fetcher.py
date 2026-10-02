@@ -31,6 +31,11 @@
 - `trading`：含 `TRADING_MARKERS` 任一詞（開始交易／最後交易）
 - `unclassified`：**兩類都沒中、或兩類都中**。⛔ 不猜它是哪一類 ——
   下游碰到這一天一律判「無法判定」（L2 `src/compute/trading_calendar.py`）。
+- **同一天兩列分類互相衝突**（例：一列放假、一列開始交易）→ 該日只歸 `unclassified`。
+
+═══ 完整性檢查（批 D5 QA 修 1）═════════════════════════════════════
+某年要三個固定國曆日國定假日（`COMPLETENESS_ANCHORS`：1/1、2/28、10/10）都以 `closed`
+出現才算涵蓋；沒有任何一年通過 → 整份 raise（不入快取）。只防明顯殘缺，⛔ 不證明完整。
 
 ═══ 只快取成功、失敗退避（§1.A-3）══════════════════════════════════
 - 快取層 `_fetch_calendar_cached` 失敗一律 **raise**（`st.cache_data` 不快取例外）；
@@ -82,6 +87,12 @@ TRADING_MARKERS: tuple[str, ...] = ("開始交易", "最後交易")
 #: `Weekday` 欄的字 → `date.weekday()`（交叉核對用；格式漂移時 raise）。
 _WEEKDAY_CHARS: dict[str, int] = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6}
 
+#: 「這一年的表是完整的」的錨點：三個**固定國曆日**的國定假日，每年必列（落在週末也照列）。
+#: 某年三個都以 `closed` 出現，才算本表涵蓋該年；缺任一 → 該年一律無法判定（批 D5 QA 修 1：
+#: 修前「該年有任一列就算涵蓋」⇒ 只回一列的殘表會把春節等平日休市全判成交易日）。
+#: ⚠️ 只防「明顯殘缺」，⛔ 不證明完整（例：漏掉春節而三錨點都在的表仍會通過）。
+COMPLETENESS_ANCHORS: tuple[tuple[int, int], ...] = ((1, 1), (2, 28), (10, 10))
+
 _HDR_JSON = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 
 
@@ -104,14 +115,25 @@ class HolidayCalendar:
     """解析後的休市表 ＋ provenance（§2.2）。"""
 
     entries: tuple[HolidayEntry, ...]
-    #: 表內出現過的西元年（＝本表涵蓋得到的年份；不在其中的年份一律無法判定）。
+    #: 通過完整性檢查（`COMPLETENESS_ANCHORS`）的西元年；不在其中的年份一律無法判定。
     covered_years: frozenset[int]
     source: str
     #: 抓取當下（UTC）。
     fetched_at: datetime
 
+    def conflicting_dates(self) -> frozenset[date]:
+        """同一天出現兩種以上分類的日子（例：一列放假、一列開始交易）。"""
+        kinds: dict[date, set[str]] = {}
+        for e in self.entries:
+            kinds.setdefault(e.day, set()).add(e.kind)
+        return frozenset(d for d, k in kinds.items() if len(k) > 1)
+
     def dates_of(self, kind: str) -> frozenset[date]:
-        return frozenset(e.day for e in self.entries if e.kind == kind)
+        """某一類的日子。**分類互相衝突的日子只歸 `unclassified`**（批 D5 QA 修 2）。"""
+        conflict = self.conflicting_dates()
+        if kind == "unclassified":
+            return frozenset(e.day for e in self.entries if e.kind == kind) | conflict
+        return frozenset(e.day for e in self.entries if e.kind == kind) - conflict
 
 
 def parse_roc_date(raw: object) -> date:
@@ -119,6 +141,8 @@ def parse_roc_date(raw: object) -> date:
     s = str(raw).strip() if raw is not None else ""
     if len(s) != 7 or not s.isdigit():
         raise ValueError(f"Date 欄不是 7 位民國年月日：{raw!r}")
+    if int(s[:3]) < 1:
+        raise ValueError(f"Date 欄民國年小於 1（民國 0 年不存在）：{raw!r}")
     return date(roc_to_gregorian_year(int(s[:3])), int(s[3:5]), int(s[5:7]))
 
 
@@ -161,9 +185,20 @@ def parse_holiday_schedule(payload: object, *, fetched_at: datetime) -> HolidayC
         # §1：不吞 —— 這些日子下游會判「無法判定」，這裡先講出來。
         print(f"[twse_holiday] {len(_unc)} 列無法分類（下游判無法判定）："
               + "；".join(f"{e.day} {e.name}" for e in _unc[:5]))
+    _draft = HolidayCalendar(entries=tuple(entries), covered_years=frozenset(),
+                             source=SOURCE_ID, fetched_at=fetched_at)
+    _closed = _draft.dates_of("closed")
+    _years = sorted({e.day.year for e in entries})
+    complete = frozenset(y for y in _years
+                         if all(date(y, m, d) in _closed for m, d in COMPLETENESS_ANCHORS))
+    if not complete:
+        # 殘表 ⇒ raise（快取層不快取例外），⛔ 不得當成功結果快取 TTL_1DAY。
+        raise ValueError(f"休市表不完整：{_years} 年都缺固定國定假日錨點 {COMPLETENESS_ANCHORS}")
+    if set(_years) - complete:
+        print(f"[twse_holiday] 下列年份表不完整、判無法判定：{sorted(set(_years) - complete)}")
     return HolidayCalendar(
         entries=tuple(entries),
-        covered_years=frozenset(e.day.year for e in entries),
+        covered_years=complete,
         source=SOURCE_ID,
         fetched_at=fetched_at,
     )

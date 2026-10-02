@@ -63,7 +63,7 @@ class TestParse:
 
     def test_roc_date(self):
         assert hf.parse_roc_date("1150101") == date(2026, 1, 1)
-        for bad in ("115011", "2026-01-01", "11501a1", "", None, "1151301"):
+        for bad in ("115011", "2026-01-01", "11501a1", "", None, "1151301", "0000101"):
             with pytest.raises(ValueError):
                 hf.parse_roc_date(bad)
 
@@ -80,6 +80,8 @@ class TestParse:
 
     @pytest.mark.parametrize("name,desc,kind", [
         ("中秋節", "依規定放假1日。", "closed"),
+        ("颱風", "本日休市。", "closed"),
+        ("臨時", "集中交易市場停止交易。", "closed"),
         ("市場無交易，僅辦理結算交割作業", "", "closed"),
         ("國曆新年開始交易日", "國曆新年開始交易。", "trading"),
         ("補行上班日", "", "unclassified"),             # 兩類都沒中
@@ -123,7 +125,10 @@ class TestFetch:
         assert calls == [hf.TWSE_HOLIDAY_URL]
         assert a.dates_of("closed") == b.dates_of("closed")
 
-    @pytest.mark.parametrize("resp", [None, _Resp(500, None), _Resp(200, ValueError("x")),
+    @pytest.mark.parametrize("resp", [None, _Resp(500, None),
+                                      _Resp(503, json.loads(FIXTURE.read_text(encoding="utf-8"))),
+                                      _Resp(200, [{"Name": "中秋節", "Date": "1150925",
+                                                   "Weekday": "五", "Description": "依規定放假1日。"}]), _Resp(200, ValueError("x")),
                                       _Resp(200, []), _Resp(200, {"stat": "no"})])
     def test_failure_raises_not_cached_and_backs_off(self, monkeypatch, resp):
         calls = self._patch(monkeypatch, [resp, _Resp(200, _payload())])
@@ -141,6 +146,42 @@ class TestFetch:
 
     def test_cooldown_constant_is_shared_ssot(self):
         assert hf._calendar_fail_cooldown.seconds == _fc.FAIL_COOLDOWN_SEC
+
+
+# ── 批 D5 QA 修 1／修 2：殘表與衝突列 ─────────────────────────────
+class TestCompletenessAndConflicts:
+    def test_single_row_table_raises(self):
+        row = {"Name": "中秋節", "Date": "1150925", "Weekday": "五", "Description": "依規定放假1日。"}
+        with pytest.raises(ValueError, match="不完整"):
+            hf.parse_holiday_schedule([row], fetched_at=datetime.now(UTC))
+
+    @pytest.mark.parametrize("drop", ["1150101", "1150228", "1151010"])
+    def test_missing_anchor_raises(self, drop):
+        rows = [r for r in _payload() if r["Date"] != drop]
+        with pytest.raises(ValueError, match="不完整"):
+            hf.parse_holiday_schedule(rows, fetched_at=datetime.now(UTC))
+
+    def test_partial_extra_year_not_covered(self):
+        cal = _cal([{"Name": "中華民國開國紀念日", "Date": "1160101", "Weekday": "五",
+                     "Description": "依規定放假1日。"}])
+        assert cal.covered_years == frozenset({2026})
+        v = tc.classify_day(date(2027, 2, 8), **_sets(cal))  # 2027 平日
+        assert v.status == tc.UNDETERMINED
+
+    def test_conflicting_duplicate_is_undetermined(self):
+        dup = {"Name": "中秋節後開始交易日", "Date": "1150925", "Weekday": "五",
+               "Description": "開始交易。"}
+        cal = _cal([dup])
+        assert date(2026, 9, 25) in cal.dates_of("unclassified")
+        assert date(2026, 9, 25) not in cal.dates_of("closed")
+        assert date(2026, 9, 25) not in cal.dates_of("trading")
+        assert tc.classify_day(date(2026, 9, 25), **_sets(cal)).status == tc.UNDETERMINED
+
+    def test_conflicting_anchor_breaks_completeness(self):
+        dup = {"Name": "國曆新年開始交易日", "Date": "1150101", "Weekday": "四",
+               "Description": "開始交易。"}
+        with pytest.raises(ValueError, match="不完整"):
+            _cal([dup])
 
 
 # ── L2 判定 ─────────────────────────────────────────────────────────
@@ -224,6 +265,25 @@ class TestService:
         assert f.years == [2027]
         assert r.today == date(2027, 1, 1)
         assert r.is_trading_day is None and "2027" in r.error
+
+    def test_table_listed_weekday_holiday(self, monkeypatch):
+        self._fake_cal(monkeypatch, cal=_cal())
+        r = svc.get_today_trading_status(datetime(2026, 9, 25, 2, tzinfo=UTC))
+        assert r.is_trading_day is False and r.error is None
+        assert r.next_trading_day == date(2026, 9, 28)
+
+    def test_table_listed_trading_saturday(self, monkeypatch):
+        sat = {"Name": "補行上班日", "Date": "1150307", "Weekday": "六",
+               "Description": "集中交易市場開始交易。"}
+        self._fake_cal(monkeypatch, cal=_cal([sat]))
+        r = svc.get_today_trading_status(datetime(2026, 3, 7, 2, tzinfo=UTC))
+        assert r.is_trading_day is True and r.error is None
+
+    def test_table_unclassified_weekday_is_unavailable(self, monkeypatch):
+        odd = {"Name": "補行上班日", "Date": "1150306", "Weekday": "五", "Description": ""}
+        self._fake_cal(monkeypatch, cal=_cal([odd]))
+        r = svc.get_today_trading_status(datetime(2026, 3, 6, 2, tzinfo=UTC))
+        assert r.is_trading_day is None and r.error
 
     def test_today_known_next_unknown(self, monkeypatch):
         self._fake_cal(monkeypatch, cal=_cal())
