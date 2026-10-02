@@ -16,6 +16,7 @@ import traceback
 
 import streamlit as st
 
+from shared.macro_provenance import is_m1b_m2_proxy  # DL-f1-s17／s23：代理值不計分（L0 SSOT）
 from shared.signal_thresholds import (
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
     MARGIN_BALANCE_WARN_THRESHOLD_YI,
@@ -82,6 +83,9 @@ def compute_and_apply_market_assessment(
         #    補了也沒人用。**列為復活前置條件之一** —— 若日後把腿打開卻沒補
         #    寫入端,線上就會靜默地少一分,又是一次「兩套系統」。
         _m1b2_prev = _m1b2.get('m1b_m2_gap_prev')  # 上月 gap(現況恆 None,見上)
+        # DL-f1-s17／s23（客戶 2026-10-02 頁 1 ③「只顯示不計分」）：代理旗標交給 L3 —— 不計分，
+        # 腿停用時 chip 標既有代理註記。
+        _m1b2_is_proxy = is_m1b_m2_proxy(_m1b2)
         # 市場廣度真值(v18.449):df_adl 最後一列的 ad_ratio(0-100% 上漲家數佔比)。
         # 無資料/空值 → None(不納入評分,§1 寧缺勿假,不塞假中性值)。
         _ad_ratio_loaded = None
@@ -98,6 +102,7 @@ def compute_and_apply_market_assessment(
             m1b_m2_gap=_m1b2_gap,
             m1b_m2_prev=_m1b2_prev,
             ad_ratio=_ad_ratio_loaded,
+            m1b_m2_is_proxy=_m1b2_is_proxy,
         )
         if _mkt_loaded:
             _append_margin_signals(_mkt_loaded, margin)
@@ -115,7 +120,8 @@ def compute_and_apply_market_assessment(
             print('[市場評估] df_index 失敗,用 yfinance 備援')
             _mkt_fb = get_market_assessment(df_index=None, foreign_net=_foreign_net_loaded,
                                             m1b_m2_gap=_m1b2_gap, m1b_m2_prev=_m1b2_prev,
-                                            ad_ratio=_ad_ratio_loaded)
+                                            ad_ratio=_ad_ratio_loaded,
+                                            m1b_m2_is_proxy=_m1b2_is_proxy)
             if _mkt_fb:
                 _append_margin_signals(_mkt_fb, margin)
                 st.session_state['mkt_info'] = _mkt_fb
