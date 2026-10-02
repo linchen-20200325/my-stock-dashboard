@@ -256,6 +256,7 @@ def _S6_EXTRA_FORMS(n: int) -> dict[str, str]:  # noqa: N802 —— 後面各項
             #: 批 S6 QA 第二輪：沒有英數字、沒有位置字尾的視窗（第二種錨點「收尾引號＋遮罩」）× 64 個長值。
             "rem_noalnum_dot": _qa2_repro(4000, " ." * 150, n), "rem_noalnum_dash": _qa2_repro(4000, "-" * 300, n),
             "rem_noalnum_emdash": _qa2_repro(4000, "—" * 300, n), "rem_noalnum_star999": _qa2_repro(999, "*" * 300, n),
+            "rem_many_anchors_varlen": _qa4_perf_repro(n),
             "html_long_values": ("could not convert string to float: &#x27;" + "x" * 5000 + " (line 1 column 1 char 0)\n") * (n // 5000)}
 
 
@@ -1020,3 +1021,60 @@ def test_b3_beyond_max_without_alnum_unchanged():
 
 
 _S6_EXTRA_CORPUS.extend([_B1, _B2])
+
+
+# ══════════════════════════════════════════════════════════════════
+# 批 S6 QA 第四輪（2026-10-02）：`_TOML_REM_MAX` 調回 256（4096 時長度各異的 64 個值 × 4096 個錨點逐一走 ≈ 2.4 倍 main）；
+# 超過上限那一段的三個分支各自有會外露的突變 → 秘密放在剛好超過上限處，逐一殺掉
+# ══════════════════════════════════════════════════════════════════
+def _qa4_perf_repro(n: int = 400_000) -> str:
+    vals = "TomlDecodeError\n" + "".join(f"could not convert string to float: '{i:03d}" + "a" * (900 + 7 * i) + "'" + "*" * 16
+                                         + "\n" for i in range(64))
+    return (vals + ("-" * 75 + "'***") * 4096)[:n]
+
+
+@pytest.mark.parametrize("fn", ["scrub_secrets", "scrub_prose_secrets"])
+def test_qa4_many_anchors_distinct_value_lengths_within_2x_main(fn):
+    """修正前（c4af166，上限 4096）：分支 1.70／1.82 秒、main 0.72 秒。"""
+    x = _qa4_perf_repro()
+    new, old = _cpu_best(getattr(_SSC, fn), x), _cpu_best(getattr(_MAIN, fn), x)
+    assert new <= 2 * old + 0.1 and new <= 1.5, (new, old)
+
+
+def _qa4_past_max(unit: str, tail: str, extra: int = 0) -> str:
+    from tests.test_sec_s3_batch_s3 import _b64, _pkcs8, _wrap
+    keyline, keylike = _wrap(_b64(_pkcs8(5)))[0], _wrap(_b64(_pkcs8(7)))[0]
+    u = "\n" + unit + "'" + tail
+    b = keyline + "\ncould not convert string to float: '" + keylike + " R29CSECRET'" + tail
+    return u * (_SSC._TOML_REM_MAX + extra) + "\n" + b + u * 2
+
+
+_QA4_TAILS = {"suf": " (line 1 column 1 char 0)", "ctx": "\nTomlDecodeError"}
+#: （突變名, 突變點, 改成, 會外露的樣本）—— 樣本都是「秘密剛好在第 `_TOML_REM_MAX` 個錨點之後」。
+_QA4_MUTANTS = [
+    ("stretch-start-without-window", ("_a, _b = max(0, _more[0] - _cap), _more[1]", "_a, _b = _more[0], _more[1]"),
+     _qa4_past_max("x", _QA4_TAILS["suf"])),
+    ("stretch-letter-digit-clause-off",
+     ('_hs = idx[1][_sk] = _ALNUM_RE.search(out[_s0 if _s0 >= 0 else _b:_b].replace(_anchor, "")) is not None',
+      "_hs = idx[1][_sk] = False"),
+     _qa4_past_max("x", _QA4_TAILS["ctx"], 3)),
+    ("stretch-first-mask-rfind",
+     ("_s0 = out.find(MASK, _a, _b) if _a > 0 else _a", "_s0 = out.rfind(MASK, _a, _b) if _a > 0 else _a"),
+     _qa4_past_max("***", _QA4_TAILS["ctx"], 1)),
+]
+
+
+@pytest.mark.parametrize("name,mut,x", _QA4_MUTANTS, ids=[m[0] for m in _QA4_MUTANTS])
+def test_qa4_stretch_path_mutants_leak(name, mut, x):
+    assert "R29CSECRET" in _MAIN.scrub_secrets(x), "前提：main 外露"
+    assert "R29CSECRET" not in scrub_secrets(x) and "R29CSECRET" not in scrub_prose_secrets(x)
+    _never_less(x)
+    assert "R29CSECRET" in _mutant(mut).scrub_secrets(x), name
+
+
+@pytest.mark.parametrize("unit", ["x", "***", "---"])
+@pytest.mark.parametrize("tail", sorted(_QA4_TAILS))
+@pytest.mark.parametrize("extra", [0, 1, 50])
+def test_qa4_secret_just_past_max_masked(unit, tail, extra):
+    x = _qa4_past_max(unit, _QA4_TAILS[tail], extra)
+    assert "R29CSECRET" not in scrub_secrets(x) and "R29CSECRET" not in scrub_prose_secrets(x)

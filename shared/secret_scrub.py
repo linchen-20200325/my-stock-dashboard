@@ -84,7 +84,7 @@
            → 在輸出裡找「收尾引號＋位置字尾」（沒有字尾時用原文緊接在後的字、或收尾引號＋遮罩；值在字串結尾時認輸出結尾的收尾引號），
            往左逐段比對值剩下的片段，連同中間的遮罩整段遮；比對不上的那一段若以「開頭引號＋值的開頭 ≥2 字」結尾，從開頭引號起一併遮
            （`'SECA ***'` → `***'`；批 S6 QA F2）。工作量有上限（`_TOML_REM_BUDGET`），用完時剩下的錨點把左邊整個視窗遮掉（只會多遮）；
-           同一個錨點超過 `_TOML_REM_MAX`（4096）處時，其餘各處不逐一比對、改把它們涵蓋的整段遮掉（扣掉錨點本身與
+           同一個錨點超過 `_TOML_REM_MAX`（256）處時，其餘各處不逐一比對、改把它們涵蓋的整段遮掉（扣掉錨點本身與
            被切斷的第一段後仍有英數字、或錨點的英數字片段出現在值裡時；否則逐段比對也不可能遮）；
        (c) 批 S6 QA F3：數字轉換的值用 HTML 跳脫引號、超過 4096 字或找不到收尾 → 開頭引號起遮到行尾（條件同第 12 類 (b)）；
            訊息的第一個字已被前面規則換成遮罩（`*** not convert …`）也認。
@@ -138,7 +138,7 @@
     原始文字上值在第一個收尾引號就結束，記下的字面與錨點都對不上剩下的片段 ⇒ `SECA` 仍外露（main 亦然）。
   · 第 13 類的多遮方向（安全側）：(b) 的比對只看字面、不看語意 —— 錨點左邊剛好有值的片段（例：說明文字引用了值的尾巴，
     後面又接著同一個收尾引號＋位置字尾）也會被遮；工作量用完時整個視窗（錨點左邊 `2×len(值)＋64` 字）遮掉；
-    同一個錨點出現超過 4096 次時，第 4097 次的視窗起點到最後一次之間整段遮（條件見第 13 類 (b)）。
+    同一個錨點出現超過 256 次時，第 257 次的視窗起點到最後一次之間整段遮（條件見第 13 類 (b)）。
   · 批 S3 的多遮方向（安全側）：
     - 方括號取值的裸值（`headers['Authorization'] = token_var`）連變數名一起遮；
     - tab 規則以整條路徑判：`/a/x.toml<tab>note/b` 這種「路徑後面接 tab 再接含 `/` 的字」會被當成目錄遮成 `***/b`；
@@ -1005,7 +1005,7 @@ _TOML_ORIG_MAX: int = 64
 #: 視窗裡沒有任何英數字時直接略過（不可能比對上）—— 滿滿 `***` 的視窗不再逐段跑（批 S6 QA F1 的重現）；這個判斷查分塊索引
 #: （`_has_alnum`），不逐字掃視窗。最靠近錨點那一段先單獨判（不是值的結尾就不整窗切段）。
 _TOML_REM_PAD: int = 64
-_TOML_REM_MAX: int = 4096
+_TOML_REM_MAX: int = 256
 _TOML_REM_BUDGET: int = 1 << 26
 _TOML_REM_STEP: int = 1024
 _ALNUM_RE = re.compile(r"[^\W_]")
@@ -1110,8 +1110,13 @@ def _toml_remnant_spans(head: str, close: str, ctx: str, out: str, budget: list[
             #: 視窗起點被切斷時，起點到第一個遮罩之間是「被切斷的第一段」，逐段比對不會比它 ⇒ 不必看。
             _a, _b = max(0, _more[0] - _cap), _more[1]
             _s0 = out.find(MASK, _a, _b) if _a > 0 else _a
-            budget[0] -= 2 * (_b - _a)
-            if (_ALNUM_RE.search(out[_s0 if _s0 >= 0 else _b:_b].replace(_anchor, "")) is not None
+            #: 同一個錨點、同一個起點的判斷整次呼叫只做一次（長度相同的值共用）；這一趟是 C 層單次掃描，按 1/8 計工作量。
+            _sk = ("stretch", _anchor, _s0)
+            _hs = idx[1].get(_sk)
+            if _hs is None:
+                budget[0] -= (_b - _a) // 8
+                _hs = idx[1][_sk] = _ALNUM_RE.search(out[_s0 if _s0 >= 0 else _b:_b].replace(_anchor, "")) is not None
+            if (_hs
                     or any(_t in head for _t in _ALNUM_RUN_RE.findall(_anchor))):
                 _spans.append((_a, _b))
     else:
