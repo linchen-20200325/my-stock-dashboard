@@ -47,6 +47,7 @@ from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 # _proxy_env SSOT(env backup/restore context manager),不重寫。yf_proxy 僅 lazy import
 # src.data.stock._load_proxy_config,不 import 本檔 → 無 import cycle。
 from src.data.proxy.yf_proxy import _proxy_env
+from src.data.proxy.yf_proxy import _is_yf_no_data  # D2-f54:沒資料 vs 抓取失敗同一判準
 from shared.fail_cooldown import FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT
 
 
@@ -232,8 +233,22 @@ def _fetch_etf_price_max_cached(ticker: str) -> pd.DataFrame:
     """
     # 走 NAS proxy(_proxy_env:臨時設 HTTPS/HTTP_PROXY,finally 還原)避開
     # Yahoo 海外 IP 封鎖 → 原本直呼致 0050.TW 空 df「找不到歷史/價格資料」。
+    # D2-f54:raise_errors=True(同 yf_proxy._history_or_raise)— 網路/代理錯誤往上拋、
+    # 不入快取;yfinance 自己回報「沒有資料」→ 照舊回空 df。舊/新版不認參數 → 修前呼叫。
     with _proxy_env():
-        df = yf.Ticker(ticker).history(period='max', auto_adjust=True)
+        _tk = yf.Ticker(ticker)
+        try:
+            df = _tk.history(period='max', auto_adjust=True, raise_errors=True)
+        except TypeError as _e:
+            if 'raise_errors' not in str(_e):
+                raise
+            df = _tk.history(period='max', auto_adjust=True)
+        except DeprecationWarning:
+            df = _tk.history(period='max', auto_adjust=True)
+        except Exception as _e:
+            if not _is_yf_no_data(_e):
+                raise
+            df = pd.DataFrame()
     if df.empty:
         return pd.DataFrame()
     df.index = pd.to_datetime(df.index).tz_localize(None)
