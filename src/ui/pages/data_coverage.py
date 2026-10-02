@@ -46,6 +46,7 @@ inline 門檻與色票改吃 SSOT(shared.staleness / shared.colors),詳見下方
 from __future__ import annotations
 
 import datetime as _dt
+import math as _math
 from html import escape as _html_escape  # SEC-r9：detail 欄進 unsafe_allow_html 前先跳脫
 
 import streamlit as st
@@ -482,7 +483,15 @@ def compute_tab_coverage(state: dict | None = None,
         _by_reason: dict = {}
         for _r in _rd_wired:
             if _r.get("state") != "ok":
-                _by_reason.setdefault(_r.get("reason") or "?", []).append(_r["key"])
+                _rs_g = _r.get("reason") or "?"
+                # 批 D4 C1（客戶 2026-10-02 選 A）：被擋的值**全是**非有限值(NaN / ±inf)
+                #   時，那不是量綱問題、是「沒有觀測值」(shared/macro_buckets 同義註解)
+                #   ⇒ 歸既有「📵 上游無值」組。只改分組；原因碼與下方逐筆標註不動。
+                _rj_g = _r.get("rejected") or []
+                if (_rs_g == MISSING_OUT_OF_RANGE and _rj_g
+                        and all(not _math.isfinite(_x[1]) for _x in _rj_g)):
+                    _rs_g = MISSING_NO_VALUE
+                _by_reason.setdefault(_rs_g, []).append(_r["key"])
         _REASON_TXT = {
             MISSING_NOT_LOADED:    ("🔌", "未載入", "在 🌍 總經 按更新"),
             MISSING_NO_VALUE:      ("📵", "上游無值", "看下方 API 根因診斷"),

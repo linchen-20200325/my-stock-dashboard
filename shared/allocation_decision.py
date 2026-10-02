@@ -295,7 +295,7 @@ def build_allocation_decision(
             if _clamped != _raw:
                 print(f'[allocation] exposure_limit_pct={_raw} 越界，已夾限為 {_clamped}')
             _caps.append(Cap('系統風險上限', _clamped,
-                             'macro_state 規則引擎（薩姆／PMI／外資期貨硬否決）'))
+                             'macro_state 規則引擎（分數計算：VIX／PMI／M1B-M2／BIAS240／PCR；三大硬否決紅線：薩姆／PMI／外資期貨）'))
 
     _cap_pct: int | None = None
     _cap_name = ''

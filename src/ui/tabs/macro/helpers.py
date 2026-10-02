@@ -307,7 +307,8 @@ def _render_china_drag_panel(fred_api_key: str = "",
         # 舊版仍往下畫 4 張卡 —— 乘子 1.000、折扣後＝主分、delta +0.0，看起來像
         # 「中國沒拖累」的有效觀測（§1.A-1 假地平線）。改在此誠實回報資料不足。
         if _china_score is None:
-            st.caption("🇨🇳 中國拖累 China Drag:⬜ 中國資料不足(5 條 series 全敗)")
+            # 批 D4 D2-f42-n1：此處涵蓋「全敗」與「抓到但值全空」⇒ 用 L2 docstring 的「全缺」。
+            st.caption("🇨🇳 中國拖累 China Drag:⬜ 中國資料不足(5 條 series 全缺)")
             return
         _regime = classify_china_regime(_china_sub) if _china_sub else None
         _regime_label = _regime.get("regime") if _regime else "—"

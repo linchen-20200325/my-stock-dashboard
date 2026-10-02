@@ -50,7 +50,7 @@ def _vix_line(vix: "float | None", total: int) -> list[str]:
     _level = classify_danger(vix, _spec)
 
     if _level == "gray":
-        return [f"😱 VIX：抓取失敗　有效判斷 {total} 檔",
+        return [f"😱 VIX：無資料　有效判斷 {total} 檔",  # 批 D4 NF-f4：涵蓋 None／不可解析／非有限值
                 "　→ 本項無資料，不做波動度判讀（不是「市場平靜」）。"]
 
     _label, _advice = {

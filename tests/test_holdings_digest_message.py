@@ -86,7 +86,7 @@ def test_vix_missing_shows_honest_text():
     d = _full_digest()
     d["vix"] = None
     msg = F(d, _full_switch(), as_of=_AS_OF)
-    assert "VIX：抓取失敗" in msg
+    assert "VIX：無資料" in msg  # 批 D4 NF-f4
     assert "None" not in msg
 
 
