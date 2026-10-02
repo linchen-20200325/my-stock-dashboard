@@ -207,3 +207,17 @@ class TestM1bNonFinite:
         assert _is_finite_num(1.5) and _is_finite_num(0) and _is_finite_num(-3)
         for bad in (None, float('nan'), float('inf'), float('-inf'), True, 'x'):
             assert not _is_finite_num(bad), bad
+
+
+class TestUs10yNonFinite:
+    """批 D2 QA：fredgraph 末筆為 ±inf → 不得以 current=inf 回傳、不得入快取。"""
+
+    @pytest.mark.parametrize("bad", ["inf", "-inf"])
+    def test_inf_is_failure_and_not_cached(self, _snap, monkeypatch, bad):
+        import src.data.proxy.proxy_helper as _ph
+        csv_bad = f'observation_date,DGS10\n2026-09-29,4.10\n2026-09-30,{bad}\n'
+        monkeypatch.setattr(_ph, 'fetch_url', lambda *a, **k: _CsvResp(csv_bad))
+        out = _snap.fetch_us10y_block(fred_api_key='')
+        assert out['us10y']['current'] is None and '_err' in out['us10y']
+        monkeypatch.setattr(_ph, 'fetch_url', lambda *a, **k: _CsvResp(_DGS10_CSV))
+        assert _snap.fetch_us10y_block(fred_api_key='')['us10y']['current'] == pytest.approx(4.12)

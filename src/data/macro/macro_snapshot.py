@@ -590,6 +590,8 @@ def fetch_us10y_block(fred_api_key: str = '') -> dict:
             _df0 = _df0.dropna()
             if len(_df0) >= 1:
                 _vals = _pd_u.to_numeric(_df0.iloc[:, 1], errors='coerce').dropna()
+                if len(_vals) >= 1 and not _is_finite_num(_vals.iloc[-1]):
+                    _vals = _vals.iloc[0:0]   # 批 D2 QA:末筆 ±inf 不放行(c)→ 落到下方既有失敗出口
                 if len(_vals) >= 1:
                     _curr = round(float(_vals.iloc[-1]), 3)
                     _date = str(_df0.iloc[-1, 0])[:10]
