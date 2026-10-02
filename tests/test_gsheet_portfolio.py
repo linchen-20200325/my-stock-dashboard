@@ -392,6 +392,27 @@ def test_number_like_name_repeated_saves_stable(nm):
     assert len(vals) == 4
 
 
+@pytest.mark.parametrize('sheet_nm,nm', [
+    (' 0050', '0050'), ('0050 ', '0050'), (' 007', '007'), ('1,000 ', '1,000'), (' 1e3', '1e3'),
+])
+def test_number_like_name_with_spaces_replaced_by_trimmed_save(sheet_nm, nm):
+    """Sheet 上的原名帶前後空白（numericise 後也對不上）:以去空白的名字存檔,
+    舊有效列須被取代（連存 3 次列數恆定）,該組合的無效列原樣保留。"""
+    ws = _FakeWorksheet([gsp._HEADERS, [sheet_nm, '2330', '1', '600', 'ts'],
+                         [sheet_nm, '2317', '0', '50', 'ts'],
+                         ['B', 'VOO', '2', '400', 'ts']])
+    editor = [{'ticker': '2330', 'lots': 1, 'avg_price': 600}]
+    with patch.object(gsp, '_ws', return_value=ws):
+        for _ in range(3):
+            gsp.clear_read_cache()
+            gsp.save_portfolio(nm, editor)
+        vals = ws.get_all_values()
+    assert [r for r in vals if r[1] == '2330'] and all(r[0] == nm for r in vals if r[1] == '2330')
+    assert sum(1 for r in vals if r[1] == '2330') == 1
+    assert [sheet_nm, '2317', '0', '50', 'ts'] in vals
+    assert ['B', 'VOO', '2', '400', 'ts'] in vals
+    assert len(vals) == 4
+
 def test_duplicate_header_means_nothing_loaded_all_rows_kept():
     """表頭重複 → get_all_records raise、編輯器一列都載不進來 ⇒ 存檔保留全部舊列。"""
     sheet = [gsp._HEADERS + ['x', 'x'], ['A', '2330', '1', '100', 't0', '', '']]
@@ -504,6 +525,15 @@ def test_save_portfolio_expands_grid_before_write():
     assert len(ws.get_all_values()) == 5
 
 
+
+
+def test_save_portfolio_no_add_rows_when_grid_exactly_fits():
+    """邊界:所需列數 == 工作表列數 → 不呼叫 add_rows（`>` 而非 `>=`）。"""
+    ws = _FakeWorksheet([gsp._HEADERS], row_count=5, col_count=5)
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_portfolio('A', [{'ticker': f'T{i}', 'lots': 1, 'avg_price': 1}
+                                 for i in range(4)])
+    assert ws.calls == [('update', 'A1:E5')]
 
 def test_save_portfolio_expands_columns_when_sheet_narrower_than_headers():
     """M12:工作表只有 3 欄 → 先 add_cols 補到 5 欄再寫;add_cols 失敗則原狀、例外上拋。"""
