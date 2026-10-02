@@ -476,6 +476,8 @@ for _f in (
     "src/data/stock/quarterly_financials_fetcher.py",
     "src/data/stock/share_capital_fetcher.py",
     "src/data/stock/tw_stock_data_fetcher.py",
+    # 批 D5(2026-10-02):證交所休市表新源(客戶裁示頁1⑤),只用 @st.cache_data
+    "src/data/stock/twse_holiday_fetcher.py",
     # E2(2026-08):自 src/ui/tabs/yield_screener.py 下沉,見 C3-d 結案
     "src/data/stock/yield_pe_fetcher.py",
 ):
