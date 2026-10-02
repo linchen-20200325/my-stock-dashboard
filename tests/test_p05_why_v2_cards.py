@@ -885,7 +885,7 @@ _MUST_KEEP: dict[str, dict[str, tuple[str, ...]]] = {
     "SPEC_FLAG_DEGRADED_NOW": {_WHERE: _SPEC_WHERE},
     "LIGHTS_EMPTY_NOW": {_WHY: ("沒有回傳任何一盞燈的定義",), _WHERE: (NO_EXIT_MARKER, _REPORT)},
     "HEALTH6_NOW": {_WHY: ("沒有任何一份是可讀的資料結構",), _WHERE: _UNWIRED},
-    "SCALES_DEGRADED_NOW": {_WHY: ("別照門檻讀", "逐盞原因見上方的 facts 與下方對照表"),
+    "SCALES_DEGRADED_NOW": {_WHY: ("別照門檻讀", "逐盞原因見「⚠️ 已失準」與這張卡下面的對照表"),  # 批 D4 SA2-f11
                             _WHERE: _SCALES},
     "SCALES_EMPTY_NOW": {_WHY: ("沒有回傳可用的燈號定義",), _WHERE: _SCALES},
     "LEGACY_NOW": {_WHY: ("搬遷會動到既有分頁與 caller", "刻意不夾帶"),

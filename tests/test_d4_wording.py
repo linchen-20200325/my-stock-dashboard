@@ -73,3 +73,16 @@ def test_w_f5_valuation_card_label_is_upstream_note():
     src = _inspect.getsource(PI.build_valuation_card)
     assert '("上游說明", scrub_secrets(val.msg))' in src
     assert "L2 說明" not in src
+
+
+def test_sa2_f11_scales_card_why_and_summary():
+    """SA2-f11：why 原句與摘要列第三段同步改；摘要列每段仍是原句的連續片段。"""
+    import inspect as _inspect
+
+    from src.ui.views import page_why as PW
+    src = _inspect.getsource(PW.build_scale_card)
+    assert "其中一側的門檻已失準" in src
+    assert "逐盞原因見「⚠️ 已失準」與這張卡下面的對照表" in src
+    assert "discriminative=False`" not in src and "上方的 facts" not in src
+    assert "上方的 facts" not in _inspect.getsource(PW)
+    assert len("逐盞原因見「⚠️ 已失準」與這張卡下面的對照表") <= 46

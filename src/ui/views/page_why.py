@@ -1724,9 +1724,10 @@ def build_scale_card(disclosure: ScaleDisclosure) -> _Built:
         reason=MISS_NO_INPUT,
         now=(SCALES_DEGRADED_NOW
              if disclosure.degraded else SCALES_EMPTY_NOW),
-        why=("其中一側的門檻來源在 L0 規格表標了 `discriminative=False`"
+        # 批 D4 SA2-f11（客戶 2026-10-02 採用）：畫面句拿掉旗標名／facts／L0 等內部代號。
+        why=("其中一側的門檻已失準"
              "（燈會亮、也有等級，只是**別照門檻讀**）—— "
-             "逐盞原因見上方的 facts 與下方對照表，那段文字是 L0 自己寫的，"
+             "逐盞原因見「⚠️ 已失準」與這張卡下面的對照表，"
              "本頁沒有改寫"
              if disclosure.degraded else
              "L0 規格表這一輪沒有回傳可用的燈號定義"),
@@ -2262,7 +2263,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("why.edu.scales", SCALES_DEGRADED_NOW, (
            # QA F4：「逐盞原因見…」是**去處**（原因寫在哪），⛔ 不得略。
            None, "其中一側" + V2_EXCERPT_GAP + "燈會亮、也有等級，只是別照門檻讀" + V2_EXCERPT_GAP
-           + "逐盞原因見上方的 facts 與下方對照表",
+           + "逐盞原因見「⚠️ 已失準」與這張卡下面的對照表",  # 批 D4 SA2-f11
            _V2_SCALES_WHERE)),
        _v2_rows_for("why.edu.scales", SCALES_EMPTY_NOW, (
            None, "L0 規格表這一輪沒有回傳可用的燈號定義", _V2_SCALES_WHERE)),
