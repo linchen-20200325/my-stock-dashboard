@@ -192,8 +192,23 @@ _PENDING_BRANCH = ("        elif _m1b_info:\n",
                    "'待取得', '更新總經數據後自動計算', '#484f58', '#0d1117'), unsafe_allow_html=True)\n")
 
 
+#: 批 D3（DL-f1-s17，客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）加的片段 —— 還原體一併拿掉，
+#: 才仍等於修前 b7456d1。D3 起代理來源的輸出**刻意**不同（見 `_D3_PROXY` 與 `_check_d3_proxy`）。
+_D3_REVERT_PAIRS = (
+    ("from shared.macro_provenance import m1b_m2_for_scoring  # DL-f1-s17：代理值不計分（L0 SSOT）\n", ""),
+    ("    # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理 → 結論卡\n"
+     "    # 不列 M1B-M2 那條（＝缺數字時的既有樣子；此時清單裡只有它）；下方 KPI 卡照樣顯示數字＋代理註記＋警語。\n"
+     "    if m1b_m2_for_scoring(_m1b_info) is None:\n"
+     "        _macro_concl = []\n", ""),
+    ("            if _is_m1b_proxy:\n"
+     "                # DL-f1-s17：代理值只顯示不計分 → 不下「資金流入／撤離」判斷、不上紅綠色\n"
+     "                # （副標只留兩個數字；色沿用本卡灰態既有色碼）。數字＋註記＋下方警語照舊。\n"
+     "                _mc, _ml = '#484f58', ''\n", ""),
+)
+
+
 def _revert_source() -> str:
-    code = _apply(_LONG_PATH.read_text(encoding="utf-8"), _REVERT_PAIRS)
+    code = _apply(_LONG_PATH.read_text(encoding="utf-8"), _REVERT_PAIRS + _D3_REVERT_PAIRS)
     start, end = _PENDING_BRANCH
     assert code.count(start) == 1 and code.count(end) == 1, "缺值灰態那一枝定位失準"
     i = code.index(start)
@@ -406,12 +421,23 @@ _GOLDEN = {
 }
 
 
+def _check_d3_proxy(out, m1b, m2) -> None:
+    """D3：代理值 → §七 不列 M1B-M2 那條；KPI 照樣顯示數字＋註記＋D2 警語，但不下判斷、灰色。"""
+    assert _s7_m1b_cards(out) == []
+    assert _kpi_cards(out) == [kpi("M1B-M2 差距", f"{round(m1b - m2, 2):+.2f}%{NOTE}",
+                                   f"M1B:{m1b:.1f}%  M2:{m2:.1f}%  ", "#484f58", "#0d1117")]
+    assert sum(t.startswith(_PROXY_CAPTION_HEAD) for _, t in out) == 1
+
+
 def _check_golden(mod, gap: str, source: str) -> None:
     diff, branch, result, sub, color = _GOLDEN[gap]
     m1b, m2 = _GAPS[gap]
     out, exc = _render(mod, {"m1b_yoy": m1b, "m2_yoy": m2, **_SOURCES[source]})
     assert exc is None
-    note = NOTE if source.startswith("proxy") else ""
+    if source.startswith("proxy"):
+        _check_d3_proxy(out, m1b, m2)
+        return
+    note = ""
     assert _s7_m1b_cards(out) == [strategy_conclusion(
         STRATEGY_TECHNICAL, f"M1B-M2={diff}{note} {branch}", result,
         color=TRAFFIC_GREEN if branch == "正值" else TRAFFIC_RED)]
@@ -428,6 +454,10 @@ class TestNonMissingUnchanged:
         for bias in _BIAS.values():
             info = {"m1b_yoy": m1b, "m2_yoy": m2, **_SOURCES[source]}
             now, e_now = _render(_long_module(), info, bias)
+            if source.startswith("proxy"):
+                assert e_now is None
+                _check_d3_proxy(now, m1b, m2)      # D3：代理值只顯示不計分
+                continue
             pre, e_pre = _render(pre_fix, info, bias)
             assert e_now is None and e_pre is None
             assert now == pre, f"{source}/{gap}/bias={bias}：完整輸出與修前不同"

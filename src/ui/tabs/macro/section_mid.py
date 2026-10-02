@@ -13,6 +13,7 @@ from shared.secret_scrub import scrub_secrets  # SEC-3：例外原文上畫面�
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
 from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
+from shared.macro_provenance import m1b_m2_for_scoring  # DL-f1-s17：代理值不計分（L0 SSOT）
 from src.ui.render.macro_ui_components import section_header
 # v19.174 去識別化：改用策略代號常數 + 新函式名 strategy_conclusion（原 teacher_conclusion）
 from src.ui.render.ui_widgets import (
@@ -466,6 +467,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         # 閘門改用 `_finite_yoy`（None／NaN／±inf／非數值一律算缺，與 §七 同一個判定）⇒ 走既有
         #「載入後自動顯示」那一枝；下方三環 D 徽章共用同一組值 ⇒ 走既有「D M1B-M2未知」。
         # 分支、門檻、文案一位未動；兩個都有值時照舊（同一組物件）。
+        # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理 →
+        # 當缺（＝空 dict）：策略3 走既有「載入後自動顯示」、下方三環 D 走既有「D M1B-M2未知」。
+        # 非代理時不動（同一個物件）。
+        if m1b_m2_for_scoring(_m1b8_info) is None:
+            _m1b8_info = {}
         _m1b8_v = _finite_yoy(_m1b8_info, 'm1b_yoy')
         _m2b8_v = _finite_yoy(_m1b8_info, 'm2_yoy')
         if _m1b8_v is not None and _m2b8_v is not None:
