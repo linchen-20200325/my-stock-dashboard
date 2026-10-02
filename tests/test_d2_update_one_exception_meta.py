@@ -43,3 +43,14 @@ def test_exception_with_bad_existing_unchanged(monkeypatch, tmp_path):
     meta = umh.update_one("zz_probe", _TODAY, False, 20, "tok")
     assert meta == {"name": "zz_probe", "last_updated": None, "row_count": 2,
                     "last_error": "RuntimeError: upstream down；既有檔 sanity 不過,待重建"}
+
+
+def test_exception_with_existing_without_usable_date_does_not_crash(monkeypatch, tmp_path):
+    """既有檔沒有 date 欄 → last_updated 留 None，不得 AttributeError（QA 回報）。"""
+    import pandas as pd
+    monkeypatch.setattr(umh, "CACHE_DIR", tmp_path)
+    pd.DataFrame({"foreign_buy": [1.0, 2.0]}).to_parquet(tmp_path / "finmind_inst.parquet", index=False)
+    monkeypatch.setitem(umh.FETCHERS, "finmind_inst", (_boom, True))
+    meta = umh.update_one("finmind_inst", _TODAY, False, 20, "tok")
+    assert meta == {"name": "finmind_inst", "last_updated": None, "row_count": 2,
+                    "last_error": "RuntimeError: upstream down"}
