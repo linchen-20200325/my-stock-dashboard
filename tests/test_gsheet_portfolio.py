@@ -15,34 +15,92 @@ def _clear_read_cache():
 
 
 class _FakeWorksheet:
-    """模擬 gspread.Worksheet：用 list[list] 存 2D 資料 + header。"""
-    def __init__(self, initial_rows=None):
+    """模擬 gspread.Worksheet：用 list[list] 存 2D 資料 + header。
+
+    `update(values, range_name)` 依 A1 起點逐格寫入（同 gspread 6 簽章）;
+    `get_all_values()` 同真 API:去掉尾端全空列與全空欄,再補齊成等寬（fill_gaps）。
+    """
+    def __init__(self, initial_rows=None, row_count=1000, col_count=26):
         self.rows = list(initial_rows or [gsp._HEADERS])
+        self.row_count = row_count
+        self.col_count = col_count
+        self.calls = []
+
+    def _view(self):
+        rows = [['' if v is None else str(v) if not isinstance(v, str) else v
+                 for v in r] for r in self.rows]
+        while rows and not any(c != '' for c in rows[-1]):
+            rows.pop()
+        width = 0
+        for r in rows:
+            for i, c in enumerate(r):
+                if c != '':
+                    width = max(width, i + 1)
+        return [(r + [''] * width)[:width] for r in rows]
 
     def get_all_values(self):
-        return [list(r) for r in self.rows]
+        return self._view()
 
     def get_all_records(self):
-        if len(self.rows) < 2:
+        """同 gspread 6 `Worksheet.get_all_records()` 預設行為:表頭重複 raise、
+        每列跑真 `numericise_all`（預設參數）、再用真 `to_records` 組 dict。"""
+        from gspread.exceptions import GSpreadException
+        from gspread.utils import numericise_all, to_records
+        rows = self._view()
+        if not rows:
             return []
-        headers = self.rows[0]
-        return [dict(zip(headers, [str(v) for v in r])) for r in self.rows[1:]]
+        keys, values = rows[0], rows[1:]
+        if len(set(keys)) != len(keys):
+            raise GSpreadException('the header row in the worksheet contains duplicates')
+        return to_records(keys, [numericise_all(r) for r in values])
 
     def row_values(self, n):
         return list(self.rows[n - 1]) if n - 1 < len(self.rows) else []
 
-    def update(self, _range, values):
-        if _range.startswith('A1') and values:
-            self.rows[0] = list(values[0])
+    def update(self, values=None, range_name=None):
+        if isinstance(range_name, (list, tuple)) and isinstance(values, str):
+            range_name, values = values, range_name   # 同 gspread 6:舊參數順序自動對調
+        self.calls.append(('update', range_name))
+        assert range_name and range_name.startswith('A1'), range_name
+        # 同真 values.update:超出表格格數 → 錯;只寫給定的格子,右側／下方舊格**不會**被清掉。
+        from gspread.utils import a1_range_to_grid_range
+        if ':' in range_name:
+            _g = a1_range_to_grid_range(range_name)
+            if _g['endRowIndex'] > self.row_count or _g['endColumnIndex'] > self.col_count:
+                raise ValueError(f'exceeds grid limits: {range_name}')
+            if (len(values or []) > _g['endRowIndex'] - _g['startRowIndex']
+                    or any(len(r) > _g['endColumnIndex'] - _g['startColumnIndex']
+                           for r in (values or []))):
+                raise ValueError(f'values larger than range: {range_name}')
+        for i, row in enumerate(values or []):
+            while len(self.rows) <= i:
+                self.rows.append([])
+            cur = list(self.rows[i])
+            for j, v in enumerate(row):
+                while len(cur) <= j:
+                    cur.append('')
+                cur[j] = v
+            self.rows[i] = cur
+
+    def add_rows(self, n):
+        self.calls.append(('add_rows', n))
+        self.row_count += n
+
+    def add_cols(self, n):
+        self.calls.append(('add_cols', n))
+        self.col_count += n
 
     def append_row(self, row):
+        self.calls.append(('append_row',))
         self.rows.append(list(row))
 
     def append_rows(self, rows):
+        self.calls.append(('append_rows',))
         for r in rows:
             self.rows.append(list(r))
 
     def clear(self):
+        self.calls.append(('clear',))
         self.rows = []
 
 
@@ -188,6 +246,372 @@ def test_save_portfolio_uppercases_ticker(fake_ws):
     assert rows[0]['ticker'] == '0050.TW'
 
 
+# ── Q4-r5-f1（客戶 2026-10-02 頁1①）：存檔保留編輯器沒載入的列 + 單次寫入 ─────
+_H_EXTRA = gsp._HEADERS + ['note']
+_UNLOADED_A = [
+    ['A', '2330', '0', '600', 'ts0', ''],          # 張數 0
+    ['A', '2317', '-1', '100', 'ts0', ''],         # 張數負數
+    ['A', '2454', '', '900', 'ts0', 'keep me'],    # 張數空白
+    ['A', '2603', 'abc', '50', 'ts0', ''],         # 張數非數字
+    ['A', '', '1', '10', 'ts0', ''],               # 代號空白
+    ['A', '1101', '2', '-3', 'ts0', ''],           # 均價負數
+    ['A', '1216', '1', '', 'ts0', ''],             # 均價空白
+]
+
+
+def _mixed_sheet():
+    return [
+        _H_EXTRA,
+        ['A', '0050.TW', '1', '135.5', 'ts0', ''],     # 載得進來 → 由編輯器內容取代
+        _UNLOADED_A[0],
+        ['B', 'BND', '0.2', '72.5', 'ts1', 'other'],   # 別的組合
+        _UNLOADED_A[1],
+        ['', '', '', '', '', ''],                      # 中間整列空白
+        _UNLOADED_A[2],
+        ['A', '00713.TW', '0.5', '82.3', 'ts0', ''],   # 載得進來
+        _UNLOADED_A[3],
+        _UNLOADED_A[4],
+        _UNLOADED_A[5],
+        _UNLOADED_A[6],
+        ['B', '0', '-5', '', 'ts1', ''],               # 別的組合（髒列也不碰）
+    ]
+
+
+def test_editor_loaded_row_matches_load_portfolio():
+    """判準與編輯器讀取路徑（load_portfolio 預設模式）逐列一致。"""
+    ws = _FakeWorksheet(_mixed_sheet())
+    with patch.object(gsp, '_ws', return_value=ws):
+        loaded = gsp.load_portfolio('A')
+    vals = ws.get_all_values()
+    flagged = [r for r in vals[1:] if gsp._editor_loaded_row(vals[0], r, 'A')]
+    assert [r[1] for r in flagged] == [r['ticker'] for r in loaded] == ['0050.TW', '00713.TW']
+    for _nm in ('A', 'B'):
+        with patch.object(gsp, '_ws', return_value=ws):
+            gsp.clear_read_cache()
+            _n = len(gsp.load_portfolio(_nm))
+        assert sum(gsp._editor_loaded_row(vals[0], r, _nm) for r in vals[1:]) == _n
+
+
+
+# ── QA 2026-10-02 迴歸:判準必須與真讀取路徑（get_all_records → numericise_all）一致 ──
+def _editor_round_trip(ws, name):
+    """模擬 📁 組合管理:📂 載入 name → 原封不動 💾 儲存（同 portfolio_manager 的轉換）。"""
+    from src.ui.tabs.portfolio_manager import etf_rows_to_records, records_to_etf_rows
+    gsp.clear_read_cache()
+    loaded = gsp.load_portfolio(name)
+    rows = records_to_etf_rows(etf_rows_to_records(loaded))
+    gsp.save_portfolio(name, rows)
+    gsp.clear_read_cache()
+
+
+def test_qa_repro_thousands_comma_no_duplicate_growth():
+    """QA 重現:"1,050" 編輯器載得進來（numericise→1050）⇒ 存檔須取代、不可每存多一份。"""
+    ws = _FakeWorksheet([gsp._HEADERS,
+                         ['A', '2330', '1', '1,050', 't0'],
+                         ['B', '2317', '2', '100', 't0']])
+    with patch.object(gsp, '_ws', return_value=ws):
+        for _ in range(3):
+            _editor_round_trip(ws, 'A')
+            assert len(gsp.load_portfolio('A')) == 1
+        vals = ws.get_all_values()
+    assert sum(1 for r in vals if r[0] == 'A') == 1
+    assert ['B', '2317', '2', '100', 't0'] in vals
+
+
+def test_thousands_comma_row_deleted_in_editor_is_removed():
+    ws = _FakeWorksheet([gsp._HEADERS,
+                         ['A', '2330', '1', '1,050', 't0'],
+                         ['A', '2317', '2', '100', 't0']])
+    with patch.object(gsp, '_ws', return_value=ws):
+        loaded = gsp.load_portfolio('A')
+        assert [r['avg_price'] for r in loaded] == [1050, 100]
+        gsp.save_portfolio('A', [r for r in loaded if r['ticker'] == '2317'])
+        gsp.clear_read_cache()
+        assert [r['ticker'] for r in gsp.load_portfolio('A')] == ['2317']
+        assert not any(r[1] == '2330' for r in ws.get_all_values())
+
+
+@pytest.mark.parametrize('lots,avg', [
+    ('1,000', '50'), ('1e3', '50'), ('2', '1e3'), ('2', '1,050.5'), ('NaN', '50'),
+    ('2', 'NaN'), (' 3 ', '50'),
+])
+def test_number_like_cells_round_trip_without_growth(lots, avg):
+    """numericise 會轉的寫法（千分位、科學記號、NaN、前後空白）:載得進來就必須被取代。"""
+    ws = _FakeWorksheet([gsp._HEADERS, ['A', '2330', lots, avg, 't0'],
+                         ['B', 'X', '1', '1', 't0']])
+    with patch.object(gsp, '_ws', return_value=ws):
+        n_loaded = len(gsp.load_portfolio('A'))
+        vals0 = ws.get_all_values()
+        flagged = sum(gsp._editor_loaded_row(vals0[0], r, 'A') for r in vals0[1:])
+        assert flagged == n_loaded
+        if n_loaded:
+            for _ in range(2):
+                _editor_round_trip(ws, 'A')
+            assert sum(1 for r in ws.get_all_values() if r[0] == 'A') == 1
+        assert ['B', 'X', '1', '1', 't0'] in ws.get_all_values()
+
+
+def test_number_like_name_consistent_with_load_portfolio():
+    """name "007" 經 numericise → 7:load_portfolio('7') 看得到、load_portfolio('007') 看不到。
+    save 判準取聯集 —— 存成 "7"（編輯器真的載得進來）或 "007"（Sheet 上的原名,同 main）
+    都取代該有效列、不重複;"007" 的無效列（張數 0）兩種情形都原樣保留。"""
+    sheet = [gsp._HEADERS, ['007', '2330', '1', '100', 't0'],
+             ['007', '2317', '0', '100', 't0']]
+    ws = _FakeWorksheet([list(r) for r in sheet])
+    with patch.object(gsp, '_ws', return_value=ws):
+        assert [r['ticker'] for r in gsp.load_portfolio('7')] == ['2330']
+        assert gsp.load_portfolio('007') == []
+        gsp.save_portfolio('007', [{'ticker': 'NEW', 'lots': 1, 'avg_price': 1}])
+        vals = ws.get_all_values()
+    assert vals[1] == ['007', '2317', '0', '100', 't0']             # 無效列原字串保留
+    assert len(vals) == 3 and vals[2][:2] == ['007', 'NEW']          # 有效列被取代
+    ws = _FakeWorksheet([list(r) for r in sheet])
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.clear_read_cache()
+        _editor_round_trip(ws, '7')                               # 載得進來 → 取代,不重複
+        vals = ws.get_all_values()
+    assert vals[1] == ['007', '2317', '0', '100', 't0']
+    assert len(vals) == 3 and vals[2][:2] == ['7', '2330']
+
+
+@pytest.mark.parametrize('nm', ['0050', '007', '1.50', '1,000', '1e3', 'NaN'])
+def test_number_like_name_repeated_saves_stable(nm):
+    """re-QA 迴歸:numericise 會改寫的組合名,同名連存 3 次 → 該組合恆為 1 列（main 同）。"""
+    ws = _FakeWorksheet([gsp._HEADERS, ['B', 'VOO', '2', '400', 'ts'],
+                         [nm, '2317', '0', '50', 'ts']])          # 該組合的無效列須保留
+    editor = [{'ticker': '2330', 'lots': 1, 'avg_price': 600}]
+    with patch.object(gsp, '_ws', return_value=ws):
+        for _ in range(3):
+            gsp.clear_read_cache()
+            gsp.load_portfolio(nm)
+            gsp.save_portfolio(nm, editor)
+        vals = ws.get_all_values()
+    assert sum(1 for r in vals if r[:2] == [nm, '2330']) == 1
+    assert [nm, '2317', '0', '50', 'ts'] in vals
+    assert ['B', 'VOO', '2', '400', 'ts'] in vals
+    assert len(vals) == 4
+
+
+@pytest.mark.parametrize('sheet_nm,nm', [
+    (' 0050', '0050'), ('0050 ', '0050'), (' 007', '007'), ('1,000 ', '1,000'), (' 1e3', '1e3'),
+])
+def test_number_like_name_with_spaces_replaced_by_trimmed_save(sheet_nm, nm):
+    """Sheet 上的原名帶前後空白（numericise 後也對不上）:以去空白的名字存檔,
+    舊有效列須被取代（連存 3 次列數恆定）,該組合的無效列原樣保留。"""
+    ws = _FakeWorksheet([gsp._HEADERS, [sheet_nm, '2330', '1', '600', 'ts'],
+                         [sheet_nm, '2317', '0', '50', 'ts'],
+                         ['B', 'VOO', '2', '400', 'ts']])
+    editor = [{'ticker': '2330', 'lots': 1, 'avg_price': 600}]
+    with patch.object(gsp, '_ws', return_value=ws):
+        for _ in range(3):
+            gsp.clear_read_cache()
+            gsp.save_portfolio(nm, editor)
+        vals = ws.get_all_values()
+    assert [r for r in vals if r[1] == '2330'] and all(r[0] == nm for r in vals if r[1] == '2330')
+    assert sum(1 for r in vals if r[1] == '2330') == 1
+    assert [sheet_nm, '2317', '0', '50', 'ts'] in vals
+    assert ['B', 'VOO', '2', '400', 'ts'] in vals
+    assert len(vals) == 4
+
+def test_duplicate_header_means_nothing_loaded_all_rows_kept():
+    """表頭重複 → get_all_records raise、編輯器一列都載不進來 ⇒ 存檔保留全部舊列。"""
+    sheet = [gsp._HEADERS + ['x', 'x'], ['A', '2330', '1', '100', 't0', '', '']]
+    ws = _FakeWorksheet([list(r) for r in sheet])
+    with patch.object(gsp, '_ws', return_value=ws):
+        with pytest.raises(Exception):
+            gsp.load_portfolio('A')
+        gsp.save_portfolio('A', [{'ticker': 'NEW', 'lots': 1, 'avg_price': 1}])
+        vals = ws.get_all_values()
+    assert vals[1][:5] == ['A', '2330', '1', '100', 't0']
+    assert vals[2][:2] == ['A', 'NEW']
+
+def test_save_portfolio_preserves_unloaded_rows_byte_for_byte():
+    before = _mixed_sheet()
+    ws = _FakeWorksheet([list(r) for r in before])
+    with patch.object(gsp, '_ws', return_value=ws):
+        n = gsp.save_portfolio('A', [{'ticker': 'voo', 'lots': 0.1, 'avg_price': 400.0}])
+        after = ws.get_all_values()
+        assert n == 1
+        # 表頭:前 5 欄 _HEADERS,使用者自加的第 6 欄表頭保留
+        assert after[0] == _H_EXTRA
+        # 沒載入的列:原順序、原字串（含空白列、別的組合、本組合 0／負數／空白／非數字）
+        expected_kept = [r for r in before[1:]
+                         if r[1] not in ('0050.TW', '00713.TW')]
+        assert after[1:1 + len(expected_kept)] == expected_kept
+        # 新列接在最後;載得進來的舊列已被取代
+        assert after[1 + len(expected_kept)][:4] == ['A', 'VOO', '0.1', '400.0']
+        assert len(after) == 2 + len(expected_kept)
+        assert [r['ticker'] for r in gsp.load_portfolio('A')] == ['VOO']
+        assert [r['ticker'] for r in gsp.load_portfolio('B')] == ['BND']
+
+
+def test_save_portfolio_preserves_unloaded_rows_across_repeated_saves():
+    ws = _FakeWorksheet(_mixed_sheet())
+    with patch.object(gsp, '_ws', return_value=ws):
+        for tk in ('VOO', 'QQQ', 'SPY'):
+            gsp.clear_read_cache()
+            gsp.save_portfolio('A', [{'ticker': tk, 'lots': 1, 'avg_price': 10}])
+        vals = ws.get_all_values()
+    for row in _UNLOADED_A:
+        assert row in vals, row
+    assert sum(1 for r in vals if r[:2] == ['A', 'SPY']) == 1
+    assert not any(r[1] in ('VOO', 'QQQ') for r in vals)
+
+
+def test_save_portfolio_clears_stale_tail_when_shorter():
+    ws = _FakeWorksheet([
+        gsp._HEADERS,
+        ['A', 'X1', '1', '1', 't'], ['A', 'X2', '1', '1', 't'], ['A', 'X3', '1', '1', 't'],
+    ])
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_portfolio('A', [{'ticker': 'Y', 'lots': 1, 'avg_price': 1}])
+        vals = ws.get_all_values()
+    assert len(vals) == 2
+    assert vals[1][:2] == ['A', 'Y']
+
+
+def test_save_portfolio_single_update_no_clear():
+    """寫入只有一次 update,不再 clear → append（避免中途失敗清空整張表）。"""
+    ws = _FakeWorksheet(_mixed_sheet())
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_portfolio('A', [{'ticker': 'VOO', 'lots': 1, 'avg_price': 1}])
+    kinds = [c[0] for c in ws.calls]
+    assert kinds == ['update']
+    # 舊表 13 列（表頭 + 12）→ 表頭 + 10 保留 + 1 新 = 12 列,補空到舊高 13 列以清掉殘列
+    assert ws.calls[0][1] == 'A1:F13'
+
+
+class _FailingWorksheet(_FakeWorksheet):
+    def __init__(self, *a, fail_on='update', **kw):
+        super().__init__(*a, **kw)
+        self.fail_on = fail_on
+
+    def update(self, values=None, range_name=None):
+        if self.fail_on == 'update':
+            raise ConnectionError('network down mid-write')
+        return super().update(values=values, range_name=range_name)
+
+    def add_cols(self, n):
+        if self.fail_on == 'add_cols':
+            raise ConnectionError('network down mid-write')
+        return super().add_cols(n)
+
+    def add_rows(self, n):
+        if self.fail_on == 'add_rows':
+            raise ConnectionError('network down mid-write')
+        return super().add_rows(n)
+
+
+@pytest.mark.parametrize('fail_on', ['update', 'add_rows'])
+def test_save_portfolio_failure_never_empties_sheet(fail_on):
+    """寫入途中失敗:例外照拋（§1）,Sheet 內容一格不變（不會被清空）。"""
+    before = _mixed_sheet()
+    ws = _FailingWorksheet([list(r) for r in before], fail_on=fail_on, row_count=5)
+    snapshot = ws.get_all_values()
+    with patch.object(gsp, '_ws', return_value=ws):
+        with pytest.raises(ConnectionError):
+            gsp.save_portfolio('A', [{'ticker': 'VOO', 'lots': 1, 'avg_price': 1}])
+    assert ws.get_all_values() == snapshot == before
+    assert ('clear',) not in ws.calls
+
+
+def test_save_portfolio_expands_grid_before_write():
+    """新內容比工作表格數多 → 先 add_rows 再一次 update。"""
+    ws = _FakeWorksheet([gsp._HEADERS], row_count=2, col_count=5)
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_portfolio('A', [{'ticker': f'T{i}', 'lots': 1, 'avg_price': 1}
+                                 for i in range(4)])
+    assert ws.calls == [('add_rows', 3), ('update', 'A1:E5')]
+    assert len(ws.get_all_values()) == 5
+
+
+
+
+def test_save_portfolio_no_add_rows_when_grid_exactly_fits():
+    """邊界:所需列數 == 工作表列數 → 不呼叫 add_rows（`>` 而非 `>=`）。"""
+    ws = _FakeWorksheet([gsp._HEADERS], row_count=5, col_count=5)
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_portfolio('A', [{'ticker': f'T{i}', 'lots': 1, 'avg_price': 1}
+                                 for i in range(4)])
+    assert ws.calls == [('update', 'A1:E5')]
+
+def test_save_portfolio_expands_columns_when_sheet_narrower_than_headers():
+    """M12:工作表只有 3 欄 → 先 add_cols 補到 5 欄再寫;add_cols 失敗則原狀、例外上拋。"""
+    ws = _FakeWorksheet([['name', 'ticker', 'lots'], ['B', 'X', '1']],
+                        row_count=2, col_count=3)
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_portfolio('A', [{'ticker': 'Y', 'lots': 1, 'avg_price': 1}])
+    assert ws.calls == [('add_rows', 1), ('add_cols', 2), ('update', 'A1:E3')]
+    vals = ws.get_all_values()
+    assert vals[0] == gsp._HEADERS
+    assert vals[1] == ['B', 'X', '1', '', '']
+    assert vals[2][:2] == ['A', 'Y']
+
+    before = [['name', 'ticker', 'lots'], ['B', 'X', '1']]
+    ws = _FailingWorksheet([list(r) for r in before], fail_on='add_cols',
+                           row_count=10, col_count=3)
+    with patch.object(gsp, '_ws', return_value=ws):
+        with pytest.raises(ConnectionError):
+            gsp.save_portfolio('A', [{'ticker': 'Y', 'lots': 1, 'avg_price': 1}])
+    assert ws.get_all_values() == before
+    assert not any(c[0] == 'update' for c in ws.calls)
+
+
+def test_save_portfolio_short_rows_do_not_inherit_old_right_hand_cells():
+    """M15:新列比舊列窄時,補空字串蓋掉右側舊格 —— 別的組合的 note 不可跑到新列上。"""
+    H = gsp._HEADERS + ['note']
+    ws = _FakeWorksheet([H, ['A', '2330', '1', '600', 't', 'old note'],
+                         ['B', 'VOO', '1', '1', 't', 'b']], row_count=50, col_count=26)
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_portfolio('A', [{'ticker': 'x', 'lots': 1, 'avg_price': 1},
+                                 {'ticker': 'y', 'lots': 1, 'avg_price': 1}])
+        vals = ws.get_all_values()
+    assert vals[1] == ['B', 'VOO', '1', '1', 't', 'b']
+    assert [r[1] for r in vals[2:]] == ['X', 'Y']
+    assert [r[5] for r in vals[2:]] == ['', '']
+    assert not any('old note' in r for r in vals)
+
+
+def test_name_with_surrounding_spaces_is_replaced_not_duplicated():
+    """M7:name 前後有空白的列,load_portfolio（strip 後比對）載得進來 ⇒ 存檔須取代、不重複。"""
+    ws = _FakeWorksheet([gsp._HEADERS, [' A ', '2330', '1', '100', 't0'],
+                         ['B', 'X', '1', '1', 't0']])
+    with patch.object(gsp, '_ws', return_value=ws):
+        assert [r['ticker'] for r in gsp.load_portfolio('A')] == ['2330']
+        for _ in range(2):
+            _editor_round_trip(ws, 'A')
+        vals = ws.get_all_values()
+    assert sum(1 for r in vals if r[0].strip() == 'A') == 1
+    assert ['B', 'X', '1', '1', 't0'] in vals
+
+def test_save_portfolio_invalid_input_does_not_write():
+    """無有效持股 → ValueError,且完全不寫 Sheet。"""
+    ws = _FakeWorksheet(_mixed_sheet())
+    with patch.object(gsp, '_ws', return_value=ws):
+        with pytest.raises(ValueError, match='有效'):
+            gsp.save_portfolio('A', [{'ticker': 'X', 'lots': 0, 'avg_price': 1}])
+    assert ws.calls == []
+    assert ws.get_all_values() == _mixed_sheet()
+
+
+
+def test_save_portfolio_uses_real_gspread_worksheet_api():
+    """呼叫的方法名／參數名與真 gspread.Worksheet 一致（spec 化 mock,打錯名字即紅）。"""
+    import inspect
+    gspread = pytest.importorskip('gspread')
+    ws = MagicMock(spec=gspread.Worksheet)
+    ws.get_all_values.return_value = [gsp._HEADERS, ['B', 'BND', '1', '1', 't']]
+    ws.row_count = 1000
+    ws.col_count = 26
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_portfolio('A', [{'ticker': 'VOO', 'lots': 1, 'avg_price': 1}])
+    ws.clear.assert_not_called()
+    ws.append_rows.assert_not_called()
+    _args, kwargs = ws.update.call_args
+    inspect.signature(gspread.Worksheet.update).bind(ws, **kwargs)
+    assert kwargs['range_name'] == 'A1:E3'
+    assert kwargs['values'][1] == ['B', 'BND', '1', '1', 't']
+
 # ── delete_portfolio ────────────────────────────────────────
 def test_delete_portfolio_existing(populated_ws):
     n = gsp.delete_portfolio('攻擊組合')
@@ -256,7 +680,11 @@ def _fake_client_capturing():
     def _open_by_key(sid):
         opened.append(sid)
         _sh = MagicMock()
-        _sh.worksheet.return_value = _FakeWorksheet()
+        # 依分頁名給對應表頭（fake 的 update 現在逐格寫、get_all_records 同真 gspread
+        # 會因表頭重複 raise ⇒ 不能再拿 5 欄表頭冒充 3 欄 watchlist 分頁）。
+        _sh.worksheet.side_effect = lambda _n: _FakeWorksheet(
+            [gsp._STOCK_WATCHLIST_HEADERS if _n == gsp._STOCK_WATCHLIST_WORKSHEET
+             else gsp._HEADERS])
         return _sh
 
     client = MagicMock()
