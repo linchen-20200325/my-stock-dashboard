@@ -171,6 +171,12 @@ def test_r21_unclosed_or_overlong_value_masked_to_end_of_line():
         _never_less(x)
 
 
+#: 批 S4 QA F3：原始文字那一道的「關掉」突變（測最後一道本身時要一併關掉，否則被這一道補遮、突變看不出差別）。
+_TOML_ORIG_OFF = ("    if not any(_n in text for _n in _POST_NEEDLES[_TOML_CONV_RE]):\n        return []",
+                  "    if True:\n        return []")
+_TOML_HTML_OFF = (r'''    r"|(?P<he>&#x27;|&#39;|&quot;)(?:(?!(?P=he))[^\r\n]){0,4096}" + _POSS + r"(?P=he)"''', "")
+
+
 def _mutant_ss(*pairs):
     from tests.test_sec_s3_0928 import _mutant
     return _mutant(*pairs)
@@ -184,7 +190,7 @@ def _mutant_ss(*pairs):
      "True:", "num_int"),                                                 # 只認型別名 → (i) 外露
 ])
 def test_r20_r21_mutants_leak(old, new, sample):
-    m = _mutant_ss((old, new))
+    m = _mutant_ss((old, new), _TOML_ORIG_OFF)
     x = _TB_CHAINED.format(v=_SECRET_HEX) if sample == "chained" else f"看到 {_toml_msg(sample)}"
     assert not _toml_leaks(scrub_secrets(x)) and _SECRET_HEX not in scrub_secrets(x)
     assert _toml_leaks(m.scrub_secrets(x)) or _SECRET_HEX in m.scrub_secrets(x), (old, new)
@@ -212,6 +218,7 @@ _S4_OFF: list[tuple[str, str]] = [
     ("    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),\n", ""),
     ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""),
     ("_DERL_INDENT_MAX: int = 256", "_DERL_INDENT_MAX: int = 16"),           # SEC-r27
+    _TOML_ORIG_OFF, _TOML_HTML_OFF,                                           # 批 S4 QA F3
 ]
 
 
@@ -308,6 +315,11 @@ def test_f3_plain_float_error_still_untouched():
     for x in ("ValueError: could not convert string to float: '1.2SEC'", "could not convert string to float: &#x27;a&#x27;",
               "invalid literal for int() with base 10: &quot;x&quot;"):
         assert scrub_secrets(x) == x == scrub_prose_secrets(x)
+
+
+def test_f3_mutant_without_html_quotes_leaks():
+    m = _mutant_ss(_TOML_HTML_OFF)
+    assert all("SEC" in m.scrub_secrets(x) for x in _F3_HTML) and not any("SEC" in scrub_secrets(x) for x in _F3_HTML)
 
 
 def test_f3_mutant_without_original_text_pass_leaks():

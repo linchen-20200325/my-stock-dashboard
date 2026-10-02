@@ -278,7 +278,10 @@ _TOML_RELAX_MUT = ('_PROSE_RELAXED_EXC: str = r"Unicode(?:Decode|Encode|Translat
 
 #: 突變：拿掉批 S4 的兩條 toml 帶值規則（SEC-r20／SEC-r21）。
 _S4_TOML_DROP = (("    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),\n", ""),
-                 ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""))
+                 ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""),
+                 #: 批 S4 QA F3：原始文字那一道（`_toml_orig_values`）一併關掉。
+                 ("    if not any(_n in text for _n in _POST_NEEDLES[_TOML_CONV_RE]):\n        return []",
+                  "    if True:\n        return []"))
 
 
 def _toml_message(doc: str, recorded: str) -> str:

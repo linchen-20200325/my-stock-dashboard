@@ -842,7 +842,10 @@ def test_r4_old_part_is_exactly_e23ff2f():
                 ("    (_POSIX_TAB_DIR_RE, _mask_tab_dirs),\n    (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),\n", ""),
                 #: 批 S4（SEC-r20／SEC-r21）加進 `_RULES_NEW` 的兩條，一併關掉。
                 ("    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),\n", ""),
-                ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""))
+                ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""),
+                #: 批 S4 QA F3：原始文字那一道一併關掉。
+                ("    if not any(_n in text for _n in _POST_NEEDLES[_TOML_CONV_RE]):\n        return []",
+                 "    if True:\n        return []"))
     corpus = sorted(_batch_corpus() | _ui_corpus())[::3] + _r4_cases(3000)
     diff = [r for r in corpus if m.scrub_secrets(r) != _OLD(r)]
     assert not diff, [(d[:60], _OLD(d)[:60], m.scrub_secrets(d)[:60]) for d in diff[:5]]
