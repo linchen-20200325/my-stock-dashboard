@@ -40,6 +40,7 @@ from shared.calc_helpers import calc_bias_pct
 # (v19.85)FINMIND_API_URL import 移除 — 唯一 caller 出口鏈方案 FM 已拔(假 dataset)
 from shared.ttls import TTL_1HOUR
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
+import math
 
 
 # S7 v19.78:原每呼叫 new Session → 連線池零複用。改 thread-local 單例
@@ -76,8 +77,11 @@ def _is_block_failure(out: dict) -> bool:
     return all(str(k).startswith('_') for k in out)
 
 
-def _cache_success_only(ttl: int):
+def _cache_success_only(ttl: int, is_failure=_is_block_failure):
     """@st.cache_data 變體:**只快取成功結果**,失敗穿透(下次呼叫真重試)。
+
+    `is_failure`:失敗判準(預設 `_is_block_failure`);回傳形狀不同的 block
+    (us10y 失敗仍含資料鍵、twii 2y 回 DataFrame/None)傳自己的判準(D2-f52/f53)。
 
     用法與行為:
     - 成功(含資料鍵)→ 照常入快取,TTL 內回快取值(效能/quota 不變)
@@ -90,7 +94,7 @@ def _cache_success_only(ttl: int):
         @_ft_ms.wraps(fn)   # wraps 保 __qualname__ 各 block 快取鍵獨立
         def _inner(*args, **kwargs):
             out = fn(*args, **kwargs)
-            if _is_block_failure(out):
+            if is_failure(out):
                 raise _BlockFetchFailed(out)
             return out
 
@@ -105,6 +109,29 @@ def _cache_success_only(ttl: int):
         _outer.clear = getattr(_inner, 'clear', lambda: None)  # type: ignore[attr-defined]
         return _outer
     return _deco
+
+
+def _is_us10y_failure(out) -> bool:
+    """us10y 失敗形狀 `{'us10y': {'_err': …, 'current': None}}` 仍含資料鍵(D2-f52)。"""
+    if not isinstance(out, dict):
+        return True
+    _node = out.get('us10y')
+    return not isinstance(_node, dict) or _node.get('current') is None
+
+
+def _is_none(out) -> bool:
+    """回 None 即失敗(fetch_twii_2y_for_ma240,D2-f53)。"""
+    return out is None
+
+
+def _is_finite_num(x) -> bool:
+    """有限實數才放行;None / NaN / ±inf / bool / 非數字一律否(DL-f1-s46)。"""
+    if isinstance(x, bool):
+        return False
+    try:
+        return math.isfinite(float(x))
+    except (TypeError, ValueError):
+        return False
 
 
 def _make_proxy_session():
@@ -172,7 +199,7 @@ def fetch_vix_block() -> dict:
         return {'_err_vix': str(_e_vix)[:80]}
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+@_cache_success_only(ttl=TTL_1HOUR)   # D2-f51:全敗回 None 不進快取
 def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
     """抓 TW M1B/M2 YoY,3 路 fallback。
 
@@ -204,7 +231,11 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
     try:
         from src.data.macro import fetch_cbc_m1b_m2 as _tw_cbc
         _cbc_snap = _tw_cbc()
-        if _cbc_snap.get('m1b_yoy') is not None:
+        # DL-f1-s46:NaN / ±inf 不放行(原只測 is not None),落下一層
+        if (_is_finite_num(_cbc_snap.get('m1b_yoy'))
+                and _is_finite_num(_cbc_snap.get('m2_yoy'))
+                and (_cbc_snap.get('gap') is None
+                     or _is_finite_num(_cbc_snap.get('gap')))):
             _src_label = ('TWII-proxy' if _cbc_snap.get('is_proxy_tier')
                           else f'CBC-tier{_cbc_snap.get("tier_used")}')
             print(f'[M1B/tw_macro] ✅ {_src_label} '
@@ -247,6 +278,8 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
                                 _df_fred_m1['value'].iloc[-13] - 1) * 100, 2)
             _m2_yoy_f = round((_df_fred_m2['value'].iloc[-1] /
                                _df_fred_m2['value'].iloc[-13] - 1) * 100, 2)
+            if not (_is_finite_num(_m1b_yoy_f) and _is_finite_num(_m2_yoy_f)):
+                raise ValueError(f'FRED 年增率非有限值 M1B={_m1b_yoy_f} M2={_m2_yoy_f}')  # DL-f1-s46
             print(f'[M1B/FRED] ✅ M1B={_m1b_yoy_f:.2f}% M2={_m2_yoy_f:.2f}%')
             return {'m1b_yoy': _m1b_yoy_f, 'm2_yoy': _m2_yoy_f,
                     'gap': round(_m1b_yoy_f - _m2_yoy_f, 2), 'source': 'FRED'}
@@ -279,6 +312,8 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
                 if _imf_m1_sorted and _imf_m2_sorted:
                     _m1b_yoy_imf = round(_imf_m1_sorted[-1][1], 2)
                     _m2_yoy_imf = round(_imf_m2_sorted[-1][1], 2)
+                    if not (_is_finite_num(_m1b_yoy_imf) and _is_finite_num(_m2_yoy_imf)):
+                        raise ValueError(f'IMF 年增率非有限值 M1B={_m1b_yoy_imf} M2={_m2_yoy_imf}')  # DL-f1-s46
                     print(f'[M1B/IMF] ✅ year={_imf_m1_sorted[-1][0]} '
                           f'M1B={_m1b_yoy_imf:.2f}% M2={_m2_yoy_imf:.2f}%')
                     return {'m1b_yoy': _m1b_yoy_imf, 'm2_yoy': _m2_yoy_imf,
@@ -359,7 +394,7 @@ def compute_twii_bias(twii_local) -> dict | None:
     }
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+@_cache_success_only(ttl=TTL_1HOUR, is_failure=_is_none)   # D2-f53:回 None 不進快取
 def fetch_twii_2y_for_ma240():
     """抓 ^TWII 2 年 OHLCV(MA240 計算用)。
 
@@ -525,7 +560,7 @@ def fetch_cpi_block(fred_api_key: str = '') -> dict:
     return {'_err_cpi': ' | '.join(_cpi_errs) or 'all failed'}
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+@_cache_success_only(ttl=TTL_1HOUR, is_failure=_is_us10y_failure)   # D2-f52:失敗不進快取
 def fetch_us10y_block(fred_api_key: str = '') -> dict:
     """美 10 年期殖利率 FRED DGS10(R3 v18.405)。
 
