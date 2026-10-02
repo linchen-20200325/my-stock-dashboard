@@ -86,3 +86,30 @@ def test_sa2_f11_scales_card_why_and_summary():
     assert "discriminative=False`" not in src and "上方的 facts" not in src
     assert "上方的 facts" not in _inspect.getsource(PW)
     assert len("逐盞原因見「⚠️ 已失準」與這張卡下面的對照表") <= 46
+
+
+def _m1b_readiness(gap):
+    from src.compute.macro.macro_helpers import compute_five_bucket_summary
+    rd: dict = {}
+    compute_five_bucket_summary(
+        m1b_m2_info={"m1b_yoy": 3.0, "m2_yoy": 1.0, "gap": gap, "source": "CBC-tier1"},
+        readiness_out=rd)
+    return rd["m1b_m2_gap"]
+
+
+@pytest.mark.parametrize("gap", [float("inf"), float("-inf"), float("nan")])
+def test_nf_f2_non_finite_rejection_says_non_finite(gap, capsys):
+    """NF-f2 ①②：非有限值被擋時，標註與 log 說「非有限值(NaN / ±inf)」，⛔ 不再說超出範圍。"""
+    r = _m1b_readiness(gap)
+    assert r["rejected"][0][2] == "非有限值(NaN / ±inf)"
+    out = capsys.readouterr().out
+    assert "非有限值(NaN / ±inf) → 跳過此源(§3.2)。" in out
+    assert "超出合理範圍" not in out
+
+
+def test_dl_f1_s67_m1b_hit_source_chain_order():
+    from src.compute.macro import macro_helpers as MH
+    import inspect as _inspect
+    src = _inspect.getsource(MH.compute_five_bucket_summary)
+    assert "m1b_m2_info.gap (CBC ms1 → EF15M01 → ^TWII proxy → FRED → IMF)" in src
+    assert "CBC ms1 → FRED → IMF → ^TWII proxy" not in src

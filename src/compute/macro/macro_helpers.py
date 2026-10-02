@@ -1814,6 +1814,13 @@ def compute_five_bucket_summary(
             if _v_fs is None:
                 continue
             if _spec_fs is not None and not within_valid_range(_v_fs, _spec_fs):
+                # 批 D4 NF-f2（客戶 2026-10-02 採用）：非有限值(NaN / ±inf)不是範圍問題,
+                #   標註與 log 改說「非有限值」(只換字;擋下與原因碼不變)。
+                if _v_fs != _v_fs or _v_fs in (float("inf"), float("-inf")):
+                    _rejected.append((_src_label, _v_fs, "非有限值(NaN / ±inf)"))
+                    print(f"[五桶/{key}] ⚠️ 來源 {_src_label} 值 {_v_fs} 非有限值(NaN / ±inf) "
+                          f"→ 跳過此源(§3.2)。")
+                    continue
                 _rejected.append((_src_label, _v_fs,
                                   f"out_of_range[{_spec_fs.valid_min},{_spec_fs.valid_max}]"))
                 # §1:出聲不吞。這行 log 就是「上游換標的 / 換慣例」的偵測點。
@@ -1842,7 +1849,7 @@ def compute_five_bucket_summary(
     values = {
         "health":        _traced("health", "warroom_summary.health_score (calc_traffic_light)", _g(warroom_summary, "health_score"), warroom_summary),
         "ndc_signal":    _traced("ndc_signal", "macro_info.ndc_signal.score (FinMind TaiwanBusinessIndicator)", _g(macro_info, "ndc_signal", "score"), macro_info),
-        "m1b_m2_gap":    _traced("m1b_m2_gap", "m1b_m2_info.gap (CBC ms1 → FRED → IMF → ^TWII proxy)", _g(m1b_m2_info, "gap"), m1b_m2_info),
+        "m1b_m2_gap":    _traced("m1b_m2_gap", "m1b_m2_info.gap (CBC ms1 → EF15M01 → ^TWII proxy → FRED → IMF)", _g(m1b_m2_info, "gap"), m1b_m2_info),
         "ism_pmi":       _traced("ism_pmi", "macro_info.ism_pmi.value (PMI_SOURCE_REGISTRY 多源賽跑)", _g(macro_info, "ism_pmi", "value"), macro_info),
         "us_core_cpi":   _traced("us_core_cpi", "macro_info.us_core_cpi.yoy (FRED CPILFESL)", _g(macro_info, "us_core_cpi", "yoy"), macro_info),
         "tw_export":     _traced("tw_export", "macro_info.tw_export.yoy (MOF 進出口)", _g(macro_info, "tw_export", "yoy"), macro_info),
