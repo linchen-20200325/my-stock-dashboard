@@ -438,9 +438,14 @@ def write_monthly_revenue(conn: sqlite3.Connection, token: str) -> int:
         return -1
     from src.data.stock.monthly_revenue_fetcher import fetch_batch_monthly_revenue
 
-    df = fetch_batch_monthly_revenue()
+    # D2-f28(批 D2):同一次呼叫取得「是否 L1 判定的確定抓取失敗」(上市／上櫃一邊失敗的半邊表)
+    _ws = getattr(fetch_batch_monthly_revenue, "with_status", None)
+    df, _failed = _ws() if callable(_ws) else (fetch_batch_monthly_revenue(), False)
     if df is None or df.empty:
         _log("⚠️ 略過 monthly_revenue：fetch 回空（不寫空表）")
+        return -1
+    if _failed:   # 半邊表不寫(修前照寫並記 ok);source_health 記 absent
+        _log("⚠️ 略過 monthly_revenue：上市／上櫃一邊確定抓取失敗（不寫半邊表）")
         return -1
     rows = _revenue_rows(df)
     rows.to_sql("monthly_revenue", conn, if_exists="replace", index=False)

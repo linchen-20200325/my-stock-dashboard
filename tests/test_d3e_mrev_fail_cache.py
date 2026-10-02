@@ -1330,7 +1330,7 @@ class TestCallers:
 
     @pytest.mark.parametrize("case", ["partial", "openapi_ok", "failed"])
     def test_export_stock_db_caller(self, world, monkeypatch, case):
-        """匯出端拿到的表與修前逐字相同（半邊表照寫、沒有旗標 —— D2-f28，本批不處理）。"""
+        """匯出端拿到的表與修前逐字相同；半邊表例外 —— 批 D2（D2-f28）起不寫（修前照寫、沒有旗標）。"""
         E = _load_script("scripts/export_stock_db.py", "_d3e_export_stock_db")
         world.twse, world.tpex = {"partial": ("none", "ok"), "openapi_ok": ("ok", "ok"),
                                   "failed": ("none", "none")}[case]
@@ -1345,10 +1345,13 @@ class TestCallers:
         pre = _with_prefix_mr(f"caller_export_{case}", monkeypatch, world)
         monkeypatch.setattr(MR, "fetch_batch_monthly_revenue", pre.fetch_batch_monthly_revenue)
         want_n, want = _export()
+        if case == "partial":   # D2-f28：修前寫 1 列半邊表，現在略過
+            assert (want_n, got_n, got) == (1, -1, None)
+            return
         assert got_n == want_n and (got is None) == (want is None)
         if got is not None:
             pd.testing.assert_frame_equal(got, want)
-        assert got_n == {"partial": 1, "openapi_ok": 3, "failed": -1}[case]
+        assert got_n == {"openapi_ok": 3, "failed": -1}[case]
 
     @_NEEDS_PANDERA
     def test_export_stock_db_gets_finmind_history_d2f21(self, world):
