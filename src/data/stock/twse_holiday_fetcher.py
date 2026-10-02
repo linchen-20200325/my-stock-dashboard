@@ -28,7 +28,7 @@
 「農曆春節前最後交易日」）。把每一列都當休市 = 把交易日說成休市。故逐列分三類：
 
 - `closed`：名稱或說明含 `CLOSED_MARKERS` 任一詞（放假／補假／休市／無交易…）
-- `trading`：含 `TRADING_MARKERS` 任一詞（開始交易／最後交易）
+- `trading`：含 `TRADING_MARKERS` 任一詞（開始交易／最後交易／照常交易）
 - `unclassified`：**兩類都沒中、或兩類都中**。⛔ 不猜它是哪一類 ——
   下游碰到這一天一律判「無法判定」（L2 `src/compute/trading_calendar.py`）。
 - **同一天兩列分類互相衝突**（例：一列放假、一列開始交易）→ 該日只歸 `unclassified`。
@@ -82,7 +82,9 @@ SOURCE_ID: str = "TWSE:openapi/holidaySchedule"
 #: 判為「休市」的關鍵詞（名稱或說明任一含即中）。
 CLOSED_MARKERS: tuple[str, ...] = ("放假", "補假", "休市", "無交易", "停止交易")
 #: 判為「表內提示的交易日」的關鍵詞。
-TRADING_MARKERS: tuple[str, ...] = ("開始交易", "最後交易")
+#: 「照常交易」（批 D5 QA A 組）：例「依規定僅勞工放假，市場照常交易」同時中「放假」→ 兩類都中
+#: → `unclassified`（無法判定），⛔ 不再被誤判成休市。
+TRADING_MARKERS: tuple[str, ...] = ("開始交易", "最後交易", "照常交易")
 
 #: `Weekday` 欄的字 → `date.weekday()`（交叉核對用；格式漂移時 raise）。
 _WEEKDAY_CHARS: dict[str, int] = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6}

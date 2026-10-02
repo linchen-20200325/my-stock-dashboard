@@ -85,6 +85,7 @@ class TestParse:
         ("市場無交易，僅辦理結算交割作業", "", "closed"),
         ("國曆新年開始交易日", "國曆新年開始交易。", "trading"),
         ("補行上班日", "", "unclassified"),             # 兩類都沒中
+        ("勞動節", "依規定僅勞工放假，市場照常交易。", "unclassified"),  # 放假＋照常交易 兩類都中
         ("農曆春節前最後交易日", "次日起放假。", "unclassified"),  # 兩類都中
     ])
     def test_classify_entry(self, name, desc, kind):
@@ -278,6 +279,13 @@ class TestService:
         self._fake_cal(monkeypatch, cal=_cal([sat]))
         r = svc.get_today_trading_status(datetime(2026, 3, 7, 2, tzinfo=UTC))
         assert r.is_trading_day is True and r.error is None
+
+    def test_labor_day_market_open_row_is_unavailable(self, monkeypatch):
+        row = {"Name": "勞動節", "Date": "1150501", "Weekday": "五",
+               "Description": "依規定僅勞工放假，市場照常交易。"}
+        self._fake_cal(monkeypatch, cal=_cal([row]))
+        r = svc.get_today_trading_status(datetime(2026, 5, 1, 2, tzinfo=UTC))
+        assert r.is_trading_day is None and r.error
 
     def test_table_unclassified_weekday_is_unavailable(self, monkeypatch):
         odd = {"Name": "補行上班日", "Date": "1150306", "Weekday": "五", "Description": ""}
