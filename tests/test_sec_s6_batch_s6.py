@@ -1078,3 +1078,41 @@ def test_qa4_stretch_path_mutants_leak(name, mut, x):
 def test_qa4_secret_just_past_max_masked(unit, tail, extra):
     x = _qa4_past_max(unit, _QA4_TAILS[tail], extra)
     assert "R29CSECRET" not in scrub_secrets(x) and "R29CSECRET" not in scrub_prose_secrets(x)
+
+
+# ── 批 S6 QA 第四輪複驗：超過上限那一段的快取鍵（錨點, 起點）兩個欄位都是承重的 ——
+_KC = "could not convert string to float: "
+
+
+def _qa4_key_no_s0() -> str:
+    """兩個長度差很多的值共用「收尾引號＋遮罩」錨點：鍵少了起點 → 短值的判斷被長值沿用 → 秘密外露。"""
+    u = "-" * 20 + "'***"
+    return ("TomlDecodeError\n" + _KC + "'" + "a" * 5 + "'" + "*" * 16 + "\n" + _KC + "'" + "b" * 600 + "'" + "*" * 16
+            + "\n" + u * 250 + "\n*** R29CSECRET " + "-" * 200 + "'***" + u * 40)
+
+
+def _qa4_key_no_anchor() -> str:
+    """兩個值各用不同的錨點（位置字尾／遮罩）、起點相同：鍵少了錨點 → 一個錨點的判斷被另一個沿用 → 秘密外露。"""
+    return ("TomlDecodeError\n" + _KC + "'" + "a" * 40 + "'" + _SUF + "\n" + _KC + "'" + "b" * 50 + "'" + "*" * 16 + "\n"
+            + ("-'" + _SUF + "-'***") * 300 + "\n*** R29CSECRET ----------'***" * 3)
+
+
+_QA4_KEY_OLD = '            _sk = ("stretch", _anchor, _s0)\n'
+_QA4_KEY_MUTANTS = [
+    ("key-without-start", (_QA4_KEY_OLD, '            _sk = ("stretch", _anchor)\n'), _qa4_key_no_s0()),
+    ("key-end-instead-of-start", (_QA4_KEY_OLD, '            _sk = ("stretch", _anchor, _b)\n'), _qa4_key_no_s0()),
+    ("key-constant", (_QA4_KEY_OLD, '            _sk = "stretch"\n'), _qa4_key_no_s0()),
+    ("key-without-anchor", (_QA4_KEY_OLD, '            _sk = ("stretch", _s0)\n'), _qa4_key_no_anchor()),
+]
+
+
+@pytest.mark.parametrize("name,mut,x", _QA4_KEY_MUTANTS, ids=[m[0] for m in _QA4_KEY_MUTANTS])
+def test_qa4_stretch_cache_key_mutants_leak(name, mut, x):
+    assert "R29CSECRET" in _MAIN.scrub_secrets(x), "前提：main 外露"
+    assert "R29CSECRET" not in scrub_secrets(x) and "R29CSECRET" not in scrub_prose_secrets(x)
+    _never_less(x)
+    m = _mutant(mut)
+    assert "R29CSECRET" in m.scrub_secrets(x) and "R29CSECRET" in m.scrub_prose_secrets(x), name
+
+
+_S6_EXTRA_CORPUS.extend([_qa4_key_no_s0(), _qa4_key_no_anchor()])
