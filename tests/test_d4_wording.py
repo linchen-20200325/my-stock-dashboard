@@ -167,3 +167,14 @@ def test_dl_f1_s14_edu_source_table_and_m1b_card():
     assert f"'{china}'" in src
     for gone in ("CNCPIALLMINMEI", "90 天 cache", "modifier = 1.0 中性", "月後 ~5-7 天"):
         assert gone not in src, gone
+
+
+def test_dl_f1_s14_health_inspector_m1b_source_and_endpoint():
+    """DL-f1-s14 ⑧⑨：健診 M1B 列「來源」×3、「端點」×2 對齊 5 段取數鏈（M1B 路徑沒有 FinMind）。"""
+    import inspect as _inspect
+
+    from src.ui.pages import health_inspector as H
+    src = _inspect.getsource(H)
+    assert src.count("'CBC ms1.json+EF15M01+^TWII 動能代理+FRED+IMF 5段'") == 3
+    assert src.count("'cbc.gov.tw / cpx.cbc.gov.tw / Yahoo / FRED / IMF DataMapper'") == 2
+    assert "CBC + FinMind 雙源" not in src and "TaiwanStockMonetaryAggregates" not in src
