@@ -178,3 +178,13 @@ def test_dl_f1_s14_health_inspector_m1b_source_and_endpoint():
     assert src.count("'CBC ms1.json+EF15M01+^TWII 動能代理+FRED+IMF 5段'") == 3
     assert src.count("'cbc.gov.tw / cpx.cbc.gov.tw / Yahoo / FRED / IMF DataMapper'") == 2
     assert "CBC + FinMind 雙源" not in src and "TaiwanStockMonetaryAggregates" not in src
+
+
+def test_dl_f1_s66_system_cap_basis_wording():
+    """DL-f1-s66：持股頁「推導依據」的系統風險上限說明列出分數因子與三大硬否決紅線。"""
+    from shared.allocation_decision import build_allocation_decision
+    import inspect as _inspect
+    src = _inspect.getsource(build_allocation_decision)
+    assert ("'macro_state 規則引擎（分數計算：VIX／PMI／M1B-M2／BIAS240／PCR；"
+            "三大硬否決紅線：薩姆／PMI／外資期貨）'") in src
+    assert "外資期貨硬否決）" not in src
