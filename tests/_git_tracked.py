@@ -172,6 +172,10 @@ def _parse_index(data: bytes) -> tuple[frozenset[str] | None, str]:
                 i = start + ((nul - start) // 8 + 1) * 8
                 if i > end_entries or data[nul:i].strip(b"\0"):
                     raise IndexCorrupt(f"第 {k} 項：補齊的 NUL 不完整")
+            #: 批 S7（S6-n4）：flags 名長飽和（0xFFF）只在路徑 ≥ 4095 位元組時才會由 git 寫出（`ce_namelen >= CE_NAMEMASK`）；
+            #: 路徑較短卻記 0xFFF ＝ 位元翻轉／偽造 → 同「名長不符」（v2／v3／v4 一律；檔尾全 0 時這是唯一的核對）。
+            if (flags & _NAME_MASK) == _NAME_MASK and len(path) < _NAME_MASK:
+                raise IndexCorrupt(f"第 {k} 項：flags 名長飽和（0xFFF）但路徑只有 {len(path)} 位元組（應 ≥ {_NAME_MASK}）")
             if not path:
                 #: split index 的「被取代項目」：git 寫入時剝掉名字（長度 0）—— 先記下，讀完擴充區才知道合不合法。
                 if empty_at is None:
