@@ -62,6 +62,16 @@ class _FakeWorksheet:
             range_name, values = values, range_name   # 同 gspread 6:舊參數順序自動對調
         self.calls.append(('update', range_name))
         assert range_name and range_name.startswith('A1'), range_name
+        # 同真 values.update:超出表格格數 → 錯;只寫給定的格子,右側／下方舊格**不會**被清掉。
+        from gspread.utils import a1_range_to_grid_range
+        if ':' in range_name:
+            _g = a1_range_to_grid_range(range_name)
+            if _g['endRowIndex'] > self.row_count or _g['endColumnIndex'] > self.col_count:
+                raise ValueError(f'exceeds grid limits: {range_name}')
+            if (len(values or []) > _g['endRowIndex'] - _g['startRowIndex']
+                    or any(len(r) > _g['endColumnIndex'] - _g['startColumnIndex']
+                           for r in (values or []))):
+                raise ValueError(f'values larger than range: {range_name}')
         for i, row in enumerate(values or []):
             while len(self.rows) <= i:
                 self.rows.append([])
@@ -438,6 +448,11 @@ class _FailingWorksheet(_FakeWorksheet):
             raise ConnectionError('network down mid-write')
         return super().update(values=values, range_name=range_name)
 
+    def add_cols(self, n):
+        if self.fail_on == 'add_cols':
+            raise ConnectionError('network down mid-write')
+        return super().add_cols(n)
+
     def add_rows(self, n):
         if self.fail_on == 'add_rows':
             raise ConnectionError('network down mid-write')
@@ -466,6 +481,56 @@ def test_save_portfolio_expands_grid_before_write():
     assert ws.calls == [('add_rows', 3), ('update', 'A1:E5')]
     assert len(ws.get_all_values()) == 5
 
+
+
+def test_save_portfolio_expands_columns_when_sheet_narrower_than_headers():
+    """M12:工作表只有 3 欄 → 先 add_cols 補到 5 欄再寫;add_cols 失敗則原狀、例外上拋。"""
+    ws = _FakeWorksheet([['name', 'ticker', 'lots'], ['B', 'X', '1']],
+                        row_count=2, col_count=3)
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_portfolio('A', [{'ticker': 'Y', 'lots': 1, 'avg_price': 1}])
+    assert ws.calls == [('add_rows', 1), ('add_cols', 2), ('update', 'A1:E3')]
+    vals = ws.get_all_values()
+    assert vals[0] == gsp._HEADERS
+    assert vals[1] == ['B', 'X', '1', '', '']
+    assert vals[2][:2] == ['A', 'Y']
+
+    before = [['name', 'ticker', 'lots'], ['B', 'X', '1']]
+    ws = _FailingWorksheet([list(r) for r in before], fail_on='add_cols',
+                           row_count=10, col_count=3)
+    with patch.object(gsp, '_ws', return_value=ws):
+        with pytest.raises(ConnectionError):
+            gsp.save_portfolio('A', [{'ticker': 'Y', 'lots': 1, 'avg_price': 1}])
+    assert ws.get_all_values() == before
+    assert not any(c[0] == 'update' for c in ws.calls)
+
+
+def test_save_portfolio_short_rows_do_not_inherit_old_right_hand_cells():
+    """M15:新列比舊列窄時,補空字串蓋掉右側舊格 —— 別的組合的 note 不可跑到新列上。"""
+    H = gsp._HEADERS + ['note']
+    ws = _FakeWorksheet([H, ['A', '2330', '1', '600', 't', 'old note'],
+                         ['B', 'VOO', '1', '1', 't', 'b']], row_count=50, col_count=26)
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.save_portfolio('A', [{'ticker': 'x', 'lots': 1, 'avg_price': 1},
+                                 {'ticker': 'y', 'lots': 1, 'avg_price': 1}])
+        vals = ws.get_all_values()
+    assert vals[1] == ['B', 'VOO', '1', '1', 't', 'b']
+    assert [r[1] for r in vals[2:]] == ['X', 'Y']
+    assert [r[5] for r in vals[2:]] == ['', '']
+    assert not any('old note' in r for r in vals)
+
+
+def test_name_with_surrounding_spaces_is_replaced_not_duplicated():
+    """M7:name 前後有空白的列,load_portfolio（strip 後比對）載得進來 ⇒ 存檔須取代、不重複。"""
+    ws = _FakeWorksheet([gsp._HEADERS, [' A ', '2330', '1', '100', 't0'],
+                         ['B', 'X', '1', '1', 't0']])
+    with patch.object(gsp, '_ws', return_value=ws):
+        assert [r['ticker'] for r in gsp.load_portfolio('A')] == ['2330']
+        for _ in range(2):
+            _editor_round_trip(ws, 'A')
+        vals = ws.get_all_values()
+    assert sum(1 for r in vals if r[0].strip() == 'A') == 1
+    assert ['B', 'X', '1', '1', 't0'] in vals
 
 def test_save_portfolio_invalid_input_does_not_write():
     """無有效持股 → ValueError,且完全不寫 Sheet。"""
