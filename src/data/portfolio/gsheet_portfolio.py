@@ -448,12 +448,38 @@ def load_portfolio(name: str, *, sheet_id: str | None = None,
     return parse_portfolio_records(recs)   # §2.1 共用純解析器（同 headless SA reader）
 
 
+def _editor_loaded_row(header: list[str], row: list[Any], name: str) -> bool:
+    """這一列是不是「📁 組合管理」編輯器按 📂 載入 時**會被讀進表格**的那種列（純函式）。
+
+    判準與 `load_portfolio(name)`（預設模式,即編輯器的讀取路徑）**逐條相同**:
+    以表頭對欄（同 `get_all_records()` 的 header→值 對映）→ name 去空白後相等 →
+    交給同一支 `parse_portfolio_records()` 判定（ticker 非空、張數>0、均價>0）。
+    ⇒ 回 False 的列 ＝ 編輯器**看不到**的列（別的組合、0／負數／空白／非數字、空白列…）,
+    save 時必須原封保留（Q4-r5-f1,客戶 2026-10-02 頁1①）。
+    ⚠️ 若日後編輯器改用 `keep_blank=True` 載入,本判準須同步改,否則空白列會被讀進表格、
+    卻在存檔時因張數／均價不是正數而不寫回 ⇒ 被刪。
+    """
+    rec = dict(zip(header, row))
+    if str(rec.get('name', '')).strip() != name:
+        return False
+    return bool(parse_portfolio_records([rec]))
+
+
 def save_portfolio(name: str, rows: list[dict[str, Any]], *,
                    sheet_id: str | None = None) -> int:
     """儲存（覆蓋）指定名稱的組合，回傳寫入的列數。
 
     rows 預期格式：每筆含 `ticker` / `lots` / `avg_price`。其它欄位忽略。
     sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
+
+    覆蓋範圍（Q4-r5-f1,客戶 2026-10-02 頁1①「存檔時保留沒載入的列」）:
+        只取代本組合中**編輯器載得進來**的列（判準見 `_editor_loaded_row`）;
+        其餘每一列（別的組合、本組合裡張數／均價為 0／負數／空白／非數字、代號空白、
+        整列空白…）**原位、原字串**寫回,⛔ 不丟、⛔ 不正規化。新列照舊接在最後。
+    寫入方式:整張表（表頭 + 保留列 + 新列,不足舊高度／寬度處補空字串以清掉殘留）
+        以**單一** `ws.update` 一次寫完,取代原本 `clear()` → `append_*` 三步 ——
+        原寫法若在 clear 之後斷線,整張 Sheet 會被清空。現寫法失敗時 Sheet 維持原狀,
+        例外照常往上拋（§1）。值以 RAW 寫入（與原 `append_rows` 預設相同）。
     """
     name = (name or '').strip()
     if not name:
@@ -463,7 +489,11 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
 
     ws = _ws(sheet_id=sheet_id)
     existing = ws.get_all_values()
-    keep_rows = [r for r in existing[1:] if (r and r[0].strip() != name)]
+    _old_header = list(existing[0]) if existing else []
+    # 表頭:前 5 欄釘 _HEADERS（同原寫法）;使用者在第 6 欄以後自加的表頭格原樣保留。
+    header = list(_HEADERS) + _old_header[len(_HEADERS):]
+    keep_rows = [list(r) for r in existing[1:]
+                 if not _editor_loaded_row(_old_header, r, name)]
 
     ts = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     new_rows = []
@@ -483,11 +513,21 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
     if not new_rows:
         raise ValueError('無有效持股可儲存（檢查代號、張數、均價）')
 
-    ws.clear()
-    ws.append_row(_HEADERS)
-    if keep_rows:
-        ws.append_rows(keep_rows)
-    ws.append_rows(new_rows)
+    grid = [header] + keep_rows + new_rows
+    n_cols = max(len(r) for r in (grid + existing))
+    n_rows = max(len(grid), len(existing))
+    # 補空字串到舊表的高／寬:舊資料比新內容長的部分一併在同一次寫入中清掉,不留殘列。
+    grid = [r + [''] * (n_cols - len(r)) for r in grid]
+    grid += [[''] * n_cols for _ in range(n_rows - len(grid))]
+
+    # 表格格數不夠時先擴（只加空列／空欄,不動既有內容;失敗則 Sheet 原狀、例外上拋）。
+    if n_rows > ws.row_count:
+        ws.add_rows(n_rows - ws.row_count)
+    if n_cols > ws.col_count:
+        ws.add_cols(n_cols - ws.col_count)
+
+    from gspread.utils import rowcol_to_a1
+    ws.update(values=grid, range_name=f'A1:{rowcol_to_a1(n_rows, n_cols)}')
     clear_read_cache()          # 寫入即清:使用者自己的編輯即時可見(§1)
     return len(new_rows)
 
