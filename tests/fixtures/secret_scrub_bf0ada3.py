@@ -1,3 +1,10 @@
+# ═══ 凍結副本（tests 專用，⛔ 不得修改、⛔ 不得被 production 程式 import）════════════════
+# 來源：commit bf0ada3（批 S3r，PR #769 合併點）的 `shared/secret_scrub.py`（git blob 8fb713800e6c2a68377ab313d0d07876a235936e），
+#       「原檔開始」那一行之後逐位元組照抄、一字未改（sha256 見 `tests/test_sec_s4_batch_s4.py` 的 `_BF0_SHA256`，
+#       該檔有測試逐位元組核對）。
+# 用途：`tests/test_sec_s4_batch_s4.py` 的「不得比 main bf0ada3 少遮」回歸基準 —— 固定在批 S4 動工前的版本，
+#       不隨 `shared/secret_scrub.py` 變動（理由同 `secret_scrub_e23ff2f.py`：自我參照的基準測不出舊規則被改壞）。
+# ═══ 原檔開始 ═══
 """shared/secret_scrub.py — L0：要畫上畫面的錯誤字串，先洗掉金鑰／識別碼／路徑（2026-09-26）。
 
 **純函式，零 I/O、零 streamlit、不 import 任何 L1+。**
@@ -69,14 +76,6 @@
            沒遮罩的行定出寬度；「同寬」連 `=`／`==` 補位一起算，補位收尾的最後一行也算滿行）。附帶效果：欄位名後面直接接多行金鑰（`private_key: MIIE…`，SEC-r22 的形態）時，
            第一行被第 5 類遮掉後，其餘整齊的行（≥3 行同寬 ≥40 字）也會一併遮；只剩 1～2 行、或行寬 <40、
            或各行不同寬時仍外露（SEC-r22 其餘形態未處理）。
-   12. 補洞 批 S4（SEC-r20／SEC-r21，2026-10-01；排在 `_RULES_NEW` 的最後 ⇒ 只加遮罩，不會比 e23ff2f／bf0ada3 少遮）：
-       toml 帶值的訊息**不論前面有沒有型別名**：(a) 重複表 `already exists?{'…` 的 dict → `{` 起到行尾遮；
-       (b) 數字轉換失敗 `could not convert string to float: '<值>'`／`invalid literal for int() with base N: '<值>'`
-       → 值遮掉，但只在「值後面緊接 toml 位置字尾 `(line N column M char K)`」或「同一段文字有 `TomlDecodeError`」時
-       （一般 `float()`／`int()` 錯誤一字不動）。只貼訊息本文、traceback 裡排在型別名之前的 `ValueError` 行、
-       散文版 `Unicode*Error` 散文形之後的 toml 訊息，值都不再外露。值的引號也認 HTML 跳脫（`&#x27;`／`&#39;`／`&quot;`）。
-       (b) 的條件也在**原始文字**上判一次（批 S4 QA F3）：前面的規則把錨點字面吃掉時（例：`?token=abc\ncould not
-       convert …` 經 `repr` 後查詢參數那條把 `abc\ncould` 當值遮掉），記下的「引號＋值＋引號」若仍出現在輸出，整段遮。
   遮罩一律沿用既有的 `***`（`MASK`）。**⛔ 不新增任何說明文字** —— 看得到 `***` 就知道有東西被遮。
 
 ⚠️ 據實揭露的邊界（**不是**全稱「洗乾淨了」）：
@@ -105,18 +104,12 @@
       同 d61a1fd）—— 使用者名稱會留在畫面上（SEC-r13 (c)）；
     - BER 不定長格式（`30 80` 開頭，例：`openssl cms -stream`、部分 PKCS#12 匯出檔）兩道 DER 規則都認不出
       （DER 不允許不定長，`_der_length` 回 `None`；SEC-r15）；
-    - 第 11 類 (c) 仍認不出：換行寬度 <16、第一行只剩 1 個字（`M` 之後就換行）、~~行首縮排超過 16 個空白
-      （SEC-r27）~~ 行首縮排／行尾空白超過 256 個空白（批 S4 自 16 調高；SEC-r27）、base64url 編碼；
+    - 第 11 類 (c) 仍認不出：換行寬度 <16、第一行只剩 1 個字（`M` 之後就換行）、行首縮排超過 16 個空白
+      （SEC-r27）、base64url 編碼；
     - 方括號取值只認 `[…]` 內**直接**是 `Authorization` 字串的寫法（`headers[AUTH_KEY] = …` 這種變數取值不認）；
       值被括號包住（`= ( 'tok' )`）、`=` 後面先換行、`headers.__setitem__('Authorization', 'tok')` 這三種仍外露
       （S3 QA F3；與舊版相同）；
       目錄名 tab 規則只認合理起點（同 `_POSIX_SPACE_DIR_RE`）之後的路徑。
-  · 批 S4 之後仍然外露（第 12 類 (b) 的邊界）：數字轉換訊息**既沒有** toml 位置字尾、同一段文字**也沒有**
-    `TomlDecodeError`（例：只貼 `could not convert string to float: '<值>'` 這一句、把位置字尾刪掉）→ 分不出是
-    toml 還是一般錯誤，值照原樣（為了不改一般錯誤訊息）。
-  · 第 12 類 (b) 原始文字那一道的邊界（批 S4 QA F3）：只認得**完整、未被改動**的「引號＋值＋引號」——值本身
-    被前面規則改掉一部分（例：值裡含路徑或權杖、只遮了一段）、或值沒有收尾引號而同一行後文被改過時，剩下的部分
-    照原樣；同一段文字超過 64 個不同的值時，第 65 個起只靠最後一道（錨點被吃掉就外露）。
   · 批 S3 的多遮方向（安全側）：
     - 方括號取值的裸值（`headers['Authorization'] = token_var`）連變數名一起遮；
     - tab 規則以整條路徑判：`/a/x.toml<tab>note/b` 這種「路徑後面接 tab 再接含 `/` 的字」會被當成目錄遮成 `***/b`；
@@ -652,7 +645,7 @@ def _mask_tab_dirs(m: re.Match) -> str:
 #: SEC-r14／SEC-r17 第二道無標頭 DER（`_DER_B64_LOOSE_RE`）：與上面 `_DER_B64_RE` 在**同一份輸入**上各自判
 #: （`_run_post`：在舊規則的結果上再遮），用較寬的排版再認一次，並**依宣告長度逐段判**：
 #:   · 排版：換行寬度 ≥ `_DER_LOOSE_LINE_MIN`（16）字、第一行被前綴折短（第一行只要 `M[A-P]` 起頭即可）、
-#:     行尾空白、只用 CR 換行、JSON 的 `\/` 跳脫、行首縮排 ≤256 個空白（批 S4 SEC-r27 自 16 調高）；
+#:     行尾空白、只用 CR 換行、JSON 的 `\/` 跳脫、行首縮排 ≤16 個空白；
 #:   · 判法：開頭 16 個 base64 字（跨行串起來）解得出 DER 標頭（`_der_head_total`，條件同 `_looks_like_der`、
 #:     但**不比「宣告 ≥ 實際」**）→ 只遮**宣告長度涵蓋到的那幾行**（含涵蓋終點所在的那一整行），
 #:     其餘各行**另判**（例如後面接著的憑證／憑證鏈各自從 `M[A-P]` 再判一次；不是 DER 的長 base64 照原樣）——
@@ -670,35 +663,12 @@ _DERL_RUN: str = r"[A-Za-z0-9+/*]*(?:\\/[A-Za-z0-9+/*]*){0,1024}" + _POSS
 _DERL_LINE: str = (r"(?=(?:[A-Za-z0-9+/*]|\\/){%d}|(?:[A-Za-z0-9+/]|\\/){0,4096}\*\*\*)" % _DER_LOOSE_LINE_MIN
                    + _DERL_RUN)
 #: 換行：行尾空白、真換行／只用 CR／`repr`・JSON 的跳脫換行、行首縮排；另收 Markdown 引用的 `> `（最多 8 層，S3 QA 第三輪 2(a)）。
-#: 批 S4（SEC-r27，2026-10-01）：行尾空白與行首縮排的上限 16 → `_DERL_INDENT_MAX`（256）。縮排 17 個以上空白時，
-#: 換行之後的空白吃不完、下一行接不上，整塊只剩第一行（實測 17／20 個空白：24 行外露 23 行）。
-#: 線性：空白串前後都是互斥的字面（換行、`>`、base64 字元），用 `_POSS`；失敗的一圈最多回看 256 個空白。
-_DERL_INDENT_MAX: int = 256
-#: 批 S4 QA（SEC-r27 修正，2026-10-01）：bf0ada3 的上限 16 那一道**照跑**、範圍與 256 那一道取聯集。
-#: 理由：上限放寬後，一塊可能多接進後面的短行（例：`AIza***` 收尾的行之後隔 20 個空白接 `MIIpassword`），
-#: 「涵蓋終點那一行含遮罩 → 視為涵蓋到宣告長度」不再落在最後一行 ⇒ 那一塊整段不遮 —— 比 bf0ada3 少遮。
-#: 取聯集 ⇒ 結構上必定 ⊇ bf0ada3。文字裡沒有連續 ≥17 個空白／tab 時兩道比對結果相同 → 只跑 256 那一道（純效能）。
-_DERL_INDENT_MAX_BF0: int = 16
-
-
-def _derl_nl(cap: int) -> str:
-    return (r"[ \t]{0,%d}" % cap + _POSS + r"(?:\r\n|\r|\n|(?:\\{1,32}r)?\\{1,32}n)"
-            r"[ \t]{0,%d}" % cap + _POSS + r"(?:>[ \t]{0,4}){0,8}")
-
-
-def _derl_loose_re(nl: str) -> re.Pattern:
-    return re.compile(
-        r"(?:(?<![A-Za-z0-9+/*])|(?<=\\[nrt]))(?:M[A-P]|\*\*\*)" + _DERL_RUN
-        + r"(?:" + nl + _DERL_LINE + r"){0,4096}" + _POSS
-        + r"(?:" + nl + r"(?:[A-Za-z0-9+/]|\\/){1,15}(?![A-Za-z0-9+/*\\]))?={0,2}")
-
-
-_DERL_NL: str = _derl_nl(_DERL_INDENT_MAX)
-_DER_B64_LOOSE_RE = _derl_loose_re(_DERL_NL)
+_DERL_NL: str = r"[ \t]{0,16}(?:\r\n|\r|\n|(?:\\{1,32}r)?\\{1,32}n)[ \t]{0,16}(?:>[ \t]{0,4}){0,8}"
+_DER_B64_LOOSE_RE = re.compile(
+    r"(?:(?<![A-Za-z0-9+/*])|(?<=\\[nrt]))(?:M[A-P]|\*\*\*)" + _DERL_RUN
+    + r"(?:" + _DERL_NL + _DERL_LINE + r"){0,4096}" + _POSS
+    + r"(?:" + _DERL_NL + r"(?:[A-Za-z0-9+/]|\\/){1,15}(?![A-Za-z0-9+/*\\]))?={0,2}")
 _DERL_NL_RE = re.compile(_DERL_NL)
-_DER_B64_LOOSE_BF0_RE = _derl_loose_re(_derl_nl(_DERL_INDENT_MAX_BF0))
-_DERL_NL_BF0_RE = re.compile(_derl_nl(_DERL_INDENT_MAX_BF0))
-_LONG_BLANK_RE = re.compile(r"[ \t]{%d}" % (_DERL_INDENT_MAX_BF0 + 1))
 
 
 def _der_head_total(head_b64: str) -> int | None:
@@ -731,7 +701,7 @@ def _is_der_start(line: str) -> bool:
     return line.startswith(MASK) or (line[:1] == "M" and "A" <= line[1:2] <= "P")
 
 
-def _der_loose_block(m: re.Match, nl_re: re.Pattern = _DERL_NL_RE) -> list[tuple[int, int]]:
+def _der_loose_block(m: re.Match) -> list[tuple[int, int]]:
     """`_DER_B64_LOOSE_RE` 比對到的一整塊 → 要遮的範圍（相對 `body`）。⛔ 不遞迴：逐行往下走一次。
 
     每個可能的起點（`M[A-P]` 或 `***` 開頭的行）各自判一段：解得出標頭 → 宣告涵蓋到的行；判不了標頭
@@ -742,7 +712,7 @@ def _der_loose_block(m: re.Match, nl_re: re.Pattern = _DERL_NL_RE) -> list[tuple
     """
     body = m.group(0)
     _ends, _starts = [], [0]
-    for _sep in nl_re.finditer(body):
+    for _sep in _DERL_NL_RE.finditer(body):
         _ends.append(_sep.start())
         _starts.append(_sep.end())
     _ends.append(len(body))
@@ -842,13 +812,9 @@ def _der_loose_spans(text: str) -> list[tuple[int, int]]:
     """第二道無標頭 DER：在 `text` 上算出要遮的範圍（不改字串）。不到 `_DER_B64_MIN` 字、又沒有遮罩的塊必定判不成，
     直接略過（純效能；含遮罩的塊原本多長不可知，照判）。"""
     _spans: list[tuple[int, int]] = []
-    _passes = [(_DER_B64_LOOSE_RE, _DERL_NL_RE)]
-    if _DERL_INDENT_MAX != _DERL_INDENT_MAX_BF0 and _LONG_BLANK_RE.search(text):
-        _passes.append((_DER_B64_LOOSE_BF0_RE, _DERL_NL_BF0_RE))     # bf0ada3 那一道（見 `_DERL_INDENT_MAX_BF0`）
-    for _rx, _nl in _passes:
-        for _m in _rx.finditer(text):
-            if _m.end() - _m.start() >= _DER_B64_MIN or MASK in _m.group(0):
-                _spans.extend((_m.start() + _a, _m.start() + _b) for _a, _b in _der_loose_block(_m, _nl))
+    for _m in _DER_B64_LOOSE_RE.finditer(text):
+        if _m.end() - _m.start() >= _DER_B64_MIN or MASK in _m.group(0):
+            _spans.extend((_m.start() + _a, _m.start() + _b) for _a, _b in _der_loose_block(_m))
     return _spans
 
 
@@ -925,79 +891,6 @@ def _mask_orig_spans(out: str, segs: list[tuple[int, int, int]], spans: list[tup
     return "".join(_parts)
 
 
-# ── 補洞 批 S4（SEC-r20／SEC-r21，2026-10-01）：toml 帶值的訊息，不論前面有沒有型別名 —— 同樣排在最後 ⇒ 只加遮罩 ──
-#: toml 0.10.2 有兩種訊息會把 secrets 的**原始值**串進訊息本文（見 `_CONTENT_BEARING_EXC_PROSE_RE` 的註解）：
-#: 重複表（`What? <表名> already exists?{<已解析的整包 dict>} (line …)`）與數字轉換失敗
-#: （`could not convert string to float: '<值>'`／`invalid literal for int() with base 0: '<值>'`）。
-#: 第 1 類只在**型別名**（`TomlDecodeError`）之後整段截 —— 只貼訊息本文、或訊息排在型別名之前時認不出來：
-#:   SEC-r21 (i) 只貼訊息本文；(ii) traceback 裡串接的 `ValueError: could not convert …: '<值>'` 排在
-#:   `TomlDecodeError` 之前；SEC-r20 散文版先出現 `Unicode*Error` 散文形（不截）、後面接不帶型別名的訊息。
-#: (a) 重複表：`already exists?{` 後面緊接引號（dict 的第一個鍵）是 toml 專屬的形狀 → **一律**把 `{` 起到行尾換成遮罩
-#:     （dict 的 repr 不含真換行；引號前可有 ≤4 個反斜線＝外面又包了一層 `repr`）。
-#: (b) 數字轉換：同樣的句子也是一般 `float()`／`int()` 的錯誤（`_PLAIN` 釘住 `ValueError('invalid literal for int()
-#:     with base 10: 'x'')` 一字不動），故**只在兩種情形**遮引號內的值（連引號整段換成遮罩）：值後面緊接 toml 的
-#:     位置字尾 `(line N column M char K)`，或同一段文字裡出現 `TomlDecodeError`。值找不到收尾 → 遮到行尾。
-#: 線性：兩條都以固定字面錨定起點；值的迴圈有上限（4096 字）並用 `_POSS`，超過上限遮到行尾。
-_TOML_EXISTS_DICT_RE = re.compile(r"(already exists\?)\{(?=\\{0,4}['\"])[^\r\n]*")
-_TOML_POS: str = r"[ \t]{0,4}\(line \d{1,9} column \d{1,9} char \d{1,12}\)"
-_TOML_CONV_RE = re.compile(
-    r"(?P<pre>(?:could not convert string to float|invalid literal for int\(\) with base \d{1,2}):[ \t]{0,4}b?)"
-    r"(?:'(?:\\.|[^'\\\r\n]){0,4096}" + _POSS + r"'|\"(?:\\.|[^\"\\\r\n]){0,4096}" + _POSS + r"\""
-    r"|(?P<bs>\\{1,4})(?P<qc>[\"'])(?:(?!(?P=bs)(?P=qc))[^\r\n]){0,4096}" + _POSS + r"(?P=bs)(?P=qc)"
-    #: 批 S4 QA F3：HTML 跳脫的引號（`&#x27;`／`&#39;`／`&quot;`；網頁上複製下來的訊息）。
-    r"|(?P<he>&#x27;|&#39;|&quot;)(?:(?!(?P=he))[^\r\n]){0,4096}" + _POSS + r"(?P=he)"
-    r"|[\"'\\][^\r\n]*)"
-    r"(?P<suf>" + _TOML_POS + r")?")
-_TOML_TYPE_NAME: str = "TomlDecodeError"
-_TOML_POS_RE = re.compile(_TOML_POS)
-
-
-#: 批 S4 QA F3（2026-10-01）：前面的規則可能把 toml 訊息的錨點字面吃掉（例：`?token=abc\ncould not convert …` 在
-#: `repr` 後是同一行，查詢參數那一條把 `abc\ncould` 當成值遮掉 ⇒ 最後一道找不到 `could not convert`，值外露；main 亦然）。
-#: 補法：在**原始文字**上先找一次（同一套條件），記下要遮的「引號＋值＋引號」字面；全部規則跑完後，輸出裡還看得到的
-#: 同一段字面整段換成遮罩 ⇒ 只加遮罩。上限 `_TOML_ORIG_MAX` 個不同的值（線性：每個值一次 `str.replace`）。
-_TOML_ORIG_MAX: int = 64
-
-
-def _toml_orig_values(text: str) -> list[str]:
-    if not any(_n in text for _n in _POST_NEEDLES[_TOML_CONV_RE]):
-        return []
-    _rep = _mask_toml_conv_for(text)
-    _out: list[str] = []
-    for _m in _TOML_CONV_RE.finditer(text):
-        if _rep(_m) == _m.group(0):
-            continue                                        # 一般 float()／int() 錯誤：同最後一道，不動
-        _tok = text[_m.end("pre"):_m.start("suf") if _m.group("suf") is not None else _m.end()]
-        if len(_tok) >= 3 and MASK not in _tok and _tok not in _out:
-            _out.append(_tok)
-            if len(_out) >= _TOML_ORIG_MAX:
-                break
-    return _out
-
-
-def _mask_toml_orig(orig_vals: list[str], out: str) -> str:
-    for _tok in orig_vals:
-        if _tok in out:
-            out = out.replace(_tok, MASK)
-    return out
-
-
-def _mask_toml_conv_for(text: str):
-    """`_TOML_CONV_RE` 的取代函式工廠：先看一次整段文字有沒有 `TomlDecodeError`（整段只掃一次 ⇒ 線性；
-    在每個比對裡各掃一次會變成 O(n²)），回傳真正的取代函式。
-
-    取代規則：同一段文字有 `TomlDecodeError`、或比對到的那一段有 toml 位置字尾 → 值換成遮罩；否則原樣（一般錯誤訊息）。
-    位置字尾在比對到的那一段裡找（值有收尾時是 `suf` 群組；值超過上限或找不到收尾時，比對一路吃到行尾、字尾也在裡面）。
-    """
-    _named = _TOML_TYPE_NAME in text
-
-    def _rep(m: re.Match) -> str:
-        if not _named and _TOML_POS_RE.search(m.group(0), len(m.group("pre"))) is None:
-            return m.group(0)
-        return m.group("pre") + MASK + (m.group("suf") or "")
-    return _rep
-
-
 #: ⚠️ 下面三組的分工就是「不會比 e23ff2f 少遮」的**結構保證**（S3 QA 第四輪：前三輪的少遮全是同一族 ——
 #: 新規則先改寫了字串，後面的舊規則就認不出原本認得的東西）：
 #:   · `_RULES_POST` ＋ `_RULES_POST_TRACKED` ＝ e23ff2f 的 `_RULES_POST`（同樣的規則、同樣的順序、同樣的程式）
@@ -1028,12 +921,7 @@ _RULES_POST_TRACKED: tuple[tuple[re.Pattern, object], ...] = (
 _RULES_NEW: tuple[tuple[re.Pattern, object], ...] = (
     (_POSIX_TAB_DIR_RE, _mask_tab_dirs),
     (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),
-    #: 批 S4（SEC-r20／SEC-r21）。
-    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),
-    (_TOML_CONV_RE, _mask_toml_conv_for),
 )
-#: 取代函式是「工廠」的規則：`rep(text)` 先看一次整段文字，再回傳真正的取代函式（見 `_mask_toml_conv_for`）。
-_TEXT_AWARE_RULES: frozenset[re.Pattern] = frozenset({_TOML_CONV_RE})
 #: 預先過濾：字串裡連必要字面都沒有，就不必讓該條規則掃一遍（純效能；有字面才跑，行為不變）。
 _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
     _FW_ASSIGN_RE: ("＝",), _FW_COLON_QUOTED_RE: ("：",), _FW_COLON_BARE_RE: ("：",),
@@ -1042,7 +930,6 @@ _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
     _DEEP_QUOTED_FIELD_RE: ("\\" * 5,), _DEEP_ASSIGN_TAIL_RE: (MASK + "'", MASK + '"'),
     _DER_B64_RE: ("M",), _POSIX_SPACE_DIR_RE: ("/",),
     _POSIX_TAB_DIR_RE: ("\t", "\\t"), _AUTH_SUBSCRIPT_RE: ("]",),
-    _TOML_EXISTS_DICT_RE: ("already exists?{",), _TOML_CONV_RE: ("could not convert", "invalid literal for int"),
 }
 
 
@@ -1060,7 +947,7 @@ def _run_post(out: str) -> str:
         out = _mask_orig_spans(out, _segs, _der_loose_spans(_t0))
     for _re, _rep in _RULES_NEW:
         if any(_n in out for _n in _POST_NEEDLES[_re]):
-            out = _re.sub(_rep(out) if _re in _TEXT_AWARE_RULES else _rep, out)
+            out = _re.sub(_rep, out)
     return out
 
 
@@ -1073,13 +960,12 @@ def scrub_secrets(text) -> str:
     if text is None:
         return ""
     out = str(text)
-    _toml_vals = _toml_orig_values(out)                     # 批 S4 QA F3：原始文字上的 toml 值（見 `_TOML_ORIG_MAX`）
     for _re, _rep in _RULES:
         out = _re.sub(_rep, out)
     out = scrub_query_secrets(out)
     for _re, _rep in _RULES_AFTER_QUERY:
         out = _re.sub(_rep, out)
-    return _mask_toml_orig(_toml_vals, _run_post(out))
+    return _run_post(out)
 
 
 def scrub_prose_secrets(text) -> str:
@@ -1120,10 +1006,9 @@ def scrub_prose_secrets(text) -> str:
     if text is None:
         return ""
     out = str(text)
-    _toml_vals = _toml_orig_values(out)                     # 批 S4 QA F3（同 `scrub_secrets`）
     for _re, _rep in _RULES:
         out = (_CONTENT_BEARING_EXC_PROSE_RE if _re is _CONTENT_BEARING_EXC_RE else _re).sub(_rep, out)
     out = scrub_query_secrets(out)
     for _re, _rep in _RULES_AFTER_QUERY:
         out = _re.sub(_rep, out)
-    return _mask_toml_orig(_toml_vals, _run_post(out))
+    return _run_post(out)

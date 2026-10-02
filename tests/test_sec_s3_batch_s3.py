@@ -32,6 +32,7 @@ import pytest
 
 from shared import secret_scrub as SSC
 from shared.secret_scrub import MASK, scrub_prose_secrets, scrub_secrets
+from tests._git_tracked import REPO_MIN_TRACKED, only_tracked
 from tests.test_sec_s3_0928 import _is_masking_of, _mutant, _secret_corpus, _ui_corpus
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -306,13 +307,14 @@ def test_r17_layouts_masked(layout):
 @pytest.mark.parametrize("layout,enc", [
     ("width12", lambda b: "\n".join(_wrap(b, 12))),
     ("first_line_1_char", lambda b: "\n".join(_first_short(b, 1))),
-    ("indent20", lambda b: ("\n" + " " * 20).join(_wrap(b))),
+    #: ~~`indent20`（縮排 >16）~~ —— 批 S4（SEC-r27）把上限調到 256（`_DERL_INDENT_MAX`），邊界移到 257。
+    ("indent257", lambda b: ("\n" + " " * 257).join(_wrap(b))),
 ])
 def test_r17_disclosed_boundaries_still_leak(layout, enc):
-    """檔頭揭露的邊界（寬度 <16、第一行只剩 1 字、縮排 >16）：仍外露 —— 改了請同步改檔頭。"""
+    """檔頭揭露的邊界（寬度 <16、第一行只剩 1 字、縮排 >256）：仍外露 —— 改了請同步改檔頭。"""
     b = _b64(_pkcs8(3))
     assert _leak(scrub_secrets(enc(b)), b) > 0
-    assert "換行寬度 <16" in _DOC and "第一行只剩 1 個字" in _DOC and "縮排超過 16 個空白" in _DOC
+    assert "換行寬度 <16" in _DOC and "第一行只剩 1 個字" in _DOC and "超過 256 個空白" in _DOC
 
 
 def test_r17_line_min_is_16():
@@ -531,7 +533,9 @@ def _tracked_md_lines() -> tuple[str, ...]:
     ⚠️ 只掃這兩處（都是 repo 追蹤的文件區），不 `rglob` 整個工作目錄 —— 未追蹤檔混進語料會讓本機與 CI 結果不同
     （SEC-r26 指出的同型問題）。
     """
-    files = [*sorted(_ROOT.glob("*.md")), *sorted(_ROOT.joinpath("docs").rglob("*.md"))]
+    #: SEC-r26 餘項（批 S4）：兩處底下的未追蹤檔（`docs/` 裡的暫存筆記等）也排除 —— 讀 git 索引檔、⛔ 不呼叫 git。
+    files = only_tracked(_ROOT, [*sorted(_ROOT.glob("*.md")), *sorted(_ROOT.joinpath("docs").rglob("*.md"))],
+                         min_tracked=REPO_MIN_TRACKED, min_kept=15)
     out: list[str] = []
     for p in files:
         out.extend(p.read_text(encoding="utf-8", errors="replace").split("\n\n"))
@@ -835,7 +839,13 @@ def test_r3_the_reported_repro():
 def test_r4_old_part_is_exactly_e23ff2f():
     """結構保證：關掉新規則（第二道 DER、`_RULES_NEW`）後，輸出與 e23ff2f 逐字相同 ⇒ 新規則只能在其上多遮。"""
     m = _mutant(("_der_loose_spans(_t0))", "[])"),
-                ("    (_POSIX_TAB_DIR_RE, _mask_tab_dirs),\n    (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),\n", ""))
+                ("    (_POSIX_TAB_DIR_RE, _mask_tab_dirs),\n    (_AUTH_SUBSCRIPT_RE, _mask_auth_subscript),\n", ""),
+                #: 批 S4（SEC-r20／SEC-r21）加進 `_RULES_NEW` 的兩條，一併關掉。
+                ("    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),\n", ""),
+                ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""),
+                #: 批 S4 QA F3：原始文字那一道一併關掉。
+                ("    if not any(_n in text for _n in _POST_NEEDLES[_TOML_CONV_RE]):\n        return []",
+                 "    if True:\n        return []"))
     corpus = sorted(_batch_corpus() | _ui_corpus())[::3] + _r4_cases(3000)
     diff = [r for r in corpus if m.scrub_secrets(r) != _OLD(r)]
     assert not diff, [(d[:60], _OLD(d)[:60], m.scrub_secrets(d)[:60]) for d in diff[:5]]

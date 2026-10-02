@@ -739,7 +739,10 @@ class TestQ1r5EveryRuleIsLoadBearing:
         pair, case = _RULE_MUTANTS[name]
         raw, gone, _kept = _LEAKY[case]
         assert all(g not in SSC.scrub_secrets(raw) for g in gone), "前提：正版要遮得掉"
-        m = _mutant(SSC, pair)
+        #: 批 S4（SEC-r20／SEC-r21）的兩條 toml 帶值規則會替含 toml 重複表 dict 的樣本再遮一次（縱深防禦）——
+        #: 要看出「這一條舊規則」承重，先把那兩條關掉。
+        m = _mutant(SSC, pair, ("    (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),\n", ""),
+                    ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""))
         out = m.scrub_secrets(raw)
         assert any(g in out for g in gone), (name, out)
 
