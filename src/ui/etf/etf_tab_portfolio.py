@@ -572,7 +572,7 @@ def render_etf_portfolio(gemini_fn=None):
             f'</div>', unsafe_allow_html=True)
     with _fcols[1]:
         if st.button('🔄 強制重抓', key='etf_pf_force_refresh',
-                     help='清快取後重新抓取最新現價與配息（不需重填表格）'):
+                     help='清快取（不需重填表格），會一併清掉其他頁快取'):  # 批 D4 W2-f1
             try:
                 st.cache_data.clear()
             except Exception as _e_clr:

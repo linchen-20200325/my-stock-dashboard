@@ -188,3 +188,13 @@ def test_dl_f1_s66_system_cap_basis_wording():
     assert ("'macro_state 規則引擎（分數計算：VIX／PMI／M1B-M2／BIAS240／PCR；"
             "三大硬否決紅線：薩姆／PMI／外資期貨）'") in src
     assert "外資期貨硬否決）" not in src
+
+
+def test_w2_f1_etf_force_refresh_help():
+    """W2-f1：按鈕只清全站快取再重跑，⛔ 不保證抓到最新 ⇒ 說明不再寫「重新抓取最新現價與配息」。"""
+    import inspect as _inspect
+
+    from src.ui.etf import etf_tab_portfolio as T
+    src = _inspect.getsource(T)
+    assert "help='清快取（不需重填表格），會一併清掉其他頁快取'" in src
+    assert "重新抓取最新現價與配息" not in src
