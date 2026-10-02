@@ -525,7 +525,10 @@ class TestTtlCacheHook:
     def test_only_two_fetchers_opt_in_ttl_and_maxsize_unchanged(self):
         decos = _ttl_cache_decorators()
         opted = {k: v for k, v in decos.items() if "cache_if" in v}
-        assert opted == {
+        # 批 D2（D2-f40，2026-10-02）另有 8 支啟用（附本層失敗冷卻），見 tests/test_d2_tw_macro_ttl_fail_cache.py；
+        # 本批（D3g）這兩支的寫法不變（不附 fail_cooldown）。
+        _d3g = {k: v for k, v in opted.items() if "fail_cooldown" not in v}
+        assert _d3g == {
             "fetch_usdtwd_close": "_ttl_cache(ttl_sec=TTL_1HOUR, maxsize=4, cache_if=_usdtwd_ok)",
             "fetch_china_macro": "_ttl_cache(ttl_sec=TTL_30MIN, maxsize=4, cache_if=_china_macro_complete)",
         }, "只有這兩支啟用；TTL／maxsize 同修前"

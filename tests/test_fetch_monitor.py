@@ -134,7 +134,9 @@ class TestProductionWiring:
     def test_monitored_sits_inside_cache_decorators(self):
         # @monitored 必須在 cache 之「內」(緊貼 def) → 只記真實外抓
         tw = (REPO / "src/data/macro/tw_macro.py").read_text(encoding="utf-8")
-        assert "@_ttl_cache(ttl_sec=TTL_15MIN, maxsize=4)\n@monitored('fetch_business_indicator_series'" in tw
+        # 批 D2（D2-f40）：快取裝飾器多了 cache_if／fail_cooldown，順序不變
+        assert ("@_ttl_cache(ttl_sec=TTL_15MIN, maxsize=4, cache_if=_not_none, fail_cooldown=True)  # D2-f40\n"
+                "@monitored('fetch_business_indicator_series'") in tw
         dd = (REPO / "src/data/daily/daily_data_fetchers.py").read_text(encoding="utf-8")
         assert "show_spinner=False)\n@monitored('fetch_margin_balance'" in dd
 

@@ -34,6 +34,7 @@ from typing import Optional
 import pandas as pd
 
 from shared.fetch_monitor import monitored  # v19.96 批次4 Item1(純 stdlib,無 streamlit)
+from shared.fail_cooldown import FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT  # D2-f40
 from shared.ttls import TTL_10MIN, TTL_15MIN, TTL_30MIN, TTL_1HOUR
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 # DL-f1-s1:EF15M01 解析 SSOT(與排程 scripts/update_macro_history 共用同一份,§2.1)
@@ -50,7 +51,7 @@ __version__ = "1.1.0"
 
 # ── v1.1 輕量 TTL cache（純 stdlib，不依賴 streamlit）──────────
 # 雙 repo 共用設計約束：本模組嚴禁 import streamlit，故自帶 cache decorator。
-def _ttl_cache(ttl_sec: int, maxsize: int = 32, cache_if=None):
+def _ttl_cache(ttl_sec: int, maxsize: int = 32, cache_if=None, fail_cooldown: bool = False):
     """TTL+LRU cache。cache key=(args, sorted kwargs)；unhashable 引數 bypass。
 
     D2-f13(2026-09-29,§1.A-3(a)「只快取成功結果」):`cache_if` 為選用的 `callable(result) -> bool`,
@@ -58,9 +59,13 @@ def _ttl_cache(ttl_sec: int, maxsize: int = 32, cache_if=None):
     給了且這次結果判為 False → 結果**照常回傳、不入快取**(下次同參數呼叫重算)。
     預設 None ＝ 一律入快取(修前行為;沒給 `cache_if` 的函式行為不變)。
     ⚠️ 不入快取 ≠ 可以轟炸上游:給 `cache_if` 的函式須確認底層抓取已有退避(見各函式註解)。
+    `fail_cooldown`(D2-f40,批 D2;預設 False ＝ 行為不變):底層沒有退避的函式設 True —— 判為失敗後
+    同參數在 `shared.fail_cooldown.FAIL_COOLDOWN_SEC` 秒內不重算、回同一份失敗結果(§1.A-3(b));
+    成功一次即解除。`cache_clear()` 同清退避紀錄。
     """
     def decorator(fn):
         _cache: dict = {}
+        _cd = _FailCooldown() if (cache_if is not None and fail_cooldown) else None
 
         @_ft.wraps(fn)
         def wrapper(*args, **kwargs):
@@ -73,16 +78,30 @@ def _ttl_cache(ttl_sec: int, maxsize: int = 32, cache_if=None):
             hit = _cache.get(key)
             if hit and (now - hit[0]) < ttl_sec:
                 return hit[1]
+            _gen = None
+            if _cd is not None:   # D2-f40:失敗退避期內不重算
+                _fhit, _gen = _cd.begin(key)
+                if _fhit is not _FC_NO_HIT:
+                    return _fhit
             result = fn(*args, **kwargs)
+            if _cd is not None and not cache_if(result):
+                return _cd.fail(key, _gen, result)   # D2-f40:不入快取,記退避
             if cache_if is not None and not cache_if(result):
                 return result   # D2-f13:判為失敗／不完整 → 不入快取(回傳內容不變)
+            if _cd is not None:
+                _cd.success(key)
             _cache[key] = (now, result)
             if len(_cache) > maxsize:
                 oldest = min(_cache.items(), key=lambda kv: kv[1][0])[0]
                 _cache.pop(oldest, None)
             return result
 
-        wrapper.cache_clear = lambda: _cache.clear()  # type: ignore[attr-defined]
+        def _cache_clear() -> None:
+            _cache.clear()
+            if _cd is not None:
+                _cd.clear()
+
+        wrapper.cache_clear = _cache_clear  # type: ignore[attr-defined]
         return wrapper
 
     return decorator
@@ -102,11 +121,38 @@ CBC_MS1_URLS      = [
 CBC_EF15M01_URL   = "https://cpx.cbc.gov.tw/API/DataAPI/Get"
 
 
+# ── D2-f40(批 D2,§1.A-3(a)):下列 `_ttl_cache` 函式的入快取判準(失敗 → 不入快取 + 底層無退避 → 本層冷卻) ──
+def _not_none(result) -> bool:
+    """回 None ＝ 失敗(抓不到／解析失敗／空表)。"""
+    return result is not None
+
+
+def _no_error(result) -> bool:
+    """dict 的 `error` 為 None ＝ 成功;有 error ＝ 失敗。"""
+    return isinstance(result, dict) and result.get('error') is None
+
+
+#: FinMind 外資那兩支「有回應但沒有外資列／筆數不足」的 error —— 與真的沒資料分不出來 → 照舊快取(不猜)。
+_FII_NO_DATA_ERRORS = ('FinMind 無 Foreign_Investor 資料', '外資資料筆數不足')
+
+
+def _fii_ok(result) -> bool:
+    """外資兩支:只有「抓取失敗／JSON 解析失敗」算失敗;沒資料那一類照舊快取。"""
+    return isinstance(result, dict) and (result.get('error') is None
+                                         or result.get('error') in _FII_NO_DATA_ERRORS)
+
+
+def _market_snapshot_ok(result) -> bool:
+    """聚合快照:寬度或外資那一腿失敗 → 不入快取(M1B-M2 那一腿的快取政策另案,不在此判)。"""
+    return (isinstance(result, dict) and _no_error(result.get('breadth'))
+            and _fii_ok(result.get('fii')))
+
+
 # ══════════════════════════════════════════════════════════════
 # TWSE 市場寬度
 # ══════════════════════════════════════════════════════════════
 
-@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4, cache_if=_no_error, fail_cooldown=True)  # D2-f40
 def fetch_twse_breadth() -> dict:
     """
     從 TWSE MI_INDEX 抓上漲/下跌家數,計算市場寬度。
@@ -172,7 +218,7 @@ def fetch_twse_breadth() -> dict:
 # FinMind 三大法人籌碼
 # ══════════════════════════════════════════════════════════════
 
-@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8, cache_if=_fii_ok, fail_cooldown=True)  # D2-f40
 def fetch_finmind_foreign_investor(days_back: int = 7) -> dict:
     """
     從 FinMind 抓最近 N 天的外資買賣超(免費 API,無需 token)。
@@ -236,7 +282,7 @@ def fetch_finmind_foreign_investor(days_back: int = 7) -> dict:
 # 中央銀行 M1B / M2(三層備援)
 # ══════════════════════════════════════════════════════════════
 
-@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8, cache_if=_not_none, fail_cooldown=True)  # D2-f40
 def fetch_cbc_ms1_rows(url: str, *, min_rows: int = 1,
                        log_label: Optional[str] = None,
                        **fetch_kwargs) -> Optional[list]:
@@ -806,7 +852,7 @@ def _finmind_token_from_env() -> str:
     return _os.environ.get('FINMIND_TOKEN', '') or ''
 
 
-@_ttl_cache(ttl_sec=TTL_15MIN, maxsize=4)
+@_ttl_cache(ttl_sec=TTL_15MIN, maxsize=4, cache_if=_not_none, fail_cooldown=True)  # D2-f40
 @monitored('fetch_business_indicator_series', category='🇹🇼 台灣總經',
            frequency='monthly', registry_key='景氣先行指標（NDC）')  # v19.96(cache 內=只記真實抓)
 def fetch_business_indicator_series(months_back: int = 18,
@@ -863,7 +909,7 @@ def fetch_business_indicator_series(months_back: int = 18,
     return out
 
 
-@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8, cache_if=_no_error, fail_cooldown=True)  # D2-f40
 @monitored('fetch_ndc_signal_history', category='🇹🇼 台灣總經',
            frequency='monthly', registry_key='景氣先行指標（NDC）')  # v19.96
 def fetch_ndc_signal_history(months_back: int = 12,
@@ -961,7 +1007,7 @@ def fetch_ndc_signal_history(months_back: int = 12,
     return result
 
 
-@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4, cache_if=_no_error, fail_cooldown=True)  # D2-f40
 @monitored('fetch_ndc_leading_index', category='🇹🇼 台灣總經',
            frequency='monthly', registry_key='景氣先行指標（NDC）')  # v19.96
 def fetch_ndc_leading_index(months_back: int = 18,
@@ -1051,7 +1097,7 @@ def fetch_ndc_leading_index(months_back: int = 18,
     return result
 
 
-@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=8, cache_if=_fii_ok, fail_cooldown=True)  # D2-f40
 def fetch_foreign_consecutive_days(days_back: int = 30,
                                    token: str = "") -> dict:
     """抓外資最近 N 日買賣超，計算連續同向日數與反轉拐點。
@@ -1156,7 +1202,7 @@ def fetch_foreign_consecutive_days(days_back: int = 30,
 # 整合 API — 一次抓回三大台股總經因子
 # ══════════════════════════════════════════════════════════════
 
-@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
+@_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4, cache_if=_market_snapshot_ok, fail_cooldown=True)  # D2-f40
 def fetch_tw_market_snapshot(days_back: int = 7) -> dict:
     """
     一次抓回三大台股總經因子(寬度 / 外資 / M1B-M2),供 TPI 計算使用。
