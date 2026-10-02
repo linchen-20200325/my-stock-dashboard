@@ -253,6 +253,9 @@ def _S6_EXTRA_FORMS(n: int) -> dict[str, str]:  # noqa: N802 —— 後面各項
             "rem_der_eaten_lines": (key + "\n" + conv + "'" + key + " S" + anchor + "\n") * (n // 200),
             #: 批 S6 QA F1：整窗都是 `***` 的錨點（見 `_f1_repro`）；HTML 引號超長值（批 S6 QA F3）。
             "rem_star_windows": _f1_repro() * (n // 380_000 + 1),
+            #: 批 S6 QA 第二輪：沒有英數字、沒有位置字尾的視窗（第二種錨點「收尾引號＋遮罩」）× 64 個長值。
+            "rem_noalnum_dot": _qa2_repro(4000, " ." * 150, n), "rem_noalnum_dash": _qa2_repro(4000, "-" * 300, n),
+            "rem_noalnum_emdash": _qa2_repro(4000, "—" * 300, n), "rem_noalnum_star999": _qa2_repro(999, "*" * 300, n),
             "html_long_values": ("could not convert string to float: &#x27;" + "x" * 5000 + " (line 1 column 1 char 0)\n") * (n // 5000)}
 
 
@@ -487,6 +490,9 @@ _R30_MUTANTS = {
                                     '''    if False:'''),
     "zero-trailer-version-lenient": ("        if no_hash:\n            raise IndexCorrupt(f\"索引版本",
                                      "        if False:\n            raise IndexCorrupt(f\"索引版本"),
+    "v4-name-length-unchecked": ("                if (flags & _NAME_MASK) != _NAME_MASK and len(path) != (flags & _NAME_MASK):\n"
+                                 "                    raise IndexCorrupt(f\"第 {k} 項：路徑長 {len(path)} 與 flags 記載 {flags & _NAME_MASK} 不符（v4）\")\n",
+                                 ""),
     "link-returns-early": ('''            unsupported = "split index（link 擴充；路徑一部分在共用索引 sharedindex.*）"''',
                            '''            return None, "split index"'''),
 }
@@ -517,7 +523,22 @@ def _r30_suite(g: dict) -> list[str]:
         fails.append("v5-zero")
     except corrupt:
         pass
+    for d in _r30_v4_bad_name_len():
+        try:
+            parse(d)
+            fails.append("v4-name-len")
+        except corrupt:
+            pass
     return fails
+
+
+def _r30_v4_bad_name_len() -> list[bytes]:
+    """批 S6 QA（R30-v4）：v4 項目的 flags 名長與實際路徑長不符（git 拒讀）—— 有雜湊、檔尾全 0 兩種都要 `IndexCorrupt`。"""
+    good = _index(["a.md", "b/c.md", "b/d.md"], 4)
+    body = good[:-20]
+    at = 12 + 60                                                        # 第 0 項的 flags（ctime..size 40＋oid 20）
+    bad = body[:at] + (3).to_bytes(2, "big") + body[at + 2:]
+    return [_seal(bad), bad + bytes(20)]
 
 
 def test_r30_current_module_passes_suite():
@@ -581,7 +602,7 @@ def test_r29c_unrelated_text_unchanged_vs_main(x):
     assert scrub_secrets(x) == _MAIN.scrub_secrets(x) and scrub_prose_secrets(x) == _MAIN.scrub_prose_secrets(x)
 
 
-_R29C_OFF = ("        _spans += _toml_remnant_spans(_head, _close, _ctx, out, _budget)\n"
+_R29C_OFF = ("        _spans += _toml_remnant_spans(_head, _close, _ctx, out, _budget, _idx)\n"
              "        if not _has_suf:\n", "        if False:\n")
 
 
@@ -592,7 +613,7 @@ def test_r29c_mutant_without_remnant_pass_leaks():
 
 def test_r29c_mutant_without_mask_anchor_leaks_double_repr():
     """沒有位置字尾、緊接在後的 `\\\\nTomlDecodeError` 也被遮掉 → 只靠「收尾引號＋遮罩」那個錨點。"""
-    m = _mutant(("            _spans += _toml_remnant_spans(_head, _close, MASK, out, _budget)", "            pass"))
+    m = _mutant(("            _spans += _toml_remnant_spans(_head, _close, MASK, out, _budget, _idx)", "            pass"))
     assert any("R29CSECRET" in m.scrub_secrets(t) for n, t in _R29C_FORMS if n == "rr")
 
 
@@ -600,7 +621,8 @@ def test_r29c_mutant_last_segment_not_required_as_suffix_masks_unrelated_text():
     """反方向：最靠近錨點那一段不要求是值的結尾 → 錨點前的無關文字也被遮（條件是承重的）。"""
     x = ("could not convert string to float: 'R29CSECRET0123456789abcdefghij0123456789' (line 1 column 1 char 0)\n"
          "ab' (line 1 column 1 char 0)")
-    m = _mutant(("or not head.endswith(_last):", "or False:"))
+    m = _mutant(("or not head.endswith(_last):", "or False:"),
+                ("            if not head.endswith(_l0) or (_j0 < 0 and _w0 > 0):", "            if _j0 < 0 and _w0 > 0:"))
     assert scrub_secrets(x) == _MAIN.scrub_secrets(x) and "\nab'" in scrub_secrets(x)
     assert "\nab'" not in m.scrub_secrets(x)
 
@@ -861,3 +883,77 @@ def test_g2_value_at_end_of_string_anchor(fn):
 
 
 _S6_EXTRA_CORPUS.append(_end_case())
+
+
+# ══════════════════════════════════════════════════════════════════
+# 批 S6 QA 第二輪（2026-10-02）：沒有英數字的視窗逐字掃（F1 再發）、找不到收尾的 HTML 引號值＋錨點被吃掉
+# ══════════════════════════════════════════════════════════════════
+def _qa2_repro(length: int, fill: str, n: int = 400_000) -> str:
+    vals = "".join(f"could not convert string to float: '{i:03d}" + "a" * length + "'" + "*" * 16 + "\n" for i in range(64))
+    unit = fill + "'" + "*" * 16
+    return ("TomlDecodeError\n" + vals + unit * (n // len(unit) + 1))[:n]
+
+
+@pytest.mark.parametrize("fn", ["scrub_secrets", "scrub_prose_secrets"])
+@pytest.mark.parametrize("length,fill", [(4000, " ." * 150), (4000, "-" * 300), (4000, "—" * 300), (999, "*" * 300)],
+                         ids=["dot", "dash", "emdash", "star999"])
+def test_qa2_noalnum_windows_within_2x_main(fn, length, fill):
+    """修正前：分支 1.05～1.53 秒、main 0.46～0.82 秒（≈2.3 倍）；且工作量用完、輸出縮成 59k 字（main 144k）。"""
+    x = _qa2_repro(length, fill)
+    new, old = _cpu_best(getattr(_SSC, fn), x), _cpu_best(getattr(_MAIN, fn), x)
+    assert new <= 2 * old + 0.1 and new <= 1.5, (new, old)
+    #: 這幾種形態在工作量上限內就比完（不走「整窗遮掉」）：輸出與 main 一樣長。
+    assert len(getattr(_SSC, fn)(x)) == len(getattr(_MAIN, fn)(x))
+
+
+def test_qa2_has_alnum_matches_regex():
+    import random
+    rnd = random.Random(7)
+    alpha = ["*", " ", ".", "-", "—", "a", "9", "_", "'", "\n", "中"]
+    for _ in range(300):
+        s = "".join(rnd.choice(alpha) * rnd.choice([1, 3, 300]) for _ in range(rnd.randint(1, 30)))
+        idx = [None]
+        for _ in range(20):
+            a = rnd.randint(0, len(s))
+            b = rnd.randint(a, len(s))
+            assert _SSC._has_alnum(s, a, b, idx) == (_SSC._ALNUM_RE.search(s, a, b) is not None), (s[:40], a, b)
+
+
+def test_qa2_last_segment_precheck_is_only_a_shortcut():
+    """最後一段先判那一步只是捷徑：拿掉它，輸出逐字相同。"""
+    import random
+    m = _mutant(("        if _j0 < 0 or out[_j0 - 1:_j0] != \"*\" or _j0 == _w0:\n", "        if False:\n"))
+    rnd = random.Random(11)
+    alpha = ["could not convert string to float: ", "'", "***", "*", " (line 1 column 1 char 0)", "\n", "TomlDecodeError",
+             "?token=abc\\n", "SEC", "a", "ab", " "]
+    xs = [t for _, t in _R29C_FORMS[::5]] + _F2_CASES + [_end_case()]
+    xs += ["".join(rnd.choice(alpha) for _ in range(rnd.randint(3, 20))) for _ in range(3000)]
+    diff = [x for x in xs if m.scrub_secrets(x) != scrub_secrets(x)]
+    assert not diff, diff[:3]
+
+
+_QA2_HTML_EATEN = ["TomlDecodeError ?token=abc\\ncould not convert string to float: &#x27;hunter2SECRET already exists?{&quot;",
+                   repr("TomlDecodeError ?token=abc\ncould not convert string to float: &#x27;hunter2SECRET x"),
+                   "?token=abc\\ninvalid literal for int() with base 0: &quot;hunter2SECRET (line 1 column 1 char 0)"]
+
+
+@pytest.mark.parametrize("fn", [scrub_secrets, scrub_prose_secrets], ids=["errors", "prose"])
+@pytest.mark.parametrize("x", _QA2_HTML_EATEN)
+def test_qa2_unclosed_html_value_with_eaten_anchor_masked(x, fn):
+    assert "hunter2SECRET" in _MAIN.scrub_secrets(x), "前提：main 外露"
+    assert "hunter2SECRET" not in fn(x), fn(x)
+    _never_less(x)
+
+
+_S6_EXTRA_CORPUS.extend(_QA2_HTML_EATEN)
+
+
+def test_r30_v4_name_length_mismatch_is_corrupt():
+    from tests._git_tracked import IndexCorrupt, IndexUnavailable, parse_index
+    assert parse_index(_index(["a.md", "b/c.md", "b/d.md"], 4)) == {"a.md", "b/c.md", "b/d.md"}
+    for d in _r30_v4_bad_name_len():
+        with pytest.raises(IndexCorrupt, match="v4") as ei:
+            parse_index(d)
+        assert not isinstance(ei.value, IndexUnavailable)
+    from tests import _git_tracked as G
+    assert "約 470 個路徑" in (G.__doc__ or "")

@@ -24,7 +24,10 @@ split index（`link` 擴充）、sparse index（目錄型的項目）。
 沒有任何 skipHash 設定的 repo，把索引檔尾改成全 0，`git fsck` 不報錯；改成非 0 的錯值則報 `bad index file sha1 signature`）。
 檔尾全 0 時無法以雜湊驗證，故另外從嚴：版本不是 2／3／4 → `IndexCorrupt`（有雜湊時才當「格式不支援」）。
 ⚠️ 殘餘風險（據實揭露）：檔尾全 0、**且**結構剛好仍完全合法的內容損壞（例：路徑裡某個位元翻轉、長度不變）
-認不出來 —— 與 git 本身相同，沒有雜湊就沒有逐位元驗證。
+認不出來 —— 與 git 本身相同，沒有雜湊就沒有逐位元驗證。v2／v3 每一項的名字各自獨立，一個位元翻轉最多錯 1 個路徑；
+**v4 不是**：名字以前綴壓縮（每一項沿用上一項的前段），一個位元翻轉若落在某一項的名字或前綴刪除數裡、而長度與排序
+仍合法，後面沿用它的路徑會一起錯（批 S6 QA 實測：加上 v4 名長核對之後，最壞仍約 470 個路徑；git 同樣接受這些檔）。
+項目數不變，`min_tracked` 抓不到。批 S6 QA（R30-v4）起 v4 也核對 flags 記載的名長（原本只核對 v2／v3）。
 批 S6（SEC-r30）：split index 的「被取代項目」路徑長為 0（git 寫入時剝掉名字），原本先撞上路徑檢查、誤報
 `IndexCorrupt`「路徑不合法 b''」；現在名字為空的項目先記下，讀完擴充區看到 `link` → 格式不支援（`IndexUnavailable`
 訊息寫明 split index）；沒有 `link` 卻有空名字 → 照舊 `IndexCorrupt`。sparse／其他必要擴充同樣讀完全檔才判「不支援」
@@ -156,6 +159,10 @@ def _parse_index(data: bytes) -> tuple[frozenset[str] | None, str]:
                     raise IndexCorrupt(f"第 {k} 項：前綴刪除 {strip} 超過前一路徑長 {len(prev)}")
                 path = prev[:len(prev) - strip] + data[i:nul]
                 i = nul + 1
+                #: 批 S6 QA（R30-v4）：v4 同樣核對 flags 記載的名長（同 git：不符即「索引項目格式不明」）—— 不核對時，
+                #: 檔尾全 0 下一個位元翻轉就能讓後面數百個路徑經前綴壓縮全錯、項目數卻不變（min_tracked 抓不到）。
+                if (flags & _NAME_MASK) != _NAME_MASK and len(path) != (flags & _NAME_MASK):
+                    raise IndexCorrupt(f"第 {k} 項：路徑長 {len(path)} 與 flags 記載 {flags & _NAME_MASK} 不符（v4）")
             else:
                 nul = data.index(b"\0", i, end_entries)
                 path = data[i:nul]

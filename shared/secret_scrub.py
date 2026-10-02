@@ -84,7 +84,8 @@
            → 在輸出裡找「收尾引號＋位置字尾」（沒有字尾時用原文緊接在後的字、或收尾引號＋遮罩；值在字串結尾時認輸出結尾的收尾引號），
            往左逐段比對值剩下的片段，連同中間的遮罩整段遮；比對不上的那一段若以「開頭引號＋值的開頭 ≥2 字」結尾，從開頭引號起一併遮
            （`'SECA ***'` → `***'`；批 S6 QA F2）。工作量有上限（`_TOML_REM_BUDGET`），用完時剩下的錨點把左邊整個視窗遮掉（只會多遮）；
-       (c) 批 S6 QA F3：數字轉換的值用 HTML 跳脫引號、超過 4096 字或找不到收尾 → 開頭引號起遮到行尾（條件同第 12 類 (b)）。
+       (c) 批 S6 QA F3：數字轉換的值用 HTML 跳脫引號、超過 4096 字或找不到收尾 → 開頭引號起遮到行尾（條件同第 12 類 (b)）；
+           訊息的第一個字已被前面規則換成遮罩（`*** not convert …`）也認。
   遮罩一律沿用既有的 `***`（`MASK`）。**⛔ 不新增任何說明文字** —— 看得到 `***` 就知道有東西被遮。
 
 ⚠️ 據實揭露的邊界（**不是**全稱「洗乾淨了」）：
@@ -994,18 +995,37 @@ _TOML_ORIG_MAX: int = 64
 #: 工作量上限（批 S6 QA F1）：每個值的每個錨點只看錨點左邊 `2×len(值)＋_TOML_REM_PAD` 字；每個值最多 `_TOML_REM_MAX` 個錨點；
 #: 一次呼叫全部的值合計最多 `_TOML_REM_BUDGET` 個工作單位（掃過的字數；每一圈 Python 迴圈另計 `_TOML_REM_STEP`）。
 #: 用完時，剩下的每個錨點**不再比對**，直接把它左邊整個視窗遮掉（逐段比對時遮的範圍一定在這個視窗內 ⇒ 只會多遮、不會少遮）。
-#: 視窗裡沒有任何英數字時直接略過（不可能比對上）—— 滿滿 `***` 的視窗不再逐段跑（批 S6 QA F1 的重現）。
+#: 視窗裡沒有任何英數字時直接略過（不可能比對上）—— 滿滿 `***` 的視窗不再逐段跑（批 S6 QA F1 的重現）；這個判斷查分塊索引
+#: （`_has_alnum`），不逐字掃視窗。最靠近錨點那一段先單獨判（不是值的結尾就不整窗切段）。
 _TOML_REM_PAD: int = 64
 _TOML_REM_MAX: int = 256
 _TOML_REM_BUDGET: int = 1 << 26
 _TOML_REM_STEP: int = 1024
 _ALNUM_RE = re.compile(r"[^\W_]")
+#: 批 S6 QA 第二輪（F1 再發）：「視窗裡有沒有英數字」改查分塊索引（每 `_ALNUM_BLOCK` 字一格、整次呼叫只建一次）⇒ 每個錨點
+#: 只看兩端零頭（各 < `_ALNUM_BLOCK` 字）＋索引，⛔ 不再逐字掃整個視窗（舊寫法 64 個值 × 256 個錨點 × 8k 字的視窗 ≈ 1 秒）。
+_ALNUM_BLOCK: int = 256
+
+
+def _has_alnum(out: str, w0: int, p: int, idx: list) -> bool:
+    """`out[w0:p]` 裡有沒有英數字（與 `_ALNUM_RE.search(out, w0, p) is not None` 相同）；`idx[0]` 是延後建立的分塊索引。"""
+    _b = _ALNUM_BLOCK
+    if p - w0 <= 2 * _b:
+        return _ALNUM_RE.search(out, w0, p) is not None
+    if idx[0] is None:
+        idx[0] = bytearray(_ALNUM_RE.search(out, _i, _i + _b) is not None for _i in range(0, len(out), _b))
+    _b0, _b1 = -(-w0 // _b), p // _b                        # 視窗完整涵蓋的格子 [_b0, _b1)
+    return (idx[0].find(1, _b0, _b1) >= 0 or _ALNUM_RE.search(out, w0, _b0 * _b) is not None
+            or _ALNUM_RE.search(out, _b1 * _b, p) is not None)
 #: 批 S6 QA F3（2026-10-02）：數字轉換訊息的值用 HTML 跳脫引號、而且**超過 4096 字或找不到收尾**時，`_TOML_CONV_RE` 的
 #: HTML 分支比對不到、最後一個分支又只認 `'`／`"`／`\` 開頭 ⇒ 整段外露（main 亦然）。檔頭說「超過上限遮到行尾」，
 #: 這一條讓 HTML 引號也照做：開頭引號起遮到行尾（條件同 `_mask_toml_conv_for`：同段有 `TomlDecodeError`，或行內有位置字尾）。
 #: 前瞻只排除「4096 字內找得到收尾」的情形（那一種由 `_TOML_CONV_RE` 處理）；前瞻每個起點最多看 4096 字 ⇒ 有上限。
+#: 批 S6 QA 第二輪：第一個字已被前面的規則換成遮罩（`?token=abc\ncould …` 經 `repr` 後查詢參數那一條吃掉 `abc\ncould`）
+#: 也認（`*** not convert …`／`*** literal for int() …`）—— 找不到收尾的 HTML 引號值，原始文字那一道沒有完整字面可找。
 _TOML_CONV_HTML_LONG_RE = re.compile(
-    r"(?P<pre>(?:could not convert string to float|invalid literal for int\(\) with base \d{1,2}):[ \t]{0,4}b?)"
+    r"(?P<pre>(?:could not convert string to float|invalid literal for int\(\) with base \d{1,2}"
+    r"|\*\*\* not convert string to float|\*\*\* literal for int\(\) with base \d{1,2}):[ \t]{0,4}b?)"
     r"(?P<he>&#x27;|&#39;|&quot;)(?!(?:(?!(?P=he))[^\r\n]){0,4096}(?P=he))[^\r\n]*")
 
 
@@ -1049,12 +1069,15 @@ def _open_part_len(head: str, sg: str, budget: list[int]) -> int:
     return 0
 
 
-def _toml_remnant_spans(head: str, close: str, ctx: str, out: str, budget: list[int]) -> list[tuple[int, int]]:
+def _toml_remnant_spans(head: str, close: str, ctx: str, out: str, budget: list[int],
+                        idx: list | None = None) -> list[tuple[int, int]]:
     """批 S6（SEC-r29 (c)）：值的字面被前面的規則改掉一部分之後，剩下的片段在 `out` 裡要遮的範圍（見 `_TOML_REM_PAD` 上方註解）。
 
     錨點 ＝ 收尾引號＋`ctx`（位置字尾，或原文緊接在後的字）；`ctx` 為空（值在字串結尾）→ 只認輸出結尾的收尾引號。
-    `budget` 是整次呼叫共用的工作量（見 `_TOML_REM_BUDGET`）。
+    `budget` 是整次呼叫共用的工作量（見 `_TOML_REM_BUDGET`）；`idx` 是整次呼叫共用的英數字分塊索引（見 `_has_alnum`）。
     """
+    if idx is None:
+        idx = [None]
     if not close or len(head) <= len(close):
         return []
     if ctx:
@@ -1073,9 +1096,17 @@ def _toml_remnant_spans(head: str, close: str, ctx: str, out: str, budget: list[
         if budget[0] < 0:
             _spans.append((_w0, _p))                        # 工作量用完：整個視窗遮掉（只會多遮）
             continue
-        budget[0] -= _p - _w0
-        if _ALNUM_RE.search(out, _w0, _p) is None:
+        budget[0] -= 2 * _ALNUM_BLOCK
+        if not _has_alnum(out, _w0, _p, idx):
             continue
+        #: 先只取最後一段（最靠近錨點）判：前一個字不是 `*` 時，`rfind` 找到的遮罩與 `split` 的切點相同；不是值的結尾 → 不必整窗切。
+        _j0 = out.rfind(MASK, _w0, _p)
+        if _j0 < 0 or out[_j0 - 1:_j0] != "*" or _j0 == _w0:
+            _l0 = out[(_j0 + len(MASK)) if _j0 >= 0 else _w0:_p]
+            budget[0] -= len(_l0)
+            if not head.endswith(_l0) or (_j0 < 0 and _w0 > 0):
+                continue
+        budget[0] -= 2 * (_p - _w0)
         _segs = out[_w0:_p].split(MASK)
         _n = len(_segs)
         _last = _segs[-1]
@@ -1151,16 +1182,16 @@ def _mask_s6(orig_vals: list[tuple[str, str, str, bool]], out: str) -> str:
       · 批 S6 QA F3：數字轉換的 HTML 引號值超過上限或找不到收尾（`_TOML_CONV_HTML_LONG_RE`，開頭引號起到行尾）。
     """
     _spans: list[tuple[int, int]] = []
-    _budget = [_TOML_REM_BUDGET]
+    _budget, _idx = [_TOML_REM_BUDGET], [None]
     for _tok, _close, _ctx, _has_suf in orig_vals:
         _head = _tok[:len(_tok) - len(_close)]
-        _spans += _toml_remnant_spans(_head, _close, _ctx, out, _budget)
+        _spans += _toml_remnant_spans(_head, _close, _ctx, out, _budget, _idx)
         if not _has_suf:
             #: 沒有位置字尾時，緊接在後的原文本身也可能被遮掉（實證：`\nTomlDecodeError` 整段換成遮罩）→ 再以「收尾引號＋遮罩」當錨點。
-            _spans += _toml_remnant_spans(_head, _close, MASK, out, _budget)
+            _spans += _toml_remnant_spans(_head, _close, MASK, out, _budget, _idx)
     if any(_n in out for _n in _POST_NEEDLES[_TOML_EXISTS_DICT_HTML_RE]):
         _spans += [(_m.end(1), _m.end()) for _m in _TOML_EXISTS_DICT_HTML_RE.finditer(out)]
-    if any(_n in out for _n in _POST_NEEDLES[_TOML_CONV_RE]):
+    if "convert string to float" in out or "literal for int" in out:
         _named = _TOML_TYPE_NAME in out
         _spans += [(_m.start("he"), _m.end()) for _m in _TOML_CONV_HTML_LONG_RE.finditer(out)
                    if _named or _TOML_POS_RE.search(_m.group(0), len(_m.group("pre"))) is not None]
