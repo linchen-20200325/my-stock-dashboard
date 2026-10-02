@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import pandas as pd
 import pytest
 
 import shared.macro_buckets as mb
@@ -113,3 +114,35 @@ def test_dl_f1_s67_m1b_hit_source_chain_order():
     src = _inspect.getsource(MH.compute_five_bucket_summary)
     assert "m1b_m2_info.gap (CBC ms1 → EF15M01 → ^TWII proxy → FRED → IMF)" in src
     assert "CBC ms1 → FRED → IMF → ^TWII proxy" not in src
+
+
+def _coverage_macro_detail(us10y_close):
+    import streamlit as st
+
+    from src.ui.pages.data_coverage import compute_tab_coverage
+    _ss = {"macro_info": {"vix": {"current": 17.2}, "_loaded_at": "2026-08-20T01:00"},
+           "cl_data": {"intl": {"10Y公債殖利率": pd.DataFrame({"close": [us10y_close]})}}}
+    for k, v in _ss.items():
+        st.session_state[k] = v
+    try:
+        return [r for r in compute_tab_coverage() if "總經" in r["tab"]][0]["detail"]
+    finally:
+        for k in _ss:
+            st.session_state.pop(k, None)
+
+
+@pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan")])
+def test_c1_non_finite_grouped_as_upstream_no_value(bad):
+    """C1 = A：資料診斷頁裡，被擋的值全是非有限值 ⇒ 歸「📵 上游無值」，⛔ 不再進「📐 量綱異常」。"""
+    detail = _coverage_macro_detail(bad)
+    import re as _re
+    no_val = _re.search(r"📵 上游無值\(\d+\):([^ ]+)", detail)
+    assert no_val and "us10y" in no_val.group(1).split("/"), detail
+    assert "📐 量綱異常" not in detail, detail
+    assert "非有限值(NaN / ±inf)" in detail  # NF-f2 ②：逐筆標註仍在
+
+
+def test_c1_finite_out_of_range_still_dimension_anomaly():
+    detail = _coverage_macro_detail(46.3)
+    assert "📐 量綱異常(1):us10y" in detail, detail
+    assert "46.3" in detail
