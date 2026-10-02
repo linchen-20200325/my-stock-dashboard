@@ -67,6 +67,20 @@ class _CandidatePoolFetchFailed(_CachedFailure):
     """
 
 
+class _DeepScanFetchFailed(_CandidatePoolFetchFailed):
+    """逐檔深掃時有個股的季報或月營收是 L1 判定的**確定抓取失敗**(D2-f30,批 D2,§1.A-3(a)):
+    算出的排行不入快取,`run_shortage_scan` 照舊接住(子類別)取 `.payload`,回傳內容不變。
+    本層不另記退避:失敗的那幾檔在 L1 冷卻期內重算不打上游,其餘吃 L1 成功快取。"""
+
+
+def _with_status(fn, *args, **kwargs) -> tuple:
+    """(L1 回傳, 是否確定抓取失敗)。L1 沒有 `.with_status`(例:被換成純函式)→ 照修前呼叫、當非失敗。"""
+    _ws = getattr(fn, "with_status", None)
+    if callable(_ws):
+        return _ws(*args, **kwargs)
+    return fn(*args, **kwargs), False
+
+
 def _batch_revenue_with_status(months: int) -> tuple[pd.DataFrame, bool]:
     """L1 全市場月營收 +「這一份是不是 L1 判定的確定抓取失敗」(D2-f5 2026-09-28)。
 
@@ -142,17 +156,20 @@ def _diagnose(scored: list, n: int) -> str:
     return _msg
 
 
-def _score_and_diagnose(pairs: list[tuple[str, list | None]]) -> tuple[list[dict], str]:
+def _score_and_diagnose(pairs: list[tuple[str, list | None]], *,
+                        failed: list | None = None) -> tuple[list[dict], str]:
     """對 (股號, 月營收YoY或None) 逐檔深抓季報 + 評分 → (可排名 rows, 診斷 note)。
 
     yoy3 為 None（存活池路徑）→ 逐檔單抓月營收（data_id，低 tier 也支援）補算；
     抓不到 → C4 標資料不足（0 分），C1-C3 仍由季報計分（fail-soft）。
+    failed（D2-f30）：傳 list 進來 → 季報或月營收是 L1 確定抓取失敗的股號各寫一筆（回傳不變）。
     """
     stocks: list[dict] = []
     for _sid, _yoy3 in pairs:
-        _frame = fetch_quarterly_shortage_frame(_sid)
+        _frame, _q_failed = _with_status(fetch_quarterly_shortage_frame, _sid)
+        _m_failed = False
         if _yoy3 is None:
-            _mrev = fetch_monthly_revenue(_sid, months=18)
+            _mrev, _m_failed = _with_status(fetch_monthly_revenue, _sid, months=18)
             _yoy3 = (compute_yoy_mom(_mrev).get("yoy_last3", [])
                      if _mrev is not None and not _mrev.empty else [])
         stocks.append({
@@ -162,6 +179,8 @@ def _score_and_diagnose(pairs: list[tuple[str, list | None]]) -> tuple[list[dict
             "quarters": _frame,
             "revenue_yoy_last3": _yoy3,
         })
+        if failed is not None and (_q_failed or _m_failed):
+            failed.append(_sid)
     _scored = rank_shortage(stocks, include_na=True)
     _rows = [s.to_row() for s in _scored if s.tier in _RANKABLE_TIERS]
     _note = "" if _rows else _diagnose(_scored, len(pairs))
@@ -192,13 +211,17 @@ def _scan_cached(max_scan: int) -> tuple[list[dict], dict]:
     _survivors = _survivor_pool(max_scan)
     if _survivors:
         _pairs = [(s, None) for s in _survivors]
-        _rows, _note = _score_and_diagnose(_pairs)
-        return _rows, {
+        _deep_failed: list[str] = []   # D2-f30
+        _rows, _note = _score_and_diagnose(_pairs, failed=_deep_failed)
+        _res1 = (_rows, {
             "candidates": len(_survivors), "deep_scanned": len(_pairs),
             "scored": len(_rows), "pool_source": "基本面存活池（免費離線快照）",
             "note": _note,
             "source": "FundamentalsSnapshot(survivors)+FinMind:MonthRevenue(single)+FS+BS",
-            "fetched_at": _fetched_at, "version": SHORTAGE_VERSION}
+            "fetched_at": _fetched_at, "version": SHORTAGE_VERSION})
+        if _deep_failed:   # D2-f30:有個股確定抓取失敗 → 降級排行不入快取
+            raise _DeepScanFetchFailed(_res1, "、".join(_deep_failed))
+        return _res1
 
     # ── ② fallback：全市場月營收批次（需 sponsor tier）──────────
     _batch, _batch_failed = _batch_revenue_with_status(months=18)   # D2-f5：df 同修前的呼叫
@@ -219,7 +242,8 @@ def _scan_cached(max_scan: int) -> tuple[list[dict], dict]:
 
     _pool = _candidate_pool(_batch, max_n=max_scan)
     _pairs = [(c["stock_id"], c["revenue_yoy_last3"]) for c in _pool]
-    _rows, _note = _score_and_diagnose(_pairs)
+    _deep_failed2: list[str] = []   # D2-f30(② 的逐檔深掃同理)
+    _rows, _note = _score_and_diagnose(_pairs, failed=_deep_failed2)
     _result = (_rows, {
         "candidates": len(_pool), "deep_scanned": len(_pairs), "scored": len(_rows),
         "pool_source": "全市場月營收動能候選池（sponsor tier）",
@@ -228,6 +252,8 @@ def _scan_cached(max_scan: int) -> tuple[list[dict], dict]:
         "fetched_at": _fetched_at, "version": SHORTAGE_VERSION})
     if _batch_failed:   # D2-f23(批 D3e):L1 判定一邊市場確定失敗、只拿到半邊表 → 不入快取(同上)
         raise _CandidatePoolFetchFailed(_result)
+    if _deep_failed2:   # D2-f30
+        raise _DeepScanFetchFailed(_result, "、".join(_deep_failed2))
     return _result
 
 

@@ -427,19 +427,28 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
     數據」、個股頁「強制重抓」)清不掉這張退避表 —— 失敗後的冷卻期內按它不會重抓這一檔(修前按它會);
     `fetch_monthly_revenue.clear()` 則會。
     """
+    return _fetch_monthly_revenue_with_status(stock_id, months)[0]
+
+
+def _fetch_monthly_revenue_with_status(stock_id: str, months: int = 18) -> tuple[pd.DataFrame, bool]:
+    """(單股月營收, 這一份是不是確定抓取失敗)。**本函式不快取**(D2-f30,批 D2:給 L3 缺貨掃描判斷
+    自己的結果能不能入快取)。第 1 項與 `fetch_monthly_revenue` 回的相同;冷卻期內回 (同一份, True)。"""
     _key = (stock_id, months)
     _hit, _gen = _single_fail_cooldown.begin(_key)
     if _hit is not _FC_NO_HIT:
-        return _hit
+        return _hit, True
     try:
         _df = _fetch_monthly_revenue_cached(stock_id, months)
     except _SingleRevenueFetchFailed as _sf:
         print(f"[mrev-fetcher] {stock_id} "
               f"{'無資料且 OpenAPI' if _sf.payload.empty else '降級結果、FinMind'} 確定抓取失敗({_sf})→ 不入快取,"
               f"{_cooldown_note(_single_fail_cooldown)}")
-        return _single_fail_cooldown.fail(_key, _gen, _sf.payload)
+        return _single_fail_cooldown.fail(_key, _gen, _sf.payload), True
     _single_fail_cooldown.success(_key)
-    return _df
+    return _df, False
+
+
+fetch_monthly_revenue.with_status = _fetch_monthly_revenue_with_status
 
 
 def _clear_fetch_monthly_revenue() -> None:
