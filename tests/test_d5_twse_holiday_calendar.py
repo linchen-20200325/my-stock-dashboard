@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-import src.data.proxy as _proxy_barrel
+from src.data.proxy import proxy_helper as _proxy_helper
 from shared import fail_cooldown as _fc
 from src.compute import trading_calendar as tc
 from src.data.stock import twse_holiday_fetcher as hf
@@ -110,7 +110,10 @@ class TestFetch:
             r = responses[min(len(calls), len(responses)) - 1]
             return r
 
-        monkeypatch.setattr(_proxy_barrel, "fetch_url", fake, raising=False)
+        # ⚠️ 打在實體模組上，⛔ 不打在 barrel：barrel 靠 PEP 562 `__getattr__` 即時轉發，
+        #    對 barrel setattr 會在還原時把舊函式「釘」進 barrel 的模組字典，
+        #    之後別的測試 patch `proxy_helper.fetch_url` 就轉發不到了（實測汙染 2 支測試）。
+        monkeypatch.setattr(_proxy_helper, "fetch_url", fake)
         return calls
 
     def test_success_is_cached(self, monkeypatch):
