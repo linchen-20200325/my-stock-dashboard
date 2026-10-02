@@ -207,12 +207,17 @@ def _clear_fetch_single() -> None:
 fetch_single.clear = _clear_fetch_single
 
 
-@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
-def fetch_flow_snapshot(period: str = "2y"):
-    """全球資金流向所需的區域 / 跨資產 ETF 收盤序列:並行抓取 + /tmp pickle 快取 30 分。
+class _FlowSnapshotFailed(_CachedFailure):
+    """`_fetch_flow_snapshot_cached` 有代號確定抓取失敗 → 不入快取(D2-f31);外層取 `.payload`。"""
 
-    回 {顯示名: DataFrame}(沿用 fetch_single 結構)。只在核心 SPY 抓到時才寫快取,
-    避免暫時性全失敗被黏住。供總經 tab「全球資金流向」一節使用。
+
+@st.cache_data(ttl=TTL_1HOUR, show_spinner=False)
+def _fetch_flow_snapshot_cached(period: str = "2y"):
+    """`fetch_flow_snapshot()` 的快取層(原函式本體;TTL、參數、成功回傳同修前)。
+
+    D2-f31(§1.A-3(a)「只快取成功結果」):任一代號在 `_fetch_single_cached` 確定抓取失敗
+    (或並行抓取本身拋例外)→ 拋 `_FlowSnapshotFailed`(不入 st.cache_data,也不寫 pkl),
+    `.payload` 即修前會回傳的同一個 dict(抓不到的代號值為 None)。
     """
     from concurrent.futures import ThreadPoolExecutor as _TPE_fl
     from shared.etf_universe import all_symbols as _all_fl  # Phase 2 Batch 2b v18.424:L1→L0 直 import,解 L1→L2 反向違規
@@ -226,23 +231,50 @@ def fetch_flow_snapshot(period: str = "2y"):
     _uniq = sorted(set(_syms.values()))    # 去重後實際抓取(SPY 等共用代號只抓一次)
 
     def _one(sym):
-        return sym, fetch_single(sym, period=period)
+        try:
+            return sym, _fetch_single_cached(sym, period=period), False
+        except _SingleFetchFailed as _sf:   # D2-f31:確定失敗(fetch_single 回的同一個 None)
+            return sym, _sf.payload, True
 
     _by_sym = {}
+    _failed = []
     try:
         with _TPE_fl(max_workers=min(8, len(_uniq))) as _ex_fl:
-            for _sym, _df in _ex_fl.map(_one, _uniq):
+            for _sym, _df, _f in _ex_fl.map(_one, _uniq):
                 _by_sym[_sym] = _df
+                if _f:
+                    _failed.append(_sym)
     except Exception as _e_fl:
         print(f'[flow] ❌ 並行抓取異常: {_e_fl}')
+        _failed.append(f'{type(_e_fl).__name__}')
 
     out = {name: _by_sym.get(sym) for name, sym in _syms.items()}
 
-    if _by_sym.get('SPY') is not None:     # 核心抓到才快取(避免暫時全失敗被黏住)
-        _pkl_put('_flow_snapshot', out)
     _prov_log('fetch_flow_snapshot', 'flow_engine+yf_proxy(parallel)',
               f'period={period}', f'dict:{sum(1 for v in out.values() if v is not None)}/{len(out)}symbols')
+    if _failed:
+        raise _FlowSnapshotFailed(out, f"抓取失敗:{'、'.join(_failed)}")
+    if _by_sym.get('SPY') is not None:     # 核心抓到才快取(避免暫時全失敗被黏住)
+        _pkl_put('_flow_snapshot', out)
     return out
+
+
+def fetch_flow_snapshot(period: str = "2y"):
+    """全球資金流向所需的區域 / 跨資產 ETF 收盤序列:並行抓取 + /tmp pickle 快取 30 分。
+
+    回 {顯示名: DataFrame}(沿用 fetch_single 結構)。只在核心 SPY 抓到時才寫快取,
+    避免暫時性全失敗被黏住。供總經 tab「全球資金流向」一節使用。
+
+    D2-f31:快取在 `_fetch_flow_snapshot_cached`;有代號確定抓取失敗時不入快取(回傳形狀同修前)。
+    `.clear()` 清快取層。
+    """
+    try:
+        return _fetch_flow_snapshot_cached(period=period)
+    except _FlowSnapshotFailed as _ff:
+        return _ff.payload
+
+
+fetch_flow_snapshot.clear = lambda: getattr(_fetch_flow_snapshot_cached, 'clear', lambda: None)()
 
 
 # ═══════════════════════════════════════════════
