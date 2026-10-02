@@ -48,12 +48,29 @@
 ═══ 這個檔**不是**什麼 ═══════════════════════════════════════════════
 - **不是**第二份門檻表：紅綠燈怎麼判、每一盞的門檻與出處，全部逐欄讀 L0
   `shared/macro_buckets.py` 與 `shared/station_specs.py`，**本檔一個門檻數字都沒有**。
-- **不是**新的狀態模型：七態一律走 L0 `shared/ui_state.py::classify_ui_state()`。
+- **不是**新的狀態模型：狀態一律走 L0 `shared/ui_state.py::classify_ui_state()`
+  （2026-09-23 起由七態成為十態，見下方 D-3(a) 附註；**本頁判態寫法未改**）。
 - **不是**新的卡片型別：`Card` / `Note` / `MAX_COLS` 一律 import
   `src/ui/tabs/tab_today.py` 與 `src/ui/views/_ui_kit.py`（**不寫第五份渲染器**）。
 - **不是**診斷面板的搬家：`src/ui/pages/{data_coverage,api_diagnostic,health_inspector,
   data_registry_panel,reconcile_panel,calibration_ui}.py` 一支都**沒有 import**
   （它們自己直接讀 `st.session_state` 或直呼 L1，把它們拉進來等於把違憲一起繼承）。
+
+⚠️ **2026-09-23（客戶裁示 D-3(a)）：`UI_EMPTY` 分出三種可分辨的缺值。**
+本頁**判態的寫法一行未改** —— 分辨是 L0 `classify_ui_state()` 依既有的
+`reason=` 自動做掉的（本頁本來就有在傳），畫面因此自動多出一層資訊：
+
+    `MISS_NO_INPUT`       → `UI_MISSING_RETRYABLE`（#7 缺漏）    **再按一次有用**
+    `MISS_NOT_APPLICABLE` → `UI_NOT_APPLICABLE`（#8 結構上不適用）**按幾次都一樣**
+    其餘／沒給原因        → `UI_EMPTY`（無資料）                 **分不出是哪一種**
+
+⛔ **判不出來時不准挑一個看起來合理的**：`MISS_NOT_ENOUGH`（等時間累積）與
+`MISS_NO_VARIATION`（等它開始動）**刻意留在 `UI_EMPTY`** —— 它們重試無用，但也
+**不是**「結構上不適用」，硬塞進 #8 等於對使用者說一句永久性的假話
+（`CLAUDE.md §-2` 記載過同型事故：新上市標的收到「可以重跑一次」的錯誤指引）。
+⛔ **本頁不得出現缺值家族的任何字面 glyph** —— 符號一律由 `state_meta()` 從 L0
+供給一次。守衛 `tests/test_ui_empty_split.py` **整檔掃描、連註解與 docstring 都算**，
+所以本段只寫得出常數名、寫不出符號本身；那是刻意的。
 
 ~~**本檔沒有 production caller**（`app.py` 掛載另案；本批一個字都沒有碰 `app.py`、
 `page_today.py`、`page_find.py`、`page_inspect.py`、`page_hold.py`、`_ui_kit.py`、
@@ -249,6 +266,10 @@ from typing import Any, Iterable, Mapping, Sequence
 import streamlit as st
 
 from shared import ia_nav
+# L0 SSOT：AI 免責樣板（`S1-6_COMPLIANCE_COPY_GUIDE.md §3.1` 的**強制樣板**）。
+# ⚠️ **不得在本檔手抄一份** —— §3.1 實作紀律第 1 條：「一處常數，兩處引用……
+# 禁止在各頁手抄免責」。守衛：`TestQaDisclosure::test_the_view_does_not_hand_copy_it`。
+from shared.compliance_copy import AI_NARRATIVE_GLYPH, AI_QA_DISCLOSURE
 # L0 SSOT：@monitored fetcher 的**呼叫紀錄**（純 in-process dict，零 I/O）。
 from shared.fetch_monitor import get_monitor_registry
 # L0 SSOT：總經燈規格（含 `wired` / `discriminative` 與各自的原因欄）。
@@ -1907,6 +1928,51 @@ def build_qa_card(qa: QaReadout) -> _Built:
             tuple(_facts), "")
 
 
+def compose_qa_message(text: str) -> str:
+    """把**強制免責**與 AI 回答組成**一則**訊息。
+
+    客戶 2026-09-23 裁示 **D-4(a)**「`why.qa` 補強制免責三件」的落點就是這裡。
+
+    ── 為什麼需要這支函式（而不是在渲染處直接串字串）────────────────
+    這一葉的回答會被寫進對話紀錄（`_append_history`），而**下一次 rerun
+    是從紀錄重播的**（`_render_qa_leaf` 開頭那個 for 迴圈）。
+    若免責只加在「這一輪剛回答」的那條路徑上，使用者再按任何一個 widget、
+    畫面重跑一次之後，**免責就會自己消失**，只剩下 🧬 開頭的回答 ——
+    而那正好回到 `S1-6 §3.1` 判為「不是免責」的狀態。
+    ⇒ **免責必須跟回答是同一個字串**，存進去的與畫出來的是同一份，
+    重播多少次都還在。守衛：`TestQaDisclosure::test_it_survives_a_rerun`。
+
+    ── 為什麼是「前綴」而不是獨立區塊（⚠️ 含一處與總管建議的偏離）──
+    總管建議、客戶採納的形式是「**一行前綴**」，理由是免責若補成獨立段落會
+    **淹掉答案**。本函式照這個方向做：免責放在回答**上方、同一則氣泡內**，
+    只隔一個空行 —— §3.1 要的「免責必須與被免責的內容同屏」成立，
+    而答案仍然是視覺主體（⛔ 不另開卡片、⛔ 不動版面結構）。
+
+    ⚠️ **但實際落地的不是「一行」，是四句（渲染後為一個段落）。據實標明：**
+    §3.1 把版本 C 訂為**強制樣板**，而總管的規格同時要求「三件事**逐字照用**、
+    ⛔ 不要自己發明、⛔ 不要改寫」。**兩者只能滿足一個** ——
+    把版本 C 壓成一行就是改寫它、等於發明第四個版本（§3.1 只有 A/B/C 三版）。
+    本組取「逐字」那一邊，因為它是 🔴 級硬約束，而「一行」是**建議**的形式；
+    且總管真正禁止的是「**補成整段落**（會淹掉答案）」，
+    版本 C 以單一段落小字置於氣泡頂端，並沒有變成另一個段落區塊。
+    ⇒ **這是實作組的判斷，不是客戶明示**（`CLAUDE.md §-2` 規則 6）：
+    客戶若要的就是字面一行，正確的處置是**請客戶裁示一份新的樣板文字**，
+    ⛔ 不是在這裡把版本 C 剪短。
+
+    ── 🧬 為什麼留著 ────────────────────────────────────────────────
+    它是本站既有的 AI 敘述旗標，**但它不是免責**（§3.0 出口盤點表逐字寫
+    「只有 🧬 符號……不是免責」）。留著是因為它標的是**回答那一行本身**，
+    在對話往下捲之後仍然指得出「這一則是模型寫的」；
+    拿掉它不會讓免責更完整，只會讓長對話裡少一個定位點。
+    **它是加在免責之外的東西，不是免責的替代品。**
+
+    ⚠️ **呼叫端負責「有沒有答案」這個判斷，本函式不判。**
+    沒有答案時**不准**呼叫它（見 `_render_qa_leaf`）——
+    對一段不存在的內容做免責，是替一個沒發生的事情背書。
+    """
+    return f"{AI_QA_DISCLOSURE}\n\n{AI_NARRATIVE_GLYPH} {text}"
+
+
 def read_history(session: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
     """讀對話紀錄。形狀怪的一律當成空（**不猜**）。"""
     _raw = session.get(SS_QA_HISTORY)
@@ -2177,11 +2243,15 @@ def _render_qa_leaf(session: Mapping[str, Any]) -> None:
             st.markdown(_question)
         _append_history("user", _question)
         if _qa.answered:
+            # ⚠️ **只有真的拿到 AI 文字時才掛免責**（`_qa.answered`）。
+            # 失敗態／空回答態走的是下方的狀態卡，畫面上**一個字的 AI 文字都沒有** ——
+            # 對一段不存在的內容做免責，等於替一個沒發生的事情背書（§1）。
+            # ⚠️ **畫出來的與存進紀錄的是同一個字串**：下一次 rerun 從紀錄重播，
+            # 兩邊若各串各的，免責會在重播時消失（見 `compose_qa_message`）。
+            _body = compose_qa_message(_qa.text)
             with st.chat_message("assistant"):
-                # 🧬 = AI 敘述旗標（沿用既有 🧬 AI 問答分頁的慣例）：
-                # 讓使用者一眼看出這一段是模型寫的，不是本站算出來的數字。
-                st.markdown(f"🧬 {_qa.text}")
-            _append_history("assistant", f"🧬 {_qa.text}")
+                st.markdown(_body)
+            _append_history("assistant", _body)
 
     _render_one(build_qa_card(_qa))
 

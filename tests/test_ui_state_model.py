@@ -23,6 +23,7 @@ import pathlib
 
 import pytest
 
+from shared.colors import TRAFFIC_NEUTRAL
 from shared.station_specs import (
     MISS_CONTRACT_DRIFT,
     MISS_FETCH_FAILED,
@@ -32,6 +33,7 @@ from shared.station_specs import (
 from shared.ui_state import (
     FAILED_REASONS,
     UI_DEGRADED,
+    NO_VALUE_STATES,
     UI_EMPTY,
     UI_FAILED,
     UI_IDLE,
@@ -105,9 +107,19 @@ class TestClassifyUiState:
 
     @pytest.mark.parametrize("reason", [MISS_NO_INPUT, MISS_NOT_ENOUGH, "n/a"])
     def test_non_failed_reasons_stay_grey(self, reason):
-        """「等一等就好」類的缺值原因**不得**標紅（否則就是假性錯誤）。"""
-        assert classify_ui_state(requested=True, has_value=False,
-                                 reason=reason) == UI_EMPTY
+        """「等一等就好」類的缺值原因**不得**標紅（否則就是假性錯誤）。
+
+        ⚠️ 2026-09-23（D-3(a)）起斷言由「== `UI_EMPTY`」改為「**是灰的、
+        不是紅的**」—— 本測的原意從來就是**不准標紅**，而不是「必須是
+        `UI_EMPTY` 這個鍵」。`no_input` 與 `n/a` 現在會落到 #7／#8，
+        **三者同為中性灰**，原意一字未減；把斷言留在鍵上反而會在
+        「畫面變得更清楚」時轉紅，那是守錯東西。
+        """
+        _state = classify_ui_state(requested=True, has_value=False,
+                                   reason=reason)
+        assert _state in NO_VALUE_STATES
+        assert _state != UI_FAILED and not is_alarming(_state)
+        assert state_meta(_state)[2] == TRAFFIC_NEUTRAL
 
     def test_failed_reasons_membership(self):
         assert FAILED_REASONS == {MISS_FETCH_FAILED, MISS_CONTRACT_DRIFT}

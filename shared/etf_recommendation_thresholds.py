@@ -21,8 +21,8 @@ SELL_COMPOSITE_MAX: float = 0.35
 
 # σ位階(現價離 252 日均線幾個 σ)偏便宜 / 偏貴切點 —— 只影響「加碼時機」註解,
 # 不改變留/換判斷(好 ETF 貴了也是續抱、暫緩加碼,而非賣出)。
-SIGMA_Z_CHEAP: float = -1.0   # ≤ 此 → 價位偏低,分批加碼時機較佳
-SIGMA_Z_RICH: float = 1.0     # ≥ 此 → 價位偏高,續抱可、暫緩加碼
+SIGMA_Z_CHEAP: float = -1.0   # ≤ 此 → 估值位階偏低
+SIGMA_Z_RICH: float = 1.0     # ≥ 此 → 估值位階偏高
 
 # 同類重疊:同一 ETF 類別(市值型 / 高股息 …)持有幾檔(含)以上就提示「擇一」。
 REDUNDANCY_MIN_PEERS: int = 2

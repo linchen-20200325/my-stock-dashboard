@@ -2,9 +2,15 @@ name: "PR Check（pytest fast + AppTest slow）"
 
 on:
   pull_request:
-    branches: [main]
+    # ⚠️ 語意:pull_request 的 branches 過濾的是 PR 的**目標(base)分支**,不是來源分支。
+    #    所以 `ui-v2 → v2` 的 PR 本來就會跑(base=v2 已在列);加上 ui-v2 多涵蓋的是
+    #    **以 ui-v2 為 base 的 PR**(例:功能子分支 → ui-v2)。
+    branches: [main, v2, ui-v2]
   push:
-    branches: [main]
+    # 2026-09-21 補 ui-v2(決策者:AI 總管;CLAUDE.md §-1.5.D §03-1「CI 配置同步更新」
+    # 明文屬內部自決區)。補之前 push 到 ui-v2 不觸發任何 CI —— UI v2 的開發線
+    # 整條沒有守衛,包含剛補進 tests/test_c3_layering_guard.py 的 src/ui_v2/ 分層守衛。
+    branches: [main, v2, ui-v2]
   workflow_dispatch:
 
 concurrency:

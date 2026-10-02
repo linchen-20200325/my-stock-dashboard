@@ -77,7 +77,7 @@ def test_build_rows_stock_kind_mj_kd():
     assert "3-3-3" not in r and "235 燈號" not in r       # 個股不套 ETF 規則
     assert "財報體檢" in r and "KD" in r
     assert r["健檢"] == "🔴"                              # F + KD 轉弱 → 汰弱換出
-    assert "換出" in r["建議動作"]
+    assert "落在 C/F 兩級內" in r["建議動作"]
     assert r["_detail"]["KD交叉"] == "死亡交叉"
 
 
@@ -795,3 +795,187 @@ class TestWeeklySeriesPayload:
             vix=18, metrics_fn=self._etf_metrics(60))[0]
         for _k in ("健檢", "235 燈號", "加碼金", "3-3-3", "建議動作"):
             assert _r[_k] == _r2[_k]
+
+
+# ══════════════════════════════════════════════════════════════════
+# 殘留②｜「不含系統目標」出口（客戶 2026-09-23 裁示：方案 B）
+# ══════════════════════════════════════════════════════════════════
+def _alloc_line(prompt: str) -> str:
+    """從 prompt 裡撈出「實際配置」那一行。**找不到就炸**（§1：不回空字串裝沒事）。
+
+    ⚠️ 回**整行**是刻意的：底下兩組守衛一律用 `==` 比整行,不用 `in` 比子字串 ——
+    子字串比對在「多印了一段」時照樣綠（`"核心 73%" in line` 對
+    `"核心 73%（目標 80/20…）"` 也成立）,那正是本輪要防的失效模式。
+    """
+    _hit = [_l for _l in prompt.splitlines() if "實際配置" in _l]
+    assert len(_hit) == 1, f"prompt 裡的「實際配置」行有 {len(_hit)} 行,預期恰 1 行"
+    return _hit[0]
+
+
+class TestSystemTargetsOptOut:
+    """🔴 反向守衛：**💼⑦ 走的那條路徑,不得拿到系統預設的目標比例。**
+
+    依據：`docs/v2/spec/UI_PAGE_HOLD.md §③` 硬禁令第 2 條逐字「目標比例只能由
+    使用者自己填,系統⛔ 不得預填、⛔ 不得建議、⛔ 不得給『參考配置』」＋ (c)
+    「**AI 不得繞過禁令**」。`17998e9`（D-1(b)）已把 80/20 從 ⑤ 的**畫面**拿掉,
+    但 ⑦ 的 AI 總結是**另一條路**（digest → `build_summary_prompt`）—— 本類釘住那一條。
+
+    ⚠️ **比對值一律從 L0 `shared/dividend_station_thresholds` 現場讀**（§3.3）,
+    ⛔ 不寫死 `80` / `20`：門檻哪天改成 70/30,守衛要跟著動,不是變成假綠燈。
+    """
+
+    def _rows(self):
+        return _alloc_rows()
+
+    def test_opt_out_digest_drops_exactly_the_three_target_keys(self):
+        """`with_system_targets=False` → allocation 的鍵集 **等於** 預設減掉那三個。
+
+        用**集合相等**,不是 `not in` 逐一檢查：少關一個會紅,順手多刪一個也會紅。
+        """
+        _default = svc.build_station_digest(self._rows(), 18.0)["allocation"]
+        _opt_out = svc.build_station_digest(
+            self._rows(), 18.0, with_system_targets=False)["allocation"]
+        assert _default is not None and _opt_out is not None
+        assert set(_opt_out) == set(_default) - set(svc.SYSTEM_TARGET_KEYS), (
+            f"⑦ 路徑的 allocation 鍵集不對：{sorted(_opt_out)}")
+        #: §1：是「鍵不存在」,⛔ 不是「鍵在但值是 None/0」—— 後者下游 `.get()` 讀起來一樣。
+        for _k in svc.SYSTEM_TARGET_KEYS:
+            assert _k not in _opt_out
+
+    def test_opt_out_keeps_every_real_measurement(self):
+        """關掉的只有**系統目標**;**實際量到的東西一個都不准少**（§1 不因合規而少報）。"""
+        _default = svc.build_station_digest(self._rows(), 18.0)["allocation"]
+        _opt_out = svc.build_station_digest(
+            self._rows(), 18.0, with_system_targets=False)["allocation"]
+        for _k, _v in _opt_out.items():
+            assert _default[_k] == _v, f"`{_k}` 在兩條路徑上不一致"
+
+    def test_opt_out_prompt_is_the_default_line_minus_the_target_clause(self):
+        """🔴 **核心守衛**：⑦ 的 prompt 行 ＝ 預設那一行**扣掉目標括號**,一字不多不少。
+
+        期望值用 L0 常數 ＋ 預設路徑算出來的 `core_dev` **現場組**,⛔ 不寫死字面值。
+        """
+        _d_def = svc.build_station_digest(self._rows(), 18.0)
+        _d_opt = svc.build_station_digest(
+            self._rows(), 18.0, with_system_targets=False)
+        _clause = (f"（目標 {T.CORE_TARGET_PCT:.0f}/{T.SATELLITE_TARGET_PCT:.0f}，"
+                   f"核心偏離 {_d_def['allocation']['core_dev']:+.0f}%）")
+        _line_def = _alloc_line(svc.build_summary_prompt(_d_def))
+        assert _clause in _line_def, "預設路徑竟然沒印目標括號 —— 前提就不成立了"
+        assert _alloc_line(svc.build_summary_prompt(_d_opt)) == _line_def.replace(
+            _clause, ""), "⑦ 的配置行不等於「預設行扣掉目標括號」"
+
+    def test_opt_out_prompt_says_no_target_and_no_deviation_at_all(self):
+        """整份 prompt 不准再出現「目標」或「偏離」兩個字（⑦ 全文掃,不只那一行）。
+
+        ⚠️ 這兩個詞在本 prompt 的**其他段落一次都沒有**（停利段寫的是「門檻」,
+        換股段沒有）⇒ 出現＝一定是目標又漏進來了,不是誤判。
+        """
+        _p = svc.build_summary_prompt(svc.build_station_digest(
+            self._rows(), 18.0, with_system_targets=False))
+        assert "目標" not in _p and "偏離" not in _p, (
+            "⑦ 的 prompt 仍在講目標/偏離 —— 硬禁令第 2 條 (c)「AI 不得繞過禁令」")
+
+    def test_opt_out_never_invents_a_substitute_target(self):
+        """§1：⛔ 不得補預設、⛔ 不得填 0、⛔ 不得改寫成「建議」。
+
+        L0 的兩個目標值**以數字形式**都不該出現在配置行裡。
+        ⚠️ 這一條刻意用**沒有缺金額**的 rows（`partial=False`）—— 帶 partial 時
+        行尾那句「僅供參考」是 §1 要求的**誠實揭露**,不是把目標改寫成建議,
+        拿它來判會得到一個假紅燈。核心 70/衛星 30 也刻意避開 L0 的 80/20,
+        否則「實際值剛好等於目標值」會讓下面那個數字檢查誤判。
+        """
+        _rows = [
+            {"代號": "0056", "種類": "ETF", "held": True, "市值": 700000.0,
+             "損益%": 5.0, "健檢": "🟢", "_detail": {}},
+            {"代號": "2330", "種類": "個股", "held": True, "市值": 300000.0,
+             "損益%": 2.0, "健檢": "🟢", "_detail": {}},
+        ]
+        _d = svc.build_station_digest(_rows, 18.0, with_system_targets=False)
+        assert _d["allocation"]["partial"] is False       # 前提：這一組不帶揭露句
+        _line = _alloc_line(svc.build_summary_prompt(_d))
+        for _v in (T.CORE_TARGET_PCT, T.SATELLITE_TARGET_PCT):
+            assert f"{_v:.0f}" not in _line, f"配置行仍帶著 L0 目標值 {_v}"
+        for _word in ("建議", "參考", "預設", "目標", "偏離"):
+            assert _word not in _line, f"配置行把目標改寫成「{_word}」—— 換個地方預填"
+
+    def test_opt_out_survives_the_partial_and_empty_edges(self):
+        """邊界：無持股 / 零市值 → `allocation is None`,兩條路徑**一致**,都不炸。"""
+        for _rows in ([], [{"代號": "0056", "種類": "ETF", "held": True,
+                            "市值": None, "_detail": {}}]):
+            _d = svc.build_station_digest(_rows, None, with_system_targets=False)
+            assert _d["allocation"] is None
+            svc.build_summary_prompt(_d)          # ⛔ 不得 KeyError
+
+    def test_half_a_target_dict_fails_loud(self):
+        """§1 Fail Loud：只給一半目標欄位的 digest 是**壞掉的**,不是「沒有目標」。
+
+        靜默略過會讓「漏關一欄」長得跟「正常關掉」一模一樣 —— 那正是本輪的失效模式。
+        """
+        _d = svc.build_station_digest(self._rows(), 18.0)
+        _d["allocation"].pop("core_dev")
+        with pytest.raises(ValueError, match="只有一部分"):
+            svc.build_summary_prompt(_d)
+
+
+class TestDefaultExitStillCarriesSystemTargets:
+    """🔴 不退化守衛：**原出口（預設參數）的行為一字不准變。**
+
+    v1 戰情室 `src/ui/etf/etf_tab_dividend_station.py::_render_allocation_take_profit`
+    **直接下標** `_alloc["core_dev"]`,LINE 推播
+    `src/compute/notify/holdings_digest_message.py::_allocation_line` 讀三欄才印,
+    `scripts/push_holdings_daily.py` 是 production cron —— 三條路全走**預設值**。
+    ⇒ **把預設值改掉 = 這一類當場紅燈**（客戶 2026-09-23：「v1 零影響」）。
+    """
+
+    def test_the_default_is_true_on_both_exits(self):
+        """🔴 直接釘**預設值本身**：改成 `False` 就紅,不必等別人踩到。"""
+        import inspect
+
+        for _fn in (svc.compute_allocation_split, svc.build_station_digest):
+            _p = inspect.signature(_fn).parameters["with_system_targets"]
+            assert _p.default is True, f"{_fn.__name__} 的預設值被改掉了"
+            assert _p.kind is inspect.Parameter.KEYWORD_ONLY, (
+                f"{_fn.__name__} 的 with_system_targets 必須是 keyword-only ——"
+                "位置參數會讓既有 caller 的第 N 個引數悄悄變成它")
+
+    def test_default_allocation_still_has_all_three_keys_from_l0(self):
+        """預設出口仍含三欄,且值**等於 L0 常數**（⛔ 不寫死 80/20）。"""
+        _a = svc.build_station_digest(_alloc_rows(), 18.0)["allocation"]
+        assert {_k for _k in svc.SYSTEM_TARGET_KEYS if _k in _a} == set(
+            svc.SYSTEM_TARGET_KEYS), f"預設出口少了目標欄位：{sorted(_a)}"
+        assert _a["core_target"] == T.CORE_TARGET_PCT
+        assert _a["sat_target"] == T.SATELLITE_TARGET_PCT
+        assert _a["core_dev"] == pytest.approx(
+            _a["core_pct"] - T.CORE_TARGET_PCT, abs=0.05)
+
+    def test_default_prompt_still_prints_target_and_deviation(self):
+        """預設 prompt 的配置行 **完全等於** 用 L0 現場組出來的那一行。"""
+        _d = svc.build_station_digest(_alloc_rows(), 18.0)
+        _a = _d["allocation"]
+        _expect = (f"- 實際配置：核心 {_a['core_pct']:.0f}% / 衛星 {_a['sat_pct']:.0f}%"
+                   f"（目標 {T.CORE_TARGET_PCT:.0f}/{T.SATELLITE_TARGET_PCT:.0f}，"
+                   f"核心偏離 {_a['core_dev']:+.0f}%）"
+                   f"（部分持股缺金額,僅供參考）")
+        assert _alloc_line(svc.build_summary_prompt(_d)) == _expect
+
+    def test_v1_direct_subscript_still_works(self):
+        """v1 是 `_alloc["core_dev"]` **直接下標** —— 少一欄就是 `KeyError`。"""
+        _a = svc.build_station_digest(_alloc_rows(), 18.0)["allocation"]
+        assert isinstance(_a["core_dev"], float)          # ⛔ 不得 KeyError
+        assert isinstance(_a["core_target"], float)
+        assert isinstance(_a["sat_target"], float)
+
+    def test_line_cron_path_still_prints_the_allocation_line(self):
+        """LINE 推播那一行仍印得出來（`_allocation_line` 需要三欄齊備才回內容）。
+
+        ⚠️ 本測試**只讀** `holdings_digest_message`,一個字都沒有改它
+        （本輪檔案邊界）—— 它在這裡是「零影響」這句宣稱的**證人**。
+        """
+        from src.compute.notify import holdings_digest_message as _msg
+
+        _d = svc.build_station_digest(_alloc_rows(), 18.0)
+        _lines = _msg._allocation_line(_d)
+        assert len(_lines) == 1, "LINE 的配置行不見了 —— v1 推播退化"
+        assert (f"目標 {T.CORE_TARGET_PCT:.0f}/{T.SATELLITE_TARGET_PCT:.0f}"
+                in _lines[0]), "LINE 的配置行不再印 L0 目標"

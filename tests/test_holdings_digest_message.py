@@ -96,7 +96,7 @@ def test_no_switch_out_shows_hold_line():
     s = _full_switch()
     s["switch_out"] = []
     msg = F(d, s, as_of=_AS_OF)
-    assert "無紅燈,續抱" in msg
+    assert "沒有健檢紅燈" in msg
 
 
 def test_allocation_partial_flag_shown():

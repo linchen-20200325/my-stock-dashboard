@@ -96,7 +96,11 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
 **而本頁還有第四種**，線框特地為它補畫了一個區塊（葉1-C，原文
 「**第三條路 · 不是紅態**」）：
 
-    判不出是個股還是 ETF → `UI_EMPTY` + `MISS_NOT_APPLICABLE`（灰）
+    判不出是個股還是 ETF → `UI_NOT_APPLICABLE`（灰，#8「不適用 · 重跑無效」）
+                           ⤷ 2026-09-23（D-3(a)）前這一態與「查無此代碼」
+                             **共用同一顆符號**，使用者分不出哪一個再查有用；
+                             現在 #8 自己是一顆符號，明講「**再按幾次都一樣**」。
+                             判態的輸入（`reason=MISS_NOT_APPLICABLE`）**一字未改**。
 
 ⛔ **它絕對不可以是 `failed`。** 判型失敗不是系統壞掉 —— `classify_asset_kind`
 對美股 / 指數 / 興櫃 / 打錯的代碼一律回 `unknown`，那是**這個輸入不在本站的
@@ -265,6 +269,7 @@ from shared import ia_nav
 # L0 SSOT：均線週期。**禁止在 UI 端寫死 20 / 60 / 120 / 240**（§3.3）。
 from shared.station_specs import MISS_NOT_APPLICABLE, MISS_TEXT
 from shared.ui_state import (
+    NO_VALUE_STATES,
     UI_EMPTY,
     UI_FAILED,
     UI_IDLE,
@@ -1862,7 +1867,14 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
     # 卻印「沒有拿到配息紀錄」「三段都沒有給」，等於**替一輪沒發生的取數
     # 宣稱它的結果**（§1：錯誤的數字比沒有數字更危險，錯誤的敘述亦然）。
     # 那兩態的原因由 Note 講（它才知道是「還沒叫」還是「炸了」）。
-    _ran = (_state == UI_EMPTY)
+    # ⚠️ **讀 `NO_VALUE_STATES`，不是 `== UI_EMPTY`**（2026-09-23 D-3(a)）：
+    # 這一格問的是「**這一輪到底跑完了沒**」，而「跑完了、沒有值」自本日起
+    # 可能是 `UI_EMPTY`／`UI_MISSING_RETRYABLE`／`UI_NOT_APPLICABLE` 三者之一。
+    # 寫死 `== UI_EMPTY` 在上游哪天開始給
+    # `reason=` 時會**靜默變成 False** —— 那些「—（備援鏈跑完，沒有一段給出
+    # 紀錄）」的誠實說明會無聲消失，退回只剩一個「—」，而畫面看起來完全正常。
+    # 本頁這一格目前不傳 `reason=`（⇒ 行為與改前完全相同），這行是**防它退化**。
+    _ran = (_state in NO_VALUE_STATES)
     _facts: list[tuple[str, str]] = [
         ("近 5 年平均年現金股利",
          ("—（備援鏈跑完，沒有一段給出紀錄）" if _ran else "—")

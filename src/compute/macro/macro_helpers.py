@@ -877,16 +877,16 @@ def classify_long_term_regime(
 
     if score >= 1.0:
         regime, color, suggest = '🟢 成長期', TRAFFIC_GREEN, '80%+'
-        detail = '景氣擴張+通膨溫和+資金寬鬆 → 多頭主升段，可積極做多'
+        detail = '景氣擴張+通膨溫和+資金寬鬆 → 位階處於多頭主升段'
     elif score >= 0.0:
         regime, color, suggest = '🔵 復甦期', '#58a6ff', '60-80%'
-        detail = '景氣由谷底回升 → 加碼基本面好的標的，留意通膨變化'
+        detail = '景氣由谷底回升 → 基本面位階改善，留意通膨變化'
     elif score >= -1.0:
         regime, color, suggest = '🟡 過熱/震盪期', TRAFFIC_YELLOW, '40-60%'
-        detail = '景氣高檔震盪或通膨壓力 → 謹慎觀望，等待方向確認'
+        detail = '景氣高檔震盪或通膨壓力 → 位階高檔、方向未明'
     else:
         regime, color, suggest = '🔴 衰退期', TRAFFIC_RED, '<30%'
-        detail = '景氣下行+通膨壓力或政策緊縮 → 保守減倉，現金為王'
+        detail = '景氣下行+通膨壓力或政策緊縮 → 風險升高、位階偏低'
 
     return {
         'regime': regime,

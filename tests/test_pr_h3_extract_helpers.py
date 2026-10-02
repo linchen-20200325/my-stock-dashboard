@@ -37,7 +37,7 @@ class TestClassifyEtfQuickSigma:
         assert emoji == '🟢🟢🟢'
         assert '股災價' in label
         assert '⚡短線' in label
-        assert action == '大買 50%'
+        assert action == '-3σ 以下'
 
     def test_oversold_between_minus_2_and_3(self):
         # cur=75 → -2.5σ → 超跌價
@@ -45,21 +45,21 @@ class TestClassifyEtfQuickSigma:
         emoji, label, action = r
         assert emoji == '🟢🟢'
         assert '超跌價' in label
-        assert action == '買 30%'
+        assert action == '-2σ~-3σ'
 
     def test_cheap_between_minus_1_and_2(self):
         r = classify_etf_quick_sigma(85.0, 100.0, 10.0)
         emoji, label, action = r
         assert emoji == '🟢'
         assert '便宜價' in label
-        assert action == '小買 20%'
+        assert action == '-1σ~-2σ'
 
     def test_neutral_within_one_sigma(self):
         r = classify_etf_quick_sigma(100.0, 100.0, 10.0)
         emoji, label, action = r
         assert emoji == '⚪'
         assert '中性區' in label
-        assert action == '靜待訊號'
+        assert action == '±1σ 內'
 
     def test_high_between_plus_1_5_and_2(self):
         # cur=117 → +1.7σ → 偏高
@@ -67,14 +67,14 @@ class TestClassifyEtfQuickSigma:
         emoji, label, action = r
         assert emoji == '🟠'
         assert '偏高' in label
-        assert action == '不追高/減碼'
+        assert action == '+1.5σ~+2σ'
 
     def test_overbought_above_plus_2(self):
         r = classify_etf_quick_sigma(125.0, 100.0, 10.0)
         emoji, label, action = r
         assert emoji == '🔴'
         assert '準備停利' in label
-        assert action == '分批停利'
+        assert action == '+2σ 以上'
 
     def test_invalid_returns_none(self):
         assert classify_etf_quick_sigma(None, 100.0, 10.0) is None

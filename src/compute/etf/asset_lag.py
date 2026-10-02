@@ -82,7 +82,8 @@ def classify_lag_verdict(metrics, *, is_etf: bool = False,
         return {
             "燈號": f"🚨 連續{streak}季輸盤",
             "動作建議": ("⏳ 新經理人 <6 月，再給時間" if new_manager
-                       else "考慮換到大盤被動式 ETF（如 0050）"),
+                       else f"連續輸盤季數 {streak} ≥ 警戒門檻 "
+                            f"{LAG_ALERT_STREAK_QUARTERS} 季"),
         }
     if down > ETF_UP_DOWN_DAYS_THRESHOLD and up > ETF_UP_DOWN_DAYS_THRESHOLD:
         return {"燈號": "🔴 雙向弱勢", "動作建議": "近期表現雙向落後大盤；觀察 1-2 季"}

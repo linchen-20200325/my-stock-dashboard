@@ -25,7 +25,7 @@ def _row(**kw):
     base = {
         'ticker': '0050.TW', 'composite': 0.5, 'error': None,
         'liquidity_level': '🟢', 'dividend_health': '✅ 雙贏 +2.0pp',
-        'valuation_zone': '⚪ 中性持有', 'sigma_z': 0.0,
+        'valuation_zone': '⚪ 殖利率 5~7%', 'sigma_z': 0.0,
     }
     base.update(kw)
     return base
@@ -89,13 +89,13 @@ def test_none_composite_returns_watch_not_fabricated():
 
 # ── 估值/位階註解 ──
 def test_cheap_valuation_adds_add_timing_note():
-    r = recommend_etf_action(_row(composite=0.8, valuation_zone='🟢 強烈買進'))
-    assert any('加碼' in x for x in r['reasons'])
+    r = recommend_etf_action(_row(composite=0.8, valuation_zone='🟢 殖利率 ≥ 7%'))
+    assert any('估值位階偏低' in x for x in r['reasons'])
 
 
 def test_rich_sigma_adds_slowdown_note():
     r = recommend_etf_action(_row(composite=0.8, sigma_z=2.0))
-    assert any('暫緩加碼' in x for x in r['reasons'])
+    assert any('估值位階偏高' in x for x in r['reasons'])
 
 
 # ── 同類重疊(需真類別:用同一 peer group 的兩檔高股息)──
@@ -124,6 +124,6 @@ def test_single_etf_no_redundancy_note():
 
 
 def test_reason_text_joined_with_semicolon():
-    rows = [_row(ticker='0050.TW', composite=0.8, valuation_zone='🟢 強烈買進')]
+    rows = [_row(ticker='0050.TW', composite=0.8, valuation_zone='🟢 殖利率 ≥ 7%')]
     out = recommend_etf_actions(rows)
     assert ';' in out[0]['reason_text']

@@ -680,6 +680,16 @@ class TestSynthesizeDualVerdict:
       警報 × 慢中性 → 提高現金部位      （中）
       警報 × 慢悲觀 → 大幅提高現金部位  （最重：全面防守）
     另每條加一則反向斷言 `_PCT_RE`，釘住「L2 不得再輸出持股百分比」這條新規則。
+
+    v19.18x 動作下架（合規）
+    ------------------------
+    上面那三個「敘事強度詞」本身仍是**操作指令**，且會直接印給使用者。本輪
+    `level` / `action` 全面改為純風險位階觀測，三級強度改以觀測語氣區分：
+      警報 × 慢多頭 → 位階偏高、動能轉弱  （最輕）
+      警報 × 慢中性 → 風險升高            （中）
+      警報 × 慢悲觀 → 風險顯著升高        （最重）
+    原「此級不該升級成加現金 / 不該用全面防守語氣」兩則反向守衛**語意保留**，
+    只換成新文案的等價斷言（`"風險升高" not in` / `"顯著" not in`）。
     """
 
     SLOW_BULL = ("極度樂觀", 10.5, "#00c853", "🟢", "多頭市場強勁：可滿倉持有")
@@ -707,25 +717,28 @@ class TestSynthesizeDualVerdict:
         s = rr.synthesize_dual_verdict(*self.SLOW_BULL, "警戒")
         assert s["mode"] == "downgrade_1"
         assert "警戒觀察" in s["level"]
-        assert "暫緩單筆加碼" in s["action"]
+        assert "維持觀察" in s["action"]
         assert s["color"] == "#fbc02d"
 
     def test_radar_warning_with_neutral_slow_goes_neutral(self):
         s = rr.synthesize_dual_verdict(*self.SLOW_NEU, "警戒")
         assert s["mode"] == "downgrade_1"
         assert s["level"] == "中性觀察"
-        assert "定期定額減半" in s["action"]
+        # v19.18x：原敘事強度詞（仍是動作）→ 純觀測（與姊妹分支「維持觀察」同級）
+        assert "風險尚未升級" in s["action"]
+        assert "位階持平" in s["action"]
+        assert "風險升高" not in s["action"], "強度混淆：downgrade_1 不該用 downgrade_2 語氣"
         assert s["icon"] == "🟡"
 
     def test_radar_alert_with_bull_slow_diverges(self):
         s = rr.synthesize_dual_verdict(*self.SLOW_BULL, "警報")
         assert s["mode"] == "downgrade_2"
         assert "雙速分歧" in s["level"]
-        assert "降槓桿" in s["level"]
-        # v19.170：原「倉位降至 50-60%」→ 敘事詞（最輕的一級：只降槓桿）
-        assert "明顯降低倉位" in s["action"]
-        assert "暫緩定額" in s["action"]
-        assert "提高現金部位" not in s["action"], "強度混淆：此級不該升級成加現金"
+        assert "降槓桿" not in s["level"], "level 不得再含操作動詞（v19.18x 動作下架）"
+        # v19.18x：原敘事強度詞（仍是動作）→ 純觀測（最輕的一級）
+        assert "位階偏高" in s["action"]
+        assert "動能轉弱" in s["action"]
+        assert "風險升高" not in s["action"], "強度混淆：此級不該升級成中級語氣"
         assert not _PCT_RE.search(s["action"]), \
             "L2 不得再輸出持股百分比（唯一來源 = get_allocation()）"
         assert s["icon"] == "🟠"
@@ -734,20 +747,20 @@ class TestSynthesizeDualVerdict:
     def test_radar_alert_with_neutral_slow_goes_short(self):
         s = rr.synthesize_dual_verdict(*self.SLOW_NEU, "警報")
         assert s["mode"] == "downgrade_2"
-        assert "偏空" in s["level"]
-        # v19.170：原「現金 25-30%」→ 敘事詞（中間強度）
-        assert "提高現金部位" in s["action"]
-        assert "停止加碼" in s["action"]
-        assert "大幅提高現金" not in s["action"], "強度混淆：此級不該用全面防守語氣"
+        assert "雙線疲弱" in s["level"]
+        # v19.18x：原敘事強度詞（仍是動作）→ 純觀測（中間強度）
+        assert "風險升高" in s["action"]
+        assert "衛星位階偏高" in s["action"]
+        assert "顯著" not in s["action"], "強度混淆：此級不該用全面防守語氣"
         assert not _PCT_RE.search(s["action"]), \
             "L2 不得再輸出持股百分比（唯一來源 = get_allocation()）"
 
     def test_radar_alert_with_bear_slow_full_defense(self):
         s = rr.synthesize_dual_verdict(*self.SLOW_BEAR, "警報")
         assert s["mode"] == "downgrade_2"
-        assert s["level"] == "全面防守"
-        # v19.170：原「現金 35%+」→ 敘事詞（最強防守語氣）
-        assert "大幅提高現金部位" in s["action"]
+        assert s["level"] == "全面防守位階"
+        # v19.18x：原敘事強度詞（仍是動作）→ 純觀測（最重，「顯著」拉開強度）
+        assert "風險顯著升高" in s["action"]
         assert not _PCT_RE.search(s["action"]), \
             "L2 不得再輸出持股百分比（唯一來源 = get_allocation()）"
         assert s["color"] == "#b71c1c"
@@ -755,15 +768,15 @@ class TestSynthesizeDualVerdict:
     def test_radar_extreme_overrides_any_slow(self):
         s = rr.synthesize_dual_verdict(*self.SLOW_BULL, "極端警報")
         assert s["mode"] == "override_defense"
-        assert s["level"] == "立即減倉防守"
-        assert "暫不採信" in s["action"]
+        assert s["level"] == "防守位階"
+        assert "與短線背離" in s["action"]
         assert s["icon"] == "🔴"
         assert s["color"] == "#d32f2f"
 
     def test_radar_extreme_with_already_bear_still_overrides(self):
         s = rr.synthesize_dual_verdict(*self.SLOW_VERY_BEAR, "極端警報")
         assert s["mode"] == "override_defense"
-        assert s["level"] == "立即減倉防守"
+        assert s["level"] == "防守位階"
 
     def test_unknown_radar_level_falls_back_to_slow(self):
         s = rr.synthesize_dual_verdict(*self.SLOW_OK, "外星訊號")

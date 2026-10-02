@@ -294,12 +294,12 @@ def generate_ai_comment(data: dict) -> str:
         lines.append('📊 【財報訊號】' + '；'.join(fin_msg) + '。')
 
     if score >= 85 and '便宜' in val and '多頭' in trend:
-        lines.append('🚀 【強烈買入】評分≥85 + 357便宜價 + 多頭排列。'
-                     '建議突破60日箱頂時分批進場，回測紅K低點不破可加碼。')
+        lines.append('🚀 【三項條件同時成立】多因子評分 ≥85、357 估值落在便宜區、'
+                     '趨勢分類為多頭排列。')
     elif score >= 75 and '便宜' in val:
-        lines.append('✅ 【積極買入】評分≥75且位於357便宜區，可分批布局。')
+        lines.append('✅ 【兩項條件成立】多因子評分 ≥75、357 估值落在便宜區。')
     elif score >= 75:
-        lines.append('✅ 【評分優良】多因子評分≥75，技術面健康，可考慮建立底倉。')
+        lines.append('✅ 【一項條件成立】多因子評分 ≥75（357 估值未落在便宜區）。')
 
     if fb > 5 and tb > 0:
         lines.append(f'💰 【籌碼共振】外資+{fb:.1f}億 & 投信+{tb:.1f}億，主力共同買進，訊號強烈。')
@@ -330,13 +330,13 @@ def generate_ai_comment(data: dict) -> str:
                      '建議先減50%部位，剩餘守5MA停利。')
 
     if score < 60 and '空頭' in trend:
-        lines.append('🛑 【絕對停損警示】多因子評分<60 + 空頭排列，理由消失即出場。'
-                     '出清後觀望，等待評分重返60以上再考慮回補。')
+        lines.append('🛑 【兩項條件同時成立】多因子評分 <60、趨勢分類為空頭排列'
+                     '（評分回到 60 以上即不再符合本條件）。')
 
     if '便宜' in val:
-        lines.append('💎 【357估值】位於7%殖利率線以下（便宜區），策略1認定的必買送分題。')
+        lines.append('💎 【357估值】現價位於 7% 殖利率線以下，估值分類為便宜區。')
     elif '昂貴' in val or '超貴' in val:
-        lines.append('⚠️ 【357估值】位於3%殖利率線以上（昂貴區），不宜追高，等待回調。')
+        lines.append('⚠️ 【357估值】現價位於 3% 殖利率線以上，估值分類為昂貴區。')
 
     if not lines:
         lines.append('⚪ 目前無明顯買賣訊號，建議繼續觀察。')

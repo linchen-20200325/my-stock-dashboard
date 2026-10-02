@@ -221,7 +221,7 @@ def _render_global_risk_bucket(fred_api_key: str = "",
                 unsafe_allow_html=True,
             )
         st.caption('💡 雷達為「短線急殺領先指標」（1～5 日視角），與上方長/短期總經（季級）互補。'
-                   '4+ 紅燈 = 急殺進行中；2 紅燈 = 警報需降槓桿；紅+黃 ≥4 = 警戒觀察。')
+                   '4+ 紅燈 = 急殺進行中；2 紅燈 = 警報；紅+黃 ≥4 = 警戒觀察。')
 
     # ── v18.173 🤝 雙速合議（慢總經 × 短線雷達 → 單一行動建議）──────────
     if slow_verdict and isinstance(slow_verdict, dict):
@@ -247,8 +247,8 @@ def _render_global_risk_bucket(fred_api_key: str = "",
                 f'</div>',
                 unsafe_allow_html=True,
             )
-            st.caption('💡 規則：雷達極端警報 → 強制減倉（覆蓋慢總經）；雷達警報 + 慢樂觀 → 降槓桿（分歧）；'
-                       '雷達警戒 → 維持持倉但暫緩加碼；雷達平靜 → 採用慢總經結論。')
+            st.caption('💡 規則：雷達極端警報 → 防守位階（覆蓋慢總經）；雷達警報 + 慢樂觀 → 雙速分歧；'
+                       '雷達警戒 → 維持觀察；雷達平靜 → 採用慢總經結論。')
         except Exception as _e_syn:
             print(f'[risk_radar/dual_verdict] {type(_e_syn).__name__}: {_e_syn}')
 

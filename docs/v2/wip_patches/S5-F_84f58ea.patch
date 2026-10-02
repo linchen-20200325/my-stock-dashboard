@@ -1,0 +1,179 @@
+diff --git a/src/data/stock/yield_pe_fetcher.py b/src/data/stock/yield_pe_fetcher.py
+index b6ac03d..6f93f57 100644
+--- a/src/data/stock/yield_pe_fetcher.py
++++ b/src/data/stock/yield_pe_fetcher.py
+@@ -185,7 +185,7 @@ def fetch_tpex_yield_pe() -> pd.DataFrame:
+         return pd.DataFrame()
+ 
+ 
+-def fetch_pe_name_maps() -> tuple[dict, dict]:
++def fetch_pe_name_maps(*, failed_markets: list[str] | None = None) -> tuple[dict, dict]:
+     """上市(TWSE BWIBBU) + 上櫃(TPEX peratio) 合併 → (pe_map, name_map)。
+ 
+     選股網 pe_low（估值分）+ 顯示名稱的 **SSOT**：畫面 / 推播 / 前進式凍結 / MCP 四個
+@@ -204,13 +204,21 @@ def fetch_pe_name_maps() -> tuple[dict, dict]:
+     ⚠️ 兩個 fetcher 刻意在**呼叫時**才從本模組 globals 解析（下面的 tuple 是在函式體內
+     建的），測試才 patch 得到（見模組 docstring 的 patch 目標說明）。
+ 
++    Args:
++        failed_markets: 可選的**附加標記**（v2「🔍 找標的」選股結果卡用；不傳 = 既有行為
++            一字不變）。傳入一個 list → 本輪**一筆本益比都沒貢獻**的市場（抓取拋例外 /
++            回空 / 缺欄 / 全無有效值）會把市場名（`'上市 TWSE'` / `'上櫃 TPEX'`）附加進去。
++            fail-soft 照舊（回傳值不變），只是讓 caller 分得出「只少半邊」。
++
+     Returns:
+         (pe_map, name_map)：pe_map = {代碼: 本益比(float > 0)}；
+         name_map = {代碼: 名稱}（過濾空字串 / 'nan'，避免畫面顯示 "nan"）。
+     """
+     pe_map: dict = {}
+     name_map: dict = {}
++    _no_pe: list[str] = []     # 本輪一筆本益比都沒貢獻的市場（只供 failed_markets 用）
+     for _mkt, _fetch in (('上市 TWSE', fetch_twse_yield_pe), ('上櫃 TPEX', fetch_tpex_yield_pe)):
++        _no_pe.append(_mkt)    # 下面真的放進一筆本益比才移除
+         try:
+             _df = _fetch()
+         except Exception as _e:  # noqa: BLE001 — 任一市場抓不到 → 只少半邊涵蓋,不炸
+@@ -227,12 +235,16 @@ def fetch_pe_name_maps() -> tuple[dict, dict]:
+                     continue
+                 if _pe != _pe or _pe <= 0:      # NaN / ≤0 → 無本益比,不放 key
+                     continue
++                if _c not in pe_map and _mkt in _no_pe:
++                    _no_pe.remove(_mkt)
+                 pe_map.setdefault(_c, _pe)
+         if '名稱' in _df.columns:
+             for _c, _n in zip(_codes, _df['名稱'].astype(str)):
+                 _n = _n.strip()
+                 if _n and _n.lower() != 'nan':
+                     name_map.setdefault(_c, _n)
++    if failed_markets is not None:
++        failed_markets.extend(_no_pe)
+     return pe_map, name_map
+ 
+ 
+diff --git a/src/services/fundamental_screener_service.py b/src/services/fundamental_screener_service.py
+index 644eda7..e5aec87 100644
+--- a/src/services/fundamental_screener_service.py
++++ b/src/services/fundamental_screener_service.py
+@@ -75,10 +75,22 @@ def get_fundamental_prescreen(*, refresh: bool = False) -> tuple[pd.DataFrame, d
+     return _prescreen_cached()
+ 
+ 
+-def get_fundamental_survivors(*, refresh: bool = False) -> tuple[pd.DataFrame, dict]:
+-    """四項全過的存活池子集(依 eps 由大到小)+ meta。"""
++def get_fundamental_survivors(*, refresh: bool = False,
++                              strict: bool = False) -> tuple[pd.DataFrame, dict]:
++    """四項全過的存活池子集(依 eps 由大到小)+ meta。
++
++    strict(v2「🔍 找標的」選股結果卡用;預設 False = 既有行為一字不變):
++      True → 存活池為空一律 `raise RuntimeError`,訊息用排名器自己的 note 原文
++      (SSOT,本函式不另寫一句;做法同 `dividend_station_service._ranked_picks_strict`)。
++      否則 caller 拿到空表,會把「去年同季快照缺 → 三率三升全判不過 → 0 檔存活」
++      畫成「選股完成、0 檔」(§1 靜默失敗)。空池時排名器不做任何掃描即返回。
++    """
+     df, meta = get_fundamental_prescreen(refresh=refresh)
+-    return survivors_only(df), meta
++    surv = survivors_only(df)
++    if strict and (surv is None or surv.empty or "stock_id" not in surv.columns):
++        _, _note = composite_rank_candidates(surv, factors=[])
++        raise RuntimeError(_note)
++    return surv, meta
+ 
+ 
+ def get_survivor_ids(*, refresh: bool = False) -> list[str]:
+@@ -107,11 +119,13 @@ def get_cross_quarter_trends(*, refresh: bool = False) -> pd.DataFrame:
+     return _cross_quarter_trends_cached()
+ 
+ 
+-def build_trend_map(*, refresh: bool = False) -> dict[str, int]:
++def build_trend_map(*, refresh: bool = False, strict: bool = False) -> dict[str, int]:
+     """{stock_id: favorable_count} 供選股網 composite「跨季轉強」因子用。
+ 
+     favorable_count ∈ [0,4] = 毛利/營益率升·負債降·營收增 中「方向為佳」的個數。
+     快照缺 / 計算失敗 → 回空 dict(不炸選股;§1 缺料下游不計入該因子)。
++    strict=True(v2「🔍 找標的」用;預設 False = 既有行為一字不變)→ 快照缺 / 計算失敗
++    照樣 log,但**往上拋**、不回空 dict —— caller 才分得出「算失敗」與「算了但沒有證據」。
+ 
+     §1 B6-b(2026-08):**favorable_of == 0 的檔不放 key**。favorable_of 是「算得出來的
+     因子數」,為 0 代表四個趨勢因子全 NaN(季數不足 / 營收·資產為 0 → 比率算不出),
+@@ -123,6 +137,8 @@ def build_trend_map(*, refresh: bool = False) -> dict[str, int]:
+         _df = get_cross_quarter_trends(refresh=refresh)
+     except Exception as _e:  # noqa: BLE001 — 快照缺不炸選股
+         print(f"[fund_screener_service] 跨季趨勢不可用:{type(_e).__name__}: {_e}")
++        if strict:
++            raise
+         return {}
+     if _df is None or _df.empty:
+         return {}
+diff --git a/src/services/valuation_service.py b/src/services/valuation_service.py
+index 53e1b3a..2fc63e1 100644
+--- a/src/services/valuation_service.py
++++ b/src/services/valuation_service.py
+@@ -76,9 +76,13 @@ from __future__ import annotations
+ from dataclasses import dataclass
+ 
+ 
+-def get_pe_name_maps() -> tuple[dict, dict]:
++def get_pe_name_maps(*, failed_markets: list[str] | None = None) -> tuple[dict, dict]:
+     """全市場（上市 ＋ 上櫃）「代碼 → 本益比 / 名稱」對照表。
+ 
++    Args:
++        failed_markets: 原樣轉給 L1 的附加標記（語意見 L1 `fetch_pe_name_maps` 的
++            docstring）。**不傳 = 呼叫方式與既有一字不變**（L1 收到的是無引數呼叫）。
++
+     Returns:
+         `(pe_map, name_map)` —— 與 L1 SSOT `fetch_pe_name_maps()` **逐字同形**：
+         `pe_map = {代碼: 本益比(float > 0)}`（本益比 ≤ 0 的不放 key ——
+@@ -96,7 +100,9 @@ def get_pe_name_maps() -> tuple[dict, dict]:
+     """
+     from src.data.stock.yield_pe_fetcher import fetch_pe_name_maps
+ 
+-    return fetch_pe_name_maps()
++    if failed_markets is None:
++        return fetch_pe_name_maps()
++    return fetch_pe_name_maps(failed_markets=failed_markets)
+ 
+ 
+ @dataclass(frozen=True)
+diff --git a/src/ui/views/page_find.py b/src/ui/views/page_find.py
+index cfa4158..8f956cf 100644
+--- a/src/ui/views/page_find.py
++++ b/src/ui/views/page_find.py
+@@ -297,6 +297,7 @@ from shared.fundamental_prescreen_thresholds import (
+ from shared.station_specs import (
+     MISS_CONTRACT_DRIFT,
+     MISS_FETCH_FAILED,
++    MISS_NO_INPUT,
+     MISS_TEXT,
+ )
+ # L0 SSOT：熱力圖的區間標籤與「台股是單一代表股不是類股平均」那段揭露。
+@@ -576,6 +577,18 @@ PE_EMPTY_WHY: str = (
+     "L3 會讓缺料的因子不計入平均，**不會**拿 0 分頂替"
+ )
+ 
++#: 需要**額外取數**的四個因子 → 它在卡片 facts「週邊取數失敗」那一列的標籤。
++#: 2026-09-26 批次 5 自 `load_screen_result()` 函式體內**上提**（字面一字未改），
++#: 讓那幾列 facts 與「選股中止」紅卡的主詞讀同一份（⛔ 不手抄第二份）。
++#: 順序＝本頁取數順序，也是紅卡主詞的排列順序（短句表依第一個主詞摘錄）。
++#: `eps_high` 不在表內：它讀存活池自己的 `eps` 欄，沒有另一輪取數會失敗。
++FACTOR_INPUT_LABELS: dict[str, str] = {
++    PE_FACTOR_KEY: "估值（本益比）",
++    "shortage": "缺貨掃描",
++    "rs_leader": "抗跌 RS 掃描",
++    "trend": "跨季轉強",
++}
++
+ #: 表單下方常駐的接線揭露（不隨狀態消失）。
+ WIRING_DISCLOSURE: str = (
+     "**取數接線揭露**：估值（本益比）/ 缺貨動能 / 抗跌 RS / 跨季轉強 / EPS "
+@@ -664,7 +677,11 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = {
+         ("選股中止",
+          # 兩種中止（批次 1，2026-09-26）：本頁存活池取數拋例外 → 摘出處原文；
+          # 否則 → 既有那一句（L3 選股編排拋例外），一字未改。見 `_v2_pick_short()`。
++         # 批次 5（2026-09-26）第三種：勾選因子的輸入這一輪沒拿到 → 摘「第一個主詞 … L0 原文前半」
++         # （主詞依 `FACTOR_INPUT_LABELS` 順序排，故每個主詞一個候選；原文逐字在詳細）。
+          (v2_plain(SRC_SURVIVORS).split("（", 1)[0] + V2_EXCERPT_GAP + "拋出例外",
++          *(_label + V2_EXCERPT_GAP + FACTOR_MISS_WHY.split("，", 1)[0]
++            for _label in FACTOR_INPUT_LABELS.values()),
+           "L3 選股編排拋出例外（原文在詳細）"),
+          "FinMind 額度每日 00:00 重置；其餘看資料體檢"),
+     ("find.screen_result", SCREEN_DRIFT_NOW):

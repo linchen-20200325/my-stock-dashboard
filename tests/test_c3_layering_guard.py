@@ -74,6 +74,16 @@ _PATH_LAYERS: tuple[tuple[str, int], ...] = (
     # ⚠️ 只加這一條具名前綴,不要補 ("src/ui/", L5) 兜底 —— 那會有把
     #    src/ui/render/(L4)誤標成 L5 的風險,使 R4/R5 對 render/ 失效。
     ("src/ui/views/", L5),
+    # 戰情室 v2 UI 套件(2026-09-21 新增登記;分支 `ui-v2`;決策者:AI 總管)。
+    # 為什麼是 L5:本套件是**畫面層** —— 現階段是 token / 元件規格 / 頁面版面契約,
+    # 下一步會放進第一個 import streamlit 的渲染檔,職責等同 tabs/etf/pages/views。
+    # ⚠️ 底線會擋住 startswith,上面所有 src/ui/* 前綴都咬不到它
+    #    (實測:"src/ui_v2/render.py".startswith("src/ui/") is False)。
+    #    補這條之前,整個 src/ui_v2/ 是一塊 _layer_of_file() 回 None 的空白區,
+    #    而五條硬規則全部以「層判得出來」為前提 ⇒ 五條同時靜默失效(假綠燈)。
+    #    這正是 CLAUDE.md §8.2.A 末段講的「未經登錄的軟例外 / 漏登 = 沒人發現」。
+    # ⚠️ 同上:只加這一條具名前綴,不要補 ("src/ui/", L5) 兜底。
+    ("src/ui_v2/", L5),
 )
 
 # 被 import 的模組路徑 → 層(most-specific-first;順序有意義)
@@ -88,6 +98,13 @@ _MODULE_LAYERS: tuple[tuple[str, int], ...] = (
     ("src.ui.tabs", L5),
     ("src.ui.etf", L5),
     ("src.ui.pages", L5),
+    # 同上(2026-09-21;決策者:AI 總管):src.ui_v2.* 與 tabs/etf/pages 同為 L5。
+    # ⚠️ 必須排在下面 ("src.ui", L5) 兜底**之前**。現行比對式是
+    #    `module == prefix or module.startswith(prefix + ".")`,"src.ui_v2" 咬不到
+    #    "src.ui." ⇒ 就今天的比對式而言順序其實無差別(實測補之前回 None,
+    #    不是被兜底誤判成 L5);但本表註明 most-specific-first,順序寫對才不會
+    #    在日後有人把比對式改成裸 startswith 時,讓 ui_v2 被兜底悄悄吃掉。
+    ("src.ui_v2", L5),
     ("src.ui", L5),          # 兜底:未知的 src.ui.* 視為 L5
     ("app", L6),
 )

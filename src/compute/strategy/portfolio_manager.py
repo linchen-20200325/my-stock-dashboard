@@ -98,9 +98,8 @@ class CoreSatelliteManager:
         if rebalance_ok:
             action  = 'SELL_EXCESS'
             message = (
-                f'🚨 再平衡警報！衛星倉位佔比 {actual_ratio*100:.1f}%，'
-                f'超標目標 {target_ratio*100:.0f}% 達 {excess_ratio*100:.1f}%。'
-                f'建議減持約 NT${excess_value:,.0f}，轉入核心 ETF。'
+                f'⚖️ 衛星佔比 {actual_ratio*100:.1f}%，超出目標 {target_ratio*100:.0f}% 達 {excess_ratio*100:.1f}pp'
+                f'（再平衡門檻 {_REBALANCE_THRESHOLD*100:.0f}pp，對應金額 NT${excess_value:,.0f}）'
             )
         elif actual_ratio > target_ratio:
             action  = 'MONITOR'
@@ -164,7 +163,7 @@ class CoreSatelliteManager:
             message = f'⚠️ 衛星額度不足（剩餘 NT${available:,.0f}），無法建倉'
         else:
             message = (
-                f'📊 建議買進 {shares} 股（{lots} 張），成本約 NT${actual_cost:,.0f}，'
+                f'📊 以 {weight:.0%} 權重試算：{shares} 股（{lots} 張），成本約 NT${actual_cost:,.0f}，'
                 f'衛星資金剩餘 NT${remaining:,.0f}'
             )
 

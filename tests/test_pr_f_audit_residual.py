@@ -46,28 +46,38 @@ class TestU8_ClassifyYieldZone:
         from shared.thresholds import classify_yield_zone
         assert callable(classify_yield_zone)
 
+    # ⚠️ 下列四個測試刻意**不釘 label 文案**(釘了就是下次改文案再紅一輪的原因),
+    # 改釘兩件真正是契約的東西:
+    #   (a) 開頭 emoji —— src/compute/etf/etf_recommendation.py 用 `'🟢' in val`
+    #       / `'🔴' in val` 子字串比對判 _cheap / _rich,換 emoji 會靜默失效;
+    #   (b) 門檻數字由 shared.thresholds 的 YIELD_* 常數插值(§3.3 禁 inline magic)。
+
     def test_strong_buy_at_7pct(self):
-        from shared.thresholds import classify_yield_zone
+        from shared.thresholds import YIELD_HIGH, classify_yield_zone
         label, code = classify_yield_zone(7.0)
-        assert '強烈買進' in label
+        assert label.startswith('🟢')
+        assert f'{YIELD_HIGH:g}' in label
         assert code == 'strong_buy'
 
     def test_sell_below_3pct(self):
-        from shared.thresholds import classify_yield_zone
+        from shared.thresholds import YIELD_LOW, classify_yield_zone
         label, code = classify_yield_zone(2.5)
-        assert '獲利了結' in label
+        assert label.startswith('🔴')
+        assert f'{YIELD_LOW:g}' in label
         assert code == 'sell'
 
     def test_reduce_3_to_5(self):
-        from shared.thresholds import classify_yield_zone
+        from shared.thresholds import YIELD_LOW, YIELD_MID, classify_yield_zone
         label, code = classify_yield_zone(4.0)
-        assert '適度減碼' in label
+        assert label.startswith('🟡')
+        assert f'{YIELD_LOW:g}' in label and f'{YIELD_MID:g}' in label
         assert code == 'reduce'
 
     def test_neutral_5_to_7(self):
-        from shared.thresholds import classify_yield_zone
+        from shared.thresholds import YIELD_HIGH, YIELD_MID, classify_yield_zone
         label, code = classify_yield_zone(6.0)
-        assert '中性持有' in label
+        assert label.startswith('⚪')
+        assert f'{YIELD_MID:g}' in label and f'{YIELD_HIGH:g}' in label
         assert code == 'neutral'
 
     def test_none_input(self):

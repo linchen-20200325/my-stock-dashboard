@@ -33,10 +33,28 @@
 L0 `shared/ui_state.py` 七態，是線框四態 ＋ 正常態的超集：
 
     灰態（無資料）→ `UI_EMPTY`（已請求但沒回值）／`UI_IDLE`（**還沒有人叫過**）
+                     ⤷ 2026-09-23 起 `UI_EMPTY` 再分出 `UI_MISSING_RETRYABLE`（#7）
+                       與 `UI_NOT_APPLICABLE`（#8），見本節末的 D-3(a) 附註
     未接線        → `UI_UNWIRED`   （`DangerSpec.wired=False`）
     已失準        → `UI_DEGRADED`  （`DangerSpec.discriminative=False`）
     紅態（真故障）→ `UI_FAILED`    （呼叫拋例外 / 來源回錯）
     正常          → `UI_LIVE`
+
+⚠️ **2026-09-23（客戶裁示 D-3(a)）：`UI_EMPTY` 分出三種可分辨的缺值。**
+本頁**判態的寫法一行未改** —— 分辨是 L0 `classify_ui_state()` 依既有的
+`reason=` 自動做掉的（本頁本來就有在傳），畫面因此自動多出一層資訊：
+
+    `MISS_NO_INPUT`       → `UI_MISSING_RETRYABLE`（#7 缺漏）    **再按一次有用**
+    `MISS_NOT_APPLICABLE` → `UI_NOT_APPLICABLE`（#8 結構上不適用）**按幾次都一樣**
+    其餘／沒給原因        → `UI_EMPTY`（無資料）                 **分不出是哪一種**
+
+⛔ **判不出來時不准挑一個看起來合理的**：`MISS_NOT_ENOUGH`（等時間累積）與
+`MISS_NO_VARIATION`（等它開始動）**刻意留在 `UI_EMPTY`** —— 它們重試無用，但也
+**不是**「結構上不適用」，硬塞進 #8 等於對使用者說一句永久性的假話
+（`CLAUDE.md §-2` 記載過同型事故：新上市標的收到「可以重跑一次」的錯誤指引）。
+⛔ **本頁不得出現缺值家族的任何字面 glyph** —— 符號一律由 `state_meta()` 從 L0
+供給一次。守衛 `tests/test_ui_empty_split.py` **整檔掃描、連註解與 docstring 都算**，
+所以本段只寫得出常數名、寫不出符號本身；那是刻意的。
 
 ⚠️ **`idle` 與 `empty` 的分家不准合併** —— 那正是 `CLAUDE.md §1.A` 第 4 點
 「未點擊載入＝灰色說明；系統真出錯＝紅色警示」。
@@ -186,6 +204,14 @@ L3 `services.macro_refresh_service.refresh_macro_now()` → 報告落
 （清單 SSOT：`macro_refresh_service.UNTOUCHED_BLOCKS`），
 不留白讓人以為整頁都是今天的（§1）。
 
+═══ v2 卡面樣板（2026-09-23，客戶要的「一張給客戶看的樣板」）════════════
+葉1 ① 那一排**三張卡裡只有第一張**（`verdict.exposure`）改走 v2 卡面；
+另外兩張（`verdict.danger` / `verdict.regime`）**一行都沒動**，刻意留著當對照組。
+CSS 與 HTML 一律 import `src/ui_v2/markup.py`（既有 repo 內模組、純字串、零 streamlit），
+**本檔⛔ 不抄一份 CSS** —— 抄 ~30 條規則進 L5 就是第二個真相源（§2.1），
+而且改了規格之後畫面**看起來仍然正常**、只是與規格對不上。
+細節（徽章對映怎麼對出來的、灰字那一行怎麼壓、錯誤怎麼隔離）見下方「v2 卡面」區塊。
+
 ═══ 分層（CLAUDE.md §8.2）═════════════════════════════════════════════
 L5。取數走 L3（`section_inputs` / `allocation_service` /
 **`macro_refresh_service`**），計算走 L2（`macro_helpers` / `daily_key_alerts`），
@@ -203,14 +229,26 @@ L3 `macro_refresh_service` 當然會去打 L1 fetcher —— 那正是分層要�
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from html import escape as html_escape
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 import streamlit as st
 
 from shared import ia_nav
+# ⚠️ 這兩個**模組物件**只為了「**用常數名反解常數值**」（`getattr`）——
+#    見 `_v2_badge_to_l0_state()`：`src/ui_v2/components.py::BADGES` 存的是
+#    **常數名字串**（`"UI_LIVE"` / `"MISS_NO_INPUT"`），不是值。用 `getattr` 反解 ＝
+#    對映**由 SSOT 推出來**；手抄一張「名字 → 值」的表才是第二把尺（§2.1）。
+from shared import station_specs as _station_specs
+from shared import ui_state as _ui_state
 # L0 SSOT：regime → 中文。`tab_macro_v2.parallel_verdict()` 讀的也是這一份，
 # 本檔直接讀源頭**不是**第二把尺（見檔頭陷阱 3 的 2026-09-07 修註）。
 from shared.allocation_decision import REGIME_LABEL
+# 燈卡「變化方向」列（2026-09-24）：哪幾盞燈有這一列 ＋ 列標籤。純常數 L0。
+from shared.lamp_direction_thresholds import (
+    LAMP_DIRECTION_FACT_KEY,
+    LAMP_DIRECTION_KEYS,
+)
 from shared.macro_buckets import (
     BUCKET_DANGER_SPECS,
     BUCKET_META,
@@ -234,9 +272,15 @@ from shared.station_specs import (
 )
 from shared.ui_state import (
     UI_DEGRADED,
+    UI_EMPTY,
     UI_FAILED,
     UI_IDLE,
     UI_LIVE,
+    UI_LOADING,
+    UI_MISSING_RETRYABLE,
+    UI_NOT_APPLICABLE,
+    UI_PARTIAL,
+    UI_STATES,
     UI_UNWIRED,
     classify_ui_state,
 )
@@ -247,12 +291,30 @@ from src.ui.tabs.tab_today import (
     #    `EXIT_OUT_OF_REACH`（**接上了，但這一格不在射程內**，那才是實話）。
     #    ⛔ `tab_today.py` 本身一個字都沒動（檔案邊界）：那句話在**它自己那一頁**
     #    仍然為真，`tests/test_p01_today_skeleton.py` 照舊守著它。
+    #
+    # 📌 **2026-09-24 事實更正 —— 有意識的更正，⛔ 不是漏刪；上面整段一字未改。**
+    #    上面那段講的是「**⛔ 不拿它當 `where=` 用**」，那**仍然完全有效** ——
+    #    本檔所有自己寫的 `where=` 照舊只走 `EXIT_*`。
+    #    **變的是它從頭到尾都還在畫面上這個事實**：位階卡 `degraded` 態刻意
+    #    **整份沿用** `build_status_bar_card().note`（§2.1 SSOT：⛔ 不另寫一份文案，
+    #    見下方該分支的註 ＋ `tests/test_p01_today_view.py` 逐欄釘死兩邊相同），
+    #    ⇒ **那一態的 `where` 本來就是對面這個常數**，⛔ 不是本檔的 `EXIT_*`。
+    #    🔴 **為什麼現在非 import 不可**：`_v2_exit_phrase()` 以 `is` 比**物件身分**
+    #    查表，查不到就 `raise` ⇒ 不登記的話，`degraded` 的位階卡會在 v2 卡面
+    #    **當場炸成紅卡**（本輪實跑抓到，⛔ 不是推測）。**import 它是為了「認得它」，
+    #    ⛔ 不是為了「用它」** —— 兩件事不一樣。
+    CONTRACT_NO_EXIT_WHERE,
     LEAF_CONCLUSION,
     LEAF_DETAIL,
     MODE_FORCE,
     MODE_LABELS,
     MODE_WARM,
     NO_EXIT_MARKER,
+    # 🔴 2026-09-24 整頁卡化新增：未接線態的指路**常數**（`_staged_card()` 用的那一份）。
+    #    import 它的理由與 `CONTRACT_NO_EXIT_WHERE` 同構 —— 是為了讓
+    #    `_v2_exit_phrase()` 的 `is` 查表**認得它**，⛔ 不是為了「用它」寫新文案。
+    #    本檔所有自己寫的 `where=` 照舊只走本檔的 `EXIT_*`。
+    STAGED_ROLLOUT_WHERE,
     Card,
     Note,
     applied_update_mode,
@@ -268,11 +330,37 @@ from src.ui.views._ui_kit import (
     assert_signal_text_clean,
     grid,
     render_card_isolated,
-    render_cards,
+    # ~~`render_cards`~~ 🔴 **2026-09-24 整頁卡化後 0 caller，同批移除**
+    #    （有意識的清理，⛔ 不是漏刪；`CLAUDE.md §-1.5.F 判定 3(4)`：
+    #     因本次改動才變成孤兒的東西，是本次任務的**收尾義務**）。
+    #    本頁原本有三處用它畫「無燈號、無 facts」的簡單卡（狀態列 / 三欄摘要 / ⑤⑥），
+    #    現在那三處改走 `_render_tiles(_tiles_of_cards(...))` 的 v2 卡面。
+    #    ⚠️ **`_ui_kit.render_cards()` 本身一個字都沒動** —— 頁2~頁5 仍在用它。
     render_note,
     section_header,
     single_submit_form,
 )
+# ── v2 卡面（樣板卡，見下方「v2 卡面」區塊）───────────────────────────
+# ⚠️ **`v2_page` ＝ `src/ui_v2/page_today.py`（v2 的版面與狀態契約），⛔ 不是本檔。**
+#    兩個檔同名，讀到 `v2_page.` 開頭的一律指對面那一份。
+# ⚠️ **為什麼敢放在 module level**（本檔檔頭那條 ⛔「module-level import 失敗 ＝ 整頁空白」
+#    仍然完全有效，這裡是逐條對照後的判斷，不是忽略它）：
+#    `src/ui_v2/{tokens,components,page_today,markup}.py` 實測**只 import 標準函式庫**
+#    （`types` / `typing` / `html`）＋ 彼此，**零第三方**（⛔ 無 streamlit / pandas / plotly）
+#    ⇒ 它們的 import 失敗風險與本檔已經接受的 `shared.*` **同一級**，
+#    ⛔ 不是 FE-7 消掉的那種「不相干模組連坐」。
+#    代價換到的是：下面兩支 `_assert_*` 能在 **import 時**就驗完對映
+#    （沿用本檔既有慣例 `_assert_applied_key_matches_reader` /
+#     `_assert_every_update_mode_is_mapped`：契約由模組自己在 import 時攜帶並驗證）。
+#    ⛔ `src/ui_v2/render.py` **不得**被 import —— 那支才是會拉 streamlit 的渲染層，
+#    而本檔要的只有「產字串」的純層（`markup`）。分層：`src.ui_v2` 與本檔同為 **L5**
+#    （`tests/test_c3_layering_guard.py` 的 `_MODULE_LAYERS` 明文登記），非跨層上行。
+from src.ui_v2 import components as v2_components
+from src.ui_v2 import markup as v2_markup
+from src.ui_v2 import page_today as v2_page
+
+if TYPE_CHECKING:  # 只為型別標註；執行期在 `_load_lamp_directions()` 內 lazy import
+    from src.compute.macro.lamp_direction import LampDirection
 
 # ══════════════════════════════════════════════════════════════════
 # session key
@@ -468,6 +556,21 @@ EXIT_ALERTS_PARTIAL: str = (
     "**門檻層掃描本頁摸不到**（它掛在舊「🌍 總經」分頁的中期桶裡）。"
     "也就是說按完之後這張卡最多是「已列出急變層、門檻層未評估」，**不會變綠**。"
     f"要看門檻層到底怎麼了，去 {ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
+
+#: (d) **已失準**（`discriminative=False`）那一格的指路 —— 不是「沒資料」，是「別照門檻讀」。
+#:
+#: 🔴 **2026-09-24 從 `build_indicator_tile()` 的 UI_DEGRADED 分支原地上提，字面一字未改。**
+#:    **上提的理由（⛔ 不是為了整齊）**：`_v2_exit_phrase()` 以 `is` 比**物件身分**查表，
+#:    而寫在函式體裡的那一段含 f-string 插值（`ia_nav.where_to_find(...)`）
+#:    ⇒ **每呼叫一次就是一個新物件**，`is` 永遠對不上 ⇒ 那張卡會被畫成**紅卡**。
+#:    整頁卡化之前這條路徑不走 v2 卡面，所以不會爆；現在 16 盞燈全走 v2 了。
+#:    ⚠️ **這一態在 production 真的走得到**：`margin`（融資餘額）的
+#:    `DangerSpec.discriminative` 實測為 `False`（量測日 2026-09-24）——
+#:    ⛔ 不是為了「以防萬一」而登記的預防性條目。
+EXIT_DEGRADED_READ_DIRECTION: str = (
+    "這一態不用你做什麼 —— 別看它有沒有過線，"
+    "改看它相對自身近年區間的變化方向；"
+    f"門檻本身要不要改屬另案，見 {ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
 
 #: 16 盞燈裡**本頁按鈕摸不到**的那幾盞（其餘 14 盞都在射程內）。
 #:
@@ -938,7 +1041,8 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
                          requested: bool, error: str,
                          band_label: Any = None,
                          thr_text: Any = None,
-                         l4_error: str = "") -> Tile:
+                         l4_error: str = "",
+                         direction: LampDirection | None = None) -> Tile:
     """一盞燈 → 一張卡。**燈號與門檻全部走 L0 / L4 SSOT，本檔不判燈。**
 
     Args:
@@ -948,6 +1052,12 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
         band_label: L4 `macro_v2_cards.band_meta` 或 None（載入失敗）。
         thr_text: L4 `macro_v2_cards.threshold_text` 或 None（載入失敗）。
         l4_error: L4 載入失敗時的 `repr(e)`。
+        direction: L2 `lamp_direction.LampDirection` 或 None。None → **不出**
+            「變化方向」列（與加這一列之前逐字相同）。只接受
+            `LAMP_DIRECTION_KEYS` 內的燈，其餘 → `ValueError`。
+            ⚠️ 它**只加一列 fact**，不碰 `_band` / `_state` / 燈號頻道。
+            位置：live → 第一列（判決行正下方）；degraded → 緊接「現值」；
+            其餘狀態（尚未載入 / 失敗 / 未接線…）→ **不出這一列**。
 
     ⚠️ **`classify_danger()` 對沒有門檻的 spec 會 TypeError**（L0 刻意的
     fail loud）。所以一律**先問 `has_thresholds(spec)`** —— 不 guard 的話
@@ -984,7 +1094,20 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
 
     _shown = fmt_value(_value, _spec) if _value is not None else ""
 
+    # ── 「變化方向」列（2026-09-24）：只加一列 fact，⛔ 不碰 `_band` / `_state` ──
+    _dir_fact: tuple[str, str] | None = None
+    if direction is not None:
+        if key not in LAMP_DIRECTION_KEYS:
+            raise ValueError(f"{key!r} 不在 LAMP_DIRECTION_KEYS，不該帶「變化方向」")
+        from src.compute.macro.lamp_direction import format_direction_text
+        # 只有 live / degraded（有值）才出這一列。尚未載入 / 失敗 / 未接線等灰紅態
+        # 一律不出（v3 §02：「未載入」必須看起來與「有資料」截然不同）。
+        if _state in (UI_LIVE, UI_DEGRADED):
+            _dir_fact = (LAMP_DIRECTION_FACT_KEY, format_direction_text(direction))
+
     if _state == UI_LIVE:
+        if _dir_fact is not None:
+            _facts.insert(0, _dir_fact)        # 判決行正下方的第一列
         return Tile(Card(key=f"detail.{key}", label=_spec.label,
                          state=_state, value=_shown),
                     signal_text=_signal_text, signal_color=_signal_color,
@@ -994,15 +1117,18 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
     # 所以**已失準**那一態的現值改掛在 facts（它是有值的，不能藏起來）。
     if _state == UI_DEGRADED:
         _facts.insert(0, ("現值", _shown or "—"))
+        if _dir_fact is not None:
+            _facts.insert(1, _dir_fact)        # 緊接「現值」
         _note = Note(
             now=f"{_spec.label}　**有值，但門檻已失去判別力**",
             # §1 + 規格：理由直接讀 SSOT，不自己寫一份。
             why=(_spec.degraded_reason
                  or "SSOT 標了 `discriminative=False` 卻沒填 `degraded_reason`"
                     " —— 這是程式要修的訊號"),
-            where=("這一態不用你做什麼 —— 別看它有沒有過線，"
-                   "改看它相對自身近年區間的變化方向；"
-                   f"門檻本身要不要改屬另案，見 {ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}"),
+            # 🔴 2026-09-24 改引 `EXIT_DEGRADED_READ_DIRECTION`（**字面一字未改**）——
+            #    上提的理由見該常數：寫在這裡的話每次呼叫都是新物件，
+            #    `_v2_exit_phrase()` 的 `is` 查表永遠對不上 ⇒ 這張卡會被畫成紅卡。
+            where=EXIT_DEGRADED_READ_DIRECTION,
         )
     elif _state == UI_UNWIRED:
         _note = Note(
@@ -1056,13 +1182,20 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
 
 def build_indicator_tiles(readout: MacroReadout, *,
                           band_label: Any = None, thr_text: Any = None,
-                          l4_error: str = "") -> dict[str, list[Tile]]:
+                          l4_error: str = "",
+                          directions: Mapping[str, LampDirection] | None = None,
+                          ) -> dict[str, list[Tile]]:
     """16 盞燈 → 依 `BUCKET_ORDER` 分桶的卡片。**分母恆為 16。**
 
     迭代來源是 L0 `BUCKET_DANGER_SPECS` 而**不是**側車的 key ——
     側車在冷啟動 / 取數失敗時是空的，照它迭代會讓整個葉2 消失，
     而「什麼都不畫」是最糟的一種說謊（線框：未評估 ≠ 沒事）。
+
+    `directions`：`{key: LampDirection}`（2026-09-24「變化方向」列）。
+    **只取 `LAMP_DIRECTION_KEYS` 內的 key**，其餘 key 即使出現在 mapping 裡也不傳
+    ⇒ 其他 12 盞燈的卡與不傳 `directions` 時逐字相同。
     """
+    _dirs = directions or {}
     _out: dict[str, list[Tile]] = {_b: [] for _b in BUCKET_ORDER}
     for _spec in BUCKET_DANGER_SPECS:
         _rec = readout.readiness.get(_spec.key) or {}
@@ -1071,7 +1204,10 @@ def build_indicator_tiles(readout: MacroReadout, *,
                                  requested=readout.requested,
                                  error=readout.error,
                                  band_label=band_label, thr_text=thr_text,
-                                 l4_error=l4_error))
+                                 l4_error=l4_error,
+                                 direction=(_dirs.get(_spec.key)
+                                            if _spec.key in LAMP_DIRECTION_KEYS
+                                            else None)))
     return _out
 
 
@@ -1291,6 +1427,14 @@ REGIME_SCOPE_NOTE: str = (
     "**兩邊不一致是預期的；本頁以這張卡為準。**"
 )
 
+#: 上面那段揭露掛在 `facts` 時用的**標籤**。⛔ 不在各處各寫一份字面。
+#:
+#: 🔴 **為什麼非得是一個常數**：`V2_HOVER_ONLY_FACTS`（見下方 v2 卡面段）要拿它
+#: **比對**才知道哪一列該移出卡面。兩邊各寫一份 `"位階的出處"` 的話，
+#: 改了一處就**默默**失配 —— 那一列會悄悄回到卡面（或悄悄兩邊都不見），
+#: 而畫面**看起來仍然正常**，⛔ 沒有人會發現（`CLAUDE.md §1` 靜默失效）。
+REGIME_SCOPE_FACT_KEY: str = "位階的出處"
+
 
 def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                         danger: tuple[str, str] | None, danger_error: str,
@@ -1432,7 +1576,8 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             Card(key="verdict.regime", label=REGIME_CARD_LABEL,
                  state=_regime_state, value=_rlabel),
             signal_text=_rlabel,
-            facts=(("生效分支", _rsource), ("位階的出處", REGIME_SCOPE_NOTE))))
+            facts=(("生效分支", _rsource),
+                   (REGIME_SCOPE_FACT_KEY, REGIME_SCOPE_NOTE))))
     elif _regime_state == UI_DEGRADED:
         # ⚠️ **【FIX-1】2026-09-07：degraded 修前掉進下面那個 `else`。**
         # 修前的判斷是 `if _regime_state == UI_LIVE: ... else: ...` ——
@@ -1469,7 +1614,7 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             # `_facts.insert(0, ("現值", ...))`），不是第二種做法。
             signal_text=_rlabel,
             facts=(("現值", _rlabel), ("生效分支", _rsource),
-                   ("位階的出處", REGIME_SCOPE_NOTE))))
+                   (REGIME_SCOPE_FACT_KEY, REGIME_SCOPE_NOTE))))
     else:
         _tiles.append(Tile(Card(
             key="verdict.regime", label=REGIME_CARD_LABEL,
@@ -1483,7 +1628,7 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                      "**不是** `neutral`；本站不以缺值推導「中性」"),
                 where=(EXIT_OUT_OF_REACH if not regime_error
                        else EXIT_FIX_CODE))),
-            facts=(("位階的出處", REGIME_SCOPE_NOTE),)))
+            facts=((REGIME_SCOPE_FACT_KEY, REGIME_SCOPE_NOTE),)))
     return tuple(_tiles)
 
 
@@ -1511,6 +1656,31 @@ def _load_l4_labels() -> tuple[Any, Any, Any, str]:
     except Exception as _e:  # noqa: BLE001 — 轉成可見的說明，不吞
         print(f"[views/page_today] L4 標籤模組載入失敗：{_e!r}")
         return None, None, None, repr(_e)
+
+
+def _load_lamp_directions() -> dict[str, Any]:
+    """燈卡「變化方向」列：L3 取歷史 → L2 算方向。回 `{key: LampDirection}`。
+
+    只算 `LAMP_DIRECTION_KEYS` 那幾盞。某一條序列取不到 ⇒ L2 回 `nodata`
+    （畫面顯示「無資料」），⛔ 不整列消失、⛔ 不編箭頭。
+    整支失敗（例如 L3 / L2 載入失敗）⇒ 印 log、回 `{}` ⇒ 該列不出現，
+    **燈號與其他列不受影響**（它不參與判燈）。
+    """
+    try:
+        from src.compute.macro.lamp_direction import compute_lamp_direction
+        from src.services.macro_v2_service import (
+            get_chart_series,
+            get_monthly_history,
+        )
+        _hist: dict[str, Any] = {}
+        _hist.update(get_chart_series() or {})       # margin / bias_240（交易日）
+        _hist.update(get_monthly_history() or {})    # ism_pmi（月）
+        # ⚠️ m1b_m2_gap 刻意不給序列：歷史檔已知損壞，L2 恆回 nodata。
+        return {_k: compute_lamp_direction(_k, _hist.get(_k))
+                for _k in LAMP_DIRECTION_KEYS}
+    except Exception as _e:  # noqa: BLE001 — 轉成 log，不吞；燈號本身不受影響
+        print(f"[views/page_today] 變化方向計算失敗（該列不顯示）：{_e!r}")
+        return {}
 
 
 def _load_allocation() -> tuple[Any, str]:
@@ -1590,6 +1760,756 @@ def _load_key_alerts(session: Mapping[str, Any]) -> tuple[Any, bool, str]:
 
 
 # ══════════════════════════════════════════════════════════════════
+# v2 卡面（葉1 ① **三張並排的卡全部**走這條路）
+#
+# ⚠️ **2026-09-24 客戶裁示批 1：下面那條刪除線是有意識的政策變更，⛔ 不是漏刪。**
+# ~~客戶要的是「一張給客戶看的樣板」，所以這一段**刻意只接一張卡**：~~
+# ~~`verdict.exposure`。同一排的另外兩張（`verdict.danger` / `verdict.regime`）~~
+# ~~一行都沒動，留著當**對照組** —— 新舊兩種卡面並排，差異一眼看得到。~~
+# · **舊做法的理由仍然成立**（在它寫下的那天）：樣板卡就是要讓客戶把新舊兩種卡面
+#   擺在一起比，留兩張舊卡當對照組是**當時唯一看得到差異**的方式。
+# · **被權衡掉的是它的前提**：客戶 2026-09-24 看過對照之後裁示「三張同版」——
+#   對照組的任務結束了，再留著只會讓同一排長出兩種卡面（那本身就是版面不一致）。
+# **現行**：`V2_CARD_BLOCKS` 是 **key → block 的分派表**，日後加卡只要加一列。
+#
+# 🔴 **CSS 一律走 `src/ui_v2/markup.page_css()`，⛔ 不在本檔抄一份。**
+#    抄 ~30 條規則進 L5 ＝ 第二個真相源（§2.1）：`markup.py` 改了色票 / 密度階，
+#    本檔這一份不會跟著動，而畫面**看起來仍然正常**（只是與規格對不上）。
+#    `markup.py` 是既有的 repo 內模組，⛔ 不是新依賴、⛔ 不是新 pip 套件。
+#
+# 🔴 **本區塊零顏色、零字級、零 px**（§3.3 反捏造）——
+#    全部由 `markup.page_css()` / `components.*` 供給。
+#    📌 **2026-09-24 更新**：~~本區塊唯一的數字是 `V2_LEVEL_MAX_CHARS`~~ ——
+#    那個常數本輪已刪（0 caller，見其原址的清理註）。**現在本區塊一個自有數字都沒有**：
+#    `why` 那一列的字數預算 `V2_WHY_MAX_CHARS` **直接讀**契約層的
+#    `v2_markup.FACT_VALUE_MAX_CHARS`，⛔ 不再抄一份。
+# ══════════════════════════════════════════════════════════════════
+#: 分派表**手寫**的那 12 列（＝ key 無法由 L0 SSOT 展開的那些）。
+#:
+#: ⛔ **刻意與 `_V2_SSOT_BLOCKS` 分開放**（唯一理由，⛔ 不是排版偏好）：
+#: 分開才驗得到「兩邊有沒有撞 key」（`_assert_v2_dispatch_keys_do_not_collide()`）——
+#: 直接寫在同一個 dict 字面量裡的話，重複 key 會被 Python **靜默**吃掉
+#: （後寫的蓋前寫的，⛔ 不報錯），從合併結果反推**永遠驗不到**。
+_V2_HANDWRITTEN_BLOCKS: dict[str, str] = {
+    # ── 葉外 chrome（t3）：頂部狀態列三張 ─────────────────────────
+    # 來源是 `tab_today.build_status_bar_cards()` 的 `Card`（⛔ 不是 `Tile`）——
+    # 橋接在 `_tiles_of_cards()`，**`tab_today.py` 一個字都沒動**（檔案邊界）。
+    "statusbar.trading_day": "today.statusbar",
+    "statusbar.macro":       "today.statusbar",
+    "statusbar.sheet":       "today.statusbar",
+    # ── 第一層（t1）：葉1 ① 三張並排的結論卡 ───────────────────────
+    "verdict.exposure": "today.verdict",   # ① 能不能出手 · 出手到幾成
+    "verdict.danger":   "today.verdict",   # ② 指標危險度（不含多空方向）
+    "verdict.regime":   "today.verdict",   # ③ 市場位階
+    # ── 第二層（t2）：葉1 ③ 線框的三欄摘要 ──────────────────────────
+    # 同樣來自 `build_today_blocks()["today.summary"].cards` 的 `Card`。
+    "summary.regime":   "today.summary",
+    "summary.momentum": "today.summary",
+    "summary.risk":     "today.summary",
+    # ── 第二層（t2）：葉1 ④ 今日關鍵橫幅 ───────────────────────────
+    "key_banner.alerts": "today.key_banner",
+    # ── 第四層（t4）：葉1 ⑤⑥ 作戰室 / AI 摘要（未接線，誠實標） ──────
+    "warroom.todo": "today.warroom",
+    "warroom.ai":   "today.warroom",
+}
+
+#: 分派表**由 L0 SSOT 展開**的那 21 列 —— 葉2 五桶摘要（5）＋ 指標明細 16 盞燈。
+#: ⚠️ **⛔ 不手抄 key**：手抄一份 21 個 key 的名單就是第二把尺 —— L0 加一盞燈、
+#: 改一個桶名，名單不會跟著動，而那盞燈會**靜靜地退回舊卡面**
+#: （畫面看起來正常，只是同一葉長出兩種卡面）。
+#:
+#: 🔴 **五桶摘要為什麼併進 `today.detail`（本輪的判斷，就地寫明理由）**：
+#:    v2 契約層的 block key **只有 8 個**，⛔ 而且本輪不得新開
+#:    （那是契約層 `src/ui_v2/page_today.py::_LAYER_PLAN`，不在本輪的檔案邊界內）。
+#:    可選的只有既有 8 個裡的哪一個，判準三條，三條都指向 `today.detail`：
+#:    ① **同一葉**：五桶摘要住在葉2（`LEAF_DETAIL`），`today.detail` 是葉2 唯一的
+#:       block；`today.summary` 是**葉1 ③** 的三欄摘要，已經被上面三列佔住，
+#:       兩組不相干的卡共用一個 block key 會讓「這個 block 是什麼」變成兩種答案。
+#:    ② **同一批資料的 roll-up**：五桶摘要就是這 16 盞燈**按桶收斂**的結果
+#:       （同一次 `compute_five_bucket_summary` 側車：`readout.summary` 與
+#:        `readout.readiness` 來自同一支 `load_macro_readout()`），
+#:       ⛔ 不是另一組觀測 —— 它與 16 盞燈本來就該同階。
+#:    ③ **密度階對得上**：`today.detail` ⇒ 第四層 ⇒ **t4（展開佐證）**，
+#:       而葉2 整葉就是「展開佐證」；判給 `today.summary` 會讓它宣稱 **t2（核心卡）**
+#:       的密度，與它所在的葉自相矛盾。
+#:       附帶：`BLOCK_COLS["today.detail"] == (3, 2, 1)`，桌機 3 欄 ——
+#:       與本檔 `_render_tiles(...)` 既有的 `MAX_COLS=3` **實際排法一致**
+#:       （⛔ 不是挑一個讓數字好看的 block：對不上的話卡面契約與實際欄數會說兩種話）。
+_V2_SSOT_BLOCKS: dict[str, str] = {
+    **{f"summary.{_b}": "today.detail" for _b in BUCKET_ORDER},
+    **{f"detail.{_s.key}": "today.detail" for _s in BUCKET_DANGER_SPECS},
+}
+
+#: **分派表**：走 v2 卡面的卡 `key` → 它在 v2 版面契約裡的 **block key**。
+#: 不在表內的 key 一律走既有 `_ui_kit.render_card_isolated()`（舊卡面）。
+#: **手寫 12 列 ＋ SSOT 展開 21 列 ＝ 整頁 33 張卡**
+#: （客戶 2026-09-24 裁示：放棄分批，一次整頁卡化）。
+#:
+#: ⚠️ **2026-09-24（同日稍早）取代舊的「`V2_CARD_KEYS` 單一 key ＋ `V2_BLOCK` 單一常數」**
+#: （有意識的政策變更，⛔ 不是漏刪；決策者：客戶）。**舊寫法的理由仍然成立**：
+#: 只有一張卡時它是最省的寫法。**被權衡掉的是它的擴充成本** —— 加第二張就得同時
+#: 改兩個常數 ＋ 一支只驗一個 block 的斷言；分派表把「加一張卡」收斂成**加一列**。
+#:
+#: 密度階**不由本檔指定** —— `v2_markup.card_html()` 內部呼叫
+#: `v2_page.tier_for_block()` 依「它所在的層」自動決定（該函式刻意沒有 `tier=` 入口）。
+#: ~~本檔只在 import 時**逐 block 驗**它真的是 t1（見 `_assert_v2_blocks_are_tier_one`）。~~
+#:
+#: 🔴 **2026-09-24 客戶裁示「一次把整頁卡化」：上面那條刪除線是有意識的政策變更，⛔ 不是漏刪。**
+#: **舊句的理由仍然成立**：表裡只有 `today.verdict` 一個 block 時，「逐 block 驗它是 t1」
+#: 與「驗這一個 block 是 t1」**外延相同**，寫哪個都對，而且它擋得住「對面把結論燈搬層」。
+#: **被權衡掉的是它的前提** —— 整頁卡化之後表裡有 **6 個 block、橫跨 4 個密度階**
+#: （`today.statusbar` t3 ／ `today.verdict` t1 ／ `today.summary` t2 ／
+#:  `today.key_banner` t2 ／ `today.warroom` t4 ／ `today.detail` t4；
+#:  實測值見 `V2_EXPECTED_TIERS`），「全部都是 t1」這個期望值**本身就變成假的**。
+#: **現行**：期望值改成**逐 block 各自的密度階**（`V2_EXPECTED_TIERS`），
+#: 守的東西一樣（對面搬層 ⇒ 當場炸），⛔ 不是把斷言拿掉了事。
+V2_CARD_BLOCKS: dict[str, str] = {**_V2_HANDWRITTEN_BLOCKS, **_V2_SSOT_BLOCKS}
+
+#: 走 v2 卡面的卡 key。**由分派表推出來，⛔ 不另列一份名單**（那才是第二把尺）。
+V2_CARD_KEYS: frozenset[str] = frozenset(V2_CARD_BLOCKS)
+
+#: ~~分派表裡**每一個** block 都應該落在的密度階。~~**這是斷言用的期望值，不是設定值**
+#: —— 本檔沒有任何地方把它傳給 `card_html`（傳不進去，那支函式不收）。
+#:
+#: 🔴 **2026-09-24 整頁卡化：單一字串 → 逐 block 對照表。有意識的政策變更，⛔ 不是漏刪。**
+#: **舊寫法的理由仍然成立**：表裡只有一個 block 時，一個字串就講得完。
+#: **被權衡掉的是它的前提** —— 現在橫跨四階，一個字串**表達不了**，
+#: 硬留著只有兩條路：把它放寬成「不驗」，或把四階硬說成 t1。兩條都是弱化。
+#:
+#: ⚠️ **這張表是期望值，⛔ 不是來源** —— 實際密度階永遠由
+#: `v2_page.tier_for_block()`（＝ block 所在的層）決定；本表只負責在
+#: **import 時**把「對面把某個 block 搬到別層」變成當場 `RuntimeError`。
+#: ⛔ 對不上時**不得**把期望值改成現況了事（那等於把守衛關掉）。
+V2_EXPECTED_TIERS: dict[str, str] = {
+    "today.statusbar":  "t3",   # 葉外 chrome
+    "today.verdict":    "t1",   # 第一層 結論燈
+    "today.summary":    "t2",   # 第二層 核心卡
+    "today.key_banner": "t2",   # 第二層 核心卡
+    "today.warroom":    "t4",   # 第四層 展開佐證
+    "today.detail":     "t4",   # 第四層 展開佐證
+}
+
+#: 樣式表模式。出處：`src/ui_v2/render.py::unwired_view_model(*, mode="dark")` 的既有預設值
+#: （本檔**不 import** 那支 —— 它會拉 streamlit；只沿用它已經定案的字面）。
+#: 合法值由 `tokens.get_token(mode=)` 把關，寫錯會當場炸，⛔ 不會靜默退回一組顏色。
+V2_CSS_MODE: str = "dark"
+
+#: 這一次 script run 有沒有吐過 v2 樣式表。
+#:
+#: ⚠️ **刻意是「一次 script run 一次」，⛔ 不是「一個 session 一次」**（實作細節，寫死免得被改回去）：
+#: Streamlit 每一輪 rerun 會**重建整棵元素樹**，這一輪沒有再吐一次的元素就會從 DOM 消失。
+#: 真的做成「整個 session 只注入一次」的話，**第二次 rerun 起樣式表就不見了** ——
+#: 卡片變成沒有樣式的裸 HTML，而**所有守衛仍然是綠的**（字都還在、測試也抓不到）。
+#: 那正是 §1 要防的靜默失效。故 `render_page_today()` 在**每一輪開頭清掉這個旗標**，
+#: 本旗標只負責「同一輪裡畫第二張 v2 卡時不要再吐一次」。
+SS_V2_CSS_DONE: str = "_p01_v2_css_emitted"
+
+#: v2 卡面產不出來時，例外的出處（【8b】：出事的是哪一層只有本頁知道）。
+SRC_V2_MARKUP: str = (
+    "L5 `src/ui_v2/markup`（v2 卡面標記層：`page_css` / `card_html`）")
+
+# ~~`V2_LEVEL_MAX_CHARS`（壓縮後那一行的字數上限）與 `V2_LEVEL_ELLIPSIS`（截斷記號）~~
+# 🔴 **2026-09-24 整頁卡化：兩者已刪除。有意識的清理，⛔ 不是漏刪；決策者：AI 總管。**
+#
+# · **它們為什麼在**：舊做法把三段 `Note` 壓成**一行**，那一行沒有任何長度保證，
+#   所以需要一個字數夾子 ＋ 一個截斷記號。**那個理由在它寫下的那天完全成立。**
+# · **它們為什麼走**：本輪改成三列 fact 之後，**沒有任何一段文字走本檔的夾子** ——
+#   `now` 與 `去哪補` 由來源本身就短；`why` 走 `_v2_why_phrase()` 的**子句邊界**收尾；
+#   真的還超出的（只有紅態）交給**契約層自己**的
+#   `v2_markup.FACT_VALUE_MAX_CHARS`。⇒ 兩個常數 **0 caller**。
+# · **為什麼不留著**：`CLAUDE.md §-1.5.F 判定 3(4)` —— 「**因本次改動才變成 0 caller
+#   的孤兒**」是本次任務的**收尾義務**，⛔ 不是趁機清全 repo。
+#   留一個字數夾子在那裡，下一個人會以為卡面還有一道本檔自己的截斷，
+#   然後在兩把尺之間找 bug。
+# · **它的「46」沒有消失，而且不再是第二份**：`V2_WHY_MAX_CHARS` 現在**直接讀**
+#   `v2_markup.FACT_VALUE_MAX_CHARS`（見該常數）⇒ 全頁只剩**一個** 46。
+
+#: 出口常數 → v2 卡面那一行的**固定短語**。⛔ 不是截斷。
+#:
+#: 🔴 **2026-09-24 客戶退回「截尾＋…」：讀起來是斷句，改成重寫成短語。**
+#: 舊做法（`where.split("。")[0]` ＋ 字數上限）的理由仍然成立 —— 它**不挑字**，
+#: 文案怎麼改都跟得上。**被權衡掉的是它的產出**：首句本身就有 40~90 字，
+#: 夾住之後必然斷在半句話中間，而「讀不完的半句」對使用者等於沒有指路。
+#:
+#: 🔴 **key 是常數物件本身，`_v2_exit_phrase()` 用 `is` 比對**（客戶明示）：
+#: 改成比對字串開頭的話，文案改一個字就**默默**退回長句 —— ⛔ 不會報錯（§1）。
+#: ⚠️ **據實揭露（§3.3）：這~~四~~**五**個短語沒有契約層出處，是實作層挑的**
+#: （「四 → 五」是 2026-09-24 整頁卡化新增 `EXIT_DEGRADED_READ_DIRECTION` 那一列所致；
+#:  另兩列 `CONTRACT_NO_EXIT_WHERE` / `STAGED_ROLLOUT_WHERE` **不算**在內 ——
+#:  它們回的是 `NO_EXIT_MARKER` 這個既有 SSOT 常數本身，⛔ 不是本檔挑的字）。
+#: 客戶只給「≤30 字」這個上限與三個
+#: **舉例**；用字一律沿用對應常數自己的字面（射程／程式要修／只更新得到一半／
+#: **方向·門檻** —— 後者出自 `EXIT_DEGRADED_READ_DIRECTION` 原文的
+#: 「別看它有沒有過線，改看它…的變化**方向**」），⛔ 不新造名詞。
+#: 🔴 **⛔ 一個字都沒刪**：完整三段原文照舊掛在外層 `title=`。
+#: ⚠️ ~~`EXIT_ALERTS_PARTIAL` 現在**沒有**卡走到（今日關鍵橫幅不在 `V2_CARD_BLOCKS`
+#: 內）。仍然登記，是因為漏登的後果是**渲染當下才炸**；登記的成本是一行。~~
+#: 📌 **2026-09-24 事實更正 —— 有意識的更正，⛔ 不是漏刪。** 整頁卡化之後
+#: `key_banner.alerts` **已經在** `V2_CARD_BLOCKS` 內 ⇒ 這一條**真的有卡在走**。
+#: ⚠️ 變的只有事實；**當初「先登記」的判斷仍然成立**（漏登的後果是渲染當下才炸）。
+#: 🔴 **`CONTRACT_NO_EXIT_WHERE` 是對面 `tab_today` 的常數，⛔ 不是本檔的 `EXIT_*`**
+#: （2026-09-24 補登；**實跑抓到的漏登**，⛔ 不是預防性登記）：位階卡 `degraded` 態
+#: 刻意**整份沿用** `build_status_bar_card().note`（§2.1 SSOT），所以它的 `where`
+#: 是**那一支**給的物件。三張卡全部改走 v2 卡面之後，這一態會走進 `_v2_exit_phrase()`
+#: ⇒ 漏登＝`KeyError`＝**畫成紅卡**。⚠️ 它的短語沿用該常數自己開頭的
+#: `NO_EXIT_MARKER` 字面（⛔ 不新造名詞）；**完整原文照舊掛在外層 `title=`**。
+#: 🔴 **2026-09-24 整頁卡化新增兩列（`EXIT_DEGRADED_READ_DIRECTION` /
+#: `STAGED_ROLLOUT_WHERE`），並新增一道 fallback（見 `_v2_exit_phrase()` 第 2 段）。**
+#: 原因是**實跑窮舉**出來的，⛔ 不是推測：本輪把 33 張卡在
+#: idle / empty / unwired / degraded / failed / live 各態下全部建一遍，
+#: 收集到 **22 個相異的 `Note.where` 物件**，其中
+#:   · 5 個對得上本表既有的 `EXIT_*` / `CONTRACT_NO_EXIT_WHERE`；
+#:   · 1 個是 `tab_today.STAGED_ROLLOUT_WHERE`（**模組常數，比得到身分** → 本輪登記）；
+#:   · 1 個是本輪上提的 `EXIT_DEGRADED_READ_DIRECTION`（**原本寫在函式體裡**）；
+#:   · 其餘 15 個全部是**函式體內的 f-string**（`statusbar.sheet` /
+#:     `statusbar.macro` 紅態 / 16 盞燈的 unwired 態）—— 它們住在
+#:     `src/ui/tabs/tab_today.py`，**本輪的檔案邊界外**，⛔ 上提不得。
+#:     這 15 個**每次呼叫都是新物件**，`is` 在結構上永遠對不上。
+V2_EXIT_PHRASES: tuple[tuple[str, str], ...] = (
+    (EXIT_RETRY_HERE,             "按上方 🚀 更新"),
+    (EXIT_OUT_OF_REACH,           "不在本頁射程內"),
+    (EXIT_FIX_CODE,               "需修程式"),
+    (EXIT_ALERTS_PARTIAL,         "只更新得到一半"),
+    (EXIT_DEGRADED_READ_DIRECTION, "改看方向，別照門檻讀"),
+    (CONTRACT_NO_EXIT_WHERE,      NO_EXIT_MARKER),
+    (STAGED_ROLLOUT_WHERE,        NO_EXIT_MARKER),
+)
+
+#: 三要素**第三列**（`Note.where`）的 fact 列標籤。用語沿用鐵律 4 的三要素字面。
+#:
+#: ⚠️ ~~壓縮後那一行**退而求其次**時掛的 fact 列標籤。~~
+#: 📌 **2026-09-24 整頁卡化更新（有意識的更正，⛔ 不是漏刪）**：它已經**不是退路**，
+#: 而是三列 fact 的**固定第三列**（見下方 `V2_NOW_FACT_KEY` / `V2_WHY_FACT_KEY`）。
+#: **但下面整段理由一字未改、而且全部仍然成立** —— 它解釋的是「**為什麼三要素
+#: 非走 fact 列不可**」，那個結構性原因（契約對灰態紅態一律判決留白）沒有任何改變。
+#:
+#: 🔴 **為什麼需要這個退路（實測，⛔ 不是設計偏好）**：v2 契約層對
+#: **灰態與紅態一律「判決留白」**（`v2_page.card_level_text()` 對
+#: `idle` / `empty` / `missing` / `na` / `unwired` / `failed` / `degraded` 一律回 `None`，
+#: 本輪逐態實跑確認）—— 而**會帶 `Note` 的正好就是這些態**。
+#: 也就是說：指路句若只走 `level=`，在**每一個需要它的狀態下都會整段消失**，
+#: 而畫面上只剩標題＋徽章，看起來完全正常（⛔ §1 無聲丟棄 ＋ 鐵律 4 三要素蒸發）。
+#: ⇒ 契約留白時改掛成**卡內第一列 fact**（fact 列任何狀態都會畫）。
+#: ⚠️ 走哪一邊**由契約自己的 `card_level_text()` 決定**，⛔ 不是本檔另判一次；
+#: 兩條路互斥，⛔ 不會重複印。契約哪天改成灰態也畫判決區，這一行**自動**搬回
+#: `.blk-lvl`，本檔一個字都不用改。
+V2_GUIDE_FACT_KEY: str = "去哪補"
+
+#: 🔴 **2026-09-24 客戶裁示：三要素要在卡面上看得到，⛔ 不是只剩一條指路 ＋ hover。**
+#:
+#: 鐵律 4 的三要素（`Note.now` / `.why` / `.where`）各自一列 fact。
+#: **標籤逐字沿用鐵律 4 自己的說法**（現在怎樣 / 為什麼 / 去哪補），⛔ 不新造名詞；
+#: 第三列沿用既有的 `V2_GUIDE_FACT_KEY`（⛔ 不另立一個同義的常數）。
+#:
+#: ⚠️ **順序有意義，⛔ 不得調換**：使用者的閱讀順序是
+#: 「**這一格現在怎樣 → 為什麼 → 那我能做什麼**」，
+#: 把「去哪補」排在中間會讓最可操作的那一句被夾在兩段說明裡。
+V2_NOW_FACT_KEY: str = "現在"
+V2_WHY_FACT_KEY: str = "為什麼"
+
+#: `Note.why` 壓成一列時，**允許在哪些「子句邊界」收尾**（由寬到嚴，依序嘗試）。
+#:
+#: 🔴 **這是子句切分，⛔ 不是字數截斷** —— 客戶 2026-09-24 退回的是
+#: 「截尾＋`…`」（讀起來是斷句）。本表切的每一刀都落在**標點劃出的子句界線**上，
+#: 切完仍是一個讀得完的完整子句，⛔ 不會斷在半句話中間。
+#:
+#: **順序的依據（⛔ 不是隨手排的）**：依「後半段**離主旨多遠**」由遠而近 ——
+#:   1. `——` 後面幾乎都是**對比澄清**（「這是『還沒叫』，不是『叫了沒回』」）：
+#:      有價值，但它澄清的是**前半段已經講過的事**，是最先可讓的；
+#:   2. `。` 後面是**另一整句**補充（常是上游例外訊息的後續句）；
+#:   3. `；` 後面是**第二個獨立子句**；
+#:   4. `（` 後面是**括號補充**；
+#:   5. `，` 後面是**同句的後續子句**（離主旨最近，**最後才讓**）。
+#: ⚠️ **只有在還超出顯示預算時才往下切一刀**（見 `_v2_why_phrase()`）——
+#: 短的 `why` 一個字都不動，而且**切到進預算就停**（⛔ 不會一路切到剩半句）。
+#: **被切掉的部分⛔ 沒有消失**：完整三段原文照舊掛在卡的外層 `title=`（hover 看得到）。
+#:
+#: ⚠️ **據實揭露（§3.3）：這張表與它的順序沒有契約層出處，是實作層挑的**
+#: （沿用 `V2_EXIT_PHRASES` 的既有先例）。
+V2_WHY_CLAUSE_SEPARATORS: tuple[str, ...] = ("——", "。", "；", "（", "，")
+
+#: `why` 那一列的顯示預算。**刻意與 `v2_markup.FACT_VALUE_MAX_CHARS` 對齊**
+#: —— 那是 fact 值那一格真正會動手截斷的地方；本檔要做的是
+#: 「**在它動手之前，先在子句邊界收好**」，所以兩者必須是同一個數字。
+#:
+#: 🔴 **直接讀對面的常數、⛔ 不手抄一個 46**（§2.1）：手抄的那天對面調了值，
+#: 本檔會在它的預算之外多送幾個字過去，然後**被它截尾** —— 而那正是本輪要避免的事，
+#: 且畫面上看起來完全正常（只是多了一個 `…`）。
+V2_WHY_MAX_CHARS: int = v2_markup.FACT_VALUE_MAX_CHARS
+
+#: **移出卡面、只留 hover** 的 fact 列：`card.key` → 該卡要移出的 fact **標籤**集合。
+#:
+#: 🔴 **2026-09-24 客戶裁示：卡③「位階的出處」那一列不再出現在卡面。**
+#: 🔴 **⛔ 一個字都沒刪** —— 整段 `REGIME_SCOPE_NOTE`（193 字）**原文逐字**改掛該卡的
+#:    `title=`（見 `v2_card_html` 結尾），滑過去就看得到。
+#:    ⚠️ 這**不是**漏渲染：下一個人看到卡③ 少一列時，請先讀本註再動手。
+#:
+#: **為什麼移的是這一列（判準，⛔ 不是「嫌它長」）**：它是**免責說明**，⛔ 不是**觀測值**。
+#: `REGIME_SCOPE_NOTE` 的 docstring 自陳：它是為了**否認**一句 2026-09-07 獨立稽核
+#: **實測為假**的全稱宣稱而寫的**誠實揭露**（被否認的那句話、以及它假在哪裡，
+#: 逐字寫在該常數與 `REGIME_CARD_LABEL` 的註裡 —— 本行⛔ 不複述，複述一次就是
+#: 多一個會漂開的複本，而且會再踩一次
+#: `tests/test_views_no_unverified_universal_claims.py` 的登記制）。
+#: 揭露的職責是「**要看得到**」，
+#: ⛔ 不是「**要佔住第一眼**」—— 三張並排的 t1 結論卡是拿來一眼看結論的，
+#: 193 字的免責擺在那裡會把真正的觀測（現值 / 生效分支）擠掉。
+#: ⇒ **移的是版位，⛔ 不是內容**；內容一字不少地留在 hover。
+#:
+#: ⚠️ **同一張卡 degraded 態的 `("現值", _rlabel)` 是觀測值 ⇒ ⛔ 不在表內，照留卡面。**
+#:    本表比對的是**單一標籤**，⛔ 不是「這張卡的 facts 全部不顯示」。
+#: ⚠️ **表外的卡一行都沒變**（⛔ 不是「所有 fact 都不顯示」）——
+#:    卡① `verdict.exposure` / 卡② `verdict.danger` 的 fact 列原樣照畫。
+#: ⚠️ 日後要再移一列，**先問自己：它是免責 / 出處說明，還是這一眼要看的觀測值？**
+#:    是觀測值 → ⛔ 不准移進來（那就是把使用者該看到的東西藏進 hover）。
+V2_HOVER_ONLY_FACTS: dict[str, frozenset[str]] = {
+    "verdict.regime": frozenset({REGIME_SCOPE_FACT_KEY}),
+}
+
+#: L0 十態 → （`src/ui_v2/page_today.py` 的狀態語彙, `resolve_badge()` 要的缺值原因）。
+#:
+#: **為什麼需要這張表**：兩邊是**兩套字面**，不通用 ——
+#: L0 把 `UI_EMPTY` 拆成 `missing_retryable` / `not_applicable`（鍵名刻意避開
+#: `station_specs.STATE_MISSING`）；v2 契約層用的是線框語彙 `missing` / `na`。
+#: 不翻譯直接餵進去，`card_value_text()` 會當場 `ValueError`（它只認 v2 那套）。
+#: 這與本檔既有的 `READINESS_REASON_TO_MISS` 是**同一種東西**（語彙翻譯），
+#: ⛔ 不是第二張狀態表：**徽章與留白規則都仍然由對面決定**，這裡只換字面。
+#:
+#: 🔴 **這張表不是抄來的，是對出來的，而且 import 時會回推驗一次**
+#: （`_assert_v2_state_vocab_matches_ssot`）：每一筆都要能從
+#: `components.BADGES[*].state_const` / `.miss_reason` **解回同一個 L0 態**。
+V2_STATE_VOCAB: dict[str, tuple[str, str | None]] = {
+    UI_LIVE:              ("live",     None),
+    UI_LOADING:           ("loading",  None),
+    UI_IDLE:              ("idle",     None),
+    UI_DEGRADED:          ("degraded", None),
+    UI_UNWIRED:           ("unwired",  None),
+    UI_FAILED:            ("failed",   None),
+    # #7／#8 的分辨鍵在 `miss_reason`；`Card` **沒有** `reason` 欄位，
+    # 所以分辨結果是 L0 先編碼進狀態鍵、本表再翻回 v2 語彙（見 `shared/ui_state.py`）。
+    UI_MISSING_RETRYABLE: ("missing",  None),
+    UI_NOT_APPLICABLE:    ("na",       v2_page.MISS_NOT_APPLICABLE),
+    UI_EMPTY:             ("empty",    None),
+    UI_PARTIAL:           ("partial",  None),
+}
+
+#: **回推對不上、而且契約本身就分不出來**的兩態。⛔ 登記制，不是漏驗。
+#:
+#: · `UI_EMPTY`：#7 與 #8 的 `state_const` **都是** `UI_EMPTY`，分辨鍵是
+#:   `miss_reason`，而 `Card` 不帶原因 ⇒ 從一個裸 `empty` **解不出**是哪一顆。
+#:   **本檔不自己挑**：把決定權交回 v2 的 SSOT 函式 `v2_page.resolve_badge()`，
+#:   它對 `state="empty"` 有明文裁決（`UI_PAGE_TODAY.md ② 狀態覆蓋表 empty 列`：
+#:   「#7 被 `empty`＋`missing` 兩鍵共用」）。
+#:   ⚠️ **據實揭露一個兩邊說法不一致的地方**（⛔ 不吞）：L0 對裸 `UI_EMPTY` 的立場是
+#:   「**分不出是哪一種缺值**、對能不能重試不做任何宣稱」，而 v2 的 #7 文字**會**
+#:   宣稱可重跑。⇒ 這一態的徽章文字比 L0 多講了一句話。本輪**照 v2 SSOT 走並登記在此**，
+#:   ⛔ 不在本檔另發明一顆徽章（那是 §3.3），要改請先改 v2 契約層。
+#: · `UI_PARTIAL`：#9 的 `state_const` 是 `None`（七態沒有 partial，#9 是新訂的），
+#:   本來就回推不到；`resolve_badge` 在拿不到分子分母時走**它自己的 fail-safe**
+#:   降 #7，⛔ 本檔不代它決定。
+#:
+#: ⛔ **任何不在本集合、又回推對不上的 L0 態 → import 時 `RuntimeError`。**
+#: 這就是「查不到就 fail loud」的落點：L0 日後新增第十一態時，
+#: 本頁**當場說出來**，⛔ 不會靜靜地給它一顆看起來合理的徽章。
+V2_BADGE_AMBIGUOUS: frozenset[str] = frozenset({UI_EMPTY, UI_PARTIAL})
+
+
+def _v2_badge_to_l0_state(badge_n: int) -> str | None:
+    """徽章號 → 它宣稱的 L0 狀態。**用常數名反解，⛔ 不手抄對照表。**
+
+    `components.BADGES` 存的是**常數名字串**：`state_const` 是
+    `shared/ui_state.py` 的名字、`miss_reason` 是 `shared/station_specs.py` 的名字。
+    帶 `miss_reason` 的那兩顆（#7／#8）要再過一手 `ui_state.EMPTY_STATE_BY_REASON`
+    （缺值原因 → 拆出來的那一態），因為它們的 `state_const` 都還寫著 `UI_EMPTY`。
+
+    Returns:
+        解得出來的 L0 狀態字串；解不出來（`state_const` 是 `None` 或不是十態之一）→ `None`。
+    """
+    _spec = v2_components.badge(badge_n)
+    _reason_name = _spec["miss_reason"]
+    if _reason_name is not None:
+        _reason = getattr(_station_specs, str(_reason_name), None)
+        return _ui_state.EMPTY_STATE_BY_REASON.get(_reason)
+    _const_name = _spec["state_const"]
+    _value = getattr(_ui_state, str(_const_name), None)
+    return _value if _value in UI_STATES else None
+
+
+def _assert_v2_blocks_are_tier_one() -> None:
+    """import 時就驗：分派表裡**每一個** block 都落在**它該落的**密度階（§1 Fail Loud）。
+
+    ⚠️ **2026-09-24 由「逐 block 驗它是 t1」改成「逐 block 驗它是期望的那一階」** ——
+    ⛔ 不是拿掉這道斷言：整頁卡化之後分派表橫跨四階，「全部是 t1」**本身就是假的**，
+    留著只能靠放寬（＝關掉守衛）或說謊（＝把 t4 說成 t1）。
+    ⚠️ **函式名刻意不改**（`_assert_v2_blocks_are_tier_one`，雖然它已經不只驗 t1）：
+    改名是**純 cosmetic**（`CLAUDE.md §8.1 step 6` 的反例），而且本檔在本輪已經
+    改動夠多。**語意以本 docstring 與 `V2_EXPECTED_TIERS` 為準，⛔ 不以函式名為準。**
+    📌 **實測（量測日 2026-09-24）**：全 repo `grep _assert_v2_blocks_are_tier_one`
+    在本檔以外 **0 命中** ⇒ 改名不會弄壞任何東西；**不改純粹是不想製造無意義的 diff**，
+    ⛔ 不是「怕動到別人」（那會是一句沒查過的話）。
+
+    守的東西一字未減：對面把某個 block 搬到別層的那天，這些卡會靜靜地換成另一個
+    密度階 —— 畫面**看起來仍然正常**，只是與規格對不上。
+    另加一道：分派表用到的 block **必須**已登記期望值，⛔ 不得「沒登記就當它對」。
+    """
+    _blocks = sorted(set(V2_CARD_BLOCKS.values()))
+    _unregistered = [_b for _b in _blocks if _b not in V2_EXPECTED_TIERS]
+    if _unregistered:
+        raise RuntimeError(
+            f"v2 分派表用到的 block {_unregistered} 沒有登記期望密度階 —— "
+            "請在 `V2_EXPECTED_TIERS` 補上它**應該**落在哪一階（查 "
+            "`src/ui_v2/page_today.py::_LAYER_PLAN`），"
+            "⛔ 不得因為「反正現在對得上」就不登記：不登記＝這個 block 日後被搬層"
+            "**沒有任何守衛會發現**。")
+    for _block in _blocks:
+        _tier = v2_page.tier_for_block(_block)
+        _want = V2_EXPECTED_TIERS[_block]
+        if _tier != _want:
+            raise RuntimeError(
+                f"v2 卡面的 block {_block!r} 現在落在密度階 {_tier!r}，"
+                f"不是登記的 {_want!r} —— "
+                "`src/ui_v2/page_today.py` 的層序很可能動過。"
+                "請確認規格，⛔ 不要把期望值改成現況了事。")
+
+
+def _assert_v2_dispatch_keys_do_not_collide() -> None:
+    """import 時就驗：分派表裡**沒有兩組不同來源的卡搶同一個 `card.key`**（§1）。
+
+    🔴 **為什麼需要這一道（實測的近距離擦撞，⛔ 不是預防性儀式）**：
+    葉1 ③ 的三欄摘要用 `summary.regime` / `summary.momentum` / `summary.risk`
+    （`tab_today.build_today_blocks()`），而葉2 的**五桶摘要**用
+    `summary.{BUCKET_ORDER}`（本檔 `build_bucket_tiles()`）—— **同一個 `summary.` 前綴、
+    兩支不同的 builder**。現況 `BUCKET_ORDER` ＝ long/mid/short/chips/news，
+    與 regime/momentum/risk 零交集，所以**現在**沒事。
+    但這是**巧合，不是設計**：L0 哪天把某一桶改名成 `risk`，
+    分派表的那一列就會被另一列覆蓋掉 ⇒ 那張卡被**送進錯的 block**（錯的密度階、
+    錯的欄數），而畫面**看起來完全正常**。那正是 §1 的靜默失效。
+
+    ⚠️ **驗的是兩份來源的交集，⛔ 不是合併後的 dict** —— 合併後撞掉的那一列
+    **已經不在**了（dict 字面量與 `**` 展開都是後寫的蓋前寫的、⛔ 不報錯），
+    從結果反推**永遠驗不到**。這也是上面 `_V2_HANDWRITTEN_BLOCKS` /
+    `_V2_SSOT_BLOCKS` 刻意分開放的唯一理由。
+    """
+    _clash = sorted(set(_V2_HANDWRITTEN_BLOCKS) & set(_V2_SSOT_BLOCKS))
+    # SSOT 展開內部也要驗：`BUCKET_ORDER` 與 `BUCKET_DANGER_SPECS` 各自有可能重複。
+    _expanded = ([f"summary.{_b}" for _b in BUCKET_ORDER]
+                 + [f"detail.{_s.key}" for _s in BUCKET_DANGER_SPECS])
+    _dupes = sorted({_k for _k in _expanded if _expanded.count(_k) > 1})
+    if _clash or _dupes:
+        raise RuntimeError(
+            f"v2 分派表的 key 撞了：手寫列與 SSOT 展開相撞 {_clash}、"
+            f"SSOT 展開內部重複 {_dupes} —— 兩組不同來源的卡搶同一個 `card.key`，"
+            "其中一組會被靜默送進錯的 block（錯的密度階、錯的欄數），"
+            "而畫面看起來完全正常。"
+            "⛔ 不要把其中一列刪掉了事，先確認是哪一邊該改名。")
+
+
+def _assert_v2_state_vocab_matches_ssot() -> None:
+    """import 時就驗：`V2_STATE_VOCAB` 真的對得上兩邊的 SSOT（§1 Fail Loud）。
+
+    驗兩件事：
+      1. **十態一個都不准漏** —— L0 新增狀態時當場炸，
+         ⛔ 不會在 render 期才變成一個 `KeyError` 紅卡（更不會靜默挑一顆徽章）。
+      2. **逐筆回推** —— `resolve_badge()` 給的那顆徽章，要能經
+         `state_const` / `miss_reason` **解回同一個 L0 態**；
+         解不回來的，必須已登記在 `V2_BADGE_AMBIGUOUS` 並寫明理由。
+    """
+    _missing = [_s for _s in UI_STATES if _s not in V2_STATE_VOCAB]
+    if _missing:
+        raise RuntimeError(
+            f"`shared/ui_state.py` 的狀態 {_missing} 在 `V2_STATE_VOCAB` 裡沒有對應 —— "
+            "v2 卡面會在畫到它的時候炸。請去 `src/ui_v2/components.py::BADGES` 把它"
+            "對得到的徽章查出來再補；**查不到就不要填**（§1：⛔ 不挑一顆看起來合理的）。")
+    for _l0_state, (_v2_state, _reason) in V2_STATE_VOCAB.items():
+        _n = v2_page.resolve_badge(state=_v2_state, miss_reason=_reason)
+        _back = _v2_badge_to_l0_state(_n)
+        if _back == _l0_state or _l0_state in V2_BADGE_AMBIGUOUS:
+            continue
+        raise RuntimeError(
+            f"L0 狀態 {_l0_state!r} 被對到徽章 #{_n}，但那顆徽章宣稱的是 {_back!r} —— "
+            "對映錯了，或 `src/ui_v2/components.py::BADGES` 改過。"
+            "若這是一個**契約本身就分不出來**的態，請登記進 `V2_BADGE_AMBIGUOUS` "
+            "**並寫明它為什麼分不出來**，⛔ 不要把回推那一段拿掉。")
+
+
+_assert_v2_blocks_are_tier_one()
+_assert_v2_dispatch_keys_do_not_collide()
+_assert_v2_state_vocab_matches_ssot()
+
+
+def v2_plain(text: object) -> str:
+    """把 Markdown 強調記號拿掉。**只拿掉記號本身，⛔ 一個字都不刪。**
+
+    為什麼要這一步：既有卡面走 `st.markdown`（`**粗體**` 會被解析），
+    v2 卡面是 `card_html()` 產的 **raw HTML**、而且它把所有文字都 `escape` 過 ——
+    同一串 `**今天能不能出手：尚未評估**` 在 v2 卡上會**原樣印出星號**。
+    ⛔ 不是為了好看才改：印出裸星號會讓使用者以為畫面壞了。
+    """
+    return str(text).replace("**", "").replace("`", "")
+
+
+def _v2_exit_phrase(where: str) -> str:
+    """出口文案 → 卡面那一行的固定短語。**兩段查表，⛔ 不比字串開頭。**
+
+    **第 1 段（主路）：`is` 比物件身分。** 客戶 2026-09-24 明示 ——
+    改成比對字串開頭的話，文案改一個字就**默默**退回長句，⛔ 不會報錯（§1）。
+
+    🔴 **第 2 段（2026-09-24 整頁卡化新增）：含 `NO_EXIT_MARKER` → 回
+    `NO_EXIT_MARKER` 本身。⛔ 這不是「比字串開頭」的後門，理由三條**：
+      ① **它比對的是一個為此而生的 SSOT 標記**，⛔ 不是任何一句文案的前綴。
+         `tab_today.NO_EXIT_MARKER` 的 docstring 逐字寫明它存在的理由就是
+         「守衛…**就是靠這個標記在每一張卡上確認**『本批沒有給出一個按了也沒用的
+         指路』…各處自己造句 ＝ 守衛只能改用模糊比對」—— 也就是說，
+         **用它做 containment 比對正是 SSOT 自己指定的用法**。
+      ② **它回的是那個標記本身，⛔ 不是從長句裁下來的一段**
+         —— 沒有半句話、沒有截尾號，與客戶退回的做法不同類。
+      ③ **⛔ 非它不可**：本輪實跑窮舉的 22 個 `where` 裡有 15 個是
+         `src/ui/tabs/tab_today.py` **函式體內的 f-string**（每次呼叫都是新物件），
+         而那個檔在本輪的檔案邊界外 ⇒ 身分比對在結構上永遠對不上。
+         沒有這一段，`statusbar.sheet` 等 15 種情形會被畫成**紅卡** ——
+         把一張「未接線」的灰卡謊報成故障，那本身就是 §1 禁止的假警報。
+
+    第 3 段：查不到 → `raise`（§1）：⛔ 不回一個「看起來合理」的短語（那是捏造），
+    也⛔ 不偷偷退回截斷 —— 那正是客戶 2026-09-24 退回的做法，
+    而退回之後畫面**看起來仍然正常**，沒有人會發現（§1 靜默失效）。
+    """
+    for _const, _phrase in V2_EXIT_PHRASES:
+        if where is _const:
+            return _phrase
+    if NO_EXIT_MARKER in where:
+        return NO_EXIT_MARKER
+    raise KeyError(
+        f"這段出口文案沒有登記短語（開頭 {where[:16]!r}…）—— "
+        "新增 `EXIT_*` 常數時**必須**同步補一列 `V2_EXIT_PHRASES`。")
+
+
+def _v2_why_phrase(why: str) -> str:
+    """`Note.why` → 卡面那一列。**在子句邊界收尾，⛔ 不做字數截斷。**
+
+    做法：短的**一個字都不動**；超出 `V2_WHY_MAX_CHARS` 時，依
+    `V2_WHY_CLAUSE_SEPARATORS` 找**第一個能一刀進預算**的子句界線，切在那裡。
+
+    🔴 **「一刀要能進預算」是硬條件，⛔ 不是寫法偏好**（實測踩到才加的）：
+    容許「切了還是超出」的半吊子切法時，`why` 若長成
+    `「{出處}（補充）拋出例外：{repr(e)}」`（＝ `_error_why()` 的形狀），
+    `（` 那一刀會把**例外本身**整段砍掉，只留下出處前綴 ——
+    而那正是這一態使用者唯一需要的東西。有了硬條件，那一刀因為
+    「切了仍超出」而**不被採用**，整段原文留給契約層的夾子處理（見下段）。
+
+    ⚠️ **一刀都找不到時本函式⛔ 不動手**：那時交給
+    `v2_markup._fact_value_cell()` 的 `FACT_VALUE_MAX_CHARS` 收尾 ——
+    它是**契約層自己**的夾子，而且會把**完整原文**掛在那一格的 `title=`。
+    ⛔ 本檔不再疊第二個夾子（兩個夾子＝兩把尺，外面那把還會看不到裡面那把切過）。
+
+    **本輪實跑（量測日 2026-09-24）**：33 張卡在
+    `idle` / `empty` / `unwired` / `degraded` / `failed` / `live` 各態下逐一建出並產 HTML
+    （批次窮舉 228 組 tile×狀態 ＋ 一次針對 `degraded`／`live` 的補跑 ——
+     前者的側車沒帶 `state="ok"`，所以 16 盞燈那邊**跑不到** degraded，補跑才涵蓋到）。
+    結果：灰態（`idle` / `empty` / `unwired` / `degraded`）**全部**一刀進預算，
+    ⛔ 沒有一張走到契約層的夾子；**只有紅態（`failed`）走得到**
+    —— 它的 `why` 是 `{出處}拋出例外：{repr(e)}`，長度無上限、
+    而且**後半段才是重點**，本來就不該切。
+    ⚠️ **這是本組單組窮舉的結論，未經第二組獨立驗**（`CLAUDE.md §-2` 規則 6）。
+    """
+    _text = why.strip()
+    if len(_text) <= V2_WHY_MAX_CHARS:
+        return _text                       # 短的一個字都不動
+    for _sep in V2_WHY_CLAUSE_SEPARATORS:
+        if _sep not in _text:
+            continue
+        _head = _text.split(_sep)[0].strip()
+        # ⛔ 空的前半段不算一刀（例：`why` 本身就以分隔符開頭）——
+        #    §1：回一個空字串等於把「為什麼沒有」這一段**靜默刪掉**。
+        if _head and len(_head) <= V2_WHY_MAX_CHARS:
+            return _head
+    return _text
+
+
+def v2_level_line(tile: Tile) -> tuple[str | None, tuple[tuple[str, str], ...], str]:
+    """把三段 `Note` 攤成**三列 fact**，外加 hover 用的完整原文。
+
+    Returns:
+        `(判決語, 三要素的 fact 列, 要掛在 title= 的完整原文)`。
+        · **live**（`Card.__post_init__` 只強制「非 live 必附 Note」⇒ live 沒有 Note）
+          → `(signal_text, (), "")`：那一格放**判決語**（本頁是 `alloc.posture`），
+          那正是 `.blk-lvl` 這個槽位在 v2 規格裡的本業。
+        · **其餘** → `(None, ((現在, …), (為什麼, …), (去哪補, …)), 完整三段原文)`。
+
+    🔴 **2026-09-24 客戶裁示：由「一行」改成「2~3 列」。有意識的政策變更，⛔ 不是漏刪。**
+    · **舊做法的理由仍然成立**：一行 `「現況」· <出口短語>` 是**最省版位**的寫法，
+      而當時整排只有三張 t1 結論卡，版位就是最稀缺的東西。
+    · **被權衡掉的是它的產出**：三要素裡**只有兩個**上得了卡面
+      （`now` 被引號包住當前綴、`where` 只剩短語），而「**為什麼沒有**」
+      —— 三要素裡唯一回答「這是不是故障」的那一段 —— **完全只活在 hover**。
+      滑鼠碰不到的裝置（手機 / 平板）等於看不到它。
+    **現行**：三段各自一列，`why` 也上卡面。
+
+    ⚠️ **客戶要的是「短」，⛔ 不是「把指路刪掉」**（鐵律 4 空狀態引導三要素）：
+    壓縮之後**必須留下可操作的下一步**，所以第三列固定是 `<出口短語>`
+    （短語由 `_v2_exit_phrase()` 依**出口常數的物件身分**查表，⛔ 不是截首句）。
+    `why` 那一列走 `_v2_why_phrase()` 的**子句邊界**收尾，⛔ 不是截尾號。
+    ⛔ 收尾也不是丟棄：收掉的只是**顯示**，原文一字不少地留在 `title=`。
+
+    ⚠️ 三列**刻意不自帶標籤文字**（「去哪補：」之類）：標籤由 fact 列的 key 供給
+    （`V2_NOW_FACT_KEY` / `V2_WHY_FACT_KEY` / `V2_GUIDE_FACT_KEY`）—— 自帶就會印兩次。
+    """
+    _note = tile.card.note
+    if _note is None:
+        return (v2_plain(tile.signal_text) or None), (), ""
+    _now = v2_plain(_note.now)
+    _why = v2_plain(_note.why)
+    _where = v2_plain(_note.where)
+    # 出口 → **固定短語**（⛔ 不截首句；見 `V2_EXIT_PHRASES` 的 2026-09-24 註）。
+    # 🔴 比對餵的是 `_note.where`（**原物件**），⛔ 不是 `v2_plain()` 產的新字串。
+    _rows = (
+        (V2_NOW_FACT_KEY,   _now),
+        (V2_WHY_FACT_KEY,   _v2_why_phrase(_why)),
+        (V2_GUIDE_FACT_KEY, _v2_exit_phrase(_note.where)),
+    )
+    _full = f"{_now}｜為什麼沒有：{_why}｜去哪補：{_where}"
+    return None, _rows, _full
+
+
+def v2_card_html(tile: Tile) -> str:
+    """一張 `Tile` → v2 卡面的 HTML。**所有文字都由 `card_html()` escape。**
+
+    對映（照 v2 結構）：
+      · 卡框 ← `V2_CARD_BLOCKS[card.key]` ⇒ t1 密度階
+        （階由 `tier_for_block` 決定，本檔只驗不設；未登記的 key → `KeyError`，⛔ 不猜一個 block）
+      · 標題 ← `card.label`
+      · 徽章 ← `card.state` 經 `V2_STATE_VOCAB` → `v2_page.resolve_badge()`
+      · 大字 ← `card.value`；**非 live 時整塊不渲染**
+      · 灰字 ← `v2_level_line()` 的判決語（**只有 live 有**）
+      · fact 列 ← **鐵律 4 三要素三列**（現在 / 為什麼 / 去哪補）**排在最前**，
+        其後是 `tile.facts`（沿用既有的「門檻帶」「命中來源」…），
+        **扣掉 `V2_HOVER_ONLY_FACTS` 登記要移進 hover 的那幾列**
+        （目前只有卡③ `verdict.regime` 的「位階的出處」；⛔ 不是漏渲染，見該表）
+
+    ⚠️ **三要素走 fact 列而不是 `.blk-lvl`，由契約自己說了算**：
+    v2 對灰態／紅態一律**判決留白**（實測逐態確認），而會帶 `Note` 的正好就是那些態
+    ⇒ 只掛 `level=` 的話，**在每一個需要它的狀態下都會整段消失**（⛔ §1 無聲丟棄）。
+    故這裡**先問 `v2_page.card_level_text()`**：它願意畫「現在」那一段就走 `.blk-lvl`
+    （其餘兩列照樣是 fact），它留白就三列全走 fact。
+    ⛔ 兩條路互斥，⛔ 不會重複印；⛔ 本檔不自己判「這個狀態要不要留白」。
+    ⚠️ 現況**實跑逐態確認**：Note-bearing 的七態契約全部留白 ⇒ 實際走的一律是
+    「三列全 fact」那條。留著另一條**不是死碼**：契約哪天改成灰態也畫判決區，
+    本檔一個字都不用改就會自動跟上（那正是「由契約說了算」的意思）。
+
+    ⚠️ **大字區的留白規則由對面決定，本檔⛔ 不再寫一層判斷**：
+    `card_html()` 內部走 `v2_page.card_value_text()` —— 灰態紅態一律留白
+    （⛔ 無 `0`、⛔ 無「尚未評估」代打、⛔ 無上一輪殘值）。本檔只負責
+    「非 live 的 `Card.value` 本來就是空字串 ⇒ 傳 `None`」這件**型別**上的事。
+
+    ⚠️ **`title=` 裝兩種東西，⛔ 不是只有 `Note`**：`v2_level_line()` 壓掉的三段原文，
+    ＋ `V2_HOVER_ONLY_FACTS` 從卡面移出來的那幾列（以 `｜` 相接，沿用 `_full` 的接法）。
+    ⛔ 兩者都**一個字都沒刪**，只是換了露出的位置。
+
+    ⚠️ `title=` 這個 hover 槽**掛在外層 div**，不是掛在灰字那一行上：
+    `card_html()` 把每一段文字都 escape，**沒有**掛屬性的入口，而
+    `src/ui_v2/**` 在本輪的檔案邊界外（⛔ 不改它去開一個入口）。
+    外層 div **只有 `title` 一個屬性、零 CSS**，⛔ 不影響 `.blk*` 任何一條規則
+    （那些選擇器都不看祖先）。
+    """
+    _card = tile.card
+    # 未知狀態 → `KeyError`。⛔ 不 `.get()` 兜底（兜底＝挑一顆看起來合理的徽章）。
+    _v2_state, _reason = V2_STATE_VOCAB[_card.state]
+    _badge_n = v2_page.resolve_badge(state=_v2_state, miss_reason=_reason)
+    _level, _guide_rows, _full = v2_level_line(tile)
+    # 🔴 **移出卡面、只留 hover** 的那幾列（見 `V2_HOVER_ONLY_FACTS` 的判準與理由）。
+    #    🔴 餵進 hover 的是 `tile.facts` 的**原字串**，⛔ 不過 `v2_plain()` ——
+    #       那支會吃掉 `**` 與反引號，**也就是真的刪字**；而 hover 是
+    #       「**完整原文**」那條通道（卡面才是被排版規則夾的那一條）。
+    #    ⚠️ 只比對**標籤**⇒ 同一張卡的其餘 fact（例如 degraded 態的「現值」
+    #       這個**觀測值**）照留卡面；表外的卡一行都沒變。
+    _hover_keys = V2_HOVER_ONLY_FACTS.get(_card.key, frozenset())
+    _moved = tuple(f"{_k}：{_v}" for _k, _v in tile.facts if _k in _hover_keys)
+    if _hover_keys and not _moved:
+        # §1 Fail Loud：登記了要搬、卻一列都沒搬到 ⇒ 那段**揭露兩邊都不見了**
+        # （卡面已經不畫、hover 又沒接到）。⛔ 不靜靜地少一段 ——
+        # `_render_one_v2()` 會把這個例外轉成**看得見的紅卡**，逼人回來看。
+        raise KeyError(
+            f"卡 {_card.key!r} 登記了要移進 hover 的 fact "
+            f"{sorted(_hover_keys)!r}，但這張卡一列都沒有 —— 標籤改過了嗎？"
+            "⛔ 不要把登記拿掉了事，那會讓揭露悄悄消失。")
+    _facts = tuple((v2_plain(_k), v2_plain(_v))
+                   for _k, _v in tile.facts if _k not in _hover_keys)
+    if _guide_rows:
+        # 🔴 三要素**排在最前** —— 使用者要先知道「這一格現在怎樣」，
+        #    才輪得到「門檻帶」「命中來源」這些中繼資料。
+        _head_text = _guide_rows[0][1]                  # ＝「現在」那一列的文字
+        if v2_page.card_level_text(state=_v2_state, level=_head_text) is not None:
+            _level = _head_text                  # 契約願意畫判決區 → 「現在」走 `.blk-lvl`
+            _facts = tuple(_guide_rows[1:]) + _facts
+        else:
+            _facts = tuple(_guide_rows) + _facts          # 留白 → 三列全走 fact
+    _html = v2_markup.card_html(
+        block=V2_CARD_BLOCKS[_card.key],
+        state=_v2_state,
+        title=v2_plain(_card.label),
+        value=(v2_plain(_card.value) or None),
+        level=_level,
+        badge_n=_badge_n,
+        facts=_facts,
+    )
+    # `Note` 原文 ＋ 移出卡面的那幾列，共用同一個 hover 槽（`｜` 沿用 `_full` 的接法）。
+    _hover = "｜".join(_p for _p in (_full, *_moved) if _p)
+    if not _hover:
+        return _html
+    return f'<div title="{html_escape(_hover, quote=True)}">{_html}</div>'
+
+
+def _inject_v2_css() -> None:
+    """吐出 v2 樣式表，**同一輪 script run 只吐一次**（旗標見 `SS_V2_CSS_DONE`）。
+
+    ⛔ **不在本檔抄 CSS**：內容一律是 `v2_markup.page_css()` 的產出，本檔只負責
+    包一層 `<style>` 丟給 `st.markdown` —— 與 `src/ui_v2/render.py` 的注入形態相同。
+    `page_css()` 自己有 §1 落點：任何一個 token 拿不到就**整張不產出**，
+    ⛔ 不會留下半套樣式表（那會畫出「看起來正常、其實是錯色」的卡）。
+    """
+    if st.session_state.get(SS_V2_CSS_DONE):
+        return
+    st.markdown(f"<style>{v2_markup.page_css(V2_CSS_MODE)}</style>",
+                unsafe_allow_html=True)
+    st.session_state[SS_V2_CSS_DONE] = True
+
+
+def _render_one_v2(tile: Tile) -> None:
+    """畫一張 v2 卡面，**並且不讓它把整頁畫到一半就死掉**。
+
+    ⚠️ **錯誤隔離⛔ 不准降級**：這條路徑與 `_ui_kit.render_card_isolated()`
+    做的是**同一件事** —— 炸了就**就地轉成一張看得見的紅卡 ＋ `repr(e)`**，
+    其餘的卡照畫；log 也留一份。⛔ 不是 `except: pass`，也⛔ 不是
+    「悄悄退回舊卡面」（那會讓 v2 壞掉這件事沒有人查得到 —— §-2：
+    沒查證的宣稱比沒有宣稱更危險，靜默的降級同理）。
+
+    ⚠️ 補救卡走既有的 `render_card_isolated()`：它是**第二層**防線
+    （連補救卡都畫不出來時還有一道），而且那支就是本頁其餘卡片的同一支，
+    ⛔ 不是為了這條路徑另寫一把尺。
+    """
+    try:
+        _inject_v2_css()
+        st.markdown(v2_card_html(tile), unsafe_allow_html=True)
+        return
+    except Exception as _e:  # noqa: BLE001 — 轉成看得見的紅卡，不吞
+        # ⚠️ `except ... as _e` 的 `_e` 在區塊結束時會被 `del`，先把字串取出來
+        #    （同 `_ui_kit.render_card_isolated()` 踩過的那個坑）。
+        _err = repr(_e)
+        print(f"[views/page_today] 卡 {tile.card.key!r} 的 v2 卡面畫不出來 "
+              f"→ 轉紅卡：{_err}")
+    # 卡的 label 不受 `Note` 那道 glyph 驗證管，先洗過再放進 `Note.now`，
+    # 否則這張補救卡自己會再炸一次（§1：紅態要看得見，不是換一種炸法）。
+    _label = scrub_state_glyphs(tile.card.label)[0] or tile.card.key
+    render_card_isolated(
+        Card(key=f"{tile.card.key}.v2_render_failed", label=_label,
+             state=UI_FAILED,
+             note=Note(now=f"{_label}　**這一格畫不出來**",
+                       why=_error_why(SRC_V2_MARKUP, _err),
+                       where=EXIT_FIX_CODE)),
+        owner="views/page_today",
+        error_why=lambda _err2: _error_why(SRC_RENDER, _err2),
+        where=EXIT_FIX_CODE)
+
+
+# ══════════════════════════════════════════════════════════════════
 # 渲染（薄；所有判斷都在上面的純函式裡）
 # ══════════════════════════════════════════════════════════════════
 def _render_one(tile: Tile) -> None:
@@ -1601,7 +2521,15 @@ def _render_one(tile: Tile) -> None:
     `_render_one()`（**兩把尺**，遲早漂移）。**邏輯一字未改**，
     本函式只剩「把本頁專屬的三樣東西綁上去」：
     log 前綴 / 出處文案（【8b】：出事的是哪一層只有本頁知道）/ 去哪補。
+
+    ⚠️ **2026-09-23：`V2_CARD_KEYS` 裡的卡改走 v2 卡面；2026-09-24 客戶裁示批 1 起，
+    葉1 ① 三張並排的卡全部在表內**（對照組已完成任務 —— 見 `V2_CARD_BLOCKS` 的更正註）。
+    分派只看 `card.key`，**表外每一張走的路一行都沒有變**。
+    兩條路徑**都**被包在「一張卡炸了不影響別張」的機制裡（見 `_render_one_v2`）。
     """
+    if tile.card.key in V2_CARD_KEYS:
+        _render_one_v2(tile)
+        return
     render_card_isolated(
         tile.card, signal_text=tile.signal_text,
         signal_color=tile.signal_color, facts=tile.facts,
@@ -1616,6 +2544,28 @@ def _render_tiles(tiles: Sequence[Tile], cols: int = MAX_COLS) -> None:
         for _tile, _col in zip(_chunk, _columns):
             with _col:
                 _render_one(_tile)
+
+
+def _tiles_of_cards(cards: Sequence[Card]) -> tuple[Tile, ...]:
+    """對面 `tab_today` 的 `Card` → 本頁的 `Tile`。**橋接，⛔ 不是複寫。**
+
+    🔴 **2026-09-24 整頁卡化新增。** 頂部狀態列（3）、葉1 ③ 三欄摘要（3）、
+    ⑤⑥ 作戰室（2）共 8 張卡的**內容**由 `tab_today.build_status_bar_cards()` /
+    `build_today_blocks()` 產出，型別是 `Card`；而 v2 卡面那條路
+    （`_render_one()` → `V2_CARD_KEYS`）吃的是 `Tile`。
+
+    ⚠️ **為什麼橋在這一側，⛔ 不是去改 `tab_today.py`**：那個檔是**舊分頁也在用**
+    的契約與純函式的家（`tests/test_p01_today_skeleton.py` 守著），
+    **本輪的檔案邊界明文不含它**。把 `Card` 包成 `Tile` 是**唯一**不動對面一個字
+    的做法 —— 與 `Tile` 這個型別當初誕生的理由完全一樣（見 `Tile` 的 docstring）。
+
+    ⚠️ **⛔ 不帶 `signal_text` / `facts`**：這 8 張卡本來走
+    `_ui_kit.render_cards()`，那支就**沒有**燈號頻道與 fact 列這兩個入口
+    （它的 docstring 逐字寫「無燈號頻道、無 facts 的簡單情形」）
+    ⇒ 上游本來就沒有產這兩樣東西給它們。這裡憑空補一個**就是捏造**（§3.3）。
+    三要素該露出的部分由 `v2_level_line()` 的三列 fact 負責，⛔ 不是這裡。
+    """
+    return tuple(Tile(_c) for _c in cards)
 
 
 def refresh_is_clean(report: Any) -> bool:
@@ -1708,14 +2658,29 @@ def _render_refresh_report(report: Any) -> None:
     §1：這一段的存在理由是「沒更新到的東西如果留白，看起來跟更新過一模一樣」。
     所以它**一定**會列出 `untouched`（本路徑摸不到的區塊），
     即使那一輪一切順利。
+
+    🔴 **2026-09-24 客戶裁示：整段收進 `st.expander(..., expanded=False)`。**
+    **⛔ 一個字都沒有刪 —— 只是預設收起來。** 這一段在展開後仍然一字不差。
+
+    🔴 **但「真錯誤」留在收合區外面（客戶明示的那半句，也是 §1 的要求）**：
+    `report.failures`（取不到的來源 / 跑不完的步驟）與 `report.empties`
+    （沒報錯但一筆都沒有）這兩段 `st.error` **畫在 expander 之前**。
+    把一個**真的失敗**藏進預設收合的區塊裡，使用者看不到故障 ——
+    那是 `CLAUDE.md §1.A` 第 4 點那條「介面狀態嚴格分離」的**反向**失效：
+    A-4 防的是「把沒載入畫成紅色（假警報）」，這裡防的是
+    「**把真紅色藏起來（假平安）**」。兩者同樣是造假。
+
+    ⚠️ **`partials` / `skipped` 的 `st.warning` 進收合區，但⛔ 沒有被藏起來**：
+    它們的計數寫進 expander 的**標題**（見 `_label`）⇒ 不展開也看得到
+    「這一輪有 N 項只拿到一半 / M 項跳過」。客戶那句話點名的是 `st.error`；
+    黃字降一階、且在標題留計數，是本輪的判斷（⛔ 非客戶明示）。
+
+    ⚠️ **內層那個 `st.expander("這一輪碰了哪些資料？…")` 原樣保留、⛔ 沒有攤平**：
+    本輪實測 Streamlit 1.59.2 **允許巢狀 expander**（`AppTest` 跑 outer→inner
+    無例外、兩層的 markdown 都收得到）。⛔ 不憑記憶假設它不行而去動那一段。
     """
     _clean = refresh_is_clean(report)
-    section_header(
-        f"{'✅' if _clean else '⚠️'} 上一次更新的結果",
-        f"{MODE_LABELS.get(_refresh_mode_label_key(report.mode), report.mode)}"
-        f"　·　送出於 {report.started_at}"
-        f"　·　實際耗時 {report.elapsed_s:.1f} 秒")
-
+    # ── 真錯誤：留在收合區**外面**（見 docstring）──────────────────
     if report.failures:
         st.error(
             "**這一輪有取不到的來源 / 跑不完的步驟**：\n\n"
@@ -1729,62 +2694,80 @@ def _render_refresh_report(report: Any) -> None:
             "**這幾個來源這一輪回空**（沒有報錯，但一筆資料都沒有）：\n\n"
             + "\n".join(f"- ❌ {_e}" for _e in report.empties)
             + f"\n\n{REFRESH_FAILED_WHAT_NOW}", icon="🕳")
-    if report.partials:
-        st.warning(
-            "**這幾個來源只拿到一部分**（拿到的是今天的，缺的那幾檔"
-            "顯示的是上一輪的值）：\n\n"
-            + "\n".join(f"- ⚠️ {_p}" for _p in report.partials), icon="⚠️")
-    if report.skipped:
-        st.warning(
-            "**這一輪有步驟沒有條件跑**（跳過 ≠ 成功，也 ≠ 失敗）：\n\n"
-            + "\n".join(f"- ⏭ {_s}" for _s in report.skipped), icon="⏭")
-    if _clean:
-        st.success(
-            f"7 個來源**都真的拿到資料了**，全部步驟也都跑完（{report.started_at} 送出）。"
-            "⚠️ 這句話**只涵蓋下面「有更新到」那一段列出的 key** —— "
-            "本頁按鈕碰不到的區塊見下一段。", icon="✅")
 
-    with st.expander("這一輪碰了哪些資料？（逐鍵列出）", expanded=False):
-        st.markdown(
-            "**有更新到（實測寫進 session 的 key）**：\n\n"
-            + ("\n".join(f"- `{_k}`" for _k in report.written_keys)
-               or "- （這一輪一個 key 都沒寫成功）"))
-        # ⚠️ 這一段是 2026-09-09 補的另一半：只列「有更新到」的話，
-        #    一個宣告寫得到、這輪卻沒寫到的 key（旌旗 / 市場評估 / 6 源快照 …）
-        #    會**兩份清單都不在** —— 使用者想確認「它更新了沒」，
-        #    在畫面上找不到任何一句話回答他。
-        if report.not_written_keys:
+    # ── 其餘整段：預設收合。標題自帶「這一輪出了什麼事」的計數 ────────
+    #    ⛔ 標題不得只寫「上一次更新的結果」—— 那會讓一個有 3 項跳過的更新
+    #    看起來和乾淨跑完的一模一樣（§1：留白看起來就跟更新過一樣）。
+    _counts = [
+        f"{len(report.failures)} 項失敗" if report.failures else "",
+        f"{len(report.empties)} 項回空" if report.empties else "",
+        f"{len(report.partials)} 項只拿到一半" if report.partials else "",
+        f"{len(report.skipped)} 項跳過" if report.skipped else "",
+    ]
+    _issues = "　·　".join(_c for _c in _counts if _c)
+    _label = (
+        f"{'✅' if _clean else '⚠️'} 上一次更新的結果"
+        f"　·　{MODE_LABELS.get(_refresh_mode_label_key(report.mode), report.mode)}"
+        f"　·　送出於 {report.started_at}"
+        f"　·　實際耗時 {report.elapsed_s:.1f} 秒"
+        + (f"　·　{_issues}" if _issues else ""))
+    with st.expander(_label, expanded=False):
+        if report.partials:
+            st.warning(
+                "**這幾個來源只拿到一部分**（拿到的是今天的，缺的那幾檔"
+                "顯示的是上一輪的值）：\n\n"
+                + "\n".join(f"- ⚠️ {_p}" for _p in report.partials), icon="⚠️")
+        if report.skipped:
+            st.warning(
+                "**這一輪有步驟沒有條件跑**（跳過 ≠ 成功，也 ≠ 失敗）：\n\n"
+                + "\n".join(f"- ⏭ {_s}" for _s in report.skipped), icon="⏭")
+        if _clean:
+            st.success(
+                f"7 個來源**都真的拿到資料了**，全部步驟也都跑完（{report.started_at} 送出）。"
+                "⚠️ 這句話**只涵蓋下面「有更新到」那一段列出的 key** —— "
+                "本頁按鈕碰不到的區塊見下一段。", icon="✅")
+
+        with st.expander("這一輪碰了哪些資料？（逐鍵列出）", expanded=False):
             st.markdown(
-                "**沒更新到（本頁按鈕寫得到、但這一輪沒有寫進去）**：\n\n"
-                + "\n".join(f"- `{_k}`" for _k in report.not_written_keys)
-                + "\n\n這幾格顯示的是**上一輪的值**；原因見上面的失敗 / 跳過清單。")
-        if report.popped_keys:
-            st.markdown("**刪除的 key**：\n\n"
-                        + "\n".join(f"- `{_k}`" for _k in report.popped_keys))
-        if report.cleared:
-            st.markdown("**強制重抓清掉的快取**：\n\n"
-                        + "\n".join(f"- {_c}" for _c in report.cleared))
-        st.markdown(
-            "\n**逐來源結果**（這一格只說「這個 job 有沒有以例外收場」）：\n\n"
-            + "\n".join(
-                f"- {_event_icon(_r)} {_r.label}"
-                + (f" — {_r.detail}" if _r.detail else "")
-                for _r in tuple(report.sources) + tuple(report.steps)))
-        # ⚠️ 上下兩格**不是重複**：上面是「有沒有炸」，下面是「真的收到什麼」。
-        #    一個 job 可以不炸而回空 —— 那正是這一段存在的理由。
-        st.markdown(
-            "\n**逐來源實際收到的內容**（`N/M` ＝ 拿到幾項 / 要抓幾項）：\n\n"
-            + ("\n".join(f"- {_event_icon(_c)} {_c.label} — {_c.detail}"
-                         for _c in report.contents)
-               or "- （這一輪沒有做判空 —— 取數整條失敗，連 bundle 都沒有）"))
+                "**有更新到（實測寫進 session 的 key）**：\n\n"
+                + ("\n".join(f"- `{_k}`" for _k in report.written_keys)
+                   or "- （這一輪一個 key 都沒寫成功）"))
+            # ⚠️ 這一段是 2026-09-09 補的另一半：只列「有更新到」的話，
+            #    一個宣告寫得到、這輪卻沒寫到的 key（旌旗 / 市場評估 / 6 源快照 …）
+            #    會**兩份清單都不在** —— 使用者想確認「它更新了沒」，
+            #    在畫面上找不到任何一句話回答他。
+            if report.not_written_keys:
+                st.markdown(
+                    "**沒更新到（本頁按鈕寫得到、但這一輪沒有寫進去）**：\n\n"
+                    + "\n".join(f"- `{_k}`" for _k in report.not_written_keys)
+                    + "\n\n這幾格顯示的是**上一輪的值**；原因見上面的失敗 / 跳過清單。")
+            if report.popped_keys:
+                st.markdown("**刪除的 key**：\n\n"
+                            + "\n".join(f"- `{_k}`" for _k in report.popped_keys))
+            if report.cleared:
+                st.markdown("**強制重抓清掉的快取**：\n\n"
+                            + "\n".join(f"- {_c}" for _c in report.cleared))
+            st.markdown(
+                "\n**逐來源結果**（這一格只說「這個 job 有沒有以例外收場」）：\n\n"
+                + "\n".join(
+                    f"- {_event_icon(_r)} {_r.label}"
+                    + (f" — {_r.detail}" if _r.detail else "")
+                    for _r in tuple(report.sources) + tuple(report.steps)))
+            # ⚠️ 上下兩格**不是重複**：上面是「有沒有炸」，下面是「真的收到什麼」。
+            #    一個 job 可以不炸而回空 —— 那正是這一段存在的理由。
+            st.markdown(
+                "\n**逐來源實際收到的內容**（`N/M` ＝ 拿到幾項 / 要抓幾項）：\n\n"
+                + ("\n".join(f"- {_event_icon(_c)} {_c.label} — {_c.detail}"
+                             for _c in report.contents)
+                   or "- （這一輪沒有做判空 —— 取數整條失敗，連 bundle 都沒有）"))
 
-    st.markdown(UNTOUCHED_HEADING)
-    st.caption(UNTOUCHED_WHY)
-    for _b in report.untouched:
-        st.markdown(
-            f"- **{_b.label}**"
-            + (f"（`{_b.session_key}`）" if _b.session_key else "")
-            + f" —— {_b.why}。**寫得到它的是**：{_b.writer}")
+        st.markdown(UNTOUCHED_HEADING)
+        st.caption(UNTOUCHED_WHY)
+        for _b in report.untouched:
+            st.markdown(
+                f"- **{_b.label}**"
+                + (f"（`{_b.session_key}`）" if _b.session_key else "")
+                + f" —— {_b.why}。**寫得到它的是**：{_b.writer}")
 
 
 def _refresh_mode_label_key(mode: str) -> str:
@@ -1845,6 +2828,16 @@ def render_page_today() -> None:
     選到本頁時 late import 並呼叫本函式。理由與守衛見檔頭 FE-36 那段。
     """
     _session = st.session_state
+    # ⚠️ 每一輪開頭清掉 v2 樣式表旗標 —— 見 `SS_V2_CSS_DONE`：Streamlit 每輪重建
+    #    元素樹，做成「一個 session 只注入一次」的話第二輪起樣式表就不見了，
+    #    而所有守衛仍然是綠的。旗標只負責「同一輪裡不要吐第二次」。
+    _session.pop(SS_V2_CSS_DONE, None)
+    # ⚠️ **刻意在這裡就吐掉，而不是留給第一張 v2 卡**：那張卡畫在 `st.columns` 的
+    #    第一欄裡，`<style>` 雖然不顯示，Streamlit 仍會替它包一層 `stMarkdown` 容器
+    #    ⇒ 第一欄會比另外兩欄多一塊垂直間距，三張並排的卡就對不齊了。
+    #    `_render_one_v2()` 裡那一次呼叫保留當保險（旗標已設 ⇒ 它會直接 return），
+    #    這樣就算有別的進入點單獨畫那張卡，也不會出現沒有樣式的裸 HTML。
+    _inject_v2_css()
     _readout = load_macro_readout(_session)
     _band_label, _thr_text, _band_zh, _l4_err = _load_l4_labels()
     _alloc, _alloc_err = _load_allocation()
@@ -1855,7 +2848,8 @@ def render_page_today() -> None:
     _alerts, _scanned, _alerts_err = _load_key_alerts(_session)
 
     _tiles_by_bucket = build_indicator_tiles(
-        _readout, band_label=_band_label, thr_text=_thr_text, l4_error=_l4_err)
+        _readout, band_label=_band_label, thr_text=_thr_text, l4_error=_l4_err,
+        directions=_load_lamp_directions())
     _cov = coverage(_tiles_by_bucket)
     # 線框七塊全部照算（`build_today_blocks` 是純函式），葉1 ③ 與 ⑤⑥ 各取所需。
     _blocks = {_b.key: _b for _b in build_today_blocks(
@@ -1889,7 +2883,11 @@ def render_page_today() -> None:
     # ── （跨頁）頂部狀態列：常駐一條，位在兩葉之上 ───────────────────
     # 三張卡完全復用 `tab_today.build_status_bar_cards()`（交易日 / 總經 /
     # Sheet 綁定），本檔一個字都不重寫。
-    render_cards(build_status_bar_cards(_regime, error=_regime_err or None))
+    # 🔴 2026-09-24 整頁卡化：三張狀態卡改走 v2 卡面（`_tiles_of_cards()` 橋接）。
+    #    **內容仍然完全復用 `tab_today.build_status_bar_cards()`，本檔一個字都不重寫**；
+    #    換的只有畫它的那一層（`render_cards` → `_render_tiles` → v2 卡面）。
+    _render_tiles(_tiles_of_cards(
+        build_status_bar_cards(_regime, error=_regime_err or None)))
 
     _leaf1, _leaf2 = st.tabs([
         ia_nav.SECTION_LABELS[LEAF_CONCLUSION],
@@ -1915,7 +2913,8 @@ def render_page_today() -> None:
         #    本來每一輪就已經算出來了（修前算完丟掉，改成五桶摘要且零揭露）。
         _summary = _blocks["today.summary"]
         section_header(_summary.title, LEAF1_SUMMARY_NOTE)
-        render_cards(_summary.cards)
+        # 🔴 2026-09-24 整頁卡化：三欄摘要改走 v2 卡面（同上，內容一字未改）。
+        _render_tiles(_tiles_of_cards(_summary.cards))
 
         section_header("④ 今日關鍵橫幅")
         _render_tiles((build_key_alert_tile(
@@ -1927,7 +2926,8 @@ def render_page_today() -> None:
         #    連「為什麼未接線」的文案都走對面的 SSOT 常數。
         _warroom = _blocks["today.warroom"]
         section_header(_warroom.title)
-        render_cards(_warroom.cards)
+        # 🔴 2026-09-24 整頁卡化：⑤⑥ 兩張卡改走 v2 卡面（同上，內容一字未改）。
+        _render_tiles(_tiles_of_cards(_warroom.cards))
 
     with _leaf2:
         # 五桶摘要（原葉1 ③）搬到這裡 —— 葉2 本來就是五桶明細，這才是它的歸屬。

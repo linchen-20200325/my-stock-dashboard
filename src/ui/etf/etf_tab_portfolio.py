@@ -684,9 +684,12 @@ def render_etf_portfolio(gemini_fn=None):
         '1年含息報酬%': st.column_config.NumberColumn('1年含息報酬%', format='%+.2f%%'),
         '走勢':         st.column_config.LineChartColumn('近30日走勢'),
         '健康燈號':     st.column_config.TextColumn('σ 燈號', width='medium',
-                          help='🟢🟢🟢 大買 50% / 🟢🟢 買 30% / 🟢 小買 20% / 🔴 停利'),
+                          help=f'🟢🟢🟢 -{ETF_QUICK_SIGMA_DISASTER:g}σ 以下 / '
+                               f'🟢🟢 -{ETF_QUICK_SIGMA_OVERSOLD:g}σ~-{ETF_QUICK_SIGMA_DISASTER:g}σ / '
+                               f'🟢 -{ETF_QUICK_SIGMA_CHEAP:g}σ~-{ETF_QUICK_SIGMA_OVERSOLD:g}σ / '
+                               f'🔴 +{ETF_QUICK_SIGMA_OVERBOUGHT:g}σ 以上'),
         '動作建議':     st.column_config.TextColumn('動作建議', width='medium',
-                          help='依 σ 位階自動推導加碼/停利比例'),
+                          help='依 MA20 ± nσ 位階自動分級,顯示所屬 σ 區間'),
     }
 
     # 其他角色簡表
@@ -715,17 +718,21 @@ def render_etf_portfolio(gemini_fn=None):
         st.dataframe(_core_df, column_config=_core_cols,
                      use_container_width=True, hide_index=True)
     if _sat_rows:
-        st.markdown('##### 🚀 衛星資產戰情室（目標 20%）— 跌了就買 σ 分級')
+        st.markdown('##### 🚀 衛星資產戰情室（目標 20%）— MA20 ± nσ 位階分級')
         # F1 v19.184：σ 倍數插 SSOT（見 import 段註解）。
         # ⚠️ 加碼比例「50% / 30% / 20%」**刻意保留字面** —— 它們目前只以字串常值
         # 存在於 `src/compute/etf/etf_helpers.classify_etf_quick_sigma` 的回傳值裡
         # （`'大買 50%'`），全站沒有對應常數。在這裡新造一個 L0 常數而不改那邊，
         # 只會製造第二份真相（正是本批要消滅的東西）→ 列為 B 類待辦，
         # 需連同 `etf_helpers` 一起抽，不在本批範圍（該檔屬 L2，不在 F1 施工範圍）。
-        st.caption(f'🟢🟢🟢 < MA20-{ETF_QUICK_SIGMA_DISASTER:g}σ 股災價(大買 50%) ｜ '
-                   f'🟢🟢 < -{ETF_QUICK_SIGMA_OVERSOLD:g}σ 超跌(30%) ｜ '
-                   f'🟢 < -{ETF_QUICK_SIGMA_CHEAP:g}σ 便宜(20%) ｜ '
-                   f'🔴 ≥ +{ETF_QUICK_SIGMA_OVERBOUGHT:g}σ 停利')
+        # 📌 2026-09-21 更新：上游 `classify_etf_quick_sigma` 已把六個回傳值改為
+        # σ 位階語言（`'-3σ 以下'` / `'-2σ~-3σ'` / `'-1σ~-2σ'` / `'+2σ 以上'` /
+        # `'+1.5σ~+2σ'` / `'±1σ 內'`）→ 上段 B 類待辦的前提（回傳值含加碼比例
+        # 字面）已不成立。本處同步改為 MA20±nσ 觀測語。**上段沿革記錄保留不刪。**
+        st.caption(f'🟢🟢🟢 < MA20-{ETF_QUICK_SIGMA_DISASTER:g}σ 股災價 ｜ '
+                   f'🟢🟢 < -{ETF_QUICK_SIGMA_OVERSOLD:g}σ 超跌 ｜ '
+                   f'🟢 < -{ETF_QUICK_SIGMA_CHEAP:g}σ 便宜 ｜ '
+                   f'🔴 ≥ +{ETF_QUICK_SIGMA_OVERBOUGHT:g}σ 超漲')
         _sat_df = pd.DataFrame(_sat_rows)[
             ['代號', '名稱', '市價', '距月線%', 'σ位階',
              '1年含息報酬%', '走勢', '健康燈號', '動作建議']

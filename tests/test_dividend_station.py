@@ -238,7 +238,7 @@ def _assess(**kw):
 
 def test_suggest_action_cull_on_principal_eat():
     a = _assess(total_return_1y_pct=2, annual_yield_pct=6)   # 吃本金
-    assert ds.suggest_action(a).startswith("🔴 汰弱")
+    assert ds.suggest_action(a).startswith("🔴 健檢紅燈")
 
 
 def test_suggest_action_trend_weak_pauses_add():
@@ -246,7 +246,8 @@ def test_suggest_action_trend_weak_pauses_add():
     idx = pd.date_range("2022-01-07", periods=60, freq="W-FRI")
     wk = pd.Series(np.linspace(130, 100, 60), index=idx)     # 下彎、收季線下
     a = _assess(weekly_close=wk, vix=22, sharpe=1.0, total_return_1y_pct=15, annual_yield_pct=6)
-    assert "暫停加碼" in ds.suggest_action(a)
+    _txt = ds.suggest_action(a)
+    assert "235 條件已觸發" in _txt and "趨勢轉弱" in _txt
 
 
 def test_suggest_action_cruise():
@@ -293,7 +294,7 @@ def test_assess_stock_grade_f_bearish_kd_swap_out():
                          mj_fail_items=["負債比率", "流動比率", "現金"],
                          kd=_kd(label="死亡交叉", cross="death"))
     assert sa.swap_level == "🔴"
-    assert "換出" in sa.swap_action and "賣點確認" in sa.swap_action
+    assert "落在 C/F 兩級內" in sa.swap_action and "KD 同時轉弱" in sa.swap_action
 
 
 def test_assess_stock_grade_c_bullish_kd_batch():
@@ -302,7 +303,7 @@ def test_assess_stock_grade_c_bullish_kd_batch():
                          mj_grade="C", mj_score_pct=40, mj_headline="🟡",
                          mj_fail_items=["毛利率"], kd=_kd(label="黃金交叉", cross="golden"))
     assert sa.swap_level == "🟡"
-    assert "分批換" in sa.swap_action or "觀察" in sa.swap_action
+    assert "KD 轉強" in sa.swap_action and "方向相反" in sa.swap_action
 
 
 def test_assess_stock_grade_c_neutral_kd_swap_out():
@@ -310,7 +311,7 @@ def test_assess_stock_grade_c_neutral_kd_swap_out():
     sa = ds.assess_stock(ticker="3333", name="", asset_class=T.ASSET_SATELLITE,
                          mj_grade="C", mj_score_pct=45, mj_headline="🟡",
                          mj_fail_items=["負債比率"], kd=_kd(label="無"))
-    assert sa.swap_level == "🔴" and "換出" in sa.swap_action
+    assert sa.swap_level == "🔴" and "落在 C/F 兩級內" in sa.swap_action
 
 
 def test_assess_stock_grade_a_high_passivation_strong_hold():
@@ -318,7 +319,8 @@ def test_assess_stock_grade_a_high_passivation_strong_hold():
     sa = ds.assess_stock(ticker="4444", name="", asset_class=T.ASSET_SATELLITE,
                          mj_grade="A", mj_score_pct=85, mj_headline="🟢",
                          mj_fail_items=[], kd=_kd(label="高檔鈍化", high=True, k=92, d=90))
-    assert sa.swap_level == "🟢" and "強勢續抱" in sa.swap_action
+    assert sa.swap_level == "🟢" and "未落在 C/F" in sa.swap_action
+    assert "KD 高檔鈍化" in sa.swap_action
 
 
 def test_assess_stock_grade_a_bearish_kd_watch():
@@ -327,7 +329,7 @@ def test_assess_stock_grade_a_bearish_kd_watch():
                          mj_grade="A", mj_score_pct=80, mj_headline="🟢",
                          mj_fail_items=[], kd=_kd(label="頂背離", bear=True))
     assert sa.swap_level == "🟡"
-    assert "留意" in sa.swap_action and "換出" not in sa.swap_action
+    assert "KD 短線轉弱" in sa.swap_action and "落在 C/F 兩級內" not in sa.swap_action
 
 
 def test_assess_stock_grade_b_neutral_hold():
@@ -335,7 +337,7 @@ def test_assess_stock_grade_b_neutral_hold():
     sa = ds.assess_stock(ticker="6666", name="", asset_class=T.ASSET_SATELLITE,
                          mj_grade="B", mj_score_pct=65, mj_headline="🔵",
                          mj_fail_items=[], kd=_kd(label="無"))
-    assert sa.swap_level == "🟢" and "續抱" in sa.swap_action
+    assert sa.swap_level == "🟢" and "未落在 C/F" in sa.swap_action
 
 
 def test_assess_stock_no_financials_data_insufficient():
@@ -352,7 +354,7 @@ def test_assess_stock_no_kd_still_fundamentals_only():
     sa = ds.assess_stock(ticker="8888", name="", asset_class=T.ASSET_SATELLITE,
                          mj_grade="F", mj_score_pct=10, mj_headline="🔴",
                          mj_fail_items=["現金"], kd=None)
-    assert sa.swap_level == "🔴" and "換出" in sa.swap_action
+    assert sa.swap_level == "🔴" and "落在 C/F 兩級內" in sa.swap_action
     assert sa.kd_label == "資料不足"
 
 
