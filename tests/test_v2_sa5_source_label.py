@@ -67,5 +67,5 @@ def test_live_margin_flag_card_says_threshold_source():
     built = [b for b in P.build_spec_flag_cards(P.load_specs()) if b[0].key == "why.spec.margin"]
     assert built, "L0 目前沒有標記融資那一盞 —— 這一條沒有東西可驗"
     facts = dict(built[0][1])
-    assert facts.get("門檻出處", "").startswith("SSOT:MARGIN_BALANCE_OVERHEAT"), facts
+    assert facts.get("門檻出處", "").startswith("紅線 3,400 億"), facts  # 批 D4 B5-13 白話短版
     assert "值從哪來" not in facts
