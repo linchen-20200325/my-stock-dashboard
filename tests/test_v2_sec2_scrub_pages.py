@@ -161,7 +161,7 @@ _MUT: dict[str, dict[str, tuple[str, str]]] = {
     },
     "PI": {
         "why": _WHY_SCRUB,
-        "msg_fact": ('("L2 說明", scrub_secrets(val.msg))', '("L2 說明", val.msg)'),
+        "msg_fact": ('("上游說明", scrub_secrets(val.msg))', '("上游說明", val.msg)'),
         "msg_why": ("scrub_state_glyphs(scrub_secrets(val.msg))", "scrub_state_glyphs(val.msg)"),
         "chips_fact": ('("上游說明", scrub_secrets(chips.miss_reason))', '("上游說明", chips.miss_reason)'),
         "chips_why": ("scrub_state_glyphs(scrub_secrets(chips.miss_reason))",
@@ -624,7 +624,7 @@ def _pi_texts(mod, raw: str) -> dict[str, str]:
             mod.InspectRequest(submitted=True, ticker="2330"))),
         "val_red": _built_text(mod, mod.build_valuation_card(
             mod.ValuationReadout(requested=True, error=mod._error_why(mod.SRC_DIVIDENDS, raw)))),
-        "msg_fact": dict(_val_empty[1])["L2 說明"],
+        "msg_fact": dict(_val_empty[1])["上游說明"],
         "msg_why": _val_empty[0].note.why,
         "chips_fact": dict(_chips_empty[1])["上游說明"],
         "chips_why": _chips_empty[0].note.why,

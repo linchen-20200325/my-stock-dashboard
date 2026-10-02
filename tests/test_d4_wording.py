@@ -63,3 +63,13 @@ def test_b5_numbers_follow_the_constants():
         for v in (s.yellow, s.red):
             assert (f"{v:g}" in s.source or f"{v:,.0f}" in s.source
                     or f"{v:.1f}" in s.source), (key, v, s.source)
+
+
+def test_w_f5_valuation_card_label_is_upstream_note():
+    """W-f5：估值卡那一列標籤由「L2 說明」改「上游說明」（同籌碼卡既有字樣），內容原樣。"""
+    import inspect as _inspect
+
+    from src.ui.views import page_inspect as PI
+    src = _inspect.getsource(PI.build_valuation_card)
+    assert '("上游說明", scrub_secrets(val.msg))' in src
+    assert "L2 說明" not in src
