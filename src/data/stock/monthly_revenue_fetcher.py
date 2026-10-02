@@ -58,7 +58,7 @@ def _get_token() -> str:
             os.environ.get("FM_TOKEN", ""))
 
 
-def _single_finmind(stock_id: str, months: int = 18) -> pd.DataFrame:
+def _single_finmind(stock_id: str, months: int = 18, *, failed: list | None = None) -> pd.DataFrame:
     """[私有] 單股近 N 月營收 FinMind 主源實作(TaiwanStockMonthRevenue)。
 
     公開入口 `fetch_monthly_revenue` 於此回空時改走 TWSE/TPEx OpenAPI keyless fallback
@@ -71,6 +71,8 @@ def _single_finmind(stock_id: str, months: int = 18) -> pd.DataFrame:
     Returns:
         DataFrame columns: date / revenue / revenue_year / revenue_month
         失敗回空 DataFrame
+
+    failed(D2-f22 變形,批 D2;預設 None = 既有行為不變):轉給 `finmind_get`,確定抓取失敗時寫一筆說明。
     """
     _tok = _get_token()
     if not _tok:
@@ -86,6 +88,7 @@ def _single_finmind(stock_id: str, months: int = 18) -> pd.DataFrame:
             start_date=_start,
             token=_tok,
             timeout=20,
+            failed=failed,
         )
         if _df.empty:
             return pd.DataFrame()
@@ -354,9 +357,12 @@ def _fetch_monthly_revenue_cached(stock_id: str, months: int = 18) -> pd.DataFra
     這一層不知道該股在上市還是上櫃 —— 有一邊確定失敗、這檔又沒拿到,它就可能正在失敗的那一邊,
     不猜(§1),一律不入快取。其餘結果照舊回傳、照舊快取:FinMind 有資料;OpenAPI 拿到這一檔(即使
     另一邊失敗 —— 一檔只在其中一個市場);沒有確定失敗的空表(與真的沒資料分不出來)。
-    ⚠️ 本批不處理(照舊快取,等 D2-f24 的 FinMind 狀態入口):FinMind 掛掉、OpenAPI 正常時的降級 1 列。
+    D2-f22 變形(批 D2,經 D2-f24 的 `finmind_get(failed=…)`):FinMind **確定抓取失敗**、改走 OpenAPI
+    拿到的降級 1 列 → 同樣拋 `_SingleRevenueFetchFailed`(不入快取),`.payload` 即那一份降級結果
+    (回傳不變);FinMind 恢復後冷卻期滿即重抓。FinMind 只是回空(非確定失敗)→ 照舊快取。
     """
-    _df = _single_finmind(stock_id, months)
+    _fm_failed: list[str] = []
+    _df = _single_finmind(stock_id, months, failed=_fm_failed)
     if _df is not None and not _df.empty:
         return _df
     print(f"[mrev-fetcher] {stock_id} FinMind 無資料 → TWSE/TPEx OpenAPI fallback(單股篩)")
@@ -367,6 +373,8 @@ def _fetch_monthly_revenue_cached(stock_id: str, months: int = 18) -> pd.DataFra
     if _one.empty:
         if _failed:   # D2-f22:這一檔沒拿到,且有市場確定抓取失敗 → 不入快取
             raise _SingleRevenueFetchFailed(pd.DataFrame(), "；".join(_failed))
+        if _fm_failed:   # D2-f22 變形:主源確定失敗、備援也沒有這一檔 → 不入快取
+            raise _SingleRevenueFetchFailed(pd.DataFrame(), "FinMind " + "；".join(_fm_failed))
         return pd.DataFrame()
     _one["revenue_year"] = _one["date"].dt.year
     _one["revenue_month"] = _one["date"].dt.month
@@ -376,6 +384,8 @@ def _fetch_monthly_revenue_cached(stock_id: str, months: int = 18) -> pd.DataFra
         _one.attrs["fetched_at"] = pd.Timestamp.now("UTC").isoformat()
     except Exception:
         pass
+    if _fm_failed:   # D2-f22 變形:FinMind 確定抓取失敗 → 降級結果不入快取
+        raise _SingleRevenueFetchFailed(_one, "FinMind " + "；".join(_fm_failed))
     return _one
 
 
@@ -424,7 +434,8 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
     try:
         _df = _fetch_monthly_revenue_cached(stock_id, months)
     except _SingleRevenueFetchFailed as _sf:
-        print(f"[mrev-fetcher] {stock_id} 無資料且 OpenAPI 確定抓取失敗({_sf})→ 不入快取,"
+        print(f"[mrev-fetcher] {stock_id} "
+              f"{'無資料且 OpenAPI' if _sf.payload.empty else '降級結果、FinMind'} 確定抓取失敗({_sf})→ 不入快取,"
               f"{_cooldown_note(_single_fail_cooldown)}")
         return _single_fail_cooldown.fail(_key, _gen, _sf.payload)
     _single_fail_cooldown.success(_key)

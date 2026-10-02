@@ -852,7 +852,8 @@ class TestD2f22StillCached:
         "not_listed_one_empty200": ("9999", "ok", "empty200", "empty"),
         "both_empty200": ("2330", "empty200", "empty200", "empty"),
         "finmind_ok": ("2330", "none", "none", "ok"),
-        # D2-f22 的「變形」（本批不處理，等 D2-f24）：FinMind 掛掉（這一層只看得到空）、OpenAPI 正常 → 降級 1 列照舊快取
+        # FinMind 回空但**未回報確定失敗**（替身 finmind_get 不寫 failed）、OpenAPI 正常 → 降級 1 列照舊快取
+        # （FinMind 確定失敗的那一種〔D2-f22 變形〕自批 D2 起不入快取，見 tests/test_d2_mrev_variant_fail_cache.py）
         "variant_finmind_down_openapi_ok": ("2330", "ok", "ok", "empty"),
     }
 
