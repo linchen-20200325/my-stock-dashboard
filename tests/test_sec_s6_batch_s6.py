@@ -140,7 +140,7 @@ def test_r29b_non_toml_shapes_unchanged(x):
     assert scrub_secrets(x) == x == _MAIN.scrub_secrets(x)
 
 
-_R29B_OFF = ("    (_TOML_EXISTS_DICT_HTML_RE, lambda m: m.group(1) + MASK),\n", "")
+_R29B_OFF = ("    if any(_n in out for _n in _POST_NEEDLES[_TOML_EXISTS_DICT_HTML_RE]):\n", "    if False:\n")
 #: 實作組自測抓到的少遮形態（若把 HTML 引號直接併進 `_TOML_EXISTS_DICT_RE`，它先遮到行尾、數字轉換那一條就少遮）。
 _R29B_ORDER = [
     "'could not convert string to float: \\&#x27;&#x27;could not convert string to float: already exists?{&quot;a\""
@@ -172,7 +172,9 @@ def test_r29b_mutant_without_html_quotes_leaks():
 # ⭐ 結構保證：關掉本批新增的部分 → 輸出與 main 792c7a2 逐字相同；且本批任何樣本都不比 main／bf0ada3／e23ff2f 少遮
 # ══════════════════════════════════════════════════════════════════
 #: 本批每一項的「關掉」突變（後面各項完成時一併登記）。
-_S6_OFF: list[tuple[str, str]] = [_R29B_OFF]  # SEC-r29 (c) 的關掉突變在檔尾登記（_R29C_OFF）
+#: 批 S6 QA 修正輪起：本批新增的遮罩全部集中在 `_mask_s6`（main 整條流程之後），這一項關掉全部；各項自己的關掉突變另外登記。
+_S6_ALL_OFF = ("    return _mask_s6(orig_vals, out)\n", "    return out\n")
+_S6_OFF: list[tuple[str, str]] = [_S6_ALL_OFF, _R29B_OFF]  # SEC-r29 (c) 的關掉突變在檔尾登記（_R29C_OFF）
 #: 本批新增的樣本（一併涵蓋於結構保證與「不少遮」）。
 _S6_EXTRA_CORPUS: list[str] = _R28_TWO_EATEN.splitlines() + [_R28_TWO_EATEN] + _R29B_HTML + _R29B_PLAIN + _R29B_ORDER
 
@@ -218,7 +220,8 @@ def test_s6_ui_string_constants_unchanged_vs_main():
     cur = {k: v for k, v in vars(SSC).items() if k.isupper() and isinstance(v, str)}
     old = {k: v for k, v in vars(_MAIN).items() if k.isupper() and isinstance(v, str)}
     assert cur == old
-    assert SSC.__doc__ == _MAIN.__doc__
+    #: ~~`assert SSC.__doc__ == _MAIN.__doc__`~~ ← 批 S6 QA 修正輪（2026-10-02）移除，有意識的更正、不是漏刪：檔頭是行為描述，
+    #: 本批要據實補上 SEC-r29 (b)／(c) 與 F1／F3 的行為與邊界（批 S6 QA 第一組 G3），不再與 main 逐字相同；UI 字串常數照舊逐字核對。
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -247,7 +250,10 @@ def _S6_EXTRA_FORMS(n: int) -> dict[str, str]:  # noqa: N802 —— 後面各項
     return {"rem_anchor_flood": longv + ("y" * 3 + anchor) * (n // 30),
             "rem_anchor_mask_flood": longv.replace(anchor, "'\nTomlDecodeError") + ("'" + MASK + "zzzz") * (n // 8),
             "rem_many_long_values": many_vals * (n // len(many_vals) + 1),
-            "rem_der_eaten_lines": (key + "\n" + conv + "'" + key + " S" + anchor + "\n") * (n // 200)}
+            "rem_der_eaten_lines": (key + "\n" + conv + "'" + key + " S" + anchor + "\n") * (n // 200),
+            #: 批 S6 QA F1：整窗都是 `***` 的錨點（見 `_f1_repro`）；HTML 引號超長值（批 S6 QA F3）。
+            "rem_star_windows": _f1_repro() * (n // 380_000 + 1),
+            "html_long_values": ("could not convert string to float: &#x27;" + "x" * 5000 + " (line 1 column 1 char 0)\n") * (n // 5000)}
 
 
 _CPU_SCRIPT_MAIN = (
@@ -575,7 +581,7 @@ def test_r29c_unrelated_text_unchanged_vs_main(x):
     assert scrub_secrets(x) == _MAIN.scrub_secrets(x) and scrub_prose_secrets(x) == _MAIN.scrub_prose_secrets(x)
 
 
-_R29C_OFF = ("        out = _mask_toml_remnant(_head, _close, _ctx, out)\n"
+_R29C_OFF = ("        _spans += _toml_remnant_spans(_head, _close, _ctx, out, _budget)\n"
              "        if not _has_suf:\n", "        if False:\n")
 
 
@@ -586,7 +592,7 @@ def test_r29c_mutant_without_remnant_pass_leaks():
 
 def test_r29c_mutant_without_mask_anchor_leaks_double_repr():
     """沒有位置字尾、緊接在後的 `\\\\nTomlDecodeError` 也被遮掉 → 只靠「收尾引號＋遮罩」那個錨點。"""
-    m = _mutant(("            out = _mask_toml_remnant(_head, _close, MASK, out)", "            pass"))
+    m = _mutant(("            _spans += _toml_remnant_spans(_head, _close, MASK, out, _budget)", "            pass"))
     assert any("R29CSECRET" in m.scrub_secrets(t) for n, t in _R29C_FORMS if n == "rr")
 
 
@@ -594,10 +600,264 @@ def test_r29c_mutant_last_segment_not_required_as_suffix_masks_unrelated_text():
     """反方向：最靠近錨點那一段不要求是值的結尾 → 錨點前的無關文字也被遮（條件是承重的）。"""
     x = ("could not convert string to float: 'R29CSECRET0123456789abcdefghij0123456789' (line 1 column 1 char 0)\n"
          "ab' (line 1 column 1 char 0)")
-    m = _mutant(("_left.endswith(_sg) else (", "True else ("))
+    m = _mutant(("or not head.endswith(_last):", "or False:"))
     assert scrub_secrets(x) == _MAIN.scrub_secrets(x) and "\nab'" in scrub_secrets(x)
     assert "\nab'" not in m.scrub_secrets(x)
 
 
 _S6_OFF.append(_R29C_OFF)
 _S6_EXTRA_CORPUS.extend(_R29C[::3] + [repr(x) for x in _R29C[1::7]] + [repr(repr(x)) for x in _R29C[2::7]])
+
+
+# ══════════════════════════════════════════════════════════════════
+# 批 S6 QA 修正輪（2026-10-02）：F1 效能、F2 秘密在像金鑰的字之前、F3 超長 HTML 引號值、
+# G1 HTML 重複表規則讓原始文字那一道找不到字面（比 main 少遮）、G2 剩餘片段那一道的分支各自有測試殺突變
+# ══════════════════════════════════════════════════════════════════
+import shared.secret_scrub as _SSC  # noqa: E402
+
+_ANCHOR = "' (line 1 column 1 char 0)"
+
+
+def _f1_repro() -> str:
+    """批 S6 QA F1 的重現：64 個不同的長值＋150 個「整窗都是 `***`」的錨點（舊寫法每個錨點逐段跑 ~690 個空段）。"""
+    vals = [f"could not convert string to float: '{i:03d}" + "a" * 999 + _ANCHOR for i in range(64)]
+    return "\n".join(vals + ["*" * 2061 + _ANCHOR] * 150)
+
+
+def _cpu_best(f, x, n=2):
+    import time
+    best = None
+    for _ in range(n):
+        t = time.process_time()
+        f(x)
+        d = time.process_time() - t
+        best = d if best is None else min(best, d)
+    return best
+
+
+@pytest.mark.parametrize("fn", ["scrub_secrets", "scrub_prose_secrets"])
+def test_f1_star_window_repro_within_2x_main(fn):
+    """批 S6 QA F1：分支 4.4 秒、main 0.89 秒（修正前）。現在 ≤ 2 倍 main ＋ 0.2 秒（量測雜訊）。"""
+    x = _f1_repro()
+    new, old = _cpu_best(getattr(_SSC, fn), x), _cpu_best(getattr(_MAIN, fn), x)
+    assert new <= 2 * old + 0.2, (new, old)
+
+
+def test_f1_star_window_repro_output_never_less():
+    x = _f1_repro()
+    assert _is_masking_of(scrub_secrets(x), _MAIN.scrub_secrets(x))
+
+
+def test_f1_budget_exhausted_falls_back_to_masking_whole_window(monkeypatch):
+    """工作量用完 → 剩下的錨點不比對、整個視窗遮掉：結果仍是「正常結果再多遮」，秘密不外露。"""
+    xs = [t for _, t in _R29C_FORMS[:60]] + [_F2_CASES[0]]
+    normal = [scrub_secrets(t) for t in xs]
+    monkeypatch.setattr(_SSC, "_TOML_REM_BUDGET", 1)
+    for t, n in zip(xs, normal):
+        o = scrub_secrets(t)
+        assert _is_masking_of(o, n) and "R29CSECRET" not in o and "SECA" not in o, (t[-80:], o[-80:])
+
+
+def _f2_cases() -> list[str]:
+    from tests.test_sec_s3_batch_s3 import _b64, _pkcs8, _wrap
+    keyline = _wrap(_b64(_pkcs8(5)))[0]
+    keylike = _wrap(_b64(_pkcs8(7)))[0]
+    out = []
+    for q in ("'", '"', "&#x27;"):
+        x = keyline + "\n" + f"could not convert string to float: {q}SECA {keylike}{q} (line 1 column 1 char 0)"
+        out += [x, repr(x)]
+    return out
+
+
+_F2_CASES = _f2_cases()
+
+
+def test_f2_premise_main_leaks():
+    assert all("SECA" in _MAIN.scrub_secrets(t) for t in _F2_CASES)
+
+
+@pytest.mark.parametrize("fn", [scrub_secrets, scrub_prose_secrets], ids=["errors", "prose"])
+@pytest.mark.parametrize("x", _F2_CASES)
+def test_f2_secret_before_keylike_token_masked(x, fn):
+    out = fn(x)
+    assert "SECA" not in out, out[-90:]
+    _never_less(x)
+
+
+def test_f2_mutant_without_open_part_leaks():
+    m = _mutant(("                _j = _open_part_len(head, _sg, budget)\n", "                _j = 0\n"))
+    assert all("SECA" in m.scrub_secrets(t) for t in _F2_CASES)
+
+
+_F3_LONG = [f"could not convert string to float: {q}1.0SECX" + "x" * 5000 + f"{q} (line 1 column 1 char 0)"
+            for q in _HTML_Q]
+_F3_OPEN = [f"could not convert string to float: {q}1.0SECX tail (line 1 column 1 char 0)" for q in _HTML_Q] + \
+           [f"TomlDecodeError\ninvalid literal for int() with base 0: {q}0xSECX" for q in _HTML_Q]
+
+
+def test_f3_premise_main_leaks():
+    assert all("SECX" in _MAIN.scrub_secrets(t) for t in _F3_LONG + _F3_OPEN)
+
+
+@pytest.mark.parametrize("fn", [scrub_secrets, scrub_prose_secrets], ids=["errors", "prose"])
+@pytest.mark.parametrize("x", _F3_LONG + _F3_OPEN)
+def test_f3_over_limit_or_unclosed_html_value_masked_to_end_of_line(x, fn):
+    out = fn(x)
+    assert "SECX" not in out and out.splitlines()[-1].endswith(": ***"), out[-80:]
+    _never_less(x)
+
+
+@pytest.mark.parametrize("x", [
+    "could not convert string to float: &#x27;1.0SECX" + "x" * 5000 + "&#x27;",    # 無字尾、無型別名：一般錯誤
+    "could not convert string to float: &#x27;abc&#x27; (line 1 column 1 char 0)\n下一行",  # 4096 字內有收尾：照舊
+    "could not convert string to float: &quot;abc",
+])
+def test_f3_other_shapes_unchanged_vs_main(x):
+    assert scrub_secrets(x) == _MAIN.scrub_secrets(x) and scrub_prose_secrets(x) == _MAIN.scrub_prose_secrets(x)
+
+
+def test_f3_mutant_without_rule_leaks():
+    m = _mutant(("_TOML_CONV_HTML_LONG_RE.finditer(out)", "()"))
+    assert all("SECX" in m.scrub_secrets(t) for t in _F3_LONG)
+
+
+_G1 = ["TomlDecodeError ?token=abc\\ncould not convert string to float: 'hunter2SECRET already exists?{&quot;",
+       "TomlDecodeError ?token=abc\\ncould not convert string to float: 'hunter2SECRET already exists?{&#x27;a&#x27;: 1",
+       "?token=abc\\ncould not convert string to float: 'hunter2SECRET already exists?{&#39;x (line 1 column 1 char 0)"]
+
+
+@pytest.mark.parametrize("fn", [scrub_secrets, scrub_prose_secrets], ids=["errors", "prose"])
+@pytest.mark.parametrize("x", _G1)
+def test_g1_html_dup_table_rule_never_hides_value_from_original_text_pass(x, fn):
+    """批 S6 QA 第一組 G1：舊寫法分支輸出 `'hunter2SECRET already exists?***`、main 輸出 `***`。"""
+    main_fn = _MAIN.scrub_secrets if fn is scrub_secrets else _MAIN.scrub_prose_secrets
+    assert "hunter2SECRET" not in main_fn(x), "前提：main 遮得到"
+    assert "hunter2SECRET" not in fn(x) and _is_masking_of(fn(x), main_fn(x)), fn(x)
+
+
+def test_g1_mutant_html_rule_back_in_rules_new_masks_less():
+    """反證位置是承重的：把 HTML 重複表那一條放回 `_RULES_NEW`（原始文字那一道之前）→ 比 main 少遮。"""
+    m = _mutant(_R29B_OFF, ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n)",
+                            "    (_TOML_CONV_RE, _mask_toml_conv_for),\n    (_TOML_EXISTS_DICT_HTML_RE, lambda m: m.group(1) + MASK),\n)"))
+    assert "hunter2SECRET" in m.scrub_secrets(_G1[0])
+
+
+# —— G2：剩餘片段那一道（`_toml_remnant_spans`／`_mask_spans`）每個分支都由下面的測試釘住 ——
+_SUF = " (line 1 column 1 char 0)"
+
+
+def _spans(head: str, out: str, ctx: str = _SUF, mod=_SSC):
+    return mod._toml_remnant_spans(head, "'", ctx, out, [mod._TOML_REM_BUDGET])
+
+
+def test_g2_window_edge_first_segment_not_matched():
+    """視窗切斷的第一段（只剩 `cc`）即使字面出現在值裡也不比對 ⇒ 不遮視窗外延的那一段文字。"""
+    head = "'" + "c" * 20 + "D" * 100
+    out = "c" * 50 + MASK * 68 + "D" * 100 + "'" + _SUF
+    p = out.index("'" + _SUF)
+    assert _spans(head, out) == [(50, p)]
+    m = _mutant(("            if _k == 0 and _w0 > 0:                         # 被視窗切斷的第一段：不比對\n"
+                 "                _f = 0\n                break\n", ""))
+    assert _spans(head, out, mod=m) != [(50, p)]
+
+
+def test_g2_preceding_mask_merged_into_span():
+    """比對不上的段落後面那個遮罩併進來：`xyz: *** SECRET'…` → `xyz: ***'…`（不是 `xyz: ******'…`）。"""
+    head, out = "'abc SECRET", "xyz: " + MASK + " SECRET'" + _SUF
+    assert _SSC._mask_spans(out, _spans(head, out)) == "xyz: ***'" + _SUF
+    m = _mutant(("        _start = _sp - len(MASK) * (_kp - _f) if _f >= 0 else _w0\n",
+                 "        _start = _sp - len(MASK) * (_kp - _f - 1) if _f >= 0 else _w0\n"))
+    assert m._mask_spans(out, _spans(head, out, mod=m)) != "xyz: ***'" + _SUF
+
+
+def test_g2_no_alnum_in_matched_text_not_masked():
+    """比對上的只有空白／標點 → 不遮（`_hit` 是承重的）。"""
+    head, out = "'ab  ", "zz" + MASK + "  '" + _SUF
+    assert _spans(head, out) == []
+    m = _mutant(("        if not _hit:\n            continue\n", ""))
+    assert _spans(head, out, mod=m) != []
+
+
+def test_g2_mask_spans_union():
+    """聯集：重疊、相接、包含的範圍各併成一個遮罩。"""
+    s = "abcdefghij"
+    assert _SSC._mask_spans(s, [(0, 5), (3, 8)]) == "***ij"
+    assert _SSC._mask_spans(s, [(3, 6), (0, 3)]) == "***ghij"
+    assert _SSC._mask_spans(s, [(0, 8), (2, 4)]) == "***ij"
+    assert _SSC._mask_spans(s, [(1, 2), (5, 5), (7, 9)]) == "a***cdefg***j"
+    m1 = _mutant(("        if _cur is not None and _a <= _cur[1]:\n", "        if False:\n"))
+    m2 = _mutant(("            _cur = (_cur[0], max(_cur[1], _b))", "            _cur = (_cur[0], _b)"))
+    assert m1._mask_spans(s, [(0, 5), (3, 8)]) != "***ij" and m2._mask_spans(s, [(0, 8), (2, 4)]) != "***ij"
+
+
+def test_g2_open_part_requires_value_start():
+    """開頭片段只認「開頭引號＋值的開頭」：比對不上的段落結尾不是值的開頭 → 停手、不往左延伸。"""
+    head = "'SECA KEYLIKE"
+    out = "note: 'SECX " + MASK + "'" + _SUF                  # `'SECX ` 不是值的開頭 → 不遮 note
+    assert _spans(head, out) == []
+    out2 = "note: 'SECA " + MASK + "'" + _SUF
+    assert _SSC._mask_spans(out2, _spans(head, out2)) == "note: ***'" + _SUF
+
+
+def test_g2_budget_fallbacks_each_mask_window(monkeypatch):
+    """工作量用完的兩個出口（錨點開頭、逐段比對途中）都把整個視窗遮掉；任一出口改成不遮 → 外露。"""
+    head = "'SECA " + "K" * 40
+    out = "zz: 'SECA " + MASK + "'" + _SUF
+    p = out.index("'" + _SUF)
+    w0 = max(0, p - (2 * len(head) + _SSC._TOML_REM_PAD))
+    assert _SSC._toml_remnant_spans(head, "'", _SUF, out, [-1]) == [(w0, p)]           # 一開始就用完
+    assert _SSC._toml_remnant_spans(head, "'", _SUF, out, [p - w0 + 1]) == [(w0, p)]   # 逐段比對途中用完
+    m1 = _mutant(("            _spans.append((_w0, _p))                        # 工作量用完：整個視窗遮掉（只會多遮）\n",
+                  "            pass\n"))
+    m2 = _mutant(("        if _over:\n            _spans.append((_w0, _p))\n", "        if _over:\n            pass\n"))
+    assert m1._toml_remnant_spans(head, "'", _SUF, out, [-1]) == []
+    assert m2._toml_remnant_spans(head, "'", _SUF, out, [p - w0 + 1]) == []
+
+
+_S6_EXTRA_CORPUS.extend(_F2_CASES + _F3_LONG + _F3_OPEN + _G1)
+
+
+def test_g2_segments_must_appear_in_order_left_of_previous():
+    """往左每一段都必須出現在右邊那一段**左邊**：`zz` 在值裡只出現在 `SECRET` 右邊 → 停在 `zz`、不遮它。"""
+    head, out = "'Q SECRET zz yy", "zz" + MASK + "SECRET" + MASK + " yy'" + _SUF
+    assert _SSC._mask_spans(out, _spans(head, out)) == "zz***'" + _SUF
+    m = _mutant(("            _lim, _kp, _sp = _at, _k, _end - len(_sg)", "            _lim, _kp, _sp = _lim, _k, _end - len(_sg)"))
+    assert m._mask_spans(out, _spans(head, out, mod=m)) != "zz***'" + _SUF
+
+
+def test_g2_open_part_needs_at_least_two_chars():
+    """只剩開頭引號（1 字）不算開頭片段：`xyz: '*** SECRET'…` → `xyz: '***'…`。"""
+    head, out = "'abc SECRET", "xyz: '" + MASK + " SECRET'" + _SUF
+    assert _SSC._mask_spans(out, _spans(head, out)) == "xyz: '***'" + _SUF
+    m = _mutant(("    while 0 <= _i <= len(sg) - 2:", "    while 0 <= _i <= len(sg) - 1:"))
+    assert m._mask_spans(out, _spans(head, out, mod=m)) != "xyz: '***'" + _SUF
+
+
+def test_g2_empty_value_not_treated_as_remnant():
+    """值是空的（只有一對引號）→ 沒有東西可遮，開頭引號照原樣。"""
+    q = "&#x27;"
+    out = q + q + _SUF
+    assert _SSC._toml_remnant_spans(q, q, _SUF, out, [_SSC._TOML_REM_BUDGET]) == []
+    m = _mutant(("    if not close or len(head) <= len(close):\n        return []\n    if ctx:",
+                 "    if not close:\n        return []\n    if ctx:"))
+    assert m._toml_remnant_spans(q, q, _SUF, out, [m._TOML_REM_BUDGET]) != []
+
+
+def _end_case() -> str:
+    from tests.test_sec_s3_batch_s3 import _b64, _pkcs8, _wrap
+    return ("TomlDecodeError x\n" + _wrap(_b64(_pkcs8(5)))[0] + "\ncould not convert string to float: '"
+            + _wrap(_b64(_pkcs8(7)))[0] + " ENDSEC'")
+
+
+@pytest.mark.parametrize("fn", [scrub_secrets, scrub_prose_secrets], ids=["errors", "prose"])
+def test_g2_value_at_end_of_string_anchor(fn):
+    """值在字串結尾（沒有位置字尾、後面也沒有字）→ 錨點是輸出結尾的收尾引號。"""
+    x = _end_case()
+    assert "ENDSEC" in _MAIN.scrub_secrets(x), "前提：main 外露"
+    assert "ENDSEC" not in fn(x), fn(x)[-60:]
+    _never_less(x)
+    m = _mutant(("        _ps = [len(out) - len(close)] if out.endswith(close) else []", "        _ps = []"))
+    assert "ENDSEC" in m.scrub_secrets(x)
+
+
+_S6_EXTRA_CORPUS.append(_end_case())
