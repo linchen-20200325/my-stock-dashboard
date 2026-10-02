@@ -382,7 +382,13 @@ def _try_cbc_ms1_dated(url: str) -> Optional[tuple]:
     data = fetch_cbc_ms1_rows(url, min_rows=13, timeout=12)
     if data is None:
         return None
-    df, why = parse_cbc_ms1_rows(data)
+    try:
+        # D3 QA：壞月份（2026M13／M00／2026-0）會讓解析器的 `datetime.date` 拋 ValueError ——
+        # 不得冒出 `fetch_cbc_m1b_m2`（否則 Tier 2 EF15M01 永遠沒機會試）。比照 EF15M01 的守法：拒用、往下。
+        df, why = parse_cbc_ms1_rows(data)
+    except (ValueError, TypeError, OverflowError) as e:
+        print(f'{tag} ❌ {url[-40:]} 解析例外 {type(e).__name__}: {e} → 拒用,往下一層')
+        return None
     if df is None:
         print(f'{tag} ❌ {url[-40:]} {why} → 往下一層')
         return None
