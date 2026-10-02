@@ -636,7 +636,7 @@ def macro_state_is_expired(state: dict | None, *, now=None) -> bool:
 
     依 `timestamp`（`_now_str()` 寫入的台北時間）算年齡，超過
     `shared.staleness.MACRO_VERDICT_MAX_AGE_DAYS` 日曆天 → 過期。
-    `timestamp` 缺／空／解析不了 → **視為過期**（§1：確認不了裁決產生時間，
+    `timestamp` 缺／空／解析不了，或超前現在超過 `MACRO_VERDICT_FUTURE_SKEW_DAYS` → **視為過期**（§1：確認不了裁決產生時間，
     就不得把它當成當下的天花板；對齊 `staleness.gate_for_realtime` 的 fail-safe）。
 
     Args:
@@ -644,7 +644,7 @@ def macro_state_is_expired(state: dict | None, *, now=None) -> bool:
         now: 基準時間（aware datetime；測試注入）。None → 現在（台北時間）。
     """
     from datetime import datetime, timezone, timedelta
-    from shared.staleness import MACRO_VERDICT_MAX_AGE_DAYS
+    from shared.staleness import MACRO_VERDICT_FUTURE_SKEW_DAYS, MACRO_VERDICT_MAX_AGE_DAYS
     _tz = timezone(timedelta(hours=8))
     _ts = (state or {}).get("timestamp") if isinstance(state, dict) else None
     try:
@@ -652,4 +652,6 @@ def macro_state_is_expired(state: dict | None, *, now=None) -> bool:
     except (TypeError, ValueError):
         return True
     _now = now if now is not None else datetime.now(_tz)
+    if (_made - _now) > timedelta(days=MACRO_VERDICT_FUTURE_SKEW_DAYS):
+        return True     # D3 QA：超前現在超過時鐘誤差 → 時間戳不可信，當過期（否則永不過期）
     return (_now - _made) > timedelta(days=MACRO_VERDICT_MAX_AGE_DAYS)
