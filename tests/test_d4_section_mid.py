@@ -45,7 +45,8 @@ def test_m2n_f6_all_five_present_keeps_original_line(monkeypatch):
 
 
 @pytest.mark.parametrize("drop,name", [("tw_export", "台灣出口 YoY"), ("ndc_signal", "NDC 燈號"),
-                                       ("us_core_cpi", "美國核心 CPI")])
+                                       ("us_core_cpi", "美國核心 CPI"), ("vix", "VIX"),
+                                       ("ism_pmi", "台灣 PMI")])
 def test_m2n_f6_missing_input_is_named(drop, name, monkeypatch):
     info = {k: v for k, v in _ALL5.items() if k != drop}
     out = _run(info, monkeypatch, bias_info={"bias_240": 5.0})

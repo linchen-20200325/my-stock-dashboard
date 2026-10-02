@@ -116,11 +116,14 @@ def test_dl_f1_s67_m1b_hit_source_chain_order():
     assert "CBC ms1 → FRED → IMF → ^TWII proxy" not in src
 
 
-def _coverage_macro_detail(us10y_close):
+def _coverage_macro_detail(us10y_close, us10y_macro=None):
     import streamlit as st
 
     from src.ui.pages.data_coverage import compute_tab_coverage
-    _ss = {"macro_info": {"vix": {"current": 17.2}, "_loaded_at": "2026-08-20T01:00"},
+    _mi = {"vix": {"current": 17.2}, "_loaded_at": "2026-08-20T01:00"}
+    if us10y_macro is not None:
+        _mi["us10y"] = {"current": us10y_macro}
+    _ss = {"macro_info": _mi,
            "cl_data": {"intl": {"10Y公債殖利率": pd.DataFrame({"close": [us10y_close]})}}}
     for k, v in _ss.items():
         st.session_state[k] = v
@@ -198,3 +201,19 @@ def test_w2_f1_etf_force_refresh_help():
     src = _inspect.getsource(T)
     assert "help='清快取（不需重填表格），會一併清掉其他頁快取'" in src
     assert "重新抓取最新現價與配息" not in src
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_c1_mixed_non_finite_and_finite_out_of_range_stays_dimension_anomaly(bad):
+    """C1 只在「被擋的值**全是**非有限值」時改組；混有一筆有限值超範圍 ⇒ 仍是量綱問題。"""
+    from src.compute.macro.macro_helpers import compute_five_bucket_summary
+    rd: dict = {}
+    compute_five_bucket_summary(
+        macro_info={"us10y": {"current": bad}},
+        cl_data={"intl": {"10Y公債殖利率": pd.DataFrame({"close": [46.3]})}},
+        readiness_out=rd)
+    _whys = [x[2] for x in rd["us10y"]["rejected"]]
+    assert "非有限值(NaN / ±inf)" in _whys and any(w.startswith("out_of_range") for w in _whys), _whys
+    detail = _coverage_macro_detail(46.3, us10y_macro=bad)
+    assert "📐 量綱異常(1):us10y" in detail, detail
+    assert "📵 上游無值" not in detail or "us10y" not in detail.split("📵 上游無值")[1].split("→")[0], detail
