@@ -829,8 +829,7 @@ def test_g2_budget_fallbacks_each_mask_window(monkeypatch):
     w0 = max(0, p - (2 * len(head) + _SSC._TOML_REM_PAD))
     assert _SSC._toml_remnant_spans(head, "'", _SUF, out, [-1]) == [(w0, p)]           # 一開始就用完
     assert _SSC._toml_remnant_spans(head, "'", _SUF, out, [p - w0 + 1]) == [(w0, p)]   # 逐段比對途中用完
-    m1 = _mutant(("            _spans.append((_w0, _p))                        # 工作量用完：整個視窗遮掉（只會多遮）\n",
-                  "            pass\n"))
+    m1 = _mutant(("            _spans.append((_w0, _ps[-1]))\n            break\n", "            break\n"))
     m2 = _mutant(("        if _over:\n            _spans.append((_w0, _p))\n", "        if _over:\n            pass\n"))
     assert m1._toml_remnant_spans(head, "'", _SUF, out, [-1]) == []
     assert m2._toml_remnant_spans(head, "'", _SUF, out, [p - w0 + 1]) == []
@@ -860,8 +859,8 @@ def test_g2_empty_value_not_treated_as_remnant():
     q = "&#x27;"
     out = q + q + _SUF
     assert _SSC._toml_remnant_spans(q, q, _SUF, out, [_SSC._TOML_REM_BUDGET]) == []
-    m = _mutant(("    if not close or len(head) <= len(close):\n        return []\n    if ctx:",
-                 "    if not close:\n        return []\n    if ctx:"))
+    m = _mutant(("    if not close or len(head) <= len(close):\n        return []\n    _cap",
+                 "    if not close:\n        return []\n    _cap"))
     assert m._toml_remnant_spans(q, q, _SUF, out, [m._TOML_REM_BUDGET]) != []
 
 
@@ -957,3 +956,67 @@ def test_r30_v4_name_length_mismatch_is_corrupt():
         assert not isinstance(ei.value, IndexUnavailable)
     from tests import _git_tracked as G
     assert "約 470 個路徑" in (G.__doc__ or "")
+
+
+# ══════════════════════════════════════════════════════════════════
+# 批 S6 QA 第三組（2026-10-02）：B1 工作量在找開頭片段途中用完、B2 開頭片段要取最大的 j、B3 超過錨點上限
+# ══════════════════════════════════════════════════════════════════
+_B1 = "'TomlDecodeError'7***'invalid literal for int() with base 10: '7'invalid literal for int() with base 10: '7''7***'"
+
+
+def test_b1_budget_sweep_always_superset_of_default(monkeypatch):
+    """任何工作量上限下，輸出都是「預設上限的輸出再多遮」（舊寫法 1063～2104 時少遮開頭引號那一段）。"""
+    xs = [_B1] + _F2_CASES[:2] + [t for _, t in _R29C_FORMS[:12]]
+    base = {x: (scrub_secrets(x), scrub_prose_secrets(x)) for x in xs}
+    for cap in list(range(0, 4000, 37)) + [1063, 1500, 2104]:
+        monkeypatch.setattr(_SSC, "_TOML_REM_BUDGET", cap)
+        for x in xs:
+            e, p = scrub_secrets(x), scrub_prose_secrets(x)
+            assert _is_masking_of(e, base[x][0]) and _is_masking_of(p, base[x][1]), (cap, x[:60], e[:60])
+
+
+def test_b1_mutant_open_part_exhaustion_returns_zero_masks_less(monkeypatch):
+    m = _mutant(("        if budget[0] < 0:\n            return -1\n", "        if budget[0] < 0:\n            return 0\n"))
+    default = m.scrub_secrets(_B1)
+    m._TOML_REM_BUDGET = 1500
+    assert not _is_masking_of(m.scrub_secrets(_B1), default)
+
+
+_B2 = ('\'api_key=pAsSw0rdQQ26"password:   Hunter2SECRET11could not convert string to float:b\\\\\\\'AIzax'
+       'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxZq7Kx960\\\\\\\' (line 3 column 7 char 22)\'')
+
+
+def test_b2_open_part_takes_longest_match():
+    """開頭片段取最大的 j（由左往右找第一個候選）；改成由右往左 → `\\\\\\'AIza` 外露（QA 突變 M33）。"""
+    assert "AIza" not in scrub_secrets(_B2) and "AIza" not in scrub_prose_secrets(_B2)
+    _never_less(_B2)
+    m = _mutant(("    _i = sg.find(head[0])\n", "    _i = sg.rfind(head[0])\n"))
+    assert "AIza" in m.scrub_secrets(_B2)
+
+
+def _b3_case(n_extra: int) -> str:
+    from tests.test_sec_s3_batch_s3 import _b64, _pkcs8, _wrap
+    keyline, keylike = _wrap(_b64(_pkcs8(5)))[0], _wrap(_b64(_pkcs8(7)))[0]
+    #: 4096 個同樣的錨點（空白窗）排在前面，真正的剩餘片段在第 4096 個之後。
+    filler = ("." * 10 + "'" + _SUF + "\n") * (_SSC._TOML_REM_MAX + n_extra)
+    return filler + keyline + "\ncould not convert string to float: '" + keylike + " B3SECRET'" + _SUF
+
+
+@pytest.mark.parametrize("fn", [scrub_secrets, scrub_prose_secrets], ids=["errors", "prose"])
+def test_b3_anchor_beyond_max_still_masked(fn):
+    x = _b3_case(5)
+    assert "B3SECRET" in _MAIN.scrub_secrets(x), "前提：main 外露"
+    assert "B3SECRET" not in fn(x)
+    _never_less(x)
+    m = _mutant(("                _spans.append((_a, _b))\n", "                pass\n"))
+    assert "B3SECRET" in m.scrub_secrets(x)
+
+
+def test_b3_beyond_max_without_alnum_unchanged():
+    """超過上限的那一段沒有英數字 → 不遮（輸出與 main 一樣長）。"""
+    x = ("could not convert string to float: 'abc" + "d" * 50 + "'" + _SUF + "\n"
+         + ("." * 10 + "'" + _SUF + "\n") * (_SSC._TOML_REM_MAX + 50))
+    assert scrub_secrets(x) == _MAIN.scrub_secrets(x)
+
+
+_S6_EXTRA_CORPUS.extend([_B1, _B2])
