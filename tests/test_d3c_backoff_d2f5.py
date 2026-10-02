@@ -983,14 +983,14 @@ def _check_finmind_get_never_raises(mod, kind: str, monkeypatch) -> None:
 
 
 class TestD2f5QuarterlyPremise:
-    """第 ③ 處不改的依據（前提守衛）：`finmind_get` 從不拋例外 ⇒ `fetch_quarterly_shortage_frame` 只看得到
-    空表 ⇒ 依判準（沒拋、只回空 ＝ 分不出失敗與真的沒資料）照舊快取。前提一旦被推翻，本類別轉紅。"""
+    """`finmind_get` 從不拋例外（回傳值仍是空表）。批 D2（D2-f24，2026-10-02）起 `finmind_get(failed=…)`
+    會回報確定抓取失敗 ⇒ `fetch_quarterly_shortage_frame` 分得出失敗、不入快取（原「照舊快取」前提已推翻）。"""
 
     @pytest.mark.parametrize("kind", _FM_FAILURE_KINDS)
     def test_premise_finmind_get_never_raises(self, monkeypatch, kind):
         _check_finmind_get_never_raises(FMC, kind, monkeypatch)
 
-    def test_quarterly_frame_sees_only_empty_and_caches_it(self, monkeypatch, fc_clock):
+    def test_quarterly_frame_failure_not_cached(self, monkeypatch, fc_clock):
         monkeypatch.setenv("FINMIND_TOKEN", "dummy-token")
         n = {"get": 0}
 
@@ -1000,7 +1000,7 @@ class TestD2f5QuarterlyPremise:
         monkeypatch.setattr(requests, "get", _down)
         QF.fetch_quarterly_shortage_frame.clear()
         try:
-            assert QF.fetch_quarterly_shortage_frame("2330") == [], "不拋、回 [] —— 與「這檔沒有季報」同形"
+            assert QF.fetch_quarterly_shortage_frame("2330") == [], "不拋、回 [] —— 回傳形狀同修前"
             assert n["get"] == 3, "損益表兩種 dataset 名 ＋ 資產負債表，各打 1 次"
 
             def _up(*_a, **_k):
@@ -1008,13 +1008,15 @@ class TestD2f5QuarterlyPremise:
                 return _Resp({"status": 200, "data": [
                     {"date": "2025-03-31", "type": "Revenue", "origin_name": "營業收入合計", "value": 1000}]})
             monkeypatch.setattr(requests, "get", _up)
+            assert QF.fetch_quarterly_shortage_frame("2330") == [] and n["get"] == 3, "冷卻期內不重打"
             fc_clock["now"] += 100 * FAIL_COOLDOWN_SEC
-            assert QF.fetch_quarterly_shortage_frame("2330") == [] and n["get"] == 3, \
-                "照舊快取（本層分不出失敗；本次不改）"
+            out = QF.fetch_quarterly_shortage_frame("2330")
+            assert len(out) == 1 and out[0]["revenue"] == 1000, "D2-f24：失敗不入快取，冷卻期滿即重抓"
         finally:
             QF.fetch_quarterly_shortage_frame.clear()
         tree = ast.parse(pathlib.Path(QF.__file__).read_text(encoding="utf-8"))
-        fn = next(x for x in tree.body if isinstance(x, ast.FunctionDef) and x.name == "fetch_quarterly_shortage_frame")
+        fn = next(x for x in tree.body if isinstance(x, ast.FunctionDef)
+                  and x.name == "_fetch_quarterly_shortage_frame_cached")
         assert [ast.unparse(d) for d in fn.decorator_list] == ["st.cache_data(ttl=TTL_1DAY, show_spinner=False)"]
 
 
@@ -1250,8 +1252,11 @@ class TestMutations:
     # ── 第 ③ 處（不改；突變的是它依據的前提 `finmind_get`）──
     def test_m11_premise_finmind_get_reraises(self, monkeypatch):
         """M11：`finmind_get` 最後一次嘗試改成往上拋 → 前提守衛轉紅（屆時第 ③ 處要重新評估）。"""
-        m = _mutant(FMC, ("            if _i == _attempts - 1:\n                return pd.DataFrame()\n",
-                          "            if _i == _attempts - 1:\n                raise\n"), tag="m11")
+        # 批 D2（D2-f24）：該分支多了 `failed` 回報兩行，突變點隨原始碼同步
+        m = _mutant(FMC, ("                    failed.append(f\"{dataset}: {type(_e).__name__}\")\n"
+                          "                return pd.DataFrame()\n",
+                          "                    failed.append(f\"{dataset}: {type(_e).__name__}\")\n"
+                          "                raise\n"), tag="m11")
         with pytest.raises(AssertionError, match="前提被推翻"):
             _check_finmind_get_never_raises(m, "conn", monkeypatch)
 

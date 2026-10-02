@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import sys
 
 import pandas as pd
 
@@ -37,7 +38,9 @@ except ImportError:
         secrets: dict = {}
     st = _NoOpST()  # noqa
 
-from shared.ttls import TTL_1DAY
+from shared.ttls import TTL_1DAY, TTL_1HOUR
+from shared.fail_cooldown import (CachedFailure as _CachedFailure,  # D2-f24
+                                  FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT)
 from src.data.core.finmind_client import finmind_get
 
 # ── 會計科目別名（英文 IFRS code + 中文 origin_name 混合，比照 data_loader 既有慣例）──
@@ -125,14 +128,17 @@ def _sum_contract_liab(rows: list) -> dict:
     return out
 
 
-def _finmind_rows_first(datasets: tuple, stock_id: str, start: str, tok: str) -> list:
+def _finmind_rows_first(datasets: tuple, stock_id: str, start: str, tok: str,
+                        failed: list | None = None) -> list:
     """依序試多個 dataset 名,回第一個非空的 rows(list[dict])。全空/全失敗回 []。
 
     用於相容 FinMind 免費/付費版 dataset 命名差異(如財報 無s/有s)。
+    failed(D2-f24):轉給 `finmind_get`,確定抓取失敗時寫一筆說明(回傳值不變)。
     """
     for _ds in datasets:
         try:
-            _df = finmind_get(_ds, data_id=stock_id, start_date=start, token=tok, timeout=25)
+            _df = finmind_get(_ds, data_id=stock_id, start_date=start, token=tok, timeout=25,
+                              failed=failed)
         except Exception as _e:  # noqa: BLE001 — 換下一個 dataset 名
             print(f"[qtr-shortage] {stock_id} {_ds} 失敗: {type(_e).__name__}: {_e}")
             continue
@@ -141,18 +147,17 @@ def _finmind_rows_first(datasets: tuple, stock_id: str, start: str, tok: str) ->
     return []
 
 
+class _QuarterlyFetchFailed(_CachedFailure):
+    """`_fetch_quarterly_shortage_frame_cached` 的「確定抓取失敗」出口(D2-f24,§1.A-3(a));外層取 `.payload`。"""
+
+
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
-def fetch_quarterly_shortage_frame(stock_id: str, quarters: int = 12) -> list[dict]:
-    """抓齊缺貨評分所需的季度序列，回「由近到遠」list[dict]。
+def _fetch_quarterly_shortage_frame_cached(stock_id: str, quarters: int = 12) -> list[dict]:
+    """`fetch_quarterly_shortage_frame()` 的快取層(原函式本體;TTL、參數、回傳同修前)。
 
-    Args:
-        stock_id: 純台股代碼如 '2330'
-        quarters: 最多回傳季數（預設 12）
-
-    Returns:
-        list[dict]（近→遠）每季:
-          {label, date, revenue, gross_profit, cogs, contract_liab, inventory}
-        缺科目該欄為 None;抓取失敗回 []。
+    D2-f24:損益表或資產負債表**沒拿到資料**、且該表的 FinMind 請求**確定抓取失敗**
+    (`finmind_get(failed=…)`:例外／402／429／5xx)→ 拋 `_QuarterlyFetchFailed`(不入快取),
+    `.payload` 即修前會回傳的同一份 list。其餘(含無 token、非確定失敗的空表)照舊快取。
     """
     _tok = _get_token()
     if not _tok:
@@ -161,12 +166,18 @@ def fetch_quarterly_shortage_frame(stock_id: str, quarters: int = 12) -> list[di
 
     # 損益表:免費版 dataset 名 `TaiwanStockFinancialStatement`(無 s),付費版有 s → 兩個都試
     # (對齊 data_loader.get_quarterly_data:1068 既有慣例;缺這步 → 免費方案每檔 0 季→全「資料不足」)
+    _is_failed: list[str] = []   # D2-f24
+    _bs_failed: list[str] = []
     _is_rows = _finmind_rows_first(
         ("TaiwanStockFinancialStatement", "TaiwanStockFinancialStatements"),
-        stock_id, _start, _tok)
-    _bs_rows = _finmind_rows_first(("TaiwanStockBalanceSheet",), stock_id, _start, _tok)
+        stock_id, _start, _tok, failed=_is_failed)
+    _bs_rows = _finmind_rows_first(("TaiwanStockBalanceSheet",), stock_id, _start, _tok,
+                                   failed=_bs_failed)
+    _fail_notes = (_is_failed if not _is_rows else []) + (_bs_failed if not _bs_rows else [])
     if not _is_rows and not _bs_rows:
         print(f"[qtr-shortage] {stock_id}: 損益表+資產負債表皆無資料(方案權限/配額/停牌?)")
+        if _fail_notes:
+            raise _QuarterlyFetchFailed([], "；".join(_fail_notes))
         return []
 
     _is_idx = _index_rows(_is_rows)
@@ -198,4 +209,59 @@ def fetch_quarterly_shortage_frame(stock_id: str, quarters: int = 12) -> list[di
             "contract_liab": _cl_map.get(_d),
             "inventory": _first_hit(_bs_slot, _INV_KEYS),
         })
+    if _fail_notes:   # D2-f24:其中一張表確定抓取失敗 → 半套結果不入快取
+        raise _QuarterlyFetchFailed(_out, "；".join(_fail_notes))
     return _out
+
+
+#: D2-f24(§1.A-3(b)):季報失敗退避。鍵 ＝ (stock_id, quarters)(與快取層快取鍵同義)。設定比照
+#: 單股月營收 `_single_fail_cooldown`(起點 `FAIL_COOLDOWN_SEC`、連續失敗加倍、上限 `TTL_1HOUR`、
+#: 不設筆數上限 —— 理由同該處:成功快取那層也不限筆數)。
+_qtr_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR, max_entries=sys.maxsize)
+
+
+def _fetch_quarterly_shortage_frame_with_status(stock_id: str,
+                                                quarters: int = 12) -> tuple[list[dict], bool]:
+    """(季度序列, 這一份是不是確定抓取失敗)。**本函式不快取**;快取在 `_fetch_quarterly_shortage_frame_cached`。
+
+    第 1 項與 `fetch_quarterly_shortage_frame` 回的相同;第 2 項給 L3 判斷自己的結果能不能入快取。
+    失敗後冷卻期內同一組參數不重打上游,回同一份結果;成功一次即解除。
+    """
+    _key = (stock_id, quarters)
+    _hit, _gen = _qtr_fail_cooldown.begin(_key)
+    if _hit is not _FC_NO_HIT:
+        return _hit, True
+    try:
+        _out = _fetch_quarterly_shortage_frame_cached(stock_id, quarters)
+    except _QuarterlyFetchFailed as _qf:
+        print(f"[qtr-shortage] {stock_id} 季報確定抓取失敗({_qf})→ 不入快取,冷卻期內不重打上游")
+        return _qtr_fail_cooldown.fail(_key, _gen, _qf.payload), True
+    _qtr_fail_cooldown.success(_key)
+    return _out, False
+
+
+def fetch_quarterly_shortage_frame(stock_id: str, quarters: int = 12) -> list[dict]:
+    """抓齊缺貨評分所需的季度序列，回「由近到遠」list[dict]。
+
+    Args:
+        stock_id: 純台股代碼如 '2330'
+        quarters: 最多回傳季數（預設 12）
+
+    Returns:
+        list[dict]（近→遠）每季:
+          {label, date, revenue, gross_profit, cogs, contract_liab, inventory}
+        缺科目該欄為 None;抓取失敗回 []。
+
+    D2-f24:快取在 `_fetch_quarterly_shortage_frame_cached`(`TTL_1DAY`);確定抓取失敗不入快取、
+    冷卻期內不重打(回傳形狀同修前)。`.clear()` 同清快取層與退避紀錄;`.with_status` 給 L3。
+    """
+    return _fetch_quarterly_shortage_frame_with_status(stock_id, quarters)[0]
+
+
+def _clear_fetch_quarterly_shortage_frame() -> None:
+    getattr(_fetch_quarterly_shortage_frame_cached, "clear", lambda: None)()
+    _qtr_fail_cooldown.clear()
+
+
+fetch_quarterly_shortage_frame.clear = _clear_fetch_quarterly_shortage_frame
+fetch_quarterly_shortage_frame.with_status = _fetch_quarterly_shortage_frame_with_status
