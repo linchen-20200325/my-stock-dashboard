@@ -30,6 +30,15 @@ from pathlib import Path
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _d3_no_live_twii_proxy(monkeypatch):
+    """D3（DL-f1-s12）：`fetch_m1b_m2_block` 的 ^TWII 代理改排在 FRED／IMF 之後、獨立呼叫 ——
+    本檔的 `fetch_cbc_m1b_m2` 樁不再擋得住它。預設換成「代理也失敗」（不觸網）；
+    需要代理值的測試自行覆寫 `fetch_twii_m1b_m2_proxy`。"""
+    import src.data.macro.tw_macro as _tw
+    monkeypatch.setattr(_tw, "_try_twii_proxy", lambda: None)
+
 _REPO = Path(__file__).resolve().parents[1]
 
 
@@ -93,12 +102,16 @@ class TestM1bM2ProxyDetection:
         """走真的 `fetch_m1b_m2_block()`：CBC 落到 Tier 3 → 必須判為代理。"""
         import src.data.macro.macro_snapshot as ms
         from shared.macro_provenance import is_m1b_m2_proxy
+        # D3（DL-f1-s12）：代理改在 FRED／IMF 之後才試（`fetch_twii_m1b_m2_proxy`）；
+        # 央行兩層、FRED、IMF 全敗 → 落代理。
+        import src.data.proxy.proxy_helper as _px   # 不可 patch package（PEP 562 轉發地雷）
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: {'m1b_yoy': 2.1, 'm2_yoy': 1.4, 'gap': 0.7,
-                     'tier_used': 3, 'is_proxy_tier': True,
-                     'source': 'Yahoo:^TWII:proxy_tier3'},
+            lambda **_k: {'m1b_yoy': None, 'm2_yoy': None, 'gap': None,
+                          'tier_used': None, 'is_proxy_tier': False},
         )
+        monkeypatch.setattr(_px, 'fetch_url', lambda *a, **k: None)
+        monkeypatch.setattr('src.data.macro.fetch_twii_m1b_m2_proxy', lambda: (2.1, 1.4))
         r = _unwrap(ms.fetch_m1b_m2_block, '')
         assert r is not None
         assert is_m1b_m2_proxy(r) is True, (
@@ -111,7 +124,7 @@ class TestM1bM2ProxyDetection:
         from shared.macro_provenance import is_m1b_m2_proxy
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: {'m1b_yoy': 1.2, 'm2_yoy': 13.83, 'gap': -12.63,
+            lambda **_k: {'m1b_yoy': 1.2, 'm2_yoy': 13.83, 'gap': -12.63,
                      'tier_used': 1, 'is_proxy_tier': False},
         )
         r = _unwrap(ms.fetch_m1b_m2_block, '')

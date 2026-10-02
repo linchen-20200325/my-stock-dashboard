@@ -155,6 +155,19 @@ STALE_DAYS_QUARTERLY = 150    # ⚠️ 僅適用「季後固定 ~45 天公告、
                               #   G3 2026-08-08 起本常數在 production **無消費端**,
                               #   保留是為了讓「等距季頻」型序列日後仍有 SSOT 可用。
 
+#: `macro_state.json`（§十一「執行 AI 裁決」寫入的規則引擎裁決）的有效期限（日曆天）。
+#: DL-f1-s65（客戶 2026-10-02 頁 1 ③「裁決設有效期限」）：裁決是以 VIX／外資期貨／
+#: 跌破 MA5／PCR／年線乖離等**日頻**輸入算出的大盤 regime 判斷 —— 正落在上一行
+#: `STALE_DAYS_DAILY` 註明的「大盤 regime」範疇，故**直接沿用同一個 SSOT 值**，不另立數字。
+#: 超過 → `macro_state_locker.get_macro_state` 視同未評估（不再進建議持股上限／AI 問答）。
+MACRO_VERDICT_MAX_AGE_DAYS: int = STALE_DAYS_DAILY
+
+#: `macro_state.json` 裁決 `timestamp` 允許超前「現在」的時鐘誤差（日曆天）。超過 → 視為過期
+#: （未來時間戳不是可信的裁決時間；否則永不過期、天花板一直生效）。
+#: ⚠️ 本 repo 無現成「時鐘誤差」SSOT 可沿用 —— 此值 1 天為 D3 QA 修正時**新立**的具名常數，
+#: 待客戶／總管確認（需規格）。
+MACRO_VERDICT_FUTURE_SKEW_DAYS: int = 1
+
 _STALE_DAYS_BY_CADENCE = {
     "daily": STALE_DAYS_DAILY,
     "monthly": STALE_DAYS_MONTHLY,

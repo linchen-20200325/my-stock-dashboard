@@ -65,6 +65,7 @@ from shared.macro_buckets import (
     has_thresholds,
 )
 from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
+from shared.macro_provenance import is_m1b_m2_proxy  # DL-f1-s17：代理值不計分（L0 SSOT）
 from src.compute.macro.macro_helpers import compute_five_bucket_summary
 from src.services.macro_v2_service import get_chart_series, get_edu, get_twii_ohlc
 from src.services.section_inputs import load_section_inputs
@@ -385,6 +386,10 @@ def build_rows(readiness: dict) -> list[Row]:
         value = rec.get("value")
         # 判燈用上游 SSOT 函式,不自己重寫一套(§3.3)
         band = classify_danger(value, spec)
+        # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：側車 `is_proxy`
+        # （L2 以 L0 判）→ 燈號走既有 gray，不進桶摘要／指標危險度；值與註記照樣顯示。
+        if spec.key == "m1b_m2_gap" and is_m1b_m2_proxy(rec):
+            band = classify_danger(None, spec)
 
         # 四態的判定順序 = L0 SSOT `shared.station_specs.classify_state()`:
         #   1. wired=False → unwired   2. 沒值 → missing

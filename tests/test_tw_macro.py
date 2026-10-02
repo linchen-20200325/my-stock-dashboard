@@ -134,8 +134,16 @@ def test_finmind_proxy_failure(monkeypatch):
 # ══════════════════════════════════════════════════════════════
 
 def test_cbc_m1b_m2_tier1_hit(monkeypatch):
-    """Tier 1 ms1.json 命中,Tier 2/3 不應呼叫。"""
-    rows = [{'M1B': str(100 + i), 'M2': str(200 + i * 0.5)} for i in range(13)]
+    """Tier 1 ms1.json 命中,Tier 2/3 不應呼叫。
+
+    D3（DL-f1-s49）起 Tier 1 依資料月對齊 t−12 → 測資帶「年月」欄（2025M07～2026M07）；
+    資料月過期閘的基準日釘在 2026-10-02（2026M07 為當期）。
+    """
+    import datetime as _dtt
+    monkeypatch.setattr(tw_macro, '_today_tw', lambda: _dtt.date(2026, 10, 2))
+    _months = [f'2025M{m:02d}' for m in range(7, 13)] + [f'2026M{m:02d}' for m in range(1, 8)]
+    rows = [{'年月': ym, 'M1B': str(100 + i), 'M2': str(200 + i * 0.5)}
+            for i, ym in enumerate(_months)]
     call_count = {'fetch_url': 0}
 
     def fake(url, headers=None, params=None, timeout=12):

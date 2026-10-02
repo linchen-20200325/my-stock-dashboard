@@ -199,8 +199,12 @@ def _tool_get_market_state() -> dict:
     # macro_state.json 鎖定快照才有、canonical 契約未涵蓋的欄位(標明來源,避免與上方混淆)
     _file = {}
     try:
-        from src.services.macro_state_locker import load_macro_state
+        from src.services.macro_state_locker import load_macro_state, macro_state_is_expired
         _file = load_macro_state() or {}
+        # DL-f1-s65：過期裁決（`MACRO_VERDICT_MAX_AGE_DAYS`）的附加欄位不送 AI 問答 ——
+        # 與 canonical 契約同一條期限（`get_macro_state` 已把過期檔當不存在）。
+        if macro_state_is_expired(_file):
+            _file = {}
     except Exception as _e:      # noqa: BLE001 — 附加欄位缺席不影響主結論
         print(f"[ai_qa regime] 讀 macro_state.json 附加欄位失敗:{type(_e).__name__}: {_e}")
     _extra = {k: _file[k] for k in ("systemic_risk_level", "Macro_Phase") if k in _file}

@@ -1938,7 +1938,12 @@ def compute_five_bucket_summary(
             details.append({
                 "key": s.key, "label": s.label,
                 "value_str": _value_str,
-                "danger": classify_danger(v, s), "note": s.note,
+                # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：代理值照樣
+                # 顯示（上面 value_str 帶註記），但燈號走既有未載入 gray —— 不進桶等級 / headline。
+                "danger": (classify_danger(None, s)
+                           if s.key == "m1b_m2_gap" and _m1b_badge
+                           else classify_danger(v, s)),
+                "note": s.note,
             })
         blevel = aggregate_level([d["danger"] for d in details])
         d0 = None

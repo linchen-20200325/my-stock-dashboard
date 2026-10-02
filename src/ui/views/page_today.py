@@ -1110,6 +1110,10 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
     _value = rec.get("value")
     _has_thr = has_thresholds(_spec)
     _band = classify_danger(_value, _spec) if _has_thr else "gray"
+    # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：L2 側車 `is_proxy` →
+    # 燈號頻道走既有 gray（不判燈）；下方現值＋代理註記照樣顯示。
+    if key == "m1b_m2_gap" and rec.get("is_proxy") is True:
+        _band = classify_danger(None, _spec)
 
     # ── 中繼資料列：任何狀態都該看得見「這盞燈本來長什麼樣」──────────
     _facts: list[tuple[str, str]] = []

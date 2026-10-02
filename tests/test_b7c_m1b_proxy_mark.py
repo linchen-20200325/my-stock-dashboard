@@ -82,26 +82,31 @@ class TestProxyIsMarked:
         assert tile.card.value == fmt_value(-0.5, SPECS_BY_KEY[_KEY]) + _NOTE
 
     def test_headline_carries_note_when_m1b_is_main_cause(self):
+        # D3（DL-f1-s17，客戶 2026-10-02 頁 1 ③「只顯示不計分」）：代理燈 gray → 只給 m1b 一盞時
+        # 長期桶＝未載入（既有 headline）；真值時照舊由 m1b 當主因亮紅。
         out, _rd, _det = _run(_info(MP.M1B_PROXY_SOURCE_LABEL))
-        # 只給 m1b 一盞 → 長期桶主因必為 m1b（-0.5 < red=0.0 → 紅）
-        assert out["long"]["level"] == "red"
-        assert _NOTE in out["long"]["headline"]
+        assert out["long"]["level"] == "gray" and _NOTE not in out["long"]["headline"]
+        out_r, _rd, _det = _run(_info("CBC-tier1"))
+        assert out_r["long"]["level"] == "red"
 
 
 class TestJudgementUnchanged:
-    """v1 對 KPI 卡只揭露不改燈 → 燈號 / 桶等級與非代理時完全一樣。"""
+    """~~v1 對 KPI 卡只揭露不改燈 → 燈號 / 桶等級與非代理時完全一樣。~~
+    D3（DL-f1-s17，客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）起：代理值**照樣顯示**
+    （值＋註記，見上一類），但燈號走既有 gray（＝未載入），不進桶等級；真值照舊判燈。"""
 
     @pytest.mark.parametrize("gap", [-0.5, 0.5, 2.0])
     def test_lamp_and_bucket_same(self, gap):
         out_p, _, det_p = _run(_info(MP.M1B_PROXY_SOURCE_LABEL, gap))
         out_r, _, det_r = _run(_info("CBC-tier1", gap))
-        assert det_p["danger"] == det_r["danger"] == classify_danger(gap, SPECS_BY_KEY[_KEY])
-        assert out_p["long"]["level"] == out_r["long"]["level"]
-        assert out_p["long"]["label"] == out_r["long"]["label"]
+        assert det_r["danger"] == classify_danger(gap, SPECS_BY_KEY[_KEY])
+        assert det_p["danger"] == "gray"
+        assert out_p["long"]["level"] == "gray" and out_r["long"]["level"] == det_r["danger"]
         tp = _tile(_run(_info(MP.M1B_PROXY_SOURCE_LABEL, gap))[1][_KEY])
         tr = _tile(_run(_info("CBC-tier1", gap))[1][_KEY])
-        assert (tp.card.state, tp.signal_text, tp.signal_color, tp.facts) == \
-               (tr.card.state, tr.signal_text, tr.signal_color, tr.facts)
+        assert tp.card.state == tr.card.state                  # 仍是「有值」那一態（照樣顯示）
+        assert (tp.signal_text, tp.signal_color) == BANDS["gray"]
+        assert tp.facts == tr.facts
 
 
 class TestNonProxyByteIdentical:

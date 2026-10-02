@@ -23,6 +23,7 @@ import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
+from shared.macro_provenance import m1b_m2_for_scoring  # DL-f1-s17：代理值不計分（L0 SSOT）
 from src.ui.render.macro_ui_components import section_header
 
 
@@ -76,7 +77,9 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
     _ai_pmi  = _num(_m8_pmi, 'value') if not _ai_is_cli else None
     _ai_exp  = _num(_m8_exp, 'yoy')
     _ai_cpi  = _num(_m8_cpi, 'yoy')
-    _ai_mi8  = st.session_state.get('m1b_m2_info') or {}
+    # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理 → 當缺，
+    # ③ 卡走既有「待取得 M1B/M2」、⑤ 結論不列、不進多空計分。非代理時同一個物件。
+    _ai_mi8  = m1b_m2_for_scoring(st.session_state.get('m1b_m2_info')) or {}
     _ai_m1b  = _num(_ai_mi8, 'm1b_yoy')
     _ai_m2   = _num(_ai_mi8, 'm2_yoy')
     _ai_gap  = round(_ai_m1b - _ai_m2, 2) if (_ai_m1b is not None and _ai_m2 is not None) else None

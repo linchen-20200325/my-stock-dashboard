@@ -36,6 +36,7 @@ import pandas as pd
 from shared.fetch_monitor import monitored  # v19.96 批次4 Item1(純 stdlib,無 streamlit)
 from shared.fail_cooldown import FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT  # D2-f40
 from shared.ttls import TTL_10MIN, TTL_15MIN, TTL_30MIN, TTL_1HOUR
+from shared.staleness import monthly_periods_behind  # DL-f1-s13：資料月過期閘（L0 SSOT）
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 # DL-f1-s1:EF15M01 解析 SSOT(與排程 scripts/update_macro_history 共用同一份,§2.1)
 from src.data.macro.cbc_ef15m01 import (
@@ -326,29 +327,100 @@ def fetch_cbc_ms1_rows(url: str, *, min_rows: int = 1,
     return data
 
 
-def _try_cbc_ms1(url: str) -> Optional[tuple]:
-    """嘗試抓 CBC ms1.json,回傳 (m1b_yoy, m2_yoy) 或 None。"""
+def parse_cbc_ms1_rows(data) -> tuple[Optional[pd.DataFrame], str]:
+    """CBC ms1.json 的 list → (DataFrame[date, m1b, m2]（date＝資料月月初、升冪）, 說明) 或 (None, 原因)。
+
+    DL-f1-s49（2026-10-02 批 D3）：線上 Tier 1 與排程 `update_macro_history._m1m2_ms1_candidate`
+    **共用這一份**欄位辨識／日期正規化／去千分位（原本只寫在排程端；線上端不讀日期、兩欄各自
+    `dropna` 後以 `iloc` 硬配）。內容逐字沿用排程端原 ms1 分支（§2.1 SSOT）。
+    只做形狀與解析；列數與量級檢查留給呼叫端（兩端門檻不同）。
+    """
+    df = pd.DataFrame(data)
+    c1 = next((c for c in df.columns
+               if "M1B" in str(c).upper() or "貨幣供給額M1B" in str(c)), None)
+    c2 = next((c for c in df.columns
+               if str(c).strip().upper() == "M2" or "貨幣供給額M2" in str(c)), None)
+    date_col = next((c for c in df.columns
+                     if str(c).strip() in ("年月", "date", "yearMonth", "Date",
+                                            "PERIOD", "TIME_PERIOD")), None)
+    if not (c1 and c2 and date_col):
+        return None, f"形狀不符：欄位對應失敗（欄位={list(df.columns)[:15]}）"
+    out = df[[date_col, c1, c2]].copy()
+    out.columns = ["date_raw", "m1b", "m2"]
+
+    # 日期 normalize：支援 'YYYYMmm'（CBC PXWeb）/ 'YYYY-MM' / 'YYYY/MM' / 'YYYYMM'
+    def _norm(s):
+        s = str(s).strip()
+        m = _re.search(r"(20\d{2})\s*M\s*(\d{1,2})", s, _re.IGNORECASE)
+        if m:
+            return _dt.date(int(m.group(1)), int(m.group(2)), 1)
+        m = _re.search(r"(20\d{2})[-/年]?(\d{1,2})", s)
+        if not m:
+            return None
+        return _dt.date(int(m.group(1)), int(m.group(2)), 1)
+    out["date"] = out["date_raw"].apply(_norm)
+    out = out.dropna(subset=["date"]).drop(columns=["date_raw"])
+    # SDMX 數字可能含 thousand separator，先去掉再轉
+    out["m1b"] = pd.to_numeric(
+        out["m1b"].astype(str).str.replace(",", ""), errors="coerce")
+    out["m2"] = pd.to_numeric(
+        out["m2"].astype(str).str.replace(",", ""), errors="coerce")
+    out = out.dropna().sort_values("date").reset_index(drop=True)
+    if out.empty:
+        return None, "日期或數值全數無法解析"
+    return out, "ok"
+
+
+def _try_cbc_ms1_dated(url: str) -> Optional[tuple]:
+    """Tier 1:CBC ms1.json → `(m1b_yoy, m2_yoy, 資料月 date)` 或 None。
+
+    DL-f1-s49:改以**資料月**對齊 —— 取最新資料月,再找**恰好 12 個月前**那一列當基期
+    (舊碼兩欄各自 `dropna` 後 `iloc[-1]/iloc[-13]`,不讀日期、不排序,缺月即錯配)。
+    同月重複 / 找不到 t−12 那一列 → 回 None(不猜,往下一層)。
+    """
+    tag = '[tw_macro/ms1]'
     data = fetch_cbc_ms1_rows(url, min_rows=13, timeout=12)
     if data is None:
         return None
-    df = pd.DataFrame(data)
-    c1 = next((c for c in df.columns
-               if 'M1B' in str(c).upper() or '貨幣供給額M1B' in str(c)), None)
-    c2 = next((c for c in df.columns
-               if str(c).strip().upper() == 'M2' or '貨幣供給額M2' in str(c)), None)
-    if not (c1 and c2):
+    try:
+        # D3 QA：壞月份（2026M13／M00／2026-0）會讓解析器的 `datetime.date` 拋 ValueError ——
+        # 不得冒出 `fetch_cbc_m1b_m2`（否則 Tier 2 EF15M01 永遠沒機會試）。比照 EF15M01 的守法：拒用、往下。
+        df, why = parse_cbc_ms1_rows(data)
+    except (ValueError, TypeError, OverflowError) as e:
+        print(f'{tag} ❌ {url[-40:]} 解析例外 {type(e).__name__}: {e} → 拒用,往下一層')
         return None
-    s1 = pd.to_numeric(df[c1], errors='coerce').dropna()
-    s2 = pd.to_numeric(df[c2], errors='coerce').dropna()
-    if len(s1) < 13 or len(s2) < 13:
+    if df is None:
+        print(f'{tag} ❌ {url[-40:]} {why} → 往下一層')
         return None
+    if df['date'].duplicated().any():
+        print(f'{tag} ❌ {url[-40:]} 同一資料月出現多列 → 拒用,往下一層')
+        return None
+    last = df.iloc[-1]
+    as_of = last['date']
+    base_month = _dt.date(as_of.year - 1, as_of.month, 1)
+    base = df[df['date'] == base_month]
+    if base.empty:
+        print(f'{tag} ❌ {url[-40:]} 最新月 {as_of:%Y-%m} 找不到 12 個月前 {base_month:%Y-%m}'
+              f' 的基期 → 拒用,往下一層')
+        return None
+    b = base.iloc[0]
     return (
-        round((s1.iloc[-1] / s1.iloc[-13] - 1) * 100, 2),
-        round((s2.iloc[-1] / s2.iloc[-13] - 1) * 100, 2),
+        round((float(last['m1b']) / float(b['m1b']) - 1) * 100, 2),
+        round((float(last['m2']) / float(b['m2']) - 1) * 100, 2),
+        as_of,
     )
 
 
-def _try_cbc_ef15m01() -> Optional[tuple]:
+def _try_cbc_ms1(url: str) -> Optional[tuple]:
+    """嘗試抓 CBC ms1.json,回傳 (m1b_yoy, m2_yoy) 或 None。
+
+    DL-f1-s49 起為 `_try_cbc_ms1_dated` 的相容外殼(拿掉資料月);`fetch_cbc_m1b_m2` 走 dated 版。
+    """
+    out = _try_cbc_ms1_dated(url)
+    return None if out is None else out[:2]
+
+
+def _try_cbc_ef15m01_dated() -> Optional[tuple]:
     """Tier 2:CBC PXWeb EF15M01(貨幣總計數-日平均數)→ (m1b_yoy, m2_yoy) 或 None。
 
     DL-f1-s1(2026-09-28)改寫。舊版讀頂層 `DataSet`／`Structure`(舊格式),CBC 現行回應是
@@ -408,7 +480,36 @@ def _try_cbc_ef15m01() -> Optional[tuple]:
     m1b_yoy = round(float(last['m1b_yoy']), 2)
     m2_yoy = round(float(last['m2_yoy']), 2)
     print(f'{tag} ✅ {as_of:%Y-%m} 官方年增率 M1B={m1b_yoy:.2f}% M2={m2_yoy:.2f}%')
-    return (m1b_yoy, m2_yoy)
+    return (m1b_yoy, m2_yoy, as_of)
+
+
+def _try_cbc_ef15m01() -> Optional[tuple]:
+    """Tier 2 → `(m1b_yoy, m2_yoy)` 或 None。
+
+    DL-f1-s13(2026-10-02 批 D3)起為 `_try_cbc_ef15m01_dated` 的相容外殼(拿掉資料月);
+    `fetch_cbc_m1b_m2` 走 dated 版,把資料月帶進回傳並過資料月過期閘。
+    """
+    out = _try_cbc_ef15m01_dated()
+    return None if out is None else out[:2]
+
+
+def _today_tw() -> _dt.date:
+    """台北時間今天(資料月過期閘的基準日;測試可 monkeypatch)。"""
+    return _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=8))).date()
+
+
+def _official_month_ok(as_of, tag: str) -> bool:
+    """DL-f1-s13:官方值的資料月是否仍算當期(落後 < 1 個發布期)。
+
+    判準走 L0 SSOT `shared.staleness.monthly_periods_behind(indicator='m1b_m2')`
+    (發布延遲 `MACRO_PUBLICATION_LAG_DAYS['m1b_m2']` + 既有緩衝)。落後 ≥ 1 期或判不出來
+    → False:不把舊月當當期(§2.4),呼叫端照舊往下一層。
+    """
+    behind = monthly_periods_behind(as_of, indicator='m1b_m2', today=_today_tw())
+    if behind is None or behind >= 1:
+        print(f'{tag} ❌ 資料月 {as_of} 落後預期 {behind} 期(m1b_m2 發布延遲 SSOT)→ 拒用,往下一層')
+        return False
+    return True
 
 
 def _try_twii_proxy() -> Optional[tuple]:
@@ -433,8 +534,18 @@ def _try_twii_proxy() -> Optional[tuple]:
     return (chg20, round(chg60 / 3, 2))
 
 
+def fetch_twii_m1b_m2_proxy() -> Optional[tuple]:
+    """Tier 3 `^TWII` 動能代理的公開入口 → `(m1b 代理值, m2 代理值)` 或 None。
+
+    DL-f1-s12(2026-10-02 批 D3):`macro_snapshot.fetch_m1b_m2_block` 改成「央行 → FRED → IMF
+    → 代理」的順序,代理排最後;直接委派 `_try_twii_proxy`(同一份實作,不另寫)。
+    ⚠️ 回的是股價動能,不是貨幣供給年增率 —— 只顯示、不計分(客戶 2026-10-02 頁 1 ③)。
+    """
+    return _try_twii_proxy()
+
+
 @_ttl_cache(ttl_sec=TTL_10MIN, maxsize=4)
-def fetch_cbc_m1b_m2() -> dict:
+def fetch_cbc_m1b_m2(include_proxy: bool = True) -> dict:
     """
     抓中央銀行 M1B / M2 月資料 YoY 變動率。三層備援:
 
@@ -460,7 +571,14 @@ def fetch_cbc_m1b_m2() -> dict:
             'error':          str | None,
             'source':         str,             血緣標識,依 tier 動態 (v18.249)
             'fetched_at':     str,             UTC ISO (v18.249)
+            'data_month':     str | None,      'YYYY-MM' 資料月(Tier 1/2;Tier 3 代理 → None)
         }
+
+    DL-f1-s13／s49(2026-10-02 批 D3):
+      · 回傳多帶 `data_month`(schema-additive);
+      · Tier 1/2 的資料月落後 ≥ 1 個發布期(`_official_month_ok`)→ 拒用、往下一層;
+      · `include_proxy=False` → 不試 Tier 3(DL-f1-s12:讓 `macro_snapshot` 先試 FRED/IMF
+        真值備援,代理排最後;代理值只顯示不計分,客戶 2026-10-02 頁 1 ③)。
     """
     # S-PROV-1 v18.249 phase 5:provenance schema(§2.2)
     _now_iso = pd.Timestamp.now('UTC').isoformat()
@@ -468,25 +586,32 @@ def fetch_cbc_m1b_m2() -> dict:
         'm1b_yoy': None, 'm2_yoy': None, 'gap': None,
         'tier_used': None, 'is_proxy_tier': False, 'error': None,
         'source': 'CBC:M1B_M2:unknown', 'fetched_at': _now_iso,
+        'data_month': None,
     }
 
     # ── Tier 1 ──
     for url in CBC_MS1_URLS:
-        out = _try_cbc_ms1(url)
-        if out is not None:
-            result['m1b_yoy'], result['m2_yoy'] = out
+        out = _try_cbc_ms1_dated(url)
+        if out is not None and _official_month_ok(out[2], '[tw_macro/ms1]'):
+            result['m1b_yoy'], result['m2_yoy'] = out[0], out[1]
             result['gap']        = round(out[0] - out[1], 2)
             result['tier_used']  = 1
             result['source']     = 'CBC:ms1.json:tier1'
+            result['data_month'] = f'{out[2]:%Y-%m}'
             return result
 
     # ── Tier 2 ──
-    out = _try_cbc_ef15m01()
-    if out is not None:
-        result['m1b_yoy'], result['m2_yoy'] = out
-        result['gap']       = round(out[0] - out[1], 2)
-        result['tier_used'] = 2
-        result['source']    = 'CBC:EF15M01:tier2'
+    out = _try_cbc_ef15m01_dated()
+    if out is not None and _official_month_ok(out[2], f'[tw_macro/{EF15_FILE}]'):
+        result['m1b_yoy'], result['m2_yoy'] = out[0], out[1]
+        result['gap']        = round(out[0] - out[1], 2)
+        result['tier_used']  = 2
+        result['source']     = 'CBC:EF15M01:tier2'
+        result['data_month'] = f'{out[2]:%Y-%m}'
+        return result
+
+    if not include_proxy:
+        result['error'] = "央行兩層皆未取得"
         return result
 
     # ── Tier 3 ──

@@ -26,6 +26,12 @@
 已有標示的前例：v1 `section_long` KPI 卡、L2 `compute_five_bucket_summary`、
 v2 `page_today`（B7c）—— 一律後綴 L0 `shared.macro_provenance.M1B_PROXY_VALUE_NOTE`。
 
+📌 **2026-10-02 批 D3 更新（DL-f1-s17；客戶頁 1 ③「M1B 代理值：只顯示不計分」）**：
+下方「純標示、不改計分」是批 P 當時的範圍。D3 起 ①②③④⑥ 與 ⑦ 的燈號／桶摘要是**計分／結論出口**
+→ 代理時走各自既有缺值路徑（＝沒有 m1b_m2_info 的輸出），註記也不會出現；⑤ 說明書 chip、
+⑥ 同頁 KPI 卡、⑦ 總表「目前值」與右側明細是**顯示出口** → 照樣顯示數字＋註記。
+各類的 `test_d3_*` 即新契約；其餘非代理比對逐字未動。
+
 本批範圍（**純標示**，⛔ 不改計分／門檻／燈號／建議邏輯）
 ────────────────────────────────────────────────────────────────
   · 代理時：數字（或據其產生的結論句中的「M1B-M2」）後面接 L0 既有註記；
@@ -370,26 +376,6 @@ class TestCrossAiSection9:
         assert run.calls_seen.get("get_allocation") == 1, "配置替身沒被呼叫到 —— patch 失效"
         assert _ORIG_XAI_CARD3["strong"] in _card(fake, "③ 目前貨幣流向")
 
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    @pytest.mark.parametrize("scn", sorted(_GAPS))
-    def test_proxy_card3_value_has_note(self, run, scn, how):
-        card = _card(run.cross_ai(_proxy(scn, how)), "③ 目前貨幣流向")
-        m1b, m2 = _GAPS[scn]
-        gap = round(m1b - m2, 2)
-        assert f"Gap={gap:+.2f}%{NOTE} — " in card, card
-
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    def test_proxy_conclusion_points_have_note(self, run, how):
-        c5 = _card(run.cross_ai(_proxy("strong", how)), "⑤ 結論")
-        assert f"M1B-M2 Gap=+3.1%{NOTE} 資金動能正向共振" in c5, c5
-        c5n = _card(run.cross_ai(_proxy("negative", how)), "⑤ 結論")
-        assert f"M1B-M2{NOTE}死亡交叉，貨幣資金外逃" in c5n, c5n
-
-    def test_proxy_m2_missing_label_has_note(self, run):
-        info = _info(5.1, None, source=M1B_PROXY_SOURCE_LABEL)
-        card = _card(run.cross_ai(info), "③ 目前貨幣流向")
-        assert f"M1B=5.1%{NOTE} M2待取得" in card, card
-
     @pytest.mark.parametrize("source", _REAL_SOURCES)
     @pytest.mark.parametrize("scn", sorted(_GAPS))
     def test_non_proxy_card3_is_byte_identical_to_before(self, run, scn, source):
@@ -403,20 +389,22 @@ class TestCrossAiSection9:
         assert _ORIG_XAI_M2_MISSING_LABEL in _card(
             run.cross_ai(_info(5.1, None)), "③ 目前貨幣流向")
 
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    @pytest.mark.parametrize("scn", sorted(_GAPS))
-    def test_only_difference_is_the_note(self, run, scn, how):
-        """燈號顏色 / ⑤ 多空計分結論 / 其餘文案：代理與非代理逐字相同，差別只有註記。"""
-        p = run.cross_ai(_proxy(scn, how)).out
-        r = run.cross_ai(_real(scn)).out
-        assert _strip_note(p) == r
-        assert p != r, "反向對照：代理時必須真的多出註記（否則上一行恆綠）"
-
     def test_no_note_without_a_number(self, run):
         """代理源但 M1B 缺 → 卡片是「待取得」，不得出現孤零零的註記。"""
         fake = run.cross_ai(_info(None, None, source=M1B_PROXY_SOURCE_LABEL))
         assert "待取得 M1B/M2" in _card(fake, "③ 目前貨幣流向")
         assert NOTE not in fake.text
+
+    # ── 批 D3（DL-f1-s17，客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）──
+    # 原本這裡驗「代理值照樣計分、只多一串註記」；D3 起這個出口**不吃代理值**：
+    # 完整輸出 ＝ 沒有 m1b_m2_info 時的輸出（既有缺值路徑），註記也不會出現。
+    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
+    @pytest.mark.parametrize("scn", sorted(_GAPS))
+    def test_d3_proxy_is_not_scored(self, run, scn, how):
+        p = run.cross_ai(_proxy(scn, how))
+        assert p.out == run.cross_ai({}).out
+        assert "待取得 M1B/M2" in _card(p, "③ 目前貨幣流向") and NOTE not in p.text
+        assert p.out != run.cross_ai(_real(scn)).out, "反向對照：真值時③⑤ 確實有 M1B 結論"
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -441,38 +429,12 @@ class TestNewsAiPrompt:
         assert run.calls_seen.get("fetch_macro_news") == 1, "新聞替身沒被呼叫到 —— patch 失效"
         assert _m1b_line(prompt).startswith(_ORIG_NEWS_LINE["strong"])
 
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    @pytest.mark.parametrize("scn", ["strong", "negative"])
-    def test_proxy_line_carries_the_note(self, run, scn, how):
-        line = _m1b_line(run.news(_proxy(scn, how))[0])
-        m1b, m2 = _GAPS[scn]
-        gap = round(m1b - m2, 2)
-        assert f"差額={gap:+.2f}%{NOTE}（正=資金行情啟動；" in line, line
-
     @pytest.mark.parametrize("source", _REAL_SOURCES)
     @pytest.mark.parametrize("scn", ["strong", "negative"])
     def test_non_proxy_line_is_byte_identical_to_before(self, run, scn, source):
         prompt, _ = run.news(_real(scn, source))
         assert _m1b_line(prompt).startswith(_ORIG_NEWS_LINE[scn])
         assert NOTE not in prompt
-
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    @pytest.mark.parametrize("scn", ["strong", "negative"])
-    def test_only_difference_is_the_note_and_rule_engine_unchanged(self, run, scn, how):
-        """整份 prompt 拿掉註記後逐字相同；規則引擎寫進狀態鎖的結果也完全相同。
-
-        兩個情境（第三個 commit 依獨立 QA 建議補 strong）：
-          · strong（gap +3.10）：M1B 讓分數 +15 → 狀態**成為多頭**；
-          · negative（gap −3.80）：M1B 讓分數 −10 並加註「資金緊縮」。
-        ⚠️ 「只在代理時把 M1B 從引擎拿掉（M2 照送）」這種偷改計分，**只有 strong 抓得到**
-        —— negative 情境拿掉 M1B 後 spread 變 −5.00，仍 < −3，分數與標籤碰巧相同
-        （實測：只跑 negative 時該突變不會轉紅）。前提見下一條守衛。
-        """
-        p_prompt, p_state = run.news(_proxy(scn, how))
-        r_prompt, r_state = run.news(_real(scn))
-        assert p_prompt.replace(NOTE, "") == r_prompt
-        assert p_prompt != r_prompt, "反向對照：代理時 prompt 必須真的多出註記"
-        assert p_state == r_state, "只准揭露：calculate_system_state 的結果不得因代理而變"
 
     def test_strong_scenario_is_sensitive_to_m1b_only_removal(self, run):
         """前提守衛（QA 的 M10）：上一條要抓得到「只在代理時把 M1B 從引擎拿掉」，
@@ -485,8 +447,23 @@ class TestNewsAiPrompt:
         m1b, m2 = _GAPS["strong"]
         with_m1b = calculate_system_state({"M1B_YoY_pct": m1b, "M2_YoY_pct": m2})
         m1b_removed = calculate_system_state({"M1B_YoY_pct": None, "M2_YoY_pct": m2})
+        r_state = {k: v for k, v in r_state.items() if k != "m1b_m2_data_month"}   # D3 加性鍵
         assert with_m1b == r_state, "前提：prompt 流程送進引擎的就是這組 M1B/M2"
         assert m1b_removed["market_regime"] != "多頭", m1b_removed
+
+    # ── 批 D3（DL-f1-s17，客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）──
+    # 原本這裡驗「代理值照樣計分、只多一串註記」；D3 起這個出口**不吃代理值**：
+    # 完整輸出 ＝ 沒有 m1b_m2_info 時的輸出（既有缺值路徑），註記也不會出現。
+    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
+    @pytest.mark.parametrize("scn", ["strong", "negative"])
+    def test_d3_proxy_not_in_prompt_nor_rule_engine(self, run, scn, how):
+        """規則引擎（→ macro_state.json → 全站建議持股上限）與 prompt 都不吃代理值。"""
+        p_prompt, p_state = run.news(_proxy(scn, how))
+        e_prompt, e_state = run.news({})
+        assert p_prompt == e_prompt and "• M1B=" not in p_prompt and NOTE not in p_prompt
+        assert p_state == e_state, "代理值不得改變規則引擎結果（曝險上限）"
+        _r_prompt, r_state = run.news(_real(scn))
+        assert r_state != e_state, "反向對照：真值時 M1B 確實改變引擎結果"
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -517,15 +494,6 @@ class TestMidStrategy3:
         assert run.calls_seen.get("apply_vix_veto") == 1, "VIX 否決替身沒被呼叫到 —— patch 失效"
         assert _ORIG_MID["strong"][0] in _strategy3(fake)
 
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    @pytest.mark.parametrize("scn", sorted(_GAPS))
-    def test_proxy_gap_value_has_note(self, run, scn, how):
-        card = _strategy3(run.mid(_proxy(scn, how)))
-        m1b, m2 = _GAPS[scn]
-        gap = round(m1b - m2, 2)
-        _num = f"+{gap:.2f}" if gap >= 0 else f"{gap:.2f}"
-        assert f"M1B-M2 Gap = {_num}%{NOTE}{_MID_TAIL[scn]}" in card, card
-
     @pytest.mark.parametrize("source", _REAL_SOURCES)
     @pytest.mark.parametrize("scn", sorted(_GAPS))
     def test_non_proxy_is_byte_identical_to_before(self, run, scn, source):
@@ -534,14 +502,16 @@ class TestMidStrategy3:
         assert indicator in card and conclusion in card, card
         assert NOTE not in card
 
+    # ── 批 D3（DL-f1-s17，客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）──
+    # 原本這裡驗「代理值照樣計分、只多一串註記」；D3 起這個出口**不吃代理值**：
+    # 完整輸出 ＝ 沒有 m1b_m2_info 時的輸出（既有缺值路徑），註記也不會出現。
     @pytest.mark.parametrize("how", sorted(_PROXY_KW))
     @pytest.mark.parametrize("scn", sorted(_GAPS))
-    def test_only_difference_is_the_note(self, run, scn, how):
-        """含顏色、「積極作多強勢股」結論、⚔️ 三環火力分級：全部逐字相同。"""
-        p = run.mid(_proxy(scn, how)).out
-        r = run.mid(_real(scn)).out
-        assert _strip_note(p) == r
-        assert p != r
+    def test_d3_proxy_is_not_scored(self, run, scn, how):
+        p = run.mid(_proxy(scn, how))
+        assert p.out == run.mid({}).out
+        assert "M1B/M2 數據載入後自動顯示資金動能判斷" in p.text and NOTE not in p.text
+        assert "M1B-M2 Gap = " not in p.text
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -564,12 +534,6 @@ def _d_badge(fake: _FakeST) -> tuple[str, str]:
 
 class TestMidRing2DBadge:
 
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    @pytest.mark.parametrize("scn", sorted(_GAPS))
-    def test_proxy_d_badge_has_note(self, run, scn, how):
-        _span, text = _d_badge(run.mid(_proxy(scn, how)))
-        assert text == f"{_ORIG_D_TEXT[scn]}{NOTE}", text
-
     @pytest.mark.parametrize("source", _REAL_SOURCES)
     @pytest.mark.parametrize("scn", sorted(_GAPS))
     def test_non_proxy_d_badge_is_byte_identical_to_before(self, run, scn, source):
@@ -577,18 +541,18 @@ class TestMidRing2DBadge:
         assert text == _ORIG_D_TEXT[scn], text
         assert span.endswith(f">{_ORIG_D_TEXT[scn]}</span>"), span
 
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    @pytest.mark.parametrize("scn", sorted(_GAPS))
-    def test_badge_color_and_condition_unchanged(self, run, scn, how):
-        """`_cD` 判定（徽章綠／灰）不因代理而變：span 拿掉註記後與非代理逐字相同。"""
-        p_span, _ = _d_badge(run.mid(_proxy(scn, how)))
-        r_span, _ = _d_badge(run.mid(_real(scn)))
-        assert p_span.replace(NOTE, "") == r_span
-        assert p_span != r_span, "反向對照：代理時徽章必須真的多出註記"
-
     def test_unknown_badge_has_no_note(self, run):
         """代理源但缺數字 → 仍是「D M1B-M2未知」，不得貼註記。"""
         _span, text = _d_badge(run.mid(_NO_NUMBER))
+        assert text == "D M1B-M2未知", text
+
+    # ── 批 D3（DL-f1-s17，客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）──
+    # 原本這裡驗「代理值照樣計分、只多一串註記」；D3 起這個出口**不吃代理值**：
+    # 完整輸出 ＝ 沒有 m1b_m2_info 時的輸出（既有缺值路徑），註記也不會出現。
+    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
+    @pytest.mark.parametrize("scn", sorted(_GAPS))
+    def test_d3_proxy_d_badge_is_unknown(self, run, scn, how):
+        _span, text = _d_badge(run.mid(_proxy(scn, how)))
         assert text == "D M1B-M2未知", text
 
 
@@ -631,13 +595,6 @@ class TestSection7ConclusionCard:
         assert run.calls_seen.get("bucket_bar", 0) >= 1, "五桶 bar 替身沒被呼叫到 —— patch 失效"
         assert f">{_ORIG_S7['strong']}</span>" in card, card
 
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    @pytest.mark.parametrize("scn", sorted(_S7_GAPS))
-    def test_proxy_value_has_note(self, run, scn, how):
-        card = _s7_card(run.long(_s7_info(scn, how)))
-        m1b, m2 = _S7_GAPS[scn]
-        assert f">M1B-M2={m1b - m2:+.2f}%{NOTE}{_S7_TAIL[scn]}</span>" in card, card
-
     @pytest.mark.parametrize("source", _REAL_SOURCES)
     @pytest.mark.parametrize("scn", sorted(_S7_GAPS))
     def test_non_proxy_is_byte_identical_to_before(self, run, scn, source):
@@ -645,16 +602,19 @@ class TestSection7ConclusionCard:
         assert f">{_ORIG_S7[scn]}</span>" in _s7_card(fake)
         assert NOTE not in fake.text
 
+    # ── 批 D3（DL-f1-s17，客戶 2026-10-02 頁 1 ③「只顯示不計分」）──
+    # 結論卡不列 M1B-M2 那條（＝缺數字的既有樣子）；同頁 KPI 卡照樣顯示數字＋註記＋D2 警語，
+    # 但不再下「資金流入／撤離」判斷、不上紅綠色。
     @pytest.mark.parametrize("how", sorted(_PROXY_KW))
     @pytest.mark.parametrize("scn", sorted(_S7_GAPS))
-    def test_only_difference_is_the_note(self, run, scn, how):
-        """結論文案、顏色、同頁其餘卡片：拿掉註記（與 D2 既有警語）後逐字相同。"""
-        p = run.long(_s7_info(scn, how)).out
-        r = run.long(_s7_info(scn)).out
-        p_wo_d2 = [x for x in p if not x[1].startswith(_D2_PROXY_CAPTION_HEAD)]
-        assert len(p) - len(p_wo_d2) == 1, "D2 既有警語應恰好一行（定位失準會讓差分失真）"
-        assert _strip_note(p_wo_d2) == r
-        assert p_wo_d2 != r, "反向對照：代理時必須真的多出註記"
+    def test_d3_conclusion_dropped_kpi_still_shows(self, run, scn, how):
+        fake = run.long(_s7_info(scn, how))
+        assert not [t for _, t in fake.out if "🎯 策略3" in t and "M1B-M2=" in t]
+        m1b, m2 = _S7_GAPS[scn]
+        kpi = [t for _, t in fake.out if "M1B-M2 差距" in t]
+        assert len(kpi) == 1 and f"{m1b - m2:+.2f}%{NOTE}" in kpi[0], kpi
+        assert "資金流入股市" not in kpi[0] and "資金撤離股市" not in kpi[0]
+        assert sum(1 for _, t in fake.out if t.startswith(_D2_PROXY_CAPTION_HEAD)) == 1
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -696,9 +656,9 @@ class TestMacroV2Page:
         cur, long_b, _t, _s = _v2_views(rows)
         want = f"{_ORIG_V2_VALUE[scn]}{NOTE}"
         assert cur == want, cur
-        # 只餵 M1B → 長期桶其餘燈無資料 → 最差項必為 M1B（前提照實斷言）
-        assert long_b["worst_label"] == "M1B-M2 資金動能", long_b
-        assert long_b["worst_value"] == want, long_b
+        # D3（客戶 2026-10-02 頁 1 ③「只顯示不計分」）：代理燈走 gray → 只餵 M1B 時長期桶
+        # ＝全部無資料（既有字樣）；總表「目前值」與右側明細照樣顯示數字＋註記。
+        assert long_b["worst_label"] == "全部無資料", long_b
         assert f">{want}</div>" in _v2_big_value(run.v2_detail(_v2_m1b(rows)))
 
     @pytest.mark.parametrize("source", _REAL_SOURCES)
@@ -715,25 +675,6 @@ class TestMacroV2Page:
     def test_non_proxy_rows_carry_no_note(self, run, source):
         assert all(r.value_note == "" for r in run.v2_rows(_real("strong", source)))
 
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    @pytest.mark.parametrize("scn", sorted(_GAPS))
-    def test_only_difference_is_the_note(self, run, scn, how):
-        """燈色 / 狀態 / 桶等級 / 指標危險度：代理與非代理完全相同，差別只有註記。"""
-        import dataclasses
-
-        import src.ui.tabs.tab_macro_v2 as V
-        p_rows = run.v2_rows(_proxy(scn, how))
-        r_rows = run.v2_rows(_real(scn))
-        assert [dataclasses.replace(r, value_note="") for r in p_rows] == r_rows
-        _pc, _pl, p_table, p_summary = _v2_views(p_rows)
-        _rc, _rl, r_table, r_summary = _v2_views(r_rows)
-        strip = {k: [str(v).replace(NOTE, "") for v in vs] for k, vs in p_table.items()}
-        assert strip == {k: [str(v) for v in vs] for k, vs in r_table.items()}
-        assert [{k: (v.replace(NOTE, "") if isinstance(v, str) else v) for k, v in b.items()}
-                for b in p_summary] == r_summary
-        assert V.overall_verdict(p_summary) == V.overall_verdict(r_summary)
-        assert p_table != r_table, "反向對照：代理時總表必須真的多出註記"
-
     def test_no_note_without_a_number(self, run):
         """代理源但缺數字 → 那一列是「無資料」，不得貼註記。"""
         rows = run.v2_rows(_NO_NUMBER)
@@ -748,6 +689,23 @@ class TestMacroV2Page:
                 state="live", reason=None, hit_source=None, thr_text="—", source="—",
                 note="", decimals=1)
         assert r.value_note == ""
+
+    # ── 批 D3（DL-f1-s17，客戶 2026-10-02 頁 1 ③「只顯示不計分」）──
+    # 值與註記照樣顯示（上一條），但燈號走既有 gray → 不進桶等級／指標危險度。
+    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
+    @pytest.mark.parametrize("scn", sorted(_GAPS))
+    def test_d3_band_gray_not_in_verdict(self, run, scn, how):
+        import dataclasses
+
+        import src.ui.tabs.tab_macro_v2 as V
+        p_rows = run.v2_rows(_proxy(scn, how))
+        r_rows = run.v2_rows(_real(scn))
+        assert _v2_m1b(p_rows).band == "gray"
+        assert [dataclasses.replace(r, value_note="", band="gray") if r.key == "m1b_m2_gap"
+                else r for r in p_rows] == \
+            [dataclasses.replace(r, band="gray") if r.key == "m1b_m2_gap" else r for r in r_rows]
+        assert V.overall_verdict(V.bucket_summary(p_rows)) == \
+            V.overall_verdict(V.bucket_summary(run.v2_rows({})))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -817,13 +775,6 @@ class TestOpRecommendationSection:
         assert run.calls_seen.get("get_macro_regime") == 1, "大盤格局替身沒被呼叫到 —— patch 失效"
         assert _ORIG_OP["strong"] in _op_comment(fake)
 
-    @pytest.mark.parametrize("how", sorted(_PROXY_KW))
-    @pytest.mark.parametrize("scn", ["strong", "negative"])
-    def test_proxy_reaches_the_card(self, run, scn, how):
-        """L5 真的把 m1b_m2_info 帶進 L3 —— 畫面上的文案帶註記。"""
-        card = _op_comment(run.op(_proxy(scn, how)))
-        assert f"【景氣環境】M1B-M2{NOTE}為" in card, card
-
     @pytest.mark.parametrize("source", _REAL_SOURCES)
     @pytest.mark.parametrize("scn", ["strong", "negative"])
     def test_non_proxy_is_byte_identical_to_before(self, run, scn, source):
@@ -831,14 +782,15 @@ class TestOpRecommendationSection:
         assert _ORIG_OP[scn] in _op_comment(fake)
         assert NOTE not in fake.text
 
+    # ── 批 D3（DL-f1-s17，客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）──
+    # 原本這裡驗「代理值照樣計分、只多一串註記」；D3 起這個出口**不吃代理值**：
+    # 完整輸出 ＝ 沒有 m1b_m2_info 時的輸出（既有缺值路徑），註記也不會出現。
     @pytest.mark.parametrize("how", sorted(_PROXY_KW))
     @pytest.mark.parametrize("scn", ["strong", "negative"])
-    def test_only_difference_is_the_note(self, run, scn, how):
-        """4 訊號共振計分、策略結論、年線乖離揭露：全部逐字相同。"""
-        p = run.op(_proxy(scn, how)).out
-        r = run.op(_real(scn)).out
-        assert _strip_note(p) == r
-        assert p != r
+    def test_d3_proxy_is_not_scored(self, run, scn, how):
+        p = run.op(_proxy(scn, how))
+        assert p.out == run.op({}).out
+        assert "【景氣環境】" not in p.text and NOTE not in p.text
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -977,16 +929,21 @@ class TestRealStreamlitRender:
     def test_proxy_note_rendered_and_only_difference(self, target):
         p = _app_markdown(target, _proxy("strong"))
         r = _app_markdown(target, _real("strong"))
-        assert any(NOTE in t for t in p), f"{target}: 代理時畫面上找不到註記"
         assert not any(NOTE in t for t in r), f"{target}: 非代理卻出現註記"
-        assert [t.replace(NOTE, "") for t in p] == r, f"{target}: 註記以外還有其他差異"
+        if target in ("cross_ai", "mid", "op"):
+            # D3（客戶 2026-10-02 頁 1 ③「只顯示不計分」）：這三處是結論／計分出口 →
+            # 代理時＝沒有 m1b_m2_info 的畫面（既有缺值路徑），不出現註記。
+            assert p == _app_markdown(target, {}), f"{target}: 代理值仍進結論"
+            assert not any(NOTE in t for t in p)
+        else:
+            # long（KPI 卡）／macro_v2（總表、明細）是顯示出口：數字＋註記照樣畫。
+            assert any(NOTE in t for t in p), f"{target}: 代理時畫面上找不到註記"
 
     def test_section7_card_itself_is_labelled(self):
-        """§七 同頁 KPI 卡本來就有註記 → 上一條的「找得到註記」對 long 不夠具體，這裡點名那張卡。"""
+        """D3：§七 結論卡代理時不列 M1B-M2 那條；真值時照舊。"""
         p = [t for t in _app_markdown("long", _proxy("strong")) if "🎯 策略3" in t and "M1B-M2=" in t]
         r = [t for t in _app_markdown("long", _real("strong")) if "🎯 策略3" in t and "M1B-M2=" in t]
-        assert len(p) == len(r) == 1, (p, r)
-        assert f"M1B-M2=+3.10%{NOTE} 正值" in p[0], p[0]
+        assert p == [] and len(r) == 1, (p, r)
         assert f">{_ORIG_S7['strong']}</span>" in r[0], r[0]
 
     def test_macro_v2_table_and_bucket_summary_are_labelled(self):
@@ -994,4 +951,5 @@ class TestRealStreamlitRender:
         p = _app_markdown("macro_v2", _proxy("strong"))
         want = f"{_ORIG_V2_VALUE['strong']}{NOTE}"
         assert want in p, "總表（st.dataframe）「目前值」沒有註記"
-        assert any(f"M1B-M2 資金動能 {want}" in t for t in p), "桶摘要「最差項」沒有註記"
+        # D3：代理燈走 gray → 桶摘要「最差項」不再列它（不進桶等級）
+        assert not any(f"M1B-M2 資金動能 {want}" in t for t in p), "代理值仍進桶摘要"

@@ -202,7 +202,13 @@ class MacroStateLocker:
             return False
 
     def lock_system_state_only(self, system_state: dict) -> None:
-        """Write rule-based system_state to the state lock without calling AI."""
+        """Write rule-based system_state to the state lock without calling AI.
+
+        DL-f1-s13／s65：呼叫端（§十一）會在 `system_state` 裡多帶 `m1b_m2_data_month`
+        （本次計分實際用到的 M1B/M2 資料月；代理／缺值 → None），照 `**system_state` 原樣落檔。
+        裁決產生時間仍是 `timestamp`；有效期限由 `get_macro_state` 依它判
+        （`shared.staleness.MACRO_VERDICT_MAX_AGE_DAYS`）。
+        """
         final = {
             **system_state,
             "exposure_limit_pct": max(0, min(100, int(system_state.get("exposure_limit_pct", 0)))),
@@ -322,7 +328,8 @@ def normalize_regime(value) -> str:
 
 def get_macro_state(warroom_summary: dict | None = None, *,
                     state_file_path: str = "macro_state.json",
-                    strict: bool = False) -> dict:
+                    strict: bool = False,
+                    now=None) -> dict:
     """『總經 tab 已算好的狀態』→ 全站唯一的 canonical 總經契約（① 接線 + C1 仲裁）。
 
     來源優先序（§2.1 上層贏、**禁止平均**）::
@@ -389,6 +396,12 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     # 再一路把 nan 傳進姿態油門。NaN 不是一個健康分，視同未載入（§1）。
     _wr_ok = bool(_wr) and _is_finite_number(_wr.get("health_score"))
     _file_ok = bool(_file) and _file.get("market_regime") not in (None, "系統異常")
+    # DL-f1-s65（客戶 2026-10-02 頁 1 ③「裁決設有效期限」）：過期裁決**視同不存在**——
+    # 不進位階、不給曝險上限（＝建議持股上限）、strict 也不當「讀壞了」拋（過期 ≠ 讀壞）。
+    # 走的全是「檔案不存在」那條既有路徑；`now` 只給測試注入。
+    _file_expired = _file_ok and macro_state_is_expired(_file, now=now)
+    if _file_expired:
+        _file_ok = False
     _is_loaded = _wr_ok or _file_ok
     # B6-r5:讀檔／JSON 失敗 → 帶原始例外 repr(檔名＋例外),不帶降級後的「系統異常」;
     # 讀得出來但內容不可用(Fail-safe／缺鍵)→ 同修前帶 market_regime。
@@ -396,7 +409,7 @@ def get_macro_state(warroom_summary: dict | None = None, *,
         f"{os.path.basename(state_file_path)}: "
         + (repr(_read_exc) if _read_exc is not None
            else f"market_regime={_file.get('market_regime')!r}"))
-    if strict and not _is_loaded and os.path.exists(state_file_path):
+    if strict and not _is_loaded and os.path.exists(state_file_path) and not _file_expired:
         raise RuntimeError(_strict_detail)
 
     # B6-r4（加性）：strict ＋ warroom 可用 ＋ 檔**存在**卻不可用 → 位階照算（warroom 撐得住），
@@ -404,7 +417,8 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     # 回傳 dict 多帶 `file_error`（**只在這一種情形才有這個鍵**）；預設 strict=False、
     # 檔不存在、檔可用 → 一個鍵都不多（逐位元組同修前）。
     _file_error = ""
-    if strict and _wr_ok and not _file_ok and os.path.exists(state_file_path):
+    if (strict and _wr_ok and not _file_ok and os.path.exists(state_file_path)
+            and not _file_expired):
         _file_error = _strict_detail
 
     _health = _wr.get("health_score") if _wr_ok else None
@@ -607,7 +621,37 @@ def calculate_system_state(macro_numbers: dict) -> dict:
 
 
 # ── 工具 ────────────────────────────────────────────────────
+#: `_now_str()` 寫入 `timestamp` 的格式（台北時間、不帶時區字樣）。讀寫兩端共用。
+_TIMESTAMP_FMT = "%Y-%m-%d %H:%M:%S"
+
+
 def _now_str() -> str:
     from datetime import datetime, timezone, timedelta
     tz = timezone(timedelta(hours=8))
-    return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(tz).strftime(_TIMESTAMP_FMT)
+
+
+def macro_state_is_expired(state: dict | None, *, now=None) -> bool:
+    """`macro_state.json` 裁決是否已過有效期限（DL-f1-s65）。
+
+    依 `timestamp`（`_now_str()` 寫入的台北時間）算年齡，超過
+    `shared.staleness.MACRO_VERDICT_MAX_AGE_DAYS` 日曆天 → 過期。
+    `timestamp` 缺／空／解析不了，或超前現在超過 `MACRO_VERDICT_FUTURE_SKEW_DAYS` → **視為過期**（§1：確認不了裁決產生時間，
+    就不得把它當成當下的天花板；對齊 `staleness.gate_for_realtime` 的 fail-safe）。
+
+    Args:
+        state: 讀出的 dict（可為 None → 過期）。
+        now: 基準時間（aware datetime；測試注入）。None → 現在（台北時間）。
+    """
+    from datetime import datetime, timezone, timedelta
+    from shared.staleness import MACRO_VERDICT_FUTURE_SKEW_DAYS, MACRO_VERDICT_MAX_AGE_DAYS
+    _tz = timezone(timedelta(hours=8))
+    _ts = (state or {}).get("timestamp") if isinstance(state, dict) else None
+    try:
+        _made = datetime.strptime(str(_ts), _TIMESTAMP_FMT).replace(tzinfo=_tz)
+    except (TypeError, ValueError):
+        return True
+    _now = now if now is not None else datetime.now(_tz)
+    if (_made - _now) > timedelta(days=MACRO_VERDICT_FUTURE_SKEW_DAYS):
+        return True     # D3 QA：超前現在超過時鐘誤差 → 時間戳不可信，當過期（否則永不過期）
+    return (_now - _made) > timedelta(days=MACRO_VERDICT_MAX_AGE_DAYS)

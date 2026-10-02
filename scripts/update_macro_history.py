@@ -554,40 +554,12 @@ def _m1m2_ms1_candidate(data) -> tuple[pd.DataFrame | None, str]:
     if not isinstance(data, list) or len(data) < 13:
         _n = len(data) if isinstance(data, list) else "—"
         return None, f"回應不是 ≥ 13 列的 list（{type(data).__name__}，{_n} 列）"
-    df = pd.DataFrame(data)
-    c1 = next((c for c in df.columns
-               if "M1B" in str(c).upper() or "貨幣供給額M1B" in str(c)), None)
-    c2 = next((c for c in df.columns
-               if str(c).strip().upper() == "M2" or "貨幣供給額M2" in str(c)), None)
-    date_col = next((c for c in df.columns
-                     if str(c).strip() in ("年月", "date", "yearMonth", "Date",
-                                            "PERIOD", "TIME_PERIOD")), None)
-    if not (c1 and c2 and date_col):
-        return None, f"形狀不符：欄位對應失敗（欄位={list(df.columns)[:15]}）"
-    out = df[[date_col, c1, c2]].copy()
-    out.columns = ["date_raw", "m1b", "m2"]
-    # 日期 normalize：支援 'YYYYMmm'（CBC PXWeb）/ 'YYYY-MM' / 'YYYY/MM' / 'YYYYMM'
-    import re as _re
-
-    def _norm(s):
-        s = str(s).strip()
-        m = _re.search(r"(20\d{2})\s*M\s*(\d{1,2})", s, _re.IGNORECASE)
-        if m:
-            return _dt.date(int(m.group(1)), int(m.group(2)), 1)
-        m = _re.search(r"(20\d{2})[-/年]?(\d{1,2})", s)
-        if not m:
-            return None
-        return _dt.date(int(m.group(1)), int(m.group(2)), 1)
-    out["date"] = out["date_raw"].apply(_norm)
-    out = out.dropna(subset=["date"]).drop(columns=["date_raw"])
-    # SDMX 數字可能含 thousand separator，先去掉再轉
-    out["m1b"] = pd.to_numeric(
-        out["m1b"].astype(str).str.replace(",", ""), errors="coerce")
-    out["m2"] = pd.to_numeric(
-        out["m2"].astype(str).str.replace(",", ""), errors="coerce")
-    out = out.dropna().sort_values("date").reset_index(drop=True)
-    if out.empty:
-        return None, "日期或數值全數無法解析"
+    # DL-f1-s49（2026-10-02 批 D3）：②③ 改呼叫與線上 Tier 1 共用的 SSOT 解析器
+    # `tw_macro.parse_cbc_ms1_rows`（內容即原本寫在這裡的那段，逐字搬過去）。
+    from src.data.macro.tw_macro import parse_cbc_ms1_rows
+    out, _why = parse_cbc_ms1_rows(data)
+    if out is None:
+        return None, _why
     _lo, _hi = _m1m2_level_band()
     _off = ~(out["m1b"].between(_lo, _hi) & out["m2"].between(_lo, _hi))
     if _off.any():

@@ -36,6 +36,7 @@ from src.services.daily_checklist import (
 from shared.stats_helpers import ewma_vol, signal_with_deadband
 # v19.183 D2:M1B/M2 是否為「^TWII 動能代理」的判定 SSOT(原用從未被寫入的 is_proxy 鍵)。
 from shared.macro_provenance import M1B_PROXY_VALUE_NOTE, is_m1b_m2_proxy, m1b_m2_proxy_badge
+from shared.macro_provenance import m1b_m2_for_scoring  # DL-f1-s17：代理值不計分（L0 SSOT）
 from shared.ui_state import UI_IDLE, classify_ui_state
 # I2(2026-08-10):`bias_240` 估算揭露文案 SSOT(L5 → L2 合法下行)。本檔原本是全 repo
 # 唯一有揭露的地方,但那兩句是 inline 字面 —— 其餘 9 個消費點要一起揭露就得複製,
@@ -292,6 +293,10 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         else:
             _macro_concl.append((STRATEGY_TECHNICAL, f'{_ind_m1b} 負值',
                                  '資金撤離，空手觀望！', TRAFFIC_RED))
+    # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理 → 結論卡
+    # 不列 M1B-M2 那條（＝缺數字時的既有樣子；此時清單裡只有它）；下方 KPI 卡照樣顯示數字＋代理註記＋警語。
+    if m1b_m2_for_scoring(_m1b_info) is None:
+        _macro_concl = []
     if _bias_info:
         _bv2 = _bias_info.get('bias_240', 0)
         # I2:估算徽章只進**指標文字**,下方 `_bv2 > 20` / `< -20` 判定一行未動。
@@ -327,6 +332,10 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
             _is_m1b_proxy = is_m1b_m2_proxy(_m1b_info)
             # B7c：字面上提 L0 `M1B_PROXY_VALUE_NOTE`（與 v2 今天頁 m1b 燈共用），輸出逐字不變。
             _proxy_note = M1B_PROXY_VALUE_NOTE if _is_m1b_proxy else ''
+            if _is_m1b_proxy:
+                # DL-f1-s17：代理值只顯示不計分 → 不下「資金流入／撤離」判斷、不上紅綠色
+                # （副標只留兩個數字；色沿用本卡灰態既有色碼）。數字＋註記＋下方警語照舊。
+                _mc, _ml = '#484f58', ''
             st.markdown(kpi('M1B-M2 差距', f'{_diff:+.2f}%{_proxy_note}',
                             f'M1B:{_m1b_v:.1f}%  M2:{_m2_v:.1f}%  {_ml}', _mc, '#0d1117'), unsafe_allow_html=True)
             if _is_m1b_proxy:

@@ -95,3 +95,20 @@ def m1b_m2_proxy_badge(info: Optional[dict]) -> str:
     呼叫端串接後輸出與未接線前**逐字元相同**。
     """
     return M1B_PROXY_VALUE_NOTE if is_m1b_m2_proxy(info) else ''
+
+
+def m1b_m2_for_scoring(info: Optional[dict]) -> Optional[dict]:
+    """計分／結論／燈號端取 M1B/M2 的唯一入口：代理值 → ``None``；否則原物件。
+
+    DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：
+    `^TWII` 動能代理（`is_m1b_m2_proxy` 為真）**可以顯示**（數字後綴
+    `M1B_PROXY_VALUE_NOTE`），但**不得**進任何燈號、結論、三環、策略卡、建議持股上限。
+    呼叫端把本函式的回傳當成 `m1b_m2_info` 用 —— 代理時拿到 ``None``，自然走
+    各自**既有**的缺值路徑（不另寫一套「代理」分支、不自擬新字）。
+
+    非代理時回**同一個物件**（不複製、不轉型）⇒ 既有計分輸入逐位不變。
+    顯示端請照舊讀原始 `m1b_m2_info`（才看得到代理值與註記），不要改讀本函式。
+    """
+    if is_m1b_m2_proxy(info):
+        return None
+    return info

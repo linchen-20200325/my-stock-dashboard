@@ -68,7 +68,10 @@ def test_defense_when_bear(tmp_path):
 
 def test_file_source_chinese_to_english(tmp_path):
     _f = tmp_path / "macro_state.json"
-    _f.write_text(json.dumps({"market_regime": "空頭防禦", "exposure_limit_pct": 30}),
+    # D3（DL-f1-s65）：裁決有有效期限 → 測資帶一個當下的 timestamp（過期另由 test_d3 驗）
+    from src.services.macro_state_locker import _now_str
+    _f.write_text(json.dumps({"market_regime": "空頭防禦", "exposure_limit_pct": 30,
+                              "timestamp": _now_str()}),
                   encoding="utf-8")
     ms = get_macro_state(None, state_file_path=str(_f))
     assert ms["regime"] == "bear"                      # 中文 → 英文

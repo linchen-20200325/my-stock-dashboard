@@ -17,6 +17,7 @@ except ImportError:
 
 # v18.449:市場廣度中性門檻 SSOT(原 inline `1.0`，尺度語意錯誤，見下方 market_regime docstring）
 from shared.signal_thresholds import M1B_M2_LEG_ENABLED, MARKET_BREADTH_NEUTRAL_PCT
+from shared.macro_provenance import M1B_PROXY_VALUE_NOTE  # DL-f1-s23：代理註記（L0 SSOT，K1）
 
 # P0-2 v18.369 深層拔毒:portfolio_exposure SSOT 收攏至 L2 risk_control(原本兩處同名異實作)
 from src.compute.risk.risk_control import portfolio_exposure  # noqa: F401
@@ -52,7 +53,8 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
                   m1b_m2_gap=None, m1b_m2_prev=None,
                   ma60_above_3d=False, ma60_below_3d=False,
                   ma120_above_3d=False, ma120_below_3d=False,
-                  ma120_rising=False, ma120_falling=False):
+                  ma120_rising=False, ma120_falling=False,
+                  m1b_m2_is_proxy=False):
     """
     市場狀態判斷引擎 v4.1
     新增：MA60 連三日遲滯區間（Hysteresis）+ MA斜率過濾 + M1B-M2
@@ -66,7 +68,12 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
                  未傳入時誠實不計分/不顯示，而非塞一個假中性值(§1 寧缺勿假)。
     m1b_m2_gap:  float | None — M1B年增率 - M2年增率（百分點）
     m1b_m2_prev: float | None — 上月 gap，用於判斷趨勢方向
+    m1b_m2_is_proxy: bool — gap 來自 `^TWII` 動能代理（L0 `is_m1b_m2_proxy` 由呼叫端判）。
+                 DL-f1-s17／s23（客戶 2026-10-02 頁 1 ③「只顯示不計分」）：代理值**一律不計分**；
+                 腿停用時 chip 照舊顯示數字並後綴 L0 既有註記，腿啟用時走既有缺值路徑（不出、不計分母）。
     """
+    if m1b_m2_is_proxy and M1B_M2_LEG_ENABLED:
+        m1b_m2_gap = None      # DL-f1-s17：代理值不得進分數 / 分母 → 既有「未傳」路徑
     score = 0
     signals = []
 
@@ -142,8 +149,11 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     if m1b_m2_gap is not None and not M1B_M2_LEG_ENABLED:
         # 停用 ≠ 缺資料。上游確實給了值，只是我們判定它不該進分數 ——
         # 這件事要說出來（§1），否則使用者只會發現「資金活水那行不見了」。
-        signals.append(f'⬜ M1B-M2 資金活水已停用（{m1b_m2_gap:+.2f}%，'
-                       f'AUC 0.54 無預測力＋來源量綱異常）— 不計分')
+        # DL-f1-s23（客戶 2026-10-02 頁 1 ③）：代理值時數字後綴 L0 既有註記；
+        # 拿掉已不成立的「＋來源量綱異常」（`2aed087` 整檔重建後資料已無量綱異常，見上方 DL-f1-s33）。
+        _m1b_note = M1B_PROXY_VALUE_NOTE if m1b_m2_is_proxy else ''
+        signals.append(f'⬜ M1B-M2 資金活水已停用（{m1b_m2_gap:+.2f}%{_m1b_note}，'
+                       f'AUC 0.54 無預測力）— 不計分')
     elif m1b_m2_gap is not None:
         _trending_up = (m1b_m2_prev is not None) and (m1b_m2_gap > m1b_m2_prev)
         if m1b_m2_gap > 0 and _trending_up:
@@ -369,7 +379,8 @@ def volume_window_stats(df, window=VOL_WINDOW_DAYS,
 
 
 def get_market_assessment(df_index=None, foreign_net=None,
-                          m1b_m2_gap=None, m1b_m2_prev=None, ad_ratio=None):
+                          m1b_m2_gap=None, m1b_m2_prev=None, ad_ratio=None,
+                          m1b_m2_is_proxy=False):
     """
     整合版市場評估（v4.0 升級版）
     同時輸出 regime (bull/neutral/bear) 與舊版 score
@@ -466,6 +477,7 @@ def get_market_assessment(df_index=None, foreign_net=None,
         ma60_prev=ma60_prev, ma120_prev=None,
         vol_today=vol_today, avg_vol_20=avg_vol,
         m1b_m2_gap=m1b_m2_gap, m1b_m2_prev=m1b_m2_prev,
+        m1b_m2_is_proxy=m1b_m2_is_proxy,
         ma60_above_3d=ma60_above_3d, ma60_below_3d=ma60_below_3d,
         ma120_above_3d=ma120_above_3d, ma120_below_3d=ma120_below_3d,
         ma120_rising=ma120_rising, ma120_falling=ma120_falling,

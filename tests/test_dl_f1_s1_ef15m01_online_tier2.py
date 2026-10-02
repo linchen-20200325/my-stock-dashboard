@@ -43,6 +43,13 @@ from tests.test_b7b_r1_ef15m01_level import (
 
 _REPO = Path(__file__).resolve().parent.parent
 
+@pytest.fixture(autouse=True)
+def _pin_today(monkeypatch):
+    """D3（DL-f1-s13）起 `fetch_cbc_m1b_m2` 對官方值加資料月過期閘（落後 ≥ 1 期拒用）。
+    本檔 fixture 最新月 2026M07 → 基準日釘在探針當天 2026-09-28（當期），不吃執行日。"""
+    monkeypatch.setattr(tw_macro, "_today_tw", lambda: dt.date(2026, 9, 28))
+
+
 #: 探針 run 36408641177 的 Tier 3 代理值（`fetch_cbc_m1b_m2()` 實測 tier_used=3 時的回傳）
 _PROXY = (3.65, 0.91)
 
@@ -100,9 +107,10 @@ class TestCurrentFormat:
         assert r["tier_used"] == 2 and r["is_proxy_tier"] is False
         assert (r["m1b_yoy"], r["m2_yoy"], r["gap"]) == (7.34, 7.42, -0.08)
         assert r["source"] == "CBC:EF15M01:tier2" and r["error"] is None
-        # 回傳 schema 不變（鍵集合與修正前相同）
+        # 回傳 schema：修正前的鍵全在；D3（DL-f1-s13）加性多一個 `data_month`
         assert set(r) == {"m1b_yoy", "m2_yoy", "gap", "tier_used", "is_proxy_tier",
-                          "error", "source", "fetched_at"}
+                          "error", "source", "fetched_at", "data_month"}
+        assert r["data_month"] == "2026-07"
 
     def test_value_is_official_not_recomputed_from_levels(self, monkeypatch):
         """2025-07 餘額為 "-" → 2026-07 無 t−12 餘額、無從自算；官方年增率照樣是 7.34／7.42。

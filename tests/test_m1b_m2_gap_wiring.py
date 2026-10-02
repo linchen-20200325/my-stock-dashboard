@@ -18,6 +18,15 @@ from __future__ import annotations
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _d3_no_live_twii_proxy(monkeypatch):
+    """D3（DL-f1-s12）：`fetch_m1b_m2_block` 的 ^TWII 代理改排在 FRED／IMF 之後、獨立呼叫 ——
+    本檔的 `fetch_cbc_m1b_m2` 樁不再擋得住它。預設換成「代理也失敗」（不觸網）；
+    需要代理值的測試自行覆寫 `fetch_twii_m1b_m2_proxy`。"""
+    import src.data.macro.tw_macro as _tw
+    monkeypatch.setattr(_tw, "_try_twii_proxy", lambda: None)
+
+
 def _unwrap(fn, *a, **k):
     """st.cache_data 裝飾函式測試時繞過快取直接呼叫底層邏輯。"""
     return fn.__wrapped__(*a, **k)
@@ -28,7 +37,7 @@ class TestTier0CbcGap:
         import src.data.macro.macro_snapshot as ms
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: {'m1b_yoy': 1.2, 'm2_yoy': 13.83, 'gap': -12.63,
+            lambda **_k: {'m1b_yoy': 1.2, 'm2_yoy': 13.83, 'gap': -12.63,
                      'tier_used': 1, 'is_proxy_tier': False},
         )
         r = _unwrap(ms.fetch_m1b_m2_block, '')
@@ -41,7 +50,7 @@ class TestTier0CbcGap:
         import src.data.macro.macro_snapshot as ms
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: {'m1b_yoy': 5.0, 'm2_yoy': 8.5, 'gap': -3.5,
+            lambda **_k: {'m1b_yoy': 5.0, 'm2_yoy': 8.5, 'gap': -3.5,
                      'tier_used': 1, 'is_proxy_tier': False},
         )
         r = _unwrap(ms.fetch_m1b_m2_block, '')
@@ -55,7 +64,7 @@ class TestTier1FredGap:
 
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: (_ for _ in ()).throw(RuntimeError('CBC 全敗')),
+            lambda **_k: (_ for _ in ()).throw(RuntimeError('CBC 全敗')),
         )
 
         class _FakeResp:
@@ -63,15 +72,27 @@ class TestTier1FredGap:
             def json(self):
                 return {'observations': self._obs}
 
+        # D3（DL-f1-s12／s13）：FRED 多了資料月過期閘 → 測資改成「20 個連續月、止於今天應有的
+        # 最新資料月」（原寫死 2024 年、月份還會回捲）。
+        # Re-QA：基準日釘死（測資與 production 閘吃同一個固定日，不吃執行當天）
+        import datetime as _dtx
+        from shared.staleness import (MACRO_PUBLICATION_LAG_DAYS, expected_latest_data_month,
+                                      monthly_periods_behind as _mpb)
+        _today = _dtx.date(2026, 10, 2)
+        monkeypatch.setattr(ms, 'monthly_periods_behind',
+                            lambda *a, **k: _mpb(*a, **{**k, 'today': _today}))
+        _last = expected_latest_data_month(lag_days=MACRO_PUBLICATION_LAG_DAYS['m1b_m2'],
+                                           today=_today)
+        _idx0 = _last.year * 12 + _last.month - 1 - 19
+        _dates = [f'{(_idx0 + i) // 12}-{(_idx0 + i) % 12 + 1:02d}-01' for i in range(20)]
+
         def _fake_fetch_url(url, params=None, **kwargs):
             _series = params.get('series_id', '')
             _r = _FakeResp()
             if _series == 'MYAGM1TWA189S':
-                _r._obs = [{'date': f'2024-{(i % 12) + 1:02d}-01', 'value': str(100 + i)}
-                           for i in range(20)]
+                _r._obs = [{'date': _dates[i], 'value': str(100 + i)} for i in range(20)]
             else:
-                _r._obs = [{'date': f'2024-{(i % 12) + 1:02d}-01', 'value': str(200 + i * 2)}
-                           for i in range(20)]
+                _r._obs = [{'date': _dates[i], 'value': str(200 + i * 2)} for i in range(20)]
             return _r
 
         # v19.74/v19.113 地雷:**不可** patch package `src.data.proxy` —— 它是
@@ -94,7 +115,7 @@ class TestTier2ImfGap:
 
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: (_ for _ in ()).throw(RuntimeError('CBC 全敗')),
+            lambda **_k: (_ for _ in ()).throw(RuntimeError('CBC 全敗')),
         )
 
         class _FakeResp:
