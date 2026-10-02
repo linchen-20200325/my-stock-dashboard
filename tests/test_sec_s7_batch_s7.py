@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import hashlib
-import subprocess
 
 import pytest
 
@@ -124,30 +123,34 @@ def test_n4_each_mutant_is_killed(name):
     assert _n4_suite(_gt_mutant(*_N4_MUTANTS[name])), name
 
 
-def _git(cwd, *args: str, inp: bytes | None = None) -> bytes:
-    r = subprocess.run(["git", "-c", "core.autocrlf=false", *args], cwd=cwd, input=inp, capture_output=True,
-                       timeout=60, check=True)
-    return r.stdout
+#: 真的 git 2.43.0 寫出的索引（`git update-index --add --cacheinfo`，不經檔案系統；v3 以 `--skip-worktree` 加上 extended flag，
+#: 再 `--index-version N`；skiphash ＝ `-c index.skipHash=true`）—— zlib＋base64 內嵌（tests/ ⛔ 不得呼叫外部程式，
+#: 見 tests/test_zz_test_portability.py；同批 S6 `_REAL_INDEX_B64` 的作法）。路徑含 4094／4095／5000 位元組三個長路徑。
+_N4_REAL_PATHS = frozenset(["a.md", "L/" + "x" * 4092, "M/" + "y" * 4093, "N/" + "z" * 4998, "zz.md"])
+_N4_REAL_INDEX = {
+    "v2-sha1": "eNrt2q8KwlAUgPGDOKsINrtY9FbBIKhB8U8QBOvAuu6uSUwWi+gT2Fa1mBTXFHwL38BgmbMIlolwsYzvByecch7g4zRa/bqIJF5jSaTp5nMbTm7b06O69OeHTG4/WGd1/pwOOmoMAAAAAABiTb76oR88u8oFAAAAAADxZtwPekoDAAAAAAAA+DOzjidJu+SMREz/icTS+n3ImxUrvtu+Nr17qlC77Bbl4yoEnc2obw==",  # 13560 B
+    "v2-skiphash": "eNrt2r8KQQEUwOGT3FnKZje6j2BgURiUsiqrnWsympUn8Agmk2LzHt7B4s9ocVM3i76vznCW8wC/Tqc7bEdE6TVJfLTavW/j5XV/urU25/WxWj+MtrWscance+kcAAAA+GuR64t+8OinCwAAAOC/Fe4HgzQDAAAAAH6sWMeL8qQ5m0YU/SeKJMvyDj0BONiejQ==",  # 13560 B
+    "v3-sha1": "eNrt2j8LQWEUgPFT3FnKdo0yeu83cOtaFAalrMqkzHjvZDRYvOULMCiryaSuzWwz+wAmUv4sykLqzXJ7fnWGs5wP8HRK5XogIonnOPLRcP6+NcPjKroUzXa0SbvrxjSj87vUraL6AAAAAAAg1uSrH/rBvaoGAAAAAAAg3qz7QU1pAAAAAAAAAH9m1/H8pC+tQrdt+08kjtavM7ns5Go8bzk7hGbfG3cW0fn0AAffqp4=",  # 13560 B
+    "v3-skiphash": "eNrt2r8KQWEYwOGvOLOUzW50LsEpFoVBKauy2vlMRrNyBS7BZFJs7sM9WPwZLU7qZNHz1Du8y3sBv95Od9gOIZRek4SPVrv3bby87k+31ua8Plbrh9G2FhuXyr2XzgEAAIC/FnJ90Q8e/XQBAAAA/LfC/WCQRgAAAADgx4p1vKychUlzNi36TxSSGPPOPAGeiZ8O",  # 13560 B
+    "v4-sha1": "eNrt2C8PQVEYx/EnnLtp2CS66KbbbALlbAg2m2pTBElxj41JprKJCjNRUNxko4neA1W1mX9Nkc6Uu+9ne8JTfi/gW9CVvIio9zny02Dx/dW6583+lpscRrt4KqhOEyZ9jD6k6HYAAAAAAECoiVU9eM56JdcHAAAAAADhZtsP+mXXAAAAAAAAAPgzq5AnahmpZ1oNuxFHGfMZuQxjXvZ6SgbeXN+b61V7rLcvwnyr5Q==",  # 13553 B
+    "v4-skiphash": "eNrt2C0KAmEUhtEvzIBNBJvd6CzBoEVQgyBYBatdR1CMZsFoEldgMgna3Id7sPgTLZMGy3AO3HDLu4Cn3Rm0QgjR9+KQaX34/UaLx+n6bG5vm0uldh7uqmn9Xn6FbjIDAAAACi3kqgfv/bKXzAEAAIBiy9sPVv0kBQAAAAD+LFfIC9GxNG5MJ/lG4ihNs0Y+WDiheg==",  # 13553 B
+}
 
 
-@pytest.mark.parametrize("skiphash", [False, True])
-@pytest.mark.parametrize("ver", [2, 3, 4])
-def test_n4_real_git_index_with_long_paths_parses(tmp_path, ver, skiphash):
-    """真的 git 寫出的索引（含 4094／4095／5000 位元組路徑）：照常讀出全部路徑（不經檔案系統：`--cacheinfo`）。"""
+@pytest.mark.parametrize("kind", sorted(_N4_REAL_INDEX))
+def test_n4_real_git_index_with_long_paths_parses(kind):
+    import base64
+    import zlib
+
     from tests._git_tracked import parse_index
-    _git(tmp_path, "init", "-q", ".")
-    oid = _git(tmp_path, "hash-object", "-w", "--stdin", inp=b"x\n").decode().strip()
-    paths = sorted(["a.md", "L/" + "x" * 4092, "M/" + "y" * 4093, "N/" + "z" * 4998, "zz.md"], key=str.encode)
-    cfg = ["-c", f"index.skipHash={'true' if skiphash else 'false'}"]
-    for p in paths:
-        _git(tmp_path, *cfg, "update-index", "--add", "--cacheinfo", f"100644,{oid},{p}")
-    if ver == 3:
-        _git(tmp_path, *cfg, "update-index", "--skip-worktree", "a.md")   # extended flag ⇒ git 才寫 v3
-    _git(tmp_path, *cfg, "update-index", "--index-version", str(ver))
-    data = (tmp_path / ".git" / "index").read_bytes()
+    data = zlib.decompress(base64.b64decode(_N4_REAL_INDEX[kind]))
+    ver = int(kind[1])
     assert int.from_bytes(data[4:8], "big") == ver, "前提：索引版本"
-    assert (data[-20:] == bytes(20)) == skiphash, "前提：檔尾形式"
-    assert parse_index(data) == frozenset(paths)
+    if kind.endswith("skiphash"):
+        assert data[-20:] == bytes(20), "前提：git 寫的檔尾是全 0"
+    else:
+        assert hashlib.sha1(data[:-20]).digest() == data[-20:], "前提：真的 SHA-1 檔尾"
+    assert parse_index(data) == _N4_REAL_PATHS
 
 
 # ══════════════════════════════════════════════════════════════════
