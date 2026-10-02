@@ -42,11 +42,17 @@ class _FakeWorksheet:
         return self._view()
 
     def get_all_records(self):
+        """同 gspread 6 `Worksheet.get_all_records()` 預設行為:表頭重複 raise、
+        每列跑真 `numericise_all`（預設參數）、再用真 `to_records` 組 dict。"""
+        from gspread.exceptions import GSpreadException
+        from gspread.utils import numericise_all, to_records
         rows = self._view()
-        if len(rows) < 2:
+        if not rows:
             return []
-        headers = rows[0]
-        return [dict(zip(headers, r)) for r in rows[1:]]
+        keys, values = rows[0], rows[1:]
+        if len(set(keys)) != len(keys):
+            raise GSpreadException('the header row in the worksheet contains duplicates')
+        return to_records(keys, [numericise_all(r) for r in values])
 
     def row_values(self, n):
         return list(self.rows[n - 1]) if n - 1 < len(self.rows) else []
@@ -269,7 +275,102 @@ def test_editor_loaded_row_matches_load_portfolio():
     vals = ws.get_all_values()
     flagged = [r for r in vals[1:] if gsp._editor_loaded_row(vals[0], r, 'A')]
     assert [r[1] for r in flagged] == [r['ticker'] for r in loaded] == ['0050.TW', '00713.TW']
+    for _nm in ('A', 'B', ''):
+        with patch.object(gsp, '_ws', return_value=ws):
+            gsp.clear_read_cache()
+            _n = len(gsp.load_portfolio(_nm))
+        assert sum(gsp._editor_loaded_row(vals[0], r, _nm) for r in vals[1:]) == _n
 
+
+
+# ── QA 2026-10-02 迴歸:判準必須與真讀取路徑（get_all_records → numericise_all）一致 ──
+def _editor_round_trip(ws, name):
+    """模擬 📁 組合管理:📂 載入 name → 原封不動 💾 儲存（同 portfolio_manager 的轉換）。"""
+    from src.ui.tabs.portfolio_manager import etf_rows_to_records, records_to_etf_rows
+    gsp.clear_read_cache()
+    loaded = gsp.load_portfolio(name)
+    rows = records_to_etf_rows(etf_rows_to_records(loaded))
+    gsp.save_portfolio(name, rows)
+    gsp.clear_read_cache()
+
+
+def test_qa_repro_thousands_comma_no_duplicate_growth():
+    """QA 重現:"1,050" 編輯器載得進來（numericise→1050）⇒ 存檔須取代、不可每存多一份。"""
+    ws = _FakeWorksheet([gsp._HEADERS,
+                         ['A', '2330', '1', '1,050', 't0'],
+                         ['B', '2317', '2', '100', 't0']])
+    with patch.object(gsp, '_ws', return_value=ws):
+        for _ in range(3):
+            _editor_round_trip(ws, 'A')
+            assert len(gsp.load_portfolio('A')) == 1
+        vals = ws.get_all_values()
+    assert sum(1 for r in vals if r[0] == 'A') == 1
+    assert ['B', '2317', '2', '100', 't0'] in vals
+
+
+def test_thousands_comma_row_deleted_in_editor_is_removed():
+    ws = _FakeWorksheet([gsp._HEADERS,
+                         ['A', '2330', '1', '1,050', 't0'],
+                         ['A', '2317', '2', '100', 't0']])
+    with patch.object(gsp, '_ws', return_value=ws):
+        loaded = gsp.load_portfolio('A')
+        assert [r['avg_price'] for r in loaded] == [1050, 100]
+        gsp.save_portfolio('A', [r for r in loaded if r['ticker'] == '2317'])
+        gsp.clear_read_cache()
+        assert [r['ticker'] for r in gsp.load_portfolio('A')] == ['2317']
+        assert not any(r[1] == '2330' for r in ws.get_all_values())
+
+
+@pytest.mark.parametrize('lots,avg', [
+    ('1,000', '50'), ('1e3', '50'), ('2', '1e3'), ('2', '1,050.5'), ('NaN', '50'),
+    ('2', 'NaN'), (' 3 ', '50'),
+])
+def test_number_like_cells_round_trip_without_growth(lots, avg):
+    """numericise 會轉的寫法（千分位、科學記號、NaN、前後空白）:載得進來就必須被取代。"""
+    ws = _FakeWorksheet([gsp._HEADERS, ['A', '2330', lots, avg, 't0'],
+                         ['B', 'X', '1', '1', 't0']])
+    with patch.object(gsp, '_ws', return_value=ws):
+        n_loaded = len(gsp.load_portfolio('A'))
+        vals0 = ws.get_all_values()
+        flagged = sum(gsp._editor_loaded_row(vals0[0], r, 'A') for r in vals0[1:])
+        assert flagged == n_loaded
+        if n_loaded:
+            for _ in range(2):
+                _editor_round_trip(ws, 'A')
+            assert sum(1 for r in ws.get_all_values() if r[0] == 'A') == 1
+        assert ['B', 'X', '1', '1', 't0'] in ws.get_all_values()
+
+
+def test_number_like_name_consistent_with_load_portfolio():
+    """name "007" 經 numericise → 7:load_portfolio('7') 看得到、load_portfolio('007') 看不到。
+    save 判準跟著同一套 —— 存成 "7" 取代該列;存成 "007" 則該列屬「沒載入」→ 原樣保留。"""
+    sheet = [gsp._HEADERS, ['007', '2330', '1', '100', 't0']]
+    ws = _FakeWorksheet([list(r) for r in sheet])
+    with patch.object(gsp, '_ws', return_value=ws):
+        assert [r['ticker'] for r in gsp.load_portfolio('7')] == ['2330']
+        assert gsp.load_portfolio('007') == []
+        gsp.save_portfolio('007', [{'ticker': 'NEW', 'lots': 1, 'avg_price': 1}])
+        vals = ws.get_all_values()
+        assert ['007', '2330', '1', '100', 't0'] == vals[1]        # 沒載入 → 原字串保留
+    ws = _FakeWorksheet([list(r) for r in sheet])
+    with patch.object(gsp, '_ws', return_value=ws):
+        gsp.clear_read_cache()
+        _editor_round_trip(ws, '7')                               # 載得進來 → 取代,不重複
+        vals = ws.get_all_values()
+    assert len(vals) == 2 and vals[1][:2] == ['7', '2330']
+
+
+def test_duplicate_header_means_nothing_loaded_all_rows_kept():
+    """表頭重複 → get_all_records raise、編輯器一列都載不進來 ⇒ 存檔保留全部舊列。"""
+    sheet = [gsp._HEADERS + ['x', 'x'], ['A', '2330', '1', '100', 't0', '', '']]
+    ws = _FakeWorksheet([list(r) for r in sheet])
+    with patch.object(gsp, '_ws', return_value=ws):
+        with pytest.raises(Exception):
+            gsp.load_portfolio('A')
+        gsp.save_portfolio('A', [{'ticker': 'NEW', 'lots': 1, 'avg_price': 1}])
+        vals = ws.get_all_values()
+    assert vals[1][:5] == ['A', '2330', '1', '100', 't0']
+    assert vals[2][:2] == ['A', 'NEW']
 
 def test_save_portfolio_preserves_unloaded_rows_byte_for_byte():
     before = _mixed_sheet()
@@ -462,7 +563,11 @@ def _fake_client_capturing():
     def _open_by_key(sid):
         opened.append(sid)
         _sh = MagicMock()
-        _sh.worksheet.return_value = _FakeWorksheet()
+        # 依分頁名給對應表頭（fake 的 update 現在逐格寫、get_all_records 同真 gspread
+        # 會因表頭重複 raise ⇒ 不能再拿 5 欄表頭冒充 3 欄 watchlist 分頁）。
+        _sh.worksheet.side_effect = lambda _n: _FakeWorksheet(
+            [gsp._STOCK_WATCHLIST_HEADERS if _n == gsp._STOCK_WATCHLIST_WORKSHEET
+             else gsp._HEADERS])
         return _sh
 
     client = MagicMock()

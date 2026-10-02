@@ -452,17 +452,28 @@ def _editor_loaded_row(header: list[str], row: list[Any], name: str) -> bool:
     """這一列是不是「📁 組合管理」編輯器按 📂 載入 時**會被讀進表格**的那種列（純函式）。
 
     判準與 `load_portfolio(name)`（預設模式,即編輯器的讀取路徑）**逐條相同**:
-    以表頭對欄（同 `get_all_records()` 的 header→值 對映）→ name 去空白後相等 →
-    交給同一支 `parse_portfolio_records()` 判定（ticker 非空、張數>0、均價>0）。
+    編輯器走 `ws.get_all_records()` —— gspread 6 先對每列跑 `numericise_all`（預設參數:
+    `"1,050"`→1050、`"007"`→7、`"1e3"`→1000.0、`"NaN"`→nan、含底線不轉、空白留 `''`）,
+    再以 `to_records`（header→值 zip）組成 dict。本函式對 `get_all_values()` 的原字串列
+    **重做同一套**（同一支 gspread 函式、同一組預設參數）→ name 轉字串去空白後相等 →
+    交給同一支 `parse_portfolio_records()` 判定。表頭**不** numericise（同 get_all_records）。
     ⇒ 回 False 的列 ＝ 編輯器**看不到**的列（別的組合、0／負數／空白／非數字、空白列…）,
-    save 時必須原封保留（Q4-r5-f1,客戶 2026-10-02 頁1①）。
+    save 時必須原封保留（Q4-r5-f1,客戶 2026-10-02 頁1①）;回 True 的列由編輯器內容取代。
+    ⚠️ 兩邊判準若不一致會出事:編輯器載得進來、這裡卻判「沒載入」⇒ 存檔時舊列保留
+    **又**接上編輯器那份 ⇒ 每存一次多一份（QA 2026-10-02 抓到的 "1,050" 迴歸）。
     ⚠️ 若日後編輯器改用 `keep_blank=True` 載入,本判準須同步改,否則空白列會被讀進表格、
     卻在存檔時因張數／均價不是正數而不寫回 ⇒ 被刪。
     """
-    rec = dict(zip(header, row))
+    from gspread.utils import numericise_all, to_records
+    rec = to_records(header, [numericise_all(list(row))])[0]
     if str(rec.get('name', '')).strip() != name:
         return False
     return bool(parse_portfolio_records([rec]))
+
+
+def _header_has_duplicates(header: list[Any]) -> bool:
+    """`get_all_records()`（無 expected_headers）遇表頭重複會 raise ⇒ 編輯器一列都載不進來。"""
+    return len(set(header)) != len(header)
 
 
 def save_portfolio(name: str, rows: list[dict[str, Any]], *,
@@ -492,8 +503,10 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
     _old_header = list(existing[0]) if existing else []
     # 表頭:前 5 欄釘 _HEADERS（同原寫法）;使用者在第 6 欄以後自加的表頭格原樣保留。
     header = list(_HEADERS) + _old_header[len(_HEADERS):]
+    # 表頭重複 → get_all_records 會 raise、編輯器什麼都沒載入 ⇒ 每列都屬「沒載入」,全保留。
+    _none_loaded = _header_has_duplicates(_old_header)
     keep_rows = [list(r) for r in existing[1:]
-                 if not _editor_loaded_row(_old_header, r, name)]
+                 if _none_loaded or not _editor_loaded_row(_old_header, r, name)]
 
     ts = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     new_rows = []
