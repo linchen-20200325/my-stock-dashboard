@@ -99,12 +99,12 @@ _PAD_CHECK = ' or data[nul:i].strip(b"\\0")'
 def test_r28_non_nul_padding_on_zero_trailer_index_raises():
     from tests._git_tracked import IndexCorrupt, parse_index
     with pytest.raises(IndexCorrupt, match="補齊的 NUL"):
-        parse_index(_r28_bad_padding(), allow_zero_trailer=True)
+        parse_index(_r28_bad_padding())
 
 
 def test_r28_mutant_without_padding_check_silently_returns_path():
     g = _gt_mutant(_PAD_CHECK, "")
-    assert g["parse_index"](_r28_bad_padding(), allow_zero_trailer=True) == frozenset({"ab"})
+    assert g["parse_index"](_r28_bad_padding()) == frozenset({"ab"})
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -292,3 +292,224 @@ def test_s6_memory_within_5mb_of_main():
         if new - old > 5:
             worse[name] = (old, new)
     assert not worse, worse
+
+
+# ══════════════════════════════════════════════════════════════════
+# SEC-r30：split index 報清楚的「格式不支援」；檔尾全 0（skipHash，不論設定寫在哪）一律以結構核對
+# ══════════════════════════════════════════════════════════════════
+#: 真的 git（2.43.0，2026-10-02）產出的索引檔，base64。產生方式（在暫存目錄；⛔ 測試本身不呼叫 git）：
+#:   split-v2／split-v4：`git config splitIndex.maxPercentChange 100`；5 個檔 add＋commit（v4 先 `git update-index
+#:     --index-version 4`）；`git update-index --split-index`；改 a.md、新增 e.md 後 `git add .`
+#:     ⇒ 5 個「被取代項目」路徑長 0（git 寫入時剝掉名字）＋ e.md ＋ `link` 擴充。
+#:   skiphash-v2／skiphash-v4：`git -c index.skipHash=true add .`（v4 另加 `-c index.version=4`）—— 設定只在命令列，
+#:     repo 的 `.git/config` 看不到（修前因此誤判 `IndexCorrupt`）。
+_REAL_INDEX_B64 = {
+    "split-v2": (
+        "RElSQwAAAAIAAAAGar8dPwfzqXVqvx0/B/OpdQAA/gAANMbiAACBpAAAAAAAAAAAAAAAB3S/CYBf3qtVDjUNCVuU3pXrdFbz"
+        "AAAAAGq/HT4mDl1Par8dPiYOXU8AAP4AADTG5gAAgaQAAAAAAAAAAAAAAAVJPNW6J4b/RMFQetPqeZmTfQ7IXgAAAABqvx0+"
+        "JngpgGq/HT4meCmAAAD+AAA0xugAAIGkAAAAAAAAAAAAAAAHbO5H98fZ2+S24gqMs+ORXVyuuuEAAAAAar8dPia1MoBqvx0+"
+        "JrUygAAA/gAANMbpAACBpAAAAAAAAAAAAAAABcEIEiN5lHz4ab1F3evsoedlR0BXAAAAAGq/HT4m8juAar8dPibyO4AAAP4A"
+        "ADTG6gAAgaQAAAAAAAAAAAAAAAVDhvaxIB17ongVbLNdeZPCcQQb2gAAAABqvx0/B/OpdWq/HT8H86l1AAD+AAA0xvUAAIGk"
+        "AAAAAAAAAAAAAAACWHvmtMP5P5PEicARG7pVlhR6JssABGUubWQAAAAAAABsaW5rAAAARC/ePsoOqw4KRrmB4DZXWDVN701F"
+        "AAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAFAAAAAgAAAAIAAAAAAAAAAAAAAB8AAAAAVFJFRQAAAA0ALTEgMQpjAC0xIDAKseMW"
+        "sue7xWIppH0PDErHhhw8Eb4="),
+    "split-v4": (
+        "RElSQwAAAAQAAAAGar8iEhC+njpqvyISEL6eOgAA/gAANOHCAACBpAAAAAAAAAAAAAAAB3S/CYBf3qtVDjUNCVuU3pXrdFbz"
+        "AAAAAGq/IhII518dar8iEgjnXx0AAP4AADThxgAAgaQAAAAAAAAAAAAAAAVJPNW6J4b/RMFQetPqeZmTfQ7IXgAAAABqvyIS"
+        "CSRoHWq/IhIJJGgdAAD+AAA04cgAAIGkAAAAAAAAAAAAAAAHbO5H98fZ2+S24gqMs+ORXVyuuuEAAAAAar8iEglhcR1qvyIS"
+        "CWFxHQAA/gAANOHJAACBpAAAAAAAAAAAAAAABcEIEiN5lHz4ab1F3evsoedlR0BXAAAAAGq/IhIJnnodar8iEgmeeh0AAP4A"
+        "ADThygAAgaQAAAAAAAAAAAAAAAVDhvaxIB17ongVbLNdeZPCcQQb2gAAAABqvyISEL6eOmq/IhIQvp46AAD+AAA04csAAIGk"
+        "AAAAAAAAAAAAAAACWHvmtMP5P5PEicARG7pVlhR6JssABABlLm1kAGxpbmsAAABED77zdGy7my+EzGRBI/a5i57qsIEAAAAA"
+        "AAAAAQAAAAAAAAAAAAAAAAAAAAUAAAACAAAAAgAAAAAAAAAAAAAAHwAAAABUUkVFAAAADQAtMSAxCmMALTEgMAqvsEQtKD6o"
+        "GrrMuvVJDGd9FLJe8A=="),
+    "skiphash-v2": (
+        "RElSQwAAAAIAAAACar8dJiE1YGNqvx0mITVgYwAA/gAANMbAAACBpAAAAAAAAAAAAAAAAniYGSJhOyr7YCUEL/a9h4rBmU6F"
+        "AARhLm1kAAAAAAAAar8dJiE1YGNqvx0mITVgYwAA/gAANMbBAACBpAAAAAAAAAAAAAAAAmF4B5gijRevLTT85M+981VWgyRy"
+        "AARiLm1kAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+    "skiphash-v4": (
+        "RElSQwAAAAQAAAACar8iEhFBRTRqvyISEUFFNAAA/gAANOIGAACBpAAAAAAAAAAAAAAAAniYGSJhOyr7YCUEL/a9h4rBmU6F"
+        "AAQAYS5tZABqvyISEUFFNGq/IhIRQUU0AAD+AAA04gcAAIGkAAAAAAAAAAAAAAACYXgHmCKNF68tNPzkz73zVVaDJHIABgRj"
+        "L2IubWQAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+}
+_REAL_PATHS = {"split-v2": None, "split-v4": None, "skiphash-v2": frozenset({"a.md", "b.md"}),
+               "skiphash-v4": frozenset({"a.md", "c/b.md"})}
+
+
+def _real(kind: str) -> bytes:
+    import base64
+    return base64.b64decode(_REAL_INDEX_B64[kind])
+
+
+@pytest.mark.parametrize("kind", sorted(_REAL_INDEX_B64))
+def test_r30_real_git_indexes_parse(kind):
+    from tests._git_tracked import parse_index
+    data = _real(kind)
+    if kind.startswith("skiphash"):
+        assert data[-20:] == bytes(20), "前提：git 寫的檔尾是全 0"
+    else:
+        import hashlib
+        assert hashlib.sha1(data[:-20]).digest() == data[-20:] and b"link" in data, "前提：真的 split index"
+    assert parse_index(data) == _REAL_PATHS[kind]
+
+
+@pytest.mark.parametrize("kind", ["split-v2", "split-v4"])
+def test_r30_split_index_is_unavailable_with_clear_reason(tmp_path, kind):
+    """修前：`IndexCorrupt`「第 0 項：路徑不合法 b''」。修後：`IndexUnavailable`，訊息寫明 split index。"""
+    from tests._git_tracked import IndexUnavailable, only_tracked, tracked_paths
+    tracked_paths.cache_clear()
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "index").write_bytes(_real(kind))
+    (tmp_path / "e.md").write_text("x", encoding="utf-8")
+    with pytest.raises(IndexUnavailable, match="split index") as ei:
+        only_tracked(tmp_path, [tmp_path / "e.md"])
+    assert "路徑不合法" not in str(ei.value)
+    tracked_paths.cache_clear()
+
+
+@pytest.mark.parametrize("kind", ["skiphash-v2", "skiphash-v4"])
+@pytest.mark.parametrize("config", ["", "[core]\n\tbare = false\n", "[index]\n\tskipHash = false\n"])
+def test_r30_zero_trailer_accepted_whatever_the_repo_config_says(tmp_path, kind, config):
+    """skipHash 寫在全域設定或 `-c`：repo config 看不到（或寫著 false）—— 修前誤判 `IndexCorrupt`，修後照常讀。"""
+    from tests._git_tracked import only_tracked, tracked_paths
+    tracked_paths.cache_clear()
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "index").write_bytes(_real(kind))
+    if config:
+        (tmp_path / ".git" / "config").write_text(config, encoding="utf-8")
+    files = [tmp_path / p for p in sorted(_REAL_PATHS[kind])] + [tmp_path / "untracked.md"]
+    assert only_tracked(tmp_path, files, min_kept=2) == files[:2]
+    tracked_paths.cache_clear()
+
+
+def _z(data: bytes) -> bytes:
+    """把檔尾換成全 0（skipHash 形）。"""
+    return data[:-20] + bytes(20)
+
+
+_LINK = b"link" + (20).to_bytes(4, "big") + bytes(20)
+
+
+def _split_synth(ver: int) -> bytes:
+    """合成 split index：2 個路徑長 0 的被取代項目 ＋ 1 個一般項目 ＋ `link` 擴充。"""
+    out = b"DIRC" + ver.to_bytes(4, "big") + (3).to_bytes(4, "big")
+    prev = ""
+    for p in ("", "", "e.md"):
+        out += _entry(p, ver, prev)
+        prev = p
+    return _seal(out + _LINK)
+
+
+def _entry(path: str, ver: int, prev: str = "") -> bytes:
+    from tests.test_sec_s4_batch_s4 import _entry as e
+    return e(path, ver, prev)
+
+
+def _seal(body: bytes) -> bytes:
+    import hashlib
+    return body + hashlib.sha1(body).digest()
+
+
+@pytest.mark.parametrize("ver", [2, 3, 4])
+def test_r30_synthetic_split_index_unsupported(ver):
+    from tests._git_tracked import parse_index
+    assert parse_index(_split_synth(ver)) is None
+    assert parse_index(_z(_split_synth(ver))) is None
+
+
+#: 壞掉的索引 —— 不論檔尾是真的 SHA-1 還是全 0，一律 `IndexCorrupt`（⛔ 不得變成「不支援」、⛔ 不得被接受）。
+_R30_CORRUPT = {
+    "empty-name-without-link": _index(["", "e.md"], 2),
+    "link-too-short": _index(["a.md", "b.md"], 2, ext=b"link" + (4).to_bytes(4, "big") + bytes(4)),
+    "link-then-overrun": _index(["a.md", "b.md"], 2, ext=_LINK + b"TREE" + (999).to_bytes(4, "big")),
+    "sparse-then-overrun": _index(["a.md", "b.md"], 2, mode_at=1, ext=b"TREE" + (999).to_bytes(4, "big")),
+    "sdir-then-bad-sig": _index(["a.md", "b.md"], 2, ext=b"sdir" + (0).to_bytes(4, "big") + b"\x01\x02\x03\x04" + bytes(4)),
+    "count-short": _index(["a.md", "b.md", "c.md"], 2, count=2),
+    "count-long": _index(["a.md", "b.md"], 2, count=3),
+    "count-0": _index(["a.md", "b.md"], 2, count=0),
+    "unsorted": _index(["b.md", "a.md"], 2),
+    "duplicate": _index(["a.md", "a.md"], 2),
+    "truncated": _index(["a.md", "b.md"], 2)[:-30],
+    "v2-extended-flag": _index(["a.md", "b.md"], 2, extended_at=1),
+}
+
+
+@pytest.mark.parametrize("trailer", ["sha1", "zero"])
+@pytest.mark.parametrize("kind", sorted(_R30_CORRUPT))
+def test_r30_corrupt_index_raises_with_either_trailer(kind, trailer):
+    from tests._git_tracked import IndexCorrupt, IndexUnavailable, parse_index
+    data = _R30_CORRUPT[kind] if trailer == "sha1" else _z(_R30_CORRUPT[kind])
+    with pytest.raises(IndexCorrupt) as ei:
+        parse_index(data)
+    assert not isinstance(ei.value, IndexUnavailable)
+
+
+@pytest.mark.parametrize("ver", [1, 5, 0xFFFFFFFF])
+def test_r30_unknown_version_with_zero_trailer_is_corrupt_not_unsupported(ver):
+    """檔尾全 0 時沒有雜湊可驗證 ⇒ 版本欄位不是 2／3／4 一律當壞掉（有雜湊時才算「不支援」→ `None`）。"""
+    from tests._git_tracked import IndexCorrupt, parse_index
+    assert parse_index(_index(["a.md"], ver)) is None
+    with pytest.raises(IndexCorrupt, match="版本"):
+        parse_index(_z(_index(["a.md"], ver)))
+
+
+def test_r30_zero_trailer_corruption_within_structure_is_disclosed_residual_risk():
+    """據實揭露（檔頭）：檔尾全 0、且結構仍完全合法的位元翻轉認不出來（與 git 相同）；有雜湊時照樣抓到。"""
+    from tests import _git_tracked as G
+    good = _index(["a.md", "b.md"], 2)
+    flipped = good[:12 + 62] + b"A" + good[12 + 63:]                    # a.md → A.md：長度、排序都還合法
+    with pytest.raises(G.IndexCorrupt):
+        G.parse_index(flipped)
+    assert G.parse_index(_z(flipped)) == frozenset({"A.md", "b.md"})
+    assert "殘餘風險" in (G.__doc__ or "")
+
+
+# ── 突變：每一道修法拿掉 → 上面至少一個測試紅 ──
+_R30_MUTANTS = {
+    "zero-trailer-accept-removed": ("    no_hash = trailer == bytes(_SHA1_LEN)\n", "    no_hash = False\n"),
+    "empty-name-not-deferred": ("            if not path:\n", "            if False:\n"),
+    "empty-without-link-accepted": ('''    if empty_at is not None and not unsupported.startswith("split index"):''',
+                                    '''    if False:'''),
+    "zero-trailer-version-lenient": ("        if no_hash:\n            raise IndexCorrupt(f\"索引版本",
+                                     "        if False:\n            raise IndexCorrupt(f\"索引版本"),
+    "link-returns-early": ('''            unsupported = "split index（link 擴充；路徑一部分在共用索引 sharedindex.*）"''',
+                           '''            return None, "split index"'''),
+}
+
+
+def _r30_suite(g: dict) -> list[str]:
+    """在突變模組上重跑本節的關鍵判定；回傳失敗的判定名。"""
+    parse, corrupt = g["parse_index"], g["IndexCorrupt"]
+    unavailable = g["IndexUnavailable"]
+    fails = []
+    for kind in _REAL_INDEX_B64:
+        try:
+            if parse(_real(kind)) != _REAL_PATHS[kind]:
+                fails.append(kind)
+        except corrupt:
+            fails.append(kind)
+    for kind, data in _R30_CORRUPT.items():
+        for d in (data, _z(data)):
+            try:
+                parse(d)
+                fails.append(kind)
+            except unavailable:
+                fails.append(kind)
+            except corrupt:
+                pass
+    try:
+        parse(_z(_index(["a.md"], 5)))
+        fails.append("v5-zero")
+    except corrupt:
+        pass
+    return fails
+
+
+def test_r30_current_module_passes_suite():
+    from tests import _git_tracked as G
+    assert _r30_suite(vars(G)) == []
+
+
+@pytest.mark.parametrize("name", sorted(_R30_MUTANTS))
+def test_r30_each_mutant_is_killed(name):
+    from tests.test_sec_s6_batch_s6 import _gt_mutant
+    assert _r30_suite(_gt_mutant(*_R30_MUTANTS[name])), name
