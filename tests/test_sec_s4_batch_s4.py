@@ -219,6 +219,8 @@ _S4_OFF: list[tuple[str, str]] = [
     ("    (_TOML_CONV_RE, _mask_toml_conv_for),\n", ""),
     ("_DERL_INDENT_MAX: int = 256", "_DERL_INDENT_MAX: int = 16"),           # SEC-r27
     _TOML_ORIG_OFF, _TOML_HTML_OFF,                                           # 批 S4 QA F3
+    #: 批 S6（SEC-r29 (b)）：同樣登記，讓「關掉 ⇒ 與 bf0ada3 逐字相同」繼續成立（批 S6 自己的基準見 test_sec_s6_batch_s6）。
+    ("    (_TOML_EXISTS_DICT_HTML_RE, lambda m: m.group(1) + MASK),\n", ""),
 ]
 
 

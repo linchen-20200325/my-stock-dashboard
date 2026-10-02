@@ -939,6 +939,10 @@ def _mask_orig_spans(out: str, segs: list[tuple[int, int, int]], spans: list[tup
 #:     位置字尾 `(line N column M char K)`，或同一段文字裡出現 `TomlDecodeError`。值找不到收尾 → 遮到行尾。
 #: 線性：兩條都以固定字面錨定起點；值的迴圈有上限（4096 字）並用 `_POSS`，超過上限遮到行尾。
 _TOML_EXISTS_DICT_RE = re.compile(r"(already exists\?)\{(?=\\{0,4}['\"])[^\r\n]*")
+#: 批 S6（SEC-r29 (b)，2026-10-02）：dict 的引號是 HTML 跳脫形（`&#x27;`／`&#39;`／`&quot;`，與 (b) 認的同一組；網頁上
+#: 複製下來的訊息）→ 上一條認不出、整包 dict 外露。另立一條、排在 `_RULES_NEW` **最後**（⛔ 不放寬上一條：放寬後它會先把
+#: `{` 起到行尾換掉，排在後面的數字轉換那一條就看不到原本會遮到行尾的引號 ⇒ 少遮；批 S6 實作組自測抓到）⇒ 只加遮罩。
+_TOML_EXISTS_DICT_HTML_RE = re.compile(r"(already exists\?)\{(?=\\{0,4}(?:&#x27;|&#39;|&quot;))[^\r\n]*")
 _TOML_POS: str = r"[ \t]{0,4}\(line \d{1,9} column \d{1,9} char \d{1,12}\)"
 _TOML_CONV_RE = re.compile(
     r"(?P<pre>(?:could not convert string to float|invalid literal for int\(\) with base \d{1,2}):[ \t]{0,4}b?)"
@@ -1031,6 +1035,8 @@ _RULES_NEW: tuple[tuple[re.Pattern, object], ...] = (
     #: 批 S4（SEC-r20／SEC-r21）。
     (_TOML_EXISTS_DICT_RE, lambda m: m.group(1) + MASK),
     (_TOML_CONV_RE, _mask_toml_conv_for),
+    #: 批 S6（SEC-r29 (b)）。
+    (_TOML_EXISTS_DICT_HTML_RE, lambda m: m.group(1) + MASK),
 )
 #: 取代函式是「工廠」的規則：`rep(text)` 先看一次整段文字，再回傳真正的取代函式（見 `_mask_toml_conv_for`）。
 _TEXT_AWARE_RULES: frozenset[re.Pattern] = frozenset({_TOML_CONV_RE})
@@ -1043,6 +1049,7 @@ _POST_NEEDLES: dict[re.Pattern, tuple[str, ...]] = {
     _DER_B64_RE: ("M",), _POSIX_SPACE_DIR_RE: ("/",),
     _POSIX_TAB_DIR_RE: ("\t", "\\t"), _AUTH_SUBSCRIPT_RE: ("]",),
     _TOML_EXISTS_DICT_RE: ("already exists?{",), _TOML_CONV_RE: ("could not convert", "invalid literal for int"),
+    _TOML_EXISTS_DICT_HTML_RE: ("already exists?{",),
 }
 
 
