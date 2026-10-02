@@ -39,6 +39,7 @@ except ImportError:
 from shared.calc_helpers import calc_bias_pct
 # (v19.85)FINMIND_API_URL import 移除 — 唯一 caller 出口鏈方案 FM 已拔(假 dataset)
 from shared.ttls import TTL_1HOUR
+from shared.staleness import monthly_periods_behind  # DL-f1-s12／s13：資料月過期閘（L0 SSOT）
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 import math
 
@@ -206,9 +207,16 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
     P3-D2 v18.389 深層拔毒:從 tab_macro.py:885-974 `_job_m1b` inline def 抽出(L5→L1)。
 
     路徑優先級(§2.1 衝突裁決):
-        Tier 0: tw_macro.fetch_cbc_m1b_m2(CBC ms1.json + CPX + ^TWII proxy)
+        Tier 0: tw_macro.fetch_cbc_m1b_m2(include_proxy=False)(CBC ms1.json + EF15M01)
         Tier 1: FRED MYAGM1TWA189S / MYAGM2TWA189S(需 fred_api_key,可選)
         Tier 2: IMF DataMapper MANMM101 / MABMM301 / TW
+        最後:  tw_macro.fetch_twii_m1b_m2_proxy(^TWII 動能代理;source='TWII-proxy')
+
+    DL-f1-s12(2026-10-02 批 D3):原 Tier 0 內含 ^TWII 代理 ⇒ 央行兩層失敗時代理搶在 FRED/IMF
+    真值備援之前回傳。現改為**純排序修正**:真值三路都試過才落代理(不新增任何來源)。
+    FRED/IMF 同步加資料月過期閘(L0 `monthly_periods_behind`,indicator='m1b_m2';落後 ≥ 1 期
+    → 拒用往下)—— 否則排序一改,FRED 的舊資料(`sort_order='asc'`+`limit=36` 取到最舊 36 筆)
+    會被當成當期真值顯示並計分(§1/§2.4)。回傳多帶 `data_month`('YYYY-MM';代理 → None)。
 
     全敗回 None(§1 Fail Loud — UI 顯示「待更新」,不捏造)。
 
@@ -230,7 +238,7 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
     # ── Tier 0:tw_macro.fetch_cbc_m1b_m2 統一委派 ──
     try:
         from src.data.macro import fetch_cbc_m1b_m2 as _tw_cbc
-        _cbc_snap = _tw_cbc()
+        _cbc_snap = _tw_cbc(include_proxy=False)
         # DL-f1-s46:NaN / ±inf 不放行(原只測 is not None),落下一層
         if (_is_finite_num(_cbc_snap.get('m1b_yoy'))
                 and _is_finite_num(_cbc_snap.get('m2_yoy'))
@@ -243,7 +251,8 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
             return {'m1b_yoy': _cbc_snap['m1b_yoy'],
                     'm2_yoy':  _cbc_snap['m2_yoy'],
                     'gap':     _cbc_snap.get('gap'),
-                    'source':  _src_label}
+                    'source':  _src_label,
+                    'data_month': _cbc_snap.get('data_month')}
     except Exception as _tw_e:
         print(f'[M1B/tw_macro] ❌ {_tw_e}')
 
@@ -280,9 +289,16 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
                                _df_fred_m2['value'].iloc[-13] - 1) * 100, 2)
             if not (_is_finite_num(_m1b_yoy_f) and _is_finite_num(_m2_yoy_f)):
                 raise ValueError(f'FRED 年增率非有限值 M1B={_m1b_yoy_f} M2={_m2_yoy_f}')  # DL-f1-s46
+            # DL-f1-s12／s13:資料月 = 兩條序列最後一筆觀測日中較舊者;落後 ≥ 1 期 → 拒用
+            _asof_f = min(_pd_m1.Timestamp(_df_fred_m1['date'].iloc[-1]),
+                          _pd_m1.Timestamp(_df_fred_m2['date'].iloc[-1])).date()
+            _behind_f = monthly_periods_behind(_asof_f, indicator='m1b_m2')
+            if _behind_f is None or _behind_f >= 1:
+                raise ValueError(f'FRED 資料月 {_asof_f:%Y-%m} 落後預期 {_behind_f} 期 → 拒用')
             print(f'[M1B/FRED] ✅ M1B={_m1b_yoy_f:.2f}% M2={_m2_yoy_f:.2f}%')
             return {'m1b_yoy': _m1b_yoy_f, 'm2_yoy': _m2_yoy_f,
-                    'gap': round(_m1b_yoy_f - _m2_yoy_f, 2), 'source': 'FRED'}
+                    'gap': round(_m1b_yoy_f - _m2_yoy_f, 2), 'source': 'FRED',
+                    'data_month': f'{_asof_f:%Y-%m}'}
     except Exception as _fred_e:
         print(f'[M1B/FRED] ❌ {_fred_e}')
 
@@ -314,13 +330,33 @@ def fetch_m1b_m2_block(fred_api_key: str = '') -> dict | None:
                     _m2_yoy_imf = round(_imf_m2_sorted[-1][1], 2)
                     if not (_is_finite_num(_m1b_yoy_imf) and _is_finite_num(_m2_yoy_imf)):
                         raise ValueError(f'IMF 年增率非有限值 M1B={_m1b_yoy_imf} M2={_m2_yoy_imf}')  # DL-f1-s46
+                    # DL-f1-s12／s13:年資料 → 資料月取該年 12 月(兩條取較舊);落後 ≥ 1 期 → 拒用
+                    import datetime as _dt_imf
+                    _yr_imf = min(int(_imf_m1_sorted[-1][0]), int(_imf_m2_sorted[-1][0]))
+                    _asof_imf = _dt_imf.date(_yr_imf, 12, 1)
+                    _behind_imf = monthly_periods_behind(_asof_imf, indicator='m1b_m2')
+                    if _behind_imf is None or _behind_imf >= 1:
+                        raise ValueError(f'IMF 資料月 {_asof_imf:%Y-%m} 落後預期 {_behind_imf} 期 → 拒用')
                     print(f'[M1B/IMF] ✅ year={_imf_m1_sorted[-1][0]} '
                           f'M1B={_m1b_yoy_imf:.2f}% M2={_m2_yoy_imf:.2f}%')
                     return {'m1b_yoy': _m1b_yoy_imf, 'm2_yoy': _m2_yoy_imf,
                             'gap': round(_m1b_yoy_imf - _m2_yoy_imf, 2),
-                            'source': f'IMF({_imf_m1_sorted[-1][0]})'}
+                            'source': f'IMF({_imf_m1_sorted[-1][0]})',
+                            'data_month': f'{_asof_imf:%Y-%m}'}
     except Exception as _imf_e:
         print(f'[M1B/IMF] ❌ {_imf_e}')
+
+    # ── 最後:^TWII 動能代理(DL-f1-s12:真值三路都失敗才落這裡;只顯示不計分)──
+    try:
+        from src.data.macro import fetch_twii_m1b_m2_proxy as _twii_px
+        _px = _twii_px()
+        if (_px is not None and _is_finite_num(_px[0]) and _is_finite_num(_px[1])):
+            _gap_px = round(_px[0] - _px[1], 2)
+            print(f'[M1B/tw_macro] ✅ TWII-proxy M1B={_px[0]:.2f}% M2={_px[1]:.2f}%')
+            return {'m1b_yoy': _px[0], 'm2_yoy': _px[1], 'gap': _gap_px,
+                    'source': 'TWII-proxy', 'data_month': None}
+    except Exception as _px_e:
+        print(f'[M1B/TWII-proxy] ❌ {_px_e}')
 
     # 全敗回 None(§1 Fail Loud — UI 顯示「待更新」)
     print('[M1B] 所有路徑失敗,回傳 None')

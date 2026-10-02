@@ -15,6 +15,15 @@ import pandas as pd
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _d3_no_live_twii_proxy(monkeypatch):
+    """D3（DL-f1-s12）：`fetch_m1b_m2_block` 的 ^TWII 代理改排在 FRED／IMF 之後、獨立呼叫 ——
+    本檔的 `fetch_cbc_m1b_m2` 樁不再擋得住它。預設換成「代理也失敗」（不觸網）；
+    需要代理值的測試自行覆寫 `fetch_twii_m1b_m2_proxy`。"""
+    import src.data.macro.tw_macro as _tw
+    monkeypatch.setattr(_tw, "_try_twii_proxy", lambda: None)
+
+
 def _unwrap(fn, *a, **k):
     return fn.__wrapped__(*a, **k)
 
@@ -76,7 +85,7 @@ class TestM1bBlockNoneNotCached:
         monkeypatch.setattr(_ph, 'fetch_url', lambda *a, **k: None)
         state = {'ok': False}
 
-        def _cbc():
+        def _cbc(**_k):   # D3：macro_snapshot 傳 include_proxy=False
             if not state['ok']:
                 raise RuntimeError('CBC 全敗')
             return {'m1b_yoy': 1.2, 'm2_yoy': 3.4, 'gap': -2.2,
@@ -124,7 +133,7 @@ class TestM1bNonFinite:
         monkeypatch.setattr(_ph, 'fetch_url', lambda *a, **k: None)
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: {'m1b_yoy': bad, 'm2_yoy': 5.0, 'gap': bad,
+            lambda **_k: {'m1b_yoy': bad, 'm2_yoy': 5.0, 'gap': bad,
                      'tier_used': 1, 'is_proxy_tier': False})
         assert _unwrap(ms.fetch_m1b_m2_block, '') is None
 
@@ -134,7 +143,7 @@ class TestM1bNonFinite:
         monkeypatch.setattr(_ph, 'fetch_url', lambda *a, **k: None)
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: {'m1b_yoy': 1.0, 'm2_yoy': float('nan'), 'gap': float('nan'),
+            lambda **_k: {'m1b_yoy': 1.0, 'm2_yoy': float('nan'), 'gap': float('nan'),
                      'tier_used': 1, 'is_proxy_tier': False})
         assert _unwrap(ms.fetch_m1b_m2_block, '') is None
 
@@ -143,7 +152,7 @@ class TestM1bNonFinite:
         import src.data.macro.macro_snapshot as ms
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: (_ for _ in ()).throw(RuntimeError('CBC 全敗')))
+            lambda **_k: (_ for _ in ()).throw(RuntimeError('CBC 全敗')))
 
         class _R:
             status_code = 200
@@ -171,7 +180,7 @@ class TestM1bNonFinite:
         import src.data.macro.macro_snapshot as ms
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: (_ for _ in ()).throw(RuntimeError('CBC 全敗')))
+            lambda **_k: (_ for _ in ()).throw(RuntimeError('CBC 全敗')))
 
         class _R:
             status_code = 200
@@ -197,7 +206,7 @@ class TestM1bNonFinite:
         import src.data.macro.macro_snapshot as ms
         monkeypatch.setattr(
             'src.data.macro.fetch_cbc_m1b_m2',
-            lambda: {'m1b_yoy': 1.2, 'm2_yoy': 13.83, 'gap': -12.63,
+            lambda **_k: {'m1b_yoy': 1.2, 'm2_yoy': 13.83, 'gap': -12.63,
                      'tier_used': 1, 'is_proxy_tier': False})
         r = _unwrap(ms.fetch_m1b_m2_block, '')
         assert r is not None and math.isclose(r['gap'], -12.63)
