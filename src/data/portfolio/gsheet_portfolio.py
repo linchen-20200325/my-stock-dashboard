@@ -457,6 +457,8 @@ def _editor_loaded_row(header: list[str], row: list[Any], name: str) -> bool:
     再以 `to_records`（header→值 zip）組成 dict。本函式對 `get_all_values()` 的原字串列
     **重做同一套**（同一支 gspread 函式、同一組預設參數）→ name 轉字串去空白後相等 →
     交給同一支 `parse_portfolio_records()` 判定。表頭**不** numericise（同 get_all_records）。
+    name 另認**原字串**相等（"0050"／"007"／"1,000"… 這類 numericise 會改寫的名字）:
+    存檔名＝Sheet 上那個名字的有效持股列由編輯器內容取代（同 main）,⛔ 不重複。
     ⇒ 回 False 的列 ＝ 編輯器**看不到**的列（別的組合、0／負數／空白／非數字、空白列…）,
     save 時必須原封保留（Q4-r5-f1,客戶 2026-10-02 頁1①）;回 True 的列由編輯器內容取代。
     ⚠️ 兩邊判準若不一致會出事:編輯器載得進來、這裡卻判「沒載入」⇒ 存檔時舊列保留
@@ -466,7 +468,12 @@ def _editor_loaded_row(header: list[str], row: list[Any], name: str) -> bool:
     """
     from gspread.utils import numericise_all, to_records
     rec = to_records(header, [numericise_all(list(row))])[0]
-    if str(rec.get('name', '')).strip() != name:
+    raw_name = str(dict(zip(header, row)).get('name', '')).strip()
+    # name 比對取聯集:(a) numericise 後相等 ＝ 編輯器經清單（如 "50"）真的載得進來;
+    # (b) 原字串相等 ＝ 存檔名就是 Sheet 上寫的那個名字（如 "0050"）—— 這種列 main 一律
+    # 覆蓋;此處若只認 (a),`load_portfolio('0050')` 讀不到它 → 保留舊列又接新列 → 每存
+    # 一次多一份（QA re-QA 2026-10-02 迴歸）。兩者都只取代「有效持股」列,無效列照舊保留。
+    if str(rec.get('name', '')).strip() != name and raw_name != name:
         return False
     return bool(parse_portfolio_records([rec]))
 

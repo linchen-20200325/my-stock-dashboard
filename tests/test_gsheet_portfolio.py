@@ -285,7 +285,7 @@ def test_editor_loaded_row_matches_load_portfolio():
     vals = ws.get_all_values()
     flagged = [r for r in vals[1:] if gsp._editor_loaded_row(vals[0], r, 'A')]
     assert [r[1] for r in flagged] == [r['ticker'] for r in loaded] == ['0050.TW', '00713.TW']
-    for _nm in ('A', 'B', ''):
+    for _nm in ('A', 'B'):
         with patch.object(gsp, '_ws', return_value=ws):
             gsp.clear_read_cache()
             _n = len(gsp.load_portfolio(_nm))
@@ -353,21 +353,43 @@ def test_number_like_cells_round_trip_without_growth(lots, avg):
 
 def test_number_like_name_consistent_with_load_portfolio():
     """name "007" 經 numericise → 7:load_portfolio('7') 看得到、load_portfolio('007') 看不到。
-    save 判準跟著同一套 —— 存成 "7" 取代該列;存成 "007" 則該列屬「沒載入」→ 原樣保留。"""
-    sheet = [gsp._HEADERS, ['007', '2330', '1', '100', 't0']]
+    save 判準取聯集 —— 存成 "7"（編輯器真的載得進來）或 "007"（Sheet 上的原名,同 main）
+    都取代該有效列、不重複;"007" 的無效列（張數 0）兩種情形都原樣保留。"""
+    sheet = [gsp._HEADERS, ['007', '2330', '1', '100', 't0'],
+             ['007', '2317', '0', '100', 't0']]
     ws = _FakeWorksheet([list(r) for r in sheet])
     with patch.object(gsp, '_ws', return_value=ws):
         assert [r['ticker'] for r in gsp.load_portfolio('7')] == ['2330']
         assert gsp.load_portfolio('007') == []
         gsp.save_portfolio('007', [{'ticker': 'NEW', 'lots': 1, 'avg_price': 1}])
         vals = ws.get_all_values()
-        assert ['007', '2330', '1', '100', 't0'] == vals[1]        # 沒載入 → 原字串保留
+    assert vals[1] == ['007', '2317', '0', '100', 't0']             # 無效列原字串保留
+    assert len(vals) == 3 and vals[2][:2] == ['007', 'NEW']          # 有效列被取代
     ws = _FakeWorksheet([list(r) for r in sheet])
     with patch.object(gsp, '_ws', return_value=ws):
         gsp.clear_read_cache()
         _editor_round_trip(ws, '7')                               # 載得進來 → 取代,不重複
         vals = ws.get_all_values()
-    assert len(vals) == 2 and vals[1][:2] == ['7', '2330']
+    assert vals[1] == ['007', '2317', '0', '100', 't0']
+    assert len(vals) == 3 and vals[2][:2] == ['7', '2330']
+
+
+@pytest.mark.parametrize('nm', ['0050', '007', '1.50', '1,000', '1e3', 'NaN'])
+def test_number_like_name_repeated_saves_stable(nm):
+    """re-QA 迴歸:numericise 會改寫的組合名,同名連存 3 次 → 該組合恆為 1 列（main 同）。"""
+    ws = _FakeWorksheet([gsp._HEADERS, ['B', 'VOO', '2', '400', 'ts'],
+                         [nm, '2317', '0', '50', 'ts']])          # 該組合的無效列須保留
+    editor = [{'ticker': '2330', 'lots': 1, 'avg_price': 600}]
+    with patch.object(gsp, '_ws', return_value=ws):
+        for _ in range(3):
+            gsp.clear_read_cache()
+            gsp.load_portfolio(nm)
+            gsp.save_portfolio(nm, editor)
+        vals = ws.get_all_values()
+    assert sum(1 for r in vals if r[:2] == [nm, '2330']) == 1
+    assert [nm, '2317', '0', '50', 'ts'] in vals
+    assert ['B', 'VOO', '2', '400', 'ts'] in vals
+    assert len(vals) == 4
 
 
 def test_duplicate_header_means_nothing_loaded_all_rows_kept():
