@@ -47,7 +47,7 @@ from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 # _proxy_env SSOT(env backup/restore context manager),不重寫。yf_proxy 僅 lazy import
 # src.data.stock._load_proxy_config,不 import 本檔 → 無 import cycle。
 from src.data.proxy.yf_proxy import _proxy_env
-from src.data.proxy.yf_proxy import _is_yf_no_data  # D2-f54:沒資料 vs 抓取失敗同一判準
+from src.data.proxy.yf_proxy import _history_or_raise  # X1-n1:同 K 線那支的失敗判準（含 HTTP 回應）
 from shared.fail_cooldown import FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT
 
 
@@ -209,7 +209,9 @@ _PERIOD_TO_DAYS = {
 def _fetch_etf_price_max_cached(ticker: str) -> pd.DataFrame:
     """`_fetch_etf_price_max()` 的快取層。**抓取拋例外一律往上拋,不回空 df**
     （Q3-r5 2026-09-27,CLAUDE.md §1.A-3(a)「只快取成功結果」;st.cache_data 不快取例外）。
-    成功路徑與 TTL 與修前逐字相同。yfinance 沒拋、只回空 → 照舊回空 df（並快取;分不出來,不猜）。
+    成功路徑與 TTL 與修前逐字相同。yfinance 沒拋、只回空 → 照舊回空 df（並快取）——
+    批 Y1 X1-n1／X1-n10(2026-10-03)起例外:該次 K 線回應是 5xx／401／403、或 200 但 body 為 `null`
+    → 經 `_history_or_raise` 改拋例外(＝失敗,不入快取、外層冷卻並帶失敗旗標)。其餘回空照舊(分不出來,不猜)。
 
     以下為原 docstring。
 
@@ -233,23 +235,15 @@ def _fetch_etf_price_max_cached(ticker: str) -> pd.DataFrame:
     """
     # 走 NAS proxy(_proxy_env:臨時設 HTTPS/HTTP_PROXY,finally 還原)避開
     # Yahoo 海外 IP 封鎖 → 原本直呼致 0050.TW 空 df「找不到歷史/價格資料」。
-    # D2-f54:raise_errors=True(同 yf_proxy._history_or_raise)— 網路/代理錯誤往上拋、
-    # 不入快取;yfinance 自己回報「沒有資料」→ 照舊回空 df。舊/新版不認參數 → 修前呼叫。
+    # D2-f54:raise_errors=True — 網路/代理錯誤往上拋、不入快取;yfinance 自己回報「沒有資料」
+    # → 照舊回空 df。舊/新版不認參數 → 修前呼叫。
+    # X1-n1(批 Y1,2026-10-03,§1.A-3(a)):改經 `yf_proxy._history_or_raise`(上述判準由它承接、
+    # 邏輯相同,不再複寫一份)—— 另看本次 K 線請求的 HTTP 回應(D2-f36／X1-n10):5xx／401／403、或 200 但 body 為
+    # `null` → 失敗(往上拋、不入快取、外層冷卻)。修前這種回應被當「沒資料」快取 TTL_1HOUR。
     with _proxy_env():
         _tk = yf.Ticker(ticker)
-        try:
-            df = _tk.history(period='max', auto_adjust=True, raise_errors=True)
-        except TypeError as _e:
-            if 'raise_errors' not in str(_e):
-                raise
-            df = _tk.history(period='max', auto_adjust=True)
-        except DeprecationWarning:
-            df = _tk.history(period='max', auto_adjust=True)
-        except Exception as _e:
-            if not _is_yf_no_data(_e):
-                raise
-            df = pd.DataFrame()
-    if df.empty:
+        df = _history_or_raise(_tk, ticker, 'max', auto_adjust=True)
+    if df is None or df.empty:
         return pd.DataFrame()
     df.index = pd.to_datetime(df.index).tz_localize(None)
     out = df.ffill()
@@ -303,6 +297,8 @@ _fetch_etf_price_max.clear = _clear_etf_price_max
 #: `_fetch_etf_price_max()` 接住例外時,回傳的空 DataFrame 在 `attrs` 裡帶的鍵。
 #: 值 ＝ `"{例外型別}: {訊息}"`。**只有拋過例外才有** —— yfinance 沒拋例外、只回空的那一種
 #: **沒有**(那與「這檔沒有那段歷史」在這一層分不出來,不猜;同 `DIVIDENDS_FETCH_FAILED_ATTR`)。
+#: 批 Y1(2026-10-03)起:回空但該次 K 線回應是 5xx／401／403、或 200 但 body 為 `null` →
+#: `_history_or_raise` 改拋例外,因此**有**這個鍵(＝抓取失敗)。
 PRICE_FETCH_FAILED_ATTR = "fetch_failed"
 
 
@@ -318,7 +314,9 @@ def fetch_etf_price(ticker: str, period: str = '5y', *,
     Q3(2026-09-26)`failed=`:**加性參數;預設 `None` → 回傳值與修前逐位元組相同**
     (抓取失敗時照舊回一個 `attrs` 為空的空 DataFrame)。傳一個 list 進來 → 抓取
     **拋過例外**(含快取中的那一次失敗)時把 `"{例外型別}: {訊息}"` append 進去,
-    回傳值不變。yfinance 只回空、沒拋例外 → **不 append**(分不出來,不猜)。
+    回傳值不變。yfinance 只回空、沒拋例外 → **不 append**(分不出來,不猜)——
+    批 Y1(2026-10-03)起例外:回空但該次 K 線回應是 5xx／401／403、或 200 但 body 為 `null`
+    → 算抓取失敗、**會 append**。
     ⚠️ 不改快取鍵(仍是 `_fetch_etf_price_max(ticker)`),一次都不多打上游。
     """
     df = _fetch_etf_price_max(ticker)

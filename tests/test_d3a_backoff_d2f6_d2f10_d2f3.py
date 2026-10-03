@@ -294,15 +294,16 @@ class TestD2f6FredSuccessUnchanged:
         _call_fred()
         assert calls["n"] == 2, "TTL 滿 → 重抓（TTL 不變）"
 
-    def test_all_missing_values_path_is_untouched(self, fred, clock):
-        """observations 有列、但值全是 '.'（FRED 缺值記號）：修前走成功路徑、空結果照樣入 30 分鐘快取。
-        這一條**不屬於** D2-f6 的三個失敗出口，本次未動 —— 釘住現行語意，避免被順手改掉。"""
+    def test_all_missing_values_path_backs_off(self, fred, clock):
+        """observations 有列、但值全是 '.'（FRED 缺值記號）。
+        D2-f6 當時：走成功路徑、空結果照樣入 30 分鐘快取（不屬於那次的三個失敗出口，刻意未動）。
+        批 Y1 X1-n2（2026-10-03，客戶資料層授權類 (a) 失敗不快取）：**有意識地改掉** —— 比照
+        「observations 為空」出口：回 `pd.DataFrame()`、記退避、不入成功快取；冷卻期內不重打上游。"""
         plan, calls = fred
         plan["resp"] = _fred_ok([("2026-01-02", "."), ("2026-01-03", ".")])
         got = _call_fred()
-        assert got.empty and list(got.columns) == \
-            ["realtime_start", "realtime_end", "date", "value", "source", "fetched_at"]
-        assert MC._FRED_FAIL_CACHE == {} and _FRED_KEY in MC._FRED_CACHE
+        assert got.empty and list(got.columns) == []
+        assert _FRED_KEY in MC._FRED_FAIL_CACHE and _FRED_KEY not in MC._FRED_CACHE
         _call_fred()
         assert calls["n"] == 1
 

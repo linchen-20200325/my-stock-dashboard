@@ -1493,15 +1493,16 @@ class TestModelBased:
 # ══════════════════════════════════════════════════════════════════
 # 突變：逐一拿掉每一處修正 → 本檔對應的共用檢查轉紅
 # ══════════════════════════════════════════════════════════════════
-_YP_STRICT_CALL = "        return tk.history(period=period, raise_errors=True)\n"
+#: 批 Y1（2026-10-03）：`_history_or_raise` 改成先存 `_df` 再看回應（X1-n10）、並轉傳 `history_kwargs`（X1-n1）→ 突變點跟著改。
+_YP_STRICT_CALL = "        _df = tk.history(period=period, raise_errors=True, **history_kwargs)\n"
 _YP_TYPEERROR = ("    except TypeError as _e:\n"
                  "        if \"raise_errors\" not in str(_e):\n"
                  "            raise\n"
-                 "        return tk.history(period=period)\n")
+                 "        _df = tk.history(period=period, **history_kwargs)\n")
 _YP_TYPEERROR_MSG = ("        if \"raise_errors\" not in str(_e):\n"
                      "            raise\n")
 _YP_DEPRECATION = ("    except DeprecationWarning:\n"
-                   "        return tk.history(period=period)\n")
+                   "        _df = tk.history(period=period, **history_kwargs)\n")
 _YP_NO_DATA_BRANCH = ("        if not _is_yf_no_data(_e):\n"
                       "            raise\n")
 _YP_BARE_RULE = ("    if type(exc) is Exception:\n"
@@ -1528,7 +1529,8 @@ _FC_STREAK_CAP = "        while len(self._streak) > cap:\n"
 #: (標籤, 被突變的模組, 替換, 哪一個檢查必須轉紅)
 _MUTATIONS = [
     # ── D2-f16 yf_proxy ──
-    ("f16_no_raise_errors", "yp", [(_YP_STRICT_CALL, "        return tk.history(period=period)\n")], "swallowed"),
+    ("f16_no_raise_errors", "yp", [(_YP_STRICT_CALL, "        _df = tk.history(period=period, **history_kwargs)\n")],
+     "swallowed"),
     ("f16_layer_prefix_call", "yp", [(_YP_LAYER_CALL, "        _df = yf.Ticker(ticker).history(period=period)\n")],
      "swallowed"),
     ("f16_no_data_is_failure", "yp", [(_YP_NO_DATA_BRANCH, "        if True:\n            raise\n")], "no_data"),

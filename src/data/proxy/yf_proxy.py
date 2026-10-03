@@ -191,7 +191,7 @@ def _ensure_chart_reply_recorder() -> None:
         _cls.get = _get
 
 
-def _history_or_raise(tk, ticker: str, period: str):
+def _history_or_raise(tk, ticker: str, period: str, **history_kwargs):
     """`tk.history(period=period)`，但**抓取失敗一律以例外浮出**（D2-f16 2026-09-28）。
 
     修前的破口：yfinance `history()` 預設（1.x ＝ `hide_exceptions=True`；0.2.x ＝
@@ -220,17 +220,29 @@ def _history_or_raise(tk, ticker: str, period: str):
     （`YFPricesMissingError`），修前因此照舊快取 1 小時。現在「沒資料」型別的例外另看這一次 K 線請求
     實際收到的 HTTP 回應（`_chart_reply_failure`）：5xx／401／403，或 200 但 body 為 `null` → **原樣往上拋**
     （＝失敗，不入快取、冷卻）。看不到回應（沒送出請求、或 yfinance 走自己的快取）→ 同修前。
+
+    X1-n10（批 Y1，2026-10-03，§1.A-3(a)）：上一段只看「拋例外」那條路。yfinance 1.7.0 遇到
+    HTTP 5xx／401／403 但 body 是**帶時間戳、價格全空**的 K 線時**不拋例外、回空表**（本批實跑查證）——
+    修前照舊當「沒資料」快取 1 小時。現在**回空表（或 None）**時同樣看本次 K 線回應：判得出失敗 →
+    拋 yfinance 的 `YFPricesMissingError`（訊息即 yfinance 自己的模板，不另寫字；＝失敗，不入快取、冷卻）；判不出（200 非 null、404、看不到回應）→ 原樣回傳（同修前）。
+    非空表一律原樣回傳（成功路徑不看回應）。
+
+    `history_kwargs`（批 Y1 X1-n1）：原樣轉給 `tk.history`（例：ETF 取價的 `auto_adjust=True`）；
+    不給 → 呼叫與修前逐字相同。`raise_errors` 不可放進 `history_kwargs`（拋 `ValueError`，內部用）——
+    它由本函式決定，放進來會在「不認參數」退路裡被靜默丟掉。
     """
+    if "raise_errors" in history_kwargs:                  # 批 Y1：由本函式決定，不得由呼叫端帶入
+        raise ValueError("_history_or_raise: raise_errors is controlled here; do not pass it in history_kwargs")
     _CHART_REPLY.reply = None                             # D2-f36：只看本次呼叫的回應
     _ensure_chart_reply_recorder()
     try:
-        return tk.history(period=period, raise_errors=True)
+        _df = tk.history(period=period, raise_errors=True, **history_kwargs)
     except TypeError as _e:
         if "raise_errors" not in str(_e):
             raise
-        return tk.history(period=period)
+        _df = tk.history(period=period, **history_kwargs)
     except DeprecationWarning:
-        return tk.history(period=period)
+        _df = tk.history(period=period, **history_kwargs)
     except Exception as _e:
         if not _is_yf_no_data(_e):
             raise
@@ -241,6 +253,19 @@ def _history_or_raise(tk, ticker: str, period: str):
             raise
         print(f"[yf_proxy.history] {ticker}: 無資料（{type(_e).__name__}: {_e}）")
         return None
+    if _df is None or getattr(_df, "empty", False):       # X1-n10：沒拋例外、回空表也看回應
+        _bad = _chart_reply_failure(getattr(_CHART_REPLY, "reply", None))
+        if _bad:
+            print(f"[yf_proxy.history] {ticker}: Yahoo 回應 {_bad}、回空表 → 抓取失敗")
+            # 例外訊息不另寫一句：用 yfinance 自己「沒有價格資料」的例外 —— 與上方例外路徑同一種回應失敗時
+            # 往上拋的是同一類、同一模板。尾巴同其 `history()` 的 debug_info：一般區間為 ` (period=…)`；
+            # `max`（或帶 start）時 yfinance 寫的是它內部算出的日期區間（起點算法跨版本不同）→ 不重算、
+            # 不給尾巴（建構子自己的「no price data found」形式）。
+            from yfinance.exceptions import YFPricesMissingError as _no_prices
+            _ranged = (period is None or str(period).lower() == "max"
+                       or history_kwargs.get("start") is not None)
+            raise _no_prices(ticker, "" if _ranged else f" (period={period})")
+    return _df
 
 
 #: K 線快取的鍵數上限 —— 成功快取（`_cached_history_cached` 的 `max_entries`）與失敗冷卻

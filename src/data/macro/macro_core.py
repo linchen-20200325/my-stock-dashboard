@@ -374,6 +374,8 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     成功即清。成功路徑、30min TTL、回傳形狀不變。
     D2-f49(2026-10-03):HTTP 200 之後整理回應時拋的例外(缺欄、日期解析、pandera SchemaError)同樣記退避;
     該次呼叫照舊原樣拋出,冷卻期內回同一種空 DataFrame。
+    X1-n2(批 Y1,2026-10-03):observations 非空但全無有效值(皆為 '.')→ 同「observations 為空」出口
+    (記退避、不入成功快取、回空 DataFrame)。
     """
     if not api_key:
         # W5-2 §1: 沉默 return empty 改補 log,但不 raise(caller 已透過 empty 判斷 fallback)
@@ -461,6 +463,15 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         with _FRED_CACHE_LOCK:
             _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f49:同 D2-f14 取 max
         raise
+    if out.empty:
+        # X1-n2(批 Y1,2026-10-03,§1.A-3(a)):observations 非空、但每一筆都是 FRED 的缺值標記 '.'
+        # (或轉不成數字)→ 剔除後 0 列。修前這張空表寫進 30min 成功快取、當成功回傳。現在比照上方
+        # 「observations 為空」出口:算失敗、記退避(同一把鎖、同一個鍵、同一個時點)、不入成功快取、
+        # 回同一種空 DataFrame。
+        print(f"[macro_core/fred] {series_id} observations {len(obs)} 筆皆無有效值(記退避)")
+        with _FRED_CACHE_LOCK:
+            _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # 同 D2-f14 取 max
+        return pd.DataFrame()
     with _FRED_CACHE_LOCK:   # S9 v19.78
         _FRED_CACHE[key] = (now, out.copy())
         _FRED_FAIL_CACHE.pop(key, None)   # D2-f6:成功即解除退避

@@ -148,7 +148,8 @@ def test_source_wraps_history_in_proxy_env():
     src = inspect.getsource(etf_fetch._fetch_etf_price_max_cached)
     assert 'with _proxy_env():' in src, '_fetch_etf_price_max 未用 _proxy_env 包 history'
     # _proxy_env 的 with 必須出現在 history 呼叫之前
-    assert src.index('with _proxy_env():') < src.index(".history(period='max'"), \
+    # 批 Y1 X1-n1(2026-10-03):上游呼叫改經 `yf_proxy._history_or_raise`(同 K 線那支的失敗判準)。
+    assert src.index('with _proxy_env():') < src.index("_history_or_raise(_tk, ticker, 'max'"), \
         'history 呼叫未被 _proxy_env 包住'
 
 
@@ -231,7 +232,8 @@ def test_source_pins_auto_adjust_true():
     assert "auto_adjust=False" not in src, \
         '_fetch_etf_price_max 出現 auto_adjust=False —— 還原價前提被翻面'
     # 必須就掛在 period='max' 那一呼上(而不是別處某個順手加的呼叫)
-    assert ".history(period='max', auto_adjust=True)" in src, \
+    # 批 Y1 X1-n1(2026-10-03):上游呼叫改經 `yf_proxy._history_or_raise`,`auto_adjust=True` 原樣轉給 history。
+    assert "_history_or_raise(_tk, ticker, 'max', auto_adjust=True)" in src, \
         f'auto_adjust=True 未掛在 history(period=\'max\') 那一呼上:\n{src}'
 
 
