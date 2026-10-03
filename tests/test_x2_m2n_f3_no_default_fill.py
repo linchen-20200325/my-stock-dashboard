@@ -213,6 +213,51 @@ class TestFinitePresentUnchanged:
         assert "missing_inputs" not in calculate_system_state(d)
 
 
+class TestZeroIsAValueNotMissing:
+    """有限的 0 是真值，不是缺值（QA 突變：`is not None` 守衛改成真值判斷 `if vix:` 會把 0 當缺）。"""
+
+    #: 其餘輸入都在「不起作用」的值上，只看被測那一項的 0 造成的效果
+    _BASE = {**_INERT, "Sahm_Rule_Triggered": False, "Index_Below_MA5": False}
+
+    @pytest.mark.parametrize("zero", [0.0, 0, -0.0, np.float64(0.0), "0"], ids=["float", "int", "neg0", "np", "str"])
+    @pytest.mark.parametrize("key", _KEYS)
+    def test_zero_matches_pre_fix_and_is_not_flagged(self, key, zero):
+        d = {**self._BASE, key: zero}
+        got = calculate_system_state(d)
+        assert got == _pre_fix_css(d), (key, zero)
+        assert "missing_inputs" not in got
+
+    def test_vix_zero_scores_plus_ten(self):
+        got = calculate_system_state({**self._BASE, "VIX_Index": 0})
+        assert got["exposure_limit_pct"] == 70 and got["market_regime"] == "多頭"
+        assert got == _pre_fix_css({**self._BASE, "VIX_Index": 0})
+
+    def test_pcr_zero_scores_plus_five(self):
+        # 基準 60 ＋5 ＝ 65 → round(6.5) 銀行家捨入回 60，看不出 +5；故墊 VIX 10（+10）：70 ＋5 ＝ 75 → 80
+        d = {**self._BASE, "VIX_Index": 10.0, "PCR": 0}
+        got = calculate_system_state(d)
+        assert got == _pre_fix_css(d)
+        assert got["exposure_limit_pct"] == 80                              # pcr < 0.7 → +5
+        assert calculate_system_state({**d, "PCR": None})["exposure_limit_pct"] == 70
+
+    def test_pmi_zero_triggers_bias_resonance(self):
+        """PMI＝0（< 50）讓 BIAS240 高乖離共振成立：扣 15 並貼「均線過熱」（VIX 在 20 → 只靠 PMI 成立）。"""
+        d = {**self._BASE, "ISM_PMI_or_OECD_CLI": 0, "BIAS240_pct": 20.0}
+        got = calculate_system_state(d)
+        assert got == _pre_fix_css(d)
+        assert "均線過熱" in got["Macro_Phase"]
+        assert "均線過熱" not in calculate_system_state({**d, "ISM_PMI_or_OECD_CLI": None})["Macro_Phase"]
+
+    def test_pmi_zero_scores_and_labels(self):
+        d = {**self._BASE, "ISM_PMI_or_OECD_CLI": 0, "PMI_Prev_Month": 0}
+        got = calculate_system_state(d)
+        assert got == _pre_fix_css(d)
+        assert "PMI連兩月收縮(0.0→0.0)" in got["Macro_Phase"]               # 兩月都 0 → 紅線觸發
+        got1 = calculate_system_state({**self._BASE, "ISM_PMI_or_OECD_CLI": 0})
+        assert got1 == _pre_fix_css({**self._BASE, "ISM_PMI_or_OECD_CLI": 0})
+        assert "PMI收縮(0.0)" in got1["Macro_Phase"] and got1["exposure_limit_pct"] == 40
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # B. 缺值：當缺（整條不算），不代預設值；`missing_inputs` 照實
 # ══════════════════════════════════════════════════════════════════════════
