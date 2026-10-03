@@ -39,7 +39,11 @@ def _escape_warnings(fn) -> list[str]:
 def test_frozen_fixture_still_needs_the_filter(path):
     """前提：直接 `ast.parse` 副本仍會發這則警告（若哪天不再發，壓警告那段就可以拿掉）。"""
     text = path.read_text(encoding="utf-8")
-    assert _escape_warnings(lambda: ast.parse(text)), path.name
+    try:
+        warned = _escape_warnings(lambda: ast.parse(text))
+    except SyntaxError as e:                              # 日後 Python 若把無效跳脫升級成錯誤
+        pytest.skip(f"本版 Python 對 {path.name} 直接報 SyntaxError（{e.msg}）—— 前提已不同，另案處理")
+    assert warned, path.name
 
 
 @pytest.mark.parametrize("path", _FROZEN, ids=lambda p: p.name)
@@ -135,3 +139,67 @@ def test_margin_p95_text_is_attached_to_the_value_it_was_measured_for():
     assert d, doc
     assert float(d.group(1)) == MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI, \
         "「歷史 P95」記載的金額與常數不一致 —— P95 是否仍成立要重新量測"
+
+
+# ── 批 Y3 QA 補強：`parse_source` 的四個存活突變（M25／M28／M29／M30）──────────────
+def _fake_ast(monkeypatch, parse):
+    """只換掉 `tests/_frozen_fixtures` 模組裡的 `ast` 名字（⛔ 不動全域 `ast.parse`）。"""
+    monkeypatch.setattr(FF, "ast", types.SimpleNamespace(parse=parse))
+
+
+def test_parse_source_silences_the_syntaxwarning_form_too(monkeypatch):
+    """M25：Python 3.12+ 改發 `SyntaxWarning`。CI 是 3.11、真的 `ast.parse` 永遠不發 —— 用假的 parse
+    在 `parse_source` 的過濾範圍內發一則 SyntaxWarning 版的同一訊息，拿掉 SyntaxWarning 那條過濾即紅。"""
+    def _fake_parse(text, **kw):
+        warnings.warn("invalid escape sequence '\\/'", SyntaxWarning)
+        return ast.Module(body=[], type_ignores=[])
+    _fake_ast(monkeypatch, _fake_parse)
+    assert _escape_warnings(lambda: FF.parse_source("", _FROZEN[0])) == []
+
+
+def _filters_snapshot():
+    return list(warnings.filters)
+
+
+def test_parse_source_does_not_leak_filters_on_success():
+    """M28：過濾只在 `catch_warnings` 範圍內 —— 呼叫前後全域 `warnings.filters` 必須逐項相同。"""
+    before = _filters_snapshot()
+    FF.parse_source(_FROZEN[0].read_text(encoding="utf-8"), _FROZEN[0])
+    assert _filters_snapshot() == before
+
+
+def test_parse_source_does_not_leak_filters_on_syntax_error():
+    before = _filters_snapshot()
+    with pytest.raises(SyntaxError):
+        FF.parse_source("def (:\n", _FROZEN[0])
+    assert _filters_snapshot() == before
+
+
+def test_parse_source_does_not_leak_filters_on_injected_error(monkeypatch):
+    class _Boom(Exception):
+        pass
+
+    def _fake_parse(text, **kw):
+        raise _Boom("injected")
+    _fake_ast(monkeypatch, _fake_parse)
+    before = _filters_snapshot()
+    with pytest.raises(_Boom):
+        FF.parse_source("", _FROZEN[0])
+    assert _filters_snapshot() == before
+
+
+_LOOKALIKES = [
+    ("other", "fixtures"),            # M29：上一層不是 tests
+    ("tests", "notfixtures"),         # M30：所在目錄不是 fixtures
+    ("x", "tests", "fixtures_old"),
+]
+
+
+@pytest.mark.parametrize("parts", _LOOKALIKES, ids=lambda p: "/".join(p))
+@pytest.mark.parametrize("path", _FROZEN, ids=lambda p: p.name)
+def test_lookalike_paths_are_not_frozen_fixtures(parts, path):
+    """M29／M30（QA-A Q11）：檔名相同、但不在 `tests/fixtures/` 底下 ⇒ 不是凍結副本、警告照常。"""
+    fake = _ROOT.joinpath("scratch_lookalike", *parts, path.name)
+    assert FF.is_frozen_escape_fixture(fake) is False
+    text = path.read_text(encoding="utf-8")
+    assert _escape_warnings(lambda: FF.parse_source(text, fake)), fake
