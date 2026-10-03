@@ -191,6 +191,10 @@ def fetch_vix_block() -> dict:
         if _fin_v and not _fin_v[-1]:
             _df_v = _df_v.iloc[0:0]
         elif _fin_v:
+            # 批 Y2(V2-n6,§3.3):中段剔除須 log 受影響筆數(輸出不變)
+            _n_drop_v = len(_fin_v) - sum(_fin_v)
+            if _n_drop_v:
+                print(f'[Macro/VIX] ⚠️ 剔除中段非有限/非數值 Close {_n_drop_v} 筆')
             _df_v = _df_v[_fin_v]
         _vv = [round(float(v), 1) for v in _df_v['Close']]
         _vd = [str(d)[:10] for d in _df_v.index]
@@ -427,13 +431,19 @@ def compute_twii_bias(twii_local) -> dict | None:
     _ma120 = float(_cs.tail(min(120, _n)).mean())
     _ma240 = float(_cs.tail(min(240, _n)).mean())
     # R-CALC-3 v18.412:乖離率公式 SSOT 收(`(p-ma)/ma*100` → calc_bias_pct)
-    _b240_log = calc_bias_pct(_lp, _ma240, decimals=1) or 0
+    # 批 Y2(V2-n2,§1 缺值不填 0):原 `calc_bias_pct(...) or 0` 把 None(ma<=0 等算不出)
+    #   捏成 0(「乖離正常」)。改為算不出就留 None —— 下游讀取端皆已走既有缺值路徑
+    #   (`_finite_yoy` / `is not None` / 五桶 `_traced`);真 0.0 照舊是 0.0。
+    _b20 = calc_bias_pct(_lp, _ma20, decimals=1)
+    _b60 = calc_bias_pct(_lp, _ma60, decimals=1)
+    _b240 = calc_bias_pct(_lp, _ma240, decimals=1)
+    _b240_log = f'{_b240:.1f}%' if _b240 is not None else 'None'
     print(f'[Bias] price={_lp:.0f} MA240={_ma240:.0f} '
-          f'bias240={_b240_log:.1f}% (n={_n})')
+          f'bias240={_b240_log} (n={_n})')
     return {
-        'bias_20':  calc_bias_pct(_lp, _ma20,  decimals=1) or 0,
-        'bias_60':  calc_bias_pct(_lp, _ma60,  decimals=1) or 0,
-        'bias_240': calc_bias_pct(_lp, _ma240, decimals=1) or 0,
+        'bias_20':  _b20,
+        'bias_60':  _b60,
+        'bias_240': _b240,
         'price': _lp, 'ma20': _ma20, 'ma60': _ma60, 'ma120': _ma120, 'ma240': _ma240,
         'data_days': _n, 'is_estimated': _n < 240,
     }
@@ -686,6 +696,11 @@ def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
             if len(_df0) >= 2:
                 _vals0 = _pd_ff.to_numeric(_df0.iloc[:, 1],
                                            errors='coerce').dropna()
+                if len(_vals0) >= 1 and not _is_finite_num(_vals0.iloc[-1]):
+                    # 批 Y2(V2-n3,三類 (c)):末筆 ±inf 不放行 → 落到下方既有失敗出口
+                    # (比照 fetch_us10y_block 批 D2 QA)。
+                    print(f'[Macro/FedFunds/fredgraph] ⚠️ 末筆非有限值 {_vals0.iloc[-1]!r},不採用')
+                    _vals0 = _vals0.iloc[0:0]
                 if len(_vals0) >= 2:
                     _curr = round(float(_vals0.iloc[-1]), 2)
                     _prev = round(float(_vals0.iloc[-2]), 2)
@@ -718,8 +733,12 @@ def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
         if _rc1 is not None:
             _obs_f = [o for o in _rc1.json().get('observations', [])
                       if o.get('value', '.') != '.']
-            if len(_obs_f) >= 2:
-                _vals_f = [float(o['value']) for o in _obs_f]
+            _vals_f = [float(o['value']) for o in _obs_f] if len(_obs_f) >= 2 else []
+            if _vals_f and not _is_finite_num(_vals_f[-1]):
+                # 批 Y2(V2-n3,三類 (c)):末筆 NaN/±inf 不放行 → 落到下方既有失敗出口
+                print(f'[Macro/FedFunds/FRED-API] ⚠️ 末筆非有限值 {_vals_f[-1]!r},不採用')
+                _vals_f = []
+            if _vals_f:
                 _curr = round(_vals_f[-1], 2)
                 _prev = round(_vals_f[-2], 2)
                 _date = _obs_f[-1]['date']

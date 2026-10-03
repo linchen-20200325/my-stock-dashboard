@@ -527,6 +527,10 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
             avg = float(r.get('avg_price') or 0)
         except (TypeError, ValueError):
             continue
+        except OverflowError:
+            # 批 Y2(V2-n8):超大整數 float() 溢位 ＝ 非有限值 → 與下方同一句既有 ValueError、
+            #   任何寫入之前 fail loud(修前 OverflowError 直接外洩)。
+            raise ValueError('無有效持股可儲存（檢查代號、張數、均價）') from None
         # 批 V2(D1-n2,§1 擋非有限值):NaN 會通過下一行 `<= 0` 篩選、一路帶到
         #   `ws.update` 才炸。改在**任何寫入之前**(含下方 add_rows／add_cols)
         #   fail loud,沿用同函式既有的 ValueError 字句;Sheet 一格不動。

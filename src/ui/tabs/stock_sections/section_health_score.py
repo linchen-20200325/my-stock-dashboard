@@ -251,7 +251,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                 try:
                     _vix_f = float(_vix_obj_v4.get('current'))
                     _v4_vix2 = _vix_f if math.isfinite(_vix_f) else None   # NaN / ±inf guard(批 V2)
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, OverflowError):   # OverflowError 視同非有限(批 Y2,V2-n8)
                     _v4_vix2 = None
             _li_for_v4 = st.session_state.get('li_latest')
             _v4_fut2 = 0.0

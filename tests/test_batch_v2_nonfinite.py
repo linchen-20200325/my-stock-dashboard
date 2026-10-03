@@ -144,7 +144,8 @@ class TestHealthScoreV4Vix:
     def _run(self, macro_info):
         ns = {'st': type('S', (), {'session_state': {'macro_info': macro_info}})()}
         return _exec_snippet(_HS, "_mi_v4 = st.session_state.get('macro_info')",
-                             "except (TypeError, ValueError):\n                    _v4_vix2 = None\n",
+                             "except (TypeError, ValueError, OverflowError):   # OverflowError 視同非有限(批 Y2,V2-n8)\n"
+                             "                    _v4_vix2 = None\n",   # 批 Y2:except 行多攔 OverflowError
                              ns)['_v4_vix2']
 
     @pytest.mark.parametrize('bad', [math.inf, -math.inf, math.nan, 'x', None])
@@ -166,7 +167,8 @@ class TestTabStockAiPromptVix:
         ns = {'_macro_info2': {'vix': {'current': cur}}, '_ma_snap2': {},
               '_drt2': lambda k: 'D', '_macro_lines2': []}
         _exec_snippet(_TS, "_vix_v2 = (_macro_info2.get('vix') or {})",
-                      "                except (TypeError, ValueError):\n                    pass\n", ns)
+                      "                except (TypeError, ValueError, OverflowError):   # OverflowError 視同非有限(批 Y2,V2-n8)\n"
+                      "                    pass\n", ns)   # 批 Y2:except 行多攔 OverflowError
         return ns['_macro_lines2']
 
     @pytest.mark.parametrize('bad', [math.inf, -math.inf, math.nan])

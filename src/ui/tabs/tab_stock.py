@@ -1719,7 +1719,7 @@ padding:14px 18px;margin-bottom:12px;">
                     if math.isfinite(float(_vix_v2)):
                         _macro_lines2.append(
                             f"VIX 恐慌指數={float(_vix_v2):.2f}（{_drt2('vix')}）")
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, OverflowError):   # OverflowError 視同非有限(批 Y2,V2-n8)
                     pass
             _cpi_v2 = _cpi_blk2.get('yoy') or _ma_snap2.get('cpi')
             if _cpi_v2 is not None:

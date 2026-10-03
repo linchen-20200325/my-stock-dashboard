@@ -738,7 +738,7 @@ def _safe_float(x: Any) -> Optional[float]:
         return None
     try:
         f = float(x)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError(超大 int)視同缺值(批 Y2,V2-n8)
         return None
     if f != f:  # NaN guard
         return None
