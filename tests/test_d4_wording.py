@@ -112,7 +112,9 @@ def test_dl_f1_s67_m1b_hit_source_chain_order():
     from src.compute.macro import macro_helpers as MH
     import inspect as _inspect
     src = _inspect.getsource(MH.compute_five_bucket_summary)
-    assert "m1b_m2_info.gap (CBC ms1 → EF15M01 → ^TWII proxy → FRED → IMF)" in src
+    # 批 W1（客戶 2026-10-02）：R7-3 取代本句，且「^TWII 動能代理」移到最後（逐字釘於 test_w1_r7_hit_source.py）。
+    assert "M1B 年增率減 M2 年增率，依序：央行公開 JSON → 央行 EF15M01 → FRED → IMF → 大盤動能代理估算" in src
+    assert "m1b_m2_info.gap (CBC ms1 → EF15M01 → ^TWII proxy → FRED → IMF)" not in src
     assert "CBC ms1 → FRED → IMF → ^TWII proxy" not in src
 
 
@@ -160,15 +162,16 @@ def test_dl_f1_s14_edu_source_table_and_m1b_card():
     src = _inspect.getsource(E)
     for want in ("'CBC ms1.json → EF15M01（央行）'",
                  "'月後 ~27 天,1hr cache'",
-                 "'CBC ms1.json → EF15M01 → ^TWII 動能代理 → FRED → IMF（USD,僅 fallback,禁跨幣別平均）'",
+                 "'CBC ms1.json → EF15M01 → FRED → IMF（USD,僅 fallback,禁跨幣別平均） → ^TWII 動能代理'",
                  "'月頻,30min cache'",
                  "'全敗 → ⬜ 中國資料不足'",
-                 "**資料源**:央行 CBC ms1.json → EF15M01 月公布（月後 ~27 天）,備援 ^TWII 動能代理 → FRED → IMF。"):
+                 "**資料源**:央行 CBC ms1.json → EF15M01 月公布（月後 ~27 天）,備援 FRED → IMF → ^TWII 動能代理。"):
         assert want in src, want
     china = (f"FRED（{F.FRED_USDCNY} / {F.FRED_CHN_OECD_CLI} / {F.FRED_CHN_CPI} / "
              f"{F.FRED_CHN_M2} / {F.FRED_CHN_PMI}）")
     assert f"'{china}'" in src
-    for gone in ("CNCPIALLMINMEI", "90 天 cache", "modifier = 1.0 中性", "月後 ~5-7 天"):
+    for gone in ("CNCPIALLMINMEI", "90 天 cache", "modifier = 1.0 中性", "月後 ~5-7 天",
+                 "EF15M01 → ^TWII 動能代理 → FRED", "備援 ^TWII 動能代理 → FRED"):  # 批 W1 調序
         assert gone not in src, gone
 
 
@@ -178,8 +181,12 @@ def test_dl_f1_s14_health_inspector_m1b_source_and_endpoint():
 
     from src.ui.pages import health_inspector as H
     src = _inspect.getsource(H)
-    assert src.count("'CBC ms1.json+EF15M01+^TWII 動能代理+FRED+IMF 5段'") == 3
-    assert src.count("'cbc.gov.tw / cpx.cbc.gov.tw / Yahoo / FRED / IMF DataMapper'") == 2
+    # 批 W1（客戶 2026-10-02）：只把「^TWII 動能代理」移到最後。
+    assert src.count("'CBC ms1.json+EF15M01+FRED+IMF+^TWII 動能代理 5段'") == 3
+    assert "EF15M01+^TWII 動能代理+FRED" not in src
+    # 客戶 2026-10-03：端點字串只把「Yahoo」移到最後（只調詞序，不加新字）。
+    assert src.count("'cbc.gov.tw / cpx.cbc.gov.tw / FRED / IMF DataMapper / Yahoo'") == 2
+    assert "cpx.cbc.gov.tw / Yahoo / FRED" not in src
     assert "CBC + FinMind 雙源" not in src and "TaiwanStockMonetaryAggregates" not in src
 
 
