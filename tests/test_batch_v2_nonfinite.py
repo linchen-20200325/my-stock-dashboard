@@ -238,6 +238,33 @@ class TestWarroomBiasMissing:
         assert '📐 年線位階參考：年線乖離 +25.0%｜乖離過熱' in joined
         assert '🟡 年線乖離 +25.0%，大盤偏高，勿追買' in joined
 
+    # QA 突變殘存（守衛 `_wr_px is not None and _wr_px > 0 and _wr_ma ...` 各子句）：
+    # 價格或年線任一不是有限正數 ⇒ 不得印出 v4 位階片段（假「+0.0%」／「-105.0%」）。
+    @pytest.mark.parametrize('bias', [
+        pytest.param({'price': 20000.0}, id='ma240-missing-only'),
+        pytest.param({'price': 20000.0, 'ma240': 0.0}, id='ma240-zero'),
+        pytest.param({'price': 0.0, 'ma240': 16000.0}, id='price-zero'),
+        pytest.param({'price': -800.0, 'ma240': 16000.0}, id='price-negative'),
+    ])
+    def test_non_positive_or_missing_px_ma_no_v4_bits(self, bias):
+        joined = '\n'.join(_warroom_out(bias))
+        assert '年線位階參考' not in joined, joined[-800:]
+        assert '年線乖離 +0.0%' not in joined and '-105.0%' not in joined
+        assert '股價在年線下' not in joined and '乖離過熱' not in joined
+
+    # QA 突變殘存（年線位置卡 `_wr_b240 is None or …`）：釘住「未知」時的既有圖示 ✅
+    # （與 main 的 `not _wr_bias or …` 在 bias_info 為空時同一枝；只釘現況，不改行為）。
+    @pytest.mark.parametrize('bias', [
+        pytest.param({}, id='empty'),
+        pytest.param({'price': 20000.0, 'ma240': 16000.0}, id='bias240-missing'),
+        pytest.param({'bias_240': math.nan}, id='bias240-nan'),
+    ])
+    def test_unknown_card_icon_pinned(self, bias):
+        joined = '\n'.join(_warroom_out(bias))
+        assert '✅ 年線位置</div>' in joined
+        assert '⚠️ 年線位置' not in joined
+        assert "line-height:1.25;'>未知</div>" in joined
+
 
 def _state_out(bias, mp):
     from tests.test_m2n2_no_zero_fill import _FakeST
@@ -260,6 +287,18 @@ class TestStateBiasMissing:
         assert [p[0] for p in piv] == ['月線過熱']
         piv, _ = _state_out({'bias_240': 25.0}, monkeypatch)
         assert [p[0] for p in piv] == ['年線乖離過大']
+
+    # QA 突變殘存（`_fam_ok.add('level')` 的 `or`→`and`）：單邊乖離仍算位階群可評估。
+    @pytest.mark.parametrize('bias,n', [
+        pytest.param({'bias_20': 3.0}, 1, id='bias20-only'),
+        pytest.param({'bias_240': 3.0}, 1, id='bias240-only'),
+        pytest.param({'bias_20': 3.0, 'bias_240': 3.0}, 1, id='both'),
+        pytest.param({}, 0, id='empty'),
+    ])
+    def test_level_family_evaluable_count(self, bias, n, monkeypatch):
+        _, out = _state_out(bias, monkeypatch)
+        joined = '\n'.join(out)
+        assert f'6 群僅 {n} 群可評估' in joined, joined[-800:]
 
     def test_finite_unchanged(self, monkeypatch):
         piv, out = _state_out(dict(_BIAS_FULL), monkeypatch)
