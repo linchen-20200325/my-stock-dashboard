@@ -209,6 +209,16 @@ class TestX1n10Branches:
                 return ret
         assert YP._history_or_raise(_T(), "X", "1y") is ret
 
+    def test_object_without_empty_attr_passthrough(self):
+        """回的不是表（沒有 `.empty`）→ 不判空、原樣回傳（同修前；不因回應而改拋例外）。"""
+        ret = object()
+
+        class _T:
+            def history(self, period="1mo", raise_errors=False):
+                _recorded(503)
+                return ret
+        assert YP._history_or_raise(_T(), "X", "1y") is ret
+
     def test_typeerror_fallback_empty_failure_raises(self):
         seen = []
 
