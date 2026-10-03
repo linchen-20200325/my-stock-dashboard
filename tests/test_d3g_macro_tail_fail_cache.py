@@ -309,19 +309,23 @@ class TestD2f13ChinaMacro:
         assert fred_world.calls == {sid: 0 for sid in _SIDS}
 
     def test_all_dot_series_counts_as_incomplete_but_never_hits_upstream(self, fred_world, clock):
-        """FRED 200 但該序列全是 '.'（fetch_fred 成功路徑、得到空表並入它自己的 30 分鐘快取）：
-        本層視為不完整、不入快取；重算時那條命中 fetch_fred 的成功快取 → 上游 0 次（退避路徑之一）。"""
+        """FRED 200 但該序列全是 '.'：本層視為不完整、不入快取。
+        批 Y1 X1-n2（2026-10-03）：修前 fetch_fred 把這張**有欄位的空表**當成功、入它自己的 30 分鐘快取；
+        現在比照「observations 為空」出口 —— 回 `pd.DataFrame()`、記退避、不入成功快取。冷卻期內重算 →
+        上游 0 次（退避擋下）；期滿 → 重打一次。"""
         fred_world.all_ok()
         fred_world.resp[FRED_CHN_CPI] = _fred_ok([("2026-01-01", "."), ("2026-02-01", ".")])
         out = TW.fetch_china_macro(_KEY)
         assert _ok_sids(out) == [s for s in _SIDS if s != FRED_CHN_CPI]
-        assert out[FRED_CHN_CPI].empty and list(out[FRED_CHN_CPI].columns) == \
-            ["date", "value", "source", "fetched_at"], "修前同形：有欄位的空表"
+        _assert_empty_df(out[FRED_CHN_CPI])
         for _ in range(3):
-            clock["now"] += 60
+            clock["now"] += 50                                # 150 秒 < FAIL_COOLDOWN_SEC
             again = TW.fetch_china_macro(_KEY)
             assert again is not out and _ok_sids(again) == _ok_sids(out)
         assert fred_world.calls == {sid: 1 for sid in _SIDS}
+        clock["now"] += FAIL_COOLDOWN_SEC
+        TW.fetch_china_macro(_KEY)
+        assert fred_world.calls[FRED_CHN_CPI] == 2, "冷卻期滿 → 重打（未入成功快取）"
 
     def test_worker_exception_series_counts_as_incomplete(self, fred_world, clock, capsys):
         """某條在執行緒內拋例外（修前：補空表、整包照存 30 分鐘）→ 本層不入快取；補位與 log 同修前。"""

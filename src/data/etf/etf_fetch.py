@@ -47,7 +47,7 @@ from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 # _proxy_env SSOT(env backup/restore context manager),不重寫。yf_proxy 僅 lazy import
 # src.data.stock._load_proxy_config,不 import 本檔 → 無 import cycle。
 from src.data.proxy.yf_proxy import _proxy_env
-from src.data.proxy.yf_proxy import _is_yf_no_data  # D2-f54:沒資料 vs 抓取失敗同一判準
+from src.data.proxy.yf_proxy import _history_or_raise  # X1-n1:同 K 線那支的失敗判準（含 HTTP 回應）
 from shared.fail_cooldown import FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT
 
 
@@ -233,23 +233,15 @@ def _fetch_etf_price_max_cached(ticker: str) -> pd.DataFrame:
     """
     # 走 NAS proxy(_proxy_env:臨時設 HTTPS/HTTP_PROXY,finally 還原)避開
     # Yahoo 海外 IP 封鎖 → 原本直呼致 0050.TW 空 df「找不到歷史/價格資料」。
-    # D2-f54:raise_errors=True(同 yf_proxy._history_or_raise)— 網路/代理錯誤往上拋、
-    # 不入快取;yfinance 自己回報「沒有資料」→ 照舊回空 df。舊/新版不認參數 → 修前呼叫。
+    # D2-f54:raise_errors=True — 網路/代理錯誤往上拋、不入快取;yfinance 自己回報「沒有資料」
+    # → 照舊回空 df。舊/新版不認參數 → 修前呼叫。
+    # X1-n1(批 Y1,2026-10-03,§1.A-3(a)):改經 `yf_proxy._history_or_raise`(上述判準由它承接、
+    # 邏輯相同,不再複寫一份)—— 另看本次 K 線請求的 HTTP 回應(D2-f36／X1-n10):5xx／401／403、或 200 但 body 為
+    # `null` → 失敗(往上拋、不入快取、外層冷卻)。修前這種回應被當「沒資料」快取 TTL_1HOUR。
     with _proxy_env():
         _tk = yf.Ticker(ticker)
-        try:
-            df = _tk.history(period='max', auto_adjust=True, raise_errors=True)
-        except TypeError as _e:
-            if 'raise_errors' not in str(_e):
-                raise
-            df = _tk.history(period='max', auto_adjust=True)
-        except DeprecationWarning:
-            df = _tk.history(period='max', auto_adjust=True)
-        except Exception as _e:
-            if not _is_yf_no_data(_e):
-                raise
-            df = pd.DataFrame()
-    if df.empty:
+        df = _history_or_raise(_tk, ticker, 'max', auto_adjust=True)
+    if df is None or df.empty:
         return pd.DataFrame()
     df.index = pd.to_datetime(df.index).tz_localize(None)
     out = df.ffill()
