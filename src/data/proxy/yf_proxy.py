@@ -257,10 +257,14 @@ def _history_or_raise(tk, ticker: str, period: str, **history_kwargs):
         _bad = _chart_reply_failure(getattr(_CHART_REPLY, "reply", None))
         if _bad:
             print(f"[yf_proxy.history] {ticker}: Yahoo 回應 {_bad}、回空表 → 抓取失敗")
-            # 例外訊息不另寫一句：用 yfinance 自己「沒有價格資料」的例外與同一格式（`(period=…)`，
-            # 同其 `history()` 的 debug_info）—— 與上方例外路徑同一種回應失敗時往上拋的是同一類、同一模板。
+            # 例外訊息不另寫一句：用 yfinance 自己「沒有價格資料」的例外 —— 與上方例外路徑同一種回應失敗時
+            # 往上拋的是同一類、同一模板。尾巴同其 `history()` 的 debug_info：一般區間為 ` (period=…)`；
+            # `max`（或帶 start）時 yfinance 寫的是它內部算出的日期區間（起點算法跨版本不同）→ 不重算、
+            # 不給尾巴（建構子自己的「no price data found」形式）。
             from yfinance.exceptions import YFPricesMissingError as _no_prices
-            raise _no_prices(ticker, f" (period={period})")
+            _ranged = (period is None or str(period).lower() == "max"
+                       or history_kwargs.get("start") is not None)
+            raise _no_prices(ticker, "" if _ranged else f" (period={period})")
     return _df
 
 
