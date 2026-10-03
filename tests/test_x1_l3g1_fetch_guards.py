@@ -754,11 +754,14 @@ class TestD2f29SharedOpenApiCooldown:
         assert list(df.columns) == ["date", "revenue", "revenue_year", "revenue_month"]
         assert ("6488", 18) not in MR._single_fail_cooldown, "拿到資料 → 照舊算成功"
 
-    def test_healthy_side_failing_in_cooldown_joins_record(self, mrev):
+    def test_healthy_side_failing_in_cooldown_joins_record(self, mrev, capsys):
         mrev.tpex = "ok"
         MR.fetch_monthly_revenue("2330")                     # 上市失敗
         mrev.tpex = "none"
+        capsys.readouterr()
         _assert_bare_empty(MR.fetch_monthly_revenue("6488"))  # 冷卻期內上櫃也失敗 → 併入
+        out = capsys.readouterr().out
+        assert "確定抓取失敗(上市: status=None；上櫃: status=None)" in out, "失敗說明同修前（兩邊都列）"
         n = dict(mrev.calls)
         _assert_bare_empty(MR.fetch_monthly_revenue("6489"))
         assert mrev.calls == n, "兩邊都在冷卻 → 0 次上游"
@@ -819,6 +822,15 @@ class TestD2f29SharedOpenApiCooldown:
         fc_clock["now"] += FAIL_COOLDOWN_SEC
         MR.fetch_monthly_revenue("9502")
         assert mrev.calls["twse"] == n + 1, "冷卻回到起點 FAIL_COOLDOWN_SEC"
+
+    def test_proxy_unavailable_in_cooldown_same_as_base(self, mrev, monkeypatch, capsys):
+        """冷卻期內 `fetch_url` import 不到 → 同修前（印同一行、回空表）。"""
+        import sys as _sys
+        MR.fetch_monthly_revenue("9700")
+        monkeypatch.setitem(_sys.modules, "src.data.proxy", types.ModuleType("src.data.proxy"))
+        capsys.readouterr()
+        _assert_bare_empty(MR.fetch_monthly_revenue("9701"))
+        assert "[mrev-fetcher] proxy fetch_url 不可用 → TWSE fallback 略過" in capsys.readouterr().out
 
     def test_clear_resets_shared_cooldown(self, mrev):
         MR.fetch_monthly_revenue("9300")
