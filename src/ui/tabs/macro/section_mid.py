@@ -429,11 +429,12 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     # `_cA = _vix_now8 is not None and _vix_now8 < 20` 會**偽造通過**三環第一環,
     # badge 印出假的「A VIX=0.0<20 ✅」。
     # 對齊 `src/services/allocation_service._read_vix()`(缺值/型別錯誤→None)。
-    _vix_raw8 = _m8_vix.get('current') if isinstance(_m8_vix, dict) else None
-    try:
-        _vix_now8 = float(_vix_raw8) if _vix_raw8 is not None else None
-    except (TypeError, ValueError):
-        _vix_now8 = None
+    # 批 V1 D4-n1（§1）：原 `float(_vix_raw8)` 讓 NaN／±inf 過關 → 印出假綠燈
+    #   「VIX nan 🟢 …未觸發 VIX 否決權」、badge「A VIX=nan」，且 apply_vix_veto(nan)。
+    #   改沿用上方已算好的有限值 `_vcur8_v`（缺鍵／None／NaN／±inf／非數值一律 None）⇒
+    #   走既有「VIX 數據載入中…」／「A VIX未知」路徑，且與上方缺項清單（M2N-f6）判定一致
+    #   （數字字串原本這裡算有值、清單卻列「VIX 待取得」）。有限值時 float() 同一物件，輸出不變。
+    _vix_now8 = float(_vcur8_v) if _vcur8_v is not None else None
     # CLI：OECD CLI 榮枯線 = 100，取自 _m8_pmi（is_oecd_cli=True 時）
     _cli_8 = None
     if _m8_pmi and _m8_pmi.get('is_oecd_cli'):
