@@ -228,8 +228,11 @@ def _history_or_raise(tk, ticker: str, period: str, **history_kwargs):
     非空表一律原樣回傳（成功路徑不看回應）。
 
     `history_kwargs`（批 Y1 X1-n1）：原樣轉給 `tk.history`（例：ETF 取價的 `auto_adjust=True`）；
-    不給 → 呼叫與修前逐字相同。
+    不給 → 呼叫與修前逐字相同。`raise_errors` 不可放進 `history_kwargs`（拋 `ValueError`，內部用）——
+    它由本函式決定，放進來會在「不認參數」退路裡被靜默丟掉。
     """
+    if "raise_errors" in history_kwargs:                  # 批 Y1：由本函式決定，不得由呼叫端帶入
+        raise ValueError("_history_or_raise: raise_errors is controlled here; do not pass it in history_kwargs")
     _CHART_REPLY.reply = None                             # D2-f36：只看本次呼叫的回應
     _ensure_chart_reply_recorder()
     try:

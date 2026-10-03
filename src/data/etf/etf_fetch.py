@@ -209,7 +209,9 @@ _PERIOD_TO_DAYS = {
 def _fetch_etf_price_max_cached(ticker: str) -> pd.DataFrame:
     """`_fetch_etf_price_max()` 的快取層。**抓取拋例外一律往上拋,不回空 df**
     （Q3-r5 2026-09-27,CLAUDE.md §1.A-3(a)「只快取成功結果」;st.cache_data 不快取例外）。
-    成功路徑與 TTL 與修前逐字相同。yfinance 沒拋、只回空 → 照舊回空 df（並快取;分不出來,不猜）。
+    成功路徑與 TTL 與修前逐字相同。yfinance 沒拋、只回空 → 照舊回空 df（並快取）——
+    批 Y1 X1-n1／X1-n10(2026-10-03)起例外:該次 K 線回應是 5xx／401／403、或 200 但 body 為 `null`
+    → 經 `_history_or_raise` 改拋例外(＝失敗,不入快取、外層冷卻並帶失敗旗標)。其餘回空照舊(分不出來,不猜)。
 
     以下為原 docstring。
 
@@ -295,6 +297,8 @@ _fetch_etf_price_max.clear = _clear_etf_price_max
 #: `_fetch_etf_price_max()` 接住例外時,回傳的空 DataFrame 在 `attrs` 裡帶的鍵。
 #: 值 ＝ `"{例外型別}: {訊息}"`。**只有拋過例外才有** —— yfinance 沒拋例外、只回空的那一種
 #: **沒有**(那與「這檔沒有那段歷史」在這一層分不出來,不猜;同 `DIVIDENDS_FETCH_FAILED_ATTR`)。
+#: 批 Y1(2026-10-03)起:回空但該次 K 線回應是 5xx／401／403、或 200 但 body 為 `null` →
+#: `_history_or_raise` 改拋例外,因此**有**這個鍵(＝抓取失敗)。
 PRICE_FETCH_FAILED_ATTR = "fetch_failed"
 
 
@@ -310,7 +314,9 @@ def fetch_etf_price(ticker: str, period: str = '5y', *,
     Q3(2026-09-26)`failed=`:**加性參數;預設 `None` → 回傳值與修前逐位元組相同**
     (抓取失敗時照舊回一個 `attrs` 為空的空 DataFrame)。傳一個 list 進來 → 抓取
     **拋過例外**(含快取中的那一次失敗)時把 `"{例外型別}: {訊息}"` append 進去,
-    回傳值不變。yfinance 只回空、沒拋例外 → **不 append**(分不出來,不猜)。
+    回傳值不變。yfinance 只回空、沒拋例外 → **不 append**(分不出來,不猜)——
+    批 Y1(2026-10-03)起例外:回空但該次 K 線回應是 5xx／401／403、或 200 但 body 為 `null`
+    → 算抓取失敗、**會 append**。
     ⚠️ 不改快取鍵(仍是 `_fetch_etf_price_max(ticker)`),一次都不多打上游。
     """
     df = _fetch_etf_price_max(ticker)

@@ -268,6 +268,19 @@ class TestX1n10Branches:
         YP._history_or_raise(_T(), "X", "1y")
         assert seen == [((), {"period": "1y", "raise_errors": True})]
 
+    def test_raise_errors_in_kwargs_rejected(self):
+        """`raise_errors` 由本函式決定；放進 `history_kwargs` 會在「不認參數」退路被靜默丟掉 → 直接拒收。"""
+        seen = []
+
+        class _T:
+            def history(self, *a, **kw):
+                seen.append(kw)
+                return pd.DataFrame({"Close": [1.0]})
+        for v in (True, False):
+            with pytest.raises(ValueError, match="raise_errors"):
+                YP._history_or_raise(_T(), "X", "1y", raise_errors=v)
+        assert seen == [], "拒收發生在呼叫上游之前"
+
     @pytest.mark.parametrize("path", ["strict", "typeerror", "deprecation"])
     def test_kwargs_forwarded_on_every_path(self, path):
         seen = []
@@ -410,6 +423,40 @@ class TestX1n2FredAllDot:
         t0 = time.time()
         MC.fetch_fred("Y1NL", "k", n=10)
         assert MC._FRED_FAIL_CACHE[key] >= t0 + 49
+
+    def test_failure_record_written_under_lock(self, fred, monkeypatch):
+        """F9（確定性，不靠時序）：新出口寫 `_FRED_FAIL_CACHE` 時必須持有 `_FRED_CACHE_LOCK`。
+        把鎖換成會記「是否持有中」的包裝、把退避表換成寫入時檢查的 dict。"""
+        import threading
+
+        class _RecLock:
+            def __init__(self):
+                self._l = threading.Lock()
+                self.held = False
+
+            def __enter__(self):
+                self._l.acquire()
+                self.held = True
+                return self
+
+            def __exit__(self, *a):
+                self.held = False
+                self._l.release()
+                return False
+
+        lock = _RecLock()
+        writes = []
+
+        class _Checked(dict):
+            def __setitem__(self, k, v):
+                writes.append((k, lock.held))
+                super().__setitem__(k, v)
+
+        monkeypatch.setattr(MC, "_FRED_CACHE_LOCK", lock)
+        monkeypatch.setattr(MC, "_FRED_FAIL_CACHE", _Checked())
+        fred["body"] = _ALL_DOT
+        _assert_bare_empty(MC.fetch_fred("Y1NK", "k", n=10))
+        assert writes == [(("Y1NK", "k", 10), True)]
 
     def test_failure_record_uses_call_start(self, fred, monkeypatch):
         """記的時點 ＝ 本次呼叫開始的 now（同其他出口）。"""
