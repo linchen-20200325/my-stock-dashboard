@@ -333,7 +333,11 @@ class TestD2f13ChinaMacro:
         assert f"[tw_macro/china_macro/{FRED_CHN_M2}] 失敗:" in capsys.readouterr().out
         fred_world.resp[FRED_CHN_M2] = _fred_ok(_ROWS[FRED_CHN_M2])
         clock["now"] += 1
-        _assert_all_expected(TW.fetch_china_macro(_KEY))   # 例外那條沒進快取 → 下一次即重抓成功
+        # D2-f49（批 X1，2026-10-03）：fetch_fred 對 HTTP 200 之後的例外也記退避 —— 冷卻期內仍缺那一條
+        # （修前：例外不記退避、下一次即重打）；本層照舊不入快取，期滿即重抓成功。
+        assert _ok_sids(TW.fetch_china_macro(_KEY)) == [s for s in _SIDS if s != FRED_CHN_M2]
+        clock["now"] += FAIL_COOLDOWN_SEC
+        _assert_all_expected(TW.fetch_china_macro(_KEY))   # 例外那條沒進快取 → 冷卻期滿即重抓成功
 
 
 class TestD2f13ChinaCallerContract:

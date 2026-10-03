@@ -72,14 +72,31 @@ def test_swallowed_network_error_is_failure_and_not_cached(_env, monkeypatch):
 
 
 def test_yf_reported_no_data_returns_empty_without_failure_flag(_env, monkeypatch):
+    """裸 `Exception` 的「沒資料」只出現在沒有型別例外的 yfinance（0.2.36～0.2.38）—— 以那個世界模擬
+    （D2-f37，批 X1 2026-10-03：有型別的版本裡裸 `Exception` 改判失敗，見下一條）。"""
+    from src.data.proxy import yf_proxy
+
     def _behave(kw):
         if kw.get('raise_errors'):
             raise Exception('0050.TW: possibly delisted; no price data found')
         return pd.DataFrame()
 
+    monkeypatch.setattr(yf_proxy, '_yf_no_data_exc_types', lambda: ())
     _install(monkeypatch, _behave)
     out = etf_fetch._fetch_etf_price_max('0050.TW')
     assert out.empty and etf_fetch.PRICE_FETCH_FAILED_ATTR not in out.attrs
+
+
+def test_bare_exception_in_typed_world_is_failure(_env, monkeypatch):
+    """D2-f37：已安裝的 yfinance 有型別例外 → 裸 `Exception`（資料整理失敗）帶失敗旗標、不入快取。"""
+    def _behave(kw):
+        if kw.get('raise_errors'):
+            raise Exception('Data was lost in merge, investigate')
+        return pd.DataFrame()
+
+    _install(monkeypatch, _behave)
+    out = etf_fetch._fetch_etf_price_max('0050.TW')
+    assert out.empty and etf_fetch.PRICE_FETCH_FAILED_ATTR in out.attrs
 
 
 def test_legacy_signature_falls_back_with_auto_adjust(_env, monkeypatch):

@@ -520,14 +520,16 @@ class TestD2f10OhlcvSuccessUnchanged:
         assert MC._YF_OHLCV_FAIL_CACHE == {}, "成功不寫失敗紀錄"
 
     def test_all_null_close_path_is_untouched(self, ohlcv, clock):
-        """HTTP 200 但 Close 全缺：修前回「有五個欄位的空表」、不當成失敗；本次未動（不屬兩個失敗出口）。"""
+        """HTTP 200 但 Close 全缺：該次回傳同修前（「有五個欄位的空表」）。
+        D2-f49（批 X1，2026-10-03）起改記退避 —— 修前這裡釘的是「不退避、第二次照打上游」（上游保護只靠
+        fetch_url 的 300 秒 URL 快取）；現在冷卻期內不重打，詳見 `tests/test_x1_l3g1_fetch_guards.py`。"""
         plan, calls = ohlcv
         plan["resp"] = _Raw(_chart([(_T0, 1.0, 1.0, 1.0, None, 0), (_T0 + _DAY, 1.0, 1.0, 1.0, None, 0)]))
         got = _call_ohlcv()
         assert got.empty and list(got.columns) == ["Open", "High", "Low", "Close", "Volume"]
-        assert MC._YF_OHLCV_FAIL_CACHE == {}
+        assert list(MC._YF_OHLCV_FAIL_CACHE) == [("^TWII", "9mo", "1d")]
         _call_ohlcv()
-        assert calls["n"] == 2, "同修前：不退避（上游保護由 fetch_url 對 HTTP 200 的 300 秒 URL 快取承接）"
+        assert calls["n"] == 1, "D2-f49：冷卻期內不重打上游"
 
     def test_backoff_is_per_key(self, ohlcv, clock):
         plan, calls = ohlcv

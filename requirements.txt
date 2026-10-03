@@ -84,7 +84,10 @@ pyarrow>=14,<25
 # v19.79:移除 FinMind SDK — 其 1.x 全系列 pin pandas<2.0/numpy<2.0/lxml<5.0,
 # 與上方核心 pin 硬衝突,雲端/CI 從未真正裝上(app 一直走 DataLoader=None 的
 # raw HTTP 備援)。移除以消滅 resolver 回溯不確定性;REST 路徑(finmind_get)不受影響。
-yfinance>=0.2.36,<2.0
+# D2-f32(2026-10-03):下限 0.2.36 → 0.2.52。0.2.39／0.2.45 在 Python 3.11(CI)import 就 SyntaxError;
+# 0.2.40～0.2.51 拒收本 repo 用的 period(`60d`／`9mo`,不在 Yahoo validRanges)→ 空表。0.2.52 起本地換算
+# 自訂 period(`utils.is_valid_period_format`)。逐版原始碼查證;0.2.36～0.2.38 對 60d/9mo 的實際行為無法離線驗證。
+yfinance>=0.2.52,<2.0
 google-generativeai>=0.5.0,<2.0
 curl-cffi>=0.6.0,<1.0
 

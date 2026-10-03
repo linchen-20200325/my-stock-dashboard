@@ -35,6 +35,7 @@ D2-f21／f22／f23／f25 都先以修前模型跑同一個共用檢查、證明�
 from __future__ import annotations
 
 import ast
+import contextlib
 import importlib.util
 import inspect
 import pathlib
@@ -454,7 +455,29 @@ def _check_single_still_cached(mod, w: _World, clock: dict, *, sid: str, twse: s
     return first
 
 
+@contextlib.contextmanager
+def _per_stock_only(mod):
+    """只看「同一檔」的單股冷卻：把 D2-f29（批 X1，2026-10-03）新增、檔與檔共用的 OpenAPI 快照冷卻
+    暫時關掉（冷卻秒數 0 ＝ 紀錄立即過期；模組沒有這張表〔修前模型〕就不動）。共用冷卻本身的行為見
+    `tests/test_x1_l3g1_fetch_guards.py`。"""
+    cd = getattr(mod, "_openapi_snapshot_fail_cooldown", None)
+    if cd is None:
+        yield
+        return
+    old = cd.seconds
+    cd.seconds = 0.0
+    try:
+        yield
+    finally:
+        cd.seconds = old
+
+
 def _check_single_cooldown_is_per_stock_and_months(mod, w: _World, clock: dict) -> None:
+    with _per_stock_only(mod):
+        _check_single_cooldown_is_per_stock_and_months_body(mod, w, clock)
+
+
+def _check_single_cooldown_is_per_stock_and_months_body(mod, w: _World, clock: dict) -> None:
     w.twse, w.tpex = "none", "ok"                            # 上市失敗、上櫃正常
     _assert_empty_frame(mod.fetch_monthly_revenue("2330"))   # 2330（上市）→ 確定失敗、冷卻
     _assert_single_openapi_row(mod.fetch_monthly_revenue("6488"), "6488")   # 別檔不被連坐
@@ -493,6 +516,11 @@ def _check_single_many_failing_keys_back_off(mod, w: _World, clock: dict, n: int
     """QA 必修（2026-09-29）：同一冷卻期內 n 個不同的鍵都失敗 → 第二、三輪 0 次上游。
     退避表若有筆數上限且 n 超過它，最舊的紀錄被逐出 → 被逐出的鍵下一次就重打（逐出後再失敗又擠掉下一個，
     整輪都重打 ＝ 轟炸上游，違反 §1.A-3(b)）。修前（失敗凍在 6 小時快取、不限筆數）不會有這個問題。"""
+    with _per_stock_only(mod):
+        _check_single_many_failing_keys_back_off_body(mod, w, clock, n)
+
+
+def _check_single_many_failing_keys_back_off_body(mod, w: _World, clock: dict, n: int) -> None:
     sids = [str(10000 + i) for i in range(n)]
     for sid in sids:
         mod.fetch_monthly_revenue(sid)
@@ -640,7 +668,8 @@ def _check_batch_escalating_schedule(mod, w: _World, clock: dict) -> None:
 
 
 def _check_single_escalating_schedule(mod, w: _World, clock: dict) -> None:
-    hits = _drive(lambda: mod.fetch_monthly_revenue("2330"), w, clock, horizon=_LONG)
+    with _per_stock_only(mod):
+        hits = _drive(lambda: mod.fetch_monthly_revenue("2330"), w, clock, horizon=_LONG)
     assert hits == _ESC_4H, "單股冷卻與全市場同設定（遞增、上限 TTL_1HOUR）"
 
 
@@ -1147,7 +1176,9 @@ class TestD2f25BatchEscalatingCooldown:
                  for t in n.targets if isinstance(t, ast.Name) and t.id.endswith("_fail_cooldown")}
         assert calls == {"_single_fail_cooldown":
                          "_FailCooldown(max_seconds=TTL_1HOUR, max_entries=_SINGLE_FAIL_COOLDOWN_MAX_ENTRIES)",
-                         "_batch_fail_cooldown": "_FailCooldown(max_seconds=TTL_1HOUR)"}, \
+                         "_batch_fail_cooldown": "_FailCooldown(max_seconds=TTL_1HOUR)",
+                         # D2-f29（批 X1）：單股 fallback 檔與檔共用的 OpenAPI 快照冷卻，同一組設定
+                         "_openapi_snapshot_fail_cooldown": "_FailCooldown(max_seconds=TTL_1HOUR)"}, \
             "沿用既有常數（FAIL_COOLDOWN_SEC 為預設起點、TTL_1HOUR 為上限），不新增數字"
 
     def test_escalating_schedule_4h(self, world, fc_clock):

@@ -421,6 +421,11 @@ def prefix():
 # ══════════════════════════════════════════════════════════════════
 def _check_swallowed_error_not_cached(yp, fake, clock, mode: str = "net_down") -> None:
     """D2-f16：yfinance 吞成空表的網路錯誤 → 回同一份空表、不入快取、冷卻期內不重打、期滿即取得資料。"""
+    with _legacy_world(yp, mode):
+        _check_swallowed_error_not_cached_body(yp, fake, clock, mode)
+
+
+def _check_swallowed_error_not_cached_body(yp, fake, clock, mode: str) -> None:
     _fresh(yp.cached_history)
     fake.mode, fake.per = mode, {}
     base = fake.n("2330.TW")
@@ -439,8 +444,27 @@ def _check_swallowed_error_not_cached(yp, fake, clock, mode: str = "net_down") -
     assert fake.n("2330.TW") - base == 2, "恢復後的成功照舊入快取"
 
 
+#: 只在「沒有型別例外的 yfinance」（0.2.36～0.2.38）才會出現的模式 —— 檢查時把被測模組的
+#: `_yf_no_data_exc_types` 換成回 ()（＝那幾版的真實世界；D2-f37 2026-10-03 起，有型別的版本裡
+#: 裸 `Exception` 不再算「沒資料」，見 `TestD2f37BareExceptionTypedWorld`）。
+_LEGACY_WORLD_MODES = ("legacy_no_data", "yahoo_down_legacy")
+
+
+@contextlib.contextmanager
+def _legacy_world(yp, mode: str):
+    with pytest.MonkeyPatch.context() as mp:
+        if mode in _LEGACY_WORLD_MODES:
+            mp.setattr(yp, "_yf_no_data_exc_types", lambda: (), raising=False)
+        yield
+
+
 def _check_no_data_cached(yp, fake, clock, mode: str) -> None:
     """真的沒資料（yfinance 自己回報、或沒拋只回空）→ 回 `pd.DataFrame()`、照舊快取、不記退避（同修前）。"""
+    with _legacy_world(yp, mode):
+        _check_no_data_cached_body(yp, fake, clock, mode)
+
+
+def _check_no_data_cached_body(yp, fake, clock, mode: str) -> None:
     _fresh(yp.cached_history)
     fake.mode, fake.per = mode, {}
     base = fake.n("9999.TW")
@@ -1355,8 +1379,10 @@ class TestN4aFetchSingleTtl:
 # ══════════════════════════════════════════════════════════════════
 # 隨機操作序列 × 獨立參考模型（property-based 的精神；固定 seed、不引入新依賴，同 #741 測試手法）
 # ══════════════════════════════════════════════════════════════════
-_FAILS = ("net_down", "timeout", "rate_limited", "yahoo_down", "yahoo_down_legacy")   # 抓取失敗：不入快取、記冷卻
-_NO_DATA = ("no_data", "tz_missing", "bad_period", "legacy_no_data", "empty", "none")   # 照舊快取
+#: D2-f37（2026-10-03）：已安裝的 yfinance 有型別例外 → 裸 `Exception`（legacy_no_data）算抓取失敗。
+_FAILS = ("net_down", "timeout", "rate_limited", "yahoo_down", "yahoo_down_legacy",
+          "legacy_no_data")                                                          # 抓取失敗：不入快取、記冷卻
+_NO_DATA = ("no_data", "tz_missing", "bad_period", "empty", "none")                  # 照舊快取
 
 
 class _HistoryModel:
@@ -1479,7 +1505,7 @@ _YP_DEPRECATION = ("    except DeprecationWarning:\n"
 _YP_NO_DATA_BRANCH = ("        if not _is_yf_no_data(_e):\n"
                       "            raise\n")
 _YP_BARE_RULE = ("    if type(exc) is Exception:\n"
-                 "        return True\n")
+                 "        return not _types\n")
 _YP_RATE_RULE = ("    if _rate_limited is not None and isinstance(exc, _rate_limited):\n"
                  "        return False\n")
 _YP_LAYER_CALL = "        _df = _history_or_raise(yf.Ticker(ticker), ticker, period)\n"
@@ -1506,7 +1532,11 @@ _MUTATIONS = [
     ("f16_layer_prefix_call", "yp", [(_YP_LAYER_CALL, "        _df = yf.Ticker(ticker).history(period=period)\n")],
      "swallowed"),
     ("f16_no_data_is_failure", "yp", [(_YP_NO_DATA_BRANCH, "        if True:\n            raise\n")], "no_data"),
-    ("f16_no_bare_exception_rule", "yp", [(_YP_BARE_RULE, "    if False:\n        return True\n")], "legacy_no_data"),
+    ("f16_no_bare_exception_rule", "yp", [(_YP_BARE_RULE, "    if False:\n        return not _types\n")],
+     "legacy_no_data"),
+    # D2-f37：裸 Exception 不分版本一律算「沒資料」（修前）→ 有型別的世界裡被快取
+    ("f37_bare_exception_always_no_data", "yp",
+     [(_YP_BARE_RULE, "    if type(exc) is Exception:\n        return True\n")], "f37_typed_bare"),
     ("f16_no_rate_limit_rule", "yp", [(_YP_RATE_RULE, "    if False:\n        return False\n")], "rate_rule"),
     ("f16_no_typeerror_fallback", "yp", [(_YP_TYPEERROR, "")], "legacy_signature"),
     ("f16_typeerror_any_message", "yp", [(_YP_TYPEERROR_MSG, "")], "unrelated_typeerror"),
@@ -1575,6 +1605,7 @@ def _run_check(name: str, yp, ddf, fcm, fake, clock, capsys) -> None:
         "swallowed": lambda: _check_swallowed_error_not_cached(yp, fake, clock),
         "no_data": lambda: _check_no_data_cached(yp, fake, clock, "no_data"),
         "legacy_no_data": lambda: _check_no_data_cached(yp, fake, clock, "legacy_no_data"),
+        "f37_typed_bare": lambda: _check_swallowed_error_not_cached_body(yp, fake, clock, "legacy_no_data"),
         "rate_rule": lambda: _check_rate_limit_never_no_data(yp),
         "legacy_signature": lambda: _check_legacy_signature_fallback(yp),
         "unrelated_typeerror": lambda: _check_unrelated_typeerror_not_retried(yp),

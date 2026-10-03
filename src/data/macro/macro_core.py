@@ -372,6 +372,8 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
     None / JSON 解析失敗 / observations 為空)記退避(`_FRED_FAIL_CACHE`),
     `_FAIL_COOLDOWN_SEC` 秒內同一鍵不重打上游、回與修前相同的空 DataFrame;期滿重抓;
     成功即清。成功路徑、30min TTL、回傳形狀不變。
+    D2-f49(2026-10-03):HTTP 200 之後整理回應時拋的例外(缺欄、日期解析、pandera SchemaError)同樣記退避;
+    該次呼叫照舊原樣拋出,冷卻期內回同一種空 DataFrame。
     """
     if not api_key:
         # W5-2 §1: 沉默 return empty 改補 log,但不 raise(caller 已透過 empty 判斷 fallback)
@@ -433,22 +435,32 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         with _FRED_CACHE_LOCK:
             _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f14:與既有紀錄取 max
         return pd.DataFrame()
-    df = pd.DataFrame(obs)
-    df = df[df["value"] != "."].copy()
-    # v18.306:強制 float64(pd.to_numeric 對 int-only series 如 PAYEMS/HSN1F 會
-    # 推得 int64;pandera MacroFredSchema 要求 float64,鎖死避免 schema 飄移)
-    df["value"] = pd.to_numeric(df["value"], errors="coerce").astype("float64")
-    df["date"]  = pd.to_datetime(df["date"])
-    out = df.dropna(subset=["value"]).sort_values("date").reset_index(drop=True)
-    # v18.246 S-PROV-1:provenance schema(§2.2)— source 標識 + 抓取時間
-    out["source"] = f"FRED:{series_id}"
-    out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
-    # v18.306 Pandera Phase A pilot:出口契約驗(best-effort,pandera 不在時不阻斷)
     try:
-        from shared.schemas import validate_fred  # noqa: PLC0415
-        validate_fred(out)
-    except ImportError:
-        pass
+        df = pd.DataFrame(obs)
+        df = df[df["value"] != "."].copy()
+        # v18.306:強制 float64(pd.to_numeric 對 int-only series 如 PAYEMS/HSN1F 會
+        # 推得 int64;pandera MacroFredSchema 要求 float64,鎖死避免 schema 飄移)
+        df["value"] = pd.to_numeric(df["value"], errors="coerce").astype("float64")
+        df["date"]  = pd.to_datetime(df["date"])
+        out = df.dropna(subset=["value"]).sort_values("date").reset_index(drop=True)
+        # v18.246 S-PROV-1:provenance schema(§2.2)— source 標識 + 抓取時間
+        out["source"] = f"FRED:{series_id}"
+        out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
+        # v18.306 Pandera Phase A pilot:出口契約驗(best-effort,pandera 不在時不阻斷)
+        try:
+            from shared.schemas import validate_fred  # noqa: PLC0415
+            validate_fred(out)
+        except ImportError:
+            pass
+    except Exception as e:
+        # D2-f49(2026-10-03,§1.A-3(b)):HTTP 200 之後才出錯(缺欄 KeyError、日期解析失敗、pandera
+        # SchemaError…)修前不記退避,只靠 fetch_url 的 URL 快取擋(被擠出／清空後每次重算都重打 FRED)。
+        # 現在同三個失敗出口記退避(同一把鎖、同一個鍵、同一個時點);例外照舊原樣往上拋(本次呼叫的
+        # 結果同修前),冷卻期內的呼叫回與其他失敗出口相同的空 DataFrame。
+        print(f"[macro_core/fred] {series_id} 回應整理失敗(記退避): {type(e).__name__}: {e}")
+        with _FRED_CACHE_LOCK:
+            _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f49:同 D2-f14 取 max
+        raise
     with _FRED_CACHE_LOCK:   # S9 v19.78
         _FRED_CACHE[key] = (now, out.copy())
         _FRED_FAIL_CACHE.pop(key, None)   # D2-f6:成功即解除退避
@@ -625,6 +637,7 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
     D2-f10(2026-09-28,§1.A-3(b)「失敗要退避」):fetch_url 回 None／回應解析失敗兩個出口
     記退避(`_YF_OHLCV_FAIL_CACHE`),`_FAIL_COOLDOWN_SEC` 秒內同一鍵不重打上游、回與修前
     相同的空 DataFrame;期滿重抓;成功即清。成功路徑與回傳形狀不變(仍不加成功快取)。
+    D2-f49(2026-10-03):HTTP 200 但收盤全缺(整理後 0 列)也記退避、不算成功(該次回傳不變)。
     """
     import time as _time
     key = (ticker, range_, interval)
@@ -673,6 +686,15 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
                                        normalize_case=True)
         except Exception:
             pass
+        if df.empty:
+            # D2-f49(2026-10-03,§1.A-3(b)):HTTP 200 但收盤全缺(dropna 後 0 列)＝抓取失敗(同
+            # `_fetch_yf_close_base` 的 Q2-r2)—— 修前走成功路徑、清掉退避,只靠 URL 快取擋。現在記退避
+            # (寫法同下方解析失敗出口);本次回傳同修前(同一張帶欄位的空表),冷卻期內回無欄位的空 DataFrame(`pd.DataFrame()`,同其他失敗出口)。
+            print(f"[macro_core/yf_ohlcv] {ticker} 收盤全為空值(不算成功,冷卻 {_FAIL_COOLDOWN_SEC:.0f}s)")
+            with _YF_OHLCV_FAIL_LOCK:
+                if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:
+                    _YF_OHLCV_FAIL_CACHE[key] = max(now, _YF_OHLCV_FAIL_CACHE.get(key, now))   # D2-f49:同 D2-f14 取 max
+            return df
         with _YF_OHLCV_FAIL_LOCK:   # D2-f10:成功即解除退避、推進成功世代
             _YF_OHLCV_OK_GEN_CACHE[key] = _YF_OHLCV_OK_GEN_CACHE.get(key, 0) + 1
             _YF_OHLCV_FAIL_CACHE.pop(key, None)
