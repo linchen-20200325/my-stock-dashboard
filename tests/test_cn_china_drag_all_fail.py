@@ -80,3 +80,21 @@ def test_partial_data_still_renders_cards(run_panel):
     fake, captions = run_panel(china)
     assert not any(_ALL_FAIL_MSG in c or _ALL_MISSING_MSG in c for c in captions), captions
     assert fake.metric.call_count == 4
+
+
+def test_empty_snapshot_shows_all_fail_caption_and_no_cards(monkeypatch):
+    """批 Y3（D4-n5）：`if not _snap` 那一支（L2 回空 dict）原本沒有測試 —— 上面兩例都走 score None 那支（「全缺」）。
+    這裡直接讓 `get_china_snapshot` 回 `{}`，釘住它說「全敗」、不畫卡。"""
+    from src.ui.tabs.macro import helpers as h
+
+    fake = _fake_st()
+    monkeypatch.setattr(h, "st", fake)
+    # 打真正的查找點：`src.compute.macro` barrel 以 PEP 562 `__getattr__` 即時轉發至 macro_helpers
+    # （⛔ 不在 barrel 上 setattr，理由同上方 `run_panel`）。
+    monkeypatch.setattr("src.compute.macro.macro_helpers.get_china_snapshot", lambda _k: {})
+    h._render_china_drag_panel(_KEY, main_health=60.0)
+    captions = [str(c.args[0]) for c in fake.caption.call_args_list]
+    assert any(_ALL_FAIL_MSG in c for c in captions), captions
+    assert not any(_ALL_MISSING_MSG in c for c in captions), captions
+    fake.metric.assert_not_called()
+    fake.markdown.assert_not_called()
