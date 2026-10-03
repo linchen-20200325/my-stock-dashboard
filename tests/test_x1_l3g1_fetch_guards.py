@@ -576,22 +576,44 @@ class TestD2f41UrlCacheLock:
         assert r.status_code == 200 and r.content == b"cached"
 
     def test_concurrent_puts_no_error(self, monkeypatch):
-        monkeypatch.setattr(PH, "_URL_CACHE", {})
-        monkeypatch.setattr(PH, "_URL_CACHE_MAX", 8)
-        errs: list = []
+        """兩支寫入恰好交錯 → 不拋、筆數不超過上限。
 
-        def _w(i):
-            try:
-                for j in range(1500):
-                    PH._url_cache_put((i, j), b"v")
-            except Exception as e:  # noqa: BLE001
-                errs.append(e)
-        ts = [threading.Thread(target=_w, args=(i,)) for i in range(8)]
-        for t in ts:
-            t.start()
-        for t in ts:
-            t.join()
-        assert errs == [] and len(PH._URL_CACHE) <= 8
+        批 Y3（X1-n7）改為**確定性**：原本 8 執行緒 × 1500 次寫入，靠排程器碰巧交錯（機率性；拿掉鎖時
+        多半仍綠）。現在用快取的 `__setitem__` 鉤子把交錯點固定在最危險的位置 —— A 已檢查完筆數、正要寫入時，
+        讓 B 在另一條執行緒做一次完整的 `_url_cache_put`：
+          · 有鎖：B 卡在鎖上（等 0.3 秒仍未完成）→ A 寫完放鎖 → B 逐出一筆再寫 ⇒ 恰好滿額、A／B 都在。
+          · 沒鎖：B 趁隙寫入 → A 再寫 ⇒ 比上限多 1 筆（紅）。
+        「寫入必須持鎖」本身另由 `test_put_takes_the_lock` 直接守（持鎖期間寫入必須等待）；本測試守的是
+        沒有鎖時會壞掉的那個不變量（筆數上限）。"""
+        cap = 8
+        monkeypatch.setattr(PH, "_URL_CACHE_MAX", cap)
+        b_state: dict = {}
+
+        class _Interleave(dict):
+            def __setitem__(self, k, v):
+                if k == ("A",) and "t" not in b_state:
+                    def _b():
+                        try:
+                            PH._url_cache_put(("B",), b"b")
+                        except Exception as e:  # noqa: BLE001
+                            b_state["err"] = e
+                    b_state["t"] = threading.Thread(target=_b)
+                    b_state["t"].start()
+                    b_state["t"].join(0.3)
+                    b_state["b_done_before_a"] = not b_state["t"].is_alive()
+                super().__setitem__(k, v)
+
+        cache = _Interleave()
+        now = time.time()
+        for n in range(cap - 1):                          # 還差 1 筆滿額，且都沒過期
+            dict.__setitem__(cache, ("old", n), (now - 10 + n, b"o", 200))
+        monkeypatch.setattr(PH, "_URL_CACHE", cache)
+        PH._url_cache_put(("A",), b"a")
+        b_state["t"].join(5)
+        assert not b_state["t"].is_alive() and "err" not in b_state, b_state
+        assert b_state["b_done_before_a"] is False, "B 沒有等 A 放鎖（寫入沒有持鎖）"
+        assert len(cache) == cap, sorted(map(str, cache))
+        assert ("A",) in cache and ("B",) in cache and ("old", 0) not in cache, "逐出最舊的一筆"
 
     @pytest.mark.slow
     def test_puts_with_unlocked_external_clear(self, monkeypatch):

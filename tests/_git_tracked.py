@@ -174,6 +174,10 @@ def _parse_index(data: bytes) -> tuple[frozenset[str] | None, str]:
                     raise IndexCorrupt(f"第 {k} 項：補齊的 NUL 不完整")
             #: 批 S7（S6-n4）：flags 名長飽和（0xFFF）只在路徑 ≥ 4095 位元組時才會由 git 寫出（`ce_namelen >= CE_NAMEMASK`）；
             #: 路徑較短卻記 0xFFF ＝ 位元翻轉／偽造 → 同「名長不符」（v2／v3／v4 一律；檔尾全 0 時這是唯一的核對）。
+            #: 批 Y3（S7-n1）補註：⚠️ 這條核對**比 git 嚴** —— git **讀**索引時見名長飽和就改以 NUL 結尾量路徑長（`strlen`），
+            #: 不檢查「路徑是否真的 ≥ 4095」，所以這種（不合規格的）索引 git 照樣讀進、`git ls-files` 列得出來
+            #: （2026-10-03 實測 git 2.43：把短路徑項目的 flags 名長改成 0xFFF、重算檔尾 SHA-1，`git ls-files` 正常列出該路徑）。
+            #: 本模組刻意從嚴、判 `IndexCorrupt`：語料測試寧可大聲失敗，也不拿一份可能損壞的索引當語料。
             if (flags & _NAME_MASK) == _NAME_MASK and len(path) < _NAME_MASK:
                 raise IndexCorrupt(f"第 {k} 項：flags 名長飽和（0xFFF）但路徑只有 {len(path)} 位元組（應 ≥ {_NAME_MASK}）")
             if not path:

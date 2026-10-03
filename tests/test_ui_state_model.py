@@ -46,6 +46,7 @@ from shared.ui_state import (
     is_alarming,
     state_meta,
 )
+from tests._frozen_fixtures import parse_source
 
 _REPO = pathlib.Path(__file__).resolve().parent.parent
 
@@ -223,7 +224,8 @@ class TestNoDerivedRequested:
                    (".git", "__pycache__", ".ruff_cache", "data_cache")):
                 continue
             try:
-                _tree = ast.parse(io.open(_p, encoding="utf-8").read())
+                #: 批 Y3（S7-n2）：凍結副本的跳脫警告只在這裡壓掉（見 `tests/_frozen_fixtures.py`）。
+                _tree = parse_source(io.open(_p, encoding="utf-8").read(), _p)
             except (SyntaxError, UnicodeDecodeError):
                 continue
             for _n in ast.walk(_tree):
