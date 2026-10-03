@@ -67,6 +67,10 @@ class TestTwiiBiasMissingNotZero:
         macro_snapshot.compute_twii_bias(_twii([0.0] * 240))
         assert 'bias240=None' in capsys.readouterr().out
 
+    def test_log_line_genuine_zero(self, capsys):
+        macro_snapshot.compute_twii_bias(_twii([100.0] * 240))
+        assert 'bias240=0.0% (n=240)' in capsys.readouterr().out
+
     def test_log_line_finite_unchanged(self, capsys):
         macro_snapshot.compute_twii_bias(_twii([100.0] * 239 + [110.0]))
         assert 'bias240=10.0% (n=240)' in capsys.readouterr().out
