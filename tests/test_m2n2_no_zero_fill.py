@@ -260,7 +260,9 @@ _REVERT = {
          "f'• M1B={_mi_d[\"m1b_yoy\"]:.1f}%  M2={_mi_d.get(\"m2_yoy\",0):.1f}%  '"),
     ),
     "op": (
-        (_IMPORT_LINE, ""),
+        # 批 V2（D4-n6）起本檔的乖離率取值也用 `_finite_yoy`（替換片段以外），還原體若拿掉
+        # import 會 NameError → 比照 mid，不再移除 import 行。還原的 M1B／M2 片段本身不呼叫
+        # `_finite_yoy`，故對本檔比對的 M1B-M2 路徑等價於修前。
         ("        _m1b_g = _finite_yoy(_m1b_top_g, 'm1b_yoy')\n"
          "        _m2_g = _finite_yoy(_m1b_top_g, 'm2_yoy')\n"
          "        _m1b_diff_g = (_m1b_g - _m2_g\n"
@@ -269,7 +271,9 @@ _REVERT = {
          "                       if _m1b_top_g else 0)\n"),
     ),
     "state": (
-        (_IMPORT_LINE, ""),
+        # 批 V2（D4-n6）起本檔的乖離率取值也用 `_finite_yoy`（替換片段以外），還原體若拿掉
+        # import 會 NameError → 比照 mid，不再移除 import 行。還原的 M1B／M2 片段本身不呼叫
+        # `_finite_yoy`，故對本檔比對的 M1B-M2 路徑等價於修前。
         ("        _m1b_y = _finite_yoy(_m1b2, 'm1b_yoy')\n"
          "        _m2_y  = _finite_yoy(_m1b2, 'm2_yoy')\n"
          "        if (_m1b2 and not is_m1b_m2_proxy(_m1b2)\n"
@@ -990,7 +994,7 @@ _MUTANTS = {
     "news_numbers_reverted": ("news", _REVERT["news"][2:3], _M2_SIDE | _M1B_SIDE),
     # ── 個股建議 ─────────────────────────────────────────────
     # 把守衛拿掉：整段退回 `.get(..., 0)` 相減
-    "op_guard_removed": ("op", _REVERT["op"][1:2], set(_MISSING)),
+    "op_guard_removed": ("op", _REVERT["op"][0:1], set(_MISSING)),
     # 只驗 M1B，M2 缺就當 0
     "op_only_m1b_checked": ("op", (
         ("        _m1b_diff_g = (_m1b_g - _m2_g\n"
@@ -1004,7 +1008,7 @@ _MUTANTS = {
         ("_m2_g = _finite_yoy(_m1b_top_g, 'm2_yoy')", "_m2_g = (_m1b_top_g or {}).get('m2_yoy')"),
     ), _NON_FINITE | _NON_NUMERIC),
     # ── §二 ──────────────────────────────────────────────────
-    "state_guard_removed": ("state", _REVERT["state"][1:2], set(_MISSING) - _PROXY_MISSING),
+    "state_guard_removed": ("state", _REVERT["state"][0:1], set(_MISSING) - _PROXY_MISSING),
     # 只驗 M1B → 缺 M2 時 `x - None` 炸掉 §二
     "state_only_m1b_checked": ("state", (
         ("                and _m1b_y is not None and _m2_y is not None):\n",

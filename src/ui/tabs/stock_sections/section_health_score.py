@@ -11,6 +11,8 @@ KPI + 綜合建議)、v4 防守線+VPOC+籌碼 3 卡、v5 布林+殖利率+財�
 """
 from __future__ import annotations
 
+import math
+
 import pandas as pd
 import streamlit as st
 
@@ -248,7 +250,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             if isinstance(_vix_obj_v4, dict):
                 try:
                     _vix_f = float(_vix_obj_v4.get('current'))
-                    _v4_vix2 = _vix_f if _vix_f == _vix_f else None   # NaN guard
+                    _v4_vix2 = _vix_f if math.isfinite(_vix_f) else None   # NaN / ±inf guard(批 V2)
                 except (TypeError, ValueError):
                     _v4_vix2 = None
             _li_for_v4 = st.session_state.get('li_latest')

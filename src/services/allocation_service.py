@@ -26,6 +26,8 @@ key 由 `(cl_ts, health, regime, exposure_limit_pct, vix, ring1)` 組成，
 """
 from __future__ import annotations
 
+import math
+
 import streamlit as st
 
 from shared.allocation_decision import (
@@ -120,7 +122,7 @@ def _safe_float(v) -> float | None:
         _f = float(v)
     except (TypeError, ValueError):
         return None
-    return _f if _f == _f else None  # NaN → None
+    return _f if math.isfinite(_f) else None  # NaN / ±inf → None(批 V2,V1-n1)
 
 
 def _read_vix() -> float | None:

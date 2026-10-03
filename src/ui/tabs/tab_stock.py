@@ -20,6 +20,8 @@
 """
 from __future__ import annotations
 
+import math
+
 import streamlit as st
 from shared.secret_scrub import scrub_secrets  # SEC-3：新聞抓取診斷（st.code，不跳脫）
 from shared.secret_md import scrub_md_mask  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
@@ -1713,8 +1715,10 @@ padding:14px 18px;margin-bottom:12px;">
             _vix_v2 = (_macro_info2.get('vix') or {}).get('current') or _ma_snap2.get('vix')
             if _vix_v2 is not None:
                 try:
-                    _macro_lines2.append(
-                        f"VIX 恐慌指數={float(_vix_v2):.2f}（{_drt2('vix')}）")
+                    # 批 V2(V1-n3):±inf / NaN 比照缺值 → 不列這一行(不送「VIX=inf」給 AI)
+                    if math.isfinite(float(_vix_v2)):
+                        _macro_lines2.append(
+                            f"VIX 恐慌指數={float(_vix_v2):.2f}（{_drt2('vix')}）")
                 except (TypeError, ValueError):
                     pass
             _cpi_v2 = _cpi_blk2.get('yoy') or _ma_snap2.get('cpi')

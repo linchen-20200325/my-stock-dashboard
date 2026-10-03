@@ -128,17 +128,22 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
                     '站上MA60但未過MA120 → 等待方向確認'))
     
         # 2. 乖離率（與台股體質 ±7~10% 門檻）
-        if _bias2:
+        # 批 V2(D4-n6,§1 不捏 0):原 `.get('bias_240', 0)` / `.get('bias_20', 0)` 缺鍵捏成 0
+        #   → 位階群被登記成「可評估」並判「中性」。改走 `_finite_yoy`(缺鍵／None／NaN／±inf → None);
+        #   兩個都缺 ⇒ 位階群不登記(與 bias_info 為空同一條既有路徑);單缺 ⇒ 只略過該燈。
+        #   (原 `_b60` 為未使用的指派,一併拿掉。)有限值時同一物件,輸出不變。
+        _b240 = _finite_yoy(_bias2, 'bias_240') if _bias2 else None
+        _b20  = _finite_yoy(_bias2, 'bias_20') if _bias2 else None
+        if _b240 is not None or _b20 is not None:
             _fam_ok.add('level')   # v19.173：乖離率資料到位 → 位階群可評估
-            _b240 = _bias2.get('bias_240', 0)
-            _b60  = _bias2.get('bias_60', _bias2.get('bias_20', 0))
-            _b20  = _bias2.get('bias_20', 0)
+        if _b240 is not None:
             if _b240 > PIVOT_BIAS_240_PCT:
                 pivot_signals.append(('年線乖離過大','⚠️',TRAFFIC_RED,
                     f'年線乖離 +{_b240:.1f}% > {PIVOT_BIAS_240_PCT:.0f}% → 頂部拐點區間，考慮減碼'))
             elif _b240 < -PIVOT_BIAS_240_PCT:
                 pivot_signals.append(('年線深度低估','💡',TRAFFIC_GREEN,
                     f'年線乖離 {_b240:.1f}% < -{PIVOT_BIAS_240_PCT:.0f}% → 底部拐點區間，考慮布局'))
+        if _b20 is not None:
             if abs(_b20) > PIVOT_BIAS_20_PCT:
                 _bl20 = '過熱' if _b20 > 0 else '超賣'
                 # ── v19.183 D2 §2.1:色碼改吃 traffic SSOT（原 '#da3633' / '#2ea043'）──
