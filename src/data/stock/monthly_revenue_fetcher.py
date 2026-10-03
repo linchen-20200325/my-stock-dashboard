@@ -456,7 +456,7 @@ def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:
     備援又**確定抓取失敗**(或該股所在的那一邊失敗)時回的空表被快取 6 小時 —— 來源恢復後同參數仍回
     空表。現在那一種**不入快取**(判準見 `_fetch_monthly_revenue_cached`);失敗後同一個
     (stock_id, months) 在冷卻期內不重打上游、回同一份空表 —— 冷卻由 `FAIL_COOLDOWN_SEC` 起、連續
-    失敗加倍、上限 `TTL_1HOUR`;成功一次即歸零。**本函式不快取**;`.clear()` 同清快取層與退避紀錄。
+    失敗加倍、上限 `TTL_1HOUR`;成功一次即歸零;連續失敗次數另隨時間衰減(D2-f38,#768):距上一次失敗已達「上一次的冷卻秒數 ＋ `TTL_1HOUR`」才又失敗 → 視為新的一串,冷卻回到 `FAIL_COOLDOWN_SEC`(見 `shared.fail_cooldown.FailCooldown`)。**本函式不快取**;`.clear()` 同清快取層與退避紀錄。
     已知代價(與 D2-f5／#741 的 D2-f8、D2-f11 同型):全站 `st.cache_data.clear()`(例:v1 側欄「強制刷新
     數據」、個股頁「強制重抓」)清不掉這張退避表 —— 失敗後的冷卻期內按它不會重抓這一檔(修前按它會);
     `fetch_monthly_revenue.clear()` 則會。
@@ -530,7 +530,7 @@ def _fetch_batch_monthly_revenue_cached(months: int = 18) -> pd.DataFrame:
 #: D2-f25(2026-09-28 批 D3e):冷卻由固定 `FAIL_COOLDOWN_SEC` 改**遞增** —— 同一個 `months` 連續失敗時
 #: 由 `FAIL_COOLDOWN_SEC` 起、每次加倍,上限 `TTL_1HOUR`(比照 RS 掃描層 `_scan_fail_cooldown`;刻意短於
 #: 本函式成功快取的 `TTL_6HOUR`:長時間中斷恢復後最慢 1 小時就重抓 —— D2-f5 以前失敗是凍 6 小時);
-#: 一次成功即歸零。原因(D2-f25 登記):上游只收連線、不回應時一輪重抓可卡數分鐘(批 D3c QA 在無代理
+#: 一次成功即歸零;連續失敗次數另隨時間衰減(D2-f38,#768):距上一次失敗已達「上一次的冷卻秒數 ＋ `TTL_1HOUR`」才又失敗 → 視為新的一串,冷卻回到 `FAIL_COOLDOWN_SEC`(見 `shared.fail_cooldown.FailCooldown`)。原因(D2-f25 登記):上游只收連線、不回應時一輪重抓可卡數分鐘(批 D3c QA 在無代理
 #: 環境量到約 264 秒),冷卻又從該輪結束才起算 → 固定 180 秒時,走缺貨掃描後備 ② 的頁面約每 7.4 分鐘
 #: (264 ＋ 180 秒)再被卡一次。
 _batch_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)
@@ -544,6 +544,7 @@ def _fetch_batch_monthly_revenue_with_status(months: int = 18) -> tuple[pd.DataF
     候選池來源都取不到」,或 D2-f23 起的半邊表候選池)能不能入它自己的快取(同一次呼叫取得,不必事後查
     退避表,沒有競態)。失敗後冷卻期內同一個 `months` 不重打上游,回同一份表(冷卻由 `FAIL_COOLDOWN_SEC`
     起、連續失敗加倍、上限 `TTL_1HOUR`,D2-f25);成功(含沒有確定失敗的空表)一次即解除並歸零;
+    連續失敗次數另隨時間衰減(D2-f38,#768):距上一次失敗已達「上一次的冷卻秒數 ＋ `TTL_1HOUR`」才又失敗 → 視為新的一串,冷卻回到 `FAIL_COOLDOWN_SEC`(見 `shared.fail_cooldown.FailCooldown`);
     並行時期間有人成功過,較晚到的失敗不記(`FailCooldown` 世代)。
     """
     _hit, _gen = _batch_fail_cooldown.begin(months)

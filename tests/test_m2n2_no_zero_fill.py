@@ -29,7 +29,8 @@
 本檔釘的東西
 ────────────────────────────────────────────────────────────────
   A. L3 實跑：兩個 None 走既有缺值路徑（不加不扣、不貼「資金緊縮」、個股不出 M1B-M2 句）；
-     只清一個值會被看見（突變 G 的前提守衛）。
+     只清一個值：計分＝兩個都缺、`missing_inputs` 照實列出（批 X2 M2N-f3 起 L3 自己當缺；突變 G 改由
+     `_check_missing` 的「規則引擎必須收到兩個 None」抓）。
   B. 修後缺值契約：每個出口 × 每種缺值 → 不拋、完整輸出 ＝ `m1b_m2_info` 為空時的完整輸出；
      §十一 另驗 prompt 無「M2=0.0%」、規則引擎收到兩個 None。
   C. 修前確實出事：還原體（反向替換回修前碼）在每個出口的「出事集合」與修前實跑相符。
@@ -583,6 +584,11 @@ _L3_BASE = {"VIX_Index": 17.0, "ISM_PMI_or_OECD_CLI": 51.0, "PMI_Prev_Month": 50
             "BIAS240_pct": 5.0, "PCR": 1.0}
 
 
+def _scored(state: dict) -> dict:
+    """引擎回傳去掉 `missing_inputs`（批 X2 M2N-f3 起有缺才帶的旗標）—— 只比計分結果。"""
+    return {k: v for k, v in state.items() if k != "missing_inputs"}
+
+
 class TestL3MissingPath:
 
     @pytest.mark.parametrize("base", [{}, _L3_BASE], ids=["empty_base", "scenario_base"])
@@ -590,20 +596,33 @@ class TestL3MissingPath:
         from src.services.macro_state_locker import calculate_system_state as css
         both_none = css({**base, "M1B_YoY_pct": None, "M2_YoY_pct": None})
         assert both_none == css(dict(base)), "兩個 None 應＝兩個鍵都不在"
-        # spread = 0 的真值 → 資金項不加不扣：兩個 None 的結果必須與它相同
-        assert both_none == css({**base, "M1B_YoY_pct": 2.0, "M2_YoY_pct": 2.0})
+        # spread = 0 的真值 → 資金項不加不扣：兩個 None 的計分結果必須與它相同
+        # （批 X2 M2N-f3：兩個 None 另帶 `missing_inputs`，有值那份沒有 M1B／M2 這兩項）
+        both_two = css({**base, "M1B_YoY_pct": 2.0, "M2_YoY_pct": 2.0})
+        assert _scored(both_none) == _scored(both_two)
+        assert {"M1B_YoY_pct", "M2_YoY_pct"} <= set(both_none["missing_inputs"])
+        assert not {"M1B_YoY_pct", "M2_YoY_pct"} & set(both_two.get("missing_inputs", []))
         assert "資金緊縮" not in both_none["Macro_Phase"]
 
     @pytest.mark.parametrize("base", [{}, _L3_BASE], ids=["empty_base", "scenario_base"])
-    def test_clearing_only_one_side_is_visible(self, base):
-        """前提守衛：本檔的測資若「只清一個值」，引擎結果必然不同 —— 否則突變 G 抓不到。"""
+    def test_clearing_only_one_side_is_flagged_not_scored(self, base):
+        """批 X2 M2N-f3（L3）：只清一個值 → 資金項整條不算（計分＝兩個都缺），`missing_inputs` 照實列缺的那一個。
+
+        修前（本檔原為「前提守衛：只清一個值引擎結果必然不同」）：L3 把缺的那一邊當 0 → spread 變單邊值。
+        L3 修好後，本檔 L5 突變 G（只清一個值）改由 `_check_missing` 的「規則引擎必須收到兩個 None」抓
+        （`numbers` 替身記下的是 L5 送進引擎的值，與 L3 怎麼算無關）。
+        """
         from src.services.macro_state_locker import calculate_system_state as css
         both_none = css({**base, "M1B_YoY_pct": None, "M2_YoY_pct": None})
         only_m2_cleared = css({**base, "M1B_YoY_pct": 4.2, "M2_YoY_pct": None})
         only_m1b_cleared = css({**base, "M1B_YoY_pct": None, "M2_YoY_pct": 5.0})
-        assert only_m2_cleared["exposure_limit_pct"] > both_none["exposure_limit_pct"]
-        assert "資金緊縮" in only_m1b_cleared["Macro_Phase"]
-        assert only_m1b_cleared["exposure_limit_pct"] < both_none["exposure_limit_pct"]
+        assert _scored(only_m2_cleared) == _scored(both_none)
+        assert _scored(only_m1b_cleared) == _scored(both_none)
+        assert "資金緊縮" not in only_m1b_cleared["Macro_Phase"]
+        assert "M2_YoY_pct" in only_m2_cleared["missing_inputs"]
+        assert "M1B_YoY_pct" not in only_m2_cleared["missing_inputs"]
+        assert "M1B_YoY_pct" in only_m1b_cleared["missing_inputs"]
+        assert "M2_YoY_pct" not in only_m1b_cleared["missing_inputs"]
 
     @pytest.mark.parametrize("info", [None, {}, {"m1b_yoy": 4.2, "source": M1B_PROXY_SOURCE_LABEL}],
                              ids=["no_info", "empty_info", "proxy_info"])
@@ -679,16 +698,25 @@ class TestPreFixWasBroken:
         assert _red_cases(ek, _mod(ek), monkeypatch) == set()
 
     def test_pre_fix_news_fabricated_m2_zero_and_bull(self, pre_fix, monkeypatch):
-        """修前實況（da4eb94 實跑擷取）：缺 M2 → 「M2=0.0%」且引擎升成多頭。"""
+        """修前實況（da4eb94 實跑擷取）：缺 M2 → 「M2=0.0%」且只送 M1B 一邊進引擎。
+
+        修前 L3 會把缺的 M2 當 0 → 升成「多頭」；批 X2 M2N-f3 起 L3 自己也把缺的那邊當缺
+        （資金項不算、`missing_inputs` 列出 M2）—— 這裡改釘 L5 送了什麼，並釘 L3 不再升多頭。
+        """
         got = _run_news(pre_fix["news"], _MISSING["m2_key_absent"], monkeypatch)
         assert _m1b_lines(got["prompt"])[0].startswith("• M1B=4.2%  M2=0.0%  差額=+4.20%")
-        assert got["locked"][0]["market_regime"] == "多頭"
+        assert got["numbers"][0]["M1B_YoY_pct"] == 4.2 and got["numbers"][0]["M2_YoY_pct"] is None
+        assert got["locked"][0]["market_regime"] != "多頭"
+        assert "M2_YoY_pct" in got["locked"][0]["missing_inputs"]
         none = _run_news(pre_fix["news"], _MISSING["m2_none"], monkeypatch)
         assert isinstance(none["exc"], TypeError)
 
     def test_pre_fix_news_m1b_missing_tags_funding_squeeze(self, pre_fix, monkeypatch):
+        """修前 L5 缺 M1B 時只送 M2 一邊（修前 L3 因此扣分並貼「資金緊縮」；批 X2 M2N-f3 起 L3 不再貼）。"""
         got = _run_news(pre_fix["news"], _MISSING["m1b_key_absent"], monkeypatch)
-        assert "資金緊縮" in got["locked"][0]["Macro_Phase"]
+        assert got["numbers"][0]["M1B_YoY_pct"] is None and got["numbers"][0]["M2_YoY_pct"] == 5.0
+        assert "資金緊縮" not in got["locked"][0]["Macro_Phase"]
+        assert "M1B_YoY_pct" in got["locked"][0]["missing_inputs"]
 
 
 # ══════════════════════════════════════════════════════════════════════════
