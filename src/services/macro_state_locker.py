@@ -484,6 +484,13 @@ def get_macro_state(warroom_summary: dict | None = None, *,
 
 
 # ── 理科引擎：Python 規則計算總經狀態 ─────────────────────
+#: `calculate_system_state` 的 8 個數值輸入（M2N-f3 缺值契約與 `missing_inputs` 的順序以此為準）。
+_ENGINE_NUMERIC_INPUTS: tuple = (
+    "VIX_Index", "ISM_PMI_or_OECD_CLI", "PMI_Prev_Month", "M1B_YoY_pct", "M2_YoY_pct",
+    "BIAS240_pct", "PCR", "Futures_Net_Short",
+)
+
+
 def calculate_system_state(macro_numbers: dict) -> dict:
     """
     Rule-based quantitative engine (理科 brain).
@@ -512,8 +519,19 @@ def calculate_system_state(macro_numbers: dict) -> dict:
     已 ×100 的**百分比刻度**（50~200）。歷史 bug（v19.180 B2-b 修）：實測
     126.80 直接進來 → `pcr > 1.5` 恆真 → 曝險分數系統性 −10 → 曝險上限恆低
     10 個百分點。取值端請一律經 `shared.pcr_scale.normalize_pcr_to_ratio()`
-    換算；刻度不明時該 helper 回 `None`，本函式收到 None 會退回中性預設 1.0
-    （`_f` 的 default），不加不扣。
+    換算；刻度不明時該 helper 回 `None`，本函式收到 None 當缺值（見下段），PCR 項不加不扣。
+
+    缺值契約（M2N-f3，2026-10-03 批 X2；CLAUDE.md §1「缺值 ≠ 0、不得填任意預設值」）
+    ────────────────────────────────────────────────────────────────
+    上表 8 個數值輸入任一為缺鍵／None／非數值／NaN／±inf → **當缺**，不再代入預設值
+    （修前：VIX 20、PMI 50、PMI_Prev 50、M1B 0、M2 0、BIAS240 0、PCR 1.0、Futures 0）：
+      · 用到它的計分項與硬否決紅線**整條不算**（不加不扣、不觸發）；
+      · M1B、M2 任一缺 → 資金項（spread）整條不算、不貼「資金緊縮」（修前缺一邊時 spread 變成
+        單邊值：缺 M1B ⇒ −M2 扣分；缺 M2 ⇒ +M1B 加分）；
+      · BIAS240 的「VIX 偏高或 PMI 收縮」共振條件：缺的那一個視為不成立（同修前預設值的結果）；
+      · 回傳多一個 `missing_inputs`（缺的輸入鍵名，依上表順序）—— **只在有缺時才帶**，
+        8 個都是有限數值時回傳與修前逐字相同。
+    兩個 bool 輸入（Sahm／MA5）不在此列，照舊（None → False）。
 
     本函式**刻意不在內部塞刻度判斷**：規則引擎的職責是「照契約算分」，
     一旦引擎自己猜刻度，錯誤就會被吸收在引擎裡、caller 永遠不會發現送錯值
@@ -524,53 +542,59 @@ def calculate_system_state(macro_numbers: dict) -> dict:
         if isinstance(v, bool): return v
         return str(v).lower() in ('true', '1', 'yes') if v is not None else False
 
-    def _f(key, default):
+    def _f(key):
+        # M2N-f3：有限實數 → float；缺鍵／None／非數值／NaN／±inf → None（當缺，不代預設值）
         v = macro_numbers.get(key)
-        try:
-            return float(v) if v is not None else default
-        except (ValueError, TypeError):
-            return default
+        return float(v) if _is_finite_number(v) else None
 
-    vix         = _f("VIX_Index", 20.0)
-    pmi         = _f("ISM_PMI_or_OECD_CLI", 50.0)
-    pmi_prev    = _f("PMI_Prev_Month", 50.0)
-    m1b_yoy     = _f("M1B_YoY_pct", 0.0)
-    m2_yoy      = _f("M2_YoY_pct", 0.0)
-    bias240     = _f("BIAS240_pct", 0.0)
-    pcr         = _f("PCR", 1.0)
-    futures_net = _f("Futures_Net_Short", 0.0)  # 負值 = 淨空單
+    _nums = {k: _f(k) for k in _ENGINE_NUMERIC_INPUTS}
+    missing_inputs = [k for k in _ENGINE_NUMERIC_INPUTS if _nums[k] is None]
+    vix         = _nums["VIX_Index"]
+    pmi         = _nums["ISM_PMI_or_OECD_CLI"]
+    pmi_prev    = _nums["PMI_Prev_Month"]
+    m1b_yoy     = _nums["M1B_YoY_pct"]
+    m2_yoy      = _nums["M2_YoY_pct"]
+    bias240     = _nums["BIAS240_pct"]
+    pcr         = _nums["PCR"]
+    futures_net = _nums["Futures_Net_Short"]  # 負值 = 淨空單
     sahm        = _b("Sahm_Rule_Triggered")
     below_ma5   = _b("Index_Below_MA5")
 
     score = 60  # 中性基準
 
-    # VIX 恐慌指數
-    if vix >= 35:    score -= 30
-    elif vix >= 28:  score -= 20
-    elif vix >= 22:  score -= 10
-    elif vix <= 14:  score += 10
+    # VIX 恐慌指數（缺 → 整條不算）
+    if vix is not None:
+        if vix >= 35:    score -= 30
+        elif vix >= 28:  score -= 20
+        elif vix >= 22:  score -= 10
+        elif vix <= 14:  score += 10
 
-    # PMI 經濟動能
-    if pmi < 46:     score -= 20
-    elif pmi < 50:   score -= 10
-    elif pmi > 55:   score += 10
-    elif pmi > 52:   score += 5
+    # PMI 經濟動能（缺 → 整條不算）
+    if pmi is not None:
+        if pmi < 46:     score -= 20
+        elif pmi < 50:   score -= 10
+        elif pmi > 55:   score += 10
+        elif pmi > 52:   score += 5
 
-    # M1B-M2 資金流動
-    spread = m1b_yoy - m2_yoy
-    if spread > 3:    score += 15
-    elif spread > 0:  score += 5
-    elif spread < -3: score -= 10
+    # M1B-M2 資金流動（任一缺 → 整條不算；不以 0 代入另一邊）
+    spread = (m1b_yoy - m2_yoy) if (m1b_yoy is not None and m2_yoy is not None) else None
+    if spread is not None:
+        if spread > 3:    score += 15
+        elif spread > 0:  score += 5
+        elif spread < -3: score -= 10
 
-    # BIAS240 雙重共振才扣分：高乖離需同時伴隨 VIX 偏高或 PMI 收縮
-    if bias240 > 15 and (vix >= 22 or pmi < 50):
-        score -= 15
-    elif bias240 < -10:
-        score += 10
+    # BIAS240 雙重共振才扣分：高乖離需同時伴隨 VIX 偏高或 PMI 收縮（缺的那一個視為不成立）
+    _bias_resonance = (vix is not None and vix >= 22) or (pmi is not None and pmi < 50)
+    if bias240 is not None:
+        if bias240 > 15 and _bias_resonance:
+            score -= 15
+        elif bias240 < -10:
+            score += 10
 
-    # PCR 期權恐慌比
-    if pcr > 1.5:   score -= 10
-    elif pcr < 0.7: score += 5
+    # PCR 期權恐慌比（缺 → 整條不算）
+    if pcr is not None:
+        if pcr > 1.5:   score -= 10
+        elif pcr < 0.7: score += 5
 
     # ── 初始曝險（分數計算結果）─────────────────────────────
     exposure = max(0, min(100, round(score / 10) * 10))
@@ -587,12 +611,13 @@ def calculate_system_state(macro_numbers: dict) -> dict:
         veto_labels.append("🚨薩姆規則觸發")
 
     # 紅線二：ISM PMI 連兩月低於收縮水位 → 強制上限
-    if pmi < MACRO_VETO_PMI_CONTRACTION_LEVEL and pmi_prev < MACRO_VETO_PMI_CONTRACTION_LEVEL:
+    if (pmi is not None and pmi_prev is not None
+            and pmi < MACRO_VETO_PMI_CONTRACTION_LEVEL and pmi_prev < MACRO_VETO_PMI_CONTRACTION_LEVEL):
         exposure = min(exposure, MACRO_VETO_PMI_EXPOSURE_CAP_PCT)
         veto_labels.append(f"⚠️PMI連兩月收縮({pmi_prev:.1f}→{pmi:.1f})")
 
     # 紅線三：外資期貨大額淨空 + 指數跌破 MA5 → 強制上限
-    if futures_net < MACRO_VETO_FUTURES_NET_SHORT_LOTS and below_ma5:
+    if futures_net is not None and futures_net < MACRO_VETO_FUTURES_NET_SHORT_LOTS and below_ma5:
         exposure = min(exposure, MACRO_VETO_FUTURES_EXPOSURE_CAP_PCT)
         veto_labels.append(f"🚨期貨淨空{abs(futures_net):.0f}口+破MA5")
 
@@ -602,22 +627,26 @@ def calculate_system_state(macro_numbers: dict) -> dict:
     else:                                            risk_level, regime = "危險", "空頭"
 
     labels = veto_labels.copy()
-    if pmi < 50 and not any("PMI" in l for l in labels):
+    if pmi is not None and pmi < 50 and not any("PMI" in l for l in labels):
         labels.append(f"PMI收縮({pmi:.1f})")
-    if vix > 25:
+    if vix is not None and vix > 25:
         labels.append(f"VIX高波動({vix:.1f})")
-    if spread < 0:
+    if spread is not None and spread < 0:
         labels.append("資金緊縮")
-    if bias240 > 15 and (vix >= 22 or pmi < 50):
+    if bias240 is not None and bias240 > 15 and _bias_resonance:
         labels.append("均線過熱")
     macro_phase = "、".join(labels) if labels else "環境正常"
 
-    return {
+    _out = {
         "market_regime": regime,
         "systemic_risk_level": risk_level,
         "exposure_limit_pct": exposure,
         "Macro_Phase": macro_phase,
     }
+    if missing_inputs:
+        # M2N-f3：有缺才帶（8 個都有值時回傳與修前逐字相同）
+        _out["missing_inputs"] = missing_inputs
+    return _out
 
 
 # ── 工具 ────────────────────────────────────────────────────

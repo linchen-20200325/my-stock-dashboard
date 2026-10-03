@@ -357,7 +357,7 @@ def _scan_body(lookback: int, max_scan: int, beat_only: bool,
 #: 不能讓每次 rerun 都重掃。批 D3b QA N1(2026-09-28):固定 180 秒在「上游持續全失敗 + 每分鐘
 #: rerun」下 1 小時仍會重掃 21 次(修前 1 次)→ 改**遞增**:同一組參數連續失敗時冷卻由
 #: `FAIL_COOLDOWN_SEC` 起、每次加倍,上限 ＝ 原本的成功快取 TTL(`TTL_1HOUR`,與 `_scan_body` 同一個
-#: SSOT 常數);一次成功即歸零。同一情境下第 1 小時重掃 5 次;封頂之後(連續失敗約 1.5 小時起)
+#: SSOT 常數);一次成功即歸零;連續失敗次數另隨時間衰減(D2-f38,#768):距上一次失敗已達「上一次的冷卻秒數 ＋ `TTL_1HOUR`」才又失敗 → 視為新的一串,冷卻回到 `FAIL_COOLDOWN_SEC`(見 `shared.fail_cooldown.FailCooldown`)。同一情境下第 1 小時重掃 5 次;封頂之後(連續失敗約 1.5 小時起)
 #: 每小時 1 次,與修前「失敗凍 1 小時」同頻。代價與好處:短暫中斷(失敗 1 次)恢復後
 #: `FAIL_COOLDOWN_SEC` 就拿到新排行;長時間中斷恢復後,最慢要等當下那一段冷卻(上限 1 小時,同修前)。
 _scan_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)
@@ -370,7 +370,7 @@ def _scan_cached(lookback: int, max_scan: int, beat_only: bool,
     `_scan_body` 拋 `_PoolPricesFetchFailed`(大盤正常、個股全抓不到價)→ 不入快取;
     失敗後同一組參數在冷卻期內**不重掃**(退避),回同一份 (rows, meta);冷卻期過才重掃。
     冷卻**遞增**(QA N1):連續失敗時 `FAIL_COOLDOWN_SEC` → ×2 → ×4 …,上限 `TTL_1HOUR`;
-    成功一次即歸零(下一次失敗又從 `FAIL_COOLDOWN_SEC` 起)。其餘結果(含正當的空排行)照舊
+    成功一次即歸零(下一次失敗又從 `FAIL_COOLDOWN_SEC` 起);連續失敗次數另隨時間衰減(D2-f38,#768):距上一次失敗已達「上一次的冷卻秒數 ＋ `TTL_1HOUR`」才又失敗 → 視為新的一串,冷卻回到 `FAIL_COOLDOWN_SEC`(見 `shared.fail_cooldown.FailCooldown`)。其餘結果(含正當的空排行)照舊
     由 `_scan_body` 快取。大盤抓取失敗(`_UpstreamFetchFailed` 本身,D2-f1)不在這裡接,
     照原樣往上拋給 `run_rs_leader_scan`(退避由 L1 `fetch_yf_close` 負責)。
     `.clear()` 同清快取層與退避紀錄(含連續失敗次數)。
