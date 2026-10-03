@@ -224,7 +224,7 @@ def _history_or_raise(tk, ticker: str, period: str, **history_kwargs):
     X1-n10（批 Y1，2026-10-03，§1.A-3(a)）：上一段只看「拋例外」那條路。yfinance 1.7.0 遇到
     HTTP 5xx／401／403 但 body 是**帶時間戳、價格全空**的 K 線時**不拋例外、回空表**（本批實跑查證）——
     修前照舊當「沒資料」快取 1 小時。現在**回空表（或 None）**時同樣看本次 K 線回應：判得出失敗 →
-    拋 `RuntimeError`（＝失敗，不入快取、冷卻）；判不出（200 非 null、404、看不到回應）→ 原樣回傳（同修前）。
+    拋 yfinance 的 `YFPricesMissingError`（訊息即 yfinance 自己的模板，不另寫字；＝失敗，不入快取、冷卻）；判不出（200 非 null、404、看不到回應）→ 原樣回傳（同修前）。
     非空表一律原樣回傳（成功路徑不看回應）。
 
     `history_kwargs`（批 Y1 X1-n1）：原樣轉給 `tk.history`（例：ETF 取價的 `auto_adjust=True`）；
@@ -254,7 +254,10 @@ def _history_or_raise(tk, ticker: str, period: str, **history_kwargs):
         _bad = _chart_reply_failure(getattr(_CHART_REPLY, "reply", None))
         if _bad:
             print(f"[yf_proxy.history] {ticker}: Yahoo 回應 {_bad}、回空表 → 抓取失敗")
-            raise RuntimeError(f"{ticker}: Yahoo 回應 {_bad}（回空表）")
+            # 例外訊息不另寫一句：用 yfinance 自己「沒有價格資料」的例外與同一格式（`(period=…)`，
+            # 同其 `history()` 的 debug_info）—— 與上方例外路徑同一種回應失敗時往上拋的是同一類、同一模板。
+            from yfinance.exceptions import YFPricesMissingError as _no_prices
+            raise _no_prices(ticker, f" (period={period})")
     return _df
 
 

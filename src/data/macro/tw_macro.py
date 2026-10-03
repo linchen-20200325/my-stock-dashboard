@@ -1617,8 +1617,9 @@ def fetch_china_macro(fred_api_key: str = "") -> dict:
 
     D2-f13(2026-09-29,§1.A-3(a)):任一條序列為空 → 這一份**不入** 30 分鐘快取(修前整包照存:
     FRED 恢復後 30 分鐘內仍 0/5、上游 0 次請求);5 條全有資料才照舊快取、回傳不變。
-    退避(§1.A-3(b))由底層 `macro_core.fetch_fred` 承擔:有資料(及 HTTP 200 但全為 '.')的序列在它的
-    30 分鐘成功快取、三個失敗出口在它的 `FAIL_COOLDOWN_SEC` 秒退避 —— 期內重算都不重打上游。
+    退避(§1.A-3(b))由底層 `macro_core.fetch_fred` 承擔:有資料的序列在它的 30 分鐘成功快取、
+    失敗出口(含 HTTP 200 但全為 '.' —— 批 Y1 X1-n2 2026-10-03 起比照「observations 為空」記退避、
+    不入成功快取)在它的 `FAIL_COOLDOWN_SEC` 秒退避 —— 期內重算都不重打上游。
     HTTP 200 之後才在 fetch_fred 內拋例外(缺欄的 KeyError、日期解析失敗、pandera SchemaError 等)的那條,
     原本不在退避裡、只靠 `fetch_url` 的 URL 快取擋(被擠出或清空後每次重算都重打上游);D2-f49
     (2026-10-03)起 `fetch_fred` 對它同樣記退避(該次仍拋出,本函式照舊接住、記為空 DataFrame)。

@@ -147,8 +147,11 @@ class TestX1n10EmptyReturnChecksReply:
 
     def test_direct_raises_runtime_error_with_log(self, real_yf, capsys):
         real_yf["mode"] = "503_nan"
-        with pytest.raises(RuntimeError, match="HTTP 503"):
+        with pytest.raises(YFE.YFPricesMissingError) as ei:
             YP._history_or_raise(yfinance.Ticker("N10D.TW"), "N10D.TW", "1y")
+        # K1：例外訊息＝yfinance 自己的模板（同類、同建構方式），不另寫字
+        assert str(ei.value) == str(YFE.YFPricesMissingError("N10D.TW", " (period=1y)"))
+        assert str(ei.value) == "$N10D.TW: possibly delisted; no price data found  (period=1y)"
         assert "[yf_proxy.history] N10D.TW: Yahoo 回應 HTTP 503、回空表 → 抓取失敗" in capsys.readouterr().out
 
     @pytest.mark.parametrize("period", ["1y", "60d"])
@@ -172,7 +175,7 @@ class TestX1n10Branches:
             def history(self, period="1mo", raise_errors=False):
                 _recorded(503)
                 return None
-        with pytest.raises(RuntimeError):
+        with pytest.raises(YFE.YFPricesMissingError):
             YP._history_or_raise(_T(), "X", "1y")
 
     def test_none_return_without_failure_reply_passthrough(self):
@@ -182,13 +185,14 @@ class TestX1n10Branches:
                 return None
         assert YP._history_or_raise(_T(), "X", "1y") is None
 
-    def test_empty_with_200_null_raises(self):
+    def test_empty_with_200_null_raises(self, capsys):
         class _T:
             def history(self, period="1mo", raise_errors=False):
                 _recorded(200, True)
                 return pd.DataFrame()
-        with pytest.raises(RuntimeError, match="null"):
+        with pytest.raises(YFE.YFPricesMissingError):
             YP._history_or_raise(_T(), "X", "1y")
+        assert "null" in capsys.readouterr().out
 
     def test_empty_without_reply_passthrough_same_object(self):
         """看不到回應（例：yfinance 走自己的快取）→ 同修前：原樣回傳。"""
@@ -219,7 +223,7 @@ class TestX1n10Branches:
                 return ret
         assert YP._history_or_raise(_T(), "X", "1y") is ret
 
-    def test_typeerror_fallback_empty_failure_raises(self):
+    def test_typeerror_fallback_empty_failure_raises(self, capsys):
         seen = []
 
         class _T:
@@ -227,11 +231,11 @@ class TestX1n10Branches:
                 seen.append(period)
                 _recorded(401)
                 return pd.DataFrame()
-        with pytest.raises(RuntimeError, match="HTTP 401"):
+        with pytest.raises(YFE.YFPricesMissingError):
             YP._history_or_raise(_T(), "X", "1y")
-        assert seen == ["1y"]
+        assert seen == ["1y"] and "HTTP 401" in capsys.readouterr().out
 
-    def test_deprecation_fallback_empty_failure_raises(self):
+    def test_deprecation_fallback_empty_failure_raises(self, capsys):
         calls = []
 
         class _T:
@@ -241,9 +245,9 @@ class TestX1n10Branches:
                     raise DeprecationWarning("'raise_errors' deprecated")
                 _recorded(500)
                 return pd.DataFrame()
-        with pytest.raises(RuntimeError, match="HTTP 500"):
+        with pytest.raises(YFE.YFPricesMissingError):
             YP._history_or_raise(_T(), "X", "1y")
-        assert calls == [{"raise_errors": True}, {}]
+        assert calls == [{"raise_errors": True}, {}] and "HTTP 500" in capsys.readouterr().out
 
     def test_typeerror_fallback_success_passthrough(self):
         ret = pd.DataFrame({"Close": [2.0]})
@@ -325,9 +329,18 @@ class TestX1n1EtfPrice:
         assert out.attrs["source"] == "Yahoo:E1OK.TW:history_max_adj"
         assert out.attrs["price_basis"] == EF.PRICE_BASIS_ADJUSTED
 
-    def test_requests_max_adjusted(self, real_yf):
-        """K 線請求的確是 period=max（走 _history_or_raise 不改請求內容）。"""
-        EF._fetch_etf_price_max_cached("E1RQ.TW")
+    def test_requests_max_adjusted(self, real_yf, monkeypatch):
+        """真 yfinance 的 `history()` 收到的就是 `period='max'`、`auto_adjust=True`（走 _history_or_raise 不改請求內容）。"""
+        seen = []
+        orig = yfinance.Ticker.history
+
+        def _spy(self, *a, **kw):
+            seen.append((a, kw))
+            return orig(self, *a, **kw)
+        monkeypatch.setattr(yfinance.Ticker, "history", _spy)
+        out = EF._fetch_etf_price_max_cached("E1RQ.TW")
+        assert len(out) == 40
+        assert seen == [((), {"period": "max", "raise_errors": True, "auto_adjust": True})]
         assert real_yf["urls"] and all("/v8/finance/chart/E1RQ.TW" in u for u in real_yf["urls"])
 
 
