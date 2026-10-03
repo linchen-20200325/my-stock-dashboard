@@ -86,7 +86,7 @@ def _neutral(**over) -> dict:
 class TestOldBugReproduction:
 
     def test_baseline_without_pcr_is_60(self):
-        """沒有 PCR 時的基準曝險 = 60（`_f('PCR', 1.0)` 預設 1.0 不加不扣）。"""
+        """沒有 PCR 時的基準曝險 = 60（批 X2 M2N-f3 起 PCR 缺 → 當缺、不加不扣；修前是預設 1.0）。"""
         assert calculate_system_state(_neutral())["exposure_limit_pct"] == 60
 
     def test_percent_scale_pcr_costs_exactly_10_points(self):
@@ -104,7 +104,11 @@ class TestOldBugReproduction:
         ratio, _src = normalize_pcr_to_ratio(126.80)
         fixed = calculate_system_state(_neutral(PCR=ratio))
         assert fixed["exposure_limit_pct"] == 60
-        assert fixed == calculate_system_state(_neutral()), (
+        no_pcr = calculate_system_state(_neutral())
+        # 批 X2 M2N-f3：無 PCR 那份另帶 `missing_inputs == ["PCR"]`（有缺才帶）；計分結果須完全相同
+        assert no_pcr.pop("missing_inputs") == ["PCR"]
+        assert "missing_inputs" not in fixed
+        assert fixed == no_pcr, (
             "126.80（≈1.27，落在 0.7~1.5 的中性帶）換算後不該對曝險有任何影響")
 
     @pytest.mark.parametrize("raw", [70.0, 80.0, 100.0, 126.80, 149.0])
