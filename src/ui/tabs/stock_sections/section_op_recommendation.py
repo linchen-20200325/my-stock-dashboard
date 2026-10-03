@@ -108,8 +108,11 @@ def render_op_recommendation_section(sid2: str, health2,
             'score':       0,  # Tab3 多因子評分(此處無法取得,用0)
             'rsi':         rsi2,
             'vcp_ok':      bool(vcp2 and isinstance(vcp2, dict) and vcp2.get('contracting')),
-            'bias_240':    _bias_g.get('bias_240', 0),
-            'bias_20':     _bias_g.get('bias_20', 0),
+            # 批 V2(D4-n6,§1 不捏 0):原 `.get(..., 0)` 缺鍵捏 0;改 `_finite_yoy`
+            #   (缺鍵／None／NaN／±inf → None)→ L3 既有缺值路徑(不出年線/月線乖離那幾句;
+            #   +inf 不再印「年線正乖離inf%」)。有限值同一物件,輸出不變。
+            'bias_240':    _finite_yoy(_bias_g, 'bias_240'),
+            'bias_20':     _finite_yoy(_bias_g, 'bias_20'),
             # I2:整包帶進去只為了讓 generate_ai_comment 能在年線乖離那兩句
             # 加「（估算）」徽章。**不影響任何判定分支**(該函式的 b240 門檻未動);
             # 缺這個 key 時徽章為空字串,輸出與 I2 前逐字元相同。

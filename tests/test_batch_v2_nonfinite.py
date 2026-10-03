@@ -185,3 +185,132 @@ class TestSectionMidNonDictVix:
         node = {'current': 18.5, 'ma20': 17.0, 'dates': ['2026-09-01'], 'values': [18.5]}
         out, _ = _run(node, monkeypatch)
         assert _LOADING not in out
+
+
+# ── 項 4：D4-n6 乖離率缺值不捏 0（section_state / warroom / long / op_recommendation）──
+#: 「缺」的各種形狀：缺鍵、None、NaN、±inf、非數值；全部要等同「bias_info 為空」那條既有路徑。
+_BIAS_MISSING = [
+    pytest.param({'is_estimated': False}, id='keys-missing'),
+    pytest.param({'bias_240': None, 'bias_20': None, 'price': None, 'ma240': None}, id='none'),
+    pytest.param({'bias_240': math.nan, 'bias_20': math.nan, 'price': math.nan, 'ma240': math.nan}, id='nan'),
+    pytest.param({'bias_240': math.inf, 'bias_20': -math.inf, 'price': math.inf, 'ma240': 1.0}, id='inf'),
+    pytest.param({'bias_240': 'x', 'bias_20': 'y', 'price': 'z', 'ma240': 'w'}, id='non-numeric'),
+]
+_BIAS_FULL = {'bias_240': 25.0, 'bias_20': 12.0, 'bias_60': 3.0,
+              'price': 20000.0, 'ma240': 16000.0, 'data_days': 300, 'is_estimated': False}
+
+
+def _warroom_out(bias):
+    from tests.test_m2n2_no_zero_fill import _FakeST
+    import src.ui.tabs.macro.section_warroom as W
+    fake = _FakeST({'bias_info': bias, 'cl_data': {'margin': 2000.0}})
+    saved, W.st = W.st, fake
+    try:
+        W.render_section_warroom('bull', True, False)
+    finally:
+        W.st = saved
+    return [t for _k, t in fake.out]
+
+
+class TestWarroomBiasMissing:
+    @pytest.mark.parametrize('bias', _BIAS_MISSING)
+    def test_missing_equals_empty_path(self, bias):
+        try:
+            out = _warroom_out(bias)
+        except TypeError:
+            pytest.skip('非數值 price 在 v4 引擎（L0，本批不動）即拋 —— 與本批無關')
+        joined = '\n'.join(out)
+        assert '乖離+0.0%' not in joined and '年線乖離 +0.0%' not in joined
+        assert out == _warroom_out({}), joined[-800:]
+
+    def test_finite_unchanged(self):
+        joined = '\n'.join(_warroom_out(dict(_BIAS_FULL)))
+        assert '乖離+25.0%' in joined
+        assert '📐 年線位階參考：年線乖離 +25.0%｜乖離過熱' in joined
+        assert '🟡 年線乖離 +25.0%，大盤偏高，勿追買' in joined
+
+
+def _state_out(bias, mp):
+    from tests.test_m2n2_no_zero_fill import _FakeST
+    import src.ui.tabs.macro.section_state as S
+    fake = _FakeST({'bias_info': bias, '_ndc_hist_cache': {}, '_ndc_li_cache': {},
+                    '_fi_streak_cache': {}})
+    mp.setattr(S, 'st', fake)
+    S.render_section_state({'signals': []}, None, None, {},
+                           show_market_data=False, requested=True)
+    return fake.session_state.get('_pivot_signals'), [t for _k, t in fake.out]
+
+
+class TestStateBiasMissing:
+    @pytest.mark.parametrize('bias', _BIAS_MISSING)
+    def test_missing_equals_empty_path(self, bias, monkeypatch):
+        assert _state_out(bias, monkeypatch) == _state_out({}, monkeypatch)
+
+    def test_one_side_missing_only_skips_that_lamp(self, monkeypatch):
+        piv, _ = _state_out({'bias_20': 12.0}, monkeypatch)
+        assert [p[0] for p in piv] == ['月線過熱']
+        piv, _ = _state_out({'bias_240': 25.0}, monkeypatch)
+        assert [p[0] for p in piv] == ['年線乖離過大']
+
+    def test_finite_unchanged(self, monkeypatch):
+        piv, out = _state_out(dict(_BIAS_FULL), monkeypatch)
+        assert [p[0] for p in piv] == ['年線乖離過大', '月線過熱']
+        assert out != _state_out({}, monkeypatch)[1]
+
+
+def _long_out(bias):
+    from tests.test_dl_f1_s24_m2_missing import _long_module, _render
+    out, exc = _render(_long_module(), {}, bias=bias)
+    assert exc is None, exc
+    return [t for _k, t in out]
+
+
+class TestLongBiasMissing:
+    @pytest.mark.parametrize('bias', _BIAS_MISSING)
+    def test_missing_takes_existing_paths(self, bias):
+        out = _long_out(bias)
+        empty = _long_out({})
+        joined = '\n'.join(out)
+        assert '年線乖離 +0.0%' not in joined and '+0.0%' not in joined
+        # 結論卡＝bias_info 為空時的樣子；KPI 只把「計算中」換成既有灰態「待取得」
+        assert [t.replace('待取得', '計算中') for t in out] == empty
+        assert any('年線乖離率(240MA)' in t and '待取得' in t for t in out)
+
+    def test_bias20_missing_drops_only_that_segment(self):
+        out = '\n'.join(_long_out({'bias_240': 25.0}))
+        assert '+25.0%' in out and '月線20MA' not in out
+
+    def test_finite_unchanged(self):
+        out = '\n'.join(_long_out(dict(_BIAS_FULL)))
+        assert '月線20MA: +12.0% (⚠️過熱)' in out
+        assert '年線乖離 +25.0% 過大' in out
+
+
+class TestOpRecommendationBias:
+    def _sent(self, bias, mp):
+        from tests.test_m2n2_no_zero_fill import _FakeST
+        import src.services.allocation_service as AS
+        import src.ui.tabs.stock_sections.section_op_recommendation as OP
+        seen = []
+        fake = _FakeST({'bias_info': bias, 'cl_data': {'inst': {}}})
+        mp.setattr(OP, 'st', fake)
+        mp.setattr(OP, 'generate_ai_comment',
+                   lambda d: seen.append((d['bias_240'], d['bias_20'])) or '')
+        mp.setattr(AS, 'get_macro_regime', lambda *a, **k: {'is_loaded': False})
+        OP.render_op_recommendation_section('2330', 82.0, {'contracting': True},
+                                            5.0, 100.0, 55.0, 0, 0)
+        return seen
+
+    @pytest.mark.parametrize('bias', _BIAS_MISSING)
+    def test_missing_sent_as_none(self, bias, monkeypatch):
+        assert self._sent(bias, monkeypatch) == [(None, None)]
+
+    def test_finite_unchanged(self, monkeypatch):
+        assert self._sent(dict(_BIAS_FULL), monkeypatch) == [(25.0, 12.0)]
+
+    def test_l3_none_is_existing_missing_path(self):
+        from src.services.app_ai_service import generate_ai_comment
+        base = {'health': 82.0, 'score': 0, 'rsi': 55.0, 'vcp_ok': True}
+        assert (generate_ai_comment({**base, 'bias_240': None, 'bias_20': None})
+                == generate_ai_comment(base))
+        assert 'inf' not in generate_ai_comment({**base, 'bias_240': None})
