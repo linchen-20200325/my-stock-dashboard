@@ -344,6 +344,14 @@ def test_number_like_cells_round_trip_without_growth(lots, avg):
         vals0 = ws.get_all_values()
         flagged = sum(gsp._editor_loaded_row(vals0[0], r, 'A') for r in vals0[1:])
         assert flagged == n_loaded
+        if 'NaN' in (lots, avg):
+            # 批 V2（D1-n2）：NaN 張數／均價載得進編輯器，但原封不動存回時**在任何寫入前**
+            # fail loud（舊行為：真 gspread 在 ws.update 序列化 NaN 才拋；本假表會照寫）。
+            assert n_loaded == 1
+            with pytest.raises(ValueError, match='無有效持股可儲存'):
+                _editor_round_trip(ws, 'A')
+            assert ws.get_all_values() == vals0 and ws.calls == []
+            return
         if n_loaded:
             for _ in range(2):
                 _editor_round_trip(ws, 'A')

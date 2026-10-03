@@ -430,3 +430,35 @@ class TestForeignConsecutiveMissingNotZero:
         assert r['inflection'] == '🟢 連5日買超' and r['today_net'] == 100
         r = _fii(_fii_rows([_BUY, (50, 50)]), monkeypatch)    # 真 0 仍是 0
         assert r['consec_days'] == 0 and r['today_net'] == 0 and r['inflection'] == '📊 震盪'
+
+
+# ── 項 7：D1-n2 save_portfolio —— NaN／±inf 張數或均價在任何寫入之前 fail loud ─────
+class TestSavePortfolioNonFinite:
+    def _ws(self):
+        from tests.test_gsheet_portfolio import _FakeWorksheet, _mixed_sheet
+        return _FakeWorksheet([list(r) for r in _mixed_sheet()], row_count=5, col_count=5)
+
+    @pytest.mark.parametrize('field', ['lots', 'avg_price'])
+    @pytest.mark.parametrize('bad', [math.nan, math.inf, -math.inf, 'nan', 'inf'])
+    def test_raises_before_any_write(self, field, bad):
+        from unittest.mock import patch
+        import src.data.portfolio.gsheet_portfolio as gsp
+        ws = self._ws()
+        snap = ws.get_all_values()
+        row = {'ticker': 'VOO', 'lots': 1, 'avg_price': 400.0}
+        row[field] = bad
+        with patch.object(gsp, '_ws', return_value=ws):
+            with pytest.raises(ValueError, match='無有效持股可儲存（檢查代號、張數、均價）'):
+                gsp.save_portfolio('A', [{'ticker': 'QQQ', 'lots': 2, 'avg_price': 300.0}, row])
+        assert ws.calls == [] and ws.get_all_values() == snap
+        assert ws.row_count == 5 and ws.col_count == 5         # 連 add_rows／add_cols 都沒碰
+
+    def test_finite_unchanged(self):
+        from unittest.mock import patch
+        import src.data.portfolio.gsheet_portfolio as gsp
+        ws = self._ws()
+        with patch.object(gsp, '_ws', return_value=ws):
+            n = gsp.save_portfolio('A', [{'ticker': 'voo', 'lots': 0.1, 'avg_price': 400.0},
+                                         {'ticker': 'x', 'lots': 0, 'avg_price': 1},
+                                         {'ticker': 'y', 'lots': 'abc', 'avg_price': 1}])
+        assert n == 1 and [c[0] for c in ws.calls][-1] == 'update'

@@ -43,6 +43,7 @@ Schema
 from __future__ import annotations
 
 import datetime as _dt
+import math
 from typing import Any
 
 try:
@@ -526,6 +527,11 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
             avg = float(r.get('avg_price') or 0)
         except (TypeError, ValueError):
             continue
+        # 批 V2(D1-n2,§1 擋非有限值):NaN 會通過下一行 `<= 0` 篩選、一路帶到
+        #   `ws.update` 才炸。改在**任何寫入之前**(含下方 add_rows／add_cols)
+        #   fail loud,沿用同函式既有的 ValueError 字句;Sheet 一格不動。
+        if not (math.isfinite(lots) and math.isfinite(avg)):
+            raise ValueError('無有效持股可儲存（檢查代號、張數、均價）')
         if lots <= 0 or avg <= 0:
             continue
         new_rows.append([name, tk, lots, avg, ts])
