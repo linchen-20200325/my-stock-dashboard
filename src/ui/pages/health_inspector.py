@@ -819,7 +819,7 @@ def render_data_health_raw():
             #    屬 §2.2 provenance 另案(G2 記錄,未修)。
             rows.append(_row('M1B / M2 貨幣供給', _mi_date, 'monthly',
                              source='CBC ms1.json+EF15M01+FRED+IMF+^TWII 動能代理 5段',
-                             endpoint='cbc.gov.tw / cpx.cbc.gov.tw / Yahoo / FRED / IMF DataMapper',
+                             endpoint='cbc.gov.tw / cpx.cbc.gov.tw / FRED / IMF DataMapper / Yahoo',
                              proxy=True, indicator='m1b_m2'))
         else:
             # m1b_m2_info 尚未抓取 → 黃燈提示，與上方 5 個 macro 一致
@@ -827,7 +827,7 @@ def render_data_health_raw():
             rows.append({'資料名稱': 'M1B / M2 貨幣供給',
                          '頻率': _FREQ_LBL.get('monthly', 'monthly'),
                          '來源': 'CBC ms1.json+EF15M01+FRED+IMF+^TWII 動能代理 5段',
-                         '端點': 'cbc.gov.tw / cpx.cbc.gov.tw / Yahoo / FRED / IMF DataMapper',
+                         '端點': 'cbc.gov.tw / cpx.cbc.gov.tw / FRED / IMF DataMapper / Yahoo',
                          'Proxy': '✅',
                          '最後更新': ('🟡 待補抓（系統下次背景輪詢自動處理）'
                                       if _m1b_never else '❌ 抓取失敗'),

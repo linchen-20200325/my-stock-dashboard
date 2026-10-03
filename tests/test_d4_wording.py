@@ -184,7 +184,9 @@ def test_dl_f1_s14_health_inspector_m1b_source_and_endpoint():
     # 批 W1（客戶 2026-10-02）：只把「^TWII 動能代理」移到最後。
     assert src.count("'CBC ms1.json+EF15M01+FRED+IMF+^TWII 動能代理 5段'") == 3
     assert "EF15M01+^TWII 動能代理+FRED" not in src
-    assert src.count("'cbc.gov.tw / cpx.cbc.gov.tw / Yahoo / FRED / IMF DataMapper'") == 2
+    # 客戶 2026-10-03：端點字串只把「Yahoo」移到最後（只調詞序，不加新字）。
+    assert src.count("'cbc.gov.tw / cpx.cbc.gov.tw / FRED / IMF DataMapper / Yahoo'") == 2
+    assert "cpx.cbc.gov.tw / Yahoo / FRED" not in src
     assert "CBC + FinMind 雙源" not in src and "TaiwanStockMonetaryAggregates" not in src
 
 
