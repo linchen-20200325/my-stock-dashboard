@@ -217,6 +217,8 @@ def _fetch_quarterly_shortage_frame_cached(stock_id: str, quarters: int = 12) ->
 #: D2-f24(§1.A-3(b)):季報失敗退避。鍵 ＝ (stock_id, quarters)(與快取層快取鍵同義)。設定比照
 #: 單股月營收 `_single_fail_cooldown`(起點 `FAIL_COOLDOWN_SEC`、連續失敗加倍、上限 `TTL_1HOUR`、
 #: 不設筆數上限 —— 理由同該處:成功快取那層也不限筆數)。
+#: 連續失敗次數會隨時間衰減(`shared.fail_cooldown.FailCooldown` 的 D2-f38,`max_seconds` 開啟即生效):
+#: 距上一次失敗已超過「上一次的冷卻秒數 ＋ `TTL_1HOUR`」才又失敗 ⇒ 視為新的一串,冷卻回到 `FAIL_COOLDOWN_SEC`。
 _qtr_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR, max_entries=sys.maxsize)
 
 

@@ -9,14 +9,18 @@
     修法：`_ttl_cache` 加選用的判定式 `cache_if`（預設 None ＝ 修前行為）；china 給「5 條全有資料」
     （同 D2-f23「半邊失敗不入快取」），usdtwd 給「不是 None」。`fetch_cbc_discount_rate`
     （交接本 DEAD_CODE.md D-016，疑似死碼）與其餘 11 個 `_ttl_cache` 函式不啟用（`TestTtlCacheHook` 以 AST
-    釘住「只有這兩支啟用」）。
+    釘住「只有這兩支啟用」）。〔批 Y3（X1-n4）補註：上句是 D3g 當時的現況。之後批 D2（D2-f40）另讓 8 支以
+    `cache_if`＋`fail_cooldown=True` 啟用（見 `tests/test_d2_tw_macro_ttl_fail_cache.py`）；AST 守衛現在釘的是
+    「不帶 `fail_cooldown` 的只有這兩支」，`fetch_cbc_discount_rate` 仍不啟用。〕
     退避：不入快取後重算也不打上游 —— 底層 `fetch_fred`（成功 30 分鐘快取／失敗 FAIL_COOLDOWN_SEC 退避）、
-    `_fetch_yf_close_base`（成功 1 小時快取／失敗 FAIL_COOLDOWN_SEC 退避）；唯一不在 180 秒退避裡的是
-    `fetch_fred` 在 HTTP 200 之後拋例外那條（合成情境），只靠 fetch_url 的 URL 快取擋
-    （`proxy_helper._URL_CACHE`：`_URL_CACHE_TTL` 300 秒、`_URL_CACHE_MAX` 256 筆、全程序共用）：
-    該筆沒被擠出或清空時每 300 秒至多 1 次 GET（`TestUpstreamHttpCount` 走真的 fetch_url 數實際 GET）；
-    每次重算前該筆都被擠出時，每次重算都會 GET —— `fetch_fred` 的既有缺口（`risk_radar` 直呼
-    `fetch_fred` 同樣如此），本檔不測擠出情境、本批不修。
+    `_fetch_yf_close_base`（成功 1 小時快取／失敗 FAIL_COOLDOWN_SEC 退避）。
+    `fetch_fred` 在 HTTP 200 之後拋例外那條（合成情境）：~~唯一不在 180 秒退避裡，只靠 fetch_url 的 URL 快取擋，
+    每次重算前該筆都被擠出時每次重算都會 GET（`fetch_fred` 的既有缺口）~~ ← 批 Y3（X1-n4）更正，有意識的更正、
+    不是漏刪：上述是 D3g 當時的現況；批 X1（#784，D2-f49）起 `fetch_fred` 對這條同樣記退避（該次呼叫照舊拋出、
+    本層照舊接住記為空表；冷卻期內回空 DataFrame、不打上游）⇒ 缺口已補，即使該筆被擠出 URL 快取，
+    每個冷卻期也至多 1 次 GET。URL 快取（`proxy_helper._URL_CACHE`：`_URL_CACHE_TTL` 300 秒、`_URL_CACHE_MAX`
+    256 筆、全程序共用）仍在 —— 冷卻期滿而該筆還在時照樣擋，故 `TestUpstreamHttpCount` 數到的 GET 次數不變
+    （走真的 fetch_url 數實際 GET）。本檔仍不測擠出情境。
   · **D2-f14 ①** `macro_core.fetch_fred` 三個失敗出口、`fetch_yf_ohlcv` 兩個失敗出口，以及同檔同一缺陷的
     `_fetch_yf_close_base` 三個失敗出口（fetch_url 回 None／收盤全 null／解析失敗；總管 2026-09-29 裁定併入
     本列）：寫退避紀錄時與既有紀錄取 max —— 並行時「較早開始、較晚失敗」的呼叫不再用較舊的 now 蓋掉較新的
@@ -808,10 +812,11 @@ class TestUpstreamHttpCount:
         assert gets == {sid: 4 for sid in _SIDS} and relay["n"] == 5, "恢復後 1 次取回、之後照舊快取"
 
     def test_china_post_200_exception_path_bounded_by_url_cache(self, http, clock, sync_pool):
-        """合成情境（真實 FRED 不會回）：HTTP 200 但 fetch_fred 解析時拋例外 —— 這條**不在** 180 秒退避裡，
-        只靠 fetch_url 的 URL 快取擋。本測試獨佔一份空的 `_URL_CACHE`、只有這 5 條寫入，該筆擠不出去 ⇒
-        每 300 秒至多 1 次 GET、不是每次 rerun 都重打；每次重算前該筆都被擠出時就是每次都 GET
-        （既有缺口，見檔頭），本測試不涵蓋。"""
+        """合成情境（真實 FRED 不會回）：HTTP 200 但 fetch_fred 解析時拋例外。D3g 當時這條不在 180 秒退避裡、
+        只靠 fetch_url 的 URL 快取擋；批 X1（#784，D2-f49）起 fetch_fred 對它也記退避（見檔頭）。
+        本測試獨佔一份空的 `_URL_CACHE`、只有這 5 條寫入，該筆擠不出去 ⇒ 退避與 URL 快取兩層都擋：
+        270 秒內 6 次呼叫只 GET 1 次（冷卻期滿時 URL 快取仍命中），URL 快取過期後才再 GET。
+        擠出情境（現在由退避擋住）本測試不涵蓋。"""
         routes, gets, relay = http
         for sid in _SIDS:
             routes[sid] = (200, _fred_body(sid))
