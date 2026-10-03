@@ -30,20 +30,30 @@ _URL_CACHE_TTL = 300
 # _url_cache_put:先清過期,仍超額再逐出最舊,上限對齊全站 @st.cache_data
 # max_entries 慣例。
 _URL_CACHE_MAX = 256
+# D2-f41(2026-10-03):寫入端持鎖。原本無鎖 —— 並行寫入(如 `tw_macro.fetch_china_macro` 5 條並行)時,
+# 一邊迭代清過期、一邊被別的執行緒寫入/逐出,會拋 `RuntimeError: dictionary changed size during iteration`
+# 或逐出時 `min()` 的 KeyError;`fetch_url` 把它當一般錯誤接住 ⇒ 假失敗或多打一次上游。
+# 迭代一律對快照(`list(...items())`)做:鎖外還有直接 `_URL_CACHE.clear()` 的呼叫端(強制重抓)。
+# 讀取端(`fetch_url` 開頭)改成單次 `.get()`,不再「先查 in、再取值」。
+_URL_CACHE_LOCK = threading.Lock()
 
 
 def _url_cache_put(key, content) -> None:
-    """寫入 URL 快取:先逐出過期項,仍超過 _URL_CACHE_MAX 再逐出最舊。"""
+    """寫入 URL 快取:先逐出過期項,仍超過 _URL_CACHE_MAX 再逐出最舊(D2-f41 起持鎖)。"""
     import time as _t_ucp
-    _now_ucp = _t_ucp.time()
-    _expired = [k for k, (ts, _, _) in _URL_CACHE.items()
-                if _now_ucp - ts >= _URL_CACHE_TTL]
-    for _k in _expired:
-        _URL_CACHE.pop(_k, None)
-    while len(_URL_CACHE) >= _URL_CACHE_MAX:
-        _oldest = min(_URL_CACHE, key=lambda k: _URL_CACHE[k][0])
-        _URL_CACHE.pop(_oldest, None)
-    _URL_CACHE[key] = (_now_ucp, content, 200)
+    with _URL_CACHE_LOCK:
+        _now_ucp = _t_ucp.time()
+        _expired = [k for k, (ts, _, _) in list(_URL_CACHE.items())
+                    if _now_ucp - ts >= _URL_CACHE_TTL]
+        for _k in _expired:
+            _URL_CACHE.pop(_k, None)
+        while len(_URL_CACHE) >= _URL_CACHE_MAX:
+            _snap = list(_URL_CACHE.items())
+            if not _snap:                 # 鎖外的 clear() 剛清空
+                break
+            _oldest = min(_snap, key=lambda kv: kv[1][0])[0]
+            _URL_CACHE.pop(_oldest, None)
+        _URL_CACHE[key] = (_now_ucp, content, 200)
 
 
 # get_proxies() 定義於本檔末尾,為 get_proxy_config 的向下相容別名(含 TTL 快取)。
@@ -189,8 +199,9 @@ def fetch_url(url: str, headers: dict = None,
     # ── Storm Shield: 命中快取直接回傳 ─────────────────────────────
     _cache_key = (url, tuple(sorted((params or {}).items())))
     _now = _t.time()
-    if _cache_key in _URL_CACHE:
-        _ts, _cached_text, _cached_status = _URL_CACHE[_cache_key]
+    _cache_hit = _URL_CACHE.get(_cache_key)   # D2-f41:單次取值(先查後取之間可能被逐出)
+    if _cache_hit is not None:
+        _ts, _cached_text, _cached_status = _cache_hit
         if _now - _ts < _URL_CACHE_TTL:
             _mock = requests.models.Response()
             _mock.status_code = _cached_status

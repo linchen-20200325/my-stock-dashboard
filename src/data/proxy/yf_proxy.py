@@ -19,7 +19,9 @@ proxy env 由模組內 try/finally 統一處理，caller 零樣板。
 """
 from __future__ import annotations
 
+import functools as _functools
 import os as _os
+import threading as _threading
 from contextlib import contextmanager
 
 import pandas as pd
@@ -95,10 +97,16 @@ def _is_yf_no_data(exc: BaseException) -> bool:
     """`exc` 是 yfinance 自己回報的「沒有資料」（→ 同修前、照舊快取），而不是抓取失敗？（D2-f16）
 
     · 429（`YFRateLimitError`，0.2.52 起）一律**不是** —— 確定的抓取失敗（防日後型別階層變動）。
-    · 型別**恰為** `Exception`：0.2.36～0.2.38 還沒有型別，`history(raise_errors=True)` 把「沒資料」
-      一律拋成裸 `Exception("{ticker}: {原因}")`；網路／代理錯誤則是原樣往上拋、帶自己的型別
-      （requests／curl_cffi 例外），不會是裸 `Exception`。0.2.x 全系列另有一處也拋裸 `Exception`：
-      還原權息（auto_adjust）失敗 —— 同樣落在這一類（見 `_history_or_raise` 末段）。
+    · 型別**恰為** `Exception`：**只在**已安裝的 yfinance 沒有「沒資料」型別時（`_yf_no_data_exc_types()`
+      為空 ＝ 0.2.36～0.2.38）才算 —— 那幾版 `history(raise_errors=True)` 把「沒資料」一律拋成裸
+      `Exception("{ticker}: {原因}")`；網路／代理錯誤則是原樣往上拋、帶自己的型別（requests／curl_cffi
+      例外），不會是裸 `Exception`。有型別的版本（0.2.39 起）裸 `Exception` 一律**不是**「沒資料」
+      （D2-f37，2026-10-03）：0.2.39～0.2.66 本模組這種呼叫（日線、不開 repair）會拋裸 `Exception` 的是
+      資料整理階段 —— 還原權息（auto_adjust）失敗 1 處，以及配息／分割合併 `utils.safe_merge_dfs` 5 處
+      （「No data to merge」「Expected 1 data col」「events are out-of-range」「New index contains
+      duplicates」「Data was lost in merge」；D2-f46，0.2.36～0.2.66 逐版原始碼查證 2026-10-03；
+      repair／重採樣路徑另有幾處，本模組不開、到不了）—— 都不是 Yahoo 回報沒有資料，歸「抓取失敗」
+      （不入快取、冷卻）。1.7.0 的 `safe_merge_dfs` 剩 3 處、改拋 `YFException`（不在「沒資料」型別內），同樣是失敗。
     · 其餘：`_yf_no_data_exc_types()` 的實例。
     """
     try:
@@ -107,10 +115,80 @@ def _is_yf_no_data(exc: BaseException) -> bool:
         _rate_limited = None
     if _rate_limited is not None and isinstance(exc, _rate_limited):
         return False
-    if type(exc) is Exception:
-        return True
     _types = _yf_no_data_exc_types()
+    # D2-f37：裸 Exception 只在沒有型別的舊版（0.2.36～0.2.38）算「沒資料」
+    if type(exc) is Exception:
+        return not _types
     return bool(_types) and isinstance(exc, _types)
+
+
+#: D2-f36（2026-10-03）：本執行緒最近一次 Yahoo K 線請求（URL 含 `_CHART_URL_PART`）收到的
+#: (HTTP 狀態碼, body 是不是 JSON `null`)。由 `_ensure_chart_reply_recorder` 掛在 `yfinance.data.YfData.get`
+#: 上記錄（回應原樣交還 yfinance，不改任何內容）；`_history_or_raise` 每次呼叫前清成 None。
+_CHART_REPLY = _threading.local()
+_CHART_URL_PART = "/v8/finance/chart/"
+_CHART_REPLY_RECORDER_FLAG = "_yf_proxy_chart_reply_recorder"
+_CHART_REPLY_RECORDER_LOCK = _threading.Lock()
+
+
+def _chart_reply_of(resp) -> tuple:
+    """(狀態碼, body 是不是 JSON `null`)；讀不到的部分回 None／False（不猜）。"""
+    _status = getattr(resp, "status_code", None)
+    _null = False
+    if _status == 200:
+        try:
+            _raw = getattr(resp, "content", None)
+            if _raw is None:
+                _raw = (getattr(resp, "text", "") or "").encode("utf-8")
+            _null = len(_raw) <= 64 and _raw.strip() == b"null"
+        except Exception:  # noqa: BLE001 — 讀不到 body → 不判 null（同修前）
+            _null = False
+    return _status, _null
+
+
+def _chart_reply_failure(reply) -> str:
+    """K 線回應是抓取失敗 → 回白話說明（log 用）；否則（含看不到回應）回 ''。
+
+    失敗 ＝ 5xx、401、403（認證／被擋），或 200 但 body 為 `null`。200、404（Yahoo 的「查無此代碼」）
+    與其他狀態照舊交給 yfinance 的判斷。"""
+    if not reply:
+        return ""
+    _status, _null = reply
+    if not isinstance(_status, int):
+        return ""
+    if _status >= 500 or _status in (401, 403):
+        return f"HTTP {_status}"
+    if _status == 200 and _null:
+        return "HTTP 200（body 為 null）"
+    return ""
+
+
+def _ensure_chart_reply_recorder() -> None:
+    """在 `yfinance.data.YfData.get` 掛上 K 線回應記錄器（已掛則不動；找不到該方法 → 不掛，同修前）。
+
+    每次呼叫都檢查（不是只掛一次）：測試或其他程式換掉 `YfData.get` 之後仍掛得上。"""
+    try:
+        from yfinance import data as _yfd
+        _cls = _yfd.YfData
+        _orig = _cls.get
+    except Exception:  # noqa: BLE001 — yfinance 內部結構不同 → 不記錄（判斷同修前）
+        return
+    if getattr(_orig, _CHART_REPLY_RECORDER_FLAG, False):
+        return
+    with _CHART_REPLY_RECORDER_LOCK:
+        _orig = _cls.get
+        if getattr(_orig, _CHART_REPLY_RECORDER_FLAG, False):
+            return
+
+        @_functools.wraps(_orig)
+        def _get(self, url, *args, **kwargs):
+            _resp = _orig(self, url, *args, **kwargs)
+            if _CHART_URL_PART in str(url):
+                _CHART_REPLY.reply = _chart_reply_of(_resp)
+            return _resp
+
+        setattr(_get, _CHART_REPLY_RECORDER_FLAG, True)
+        _cls.get = _get
 
 
 def _history_or_raise(tk, ticker: str, period: str):
@@ -132,11 +210,19 @@ def _history_or_raise(tk, ticker: str, period: str):
     相容防線（兩者都退回**修前呼叫**：分不出失敗與沒資料 → 照舊，不會比修前差）：
     · 日後版本移除 `raise_errors`（`TypeError` 且訊息提到它）→ 改用修前呼叫；
     · `DeprecationWarning` 被設定成例外（`-W error`；1.x 在發出 K 線請求前就警告）→ 同上。
-    已知沒有照修前的一條 —— 還原權息（auto_adjust）失敗（修前回的是**未還原**的價格），修後依版本不同：
-    0.2.36～0.2.66 拋裸 `Exception` → 歸「沒資料」（回空表、照舊快取）；1.0～1.7.0 原樣拋出原例外
-    → 失敗（不入快取、冷卻）。各版 `parse_quotes` 恆補 `Adj Close`，該路徑實務上到不了。
-    （2026-09-29 更正：前一版此處寫成不分版本的「會拋出」，0.2.x 並非如此。）
+    已知沒有照修前的一條 —— 還原權息（auto_adjust）失敗（修前回的是**未還原**的價格），修後：
+    0.2.39～0.2.66 拋裸 `Exception`、1.0～1.7.0 原樣拋出原例外 → 皆為失敗（不入快取、冷卻；D2-f37
+    2026-10-03 起 0.2.x 也是 —— 之前 0.2.36～0.2.66 歸「沒資料」）。各版 `parse_quotes` 恆補 `Adj Close`，
+    該路徑實務上到不了。（2026-09-29 更正：前一版此處寫成不分版本的「會拋出」，0.2.x 並非如此。）
+
+    D2-f36（2026-10-03，§1.A-3(a)）：yfinance 不看 HTTP 狀態碼 —— 帶 JSON body 的 HTTP 錯誤
+    （5xx＋`chart.error`、401＋`finance.error`）與「HTTP 200 但 body 是 `null`」都被它拋成「沒資料」型別
+    （`YFPricesMissingError`），修前因此照舊快取 1 小時。現在「沒資料」型別的例外另看這一次 K 線請求
+    實際收到的 HTTP 回應（`_chart_reply_failure`）：5xx／401／403，或 200 但 body 為 `null` → **原樣往上拋**
+    （＝失敗，不入快取、冷卻）。看不到回應（沒送出請求、或 yfinance 走自己的快取）→ 同修前。
     """
+    _CHART_REPLY.reply = None                             # D2-f36：只看本次呼叫的回應
+    _ensure_chart_reply_recorder()
     try:
         return tk.history(period=period, raise_errors=True)
     except TypeError as _e:
@@ -147,6 +233,11 @@ def _history_or_raise(tk, ticker: str, period: str):
         return tk.history(period=period)
     except Exception as _e:
         if not _is_yf_no_data(_e):
+            raise
+        _bad = _chart_reply_failure(getattr(_CHART_REPLY, "reply", None))
+        if _bad:                                          # D2-f36：HTTP 錯誤不是「沒資料」
+            print(f"[yf_proxy.history] {ticker}: Yahoo 回應 {_bad} → 抓取失敗"
+                  f"（{type(_e).__name__}: {_e}）")
             raise
         print(f"[yf_proxy.history] {ticker}: 無資料（{type(_e).__name__}: {_e}）")
         return None
