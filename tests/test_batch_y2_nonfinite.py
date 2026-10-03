@@ -139,6 +139,21 @@ class TestFedFundsNonFinite:
         # 既有失敗出口、既有字串（fredgraph 走 us10y 同款 rows<2；FRED-API 沉默落空同修前）
         assert out == {'_err_fed_funds': 'fredgraph:rows<2(2)'}
 
+    @pytest.mark.parametrize('bad', ['inf', '-inf'])
+    @pytest.mark.parametrize('head', [['5.0', '4.5'], ['5.33', '5.0', '4.75', '4.5']],
+                             ids=['3rows', '5rows'])
+    def test_fredgraph_long_csv_last_non_finite_no_prev_as_current(self, _ff, head, bad):
+        # QA M32:守衛若只砍掉末筆(`iloc[:-1]`)而非清空,≥3 列時會把上月 4.5 當成
+        #   current、掛在最新日期下。必須整段走既有失敗出口,4.5 不得出現。
+        #   (NaN 不適用:fredgraph 先 `dropna()`,NaN 列本來就被剔除,屬既有行為。)
+        rows = head + [bad]
+        _ff['csv'] = _Resp(text=_fred_csv(rows))
+        _ff['api'] = None
+        out = macro_snapshot.fetch_fed_funds_block()
+        assert out == {'_err_fed_funds': f'fredgraph:rows<2({len(rows)})'}
+        assert (out.get('fed_funds') or {}).get('current') is None
+        assert '4.5' not in repr(out)
+
     def test_failure_not_cached(self, _ff):
         _ff['csv'] = _Resp(text=_fred_csv(['4.33', 'inf']))
         _ff['api'] = None
