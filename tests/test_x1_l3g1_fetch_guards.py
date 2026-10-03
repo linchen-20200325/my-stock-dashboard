@@ -313,6 +313,20 @@ class TestD2f36HttpErrorNotNoData:
         assert YP._chart_reply_of(_Resp(200, text=text)) == (200, want)
         assert YP._chart_reply_of(_Resp(503, text=text)) == (503, False)
 
+    def test_reply_of_long_whitespace_null(self):
+        assert YP._chart_reply_of(_Resp(200, text=" " * 500 + "null")) == (200, True)
+
+    def test_non_chart_url_not_recorded(self, real_yf):
+        """只記 K 線（`/v8/finance/chart/`）的回應；其他端點（例：quoteSummary）不覆寫。"""
+        from yfinance import data as yfd
+        YP._ensure_chart_reply_recorder()
+        real_yf["mode"] = "503_chart"
+        YP._CHART_REPLY.reply = ("sentinel", False)
+        yfd.YfData.get(object.__new__(yfd.YfData), "https://query2.finance.yahoo.com/v10/finance/quoteSummary/X")
+        assert YP._CHART_REPLY.reply == ("sentinel", False)
+        yfd.YfData.get(object.__new__(yfd.YfData), "https://query2.finance.yahoo.com/v8/finance/chart/X")
+        assert YP._CHART_REPLY.reply == (503, False)
+
     def test_reply_of_text_only_response(self):
         r = types.SimpleNamespace(status_code=200, text="null")
         assert YP._chart_reply_of(r) == (200, True)
@@ -366,6 +380,22 @@ class TestD2f49Fred:
         out = MC.fetch_fred("X49A", "k", n=10)
         assert fred["n"] == 2 and out["value"].tolist() == [4.1, 4.3]
         assert ("X49A", "k", 10) not in MC._FRED_FAIL_CACHE
+
+    def test_late_failure_keeps_newer_record(self, fred, monkeypatch):
+        """D2-f14 同一規則：並行時別人在本次呼叫期間記下較新的失敗 → 本次較舊的 now 不得蓋掉它。"""
+        key = ("X49L", "k", 10)
+        orig = MC.fetch_url
+
+        def _fu(url, **kw):
+            with MC._FRED_CACHE_LOCK:
+                MC._FRED_FAIL_CACHE[key] = time.time() + 50
+            return orig(url, **kw)
+        monkeypatch.setattr(MC, "fetch_url", _fu)
+        fred["body"] = {"observations": [{"date": "2026-09-01"}]}
+        t0 = time.time()
+        with pytest.raises(KeyError):
+            MC.fetch_fred("X49L", "k", n=10)
+        assert MC._FRED_FAIL_CACHE[key] >= t0 + 49
 
     def test_schema_error_backs_off(self, fred):
         pytest.importorskip("pandera")
@@ -435,6 +465,20 @@ class TestD2f49Ohlcv:
             MC.fetch_url = orig
         assert key not in MC._YF_OHLCV_FAIL_CACHE
 
+    def test_late_failure_keeps_newer_record(self, fred, monkeypatch):
+        key = ("X49M", "9mo", "1d")
+        orig = MC.fetch_url
+
+        def _fu(url, **kw):
+            with MC._YF_OHLCV_FAIL_LOCK:
+                MC._YF_OHLCV_FAIL_CACHE[key] = time.time() + 50
+            return orig(url, **kw)
+        monkeypatch.setattr(MC, "fetch_url", _fu)
+        fred["body"] = _chart_ohlcv([None])
+        t0 = time.time()
+        MC.fetch_yf_ohlcv("X49M", range_="9mo")
+        assert MC._YF_OHLCV_FAIL_CACHE[key] >= t0 + 49
+
     def test_partial_close_is_success(self, fred):
         fred["body"] = _chart_ohlcv([None, 5.0])
         out = MC.fetch_yf_ohlcv("X49Q", range_="9mo")
@@ -503,6 +547,41 @@ class TestD2f41UrlCacheLock:
         for t in ts:
             t.join()
         assert errs == [] and len(PH._URL_CACHE) <= 8
+
+    @pytest.mark.slow
+    def test_puts_with_unlocked_external_clear(self, monkeypatch):
+        """鎖外有人直接 `_URL_CACHE.clear()`（強制重抓的兩個呼叫端）同時寫入 → 寫入端不拋。
+        （壓力測試，約 20 秒 → slow lane；迭代改成對快照做的那一處，拿掉快照時本測試會紅。）"""
+        monkeypatch.setattr(PH, "_URL_CACHE", {})
+        monkeypatch.setattr(PH, "_URL_CACHE_MAX", 10_000)
+        monkeypatch.setattr(PH, "_URL_CACHE_TTL", -1)      # 每次寫入都要掃一輪「過期」
+        stop = threading.Event()
+        errs: list = []
+
+        def _clearer():
+            while not stop.is_set():
+                PH._URL_CACHE.clear()
+
+        def _writer(i):
+            try:
+                for j in range(3000):
+                    if errs:
+                        return
+                    for k in range(20):
+                        dict.__setitem__(PH._URL_CACHE, (i, j, k), (0.0, b"", 200))
+                    PH._url_cache_put((i, j), b"v")
+            except Exception as e:  # noqa: BLE001
+                errs.append(e)
+        c = threading.Thread(target=_clearer)
+        ws = [threading.Thread(target=_writer, args=(i,)) for i in range(4)]
+        c.start()
+        for t in ws:
+            t.start()
+        for t in ws:
+            t.join()
+        stop.set()
+        c.join()
+        assert errs == []
 
     def test_put_survives_external_clear(self, monkeypatch):
         """鎖外的 `_URL_CACHE.clear()`（強制重抓）在逐出迴圈中清空 → 不拋。"""
@@ -626,6 +705,19 @@ class TestD2f29SharedOpenApiCooldown:
         fc_clock["now"] += FAIL_COOLDOWN_SEC                 # 第二次失敗 → 冷卻加倍
         MR.fetch_monthly_revenue("9202")
         assert mrev.calls["twse"] == 2, "仍在加倍後的冷卻內"
+
+    def test_success_resets_escalation(self, mrev, fc_clock):
+        """成功一次即歸零：之後再失敗，冷卻從起點算（不是接著加倍）。"""
+        MR.fetch_monthly_revenue("9500")                     # 失敗 #1
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        mrev.twse = mrev.tpex = "ok"
+        MR.fetch_monthly_revenue("2330")                     # 成功
+        mrev.twse = mrev.tpex = "none"
+        MR.fetch_monthly_revenue("9501")                     # 新一串的失敗 #1
+        n = mrev.calls["twse"]
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        MR.fetch_monthly_revenue("9502")
+        assert mrev.calls["twse"] == n + 1, "冷卻回到起點 FAIL_COOLDOWN_SEC"
 
     def test_clear_resets_shared_cooldown(self, mrev):
         MR.fetch_monthly_revenue("9300")

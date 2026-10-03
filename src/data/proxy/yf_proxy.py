@@ -140,7 +140,7 @@ def _chart_reply_of(resp) -> tuple:
             _raw = getattr(resp, "content", None)
             if _raw is None:
                 _raw = (getattr(resp, "text", "") or "").encode("utf-8")
-            _null = len(_raw) <= 64 and _raw.strip() == b"null"
+            _null = _raw.strip() == b"null"
         except Exception:  # noqa: BLE001 — 讀不到 body → 不判 null（同修前）
             _null = False
     return _status, _null
