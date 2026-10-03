@@ -459,7 +459,7 @@ def fetch_fred(series_id: str, api_key: str, n: int = 250) -> pd.DataFrame:
         # 結果同修前),冷卻期內的呼叫回與其他失敗出口相同的空 DataFrame。
         print(f"[macro_core/fred] {series_id} 回應整理失敗(記退避): {type(e).__name__}: {e}")
         with _FRED_CACHE_LOCK:
-            _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f14:與既有紀錄取 max
+            _FRED_FAIL_CACHE[key] = max(now, _FRED_FAIL_CACHE.get(key, now))   # D2-f49:同 D2-f14 取 max
         raise
     with _FRED_CACHE_LOCK:   # S9 v19.78
         _FRED_CACHE[key] = (now, out.copy())
@@ -693,7 +693,7 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
             print(f"[macro_core/yf_ohlcv] {ticker} 收盤全為空值(不算成功,冷卻 {_FAIL_COOLDOWN_SEC:.0f}s)")
             with _YF_OHLCV_FAIL_LOCK:
                 if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:
-                    _YF_OHLCV_FAIL_CACHE[key] = max(now, _YF_OHLCV_FAIL_CACHE.get(key, now))   # D2-f14:取 max
+                    _YF_OHLCV_FAIL_CACHE[key] = max(now, _YF_OHLCV_FAIL_CACHE.get(key, now))   # D2-f49:同 D2-f14 取 max
             return df
         with _YF_OHLCV_FAIL_LOCK:   # D2-f10:成功即解除退避、推進成功世代
             _YF_OHLCV_OK_GEN_CACHE[key] = _YF_OHLCV_OK_GEN_CACHE.get(key, 0) + 1
