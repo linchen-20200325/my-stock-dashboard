@@ -97,7 +97,7 @@ def read_v4_macro_veto() -> dict | None:
     _vix_raw = _vix_node.get('current') if isinstance(_vix_node, dict) else None
     try:
         _vix = float(_vix_raw)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError 視同非有限(批 Y2,V2-n8)
         return None
     if not math.isfinite(_vix):   # NaN / ±inf → 視為未取得(批 V2,V1-n3)
         return None

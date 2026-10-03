@@ -304,7 +304,7 @@ def _is_finite_number(value) -> bool:
     """
     try:
         _f = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError(超大 int)視同非有限(批 Y2,X2-n2)
         return False
     return _f == _f and _f not in (float('inf'), float('-inf'))
 

@@ -120,7 +120,7 @@ def reset_allocation_registry() -> None:
 def _safe_float(v) -> float | None:
     try:
         _f = float(v)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError(超大 int)視同非有限(批 Y2,V2-n8)
         return None
     return _f if math.isfinite(_f) else None  # NaN / ±inf → None(批 V2,V1-n1)
 
