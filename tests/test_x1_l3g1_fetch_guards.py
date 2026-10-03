@@ -298,6 +298,51 @@ class TestD2f36HttpErrorNotNoData:
         t.join()
         assert getattr(YP._CHART_REPLY, "reply", None) is None, "別的執行緒的回應不寫到這裡"
 
+    def test_reply_survives_other_thread_reset(self, monkeypatch):
+        """強制交錯（Event，不靠時序運氣）：A 收到 503 後、判斷前，B 開始自己的呼叫（清空「本次回應」）。
+        A 的 503 必須仍被看見 → 拋出（失敗）。`_CHART_REPLY` 若是全執行緒共用的物件，A 會被 B 清掉 →
+        誤判「沒資料」回 None。"""
+        from yfinance import data as yfd
+        monkeypatch.setattr(yfd.YfData, "get", lambda self, url, *a, **k: _Resp(503, _CHART_5XX))
+        YP._ensure_chart_reply_recorder()
+        a_recorded, b_reset = threading.Event(), threading.Event()
+        res: dict = {}
+
+        def _no_data():
+            e = YFE.YFPricesMissingError.__new__(YFE.YFPricesMissingError)
+            Exception.__init__(e, "X: no price data found")
+            return e
+
+        class _TA:
+            def history(self, period="1mo", raise_errors=False):
+                yfd.YfData.get(object.__new__(yfd.YfData), "https://q/v8/finance/chart/A")
+                a_recorded.set()
+                assert b_reset.wait(5)
+                raise _no_data()
+
+        class _TB:
+            def history(self, period="1mo", raise_errors=False):
+                b_reset.set()                                 # B 的呼叫已越過「清空本次回應」那一步
+                return pd.DataFrame({"Close": [1.0]})
+
+        def _a():
+            try:
+                res["a"] = YP._history_or_raise(_TA(), "A", "1y")
+            except Exception as e:  # noqa: BLE001
+                res["a_exc"] = e
+
+        def _b():
+            assert a_recorded.wait(5)
+            res["b"] = YP._history_or_raise(_TB(), "B", "1y")
+
+        ta, tb = threading.Thread(target=_a), threading.Thread(target=_b)
+        ta.start()
+        tb.start()
+        ta.join(10)
+        tb.join(10)
+        assert isinstance(res.get("a_exc"), YFE.YFPricesMissingError), res
+        assert len(res["b"]) == 1
+
     @pytest.mark.parametrize("reply,want", [
         (None, ""), ((None, False), ""), ((200, False), ""), ((404, False), ""), ((400, False), ""),
         ((429, False), ""), ((499, False), ""), ((500, False), "HTTP 500"), ((503, False), "HTTP 503"),
@@ -583,6 +628,41 @@ class TestD2f41UrlCacheLock:
         c.join()
         assert errs == []
 
+    def test_clear_during_expiry_scan_not_a_false_failure(self, monkeypatch):
+        """鎖外 `_URL_CACHE.clear()` 恰好落在過期掃描途中（以 ts 的 `__rsub__` 鉤子在掃描第一筆時觸發，
+        確定性重現）→ 寫入端不拋、`fetch_url` 照常回 200。掃描若直接迭代活的 dict（不先取快照）→
+        RuntimeError → 被 `fetch_url` 當一般錯誤接住 → 回 None（假失敗）。"""
+        cache: dict = {}
+
+        class _HookTs(float):
+            fired = False
+
+            def __rsub__(self, other):
+                if not _HookTs.fired:
+                    _HookTs.fired = True
+                    dict.clear(cache)                         # 模擬另一執行緒的鎖外 clear()
+                return float(other) - float(self)
+
+        now = time.time()
+        cache[("a", ())] = (_HookTs(now), b"a", 200)
+        cache[("b", ())] = (_HookTs(now), b"b", 200)
+
+        class _S:
+            def get(self, url, **kw):
+                r = requests.models.Response()
+                r.status_code = 200
+                r._content = b"fresh"
+                return r
+
+        monkeypatch.setattr(PH, "_URL_CACHE", cache)
+        monkeypatch.setattr(PH, "get_proxy_config", lambda: None)
+        monkeypatch.setattr(PH, "get_nas_relay", lambda: None)
+        monkeypatch.setattr(PH, "_get_thread_session", lambda lean=False: _S())
+        r = PH.fetch_url("https://example.invalid/z", attempts=1)
+        assert _HookTs.fired, "前提：鉤子確實在掃描中觸發"
+        assert r is not None and r.content == b"fresh"
+        assert list(cache) == [("https://example.invalid/z", ())]
+
     def test_put_survives_external_clear(self, monkeypatch):
         """鎖外的 `_URL_CACHE.clear()`（強制重抓）在逐出迴圈中清空 → 不拋。"""
         class _ClearOnLen(dict):
@@ -686,6 +766,38 @@ class TestD2f29SharedOpenApiCooldown:
         pd.testing.assert_frame_equal(shared[0], fresh[0])
         a = MR.fetch_monthly_revenue.with_status("2317", 12)
         assert a[1] is True and a[0].empty
+
+    def _escalate_to_long_cooldown(self, mrev, fc_clock):
+        """上市持續失敗、上櫃正常：失敗兩次 → 冷卻加倍到 2×FAIL_COOLDOWN_SEC（> URL 快取 300 秒）。"""
+        mrev.tpex = "ok"
+        MR.fetch_monthly_revenue("2330")                     # 失敗 #1（冷卻 180 秒）
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        MR.fetch_monthly_revenue("2317")                     # 期滿重抓、再失敗 #2（冷卻 360 秒）
+        assert mrev.calls == {"twse": 2, "tpex": 2}
+
+    def test_reused_snapshot_never_older_than_url_cache(self, mrev, fc_clock):
+        """冷卻期內沿用的快照含正常市場（上櫃）的資料時，最多沿用 URL 快取期限（300 秒）；超過就重抓一次
+        —— 不把比修前更舊的上櫃資料以「現在」的 fetched_at 入 6 小時快取。修前（本批 v1）沿用到冷卻結束 → 紅。"""
+        self._escalate_to_long_cooldown(mrev, fc_clock)
+        fc_clock["now"] += PH._URL_CACHE_TTL                 # 剛好 300 秒：仍沿用
+        df = MR.fetch_monthly_revenue("6488")
+        assert mrev.calls == {"twse": 2, "tpex": 2} and len(df) == 1
+        fc_clock["now"] += 1                                 # 超過 300 秒，仍在 360 秒冷卻內
+        df = MR.fetch_monthly_revenue("6488", months=12)
+        assert mrev.calls == {"twse": 3, "tpex": 3}, "快照過舊 → 重抓一次"
+        assert len(df) == 1 and df["revenue"].iloc[0] == 3000 * 1000.0
+        MR.fetch_monthly_revenue("6488", months=6)           # 重抓後以新快照重記 → 再沿用
+        assert mrev.calls == {"twse": 3, "tpex": 3}
+
+    def test_empty_snapshot_reused_whole_cooldown(self, mrev, fc_clock):
+        """兩邊都失敗（快照為空）→ 沒有舊資料問題，整段冷卻都沿用、不重打。"""
+        MR.fetch_monthly_revenue("9600")
+        fc_clock["now"] += FAIL_COOLDOWN_SEC
+        MR.fetch_monthly_revenue("9601")                     # 失敗 #2 → 冷卻 360 秒
+        n = dict(mrev.calls)
+        fc_clock["now"] += 2 * FAIL_COOLDOWN_SEC - 1
+        MR.fetch_monthly_revenue("9602")
+        assert mrev.calls == n
 
     def test_cooldown_expires_and_recovers(self, mrev, fc_clock):
         MR.fetch_monthly_revenue("9100")

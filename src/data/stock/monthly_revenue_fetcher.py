@@ -48,6 +48,7 @@ except ImportError:
 from shared.ttls import TTL_1HOUR, TTL_6HOUR
 from shared.fail_cooldown import (CachedFailure as _CachedFailure,  # D2-f5 2026-09-28
                                   FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT)
+import shared.fail_cooldown as _fc_mod  # D2-f29:快照時點與冷卻用同一個時鐘
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 from src.data.core.finmind_client import finmind_get  # D5 step2 v18.437 SSOT client
 
@@ -426,19 +427,28 @@ def _single_openapi_snapshot(failed: list) -> pd.DataFrame:
     """單股 fallback 用的 OpenAPI 全市場快照(D2-f29):`_batch_twse_openapi(failed=…)`,外加檔與檔共用的失敗冷卻。
 
     回傳與 `failed` 的寫入同 `_batch_twse_openapi(failed=failed)`;冷卻期內回上次確定失敗那一份的複本、
-    `failed` 寫入同一組說明,不打上游。"""
+    `failed` 寫入同一組說明,不打上游。
+
+    沿用的快照若含另一邊(正常市場)的資料,最多只沿用 `proxy_helper._URL_CACHE_TTL` 秒(＝修前重打時
+    `fetch_url` 的 URL 快取能給的最舊資料);超過就照常重抓一次(並以新快照重記冷卻)—— 不會把比修前更舊的
+    資料當成新抓的(單股結果會以抓取當下的 `fetched_at` 入 6 小時快取)。兩邊都失敗(快照為空)時沒有舊資料
+    可言,整段冷卻期都沿用。"""
+    from src.data.proxy import proxy_helper as _ph   # late import:同 `_batch_twse_openapi`
     _hit, _gen = _openapi_snapshot_fail_cooldown.begin(_OPENAPI_SNAPSHOT_KEY)
     if _hit is not _FC_NO_HIT:
-        _snap, _notes = _hit
-        failed.extend(_notes)
-        print(f"[mrev-fetcher] TWSE/TPEx OpenAPI fallback 退避中(他檔剛確定抓取失敗:{'；'.join(_notes)})"
-              f"→ 不重打上游,{_cooldown_note(_openapi_snapshot_fail_cooldown)}")
-        return _snap
+        _snap, _notes, _at = _hit
+        if _snap.empty or _fc_mod.time.monotonic() - _at <= _ph._URL_CACHE_TTL:
+            failed.extend(_notes)
+            print(f"[mrev-fetcher] TWSE/TPEx OpenAPI fallback 退避中(他檔剛確定抓取失敗:{'；'.join(_notes)})"
+                  f"→ 不重打上游,{_cooldown_note(_openapi_snapshot_fail_cooldown)}")
+            return _snap
+        print("[mrev-fetcher] TWSE/TPEx OpenAPI fallback 退避中,但沿用的快照已超過 URL 快取期限 → 重抓一次")
     _failed: list[str] = []
+    _at = _fc_mod.time.monotonic()
     _batch = _batch_twse_openapi(failed=_failed)
     failed.extend(_failed)
     if _failed:
-        _openapi_snapshot_fail_cooldown.fail(_OPENAPI_SNAPSHOT_KEY, _gen, (_batch, list(_failed)))
+        _openapi_snapshot_fail_cooldown.fail(_OPENAPI_SNAPSHOT_KEY, _gen, (_batch, list(_failed), _at))
     else:
         _openapi_snapshot_fail_cooldown.success(_OPENAPI_SNAPSHOT_KEY)
     return _batch

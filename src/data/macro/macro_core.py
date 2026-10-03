@@ -689,7 +689,7 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
         if df.empty:
             # D2-f49(2026-10-03,§1.A-3(b)):HTTP 200 但收盤全缺(dropna 後 0 列)＝抓取失敗(同
             # `_fetch_yf_close_base` 的 Q2-r2)—— 修前走成功路徑、清掉退避,只靠 URL 快取擋。現在記退避
-            # (寫法同下方解析失敗出口);本次回傳同修前(同一張空表),冷卻期內回同形空 DataFrame。
+            # (寫法同下方解析失敗出口);本次回傳同修前(同一張帶欄位的空表),冷卻期內回無欄位的空 DataFrame(`pd.DataFrame()`,同其他失敗出口)。
             print(f"[macro_core/yf_ohlcv] {ticker} 收盤全為空值(不算成功,冷卻 {_FAIL_COOLDOWN_SEC:.0f}s)")
             with _YF_OHLCV_FAIL_LOCK:
                 if _YF_OHLCV_OK_GEN_CACHE.get(key, 0) == _gen:
