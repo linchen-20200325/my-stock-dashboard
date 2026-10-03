@@ -48,7 +48,6 @@ except ImportError:
 from shared.ttls import TTL_1HOUR, TTL_6HOUR
 from shared.fail_cooldown import (CachedFailure as _CachedFailure,  # D2-f5 2026-09-28
                                   FailCooldown as _FailCooldown, NO_HIT as _FC_NO_HIT)
-import shared.fail_cooldown as _fc_mod  # D2-f29:快照時點與冷卻用同一個時鐘
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 from src.data.core.finmind_client import finmind_get  # D5 step2 v18.437 SSOT client
 
@@ -297,22 +296,40 @@ def _batch_twse_openapi(*, failed: list | None = None) -> pd.DataFrame:
         print("[mrev-fetcher] proxy fetch_url 不可用 → TWSE fallback 略過")
         return pd.DataFrame()
     _rows: list[dict] = []
-    for _url, _mkt in ((_TWSE_REVENUE_URL, "上市"), (_TPEX_REVENUE_URL, "上櫃")):
-        try:
-            _r = _furl(_url, headers={"Accept": "application/json"}, timeout=25, attempts=2)
-            if _r is None or _r.status_code != 200:
-                print(f"[mrev-fetcher] TWSE fallback {_mkt} 非200: "
-                      f"status={getattr(_r, 'status_code', None)}")
-                if failed is not None:   # D2-f5:確定抓取失敗
-                    failed.append(f"{_mkt}: status={getattr(_r, 'status_code', None)}")
-                continue
-            _parsed = _parse_twse_revenue_records(_r.json(), market=_mkt)
-            print(f"[mrev-fetcher] TWSE fallback {_mkt}: {len(_parsed)} 檔月營收")
+    for _url, _mkt in _OPENAPI_MARKETS:
+        _parsed = _openapi_market_rows(_furl, _url, _mkt, failed)
+        if _parsed is not None:
             _rows.extend(_parsed)
-        except Exception as _e:
-            print(f"[mrev-fetcher] TWSE fallback {_mkt} 失敗: {type(_e).__name__}: {_e}")
-            if failed is not None:       # D2-f5:確定抓取失敗(抓取/解碼拋例外)
-                failed.append(f"{_mkt}: {type(_e).__name__}: {_e}")
+    return _openapi_rows_to_df(_rows)
+
+
+#: OpenAPI 全市場快照的兩個市場(順序即抓取與 log 順序)。
+_OPENAPI_MARKETS = ((_TWSE_REVENUE_URL, "上市"), (_TPEX_REVENUE_URL, "上櫃"))
+
+
+def _openapi_market_rows(_furl, _url: str, _mkt: str, failed: list | None) -> list[dict] | None:
+    """[私有] 抓一個市場的 OpenAPI 快照並解析(`_batch_twse_openapi` 迴圈本體,D2-f29 抽出、行為與 log 不變)。
+    確定抓取失敗 → 寫 `failed`(若有)並回 None;否則回解析後的列(可為空 list)。"""
+    try:
+        _r = _furl(_url, headers={"Accept": "application/json"}, timeout=25, attempts=2)
+        if _r is None or _r.status_code != 200:
+            print(f"[mrev-fetcher] TWSE fallback {_mkt} 非200: "
+                  f"status={getattr(_r, 'status_code', None)}")
+            if failed is not None:   # D2-f5:確定抓取失敗
+                failed.append(f"{_mkt}: status={getattr(_r, 'status_code', None)}")
+            return None
+        _parsed = _parse_twse_revenue_records(_r.json(), market=_mkt)
+        print(f"[mrev-fetcher] TWSE fallback {_mkt}: {len(_parsed)} 檔月營收")
+        return _parsed
+    except Exception as _e:
+        print(f"[mrev-fetcher] TWSE fallback {_mkt} 失敗: {type(_e).__name__}: {_e}")
+        if failed is not None:       # D2-f5:確定抓取失敗(抓取/解碼拋例外)
+            failed.append(f"{_mkt}: {type(_e).__name__}: {_e}")
+        return None
+
+
+def _openapi_rows_to_df(_rows: list[dict]) -> pd.DataFrame:
+    """[私有] 兩個市場解析後的列 → 全市場 df(`_batch_twse_openapi` 尾段,D2-f29 抽出、行為與 log 不變)。"""
     if not _rows:
         print("[mrev-fetcher] TWSE/TPEx OpenAPI fallback 全空 → 回空(§1 不造假)")
         return pd.DataFrame()
@@ -413,12 +430,12 @@ _single_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR, max_entries=_SINGLE
 #: D2-f29(2026-10-03,§1.A-3(b)「失敗要退避、不轟炸來源」):單股 fallback 的 OpenAPI 全市場快照**檔與檔共用**
 #: 的失敗冷卻。修前只有「同一檔」的 `_single_fail_cooldown`(D2-f22):FinMind 掛掉、OpenAPI 又確定抓取失敗時,
 #: 缺貨掃描 ① 一輪最多 `SHORTAGE_DEEP_SCAN_MAX`(50)檔、每一檔各打一次上市＋上櫃全市場快照(每次
-#: `timeout=25, attempts=2`)。現在單一鍵 `_OPENAPI_SNAPSHOT_KEY`:有市場確定抓取失敗(判準同 `_batch_twse_openapi`
-#: 的 `failed`)→ 記下那一份 (快照, 失敗說明);冷卻期內其他檔直接沿用,不重打上游 —— 回的就是那次抓到的同一份
-#: 快照(另一邊有資料的照樣篩得到)與同一組失敗說明,所以每一檔的結果、要不要入快取,都與「冷卻期內重打、
-#: 上游仍同樣失敗」時相同。兩邊都沒有確定失敗 → 解除冷卻(成功的快照由 `fetch_url` 的 URL 快取在檔與檔之間共用,
-#: 同修前)。冷卻設定同 `_single_fail_cooldown`(起點 `FAIL_COOLDOWN_SEC`、連續失敗加倍、上限 `TTL_1HOUR`)。
-#: 只用在單股 fallback;全市場那支(`fetch_batch_monthly_revenue`)有自己的冷卻,未改。
+#: `timeout=25, attempts=2`)。現在單一鍵 `_OPENAPI_SNAPSHOT_KEY`,**以市場為單位**:有市場確定抓取失敗(判準同
+#: `_batch_twse_openapi` 的 `failed`)→ 記下 {失敗的市場: 失敗說明};冷卻期內其他檔**只跳過失敗的那一邊**
+#: (寫入同一則說明、不打上游),正常的那一邊照修前每次經 `fetch_url` 取(URL 快取命中就不打上游)——
+#: 所以正常市場的資料新舊、每一檔的結果與要不要入快取,都與修前逐字相同,只是不再重打失敗的那一邊。
+#: 冷卻期內正常那一邊也失敗了 → 併入紀錄(同一把冷卻)。冷卻設定同 `_single_fail_cooldown`(起點
+#: `FAIL_COOLDOWN_SEC`、連續失敗加倍、上限 `TTL_1HOUR`)。只用在單股 fallback;全市場那支有自己的冷卻,未改。
 _OPENAPI_SNAPSHOT_KEY = "openapi_snapshot"
 _openapi_snapshot_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)
 
@@ -426,32 +443,45 @@ _openapi_snapshot_fail_cooldown = _FailCooldown(max_seconds=TTL_1HOUR)
 def _single_openapi_snapshot(failed: list) -> pd.DataFrame:
     """單股 fallback 用的 OpenAPI 全市場快照(D2-f29):`_batch_twse_openapi(failed=…)`,外加檔與檔共用的失敗冷卻。
 
-    回傳與 `failed` 的寫入同 `_batch_twse_openapi(failed=failed)`;冷卻期內回上次確定失敗那一份的複本、
-    `failed` 寫入同一組說明,不打上游。
-
-    沿用的快照若含另一邊(正常市場)的資料,最多只沿用 `proxy_helper._URL_CACHE_TTL` 秒(＝修前重打時
-    `fetch_url` 的 URL 快取能給的最舊資料);超過就照常重抓一次(並以新快照重記冷卻)—— 不會把比修前更舊的
-    資料當成新抓的(單股結果會以抓取當下的 `fetched_at` 入 6 小時快取)。兩邊都失敗(快照為空)時沒有舊資料
-    可言,整段冷卻期都沿用。"""
-    from src.data.proxy import proxy_helper as _ph   # late import:同 `_batch_twse_openapi`
+    冷卻期外:就是 `_batch_twse_openapi(failed=failed)`。冷卻期內:失敗的市場不打上游、`failed` 寫入記下的
+    同一則說明;正常的市場照常經 `fetch_url` 重取(與修前同一條路、同一份 URL 快取)—— 回給呼叫端的正常市場
+    資料不會比修前舊。"""
     _hit, _gen = _openapi_snapshot_fail_cooldown.begin(_OPENAPI_SNAPSHOT_KEY)
     if _hit is not _FC_NO_HIT:
-        _snap, _notes, _at = _hit
-        if _snap.empty or _fc_mod.time.monotonic() - _at <= _ph._URL_CACHE_TTL:
-            failed.extend(_notes)
-            print(f"[mrev-fetcher] TWSE/TPEx OpenAPI fallback 退避中(他檔剛確定抓取失敗:{'；'.join(_notes)})"
-                  f"→ 不重打上游,{_cooldown_note(_openapi_snapshot_fail_cooldown)}")
-            return _snap
-        print("[mrev-fetcher] TWSE/TPEx OpenAPI fallback 退避中,但沿用的快照已超過 URL 快取期限 → 重抓一次")
+        try:
+            from src.data.proxy import fetch_url as _furl
+        except ImportError:
+            return _batch_twse_openapi(failed=failed)        # 同修前(印同一行、回空)
+        _down = dict(_hit)
+        _new: list[str] = []
+        _rows: list[dict] = []
+        for _url, _mkt in _OPENAPI_MARKETS:
+            if _mkt in _down:
+                failed.append(_down[_mkt])
+                print(f"[mrev-fetcher] TWSE fallback {_mkt} 退避中(他檔剛確定抓取失敗:{_down[_mkt]})"
+                      f"→ 不重打上游,{_cooldown_note(_openapi_snapshot_fail_cooldown)}")
+                continue
+            _parsed = _openapi_market_rows(_furl, _url, _mkt, _new)
+            if _parsed is not None:
+                _rows.extend(_parsed)
+        failed.extend(_new)
+        if _new:
+            _down.update(_by_market(_new))
+            _openapi_snapshot_fail_cooldown.fail(_OPENAPI_SNAPSHOT_KEY, _gen, _down)
+        return _openapi_rows_to_df(_rows)
     _failed: list[str] = []
-    _at = _fc_mod.time.monotonic()
     _batch = _batch_twse_openapi(failed=_failed)
     failed.extend(_failed)
     if _failed:
-        _openapi_snapshot_fail_cooldown.fail(_OPENAPI_SNAPSHOT_KEY, _gen, (_batch, list(_failed), _at))
+        _openapi_snapshot_fail_cooldown.fail(_OPENAPI_SNAPSHOT_KEY, _gen, _by_market(_failed))
     else:
         _openapi_snapshot_fail_cooldown.success(_OPENAPI_SNAPSHOT_KEY)
     return _batch
+
+
+def _by_market(notes: list[str]) -> dict[str, str]:
+    """失敗說明(`"上市: …"`/`"上櫃: …"`,格式見 `_openapi_market_rows`)→ {市場: 說明}。"""
+    return {_mkt: _n for _n in notes for _u, _mkt in _OPENAPI_MARKETS if _n.startswith(f"{_mkt}: ")}
 
 
 def fetch_monthly_revenue(stock_id: str, months: int = 18) -> pd.DataFrame:

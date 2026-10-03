@@ -743,15 +743,26 @@ class TestD2f29SharedOpenApiCooldown:
             assert (str(9000 + i), 18) in MR._single_fail_cooldown, "每一檔照舊不入快取、記自己的冷卻"
 
     def test_shared_snapshot_serves_other_side(self, mrev):
-        """上市失敗、上櫃正常：上市股失敗後，上櫃股在冷卻期內直接用同一份快照拿到資料（0 次上游）。"""
+        """上市失敗、上櫃正常：上市股失敗後，冷卻期內上櫃股**只跳過上市**、上櫃照常經 fetch_url 取（同修前），
+        拿到資料。"""
         mrev.tpex = "ok"
         _assert_bare_empty(MR.fetch_monthly_revenue("2330"))
         n = dict(mrev.calls)
         df = MR.fetch_monthly_revenue("6488")
-        assert mrev.calls == n, "冷卻期內不重打"
+        assert mrev.calls == {"twse": n["twse"], "tpex": n["tpex"] + 1}, "失敗的上市不重打；正常的上櫃照常取"
         assert len(df) == 1 and df["revenue"].iloc[0] == 3000 * 1000.0
         assert list(df.columns) == ["date", "revenue", "revenue_year", "revenue_month"]
         assert ("6488", 18) not in MR._single_fail_cooldown, "拿到資料 → 照舊算成功"
+
+    def test_healthy_side_failing_in_cooldown_joins_record(self, mrev):
+        mrev.tpex = "ok"
+        MR.fetch_monthly_revenue("2330")                     # 上市失敗
+        mrev.tpex = "none"
+        _assert_bare_empty(MR.fetch_monthly_revenue("6488"))  # 冷卻期內上櫃也失敗 → 併入
+        n = dict(mrev.calls)
+        _assert_bare_empty(MR.fetch_monthly_revenue("6489"))
+        assert mrev.calls == n, "兩邊都在冷卻 → 0 次上游"
+        assert ("6488", 18) in MR._single_fail_cooldown and ("6489", 18) in MR._single_fail_cooldown
 
     def test_result_same_as_refetch(self, mrev, monkeypatch):
         """冷卻期內沿用快照的結果 ＝ 關掉共用冷卻、重打一次（上游仍同樣失敗）的結果。"""
@@ -766,28 +777,6 @@ class TestD2f29SharedOpenApiCooldown:
         pd.testing.assert_frame_equal(shared[0], fresh[0])
         a = MR.fetch_monthly_revenue.with_status("2317", 12)
         assert a[1] is True and a[0].empty
-
-    def _escalate_to_long_cooldown(self, mrev, fc_clock):
-        """上市持續失敗、上櫃正常：失敗兩次 → 冷卻加倍到 2×FAIL_COOLDOWN_SEC（> URL 快取 300 秒）。"""
-        mrev.tpex = "ok"
-        MR.fetch_monthly_revenue("2330")                     # 失敗 #1（冷卻 180 秒）
-        fc_clock["now"] += FAIL_COOLDOWN_SEC
-        MR.fetch_monthly_revenue("2317")                     # 期滿重抓、再失敗 #2（冷卻 360 秒）
-        assert mrev.calls == {"twse": 2, "tpex": 2}
-
-    def test_reused_snapshot_never_older_than_url_cache(self, mrev, fc_clock):
-        """冷卻期內沿用的快照含正常市場（上櫃）的資料時，最多沿用 URL 快取期限（300 秒）；超過就重抓一次
-        —— 不把比修前更舊的上櫃資料以「現在」的 fetched_at 入 6 小時快取。修前（本批 v1）沿用到冷卻結束 → 紅。"""
-        self._escalate_to_long_cooldown(mrev, fc_clock)
-        fc_clock["now"] += PH._URL_CACHE_TTL                 # 剛好 300 秒：仍沿用
-        df = MR.fetch_monthly_revenue("6488")
-        assert mrev.calls == {"twse": 2, "tpex": 2} and len(df) == 1
-        fc_clock["now"] += 1                                 # 超過 300 秒，仍在 360 秒冷卻內
-        df = MR.fetch_monthly_revenue("6488", months=12)
-        assert mrev.calls == {"twse": 3, "tpex": 3}, "快照過舊 → 重抓一次"
-        assert len(df) == 1 and df["revenue"].iloc[0] == 3000 * 1000.0
-        MR.fetch_monthly_revenue("6488", months=6)           # 重抓後以新快照重記 → 再沿用
-        assert mrev.calls == {"twse": 3, "tpex": 3}
 
     def test_empty_snapshot_reused_whole_cooldown(self, mrev, fc_clock):
         """兩邊都失敗（快照為空）→ 沒有舊資料問題，整段冷卻都沿用、不重打。"""
@@ -849,3 +838,67 @@ class TestD2f29SharedOpenApiCooldown:
         assert df["revenue"].tolist() == [2000 * 1000.0]
         assert df.attrs["source"] == "TWSE-OpenAPI:t187ap05_L(keyless fallback,單股)"
         assert MR._OPENAPI_SNAPSHOT_KEY not in MR._openapi_snapshot_fail_cooldown
+
+
+# ── D2-f29（QA B 情境）：真的 `fetch_url`＋URL 快取＋共用假時鐘 —— 正常市場資料的新舊與修前逐字相同 ──
+class TestD2f29FreshnessThroughRealUrlCache:
+    """上市持續 500、上櫃正常且資料隨時間變（營收欄位編碼「上游產生資料的時點」）。每 10 秒查一檔新股，
+    比較本批與「關掉共用冷卻」（＝修前單股路徑）兩者回給呼叫端的資料年齡序列：必須逐筆相同、最舊 ≤
+    `_URL_CACHE_TTL`（加上一次抓取耗時），而上市被打的次數要少得多。
+    fetch_delay>0：上游每次回應前假時鐘先走 fetch_delay 秒（慢抓取）—— 若用「抓取前」或「抓取後」的時點
+    去判斷快照能沿用多久，兩種寫法都會與修前不同；本批不記時點、每次經 URL 快取取正常市場，所以仍逐筆相同。"""
+
+    def _run(self, monkeypatch, *, base: bool, fetch_delay: float, steps: int = 150):
+        clk = {"t": 1_000_000.0}
+        t0 = clk["t"]
+        calls = {"twse": 0, "tpex": 0}
+
+        class _S:
+            def get(self, url, **kw):
+                r = requests.models.Response()
+                r.encoding = "utf-8"
+                if "twse" in url:
+                    calls["twse"] += 1
+                    r.status_code = 500
+                    r._content = b"x"
+                    return r
+                calls["tpex"] += 1
+                clk["t"] += fetch_delay
+                produced = int(clk["t"] - t0) + 1
+                r.status_code = 200
+                r._content = json.dumps([{"公司代號": str(6000 + i), "資料年月": "11505",
+                                          "營業收入-當月營收": str(produced)} for i in range(steps)]).encode()
+                return r
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(time, "time", lambda: clk["t"])
+            mp.setattr(FC, "time", types.SimpleNamespace(monotonic=lambda: clk["t"]))
+            mp.setattr(PH, "_URL_CACHE", {})
+            mp.setattr(PH, "get_proxy_config", lambda: None)
+            mp.setattr(PH, "nas_relay_fetch", lambda *a, **k: None)
+            mp.setattr(PH, "_get_thread_session", lambda lean=False: _S())
+            mp.setattr(MR, "finmind_get", lambda *a, **k: pd.DataFrame())
+            mp.setenv("FINMIND_TOKEN", "dummy")
+            if base:
+                mp.setattr(MR._openapi_snapshot_fail_cooldown, "seconds", 0.0)
+            MR.fetch_monthly_revenue.clear()
+            ages = []
+            try:
+                for step in range(steps):
+                    clk["t"] = max(clk["t"], t0 + 10 * step)
+                    df, _f = MR.fetch_monthly_revenue.with_status(str(6000 + step), 18)
+                    assert not df.empty
+                    ages.append(clk["t"] - t0 - (df["revenue"].iloc[0] / 1000 - 1))
+            finally:
+                MR.fetch_monthly_revenue.clear()
+        return ages, calls
+
+    @pytest.mark.parametrize("fetch_delay", [0.0, 7.0, 130.0])
+    def test_served_age_identical_to_base(self, monkeypatch, fetch_delay):
+        """531162b：以快照時點判斷 → 最舊約 2×TTL（QA B 實測 480 秒）、序列與修前不同 → 紅。"""
+        got, c_new = self._run(monkeypatch, base=False, fetch_delay=fetch_delay)
+        want, c_base = self._run(monkeypatch, base=True, fetch_delay=fetch_delay)
+        assert got == want, "回給呼叫端的資料年齡逐筆同修前"
+        assert max(got) <= PH._URL_CACHE_TTL + fetch_delay
+        assert c_new["tpex"] == c_base["tpex"], "正常市場的上游呼叫數同修前"
+        assert c_new["twse"] < c_base["twse"] / 5, "失敗市場不再逐檔重打"

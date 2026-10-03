@@ -1128,8 +1128,9 @@ class TestPrefixReproducesBug:
 # ══════════════════════════════════════════════════════════════════
 # 突變：每一個突變體都讓本檔對應的共用檢查轉紅
 # ══════════════════════════════════════════════════════════════════
-_L1_NONE_APPEND = ("                if failed is not None:   # D2-f5:確定抓取失敗\n"
-                   "                    failed.append(f\"{_mkt}: status={getattr(_r, 'status_code', None)}\")\n")
+#: 批 X1（D2-f29）把 `_batch_twse_openapi` 的迴圈本體抽成 `_openapi_market_rows`（行為不變）→ 縮排少一層。
+_L1_NONE_APPEND = ("            if failed is not None:   # D2-f5:確定抓取失敗\n"
+                   "                failed.append(f\"{_mkt}: status={getattr(_r, 'status_code', None)}\")\n")
 
 
 def _l1_mutant_world(tag, monkeypatch, *pairs):
