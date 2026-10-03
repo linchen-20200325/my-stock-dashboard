@@ -31,6 +31,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from tests._frozen_fixtures import parse_source
+
 _TESTS_DIR = Path(__file__).resolve().parent
 _REPO = _TESTS_DIR.parent
 
@@ -151,7 +153,8 @@ def _scan(path: Path) -> list[str]:
     """回傳該檔違規清單,每筆為 "相對路徑:行號: [規則] 該行原文"。"""
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
-    tree = ast.parse(text, filename=str(path))
+    #: 批 Y3（S7-n2）：凍結副本 `tests/fixtures/secret_scrub_{792c7a2,bf0ada3}.py` 的跳脫警告只在這裡壓掉（見 `tests/_frozen_fixtures.py`）。
+    tree = parse_source(text, path, filename=str(path))
     aliases = _alias_map(tree)
     rel = path.relative_to(_REPO).as_posix()
     found: list[str] = []
