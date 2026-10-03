@@ -297,8 +297,15 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
     # 不列 M1B-M2 那條（＝缺數字時的既有樣子；此時清單裡只有它）；下方 KPI 卡照樣顯示數字＋代理註記＋警語。
     if m1b_m2_for_scoring(_m1b_info) is None:
         _macro_concl = []
-    if _bias_info:
-        _bv2 = _bias_info.get('bias_240', 0)
+    # 批 V2(D4-n6,§1 不捏 0):原 `.get('bias_240', 0)` / `.get('bias_20', 0)` 缺鍵捏成 0
+    #   →「年線乖離 +0.0% 正常 / 可持股」與 KPI「+0.0%」。改走 `_finite_yoy`(缺鍵／None／NaN／±inf → None):
+    #   年線缺 ⇒ 結論卡不列這條(＝bias_info 為空時的既有樣子)、KPI 走既有灰態「待取得」
+    #   (同檔 M1B 卡 DL-f1-s24 已用的字樣);月線缺 ⇒ 副標拿掉「｜ 月線20MA…」那段(只刪不加字)。
+    #   有限值時同一物件,輸出不變。
+    _bias240_v = _finite_yoy(_bias_info, 'bias_240') if _bias_info else None
+    _bias20_v = _finite_yoy(_bias_info, 'bias_20') if _bias_info else None
+    if _bias240_v is not None:
+        _bv2 = _bias240_v
         # I2:估算徽章只進**指標文字**,下方 `_bv2 > 20` / `< -20` 判定一行未動。
         _ind_bias = f'年線乖離 {_bv2:+.1f}%{_bias_est_badge(_bias_info)}'
         if _bv2 > 20:
@@ -350,9 +357,9 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
             st.markdown(kpi('M1B-M2 差距', '抓取中', '更新總經數據後自動計算', '#484f58', '#0d1117'), unsafe_allow_html=True)
     
     with _m_cols[1]:
-        if _bias_info:
-            _bias_v = _bias_info.get('bias_240', 0)
-            _bias_20 = _bias_info.get('bias_20', 0)
+        if _bias240_v is not None:
+            _bias_v = _bias240_v
+            _bias_20 = _bias20_v
             _bc     = TRAFFIC_RED if _bias_v > 20 else (TRAFFIC_GREEN if _bias_v < -20 else TRAFFIC_YELLOW)
             _bl     = ('⚠️ 乖離過大，考慮減碼' if _bias_v > 20
                        else ('✅ 嚴重低估，可積極布局' if _bias_v < -20
@@ -362,10 +369,14 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
             _est_note = _bias_est_badge(_bias_info)
             _days_note = f" {_bias_info.get('data_days',0)}天資料" if _bias_info.get('is_estimated') else ''
             # 月線乖離併入副標（過熱/超賣時加 emoji 提示）
-            _bl20_short = ('⚠️過熱' if _bias_20 > 10 else
-                           ('✅機會' if _bias_20 < -10 else '正常'))
+            if _bias_20 is not None:
+                _bl20_short = ('⚠️過熱' if _bias_20 > 10 else
+                               ('✅機會' if _bias_20 < -10 else '正常'))
+                _sub20 = f'　｜　月線20MA: {_bias_20:+.1f}% ({_bl20_short})'
+            else:
+                _sub20 = ''
             st.markdown(kpi(f'年線乖離率(240MA){_est_note}', f'{_bias_v:+.1f}%',
-                            f'{_bl}{_days_note}　｜　月線20MA: {_bias_20:+.1f}% ({_bl20_short})',
+                            f'{_bl}{_days_note}{_sub20}',
                             _bc, '#0d1117'), unsafe_allow_html=True)
             # I2:原本只有卡片標題那三個字「（估算）」——與 v19.183 的 M1B 代理註記
             # 同款問題(括號註記太容易被略過,且沒說「所以這個數字代表什麼」)。
@@ -374,6 +385,8 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
             _bias_note_long = _bias_est_note(_bias_info)
             if _bias_note_long:
                 st.caption(_bias_note_long)
+        elif _bias_info:
+            st.markdown(kpi('年線乖離率(240MA)', '待取得', '大盤收盤/年線（月線乖離併顯示）', '#484f58', '#0d1117'), unsafe_allow_html=True)
         else:
             st.markdown(kpi('年線乖離率(240MA)', '計算中', '大盤收盤/年線（月線乖離併顯示）', '#484f58', '#0d1117'), unsafe_allow_html=True)
     

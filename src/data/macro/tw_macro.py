@@ -1274,13 +1274,27 @@ def fetch_foreign_consecutive_days(days_back: int = 30,
         result['error'] = 'FinMind 無 Foreign_Investor 資料'
         return result
     df = pd.DataFrame(fi_rows)
-    df['net'] = pd.to_numeric(df.get('buy', 0), errors='coerce').fillna(0) - \
-                pd.to_numeric(df.get('sell', 0), errors='coerce').fillna(0)
+    # 批 V2(D2-n5,§1 不捏 0):原 `to_numeric(...).fillna(0)` 把缺的買／賣額當 0
+    #   → 缺「賣」的那天變成「全額買超」、缺兩邊變成「0 ＝ 平盤」並據以算連買／連賣。
+    #   改為缺值(含欄位不存在、非數值、±inf)→ 當日淨額 NaN,不參與正負號判定:
+    #   中段 NaN 與原本的 0 一樣會截斷連續段(不跨缺口捏造連續);
+    #   **最新一日**缺 → 不給連續日數／今日淨額(None,既有「⬜ 資料不足」路徑)。
+    def _num_col(_c):
+        if _c not in df.columns:
+            return pd.Series(float('nan'), index=df.index, dtype=float)
+        return pd.to_numeric(df[_c], errors='coerce').astype(float)
+    _net = _num_col('buy') - _num_col('sell')
+    df['net'] = _net.where(_net.abs() != float('inf'))
     df = df.sort_values('date').reset_index(drop=True)
     if len(df) < 2:
         result['error'] = '外資資料筆數不足'
         return result
     nets = df['net'].astype(float).tolist()
+    if nets[-1] != nets[-1]:   # 最新一日淨額缺 → 不判連續方向
+        _n_miss = int(df['net'].isna().sum())
+        print(f'[外資連續日數] ⚠️ 最新一日({str(df["date"].iloc[-1])[:10]})買／賣額缺值,'
+              f'不計算連續日數(缺值 {_n_miss}/{len(df)} 日)')
+        return result
     # 連續日數計算：從尾巴往前數同號
     last_sign = 1 if nets[-1] > 0 else (-1 if nets[-1] < 0 else 0)
     consec = 0

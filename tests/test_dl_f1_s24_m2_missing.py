@@ -207,8 +207,44 @@ _D3_REVERT_PAIRS = (
 )
 
 
+#: 批 V2（D4-n6，乖離率缺值不捏 0）改的是同檔另一張卡（年線乖離），與本檔驗的 M1B-M2 路徑無關；
+#: 還原體一併拿掉，才仍等於修前 b7456d1（否則 V2 也用的「待取得」會讓 K1 差集算錯）。
+_V2_REVERT_PAIRS = (
+    ("    # 批 V2(D4-n6,§1 不捏 0):原 `.get('bias_240', 0)` / `.get('bias_20', 0)` 缺鍵捏成 0\n"
+     "    #   →「年線乖離 +0.0% 正常 / 可持股」與 KPI「+0.0%」。改走 `_finite_yoy`(缺鍵／None／NaN／±inf → None):\n"
+     "    #   年線缺 ⇒ 結論卡不列這條(＝bias_info 為空時的既有樣子)、KPI 走既有灰態「待取得」\n"
+     "    #   (同檔 M1B 卡 DL-f1-s24 已用的字樣);月線缺 ⇒ 副標拿掉「｜ 月線20MA…」那段(只刪不加字)。\n"
+     "    #   有限值時同一物件,輸出不變。\n"
+     "    _bias240_v = _finite_yoy(_bias_info, 'bias_240') if _bias_info else None\n"
+     "    _bias20_v = _finite_yoy(_bias_info, 'bias_20') if _bias_info else None\n"
+     "    if _bias240_v is not None:\n"
+     "        _bv2 = _bias240_v\n",
+     "    if _bias_info:\n"
+     "        _bv2 = _bias_info.get('bias_240', 0)\n"),
+    ("        if _bias240_v is not None:\n"
+     "            _bias_v = _bias240_v\n"
+     "            _bias_20 = _bias20_v\n",
+     "        if _bias_info:\n"
+     "            _bias_v = _bias_info.get('bias_240', 0)\n"
+     "            _bias_20 = _bias_info.get('bias_20', 0)\n"),
+    ("            if _bias_20 is not None:\n"
+     "                _bl20_short = ('⚠️過熱' if _bias_20 > 10 else\n"
+     "                               ('✅機會' if _bias_20 < -10 else '正常'))\n"
+     "                _sub20 = f'　｜　月線20MA: {_bias_20:+.1f}% ({_bl20_short})'\n"
+     "            else:\n"
+     "                _sub20 = ''\n",
+     "            _bl20_short = ('⚠️過熱' if _bias_20 > 10 else\n"
+     "                           ('✅機會' if _bias_20 < -10 else '正常'))\n"),
+    ("                            f'{_bl}{_days_note}{_sub20}',\n",
+     "                            f'{_bl}{_days_note}　｜　月線20MA: {_bias_20:+.1f}% ({_bl20_short})',\n"),
+    ("        elif _bias_info:\n"
+     "            st.markdown(kpi('年線乖離率(240MA)', '待取得', '大盤收盤/年線（月線乖離併顯示）', '#484f58', '#0d1117'), unsafe_allow_html=True)\n",
+     ""),
+)
+
+
 def _revert_source() -> str:
-    code = _apply(_LONG_PATH.read_text(encoding="utf-8"), _REVERT_PAIRS + _D3_REVERT_PAIRS)
+    code = _apply(_LONG_PATH.read_text(encoding="utf-8"), _REVERT_PAIRS + _D3_REVERT_PAIRS + _V2_REVERT_PAIRS)
     start, end = _PENDING_BRANCH
     assert code.count(start) == 1 and code.count(end) == 1, "缺值灰態那一枝定位失準"
     i = code.index(start)

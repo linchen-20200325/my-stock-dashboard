@@ -499,14 +499,17 @@ def compute_tab_coverage(state: dict | None = None,
             MISSING_NO_EXTRACTION: ("🐛", "spec 無取值", "程式 bug,非資料問題"),
         }
         _detail1_parts = [f"決策燈 {len(_rd_ok)}/{len(_rd_wired)} 有值"]
+        # 量綱異常最毒(有值、數字看起來正常、但尺度錯) → 把實際被擋的值講出來
+        # 批 V2(D4-n3):「└」逐筆標註改排在**該燈實際所屬的那一組**正下方。原本一律
+        #   排在全部分組之後 → 批 D4 C1 改歸「📵 上游無值」的燈(被擋值全非有限)
+        #   在畫面上像掛在「📐 量綱異常」底下的孤兒行。文字一字未動,只改排列位置。
         for _rs, _keys in _by_reason.items():
             _ic, _nm, _act = _REASON_TXT.get(_rs, ("⬜", str(_rs), ""))
             _detail1_parts.append(f"{_ic} {_nm}({len(_keys)}):{'/'.join(_keys)} → {_act}")
-        # 量綱異常最毒(有值、數字看起來正常、但尺度錯) → 把實際被擋的值講出來
-        for _r in _rd_wired:
-            if _r.get("reason") == MISSING_OUT_OF_RANGE:
-                for _lbl, _v, _why in (_r.get("rejected") or []):
-                    _detail1_parts.append(f"　└ {_r['key']}:{_lbl} = {_v} {_why}")
+            for _r in _rd_wired:
+                if _r.get("reason") == MISSING_OUT_OF_RANGE and _r["key"] in _keys:
+                    for _lbl, _v, _why in (_r.get("rejected") or []):
+                        _detail1_parts.append(f"　└ {_r['key']}:{_lbl} = {_v} {_why}")
         # 刻意未接線者:不計入分母,但要具名說明,否則使用者會以為它壞了
         for _r in _rd_unwired:
             _sp_u = SPECS_BY_KEY.get(_r["key"])

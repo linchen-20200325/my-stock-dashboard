@@ -38,6 +38,7 @@ from shared.signal_thresholds import (
 _BIAS240_RED: float = float(_SPECS_BY_KEY['bias_240'].red)
 # v19.175 P0:`cl_data['inst']` 型別收斂 SSOT(L5 → L2,合法下行依賴)
 # I2(2026-08-10):`bias_240` / `ma240` 估算揭露文案 SSOT(同上,L5 → L2)。
+from src.ui.tabs.macro.section_long import _finite_yoy  # 批 V2(D4-n6)
 from src.compute.macro import (
     bias_estimated_badge as _bias_est_badge,
     bias_estimated_note as _bias_est_note,
@@ -119,11 +120,19 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         # v4 引擎的輸入與 `_BIAS240_RED` 判定式一行未動(§-1 範圍限制)。
         _wr_bias_badge = _bias_est_badge(_wr_bias)
         # v4 年線位階資訊 → 降為補充提示,不再覆蓋主結論
-        _v4_bits = [f'年線乖離 {_v4["Bias_240"]:+.1f}%{_wr_bias_badge}']
-        if not _v4.get('Is_Bull'):
-            _v4_bits.append('股價在年線下')
-        if _v4.get('Is_Overheated'):
-            _v4_bits.append('乖離過熱')
+        # 批 V2(D4-n6,§1 不捏 0):上方送進 v4 引擎的 `price` / `ma240` 缺值時是 `or 0`
+        #   (引擎再把 0 換成 1.0)→ 這行會印出假的「年線乖離 +0.0%」與年線位階。
+        #   價格或年線不是有限正數 ⇒ 不列這三個位階片段(只剩與價格無關的外資期貨那段;
+        #   都沒有 ⇒ 整行不出,＝既有空字串路徑)。有值時一字未動。
+        _wr_px = _finite_yoy(_wr_bias, 'price') if _wr_bias else None
+        _wr_ma = _finite_yoy(_wr_bias, 'ma240') if _wr_bias else None
+        _v4_bits = []
+        if _wr_px is not None and _wr_ma is not None and _wr_px > 0 and _wr_ma > 0:
+            _v4_bits.append(f'年線乖離 {_v4["Bias_240"]:+.1f}%{_wr_bias_badge}')
+            if not _v4.get('Is_Bull'):
+                _v4_bits.append('股價在年線下')
+            if _v4.get('Is_Overheated'):
+                _v4_bits.append('乖離過熱')
         if _v4.get('Is_Foreign_Hedging'):
             _v4_bits.append('外資期貨避險')
         _wr_v4_hint = '｜'.join(_v4_bits)
@@ -134,8 +143,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         elif _wr_margin and _wr_margin > MARGIN_BALANCE_WARN_THRESHOLD_YI:
             _wr_warns.append(('🟡', f'融資 {_wr_margin:.0f}億 警戒，注意風險'))
 
-        if _wr_bias:
-            _b240 = _wr_bias.get('bias_240', 0)
+        # 批 V2(D4-n6,§1 不捏 0):原 `.get('bias_240', 0)` 缺鍵捏成 0 → 清單印「乖離+0.0% ✅」。
+        #   改走 `_finite_yoy`(缺鍵／None／NaN／±inf → None);None 時走既有「未知」路徑
+        #   (與 bias_info 為空同一枝)。有限值時同一物件,輸出不變。
+        _wr_b240 = _finite_yoy(_wr_bias, 'bias_240') if _wr_bias else None
+        if _wr_b240 is not None:
+            _b240 = _wr_b240
             if _b240 > _BIAS240_RED:
                 _wr_warns.append(('🟡', f'年線乖離 {_b240:+.1f}%{_wr_bias_badge}，大盤偏高，勿追買'))
             elif _b240 < -_BIAS240_RED:
@@ -187,8 +200,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             # I2:`_val` 加估算徽章;第 3 欄(`_ok`,決定 ✅/⚠️ 與卡片顏色)與
             # 第 4 欄門檻文字皆未動 —— 揭露不改判定。
             ('年線位置',
-             f'乖離{_wr_bias.get("bias_240",0):+.1f}%{_wr_bias_badge}' if _wr_bias else '未知',
-             not _wr_bias or abs(_wr_bias.get("bias_240", 0)) < _BIAS240_RED,
+             f'乖離{_wr_b240:+.1f}%{_wr_bias_badge}' if _wr_b240 is not None else '未知',
+             _wr_b240 is None or abs(_wr_b240) < _BIAS240_RED,
              f'超過±{_BIAS240_RED:.0f}%要警惕'),
             # v19.170 P0-1:第 5 格同讀 SSOT;未評估誠實顯示,被硬否決壓低時給 ⚠️ 而非 ✅
             ('持股比例', f'建議{_wr_exp}' if _alloc.is_loaded else '⬜ 總經未評估',
