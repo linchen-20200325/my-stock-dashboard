@@ -1043,7 +1043,7 @@ def compute_portfolio_totals(rows: list[dict]) -> dict | None:
     }
 
 
-# ── 80/20 配置偏離 + 衛星停利（#38：有張數/均價才算,§1 缺就不算）───────────
+# ── 80/20 配置偏離 + 衛星停利（#38；80/20 看市值＝張數×現價，停利看損益%＝均價＋現價；§1 缺就不算）──
 def compute_allocation_split(rows: list[dict]) -> dict | None:
     """80/20 實際配置偏離（純函式）。核心=ETF、衛星=個股（郭俊宏:核心配息ETF/衛星成長股,
     以代號類型近似;主題型 ETF 會被算核心,UI 已註記此近似）。
@@ -1104,7 +1104,7 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
     - reds：健檢 🔴 需汰弱（代號 + 建議動作）
     - adds：235 加碼觸發（加碼金非空 = deploy_pct>0）
     - errors：抓取失敗未納入判斷的代號（§1 誠實排除,不當作「無事」）
-    - allocation：80/20 實際配置偏離（有張數/均價才算;缺 → None,#38）
+    - allocation：80/20 實際配置偏離（只納入市值＝張數×現價 > 0 的持有列;全無市值 → None,#38）
     - take_profit：衛星獲利達 15% 嚴格停利清單（有損益%才判;#38）
     """
     reds: list[dict] = []
