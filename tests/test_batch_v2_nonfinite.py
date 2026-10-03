@@ -169,3 +169,19 @@ class TestTabStockAiPromptVix:
 
     def test_finite_unchanged(self):
         assert self._run(19.234) == ['VIX 恐慌指數=19.23（D）']
+
+
+# ── 項 3：V1-n4 section_mid 非 dict 的 VIX 節點 → 既有缺值路徑（不崩潰）──────────
+class TestSectionMidNonDictVix:
+    @pytest.mark.parametrize('node', ['x', 5, [1, 2], 18.5])
+    def test_non_dict_takes_missing_path(self, node, monkeypatch):
+        from tests.test_v1_vix_nonfinite import _LOADING, _run
+        out, calls = _run(node, monkeypatch)
+        assert _LOADING in out
+        assert any('待取得' in t for t in out)   # 既有 KPI 缺值卡
+
+    def test_finite_dict_unchanged(self, monkeypatch):
+        from tests.test_v1_vix_nonfinite import _LOADING, _run
+        node = {'current': 18.5, 'ma20': 17.0, 'dates': ['2026-09-01'], 'values': [18.5]}
+        out, _ = _run(node, monkeypatch)
+        assert _LOADING not in out
