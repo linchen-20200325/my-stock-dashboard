@@ -437,6 +437,9 @@ def compute_twii_bias(twii_local) -> dict | None:
     _b20 = calc_bias_pct(_lp, _ma20, decimals=1)
     _b60 = calc_bias_pct(_lp, _ma60, decimals=1)
     _b240 = calc_bias_pct(_lp, _ma240, decimals=1)
+    # 批 Y2 QA:round 到 -0.0 時正規化成 +0.0(修前 `-0.0 or 0` 會收斂成 0;
+    #   否則畫面印「-0.0%」)。None / NaN 不等於 0,語意不變。
+    _b20, _b60, _b240 = (0.0 if _b == 0 else _b for _b in (_b20, _b60, _b240))
     _b240_log = f'{_b240:.1f}%' if _b240 is not None else 'None'
     print(f'[Bias] price={_lp:.0f} MA240={_ma240:.0f} '
           f'bias240={_b240_log} (n={_n})')

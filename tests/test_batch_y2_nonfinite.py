@@ -48,6 +48,21 @@ class TestTwiiBiasMissingNotZero:
         for k in ('bias_20', 'bias_60', 'bias_240'):
             assert out[k] == 0.0 and out[k] is not None
 
+    def test_negative_zero_normalised(self, capsys):
+        # QA-A:乖離 round 到 -0.0 時,修前 `-0.0 or 0` 收斂成 0;必須維持 +0.0,
+        #   否則五桶 / KPI / AI prompt / log 印「-0.0%」。
+        from src.compute.macro.macro_helpers import compute_five_bucket_summary
+        out = macro_snapshot.compute_twii_bias(_twii([100.0] * 239 + [99.97]))
+        for k in ('bias_20', 'bias_60', 'bias_240'):
+            v = out[k]
+            assert v == 0.0 and isinstance(v, float) and math.copysign(1, v) == 1, (k, v)
+            assert f'{v:+.1f}%' == '+0.0%'
+        assert 'bias240=0.0% (n=240)' in capsys.readouterr().out
+        summ = compute_five_bucket_summary(bias_info=out)
+        rows = [d for b in summ.values() if isinstance(b, dict)
+                for d in (b.get('details') or []) if d.get('key') == 'bias_240']
+        assert rows and rows[0]['value_str'] == '0.0%'
+
     def test_finite_unchanged(self):
         closes = [15000.0 + 7.3 * i + (i % 11) * 13.1 for i in range(260)]
         out = macro_snapshot.compute_twii_bias(_twii(closes))
