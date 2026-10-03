@@ -462,3 +462,36 @@ class TestSavePortfolioNonFinite:
                                          {'ticker': 'x', 'lots': 0, 'avg_price': 1},
                                          {'ticker': 'y', 'lots': 'abc', 'avg_price': 1}])
         assert n == 1 and [c[0] for c in ws.calls][-1] == 'update'
+
+
+# ── 項 8：D2-n1（純測試）季報「第一次」確定失敗必須回報 failed=True ────────────────
+class TestQuarterlyFirstFreshFailureFlag:
+    def test_first_fresh_failure_reports_true(self, monkeypatch):
+        import src.data.stock.quarterly_financials_fetcher as QF
+        payload = [{'label': '2026Q1', 'revenue': 1.0}]
+
+        def _boom(stock_id, quarters=12):
+            raise QF._QuarterlyFetchFailed(payload, 'TaiwanStockBalanceSheet:ConnectionError')
+
+        QF.fetch_quarterly_shortage_frame.clear()
+        monkeypatch.setattr(QF, '_fetch_quarterly_shortage_frame_cached', _boom)
+        try:
+            out, failed = QF._fetch_quarterly_shortage_frame_with_status('9999', 12)
+            # 存活突變（第一次新失敗那一行 `, True` → `, False`）會讓 L3 把半套結果寫進快取
+            assert failed is True
+            assert out == payload
+            out2, failed2 = QF._fetch_quarterly_shortage_frame_with_status('9999', 12)
+            assert failed2 is True and out2 == payload            # 冷卻期內：同一份、仍是失敗
+        finally:
+            QF._qtr_fail_cooldown.clear()
+
+    def test_success_reports_false(self, monkeypatch):
+        import src.data.stock.quarterly_financials_fetcher as QF
+        QF.fetch_quarterly_shortage_frame.clear()
+        monkeypatch.setattr(QF, '_fetch_quarterly_shortage_frame_cached',
+                            lambda stock_id, quarters=12: [{'label': '2026Q1'}])
+        try:
+            assert QF._fetch_quarterly_shortage_frame_with_status('9998', 12) == (
+                [{'label': '2026Q1'}], False)
+        finally:
+            QF._qtr_fail_cooldown.clear()
