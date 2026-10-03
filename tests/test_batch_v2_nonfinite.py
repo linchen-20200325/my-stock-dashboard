@@ -365,3 +365,68 @@ class TestCoverageTickLinesUnderOwnGroup:
         parts = _coverage_parts(46.3, 100.0)
         i = next(i for i, p in enumerate(parts) if p.startswith('📐 量綱異常(1):us10y'))
         assert parts[i + 1].startswith('　└ us10y:') and '= 46.3 out_of_range' in parts[i + 1]
+
+
+# ── 項 6：D2-n5 外資連續日數 —— 缺的買／賣額不當 0 ──────────────────────────────
+def _fii(rows, mp):
+    from unittest.mock import MagicMock
+    from src.data.macro import tw_macro as TW
+    resp = MagicMock()
+    resp.json.return_value = {'data': rows}
+    mp.setattr(TW, 'fetch_url', lambda *a, **k: resp)
+    TW.fetch_foreign_consecutive_days.cache_clear()
+    try:
+        return TW.fetch_foreign_consecutive_days(days_back=15)
+    finally:
+        TW.fetch_foreign_consecutive_days.cache_clear()
+
+
+def _fii_rows(pairs):
+    import datetime as _d
+    base = _d.date(2026, 5, 1)
+    out = []
+    for i, (b, s) in enumerate(pairs):
+        r = {'date': (base + _d.timedelta(days=i)).isoformat(), 'name': 'Foreign_Investor'}
+        if b is not _ABSENT:
+            r['buy'] = b
+        if s is not _ABSENT:
+            r['sell'] = s
+        out.append(r)
+    return out
+
+
+_ABSENT = object()
+_SELL = (0, 100)
+_BUY = (100, 0)
+
+
+class TestForeignConsecutiveMissingNotZero:
+    @pytest.mark.parametrize('last', [(100, None), (None, 100), (None, None), (100, 'x'),
+                                      (math.inf, 0), (100, _ABSENT)])
+    def test_latest_day_missing_gives_no_streak(self, last, monkeypatch):
+        r = _fii(_fii_rows([_SELL] * 6 + [last]), monkeypatch)
+        assert r['consec_days'] is None and r['today_net'] is None
+        assert r['inflection'] == '⬜ 資料不足'           # 既有缺值路徑
+        assert r['error'] is None
+
+    def test_missing_sell_not_counted_as_full_buy(self, monkeypatch):
+        # 舊：缺「賣」→ 淨額 = +100 → 「🚀 連6賣→買（拐點）」假訊號
+        r = _fii(_fii_rows([_SELL] * 6 + [(100, None)]), monkeypatch)
+        assert '賣→買' not in r['inflection']
+
+    def test_interior_missing_breaks_streak_like_before(self, monkeypatch):
+        r = _fii(_fii_rows([_SELL] * 3 + [(None, None)] + [_SELL] * 2), monkeypatch)
+        assert r['consec_days'] == -2 and r['prev_streak'] == 0
+
+    def test_missing_columns_do_not_crash(self, monkeypatch):
+        r = _fii(_fii_rows([(_ABSENT, _ABSENT)] * 3), monkeypatch)
+        assert r['consec_days'] is None and r['inflection'] == '⬜ 資料不足'
+
+    def test_finite_unchanged(self, monkeypatch):
+        r = _fii(_fii_rows([_SELL] * 6 + [_BUY]), monkeypatch)
+        assert (r['consec_days'], r['prev_streak'], r['today_net']) == (1, -6, 100)
+        assert r['inflection'] == '🚀 連6賣→買（拐點）'
+        r = _fii(_fii_rows([_BUY] * 5), monkeypatch)
+        assert r['inflection'] == '🟢 連5日買超' and r['today_net'] == 100
+        r = _fii(_fii_rows([_BUY, (50, 50)]), monkeypatch)    # 真 0 仍是 0
+        assert r['consec_days'] == 0 and r['today_net'] == 0 and r['inflection'] == '📊 震盪'
