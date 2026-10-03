@@ -9,6 +9,8 @@ closure params(explicit pass,§-1 minimal):
 """
 from __future__ import annotations
 
+import math
+
 import streamlit as st
 
 from shared.colors import (
@@ -97,7 +99,7 @@ def read_v4_macro_veto() -> dict | None:
         _vix = float(_vix_raw)
     except (TypeError, ValueError):
         return None
-    if _vix != _vix:          # NaN → 視為未取得
+    if not math.isfinite(_vix):   # NaN / ±inf → 視為未取得(批 V2,V1-n3)
         return None
 
     # 先行指標取「與畫面主表格同一份 ffill 後」的末筆：若 §三 吃 ffill 值、

@@ -229,7 +229,8 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             ), unsafe_allow_html=True)
     
     with _s8c2[2]:
-        if _m8_vix and _m8_vix.get('dates') and _vcur8_v is not None:
+        # 批 V2(V1-n4):`_vcur8_v` 先判 → 非 dict 的 `_m8_vix` 短路走既有缺值卡,不再 `.get` 崩潰
+        if _vcur8_v is not None and _m8_vix and _m8_vix.get('dates'):
             _vcur8 = _vcur8_v
             # M2N-f1：MA20 缺 → 標題拿掉「（MA20=…）」那段（只刪不加字），⛔ 不捏「MA20=0」。
             _vma8  = _finite_yoy(_m8_vix, 'ma20')

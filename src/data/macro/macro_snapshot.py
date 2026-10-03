@@ -183,6 +183,15 @@ def fetch_vix_block() -> dict:
         if hasattr(_df_v.columns, 'nlevels') and _df_v.columns.nlevels > 1:
             _df_v.columns = _df_v.columns.get_level_values(0)
         _df_v = _df_v.dropna(subset=['Close'])
+        # 批 V2(V1-n3 根源,三類 (c)):末筆 ±inf 不放行 → 落到下方既有失敗出口
+        # (比照 fetch_us10y_block 批 D2 QA);中段 ±inf 比照 NaN 剔除。
+        _fin_v = [_is_finite_num(v) for v in _df_v['Close']]
+        # QA F1/N1:Close 全 NaN 時 _fin_v == []，`_df_v[[]]` 會變成選 0 欄 → KeyError
+        # 'Close' 外洩成 _err_vix；空 list 不做布林篩選，維持 main 的 'not enough data'。
+        if _fin_v and not _fin_v[-1]:
+            _df_v = _df_v.iloc[0:0]
+        elif _fin_v:
+            _df_v = _df_v[_fin_v]
         _vv = [round(float(v), 1) for v in _df_v['Close']]
         _vd = [str(d)[:10] for d in _df_v.index]
         if len(_vv) < 3:
