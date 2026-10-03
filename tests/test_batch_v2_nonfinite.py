@@ -314,3 +314,54 @@ class TestOpRecommendationBias:
         assert (generate_ai_comment({**base, 'bias_240': None, 'bias_20': None})
                 == generate_ai_comment(base))
         assert 'inf' not in generate_ai_comment({**base, 'bias_240': None})
+
+
+# ── 項 5：D4-n3 資料診斷頁「└」逐筆標註排在所屬分組正下方 ─────────────────────
+def _coverage_parts(us10y_close, dxy_close):
+    import streamlit as st
+    from shared.macro_buckets import CL_INTL_KEY_DXY, CL_INTL_KEY_US10Y
+    from src.ui.pages.data_coverage import compute_tab_coverage
+    ss = {'macro_info': {'vix': {'current': 17.2}, '_loaded_at': '2026-08-20T01:00'},
+          'cl_data': {'intl': {CL_INTL_KEY_US10Y: pd.DataFrame({'close': [us10y_close]}),
+                               CL_INTL_KEY_DXY: pd.DataFrame({'close': [dxy_close]})}}}
+    for k, v in ss.items():
+        st.session_state[k] = v
+    try:
+        detail = [r for r in compute_tab_coverage() if '總經' in r['tab']][0]['detail']
+    finally:
+        for k in ss:
+            st.session_state.pop(k, None)
+    return detail.split(' ｜ ')
+
+
+def _owner_of_each_tick(parts):
+    """每一行「└ key:…」往上找最近的分組標頭 → (key, 標頭)。"""
+    out, head = [], None
+    for p in parts:
+        if p.startswith('　└ '):
+            out.append((p[3:].split(':', 1)[0], head))
+        else:
+            head = p
+    return out
+
+
+class TestCoverageTickLinesUnderOwnGroup:
+    @pytest.mark.parametrize('bad', [math.nan, math.inf, -math.inf])
+    def test_regrouped_lamp_ticks_under_no_value_group(self, bad):
+        parts = _coverage_parts(bad, 500.0)       # us10y 全非有限 → 📵；dxy 有限超範圍 → 📐
+        owners = _owner_of_each_tick(parts)
+        assert owners, parts
+        for key, head in owners:
+            assert head is not None and key in head.split(':', 1)[1].split(' → ')[0].split('/'), (key, head)
+        assert any(k == 'us10y' and head.startswith('📵 上游無值') for k, head in owners)
+        assert any(k == 'dxy' and head.startswith('📐 量綱異常') for k, head in owners)
+
+    def test_text_unchanged_only_position(self):
+        parts = _coverage_parts(math.nan, 500.0)
+        ticks = sorted(p for p in parts if p.startswith('　└ '))
+        assert ticks and all(('= nan 非有限值' in t) or ('= 500.0 out_of_range' in t) for t in ticks), ticks
+
+    def test_finite_out_of_range_only_unchanged(self):
+        parts = _coverage_parts(46.3, 100.0)
+        i = next(i for i, p in enumerate(parts) if p.startswith('📐 量綱異常(1):us10y'))
+        assert parts[i + 1].startswith('　└ us10y:') and '= 46.3 out_of_range' in parts[i + 1]
