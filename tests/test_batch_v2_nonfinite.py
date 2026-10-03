@@ -37,6 +37,15 @@ class TestFetchVixBlockNonFinite:
         out = macro_snapshot.fetch_vix_block()
         assert out == {'_err_vix': 'not enough data'}   # 既有失敗出口，非新字串
 
+    @pytest.mark.parametrize('n', [1, 30])
+    def test_all_nan_close_matches_main(self, monkeypatch, _clear_vix_cache, n):
+        # QA F1/N1：Close 全 NaN → dropna 後空 → 必須走 main 的 'not enough data'，
+        # 不得外洩 KeyError "'Close'"（空布林 list 選 0 欄）。
+        import yfinance
+        monkeypatch.setattr(yfinance, 'download',
+                            lambda *a, **k: _vix_df([math.nan] * n))
+        assert macro_snapshot.fetch_vix_block() == {'_err_vix': 'not enough data'}
+
     @pytest.mark.parametrize('bad', [math.inf, -math.inf, math.nan])
     def test_interior_non_finite_dropped_like_nan(self, monkeypatch, _clear_vix_cache, bad):
         import yfinance
