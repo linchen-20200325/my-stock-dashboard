@@ -251,6 +251,9 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     當日淨額被捏成大正數、buy 缺值時捏成大負數；缺整欄時 `fi.get()` 回 None → AttributeError。改為：
     - 缺 date／buy／sell 欄 → raise（`update_one` 接住 → metadata 記 last_error、既有檔原封不動）。
       上游 schema 漂移是系統性問題；回空表會被記成「抓取結果為空」，讀取端會當成「沒有新資料」。
+    - DL-f1-s56（2026-10-03，批 X2）：缺 `name` 欄同上 → raise（同一句訊息，欄名換成 name）。
+      修前印「缺欄位 name」後回空表 → 被記成「抓取結果為空」，與缺 date／buy／sell 的處理不一致。
+      ⚠️ `name` 欄在、但沒有任何 'Foreign' 列時照舊回空表（不在本列範圍，另登待辦）。
     - 某日任一外資組成列的 buy 或 sell 缺值（含轉不成數值）→ **該日整日不產出**（不以 0 代入、
       不做部分加總），log 剔除的日期數與樣本；其餘日子的算式、輸出逐位不變。
     - ⚠️ 某日「根本沒有」某一組成列（例：只有 Foreign_Investor）不在此列，照舊以有的列加總 ——
@@ -265,18 +268,22 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     # FinMind 實際 name 值為英文：Foreign_Investor / Foreign_Dealer_Self /
     # Investment_Trust / Dealer_self / Dealer_Hedging / total
     # 外資總額 = Foreign_Investor + Foreign_Dealer_Self（兩者皆 'Foreign' prefix）
+    def _missing_columns_error(missing: list) -> RuntimeError:
+        return RuntimeError(
+            f"缺欄 {missing}（欄位={list(raw.columns)}）→ 算不出外資淨買賣超；"
+            "不寫入 parquet（§1：不以 0 代入、不猜欄位）")
+
     if "name" not in raw.columns:
-        print(f"[finmind_inst] 缺欄位 name，欄位={list(raw.columns)}")
-        return pd.DataFrame()
+        # DL-f1-s56：缺 name 欄 ＝ 上游 schema 漂移，與缺 date／buy／sell 同處置（raise），
+        # 不回空表（空表會被 `update_one` 記成「抓取結果為空」＝讀取端當「沒有新資料」）。
+        raise _missing_columns_error(["name"])
     fi = raw[raw["name"].astype(str).str.contains("Foreign", na=False)]
     if fi.empty:
         print(f"[finmind_inst] name 欄位無 'Foreign' 列，unique={list(raw['name'].unique())[:10]}")
         return pd.DataFrame()
     _missing = [c for c in ("date", "buy", "sell") if c not in fi.columns]
     if _missing:
-        raise RuntimeError(
-            f"缺欄 {_missing}（欄位={list(raw.columns)}）→ 算不出外資淨買賣超；"
-            "不寫入 parquet（§1：不以 0 代入、不猜欄位）")
+        raise _missing_columns_error(_missing)
     fi = fi.copy()
     _buy = pd.to_numeric(fi["buy"], errors="coerce")
     _sell = pd.to_numeric(fi["sell"], errors="coerce")
