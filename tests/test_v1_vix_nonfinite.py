@@ -73,6 +73,16 @@ def test_nonfinite_vix_takes_missing_path(node, drop, monkeypatch):
     (0, "VIX 0.0 < 20（平靜期）", "A VIX=0.0<20"),
     (25.0, "VIX 25.0（20~30 警戒）", "A VIX=25.0<20"),
     (35.0, "VIX 35.0 ≥ 30", "A VIX=35.0<20"),
+    # QA 跟進：近門檻／負值 —— 釘「veto 參數＝原值、不得 round／abs」。
+    # （19.96 顯示成「20.0 < 20」是 main 既有的 .1f 格式行為，此處只釘與 main 一致。）
+    (19.96, "VIX 20.0 < 20（平靜期）", "A VIX=20.0<20"),
+    (19.99, "VIX 20.0 < 20（平靜期）", "A VIX=20.0<20"),
+    (29.96, "VIX 30.0（20~30 警戒）", "A VIX=30.0<20"),
+    (-5, "VIX -5.0 < 20（平靜期）", "A VIX=-5.0<20"),
+    # 門檻邊界（既有字句）
+    (20, "VIX 20.0（20~30 警戒）", "A VIX=20.0<20"),
+    (30, "VIX 30.0 ≥ 30", "A VIX=30.0<20"),
+    (100, "VIX 100.0 ≥ 30", "A VIX=100.0<20"),
 ])
 def test_finite_vix_unchanged(vix, line, badge, monkeypatch):
     out, calls = _run({"current": vix}, monkeypatch)
@@ -82,6 +92,10 @@ def test_finite_vix_unchanged(vix, line, badge, monkeypatch):
     assert _LOADING not in out
     assert len(calls) == 1 and calls[0][0] == float(vix)
     assert type(calls[0][0]) is float
+    assert "VIX 數值異常" not in joined
+    # 結論卡只出現該段那一句（round 變異會把 19.96 推進警戒段）
+    _segs = ("（平靜期）", "（20~30 警戒）", " ≥ 30")
+    assert sum(any(f"VIX " in t and sg in t for t in out) for sg in _segs) == 1, out
 
 
 def test_vix_over_100_still_api_error(monkeypatch):
