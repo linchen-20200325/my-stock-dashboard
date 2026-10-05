@@ -33,6 +33,7 @@ harness：`_FakeST` 以 monkeypatch 換掉被測模組的 module-level `st`；L1
 from __future__ import annotations
 
 import copy
+import math
 
 import numpy as np
 import pandas as pd
@@ -146,6 +147,12 @@ _H_UP = dict(_H_FLAT, score_latest=26, score_prev=24, score_prev2=25, inflection
 _LI_EXP = dict(_LI_FLAT, smooth6m=0.42, prev_s6m=0.31, inflection="🟢 持續擴張")
 _FI_SELL = dict(_FI_FLAT, consec_days=-6, prev_streak=3, today_net=-987654,
                 inflection="🔴 連6日賣超")
+#: 驗收補測（A 組 B1）：與上面三支方向相反的另一組可用值（舊快取＝`_H_UP`／`_LI_EXP`／`_FI_BUY`，
+#: 按更新後上游給的新值＝`_H_DOWN`／`_LI_CON`／`_FI_SELL`）。inflection 與 L1 判定式一致。
+_H_DOWN = dict(_H_FLAT, score_latest=24, score_prev=26, score_prev2=25, inflection="⚠️ 連2月翻空")
+_LI_CON = dict(_LI_FLAT, smooth6m=-0.35, prev_s6m=-0.2, inflection="🔴 持續收縮")
+_FI_BUY = dict(_FI_FLAT, consec_days=6, prev_streak=-2, today_net=987654,
+               inflection="🟢 連6日買超")
 
 _KEYS = ("_ndc_hist_cache", "_ndc_li_cache", "_fi_streak_cache")
 
@@ -210,6 +217,76 @@ _GOLDEN_SIGNALS_PIVOTS = [
     ('景氣對策連2月翻多', '🚀', '#22c55e', '分數 24→26 由跌轉升 → 景氣領先翻揚拐點'),
     ('領先指標持續擴張', '✅', '#22c55e', '6M smoothed change +0.42% 維持正值 → 景氣擴張'),
     ('外資連續賣超', '❌', '#ef4444', '外資已連 6 日賣超 → 籌碼流出警示'),
+]
+
+#: 驗收補測（A 組 B1）—— 84c1ca4 實跑（全新 session）：三支都是「新」值（`_H_DOWN`／`_LI_CON`／`_FI_SELL`）
+#: 的完整輸出。按更新後必須長這樣（不得沿用舊快取 `_H_UP`／`_LI_EXP`／`_FI_BUY`）。
+_GOLDEN_NEW = [
+    ('markdown',
+     '<div style="margin:34px 0 10px;padding:12px 18px;background:linear-gradient(90deg,#ff7b722b,#ff7b720a,#0d1117);border-left:6px solid #ff7b72;border-radius:0 10px 10px 0;"><span style="font-size:12px;color:#ff7b72;font-weight:700;opacity:0.85;">拐點</span><div style="font-size:18px;font-weight:900;color:#ff7b72;margin-top:2px;">🔮 拐點</div><div style="font-size:12px;color:#8b949e;margin-top:2px;">六大面向 × CPI×Fed 雙頂回落（景氣反轉偵測）</div></div>'),
+    ('markdown',
+     '<div style="background:#161b22;border-left:4px solid #ef4444;border-radius:0 8px 8px 0;padding:8px 12px;margin:6px 0;font-size:13px;font-weight:600;color:#ef4444;">🔴 綜合拐點：6 群中 2 群偏空（可評估 2/6 群）→ 偏向頂部起跌</div>'),
+    ('caption',
+     '趨勢（均線結構）：未評估\u3000位階（乖離率）：未評估\u3000資金（M1B-M2 / 台幣）：未評估\u3000籌碼（外資期貨 / 韭菜 / 外資連續）：偏空\u3000景氣（NDC 對策 / 領先指標）：偏空\u3000通膨利率（CPI × Fed）：未評估'),
+    ('caption',
+     '💡 同一群內的訊號（例：外資期貨大空單＋散戶極度看多）源自同一個潛在因子，**群內取最壞、不累加** —— 避免把同一件事數成多份獨立證據而誇大確信度。'),
+    ('caption',
+     '⚠️ 未評估：趨勢（均線結構）、位階（乖離率）、資金（M1B-M2 / 台幣）、通膨利率（CPI × Fed）（資料未取得 → 已排除於分母外，既不計入偏多也不計入偏空）'),
+    ('markdown',
+     '##### 📊 拐點詳細分析 — 六大面向 + CPI×Fed 雙頂回落'),
+    ('markdown',
+     "<div style='background:#0d1117;border:1px solid #21262d;border-top:3px solid #ef4444;border-radius:8px;padding:8px 10px;margin:3px 0;min-height:54px;display:flex;align-items:center;'><span style='color:#ef4444;font-weight:700;font-size:13px;'>⚠️ 景氣對策連2月翻空</span></div>"),
+    ('markdown',
+     "<div style='background:#0d1117;border:1px solid #21262d;border-top:3px solid #ef4444;border-radius:8px;padding:8px 10px;margin:3px 0;min-height:54px;display:flex;align-items:center;'><span style='color:#ef4444;font-weight:700;font-size:13px;'>❌ 領先指標持續收縮</span></div>"),
+    ('markdown',
+     "<div style='background:#0d1117;border:1px solid #21262d;border-top:3px solid #ef4444;border-radius:8px;padding:8px 10px;margin:3px 0;min-height:54px;display:flex;align-items:center;'><span style='color:#ef4444;font-weight:700;font-size:13px;'>❌ 外資連續賣超</span></div>"),
+    ('expander',
+     '🔍 拐點六大面向 — 完整訊號明細 + 判斷參考'),
+    ('markdown',
+     '<div style="background:#0d1117;border-left:3px solid #ef4444;border-radius:0 6px 6px 0;padding:6px 10px;margin:4px 0;"><span style="color:#ef4444;font-weight:600;">⚠️ 景氣對策連2月翻空</span><br><span style="color:#8b949e;font-size:12px;">分數 26→24 由升轉跌 → 景氣動能衰退拐點</span></div>'),
+    ('markdown',
+     '<div style="background:#0d1117;border-left:3px solid #ef4444;border-radius:0 6px 6px 0;padding:6px 10px;margin:4px 0;"><span style="color:#ef4444;font-weight:600;">❌ 領先指標持續收縮</span><br><span style="color:#8b949e;font-size:12px;">6M smoothed change -0.35% 維持負值 → 景氣收縮</span></div>'),
+    ('markdown',
+     '<div style="background:#0d1117;border-left:3px solid #ef4444;border-radius:0 6px 6px 0;padding:6px 10px;margin:4px 0;"><span style="color:#ef4444;font-weight:600;">❌ 外資連續賣超</span><br><span style="color:#8b949e;font-size:12px;">外資已連 6 日賣超 → 籌碼流出警示</span></div>'),
+    ('caption',
+     '📖 拐點判斷參考表 → 詳見「策略手冊」Tab'),
+]
+#: 84c1ca4 實跑：舊快取那一組（`_H_UP`／`_LI_EXP`／`_FI_BUY`）的頭句與 `_pivot_signals`。
+_HEAD_OLD = '🟢 綜合拐點：6 群中 2 群偏多（可評估 2/6 群）→ 偏向底部起漲'
+_PIVOTS_OLD = [
+    ('景氣對策連2月翻多', '🚀', '#22c55e', '分數 24→26 由跌轉升 → 景氣領先翻揚拐點'),
+    ('領先指標持續擴張', '✅', '#22c55e', '6M smoothed change +0.42% 維持正值 → 景氣擴張'),
+    ('外資連續買超', '✅', '#22c55e', '外資已連 6 日買超 → 籌碼穩健'),
+]
+#: 84c1ca4 實跑：只有一支換成新值（其餘兩支沿用舊值）時的頭句與 `_pivot_signals`。
+_ONE_NEW = {
+    '_ndc_hist_cache': (
+        '⚪ 訊號分歧：偏多 1 群 vs 偏空 1 群（可評估 2/6 群），方向待確認',
+        [
+            ('景氣對策連2月翻空', '⚠️', '#ef4444', '分數 26→24 由升轉跌 → 景氣動能衰退拐點'),
+            ('領先指標持續擴張', '✅', '#22c55e', '6M smoothed change +0.42% 維持正值 → 景氣擴張'),
+            ('外資連續買超', '✅', '#22c55e', '外資已連 6 日買超 → 籌碼穩健'),
+        ]),
+    '_ndc_li_cache': (
+        '⚪ 訊號分歧：偏多 1 群 vs 偏空 1 群（可評估 2/6 群），方向待確認',
+        [
+            ('景氣對策連2月翻多', '🚀', '#22c55e', '分數 24→26 由跌轉升 → 景氣領先翻揚拐點'),
+            ('領先指標持續收縮', '❌', '#ef4444', '6M smoothed change -0.35% 維持負值 → 景氣收縮'),
+            ('外資連續買超', '✅', '#22c55e', '外資已連 6 日買超 → 籌碼穩健'),
+        ]),
+    '_fi_streak_cache': (
+        '⚪ 訊號分歧：偏多 1 群 vs 偏空 1 群（可評估 2/6 群），方向待確認',
+        [
+            ('景氣對策連2月翻多', '🚀', '#22c55e', '分數 24→26 由跌轉升 → 景氣領先翻揚拐點'),
+            ('領先指標持續擴張', '✅', '#22c55e', '6M smoothed change +0.42% 維持正值 → 景氣擴張'),
+            ('外資連續賣超', '❌', '#ef4444', '外資已連 6 日賣超 → 籌碼流出警示'),
+        ]),
+}
+#: 驗收補測（B 組 S9）—— 84c1ca4 實跑：真 L1（領先指標 `[100]*11+[99.99]`）產生 `smooth6m=-0.0`、
+#: 景氣對策失敗、外資震盪時的頭句與 `_pivot_signals`。
+_HEAD_REAL_NEGZERO = '⚪ 訊號分歧：偏多 0 群 vs 偏空 1 群（可評估 2/6 群），方向待確認'
+_PIVOTS_REAL_NEGZERO = [
+    ('領先指標 6M 由正轉負', '⚠️', '#ef4444', '6M smoothed change：+0.00%→-0.00% → 景氣轉折下行'),
 ]
 
 #: 84c1ca4 實跑：`_macro_session_reset` 修前的清除名單（本批只**加**三個 key，這 11 個一個都不能少）。
@@ -339,6 +416,12 @@ class TestC7n1FailureIsUnevaluated:
         "error_with_value": dict(_FI_FLAT, error="FinMind 抓取失敗"),
         "result_none": None,
         "result_empty_dict": {},
+        # 驗收補測（A 組 B2／B 組 S5）：`error=''` 也是失敗（與 L1 `_no_error` 的 `is None` 一致）
+        "error_empty_string": dict(_FI_FLAT, error=""),
+        # 驗收補測（B 組 S10／S12）：bool 與數字字串不是可用值（沿用 `_finite_yoy` 的判準）
+        "consec_bool_true": dict(_FI_FLAT, consec_days=True),
+        "consec_bool_false": dict(_FI_FLAT, consec_days=False),
+        "consec_numeric_string": dict(_FI_FLAT, consec_days="5"),
     }
 
     @pytest.mark.parametrize("shape", sorted(_FI_SHAPES))
@@ -364,6 +447,11 @@ class TestC7n1FailureIsUnevaluated:
         "error_with_value": (dict(_H_FLAT, error="x"), dict(_LI_FLAT, error="y")),
         "results_none": (None, None),
         "mixed_fail_and_nan": (_H_FAIL, dict(_LI_FLAT, smooth6m=float("nan"))),
+        # 驗收補測（A 組 B2／B 組 S5、S10、S12）
+        "error_empty_string": (dict(_H_FLAT, error=""), dict(_LI_FLAT, error="")),
+        "values_bool": (dict(_H_FLAT, score_latest=True), dict(_LI_FLAT, smooth6m=False)),
+        "values_numeric_string": (dict(_H_FLAT, score_latest="25"),
+                                  dict(_LI_FLAT, smooth6m="0.0")),
     }
 
     @pytest.mark.parametrize("shape", sorted(_CYCLE_SHAPES))
@@ -373,15 +461,18 @@ class TestC7n1FailureIsUnevaluated:
         assert r.out == _expected_flat(chips_ok=True, cycle_ok=False), shape
         assert set(r.cached) == {"_fi_streak_cache"}
 
-    @pytest.mark.parametrize("h,li", [
-        pytest.param(_H_FAIL, _LI_FLAT, id="hist-failed-leading-ok"),
-        pytest.param(_H_FLAT, _LI_FAIL, id="hist-ok-leading-failed"),
+    @pytest.mark.parametrize("h,li,cached", [
+        pytest.param(_H_FAIL, _LI_FLAT, {"_ndc_li_cache", "_fi_streak_cache"},
+                     id="hist-failed-leading-ok"),
+        pytest.param(_H_FLAT, _LI_FAIL, {"_ndc_hist_cache", "_fi_streak_cache"},
+                     id="hist-ok-leading-failed"),
     ])
-    def test_one_of_two_ndc_usable_keeps_cycle(self, h, li, monkeypatch):
-        """景氣群只要其中一支可用就可評估 —— 畫面與 84c1ca4 逐字相同；只有失敗那支不進快取。"""
+    def test_one_of_two_ndc_usable_keeps_cycle(self, h, li, cached, monkeypatch):
+        """景氣群只要其中一支可用就可評估 —— 畫面與 84c1ca4 逐字相同；只有失敗那支不進快取
+        （驗收補測：逐 key 釘住哪兩支入快取，⛔ 只數個數）。"""
         r = _render_state(monkeypatch, h, li, _FI_FLAT)
         assert r.out == _GOLDEN_FLAT
-        assert len(r.cached) == 2 and "_fi_streak_cache" in r.cached
+        assert set(r.cached) == cached
 
     def test_hist_failed_signals_from_others_unchanged(self, monkeypatch):
         """景氣對策失敗、領先指標與外資都有訊號：頭句與訊號與 84c1ca4 相同（實跑同值）。"""
@@ -453,6 +544,57 @@ class TestC7n1NormalUnchanged:
         r = _render_state(monkeypatch, _H_FAIL, _LI_FAIL, _FI_FAIL, ss=ss)
         assert r.calls == {"h": 0, "li": 0, "fi": 0}
         assert r.out == _GOLDEN_SIGNALS
+
+
+class TestC7n1UsableValueShapes:
+    """驗收補測（B 組 S9／S11）：「可用值」的判準逐型別釘住 —— 這裡是**算可用**的那一側
+    （bool、數字字串、`error=''` 算不可用，見 `TestC7n1FailureIsUnevaluated` 的兩張形狀表）。
+    每一支都同時驗畫面（群算不算可評估）與快取（入不入、下一輪重不重抓）。"""
+
+    @pytest.mark.parametrize("h_val,li_val,fi_val", [
+        pytest.param(np.int64(25), np.float64(0.0), np.int64(2), id="numpy-int64"),
+        pytest.param(np.float64(25.0), np.float32(0.0), np.float64(5.0), id="numpy-float"),
+    ])
+    def test_numpy_scalars_are_usable(self, h_val, li_val, fi_val, monkeypatch):
+        """numpy 純量是真的數值：與 84c1ca4 一樣兩群可評估（明細「中性」）、入快取、下一輪不重抓。"""
+        fake = _FakeST()
+        r1 = _render_state(monkeypatch, dict(_H_FLAT, score_latest=h_val),
+                           dict(_LI_FLAT, smooth6m=li_val), dict(_FI_FLAT, consec_days=fi_val),
+                           fake=fake)
+        assert r1.out == _GOLDEN_FLAT
+        assert set(r1.cached) == set(_KEYS)
+        r2 = _render_state(monkeypatch, _H_FAIL, _LI_FAIL, _FI_FAIL, fake=fake)
+        assert r2.calls == {"h": 0, "li": 0, "fi": 0}
+        assert r2.out == _GOLDEN_FLAT
+
+    def test_negative_zero_smooth6m_is_a_value(self, monkeypatch):
+        """`smooth6m=-0.0` 是真的 0（⛔ 缺）：景氣群照舊可評估、入快取、下一輪不重抓（84c1ca4 同值）。"""
+        fake = _FakeST()
+        li0 = dict(_LI_FLAT, smooth6m=-0.0, prev_s6m=-0.0)
+        r1 = _render_state(monkeypatch, _H_FAIL, li0, _FI_FLAT, fake=fake)
+        assert r1.out == _GOLDEN_FLAT
+        assert set(r1.cached) == {"_ndc_li_cache", "_fi_streak_cache"}
+        r2 = _render_state(monkeypatch, _H_FAIL, _LI_FAIL, _FI_FAIL, fake=fake)
+        assert r2.calls == {"h": 1, "li": 0, "fi": 0}
+        assert r2.out == _GOLDEN_FLAT
+
+    def test_real_l1_negative_zero_is_cached(self, monkeypatch):
+        """真 L1 產得出 -0.0：領先指標 `[100]*11+[99.99]` → `smooth6m=-0.0`（由正轉負）。
+        入快取、下一輪不重抓；畫面與 84c1ca4 同值（含「+0.00%→-0.00%」那句）。"""
+        tbi = pd.DataFrame({
+            "date": pd.date_range("2025-01-01", periods=12, freq="MS").strftime("%Y-%m-%d"),
+            "monitoring": [25] * 12, "leading": [100.0] * 11 + [99.99]})
+        monkeypatch.setattr(TW, "fetch_business_indicator_series", lambda *a, **k: tbi)
+        li_real = TW.fetch_ndc_leading_index(months_back=18, token="")
+        assert li_real["error"] is None and li_real["inflection"] == "⚠️ 由正轉負"
+        assert li_real["smooth6m"] == 0.0 and math.copysign(1.0, li_real["smooth6m"]) == -1.0
+        fake = _FakeST()
+        r1 = _render_state(monkeypatch, _H_FAIL, li_real, _FI_FLAT, fake=fake)
+        assert r1.pivots == _PIVOTS_REAL_NEGZERO and _HEAD_REAL_NEGZERO in r1.text
+        assert set(r1.cached) == {"_ndc_li_cache", "_fi_streak_cache"}
+        r2 = _render_state(monkeypatch, _H_FAIL, _LI_FAIL, _FI_FAIL, fake=fake)
+        assert r2.calls == {"h": 1, "li": 0, "fi": 0}
+        assert r2.pivots == _PIVOTS_REAL_NEGZERO and _HEAD_REAL_NEGZERO in r2.text
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -545,6 +687,46 @@ class TestC7n1SessionReset:
         assert r.calls == {"h": 1, "li": 1, "fi": 1}
         assert r.out == _GOLDEN_SIGNALS
 
+    # ── 驗收補測（A 組 B1）：舊快取是**可用**值時，重設也要清掉並重抓 ───────────────────
+    #   上面幾支的種子是失敗 dict；「重設只清不可用快取」的突變在那幾支會存活。下面兩支改用
+    #   可用的舊值（`_H_UP`／`_LI_EXP`／`_FI_BUY`，84c1ca4 實跑頭句「🟢 綜合拐點：6 群中 2 群偏多…」）。
+    @staticmethod
+    def _usable_old_session() -> dict:
+        # 只放三個可用的舊快取（＋按過更新的旗標）：按更新**前**也要能正常 render 一輪，
+        # 故不放 `_seeded_session()` 那些字串佔位值（`cl_data` 等是字串時 §二 會拋）。
+        return {"_ndc_hist_cache": copy.deepcopy(_H_UP), "_ndc_li_cache": copy.deepcopy(_LI_EXP),
+                "_fi_streak_cache": copy.deepcopy(_FI_BUY), "chips_loaded": True}
+
+    def test_reset_drops_usable_caches_too(self, monkeypatch):
+        """按更新前：沿用可用的舊快取、不重抓（頭句「🟢 …2 群偏多」）；按更新後：三支都重抓、
+        畫面＝新值的完整輸出（頭句「🔴 綜合拐點：6 群中 2 群偏空…」），⛔ 沿用舊值。"""
+        fake = _FakeST(self._usable_old_session())
+        r0 = _render_state(monkeypatch, _H_DOWN, _LI_CON, _FI_SELL, fake=fake)
+        assert r0.calls == {"h": 0, "li": 0, "fi": 0}
+        assert r0.pivots == _PIVOTS_OLD and _HEAD_OLD in r0.text
+        monkeypatch.setattr(H, "st", fake)
+        H._macro_session_reset()
+        r1 = _render_state(monkeypatch, _H_DOWN, _LI_CON, _FI_SELL, fake=fake)
+        assert r1.calls == {"h": 1, "li": 1, "fi": 1}
+        assert r1.out == _GOLDEN_NEW
+        assert _HEAD_OLD not in r1.text
+
+    @pytest.mark.parametrize("key", _KEYS)
+    def test_reset_drops_each_usable_cache(self, key, monkeypatch):
+        """逐一釘住：只有 `key` 那支上游換了新值 —— 按更新後那一支必須換成新值
+        （任何一個 key 被重設漏掉都會單獨轉紅；頭句與訊號以 84c1ca4 全新 session 實跑寫死）。"""
+        new = {"_ndc_hist_cache": _H_DOWN, "_ndc_li_cache": _LI_CON, "_fi_streak_cache": _FI_SELL}
+        old = {"_ndc_hist_cache": _H_UP, "_ndc_li_cache": _LI_EXP, "_fi_streak_cache": _FI_BUY}
+        src = {k: (new[k] if k == key else old[k]) for k in _KEYS}
+        fake = _FakeST(self._usable_old_session())
+        monkeypatch.setattr(H, "st", fake)
+        H._macro_session_reset()
+        r = _render_state(monkeypatch, src["_ndc_hist_cache"], src["_ndc_li_cache"],
+                          src["_fi_streak_cache"], fake=fake)
+        head, pivots = _ONE_NEW[key]
+        assert r.pivots == pivots and head in r.text
+        assert r.calls == {"h": 1, "li": 1, "fi": 1}
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # C7-n8 —— §十一 AI 裁決 prompt
@@ -564,6 +746,26 @@ _PRE_FIX_NAN_LINES = (
     _LEEK_LINE + "+nan%" + _LEEK_TAIL,
     _ADL_LINE + "nan%" + _ADL_TAIL,
     _FUT_LINE + "+nan 口" + _FUT_TAIL,
+)
+
+#: 驗收補測（B 組 N13）：有限但極大的值照送（只有 NaN／±inf／溢位才不送）。
+#: 84c1ca4 實跑：prompt 裡 1e301 的整數位（`:+.0f`／`:+.1f`／`:.0f` 去掉正負號與小數部分），302 位。
+_DIGITS_1E301 = (
+    "100000000000000005250476025520442024870446858110815915491585"
+    "411551180245798890819578637137508044786404370444383288387817"
+    "694252323536043057564479218478670698284838720092657580373783"
+    "023379478809005936895323497079994508111903896764088007465274"
+    "278014249457925878882005684283811566947219638686545940054016"
+    "00"
+)
+#: 84c1ca4 實跑：同上，1.7976931348623157e308（float 最大有限值），309 位。
+_DIGITS_FLOAT_MAX = (
+    "179769313486231570814527423731704356798070567525844996598917"
+    "476803157260780028538760589558632766878171540458953514382464"
+    "234321326889464182768467546703537516986049910576551282076245"
+    "490090389328944075868508455133942304583236903222948165808559"
+    "332123348274797826204144723168738177180919299881250404026184"
+    "124858368"
 )
 
 #: 84c1ca4 實跑：完整 prompt（外資大小 −23456.0／韭菜指數 12.34／ad_ratio 61.7）。逐行寫死。
@@ -772,6 +974,24 @@ class TestC7n8FiniteUnchanged:
                                  _ADL_LINE + adl_s + _ADL_TAIL,
                                  _FUT_LINE + fut_s + _FUT_TAIL]
         assert seen["numbers"][0]["Futures_Net_Short"] == fut_in
+
+    @pytest.mark.parametrize("fut,leek,adl,dtype,signs,digits", [
+        pytest.param(1e301, 1e301, 1e301, None, ("+", "+", ""), _DIGITS_1E301, id="pos-1e301"),
+        pytest.param(-1e301, -1e301, -1e301, None, ("-", "-", "-"), _DIGITS_1E301, id="neg-1e301"),
+        pytest.param(1e301, -1e301, 1e301, object, ("+", "-", ""), _DIGITS_1E301,
+                     id="mixed-1e301-object"),
+        pytest.param(1.7976931348623157e308, -1.7976931348623157e308, 1.7976931348623157e308, None,
+                     ("+", "-", ""), _DIGITS_FLOAT_MAX, id="float-max"),
+    ])
+    def test_large_finite_values_still_sent(self, fut, leek, adl, dtype, signs, digits, monkeypatch):
+        """驗收補測（B 組 N13）：有限但極大（1e301、float 最大值）不是缺值 —— 三行照送、逐字＝84c1ca4，
+        規則引擎照收原值；⛔ 拿「很大」當不送的理由（只有 NaN／±inf／溢位才不送）。"""
+        seen = _run_news(monkeypatch, *_frames(fut, leek, adl, dtype=dtype))
+        fut_s, leek_s, adl_s = signs
+        assert seen["lines"] == [_LEEK_LINE + leek_s + digits + ".0%" + _LEEK_TAIL,
+                                 _ADL_LINE + adl_s + digits + "%" + _ADL_TAIL,
+                                 _FUT_LINE + fut_s + digits + " 口" + _FUT_TAIL]
+        assert seen["numbers"][0]["Futures_Net_Short"] == fut
 
     @pytest.mark.parametrize("li_df,adl_df", [
         pytest.param(None, None, id="no-li-latest-no-adl"),
