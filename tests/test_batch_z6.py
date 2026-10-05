@@ -1,4 +1,4 @@
-"""批 Z6（2026-10-05）—— C7-n9 ＋ Z3-n10 釘子（基底 origin/main `84c1ca4`）。
+"""批 Z6（2026-10-05）—— C7-n9 ＋ Z3-n10 ＋ Z4-n1 釘子（基底 origin/main `84c1ca4`）。
 
 - C7-n9（L5 v1 `src/ui/tabs/macro/section_warroom.py`，修正錯誤）：作戰室「外資期貨避險」片段從來出不來 ——
   作戰室讀 `st.session_state['futures_net']`（經 L3 `load_section_inputs`），全 repo 沒有任何地方寫這個 key
@@ -13,6 +13,9 @@
   「+0.0」，其餘值逐字不變。⚠️ 未照規格舉例寫 `round(x, 1) + 0.0`：引擎收 numpy 浮點時 numpy 的 round
   不是正確捨入（例 np.float64 乖離 0.05：`:+.1f` 印 +0.1、round 後印 +0.0）、收 Decimal 時 `+ 0.0` 拋
   TypeError —— 都會動到其他值的顯示（見 TestZ3n10WhyNotRoundPlusZero）。
+- Z4-n1（只加測試，⛔ 改正式碼）：NDC 高側黃線判式 `v >= yellow`（`shared/macro_buckets.classify_danger` band 分支，
+  `ndc_signal.yellow` = 32.0）只有整數測試 —— 突變 `v > yellow − 0.05`（批 Z4 QA R9-M21）在 fast＋slow 全量下存活。
+  補「界值判黃、`math.nextafter(界值, −inf)` 判綠」與消費端（五桶長期桶、v2 今天頁指標磚）。
 
 修前輸出：於基底 `84c1ca4` 以本檔同一支 `_run`（`_FakeST`）實跑後寫死於本檔（⛔ 不讀 git）——
 - `_BASE`：整個作戰室輸出（每個 st.* 文字呼叫的種類＋內容）的 sha256；
@@ -42,6 +45,7 @@ import pytest
 import src.services.allocation_service as AS
 import src.ui.tabs.macro.section_warroom as W
 from shared.allocation_decision import build_allocation_decision
+from shared.macro_buckets import SPECS_BY_KEY, classify_danger
 from shared.macro_compute import evaluate_market_status_v4_final as _V4
 from tests.test_m2n2_no_zero_fill import _FakeST
 
@@ -597,3 +601,52 @@ class TestUnrelatedShapesIdenticalToBase:
 
     def test_bull_card_literal(self):
         assert _out(_S(_BULL))[1] == ('markdown', _CARD.format(_HINT_DIV.format(_H)))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Z4-n1：NDC 高側黃線（band：`v >= yellow`）邊界 —— 只加測試
+# ══════════════════════════════════════════════════════════════════════════
+NDC = SPECS_BY_KEY['ndc_signal']
+_BELOW_YELLOW = math.nextafter(NDC.yellow, -math.inf)
+
+
+class TestZ4n1NdcHighSideYellowBoundary:
+    def test_premise_spec(self):
+        """判式在 `shared/macro_buckets.classify_danger` 的 band 分支：`... or v >= spec.yellow` → yellow。"""
+        assert NDC.direction == 'band'
+        assert (NDC.yellow, NDC.red, NDC.yellow_lo, NDC.red_lo) == (32.0, 38.0, 22.0, 16.0)
+        assert NDC.yellow_lo < _BELOW_YELLOW < NDC.yellow         # 緊鄰界值的下一個浮點數落在綠燈帶內
+
+    def test_yellow_line_itself_is_yellow(self):
+        assert classify_danger(NDC.yellow, NDC) == 'yellow'
+        assert classify_danger(32, NDC) == 'yellow'
+
+    @pytest.mark.parametrize('v', [_BELOW_YELLOW, 31.999, 31.99, 31.96, 31.951, 31.5],
+                             ids=['nextafter', '31.999', '31.99', '31.96', '31.951', '31.5'])
+    def test_just_below_is_green(self, v):
+        assert classify_danger(v, NDC) == 'green'
+
+    def test_premise_inputs_split_the_r9_m21_mutant(self):
+        """R9-M21 突變 `v > yellow − 0.05`：上面的輸入在突變下判黃、在正式碼下判綠 —— 殺得掉。"""
+        for v in (_BELOW_YELLOW, 31.999, 31.99, 31.96, 31.951):
+            assert (v > NDC.yellow - 0.05) and not (v >= NDC.yellow), v
+
+    def test_five_bucket_long_bucket(self):
+        """消費端（v1 五桶 bar／v2 今天頁五桶摘要共用的 L2 長期桶）：界值下緣綠、界值黃。"""
+        from src.compute.macro import compute_five_bucket_summary
+        lo = compute_five_bucket_summary(macro_info={'ndc_signal': {'score': _BELOW_YELLOW}})['long']
+        assert (lo['level'], lo['label'], lo['headline']) == ('green', '結構健康', '1 項指標全綠')
+        hi = compute_five_bucket_summary(macro_info={'ndc_signal': {'score': NDC.yellow}})['long']
+        assert (hi['level'], hi['label']) == ('yellow', '結構轉折')
+        assert hi['headline'] == 'NDC 景氣對策燈號 32分｜9-16 藍衰退 / 23-31 綠穩定 / 38+ 紅過熱'
+
+    @pytest.mark.parametrize('v,zh', [(_BELOW_YELLOW, '綠'), (31.96, '綠'), (NDC.yellow, '黃')],
+                             ids=['nextafter', '31.96', 'yellow'])
+    def test_v2_today_tile(self, v, zh):
+        from src.ui.render.macro_v2_cards import band_meta, threshold_text
+        from src.ui.views import page_today as PT
+        rec = {'key': 'ndc_signal', 'wired': True, 'discriminative': True, 'state': 'ok', 'reason': None,
+               'value': float(v), 'hit_source': 'FinMind', 'candidates': [], 'rejected': []}
+        tile = PT.build_indicator_tile('ndc_signal', rec, requested=True, error='',
+                                       band_label=band_meta, thr_text=threshold_text)
+        assert tile.signal_text == zh
