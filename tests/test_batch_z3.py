@@ -14,8 +14,11 @@
   numpy bool 的缺值與正常形狀，渲染與修前相同；單邊 numpy bool 改走價／年線缺值路徑（有意識的變更，
   fd989ae 是把 np.True_ 當 1 印假乖離）。
 - V1-n2（L5 v1）`section_mid`：VIX 為負（實跑 −5）印「✅ 市場平靜」「平靜期 🟢」「A VIX=-5.0<20 ✅」、
-  否決權收到 −5。總管決定 VIX ≤ 0（定義上不可能）視同非有限值 —— 在本檔取 VIX 的單一入口處理，
-  全部走 #781 既有缺值路徑（KPI「待取得」、§八 否決權那句、三環「A VIX未知」、apply_vix_veto(None)）。
+  否決權收到 −5。總管決定 VIX ≤ 0（定義上不可能）視同非有限值 —— 在 §八 自己取 VIX 的 `_vcur8_v` 處理，
+  由它取值的 KPI「待取得」、基本面否決檢查「VIX待取得」、§八 否決權那句、三環「A VIX未知」、
+  apply_vix_veto(None) 走 #781 既有缺值路徑。📌 範圍更正（驗收）：原句「本檔取 VIX 的單一入口／全部走」
+  過寬 —— 本頁另有 §三 `read_v4_macro_veto()` 與頂部總經警示看板（L1，正式載入才出現）自行讀 VIX；
+  前者在 §八 VIX 無效時已不取用（驗收阻擋 2，下方以真函式驗），後者屬 L1、總管另登記為已知限制。
 - V1-n5（同檔）：VIX「有值但無效」（非有限或 ≤ 0；含非數值）時，§八 那句原寫「VIX 數據載入中，VIX 否決權
   暫無法判斷」—— 值明明到了，「載入中」是假的。只在此時於子句界純刪「VIX 數據載入中，」；
   真的沒值（None／缺鍵）原句一字不變。
@@ -37,6 +40,7 @@ import pandas as pd
 import pytest
 
 from shared import macro_compute as MC
+from src.config import VETO_V4_ENGINE_NAME
 from src.compute.macro import macro_helpers as MH
 from tests.test_m2n2_no_zero_fill import _FakeST, _apply, _load, _mod, _source
 
@@ -428,11 +432,14 @@ _MID_BASE = {"ism_pmi": {"value": 52.0}, "us_core_cpi": {"yoy": 3.0},
 _LOADING = "VIX 數據載入中，VIX 否決權暫無法判斷"     # 既有句（#781 缺值路徑；真的沒值）
 _INVALID = "VIX 否決權暫無法判斷"                     # V1-n5：有值但無效（子句界純刪後）
 
-#: 修後 → 修前（反向替換，只動程式行；註解不影響行為）。還原體在 VIX > 0／真缺值上
-#: 與 `fd989ae` 的 section_mid 渲染逐字相同（已另以 git 原始檔實跑對過）。
+#: 修後 → 修前（反向替換，只動程式行；註解不影響行為）。範圍：本檔 harness（`_FakeST`、
+#: `_load_heavy=False` 不畫頂部警示看板）下，還原體與 `fd989ae` 的 section_mid 渲染逐字相同
+#: （已另以 git 原始檔實跑對過；不是全頁、全輸入的等價證明）。
 _MID_REVERT = (
     ("    if _vcur8_v is not None and _vcur8_v <= 0:\n"
      "        _vcur8_v = None\n", ""),
+    ("    if _vcur8_v is None:\n"
+     "        _v4_light = None\n", ""),                       # 驗收阻擋 2 的揭露框閘門
     ("            st.info('VIX 否決權暫無法判斷' if _vix_bad8\n"
      "                    else 'VIX 數據載入中，VIX 否決權暫無法判斷')\n",
      "            st.info('VIX 數據載入中，VIX 否決權暫無法判斷')\n"),
@@ -501,8 +508,9 @@ class TestV1n2NonPositiveVix:
 
     @pytest.mark.parametrize("v", _NONPOS)
     def test_output_equals_missing_current(self, v, monkeypatch):
-        # 全部走既有缺值路徑：整份輸出 ＝ current 為 None 時（同一個節點形狀）；
-        # 唯一差別是 V1-n5 那一句（≤ 0 屬「有值但無效」→ 刪去「VIX 數據載入中，」）。
+        # 範圍（驗收更正）：在本 harness（`_load_heavy=False` 不畫頂部警示看板、`read_v4_macro_veto`
+        # stub 為 None）內，輸出 ＝ current 為 None 時（同一個節點形狀），唯一差別是 V1-n5 那一句
+        # （≤ 0 屬「有值但無效」→ 刪去「VIX 數據載入中，」）。揭露框用真函式的情形見 TestV1CrossDisclosure。
         out, calls = _run_mid(_mod("mid"), _node(v), monkeypatch)
         base, base_calls = _run_mid(_mod("mid"), _node(None), monkeypatch)
         assert out == [_INVALID if t == _LOADING else t for t in base]
@@ -542,7 +550,7 @@ class TestV1n5InvalidValueSentence:
         out, calls = _run_mid(_mod("mid"), _node(v), monkeypatch)
         assert _INVALID in out and _LOADING not in out, out
         assert calls == [(None,)]
-        # 與「真的沒值」只差這一句（其餘逐字相同）
+        # 本 harness 範圍內（同上）：與「真的沒值」只差這一句，其餘逐字相同
         base, _ = _run_mid(_mod("mid"), _node(None), monkeypatch)
         assert sum(t == _LOADING for t in base) == 1
         assert out == [_INVALID if t == _LOADING else t for t in base]
@@ -564,3 +572,67 @@ class TestV1n5InvalidValueSentence:
         assert _LOADING.split("，", 1) == ["VIX 數據載入中", _INVALID]
         src = _source("mid")
         assert src.count(f"'{_INVALID}'") == 1 and src.count(f"'{_LOADING}'") == 1
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 驗收阻擋 2：§八 跨區揭露框 —— 不 stub `read_v4_macro_veto`（真函式）
+# ══════════════════════════════════════════════════════════════════════════
+#: 既有缺值路徑那句（#781 前就在；本批只讓 VIX 無效時也走它，不新增字）
+_V4_UNAVAILABLE = (f'（§三 籌碼的「{VETO_V4_ENGINE_NAME}」因 VIX 未取得而無法判定，'
+                   '本區與該燈暫時無法比對 —— 兩區都缺 VIX 時請先按「🚀 一鍵更新全部數據」）')
+
+
+def _run_mid_real_v4(mod, vix_node, mp, fut=-40000.0):
+    """同 `_run_mid`，但 §三 的 `read_v4_macro_veto` 用真函式（只把它讀的 st 換成同一個假 st）。"""
+    import src.services.allocation_service as AS
+    import src.ui.tabs.macro.section_chips as SC
+    assert (SC.read_v4_macro_veto.__module__, SC.read_v4_macro_veto.__qualname__) == (
+        'src.ui.tabs.macro.section_chips', 'read_v4_macro_veto')          # 確定沒被 stub
+    info = dict(_MID_BASE)
+    info["vix"] = vix_node
+    li = pd.DataFrame({"日期": ["2026-10-01"], "外資大小": [fut]})
+    fake = _FakeSTFig({"macro_info": info, "bias_info": {"bias_240": 5.0}, "li_latest": li})
+    mp.setattr(mod, "st", fake)
+    mp.setattr(SC, "st", fake)
+    mp.setattr(AS, "apply_vix_veto", lambda *a, **k: None)
+    mp.setattr(AS, "apply_ring_gate", lambda *a, **k: None)
+    mp.setattr(AS, "register_conflict", lambda *a, **k: None)
+    mp.setattr(AS, "get_allocation", lambda *a, **k: types.SimpleNamespace(
+        is_loaded=False, final_hi=None))
+    mod.render_section_mid(False, {}, {}, {})
+    return fake.out, SC.read_v4_macro_veto()
+
+
+_INVALID_FOR_DISCLOSURE = [pytest.param(v, id=repr(v)) for v in (-5, 0, -0.0, "18.5", True, math.nan)]
+
+
+class TestV1CrossDisclosure:
+    @pytest.mark.parametrize("v", _INVALID_FOR_DISCLOSURE)
+    def test_invalid_vix_takes_unavailable_caption(self, v, monkeypatch):
+        out, light = _run_mid_real_v4(_mod("mid"), {"current": v}, monkeypatch)
+        assert ("caption", _V4_UNAVAILABLE) in out, out
+        assert not any("看的是 VIX=" in t for _k, t in out)
+        assert not any(k == "warning" and "兩套判定結論不一致" in t for k, t in out)
+
+    def test_premise_real_reader_still_judges_negative_vix(self, monkeypatch):
+        # 前提自證：真 `read_v4_macro_veto` 在同一份 session 下照樣拿 −5 判出 🔴 燈 ——
+        # 少了 §八 的閘門，揭露框就會印「看的是 VIX=-5.0、外資期貨=-40,000 口」
+        _out, light = _run_mid_real_v4(_mod("mid"), {"current": -5}, monkeypatch)
+        assert light is not None and light["_vix"] == -5.0 and light["status"].startswith("🔴")
+
+    def test_pre_fix_printed_contradiction(self, mid_pre, monkeypatch):
+        out, _light = _run_mid_real_v4(mid_pre, {"current": -5}, monkeypatch)
+        assert any(k == "warning" and "看的是 VIX=-5.0、外資期貨=-40,000 口" in t for k, t in out)
+
+    @pytest.mark.parametrize("v,fut", [(18.0, -40000.0), (35.0, 0.0), (18.0, 0.0), (25.0, -40000.0)])
+    def test_valid_vix_disclosure_unchanged(self, v, fut, mid_pre, monkeypatch):
+        now, _ = _run_mid_real_v4(_mod("mid"), {"current": v}, monkeypatch, fut)
+        pre, _ = _run_mid_real_v4(mid_pre, {"current": v}, monkeypatch, fut)
+        assert now == pre
+        if (v, fut) == (18.0, -40000.0):          # §八 無觸發、§三 紅燈 → 照舊揭露分歧
+            assert any(k == "warning" and "看的是 VIX=18.0、外資期貨=-40,000 口" in t for k, t in now)
+
+    def test_true_missing_vix_unchanged(self, mid_pre, monkeypatch):
+        now, _ = _run_mid_real_v4(_mod("mid"), {"current": None}, monkeypatch)
+        pre, _ = _run_mid_real_v4(mid_pre, {"current": None}, monkeypatch)
+        assert now == pre and ("caption", _V4_UNAVAILABLE) in now

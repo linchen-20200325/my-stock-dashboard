@@ -63,7 +63,8 @@ _BAD = [
     # 📌 批 Z3 V1-n2：VIX≤0 視為無效，有意識的變更（⛔ 不是漏刪）。這兩列原本釘在下方
     #   `test_finite_vix_unchanged` ——（0 →「VIX 0.0 < 20（平靜期）」「A VIX=0.0<20」；
     #   −5 →「VIX -5.0 < 20（平靜期）」「A VIX=-5.0<20」、veto 收到原值）。VIX 定義上恆為正，
-    #   ≤ 0 只可能是壞資料 ⇒ 改走既有缺值路徑（總管決定；本檔取 VIX 的單一入口處理）。
+    #   ≤ 0 只可能是壞資料 ⇒ 改走既有缺值路徑（總管決定；在 §八 自己取 VIX 的 `_vcur8_v` 處理 ——
+    #   範圍更正（驗收）：非「本檔單一入口」，§三 read_v4_macro_veto 與頂部警示看板另讀 VIX）。
     pytest.param({"current": 0}, False, _INVALID, id="zero"),
     pytest.param({"current": -5}, False, _INVALID, id="negative"),
 ]

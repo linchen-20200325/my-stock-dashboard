@@ -107,8 +107,13 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     _vcur8_v = _finite_yoy(_m8_vix, 'current')
     # 批 Z3（V1-n2，§1）：VIX ≤ 0 定義上不可能（恐慌指數恆為正）—— `_finite_yoy` 只擋非有限，
     #   實跑 −5 印「✅ 市場平靜」「VIX -5.0 < 20（平靜期）🟢」「A VIX=-5.0<20 ✅」、否決權收到 −5。
-    #   在本檔取 VIX 的單一入口視同非有限值 ⇒ 下游全走 #781 既有缺值路徑（KPI「待取得」、
-    #   §八 否決權那句、三環「A VIX未知」、apply_vix_veto(None)、基本面否決檢查列「VIX待取得」）。
+    #   在 §八 自己取 VIX 的這一處（`_vcur8_v`）視同非有限值 ⇒ 由它取值的 KPI 卡（「待取得」）、
+    #   基本面否決檢查（列「VIX待取得」）、§八 否決權那句、三環「A VIX未知」、apply_vix_veto(None)
+    #   走 #781 既有缺值路徑；跨區揭露框見下方「驗收阻擋 2」那段。
+    #   ⚠️ 範圍更正（驗收）：原註「本檔取 VIX 的單一入口 ⇒ 下游全走」說得過寬 —— 本頁另有兩處自行讀
+    #   VIX、不經此處：§三 `section_chips.read_v4_macro_veto()`（本區揭露框已不取用其結果），與頂部
+    #   總經警示看板（L1 `check_macro_alerts`，只在正式載入時出現；驗收組實測 VIX ≤ 0／NaN／−inf 仍給
+    #   🟢 —— 屬 L1、不在本批，總管另登記為已知限制）。
     #   ⛔ 共用的 `_finite_yoy` 不動；VIX > 0 時同一物件，輸出不變。
     if _vcur8_v is not None and _vcur8_v <= 0:
         _vcur8_v = None
@@ -404,6 +409,12 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         _v4_light = read_v4_macro_veto()
     except Exception as _e_v4x:
         print(f'[section_mid/veto-cross] {type(_e_v4x).__name__}: {_e_v4x}')
+        _v4_light = None
+    # 批 Z3（驗收阻擋 2）：§八 判 VIX 無效（`_vcur8_v is None`：缺值／非有限／≤ 0／非數值）時，
+    #   ⛔ 不取用上面 `read_v4_macro_veto()` 的結果 —— 它另讀 VIX、只擋非有限（VIX=−5、數字字串、
+    #   bool 照樣判燈），同一區會同時印「VIX待取得／A VIX未知」與「看的是 VIX=-5.0」。
+    #   改走下方既有「…因 VIX 未取得而無法判定…」那句（只用既有字）；§八 VIX 有效時照舊比對、輸出不變。
+    if _vcur8_v is None:
         _v4_light = None
 
     if _fund_evaluable and _v4_light is not None:
