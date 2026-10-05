@@ -21,7 +21,8 @@ session_state 讀(0 寫):
   (外資期貨淨口只取 `warroom_summary['futures_net']`。批 Z6 C7-n9 起作戰室〔含「外資期貨避險」片段〕
   不再使用 `SectionInputs.futures_net`;但 L3 `load_section_inputs` 本身仍會讀 `futures_net` 這個
   session key 並以 `int(... or 0)` 轉型 —— 非數值字串／NaN 拋 ValueError、±inf 拋 OverflowError、
-  list 等拋 TypeError,本函式會跟著拋。正式路徑沒有任何寫入點,走不到。)
+  list 等拋 TypeError,本函式會跟著拋。falsy 值〔空字串、空容器、None、0〕經 `or 0` 換成 0,不拋。
+  正式路徑沒有任何寫入點,走不到。)
 """
 from __future__ import annotations
 
