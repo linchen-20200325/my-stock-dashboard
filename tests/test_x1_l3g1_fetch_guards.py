@@ -585,13 +585,30 @@ class TestD2f41UrlCacheLock:
         批 Y3（X1-n7）改為**確定性**：原本 8 執行緒 × 1500 次寫入，靠排程器碰巧交錯（機率性；拿掉鎖時
         多半仍綠）。現在用快取的 `__setitem__` 鉤子把交錯點固定在最危險的位置 —— A 已檢查完筆數、正要寫入時，
         讓 B 在另一條執行緒做一次完整的 `_url_cache_put`：
-          · 有鎖：B 卡在鎖上（等 0.3 秒仍未完成）→ A 寫完放鎖 → B 逐出一筆再寫 ⇒ 恰好滿額、A／B 都在。
+          · 有鎖：B 卡在鎖上 → A 寫完放鎖 → B 逐出一筆再寫 ⇒ 恰好滿額、A／B 都在。
           · 沒鎖：B 趁隙寫入 → A 再寫 ⇒ 比上限多 1 筆（紅）。
+        批 Z2（Y3-n3）再去掉 `join(0.3)` 的計時依賴：把 `_URL_CACHE_LOCK` 換成間諜鎖，B 進 `__enter__`、
+        真正搶鎖**之前**先設 `b_waiting`；主執行緒等到「`b_waiting` 已設」或「B 已結束」（5 秒安全上限）才判定。
+        有鎖時 B 必定卡在 A 持有的真鎖上（尚未結束）；拿掉鎖／每次新建一把鎖時 B 不會碰到間諜鎖，只能跑完 ⇒ 紅。
+        極端負載下不再因 B 0.3 秒內沒跑完而讓突變逃過。
         「寫入必須持鎖」本身另由 `test_put_takes_the_lock` 直接守（持鎖期間寫入必須等待）；本測試守的是
         沒有鎖時會壞掉的那個不變量（筆數上限）。"""
         cap = 8
         monkeypatch.setattr(PH, "_URL_CACHE_MAX", cap)
         b_state: dict = {}
+        b_waiting = threading.Event()
+        real_lock = threading.Lock()
+
+        class _SpyLock:
+            def __enter__(self):
+                if threading.current_thread() is b_state.get("t"):
+                    b_waiting.set()                       # 先宣告「B 要搶鎖了」，再真的去搶
+                return real_lock.__enter__()
+
+            def __exit__(self, *exc):
+                return real_lock.__exit__(*exc)
+
+        monkeypatch.setattr(PH, "_URL_CACHE_LOCK", _SpyLock())
 
         class _Interleave(dict):
             def __setitem__(self, k, v):
@@ -603,7 +620,10 @@ class TestD2f41UrlCacheLock:
                             b_state["err"] = e
                     b_state["t"] = threading.Thread(target=_b)
                     b_state["t"].start()
-                    b_state["t"].join(0.3)
+                    deadline = time.monotonic() + 5
+                    while (not b_waiting.is_set() and b_state["t"].is_alive()
+                           and time.monotonic() < deadline):
+                        b_waiting.wait(0.01)
                     b_state["b_done_before_a"] = not b_state["t"].is_alive()
                 super().__setitem__(k, v)
 
@@ -615,6 +635,7 @@ class TestD2f41UrlCacheLock:
         PH._url_cache_put(("A",), b"a")
         b_state["t"].join(5)
         assert not b_state["t"].is_alive() and "err" not in b_state, b_state
+        assert b_waiting.is_set(), "B 沒有經過 `_URL_CACHE_LOCK`（寫入沒有持鎖）"
         assert b_state["b_done_before_a"] is False, "B 沒有等 A 放鎖（寫入沒有持鎖）"
         assert len(cache) == cap, sorted(map(str, cache))
         assert ("A",) in cache and ("B",) in cache and ("old", 0) not in cache, "逐出最舊的一筆"
