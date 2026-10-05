@@ -46,7 +46,6 @@ inline 門檻與色票改吃 SSOT(shared.staleness / shared.colors),詳見下方
 from __future__ import annotations
 
 import datetime as _dt
-import math as _math
 from html import escape as _html_escape  # SEC-r9：detail 欄進 unsafe_allow_html 前先跳脫
 
 import streamlit as st
@@ -63,6 +62,7 @@ from shared.macro_buckets import (
     MACRO_INFO_KEYS, SPECS_BY_KEY,
     MISSING_NOT_LOADED, MISSING_NO_VALUE, MISSING_OUT_OF_RANGE,
     MISSING_NO_EXTRACTION,
+    rejected_all_nonfinite,   # 批 Z4 D4-n2：「被擋值全是非有限值」三處共用的 L0 判斷
 )
 
 # v19.170 P0-4:覆蓋率 ≠ 新鮮度。覆蓋率只問「有沒有值」,問不出「值是不是 9 天沒動
@@ -487,9 +487,9 @@ def compute_tab_coverage(state: dict | None = None,
                 # 批 D4 C1（客戶 2026-10-02 選 A）：被擋的值**全是**非有限值(NaN / ±inf)
                 #   時，那不是量綱問題、是「沒有觀測值」(shared/macro_buckets 同義註解)
                 #   ⇒ 歸既有「📵 上游無值」組。只改分組；原因碼與下方逐筆標註不動。
-                _rj_g = _r.get("rejected") or []
-                if (_rs_g == MISSING_OUT_OF_RANGE and _rj_g
-                        and all(not _math.isfinite(_x[1]) for _x in _rj_g)):
+                # 批 Z4 D4-n2：判斷上提 L0 `rejected_all_nonfinite`（今天頁／總經 v2 同一支，
+                #   ⛔ 不再各寫一份）；判斷內容與原本寫在這裡的那一行相同 ⇒ 本頁輸出不變。
+                if rejected_all_nonfinite(_r):
                     _rs_g = MISSING_NO_VALUE
                 _by_reason.setdefault(_rs_g, []).append(_r["key"])
         _REASON_TXT = {

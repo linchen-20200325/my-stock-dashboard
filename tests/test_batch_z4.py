@@ -1,4 +1,4 @@
-"""批 Z4（2026-10-05）—— R9 釘子。
+"""批 Z4（2026-10-05）—— R9 ＋ D4-n2 釘子。
 
 R9（L0）：NDC 景氣對策燈號 23 分「程式判黃、文件寫綠」（客戶 2026-10-02 定性為程式 bug）。
 修法：`shared/macro_buckets.py::BUCKET_DANGER_SPECS['ndc_signal']` 的 `yellow_lo` 23.0 → 22.0。
@@ -6,6 +6,9 @@ R9（L0）：NDC 景氣對策燈號 23 分「程式判黃、文件寫綠」（�
 （≤16 紅／17～22 黃／23～31 綠／32～37 黃／≥38 紅）；門檻字出現「黃 ≤22」；只動數字、不改任何字。
 本檔另逐一釘住受影響的消費端（v1 五桶 / v2 今天頁 / v2 總經頁 / 資料體檢頁門檻字 /
 教學卡線位 / AI prompt 門檻句 / 超標幅度 / 長期桶主因選擇）。
+
+D4-n2（L0＋L5）：被擋的值**全部**是非有限值（NaN／±inf）＝ 📵 上游無值（客戶 10-02 裁「C1 選 A」），
+三處（資料診斷頁／今天頁／總經 v2）共用 L0 `rejected_all_nonfinite`；見檔案下半部。
 """
 from __future__ import annotations
 
@@ -181,3 +184,294 @@ class TestR9Consumers:
         assert ndc_row.band == band
         assert ndc_row.thr_text == "紅 ≤16 / 黃 ≤22　黃 ≥32 / 紅 ≥38"
         assert TV.overall_verdict(TV.bucket_summary(rows)) == verdict
+
+
+# ══════════════════════════════════════════════════════════════════
+# D4-n2 —— 被擋的值**全部**是非有限值 ⇒ 三處一致走既有的「上游無值」那一態
+# ══════════════════════════════════════════════════════════════════
+# 客戶 2026-10-02 審稿裁「C1 選 A」：被擋值全是 NaN／±inf ＝ 📵 上游無值（原本只套在資料診斷頁）。
+#   · 資料診斷頁（`src/ui/pages/data_coverage.py`）：輸出**完全不變**（含「└」逐筆行）。
+#   · 今天頁（`src/ui/views/page_today.py`）：紅燈「程式要修」→ 既有「無輸入」灰態＋`MISSING_NO_VALUE` 的既有說法。
+#   · 總經 v2（`src/ui/tabs/tab_macro_v2.py`）：明細面板改用既有「上游來源這輪沒有回值」那句。
+#   · 混合（有限越界＋非有限）／純有限越界 → 三處都維持原判定；L2 側車原因碼一個字不改。
+#   · 三處共用 L0 `shared.macro_buckets.rejected_all_nonfinite`（下方 spy 測試釘「真的有用它」）。
+import pandas as pd  # noqa: E402
+
+from shared.macro_buckets import (  # noqa: E402
+    MISSING_NO_VALUE,
+    MISSING_OUT_OF_RANGE,
+    rejected_all_nonfinite,
+)
+from shared.station_specs import MISS_CONTRACT_DRIFT, MISS_NO_INPUT, MISS_TEXT  # noqa: E402
+from shared.ui_state import UI_FAILED, UI_MISSING_RETRYABLE  # noqa: E402
+
+NAN, INF = float("nan"), float("inf")
+_WHY_NONFINITE = "非有限值(NaN / ±inf)"          # L2 `_first_sane` 寫進側車的逐筆標註（既有字樣）
+_V2_NO_VALUE_TXT = "上游來源這輪沒有回值 —— 到「🔎 資料診斷」看 API 根因。"
+_V2_OOR_TXT = ("取到的值超出合理範圍,已被擋下 —— 通常是上游換了標的或報價慣例"
+               "(如 DXY→UUP、殖利率×10)。**不猜換算**,故顯示無資料。")
+
+
+def _rec(*vals, reason=MISSING_OUT_OF_RANGE, key="us10y"):
+    """readiness 側車一筆（形狀同 L2 `macro_helpers._rec`）；`vals`＝被擋下的值，依序一源一筆。"""
+    _sp = SPECS_BY_KEY[key]
+    return {
+        "key": key, "label": _sp.label, "bucket": _sp.bucket, "wired": True,
+        "discriminative": True, "state": "missing", "reason": reason, "value": None,
+        "hit_source": None, "candidates": [f"源{i}" for i in range(len(vals))],
+        "rejected": [(f"源{i}", v, _WHY_NONFINITE if not math.isfinite(v)
+                      else f"out_of_range[{_sp.valid_min},{_sp.valid_max}]")
+                     for i, v in enumerate(vals)],
+    }
+
+
+def _intl(**closes):
+    return {"intl": {k: pd.DataFrame({"close": [v]}) for k, v in closes.items()}}
+
+
+#: 真實 L2 路徑產生側車的情境（`compute_five_bucket_summary` 的關鍵字參數）。
+#: 一律帶一個有值的 VIX，讓資料診斷頁那一列是「已載入」（macro_info 有實質 key）。
+_VIX_OK = {"vix": {"current": 17.2}}
+SCENARIOS = {
+    "us10y_nan": dict(macro_info={**_VIX_OK, "us10y": {"current": NAN}}),
+    "us10y_inf_both": dict(macro_info={**_VIX_OK, "us10y": {"current": INF}},
+                           cl_data=_intl(**{"10Y公債殖利率": -INF})),
+    "us10y_mixed": dict(macro_info={**_VIX_OK, "us10y": {"current": NAN}},
+                        cl_data=_intl(**{"10Y公債殖利率": 46.3})),
+    "us10y_finite": dict(macro_info=dict(_VIX_OK), cl_data=_intl(**{"10Y公債殖利率": 46.3})),
+}
+#: 情境 → 是否「被擋值全是非有限值」
+NONFINITE_ONLY = {"us10y_nan": True, "us10y_inf_both": True,
+                  "us10y_mixed": False, "us10y_finite": False}
+
+
+def _readiness(**kw) -> dict:
+    from src.compute.macro import compute_five_bucket_summary
+    rd: dict = {}
+    compute_five_bucket_summary(readiness_out=rd, **kw)
+    return rd
+
+
+class TestD4n2SharedPredicate:
+    @pytest.mark.parametrize("vals", [(NAN,), (INF,), (-INF,), (NAN, INF, -INF), (INF, INF)])
+    def test_true_when_every_rejected_value_is_nonfinite(self, vals):
+        assert rejected_all_nonfinite(_rec(*vals)) is True
+
+    @pytest.mark.parametrize("vals", [
+        (NAN, 46.3), (46.3, INF), (-INF, 0.0, NAN),   # 混合：任一筆有限 ⇒ 仍是量綱訊號
+        (46.3,), (-1e300,),                           # 純有限越界
+        (),                                           # 沒有被擋的值（all([]) 恆真的陷阱）
+    ])
+    def test_false_otherwise(self, vals):
+        assert rejected_all_nonfinite(_rec(*vals)) is False
+
+    @pytest.mark.parametrize("reason", [MISSING_NO_VALUE, "not_loaded", "no_extraction", None, ""])
+    def test_only_for_out_of_range(self, reason):
+        assert rejected_all_nonfinite(_rec(NAN, reason=reason)) is False
+
+    @pytest.mark.parametrize("rec", [None, {}, [], "out_of_range", {"reason": MISSING_OUT_OF_RANGE}])
+    def test_not_a_record_or_no_rejected(self, rec):
+        assert rejected_all_nonfinite(rec) is False
+
+    def test_reads_the_value_column_not_the_label_or_note(self):
+        """只看第 2 欄（值）—— 標註字串寫「非有限值」但值是有限的 ⇒ False。"""
+        rec = {"reason": MISSING_OUT_OF_RANGE,
+               "rejected": [("nan", 46.3, _WHY_NONFINITE), ("inf", 99.0, _WHY_NONFINITE)]}
+        assert rejected_all_nonfinite(rec) is False
+
+    def test_accepts_readonly_mapping(self):
+        from types import MappingProxyType
+        assert rejected_all_nonfinite(MappingProxyType(_rec(NAN))) is True
+
+    @pytest.mark.parametrize("name", sorted(SCENARIOS))
+    def test_real_l2_sidecar(self, name):
+        """真 L2 路徑：側車原因碼照舊 `out_of_range`（⛔ 不改 L2）；判斷結果與情境一致。"""
+        rec = _readiness(**SCENARIOS[name])["us10y"]
+        assert rec["reason"] == MISSING_OUT_OF_RANGE and rec["state"] == "missing"
+        assert rejected_all_nonfinite(rec) is NONFINITE_ONLY[name]
+
+
+# ── ① 資料診斷頁：輸出完全不變 ──────────────────────────────────────────
+#: 修前（origin/main fd989ae）實跑的分組與「└」逐筆行（只取 us10y 那一段）。
+_DC_BEFORE = {
+    "us10y_nan": ("📵 上游無值", ["　└ us10y:FRED 美 10 年期殖利率 = nan 非有限值(NaN / ±inf)"]),
+    "us10y_inf_both": ("📵 上游無值", [
+        "　└ us10y:FRED 美 10 年期殖利率 = inf 非有限值(NaN / ±inf)",
+        "　└ us10y:Yahoo 美債 10Y 殖利率（FRED 抓不到時的備援） = -inf 非有限值(NaN / ±inf)"]),
+    "us10y_mixed": ("📐 量綱異常", [
+        "　└ us10y:FRED 美 10 年期殖利率 = nan 非有限值(NaN / ±inf)",
+        "　└ us10y:Yahoo 美債 10Y 殖利率（FRED 抓不到時的備援） = 46.3 out_of_range[0.0,20.0]"]),
+    "us10y_finite": ("📐 量綱異常", [
+        "　└ us10y:Yahoo 美債 10Y 殖利率（FRED 抓不到時的備援） = 46.3 out_of_range[0.0,20.0]"]),
+}
+
+
+def _coverage_detail(**kw) -> str:
+    import datetime as _dt
+
+    from src.ui.pages.data_coverage import compute_tab_coverage
+    _state = {**{k: v for k, v in kw.items() if k != "macro_info"},
+              "macro_info": {**kw.get("macro_info", {}), "_loaded_at": "2026-10-05T01:00"}}
+    _rows = compute_tab_coverage(state=_state, today=_dt.date(2026, 10, 5))
+    return [r for r in _rows if "總經" in r["tab"]][0]["detail"]
+
+
+def _group_of(detail: str, key: str):
+    """回 (key 所在分組的「圖示 名稱」, 緊接在該組標頭後、屬於 key 的「└」行)。"""
+    segs = detail.split(" ｜ ")
+    for i, s in enumerate(segs):
+        if s[:1] in ("🔌", "📵", "📐", "🐛", "⬜") and "(" in s and ":" in s:
+            members = s.split(":", 1)[1].split(" → ")[0].split("/")
+            if key in members:
+                tail = []
+                for t in segs[i + 1:]:
+                    if not t.startswith("　└"):
+                        break
+                    if t.startswith(f"　└ {key}:"):
+                        tail.append(t)
+                return s.split("(")[0], tail
+    return None, []
+
+
+class TestD4n2DataCoverageUnchanged:
+    @pytest.mark.parametrize("name", sorted(_DC_BEFORE))
+    def test_grouping_and_detail_lines_identical_to_before(self, name):
+        assert _group_of(_coverage_detail(**SCENARIOS[name]), "us10y") == _DC_BEFORE[name]
+
+    def test_two_keys_each_lines_under_its_own_group(self):
+        """us10y（全非有限）在 📵、dxy（UUP 27）在 📐；各自的「└」排在自己那一組正下方。"""
+        detail = _coverage_detail(macro_info={**_VIX_OK, "us10y": {"current": NAN}},
+                                  cl_data=_intl(**{"美元指數 DXY": 27.0}))
+        assert _group_of(detail, "us10y") == (
+            "📵 上游無值", ["　└ us10y:FRED 美 10 年期殖利率 = nan 非有限值(NaN / ±inf)"])
+        assert _group_of(detail, "dxy") == ("📐 量綱異常", [
+            "　└ dxy:Yahoo 美元指數 → 美元指數期貨（ETF 備援尺度不同，一律擋下不用） = 27.0 "
+            "out_of_range[70.0,130.0]"])
+
+
+# ── ② 今天頁：全非有限 → 既有「無輸入」灰態；混合／有限越界 → 照舊紅 ──────────
+def _today_tile(key, rec):
+    from src.ui.render.macro_v2_cards import band_meta, threshold_text
+    from src.ui.views import page_today as PT
+    return PT.build_indicator_tile(key, rec, requested=True, error="",
+                                   band_label=band_meta, thr_text=threshold_text)
+
+
+class TestD4n2TodayPage:
+    @pytest.mark.parametrize("key,vals", [
+        ("us10y", (NAN,)), ("us10y", (INF, -INF)), ("vix", (NAN,)), ("m1b_m2_gap", (INF,)),
+        ("dxy", (-INF,)), ("ndc_signal", (NAN,)),
+    ])
+    def test_nonfinite_only_is_gray_no_input(self, key, vals):
+        from src.ui.views import page_today as PT
+        t = _today_tile(key, _rec(*vals, key=key))
+        assert t.card.state == UI_MISSING_RETRYABLE
+        assert t.card.note.now == f"{SPECS_BY_KEY[key].label}　無數值"
+        assert t.card.note.why == MISS_TEXT[MISS_NO_INPUT]        # MISSING_NO_VALUE 的既有說法
+        assert t.card.note.where is PT.EXIT_RETRY_HERE
+        assert t.signal_text == ""
+        assert PT.v2_card_badge_n(t.card) == 7                    # ⚠︎ — 缺漏 · 可重跑
+        assert PT.reason_is_unregistered(_rec(*vals, key=key)) is False
+
+    def test_out_of_reach_light_keeps_its_exit(self):
+        """`health`（本頁按鈕摸不到）：一樣轉灰，但出口照舊是「不在本頁射程內」。"""
+        from src.ui.views import page_today as PT
+        t = _today_tile("health", _rec(NAN, key="health"))
+        assert t.card.state == UI_MISSING_RETRYABLE
+        assert t.card.note.where is PT.EXIT_OUT_OF_REACH
+
+    @pytest.mark.parametrize("vals", [(NAN, 46.3), (46.3,), (INF, 25.0, -INF)])
+    def test_finite_or_mixed_stays_red(self, vals):
+        from src.ui.views import page_today as PT
+        t = _today_tile("us10y", _rec(*vals))
+        assert t.card.state == UI_FAILED
+        assert t.card.note.now == "10Y 公債殖利率　**這盞燈壞了，不是沒資料**"
+        assert t.card.note.why == MISS_TEXT[MISS_CONTRACT_DRIFT]
+        assert t.card.note.where is PT.EXIT_FIX_CODE
+        assert PT.v2_card_badge_n(t.card) == 6                    # 🔴 取得失敗
+
+    @pytest.mark.parametrize("name", sorted(SCENARIOS))
+    def test_real_l2_path_and_coverage_counts(self, name):
+        from src.ui.views import page_today as PT
+        rd = _readiness(**SCENARIOS[name])
+        tiles = PT.build_indicator_tiles(PT.MacroReadout(requested=True, readiness=rd))
+        tile = [t for b in tiles.values() for t in b if t.card.key == "detail.us10y"][0]
+        cov = PT.coverage(tiles)
+        if NONFINITE_ONLY[name]:
+            assert tile.card.state == UI_MISSING_RETRYABLE and cov.fault == 0
+        else:
+            assert tile.card.state == UI_FAILED and cov.fault == 1
+
+
+# ── ③ 總經 v2：明細面板的說明句 ──────────────────────────────────────────
+class TestD4n2MacroV2:
+    @pytest.mark.parametrize("name", sorted(SCENARIOS))
+    def test_detail_reason_text(self, name):
+        from src.ui.tabs import tab_macro_v2 as TV
+        row = {r.key: r for r in TV.build_rows(_readiness(**SCENARIOS[name]))}["us10y"]
+        assert (row.state, row.band, row.value) == ("missing", "gray", None)
+        if NONFINITE_ONLY[name]:
+            assert row.reason == MISSING_NO_VALUE
+            assert TV._REASON_TXT[row.reason] == _V2_NO_VALUE_TXT
+        else:
+            assert row.reason == MISSING_OUT_OF_RANGE
+            assert TV._REASON_TXT[row.reason] == _V2_OOR_TXT
+
+    @pytest.mark.parametrize("nonfinite", [True, False])
+    def test_render_detail_info_box(self, monkeypatch, nonfinite):
+        """L4 明細面板實際印出的那一句（`st.info(…, icon="📭")`）。"""
+        from unittest import mock
+
+        from src.ui.render import macro_v2_cards as MV
+        from src.ui.tabs import tab_macro_v2 as TV
+        rd = _readiness(**SCENARIOS["us10y_nan" if nonfinite else "us10y_finite"])
+        row = {r.key: r for r in TV.build_rows(rd)}["us10y"]
+        fake = mock.MagicMock(name="st")
+        monkeypatch.setattr(MV, "st", fake)
+        MV.render_detail(row, SPECS_BY_KEY["us10y"], edu=None,
+                         reason_text=TV._REASON_TXT.get(row.reason or "", ""))
+        infos = [c.args[0] for c in fake.info.call_args_list if c.kwargs.get("icon") == "📭"]
+        assert (_V2_NO_VALUE_TXT if nonfinite else _V2_OOR_TXT) in infos
+
+
+# ── ④ 三處都真的走 L0 共用判斷（任一處自己判 ⇒ 紅燈）──────────────────────
+def _dc_group(monkeypatch, verdict, scenario):
+    """把資料診斷頁命名空間裡的共用判斷換成恆 `verdict`，回 us10y 被分到哪一組。"""
+    from src.ui.pages import data_coverage as DC
+    monkeypatch.setattr(DC, "rejected_all_nonfinite", lambda _r: verdict)
+    return _group_of(_coverage_detail(**SCENARIOS[scenario]), "us10y")[0]
+
+
+def _today_state(monkeypatch, verdict, vals):
+    from src.ui.views import page_today as PT
+    monkeypatch.setattr(PT, "rejected_all_nonfinite", lambda _r: verdict)
+    t = _today_tile("us10y", _rec(*vals))
+    return t.card.state, t.card.note.why, t.card.note.where is PT.EXIT_FIX_CODE
+
+
+def _v2_reason(monkeypatch, verdict, vals):
+    from src.ui.tabs import tab_macro_v2 as TV
+    monkeypatch.setattr(TV, "rejected_all_nonfinite", lambda _r: verdict)
+    return {r.key: r for r in TV.build_rows({"us10y": _rec(*vals)})}["us10y"].reason
+
+
+class TestD4n2AllThreeUseTheSharedPredicate:
+    """spy：把各頁命名空間裡的 `rejected_all_nonfinite` 換成恆真／恆假 → 結果必須跟著翻。
+
+    任一處改回自己判（或漏接、只接一半）都會在這裡紅 —— 那正是「三處各寫一份」的病。
+    """
+
+    def test_data_coverage(self, monkeypatch):
+        assert _dc_group(monkeypatch, True, "us10y_finite") == "📵 上游無值"
+        assert _dc_group(monkeypatch, False, "us10y_nan") == "📐 量綱異常"
+
+    def test_today_page_state_and_wording_both(self, monkeypatch):
+        """判態（`indicator_state`）與說法／出口（`_miss_why`）兩處都得走同一支。"""
+        assert _today_state(monkeypatch, True, (46.3,)) == (
+            UI_MISSING_RETRYABLE, MISS_TEXT[MISS_NO_INPUT], False)
+        assert _today_state(monkeypatch, False, (NAN,)) == (
+            UI_FAILED, MISS_TEXT[MISS_CONTRACT_DRIFT], True)
+
+    def test_macro_v2(self, monkeypatch):
+        assert _v2_reason(monkeypatch, True, (46.3,)) == MISSING_NO_VALUE
+        assert _v2_reason(monkeypatch, False, (NAN,)) == MISSING_OUT_OF_RANGE

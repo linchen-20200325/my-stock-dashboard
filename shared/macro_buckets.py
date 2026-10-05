@@ -22,8 +22,9 @@ test_macro_buckets.py 斷言相等（drift-safe，CI 擋漂移），非無據腦
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 # ── 既有 L0 SSOT 常數（直接 import，不重複宣告）──
 from shared.signal_thresholds import (
@@ -275,6 +276,35 @@ MISSING_NO_EXTRACTION: str = "no_extraction"
 實例:`us10y` 自 v18.286 註冊、到 v19.175 才接線,中間 4 個版本永久灰燈,
 而上游 `fetch_us10y_block` 全程抓取成功 —— 沒有任何生產端能回報這種病。
 `tests/test_decision_readiness.py` 有機械守衛,新增 spec 忘了接取值即 CI 紅燈。"""
+
+
+def rejected_all_nonfinite(rec: Optional[Mapping[str, Any]]) -> bool:
+    """readiness 側車一筆:原因碼是 `MISSING_OUT_OF_RANGE`,而被擋下的值**全部**是非有限值。
+
+    批 Z4 D4-n2(客戶 2026-10-02 審稿裁「C1 選 A」):被擋的值全是 NaN / ±inf
+    ⇒ 上游其實**沒有給出任何觀測值**(📵 上游無值),⛔ 不是量綱 / 標的漂移。
+    三處消費端共用本判斷,各自改走**既有的**「上游無值」那一態:
+      · 資料診斷頁 `data_coverage`:分組改歸「📵 上游無值」(批 D4 C1 原就如此,改呼叫本函式)
+      · 今天頁 `views/page_today`:燈卡改走「無輸入」灰態(`MISSING_NO_VALUE` 的既有說法)
+      · 總經 v2 `tab_macro_v2`:明細面板改用 `MISSING_NO_VALUE` 那句
+    ⛔ 不改 L2 `_first_sane` 寫進側車的原因碼(側車照舊是 `out_of_range`,逐筆 `rejected` 不動)。
+
+    回 False(⇒ 維持原判定)的情形:
+      · `rec` 不是 Mapping(含 None)/ 原因碼不是 `MISSING_OUT_OF_RANGE`;
+      · `rejected` 為空 —— `all([])` 恆真,⛔ 不得因此把「沒有被擋的值」說成「全是非有限值」;
+      · 其中**任一**筆是有限值(混合:有限越界 ＋ 非有限 ⇒ 有限那筆仍是量綱訊號,
+        「上游換標的 / 換慣例」這件事沒有消失)。
+
+    `rejected` 每筆的形狀沿用 L2:`(來源標籤, 值, 原因字串)`,本函式只看第 2 欄。
+    值的型別由 L2 `_num()` 保證是 float;不是數字時 `math.isfinite` 照樣拋
+    `TypeError`(與批 D4 C1 原本寫在資料診斷頁的那一行同一個行為,⛔ 不吞)。
+    """
+    if not isinstance(rec, Mapping):
+        return False
+    if rec.get("reason") != MISSING_OUT_OF_RANGE:
+        return False
+    _rj = rec.get("rejected") or []
+    return bool(_rj) and all(not math.isfinite(_x[1]) for _x in _rj)
 
 
 # ════════════════════════════════════════════════════════════════

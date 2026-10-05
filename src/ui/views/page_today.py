@@ -269,6 +269,7 @@ from shared.macro_buckets import (
     classify_danger,
     fmt_value,
     has_thresholds,
+    rejected_all_nonfinite,   # 批 Z4 D4-n2：三處共用的 L0 判斷（見 `_sidecar_reason`）
 )
 from shared.station_specs import (
     MISS_CONTRACT_DRIFT,
@@ -483,6 +484,11 @@ SESSION_KEY_MACRO_ALERTS: str = "macro_alerts"
 #:   · `no_value` / `not_loaded` → `no_input`：都是「這輪沒拿到，重跑可能就好」。
 #:   · `not_wired` → `n/a`：實務上到不了這裡（`wired=False` 由 `classify_ui_state`
 #:     的第 1 條規則先判成 `unwired`），列出來只是**不留空**。
+#:
+#: 📌 批 Z4 D4-n2（2026-10-05；客戶 10-02 審稿裁「C1 選 A」）：`out_of_range` 但被擋下的值
+#:    **全部**是非有限值（NaN / ±inf）＝ 上游沒給觀測值，⛔ 不是量綱漂移 ⇒ 查本表**之前**
+#:    先經 `_sidecar_reason()` 讀成 `no_value`（判斷走 L0 `rejected_all_nonfinite`，與資料診斷頁、
+#:    總經 v2 同一支）。本表一列未動；側車寫下的原因碼也一個字沒改。
 READINESS_REASON_TO_MISS: dict[str, str] = {
     MISSING_NO_EXTRACTION: MISS_CONTRACT_DRIFT,
     MISSING_OUT_OF_RANGE: MISS_CONTRACT_DRIFT,
@@ -490,6 +496,21 @@ READINESS_REASON_TO_MISS: dict[str, str] = {
     MISSING_NOT_LOADED: MISS_NO_INPUT,
     MISSING_NOT_WIRED: MISS_NOT_APPLICABLE,
 }
+
+
+def _sidecar_reason(rec: Mapping[str, Any]) -> str:
+    """側車一筆的原因碼 → 本頁判態／選說法用的原因碼。**本頁讀原因只走這一支。**
+
+    批 Z4 D4-n2：被擋下的值全是非有限值（L0 `rejected_all_nonfinite`）→ 讀成
+    `MISSING_NO_VALUE`，走既有的「無輸入」灰態與它既有的說法（⛔ 不再升紅「程式要修」）。
+    混合（有限越界＋非有限）與純有限越界 → 原樣 `out_of_range`（仍升紅）。
+    ⚠️ `indicator_state()`（判態）與 `_miss_why()`（說法 → 也決定出口）**兩處都走這裡**：
+    只改一處的話，同一張卡會變成「灰態卻說程式要修」或「紅態卻說可以重跑」。
+    """
+    if rejected_all_nonfinite(rec):
+        return MISSING_NO_VALUE
+    return str(rec.get("reason") or "")
+
 
 #: 側車沒有交代缺值原因時的說法。
 #:
@@ -1004,7 +1025,7 @@ def indicator_state(rec: Mapping[str, Any], spec: Any, *, requested: bool,
     照樣畫成「未接線」而不是「尚未載入」—— 它**永遠不會載入**，處置完全不同，
     且線框的灰態原文明寫 `0／16 …（無資料 15 · **未接線 1**）`。
     """
-    _reason = str(rec.get("reason") or "")
+    _reason = _sidecar_reason(rec)   # 批 Z4 D4-n2：被擋值全是非有限值 → no_value
     _has_value = rec.get("state") == "ok" and rec.get("value") is not None
     # ⛔ 這兩個旗標**不得**改回 `rec.get(...)` —— 見上方 docstring 的紅隊實證。
     #    `tests/test_p01_today_view.py::TestSidecarCannotOverrideSSOT` 釘住它。
@@ -1020,7 +1041,7 @@ def indicator_state(rec: Mapping[str, Any], spec: Any, *, requested: bool,
 
 def _miss_why(rec: Mapping[str, Any]) -> str:
     """缺值原因 → 給使用者的「為什麼沒有」。文字走 L0 `MISS_TEXT`，本檔不另寫。"""
-    _mapped = READINESS_REASON_TO_MISS.get(str(rec.get("reason") or ""), "")
+    _mapped = READINESS_REASON_TO_MISS.get(_sidecar_reason(rec), "")   # 批 Z4 D4-n2
     return MISS_TEXT.get(_mapped, UNKNOWN_REASON_WHY)
 
 
