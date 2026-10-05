@@ -92,3 +92,67 @@ class TestTwiiBiasNonFinite:
         # Y2 語意不變：MA ≤ 0 算不出 → 欄位 None，整體仍回 dict
         out = macro_snapshot.compute_twii_bias(_twii([0.0] * 240))
         assert out is not None and (out['bias_20'], out['bias_60'], out['bias_240']) == (None, None, None)
+
+
+# ── Y2-n9：fetch_vix_block 的 ma20 溢位 ─────────────────────────────────────────
+@pytest.fixture
+def _clear_vix_cache():
+    macro_snapshot.fetch_vix_block.clear()
+    yield
+    macro_snapshot.fetch_vix_block.clear()
+
+
+def _vix_df(closes):
+    idx = pd.date_range('2026-04-01', periods=len(closes), freq='D')
+    return pd.DataFrame({'Close': closes}, index=idx)
+
+
+def _no_non_finite(obj):
+    if isinstance(obj, dict):
+        return all(_no_non_finite(v) for v in obj.values())
+    if isinstance(obj, (list, tuple)):
+        return all(_no_non_finite(v) for v in obj)
+    if isinstance(obj, float):
+        return math.isfinite(obj)
+    return True
+
+
+class TestVixMa20Overflow:
+    def test_ma20_overflow_takes_existing_failure(self, monkeypatch, capsys, _clear_vix_cache):
+        import yfinance
+        monkeypatch.setattr(yfinance, 'download', lambda *a, **k: _vix_df([1.7e308] * 30))
+        out = macro_snapshot.fetch_vix_block()
+        # 既有失敗形狀與既有錯誤碼（同「末筆非有限」出口），不帶 inf/nan
+        assert out == {'_err_vix': 'not enough data'}, out
+        assert _no_non_finite(out)
+        assert 'ma20 非有限值' in capsys.readouterr().out
+
+    def test_ma20_overflow_short_series(self, monkeypatch, _clear_vix_cache):
+        # 不足 20 筆時以全部筆數平均 —— 同樣要擋
+        import yfinance
+        monkeypatch.setattr(yfinance, 'download', lambda *a, **k: _vix_df([1.0e308] * 5))
+        assert macro_snapshot.fetch_vix_block() == {'_err_vix': 'not enough data'}
+
+    def test_failure_not_cached(self, monkeypatch, _clear_vix_cache):
+        import yfinance
+        state = {'df': _vix_df([1.7e308] * 30)}
+        monkeypatch.setattr(yfinance, 'download', lambda *a, **k: state['df'])
+        assert '_err_vix' in macro_snapshot.fetch_vix_block()
+        state['df'] = _vix_df([15.0] * 30)
+        assert macro_snapshot.fetch_vix_block()['vix']['ma20'] == 15.0
+
+    def test_large_but_safe_unchanged(self, monkeypatch, _clear_vix_cache):
+        import yfinance
+        closes = [1.0e306] * 30          # 20 × 1e306 不溢位 → 照常輸出
+        monkeypatch.setattr(yfinance, 'download', lambda *a, **k: _vix_df(closes))
+        out = macro_snapshot.fetch_vix_block()['vix']
+        assert out['ma20'] == round(sum(closes[-20:]) / 20, 1) and _no_non_finite(out)
+
+    def test_finite_unchanged(self, monkeypatch, _clear_vix_cache):
+        import yfinance
+        closes = [14.0 + 0.37 * i for i in range(40)]
+        monkeypatch.setattr(yfinance, 'download', lambda *a, **k: _vix_df(closes))
+        out = macro_snapshot.fetch_vix_block()['vix']
+        vv = [round(c, 1) for c in closes]
+        assert out['ma20'] == round(sum(vv[-20:]) / 20, 1)
+        assert out['current'] == vv[-1] and out['values'] == vv[-60:]

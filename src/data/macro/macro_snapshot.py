@@ -201,10 +201,16 @@ def fetch_vix_block() -> dict:
         if len(_vv) < 3:
             return {'_err_vix': 'not enough data'}
         _s20 = _vv[-20:] if len(_vv) >= 20 else _vv
+        # 批 Z2(Y2-n9,三類 (c)):每筆有限但加總溢位(收盤近 1e308)→ ma20 = inf。
+        #   不放行,比照上方「末筆非有限」走同一個既有失敗出口(不新增錯誤碼字串)。
+        _ma20_v = sum(_s20) / len(_s20)
+        if not _is_finite_num(_ma20_v):
+            print(f'[Macro/VIX] ❌ ma20 非有限值(溢位),不輸出 (n={len(_s20)})')
+            return {'_err_vix': 'not enough data'}
         print(f'[Macro/VIX] ✅ current={_vv[-1]} date={_vd[-1]}')
         # v18.357 PR-Q5c S-PROV-1 phase 19:provenance 進入 dict(schema-additive)
         import datetime as _dt_vp
-        return {'vix': {'current': _vv[-1], 'ma20': round(sum(_s20) / len(_s20), 1),
+        return {'vix': {'current': _vv[-1], 'ma20': round(_ma20_v, 1),
                         'dates': _vd[-60:], 'values': _vv[-60:], 'date': _vd[-1],
                         'source': 'yfinance:^VIX:3mo:1d',
                         'fetched_at': _dt_vp.datetime.utcnow().isoformat() + 'Z'}}
