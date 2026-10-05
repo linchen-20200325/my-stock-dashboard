@@ -40,7 +40,7 @@ from src.ui.render import macro_v2_cards as C
 _SRC = pathlib.Path(C.__file__)
 
 _LEFT_SPEC = SPECS_BY_KEY["dxy"]          # high_bad：黃 105 / 紅 110
-_RIGHT_SPEC = SPECS_BY_KEY["ndc_signal"]  # band：黃 32 / 紅 38 / 黃下 23 / 紅下 16
+_RIGHT_SPEC = SPECS_BY_KEY["ndc_signal"]  # band：黃 32 / 紅 38 / 黃下 22 / 紅下 16（批 Z4 R9：黃下原 23）
 
 
 def _row(key: str, label: str, value: float | None, *, band: str = "green",

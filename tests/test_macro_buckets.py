@@ -182,7 +182,8 @@ def test_classify_low_bad():
 
 
 def test_classify_band():
-    ndc = mb.SPECS_BY_KEY["ndc_signal"]  # yellow_lo=23 yellow=32 red_lo=16 red=38
+    # 批 Z4 R9（有意識的變更）：yellow_lo 23→22（23 分改判綠），下列 5 個斷言都不受影響。
+    ndc = mb.SPECS_BY_KEY["ndc_signal"]  # yellow_lo=22 yellow=32 red_lo=16 red=38
     assert mb.classify_danger(28, ndc) == "green"   # 23-31 綠
     assert mb.classify_danger(34, ndc) == "yellow"  # 32-37 黃紅
     assert mb.classify_danger(20, ndc) == "yellow"  # 17-22 黃藍
@@ -524,9 +525,11 @@ def test_danger_exceedance_degrades_to_zero_not_crash():
 
 
 def test_danger_exceedance_band_both_sides():
-    _ndc = mb.SPECS_BY_KEY["ndc_signal"]   # yellow_lo=23 yellow=32 red_lo=16 red=38
+    _ndc = mb.SPECS_BY_KEY["ndc_signal"]   # yellow_lo=22 yellow=32 red_lo=16 red=38
     assert math.isclose(mb.danger_exceedance(44, _ndc, "red"), 1.0, abs_tol=1e-9)   # (44-38)/6
-    assert math.isclose(mb.danger_exceedance(9, _ndc, "red"), 1.0, abs_tol=1e-9)    # (16-9)/7
+    # 批 Z4 R9（客戶 2026-10-02 定性「NDC 23 分程式判黃」為程式 bug）—— 有意識的變更：
+    #   yellow_lo 23→22 ⇒ 低側黃→紅帶寬 7（23−16）→ 6（22−16），9 分的紅燈超標幅度 1.0 → 7/6。
+    assert math.isclose(mb.danger_exceedance(9, _ndc, "red"), 7 / 6, abs_tol=1e-9)  # (16-9)/6
     assert mb.danger_exceedance(28, _ndc, "red") == 0.0    # 綠區,兩側皆未觸發
 
 

@@ -171,13 +171,17 @@ class TestClassifyDanger:
     def test_finite_low_bad_boundaries_unchanged(self, value, expected):
         assert classify_danger(value, SPECS_BY_KEY[_KEY]) == expected           # 1.0 / 0.0
 
+    # 批 Z4 R9（客戶 2026-10-02 定性「NDC 23 分程式判黃」為程式 bug）—— 有意識的變更：
+    #   低側黃線 23→22，原本的 (23.0, "yellow") 改為 (22.0, "yellow") ＋ (23.0, "green")。
+    #   本類「有限值判定不受 NF-a 非有限值修法影響」的本意不變（其餘列一字未動）。
     @pytest.mark.parametrize("value,expected", [
-        (0.0, "red"), (16.0, "red"), (16.5, "yellow"), (23.0, "yellow"), (23.5, "green"),
+        (0.0, "red"), (16.0, "red"), (16.5, "yellow"), (22.0, "yellow"), (23.0, "green"),
+        (23.5, "green"),
         (28.0, "green"), (31.9, "green"), (32.0, "yellow"), (37.9, "yellow"),
         (38.0, "red"), (1e300, "red"), (-1e300, "red"),
     ])
     def test_finite_band_boundaries_unchanged(self, value, expected):
-        assert classify_danger(value, SPECS_BY_KEY["ndc_signal"]) == expected   # 16/23/32/38
+        assert classify_danger(value, SPECS_BY_KEY["ndc_signal"]) == expected   # 16/22/32/38
 
     @pytest.mark.parametrize("spec", _THR_SPECS, ids=lambda s: s.key)
     def test_finite_never_gray(self, spec):

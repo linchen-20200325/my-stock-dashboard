@@ -63,6 +63,7 @@ from shared.macro_buckets import (
     SPECS_BY_KEY,
     classify_danger,
     has_thresholds,
+    rejected_all_nonfinite,   # 批 Z4 D4-n2：三處共用的 L0 判斷（見 build_rows 的 reason=）
 )
 from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
 from shared.macro_provenance import is_m1b_m2_proxy  # DL-f1-s17：代理值不計分（L0 SSOT）
@@ -425,7 +426,11 @@ def build_rows(readiness: dict) -> list[Row]:
             value=value,
             band=band,
             state=state,
-            reason=rec.get("reason"),
+            # 批 Z4 D4-n2（客戶 10-02 審稿裁「C1 選 A」）：被擋下的值全是非有限值（NaN / ±inf）
+            #   ＝ 上游沒給觀測值 ⇒ 明細面板改用既有 `MISSING_NO_VALUE` 那句（「上游來源這輪沒有回值」），
+            #   ⛔ 不再說「超出合理範圍…上游換了標的」。判斷走 L0（與資料診斷頁、今天頁同一支）；
+            #   混合／純有限越界原樣。側車原因碼不動；本欄只餵 `_REASON_TXT` 查表（見 render 端）。
+            reason=(MISSING_NO_VALUE if rejected_all_nonfinite(rec) else rec.get("reason")),
             hit_source=rec.get("hit_source"),
             thr_text=threshold_text(spec),
             source=spec.source or "—",

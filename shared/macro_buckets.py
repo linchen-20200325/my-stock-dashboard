@@ -22,8 +22,9 @@ test_macro_buckets.py 斷言相等（drift-safe，CI 擋漂移），非無據腦
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 # ── 既有 L0 SSOT 常數（直接 import，不重複宣告）──
 from shared.signal_thresholds import (
@@ -277,6 +278,51 @@ MISSING_NO_EXTRACTION: str = "no_extraction"
 `tests/test_decision_readiness.py` 有機械守衛,新增 spec 忘了接取值即 CI 紅燈。"""
 
 
+def rejected_all_nonfinite(rec: Optional[Mapping[str, Any]]) -> bool:
+    """readiness 側車一筆:原因碼是 `MISSING_OUT_OF_RANGE`,而被擋下的值**全部**是非有限值。
+
+    批 Z4 D4-n2(客戶 2026-10-02 審稿裁「C1 選 A」):被擋的值全是 NaN / ±inf
+    ⇒ 上游其實**沒有給出任何觀測值**(📵 上游無值),⛔ 不是量綱 / 標的漂移。
+    三處消費端共用本判斷,各自改走**既有的**「上游無值」那一態:
+      · 資料診斷頁 `data_coverage`:分組改歸「📵 上游無值」(批 D4 C1 原就如此,改呼叫本函式)
+      · 今天頁 `views/page_today`:燈卡改走「無輸入」灰態(`MISSING_NO_VALUE` 的既有說法)
+      · 總經 v2 `tab_macro_v2`:明細面板改用 `MISSING_NO_VALUE` 那句
+    ⛔ 不改 L2 `_first_sane` 寫進側車的原因碼(側車照舊是 `out_of_range`,逐筆 `rejected` 不動)。
+
+    回 False(⇒ 維持原判定)的情形:
+      · `rec` 不是 Mapping(含 None)/ 原因碼不是 `MISSING_OUT_OF_RANGE`;
+      · `rejected` 為空 —— `all([])` 恆真,⛔ 不得因此把「沒有被擋的值」說成「全是非有限值」;
+      · 其中**任一**筆是有限值(混合:有限越界 ＋ 非有限 ⇒ 有限那筆仍是量綱訊號,
+        「上游換標的 / 換慣例」這件事沒有消失)。
+
+    `rejected` 每筆的形狀沿用 L2:`(來源標籤, 值, 原因字串)`,本函式只看第 2 欄。
+    形狀不合法時 fail loud、⛔ 不吞:值不是實數(例:字串 `'-inf'`)→ `math.isfinite` 拋
+    `TypeError`;tuple 不足 2 欄 → `IndexError`。三處受到的影響**不一樣**,據實分開寫:
+      · 資料診斷頁:修前修後相同(批 D4 C1 原本寫在該頁的那一行就是這個行為);
+      · 今天頁、總經 v2:這是**新增的例外路徑** —— 兩頁修前根本不讀 `rejected`,
+        修前遇到同樣的側車不會拋。**影響範圍**(2026-10-05 AppTest 實測,直接掛頁面函式與
+        跑整支 app.py 各一次):例外一拋,該頁從那一刻起**整頁中斷** —— 直接掛頁面函式時只剩
+        最先注入的樣式表、0 張卡、連「🚀 更新今日戰情」按鈕都不畫;在 app.py 裡被
+        `_render_tab_isolated` 接住,該分頁位置只剩一個「分頁渲染異常,已隔離」紅框,
+        側欄、其他不讀缺值原因的分頁與頁尾照常。同一份側車在 fd989ae:兩頁都照常畫完
+        (今天頁 us10y 那張卡為紅卡;總經 v2 三層都在)。
+    在 L2 契約下走不到:L2 `_first_sane` 寫入的每一筆都是恰 3 欄的 tuple `(str, float, str)`,
+    第 2 欄是 `_num()` 轉出的 Python float(產出端契約由
+    `tests/test_batch_z4.py::TestL2RejectedContract` 釘住,L2 一違約 CI 先紅)。
+    ⇒ 維持 fail-loud、⛔ 不吞(總管 2026-10-05 裁定),理由即上面這兩件事:L2 契約下走不到,
+    且 `TestL2RejectedContract` 會在 CI 先擋下 L2 違約。
+    📌 2026-10-05 更正(批 Z4 追補【5】,有意識的更正,⛔ 不是漏改):原句寫「不是數字時
+    `math.isfinite` 照樣拋 `TypeError`(與批 D4 C1 原本寫在資料診斷頁的那一行同一個行為)」——
+    那句**只對資料診斷頁成立**,對今天頁與總經 v2 是新增的例外路徑,故改寫成上面的範圍。
+    """
+    if not isinstance(rec, Mapping):
+        return False
+    if rec.get("reason") != MISSING_OUT_OF_RANGE:
+        return False
+    _rj = rec.get("rejected") or []
+    return bool(_rj) and all(not math.isfinite(_x[1]) for _x in _rj)
+
+
 # ════════════════════════════════════════════════════════════════
 # 危險門檻註冊表 — 五桶 × 指標
 # ════════════════════════════════════════════════════════════════
@@ -299,8 +345,16 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                source=f"紅線 {_HEALTH_RED:g}：有既有常數背書（防禦門檻預設值，手訂未校準）；"
                       f"黃線 {_HEALTH_YELLOW:g}：系統設計之警示線（低於半分轉弱警示）",
                emoji="🩺"),
+    # 批 Z4 R9（客戶 2026-10-02 定性為程式 bug：「NDC 23 分程式判黃、文件寫綠」）——
+    #   有意識的變更，⛔ 不是漏改：`yellow_lo` 23.0 → 22.0。band 低側判式是 `v <= yellow_lo`
+    #   （含等號），舊值把 23 分判成黃；而官方分數帶 `signal_thresholds.NDC_SIGNAL_BANDS`
+    #   （≥23「🟢 綠燈 穩定」）、本 spec 自己的 note（23-31 綠）、SPEC.md §11（23–31 綠／17–22 黃）
+    #   都寫 23 是綠。改 22 後 9~45 每個整數都與該表色系一致：
+    #   ≤16 紅（藍燈）／17~22 黃（黃藍燈）／23~31 綠／32~37 黃（黃紅燈）／≥38 紅。
+    #   只動這一個數字；note／source（B5-2，客戶裁示不寫分段數字）一字未動。
+    #   連帶：低側黃→紅帶寬 7 → 6（`danger_exceedance` 低側超標幅度跟著變）。
     DangerSpec("ndc_signal", "NDC 景氣對策燈號", "long", "分", "band",
-               yellow=32.0, red=38.0, yellow_lo=23.0, red_lo=16.0, decimals=0,
+               yellow=32.0, red=38.0, yellow_lo=22.0, red_lo=16.0, decimals=0,
                note="9-16 藍衰退 / 23-31 綠穩定 / 38+ 紅過熱", source="系統設計之警示線（NDC 燈號 9藍-45紅）",
                emoji="🚦"),
     DangerSpec("m1b_m2_gap", "M1B-M2 資金動能", "long", "%", "low_bad",
