@@ -8,7 +8,11 @@
   `ma_240 or current_price` 把缺值捏成「價 1.0、年線＝價」⇒ (None,None,None)／(0,0,0) 回乖離 0.0、
   Is_Bull True、「🟢 強勢多頭」；非數字價格（例 'N/A'）拋 TypeError。改為價或年線不是有限正實數 ⇒
   依賴價格／年線的鍵一律 None、不拋；Is_Foreign_Hedging 照舊（`futures_net or 0` 另登記，本批不動）。
-  唯一消費端 v1 `section_warroom` 只在價與年線為有限正數時才讀 —— 各種缺值形狀的渲染修前修後逐字相同。
+  唯一消費端 v1 `section_warroom`：讀 `Bias_240` 前的守衛用 `_finite_yoy`（只排除 Python bool，numpy bool
+  會過），引擎則把 numpy bool 判無效 —— 📌 驗收阻擋 1 更正：原句「只在價與年線為有限正數時才讀」不實
+  （單邊 np.True_ 會讀到 None 而崩），warroom 已另判 `Bias_240 is not None`。對拍範圍：價／年線不是
+  numpy bool 的缺值與正常形狀，渲染與修前相同；單邊 numpy bool 改走價／年線缺值路徑（有意識的變更，
+  fd989ae 是把 np.True_ 當 1 印假乖離）。
 - V1-n2（L5 v1）`section_mid`：VIX 為負（實跑 −5）印「✅ 市場平靜」「平靜期 🟢」「A VIX=-5.0<20 ✅」、
   否決權收到 −5。總管決定 VIX ≤ 0（定義上不可能）視同非有限值 —— 在本檔取 VIX 的單一入口處理，
   全部走 #781 既有缺值路徑（KPI「待取得」、§八 否決權那句、三環「A VIX未知」、apply_vix_veto(None)）。
@@ -377,6 +381,43 @@ class TestWarroomConsumerUnchanged:
         with pytest.raises(exc):
             _wr(bias, monkeypatch, _V4_PRE)               # 前提：修前整個作戰室炸掉
         assert _wr(bias, monkeypatch, _V4) == _wr({}, monkeypatch, _V4)
+
+
+# ── 驗收阻擋 1：單邊 numpy bool（`_finite_yoy` 放行、引擎判無效）不得讓作戰室崩潰 ───────────
+_WR_NPBOOL = [pytest.param(b, m, id=i) for b, m, i in (
+    ({'price': np.True_, 'ma240': 16000.0}, {'price': None, 'ma240': 16000.0}, 'price-np.True_'),
+    ({'price': 20000.0, 'ma240': np.True_}, {'price': 20000.0, 'ma240': None}, 'ma-np.True_'),
+    ({'price': np.False_, 'ma240': 16000.0}, {'price': None, 'ma240': 16000.0}, 'price-np.False_'),
+    ({'price': 20000.0, 'ma240': np.False_}, {'price': 20000.0, 'ma240': None}, 'ma-np.False_'),
+    ({'price': np.True_, 'ma240': np.True_}, {'price': None, 'ma240': None}, 'both-np.True_'),
+    ({'bias_240': 3.0, 'price': np.True_, 'ma240': 16000.0, 'is_estimated': True, 'data_days': 90},
+     {'bias_240': 3.0, 'price': None, 'ma240': 16000.0, 'is_estimated': True, 'data_days': 90},
+     'estimated-price-np.True_'),
+)]
+
+
+class TestWarroomNumpyBool:
+    @pytest.mark.parametrize('fut', [0, -40000])
+    @pytest.mark.parametrize('bias,missing', _WR_NPBOOL)
+    def test_takes_price_missing_path_no_crash(self, bias, missing, fut, monkeypatch):
+        out = _wr(bias, monkeypatch, _V4, fut)                     # 不得拋 TypeError
+        assert out == _wr(missing, monkeypatch, _V4, fut)          # ＝價／年線缺值的既有路徑
+        assert not any('📐 年線位階參考' in t and '年線乖離 ' in t for t in out)
+
+    def test_premise_gate_and_engine_disagree_on_numpy_bool(self):
+        # 前提：消費端守衛（`_finite_yoy` > 0）放行 np.True_、引擎判無效回 None ——
+        # 少了 `Bias_240 is not None` 就會在 `:+.1f` 拋 TypeError（驗收阻擋 1 的成因）
+        from src.ui.tabs.macro.section_long import _finite_yoy
+        assert _finite_yoy({'p': np.True_}, 'p') is np.True_ and bool(np.True_ > 0)
+        assert _V4(np.True_, 16000.0, 0)['Bias_240'] is None
+        assert _V4(20000.0, np.True_, 0)['Bias_240'] is None
+
+    @pytest.mark.parametrize('bias', [{'price': np.True_, 'ma240': 16000.0},
+                                      {'price': 20000.0, 'ma240': np.True_}])
+    def test_pre_fix_printed_fake_bias(self, bias, monkeypatch):
+        # fd989ae 不崩，而是把 np.True_ 當 1 印假乖離 —— 改走缺值路徑是有意識的變更
+        out = '\n'.join(_wr(bias, monkeypatch, _V4_PRE))
+        assert '📐 年線位階參考：年線乖離 ' in out
 
 
 # ══════════════════════════════════════════════════════════════════════════
