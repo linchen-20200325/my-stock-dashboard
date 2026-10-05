@@ -460,7 +460,10 @@ class TestD4n2MacroV2:
     def test_live_row_with_out_of_range_sidecar_pins_current_reason(self):
         """批 Z4 追補【4】D-M22（QA B 組）：側車「state=ok 有值」卻同時帶 out_of_range＋全非有限
         rejected（L2 契約下不會發生：命中時 `_rec(state="ok")` 不寫 reason）—— 釘住現行輸出：
-        列照常判燈（live），`Row.reason` 照樣經 L0 共用判斷讀成 no_value（⛔ 不看列狀態）。"""
+        列照常判燈（live），`Row.reason` 照樣經 L0 共用判斷讀成 no_value（現行實作不看列狀態）。
+
+        這是 L2 走不到的合成形狀；本測試只鎖現行輸出、⛔ 不代表語意背書；日後若做畫面等價的
+        重構（例：只對無資料列套用），可以有意識地改這支測試。"""
         from src.ui.tabs import tab_macro_v2 as TV
         rec = {**_ok_rec(SPECS_BY_KEY["vix"]), "value": 25.0, "reason": MISSING_OUT_OF_RANGE,
                "rejected": [("源0", NAN, _WHY_NONFINITE)]}
