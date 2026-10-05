@@ -422,6 +422,9 @@ class TestC7n1FailureIsUnevaluated:
         "consec_bool_true": dict(_FI_FLAT, consec_days=True),
         "consec_bool_false": dict(_FI_FLAT, consec_days=False),
         "consec_numeric_string": dict(_FI_FLAT, consec_days="5"),
+        # 驗收補測（B 組重驗 S5b）：`error=False`／`error=0` 也是「有 error」（L1 `_no_error` 只認 `is None`）
+        "error_false": dict(_FI_FLAT, error=False),
+        "error_zero": dict(_FI_FLAT, error=0),
     }
 
     @pytest.mark.parametrize("shape", sorted(_FI_SHAPES))
@@ -452,6 +455,10 @@ class TestC7n1FailureIsUnevaluated:
         "values_bool": (dict(_H_FLAT, score_latest=True), dict(_LI_FLAT, smooth6m=False)),
         "values_numeric_string": (dict(_H_FLAT, score_latest="25"),
                                   dict(_LI_FLAT, smooth6m="0.0")),
+        # 驗收補測（B 組重驗 S5b、S10F_h、S10T_li）：error=False／0；bool 兩支對調（h=False、li=True）
+        "error_false": (dict(_H_FLAT, error=False), dict(_LI_FLAT, error=False)),
+        "error_zero": (dict(_H_FLAT, error=0), dict(_LI_FLAT, error=0)),
+        "values_bool_swapped": (dict(_H_FLAT, score_latest=False), dict(_LI_FLAT, smooth6m=True)),
     }
 
     @pytest.mark.parametrize("shape", sorted(_CYCLE_SHAPES))
@@ -583,6 +590,26 @@ class TestC7n1UsableValueShapes:
         assert set(r1.cached) == set(_KEYS)
         r2 = _render_state(monkeypatch, _H_FAIL, _LI_FAIL, _FI_FAIL, fake=fake)
         assert r2.calls == {"h": 0, "li": 0, "fi": 0}
+        assert r2.out == _GOLDEN_FLAT
+
+    @pytest.mark.parametrize("h,li,fi,cached,calls2", [
+        # 景氣群只靠景氣對策那支（領先指標失敗）→ 兩個呼叫點（寫快取／登記）都只看 score_latest
+        pytest.param(dict(_H_FLAT, score_latest=-0.0), _LI_FAIL, _FI_FLAT,
+                     {"_ndc_hist_cache", "_fi_streak_cache"}, {"h": 0, "li": 1, "fi": 0},
+                     id="score_latest"),
+        # 籌碼群只靠外資連續那支（沒有先行指標）
+        pytest.param(_H_FLAT, _LI_FLAT, dict(_FI_FLAT, consec_days=-0.0),
+                     set(_KEYS), {"h": 0, "li": 0, "fi": 0}, id="consec_days"),
+    ])
+    def test_negative_zero_representative_is_a_value(self, h, li, fi, cached, calls2, monkeypatch):
+        """驗收補測（B 組重驗 S9c／CZ，h 與 fi 兩支）：代表值 -0.0 是真的 0（⛔ 缺）—— 該群照舊可評估
+        （完整輸出＝`_GOLDEN_FLAT`，明細「中性」）、入快取、下一輪不重抓（以本 head 實跑釘住）。"""
+        fake = _FakeST()
+        r1 = _render_state(monkeypatch, h, li, fi, fake=fake)
+        assert r1.out == _GOLDEN_FLAT
+        assert set(r1.cached) == cached
+        r2 = _render_state(monkeypatch, _H_FAIL, _LI_FAIL, _FI_FAIL, fake=fake)
+        assert r2.calls == calls2
         assert r2.out == _GOLDEN_FLAT
 
     def test_negative_zero_smooth6m_is_a_value(self, monkeypatch):
@@ -767,6 +794,8 @@ _PRE_FIX_NAN_LINES = (
 )
 
 #: 驗收補測（B 組 N13）：有限但極大的值照送（只有 NaN／±inf／溢位才不送）。
+#: 本 head 實跑：prompt 裡 1e18 的整數位（同上去掉正負號與小數部分），19 位。
+_DIGITS_1E18 = "1000000000000000000"
 #: 84c1ca4 實跑：prompt 裡 1e301 的整數位（`:+.0f`／`:+.1f`／`:.0f` 去掉正負號與小數部分），302 位。
 _DIGITS_1E301 = (
     "100000000000000005250476025520442024870446858110815915491585"
@@ -1000,10 +1029,14 @@ class TestC7n8FiniteUnchanged:
                      id="mixed-1e301-object"),
         pytest.param(1.7976931348623157e308, -1.7976931348623157e308, 1.7976931348623157e308, None,
                      ("+", "-", ""), _DIGITS_FLOAT_MAX, id="float-max"),
+        # 驗收補測（B 組重驗 N13band）：中段大值（1e18）三欄各一、正負各一 —— 殺「只丟某一段大值」一類突變
+        pytest.param(1e18, 1e18, 1e18, None, ("+", "+", ""), _DIGITS_1E18, id="pos-1e18"),
+        pytest.param(-1e18, -1e18, -1e18, None, ("-", "-", "-"), _DIGITS_1E18, id="neg-1e18"),
     ])
     def test_large_finite_values_still_sent(self, fut, leek, adl, dtype, signs, digits, monkeypatch):
-        """驗收補測（B 組 N13）：有限但極大（1e301、float 最大值）不是缺值 —— 三行照送、逐字＝84c1ca4，
-        規則引擎照收原值；⛔ 拿「很大」當不送的理由（只有 NaN／±inf／溢位才不送）。"""
+        """驗收補測（B 組 N13／重驗 N13band）：有限但很大（1e18、1e301、float 最大值）不是缺值 ——
+        三行照送、逐字＝實跑（1e301／最大值＝84c1ca4；1e18＝本 head），規則引擎照收原值；
+        ⛔ 拿「很大」當不送的理由（只有 NaN／±inf／溢位才不送）。"""
         seen = _run_news(monkeypatch, *_frames(fut, leek, adl, dtype=dtype))
         fut_s, leek_s, adl_s = signs
         assert seen["lines"] == [_LEEK_LINE + leek_s + digits + ".0%" + _LEEK_TAIL,
