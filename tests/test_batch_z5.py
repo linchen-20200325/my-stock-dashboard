@@ -567,6 +567,24 @@ class TestC7n1UsableValueShapes:
         assert r2.calls == {"h": 0, "li": 0, "fi": 0}
         assert r2.out == _GOLDEN_FLAT
 
+    @pytest.mark.parametrize("val", [pytest.param(np.True_, id="np-True"),
+                                     pytest.param(np.False_, id="np-False")])
+    def test_numpy_bool_currently_usable(self, val, monkeypatch):
+        """只鎖現行輸出，⛔ 不代表語意背書；與共用 `_finite_yoy` 一致，語意待 Z3-n3 裁定，屆時可有意識地改這支測試。
+
+        現行：numpy bool（`np.True_`／`np.False_`）判「可用」—— 共用 `_finite_yoy` 只排除 Python bool
+        （總管 2026-10-05 裁定本批不改正式碼、不另立規則）。L1 這三支不會產出 numpy bool；
+        Python bool 判不可用見 `_FI_SHAPES`／`_CYCLE_SHAPES`。釘住的行為：兩群可評估（明細「中性」，
+        完整輸出＝84c1ca4 的 `_GOLDEN_FLAT`）、三支入快取、下一輪不重抓。"""
+        fake = _FakeST()
+        r1 = _render_state(monkeypatch, dict(_H_FLAT, score_latest=val),
+                           dict(_LI_FLAT, smooth6m=val), dict(_FI_FLAT, consec_days=val), fake=fake)
+        assert r1.out == _GOLDEN_FLAT
+        assert set(r1.cached) == set(_KEYS)
+        r2 = _render_state(monkeypatch, _H_FAIL, _LI_FAIL, _FI_FAIL, fake=fake)
+        assert r2.calls == {"h": 0, "li": 0, "fi": 0}
+        assert r2.out == _GOLDEN_FLAT
+
     def test_negative_zero_smooth6m_is_a_value(self, monkeypatch):
         """`smooth6m=-0.0` 是真的 0（⛔ 缺）：景氣群照舊可評估、入快取、下一輪不重抓（84c1ca4 同值）。"""
         fake = _FakeST()
