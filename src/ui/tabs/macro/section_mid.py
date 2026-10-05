@@ -8,6 +8,7 @@ closure params(explicit pass):
 """
 from __future__ import annotations
 
+import numpy as np
 import streamlit as st
 from shared.secret_scrub import scrub_secrets  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑（反引號內，不跳脫）
 
@@ -104,7 +105,12 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     _pv8_v = _finite_yoy(_m8_pmi, 'value')
     _cy8_v = _finite_yoy(_m8_cpi, 'yoy')
     _fc8_v = _finite_yoy(_m8_fed, 'current')
-    _vcur8_v = _finite_yoy(_m8_vix, 'current')
+    # 📌 批 Z3 驗收阻擋 3-3（延伸）：numpy bool 與複數先排除、不交給 `_finite_yoy` —— 它只排除
+    #   Python bool：np.True_ 會被當成 VIX 1.0；numpy complex 會在 `math.isfinite` 發 ComplexWarning、
+    #   丟掉虛部後當實數放行（與總管對 bool「有值但無效」、對非實數「不是有限正實數」的認定一致）。
+    _vix_cur8_raw = _m8_vix.get('current') if isinstance(_m8_vix, dict) else None
+    _vcur8_v = (None if isinstance(_vix_cur8_raw, (np.bool_, complex, np.complexfloating))
+                else _finite_yoy(_m8_vix, 'current'))
     # 批 Z3（V1-n2，§1）：VIX ≤ 0 定義上不可能（恐慌指數恆為正）—— `_finite_yoy` 只擋非有限，
     #   實跑 −5 印「✅ 市場平靜」「VIX -5.0 < 20（平靜期）🟢」「A VIX=-5.0<20 ✅」、否決權收到 −5。
     #   在 §八 自己取 VIX 的這一處（`_vcur8_v`）視同非有限值 ⇒ 由它取值的 KPI 卡（「待取得」）、
@@ -115,11 +121,15 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     #   總經警示看板（L1 `check_macro_alerts`，只在正式載入時出現；驗收組實測 VIX ≤ 0／NaN／−inf 仍給
     #   🟢 —— 屬 L1、不在本批，總管另登記為已知限制）。
     #   ⛔ 共用的 `_finite_yoy` 不動；VIX > 0 時同一物件，輸出不變。
+    #   📌 驗收阻擋 3-3：下限用一般比較（`<= 0`），numpy 整數／浮點、Decimal、Fraction、np.False_
+    #   一律適用（不得只認 Python int／float）。
     if _vcur8_v is not None and _vcur8_v <= 0:
         _vcur8_v = None
-    # 批 Z3（V1-n5）：VIX「有值但無效」（`current` 有給、卻非有限／≤ 0／非數值）≠「載入中」——
-    #   值明明到了，說「數據載入中」是假的。§八 否決權那句只在此時於子句界純刪「VIX 數據載入中，」
-    #   （⛔ 不新增字）；真的沒值（`current` 為 None／缺鍵／VIX 節點不是 dict）原句一字不變。
+    # 批 Z3（V1-n5）：VIX「有值但無效」≠「載入中」—— 值明明到了，說「數據載入中」是假的。
+    #   §八 否決權那句只在此時於子句界純刪「VIX 數據載入中，」（⛔ 不新增字）。
+    #   界定（驗收阻擋 3-8，總管確認）：只有 `current` 為 None 或缺鍵＝真的沒值（原句一字不變）；
+    #   pd.NA、pd.NaT、''、'N/A'、bool、list、非有限、≤ 0 等一律算「有值但無效」。
+    #   VIX 節點本身不是 dict（例 'x'、5）讀不到 `current` 鍵，比照缺鍵（批 V2 V1-n4 測試釘原句）。
     _vix_bad8 = (isinstance(_m8_vix, dict) and _m8_vix.get('current') is not None
                  and _vcur8_v is None)
 

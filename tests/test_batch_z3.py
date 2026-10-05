@@ -21,7 +21,8 @@
   前者在 §八 VIX 無效時已不取用（驗收阻擋 2，下方以真函式驗），後者屬 L1、總管另登記為已知限制。
 - V1-n5（同檔）：VIX「有值但無效」（非有限或 ≤ 0；含非數值）時，§八 那句原寫「VIX 數據載入中，VIX 否決權
   暫無法判斷」—— 值明明到了，「載入中」是假的。只在此時於子句界純刪「VIX 數據載入中，」；
-  真的沒值（None／缺鍵）原句一字不變。
+  真的沒值（None／缺鍵）原句一字不變。界定（驗收阻擋 3-8，總管確認）：只有 None 與缺鍵＝真的沒值；
+  pd.NA、pd.NaT、''、'N/A'、bool、list 等一律算「有值但無效」；VIX 節點本身不是 dict 比照缺鍵。
 
 只擋資料、不加新字句、不動門檻、不動版面；有限輸入與修前逐位相同（下方對拍修前副本）。
 每段都有「拔掉修復即轉紅」的斷言（修前副本在同一組輸入上必須給出不同答案）。
@@ -41,7 +42,7 @@ import pandas as pd
 import pytest
 
 from shared import macro_compute as MC
-from src.config import VETO_V4_ENGINE_NAME
+from src.config import VETO_FUNDAMENTAL_NAME, VETO_FUNDAMENTAL_SCOPE_NOTE, VETO_V4_ENGINE_NAME
 from src.compute.macro import macro_helpers as MH
 from tests.test_m2n2_no_zero_fill import _FakeST, _apply, _load, _mod, _source
 
@@ -511,6 +512,10 @@ _INVALID = "VIX 否決權暫無法判斷"                     # V1-n5：有值�
 #: `_load_heavy=False` 不畫頂部警示看板）下，還原體與 `fd989ae` 的 section_mid 渲染逐字相同
 #: （已另以 git 原始檔實跑對過；不是全頁、全輸入的等價證明）。
 _MID_REVERT = (
+    ("    _vix_cur8_raw = _m8_vix.get('current') if isinstance(_m8_vix, dict) else None\n"
+     "    _vcur8_v = (None if isinstance(_vix_cur8_raw, (np.bool_, complex, np.complexfloating))\n"
+     "                else _finite_yoy(_m8_vix, 'current'))\n",
+     "    _vcur8_v = _finite_yoy(_m8_vix, 'current')\n"),          # 驗收 3-3 延伸：numpy bool／複數先排除
     ("    if _vcur8_v is not None and _vcur8_v <= 0:\n"
      "        _vcur8_v = None\n", ""),
     ("    if _vcur8_v is None:\n"
@@ -528,10 +533,11 @@ class _FakeSTFig(_FakeST):
         self.out.append(("plotly_chart", str(fig.layout.title.text)))
 
 
-def _run_mid(mod, vix_node, mp, drop_key=False):
+def _run_mid_raw(mod, vix_node, mp, drop_key=False, base=None):
+    """回 (元素種類, 文字) 清單 —— 驗收阻擋 3-5：要能分辨 st.info 與 st.warning 等。"""
     import src.services.allocation_service as AS
     import src.ui.tabs.macro.section_chips as SC
-    info = dict(_MID_BASE)
+    info = dict(_MID_BASE if base is None else base)
     if not drop_key:
         info["vix"] = vix_node
     fake = _FakeSTFig({"macro_info": info, "bias_info": {"bias_240": 5.0}})
@@ -544,7 +550,12 @@ def _run_mid(mod, vix_node, mp, drop_key=False):
         is_loaded=False, final_hi=None))
     mp.setattr(SC, "read_v4_macro_veto", lambda *a, **k: None)
     mod.render_section_mid(False, {}, {}, {})
-    return [t for _k, t in fake.out], calls
+    return list(fake.out), calls
+
+
+def _run_mid(mod, vix_node, mp, drop_key=False):
+    out, calls = _run_mid_raw(mod, vix_node, mp, drop_key)
+    return [t for _k, t in out], calls
 
 
 def _node(v):
@@ -647,6 +658,83 @@ class TestV1n5InvalidValueSentence:
         assert _LOADING.split("，", 1) == ["VIX 數據載入中", _INVALID]
         src = _source("mid")
         assert src.count(f"'{_INVALID}'") == 1 and src.count(f"'{_LOADING}'") == 1
+
+
+_COMPLEX_WARNING = getattr(np, "exceptions", np).ComplexWarning
+
+
+# ── 驗收阻擋 3-3：≤ 0 守衛不得只認 Python int／float；numpy bool／複數同屬無效（延伸）────────────
+_NONPOS_TYPES = [pytest.param(v, id=i) for v, i in (
+    (np.int64(-3), "np.int64(-3)"), (np.int64(0), "np.int64(0)"), (np.float32(-5), "np.float32(-5)"),
+    (Decimal("-5"), "Decimal(-5)"), (Fraction(-5, 1), "Fraction(-5,1)"), (np.False_, "np.False_"),
+)]
+_NUMPY_BOOL_COMPLEX = [pytest.param(v, id=i) for v, i in (
+    (np.True_, "np.True_"), (np.complex128(18), "np.complex128(18)"),
+    (np.complex128(-5), "np.complex128(-5)"), (np.complex64(25), "np.complex64(25)"),
+)]
+
+
+class TestV1n2GuardTypes:
+    @pytest.mark.parametrize("v", _NONPOS_TYPES + _NUMPY_BOOL_COMPLEX)
+    def test_invalid_path(self, v, monkeypatch):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", _COMPLEX_WARNING)    # 不得靠丟掉虛部把複數當實數
+            out, calls = _run_mid_raw(_mod("mid"), _node(v), monkeypatch)
+        joined = "\n".join(t for _k, t in out)
+        assert "平靜期" not in joined and "市場平靜" not in joined and "A VIX=" not in joined, joined[-1500:]
+        assert "A VIX未知" in joined
+        assert calls == [(None,)]                                # 否決權不得收到負值／假值
+        assert ("info", _INVALID) in out
+        assert any("VIX 恐慌指數" in t and "待取得" in t for _k, t in out)
+
+    @pytest.mark.parametrize("v", _NONPOS_TYPES + _NUMPY_BOOL_COMPLEX)
+    def test_pre_fix_used_the_value(self, v, mid_pre, monkeypatch):
+        # 前提自證：修前（還原體）把這些值當成有效 VIX —— 印出「A VIX=…」並把它送進否決權
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", _COMPLEX_WARNING)
+            out, calls = _run_mid_raw(mid_pre, _node(v), monkeypatch)
+        assert any("A VIX=" in t for _k, t in out)
+        assert calls and calls[0][0] is not None
+
+
+# ── 驗收阻擋 3-4：只有 VIX 一項且無效、其餘四項皆缺 → 基本面否決檢查不可評估 ─────────────────
+class TestV1FundEvaluableOnlyVix:
+    @pytest.mark.parametrize("v", [-5, 0, np.int64(-3), math.nan, "18.5", np.True_], ids=repr)
+    def test_no_ok_line(self, v, monkeypatch):
+        out, _ = _run_mid_raw(_mod("mid"), {"current": v}, monkeypatch, base={})
+        assert not any(VETO_FUNDAMENTAL_NAME in t and t.startswith("✅") for _k, t in out), out
+        assert ("caption", f"📌 {VETO_FUNDAMENTAL_SCOPE_NOTE}") not in out
+
+    def test_pre_fix_printed_ok_line_for_negative(self, mid_pre, monkeypatch):
+        out, _ = _run_mid_raw(mid_pre, {"current": -5}, monkeypatch, base={})
+        assert any(k == "success" and t.startswith(f"✅ {VETO_FUNDAMENTAL_NAME}：無觸發") for k, t in out)
+
+    def test_valid_vix_alone_still_evaluable(self, monkeypatch):
+        out, _ = _run_mid_raw(_mod("mid"), {"current": 18.0}, monkeypatch, base={})
+        assert any(k == "success" and t.startswith(f"✅ {VETO_FUNDAMENTAL_NAME}：無觸發") for k, t in out)
+
+
+# ── 驗收阻擋 3-5／3-8：那句必須以 st.info 呈現；「有值」界定（總管確認）────────────────────────
+_HAS_VALUE_CONFIRMED = [pytest.param(v, id=i) for v, i in (
+    (pd.NA, "pd.NA"), (pd.NaT, "pd.NaT"), ("", "empty-str"), ("N/A", "str-N/A"), (True, "True"),
+    (False, "False"), ([1, 2], "list"), (np.True_, "np.True_"), (math.nan, "nan"), (-5, "-5"),
+)]
+
+
+class TestV1n5ElementKindAndDefinition:
+    @pytest.mark.parametrize("v", _HAS_VALUE_CONFIRMED)
+    def test_has_value_invalid_is_info_short_sentence(self, v, monkeypatch):
+        out, calls = _run_mid_raw(_mod("mid"), _node(v), monkeypatch)
+        assert ("info", _INVALID) in out, out
+        assert ("info", _LOADING) not in out
+        assert not any(t in (_INVALID, _LOADING) for k, t in out if k != "info")
+        assert calls == [(None,)]
+
+    @pytest.mark.parametrize("node,drop", _TRUE_MISSING)
+    def test_true_missing_is_info_original_sentence(self, node, drop, monkeypatch):
+        out, _ = _run_mid_raw(_mod("mid"), node, monkeypatch, drop)
+        assert ("info", _LOADING) in out and ("info", _INVALID) not in out
+        assert not any(t in (_INVALID, _LOADING) for k, t in out if k != "info")
 
 
 # ══════════════════════════════════════════════════════════════════════════
