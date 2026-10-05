@@ -430,7 +430,12 @@ def _wr(bias, mp, engine, futures_net=0):
     import src.services.daily_checklist as DC
     import src.ui.tabs.macro.section_warroom as W
     mp.setattr(DC, 'evaluate_market_status_v4_final', engine)   # `from src.services import …` 即時轉發
-    fake = _FakeST({'bias_info': bias, 'cl_data': {'margin': 2000.0}, 'futures_net': futures_net})
+    # 📌 批 Z6（C7-n9，有意識的更正，⛔ 不是漏改）：作戰室改讀 `warroom_summary['futures_net']` ——
+    #   原讀的 session key `futures_net` 全 repo 0 寫入點、修後作戰室不再用它（L3 `load_section_inputs`
+    #   仍會讀它並轉 int，見 section_warroom 模組 docstring）。期貨值改由 warroom_summary 餵入，
+    #   本檔 fut=−40000 的各例（含 TestWarroomV4HintGolden 的三個避險例）才照原意出現「外資期貨避險」。
+    fake = _FakeST({'bias_info': bias, 'cl_data': {'margin': 2000.0},
+                    'warroom_summary': {'futures_net': futures_net}})
     mp.setattr(W, 'st', fake)
     W.render_section_warroom('bull', True, False)
     return [t for _k, t in fake.out]
