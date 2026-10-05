@@ -131,7 +131,7 @@ def _is_finite_num(x) -> bool:
         return False
     try:
         return math.isfinite(float(x))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError(超大 int)視同非有限(批 Z1,Y2-n7;同 macro_helpers._safe_float)
         return False
 
 
