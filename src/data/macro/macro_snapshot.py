@@ -425,11 +425,24 @@ def compute_twii_bias(twii_local) -> dict | None:
     _n = len(_cs)
     if _n == 0:
         return None
+    # 批 Z2(Y2-n5,§1 擋非有限值):末筆收盤 ±inf / 超大 int(float() 會 OverflowError),
+    #   或均值溢位成 inf / NaN(例:收盤近 1e308)→ 不產出乖離,走既有失敗值 None。
+    #   (NaN 已由上面 dropna 剔除,行為不變。)
+    if not _is_finite_num(_cs.iloc[-1]):
+        print(f'[Bias] 末筆收盤非有限值,不計算乖離 (n={_n})')
+        return None
     _lp = float(_cs.iloc[-1])
-    _ma20 = float(_cs.tail(min(20, _n)).mean())
-    _ma60 = float(_cs.tail(min(60, _n)).mean())
-    _ma120 = float(_cs.tail(min(120, _n)).mean())
-    _ma240 = float(_cs.tail(min(240, _n)).mean())
+    try:
+        _ma20 = float(_cs.tail(min(20, _n)).mean())
+        _ma60 = float(_cs.tail(min(60, _n)).mean())
+        _ma120 = float(_cs.tail(min(120, _n)).mean())
+        _ma240 = float(_cs.tail(min(240, _n)).mean())
+    except OverflowError as _ov_b:
+        print(f'[Bias] 均線計算溢位,不計算乖離: {_ov_b}')
+        return None
+    if not all(_is_finite_num(_m) for _m in (_ma20, _ma60, _ma120, _ma240)):
+        print(f'[Bias] 均線非有限值(溢位),不計算乖離 (n={_n})')
+        return None
     # R-CALC-3 v18.412:乖離率公式 SSOT 收(`(p-ma)/ma*100` → calc_bias_pct)
     # 批 Y2(V2-n2,§1 缺值不填 0):原 `calc_bias_pct(...) or 0` 把 None(ma<=0 等算不出)
     #   捏成 0(「乖離正常」)。改為算不出就留 None —— 下游讀取端皆已走既有缺值路徑
@@ -440,6 +453,11 @@ def compute_twii_bias(twii_local) -> dict | None:
     # 批 Y2 QA:round 到 -0.0 時正規化成 +0.0(修前 `-0.0 or 0` 會收斂成 0;
     #   否則畫面印「-0.0%」)。None / NaN 不等於 0,語意不變。
     _b20, _b60, _b240 = (0.0 if _b == 0 else _b for _b in (_b20, _b60, _b240))
+    # 批 Z2(Y2-n5):輸入有限但乖離本身溢位(例:價近 1e308、均線極小)→ 同樣走既有失敗值 None。
+    #   算不出(None)仍照 Y2 留 None,不在此擋。
+    if any(_b is not None and not _is_finite_num(_b) for _b in (_b20, _b60, _b240)):
+        print(f'[Bias] 乖離計算結果非有限值,不輸出 (n={_n})')
+        return None
     _b240_log = f'{_b240:.1f}%' if _b240 is not None else 'None'
     print(f'[Bias] price={_lp:.0f} MA240={_ma240:.0f} '
           f'bias240={_b240_log} (n={_n})')
