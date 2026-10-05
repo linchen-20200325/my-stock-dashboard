@@ -11,6 +11,9 @@ v18.344 PR-N1 從 daily_checklist.py 抽出純函式部分(無 IO):
 from __future__ import annotations
 
 import datetime
+import math
+
+import numpy as np
 
 
 # ── 文字 → 數字安全轉換 ────────────────────────────────
@@ -52,17 +55,51 @@ def _recent_date(fmt: str = "%Y%m%d"):
 
 
 # ── v4 大盤狀態評分 ──────────────────────────────────
+def _is_finite_positive(x) -> bool:
+    """價／年線可用 ⇔ 有限正實數(批 Z3,V2-n1)。
+
+    None／0／負／NaN／±inf／字串(含數字字串)／bool(含 numpy bool)／轉 float 溢位的超大 int
+    → False。判法與 v1 唯一消費端 `section_warroom` 判「可讀」所用的 `section_long._finite_yoy`
+    同型(先排除 None／bool,再 `math.isfinite`),外加 > 0;唯一差別是本函式連 numpy bool 也排除
+    (修前它在算式裡就拋 TypeError)。只判斷、不轉型:合格時引擎照舊拿原物件計算 ⇒ 輸出逐位不變。
+    """
+    if x is None or isinstance(x, (bool, np.bool_)):
+        return False
+    try:
+        return bool(math.isfinite(x) and x > 0)
+    except (TypeError, ValueError, OverflowError):   # 非實數 / 轉不成 float / 超大 int 溢位 → 不可用
+        return False
+
+
 def evaluate_market_status_v4_final(current_price: float, ma_240: float,
                                     futures_net_oi: int) -> dict:
-    """台股 AI 戰情室 v4.0 核心引擎(專注共同基金與總經)。"""
-    current_price = current_price or 1.0
-    ma_240 = ma_240 or current_price
+    """台股 AI 戰情室 v4.0 核心引擎(專注共同基金與總經)。
+
+    批 Z3(V2-n1,併 V2-n10;§1 不捏值):原 `current_price or 1.0`／`ma_240 or current_price`
+    把缺值捏成「價 1.0、年線＝價」⇒ (None,None,None)、(0,0,0) 回 `Bias_240` 0.0、`Is_Bull` True、
+    強勢多頭那一組 Signal／建議;非數字價格(例 'N/A')則拋 TypeError。改為:價或年線不是有限正實數
+    (`_is_finite_positive`)⇒ 依賴價格／年線的鍵(Signal／Action_Advice／Suggested_Holding／
+    Bias_240／Is_Bull／Is_Overheated)一律 None、不拋;不依賴價格的 `Is_Foreign_Hedging` 照舊。
+    有限正數輸入走原算式、原物件 ⇒ 全部輸出逐位不變。
+    ⚠️ `futures_net_oi or 0`(外資期貨缺值捏 0)不在本批,另登記。
+    """
     futures_net_oi = futures_net_oi or 0
+    is_foreign_hedging = futures_net_oi < -30000
+
+    if not (_is_finite_positive(current_price) and _is_finite_positive(ma_240)):
+        return {
+            "Signal": None,
+            "Action_Advice": None,
+            "Suggested_Holding": None,
+            "Bias_240": None,
+            "Is_Bull": None,
+            "Is_Overheated": None,
+            "Is_Foreign_Hedging": is_foreign_hedging,
+        }
 
     bias_240 = ((current_price - ma_240) / ma_240) * 100
     is_bull_market = current_price >= (ma_240 * 0.99)
     is_overheated = bias_240 > 20.0
-    is_foreign_hedging = futures_net_oi < -30000
 
     if is_bull_market:
         if is_overheated or is_foreign_hedging:

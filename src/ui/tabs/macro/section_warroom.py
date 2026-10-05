@@ -124,6 +124,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         #   (引擎再把 0 換成 1.0)→ 這行會印出假的「年線乖離 +0.0%」與年線位階。
         #   價格或年線不是有限正數 ⇒ 不列這三個位階片段(只剩與價格無關的外資期貨那段;
         #   都沒有 ⇒ 整行不出,＝既有空字串路徑)。有值時一字未動。
+        #   📌 批 Z3(V2-n1)起引擎本身也不再捏 1.0:價或年線非有限正數 ⇒ 依賴價格的鍵回 None
+        #   (`Bias_240` 為 None)—— 本守衛照留,是讀 `Bias_240` 前的必要條件(只加註,程式未動)。
         _wr_px = _finite_yoy(_wr_bias, 'price') if _wr_bias else None
         _wr_ma = _finite_yoy(_wr_bias, 'ma240') if _wr_bias else None
         _v4_bits = []

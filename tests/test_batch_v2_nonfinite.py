@@ -226,10 +226,10 @@ def _warroom_out(bias):
 class TestWarroomBiasMissing:
     @pytest.mark.parametrize('bias', _BIAS_MISSING)
     def test_missing_equals_empty_path(self, bias):
-        try:
-            out = _warroom_out(bias)
-        except TypeError:
-            pytest.skip('非數值 price 在 v4 引擎（L0，本批不動）即拋 —— 與本批無關')
+        # 📌 批 Z3 V2-n1（有意識的更正，⛔ 不是漏刪）：原本此處 `except TypeError: pytest.skip(...)`
+        #   ——「非數值 price 在 v4 引擎（L0，本批不動）即拋」。v4 引擎已改為價或年線非有限正實數
+        #   ⇒ 依賴價格的鍵回 None、不拋，non-numeric 形狀不再 skip，與其他缺值形狀同一契約。
+        out = _warroom_out(bias)
         joined = '\n'.join(out)
         assert '乖離+0.0%' not in joined and '年線乖離 +0.0%' not in joined
         assert out == _warroom_out({}), joined[-800:]
