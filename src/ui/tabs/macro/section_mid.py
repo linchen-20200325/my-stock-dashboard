@@ -8,6 +8,7 @@ closure params(explicit pass):
 """
 from __future__ import annotations
 
+import numpy as np
 import streamlit as st
 from shared.secret_scrub import scrub_secrets  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑（反引號內，不跳脫）
 
@@ -104,7 +105,36 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     _pv8_v = _finite_yoy(_m8_pmi, 'value')
     _cy8_v = _finite_yoy(_m8_cpi, 'yoy')
     _fc8_v = _finite_yoy(_m8_fed, 'current')
-    _vcur8_v = _finite_yoy(_m8_vix, 'current')
+    # 📌 批 Z3 驗收阻擋 3-3（延伸）：numpy bool 與複數先排除、不交給 `_finite_yoy` —— 它只排除
+    #   Python bool：np.True_ 會被當成 VIX 1.0；numpy complex 會在 `math.isfinite` 發 ComplexWarning、
+    #   丟掉虛部後當實數放行（與總管對 bool「有值但無效」、對非實數「不是有限正實數」的認定一致）。
+    _vix_cur8_raw = _m8_vix.get('current') if isinstance(_m8_vix, dict) else None
+    _vcur8_v = (None if isinstance(_vix_cur8_raw, (np.bool_, complex, np.complexfloating))
+                else _finite_yoy(_m8_vix, 'current'))
+    # 批 Z3（V1-n2，§1）：VIX ≤ 0 定義上不可能（恐慌指數恆為正）—— `_finite_yoy` 只擋非有限，
+    #   實跑 −5 印「✅ 市場平靜」「VIX -5.0 < 20（平靜期）🟢」「A VIX=-5.0<20 ✅」、否決權收到 −5。
+    #   在 §八 自己取 VIX 的這一處（`_vcur8_v`）視同非有限值 ⇒ 由它取值的 KPI 卡（「待取得」）、
+    #   基本面否決檢查（列「VIX待取得」）、§八 否決權那句、三環「A VIX未知」、apply_vix_veto(None)
+    #   走 #781 既有缺值路徑。
+    #   ⚠️ 範圍更正（驗收）：原註「本檔取 VIX 的單一入口 ⇒ 下游全走」說得過寬 —— 本頁另有兩處自行讀
+    #   VIX、不經此處，也不在上述清單內：
+    #   (1) §三 `section_chips.read_v4_macro_veto()`：下方跨區揭露框照舊用它的結果，如實列出 §三 那盞燈
+    #       的實際狀態與它看的 VIX（總管改判，理由見該處註解）；§三 收下無效 VIX（≤ 0、數字字串、bool…）
+    #       屬 section_chips、不在本批範圍，總管另登記為新項。
+    #   (2) 頂部總經警示看板（L1 `check_macro_alerts`，只在正式載入時出現；驗收組實測 VIX ≤ 0／NaN／−inf
+    #       仍給 🟢 —— 屬 L1、不在本批，總管另登記為已知限制）。
+    #   ⛔ 共用的 `_finite_yoy` 不動；VIX > 0 時同一物件，輸出不變。
+    #   📌 驗收阻擋 3-3：下限用一般比較（`<= 0`），numpy 整數／浮點、Decimal、Fraction、np.False_
+    #   一律適用（不得只認 Python int／float）。
+    if _vcur8_v is not None and _vcur8_v <= 0:
+        _vcur8_v = None
+    # 批 Z3（V1-n5）：VIX「有值但無效」≠「載入中」—— 值明明到了，說「數據載入中」是假的。
+    #   §八 否決權那句只在此時於子句界純刪「VIX 數據載入中，」（⛔ 不新增字）。
+    #   界定（驗收阻擋 3-8，總管確認）：只有 `current` 為 None 或缺鍵＝真的沒值（原句一字不變）；
+    #   pd.NA、pd.NaT、''、'N/A'、bool、list、非有限、≤ 0 等一律算「有值但無效」。
+    #   VIX 節點本身不是 dict（例 'x'、5）讀不到 `current` 鍵，比照缺鍵（批 V2 V1-n4 測試釘原句）。
+    _vix_bad8 = (isinstance(_m8_vix, dict) and _m8_vix.get('current') is not None
+                 and _vcur8_v is None)
 
     with _s8c1[0]:
         if _m8_ndc and _sc8_v is not None:
@@ -393,6 +423,14 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     except Exception as _e_v4x:
         print(f'[section_mid/veto-cross] {type(_e_v4x).__name__}: {_e_v4x}')
         _v4_light = None
+    # 批 Z3（總管改判，撤回 db7b2e2「驗收阻擋 2」的閘門 —— 有意識的更正，不是漏刪）：
+    #   本框的職責是如實寫出 §三 那盞燈的實際狀態，而 `read_v4_macro_veto()` 就是 §三 自己的入口。
+    #   §八 判 VIX 無效、但 §三 照樣判得出燈時（例 VIX=−5、0、−0.0、數字字串、bool），下方比對句
+    #   「（§三 籌碼）：🔴 紅燈　看的是 VIX=-5.0、外資期貨=-40,000 口」是真話，且明確標示是 §三 看的值；
+    #   閘門改走的「§三 …因 VIX 未取得而無法判定」在這些情況下反而是假話（§三 實際判出了燈）。
+    #   真實優先於表面一致（§1）⇒ 不設閘門：§三 判得出就列它的實際輸入，`read_v4_macro_veto()`
+    #   回 None 才走缺值句（與 fd989ae 相同）。根因「§三 收下無效 VIX」屬 section_chips、
+    #   不在本批範圍，總管另登記為新項。
 
     if _fund_evaluable and _v4_light is not None:
         # 綠燈以外（🔴/🟡）都算「籌碼側有風險訊號」。
@@ -435,6 +473,8 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     #   改沿用上方已算好的有限值 `_vcur8_v`（缺鍵／None／NaN／±inf／非數值一律 None）⇒
     #   走既有「VIX 數據載入中…」／「A VIX未知」路徑，且與上方缺項清單（M2N-f6）判定一致
     #   （數字字串原本這裡算有值、清單卻列「VIX 待取得」）。有限值時 float() 同一物件，輸出不變。
+    #   批 Z3（V1-n2）起 `_vcur8_v` 另把 VIX ≤ 0 視同非有限（見上方取值處），同走這條缺值路徑；
+    #   （V1-n5）其中「有值但無效」時那句改為子句界刪去「VIX 數據載入中，」的版本（見 `_vix_bad8`）。
     _vix_now8 = float(_vcur8_v) if _vcur8_v is not None else None
     # CLI：OECD CLI 榮枯線 = 100，取自 _m8_pmi（is_oecd_cli=True 時）
     _cli_8 = None
@@ -475,7 +515,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 _hyc8t = '🟢 全球風險情緒穩定，未觸發 VIX 否決權。回歸個股籌碼面與基本面操作。'
             st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _hyi8, _hyc8t, color=_hyc8), unsafe_allow_html=True)
         else:
-            st.info('VIX 數據載入中，VIX 否決權暫無法判斷')
+            # 批 Z3（V1-n5）：有值但無效 → 子句界純刪後的句子；真的沒值 → 原句（判定見 `_vix_bad8`）。
+            st.info('VIX 否決權暫無法判斷' if _vix_bad8
+                    else 'VIX 數據載入中，VIX 否決權暫無法判斷')
 
         # ── 策略3：M1B-M2 資金動能（三段公式）────────────────────
         _m1b8_info = st.session_state.get('m1b_m2_info', {})

@@ -121,13 +121,25 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _wr_bias_badge = _bias_est_badge(_wr_bias)
         # v4 年線位階資訊 → 降為補充提示,不再覆蓋主結論
         # 批 V2(D4-n6,§1 不捏 0):上方送進 v4 引擎的 `price` / `ma240` 缺值時是 `or 0`
-        #   (引擎再把 0 換成 1.0)→ 這行會印出假的「年線乖離 +0.0%」與年線位階。
+        #   → 當時的引擎(fd989ae 以前)把年線的 0 換成價 ⇒ 這行印出假的「年線乖離 +0.0%」(兩邊都缺時
+        #   亦同);把價的 0 換成 1.0 ⇒ 年線有實值時(實測 8000～23000)印出假的「年線乖離 -100.0%｜
+        #   股價在年線下」。
+        #   📌 批 Z3 重驗更正(實測 #782 之前的作戰室＋fd989ae 引擎):原句「(引擎再把 0 換成 1.0)→ 這行
+        #   會印出假的『年線乖離 +0.0%』與年線位階」不精確 —— 換成 1.0 的只有價那邊,+0.0% 是年線被換成
+        #   價造成的;價被換成 1.0 時印的是 -100.0%。
         #   價格或年線不是有限正數 ⇒ 不列這三個位階片段(只剩與價格無關的外資期貨那段;
         #   都沒有 ⇒ 整行不出,＝既有空字串路徑)。有值時一字未動。
+        #   📌 批 Z3(V2-n1)起引擎本身也不再捏值(價 1.0、年線＝價):價或年線非有限正數 ⇒ 依賴價格的鍵回 None
+        #   (`Bias_240` 為 None)—— 本守衛照留,是讀 `Bias_240` 前的必要條件。
+        #   📌 批 Z3 驗收阻擋 1:另加 `_v4.get('Bias_240') is not None` —— `_finite_yoy` 放行 numpy bool
+        #   (np.True_ > 0 成立),引擎則把 numpy bool 判為無效回 None ⇒ 單邊 np.True_ 時讀到 None、
+        #   `:+.1f` 拋 TypeError(fd989ae 不崩,是把 np.True_ 當 1 算出假乖離)。引擎回 None 一律走
+        #   上面同一條「價／年線缺值」路徑(不列位階片段);有限正數時 Bias_240 必有值,輸出一字未動。
         _wr_px = _finite_yoy(_wr_bias, 'price') if _wr_bias else None
         _wr_ma = _finite_yoy(_wr_bias, 'ma240') if _wr_bias else None
         _v4_bits = []
-        if _wr_px is not None and _wr_ma is not None and _wr_px > 0 and _wr_ma > 0:
+        if (_wr_px is not None and _wr_ma is not None and _wr_px > 0 and _wr_ma > 0
+                and _v4.get('Bias_240') is not None):
             _v4_bits.append(f'年線乖離 {_v4["Bias_240"]:+.1f}%{_wr_bias_badge}')
             if not _v4.get('Is_Bull'):
                 _v4_bits.append('股價在年線下')

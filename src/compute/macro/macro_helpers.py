@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import math
 import sys
 from typing import Any, Optional
 
@@ -733,14 +734,18 @@ detect_mk_golden_inflection = detect_cpi_fed_double_top
 
 # v18.170: 長期總經位階分類（12M 視角，景氣大循環）— 純函式 helper
 def _safe_float(x: Any) -> Optional[float]:
-    """容錯轉浮點：None/字串/NaN → None。"""
+    """容錯轉浮點：None/字串/NaN/±inf → None。"""
     if x is None:
         return None
     try:
         f = float(x)
     except (TypeError, ValueError, OverflowError):   # OverflowError(超大 int)視同缺值(批 Y2,V2-n8)
         return None
-    if f != f:  # NaN guard
+    # NaN／±inf guard。批 Z3(Y2-n4,§1):原只擋 NaN(`f != f`)—— ±inf(含字串 'inf'／'-Infinity'、
+    # numpy inf)照樣過關:`classify_long_term_regime` 拿 inf 計分(分類組實跑:CPI 給 inf 判
+    # 「🟡 過熱/震盪期」、給 None 判「🔵 復甦期」),`calc_traffic_light` 拿 inf 算健康分／判燈。
+    # 非有限一律 None ⇒ 各呼叫點走既有缺值路徑(＝給 None 的輸出);有限值照回 `float(x)`,逐位不變。
+    if not math.isfinite(f):
         return None
     return f
 
