@@ -771,14 +771,37 @@ _CONTRACT_VALUES = [
 
 
 class TestL2RejectedContract:
+    """L2 產出端契約：側車 `rejected` 每一筆都**恰是 3 欄** `(str 來源標籤, float 值, str 原因)`。
+
+    · 為什麼是「恰 3 欄」而不只「≥2 欄」（QA B 組重驗）：資料診斷頁的「└」逐筆行是
+      `for _lbl, _v, _why in rejected` **拆 3 欄**；只釘 ≥2 欄的話，「L2 只存 2 欄」這種違約
+      在本類單跑會存活（要等到資料診斷頁的測試才紅）。
+    · 第 2 欄要是**恰好** Python `float`（`type(x) is float`，⛔ 不收 `numpy.float64` 這種子類別）：
+      L2 `_num()` 一律 `float(x)` 轉出。
+    · ⚠️ 不是每一種輸入都貢獻契約樣本（2026-10-05 實跑確認）：`None`、非數字字串（如 `'abc'`、
+      `'N/A'`）、`''` 在 L2 會先被 `_num()` 略過（回 None → 跳過此源），**不產生 rejected** ——
+      那盞燈只會是 `no_value`。這類輸入在本類裡等於「沒有樣本」，契約靠其餘輸入撐住；
+      `test_unparseable_inputs_contribute_no_samples` 釘住這句說明，`test_contract_is_not_vacuous`
+      確認非有限輸入下 15 盞每盞都真的有樣本。
+    """
+
     @pytest.mark.parametrize("x", _CONTRACT_VALUES, ids=repr)
     def test_every_rejected_entry_is_a_tuple_with_a_python_float(self, x):
+        """每筆 rejected ＝ 恰 3 欄的 tuple：(str, float, str)，第 2 欄 type 恰為 Python float。"""
         rd = _readiness(**_inject_all(x))
         assert set(rd) == set(ALL_KEYS)
         for _key, _rec_l2 in rd.items():
             for _e in _rec_l2.get("rejected") or []:
-                assert isinstance(_e, tuple) and len(_e) >= 2, (_key, _e)
+                assert isinstance(_e, tuple) and len(_e) == 3, (_key, _e)
+                assert type(_e[0]) is str and type(_e[2]) is str, (_key, _e)
                 assert type(_e[1]) is float, (_key, _e, type(_e[1]))
+
+    @pytest.mark.parametrize("x", [None, "abc", "", "N/A"], ids=repr)
+    def test_unparseable_inputs_contribute_no_samples(self, x):
+        """None／非數字字串／'' 在 L2 先被略過：16 盞的 rejected 全空、可注入的 15 盞都是 no_value。"""
+        rd = _readiness(**_inject_all(x))
+        assert all(not (r.get("rejected") or []) for r in rd.values())
+        assert {rd[k]["reason"] for k in REAL_L2_KEYS} == {MISSING_NO_VALUE}
 
     @pytest.mark.parametrize("x", [NAN, INF, -INF, "nan", "-inf", Decimal("NaN"), np.float64("inf")],
                              ids=repr)
