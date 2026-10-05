@@ -9,6 +9,9 @@
   Is_Bull True、「🟢 強勢多頭」；非數字價格（例 'N/A'）拋 TypeError。改為價或年線不是有限正實數 ⇒
   依賴價格／年線的鍵一律 None、不拋；Is_Foreign_Hedging 照舊（`futures_net or 0` 另登記，本批不動）。
   唯一消費端 v1 `section_warroom` 只在價與年線為有限正數時才讀 —— 各種缺值形狀的渲染修前修後逐字相同。
+- V1-n2（L5 v1）`section_mid`：VIX 為負（實跑 −5）印「✅ 市場平靜」「平靜期 🟢」「A VIX=-5.0<20 ✅」、
+  否決權收到 −5。總管決定 VIX ≤ 0（定義上不可能）視同非有限值 —— 在本檔取 VIX 的單一入口處理，
+  全部走 #781 既有缺值路徑（KPI「待取得」、§八 否決權那句、三環「A VIX未知」、apply_vix_veto(None)）。
 
 只擋資料、不加新字句、不動門檻、不動版面；有限輸入與修前逐位相同（下方對拍修前副本）。
 每段都有「拔掉修復即轉紅」的斷言（修前副本在同一組輸入上必須給出不同答案）。
@@ -18,6 +21,7 @@ from __future__ import annotations
 import math
 import random
 import struct
+import types
 from decimal import Decimal
 from fractions import Fraction
 
@@ -27,7 +31,7 @@ import pytest
 
 from shared import macro_compute as MC
 from src.compute.macro import macro_helpers as MH
-from tests.test_m2n2_no_zero_fill import _FakeST, _apply
+from tests.test_m2n2_no_zero_fill import _FakeST, _apply, _load, _mod, _source
 
 _HUGE = 10 ** 400   # float() → OverflowError（不是 inf）
 
@@ -370,3 +374,103 @@ class TestWarroomConsumerUnchanged:
         with pytest.raises(exc):
             _wr(bias, monkeypatch, _V4_PRE)               # 前提：修前整個作戰室炸掉
         assert _wr(bias, monkeypatch, _V4) == _wr({}, monkeypatch, _V4)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# V1-n2（L5 v1）：section_mid 的 VIX ≤ 0 視同非有限值
+# ══════════════════════════════════════════════════════════════════════════
+_MID_BASE = {"ism_pmi": {"value": 52.0}, "us_core_cpi": {"yoy": 3.0},
+             "tw_export": {"yoy": 5.0, "date": "2026-08"}, "ndc_signal": {"score": 27}}
+_LOADING = "VIX 數據載入中，VIX 否決權暫無法判斷"     # 既有句（#781 缺值路徑）
+
+#: 修後 → 修前（反向替換，只動程式行；註解不影響行為）。還原體在 VIX > 0／真缺值上
+#: 與 `fd989ae` 的 section_mid 渲染逐字相同（已另以 git 原始檔實跑對過）。
+_MID_REVERT = (
+    ("    if _vcur8_v is not None and _vcur8_v <= 0:\n"
+     "        _vcur8_v = None\n", ""),
+)
+
+
+class _FakeSTFig(_FakeST):
+    """多記一筆 VIX 走勢圖標題（「✅ 市場平靜」等燈義只出現在圖標題裡）。"""
+
+    def plotly_chart(self, fig, *a, **k):
+        self.out.append(("plotly_chart", str(fig.layout.title.text)))
+
+
+def _run_mid(mod, vix_node, mp, drop_key=False):
+    import src.services.allocation_service as AS
+    import src.ui.tabs.macro.section_chips as SC
+    info = dict(_MID_BASE)
+    if not drop_key:
+        info["vix"] = vix_node
+    fake = _FakeSTFig({"macro_info": info, "bias_info": {"bias_240": 5.0}})
+    calls: list = []
+    mp.setattr(mod, "st", fake)
+    mp.setattr(AS, "apply_vix_veto", lambda *a, **k: calls.append(a))
+    mp.setattr(AS, "apply_ring_gate", lambda *a, **k: None)
+    mp.setattr(AS, "register_conflict", lambda *a, **k: None)
+    mp.setattr(AS, "get_allocation", lambda *a, **k: types.SimpleNamespace(
+        is_loaded=False, final_hi=None))
+    mp.setattr(SC, "read_v4_macro_veto", lambda *a, **k: None)
+    mod.render_section_mid(False, {}, {}, {})
+    return [t for _k, t in fake.out], calls
+
+
+def _node(v):
+    """有走勢資料的 VIX 節點（有 dates 才走「畫圖」那枝 —— 才看得到圖標題的「✅ 市場平靜」）。"""
+    return {"current": v, "dates": ["2026-09-30", "2026-10-01"], "values": [18.0, v], "ma20": 17.5}
+
+
+@pytest.fixture(scope="module")
+def mid_pre():
+    return _load("mid", _apply(_source("mid"), _MID_REVERT), "z3_pre")
+
+
+_NONPOS = [pytest.param(v, id=repr(v)) for v in (0, 0.0, -0.0, -5, -5.0, -1e-9, -1e300, np.float64(-3.0))]
+_TRUE_MISSING = [
+    pytest.param({"current": None}, False, id="none"),
+    pytest.param({"dates": []}, False, id="missing-current"),
+    pytest.param(None, True, id="missing-vix-key"),
+    pytest.param("x", False, id="non-dict-str"),
+    pytest.param(18.5, False, id="non-dict-float"),
+]
+
+
+class TestV1n2NonPositiveVix:
+    @pytest.mark.parametrize("v", _NONPOS)
+    def test_takes_existing_missing_path(self, v, monkeypatch):
+        out, calls = _run_mid(_mod("mid"), _node(v), monkeypatch)
+        joined = "\n".join(out)
+        # 修前（實跑 −5）：「✅ 市場平靜」「平靜期 🟢」「A VIX=-5.0<20 ✅」、否決權收到 −5
+        assert "市場平靜" not in joined and "平靜期" not in joined, joined[-1500:]
+        assert "A VIX=" not in joined and "未觸發 VIX 否決權" not in joined
+        assert "A VIX未知" in joined                                       # 三環徽章
+        assert calls == [(None,)], calls                                     # apply_vix_veto(None)
+        assert any("VIX 恐慌指數" in t and "待取得" in t for t in out)        # KPI 卡「待取得」
+        assert not any(t.startswith("VIX 恐慌指數 ") for t in out)           # 不畫走勢圖
+        assert any("VIX待取得" in t or "VIX／" in t for t in out if "總經基本面否決檢查" in t)
+
+    @pytest.mark.parametrize("v", _NONPOS)
+    def test_output_equals_missing_current(self, v, monkeypatch):
+        # 全部走既有缺值路徑：整份輸出 ＝ current 為 None 時（同一個節點形狀）
+        assert (_run_mid(_mod("mid"), _node(v), monkeypatch)
+                == _run_mid(_mod("mid"), _node(None), monkeypatch))
+
+    @pytest.mark.parametrize("v", _NONPOS)
+    def test_pre_fix_printed_fake_calm(self, v, mid_pre, monkeypatch):
+        # 前提自證（拔掉修復即轉紅）：還原體在同一輸入印假的「平靜期」並把原值送進否決權
+        out, calls = _run_mid(mid_pre, _node(v), monkeypatch)
+        joined = "\n".join(out)
+        assert "（平靜期）" in joined and "市場平靜" in joined and "A VIX=" in joined
+        assert calls == [(float(v),)]
+
+    @pytest.mark.parametrize("v", [1e-9, 5e-324, 0.01, 0.5, 18, 19.96, 20, 25.0, 30, 35.5, 100, 150.0])
+    def test_positive_vix_identical_to_pre_fix(self, v, mid_pre, monkeypatch):
+        for node in (_node(v), {"current": v}):
+            assert _run_mid(_mod("mid"), node, monkeypatch) == _run_mid(mid_pre, node, monkeypatch)
+
+    @pytest.mark.parametrize("node,drop", _TRUE_MISSING)
+    def test_true_missing_identical_to_pre_fix(self, node, drop, mid_pre, monkeypatch):
+        assert (_run_mid(_mod("mid"), node, monkeypatch, drop)
+                == _run_mid(mid_pre, node, monkeypatch, drop))

@@ -105,6 +105,13 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     _cy8_v = _finite_yoy(_m8_cpi, 'yoy')
     _fc8_v = _finite_yoy(_m8_fed, 'current')
     _vcur8_v = _finite_yoy(_m8_vix, 'current')
+    # 批 Z3（V1-n2，§1）：VIX ≤ 0 定義上不可能（恐慌指數恆為正）—— `_finite_yoy` 只擋非有限，
+    #   實跑 −5 印「✅ 市場平靜」「VIX -5.0 < 20（平靜期）🟢」「A VIX=-5.0<20 ✅」、否決權收到 −5。
+    #   在本檔取 VIX 的單一入口視同非有限值 ⇒ 下游全走 #781 既有缺值路徑（KPI「待取得」、
+    #   §八 否決權那句、三環「A VIX未知」、apply_vix_veto(None)、基本面否決檢查列「VIX待取得」）。
+    #   ⛔ 共用的 `_finite_yoy` 不動；VIX > 0 時同一物件，輸出不變。
+    if _vcur8_v is not None and _vcur8_v <= 0:
+        _vcur8_v = None
 
     with _s8c1[0]:
         if _m8_ndc and _sc8_v is not None:
@@ -435,6 +442,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     #   改沿用上方已算好的有限值 `_vcur8_v`（缺鍵／None／NaN／±inf／非數值一律 None）⇒
     #   走既有「VIX 數據載入中…」／「A VIX未知」路徑，且與上方缺項清單（M2N-f6）判定一致
     #   （數字字串原本這裡算有值、清單卻列「VIX 待取得」）。有限值時 float() 同一物件，輸出不變。
+    #   批 Z3（V1-n2）起 `_vcur8_v` 另把 VIX ≤ 0 視同非有限（見上方取值處），同走這條缺值路徑。
     _vix_now8 = float(_vcur8_v) if _vcur8_v is not None else None
     # CLI：OECD CLI 榮枯線 = 100，取自 _m8_pmi（is_oecd_cli=True 時）
     _cli_8 = None

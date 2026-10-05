@@ -5,6 +5,9 @@
 且 `apply_vix_veto(nan)`。修正後非有限／None／缺鍵／非數值一律走既有缺值路徑：
 「VIX 數據載入中，VIX 否決權暫無法判斷」＋「A VIX未知」，veto 收到 None。
 有限值輸出逐字不變（下方 golden 釘住）。harness 沿用 `tests/test_d4_section_mid.py`。
+
+📌 批 Z3（V1-n2，有意識的變更）：VIX ≤ 0（定義上不可能）併入同一條缺值路徑 ——
+原釘在 golden 的 0／−5 兩列移到 `_BAD`（細節與修前修後對拍見 tests/test_batch_z3.py）。
 """
 from __future__ import annotations
 
@@ -49,6 +52,12 @@ _BAD = [
     pytest.param({"dates": []}, False, id="missing-current"),
     pytest.param({"current": "18.5"}, False, id="numeric-string"),
     pytest.param(None, True, id="missing-vix-key"),
+    # 📌 批 Z3 V1-n2：VIX≤0 視為無效，有意識的變更（⛔ 不是漏刪）。這兩列原本釘在下方
+    #   `test_finite_vix_unchanged` ——（0 →「VIX 0.0 < 20（平靜期）」「A VIX=0.0<20」；
+    #   −5 →「VIX -5.0 < 20（平靜期）」「A VIX=-5.0<20」、veto 收到原值）。VIX 定義上恆為正，
+    #   ≤ 0 只可能是壞資料 ⇒ 改走既有缺值路徑（總管決定；本檔取 VIX 的單一入口處理）。
+    pytest.param({"current": 0}, False, id="zero"),
+    pytest.param({"current": -5}, False, id="negative"),
 ]
 
 
@@ -70,7 +79,7 @@ def test_nonfinite_vix_takes_missing_path(node, drop, monkeypatch):
 
 @pytest.mark.parametrize("vix,line,badge", [
     (18.0, "VIX 18.0 < 20（平靜期）", "A VIX=18.0<20"),
-    (0, "VIX 0.0 < 20（平靜期）", "A VIX=0.0<20"),
+    # 📌 批 Z3 V1-n2（有意識的變更）：原 `(0, …)` 一列移至上方 `_BAD`（VIX≤0 視為無效）。
     (25.0, "VIX 25.0（20~30 警戒）", "A VIX=25.0<20"),
     (35.0, "VIX 35.0 ≥ 30", "A VIX=35.0<20"),
     # QA 跟進：近門檻／負值 —— 釘「veto 參數＝原值、不得 round／abs」。
@@ -78,7 +87,10 @@ def test_nonfinite_vix_takes_missing_path(node, drop, monkeypatch):
     (19.96, "VIX 20.0 < 20（平靜期）", "A VIX=20.0<20"),
     (19.99, "VIX 20.0 < 20（平靜期）", "A VIX=20.0<20"),
     (29.96, "VIX 30.0（20~30 警戒）", "A VIX=30.0<20"),
-    (-5, "VIX -5.0 < 20（平靜期）", "A VIX=-5.0<20"),
+    # 📌 批 Z3 V1-n2（有意識的變更）：原 `(-5, …)` 負值列移至上方 `_BAD`（VIX≤0 視為無效）。
+    #   改以極小正值續釘 round（`round` 變異會把 0.01 變 0 → veto 參數不等於原值）；
+    #   `abs` 變異對正值無作用、負值已不進這條路，故不再需要負值列。下限只擋 ≤ 0，小正數照舊有效。
+    (0.01, "VIX 0.0 < 20（平靜期）", "A VIX=0.0<20"),
     # 門檻邊界（既有字句）
     (20, "VIX 20.0（20~30 警戒）", "A VIX=20.0<20"),
     (30, "VIX 30.0 ≥ 30", "A VIX=30.0<20"),
