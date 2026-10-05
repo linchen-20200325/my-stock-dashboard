@@ -618,14 +618,19 @@ _S9_FIELDS = [pytest.param(bad, none, pre_txt, id=i) for i, bad, none, pre_txt i
 
 class TestZ3n1NumOtherFields:
     @pytest.mark.parametrize("bad,none,pre_txt", _S9_FIELDS)
-    def test_non_finite_equals_missing(self, bad, none, pre_txt, pre, monkeypatch):
-        out = _s9(_vnode(18.0), monkeypatch, **bad)
+    def test_non_finite_equals_missing(self, bad, none, pre_txt, monkeypatch):
+        out = _s9(_vnode(18.0), monkeypatch, **bad)               # 不得拋（修前 10**400 拋 OverflowError）
         assert out == _s9(_vnode(18.0), monkeypatch, **none)
+        if pre_txt is not None:                                    # 修前（寫死）才有的字樣不再出現
+            assert pre_txt not in "\n".join(_md(out))
+
+    @pytest.mark.parametrize("bad,none,pre_txt", _S9_FIELDS)
+    def test_premise_pre_fix_copy_used_the_value(self, bad, none, pre_txt, pre, monkeypatch):
+        # 前提：修前副本在同一輸入印出寫死的字樣／整段拋例外（＝本列 bug）
         if pre_txt is None:
-            with pytest.raises(OverflowError):                   # 修前副本：整段拋例外（前提）
+            with pytest.raises(OverflowError):
                 _s9(_vnode(18.0), monkeypatch, mod=pre["cross"], **bad)
         else:
-            assert pre_txt not in "\n".join(_md(out))
             assert pre_txt in "\n".join(_md(_s9(_vnode(18.0), monkeypatch, mod=pre["cross"], **bad)))
 
     @pytest.mark.parametrize("vma", [math.inf, -math.inf, _HUGE], ids=["+inf", "-inf", "10**400"])
@@ -731,6 +736,18 @@ class TestC7n7Section8:
         out, _ = _mid(_node(v), monkeypatch)
         base, _ = _mid({"current": None, "dates": ["2026-09-30", "2026-10-01"], "values": [18.0, 18.0]},
                        monkeypatch)
+        i = out.index(("error", _abnormal(e)))
+        j = base.index(("info", "VIX 數據載入中，VIX 否決權暫無法判斷"))
+        assert out[:i] == base[:j]
+
+    @pytest.mark.parametrize("v,t,e", _ABOVE_100)
+    def test_only_vix_above_100_not_evaluable(self, v, t, e, monkeypatch):
+        # 只有 VIX 一項且 > 100、其餘四項皆缺：基本面檢查不可評估（不印 ✅ 行、不印範圍註腳）＝ VIX 缺值時
+        out, _ = _mid(_node(v), monkeypatch, base={})
+        base, _ = _mid({"current": None, "dates": ["2026-09-30", "2026-10-01"], "values": [18.0, 18.0]},
+                       monkeypatch, base={})
+        assert not any(k == "success" and t2.startswith("✅ 總經基本面否決檢查") for k, t2 in out)
+        assert not any(k == "caption" and t2.startswith("📌 本檢查只看【") for k, t2 in out)
         i = out.index(("error", _abnormal(e)))
         j = base.index(("info", "VIX 數據載入中，VIX 否決權暫無法判斷"))
         assert out[:i] == base[:j]
