@@ -592,6 +592,30 @@ class TestC7n1UsableValueShapes:
         assert r2.calls == {"h": 0, "li": 0, "fi": 0}
         assert r2.out == _GOLDEN_FLAT
 
+    @pytest.mark.parametrize("h,li,side", [
+        pytest.param(dict(_H_FLAT, score_latest=np.int64(25)), _LI_FAIL, "h", id="h-np-int64"),
+        pytest.param(dict(_H_FLAT, score_latest=np.True_), _LI_FAIL, "h", id="h-np-True"),
+        pytest.param(dict(_H_FLAT, score_latest=np.False_), _LI_FAIL, "h", id="h-np-False"),
+        pytest.param(dict(_H_FLAT, score_latest=0), _LI_FAIL, "h", id="h-zero"),
+        pytest.param(_H_FAIL, dict(_LI_FLAT, smooth6m=np.float64(0.42)), "li", id="li-np-float64"),
+        pytest.param(_H_FAIL, dict(_LI_FLAT, smooth6m=np.True_), "li", id="li-np-True"),
+        pytest.param(_H_FAIL, dict(_LI_FLAT, smooth6m=np.False_), "li", id="li-np-False"),
+    ])
+    def test_cycle_single_side_usable(self, h, li, side, monkeypatch):
+        """驗收補測（B 組逐 key 掃描）：景氣群只有**一支**可用（另一支失敗）時，由那一支單獨撐起「可評估」——
+        畫面＝`_GOLDEN_FLAT`（景氣「中性」）、那一支入快取、下一輪不重抓（失敗那支照常重抓）。
+        上面幾支把兩支設成同型別，「任一支可用即可評估」的 OR 會蓋掉單邊的錯；這裡逐支拆開。
+        畫面與 84c1ca4 逐字相同（實跑）。np.True_／np.False_ 兩格同屬：只鎖現行輸出，⛔ 不代表語意背書；
+        與共用 `_finite_yoy` 一致，語意待 Z3-n3 裁定，屆時可有意識地改這兩格。"""
+        key = {"h": "_ndc_hist_cache", "li": "_ndc_li_cache"}[side]
+        fake = _FakeST()
+        r1 = _render_state(monkeypatch, h, li, _FI_FLAT, fake=fake)
+        assert r1.out == _GOLDEN_FLAT
+        assert set(r1.cached) == {key, "_fi_streak_cache"}
+        r2 = _render_state(monkeypatch, _H_FAIL, _LI_FAIL, _FI_FAIL, fake=fake)
+        assert r2.calls == {"h": int(side != "h"), "li": int(side != "li"), "fi": 0}
+        assert r2.out == _GOLDEN_FLAT
+
     @pytest.mark.parametrize("h,li,fi,cached,calls2", [
         # 景氣群只靠景氣對策那支（領先指標失敗）→ 兩個呼叫點（寫快取／登記）都只看 score_latest
         pytest.param(dict(_H_FLAT, score_latest=-0.0), _LI_FAIL, _FI_FLAT,
@@ -1011,6 +1035,8 @@ class TestC7n8FiniteUnchanged:
         "numpy_scalars": ((np.float64(-31234.5), np.int64(-4), np.float32(38.5)),
                           ("-4.0%", "38%", "-31234 口"), -31234.5),
         "negative_zero": ((-0.0, -0.0, -0.0), ("-0.0%", "-0%", "-0 口"), -0.0),
+        # 驗收補測（B 組逐 key 掃描）：+0.0（正式路徑走得到：淨口數、空多比剛好為 0）三行照送，84c1ca4 實跑
+        "positive_zero": ((0.0, 0.0, 0.0), ("+0.0%", "0%", "+0 口"), 0.0),
     }
 
     @pytest.mark.parametrize("name", sorted(_FINITE))
