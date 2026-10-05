@@ -835,7 +835,7 @@ class TestMalformedRejectedFailsLoud:
         直接掛頁面函式時只剩最先注入的樣式表、0 張卡、連「🚀 更新今日戰情」按鈕都不畫；
         在 app.py 裡被 `_render_tab_isolated` 接住，該分頁位置只剩一個紅框
         「⚠️ 「…」分頁渲染異常,已隔離(其他分頁不受影響):TypeError／IndexError…」，
-        側欄、其他分頁與頁尾照常。
+        側欄、其他不讀缺值原因的分頁與頁尾照常。
         同一份側車在 fd989ae：兩頁都照常畫完（今天頁 us10y 那張卡為紅卡；總經 v2 三層都在）。
     為什麼仍維持 fail-loud：L2 契約下走不到（L2 只寫恰 3 欄 `(str, float, str)`），
     且 `TestL2RejectedContract` 會在 CI 先擋下 L2 違約。

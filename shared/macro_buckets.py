@@ -304,7 +304,7 @@ def rejected_all_nonfinite(rec: Optional[Mapping[str, Any]]) -> bool:
         跑整支 app.py 各一次):例外一拋,該頁從那一刻起**整頁中斷** —— 直接掛頁面函式時只剩
         最先注入的樣式表、0 張卡、連「🚀 更新今日戰情」按鈕都不畫;在 app.py 裡被
         `_render_tab_isolated` 接住,該分頁位置只剩一個「分頁渲染異常,已隔離」紅框,
-        側欄、其他分頁與頁尾照常。同一份側車在 fd989ae:兩頁都照常畫完
+        側欄、其他不讀缺值原因的分頁與頁尾照常。同一份側車在 fd989ae:兩頁都照常畫完
         (今天頁 us10y 那張卡為紅卡;總經 v2 三層都在)。
     在 L2 契約下走不到:L2 `_first_sane` 寫入的每一筆都是恰 3 欄的 tuple `(str, float, str)`,
     第 2 欄是 `_num()` 轉出的 Python float(產出端契約由
