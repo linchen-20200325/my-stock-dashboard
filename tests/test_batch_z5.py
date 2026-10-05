@@ -33,10 +33,12 @@ from __future__ import annotations
 import copy
 
 import numpy as np
+import pandas as pd
 import pytest
 
 import src.data.macro.tw_macro as TW
 import src.ui.tabs.macro.handlers as H
+import src.ui.tabs.macro.section_news_ai as NEWS
 import src.ui.tabs.macro.section_state as STATE
 
 
@@ -534,6 +536,249 @@ class TestC7n1SessionReset:
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# C7-n8 —— §十一 AI 裁決 prompt
+# ══════════════════════════════════════════════════════════════════════════
+_FUT_LINE = "• 外資期貨淨口數："
+_LEEK_LINE = "• 韭菜指數（小台法人空多比）："
+_ADL_LINE = "• ADL 漲跌家數比（上漲家數佔全市場 %）："
+_FUT_TAIL = ("（單位為 TX 當量口＝大台淨口＋0.25×小台淨口，非原始口數加總；負=淨空單；"
+             "畫面燈號同一套門檻：≤-10000口 🟡 警戒、≤-20000口 🔴 危險；另有系統硬否決線："
+             "淨口 <-35000 口「且」指數同時跌破 MA5 → 強制曝險上限 30%，此線比燈號嚴屬設計）")
+_LEEK_TAIL = ("（值域 ±100%、中性 0%；>+20% 散戶偏熱、>+30% 極端過熱（頂部訊號）；"
+              "<-30% 極端悲觀（軋空動能）)")
+_ADL_TAIL = "（畫面燈號同一套門檻：≤50.0% 🟡 警戒、≤35.0% 🔴 危險）"
+
+#: 84c1ca4 實跑：三欄末列皆為 NaN 時 prompt 的三行（本批要擋掉的東西；±inf 同型，印「+inf 口」等）。
+_PRE_FIX_NAN_LINES = (
+    _LEEK_LINE + "+nan%" + _LEEK_TAIL,
+    _ADL_LINE + "nan%" + _ADL_TAIL,
+    _FUT_LINE + "+nan 口" + _FUT_TAIL,
+)
+
+#: 84c1ca4 實跑：完整 prompt（外資大小 −23456.0／韭菜指數 12.34／ad_ratio 61.7）。逐行寫死。
+_GOLDEN_PROMPT_FINITE = '\n'.join([
+    '你是一個很會「把複雜的投資資訊翻成人話」的朋友，正在幫一個完全不懂股票的人看懂下面這份「台股大盤現在的狀況」的資料。',
+    '',
+    '【講話規則 — 一定要遵守】',
+    '1. 用「跟完全不懂股票的長輩或朋友聊天解釋」的白話口吻，能講人話就不要拽詞。',
+    '2. 嚴禁專業術語裸用。若非用不可（如 殖利率、乖離、KD、折溢價、Sharpe），',
+    '   務必馬上用括號附超白話解釋，例：「殖利率（你買進後一年大概能領回幾 % 現金）」。',
+    '3. 重點不是堆數字，而是「這代表好還是壞、該開心還是擔心、要注意什麼」。',
+    '4. 不要喊「一定要買 / 保證賺 / 必漲 / 快進場」這種話。',
+    '5. 全程繁體中文，語氣親切、簡短，不要落落長。',
+    '6. 只能根據上方各節「已提供的數字」說明；**嚴禁自行虛構任何價格、代號、比率、日期或結論**。',
+    '   某項資料沒有就直說「這項沒有資料」，絕不腦補一個數字、也不編一檔沒被列出的股票（§1 反捏造）。',
+    '',
+    '下面是各章節的原始數據（都幫你算好了），請逐節用白話解讀：',
+    '',
+    '【第1節：現在市場是偏多還偏空（系統幫你下的判斷）】',
+    '{',
+    '  "market_regime": "震盪",',
+    '  "systemic_risk_level": "警告",',
+    '  "exposure_limit_pct": 60,',
+    '  "Macro_Phase": "環境正常",',
+    '  "missing_inputs": [',
+    '    "VIX_Index",',
+    '    "ISM_PMI_or_OECD_CLI",',
+    '    "PMI_Prev_Month",',
+    '    "M1B_YoY_pct",',
+    '    "M2_YoY_pct",',
+    '    "BIAS240_pct",',
+    '    "PCR"',
+    '  ]',
+    '}',
+    '',
+    '【第2節：景氣、資金、利率這些關鍵數字現在長怎樣】',
+    '• 韭菜指數（小台法人空多比）：+12.3%（值域 ±100%、中性 0%；>+20% 散戶偏熱、>+30% 極端過熱（頂部訊號）；<-30% 極端悲觀（軋空動能）)',
+    '• ADL 漲跌家數比（上漲家數佔全市場 %）：62%（畫面燈號同一套門檻：≤50.0% 🟡 警戒、≤35.0% 🔴 危險）',
+    '• 外資期貨淨口數：-23456 口（單位為 TX 當量口＝大台淨口＋0.25×小台淨口，非原始口數加總；負=淨空單；畫面燈號同一套門檻：≤-10000口 🟡 警戒、≤-20000口 🔴 危險；另有系統硬否決線：淨口 <-35000 口「且」指數同時跌破 MA5 → 強制曝險上限 30%，此線比燈號嚴屬設計）',
+    '',
+    '【第3節：熱錢動向（三角交叉：外資 × 台幣匯率 × 背離）】',
+    '（無熱錢資料）',
+    '',
+    '【第4節：拐點訊號（六大面向綜合判斷，偵測景氣反轉）】',
+    '（拐點訊號尚未計算，請先載入總經拼圖）',
+    '',
+    '【最近相關新聞 / 時事】',
+    '（無法取得新聞）',
+    '',
+    '【輸出格式 — 用 Markdown，務必逐節對應】',
+    '## 🧾 台股大盤現在的狀況｜白話總整理',
+    '',
+    '⚠️ **硬規定（缺一不可）**：以下 4 個章節**全部都要輸出**，順序與名稱完全照下方清單，',
+    '缺資料的章節也必須保留標題，並用一句話說明「為什麼缺資料 / 看不出來」，不准跳過、不准合併：',
+    '',
+    '  1. 第1節：現在市場是偏多還偏空（系統幫你下的判斷）',
+    '  2. 第2節：景氣、資金、利率這些關鍵數字現在長怎樣',
+    '  3. 第3節：熱錢動向（三角交叉：外資 × 台幣匯率 × 背離）',
+    '  4. 第4節：拐點訊號（六大面向綜合判斷，偵測景氣反轉）',
+    '',
+    '每節都用這個格式輸出（節名沿用上面的章節名稱）：',
+    '### 第N節：<章節名稱>',
+    '- 用 2~3 句白話講：這節在看什麼、現在狀況是好是壞、要開心還是擔心、要注意什麼。',
+    '',
+    '全部 4 節講完後，再加兩段：',
+    '### 📰 最近發生了什麼事（時事）',
+    '- 從上面新聞挑「跟這個標的真的有關」的 1~3 件，白話講「發生什麼、對它是好消息還壞消息」。',
+    '  若沒抓到新聞，就老實說「最近沒抓到相關新聞」，不要硬掰。',
+    '### ✅ 一句話總結',
+    '- 用一句最白話的話總結：現在大盤整體偏多還偏空、適不適合進場、最該留意什麼。',
+    '- 最後另起一行附小字：「以上只是把資料翻成白話幫你理解，不是投資建議，買賣請自己決定。」',
+])
+
+
+def _frames(fut=-23456.0, leek=12.34, adl=61.7, *, drop=(), dtype=None):
+    """`li_latest`（外資大小／韭菜指數）＋ `cl_data['adl']`（ad_ratio）；`drop` 拿掉指定欄（＝缺欄）。"""
+    li = {"外資大小": [-1000.0, fut], "韭菜指數": [5.0, leek]}
+    ad = {"ad_ratio": [50.0, adl]}
+    for _c in drop:
+        li.pop(_c, None)
+        ad.pop(_c, None)
+    li_df = pd.DataFrame(li if li else {"x": [1, 2]}, dtype=dtype)
+    ad_df = pd.DataFrame(ad if ad else {"y": [1, 2]}, dtype=dtype)
+    return li_df, ad_df
+
+
+def _run_news(mp, li_df, adl_df) -> dict:
+    """§十一：按下「🔒 執行 AI 裁決」→ 攔下送 Gemini 的 prompt、規則引擎的輸入與輸出、鎖定的狀態。"""
+    import src.data.news as N
+    import src.services.app_ai_service as A
+    from src.services.macro_state_locker import calculate_system_state as _real_calc
+    ss = {"li_latest": li_df, "cl_data": ({"adl": adl_df} if adl_df is not None else {})}
+    fake = _FakeST(ss, clicked={"btn_run_verdict"})
+    seen: dict = {"prompts": [], "numbers": [], "states": [], "locked": []}
+
+    class _Locker:                       # 不寫 macro_state.json
+        def lock_system_state_only(self, state):
+            seen["locked"].append(state)
+
+    def _spy_calc(nums):                 # 只記錄、原樣交給 L3 本尊
+        seen["numbers"].append(dict(nums))
+        out = _real_calc(nums)
+        seen["states"].append(out)
+        return out
+
+    mp.setattr(NEWS, "st", fake)
+    mp.setattr(NEWS, "render_macro_bucket_summary_bar", lambda *a, **k: None)
+    mp.setattr(NEWS, "MacroStateLocker", _Locker)
+    mp.setattr(NEWS, "calculate_system_state", _spy_calc)
+    mp.setattr(A, "gemini_call",
+               lambda p, max_tokens=2048: seen["prompts"].append(p) or "（測試替身報告）")
+    mp.setattr(N, "fetch_macro_news", lambda *a, **k: [])
+    with pytest.raises(_Rerun):
+        NEWS.render_section_news_ai({}, "unknown")
+    assert len(seen["prompts"]) == 1, "沒有走到 Gemini 替身"
+    seen["prompt"] = seen["prompts"][0]
+    seen["lines"] = [ln for ln in seen["prompt"].splitlines()
+                     if ln.startswith((_FUT_LINE, _LEEK_LINE, _ADL_LINE))]
+    return seen
+
+
+#: 欄位 → (被拿掉的欄名, 那一行的開頭)
+_FIELDS = {"fut": ("外資大小", _FUT_LINE), "leek": ("韭菜指數", _LEEK_LINE),
+           "adl": ("ad_ratio", _ADL_LINE)}
+
+#: 非有限（或轉不成有限 float）的值 —— 修後一律當缺
+_BAD = {
+    "nan": float("nan"),
+    "pos_inf": float("inf"),
+    "neg_inf": float("-inf"),
+    "np_float64_nan": np.float64("nan"),
+    "np_float32_nan": np.float32("nan"),
+    "np_float64_inf": np.float64("inf"),
+    "str_nan": "nan",
+    "str_inf": "inf",
+    "str_neg_infinity": "-Infinity",
+    "str_overflow": "1e400",
+    "huge_int": 10 ** 400,               # 84c1ca4：float() 拋 OverflowError，整個裁決流程崩潰
+}
+
+
+class TestC7n8NonFiniteDropsTheLine:
+
+    def test_all_three_nan(self, monkeypatch):
+        """修前：三行各印「+nan%」「nan%」「+nan 口」（`_PRE_FIX_NAN_LINES`）。"""
+        nan = float("nan")
+        seen = _run_news(monkeypatch, *_frames(nan, nan, nan))
+        assert seen["lines"] == []
+        assert not any(ln in seen["prompt"] for ln in _PRE_FIX_NAN_LINES)
+        assert seen["numbers"][0]["Futures_Net_Short"] is None
+        absent = _run_news(monkeypatch, *_frames(drop=("外資大小", "韭菜指數", "ad_ratio")))
+        assert seen["prompt"] == absent["prompt"]       # ＝三欄都缺的既有輸出（整行不送）
+        assert seen["states"] == absent["states"] and seen["locked"] == absent["locked"]
+
+    @pytest.mark.parametrize("bad", sorted(_BAD))
+    @pytest.mark.parametrize("field", sorted(_FIELDS))
+    def test_one_field_non_finite(self, field, bad, monkeypatch):
+        vals = {"fut": -23456.0, "leek": 12.34, "adl": 61.7}
+        vals[field] = _BAD[bad]
+        seen = _run_news(monkeypatch, *_frames(**vals, dtype=object))
+        col, head = _FIELDS[field]
+        assert not any(ln.startswith(head) for ln in seen["lines"]), seen["lines"]
+        for ln in seen["lines"]:
+            assert "nan" not in ln and "inf" not in ln, ln
+        # 其餘兩行與 84c1ca4 逐字相同；整份 prompt ＝ 該欄不存在時的 prompt（既有缺值路徑）
+        golden = [ln for ln in _GOLDEN_PROMPT_FINITE.splitlines()
+                  if ln.startswith((_FUT_LINE, _LEEK_LINE, _ADL_LINE)) and not ln.startswith(head)]
+        assert seen["lines"] == golden
+        absent = _run_news(monkeypatch, *_frames(drop=(col,)))
+        assert seen["prompt"] == absent["prompt"]
+        assert seen["states"] == absent["states"] and seen["locked"] == absent["locked"]
+        if field == "fut":
+            assert seen["numbers"][0]["Futures_Net_Short"] is None
+
+    def test_engine_output_same_as_missing(self, monkeypatch):
+        """規則引擎本來就把 NaN 當缺：送 None 與修前送 NaN 的引擎輸出相同（含 missing_inputs）。"""
+        from src.services.macro_state_locker import calculate_system_state as calc
+        seen = _run_news(monkeypatch, *_frames(fut=float("nan")))
+        as_nan = dict(seen["numbers"][0], Futures_Net_Short=float("nan"))
+        assert calc(as_nan) == seen["states"][0]
+        assert "Futures_Net_Short" in seen["states"][0]["missing_inputs"]
+
+
+class TestC7n8FiniteUnchanged:
+
+    def test_full_prompt_matches_golden(self, monkeypatch):
+        seen = _run_news(monkeypatch, *_frames())
+        assert seen["prompt"] == _GOLDEN_PROMPT_FINITE
+        assert seen["numbers"][0]["Futures_Net_Short"] == -23456.0
+
+    #: 84c1ca4 實跑：(外資大小, 韭菜指數, ad_ratio) → 三行的數字部分（各行尾句同 `_*_TAIL`）
+    _FINITE = {
+        "floats": ((-23456.0, 12.34, 61.7), ("+12.3%", "62%", "-23456 口"), -23456.0),
+        "object_ints": ((-15000, -7, 44), ("-7.0%", "44%", "-15000 口"), -15000.0),
+        "numeric_strings": (("-12000", "8.5", "47.2"), ("+8.5%", "47%", "-12000 口"), -12000.0),
+        "numpy_scalars": ((np.float64(-31234.5), np.int64(-4), np.float32(38.5)),
+                          ("-4.0%", "38%", "-31234 口"), -31234.5),
+        "negative_zero": ((-0.0, -0.0, -0.0), ("-0.0%", "-0%", "-0 口"), -0.0),
+    }
+
+    @pytest.mark.parametrize("name", sorted(_FINITE))
+    def test_finite_lines_match_golden(self, name, monkeypatch):
+        (fut, leek, adl), (leek_s, adl_s, fut_s), fut_in = self._FINITE[name]
+        seen = _run_news(monkeypatch, *_frames(fut, leek, adl, dtype=object))
+        assert seen["lines"] == [_LEEK_LINE + leek_s + _LEEK_TAIL,
+                                 _ADL_LINE + adl_s + _ADL_TAIL,
+                                 _FUT_LINE + fut_s + _FUT_TAIL]
+        assert seen["numbers"][0]["Futures_Net_Short"] == fut_in
+
+    @pytest.mark.parametrize("li_df,adl_df", [
+        pytest.param(None, None, id="no-li-latest-no-adl"),
+        pytest.param(pd.DataFrame({"x": [1, 2]}), pd.DataFrame({"y": [1, 2]}), id="columns-absent"),
+        pytest.param(pd.DataFrame({"外資大小": [1.0, None], "韭菜指數": [1.0, None]}, dtype=object),
+                     pd.DataFrame({"ad_ratio": [1.0, None]}, dtype=object), id="none-values"),
+        pytest.param(*_frames("-", "-", "-", dtype=object), id="dash-strings"),
+        pytest.param(pd.DataFrame({"外資大小": [], "韭菜指數": []}),
+                     pd.DataFrame({"ad_ratio": []}), id="empty-frames"),
+    ])
+    def test_missing_stays_missing(self, li_df, adl_df, monkeypatch):
+        """84c1ca4 在這幾種缺值本來就整行不送（實跑三行皆無）—— 修後不變。"""
+        seen = _run_news(monkeypatch, li_df, adl_df)
+        assert seen["lines"] == []
+        assert seen["numbers"][0]["Futures_Net_Short"] is None
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # slow lane —— 真 Streamlit（AppTest）
 # ══════════════════════════════════════════════════════════════════════════
 def _app(body: str):
@@ -596,3 +841,31 @@ class TestRealStreamlitZ5:
         at.run()
         _app_ok(at)
         assert calls == {"h": 2, "li": 2, "fi": 2}
+
+    def test_news_nan_real_click(self, monkeypatch):
+        import src.data.news as N
+        import src.services.app_ai_service as A
+        prompts: list = []
+
+        class _Locker:
+            def lock_system_state_only(self, state):
+                pass
+        monkeypatch.setattr(A, "gemini_call",
+                            lambda p, max_tokens=2048: prompts.append(p) or "（替身）")
+        monkeypatch.setattr(N, "fetch_macro_news", lambda *a, **k: [])
+        monkeypatch.setattr(NEWS, "MacroStateLocker", _Locker)
+        at = _app(
+            "import pandas as pd\n"
+            "st.session_state['li_latest'] = pd.DataFrame("
+            "{'外資大小': [-1000.0, float('nan')], '韭菜指數': [5.0, float('inf')]})\n"
+            "st.session_state['cl_data'] = {'adl': pd.DataFrame({'ad_ratio': [50.0, float('-inf')]})}\n"
+            "from src.ui.tabs.macro.section_news_ai import render_section_news_ai\n"
+            "render_section_news_ai({}, 'unknown')\n")
+        at.run()
+        _app_ok(at)
+        at.button(key="btn_run_verdict").click().run()
+        _app_ok(at)
+        assert len(prompts) == 1, "真按鈕沒有走到 Gemini 替身"
+        assert not any(ln.startswith((_FUT_LINE, _LEEK_LINE, _ADL_LINE))
+                       for ln in prompts[0].splitlines())
+        assert "+nan" not in prompts[0] and "inf%" not in prompts[0] and "inf 口" not in prompts[0]

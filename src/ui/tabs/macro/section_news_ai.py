@@ -107,6 +107,18 @@ def _asof(_d: dict) -> str:
     return f'資料月份 {_v}' if _v else '資料月份不明'
 
 
+def _finite_or_none(_v):
+    """C7-n8（§1：nan 不是一個數）：有限 float → 原值；None／NaN／±inf → None。
+
+    修前 `外資大小`／`韭菜指數`／`ad_ratio` 末列為 NaN（或 ±inf）時，`float(...)` 照樣成功、
+    `is not None` 擋不住 → prompt 印「外資期貨淨口數：+nan 口」「韭菜指數…：+nan%」
+    「ADL…：nan%」。改成 None 之後走各行既有的「缺值整行不送」路徑（先例 DL-f1-s16）。
+    只收本檔 `float(...)` 轉出來的值或 None；有限值回同一物件（輸出逐字不變）。
+    有限值判斷沿用 `_finite_yoy`（DL-f1-s16：本檔不另寫一份有限值判斷）。
+    """
+    return _finite_yoy({'value': _v}, 'value')
+
+
 def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
     """渲染§十一 News AI 總裁決區(原 tab_macro line 4227-4521)。"""
     # F2(2026-08):原 `from app import gemini_call` —— 舊註解寫「lazy import,避
@@ -203,8 +215,13 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 if _li_d is not None and not _li_d.empty and '外資大小' in _li_d.columns:
                     try:
                         _fut_net_v = float(_li_d.iloc[-1].get('外資大小', 0))
-                    except (ValueError, TypeError):
+                    # C7-n8：OverflowError（超大整數轉不成 float）視同非有限 ⇒ None
+                    #   （比照批 Y2〔X2-n2〕規則引擎 `_is_finite_number` 的先例）。
+                    except (ValueError, TypeError, OverflowError):
                         pass
+                # C7-n8：NaN／±inf → None ⇒ 下方 prompt 那一行不送；規則引擎本來就把非有限值當缺
+                #   （`_is_finite_number` ⇒ 同列 `missing_inputs`），引擎輸出與送 NaN 時相同。
+                _fut_net_v = _finite_or_none(_fut_net_v)
                 # 指數是否跌破 MA5（從 mkt_info 取得）
                 _mkt_d = st.session_state.get('mkt_info') or {}
                 _below_ma5 = bool(_mkt_d.get('index_below_ma5', False))
@@ -269,14 +286,16 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 if _adl_v is not None and not _adl_v.empty and 'ad_ratio' in _adl_v.columns:
                     try:
                         _adl_ratio_v = float(_adl_v['ad_ratio'].iloc[-1])
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError, OverflowError):   # C7-n8：同上
                         pass
+                _adl_ratio_v = _finite_or_none(_adl_ratio_v)   # C7-n8：NaN／±inf → 該行不送
                 _leek_v2 = None
                 if _li_d is not None and not _li_d.empty and '韭菜指數' in _li_d.columns:
                     try:
                         _leek_v2 = float(_li_d.iloc[-1].get('韭菜指數', None))
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError, OverflowError):   # C7-n8：同上
                         pass
+                _leek_v2 = _finite_or_none(_leek_v2)   # C7-n8：NaN／±inf → 該行不送
                 _ctx = []
                 if _bi_d.get('bias_240') is not None:
                     # v19.178:原「>15%偏貴、<-10%低估」為 prompt 內寫死,與五桶 SSOT
