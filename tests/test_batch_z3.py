@@ -11,8 +11,17 @@
   唯一消費端 v1 `section_warroom`：讀 `Bias_240` 前的守衛用 `_finite_yoy`（只排除 Python bool，numpy bool
   會過），引擎則把 numpy bool 判無效 —— 📌 驗收阻擋 1 更正：原句「只在價與年線為有限正數時才讀」不實
   （單邊 np.True_ 會讀到 None 而崩），warroom 已另判 `Bias_240 is not None`。對拍範圍：價／年線不是
-  numpy bool 的缺值與正常形狀，渲染與修前相同；單邊 numpy bool 改走價／年線缺值路徑（有意識的變更，
-  fd989ae 是把 np.True_ 當 1 印假乖離）。
+  numpy bool 的缺值與正常形狀，渲染與修前相同（修前就拋例外的非數字字串／超大 int 除外 —— 改走
+  bias_info 為空的既有路徑，見 test_pre_fix_raised_now_renders_empty_path）。numpy bool（📌 重驗更正：
+  原句「單邊 numpy bool 改走價／年線缺值路徑（…fd989ae 是把 np.True_ 當 1 印假乖離）」不精確 ——
+  np.False_ 那半不變，印假乖離只在另一邊是有限正數時成立）：價給 np.True_、年線給有限正數，或反過來
+  → fd989ae 把 np.True_ 當 1 印假乖離；價給 np.True_、年線缺值／0／np.False_／np.True_／Python True，
+  或價給 Python True、年線給 np.True_ → fd989ae 在引擎相減拋 TypeError、整個作戰室崩潰（缺值／0／
+  np.False_ 經作戰室 `or 0` 換 0，引擎再把年線的 0 換成價 np.True_）；兩類修後都改走價／年線缺值路徑、
+  不崩（有意識的變更）。單邊 np.False_，或年線給 np.True_ 而價缺值：fd989ae 就不讀（守衛 `> 0` 或
+  `is not None` 不成立），不變（見 TestWarroomNumpyBool）。
+  📌 驗收（重驗）：正常形狀的「📐 年線位階參考」另以 fd989ae 實跑結果寫死（TestWarroomV4HintGolden，
+  含乖離 +0.0 的三例），不再只靠同一份 warroom 換引擎的相對比對。
 - V1-n2（L5 v1）`section_mid`：VIX 為負（實跑 −5）印「✅ 市場平靜」「平靜期 🟢」「A VIX=-5.0<20 ✅」、
   否決權收到 −5。總管決定 VIX ≤ 0（定義上不可能）視同非有限值 —— 在 §八 自己取 VIX 的 `_vcur8_v` 處理，
   由它取值的 KPI「待取得」、基本面否決檢查「VIX待取得」、§八 否決權那句、三環「A VIX未知」、
@@ -20,8 +29,10 @@
   過寬 —— 本頁另有 §三 `read_v4_macro_veto()` 與頂部總經警示看板（L1，正式載入才出現）自行讀 VIX，
   不在上述清單內：前者供 §八 跨區揭露框如實列出 §三 那盞燈的實際狀態與它看的 VIX（總管改判，撤回
   db7b2e2「驗收阻擋 2」的閘門 —— §三 判得出燈時，「§三 因 VIX 未取得而無法判定」反而是假話；
-  揭露框與 fd989ae 相同，下方以真函式對寫死的 golden 驗）；§三 收下無效 VIX 屬 section_chips、
-  不在本批範圍，總管另登記為新項。後者屬 L1、總管另登記為已知限制。
+  §八 其餘欄位有值時揭露框與 fd989ae 相同，下方以真函式對寫死的 golden 驗；例外：只有 VIX 一項且
+  無效、其餘皆缺時，§八 不可評估（3-4 的連帶結果），揭露框的比對句與缺值句都不出，等於 fd989ae 在
+  VIX=None 同情境的輸出（皆無；見 TestV1CrossDisclosureOnlyVix））；§三 收下無效 VIX 屬
+  section_chips、不在本批範圍，總管另登記為新項。後者屬 L1、總管另登記為已知限制。
 - V1-n5（同檔）：VIX「有值但無效」（非有限或 ≤ 0；含非數值）時，§八 那句原寫「VIX 數據載入中，VIX 否決權
   暫無法判斷」—— 值明明到了，「載入中」是假的。只在此時於子句界純刪「VIX 數據載入中，」；
   真的沒值（None／缺鍵）原句一字不變。界定（驗收阻擋 3-8，總管確認）：只有 None 與缺鍵＝真的沒值；
@@ -34,6 +45,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 import struct
 import types
 import warnings
@@ -478,6 +490,14 @@ _WR_NPBOOL = [pytest.param(b, m, id=i) for b, m, i in (
     ({'bias_240': 3.0, 'price': np.True_, 'ma240': 16000.0, 'is_estimated': True, 'data_days': 90},
      {'bias_240': 3.0, 'price': None, 'ma240': 16000.0, 'is_estimated': True, 'data_days': 90},
      'estimated-price-np.True_'),
+    # 重驗更正：下列 fd989ae 整個作戰室崩潰（見 test_pre_fix_crashed），修後同樣走缺值路徑
+    ({'price': np.True_}, {'price': None}, 'price-np.True_-ma-absent'),
+    ({'price': np.True_, 'ma240': None}, {'price': None, 'ma240': None}, 'price-np.True_-ma-None'),
+    ({'price': np.True_, 'ma240': 0.0}, {'price': None, 'ma240': 0.0}, 'price-np.True_-ma-0'),
+    ({'price': np.True_, 'ma240': np.False_}, {'price': None, 'ma240': np.False_},
+     'price-np.True_-ma-np.False_'),
+    ({'price': np.True_, 'ma240': True}, {'price': None, 'ma240': True}, 'price-np.True_-ma-True'),
+    ({'price': True, 'ma240': np.True_}, {'price': None, 'ma240': np.True_}, 'price-True-ma-np.True_'),
 )]
 
 
@@ -501,8 +521,27 @@ class TestWarroomNumpyBool:
                                       {'price': 20000.0, 'ma240': np.True_}])
     def test_pre_fix_printed_fake_bias(self, bias, monkeypatch):
         # fd989ae 不崩，而是把 np.True_ 當 1 印假乖離 —— 改走缺值路徑是有意識的變更
+        # （只在另一邊是有限正數時如此；另一邊不是時見 test_pre_fix_crashed）
         out = '\n'.join(_wr(bias, monkeypatch, _V4_PRE))
         assert '📐 年線位階參考：年線乖離 ' in out
+
+    @pytest.mark.parametrize('bias', [
+        {'price': np.True_}, {'price': np.True_, 'ma240': None}, {'price': np.True_, 'ma240': 0.0},
+        {'price': np.True_, 'ma240': np.False_}, {'price': np.True_, 'ma240': np.True_},
+        {'price': np.True_, 'ma240': True}, {'price': True, 'ma240': np.True_}], ids=repr)
+    def test_pre_fix_crashed(self, bias, monkeypatch):
+        # 重驗更正：另一邊不是有限正數時，fd989ae 不是印假乖離，而是在引擎相減拋 TypeError
+        # （置換後兩邊都是布林、至少一邊 numpy bool）—— 整個作戰室崩潰；修後見 _WR_NPBOOL
+        with pytest.raises(TypeError, match='numpy boolean subtract'):
+            _wr(bias, monkeypatch, _V4_PRE)
+
+    @pytest.mark.parametrize('fut', [0, -40000])
+    @pytest.mark.parametrize('bias', [
+        {'price': np.False_, 'ma240': 16000.0}, {'price': 20000.0, 'ma240': np.False_},
+        {'ma240': np.True_}, {'price': None, 'ma240': np.True_}], ids=repr)
+    def test_unchanged_vs_fd989ae(self, bias, fut, monkeypatch):
+        # 單邊 np.False_，或年線 np.True_ 而價缺值：fd989ae 就不讀 Bias_240 —— 修後渲染逐字相同
+        assert _wr(bias, monkeypatch, _V4, fut) == _wr(bias, monkeypatch, _V4_PRE, fut)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -527,6 +566,39 @@ _MID_REVERT = (
      "                    else 'VIX 數據載入中，VIX 否決權暫無法判斷')\n",
      "            st.info('VIX 數據載入中，VIX 否決權暫無法判斷')\n"),
 )
+
+
+# ── 驗收（重驗）阻擋 1：warroom 正常形狀的「📐 年線位階參考」以 fd989ae 實跑結果寫死 ───────────
+# 前面的 warroom 測試都是同一份 warroom 程式換引擎／輸入的相對比對 —— 守衛被改成判真值
+# （`and _v4.get('Bias_240')`）時，乖離四捨五入成 0.0 的「年線乖離 +0.0%」那段會消失（沒有外資避險
+# 片段時整行消失；有時只剩「外資期貨避險」），相對比對抓不到。
+# 這裡改釘絕對字串（fd989ae 實跑後凍結於本檔，不讀 git）。⛔ 不釘「-0.0%」（價略低於年線時
+# fd989ae 起就印 -0.0% 的負零顯示，屬範圍外、總管另登記）。
+_WR_V4_DIV = '<div style="font-size:11px;color:#8b949e;margin-top:4px;">📐 年線位階參考：{}</div>'
+_WR_V4_GOLDEN = [pytest.param(b, f, h, id=i) for b, f, h, i in (
+    ({'bias_240': 25.0, 'bias_20': 12.0, 'price': 20000.0, 'ma240': 16000.0, 'data_days': 300,
+      'is_estimated': False}, 0, '年線乖離 +25.0%｜乖離過熱', 'overheated'),
+    ({'price': 15000.0, 'ma240': 16000.0}, 0, '年線乖離 -6.2%｜股價在年線下', 'below-ma'),
+    ({'price': 20000.0, 'ma240': 19000.0}, -40000, '年線乖離 +5.3%｜外資期貨避險', 'bull-hedging'),
+    # 乖離 +0.0 的三例（總管要求的兩例：價＝年線、資料 1 天估算；另加與外資避險並存的一例）
+    ({'price': 16000.0, 'ma240': 16000.0}, 0, '年線乖離 +0.0%', 'zero-bias-price-eq-ma'),
+    ({'price': 16500.0, 'ma240': 16500.0, 'bias_240': 0.0, 'bias_20': 0.0, 'data_days': 1,
+      'is_estimated': True}, 0, '年線乖離 +0.0%（估算）', 'zero-bias-1day-estimated'),
+    ({'price': 16000.0, 'ma240': 16000.0}, -40000, '年線乖離 +0.0%｜外資期貨避險', 'zero-bias-hedging'),
+    ({'ma240': 16000.0}, -40000, '外資期貨避險', 'price-missing-hedging'),
+    ({}, 0, None, 'empty'),
+)]
+
+
+class TestWarroomV4HintGolden:
+    @pytest.mark.parametrize('bias,fut,hint', _WR_V4_GOLDEN)
+    def test_v4_hint_line_matches_fd989ae(self, bias, fut, hint, monkeypatch):
+        joined = '\n'.join(_wr(bias, monkeypatch, _V4, fut))
+        if hint is None:
+            assert '📐 年線位階參考' not in joined
+        else:
+            assert _WR_V4_DIV.format(hint) in joined, re.findall(r'📐 年線位階參考：[^<]*', joined)
+            assert joined.count('📐 年線位階參考') == 1
 
 
 class _FakeSTFig(_FakeST):
@@ -894,3 +966,29 @@ class TestV1CrossDisclosureOnlyVix:
         # 前提：揭露框不出是因 §八 不可評估，不是 §三 判不出 —— §三 照樣拿 −5 判出 🔴 燈
         _out, light = _run_mid_real_v4(_mod("mid"), {"current": -5}, monkeypatch, base={})
         assert light is not None and light["_vix"] == -5.0 and light["status"].startswith("🔴")
+
+
+# ── 驗收（重驗）：極小正 VIX 仍是有效值 —— 不依賴 mid_pre，以 fd989ae 實跑結果寫死 ───────────────
+# 原本只靠 mid_pre 字面比對＋單一參數 5e-324 擋「下限 `<= 0` 改 `<= 1e-300`」這類突變。
+# 這裡直接斷言走有效路徑、輸出（圖標題、§八 結論、三環徽章、否決權參數、基本面檢查句）與 fd989ae 相同。
+_TINY_VIX_GOLDEN = [pytest.param(v, t, id=repr(v)) for v, t in (
+    (5e-324, 'VIX 恐慌指數 5e-324（MA20=17.5）— ✅ 市場平靜'),
+    (2.2250738585072014e-308, 'VIX 恐慌指數 2.2250738585072014e-308（MA20=17.5）— ✅ 市場平靜'),
+    (1e-300, 'VIX 恐慌指數 1e-300（MA20=17.5）— ✅ 市場平靜'),
+    (1e-9, 'VIX 恐慌指數 1e-09（MA20=17.5）— ✅ 市場平靜'),
+)]
+
+
+class TestV1TinyPositiveVixGolden:
+    @pytest.mark.parametrize('v,title', _TINY_VIX_GOLDEN)
+    def test_valid_path_matches_fd989ae(self, v, title, monkeypatch):
+        out, calls = _run_mid_raw(_mod('mid'), _node(v), monkeypatch)
+        texts = [t for _k, t in out]
+        joined = '\n'.join(texts)
+        assert ('plotly_chart', title) in out                               # 走勢圖照畫、燈義照舊
+        assert 'VIX 0.0 < 20（平靜期）' in joined
+        assert '🟢 全球風險情緒穩定，未觸發 VIX 否決權。回歸個股籌碼面與基本面操作。' in joined
+        assert 'A VIX=0.0<20' in joined and 'A VIX未知' not in joined
+        assert len(calls) == 1 and type(calls[0][0]) is float and calls[0][0].hex() == float(v).hex()
+        assert ('success', f'✅ {VETO_FUNDAMENTAL_NAME}：無觸發 — 景氣／通膨／外需面無系統性風險訊號') in out
+        assert not any(t in (_INVALID, _LOADING) for t in texts)

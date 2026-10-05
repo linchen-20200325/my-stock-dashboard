@@ -58,14 +58,24 @@ def _recent_date(fmt: str = "%Y%m%d"):
 def _is_finite_positive(x) -> bool:
     """價／年線可用 ⇔ 有限正實數(批 Z3,V2-n1)。
 
-    None／0／負／NaN／±inf／字串(含數字字串)／bool(含 numpy bool)／轉 float 溢位的超大 int
+    None／0／負／NaN／±inf／字串(含數字字串)／bool(含 numpy bool 純量)／轉 float 溢位的超大 int
     ／複數(含 numpy complex 與 complex 陣列)→ False。判法參照 v1 唯一消費端 `section_warroom`
     判「可讀」所用的 `section_long._finite_yoy`(先排除 None／bool,再 `math.isfinite`),外加 > 0;
     差別是本函式連 numpy bool 與複數也排除,`_finite_yoy` 只排除 Python bool
     ⇒ 消費端讀 `Bias_240` 前須自行判 None(section_warroom 已加)。
-    ⚠️ 更正(批 Z3 驗收阻擋 1):原句「(numpy bool)修前它在算式裡就拋 TypeError」不實 —— fd989ae
-    只有價與年線「兩邊都是」numpy bool 才拋(numpy bool 不支援相減);單邊時是把 np.True_ 當 1、
-    np.False_ 經 `or` 換成 1.0,算出假乖離。
+    ⚠️ 未排除:0 維布林陣列 `np.array(True)` —— `math.isfinite` 與 `> 0` 都放行 ⇒ 另一邊合格時當 1
+    參與運算;價與年線都是它時在相減拋 TypeError(與 fd989ae 同)。批 Z3 重驗時發現、已回報總管;
+    該輪正式碼只准改 docstring,未修。
+    ⚠️ 更正(批 Z3 驗收,兩度):原句「(numpy bool)修前它在算式裡就拋 TypeError」不實;第一次更正
+    『只有價與年線「兩邊都是」numpy bool 才拋…單邊時是把 np.True_ 當 1、np.False_ 經 `or` 換成 1.0,
+    算出假乖離』也不精確。fd989ae 實跑:先經 `or` 置換 —— 價是假值(含 np.False_)→ 1.0;年線是假值
+    (含 np.False_)→ 置換後的價;np.True_ 是真值,不置換。numpy bool 引起的 TypeError(numpy bool
+    不支援相減)只在置換後兩邊「都是布林(Python bool／numpy bool／0 維布林陣列)、且至少一邊是 numpy
+    型別」時發生 —— 兩邊都給 numpy bool 的四種組合只有 (np.True_, np.True_)、(np.True_, np.False_) 拋;
+    單邊也會拋:價給 np.True_、年線給 None／0／False／'' 等假值(被換成 np.True_)或 Python True,
+    以及 (True, np.True_)。下列照算(np.True_ 當 1 參與運算,np.False_ 依上述置換):(np.False_,
+    np.False_)、(np.False_, np.True_)、(20000, np.False_) 得乖離 0.0、判「🟢 強勢多頭」;
+    (np.True_, 16000)、(np.False_, 16000) 得 -99.99;(20000, np.True_) 得 1999900.0。
     📌 批 Z3 驗收阻擋 3-7:複數不是實數 —— numpy complex 會讓 `math.isfinite` 丟掉虛部放行
     (只發 ComplexWarning),接著在 `round()` 拋 TypeError;依規格「不是有限正實數 → None、不拋」先行排除。
     只判斷、不轉型:合格時引擎照舊拿原物件計算 ⇒ 輸出逐位不變(Decimal 亦照舊,含修前就會拋的組合)。
