@@ -84,7 +84,7 @@
 
 【分支】
 - main
-- HANDOFF：claude/stock-dashboard-handoff-g9dtm0（最新 commit 用 git log -1 origin/claude/stock-dashboard-handoff-g9dtm0 查；前一筆＝124a5b7；commit 無法含自己的 SHA，故不寫本筆）
+- HANDOFF：claude/stock-dashboard-handoff-g9dtm0（最新 commit 用 git log -1 origin/claude/stock-dashboard-handoff-g9dtm0 查，前一筆用 git log -2 origin/claude/stock-dashboard-handoff-g9dtm0 查；commit 無法含自己的 SHA，故不寫死）
 - 指定開發分支：claude/stock-dashboard-handoff-0f4u8s
 - 目前批次：無（wip/batch-z2 已隨 #789 合併刪除）
 
