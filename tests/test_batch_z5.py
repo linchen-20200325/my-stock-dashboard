@@ -388,6 +388,15 @@ class TestC7n1FailureIsUnevaluated:
         assert "⚪ 訊號分歧：偏多 1 群 vs 偏空 1 群（可評估 2/6 群），方向待確認" in r.text
         assert "_ndc_hist_cache" not in r.cached
 
+    def test_chips_still_evaluable_from_leading_indicators(self, monkeypatch):
+        """籌碼群另有先行指標（`li_latest` 的外資期貨／韭菜）時，外資連續失敗不影響籌碼群 ——
+        只擋「面板 6 自己沒資料」，⛔ 把整群打成未評估（實跑：fi 失敗那格與 84c1ca4 逐字相同）。"""
+        li = pd.DataFrame({"外資大小": [-1000.0, 5000.0], "韭菜指數": [1.0, 0.0]})   # 不觸發訊號
+        r = _render_state(monkeypatch, _H_FLAT, _LI_FLAT, _FI_FAIL, ss={"li_latest": li})
+        assert r.out == _GOLDEN_FLAT
+        r = _render_state(monkeypatch, _H_FAIL, _LI_FAIL, _FI_FAIL, ss={"li_latest": li})
+        assert r.out == _expected_flat(chips_ok=True, cycle_ok=False)
+
 
 class TestC7n1RealL1FailureShape:
     """不替換 fetcher，只把 L1 的 `fetch_url` 換成「無回應」—— 三支真的 L1 函式自己產生失敗 dict。"""
