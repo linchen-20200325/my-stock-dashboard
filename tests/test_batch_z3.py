@@ -81,6 +81,13 @@ _INF_LIKE = [
     pytest.param(np.inf, id='np.inf'), pytest.param(-np.inf, id='-np.inf'),
     pytest.param(np.float32('inf'), id='np.float32-inf'),
     pytest.param(Decimal('-Infinity'), id='Decimal--Infinity'),
+    # 📌 驗收阻擋 3-2：float() 溢位成 ±inf（不是 OverflowError）的形狀 —— 只比對 'inf' 字樣的擋法會漏
+    pytest.param('1e400', id='str-1e400'), pytest.param('-1e400', id='str--1e400'),
+    pytest.param('1e309', id='str-1e309'),
+    pytest.param(Decimal('1e400'), id='Decimal-1e400'), pytest.param(Decimal('-1e400'), id='Decimal--1e400'),
+    pytest.param(b'inf', id='bytes-inf'), pytest.param(b'-inf', id='bytes--inf'),
+    pytest.param(b'1e400', id='bytes-1e400'), pytest.param(bytearray(b'inf'), id='bytearray-inf'),
+    pytest.param(np.longdouble('1e400'), id='longdouble-1e400'),
 ]
 _MISSING_ALREADY = [   # 修前就回 None 的形狀：照舊
     pytest.param(None, id='None'), pytest.param(math.nan, id='nan'), pytest.param('nan', id='str-nan'),
@@ -135,6 +142,8 @@ _INF_VALUES = [
     pytest.param(math.inf, id='+inf'), pytest.param(-math.inf, id='-inf'),
     pytest.param('inf', id='str-inf'), pytest.param('-Infinity', id='str--Infinity'),
     pytest.param(np.inf, id='np.inf'), pytest.param(np.float64('-inf'), id='np.-inf'),
+    pytest.param('1e400', id='str-1e400'), pytest.param(Decimal('-1e400'), id='Decimal--1e400'),
+    pytest.param(b'inf', id='bytes-inf'),
 ]
 
 
