@@ -435,7 +435,12 @@ class TestD4n2MacroV2:
     @pytest.mark.parametrize("name", sorted(SCENARIOS))
     def test_detail_reason_text(self, name):
         from src.ui.tabs import tab_macro_v2 as TV
-        row = {r.key: r for r in TV.build_rows(_readiness(**SCENARIOS[name]))}["us10y"]
+        # 批 Z4 追補【4】D-M28：另給一筆融資（discriminative=False ⇒ 「已失準」列）；
+        #   只加在 cl_data 的 `margin` 格，⛔ 不影響 us10y 那一列的任何一源。
+        _kw = {**SCENARIOS[name],
+               "cl_data": {**SCENARIOS[name].get("cl_data", {}), "margin": 3000.0}}
+        rows = {r.key: r for r in TV.build_rows(_readiness(**_kw))}
+        row = rows["us10y"]
         assert (row.state, row.band, row.value) == ("missing", "gray", None)
         if NONFINITE_ONLY[name]:
             assert row.reason == MISSING_NO_VALUE
@@ -443,6 +448,21 @@ class TestD4n2MacroV2:
         else:
             assert row.reason == MISSING_OUT_OF_RANGE
             assert TV._REASON_TXT[row.reason] == _V2_OOR_TXT
+        # 批 Z4 追補【4】D-M28（QA B 組）：運作中／已失準的列 `Row.reason` 一律 None（⛔ 不得補成 no_value）
+        assert rows["vix"].state == "live" and rows["margin"].state == "degraded"
+        _shown = [r for r in rows.values() if r.state in ("live", "degraded")]
+        assert all(r.reason is None for r in _shown), [(r.key, r.reason) for r in _shown]
+
+    def test_live_row_with_out_of_range_sidecar_pins_current_reason(self):
+        """批 Z4 追補【4】D-M22（QA B 組）：側車「state=ok 有值」卻同時帶 out_of_range＋全非有限
+        rejected（L2 契約下不會發生：命中時 `_rec(state="ok")` 不寫 reason）—— 釘住現行輸出：
+        列照常判燈（live），`Row.reason` 照樣經 L0 共用判斷讀成 no_value（⛔ 不看列狀態）。"""
+        from src.ui.tabs import tab_macro_v2 as TV
+        rec = {**_ok_rec(SPECS_BY_KEY["vix"]), "value": 25.0, "reason": MISSING_OUT_OF_RANGE,
+               "rejected": [("源0", NAN, _WHY_NONFINITE)]}
+        row = {r.key: r for r in TV.build_rows({"vix": rec})}["vix"]
+        assert (row.state, row.value, row.band) == ("live", 25.0, "yellow")
+        assert row.reason == MISSING_NO_VALUE
 
     @pytest.mark.parametrize("nonfinite", [True, False])
     def test_render_detail_info_box(self, monkeypatch, nonfinite):
