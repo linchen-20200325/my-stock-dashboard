@@ -300,9 +300,17 @@ def rejected_all_nonfinite(rec: Optional[Mapping[str, Any]]) -> bool:
     `TypeError`;tuple 不足 2 欄 → `IndexError`。三處受到的影響**不一樣**,據實分開寫:
       · 資料診斷頁:修前修後相同(批 D4 C1 原本寫在該頁的那一行就是這個行為);
       · 今天頁、總經 v2:這是**新增的例外路徑** —— 兩頁修前根本不讀 `rejected`,
-        修前遇到同樣的側車不會拋。
-    在 L2 契約下走不到:L2 `_first_sane` 寫入的每一筆都是 ≥2 欄 tuple、第 2 欄是 `_num()`
-    轉出的 Python float(產出端契約由 `tests/test_batch_z4.py::TestL2RejectedContract` 釘住)。
+        修前遇到同樣的側車不會拋。**影響範圍**(2026-10-05 AppTest 實測,直接掛頁面函式與
+        跑整支 app.py 各一次):例外一拋,該頁從那一刻起**整頁中斷** —— 直接掛頁面函式時只剩
+        最先注入的樣式表、0 張卡、連「🚀 更新今日戰情」按鈕都不畫;在 app.py 裡被
+        `_render_tab_isolated` 接住,該分頁位置只剩一個「分頁渲染異常,已隔離」紅框,
+        側欄、其他分頁與頁尾照常。同一份側車在 fd989ae:兩頁都照常畫完
+        (今天頁 us10y 那張卡為紅卡;總經 v2 三層都在)。
+    在 L2 契約下走不到:L2 `_first_sane` 寫入的每一筆都是恰 3 欄的 tuple `(str, float, str)`,
+    第 2 欄是 `_num()` 轉出的 Python float(產出端契約由
+    `tests/test_batch_z4.py::TestL2RejectedContract` 釘住,L2 一違約 CI 先紅)。
+    ⇒ 維持 fail-loud、⛔ 不吞(總管 2026-10-05 裁定),理由即上面這兩件事:L2 契約下走不到,
+    且 `TestL2RejectedContract` 會在 CI 先擋下 L2 違約。
     📌 2026-10-05 更正(批 Z4 追補【5】,有意識的更正,⛔ 不是漏改):原句寫「不是數字時
     `math.isfinite` 照樣拋 `TypeError`(與批 D4 C1 原本寫在資料診斷頁的那一行同一個行為)」——
     那句**只對資料診斷頁成立**,對今天頁與總經 v2 是新增的例外路徑,故改寫成上面的範圍。

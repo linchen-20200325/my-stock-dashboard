@@ -734,7 +734,9 @@ class TestD4n2AllLampsSyntheticSidecar:
 # IndexError）。資料診斷頁修前就是如此；今天頁與總經 v2 則是**新增的例外路徑**（兩頁修前不讀
 # rejected）。總管 2026-10-05 裁定：維持 fail-loud、⛔ 不吞 —— 但「L2 契約下走不到」要由測試保證：
 #   · `TestL2RejectedContract`：真 L2 產生器 × 各種型別 → 每筆 rejected 都是 ≥2 欄 tuple、第 2 欄是 Python float；
-#   · `TestMalformedRejectedFailsLoud`：形狀不合法時三處都照樣拋（⛔ 不得被改成靜默吞掉）。
+#     （📌 重驗一併 1 起收緊為**恰 3 欄** `(str, float, str)`，見該類 docstring。）
+#   · `TestMalformedRejectedFailsLoud`：形狀不合法時三處都照樣拋（⛔ 不得被改成靜默吞掉）；
+#     實際畫面影響範圍（AppTest 實測）見該類 docstring。
 from decimal import Decimal  # noqa: E402
 
 import numpy as np  # noqa: E402
@@ -824,6 +826,21 @@ def _malformed_rec(rejected) -> dict:
 
 
 class TestMalformedRejectedFailsLoud:
+    """形狀不合法的 rejected → 四處都照樣拋（維持 fail-loud；總管 2026-10-05 裁定）。
+
+    實際畫面影響範圍（2026-10-05 AppTest 實測：分別「直接掛頁面函式」與「跑整支 app.py」；
+    側車其餘 15 盞照常有值、只有 us10y 帶不合法的 rejected，兩種不合法形狀結果相同）：
+      · 資料診斷頁：與修前相同（批 D4 C1 寫在該頁的那一行本來就會拋）。
+      · 今天頁、總經 v2：**新增的例外路徑** —— 例外一拋，該頁從那一刻起**整頁中斷**：
+        直接掛頁面函式時只剩最先注入的樣式表、0 張卡、連「🚀 更新今日戰情」按鈕都不畫；
+        在 app.py 裡被 `_render_tab_isolated` 接住，該分頁位置只剩一個紅框
+        「⚠️ 「…」分頁渲染異常,已隔離(其他分頁不受影響):TypeError／IndexError…」，
+        側欄、其他分頁與頁尾照常。
+        同一份側車在 fd989ae：兩頁都照常畫完（今天頁 us10y 那張卡為紅卡；總經 v2 三層都在）。
+    為什麼仍維持 fail-loud：L2 契約下走不到（L2 只寫恰 3 欄 `(str, float, str)`），
+    且 `TestL2RejectedContract` 會在 CI 先擋下 L2 違約。
+    """
+
     @pytest.mark.parametrize("rejected,exc", _MALFORMED)
     def test_l0(self, rejected, exc):
         with pytest.raises(exc):
