@@ -13,10 +13,11 @@
   OverflowError（其餘欄位 ±inf／溢位 → 各自既有缺值路徑）。⛔ 美國核心 CPI 不套（④ 把 CPI 缺值當正常，
   另列 C8-n7）—— CPI 一切照舊，含 10**400 照舊拋 OverflowError。
 - C7-n7 §八：VIX > 100（結論段「VIX 數值異常」的既有門檻，抽成本檔常數 `_VIX_ABNORMAL_ABOVE`）時，KPI 卡走既有
-  「待取得」卡、基本面否決檢查走既有「VIX待取得，未納入任何判斷」；結論段原句不動。
+  「待取得」卡、基本面否決檢查走既有「VIX待取得，未納入任何判斷」；結論段原句不動。連帶變化（總管裁定接受）：
+  其餘總經有值時既有揭露框改為出現（§三 照判 🔴；§三 該不該擋 > 100 屬客戶待答 Q-r8b），見 D 段末條。
 - C7-n3 只做 (b)：`section_health_score` 的 `_v4_fut2` 預設 0.0 → None（畫面零變化：該頁不顯示 v4 總經燈）。
-  (a)（§三 v5 卡「水位中性」）停手（⑤：卡上沒有任何既有字樣可說明「期貨缺值／未取得」），本檔只鎖現行輸出；
-  (c) 依規格不碰。
+  (a)（§三 v5 卡「水位中性」）停手（⑤：卡上沒有任何既有字樣可說明「期貨缺值／未取得」；總管裁定停手、登記為
+  卡住 ⑤），本檔只鎖現行輸出；(c) 依規格不碰。
 
 golden：一律於基底 `96779d4` 實跑後寫死於本檔（⛔ 不讀 git、不由現行碼反推）。「修前副本」（現行檔反向替換本批
 改動處；實作組已離線以 `96779d4` 原始檔對同一批輸入實跑、輸出逐字相同）只用於「與本批無關的形狀逐字不變」的
@@ -468,7 +469,8 @@ class TestC7n3aNotDone:
     @pytest.mark.parametrize("li", [pytest.param(_li(math.nan), id="fut-all-nan"),
                                     pytest.param(pd.DataFrame({"日期": ["d"], "選PCR": [90.0]}), id="fut-col-missing")])
     def test_v5_card_unchanged_pending_client(self, li, monkeypatch):
-        # (a) 未做（⑤ 停手：卡上沒有既有字樣可說明期貨缺值，只剩顏色）—— 輸出與 96779d4 逐字相同
+        # (a) 未做（⑤ 停手：刪掉「水位中性…」後卡上沒有任何既有字樣可說明期貨缺值，只剩顏色；總管裁定停手、
+        #   登記為卡住 ⑤，2026-10-05）—— 輸出與 96779d4 逐字相同；(a) 日後有答案時依答案更新本條
         out, _ = _chips({"current": 18.0}, monkeypatch, li=li)
         assert [t for t in _md(out) if "💰 v5" in t] == [_V5_NEUTRAL_NO_SLEEVES]
 
@@ -766,8 +768,11 @@ class TestC7n7Section8:
             monkeypatch.undo()
 
     def test_disclosure_side_effect_pinned(self, monkeypatch):
-        # ⚠️ 連帶變化（規格未明列，實作組回報總管裁）：VIX > 100 時 §八 基本面檢查不再把 VIX 算成觸發，
-        #   而 §三 共用規則不擋 > 100、照判 🔴 ⇒ 既有揭露框改為出現（修前：兩邊都「觸發」→ 不出）。
+        # 連帶變化（規格未明列；實作組回報後總管裁定「接受」，2026-10-05）：VIX > 100 且 §八 其餘總經有值時，
+        #   §八 基本面檢查不再把 VIX 算成觸發，而 §三 的共用有效性規則不擋 > 100、照判 🔴 ⇒ 既有揭露框改為出現
+        #   （修前：兩邊都「觸發」→ 不出）。接受理由同批 Z3 改判：揭露框如實寫出 §三 實際看的值（真實優先於
+        #   表面一致，§1）。§三 是否也該擋 > 100 屬客戶待答的 Q-r8b（承接 C8-n3「VIX > 100 時各區不一致」），
+        #   本批不動；Q-r8b 有答案後，本條依答案更新。
         out, _ = _mid(_node(150.0), monkeypatch, real_v4=True, fut=-40000.0)
         warns = [t for k, t in out if k == "warning" and "兩套判定結論不一致" in t]
         assert len(warns) == 1
