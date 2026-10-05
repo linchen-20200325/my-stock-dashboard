@@ -291,12 +291,16 @@ class TestD2f36HttpErrorNotNoData:
         YP._CHART_REPLY.reply = (503, False)
         assert YP._history_or_raise(_T(), "X", "1y") is None
 
-    def test_reply_is_per_thread(self, real_yf):
+    def test_reply_is_per_thread(self, real_yf, monkeypatch):
+        """Y3-n1：主執行緒先放哨兵值（不依賴前一支測試留下什麼），別的執行緒寫入後哨兵必須不變。"""
         real_yf["mode"] = "503_chart"
+        YP._ensure_chart_reply_recorder()      # real_yf 換掉了 `YfData.get`；不裝紀錄器，別的執行緒根本不會寫入
+        sentinel = ("main-sentinel", False)
+        monkeypatch.setattr(YP._CHART_REPLY, "reply", sentinel, raising=False)   # 測試後還原原狀
         t = threading.Thread(target=lambda: yfinance.Ticker("F36T.TW").history(period="1y"))
         t.start()
         t.join()
-        assert getattr(YP._CHART_REPLY, "reply", None) is None, "別的執行緒的回應不寫到這裡"
+        assert getattr(YP._CHART_REPLY, "reply", None) == sentinel, "別的執行緒的回應不寫到這裡"
 
     def test_reply_survives_other_thread_reset(self, monkeypatch):
         """強制交錯（Event，不靠時序運氣）：A 收到 503 後、判斷前，B 開始自己的呼叫（清空「本次回應」）。
