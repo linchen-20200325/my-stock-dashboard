@@ -23,8 +23,10 @@ C7-n8（v1 §十一 AI 裁決 prompt）
 走既有「缺值整行不送」路徑（先例 DL-f1-s16）；⛔ 新增字。規則引擎本來就把非有限值當缺
 （`_is_finite_number`），引擎輸出不變。
 
-golden：以 origin/main `84c1ca4`（修前）在本檔同一個 harness 實跑後**寫死** —— ⛔ 在測試裡讀 git、
-⛔ 由程式反推。正常值的完整輸出與修前逐字相同（`_GOLDEN_*`）。
+golden：以 origin/main `84c1ca4`（修前）用同型 harness（假 st＋同一批離線替身）實跑後**寫死** ——
+⛔ 在測試裡讀 git、⛔ 由程式反推。正常值的完整輸出與修前逐字相同（`_GOLDEN_*`）。
+另：本檔整份放到 84c1ca4 副本上實跑過 —— 正常值與性質那幾支（golden／快取沿用／引擎對 NaN 與缺值同解）
+全過，其餘（修復相關）全紅。
 harness：`_FakeST` 以 monkeypatch 換掉被測模組的 module-level `st`；L1 fetcher、Gemini、新聞 RSS、
 狀態鎖一律換成離線替身。本檔不觸網、不寫檔。slow lane 另以真 Streamlit（AppTest）驗 rerun 行為。
 """
@@ -439,7 +441,7 @@ class TestC7n1NormalUnchanged:
         assert r.out == _GOLDEN_FLAT
         assert set(r.cached) == {"_ndc_li_cache", "_fi_streak_cache"}
 
-    def test_usable_results_cached_as_same_object(self, monkeypatch):
+    def test_usable_results_are_cached(self, monkeypatch):
         r = _render_state(monkeypatch, _H_UP, _LI_EXP, _FI_SELL)
         assert r.cached == {"_ndc_hist_cache": _H_UP, "_ndc_li_cache": _LI_EXP,
                             "_fi_streak_cache": _FI_SELL}
