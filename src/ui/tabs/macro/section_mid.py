@@ -115,11 +115,14 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     #   實跑 −5 印「✅ 市場平靜」「VIX -5.0 < 20（平靜期）🟢」「A VIX=-5.0<20 ✅」、否決權收到 −5。
     #   在 §八 自己取 VIX 的這一處（`_vcur8_v`）視同非有限值 ⇒ 由它取值的 KPI 卡（「待取得」）、
     #   基本面否決檢查（列「VIX待取得」）、§八 否決權那句、三環「A VIX未知」、apply_vix_veto(None)
-    #   走 #781 既有缺值路徑；跨區揭露框見下方「驗收阻擋 2」那段。
+    #   走 #781 既有缺值路徑。
     #   ⚠️ 範圍更正（驗收）：原註「本檔取 VIX 的單一入口 ⇒ 下游全走」說得過寬 —— 本頁另有兩處自行讀
-    #   VIX、不經此處：§三 `section_chips.read_v4_macro_veto()`（本區揭露框已不取用其結果），與頂部
-    #   總經警示看板（L1 `check_macro_alerts`，只在正式載入時出現；驗收組實測 VIX ≤ 0／NaN／−inf 仍給
-    #   🟢 —— 屬 L1、不在本批，總管另登記為已知限制）。
+    #   VIX、不經此處，也不在上述清單內：
+    #   (1) §三 `section_chips.read_v4_macro_veto()`：下方跨區揭露框照舊用它的結果，如實列出 §三 那盞燈
+    #       的實際狀態與它看的 VIX（總管改判，理由見該處註解）；§三 收下無效 VIX（≤ 0、數字字串、bool…）
+    #       屬 section_chips、不在本批範圍，總管另登記為新項。
+    #   (2) 頂部總經警示看板（L1 `check_macro_alerts`，只在正式載入時出現；驗收組實測 VIX ≤ 0／NaN／−inf
+    #       仍給 🟢 —— 屬 L1、不在本批，總管另登記為已知限制）。
     #   ⛔ 共用的 `_finite_yoy` 不動；VIX > 0 時同一物件，輸出不變。
     #   📌 驗收阻擋 3-3：下限用一般比較（`<= 0`），numpy 整數／浮點、Decimal、Fraction、np.False_
     #   一律適用（不得只認 Python int／float）。
@@ -420,12 +423,14 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     except Exception as _e_v4x:
         print(f'[section_mid/veto-cross] {type(_e_v4x).__name__}: {_e_v4x}')
         _v4_light = None
-    # 批 Z3（驗收阻擋 2）：§八 判 VIX 無效（`_vcur8_v is None`：缺值／非有限／≤ 0／非數值）時，
-    #   ⛔ 不取用上面 `read_v4_macro_veto()` 的結果 —— 它另讀 VIX、只擋非有限（VIX=−5、數字字串、
-    #   bool 照樣判燈），同一區會同時印「VIX待取得／A VIX未知」與「看的是 VIX=-5.0」。
-    #   改走下方既有「…因 VIX 未取得而無法判定…」那句（只用既有字）；§八 VIX 有效時照舊比對、輸出不變。
-    if _vcur8_v is None:
-        _v4_light = None
+    # 批 Z3（總管改判，撤回 db7b2e2「驗收阻擋 2」的閘門 —— 有意識的更正，不是漏刪）：
+    #   本框的職責是如實寫出 §三 那盞燈的實際狀態，而 `read_v4_macro_veto()` 就是 §三 自己的入口。
+    #   §八 判 VIX 無效、但 §三 照樣判得出燈時（例 VIX=−5、0、−0.0、數字字串、bool），下方比對句
+    #   「（§三 籌碼）：🔴 紅燈　看的是 VIX=-5.0、外資期貨=-40,000 口」是真話，且明確標示是 §三 看的值；
+    #   閘門改走的「§三 …因 VIX 未取得而無法判定」在這些情況下反而是假話（§三 實際判出了燈）。
+    #   真實優先於表面一致（§1）⇒ 不設閘門：§三 判得出就列它的實際輸入，`read_v4_macro_veto()`
+    #   回 None 才走缺值句（與 fd989ae 相同）。根因「§三 收下無效 VIX」屬 section_chips、
+    #   不在本批範圍，總管另登記為新項。
 
     if _fund_evaluable and _v4_light is not None:
         # 綠燈以外（🔴/🟡）都算「籌碼側有風險訊號」。
