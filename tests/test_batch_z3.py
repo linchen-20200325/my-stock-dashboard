@@ -12,6 +12,9 @@
 - V1-n2（L5 v1）`section_mid`：VIX 為負（實跑 −5）印「✅ 市場平靜」「平靜期 🟢」「A VIX=-5.0<20 ✅」、
   否決權收到 −5。總管決定 VIX ≤ 0（定義上不可能）視同非有限值 —— 在本檔取 VIX 的單一入口處理，
   全部走 #781 既有缺值路徑（KPI「待取得」、§八 否決權那句、三環「A VIX未知」、apply_vix_veto(None)）。
+- V1-n5（同檔）：VIX「有值但無效」（非有限或 ≤ 0；含非數值）時，§八 那句原寫「VIX 數據載入中，VIX 否決權
+  暫無法判斷」—— 值明明到了，「載入中」是假的。只在此時於子句界純刪「VIX 數據載入中，」；
+  真的沒值（None／缺鍵）原句一字不變。
 
 只擋資料、不加新字句、不動門檻、不動版面；有限輸入與修前逐位相同（下方對拍修前副本）。
 每段都有「拔掉修復即轉紅」的斷言（修前副本在同一組輸入上必須給出不同答案）。
@@ -381,13 +384,17 @@ class TestWarroomConsumerUnchanged:
 # ══════════════════════════════════════════════════════════════════════════
 _MID_BASE = {"ism_pmi": {"value": 52.0}, "us_core_cpi": {"yoy": 3.0},
              "tw_export": {"yoy": 5.0, "date": "2026-08"}, "ndc_signal": {"score": 27}}
-_LOADING = "VIX 數據載入中，VIX 否決權暫無法判斷"     # 既有句（#781 缺值路徑）
+_LOADING = "VIX 數據載入中，VIX 否決權暫無法判斷"     # 既有句（#781 缺值路徑；真的沒值）
+_INVALID = "VIX 否決權暫無法判斷"                     # V1-n5：有值但無效（子句界純刪後）
 
 #: 修後 → 修前（反向替換，只動程式行；註解不影響行為）。還原體在 VIX > 0／真缺值上
 #: 與 `fd989ae` 的 section_mid 渲染逐字相同（已另以 git 原始檔實跑對過）。
 _MID_REVERT = (
     ("    if _vcur8_v is not None and _vcur8_v <= 0:\n"
      "        _vcur8_v = None\n", ""),
+    ("            st.info('VIX 否決權暫無法判斷' if _vix_bad8\n"
+     "                    else 'VIX 數據載入中，VIX 否決權暫無法判斷')\n",
+     "            st.info('VIX 數據載入中，VIX 否決權暫無法判斷')\n"),
 )
 
 
@@ -453,9 +460,12 @@ class TestV1n2NonPositiveVix:
 
     @pytest.mark.parametrize("v", _NONPOS)
     def test_output_equals_missing_current(self, v, monkeypatch):
-        # 全部走既有缺值路徑：整份輸出 ＝ current 為 None 時（同一個節點形狀）
-        assert (_run_mid(_mod("mid"), _node(v), monkeypatch)
-                == _run_mid(_mod("mid"), _node(None), monkeypatch))
+        # 全部走既有缺值路徑：整份輸出 ＝ current 為 None 時（同一個節點形狀）；
+        # 唯一差別是 V1-n5 那一句（≤ 0 屬「有值但無效」→ 刪去「VIX 數據載入中，」）。
+        out, calls = _run_mid(_mod("mid"), _node(v), monkeypatch)
+        base, base_calls = _run_mid(_mod("mid"), _node(None), monkeypatch)
+        assert out == [_INVALID if t == _LOADING else t for t in base]
+        assert calls == base_calls == [(None,)]
 
     @pytest.mark.parametrize("v", _NONPOS)
     def test_pre_fix_printed_fake_calm(self, v, mid_pre, monkeypatch):
@@ -474,3 +484,42 @@ class TestV1n2NonPositiveVix:
     def test_true_missing_identical_to_pre_fix(self, node, drop, mid_pre, monkeypatch):
         assert (_run_mid(_mod("mid"), node, monkeypatch, drop)
                 == _run_mid(mid_pre, node, monkeypatch, drop))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# V1-n5（同檔）：VIX「有值但無效」時，§八 那句於子句界刪「VIX 數據載入中，」
+# ══════════════════════════════════════════════════════════════════════════
+_HAS_VALUE_INVALID = [pytest.param(v, id=repr(v)) for v in (
+    math.nan, math.inf, -math.inf, np.float64("nan"), 0, -5, -0.0, "18.5", "x", "", True, False)]
+#: 修前（還原體）在這些值上說「數據載入中」（≤ 0 修前印假平靜期，前提另見 V1-n2 段）
+_PRE_SAID_LOADING = [pytest.param(v, id=repr(v)) for v in (math.nan, math.inf, -math.inf, "18.5", True)]
+
+
+class TestV1n5InvalidValueSentence:
+    @pytest.mark.parametrize("v", _HAS_VALUE_INVALID)
+    def test_has_value_invalid_drops_loading_clause(self, v, monkeypatch):
+        out, calls = _run_mid(_mod("mid"), _node(v), monkeypatch)
+        assert _INVALID in out and _LOADING not in out, out
+        assert calls == [(None,)]
+        # 與「真的沒值」只差這一句（其餘逐字相同）
+        base, _ = _run_mid(_mod("mid"), _node(None), monkeypatch)
+        assert sum(t == _LOADING for t in base) == 1
+        assert out == [_INVALID if t == _LOADING else t for t in base]
+
+    @pytest.mark.parametrize("node,drop", _TRUE_MISSING)
+    def test_true_missing_keeps_original_sentence(self, node, drop, monkeypatch):
+        out, calls = _run_mid(_mod("mid"), node, monkeypatch, drop)
+        assert _LOADING in out and _INVALID not in out, out
+        assert calls == [(None,)]
+
+    @pytest.mark.parametrize("v", _PRE_SAID_LOADING)
+    def test_pre_fix_said_loading(self, v, mid_pre, monkeypatch):
+        # 前提自證：修前有值但無效時照樣說「VIX 數據載入中，…」
+        out, _ = _run_mid(mid_pre, _node(v), monkeypatch)
+        assert _LOADING in out and _INVALID not in out
+
+    def test_k1_pure_clause_deletion(self):
+        # K1：新句＝既有句在子句界「，」刪掉前一子句，不新增任何字
+        assert _LOADING.split("，", 1) == ["VIX 數據載入中", _INVALID]
+        src = _source("mid")
+        assert src.count(f"'{_INVALID}'") == 1 and src.count(f"'{_LOADING}'") == 1

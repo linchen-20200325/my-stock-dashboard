@@ -112,6 +112,11 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     #   ⛔ 共用的 `_finite_yoy` 不動；VIX > 0 時同一物件，輸出不變。
     if _vcur8_v is not None and _vcur8_v <= 0:
         _vcur8_v = None
+    # 批 Z3（V1-n5）：VIX「有值但無效」（`current` 有給、卻非有限／≤ 0／非數值）≠「載入中」——
+    #   值明明到了，說「數據載入中」是假的。§八 否決權那句只在此時於子句界純刪「VIX 數據載入中，」
+    #   （⛔ 不新增字）；真的沒值（`current` 為 None／缺鍵／VIX 節點不是 dict）原句一字不變。
+    _vix_bad8 = (isinstance(_m8_vix, dict) and _m8_vix.get('current') is not None
+                 and _vcur8_v is None)
 
     with _s8c1[0]:
         if _m8_ndc and _sc8_v is not None:
@@ -442,7 +447,8 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     #   改沿用上方已算好的有限值 `_vcur8_v`（缺鍵／None／NaN／±inf／非數值一律 None）⇒
     #   走既有「VIX 數據載入中…」／「A VIX未知」路徑，且與上方缺項清單（M2N-f6）判定一致
     #   （數字字串原本這裡算有值、清單卻列「VIX 待取得」）。有限值時 float() 同一物件，輸出不變。
-    #   批 Z3（V1-n2）起 `_vcur8_v` 另把 VIX ≤ 0 視同非有限（見上方取值處），同走這條缺值路徑。
+    #   批 Z3（V1-n2）起 `_vcur8_v` 另把 VIX ≤ 0 視同非有限（見上方取值處），同走這條缺值路徑；
+    #   （V1-n5）其中「有值但無效」時那句改為子句界刪去「VIX 數據載入中，」的版本（見 `_vix_bad8`）。
     _vix_now8 = float(_vcur8_v) if _vcur8_v is not None else None
     # CLI：OECD CLI 榮枯線 = 100，取自 _m8_pmi（is_oecd_cli=True 時）
     _cli_8 = None
@@ -483,7 +489,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 _hyc8t = '🟢 全球風險情緒穩定，未觸發 VIX 否決權。回歸個股籌碼面與基本面操作。'
             st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _hyi8, _hyc8t, color=_hyc8), unsafe_allow_html=True)
         else:
-            st.info('VIX 數據載入中，VIX 否決權暫無法判斷')
+            # 批 Z3（V1-n5）：有值但無效 → 子句界純刪後的句子；真的沒值 → 原句（判定見 `_vix_bad8`）。
+            st.info('VIX 否決權暫無法判斷' if _vix_bad8
+                    else 'VIX 數據載入中，VIX 否決權暫無法判斷')
 
         # ── 策略3：M1B-M2 資金動能（三段公式）────────────────────
         _m1b8_info = st.session_state.get('m1b_m2_info', {})

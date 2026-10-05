@@ -8,6 +8,8 @@
 
 📌 批 Z3（V1-n2，有意識的變更）：VIX ≤ 0（定義上不可能）併入同一條缺值路徑 ——
 原釘在 golden 的 0／−5 兩列移到 `_BAD`（細節與修前修後對拍見 tests/test_batch_z3.py）。
+📌 批 Z3（V1-n5，有意識的變更）：VIX「有值但無效」時那句於子句界純刪「VIX 數據載入中，」→
+「VIX 否決權暫無法判斷」；真的沒值（None／缺鍵）時原句不動。
 """
 from __future__ import annotations
 
@@ -22,6 +24,10 @@ _BASE = {"ism_pmi": {"value": 52.0}, "us_core_cpi": {"yoy": 3.0},
          "tw_export": {"yoy": 5.0, "date": "2026-08"}, "ndc_signal": {"score": 27}}
 _GREEN = "全球風險情緒穩定，未觸發 VIX 否決權"
 _LOADING = "VIX 數據載入中，VIX 否決權暫無法判斷"
+# 📌 批 Z3 V1-n5（有意識的變更，⛔ 不是漏刪）：VIX「有值但無效」（非有限／≤0／非數值）時那句
+#   於子句界純刪「VIX 數據載入中，」—— 值明明到了，說「載入中」是假的。真的沒值（None／缺鍵）
+#   時 `_LOADING` 原句一字不變。
+_INVALID = "VIX 否決權暫無法判斷"
 
 
 def _run(vix_node, mp, drop_key=False):
@@ -44,29 +50,34 @@ def _run(vix_node, mp, drop_key=False):
     return [t for _k, t in fake.out], calls
 
 
+#: (節點, 是否整個拿掉 vix 鍵, 該出現的那句)。📌 批 Z3 V1-n5：第三欄為新增 ——
+#:   有值但無效 → `_INVALID`；真的沒值 → `_LOADING`（原本一律 `_LOADING`）。
 _BAD = [
-    pytest.param({"current": math.nan}, False, id="nan"),
-    pytest.param({"current": math.inf}, False, id="+inf"),
-    pytest.param({"current": -math.inf}, False, id="-inf"),
-    pytest.param({"current": None}, False, id="none"),
-    pytest.param({"dates": []}, False, id="missing-current"),
-    pytest.param({"current": "18.5"}, False, id="numeric-string"),
-    pytest.param(None, True, id="missing-vix-key"),
+    pytest.param({"current": math.nan}, False, _INVALID, id="nan"),
+    pytest.param({"current": math.inf}, False, _INVALID, id="+inf"),
+    pytest.param({"current": -math.inf}, False, _INVALID, id="-inf"),
+    pytest.param({"current": None}, False, _LOADING, id="none"),
+    pytest.param({"dates": []}, False, _LOADING, id="missing-current"),
+    pytest.param({"current": "18.5"}, False, _INVALID, id="numeric-string"),
+    pytest.param(None, True, _LOADING, id="missing-vix-key"),
     # 📌 批 Z3 V1-n2：VIX≤0 視為無效，有意識的變更（⛔ 不是漏刪）。這兩列原本釘在下方
     #   `test_finite_vix_unchanged` ——（0 →「VIX 0.0 < 20（平靜期）」「A VIX=0.0<20」；
     #   −5 →「VIX -5.0 < 20（平靜期）」「A VIX=-5.0<20」、veto 收到原值）。VIX 定義上恆為正，
     #   ≤ 0 只可能是壞資料 ⇒ 改走既有缺值路徑（總管決定；本檔取 VIX 的單一入口處理）。
-    pytest.param({"current": 0}, False, id="zero"),
-    pytest.param({"current": -5}, False, id="negative"),
+    pytest.param({"current": 0}, False, _INVALID, id="zero"),
+    pytest.param({"current": -5}, False, _INVALID, id="negative"),
 ]
 
 
-@pytest.mark.parametrize("node,drop", _BAD)
-def test_nonfinite_vix_takes_missing_path(node, drop, monkeypatch):
+@pytest.mark.parametrize("node,drop,sentence", _BAD)
+def test_nonfinite_vix_takes_missing_path(node, drop, sentence, monkeypatch):
     out, calls = _run(node, monkeypatch, drop_key=drop)
     joined = "\n".join(out)
     assert _GREEN not in joined, joined[-1500:]
-    assert _LOADING in out
+    # 📌 批 Z3 V1-n5（有意識的變更）：原 `assert _LOADING in out`（一律原句）→ 依「有值但無效／
+    #   真的沒值」分兩句；另一句不得出現。
+    assert sentence in out
+    assert ({_LOADING, _INVALID} - {sentence}).isdisjoint(out), out
     assert "A VIX未知" in joined
     assert "VIX=nan" not in joined and "VIX nan" not in joined
     assert "VIX=inf" not in joined and "VIX inf" not in joined and "VIX -inf" not in joined
@@ -101,7 +112,7 @@ def test_finite_vix_unchanged(vix, line, badge, monkeypatch):
     joined = "\n".join(out)
     assert line in joined
     assert badge in joined
-    assert _LOADING not in out
+    assert _LOADING not in out and _INVALID not in out
     assert len(calls) == 1 and calls[0][0] == float(vix)
     assert type(calls[0][0]) is float
     assert "VIX 數值異常" not in joined
