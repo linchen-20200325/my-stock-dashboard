@@ -774,13 +774,13 @@ def _disclosure(out):
             if (k == "warning" and "兩套判定結論不一致" in t) or (k == "caption" and t.startswith("（§三 籌碼的「"))]
 
 
-def _run_mid_real_v4(mod, vix_node, mp, fut=-40000.0):
+def _run_mid_real_v4(mod, vix_node, mp, fut=-40000.0, base=None):
     """同 `_run_mid`，但 §三 的 `read_v4_macro_veto` 用真函式（只把它讀的 st 換成同一個假 st）。"""
     import src.services.allocation_service as AS
     import src.ui.tabs.macro.section_chips as SC
     assert (SC.read_v4_macro_veto.__module__, SC.read_v4_macro_veto.__qualname__) == (
         'src.ui.tabs.macro.section_chips', 'read_v4_macro_veto')          # 確定沒被 stub
-    info = dict(_MID_BASE)
+    info = dict(_MID_BASE if base is None else base)
     info["vix"] = vix_node
     li = pd.DataFrame({"日期": ["2026-10-01"], "外資大小": [fut]})
     fake = _FakeSTFig({"macro_info": info, "bias_info": {"bias_240": 5.0}, "li_latest": li})
@@ -860,3 +860,37 @@ class TestV1CrossDisclosure:
         now, _ = _run_mid_real_v4(_mod("mid"), {"current": None}, monkeypatch)
         pre, _ = _run_mid_real_v4(mid_pre, {"current": None}, monkeypatch)
         assert now == pre and ("caption", _V4_UNAVAILABLE) in now
+
+
+# ── 只有 VIX 一項且無效、其餘四項皆缺（3-4 的連帶結果；總管裁定維持）——真 `read_v4_macro_veto` ──────
+# 理由：依規格「VIX 無效＝走既有缺值路徑」，此情境應與 fd989ae 在「VIX=None、其餘四項皆缺」時相同 ——
+# §八 沒有可評估的結論（3-4：`_fund_evaluable` 不把無效 VIX 算進去），就沒有可比對的對象，揭露框的
+# 比對句與缺值句都不出；§八 不印任何結論，頁面上也就沒有互相矛盾的說法。注意這不是 §三 判不出：
+# 同情境下 §三 真函式照樣拿 −5 判出 🔴 燈（見 test_premise_section3_still_judges_alone）。
+#: fd989ae 在「VIX=None、其餘四項皆缺、外資期貨 −40,000 口」時的揭露框輸出 —— 以 fd989ae 實跑後寫死（無）
+_FD989AE_DISCLOSURE_ONLY_VIX_NONE: list = []
+_ONLY_VIX_INVALID = [pytest.param(v, id=repr(v)) for v in (
+    -5, 0, -0.0, "18.5", True, np.True_, np.int64(-3),          # §三 判得出燈（皆 🔴）
+    math.nan, math.inf, pd.NA, "", "N/A",                      # §三 也判不出（read_v4_macro_veto 回 None）
+)]
+
+
+class TestV1CrossDisclosureOnlyVix:
+    @pytest.mark.parametrize("v", _ONLY_VIX_INVALID)
+    def test_no_disclosure_when_section8_not_evaluable(self, v, monkeypatch):
+        out, _light = _run_mid_real_v4(_mod("mid"), {"current": v}, monkeypatch, base={})
+        assert _disclosure(out) == _FD989AE_DISCLOSURE_ONLY_VIX_NONE == [], _disclosure(out)
+        assert not any("看的是 VIX=" in t for _k, t in out)
+        assert ("caption", _V4_UNAVAILABLE) not in out
+        assert not any(k == "success" and VETO_FUNDAMENTAL_NAME in t for k, t in out)   # §八 不印結論
+
+    def test_vix_none_same_scenario_also_none(self, monkeypatch):
+        # 對照組：VIX=None 同情境（＝fd989ae 寫死值的情境）—— 修後同樣無揭露框
+        out, light = _run_mid_real_v4(_mod("mid"), {"current": None}, monkeypatch, base={})
+        assert light is None
+        assert _disclosure(out) == _FD989AE_DISCLOSURE_ONLY_VIX_NONE
+
+    def test_premise_section3_still_judges_alone(self, monkeypatch):
+        # 前提：揭露框不出是因 §八 不可評估，不是 §三 判不出 —— §三 照樣拿 −5 判出 🔴 燈
+        _out, light = _run_mid_real_v4(_mod("mid"), {"current": -5}, monkeypatch, base={})
+        assert light is not None and light["_vix"] == -5.0 and light["status"].startswith("🔴")
