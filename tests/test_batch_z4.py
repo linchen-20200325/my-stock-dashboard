@@ -63,15 +63,19 @@ class TestR9NdcBoundary:
         assert classify_danger(float(score), NDC) == expected
 
     def test_non_integer_follows_the_shared_le_rule(self):
-        """批 Z4 追補【2】（QA：R9-c／R9-M05／R9-M17）：非整數沿用全燈共用的「≤ yellow_lo 才黃」。
+        """批 Z4 追補【2】（QA：R9-c／R9-M05／R9-M17；重驗再補 R9-M18／M19／M20）：
+        非整數沿用全燈共用的「≤ yellow_lo 才黃」。
 
         總管 2026-10-05 裁定：⛔ 不另立 NDC 專屬語意。
         ⚠️ 正式路徑的 NDC 分數一律是整數（`src/data/macro/macro_snapshot.fetch_ndc_block` 的來源
         全都轉 `int`，兩組 QA 皆查得）；本釘子**只鎖共用比較規則**，⛔ 不是官方分數帶語意
         （官方表 22.4 會落在「黃藍燈」）。⛔ 不釘畫面顯示（22.4 顯示「22分」卻亮綠屬既有類型的
         已知限制，總管另登記）。
+        22.4 只殺得掉黃線外推 ≥ 0.4 的偏移（`<= yellow_lo+0.5`、`< yellow_lo+1`）；
+        「緊鄰 22.0 的下一個浮點數 → 綠」才殺得掉 `<= yellow_lo+0.01`、`<= +0.3`、`< +0.4` 這類小偏移。
         """
         assert classify_danger(22.4, NDC) == "green"
+        assert classify_danger(math.nextafter(22.0, math.inf), NDC) == "green"
         assert classify_danger(22.0, NDC) == "yellow"
 
     def test_only_the_number_changed(self):
