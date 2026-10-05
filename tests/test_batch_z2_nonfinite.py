@@ -135,19 +135,21 @@ class TestTwiiBiasEachValueChecked:
         assert macro_snapshot.compute_twii_bias(_twii(closes)) is None
 
     # 乖離溢位、均線全有限：object 欄的 Python int 精確相消（確定性，與 numpy 版本無關）
-    #   → 均線很小、末筆價很大。
-    @pytest.mark.parametrize('target, closes', [
-        ('bias_20', _put(240, [(-1, 17 * 10**307), (-5, -17 * 10**307), (-30, 10**307)], base=50)),
-        ('bias_60', _put(240, [(-1, 17 * 10**307), (-30, -17 * 10**307), (-100, 10**307)], base=50)),
-        ('bias_240', _put(240, [(-1, 17 * 10**307), (50, -17 * 10**307)], base=50)),
+    #   → 均線很小、末筆價很大（末筆為負時乖離 = -inf，守「結果檢查不能只查 +inf」）。
+    @pytest.mark.parametrize('target, sign, closes', [
+        ('bias_20', 1, _put(240, [(-1, 17 * 10**307), (-5, -17 * 10**307), (-30, 10**307)], base=50)),
+        ('bias_60', 1, _put(240, [(-1, 17 * 10**307), (-30, -17 * 10**307), (-100, 10**307)], base=50)),
+        ('bias_240', 1, _put(240, [(-1, 17 * 10**307), (50, -17 * 10**307)], base=50)),
+        ('bias_20', -1, _put(240, [(-1, -17 * 10**307), (-5, 17 * 10**307), (-30, 10**307)], base=50)),
     ])
-    def test_single_bias_non_finite_is_failure(self, target, closes, _no_2y):
+    def test_single_bias_non_finite_is_failure(self, target, sign, closes, _no_2y):
         from shared.calc_helpers import calc_bias_pct
         mas = _mas_like_code(closes, object)
         assert all(math.isfinite(v) for v in mas.values()), mas
         lp = float(closes[-1])
         biases = {f'bias_{w}': calc_bias_pct(lp, mas[f'ma{w}'], decimals=1) for w in (20, 60, 240)}
         _assert_only_non_finite(biases, target)
+        assert biases[target] == sign * math.inf, biases
         assert macro_snapshot.compute_twii_bias(_twii(closes, dtype=object)) is None
 
 
