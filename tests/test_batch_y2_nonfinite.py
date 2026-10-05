@@ -195,6 +195,38 @@ class TestFedFundsNonFinite:
         assert macro_snapshot.fetch_fed_funds_block() == {
             '_err_fed_funds': 'fredgraph:HTTPNone'}
 
+    # ── 批 Z1（Y2-n1）：前一筆（prev，[-2]）非有限值同樣不放行 ──
+    # fredgraph 的 NaN 列先被既有 `dropna()` 剔除（列數 2→1，走既有 rows<2）；±inf 才會碰到新守衛。
+    @staticmethod
+    def _fredgraph_rows_after_dropna(bad):
+        return 1 if bad.lower() == 'nan' else 2
+
+    @pytest.mark.parametrize('bad', ['inf', '-inf', 'nan'])
+    def test_fredgraph_prev_non_finite_falls_to_api(self, _ff, bad):
+        _ff['csv'] = _Resp(text=_fred_csv([bad, '4.08']))
+        _ff['api'] = _Resp(js=_fred_api(['4.33', '4.08']))
+        out = macro_snapshot.fetch_fed_funds_block()
+        assert out['fed_funds']['source'] == 'FRED-API'
+        assert out['fed_funds']['current'] == 4.08 and out['fed_funds']['prev'] == 4.33
+
+    @pytest.mark.parametrize('bad', ['inf', '-inf', 'nan'])
+    def test_both_tiers_prev_non_finite_existing_failure_exit(self, _ff, bad):
+        _ff['csv'] = _Resp(text=_fred_csv([bad, '4.08']))
+        _ff['api'] = _Resp(js=_fred_api([bad, '4.08']))
+        out = macro_snapshot.fetch_fed_funds_block()
+        n = self._fredgraph_rows_after_dropna(bad)
+        assert out == {'_err_fed_funds': f'fredgraph:rows<2({n})'}
+        assert 'prev' not in repr(out)
+
+    @pytest.mark.parametrize('bad', ['inf', '-inf', 'nan'])
+    def test_prev_non_finite_failure_not_cached(self, _ff, bad):
+        _ff['csv'] = _Resp(text=_fred_csv([bad, '4.08']))
+        _ff['api'] = _Resp(js=_fred_api([bad, '4.08']))
+        assert '_err_fed_funds' in macro_snapshot.fetch_fed_funds_block()
+        _ff['csv'] = _Resp(text=_fred_csv(['4.33', '4.08']))
+        out = macro_snapshot.fetch_fed_funds_block()
+        assert out['fed_funds']['current'] == 4.08 and out['fed_funds']['prev'] == 4.33
+
 
 # ── V2-n6：fetch_vix_block 中段剔除補 log ───────────────────────────────────────
 @pytest.fixture
