@@ -131,7 +131,7 @@ def _is_finite_num(x) -> bool:
         return False
     try:
         return math.isfinite(float(x))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError(超大 int)視同非有限(批 Z1,Y2-n7;同 macro_helpers._safe_float)
         return False
 
 
@@ -704,6 +704,10 @@ def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
                     # (比照 fetch_us10y_block 批 D2 QA)。
                     print(f'[Macro/FedFunds/fredgraph] ⚠️ 末筆非有限值 {_vals0.iloc[-1]!r},不採用')
                     _vals0 = _vals0.iloc[0:0]
+                if len(_vals0) >= 2 and not _is_finite_num(_vals0.iloc[-2]):
+                    # 批 Z1(Y2-n1):前一筆(prev)±inf 同樣不放行 → 落到下方既有失敗出口(轉 FRED-API)。
+                    print(f'[Macro/FedFunds/fredgraph] ⚠️ 前一筆非有限值 {_vals0.iloc[-2]!r},不採用')
+                    _vals0 = _vals0.iloc[0:0]
                 if len(_vals0) >= 2:
                     _curr = round(float(_vals0.iloc[-1]), 2)
                     _prev = round(float(_vals0.iloc[-2]), 2)
@@ -740,6 +744,10 @@ def fetch_fed_funds_block(fred_api_key: str = '') -> dict:
             if _vals_f and not _is_finite_num(_vals_f[-1]):
                 # 批 Y2(V2-n3,三類 (c)):末筆 NaN/±inf 不放行 → 落到下方既有失敗出口
                 print(f'[Macro/FedFunds/FRED-API] ⚠️ 末筆非有限值 {_vals_f[-1]!r},不採用')
+                _vals_f = []
+            if _vals_f and not _is_finite_num(_vals_f[-2]):
+                # 批 Z1(Y2-n1):前一筆(prev)NaN/±inf 同樣不放行 → 落到下方既有失敗出口
+                print(f'[Macro/FedFunds/FRED-API] ⚠️ 前一筆非有限值 {_vals_f[-2]!r},不採用')
                 _vals_f = []
             if _vals_f:
                 _curr = round(_vals_f[-1], 2)

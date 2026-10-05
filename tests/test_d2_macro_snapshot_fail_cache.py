@@ -216,6 +216,10 @@ class TestM1bNonFinite:
         assert _is_finite_num(1.5) and _is_finite_num(0) and _is_finite_num(-3)
         for bad in (None, float('nan'), float('inf'), float('-inf'), True, 'x'):
             assert not _is_finite_num(bad), bad
+        # 批 Z1（Y2-n7）：float() 溢位的超大 int → False，不得拋 OverflowError；邊界內的大浮點仍為 True
+        assert _is_finite_num(10 ** 400) is False
+        assert _is_finite_num(-10 ** 400) is False
+        assert _is_finite_num(1e308) is True
 
 
 class TestUs10yNonFinite:

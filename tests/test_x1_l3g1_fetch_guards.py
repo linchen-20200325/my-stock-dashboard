@@ -291,12 +291,16 @@ class TestD2f36HttpErrorNotNoData:
         YP._CHART_REPLY.reply = (503, False)
         assert YP._history_or_raise(_T(), "X", "1y") is None
 
-    def test_reply_is_per_thread(self, real_yf):
+    def test_reply_is_per_thread(self, real_yf, monkeypatch):
+        """Y3-n1：主執行緒先放哨兵值（不依賴前一支測試留下什麼），別的執行緒寫入後哨兵必須不變。"""
         real_yf["mode"] = "503_chart"
+        YP._ensure_chart_reply_recorder()      # real_yf 換掉了 `YfData.get`；不裝紀錄器，別的執行緒根本不會寫入
+        sentinel = ("main-sentinel", False)
+        monkeypatch.setattr(YP._CHART_REPLY, "reply", sentinel, raising=False)   # 測試後還原原狀
         t = threading.Thread(target=lambda: yfinance.Ticker("F36T.TW").history(period="1y"))
         t.start()
         t.join()
-        assert getattr(YP._CHART_REPLY, "reply", None) is None, "別的執行緒的回應不寫到這裡"
+        assert getattr(YP._CHART_REPLY, "reply", None) == sentinel, "別的執行緒的回應不寫到這裡"
 
     def test_reply_survives_other_thread_reset(self, monkeypatch):
         """強制交錯（Event，不靠時序運氣）：A 收到 503 後、判斷前，B 開始自己的呼叫（清空「本次回應」）。
@@ -714,6 +718,54 @@ class TestD2f41UrlCacheLock:
         monkeypatch.setattr(PH, "_URL_CACHE_MAX", 4)
         PH._url_cache_put(("new", 0), b"n")
         assert ("k", 0) not in d and ("k", "tie") in d and ("new", 0) in d
+
+    # ── Y3-n2：TTL 邊界（`fetch_url` 讀取用 `<`、`_url_cache_put` 逐出用 `>=`）──
+    # 兩支函式都在函式內 `import time as _t`，拿到的是同一個 stdlib `time` 模組 → 凍結 `time.time` 即可。
+    _T0 = 1_000_000.0          # 與 TTL 相減皆為精確浮點數，邊界不受捨入影響
+
+    def _freeze_and_stub(self, monkeypatch, cache):
+        calls = {"n": 0}
+
+        class _S:
+            def get(self, url, **kw):
+                calls["n"] += 1
+                r = requests.models.Response()
+                r.status_code = 200
+                r._content = b"fresh"
+                return r
+
+        monkeypatch.setattr(time, "time", lambda: self._T0)
+        monkeypatch.setattr(PH, "_URL_CACHE", cache)
+        monkeypatch.setattr(PH, "get_proxy_config", lambda: None)
+        monkeypatch.setattr(PH, "_get_thread_session", lambda lean=False: _S())
+        return calls
+
+    def test_read_at_exact_ttl_refetches(self, monkeypatch):
+        """存入時點恰為 T-TTL（年齡 == TTL）→ 已過期：打一次上游、回新內容。殺 `<`→`<=`、永遠命中。"""
+        key = ("https://e.invalid/ttl", ())
+        calls = self._freeze_and_stub(
+            monkeypatch, {key: (self._T0 - PH._URL_CACHE_TTL, b"stale", 200)})
+        r = PH.fetch_url(key[0], attempts=1)
+        assert calls["n"] == 1 and r is not None and r.content == b"fresh"
+
+    def test_read_just_inside_ttl_hits(self, monkeypatch):
+        """存入時點 T-TTL+0.001（年齡略小於 TTL）→ 命中快取、0 次上游。殺「永遠未命中」。"""
+        key = ("https://e.invalid/ttl2", ())
+        calls = self._freeze_and_stub(
+            monkeypatch, {key: (self._T0 - PH._URL_CACHE_TTL + 0.001, b"cached", 200)})
+        r = PH.fetch_url(key[0], attempts=1)
+        assert calls["n"] == 0 and r.status_code == 200 and r.content == b"cached"
+
+    def test_put_purges_at_exact_ttl_keeps_just_inside(self, monkeypatch):
+        """寫入時逐出：年齡 == TTL → 逐出；年齡略小於 TTL → 保留。殺 `>=`→`>`、永遠逐出。"""
+        d = {("old", 0): (self._T0 - PH._URL_CACHE_TTL, b"o", 200),
+             ("young", 0): (self._T0 - PH._URL_CACHE_TTL + 0.001, b"y", 200)}
+        monkeypatch.setattr(time, "time", lambda: self._T0)
+        monkeypatch.setattr(PH, "_URL_CACHE", d)
+        PH._url_cache_put(("new", 0), b"n")
+        assert ("old", 0) not in d
+        assert ("young", 0) in d and d[("young", 0)][1] == b"y"
+        assert d[("new", 0)] == (self._T0, b"n", 200)
 
 
 # ══════════════════════════════════════════════════════════════════
