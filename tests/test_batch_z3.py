@@ -32,6 +32,7 @@ import math
 import random
 import struct
 import types
+import warnings
 from decimal import Decimal
 from fractions import Fraction
 
@@ -199,55 +200,85 @@ class TestCallSitesInfEqualsNone:
 # ══════════════════════════════════════════════════════════════════════════
 # V2-n1（併 V2-n10）：shared.macro_compute.evaluate_market_status_v4_final 不捏價／年線
 # ══════════════════════════════════════════════════════════════════════════
-#: 修後 → 修前（反向替換，每組恰好一處）。還原後的函式本體 ＝ `fd989ae` 的引擎
-#: （docstring 以外逐字；AST 已另以 git 版對過）—— 本檔不依賴 git 歷史，CI 淺 clone 亦可跑。
-_V2N1_REVERT = (
-    ("    futures_net_oi = futures_net_oi or 0\n"
-     "    is_foreign_hedging = futures_net_oi < -30000\n"
-     "\n"
-     "    if not (_is_finite_positive(current_price) and _is_finite_positive(ma_240)):\n"
-     "        return {\n"
-     "            \"Signal\": None,\n"
-     "            \"Action_Advice\": None,\n"
-     "            \"Suggested_Holding\": None,\n"
-     "            \"Bias_240\": None,\n"
-     "            \"Is_Bull\": None,\n"
-     "            \"Is_Overheated\": None,\n"
-     "            \"Is_Foreign_Hedging\": is_foreign_hedging,\n"
-     "        }\n"
-     "\n"
-     "    bias_240 = ((current_price - ma_240) / ma_240) * 100\n",
-     "    current_price = current_price or 1.0\n"
-     "    ma_240 = ma_240 or current_price\n"
-     "    futures_net_oi = futures_net_oi or 0\n"
-     "\n"
-     "    bias_240 = ((current_price - ma_240) / ma_240) * 100\n"),
-    ("    is_overheated = bias_240 > 20.0\n"
-     "\n"
-     "    if is_bull_market:\n",
-     "    is_overheated = bias_240 > 20.0\n"
-     "    is_foreign_hedging = futures_net_oi < -30000\n"
-     "\n"
-     "    if is_bull_market:\n"),
-)
+def _v4_fd989ae(current_price, ma_240, futures_net_oi):
+    """修前引擎：`fd989ae` 的 `evaluate_market_status_v4_final` 函式本體，逐字凍結於本檔。
+
+    📌 驗收阻擋 3-1 更正：原本由現行檔反向替換出「修前體」—— 修前修後共用的算式（`* 0.99`、
+    `round(…, 2)`）一起被突變時兩邊同步改變，對拍抓不到。改為凍結副本（不讀 git 歷史、不由現行檔
+    反推；CI 淺 clone 亦可跑），並由下方寫死的 golden 表雙重釘住。
+    """
+    current_price = current_price or 1.0
+    ma_240 = ma_240 or current_price
+    futures_net_oi = futures_net_oi or 0
+
+    bias_240 = ((current_price - ma_240) / ma_240) * 100
+    is_bull_market = current_price >= (ma_240 * 0.99)
+    is_overheated = bias_240 > 20.0
+    is_foreign_hedging = futures_net_oi < -30000
+
+    if is_bull_market:
+        if is_overheated or is_foreign_hedging:
+            signal = "🟡 多頭過熱 / 震盪警戒"
+            action = "大盤乖離與外資避險過高。建議暫停積極型基金單筆申購，轉為定期定額，並拉高防禦型/平衡型基金權重。"
+            hold_ratio = "50% - 70%"
+        else:
+            signal = "🟢 強勢多頭"
+            action = "均線多頭排列且籌碼穩定。建議擴大核心部位，增加成長型股票基金曝險。"
+            hold_ratio = "80% - 100%"
+    else:
+        signal = "🔴 空頭防禦"
+        action = "跌破年線，趨勢偏空。維持既有定期定額，單筆操作宜觀望。"
+        hold_ratio = "20% - 40%"
+
+    return {
+        "Signal": signal,
+        "Action_Advice": action,
+        "Suggested_Holding": hold_ratio,
+        "Bias_240": round(bias_240, 2),
+        "Is_Bull": is_bull_market,
+        "Is_Overheated": is_overheated,
+        "Is_Foreign_Hedging": is_foreign_hedging,
+    }
 
 
-def _load_mc_pre():
-    import importlib.util
-    with open(MC.__file__, encoding='utf-8') as f:
-        code = _apply(f.read(), _V2N1_REVERT)
-    spec = importlib.util.spec_from_loader('_z3_macro_compute_pre', loader=None)
-    m = importlib.util.module_from_spec(spec)
-    m.__file__ = MC.__file__
-    exec(compile(code, MC.__file__, 'exec'), m.__dict__)
-    return m
-
-
-_V4_PRE = _load_mc_pre().evaluate_market_status_v4_final
+_V4_PRE = _v4_fd989ae
 _V4 = MC.evaluate_market_status_v4_final
 _V4_KEYS = ['Signal', 'Action_Advice', 'Suggested_Holding', 'Bias_240', 'Is_Bull',
             'Is_Overheated', 'Is_Foreign_Hedging']
 _PRICE_KEYS = _V4_KEYS[:-1]     # 依賴價格／年線的鍵（Is_Foreign_Hedging 只看外資期貨）
+
+# ── golden：以 `fd989ae` 實算後寫死（驗收阻擋 3-1；不在測試裡讀 git、不由任何程式反推）──────────
+_G_BULL, _G_HOT, _G_BEAR = '🟢 強勢多頭', '🟡 多頭過熱 / 震盪警戒', '🔴 空頭防禦'
+_V4_GOLDEN_ACTION = {
+    _G_BULL: '均線多頭排列且籌碼穩定。建議擴大核心部位，增加成長型股票基金曝險。',
+    _G_HOT: '大盤乖離與外資避險過高。建議暫停積極型基金單筆申購，轉為定期定額，並拉高防禦型/平衡型基金權重。',
+    _G_BEAR: '跌破年線，趨勢偏空。維持既有定期定額，單筆操作宜觀望。',
+}
+_V4_GOLDEN_HOLD = {_G_BULL: '80% - 100%', _G_HOT: '50% - 70%', _G_BEAR: '20% - 40%'}
+#: (價, 年線, 外資期貨) → (Signal, Bias_240, Is_Bull, Is_Overheated, Is_Foreign_Hedging)
+_V4_GOLDEN = [pytest.param(a, w, id=repr(a)) for a, w in (
+    ((20000.0, 19000.0, 0), (_G_BULL, 5.26, True, False, False)),          # round 2 位（改 1 位 → 5.3）
+    ((20000.0, 19000.0, -40000), (_G_HOT, 5.26, True, False, True)),       # 多頭 × 外資避險
+    ((20000.0, 19000.0, -30000), (_G_BULL, 5.26, True, False, False)),     # 避險門檻（不含等號）
+    ((20000.0, 19000.0, -30001), (_G_HOT, 5.26, True, False, True)),
+    ((25000.0, 19000.0, 0), (_G_HOT, 31.58, True, True, False)),           # 多頭 × 過熱
+    ((22800.0, 19000.0, 0), (_G_BULL, 20.0, True, False, False)),          # 乖離恰 20（不含等號）
+    ((22800.000000000004, 19000.0, 0), (_G_HOT, 20.0, True, True, False)),  # 乖離 20.000000000000018
+    ((21004.0, 17503.0, 0), (_G_HOT, 20.0, True, True, False)),
+    ((18000.0, 19000.0, 0), (_G_BEAR, -5.26, False, False, False)),        # 空頭
+    ((18000.0, 19000.0, -40000), (_G_BEAR, -5.26, False, False, True)),    # 空頭 × 避險（燈仍空頭）
+    ((18700.0, 19000.0, 0), (_G_BEAR, -1.58, False, False, False)),        # 0.98 < 價/年線 < 0.99
+    ((18809.99, 19000.0, 0), (_G_BEAR, -1.0, False, False, False)),        # 0.99 邊界下方
+    ((18810.0, 19000.0, 0), (_G_BULL, -1.0, True, False, False)),          # 0.99 邊界（含等號）
+    ((17150.0, 17320.0, 0), (_G_BULL, -0.98, True, False, False)),
+    ((19001.0, 19000.0, 0), (_G_BULL, 0.01, True, False, False)),          # round 2 位（改 1 位 → 0.0）
+    ((18990.0, 19000.0, 0), (_G_BULL, -0.05, True, False, False)),
+    ((19950.0, 19000.0, 0), (_G_BULL, 5.0, True, False, False)),
+    ((20000, 16000, None), (_G_HOT, 25.0, True, True, False)),              # int、期貨 None
+    ((16000, 20000, 5000), (_G_BEAR, -20.0, False, False, False)),
+    ((1.0, 0.5, 0), (_G_HOT, 100.0, True, True, False)),
+    ((0.5, 1.0, 0), (_G_BEAR, -50.0, False, False, False)),
+)]
 
 _NOT_FINITE_POSITIVE = [
     pytest.param(v, id=i) for v, i in (
@@ -258,6 +289,8 @@ _NOT_FINITE_POSITIVE = [
         ('inf', 'str-inf'), (True, 'True'), (False, 'False'), (np.bool_(True), 'np.True_'),
         (np.bool_(False), 'np.False_'), (_HUGE, '10**400'), (-_HUGE, '-10**400'), (pd.NA, 'pd.NA'),
         ([], 'list'), ({}, 'dict'), (complex(1, 0), 'complex'),
+        (np.complex128(20000), 'np.complex128'), (np.complex64(20000), 'np.complex64'),
+        (np.complex128(20000 + 5j), 'np.complex128-imag'), (np.array(20000 + 0j), 'complex-0d-array'),
     )
 ]
 
@@ -277,7 +310,9 @@ class TestV4EngineNoFabrication:
     @pytest.mark.parametrize('bad', _NOT_FINITE_POSITIVE)
     def test_price_dependent_keys_none_no_raise(self, bad, side, fut):
         price, ma = {'price': (bad, 16000.0), 'ma': (20000.0, bad), 'both': (bad, bad)}[side]
-        out = _V4(price, ma, fut)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')        # 不得靠 math.isfinite 丟虛部（ComplexWarning）過關
+            out = _V4(price, ma, fut)
         assert list(out) == _V4_KEYS
         assert all(out[k] is None for k in _PRICE_KEYS), out
         # 不依賴價格的鍵照舊（含 `futures_net_oi or 0` —— 本批不動，另登記）
@@ -306,11 +341,25 @@ class TestV4EngineNoFabrication:
         assert _V4(bad, 16000.0, 0)['Bias_240'] is None
         assert _V4(20000.0, bad, 0)['Bias_240'] is None
 
-    def test_finite_positive_identical_to_pre_fix(self):
+    @pytest.mark.parametrize('args,want', _V4_GOLDEN)
+    def test_golden_fd989ae(self, args, want):
+        # 修後與凍結副本都必須等於寫死值（乖離逐位；任一共用算式被改都會轉紅）
+        sig, bias, bull, hot, hedge = want
+        for fn in (_V4, _V4_PRE):
+            out = fn(*args)
+            assert list(out) == _V4_KEYS
+            assert (out['Signal'], out['Suggested_Holding'], out['Action_Advice']) == (
+                sig, _V4_GOLDEN_HOLD[sig], _V4_GOLDEN_ACTION[sig]), fn
+            assert _hexbits(out['Bias_240']) == _hexbits(bias), (fn, out['Bias_240'])
+            assert (out['Is_Bull'], out['Is_Overheated'], out['Is_Foreign_Hedging']) == (bull, hot, hedge)
+            assert type(out['Is_Bull']) is bool and type(out['Is_Overheated']) is bool
+
+    def test_finite_positive_identical_to_frozen_fd989ae(self):
         pos = [1, 2, 99, 100, 101, 16000, 19000, 20000, 25000, 1e-300, 5e-324, 0.5, 1.0,
-               15999.99, 16000.0, 16159.0, 18810.0, 19200.0, 22800.0, 22800.000000000004,
-               1.7976931348623157e308, 10 ** 300, np.float64(20000.0), np.float32(19000.0),
-               np.int64(18000), Fraction(39, 2), np.array(20000.0)]
+               15999.99, 16000.0, 16159.0, 18700.0, 18809.99, 18810.0, 18990.0, 19001.0, 19200.0,
+               22800.0, 22800.000000000004, 1.7976931348623157e308, 10 ** 300, np.float64(20000.0),
+               np.float32(19000.0), np.int64(18000), Fraction(39, 2), np.array(20000.0),
+               Decimal('20000'), Decimal('19000')]
         futs = [None, 0, -30000, -30001, -40000, 5000, np.int64(-40000), -30000.5]
         n = 0
         with np.errstate(all='ignore'):
@@ -322,14 +371,31 @@ class TestV4EngineNoFabrication:
                         n += 1
         assert n == len(pos) ** 2 * len(futs)
 
-    @pytest.mark.parametrize('p,want', [
-        (20000.0, '🟢 強勢多頭'), (25000.0, '🟡 多頭過熱 / 震盪警戒'), (18000.0, '🔴 空頭防禦'),
-        (18810.0, '🟢 強勢多頭'),                      # 19000×0.99 邊界（含等號）
-        (22800.0, '🟢 強勢多頭'),                      # 乖離恰 20.0（不含等號）
-        (22800.000000000004, '🟡 多頭過熱 / 震盪警戒'),  # 乖離 20.000000000000018
+    # ── 驗收阻擋 3-6：Decimal 是有限正實數 → 行為須與 fd989ae 相同（含它本來就會拋的組合）────────
+    def test_decimal_with_int_ma_same_as_fd989ae(self):
+        out = _V4(Decimal('20000'), 19000, 0)
+        assert type(out['Bias_240']) is Decimal and out['Bias_240'] == Decimal('5.26')
+        assert (out['Signal'], out['Suggested_Holding'], out['Is_Bull'], out['Is_Overheated'],
+                out['Is_Foreign_Hedging']) == (_G_BULL, '80% - 100%', True, False, False)
+        assert _outcome(_V4, Decimal('20000'), 19000, 0) == _outcome(_V4_PRE, Decimal('20000'), 19000, 0)
+
+    @pytest.mark.parametrize('args,msg', [
+        ((Decimal('20000'), 19000.0, 0), "unsupported operand type(s) for -: 'decimal.Decimal' and 'float'"),
+        ((20000.0, Decimal('19000'), 0), "unsupported operand type(s) for -: 'float' and 'decimal.Decimal'"),
+        ((Decimal('20000'), Decimal('19000'), 0), "unsupported operand type(s) for *: 'decimal.Decimal' and 'float'"),
+        ((20000, Decimal('19000'), 0), "unsupported operand type(s) for *: 'decimal.Decimal' and 'float'"),
     ])
-    def test_boundaries_unchanged(self, p, want):
-        assert _V4(p, 19000.0, 0)['Signal'] == _V4_PRE(p, 19000.0, 0)['Signal'] == want
+    def test_decimal_raises_like_fd989ae(self, args, msg):
+        # 有限正數 → 照原算式算（不得另把 Decimal 判無效回 None）；fd989ae 在這些組合就拋這個訊息
+        for fn in (_V4, _V4_PRE):
+            with pytest.raises(TypeError) as ei:
+                fn(*args)
+            assert str(ei.value) == msg
+
+    # ── 驗收阻擋 3-7：非實數（複數）→ 不是有限正實數 → 回 None、不拋 ───────────────────────────
+    def test_pre_fix_complex_raised(self):
+        with pytest.raises(TypeError):
+            _V4_PRE(np.complex128(20000), 19000.0, 0)       # 前提：修前在 round() 拋
 
 
 # ── 唯一消費端 v1 section_warroom：各種缺值形狀的渲染輸出修前修後相同 ────────────────

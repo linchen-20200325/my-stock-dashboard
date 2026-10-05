@@ -59,14 +59,20 @@ def _is_finite_positive(x) -> bool:
     """價／年線可用 ⇔ 有限正實數(批 Z3,V2-n1)。
 
     None／0／負／NaN／±inf／字串(含數字字串)／bool(含 numpy bool)／轉 float 溢位的超大 int
-    → False。判法參照 v1 唯一消費端 `section_warroom` 判「可讀」所用的 `section_long._finite_yoy`
-    (先排除 None／bool,再 `math.isfinite`),外加 > 0;差別是本函式連 numpy bool 也排除,
-    `_finite_yoy` 只排除 Python bool ⇒ 消費端讀 `Bias_240` 前須自行判 None(section_warroom 已加)。
+    ／複數(含 numpy complex 與 complex 陣列)→ False。判法參照 v1 唯一消費端 `section_warroom`
+    判「可讀」所用的 `section_long._finite_yoy`(先排除 None／bool,再 `math.isfinite`),外加 > 0;
+    差別是本函式連 numpy bool 與複數也排除,`_finite_yoy` 只排除 Python bool
+    ⇒ 消費端讀 `Bias_240` 前須自行判 None(section_warroom 已加)。
     ⚠️ 更正(批 Z3 驗收阻擋 1):原句「(numpy bool)修前它在算式裡就拋 TypeError」不實 —— fd989ae
     只有價與年線「兩邊都是」numpy bool 才拋(numpy bool 不支援相減);單邊時是把 np.True_ 當 1、
-    np.False_ 經 `or` 換成 1.0,算出假乖離。只判斷、不轉型:合格時引擎照舊拿原物件計算 ⇒ 輸出逐位不變。
+    np.False_ 經 `or` 換成 1.0,算出假乖離。
+    📌 批 Z3 驗收阻擋 3-7:複數不是實數 —— numpy complex 會讓 `math.isfinite` 丟掉虛部放行
+    (只發 ComplexWarning),接著在 `round()` 拋 TypeError;依規格「不是有限正實數 → None、不拋」先行排除。
+    只判斷、不轉型:合格時引擎照舊拿原物件計算 ⇒ 輸出逐位不變(Decimal 亦照舊,含修前就會拋的組合)。
     """
-    if x is None or isinstance(x, (bool, np.bool_)):
+    if x is None or isinstance(x, (bool, np.bool_, complex, np.complexfloating)):
+        return False
+    if getattr(getattr(x, 'dtype', None), 'kind', None) == 'c':     # complex ndarray(含 0 維)
         return False
     try:
         return bool(math.isfinite(x) and x > 0)
