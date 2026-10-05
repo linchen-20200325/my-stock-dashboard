@@ -17,10 +17,16 @@ closure params:
 
 session_state 讀(0 寫):
 - monthly_loss_pct(月虧損強制停機)
-- via load_section_inputs:mkt_info / cl_data / bias_info / m1b_m2_info / cl_ts / futures_net
+- via load_section_inputs:mkt_info / cl_data / bias_info / m1b_m2_info / cl_ts / warroom_summary
+  (外資期貨淨口只取 `warroom_summary['futures_net']`。批 Z6 C7-n9 起作戰室〔含「外資期貨避險」片段〕
+  不再使用 `SectionInputs.futures_net`;但 L3 `load_section_inputs` 本身仍會讀 `futures_net` 這個
+  session key 並以 `int(... or 0)` 轉型 —— 非數值字串／NaN 拋 ValueError、±inf 拋 OverflowError、
+  list 等拋 TypeError,本函式會跟著拋。falsy 值〔空字串、空容器、None、0〕經 `or 0` 換成 0,不拋。
+  正式路徑沒有任何寫入點,走不到。)
 """
 from __future__ import annotations
 
+import numpy as np
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
@@ -85,7 +91,22 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # `_tl_eff_reg` 現已是 canonical 結論(`calc_traffic_light.effective_regime`)。
     _wr_reg = _tl_eff_reg or 'unknown'
     # v4 引擎:解耦趨勢與位階,取得精準操作建議
-    _wr_fut_net = _wr_inp.futures_net
+    # 批 Z6(C7-n9,修正錯誤):外資期貨淨口原讀 `_wr_inp.futures_net`(＝ session_state['futures_net'])——
+    #   全 repo、origin/main 整個 git 歷史都沒有寫這個 key 的地方(`git log -G` 實測)⇒ 恆為 0
+    #   ⇒ 下方「外資期貨避險」片段從來出不來。
+    #   改讀 `warroom_summary['futures_net']`:同一輪在本函式之前由 `render_traffic_light_top` 寫入的
+    #   `calc_traffic_light` 外資期貨淨口(沒拿到／值凍結時為 None;`section_state` 之後就地 update 同一欄;
+    #   L3 `macro_state_locker.get_macro_state` 的 arbiter 相容路徑讀的也是這一欄)。
+    #   ⛔ 不改去補寫 session_state['futures_net'] —— L3 `UNTOUCHED_BLOCKS` 那句「全 repo 沒有任何一處
+    #   寫這個 key」會變成假話。
+    #   非有限／缺值(缺鍵／None／NaN／±inf／非數值／bool／numpy bool／複數)⇒ 視同沒有:送 None,
+    #   引擎 `or 0` ⇒ 避險不成立、片段不出。numpy bool 與複數先排除、不交給 `_finite_yoy`(它只排除
+    #   Python bool;numpy complex 會在 `math.isfinite` 丟掉虛部放行)—— 同 section_mid 批 Z3 3-3 的寫法。
+    #   有限值照原物件送進引擎(門檻、判式一字未動)。
+    _wr_sum = _wr_inp.warroom_summary
+    _wr_fut_raw = _wr_sum.get('futures_net') if isinstance(_wr_sum, dict) else None
+    _wr_fut_net = (None if isinstance(_wr_fut_raw, (np.bool_, complex, np.complexfloating))
+                   else _finite_yoy(_wr_sum, 'futures_net'))
     _v4 = evaluate_market_status_v4_final(
         _wr_bias.get('price', 0) or 0,
         _wr_bias.get('ma240', 0) or 0,
@@ -140,7 +161,17 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _v4_bits = []
         if (_wr_px is not None and _wr_ma is not None and _wr_px > 0 and _wr_ma > 0
                 and _v4.get('Bias_240') is not None):
-            _v4_bits.append(f'年線乖離 {_v4["Bias_240"]:+.1f}%{_wr_bias_badge}')
+            # 批 Z6(Z3-n10):價略低於年線(例 19999.99／20000)時引擎回的 `Bias_240` 是 −0.0 或 (−0.05, 0)
+            #   的小負數,`:+.1f` 印成「年線乖離 -0.0%」;同頁「年線位置」卡讀的 bias_info['bias_240'] 上游
+            #   已把 −0.0 正規化(批 Y2 QA)印「+0.0%」⇒ 同一頁正負號不一致。顯示前把負零正規化:
+            #   格式化結果是「-0.0」時改印「+0.0」;其餘值逐字不變(先例:批 Y2、M2N-f2)。
+            #   不用 `round(x, 1) + 0.0`:引擎收 numpy 浮點時 `Bias_240` 是 numpy 型別,其 round 不是正確捨入
+            #   (例 np.float64(0.05) → 0.0,而 `:+.1f` 印 +0.1);收 Decimal 時 `+ 0.0` 拋 TypeError ——
+            #   兩者都會動到其他值的顯示(後者是修前不崩的輸入改崩)。
+            _wr_b240_txt = f'{_v4["Bias_240"]:+.1f}'
+            if _wr_b240_txt == '-0.0':
+                _wr_b240_txt = '+0.0'
+            _v4_bits.append(f'年線乖離 {_wr_b240_txt}%{_wr_bias_badge}')
             if not _v4.get('Is_Bull'):
                 _v4_bits.append('股價在年線下')
             if _v4.get('Is_Overheated'):
