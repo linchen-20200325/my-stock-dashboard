@@ -94,6 +94,63 @@ class TestTwiiBiasNonFinite:
         assert out is not None and (out['bias_20'], out['bias_60'], out['bias_240']) == (None, None, None)
 
 
+# ── Y2-n5 QA-B：每條均線／每個乖離各自都要被檢查（單一非有限、其餘有限）──────────
+_MA_WINDOWS = {'ma20': 20, 'ma60': 60, 'ma120': 120, 'ma240': 240}
+
+
+def _put(n, pts, base=100.0):
+    c = [base] * n
+    for i, v in pts:
+        c[i] = v
+    return c
+
+
+def _mas_like_code(closes, dtype=None):
+    """與 compute_twii_bias 同一算法（dropna → tail(min(w, n)).mean()）獨立重算四條均線。"""
+    cs = _twii(closes, dtype)['Close'].dropna()
+    n = len(cs)
+    return {k: float(cs.tail(min(w, n)).mean()) for k, w in _MA_WINDOWS.items()}
+
+
+def _assert_only_non_finite(vals: dict, target: str):
+    """前提自證：恰好 target 一個非有限。±1e308 加總順序若隨 numpy 版本漂移，
+    這裡會大聲失敗，而不是讓測試悄悄不再隔離該均線／乖離。"""
+    bad = sorted(k for k, v in vals.items() if v is not None and not math.isfinite(v))
+    assert bad == [target], f'前提不成立（輸入已無法隔離 {target}）：{vals}'
+
+
+class TestTwiiBiasEachValueChecked:
+    # 均線 +inf 會讓對應乖離變 NaN（被結果檢查擋）；故 ma20/60/240 用 -inf
+    #   （calc_bias_pct 視為 ma≤0 回 None），ma120 沒有對應乖離可用 +inf。
+    #   inf 只能靠 ±1e308 在小窗溢位、大窗相消做出 —— 依加總順序，所以先自證前提。
+    @pytest.mark.parametrize('target, closes', [
+        ('ma20', _put(240, [(180, 1.5e308), (220, -1e308), (228, -1e308)])),
+        ('ma60', _put(130, [(25, 1.5e308), (64, 9e307), (81, -1e308), (122, -9e307)])),
+        ('ma120', _put(203, [(68, -1.5e308), (90, 9e307), (140, -9e307), (186, 9e307)])),
+        # ma240 單獨非有限是確定性的：-inf 只落在 ma240 的窗內
+        ('ma240', _put(240, [(50, -math.inf)])),
+    ])
+    def test_single_ma_non_finite_is_failure(self, target, closes, _no_2y):
+        _assert_only_non_finite(_mas_like_code(closes), target)
+        assert macro_snapshot.compute_twii_bias(_twii(closes)) is None
+
+    # 乖離溢位、均線全有限：object 欄的 Python int 精確相消（確定性，與 numpy 版本無關）
+    #   → 均線很小、末筆價很大。
+    @pytest.mark.parametrize('target, closes', [
+        ('bias_20', _put(240, [(-1, 17 * 10**307), (-5, -17 * 10**307), (-30, 10**307)], base=50)),
+        ('bias_60', _put(240, [(-1, 17 * 10**307), (-30, -17 * 10**307), (-100, 10**307)], base=50)),
+        ('bias_240', _put(240, [(-1, 17 * 10**307), (50, -17 * 10**307)], base=50)),
+    ])
+    def test_single_bias_non_finite_is_failure(self, target, closes, _no_2y):
+        from shared.calc_helpers import calc_bias_pct
+        mas = _mas_like_code(closes, object)
+        assert all(math.isfinite(v) for v in mas.values()), mas
+        lp = float(closes[-1])
+        biases = {f'bias_{w}': calc_bias_pct(lp, mas[f'ma{w}'], decimals=1) for w in (20, 60, 240)}
+        _assert_only_non_finite(biases, target)
+        assert macro_snapshot.compute_twii_bias(_twii(closes, dtype=object)) is None
+
+
 # ── Y2-n9：fetch_vix_block 的 ma20 溢位 ─────────────────────────────────────────
 @pytest.fixture
 def _clear_vix_cache():
@@ -126,6 +183,12 @@ class TestVixMa20Overflow:
         assert out == {'_err_vix': 'not enough data'}, out
         assert _no_non_finite(out)
         assert 'ma20 非有限值' in capsys.readouterr().out
+
+    def test_ma20_negative_overflow(self, monkeypatch, _clear_vix_cache):
+        # QA-B：負向溢位（ma20 = -inf）也要擋，不能只查 +inf
+        import yfinance
+        monkeypatch.setattr(yfinance, 'download', lambda *a, **k: _vix_df([-1.7e308] * 30))
+        assert macro_snapshot.fetch_vix_block() == {'_err_vix': 'not enough data'}
 
     def test_ma20_overflow_short_series(self, monkeypatch, _clear_vix_cache):
         # 不足 20 筆時以全部筆數平均 —— 同樣要擋
