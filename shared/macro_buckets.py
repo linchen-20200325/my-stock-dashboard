@@ -299,8 +299,16 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                source=f"紅線 {_HEALTH_RED:g}：有既有常數背書（防禦門檻預設值，手訂未校準）；"
                       f"黃線 {_HEALTH_YELLOW:g}：系統設計之警示線（低於半分轉弱警示）",
                emoji="🩺"),
+    # 批 Z4 R9（客戶 2026-10-02 定性為程式 bug：「NDC 23 分程式判黃、文件寫綠」）——
+    #   有意識的變更，⛔ 不是漏改：`yellow_lo` 23.0 → 22.0。band 低側判式是 `v <= yellow_lo`
+    #   （含等號），舊值把 23 分判成黃；而官方分數帶 `signal_thresholds.NDC_SIGNAL_BANDS`
+    #   （≥23「🟢 綠燈 穩定」）、本 spec 自己的 note（23-31 綠）、SPEC.md §11（23–31 綠／17–22 黃）
+    #   都寫 23 是綠。改 22 後 9~45 每個整數都與該表色系一致：
+    #   ≤16 紅（藍燈）／17~22 黃（黃藍燈）／23~31 綠／32~37 黃（黃紅燈）／≥38 紅。
+    #   只動這一個數字；note／source（B5-2，客戶裁示不寫分段數字）一字未動。
+    #   連帶：低側黃→紅帶寬 7 → 6（`danger_exceedance` 低側超標幅度跟著變）。
     DangerSpec("ndc_signal", "NDC 景氣對策燈號", "long", "分", "band",
-               yellow=32.0, red=38.0, yellow_lo=23.0, red_lo=16.0, decimals=0,
+               yellow=32.0, red=38.0, yellow_lo=22.0, red_lo=16.0, decimals=0,
                note="9-16 藍衰退 / 23-31 綠穩定 / 38+ 紅過熱", source="系統設計之警示線（NDC 燈號 9藍-45紅）",
                emoji="🚦"),
     DangerSpec("m1b_m2_gap", "M1B-M2 資金動能", "long", "%", "low_bad",

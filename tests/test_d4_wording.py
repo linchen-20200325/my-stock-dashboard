@@ -52,6 +52,8 @@ def test_b5_no_internal_codes_on_screen(key):
 
 def test_b5_2_ndc_writes_no_segment_numbers():
     """R9（NDC 23 分邊界）未修 ⇒ B5-2 ⛔ 不寫分段數字（只留既有的「9藍-45紅」）。"""
+    # 📌 批 Z4（2026-10-05）：R9 已修（yellow_lo 23→22，見 tests/test_batch_z4.py）；
+    #    「B5-2 不寫分段數字」照舊有效（客戶 10-02 裁示），本守衛一字不改。
     src = mb.SPECS_BY_KEY["ndc_signal"].source
     for seg in ("16", "17", "22", "23", "31", "32", "37", "38"):
         assert seg not in src, src
