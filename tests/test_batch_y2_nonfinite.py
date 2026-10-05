@@ -201,22 +201,65 @@ class TestFedFundsNonFinite:
     def _fredgraph_rows_after_dropna(bad):
         return 1 if bad.lower() == 'nan' else 2
 
+    _LOG_FG_PREV = '[Macro/FedFunds/fredgraph] ⚠️ 前一筆非有限值'
+    _LOG_API_PREV = '[Macro/FedFunds/FRED-API] ⚠️ 前一筆非有限值'
+
     @pytest.mark.parametrize('bad', ['inf', '-inf', 'nan'])
-    def test_fredgraph_prev_non_finite_falls_to_api(self, _ff, bad):
+    def test_fredgraph_prev_non_finite_falls_to_api(self, _ff, capsys, bad):
         _ff['csv'] = _Resp(text=_fred_csv([bad, '4.08']))
         _ff['api'] = _Resp(js=_fred_api(['4.33', '4.08']))
         out = macro_snapshot.fetch_fed_funds_block()
         assert out['fed_funds']['source'] == 'FRED-API'
         assert out['fed_funds']['current'] == 4.08 and out['fed_funds']['prev'] == 4.33
+        log = capsys.readouterr().out
+        # NaN 列先被 dropna 剔除、不經新守衛 → 不印；±inf 才印
+        assert (self._LOG_FG_PREV in log) is (bad.lower() != 'nan')
+        assert self._LOG_API_PREV not in log
 
     @pytest.mark.parametrize('bad', ['inf', '-inf', 'nan'])
-    def test_both_tiers_prev_non_finite_existing_failure_exit(self, _ff, bad):
+    def test_both_tiers_prev_non_finite_existing_failure_exit(self, _ff, capsys, bad):
         _ff['csv'] = _Resp(text=_fred_csv([bad, '4.08']))
         _ff['api'] = _Resp(js=_fred_api([bad, '4.08']))
         out = macro_snapshot.fetch_fed_funds_block()
         n = self._fredgraph_rows_after_dropna(bad)
         assert out == {'_err_fed_funds': f'fredgraph:rows<2({n})'}
         assert 'prev' not in repr(out)
+        log = capsys.readouterr().out
+        assert (self._LOG_FG_PREV in log) is (bad.lower() != 'nan')
+        assert self._LOG_API_PREV in log
+
+    # QA 追加：≥3 列，區分 [-2] 與 [0]、「整段清空」與「只剔除壞列／濾掉非有限值」
+    @pytest.mark.parametrize('bad', ['inf', '-inf'])
+    def test_fredgraph_3rows_bad_prev_whole_tier_rejected(self, _ff, bad):
+        _ff['csv'] = _Resp(text=_fred_csv(['5.33', bad, '4.08']))
+        _ff['api'] = _Resp(js=_fred_api(['4.33', '4.08']))
+        out = macro_snapshot.fetch_fed_funds_block()
+        assert out['fed_funds']['source'] == 'FRED-API'
+        assert out['fed_funds']['current'] == 4.08 and out['fed_funds']['prev'] == 4.33
+        assert '5.33' not in repr(out)
+
+    @pytest.mark.parametrize('bad', ['inf', '-inf'])
+    def test_fredgraph_older_non_finite_not_rejected(self, _ff, bad):
+        _ff['csv'] = _Resp(text=_fred_csv([bad, '4.33', '4.08']))
+        _ff['api'] = None
+        out = macro_snapshot.fetch_fed_funds_block()
+        assert out['fed_funds']['source'] == 'FRED/fredgraph.csv'
+        assert out['fed_funds']['current'] == 4.08 and out['fed_funds']['prev'] == 4.33
+
+    @pytest.mark.parametrize('bad', ['inf', '-inf', 'nan'])
+    def test_api_3rows_bad_prev_existing_failure_exit(self, _ff, bad):
+        _ff['csv'] = None
+        _ff['api'] = _Resp(js=_fred_api(['5.33', bad, '4.08']))
+        out = macro_snapshot.fetch_fed_funds_block()
+        assert out == {'_err_fed_funds': 'fredgraph:HTTPNone'}
+
+    @pytest.mark.parametrize('bad', ['inf', '-inf', 'nan'])
+    def test_api_older_non_finite_not_rejected(self, _ff, bad):
+        _ff['csv'] = None
+        _ff['api'] = _Resp(js=_fred_api([bad, '4.33', '4.08']))
+        out = macro_snapshot.fetch_fed_funds_block()
+        assert out['fed_funds']['source'] == 'FRED-API'
+        assert out['fed_funds']['current'] == 4.08 and out['fed_funds']['prev'] == 4.33
 
     @pytest.mark.parametrize('bad', ['inf', '-inf', 'nan'])
     def test_prev_non_finite_failure_not_cached(self, _ff, bad):
