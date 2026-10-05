@@ -261,6 +261,17 @@ class TestFedFundsNonFinite:
         assert out['fed_funds']['source'] == 'FRED-API'
         assert out['fed_funds']['current'] == 4.08 and out['fed_funds']['prev'] == 4.33
 
+    def test_finite_no_prev_guard_log(self, _ff, capsys):
+        """QA N4/N6：值皆有限時，兩道 prev 守衛的 log 都不得出現。"""
+        _ff['csv'] = _Resp(text=_fred_csv(['5.33', '4.333', '4.087']))
+        assert macro_snapshot.fetch_fed_funds_block()['fed_funds']['source'] == 'FRED/fredgraph.csv'
+        _ff['csv'] = None
+        _ff['api'] = _Resp(js=_fred_api(['5.33', '4.333', '4.087']))
+        macro_snapshot.fetch_fed_funds_block.clear()
+        assert macro_snapshot.fetch_fed_funds_block()['fed_funds']['source'] == 'FRED-API'
+        log = capsys.readouterr().out
+        assert self._LOG_FG_PREV not in log and self._LOG_API_PREV not in log
+
     @pytest.mark.parametrize('bad', ['inf', '-inf', 'nan'])
     def test_prev_non_finite_failure_not_cached(self, _ff, bad):
         _ff['csv'] = _Resp(text=_fred_csv([bad, '4.08']))
