@@ -275,7 +275,8 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
             # C7-n1（§1.A-3(a) 只快取成功結果）：三個 session 快取只寫**可用**結果
             #   （`_pivot6_usable`）—— 失敗 dict／最新一日缺不寫，下一輪 rerun 重新向 L1 要。
             #   不會轟炸上游：L1 這三支本來就「失敗不入快取＋同參數冷卻」（D2-f40；秒數見
-            #   `shared.fail_cooldown.FAIL_COOLDOWN_SEC`），冷卻期內回同一份失敗結果、不重打外部來源。
+            #   `shared.fail_cooldown.FAIL_COOLDOWN_SEC`），冷卻期內回同一份失敗結果、不重打外部來源；
+            #   外資那支的「沒資料」兩種 error 與「最新一日缺」L1 照 TTL 快取（`_fii_ok`），同樣不重打。
             #   可用結果照舊寫入、照舊沿用。
             _ndc_h = st.session_state.get('_ndc_hist_cache')
             if _ndc_h is None:
