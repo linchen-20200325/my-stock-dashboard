@@ -20,8 +20,11 @@ import pytest
 from tests.test_m2n2_no_zero_fill import _FakeST, _apply, _load, _mod, _source
 
 #: 修後 → 修前（反向替換；恰好一處）。
+#: 📌 批 Z7（C7-n7，有意識的更正，⛔ 不是漏改）：§八 基本面否決檢查的 VIX 一項改讀 `_vix_sane8`
+#:   （VIX 高於「數值異常」門檻 100 時當缺值；門檻以下與 `_vcur8_v` 同一個物件）—— 第 0、5 組的「修後」
+#:   字面跟著換名；「修前」字面一字未動。本檔所有 VIX 輸入皆 ≤ 100，判定與比對範圍不受影響。
 _REVERT = (
-    ("    if _vcur8_v is not None and _vcur8_v >= 30:\n",
+    ("    if _vix_sane8 is not None and _vix_sane8 >= 30:\n",
      "    if _m8_vix and _m8_vix.get('current', 0) >= 30:\n"),
     ("    if _pv8_v is not None and _pv8_v < 48:\n",
      "    if _m8_pmi and _m8_pmi.get('value', 55) < 48:\n"),
@@ -31,7 +34,7 @@ _REVERT = (
      "    if _m8_exp and _m8_exp.get('yoy', 0) < -5:\n"),
     ("    _crisis_buy = _sc8_v is not None and _sc8_v <= 16\n",
      "    _crisis_buy = _m8_ndc and _m8_ndc.get('score', 25) <= 16\n"),
-    ("    _fund_evaluable = any(_v is not None for _v in (_vcur8_v, _pv8_v, _cy8_v, _sc8_v))\n",
+    ("    _fund_evaluable = any(_v is not None for _v in (_vix_sane8, _pv8_v, _cy8_v, _sc8_v))\n",
      "    _fund_evaluable = any([_m8_vix, _m8_pmi, _m8_cpi, _m8_ndc])\n"),
 )
 

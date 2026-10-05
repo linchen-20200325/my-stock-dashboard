@@ -19,11 +19,14 @@ session_state 讀(0 寫):
 """
 from __future__ import annotations
 
+import math
+
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
 from shared.macro_provenance import m1b_m2_for_scoring  # DL-f1-s17：代理值不計分（L0 SSOT）
+from shared.vix_validity import vix_value_or_none  # 批 Z7（Z3-n1）：與 §八 同一套「有效 VIX」規則（L0）
 from src.ui.render.macro_ui_components import section_header
 
 
@@ -57,8 +60,12 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
     #     「景氣位階」直接拿一個憑空的分水嶺值去分類。
     # 這正是 section_mid v19.170 已修過的同一個坑(該檔註解寫得很清楚),
     # 但 §九 這份 copy 沒跟著修。此處統一收斂。
-    def _num(node, key):
-        """`node[key]` → float;node 非 dict / key 缺 / 值為 None 或 NaN → None。"""
+    def _num_raw(node, key):
+        """`node[key]` → float;node 非 dict / key 缺 / 值為 None 或 NaN → None。
+
+        批 Z7（Z3-n1）：即原 `_num`，本體一字未改、只改名 —— ±inf 照樣回傳、超大整數照樣拋
+        OverflowError。⚠️ 只剩美國核心 CPI 用它（理由見下方 `_ai_cpi`），其餘一律走 `_num`。
+        """
         if not isinstance(node, dict):
             return None
         _v = node.get(key)
@@ -70,13 +77,37 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
             return None
         return None if _f != _f else _f   # NaN guard
 
-    _ai_vix  = _num(_m8_vix, 'current')
+    def _num(node, key):
+        """批 Z7（Z3-n1，§1）：`_num_raw` 再擋 ±inf、接 OverflowError（超大整數，例 10**400）→ None。
+
+        原 `_num` 讓 ±inf 一路算進分支（出口 +inf →「景氣擴張強勢期」、SOX +inf →「半導體點火」、
+        M1B +inf →「熱錢大量流入」…），超大整數則讓整個 §九 拋 OverflowError。改後走各欄位既有缺值路徑；
+        有限值 → 同一個 float，輸出不變。
+        """
+        try:
+            _f = _num_raw(node, key)
+        except OverflowError:
+            return None
+        return _f if (_f is None or math.isfinite(_f)) else None
+
+    # 批 Z7（Z3-n1）：VIX 改走 L0 共用判定（與 §八 `_vcur8_v`、§三 `read_v4_macro_veto` 同一套規則）——
+    #   原 `_num` 收下 ≤ 0、−inf、bool（含 numpy bool）、數字字串、numpy 複數，印「（安全）」「極度平靜」，
+    #   +inf 印「≥30…流動性急凍」，10**400 整段拋 OverflowError。無效一律當缺值 ⇒ ④ 走既有「待取得」、
+    #   ⑤ 不列 VIX、不進多空計分。有效 VIX → 與原 `float()` 同一個值，輸出不變。
+    _ai_vix  = vix_value_or_none(_m8_vix.get('current')) if isinstance(_m8_vix, dict) else None
+    # 批 Z7（Z3-n1，比照批 Z3 V1-n5）：VIX「有值但無效」≠「載入中」—— 只有 `current` 為 None／缺鍵、
+    #   或 VIX 節點本身不是 dict，才算真的沒值（④ 原句一字不變）；其餘無效值一律算「有值但無效」。
+    _vix_bad9 = (isinstance(_m8_vix, dict) and _m8_vix.get('current') is not None
+                 and _ai_vix is None)
     _ai_vma  = _num(_m8_vix, 'ma20')
     _ai_is_cli = bool(_m8_pmi.get('is_oecd_cli', False)) if isinstance(_m8_pmi, dict) else False
     _ai_cli  = _num(_m8_pmi, 'value') if _ai_is_cli else None
     _ai_pmi  = _num(_m8_pmi, 'value') if not _ai_is_cli else None
     _ai_exp  = _num(_m8_exp, 'yoy')
-    _ai_cpi  = _num(_m8_cpi, 'yoy')
+    # ⛔ 批 Z7（Z3-n1）：CPI 刻意不套 ±inf→None／溢位→None，照原 `_num`（`_num_raw`）——
+    #   ④ 把 CPI 缺值當正常（`_cpi_ok = _ai_cpi is None or …`，另列 C8-n7、屬 ⑤），套了會把
+    #   +inf／10**400 變成「CPI 正常」而印「🟢 美股平穩…無系統性風險」。CPI 的輸出一切照舊。
+    _ai_cpi  = _num_raw(_m8_cpi, 'yoy')
     # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理 → 當缺，
     # ③ 卡走既有「待取得 M1B/M2」、⑤ 結論不列、不進多空計分。非代理時同一個物件。
     _ai_mi8  = m1b_m2_for_scoring(st.session_state.get('m1b_m2_info')) or {}
@@ -216,7 +247,10 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
         _ai3_desc = 'M2 數據未就緒，暫無法判斷 Gap'
 
     # ── ④ 美股動態 ──────────────────────────────────────────────
-    _ai4_lbl, _ai4_clr, _ai4_desc = '待取得', '#484f58', 'VIX / CPI 數據載入中'
+    # 批 Z7（Z3-n1，比照批 Z3 V1-n5）：VIX「有值但無效」時值明明到了，說「數據載入中」是假的 ——
+    #   只在此時把「VIX / CPI 數據載入中」整句純刪（全句只有一個子句；⛔ 不新增字），標籤「待取得」照舊；
+    #   真的沒值（見 `_vix_bad9`）原句一字不變。
+    _ai4_lbl, _ai4_clr, _ai4_desc = '待取得', '#484f58', ('' if _vix_bad9 else 'VIX / CPI 數據載入中')
     if _ai_vix is not None:
         _cpi_ok  = _ai_cpi is None or _ai_cpi < 3.0
         _cpi_wrm = _ai_cpi is not None and 3.0 <= _ai_cpi < 4.0

@@ -254,7 +254,11 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                 except (TypeError, ValueError, OverflowError):   # OverflowError 視同非有限(批 Y2,V2-n8)
                     _v4_vix2 = None
             _li_for_v4 = st.session_state.get('li_latest')
-            _v4_fut2 = 0.0
+            # 批 Z7（C7-n3 (b)，§1）：先行指標未載入（None／空表）或讀取失敗時，外資期貨原預設 0.0 口 ——
+            #   把「沒資料」捏成「多空平衡 0 口」交給 V4 引擎。改 None ⇒ 引擎 `_macro_number` 當未取得。
+            #   本頁只畫防守價／上方賣壓／相對籌碼三卡、不顯示引擎的總經燈 ⇒ 畫面零變化。
+            #   ⛔ `_v4_pcr2` 與下方 `or 0` 取值不在本列範圍（未動）。
+            _v4_fut2 = None
             _v4_pcr2 = 100.0
             if _li_for_v4 is not None and not _li_for_v4.empty:
                 try:

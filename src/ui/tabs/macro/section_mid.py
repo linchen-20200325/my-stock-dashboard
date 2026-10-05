@@ -34,6 +34,11 @@ from src.compute.macro import coerce_inst_dict
 from src.data.macro import check_macro_alerts, fetch_macro_snapshot
 from src.ui.render.macro_ui_components import render_macro_alerts  # v19.159:render 歸位 L4
 
+# 批 Z7（C7-n7，§3.3）：「VIX 數值異常」門檻 —— 原為下方結論段 `_vix_now8 > 100` 的字面值，抽成本檔常數，
+#   值未動。VIX 高於本值時：結論段照舊印「❌ VIX 數值異常…結論暫不顯示」（原句不動），且 KPI 卡、
+#   基本面否決檢查一併當缺值（見 `_vix_sane8`），同一頁不再一邊說「數值異常」、一邊照判「恐慌衝頂，強制空手」。
+_VIX_ABNORMAL_ABOVE = 100
+
 
 def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict) -> None:
     """渲染中期桶(§八 總經拼圖 v4.0,原 tab_macro line 2975-3411)。"""
@@ -135,6 +140,14 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     #   VIX 節點本身不是 dict（例 'x'、5）讀不到 `current` 鍵，比照缺鍵（批 V2 V1-n4 測試釘原句）。
     _vix_bad8 = (isinstance(_m8_vix, dict) and _m8_vix.get('current') is not None
                  and _vcur8_v is None)
+    # 批 Z7（C7-n7）：VIX > `_VIX_ABNORMAL_ABOVE` 時，下方結論段說「❌ VIX 數值異常…結論暫不顯示」，
+    #   同頁 KPI 卡標題卻照判「🚨 恐慌衝頂，強制空手」、否決清單照列「VIX=150.0 ≥ 30…強制空手！」（自相矛盾）。
+    #   KPI 卡與基本面否決檢查（清單、可評估、缺項）改讀 `_vix_sane8`：高於門檻 → 當缺值 ⇒ 走既有
+    #   「待取得」卡／「VIX待取得，未納入任何判斷」；結論段仍讀 `_vcur8_v`（原句不動）。
+    #   比較取 float(…)，與結論段 `_vix_now8 = float(_vcur8_v)` 同一個數（Decimal 等型別兩處不會分歧）。
+    #   ⛔ `_vcur8_v` 的取值規則不動（批 Z3 定案）；門檻以下（含恰 100）是同一個物件，輸出不變。
+    _vix_sane8 = (None if (_vcur8_v is not None and float(_vcur8_v) > _VIX_ABNORMAL_ABOVE)
+                  else _vcur8_v)
 
     with _s8c1[0]:
         if _m8_ndc and _sc8_v is not None:
@@ -260,8 +273,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     
     with _s8c2[2]:
         # 批 V2(V1-n4):`_vcur8_v` 先判 → 非 dict 的 `_m8_vix` 短路走既有缺值卡,不再 `.get` 崩潰
-        if _vcur8_v is not None and _m8_vix and _m8_vix.get('dates'):
-            _vcur8 = _vcur8_v
+        # 批 Z7(C7-n7):改判 `_vix_sane8` —— VIX 高於「數值異常」門檻時同樣走下方既有「待取得」卡
+        if _vix_sane8 is not None and _m8_vix and _m8_vix.get('dates'):
+            _vcur8 = _vix_sane8
             # M2N-f1：MA20 缺 → 標題拿掉「（MA20=…）」那段（只刪不加字），⛔ 不捏「MA20=0」。
             _vma8  = _finite_yoy(_m8_vix, 'ma20')
             _vma8_txt = f'（MA20={_vma8}）' if _vma8 is not None else ''
@@ -368,8 +382,10 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     # 改沿用上方 KPI 卡已算好的有限值（`_vcur8_v`／`_pv8_v`／`_cy8_v`／`_ey8_v`／`_sc8_v`，
     # 缺鍵／None／NaN／±inf／非數值一律為 None）。值非有限 → 該條件略過（同缺鍵時的既有行為）；
     # 分支、門檻、文案一字未動，訊息仍印原 dict 的值（有限時與比較用的是同一個物件）。
+    # 批 Z7（C7-n7）：VIX 這一項（清單／可評估／缺項三處）改讀 `_vix_sane8`（與 KPI 卡同一個值）——
+    #   高於「數值異常」門檻時當缺值 ⇒ 走既有「VIX待取得，未納入任何判斷」；門檻以下同一個物件。
     _veto8 = []
-    if _vcur8_v is not None and _vcur8_v >= 30:
+    if _vix_sane8 is not None and _vix_sane8 >= 30:
         _veto8.append(('🚨', f'VIX={_m8_vix["current"]} ≥ 30：全球流動性危機，無視所有技術面買訊，強制空手！', TRAFFIC_RED))
     if _pv8_v is not None and _pv8_v < 48:
         _veto8.append(('⚠️', f'🇹🇼 台灣 PMI={_m8_pmi["value"]} < 48：在地製造業需求急凍，若 SOX 仍漲為「無基之彈」，降低持股水位', TRAFFIC_YELLOW))
@@ -386,7 +402,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     # 四個來源任一有資料才算「本檢查可評估」；全空時不下任何結論（§1）。
     # M2N-f4：只算**有限值** —— 原判 dict 真值，dict 在、值為 None／NaN 時也算可評估，
     # 會印出假的「✅ 無觸發」。
-    _fund_evaluable = any(_v is not None for _v in (_vcur8_v, _pv8_v, _cy8_v, _sc8_v))
+    _fund_evaluable = any(_v is not None for _v in (_vix_sane8, _pv8_v, _cy8_v, _sc8_v))
     if _veto8:
         _exp_title = (f'🚨 {VETO_FUNDAMENTAL_NAME}已觸發（展開看詳情）' if _has_veto else
                       '💡 危機入市訊號（展開看詳情）')
@@ -400,7 +416,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         # 批 D4 M2N-f6（客戶 2026-10-02 選 C2＝A）：五項有缺時把沒檢查到的項目講出來，
         #   ⛔ 不再一律宣稱「景氣／通膨／外需面無系統性風險訊號」。項目名取自
         #   `VETO_FUNDAMENTAL_INPUTS` 既有字樣；五項皆有值時原句一字不動。
-        _fund_missing8 = [_nm for _vv, _nm in ((_vcur8_v, 'VIX'), (_pv8_v, '台灣 PMI'),
+        _fund_missing8 = [_nm for _vv, _nm in ((_vix_sane8, 'VIX'), (_pv8_v, '台灣 PMI'),
                                                (_cy8_v, '美國核心 CPI'), (_ey8_v, '台灣出口 YoY'),
                                                (_sc8_v, 'NDC 燈號')) if _vv is None]
         if _fund_missing8:
@@ -483,8 +499,8 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
         #   改有限值或 None ⇒ 走既有「CLI未知」。
         _cli_8 = float(_pv8_v) if _pv8_v is not None else None
     
-    # VIX 防呆：若值 > 100 代表 API 錯置
-    if _vix_now8 is not None and _vix_now8 > 100:
+    # VIX 防呆：若值 > 100 代表 API 錯置（批 Z7 C7-n7：門檻改讀本檔常數 `_VIX_ABNORMAL_ABOVE`，值未動、原句不動）
+    if _vix_now8 is not None and _vix_now8 > _VIX_ABNORMAL_ABOVE:
         st.error(f'❌ VIX 數值異常（{_vix_now8:.0f}），疑似 API 變數映射錯誤，結論暫不顯示。請重新整理。')
     else:
         # ── 策略3：VIX 否決權（持股天花板）──────────────────────
