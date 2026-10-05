@@ -62,6 +62,18 @@ class TestR9NdcBoundary:
         assert classify_danger(score, NDC) == expected
         assert classify_danger(float(score), NDC) == expected
 
+    def test_non_integer_follows_the_shared_le_rule(self):
+        """批 Z4 追補【2】（QA：R9-c／R9-M05／R9-M17）：非整數沿用全燈共用的「≤ yellow_lo 才黃」。
+
+        總管 2026-10-05 裁定：⛔ 不另立 NDC 專屬語意。
+        ⚠️ 正式路徑的 NDC 分數一律是整數（`src/data/macro/macro_snapshot.fetch_ndc_block` 的來源
+        全都轉 `int`，兩組 QA 皆查得）；本釘子**只鎖共用比較規則**，⛔ 不是官方分數帶語意
+        （官方表 22.4 會落在「黃藍燈」）。⛔ 不釘畫面顯示（22.4 顯示「22分」卻亮綠屬既有類型的
+        已知限制，總管另登記）。
+        """
+        assert classify_danger(22.4, NDC) == "green"
+        assert classify_danger(22.0, NDC) == "yellow"
+
     def test_only_the_number_changed(self):
         """只動 `yellow_lo`；其餘欄位與畫面上的字（note／source＝B5-2）一字未動。"""
         assert NDC.yellow_lo == 22.0
@@ -286,6 +298,17 @@ class TestD4n2SharedPredicate:
     def test_accepts_readonly_mapping(self):
         from types import MappingProxyType
         assert rejected_all_nonfinite(MappingProxyType(_rec(NAN))) is True
+
+    @pytest.mark.parametrize("bad", ["-inf", "nan", "inf", "46.3"])
+    def test_non_real_value_raises_type_error(self, bad):
+        """批 Z4 追補【3】（QA D4-b）：rejected 的值是字串 → `math.isfinite` 拋 TypeError（現行行為）。
+
+        釘的是「⛔ 先 `float()` 強轉」：強轉後 `'-inf'` 會被當成非有限值、整件事變成靜默轉灰。
+        L2 契約下走不到（L2 寫入的一律是 Python float；產出端契約由本檔追補【5】的契約測試釘住）。
+        """
+        rec = {"reason": MISSING_OUT_OF_RANGE, "rejected": [("源0", bad, _WHY_NONFINITE)]}
+        with pytest.raises(TypeError):
+            rejected_all_nonfinite(rec)
 
     @pytest.mark.parametrize("name", sorted(SCENARIOS))
     def test_real_l2_sidecar(self, name):
