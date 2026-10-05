@@ -213,11 +213,15 @@ _V2_OOR_TXT = ("取到的值超出合理範圍,已被擋下 —— 通常是上�
 
 
 def _rec(*vals, reason=MISSING_OUT_OF_RANGE, key="us10y"):
-    """readiness 側車一筆（形狀同 L2 `macro_helpers._rec`）；`vals`＝被擋下的值，依序一源一筆。"""
+    """readiness 側車一筆（形狀同 L2 `macro_helpers._rec`）；`vals`＝被擋下的值，依序一源一筆。
+
+    `wired` / `discriminative` 照 L2 的作法**抄自 spec**（批 Z4 追補：原本寫死 True，
+    融資 `margin` 的側車就會跟 L0 對不上）。
+    """
     _sp = SPECS_BY_KEY[key]
     return {
-        "key": key, "label": _sp.label, "bucket": _sp.bucket, "wired": True,
-        "discriminative": True, "state": "missing", "reason": reason, "value": None,
+        "key": key, "label": _sp.label, "bucket": _sp.bucket, "wired": bool(_sp.wired),
+        "discriminative": bool(_sp.discriminative), "state": "missing", "reason": reason, "value": None,
         "hit_source": None, "candidates": [f"源{i}" for i in range(len(vals))],
         "rejected": [(f"源{i}", v, _WHY_NONFINITE if not math.isfinite(v)
                       else f"out_of_range[{_sp.valid_min},{_sp.valid_max}]")
@@ -475,3 +479,199 @@ class TestD4n2AllThreeUseTheSharedPredicate:
     def test_macro_v2(self, monkeypatch):
         assert _v2_reason(monkeypatch, True, (46.3,)) == MISSING_NO_VALUE
         assert _v2_reason(monkeypatch, False, (NAN,)) == MISSING_OUT_OF_RANGE
+
+
+# ══════════════════════════════════════════════════════════════════
+# 批 Z4 追補（2026-10-05 QA 驗收 A 組 B1）【1】D4-n2 三頁 × 全燈參數化
+# ══════════════════════════════════════════════════════════════════
+# 修前的 D4-n2 釘子：總經 v2／資料診斷頁只測 us10y、今天頁只測 6 盞 ⇒ 下列突變 fast＋slow 全綠存活：
+#   只對「有 valid 範圍」的燈套用（D4-f／D4-g）、只對 `discriminative=True` 套用（D4-m／D4-n）、
+#   單一盞例外（D4-o：ism_pmi；D4-l：news_systemic）。
+# 母集合＝`BUCKET_DANGER_SPECS`（16 盞）；兩種輸入：
+#   (a) 真 L2 路徑注入：可注入的燈 × NaN／+inf／−inf（`compute_five_bucket_summary` 實跑）；
+#   (b) 合成側車：全 16 盞（含 `news_systemic`），目標燈「被擋值全非有限」、其餘 15 盞照常有值。
+# 斷言一律落在使用者看得到的輸出：
+#   今天頁＝狀態／徽章 #7／「為什麼」句／去哪補短語／覆蓋率「故障 0」；
+#   總經 v2＝`Row.reason` 與明細句；資料診斷頁＝📵 那一組＋該燈的「└」逐筆行（⛔ 不是 📐）。
+from shared.macro_buckets import (  # noqa: E402
+    BUCKET_DANGER_SPECS,
+    CL_INTL_KEY_DXY,
+    CL_INTL_KEY_US10Y,
+)
+
+#: (a) 真 L2 注入**排除**的燈與理由（明列，⛔ 不靜默略過）。
+REAL_L2_EXCLUDED: dict[str, str] = {
+    "news_systemic": ("值由 L2 自己數則數（`float(sum(...))`，恆為有限整數），上游沒有能塞進 "
+                      "NaN／±inf 的欄位 ⇒ 真 L2 走不到「被擋值全非有限」；改由 (b) 合成側車涵蓋"),
+}
+#: 三頁**實際不消費**的燈與理由。現況 16 盞全 `wired=True` ⇒ 三頁都消費全部 16 盞，本表為空。
+#: 日後若有燈改成 `wired=False`：三頁都先判「未接線」、⛔ 不讀缺值原因（L2 也不會寫 out_of_range）
+#: ⇒ 必須登記在這裡並寫明理由（`TestD4n2ParamUniverse` 會逼你登記）。
+PAGE_EXCLUDED: dict[str, str] = {}
+
+ALL_KEYS = [s.key for s in BUCKET_DANGER_SPECS]
+PAGE_KEYS = [k for k in ALL_KEYS if k not in PAGE_EXCLUDED]
+REAL_L2_KEYS = [k for k in PAGE_KEYS if k not in REAL_L2_EXCLUDED]
+NONFINITE = [NAN, INF, -INF]
+_NF_IDS = ["nan", "+inf", "-inf"]
+#: 總管指定的最小涵蓋：無 valid 範圍（vix／ndc_signal）、`discriminative=False`（margin）、ism_pmi。
+MUST_COVER = {"vix", "ndc_signal", "margin", "ism_pmi"}
+
+
+def _inject(key: str, x) -> dict:
+    """把 `x` 塞進 `key` 那盞燈在真 L2（`compute_five_bucket_summary`）實際讀的那一格。"""
+    def _df(col):
+        return pd.DataFrame({col: [x]})
+    return {
+        "health": dict(warroom_summary={"health_score": x}),
+        "ndc_signal": dict(macro_info={"ndc_signal": {"score": x}}),
+        "m1b_m2_gap": dict(m1b_m2_info={"gap": x, "source": "CBC-tier1"}),
+        "ism_pmi": dict(macro_info={"ism_pmi": {"value": x}}),
+        "us_core_cpi": dict(macro_info={"us_core_cpi": {"yoy": x}}),
+        "tw_export": dict(macro_info={"tw_export": {"yoy": x}}),
+        "bias_240": dict(bias_info={"bias_240": x}),
+        "us10y": dict(macro_info={"us10y": {"current": x}}),
+        "dxy": dict(cl_data={"intl": {CL_INTL_KEY_DXY: _df("close")}}),
+        "vix": dict(macro_info={"vix": {"current": x}}),
+        "adl": dict(cl_data={"adl": _df("ad_ratio")}),
+        "fut_net": dict(li_latest=_df("外資大小")),
+        "margin": dict(cl_data={"margin": x}),
+        "jingqi": dict(jingqi_info={"avg": x}),
+        "foreign_net": dict(cl_data={"inst": {"外資及陸資": {"net": x}}}),
+    }[key]
+
+
+def _with_base_macro(kw: dict) -> dict:
+    """資料診斷頁那一列要「已載入」：macro_info 至少要有一個實質 key（沒有就補一個有值的 VIX）。"""
+    return kw if kw.get("macro_info") else {**kw, "macro_info": dict(_VIX_OK)}
+
+
+def _ok_rec(spec) -> dict:
+    """合成側車裡「照常有值」的一筆（值取 spec 自己的黃線 ⇒ ⛔ 不手抄門檻）。"""
+    return {"key": spec.key, "label": spec.label, "bucket": spec.bucket,
+            "wired": bool(spec.wired), "discriminative": bool(spec.discriminative),
+            "state": "ok", "reason": None, "value": float(spec.yellow), "hit_source": "T",
+            "candidates": ["T"], "rejected": []}
+
+
+def _synthetic(target: str, x) -> dict:
+    """全 16 盞的合成側車：`target` 被擋值全是非有限值 `x`，其餘 15 盞照常有值。"""
+    rd = {s.key: _ok_rec(s) for s in BUCKET_DANGER_SPECS}
+    rd[target] = _rec(x, key=target)
+    return rd
+
+
+def _today_tiles(rd: dict):
+    from src.ui.render.macro_v2_cards import band_meta, threshold_text
+    from src.ui.views import page_today as PT
+    return PT.build_indicator_tiles(PT.MacroReadout(requested=True, readiness=rd),
+                                    band_label=band_meta, thr_text=threshold_text)
+
+
+def _assert_today_gray(tiles, key: str) -> None:
+    """今天頁：目標燈＝既有「無輸入」灰態（#7）＋既有說法＋出口短語；覆蓋率沒有「故障」。"""
+    from src.ui.views import page_today as PT
+    tile = [t for b in tiles.values() for t in b if t.card.key == f"detail.{key}"][0]
+    assert tile.card.state == UI_MISSING_RETRYABLE, (key, tile.card.state)
+    assert PT.v2_card_badge_n(tile.card) == 7, key                      # ⚠︎ — 缺漏 · 可重跑
+    _exit = "不在本頁射程內" if key in PT.OUT_OF_REACH_LIGHT_KEYS else "按上方 🚀 更新"
+    assert PT.v2_level_line(tile)[1] == (
+        ("現在", f"{SPECS_BY_KEY[key].label}　無數值"),
+        ("為什麼", MISS_TEXT[MISS_NO_INPUT]),
+        ("去哪補", _exit)), key
+    cov = PT.coverage(tiles)
+    assert cov.fault == 0 and "故障 0" in cov.text(), (key, cov.text())
+
+
+def _assert_v2_no_value(rows, key: str) -> None:
+    """總經 v2：目標列 `Row.reason`＝no_value，明細句＝既有「上游來源這輪沒有回值」那句。"""
+    from src.ui.tabs import tab_macro_v2 as TV
+    row = {r.key: r for r in rows}[key]
+    assert (row.state, row.band, row.value) == ("missing", "gray", None), key
+    assert row.reason == MISSING_NO_VALUE, (key, row.reason)
+    assert TV._REASON_TXT.get(row.reason or "", "") == _V2_NO_VALUE_TXT, key
+
+
+def _assert_dc_no_value(detail: str, key: str, rejected) -> None:
+    """資料診斷頁：目標燈在「📵 上游無值」組，其下緊接它自己的「└」逐筆行（字樣同修前）。"""
+    expect = [f"　└ {key}:{_lbl} = {_v} {_why}" for _lbl, _v, _why in rejected]
+    assert expect, key
+    assert _group_of(detail, key) == ("📵 上游無值", expect), (key, detail)
+
+
+class TestD4n2ParamUniverse:
+    def test_param_universe(self):
+        """母集合＝16 盞；排除一律明列＋理由；總管指定的四盞都在兩種輸入的參數裡。"""
+        assert len(ALL_KEYS) == len(set(ALL_KEYS)) == len(BUCKET_DANGER_SPECS)
+        assert set(PAGE_KEYS) | set(PAGE_EXCLUDED) == set(ALL_KEYS)
+        assert all(PAGE_EXCLUDED.values()) and all(REAL_L2_EXCLUDED.values())
+        assert set(REAL_L2_EXCLUDED) <= set(PAGE_KEYS)
+        # 未接線的燈三頁都不讀缺值原因 ⇒ 不可能在母集合裡而不登記（見 PAGE_EXCLUDED 註解）
+        assert all(SPECS_BY_KEY[k].wired for k in PAGE_KEYS)
+        assert MUST_COVER <= set(REAL_L2_KEYS) and MUST_COVER <= set(PAGE_KEYS)
+        assert "news_systemic" in PAGE_KEYS            # 真 L2 走不到 ⇒ 靠 (b) 合成側車
+        assert SPECS_BY_KEY["vix"].valid_min is None and SPECS_BY_KEY["ndc_signal"].valid_min is None
+        assert SPECS_BY_KEY["margin"].discriminative is False
+
+    @pytest.mark.parametrize("x", NONFINITE, ids=_NF_IDS)
+    @pytest.mark.parametrize("key", REAL_L2_KEYS)
+    def test_real_l2_really_writes_nonfinite_only(self, key, x):
+        """(a) 的前提：真 L2 對這盞燈確實寫出「out_of_range＋被擋值全非有限」（⛔ 不改 L2 原因碼）。"""
+        rec = _readiness(**_inject(key, x))[key]
+        assert rec["state"] == "missing" and rec["reason"] == MISSING_OUT_OF_RANGE, (key, rec)
+        assert rec["rejected"] and rejected_all_nonfinite(rec), (key, rec["rejected"])
+
+
+class TestD4n2AllLampsRealL2:
+    """(a) 真 L2 路徑注入：可注入的 15 盞 × NaN／+inf／−inf。"""
+
+    @pytest.mark.parametrize("x", NONFINITE, ids=_NF_IDS)
+    @pytest.mark.parametrize("key", REAL_L2_KEYS)
+    def test_today_page(self, key, x):
+        _assert_today_gray(_today_tiles(_readiness(**_inject(key, x))), key)
+
+    @pytest.mark.parametrize("x", NONFINITE, ids=_NF_IDS)
+    @pytest.mark.parametrize("key", REAL_L2_KEYS)
+    def test_macro_v2(self, key, x):
+        from src.ui.tabs import tab_macro_v2 as TV
+        _assert_v2_no_value(TV.build_rows(_readiness(**_inject(key, x))), key)
+
+    @pytest.mark.parametrize("x", NONFINITE, ids=_NF_IDS)
+    @pytest.mark.parametrize("key", REAL_L2_KEYS)
+    def test_data_coverage(self, key, x):
+        kw = _with_base_macro(_inject(key, x))
+        _assert_dc_no_value(_coverage_detail(**kw), key, _readiness(**kw)[key]["rejected"])
+
+
+class TestD4n2AllLampsSyntheticSidecar:
+    """(b) 合成側車：全 16 盞（含真 L2 走不到的 `news_systemic`）。"""
+
+    @pytest.mark.parametrize("x", NONFINITE, ids=_NF_IDS)
+    @pytest.mark.parametrize("key", PAGE_KEYS)
+    def test_today_page(self, key, x):
+        _assert_today_gray(_today_tiles(_synthetic(key, x)), key)
+
+    @pytest.mark.parametrize("x", NONFINITE, ids=_NF_IDS)
+    @pytest.mark.parametrize("key", PAGE_KEYS)
+    def test_macro_v2(self, key, x):
+        from src.ui.tabs import tab_macro_v2 as TV
+        rows = TV.build_rows(_synthetic(key, x))
+        _assert_v2_no_value(rows, key)
+        # 批 Z4 追補 D-M28（QA B 組）：其餘 15 盞（運作中／已失準）的 `Row.reason` 一律 None
+        others = [r for r in rows if r.key != key]
+        assert {r.state for r in others} == ({"live", "degraded"} if key != "margin" else {"live"})
+        assert all(r.reason is None for r in others), [(r.key, r.reason) for r in others]
+
+    @pytest.mark.parametrize("x", NONFINITE, ids=_NF_IDS)
+    @pytest.mark.parametrize("key", PAGE_KEYS)
+    def test_data_coverage(self, monkeypatch, key, x):
+        """資料診斷頁自己會呼叫 L2 —— 這裡把 L2 換成「回填合成側車」，其餘照真路徑跑。"""
+        import src.compute.macro as CM
+        rd_syn = _synthetic(key, x)
+
+        def _fake_summary(**kw):
+            kw["readiness_out"].update(rd_syn)
+            return {}
+
+        monkeypatch.setattr(CM, "compute_five_bucket_summary", _fake_summary)
+        _assert_dc_no_value(_coverage_detail(macro_info=dict(_VIX_OK)), key, rd_syn[key]["rejected"])
