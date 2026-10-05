@@ -296,8 +296,16 @@ def rejected_all_nonfinite(rec: Optional[Mapping[str, Any]]) -> bool:
         「上游換標的 / 換慣例」這件事沒有消失)。
 
     `rejected` 每筆的形狀沿用 L2:`(來源標籤, 值, 原因字串)`,本函式只看第 2 欄。
-    值的型別由 L2 `_num()` 保證是 float;不是數字時 `math.isfinite` 照樣拋
-    `TypeError`(與批 D4 C1 原本寫在資料診斷頁的那一行同一個行為,⛔ 不吞)。
+    形狀不合法時 fail loud、⛔ 不吞:值不是實數(例:字串 `'-inf'`)→ `math.isfinite` 拋
+    `TypeError`;tuple 不足 2 欄 → `IndexError`。三處受到的影響**不一樣**,據實分開寫:
+      · 資料診斷頁:修前修後相同(批 D4 C1 原本寫在該頁的那一行就是這個行為);
+      · 今天頁、總經 v2:這是**新增的例外路徑** —— 兩頁修前根本不讀 `rejected`,
+        修前遇到同樣的側車不會拋。
+    在 L2 契約下走不到:L2 `_first_sane` 寫入的每一筆都是 ≥2 欄 tuple、第 2 欄是 `_num()`
+    轉出的 Python float(產出端契約由 `tests/test_batch_z4.py::TestL2RejectedContract` 釘住)。
+    📌 2026-10-05 更正(批 Z4 追補【5】,有意識的更正,⛔ 不是漏改):原句寫「不是數字時
+    `math.isfinite` 照樣拋 `TypeError`(與批 D4 C1 原本寫在資料診斷頁的那一行同一個行為)」——
+    那句**只對資料診斷頁成立**,對今天頁與總經 v2 是新增的例外路徑,故改寫成上面的範圍。
     """
     if not isinstance(rec, Mapping):
         return False

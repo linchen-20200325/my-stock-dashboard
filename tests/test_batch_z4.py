@@ -718,3 +718,107 @@ class TestD4n2AllLampsSyntheticSidecar:
 
         monkeypatch.setattr(CM, "compute_five_bucket_summary", _fake_summary)
         _assert_dc_no_value(_coverage_detail(macro_info=dict(_VIX_OK)), key, rd_syn[key]["rejected"])
+
+
+# ══════════════════════════════════════════════════════════════════
+# 批 Z4 追補【5】L2 產出端契約＋形狀不合法時 fail loud
+# ══════════════════════════════════════════════════════════════════
+# `rejected_all_nonfinite` 遇到形狀不合法的 rejected 會拋（值非實數 → TypeError；tuple 不足 2 欄 →
+# IndexError）。資料診斷頁修前就是如此；今天頁與總經 v2 則是**新增的例外路徑**（兩頁修前不讀
+# rejected）。總管 2026-10-05 裁定：維持 fail-loud、⛔ 不吞 —— 但「L2 契約下走不到」要由測試保證：
+#   · `TestL2RejectedContract`：真 L2 產生器 × 各種型別 → 每筆 rejected 都是 ≥2 欄 tuple、第 2 欄是 Python float；
+#   · `TestMalformedRejectedFailsLoud`：形狀不合法時三處都照樣拋（⛔ 不得被改成靜默吞掉）。
+from decimal import Decimal  # noqa: E402
+
+import numpy as np  # noqa: E402
+
+
+def _deep_merge(a: dict, b: dict) -> dict:
+    out = dict(a)
+    for k, v in b.items():
+        out[k] = _deep_merge(out[k], v) if isinstance(out.get(k), dict) and isinstance(v, dict) else v
+    return out
+
+
+def _inject_all(x) -> dict:
+    """把 `x` 同時塞進 15 盞可注入燈的**每一個**取值格（us10y 三個源全塞）＋新聞清單。"""
+    kw: dict = {}
+    for _k in REAL_L2_KEYS:
+        kw = _deep_merge(kw, _inject(_k, x))
+    kw = _deep_merge(kw, {"macro_info": {"us10y": {"value": x}},
+                          "cl_data": {"intl": {CL_INTL_KEY_US10Y: pd.DataFrame({"close": [x]})}}})
+    kw["news_items"] = [{"is_systemic": x}]
+    return kw
+
+
+#: 總管指定的輸入型別：None、字串、Decimal、numpy 型別、±inf、NaN、bool（另加一般有限值作對照）。
+_CONTRACT_VALUES = [
+    None,
+    "abc", "", "nan", "-inf", "inf", "46.3",
+    Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity"), Decimal("46.3"),
+    np.float64("nan"), np.float32("inf"), np.float64("-inf"), np.int64(5), np.int32(-7), np.bool_(True),
+    NAN, INF, -INF,
+    True, False,
+    46.3, -1e300, 1e300,
+]
+
+
+class TestL2RejectedContract:
+    @pytest.mark.parametrize("x", _CONTRACT_VALUES, ids=repr)
+    def test_every_rejected_entry_is_a_tuple_with_a_python_float(self, x):
+        rd = _readiness(**_inject_all(x))
+        assert set(rd) == set(ALL_KEYS)
+        for _key, _rec_l2 in rd.items():
+            for _e in _rec_l2.get("rejected") or []:
+                assert isinstance(_e, tuple) and len(_e) >= 2, (_key, _e)
+                assert type(_e[1]) is float, (_key, _e, type(_e[1]))
+
+    @pytest.mark.parametrize("x", [NAN, INF, -INF, "nan", "-inf", Decimal("NaN"), np.float64("inf")],
+                             ids=repr)
+    def test_contract_is_not_vacuous(self, x):
+        """上一條不是因為 rejected 全空才綠：非有限輸入下，15 盞可注入燈每盞都至少擋下一筆。"""
+        rd = _readiness(**_inject_all(x))
+        assert [k for k in REAL_L2_KEYS if not rd[k]["rejected"]] == []
+        assert all(rejected_all_nonfinite(rd[k]) for k in REAL_L2_KEYS)
+
+
+#: 形狀不合法的 rejected → 預期例外（現行行為；⛔ 不吞）。
+_MALFORMED = [
+    pytest.param([("源0", "-inf", _WHY_NONFINITE)], TypeError, id="value-is-str"),
+    pytest.param([("源0",)], IndexError, id="tuple-shorter-than-2"),
+]
+
+
+def _malformed_rec(rejected) -> dict:
+    return {**_rec(key="us10y"), "rejected": list(rejected)}
+
+
+class TestMalformedRejectedFailsLoud:
+    @pytest.mark.parametrize("rejected,exc", _MALFORMED)
+    def test_l0(self, rejected, exc):
+        with pytest.raises(exc):
+            rejected_all_nonfinite(_malformed_rec(rejected))
+
+    @pytest.mark.parametrize("rejected,exc", _MALFORMED)
+    def test_today_page_new_exception_path(self, rejected, exc):
+        with pytest.raises(exc):
+            _today_tile("us10y", _malformed_rec(rejected))
+
+    @pytest.mark.parametrize("rejected,exc", _MALFORMED)
+    def test_macro_v2_new_exception_path(self, rejected, exc):
+        from src.ui.tabs import tab_macro_v2 as TV
+        with pytest.raises(exc):
+            TV.build_rows({"us10y": _malformed_rec(rejected)})
+
+    @pytest.mark.parametrize("rejected,exc", _MALFORMED)
+    def test_data_coverage_same_as_before(self, monkeypatch, rejected, exc):
+        import src.compute.macro as CM
+        rd_bad = {"us10y": {**_malformed_rec(rejected)}}
+
+        def _fake_summary(**kw):
+            kw["readiness_out"].update(rd_bad)
+            return {}
+
+        monkeypatch.setattr(CM, "compute_five_bucket_summary", _fake_summary)
+        with pytest.raises(exc):
+            _coverage_detail(macro_info=dict(_VIX_OK))
