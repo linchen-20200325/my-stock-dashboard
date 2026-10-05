@@ -18,7 +18,10 @@ closure params:
 session_state 讀(0 寫):
 - monthly_loss_pct(月虧損強制停機)
 - via load_section_inputs:mkt_info / cl_data / bias_info / m1b_m2_info / cl_ts / warroom_summary
-  (只取 `warroom_summary['futures_net']`;批 Z6 C7-n9 起不再讀 `futures_net` 這個 session key)
+  (外資期貨淨口只取 `warroom_summary['futures_net']`。批 Z6 C7-n9 起作戰室〔含「外資期貨避險」片段〕
+  不再使用 `SectionInputs.futures_net`;但 L3 `load_section_inputs` 本身仍會讀 `futures_net` 這個
+  session key 並以 `int(... or 0)` 轉型 —— 非數值字串／NaN 拋 ValueError、±inf 拋 OverflowError、
+  list 等拋 TypeError,本函式會跟著拋。正式路徑沒有任何寫入點,走不到。)
 """
 from __future__ import annotations
 

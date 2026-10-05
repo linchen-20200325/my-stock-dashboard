@@ -25,6 +25,17 @@
 sha256 必須等於修前 golden）—— 等於斷言「除了這一處，整個作戰室輸出逐字與基底相同」。
 `get_allocation` 換成 L0 `build_allocation_decision(None)`（＝「總經未評估」的真 AllocationDecision，與 bare mode
 下真 get_allocation 的結果相同）—— 只為讓本檔不受工作目錄有沒有 `macro_state.json` 影響，與本批無關。
+
+📌 驗收補件（批 Z6 QA，總管裁定「突變一律要以行為斷言殺掉，字面錨點不算」）：
+- 以原始碼字面替換建立還原體／變體的測試（`_pre()`／`_variant`）**只**放在 `TestRevertedCopyIsTheBase` 與兩個
+  `...Why...` 類；正式碼一改，它們會因找不到替換點而失敗 —— 那是字面錨點，⛔ 不算殺掉突變。
+  其餘各類全部不讀原始碼字面，突變時在那裡轉紅才算行為斷言。
+- 補的情境（修後輸出於 `7e17c21` 實跑後寫死；修前輸出另於基底 `84c1ca4` 原檔實跑核對）：
+  期貨值 numpy complex64／clongdouble（不是 Python `complex` 子類，只有 `np.complexfloating` 那一格擋得到）、
+  Decimal／Fraction 剛好低於 −30000（先 `float()` 會變成 −30000.0、避險不成立）、有 `jingqi_info` 時
+  `warroom_summary` 不是 dict；乖離 Decimal −0.05（`:+.1f` 半位取偶印 -0.0，`float()` 後印 -0.1）、
+  numpy float16 −0.05（實值 −0.04998779296875，與 Python float −0.05 比較時被轉成 float16 而相等）、
+  Decimal +0.05（印 +0.0，`float()` 後印 +0.1）。
 """
 from __future__ import annotations
 
@@ -37,6 +48,7 @@ import random
 import re
 import warnings
 from decimal import Decimal
+from fractions import Fraction
 
 import numpy as np
 import pandas as pd
@@ -191,7 +203,27 @@ _FUT_CASES = [
      _UNDO_ONLY_HEDGE),
     ('pxmiss-wr-ninf', _S(_PXMISS, {'futures_net': -math.inf}), [], _D_NO_HINT, ()),
     ('pxmiss-wr-none', _S(_PXMISS, {'futures_net': None}), [], _D_NO_HINT, ()),
-    # ── 舊 session key（全 repo 0 寫入點）：修後不再讀 ────────────────────────────────
+    # ── 驗收補件（修後於 7e17c21 實跑釘住；修前＝基底一律不讀 warroom_summary ⇒ 皆無避險）────────────
+    # numpy complex64／clongdouble 不是 Python `complex` 的子類（complex128 才是）—— 只有 `np.complexfloating`
+    # 那一格擋得到；少了它，`_finite_yoy` 經 `math.isfinite` 丟掉虛部放行、引擎判成避險。
+    ('wr-np-complex64-imag', _S(_BULL, {'futures_net': np.complex64(-40000 + 1j)}), [_H], _D_BULL, ()),
+    ('wr-np-complex64', _S(_BULL, {'futures_net': np.complex64(-40000)}), [_H], _D_BULL, ()),
+    ('wr-np-clongdouble-imag', _S(_BULL, {'futures_net': np.clongdouble(-40000 + 1j)}), [_H], _D_BULL, ()),
+    # 精確型別剛好低於 −30000：照原物件比 ⇒ 成立；先 `float()` 會變成 −30000.0 ⇒ 不成立
+    ('wr-decimal-just-below', _S(_BULL, {'futures_net': Decimal('-30000.0000000000000001')}), [_HH], _D_BULL,
+     _UNDO_HEDGE),
+    ('wr-fraction-just-below', _S(_BULL, {'futures_net': Fraction(-300000000000000000001, 10 ** 16)}), [_HH],
+     _D_BULL, _UNDO_HEDGE),
+    ('wr-decimal-m30000', _S(_BULL, {'futures_net': Decimal('-30000')}), [_H], _D_BULL, ()),
+    ('wr-fraction-m30000', _S(_BULL, {'futures_net': Fraction(-30000)}), [_H], _D_BULL, ()),
+    # warroom_summary 不是 dict：有 jingqi_info 時 L3 loader 不碰它 ⇒ 原樣交給作戰室，作戰室須照常渲染、不拋
+    # （沒有 jingqi_info 時 L3 loader 自己就在 `wr5.get` 拋 AttributeError —— 修前即如此，屬 L3、不在本批）
+    ('jq-wr-list', {**_S(_BULL, ['x']), 'jingqi_info': {'avg': 55.0}}, [_H], _D_BULL, ()),
+    ('jq-wr-str', {**_S(_BULL, 'abc'), 'jingqi_info': {'avg': 55.0}}, [_H], _D_BULL, ()),
+    ('jq-wr-int', {**_S(_BULL, 1), 'jingqi_info': {'avg': 55.0}}, [_H], _D_BULL, ()),
+    ('jq-wr-m40000', {**_S(_BULL, {'futures_net': -40000.0}), 'jingqi_info': {'avg': 55.0}}, [_HH], _D_BULL,
+     _UNDO_HEDGE),
+    # ── 舊 session key（全 repo 0 寫入點）：修後作戰室不再用它（L3 loader 仍讀它並轉 int —— 本區皆整數，不拋）──
     ('legacy-m40000', _S(_BULL, legacy=-40000), [_H], _D_BULL_HEDGE, (('年線乖離 +5.3%', _HH),)),
     ('legacy-m40000-wr-zero', _S(_BULL, {'futures_net': 0.0}, legacy=-40000), [_H], _D_BULL_HEDGE,
      (('年線乖離 +5.3%', _HH),)),
@@ -251,6 +283,19 @@ _BIAS_CASES = [
      ['年線乖離 +0.1%'], _D_P01, ()),
     ('b-np-19990', _S({'price': np.float64(19990.0), 'ma240': np.float64(20000.0)}), ['年線乖離 -0.1%'],
      ['年線乖離 -0.1%'], _D_M01, ()),
+    # ── 驗收補件（修後於 7e17c21 實跑釘住；修前於基底 84c1ca4 原檔實跑核對）──────────────────────────
+    # Decimal −0.05：Decimal 的 `:+.1f` 半位取偶 ⇒ -0.0 ⇒ 改 +0.0；`float()` 後是 -0.05000…0277 ⇒ 會印 -0.1
+    ('b-dec-19990', _S({'price': Decimal('19990'), 'ma240': 20000}), ['年線乖離 +0.0%'], ['年線乖離 -0.0%'],
+     _D_NEGZERO, _NZ),
+    ('b-dec-19990.2', _S({'price': Decimal('19990.2'), 'ma240': 20000}), ['年線乖離 +0.0%'], ['年線乖離 -0.0%'],
+     _D_NEGZERO, _NZ),                                                 # 乖離 −0.049 → 引擎 round 2 位 −0.05
+    # numpy float16：引擎回 np.float16(−0.05)（實值 −0.04998779296875）⇒ 印 -0.0 ⇒ 改 +0.0；與 Python
+    # float −0.05 比較時（NumPy 2）Python 端被轉成 float16 ⇒ 兩者相等，`-0.05 < b` 為假
+    ('b-f16-2000-2001', _S({'price': np.float16(2000), 'ma240': np.float16(2001)}), ['年線乖離 +0.0%'],
+     ['年線乖離 -0.0%'], _D_NEGZERO, _NZ),
+    # Decimal +0.05：`:+.1f` 半位取偶 ⇒ +0.0（修前修後相同）；`float()` 後印 +0.1
+    ('b-dec-20010', _S({'price': Decimal('20010'), 'ma240': 20000}), ['年線乖離 +0.0%'], ['年線乖離 +0.0%'],
+     _D_ZERO, ()),
 ]
 
 _BIAS_BY_ID = {_c[0]: _c for _c in _BIAS_CASES}
@@ -326,8 +371,38 @@ def _pre():
     return _variant((_REVERT_FUT, _REVERT_NEGZERO), 'pre')
 
 
+def _e2e(monkeypatch, fut, mod):
+    """真上游：`render_traffic_light_top`（calc_traffic_light → warroom_summary）先寫、作戰室（`mod`）後讀。
+
+    回 (fake, 作戰室那段輸出的「📐」行)。`li_latest['外資大小']` ＝ `fut`。
+    """
+    import src.ui.tabs.macro.handlers as H
+    import src.ui.tabs.macro.section_traffic_light as TL
+    state = {'cl_ts': _dt.datetime.now().strftime('%Y-%m-%d %H:%M'),      # 30 分鐘內 ⇒ 快取新鮮
+             'mkt_info': {'score': 3.0, 'regime': 'bull', 'max_score': 4.0},
+             'jingqi_info': {'avg': 55.0},
+             'cl_data': {'inst': {'外資': {'net': 12.5}}, 'adl': pd.DataFrame({'ad_ratio': [50.0]}),
+                         'margin': 2000.0},
+             'li_latest': pd.DataFrame({'外資大小': [fut], '韭菜指數': [10.0]}),
+             'bias_info': dict(_BULL)}
+    fake = _FakeST(state)
+    with monkeypatch.context() as m:
+        m.setattr(TL, 'st', fake)
+        m.setattr(H, 'st', fake)
+        m.setattr(mod, 'st', fake)
+        _ph, show, reg = TL.render_traffic_light_top()
+        assert show is True
+        n0 = len(fake.out)
+        mod.render_section_warroom(reg, show, False)
+    return fake, _hint(fake.out[n0:])
+
+
 class TestRevertedCopyIsTheBase:
-    """前提：還原體在本檔每個情境都重現基底 84c1ca4 的 golden —— 本批對這支檔的行為改動只有這兩處。"""
+    """前提：還原體在本檔每個情境都重現基底 84c1ca4 的 golden —— 本批對這支檔的行為改動只有這兩處。
+
+    ⚠️ 本類（與兩個 `...Why...` 類）靠原始碼字面替換建立還原體／變體：正式碼一改，這裡會因找不到替換點
+    而失敗 —— 那是**字面錨點**，⛔ 不算殺掉突變。用還原體做的相對比對（修前 vs 修後）也一律集中在本類。
+    """
 
     @pytest.mark.parametrize('case', _FUT_CASES, ids=_ids(_FUT_CASES))
     def test_fut(self, case):
@@ -346,6 +421,35 @@ class TestRevertedCopyIsTheBase:
         _id, state, base_hint, base_d = case
         out = _out(state, _pre())
         assert _digest(out) == base_d and _hint(out) == base_hint
+
+    def test_e2e_pre_fix_never_showed_the_fragment(self, monkeypatch):
+        """拔掉修復（還原體）：同一份真上游輸出（外資期貨 −40000），片段出不來 —— 即 C7-n9 的錯誤。"""
+        fake, hint = _e2e(monkeypatch, -40000.0, _pre())
+        assert fake.session_state['warroom_summary']['futures_net'] == -40000.0
+        assert hint == [_H]
+
+    def test_card_and_hint_disagreed_before(self):
+        """修前同頁兩處一正一負：「年線位置」卡 +0.0%、「📐 年線位階參考」-0.0%（Z3-n10 的錯誤）。"""
+        pre = '\n'.join(t for _k, t in _out(_BIAS_BY_ID['b-full-card'][1], _pre()))
+        assert '乖離+0.0%' in pre and _HINT_DIV.format('年線乖離 -0.0%') in pre
+
+    def test_random_near_ma_pre_vs_post_only_negzero_changes(self):
+        """價在年線附近隨機取樣：修後＝修前把「年線乖離 -0.0%」換成「+0.0%」，其餘逐字相同。"""
+        rng = random.Random(10005)
+        hits = 0
+        for i in range(400):
+            ma = rng.uniform(1000.0, 30000.0)
+            d = rng.choice((rng.uniform(-6e-4, 6e-4), rng.uniform(-0.3, 0.3), rng.uniform(-1e-9, 1e-9)))
+            px = ma * (1 + d)
+            if i % 3 == 0:
+                px, ma = np.float64(px), np.float64(ma)
+            state = _S({'price': px, 'ma240': ma})
+            pre = _out(state, _pre())
+            post = _out(state)
+            hits += any('年線乖離 -0.0%' in t for _k, t in pre)
+            assert post == [(k, t.replace('年線乖離 -0.0%', '年線乖離 +0.0%')) for k, t in pre], (px, ma)
+            assert not any('-0.0%' in t for _k, t in post), (px, ma)
+        assert hits >= 50                                   # 真的走到「-0.0」那一枝
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -420,37 +524,16 @@ class TestC7n9FuturesHedgingFragment:
         assert hits >= 40                                   # 真的走到「成立」那一枝
 
     def test_e2e_traffic_light_producer_to_warroom(self, monkeypatch):
-        """真上游：`render_traffic_light_top`（calc_traffic_light → warroom_summary）先寫、作戰室後讀。"""
-        import src.ui.tabs.macro.handlers as H
-        import src.ui.tabs.macro.section_traffic_light as TL
+        """真上游：`render_traffic_light_top`（calc_traffic_light → warroom_summary）先寫、作戰室後讀。
 
-        def _e2e(fut, mod):
-            state = {'cl_ts': _dt.datetime.now().strftime('%Y-%m-%d %H:%M'),      # 30 分鐘內 ⇒ 快取新鮮
-                     'mkt_info': {'score': 3.0, 'regime': 'bull', 'max_score': 4.0},
-                     'jingqi_info': {'avg': 55.0},
-                     'cl_data': {'inst': {'外資': {'net': 12.5}}, 'adl': pd.DataFrame({'ad_ratio': [50.0]}),
-                                 'margin': 2000.0},
-                     'li_latest': pd.DataFrame({'外資大小': [fut], '韭菜指數': [10.0]}),
-                     'bias_info': dict(_BULL)}
-            fake = _FakeST(state)
-            with monkeypatch.context() as m:
-                m.setattr(TL, 'st', fake)
-                m.setattr(H, 'st', fake)
-                m.setattr(mod, 'st', fake)
-                _ph, show, reg = TL.render_traffic_light_top()
-                assert show is True
-                n0 = len(fake.out)
-                mod.render_section_warroom(reg, show, False)
-            return fake, _hint(fake.out[n0:])
-
-        fake, hint = _e2e(-40000.0, W)
+        （修前同一份上游輸出片段出不來 —— 那一條用還原體，放在 TestRevertedCopyIsTheBase。）
+        """
+        fake, hint = _e2e(monkeypatch, -40000.0, W)
         assert fake.session_state['warroom_summary']['futures_net'] == -40000.0
         assert 'futures_net' not in fake.session_state                     # 上游也沒寫舊 key
         assert hint == [_HH]
-        assert _e2e(-30000.0, W)[1] == [_H]
-        assert _e2e(math.nan, W)[1] == [_H]                                 # 上游 _safe_float → None
-        # 拔掉修復（還原體）：同一份上游輸出，片段出不來 —— 即本列的錯誤
-        assert _e2e(-40000.0, _pre())[1] == [_H]
+        assert _e2e(monkeypatch, -30000.0, W)[1] == [_H]
+        assert _e2e(monkeypatch, math.nan, W)[1] == [_H]                   # 上游 _safe_float → None
 
 
 class TestC7n9WhyTheFiniteCheck:
@@ -520,31 +603,13 @@ class TestZ3n10NegativeZeroBias:
         assert _digest(_out(state)) == _D_ZERO
 
     def test_card_and_hint_same_sign(self):
-        """同頁兩處：「年線位置」卡（上游已正規化）與「📐 年線位階參考」同為 +0.0%（修前一正一負）。"""
-        state = _BIAS_BY_ID['b-full-card'][1]
-        joined = '\n'.join(t for _k, t in _out(state))
+        """同頁兩處：「年線位置」卡（上游已正規化）與「📐 年線位階參考」同為 +0.0%。
+
+        （修前一正一負 —— 那一條用還原體，放在 TestRevertedCopyIsTheBase。）
+        """
+        joined = '\n'.join(t for _k, t in _out(_BIAS_BY_ID['b-full-card'][1]))
         assert '乖離+0.0%' in joined and _HINT_DIV.format('年線乖離 +0.0%') in joined
         assert '-0.0' not in joined
-        pre = '\n'.join(t for _k, t in _out(state, _pre()))
-        assert '乖離+0.0%' in pre and _HINT_DIV.format('年線乖離 -0.0%') in pre
-
-    def test_random_near_ma_only_negzero_changes(self):
-        """價在年線附近隨機取樣：修後＝修前把「年線乖離 -0.0%」換成「+0.0%」，其餘逐字相同。"""
-        rng = random.Random(10005)
-        hits = 0
-        for i in range(400):
-            ma = rng.uniform(1000.0, 30000.0)
-            d = rng.choice((rng.uniform(-6e-4, 6e-4), rng.uniform(-0.3, 0.3), rng.uniform(-1e-9, 1e-9)))
-            px = ma * (1 + d)
-            if i % 3 == 0:
-                px, ma = np.float64(px), np.float64(ma)
-            state = _S({'price': px, 'ma240': ma})
-            pre = _out(state, _pre())
-            post = _out(state)
-            hits += any('年線乖離 -0.0%' in t for _k, t in pre)
-            assert post == [(k, t.replace('年線乖離 -0.0%', '年線乖離 +0.0%')) for k, t in pre], (px, ma)
-            assert not any('-0.0%' in t for _k, t in post), (px, ma)
-        assert hits >= 50                                   # 真的走到「-0.0」那一枝
 
     def test_random_near_ma_display_matches_engine(self):
         """（不靠還原體）「📐」第一段＝引擎 `Bias_240` 以 `:+.1f` 格式化，唯「-0.0」改印「+0.0」。"""
@@ -586,6 +651,59 @@ class TestZ3n10WhyNotRoundPlusZero:
             '年線乖離 +0.0%']                                      # 基底與修後皆 +0.1%
         with pytest.raises(TypeError):
             _out(_S({'price': Decimal('19999.99'), 'ma240': 20000}), rnd)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 驗收補件的前提（不讀原始碼字面）：這些輸入為什麼分得開各個突變
+# ══════════════════════════════════════════════════════════════════════════
+class TestSupplementInputPremises:
+    def test_numpy_complex_subclassing(self):
+        """complex128 是 Python `complex` 的子類（已被 `complex` 那一格擋）；complex64／clongdouble 不是。"""
+        assert issubclass(np.complex128, complex)
+        assert not issubclass(np.complex64, complex) and not issubclass(np.clongdouble, complex)
+        assert issubclass(np.complex64, np.complexfloating) and issubclass(np.clongdouble, np.complexfloating)
+
+    @pytest.mark.parametrize('z', [np.complex64(-40000 + 1j), np.clongdouble(-40000 + 1j)],
+                             ids=['complex64', 'clongdouble'])
+    def test_unguarded_numpy_complex_would_assert_hedging(self, z):
+        """不先排除時：`_finite_yoy` 丟掉虛部放行（ComplexWarning），引擎判成避險。"""
+        from src.ui.tabs.macro.section_long import _finite_yoy
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            v = _finite_yoy({'f': z}, 'f')
+            assert v is not None
+            assert bool(_V4(20000.0, 19000.0, v)['Is_Foreign_Hedging']) is True
+
+    @pytest.mark.parametrize('x', [Decimal('-30000.0000000000000001'), Fraction(-300000000000000000001, 10 ** 16)],
+                             ids=['decimal', 'fraction'])
+    def test_exact_types_just_below_lose_it_through_float(self, x):
+        assert x < -30000 and float(x).hex() == (-30000.0).hex()
+        assert _V4(20000.0, 19000.0, x)['Is_Foreign_Hedging'] is True
+        assert _V4(20000.0, 19000.0, float(x))['Is_Foreign_Hedging'] is False
+
+    @pytest.mark.parametrize('wr', [['x'], 'abc', 1], ids=['list', 'str', 'int'])
+    def test_l3_loader_hands_non_dict_through_when_jingqi_present(self, wr):
+        from src.services.section_inputs import load_section_inputs
+        assert load_section_inputs({'warroom_summary': wr, 'jingqi_info': {'avg': 55.0}}).warroom_summary == wr
+
+    def test_decimal_minus_005(self):
+        b = _V4(Decimal('19990'), 20000, None)['Bias_240']
+        assert isinstance(b, Decimal) and b == Decimal('-0.05')
+        assert f'{b:+.1f}' == '-0.0'                                    # Decimal 半位取偶
+        assert f'{float(b):+.1f}' == '-0.1'                             # 先 float() ⇒ -0.1
+        assert f'{round(float(b), 1) + 0.0:+.1f}' == '-0.1'
+        assert not abs(float(b)) < 0.05                                 # 「|b|<0.05 才換」不會換
+        assert _V4(Decimal('19990.2'), 20000, None)['Bias_240'] == Decimal('-0.05')
+
+    def test_float16_minus_005(self):
+        b = _V4(np.float16(2000), np.float16(2001), None)['Bias_240']
+        assert isinstance(b, np.float16) and float(b).hex() == (-0.04998779296875).hex()
+        assert f'{b:+.1f}' == '-0.0'
+        assert not (-0.05 < b)                  # NumPy 2：Python float −0.05 被轉成 float16 ⇒ 與 b 相等
+
+    def test_decimal_plus_005(self):
+        b = _V4(Decimal('20010'), 20000, None)['Bias_240']
+        assert b == Decimal('0.05') and f'{b:+.1f}' == '+0.0' and f'{float(b):+.1f}' == '+0.1'
 
 
 # ══════════════════════════════════════════════════════════════════════════
