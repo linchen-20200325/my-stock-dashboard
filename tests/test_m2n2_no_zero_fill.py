@@ -590,7 +590,12 @@ _L3_BASE = {"VIX_Index": 17.0, "ISM_PMI_or_OECD_CLI": 51.0, "PMI_Prev_Month": 50
 
 def _scored(state: dict) -> dict:
     """引擎回傳去掉 `missing_inputs`（批 X2 M2N-f3 起有缺才帶的旗標）—— 只比計分結果。"""
-    return {k: v for k, v in state.items() if k != "missing_inputs"}
+    # 批 Z9 X2-n1：「N 項未評估」標籤隨缺值數變 → 只比計分，剝掉該標籤（N=0 時引擎回「環境正常」）
+    import re as _re
+    out = {k: v for k, v in state.items() if k != "missing_inputs"}
+    ph = _re.sub(r"、?\d+ 項未評估（缺資料不計分）", "", out.get("Macro_Phase", ""))
+    out["Macro_Phase"] = ph or "環境正常"
+    return out
 
 
 class TestL3MissingPath:

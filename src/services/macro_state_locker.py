@@ -635,6 +635,8 @@ def calculate_system_state(macro_numbers: dict) -> dict:
         labels.append("資金緊縮")
     if bias240 is not None and bias240 > 15 and _bias_resonance:
         labels.append("均線過熱")
+    if missing_inputs:                                     # 批 Z9（X2-n1）：N>0 才寫，N=0 ⛔「0 項未評估」
+        labels.append(f"{len(missing_inputs)} 項未評估（缺資料不計分）")
     macro_phase = "、".join(labels) if labels else "環境正常"
 
     _out = {

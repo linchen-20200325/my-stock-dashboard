@@ -498,7 +498,7 @@ class TestSavePortfolioNonFinite:
         row = {'ticker': 'VOO', 'lots': 1, 'avg_price': 400.0}
         row[field] = bad
         with patch.object(gsp, '_ws', return_value=ws):
-            with pytest.raises(ValueError, match='無有效持股可儲存（檢查代號、張數、均價）'):
+            with pytest.raises(ValueError, match='有張數或均價空白／無效的列，Sheet 維持原狀（檢查張數、均價）'):
                 gsp.save_portfolio('A', [{'ticker': 'QQQ', 'lots': 2, 'avg_price': 300.0}, row])
         assert ws.calls == [] and ws.get_all_values() == snap
         assert ws.row_count == 5 and ws.col_count == 5         # 連 add_rows／add_cols 都沒碰

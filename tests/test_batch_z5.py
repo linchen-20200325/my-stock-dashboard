@@ -860,7 +860,7 @@ _GOLDEN_PROMPT_FINITE = '\n'.join([
     '  "market_regime": "震盪",',
     '  "systemic_risk_level": "警告",',
     '  "exposure_limit_pct": 60,',
-    '  "Macro_Phase": "環境正常",',
+    '  "Macro_Phase": "7 項未評估（缺資料不計分）",',  # 批 Z9 X2-n1：缺 7 項 → 改字（客戶 2026-10-06 裁）
     '  "missing_inputs": [',
     '    "VIX_Index",',
     '    "ISM_PMI_or_OECD_CLI",',

@@ -66,8 +66,13 @@ class TestCalculateSystemState:
         assert "PMI收縮" in result["Macro_Phase"]
 
     def test_normal_env_label(self):
+        # 批 Z9 X2-n1：8 項齊全（N=0）才回「環境正常」；缺 6 項 → 「6 項未評估（缺資料不計分）」
+        full = {"VIX_Index": 18, "ISM_PMI_or_OECD_CLI": 51, "PMI_Prev_Month": 51,
+                "M1B_YoY_pct": 3.0, "M2_YoY_pct": 3.0, "BIAS240_pct": 0.0, "PCR": 1.0,
+                "Futures_Net_Short": 0.0}
+        assert calculate_system_state(full)["Macro_Phase"] == "環境正常"
         result = calculate_system_state({"VIX_Index": 18, "ISM_PMI_or_OECD_CLI": 51})
-        assert result["Macro_Phase"] == "環境正常"
+        assert result["Macro_Phase"] == "6 項未評估（缺資料不計分）"
 
     def test_none_values_use_defaults(self):
         result = calculate_system_state({"VIX_Index": None, "ISM_PMI_or_OECD_CLI": None})
