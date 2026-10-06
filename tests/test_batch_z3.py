@@ -873,57 +873,68 @@ def _run_mid_real_v4(mod, vix_node, mp, fut=-40000.0, base=None):
 
 
 _RED, _F40K = "🔴 紅燈", "-40,000"
-#: (§八 判無效的 VIX, 外資期貨, fd989ae 揭露框輸出) —— 以 fd989ae 實跑後寫死
-_DISCLOSURE_GOLDEN = [pytest.param(v, fut, want, id=f"{v!r}|{fut:g}") for v, fut, want in (
-    (-5, -40000.0, [("warning", _cmp_fd989ae(_RED, "-5.0", _F40K))]),
-    (0, -40000.0, [("warning", _cmp_fd989ae(_RED, "0.0", _F40K))]),
-    (-0.0, -40000.0, [("warning", _cmp_fd989ae(_RED, "-0.0", _F40K))]),
-    ("18.5", -40000.0, [("warning", _cmp_fd989ae(_RED, "18.5", _F40K))]),
-    (True, -40000.0, [("warning", _cmp_fd989ae(_RED, "1.0", _F40K))]),
-    (np.True_, -40000.0, [("warning", _cmp_fd989ae(_RED, "1.0", _F40K))]),
-    (False, -40000.0, [("warning", _cmp_fd989ae(_RED, "0.0", _F40K))]),
-    (np.int64(-3), -40000.0, [("warning", _cmp_fd989ae(_RED, "-3.0", _F40K))]),
-    (Decimal("-5"), -40000.0, [("warning", _cmp_fd989ae(_RED, "-5.0", _F40K))]),
-    (np.complex128(18), -40000.0, [("warning", _cmp_fd989ae(_RED, "18.0", _F40K))]),
-    # §三 判得出、且為 🟢 → 與 §八 一致 → 不出揭露（fd989ae 亦然）
-    (-5, 0.0, []), ("18.5", 0.0, []), (True, 0.0, []), (np.True_, 0.0, []),
-    # §三 自己也判不出（read_v4_macro_veto 回 None）→ 既有缺值句
-    (math.nan, -40000.0, [("caption", _V4_UNAVAILABLE)]),
-    (math.inf, -40000.0, [("caption", _V4_UNAVAILABLE)]),
-    (-math.inf, -40000.0, [("caption", _V4_UNAVAILABLE)]),
-    (None, -40000.0, [("caption", _V4_UNAVAILABLE)]),
-    ("", -40000.0, [("caption", _V4_UNAVAILABLE)]),
-    ("N/A", -40000.0, [("caption", _V4_UNAVAILABLE)]),
-    (pd.NA, -40000.0, [("caption", _V4_UNAVAILABLE)]),
-    ([1, 2], -40000.0, [("caption", _V4_UNAVAILABLE)]),
-    (math.nan, 0.0, [("caption", _V4_UNAVAILABLE)]),
+#: 📌 批 Z7（Z3-n4，併 Z3-n11；有意識的更正，⛔ 不是漏改 —— 總管規格明定的預期變更）：§三
+#:   `read_v4_macro_veto()` 改走 L0 共用判定 `shared.vix_validity.vix_value_or_none`（與 §八 `_vcur8_v`
+#:   同一套規則）→ 下表前 14 組「§八 判無效、§三 原本照樣判燈」的 VIX，§三 也回 None ⇒ 揭露框改走既有
+#:   缺值句 `_V4_UNAVAILABLE`（此時屬實：§三 確實判不出）。fd989ae 實跑值逐組凍結於第三欄（`pre`，
+#:   ⛔ 不再是斷言目標，只供對照「修前 → 修後」）；斷言目標為第四欄（`want`）。
+_Z7_UNAVAILABLE = [("caption", _V4_UNAVAILABLE)]
+#: (§八 判無效的 VIX, 外資期貨, fd989ae 揭露框輸出〔實跑寫死〕, 批 Z7 起的揭露框輸出)
+_DISCLOSURE_GOLDEN = [pytest.param(v, fut, pre, want, id=f"{v!r}|{fut:g}") for v, fut, pre, want in (
+    (-5, -40000.0, [("warning", _cmp_fd989ae(_RED, "-5.0", _F40K))], _Z7_UNAVAILABLE),
+    (0, -40000.0, [("warning", _cmp_fd989ae(_RED, "0.0", _F40K))], _Z7_UNAVAILABLE),
+    (-0.0, -40000.0, [("warning", _cmp_fd989ae(_RED, "-0.0", _F40K))], _Z7_UNAVAILABLE),
+    ("18.5", -40000.0, [("warning", _cmp_fd989ae(_RED, "18.5", _F40K))], _Z7_UNAVAILABLE),
+    (True, -40000.0, [("warning", _cmp_fd989ae(_RED, "1.0", _F40K))], _Z7_UNAVAILABLE),
+    (np.True_, -40000.0, [("warning", _cmp_fd989ae(_RED, "1.0", _F40K))], _Z7_UNAVAILABLE),
+    (False, -40000.0, [("warning", _cmp_fd989ae(_RED, "0.0", _F40K))], _Z7_UNAVAILABLE),
+    (np.int64(-3), -40000.0, [("warning", _cmp_fd989ae(_RED, "-3.0", _F40K))], _Z7_UNAVAILABLE),
+    (Decimal("-5"), -40000.0, [("warning", _cmp_fd989ae(_RED, "-5.0", _F40K))], _Z7_UNAVAILABLE),
+    (np.complex128(18), -40000.0, [("warning", _cmp_fd989ae(_RED, "18.0", _F40K))], _Z7_UNAVAILABLE),
+    # fd989ae：§三 判得出、且為 🟢 → 與 §八 一致 → 不出揭露；批 Z7 起 §三 判不出 → 既有缺值句
+    (-5, 0.0, [], _Z7_UNAVAILABLE), ("18.5", 0.0, [], _Z7_UNAVAILABLE),
+    (True, 0.0, [], _Z7_UNAVAILABLE), (np.True_, 0.0, [], _Z7_UNAVAILABLE),
+    # §三 自己也判不出（read_v4_macro_veto 回 None）→ 既有缺值句（fd989ae 與批 Z7 相同）
+    (math.nan, -40000.0, [("caption", _V4_UNAVAILABLE)], [("caption", _V4_UNAVAILABLE)]),
+    (math.inf, -40000.0, [("caption", _V4_UNAVAILABLE)], [("caption", _V4_UNAVAILABLE)]),
+    (-math.inf, -40000.0, [("caption", _V4_UNAVAILABLE)], [("caption", _V4_UNAVAILABLE)]),
+    (None, -40000.0, [("caption", _V4_UNAVAILABLE)], [("caption", _V4_UNAVAILABLE)]),
+    ("", -40000.0, [("caption", _V4_UNAVAILABLE)], [("caption", _V4_UNAVAILABLE)]),
+    ("N/A", -40000.0, [("caption", _V4_UNAVAILABLE)], [("caption", _V4_UNAVAILABLE)]),
+    (pd.NA, -40000.0, [("caption", _V4_UNAVAILABLE)], [("caption", _V4_UNAVAILABLE)]),
+    ([1, 2], -40000.0, [("caption", _V4_UNAVAILABLE)], [("caption", _V4_UNAVAILABLE)]),
+    (math.nan, 0.0, [("caption", _V4_UNAVAILABLE)], [("caption", _V4_UNAVAILABLE)]),
 )]
 
 
 class TestV1CrossDisclosure:
-    @pytest.mark.parametrize("v,fut,want", _DISCLOSURE_GOLDEN)
-    def test_disclosure_matches_fd989ae_golden(self, v, fut, want, monkeypatch):
+    # 📌 批 Z7（Z3-n4）：原名 `test_disclosure_matches_fd989ae_golden` —— 前 14 組自批 Z7 起刻意不再等於
+    #   fd989ae（見上表註），改名以免名實不符；斷言目標改為 `want` 欄。
+    @pytest.mark.parametrize("v,fut,pre,want", _DISCLOSURE_GOLDEN)
+    def test_disclosure_matches_golden(self, v, fut, pre, want, monkeypatch):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", _COMPLEX_WARNING)   # §三 自讀 numpy complex 的既有警告（範圍外）
             out, _light = _run_mid_real_v4(_mod("mid"), {"current": v}, monkeypatch, fut)
         assert _disclosure(out) == want, _disclosure(out)
 
-    def test_negative_vix_states_section3_value_verbatim(self, monkeypatch):
-        # 寫死字串（不經上面的凍結 f-string）：VIX=−5＋外資期貨 −40,000 口 → 比對句含 §三 實際看的值，
-        # 且同一區的 §八 自己仍判 VIX 無效（A VIX未知、否決權那句）—— 兩者都是真話、各自標明出處
+    def test_negative_vix_section3_now_unavailable_too(self, monkeypatch):
+        # 📌 批 Z7（Z3-n4，預期變更；原名 `test_negative_vix_states_section3_value_verbatim`）：
+        #   fd989ae 實跑 VIX=−5＋外資期貨 −40,000 口時，比對句為「（§三 籌碼）：🔴 紅燈　看的是 VIX=-5.0、
+        #   外資期貨=-40,000 口」（§三 收下無效 VIX）。批 Z7 起 §三 同樣判 −5 無效 → 該句不再出現，改出既有
+        #   缺值句；同一區的 §八 自己照舊判 VIX 無效（A VIX未知、否決權那句）。
         out, _light = _run_mid_real_v4(_mod("mid"), {"current": -5}, monkeypatch)
-        warns = [t for k, t in out if k == "warning" and "兩套判定結論不一致" in t]
-        assert len(warns) == 1
-        assert "（§三 籌碼）：🔴 紅燈　看的是 VIX=-5.0、外資期貨=-40,000 口" in warns[0]
-        assert ("caption", _V4_UNAVAILABLE) not in out
+        assert not [t for k, t in out if k == "warning" and "兩套判定結論不一致" in t]
+        assert ("caption", _V4_UNAVAILABLE) in out
         joined = "\n".join(t for _k, t in out)
+        assert "看的是 VIX=-5.0" not in joined
         assert "A VIX未知" in joined and ("info", _INVALID) in out
 
-    def test_section3_reader_judges_light_from_invalid_vix(self, monkeypatch):
-        # 前提：§三 自己的入口照樣拿 −5 判出 🔴 燈（根因屬 section_chips，總管另登記）——
-        # 這正是揭露框列出它的理由；若日後 §三 改為不收無效 VIX，本條會轉紅提醒同步更新 golden
+    def test_section3_reader_rejects_invalid_vix(self, monkeypatch):
+        # 📌 批 Z7（Z3-n4，預期變更；原名 `test_section3_reader_judges_light_from_invalid_vix`）：
+        #   fd989ae 時 §三 自己的入口拿 −5 判出 🔴 燈（本條原註「若日後 §三 改為不收無效 VIX，本條會轉紅提醒
+        #   同步更新 golden」—— 批 Z7 即該次更新）。批 Z7 起回 None。
         _out, light = _run_mid_real_v4(_mod("mid"), {"current": -5}, monkeypatch)
-        assert light is not None and light["_vix"] == -5.0 and light["status"].startswith("🔴")
+        assert light is None
 
     @pytest.mark.parametrize("v,fut", [(18.0, -40000.0), (35.0, 0.0), (18.0, 0.0), (25.0, -40000.0)])
     def test_valid_vix_disclosure_unchanged(self, v, fut, mid_pre, monkeypatch):
@@ -944,10 +955,12 @@ class TestV1CrossDisclosure:
 # §八 沒有可評估的結論（3-4：`_fund_evaluable` 不把無效 VIX 算進去），就沒有可比對的對象，揭露框的
 # 比對句與缺值句都不出；§八 不印任何結論，頁面上也就沒有互相矛盾的說法。注意這不是 §三 判不出：
 # 同情境下 §三 真函式照樣拿 −5 判出 🔴 燈（見 test_premise_section3_still_judges_alone）。
+# 📌 批 Z7（Z3-n4）：上一句只在 fd989ae～批 Z6 成立 —— 批 Z7 起 §三 也判下列第一行的值無效、回 None
+#   （見改名後的 test_premise_section3_now_unavailable_alone）；本段「揭露框不出」的斷言不受影響。
 #: fd989ae 在「VIX=None、其餘四項皆缺、外資期貨 −40,000 口」時的揭露框輸出 —— 以 fd989ae 實跑後寫死（無）
 _FD989AE_DISCLOSURE_ONLY_VIX_NONE: list = []
 _ONLY_VIX_INVALID = [pytest.param(v, id=repr(v)) for v in (
-    -5, 0, -0.0, "18.5", True, np.True_, np.int64(-3),          # §三 判得出燈（皆 🔴）
+    -5, 0, -0.0, "18.5", True, np.True_, np.int64(-3),          # fd989ae：§三 判得出燈（皆 🔴）；批 Z7 起 §三 也回 None
     math.nan, math.inf, pd.NA, "", "N/A",                      # §三 也判不出（read_v4_macro_veto 回 None）
 )]
 
@@ -967,10 +980,12 @@ class TestV1CrossDisclosureOnlyVix:
         assert light is None
         assert _disclosure(out) == _FD989AE_DISCLOSURE_ONLY_VIX_NONE
 
-    def test_premise_section3_still_judges_alone(self, monkeypatch):
-        # 前提：揭露框不出是因 §八 不可評估，不是 §三 判不出 —— §三 照樣拿 −5 判出 🔴 燈
+    def test_premise_section3_now_unavailable_alone(self, monkeypatch):
+        # 📌 批 Z7（Z3-n4，預期變更；原名 `test_premise_section3_still_judges_alone`）：fd989ae 時同情境下
+        #   §三 照樣拿 −5 判出 🔴 燈（揭露框不出純因 §八 不可評估）。批 Z7 起 §三 也判 −5 無效、回 None；
+        #   揭露框照舊不出（§八 不可評估 ⇒ 比對句與缺值句皆不出，見上方 test_no_disclosure_when_section8_not_evaluable）。
         _out, light = _run_mid_real_v4(_mod("mid"), {"current": -5}, monkeypatch, base={})
-        assert light is not None and light["_vix"] == -5.0 and light["status"].startswith("🔴")
+        assert light is None
 
 
 # ── 驗收（重驗）：極小正 VIX 仍是有效值 —— 不依賴 mid_pre，以 fd989ae 實跑結果寫死 ───────────────

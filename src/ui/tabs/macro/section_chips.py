@@ -9,8 +9,6 @@ closure params(explicit pass,§-1 minimal):
 """
 from __future__ import annotations
 
-import math
-
 import streamlit as st
 
 from shared.colors import (
@@ -32,6 +30,7 @@ from shared.signal_thresholds import (
     MARKET_VOLUME_SURGE_RATIO,
     TOP5_LARGE_TRADER_NET_WARN_LOTS,
 )
+from shared.vix_validity import vix_value_or_none  # 批 Z7（Z3-n4）：與 §八 同一套「有效 VIX」規則（L0）
 from src.compute.strategy import V4StrategyEngine
 # v19.176 P0-D:韭菜門檻 + 兩個「否決」判定的正式名稱一律走 L0 SSOT(§3.3)
 from src.config import (
@@ -90,16 +89,19 @@ def read_v4_macro_veto() -> dict | None:
     Returns:
         dict: engine 原始回傳（status/level/color/max_position/msg）
               外加三個輸入 `_vix` / `_futures` / `_pcr`（供 UI 揭露依據）；
-        None: VIX 未取得 → 無法判定。
+        None: VIX 未取得 → 無法判定（批 Z7 起含「有值但無效」，規則見 `shared.vix_validity`）。
     """
     _mi = st.session_state.get('macro_info') or {}
     _vix_node = _mi.get('vix')
     _vix_raw = _vix_node.get('current') if isinstance(_vix_node, dict) else None
-    try:
-        _vix = float(_vix_raw)
-    except (TypeError, ValueError, OverflowError):   # OverflowError 視同非有限(批 Y2,V2-n8)
-        return None
-    if not math.isfinite(_vix):   # NaN / ±inf → 視為未取得(批 V2,V1-n3)
+    # 批 Z7（Z3-n4，併 Z3-n11）：VIX 有效性改走 L0 共用判定（與 §八 `_vcur8_v` 同一套規則）。
+    #   原 `float()`＋`math.isfinite` 只擋缺值／非數值／溢位（批 Y2 V2-n8）／NaN／±inf（批 V2 V1-n3），
+    #   VIX ≤ 0、bool（含 numpy bool）、數字字串（含 bytes）、numpy 複數照樣判燈 —— 實跑 VIX=-5＋外資期貨
+    #   −40,000 口判 🔴，§八 揭露框於是列出「看的是 VIX=-5.0」。改後這些一律回 None ⇒ 走本函式既有
+    #   「VIX 未取得 → 無法判定」。預期副作用（總管已知）：無效 VIX＋重空單時 §三 由 🔴 轉 ⬜，與缺 VIX 時相同
+    #   （即上方「已知取捨」）；§八 揭露框改走既有缺值句。有效 VIX → 與原 `float()` 同一個值，輸出不變。
+    _vix = vix_value_or_none(_vix_raw)
+    if _vix is None:
         return None
 
     # 先行指標取「與畫面主表格同一份 ffill 後」的末筆：若 §三 吃 ffill 值、
