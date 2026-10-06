@@ -91,14 +91,22 @@ def render_traffic_light_explainer(tl: Optional[dict]) -> None:
     _fut_net = tl.get('fut_net')
     _conf = tl.get('conf', 0)
 
+    # 批 Z8(Z5-n1):`health` / `score` 可能是 **None**(L2 `calc_traffic_light` 三態化:
+    # 該腿沒拿到 = None;兩腿都缺時 health 也 = None)。上面 `.get(..., 0)` 的預設只在
+    # key 不存在時生效,key 在、值為 None 時原樣拿到 None → 修前印「健康評分:**None** / 100」。
+    # 改印下方 regime 兩行已在用的「— 未取得」。⚠️ 判 `is not None` 而**不是** `or`:
+    # 0 是合法的分數(健康 0 = 極度惡化),不可被當成「未取得」。有值時輸出逐字不變。
+    _health_txt = _health if _health is not None else '— 未取得'
+    _score_txt = _score if _score is not None else '— 未取得'
+
     with st.expander("📖 為何紅綠燈是現在這個顏色?(展開看判讀規則 + 推導)", expanded=False):
         st.markdown("#### 🧮 目前數據")
         st.markdown(
-            f"- 健康評分:**{_health}** / 100"
+            f"- 健康評分:**{_health_txt}** / 100"
             f"  *(切點:{HEALTH_DEFENSE_THRESHOLD} → 防禦級)*"
         )
         st.markdown(
-            f"- 市場分數:**{_score}** / 6"
+            f"- 市場分數:**{_score_txt}** / 6"
             f"  *(切點:多頭需 ≥ {BULL_MIN_SCORE})*"
         )
         st.markdown(

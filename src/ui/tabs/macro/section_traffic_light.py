@@ -213,9 +213,19 @@ def render_traffic_light_top() -> tuple[Any, bool, str | None]:
         # 原始碼字串掃描斷言本檔含 `compute_position_throttle` 與 `'throttle'`,
         # 直接移除會讓 CI 變紅;若只留註解讓字串掃描通過,則會製造該測試檔自己
         # (line 44-46)指出的 false green。廢止本 key 應與該測試一起改,屬另案。
-        _wr_throttle = compute_position_throttle(
-            float(_tl_init['health']), regime=_tl_eff_reg,
-            defense=bool(_tl_init.get('defense')))
+        #
+        # 批 Z8(Z5-n1):health 兩條腿(大盤評分 / 旌旗指數)同一輪都缺時,L2
+        # `calc_traffic_light` 回 `health=None`(設計如此,arbiter 回 UNLOADED_VERDICT)。
+        # 修前這裡無條件 `float(None)` → TypeError → 整個「總經」分頁被 app.py 的
+        # `_render_tab_isolated` 換成紅框,且快取新鮮的 30 分鐘內每次 rerun 都再炸一次。
+        # 改成與 L3 `allocation_service.get_allocation()` 同一寫法:health 缺就不算,
+        # throttle 寫 None(⛔ 不補 0 —— 0 分在油門表是「防禦」,等於捏一個最強利空)。
+        # health 有值時呼叫與引數逐字不變。
+        _wr_throttle = None
+        if _tl_init['health'] is not None:
+            _wr_throttle = compute_position_throttle(
+                float(_tl_init['health']), regime=_tl_eff_reg,
+                defense=bool(_tl_init.get('defense')))
         st.session_state['warroom_summary'] = {
             'traffic_light': _tl_init['label'],
             'health_score':  _tl_init['health'],
