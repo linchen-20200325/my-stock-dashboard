@@ -34,6 +34,24 @@ from src.ui.tabs.macro.handlers import _render_traffic_light  # noqa: F401
 from src.ui.tabs.macro.section_long import _finite_yoy
 
 
+def _pivot6_usable(res, key: str) -> bool:
+    """C7-n1（§1：抓取失敗 ≠ 中性）：面板 6 的 L1 結果「可用」＝ dict、無 `error`、`key` 為有限數值。
+
+    面板 6 的三個 fetcher（`fetch_ndc_signal_history`／`fetch_ndc_leading_index`／
+    `fetch_foreign_consecutive_days`）失敗時回的是**帶 `error` 的 dict**（數值欄全為 None），
+    不是 None；外資連續日數「最新一日缺」則回 `error=None` 但 `consec_days=None`。
+    修前兩者都被 `if _ndc_h or _ndc_li`／`if _fi_st` 當成真值 → 該群登記為可評估，
+    分群明細印「中性」、頭句的「可評估 N/6 群」把它算進分母；且失敗 dict 照樣寫進
+    session 快取 → 同一個 session 之後不再重抓（一次失敗凍住）。
+    `key` 傳該 fetcher 的代表值（`score_latest`／`smooth6m`／`consec_days`）；
+    「有限數值」沿用 `_finite_yoy`（缺鍵／None／NaN／±inf／bool → 不可用），不另寫一份。
+    ⚠️ 只判「有沒有值」：`smooth6m=0.0`、`consec_days=0` 是真的值，照舊可用（不看真假值）。
+    """
+    if not isinstance(res, dict) or res.get('error') is not None:
+        return False
+    return _finite_yoy(res, key) is not None
+
+
 def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
                          show_market_data: bool = True,
                          *, requested: bool | None = None) -> None:
@@ -254,26 +272,40 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
             )
             _FMD_TK = st.secrets.get('FINMIND_TOKEN', '') \
                 if hasattr(st, 'secrets') else ''
+            # C7-n1（§1.A-3(a) 只快取成功結果）：三個 session 快取只寫**可用**結果
+            #   （`_pivot6_usable`）—— 失敗 dict／最新一日缺不寫，下一輪 rerun 重新向 L1 要。
+            #   不會轟炸上游：L1 這三支本來就「失敗不入快取＋同參數冷卻」（D2-f40；秒數見
+            #   `shared.fail_cooldown.FAIL_COOLDOWN_SEC`），冷卻期內回同一份失敗結果、不重打外部來源；
+            #   外資那支的「沒資料」兩種 error 與「最新一日缺」L1 照 TTL 快取（`_fii_ok`），同樣不重打。
+            #   可用結果照舊寫入、照舊沿用。
             _ndc_h = st.session_state.get('_ndc_hist_cache')
             if _ndc_h is None:
                 _ndc_h = _f_ndc_h(months_back=12, token=_FMD_TK or '')
-                st.session_state['_ndc_hist_cache'] = _ndc_h
+                if _pivot6_usable(_ndc_h, 'score_latest'):
+                    st.session_state['_ndc_hist_cache'] = _ndc_h
             _ndc_li = st.session_state.get('_ndc_li_cache')
             if _ndc_li is None:
                 _ndc_li = _f_ndc_li(months_back=18, token=_FMD_TK or '')
-                st.session_state['_ndc_li_cache'] = _ndc_li
+                if _pivot6_usable(_ndc_li, 'smooth6m'):
+                    st.session_state['_ndc_li_cache'] = _ndc_li
             _fi_st = st.session_state.get('_fi_streak_cache')
             if _fi_st is None:
                 _fi_st = _f_fi_streak(days_back=30, token=_FMD_TK or '')
-                st.session_state['_fi_streak_cache'] = _fi_st
+                if _pivot6_usable(_fi_st, 'consec_days'):
+                    st.session_state['_fi_streak_cache'] = _fi_st
     
             # v19.173：登記可評估群。景氣對策(6-A) 與 領先指標(6-B) 同屬國發會
             #   **同一份資料集**（領先指標本身就是景氣對策信號的構成項），
             #   故合併為一個 'cycle' 群 —— 兩者同號幾乎必然，不該當成兩份證據。
             #   6-C 外資連續日數屬籌碼面，併入 'chips'（與外資期貨同一齣戲）。
-            if _ndc_h or _ndc_li:
+            # C7-n1（§1：抓取失敗 ≠ 中性）：原 `if _ndc_h or _ndc_li`／`if _fi_st` 對帶 `error` 的
+            #   失敗 dict（及外資「最新一日缺」）也成立 → 群被登記、明細印「中性」、算進分母。
+            #   改為真的有可用值才登記；沒登記的群由 L2 `aggregate_pivot_families` 標「未評估」
+            #   並從分母剔除（既有路徑與既有字樣）。可用時登記結果與修前相同。
+            if (_pivot6_usable(_ndc_h, 'score_latest')
+                    or _pivot6_usable(_ndc_li, 'smooth6m')):
                 _fam_ok.add('cycle')
-            if _fi_st:
+            if _pivot6_usable(_fi_st, 'consec_days'):
                 _fam_ok.add('chips')
 
             # 6-A 景氣對策信號拐點

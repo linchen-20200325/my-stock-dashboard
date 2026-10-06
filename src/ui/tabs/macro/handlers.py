@@ -21,7 +21,10 @@ def _macro_session_reset():
     """
     for _k in ('cl_data', 'cl_ts', 'mkt_info', 'jingqi_info', 'li_latest',
                'warroom_summary', '_last_inst', '_last_inst_date',
-               '_last_margin', 'futures_net', 'adl_debug_msg'):
+               '_last_margin', 'futures_net', 'adl_debug_msg',
+               # C7-n1：§二 拐點面板 6（NDC 景氣對策／領先指標／外資連續日數）的 session 快取。
+               #   修前不在本名單 → 一鍵更新、強制重抓都清不掉舊值（含修前寫進去的失敗結果）。
+               '_ndc_hist_cache', '_ndc_li_cache', '_fi_streak_cache'):
         st.session_state.pop(_k, None)
     st.session_state['_is_refreshing'] = True
 

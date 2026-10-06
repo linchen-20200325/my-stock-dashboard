@@ -244,7 +244,11 @@ _D3_NON_UI_LITERALS = {"m1b_m2_data_month", "data_month"}
 #: 修前修後相同（唯一不同是個股建議送 L3 的 `m1b_diff` 由 0 改為 None，見 D 的空值那條）。
 _REVERT = {
     "news": (
-        (_IMPORT_LINE, ""),
+        # 批 Z5（C7-n8）起本檔另用 `_finite_yoy` 擋外資期貨／韭菜／ADL 的非有限值（替換片段以外），
+        # 還原體若拿掉 import 會 NameError → 比照 op／state／mid，不再移除 import 行（改為原樣保留；
+        # 仍佔第 0 格，下方 `_MUTANTS` 以索引取的 `_REVERT["news"][2:3]`／`[3:5]` 不受影響）。
+        # 還原的 M1B／M2 片段本身不呼叫 `_finite_yoy`，故對本檔比對的 M1B-M2 路徑等價於修前。
+        (_IMPORT_LINE, _IMPORT_LINE),
         ("                _m1b_ai = _finite_yoy(_mi_d, 'm1b_yoy')\n"
          "                _m2_ai  = _finite_yoy(_mi_d, 'm2_yoy')\n"
          "                if _m1b_ai is None or _m2_ai is None:\n"
