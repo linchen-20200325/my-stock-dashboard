@@ -360,6 +360,9 @@ _FIXED_TOP_SHA = {
     "F4_health_legs_missing_adl_ok": "ce591e0d557a3cf0a009a873297f7f1a1e777f4ebd4d359516a38a77b51867b5",
 }
 #: §二 尾端（燈號卡→油門→explainer）整份輸出（基底 24bf2af）。F*／N4 的修後輸出經 `_undo` 後須等於此值。
+#: ⚠️ F* 這四個值含檔頭「範圍外」第 2 點那段截斷（explainer 規則表在 health=None 時拋例外、被 section_state
+#:    吞掉）—— 本批 ⛔ 修那一點，故修前修後都截在同一處。日後修它時這四個 golden 須同步更新：那是預期的改變，
+#:    ⛔ 當成回歸；也 ⛔ 拿本 golden 當「規則表本來就該截斷」的依據。
 _BASE_STATE_SHA = {
     "F1_all_failed": "4517d076dcc7b51a3cda01d95f5b79478509fff9a0f7e2a3f02b27acdf88d95e",
     "F2_inst_none_legacy": "4517d076dcc7b51a3cda01d95f5b79478509fff9a0f7e2a3f02b27acdf88d95e",
