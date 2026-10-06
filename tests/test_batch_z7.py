@@ -812,11 +812,14 @@ def _df2():
 
 def _health(li, mp, *, mod=None, force_fut=_DROP):
     """實跑個股健康度頁。回 (輸出, 交給 V4 引擎的 macro dict)；force_fut 可強制改寫引擎收到的期貨值。"""
+    from src.compute.strategy.v4_strategy_engine import V4StrategyEngine as _engine_cls
     mod = mod or _real(_HEALTH)
     seen: list = []
-    real_engine = mod.V4StrategyEngine
+    # ⛔ 不取 `mod.V4StrategyEngine`：同一支測試連呼叫多次時那是上一次的 _Spy（未 undo）→ 包成鏈，
+    #   上一層的 force_fut 會蓋掉這一層的值。一律直接繼承 L2 本尊。
+    assert mod.V4StrategyEngine is _engine_cls or issubclass(mod.V4StrategyEngine, _engine_cls)
 
-    class _Spy(real_engine):
+    class _Spy(_engine_cls):
         def __init__(self, df, macro, shares):
             if force_fut is not _DROP:
                 macro = {**macro, "foreign_futures": force_fut}
@@ -846,9 +849,10 @@ class TestC7n3bHealthScore:
     @pytest.mark.parametrize("li", _LI_DEFAULT)
     def test_screen_does_not_depend_on_it(self, li, monkeypatch):
         # 畫面零變化：引擎收到 0.0 或 None，整頁輸出逐字相同（本頁不顯示引擎的總經燈）
-        a, _ = _health(li, monkeypatch, force_fut=0.0)
-        b, _ = _health(li, monkeypatch, force_fut=None)
-        c, _ = _health(li, monkeypatch)
+        a, ma = _health(li, monkeypatch, force_fut=0.0)
+        b, mb = _health(li, monkeypatch, force_fut=None)
+        c, mc = _health(li, monkeypatch)
+        assert ma["foreign_futures"] == 0.0 and mb["foreign_futures"] is None and mc["foreign_futures"] is None
         assert a == b == c
 
     @pytest.mark.parametrize("li", [*_LI_DEFAULT,
