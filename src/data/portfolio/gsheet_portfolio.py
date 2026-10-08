@@ -543,7 +543,19 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
     if not new_rows:
         raise ValueError('無有效持股可儲存（檢查代號、張數、均價）')
 
-    grid = [header] + keep_rows + new_rows
+    _write_whole_sheet(ws, existing, [header] + keep_rows + new_rows)
+    clear_read_cache()          # 寫入即清:使用者自己的編輯即時可見(§1)
+    return len(new_rows)
+
+
+def _write_whole_sheet(ws, existing: list[list[Any]], grid: list[list[Any]]) -> None:
+    """把 `grid`（含表頭）以**單一** `ws.update` 寫成整張表 —— 取代 `clear()` → `append_*`。
+
+    原寫法若在 clear 之後斷線,整張 Sheet 會被清空;本寫法失敗時 Sheet 維持原狀,
+    例外照常往上拋（§1）。值以 RAW 寫入（與原 `append_rows` 預設相同）。
+    批 Z12（D1-n5）:自 `save_portfolio` 抽出,`save_stock_watchlist`／`delete_portfolio`／
+    `delete_stock_watchlist` 共用同一寫法。
+    """
     n_cols = max(len(r) for r in (grid + existing))
     n_rows = max(len(grid), len(existing))
     # 補空字串到舊表的高／寬:舊資料比新內容長的部分一併在同一次寫入中清掉,不留殘列。
@@ -558,8 +570,6 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
 
     from gspread.utils import rowcol_to_a1
     ws.update(values=grid, range_name=f'A1:{rowcol_to_a1(n_rows, n_cols)}')
-    clear_read_cache()          # 寫入即清:使用者自己的編輯即時可見(§1)
-    return len(new_rows)
 
 
 # ── Option B:個股**純代碼**觀察清單 API(獨立 `stock_watchlist` 分頁,無價格)──────
@@ -598,11 +608,7 @@ def save_stock_watchlist(name: str, tickers: list[str], *,
     ts = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     new_rows = [[name, tk, ts] for tk in clean]  # ← 無價格欄,§1 反捏造
 
-    ws.clear()
-    ws.append_row(_STOCK_WATCHLIST_HEADERS)
-    if keep_rows:
-        ws.append_rows(keep_rows)
-    ws.append_rows(new_rows)
+    _write_whole_sheet(ws, existing, [list(_STOCK_WATCHLIST_HEADERS)] + keep_rows + new_rows)
     clear_read_cache()          # 寫入即清:使用者自己的編輯即時可見(§1)
     return len(new_rows)
 
@@ -955,10 +961,7 @@ def delete_portfolio(name: str, *, sheet_id: str | None = None) -> int:
     deleted = (len(existing) - 1) - len(keep_rows)
     if deleted == 0:
         return 0
-    ws.clear()
-    ws.append_row(_HEADERS)
-    if keep_rows:
-        ws.append_rows(keep_rows)
+    _write_whole_sheet(ws, existing, [list(_HEADERS)] + keep_rows)
     clear_read_cache()          # 刪除即清(§1)
     return deleted
 
@@ -982,9 +985,6 @@ def delete_stock_watchlist(name: str, *, sheet_id: str | None = None) -> int:
     deleted = (len(existing) - 1) - len(keep_rows)
     if deleted == 0:
         return 0
-    ws.clear()
-    ws.append_row(_STOCK_WATCHLIST_HEADERS)
-    if keep_rows:
-        ws.append_rows(keep_rows)
+    _write_whole_sheet(ws, existing, [list(_STOCK_WATCHLIST_HEADERS)] + keep_rows)
     clear_read_cache()          # 刪除即清(§1)
     return deleted

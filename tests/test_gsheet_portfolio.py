@@ -656,8 +656,10 @@ def test_delete_stock_watchlist_existing():
     with patch.object(gsp, '_ws', return_value=ws):
         n = gsp.delete_stock_watchlist('清單A')
     assert n == 2
-    assert ws.rows[0] == gsp._STOCK_WATCHLIST_HEADERS
-    assert ws.rows[1:] == [['清單B', '0050', 'ts']]   # 只剩清單B,不誤刪
+    # 批 Z12（D1-n5）:改單次整表寫入,多出的舊列以空字串清掉 → 以真 API 視角（去尾端空列）比對。
+    vals = ws.get_all_values()
+    assert vals[0] == gsp._STOCK_WATCHLIST_HEADERS
+    assert vals[1:] == [['清單B', '0050', 'ts']]   # 只剩清單B,不誤刪
 
 
 def test_delete_stock_watchlist_missing():
