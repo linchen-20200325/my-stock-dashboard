@@ -230,8 +230,15 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
     
         # 5. 外資期貨 + 散戶比（先行指標）
         if _li2 is not None and not _li2.empty:
-            _fam_ok.add('chips')   # v19.173：先行指標到位 → 籌碼群可評估
             _last_li = _li2.iloc[-1]
+            # v19.173：先行指標到位 → 籌碼群可評估。
+            # 批 Z11（Z5-n2，與 C7-n1 同類，§1：沒有值 ≠ 中性）：原為 df 非空就登記 → 末列兩欄
+            #   NaN／None／欄位不存在時仍印「籌碼：中性」。改為 外資大小／韭菜指數 任一為有限數值才登記
+            #   （`_finite_yoy`，不另寫一份）；否則走 L2 既有「未評估」路徑。有值時與修前相同。
+            _li_row = _last_li.to_dict()
+            if (_finite_yoy(_li_row, '外資大小') is not None
+                    or _finite_yoy(_li_row, '韭菜指數') is not None):
+                _fam_ok.add('chips')
             _fut_net = _last_li.get('外資大小')
             _leek    = _last_li.get('韭菜指數')
             _pcr     = _last_li.get('選PCR')
