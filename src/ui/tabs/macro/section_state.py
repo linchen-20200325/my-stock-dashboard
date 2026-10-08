@@ -241,8 +241,10 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
             if (_finite_yoy(_li_row, '外資大小') is not None
                     or _finite_yoy(_li_row, '韭菜指數') is not None):
                 _fam_ok.add('chips')
-            _fut_net = _last_li.get('外資大小')
-            _leek    = _last_li.get('韭菜指數')
+            # 批 Z17（Z11-n1，併 Z11-n2）：取值也走 `_finite_yoy` —— 原直接 `.get` ⇒ ±inf 印「淨多 inf口」
+            #   「+inf%」並出訊號、object 欄 pd.NA 時 `float()` 拋 TypeError 整面板崩。非有限／NA 當缺、不出訊號。
+            _fut_net = _finite_yoy(_li_row, '外資大小')
+            _leek    = _finite_yoy(_li_row, '韭菜指數')
             _pcr     = _last_li.get('選PCR')
             if _fut_net is not None:
                 _fut_net_v = float(_fut_net)

@@ -21,6 +21,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from tests.test_batch_z5 import (
+    _CHIPS, _FI_FAIL, _GOLDEN_FLAT, _H_FLAT, _LI_FLAT, _expected_flat, _render_state,
+)
 from tests.test_batch_z7 import _df2
 from tests.test_m2n2_no_zero_fill import _FakeST
 
@@ -115,3 +118,71 @@ class TestZ7n6VixValidity:
                 return 18.0
         _out, macro = _health(monkeypatch, None, _FloatOnly())
         assert macro["vix"] is None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# B. Z11-n1（併 Z11-n2）—— §二 面板 5：非有限值／pd.NA 當缺
+# ══════════════════════════════════════════════════════════════════════════
+#: 修前（6bc4f44b 實跑）：兩欄皆無有限值 ⇒ 籌碼群未登記，但仍出訊號：
+#:   fut+inf → ('外資期貨多方', '外資期貨淨多 inf口 → 多頭強勢確認')
+#:   fut-inf → ('外資期貨大量空單', '外資期貨淨空 inf口 > 3萬口 → 頂部起跌訊號')
+#:   leek+inf → ('散戶極度看多（危險）', '韭菜指數 +inf% > +20% → …')
+#:   leek-inf → ('散戶極度悲觀（機會）', '韭菜指數 -inf% < -20% → …')
+#:   pd-na → TypeError（float(pd.NA)），整個 render_section_state 拋出
+_LI_NO_FINITE = {
+    "fut+inf": pd.DataFrame({"外資大小": [math.inf], "韭菜指數": [math.nan]}),
+    "fut-inf": pd.DataFrame({"外資大小": [-math.inf], "韭菜指數": [math.nan]}),
+    "leek+inf": pd.DataFrame({"外資大小": [math.nan], "韭菜指數": [math.inf]}),
+    "leek-inf": pd.DataFrame({"外資大小": [math.nan], "韭菜指數": [-math.inf]}),
+    "both-inf": pd.DataFrame({"外資大小": [math.inf], "韭菜指數": [-math.inf]}),
+    "pd-na": pd.DataFrame({"外資大小": [pd.NA], "韭菜指數": [pd.NA]}, dtype=object),
+}
+
+#: 修前（6bc4f44b 實跑）：另一欄有限 ⇒ 籌碼群登記，但非有限那欄仍出訊號（inf）或整面板 TypeError（pd.NA）。
+_LI_OTHER_FINITE = {
+    "fut+inf-leek5": pd.DataFrame({"外資大小": [math.inf], "韭菜指數": [5.0]}),
+    "fut-inf-leek5": pd.DataFrame({"外資大小": [-math.inf], "韭菜指數": [5.0]}),
+    "fut5000-leek+inf": pd.DataFrame({"外資大小": [5000.0], "韭菜指數": [math.inf]}),
+    "fut-na-leek5": pd.DataFrame({"外資大小": [pd.NA], "韭菜指數": [5.0]}, dtype=object),
+    "fut5000-leek-na": pd.DataFrame({"外資大小": [5000.0], "韭菜指數": [pd.NA]}, dtype=object),
+}
+
+
+class TestZ11n1PanelFiveNonFinite:
+
+    @pytest.mark.parametrize("name", sorted(_LI_NO_FINITE))
+    def test_no_finite_value_is_unevaluated_no_signal(self, monkeypatch, name):
+        r = _render_state(monkeypatch, _H_FLAT, _LI_FLAT, _FI_FAIL,
+                          ss={"li_latest": _LI_NO_FINITE[name]})
+        assert r.out == _expected_flat(chips_ok=False, cycle_ok=True)
+        assert r.pivots == []
+        assert "inf" not in r.text and f"{_CHIPS}：未評估" in r.text
+
+    @pytest.mark.parametrize("name", sorted(_LI_OTHER_FINITE))
+    def test_other_column_finite_still_registered(self, monkeypatch, name):
+        r = _render_state(monkeypatch, _H_FLAT, _LI_FLAT, _FI_FAIL,
+                          ss={"li_latest": _LI_OTHER_FINITE[name]})
+        assert r.out == _GOLDEN_FLAT
+        assert r.pivots == []
+
+    @pytest.mark.parametrize("fut, leek, title", [
+        (-40000.0, math.inf, "外資期貨大量空單"),
+        (-5000.0, math.nan, "外資空單縮減"),
+        (20000.0, pd.NA, "外資期貨多方"),
+        (math.inf, 25.0, "散戶極度看多（危險）"),
+        (pd.NA, -25.0, "散戶極度悲觀（機會）"),
+    ])
+    def test_finite_column_signal_unchanged(self, monkeypatch, fut, leek, title):
+        df = pd.DataFrame({"外資大小": [fut], "韭菜指數": [leek]}, dtype=object)
+        r = _render_state(monkeypatch, _H_FLAT, _LI_FLAT, _FI_FAIL, ss={"li_latest": df})
+        assert [p[0] for p in r.pivots] == [title]
+        assert "inf" not in r.text
+
+    def test_finite_signal_text_unchanged(self, monkeypatch):
+        """有限值的訊號字樣逐字照舊（修前 6bc4f44b 實跑同字）。"""
+        df = pd.DataFrame({"外資大小": [20000.0], "韭菜指數": [25.0]})
+        r = _render_state(monkeypatch, _H_FLAT, _LI_FLAT, _FI_FAIL, ss={"li_latest": df})
+        assert [p[3] for p in r.pivots] == [
+            "外資期貨淨多 20,000口 → 多頭強勢確認",
+            "韭菜指數 +25.0% > +20% → 散戶過熱，頂部拐點警示（反向指標）",
+        ]
