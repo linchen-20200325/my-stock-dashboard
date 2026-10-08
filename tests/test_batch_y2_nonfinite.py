@@ -379,7 +379,9 @@ def _exec_between(path, start, stop, ns):
 
 class TestOverflowL5Snippets:
     def _hs(self, cur):
-        ns = {'st': type('S', (), {'session_state': {'macro_info': {'vix': {'current': cur}}}})()}
+        from shared.vix_validity import vix_value_or_none   # 批 Z17：片段改呼叫 L0 共用判定（模組層 import）
+        ns = {'st': type('S', (), {'session_state': {'macro_info': {'vix': {'current': cur}}}})(),
+              'vix_value_or_none': vix_value_or_none}
         return _exec_between('src/ui/tabs/stock_sections/section_health_score.py',
                              "_mi_v4 = st.session_state.get('macro_info')",
                              "_li_for_v4 = ", ns)['_v4_vix2']
