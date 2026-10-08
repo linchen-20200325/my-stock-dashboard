@@ -629,6 +629,13 @@ class TestVixPlainLanguageAdvice:
         # 原始碼（**扣掉 docstring**）不得出現 inline 門檻（§3.3）。
         # docstring 本來就要寫明「黃 22 / 紅 30」讓讀的人知道走哪套 SSOT,
         # 那是說明不是邏輯 —— 守衛只該看真正會執行的那幾行。
+        # 批 Z16（Z9-n12）：原寫法用 `__doc__` 字串去 replace 原始碼 —— Py3.13 起
+        # `__doc__` 會被去縮排、與原始碼不再逐字相同 ⇒ docstring 扣不掉、假紅燈。
+        # 改走 AST 定位 docstring 的行範圍、從原始碼整行扣掉（3.11／3.13 同結果；
+        # 不用 ast.unparse —— 它會把全形空白轉成 `\u3000` 跳脫字，內含「30」⇒ 假紅燈）。
         _src = inspect.getsource(m._vix_line)
-        _body = _src.replace(m._vix_line.__doc__ or "", "")
+        _doc = ast.parse(_src).body[0].body[0]
+        assert isinstance(_doc, ast.Expr) and isinstance(_doc.value, ast.Constant)
+        _lines = _src.splitlines(keepends=True)
+        _body = "".join(_lines[:_doc.lineno - 1] + _lines[_doc.end_lineno:])
         assert "22" not in _body and "30" not in _body, "VIX 門檻被寫死在推播模組"
