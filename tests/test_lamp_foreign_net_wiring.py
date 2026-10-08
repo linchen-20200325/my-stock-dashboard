@@ -385,7 +385,7 @@ class TestOtherInstConsumersByteIdentical:
         assert repr(a) == repr(b)
 
     def test_only_the_lamp_reads_the_flag(self):
-        """靜態守衛：`unobserved_net` / `is_net_observed` 只准出現在生產端與燈的取值端。"""
+        """靜態守衛：`unobserved_net` / `is_net_observed` 只准出現在生產端、燈的取值端與作戰室外資方向（批 Z16 C9-n6 (a)）。"""
         import pathlib
         root = pathlib.Path(__file__).resolve().parents[1]
         hits = {str(p.relative_to(root)) for d in ("src", "shared")
@@ -394,4 +394,6 @@ class TestOtherInstConsumersByteIdentical:
                 or "unobserved_net" in p.read_text(encoding="utf-8")}
         assert hits == {"shared/inst_net.py", "src/compute/macro/macro_helpers.py",
                         "src/data/daily/daily_data_fetchers.py",
-                        "src/services/macro_fetch_orchestrator.py"}, hits
+                        "src/services/macro_fetch_orchestrator.py",
+                        # 批 Z16 C9-n6 (a)：作戰室外資方向改讀旗標，未觀測時不把假 0 判成方向
+                        "src/ui/tabs/macro/section_warroom.py"}, hits

@@ -76,6 +76,20 @@ class TestC9n3ColdStartFirstClickLoads:
             '冷啟動第一次按更新就該進主流程載入，不能要按第二下')
         assert _EMPTY_HINT not in _infos(at)
 
+    def test_loaded_session_rerun_without_click_stays_loaded(self, monkeypatch):
+        """已載入（按過一次 ⇒ `chips_loaded` 為真）後，一般 rerun（沒按按鈕）不得退回空狀態。
+
+        守 QA 突變 M5：閘門若被改成 `if not do_refresh:`，只有按下那一輪能過，
+        之後任何 rerun（切 widget、互動）都會掉回「點擊上方按鈕載入」。"""
+        at = _macro_app(monkeypatch).run()
+        at.button(key='cl_refresh').click().run()
+        assert at.session_state['chips_loaded']
+        at.session_state['_z16_reached'] = False          # 清掉按下那一輪留下的記號
+        at.run()                                           # 沒按按鈕的一般 rerun
+        assert not at.exception
+        assert at.session_state['_z16_reached'], '已載入的 session rerun 後必須仍進主流程'
+        assert _EMPTY_HINT not in _infos(at)
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # C9-n6 (a)：缺外資列（預填 0.0）⇒「外資方向」未知
