@@ -1204,11 +1204,16 @@ def fetch_ndc_leading_index(months_back: int = 18,
         'prev':     round(prev, 2),
         'mom':      round((cur - prev) / prev * 100, 2) if prev else None,
         'smooth6m': round(cur_s, 2),
-        'prev_s6m': round(prev_s, 2),
+        # 批 Z11（Z5-n3）：`+ 0.0` 把捨入後的 −0.0 正規化成 +0.0（其餘值不變）—— 下方改以兩位小數判斷後，
+        #   前期 −0.004% 會判「由正轉負」，不加則畫面印「-0.00%→-0.10%」。
+        'prev_s6m': round(prev_s, 2) + 0.0,
         'trend':    trend,
         'date_latest': str(s.index[-1])[:10],
         'source':   _src_li or 'unknown',
     })
+    # 批 Z11（Z5-n3；客戶 2026-10-06 Q-r9b ②「領先指標看兩位小數判轉負：准」）：轉折改以畫面上的
+    #   兩位小數判斷 —— 修前只降 0.0017% 也判「由正轉負」、畫面卻印「+0.10%→-0.00%」。等於 0 → 持平。
+    cur_s, prev_s = result['smooth6m'], result['prev_s6m']
     if cur_s > 0 and prev_s <= 0:
         result['inflection'] = '🚀 6M 由負轉正'
     elif cur_s > 0:
