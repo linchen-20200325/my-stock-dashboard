@@ -162,6 +162,54 @@ class TestX1n10EmptyReturnChecksReply:
             YP._history_or_raise(yfinance.Ticker("N10M.TW"), "N10M.TW", period)
         assert str(got.value) == "N10M.TW: Yahoo 回應 HTTP 503 → 抓取失敗"
 
+    @pytest.mark.parametrize("mode, expected_bad", [
+        ("503_chart", "HTTP 503"),
+        ("401_finance", "HTTP 401"),
+        ("200_null", "HTTP 200（body 為 null）"),
+    ])
+    @pytest.mark.parametrize("period", ["1y", "max"])
+    def test_exception_path_message_equals_empty_path(self, real_yf, mode, expected_bad, period):
+        """批 Z9b：yfinance **拋例外**那條（503＋chart.error、401＋finance.error、200 null）與
+        **回空表**那條，對同一個 Yahoo 回應拋出的訊息逐字相同 ＝ 新字句，皆不含 possibly delisted；
+        例外路徑的類別同空表路徑、仍是 YFPricesMissingError，原 yfinance 例外留在 __cause__。"""
+        sym = f"Z9B{mode.upper()}.TW"
+        real_yf["mode"] = mode
+        with pytest.raises(YFE.YFPricesMissingError) as via_exc:
+            YP._history_or_raise(yfinance.Ticker(sym), sym, period)
+        reply = YP._CHART_REPLY.reply                     # 本次真 yfinance 收到的回應
+
+        class _T:                                         # 同一個回應，但 yfinance 沒拋、回空表
+            def history(self, *a, **kw):
+                YP._CHART_REPLY.reply = reply
+                return pd.DataFrame()
+        with pytest.raises(YFE.YFPricesMissingError) as via_empty:
+            YP._history_or_raise(_T(), sym, period)
+
+        want = f"{sym}: Yahoo 回應 {expected_bad} → 抓取失敗"
+        assert str(via_exc.value) == str(via_empty.value) == want
+        assert "possibly delisted" not in str(via_exc.value)
+        assert "possibly delisted" not in str(via_empty.value)
+        assert type(via_exc.value).__name__ == type(via_empty.value).__name__ == "_YahooReplyFailed"
+        assert via_exc.value.ticker == via_empty.value.ticker == sym
+        assert isinstance(via_exc.value.__cause__, YFE.YFPricesMissingError)   # 原因鏈保留
+        assert type(via_exc.value.__cause__).__name__ != "_YahooReplyFailed"
+
+    @pytest.mark.parametrize("mode", ["503_chart", "401_finance", "200_null"])
+    def test_exception_path_still_not_cached_and_cools_down(self, real_yf, fc_clock, mode):
+        """批 Z9b：改類別後快取層仍判為失敗 —— 不入快取、冷卻期內不重打、帶失敗旗標。"""
+        sym = f"Z9C{mode.upper()}.TW"
+        real_yf["mode"] = mode
+        df, failed = YP.cached_history.with_status(sym, "1y")
+        _assert_bare_empty(df)
+        assert failed is True
+        n = len(real_yf["urls"])
+        df2, failed2 = YP.cached_history.with_status(sym, "1y")
+        assert failed2 is True and len(real_yf["urls"]) == n, "冷卻期內不重打"
+        fc_clock["now"] += FAIL_COOLDOWN_SEC + 1
+        real_yf["mode"] = "ok"
+        df3, failed3 = YP.cached_history.with_status(sym, "1y")
+        assert failed3 is False and not df3.empty, "失敗未入快取，恢復後拿到資料"
+
     def test_start_kwarg_message_new_wording(self):
         class _T:
             def history(self, *a, **kw):
