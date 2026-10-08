@@ -198,7 +198,9 @@ def render_tab_macro():
         else:
             st.info('點擊上方「🚀 一鍵更新全部數據」載入資料，再點底部「⚡ 生成 AI 總結分析」，結果同步顯示此處。')
 
-    if not _macro_loaded:
+    # 批 Z16（C9-n3，修正錯誤）：`_macro_loaded` 在按鈕前算好 ⇒ 冷啟動第一下按更新時仍為 False，
+    #   當輪只立旗標就 return、要按第二下。按下的那一輪本來就要載入 ⇒ 補看 do_refresh。
+    if not (_macro_loaded or do_refresh):
         st.markdown(
             '<div style="padding:12px 0 8px;">'
             '<span style="font-size:22px;font-weight:900;color:#e6edf3;">🌍 總經位階評估</span>'
