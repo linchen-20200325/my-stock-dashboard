@@ -236,7 +236,7 @@ def render_tab_macro():
     #   3. `None` / `[]` / 非空 list 三態顯示三種不同結果,None 與 [] **絕不**
     #      走綠色分支(判定與文案見 `key_alerts_banner` docstring)。
     # 【v19.171 踩過的坑已確認不會重演】`_macro_session_reset()`
-    #   (macro/handlers.py:21-24)pop 的 10 個 key **不含** 'macro_alerts' /
+    #   (macro/handlers.py)pop 的 14 個 key **不含** 'macro_alerts' /
     #   'macro_info';且填充時機在同一輪 render 內、section_mid 之後,不經過
     #   任何 on_click callback → 不會被清掉。
     _key_alerts_slot = st.empty()
