@@ -360,15 +360,15 @@ def test_number_like_cells_round_trip_without_growth(lots, avg):
 
 
 def test_number_like_name_consistent_with_load_portfolio():
-    """name "007" 經 numericise → 7:load_portfolio('7') 看得到、load_portfolio('007') 看不到。
-    save 判準取聯集 —— 存成 "7"（編輯器真的載得進來）或 "007"（Sheet 上的原名,同 main）
-    都取代該有效列、不重複;"007" 的無效列（張數 0）兩種情形都原樣保留。"""
+    """name "007" 讀取保留原字串（批 Z12 D1-n1;修前經 numericise 變 7）:
+    load_portfolio('007') 看得到、load_portfolio('7') 看不到。存成 "007" 取代該有效列、
+    不重複;"007" 的無效列（張數 0）原樣保留。"""
     sheet = [gsp._HEADERS, ['007', '2330', '1', '100', 't0'],
              ['007', '2317', '0', '100', 't0']]
     ws = _FakeWorksheet([list(r) for r in sheet])
     with patch.object(gsp, '_ws', return_value=ws):
-        assert [r['ticker'] for r in gsp.load_portfolio('7')] == ['2330']
-        assert gsp.load_portfolio('007') == []
+        assert [r['ticker'] for r in gsp.load_portfolio('007')] == ['2330']
+        assert gsp.load_portfolio('7') == []
         gsp.save_portfolio('007', [{'ticker': 'NEW', 'lots': 1, 'avg_price': 1}])
         vals = ws.get_all_values()
     assert vals[1] == ['007', '2317', '0', '100', 't0']             # 無效列原字串保留
@@ -376,10 +376,10 @@ def test_number_like_name_consistent_with_load_portfolio():
     ws = _FakeWorksheet([list(r) for r in sheet])
     with patch.object(gsp, '_ws', return_value=ws):
         gsp.clear_read_cache()
-        _editor_round_trip(ws, '7')                               # 載得進來 → 取代,不重複
+        _editor_round_trip(ws, '007')                             # 載得進來 → 取代,不重複
         vals = ws.get_all_values()
     assert vals[1] == ['007', '2317', '0', '100', 't0']
-    assert len(vals) == 3 and vals[2][:2] == ['7', '2330']
+    assert len(vals) == 3 and vals[2][:2] == ['007', '2330']
 
 
 @pytest.mark.parametrize('nm', ['0050', '007', '1.50', '1,000', '1e3', 'NaN'])
@@ -422,8 +422,9 @@ def test_number_like_name_with_spaces_replaced_by_trimmed_save(sheet_nm, nm):
     assert len(vals) == 4
 
 def test_duplicate_header_means_nothing_loaded_all_rows_kept():
-    """表頭重複 → get_all_records raise、編輯器一列都載不進來 ⇒ 存檔保留全部舊列。"""
-    sheet = [gsp._HEADERS + ['x', 'x'], ['A', '2330', '1', '100', 't0', '', '']]
+    """本分頁的欄重複（批 Z12 D1-n6 起,僅此情形）→ 讀取 raise、編輯器一列都載不進來 ⇒
+    存檔保留全部舊列。（使用者自加欄重名已可讀,見 tests/test_batch_z12.py。）"""
+    sheet = [gsp._HEADERS + ['name', 'x'], ['A', '2330', '1', '100', 't0', '', '']]
     ws = _FakeWorksheet([list(r) for r in sheet])
     with patch.object(gsp, '_ws', return_value=ws):
         with pytest.raises(Exception):
@@ -656,8 +657,10 @@ def test_delete_stock_watchlist_existing():
     with patch.object(gsp, '_ws', return_value=ws):
         n = gsp.delete_stock_watchlist('清單A')
     assert n == 2
-    assert ws.rows[0] == gsp._STOCK_WATCHLIST_HEADERS
-    assert ws.rows[1:] == [['清單B', '0050', 'ts']]   # 只剩清單B,不誤刪
+    # 批 Z12（D1-n5）:改單次整表寫入,多出的舊列以空字串清掉 → 以真 API 視角（去尾端空列）比對。
+    vals = ws.get_all_values()
+    assert vals[0] == gsp._STOCK_WATCHLIST_HEADERS
+    assert vals[1:] == [['清單B', '0050', 'ts']]   # 只剩清單B,不誤刪
 
 
 def test_delete_stock_watchlist_missing():
