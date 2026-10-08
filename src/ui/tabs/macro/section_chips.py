@@ -50,6 +50,7 @@ from src.ui.render.ui_widgets import (
     strategy_conclusion,
 )
 from src.ui.tabs.tab_helpers import safe_get
+from src.ui.tabs.macro.section_long import _finite_yoy  # 批 Z10（C8-n1 (a)）
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -265,9 +266,16 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
     # ── 外資期貨（先行指標快速結論）─────────────────────────────────
     _li4 = st.session_state.get('li_latest')
     if _li4 is not None and not _li4.empty:
-        _fut4 = (float(_li4.iloc[-1].get('外資大小', 0)) if '外資大小' in _li4.columns else None)
-        _pcr4 = (float(_li4.iloc[-1].get('選PCR', 0)) if '選PCR' in _li4.columns else None)
+        # 批 Z10（C8-n1 (a)，§1 不捏值）：外資大小整欄沒有任何有限值（全 None／NaN／±inf）時，
+        #   原 `float(None)` 拋 TypeError ⇒ §三 之後整段不渲染（全 NaN 則印「nan口」）。改走同卡既有
+        #   「先行指標欄位異常」分支（不下結論）；PCR 只在期貨有值時才讀（移入分支內，整欄 None 同理不崩）。
+        #   欄內有任一有限值時讀末列照舊（末列缺＝C8-n1 (b)，未動），輸出逐字不變。
+        _fut4 = (float(_li4.iloc[-1].get('外資大小', 0))
+                 if '外資大小' in _li4.columns
+                 and any(_finite_yoy({'v': _v}, 'v') is not None for _v in _li4['外資大小'])
+                 else None)
         if _fut4 is not None:
+            _pcr4 = (float(_li4.iloc[-1].get('選PCR', 0)) if '選PCR' in _li4.columns else None)
             _pcr_txt = f' | PCR {_pcr4:.1f}' if _pcr4 else ''
             _l4_ind = f'外資期貨 {_fut4:,.0f}口{_pcr_txt}'
             # 絕對口數門檻（容錯率最高）

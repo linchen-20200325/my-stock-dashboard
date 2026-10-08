@@ -342,8 +342,8 @@ class TestV4EngineNoFabrication:
             out = _V4(price, ma, fut)
         assert list(out) == _V4_KEYS
         assert all(out[k] is None for k in _PRICE_KEYS), out
-        # 不依賴價格的鍵照舊（含 `futures_net_oi or 0` —— 本批不動，另登記）
-        assert out['Is_Foreign_Hedging'] is ((fut or 0) < -30000)
+        # 不依賴價格的鍵照舊；批 Z10（C8-n6）起外資期貨 None ⇒ None（未知），其餘同修前
+        assert out['Is_Foreign_Hedging'] is (None if fut is None else ((fut or 0) < -30000))
 
     @pytest.mark.parametrize('args', [(None, None, None), (0, 0, 0)])
     def test_reported_cases(self, args):
@@ -352,7 +352,7 @@ class TestV4EngineNoFabrication:
         new = _V4(*args)
         assert (new['Bias_240'], new['Is_Bull'], new['Is_Overheated']) == (None, None, None)
         assert (new['Signal'], new['Action_Advice'], new['Suggested_Holding']) == (None, None, None)
-        assert new['Is_Foreign_Hedging'] is False
+        assert new['Is_Foreign_Hedging'] is (None if args[2] is None else False)   # 批 Z10（C8-n6）
 
     @pytest.mark.parametrize('price', ['N/A', '20000'])
     def test_non_numeric_price_no_longer_raises(self, price):
@@ -378,7 +378,9 @@ class TestV4EngineNoFabrication:
             assert (out['Signal'], out['Suggested_Holding'], out['Action_Advice']) == (
                 sig, _V4_GOLDEN_HOLD[sig], _V4_GOLDEN_ACTION[sig]), fn
             assert _hexbits(out['Bias_240']) == _hexbits(bias), (fn, out['Bias_240'])
-            assert (out['Is_Bull'], out['Is_Overheated'], out['Is_Foreign_Hedging']) == (bull, hot, hedge)
+            # 批 Z10（C8-n6）：外資期貨 None ⇒ 現行引擎回 None（未知），凍結副本仍為 False
+            _hedge = None if (fn is _V4 and args[2] is None) else hedge
+            assert (out['Is_Bull'], out['Is_Overheated'], out['Is_Foreign_Hedging']) == (bull, hot, _hedge)
             assert type(out['Is_Bull']) is bool and type(out['Is_Overheated']) is bool
 
     def test_finite_positive_identical_to_frozen_fd989ae(self):
@@ -393,7 +395,10 @@ class TestV4EngineNoFabrication:
             for p in pos:
                 for m in pos:
                     for f in futs:
-                        new, pre = _outcome(_V4, p, m, f), _outcome(_V4_PRE, p, m, f)
+                        # 批 Z10（C8-n6）：f 為 None 時只有 Is_Foreign_Hedging 由 False 改 None，其餘逐位比對
+                        _fn = _V4 if f is not None else (
+                            lambda *a: {**_V4(*a), 'Is_Foreign_Hedging': False})
+                        new, pre = _outcome(_fn, p, m, f), _outcome(_V4_PRE, p, m, f)
                         assert new == pre, (p, m, f, new, pre)
                         n += 1
         assert n == len(pos) ** 2 * len(futs)

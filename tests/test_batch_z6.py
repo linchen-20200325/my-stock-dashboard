@@ -559,7 +559,7 @@ class TestC7n9WhyTheFiniteCheck:
 
     def test_engine_accepts_minus_inf_as_hedging(self):
         assert _V4(20000.0, 19000.0, -math.inf)['Is_Foreign_Hedging'] is True
-        assert _V4(20000.0, 19000.0, None)['Is_Foreign_Hedging'] is False
+        assert _V4(20000.0, 19000.0, None)['Is_Foreign_Hedging'] is None   # 批 Z10（C8-n6）：缺值＝未知，非 False
 
     def test_engine_raises_on_str(self):
         with pytest.raises(TypeError):
