@@ -19,6 +19,7 @@ except ImportError:
 # ── NAS Proxy 遷移：所有 yfinance 抓取改走 macro_core.fetch_yf_latest ──
 from src.data.macro.macro_core import fetch_yf_latest as _macro_core_yf_latest
 from shared.fail_cooldown import CachedFailure as _CachedFailure  # D2-f3 2026-09-28
+from shared.vix_validity import VIX_FETCH_MAX, vix_value_or_none  # 批 Z13(Q-r8b ②)
 
 
 # ── Streamlit 快取工具（非 Streamlit 環境自動退化為無快取）──────────
@@ -242,6 +243,10 @@ def _yf_latest(tickers: tuple) -> dict:
     (`FAIL_COOLDOWN_SEC` 秒內不重打)。
     """
     out = _macro_core_yf_latest(tickers)
+    # 批 Z13(Q-r8b ②):^VIX ≤ 0／> VIX_FETCH_MAX 當抓不到 → 走下方既有「不入快取」出口。
+    if out.get('^VIX') is not None and vix_value_or_none(out['^VIX'], upper=VIX_FETCH_MAX) is None:
+        print(f"[MacroAlert] ❌ ^VIX={out['^VIX']!r} ≤0/>{VIX_FETCH_MAX},當抓取失敗")
+        out['^VIX'] = None
     # D2-f3(§1.A-3(a)「只快取成功結果」):修前含 None 的結果也被快取 30 分鐘 —— 上游恢復後
     # 同參數呼叫仍回 None、上游 0 次呼叫,v1 總經頁 10Y／DXY 門檻警示最長悄悄消失 30 分鐘。
     if any(out.get(t) is None for t in tickers):
