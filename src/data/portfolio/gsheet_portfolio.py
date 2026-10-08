@@ -325,12 +325,27 @@ def _ws(*, sheet_id: str | None = None,
                           headers=headers)
 
 
+#: 讀取時保留原字串、**不**轉數字的欄（批 Z12 D1-n1:名稱／代號是字串,`0050` 不可讀成 50）。
+_TEXT_COLS = ('name', 'ticker')
+
+
 def _all_records(*, sheet_id: str | None = None,
                  worksheet_name: str = _WORKSHEET_NAME,
                  headers: list[str] = _HEADERS) -> list[dict[str, Any]]:
-    """回傳全表（含 header 後的所有列）為 dict list（預設 portfolios 分頁）。"""
-    return _ws(sheet_id=sheet_id, worksheet_name=worksheet_name,
-               headers=headers).get_all_records()
+    """回傳全表（含 header 後的所有列）為 dict list（預設 portfolios 分頁）。
+
+    逐列轉換同 `_sheet_record`（即 gspread `get_all_records()`,但名稱／代號保留原字串）。
+    批 Z12（D1-n6）:只有**本分頁的欄**（`headers`）重複才算錯 —— 使用者自加欄或多欄空白
+    表頭重名不再讓整張表讀不進來;本分頁的欄重複 ＝ 不知該讀哪一欄,交 gspread 原樣拋
+    它既有的錯誤（§1:不讀錯欄）。
+    """
+    ws = _ws(sheet_id=sheet_id, worksheet_name=worksheet_name, headers=headers)
+    values = ws.get_all_values()
+    if not values:
+        return []
+    if _header_has_duplicates(values[0], headers):
+        return ws.get_all_records()
+    return [_sheet_record(values[0], r) for r in values[1:]]
 
 
 # ── 純解析器（§2.1 SSOT + §4 無 I/O 離線可測）───────────────────────────
@@ -449,17 +464,23 @@ def load_portfolio(name: str, *, sheet_id: str | None = None,
     return parse_portfolio_records(recs)   # §2.1 共用純解析器（同 headless SA reader）
 
 
+def _sheet_record(header: list[Any], row: list[Any]) -> dict[str, Any]:
+    """一列原字串 → dict:同 gspread `get_all_records()` 的轉換（預設參數 `numericise_all`
+    —— `"1,050"`→1050、`"1e3"`→1000.0、`"NaN"`→nan、含底線不轉、空白留 `''` —— 再以
+    `to_records` 依表頭組 dict;表頭**不**轉）,但 `_TEXT_COLS` 保留原字串（D1-n1）。
+    `_all_records` 與 `_editor_loaded_row` 共用 ⇒ 讀取與存檔判準恆一致。
+    """
+    from gspread.utils import numericise_all, to_records
+    _ignore = [i + 1 for i, h in enumerate(header) if h in _TEXT_COLS]
+    return to_records(header, [numericise_all(list(row), ignore=_ignore)])[0]
+
+
 def _editor_loaded_row(header: list[str], row: list[Any], name: str) -> bool:
     """這一列是不是「📁 組合管理」編輯器按 📂 載入 時**會被讀進表格**的那種列（純函式）。
 
     判準與 `load_portfolio(name)`（預設模式,即編輯器的讀取路徑）**逐條相同**:
-    編輯器走 `ws.get_all_records()` —— gspread 6 先對每列跑 `numericise_all`（預設參數:
-    `"1,050"`→1050、`"007"`→7、`"1e3"`→1000.0、`"NaN"`→nan、含底線不轉、空白留 `''`）,
-    再以 `to_records`（header→值 zip）組成 dict。本函式對 `get_all_values()` 的原字串列
-    **重做同一套**（同一支 gspread 函式、同一組預設參數）→ name 轉字串去空白後相等 →
-    交給同一支 `parse_portfolio_records()` 判定。表頭**不** numericise（同 get_all_records）。
-    name 另認**原字串**相等（"0050"／"007"／"1,000"… 這類 numericise 會改寫的名字）:
-    存檔名＝Sheet 上那個名字的有效持股列由編輯器內容取代（同 main）,⛔ 不重複。
+    同一支 `_sheet_record` 轉列（名稱保留原字串,批 Z12 D1-n1）→ name 去空白後相等 →
+    交給同一支 `parse_portfolio_records()` 判定。
     ⇒ 回 False 的列 ＝ 編輯器**看不到**的列（別的組合、0／負數／空白／非數字、空白列…）,
     save 時必須原封保留（Q4-r5-f1,客戶 2026-10-02 頁1①）;回 True 的列由編輯器內容取代。
     ⚠️ 兩邊判準若不一致會出事:編輯器載得進來、這裡卻判「沒載入」⇒ 存檔時舊列保留
@@ -467,21 +488,15 @@ def _editor_loaded_row(header: list[str], row: list[Any], name: str) -> bool:
     ⚠️ 若日後編輯器改用 `keep_blank=True` 載入,本判準須同步改,否則空白列會被讀進表格、
     卻在存檔時因張數／均價不是正數而不寫回 ⇒ 被刪。
     """
-    from gspread.utils import numericise_all, to_records
-    rec = to_records(header, [numericise_all(list(row))])[0]
-    raw_name = str(dict(zip(header, row)).get('name', '')).strip()
-    # name 比對取聯集:(a) numericise 後相等 ＝ 編輯器經清單（如 "50"）真的載得進來;
-    # (b) 原字串相等 ＝ 存檔名就是 Sheet 上寫的那個名字（如 "0050"）—— 這種列 main 一律
-    # 覆蓋;此處若只認 (a),`load_portfolio('0050')` 讀不到它 → 保留舊列又接新列 → 每存
-    # 一次多一份（QA re-QA 2026-10-02 迴歸）。兩者都只取代「有效持股」列,無效列照舊保留。
-    if str(rec.get('name', '')).strip() != name and raw_name != name:
+    rec = _sheet_record(header, row)
+    if str(rec.get('name', '')).strip() != name:
         return False
     return bool(parse_portfolio_records([rec]))
 
 
-def _header_has_duplicates(header: list[Any]) -> bool:
-    """`get_all_records()`（無 expected_headers）遇表頭重複會 raise ⇒ 編輯器一列都載不進來。"""
-    return len(set(header)) != len(header)
+def _header_has_duplicates(header: list[Any], headers: list[str] = _HEADERS) -> bool:
+    """本分頁的欄（`headers`）在表頭出現不只一次 ⇒ `_all_records` 拋錯、編輯器一列都載不進來。"""
+    return any(list(header).count(h) > 1 for h in headers)
 
 
 def save_portfolio(name: str, rows: list[dict[str, Any]], *,
@@ -511,7 +526,7 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
     _old_header = list(existing[0]) if existing else []
     # 表頭:前 5 欄釘 _HEADERS（同原寫法）;使用者在第 6 欄以後自加的表頭格原樣保留。
     header = list(_HEADERS) + _old_header[len(_HEADERS):]
-    # 表頭重複 → get_all_records 會 raise、編輯器什麼都沒載入 ⇒ 每列都屬「沒載入」,全保留。
+    # 本分頁的欄重複 → `_all_records` 拋錯、編輯器什麼都沒載入 ⇒ 每列都屬「沒載入」,全保留。
     _none_loaded = _header_has_duplicates(_old_header)
     keep_rows = [list(r) for r in existing[1:]
                  if _none_loaded or not _editor_loaded_row(_old_header, r, name)]
