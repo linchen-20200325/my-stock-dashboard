@@ -2,7 +2,9 @@
 
 📊 整合六大面向 + CPI×Fed 雙頂回落(v18.169;v19.173 正名,原「MK 黃金拐點」——
 「MK」= Mann-Kendall 的通用縮寫,但那條規則只是兩點差分,見 macro_helpers 註解);
-結論寫入 st.session_state['regime_data'] 供其他 tab 共用。
+結論寫入 st.session_state['warroom_summary'](就地 update,保留既有 key)供其他 tab 共用;
+拐點訊號清單另寫入 st.session_state['_pivot_signals'](AI 解讀區讀用)。
+(Z5-n7 更正:舊註寫「寫入 regime_data」,全 repo 無此 key 的寫入點、亦無讀取點。)
 
 closure params(4 explicit pass):
 - _mkt_info: dict | None  market_regime() 結果(從 S1 算出)
