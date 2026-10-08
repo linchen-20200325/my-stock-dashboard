@@ -1141,10 +1141,11 @@ ETF 回測子頁（render_etf_backtest）額外流程：
                         ▼ on_click callback 全清三層快取：
                           ① st.cache_data.clear()
                           ② proxy_helper._URL_CACHE.clear() + reset_proxy_cache()
-                          ③ session_state pop 11 key（cl_data / cl_ts / mkt_info /
+                          ③ session_state pop 14 key（cl_data / cl_ts / mkt_info /
                              jingqi_info / li_latest / warroom_summary /
                              _last_inst / _last_inst_date / _last_margin /
-                             futures_net / adl_debug_msg）
+                             futures_net / adl_debug_msg / _ndc_hist_cache /
+                             _ndc_li_cache / _fi_streak_cache）
                         │
                         ▼ 7 job 全量並發：
                           [輕量] intl + tw + tech
