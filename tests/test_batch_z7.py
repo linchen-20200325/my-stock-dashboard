@@ -650,15 +650,24 @@ class TestZ3n1NumOtherFields:
 
 
 #: ⛔ CPI 不套（C8-n7）：`96779d4` 實跑寫死，修後逐字相同（含 10**400 照舊拋）
-class TestZ3n1CpiCarvedOut:
-    def test_cpi_plus_inf_unchanged(self, monkeypatch):
-        md = _md(_s9(_vnode(18.0), monkeypatch, base={**_S9_FULL, "us_core_cpi": {"yoy": math.inf}}))
-        assert _card9("④ 美股動態", "#eab308", "⚠️ 美股承壓，Fed鷹派升溫",
-                      "VIX=18.0 CPI=inf%超標 — 高利率環境延續，外資提款風險升高，注意匯率走勢") in md
+#: 📌 批 Z9 第 2 組（C8-n7，客戶 2026-10-08 核字）起：VIX<20 且 CPI 非有限 ⇒ ④ 改印「CPI待取得」；
+#:    修前（`96779d4`）這兩例印「⚠️ 美股承壓…CPI=inf%超標」／「🟢 美股平穩…CPI=-inf%」—— 原字面值保留於下方
+#:    `_PRE_*` 並斷言不再出現。取數本身仍未改走 `_num`（10**400 照舊拋），故本類其餘斷言不變。
+_C4_CPI_PENDING_18 = _card9("④ 美股動態", "#484f58", "VIX=18.0 CPI待取得", "CPI 數據未就緒，暫無法判斷降息預期")
 
-    def test_cpi_minus_inf_unchanged(self, monkeypatch):
+
+class TestZ3n1CpiCarvedOut:
+    _PRE_PLUS_INF = _card9("④ 美股動態", "#eab308", "⚠️ 美股承壓，Fed鷹派升溫",
+                           "VIX=18.0 CPI=inf%超標 — 高利率環境延續，外資提款風險升高，注意匯率走勢")
+    _PRE_MINUS_INF = _g4_green("18.0", " CPI=-inf%")
+
+    def test_cpi_plus_inf_now_pending(self, monkeypatch):
+        md = _md(_s9(_vnode(18.0), monkeypatch, base={**_S9_FULL, "us_core_cpi": {"yoy": math.inf}}))
+        assert _C4_CPI_PENDING_18 in md and self._PRE_PLUS_INF not in md
+
+    def test_cpi_minus_inf_now_pending(self, monkeypatch):
         md = _md(_s9(_vnode(18.0), monkeypatch, base={**_S9_FULL, "us_core_cpi": {"yoy": -math.inf}}))
-        assert _g4_green("18.0", " CPI=-inf%") in md
+        assert _C4_CPI_PENDING_18 in md and self._PRE_MINUS_INF not in md
 
     def test_cpi_huge_int_still_raises(self, monkeypatch):
         with pytest.raises(OverflowError):
