@@ -191,6 +191,25 @@ def _ensure_chart_reply_recorder() -> None:
         _cls.get = _get
 
 
+def _yahoo_reply_failed(ticker: str, bad: str) -> Exception:
+    """`_history_or_raise` 判為 Yahoo 回應失敗時拋的例外（空表與例外兩條路共用，字句只在這裡產生）。
+
+    批 Z9（Y1-n1）：例外訊息改為 `{代號}: Yahoo 回應 {狀態} → 抓取失敗`，不帶 possibly delisted。
+    yfinance 建構子會強制套模板（0.2.36 亦無 `yahoo_reason=`）→ 用子類別直接設訊息；
+    型別仍是 YFPricesMissingError（isinstance 不變 → 上層捕捉、不快取失敗行為不變）。
+    """
+    from yfinance.exceptions import YFPricesMissingError as _no_prices
+
+    class _YahooReplyFailed(_no_prices):
+        def __init__(self, msg):
+            Exception.__init__(self, msg)
+            self.ticker = ticker
+            self.debug_info = ""
+            self.yahoo_reason = None
+
+    return _YahooReplyFailed(f"{ticker}: Yahoo 回應 {bad} → 抓取失敗")
+
+
 def _history_or_raise(tk, ticker: str, period: str, **history_kwargs):
     """`tk.history(period=period)`，但**抓取失敗一律以例外浮出**（D2-f16 2026-09-28）。
 
@@ -218,13 +237,13 @@ def _history_or_raise(tk, ticker: str, period: str, **history_kwargs):
     D2-f36（2026-10-03，§1.A-3(a)）：yfinance 不看 HTTP 狀態碼 —— 帶 JSON body 的 HTTP 錯誤
     （5xx＋`chart.error`、401＋`finance.error`）與「HTTP 200 但 body 是 `null`」都被它拋成「沒資料」型別
     （`YFPricesMissingError`），修前因此照舊快取 1 小時。現在「沒資料」型別的例外另看這一次 K 線請求
-    實際收到的 HTTP 回應（`_chart_reply_failure`）：5xx／401／403，或 200 但 body 為 `null` → **原樣往上拋**
-    （＝失敗，不入快取、冷卻）。看不到回應（沒送出請求、或 yfinance 走自己的快取）→ 同修前。
+    實際收到的 HTTP 回應（`_chart_reply_failure`）：5xx／401／403，或 200 但 body 為 `null` → **往上拋**
+    （＝失敗，不入快取、冷卻；批 Z9b 起改拋與下段空表同一類別、同一字句，原例外留在 `__cause__`）。看不到回應（沒送出請求、或 yfinance 走自己的快取）→ 同修前。
 
     X1-n10（批 Y1，2026-10-03，§1.A-3(a)）：上一段只看「拋例外」那條路。yfinance 1.7.0 遇到
     HTTP 5xx／401／403 但 body 是**帶時間戳、價格全空**的 K 線時**不拋例外、回空表**（本批實跑查證）——
     修前照舊當「沒資料」快取 1 小時。現在**回空表（或 None）**時同樣看本次 K 線回應：判得出失敗 →
-    拋 yfinance 的 `YFPricesMissingError`（訊息即 yfinance 自己的模板，不另寫字；＝失敗，不入快取、冷卻）；判不出（200 非 null、404、看不到回應）→ 原樣回傳（同修前）。
+    拋 yfinance 的 `YFPricesMissingError`（子類別；訊息自批 Z9 起為「{代號}: Yahoo 回應 {狀態} → 抓取失敗」；＝失敗，不入快取、冷卻）；判不出（200 非 null、404、看不到回應）→ 原樣回傳（同修前）。
     非空表一律原樣回傳（成功路徑不看回應）。
 
     `history_kwargs`（批 Y1 X1-n1）：原樣轉給 `tk.history`（例：ETF 取價的 `auto_adjust=True`）；
@@ -250,21 +269,15 @@ def _history_or_raise(tk, ticker: str, period: str, **history_kwargs):
         if _bad:                                          # D2-f36：HTTP 錯誤不是「沒資料」
             print(f"[yf_proxy.history] {ticker}: Yahoo 回應 {_bad} → 抓取失敗"
                   f"（{type(_e).__name__}: {_e}）")
-            raise
+            # 批 Z9b：同空表那條 —— 同一類別、同一字句（不再把 yfinance 原文 possibly delisted 拋上畫面）；原例外留在 __cause__
+            raise _yahoo_reply_failed(ticker, _bad) from _e
         print(f"[yf_proxy.history] {ticker}: 無資料（{type(_e).__name__}: {_e}）")
         return None
     if _df is None or getattr(_df, "empty", False):       # X1-n10：沒拋例外、回空表也看回應
         _bad = _chart_reply_failure(getattr(_CHART_REPLY, "reply", None))
         if _bad:
             print(f"[yf_proxy.history] {ticker}: Yahoo 回應 {_bad}、回空表 → 抓取失敗")
-            # 例外訊息不另寫一句：用 yfinance 自己「沒有價格資料」的例外 —— 與上方例外路徑同一種回應失敗時
-            # 往上拋的是同一類、同一模板。尾巴同其 `history()` 的 debug_info：一般區間為 ` (period=…)`；
-            # `max`（或帶 start）時 yfinance 寫的是它內部算出的日期區間（起點算法跨版本不同）→ 不重算、
-            # 不給尾巴（建構子自己的「no price data found」形式）。
-            from yfinance.exceptions import YFPricesMissingError as _no_prices
-            _ranged = (period is None or str(period).lower() == "max"
-                       or history_kwargs.get("start") is not None)
-            raise _no_prices(ticker, "" if _ranged else f" (period={period})")
+            raise _yahoo_reply_failed(ticker, _bad)
     return _df
 
 

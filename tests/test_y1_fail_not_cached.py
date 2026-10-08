@@ -149,62 +149,75 @@ class TestX1n10EmptyReturnChecksReply:
         real_yf["mode"] = "503_nan"
         with pytest.raises(YFE.YFPricesMissingError) as ei:
             YP._history_or_raise(yfinance.Ticker("N10D.TW"), "N10D.TW", "1y")
-        # K1：例外訊息＝yfinance 自己的模板（同類、同建構方式），不另寫字
-        assert str(ei.value) == str(YFE.YFPricesMissingError("N10D.TW", " (period=1y)"))
-        assert str(ei.value) == "$N10D.TW: possibly delisted; no price data found  (period=1y)"
+        # 批 Z9（Y1-n1，客戶 2026-10-06 裁）：例外訊息改為「{代號}: Yahoo 回應 {狀態} → 抓取失敗」，不帶 possibly delisted
+        assert str(ei.value) == "N10D.TW: Yahoo 回應 HTTP 503 → 抓取失敗"
+        assert "possibly delisted" not in str(ei.value)
         assert "[yf_proxy.history] N10D.TW: Yahoo 回應 HTTP 503、回空表 → 抓取失敗" in capsys.readouterr().out
 
-    @pytest.mark.parametrize("period", ["1y", "5y", "60d"])
-    def test_message_equals_yfinance_exception_path(self, real_yf, period):
-        """一般區間：空表那條的訊息 ＝ yfinance 自己對同一類回應失敗（200 null，例外路徑）拋的訊息，逐字。"""
-        real_yf["mode"] = "200_null"
-        with pytest.raises(YFE.YFPricesMissingError) as ref:
-            YP._history_or_raise(yfinance.Ticker("N10M.TW"), "N10M.TW", period)
+    @pytest.mark.parametrize("period", ["1y", "5y", "60d", "max", None])
+    def test_message_is_new_wording_for_any_period(self, real_yf, period):
+        """批 Z9：任何區間（含 max／None）訊息一律新字句，不帶區間尾巴、不帶 possibly delisted。"""
         real_yf["mode"] = "503_nan"
         with pytest.raises(YFE.YFPricesMissingError) as got:
             YP._history_or_raise(yfinance.Ticker("N10M.TW"), "N10M.TW", period)
-        assert str(got.value) == str(ref.value) == \
-            f"$N10M.TW: possibly delisted; no price data found  (period={period})"
+        assert str(got.value) == "N10M.TW: Yahoo 回應 HTTP 503 → 抓取失敗"
 
-    @pytest.mark.parametrize("period", ["max"])
-    def test_max_message_has_no_invented_tail(self, real_yf, period):
-        """`max`：yfinance 自己寫內部算出的日期區間（起點跨版本不同，不重算）→ 不給尾巴，
-        訊息 ＝ yfinance 建構子的無尾巴形式；不得出現 yfinance 從不產生的 `(period=max)`。"""
-        real_yf["mode"] = "503_nan"
-        with pytest.raises(YFE.YFPricesMissingError) as got:
-            YP._history_or_raise(yfinance.Ticker("N10X.TW"), "N10X.TW", period)
-        assert str(got.value) == str(YFE.YFPricesMissingError("N10X.TW", ""))
-        assert str(got.value) == "$N10X.TW: possibly delisted; no price data found"
-        assert "period=" not in str(got.value)
+    @pytest.mark.parametrize("mode, expected_bad", [
+        ("503_chart", "HTTP 503"),
+        ("401_finance", "HTTP 401"),
+        ("200_null", "HTTP 200（body 為 null）"),
+    ])
+    @pytest.mark.parametrize("period", ["1y", "max"])
+    def test_exception_path_message_equals_empty_path(self, real_yf, mode, expected_bad, period):
+        """批 Z9b：yfinance **拋例外**那條（503＋chart.error、401＋finance.error、200 null）與
+        **回空表**那條，對同一個 Yahoo 回應拋出的訊息逐字相同 ＝ 新字句，皆不含 possibly delisted；
+        例外路徑的類別同空表路徑、仍是 YFPricesMissingError，原 yfinance 例外留在 __cause__。"""
+        sym = f"Z9B{mode.upper()}.TW"
+        real_yf["mode"] = mode
+        with pytest.raises(YFE.YFPricesMissingError) as via_exc:
+            YP._history_or_raise(yfinance.Ticker(sym), sym, period)
+        reply = YP._CHART_REPLY.reply                     # 本次真 yfinance 收到的回應
 
-    def test_start_kwarg_message_has_no_period_tail(self):
-        """帶 `start`（yfinance 同樣改寫日期區間）→ 不給 `(period=…)` 尾巴。"""
+        class _T:                                         # 同一個回應，但 yfinance 沒拋、回空表
+            def history(self, *a, **kw):
+                YP._CHART_REPLY.reply = reply
+                return pd.DataFrame()
+        with pytest.raises(YFE.YFPricesMissingError) as via_empty:
+            YP._history_or_raise(_T(), sym, period)
+
+        want = f"{sym}: Yahoo 回應 {expected_bad} → 抓取失敗"
+        assert str(via_exc.value) == str(via_empty.value) == want
+        assert "possibly delisted" not in str(via_exc.value)
+        assert "possibly delisted" not in str(via_empty.value)
+        assert type(via_exc.value).__name__ == type(via_empty.value).__name__ == "_YahooReplyFailed"
+        assert via_exc.value.ticker == via_empty.value.ticker == sym
+        assert isinstance(via_exc.value.__cause__, YFE.YFPricesMissingError)   # 原因鏈保留
+        assert type(via_exc.value.__cause__).__name__ != "_YahooReplyFailed"
+
+    @pytest.mark.parametrize("mode", ["503_chart", "401_finance", "200_null"])
+    def test_exception_path_still_not_cached_and_cools_down(self, real_yf, fc_clock, mode):
+        """批 Z9b：改類別後快取層仍判為失敗 —— 不入快取、冷卻期內不重打、帶失敗旗標。"""
+        sym = f"Z9C{mode.upper()}.TW"
+        real_yf["mode"] = mode
+        df, failed = YP.cached_history.with_status(sym, "1y")
+        _assert_bare_empty(df)
+        assert failed is True
+        n = len(real_yf["urls"])
+        df2, failed2 = YP.cached_history.with_status(sym, "1y")
+        assert failed2 is True and len(real_yf["urls"]) == n, "冷卻期內不重打"
+        fc_clock["now"] += FAIL_COOLDOWN_SEC + 1
+        real_yf["mode"] = "ok"
+        df3, failed3 = YP.cached_history.with_status(sym, "1y")
+        assert failed3 is False and not df3.empty, "失敗未入快取，恢復後拿到資料"
+
+    def test_start_kwarg_message_new_wording(self):
         class _T:
             def history(self, *a, **kw):
                 _recorded(503)
                 return pd.DataFrame()
         with pytest.raises(YFE.YFPricesMissingError) as got:
             YP._history_or_raise(_T(), "X", "1y", start="2020-01-01")
-        assert str(got.value) == str(YFE.YFPricesMissingError("X", ""))
-
-    def test_upper_max_message_has_no_tail(self):
-        """同 yfinance 的判斷（`period.lower() == "max"`）：大小寫不分。"""
-        class _T:
-            def history(self, *a, **kw):
-                _recorded(503)
-                return pd.DataFrame()
-        with pytest.raises(YFE.YFPricesMissingError) as got:
-            YP._history_or_raise(_T(), "X", "MAX")
-        assert str(got.value) == str(YFE.YFPricesMissingError("X", ""))
-
-    def test_none_period_message_has_no_tail(self):
-        class _T:
-            def history(self, *a, **kw):
-                _recorded(503)
-                return pd.DataFrame()
-        with pytest.raises(YFE.YFPricesMissingError) as got:
-            YP._history_or_raise(_T(), "X", None)
-        assert str(got.value) == str(YFE.YFPricesMissingError("X", ""))
+        assert str(got.value) == "X: Yahoo 回應 HTTP 503 → 抓取失敗"
 
     @pytest.mark.parametrize("period", ["1y", "60d"])
     def test_success_identical(self, real_yf, period):

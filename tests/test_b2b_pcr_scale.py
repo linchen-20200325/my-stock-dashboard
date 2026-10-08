@@ -108,6 +108,9 @@ class TestOldBugReproduction:
         # 批 X2 M2N-f3：無 PCR 那份另帶 `missing_inputs == ["PCR"]`（有缺才帶）；計分結果須完全相同
         assert no_pcr.pop("missing_inputs") == ["PCR"]
         assert "missing_inputs" not in fixed
+        # 批 Z9 X2-n1：缺 1 項 → Macro_Phase 帶「1 項未評估」；其餘計分欄位須完全相同
+        assert no_pcr.pop("Macro_Phase") == "1 項未評估（缺資料不計分）"
+        assert fixed.pop("Macro_Phase") == "環境正常"
         assert fixed == no_pcr, (
             "126.80（≈1.27，落在 0.7~1.5 的中性帶）換算後不該對曝險有任何影響")
 

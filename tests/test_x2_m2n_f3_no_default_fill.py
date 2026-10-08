@@ -173,7 +173,12 @@ def _oracle(inputs: dict, missing: set) -> dict:
         gone |= {"M1B_YoY_pct", "M2_YoY_pct"}
     for k in gone:
         d[k] = _INERT[k]
-    return _pre_fix_css(d)
+    out = _pre_fix_css(d)
+    if missing:   # 批 Z9 X2-n1：N>0 才加「N 項未評估」，接在既有標籤後（N 為實際缺的鍵數）
+        tag = f"{len(set(missing))} 項未評估（缺資料不計分）"
+        ph = out["Macro_Phase"]
+        out["Macro_Phase"] = tag if ph == "環境正常" else f"{ph}、{tag}"
+    return out
 
 
 def _with_missing(inputs: dict, key: str, form) -> dict:
@@ -306,7 +311,11 @@ class TestPreFixFabrications:
         both = calculate_system_state({**_SCN})
         only = calculate_system_state({**_SCN, "M1B_YoY_pct": 4.2})
         assert _pre_fix_css({**_SCN, "M1B_YoY_pct": 4.2})["exposure_limit_pct"] > both["exposure_limit_pct"]
-        assert _scored(only) == _scored(both)
+        # 批 Z9 X2-n1：「N 項未評估」隨缺值數變（only 缺 1、both 缺 2）→ 標籤另驗，其餘計分相同
+        assert only["Macro_Phase"] == "1 項未評估（缺資料不計分）"
+        assert both["Macro_Phase"] == "2 項未評估（缺資料不計分）"
+        assert ({k: v for k, v in _scored(only).items() if k != "Macro_Phase"}
+                == {k: v for k, v in _scored(both).items() if k != "Macro_Phase"})
         assert only["missing_inputs"] == ["M2_YoY_pct"]
 
     def test_only_m1b_missing_no_funding_squeeze(self):
