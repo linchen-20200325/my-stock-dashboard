@@ -153,7 +153,9 @@ def _S(bias, wr=..., legacy=...):
 _H = '年線乖離 +5.3%'
 _HH = '年線乖離 +5.3%｜外資期貨避險'
 _UNDO_HEDGE = (('｜外資期貨避險', ''),)
-_UNDO_ONLY_HEDGE = ((_HINT_DIV.format('外資期貨避險'), ''),)
+# 批 Z9 第 2 組（Z6-n7，客戶 2026-10-08 核字）：價缺＋避險時 📐 行改印「未知｜外資期貨避險」（原「外資期貨避險」）。
+_PX_HEDGE = '未知｜外資期貨避險'
+_UNDO_ONLY_HEDGE = ((_HINT_DIV.format(_PX_HEDGE), ''),)
 
 #: (id, state, 修後「📐」那一行, 修前 golden digest, undo)
 #:   修前 golden：修前同一個 state 的整段輸出；undo：把修後輸出換回修前寫法的唯一替換。
@@ -199,7 +201,7 @@ _FUT_CASES = [
     ('wr-pd-na', _S(_BULL, {'futures_net': pd.NA}), [_H], _D_BULL, ()),
     ('wr-list', _S(_BULL, {'futures_net': [-40000.0]}), [_H], _D_BULL, ()),
     # ── 價缺：三個位階片段不列，只剩與價格無關的避險片段 ─────────────────────────────
-    ('pxmiss-wr-m40000', _S(_PXMISS, {'futures_net': -40000.0}), ['外資期貨避險'], _D_NO_HINT,
+    ('pxmiss-wr-m40000', _S(_PXMISS, {'futures_net': -40000.0}), [_PX_HEDGE], _D_NO_HINT,
      _UNDO_ONLY_HEDGE),
     ('pxmiss-wr-ninf', _S(_PXMISS, {'futures_net': -math.inf}), [], _D_NO_HINT, ()),
     ('pxmiss-wr-none', _S(_PXMISS, {'futures_net': None}), [], _D_NO_HINT, ()),
@@ -353,6 +355,14 @@ _REVERT_NEGZERO = (
     "            _v4_bits.append(f'年線乖離 {_v4[\"Bias_240\"]:+.1f}%{_wr_bias_badge}')\n")
 
 
+#: 批 Z9 第 2 組（Z6-n7）：還原體同步還原「未知｜」那一處，還原體才仍等於基底 84c1ca4。
+_REVERT_Z9 = (
+    "            if not _wr_pos_ok:\n"
+    "                _v4_bits.append('未知')\n"
+    "            _v4_bits.append('外資期貨避險')\n",
+    "            _v4_bits.append('外資期貨避險')\n")
+
+
 def _variant(pairs, tag):
     """把一份改過的 section_warroom 原始碼載成獨立模組（不進 sys.modules、不碰本尊）。"""
     code = _WR_SRC
@@ -368,7 +378,7 @@ def _variant(pairs, tag):
 @functools.lru_cache(maxsize=None)
 def _pre():
     """還原體（延遲建立：還原點若不存在，只有用到它的測試失敗，其餘行為斷言照跑）。"""
-    return _variant((_REVERT_FUT, _REVERT_NEGZERO), 'pre')
+    return _variant((_REVERT_FUT, _REVERT_NEGZERO, _REVERT_Z9), 'pre')
 
 
 def _e2e(monkeypatch, fut, mod):
@@ -470,13 +480,21 @@ class TestC7n9FuturesHedgingFragment:
         if undo:
             assert _digest(out) != base_d          # 真的有改（不是 undo 空轉）
 
-    @pytest.mark.parametrize('case', [c for c in _FUT_CASES if c[2] in ([_HH], ['外資期貨避險'])],
-                             ids=_ids([c for c in _FUT_CASES if c[2] in ([_HH], ['外資期貨避險'])]))
+    @pytest.mark.parametrize('case', [c for c in _FUT_CASES if c[2] in ([_HH], [_PX_HEDGE])],
+                             ids=_ids([c for c in _FUT_CASES if c[2] in ([_HH], [_PX_HEDGE])]))
     def test_fragment_output_equals_base_designed_output(self, case):
-        """避險成立時，整個作戰室輸出＝基底在舊 key 有同一個值時本來就設計好的那份（逐字）。"""
+        """避險成立時，整個作戰室輸出＝基底在舊 key 有同一個值時本來就設計好的那份（逐字）。
+
+        批 Z9 第 2 組（Z6-n7）起價缺那份多了「未知｜」—— 把它換回基底寫法後須逐字相同。
+        """
         _id, state, post_hint, _d, _u = case
-        want = _D_BULL_HEDGE if post_hint == [_HH] else _D_ONLY_HEDGE
-        assert _digest(_out(state)) == want
+        out = _out(state)
+        if post_hint == [_HH]:
+            assert _digest(out) == _D_BULL_HEDGE
+        else:
+            assert _digest(out) != _D_ONLY_HEDGE
+            assert _digest(_undo(out, ((_HINT_DIV.format(_PX_HEDGE), _HINT_DIV.format('外資期貨避險')),))) \
+                == _D_ONLY_HEDGE
 
     @pytest.mark.parametrize('fut,hint', [
         (-40000.0, _HINT_DIV.format(_HH)),
@@ -490,7 +508,7 @@ class TestC7n9FuturesHedgingFragment:
 
     def test_action_card_literal_price_missing(self):
         assert _out(_S(_PXMISS, {'futures_net': -40000.0}))[1] == (
-            'markdown', _CARD.format(_HINT_DIV.format('外資期貨避險')))
+            'markdown', _CARD.format(_HINT_DIV.format(_PX_HEDGE)))
         assert _out(_S(_PXMISS, {'futures_net': math.nan}))[1] == ('markdown', _CARD.format(''))
 
     @pytest.mark.parametrize('state', [

@@ -590,7 +590,8 @@ _WR_V4_GOLDEN = [pytest.param(b, f, h, id=i) for b, f, h, i in (
     ({'price': 16500.0, 'ma240': 16500.0, 'bias_240': 0.0, 'bias_20': 0.0, 'data_days': 1,
       'is_estimated': True}, 0, '年線乖離 +0.0%（估算）', 'zero-bias-1day-estimated'),
     ({'price': 16000.0, 'ma240': 16000.0}, -40000, '年線乖離 +0.0%｜外資期貨避險', 'zero-bias-hedging'),
-    ({'ma240': 16000.0}, -40000, '外資期貨避險', 'price-missing-hedging'),
+    # 批 Z9 第 2 組（Z6-n7，客戶 2026-10-08 核字）：價缺＋避險改印「未知｜外資期貨避險」（fd989ae 時為「外資期貨避險」）。
+    ({'ma240': 16000.0}, -40000, '未知｜外資期貨避險', 'price-missing-hedging'),
     ({}, 0, None, 'empty'),
 )]
 

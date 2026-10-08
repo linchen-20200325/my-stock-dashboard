@@ -107,6 +107,8 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
     # ⛔ 批 Z7（Z3-n1）：CPI 刻意不套 ±inf→None／溢位→None，照原 `_num`（`_num_raw`）——
     #   ④ 把 CPI 缺值當正常（`_cpi_ok = _ai_cpi is None or …`，另列 C8-n7、屬 ⑤），套了會把
     #   +inf／10**400 變成「CPI 正常」而印「🟢 美股平穩…無系統性風險」。CPI 的輸出一切照舊。
+    #   📌 批 Z9 第 2 組（C8-n7）起 ④ 對 VIX<20、CPI 缺（None／非有限）改印「CPI待取得」，見 ④ 段註解；
+    #   取數本身仍照原樣（未改走 `_num`）。
     _ai_cpi  = _num_raw(_m8_cpi, 'yoy')
     # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：`^TWII` 動能代理 → 當缺，
     # ③ 卡走既有「待取得 M1B/M2」、⑤ 結論不列、不進多空計分。非代理時同一個物件。
@@ -265,7 +267,18 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
         # 只需避免 `None >= 1.5` 拋 TypeError（v19.183 取數改回 None 後的必要收尾）。
         _sox_fire = (_ai_sox is not None and _ai_sox >= 1.5) or \
                     (_ai_nvda is not None and _ai_nvda >= 2.0)
-        if _ai_vix < 20 and _cpi_ok and _sox_fire:
+        # 批 Z9 第 2 組（C8-n7，客戶 2026-10-08 核字「採 A，字句照 HANDOFF 主案，不改字」）：
+        #   `_cpi_ok` 把 CPI 缺值當正常 ⇒ VIX<20、CPI 缺時印「🟢 美股平穩，降息預期支撐…無系統性風險」
+        #   （SOX 點火時「🚀…可積極佈局科技」），等於拿沒有的 CPI 下結論（§1）。CPI 缺（None／非有限）且
+        #   VIX<20 時改走「待取得」—— 寫法比照上方 ③ 卡缺 M2（「M1B=…% M2待取得」／「M2 數據未就緒，
+        #   暫無法判斷 Gap」），灰色；字句本身已表達「待取得」，顏色不是唯一資訊載體。
+        #   VIX≥20 各枝本來就不讀 CPI、CPI 有限值時各枝 —— 一字未動。
+        #   ⚠️ CPI 仍走 `_num_raw`：超大整數（例 10**400）照舊在取數處拋 OverflowError（修前即如此，不在本批）。
+        _cpi_miss = _ai_cpi is None or not math.isfinite(_ai_cpi)
+        if _ai_vix < 20 and _cpi_miss:
+            _ai4_lbl, _ai4_clr = f'VIX={_ai_vix:.1f} CPI待取得', '#484f58'
+            _ai4_desc = 'CPI 數據未就緒，暫無法判斷降息預期'
+        elif _ai_vix < 20 and _cpi_ok and _sox_fire:
             _ai4_lbl, _ai4_clr = '🚀 美股強勢，科技領漲', TRAFFIC_RED
             _ai4_desc = f'VIX={_ai_vix:.1f}（恐慌低）{_sox_s}（半導體點火）{_cpi_s} — 台股跟漲機率高，可積極佈局科技'
         elif _ai_vix < 20 and _cpi_ok:

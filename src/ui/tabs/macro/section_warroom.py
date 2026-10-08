@@ -159,8 +159,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         _wr_px = _finite_yoy(_wr_bias, 'price') if _wr_bias else None
         _wr_ma = _finite_yoy(_wr_bias, 'ma240') if _wr_bias else None
         _v4_bits = []
-        if (_wr_px is not None and _wr_ma is not None and _wr_px > 0 and _wr_ma > 0
-                and _v4.get('Bias_240') is not None):
+        _wr_pos_ok = (_wr_px is not None and _wr_ma is not None and _wr_px > 0 and _wr_ma > 0
+                      and _v4.get('Bias_240') is not None)
+        if _wr_pos_ok:
             # 批 Z6(Z3-n10):價略低於年線(例 19999.99／20000)時引擎回的 `Bias_240` 是 −0.0 或 (−0.05, 0)
             #   的小負數,`:+.1f` 印成「年線乖離 -0.0%」;同頁「年線位置」卡讀的 bias_info['bias_240'] 上游
             #   已把 −0.0 正規化(批 Y2 QA)印「+0.0%」⇒ 同一頁正負號不一致。顯示前把負零正規化:
@@ -177,6 +178,12 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             if _v4.get('Is_Overheated'):
                 _v4_bits.append('乖離過熱')
         if _v4.get('Is_Foreign_Hedging'):
+            # 批 Z9 第 2 組（Z6-n7，客戶 2026-10-08 核字「採 A，字句照 HANDOFF 主案，不改字」）：
+            #   價（或年線）缺 ⇒ 上面三個位階片段不列，「📐 年線位階參考：」底下只剩期貨片段 —— 標題與內容
+            #   對不上。此時位階先標「未知」（同檔「年線位置」卡缺值時的既有字），再接期貨片段：
+            #   「📐 年線位階參考：未知｜外資期貨避險」。位階有值、或沒有避險時，一字未動。
+            if not _wr_pos_ok:
+                _v4_bits.append('未知')
             _v4_bits.append('外資期貨避險')
         _wr_v4_hint = '｜'.join(_v4_bits)
 
