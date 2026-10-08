@@ -17,6 +17,12 @@ from __future__ import annotations
 
 import pytest
 
+import src.services.allocation_service as AS
+import src.ui.tabs.macro.section_warroom as W
+from shared.allocation_decision import build_allocation_decision
+from shared.inst_net import InstNetDict
+from tests.test_m2n2_no_zero_fill import _FakeST
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # C9-n3：冷啟動第一下就要載入
@@ -69,3 +75,58 @@ class TestC9n3ColdStartFirstClickLoads:
         assert '_z16_reached' in at.session_state and at.session_state['_z16_reached'], (
             '冷啟動第一次按更新就該進主流程載入，不能要按第二下')
         assert _EMPTY_HINT not in _infos(at)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# C9-n6 (a)：缺外資列（預填 0.0）⇒「外資方向」未知
+# ══════════════════════════════════════════════════════════════════════════
+_UNLOADED = build_allocation_decision(None)
+_FK = '外資及陸資'
+_BIAS = {'price': 20000.0, 'ma240': 19000.0, 'bias_240': 5.3}   # 年線位置有值 ⇒ 整段輸出別處不出現「未知」
+
+
+def _wr(inst, mp):
+    mp.setattr(AS, 'get_allocation', lambda *a, **k: _UNLOADED)
+    state = {'bias_info': _BIAS, 'cl_data': {'margin': 2000.0, 'inst': inst},
+             'warroom_summary': {'futures_net': None}}
+    fake = _FakeST(state)
+    mp.setattr(W, 'st', fake)
+    W.render_section_warroom('bull', True, False)
+    return list(fake.out)
+
+
+def _card(val: str) -> str:
+    return f"line-height:1.25;'>{val}</div>"
+
+
+def _rows(net: float) -> dict:
+    return {_FK: {'net': net}, '投信': {'net': 1.0}, '自營商': {'net': -1.0}}
+
+
+class TestC9n6aUnobservedForeignNet:
+    def test_unobserved_prefill_shows_unknown(self, monkeypatch):
+        out = _wr(InstNetDict(_rows(0.0), unobserved_net={_FK}), monkeypatch)
+        joined = '\n'.join(t for _k, t in out)
+        assert _card('未知') in joined
+        assert _card('賣超 0億') not in joined
+
+    def test_only_that_card_changes(self, monkeypatch):
+        """同一份資料、只差「有沒有觀測到」⇒ 整段輸出只差外資方向那一格。"""
+        unobs = _wr(InstNetDict(_rows(0.0), unobserved_net={_FK}), monkeypatch)
+        obs = _wr(InstNetDict(_rows(0.0)), monkeypatch)
+        joined = '\x1e'.join(t for _k, t in unobs)
+        assert joined.count(_card('未知')) == 1
+        undone = [(k, t.replace(_card('未知'), _card('賣超 0億'))) for k, t in unobs]
+        assert undone == obs
+
+    @pytest.mark.parametrize('inst, shown', [
+        pytest.param(_rows(0.0), '賣超 0億', id='plain-dict-observed-zero(b-not-in-scope)'),
+        pytest.param(InstNetDict(_rows(0.0)), '賣超 0億', id='instnet-observed-zero'),
+        pytest.param(InstNetDict(_rows(25.4)), '買超 25億', id='instnet-buy'),
+        pytest.param(InstNetDict(_rows(-30.0), unobserved_net={'投信'}), '賣超 30億',
+                     id='other-row-unobserved'),
+    ])
+    def test_observed_paths_unchanged(self, monkeypatch, inst, shown):
+        joined = '\n'.join(t for _k, t in _wr(inst, monkeypatch))
+        assert _card(shown) in joined
+        assert _card('未知') not in joined
