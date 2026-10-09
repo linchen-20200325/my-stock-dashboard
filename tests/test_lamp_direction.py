@@ -487,8 +487,24 @@ class TestRenderLive:
                     "bias_240": "SSOT:macro_helpers ±20 + DESIGN(10)",
                     "m1b_m2_gap": "DESIGN:資金動能交叉慣例",
                     "ism_pmi": "SSOT:MACRO_THRESHOLDS.PMI"}
+        # 批 Z18（客戶 2026-10-09 Q-r15a 裁示「1：A」）：note 開頭符號依實際判燈邊界修正。
+        # 黃金值**不重算**（同上作法）：把這 3 盞 note 開頭壓回 10f385c 原字串再比；
+        # 新字句另由 `tests/test_batch_z18.py` 逐字守。（ism_pmi 為暫緩列，note 未改。）
+        _old_note_head = {"margin": ("≥2500 警戒 / ≥3400 散戶槓桿極危",
+                                     "2500-3400 警戒 / >3400 散戶槓桿極危"),
+                          "bias_240": ("≥+20% 正乖離過熱", ">+20% 正乖離過熱"),
+                          "m1b_m2_gap": (">1 黃金交叉 / ≤0 死亡交叉", "≥1 黃金交叉 / <0 死亡交叉")}
+
+        def _restore(k, v):
+            v = dataclasses.replace(v, source=_old_src[k])
+            if k in _old_note_head:
+                _new, _old = _old_note_head[k]
+                assert v.note.startswith(_new), v.note
+                v = dataclasses.replace(v, note=_old + v.note[len(_new):])
+            return v
+
         monkeypatch.setattr(P, "SPECS_BY_KEY", {
-            k: (dataclasses.replace(v, source=_old_src[k]) if k in _old_src else v)
+            k: (_restore(k, v) if k in _old_src else v)
             for k, v in P.SPECS_BY_KEY.items()})
         full = _flat(P.build_indicator_tiles(_live_readout(), directions=_directions(), **kw))
         # SA2-f14（2026-10-01）：今天頁摺疊區改 `fold_truncate=False`（不截斷，同另四頁）。

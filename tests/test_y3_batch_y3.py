@@ -106,7 +106,9 @@ def test_fut_net_fixed_text_matches_lot_constants():
         FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS,
     )
     spec = _spec("fut_net")
-    m = re.search(r"空單超過 (\d+) 萬口 黃燈／超過 (\d+) 萬口 紅燈", spec.source)
+    # 批 Z18 追加（客戶 2026-10-09 裁示「採最簡版說明」）：source 改「空單 1 萬口 黃燈／2 萬口 紅燈」，
+    # 解析式跟著改；「寫死數字逐一對常數」的守衛目的不變。
+    m = re.search(r"空單 (\d+) 萬口 黃燈／(\d+) 萬口 紅燈", spec.source)
     assert m, spec.source
     yellow_lots, red_lots = -int(m.group(1)) * 10_000, -int(m.group(2)) * 10_000
     assert yellow_lots == FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS == spec.yellow, spec.source
