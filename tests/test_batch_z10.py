@@ -303,12 +303,12 @@ class TestY2n10WholeColumnMissing:
         assert r['status'] == '⬜ 無法判定' and r['_futures'] is None
 
 
-def _mid_out(fut, vix, veto, mp):
+def _mid_out(fut, vix, veto, mp, mod=None):
     base = dict(Z7._MID_BASE)
     if veto == 'trig':
         base['ism_pmi'] = {'value': 45.0}
         base['tw_export'] = {'yoy': -10.0, 'date': '2026-08'}
-    return Z7._mid(Z7._node(vix), mp, real_v4=True, fut=fut, base=base)[0]
+    return Z7._mid(Z7._node(vix), mp, mod=mod, real_v4=True, fut=fut, base=base)[0]
 
 
 class TestY2n10Section8Disclosure:
@@ -326,10 +326,16 @@ class TestY2n10Section8Disclosure:
     def test_none_disclosure_uses_existing_missing_word(self, monkeypatch):
         # 修前（`66ffb1f0`）：整欄 None ⇒ 揭露框不出（§三 假綠燈與本區「無觸發」一致）；
         #   修後 §三 ⬜ ⇒ 揭露框出現，期貨走引擎既有缺值字「未取得」（`None:,.0f` 不得 TypeError）
-        warns = [t for k, t in _mid_out(None, 18.0, 'ok', monkeypatch)
+        # 📌 依客戶 2026-10-09 Q-z1／Q-z2 裁示（Q-z2＝A，批 Z27 Z19-n6）：§三 ⬜ 時改出 caption、不再出此框。
+        #   原斷言改對「恰一次還原批 Z27 該段」的修前副本執行（Z10 的行為鎖定不放寬）；本尊改斷言新 caption。
+        import tests.test_batch_z27 as Z27
+        warns = [t for k, t in _mid_out(None, 18.0, 'ok', monkeypatch, mod=Z27.pre_mid())
                  if k == 'warning' and '兩套判定結論不一致' in t]
         assert len(warns) == 1
         assert '（§三 籌碼）：⬜ 無法判定　看的是 VIX=18.0、外資期貨=未取得' in warns[0]
+        out = _mid_out(None, 18.0, 'ok', monkeypatch)
+        assert not any(k == 'warning' and '兩套判定結論不一致' in t for k, t in out)
+        assert out.count(('caption', Z27._CAP_FUT)) == 1
 
     #: 有限期貨值 ⇒ §八 整段輸出與 `66ffb1f0` 逐字相同（同一支 `_mid_out` 實跑寫死）
     _GOLD = {

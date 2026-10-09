@@ -354,6 +354,13 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
             _ai5_clr, _ai5_icon = TRAFFIC_YELLOW, '🟡 溫和偏多，精選個股'
         else:
             _ai5_clr, _ai5_icon = '#8b949e', '⏸️ 中性觀望，等待訊號'
+    elif any(_v is not None for _v in (_cycle_ref, _ai_gap, _ai_vix, _ai_bias, _ai_exp)):
+        # 批 Z27（Z9-n8／Z19-n1，客戶 2026-10-09 Q-z1＝A 核准字句）：⑤ 自己的輸入（景氣 PMI／CLI、
+        #   M1B-M2 Gap、VIX、年線乖離、出口）至少一項有值、只是全落在中性帶而沒有條列 ⇒ 資料其實已載入，
+        #   不得再印「⏳ 等待資料」。判定只看上方已驗證過的值（無效 VIX／±inf 皆已是 None）⇒
+        #   Z7-n1「有值但無效、其餘全缺」仍走下方原句。顏色沿用同卡「⏸️ 中性觀望」的灰。
+        _ai5_txt  = '總經已載入；有資料，判定為一般水準。'
+        _ai5_clr, _ai5_icon = '#8b949e', '⏸️ 中性'
     else:
         _ai5_txt  = '請先按上方「🚀 一鍵更新全部數據」載入資料後自動生成結論。'
         _ai5_clr, _ai5_icon = '#484f58', '⏳ 等待資料'
