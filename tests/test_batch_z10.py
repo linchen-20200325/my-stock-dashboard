@@ -93,7 +93,9 @@ _UNCHANGED = {
     'zero': (lambda: _li([0.0], [110.0]), '9e73377d8f047b9e390559deb67db20fd888a67d5d29765309eb54340b5851d1'),
     'mixed_nan_mid': (lambda: _li([-20000.0, _NA, 5000.0], [100.0, _NA, 90.0]), '32ecb3b02f1d09510413c928768d8fa57ed3c30c89419d1ae709b0779c417022'),
     'b_last_nan': (lambda: _li([-20000.0, _NA], [100.0, 110.0]), '42bcb378d663bd051421ba5ea2a4d8fa52692509353672be4282930cd19b83ff'),
-    'pos_pcr_nan': (lambda: _li([12000.0], [_NA]), '4f39360c700457bcdc241cdb599eaaeb449758a76cc5ef56a9ea7fbc52308244'),
+    # 📌 批 Z20（Z10-n2）：PCR 末列 NaN 不再印「| PCR nan」（走既有「不印 PCR」分支）。新 digest 於本批實跑寫死；
+    #   與舊值 4f39360c…（基底 `0482ebd5` 同一支 `_chips` 實跑）逐段比對：25 段僅 §三 外資期貨結論卡少「 | PCR nan」，其餘逐字相同。
+    'pos_pcr_nan': (lambda: _li([12000.0], [_NA]), '5e58a478112f676752636c75add1f4dfd3bb8f90e8b0c764a352f78aca93631f'),
     'obj_none_then_finite': (lambda: _li([None, -16000.0], [100.0, 120.0], dtype=object), '5ecf33a9e12db76df51de1a672ec4b73325be1611e8908309a1d5bcc90e31f9b'),
 }
 

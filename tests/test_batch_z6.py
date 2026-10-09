@@ -303,6 +303,11 @@ _BIAS_CASES = [
     # Decimal +0.05：`:+.1f` 半位取偶 ⇒ +0.0（修前修後相同）；`float()` 後印 +0.1
     ('b-dec-20010', _S({'price': Decimal('20010'), 'ma240': 20000}), ['年線乖離 +0.0%'], ['年線乖離 +0.0%'],
      _D_ZERO, ()),
+    # ── 批 Z20（Z6-n4，自 `_SAME_CASES` 移入）：bias_info['bias_240']（-6.3，同頁「年線位置」卡所讀）與引擎
+    #   `Bias_240`（-6.25 → `:+.1f` -6.2）不一致 —— 修前同頁差 0.1；修後「📐」改讀卡片值 ⇒ -6.3。
+    #   修前 golden 照舊 `_BASE['below-ma']`；與修後逐項比對僅「📐」一行「-6.2」→「-6.3」不同（undo 即此對）。
+    ('below-ma', _S({'price': 15000.0, 'ma240': 16000.0, 'bias_240': -6.3}), ['年線乖離 -6.3%｜股價在年線下'],
+     ['年線乖離 -6.2%｜股價在年線下'], _BASE['below-ma'], (('年線乖離 -6.3%', '年線乖離 -6.2%'),)),
 ]
 
 _BIAS_BY_ID = {_c[0]: _c for _c in _BIAS_CASES}
@@ -319,8 +324,7 @@ _SAME_CASES = [
     ('bool', _S({'price': True, 'ma240': True}), [], _D_NO_HINT),
     ('full', _S({'bias_240': 25.0, 'bias_20': 12.0, 'price': 20000.0, 'ma240': 16000.0, 'data_days': 300,
                  'is_estimated': False}), ['年線乖離 +25.0%｜乖離過熱'], _BASE['full']),
-    ('below-ma', _S({'price': 15000.0, 'ma240': 16000.0, 'bias_240': -6.3}), ['年線乖離 -6.2%｜股價在年線下'],
-     _BASE['below-ma']),
+    # 📌 批 Z20（Z6-n4）：'below-ma' 移至 `_BIAS_CASES`（修後「📐」改讀同頁卡片值，不再與基底相同）。
     ('below-ma-25', _S({'price': 15000.0, 'ma240': 20000.0, 'bias_240': -25.0}),
      ['年線乖離 -25.0%｜股價在年線下'], _BASE['below-ma-25']),
     ('at-ma', _S({'price': 16000.0, 'ma240': 16000.0}), ['年線乖離 +0.0%'], _D_ZERO),
@@ -352,8 +356,11 @@ _REVERT_FUT = (
     "    _wr_fut_net = (None if isinstance(_wr_fut_raw, (np.bool_, complex, np.complexfloating))\n"
     "                   else _finite_yoy(_wr_sum, 'futures_net'))\n",
     "    _wr_fut_net = _wr_inp.futures_net\n")
+#: 📌 批 Z20（Z6-n4）：作戰室乖離改優先讀同頁卡片值（`_wr_b240_card`），還原點同步納入那兩行，
+#:   還原體仍等於基底 84c1ca4（只讀引擎 `Bias_240`、無負零正規化）；替換目標（還原後寫法）一字未動。
 _REVERT_NEGZERO = (
-    "            _wr_b240_txt = f'{_v4[\"Bias_240\"]:+.1f}'\n"
+    "            _wr_b240_card = _finite_yoy(_wr_bias, 'bias_240')\n"
+    "            _wr_b240_txt = f'{_wr_b240_card if _wr_b240_card is not None else _v4[\"Bias_240\"]:+.1f}'\n"
     "            if _wr_b240_txt == '-0.0':\n"
     "                _wr_b240_txt = '+0.0'\n"
     "            _v4_bits.append(f'年線乖離 {_wr_b240_txt}%{_wr_bias_badge}')\n",
@@ -668,10 +675,11 @@ class TestZ3n10WhyNotRoundPlusZero:
 
     def test_round_variant_would_fail_the_unchanged_cases(self):
         rnd = _variant(((
-            "            _wr_b240_txt = f'{_v4[\"Bias_240\"]:+.1f}'\n"
+            # 批 Z20（Z6-n4）：替換點跟著修後寫法改；本測試輸入皆無 bias_240 鍵 ⇒ 仍走引擎 `Bias_240`，語意不變。
+            "            _wr_b240_txt = f'{_wr_b240_card if _wr_b240_card is not None else _v4[\"Bias_240\"]:+.1f}'\n"
             "            if _wr_b240_txt == '-0.0':\n"
             "                _wr_b240_txt = '+0.0'\n",
-            "            _wr_b240_txt = f'{round(_v4[\"Bias_240\"], 1) + 0.0:+.1f}'\n"),), 'round')
+            "            _wr_b240_txt = f'{round(_wr_b240_card if _wr_b240_card is not None else _v4[\"Bias_240\"], 1) + 0.0:+.1f}'\n"),), 'round')
         assert _hint(_out(_S({'price': np.float64(20010.0), 'ma240': np.float64(20000.0)}), rnd)) == [
             '年線乖離 +0.0%']                                      # 基底與修後皆 +0.1%
         with pytest.raises(TypeError):

@@ -254,7 +254,7 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
                 _fut_net_v = float(_fut_net)
                 if _fut_net_v <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:   # 批 Z10（Q-r10b）：等於門檻歸防禦側
                     pivot_signals.append(('外資期貨大量空單','🔴',TRAFFIC_RED,
-                        f'外資期貨淨空 {abs(_fut_net_v):,.0f}口 ≥ 3萬口 → 頂部起跌訊號'))
+                        f'外資期貨淨空 {abs(_fut_net_v):,.0f}口 ≥ {FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD / 10_000:g}萬口 → 頂部起跌訊號'))
                 elif _fut_net_v < 0 and abs(_fut_net_v) < 10000:
                     pivot_signals.append(('外資空單縮減','🟡',TRAFFIC_YELLOW,
                         f'外資期貨淨空 {abs(_fut_net_v):,.0f}口（補回中）→ 底部拐點觀察'))
