@@ -273,4 +273,7 @@ class TestWarroomForeignDirectionGray:
     def test_finite_output_unchanged(self, monkeypatch, net, golden):
         out = _wr(InstNetDict(_rows(net)), monkeypatch)
         j = '\x1e'.join(f'{k}\x1f{t}' for k, t in out)
+        # 📌 批 Z29（C9-n6 (b)，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：剛好 0 的格值由「賣超 0億」改
+        #   「0億（持平）」（判定不變）；本 golden 為修字前實跑 ⇒ 只把該格值換回修前字後比對，新字由 test_batch_z29 斷言。
+        j = j.replace(">0億（持平）</div>", ">賣超 0億</div>")
         assert hashlib.sha256(j.encode()).hexdigest() == golden

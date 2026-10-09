@@ -133,12 +133,15 @@ class TestC9n6aUnobservedForeignNet:
         # 批 Z25（Z16-n1）起「未知」那格改畫灰框 ⬜（不再紅框 ⚠️）⇒ 還原時連同該格的灰／⬜ 換回紅／⚠️；
         #   守的仍是「只差外資方向那一格」。
         from tests.test_batch_z25 import undo_z25_gray_card
-        undone = [(k, t.replace(_card('未知'), _card('賣超 0億'))) for k, t in undo_z25_gray_card(unobs)]
+        # 📌 批 Z29（C9-n6 (b)，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：觀測到的剛好 0 改印「0億（持平）」。
+        undone = [(k, t.replace(_card('未知'), _card('0億（持平）'))) for k, t in undo_z25_gray_card(unobs)]
         assert undone == obs
 
     @pytest.mark.parametrize('inst, shown', [
-        pytest.param(_rows(0.0), '賣超 0億', id='plain-dict-observed-zero(b-not-in-scope)'),
-        pytest.param(InstNetDict(_rows(0.0)), '賣超 0億', id='instnet-observed-zero'),
+        # 📌 批 Z29（C9-n6 (b)，客戶 2026-10-09 核准，有意識的更正）：觀測到的剛好 0 由「賣超 0億」改「0億（持平）」；
+        #   判定值不變，由 test_batch_z29 守。
+        pytest.param(_rows(0.0), '0億（持平）', id='plain-dict-observed-zero'),
+        pytest.param(InstNetDict(_rows(0.0)), '0億（持平）', id='instnet-observed-zero'),
         pytest.param(InstNetDict(_rows(25.4)), '買超 25億', id='instnet-buy'),
         pytest.param(InstNetDict(_rows(-30.0), unobserved_net={'投信'}), '賣超 30億',
                      id='other-row-unobserved'),

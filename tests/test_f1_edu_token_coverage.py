@@ -605,6 +605,8 @@ _NUM_UNIT_RE = re.compile(r'\d[\d,.]*\s*(?:億|口|天|pp|%)')
 _ALLOWED: frozenset[str] = frozenset({
     # 「本次掃了 N 檔、入選率 X%」的分母為 0 時的顯示 fallback，非門檻。
     'src/ui/tabs/tab_stock_picker.py|0%',
+    # 批 Z29（C9-n6 (b)）：外資淨額剛好 0 的客戶核准顯示字「0億（持平）」，是觀測值本身、非門檻。
+    'src/ui/tabs/macro/section_warroom.py|0億',
 })
 
 

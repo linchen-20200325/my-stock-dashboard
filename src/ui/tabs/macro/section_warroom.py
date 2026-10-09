@@ -79,9 +79,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     _wr_inst = coerce_inst_dict(_wr_cd, where='section_warroom')
     _wr_fk = next((k for k in _wr_inst if '外資' in str(k)), None)
     # 批 Z16（C9-n6 (a)，修正錯誤）：缺外資列時 L1 預填的 0.0 不是觀測值（shared/inst_net）⇒ 走既有「未知」。
-    _wr_fnet = (_wr_inst.get(_wr_fk, {}).get('net', None)
+    # 批 Z29（C9-n6 (b)／Z26-n2，§1）：NaN／±inf 原印「賣超 nan億」「nan億」並判色 ⇒ 走 `_finite_yoy`，
+    #   非有限與缺值同路徑（「未知」／「未取得 (N/A)」＋灰、不出警示句）；有限值同一物件，輸出不變。
+    _wr_fnet = (_finite_yoy(_wr_inst.get(_wr_fk, {}), 'net')
                 if _wr_fk and is_net_observed(_wr_inst, _wr_fk) else None)
-    _wr_margin = _wr_cd.get('margin')
+    _wr_margin = _finite_yoy(_wr_cd, 'margin')
     _wr_adl = _wr_cd.get('adl')
     _wr_ts = _wr_inp.cl_ts
     # ── C1 v19.182:唯一出口 + 移除捏造的 'neutral' 預設 ──────────────────────
@@ -244,7 +246,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
              # 批 Z26（Z25-(b)，§1.A-4）：「⬜ 總經未評估」（非 bull/bear/neutral，同上一行 dict 的三鍵）原給
              #   False ⇒ 紅框 ⚠️ ⇒ 改給 None 走灰框 ⬜；三態已評估時判定式不變。
              None if _wr_reg not in ('bull', 'bear', 'neutral') else _wr_reg == 'bull', '多頭才積極操作'),
-            ('外資方向', f'{"買超" if (_wr_fnet or 0)>0 else "賣超"} {abs(_wr_fnet or 0):.0f}億' if _wr_fnet is not None else '未知',
+            # 批 Z29（C9-n6 (b)，客戶 2026-10-09 核准字句）：剛好 0 原印「賣超 0億」⇒ 改「0億（持平）」；第 3 欄判定不變。
+            ('外資方向', ('0億（持平）' if _wr_fnet == 0 else f'{"買超" if (_wr_fnet or 0)>0 else "賣超"} {abs(_wr_fnet or 0):.0f}億') if _wr_fnet is not None else '未知',
              # 批 Z16-n1（Z25，§1.A-4 灰紅分離）：未取得（None）第 3 欄給 None ⇒ 下方畫灰框 ⬜，
              #   不再當成「賣超／出錯」畫紅框 ⚠️；有值時判定式不變。
              None if _wr_fnet is None else (_wr_fnet or 0) > 0, '外資買超=跟著走'),
