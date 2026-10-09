@@ -263,9 +263,13 @@ class TestWarroomBiasMissing:
         pytest.param({'price': 20000.0, 'ma240': 16000.0}, id='bias240-missing'),
         pytest.param({'bias_240': math.nan}, id='bias240-nan'),
     ])
+    # 📌 批 Z26（Z25-(d)，有意識的更正，⛔ 不是漏刪）：原本此處釘 `'✅ 年線位置</div>' in joined`
+    #   （修前現況：「未知」畫綠框 ✅ ＝ 把沒資料畫成安全，違 §1.A 第 4 點）。批 Z26 改為缺值走同檔既有
+    #   「無資料」灰 ⬜；本測改釘修後圖示，文字「未知」照舊。修後完整行為由 test_batch_z26 守。
     def test_unknown_card_icon_pinned(self, bias):
         joined = '\n'.join(_warroom_out(bias))
-        assert '✅ 年線位置</div>' in joined
+        assert '⬜ 年線位置</div>' in joined
+        assert '✅ 年線位置' not in joined
         assert '⚠️ 年線位置' not in joined
         assert "line-height:1.25;'>未知</div>" in joined
 

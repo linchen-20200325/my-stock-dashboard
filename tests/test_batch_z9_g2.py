@@ -35,6 +35,7 @@ import src.ui.tabs.macro.section_warroom as W
 from shared.allocation_decision import build_allocation_decision
 from tests.test_m2n2_no_zero_fill import _FakeST
 from tests.test_batch_z25 import undo_z25_gray_card  # 批 Z25:外資方向未取得改灰,本檔沿用修前 golden
+from tests.test_batch_z26 import undo_z26_gray_card  # 批 Z26:融資餘額／年線位置缺值改灰,本檔沿用修前 golden
 
 
 def _digest(out) -> str:
@@ -209,7 +210,8 @@ def _wr(bias, fut, mp):
     mp.setattr(W, 'st', fake)
     W.render_section_warroom('bull', True, False)
     # 批 Z25（Z16-n1）：「外資方向」未取得那格修後改灰框 ⬜ ⇒ 換回修前紅框再比修前 golden（該格由 test_batch_z25 守）。
-    return undo_z25_gray_card(list(fake.out))
+    # 批 Z26（Z25-(d)）：「融資餘額」「年線位置」缺值那兩格修後改灰框 ⬜ ⇒ 同樣換回修前綠框（該兩格由 test_batch_z26 守）。
+    return undo_z26_gray_card(undo_z25_gray_card(list(fake.out)))
 
 
 def _hint(out) -> list:

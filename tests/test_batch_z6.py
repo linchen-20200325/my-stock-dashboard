@@ -61,6 +61,7 @@ from shared.macro_buckets import SPECS_BY_KEY, classify_danger
 from shared.macro_compute import evaluate_market_status_v4_final as _V4
 from tests.test_m2n2_no_zero_fill import _FakeST
 from tests.test_batch_z25 import undo_z25_gray_card  # 批 Z25:外資方向未取得改灰,本檔沿用修前 golden
+from tests.test_batch_z26 import undo_z26_gray_card  # 批 Z26:融資餘額／年線位置缺值改灰,本檔沿用修前 golden
 
 _UNLOADED = build_allocation_decision(None)
 
@@ -79,7 +80,8 @@ def _run(state, mod=W):
     finally:
         mod.st = saved
     # 批 Z25（Z16-n1）：「外資方向」未取得那格修後改灰框 ⬜ ⇒ 換回修前紅框再比修前 golden（該格由 test_batch_z25 守）。
-    return undo_z25_gray_card([(k, t) for k, t in fake.out]), fake
+    # 批 Z26（Z25-(d)）：「融資餘額」「年線位置」缺值那兩格修後改灰框 ⬜ ⇒ 同樣換回修前綠框（該兩格由 test_batch_z26 守）。
+    return undo_z26_gray_card(undo_z25_gray_card([(k, t) for k, t in fake.out])), fake
 
 
 def _out(state, mod=W):
