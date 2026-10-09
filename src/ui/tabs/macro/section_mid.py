@@ -429,7 +429,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
 
     # ── 跨區一致性揭露（§1 Fail Loud：不一致本身必須看得見）──────────
     # 取數走 §三 的同一個入口 `read_v4_macro_veto()`，確保兩區吃**同一份輸入**
-    # （同一個 VIX、同一份 ffill 後的外資期貨口數）——
+    # （同一個 VIX、同一份原始末筆的外資期貨口數；批 Z30（Z29-n2）起不再 ffill，末日缺值走 §三 既有「無法判定」）——
     # 否則「揭露分歧」自己就會變成新的分歧來源。
     # lazy import：與本檔其他 import 一致（避免 module load 時跑完整 dependency
     # chain），同層 L5 互相取用純函式，不涉跨層上行（§8.2）。

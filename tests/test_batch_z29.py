@@ -227,7 +227,7 @@ class TestForeignNetZero:
         assert _val('賣超 0億') not in card and _val('買超 0億') not in card   # 修前：「賣超 0億」
 
     @pytest.mark.parametrize('net', _ZEROS)
-    def test_judgement_unchanged(self, net, monkeypatch):
+    def test_judgement_gray_after_qz8(self, net, monkeypatch):
         """判定值與修前相同（False ⇒ 紅 ⚠️）；把新字換回「賣超 0億」後整段等於修前基底實跑。
 
         📌 批 Z30 改（客戶 2026-10-09 Q-z8＝B）：剛好 0 第 3 欄判定改 None ⇒ 灰框 ⬜（原斷言 False ⇒ 紅框 ⚠️）。
