@@ -1138,7 +1138,10 @@ ETF 回測子頁（render_etf_backtest）額外流程：
                         ▼
 使用者點「🚀 一鍵更新全部數據」 (do_refresh=True，同步 chips_loaded=True)
                         │
-                        ▼ on_click callback 全清三層快取：
+                        ▼ on_click callback（v18.329 起分兩顆按鈕，見 handlers.py）：
+                          一般更新 `_on_refresh_click`：只做 ③，吃既有 @st.cache_data TTL 暖快取
+                          強制重抓 `_on_force_clear_click`（「🆕 強制重抓最新（清快取）」）：
+                             `_pkl_clear_all()` + ① + ② + ③
                           ① st.cache_data.clear()
                           ② proxy_helper._URL_CACHE.clear() + reset_proxy_cache()
                           ③ session_state pop 14 key（cl_data / cl_ts / mkt_info /
@@ -1152,9 +1155,17 @@ ETF 回測子頁（render_etf_backtest）額外流程：
                           [重量] inst + margin + adl + li_fast
 ```
 
+📌 **2026-10-09 事實更正（批 Z17，Z14-n1）—— 有意識的更正，不是漏刪。** 上圖 on_click 段原寫
+「**on_click callback 全清三層快取**：① ② ③」—— 那在 v10.56.0 寫下時是對的，**v18.329 起已過期**：
+一般更新只 pop 總經 session key（③）、吃既有 TTL 暖快取；①②（另加 pkl）只在「🆕 強制重抓最新（清快取）」
+時執行（現碼：`src/ui/tabs/macro/handlers.py` 的 `_on_refresh_click`／`_on_force_clear_click`，
+按鈕在 `src/ui/tabs/tab_macro.py`）。同段「設計理由」兩句同步更正如下（刪除線＝舊句）。
+
 **設計理由**：
-- 燈號渲染必須建立在**完整資料**之上，否則 conf<70 仍會被 `_render_traffic_light` early-return（顯示橘色「⏸️ 資料不足」+ 逐項列缺失資料）
-- 全清快取保證「禁用暫存資料、全部都要重新下載」的用戶意圖落實
+- ~~燈號渲染必須建立在**完整資料**之上，否則 conf<70 仍會被 `_render_traffic_light` early-return（顯示橘色「⏸️ 資料不足」+ 逐項列缺失資料）~~
+  **現行（2026-08-19 方案 C 起）**：`_render_traffic_light` 改判**獨立故障域**（`conf_groups`：^TWII 域活著、兩個獨立域至少 1 個活著、health 至少 1 條腿）任一不成立即擋燈並列出缺項；`conf < 70` 只在上游缺 `conf_groups` 時當退回門檻（現碼：`src/ui/tabs/macro/handlers.py`）
+- ~~全清快取保證「禁用暫存資料、全部都要重新下載」的用戶意圖落實~~
+  **現行（v18.329 起）**：一般更新吃暖快取、不清其他頁快取；要「全部重新下載」改按「🆕 強制重抓最新（清快取）」
 - `chips_loaded=True` query_params 同步機制仍保留（WebSocket 重連恢復用）
 
 #### 頂部總經指南針：按鈕觸發即時抓取（PR #4，取代 15 分鐘 session_state 自動快取）
