@@ -281,12 +281,14 @@ _V4_GOLDEN_ACTION = {
     _G_HOT: '大盤乖離與外資避險過高。建議暫停積極型基金單筆申購，轉為定期定額，並拉高防禦型/平衡型基金權重。',
     _G_BEAR: '跌破年線，趨勢偏空。維持既有定期定額，單筆操作宜觀望。',
 }
+#: 批 Z10（Q-r10b，客戶 2026-10-09「等於門檻歸防禦」）：現行引擎在剛好 −30000 的期望值（凍結副本仍用表內原值）
+_V4_GOLDEN_Z10 = {(20000.0, 19000.0, -30000): ('🟡 多頭過熱 / 震盪警戒', 5.26, True, False, True)}
 _V4_GOLDEN_HOLD = {_G_BULL: '80% - 100%', _G_HOT: '50% - 70%', _G_BEAR: '20% - 40%'}
 #: (價, 年線, 外資期貨) → (Signal, Bias_240, Is_Bull, Is_Overheated, Is_Foreign_Hedging)
 _V4_GOLDEN = [pytest.param(a, w, id=repr(a)) for a, w in (
     ((20000.0, 19000.0, 0), (_G_BULL, 5.26, True, False, False)),          # round 2 位（改 1 位 → 5.3）
     ((20000.0, 19000.0, -40000), (_G_HOT, 5.26, True, False, True)),       # 多頭 × 外資避險
-    ((20000.0, 19000.0, -30000), (_G_BULL, 5.26, True, False, False)),     # 避險門檻（不含等號）
+    ((20000.0, 19000.0, -30000), (_G_BULL, 5.26, True, False, False)),     # 避險門檻（凍結副本不含等號；現行見 _V4_GOLDEN_Z10）
     ((20000.0, 19000.0, -30001), (_G_HOT, 5.26, True, False, True)),
     ((25000.0, 19000.0, 0), (_G_HOT, 31.58, True, True, False)),           # 多頭 × 過熱
     ((22800.0, 19000.0, 0), (_G_BULL, 20.0, True, False, False)),          # 乖離恰 20（不含等號）
@@ -343,7 +345,8 @@ class TestV4EngineNoFabrication:
         assert list(out) == _V4_KEYS
         assert all(out[k] is None for k in _PRICE_KEYS), out
         # 不依賴價格的鍵照舊；批 Z10（C8-n6）起外資期貨 None ⇒ None（未知），其餘同修前
-        assert out['Is_Foreign_Hedging'] is (None if fut is None else ((fut or 0) < -30000))
+        # 批 Z10（Q-r10b，客戶 2026-10-09）：剛好 −30000 歸避險側 ⇒ `<=`（原 `<`）
+        assert out['Is_Foreign_Hedging'] is (None if fut is None else ((fut or 0) <= -30000))
 
     @pytest.mark.parametrize('args', [(None, None, None), (0, 0, 0)])
     def test_reported_cases(self, args):
@@ -371,8 +374,9 @@ class TestV4EngineNoFabrication:
     @pytest.mark.parametrize('args,want', _V4_GOLDEN)
     def test_golden_fd989ae(self, args, want):
         # 修後與凍結副本都必須等於寫死值（乖離逐位；任一共用算式被改都會轉紅）
-        sig, bias, bull, hot, hedge = want
         for fn in (_V4, _V4_PRE):
+            # 批 Z10（Q-r10b）：剛好 −30000 現行引擎歸避險側（凍結副本仍為修前嚴格 `<`）
+            sig, bias, bull, hot, hedge = (_V4_GOLDEN_Z10.get(args, want) if fn is _V4 else want)
             out = fn(*args)
             assert list(out) == _V4_KEYS
             assert (out['Signal'], out['Suggested_Holding'], out['Action_Advice']) == (
@@ -398,7 +402,9 @@ class TestV4EngineNoFabrication:
                         # 批 Z10（C8-n6）：f 為 None 時只有 Is_Foreign_Hedging 由 False 改 None，其餘逐位比對
                         _fn = _V4 if f is not None else (
                             lambda *a: {**_V4(*a), 'Is_Foreign_Hedging': False})
-                        new, pre = _outcome(_fn, p, m, f), _outcome(_V4_PRE, p, m, f)
+                        # 批 Z10（Q-r10b）：剛好 −30000 現行引擎歸避險側 ⇒ 對拍凍結副本的「−30001」（避險成立、其餘同）
+                        _fp = -30001 if (f is not None and f == -30000) else f
+                        new, pre = _outcome(_fn, p, m, f), _outcome(_V4_PRE, p, m, _fp)
                         assert new == pre, (p, m, f, new, pre)
                         n += 1
         assert n == len(pos) ** 2 * len(futs)

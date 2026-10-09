@@ -25,7 +25,11 @@ from src.config import FINMIND_TOKEN  # noqa: F401
 # 門檻分別命名,詳見 src/config/config.py「韭菜指數門檻 SSOT」區塊。
 from src.config import LEEK_PIVOT_HIGH_PCT, LEEK_PIVOT_LOW_PCT
 # v19.183 D2 §3.3:拐點面板乖離門檻 ±10 / ±8 原為 inline magic number,抽至 L0 SSOT。
-from shared.signal_thresholds import PIVOT_BIAS_20_PCT, PIVOT_BIAS_240_PCT
+from shared.signal_thresholds import (
+    FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD,
+    PIVOT_BIAS_20_PCT,
+    PIVOT_BIAS_240_PCT,
+)
 # v19.183 D2:M1B/M2 是否為「^TWII 動能代理」的判定 SSOT(原用從未被寫入的 is_proxy 鍵)。
 from shared.macro_provenance import is_m1b_m2_proxy
 from shared.station_specs import MISS_FETCH_FAILED
@@ -248,7 +252,7 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
             _pcr     = _last_li.get('選PCR')
             if _fut_net is not None:
                 _fut_net_v = float(_fut_net)
-                if _fut_net_v < -30000:
+                if _fut_net_v <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:   # 批 Z10（Q-r10b）：等於門檻歸防禦側
                     pivot_signals.append(('外資期貨大量空單','🔴',TRAFFIC_RED,
                         f'外資期貨淨空 {abs(_fut_net_v):,.0f}口 > 3萬口 → 頂部起跌訊號'))
                 elif _fut_net_v < 0 and abs(_fut_net_v) < 10000:

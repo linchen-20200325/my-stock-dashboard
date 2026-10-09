@@ -10,6 +10,16 @@
 - Z6-n2（同函式）：`-30000` 改接 SSOT `FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD`（同值，判式仍為嚴格 `<`；
   等號歸屬本批未動）。
 
+📌 續作（客戶 2026-10-09 裁示，逐字）：「Q-r10a：B 缺值不得視為 0，也不得因此產生假綠燈。Z10 與 Y2-n10 一起處理到
+資料語意一致後再合併。」「Q-r10b：A -30,000 等於門檻時統一歸「防禦」。依既有 Q-r9d「等於門檻歸較差側」原則，
+全站相關判定統一，不另創規則。」（基底＝`wip/batch-z10` merge origin/main 後 `66ffb1f0`）
+- Y2-n10（§三 `read_v4_macro_veto`）：外資期貨缺值不再當 0 ⇒ 走引擎既有「⬜ 無法判定…外資期貨 未取得」，不再印
+  「🟢 綠燈…外資期貨=0口 — 可依策略佈局」；§八 揭露框 `_futures` 為 None 時走引擎既有字「未取得」、不崩。
+- C7-n3 (a)（§三 v5 段）：`or 0` 缺值改走同頁 v4 卡既有字「外資期貨 未取得」（灰），不再印「水位中性…」。
+- Q-r10b：外資期貨防禦門檻（`FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD`）全站判式統一 `<=`（含 `regime_arbiter` 的
+  `abs >=`）並接 SSOT：L0 v4_final、L0 regime_arbiter、§三 結論卡（原即 `<=`）、v5 段（原即 `<=`，接 SSOT）、
+  進階警示「期貨大空警戒」、籌碼綜合判斷、§二 拐點面板 5。
+
 golden：修前輸出於基底 `1354d9ac` 以本檔同一支 `_chips`（`_FakeST`）實跑後寫死 sha256（⛔ 不讀 git、
 不由現行碼反推）。本檔所有斷言皆為實跑行為斷言，不讀原始碼字面。
 """
@@ -67,15 +77,22 @@ _CARD_EXISTING = strategy_conclusion(STRATEGY_TECHNICAL, '外資期貨留倉',
                                      '先行指標欄位異常，請確認 FinMind Token', '')
 
 #: 欄內有任一有限值 ⇒ 整段 §三 輸出與基底逐字相同（含 C8-n1 (b) 末列 NaN／inf 的現行輸出）
+#: 📌 續作移出兩例（客戶 2026-10-09 裁示後預期改變，改由下方 TestQr10b／TestY2n10 斷言）：
+#:   'eq_-30000'（修前 eb44d95f…：進階警示無「期貨大空警戒」、綜合判斷印「⚠️ 期貨淨空」）；
+#:   'no_fut_col'（修前 14cc9203…：v4 卡「🟢 綠燈…外資期貨=0口 — 可依策略佈局」、v5 卡「水位中性…」）。
+#: 續作新增（於 `66ffb1f0` 以同一支 `_chips` 實跑寫死）：−29999／−30001／−15000／+5000／0。
 _UNCHANGED = {
     'single_-40000': (lambda: _li([-40000.0], [110.0]),
                       'c256b818ab0f37dd557ba0fe403c8c4d509dfe4c9f0045e4f3398e46a39a17d4'),
-    'eq_-30000': (lambda: _li([-30000.0], [110.0]), 'eb44d95f5f417d85dd35c84e6917dd7d0ee8f7bc2c8b22b1b1865a41a0d37337'),
+    'm29999': (lambda: _li([-29999.0], [110.0]), 'f2bceb06cefeca0c2ecd8906b190e8e1d0d71294b99fcbe8514bb05824deb29c'),
+    'm30001': (lambda: _li([-30001.0], [110.0]), '6fb88cf51d19e55a6d51d0bdb73c367efc4576db2d50b80de3d2f4e017c78298'),
+    'm15000': (lambda: _li([-15000.0], [110.0]), '58a5c43a6bd4888418de4e5b4542c2c20e5a212b6f2b1aea3f55ff23da8c9160'),
+    'p5000': (lambda: _li([5000.0], [110.0]), '85a5354fa933b241c37a32d82a18ad1ca2ecac5b359d24dff495c542601910d1'),
+    'zero': (lambda: _li([0.0], [110.0]), 'ab69f92adc37a92942dcd3b30415458fab5adb086079f60de9af1a0715685fe4'),
     'mixed_nan_mid': (lambda: _li([-20000.0, _NA, 5000.0], [100.0, _NA, 90.0]), '5e2b699887b7ba0b01eef8e83f8160fe26d3ccdb4a806478e34843ba4f892cf7'),
     'b_last_nan': (lambda: _li([-20000.0, _NA], [100.0, 110.0]), '28d2533f1f64e7e605b1e486e1967767e63907c8b694c242e11d63426b1c09a4'),
     'pos_pcr_nan': (lambda: _li([12000.0], [_NA]), 'b73114fc2f7948ef36bd6a0c5374e2595b6bb6d0fdb4b54894aad121c78d58c9'),
     'obj_none_then_finite': (lambda: _li([None, -16000.0], [100.0, 120.0], dtype=object), '1afdd356fab04aba4fd17e25ce7898f32ed06a17075078ce8244d08fa7093f01'),
-    'no_fut_col': (lambda: pd.DataFrame({"日期": ["2026-10-01"], "選PCR": [110.0]}), '14cc920355eb807e2219cd6c7ab7e35fdb73d83014a2f92f60323811e3029481'),
 }
 
 #: 外資大小整欄無有限值。修前於基底實跑：None 類 ⇒ TypeError（§三 之後整段不渲染）；全 NaN ⇒ 印
@@ -195,7 +212,13 @@ class TestC8n6FuturesMissingIsUnknown:
                                      np.False_, False, '', [], pd.NA])
     @pytest.mark.parametrize('px,ma', _PRICES)
     def test_non_none_identical_to_base(self, px, ma, fut):
-        assert _outcome(_V4, px, ma, fut) == _outcome(_v4_pre_z10, px, ma, fut)
+        # 續作（Q-r10b）：剛好 −30000 改歸避險側 ⇒ 對拍凍結副本的 −30001（避險成立、其餘同）；
+        #   比較子 `<` → `<=` 只改了例外訊息的運算子字面（型別不變）
+        pre_fut = -30001 if (isinstance(fut, (int, float)) and fut == -30000) else fut
+        now, pre = _outcome(_V4, px, ma, fut), _outcome(_v4_pre_z10, px, ma, pre_fut)
+        if now[0] == 'raise':
+            now = (now[0], now[1], now[2].replace("'<='", "'<'"))
+        assert now == pre
 
 
 class TestZ6n2SsotWired:
@@ -206,7 +229,165 @@ class TestZ6n2SsotWired:
         assert out['Is_Foreign_Hedging'] is True
         assert out['Signal'] == '🟡 多頭過熱 / 震盪警戒'
 
-    def test_equal_threshold_still_strict(self):
-        # 等號歸屬本批未動：剛好 −30000 仍不判避險（與 regime_arbiter 同為嚴格比較）
-        assert _V4(20000.0, 19000.0, -30000)['Is_Foreign_Hedging'] is False
+    def test_equal_threshold_is_defense(self):
+        # 續作（Q-r10b，客戶 2026-10-09）：剛好 −30000 歸避險（防禦）側；−29999 不成立
+        assert _V4(20000.0, 19000.0, -30000)['Is_Foreign_Hedging'] is True
+        assert _V4(20000.0, 19000.0, -30000.0)['Is_Foreign_Hedging'] is True
+        assert _V4(20000.0, 19000.0, -29999)['Is_Foreign_Hedging'] is False
         assert _V4(20000.0, 19000.0, -30001)['Is_Foreign_Hedging'] is True
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 續作（客戶 2026-10-09）：Y2-n10 ＋ C7-n3 (a) —— 外資大小整欄缺值時 §三 全段無「把缺值當 0」的結論
+# ══════════════════════════════════════════════════════════════════════════
+import tests.test_batch_z7 as Z7  # noqa: E402
+from shared.regime_arbiter import is_foreign_futures_defense  # noqa: E402
+from shared.signal_thresholds import FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD as _THR  # noqa: E402
+from tests.test_batch_z5 import _FI_FAIL, _H_FLAT, _LI_FLAT, _render_state  # noqa: E402
+
+#: 整欄缺值的各種形狀（含欄位不存在）
+_COL_MISSING = {
+    'none_1row': lambda: _li([None], [110.0]),
+    'none_3row': lambda: _li([None, None, None], [100.0, 110.0, 120.0]),
+    'nan_3row': lambda: _li([_NA, _NA, _NA], [100.0, 110.0, 120.0]),
+    'obj_none': lambda: _li([None, None], [100.0, 110.0], dtype=object),
+    'no_fut_col': lambda: pd.DataFrame({"日期": ["2026-10-01"], "選PCR": [110.0]}),
+}
+#: 修前（`66ffb1f0` 實跑）在這些情境出現過的「缺值當 0」結論字樣
+_FAKE_ZERO = ('外資期貨=0口', '外資期貨=0 口', '可依策略佈局', '🟢 綠燈', '水位中性', 'nan口', 'nan 口',
+              '外資期貨微空', '總經環境安全')
+_V5_MISSING_LINE = '📌 外資期貨 未取得'
+_V4_UNKNOWN_MSG = ('⬜ 總經環境無法判定：外資期貨 未取得（VIX=15.0 / 外資期貨=未取得）— 缺的這項有可能正是會亮紅燈的'
+                   '那一項，故不給結論、也不用預設值代替')
+
+
+class TestY2n10WholeColumnMissing:
+    @pytest.mark.parametrize('case', sorted(_COL_MISSING))
+    def test_no_fake_zero_conclusion_in_section3(self, case, monkeypatch):
+        out = _chips(_COL_MISSING[case](), monkeypatch)
+        joined = '\x1e'.join(t for _k, t in out)
+        for bad in _FAKE_ZERO:
+            assert bad not in joined, (case, bad)
+        v4 = [t for _k, t in out if '🏛️' in t and '風險燈' in t]
+        assert len(v4) == 1 and '⬜ 無法判定' in v4[0] and _V4_UNKNOWN_MSG in v4[0], v4
+        v5 = [t for _k, t in out if '💰 v5' in t]
+        assert len(v5) == 1 and _V5_MISSING_LINE in v5[0], v5
+
+    @pytest.mark.parametrize('case', sorted(_COL_MISSING))
+    def test_v5_card_gray_with_sleeves(self, case, monkeypatch):
+        out = _chips(_COL_MISSING[case](), monkeypatch)       # 先跑一次（sleeves=None）建立 monkeypatch
+        monkeypatch.setattr(AS, "get_allocation_sleeves",
+                            lambda *a, **k: {"股票型ETF": 50, "債券型ETF": 30, "貨幣/現金": 20})
+        fake = SC.st
+        n0 = len(fake.out)
+        SC.render_section_chips({}, None, {})
+        v5 = [t for _k, t in fake.out[n0:] if '💰 v5' in t]
+        assert len(v5) == 1 and _V5_MISSING_LINE in v5[0] and '水位中性' not in v5[0]
+        assert 'border-left:5px solid #888888' in v5[0] and '#58a6ff' not in v5[0]   # 灰，不是「中性」藍
+        assert out
+
+    def test_read_v4_macro_veto_futures_none(self, monkeypatch):
+        _chips(_COL_MISSING['none_3row'](), monkeypatch)
+        r = SC.read_v4_macro_veto()
+        assert r['status'] == '⬜ 無法判定' and r['_futures'] is None and r['futures'] is None
+
+    def test_li_not_loaded_futures_none(self, monkeypatch):
+        # li_latest 不在 session：§八 入口不得以 0 口判綠燈
+        fake = _FakeST({"macro_info": {"vix": {"current": 15.0}}})
+        monkeypatch.setattr(SC, "st", fake)
+        r = SC.read_v4_macro_veto()
+        assert r['status'] == '⬜ 無法判定' and r['_futures'] is None
+
+
+def _mid_out(fut, vix, veto, mp):
+    base = dict(Z7._MID_BASE)
+    if veto == 'trig':
+        base['ism_pmi'] = {'value': 45.0}
+        base['tw_export'] = {'yoy': -10.0, 'date': '2026-08'}
+    return Z7._mid(Z7._node(vix), mp, real_v4=True, fut=fut, base=base)[0]
+
+
+class TestY2n10Section8Disclosure:
+    @pytest.mark.parametrize('fut', [None, _NA], ids=['none', 'nan'])
+    @pytest.mark.parametrize('vix', [18.0, 26.0])
+    @pytest.mark.parametrize('veto', ['ok', 'trig'])
+    def test_missing_futures_no_crash_no_zero(self, fut, vix, veto, monkeypatch):
+        out = _mid_out(fut, vix, veto, monkeypatch)
+        joined = '\x1e'.join(t for _k, t in out)
+        assert '外資期貨=0 口' not in joined and 'nan 口' not in joined
+        warns = [t for k, t in out if k == 'warning' and '兩套判定結論不一致' in t]
+        for w in warns:
+            assert f'看的是 VIX={vix:.1f}、外資期貨=未取得' in w
+
+    def test_none_disclosure_uses_existing_missing_word(self, monkeypatch):
+        # 修前（`66ffb1f0`）：整欄 None ⇒ 揭露框不出（§三 假綠燈與本區「無觸發」一致）；
+        #   修後 §三 ⬜ ⇒ 揭露框出現，期貨走引擎既有缺值字「未取得」（`None:,.0f` 不得 TypeError）
+        warns = [t for k, t in _mid_out(None, 18.0, 'ok', monkeypatch)
+                 if k == 'warning' and '兩套判定結論不一致' in t]
+        assert len(warns) == 1
+        assert '（§三 籌碼）：⬜ 無法判定　看的是 VIX=18.0、外資期貨=未取得' in warns[0]
+
+    #: 有限期貨值 ⇒ §八 整段輸出與 `66ffb1f0` 逐字相同（同一支 `_mid_out` 實跑寫死）
+    _GOLD = {
+        (-30000.0, 18.0, 'ok'): '9cbb665b96373e955ec428ad58ef099feadbde005edb0fc9bce74cf417db640c',
+        (-30000.0, 18.0, 'trig'): '3b2f3d37394b2fbc5eec7f44e6437b1d4731ba1fee5df7a05d4752dc3a0ffe8a',
+        (-30000.0, 26.0, 'ok'): '83a65baa177436cfae3139bfea5244bb8b2a154b22f1a74fa957a739a941efa5',
+        (-29999.0, 18.0, 'ok'): '2f7e306b0069d7c7882e035b7134e55a409d77e975f7faf11341f64434dce2f2',
+        (-29999.0, 26.0, 'trig'): '5ae5f82fbc3ac8b8cc215ad3ada2f30e18d3a5903e82015b6efb86f786dd4c4a',
+        (-40000.0, 18.0, 'ok'): 'ae5b8f47c481f5eaca89bdced7a4e7e46eb9f501206c5365c72f6ea6638a88ca',
+        (-40000.0, 26.0, 'trig'): '2fa308cb99f4392068509a16f162137bd53230ccb78f73b44b3c964db6424f2a',
+        (0.0, 18.0, 'ok'): '560aa4db05b788efcd6b0f2f1811d2cd4e822bccbf38e591ed54adf055379f38',
+        (0.0, 18.0, 'trig'): '252afb949678aa70c9fecd34c48e32f6319c38a35d9ea3f000fe200e85f77c99',
+        (5000.0, 26.0, 'ok'): 'c01539c6d59a9ec831b458f8b08f02112193663405cf06058450349444dadb25',
+        (5000.0, 18.0, 'trig'): '0ea7998deca08c860089f9e3770091f8cb425f7fc2e1f82cf6c9157b714d6025',
+    }
+
+    @pytest.mark.parametrize('key', sorted(_GOLD))
+    def test_finite_futures_identical_to_base(self, key, monkeypatch):
+        assert _digest(_mid_out(*key, monkeypatch)) == self._GOLD[key]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 續作（客戶 2026-10-09）：Q-r10b —— −30000 全站一致判防禦；−29999 一致不防禦
+# ══════════════════════════════════════════════════════════════════════════
+def _state_pivots(fut, mp):
+    df = pd.DataFrame({"外資大小": [fut], "韭菜指數": [_NA]})
+    return [p[0] for p in _render_state(mp, _H_FLAT, _LI_FLAT, _FI_FAIL, ss={"li_latest": df}).pivots]
+
+
+class TestQr10bEqualThresholdIsDefense:
+    def test_threshold_is_ssot_30000(self):
+        assert _THR == 30000
+
+    @pytest.mark.parametrize('fut,want', [(-30000.0, True), (-30000, True), (-29999.0, False),
+                                          (-30001.0, True)])
+    def test_all_judgement_points_agree(self, fut, want, monkeypatch):
+        got = {}
+        got['L0 v4_final'] = bool(_V4(20000.0, 19000.0, fut)['Is_Foreign_Hedging'])
+        got['L0 regime_arbiter'] = is_foreign_futures_defense(market_score=1, futures_net_lots=fut)
+        out = _chips(_li([fut], [110.0]), monkeypatch)
+        joined = '\x1e'.join(t for _k, t in out)
+        got['§三 結論卡'] = '啟動強制防禦，等待空單回補' in joined
+        got['§三 v5'] = '嚴禁追高攤平，保護本金優先' in joined
+        got['§三 進階警示'] = '期貨大空警戒' in joined
+        got['§三 綜合判斷'] = '🔴 期貨空單' in joined
+        monkeypatch.undo()
+        got['§二 拐點'] = '外資期貨大量空單' in _state_pivots(fut, monkeypatch)
+        assert got == {k: want for k in got}, got
+
+    def test_minus_30000_section3_text(self, monkeypatch):
+        out = _chips(_li([-30000.0], [110.0]), monkeypatch)
+        texts = [t for _k, t in out]
+        assert any('外資期貨空單 30,000 口（>3萬口門檻）' in t for t in texts)
+        assert any('🔴 期貨空單 -30,000口（超越3萬危險線）' in t for t in texts)
+        assert not any('⚠️ 期貨淨空 -30,000口' in t for t in texts)
+
+    def test_section3_card_threshold_follows_ssot(self, monkeypatch):
+        import src.ui.tabs.macro.section_state as STATE
+        monkeypatch.setattr(SC, 'FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD', 25000)
+        monkeypatch.setattr(STATE, 'FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD', 25000)
+        out = _chips(_li([-25000.0], [110.0]), monkeypatch)
+        joined = '\x1e'.join(t for _k, t in out)
+        for s in ('啟動強制防禦，等待空單回補', '嚴禁追高攤平，保護本金優先', '期貨大空警戒', '🔴 期貨空單'):
+            assert s in joined, s
+        assert '外資期貨大量空單' in _state_pivots(-25000.0, monkeypatch)

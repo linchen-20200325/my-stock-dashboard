@@ -105,12 +105,13 @@ def evaluate_market_status_v4_final(current_price: float, ma_240: float,
     批 Z10(C8-n6,§1 不捏值):原 `futures_net_oi or 0` 把外資期貨缺值捏成 0 ⇒ `Is_Foreign_Hedging`
     回 False(「確定沒避險」)。改為:`futures_net_oi` 為 None ⇒ `Is_Foreign_Hedging` 回 None(未知);
     其餘依賴價格的鍵照舊(None 在多頭分支的 `or` 與 False 同為不成立 ⇒ Signal／建議／持股不變)。
-    批 Z10(Z6-n2,§3.3):門檻改接 SSOT `FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD`(同值 30000,
-    判式仍為嚴格 `<`,等號歸屬未動)。非 None 輸入 ⇒ 全部輸出(含型別、含會拋的組合)逐位不變 ——
+    批 Z10(Z6-n2,§3.3):門檻改接 SSOT `FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD`(同值 30000)。
+    批 Z10(Q-r10b,客戶 2026-10-09):剛好 −30000 歸「防禦」側,判式由 `<` 改 `<=`(全站統一)。
+    其餘非 None 輸入 ⇒ 全部輸出(含型別、含會拋的組合)逐位不變 ——
     故非 None 那枝保留原 `or 0`(其餘假值如 0／0.0／False／空字串照修前處理,未擴大範圍)。
     """
     is_foreign_hedging = (None if futures_net_oi is None
-                          else (futures_net_oi or 0) < -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD)
+                          else (futures_net_oi or 0) <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD)
 
     if not (_is_finite_positive(current_price) and _is_finite_positive(ma_240)):
         return {

@@ -200,10 +200,14 @@ class TestForeignFuturesDefenseThreshold:
     def test_minus_20000_does_not_trigger(self):
         assert is_foreign_futures_defense(market_score=1, futures_net_lots=-20000) is False
 
-    def test_exact_threshold_is_not_enough_strict_gt(self):
-        """判定式是嚴格大於（`abs(fut) > 門檻`），剛好等於不觸發。"""
+    def test_exact_threshold_triggers(self):
+        """批 Z10（Q-r10b，客戶 2026-10-09「等於門檻歸防禦」）：判定式 `abs(fut) >= 門檻`（原嚴格 `>`），
+        剛好等於即觸發；差 1 口不觸發。"""
         assert is_foreign_futures_defense(
-            market_score=1, futures_net_lots=-FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD) is False
+            market_score=1, futures_net_lots=-FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD) is True
+        assert is_foreign_futures_defense(
+            market_score=1,
+            futures_net_lots=-(FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD - 1)) is False
         assert is_foreign_futures_defense(
             market_score=1,
             futures_net_lots=-(FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD + 1)) is True
@@ -267,7 +271,9 @@ class TestLegacyTreeParity:
                 futures_net_lots=fut,
                 health_defense_threshold=_HD_THR, bull_min_score=_BULL_THR,
             ).regime
-            want = _legacy_tree(trend, score, health, fut)
+            # 批 Z10（Q-r10b）：剛好 −門檻 由「不防禦」改「防禦」（客戶裁示的唯一行為位移）⇒ 該格對拍舊樹的 −30001
+            want = _legacy_tree(trend, score, health,
+                                -30001.0 if fut == -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD else fut)
             if got != want:
                 mismatches.append(
                     f'trend={trend} score={score} health={health} fut={fut}: '
