@@ -209,7 +209,6 @@ UNTOUCHED_BLOCKS: tuple[UntouchedBlock, ...] = (
         label="外資期貨淨口的 `futures_net` 旗標",
         session_key="futures_net",
         why=("**全 repo 沒有任何一處寫這個 key**（實測 0 個寫入點）——"
-             "五桶取數對它一律吃 `state.get('futures_net', 0)` 的預設值。"
              "⚠️ 這不是本路徑的缺口，是全站的：舊分頁按一百次也一樣。"
              "（判燈實際用的是 `li_latest['外資大小']`，那一項本路徑有更新）"),
         writer="（無）",

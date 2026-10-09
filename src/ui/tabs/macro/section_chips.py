@@ -279,12 +279,22 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         # 批 Z10（C8-n1 (a)，§1 不捏值）：外資大小整欄沒有任何有限值（全 None／NaN／±inf）時，
         #   原 `float(None)` 拋 TypeError ⇒ §三 之後整段不渲染（全 NaN 則印「nan口」）。改走同卡既有
         #   「先行指標欄位異常」分支（不下結論）；PCR 只在期貨有值時才讀（移入分支內，整欄 None 同理不崩）。
-        #   欄內有任一有限值時讀末列照舊（末列缺＝C8-n1 (b)，未動），輸出逐字不變。
-        _fut4 = (float(_li4.iloc[-1].get('外資大小', 0))
-                 if '外資大小' in _li4.columns
-                 and any(_finite_yoy({'v': _v}, 'v') is not None for _v in _li4['外資大小'])
-                 else None)
-        if _fut4 is not None:
+        #   欄內有任一有限值時讀末列照舊，輸出逐字不變。
+        # 批 Z28（C8-n1 (b)，客戶 Q-z4＝A，§1 不捏值）：欄內有有限值、但**末列**非有限（None／NaN／±inf／pd.NA）時，
+        #   原印「外資期貨 nan口 → 外資期貨微空 nan口，水位正常」（假結論；None／pd.NA 則 `float()` 拋 TypeError）。
+        #   末列改走 `_finite_yoy`，非有限 → 同頁 v5 段既有字「📌 外資期貨 未取得」（逐字、灰色、不下結論）；
+        #   末列有限 → 同一個物件轉 float，輸出逐字不變。整欄無有限值仍走上方 C8-n1 (a) 分支。
+        _l4_color = None
+        _fut4_any = ('外資大小' in _li4.columns
+                     and any(_finite_yoy({'v': _v}, 'v') is not None for _v in _li4['外資大小']))
+        _fut4 = (_finite_yoy({'v': _li4.iloc[-1].get('外資大小')}, 'v') if _fut4_any else None)
+        _fut4 = float(_fut4) if _fut4 is not None else None
+        if _fut4 is None and _fut4_any:
+            _l4c = '📌 外資期貨 未取得'
+            _l4a = ''
+            _l4_ind = '外資期貨留倉'
+            _l4_color = TRAFFIC_NEUTRAL
+        elif _fut4 is not None:
             # 批 Z20（Z10-n2，§1 不捏值）：PCR 末列 None／pd.NA 時原 `float(None)` 拋 TypeError（§三 後段不渲染）、
             #   NaN 印「PCR nan」⇒ 改走 `_finite_yoy`（缺／非有限 → None），落入既有「不印 PCR」分支；
             #   有限值照舊 `float(…)` 後格式化，逐字不變。
@@ -320,9 +330,11 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         _l4c = '先行指標尚未載入，請點擊「🚀 一鍵更新全部數據」'
         _l4a = ''
         _l4_ind = '外資期貨留倉'
+        _l4_color = None
     # v18.336：三源全空時上方已有 fail-loud 診斷卡,此處不重複「尚未載入」(避免點過更新仍喊更新)
     if not _chips_all_empty3:
-        st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _l4_ind, _l4c, _l4a), unsafe_allow_html=True)
+        st.markdown(strategy_conclusion(STRATEGY_TECHNICAL, _l4_ind, _l4c, _l4a, color=_l4_color),
+                    unsafe_allow_html=True)
 
     # ── 副標籤：欄位確認列（v12 風格）─────────────────────────────────
     st.markdown("""<div style="font-size:11px;color:#484f58;margin:-6px 0 10px 0;">

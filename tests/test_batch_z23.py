@@ -30,6 +30,7 @@ from src.data.macro.leading_indicators import render_leading_table
 from tests.test_batch_z10 import _chips, _digest
 from tests.test_batch_z17 import _health
 from tests.test_batch_z21 import _COLS, _cells, _txt
+from tests.test_batch_z28 import use_pre_z28_v4
 
 _HUGE = 10 ** 400
 #: 獨立字詞的 inf／nan（排除「YFinance」等既有字句）
@@ -100,9 +101,16 @@ class TestAlertNonFinite:
         'f32': (dict(fnet=np.float32(-32000), opt=None, leek=np.float32(33.0)), '790bab9adc99af50a5d83fd6afc45b65f6cead2d8ea440ca7b3d07ce901309c7'),
     }
 
+    #: 📌 批 Z28（Z19-n8，客戶 Q-z5＝A「剛好等於門檻判較差側」，有意識的更正，⛔ 不是漏改）：本例外資期貨剛好 −20,000 口，
+    #:   v4 引擎風險燈由 🟡 改 🔴（預期改變，已由 test_batch_z28 斷言）。為保留本檔原 golden（本檔主題與 v4 等號無關），
+    #:   本例改用 `use_pre_z28_v4`（恰一次還原 v4 兩個判式為 `<`）實跑；golden 一字未改。
+    _Z28_V4_EDGE = {'edge_20000'}
+
     @pytest.mark.parametrize('case', sorted(_BASE))
     def test_finite_unchanged(self, case, monkeypatch):
         kw, gold = self._BASE[case]
+        if case in self._Z28_V4_EDGE:
+            use_pre_z28_v4(monkeypatch)
         assert _digest(_chips(_li_w(**kw), monkeypatch)) == gold
 
     def test_finite_still_alerts(self, monkeypatch):

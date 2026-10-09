@@ -140,12 +140,14 @@ class V4StrategyEngine:
         # 門檻從 SSOT 引入（v18.241 E13）。`is not None` 的短路是必要的：
         # `None > 25` 在 py3 直接 TypeError,而寫成 `(vix or 0) > 25` 就又繞回
         # 「用一個假值參與判定」的老路。
+        # 批 Z28（Z19-n8，客戶 Q-z5＝A）：外資期貨剛好等於 −20,000／−10,000 口時歸較差側（`<` → `<=`），
+        #   比照 Q-r9d／Q-r10b「等於門檻歸較差側」；只影響剛好等於門檻的值，其餘輸出逐字不變。
         _vix_red = vix is not None and vix > VIX_HIGH_RISK_THRESHOLD
         _fut_red = (futures is not None
-                    and futures < FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS)
+                    and futures <= FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS)
         _vix_yellow = vix is not None and vix > VIX_MEDIUM_RISK_THRESHOLD
         _fut_yellow = (futures is not None
-                       and futures < FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS)
+                       and futures <= FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS)
 
         # 紅燈：高風險
         if _vix_red or _fut_red:

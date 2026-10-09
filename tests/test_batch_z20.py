@@ -32,6 +32,7 @@ from shared.macro_compute import evaluate_market_status_v4_final as _V4
 from tests.test_batch_z5 import _FI_FAIL, _H_FLAT, _LI_FLAT, _render_state
 from tests.test_batch_z6 import _S, _hint, _out
 from tests.test_batch_z10 import _chips, _digest, _li
+from tests.test_batch_z28 import use_pre_z28_v4
 
 
 def _joined(out) -> str:
@@ -139,10 +140,18 @@ _FINITE_PCR_BASE = {
 }
 
 
+#: 📌 批 Z28（Z19-n8，客戶 Q-z5＝A「剛好等於門檻判較差側」，有意識的更正，⛔ 不是漏改）：本例外資期貨剛好 −20,000 口，
+#:   v4 引擎風險燈由 🟡 改 🔴（預期改變，已由 test_batch_z28 斷言）。為保留本檔原 golden（本檔主題與 v4 等號無關），
+#:   本例改用 `use_pre_z28_v4`（恰一次還原 v4 兩個判式為 `<`）實跑；golden 一字未改。
+_Z28_V4_EDGE = {'f110'}
+
+
 class TestZ10n2FiniteUnchanged:
     @pytest.mark.parametrize('case', sorted(_FINITE_PCR_BASE))
     def test_digest_equals_base(self, case, monkeypatch):
         mk, want = _FINITE_PCR_BASE[case]
+        if case in _Z28_V4_EDGE:
+            use_pre_z28_v4(monkeypatch)
         assert _digest(_chips(mk(), monkeypatch)) == want
 
     def test_finite_pcr_still_printed(self, monkeypatch):
