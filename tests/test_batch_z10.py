@@ -81,18 +81,20 @@ _CARD_EXISTING = strategy_conclusion(STRATEGY_TECHNICAL, '外資期貨留倉',
 #:   'eq_-30000'（修前 eb44d95f…：進階警示無「期貨大空警戒」、綜合判斷印「⚠️ 期貨淨空」）；
 #:   'no_fut_col'（修前 14cc9203…：v4 卡「🟢 綠燈…外資期貨=0口 — 可依策略佈局」、v5 卡「水位中性…」）。
 #: 續作新增（於 `66ffb1f0` 以同一支 `_chips` 實跑寫死）：−29999／−30001／−15000／+5000／0。
+#: 📌 客戶 2026-10-09 裁示 2（≥／達 邊界文字）後重寫死：與舊值逐項比對，差異**僅限**表 caption
+#:   「外資空單>」→「≥」（每例 1 處）＋ −40000／−30001 的防禦三句「口 >」→「≥」「>3萬口門檻」→「≥」「超越」→「達」；其餘逐字相同。
 _UNCHANGED = {
     'single_-40000': (lambda: _li([-40000.0], [110.0]),
-                      'c256b818ab0f37dd557ba0fe403c8c4d509dfe4c9f0045e4f3398e46a39a17d4'),
-    'm29999': (lambda: _li([-29999.0], [110.0]), 'f2bceb06cefeca0c2ecd8906b190e8e1d0d71294b99fcbe8514bb05824deb29c'),
-    'm30001': (lambda: _li([-30001.0], [110.0]), '6fb88cf51d19e55a6d51d0bdb73c367efc4576db2d50b80de3d2f4e017c78298'),
-    'm15000': (lambda: _li([-15000.0], [110.0]), '58a5c43a6bd4888418de4e5b4542c2c20e5a212b6f2b1aea3f55ff23da8c9160'),
-    'p5000': (lambda: _li([5000.0], [110.0]), '85a5354fa933b241c37a32d82a18ad1ca2ecac5b359d24dff495c542601910d1'),
-    'zero': (lambda: _li([0.0], [110.0]), 'ab69f92adc37a92942dcd3b30415458fab5adb086079f60de9af1a0715685fe4'),
-    'mixed_nan_mid': (lambda: _li([-20000.0, _NA, 5000.0], [100.0, _NA, 90.0]), '5e2b699887b7ba0b01eef8e83f8160fe26d3ccdb4a806478e34843ba4f892cf7'),
-    'b_last_nan': (lambda: _li([-20000.0, _NA], [100.0, 110.0]), '28d2533f1f64e7e605b1e486e1967767e63907c8b694c242e11d63426b1c09a4'),
-    'pos_pcr_nan': (lambda: _li([12000.0], [_NA]), 'b73114fc2f7948ef36bd6a0c5374e2595b6bb6d0fdb4b54894aad121c78d58c9'),
-    'obj_none_then_finite': (lambda: _li([None, -16000.0], [100.0, 120.0], dtype=object), '1afdd356fab04aba4fd17e25ce7898f32ed06a17075078ce8244d08fa7093f01'),
+                      '0aeb2b755a136bdaad52b0bda15b9b2d919deb6ebbecd4d65f130c0e2123e355'),
+    'm29999': (lambda: _li([-29999.0], [110.0]), '121a0374d7d0176341de4a83b470da5a59c24dfaf8f2c51efb37e7a53e1cc11a'),
+    'm30001': (lambda: _li([-30001.0], [110.0]), '1468fc8afe58633f90088e9c049c5e321569db76c3e860ec8992e9ba028606ba'),
+    'm15000': (lambda: _li([-15000.0], [110.0]), '7c21ea806e42e799ce72139bd922c2c46b27677c7f39975e72c1ffbcee9f39ea'),
+    'p5000': (lambda: _li([5000.0], [110.0]), '870ef4d55d05b3e473f00efeee87c6c6c22e544cb283a1b876b1b779fbd8c908'),
+    'zero': (lambda: _li([0.0], [110.0]), '9e73377d8f047b9e390559deb67db20fd888a67d5d29765309eb54340b5851d1'),
+    'mixed_nan_mid': (lambda: _li([-20000.0, _NA, 5000.0], [100.0, _NA, 90.0]), '32ecb3b02f1d09510413c928768d8fa57ed3c30c89419d1ae709b0779c417022'),
+    'b_last_nan': (lambda: _li([-20000.0, _NA], [100.0, 110.0]), '42bcb378d663bd051421ba5ea2a4d8fa52692509353672be4282930cd19b83ff'),
+    'pos_pcr_nan': (lambda: _li([12000.0], [_NA]), '4f39360c700457bcdc241cdb599eaaeb449758a76cc5ef56a9ea7fbc52308244'),
+    'obj_none_then_finite': (lambda: _li([None, -16000.0], [100.0, 120.0], dtype=object), '5ecf33a9e12db76df51de1a672ec4b73325be1611e8908309a1d5bcc90e31f9b'),
 }
 
 #: 外資大小整欄無有限值。修前於基底實跑：None 類 ⇒ TypeError（§三 之後整段不渲染）；全 NaN ⇒ 印
@@ -378,9 +380,26 @@ class TestQr10bEqualThresholdIsDefense:
     def test_minus_30000_section3_text(self, monkeypatch):
         out = _chips(_li([-30000.0], [110.0]), monkeypatch)
         texts = [t for _k, t in out]
-        assert any('外資期貨空單 30,000 口（>3萬口門檻）' in t for t in texts)
-        assert any('🔴 期貨空單 -30,000口（超越3萬危險線）' in t for t in texts)
+        # 客戶 2026-10-09 裁示 2：等於門檻歸防禦 ⇒ 使用者文字改為「≥／達」正確邊界
+        assert any('外資期貨空單 30,000 口（≥3萬口門檻）' in t for t in texts)
+        assert any('🔴 期貨空單 -30,000口（達3萬危險線）' in t for t in texts)
         assert not any('⚠️ 期貨淨空 -30,000口' in t for t in texts)
+
+    def test_minus_30000_no_strict_gt_contradiction(self, monkeypatch):
+        """剛好 −30000 時，§三／§二 畫面不得出現「30,000口 > 30,000口」類矛盾句。"""
+        import re
+        out = _chips(_li([-30000.0], [110.0]), monkeypatch)
+        texts = [t for _k, t in out]
+        monkeypatch.undo()
+        df = pd.DataFrame({"外資大小": [-30000.0], "韭菜指數": [_NA]})
+        pv = _render_state(monkeypatch, _H_FLAT, _LI_FLAT, _FI_FAIL, ss={"li_latest": df}).pivots
+        texts += [str(x) for p in pv for x in p]
+        joined = '\x1e'.join(texts)
+        # 真的有渲染到防禦文字（避免空集合假綠）
+        assert '外資期貨空單 30,000口 ≥ 30,000口' in joined
+        assert '外資期貨淨空 30,000口 ≥ 3萬口' in joined
+        bad = re.compile(r'30,000\s*口?\s*>\s*(30,000|3萬)|>\s*3萬口門檻|超越3萬')
+        assert not bad.search(joined), bad.search(joined)
 
     def test_section3_card_threshold_follows_ssot(self, monkeypatch):
         import src.ui.tabs.macro.section_state as STATE

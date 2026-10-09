@@ -288,7 +288,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             #   它不出現在任何說明文字裡，故本批只留記錄不動它；
             #   要抽需另立具名常數（如 `FOREIGN_FUTURES_ACCUM_WATCH_LOT_THRESHOLD`）。
             if _fut4 <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:
-                _l4c = (f'外資期貨空單 {abs(_fut4):,.0f}口 > '
+                _l4c = (f'外資期貨空單 {abs(_fut4):,.0f}口 ≥ '
                         f'{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}口，'
                         f'啟動強制防禦，等待空單回補')
                 _l4a = '啟動強制防禦，嚴禁追高攤平，保護本金　→ 實際持股見 🎚️ 建議持股油門'
@@ -353,7 +353,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             #   並另起一行把刻度與「1.0 平價點是常識、不是本系統門檻」講明。
             st.caption(
                 f'📅 資料期間：{_d0} ~ {_d1}  共 {len(df_li_show)} 筆  '
-                f'｜外資空單>{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}口⚠️  '
+                f'｜外資空單≥{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}口⚠️  '
                 f'前五大>{abs(TOP5_LARGE_TRADER_NET_WARN_LOTS):,}口⚠️  '
                 f'選PCR<{PCR_PCT_COMPLACENCY_MAX:.0f}🔴過樂觀／'
                 f'>{PCR_PCT_FEAR_MIN:.0f}🟢恐慌區'
@@ -432,7 +432,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                 # 批 Z10（Q-r10b）：等於門檻歸「防禦」側（`<=`），門檻接 SSOT。
                 elif _fut_net is not None and float(_fut_net) <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:
                     _warnings.append(('🟡', '期貨大空警戒',
-                        f'外資期貨空單 {abs(float(_fut_net)):,.0f} 口（>3萬口門檻）',
+                        f'外資期貨空單 {abs(float(_fut_net)):,.0f} 口（≥3萬口門檻）',
                         '注意流向：若每日持續增加空單才是真訊號；若空單縮減則危機解除'))
         except Exception:
             pass
@@ -811,7 +811,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         if _fnet is not None:
             if   _fnet <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:   # 批 Z10（Q-r10b）：等於門檻歸防禦側
                 _score -= 2
-                _sigs.append(f'🔴 期貨空單 {_fnet:,.0f}口（超越3萬危險線）')
+                _sigs.append(f'🔴 期貨空單 {_fnet:,.0f}口（達3萬危險線）')
             elif _fnet <      0:
                 _score -= 1
                 _sigs.append(f'⚠️ 期貨淨空 {_fnet:,.0f}口')
