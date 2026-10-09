@@ -29,6 +29,7 @@ from shared.allocation_decision import build_allocation_decision
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED
 from shared.inst_net import InstNetDict
 from tests.test_m2n2_no_zero_fill import _FakeST
+from tests.test_batch_z26 import undo_z26_gray_card  # 批 Z26:持股比例未載入改灰,本檔沿用修前 golden
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -215,7 +216,9 @@ def _wr(inst, mp):
                     'warroom_summary': {'futures_net': None}})
     mp.setattr(W, 'st', fake)
     W.render_section_warroom('bull', True, False)
-    return list(fake.out)
+    # 批 Z26（Z25-(b)）：本組以未載入的 allocation 實跑 ⇒「持股比例」修後改灰框 ⬜ ⇒ 換回修前紅框再比修前 golden
+    #   （該格由 test_batch_z26 守）。本組「融資餘額」「年線位置」皆有值，還原不碰。
+    return undo_z26_gray_card(list(fake.out))
 
 
 def _rows(net):

@@ -242,7 +242,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             ('大盤燈號',
              {'bull': '🟢 多頭', 'bear': '🔴 空頭防禦',
               'neutral': '🟡 震盪'}.get(_wr_reg, '⬜ 總經未評估'),
-             _wr_reg == 'bull', '多頭才積極操作'),
+             # 批 Z26（Z25-(b)，§1.A-4）：「⬜ 總經未評估」（非 bull/bear/neutral，同上一行 dict 的三鍵）原給
+             #   False ⇒ 紅框 ⚠️ ⇒ 改給 None 走灰框 ⬜；三態已評估時判定式不變。
+             None if _wr_reg not in ('bull', 'bear', 'neutral') else _wr_reg == 'bull', '多頭才積極操作'),
             ('外資方向', f'{"買超" if (_wr_fnet or 0)>0 else "賣超"} {abs(_wr_fnet or 0):.0f}億' if _wr_fnet is not None else '未知',
              # 批 Z16-n1（Z25，§1.A-4 灰紅分離）：未取得（None）第 3 欄給 None ⇒ 下方畫灰框 ⬜，
              #   不再當成「賣超／出錯」畫紅框 ⚠️；有值時判定式不變。
@@ -253,24 +255,30 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             # 那句是手打的。改門檻時判定會動、文字不會動 → 燈色與說明相反。
             ('融資餘額',
              f'{_wr_margin:.0f}億' if _wr_margin else '未取得 (N/A)',
-             not _wr_margin or _wr_margin <= MARGIN_BALANCE_WARN_THRESHOLD_YI,
+             # 批 Z26（Z25-(d)，§1.A-4）：未取得（falsy，同上一行的「未取得 (N/A)」判式）原給 True ⇒ 綠 ✅
+             #   （把沒資料畫成安全）⇒ 改給 None 走下方灰框 ⬜；有值時判定式不變。
+             None if not _wr_margin else _wr_margin <= MARGIN_BALANCE_WARN_THRESHOLD_YI,
              f'>{MARGIN_BALANCE_WARN_THRESHOLD_YI:,.0f}億警戒，'
              f'>{MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI:,.0f}億極危'),
             # I2:`_val` 加估算徽章;第 3 欄(`_ok`,決定 ✅/⚠️ 與卡片顏色)與
             # 第 4 欄門檻文字皆未動 —— 揭露不改判定。
             ('年線位置',
              f'乖離{_wr_b240:+.1f}%{_wr_bias_badge}' if _wr_b240 is not None else '未知',
-             _wr_b240 is None or abs(_wr_b240) < _BIAS240_RED,
+             # 批 Z26（Z25-(d)，§1.A-4）：「未知」（`_wr_b240` 為 None）原給 True ⇒ 綠 ✅ ⇒ 改給 None 走灰框 ⬜。
+             None if _wr_b240 is None else abs(_wr_b240) < _BIAS240_RED,
              f'超過±{_BIAS240_RED:.0f}%要警惕'),
             # v19.170 P0-1:第 5 格同讀 SSOT;未評估誠實顯示,被硬否決壓低時給 ⚠️ 而非 ✅
             ('持股比例', f'建議{_wr_exp}' if _alloc.is_loaded else '⬜ 總經未評估',
-             _alloc.is_loaded and not _alloc.capped, '按建議比例，不要滿倉'),
+             # 批 Z26（Z25-(b)，§1.A-4）：未載入（「⬜ 總經未評估」）原給 False ⇒ 紅框 ⚠️ ⇒ 改給 None 走灰框 ⬜；
+             #   已載入時判定式不變（`is_loaded and not capped` ≡ `not capped`）。
+             None if not _alloc.is_loaded else not _alloc.capped, '按建議比例，不要滿倉'),
         ]
         _cl_cols = st.columns(len(_cl_items))
         for _ccol, (_name, _val, _ok, _tip) in zip(_cl_cols, _cl_items):
             if _ok is None:
                 # 批 Z25（Z16-n1）：無資料 ⇒ 沿用本檔既有「無資料」灰 #484f58（今日唯一結論未評估色）
-                #   與 ⬜（「總經未評估」符號）；文字照舊。其餘 4 格 `_ok` 恆為 bool，走不到這裡。
+                #   與 ⬜（「總經未評估」符號）；文字照舊。批 Z26 起「融資餘額」「年線位置」缺值、
+                #   「大盤燈號」「持股比例」未評估亦走這裡。
                 _ic, _vc = '⬜', '#484f58'
             else:
                 _ic = '✅' if _ok else '⚠️'
