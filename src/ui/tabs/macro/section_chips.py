@@ -30,7 +30,7 @@ from shared.signal_thresholds import (
     MARKET_VOLUME_SURGE_RATIO,
     TOP5_LARGE_TRADER_NET_WARN_LOTS,
 )
-from shared.vix_validity import vix_value_or_none  # 批 Z7（Z3-n4）：與 §八 同一套「有效 VIX」規則（L0）
+from shared.vix_validity import VIX_FETCH_MAX, vix_value_or_none  # 批 Z7（Z3-n4）：與 §八 同一套「有效 VIX」規則（L0）
 from src.compute.strategy import V4StrategyEngine
 # v19.176 P0-D:韭菜門檻 + 兩個「否決」判定的正式名稱一律走 L0 SSOT(§3.3)
 from src.config import (
@@ -101,7 +101,10 @@ def read_v4_macro_veto() -> dict | None:
     #   −40,000 口判 🔴，§八 揭露框於是列出「看的是 VIX=-5.0」。改後這些一律回 None ⇒ 走本函式既有
     #   「VIX 未取得 → 無法判定」。預期副作用（總管已知）：無效 VIX＋重空單時 §三 由 🔴 轉 ⬜，與缺 VIX 時相同
     #   （即上方「已知取捨」）；§八 揭露框改走既有缺值句。有效 VIX → 與原 `float()` 同一個值，輸出不變。
-    _vix = vix_value_or_none(_vix_raw)
+    # 批 Z21（Z7-n4-f1）：第二道防線 —— 帶與 L1（`fetch_vix_block`）同一個上限 `VIX_FETCH_MAX`，
+    #   session 被繞過 L1 直接寫入 > 100（150、1e300…）時視同取數失敗 ⇒ 走既有「VIX 未取得 → 無法判定」，
+    #   不再判 🔴、§八 揭露框不再印 300+ 位數；≤ 100 的有效值與修前同一個 float，輸出不變。
+    _vix = vix_value_or_none(_vix_raw, upper=VIX_FETCH_MAX)
     if _vix is None:
         return None
 
@@ -483,7 +486,10 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         try:
             if _pcr is not None:
                 _pcr_f = float(_pcr)
-                if _pcr_f < 80:
+                # 批 Z21（§1）：±inf 原會印「PCR=inf／-inf」並列警示 ⇒ 非有限值走既有「不列 PCR 警示」（同 NaN）。
+                if _finite_yoy({'v': _pcr_f}, 'v') is None:
+                    pass
+                elif _pcr_f < 80:
                     _warnings.append(('🔴', '選擇權Put/Call偏低（市場過樂觀）',
                         f'PCR={_pcr_f:.1f}（<80偏危險，市場保護不足）',
                         '選擇權市場無人買保護，通常出現在短線頂部'))
@@ -804,7 +810,9 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
     if _df_li_c is not None and not _df_li_c.empty:
         _last_li = _df_li_c.iloc[-1]
         _fnet = safe_get(_last_li.get('外資大小'))
-        _pcr  = safe_get(_last_li.get('選PCR'))
+        # 批 Z21（§1）：`safe_get` 只擋 None／NaN，±inf 原會印「PCR=inf」並計分 ⇒ 改走 `_finite_yoy`
+        #   （缺／非有限 → None），落入既有「無 PCR 不計」分支；有限值回原物件，輸出逐字不變。
+        _pcr  = _finite_yoy({'v': _last_li.get('選PCR')}, 'v')
         _leek = safe_get(_last_li.get('韭菜指數'))
         _top5 = safe_get(_last_li.get('前五大留倉'))
         _opt  = safe_get(_last_li.get('外(選)'))

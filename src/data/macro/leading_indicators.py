@@ -15,7 +15,7 @@ v5 修正：
   2. find_data_table(html, kw) 依關鍵字找正確資料表，不再依大小
   3. largeTraderFutQryTbl GET 解析 "43,469 (37,392)" 格式
 """
-import os, re, sys, time  # v18.241 D3: sys.stderr for fail-loud logging
+import math, os, re, sys, time  # v18.241 D3: sys.stderr for fail-loud logging
 # §8.2.A EX-CACHE-1:條件 import streamlit + 無 UI 呼叫 fallback。
 # 本檔僅用 @st.cache_data + _safe_cache wrapper(ThreadPool-safe);無真 UI 呼叫。
 try:
@@ -1710,7 +1710,9 @@ def render_leading_table(df):
     COLS    = ["外資","投信","自營","外資大小","融資餘額","融券餘額",
                "前五大留倉","前十大留倉","選PCR","外(選)","未平倉口數","韭菜指數"]
     def fmt(v, col):
-        if v is None or (isinstance(v, float) and pd.isna(v)): return "-"
+        # 批 Z21（§1）：pd.NA 原讓 int()／float() 拋 TypeError（整張表不渲染）、±inf 讓 int() 拋
+        #   OverflowError 或印「inf」⇒ 非有限值一律走既有缺值顯示「-」；有限值輸出不變。
+        if v is None or v is pd.NA or (isinstance(v, float) and not math.isfinite(v)): return "-"
         if col in BRACKET:
             n = int(v)
             if n > 0: return f"▲ {n:,}"

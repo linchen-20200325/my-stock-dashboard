@@ -76,7 +76,8 @@ def _variant(spec, code: str, tag: str):
 
 #: 修後 → 修前（反向替換，每組恰好一處；只換程式行）。僅供「無關形狀逐字不變」對拍用。
 _REVERT = {
-    "chips": (("    _vix = vix_value_or_none(_vix_raw)\n    if _vix is None:\n        return None\n",
+    # 📌 批 Z21（Z7-n4-f1，有意識的變更）：修後那行改帶 `upper=VIX_FETCH_MAX`，替換點跟著改（還原目標不變）。
+    "chips": (("    _vix = vix_value_or_none(_vix_raw, upper=VIX_FETCH_MAX)\n    if _vix is None:\n        return None\n",
                "    try:\n        _vix = float(_vix_raw)\n"
                "    except (TypeError, ValueError, OverflowError):\n        return None\n"
                "    if not __import__('math').isfinite(_vix):\n        return None\n"),),
@@ -359,6 +360,12 @@ _NEWLY_INVALID = [pytest.param(v, vt, l0, id=i) for v, vt, l0, i in (
     (bytearray(b"18"), "18.0", "G", "bytearray"),
     (np.complex128(18), "18.0", "G", "np.complex128(18)"), (np.complex64(25), "25.0", "Y", "np.complex64(25)"),
     (np.complex128(-5), "-5.0", "G", "np.complex128(-5)"),
+    # 📌 批 Z21（Z7-n4-f1，有意識的變更，⛔ 不是漏刪）：原釘在下方 `_VALID` 的 > 100 四列移來 ——
+    #   §三 入口改帶與 L1 同一上限 `VIX_FETCH_MAX`（客戶 Q-r8b ②「VIX > 100 當抓取失敗」），
+    #   session 繞過 L1 直接寫入時視同取數失敗、走既有「VIX 未取得」卡。（值, 修前卡上字樣, 修前燈）照原列。
+    (100.0001, "100.0", "R", "100.0001"), (150.0, "150.0", "R", "150.0"),
+    (1e300, format(1e300, ".1f"), "R", "1e300"),
+    (1.7976931348623157e308, format(1.7976931348623157e308, ".1f"), "R", "max-float"),
 )]
 #: 修前修後都判不出（`96779d4` 實跑即 ⬜）
 _ALREADY_NONE = [pytest.param(v, id=i) for v, i in (
@@ -373,9 +380,7 @@ _VALID = [pytest.param(v, vt, l0, id=i) for v, vt, l0, i in (
     (20.0001, "20.0", "Y", "20.0001"), (22, "22.0", "Y", "22"), (25, "25.0", "Y", "25"),
     (25.0001, "25.0", "R", "25.0001"), (26, "26.0", "R", "26"), (30, "30.0", "R", "30"),
     (99.9, "99.9", "R", "99.9"), (100, "100.0", "R", "100"), (100.0, "100.0", "R", "100.0"),
-    (100.0001, "100.0", "R", "100.0001"), (150.0, "150.0", "R", "150.0"),
-    (1e300, format(1e300, ".1f"), "R", "1e300"),
-    (1.7976931348623157e308, format(1.7976931348623157e308, ".1f"), "R", "max-float"),
+    # 📌 批 Z21（Z7-n4-f1）：100.0001／150.0／1e300／max-float 四列移至上方 `_NEWLY_INVALID`（有意識的變更）。
     (5e-324, "0.0", "G", "5e-324"), (1e-300, "0.0", "G", "1e-300"),
     (np.float64(18.0), "18.0", "G", "np.float64"), (np.float32(18.5), "18.5", "G", "np.float32"),
     (np.int64(18), "18.0", "G", "np.int64"), (np.float16(18), "18.0", "G", "np.float16"),
@@ -433,7 +438,9 @@ class TestZ3n4Section3:
         pytest.param(pd.DataFrame({"日期": ["a", "b"], "外資大小": [-40000.0, math.nan], "選PCR": [1.0, 2.0]}),
                      id="ffill-last-nan"),
     ])
-    @pytest.mark.parametrize("v", [18.0, 26.0, 150.0, 5e-324, Decimal("18.5"), None, math.nan, "x"], ids=repr)
+    # 📌 批 Z21（Z7-n4-f1，有意識的變更）：原 150.0 一列改 99.9 —— > 100 自批 Z21 起改判缺值、與修前不再相同
+    #   （已移至 `_NEWLY_INVALID` 斷言）；本測試只對拍「與本批無關的形狀」，故換一個仍有效的高值。
+    @pytest.mark.parametrize("v", [18.0, 26.0, 99.9, 5e-324, Decimal("18.5"), None, math.nan, "x"], ids=repr)
     def test_unrelated_shapes_identical_to_pre_fix(self, v, li, pre, monkeypatch):
         now = _chips({"current": v}, monkeypatch, li=li)
         old = _chips({"current": v}, monkeypatch, li=li, mod=pre["chips"])
@@ -803,11 +810,14 @@ class TestC7n7Section8:
         #   （修前：兩邊都「觸發」→ 不出）。接受理由同批 Z3 改判：揭露框如實寫出 §三 實際看的值（真實優先於
         #   表面一致，§1）。§三 是否也該擋 > 100 屬客戶待答的 Q-r8b（承接 C8-n3「VIX > 100 時各區不一致」），
         #   本批不動；Q-r8b 有答案後，本條依答案更新。
+        # 📌 批 Z21（Z7-n4-f1，有意識的變更，⛔ 不是漏刪）：Q-r8b 已有答案（客戶 2026-10-06 ②「VIX > 100 當抓取
+        #   失敗」，L1 批 Z13 落地），本條依答案更新 —— §三 入口改帶同一上限 ⇒ 判不出燈 ⇒ 揭露框改走既有缺值句。
+        #   修前（寫死）：warning「（§三 籌碼）：🔴 紅燈　看的是 VIX=150.0、外資期貨=-40,000 口」＋「（本區）：✅ 無觸發」。
         out, _ = _mid(_node(150.0), monkeypatch, real_v4=True, fut=-40000.0)
         warns = [t for k, t in out if k == "warning" and "兩套判定結論不一致" in t]
-        assert len(warns) == 1
-        assert "（§三 籌碼）：🔴 紅燈　看的是 VIX=150.0、外資期貨=-40,000 口" in warns[0]
-        assert "（本區）：✅ 無觸發" in warns[0]
+        assert warns == []
+        assert any(k == "caption" and t.startswith("（§三 籌碼的「") and "因 VIX 未取得而無法判定" in t
+                   for k, t in out)
 
 
 # ══════════════════════════════════════════════════════════════════════════
