@@ -489,7 +489,10 @@ class TestRenderLive:
                     "ism_pmi": "SSOT:MACRO_THRESHOLDS.PMI"}
         # 批 Z18（客戶 2026-10-09 Q-r15a 裁示「1：A」）：note 開頭符號依實際判燈邊界修正。
         # 黃金值**不重算**（同上作法）：把這 3 盞 note 開頭壓回 10f385c 原字串再比；
-        # 新字句另由 `tests/test_batch_z18.py` 逐字守。（ism_pmi 為暫緩列，note 未改。）
+        # 新字句另由 `tests/test_batch_z18.py` 逐字守。
+        # 批 Z19（客戶裁示 PMI=50 ＝ 中性／榮枯線）：ism_pmi 的 note 整句改字，同樣壓回 10f385c 原字串再比；
+        # 新字句另由 `tests/test_batch_z19.py` 逐字守。
+        _old_note = {"ism_pmi": "<50 收縮 / <46 嚴重收縮"}
         _old_note_head = {"margin": ("≥2500 警戒 / ≥3400 散戶槓桿極危",
                                      "2500-3400 警戒 / >3400 散戶槓桿極危"),
                           "bias_240": ("≥+20% 正乖離過熱", ">+20% 正乖離過熱"),
@@ -501,6 +504,8 @@ class TestRenderLive:
                 _new, _old = _old_note_head[k]
                 assert v.note.startswith(_new), v.note
                 v = dataclasses.replace(v, note=_old + v.note[len(_new):])
+            if k in _old_note:
+                v = dataclasses.replace(v, note=_old_note[k])
             return v
 
         monkeypatch.setattr(P, "SPECS_BY_KEY", {

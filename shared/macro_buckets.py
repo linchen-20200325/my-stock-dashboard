@@ -365,7 +365,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     # ── 📈 中期：景氣循環 ──
     DangerSpec("ism_pmi", "台灣 PMI", "mid", "", "low_bad",
                yellow=_PMI_YELLOW, red=_PMI_RED, decimals=1,
-               note="<50 收縮 / <46 嚴重收縮", source=f"黃線 {_PMI_YELLOW:g}／紅線 {_PMI_RED:g}：有既有常數背書（統一閾值表；<50 收縮／<46 嚴重收縮）"),
+               note="=50 中性（榮枯線） / <50 收縮 / ≤46 嚴重收縮", source=f"黃線 {_PMI_YELLOW:g}／紅線 {_PMI_RED:g}：有既有常數背書（統一閾值表）"),
     DangerSpec("us_core_cpi", "美國核心 CPI YoY", "mid", "%", "high_bad",
                yellow=_CPI_YELLOW, red=_CPI_RED, decimals=1,
                note="≥3.5% 外資提款風險 / ≥4% 通膨嚴峻", source=f"黃線 {_CPI_YELLOW:g}%／紅線 {_CPI_RED:g}%：有既有常數背書（統一閾值表）"),

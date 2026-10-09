@@ -285,13 +285,16 @@ def resolve_band(value, bands) -> tuple:
     """依 band 表(降冪 lo)取第一個 value >= lo 的 (色鍵, 燈標籤, 燈義)。
 
     value 非數 → gray「資料異常」(§1 不腦補方向)。
+    批 Z19:相鄰兩帶 lo 相同 ⇒ 前一帶取嚴格 `>`(後一帶即恰等於 lo 的帶,例 PMI =50 中性);
+    無相鄰同 lo 的表行為逐字不變。
     """
     try:
         _v = float(value)
     except (TypeError, ValueError):
         return ('gray', '⬜ 資料異常', '值非數值,無法判定燈號')
-    for lo, color_key, label, meaning in bands:
-        if _v >= lo:
+    for i, (lo, color_key, label, meaning) in enumerate(bands):
+        _strict = i + 1 < len(bands) and bands[i + 1][0] == lo
+        if (_v > lo) if _strict else (_v >= lo):
             return (color_key, label, meaning)
     return ('gray', '⬜ 資料異常', 'band 表無兜底項')   # bands 末項 -inf 時不會到
 
@@ -300,16 +303,19 @@ def bands_caption(bands, unit: str = '') -> str:
     """band 表 → 一行門檻帶說明,如「🔴≥38｜🟡≥32｜🟢≥23｜🔵≥17｜🔵<17」。
 
     與 resolve_band 讀同一張表 → 顯示的門檻永遠 = 實際判定門檻。
+    批 Z19:相鄰同 lo 的兩帶顯示為「>lo」「=lo」(與 resolve_band 同一慣例)。
     """
     parts = []
     prev_lo = None
-    for lo, _c, label, _m in bands:
+    for i, (lo, _c, label, _m) in enumerate(bands):
         _emoji = label.split(' ')[0] if label else '⬜'
         if lo == float('-inf'):
             parts.append(f'{_emoji}<{prev_lo:g}{unit}' if prev_lo is not None
                          else f'{_emoji}其他')
         else:
-            parts.append(f'{_emoji}≥{lo:g}{unit}')
+            _op = ('>' if i + 1 < len(bands) and bands[i + 1][0] == lo
+                   else '=' if prev_lo == lo else '≥')
+            parts.append(f'{_emoji}{_op}{lo:g}{unit}')
             prev_lo = lo
     return '｜'.join(parts)
 

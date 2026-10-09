@@ -79,8 +79,12 @@ def test_note_tails_untouched():
 
 
 def test_deferred_rows_untouched():
-    """⛔ 第 4 列（ism_pmi note）暫緩，Q-r15a 明令不得先改。"""
-    assert S["ism_pmi"].note == "<50 收縮 / <46 嚴重收縮"
+    """⛔ 第 4 列（ism_pmi note）於 Z18 暫緩，Q-r15a 明令不得先改。
+
+    批 Z19 更新：客戶 PMI=50 裁示（=50 中性／榮枯線，1：A 採擬稿全句）後本列已不再暫緩，
+    改釘 Z19 核准字（逐字守衛另見 `tests/test_batch_z19.py`）。
+    """
+    assert S["ism_pmi"].note == "=50 中性（榮枯線） / <50 收縮 / ≤46 嚴重收縮"
 
 
 # ── 邊界語意：剛好等於門檻的值，燈號要落在 note 所寫的那一側 ──
@@ -151,7 +155,8 @@ def test_simple_source_wording(key, text):
 
 
 def test_simple_source_out_of_scope_untouched():
-    assert S["ism_pmi"].source == "黃線 50／紅線 46：有既有常數背書（統一閾值表；<50 收縮／<46 嚴重收縮）"
+    # 批 Z19：ism_pmi source 依客戶 PMI=50 裁示改為 Z19 核准字（括號尾段移入 note），不再屬 Z18 範圍外暫緩。
+    assert S["ism_pmi"].source == "黃線 50／紅線 46：有既有常數背書（統一閾值表）"
     assert S["foreign_net"].note == ">0 買超 / <0 賣超（0 亦判黃）/ ≤-200 大賣（軟線）"  # 裁示 3：B
 
 

@@ -344,9 +344,26 @@ class TestY2n10Section8Disclosure:
         (5000.0, 18.0, 'trig'): '0ea7998deca08c860089f9e3770091f8cb425f7fc2e1f82cf6c9157b714d6025',
     }
 
+    #: 批 Z19（客戶裁示 PMI=50 ＝ 中性／榮枯線）：§八 PMI 卡門檻帶改字。雜湊**不重算**、不放寬：
+    #   先斷言新字串恰出現 1 次，再換回 `66ffb1f0` 原字串比對（比照 test_batch_z9_g2 `_undo`）；
+    #   新字串本身另由下方 `test_pmi_band_caption_present` 與 `tests/test_batch_z19.py` 守。
+    _PMI_CAP_NEW = '門檻帶：✅>50｜🟡=50｜⚠️≥47｜🔴<47'
+    _PMI_CAP_OLD = '門檻帶：✅≥50｜⚠️≥47｜🔴<47'
+
+    @classmethod
+    def _undo_z19(cls, out):
+        joined = '\x1e'.join(t for _k, t in out)
+        assert joined.count(cls._PMI_CAP_NEW) == 1, joined.count(cls._PMI_CAP_NEW)
+        return [(k, t.replace(cls._PMI_CAP_NEW, cls._PMI_CAP_OLD)) for k, t in out]
+
     @pytest.mark.parametrize('key', sorted(_GOLD))
     def test_finite_futures_identical_to_base(self, key, monkeypatch):
-        assert _digest(_mid_out(*key, monkeypatch)) == self._GOLD[key]
+        assert _digest(self._undo_z19(_mid_out(*key, monkeypatch))) == self._GOLD[key]
+
+    def test_pmi_band_caption_present(self, monkeypatch):
+        """批 Z19 正向斷言：§八 輸出含新 PMI 門檻帶、不含舊字。"""
+        joined = '\x1e'.join(t for _k, t in _mid_out(-30000.0, 18.0, 'ok', monkeypatch))
+        assert self._PMI_CAP_NEW in joined and self._PMI_CAP_OLD not in joined
 
 
 # ══════════════════════════════════════════════════════════════════════════
