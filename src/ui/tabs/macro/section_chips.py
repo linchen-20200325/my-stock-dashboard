@@ -278,7 +278,11 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                  and any(_finite_yoy({'v': _v}, 'v') is not None for _v in _li4['外資大小'])
                  else None)
         if _fut4 is not None:
-            _pcr4 = (float(_li4.iloc[-1].get('選PCR', 0)) if '選PCR' in _li4.columns else None)
+            # 批 Z20（Z10-n2，§1 不捏值）：PCR 末列 None／pd.NA 時原 `float(None)` 拋 TypeError（§三 後段不渲染）、
+            #   NaN 印「PCR nan」⇒ 改走 `_finite_yoy`（缺／非有限 → None），落入既有「不印 PCR」分支；
+            #   有限值照舊 `float(…)` 後格式化，逐字不變。
+            _pcr4 = (_finite_yoy({'v': _li4.iloc[-1].get('選PCR')}, 'v') if '選PCR' in _li4.columns else None)
+            _pcr4 = float(_pcr4) if _pcr4 is not None else None
             _pcr_txt = f' | PCR {_pcr4:.1f}' if _pcr4 else ''
             _l4_ind = f'外資期貨 {_fut4:,.0f}口{_pcr_txt}'
             # 絕對口數門檻（容錯率最高）
@@ -432,7 +436,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                 # 批 Z10（Q-r10b）：等於門檻歸「防禦」側（`<=`），門檻接 SSOT。
                 elif _fut_net is not None and float(_fut_net) <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:
                     _warnings.append(('🟡', '期貨大空警戒',
-                        f'外資期貨空單 {abs(float(_fut_net)):,.0f} 口（≥3萬口門檻）',
+                        f'外資期貨空單 {abs(float(_fut_net)):,.0f} 口（≥{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD / 10_000:g}萬口門檻）',
                         '注意流向：若每日持續增加空單才是真訊號；若空單縮減則危機解除'))
         except Exception:
             pass
@@ -811,7 +815,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         if _fnet is not None:
             if   _fnet <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:   # 批 Z10（Q-r10b）：等於門檻歸防禦側
                 _score -= 2
-                _sigs.append(f'🔴 期貨空單 {_fnet:,.0f}口（達3萬危險線）')
+                _sigs.append(f'🔴 期貨空單 {_fnet:,.0f}口（達{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD / 10_000:g}萬危險線）')
             elif _fnet <      0:
                 _score -= 1
                 _sigs.append(f'⚠️ 期貨淨空 {_fnet:,.0f}口')

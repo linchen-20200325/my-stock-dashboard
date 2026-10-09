@@ -172,7 +172,11 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             #   不用 `round(x, 1) + 0.0`:引擎收 numpy 浮點時 `Bias_240` 是 numpy 型別,其 round 不是正確捨入
             #   (例 np.float64(0.05) → 0.0,而 `:+.1f` 印 +0.1);收 Decimal 時 `+ 0.0` 拋 TypeError ——
             #   兩者都會動到其他值的顯示(後者是修前不崩的輸入改崩)。
-            _wr_b240_txt = f'{_v4["Bias_240"]:+.1f}'
+            # 批 Z20（Z6-n4）：引擎 `Bias_240` 已 round(…, 2)，再 `:+.1f` 是雙重捨入，與同頁「年線位置」卡
+            #   （bias_info['bias_240']＝calc_bias_pct(decimals=1)）可差 0.1、甚至正負號相反 ⇒ 卡片值有限時優先讀它
+            #   （同源同捨入），缺值才退回引擎 `Bias_240`（既有路徑）。不改 L0。
+            _wr_b240_card = _finite_yoy(_wr_bias, 'bias_240')
+            _wr_b240_txt = f'{_wr_b240_card if _wr_b240_card is not None else _v4["Bias_240"]:+.1f}'
             if _wr_b240_txt == '-0.0':
                 _wr_b240_txt = '+0.0'
             _v4_bits.append(f'年線乖離 {_wr_b240_txt}%{_wr_bias_badge}')
