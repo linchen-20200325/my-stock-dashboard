@@ -130,7 +130,10 @@ class TestC9n6aUnobservedForeignNet:
         obs = _wr(InstNetDict(_rows(0.0)), monkeypatch)
         joined = '\x1e'.join(t for _k, t in unobs)
         assert joined.count(_card('未知')) == 1
-        undone = [(k, t.replace(_card('未知'), _card('賣超 0億'))) for k, t in unobs]
+        # 批 Z25（Z16-n1）起「未知」那格改畫灰框 ⬜（不再紅框 ⚠️）⇒ 還原時連同該格的灰／⬜ 換回紅／⚠️；
+        #   守的仍是「只差外資方向那一格」。
+        from tests.test_batch_z25 import undo_z25_gray_card
+        undone = [(k, t.replace(_card('未知'), _card('賣超 0億'))) for k, t in undo_z25_gray_card(unobs)]
         assert undone == obs
 
     @pytest.mark.parametrize('inst, shown', [

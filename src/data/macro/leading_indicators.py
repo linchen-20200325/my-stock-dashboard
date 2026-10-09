@@ -39,6 +39,7 @@ from shared.ttls import TTL_30MIN
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 from shared.data_categories import CAT_TW_MARKET  # FE-20:@monitored category SSOT
 from shared.fetch_monitor import monitored  # FE-20:TWSE 收盤行情自我登錄(L1→L0)
+from shared.fail_cooldown import CachedFailure as _CachedFailure  # 批 Z25:失敗不入快取(L1→L0)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # F2(2026-08)§2.1 SSOT:原本這裡有一份逐字複製的 `_bps()`(全 repo 共 4 份)。
@@ -74,13 +75,21 @@ def _safe_cache(**kw):
             return fn
         @_fc.wraps(fn)
         def wrapper(*args, **kwargs):
+            # 批 Z25（§1.A-3(a)）：被裝飾函式拋 `CachedFailure` ＝「有回傳值但不入快取」——
+            #   st.cache_data 不快取例外；此處取回 `.payload` 照常回傳（不重跑、不外洩）。
+            #   沒拋的函式（本檔其餘全部）行為與修前相同。
             try:
-                from streamlit.runtime.scriptrunner import get_script_run_ctx as _gctx
-                if _gctx() is not None:
-                    return _cached(*args, **kwargs)
-            except Exception:
-                pass
-            return fn(*args, **kwargs)
+                try:
+                    from streamlit.runtime.scriptrunner import get_script_run_ctx as _gctx
+                    if _gctx() is not None:
+                        return _cached(*args, **kwargs)
+                except _CachedFailure:
+                    raise
+                except Exception:
+                    pass
+                return fn(*args, **kwargs)
+            except _CachedFailure as _cf:
+                return _cf.payload
         return wrapper
     return decorator
 # ────────────────────────────────────────────────────────────────────────
@@ -393,6 +402,7 @@ def finmind_fut_oi(start_ymd, end_ymd, token=""):
     備援來源: TAIFEX 三大法人期貨留倉（官方，免Token）
     """
     result = {}
+    _cacheable = True   # 批 Z25:主源 TX／MTX 任一支整體失敗 → False(本次結果不入快取)
 
     # ── 主要: FinMind ──
     # N4a v19.80(第三份 review):原主源段無 try/except — FinMind schema 改欄名時
@@ -402,6 +412,10 @@ def finmind_fut_oi(start_ymd, end_ymd, token=""):
         try:
             df_tx  = finmind_get("TaiwanFuturesInstitutionalInvestors","TX", start_ymd,end_ymd,token)
             df_mtx = finmind_get("TaiwanFuturesInstitutionalInvestors","MTX",start_ymd,end_ymd,token)
+            # 批 Z25（Z19-n5，§1）：TX／MTX 先各自累計，同一天兩支都有才相加；缺其一 ⇒ 該日 None
+            #   （修前 `result.get(dk, 0)` 把缺的那支當 0 ⇒ TX 限流回空表時只剩 0.25×MTX，低估約 4 倍）。
+            #   兩支都有的日子：同一組浮點加法（整數與 0.25 倍數皆精確），round 後與修前同值。
+            _fut_parts = {"TX": {}, "MTX": {}}
             for df, factor, _cid in [(df_tx, 1.0, "TX"),
                                      (df_mtx, _MTX_TO_TX_FACTOR, "MTX")]:
                 if df.empty: continue
@@ -410,15 +424,31 @@ def finmind_fut_oi(start_ymd, end_ymd, token=""):
                 if _m_fi is None:
                     continue
                 df_fi = df[_m_fi]
+                _part = _fut_parts[_cid]
                 for _, row in df_fi.iterrows():
                     dk = str(row["date"]).replace("-","")
                     long_  = int(row.get("long_open_interest_balance_volume",  0) or 0)
                     short_ = int(row.get("short_open_interest_balance_volume", 0) or 0)
-                    result[dk] = result.get(dk, 0) + (long_ - short_) * factor
+                    _part[dk] = _part.get(dk, 0) + (long_ - short_) * factor
+            _tx_p, _mtx_p = _fut_parts["TX"], _fut_parts["MTX"]
+            if set(_tx_p) & set(_mtx_p):
+                result = {dk: (_tx_p[dk] + _mtx_p[dk] if (dk in _tx_p and dk in _mtx_p) else None)
+                          for dk in dict.fromkeys([*_tx_p, *_mtx_p])}   # 鍵序同修前(TX 先)
+                _half = sorted(dk for dk, v in result.items() if v is None)
+                if _half:
+                    print(f"[fut_oi] ⚠️ TX／MTX 缺一 {len(_half)} 天 → 記缺值(不補 0):{_half[:5]}")
+            else:
+                # 任一支整體沒有可用的外資列(空表／缺欄／白名單 0 命中)＝ 沒有任何完整的一天
+                # ⇒ 比照「主源失敗」走 TAIFEX 備援;本次結果不入快取(§1.A-3(a))。
+                print(f"[fut_oi] FinMind 主源 TX／MTX 不完整(TX={len(_tx_p)}天 MTX={len(_mtx_p)}天,"
+                      f"走 TAIFEX 備援、本次不快取)")
+                result = {}
+                _cacheable = False
         except Exception as _e_fmoi:
             print(f"[fut_oi] FinMind 主源失敗(走 TAIFEX 備援): "
                   f"{type(_e_fmoi).__name__}: {_e_fmoi}")
             result = {}
+            _cacheable = False
 
     # ── 備援: TAIFEX 官方三大法人留倉（免Token）──
     if not result:
@@ -448,7 +478,10 @@ def finmind_fut_oi(start_ymd, end_ymd, token=""):
             # §1 v19.80:備援失敗不可靜默(原 except: pass) — log 後回空由 caller 判斷
             print(f"[fut_oi] TAIFEX 備援失敗: {type(_eTA).__name__}: {_eTA}")
 
-    return {k: round(v) for k, v in result.items()}
+    _out = {k: (round(v) if v is not None else None) for k, v in result.items()}
+    if not _cacheable:
+        raise _CachedFailure(_out)   # _safe_cache 取回 payload 照常回傳,只是不入快取
+    return _out
 
 
 _FUT_NIGHT_COLS = ["date", "night_close", "day_close", "chg_pts", "chg_pct"]
@@ -1296,7 +1329,10 @@ def build_leading_fast(days=7, token=""):
     # ═══ 2. 外資期貨留倉 ════════════════════════════════════════
     # §4.1 量綱:factor 0.25 = 小台契約乘數 50 / 大台 200 → fut_net 單位為
     # **TX(大台)當量口數**,只能跟同為 TX 當量的分母相除(見 §7 OI_TX當量)。
-    fut_net = {}
+    # 批 Z25（Z19-n5，§1）：TX／MTX 先各自累計，同一天兩支都有才相加；缺其一 ⇒ 該日 None
+    #   （修前 `fut_net.get(dk, 0)` 把缺的那支當 0 ⇒ TX 限流回空表時只剩 0.25×MTX，低估約 4 倍）。
+    #   兩支都有的日子：各支內逐列 round 後相加，與修前同一個 int（整數加法與順序無關）。
+    _fut_parts = {"TX": {}, "MTX": {}}
     for df, factor, _cid in [(df_tx, 1.0, "TX"),
                              (df_mtx, _MTX_TO_TX_FACTOR, "MTX")]:
         if df.empty: continue
@@ -1304,12 +1340,22 @@ def build_leading_fast(days=7, token=""):
         _m_fgn = _fgn_mask(df, tag=f":fast:{_cid}")
         if _m_fgn is None:
             continue
+        _part = _fut_parts[_cid]
         for _, row in df[_m_fgn].iterrows():
             dk = str(row["date"]).replace("-", "")
             lo = int(pd.to_numeric(row.get("long_open_interest_balance_volume",  0), errors="coerce") or 0)
             sh = int(pd.to_numeric(row.get("short_open_interest_balance_volume", 0), errors="coerce") or 0)
-            fut_net[dk] = fut_net.get(dk, 0) + round((lo - sh) * factor)
+            _part[dk] = _part.get(dk, 0) + round((lo - sh) * factor)
+    _tx_net, _mtx_net = _fut_parts["TX"], _fut_parts["MTX"]
+    fut_net = {dk: (_tx_net[dk] + _mtx_net[dk] if (dk in _tx_net and dk in _mtx_net) else None)
+               for dk in dict.fromkeys([*_tx_net, *_mtx_net])}   # 鍵序同修前(TX 先)
+    # 任一支整體沒有可用的外資列（空表／缺欄／白名單 0 命中）⇒ 本次結果不寫快取（函式尾）。
+    _fut_complete = bool(_tx_net) and bool(_mtx_net)
+    _fut_half = sorted(dk for dk, v in fut_net.items() if v is None)
     print(f"[LI-v8] 外資期貨 {len(fut_net)} 天")
+    if _fut_half:
+        print(f"[LI-v8] ⚠️ 外資期貨 TX／MTX 缺一 {len(_fut_half)} 天 → 外資大小記缺值(不補 0):"
+              f"{_fut_half[:5]}{' ...' if len(_fut_half) > 5 else ''}")
 
     # ═══ 3. PCR + 外(選) 從 TXO 計算（FinMind 法人估算，無需 TAIFEX）
     pcr_dict = {}
@@ -1684,7 +1730,10 @@ def build_leading_fast(days=7, token=""):
               f'(age={_stale_age_min}min)')
         return _mark_stale(_stale_fallback_df, _stale_age_min)
     # 只在 FinMind 主來源有回資料時快取；暫時性失敗（_fm_ok=False）不快取，保留下次刷新重試
-    if _fm_ok:
+    # 批 Z25（Z19-n5，§1.A-3(a)）：TX／MTX 任一支整體失敗＝半套結果 ⇒ 同樣不快取（回傳內容不變）。
+    if _fm_ok and not _fut_complete:
+        print("[LI-v8] ⚠️ 外資期貨 TX／MTX 任一支整體未取得 → 本次結果不寫快取")
+    if _fm_ok and _fut_complete:
         try:
             with open(_ck_li, 'wb') as _f_li:
                 _pk_li.dump(df, _f_li)

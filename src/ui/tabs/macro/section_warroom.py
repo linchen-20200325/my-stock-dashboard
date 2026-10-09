@@ -244,7 +244,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
               'neutral': '🟡 震盪'}.get(_wr_reg, '⬜ 總經未評估'),
              _wr_reg == 'bull', '多頭才積極操作'),
             ('外資方向', f'{"買超" if (_wr_fnet or 0)>0 else "賣超"} {abs(_wr_fnet or 0):.0f}億' if _wr_fnet is not None else '未知',
-             (_wr_fnet or 0) > 0, '外資買超=跟著走'),
+             # 批 Z16-n1（Z25，§1.A-4 灰紅分離）：未取得（None）第 3 欄給 None ⇒ 下方畫灰框 ⬜，
+             #   不再當成「賣超／出錯」畫紅框 ⚠️；有值時判定式不變。
+             None if _wr_fnet is None else (_wr_fnet or 0) > 0, '外資買超=跟著走'),
             # F1 v19.184 §3.3：兩張小卡的提示語原本手抄「>2500億警戒，>3400億極危」
             # 與「超過±20%要警惕」—— 同一列的**判定式**已經在讀 SSOT
             # （`MARGIN_BALANCE_WARN_THRESHOLD_YI` / `_BIAS240_RED`），只有給人看的
@@ -266,8 +268,13 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
         ]
         _cl_cols = st.columns(len(_cl_items))
         for _ccol, (_name, _val, _ok, _tip) in zip(_cl_cols, _cl_items):
-            _ic = '✅' if _ok else '⚠️'
-            _vc = TRAFFIC_GREEN if _ok else TRAFFIC_RED
+            if _ok is None:
+                # 批 Z25（Z16-n1）：無資料 ⇒ 沿用本檔既有「無資料」灰 #484f58（今日唯一結論未評估色）
+                #   與 ⬜（「總經未評估」符號）；文字照舊。其餘 4 格 `_ok` 恆為 bool，走不到這裡。
+                _ic, _vc = '⬜', '#484f58'
+            else:
+                _ic = '✅' if _ok else '⚠️'
+                _vc = TRAFFIC_GREEN if _ok else TRAFFIC_RED
             with _ccol:
                 st.markdown(
                     f"<div style='background:#0d1117;border:1px solid #21262d;"
