@@ -155,7 +155,7 @@ def render_traffic_light_explainer(tl: Optional[dict]) -> None:
                 _RA_cls.SOURCE_DEFENSE_FUTURES,
                 "🔴 **空頭防禦**（外資期貨）",
                 f"市場分數 < {_RA_cls.DEFENSE_MAX_MARKET_SCORE}"
-                f" 且外資期貨淨空單 > {FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,} 口",
+                f" 且外資期貨淨空單 ≥ {FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,} 口",
                 _defense,
             ),
             (

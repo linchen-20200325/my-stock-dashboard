@@ -155,7 +155,7 @@ def is_foreign_futures_defense(market_score: Any,
     成立條件（三者皆須為**已知**且成立）：
       1. 大盤評分 < `DEFENSE_MAX_MARKET_SCORE`
       2. 外資期貨淨口為負（淨空）
-      3. |淨口| > `FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD`（30,000 口）
+      3. |淨口| >= `FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD`（30,000 口；批 Z10 Q-r10b：等於門檻歸防禦）
 
     Args:
         market_score:     `market_regime()` 的 `score`（0~6）。None → 不成立。
@@ -175,7 +175,7 @@ def is_foreign_futures_defense(market_score: Any,
         return False
     return (_score < DEFENSE_MAX_MARKET_SCORE
             and _fut < 0
-            and abs(_fut) > FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD)
+            and abs(_fut) >= FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD)
 
 
 def arbitrate_regime(

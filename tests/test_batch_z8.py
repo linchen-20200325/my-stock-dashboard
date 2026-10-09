@@ -306,6 +306,23 @@ def _undo(out, pairs):
     return [tuple(x) for x in res]
 
 
+#: 批 Z10 續作（客戶 2026-10-09 裁示 2）：explainer 規則表「外資期貨淨空單 > 30,000 口」改為「≥」
+#:   （等於門檻歸防禦，文字同步正確邊界；判定零變更）。本檔 golden 是基底 `24bf2af` 實跑寫死，
+#:   ⛔ 不重寫 —— 改以「把這一句換回修前寫法」後比 sha，等於斷言除這句外整份輸出仍逐字同基底。
+_FUT_RULE_NEW = "外資期貨淨空單 ≥ 30,000 口"
+_FUT_RULE_OLD = "外資期貨淨空單 > 30,000 口"
+
+
+def _undo_fut_rule(out):
+    """把輸出中**恰好一處**含新句的那一項（子字串）換回修前寫法。"""
+    res = [list(x) for x in out]
+    hits = [i for i, (_k, t) in enumerate(out) if isinstance(t, str) and _FUT_RULE_NEW in t]
+    assert len(hits) == 1, f"預期恰好一項含 {_FUT_RULE_NEW!r}，實得 {len(hits)}"
+    assert _FUT_RULE_OLD not in res[hits[0]][1]
+    res[hits[0]][1] = res[hits[0]][1].replace(_FUT_RULE_NEW, _FUT_RULE_OLD)
+    return [tuple(x) for x in res]
+
+
 #: explainer 本批改到的兩行（修後 → 修前）。⚠️ 尾段的「切點」數字是上面釘住的門檻。
 _H_NEW = "- 健康評分:**— 未取得** / 100  *(切點:35 → 防禦級)*"
 _H_OLD = "- 健康評分:**None** / 100  *(切點:35 → 防禦級)*"
@@ -507,18 +524,20 @@ class TestExplainerShowsNotObtained:
         assert _S_NEW in texts
         assert "- 健康評分:**62.5** / 100  *(切點:35 → 防禦級)*" in texts
         assert not any("**None**" in t for t in texts)
-        assert _sha(_undo(fake.out, [(_S_NEW, _S_OLD)])) == _BASE_EXPL_SHA["N4_score_missing"]
+        assert _sha(_undo_fut_rule(_undo(fake.out, [(_S_NEW, _S_OLD)]))) == \
+            _BASE_EXPL_SHA["N4_score_missing"]
         fake2 = _run_state(_pinned, _scenario("N4_score_missing"))
-        assert _sha(_undo(fake2.out, [(_S_NEW, _S_OLD)])) == _BASE_STATE_SHA["N4_score_missing"]
+        assert _sha(_undo_fut_rule(_undo(fake2.out, [(_S_NEW, _S_OLD)]))) == \
+            _BASE_STATE_SHA["N4_score_missing"]
 
     @pytest.mark.parametrize("name", [n for n in _NORMAL if n != "N4_score_missing"])
     def test_values_unchanged(self, _pinned, name):
-        assert _sha(_run_explainer(_pinned, _tl_of(name)).out) == _BASE_EXPL_SHA[name]
-        assert _sha(_run_state(_pinned, _scenario(name)).out) == _BASE_STATE_SHA[name]
+        assert _sha(_undo_fut_rule(_run_explainer(_pinned, _tl_of(name)).out)) == _BASE_EXPL_SHA[name]
+        assert _sha(_undo_fut_rule(_run_state(_pinned, _scenario(name)).out)) == _BASE_STATE_SHA[name]
 
     @pytest.mark.parametrize("name", sorted(_FX))
     def test_values_unchanged_fixture_shapes(self, _pinned, name):
-        assert _sha(_run_explainer(_pinned, _FX[name]).out) == _BASE_EXPL_SHA[name]
+        assert _sha(_undo_fut_rule(_run_explainer(_pinned, _FX[name]).out)) == _BASE_EXPL_SHA[name]
 
     def test_zero_is_a_value_not_missing(self, _pinned):
         """判 `is not None`、⛔ 用 `or`：健康 0／市場分數 0 是真的值，照印 0。"""
@@ -548,7 +567,9 @@ _STL_PRE = ("        _wr_throttle = compute_position_throttle(\n"
             "            float(_tl_init['health']), regime=_tl_eff_reg,\n"
             "            defense=bool(_tl_init.get('defense')))\n")
 _MC_REVERT = (('f"- 健康評分:**{_health_txt}** / 100"', 'f"- 健康評分:**{_health}** / 100"'),
-              ('f"- 市場分數:**{_score_txt}** / 6"', 'f"- 市場分數:**{_score}** / 6"'))
+              ('f"- 市場分數:**{_score_txt}** / 6"', 'f"- 市場分數:**{_score}** / 6"'),
+              # 批 Z10 續作（客戶 2026-10-09 裁示 2）：規則表邊界文字「≥」換回 24bf2af 的「>」
+              ('f" 且外資期貨淨空單 ≥ {', 'f" 且外資期貨淨空單 > {'))
 
 
 def _load_variant(mod, pairs, tag: str):

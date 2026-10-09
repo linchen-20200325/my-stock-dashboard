@@ -1454,7 +1454,7 @@ FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD: int = 30000
 """外資期貨淨部位「大空單防禦訊號」門檻(單位:**TX 當量口**,絕對值)。
 
 判定式(唯一實作):`shared.regime_arbiter.is_foreign_futures_defense` ——
-市場評分 < `DEFENSE_MAX_MARKET_SCORE`、淨口為負、且 |淨口| > 本門檻
+市場評分 < `DEFENSE_MAX_MARKET_SCORE`、淨口為負、且 |淨口| >= 本門檻(批 Z10 Q-r10b:等於門檻歸防禦)
 → `arbitrate_regime` 走 `SOURCE_DEFENSE_FUTURES`(🔴 bear + defense=True)。
 輸入為 `li_latest['外資大小']`,其定義見 `src/data/macro/leading_indicators.py`:
 **外資大小 = 外資 TX 淨口 + 0.25 × 外資 MTX 淨口**
