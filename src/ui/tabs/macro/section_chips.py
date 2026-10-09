@@ -534,7 +534,8 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                 df_li_show['成交量'].tail(5).astype(str).str.replace('億','', regex=False),
                 errors='coerce').dropna().tolist()
                 if '成交量' in df_li_show.columns else [])
-            if len(_vols) >= 3:
+            # 批 Z29（Z24-n1，§1）：±inf 原印「今日成交量inf億…」⇒ 取到的任一筆非有限 → 整個訊號 5 不列（同訊號 1／3）。
+            if len(_vols) >= 3 and all(_finite_yoy({'v': _v}, 'v') is not None for _v in _vols):
                 _avg_vol = sum(_vols[:-1]) / len(_vols[:-1])
                 _last_vol = _vols[-1]
                 # F1 v19.184 §3.3 + §4.1：比值 0.7/1.5 抽 SSOT，
