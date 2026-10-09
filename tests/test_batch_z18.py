@@ -1,0 +1,132 @@
+"""批 Z18（客戶 2026-10-09 Q-r15a 裁示「1：A」）—— 門檻說明（note）符號依實際判燈邊界修正。
+
+裁示原文：「A 原則同意 14 列依實際程式邊界修正；但受第 2 題裁示影響，第 4、14 列暫緩，
+不得先改」。本批只改其中 12 列使用者可見字串（只改 `<`／`>`／區間寫法 → `≤`／`≥`，
+其餘一字不動）；⛔ 不改門檻常數、⛔ 不改判燈邏輯。
+
+本檔兩件事：
+1. **逐字守衛**：12 列的新字句（note 前綴 / 第 3 列 source 全句）。
+2. **邊界語意守衛**：以 `classify_danger` 的**實際門檻**，驗證「剛好等於門檻的值」
+   落在 note 所寫的那一側（例：健康評分 35 判紅、note 寫「≤35 防禦」）。
+   修前 note 寫「<35」，等於門檻的值在字面上不屬於「防禦」，但程式判紅 → 字與燈打架。
+
+⛔ 暫緩（不得先改）：第 4 列 `ism_pmi` note、第 14 列 section_mid PMI 說明 —— 本檔
+另以守衛釘住它們**維持原句**，防止被順手改掉。
+"""
+from __future__ import annotations
+
+import pytest
+
+import shared.macro_buckets as mb
+
+S = mb.SPECS_BY_KEY
+
+#: 第 1、2、5~13 列：note 必須以新字句開頭（note 後段的揭露文字不在本批範圍，一字未動）。
+NOTE_PREFIX = {
+    "health": "≤35 防禦 / ≤50 轉弱",                       # 1
+    "m1b_m2_gap": ">1 黃金交叉 / ≤0 死亡交叉",              # 2
+    "us_core_cpi": "≥3.5% 外資提款風險 / ≥4% 通膨嚴峻",      # 5
+    "tw_export": "≤0% 衰退邊界 / ≤-5% 連續衰退",             # 6
+    "bias_240": "≥+20% 正乖離過熱",                          # 7
+    "adl": "≤50 廣度轉弱 / ≤35 廣度崩",                       # 8
+    "fut_net": "≤-10000 避險 / ≤-20000 大戶閃人",             # 9
+    "margin": "≥2500 警戒 / ≥3400 散戶槓桿極危",              # 10
+    "jingqi": ">60 積極 / ≤60 中性 / ≤40 弱勢",               # 11
+    "foreign_net": ">0 買超 / <0 賣超 / ≤-200 大賣（軟線）",   # 12（「<0 賣超」不動）
+}
+USDTWD_NOTE_PREFIX = "≥32 台幣貶值警戒 / ≥33 外資撤離壓力"      # 13
+M1B_SOURCE = "系統設計之警示線（資金動能交叉慣例）：>1 黃金交叉／≤0 死亡交叉"  # 3
+
+
+def _usdtwd():
+    return next(s for s in mb.REFERENCE_TREND_SPECS if s.key == "usdtwd")
+
+
+@pytest.mark.parametrize("key,prefix", sorted(NOTE_PREFIX.items()))
+def test_note_new_wording(key, prefix):
+    assert S[key].note.startswith(prefix), f"{key} note 未照 Q-r15a 擬句：{S[key].note!r}"
+
+
+def test_m1b_note_exact():
+    assert S["m1b_m2_gap"].note == ">1 黃金交叉 / ≤0 死亡交叉"
+
+
+def test_m1b_source_exact():
+    assert S["m1b_m2_gap"].source == M1B_SOURCE
+
+
+def test_usdtwd_note_new_wording():
+    _n = _usdtwd().note
+    assert _n.startswith(USDTWD_NOTE_PREFIX), _n
+    # 後段（強勢區說明 + 參考走勢聲明）一字未動
+    assert "（＜30.5 為台幣強勢區，非燈號等級）" in _n
+    assert "**參考走勢：不計入 16 盞燈的分母、不進五桶彙總。**" in _n
+
+
+def test_note_tails_untouched():
+    """note 後段的揭露文字不在本批範圍 —— 確認沒被順手改掉。"""
+    assert S["health"].note.startswith("≤35 防禦 / ≤50 轉弱（此分只有 2 個輸入")
+    assert S["bias_240"].note == "≥+20% 正乖離過熱（負乖離為超賣機會，非危險）"
+    assert S["adl"].note == ("≤50 廣度轉弱 / ≤35 廣度崩（大型股獨撐）"
+                             "（此為佔比類指標,不受市值成長侵蝕,但仍建議對照歷史分位判讀）")
+    assert S["fut_net"].note == "≤-10000 避險 / ≤-20000 大戶閃人"
+    assert S["us_core_cpi"].note == "≥3.5% 外資提款風險 / ≥4% 通膨嚴峻"
+    assert S["tw_export"].note == "≤0% 衰退邊界 / ≤-5% 連續衰退"
+    assert S["foreign_net"].note == ">0 買超 / <0 賣超 / ≤-200 大賣（軟線）"
+    assert "（⚠️ 本項用的是絕對金額門檻" in S["margin"].note
+    assert "（此值為上漲佔比的 5 日均" in S["jingqi"].note
+
+
+def test_deferred_rows_untouched():
+    """⛔ 第 4 列（ism_pmi note）暫緩，Q-r15a 明令不得先改。"""
+    assert S["ism_pmi"].note == "<50 收縮 / <46 嚴重收縮"
+
+
+# ── 邊界語意：剛好等於門檻的值，燈號要落在 note 所寫的那一側 ──
+#    (key, 等於門檻的值, 預期燈號, note 中描述該側的片段)
+BOUNDARY_CASES = [
+    ("health", 35.0, "red", "≤35 防禦"),
+    ("health", 50.0, "yellow", "≤50 轉弱"),
+    ("m1b_m2_gap", 1.0, "yellow", ">1 黃金交叉"),     # 1.0 不算黃金交叉（判黃）
+    ("m1b_m2_gap", 0.0, "red", "≤0 死亡交叉"),
+    ("us_core_cpi", 3.5, "yellow", "≥3.5% 外資提款風險"),
+    ("us_core_cpi", 4.0, "red", "≥4% 通膨嚴峻"),
+    ("tw_export", 0.0, "yellow", "≤0% 衰退邊界"),
+    ("tw_export", -5.0, "red", "≤-5% 連續衰退"),
+    ("bias_240", 20.0, "red", "≥+20% 正乖離過熱"),
+    ("adl", 50.0, "yellow", "≤50 廣度轉弱"),
+    ("adl", 35.0, "red", "≤35 廣度崩"),
+    ("fut_net", -10000.0, "yellow", "≤-10000 避險"),
+    ("fut_net", -20000.0, "red", "≤-20000 大戶閃人"),
+    ("margin", 2500.0, "yellow", "≥2500 警戒"),
+    ("margin", 3400.0, "red", "≥3400 散戶槓桿極危"),
+    ("jingqi", 60.0, "yellow", "≤60 中性"),           # 60 不算積極（判黃）
+    ("jingqi", 40.0, "red", "≤40 弱勢"),
+    ("foreign_net", -200.0, "red", "≤-200 大賣"),
+]
+
+
+@pytest.mark.parametrize("key,value,level,phrase", BOUNDARY_CASES)
+def test_boundary_value_falls_on_side_note_says(key, value, level, phrase):
+    spec = S[key]
+    assert mb.classify_danger(value, spec) == level, "判燈邏輯不得變動"
+    assert phrase in spec.note, f"{key}={value:g} 判 {level}，note 須寫「{phrase}」：{spec.note!r}"
+
+
+def test_boundary_matches_spec_thresholds():
+    """門檻常數未動：note 裡的數字就是 spec 的 yellow / red。"""
+    assert (S["health"].red, S["health"].yellow) == (35.0, 50.0)
+    assert (S["m1b_m2_gap"].yellow, S["m1b_m2_gap"].red) == (1.0, 0.0)
+    assert (S["jingqi"].yellow, S["jingqi"].red) == (60.0, 40.0)
+    assert (S["margin"].yellow, S["margin"].red) == (2500.0, 3400.0)
+    assert (S["fut_net"].yellow, S["fut_net"].red) == (-10000.0, -20000.0)
+
+
+@pytest.mark.parametrize("value,level,phrase", [
+    (32.0, "yellow", "≥32 台幣貶值警戒"),
+    (33.0, "red", "≥33 外資撤離壓力"),
+])
+def test_usdtwd_boundary(value, level, phrase):
+    spec = _usdtwd()
+    assert mb.classify_danger(value, spec) == level
+    assert phrase in spec.note

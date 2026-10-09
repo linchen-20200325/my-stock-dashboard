@@ -334,7 +334,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                # 原本 "<35 / <50 / 60% / 40%" 四個數字全是手抄 —— 而 35/50 就在同一行
                # 的 `yellow=` / `red=` 參數裡、60/40 是 v19.102 AUC 校準值（會再被季度
                # recalibrate 改）。四個都改成插值，改常數時說明自動跟著動。
-               note=f"<{_HEALTH_RED:g} 防禦 / <{_HEALTH_YELLOW:g} 轉弱"
+               note=f"≤{_HEALTH_RED:g} 防禦 / ≤{_HEALTH_YELLOW:g} 轉弱"
                     f"（此分只有 2 個輸入 — 旌旗指數(上漲佔比 5 日均) "
                     f"{HEALTH_WEIGHT_JQ * 100:g}% ＋ "
                     f"大盤評分 {HEALTH_WEIGHT_SCORE * 100:g}%,實質是「趨勢廣度分數」;"
@@ -359,7 +359,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                emoji="🚦"),
     DangerSpec("m1b_m2_gap", "M1B-M2 資金動能", "long", "%", "low_bad",
                yellow=1.0, red=0.0, decimals=2,
-               note="≥1 黃金交叉 / <0 死亡交叉", source="系統設計之警示線（資金動能交叉慣例）：≥1 黃金交叉／<0 死亡交叉",
+               note=">1 黃金交叉 / ≤0 死亡交叉", source="系統設計之警示線（資金動能交叉慣例）：>1 黃金交叉／≤0 死亡交叉",
                emoji="💰"),
 
     # ── 📈 中期：景氣循環 ──
@@ -368,14 +368,14 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                note="<50 收縮 / <46 嚴重收縮", source=f"黃線 {_PMI_YELLOW:g}／紅線 {_PMI_RED:g}：有既有常數背書（統一閾值表；<50 收縮／<46 嚴重收縮）"),
     DangerSpec("us_core_cpi", "美國核心 CPI YoY", "mid", "%", "high_bad",
                yellow=_CPI_YELLOW, red=_CPI_RED, decimals=1,
-               note=">3.5% 外資提款風險 / >4% 通膨嚴峻", source=f"黃線 {_CPI_YELLOW:g}%／紅線 {_CPI_RED:g}%：有既有常數背書（統一閾值表）"),
+               note="≥3.5% 外資提款風險 / ≥4% 通膨嚴峻", source=f"黃線 {_CPI_YELLOW:g}%／紅線 {_CPI_RED:g}%：有既有常數背書（統一閾值表）"),
     DangerSpec("tw_export", "台灣出口訂單 YoY", "mid", "%", "low_bad",
                yellow=0.0, red=-5.0, decimals=1,
-               note="<0% 衰退邊界 / <-5% 連續衰退", source="紅線 -5%：沿用總經基本面否決檢查的出口門檻（台灣出口 YoY 低於 -5%）；"
+               note="≤0% 衰退邊界 / ≤-5% 連續衰退", source="紅線 -5%：沿用總經基本面否決檢查的出口門檻（台灣出口 YoY 低於 -5%）；"
                       "黃線 0%：系統設計之警示線（衰退邊界）"),
     DangerSpec("bias_240", "年線乖離率 BIAS240", "mid", "%", "high_bad",
                yellow=10.0, red=20.0, decimals=1,
-               note=">+20% 正乖離過熱（負乖離為超賣機會，非危險）",
+               note="≥+20% 正乖離過熱（負乖離為超賣機會，非危險）",
                source="紅線 +20%：系統設計之警示線（正乖離過熱；負乖離為超賣機會，非危險）；"
                       "黃線 10%：系統設計之警示線（無單一官方源）"),
 
@@ -403,7 +403,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     #          （同值，僅消除 SSOT 漂移風險；紅線 35.0 無對應常數，維持 DESIGN inline）
     DangerSpec("adl", "ADL 漲跌家數比", "short", "%", "low_bad",
                yellow=float(MARKET_BREADTH_NEUTRAL_PCT), red=35.0, decimals=1,
-               note="<50 廣度轉弱 / <35 廣度崩（大型股獨撐）"
+               note="≤50 廣度轉弱 / ≤35 廣度崩（大型股獨撐）"
                     # 技術備忘:相對化方案見 shared/relative_thresholds(尚未接線)。
                     "（此為佔比類指標,不受市值成長侵蝕,但仍建議對照歷史分位判讀）",
                source=f"黃線 {MARKET_BREADTH_NEUTRAL_PCT:g}%：有既有常數背書（市場廣度中性分界）；"
@@ -411,7 +411,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     DangerSpec("fut_net", "外資期貨淨口", "short", "口", "low_bad",
                yellow=float(FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS),
                red=float(FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS), decimals=0,
-               note="<-10000 避險 / <-20000 大戶閃人", source=f"黃線 {FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS:,.0f} 口／"
+               note="≤-10000 避險 / ≤-20000 大戶閃人", source=f"黃線 {FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS:,.0f} 口／"
                       f"紅線 {FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS:,.0f} 口："
                       "沿用 v4 引擎風險燈的外資期貨門檻（空單超過 1 萬口 黃燈／超過 2 萬口 紅燈）"),
 
@@ -429,7 +429,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     DangerSpec("margin", "融資餘額", "chips", "億", "high_bad",
                yellow=float(MARGIN_BALANCE_WARN_THRESHOLD_YI),
                red=float(MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI), decimals=0,
-               note="2500-3400 警戒 / >3400 散戶槓桿極危"
+               note="≥2500 警戒 / ≥3400 散戶槓桿極危"
                     "（⚠️ 本項用的是絕對金額門檻，未隨市場總市值成長調整 —— "
                     "目前餘額已長期高於兩條線，燈號會持續偏紅；"
                     "判讀時請看「相對自身近年區間的變化方向」，而非只看有沒有超過門檻）",
@@ -462,7 +462,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     # 一併更正為 DESIGN:廣度佔比經驗切點。
     DangerSpec("jingqi", "旌旗指數（上漲佔比 5 日均 %）", "chips", "%", "low_bad",
                yellow=60.0, red=40.0, decimals=0,
-               note=">60 積極 / 40-60 中性 / <40 弱勢"
+               note=">60 積極 / ≤60 中性 / ≤40 弱勢"
                     "（此值為上漲佔比的 5 日均,不是「站上均線的家數比」——"
                     "本專案並未計算後者）",
                source="黃線 60%／紅線 40%：系統設計之警示線（廣度佔比經驗切點，與均線無關）"),
@@ -479,7 +479,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     #   ±9999 億範圍守衛擋「元 / 千元 / 百萬元」尺度混入(→ gray,不猜換算)。
     DangerSpec("foreign_net", "外資現貨淨買賣", "chips", "億", "low_bad",
                yellow=0.0, red=-200.0, decimals=0,
-               note=">0 買超 / <0 賣超 / <-200 大賣（軟線）", source="黃線 0／紅線 -200 億：系統設計之警示線（外資現貨流向；-200 為軟線）",
+               note=">0 買超 / <0 賣超 / ≤-200 大賣（軟線）", source="黃線 0／紅線 -200 億：系統設計之警示線（外資現貨流向；-200 為軟線）",
                valid_min=_FOREIGN_NET_YI_VALID_MIN,
                valid_max=_FOREIGN_NET_YI_VALID_MAX),
 
@@ -527,7 +527,7 @@ REFERENCE_TREND_SPECS: list[DangerSpec] = [
     # 與 macro_core 註解「>32 yellow / >33 red」同向。
     DangerSpec("usdtwd", "新台幣匯率", REFERENCE_BUCKET, "TWD/USD", "high_bad",
                yellow=_USDTWD_YELLOW, red=_USDTWD_RED, decimals=2,
-               note=f"＞{_USDTWD_YELLOW:g} 台幣貶值警戒 / ＞{_USDTWD_RED:g} 外資撤離壓力"
+               note=f"≥{_USDTWD_YELLOW:g} 台幣貶值警戒 / ≥{_USDTWD_RED:g} 外資撤離壓力"
                     f"（＜{_USDTWD_GREEN_BELOW:g} 為台幣強勢區，非燈號等級）"
                     "。**參考走勢：不計入 16 盞燈的分母、不進五桶彙總。**",
                source="SSOT:MACRO_THRESHOLDS.USDTWD",

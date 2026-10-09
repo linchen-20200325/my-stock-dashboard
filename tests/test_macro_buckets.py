@@ -369,9 +369,9 @@ def test_long_specs_have_emoji():
 def test_cards_render_emoji_value_note():
     bs = {"details": [
         {"key": "health", "label": "總經健康評分", "value_str": "41",
-         "danger": "yellow", "note": "<35 防禦 / <50 轉弱"},
+         "danger": "yellow", "note": "≤35 防禦 / ≤50 轉弱"},
         {"key": "m1b_m2_gap", "label": "M1B-M2 資金動能", "value_str": "-13.86%",
-         "danger": "red", "note": "≥1 黃金交叉 / <0 死亡交叉"},
+         "danger": "red", "note": ">1 黃金交叉 / ≤0 死亡交叉"},
     ]}
     h = mb.bucket_indicator_cards_html(bs)
     assert "🩺" in h and "💰" in h            # 小圖
@@ -611,7 +611,7 @@ def test_health_note_discloses_factor_composition():
     """health 的 note 必須講清楚「由誰組成、不含誰」。"""
     _note = mb.SPECS_BY_KEY["health"].note
     # 原有門檻語意不得被揭露文字擠掉
-    assert "35" in _note and "50" in _note, "原門檻語意（<35 防禦 / <50 轉弱）不見了"
+    assert "35" in _note and "50" in _note, "原門檻語意（≤35 防禦 / ≤50 轉弱）不見了"
     # 兩個真實輸入 + 權重（對齊 shared/signal_thresholds.HEALTH_WEIGHT_*）
     assert "旌旗" in _note and "60%" in _note, "未揭露 jqavg（旌旗指數）權重"
     assert "大盤評分" in _note and "40%" in _note, "未揭露 score（大盤評分）權重"
