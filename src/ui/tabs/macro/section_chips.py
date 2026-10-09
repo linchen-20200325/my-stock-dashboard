@@ -107,8 +107,8 @@ def read_v4_macro_veto() -> dict | None:
     if _vix is None:
         return None
 
-    # 先行指標取「與畫面主表格同一份 ffill 後」的末筆：若 §三 吃 ffill 值、
-    # §八 吃原始 NaN，兩邊輸入不同 → 又會生出一次「同名不同結論」。
+    # 先行指標取「與畫面主表格同一份」的末筆：批 Z30（Z29-n2）起兩邊皆為原始值、不再 ffill
+    #   （末日缺值不得以前日冒充）⇒ 缺值走引擎既有「⬜ 無法判定…外資期貨 未取得」，§三／§八 仍同一份輸入。
     # 批 Z10（Y2-n10，§1）：外資期貨缺值不得當 0 —— 原預設 0.0 ＋ `or 0` 讓缺欄／整欄 None 走成
     #   「🟢 綠燈…外資期貨=0口 — 可依策略佈局」。改傳原值給引擎，由引擎既有 `_macro_number`
     #   （None／NaN／±inf／非數值 → None）判「⬜ 無法判定…外資期貨 未取得」；有限值與修前同一個 float。
@@ -121,8 +121,7 @@ def read_v4_macro_veto() -> dict | None:
     _li = st.session_state.get('li_latest')
     if _li is not None and not getattr(_li, 'empty', True):
         try:
-            _num_cols = [c for c in _li.columns if c != '日期']
-            _row = _li[_num_cols].ffill().iloc[-1]
+            _row = _li.iloc[-1]
             _fut = _row.get('外資大小')
             _pcr_v = _finite_yoy({'v': _row.get('選PCR')}, 'v')
             _pcr = None if _pcr_v is None else float(_pcr_v)
@@ -348,10 +347,8 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         # v18.342 PR-L2:預存 is_stale 旗標(copy 前讀,copy 後 attrs 可能丟失)
         _is_stale_li = bool(getattr(df_li_show, 'attrs', {}).get('is_stale', False))
         _stale_age_li = getattr(df_li_show, 'attrs', {}).get('stale_age_min')
-        # 向前填補 NaN（各欄位用最後一次有效數值補齊，避免 API 部分失敗造成空格）
-        _li_num_cols = [c for c in df_li_show.columns if c != '日期']
-        df_li_show = df_li_show.copy()
-        df_li_show[_li_num_cols] = df_li_show[_li_num_cols].ffill()
+        # 批 Z30（Z29-n2，客戶原則「今天缺值不得以昨天冒充」）：原對全部非日期欄 `.ffill()`，缺值被印成前一日的值
+        #   （含末列「今日」）並據以下結論 ⇒ 移除；缺值走各消費點既有路徑（表格「-」、警示不列、v5「未取得」、CSV 照實）。
 
         # ── ① 資料期間 caption ─────────────────────────────────────────
         _li_dates = df_li_show['日期'].tolist() if '日期' in df_li_show.columns else []
@@ -532,8 +529,10 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             # P4: vectorized str → numeric，避免逐列 Python 呼叫
             _vols = (pd.to_numeric(
                 df_li_show['成交量'].tail(5).astype(str).str.replace('億','', regex=False),
-                errors='coerce').dropna().tolist()
-                if '成交量' in df_li_show.columns else [])
+                errors='coerce')
+                if '成交量' in df_li_show.columns else pd.Series(dtype=float))
+            # 批 Z30（Z29-n2）：末列（今日）取不到 ⇒ 整個訊號 5 不列，⛔ 不得 dropna 後拿前一天當今天；中間列缺值照舊剔除。
+            _vols = _vols.dropna().tolist() if len(_vols) and pd.notna(_vols.iloc[-1]) else []
             # 批 Z29（Z24-n1，§1）：±inf 原印「今日成交量inf億…」⇒ 取到的任一筆非有限 → 整個訊號 5 不列（同訊號 1／3）。
             if len(_vols) >= 3 and all(_finite_yoy({'v': _v}, 'v') is not None for _v in _vols):
                 _avg_vol = sum(_vols[:-1]) / len(_vols[:-1])

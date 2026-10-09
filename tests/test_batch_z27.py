@@ -55,7 +55,11 @@ _REVERT = {
         "            f'（§三 籌碼的「{VETO_V4_ENGINE_NAME}」因外資期貨未取得而無法判定，'\n"
         "            '本區與該燈暫時無法比對）')\n"
         "    elif _fund_evaluable and _v4_light is not None:\n",
-        "    if _fund_evaluable and _v4_light is not None:\n"),),
+        "    if _fund_evaluable and _v4_light is not None:\n"),
+        # 📌 批 Z30（續 2，QA 建議，⛔ 只改註解、非行為）：跨區揭露上方註解「同一份 ffill 後」於批 Z30 後失真已改寫；
+        #   本對把該行註解換回修前原文，讓還原結果仍逐字等於修前（`e333e5ff`）檔案（_PRE_SHA 不改）。
+        ("    # （同一個 VIX、同一份原始末筆的外資期貨口數；批 Z30（Z29-n2）起不再 ffill，末日缺值走 §三 既有「無法判定」）——\n",
+         "    # （同一個 VIX、同一份 ffill 後的外資期貨口數）——\n"),),
 }
 #: 還原後原始碼的 sha256 ＝ 修前（`e333e5ff`）檔案
 _PRE_SHA = {

@@ -135,6 +135,16 @@ class TestC8n1aUnchangedWhenAnyFinite:
         # 📌 批 Z28（客戶 Q-z7＝A，有意識的更正，⛔ 不是漏改）：§三 v4 卡範圍說明「空單超過 2 萬口…超過 1 萬口」改「達」，
         #   本段 golden 為修字前實跑；改用 `use_pre_qz7_scope`（只把該說明恰一次還原為修前字）保留原 digest，新字由 test_batch_z28 斷言。
         from tests.test_batch_z28 import use_pre_qz7_scope
+        if case == 'mixed_nan_mid':
+            # 📌 批 Z30（Z29-n2，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：中間列 NaN 不再被 ffill 成前一日
+            #   ⇒ 先行指標表該列印「-」、CSV 照實（由 test_batch_z30 斷言）；本測試守的是 C8-n1 (a) 其餘逐字不變
+            #   ⇒ 本例改用只把批 Z30 換回基底的還原體實跑（同一套 `_chips` 設定），golden 不改。
+            from tests.test_batch_z28 import _chips as _chips_mod
+            from tests.test_batch_z30 import pre_z30_chips_module
+            _mod = pre_z30_chips_module()
+            use_pre_qz7_scope(monkeypatch, _mod)
+            assert _digest(_chips_mod(mk(), monkeypatch, _mod)) == want
+            return
         use_pre_qz7_scope(monkeypatch)
         assert _digest(_chips(mk(), monkeypatch)) == want
 
