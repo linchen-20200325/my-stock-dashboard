@@ -451,6 +451,10 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     if _fund_evaluable and _v4_light is not None:
         # 綠燈以外（🔴/🟡）都算「籌碼側有風險訊號」。
         _v4_risk = not str(_v4_light.get('status', '')).startswith('🟢')
+        # 批 Z10（Y2-n10，§1）：§三 外資期貨缺值時 `_futures` 為 None（不再當 0）⇒ 走引擎既有缺值字「未取得」，
+        #   不得 `None:,.0f` 拋 TypeError；有值時字串與修前逐字相同。
+        _v4_fut_txt = ('未取得' if _v4_light['_futures'] is None
+                       else f'{_v4_light["_futures"]:,.0f} 口')
         if _v4_risk != _has_veto:
             st.warning(
                 f'⚖️ **同一頁的兩套判定結論不一致 —— 這不是系統算錯，'
@@ -461,7 +465,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 f'- **{VETO_V4_ENGINE_NAME}**（§三 籌碼）：'
                 f'{_v4_light.get("status", "?")}　'
                 f'看的是 VIX={_v4_light["_vix"]:.1f}、'
-                f'外資期貨={_v4_light["_futures"]:,.0f} 口\n\n'
+                f'外資期貨={_v4_fut_txt}\n\n'
                 f'👉 兩者不是同一個指標，不必也不該互相覆蓋；'
                 f'實際持股水位一律以 🎚️ 建議持股油門 為準。'
             )

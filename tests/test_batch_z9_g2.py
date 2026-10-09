@@ -227,11 +227,14 @@ _Z6_CHANGED = [pytest.param(b, f, id=i) for i, b, f in (
     ('both-missing', {}, -40000.0),
     ('bias_info-None', None, -40000.0),
     ('price-missing-just-below', {'ma240': 16000.0}, math.nextafter(-30000.0, -math.inf)),
+    # 批 Z10 續作（Q-r10b，客戶 2026-10-09「等於門檻歸防禦」）：剛好 −30000 改歸避險 ⇒ 自 _Z6_SAME 移入本表
+    ('price-missing-m30000', {'ma240': 16000.0}, -30000.0),
 )]
 
 #: 修後整段作戰室輸出＝修前（fa4ad8a 實跑寫死）
 _Z6_SAME = [pytest.param(b, f, d, h, id=i) for i, b, f, d, h in (
-    ('pxmiss-m30000', {'ma240': 16000.0}, -30000.0, _D_NO_HINT, []),
+    # 批 Z10 續作（Q-r10b）：'pxmiss-m30000'（−30000）已移 _Z6_CHANGED；−29999 仍不避險、整行不出
+    ('pxmiss-m29999', {'ma240': 16000.0}, -29999.0, _D_NO_HINT, []),
     ('pxmiss-nofut', {'ma240': 16000.0}, None, _D_NO_HINT, []),
     ('bull-hedge', {'price': 20000.0, 'ma240': 19000.0}, -40000.0,
      '419b4c56151b6dda6fce1a1066b97c99268e0a038bf32756596600b04f71b124', ['年線乖離 +5.3%｜外資期貨避險']),

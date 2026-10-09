@@ -50,6 +50,7 @@ from src.ui.render.ui_widgets import (
     strategy_conclusion,
 )
 from src.ui.tabs.tab_helpers import safe_get
+from src.ui.tabs.macro.section_long import _finite_yoy  # 批 Z10（C8-n1 (a)）
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -106,25 +107,28 @@ def read_v4_macro_veto() -> dict | None:
 
     # 先行指標取「與畫面主表格同一份 ffill 後」的末筆：若 §三 吃 ffill 值、
     # §八 吃原始 NaN，兩邊輸入不同 → 又會生出一次「同名不同結論」。
-    _fut = 0.0
+    # 批 Z10（Y2-n10，§1）：外資期貨缺值不得當 0 —— 原預設 0.0 ＋ `or 0` 讓缺欄／整欄 None 走成
+    #   「🟢 綠燈…外資期貨=0口 — 可依策略佈局」。改傳原值給引擎，由引擎既有 `_macro_number`
+    #   （None／NaN／±inf／非數值 → None）判「⬜ 無法判定…外資期貨 未取得」；有限值與修前同一個 float。
+    _fut = None
     _pcr = 100.0
     _li = st.session_state.get('li_latest')
     if _li is not None and not getattr(_li, 'empty', True):
         try:
             _num_cols = [c for c in _li.columns if c != '日期']
             _row = _li[_num_cols].ffill().iloc[-1]
-            _fut = float(_row.get('外資大小') or 0)
+            _fut = _row.get('外資大小')
             _pcr = float(_row.get('選PCR') or 100)
         except Exception as _e_li:
             # §1：不靜默 —— 讀不到先行指標會讓這盞燈退化成「只看 VIX」。
             print(f'[section_chips/read_v4_macro_veto] 先行指標讀取失敗，'
-                  f'外資期貨以 0 口計：{type(_e_li).__name__}: {_e_li}')
+                  f'外資期貨以未取得計：{type(_e_li).__name__}: {_e_li}')
 
     _eng = V4StrategyEngine.__new__(V4StrategyEngine)
     _eng.macro = {'vix': _vix, 'foreign_futures': _fut, 'pcr': _pcr}
     _veto = dict(_eng.check_macro_veto())
     _veto['_vix'] = _vix
-    _veto['_futures'] = _fut
+    _veto['_futures'] = _veto['futures']   # 引擎正規化後的值（缺 → None），§八 揭露框吃同一份
     _veto['_pcr'] = _pcr
     return _veto
 
@@ -265,9 +269,16 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
     # ── 外資期貨（先行指標快速結論）─────────────────────────────────
     _li4 = st.session_state.get('li_latest')
     if _li4 is not None and not _li4.empty:
-        _fut4 = (float(_li4.iloc[-1].get('外資大小', 0)) if '外資大小' in _li4.columns else None)
-        _pcr4 = (float(_li4.iloc[-1].get('選PCR', 0)) if '選PCR' in _li4.columns else None)
+        # 批 Z10（C8-n1 (a)，§1 不捏值）：外資大小整欄沒有任何有限值（全 None／NaN／±inf）時，
+        #   原 `float(None)` 拋 TypeError ⇒ §三 之後整段不渲染（全 NaN 則印「nan口」）。改走同卡既有
+        #   「先行指標欄位異常」分支（不下結論）；PCR 只在期貨有值時才讀（移入分支內，整欄 None 同理不崩）。
+        #   欄內有任一有限值時讀末列照舊（末列缺＝C8-n1 (b)，未動），輸出逐字不變。
+        _fut4 = (float(_li4.iloc[-1].get('外資大小', 0))
+                 if '外資大小' in _li4.columns
+                 and any(_finite_yoy({'v': _v}, 'v') is not None for _v in _li4['外資大小'])
+                 else None)
         if _fut4 is not None:
+            _pcr4 = (float(_li4.iloc[-1].get('選PCR', 0)) if '選PCR' in _li4.columns else None)
             _pcr_txt = f' | PCR {_pcr4:.1f}' if _pcr4 else ''
             _l4_ind = f'外資期貨 {_fut4:,.0f}口{_pcr_txt}'
             # 絕對口數門檻（容錯率最高）
@@ -277,7 +288,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             #   它不出現在任何說明文字裡，故本批只留記錄不動它；
             #   要抽需另立具名常數（如 `FOREIGN_FUTURES_ACCUM_WATCH_LOT_THRESHOLD`）。
             if _fut4 <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:
-                _l4c = (f'外資期貨空單 {abs(_fut4):,.0f}口 > '
+                _l4c = (f'外資期貨空單 {abs(_fut4):,.0f}口 ≥ '
                         f'{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}口，'
                         f'啟動強制防禦，等待空單回補')
                 _l4a = '啟動強制防禦，嚴禁追高攤平，保護本金　→ 實際持股見 🎚️ 建議持股油門'
@@ -342,7 +353,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             #   並另起一行把刻度與「1.0 平價點是常識、不是本系統門檻」講明。
             st.caption(
                 f'📅 資料期間：{_d0} ~ {_d1}  共 {len(df_li_show)} 筆  '
-                f'｜外資空單>{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}口⚠️  '
+                f'｜外資空單≥{FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:,}口⚠️  '
                 f'前五大>{abs(TOP5_LARGE_TRADER_NET_WARN_LOTS):,}口⚠️  '
                 f'選PCR<{PCR_PCT_COMPLACENCY_MAX:.0f}🔴過樂觀／'
                 f'>{PCR_PCT_FEAR_MIN:.0f}🟢恐慌區'
@@ -418,9 +429,10 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                         f'期貨空{abs(float(_fut_net)):,.0f}口 + 選擇權外資淨空{float(_opt_net):,.0f}千元',
                         '外資「不惜成本」雙向避險，高機率隨即殺盤，務必嚴控風險　'
                         '→ 實際持股見 🎚️ 建議持股油門'))
-                elif _fut_net is not None and float(_fut_net) < -30000:
+                # 批 Z10（Q-r10b）：等於門檻歸「防禦」側（`<=`），門檻接 SSOT。
+                elif _fut_net is not None and float(_fut_net) <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:
                     _warnings.append(('🟡', '期貨大空警戒',
-                        f'外資期貨空單 {abs(float(_fut_net)):,.0f} 口（>3萬口門檻）',
+                        f'外資期貨空單 {abs(float(_fut_net)):,.0f} 口（≥3萬口門檻）',
                         '注意流向：若每日持續增加空單才是真訊號；若空單縮減則危機解除'))
         except Exception:
             pass
@@ -592,8 +604,15 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         # 配置數字一律取自 get_allocation_sleeves()(由 SSOT 最終持股中值推導)。
         try:
             from src.services.allocation_service import get_allocation_sleeves
-            _v5_fut = float(_last_row.get('外資大小') or 0)
-            if _v5_fut <= -30000:
+            # 批 Z10（Y2-n10 同族／C7-n3 (a)，§1）：原 `or 0` 把缺值（None）當 0、NaN 落 else ⇒ 印「水位中性…」。
+            #   非有限 → 走同頁 v4 卡既有字「外資期貨 未取得」（灰色）；有限值照舊。
+            #   （Q-r10b）門檻接 SSOT，等於門檻歸「防禦」側（原即 `<=`）。
+            _v5_raw = _finite_yoy({'v': _last_row.get('外資大小')}, 'v')
+            _v5_fut = float(_v5_raw) if _v5_raw is not None else None
+            if _v5_fut is None:
+                _v5_strategy = '外資期貨 未取得'
+                _v5_color = TRAFFIC_NEUTRAL
+            elif _v5_fut <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:
                 _v5_strategy = '嚴禁追高攤平，保護本金優先；可留意低基期高殖利率個股'
                 _v5_color = TRAFFIC_RED
             elif _v5_fut <= -15000:
@@ -790,9 +809,9 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         _score = 0
         _sigs = []
         if _fnet is not None:
-            if   _fnet < -30000:
+            if   _fnet <= -FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD:   # 批 Z10（Q-r10b）：等於門檻歸防禦側
                 _score -= 2
-                _sigs.append(f'🔴 期貨空單 {_fnet:,.0f}口（超越3萬危險線）')
+                _sigs.append(f'🔴 期貨空單 {_fnet:,.0f}口（達3萬危險線）')
             elif _fnet <      0:
                 _score -= 1
                 _sigs.append(f'⚠️ 期貨淨空 {_fnet:,.0f}口')

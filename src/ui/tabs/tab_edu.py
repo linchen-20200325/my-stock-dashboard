@@ -1000,7 +1000,7 @@ VCP 收縮確認 = ATR5 < ATR20 × {VCP_ATR_CONTRACTION_RATIO:g}   (SSOT: VCP_AT
 
 > 📌 **系統實際門檻**（SSOT，非教材示意）：v4 引擎風險燈
 > 🟡 期貨淨部位 < §§FUT_V4_YELLOW_LOTS§§ 口 ／ 🔴 < §§FUT_V4_RED_LOTS§§ 口；
-> 紅綠燈「空頭防禦」旗標另用 |淨部位| > §§FUT_DEFENSE_LOTS§§ 口（且市場分數 < 2）。
+> 紅綠燈「空頭防禦」旗標另用 |淨部位| ≥ §§FUT_DEFENSE_LOTS§§ 口（且市場分數 < 2）。
 > 三者用途不同、刻意不統一，詳見「📐 外資籌碼」章。
 
 ---
@@ -1236,7 +1236,7 @@ TW 股市外資持股比 ~40%(2024 年),日均成交量占比 25-30%,**外資動
 - **外資現貨買賣超**:當日 net buy/sell(億 TWD)。單日數字系統**不設門檻**,
   真正會亮燈的是**5 日累積** ≤ §§FOREIGN_5D_YI§§ 億(見下方③)
 - **外資期貨淨部位**:多空淨未平倉(口數)。系統有**兩組**門檻:
-  防禦旗標用 |淨部位| > §§FUT_DEFENSE_LOTS§§ 口、v4 風險燈用
+  防禦旗標用 |淨部位| ≥ §§FUT_DEFENSE_LOTS§§ 口、v4 風險燈用
   §§FUT_V4_YELLOW_LOTS§§ / §§FUT_V4_RED_LOTS§§ 口(見下方①②)
 - **三大法人**:外資 + 投信 + 自營商合計動向
 
@@ -1257,7 +1257,7 @@ TW 股市外資持股比 ~40%(2024 年),日均成交量占比 25-30%,**外資動
 外資期貨淨部位 (口)      = TAIFEX「外資」TX 期貨未平倉淨額(多 − 空)
 
 ① 紅綠燈「空頭防禦」旗標  (macro_helpers.calc_traffic_light)
-   市場分數 < 2  AND  |期貨淨部位| > §§FUT_DEFENSE_LOTS§§ 口  AND  期貨淨部位 < 0
+   市場分數 < 2  AND  |期貨淨部位| ≥ §§FUT_DEFENSE_LOTS§§ 口  AND  期貨淨部位 < 0
    ※ 期貨資料**沒抓到**時既不觸發也不抑制 —— 缺資料 ≠ 沒有大空單
 
 ② v4 引擎風險燈  (v4_strategy_engine.macro_risk_signal)

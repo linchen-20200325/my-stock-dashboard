@@ -458,11 +458,14 @@ _V4_UNAVAILABLE = ("（§三 籌碼的「v4 引擎風險燈」因 VIX 未取得�
 
 
 # ── C7-n3 (a)：⑤ 停手 —— v5 卡「水位中性」本批未改，只鎖現行輸出（`96779d4` 實跑寫死）──────────────────
+#   📌 批 Z10（客戶 2026-10-09 Q-r10a「缺值不得視為 0」）：期貨缺值時 v5 卡改走同頁 v4 卡既有字「外資期貨 未取得」，
+#   本條改鎖新輸出（`_V5_MISSING_NO_SLEEVES`）；修前字面保留於下（`_V5_NEUTRAL_NO_SLEEVES`，供對照）。
 _V5_NEUTRAL_NO_SLEEVES = (
     '<div style="border-left:5px solid #888888;background:#0d1117;padding:9px 14px;border-radius:0 8px 8px 0;'
     'margin:6px 0;"><span style="font-size:11px;color:#888888;">💰 v5 動態配置（數字來源：🎚️ 建議持股油門）</span>'
     '<br><span style="font-size:14px;font-weight:900;color:#888888;">⬜ 總經未評估 — 請先按「🚀 一鍵更新全部數據」'
     '</span><br><span style="font-size:12px;color:#c9d1d9;">📌 水位中性，依個股技術面操作，保留現金彈藥</span></div>')
+_V5_MISSING_NO_SLEEVES = _V5_NEUTRAL_NO_SLEEVES.replace('📌 水位中性，依個股技術面操作，保留現金彈藥', '📌 外資期貨 未取得')
 
 
 class TestC7n3aNotDone:
@@ -471,8 +474,9 @@ class TestC7n3aNotDone:
     def test_v5_card_unchanged_pending_client(self, li, monkeypatch):
         # (a) 未做（⑤ 停手：刪掉「水位中性…」後卡上沒有任何既有字樣可說明期貨缺值，只剩顏色；總管裁定停手、
         #   登記為卡住 ⑤，2026-10-05）—— 輸出與 96779d4 逐字相同；(a) 日後有答案時依答案更新本條
+        # 批 Z10 更新（客戶 2026-10-09 Q-r10a）：改走同頁 v4 卡既有字「外資期貨 未取得」，其餘逐字同 96779d4
         out, _ = _chips({"current": 18.0}, monkeypatch, li=li)
-        assert [t for t in _md(out) if "💰 v5" in t] == [_V5_NEUTRAL_NO_SLEEVES]
+        assert [t for t in _md(out) if "💰 v5" in t] == [_V5_MISSING_NO_SLEEVES]
 
 
 # ══════════════════════════════════════════════════════════════════════════

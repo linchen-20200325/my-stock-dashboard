@@ -161,10 +161,11 @@ _UNDO_ONLY_HEDGE = ((_HINT_DIV.format(_PX_HEDGE), ''),)
 #:   修前 golden：修前同一個 state 的整段輸出；undo：把修後輸出換回修前寫法的唯一替換。
 #:   修前一律不讀 warroom_summary ⇒ 經 warroom_summary 餵的各例修前都是「無避險」那份。
 _FUT_CASES = [
-    # ── 有限值、−30000 上下界（引擎 `< -30000`，嚴格小於）──────────────────────────
+    # ── 有限值、−30000 上下界（原引擎 `< -30000` 嚴格小於；批 Z10 Q-r10b〔客戶 2026-10-09〕起 `<=`：
+    #    剛好 −30000 歸避險側 ⇒ 下兩例由 [_H] 改 [_HH]，其餘界值不變）───────────────────
     ('wr-m40000', _S(_BULL, {'futures_net': -40000.0}), [_HH], _D_BULL, _UNDO_HEDGE),
-    ('wr-m30000', _S(_BULL, {'futures_net': -30000.0}), [_H], _D_BULL, ()),
-    ('wr-m30000-int', _S(_BULL, {'futures_net': -30000}), [_H], _D_BULL, ()),
+    ('wr-m30000', _S(_BULL, {'futures_net': -30000.0}), [_HH], _D_BULL, _UNDO_HEDGE),
+    ('wr-m30000-int', _S(_BULL, {'futures_net': -30000}), [_HH], _D_BULL, _UNDO_HEDGE),
     ('wr-below-30000', _S(_BULL, {'futures_net': math.nextafter(-30000.0, -math.inf)}), [_HH], _D_BULL,
      _UNDO_HEDGE),
     ('wr-above-30000', _S(_BULL, {'futures_net': math.nextafter(-30000.0, math.inf)}), [_H], _D_BULL, ()),
@@ -216,8 +217,12 @@ _FUT_CASES = [
      _UNDO_HEDGE),
     ('wr-fraction-just-below', _S(_BULL, {'futures_net': Fraction(-300000000000000000001, 10 ** 16)}), [_HH],
      _D_BULL, _UNDO_HEDGE),
-    ('wr-decimal-m30000', _S(_BULL, {'futures_net': Decimal('-30000')}), [_H], _D_BULL, ()),
-    ('wr-fraction-m30000', _S(_BULL, {'futures_net': Fraction(-30000)}), [_H], _D_BULL, ()),
+    # 批 Z10 Q-r10b：剛好 −30000 歸避險側（原 [_H]）；剛好高於 −30000 的精確型別仍不成立
+    ('wr-decimal-m30000', _S(_BULL, {'futures_net': Decimal('-30000')}), [_HH], _D_BULL, _UNDO_HEDGE),
+    ('wr-fraction-m30000', _S(_BULL, {'futures_net': Fraction(-30000)}), [_HH], _D_BULL, _UNDO_HEDGE),
+    ('wr-decimal-just-above', _S(_BULL, {'futures_net': Decimal('-29999.9999999999999999')}), [_H], _D_BULL, ()),
+    ('wr-fraction-just-above', _S(_BULL, {'futures_net': Fraction(-299999999999999999999, 10 ** 16)}), [_H],
+     _D_BULL, ()),
     # warroom_summary 不是 dict：有 jingqi_info 時 L3 loader 不碰它 ⇒ 原樣交給作戰室，作戰室須照常渲染、不拋
     # （沒有 jingqi_info 時 L3 loader 自己就在 `wr5.get` 拋 AttributeError —— 修前即如此，屬 L3、不在本批）
     ('jq-wr-list', {**_S(_BULL, ['x']), 'jingqi_info': {'avg': 55.0}}, [_H], _D_BULL, ()),
@@ -498,10 +503,11 @@ class TestC7n9FuturesHedgingFragment:
 
     @pytest.mark.parametrize('fut,hint', [
         (-40000.0, _HINT_DIV.format(_HH)),
-        (-30000.0, _HINT_DIV.format(_H)),
+        (-30000.0, _HINT_DIV.format(_HH)),            # 批 Z10 Q-r10b：等於門檻歸避險（原 _H）
+        (-29999.0, _HINT_DIV.format(_H)),
         (None, _HINT_DIV.format(_H)),
         (-math.inf, _HINT_DIV.format(_H)),
-    ], ids=['m40000', 'm30000', 'none', 'ninf'])
+    ], ids=['m40000', 'm30000', 'm29999', 'none', 'ninf'])
     def test_action_card_literal(self, fut, hint):
         out = _out(_S(_BULL, {'futures_net': fut}))
         assert out[1] == ('markdown', _CARD.format(hint))
@@ -525,7 +531,7 @@ class TestC7n9FuturesHedgingFragment:
             assert fake.session_state[k] is v
 
     def test_random_values_fragment_iff_finite_and_below_minus_30000(self):
-        """隨機外資期貨值（含 −30000 附近）：片段出現 ⟺ 有限實數且 < −30000；拿掉片段後與修前「沒有期貨」逐字相同。"""
+        """隨機外資期貨值（含 −30000 附近）：片段出現 ⟺ 有限實數且 <= −30000（批 Z10 Q-r10b，原 <）；拿掉片段後與修前「沒有期貨」逐字相同。"""
         rng = random.Random(20261005)
         base_no_fut = _D_BULL                               # 基底「沒有期貨」那份（golden）
         vals = [rng.uniform(-60000, 60000) for _ in range(120)]
@@ -535,7 +541,7 @@ class TestC7n9FuturesHedgingFragment:
         hits = 0
         for v in vals:
             out = _out(_S(_BULL, {'futures_net': v}))
-            want = v is not None and math.isfinite(v) and v < -30000
+            want = v is not None and math.isfinite(v) and v <= -30000
             hits += want
             assert _hint(out) == ([_HH] if want else [_H]), v
             assert _digest(_undo(out, _UNDO_HEDGE)) == base_no_fut, v
@@ -550,7 +556,8 @@ class TestC7n9FuturesHedgingFragment:
         assert fake.session_state['warroom_summary']['futures_net'] == -40000.0
         assert 'futures_net' not in fake.session_state                     # 上游也沒寫舊 key
         assert hint == [_HH]
-        assert _e2e(monkeypatch, -30000.0, W)[1] == [_H]
+        assert _e2e(monkeypatch, -30000.0, W)[1] == [_HH]                  # 批 Z10 Q-r10b：等於門檻歸避險（原 [_H]）
+        assert _e2e(monkeypatch, -29999.0, W)[1] == [_H]
         assert _e2e(monkeypatch, math.nan, W)[1] == [_H]                   # 上游 _safe_float → None
 
 
@@ -559,7 +566,7 @@ class TestC7n9WhyTheFiniteCheck:
 
     def test_engine_accepts_minus_inf_as_hedging(self):
         assert _V4(20000.0, 19000.0, -math.inf)['Is_Foreign_Hedging'] is True
-        assert _V4(20000.0, 19000.0, None)['Is_Foreign_Hedging'] is False
+        assert _V4(20000.0, 19000.0, None)['Is_Foreign_Hedging'] is None   # 批 Z10（C8-n6）：缺值＝未知，非 False
 
     def test_engine_raises_on_str(self):
         with pytest.raises(TypeError):
@@ -692,12 +699,14 @@ class TestSupplementInputPremises:
             assert v is not None
             assert bool(_V4(20000.0, 19000.0, v)['Is_Foreign_Hedging']) is True
 
-    @pytest.mark.parametrize('x', [Decimal('-30000.0000000000000001'), Fraction(-300000000000000000001, 10 ** 16)],
+    # 批 Z10 Q-r10b：判式改 `<=` 後，「剛好低於」經 float() 變 −30000.0 仍成立 —— 先 float() 的失真改發生在
+    #   「剛好高於」那一側（float() 後變 −30000.0 ⇒ 誤判成立），故界值改取剛好高於（原取剛好低於）。
+    @pytest.mark.parametrize('x', [Decimal('-29999.9999999999999999'), Fraction(-299999999999999999999, 10 ** 16)],
                              ids=['decimal', 'fraction'])
-    def test_exact_types_just_below_lose_it_through_float(self, x):
-        assert x < -30000 and float(x).hex() == (-30000.0).hex()
-        assert _V4(20000.0, 19000.0, x)['Is_Foreign_Hedging'] is True
-        assert _V4(20000.0, 19000.0, float(x))['Is_Foreign_Hedging'] is False
+    def test_exact_types_just_above_flip_through_float(self, x):
+        assert x > -30000 and float(x).hex() == (-30000.0).hex()
+        assert _V4(20000.0, 19000.0, x)['Is_Foreign_Hedging'] is False
+        assert _V4(20000.0, 19000.0, float(x))['Is_Foreign_Hedging'] is True
 
     @pytest.mark.parametrize('wr', [['x'], 'abc', 1], ids=['list', 'str', 'int'])
     def test_l3_loader_hands_non_dict_through_when_jingqi_present(self, wr):
