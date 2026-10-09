@@ -184,7 +184,9 @@ class TestVixMa20Overflow:
         # 既有失敗形狀與既有錯誤碼（同「末筆非有限」出口），不帶 inf/nan
         assert out == {'_err_vix': 'not enough data'}, out
         assert _no_non_finite(out)
-        assert 'ma20 非有限值' in capsys.readouterr().out
+        # 📌 批 Z13（Q-r8b ②，有意識的變更，⛔ 不是漏刪）：原斷言 `'ma20 非有限值' in out` —— 1.7e308 > 100
+        #   現於末筆就當抓取失敗（同一個出口、輸出逐字不變），走不到 ma20 溢位檢查；改驗新的出聲 log。
+        assert '[Macro/VIX] ❌ 末筆' in capsys.readouterr().out
 
     def test_ma20_negative_overflow(self, monkeypatch, _clear_vix_cache):
         # QA-B：負向溢位（ma20 = -inf）也要擋，不能只查 +inf
@@ -208,10 +210,11 @@ class TestVixMa20Overflow:
 
     def test_large_but_safe_unchanged(self, monkeypatch, _clear_vix_cache):
         import yfinance
-        closes = [1.0e306] * 30          # 20 × 1e306 不溢位 → 照常輸出
+        closes = [1.0e306] * 30          # 20 × 1e306 不溢位
         monkeypatch.setattr(yfinance, 'download', lambda *a, **k: _vix_df(closes))
-        out = macro_snapshot.fetch_vix_block()['vix']
-        assert out['ma20'] == round(sum(closes[-20:]) / 20, 1) and _no_non_finite(out)
+        # 📌 批 Z13（Q-r8b ②「VIX >100 取數層當抓取失敗」，客戶 2026-10-06 裁示；有意識的變更，⛔ 不是漏刪）：
+        #   原斷言「照常輸出、ma20 == 1e306」→ 1e306 > 100 改走既有失敗出口。
+        assert macro_snapshot.fetch_vix_block() == {'_err_vix': 'not enough data'}
 
     def test_finite_unchanged(self, monkeypatch, _clear_vix_cache):
         import yfinance

@@ -11,8 +11,6 @@ KPI + 綜合建議)、v4 防守線+VPOC+籌碼 3 卡、v5 布林+殖利率+財�
 """
 from __future__ import annotations
 
-import math
-
 import pandas as pd
 import streamlit as st
 
@@ -24,6 +22,7 @@ from shared.signal_thresholds import (
     VOLUME_RATIO_MILD,
     VOLUME_RATIO_SURGE,
 )
+from shared.vix_validity import vix_value_or_none  # 批 Z17（Z7-n6）：與 §三／§八／§九 同一套「有效 VIX」規則（L0）
 from src.compute.scoring import health_grade
 from src.compute.scoring.scoring_helpers import calc_fundamental_score
 from src.compute.strategy import (
@@ -249,8 +248,8 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             _v4_vix2 = None
             if isinstance(_vix_obj_v4, dict):
                 try:
-                    _vix_f = float(_vix_obj_v4.get('current'))
-                    _v4_vix2 = _vix_f if math.isfinite(_vix_f) else None   # NaN / ±inf guard(批 V2)
+                    # 批 Z17（Z7-n6）：原自行 float() ⇒ 收下 ≤0、bool、數字字串；改走共用判定（含 NaN／±inf）。
+                    _v4_vix2 = vix_value_or_none(_vix_obj_v4.get('current'))
                 except (TypeError, ValueError, OverflowError):   # OverflowError 視同非有限(批 Y2,V2-n8)
                     _v4_vix2 = None
             _li_for_v4 = st.session_state.get('li_latest')
@@ -262,7 +261,8 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             _v4_pcr2 = 100.0
             if _li_for_v4 is not None and not _li_for_v4.empty:
                 try:
-                    _v4_fut2 = float(_li_for_v4.iloc[-1].get('外資大小', 0) or 0)
+                    # 批 Z17（Z7-n6，§1）：欄缺／None 原 `.get(…, 0) or 0` 仍給引擎 0.0 ⇒ 改為拋例外、留 None；真的 0 口照舊。
+                    _v4_fut2 = float(_li_for_v4.iloc[-1].get('外資大小'))
                 except Exception:
                     pass
                 try:

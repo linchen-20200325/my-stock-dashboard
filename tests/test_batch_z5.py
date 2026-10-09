@@ -283,7 +283,7 @@ _ONE_NEW = {
         ]),
 }
 #: 驗收補測（B 組 S9）—— 84c1ca4 實跑：真 L1（領先指標 `[100]*11+[99.99]`）產生 `smooth6m=-0.0`、
-#: 景氣對策失敗、外資震盪時的頭句與 `_pivot_signals`。
+#: 景氣對策失敗、外資震盪時的頭句與 `_pivot_signals`。📌 批 Z11（Z5-n3）起改判持平，兩常數僅留作修前紀錄。
 _HEAD_REAL_NEGZERO = '⚪ 訊號分歧：偏多 0 群 vs 偏空 1 群（可評估 2/6 群），方向待確認'
 _PIVOTS_REAL_NEGZERO = [
     ('領先指標 6M 由正轉負', '⚠️', '#ef4444', '6M smoothed change：+0.00%→-0.00% → 景氣轉折下行'),
@@ -648,22 +648,25 @@ class TestC7n1UsableValueShapes:
         assert r2.out == _GOLDEN_FLAT
 
     def test_real_l1_negative_zero_is_cached(self, monkeypatch):
-        """真 L1 產得出 -0.0：領先指標 `[100]*11+[99.99]` → `smooth6m=-0.0`（由正轉負）。
-        入快取、下一輪不重抓；畫面與 84c1ca4 同值（含「+0.00%→-0.00%」那句）。"""
+        """真 L1 產得出 -0.0：領先指標 `[100]*11+[99.99]` → `smooth6m=-0.0`。
+        入快取、下一輪不重抓。
+        📌 批 Z11（Z5-n3，客戶 Q-r9b ②）：L1 改以兩位小數判轉折 ⇒ 此例由「⚠️ 由正轉負」（84c1ca4 印
+        `_PIVOTS_REAL_NEGZERO` 的「+0.00%→-0.00%」＋`_HEAD_REAL_NEGZERO`）改判「📊 持平」、不亮燈 ⇒
+        畫面＝`_GOLDEN_FLAT`。本測的主旨（-0.0 是真的值、入快取、不重抓）不變。"""
         tbi = pd.DataFrame({
             "date": pd.date_range("2025-01-01", periods=12, freq="MS").strftime("%Y-%m-%d"),
             "monitoring": [25] * 12, "leading": [100.0] * 11 + [99.99]})
         monkeypatch.setattr(TW, "fetch_business_indicator_series", lambda *a, **k: tbi)
         li_real = TW.fetch_ndc_leading_index(months_back=18, token="")
-        assert li_real["error"] is None and li_real["inflection"] == "⚠️ 由正轉負"
+        assert li_real["error"] is None and li_real["inflection"] == "📊 持平"
         assert li_real["smooth6m"] == 0.0 and math.copysign(1.0, li_real["smooth6m"]) == -1.0
         fake = _FakeST()
         r1 = _render_state(monkeypatch, _H_FAIL, li_real, _FI_FLAT, fake=fake)
-        assert r1.pivots == _PIVOTS_REAL_NEGZERO and _HEAD_REAL_NEGZERO in r1.text
+        assert r1.pivots == [] and r1.out == _GOLDEN_FLAT
         assert set(r1.cached) == {"_ndc_li_cache", "_fi_streak_cache"}
         r2 = _render_state(monkeypatch, _H_FAIL, _LI_FAIL, _FI_FAIL, fake=fake)
         assert r2.calls == {"h": 1, "li": 0, "fi": 0}
-        assert r2.pivots == _PIVOTS_REAL_NEGZERO and _HEAD_REAL_NEGZERO in r2.text
+        assert r2.pivots == [] and r2.out == _GOLDEN_FLAT
 
 
 # ══════════════════════════════════════════════════════════════════════════

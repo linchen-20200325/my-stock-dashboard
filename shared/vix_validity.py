@@ -25,8 +25,8 @@
 其餘回 `float(x)`（極小正數如 5e-324 照常有效）。
 
 ⚠️ 刻意與 §八 一致、不額外收緊（改了就不再「同一套規則」）：
-  - 上限：本函式**不擋** VIX > 100 —— §八 把「> 100」當成另一件事（結論段「VIX 數值異常」），
-    不是有效性；
+  - 上限：本函式**預設不擋** VIX > 100 —— §八 把「> 100」當成另一件事（結論段「VIX 數值異常」），
+    不是有效性；只有 L1 取數層傳 `upper=VIX_FETCH_MAX`（批 Z13，見下）；
   - 0 維 numpy 陣列（含 `np.array(True)`）照 §八 現況放行（Z3-n9，已登記、未判定）；
   - `<= 0` 比較放在 try 之外：比較本身拋例外的怪異物件，§八 會拋、本函式也照拋。
 
@@ -39,8 +39,14 @@ import math
 import numpy as np
 
 
-def vix_value_or_none(x) -> float | None:
-    """VIX 有效 → `float(x)`；無效（規則見模組 docstring）→ None。"""
+#: 批 Z13（客戶 2026-10-06 裁示 Q-r8b ②「VIX ≤0／>100 取數層當抓取失敗」）：取數層（L1
+#: `macro_snapshot.fetch_vix_block`、`macro_alert._yf_latest`）的 VIX 上限 —— 恰 100 仍有效、> 100 當抓取失敗。
+#: 值與 §八 `section_mid._VIX_ABNORMAL_ABOVE`（結論段「VIX 數值異常」門檻）相同。
+VIX_FETCH_MAX = 100
+
+
+def vix_value_or_none(x, *, upper: float | None = None) -> float | None:
+    """VIX 有效 → `float(x)`；無效（規則見模組 docstring）→ None。`upper` 給定時 > upper 亦無效。"""
     if x is None or isinstance(x, (bool, np.bool_, complex, np.complexfloating)):
         return None
     try:
@@ -48,6 +54,6 @@ def vix_value_or_none(x) -> float | None:
             return None
     except (TypeError, ValueError, OverflowError):   # 非實數／轉不成 float／溢位 → 缺值
         return None
-    if x <= 0:
+    if x <= 0 or (upper is not None and x > upper):
         return None
     return float(x)

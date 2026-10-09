@@ -16,7 +16,7 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
   2. **`compute_and_apply_market_assessment` 包在有逾時的執行緒裡**
      （`_run_with_timeout`）—— `tab_macro` 是直接同步呼叫，可以無限期卡住。
   3. **強制重抓模式不 pop 任何 session key** —— `tab_macro` 的
-     `handlers._macro_session_reset()` 會 pop 10 個 key。理由見 `clear_macro_caches`。
+     `handlers._macro_session_reset()` 會 pop 14 個 key。理由見 `clear_macro_caches`。
 
 ═══ 分層（CLAUDE.md §8.2）═════════════════════════════════════════════
 **L3 Service**：編排 L1 fetcher（`src.data.daily.daily_data_fetchers`）
@@ -622,7 +622,7 @@ def clear_macro_caches() -> tuple[str, ...]:
     **第二階段收編舊分頁時，第一件事就是把這份併回去。**
 
     ⛔ **本函式刻意不做 `_macro_session_reset()`（舊分頁的第四段）。**
-    那一段會 pop 掉 10 個 session key，其中 `warroom_summary` **本路徑寫不回來**
+    那一段會 pop 掉 14 個 session key，其中 `warroom_summary` **本路徑寫不回來**
     （唯一寫入點在 `section_traffic_light.py`，見 `UNTOUCHED_BLOCKS`）——
     清掉它等於讓使用者按一次「更新」之後，建議持股與市場位階兩張卡
     從「上一輪的舊值」變成「完全沒有」。**那不是更新，是刪資料。**

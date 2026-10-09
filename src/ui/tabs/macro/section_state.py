@@ -2,7 +2,9 @@
 
 📊 整合六大面向 + CPI×Fed 雙頂回落(v18.169;v19.173 正名,原「MK 黃金拐點」——
 「MK」= Mann-Kendall 的通用縮寫,但那條規則只是兩點差分,見 macro_helpers 註解);
-結論寫入 st.session_state['regime_data'] 供其他 tab 共用。
+結論寫入 st.session_state['warroom_summary'](就地 update,保留既有 key)供其他 tab 共用;
+拐點訊號清單另寫入 st.session_state['_pivot_signals'](AI 解讀區讀用)。
+(Z5-n7 更正:舊註寫「寫入 regime_data」,全 repo 無此 key 的寫入點、亦無讀取點。)
 
 closure params(4 explicit pass):
 - _mkt_info: dict | None  market_regime() 結果(從 S1 算出)
@@ -230,10 +232,19 @@ def render_section_state(_mkt_info, _mkt_placeholder, _tl_placeholder, cd,
     
         # 5. 外資期貨 + 散戶比（先行指標）
         if _li2 is not None and not _li2.empty:
-            _fam_ok.add('chips')   # v19.173：先行指標到位 → 籌碼群可評估
             _last_li = _li2.iloc[-1]
-            _fut_net = _last_li.get('外資大小')
-            _leek    = _last_li.get('韭菜指數')
+            # v19.173：先行指標到位 → 籌碼群可評估。
+            # 批 Z11（Z5-n2，與 C7-n1 同類，§1：沒有值 ≠ 中性）：原為 df 非空就登記 → 末列兩欄
+            #   NaN／None／欄位不存在時仍印「籌碼：中性」。改為 外資大小／韭菜指數 任一為有限數值才登記
+            #   （`_finite_yoy`，不另寫一份）；否則走 L2 既有「未評估」路徑。有值時與修前相同。
+            _li_row = _last_li.to_dict()
+            if (_finite_yoy(_li_row, '外資大小') is not None
+                    or _finite_yoy(_li_row, '韭菜指數') is not None):
+                _fam_ok.add('chips')
+            # 批 Z17（Z11-n1，併 Z11-n2）：取值也走 `_finite_yoy` —— 原直接 `.get` ⇒ ±inf 印「淨多 inf口」
+            #   「+inf%」並出訊號、object 欄 pd.NA 時 `float()` 拋 TypeError 整面板崩。非有限／NA 當缺、不出訊號。
+            _fut_net = _finite_yoy(_li_row, '外資大小')
+            _leek    = _finite_yoy(_li_row, '韭菜指數')
             _pcr     = _last_li.get('選PCR')
             if _fut_net is not None:
                 _fut_net_v = float(_fut_net)

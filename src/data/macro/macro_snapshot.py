@@ -41,6 +41,7 @@ from shared.calc_helpers import calc_bias_pct
 from shared.ttls import TTL_1HOUR
 from shared.staleness import monthly_periods_behind  # DL-f1-s12／s13：資料月過期閘（L0 SSOT）
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
+from shared.vix_validity import VIX_FETCH_MAX, vix_value_or_none  # 批 Z13(Q-r8b ②)
 import math
 
 
@@ -185,10 +186,13 @@ def fetch_vix_block() -> dict:
         _df_v = _df_v.dropna(subset=['Close'])
         # 批 V2(V1-n3 根源,三類 (c)):末筆 ±inf 不放行 → 落到下方既有失敗出口
         # (比照 fetch_us10y_block 批 D2 QA);中段 ±inf 比照 NaN 剔除。
-        _fin_v = [_is_finite_num(v) for v in _df_v['Close']]
+        # 批 Z13(Q-r8b ②,客戶 2026-10-06):VIX ≤ 0／> VIX_FETCH_MAX 比照非有限值 —— 末筆走同一個
+        #   既有失敗出口、中段剔除(L0 vix_value_or_none 已含非有限／非數值判定)。
+        _fin_v = [vix_value_or_none(v, upper=VIX_FETCH_MAX) is not None for v in _df_v['Close']]
         # QA F1/N1:Close 全 NaN 時 _fin_v == []，`_df_v[[]]` 會變成選 0 欄 → KeyError
         # 'Close' 外洩成 _err_vix；空 list 不做布林篩選，維持 main 的 'not enough data'。
         if _fin_v and not _fin_v[-1]:
+            print(f"[Macro/VIX] ❌ 末筆 Close={_df_v['Close'].iloc[-1]!r} 非有限/≤0/>{VIX_FETCH_MAX},當抓取失敗")
             _df_v = _df_v.iloc[0:0]
         elif _fin_v:
             # 批 Y2(V2-n6,§3.3):中段剔除須 log 受影響筆數(輸出不變)

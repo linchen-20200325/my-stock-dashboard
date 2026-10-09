@@ -142,7 +142,9 @@ _HS = 'src/ui/tabs/stock_sections/section_health_score.py'
 
 class TestHealthScoreV4Vix:
     def _run(self, macro_info):
-        ns = {'st': type('S', (), {'session_state': {'macro_info': macro_info}})()}
+        from shared.vix_validity import vix_value_or_none   # 批 Z17：片段改呼叫 L0 共用判定（模組層 import）
+        ns = {'st': type('S', (), {'session_state': {'macro_info': macro_info}})(),
+              'vix_value_or_none': vix_value_or_none}
         return _exec_snippet(_HS, "_mi_v4 = st.session_state.get('macro_info')",
                              "except (TypeError, ValueError, OverflowError):   # OverflowError 視同非有限(批 Y2,V2-n8)\n"
                              "                    _v4_vix2 = None\n",   # 批 Y2:except 行多攔 OverflowError
