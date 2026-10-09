@@ -272,6 +272,12 @@ class TestWarroomForeignDirectionGray:
     ])
     def test_finite_output_unchanged(self, monkeypatch, net, golden):
         out = _wr(InstNetDict(_rows(net)), monkeypatch)
+        # 📌 批 Z30（客戶 2026-10-09 Q-z8＝B，有意識的更正，⛔ 不是漏改）：剛好 0 第 3 欄判定改 None ⇒ 灰框 ⬜；本 golden 為
+        #   修前（紅框 ⚠️）實跑 ⇒ 只在剛好 0 時把該格灰／⬜ 換回紅／⚠️（`undo_z25_gray_card`，只動該格 3 處）；
+        #   非 0 必須原樣（還原函式不得改動任何一格）。剛好 0 的新判定由 test_batch_z30 斷言。
+        undone = undo_z25_gray_card(out)
+        assert (undone != out) is (net == 0)
+        out = undone
         j = '\x1e'.join(f'{k}\x1f{t}' for k, t in out)
         # 📌 批 Z29（C9-n6 (b)，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：剛好 0 的格值由「賣超 0億」改
         #   「0億（持平）」（判定不變）；本 golden 為修字前實跑 ⇒ 只把該格值換回修前字後比對，新字由 test_batch_z29 斷言。

@@ -132,9 +132,11 @@ class TestC9n6aUnobservedForeignNet:
         assert joined.count(_card('未知')) == 1
         # 批 Z25（Z16-n1）起「未知」那格改畫灰框 ⬜（不再紅框 ⚠️）⇒ 還原時連同該格的灰／⬜ 換回紅／⚠️；
         #   守的仍是「只差外資方向那一格」。
-        from tests.test_batch_z25 import undo_z25_gray_card
         # 📌 批 Z29（C9-n6 (b)，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：觀測到的剛好 0 改印「0億（持平）」。
-        undone = [(k, t.replace(_card('未知'), _card('0億（持平）'))) for k, t in undo_z25_gray_card(unobs)]
+        # 📌 批 Z30（客戶 2026-10-09 Q-z8＝B，有意識的更正）：觀測到的剛好 0 第 3 欄亦改 None ⇒ 與「未知」同為灰框 ⬜，
+        #   故不再需要 `undo_z25_gray_card` 把未知格換回紅框；直接比對，守的仍是「只差外資方向那一格的格值」（且更嚴：連框色都相同）。
+        undone = [(k, t.replace(_card('未知'), _card('0億（持平）'))) for k, t in unobs]
+        assert sum(a != b for a, b in zip(unobs, undone)) == 1
         assert undone == obs
 
     @pytest.mark.parametrize('inst, shown', [

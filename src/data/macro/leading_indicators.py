@@ -1892,7 +1892,14 @@ def render_leading_table(df):
     _render_cols = COLS if _has_margin else [c for c in COLS if c not in MARGIN]
     for _, row in df.iterrows():
         h += "<tr>"
-        h += f'<td class="li-dl">{row.get("日期","-")}</td><td><span style="color:#9CDCFE;">{row.get("成交量","-")}</span></td>'
+        # 批 Z30（Z29-n1，§1）：成交量是 L1 寫入的「X億」字串，「inf億」「nan億」、float ±inf／NaN、None／pd.NA 原照印
+        #   ⇒ 非有限一律走本欄既有缺值「-」（同 fmt）；有限值與其餘字串（含「-」）原樣輸出。
+        _vol = row.get("成交量","-")
+        try:
+            if not math.isfinite(float(str(_vol).replace("億", ""))): _vol = "-"
+        except ValueError:
+            if _vol is None or _vol is pd.NA: _vol = "-"
+        h += f'<td class="li-dl">{row.get("日期","-")}</td><td><span style="color:#9CDCFE;">{_vol}</span></td>'
         for col in _render_cols:
             v = row.get(col)
             _s = sty(v, col)

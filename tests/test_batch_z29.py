@@ -6,7 +6,7 @@
 - Z26-n2（L5 `section_warroom.py` 作戰室「融資餘額」卡＋風險警示句）：`cl_data['margin']` NaN／±inf 修前印
   「nan億」並判色，+inf 還出「融資 inf億 極度危險」⇒ 非有限與缺值同路徑（「未取得 (N/A)」＋灰、無警示句）。
 - C9-n6 (b)（同檔「外資方向」卡）：外資淨額真實觀測值剛好 0 修前印「賣超 0億」⇒ 改客戶核准字句
-  「0億（持平）」（逐字）；第 3 欄判定值不變。外資淨額 NaN／±inf ⇒ 走既有「未知」＋判定 None
+  「0億（持平）」（逐字）；第 3 欄判定值不變（📌 批 Z30 起依客戶 Q-z8＝B 改 None 灰框，見 TestForeignNetZero）。外資淨額 NaN／±inf ⇒ 走既有「未知」＋判定 None
   （與未觀測／None 同路徑；-inf 修前另出「外資賣超 inf億」警示句，一併不再出現）。
 
 golden：有限值的修前輸出於基底 `b00288a3` 以本檔同一支 harness 實跑後寫死 sha256（⛔ 不由現行碼反推）。
@@ -100,7 +100,16 @@ class TestSignal5FiniteUnchanged:
     @pytest.mark.parametrize('case', sorted(_S5_BASE))
     def test_golden(self, case, monkeypatch):
         vols, gold = _S5_BASE[case]
-        assert _digest(_chips(_li_v(vols), monkeypatch)) == gold
+        out = _chips(_li_v(vols), monkeypatch)
+        if case == 'nan_dropped':
+            # 📌 批 Z30（Z29-n1，客戶 2026-10-09 核准）：先行指標表「成交量」欄字串 'nan' 原照印「nan」⇒ 改印「-」。
+            #   golden 不改（仍是修前基底實跑）；把該格換回原值後整段須逐字等於基底，且差異僅此一格。
+            _d, _n = '<td><span style="color:#9CDCFE;">-</span></td>', '<td><span style="color:#9CDCFE;">nan</span></td>'
+            assert sum(t.count(_d) for _k, t in out) == 1
+            undone = [(k, t.replace(_d, _n)) for k, t in out]
+            assert _digest(out) != gold
+            out = undone
+        assert _digest(out) == gold
 
     def test_still_alerts(self, monkeypatch):
         txt = _txt(_chips(_li_v(['3000億', '3000億', '3000億', '1000億']), monkeypatch))
@@ -219,11 +228,20 @@ class TestForeignNetZero:
 
     @pytest.mark.parametrize('net', _ZEROS)
     def test_judgement_unchanged(self, net, monkeypatch):
-        """判定值與修前相同（False ⇒ 紅 ⚠️）；把新字換回「賣超 0億」後整段等於修前基底實跑。"""
+        """判定值與修前相同（False ⇒ 紅 ⚠️）；把新字換回「賣超 0億」後整段等於修前基底實跑。
+
+        📌 批 Z30 改（客戶 2026-10-09 Q-z8＝B）：剛好 0 第 3 欄判定改 None ⇒ 灰框 ⬜（原斷言 False ⇒ 紅框 ⚠️）。
+        強度不減：改斷言灰框／⬜、無紅綠；把新字換回「賣超 0億」並把該卡灰框／灰字／⬜ 換回紅框／紅字／⚠️ 後，
+        整段仍須逐字等於修前基底 `b00288a3` 實跑，且差異只在這一張卡。"""
         out = _wr(monkeypatch, net=net)
         card = _card(out, '外資方向')
-        assert f'border-top:3px solid {TRAFFIC_RED};' in card and '⚠️ 外資方向</div>' in card
-        undone = [(k, t.replace(_val('0億（持平）'), _val('賣超 0億'))) for k, t in out]
+        assert f'border-top:3px solid {_GRAY};' in card and '⬜ 外資方向</div>' in card
+        assert TRAFFIC_RED not in card and TRAFFIC_GREEN not in card
+        undone = [(k, t.replace(_val('0億（持平）'), _val('賣超 0億'))
+                   .replace(f'border-top:3px solid {_GRAY};', f'border-top:3px solid {TRAFFIC_RED};')
+                   .replace(f'font-weight:800;color:{_GRAY};', f'font-weight:800;color:{TRAFFIC_RED};')
+                   .replace('⬜ 外資方向</div>', '⚠️ 外資方向</div>'))
+                  if '外資方向</div>' in t else (k, t) for k, t in out]
         assert sum(a != b for a, b in zip(out, undone)) == 1
         assert _digest(undone) == _PRE_ZERO_GOLD
         assert _digest(out) != _PRE_ZERO_GOLD

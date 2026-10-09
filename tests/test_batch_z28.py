@@ -107,7 +107,10 @@ def use_pre_qz7_scope(monkeypatch, mod=SC):
 
 @functools.lru_cache(maxsize=None)
 def _pre_chips_module():
-    return _variant_module(SC, _PRE_CHIPS_PAIRS, 'chips')
+    # 📌 批 Z30（Z29-n2，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：本還原體定義為「基底 d88fe462」，
+    #   故連同批 Z30 的兩處（§三 ffill、訊號 5 末列缺值）一併換回基底寫法（`Z30_CHIPS_REVERT_PAIRS`，同樣恰一次替換）。
+    from tests.test_batch_z30 import Z30_CHIPS_REVERT_PAIRS
+    return _variant_module(SC, _PRE_CHIPS_PAIRS + Z30_CHIPS_REVERT_PAIRS, 'chips')
 
 
 def _digest(out) -> str:
@@ -208,8 +211,13 @@ class TestC8n1bLastRowNonFinite:
     @pytest.mark.parametrize('case', sorted(_LAST_NONFINITE_BASE))
     def test_only_the_card_changed_vs_base(self, case, monkeypatch):
         mk, old_card, base_d = _LAST_NONFINITE_BASE[case]
-        use_pre_qz7_scope(monkeypatch)   # golden 為 Q-z7 修字前實跑（見 use_pre_qz7_scope）
-        out = _chips(mk(), monkeypatch)
+        # 📌 批 Z30（Z29-n2，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：末列 NaN 不再被 ffill 成前一日 ⇒ 表格／v5 卡／
+        #   原始值／CSV 亦隨之改變（由 test_batch_z30 斷言）。本測試守的是「批 Z28 只改這張卡」⇒ 改用只把批 Z30 換回基底的
+        #   還原體（`pre_z30_chips_module`，其餘批次改動保留）實跑，斷言強度不變。
+        from tests.test_batch_z30 import pre_z30_chips_module
+        _mod = pre_z30_chips_module()
+        use_pre_qz7_scope(monkeypatch, _mod)   # golden 為 Q-z7 修字前實跑（見 use_pre_qz7_scope）
+        out = _chips(mk(), monkeypatch, _mod)
         idx = [i for i, (_k, t) in enumerate(out) if t == _CARD_NEW]
         assert len(idx) == 1
         k = out[idx[0]][0]
@@ -427,8 +435,12 @@ class TestRevertedCopyIsTheBase:
         old = _chips(_li([-20000.0, _N], [100.0, 110.0]), monkeypatch, pre)
         assert _digest(old) == _B_LAST_NAN_BASE
         monkeypatch.undo()
-        use_pre_qz7_scope(monkeypatch)
-        new = _chips(_li([-20000.0, _N], [100.0, 110.0]), monkeypatch)
+        # 📌 批 Z30（Z29-n2，有意識的更正）：末列 NaN 不再 ffill ⇒ 現行碼另有表格／v5／原始值／CSV 差異（test_batch_z30 斷言）；
+        #   本測試守「批 Z28 兩項改動恰改兩段」⇒ `new` 改用只把批 Z30 換回基底的還原體實跑。
+        from tests.test_batch_z30 import pre_z30_chips_module
+        _mod = pre_z30_chips_module()
+        use_pre_qz7_scope(monkeypatch, _mod)
+        new = _chips(_li([-20000.0, _N], [100.0, 110.0]), monkeypatch, _mod)
         assert len(new) == len(old)
         diff = [i for i, (a, b) in enumerate(zip(old, new)) if a != b]
         assert len(diff) == 2

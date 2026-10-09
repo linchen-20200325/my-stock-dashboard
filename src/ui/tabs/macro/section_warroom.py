@@ -250,7 +250,8 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
             ('外資方向', ('0億（持平）' if _wr_fnet == 0 else f'{"買超" if (_wr_fnet or 0)>0 else "賣超"} {abs(_wr_fnet or 0):.0f}億') if _wr_fnet is not None else '未知',
              # 批 Z16-n1（Z25，§1.A-4 灰紅分離）：未取得（None）第 3 欄給 None ⇒ 下方畫灰框 ⬜，
              #   不再當成「賣超／出錯」畫紅框 ⚠️；有值時判定式不變。
-             None if _wr_fnet is None else (_wr_fnet or 0) > 0, '外資買超=跟著走'),
+             # 批 Z30（客戶 2026-10-09 Q-z8＝B）：剛好 0（持平）無方向可判 ⇒ None 灰框；非 0 判定式不變。
+             None if _wr_fnet is None or _wr_fnet == 0 else (_wr_fnet or 0) > 0, '外資買超=跟著走'),
             # F1 v19.184 §3.3：兩張小卡的提示語原本手抄「>2500億警戒，>3400億極危」
             # 與「超過±20%要警惕」—— 同一列的**判定式**已經在讀 SSOT
             # （`MARGIN_BALANCE_WARN_THRESHOLD_YI` / `_BIAS240_RED`），只有給人看的
