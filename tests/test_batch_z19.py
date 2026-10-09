@@ -42,7 +42,7 @@ def test_bucket_lamp_unchanged(v, lamp):
 
 
 def test_bucket_note_and_source():
-    assert _PMI.note == '=50 中性（榮枯線） / <50 收縮 / <46 嚴重收縮'
+    assert _PMI.note == '=50 中性（榮枯線） / <50 收縮 / ≤46 嚴重收縮'
     assert _PMI.source == '黃線 50／紅線 46：有既有常數背書（統一閾值表）'
 
 
