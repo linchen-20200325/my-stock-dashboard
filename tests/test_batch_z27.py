@@ -35,11 +35,13 @@ _BOX = "兩套判定結論不一致"
 #: 修後 → 修前（每組恰好一處）
 _REVERT = {
     "cross": ((
-        "    elif any(_v is not None for _v in (_cycle_ref, _ai_gap, _ai_vix, _ai_bias, _ai_exp)):\n"
+        "    elif _macro_info_for_s9 and any(_v is not None for _v in (_cycle_ref, _ai_gap, _ai_vix, _ai_bias, _ai_exp)):\n"
         "        # 批 Z27（Z9-n8／Z19-n1，客戶 2026-10-09 Q-z1＝A 核准字句）：⑤ 自己的輸入（景氣 PMI／CLI、\n"
         "        #   M1B-M2 Gap、VIX、年線乖離、出口）至少一項有值、只是全落在中性帶而沒有條列 ⇒ 資料其實已載入，\n"
         "        #   不得再印「⏳ 等待資料」。判定只看上方已驗證過的值（無效 VIX／±inf 皆已是 None）⇒\n"
         "        #   Z7-n1「有值但無效、其餘全缺」仍走下方原句。顏色沿用同卡「⏸️ 中性觀望」的灰。\n"
+        "        #   另要求總經主資料 `macro_info` 確實在 session 且非空（沿用 `macro_trio_orchestrator` 寫入端的\n"
+        "        #   truthy 守門）：逾時只留下 bias／M1B 時，PMI／出口／VIX 其實沒有，不得說「總經已載入」。\n"
         "        _ai5_txt  = '總經已載入；有資料，判定為一般水準。'\n"
         "        _ai5_clr, _ai5_icon = '#8b949e', '⏸️ 中性'\n", ""),),
     "mid": ((
@@ -127,8 +129,11 @@ class TestQz1Section9:
         dict(pmi=50.0),                     # 只有 PMI=50
         dict(pmi=48.0),                     # ① 「景氣趨緩（出口待確認）」＝ neutral
         dict(cli=99.0),                     # CLI 收縮、出口缺
-        dict(vix=25.0), dict(gap=0.5), dict(bias=5.0), dict(exp=-3.0),
-    ], ids=["Z9-n8", "Z19-n1", "pmi50", "pmi48", "cli99", "vix25", "gap", "bias", "exp"])
+        dict(vix=25.0), dict(gap=0.5, cpi=2.5), dict(bias=5.0, cpi=2.5), dict(exp=-3.0),
+        # macro_info 在（只有 ⑤ 不讀的 CPI）＋ bias／Gap 中性值
+        dict(gap=0.5, bias=5.0, cpi=2.5),
+    ], ids=["Z9-n8", "Z19-n1", "pmi50", "pmi48", "cli99", "vix25", "gap+cpi", "bias+cpi", "exp",
+            "gap+bias+cpi"])
     def test_loaded_neutral_shows_approved_wording(self, kw, monkeypatch, pre):
         out = _s9(monkeypatch, **kw)
         assert _c5(out) == _C5_NEUTRAL
@@ -143,11 +148,34 @@ class TestQz1Section9:
         dict(vix=-5), dict(vix=True), dict(vix="18.5"), dict(vix=math.inf),   # Z7-n1：VIX 有值但無效、其餘全缺
         dict(exp=math.inf), dict(bias=math.nan),        # 其他欄位非有限
         dict(cpi=2.5),                                 # 只有 CPI（⑤ 不讀 CPI）
-    ], ids=["all-missing", "vix-5", "vixTrue", "vix-str", "vix+inf", "exp+inf", "bias-nan", "cpi-only"])
+        # QA：trio 逾時只留 bias／M1B、macro_info 從未寫入（空）⇒ 不得說「總經已載入」
+        dict(bias=5.0), dict(gap=0.5), dict(bias=5.0, gap=0.5),
+    ], ids=["all-missing", "vix-5", "vixTrue", "vix-str", "vix+inf", "exp+inf", "bias-nan", "cpi-only",
+            "bias-only", "gap-only", "bias+gap"])
     def test_not_loaded_keeps_wait(self, kw, monkeypatch, pre):
         out = _s9(monkeypatch, **kw)
         assert _c5(out) == _C5_WAIT and _C5_NEUTRAL not in "".join(t for _k, t in out)
         assert out == _s9(monkeypatch, mod=pre["cross"], **kw)
+
+    @pytest.mark.parametrize("macro_info", ["absent", None, {}], ids=["key-absent", "None", "empty"])
+    def test_macro_info_missing_keeps_wait(self, macro_info, monkeypatch, pre):
+        """QA：session 只有 bias_info／m1b_m2_info（`macro_info` 缺鍵／None／空）⇒ 「⏳」，與修前逐字相同。"""
+        import src.services.allocation_service as AS
+        import types
+
+        def run(mod):
+            ss = {"bias_info": {"bias_240": 5.0}, "m1b_m2_info": {"m1b_yoy": 4.5, "m2_yoy": 4.0}}
+            if macro_info != "absent":
+                ss["macro_info"] = macro_info
+            fake = Z7._FakeST(ss)
+            monkeypatch.setattr(mod, "st", fake)
+            monkeypatch.setattr(AS, "get_allocation", lambda *a, **k: types.SimpleNamespace(is_loaded=False))
+            mod.render_section_cross_ai({}, {})
+            return list(fake.out)
+
+        out = run(Z7._real(_CROSS))
+        assert _c5(out) == _C5_WAIT and _C5_NEUTRAL not in "".join(t for _k, t in out)
+        assert out == run(pre["cross"])
 
     def test_grid_only_neutral_case_changes(self, monkeypatch, pre):
         """全格點：本尊與修前只在「⑤ 輸入有值但無條列」那格不同，且只差 ⑤ 卡。"""
