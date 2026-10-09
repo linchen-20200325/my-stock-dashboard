@@ -343,7 +343,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                     f"那些各自有燈號。故五桶多盞紅而本分數不低非矛盾,是評估範疇不同）",
                # 批 D4 B5-1（客戶 2026-10-02 採用）：門檻出處改白話；數字照舊插值。
                source=f"紅線 {_HEALTH_RED:g}：有既有常數背書（防禦門檻預設值，手訂未校準）；"
-                      f"黃線 {_HEALTH_YELLOW:g}：系統設計之警示線（低於半分轉弱警示）",
+                      f"黃線 {_HEALTH_YELLOW:g}：系統設計之警示線（≤50 轉弱警示）",
                emoji="🩺"),
     # 批 Z4 R9（客戶 2026-10-02 定性為程式 bug：「NDC 23 分程式判黃、文件寫綠」）——
     #   有意識的變更，⛔ 不是漏改：`yellow_lo` 23.0 → 22.0。band 低側判式是 `v <= yellow_lo`
@@ -371,7 +371,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                note="≥3.5% 外資提款風險 / ≥4% 通膨嚴峻", source=f"黃線 {_CPI_YELLOW:g}%／紅線 {_CPI_RED:g}%：有既有常數背書（統一閾值表）"),
     DangerSpec("tw_export", "台灣出口訂單 YoY", "mid", "%", "low_bad",
                yellow=0.0, red=-5.0, decimals=1,
-               note="≤0% 衰退邊界 / ≤-5% 連續衰退", source="紅線 -5%：沿用總經基本面否決檢查的出口門檻（台灣出口 YoY 低於 -5%）；"
+               note="≤0% 衰退邊界 / ≤-5% 連續衰退", source="紅線 -5%：沿用總經基本面否決檢查的出口門檻（台灣出口 YoY -5%）；"
                       "黃線 0%：系統設計之警示線（衰退邊界）"),
     DangerSpec("bias_240", "年線乖離率 BIAS240", "mid", "%", "high_bad",
                yellow=10.0, red=20.0, decimals=1,
@@ -413,7 +413,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
                red=float(FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS), decimals=0,
                note="≤-10000 避險 / ≤-20000 大戶閃人", source=f"黃線 {FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS:,.0f} 口／"
                       f"紅線 {FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS:,.0f} 口："
-                      "沿用 v4 引擎風險燈的外資期貨門檻（空單超過 1 萬口 黃燈／超過 2 萬口 紅燈）"),
+                      "沿用 v4 引擎風險燈的外資期貨門檻（空單 1 萬口 黃燈／2 萬口 紅燈）"),
 
     # ── 🧩 籌碼：大戶定位 ──
     # v19.170：yellow 原 inline 硬寫 2500.0 → 改 import

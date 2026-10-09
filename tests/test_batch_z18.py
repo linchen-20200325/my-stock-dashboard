@@ -130,3 +130,25 @@ def test_usdtwd_boundary(value, level, phrase):
     spec = _usdtwd()
     assert mb.classify_danger(value, spec) == level
     assert phrase in spec.note
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 追加（客戶 2026-10-09 裁示「採最簡版說明，能直接寫門檻就不要加入內部實作說明；
+# 不改計算、門檻或邏輯」）：3 個 source 括號內字改最簡版。
+# ⛔ ism_pmi source、foreign_net note 不在本次範圍（另由上方守衛釘住）。
+# ══════════════════════════════════════════════════════════════════════════
+SIMPLE_SOURCES = {
+    "health": "紅線 35：有既有常數背書（防禦門檻預設值，手訂未校準）；黃線 50：系統設計之警示線（≤50 轉弱警示）",
+    "tw_export": "紅線 -5%：沿用總經基本面否決檢查的出口門檻（台灣出口 YoY -5%）；黃線 0%：系統設計之警示線（衰退邊界）",
+    "fut_net": "黃線 -10,000 口／紅線 -20,000 口：沿用 v4 引擎風險燈的外資期貨門檻（空單 1 萬口 黃燈／2 萬口 紅燈）",
+}
+
+
+@pytest.mark.parametrize("key,text", sorted(SIMPLE_SOURCES.items()))
+def test_simple_source_wording(key, text):
+    assert S[key].source == text
+
+
+def test_simple_source_out_of_scope_untouched():
+    assert S["ism_pmi"].source == "黃線 50／紅線 46：有既有常數背書（統一閾值表；<50 收縮／<46 嚴重收縮）"
+    assert S["foreign_net"].note == ">0 買超 / <0 賣超 / ≤-200 大賣（軟線）"
