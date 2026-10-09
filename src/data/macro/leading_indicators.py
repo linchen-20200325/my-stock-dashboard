@@ -1712,7 +1712,13 @@ def render_leading_table(df):
     def fmt(v, col):
         # 批 Z21（§1）：pd.NA 原讓 int()／float() 拋 TypeError（整張表不渲染）、±inf 讓 int() 拋
         #   OverflowError 或印「inf」⇒ 非有限值一律走既有缺值顯示「-」；有限值輸出不變。
-        if v is None or v is pd.NA or (isinstance(v, float) and not math.isfinite(v)): return "-"
+        if v is None or v is pd.NA: return "-"
+        # 批 Z22（§1）：原只認 `float` 子類，Decimal('Infinity'／'NaN')、物件欄 np.float32(±inf) 仍拋
+        #   OverflowError／ValueError ⇒ 一律以 `math.isfinite` 判；轉不成 float 的型別維持原路徑。
+        try:
+            if not math.isfinite(v): return "-"
+        except (TypeError, ValueError, OverflowError):
+            pass
         if col in BRACKET:
             n = int(v)
             if n > 0: return f"▲ {n:,}"
@@ -1740,6 +1746,8 @@ def render_leading_table(df):
             pass
         try: n = float(v)
         except Exception: return ""
+        # 批 Z22：±inf 原照套紅綠色 ⇒ 與 NaN 一致不上色（文字由 fmt 顯示「-」）。
+        if not math.isfinite(n): return ""
         # 台股紅漲綠跌：正數 = 紅 (TRAFFIC_RED) / 負數 = 綠 (TRAFFIC_GREEN)
         if col in BRACKET:
             if n > 0: return f"color:{TRAFFIC_RED};font-weight:bold;"
