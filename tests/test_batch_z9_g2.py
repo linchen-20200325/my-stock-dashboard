@@ -34,6 +34,7 @@ import src.ui.tabs.macro.section_cross_ai as CR
 import src.ui.tabs.macro.section_warroom as W
 from shared.allocation_decision import build_allocation_decision
 from tests.test_m2n2_no_zero_fill import _FakeST
+from tests.test_batch_z25 import undo_z25_gray_card  # 批 Z25:外資方向未取得改灰,本檔沿用修前 golden
 
 
 def _digest(out) -> str:
@@ -207,7 +208,8 @@ def _wr(bias, fut, mp):
     fake = _FakeST(state)
     mp.setattr(W, 'st', fake)
     W.render_section_warroom('bull', True, False)
-    return list(fake.out)
+    # 批 Z25（Z16-n1）：「外資方向」未取得那格修後改灰框 ⬜ ⇒ 換回修前紅框再比修前 golden（該格由 test_batch_z25 守）。
+    return undo_z25_gray_card(list(fake.out))
 
 
 def _hint(out) -> list:
