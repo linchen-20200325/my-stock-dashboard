@@ -1714,11 +1714,13 @@ def render_leading_table(df):
         #   OverflowError 或印「inf」⇒ 非有限值一律走既有缺值顯示「-」；有限值輸出不變。
         if v is None or v is pd.NA: return "-"
         # 批 Z22（§1）：原只認 `float` 子類，Decimal('Infinity'／'NaN')、物件欄 np.float32(±inf) 仍拋
-        #   OverflowError／ValueError ⇒ 一律以 `math.isfinite` 判；轉不成 float 的型別維持原路徑。
+        #   OverflowError／ValueError ⇒ 一律以 `math.isfinite` 判；（「轉不成 float 維持原路徑」已由批 Z23 改走「-」）。
+        # 批 Z23（§1）：字串「-」、tuple、float() 轉不了的超大整數原讓下方 int()／float() 拋例外、整張表不渲染
+        #   ⇒ 先轉 float：轉不了或非有限一律走既有「-」；可轉成有限浮點數者仍走原路徑（輸出不變）。
         try:
-            if not math.isfinite(v): return "-"
+            if not math.isfinite(float(v)): return "-"
         except (TypeError, ValueError, OverflowError):
-            pass
+            return "-"
         if col in BRACKET:
             n = int(v)
             if n > 0: return f"▲ {n:,}"

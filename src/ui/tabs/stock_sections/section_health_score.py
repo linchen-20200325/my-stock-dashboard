@@ -35,6 +35,7 @@ from src.compute.strategy.v4_strategy_engine import V4StrategyEngine
 from src.compute.strategy.v5_modules import count_dividend_paying_years
 from src.ui.render import STRATEGY_TECHNICAL, kpi, strategy_conclusion  # v19.174 去識別化
 from src.ui.render.app_render import render_health_score
+from src.ui.tabs.macro.section_long import _finite_yoy  # 批 Z23（Z22-n2）：缺／非有限 → None（同 §三 v4 否決）
 
 
 def attach_chip_columns(df):
@@ -258,7 +259,10 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
             #   本頁只畫防守價／上方賣壓／相對籌碼三卡、不顯示引擎的總經燈 ⇒ 畫面零變化。
             #   ⛔ `_v4_pcr2` 與下方 `or 0` 取值不在本列範圍（未動）。
             _v4_fut2 = None
-            _v4_pcr2 = 100.0
+            # 批 Z23（Z22-n2，§1）：原預設 100.0 ＋ `or 100` 把缺欄／None／0／未載入捏成 100、NaN／±inf 照傳
+            #   ⇒ 比照批 Z22 §三 `read_v4_macro_veto` 走 `_finite_yoy`，缺／非有限 → None。
+            #   引擎只讀 vix／foreign_futures（全 repo 無 pcr 讀者）⇒ 畫面零變化。
+            _v4_pcr2 = None
             if _li_for_v4 is not None and not _li_for_v4.empty:
                 try:
                     # 批 Z17（Z7-n6，§1）：欄缺／None 原 `.get(…, 0) or 0` 仍給引擎 0.0 ⇒ 改為拋例外、留 None；真的 0 口照舊。
@@ -266,7 +270,7 @@ border-left:4px solid {_verdict_color};border-radius:8px;padding:12px 14px;margi
                 except Exception:
                     pass
                 try:
-                    _v4_pcr2 = float(_li_for_v4.iloc[-1].get('選PCR', 100) or 100)
+                    _v4_pcr2 = _finite_yoy({'v': float(_li_for_v4.iloc[-1].get('選PCR'))}, 'v')
                 except Exception:
                     pass
 
