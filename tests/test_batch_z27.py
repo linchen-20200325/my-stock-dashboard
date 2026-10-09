@@ -44,10 +44,11 @@ _REVERT = {
         "        _ai5_clr, _ai5_icon = '#8b949e', '⏸️ 中性'\n", ""),),
     "mid": ((
         "    if (_fund_evaluable and _v4_light is not None\n"
-        "            and str(_v4_light.get('status', '')).startswith('⬜')):\n"
+        "            and str(_v4_light.get('status', '')).startswith('⬜') and not _has_veto):\n"
         "        # 批 Z27（Z19-n6，客戶 2026-10-09 Q-z2＝A 核准字句）：§三 判「⬜ 無法判定」（VIX 有效、外資期貨未取得；\n"
         "        #   VIX 無效時入口回 None，走下方既有缺值句）—— 那盞燈沒有結論，不得當成「有風險訊號」去比對而印\n"
         "        #   「兩套判定結論不一致」框；改出與下方缺值句同款的 caption。🟢／🔴／🟡 等已判定狀態走原框，一字未動。\n"
+        "        #   總管裁定最小改動：只替換「原本會出框」的情境（`not _has_veto`）；本區已觸發時原本就不出框，維持不出。\n"
         "        st.caption(\n"
         "            f'（§三 籌碼的「{VETO_V4_ENGINE_NAME}」因外資期貨未取得而無法判定，'\n"
         "            '本區與該燈暫時無法比對）')\n"
@@ -263,14 +264,15 @@ class TestQz2bSection8:
         assert len(bx) == 1 and "⬜ 無法判定" in bx[0]           # 修前：誤出比對框
         assert out == [("caption", _CAP_FUT) if (k == "warning" and t == bx[0]) else (k, t) for k, t in base]
 
-    def test_unknown_light_with_veto_also_captions(self, monkeypatch, pre):
-        # §三 ⬜ 時本區已觸發：修前不出框（風險＝觸發被當成一致）；修後同樣說明「暫時無法比對」
+    #: 修前（`e333e5ff`）實跑寫死：§三 ⬜＋本區已觸發的整段 §八 sha256
+    _GOLD_UNKNOWN_VETO = "cb59d1e4bc91fee2e66b0db8d91dbbe0b5ee065a0ec07aa6855ba60982e6892a"
+
+    def test_unknown_light_with_veto_unchanged(self, monkeypatch, pre):
+        # 總管裁定（最小改動）：§三 ⬜ 且本區已觸發 ⇒ 修前本就不出框，維持「不出框、也不出 caption」，整段與基底逐字相同
         out = _mid(monkeypatch, fut=None, veto=True)
-        assert _boxes(out) == [] and out.count(("caption", _CAP_FUT)) == 1
-        base = _mid(monkeypatch, fut=None, veto=True, mod=pre["mid"])
-        assert _boxes(out) == _boxes(base) == []
-        i = out.index(("caption", _CAP_FUT))
-        assert out[:i] + out[i + 1:] == base
+        assert _boxes(out) == [] and ("caption", _CAP_FUT) not in out
+        assert _sha(out) == self._GOLD_UNKNOWN_VETO
+        assert out == _mid(monkeypatch, fut=None, veto=True, mod=pre["mid"])
 
     @pytest.mark.parametrize("fut,vix,veto", [
         (-40000.0, 18.0, False),      # 🔴 vs 無觸發 → 原框
