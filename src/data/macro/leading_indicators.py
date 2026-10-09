@@ -1715,8 +1715,10 @@ def render_leading_table(df):
         if v is None or v is pd.NA: return "-"
         # 批 Z22（§1）：原只認 `float` 子類，Decimal('Infinity'／'NaN')、物件欄 np.float32(±inf) 仍拋
         #   OverflowError／ValueError ⇒ 一律以 `math.isfinite` 判；（「轉不成 float 維持原路徑」已由批 Z23 改走「-」）。
-        # 批 Z23（§1）：字串「-」、tuple、float() 轉不了的超大整數原讓下方 int()／float() 拋例外、整張表不渲染
-        #   ⇒ 先轉 float：轉不了或非有限一律走既有「-」；可轉成有限浮點數者仍走原路徑（輸出不變）。
+        # 批 Z23（§1）：字串「-」、tuple 原讓下方 int()／float() 拋例外、整張表不渲染；float() 轉不了的
+        #   超大整數（≥2^1024）在走 float() 的 7 欄同樣拋 OverflowError（BRACKET 四欄與「未平倉口數」走 int()
+        #   原不拋、印完整數字）⇒ 先轉 float：轉不了或非有限一律走既有「-」（上述 5 欄超大整數改顯示「-」，
+        #   已知差異、實務不出現）；可轉成有限浮點數者仍走原路徑（輸出不變）。
         try:
             if not math.isfinite(float(v)): return "-"
         except (TypeError, ValueError, OverflowError):

@@ -7,8 +7,10 @@
 - L5 `section_health_score`（個股健康度頁 v4 引擎輸入）：`_v4_pcr2 = 100.0` 與 `or 100` 把缺欄／None／0／
   先行指標未載入捏成 100、NaN／±inf 照傳 ⇒ 改走 `_finite_yoy`，缺／非有限 → None（同批 Z22 §三 v4 否決）。
   引擎 `V4StrategyEngine` 只讀 macro 的 vix／foreign_futures，全 repo 無 pcr 讀者 ⇒ 畫面零變化（本檔實跑證明）。
-- L1 `leading_indicators.render_leading_table`：儲存格為字串「-」、tuple、float() 轉不了的超大整數時
-  `fmt` 的 int()／float() 拋例外、整張表不渲染 ⇒ 無法轉成有限浮點數者走既有「-」；`sty` 原已不上色（實跑確認）。
+- L1 `leading_indicators.render_leading_table`：儲存格為字串「-」、tuple 時 `fmt` 的 int()／float() 拋例外、
+  整張表不渲染；float() 轉不了的超大整數（≥2^1024）在走 float() 的 7 欄拋 OverflowError（BRACKET 四欄與
+  「未平倉口數」走 int() 原不拋、印完整數字，修後改顯示「-」屬已知可接受差異）⇒ 無法轉成有限浮點數者走既有
+  「-」；`sty` 原已不上色（實跑確認）。
 
 golden：有限值的修前輸出於基底 `1b161d2f` 以本檔同一支 harness 實跑後寫死 sha256（⛔ 不由現行碼反推）。
 本檔所有斷言皆為實跑行為斷言，不讀原始碼字面。
@@ -174,7 +176,7 @@ class TestLeadingTableNonNumeric:
     @pytest.mark.parametrize('odd', sorted(_TBL_ODD))
     def test_every_column_dash_no_colour(self, odd):
         df = _row_df(**{c: _TBL_ODD[odd] for c in _COLS})
-        html = render_leading_table(df)                 # 修前 int('-')／float(10**400) → ValueError／OverflowError
+        html = render_leading_table(df)                 # 修前 int('-') → ValueError；float(10**400) → OverflowError（int 欄則印完整數字）
         cells = _cells(html)
         assert len(cells) == len(_COLS) + 2, cells
         assert cells[2:] == ['-'] * len(_COLS), cells
