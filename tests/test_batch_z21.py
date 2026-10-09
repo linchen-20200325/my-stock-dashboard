@@ -29,6 +29,7 @@ import src.services.allocation_service as AS
 import src.ui.tabs.macro.section_chips as SC
 from src.data.macro.leading_indicators import render_leading_table
 from tests.test_batch_z10 import _chips, _digest, _li
+from tests.test_batch_z28 import use_pre_qz7_scope, use_pre_z28_v4
 from tests.test_m2n2_no_zero_fill import _FakeST, _mod
 
 _GIANT = re.compile(r'\d{20,}')
@@ -192,6 +193,13 @@ class TestPcrNonFinite:
 
     @pytest.mark.parametrize('pcr', sorted(_BASE))
     def test_finite_unchanged(self, pcr, monkeypatch):
+        # 📌 批 Z28（Z19-n8，客戶 Q-z5＝A「剛好等於門檻判較差側」，有意識的更正，⛔ 不是漏改）：本例外資期貨剛好 −20,000 口，
+        #   v4 引擎風險燈由 🟡 改 🔴（預期改變，已由 test_batch_z28 斷言）。為保留本檔原 golden（本檔主題與 v4 等號無關），
+        #   本例改用 `use_pre_z28_v4`（恰一次還原 v4 兩個判式為 `<`）實跑；golden 一字未改。
+        use_pre_z28_v4(monkeypatch)
+        # 📌 批 Z28（客戶 Q-z7＝A，有意識的更正，⛔ 不是漏改）：§三 v4 卡範圍說明「空單超過 2 萬口…超過 1 萬口」改「達」，
+        #   本段 golden 為修字前實跑；改用 `use_pre_qz7_scope`（只把該說明恰一次還原為修前字）保留原 digest，新字由 test_batch_z28 斷言。
+        use_pre_qz7_scope(monkeypatch)
         assert _digest(_chips(_li([-20000.0], [pcr]), monkeypatch)) == self._BASE[pcr]
 
     def test_finite_still_scored(self, monkeypatch):

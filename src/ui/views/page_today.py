@@ -454,6 +454,13 @@ _assert_applied_key_matches_reader()
 #: 的預設值）。既然來源同一個，補進來不會把別頁的殘留誤判成「總經被叫過」，
 #: 而宣稱從此是**逐字為真**的。`futures_net` 沒有寫入點 → 它永遠不會
 #: 觸發這個 gate；列出來是為了讓「清單＝loader 讀的 key」這句話真的成立。
+#:
+#: 📌 **批 Z28（Z6-n1／Z14-n2，客戶 Q-z6）更正**：`SectionInputs.futures_net` 已刪除，
+#: `load_section_inputs` **不再讀** `futures_net`。上文「`load_section_inputs` 另讀 …
+#: `futures_net`」「對它一律吃 `state.get(..., 0)` 的預設值」與「清單＝loader 讀的 key」
+#: 自本批起不再逐字成立：現況是「清單 ⊇ loader 讀的 key」（`futures_net` 為多列的一個）。
+#: 清單內容刻意**不動**（不改行為）：`futures_net` 全 repo 沒有寫入點，永遠不會觸發 gate，
+#: 多列它不影響判定；少列才會出錯（`tests/test_p01_today_view.py` 守的正是子集合關係）。
 UPSTREAM_SESSION_KEYS: tuple[str, ...] = (
     "macro_info", "mkt_info", "warroom_summary", "m1b_m2_info",
     "bias_info", "cl_data", "li_latest", "jingqi_info", "_macro_news_items",

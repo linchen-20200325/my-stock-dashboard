@@ -359,7 +359,11 @@ _REVERT_FUT = (
     "    _wr_fut_raw = _wr_sum.get('futures_net') if isinstance(_wr_sum, dict) else None\n"
     "    _wr_fut_net = (None if isinstance(_wr_fut_raw, (np.bool_, complex, np.complexfloating))\n"
     "                   else _finite_yoy(_wr_sum, 'futures_net'))\n",
-    "    _wr_fut_net = _wr_inp.futures_net\n")
+    "    _wr_fut_net = int(st.session_state.get('futures_net', 0) or 0)\n")
+#: 📌 批 Z28（Z6-n1，客戶 Q-z6＝A 刪除 `SectionInputs.futures_net`，有意識的更正，⛔ 不是漏改）：
+#:   還原後寫法原為 `_wr_fut_net = _wr_inp.futures_net`；欄位刪除後該屬性不存在，改寫成它在基底 84c1ca4 的
+#:   等價展開 —— `_wr_inp = _load_si_wr(st.session_state)` 而欄位值即 `int(state.get('futures_net', 0) or 0)`。
+#:   還原體仍等於基底 84c1ca4（`TestRevertedCopyIsTheBase` 全部 golden 不動）；替換來源（現行寫法）一字未動。
 #: 📌 批 Z20（Z6-n4）：作戰室乖離改優先讀同頁卡片值（`_wr_b240_card`），還原點同步納入那兩行，
 #:   還原體仍等於基底 84c1ca4（只讀引擎 `Bias_240`、無負零正規化）；替換目標（還原後寫法）一字未動。
 _REVERT_NEGZERO = (

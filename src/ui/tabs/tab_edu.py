@@ -999,7 +999,7 @@ VCP 收縮確認 = ATR5 < ATR20 × {VCP_ATR_CONTRACTION_RATIO:g}   (SSOT: VCP_AT
 | 淨空單急速擴大 | 🚨 系統性風險信號 | 大幅降低曝險 |
 
 > 📌 **系統實際門檻**（SSOT，非教材示意）：v4 引擎風險燈
-> 🟡 期貨淨部位 < §§FUT_V4_YELLOW_LOTS§§ 口 ／ 🔴 < §§FUT_V4_RED_LOTS§§ 口；
+> 🟡 期貨淨部位 ≤ §§FUT_V4_YELLOW_LOTS§§ 口 ／ 🔴 ≤ §§FUT_V4_RED_LOTS§§ 口；
 > 紅綠燈「空頭防禦」旗標另用 |淨部位| ≥ §§FUT_DEFENSE_LOTS§§ 口（且市場分數 < 2）。
 > 三者用途不同、刻意不統一，詳見「📐 外資籌碼」章。
 
@@ -1261,8 +1261,8 @@ TW 股市外資持股比 ~40%(2024 年),日均成交量占比 25-30%,**外資動
    ※ 期貨資料**沒抓到**時既不觸發也不抑制 —— 缺資料 ≠ 沒有大空單
 
 ② v4 引擎風險燈  (v4_strategy_engine.macro_risk_signal)
-   🔴 VIX > §§VIX_V4_RED§§    或  期貨淨部位 < §§FUT_V4_RED_LOTS§§ 口
-   🟡 VIX > §§VIX_V4_YELLOW§§ 或  期貨淨部位 < §§FUT_V4_YELLOW_LOTS§§ 口
+   🔴 VIX > §§VIX_V4_RED§§    或  期貨淨部位 ≤ §§FUT_V4_RED_LOTS§§ 口
+   🟡 VIX > §§VIX_V4_YELLOW§§ 或  期貨淨部位 ≤ §§FUT_V4_YELLOW_LOTS§§ 口
 
 ③ 外資現貨賣超紅旗
    外資 5 日累積買賣超 ≤ §§FOREIGN_5D_YI§§ 億  (搭配 TWII 20 日跌幅 ≤ §§TWII_20D_PCT§§% 同時亮)

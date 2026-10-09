@@ -4,7 +4,7 @@
   有限值（全 None／NaN／±inf）時，修前 `float(None)` 拋 TypeError（被 `_render_tab_isolated` 接住 ⇒ §三 之後
   整段不渲染）、全 NaN 則印「外資期貨 nan口…微空 nan口」。改走同卡既有分支
   「外資期貨留倉 → 先行指標欄位異常，請確認 FinMind Token」（不下結論、不填 0）。
-  欄內有任一有限值 ⇒ 整段輸出逐字不變（末列缺＝C8-n1 (b)，本批未動）。
+  欄內有任一有限值 ⇒ 整段輸出逐字不變（末列缺＝C8-n1 (b)，本批未動；📌 批 Z28 已依客戶 Q-z4 處理，見 test_batch_z28）。
 - C8-n6（L0 `shared/macro_compute.evaluate_market_status_v4_final`）：`futures_net_oi or 0` 把缺值捏成 0 ⇒
   改為 None 時 `Is_Foreign_Hedging` 回 None；其餘鍵（Signal／建議／持股／乖離…）與修前相同。
 - Z6-n2（同函式）：`-30000` 改接 SSOT `FOREIGN_FUTURES_DEFENSE_LOT_THRESHOLD`（同值，判式仍為嚴格 `<`；
@@ -76,7 +76,7 @@ _INF = math.inf
 _CARD_EXISTING = strategy_conclusion(STRATEGY_TECHNICAL, '外資期貨留倉',
                                      '先行指標欄位異常，請確認 FinMind Token', '')
 
-#: 欄內有任一有限值 ⇒ 整段 §三 輸出與基底逐字相同（含 C8-n1 (b) 末列 NaN／inf 的現行輸出）
+#: 欄內有任一有限值 ⇒ 整段 §三 輸出與基底逐字相同（含 C8-n1 (b) 末列 NaN／inf 的現行輸出 —— 📌 批 Z28 起該例移出，見下）
 #: 📌 續作移出兩例（客戶 2026-10-09 裁示後預期改變，改由下方 TestQr10b／TestY2n10 斷言）：
 #:   'eq_-30000'（修前 eb44d95f…：進階警示無「期貨大空警戒」、綜合判斷印「⚠️ 期貨淨空」）；
 #:   'no_fut_col'（修前 14cc9203…：v4 卡「🟢 綠燈…外資期貨=0口 — 可依策略佈局」、v5 卡「水位中性…」）。
@@ -92,7 +92,10 @@ _UNCHANGED = {
     'p5000': (lambda: _li([5000.0], [110.0]), '870ef4d55d05b3e473f00efeee87c6c6c22e544cb283a1b876b1b779fbd8c908'),
     'zero': (lambda: _li([0.0], [110.0]), '9e73377d8f047b9e390559deb67db20fd888a67d5d29765309eb54340b5851d1'),
     'mixed_nan_mid': (lambda: _li([-20000.0, _NA, 5000.0], [100.0, _NA, 90.0]), '32ecb3b02f1d09510413c928768d8fa57ed3c30c89419d1ae709b0779c417022'),
-    'b_last_nan': (lambda: _li([-20000.0, _NA], [100.0, 110.0]), '42bcb378d663bd051421ba5ea2a4d8fa52692509353672be4282930cd19b83ff'),
+    # 📌 批 Z28 移出 'b_last_nan'（_li([-20000.0, NaN], [100.0, 110.0])，修前 42bcb378…；有意識的更正，⛔ 不是漏改）：
+    #   客戶 2026-10-09 裁示 Q-z4＝A（C8-n1 (b) 末列缺值改既有「📌 外資期貨 未取得」）＋ Q-z5＝A（v4 −20,000 等號
+    #   判較差側）後預期改變；改由 test_batch_z28 `TestRevertedCopyIsTheBase.test_b_last_nan` 以還原體重現原 digest，
+    #   並斷言修前修後只差這兩段。
     # 📌 批 Z20（Z10-n2）：PCR 末列 NaN 不再印「| PCR nan」（走既有「不印 PCR」分支）。新 digest 於本批實跑寫死；
     #   與舊值 4f39360c…（基底 `0482ebd5` 同一支 `_chips` 實跑）逐段比對：25 段僅 §三 外資期貨結論卡少「 | PCR nan」，其餘逐字相同。
     'pos_pcr_nan': (lambda: _li([12000.0], [_NA]), '5e58a478112f676752636c75add1f4dfd3bb8f90e8b0c764a352f78aca93631f'),
@@ -129,6 +132,10 @@ class TestC8n1aUnchangedWhenAnyFinite:
     @pytest.mark.parametrize('case', sorted(_UNCHANGED))
     def test_digest_equals_base(self, case, monkeypatch):
         mk, want = _UNCHANGED[case]
+        # 📌 批 Z28（客戶 Q-z7＝A，有意識的更正，⛔ 不是漏改）：§三 v4 卡範圍說明「空單超過 2 萬口…超過 1 萬口」改「達」，
+        #   本段 golden 為修字前實跑；改用 `use_pre_qz7_scope`（只把該說明恰一次還原為修前字）保留原 digest，新字由 test_batch_z28 斷言。
+        from tests.test_batch_z28 import use_pre_qz7_scope
+        use_pre_qz7_scope(monkeypatch)
         assert _digest(_chips(mk(), monkeypatch)) == want
 
 

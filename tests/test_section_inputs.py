@@ -35,9 +35,11 @@ class TestLoadSectionInputsEquivalence:
         assert out.li_latest is None
         assert out.news_items is None
         assert out.last_inst is None
-        # C1-C v18.289:cl_ts 空字串,futures_net=0 為 fail-safe 預設(對齊原 int(...) or 0)
+        # C1-C v18.289:cl_ts 空字串
         assert out.cl_ts == ''
-        assert out.futures_net == 0
+        # 📌 批 Z28（Z6-n1，客戶 Q-z6＝A 刪除未使用欄位，有意識的更正，⛔ 不是漏改）:原斷言 `out.futures_net == 0`；
+        #   `SectionInputs.futures_net` 已刪（0 讀者），改釘「欄位不存在」。
+        assert not hasattr(out, 'futures_net')
         # C1-F v18.292:
         assert out.last_inst_date is None
         assert out.last_margin is None
@@ -79,7 +81,8 @@ class TestLoadSectionInputsEquivalence:
         assert out.jingqi_info == {'avg': 28}
         # C1-C
         assert out.cl_ts == '2026-06-26 17:00:00'
-        assert out.futures_net == -5
+        # 📌 批 Z28（Z6-n1，客戶 Q-z6＝A 刪除未使用欄位，有意識的更正，⛔ 不是漏改）:原斷言 `out.futures_net == -5`；欄位已刪，session 帶 `futures_net` 也不再被讀入。
+        assert not hasattr(out, 'futures_net')
 
     def test_jingqi_info_real_dict_preferred(self):
         """C1-B v18.288:session_state['jingqi_info'] 真實 dict 存在 → 優先用,
@@ -294,16 +297,19 @@ class TestWarroomSectionIntegration:
         assert out.bias_info['ma240'] == 16800
         assert out.m1b_m2_info['gap'] == 0.8
         assert out.cl_ts == '2026-06-26 17:00:00'
-        assert out.futures_net == 1200
+        # 📌 批 Z28（Z6-n1，客戶 Q-z6＝A 刪除未使用欄位，有意識的更正，⛔ 不是漏改）:原斷言 `out.futures_net == 1200`；欄位已刪。
+        assert not hasattr(out, 'futures_net')
 
     def test_futures_net_coercion(self):
-        """futures_net 走 int(... or 0)幾種怪輸入:None / float / 字串數字 / 空字串。"""
-        assert load_section_inputs({'futures_net': None}).futures_net == 0
-        assert load_section_inputs({'futures_net': 1500}).futures_net == 1500
-        assert load_section_inputs({'futures_net': -250.7}).futures_net == -250
-        assert load_section_inputs({'futures_net': '300'}).futures_net == 300
-        assert load_section_inputs({'futures_net': ''}).futures_net == 0
-        assert load_section_inputs({'futures_net': 0}).futures_net == 0
+        """📌 批 Z28（Z6-n1，客戶 Q-z6＝A 刪除未使用欄位，有意識的更正，⛔ 不是漏改）。
+
+        原測 `futures_net` 走 int(... or 0)幾種怪輸入(None / float / 字串數字 / 空字串 → 0／1500／-250／300／0／0)；
+        欄位已刪，改釘：同一批輸入都不再產生 `futures_net` 屬性，其餘欄位與不帶該 key 時相同。
+        """
+        for v in (None, 1500, -250.7, '300', '', 0):
+            out = load_section_inputs({'futures_net': v})
+            assert not hasattr(out, 'futures_net')
+            assert out == load_section_inputs({})
 
     def test_cl_ts_falsy_coerce_to_empty_str(self):
         """cl_ts 走 str fallback,None / 缺值 / 空字串都回 ''(對齊 _wr_ts 原寫法)。"""
