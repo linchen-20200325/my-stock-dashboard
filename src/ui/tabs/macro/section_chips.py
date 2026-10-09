@@ -49,7 +49,6 @@ from src.ui.render.ui_widgets import (
     STRATEGY_VALUATION,
     strategy_conclusion,
 )
-from src.ui.tabs.tab_helpers import safe_get
 from src.ui.tabs.macro.section_long import _finite_yoy  # 批 Z10（C8-n1 (a)）
 
 
@@ -114,14 +113,19 @@ def read_v4_macro_veto() -> dict | None:
     #   「🟢 綠燈…外資期貨=0口 — 可依策略佈局」。改傳原值給引擎，由引擎既有 `_macro_number`
     #   （None／NaN／±inf／非數值 → None）判「⬜ 無法判定…外資期貨 未取得」；有限值與修前同一個 float。
     _fut = None
-    _pcr = 100.0
+    # 批 Z22（§1）：PCR 缺值不得填 100 —— 原預設 100.0 ＋ `or 100` 把缺欄／None／0 捏成 100，
+    #   NaN／±inf 照傳入引擎、pd.NA 讓 `or` 拋「boolean value of NA is ambiguous」而整段走 except。
+    #   改走 `_finite_yoy`（缺／非有限／非數值 → None）。引擎 `check_macro_veto` 不讀 pcr，燈號不受影響；
+    #   有限值與修前同一個 float。
+    _pcr = None
     _li = st.session_state.get('li_latest')
     if _li is not None and not getattr(_li, 'empty', True):
         try:
             _num_cols = [c for c in _li.columns if c != '日期']
             _row = _li[_num_cols].ffill().iloc[-1]
             _fut = _row.get('外資大小')
-            _pcr = float(_row.get('選PCR') or 100)
+            _pcr_v = _finite_yoy({'v': _row.get('選PCR')}, 'v')
+            _pcr = None if _pcr_v is None else float(_pcr_v)
         except Exception as _e_li:
             # §1：不靜默 —— 讀不到先行指標會讓這盞燈退化成「只看 VIX」。
             print(f'[section_chips/read_v4_macro_veto] 先行指標讀取失敗，'
@@ -809,13 +813,16 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
     _df_li_c = st.session_state.get('li_latest')
     if _df_li_c is not None and not _df_li_c.empty:
         _last_li = _df_li_c.iloc[-1]
-        _fnet = safe_get(_last_li.get('外資大小'))
+        # 批 Z22（§1）：外資大小／韭菜指數／前五大／外選 比照下方 PCR（批 Z21）改走 `_finite_yoy` ——
+        #   `safe_get` 只擋 None／NaN，±inf 原會印「inf口」「inf%」並計分 ⇒ 非有限落入各欄既有
+        #   「無此項不列、不計分」分支；有限值回原物件，輸出逐字不變。
+        _fnet = _finite_yoy({'v': _last_li.get('外資大小')}, 'v')
         # 批 Z21（§1）：`safe_get` 只擋 None／NaN，±inf 原會印「PCR=inf」並計分 ⇒ 改走 `_finite_yoy`
         #   （缺／非有限 → None），落入既有「無 PCR 不計」分支；有限值回原物件，輸出逐字不變。
         _pcr  = _finite_yoy({'v': _last_li.get('選PCR')}, 'v')
-        _leek = safe_get(_last_li.get('韭菜指數'))
-        _top5 = safe_get(_last_li.get('前五大留倉'))
-        _opt  = safe_get(_last_li.get('外(選)'))
+        _leek = _finite_yoy({'v': _last_li.get('韭菜指數')}, 'v')
+        _top5 = _finite_yoy({'v': _last_li.get('前五大留倉')}, 'v')
+        _opt  = _finite_yoy({'v': _last_li.get('外(選)')}, 'v')
         _date = _last_li.get('日期','最新')
 
         _score = 0
