@@ -30,6 +30,7 @@ import numpy as np
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.inst_net import is_net_observed
 from shared.macro_buckets import SPECS_BY_KEY as _SPECS_BY_KEY
 from shared.signal_thresholds import (
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
@@ -78,7 +79,9 @@ border:2px solid #1f6feb;border-radius:14px;padding:16px;margin-bottom:14px;">
     # 收斂 + log 走 L2 SSOT(§1:缺失照樣顯示成「未知」,只是不再炸頁)。
     _wr_inst = coerce_inst_dict(_wr_cd, where='section_warroom')
     _wr_fk = next((k for k in _wr_inst if '外資' in str(k)), None)
-    _wr_fnet = _wr_inst.get(_wr_fk, {}).get('net', None) if _wr_fk else None
+    # 批 Z16（C9-n6 (a)，修正錯誤）：缺外資列時 L1 預填的 0.0 不是觀測值（shared/inst_net）⇒ 走既有「未知」。
+    _wr_fnet = (_wr_inst.get(_wr_fk, {}).get('net', None)
+                if _wr_fk and is_net_observed(_wr_inst, _wr_fk) else None)
     _wr_margin = _wr_cd.get('margin')
     _wr_adl = _wr_cd.get('adl')
     _wr_ts = _wr_inp.cl_ts

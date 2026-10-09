@@ -39,8 +39,9 @@ slow lane（真 Streamlit AppTest）
 ① 最小重現：預置「全敗後」session → `render_traffic_light_top()`（連跑兩輪 ＝ rerun）。
 ② 整個總經分頁（app.py `_render_tab_isolated` 以 AST 抽出原文包住）＋預置 session。
 ③ mock 全部來源失敗：網路在 HTTP 層一律拒絕（requests／curl_cffi／urllib／socket），pickle 快取目錄、
-   `st.cache_data`、proxy URL 快取都換成空的；冷啟動連按兩次「🚀 一鍵更新全部數據」（第一下只設旗標，
-   C9-n3，範圍外），走真的抓取段 → `st.rerun` → 最終畫面。先行指標那支 job 以「逾時 → None」處理
+   `st.cache_data`、proxy URL 快取都換成空的；冷啟動按一下「🚀 一鍵更新全部數據」，當輪即走真的抓取段
+   → `st.rerun` → 最終畫面。（批 Z8 時 C9-n3 未修，第一下只設旗標、要按兩下；批 Z16 修正 C9-n3 後
+   改為一下，並反向斷言第一下就抓。）先行指標那支 job 以「逾時 → None」處理
    （批 Z5-n1 A 組真網路實跑的形狀：`li_latest` 不存在）—— 理由見下方「範圍外」第 1 點。
 
 範圍外（實作組實跑發現，⚠️ 單組；本檔 ⛔ 釘住、⛔ 修）
@@ -728,13 +729,13 @@ class TestRealStreamlitZ8:
         at = _app(_WHOLE_TAB + _END)
         at.run()
         _ok(at)
-        at.button(key="cl_refresh").click().run()     # 冷啟動第一下只設旗標（C9-n3，範圍外）
-        _ok(at)
-        assert not li_seen, "第一下就抓了 —— 與 C9-n3 的現況不符，請重看本測試的前提"
-        at.button(key="cl_refresh").click().run()     # 第二下：真的抓（全部失敗）→ st.rerun
+        assert not li_seen, "還沒按按鈕就抓了 —— 冷啟動空 session 不得自動抓取"
+        # 冷啟動第一下：當輪即真的抓（全部失敗）→ st.rerun。批 Z8 時 C9-n3 未修、第一下只設旗標，
+        # 要按第二下；批 Z16 已修 C9-n3（tab_macro 閘門補看 do_refresh），故改為一下。
+        at.button(key="cl_refresh").click().run()
         _ok(at)
         # 前提：真的走過抓取段、連線真的全被拒絕，而且得到的是「全敗後」的 session
-        assert li_seen, "沒有走到抓取段"
+        assert li_seen, "第一下沒有走到抓取段 —— C9-n3 回歸（冷啟動要按第二下才載入）"
         assert _offline, "沒有任何對外連線被拒絕 —— 不是「全部來源失敗」"
         assert _has(at, "cl_ts") and _has(at, "cl_data")
         assert not _has(at, "mkt_info") and not _has(at, "jingqi_info")
