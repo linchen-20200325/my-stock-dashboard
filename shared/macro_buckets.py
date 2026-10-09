@@ -479,7 +479,7 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     #   ±9999 億範圍守衛擋「元 / 千元 / 百萬元」尺度混入(→ gray,不猜換算)。
     DangerSpec("foreign_net", "外資現貨淨買賣", "chips", "億", "low_bad",
                yellow=0.0, red=-200.0, decimals=0,
-               note=">0 買超 / <0 賣超 / ≤-200 大賣（軟線）", source="黃線 0／紅線 -200 億：系統設計之警示線（外資現貨流向；-200 為軟線）",
+               note=">0 買超 / <0 賣超（0 亦判黃）/ ≤-200 大賣（軟線）", source="黃線 0／紅線 -200 億：系統設計之警示線（外資現貨流向；-200 為軟線）",
                valid_min=_FOREIGN_NET_YI_VALID_MIN,
                valid_max=_FOREIGN_NET_YI_VALID_MAX),
 

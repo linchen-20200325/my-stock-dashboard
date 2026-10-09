@@ -32,7 +32,8 @@ NOTE_PREFIX = {
     "fut_net": "≤-10000 避險 / ≤-20000 大戶閃人",             # 9
     "margin": "≥2500 警戒 / ≥3400 散戶槓桿極危",              # 10
     "jingqi": ">60 積極 / ≤60 中性 / ≤40 弱勢",               # 11
-    "foreign_net": ">0 買超 / <0 賣超 / ≤-200 大賣（軟線）",   # 12（「<0 賣超」不動）
+    # 12：Q-r15a 只改 -200 段；之後裁示 3：B 再補「（0 亦判黃）」（見檔尾）。
+    "foreign_net": ">0 買超 / <0 賣超（0 亦判黃）/ ≤-200 大賣（軟線）",
 }
 USDTWD_NOTE_PREFIX = "≥32 台幣貶值警戒 / ≥33 外資撤離壓力"      # 13
 M1B_SOURCE = "系統設計之警示線（資金動能交叉慣例）：>1 黃金交叉／≤0 死亡交叉"  # 3
@@ -72,7 +73,7 @@ def test_note_tails_untouched():
     assert S["fut_net"].note == "≤-10000 避險 / ≤-20000 大戶閃人"
     assert S["us_core_cpi"].note == "≥3.5% 外資提款風險 / ≥4% 通膨嚴峻"
     assert S["tw_export"].note == "≤0% 衰退邊界 / ≤-5% 連續衰退"
-    assert S["foreign_net"].note == ">0 買超 / <0 賣超 / ≤-200 大賣（軟線）"
+    assert S["foreign_net"].note == ">0 買超 / <0 賣超（0 亦判黃）/ ≤-200 大賣（軟線）"  # 裁示 3：B
     assert "（⚠️ 本項用的是絕對金額門檻" in S["margin"].note
     assert "（此值為上漲佔比的 5 日均" in S["jingqi"].note
 
@@ -151,4 +152,26 @@ def test_simple_source_wording(key, text):
 
 def test_simple_source_out_of_scope_untouched():
     assert S["ism_pmi"].source == "黃線 50／紅線 46：有既有常數背書（統一閾值表；<50 收縮／<46 嚴重收縮）"
-    assert S["foreign_net"].note == ">0 買超 / <0 賣超 / ≤-200 大賣（軟線）"
+    assert S["foreign_net"].note == ">0 買超 / <0 賣超（0 亦判黃）/ ≤-200 大賣（軟線）"  # 裁示 3：B
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 再追加（客戶 2026-10-09 裁示 3：B）：「外資現貨 0 不能描述成賣超。採：
+# 『>0 買超 / <0 賣超（0 亦判黃）/ ≤-200 大賣（軟線）』只修說明完整性，
+# 不改既有判燈邏輯。」
+# ══════════════════════════════════════════════════════════════════════════
+FOREIGN_NET_NOTE = ">0 買超 / <0 賣超（0 亦判黃）/ ≤-200 大賣（軟線）"
+
+
+def test_foreign_net_note_states_zero_is_yellow():
+    assert S["foreign_net"].note == FOREIGN_NET_NOTE
+
+
+def test_foreign_net_zero_is_yellow_as_note_says():
+    """判燈邏輯不變：0 落在 low_bad 的 `v <= yellow(0)` → 黃；note 須明講。"""
+    spec = S["foreign_net"]
+    assert mb.classify_danger(0.0, spec) == "yellow"
+    assert "（0 亦判黃）" in spec.note
+    assert mb.classify_danger(0.01, spec) == "green"      # >0 買超
+    assert mb.classify_danger(-0.01, spec) == "yellow"    # <0 賣超
+    assert mb.classify_danger(-200.0, spec) == "red"      # ≤-200 大賣
