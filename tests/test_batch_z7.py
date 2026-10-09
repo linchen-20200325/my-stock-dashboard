@@ -867,7 +867,8 @@ class TestC7n3bHealthScore:
     def test_default_futures_is_none(self, li, monkeypatch):
         _out, macro = _health(li, monkeypatch)
         assert macro["foreign_futures"] is None                       # 修前（寫死）：0.0
-        assert macro["vix"] == 18.0 and macro["pcr"] == 100.0
+        # 批 Z23（Z22-n2）：pcr 預設 100.0 亦屬缺值捏值 ⇒ 改為 None（畫面不變見 test_batch_z23）
+        assert macro["vix"] == 18.0 and macro["pcr"] is None
 
     @pytest.mark.parametrize("li", _LI_DEFAULT)
     def test_screen_does_not_depend_on_it(self, li, monkeypatch):

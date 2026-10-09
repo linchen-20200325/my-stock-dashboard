@@ -431,7 +431,10 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         # 期貨大空 + 選擇權外資淨空 → 不惜成本避險
         try:
             if _fut_net is not None and float(_fut_net) < -20000:
-                if _opt_net is not None and float(_opt_net) < 0:
+                # 批 Z23（§1）：-inf 原印「外資期貨空單 inf 口」⇒ 非有限值走既有「不列警示」（同訊號 4 PCR／NaN）。
+                if _finite_yoy({'v': float(_fut_net)}, 'v') is None:
+                    pass
+                elif _opt_net is not None and float(_opt_net) < 0:
                     # v19.171:移除硬編碼「建議降倉至30%以下」—— 實機驗收抓到它與
                     # 同畫面「最終建議持股 20%」(建議持股 SSOT)當場矛盾。
                     # 警示卡只負責敘事(發生什麼事、為何危險),持股水位一律指回
@@ -457,7 +460,10 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         try:
             if _leek is not None:
                 _leek_f = float(_leek)
-                if _leek_f > LEEK_ALERT_HIGH_PCT:
+                # 批 Z23（§1）：±inf 原印「法人空多比 ±inf%」⇒ 非有限值走既有「不列警示」（同 NaN）。
+                if _finite_yoy({'v': _leek_f}, 'v') is None:
+                    pass
+                elif _leek_f > LEEK_ALERT_HIGH_PCT:
                     _warnings.append(('🔴', '散戶過度樂觀（韭菜極端多）',
                         f'法人空多比 {_leek_f:+.1f}%'
                         f'（超過 {LEEK_ALERT_HIGH_PCT:+.0f}% 警戒線）',
