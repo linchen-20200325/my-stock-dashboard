@@ -434,7 +434,9 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                 # 批 Z23（§1）：-inf 原印「外資期貨空單 inf 口」⇒ 非有限值走既有「不列警示」（同訊號 4 PCR／NaN）。
                 if _finite_yoy({'v': float(_fut_net)}, 'v') is None:
                     pass
-                elif _opt_net is not None and float(_opt_net) < 0:
+                # 批 Z24（§1）：外(選) -inf 原印「選擇權外資淨空-inf千元」⇒ 非有限值走既有「不帶該句」（同 None／NaN）。
+                elif (_opt_net is not None and _finite_yoy({'v': float(_opt_net)}, 'v') is not None
+                      and float(_opt_net) < 0):
                     # v19.171:移除硬編碼「建議降倉至30%以下」—— 實機驗收抓到它與
                     # 同畫面「最終建議持股 20%」(建議持股 SSOT)當場矛盾。
                     # 警示卡只負責敘事(發生什麼事、為何危險),持股水位一律指回
@@ -481,7 +483,10 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             if _foreign is not None and _trust is not None:
                 _f2 = float(_foreign)
                 _t2 = float(_trust)
-                if _f2 > 50 and _t2 > 5:
+                # 批 Z24（§1）：±inf 原印「外資+inf億」「投信-inf億」⇒ 非有限值走既有「不列警示」（同 None／NaN）。
+                if _finite_yoy({'v': _f2}, 'v') is None or _finite_yoy({'v': _t2}, 'v') is None:
+                    pass
+                elif _f2 > 50 and _t2 > 5:
                     _warnings.append(('🟢', '外資投信同買（籌碼共鳴）',
                         f'外資+{_f2:.0f}億 + 投信+{_t2:.1f}億 同步買超',
                         '外投同買的股票漲幅連續性最強，現貨籌碼最乾淨'))

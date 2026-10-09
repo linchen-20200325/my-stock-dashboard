@@ -1723,8 +1723,12 @@ def render_leading_table(df):
             if not math.isfinite(float(v)): return "-"
         except (TypeError, ValueError, OverflowError):
             return "-"
+        # 批 Z24（§1）：數字字串「12.5」「-0.25」「1e3」原讓 int() 拋 ValueError、整張表不渲染 ⇒ int() 轉不了時
+        #   改先轉 float 再取整（與同欄有限 float 輸入同一輸出：12.5 →「▲ 12」）；int() 轉得了者仍走原路徑。
+        if col in BRACKET or col == "未平倉口數":
+            try: n = int(v)
+            except ValueError: n = int(float(v))
         if col in BRACKET:
-            n = int(v)
             if n > 0: return f"▲ {n:,}"
             if n < 0: return f"▼ ({abs(n):,})"
             return f"{n:,}"
@@ -1735,7 +1739,7 @@ def render_leading_table(df):
             return f"{n:.1f}"
         if col in MARGIN: return f"{float(v):,.0f}億"
         if col == "選PCR": return f"{float(v):.1f}"
-        if col == "未平倉口數": return f"{int(v):,}"
+        if col == "未平倉口數": return f"{n:,}"
         if col == "韭菜指數":
             n = float(v)
             if n > 0: return f"▲ {n:.1f}%"
