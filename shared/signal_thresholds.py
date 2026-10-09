@@ -409,10 +409,10 @@ VIX_MEDIUM_RISK_THRESHOLD: float = 20.0
 """VIX 中風險黃燈門檻。> 20 觸發黃燈，max_position=50%。原 v4_strategy_engine.py:87 inline"""
 
 FOREIGN_FUTURES_HIGH_RISK_THRESHOLD_LOTS: int = -20000
-"""外資期貨高風險紅燈門檻（單位：口）。< -20000 口空單觸發紅燈。原 v4_strategy_engine.py:76 inline"""
+"""外資期貨高風險紅燈門檻（單位：口）。≤ -20000 口空單觸發紅燈（批 Z28 Z19-n8：剛好等於門檻歸較差側）。原 v4_strategy_engine.py:76 inline"""
 
 FOREIGN_FUTURES_MEDIUM_RISK_THRESHOLD_LOTS: int = -10000
-"""外資期貨中風險黃燈門檻（單位：口）。< -10000 口空單觸發黃燈。原 v4_strategy_engine.py:87 inline"""
+"""外資期貨中風險黃燈門檻（單位：口）。≤ -10000 口空單觸發黃燈（批 Z28 Z19-n8：剛好等於門檻歸較差側）。原 v4_strategy_engine.py:87 inline"""
 
 
 # ── 大額交易人「前五大留倉」計分門檻(D3/B7 抽出,單位:口)────────────────
