@@ -441,6 +441,8 @@ class TestZ3n4Section3:
         pytest.param(_li(math.nan), id="fut-nan"), pytest.param(_li(-15000.0), id="fut--15000"),
         pytest.param(_li(5000.0), id="fut-5000"), pytest.param(_li(-0.0), id="fut--0.0"),
         pytest.param(pd.DataFrame({"日期": ["d"], "選PCR": [90.0]}), id="fut-col-missing"),
+        # 📌 批 Z30（續）：`read_v4_macro_veto` 已不再 ffill（末列缺 ⇒ ⬜ 無法判定），本尊與本檔修前副本同步改變，
+        #   本列仍只對拍「與批 Z7 無關的形狀」逐字相同；id 保留原名以利追溯。新行為由 test_batch_z30 斷言。
         pytest.param(pd.DataFrame({"日期": ["a", "b"], "外資大小": [-40000.0, math.nan], "選PCR": [1.0, 2.0]}),
                      id="ffill-last-nan"),
     ])

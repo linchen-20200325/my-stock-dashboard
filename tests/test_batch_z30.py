@@ -11,6 +11,9 @@
   前一日的值（含末列「今日」），進階警示訊號 1～4、v5 卡、「最新一筆原始值」、CSV 都吃到冒充值 ⇒ 移除該填補。
   連帶：訊號 5 末列（今日）成交量取不到（NaN 或 L1 的「-」）時，修前（ffill 或 dropna）都拿前一天當今天
   ⇒ 整個訊號 5 不列（同批 Z29「⛔ 不得剔掉 inf 後拿前一天當今天」）；中間列缺值照舊剔除。
+- Z30（續，總管裁定）：`read_v4_macro_veto()` 原另做 `.ffill().iloc[-1]` ⇒ 今日外資期貨缺、昨日 −40,000 時
+  v4 引擎風險燈仍判「🔴 紅燈…外資期貨=-40,000口」、§八 跨區揭露框據以列出 ⇒ 改讀原始末列，缺值走引擎既有
+  「⬜ 無法判定…外資期貨 未取得」與 §八 既有 caption（批 Z27 Q-z2 核准字句）；不新增字句、不改門檻與判定式。
 
 golden：有限值／無缺值的修前輸出於基底 `4591c5aa` 以本檔同一支 harness 實跑後寫死 sha256（⛔ 不由現行碼反推）。
 本檔所有斷言皆為實跑行為斷言，不讀原始碼字面。
@@ -34,6 +37,7 @@ import pytest
 import src.services.allocation_service as AS
 import src.ui.tabs.macro.section_chips as SC
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED
+from src.config.config import VETO_V4_ENGINE_NAME
 from src.data.macro.leading_indicators import render_leading_table
 from tests.test_batch_z29 import _GRAY, _ZEROS, _card, _joined, _val, _wr
 from tests.test_m2n2_no_zero_fill import _FakeST
@@ -330,20 +334,33 @@ Z30_CHIPS_REVERT_PAIRS = (
      "            _vols = _vols.dropna().tolist() if len(_vols) and pd.notna(_vols.iloc[-1]) else []\n",
      "                errors='coerce').dropna().tolist()\n"
      "                if '成交量' in df_li_show.columns else [])\n"),
+    # 批 Z30（續，總管裁定）：`read_v4_macro_veto` 的 ffill（v4 引擎風險燈與 §八 跨區揭露的輸入）
+    ("    # 先行指標取「與畫面主表格同一份」的末筆：批 Z30（Z29-n2）起兩邊皆為原始值、不再 ffill\n"
+     "    #   （末日缺值不得以前日冒充）⇒ 缺值走引擎既有「⬜ 無法判定…外資期貨 未取得」，§三／§八 仍同一份輸入。\n",
+     "    # 先行指標取「與畫面主表格同一份 ffill 後」的末筆：若 §三 吃 ffill 值、\n"
+     "    # §八 吃原始 NaN，兩邊輸入不同 → 又會生出一次「同名不同結論」。\n"),
+    ("            _row = _li.iloc[-1]\n",
+     "            _num_cols = [c for c in _li.columns if c != '日期']\n"
+     "            _row = _li[_num_cols].ffill().iloc[-1]\n"),
 )
 
 
 @functools.lru_cache(maxsize=None)
-def pre_z30_chips_module():
-    """現行 section_chips 只把本批兩處換回基底寫法（其餘批次改動保留）。"""
+def _variant_with(pairs):
+    """現行 section_chips 只把 `pairs`（修後, 修前）各恰一次換回基底寫法（其餘批次改動保留）。"""
     src = open(SC.__file__, encoding='utf-8').read()
-    for new, old in Z30_CHIPS_REVERT_PAIRS:
+    for new, old in pairs:
         assert src.count(new) == 1, f'替換點不唯一或已不存在：{new!r}'
         src = src.replace(new, old)
     m = importlib.util.module_from_spec(importlib.util.spec_from_loader('_z30_pre_chips', loader=None))
     m.__file__ = SC.__file__
     exec(compile(src, SC.__file__, 'exec'), m.__dict__)
     return m
+
+
+def pre_z30_chips_module():
+    """現行 section_chips 只把本批各處（含續）換回基底 `4591c5aa` 寫法。"""
+    return _variant_with(Z30_CHIPS_REVERT_PAIRS)
 
 
 def _chips_mod(li, mp, mod):
@@ -523,3 +540,141 @@ class TestTodayInfAndColumnMissing:
         w = _warn_txt(out)
         assert '成交量急' not in w and '選擇權Put/Call' not in w and '期權同向崩盤' not in w
         assert '📌 外資期貨 未取得' in _v5_card(out)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 4. 批 Z30（續，總管裁定）：v4 引擎風險燈與 §八 跨區揭露不再以前日值冒充當日
+#    `read_v4_macro_veto()` 原另做 `.ffill().iloc[-1]` ⇒ 今日外資期貨缺、昨日 −40,000 時 v4 燈仍判
+#    「🔴 紅燈…外資期貨=-40,000口」，§八 揭露框亦據以列出 —— 與表格／v5 卡的缺值自相矛盾。
+#    修後缺值走引擎既有「⬜ 無法判定…外資期貨 未取得」與 §八 既有 caption（批 Z27 Q-z2 核准字句）。
+# ══════════════════════════════════════════════════════════════════════════
+
+_V4_UNKNOWN_HEAD = '⬜ 無法判定'
+_V4_UNKNOWN_MSG = '⬜ 總經環境無法判定：外資期貨 未取得（VIX=15.0 / 外資期貨=未取得）'
+
+
+def _v4_card(out) -> str:
+    cards = [t for _k, t in out if f'🏛️ {VETO_V4_ENGINE_NAME}' in t]
+    assert len(cards) == 1
+    return _strip(cards[0])
+
+
+def _read_v4(li, mp, mod=SC, vix=15.0):
+    mp.setattr(mod, 'st', _FakeSTCode({'macro_info': {'vix': {'current': vix}}, 'li_latest': li}))
+    return mod.read_v4_macro_veto()
+
+
+#: 末列外資期貨缺、前一日有值（含原 z10／z28 記錄 ffill 後燈號的情境）
+_LAST_MISSING = {
+    'today_all_nan(-40000)': _TODAY_NAN,
+    'z28_b_last_nan(-20000)': lambda: pd.DataFrame({'日期': ['a', 'b'], '外資大小': [-20000.0, math.nan],
+                                                     '選PCR': [100.0, 110.0]}),
+    'z28_last_nan(-16000)': lambda: pd.DataFrame({'日期': ['a', 'b'], '外資大小': [-16000.0, math.nan],
+                                                   '選PCR': [100.0, 110.0]}),
+    'z28_last_nan_nopcr(+3000)': lambda: pd.DataFrame({'日期': ['a', 'b'], '外資大小': [3000.0, math.nan]}),
+    'today_None(-40000)': lambda: pd.DataFrame({'日期': ['a', 'b'], '外資大小': pd.Series([-40000.0, None], dtype=object)}),
+    'today_pdNA(-40000)': lambda: pd.DataFrame({'日期': ['a', 'b'], '外資大小': pd.Series([-40000.0, pd.NA], dtype=object)}),
+}
+
+
+class TestV4LightTodayMissing:
+    @pytest.mark.parametrize('case', sorted(_LAST_MISSING))
+    def test_inputs_are_raw_last_row(self, case, monkeypatch):
+        v = _read_v4(_LAST_MISSING[case](), monkeypatch)
+        assert v['_futures'] is None and v['status'].startswith(_V4_UNKNOWN_HEAD)
+
+    @pytest.mark.parametrize('case', sorted(_LAST_MISSING))
+    def test_pre_used_previous_day(self, case, monkeypatch):
+        """還原體（ffill 加回）：同一份資料，引擎吃到的是前一日的值 —— 本批修掉的正是這個。"""
+        v = _read_v4(_LAST_MISSING[case](), monkeypatch, mod=pre_z30_chips_module())
+        assert v['_futures'] is not None and not v['status'].startswith(_V4_UNKNOWN_HEAD)
+
+    def test_card_today_all_nan(self, monkeypatch):
+        card = _v4_card(_chips(_TODAY_NAN(), monkeypatch))
+        assert _V4_UNKNOWN_HEAD in card and _V4_UNKNOWN_MSG in card
+        assert '-40,000' not in card and '🔴 紅燈' not in card and not _INFNAN.search(card)
+
+    def test_card_pre_was_red_from_yesterday(self, monkeypatch):
+        card = _v4_card(_chips_mod(_TODAY_NAN(), monkeypatch, pre_z30_chips_module()))
+        assert '🔴 紅燈' in card and '外資期貨=-40,000口' in card       # 修前：昨日 −40,000 冒充今日
+
+    def test_only_v4_card_differs_from_partial_revert(self, monkeypatch):
+        """只把 read_v4 的 ffill 加回（其餘本批改動保留）⇒ 整段只差 v4 卡一段。"""
+        only_v4 = _variant_with(Z30_CHIPS_REVERT_PAIRS[2:])
+        a = _chips(_TODAY_NAN(), monkeypatch)
+        monkeypatch.undo()
+        b = _chips_mod(_TODAY_NAN(), monkeypatch, only_v4)
+        diff = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+        assert len(a) == len(b) and len(diff) == 1 and f'🏛️ {VETO_V4_ENGINE_NAME}' in a[diff[0]][1]
+
+    @pytest.mark.parametrize('fut, head', [(-40000.0, '🔴 紅燈'), (-15000.0, '🟡'), (5000.0, '🟢')])
+    def test_today_finite_unchanged(self, fut, head, monkeypatch):
+        li = _li(_DAY, dict(_DAY, 外資大小=fut))
+        now = _v4_card(_chips(li, monkeypatch))
+        monkeypatch.undo()
+        assert now == _v4_card(_chips_mod(li, monkeypatch, pre_z30_chips_module())) and head in now
+
+
+# ── §八 跨區揭露（真 §三 入口 `read_v4_macro_veto`）──────────────────────────
+_CAP_FUT8 = (f'（§三 籌碼的「{VETO_V4_ENGINE_NAME}」因外資期貨未取得而無法判定，'
+             '本區與該燈暫時無法比對）')
+_BOX8 = '兩套判定結論不一致'
+
+
+def _mid8(li, mp, chips_mod=None):
+    import tests.test_batch_z7 as Z7
+    mod = Z7._real(Z7._MID)
+    info = dict(Z7._MID_BASE)
+    info['vix'] = Z7._node(18.0)
+    fake = Z7._FakeSTFig({'macro_info': info, 'bias_info': {'bias_240': 5.0}, 'li_latest': li})
+    mp.setattr(mod, 'st', fake)
+    mp.setattr(SC, 'st', fake)
+    if chips_mod is not None:
+        mp.setattr(chips_mod, 'st', fake)
+        mp.setattr(SC, 'read_v4_macro_veto', chips_mod.read_v4_macro_veto)
+    mp.setattr(AS, 'apply_vix_veto', lambda *a, **k: None)
+    mp.setattr(AS, 'apply_ring_gate', lambda *a, **k: None)
+    mp.setattr(AS, 'register_conflict', lambda *a, **k: None)
+    mp.setattr(AS, 'get_allocation', lambda *a, **k: types.SimpleNamespace(is_loaded=False, final_hi=None))
+    mod.render_section_mid(False, {}, {}, {})
+    return list(fake.out)
+
+
+def _disc8(out):
+    return [(k, t) for k, t in out if (k == 'warning' and _BOX8 in t)
+            or (k == 'caption' and t.startswith('（§三 籌碼的「'))]
+
+
+#: 基底 `4591c5aa` 實跑：今日全缺＋昨日 −40,000 的整段 §八 sha256（揭露框列出「🔴 紅燈…外資期貨=-40,000 口」）。
+_PRE_MID8_GOLD = 'c31d07772909fb61921bfefe11cf7cfb82dc2dd2e880829dbb029616ba2a70b7'
+
+
+class TestSection8Disclosure:
+    @pytest.mark.parametrize('case', sorted(_LAST_MISSING))
+    def test_today_missing_caption(self, case, monkeypatch):
+        out = _mid8(_LAST_MISSING[case](), monkeypatch)
+        assert _disc8(out) == [('caption', _CAP_FUT8)], _disc8(out)
+        j = '\x1e'.join(t for _k, t in out)
+        assert '外資期貨=-' not in j and '外資期貨=3,000' not in j
+        assert not _INFNAN.search(_strip(j))
+
+    def test_pre_disclosed_yesterday_and_equals_base(self, monkeypatch):
+        out = _mid8(_TODAY_NAN(), monkeypatch, chips_mod=pre_z30_chips_module())
+        d = _disc8(out)
+        assert len(d) == 1 and d[0][0] == 'warning' and '外資期貨=-40,000 口' in d[0][1]
+        assert hashlib.sha256(repr(out).encode('utf-8')).hexdigest() == _PRE_MID8_GOLD
+
+    def test_only_disclosure_changed(self, monkeypatch):
+        new = _mid8(_TODAY_NAN(), monkeypatch)
+        monkeypatch.undo()
+        old = _mid8(_TODAY_NAN(), monkeypatch, chips_mod=pre_z30_chips_module())
+        diff = [i for i, (a, b) in enumerate(zip(new, old)) if a != b]
+        assert len(new) == len(old) and len(diff) == 1
+        assert new[diff[0]] == ('caption', _CAP_FUT8) and _BOX8 in old[diff[0]][1]
+
+    def test_today_finite_unchanged(self, monkeypatch):
+        li = _li(_DAY, _DAY)
+        new = _mid8(li, monkeypatch)
+        monkeypatch.undo()
+        old = _mid8(li, monkeypatch, chips_mod=pre_z30_chips_module())
+        assert new == old and '外資期貨=-40,000 口' in _disc8(new)[0][1]

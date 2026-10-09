@@ -108,7 +108,8 @@ def use_pre_qz7_scope(monkeypatch, mod=SC):
 @functools.lru_cache(maxsize=None)
 def _pre_chips_module():
     # 📌 批 Z30（Z29-n2，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：本還原體定義為「基底 d88fe462」，
-    #   故連同批 Z30 的兩處（§三 ffill、訊號 5 末列缺值）一併換回基底寫法（`Z30_CHIPS_REVERT_PAIRS`，同樣恰一次替換）。
+    #   故連同批 Z30 的各處（§三 ffill、訊號 5 末列缺值；批 Z30 續：`read_v4_macro_veto` 的 ffill）一併換回基底寫法
+    #   （`Z30_CHIPS_REVERT_PAIRS`，同樣恰一次替換）。
     from tests.test_batch_z30 import Z30_CHIPS_REVERT_PAIRS
     return _variant_module(SC, _PRE_CHIPS_PAIRS + Z30_CHIPS_REVERT_PAIRS, 'chips')
 
@@ -211,7 +212,7 @@ class TestC8n1bLastRowNonFinite:
     @pytest.mark.parametrize('case', sorted(_LAST_NONFINITE_BASE))
     def test_only_the_card_changed_vs_base(self, case, monkeypatch):
         mk, old_card, base_d = _LAST_NONFINITE_BASE[case]
-        # 📌 批 Z30（Z29-n2，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：末列 NaN 不再被 ffill 成前一日 ⇒ 表格／v5 卡／
+        # 📌 批 Z30（Z29-n2，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：末列 NaN 不再被 ffill 成前一日 ⇒ 表格／v5 卡／v4 燈（批 Z30 續）／
         #   原始值／CSV 亦隨之改變（由 test_batch_z30 斷言）。本測試守的是「批 Z28 只改這張卡」⇒ 改用只把批 Z30 換回基底的
         #   還原體（`pre_z30_chips_module`，其餘批次改動保留）實跑，斷言強度不變。
         from tests.test_batch_z30 import pre_z30_chips_module
@@ -437,6 +438,9 @@ class TestRevertedCopyIsTheBase:
         monkeypatch.undo()
         # 📌 批 Z30（Z29-n2，有意識的更正）：末列 NaN 不再 ffill ⇒ 現行碼另有表格／v5／原始值／CSV 差異（test_batch_z30 斷言）；
         #   本測試守「批 Z28 兩項改動恰改兩段」⇒ `new` 改用只把批 Z30 換回基底的還原體實跑。
+        # 📌 批 Z30（續，總管裁定，有意識的更正，⛔ 不是漏改）：`read_v4_macro_veto` 亦不再 ffill ⇒ 現行碼此例 v4 燈
+        #   不再是「ffill 後 −20,000 ⇒ 🔴」，改走引擎既有「⬜ 無法判定…外資期貨 未取得」（見本測試末段斷言）；
+        #   上方 `old`＝還原體（ffill 加回）仍逐字等於舊 golden，下方 `new`（只換回批 Z30）仍證明批 Z28 恰改兩段。
         from tests.test_batch_z30 import pre_z30_chips_module
         _mod = pre_z30_chips_module()
         use_pre_qz7_scope(monkeypatch, _mod)
@@ -447,6 +451,11 @@ class TestRevertedCopyIsTheBase:
         assert new[diff[0]][1] == _CARD_NEW
         assert '🔴 紅燈' in new[diff[1]][1] and '外資期貨=-20,000口' in new[diff[1]][1]
         assert '🟡 黃燈' in old[diff[1]][1]
+        # 現行碼（批 Z30 續）：末日外資期貨缺 ⇒ v4 燈 ⬜ 無法判定、不再以前一日 −20,000 判 🔴；其餘段與 `new` 的差異由 test_batch_z30 守。
+        monkeypatch.undo()
+        cur = _chips(_li([-20000.0, _N], [100.0, 110.0]), monkeypatch)
+        (v4,) = [t for _k, t in cur if '🏛️' in t and '引擎風險燈' in t]
+        assert '⬜ 無法判定' in v4 and '外資期貨=未取得' in v4 and '-20,000' not in v4
 
 
 # ══════════════════════════════════════════════════════════════════════════

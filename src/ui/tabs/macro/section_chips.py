@@ -107,8 +107,8 @@ def read_v4_macro_veto() -> dict | None:
     if _vix is None:
         return None
 
-    # 先行指標取「與畫面主表格同一份 ffill 後」的末筆：若 §三 吃 ffill 值、
-    # §八 吃原始 NaN，兩邊輸入不同 → 又會生出一次「同名不同結論」。
+    # 先行指標取「與畫面主表格同一份」的末筆：批 Z30（Z29-n2）起兩邊皆為原始值、不再 ffill
+    #   （末日缺值不得以前日冒充）⇒ 缺值走引擎既有「⬜ 無法判定…外資期貨 未取得」，§三／§八 仍同一份輸入。
     # 批 Z10（Y2-n10，§1）：外資期貨缺值不得當 0 —— 原預設 0.0 ＋ `or 0` 讓缺欄／整欄 None 走成
     #   「🟢 綠燈…外資期貨=0口 — 可依策略佈局」。改傳原值給引擎，由引擎既有 `_macro_number`
     #   （None／NaN／±inf／非數值 → None）判「⬜ 無法判定…外資期貨 未取得」；有限值與修前同一個 float。
@@ -121,8 +121,7 @@ def read_v4_macro_veto() -> dict | None:
     _li = st.session_state.get('li_latest')
     if _li is not None and not getattr(_li, 'empty', True):
         try:
-            _num_cols = [c for c in _li.columns if c != '日期']
-            _row = _li[_num_cols].ffill().iloc[-1]
+            _row = _li.iloc[-1]
             _fut = _row.get('外資大小')
             _pcr_v = _finite_yoy({'v': _row.get('選PCR')}, 'v')
             _pcr = None if _pcr_v is None else float(_pcr_v)
