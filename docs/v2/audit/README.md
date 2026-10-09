@@ -37,7 +37,7 @@
 
 ---
 
-## 目錄（16 份）
+## 目錄（18 份）
 
 ### 合規禁用語稽核 —— 五組不同角度，**刻意不互相參考**
 
@@ -81,6 +81,13 @@
 | `PB_LEVEL_TRACE.md` | 補漏專查：`classify_pb_level()` 的「🔴 超貴」有沒有流進 `tab_helpers.py:175` |
 | `DRAFT_GAP_AUDIT.md` | 完整儀表板草稿合稿前盤點（覆蓋度 / 矛盾 / 缺口 / 目錄提案）。**盤點文件，不是線框、不含前端代碼** |
 | `wf_fund_archive.md` | **純封存**：2026-09-15 客戶第二次明示「移除基金」後，線框稿裡因基金而擱置的紀錄，**移出畫面時逐字保存** |
+
+### 刪分支前的原文保全（逐字，**不是規格、不是現行版本**）
+
+| 檔 | 來源分支與 SHA | 內容 |
+|---|---|---|
+| `MACRO_CALIBRATION_PROPOSAL_20261001.md` | `auto/recalibrate-20261001` @`74fdb31a`（原路徑 `MACRO_CALIBRATION_PROPOSAL.md`，blob `5c6fe261`） | 2026-10-01 季度校準報告原文，逐字保存（客戶 2026-10-09 指示先保存再列刪除候選） |
+| `WIREFRAME_STOCK_IA_V1_DRAFT_20260905.html` | `wireframe/stock-ia-5pages` @`2744e8bc`（原路徑 `docs/wireframes/stock_ia_v1.html`，blob `6d695113`） | 2026-09-05 股票端 IA 線框**初稿**原文，逐字保存；main 已有後續版本，⛔ **以 main 為準**，本檔只為刪分支後不丟原文 |
 
 ### 📌 `CHECKPOINT.md` —— **不是本輪產出**，而且它記的是一個**已知缺口**
 
