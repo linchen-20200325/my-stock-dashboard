@@ -134,7 +134,10 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
     _ai1_lbl, _ai1_clr, _ai1_desc, _ai1_cyc = (
         '資料載入中', '#484f58', '請先按上方「🚀 一鍵更新全部數據」', None)
     _cycle_ref = _ai_cli if _ai_cli is not None else (_ai_pmi if _ai_pmi is not None else None)
-    _cycle_exp = (_cycle_ref >= 100.0) if (_ai_cli is not None) else (_cycle_ref >= 50.0 if _cycle_ref is not None else None)
+    _cycle_exp = (_cycle_ref >= 100.0) if (_ai_cli is not None) else (_cycle_ref > 50.0 if _cycle_ref is not None else None)
+    # 批 Z19（客戶裁示 PMI=50 ＝ 中性／榮枯線）：PMI 恰 =50（非 CLI）既非擴張也非收縮 →
+    #   走既有「景氣整理期」分支（`_ai1_cyc='neutral'`）；出口缺時標「景氣整理期（出口待確認）」。
+    _pmi_neutral = _ai_cli is None and _ai_pmi is not None and not _cycle_exp and _ai_pmi >= 50.0
     # ── v19.183 D2:`_cycle_exp is None`(PMI/CLI 都沒抓到)不得走「收縮」分支 ──────
     # 【原缺陷】舊條件寫 `elif not _cycle_exp and ...`。Python 的 `not None` 是 **True**,
     # 所以 PMI 與 CLI **雙雙抓不到**時,這兩條分支照樣成立,卡片印出
@@ -157,10 +160,10 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
         elif _cycle_exp and _ai_exp <= 0:
             _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣高峰震盪 ⚡', TRAFFIC_YELLOW, 'peak'
             _ai1_desc = f'{_cli_str}（微擴張）× {_exp_str}— 高位整理，需求疲軟，留意反轉訊號'
-        elif not _cycle_exp and _ai_exp >= 5:
+        elif not _cycle_exp and not _pmi_neutral and _ai_exp >= 5:
             _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣觸底回升 💎', '#58a6ff', 'recovery'
             _ai1_desc = f'{_cli_str}（收縮但出口反彈）× {_exp_str}— 左側佈局黃金窗口'
-        elif not _cycle_exp and _ai_exp < 0:
+        elif not _cycle_exp and not _pmi_neutral and _ai_exp < 0:
             _ai1_lbl, _ai1_clr, _ai1_cyc = '景氣收縮期 📉', '#8b949e', 'bear'
             _ai1_desc = f'{_cli_str}（收縮）× {_exp_str}— 多看少做，等待出口數據翻正'
         else:
@@ -168,7 +171,8 @@ def render_section_cross_ai(tech_s: dict, tw_s: dict) -> None:
             _ai1_desc = f'{_cli_str} × {_exp_str}— 方向待確認，保守持股'
     elif _cycle_exp is not None:
         _cli_str = f'OECD CLI={_ai_cli:.2f}' if _ai_cli is not None else f'台灣 PMI={_ai_pmi:.1f}'
-        _ai1_lbl = '景氣擴張（出口待確認）' if _cycle_exp else '景氣趨緩（出口待確認）'
+        _ai1_lbl = ('景氣擴張（出口待確認）' if _cycle_exp else
+                    '景氣整理期（出口待確認）' if _pmi_neutral else '景氣趨緩（出口待確認）')
         _ai1_clr = TRAFFIC_GREEN if _cycle_exp else TRAFFIC_YELLOW
         _ai1_cyc = 'bull' if _cycle_exp else 'neutral'
         _ai1_desc = f'{_cli_str} — 台灣出口數據載入中'

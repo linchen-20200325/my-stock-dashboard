@@ -435,7 +435,7 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 ### 📈 中期（景氣循環 3-12 月）
 | 指標 | 單位 | 🟢 綠 | 🟡 黃線 | 🔴 紅線 | 方向 | 來源 |
 |---|---|---|---|---|---|---|
-| 台灣 PMI | — | >50 | 46–50 收縮 | ≤46 嚴重收縮 | low_bad | 🔵MACRO_THRESHOLDS.PMI |
+| 台灣 PMI | — | >50 | 46–50（=50 中性／榮枯線；<50 收縮） | ≤46 嚴重收縮 | low_bad | 🔵MACRO_THRESHOLDS.PMI |
 | 美國核心 CPI YoY | % | <3.5 | 3.5–4.0 | ≥4.0 通膨嚴峻 | high_bad | 🔵MACRO_THRESHOLDS.CPI |
 | 台灣出口訂單 YoY | % | >0 | −5–0 | ≤−5 連續衰退 | low_bad | 🔵出口否決權 −5% |
 | 年線乖離 BIAS240 | % | <10 | 10–20 | ≥20 正乖離過熱 | high_bad | 🔵±20+⚪10（負乖離=超賣機會非危險）|

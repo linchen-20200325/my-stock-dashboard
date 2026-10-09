@@ -394,10 +394,13 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                         f'（{_asof(_ndc_v)}；國發會 9 項指標合成，分數越高景氣越熱；'
                         f'{_danger_rule("ndc_signal")}）')
                 if _pmi_cur is not None:
+                    # 批 Z19：榮枯線＝ism_pmi 黃線（L0 SSOT 插值，不寫死裸數字）
+                    from shared.macro_buckets import SPECS_BY_KEY as _bk_specs
+                    _pmi_mid = f'{_bk_specs["ism_pmi"].yellow:g}'
                     _ctx.append(f'• {_stale("ism_pmi", _pmi_d)}'
                                 f'台灣 PMI（製造業採購經理人指數）：{_pmi_cur}'
                                 f'（{_asof(_pmi_d)}；{_danger_rule("ism_pmi")}；'
-                                f'黃線即榮枯分界，低於代表製造業收縮）')
+                                f'{_pmi_mid} 為榮枯線：>{_pmi_mid} 擴張、={_pmi_mid} 中性、<{_pmi_mid} 收縮）')
                 if _exp_d.get('yoy') is not None:
                     # v19.178 正名:`tw_export` = 財政部海關**出口**年增率,不是經濟部
                     # 外銷訂單(v19.85 已於畫面正名,此處為漏網的第二份)。

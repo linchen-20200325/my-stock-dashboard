@@ -92,10 +92,12 @@ def _spec(key: str):
 def test_ism_pmi_fixed_text_matches_thresholds():
     from src.data.macro import MACRO_THRESHOLDS
     spec = _spec("ism_pmi")
-    m = re.search(r"<(\d+(?:\.\d+)?) 收縮／<(\d+(?:\.\d+)?) 嚴重收縮", spec.source)
-    assert m, spec.source
+    # 批 Z19：寫死的「<50 收縮／<46 嚴重收縮」由 source 括號移入 note（「… / <50 收縮 / ≤46 嚴重收縮」；
+    #   ≤46 依 Q-r9d 等號歸較差側，與 classify_danger 一致），守衛跟著改釘 note 的寫死數字（同一組比對，未放寬）。
+    m = re.search(r"<(\d+(?:\.\d+)?) 收縮 / ≤(\d+(?:\.\d+)?) 嚴重收縮", spec.note)
+    assert m, spec.note
     yellow_txt, red_txt = float(m.group(1)), float(m.group(2))
-    assert (yellow_txt, red_txt) == (spec.yellow, spec.red), spec.source
+    assert (yellow_txt, red_txt) == (spec.yellow, spec.red), spec.note
     pmi = MACRO_THRESHOLDS["PMI"]
     assert (yellow_txt, red_txt) == (float(pmi["yellow_below"]), float(pmi["red_below"]))
 
