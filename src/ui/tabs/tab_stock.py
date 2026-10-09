@@ -1698,6 +1698,9 @@ padding:14px 18px;margin-bottom:12px;">
                 macro_stale_legend as _msl2,
                 macro_stale_prefix as _msp2,
             )
+            # 批 Z19：PMI 榮枯線＝ism_pmi 黃線（L0 SSOT 插值，不寫死裸數字）
+            from shared.macro_buckets import SPECS_BY_KEY as _bk_specs2
+            _pmi_mid2 = f'{_bk_specs2["ism_pmi"].yellow:g}'
             # ── G1（2026-08-07）：月頻指標補 as_of 月份 + 過期標記 ────────────
             # 本段的 5 條裡，CPI 與台灣 PMI 是**月頻**（其餘 VIX / US10Y / SOX 是日頻，
             # 過期語意不同，不套本標記）。原本兩條都不帶日期 → 一份兩個月前的 CPI 與
@@ -1738,7 +1741,7 @@ padding:14px 18px;margin-bottom:12px;">
                         f"{_msp2('ism_pmi', _pmi_blk2.get('date'))}"
                         f"🇹🇼 台灣 PMI={float(_pmi_v2):.1f}"
                         f"（{_asof2(_pmi_blk2)}；CIER；{_drt2('ism_pmi')}；"
-                        f"黃線即榮枯分界，低於代表製造業收縮；台灣製造業景氣領先指標）")
+                        f"{_pmi_mid2} 為榮枯線：>{_pmi_mid2} 擴張、={_pmi_mid2} 中性、<{_pmi_mid2} 收縮；台灣製造業景氣領先指標）")
                 except (TypeError, ValueError):
                     pass
             _tnx_v2 = (_intl_snap2.get('tnx') or {}).get('last') or _ma_snap2.get('us10y')

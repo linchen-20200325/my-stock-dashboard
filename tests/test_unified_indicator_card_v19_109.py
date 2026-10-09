@@ -30,7 +30,8 @@ def test_band_tables_lock_legacy_thresholds():
     )
     assert [b[0] for b in NDC_SIGNAL_BANDS][:4] == [38.0, 32.0, 23.0, 17.0]
     assert [b[0] for b in TW_EXPORT_YOY_BANDS][:2] == [0.0, -5.0]
-    assert [b[0] for b in TW_PMI_CARD_BANDS][:2] == [50.0, 47.0]
+    # 批 Z19：PMI 增 =50 中性帶（與擴張帶同 lo=50，擴張帶依慣例取嚴格 >50）
+    assert [b[0] for b in TW_PMI_CARD_BANDS][:3] == [50.0, 50.0, 47.0]
     assert [b[0] for b in US_CORE_CPI_YOY_BANDS][:2] == [3.5, 2.5]
     assert [b[0] for b in FED_FUNDS_RATE_BANDS][:2] == [5.0, 3.0]
     for _tbl in (NDC_SIGNAL_BANDS, TW_EXPORT_YOY_BANDS, TW_PMI_CARD_BANDS,
@@ -97,7 +98,8 @@ class TestCardRender:
         assert '製造業景氣問卷' in html          # 俗名
         assert '燈義：' in html and '輕微收縮' in html   # 燈義(來自 band 表)
         assert '原理：' in html and '50 榮枯線' in html  # 原理
-        assert '門檻帶：' in html and '≥50' in html      # 門檻帶(同源)
+        # 批 Z19：PMI 擴張帶改 >50、新增 =50 中性帶 → 門檻帶字樣隨表同步
+        assert '門檻帶：' in html and '✅>50｜🟡=50｜⚠️≥47' in html      # 門檻帶(同源)
         assert '(2026-06)' in html
 
     def test_pending_card_honest(self):

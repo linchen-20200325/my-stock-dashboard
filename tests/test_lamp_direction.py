@@ -487,8 +487,13 @@ class TestRenderLive:
                     "bias_240": "SSOT:macro_helpers ±20 + DESIGN(10)",
                     "m1b_m2_gap": "DESIGN:資金動能交叉慣例",
                     "ism_pmi": "SSOT:MACRO_THRESHOLDS.PMI"}
+        # 批 Z19（客戶裁示 PMI=50 ＝ 中性／榮枯線）：ism_pmi 的 `note` 改字。黃金值同樣**不重算**：
+        # 把 note 壓回 10f385c 原字串再比；新字句另由 `tests/test_batch_z19.py` 逐字守。
+        _old_note = {"ism_pmi": "<50 收縮 / <46 嚴重收縮"}
         monkeypatch.setattr(P, "SPECS_BY_KEY", {
-            k: (dataclasses.replace(v, source=_old_src[k]) if k in _old_src else v)
+            k: (dataclasses.replace(v, source=_old_src[k],
+                                    **({"note": _old_note[k]} if k in _old_note else {}))
+                if k in _old_src else v)
             for k, v in P.SPECS_BY_KEY.items()})
         full = _flat(P.build_indicator_tiles(_live_readout(), directions=_directions(), **kw))
         # SA2-f14（2026-10-01）：今天頁摺疊區改 `fold_truncate=False`（不截斷，同另四頁）。
