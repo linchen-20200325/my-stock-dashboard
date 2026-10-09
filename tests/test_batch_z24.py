@@ -26,6 +26,7 @@ import pytest
 from src.data.macro.leading_indicators import render_leading_table
 from tests.test_batch_z10 import _chips, _digest
 from tests.test_batch_z21 import _COLS, _cells, _txt
+from tests.test_batch_z28 import use_pre_qz7_scope
 
 #: 獨立字詞的 inf／nan（排除「YFinance」等既有字句）
 _INFNAN = re.compile(r'(?<![A-Za-z])(inf|nan)(?![A-Za-z])', re.I)
@@ -81,6 +82,9 @@ class TestSignal1OptNonFinite:
     @pytest.mark.parametrize('case', sorted(_BASE))
     def test_finite_unchanged(self, case, monkeypatch):
         kw, gold = self._BASE[case]
+        # 📌 批 Z28（客戶 Q-z7＝A，有意識的更正，⛔ 不是漏改）：§三 v4 卡範圍說明「空單超過 2 萬口…超過 1 萬口」改「達」，
+        #   本段 golden 為修字前實跑；改用 `use_pre_qz7_scope`（只把該說明恰一次還原為修前字）保留原 digest，新字由 test_batch_z28 斷言。
+        use_pre_qz7_scope(monkeypatch)
         assert _digest(_chips(_li_s(**kw), monkeypatch)) == gold
 
     def test_finite_still_alerts(self, monkeypatch):
@@ -134,6 +138,9 @@ class TestSignal3NonFinite:
     @pytest.mark.parametrize('case', sorted(_BASE))
     def test_finite_unchanged(self, case, monkeypatch):
         kw, gold = self._BASE[case]
+        # 📌 批 Z28（客戶 Q-z7＝A，有意識的更正，⛔ 不是漏改）：§三 v4 卡範圍說明「空單超過 2 萬口…超過 1 萬口」改「達」，
+        #   本段 golden 為修字前實跑；改用 `use_pre_qz7_scope`（只把該說明恰一次還原為修前字）保留原 digest，新字由 test_batch_z28 斷言。
+        use_pre_qz7_scope(monkeypatch)
         assert _digest(_chips(_li_s(fnet=-1000.0, **kw), monkeypatch)) == gold
 
     def test_finite_still_alerts(self, monkeypatch):

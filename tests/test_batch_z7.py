@@ -322,6 +322,12 @@ _V4_CARD = ('<div style="border-left:5px solid {c};background:#0d1117;padding:9p
             '<span style="font-size:11px;color:#888888;">📌 本燈只看【VIX（超過 25 紅燈／超過 20 黃燈）× '
             '外資期貨淨口數（空單超過 2 萬口 紅燈／超過 1 萬口 黃燈）】—— 不含 PMI／CPI／出口／NDC。'
             '景氣與通膨面請見 §八 總經拼圖的「總經基本面否決檢查」。</span></div>')
+#: 📌 批 Z28（客戶 Q-z7＝A「照擬句修改」，有意識的更正，⛔ 不是漏改）：範圍說明「空單超過 2 萬口 紅燈／超過 1 萬口 黃燈」
+#:   → 「空單達 2 萬口 紅燈／達 1 萬口 黃燈」（與 Q-z5 等號歸較差側一致）。上方凍結樣板一字未改，只對這一段做恰一次替換。
+_Z28_OLD_FUT_SCOPE = '空單超過 2 萬口 紅燈／超過 1 萬口 黃燈'
+_Z28_NEW_FUT_SCOPE = '空單達 2 萬口 紅燈／達 1 萬口 黃燈'
+assert _V4_CARD.count(_Z28_OLD_FUT_SCOPE) == 1
+_V4_CARD = _V4_CARD.replace(_Z28_OLD_FUT_SCOPE, _Z28_NEW_FUT_SCOPE)
 _UNKNOWN_CARD = _V4_CARD.format(
     c="#888888", status="⬜ 無法判定",
     msg="VIX 未取得，v4 引擎風險燈無法判定 — 請先按「🚀 一鍵更新全部數據」補齊 VIX 後再看本卡。")

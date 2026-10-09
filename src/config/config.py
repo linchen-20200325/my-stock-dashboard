@@ -156,7 +156,7 @@ VETO_FUNDAMENTAL_SCOPE_NOTE = (
 VETO_V4_ENGINE_NAME = 'v4 引擎風險燈'
 VETO_V4_ENGINE_INPUTS = (
     'VIX（超過 25 紅燈／超過 20 黃燈）× '
-    '外資期貨淨口數（空單超過 2 萬口 紅燈／超過 1 萬口 黃燈）'
+    '外資期貨淨口數（空單達 2 萬口 紅燈／達 1 萬口 黃燈）'
 )
 VETO_V4_ENGINE_SCOPE_NOTE = (
     f'本燈只看【{VETO_V4_ENGINE_INPUTS}】—— 不含 PMI／CPI／出口／NDC。'

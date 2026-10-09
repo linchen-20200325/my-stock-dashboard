@@ -94,6 +94,17 @@ def use_pre_z28_v4(monkeypatch, mod=SC):
     monkeypatch.setattr(mod, 'V4StrategyEngine', pre_z28_v4_class())
 
 
+_QZ7_NEW_SCOPE = '空單達 2 萬口 紅燈／達 1 萬口 黃燈'
+_QZ7_OLD_SCOPE = '空單超過 2 萬口 紅燈／超過 1 萬口 黃燈'
+
+
+def use_pre_qz7_scope(monkeypatch, mod=SC):
+    """讓 §三（`mod`）v4 卡範圍說明恰一次還原為 Q-z7 修字前（「超過」）—— 供修字前寫死的 §三 golden 保留原 digest。"""
+    note = mod.VETO_V4_ENGINE_SCOPE_NOTE
+    assert note.count(_QZ7_NEW_SCOPE) == 1
+    monkeypatch.setattr(mod, 'VETO_V4_ENGINE_SCOPE_NOTE', note.replace(_QZ7_NEW_SCOPE, _QZ7_OLD_SCOPE))
+
+
 @functools.lru_cache(maxsize=None)
 def _pre_chips_module():
     return _variant_module(SC, _PRE_CHIPS_PAIRS, 'chips')
@@ -197,6 +208,7 @@ class TestC8n1bLastRowNonFinite:
     @pytest.mark.parametrize('case', sorted(_LAST_NONFINITE_BASE))
     def test_only_the_card_changed_vs_base(self, case, monkeypatch):
         mk, old_card, base_d = _LAST_NONFINITE_BASE[case]
+        use_pre_qz7_scope(monkeypatch)   # golden 為 Q-z7 修字前實跑（見 use_pre_qz7_scope）
         out = _chips(mk(), monkeypatch)
         idx = [i for i, (_k, t) in enumerate(out) if t == _CARD_NEW]
         assert len(idx) == 1
@@ -215,6 +227,7 @@ class TestC8n1bOtherPathsUnchanged:
     @pytest.mark.parametrize('case', sorted(_FINITE_LAST_BASE))
     def test_finite_last_digest_equals_base(self, case, monkeypatch):
         mk, want = _FINITE_LAST_BASE[case]
+        use_pre_qz7_scope(monkeypatch)   # golden 為 Q-z7 修字前實跑
         assert _digest(_chips(mk(), monkeypatch)) == want
 
     @pytest.mark.parametrize('fut', [[None], [_N, _N], [_I, -_I]])
@@ -403,15 +416,18 @@ class TestRevertedCopyIsTheBase:
     @pytest.mark.parametrize('case', sorted(_LAST_NONFINITE_BASE))
     def test_pre_chips(self, case, monkeypatch):
         mk, _old, base_d = _LAST_NONFINITE_BASE[case]
+        use_pre_qz7_scope(monkeypatch, _pre_chips_module())
         assert _digest(_chips(mk(), monkeypatch, _pre_chips_module())) == base_d
 
     def test_b_last_nan(self, monkeypatch):
         """原 z10 `b_last_nan`：末列 NaN（卡片改「📌 外資期貨 未取得」）＋ ffill 後 −20,000（v4 燈 🟡→🔴）。"""
         pre = _pre_chips_module()
         monkeypatch.setattr(pre, 'V4StrategyEngine', pre_z28_v4_class())
+        use_pre_qz7_scope(monkeypatch, pre)
         old = _chips(_li([-20000.0, _N], [100.0, 110.0]), monkeypatch, pre)
         assert _digest(old) == _B_LAST_NAN_BASE
         monkeypatch.undo()
+        use_pre_qz7_scope(monkeypatch)
         new = _chips(_li([-20000.0, _N], [100.0, 110.0]), monkeypatch)
         assert len(new) == len(old)
         diff = [i for i, (a, b) in enumerate(zip(old, new)) if a != b]
@@ -419,3 +435,56 @@ class TestRevertedCopyIsTheBase:
         assert new[diff[0]][1] == _CARD_NEW
         assert '🔴 紅燈' in new[diff[1]][1] and '外資期貨=-20,000口' in new[diff[1]][1]
         assert '🟡 黃燈' in old[diff[1]][1]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 4. Q-z7（客戶 2026-10-09 核准，原文：「照擬句修改，與 Z28 一起合併。目的僅為讓使用者可見說明與已核准的門檻
+#    等號歸屬一致，不再延伸修改其他門檻、判定邏輯或字句。」）—— v4 外資期貨門檻說明字與 `<=` 一致
+# ══════════════════════════════════════════════════════════════════════════
+#: 基底 d88fe462（與本批修字前 4774e293 同）實跑 `render_tab_edu()` 整段輸出 sha256（72 段）
+_EDU_BASE = 'e8f2b7635fb9740cea4cbf00e7103e5b74b88a545549f863788ab9a153fb2ae2'
+#: (修後逐字, 修前逐字) —— 只有外資期貨 v4 門檻的比較符號 `<` → `≤`；VIX 的 `>` 不動
+_EDU_PAIRS = (
+    ('🟡 期貨淨部位 ≤ -10,000 口 ／ 🔴 ≤ -20,000 口；', '🟡 期貨淨部位 < -10,000 口 ／ 🔴 < -20,000 口；'),
+    ('🔴 VIX > 25    或  期貨淨部位 ≤ -20,000 口', '🔴 VIX > 25    或  期貨淨部位 < -20,000 口'),
+    ('🟡 VIX > 20 或  期貨淨部位 ≤ -10,000 口', '🟡 VIX > 20 或  期貨淨部位 < -10,000 口'),
+)
+
+
+def _edu_out(mp):
+    import src.ui.tabs.tab_edu as M
+    fake = _FakeST({})
+    mp.setattr(M, 'st', fake)
+    mp.setattr(M, '_fetch_fred_series_edu', lambda *a, **k: None)
+    M.render_tab_edu()
+    return list(fake.out)
+
+
+class TestQz7Wording:
+    def test_v4_engine_inputs_exact(self):
+        from src.config import VETO_V4_ENGINE_INPUTS, VETO_V4_ENGINE_SCOPE_NOTE
+        assert VETO_V4_ENGINE_INPUTS == ('VIX（超過 25 紅燈／超過 20 黃燈）× '
+                                         '外資期貨淨口數（空單達 2 萬口 紅燈／達 1 萬口 黃燈）')
+        assert '超過 2 萬口' not in VETO_V4_ENGINE_SCOPE_NOTE and '超過 1 萬口' not in VETO_V4_ENGINE_SCOPE_NOTE
+        assert '空單達 2 萬口 紅燈／達 1 萬口 黃燈' in VETO_V4_ENGINE_SCOPE_NOTE
+
+    def test_section3_v4_card_shows_new_scope(self, monkeypatch):
+        out = _chips(_li([-16000.0], [110.0]), monkeypatch)
+        cards = [t for _k, t in out if '🏛️ v4 引擎風險燈' in t]
+        assert len(cards) == 1
+        assert '空單達 2 萬口 紅燈／達 1 萬口 黃燈' in cards[0] and '超過 2 萬口' not in cards[0]
+        assert 'VIX（超過 25 紅燈／超過 20 黃燈）' in cards[0]
+
+    def test_edu_new_phrases_present_old_gone(self, monkeypatch):
+        txt = '\x1e'.join(t for _k, t in _edu_out(monkeypatch))
+        for new, old in _EDU_PAIRS:
+            assert txt.count(new) == 1, new
+            assert old not in txt, old
+
+    def test_edu_only_these_three_changed_vs_base(self, monkeypatch):
+        out = _edu_out(monkeypatch)
+        joined = '\x1e'.join(f'{k}\x1f{t}' for k, t in out)
+        for new, old in _EDU_PAIRS:
+            assert joined.count(new) == 1
+            joined = joined.replace(new, old)
+        assert hashlib.sha256(joined.encode('utf-8')).hexdigest() == _EDU_BASE
