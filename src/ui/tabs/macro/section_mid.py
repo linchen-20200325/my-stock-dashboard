@@ -448,7 +448,16 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
     #   回 None 才走缺值句（與 fd989ae 相同）。根因「§三 收下無效 VIX」屬 section_chips、
     #   不在本批範圍，總管另登記為新項。
 
-    if _fund_evaluable and _v4_light is not None:
+    if (_fund_evaluable and _v4_light is not None
+            and str(_v4_light.get('status', '')).startswith('⬜') and not _has_veto):
+        # 批 Z27（Z19-n6，客戶 2026-10-09 Q-z2＝A 核准字句）：§三 判「⬜ 無法判定」（VIX 有效、外資期貨未取得；
+        #   VIX 無效時入口回 None，走下方既有缺值句）—— 那盞燈沒有結論，不得當成「有風險訊號」去比對而印
+        #   「兩套判定結論不一致」框；改出與下方缺值句同款的 caption。🟢／🔴／🟡 等已判定狀態走原框，一字未動。
+        #   總管裁定最小改動：只替換「原本會出框」的情境（`not _has_veto`）；本區已觸發時原本就不出框，維持不出。
+        st.caption(
+            f'（§三 籌碼的「{VETO_V4_ENGINE_NAME}」因外資期貨未取得而無法判定，'
+            '本區與該燈暫時無法比對）')
+    elif _fund_evaluable and _v4_light is not None:
         # 綠燈以外（🔴/🟡）都算「籌碼側有風險訊號」。
         _v4_risk = not str(_v4_light.get('status', '')).startswith('🟢')
         # 批 Z10（Y2-n10，§1）：§三 外資期貨缺值時 `_futures` 為 None（不再當 0）⇒ 走引擎既有缺值字「未取得」，
