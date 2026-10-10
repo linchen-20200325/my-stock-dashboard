@@ -208,6 +208,11 @@ def _tool_get_market_state() -> dict:
     except Exception as _e:      # noqa: BLE001 — 附加欄位缺席不影響主結論
         print(f"[ai_qa regime] 讀 macro_state.json 附加欄位失敗:{type(_e).__name__}: {_e}")
     _extra = {k: _file[k] for k in ("systemic_risk_level", "Macro_Phase") if k in _file}
+    # 批 Z34（客戶 2026-10-10 Q-z12／Q-z14）：規則引擎 8 項輸入全缺時落檔的 fail-safe（「系統異常」＋引擎的
+    #   `missing_inputs`）是「缺資料」，不得把它的「危險／系統異常」當鎖定快照結論附給 AI；同 §十一 判斷式。
+    #   AI 失敗檔（無 missing_inputs）、部分有效檔（不是「系統異常」）照舊附。
+    if _file.get("market_regime") == "系統異常" and _file.get("missing_inputs"):
+        _extra = {}
     if _extra:
         _data["鎖定快照額外欄位_macro_state_json"] = _extra
     return {"ok": True, "data": _data,

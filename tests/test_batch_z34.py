@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import src.services.ai_qa_service as QA
 import src.services.allocation_service as AS
 import src.services.macro_state_locker as MSL
 import src.ui.tabs.macro.section_chips as SC
@@ -612,6 +613,22 @@ _Z34_NEWS_BLOCK = (
     "        #   同樣不得畫成「危險」。AI 失敗檔不帶 `missing_inputs`、部分有效檔不會是「系統異常」⇒ 皆不受影響。\n"
     "        if not _ms_ts or (_regime == '系統異常' and _ms.get('missing_inputs')):\n"
     "            _srl = '無法判定'\n")
+_Z34_NEWS_PROMPT = (
+    "                # 批 Z34（客戶 2026-10-10 Q-z12／Q-z14）：8 項輸入全缺的 fail-safe（「系統異常」＋`missing_inputs`）\n"
+    "                #   不把它的「危險／曝險 0／系統異常」當系統結論送 AI（只留市場體制與缺項清單）；其餘情形送原物件、逐字不變。\n"
+    "                _v_state_ai = (\n"
+    "                    {k: v for k, v in _system_state.items()\n"
+    "                     if k not in ('systemic_risk_level', 'exposure_limit_pct', 'Macro_Phase')}\n"
+    "                    if (_system_state.get('market_regime') == '系統異常' and _system_state.get('missing_inputs'))\n"
+    "                    else _system_state)\n"
+    "                _v_state_json = json.dumps(_v_state_ai, ensure_ascii=False, indent=2)\n")
+_Z34_NEWS_PROMPT_OLD = "                _v_state_json = json.dumps(_system_state, ensure_ascii=False, indent=2)\n"
+_Z34_QA_BLOCK = (
+    "    # 批 Z34（客戶 2026-10-10 Q-z12／Q-z14）：規則引擎 8 項輸入全缺時落檔的 fail-safe（「系統異常」＋引擎的\n"
+    "    #   `missing_inputs`）是「缺資料」，不得把它的「危險／系統異常」當鎖定快照結論附給 AI；同 §十一 判斷式。\n"
+    "    #   AI 失敗檔（無 missing_inputs）、部分有效檔（不是「系統異常」）照舊附。\n"
+    "    if _file.get(\"market_regime\") == \"系統異常\" and _file.get(\"missing_inputs\"):\n"
+    "        _extra = {}\n")
 _Z34_MSL_EARLY = (
     "    # 批 Z34（Z9-n2，客戶 2026-10-10 Q-z14＝A）：8 項數值輸入**全缺**時，下方計分只剩中性基準 60，\n"
     "    #   修前落檔「震盪／警告／曝險上限 60%」—— 沒有任何資料卻給出正常投資結論。改回既有 fail-safe\n"
@@ -657,7 +674,8 @@ Z34_REVERT_PAIRS = {
          "                f'{\"\" if _ring1_undecided else \"（已納入本環天花板）\"}</div>'\n",
          "                f'📌 本判定僅提供「火力分級」；實際持股請看 🎚️ 建議持股油門（已納入本環天花板）</div>'\n"),
     ),
-    'news': ((_Z34_NEWS_BLOCK, ''),),
+    'news': ((_Z34_NEWS_BLOCK, ''), (_Z34_NEWS_PROMPT, _Z34_NEWS_PROMPT_OLD)),
+    'qa': ((_Z34_QA_BLOCK, ''),),
     'msl': (
         (_Z34_MSL_EARLY, ''),
         ("        # 批 Z34（Q-z14）：收到 `calculate_system_state` 的 fail-safe（「系統異常」）時，摘要沿用 `_DEFAULT_STATE`\n"
@@ -699,6 +717,7 @@ _Z34_FILES = {
     'news': ('src/ui/tabs/macro/section_news_ai.py', NEWS),
     'msl': ('src/services/macro_state_locker.py', MSL),
     'as': ('src/services/allocation_service.py', AS),
+    'qa': ('src/services/ai_qa_service.py', QA),
 }
 #: 基底 `76cac7cb` 原始檔 sha256（`git show 76cac7cb:<檔> | sha256sum` 實算；寫死以免測試依賴 git）。
 _Z34_BASE_SHA = {
@@ -706,6 +725,7 @@ _Z34_BASE_SHA = {
     'news': '3bccaf9ae90920e881e72bc95291af4f1bf066f746e481146958e6736f48d89c',
     'msl': '9ecd5dc55b76ce81daa3c7c4dcaf3f01a5f0cdcb024bddcd9c664a07d3874105',
     'as': 'b0890c5600fa6d00e190f977a14866c04d93b43009049ed6c8a534d23a0946c0',
+    'qa': 'ee8c2f35d889f51d4ab7862a200670cc63489aa91e6f5a2d5d0acfb10c41409c',
 }
 
 
@@ -725,8 +745,11 @@ def _z34_source(key: str) -> str:
 def _z34_load(key: str, code: str, tag: str):
     import importlib.util
     real = _Z34_FILES[key][1]
-    m = importlib.util.module_from_spec(importlib.util.spec_from_loader(f'_z34_{key}_{tag}', loader=None))
+    import sys
+    name = f'_z34_{key}_{tag}'
+    m = importlib.util.module_from_spec(importlib.util.spec_from_loader(name, loader=None))
     m.__file__ = real.__file__
+    sys.modules[name] = m          # dataclass 等需要以模組名回查
     exec(compile(code, real.__file__, 'exec'), m.__dict__)
     return m
 
@@ -751,3 +774,109 @@ def test_pre_module_reproduces_base_behaviour(monkeypatch, tmp_path):
     vix, fut, gold = _MID_BASE['futnoli']
     assert _digest(_mid(monkeypatch, vix, fut, mod=z34_pre_module('mid'))) == gold
     assert z34_pre_module('msl').calculate_system_state({}) == _ENGINE_ALL_MISSING_BASE
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5. 獨立 QA（總管裁定必修）：全缺 fail-safe 落檔的下游 —— ai_qa 附加欄位、§十一 送 AI 的系統判斷段
+# ══════════════════════════════════════════════════════════════════════════
+_WR = {'health_score': 62.0, 'effective_regime': 'bull', 'light': '🟢', 'regime_source': 'x',
+       'traffic_light': 'x', 'regime': 'bull'}
+_EXTRA_KEY = '鎖定快照額外欄位_macro_state_json'
+
+
+def _qa_market_state(mp, d, *, mod=QA, wr=_WR):
+    mp.chdir(d)
+    mp.setattr(AS, 'st', types.SimpleNamespace(session_state={'warroom_summary': dict(wr)}))
+    mp.setattr(MSL, 'macro_state_is_expired', lambda *a, **k: False)
+    return mod._tool_get_market_state()
+
+
+def _write_lock(mp, d, inp=None, *, ai_fail=False):
+    mp.setattr(MSL, '_now_str', lambda: _TS)
+    d.mkdir(exist_ok=True)
+    f = str(d / 'macro_state.json')
+    if ai_fail:
+        def _bad(prompt):
+            raise RuntimeError('x')
+        MSL.MacroStateLocker(llm_client=_bad, state_file_path=f).execute_and_lock({}, [])
+    else:
+        MSL.MacroStateLocker(state_file_path=f).lock_system_state_only(
+            {**MSL.calculate_system_state(inp), 'm1b_m2_data_month': None})
+    return d
+
+
+class TestQaDownstreamAllMissing:
+    def test_ai_qa_no_danger_extra(self, monkeypatch, tmp_path):
+        """全缺落檔＋session 有紅綠燈結論：ai_qa 仍 ok（結論來自紅綠燈），但不附「危險／系統異常」。"""
+        d = _write_lock(monkeypatch, tmp_path / 'q1', {})
+        r = _qa_market_state(monkeypatch, d)
+        assert r['ok'] is True and _EXTRA_KEY not in r['data']
+        assert r['data']['exposure_limit_pct'] is None
+        assert '危險' not in json.dumps(r, ensure_ascii=False)
+        # 修前碼（本批 L3／ai_qa 皆還原）同情境：附「警告／8 項未評估」＋曝險 60（本批要消掉的）
+        pre_msl = z34_pre_module('msl')
+        pre_msl.MacroStateLocker(state_file_path=str(d / 'macro_state.json')).lock_system_state_only(
+            {**pre_msl.calculate_system_state({}), 'm1b_m2_data_month': None})
+        rb = _qa_market_state(monkeypatch, d, mod=z34_pre_module('qa'))
+        assert rb['data'][_EXTRA_KEY] == {'systemic_risk_level': '警告', 'Macro_Phase': '8 項未評估（缺資料不計分）'}
+        assert rb['data']['exposure_limit_pct'] == 60
+
+    @pytest.mark.parametrize('kind', ['ai_fail', 'vix15', 'vix36', 'sahm'])
+    def test_ai_qa_other_files_unchanged(self, kind, monkeypatch, tmp_path):
+        """AI 失敗檔（無 missing_inputs）、部分有效檔 ⇒ 與修前 ai_qa 碼逐字相同（附加欄位照附）。"""
+        inp = {'vix15': {'VIX_Index': 15.0}, 'vix36': {'VIX_Index': 36.0},
+               'sahm': {'Sahm_Rule_Triggered': True}}.get(kind)
+        d = _write_lock(monkeypatch, tmp_path / kind, inp, ai_fail=(kind == 'ai_fail'))
+        r = _qa_market_state(monkeypatch, d)
+        assert r == _qa_market_state(monkeypatch, d, mod=z34_pre_module('qa'))
+        assert _EXTRA_KEY in r['data']
+        if kind == 'ai_fail':
+            assert r['data'][_EXTRA_KEY] == {'systemic_risk_level': '危險', 'Macro_Phase': '系統異常'}
+
+    def _prompt(self, mp, ss, mod=NEWS, macro_info=None):
+        import src.data.news as N
+        import src.services.app_ai_service as A
+        fake = _FakeST(ss, clicked={'btn_run_verdict'})
+        prompts: list = []
+
+        class _Locker:
+            def lock_system_state_only(self, state):
+                pass
+
+        def _gem(prompt, max_tokens=2048):
+            prompts.append(prompt)
+            return '（測試替身報告）'
+        mp.setattr(mod, 'st', fake)
+        mp.setattr(mod, 'render_macro_bucket_summary_bar', lambda *a, **k: None)
+        mp.setattr(mod, 'MacroStateLocker', _Locker)
+        mp.setattr(A, 'gemini_call', _gem)
+        mp.setattr(N, 'fetch_macro_news', lambda *a, **k: [])
+        with pytest.raises(_Rerun):
+            mod.render_section_news_ai(dict(macro_info or {}), 'unknown')
+        assert len(prompts) == 1
+        return prompts[0]
+
+    def test_prompt_all_missing_no_danger_conclusion(self, monkeypatch):
+        p = self._prompt(monkeypatch, {})
+        for k in ('"systemic_risk_level"', '"exposure_limit_pct"', '"Macro_Phase"', '"危險"'):
+            assert k not in p, k
+        assert '"market_regime": "系統異常"' in p and '"missing_inputs"' in p
+        # 只少這三欄：把修前碼（本批 L3＋§十一 皆還原）的系統判斷段比對 —— 其餘逐字相同
+        base = self._prompt(monkeypatch, {}, mod=z34_pre_module('news'))
+        assert '"exposure_limit_pct": 60' in base     # 修前送「震盪／曝險 60」
+        strip = lambda t: '\n'.join(l for l in t.splitlines()
+                                     if not any(x in l for x in ('"market_regime"', '"systemic_risk_level"',
+                                                                 '"exposure_limit_pct"', '"Macro_Phase"')))
+        assert strip(p) == strip(base)
+
+    @pytest.mark.parametrize('ss, mi', [
+        pytest.param({}, {'vix': {'current': 15.0}}, id='vix15'),
+        pytest.param({}, {'vix': {'current': 36.0}}, id='vix36'),
+        pytest.param({'bias_info': {'bias_240': -12.0}}, None, id='bias'),
+        pytest.param({'m1b_m2_info': {'m1b_yoy': 4.0, 'm2_yoy': 5.0}}, None, id='m1b'),
+    ])
+    def test_prompt_partial_unchanged(self, ss, mi, monkeypatch):
+        """部分有效 ⇒ 送 AI 的 prompt 與修前碼（還原體＝基底 sha）逐字相同。"""
+        p = self._prompt(monkeypatch, ss, macro_info=mi)
+        assert '"exposure_limit_pct"' in p and '"systemic_risk_level"' in p
+        assert p == self._prompt(monkeypatch, ss, mod=z34_pre_module('news'), macro_info=mi)

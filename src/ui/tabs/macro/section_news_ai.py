@@ -441,7 +441,14 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                                           if _m1b_ai is not None else None),
                 })
                 # 組裝 Markdown 提示語（不依賴 JSON 解析，與 Tab 2 AI 首席顧問同風格）
-                _v_state_json = json.dumps(_system_state, ensure_ascii=False, indent=2)
+                # 批 Z34（客戶 2026-10-10 Q-z12／Q-z14）：8 項輸入全缺的 fail-safe（「系統異常」＋`missing_inputs`）
+                #   不把它的「危險／曝險 0／系統異常」當系統結論送 AI（只留市場體制與缺項清單）；其餘情形送原物件、逐字不變。
+                _v_state_ai = (
+                    {k: v for k, v in _system_state.items()
+                     if k not in ('systemic_risk_level', 'exposure_limit_pct', 'Macro_Phase')}
+                    if (_system_state.get('market_regime') == '系統異常' and _system_state.get('missing_inputs'))
+                    else _system_state)
+                _v_state_json = json.dumps(_v_state_ai, ensure_ascii=False, indent=2)
                 # 將新聞標題與摘要一併傳給 AI（提升黑天鵝偵測準確度）
                 _v_news_lines = []
                 for _n_item in _v_news:
