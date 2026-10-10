@@ -531,7 +531,9 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
         #   不是偵測到危險。以同卡既有訊號「timestamp 為空」（＝下方「裁決時間：尚未執行」）判定 ⇒
         #   風險等級改「無法判定」（下方對照表查無 ⇒ 同檔既有灰 #8b949e）。`_DEFAULT_STATE` 與其他消費點不動；
         #   有 timestamp 的檔（含 execute_and_lock 失敗時寫下的 fail-safe）逐字不變。
-        if not _ms_ts:
+        #   另：規則引擎 8 項輸入全缺時落檔的 fail-safe（Q-z14；「系統異常」＋引擎的 `missing_inputs`）同屬「缺資料」，
+        #   同樣不得畫成「危險」。AI 失敗檔不帶 `missing_inputs`、部分有效檔不會是「系統異常」⇒ 皆不受影響。
+        if not _ms_ts or (_regime == '系統異常' and _ms.get('missing_inputs')):
             _srl = '無法判定'
         # v19.170 SSOT 修正:建議持股改讀 allocation_service,不再自行由
         # `_ms['exposure_limit_pct']` 算。原因:repo 中 macro_state.json 常不存在,

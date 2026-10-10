@@ -516,13 +516,50 @@ class TestQz14AllMissingFailSafe:
         r = QA._tool_get_market_state()
         assert r['ok'] is False and '總經尚未評估' in r['error']
 
-    def test_section11_card_existing_failsafe_display(self, monkeypatch, tmp_path):
-        """§十一 讀到該檔 ⇒ 走既有 fail-safe 顯示（與 execute_and_lock 失敗檔同卡，基底實跑 sha 相同）。"""
+    @pytest.mark.parametrize('loaded', [False, True], ids=['alloc-unloaded', 'alloc-loaded'])
+    def test_section11_card_all_missing_not_danger(self, loaded, monkeypatch, tmp_path):
+        """總管複驗（Q-z12 × Q-z14）：§十一 讀到 8 項全缺落檔的 fail-safe ⇒ 不得畫「危險」紅框 ⇒ 同 Q-z12 灰框「無法判定」；
+        其餘（市場體制「系統異常」、裁決時間）照舊 —— 換回紅／危險後＝基底「fail-safe 檔」實跑。"""
         d = self._lock_all_missing(monkeypatch, tmp_path)
         state = json.loads((d / 'macro_state.json').read_text(encoding='utf-8'))
-        for loaded in (False, True):
-            assert _digest(_news(monkeypatch, tmp_path, state, alloc_loaded=loaded)) == \
-                _NEWS_BASE[('failsafe_ts', loaded)]
+        out = _news(monkeypatch, tmp_path, state, alloc_loaded=loaded)
+        card = _verdict_card(out)
+        assert '系統風險：無法判定' in card and '危險' not in card and TRAFFIC_RED not in card
+        assert f'裁決時間：{_TS}' in card and '>系統異常</span>' in card
+        undone = [(k, _news_back_to_red(t)) if '系統風險：' in t else (k, t) for k, t in out]
+        assert _digest(undone) == _NEWS_BASE[('failsafe_ts', loaded)]
+
+    @pytest.mark.parametrize('loaded', [False, True], ids=['alloc-unloaded', 'alloc-loaded'])
+    def test_section11_ai_failure_file_unchanged(self, loaded, monkeypatch, tmp_path):
+        """execute_and_lock（AI）失敗檔（無 missing_inputs）⇒ 照舊紅「危險」，與基底逐字相同。"""
+        monkeypatch.setattr(MSL, '_now_str', lambda: _TS)
+        p = tmp_path / 'ai_fail.json'
+
+        def _bad_llm(prompt):
+            raise RuntimeError('x')
+        MSL.MacroStateLocker(llm_client=_bad_llm, state_file_path=str(p)).execute_and_lock({}, [])
+        state = json.loads(p.read_text(encoding='utf-8'))
+        assert 'missing_inputs' not in state
+        out = _news(monkeypatch, tmp_path, state, alloc_loaded=loaded)
+        assert _digest(out) == _NEWS_BASE[('failsafe_ts', loaded)]
+        assert '系統風險：危險' in _verdict_card(out)
+
+    @pytest.mark.parametrize('loaded', [False, True], ids=['alloc-unloaded', 'alloc-loaded'])
+    @pytest.mark.parametrize('inp', [{'VIX_Index': 15.0}, {'VIX_Index': 36.0}, {'BIAS240_pct': -12.0},
+                                     {'Sahm_Rule_Triggered': True}],
+                             ids=['vix15', 'vix36', 'bias', 'sahm-all-missing'])
+    def test_section11_partial_locked_file_unchanged(self, inp, loaded, monkeypatch, tmp_path):
+        """部分有效（落檔帶 missing_inputs、但不是「系統異常」）⇒ 與修前碼逐字相同（還原體＝基底 sha，見 §4）。"""
+        monkeypatch.setattr(MSL, '_now_str', lambda: _TS)
+        p = tmp_path / 'partial.json'
+        MSL.MacroStateLocker(state_file_path=str(p)).lock_system_state_only(
+            {**MSL.calculate_system_state(inp), 'm1b_m2_data_month': None})
+        state = json.loads(p.read_text(encoding='utf-8'))
+        assert state['missing_inputs'] and state['market_regime'] != '系統異常'
+        card = _verdict_card(_news(monkeypatch, tmp_path, state, alloc_loaded=loaded))
+        assert f"系統風險：{state['systemic_risk_level']}</span>" in card and '無法判定' not in card
+        assert _news(monkeypatch, tmp_path, state, alloc_loaded=loaded) == \
+            _news(monkeypatch, tmp_path, state, alloc_loaded=loaded, mod=z34_pre_module('news'))
 
     def test_verdict_button_locks_failsafe(self, monkeypatch, tmp_path):
         """§十一「🔒 執行 AI 裁決」：session 8 項全缺 ⇒ 鎖定的是 fail-safe，不是「震盪／60」。"""
@@ -571,7 +608,9 @@ _Z34_NEWS_BLOCK = (
     "        #   不是偵測到危險。以同卡既有訊號「timestamp 為空」（＝下方「裁決時間：尚未執行」）判定 ⇒\n"
     "        #   風險等級改「無法判定」（下方對照表查無 ⇒ 同檔既有灰 #8b949e）。`_DEFAULT_STATE` 與其他消費點不動；\n"
     "        #   有 timestamp 的檔（含 execute_and_lock 失敗時寫下的 fail-safe）逐字不變。\n"
-    "        if not _ms_ts:\n"
+    "        #   另：規則引擎 8 項輸入全缺時落檔的 fail-safe（Q-z14；「系統異常」＋引擎的 `missing_inputs`）同屬「缺資料」，\n"
+    "        #   同樣不得畫成「危險」。AI 失敗檔不帶 `missing_inputs`、部分有效檔不會是「系統異常」⇒ 皆不受影響。\n"
+    "        if not _ms_ts or (_regime == '系統異常' and _ms.get('missing_inputs')):\n"
     "            _srl = '無法判定'\n")
 _Z34_MSL_EARLY = (
     "    # 批 Z34（Z9-n2，客戶 2026-10-10 Q-z14＝A）：8 項數值輸入**全缺**時，下方計分只剩中性基準 60，\n"
