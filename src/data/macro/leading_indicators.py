@@ -1396,7 +1396,12 @@ def build_leading_fast(days=7, token=""):
             rd = {}
             for _, r in grp.iterrows():
                 nm  = str(r.get("name", ""))
-                net = round((float(r.get("buy",  0) or 0) - float(r.get("sell", 0) or 0)) / 1e8, 1)
+                # 批 Z37（Q-z21，客戶 2026-10-10 核准 A）：buy／sell 缺欄／None／不可解析 ⇒ 該列淨額為 NaN（不補 0、
+                #   不推假淨額）；自營兩子列任一 NaN ⇒ 加總為 NaN（半套不當完整）。子列整列不存在照舊（無可靠證據判定應存在）。
+                if pd.isna(pd.to_numeric(r.get("buy"), errors="coerce")) or pd.isna(pd.to_numeric(r.get("sell"), errors="coerce")):
+                    net = float("nan")
+                else:
+                    net = round((float(r.get("buy",  0) or 0) - float(r.get("sell", 0) or 0)) / 1e8, 1)
                 if   nm == "Foreign_Investor":                rd["外資"] = round(rd.get("外資", 0) + net, 1)
                 elif nm == "Investment_Trust":                 rd["投信"] = round(rd.get("投信", 0) + net, 1)
                 elif nm in ("Dealer_self", "Dealer_Hedging"): rd["自營"] = round(rd.get("自營", 0) + net, 1)
