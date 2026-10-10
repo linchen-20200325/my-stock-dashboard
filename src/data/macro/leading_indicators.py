@@ -1892,13 +1892,16 @@ def render_leading_table(df):
     _render_cols = COLS if _has_margin else [c for c in COLS if c not in MARGIN]
     for _, row in df.iterrows():
         h += "<tr>"
-        # 批 Z30（Z29-n1，§1）：成交量是 L1 寫入的「X億」字串，「inf億」「nan億」、float ±inf／NaN、None／pd.NA 原照印
-        #   ⇒ 非有限一律走本欄既有缺值「-」（同 fmt）；有限值與其餘字串（含「-」）原樣輸出。
+        # 批 Z30（Z29-n1，§1）：成交量是 L1 寫入的「X億」字串，「inf億」「nan億」「nan」「NaN」、float ±inf／NaN
+        #   （`float()` 解析得了）⇒ 非有限走本欄既有缺值「-」（同 fmt）。
+        # 批 Z31（Q-z9／Z30-n1）：`float()` 解析不了的缺值 —— None／pd.NA 物件，以及文字型「None」「<NA>」「NaT」
+        #   （含前後空白；pd.NaT 的 str 亦為「NaT」）—— 同走「-」。其餘有限值與字串（含「-」「3,000.0億」）原樣輸出，
+        #   ⛔ 不是「轉不了數字就一律 -」。
         _vol = row.get("成交量","-")
         try:
             if not math.isfinite(float(str(_vol).replace("億", ""))): _vol = "-"
         except ValueError:
-            if _vol is None or _vol is pd.NA: _vol = "-"
+            if _vol is None or _vol is pd.NA or str(_vol).strip() in ("None", "<NA>", "NaT"): _vol = "-"
         h += f'<td class="li-dl">{row.get("日期","-")}</td><td><span style="color:#9CDCFE;">{_vol}</span></td>'
         for col in _render_cols:
             v = row.get(col)

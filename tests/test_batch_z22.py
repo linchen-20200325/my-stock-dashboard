@@ -135,7 +135,12 @@ class TestSummaryNonFinite:
     def test_not_printed_not_scored(self, field, bad, monkeypatch):
         s = _summary(_chips(_li4(**{field: _BAD[bad]}), monkeypatch))
         assert not re.search(r'inf|nan', s, re.I), s     # 修前：「期貨淨多 +inf口」「韭菜指數inf%」…
-        assert not any(m in s for m in _FIELD_MARK[field]), s
+        # 📌 批 Z31（Q-z11，客戶 2026-10-10 核准，有意識的更正，⛔ 不是漏改）：缺項改列同頁既有格式「📌 ○○ 未取得」
+        #   （由 test_batch_z31 斷言）⇒ 該欄的計分字句仍一個都不得出現，但先扣掉這個缺值標記再檢查（標記本身含欄名）。
+        _tag = {'fnet': '📌 外資期貨 未取得', 'leek': '📌 韭菜指數 未取得', 'top5': '📌 前五大 未取得',
+                'opt': '📌 外選 未取得'}[field]
+        assert _tag in s, s
+        assert not any(m in s.replace(_tag, '') for m in _FIELD_MARK[field]), s
         monkeypatch.undo()
         ref = _summary(_chips(_li4(**{field: None}), monkeypatch))
         assert s == ref                                  # 與「無此項」同一張卡（含總分→結論）

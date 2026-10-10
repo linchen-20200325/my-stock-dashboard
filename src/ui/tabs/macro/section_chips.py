@@ -9,6 +9,8 @@ closure params(explicit pass,§-1 minimal):
 """
 from __future__ import annotations
 
+import math
+
 import streamlit as st
 
 from shared.colors import (
@@ -759,7 +761,9 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                     if _v is not None:
                         try:
                             import pandas as _pd_raw
-                            if not _pd_raw.isna(_v):  # [BUG FIX] 過濾 NaN 避免 format 崩潰
+                            # 批 Z31（Q-z10／Z30-n2／Z21-n2）：±inf 比照 NaN 不列（修前印「選PCR=+inf」）；
+                            #   條件放在 try 內，非數值字串（如「abc」）仍走 except 原樣印出。
+                            if not _pd_raw.isna(_v) and math.isfinite(float(_v)):  # [BUG FIX] 過濾 NaN 避免 format 崩潰
                                 _raw_items.append(f'{_c}={float(_v):+,.0f}')
                         except Exception:
                             _raw_items.append(f'{_c}={_v}')
@@ -860,6 +864,8 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             else:
                 _score += 1
                 _sigs.append(f'✅ 期貨淨多 {_fnet:+,.0f}口')
+        else:
+            _sigs.append('📌 外資期貨 未取得')
         if _pcr is not None:
             if   _pcr > 130:
                 _score += 1
@@ -869,6 +875,8 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             else:
                 _score -= 1
                 _sigs.append(f'🔴 PCR={_pcr:.0f}（<100偏空）')
+        else:
+            _sigs.append('📌 PCR 未取得')
         if _opt is not None:
             if   _opt >  10000:
                 _score += 1
@@ -878,6 +886,8 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                 _sigs.append(f'🔴 外選 {_opt:,.0f}千元（空方佈局）')
             else:
                 _sigs.append(f'⚪ 外選 {_opt:+,.0f}千元（中性）')
+        else:
+            _sigs.append('📌 外選 未取得')
         if _top5 is not None:
             if   _top5 < -10000:
                 _score -= 1
@@ -885,6 +895,8 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             elif _top5 >       0:
                 _score += 1
                 _sigs.append(f'✅ 前五大淨多 {_top5:+,.0f}口')
+        else:
+            _sigs.append('📌 前五大 未取得')
         if _leek is not None:
             # v19.176 P0-D §3.3：門檻 +10 / -5 原為 inline magic number，抽至 L0
             # SSOT `config.LEEK_SCORE_*`。**刻意與上方進階警示（±30）分名** ——
@@ -900,8 +912,16 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
                 _sigs.append(f'✅ 韭菜指數{_leek:.1f}%（散戶悲觀）')
             else:
                 _sigs.append(f'⚪ 韭菜指數{_leek:.1f}%（中性）')
+        else:
+            _sigs.append('📌 韭菜指數 未取得')
 
-        if   _score <= -3:
+        # 批 Z31（Q-z11，客戶 2026-10-10 核准）：5 項全缺（皆 None）⇒ 同頁既有「⬜ 無法判定」＋同頁 v4 卡既有灰
+        #   `TRAFFIC_NEUTRAL`，不給任何操作建議（`_va` 空 ⇒ 下方建議列整個不輸出）；至少一項有效 ⇒ 下列分支逐字不變。
+        if _fnet is None and _pcr is None and _opt is None and _top5 is None and _leek is None:
+            _vd='⬜ 無法判定'
+            _vc=TRAFFIC_NEUTRAL
+            _va=''
+        elif _score <= -3:
             _vd='🚨 強烈偏空'
             _vc=TRAFFIC_RED
             _va='建議大幅降倉，等待空單回補訊號'
@@ -926,8 +946,8 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
             f'<div style="background:#0d1117;border:2px solid {_vc}44;border-radius:10px;padding:14px 18px;margin:8px 0;">'
             f'<div style="font-size:11px;color:#8b949e;margin-bottom:4px;">🎯 {_date} 籌碼綜合判斷</div>'
             f'<div style="font-size:24px;font-weight:900;color:{_vc};">{_vd}</div>'
-            f'<div style="font-size:13px;color:#c9d1d9;margin:6px 0 10px 0;">{_va}</div>'
-            f'<div style="font-size:12px;color:#484f58;">{" ； ".join(_sigs)}</div>'
+            + (f'<div style="font-size:13px;color:#c9d1d9;margin:6px 0 10px 0;">{_va}</div>' if _va else '')
+            + f'<div style="font-size:12px;color:#484f58;">{" ； ".join(_sigs)}</div>'
             f'</div>',
             unsafe_allow_html=True
         )

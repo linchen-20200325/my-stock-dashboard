@@ -100,7 +100,11 @@ class TestSignal5FiniteUnchanged:
     @pytest.mark.parametrize('case', sorted(_S5_BASE))
     def test_golden(self, case, monkeypatch):
         vols, gold = _S5_BASE[case]
-        out = _chips(_li_v(vols), monkeypatch)
+        # 📌 批 Z31（Q-z11，客戶 2026-10-10 核准，有意識的更正，⛔ 不是漏改）：「🎯 籌碼綜合判斷」卡缺項改列「📌 ○○ 未取得」、
+        #   5 項全缺改「⬜ 無法判定」（由 test_batch_z31 斷言）。本段 golden 為修前實跑 ⇒ 以 `undo_qz11_card`（只把該卡換回修前，
+        #   正確性由 test_batch_z31 以還原體實跑自證）後比對，golden 一字未改。
+        from tests.test_batch_z31 import undo_qz11_card
+        out = undo_qz11_card(_chips(_li_v(vols), monkeypatch))
         if case == 'nan_dropped':
             # 📌 批 Z30（Z29-n1，客戶 2026-10-09 核准）：先行指標表「成交量」欄字串 'nan' 原照印「nan」⇒ 改印「-」。
             #   golden 不改（仍是修前基底實跑）；把該格換回原值後整段須逐字等於基底，且差異僅此一格。
