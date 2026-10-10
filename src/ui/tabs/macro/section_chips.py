@@ -33,6 +33,7 @@ from shared.signal_thresholds import (
     TOP5_LARGE_TRADER_NET_WARN_LOTS,
 )
 from shared.vix_validity import VIX_FETCH_MAX, vix_value_or_none  # 批 Z7（Z3-n4）：與 §八 同一套「有效 VIX」規則（L0）
+from shared.inst_net import is_net_observed  # 批 Z33：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
 from src.compute.strategy import V4StrategyEngine
 # v19.176 P0-D:韭菜門檻 + 兩個「否決」判定的正式名稱一律走 L0 SSOT(§3.3)
 from src.config import (
@@ -180,7 +181,8 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         # 「外資 +0.0億（觀望區間）→ 資金觀望，區間操作」——
         # 一個**沒有任何外資資料**的日子，被寫成「外資今天不買不賣」這個明確結論。
         # 改為 None，並在敘事上與「真的接近 0」分開（後者仍走觀望區間）。
-        _fn3 = inst[_fk3]['net'] if _fk3 else None
+        # 批 Z33（第 2／3 項，修正錯誤）：外資淨額未觀測（L1 缺列預填 0／L3 補零推出）⇒ 同缺「外資」既有路徑（含下方柱狀圖「⬜ 未取得」）。
+        _fn3 = inst[_fk3]['net'] if _fk3 and is_net_observed(inst, _fk3) else None
         _tn3 = inst[_tk3]['net'] if _tk3 else None
         if _fn3 is None:
             _hye_c = TRAFFIC_NEUTRAL

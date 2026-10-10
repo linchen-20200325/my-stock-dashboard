@@ -28,6 +28,7 @@ from src.compute.risk.reconcile import (
     reconcile_monthly_revenue_yoy,
     reconcile_us10y_yield,
 )
+from shared.inst_net import is_net_observed  # 批 Z33：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
 
 #: market_regime 未回報 max_score 時的分母。**必須**與
 #: `macro_helpers.calc_traffic_light` 健康段的 `float(_mkt.get('max_score') or 4.0)`
@@ -145,7 +146,9 @@ def _get_health_params() -> tuple[float | None, float | None, float | None]:
     # 面板誠實顯示 ⬜(both_missing)而不是紅燈。
     _inst = _cl.get('inst') or {}
     _fk = next((k for k in _inst if '外資' in str(k)), None)
-    _fnet_raw = _inst.get(_fk, {}).get('net') if _fk else None
+    # 批 Z33（第 2／3 項，修正錯誤）：L1 缺外資列預填的 0.0／L3 補零推出的假淨額同屬「沒載入」⇒ 同上走 None（⬜ both_missing）。
+    _fnet_raw = (_inst.get(_fk, {}).get('net')
+                 if _fk and is_net_observed(_inst, _fk) else None)
     try:
         _fnet = float(_fnet_raw) if _fnet_raw is not None else None
     except (TypeError, ValueError):

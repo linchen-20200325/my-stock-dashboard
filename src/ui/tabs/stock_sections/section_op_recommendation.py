@@ -21,6 +21,7 @@ from src.ui.render import STRATEGY_TECHNICAL, strategy_conclusion  # v19.174 去
 # DL-f1-s44（§1 不捏 0）：M1B／M2 年增率「可用」＝有限數值 —— 沿用 #746 同一個函式，不另寫一份。
 from src.ui.tabs.macro.section_long import _finite_yoy
 from shared.macro_provenance import m1b_m2_for_scoring  # DL-f1-s17：代理值不計分（L0 SSOT）
+from shared.inst_net import is_net_observed  # 批 Z33：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
 
 
 def render_op_recommendation_section(sid2: str, health2,
@@ -123,7 +124,10 @@ def render_op_recommendation_section(sid2: str, health2,
             'trend':       '',
             'cl':          cl2 / 1e8 if cl2 and cl2 > 0 else 0,
             'cx':          cx2 / 1e8 if cx2 and cx2 > 0 else 0,
-            'foreign_buy': _inst_g.get(_fk_g, {}).get('net', 0) if _fk_g else 0,
+            # 批 Z33（第 2／3 項，修正錯誤）：外資淨額未觀測 ⇒ 送 None，L3 既有 `or 0` 不出外資句（缺 key 仍照舊送 0）。
+            'foreign_buy': ((_inst_g.get(_fk_g, {}).get('net', 0)
+                             if is_net_observed(_inst_g, _fk_g) else None)
+                            if _fk_g else 0),
             'trust_buy':   _inst_g.get(_tk_g, {}).get('net', 0) if _tk_g else 0,
             'm1b_diff':    _m1b_diff_g,
             # DL-f1-s5:同 I2 `bias_info` 的作法,整包帶進去只為了讓 generate_ai_comment

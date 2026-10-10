@@ -31,6 +31,7 @@ from src.ui.tabs.macro.section_long import _finite_yoy
 # I2(2026-08-10):`bias_240` 估算揭露文案 SSOT(同上,L5 → L2)。
 from src.compute.macro import bias_estimated_note as _bias_est_note
 from src.compute.macro import coerce_inst_dict
+from shared.inst_net import is_net_observed  # 批 Z33：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
 from src.data.macro import check_macro_alerts, fetch_macro_snapshot
 from src.ui.render.macro_ui_components import render_macro_alerts  # v19.159:render 歸位 L4
 
@@ -699,7 +700,9 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             # 收斂 + log 走 L2 SSOT(§1:缺失照樣顯示成「E 外資未知」)。
             _inst8    = coerce_inst_dict(_cl8d, where='section_mid')
             _fk8      = next((k for k in _inst8 if '外資' in str(k)), None)
-            _fnet8    = _inst8.get(_fk8, {}).get('net', None) if _fk8 else None
+            # 批 Z33（第 2／3 項，修正錯誤）：外資淨額未觀測（L1 缺列預填 0／L3 補零推出的假淨額）⇒ 走既有「E 外資未知」。
+            _fnet8    = (_inst8.get(_fk8, {}).get('net', None)
+                         if _fk8 and is_net_observed(_inst8, _fk8) else None)
             _twii8    = tw_s.get('台股加權指數', {})
             _twd8     = tw_s.get('新台幣匯率', {})
             _sox8     = intl_s.get('費城半導體 SOX', {})

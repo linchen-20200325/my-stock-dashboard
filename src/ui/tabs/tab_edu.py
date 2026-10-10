@@ -44,6 +44,7 @@ from shared.macro_buckets import (  # F1 v19.184：cl_data['intl'] key 鏡像（
     CL_INTL_KEY_US10Y as _CL_INTL_KEY_US10Y,
 )
 from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
+from shared.inst_net import is_net_observed  # 批 Z33：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
 from shared.signal_thresholds import (  # B6-a v19.181:VCP 章風控數字改吃 SSOT
     ATR_STOP_MULTIPLIER,
     RR_DEFAULT_TARGET_GAIN,
@@ -512,7 +513,8 @@ def render_tab_edu():
                 if identifier == 'BFI82U':
                     _inst = _cl.get('inst') or {}
                     _foreign_key = next((k for k in _inst if '外資' in str(k)), None)
-                    if _foreign_key:
+                    # 批 Z33（第 2／3 項，修正錯誤）：外資淨額未觀測 ⇒ 同缺 key 既有路徑（不出即時值條）。
+                    if _foreign_key and is_net_observed(_inst, _foreign_key):
                         _net = _inst.get(_foreign_key, {}).get('net')
                         if _net is not None:
                             _val = float(_net) / 1e8 if abs(float(_net)) > 1e6 else float(_net)

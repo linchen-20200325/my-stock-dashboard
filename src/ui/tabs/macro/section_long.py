@@ -38,6 +38,7 @@ from shared.stats_helpers import ewma_vol, signal_with_deadband
 from shared.macro_provenance import M1B_PROXY_VALUE_NOTE, is_m1b_m2_proxy, m1b_m2_proxy_badge
 from shared.macro_provenance import m1b_m2_for_scoring  # DL-f1-s17：代理值不計分（L0 SSOT）
 from shared.ui_state import UI_IDLE, classify_ui_state
+from shared.inst_net import is_net_observed  # 批 Z33：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
 # I2(2026-08-10):`bias_240` 估算揭露文案 SSOT(L5 → L2 合法下行)。本檔原本是全 repo
 # 唯一有揭露的地方,但那兩句是 inline 字面 —— 其餘 9 個消費點要一起揭露就得複製,
 # 故收成 L2 一份真相(§3.3),本檔改為引用同一份,顯示內容不變 + 補一句完整說明。
@@ -544,7 +545,10 @@ def render_section_long(_load_heavy: bool, intl: dict, intl_s: dict,
         # 2. 新台幣／外資視角
         _inst_f = (st.session_state.get('cl_data') or {}).get('inst') or {}
         _frn = _inst_f.get('外資及陸資') or _inst_f.get('外資')
-        _frn_net = _frn.get('net') if isinstance(_frn, dict) else None
+        # 批 Z33（第 2／3 項，修正錯誤）：外資淨額未觀測 ⇒ 同缺 key 既有路徑（省略外資買賣超片段）；挑鍵沿用上一行 `or` 的同一順序。
+        _frn_k = '外資及陸資' if _inst_f.get('外資及陸資') else '外資'
+        _frn_net = (_frn.get('net')
+                    if isinstance(_frn, dict) and is_net_observed(_inst_f, _frn_k) else None)
         _ewt5 = dict(_rank5).get('台灣 EWT')
         _twd_pct = (tw_s.get('新台幣匯率') or {}).get('pct')
         _tw_bits = []

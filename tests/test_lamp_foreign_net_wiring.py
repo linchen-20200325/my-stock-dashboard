@@ -385,7 +385,12 @@ class TestOtherInstConsumersByteIdentical:
         assert repr(a) == repr(b)
 
     def test_only_the_lamp_reads_the_flag(self):
-        """靜態守衛：`unobserved_net` / `is_net_observed` 只准出現在生產端、燈的取值端與作戰室外資方向（批 Z16 C9-n6 (a)）。"""
+        """靜態守衛：`unobserved_net` / `is_net_observed` 只准出現在生產端、燈的取值端與已登記的消費端
+        （作戰室外資方向，批 Z16 C9-n6 (a)；批 Z33 第 2／3 項 7 處，見 tests/test_batch_z33_inst.py）。
+
+        本守衛的意圖：讀旗標的檔案必須是**明確登記過**的消費點（每一處都另有「未觀測 → 既有缺值路徑」的
+        行為測試），不得有未經檢視的新讀者。批 Z33 起清單擴大，意圖不變；函式名沿用（改名會斷既有引用）。
+        """
         import pathlib
         root = pathlib.Path(__file__).resolve().parents[1]
         hits = {str(p.relative_to(root)) for d in ("src", "shared")
@@ -396,4 +401,12 @@ class TestOtherInstConsumersByteIdentical:
                         "src/data/daily/daily_data_fetchers.py",
                         "src/services/macro_fetch_orchestrator.py",
                         # 批 Z16 C9-n6 (a)：作戰室外資方向改讀旗標，未觀測時不把假 0 判成方向
-                        "src/ui/tabs/macro/section_warroom.py"}, hits
+                        "src/ui/tabs/macro/section_warroom.py",
+                        # 批 Z33 第 2／3 項：未觀測時改走各處既有缺值路徑（行為測試見 tests/test_batch_z33_inst.py）
+                        "src/ui/tabs/macro/section_mid.py",
+                        "src/ui/tabs/macro/section_news_ai.py",
+                        "src/ui/tabs/macro/section_chips.py",
+                        "src/ui/tabs/macro/section_long.py",
+                        "src/ui/tabs/tab_edu.py",
+                        "src/ui/pages/reconcile_panel.py",
+                        "src/ui/tabs/stock_sections/section_op_recommendation.py"}, hits
