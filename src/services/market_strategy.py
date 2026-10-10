@@ -54,7 +54,7 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
                   ma60_above_3d=False, ma60_below_3d=False,
                   ma120_above_3d=False, ma120_below_3d=False,
                   ma120_rising=False, ma120_falling=False,
-                  m1b_m2_is_proxy=False):
+                  m1b_m2_is_proxy=False, foreign_net_unobserved=False):
     """
     市場狀態判斷引擎 v4.1
     新增：MA60 連三日遲滯區間（Hysteresis）+ MA斜率過濾 + M1B-M2
@@ -119,7 +119,12 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     # 的預設值,等於**把「不知道」編碼成一個合法的市場觀測值**(§1)。
     # 兩者計分都是 0 分(持平本來就不該加分),差別在**畫面要說實話**:
     # 一個是「還沒公布」,一個是「公布了,剛好持平」。
-    if foreign_buy is None:
+    # 批 Z35（Q-z16，客戶 2026-10-10 核准 A'）：外資淨額「未觀測」（呼叫端以 `foreign_net_unobserved`
+    #   告知，foreign_buy 已為 None ⇒ 0 分不變）⇒ 無法可靠區分「尚未發布」與「取得失敗」，不猜原因 ——
+    #   走同頁 §三 籌碼卡既有不帶原因的缺值字（section_chips 批 Z33 起同一情境即顯示此字），⛔ 不出「相抵／持平」。
+    if foreign_buy is None and foreign_net_unobserved:
+        signals.append('外資買賣超 ⬜ 未取得')
+    elif foreign_buy is None:
         signals.append('⏰ 外資數據待更新（收盤後15:30可用）')
     elif foreign_buy == 0:
         signals.append('➖ 外資買賣相抵（持平，0 分）')
@@ -380,7 +385,7 @@ def volume_window_stats(df, window=VOL_WINDOW_DAYS,
 
 def get_market_assessment(df_index=None, foreign_net=None,
                           m1b_m2_gap=None, m1b_m2_prev=None, ad_ratio=None,
-                          m1b_m2_is_proxy=False):
+                          m1b_m2_is_proxy=False, foreign_net_unobserved=False):
     """
     整合版市場評估（v4.0 升級版）
     同時輸出 regime (bull/neutral/bear) 與舊版 score
@@ -464,7 +469,10 @@ def get_market_assessment(df_index=None, foreign_net=None,
     # MA60 斜率（供訊號顯示）
     ma60_prev = float(_ma60_series.iloc[-2]) if len(df_index) >= 61 else None
 
-    if foreign_net is None:
+    # 批 Z35（Q-z16）：外資淨額「未觀測」＝ 呼叫端已拿到當日表但外資格不是觀測值 ⇒ 不另抓備援
+    #   （分數維持 0、不改模型；備援 `fetch_market_data` 讀同一 FinMind 資料集，缺 buy／sell 時
+    #   以 `.get(…, 0)` 推淨額），只把旗標交給 market_regime 決定文案。
+    if foreign_net is None and not foreign_net_unobserved:
         mkt = fetch_market_data()
         # P1 v19.470:`or 0` 又把 None 折回 0(且 falsy 回退連「真的 0」也吃掉)。
         # `fetch_market_data` 本來就會在失敗時回 `foreign_net=None`,並在
@@ -477,7 +485,7 @@ def get_market_assessment(df_index=None, foreign_net=None,
         ma60_prev=ma60_prev, ma120_prev=None,
         vol_today=vol_today, avg_vol_20=avg_vol,
         m1b_m2_gap=m1b_m2_gap, m1b_m2_prev=m1b_m2_prev,
-        m1b_m2_is_proxy=m1b_m2_is_proxy,
+        m1b_m2_is_proxy=m1b_m2_is_proxy, foreign_net_unobserved=foreign_net_unobserved,
         ma60_above_3d=ma60_above_3d, ma60_below_3d=ma60_below_3d,
         ma120_above_3d=ma120_above_3d, ma120_below_3d=ma120_below_3d,
         ma120_rising=ma120_rising, ma120_falling=ma120_falling,

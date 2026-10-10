@@ -376,7 +376,11 @@ class TestOtherInstConsumersByteIdentical:
         assert repr(copy.deepcopy(flagged)) == repr(plain)
 
     def test_calc_traffic_light_identical(self):
-        from src.compute.macro.macro_helpers import calc_traffic_light
+        """📌 批 Z35（Q-z15，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：`calc_traffic_light` 起改讀旗標
+        （外資未觀測當缺值，現行行為由 tests/test_batch_z35.py 斷言）。本測試守的是「旗標對未讀旗標的消費點不可分辨」
+        ⇒ 改對只把批 Z35 換回的還原體（基底 `26a43064`）實跑，斷言不改。"""
+        from tests.test_batch_z35 import z35_pre_module
+        calc_traffic_light = z35_pre_module('tl').calc_traffic_light
         plain, flagged = self._pair()
         mkt = {"score": 4, "max_score": 6}
         jq = {"avg": 55.0}
@@ -409,4 +413,7 @@ class TestOtherInstConsumersByteIdentical:
                         "src/ui/tabs/macro/section_long.py",
                         "src/ui/tabs/tab_edu.py",
                         "src/ui/pages/reconcile_panel.py",
-                        "src/ui/tabs/stock_sections/section_op_recommendation.py"}, hits
+                        "src/ui/tabs/stock_sections/section_op_recommendation.py",
+                        # 批 Z35（Q-z16）：市場評估外資訊號（未觀測 ⇒ 0 分＋同頁既有缺值字；行為測試見 tests/test_batch_z35.py）
+                        #   （calc_traffic_light 同檔 macro_helpers.py 已在清單內；Q-z15 行為測試同見該檔）
+                        "src/services/market_assessment_apply.py"}, hits

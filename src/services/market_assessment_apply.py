@@ -17,6 +17,7 @@ import traceback
 import streamlit as st
 
 from shared.macro_provenance import is_m1b_m2_proxy  # DL-f1-s17／s23：代理值不計分（L0 SSOT）
+from shared.inst_net import is_net_observed  # 批 Z35（Q-z16）：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
 from shared.signal_thresholds import (
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
     MARGIN_BALANCE_WARN_THRESHOLD_YI,
@@ -60,10 +61,15 @@ def compute_and_apply_market_assessment(
         # 等於把「不知道」寫成一個看起來正常的數字(§1)。三態化後由 None 表示
         # 「沒拿到」,0.0 保留給「真的持平」。
         _foreign_net_loaded = None
+        # 批 Z35（Q-z16，客戶 2026-10-10 核准 A'）：外資淨額未觀測 ⇒ 當缺值（分數 0 不變），
+        #   不得再顯示「外資買賣相抵（持平）」；文案改由 L2 依本旗標走同頁既有不帶原因的缺值字。
+        _foreign_unobserved = False
         for _k, _v in inst.items():
             if '外資' in _k:
                 _net_v = _v.get('net')
-                if _net_v is not None:
+                if not is_net_observed(inst, _k):
+                    _foreign_unobserved = True
+                elif _net_v is not None:
                     _foreign_net_loaded = float(_net_v) * 1e8
                 break
         _twii_df_loaded = tw_raw.get('台股加權指數')
@@ -103,6 +109,7 @@ def compute_and_apply_market_assessment(
             m1b_m2_prev=_m1b2_prev,
             ad_ratio=_ad_ratio_loaded,
             m1b_m2_is_proxy=_m1b2_is_proxy,
+            foreign_net_unobserved=_foreign_unobserved,
         )
         if _mkt_loaded:
             _append_margin_signals(_mkt_loaded, margin)
@@ -121,7 +128,8 @@ def compute_and_apply_market_assessment(
             _mkt_fb = get_market_assessment(df_index=None, foreign_net=_foreign_net_loaded,
                                             m1b_m2_gap=_m1b2_gap, m1b_m2_prev=_m1b2_prev,
                                             ad_ratio=_ad_ratio_loaded,
-                                            m1b_m2_is_proxy=_m1b2_is_proxy)
+                                            m1b_m2_is_proxy=_m1b2_is_proxy,
+                                            foreign_net_unobserved=_foreign_unobserved)
             if _mkt_fb:
                 _append_margin_signals(_mkt_fb, margin)
                 st.session_state['mkt_info'] = _mkt_fb

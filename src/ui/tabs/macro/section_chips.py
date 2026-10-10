@@ -919,7 +919,10 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
 
         # 批 Z31（Q-z11，客戶 2026-10-10 核准）：5 項全缺（皆 None）⇒ 同頁既有「⬜ 無法判定」＋同頁 v4 卡既有灰
         #   `TRAFFIC_NEUTRAL`，不給任何操作建議（`_va` 空 ⇒ 下方建議列整個不輸出）；至少一項有效 ⇒ 下列分支逐字不變。
-        if _fnet is None and _pcr is None and _opt is None and _top5 is None and _leek is None:
+        # 批 Z35（Q-z17，客戶 2026-10-10 核准 A）：條件由「5 項全缺」放寬為「有效（非 None）項數 < 2」——
+        #   只剩 1 項有效（含落在中性、不出訊號者，如前五大介於 [-10000,0]、PCR=110）同樣「⬜ 無法判定」、
+        #   不給操作建議；≥ 2 項有效 ⇒ 既有計分／門檻／結論逐字不變；「📌 ○○ 未取得」標記照舊。
+        if sum(_x is not None for _x in (_fnet, _pcr, _opt, _top5, _leek)) < 2:
             _vd='⬜ 無法判定'
             _vc=TRAFFIC_NEUTRAL
             _va=''
