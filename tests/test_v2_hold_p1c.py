@@ -68,8 +68,9 @@ _BAD = ["{bad json", {"market_regime": "系統異常", "exposure_limit_pct": 0},
 #: L3 本批守衛整段中和（＝修前）。
 _AL_REVERT = (("    if strict and _ms.get('file_error'):", "    if False:"),)
 # D3（DL-f1-s65）起該條件多一個「過期裁決不算讀壞」子句，錨點同步（突變語意不變）。
+# 批 Z36（Q-z19）起再多一個「8 項全缺落檔不算讀壞」子句，錨點同步（突變語意不變）。
 _MSL_REVERT = (("    if (strict and _wr_ok and not _file_ok and os.path.exists(state_file_path)\n"
-                "            and not _file_expired):",
+                "            and not _file_expired and not _file_no_data):",
                 "    if False:"),)
 
 

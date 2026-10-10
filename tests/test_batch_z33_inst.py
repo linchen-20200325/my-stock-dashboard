@@ -330,9 +330,19 @@ _REVERT = {k: tuple(v) + tuple(_Z34_PAIRS.get(k, ())) for k, v in Z33_INST_REVER
 #   5 項有效（或不出該卡）⇒ 該卡行為與修前相同。⛔ 不動 `Z33_INST_REVERT_PAIRS` 本身（同上 Z34 作法）。
 from tests.test_batch_z31 import Z35_QZ17_CHIPS_PAIR as _Z35_CHIPS_PAIR  # noqa: E402
 _REVERT['chips'] = _REVERT['chips'] + (_Z35_CHIPS_PAIR,)
+# 📌 批 Z36（Q-z20，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：投信／自營商淨額未觀測起改走各處既有缺值路徑
+#   （chips／news／op 三處）。還原體一併換回本批那幾行（仍逐字等於基底 a56ccf37，_BASE_SHA 不改）；
+#   本檔 `other_row_unobserved`（投信未觀測、外資觀測）在 §三 籌碼卡的「現行」取拿掉 Z36 修改的還原體
+#   （news 經 `_z34_pre_module` 已串接 Z36 pair）。現行行為由 tests/test_batch_z36.py 斷言。⛔ 不動 `Z33_INST_REVERT_PAIRS` 本身。
+from tests.test_batch_z36 import z36_pairs_for as _z36_pairs_for  # noqa: E402
+from tests.test_batch_z36 import z36_pre_module as _z36_pre_module  # noqa: E402
+for _ek36 in ('chips', 'news', 'op'):
+    _REVERT[_ek36] = _REVERT[_ek36] + _z36_pairs_for(_mods()[_ek36].__file__)
 
 
-def _now_mod(ek: str):
+def _now_mod(ek: str, case: str = ''):
+    if ek == 'chips' and case == 'other_row_unobserved':
+        return _z36_pre_module('src/ui/tabs/macro/section_chips.py')
     return _z34_pre_module(ek) if ek in ('mid', 'news') else _mods()[ek]
 
 
@@ -443,7 +453,7 @@ _PRE_FIX_GOLDEN: dict = {
 @pytest.mark.parametrize('case', sorted(OBSERVED) + sorted(MISSING_KEY))
 def test_observed_and_missing_key_identical_to_pre_fix_golden(ek, case, monkeypatch):
     mk = {**OBSERVED, **MISSING_KEY}[case]
-    r = _RUN[ek](_now_mod(ek), mk(), monkeypatch)
+    r = _RUN[ek](_now_mod(ek, case), mk(), monkeypatch)
     assert _digest(ek, r) == _PRE_FIX_GOLDEN[ek][case]
 
 
@@ -451,7 +461,7 @@ def test_observed_and_missing_key_identical_to_pre_fix_golden(ek, case, monkeypa
 @pytest.mark.parametrize('case', sorted(OBSERVED) + sorted(MISSING_KEY))
 def test_observed_and_missing_key_identical_to_pre_fix_body(ek, case, monkeypatch):
     mk = {**OBSERVED, **MISSING_KEY}[case]
-    now = _RUN[ek](_now_mod(ek), mk(), monkeypatch)
+    now = _RUN[ek](_now_mod(ek, case), mk(), monkeypatch)
     pre = _RUN[ek](_pre_fix(ek), mk(), monkeypatch)
     assert _digest(ek, now) == _digest(ek, pre)
 

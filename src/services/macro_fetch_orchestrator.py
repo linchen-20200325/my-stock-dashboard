@@ -316,12 +316,23 @@ def fetch_macro_bundle(
                     #   (→ 灰燈,⛔ 不畫假數字)。見 shared/inst_net.py。
                     _fm_foreign_rows = _df_i['name'].astype(str).map(
                         lambda _n: 'foreign' in _n.lower() or '外資' in _n)
+                    # 批 Z36（Q-z20，客戶 2026-10-10 核准 A）：投信／自營商比照外資記「未觀測」——
+                    #   列歸屬與下方迴圈同序（外資優先 → 投信 → 自營），buy／sell 不可解析即不是觀測值
+                    #   （⛔ 仍不改下兩行 fillna(0)；既有消費點照舊，只有讀旗標的消費點改走缺值路徑）。
+                    _fm_trust_rows = ~_fm_foreign_rows & _df_i['name'].astype(str).map(
+                        lambda _n: 'investment_trust' in _n.lower() or '投信' in _n)
+                    _fm_dealer_rows = ~_fm_foreign_rows & ~_fm_trust_rows & _df_i['name'].astype(str).map(
+                        lambda _n: 'dealer' in _n.lower() or '自營' in _n)
                     if 'buy' in _df_i.columns and 'sell' in _df_i.columns:
                         _fm_bad_rows = (_pd.to_numeric(_df_i['buy'], errors='coerce').isna()
                                         | _pd.to_numeric(_df_i['sell'], errors='coerce').isna())
                         _fm_foreign_unobserved = bool((_fm_bad_rows & _fm_foreign_rows).any())
+                        _fm_trust_unobserved = bool((_fm_bad_rows & _fm_trust_rows).any())
+                        _fm_dealer_unobserved = bool((_fm_bad_rows & _fm_dealer_rows).any())
                     else:
                         _fm_foreign_unobserved = bool(_fm_foreign_rows.any())
+                        _fm_trust_unobserved = bool(_fm_trust_rows.any())
+                        _fm_dealer_unobserved = bool(_fm_dealer_rows.any())
                     _df_i['buy'] = _pd.to_numeric(_df_i.get('buy', 0), errors='coerce').fillna(0)
                     _df_i['sell'] = _pd.to_numeric(_df_i.get('sell', 0), errors='coerce').fillna(0)
                     _df_i['_net'] = ((_df_i['buy'] - _df_i['sell']) / TWD_PER_YI).round(2)  # 元 → 億(§4.1)
@@ -348,7 +359,11 @@ def fetch_macro_bundle(
                     inst = InstNetDict(
                         inst, unobserved_net=(('外資及陸資',)
                                               if (_fm_foreign_unobserved and '外資及陸資' in inst)
-                                              else ()))
+                                              else ())
+                        # 批 Z36（Q-z20）：投信／自營商 buy／sell 缺值 ⇒ 淨額為 fillna(0) 推出的假值，同樣標未觀測
+                        + tuple(_k for _k, _u in (('投信', _fm_trust_unobserved),
+                                                  ('自營商', _fm_dealer_unobserved))
+                                if _u and _k in inst))
                     inst_date = _ld_i
                     print(f'[FinMind-Inst] ✅ {inst}')
             except Exception as _ei:

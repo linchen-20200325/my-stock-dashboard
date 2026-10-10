@@ -128,7 +128,10 @@ def render_op_recommendation_section(sid2: str, health2,
             'foreign_buy': ((_inst_g.get(_fk_g, {}).get('net', 0)
                              if is_net_observed(_inst_g, _fk_g) else None)
                             if _fk_g else 0),
-            'trust_buy':   _inst_g.get(_tk_g, {}).get('net', 0) if _tk_g else 0,
+            # 批 Z36（Q-z20，客戶 2026-10-10 核准 A）：投信淨額未觀測 ⇒ 送 None，L3 既有 `or 0`（同缺 key）。
+            'trust_buy':   ((_inst_g.get(_tk_g, {}).get('net', 0)
+                             if is_net_observed(_inst_g, _tk_g) else None)
+                            if _tk_g else 0),
             'm1b_diff':    _m1b_diff_g,
             # DL-f1-s5:同 I2 `bias_info` 的作法,整包帶進去只為了讓 generate_ai_comment
             # 在「【景氣環境】M1B-M2…」那兩句後綴 L0 既有代理註記(^TWII 動能代理時)。

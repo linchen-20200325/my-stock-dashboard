@@ -730,8 +730,14 @@ _Z34_BASE_SHA = {
 
 
 def z34_revert(key: str, code: str) -> str:
-    """把 Z34 的修改換回修前（每組恰好一處）。"""
-    for old, new in Z34_REVERT_PAIRS[key]:
+    """把 Z34 的修改換回修前（每組恰好一處）。
+
+    📌 批 Z36（Q-z19／Q-z20，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：本批改了 'msl'（全缺落檔 strict 不拋）
+    與 'news'（投信／自營未觀測不送）—— 還原體一併換回本批那幾行（仍逐字等於基底 76cac7cb，`_Z34_BASE_SHA` 不改；
+    同 Z33 串接 Z34 慣例）。現行行為由 tests/test_batch_z36.py 斷言。⛔ 不動 `Z34_REVERT_PAIRS` 本身。
+    """
+    from tests.test_batch_z36 import z36_pairs_for
+    for old, new in z36_pairs_for(_Z34_FILES[key][0]) + Z34_REVERT_PAIRS[key]:
         assert code.count(old) == 1, f'{key} 替換點不唯一或已不存在：{old!r}'
         code = code.replace(old, new)
     return code

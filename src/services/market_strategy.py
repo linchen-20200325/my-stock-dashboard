@@ -125,7 +125,10 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     if foreign_buy is None and foreign_net_unobserved:
         signals.append('外資買賣超 ⬜ 未取得')
     elif foreign_buy is None:
-        signals.append('⏰ 外資數據待更新（收盤後15:30可用）')
+        # 批 Z36（Q-z18，客戶 2026-10-10 核准 A）：外資整包未取得（缺 key／整包失敗，且上方 `get_market_assessment`
+        #   的 `fetch_market_data` 備援也沒拿到真值）⇒ 程式從不檢查時間，「收盤後15:30」是猜的原因 ——
+        #   比照 Q-z16 改同一個不帶原因的既有缺值字（同頁 §三 籌碼卡 `_hye_ind`）；0 分不變、模型／權重／門檻不動。
+        signals.append('外資買賣超 ⬜ 未取得')
     elif foreign_buy == 0:
         signals.append('➖ 外資買賣相抵（持平，0 分）')
     elif foreign_buy > 0:

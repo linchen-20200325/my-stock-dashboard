@@ -106,8 +106,12 @@ _PRE_FILE_SHA = {
 
 
 def _pre_source(k) -> str:
+    # 📌 批 Z36（Q-z18／Q-z20，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：本批改了 'ms'（整包未取得改缺值字）
+    #   與 'chips'（投信／自營未觀測）—— 還原體一併換回本批那幾行（仍逐字等於基底 26a43064，`_PRE_FILE_SHA` 不改；
+    #   同 Z33 串接 Z34 慣例）。⛔ 不動 `Z35_REVERT_PAIRS` 本身。
+    from tests.test_batch_z36 import z36_pairs_for
     src = open(_MODS[k].__file__, encoding='utf-8').read()
-    for new, old in Z35_REVERT_PAIRS[k]:
+    for new, old in z36_pairs_for(_MODS[k].__file__) + Z35_REVERT_PAIRS[k]:
         assert src.count(new) == 1, f'替換點不唯一或已不存在：{new!r}'
         src = src.replace(new, old)
     return src
@@ -334,13 +338,18 @@ class TestQz16ObservedUnchanged:
         assert _fsig(r) == [_FLAT] and r['score'] == 4.0
 
     def test_missing_key_unchanged(self, monkeypatch):
-        """缺 key（既有路徑）：照舊打備援、照舊「⏰ 外資數據待更新」；修前修後逐字相同。"""
+        """缺 key（既有路徑）：照舊打備援；本批（Z35）未改其文案，修前修後除該句外逐字相同。
+
+        📌 批 Z36（Q-z18，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：缺 key 且備援也沒拿到時，
+        「⏰ 外資數據待更新（收盤後15:30可用）」改為同頁既有「外資買賣超 ⬜ 未取得」（現行行為由 tests/test_batch_z36.py 斷言）。
+        原斷言 `_fsig(r) == [_WAIT]` 改為現行字；修前還原體（已串接 Z36 pair）仍出 `_WAIT`，比對時只換那一句。"""
         inst = MISSING_KEY['no_foreign_key']()
         r, n = _ma(inst, monkeypatch)
-        assert _fsig(r) == [_WAIT] and n == 1
+        assert _fsig(r) == [_MA_MISSING] and n == 1
         monkeypatch.undo()
         p, pn = _ma(inst, monkeypatch, maa=z35_pre_module('maa'), ms=z35_pre_module('ms'))
-        assert _h(r) == _h(p) and pn == 1
+        assert _fsig(p) == [_WAIT] and pn == 1
+        assert _h(dict(r, signals=[_WAIT if s == _MA_MISSING else s for s in r['signals']])) == _h(p)
 
 
 class TestQz16Unobserved:
@@ -391,6 +400,11 @@ class TestQz16Mutation:
         src = open(MS.__file__, encoding='utf-8').read()
         new, old = Z35_REVERT_PAIRS['ms'][1]
         assert src.count(new) == 1
+        # 📌 批 Z36（Q-z18）：缺值文案另一分支本批已改字 ⇒ 先換回本批（基底 0ef68f93）寫法，本突變語意不變
+        from tests.test_batch_z36 import z36_pairs_for
+        for _n36, _o36 in z36_pairs_for(MS.__file__):
+            assert src.count(_n36) == 1
+            src = src.replace(_n36, _o36)
         m = importlib.util.module_from_spec(importlib.util.spec_from_loader('_z35_mut_ms', loader=None))
         m.__file__ = MS.__file__
         exec(compile(src.replace(new, old), MS.__file__, 'exec'), m.__dict__)
