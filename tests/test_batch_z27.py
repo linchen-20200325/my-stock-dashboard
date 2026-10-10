@@ -22,6 +22,7 @@ import pytest
 import tests.test_batch_z7 as Z7
 from shared.fred_series import FRED_NAPM
 from tests.test_m2n2_no_zero_fill import _apply
+from tests.test_batch_z33_inst import Z33_INST_REVERT_PAIRS as _Z33_INST_REVERT_PAIRS
 
 _CROSS = Z7._CROSS
 _MID = Z7._MID
@@ -59,7 +60,11 @@ _REVERT = {
         # 📌 批 Z30（續 2，QA 建議，⛔ 只改註解、非行為）：跨區揭露上方註解「同一份 ffill 後」於批 Z30 後失真已改寫；
         #   本對把該行註解換回修前原文，讓還原結果仍逐字等於修前（`e333e5ff`）檔案（_PRE_SHA 不改）。
         ("    # （同一個 VIX、同一份原始末筆的外資期貨口數；批 Z30（Z29-n2）起不再 ffill，末日缺值走 §三 既有「無法判定」）——\n",
-         "    # （同一個 VIX、同一份 ffill 後的外資期貨口數）——\n"),),
+         "    # （同一個 VIX、同一份 ffill 後的外資期貨口數）——\n"),)
+        # 📌 批 Z33 第 2／3 項（外資淨額未觀測走既有缺值路徑，有意識的更正，⛔ 不是漏改）：§八 三環 E 改讀
+        #   `is_net_observed`；本組一併換回，讓還原結果仍逐字等於修前（`e333e5ff`）檔案（_PRE_SHA 不改）。
+        #   本檔各情境的 cl_data 皆無未觀測旗標 ⇒ 該處行為與修前相同。
+        + _Z33_INST_REVERT_PAIRS["mid"],
 }
 #: 還原後原始碼的 sha256 ＝ 修前（`e333e5ff`）檔案
 _PRE_SHA = {

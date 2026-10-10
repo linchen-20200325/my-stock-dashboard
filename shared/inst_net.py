@@ -3,17 +3,21 @@
 為什麼存在
 ==========
 `daily_data_fetchers._parse_bfi82u_rows` 以 `{'外資及陸資': {'net': 0.0}, ...}` 預填，
-TWSE 回傳缺某一列（或該列買賣差額不可解析）時，那一格會**留著 0.0** —— 對既有 3 個
-消費點（calc_traffic_light / section_chips / tab_edu）那是既有行為（本批授權⛔ 不改）；
-但 foreign_net 燈（五桶 / 今天頁）自 2026-09-27 起把它畫上畫面，0.0 在 low_bad
+TWSE 回傳缺某一列（或該列買賣差額不可解析）時，那一格會**留著 0.0**；
+`macro_fetch_orchestrator` 的 FinMind 補救在外資 buy／sell 有缺時同樣以 fillna(0) 推出淨額。
+foreign_net 燈（五桶 / 今天頁）自 2026-09-27 起把它畫上畫面，0.0 在 low_bad
 （yellow=0）下會變成「🟡 0億」＝ §1 捏造的觀測。
 
 作法（**加性**，既有消費點逐位不變）
 ====================================
 `InstNetDict` 是 `dict` 的子類：內容、`repr`、`==`、迭代順序、`json.dumps` 全部與原本的
 plain dict 相同；**只多一個屬性** `unobserved_net`（沒有觀測到的 key 集合）。
-既有消費點只做 `inst[k]['net']` / `for k in inst` → 完全看不到這個屬性。
-只有 foreign_net 燈的取值端以 `is_net_observed()` 讀它 → 沒觀測到 ⇒ None ⇒ 灰燈。
+沒讀旗標的消費點只做 `inst[k]['net']` / `for k in inst` → 完全看不到這個屬性。
+讀旗標的消費點（現況，清單由 `tests/test_lamp_foreign_net_wiring.py::test_only_the_lamp_reads_the_flag`
+守）以 `is_net_observed()` 判斷，沒觀測到 ⇒ 改走該處既有的缺值路徑：
+foreign_net 燈（灰燈）、§作戰室外資方向（批 Z16）、§八 三環 E／§十一 AI 提示／§三 籌碼卡／
+§七 新台幣／外資視角／教學 BFI82U 即時值／對帳面板健康評分／個股即時操作建議（批 Z33）。
+其餘消費點（如 calc_traffic_light、市場評估外資訊號）仍讀 net 原值（未改）。
 
 ⚠️ 屬性只活在**同一個物件**上：若中途有人 `dict(inst)` 複製，旗標會掉 ⇒ 退回既有行為
 （讀 net），⛔ 不會更糟。pickle（`_pkl_put` / `st.cache_data`）會保留屬性；

@@ -19,6 +19,7 @@ import streamlit as st
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW  # noqa: F401
 from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
 from shared.macro_provenance import m1b_m2_for_scoring  # DL-f1-s17：代理值不計分（L0 SSOT）
+from shared.inst_net import is_net_observed  # 批 Z33：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
 # v19.178 AI-SSOT:餵給 LLM 的門檻一律引 SSOT,不在 prompt 內寫死(§3.3)。
 # 五桶危險門檻 SSOT = shared/macro_buckets.BUCKET_DANGER_SPECS(畫面燈號同源),
 # 由 L3 共用 prompt 元件 ai_structured_summary 轉成判讀句(個股 Tab 共用同一份)。
@@ -277,7 +278,9 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 _fk_v   = next((k for k in _inst_v if '外資' in str(k)), None)
                 _tk_v   = next((k for k in _inst_v if '投信' in str(k)), None)
                 _dk_v   = next((k for k in _inst_v if '自營' in str(k)), None)
-                _fnet_v = _inst_v.get(_fk_v, {}).get('net') if _fk_v else None
+                # 批 Z33（第 2／3 項，修正錯誤）：外資淨額未觀測 ⇒ 走上面既有「缺值整行不送」（不把假 0／假淨額送給 LLM）。
+                _fnet_v = (_inst_v.get(_fk_v, {}).get('net')
+                           if _fk_v and is_net_observed(_inst_v, _fk_v) else None)
                 _tnet_v = _inst_v.get(_tk_v, {}).get('net') if _tk_v else None
                 _dnet_v = _inst_v.get(_dk_v, {}).get('net') if _dk_v else None
                 _margin_v = _cl_d_v.get('margin')
