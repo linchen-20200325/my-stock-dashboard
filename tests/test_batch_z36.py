@@ -725,6 +725,29 @@ class TestQz20FinMind:
         assert not (inst.unobserved_net & {_TK, _DK})
 
 
+class TestQz20ParserShortRow:
+    """QA N1 補測：國內自營「短列」（列在、但沒有買賣差額欄 —— `len(row) <= _net_idx` 分支）⇒ 自營商未觀測；
+    外資自營商短列不影響自營旗標；淨額值與修前逐字相同（⛔ 不改加總值）。"""
+
+    _NORMAL = [['自營商(避險)', '1', '1', '-550,000,000'], ['投信', '1', '1', '1,230,000,000'],
+               ['外資及陸資(不含外資自營商)', '1', '1', '15,000,000,000']]
+
+    def test_domestic_dealer_short_row_is_unobserved(self):
+        rows = [['自營商(自行買賣)']] + self._NORMAL
+        now = _parse_bfi82u_rows(_FIELDS, rows)
+        assert now.unobserved_net == frozenset({_DK})                 # 行為斷言（先於修前對照，突變時在此轉紅）
+        assert now[_DK]['net'] == -5.5                                # 只加總到可解析的避險列
+        pre = z36_pre_module(_DDF)._parse_bfi82u_rows(_FIELDS, rows)
+        assert repr(now) == repr(pre)                                 # 值同修前（⛔ 不改加總值）
+        assert _DK not in pre.unobserved_net                          # 修前：短列被略過、避險列解析到即算觀測
+
+    def test_foreign_dealer_short_row_does_not_affect_flag(self):
+        rows = [['外資自營商'], ['自營商(自行買賣)', '1', '1', '1,000,000,000']] + self._NORMAL
+        now = _parse_bfi82u_rows(_FIELDS, rows)
+        assert now.unobserved_net == frozenset() and now[_DK]['net'] == 4.5
+        assert repr(now) == repr(z36_pre_module(_DDF)._parse_bfi82u_rows(_FIELDS, rows))
+
+
 class TestQz20ParserMutation:
     _DEALER_CASES = ('dealer_one_dashdash', 'dealer_one_blank', 'only_foreign_dealer')
 
