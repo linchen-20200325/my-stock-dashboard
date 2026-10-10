@@ -441,7 +441,14 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                                           if _m1b_ai is not None else None),
                 })
                 # 組裝 Markdown 提示語（不依賴 JSON 解析，與 Tab 2 AI 首席顧問同風格）
-                _v_state_json = json.dumps(_system_state, ensure_ascii=False, indent=2)
+                # 批 Z34（客戶 2026-10-10 Q-z12／Q-z14）：8 項輸入全缺的 fail-safe（「系統異常」＋`missing_inputs`）
+                #   不把它的「危險／曝險 0／系統異常」當系統結論送 AI（只留市場體制與缺項清單）；其餘情形送原物件、逐字不變。
+                _v_state_ai = (
+                    {k: v for k, v in _system_state.items()
+                     if k not in ('systemic_risk_level', 'exposure_limit_pct', 'Macro_Phase')}
+                    if (_system_state.get('market_regime') == '系統異常' and _system_state.get('missing_inputs'))
+                    else _system_state)
+                _v_state_json = json.dumps(_v_state_ai, ensure_ascii=False, indent=2)
                 # 將新聞標題與摘要一併傳給 AI（提升黑天鵝偵測準確度）
                 _v_news_lines = []
                 for _n_item in _v_news:
@@ -526,6 +533,15 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
         _srl = _ms.get('systemic_risk_level', '危險')
         _regime = _ms.get('market_regime', '系統異常')
         _ms_ts = _ms.get('timestamp', '')
+        # 批 Z34（C9-n4，客戶 2026-10-10 Q-z12＝A）：沒有可用的 macro_state.json（缺檔／讀不出來）時
+        #   `load_macro_state()` 回 L3 `_DEFAULT_STATE`（風險「危險」、timestamp 空）——那是「還沒裁決」，
+        #   不是偵測到危險。以同卡既有訊號「timestamp 為空」（＝下方「裁決時間：尚未執行」）判定 ⇒
+        #   風險等級改「無法判定」（下方對照表查無 ⇒ 同檔既有灰 #8b949e）。`_DEFAULT_STATE` 與其他消費點不動；
+        #   有 timestamp 的檔（含 execute_and_lock 失敗時寫下的 fail-safe）逐字不變。
+        #   另：規則引擎 8 項輸入全缺時落檔的 fail-safe（Q-z14；「系統異常」＋引擎的 `missing_inputs`）同屬「缺資料」，
+        #   同樣不得畫成「危險」。AI 失敗檔不帶 `missing_inputs`、部分有效檔不會是「系統異常」⇒ 皆不受影響。
+        if not _ms_ts or (_regime == '系統異常' and _ms.get('missing_inputs')):
+            _srl = '無法判定'
         # v19.170 SSOT 修正:建議持股改讀 allocation_service,不再自行由
         # `_ms['exposure_limit_pct']` 算。原因:repo 中 macro_state.json 常不存在,
         # load_macro_state() 會回 _DEFAULT_STATE(exposure_limit_pct=0),

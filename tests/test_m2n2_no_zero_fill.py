@@ -600,7 +600,10 @@ def _scored(state: dict) -> dict:
 
 class TestL3MissingPath:
 
-    @pytest.mark.parametrize("base", [{}, _L3_BASE], ids=["empty_base", "scenario_base"])
+    # 📌 批 Z34（客戶 2026-10-10 Q-z14＝A，有意識的變更）：原 `{}` 底在 M1B／M2 皆 None 時＝8 項全缺 ⇒ 本批起走
+    #   fail-safe「系統異常」、不計分，不再能拿來比「資金項不加不扣」。改用只帶一項「不計分的中性值」（PCR 1.0，
+    #   介於 0.7～1.5 不加不扣）的最小底，原意（資金項缺 ⇒ 與 spread=0 同分）不變。
+    @pytest.mark.parametrize("base", [{"PCR": 1.0}, _L3_BASE], ids=["minimal_base", "scenario_base"])
     def test_both_none_is_neutral_no_add_no_deduct(self, base):
         from src.services.macro_state_locker import calculate_system_state as css
         both_none = css({**base, "M1B_YoY_pct": None, "M2_YoY_pct": None})
@@ -613,7 +616,8 @@ class TestL3MissingPath:
         assert not {"M1B_YoY_pct", "M2_YoY_pct"} & set(both_two.get("missing_inputs", []))
         assert "資金緊縮" not in both_none["Macro_Phase"]
 
-    @pytest.mark.parametrize("base", [{}, _L3_BASE], ids=["empty_base", "scenario_base"])
+    # 📌 批 Z34（Q-z14）：同上，`{}` 底改最小中性底（理由見上一測試）。
+    @pytest.mark.parametrize("base", [{"PCR": 1.0}, _L3_BASE], ids=["minimal_base", "scenario_base"])
     def test_clearing_only_one_side_is_flagged_not_scored(self, base):
         """批 X2 M2N-f3（L3）：只清一個值 → 資金項整條不算（計分＝兩個都缺），`missing_inputs` 照實列缺的那一個。
 

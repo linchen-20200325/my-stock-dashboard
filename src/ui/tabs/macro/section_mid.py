@@ -790,6 +790,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             # 根治「同畫面三環說 0~20%、油門說 30~50%」的矛盾。
             from src.services.allocation_service import (
                 apply_ring_gate, get_allocation, register_conflict,
+                ring1_data_incomplete_note,
             )
             _ring_detail = (
                 (f'A VIX={_vix_now8:.1f}' if _vix_now8 is not None else 'A VIX 未知')
@@ -799,7 +800,20 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
             )
             apply_ring_gate(_ring1_pass, detail=_ring_detail)
 
-            if not _ring1_pass:
+            # 批 Z34（Z3-n8＋C8-n8，客戶 2026-10-10 Q-z13＝A）：第一環沒過、但沒有任何「已知且不利」的條件
+            #   （只因 VIX／外資期貨未取得）⇒ L3 `_derive_intrinsic_caps` 同一規則下**未套用**第一環天花板，
+            #   修前卻畫「🚫 禁止攻擊」＋操作指示＋腳註「已納入本環天花板」。改走同 tab 既有「⬜ 無法判定」＋同檔灰，
+            #   說明句沿用 L3 既有句（`ring1_data_incomplete_note`，逐字），不給操作指示；腳註刪「（已納入本環天花板）」。
+            #   判定只用上方既有 `_cA`／`_cB`（門檻一位未動）；有已知不利條件時（L3 有套天花板）走原分支、逐字不變。
+            _ring1_known_fail = ((_vix_now8 is not None and not _cA)
+                                 or (_fut8 is not None and not _cB))
+            _ring1_undecided = not _ring1_pass and not _ring1_known_fail
+            if _ring1_undecided:
+                _atk_color = '#8b949e'
+                _atk_grade = '⬜ 無法判定'
+                _atk_txt = ring1_data_incomplete_note(
+                    vix_known=_vix_now8 is not None, fut_known=_fut8 is not None)
+            elif not _ring1_pass:
                 _atk_color = TRAFFIC_RED
                 _atk_grade = '🚫 禁止攻擊'
                 _atk_txt = ('第一環未通過（VIX過高 或 外資重兵空單）：'
@@ -839,6 +853,7 @@ def render_section_mid(_load_heavy: bool, intl_s: dict, tech_s: dict, tw_s: dict
                 f'第二環（確認燃料）：{_r2_html}<br>'
                 f'第三環（點火訊號）：{_r3_html}</div>'
                 f'<div style="margin-top:10px;font-size:11px;color:#d29922;">'
-                f'📌 本判定僅提供「火力分級」；實際持股請看 🎚️ 建議持股油門（已納入本環天花板）</div>'
+                f'📌 本判定僅提供「火力分級」；實際持股請看 🎚️ 建議持股油門'
+                f'{"" if _ring1_undecided else "（已納入本環天花板）"}</div>'
                 f'</div>', unsafe_allow_html=True)
     

@@ -31,7 +31,12 @@ class TestX2n1MacroPhase:
         assert css(d)["Macro_Phase"] == f"VIX高波動(30.0)、1 {_TAG}"
 
     def test_all_missing_is_eight(self):
-        assert css({})["Macro_Phase"] == f"8 {_TAG}"
+        # 📌 批 Z34（客戶 2026-10-10 Q-z14＝A，有意識的變更，⛔ 不是漏改）：8 項全缺＋薩姆未觸發 ⇒ 改走既有 fail-safe
+        #   「系統異常」（不計分、不貼「8 項未評估」；見 tests/test_batch_z34.py）。「8 項」標籤仍在「全缺但薩姆已觸發」
+        #   這唯一仍會計分的情形出現 —— 本測試改釘那一條，計數規則本身不變。
+        # ~~assert css({})["Macro_Phase"] == f"8 {_TAG}"~~（修前；客戶 Q-z14 推翻）
+        assert css({})["Macro_Phase"] == "系統異常"
+        assert css({"Sahm_Rule_Triggered": True})["Macro_Phase"] == f"🚨薩姆規則觸發、8 {_TAG}"
 
     def test_n0_with_label_has_no_tag(self):
         d = dict(_FULL, VIX_Index=30.0)

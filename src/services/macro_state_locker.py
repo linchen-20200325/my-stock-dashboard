@@ -209,10 +209,15 @@ class MacroStateLocker:
         裁決產生時間仍是 `timestamp`；有效期限由 `get_macro_state` 依它判
         （`shared.staleness.MACRO_VERDICT_MAX_AGE_DAYS`）。
         """
+        # 批 Z34（Q-z14）：收到 `calculate_system_state` 的 fail-safe（「系統異常」）時，摘要沿用 `_DEFAULT_STATE`
+        #   原句（與 execute_and_lock 失敗時寫下的 fail-safe 同形），不寫「曝險上限 0%（Python 規則引擎計算）」。
+        _failsafe = system_state.get("market_regime") == _DEFAULT_STATE["market_regime"]
         final = {
             **system_state,
             "exposure_limit_pct": max(0, min(100, int(system_state.get("exposure_limit_pct", 0)))),
-            "analysis_summary": f"曝險上限 {system_state.get('exposure_limit_pct', 0)}%（Python 規則引擎計算）",
+            "analysis_summary": (
+                _DEFAULT_STATE["analysis_summary"] if _failsafe
+                else f"曝險上限 {system_state.get('exposure_limit_pct', 0)}%（Python 規則引擎計算）"),
             "timestamp": _now_str(),
         }
         self._write_state_lock(final)
@@ -531,6 +536,8 @@ def calculate_system_state(macro_numbers: dict) -> dict:
       · BIAS240 的「VIX 偏高或 PMI 收縮」共振條件：缺的那一個視為不成立（同修前預設值的結果）；
       · 回傳多一個 `missing_inputs`（缺的輸入鍵名，依上表順序）—— **只在有缺時才帶**，
         8 個都是有限數值時回傳與修前逐字相同。
+      · 8 個**全缺**（且薩姆未觸發）→ 不計分，回既有 fail-safe `_DEFAULT_STATE` 的
+        regime／風險／曝險／Macro_Phase（「系統異常」）＋ `missing_inputs`（批 Z34，客戶 Q-z14）。
     兩個 bool 輸入（Sahm／MA5）不在此列，照舊（None → False）。
 
     本函式**刻意不在內部塞刻度判斷**：規則引擎的職責是「照契約算分」，
@@ -559,6 +566,19 @@ def calculate_system_state(macro_numbers: dict) -> dict:
     futures_net = _nums["Futures_Net_Short"]  # 負值 = 淨空單
     sahm        = _b("Sahm_Rule_Triggered")
     below_ma5   = _b("Index_Below_MA5")
+
+    # 批 Z34（Z9-n2，客戶 2026-10-10 Q-z14＝A）：8 項數值輸入**全缺**時，下方計分只剩中性基準 60，
+    #   修前落檔「震盪／警告／曝險上限 60%」—— 沒有任何資料卻給出正常投資結論。改回既有 fail-safe
+    #   `_DEFAULT_STATE`（「系統異常」；`get_macro_state` 既有規則視同未載入、不給曝險上限），不新增任何數字。
+    #   薩姆規則 bool 已觸發屬「有資料」，照舊走下方紅線（not sahm 才短路）。至少一項有效 → 本段不進、輸出逐字不變。
+    if len(missing_inputs) == len(_ENGINE_NUMERIC_INPUTS) and not sahm:
+        return {
+            "market_regime": _DEFAULT_STATE["market_regime"],
+            "systemic_risk_level": _DEFAULT_STATE["systemic_risk_level"],
+            "exposure_limit_pct": _DEFAULT_STATE["exposure_limit_pct"],
+            "Macro_Phase": _DEFAULT_STATE["Macro_Phase"],
+            "missing_inputs": missing_inputs,
+        }
 
     score = 60  # 中性基準
 

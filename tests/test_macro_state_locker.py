@@ -75,9 +75,15 @@ class TestCalculateSystemState:
         assert result["Macro_Phase"] == "6 項未評估（缺資料不計分）"
 
     def test_none_values_use_defaults(self):
+        # 📌 批 Z34（客戶 2026-10-10 Q-z14＝A，有意識的變更，⛔ 不是漏改）：本例其餘 6 項不在 ⇒ 8 項全缺 ⇒ 改走既有
+        #   fail-safe「系統異常」（`_DEFAULT_STATE`，曝險 0），不再給「多頭／震盪／空頭」正常結論。
+        # ~~assert result["market_regime"] in ("多頭", "震盪", "空頭")~~（修前；客戶 Q-z14 推翻）
         result = calculate_system_state({"VIX_Index": None, "ISM_PMI_or_OECD_CLI": None})
         assert isinstance(result["exposure_limit_pct"], int)
-        assert result["market_regime"] in ("多頭", "震盪", "空頭")
+        assert result["market_regime"] == "系統異常" and result["exposure_limit_pct"] == 0
+        # 部分有效（只缺這兩項）仍照舊給正常結論
+        partial = calculate_system_state({"VIX_Index": None, "ISM_PMI_or_OECD_CLI": None, "PCR": 1.0})
+        assert partial["market_regime"] in ("多頭", "震盪", "空頭")
 
     def test_output_keys_complete(self):
         result = calculate_system_state({})

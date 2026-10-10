@@ -318,7 +318,17 @@ Z33_INST_REVERT_PAIRS = {
          "            'foreign_buy': _inst_g.get(_fk_g, {}).get('net', 0) if _fk_g else 0,\n"),
     ),
 }
-_REVERT = Z33_INST_REVERT_PAIRS
+# 📌 批 Z34（客戶 2026-10-10 Q-z13／Q-z14 核准，有意識的變更，⛔ 不是漏改）：§八 火力分級卡（第一環資料不全）與
+#   §十一 送的 L3 引擎（8 項全缺 ⇒ fail-safe）本批起刻意不同。還原體一併拿掉 Z34 的 §八／§十一 修改（仍逐字等於基底
+#   a56ccf37，_BASE_SHA 不改），§十一 另換回修前 L3 引擎；比對 golden 的「現行」取拿掉 Z34 修改的還原體（見 `_now_mod`）。
+#   ⛔ 不動 `Z33_INST_REVERT_PAIRS` 本身（Z27 另行串接 Z34 pair，避免重複替換）。
+from tests.test_batch_z34 import Z34_REVERT_PAIRS as _Z34_PAIRS  # noqa: E402
+from tests.test_batch_z34 import z34_pre_module as _z34_pre_module  # noqa: E402
+_REVERT = {k: tuple(v) + tuple(_Z34_PAIRS.get(k, ())) for k, v in Z33_INST_REVERT_PAIRS.items()}
+
+
+def _now_mod(ek: str):
+    return _z34_pre_module(ek) if ek in ('mid', 'news') else _mods()[ek]
 
 
 def _revert(ek: str, code: str, pairs=None) -> str:
@@ -336,6 +346,8 @@ def _pre_fix(ek: str):
     m = importlib.util.module_from_spec(importlib.util.spec_from_loader(f'_z33i_{ek}_pre', loader=None))
     m.__file__ = real.__file__
     exec(compile(code, real.__file__, 'exec'), m.__dict__)
+    if ek == 'news':   # 批 Z34：§十一 送的是 L3 本尊，修前副本配修前 L3 引擎
+        m.calculate_system_state = _z34_pre_module('msl').calculate_system_state
     return m
 
 
@@ -426,7 +438,7 @@ _PRE_FIX_GOLDEN: dict = {
 @pytest.mark.parametrize('case', sorted(OBSERVED) + sorted(MISSING_KEY))
 def test_observed_and_missing_key_identical_to_pre_fix_golden(ek, case, monkeypatch):
     mk = {**OBSERVED, **MISSING_KEY}[case]
-    r = _RUN[ek](_mods()[ek], mk(), monkeypatch)
+    r = _RUN[ek](_now_mod(ek), mk(), monkeypatch)
     assert _digest(ek, r) == _PRE_FIX_GOLDEN[ek][case]
 
 
@@ -434,7 +446,7 @@ def test_observed_and_missing_key_identical_to_pre_fix_golden(ek, case, monkeypa
 @pytest.mark.parametrize('case', sorted(OBSERVED) + sorted(MISSING_KEY))
 def test_observed_and_missing_key_identical_to_pre_fix_body(ek, case, monkeypatch):
     mk = {**OBSERVED, **MISSING_KEY}[case]
-    now = _RUN[ek](_mods()[ek], mk(), monkeypatch)
+    now = _RUN[ek](_now_mod(ek), mk(), monkeypatch)
     pre = _RUN[ek](_pre_fix(ek), mk(), monkeypatch)
     assert _digest(ek, now) == _digest(ek, pre)
 
