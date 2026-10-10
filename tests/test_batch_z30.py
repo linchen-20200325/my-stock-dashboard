@@ -626,9 +626,9 @@ _CAP_FUT8 = (f'（§三 籌碼的「{VETO_V4_ENGINE_NAME}」因外資期貨未�
 _BOX8 = '兩套判定結論不一致'
 
 
-def _mid8(li, mp, chips_mod=None):
+def _mid8(li, mp, chips_mod=None, mid_mod=None):
     import tests.test_batch_z7 as Z7
-    mod = Z7._real(Z7._MID)
+    mod = mid_mod or Z7._real(Z7._MID)
     info = dict(Z7._MID_BASE)
     info['vix'] = Z7._node(18.0)
     fake = Z7._FakeSTFig({'macro_info': info, 'bias_info': {'bias_240': 5.0}, 'li_latest': li})
@@ -664,7 +664,10 @@ class TestSection8Disclosure:
         assert not _INFNAN.search(_strip(j))
 
     def test_pre_disclosed_yesterday_and_equals_base(self, monkeypatch):
-        out = _mid8(_TODAY_NAN(), monkeypatch, chips_mod=pre_z30_chips_module())
+        # 📌 批 Z34（Q-z13，客戶 2026-10-10 核准，有意識的變更）：今日外資期貨缺 ⇒ 本批起火力分級卡改「⬜ 無法判定」；
+        #   本測試比的是基底 `4591c5aa` 整段 golden，故 §八 取拿掉 Z34 修改的還原體（golden 不改）。
+        from tests.test_batch_z34 import z34_pre_module
+        out = _mid8(_TODAY_NAN(), monkeypatch, chips_mod=pre_z30_chips_module(), mid_mod=z34_pre_module('mid'))
         d = _disc8(out)
         assert len(d) == 1 and d[0][0] == 'warning' and '外資期貨=-40,000 口' in d[0][1]
         assert hashlib.sha256(repr(out).encode('utf-8')).hexdigest() == _PRE_MID8_GOLD

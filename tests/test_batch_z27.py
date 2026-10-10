@@ -23,6 +23,8 @@ import tests.test_batch_z7 as Z7
 from shared.fred_series import FRED_NAPM
 from tests.test_m2n2_no_zero_fill import _apply
 from tests.test_batch_z33_inst import Z33_INST_REVERT_PAIRS as _Z33_INST_REVERT_PAIRS
+from tests.test_batch_z34 import Z34_REVERT_PAIRS as _Z34_REVERT_PAIRS
+from tests.test_batch_z34 import z34_pre_module as _z34_pre_module
 
 _CROSS = Z7._CROSS
 _MID = Z7._MID
@@ -64,7 +66,10 @@ _REVERT = {
         # 📌 批 Z33 第 2／3 項（外資淨額未觀測走既有缺值路徑，有意識的更正，⛔ 不是漏改）：§八 三環 E 改讀
         #   `is_net_observed`；本組一併換回，讓還原結果仍逐字等於修前（`e333e5ff`）檔案（_PRE_SHA 不改）。
         #   本檔各情境的 cl_data 皆無未觀測旗標 ⇒ 該處行為與修前相同。
-        + _Z33_INST_REVERT_PAIRS["mid"],
+        + _Z33_INST_REVERT_PAIRS["mid"]
+        # 📌 批 Z34（Q-z13，客戶 2026-10-10 核准，有意識的變更，⛔ 不是漏改）：§八 第一環只因資料未取得而沒過時
+        #   火力分級卡改「⬜ 無法判定」；本組一併換回，讓還原結果仍逐字等於修前（`e333e5ff`）檔案（_PRE_SHA 不改）。
+        + _Z34_REVERT_PAIRS["mid"],
 }
 #: 還原後原始碼的 sha256 ＝ 修前（`e333e5ff`）檔案
 _PRE_SHA = {
@@ -294,7 +299,9 @@ class TestQz2bSection8:
 
     @pytest.mark.parametrize("fut", [None, float("nan")], ids=["none", "nan"])
     def test_unknown_light_caption_instead_of_box(self, fut, monkeypatch, pre):
-        out = _mid(monkeypatch, fut=fut)
+        # 📌 批 Z34（Q-z13）：外資期貨未取得 ⇒ 本批起火力分級卡改「⬜ 無法判定」（客戶核准，見 tests/test_batch_z34.py）；
+        #   本測試只驗 Z27 的揭露框 → caption，故「現行」取拿掉 Z34 修改的還原體比對（golden／基底不改）。
+        out = _mid(monkeypatch, fut=fut, mod=_z34_pre_module("mid"))
         assert _boxes(out) == [] and out.count(("caption", _CAP_FUT)) == 1
         base = _mid(monkeypatch, fut=fut, mod=pre["mid"])
         bx = _boxes(base)
@@ -306,7 +313,8 @@ class TestQz2bSection8:
 
     def test_unknown_light_with_veto_unchanged(self, monkeypatch, pre):
         # 總管裁定（最小改動）：§三 ⬜ 且本區已觸發 ⇒ 修前本就不出框，維持「不出框、也不出 caption」，整段與基底逐字相同
-        out = _mid(monkeypatch, fut=None, veto=True)
+        # 📌 批 Z34（Q-z13）：同上，「現行」取拿掉 Z34 修改的還原體（火力分級卡本批起刻意不同；golden 不改）。
+        out = _mid(monkeypatch, fut=None, veto=True, mod=_z34_pre_module("mid"))
         assert _boxes(out) == [] and ("caption", _CAP_FUT) not in out
         assert _sha(out) == self._GOLD_UNKNOWN_VETO
         assert out == _mid(monkeypatch, fut=None, veto=True, mod=pre["mid"])
@@ -341,6 +349,8 @@ class TestQz2bSection8:
         assert _sha(_mid(monkeypatch, fut=fut, vix=vix, veto=veto)) == self._GOLD[key]
 
     def test_vix_missing_sentence_untouched(self, monkeypatch, pre):
-        out = Z7._mid({"current": None}, monkeypatch, real_v4=True, fut=None)[0]
+        # 📌 批 Z34（Q-z13）：VIX／外資期貨皆缺 ⇒ 本批起火力分級卡改「⬜ 無法判定」（客戶核准）；
+        #   本測試只驗缺值句不受 Z27 影響，「現行」取拿掉 Z34 修改的還原體比對。
+        out = Z7._mid({"current": None}, monkeypatch, real_v4=True, fut=None, mod=_z34_pre_module("mid"))[0]
         assert ("caption", _CAP_FUT) not in out
         assert out == Z7._mid({"current": None}, monkeypatch, mod=pre["mid"], real_v4=True, fut=None)[0]

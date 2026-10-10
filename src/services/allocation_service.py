@@ -191,27 +191,39 @@ def _derive_intrinsic_caps() -> tuple[list[Cap], list[str]]:
     # 一條失敗、不可能移除一條失敗 → 單調。
     _fut = _read_foreign_futures_lots()
     _fail_bits: list[str] = []
-    _unknown_bits: list[str] = []
 
-    if _vix is None:
-        _unknown_bits.append('VIX')
-    elif _vix >= 20:
+    if _vix is not None and _vix >= 20:
         _fail_bits.append(f'VIX {_vix:.1f} ≥ 20')
 
-    if _fut is None:
-        _unknown_bits.append('外資期貨淨口')
-    elif _fut <= _RING1_FUT_MIN_LOTS:
+    if _fut is not None and _fut <= _RING1_FUT_MIN_LOTS:
         _fail_bits.append(f'外資期貨 {_fut:,.0f} 口 ≤ {_RING1_FUT_MIN_LOTS:,}')
 
     if _fail_bits:
         _cap_ring = ring_gate_cap(False, '、'.join(_fail_bits))
         if _cap_ring is not None:
             _caps.append(_cap_ring)
-    if _unknown_bits:
-        _conflicts.append(
-            f'⚠️ 三環第一環資料不全（{"、".join(_unknown_bits)} 未取得），'
-            '未套用該天花板 — 數字可能偏樂觀')
+    _note = ring1_data_incomplete_note(vix_known=_vix is not None, fut_known=_fut is not None)
+    if _note:
+        _conflicts.append(_note)
     return _caps, _conflicts
+
+
+def ring1_data_incomplete_note(*, vix_known: bool, fut_known: bool) -> str | None:
+    """三環第一環「資料不全、未套用天花板」說明句（本模組唯一出處）。
+
+    批 Z34（Z3-n8＋C8-n8，客戶 2026-10-10 Q-z13＝A）：原句寫在 `_derive_intrinsic_caps` 內；§八 火力分級卡
+    在「第一環只因資料未取得而沒過」時要沿用**同一句**（逐字），故原地抽出（字句、順序、標點一位未動），
+    兩處同呼本函式，不另抄一份字串。VIX 與外資期貨淨口皆已知 → None（不出句）。
+    """
+    _unknown_bits: list[str] = []
+    if not vix_known:
+        _unknown_bits.append('VIX')
+    if not fut_known:
+        _unknown_bits.append('外資期貨淨口')
+    if not _unknown_bits:
+        return None
+    return (f'⚠️ 三環第一環資料不全（{"、".join(_unknown_bits)} 未取得），'
+            '未套用該天花板 — 數字可能偏樂觀')
 
 
 def _invalidate() -> None:
