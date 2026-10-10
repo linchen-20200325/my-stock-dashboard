@@ -183,7 +183,9 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         # 改為 None，並在敘事上與「真的接近 0」分開（後者仍走觀望區間）。
         # 批 Z33（第 2／3 項，修正錯誤）：外資淨額未觀測（L1 缺列預填 0／L3 補零推出）⇒ 同缺「外資」既有路徑（含下方柱狀圖「⬜ 未取得」）。
         _fn3 = inst[_fk3]['net'] if _fk3 and is_net_observed(inst, _fk3) else None
-        _tn3 = inst[_tk3]['net'] if _tk3 else None
+        # 批 Z36（Q-z20，客戶 2026-10-10 核准 A）：投信／自營商淨額未觀測 ⇒ 同缺該類既有路徑（不出「投信買超」行、
+        #   柱狀圖不畫該柱並列入下方「⬜ 未取得」）；觀測值（含真實 0）逐字不變。
+        _tn3 = inst[_tk3]['net'] if _tk3 and is_net_observed(inst, _tk3) else None
         if _fn3 is None:
             _hye_c = TRAFFIC_NEUTRAL
             _hye_ind = '外資買賣超 ⬜ 未取得'
@@ -215,7 +217,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         # 讀者無從分辨「今天真的買賣超 0 億」與「今天這一類根本沒資料」。
         # 順帶清掉 `_bc_colors` 被連續賦值三次（前兩次是死碼，v19.183 移除）。
         _zk3 = next((k for k in inst if '自營' in k), None)
-        _zn3 = (inst.get(_zk3) or {}).get('net') if _zk3 else None
+        _zn3 = (inst.get(_zk3) or {}).get('net') if _zk3 and is_net_observed(inst, _zk3) else None
         _bc_spec = [('外資', _fn3, '#58a6ff'),
                     ('投信', _tn3, TRAFFIC_GREEN),
                     ('自營商', _zn3, '#ffd700')]

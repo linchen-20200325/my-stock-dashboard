@@ -281,8 +281,11 @@ def render_section_news_ai(_macro_info: dict, _tl_eff_reg: str) -> None:
                 # 批 Z33（第 2／3 項，修正錯誤）：外資淨額未觀測 ⇒ 走上面既有「缺值整行不送」（不把假 0／假淨額送給 LLM）。
                 _fnet_v = (_inst_v.get(_fk_v, {}).get('net')
                            if _fk_v and is_net_observed(_inst_v, _fk_v) else None)
-                _tnet_v = _inst_v.get(_tk_v, {}).get('net') if _tk_v else None
-                _dnet_v = _inst_v.get(_dk_v, {}).get('net') if _dk_v else None
+                # 批 Z36（Q-z20，客戶 2026-10-10 核准 A）：投信／自營商淨額未觀測 ⇒ 同上既有「缺值整行不送」（不送「0 億」給 LLM）。
+                _tnet_v = (_inst_v.get(_tk_v, {}).get('net')
+                           if _tk_v and is_net_observed(_inst_v, _tk_v) else None)
+                _dnet_v = (_inst_v.get(_dk_v, {}).get('net')
+                           if _dk_v and is_net_observed(_inst_v, _dk_v) else None)
                 _margin_v = _cl_d_v.get('margin')
                 _adl_v   = _cl_d_v.get('adl')
                 _adl_ratio_v = None

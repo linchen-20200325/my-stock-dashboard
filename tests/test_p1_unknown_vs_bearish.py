@@ -105,7 +105,10 @@ class TestForeignNetTriState:
     def test_market_regime_distinguishes_zero_from_none(self):
         r_none = market_regime(100, 90, 80, None)
         r_zero = market_regime(100, 90, 80, 0)
-        assert any('待更新' in s for s in r_none['signals'])
+        # 📌 批 Z36（Q-z18，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：None 的文案自「⏰ 外資數據待更新
+        #   （收盤後15:30可用）」改同頁既有不帶原因的「外資買賣超 ⬜ 未取得」（程式不檢查時間，原因是猜的）。
+        #   本測試守的「None ≠ 0、分數相同」不變。
+        assert '外資買賣超 ⬜ 未取得' in r_none['signals'] and not any('待更新' in s for s in r_none['signals'])
         assert any('相抵' in s for s in r_zero['signals'])
         assert r_none['score'] == r_zero['score']   # 兩者都不加分，行為零位移
 

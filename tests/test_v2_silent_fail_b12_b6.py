@@ -222,8 +222,9 @@ class TestMacroStageAndCap:
     def test_e_mutant_locker_without_raise(self, macro_dir, monkeypatch):
         _write(macro_dir / "macro_state.json", _FAILSAFE)
         # D3（DL-f1-s65）起該行多一個「過期裁決不算讀壞」子句，錨點同步（突變語意不變）。
-        _m = _mutant(MSL, ("    if strict and not _is_loaded and os.path.exists(state_file_path)"
-                           " and not _file_expired:",
+        # 批 Z36（Q-z19）起再多一個「8 項全缺落檔不算讀壞」子句（換行續寫），錨點同步（突變語意不變）。
+        _m = _mutant(MSL, ("    if (strict and not _is_loaded and os.path.exists(state_file_path)"
+                           " and not _file_expired\n            and not _file_no_data):",
                            "    if False:"))
         monkeypatch.setattr(MSL, "get_macro_state", _m.get_macro_state)
         assert _macro_card().state == UI_EMPTY

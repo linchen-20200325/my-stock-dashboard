@@ -337,14 +337,23 @@ def _parse_bfi82u_rows(fields: list, data: list) -> dict | None:
     #   預填 0.0 對既有消費點原樣保留;沒觀測到的 key 另記在 `InstNetDict.unobserved_net`,
     #   只有 foreign_net 燈讀它(缺外資列 ⇒ 灰燈,⛔ 不顯示「0億」)。見 shared/inst_net.py。
     _seen: set = set()
+    # 批 Z36（Q-z20，客戶 2026-10-10 核准 A）：自營商觀測判定只看「名稱含『自營』且不含『外資』」的國內自營列
+    #   （不依賴子列確切名稱；外資自營商列解析與否不影響本旗標，加總值照舊 ⛔ 不改）：任一列在但值不可解析
+    #   （'--'／空白／非數字）或沒有任何一列成功解析 ⇒ 自營商未觀測。真實 0（'0'／'-0'）仍為觀測值。
+    _dom_dealer_ok = _dom_dealer_bad = False
     for _row in data:
         if not _row or len(_row) <= _net_idx:
+            if _row and '自營' in str(_row[0]) and '外資' not in str(_row[0]):
+                _dom_dealer_bad = True
             continue
         _nm = str(_row[0])
+        _is_dom_dealer = '自營' in _nm and '外資' not in _nm
         # 買賣差額(元,帶千分位逗號);lstrip('-') 支援負值
         _vs = str(_row[_net_idx]).replace(',', '').strip()
         if not _vs.lstrip('-').isdigit():
+            _dom_dealer_bad = _dom_dealer_bad or _is_dom_dealer
             continue
+        _dom_dealer_ok = _dom_dealer_ok or _is_dom_dealer
         _net = round(int(_vs) / TWD_PER_YI, 2)  # 元 → 億元(§4.1,L0 SSOT 1e8)
         if '外資及陸資' in _nm:
             _inst['外資及陸資']['net'] = _net
@@ -355,7 +364,8 @@ def _parse_bfi82u_rows(fields: list, data: list) -> dict | None:
         elif '自營' in _nm:
             _inst['自營商']['net'] += _net
             _seen.add('自營商')
-    _unobs = frozenset(_k for _k in _inst if _k not in _seen)
+    _unobs = frozenset(_k for _k in _inst if _k not in _seen
+                       or (_k == '自營商' and (_dom_dealer_bad or not _dom_dealer_ok)))
     if _unobs:
         print(f'[三大法人/BFI82U] ⚠️ 以下列未觀測到(預填 0.0 保留給既有消費點;'
               f'foreign_net 燈視為缺值): {sorted(_unobs)}')

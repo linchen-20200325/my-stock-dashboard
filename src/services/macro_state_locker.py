@@ -408,13 +408,19 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     if _file_expired:
         _file_ok = False
     _is_loaded = _wr_ok or _file_ok
+    # 批 Z36（Q-z19，客戶 2026-10-10 核准 A）：規則引擎 8 項數值輸入**全缺**時落檔的 fail-safe（「系統異常」＋
+    #   `missing_inputs`，批 Z34；判斷式同 §十一 `section_news_ai`／`ai_qa_service`）是「缺資料、尚未形成有效評估」，
+    #   不是「讀壞了」⇒ strict 也比照非 strict／檔不存在走既有未評估路徑（不拋、不帶 `file_error`）。
+    #   AI 裁決失敗檔（`execute_and_lock` 寫的 fail-safe，無 `missing_inputs`）、讀檔／JSON 失敗、缺 `market_regime` 照舊。
+    _file_no_data = (_file.get("market_regime") == "系統異常" and bool(_file.get("missing_inputs")))
     # B6-r5:讀檔／JSON 失敗 → 帶原始例外 repr(檔名＋例外),不帶降級後的「系統異常」;
     # 讀得出來但內容不可用(Fail-safe／缺鍵)→ 同修前帶 market_regime。
     _strict_detail = (
         f"{os.path.basename(state_file_path)}: "
         + (repr(_read_exc) if _read_exc is not None
            else f"market_regime={_file.get('market_regime')!r}"))
-    if strict and not _is_loaded and os.path.exists(state_file_path) and not _file_expired:
+    if (strict and not _is_loaded and os.path.exists(state_file_path) and not _file_expired
+            and not _file_no_data):
         raise RuntimeError(_strict_detail)
 
     # B6-r4（加性）：strict ＋ warroom 可用 ＋ 檔**存在**卻不可用 → 位階照算（warroom 撐得住），
@@ -423,7 +429,7 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     # 檔不存在、檔可用 → 一個鍵都不多（逐位元組同修前）。
     _file_error = ""
     if (strict and _wr_ok and not _file_ok and os.path.exists(state_file_path)
-            and not _file_expired):
+            and not _file_expired and not _file_no_data):
         _file_error = _strict_detail
 
     _health = _wr.get("health_score") if _wr_ok else None
