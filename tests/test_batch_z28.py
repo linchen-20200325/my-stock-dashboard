@@ -110,8 +110,11 @@ def _pre_chips_module():
     # 📌 批 Z30（Z29-n2，客戶 2026-10-09 核准，有意識的更正，⛔ 不是漏改）：本還原體定義為「基底 d88fe462」，
     #   故連同批 Z30 的各處（§三 ffill、訊號 5 末列缺值；批 Z30 續：`read_v4_macro_veto` 的 ffill）一併換回基底寫法
     #   （`Z30_CHIPS_REVERT_PAIRS`，同樣恰一次替換）。
+    # 📌 批 Z31（Q-z10／Q-z11，客戶 2026-10-10 核准，有意識的更正，⛔ 不是漏改）：同理連同批 Z31 各處一併換回基底寫法
+    #   （`Z31_CHIPS_REVERT_PAIRS`，同樣恰一次替換）。
     from tests.test_batch_z30 import Z30_CHIPS_REVERT_PAIRS
-    return _variant_module(SC, _PRE_CHIPS_PAIRS + Z30_CHIPS_REVERT_PAIRS, 'chips')
+    from tests.test_batch_z31 import Z31_CHIPS_REVERT_PAIRS
+    return _variant_module(SC, _PRE_CHIPS_PAIRS + Z30_CHIPS_REVERT_PAIRS + Z31_CHIPS_REVERT_PAIRS, 'chips')
 
 
 def _digest(out) -> str:
@@ -237,7 +240,11 @@ class TestC8n1bOtherPathsUnchanged:
     def test_finite_last_digest_equals_base(self, case, monkeypatch):
         mk, want = _FINITE_LAST_BASE[case]
         use_pre_qz7_scope(monkeypatch)   # golden 為 Q-z7 修字前實跑
-        assert _digest(_chips(mk(), monkeypatch)) == want
+        # 📌 批 Z31（Q-z11，客戶 2026-10-10 核准，有意識的更正，⛔ 不是漏改）：「🎯 籌碼綜合判斷」卡缺項改列「📌 ○○ 未取得」、
+        #   5 項全缺改「⬜ 無法判定」（由 test_batch_z31 斷言）。本段 golden 為修前實跑 ⇒ 以 `undo_qz11_card`（只把該卡換回修前，
+        #   正確性由 test_batch_z31 以還原體實跑自證）後比對，golden 一字未改。
+        from tests.test_batch_z31 import undo_qz11_card
+        assert _digest(undo_qz11_card(_chips(mk(), monkeypatch))) == want
 
     @pytest.mark.parametrize('fut', [[None], [_N, _N], [_I, -_I]])
     def test_all_nonfinite_column_keeps_c8n1a_branch(self, fut, monkeypatch):

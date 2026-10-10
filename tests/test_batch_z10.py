@@ -146,7 +146,11 @@ class TestC8n1aUnchangedWhenAnyFinite:
             assert _digest(_chips_mod(mk(), monkeypatch, _mod)) == want
             return
         use_pre_qz7_scope(monkeypatch)
-        assert _digest(_chips(mk(), monkeypatch)) == want
+        # 📌 批 Z31（Q-z11，客戶 2026-10-10 核准，有意識的更正，⛔ 不是漏改）：「🎯 籌碼綜合判斷」卡缺項改列「📌 ○○ 未取得」、
+        #   5 項全缺改「⬜ 無法判定」（由 test_batch_z31 斷言）。本段 golden 為修前實跑 ⇒ 以 `undo_qz11_card`（只把該卡換回修前，
+        #   正確性由 test_batch_z31 以還原體實跑自證）後比對，golden 一字未改。
+        from tests.test_batch_z31 import undo_qz11_card
+        assert _digest(undo_qz11_card(_chips(mk(), monkeypatch))) == want
 
 
 # ══════════════════════════════════════════════════════════════════════════

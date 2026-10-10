@@ -200,7 +200,11 @@ class TestPcrNonFinite:
         # 📌 批 Z28（客戶 Q-z7＝A，有意識的更正，⛔ 不是漏改）：§三 v4 卡範圍說明「空單超過 2 萬口…超過 1 萬口」改「達」，
         #   本段 golden 為修字前實跑；改用 `use_pre_qz7_scope`（只把該說明恰一次還原為修前字）保留原 digest，新字由 test_batch_z28 斷言。
         use_pre_qz7_scope(monkeypatch)
-        assert _digest(_chips(_li([-20000.0], [pcr]), monkeypatch)) == self._BASE[pcr]
+        # 📌 批 Z31（Q-z11，客戶 2026-10-10 核准，有意識的更正，⛔ 不是漏改）：「🎯 籌碼綜合判斷」卡缺項改列「📌 ○○ 未取得」、
+        #   5 項全缺改「⬜ 無法判定」（由 test_batch_z31 斷言）。本段 golden 為修前實跑 ⇒ 以 `undo_qz11_card`（只把該卡換回修前，
+        #   正確性由 test_batch_z31 以還原體實跑自證）後比對，golden 一字未改。
+        from tests.test_batch_z31 import undo_qz11_card
+        assert _digest(undo_qz11_card(_chips(_li([-20000.0], [pcr]), monkeypatch))) == self._BASE[pcr]
 
     def test_finite_still_scored(self, monkeypatch):
         txt = _txt(_chips(_li([-20000.0], [150.5]), monkeypatch))

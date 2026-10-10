@@ -359,8 +359,13 @@ def _variant_with(pairs):
 
 
 def pre_z30_chips_module():
-    """現行 section_chips 只把本批各處（含續）換回基底 `4591c5aa` 寫法。"""
-    return _variant_with(Z30_CHIPS_REVERT_PAIRS)
+    """現行 section_chips 只把本批各處（含續）換回基底 `4591c5aa` 寫法。
+
+    📌 批 Z31（Q-z10／Q-z11，客戶 2026-10-10 核准，有意識的更正，⛔ 不是漏改）：基底 `4591c5aa` 尚無批 Z31 ⇒
+    連同批 Z31 各處（`Z31_CHIPS_REVERT_PAIRS`，同樣恰一次替換）一併換回，本還原體仍等於該基底（比照批 Z30 對 z28 的作法）。
+    """
+    from tests.test_batch_z31 import Z31_CHIPS_REVERT_PAIRS
+    return _variant_with(Z30_CHIPS_REVERT_PAIRS + Z31_CHIPS_REVERT_PAIRS)
 
 
 def _chips_mod(li, mp, mod):
