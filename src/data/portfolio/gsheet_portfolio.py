@@ -727,9 +727,16 @@ def load_forward_test_picks() -> list[dict[str, Any]]:
     """讀回全部凍結紀錄(dict list;含 cohort/stock_id/entry_price/factors…)。
 
     worksheet 不存在 / 未設定 Sheet / 讀取失敗 → 回 [](不炸對帳面板;§1 由 caller 判空)。
+    批 Z33（Z12-n2）:`stock_id`／`name` 保留 Sheet 原字串（`0050` 不可讀成 50,否則與本地
+    '0050' 去重失效、對帳抓不到現價）;其餘欄轉換同 `get_all_records()` 預設。
+    gspread `numericise_ignore` 只認 **1-based 欄序**（欄名不生效）⇒ 依實際表頭找欄位;
+    表頭缺其中一欄 → 只保留另一欄字串,其餘欄行為同修前。
     """
     try:
-        return _ft_worksheet().get_all_records()
+        ws = _ft_worksheet()
+        header = ws.row_values(1)
+        return ws.get_all_records(numericise_ignore=[
+            i + 1 for i, h in enumerate(header) if h in ('stock_id', 'name')])
     except Exception as _e:  # noqa: BLE001 — gsheet 不可用不炸前進式驗證面板
         print(f'[gsheet] forward_test_picks 讀取失敗: {type(_e).__name__}: {_e}')
         return []
