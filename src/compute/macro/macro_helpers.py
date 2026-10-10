@@ -293,7 +293,11 @@ def calc_traffic_light(
     # 更關鍵的是 `_conf_sources` 判的是 `bool(_fk)`(key 在不在),於是
     # 「key 在但沒數字」會**同時**顯示「信心 100%」與「⏰ 外資數據待更新」。
     # 三態化:None = 沒拿到(信心扣分 + 列缺失)、0.0 = 真的持平、其他 = 實值。
-    _fnet   = _safe_float(_inst.get(_fk, {}).get('net')) if _fk else None
+    # 批 Z35（Q-z15，客戶 2026-10-10 核准 A）：外資淨額「未觀測」（L1 缺列預填 0／L3 補零推出，
+    #   `shared/inst_net.is_net_observed`）⇒ 當缺值（同 net 為 None 的既有路徑：信心扣 20、缺失列
+    #   「外資買賣超 (三大法人)」、燈號閘門照既有機制）；觀測值逐字不變。
+    _fnet   = (_safe_float(_inst.get(_fk, {}).get('net'))
+               if _fk and is_net_observed(_inst, _fk) else None)
 
     # 先行指標：期貨外資大小、韭菜指數
     # ── v19.177 P1-B ①:兩者缺值一律 None,不再捏 0 / 50(§1 + §4.1)────────────

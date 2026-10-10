@@ -145,6 +145,16 @@ class TestC8n1aUnchangedWhenAnyFinite:
             use_pre_qz7_scope(monkeypatch, _mod)
             assert _digest(_chips_mod(mk(), monkeypatch, _mod)) == want
             return
+        if case == 'pos_pcr_nan':
+            # 📌 批 Z35（Q-z17，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：本例「🎯 籌碼綜合判斷」今日只剩外資期貨
+            #   1 項有效 ⇒ 結論改「⬜ 無法判定」（由 test_batch_z35 斷言）。本段 golden 為修前實跑 ⇒ 本例改用只把批 Z35
+            #   換回的還原體實跑（同一套 `_chips` 設定），再照下方既有 `undo_qz11_card`，golden 不改。
+            from tests.test_batch_z28 import _chips as _chips_mod
+            from tests.test_batch_z31 import pre_qz17_chips_module, undo_qz11_card
+            _mod = pre_qz17_chips_module()
+            use_pre_qz7_scope(monkeypatch, _mod)
+            assert _digest(undo_qz11_card(_chips_mod(mk(), monkeypatch, _mod))) == want
+            return
         use_pre_qz7_scope(monkeypatch)
         # 📌 批 Z31（Q-z11，客戶 2026-10-10 核准，有意識的更正，⛔ 不是漏改）：「🎯 籌碼綜合判斷」卡缺項改列「📌 ○○ 未取得」、
         #   5 項全缺改「⬜ 無法判定」（由 test_batch_z31 斷言）。本段 golden 為修前實跑 ⇒ 以 `undo_qz11_card`（只把該卡換回修前，

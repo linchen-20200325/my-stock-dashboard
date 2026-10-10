@@ -17,7 +17,8 @@ plain dict 相同；**只多一個屬性** `unobserved_net`（沒有觀測到的
 守）以 `is_net_observed()` 判斷，沒觀測到 ⇒ 改走該處既有的缺值路徑：
 foreign_net 燈（灰燈）、§作戰室外資方向（批 Z16）、§八 三環 E／§十一 AI 提示／§三 籌碼卡／
 §七 新台幣／外資視角／教學 BFI82U 即時值／對帳面板健康評分／個股即時操作建議（批 Z33）。
-其餘消費點（如 calc_traffic_light、市場評估外資訊號）仍讀 net 原值（未改）。
+總經紅綠燈 `calc_traffic_light`（信心分數當缺值）與市場評估外資訊號（批 Z35，客戶 Q-z15／Q-z16）。
+其餘消費點仍讀 net 原值（未改）。
 
 ⚠️ 屬性只活在**同一個物件**上：若中途有人 `dict(inst)` 複製，旗標會掉 ⇒ 退回既有行為
 （讀 net），⛔ 不會更糟。pickle（`_pkl_put` / `st.cache_data`）會保留屬性；

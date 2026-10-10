@@ -209,7 +209,16 @@ def _missing_tag(k) -> str:
 
 # ── 還原體：本批 section_chips 改動逐字換回基底 `64158a76` 寫法 ──
 #: (修後逐字, 修前逐字)。⚠️ 正式碼字面一改，這裡會因找不到替換點而失敗 —— 那是字面錨點。
-Z31_QZ11_REVERT_PAIRS = tuple(
+#: 📌 批 Z35（Q-z17，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：本批「5 項全缺」條件改為「有效項數 < 2」。
+#:   該行正是下方 Q-z11 錨點的一部分 ⇒ 先把批 Z35 那幾行換回批 Z31 寫法（恰一處），再接本批還原；
+#:   還原體仍逐字等於基底 `64158a76`（下游 z28／z30 串接本常數者不必改）。批 Z35 自己的還原也取用本對（單一來源）。
+Z35_QZ17_CHIPS_PAIR = (
+    "        # 批 Z35（Q-z17，客戶 2026-10-10 核准 A）：條件由「5 項全缺」放寬為「有效（非 None）項數 < 2」——\n"
+    "        #   只剩 1 項有效（含落在中性、不出訊號者，如前五大介於 [-10000,0]、PCR=110）同樣「⬜ 無法判定」、\n"
+    "        #   不給操作建議；≥ 2 項有效 ⇒ 既有計分／門檻／結論逐字不變；「📌 ○○ 未取得」標記照舊。\n"
+    "        if sum(_x is not None for _x in (_fnet, _pcr, _opt, _top5, _leek)) < 2:\n",
+    "        if _fnet is None and _pcr is None and _opt is None and _top5 is None and _leek is None:\n")
+Z31_QZ11_REVERT_PAIRS = (Z35_QZ17_CHIPS_PAIR,) + tuple(
     (f"        else:\n            _sigs.append('{_missing_tag(k)}')\n", '') for k in _COLS
 ) + (
     ("        # 批 Z31（Q-z11，客戶 2026-10-10 核准）：5 項全缺（皆 None）⇒ 同頁既有「⬜ 無法判定」＋同頁 v4 卡既有灰\n"
@@ -252,6 +261,11 @@ Z31_CHIPS_REVERT_PAIRS = Z31_QZ10_REVERT_PAIRS + Z31_QZ11_REVERT_PAIRS
 
 def pre_qz11_chips_module():
     return _variant_with(Z31_QZ11_REVERT_PAIRS)
+
+
+def pre_qz17_chips_module():
+    """現行 section_chips 只把批 Z35（Q-z17：有效項 < 2 ⇒ 無法判定）換回批 Z31 寫法（「5 項全缺」）。"""
+    return _variant_with((Z35_QZ17_CHIPS_PAIR,))
 
 
 def pre_z31_chips_module():
@@ -342,8 +356,12 @@ class TestQz11SomeMissing:
         assert '🔴 偏空' in card and _ADVICE[1] in card and '⬜ 無法判定' not in card
 
     def test_one_present_score_zero_divergent(self, monkeypatch):
-        """(e) 只有 PCR=110 有值（不計分）⇒ score 0 ⇒ 仍「⚪ 多空分歧」與既有建議句。"""
-        card = _card(monkeypatch, fnet=None, opt=None, top5=None, leek=None, pcr=110.0)
+        """(e) 只有 PCR=110 有值（不計分）⇒ score 0 ⇒ 仍「⚪ 多空分歧」與既有建議句。
+
+        📌 批 Z35（Q-z17，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：有效項 < 2 起改「⬜ 無法判定」
+        （現行行為由 test_batch_z35 斷言）。本測試守的是批 Z31 當時的規則 ⇒ 改對只把批 Z35 換回的還原體實跑，斷言不改。"""
+        card = _card_of(_chips_mod(_li_last(fnet=None, opt=None, top5=None, leek=None, pcr=110.0), monkeypatch,
+                                   pre_qz17_chips_module()))
         assert '⚪ 多空分歧' in card and _ADVICE[2] in card and '⬜ 無法判定' not in card
         assert _sigs(card) == ['📌 外資期貨 未取得', '🔵 PCR=110（偏多）', '📌 外選 未取得',
                                '📌 前五大 未取得', '📌 韭菜指數 未取得']
@@ -351,8 +369,13 @@ class TestQz11SomeMissing:
     @pytest.mark.parametrize('top5', [-10000.0, -5000.0, 0.0])
     def test_top5_neutral_is_not_missing(self, top5, monkeypatch):
         """前五大介於 [-10000, 0]：有值但中性（本來就不加訊號）≠ 缺值 ⇒ 不出「📌 前五大 未取得」；
-        其餘 4 項缺 ⇒ score 0 ⇒ 「⚪ 多空分歧」（不是「⬜ 無法判定」）。"""
-        card = _card(monkeypatch, fnet=None, pcr=None, opt=None, leek=None, top5=top5)
+        其餘 4 項缺 ⇒ score 0 ⇒ 「⚪ 多空分歧」（不是「⬜ 無法判定」）。
+
+        📌 批 Z35（Q-z17，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：只剩 1 項有效起改「⬜ 無法判定」
+        （現行行為由 test_batch_z35 斷言；「前五大中性仍算有效一項、不出未取得」兩批一致）。
+        本測試守的是批 Z31 當時的規則 ⇒ 改對只把批 Z35 換回的還原體實跑，斷言不改。"""
+        card = _card_of(_chips_mod(_li_last(fnet=None, pcr=None, opt=None, leek=None, top5=top5), monkeypatch,
+                                   pre_qz17_chips_module()))
         assert '📌 前五大 未取得' not in card and '前五大' not in card
         assert '⚪ 多空分歧' in card and '⬜ 無法判定' not in card
         assert _sigs(card) == ['📌 外資期貨 未取得', '📌 PCR 未取得', '📌 外選 未取得', '📌 韭菜指數 未取得']

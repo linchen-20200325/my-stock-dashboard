@@ -325,6 +325,11 @@ Z33_INST_REVERT_PAIRS = {
 from tests.test_batch_z34 import Z34_REVERT_PAIRS as _Z34_PAIRS  # noqa: E402
 from tests.test_batch_z34 import z34_pre_module as _z34_pre_module  # noqa: E402
 _REVERT = {k: tuple(v) + tuple(_Z34_PAIRS.get(k, ())) for k, v in Z33_INST_REVERT_PAIRS.items()}
+# 📌 批 Z35（Q-z17，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：§三「🎯 籌碼綜合判斷」有效項 < 2 改無法判定。
+#   還原體一併換回該行（恰一處），仍逐字等於基底 a56ccf37（_BASE_SHA 不改）；本檔 chips 各情境先行指標皆
+#   5 項有效（或不出該卡）⇒ 該卡行為與修前相同。⛔ 不動 `Z33_INST_REVERT_PAIRS` 本身（同上 Z34 作法）。
+from tests.test_batch_z31 import Z35_QZ17_CHIPS_PAIR as _Z35_CHIPS_PAIR  # noqa: E402
+_REVERT['chips'] = _REVERT['chips'] + (_Z35_CHIPS_PAIR,)
 
 
 def _now_mod(ek: str):
