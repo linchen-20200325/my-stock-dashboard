@@ -397,3 +397,39 @@ class TestDownstream:
         for c in set(('外資', '投信', '自營')) - set(missing):
             assert not math.isnan(d[c])
         json.dumps(QA._json_safe(r))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5. QA 補測（非阻擋建議 1）：值凍結偵測 `leading_frozen_columns`（🔎 資料診斷頁＋L2 判燈路徑共用）
+# ══════════════════════════════════════════════════════════════════════════
+class TestFrozenDetection:
+    """buy／sell 整欄缺：修前三欄被捏成連續 0 ⇒ 誤判「外資／投信／自營 3 欄數值凍結」；
+    修後三欄為缺 ⇒ 不判凍結 `(0, [])`。判燈只看「外資大小」是否凍結 ⇒ 燈號／結論修前修後相同。"""
+
+    _FUTS = {'fut_varying': [-1000.0, 2000.0, -500.0, -40000.0],   # 外資大小不凍結
+             'fut_frozen': [-40000.0] * 4}                          # 外資大小凍結 ⇒ 判燈降級（既有行為）
+
+    def test_frozen_columns_fixed_vs_pre(self, monkeypatch, tmp_path):
+        from shared.data_freshness import leading_frozen_columns
+        now = _fast(monkeypatch, tmp_path, 'no_buy_sell_cols')
+        assert leading_frozen_columns(now) == (0, [])
+        pre = _fast(monkeypatch, tmp_path, 'no_buy_sell_cols', z37_pre_module())
+        # 突變：還原本批那一處 ⇒ 重現修前（基底 3fed8dd6）誤判
+        assert leading_frozen_columns(pre) == (3, ['外資', '投信', '自營'])
+
+    @pytest.mark.parametrize('fut', sorted(_FUTS))
+    def test_traffic_light_unchanged(self, fut, monkeypatch, tmp_path):
+        from src.compute.macro.macro_helpers import calc_traffic_light
+        out = {}
+        for tag, mod in (('now', LI), ('pre', z37_pre_module())):
+            df = _fast(monkeypatch, tmp_path, 'no_buy_sell_cols', mod)
+            df['外資大小'] = self._FUTS[fut]
+            out[tag] = calc_traffic_light({'score': 3, 'regime': 'neutral'}, {'avg': 60}, {'inst': {}}, df)
+        frozen_fut = fut == 'fut_frozen'
+        assert out['now']['frozen_cols'] == (['外資大小'] if frozen_fut else [])
+        assert out['pre']['frozen_cols'] == ['外資', '投信', '自營'] + (['外資大小'] if frozen_fut else [])
+        # 判燈只依「外資大小」：除 frozen_cols 外整包結果相同（燈號、結論、fut_net、凍結降級旗標）
+        assert {k: v for k, v in out['now'].items() if k != 'frozen_cols'} == \
+               {k: v for k, v in out['pre'].items() if k != 'frozen_cols'}
+        assert out['now']['fut_net_frozen'] is frozen_fut
+        assert out['now']['fut_net'] == (None if frozen_fut else -40000.0)
