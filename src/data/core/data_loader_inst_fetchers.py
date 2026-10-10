@@ -50,7 +50,14 @@ def _get_t86_day(ds: str) -> dict:
         fields = [str(f) for f in j.get('fields', [])]
         fi = {n: i for i, n in enumerate(fields)}
         # T86 欄位名稱用「買賣超」而非「淨」，例如「外陸資買賣超股數」「投信買賣超股數」
-        f_idx = next((v for k, v in fi.items() if '外' in k and '買賣超' in k and '自營' not in k), None)
+        # 批 Z38(治理規則 Level 1 欄名對映 bug):現行欄名「外陸資買賣超股數(不含外資自營商)」
+        # 括號內含「自營」→ 舊條件「不含自營」把它排除 → f_idx=None → 每檔外資假 0。
+        # 改先挑「含外陸資且含買賣超」(現行格式只命中此欄,與 BFI82U 外資口徑同:外資及陸資、
+        # 不含外資自營商);舊格式「外資買賣超股數」保留原判斷作備援,「外資自營商買賣超股數」
+        # 兩條件皆不命中。
+        f_idx = next((v for k, v in fi.items() if '外陸資' in k and '買賣超' in k), None)
+        if f_idx is None:
+            f_idx = next((v for k, v in fi.items() if '外' in k and '買賣超' in k and '自營' not in k), None)
         t_idx = next((v for k, v in fi.items() if '投信' in k and '買賣超' in k), None)
         d_idx = next((v for k, v in fi.items() if '自營' in k and '買賣超' in k and '自行' in k), None)
         print(f'[T86] {ds} fields={fields[:5]} f_idx={f_idx} t_idx={t_idx} d_idx={d_idx}')
@@ -65,7 +72,9 @@ def _get_t86_day(ds: str) -> dict:
         for row in j['data']:
             code = str(row[0]).strip()
             if code:
-                day_data[code] = {'外資': _pn(row, f_idx), '投信': _pn(row, t_idx), '自營商': _pn(row, d_idx)}
+                # 批 Z38:找不到外資欄 → NaN(缺值),不回 _pn 的 0.0 假零;交下游既有缺值路徑
+                day_data[code] = {'外資': _pn(row, f_idx) if f_idx is not None else float('nan'),
+                                  '投信': _pn(row, t_idx), '自營商': _pn(row, d_idx)}
         _T86_DAY_CACHE[ds] = day_data
         print(f'[TWSE T86] {ds}: {len(day_data)} 支')
         return day_data
