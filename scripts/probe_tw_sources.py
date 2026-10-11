@@ -14,8 +14,14 @@
 - 走 production 同一條 `src.data.proxy.fetch_url`(NAS Squid → 直連降級),
   量到的就是正式環境會看到的
 
-執行模式(2026-10-11 起;probe workflow 只跑 `python scripts/probe_tw_sources.py` 不帶參數):
-- 無參數(預設)→ 只跑第 4 輪 `probe_round4()`:TPEx 自營避險(G6)金額對帳偏差依證券類別
+執行模式(2026-10-11 第 5 輪起;probe workflow 只跑 `python scripts/probe_tw_sources.py` 不帶參數):
+- 無參數(預設)→ 只跑第 5 輪 `probe_round5()`(批 Z41 正式切換前實測,**唯讀**、不寫 repo 任何檔):
+  ① 直接呼叫正式碼 `_get_tpex_day`/`get_tpex_day_status`、`fetch_tpex_close_day`/`get_tpex_close_status`
+  (交易日 20261008/20261007/20261001/20260918、非交易日 20261009/20261010);② fetch_url 直打新法人/
+  新收盤端點印外殼原值(U1 收盤 tables[0].date / U2 收盤頂層 date / U3 法人 title / U4 totalCount);
+  ③ 20261008/20261001「僅上市」vs「上市+上櫃」板塊淨額合理性比較 + TPEx 外資合計 vs insti/summary。
+  請求數上限 45(含正式碼內部 fetch_url)、間隔 ≥1.5s。
+- `--round4` → 只跑第 4 輪 `probe_round4()`:TPEx 自營避險(G6)金額對帳偏差依證券類別
   (A 普通股 / B ETF 類:債·外幣·其他 / C 其他)拆解;summary meta 全文;summary 變體 ≤2;
   各類 G6 買進前 10 檔。請求數上限 15、間隔 1.5s、timeout 25s。
 - `--round3` → 只跑第 3 輪 `probe_round3()`:找外資自營商非零歷史日以區分 dailyTrade
@@ -26,7 +32,7 @@
   欄位口徑 + FinMind 匿名交叉驗證;探針內直接驗算(買−賣==買賣超、合計關係、
   最低<=收盤<=最高…)並印成立比例。請求數上限 40、間隔 1.5s、timeout 25s。
 - `--legacy` → 只跑舊版 PMI/出口 TARGETS + deep dumps + production smoke(原預設行為)。
-- `--all` → 第 4 輪 + 第 3 輪 + 第 1/2 輪 + legacy 全跑。
+- `--all` → 第 5 輪 + 第 4 輪 + 第 3 輪 + 第 1/2 輪 + legacy 全跑。
 """
 from __future__ import annotations
 
@@ -1980,6 +1986,323 @@ def probe_round4(fetch_url=None) -> int:
         _TW_MAX_REQ = _saved_max
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# 第 5 輪(2026-10-11,批 Z41 正式切換前實測):以**正式碼**實打 TPEx 官方新網站
+# ══════════════════════════════════════════════════════════════════════════
+#: 第 5 輪請求上限(含正式碼內部 fetch_url 呼叫;Storm Shield 300s 快取命中不送出、不計)。
+_R5_MAX_REQ = 45
+#: 交易日 / 非交易日(預期 TPEx 非 ok 或空表,由 TWSE 同日判定休市)。
+_R5_TRADING = ('20261008', '20261007', '20261001', '20260918')
+_R5_NON_TRADING = ('20261009', '20261010')
+#: 合理性比較日(與上面交易日重疊 → 法人/收盤吃進程快取與 Storm Shield,少打請求)。
+_R5_COMPARE = ('20261008', '20261001')
+_R5_RAW_DATE = '20261008'
+_R5_STATE = {'n': 0, 'last': 0.0, 'refused': 0, 'cache_hit': 0}
+
+
+def _r5_install_throttle():
+    """把正式碼用到的 `fetch_url` 換成「計數 + ≥1.5s 間隔 + 上限」包裝(行為不變,只加延遲)。
+    回傳還原函式。Storm Shield 快取命中(同 URL+params 300s 內)不送出請求 → 不計、不睡。"""
+    import src.data.proxy as _px
+    import src.data.proxy.proxy_helper as _ph
+    import src.data.core.data_loader_inst_fetchers as _dlif
+    orig = _ph.fetch_url
+
+    def _wrapped(url, headers=None, params=None, timeout=20, attempts=3):
+        key = (url, tuple(sorted((params or {}).items())))
+        hit = _ph._URL_CACHE.get(key)
+        if hit is not None and _tw_time.time() - hit[0] < _ph._URL_CACHE_TTL:
+            _R5_STATE['cache_hit'] += 1
+            return orig(url, headers=headers, params=params, timeout=timeout, attempts=attempts)
+        if _R5_STATE['n'] >= _R5_MAX_REQ:
+            _R5_STATE['refused'] += 1
+            print(f'   [r5] 已達請求上限 {_R5_MAX_REQ} → 不送出 {url}')
+            return None
+        wait = _TW_SLEEP_S - (_tw_time.time() - _R5_STATE['last'])
+        if _R5_STATE['n'] and wait > 0:
+            _tw_time.sleep(wait)
+        _R5_STATE['n'] += 1
+        print(f'   [r5 請求 #{_R5_STATE["n"]:02d}] {url} params={params} timeout={timeout} attempts={attempts}')
+        try:
+            return orig(url, headers=headers, params=params, timeout=timeout, attempts=attempts)
+        finally:
+            _R5_STATE['last'] = _tw_time.time()
+
+    had_pkg_attr = 'fetch_url' in vars(_px)
+    _px.fetch_url = _wrapped
+    _dlif._fetch_url_dl = _wrapped
+
+    def _restore():
+        _dlif._fetch_url_dl = orig
+        if had_pkg_attr:
+            _px.fetch_url = orig
+        else:
+            del _px.fetch_url
+    return _wrapped, _restore
+
+
+def _r5_manual_count(label: str) -> None:
+    """正式碼直接 requests.get(不經 fetch_url)的請求,手動計數 + 間隔。"""
+    wait = _TW_SLEEP_S - (_tw_time.time() - _R5_STATE['last'])
+    if _R5_STATE['n'] and wait > 0:
+        _tw_time.sleep(wait)
+    _R5_STATE['n'] += 1
+    _R5_STATE['last'] = _tw_time.time()
+    print(f'   [r5 請求 #{_R5_STATE["n"]:02d}] {label}(正式碼直接 requests.get,手動計數)')
+
+
+def _r5_fmt(v) -> str:
+    return repr(v)
+
+
+def _r5_step1() -> None:
+    from src.data.core.data_loader_inst_fetchers import _get_tpex_day, get_tpex_day_status
+    from src.data.stock.market_close_fetcher import fetch_tpex_close_day, get_tpex_close_status
+    print('\n══ ① 正式碼狀態表(_get_tpex_day / fetch_tpex_close_day)══')
+    table = []
+    for ds in _R5_TRADING + _R5_NON_TRADING:
+        kind = '交易日' if ds in _R5_TRADING else '非交易日'
+        print(f'\n── {ds}({kind})')
+        try:
+            inst = _get_tpex_day(ds) or {}
+        except Exception as e:  # noqa: BLE001 — 正式碼理論上不拋;拋了要看見
+            print(f'   ❌ _get_tpex_day 例外 {type(e).__name__}: {e}')
+            inst = {}
+        try:
+            close = fetch_tpex_close_day(ds) or {}
+        except Exception as e:  # noqa: BLE001
+            print(f'   ❌ fetch_tpex_close_day 例外 {type(e).__name__}: {e}')
+            close = {}
+        ist, cst = get_tpex_day_status(ds), get_tpex_close_status(ds)
+        print(f'   法人 status={ist!r} 筆數={len(inst)} | 收盤 status={cst!r} 筆數={len(close)}')
+        for code in _TW_SAMPLE_CODES:
+            print(f'     {code}: 法人={inst.get(code)!r} 收盤={close.get(code)!r}')
+        if inst:
+            import math as _m
+            n_nan = sum(1 for v in inst.values()
+                        if any(isinstance(x, float) and _m.isnan(x) for x in v.values()))
+            print(f'   法人三分項含 NaN 的代號數={n_nan}')
+        table.append((ds, kind, ist, len(inst), cst, len(close)))
+    print('\n   ▶ 狀態總表')
+    print('   日期      類別    法人status        法人筆數  收盤status        收盤筆數')
+    for ds, kind, ist, ni, cst, nc in table:
+        print(f'   {ds}  {kind:<6}  {str(ist):<16}  {ni:>7}  {str(cst):<16}  {nc:>7}')
+
+
+def _r5_step2(fetch_url) -> None:
+    from shared.tpex_schema import tpex_query_date
+    ds = _R5_RAW_DATE
+    print(f'\n══ ② 原始回應結構(fetch_url 直打新端點,{ds};同 URL+params 若 300s 內已打過 → Storm Shield 快取)══')
+    hdr = {'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json, */*',
+           'Referer': 'https://www.tpex.org.tw/'}
+    for lab, url, params in (
+            ('法人 insti/dailyTrade', _R3_DAILY,
+             {'type': 'Daily', 'sect': 'EW', 'date': tpex_query_date(ds), 'id': '', 'response': 'json'}),
+            ('收盤 afterTrading/otc', _R3_OTC,
+             {'date': tpex_query_date(ds), 'type': 'EW', 'id': '', 'response': 'json'})):
+        print(f'\n── {lab}')
+        try:
+            r = fetch_url(url, headers=hdr, params=params, timeout=20, attempts=1)
+        except Exception as e:  # noqa: BLE001
+            print(f'   ❌ EXC {type(e).__name__}: {_tw_redact(str(e))}')
+            continue
+        if r is None:
+            print('   ❌ fetch_url 回 None')
+            continue
+        print(f'   HTTP {getattr(r, "status_code", None)} | r.url={_tw_redact(str(getattr(r, "url", "") or ""))!r}'
+              f'(空＝Storm Shield 快取 mock)')
+        try:
+            j = r.json()
+        except Exception as e:  # noqa: BLE001
+            print(f'   ⚠️ 非 JSON {type(e).__name__}: body[:300]={_tw_redact((r.text or "")[:300])!r}')
+            continue
+        if not isinstance(j, dict):
+            print(f'   頂層非 dict:{type(j).__name__}')
+            continue
+        print(f'   頂層 keys = {list(j.keys())!r}')
+        print(f'   頂層 stat = {j.get("stat")!r}')
+        print(f'   頂層 date 原值 = {j.get("date")!r}(型別 {type(j.get("date")).__name__})')
+        if 'totalCount' in j:
+            print(f'   頂層 totalCount = {j.get("totalCount")!r}(型別 {type(j.get("totalCount")).__name__})')
+        tables = j.get('tables')
+        if not isinstance(tables, list) or not tables or not isinstance(tables[0], dict):
+            print(f'   tables 非預期:{type(tables).__name__} len={len(tables) if isinstance(tables, list) else None}')
+            continue
+        print(f'   len(tables) = {len(tables)}')
+        t0 = tables[0]
+        data = t0.get('data')
+        print(f'   tables[0] keys = {list(t0.keys())!r}')
+        print(f'   tables[0].title 原值 = {t0.get("title")!r}')
+        print(f'   tables[0] 含 date 鍵 = {"date" in t0};原值 = {t0.get("date")!r}')
+        tc = t0.get('totalCount')
+        print(f'   tables[0].totalCount 原值 = {tc!r}(型別 {type(tc).__name__})')
+        print(f'   len(tables[0].data) = {len(data) if isinstance(data, list) else repr(type(data))}')
+        try:
+            eq = (None if tc is None or not isinstance(data, list) else int(tc) == len(data))
+        except (TypeError, ValueError):
+            eq = f'不可轉 int({tc!r})'
+        print(f'   totalCount == len(data) ? {eq}')
+        print(f'   tables[0].fields 原值 = {t0.get("fields")!r}')
+        for k in ('subtitle', 'notes', 'summary'):
+            if k in t0:
+                print(f'   tables[0].{k} = {t0.get(k)!r}')
+
+
+def _r5_sector_sum(sd, col: str):
+    import math as _m
+    vals = [float(v) for v in sd[col].tolist()]
+    n_nan = sum(1 for v in vals if _m.isnan(v))
+    return sum(v for v in vals if not _m.isnan(v)), n_nan
+
+
+def _r5_step3(fetch_url) -> None:
+    import importlib
+    import math as _m
+    import pandas as _pd
+    from src.compute.sector_flow import compute_sector_daily_net
+    from src.data.core.data_loader_inst_fetchers import _get_t86_day, _get_tpex_day
+    from src.data.stock.market_close_fetcher import fetch_industry_map_bulk, fetch_tpex_close_day
+    SF = importlib.import_module('scripts.update_sector_flow')
+    print('\n══ ③ 合理性比較(唯讀、記憶體內;正式碼 `scripts/update_sector_flow._collect_days` + '
+          '`compute_sector_daily_net`)══')
+    if not (_tw_os.environ.get('FINMIND_TOKEN') or ''):
+        print('   FINMIND_TOKEN 未設 → fetch_industry_map_bulk 先匿名 FinMind,敗則 TWSE/TPEx openapi')
+    _r5_manual_count('FinMind TaiwanStockInfo(fetch_industry_map_bulk 內)')
+    try:
+        industry_map = fetch_industry_map_bulk() or {}
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ fetch_industry_map_bulk 例外 {type(e).__name__}: {e}')
+        industry_map = {}
+    industry_map = SF._clean_industry_map(industry_map)
+    print(f'   industry_map 筆數={len(industry_map)};樣本 '
+          + ', '.join(f'{c}={industry_map.get(c)!r}' for c in _TW_SAMPLE_CODES))
+    if not industry_map:
+        print('   ❌ industry_map 空 → 板塊比較無法進行(全部會落「未分類」),仍照算供參')
+    for ds in _R5_COMPARE:
+        d = _pd.Timestamp(ds).date()
+        print(f'\n── {ds}')
+        try:
+            inst_df, price_df, diag = SF._collect_days([d])
+        except Exception as e:  # noqa: BLE001
+            import traceback
+            print(f'   ❌ _collect_days 例外 {type(e).__name__}: {e}')
+            traceback.print_exc()
+            continue
+        pdd = diag['per_day'].get(ds, {})
+        print(f'   _collect_days per_day = {pdd!r}')
+        t86 = _get_t86_day(ds) or {}
+        tw_codes = set(map(str, t86))
+        inst_tw = inst_df[inst_df['stock_id'].astype(str).isin(tw_codes)]
+        price_tw = price_df[price_df['stock_id'].astype(str).isin(tw_codes)]
+        if not pdd.get('tpex_ok'):
+            print('   ⚠️ tpex_ok=False → 正式碼本日只寫上市;下方「上市+上櫃」與「僅上市」相同(比較無意義)')
+        try:
+            sd_tw, cov_tw = compute_sector_daily_net(inst_tw, price_tw, industry_map)
+            sd_all, cov_all = compute_sector_daily_net(inst_df, price_df, industry_map)
+        except Exception as e:  # noqa: BLE001
+            import traceback
+            print(f'   ❌ compute_sector_daily_net 例外 {type(e).__name__}: {e}')
+            traceback.print_exc()
+            continue
+        print(f'   僅上市 inst 列={len(inst_tw)} 價格列={len(price_tw)};上市+上櫃 inst 列={len(inst_df)} 價格列={len(price_df)}')
+        print(f'   n_stocks 合計:僅上市={int(sd_tw["n_stocks"].sum()) if len(sd_tw) else 0} '
+              f'上市+上櫃={int(sd_all["n_stocks"].sum()) if len(sd_all) else 0};'
+              f'板塊數 僅上市={len(sd_tw)} 上市+上櫃={len(sd_all)}')
+        print(f'   coverage 僅上市   = {cov_tw!r}')
+        print(f'   coverage 上市+上櫃 = {cov_all!r}')
+        for col in ('foreign_yi', 'trust_yi', 'dealer_yi', 'net_amt_yi'):
+            a, na = _r5_sector_sum(sd_all, col) if len(sd_all) else (0.0, 0)
+            t, nt = _r5_sector_sum(sd_tw, col) if len(sd_tw) else (0.0, 0)
+            print(f'   全市場 {col} 合計(板塊加總,NaN 板塊略過):上市+上櫃={a:,.2f} 億(NaN 板塊 {na})'
+                  f' | 僅上市={t:,.2f} 億(NaN 板塊 {nt}) | 差(上櫃貢獻)={a - t:,.2f} 億')
+        cols = ['net_amt_yi', 'foreign_yi', 'trust_yi', 'dealer_yi', 'n_stocks']
+        m = (sd_all.set_index('sector')[cols].add_suffix('_all')
+             .join(sd_tw.set_index('sector')[cols].add_suffix('_tw'), how='outer'))
+        m['d_net'] = m['net_amt_yi_all'] - m['net_amt_yi_tw']
+        m['_k'] = m['d_net'].abs()
+        only_all = sorted(set(sd_all['sector']) - set(sd_tw['sector']))
+        only_tw = sorted(set(sd_tw['sector']) - set(sd_all['sector']))
+        print(f'   只在合併版出現的板塊({len(only_all)}):{only_all!r}')
+        if only_tw:
+            print(f'   ⚠️ 只在僅上市版出現的板塊({len(only_tw)}):{only_tw!r}')
+        print('   ▶ 板塊差異前 15 大(|Δnet| 由大到小;單位 億;all＝上市+上櫃 / tw＝僅上市)')
+        top = m.sort_values('_k', ascending=False, na_position='last').head(15)
+        for sec, r in top.iterrows():
+            def _f(x):
+                return 'NaN' if x is None or (isinstance(x, float) and _m.isnan(x)) else f'{x:,.2f}'
+            print(f'     {sec}: Δnet={_f(r["d_net"])} | all net={_f(r["net_amt_yi_all"])} '
+                  f'外={_f(r["foreign_yi_all"])} 投={_f(r["trust_yi_all"])} 自={_f(r["dealer_yi_all"])} '
+                  f'n={_f(r["n_stocks_all"])} | tw net={_f(r["net_amt_yi_tw"])} '
+                  f'外={_f(r["foreign_yi_tw"])} 投={_f(r["trust_yi_tw"])} 自={_f(r["dealer_yi_tw"])} '
+                  f'n={_f(r["n_stocks_tw"])}')
+        n_dnan = int(m['d_net'].isna().sum())
+        if n_dnan:
+            print(f'   (Δnet 為 NaN 的板塊 {n_dnan} 個:{list(m.index[m["d_net"].isna()])[:20]!r})')
+        # TPEx 全市場外資(張×收盤→億) vs insti/summary 外資及陸資(不含外資自營商)買賣超(元→億)
+        tp = _get_tpex_day(ds) or {}
+        tc = fetch_tpex_close_day(ds) or {}
+        sums = {'全部': [0.0, 0, 0], 'A普通股(4碼非00)': [0.0, 0, 0]}
+        for code, v in tp.items():
+            fl, px = v.get('外資'), tc.get(code)
+            keys = ['全部'] + (['A普通股(4碼非00)'] if _r4_class(code) == 'A' else [])
+            for k in keys:
+                if fl is None or (isinstance(fl, float) and _m.isnan(fl)) or px is None:
+                    sums[k][2] += 1
+                    continue
+                sums[k][0] += fl * 1000 * px / 1e8
+                sums[k][1] += 1
+        try:
+            js = fetch_url(_R3_SUMMARY, headers=_TW_HDR_TPEX_NEW,
+                           params={'type': 'Daily', 'date': f'{ds[:4]}/{ds[4:6]}/{ds[6:]}',
+                                   'response': 'json'}, timeout=25, attempts=1)
+            jsum = js.json() if js is not None else None
+        except Exception as e:  # noqa: BLE001
+            print(f'   ❌ insti/summary 例外 {type(e).__name__}: {e}')
+            jsum = None
+        lab, row = _r3_summary_row(jsum, '不含') if isinstance(jsum, dict) else (None, None)
+        net_yuan = _tw_n(_tw_cell(row, 3)) if row is not None else None
+        print(f'   insti/summary 列 {lab!r}: {list(row) if row is not None else None}')
+        for k, (yi, n_used, n_skip) in sums.items():
+            ratio = (yi / (net_yuan / 1e8)) if net_yuan else None
+            print(f'   TPEx 外資合計〔{k}〕(張×1000×收盤/1e8)={yi:,.2f} 億(用 {n_used} 檔,缺值/無收盤略過 {n_skip})'
+                  f' | summary 外資及陸資(不含外資自營商)買賣超={(net_yuan / 1e8) if net_yuan else None!r} 億'
+                  f' | 比值={ratio!r}(只印不判)')
+
+
+def probe_round5(fetch_url=None) -> int:
+    """第 5 輪(預設執行段,2026-10-11 批 Z41 正式切換前實測):**唯讀**、不寫 repo 任何檔、不 commit。
+    ① 直接呼叫正式碼 `_get_tpex_day`/`get_tpex_day_status`、`fetch_tpex_close_day`/`get_tpex_close_status`
+       (交易日 20261008/20261007/20261001/20260918;非交易日 20261009/20261010),印狀態/筆數/樣本值。
+    ② fetch_url 直打新法人與新收盤端點(2026/10/08),印頂層 keys/date、tables[0] keys/title/date/
+       totalCount/len(data)/fields 原值 —— 驗 U1(收盤 tables[0].date)/U2(收盤頂層 date 格式)/
+       U3(法人 title 逐字)/U4(totalCount 型別、是否等於 len(data))。
+    ③ 20261008/20261001 以正式碼 `_collect_days` + `compute_sector_daily_net` 算「僅上市」vs「上市+上櫃」
+       板塊淨額差異、coverage,並印 TPEx 外資合計 vs insti/summary 外資(不含外資自營商)比值。
+    請求上限 45(含正式碼內部 fetch_url;Storm Shield 快取命中不計)、間隔 ≥1.5s。"""
+    print('🔬 probe_tw_sources 第 5 輪(以正式碼實打 TPEx 新端點;唯讀診斷)')
+    print(f'   PROXY_URL 設定={"是" if _tw_os.environ.get("PROXY_URL") else "否"} '
+          f'NAS_BASE_URL 設定={"是" if _tw_os.environ.get("NAS_BASE_URL") else "否"} '
+          f'FINMIND_TOKEN 設定={"是" if _tw_os.environ.get("FINMIND_TOKEN") else "否"}(值一律不印)')
+    _R5_STATE.update(n=0, last=0.0, refused=0, cache_hit=0)
+    wrapped, restore = _r5_install_throttle()
+    if fetch_url is None:
+        fetch_url = wrapped
+    try:
+        for step, fn in (('①', _r5_step1), ('②', lambda: _r5_step2(fetch_url)),
+                         ('③', lambda: _r5_step3(fetch_url))):
+            try:
+                fn()
+            except Exception as e:  # noqa: BLE001 — 一段炸了不擋下一段,但要印出來
+                import traceback
+                print(f'   ❌ 段 {step} 例外 {type(e).__name__}: {e}')
+                traceback.print_exc()
+    finally:
+        restore()
+    print(f'\n══ 請求總結:送出 {_R5_STATE["n"]} 個(上限 {_R5_MAX_REQ};fetch_url 每呼叫內部依 attempts '
+          f'可能重試)、Storm Shield 命中 {_R5_STATE["cache_hit"]}、因上限拒送 {_R5_STATE["refused"]} ══')
+    return 0
+
+
 def _legacy_main() -> int:
     """舊版預設段(v19.112~2026-08-27 PMI/出口探針);現需 `--legacy` 才執行。"""
     from src.data.proxy import fetch_url
@@ -2058,10 +2381,10 @@ def _prod_smoke() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI:無參數 → 只跑第 4 輪探針 `probe_round4()`(probe workflow 不帶參數,即此段);
-    `--round3` → 只跑第 3 輪 `probe_round3()`;
+    """CLI:無參數 → 只跑第 5 輪探針 `probe_round5()`(probe workflow 不帶參數,即此段);
+    `--round4` → 只跑第 4 輪 `probe_round4()`;`--round3` → 只跑第 3 輪 `probe_round3()`;
     `--round2` → 只跑第 1/2 輪 TPEx/TWSE 欄位探針 `probe_tpex_new_site()`;
-    `--legacy` → 只跑舊 PMI/出口探針;`--all` → 四段都跑(各段請求計數各自歸零)。"""
+    `--legacy` → 只跑舊 PMI/出口探針;`--all` → 五段都跑(各段請求計數各自歸零)。"""
     global _TW_REQ_COUNT
     argv = list(sys.argv[1:] if argv is None else argv)
     if '--legacy' in argv:
@@ -2070,8 +2393,12 @@ def main(argv: list[str] | None = None) -> int:
         return probe_tpex_new_site()
     if '--round3' in argv:
         return probe_round3()
-    rc = probe_round4()
+    if '--round4' in argv:
+        return probe_round4()
+    rc = probe_round5()
     if '--all' in argv:
+        _TW_REQ_COUNT = 0
+        rc = probe_round4() or rc
         _TW_REQ_COUNT = 0
         rc = probe_round3() or rc
         _TW_REQ_COUNT = 0

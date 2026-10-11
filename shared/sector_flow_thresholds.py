@@ -69,6 +69,37 @@ def canonical_sector(label) -> str:
     s = str(label or "").strip()
     return SECTOR_ETF_CANONICAL if s in SECTOR_ETF_FAMILY_ALIASES else s
 
+# ── 批 Z41(客戶 Q-z27＝A):外幣交易 ETF 幣別混用防護(§4.1 Level 1 單位錯誤)──────────
+#: 板塊金額 = 張 × 1000 × 收盤(元)。外幣交易 ETF 的收盤是**外幣**報價,乘進去＝把美元/人民幣
+#: 當新台幣加總(不可比值)。官方 notes 原文:
+#:   TPEx「ETF證券代號第六碼為K、C者，表示該ETF以外幣交易」;TWSE 為 K、M、S、C。
+#: ⇒ 上市上櫃共用:代號第六碼(0-based index 5)落在下列集合 → L2 排除該股日(計數、log),
+#: **不是補值、不動個股法人張數本身**。
+FOREIGN_CCY_CODE_CHAR_INDEX: int = 5
+FOREIGN_CCY_CODE_6TH_CHARS: frozenset = frozenset({"K", "C", "M", "S"})
+
+
+#: 批 Z41 修正(QA L3):官方 notes 只說「**ETF** 證券代號第六碼…」⇒ 只對 ETF 代號(以 "00" 開頭)
+#: 判定;`03001C`、`02001S` 等非 ETF 代號不排除。
+FOREIGN_CCY_ETF_CODE_PREFIX: str = "00"
+
+
+def is_foreign_ccy_code(code) -> bool:
+    """ETF 代號(以 "00" 開頭、長度 ≥ 6)且第六碼 ∈ {K, C, M, S}(外幣交易 ETF)→ True;其餘 False。"""
+    s = str(code).strip().upper()
+    return (s.startswith(FOREIGN_CCY_ETF_CODE_PREFIX)
+            and len(s) > FOREIGN_CCY_CODE_CHAR_INDEX
+            and s[FOREIGN_CCY_CODE_CHAR_INDEX] in FOREIGN_CCY_CODE_6TH_CHARS)
+
+
+# ── 批 Z41 修正(QA H1):產業別對映可信度門檻 ─────────────────────────────────
+#: 本次 `fetch_industry_map_bulk` 清洗後代號數相對上一份 ticker_sector.json **縮水超過**本比例
+#: → 視為來源部分失敗(例:FinMind 被 gate、openapi 只回一個市場),cron 不改寫任何既有日。
+#: 理由:全市場上市櫃(含 ETF)約 3,000+ 檔,日常增減(新上市/下市)每日僅數檔、一年 < 5%;
+#: 20% 遠高於正常波動、遠低於「少掉整個市場」(上櫃約佔 1/3)的故障幅度,兩側都有餘裕。
+INDUSTRY_MAP_MAX_SHRINK_RATIO: float = 0.20
+
+
 #: 一個板塊在某交易日「有效成分股」數量下限;低於此該板塊當日流入代表性不足。
 #: 目前僅作為 coverage 診斷欄位輸出(不濾除),Stage 2 畫圖可據此決定是否淡化顯示。
 MIN_SECTOR_STOCKS: int = 1

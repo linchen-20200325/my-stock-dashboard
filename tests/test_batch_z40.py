@@ -212,9 +212,15 @@ Z40_BASE_SHA = {
 
 
 def z40_revert_for(file_path, code: str) -> str:
-    """舊批次還原鏈串接用：給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批之前的寫法（無 pair 則原樣）。"""
+    """舊批次還原鏈串接用：給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批之前的寫法（無 pair 則原樣）。
+
+    批 Z41（客戶 Q-z27＝A）改了 `_DLIF`（TPEx 改接官方新網站）⇒ 先換回 Z41 之前（＝本批修後）寫法，
+    再套本批還原（同 Z33 串 Z34 慣例；⛔ 不動 `Z40_REVERT_PAIRS` 本身）。
+    """
     p = pathlib.Path(file_path)
     rel = (p.resolve().relative_to(_ROOT) if p.is_absolute() else p).as_posix()
+    from tests.test_batch_z41 import z41_revert
+    code = z41_revert(rel, code)
     for new, old in Z40_REVERT_PAIRS.get(rel, ()):
         assert code.count(new) == 1, f'{rel} 替換點不唯一或已不存在：{new!r}'
         code = code.replace(new, old)

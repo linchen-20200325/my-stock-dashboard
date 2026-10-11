@@ -738,6 +738,10 @@ for _f, _m in (
     ("scripts/diagnose_etf_total_return_fix.py", "src.compute.etf.etf_recommendation"),
     ("scripts/diagnose_etf_total_return_fix.py", "src.compute.etf.etf_scoring_helpers"),
     ("scripts/diagnose_etf_total_return_fix.py", "src.services.etf_scoring_service"),
+    # 批 Z41 第 5 輪探針(2026-10-11,唯讀診斷 CLI,非 cron)—— 與上列同一根因(scripts 分層標籤)。
+    # `_r5_step3` 函式內 import L2 `compute_sector_daily_net`,與 `scripts/update_sector_flow.py`
+    # 用同一支正式純函式比較「僅上市」vs「上市+上櫃」板塊淨額;自己複寫一份彙總＝第二份真相(§2.1)。
+    ("scripts/probe_tw_sources.py", "src.compute.sector_flow"),
     ("scripts/export_stock_db.py", "src.compute.scoring.scoring_engine"),
     ("scripts/export_stock_db.py", "src.compute.strategy.tech_indicators"),
     ("scripts/push_daily_signals.py", "src.compute.notify.ai_judgment"),

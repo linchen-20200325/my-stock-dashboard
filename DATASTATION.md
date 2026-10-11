@@ -471,7 +471,7 @@ print(report)
 | 個股法人買賣超 | TWSE | `T86` | `/fund/T86` | daily | — | `—` | 個股級法人籌碼 |
 | 融資餘額 | TWSE OpenAPI | `MI_MARGN` | `/v1/exchangeReport/MI_MARGN` | daily | — | `cl_data.margin` | 散戶情緒指標（>2500 億過熱） |
 | OTC 主板每日報價 | TPEX OpenAPI | `tpex_mainboard` | `/openapi/v1/tpex_mainboard_daily_close_quotes` | daily | — | `—` | 櫃買市場全市場報價 |
-| OTC 三大法人 | TPEX | `3itrade_hedge` | `/web/stock/3insti/daily_report/3itrade_hedge_result.php` | daily | — | `—` | 櫃買法人籌碼 |
+| OTC 三大法人 | TPEX | `insti_dailyTrade` | `/www/zh-tw/insti/dailyTrade` | daily | — | `—` | 櫃買法人籌碼（批 Z41 自舊 `/web/stock/3insti/daily_report/3itrade_hedge_result.php` 遷移；舊端點已 302 轉 `/errors`） |
 | 外資期貨留倉 | TAIFEX | `largeTraderFutQry` | `/cht/3/largeTraderFutQryTbl` | daily | — | `li_latest` | 外資期貨多空（先行指標） |
 | 期貨契約日資料 | TAIFEX | `futContractsDate` | `/cht/3/futContractsDate` | daily | — | `—` | 期貨未平倉、結算日 |
 | 期貨日盤行情 | TAIFEX | `futDailyMarketReport` | `/cht/3/futDailyMarketReport` | daily | — | `—` | 期貨成交、未平倉 |

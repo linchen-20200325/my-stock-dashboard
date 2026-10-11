@@ -19,7 +19,13 @@ from shared.inst_labels import (  # 批 Z40 法人身分別判定 SSOT(L0)
     T86_DEALER_HEDGE_NET_COL, T86_DEALER_NET_COL, T86_DEALER_SELF_NET_COL,
     T86_FOREIGN_NET_COL, T86_FOREIGN_NET_COL_LEGACY, T86_TOTAL_NET_COL, T86_TRUST_NET_COL,
     is_foreign_dealer_label)
-from shared.roc_calendar import gregorian_to_roc_year
+from shared.tpex_schema import (  # 批 Z41 TPEx 官方新網站 JSON 結構契約 SSOT(L0)
+    TPEX_ALL_GROUPS, TPEX_G_DEALER, TPEX_G_DEALER_HEDGE, TPEX_G_DEALER_SELF,
+    TPEX_G_FOREIGN_DEALER, TPEX_G_FOREIGN_EXCL_FD, TPEX_G_FOREIGN_INCL_FD, TPEX_G_TRUST,
+    TPEX_IDX_OUT_DEALER, TPEX_IDX_OUT_FOREIGN, TPEX_IDX_OUT_TRUST, TPEX_IDX_TOTAL_NET,
+    TPEX_INST_FIELDS, TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO, TPEX_INST_MAX_INVALID_ROW_RATIO,
+    TPEX_INST_N_FIELDS, TPEX_INST_REQUIRE_TABLE_DATE, TPEX_INST_TITLE,
+    check_tpex_envelope, parse_tpex_int, tpex_query_date, tpex_redirected_to_error, tpex_roc_date)
 from shared.ttls import TTL_15MIN  # noqa: F401  (部分 fetcher inline 引用)
 from src.data.proxy import fetch_url as _fetch_url_dl
 
@@ -171,23 +177,39 @@ def _fetch_twse_inst_fallback(stock_id: str, df: pd.DataFrame, *,
     return df
 
 
-_TPEX_DAY_CACHE: dict = {}  # {日期字串: {股票代碼: {外資,投信,自營商}}} TPEx 進程級快取
+_TPEX_DAY_CACHE: dict = {}  # {日期字串: {股票代碼: {外資,投信,自營商}}} TPEx 進程級快取（批 Z41：只收 status=ok 的日子）
 # P1 v19.159(團隊稽核 QA-Med):TPEX 暫時性失敗(網路 None/例外)原本把 {} 永久釘進
 # _TPEX_DAY_CACHE(無 TTL)→ 來源恢復後同 process 不再重試,上櫃股法人欄位靜默 NaN。
 # 對稱補上與 T86 相同的短 TTL 負快取(N2c v19.80 當時只補 T86,漏了 TPEX)。
-# 「aaData 為空」(TPEX 明確回無資料,如假日)仍永久快取 — 該日資料永不出現,語意正確。
+# ~~「aaData 為空」(TPEX 明確回無資料,如假日)仍永久快取 — 該日資料永不出現,語意正確。~~
+# 批 Z41(客戶 Q-z27＝A 受控遷移)更正 —— 有意識的語意變更,不是漏刪:空表**不再永久快取**,
+#   一律走短 TTL 負快取。舊理由(空表＝假日、資料永不出現)在舊端點成立,但探針實測舊收盤端點
+#   **交易日也回空表**、新端點非交易日亦回 stat=ok 空表 ⇒ 空表無法區分「休市」與「來源故障」,
+#   永久快取會把一次故障釘成整個進程的「沒有資料」(§1)。休市與否改由 caller 以 TWSE 同日判定。
 _TPEX_FAIL_TS: dict = {}   # {日期字串: 失敗時間 epoch};TTL_15MIN 內不重打
-# 批 Z39(客戶 Q-z28 診斷;零行為變更):每次**實際打出請求**後記錄該日的結果狀態,
-# 供 cron 區分「TPEx 假日回空」與「交易日 TPEx 失敗」。回傳值與快取語意一字不變。
-#   ok             JSON 有 aaData 且欄位驗證(buy-sell≈net)通過
-#   empty          JSON 正常但 aaData 空(假日或 TPEx 交易日回空,需由 caller 對照 TWSE 判定)
-#   http_none      fetch_url 回 None(網路/proxy/非 2xx)
-#   json_error     回應不是 JSON(例:改版或擋爬回 HTML)
-#   col_unverified 欄位驗證 for/else 失敗(仍沿用預設索引回資料,但不得當成成功)
-#   exception      其他例外
+# 批 Z39(客戶 Q-z28 診斷):每次**實際打出請求**後記錄該日的結果狀態,
+# 供 cron 區分「TPEx 假日回空」與「交易日 TPEx 失敗」。
+# 批 Z41(客戶 Q-z27＝A):改接官方新網站 `insti/dailyTrade` JSON,狀態值擴充(只有 ok 會回資料、進永久快取):
+#   ok              外殼／欄位／逐列恆等式全部通過
+#   empty           stat=ok、日期回聲正確,但 totalCount=0 且 data=[](休市或交易日故障,由 caller 對照 TWSE)
+#   http_none       fetch_url 回 None 或非 200(網路/proxy/非 2xx)
+#   redirect_error  被轉往官方 /errors 錯誤頁(舊端點下架的實際症狀:302 → HTML 404 頁、最終 200)
+#   json_error      回應不是 JSON(改版或擋爬回 HTML)
+#   schema_error    stat≠ok／日期回聲不符(含回退前一交易日)／title 不符／fields 非逐字 24 欄／列長≠24
+#   identity_failed 任一列逐列恆等式不成立(7 組 買−賣＝超、G1＋G2＝G3、G5＋G6＝G7、T＝G1＋G4＋G7)
+#   parse_error     不可解析列比例 > TPEX_INST_MAX_INVALID_ROW_RATIO
+#   exception       其他例外
+#   (Z39 的 `col_unverified`「欄位驗證失敗仍用預設索引回資料」語意已廢除 —— 新 parser 驗不過一律不回資料,
+#    歸入 schema_error / identity_failed;舊狀態字串不再產生。)
 # 快取命中 / 負快取命中不重設狀態(沿用上一次實際請求的結果)。
 _TPEX_DAY_DIAG: dict[str, str] = {}
 TPEX_DAY_STATUS_OK: str = "ok"
+#: 批 Z41:`get_tpex_day_status` 可能回傳的全部狀態(只有 ok 代表有可用資料)。
+TPEX_DAY_STATUSES: tuple[str, ...] = (
+    "ok", "empty", "http_none", "redirect_error", "json_error", "schema_error",
+    "identity_failed", "parse_error", "exception")
+#: 批 Z41:櫃買中心官方新網站「三大法人買賣明細資訊」JSON(探針 run 38104351927 等驗證)。
+TPEX_INST_URL: str = "https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade"
 
 
 def get_tpex_day_status(ds: str) -> str | None:
@@ -200,98 +222,168 @@ def _log_tpex_body(ds: str, status: str, r) -> None:
     print(f'[TPEx] {ds} status={status} body[:500]={scrubbed_body_head(r)!r}')
 
 
+def _tpex_day_fail(ds: str, status: str, r, reason: str) -> dict:
+    """批 Z41:非 ok 統一出口 —— 記狀態 + 短 TTL 負快取(**不**進永久快取)+ log(含洗過的 body)。"""
+    import time as _t_tpf
+    _TPEX_DAY_DIAG[ds] = status
+    _TPEX_FAIL_TS[ds] = _t_tpf.time()
+    print(f'[TPEx] {ds} 非 ok（{status}）：{reason}')
+    if r is not None:
+        _log_tpex_body(ds, status, r)
+    return {}
+
+
+def _tpex_lots(shares: int | None) -> float:
+    """股 → 張。批 Z41 修正(QA L1):與上市 `_get_t86_day` 內 `_lots` **同一規則**
+    `round(v / 1000, 1)`(None → NaN);兩者一致性由 tests/test_batch_z41 逐值比對守住。"""
+    return float('nan') if shares is None else round(shares / 1000, 1)
+
+
+_TPEX_NAN_ROW: dict = {'外資': float('nan'), '投信': float('nan'), '自營商': float('nan')}
+
+
+def _parse_tpex_inst_rows(ds: str, data: list) -> tuple[str, str, dict]:
+    """批 Z41:`tables[0].data` 逐列驗證 → (status, reason, day_data)。純解析,無 I/O。
+
+    - 列長 ≠ 24 → schema_error(整日)。
+    - 批 Z41 修正(QA M1):代號重複 / 任一數值欄不可解析 → 該代號**輸出三分項 NaN**(缺值,⛔ 不當 0,
+      也不整檔省略 —— 省略會讓 L2 當成「沒有這檔」而 0 貢獻、metadata 看不到),口徑同上市 T86
+      (缺欄／髒值 → NaN)。代號空 → 無法輸出,只計數。無效列比例 > TPEX_INST_MAX_INVALID_ROW_RATIO
+      → parse_error(整日)。
+    - 批 Z41 修正(QA M2)恆等式分級(容差 0):
+      * **語意守衛** G1＋G2＝G3(買/賣/超任一)不成立 → 整日 identity_failed(G1/G3 對調的唯一偵測,
+        不得部分採用);
+      * **資料守衛** 7 組 買−賣＝超、G5＋G6＝G7、T＝G1超＋G4超＋G7超 不成立 → 該代號三分項 NaN 並計數;
+        此類列比例 > TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO → 整日 identity_failed。
+    - G2(外資自營商)任一列非零 → warning(G1/G3 區分首次有數值證據,且已由 G1＋G2＝G3 逐列驗過)。
+    - 輸出口徑(Q-z24 A'/Q-z25 A,同上市 T86):外資＝G1 超、投信＝G4 超、自營商＝G7 超;
+      股 → 張 `_tpex_lots`(同 T86 `round(v/1000, 1)`)。
+    """
+    n_cols = TPEX_INST_N_FIELDS
+    bad_len = [i for i, row in enumerate(data)
+               if not isinstance(row, (list, tuple)) or len(row) != n_cols]
+    if bad_len:
+        return ('schema_error',
+                f'{len(bad_len)} 列長度≠{n_cols}(首例第 {bad_len[0]} 列)', {})
+    rows: list = []
+    codes_seen: dict = {}
+    for row in data:
+        code = str(row[0]).strip()
+        vals = [None, None] + [parse_tpex_int(row[i]) for i in range(2, n_cols)]
+        rows.append((code, vals, all(v is not None for v in vals[2:])))
+        if code:
+            codes_seen[code] = codes_seen.get(code, 0) + 1
+    parsed: dict = {}
+    nan_codes: set = set()
+    invalid: list = []
+    for code, vals, ok in rows:
+        if not code:
+            invalid.append('<空代號>')                # 無代號 → 無法輸出,只計數
+        elif not ok or codes_seen[code] > 1:          # 不可解析 / 代號重複(兩列皆不可信)
+            invalid.append(code)
+            nan_codes.add(code)
+        else:
+            parsed[code] = vals
+    if invalid:
+        print(f'[TPEx] ⚠️ {ds} 不可解析/重複代號列 {len(invalid)}/{len(data)}'
+              f'(該代號三分項 NaN,不當 0):{invalid[:10]}')
+        if len(invalid) / len(data) > TPEX_INST_MAX_INVALID_ROW_RATIO:
+            return ('parse_error', f'不可解析列 {len(invalid)}/{len(data)} > '
+                    f'{TPEX_INST_MAX_INVALID_ROW_RATIO:.0%}', {})
+    sem_fails: list = []
+    data_fail_codes: list = []
+    n_g2_nonzero = 0
+    g1, g2, g3 = TPEX_G_FOREIGN_EXCL_FD, TPEX_G_FOREIGN_DEALER, TPEX_G_FOREIGN_INCL_FD
+    g4, g5, g6, g7 = TPEX_G_TRUST, TPEX_G_DEALER_SELF, TPEX_G_DEALER_HEDGE, TPEX_G_DEALER
+    for code, v in parsed.items():
+        for k in range(3):
+            if v[g1[k]] + v[g2[k]] != v[g3[k]]:
+                sem_fails.append(f'{code}:G1+G2≠G3[{k}]')
+        bad = [gi for gi, (b, s, n) in enumerate(TPEX_ALL_GROUPS, start=1) if v[b] - v[s] != v[n]]
+        bad += [f'G5+G6≠G7[{k}]' for k in range(3) if v[g5[k]] + v[g6[k]] != v[g7[k]]]
+        if v[TPEX_IDX_TOTAL_NET] != v[g1[2]] + v[g4[2]] + v[g7[2]]:
+            bad.append('T')
+        if bad:
+            data_fail_codes.append(f'{code}:{bad}')
+            nan_codes.add(code)
+        if v[g2[0]] or v[g2[1]] or v[g2[2]]:
+            n_g2_nonzero += 1
+    if sem_fails:
+        return ('identity_failed', f'語意守衛 G1+G2=G3 不成立 {len(sem_fails)} 處'
+                f'(疑似 G1/G3 欄位對調,整日不採用;首例 {sem_fails[:5]})', {})
+    if data_fail_codes:
+        print(f'[TPEx] ⚠️ {ds} 資料守衛(買−賣=超/G5+G6=G7/T)不成立 {len(data_fail_codes)}/{len(data)} 列'
+              f'(該代號三分項 NaN):{data_fail_codes[:5]}')
+        if len(data_fail_codes) / len(data) > TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO:
+            return ('identity_failed', f'資料守衛不成立列 {len(data_fail_codes)}/{len(data)} > '
+                    f'{TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO:.0%}(首例 {data_fail_codes[:5]})', {})
+    if n_g2_nonzero:
+        print(f'[TPEx] ⚠️ {ds} 外資自營商(G2)非零 {n_g2_nonzero} 列 —— G1(不含)/G3(含)首次有數值'
+              '證據可區分,已逐列驗 G1+G2=G3 通過')
+    day_data = {code: {'外資': _tpex_lots(v[TPEX_IDX_OUT_FOREIGN]),
+                       '投信': _tpex_lots(v[TPEX_IDX_OUT_TRUST]),
+                       '自營商': _tpex_lots(v[TPEX_IDX_OUT_DEALER])}
+                for code, v in parsed.items() if code not in nan_codes}
+    for c in nan_codes:
+        day_data[c] = dict(_TPEX_NAN_ROW)
+    return TPEX_DAY_STATUS_OK, '', day_data
+
+
 def _get_tpex_day(ds: str) -> dict:
     """抓取 TPEx 特定日期的全市場法人資料（上櫃股），進程內快取。
-    回傳 {股票代碼: {'外資':float, '投信':float, '自營商':float}}，單位：張"""
+    回傳 {股票代碼: {'外資':float, '投信':float, '自營商':float}}，單位：張
+
+    批 Z41(客戶 Q-z27＝A 受控遷移):改接櫃買中心官方新網站 `insti/dailyTrade`(sect=EW、西元
+    `YYYY/MM/DD`)。口徑同上市 `_get_t86_day`(Z40):外資＝外資及陸資(不含外資自營商)、投信、
+    自營商＝自行＋避險;外資自營商不加到任何一類。守衛(任一不過 → 非 ok、回 {}、短 TTL 負快取):
+    轉址 /errors、非 JSON、stat、日期回聲(頂層 YYYYMMDD + tables[0] 民國)、title、fields 逐字 24 欄、
+    列長、數值可解析(無效列 ≤1%)、逐列恆等式。只有 ok 進 `_TPEX_DAY_CACHE`(永久)。
+    """
     if ds in _TPEX_DAY_CACHE:
         return _TPEX_DAY_CACHE[ds]
     import time as _t_tp
     _fts = _TPEX_FAIL_TS.get(ds)
     if _fts is not None and (_t_tp.time() - _fts) < TTL_15MIN:
         return {}   # 負快取生效中(短 TTL),不重打
-    HDR = {'User-Agent': 'Mozilla/5.0', 'Accept': '*/*',
+    HDR = {'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json, */*',
            'Referer': 'https://www.tpex.org.tw/'}
     r = None   # 批 Z39:例外分支印 body 用(請求前就炸 → 無 body 可印)
     try:
-        dt = datetime.date(int(ds[:4]), int(ds[4:6]), int(ds[6:8]))
-        roc_year = gregorian_to_roc_year(dt.year)
-        roc_date = f'{roc_year}/{dt.month:02d}/{dt.day:02d}'
         r = _fetch_url_dl(
-            'https://www.tpex.org.tw/web/stock/3insti/daily_report/3itrade_hedge_result.php',
-            params={'l': 'zh-tw', 'se': 'EW', 't': 'D', 'd': roc_date, 'o': 'json'},
+            TPEX_INST_URL,
+            params={'type': 'Daily', 'sect': 'EW', 'date': tpex_query_date(ds),
+                    'id': '', 'response': 'json'},
             headers=HDR, timeout=5)
         if r is None:
-            _TPEX_DAY_DIAG[ds] = 'http_none'
-            _TPEX_FAIL_TS[ds] = _t_tp.time()   # P1:暫時性 → 短 TTL 負快取,不永久釘
-            return {}
+            return _tpex_day_fail(ds, 'http_none', None, 'fetch_url 回 None')
+        if getattr(r, 'status_code', 200) != 200:
+            return _tpex_day_fail(ds, 'http_none', r, f'HTTP {getattr(r, "status_code", None)}')
+        if tpex_redirected_to_error(r):
+            return _tpex_day_fail(ds, 'redirect_error', r,
+                                  f'被轉往官方錯誤頁 url={getattr(r, "url", None)!r}')
         try:
             j = r.json()
         except ValueError as e:
-            # 批 Z39:非 JSON(改版/擋爬 HTML)單獨記狀態 + 印 body;回傳與負快取同原 except 分支
-            _TPEX_DAY_DIAG[ds] = 'json_error'
-            _log_tpex_body(ds, 'json_error', r)
-            print(f'[TPEx] {ds} 失敗: {e}')
-            _TPEX_FAIL_TS[ds] = _t_tp.time()
-            return {}
-        rows_data = j.get('aaData', [])
-        if not rows_data:
-            _TPEX_DAY_DIAG[ds] = 'empty'
-            _log_tpex_body(ds, 'empty', r)
-            _TPEX_DAY_CACHE[ds] = {}
-            return {}
-
-        def _pn_tp(row, idx):
-            if idx is None or idx >= len(row): return 0.0
-            try: return round(int(str(row[idx]).replace(',', '').replace('+', '') or 0) / 1000, 1)
-            # v19.82:裸 except 收窄(§3.3);髒儲存格 → 0.0 為既有 fail-token 語意
-            except (ValueError, TypeError): return 0.0
-
-        def _int_tp(row, idx):
-            try: return int(str(row[idx]).replace(',', '').replace('+', '') or 0)
-            # v19.82:裸 except 收窄(§3.3);此 helper 無 idx 前置守衛,補 IndexError
-            except (ValueError, TypeError, IndexError): return 0
-
-        # ── 動態偵測欄位索引（sColumns 或 buy-sell-net 驗證）──────────
-        # TPEx 標準格式：[0]代號 [1]名稱
-        # 外資 [2]買 [3]賣 [4]淨  投信 [5]買 [6]賣 [7]淨
-        # 自營(自行) [8]買 [9]賣 [10]淨  [11..13]避險  [14]合計
-        f_idx, t_idx, d_idx = 4, 7, 10  # 預設索引
-        _status = TPEX_DAY_STATUS_OK   # 批 Z39:for/else 失敗 → col_unverified
-
-        # 用第一筆有效資料驗證 buy - sell ≈ net（容許 1 張以內誤差）
-        for _sample in rows_data[:5]:
-            if len(_sample) < 11: continue
-            _f_buy = _int_tp(_sample, 2); _f_sell = _int_tp(_sample, 3); _f_net = _int_tp(_sample, 4)
-            _t_buy = _int_tp(_sample, 5); _t_sell = _int_tp(_sample, 6); _t_net = _int_tp(_sample, 7)
-            if abs(_f_net - (_f_buy - _f_sell)) <= 1000 and abs(_t_net - (_t_buy - _t_sell)) <= 1000:
-                break  # 驗證通過，使用預設索引
-        else:
-            # 若驗證全失敗，嘗試欄位較少的格式（部分 TPEx API 版本省略避險欄）
-            # [0]代號 [1]名稱 [2]外買 [3]外賣 [4]外淨 [5]投買 [6]投賣 [7]投淨 [8]自買 [9]自賣 [10]自淨
-            print(f'[TPEx] {ds} 欄位驗證失敗，row長度={len(rows_data[0]) if rows_data else 0}，使用預設索引')
-            _status = 'col_unverified'
-            _log_tpex_body(ds, _status, r)
-
-        day_data = {}
-        for row in rows_data:
-            code = str(row[0]).strip()
-            if not code or len(row) < 11: continue
-            day_data[code] = {
-                '外資': _pn_tp(row, f_idx),
-                '投信': _pn_tp(row, t_idx),
-                '自營商': _pn_tp(row, d_idx),
-            }
+            # 批 Z39:非 JSON(改版/擋爬 HTML)單獨記狀態 + 印 body
+            return _tpex_day_fail(ds, 'json_error', r, f'{type(e).__name__}: {e}')
+        _st, _why, t0 = check_tpex_envelope(j, ds, title_exact=TPEX_INST_TITLE,
+                                            require_table_date=TPEX_INST_REQUIRE_TABLE_DATE)
+        if _st != TPEX_DAY_STATUS_OK:
+            return _tpex_day_fail(ds, _st, r, _why)
+        fields = tuple(str(f).strip() for f in (t0.get('fields') or []))
+        if fields != TPEX_INST_FIELDS:
+            return _tpex_day_fail(ds, 'schema_error', r,
+                                  f'fields 非逐字 {TPEX_INST_N_FIELDS} 欄常數'
+                                  f'(實得 {len(fields)} 欄:{list(fields)})')
+        _st, _why, day_data = _parse_tpex_inst_rows(ds, t0['data'])
+        if _st != TPEX_DAY_STATUS_OK:
+            return _tpex_day_fail(ds, _st, r, _why)
         _TPEX_DAY_CACHE[ds] = day_data
-        _TPEX_DAY_DIAG[ds] = _status
-        print(f'[TPEx] {ds} ({roc_date}): {len(day_data)} 支 idx=({f_idx},{t_idx},{d_idx})')
+        _TPEX_DAY_DIAG[ds] = TPEX_DAY_STATUS_OK
+        print(f'[TPEx] {ds} ({tpex_roc_date(ds)}): {len(day_data)} 支(官方新網站 dailyTrade,守衛全過)')
         return day_data
     except Exception as e:
-        print(f'[TPEx] {ds} 失敗: {e}')
-        _TPEX_DAY_DIAG[ds] = 'exception'
-        if r is not None:
-            _log_tpex_body(ds, 'exception', r)
-        _TPEX_FAIL_TS[ds] = _t_tp.time()   # P1:暫時性 → 短 TTL 負快取,不永久釘
-        return {}
+        return _tpex_day_fail(ds, 'exception', r, f'{type(e).__name__}: {e}')
 
 
 def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame, *,
@@ -299,11 +391,23 @@ def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame, *,
     """TPEx 上櫃股法人備援，邏輯同 TWSE T86，使用 TPEx 三大法人 API。
 
     failed：同 `_fetch_twse_inst_fallback`（鍵 `'tpex'`；回答 ＝ 日資料進了 `_TPEX_DAY_CACHE`）。
+
+    批 Z41（客戶 Q-z27＝A）語意更正：`_get_tpex_day` 只有 status=ok 的日子進 `_TPEX_DAY_CACHE`，
+    空表（empty）／轉址／schema／恆等式失敗一律短 TTL 負快取 ⇒ 「回答」＝ 該日通過全部守衛。
+    ~~空表（假日）算回答~~（舊端點把空表永久快取，因此被算成「有回答」）—— 有意識的語意變更，
+    不是漏刪：交易日空表無法與故障區分，算「有回答」會把 TPEx 全面故障誤報成「這檔沒有上櫃法人資料」；
+    10 個平日內必有交易日，真休市日夾在其中不會讓整段被判失敗。
+
+    批 Z41 修正二（QA N1）：`_get_tpex_day` 對無效代號回三分項全 NaN（M1）。該日該股三分項**全 NaN**
+    → 視為此股該日無資料、**不加入 rows**（否則會長出全 NaN 的法人欄 → `_inst_src='tpex'` →
+    下游 D2 `fillna(0)` 把「未取得」顯示成 0）；所有日都如此 → 不產生法人欄，走既有缺值路徑
+    （`_inst_src='missing'`）。部分分項 NaN 的日子照常加入、維持 NaN（下游 D2 是否補 0 屬既有取捨，不在此改）。
     """
     _answered = False       # Q5-r2:有沒有任何一天拿到 TPEx 的回答
     _asked: list = []
     try:
         rows = []
+        _n_all_nan = 0
         base = datetime.date.today()
         checked = 0
         for delta in range(20):
@@ -317,7 +421,13 @@ def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame, *,
                 _answered = True
             checked += 1
             if stock_id in day:
-                rows.append({'date': d, **day[stock_id]})
+                _v = day[stock_id]
+                if all(pd.isna(_v.get(_k)) for _k in ('外資', '投信', '自營商')):
+                    _n_all_nan += 1      # 批 Z41 修正二(QA N1):全 NaN = 該日此股無資料,不入 rows
+                    continue
+                rows.append({'date': d, **_v})
+        if _n_all_nan:
+            print(f'[TPEx] ⚠️ {stock_id} {_n_all_nan} 日官方列無效(三分項全 NaN)→ 視為該日未取得,不補 0')
         if rows:
             _df_tp = pd.DataFrame(rows)
             _df_tp['主力合計'] = _df_tp['外資'] + _df_tp['投信'] + _df_tp['自營商']
