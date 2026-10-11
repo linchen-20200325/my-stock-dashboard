@@ -15,12 +15,15 @@
   量到的就是正式環境會看到的
 
 執行模式(2026-10-11 起;probe workflow 只跑 `python scripts/probe_tw_sources.py` 不帶參數):
-- 無參數(預設)→ 只跑 `probe_tpex_new_site()`:TPEx 新網站法人(insti/dailyTrade)/
+- 無參數(預設)→ 只跑第 3 輪 `probe_round3()`:找外資自營商非零歷史日以區分 dailyTrade
+  G1=[2-4]/G3=[8-10]、市場層級「股數×收盤」對 insti/summary 金額對帳、FinMind 10 檔×3 天擴樣、
+  休市/日期格式。請求數上限 40、間隔 1.5s、timeout 25s。
+- `--round2` → 只跑第 1/2 輪 `probe_tpex_new_site()`:TPEx 新網站法人(insti/dailyTrade)/
   收盤(afterTrading/otc)+ TPEx 舊端點取證 + TPEx 市場彙總(推測路徑)+ TWSE T86/BFI82U
   欄位口徑 + FinMind 匿名交叉驗證;探針內直接驗算(買−賣==買賣超、合計關係、
   最低<=收盤<=最高…)並印成立比例。請求數上限 40、間隔 1.5s、timeout 25s。
 - `--legacy` → 只跑舊版 PMI/出口 TARGETS + deep dumps + production smoke(原預設行為)。
-- `--all` → 兩段都跑。
+- `--all` → 第 3 輪 + 第 1/2 輪 + legacy 全跑。
 """
 from __future__ import annotations
 
@@ -1383,6 +1386,388 @@ def probe_tpex_new_site() -> int:
     return 0
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# 第 3 輪(2026-10-11,預設執行段):外資自營商非零日區分 G1/G3、市場金額對帳、FinMind 擴樣
+# ──────────────────────────────────────────────────────────────────────────
+# 紅隊指出:近期外資自營商(G2=[5-7])全 0 → G1=[2-4] 與 G3=[8-10] 資料層無法區分。
+# 本段找 G2 非零的歷史日重驗;再以「股數×收盤」對 insti/summary 金額做市場層級對帳;
+# FinMind 擴樣 10 檔×3 天。只印證據與比例,不下語意結論。
+# 請求上限沿用 _TW_MAX_REQ(40)、間隔 _TW_SLEEP_S(1.5s)、timeout _TW_TIMEOUT(25s)。
+# ══════════════════════════════════════════════════════════════════════════
+_R3_G = {k: (2 + 3 * (k - 1), 3 + 3 * (k - 1), 4 + 3 * (k - 1)) for k in range(1, 8)}
+_R3_T = 23
+_R3_DAILY = 'https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade'
+_R3_OTC = 'https://www.tpex.org.tw/www/zh-tw/afterTrading/otc'
+_R3_SUMMARY = 'https://www.tpex.org.tw/www/zh-tw/insti/summary'
+_R3_T86 = 'https://www.twse.com.tw/rwd/zh/fund/T86'
+_R3_BFI = 'https://www.twse.com.tw/rwd/zh/fund/BFI82U'
+_R3_FM = 'https://api.finmindtrade.com/api/v4/data'
+
+
+def _r3_left() -> int:
+    return _TW_MAX_REQ - _TW_REQ_COUNT
+
+
+def _r3_daily(fetch_url, label: str, date: str, sect: str = 'EW'):
+    j, _ = _tw_get(fetch_url, label, _R3_DAILY,
+                   {'type': 'Daily', 'sect': sect, 'date': date, 'id': '', 'response': 'json'},
+                   _TW_HDR_TPEX_NEW)
+    f, rows = _tw_first_table(j)
+    if isinstance(j, dict):
+        ts = _tw_tables(j)
+        print(f'   ↳ stat={j.get("stat")!r} date={j.get("date")!r} '
+              f'tables[0].date={(ts[0].get("date") if ts else None)!r} '
+              f'fields長度={len(f)} 列數={len(rows)}')
+    return j, [str(x) for x in f], [r for r in rows if isinstance(r, (list, tuple)) and r]
+
+
+def _r3_by_code(rows) -> dict:
+    return {str(_tw_cell(r, 0)).strip(): r for r in rows if isinstance(r, (list, tuple)) and r}
+
+
+def _r3_summary_row(j, *keys, exclude=()):
+    """回 summary/BFI82U 中第一個 label 含全部 keys 的列(label 去全形空白)。"""
+    _, rows = _tw_first_table(j)
+    for r in rows:
+        lab = str(_tw_cell(r, 0)).replace('　', '').strip()
+        if all(k in lab for k in keys) and not any(e in lab for e in exclude):
+            return lab, r
+    return None, None
+
+
+def _r3_nonzero(r) -> bool:
+    return r is not None and any((_tw_n(_tw_cell(r, i)) or 0) != 0 for i in (1, 2, 3))
+
+
+def _r3_group_checks(rows, tag: str) -> None:
+    """位置假設 G1..G7/T 的加總式成立比例(非平凡=所有加數皆非零)。"""
+    G, T = _R3_G, _R3_T
+    print(f'   [位置驗算〔{tag}〕 列數={len(rows)}]')
+    for k in range(1, 8):
+        nz = sum(1 for r in rows if any((_tw_n(_tw_cell(r, i)) or 0) != 0 for i in G[k]))
+        print(f'     G{k} 有任一非零值的列數: {nz}/{len(rows)}')
+    for part, pi in (('買進', 0), ('賣出', 1), ('淨', 2)):
+        _tw_ratio(rows, [G[1][pi], G[2][pi], G[3][pi]], lambda a, b, c: _tw_eq(a + b, c),
+                  f'{part}: G1 + G2 == G3')
+        _tw_ratio(rows, [G[1][pi], G[3][pi]], lambda a, c: _tw_eq(a, c),
+                  f'{part}: G1 == G3(逐列相等,對照)')
+        _tw_ratio(rows, [G[5][pi], G[6][pi], G[7][pi]], lambda a, b, c: _tw_eq(a + b, c),
+                  f'{part}: G5 + G6 == G7')
+    for name, gs in (('T == G1 + G4 + G7', (1, 4, 7)), ('T == G3 + G4 + G7', (3, 4, 7)),
+                     ('T == G1 + G2 + G4 + G7', (1, 2, 4, 7))):
+        _tw_ratio(rows, [G[g][2] for g in gs] + [T], lambda *v: _tw_eq(sum(v[:-1]), v[-1]), f'淨: {name}')
+    for k in range(1, 8):
+        _tw_ratio(rows, list(G[k]), lambda a, b, c: _tw_eq(a - b, c), f'G{k}: 買 − 賣 == 淨')
+
+
+def _r3_t86_checks(rows, tag: str) -> None:
+    """T86:18 == 4+10+11 與 18 == 4+7+10+11;非平凡列以 idx7 非零為準。"""
+    print(f'   [T86 驗算〔{tag}〕 列數={len(rows)}]')
+    for name, idxs in (('18 == 4 + 10 + 11', (4, 10, 11)), ('18 == 4 + 7 + 10 + 11', (4, 7, 10, 11))):
+        n_valid = n_ok = nt_valid = nt_ok = 0
+        fails = []
+        for r in rows:
+            vs = [_tw_n(_tw_cell(r, i)) for i in idxs]
+            t = _tw_n(_tw_cell(r, 18))
+            if t is None or None in vs:
+                continue
+            ok = _tw_eq(sum(vs), t)
+            n_valid += 1
+            n_ok += ok
+            if (_tw_n(_tw_cell(r, 7)) or 0) != 0:
+                nt_valid += 1
+                nt_ok += ok
+                if not ok and len(fails) < 3:
+                    fails.append([_tw_cell(r, i) for i in (0, 4, 7, 10, 11, 18)])
+        pct = f'{n_ok / n_valid:.4%}' if n_valid else 'n/a'
+        npct = f'{nt_ok / nt_valid:.4%}' if nt_valid else 'n/a'
+        print(f'     {name}: 全部 {n_ok}/{n_valid}={pct};idx7 非零列 {nt_ok}/{nt_valid}={npct}')
+        for fl in fails:
+            print(f'        ✗ [代號,4,7,10,11,18]={fl}')
+
+
+def _r3_amount_recon(tag: str, d_rows, c_fields, c_rows, j_sum) -> None:
+    """Σ(Gk 買進股數 × 收盤) ÷ summary 買進金額(元)。"""
+    print(f'\n   ▶ 市場金額對帳〔{tag}〕')
+    if not d_rows or not c_rows or not isinstance(j_sum, dict):
+        print(f'     資料不足:dailyTrade 列={len(d_rows)} 收盤列={len(c_rows)} '
+              f'summary={"有" if isinstance(j_sum, dict) else "無"} → 跳過')
+        return
+    ci = _tw_find_idx(c_fields, '收盤')
+    if ci is None:
+        ci = 2
+    print(f'     收盤欄 idx={ci} 欄名={c_fields[ci] if ci < len(c_fields) else None!r}')
+    close = _r3_by_code(c_rows)
+    n_dash = n_missing = n_used = 0
+    sums = {k: [0.0, 0.0] for k in range(1, 8)}   # [買進金額估, 賣出金額估]
+    for r in d_rows:
+        code = str(_tw_cell(r, 0)).strip()
+        cr = close.get(code)
+        if cr is None:
+            n_missing += 1
+            continue
+        px = _tw_n(_tw_cell(cr, ci))
+        if px is None:
+            n_dash += 1
+            continue
+        n_used += 1
+        for k in range(1, 8):
+            b, s = _tw_n(_tw_cell(r, _R3_G[k][0])), _tw_n(_tw_cell(r, _R3_G[k][1]))
+            sums[k][0] += (b or 0) * px
+            sums[k][1] += (s or 0) * px
+    print(f'     dailyTrade 列={len(d_rows)};用於計算={n_used};收盤非數值(如 ----)排除={n_dash};'
+          f'收盤表無此代號排除={n_missing}')
+    for k in range(1, 8):
+        print(f'     Σ G{k} 買進股數×收盤 = {sums[k][0]:,.0f} 元;Σ G{k} 賣出股數×收盤 = {sums[k][1]:,.0f} 元')
+    targets = {
+        'f_excl': _r3_summary_row(j_sum, '不含'),
+        'f_dealer': _r3_summary_row(j_sum, '外資自營商'),
+        'trust': _r3_summary_row(j_sum, '投信'),
+        'd_self': _r3_summary_row(j_sum, '自行'),
+        'd_hedge': _r3_summary_row(j_sum, '避險'),
+        'd_total': _r3_summary_row(j_sum, '自營商合計'),
+    }
+    for key, (lab, row) in targets.items():
+        print(f'     summary[{key}] {lab!r}: {list(row) if row is not None else None}')
+
+    def _ratio(k, key, side):
+        lab, row = targets[key]
+        den = _tw_n(_tw_cell(row, 1 + side)) if row is not None else None
+        if not den:
+            return f'G{k}/{key}: 分母無/0({den})'
+        return f'G{k}/{lab}: {sums[k][side] / den:.6f}'
+    for side, sname in ((0, '買進'), (1, '賣出')):
+        print(f'     [{sname} 正確指派假設] ' + ' | '.join(_ratio(k, key, side) for k, key in (
+            (1, 'f_excl'), (4, 'trust'), (5, 'd_self'), (6, 'd_hedge'), (7, 'd_total'), (2, 'f_dealer'))))
+        print(f'     [{sname} 對調指派 G5↔G6] ' + ' | '.join(_ratio(k, key, side) for k, key in (
+            (5, 'd_hedge'), (6, 'd_self'))))
+        print(f'     [{sname} 對照 G3/外資不含] ' + _ratio(3, 'f_excl', side))
+
+
+def probe_round3(fetch_url=None) -> int:
+    """第 3 輪(預設執行段):① 找外資自營商非零歷史日 ② 該日 G1/G3 區分與 T86 對照
+    ③ 市場金額對帳 ④ FinMind 擴樣 ⑤ 休市/日期格式。第 1/2 輪探針 → `--round2`。"""
+    global _TW_REQ_COUNT
+    _TW_REQ_COUNT = 0
+    if fetch_url is None:
+        from src.data.proxy import fetch_url
+    print('🔬 probe_tw_sources 第 3 輪(外資自營商非零日 / 市場金額對帳 / FinMind 擴樣)')
+    print(f'   走 production fetch_url timeout={_TW_TIMEOUT}s attempts=1 間隔 {_TW_SLEEP_S}s '
+          f'上限 {_TW_MAX_REQ} 請求')
+    print(f'   PROXY_URL 設定={"是" if _tw_os.environ.get("PROXY_URL") else "否"} '
+          f'FINMIND_TOKEN 設定={"是" if _tw_os.environ.get("FINMIND_TOKEN") else "否"}(值一律不印)')
+    concl: list[str] = []
+
+    # ── ① 外資自營商非零歷史日 ─────────────────────────────────────
+    print('\n══ ① 外資自營商非零歷史日(TWSE BFI82U + TPEx insti/summary) ══')
+    hist: dict[str, dict] = {}
+    found: list[str] = []
+    for d in ('20230315', '20220315', '20210315', '20200316', '20190315', '20180315'):
+        dg = f'{d[:4]}/{d[4:6]}/{d[6:]}'
+        try:
+            jb, _ = _tw_get(fetch_url, f'① BFI82U {d}', _R3_BFI,
+                            {'type': 'day', 'dayDate': d, 'response': 'json'}, _TW_HDR_TWSE)
+            lab, row = _r3_summary_row(jb, '外資自營商')
+            print(f'   ↳ BFI82U {d} stat={(jb or {}).get("stat") if isinstance(jb, dict) else None!r} '
+                  f'外資自營商列: {lab!r} {list(row) if row is not None else None}')
+            js, _ = _tw_get(fetch_url, f'① TPEx summary {dg}', _R3_SUMMARY,
+                            {'type': 'Daily', 'date': dg, 'response': 'json'}, _TW_HDR_TPEX_NEW)
+            lab2, row2 = _r3_summary_row(js, '外資自營商')
+            print(f'   ↳ TPEx summary {dg} stat={(js or {}).get("stat") if isinstance(js, dict) else None!r} '
+                  f'date={(js or {}).get("date") if isinstance(js, dict) else None!r} '
+                  f'外資自營商列: {lab2!r} {list(row2) if row2 is not None else None}')
+            hist[dg] = {'bfi': row, 'tpex': row2, 'sum': js}
+            if _r3_nonzero(row2):
+                found.append(dg)
+            concl.append(f'① {d}: BFI82U 外資自營商={list(row)[1:] if row is not None else None} '
+                         f'TPEx 外資自營商={list(row2)[1:] if row2 is not None else None}')
+        except Exception as e:  # noqa: BLE001
+            print(f'   ❌ ① {d} 處理例外 {type(e).__name__}: {e}')
+    if not found:
+        for dg in ('2017/12/15', '2017/06/15'):
+            try:
+                js, _ = _tw_get(fetch_url, f'① TPEx summary {dg}(備援日)', _R3_SUMMARY,
+                                {'type': 'Daily', 'date': dg, 'response': 'json'}, _TW_HDR_TPEX_NEW)
+                lab2, row2 = _r3_summary_row(js, '外資自營商')
+                print(f'   ↳ TPEx summary {dg} 外資自營商列: {lab2!r} {list(row2) if row2 is not None else None}')
+                concl.append(f'① {dg}: TPEx 外資自營商={list(row2)[1:] if row2 is not None else None}')
+                hist[dg] = {'bfi': None, 'tpex': row2, 'sum': js}
+                if _r3_nonzero(row2):
+                    found.append(dg)
+                    break
+            except Exception as e:  # noqa: BLE001
+                print(f'   ❌ ① {dg} 處理例外 {type(e).__name__}: {e}')
+    dx = found[:2]
+    print(f'\n   ▶ ① 結論統計:TPEx 外資自營商非零日 = {found or "無"};選定 Dx = {dx or "無(停止②)"}')
+    concl.append(f'① TPEx 外資自營商非零日={found};Dx={dx}')
+
+    # ── ② Dx:dailyTrade + T86 ────────────────────────────────────
+    print('\n══ ② Dx 日 TPEx dailyTrade(EW)位置驗算 + TWSE T86 對照 ══')
+    for dg in dx:
+        try:
+            _, f, rows = _r3_daily(fetch_url, f'② dailyTrade EW {dg}', dg)
+            if f:
+                print(f'   fields={f!r}')
+            if rows:
+                _r3_group_checks(rows, f'{dg} 全部列')
+                g2 = [r for r in rows if any((_tw_n(_tw_cell(r, i)) or 0) != 0 for i in _R3_G[2])]
+                print(f'   G2 非零列數={len(g2)};前 10 列完整內容:')
+                for r in g2[:10]:
+                    print(f'     {list(r)!r}')
+                if g2:
+                    _r3_group_checks(g2, f'{dg} 僅 G2 非零列')
+                concl.append(f'② {dg} dailyTrade 列數={len(rows)} G2 非零列={len(g2)}')
+            else:
+                concl.append(f'② {dg} dailyTrade 無資料列')
+            d8 = dg.replace('/', '')
+            jt, _ = _tw_get(fetch_url, f'② T86 ALL {d8}', _R3_T86,
+                            {'date': d8, 'selectType': 'ALL', 'response': 'json'}, _TW_HDR_TWSE)
+            tf, trows = _tw_first_table(jt)
+            print(f'   ↳ T86 stat={(jt or {}).get("stat") if isinstance(jt, dict) else None!r} '
+                  f'fields長度={len(tf)} 列數={len(trows)}')
+            if tf:
+                print(f'   T86 fields(idx:名)= {[(i, x) for i, x in enumerate(tf)]!r}')
+            if trows:
+                _r3_t86_checks(trows, d8)
+        except Exception as e:  # noqa: BLE001
+            print(f'   ❌ ② {dg} 處理例外 {type(e).__name__}: {e}')
+
+    # ── ③ 市場層級金額對帳 ─────────────────────────────────────────
+    print('\n══ ③ 市場層級對帳(Σ 股數×收盤 ÷ summary 買進金額) ══')
+    daily_cache: dict[str, list] = {}
+    for dg in ('2026/10/08', '2026/10/01'):
+        try:
+            _, f, rows = _r3_daily(fetch_url, f'③ dailyTrade EW {dg}', dg)
+            daily_cache[dg] = rows
+            jc, _ = _tw_get(fetch_url, f'③ afterTrading/otc EW {dg}', _R3_OTC,
+                            {'date': dg, 'type': 'EW', 'id': '', 'response': 'json'}, _TW_HDR_TPEX_NEW)
+            cf, crows = _tw_first_table(jc)
+            js, _ = _tw_get(fetch_url, f'③ insti/summary {dg}', _R3_SUMMARY,
+                            {'type': 'Daily', 'date': dg, 'response': 'json'}, _TW_HDR_TPEX_NEW)
+            _r3_amount_recon(f'EW {dg}', rows, [str(x) for x in cf], crows, js)
+            hist[f'③{dg}'] = {'close': ([str(x) for x in cf], crows), 'sum': js}
+        except Exception as e:  # noqa: BLE001
+            print(f'   ❌ ③ {dg} 處理例外 {type(e).__name__}: {e}')
+
+    # ── ④ FinMind 擴樣 ───────────────────────────────────────────
+    print('\n══ ④ FinMind 匿名擴樣(10 檔 × 2026-10-08/10-01/09-18) ══')
+    try:
+        _, _, r918 = _r3_daily(fetch_url, '④ dailyTrade EW 2026/09/18', '2026/09/18')
+        daily_cache['2026/09/18'] = r918
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ ④ 09/18 dailyTrade 例外 {type(e).__name__}: {e}')
+    picks: list[str] = []
+    try:
+        cand = []
+        for r in daily_cache.get('2026/10/08', []):
+            g5, g6, g4, g1 = (_tw_n(_tw_cell(r, _R3_G[k][2])) for k in (5, 6, 4, 1))
+            if not g5 or not g6 or g5 == g6:
+                continue
+            b5, b6 = _tw_n(_tw_cell(r, _R3_G[5][0])), _tw_n(_tw_cell(r, _R3_G[6][0]))
+            cand.append((0 if g4 else 1, 0 if g1 else 1, 0 if (b5 and b6 and b5 != b6) else 1,
+                         -(abs(g5) + abs(g6)), str(_tw_cell(r, 0)).strip()))
+        cand.sort()
+        picks = [c[-1] for c in cand[:10]]
+        print(f'   候選數(G5淨/G6淨 皆非零且不同)={len(cand)};選出={picks}')
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ ④ 選股例外 {type(e).__name__}: {e}')
+    by_day = {d: _r3_by_code(daily_cache.get(d, [])) for d in ('2026/10/08', '2026/10/01', '2026/09/18')}
+    # stats[name][side] = {'n': 非零比較數, 'zero': 零值數, 'hits': {idx: 次數}}
+    stats: dict = {}
+    fm_fail = 0
+    for code in picks:
+        try:
+            j, _ = _tw_get(fetch_url, f'④ FinMind InstBuySell {code} 09-18~10-08', _R3_FM,
+                           {'dataset': 'TaiwanStockInstitutionalInvestorsBuySell', 'data_id': code,
+                            'start_date': '2026-09-18', 'end_date': '2026-10-08'})
+            if not isinstance(j, dict) or not j.get('data'):
+                fm_fail += 1
+                print(f'   ❌ FinMind {code} 失敗/無資料 msg={(j or {}).get("msg") if isinstance(j, dict) else None!r} '
+                      f'status={(j or {}).get("status") if isinstance(j, dict) else None!r}')
+                continue
+            for d in j['data']:
+                dd = str(d.get('date', '')).replace('-', '/')
+                if dd not in by_day:
+                    continue
+                row = by_day[dd].get(code)
+                if row is None:
+                    print(f'     {code} {dd}: dailyTrade 無此代號列')
+                    continue
+                nm = str(d.get('name'))
+                for side in ('buy', 'sell'):
+                    v = _tw_n(d.get(side))
+                    if v is None:
+                        continue
+                    st = stats.setdefault(nm, {}).setdefault(side, {'n': 0, 'zero': 0, 'hits': {}})
+                    if v == 0:
+                        st['zero'] += 1
+                        continue
+                    st['n'] += 1
+                    for i in range(2, len(row)):
+                        rv = _tw_n(row[i])
+                        if rv is not None and abs(rv - v) < 0.5:
+                            st['hits'][i] = st['hits'].get(i, 0) + 1
+                print(f'     {code} {dd} {nm}: buy={d.get("buy")} sell={d.get("sell")} | '
+                      f'dailyTrade G1..G7(買,賣)='
+                      f'{[(row[_R3_G[k][0]], row[_R3_G[k][1]]) for k in range(1, 8) if _R3_G[k][1] < len(row)]}')
+        except Exception as e:  # noqa: BLE001
+            fm_fail += 1
+            print(f'   ❌ ④ FinMind {code} 例外 {type(e).__name__}: {e}')
+    print('\n   ▶ ④ 結論統計(每個 FinMind name × buy/sell:非零值比較數、命中欄位索引→次數/命中率)')
+    for nm, sides in sorted(stats.items()):
+        for side, st in sides.items():
+            hits = sorted(st['hits'].items(), key=lambda kv: -kv[1])
+            hs = ', '.join(f'idx{i}:{c}/{st["n"]}={c / st["n"]:.2%}' for i, c in hits) if st['n'] else '—'
+            print(f'     {nm:<22} {side:<4} 非零比較={st["n"]} 零值={st["zero"]} 命中: {hs or "(無)"}')
+    concl.append(f'④ FinMind 選股={picks} 失敗={fm_fail}')
+
+    # ── ⑤ 休市與日期格式 ─────────────────────────────────────────
+    print('\n══ ⑤ 休市與日期格式 ══')
+    try:
+        jt, _ = _tw_get(fetch_url, '⑤ T86 date=20261009', _R3_T86,
+                        {'date': '20261009', 'selectType': 'ALL', 'response': 'json'}, _TW_HDR_TWSE)
+        tf, trows = _tw_first_table(jt)
+        print(f'   ↳ T86 20261009 stat={(jt or {}).get("stat") if isinstance(jt, dict) else None!r} '
+              f'date={(jt or {}).get("date") if isinstance(jt, dict) else None!r} 列數={len(trows)}')
+        concl.append(f'⑤ T86 20261009 stat={(jt or {}).get("stat") if isinstance(jt, dict) else None!r} 列數={len(trows)}')
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ ⑤ T86 例外 {type(e).__name__}: {e}')
+    for dfmt in ('20261008', '2026-10-08', '2026/12/31'):
+        try:
+            j, _, rows = _r3_daily(fetch_url, f'⑤ dailyTrade EW date={dfmt}', dfmt)
+            concl.append(f'⑤ dailyTrade date={dfmt} stat={(j or {}).get("stat") if isinstance(j, dict) else None!r} '
+                         f'date={(j or {}).get("date") if isinstance(j, dict) else None!r} 列數={len(rows)}')
+        except Exception as e:  # noqa: BLE001
+            print(f'   ❌ ⑤ dailyTrade {dfmt} 例外 {type(e).__name__}: {e}')
+
+    # ── ③-AL(額度允許才跑) ─────────────────────────────────────
+    print(f'\n══ ③-AL sect=AL 版本(剩餘額度 {_r3_left()} 請求;每日需 2 請求) ══')
+    for dg in ('2026/10/08', '2026/10/01'):
+        if _r3_left() < 2:
+            print(f'   (額度不足,略過 AL {dg})')
+            continue
+        try:
+            _, f, rows = _r3_daily(fetch_url, f'③-AL dailyTrade AL {dg}', dg, sect='AL')
+            jc, _ = _tw_get(fetch_url, f'③-AL afterTrading/otc AL {dg}', _R3_OTC,
+                            {'date': dg, 'type': 'AL', 'id': '', 'response': 'json'}, _TW_HDR_TPEX_NEW)
+            cf, crows = _tw_first_table(jc)
+            if not crows:
+                print('   otc type=AL 無資料 → 改用 EW 收盤表(權證等將計入「收盤表無此代號」)')
+                cf, crows = hist.get(f'③{dg}', {}).get('close', ([], []))
+            _r3_amount_recon(f'AL {dg}', rows, [str(x) for x in cf], crows,
+                             hist.get(f'③{dg}', {}).get('sum'))
+        except Exception as e:  # noqa: BLE001
+            print(f'   ❌ ③-AL {dg} 例外 {type(e).__name__}: {e}')
+
+    print(f'\n══ 第 3 輪結論統計(共送出 {_TW_REQ_COUNT} 個 probe 請求) ══')
+    for c in concl:
+        print(f'   • {c}')
+    print('\n══ 請求總結 ══')
+    for lab, res in _TW_SUMMARY:
+        print(f'   • {lab} → {res}')
+    return 0
+
+
 def _legacy_main() -> int:
     """舊版預設段(v19.112~2026-08-27 PMI/出口探針);現需 `--legacy` 才執行。"""
     from src.data.proxy import fetch_url
@@ -1461,16 +1846,21 @@ def _prod_smoke() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI:無參數 → 只跑 TPEx/TWSE 欄位探針(probe workflow 不帶參數,即此段);
-    `--legacy` → 只跑舊 PMI/出口探針;`--all` → 兩段都跑。"""
+    """CLI:無參數 → 只跑第 3 輪探針 `probe_round3()`(probe workflow 不帶參數,即此段);
+    `--round2` → 只跑第 1/2 輪 TPEx/TWSE 欄位探針 `probe_tpex_new_site()`;
+    `--legacy` → 只跑舊 PMI/出口探針;`--all` → 三段都跑(各段請求計數各自歸零)。"""
+    global _TW_REQ_COUNT
     argv = list(sys.argv[1:] if argv is None else argv)
     if '--legacy' in argv:
         return _legacy_main()
-    rc = probe_tpex_new_site()
+    if '--round2' in argv:
+        return probe_tpex_new_site()
+    rc = probe_round3()
     if '--all' in argv:
+        _TW_REQ_COUNT = 0
+        rc = probe_tpex_new_site() or rc
         rc = _legacy_main() or rc
     return rc
-
 
 if __name__ == '__main__':
     raise SystemExit(main())
