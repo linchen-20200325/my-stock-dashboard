@@ -45,6 +45,37 @@ _DLIF = 'src/data/core/data_loader_inst_fetchers.py'
 _MCR = 'src/data/macro/macro_cache_reader.py'
 _EXP = 'scripts/export_stock_db.py'
 
+#: 批 Z40 跟進二（QA F4）`_normalize_inst_pivot` 主力合計修後逐字（下方 pair 與單點突變共用）
+Z40F2_MAIN_TOTAL_NEW = (
+    "        # 批 Z40 跟進二（QA F4）：主力合計 ＝ 外資＋投信＋自營商，三類**任一缺值（NaN）或整欄不存在 ⇒ 該日主力合計 NaN**\n"
+    "        #   （同 Z38 `_fetch_twse_inst_fallback` 的 NaN 傳遞；⛔ 修前 `sum(axis=1)` 預設 skipna ⇒ 缺一類算成半套、\n"
+    "        #   三類全缺算成假 0）。下游 data_loader D2 `fillna(0)`（有 log）屬既有取捨，本處不動。\n"
+    "        _absent = [c for c in ['外資', '投信', '自營商'] if c not in main]\n"
+    "        if _absent:\n"
+    "            pv['主力合計'] = float('nan')\n"
+    "            print(f'[INST-RENAME] 主力合計缺值：缺 {_absent} 欄（不以其餘類別充當主力合計）')\n"
+    "        else:\n"
+    "            pv['主力合計'] = pv[main].sum(axis=1, skipna=False)\n"
+    "            _n_na = int(pv['主力合計'].isna().sum())\n"
+    "            if _n_na:\n"
+    "                print(f'[INST-RENAME] 主力合計缺值 {_n_na} 日（外資／投信／自營商任一類當日缺值）')\n"
+)
+
+#: 批 Z40 跟進二（QA F4）重複欄合併修後逐字（FinMind 英文路徑 Dealer_self＋Dealer_Hedging 必走此段）
+Z40F2_MERGE_NEW = (
+    "        # 批 Z40 跟進二（QA F4）：合併時**任一來源欄當日缺值 ⇒ 合併後該日缺值**（⛔ 修前 groupby.sum 預設\n"
+    "        #   min_count=0 ⇒ 全缺算成假 0（連單欄的外資／投信也被補 0，使下方主力合計的 NaN 傳遞失效）、\n"
+    "        #   自行／避險缺一邊算成半套 —— 同 T86 守衛「任一子欄缺 ⇒ NaN」與客戶 Q-z21「半套不當完整」）。\n"
+    "        _np_na = _np.isna().T.groupby(level=0).any().T\n"
+    "        _np = _np.T.groupby(level=0).sum().T.mask(_np_na)\n"
+)
+#: 批 Z40 跟進二（QA F5 連帶）BFI82U 國內自營商分支修後逐字
+Z40F2_DDF_DEALER_NEW = (
+    "        elif _is_dom_dealer:\n"
+    "            # 批 Z40 跟進二（QA F5 連帶）：只收國內自營商列（含「自營」且不含「外資」，同上方 `_is_dom_dealer`）。\n"
+    "            #   修前 `'自營' in _nm` —— F5 後「外資(不包含外資自營商)」這類非官方外資列不再被當外資自營商略過，\n"
+    "            #   若沿用舊條件會掉進本分支被加進自營商；改後不進任何一類 ⇒ 外資未觀測（缺值），不誤計。\n"
+)
 #: 修後逐字 → 修前逐字（每組在現行檔恰一處）。key ＝ repo 相對路徑。
 Z40_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
     _DDF: (
@@ -54,6 +85,8 @@ Z40_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          ''),
         ("        elif is_foreign_dealer_label(_nm):\n            # 批 Z40（客戶 Q-z24＝A' 官方口徑）：「外資自營商」列已含在自營商（自行＋避險）內\n            #   （BFI82U notes：外資自營商買賣金額已計入自營商買賣金額）⇒ 不得再加進自營商（修前重複計算），\n            #   也不歸外資。明確略過並 log；`_seen`／Z36 自營觀測旗標語意不變（本列本就不算國內自營觀測）。\n            print(f'[三大法人/BFI82U] 略過「{_nm}」列 {_net} 億（官方口徑：已含在自營商自行＋避險內，不另計）')\n",
          ''),
+        # 批 Z40 跟進二（QA F5 連帶）：BFI82U 國內自營商分支改用 `_is_dom_dealer`（同檔同批跟進 ⇒ 併入本表）。
+        (Z40F2_DDF_DEALER_NEW, "        elif '自營' in _nm:\n"),
     ),
     _ORCH: (
         ('from shared.inst_labels import (  # 批 Z40 法人身分別判定 SSOT(L0)\n    is_finmind_dealer, is_finmind_foreign_investor, is_foreign_dealer_label)\n',
@@ -132,6 +165,10 @@ Z40_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          "            rn[c] = '外資'          # 英文名稱（含 dealer）\n"),
         ("            rn[c] = '自營商'        # Dealer_self ＋ Dealer_Hedging（自行＋避險，下方重複欄合併加總）\n",
          "            rn[c] = '自營商'\n"),
+        # 批 Z40 跟進二（QA F4）：主力合計任一類缺值即缺值。同檔同批口徑跟進 ⇒ pair 直接併入本表，
+        #   Z36／Z38／Z39 還原鏈（讀 `Z40_REVERT_PAIRS`）自動涵蓋，基底 sha 不變。
+        (Z40F2_MERGE_NEW, "        _np = _np.T.groupby(level=0).sum().T\n"),
+        (Z40F2_MAIN_TOTAL_NEW, "        pv['主力合計'] = pv[main].sum(axis=1)\n"),
     ),
     _MCR: (
         ("    # 批 Z40（客戶 Q-z24＝A'）口徑標註：finmind_inst.parquet 的 foreign_buy 口徑隨寫入時點而異 ——\n    #   2017-12-18 前 FinMind Foreign_Investor 本身含外資自營商；2017-12-18 起至 Z40 上線日存 Foreign_Investor\n    #   ＋ Foreign_Dealer_Self（含外資自營商）；Z40 上線日起只取 Foreign_Investor（不含）。歷史不重抓；\n    #   列級 `source` 欄可分辨（`...:Foreign` 舊／`...:Foreign_Investor` 新），詳\n    #   scripts/update_macro_history.py::fetch_finmind_inst。外資自營商 2024 年起實測約 0（派工規格轉述）。\n",
@@ -312,10 +349,31 @@ class TestBfi82u:
         assert _bfi(parser=pre, with_dom_dealer=False)['自營商']['net'] == 2.0
 
     def test_mutant_remove_fd_branch(self):
-        """單點突變：拔掉 `elif is_foreign_dealer_label(_nm):` 分支 ⇒ 外資自營商落進「自營」⇒ 6.5。"""
-        m = _mutant_module(_DDF, [("        elif is_foreign_dealer_label(_nm):\n", "        elif False:\n")],
+        """突變：拔掉 `elif is_foreign_dealer_label(_nm):` 分支 **且** 國內自營商分支退回修前 `'自營' in _nm`
+        ⇒ 外資自營商落進「自營」⇒ 6.5。
+        （批 Z40 跟進二起國內自營商分支改用 `_is_dom_dealer`，兩道防線各自擋得住；只拔其一仍 4.5，見下一支。）"""
+        m = _mutant_module(_DDF, [("        elif is_foreign_dealer_label(_nm):\n", "        elif False:\n"),
+                                  (Z40F2_DDF_DEALER_NEW, "        elif '自營' in _nm:\n")],
                            'ddf_fd')
         assert _bfi(parser=m._parse_bfi82u_rows)['自營商']['net'] == 6.5
+
+    def test_mutant_remove_fd_branch_only_still_guarded(self):
+        """單點突變：只拔 fd 分支 ⇒ 外資自營商仍被 `_is_dom_dealer` 擋在自營商外（4.5）。"""
+        m = _mutant_module(_DDF, [("        elif is_foreign_dealer_label(_nm):\n", "        elif False:\n")],
+                           'ddf_fd_only')
+        assert _bfi(parser=m._parse_bfi82u_rows)['自營商']['net'] == 4.5
+
+    @pytest.mark.parametrize('name', ['外資(不包含外資自營商)', '外資（未含外資自營商）'])
+    def test_unofficial_foreign_row_not_added_to_dealer(self, name):
+        """批 Z40 跟進二（QA F5 連帶）：非官方外資列（F5 後不再判為外資自營商）不得掉進自營商；
+        該列不屬「外資及陸資」官方列 ⇒ 外資未觀測（缺值），自營商不變 4.5。"""
+        rows = [r for r in _bfi_rows(fd=None) if r[0] != '外資及陸資(不含外資自營商)']
+        rows.insert(2, [name, '1', '1', '15,000,000,000'])
+        inst = _parse_bfi82u_rows(_BFI_FIELDS, rows)
+        assert inst['自營商']['net'] == 4.5
+        assert '外資及陸資' in inst.unobserved_net
+        m = _mutant_module(_DDF, [(Z40F2_DDF_DEALER_NEW, "        elif '自營' in _nm:\n")], 'ddf_dom')
+        assert m._parse_bfi82u_rows(_BFI_FIELDS, rows)['自營商']['net'] == 154.5     # 突變：外資 150 億誤計入自營商
 
 
 #: tests/test_batch_z36.py 的 `_QZ20_GOLDEN[(ek, 'foreign_dealer_parsed')]` 在 Z40 前的值（自營商 6.5 雙計口徑）
@@ -821,3 +879,168 @@ class TestT86:
         v = _vals()
         v['外陸資買賣超股數(不含外資自營商)'] = '--'
         assert _t86(monkeypatch, m, FIELDS_NOW, [_row(FIELDS_NOW, '2330', v)])['2330']['外資'] == 0.0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. 批 Z40 跟進二（獨立 QA non-blocking 發現 F5／F6／F4）
+# ══════════════════════════════════════════════════════════════════════════
+_LBL = 'shared/inst_labels.py'
+#: F5 修前判定（只排除含「不含」二字者）—— 單點突變用
+_F5_NEW = '    return "外資自營商" in _strip_paren_modifiers(s)\n'
+_F5_OLD = '    return "外資自營商" in s and "不含" not in s\n'
+
+#: 官方名稱 31 個 ＝ TWSE T86 19 欄 ＋ TWSE BFI82U 6 列 ＋ FinMind name 6 值（均為本檔上方既用的官方實測名稱）
+_BFI82U_ROWS = ['自營商(自行買賣)', '自營商(避險)', '投信', '外資及陸資(不含外資自營商)', '外資自營商', '合計']
+_FINMIND_NAMES = ['Foreign_Investor', 'Foreign_Dealer_Self', 'Investment_Trust', 'Dealer_self', 'Dealer_Hedging',
+                  'total']
+_OFFICIAL_31 = FIELDS_NOW + _BFI82U_ROWS + _FINMIND_NAMES
+_OFFICIAL_FD_TRUE = {'外資自營商買進股數', '外資自營商賣出股數', '外資自營商買賣超股數', '外資自營商',
+                     'Foreign_Dealer_Self'}
+#: 非官方措辭（QA F5 點名）：括號內的「外資自營商」只是修飾外資列口徑 ⇒ 不是外資自營商
+_UNOFFICIAL_NOT_FD = ['外資及陸資(含外資自營商)', '外資(不包含外資自營商)', '外資及陸資(未含外資自營商)']
+
+
+def test_official_31_names_count():
+    assert len(_OFFICIAL_31) == 31 and len(set(_OFFICIAL_31)) == 31
+
+
+class TestF5ForeignDealerParenModifier:
+    @pytest.mark.parametrize('name', _OFFICIAL_31)
+    def test_official_names(self, name):
+        assert L.is_foreign_dealer_label(name) is (name in _OFFICIAL_FD_TRUE)
+
+    @pytest.mark.parametrize('name', _OFFICIAL_31)
+    def test_official_names_unchanged_vs_pre_fix(self, name):
+        """既有官方名稱判定與修前一字不變（修前＝單點突變還原 `_F5_OLD`）。"""
+        pre = _mutant_module(_LBL, [(_F5_NEW, _F5_OLD)], 'f5_pre')
+        assert L.is_foreign_dealer_label(name) is pre.is_foreign_dealer_label(name)
+
+    @pytest.mark.parametrize('name', _UNOFFICIAL_NOT_FD + [
+        '外資及陸資（含外資自營商）', '外資（不包含外資自營商）', '外陸資買賣超股數（不含外資自營商）',
+        ' 外資及陸資(含外資自營商) ', '外資及陸資(含外資自營商'])
+    def test_paren_modifier_is_not_foreign_dealer(self, name):
+        assert not L.is_foreign_dealer_label(name)
+
+    @pytest.mark.parametrize('name', ['外資自營商(含避險)', '外資自營商（自行）', '外資自營商買賣超股數 '])
+    def test_body_is_foreign_dealer_even_with_modifier(self, name):
+        assert L.is_foreign_dealer_label(name)
+
+    @pytest.mark.parametrize('name', _UNOFFICIAL_NOT_FD)
+    def test_mutant_pre_fix_misjudges(self, name):
+        """單點突變（還原修前「只排除『不含』」）⇒ 三個非官方措辭被誤判為外資自營商 ⇒ 上方斷言轉紅。"""
+        pre = _mutant_module(_LBL, [(_F5_NEW, _F5_OLD)], 'f5_pre')
+        assert pre.is_foreign_dealer_label(name)
+
+    def test_pivot_keeps_foreign_with_paren_modifier(self, monkeypatch, capsys):
+        """行為：`外資及陸資(含外資自營商)` 欄在 pivot 歸外資、不被當外資自營商 drop；修前判定 ⇒ 外資欄消失。"""
+        raw = pd.DataFrame([{'date': '2026-10-08', 'name': n, 'buy': b, 'sell': s} for n, b, s in [
+            ('外資及陸資(含外資自營商)', 5000, 1000), ('投信', 100, 300),
+            ('自營商(自行買賣)', 2000, 0), ('自營商(避險)', 0, 500)]])
+        r = IFX._normalize_inst_pivot(raw).iloc[0]
+        assert r['外資'] == 4.0 and r['主力合計'] == pytest.approx(5.3)
+        assert '略過外資自營商欄' not in capsys.readouterr().out
+        pre = _mutant_module(_LBL, [(_F5_NEW, _F5_OLD)], 'f5_pre')
+        monkeypatch.setattr(IFX, 'is_foreign_dealer_label', pre.is_foreign_dealer_label)
+        pv = IFX._normalize_inst_pivot(raw)
+        assert '外資' not in pv.columns
+
+
+class TestF6T86FieldStrip:
+    """T86 欄名前後含空白（例 `' 自營商買賣超股數 '`）⇒ strip 後完全相等仍命中。"""
+    _PADDED = [f' {c} ' for c in FIELDS_NOW]
+
+    def test_padded_fields_still_match(self, monkeypatch, capsys):
+        rows = [_row(FIELDS_NOW, '2330', _vals())]       # 值依未補空白欄名填，欄位順序相同
+        d = _t86(monkeypatch, IFX, self._PADDED, rows)
+        assert d == {'2330': {'外資': 5000.0, '投信': -200.0, '自營商': 30.0}}
+        assert 'f_idx=4 t_idx=10 d_idx=11 d_self_idx=14 d_hedge_idx=17 total_idx=18' in capsys.readouterr().out
+
+    def test_mutant_without_strip_turns_red(self, monkeypatch):
+        """單點突變：拿掉 `n.strip()` ⇒ 補空白欄名全部找不到 ⇒ 三類皆 NaN（≠ 上方值）。"""
+        m = _mutant_module(_DLIF, [("        fi = {n.strip(): i for i, n in enumerate(fields)}\n",
+                                    "        fi = {n: i for i, n in enumerate(fields)}\n")], 't86_nostrip')
+        d = _t86(monkeypatch, m, self._PADDED, [_row(FIELDS_NOW, '2330', _vals())])['2330']
+        assert all(_isnan(d[k]) for k in ('外資', '投信', '自營商'))
+
+
+def _pv_rows(spec):
+    """spec: [(date, name, buy, sell)] → FinMind 形 raw DataFrame（單位：股）。"""
+    return pd.DataFrame([{'date': d, 'name': n, 'buy': b, 'sell': s} for d, n, b, s in spec])
+
+
+_D1, _D2 = '2026-10-07', '2026-10-08'
+_FULL_DAY = [('Foreign_Investor', 5000, 1000), ('Investment_Trust', 100, 300),
+             ('Dealer_self', 2000, 0), ('Dealer_Hedging', 0, 500)]
+
+
+class TestF4MainTotalMissing:
+    def _full(self, day):
+        return [(day, n, b, s) for n, b, s in _FULL_DAY]
+
+    def test_full_days_value_unchanged(self):
+        pv = IFX._normalize_inst_pivot(_pv_rows(self._full(_D1) + self._full(_D2)))
+        assert pv['主力合計'].tolist() == pytest.approx([5.3, 5.3])
+
+    def test_foreign_missing_after_fd_drop_is_nan(self, capsys):
+        """D2 外資只剩 Foreign_Dealer_Self（drop 後外資 NaN）⇒ D2 主力合計 NaN，不是 投信＋自營 半套 1.3。"""
+        spec = self._full(_D1) + [(_D2, 'Foreign_Dealer_Self', 9000, 0)] + \
+            [(_D2, n, b, s) for n, b, s in _FULL_DAY[1:]]
+        pv = IFX._normalize_inst_pivot(_pv_rows(spec)).set_index('date')
+        d1, d2 = _dt.date(2026, 10, 7), _dt.date(2026, 10, 8)
+        assert pv.loc[d1, '主力合計'] == pytest.approx(5.3)
+        assert math.isnan(pv.loc[d2, '外資']) and math.isnan(pv.loc[d2, '主力合計'])
+        assert pv.loc[d2, '投信'] == pytest.approx(-0.2)          # 其他類照常
+        assert '主力合計缺值 1 日' in capsys.readouterr().out
+
+    def test_trust_missing_day_is_nan(self):
+        spec = self._full(_D1) + [(_D2, n, b, s) for n, b, s in _FULL_DAY if n != 'Investment_Trust']
+        pv = IFX._normalize_inst_pivot(_pv_rows(spec))
+        assert pv['主力合計'].iloc[0] == pytest.approx(5.3) and math.isnan(pv['主力合計'].iloc[1])
+
+    def test_class_column_absent_is_all_nan(self, capsys):
+        spec = [(d, n, b, s) for d in (_D1, _D2) for n, b, s in _FULL_DAY if n != 'Investment_Trust']
+        pv = IFX._normalize_inst_pivot(_pv_rows(spec))
+        assert list(pv.columns) == ['date', '外資', '自營商', '主力合計']
+        assert pv['主力合計'].isna().all()
+        assert "缺 ['投信'] 欄" in capsys.readouterr().out
+
+    def test_real_zero_is_zero_not_nan(self):
+        spec = [(_D1, n, 0, 0) for n, _b, _s in _FULL_DAY]
+        assert IFX._normalize_inst_pivot(_pv_rows(spec))['主力合計'].tolist() == [0.0]
+
+    # ── 突變 ────────────────────────────────────────────────────────────────
+    def test_mutant_skipna_default_gives_half_set(self):
+        """單點突變：`skipna=False` 拿掉 ⇒ 外資缺日主力合計＝投信＋自營 1.3（半套）⇒ 上方斷言轉紅。"""
+        m = _mutant_module(_DLIF, [("pv[main].sum(axis=1, skipna=False)", "pv[main].sum(axis=1)")], 'f4_skipna')
+        spec = self._full(_D1) + [(_D2, n, b, s) for n, b, s in _FULL_DAY[1:]]
+        assert m._normalize_inst_pivot(_pv_rows(spec))['主力合計'].iloc[1] == pytest.approx(1.3)
+
+    def test_mutant_pre_fix_absent_column_sums_rest(self):
+        """單點突變（還原修前整段）⇒ 缺投信欄時主力合計＝外資＋自營 5.5（半套）；三類當日全缺 ⇒ 假 0。"""
+        m = _mutant_module(_DLIF, [(Z40F2_MAIN_TOTAL_NEW, "        pv['主力合計'] = pv[main].sum(axis=1)\n")],
+                           'f4_pre')
+        spec = [(_D1, n, b, s) for n, b, s in _FULL_DAY if n != 'Investment_Trust']
+        assert m._normalize_inst_pivot(_pv_rows(spec))['主力合計'].tolist() == pytest.approx([5.5])
+        spec2 = self._full(_D1) + [(_D2, 'Foreign_Dealer_Self', 9000, 0)]
+        pv = m._normalize_inst_pivot(_pv_rows(spec2))
+        assert pv['主力合計'].iloc[1] == 0.0                  # 修前假 0
+        assert math.isnan(IFX._normalize_inst_pivot(_pv_rows(spec2))['主力合計'].iloc[1])
+
+    def test_dealer_half_set_is_nan(self):
+        """D2 只有 Dealer_self、無 Dealer_Hedging ⇒ 自營商 NaN（不以自行買賣充當自營商）、主力合計 NaN。"""
+        spec = self._full(_D1) + [(_D2, n, b, s) for n, b, s in _FULL_DAY if n != 'Dealer_Hedging']
+        pv = IFX._normalize_inst_pivot(_pv_rows(spec))
+        assert pv['自營商'].iloc[0] == pytest.approx(1.5)
+        assert math.isnan(pv['自營商'].iloc[1]) and math.isnan(pv['主力合計'].iloc[1])
+        assert pv['外資'].iloc[1] == 4.0 and pv['投信'].iloc[1] == pytest.approx(-0.2)
+
+    def test_mutant_merge_min_count_zero_fakes_zero(self):
+        """單點突變（還原修前合併）⇒ 外資缺日被合併補成 0.0、主力合計 1.3；自營半套 2.0 ⇒ 上方斷言轉紅。
+        （證明只改主力合計而不改合併時，FinMind 英文路徑的 NaN 傳遞是死碼。）"""
+        m = _mutant_module(_DLIF, [(Z40F2_MERGE_NEW, "        _np = _np.T.groupby(level=0).sum().T\n")],
+                           'f4_merge')
+        spec = self._full(_D1) + [(_D2, n, b, s) for n, b, s in _FULL_DAY[1:]]
+        r = m._normalize_inst_pivot(_pv_rows(spec)).iloc[1]
+        assert r['外資'] == 0.0 and r['主力合計'] == pytest.approx(1.3)
+        spec2 = self._full(_D1) + [(_D2, n, b, s) for n, b, s in _FULL_DAY if n != 'Dealer_Hedging']
+        assert m._normalize_inst_pivot(_pv_rows(spec2))['自營商'].iloc[1] == pytest.approx(2.0)

@@ -369,7 +369,10 @@ def _parse_bfi82u_rows(fields: list, data: list) -> dict | None:
             #   （BFI82U notes：外資自營商買賣金額已計入自營商買賣金額）⇒ 不得再加進自營商（修前重複計算），
             #   也不歸外資。明確略過並 log；`_seen`／Z36 自營觀測旗標語意不變（本列本就不算國內自營觀測）。
             print(f'[三大法人/BFI82U] 略過「{_nm}」列 {_net} 億（官方口徑：已含在自營商自行＋避險內，不另計）')
-        elif '自營' in _nm:
+        elif _is_dom_dealer:
+            # 批 Z40 跟進二（QA F5 連帶）：只收國內自營商列（含「自營」且不含「外資」，同上方 `_is_dom_dealer`）。
+            #   修前 `'自營' in _nm` —— F5 後「外資(不包含外資自營商)」這類非官方外資列不再被當外資自營商略過，
+            #   若沿用舊條件會掉進本分支被加進自營商；改後不進任何一類 ⇒ 外資未觀測（缺值），不誤計。
             _inst['自營商']['net'] += _net
             _seen.add('自營商')
     _unobs = frozenset(_k for _k in _inst if _k not in _seen

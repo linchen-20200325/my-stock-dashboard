@@ -389,9 +389,24 @@ def _normalize_inst_pivot(df_raw: pd.DataFrame) -> pd.DataFrame:
     if pv.columns.duplicated().any():
         _dp = pv[['date']]
         _np = pv.drop(columns=['date'])
-        _np = _np.T.groupby(level=0).sum().T
+        # 批 Z40 跟進二（QA F4）：合併時**任一來源欄當日缺值 ⇒ 合併後該日缺值**（⛔ 修前 groupby.sum 預設
+        #   min_count=0 ⇒ 全缺算成假 0（連單欄的外資／投信也被補 0，使下方主力合計的 NaN 傳遞失效）、
+        #   自行／避險缺一邊算成半套 —— 同 T86 守衛「任一子欄缺 ⇒ NaN」與客戶 Q-z21「半套不當完整」）。
+        _np_na = _np.isna().T.groupby(level=0).any().T
+        _np = _np.T.groupby(level=0).sum().T.mask(_np_na)
         pv = pd.concat([_dp, _np], axis=1)
     main = [c for c in ['外資', '投信', '自營商'] if c in pv.columns]
     if main:
-        pv['主力合計'] = pv[main].sum(axis=1)
+        # 批 Z40 跟進二（QA F4）：主力合計 ＝ 外資＋投信＋自營商，三類**任一缺值（NaN）或整欄不存在 ⇒ 該日主力合計 NaN**
+        #   （同 Z38 `_fetch_twse_inst_fallback` 的 NaN 傳遞；⛔ 修前 `sum(axis=1)` 預設 skipna ⇒ 缺一類算成半套、
+        #   三類全缺算成假 0）。下游 data_loader D2 `fillna(0)`（有 log）屬既有取捨，本處不動。
+        _absent = [c for c in ['外資', '投信', '自營商'] if c not in main]
+        if _absent:
+            pv['主力合計'] = float('nan')
+            print(f'[INST-RENAME] 主力合計缺值：缺 {_absent} 欄（不以其餘類別充當主力合計）')
+        else:
+            pv['主力合計'] = pv[main].sum(axis=1, skipna=False)
+            _n_na = int(pv['主力合計'].isna().sum())
+            if _n_na:
+                print(f'[INST-RENAME] 主力合計缺值 {_n_na} 日（外資／投信／自營商任一類當日缺值）')
     return pv
