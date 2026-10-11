@@ -396,12 +396,18 @@ def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame, *,
     空表（empty）／轉址／schema／恆等式失敗一律短 TTL 負快取 ⇒ 「回答」＝ 該日通過全部守衛。
     ~~空表（假日）算回答~~（舊端點把空表永久快取，因此被算成「有回答」）—— 有意識的語意變更，
     不是漏刪：交易日空表無法與故障區分，算「有回答」會把 TPEx 全面故障誤報成「這檔沒有上櫃法人資料」；
-    10 個平日內必有交易日，真休市日夾在其中不會讓整段被判失敗。本函式程式碼不變。
+    10 個平日內必有交易日，真休市日夾在其中不會讓整段被判失敗。
+
+    批 Z41 修正二（QA N1）：`_get_tpex_day` 對無效代號回三分項全 NaN（M1）。該日該股三分項**全 NaN**
+    → 視為此股該日無資料、**不加入 rows**（否則會長出全 NaN 的法人欄 → `_inst_src='tpex'` →
+    下游 D2 `fillna(0)` 把「未取得」顯示成 0）；所有日都如此 → 不產生法人欄，走既有缺值路徑
+    （`_inst_src='missing'`）。部分分項 NaN 的日子照常加入、維持 NaN（下游 D2 是否補 0 屬既有取捨，不在此改）。
     """
     _answered = False       # Q5-r2:有沒有任何一天拿到 TPEx 的回答
     _asked: list = []
     try:
         rows = []
+        _n_all_nan = 0
         base = datetime.date.today()
         checked = 0
         for delta in range(20):
@@ -415,7 +421,13 @@ def _fetch_tpex_inst_fallback(stock_id: str, df: pd.DataFrame, *,
                 _answered = True
             checked += 1
             if stock_id in day:
-                rows.append({'date': d, **day[stock_id]})
+                _v = day[stock_id]
+                if all(pd.isna(_v.get(_k)) for _k in ('外資', '投信', '自營商')):
+                    _n_all_nan += 1      # 批 Z41 修正二(QA N1):全 NaN = 該日此股無資料,不入 rows
+                    continue
+                rows.append({'date': d, **_v})
+        if _n_all_nan:
+            print(f'[TPEx] ⚠️ {stock_id} {_n_all_nan} 日官方列無效(三分項全 NaN)→ 視為該日未取得,不補 0')
         if rows:
             _df_tp = pd.DataFrame(rows)
             _df_tp['主力合計'] = _df_tp['外資'] + _df_tp['投信'] + _df_tp['自營商']

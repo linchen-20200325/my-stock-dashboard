@@ -78,8 +78,12 @@ Z41_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          "        _TPEX_DAY_CACHE[ds] = day_data\n        _TPEX_DAY_DIAG[ds] = _status\n        print(f'[TPEx] {ds} ({roc_date}): {len(day_data)} 支 idx=({f_idx},{t_idx},{d_idx})')\n        return day_data\n"),
         ("    except Exception as e:\n        return _tpex_day_fail(ds, 'exception', r, f'{type(e).__name__}: {e}')\n\n",
          "    except Exception as e:\n        print(f'[TPEx] {ds} 失敗: {e}')\n        _TPEX_DAY_DIAG[ds] = 'exception'\n        if r is not None:\n            _log_tpex_body(ds, 'exception', r)\n        _TPEX_FAIL_TS[ds] = _t_tp.time()   # P1:暫時性 → 短 TTL 負快取,不永久釘\n        return {}\n\n"),
-        ('    failed：同 `_fetch_twse_inst_fallback`（鍵 `\'tpex\'`；回答 ＝ 日資料進了 `_TPEX_DAY_CACHE`）。\n\n    批 Z41（客戶 Q-z27＝A）語意更正：`_get_tpex_day` 只有 status=ok 的日子進 `_TPEX_DAY_CACHE`，\n    空表（empty）／轉址／schema／恆等式失敗一律短 TTL 負快取 ⇒ 「回答」＝ 該日通過全部守衛。\n    ~~空表（假日）算回答~~（舊端點把空表永久快取，因此被算成「有回答」）—— 有意識的語意變更，\n    不是漏刪：交易日空表無法與故障區分，算「有回答」會把 TPEx 全面故障誤報成「這檔沒有上櫃法人資料」；\n    10 個平日內必有交易日，真休市日夾在其中不會讓整段被判失敗。本函式程式碼不變。\n    """\n',
+        ('    failed：同 `_fetch_twse_inst_fallback`（鍵 `\'tpex\'`；回答 ＝ 日資料進了 `_TPEX_DAY_CACHE`）。\n\n    批 Z41（客戶 Q-z27＝A）語意更正：`_get_tpex_day` 只有 status=ok 的日子進 `_TPEX_DAY_CACHE`，\n    空表（empty）／轉址／schema／恆等式失敗一律短 TTL 負快取 ⇒ 「回答」＝ 該日通過全部守衛。\n    ~~空表（假日）算回答~~（舊端點把空表永久快取，因此被算成「有回答」）—— 有意識的語意變更，\n    不是漏刪：交易日空表無法與故障區分，算「有回答」會把 TPEx 全面故障誤報成「這檔沒有上櫃法人資料」；\n    10 個平日內必有交易日，真休市日夾在其中不會讓整段被判失敗。\n\n    批 Z41 修正二（QA N1）：`_get_tpex_day` 對無效代號回三分項全 NaN（M1）。該日該股三分項**全 NaN**\n    → 視為此股該日無資料、**不加入 rows**（否則會長出全 NaN 的法人欄 → `_inst_src=\'tpex\'` →\n    下游 D2 `fillna(0)` 把「未取得」顯示成 0）；所有日都如此 → 不產生法人欄，走既有缺值路徑\n    （`_inst_src=\'missing\'`）。部分分項 NaN 的日子照常加入、維持 NaN（下游 D2 是否補 0 屬既有取捨，不在此改）。\n    """\n',
          '    failed：同 `_fetch_twse_inst_fallback`（鍵 `\'tpex\'`；回答 ＝ 日資料進了 `_TPEX_DAY_CACHE`）。\n    """\n'),
+        ('        rows = []\n        _n_all_nan = 0\n        base = datetime.date.today()\n',
+         '        rows = []\n        base = datetime.date.today()\n'),
+        ("            if stock_id in day:\n                _v = day[stock_id]\n                if all(pd.isna(_v.get(_k)) for _k in ('外資', '投信', '自營商')):\n                    _n_all_nan += 1      # 批 Z41 修正二(QA N1):全 NaN = 該日此股無資料,不入 rows\n                    continue\n                rows.append({'date': d, **_v})\n        if _n_all_nan:\n            print(f'[TPEx] ⚠️ {stock_id} {_n_all_nan} 日官方列無效(三分項全 NaN)→ 視為該日未取得,不補 0')\n        if rows:\n",
+         "            if stock_id in day:\n                rows.append({'date': d, **day[stock_id]})\n        if rows:\n"),
     ),
     _CLOSE: (
         ('   - `fetch_twse_close_day(ds)` : TWSE MI_INDEX(帶 date,官方 T1、免 token),回 {code: close}\n   - `fetch_tpex_close_day(ds)` : TPEX 上櫃每日收盤(官方 T1、免 token;批 Z41 改接官方新網站\n     `afterTrading/otc` JSON,帶西元 date,欄位以清洗後完全相等定位 + 逐列/整表守衛)\n   兩者皆「逐日全市場」介面(給定 YYYYMMDD 回當日全市場),bootstrap 逐日回補 +\n',
@@ -1286,6 +1290,147 @@ class TestIndustryMapGuard:
         old = self._old_rows(pq)
         exp = before.sort_values(["date", "sector"]).reset_index(drop=True)
         assert old[list(exp.columns)].astype(str).equals(exp.astype(str))
+
+
+_NAN3 = {"外資": float("nan"), "投信": float("nan"), "自營商": float("nan")}
+
+
+class TestN1FallbackAllNan:
+    """批 Z41 修正二（QA N1）：M1 讓無效代號回三分項全 NaN；選股網 TPEx fallback 不得因此長出
+    全 NaN 法人欄（→ `_inst_src='tpex'` → D2 `fillna(0)` → 籌碼卡顯示 0）。"""
+
+    @staticmethod
+    def _days(n=10):
+        import datetime as _dt
+        out, d = [], _dt.date.today()
+        while len(out) < n:
+            if d.weekday() < 5:
+                out.append(d)
+            d -= _dt.timedelta(days=1)
+        return out
+
+    def _install_days(self, monkeypatch, mod, per_day):
+        """`per_day(date) -> {code: {...}}`；每天都當成 ok 日（進 `_TPEX_DAY_CACHE` ＝ 有回答）。"""
+        cache: dict = {}
+        monkeypatch.setattr(mod, "_TPEX_DAY_CACHE", cache)
+
+        def _get(ds):
+            import datetime as _dt
+            d = _dt.datetime.strptime(ds, "%Y%m%d").date()
+            cache[ds] = per_day(d)
+            return cache[ds]
+        monkeypatch.setattr(mod, "_get_tpex_day", _get)
+
+    def test_all_nan_days_produce_no_columns(self, monkeypatch, capsys):
+        self._install_days(monkeypatch, ifx, lambda d: {"6488": dict(_NAN3)})
+        failed: dict = {}
+        out = ifx._fetch_tpex_inst_fallback("6488", pd.DataFrame({"date": self._days(3)}),
+                                            failed=failed)
+        assert "外資" not in out.columns and not failed
+        assert "三分項全 NaN" in capsys.readouterr().out
+
+    def test_partial_nan_kept_as_nan(self, monkeypatch):
+        days = self._days(3)
+        part = {"外資": float("nan"), "投信": 1.0, "自營商": 2.0}
+        self._install_days(monkeypatch, ifx, lambda d: {
+            "6488": dict(part) if d == days[0] else
+            (dict(_NAN3) if d == days[1] else {"外資": 5.0, "投信": 0.0, "自營商": 0.0})})
+        out = ifx._fetch_tpex_inst_fallback("6488", pd.DataFrame({"date": days}))
+        by = out.set_index("date")
+        assert math.isnan(by.loc[days[0], "外資"]) and by.loc[days[0], "投信"] == 1.0
+        assert math.isnan(by.loc[days[0], "主力合計"])
+        assert math.isnan(by.loc[days[1], "外資"]) and math.isnan(by.loc[days[1], "投信"])
+        assert by.loc[days[2], "外資"] == 5.0
+
+    def _loader_df(self, monkeypatch, fallback_mod):
+        """籌碼卡上游：`StockDataLoader.get_combined_data`（FinMind 掛、T86 有回答但無此檔、TPEx 全 NaN）。"""
+        import src.data.core.data_loader as DL
+        import tests.test_v2_silent_fail_b13_q5r2 as Q
+        monkeypatch.setattr(DL, "_yf_dl", Q._yf_price_frame)
+        monkeypatch.setattr(DL, "get_stock_name", lambda sid: "測試股")
+        monkeypatch.setattr(DL, "_fetch_finmind_margin_raw", lambda sid, df, s: (df, "missing"))
+        monkeypatch.setattr(DL, "_bps_dl", lambda: Q._FmSess(ConnectionError("proxy down")))
+        monkeypatch.setattr(ifx, "_T86_DAY_CACHE", {})
+
+        def _t86(ds):
+            ifx._T86_DAY_CACHE[ds] = {}
+            return {}
+        monkeypatch.setattr(ifx, "_get_t86_day", _t86)
+        self._install_days(monkeypatch, fallback_mod, lambda d: {"6488": dict(_NAN3)})
+        monkeypatch.setattr(DL, "_fetch_tpex_inst_fallback", fallback_mod._fetch_tpex_inst_fallback)
+        loader = DL.StockDataLoader.__new__(DL.StockDataLoader)
+        loader.dl = None
+        DL.StockDataLoader._get_combined_data_cached.clear()
+        try:
+            df, err, _ = loader.get_combined_data("6488", 180, True)
+        finally:
+            DL.StockDataLoader._get_combined_data_cached.clear()
+        assert err is None
+        return df
+
+    def test_chips_upstream_missing_not_zero(self, monkeypatch):
+        df = self._loader_df(monkeypatch, ifx)
+        assert df.attrs["inst_src"] == "missing"
+        assert not any(c in df.columns for c in ("外資", "投信", "自營商", "主力合計"))
+
+    def test_mutant_skip_removed_shows_zero(self, monkeypatch):
+        M = _mut(_INST, [("                    _n_all_nan += 1      # 批 Z41 修正二(QA N1):全 NaN = 該日此股無資料,不入 rows\n"
+                          "                    continue\n", "                    pass\n")])
+        df = self._loader_df(monkeypatch, M)
+        assert df.attrs["inst_src"] == "tpex"
+        assert (df["外資"] == 0).all()           # 「未取得」被 D2 補成 0 = QA N1 回歸
+
+
+class TestR1IndustryOkBackfill:
+    """批 Z41 修正二（QA R1）：產業別異常期間寫入的新日標 `industry_ok=False`，產業別恢復後自動重算。"""
+
+    def test_backfill_days_industry_semantics(self, tmp_path):
+        old = _old_parquet(tmp_path / "p.parquet", with_flag=True, flag=True)
+        assert U._tpex_backfill_days(old, _TODAY) == []                  # 舊列無 industry_ok → 可信
+        na = old.assign(industry_ok=pd.array([pd.NA] * len(old), dtype="boolean"))
+        assert U._tpex_backfill_days(na, _TODAY) == []                   # NA → 可信（不無限回補）
+        bad = old.assign(industry_ok=pd.array(
+            [False if d == pd.Timestamp(_OLD_DATES[2]) else pd.NA for d in old["date"]],
+            dtype="boolean"))
+        assert U._tpex_backfill_days(bad, _TODAY) == [_OLD_DATES[2]]     # 只有明確 False
+
+    def _two_runs(self, monkeypatch, mod, tmp_path):
+        _old_parquet(tmp_path / "daily_net.parquet", with_flag=True, flag=True)
+        _rc, _seen, meta1 = _run(monkeypatch, mod, tmp_path, _TODAY, _all_days(), imap={})
+        pq1 = pd.read_parquet(tmp_path / "daily_net.parquet")
+        nd = [pd.Timestamp("2026-10-09"), pd.Timestamp(_TODAY)]
+        assert set(pq1.loc[pq1["date"].isin(nd), "sector"]) == {"未分類"}
+        assert not pq1.loc[pq1["date"].isin(nd), "industry_ok"].any()
+        assert any("20261009" in w and "產業別異常期間寫入日" in w for w in meta1["warnings"])
+        nxt = pd.Timestamp("2026-10-13").date()
+        spec = {**_all_days(), nxt.strftime("%Y%m%d"): _good_day()}
+        _rc2, seen2, meta2 = _run(monkeypatch, mod, tmp_path, nxt, spec)    # 產業別恢復
+        return pq1, seen2, meta2, pd.read_parquet(tmp_path / "daily_net.parquet"), nd
+
+    def test_repro_recovers_next_day(self, monkeypatch, tmp_path):
+        _pq1, seen2, meta2, pq2, nd = self._two_runs(monkeypatch, U, tmp_path)
+        assert {d.date() for d in nd} <= set(seen2)
+        assert not (set(_OLD_DATES) & set(seen2))        # 舊列（無欄）不被重抓
+        re = pq2[pq2["date"].isin(nd)]
+        assert "未分類" not in set(re["sector"]) and re["industry_ok"].all()
+        assert {"半導體業", "文化創意業"} <= set(re["sector"])
+        assert not any("產業別異常期間寫入日" in w for w in meta2["warnings"])
+        assert pq2["date"].nunique() == 21 and meta2["last_error"] is None
+
+    def test_mutant_industry_days_not_backfilled(self, monkeypatch, tmp_path):
+        M = _mut(_SCRIPT, [("               if not bool(_all_ok.get(x, False)) or pd.Timestamp(x) in _ind_bad]\n",
+                            "               if not bool(_all_ok.get(x, False))]\n")])
+        _pq1, _seen2, _meta2, pq2, nd = self._two_runs(monkeypatch, M, tmp_path)
+        assert set(pq2.loc[pq2["date"].isin(nd), "sector"]) == {"未分類"}   # 永久鎖住 = QA R1
+
+    def test_mutant_flag_not_written(self, monkeypatch, tmp_path):
+        M = _mut(_SCRIPT, [('    sector_daily["industry_ok"] = not bool(_ind_guard)\n', "")])
+        _old_parquet(tmp_path / "daily_net.parquet", with_flag=True, flag=True)
+        _run(monkeypatch, M, tmp_path, _TODAY, _all_days(), imap={})
+        nxt = pd.Timestamp("2026-10-13").date()
+        spec = {**_all_days(), nxt.strftime("%Y%m%d"): _good_day()}
+        _rc, seen2, _m = _run(monkeypatch, M, tmp_path, nxt, spec)
+        assert pd.Timestamp("2026-10-09").date() not in set(seen2)       # 沒旗標 ⇒ 不會被重算
 
 
 class TestCollectDaysCloseStatus:

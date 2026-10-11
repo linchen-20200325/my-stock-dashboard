@@ -204,8 +204,28 @@ def _carry_unresolved(diag: dict, retry: list[_dt.date], expired: list[str]) -> 
     diag["unresolved_expired"] = sorted(expired)
 
 
+def _is_false(v) -> bool:
+    return v is False or v is np.False_
+
+
+def _industry_bad_dates(df: pd.DataFrame | None) -> set:
+    """批 Z41 修正二(QA R1):`industry_ok` **明確為 False** 的日子(Timestamp 集合)。
+
+    ⚠️ 語意刻意與 `tpex_ok` 相反:舊列無 `industry_ok` 欄 / NA → 視為**可信**(不納入),
+    只有產業別守衛擋下期間寫入的日子(明確 False)才算 —— 否則 Z41 之前寫入的整窗舊列會被
+    無限回補。
+    """
+    if df is None or df.empty or "industry_ok" not in df.columns or "date" not in df.columns:
+        return set()
+    _d = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+    _bad = df["industry_ok"].map(_is_false)
+    return set(_d[_bad.to_numpy()].dropna())
+
+
 def _tpex_backfill_days(existing: pd.DataFrame | None, today: _dt.date) -> list[_dt.date]:
-    """批 Z41 R1:parquet 最近 WINDOW_SIZE 個交易日中 `tpex_ok` 不為 True 的日子(舊列無欄 → NA 也算)。
+    """批 Z41 R1:parquet 最近 WINDOW_SIZE 個交易日中**需重算**的日子:
+    `tpex_ok` 不為 True(舊列無欄 → NA 也算),或(批 Z41 修正二 QA R1)`industry_ok` **明確為 False**
+    (產業別異常期間寫入、全歸「未分類」;舊列無欄 / NA → 可信,不納入,見 `_industry_bad_dates`)。
 
     同日任一列非 True 即算(同日各板塊旗標相同;保守取「全為 True 才算成功」)。
     超過 `_TPEX_BACKFILL_MAX_DAYS` → 取最近的那些。
@@ -215,10 +235,12 @@ def _tpex_backfill_days(existing: pd.DataFrame | None, today: _dt.date) -> list[
     _d = pd.to_datetime(existing["date"], errors="coerce").dt.normalize()
     _dates = sorted(x for x in _d.dropna().unique() if pd.Timestamp(x).date() <= today)
     recent = _dates[-int(WINDOW_SIZE):]
+    _ind_bad = _industry_bad_dates(existing)
     if "tpex_ok" in existing.columns:
         _ok = existing["tpex_ok"].map(lambda v: v is True or v is np.True_)
         _all_ok = _ok.groupby(_d).all()
-        out = [pd.Timestamp(x).date() for x in recent if not bool(_all_ok.get(x, False))]
+        out = [pd.Timestamp(x).date() for x in recent
+               if not bool(_all_ok.get(x, False)) or pd.Timestamp(x) in _ind_bad]
     else:
         out = [pd.Timestamp(x).date() for x in recent]
     return out[-_TPEX_BACKFILL_MAX_DAYS:]
@@ -387,8 +409,12 @@ def _day_flags_frame(diag: dict) -> pd.DataFrame:
 
 
 def _norm_flag_cols(df: pd.DataFrame) -> pd.DataFrame:
-    """twse_ok / tpex_ok → nullable boolean;舊列(無旗標 → NaN/None)為 <NA>(未知 ≠ True)。"""
-    for c in ("twse_ok", "tpex_ok"):
+    """twse_ok / tpex_ok / industry_ok → nullable boolean;舊列(無旗標 → NaN/None)為 <NA>。
+
+    `twse_ok`/`tpex_ok` 的 NA ＝ 未知 ≠ True;`industry_ok`(批 Z41 修正二)的 NA ＝ 舊列,
+    回補時視為可信(只有明確 False 才重算,見 `_industry_bad_dates`)。
+    """
+    for c in ("twse_ok", "tpex_ok", "industry_ok"):
         if c in df.columns:
             df[c] = pd.array([True if (v is True or v is np.True_) else
                               (False if (v is False or v is np.False_) else pd.NA)
@@ -534,6 +560,13 @@ def _write_metadata(full: pd.DataFrame, diag: dict, cov: dict,
         _n = (cov or {}).get(_k)
         if isinstance(_n, (int, np.integer)) and not isinstance(_n, bool) and _n > 0:
             _warn.append(f"coverage.{_k}={int(_n)}")
+    # 批 Z41 修正二(QA R1):窗口內產業別異常期間寫入(industry_ok 明確 False)的日子 → 警示
+    if full is not None and not full.empty and "date" in full.columns:
+        _win = sorted(pd.to_datetime(full["date"]).dt.normalize().unique())[-int(WINDOW_SIZE):]
+        _bad = sorted(pd.Timestamp(x) for x in _industry_bad_dates(full) if pd.Timestamp(x) in set(_win))
+        if _bad:
+            _warn.append("窗口內產業別異常期間寫入日(全歸未分類,產業別恢復後自動重算):"
+                         + ",".join(x.strftime("%Y%m%d") for x in _bad))
     if bubble_meta:
         _n_used = bubble_meta.get("n_trading_days_used") or 0
         _n_tp = bubble_meta.get("n_days_tpex_ok")
@@ -676,6 +709,8 @@ def main(argv=None) -> int:
     sector_daily["date"] = (pd.to_datetime(sector_daily["date"]).dt.normalize()
                             .astype("datetime64[ns]"))
     sector_daily = sector_daily.merge(_day_flags_frame(diag), on="date", how="left")
+    # 批 Z41 修正二(QA R1):本次產業別是否可信 —— 不可信期間寫入的日子標 False,供之後自動重算
+    sector_daily["industry_ok"] = not bool(_ind_guard)
     sector_daily = _norm_flag_cols(sector_daily)
     sector_daily["fetched_at"] = pd.Timestamp.now("UTC").isoformat()
 
