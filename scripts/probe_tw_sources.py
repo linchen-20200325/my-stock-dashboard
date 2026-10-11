@@ -621,6 +621,7 @@ _TW_REQ_COUNT = 0
 _TW_SAMPLE_CODES = ('6488', '5347', '8299')
 _TW_SEEN: dict[str, str] = {}          # body sha1 → 首次出現的 label
 _TW_SUMMARY: list[tuple[str, str]] = []  # (label, 結果一句話)
+_TW_LAST_TEXT = ''                      # 最近一次成功回應的 body 文字(非 JSON 頁面解析用)
 
 # 與 production 一致的 header(_get_tpex_day / fetch_tpex_close_day)
 _TW_HDR_TPEX_INST_LEGACY = {'User-Agent': 'Mozilla/5.0', 'Accept': '*/*',
@@ -681,7 +682,8 @@ def _tw_get(fetch_url, label: str, url: str, params: dict | None = None,
             headers: dict | None = None):
     """單一請求:印 URL/status/Content-Type/body 前 500 字;JSON 則 dump 結構。
     回 (json_obj 或 None, 是否與先前回應重複)。任何失敗都印原因並繼續,不拋。"""
-    global _TW_REQ_COUNT
+    global _TW_REQ_COUNT, _TW_LAST_TEXT
+    _TW_LAST_TEXT = ''
     if _TW_REQ_COUNT >= _TW_MAX_REQ:
         print(f'\n── [略] {label} — 已達請求上限 {_TW_MAX_REQ},不送出')
         _TW_SUMMARY.append((label, '未送出(達上限)'))
@@ -711,6 +713,7 @@ def _tw_get(fetch_url, label: str, url: str, params: dict | None = None,
         pass
     raw = r.content or b''
     text = raw.decode('utf-8-sig', errors='replace')
+    _TW_LAST_TEXT = text
     print(f'   最終 URL : {_tw_final_url(r, full)}')
     print(f'   HTTP {status} | Content-Type: {ctype or "(無)"} | {len(raw)} bytes')
     print(f'   body[:500]: {_tw_redact(text[:500]).replace(chr(10), "⏎").replace(chr(13), "")}')
@@ -790,7 +793,8 @@ def _tw_dump_json(j) -> None:
               f'totalCount={t.get("totalCount")!r} data列數={len(rows)} fields長度={len(fields)}')
         for fi, fn in enumerate(fields):
             print(f'   │ field[{fi}] = {fn!r}')
-        for x in rows[:3]:
+        # 第 2 輪:小表(≤20 列,如市場彙總)全列印出;大表只印前 3 列
+        for x in (rows if len(rows) <= 20 else rows[:3]):
             print(f'   │ data列: {x!r}')
         for k in t.keys():
             if k not in ('fields', 'data', 'aaData', 'title', 'date', 'totalCount'):
@@ -986,8 +990,34 @@ def _tw_analyze_insti(label: str, fields, rows) -> None:
                   f' : {ok}/{tot}={ratio:.4%} 非平凡列={nt}')
         if not hits:
             print('     (無成立≥98% 且非平凡列≥20 的組合)')
+    # ⑤ 欄名重複(新網站 7 組都叫「買進股數/賣出股數/買賣超股數」)→ 位置假設驗算
+    if fields and sum(1 for f in fields if f.strip() == '買賣超股數') >= 2:
+        _tw_positional_insti(rows)
     # ④ 樣本股完整列
     _tw_print_samples(fields, rows)
+
+
+def _tw_positional_insti(rows) -> None:
+    """第 2 輪新增:TPEx 新網站 fields 七組同名,無法依欄名歸類 → 以「位置」列假設並驗算。
+    G1..G7 = idx[2-4],[5-7],[8-10],[11-13],[14-16],[17-19],[20-22];T = idx[23]。
+    各組語意**不在此判定**(第 1 輪 log 的 FinMind 對映只是旁證);這裡只印各加總式的成立比例,
+    並特別印「非平凡列」數(參與項皆非零),全 0 欄造成的恆真不算證據。"""
+    G = {k: (2 + 3 * (k - 1), 3 + 3 * (k - 1), 4 + 3 * (k - 1)) for k in range(1, 8)}
+    T = 23
+    print('   [位置假設驗算 — G1=[2-4] G2=[5-7] G3=[8-10] G4=[11-13] G5=[14-16] G6=[17-19] G7=[20-22] T=[23]]')
+    for k in range(1, 8):
+        nz = sum(1 for r in rows if any((_tw_n(_tw_cell(r, i)) or 0) != 0 for i in G[k]))
+        print(f'     G{k} 有任一非零值的列數: {nz}/{len(rows)}')
+    for part, pi in (('買進', 0), ('賣出', 1), ('淨', 2)):
+        _tw_ratio(rows, [G[1][pi], G[2][pi], G[3][pi]], lambda a, b, c: _tw_eq(a + b, c),
+                  f'{part}: G1 + G2 == G3')
+        _tw_ratio(rows, [G[5][pi], G[6][pi], G[7][pi]], lambda a, b, c: _tw_eq(a + b, c),
+                  f'{part}: G5 + G6 == G7')
+        _tw_ratio(rows, [G[1][pi], G[3][pi]], lambda a, c: _tw_eq(a, c), f'{part}: G1 == G3(逐列相等)')
+    for name, gs in (('T == G1 + G4 + G7', (1, 4, 7)), ('T == G3 + G4 + G7', (3, 4, 7)),
+                     ('T == G1 + G2 + G4 + G7', (1, 2, 4, 7)), ('T == G1 + G4 + G5 + G6', (1, 4, 5, 6)),
+                     ('T == G3 + G4 + G5 + G6', (3, 4, 5, 6))):
+        _tw_ratio(rows, [G[g][2] for g in gs] + [T], lambda *v: _tw_eq(sum(v[:-1]), v[-1]), f'淨: {name}')
 
 
 def _tw_print_samples(fields, rows) -> None:
@@ -1155,6 +1185,29 @@ def _tw_finmind(fetch_url, tpex_inst: tuple, tpex_close: tuple) -> None:
                         print(f'       {key}={val} → TPEx新欄 {[(i, fl[i] if i < len(fl) else None) for i in idx]}')
 
 
+def _tw_html_headers(text: str) -> None:
+    """印 HTML/模板內的表頭(thead/th)文字與關鍵字視窗,找七組欄位的群組名。"""
+    if not text:
+        print('     (無 body 可解析)')
+        return
+    heads = re.findall(r'<thead[\s\S]*?</thead>', text, flags=re.I)
+    n_th = len(re.findall(r'<th[\s>]', text, flags=re.I))
+    print(f'     <thead> 區塊數={len(heads)}  <th 出現次數={n_th}')
+    for hi, h in enumerate(heads[:4]):
+        cells = [re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', c)).strip()
+                 for c in re.findall(r'<t[hd][^>]*>[\s\S]*?</t[hd]>', h, flags=re.I)]
+        spans = re.findall(r'<t[hd]([^>]*)>', h, flags=re.I)
+        print(f'     thead[{hi}] 儲存格({len(cells)}): {cells}')
+        print(f'     thead[{hi}] 屬性: {[s.strip() for s in spans][:40]}')
+    flat = re.sub(r'\s+', ' ', text)
+    for kw in ('外資及陸資', '外資自營商', '不含', '自營商(自行', '自營商(避險', '投信', '三大法人'):
+        idxs = [m.start() for m in re.finditer(re.escape(kw), flat)][:3]
+        for n, ix in enumerate(idxs):
+            print(f'     [{kw}#{n + 1}] …{flat[max(0, ix - 80):ix + 120]}…')
+        if not idxs:
+            print(f'     [{kw}] 未出現')
+
+
 def probe_tpex_new_site() -> int:
     """預設執行段:TPEx 新/舊端點 + TWSE T86/BFI82U + FinMind 匿名交叉驗證。"""
     from src.data.proxy import fetch_url
@@ -1196,7 +1249,7 @@ def probe_tpex_new_site() -> int:
     print('\n══ B. TPEx 新網站法人 insti/dailyTrade ══')
     newi: dict = {}
     for d in trading + nontrading:
-        for kind in ('roc', 'greg'):
+        for kind in (('roc',) if d == '2026-10-10' else ('roc', 'greg')):
             lab = f'B 新法人 sect=EW date={_fmt(d, kind)}({kind}) {"交易日" if d in trading else "非交易日"}'
             j, dup = _tw_get(fetch_url, lab, 'https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade',
                              {'type': 'Daily', 'sect': 'EW', 'date': _fmt(d, kind), 'id': '',
@@ -1219,12 +1272,15 @@ def probe_tpex_new_site() -> int:
         f_ew, r_ew = newi.get(('2026-10-08', fmt_ok), ([], []))
         print(f'   ↳ AL 列數={len(r_al)} vs EW 列數={len(r_ew)};AL 獨有代號樣本='
               f'{sorted({str(r[0]) for r in r_al if r} - {str(r[0]) for r in r_ew if r})[:15]}')
+        if r_al:
+            print('   ▶ AL 全表位置假設驗算(含權證等)')
+            _tw_positional_insti(r_al)
 
     # ── C. 新網站收盤 ───────────────────────────────────────────────
     print('\n══ C. TPEx 新網站收盤 afterTrading/otc ══')
     newc: dict = {}
     for d in trading + nontrading:
-        for kind in ('roc', 'greg'):
+        for kind in (('roc',) if d == '2026-10-10' else ('roc', 'greg')):
             lab = f'C 新收盤 type=EW date={_fmt(d, kind)}({kind}) {"交易日" if d in trading else "非交易日"}'
             j, dup = _tw_get(fetch_url, lab, 'https://www.tpex.org.tw/www/zh-tw/afterTrading/otc',
                              {'date': _fmt(d, kind), 'type': 'EW', 'id': '', 'response': 'json'},
@@ -1260,10 +1316,24 @@ def probe_tpex_new_site() -> int:
     for lab, params in (
         ('D insti/summary greg', {'type': 'Daily', 'date': '2026/10/08', 'response': 'json'}),
         ('D insti/summary roc', {'type': 'Daily', 'date': '115/10/08', 'response': 'json'}),
-        ('D insti/summary greg+sect=EW', {'type': 'Daily', 'sect': 'EW', 'date': '2026/10/08',
-                                          'response': 'json'}),
     ):
         _tw_get(fetch_url, lab, 'https://www.tpex.org.tw/www/zh-tw/insti/summary', params, _TW_HDR_TPEX_NEW)
+    if ni[1]:
+        cls_sum = [(i, f) for i, f in enumerate(ni[0]) if '買賣超' in str(f)]
+        print('   ▶ 明細(股數)全市場淨額加總 — 與上方彙總(元)單位不同,只並列不比對:')
+        for i, f in cls_sum:
+            s = sum(v for v in (_tw_n(_tw_cell(r, i)) for r in ni[1]) if v is not None)
+            print(f'     明細 idx[{i}] {f}: {s:,.0f} 股')
+
+    # ── D2. 欄位群組標題(第 2 輪新增):新網站 JSON fields 七組同名,群組名在前端模板 ──
+    print('\n══ D2. TPEx 新網站法人明細「欄位群組標題」取證(JSON template 欄 + 頁面 HTML) ══')
+    for lab, url in (
+        ('D2 template 根路徑', 'https://www.tpex.org.tw/template/insti/dailyTrade'),
+        ('D2 template /www/zh-tw 前綴', 'https://www.tpex.org.tw/www/zh-tw/template/insti/dailyTrade'),
+        ('D2 法人明細頁 HTML', 'https://www.tpex.org.tw/zh-tw/mainboard/trading/major-institutional/detail/day.html'),
+    ):
+        _tw_get(fetch_url, lab, url, None, {'Referer': 'https://www.tpex.org.tw/'})
+        _tw_html_headers(_TW_LAST_TEXT)
 
     # ── E. TWSE T86 / BFI82U ──────────────────────────────────────
     print('\n══ E. TWSE T86 / BFI82U(Q-z24/Q-z25 口徑查證) ══')
@@ -1271,8 +1341,7 @@ def probe_tpex_new_site() -> int:
     for lab, url, params in (
         ('E T86 rwd(任務指定)', 'https://www.twse.com.tw/rwd/zh/fund/T86',
          {'date': '20261008', 'selectType': 'ALL', 'response': 'json'}),
-        ('E T86 /fund/T86(repo _get_t86_day 現行)', 'https://www.twse.com.tw/fund/T86',
-         {'response': 'json', 'date': '20261008', 'selectType': 'ALL'}),
+        # 第 1 輪(run 38104063605)已證 repo 現行 /fund/T86 與 rwd 回應 sha1 完全相同 → 第 2 輪不重打
     ):
         j, dup = _tw_get(fetch_url, lab, url, params, _TW_HDR_TWSE)
         f, rows = _tw_first_table(j)
