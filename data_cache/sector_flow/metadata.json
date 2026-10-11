@@ -1,13 +1,19 @@
 {
-  "updated_at": "2026-10-10T15:31:27.979776+00:00",
+  "updated_at": "2026-10-11T00:27:43.264700+00:00",
   "last_updated": "2026-10-08",
-  "row_count": 2624,
-  "n_days": 62,
+  "row_count": 764,
+  "n_days": 18,
   "fetch_diag": {
-    "days_fetched": 0,
-    "days_holiday_or_empty": 1,
+    "days_fetched": 18,
+    "days_holiday_or_empty": 3,
     "days_missing_price": 0
   },
-  "coverage": {},
-  "last_error": "所有候選交易日皆無三大法人資料(假日/來源全敗)"
+  "coverage": {
+    "n_stock_days_with_net": 323523,
+    "n_dropped_missing_price": 299495,
+    "n_unclassified_stock_days": 9,
+    "n_sectors": 43,
+    "n_days": 18
+  },
+  "last_error": null
 }
