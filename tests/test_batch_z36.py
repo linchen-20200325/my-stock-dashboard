@@ -143,6 +143,10 @@ def z36_pairs_for(file_path) -> tuple[tuple[str, str], ...]:
 
 
 def z36_revert(rel: str, code: str) -> str:
+    # 批 Z40（客戶 Q-z24＝A'／Q-z25＝A）改了 _DDF／_ORCH ⇒ 先換回 Z40 之前的寫法，再還原本批
+    #   （同 Z33 串 Z34 慣例；⛔ 不動 `Z36_REVERT_PAIRS` 本身，錨點行逐字保留）。
+    from tests.test_batch_z40 import z40_revert_for
+    code = z40_revert_for(rel, code)
     for new, old in Z36_REVERT_PAIRS[rel]:
         assert code.count(new) == 1, f'{rel} 替換點不唯一或已不存在：{new!r}'
         code = code.replace(new, old)
@@ -499,7 +503,9 @@ OBSERVED = {
                                dealer=('-100,000,000', '-200,000,000')),
     'plain_dict': lambda: {_FK: {'net': 150.0}, _TK: {'net': 12.3}, _DK: {'net': 4.5}},
     'minus_zero': lambda: _bfi(trust='-0', dealer=('-0', '0')),
-    # 外資自營商列解析與否不影響自營商旗標（加總值照舊：解析到的外資自營商值仍併入自營商 —— 既有歸類，登記不改）
+    # 外資自營商列解析與否不影響自營商旗標。
+    # 📌 批 Z40（客戶 Q-z24＝A' 官方口徑）：加總值口徑由「解析到的外資自營商值併入自營商」（Z36 當時既有歸類，
+    #   ＝重複計算）改為「外資自營商不計入任何一類」⇒ foreign_dealer_parsed 的自營商 6.5 → 4.5（＝ normal_pos）。
     'foreign_dealer_dashdash': lambda: _bfi(foreign_dealer='--'),
     'foreign_dealer_parsed': lambda: _bfi(foreign_dealer='200,000,000'),
 }
@@ -527,9 +533,11 @@ FM_CASES = {
                              _fm('Dealer_self', None, None), _FM_DHEDGE], frozenset({_TK, _DK})),
     # 限制（不猜測）：自營只有一列存在、另一列不存在 ⇒ 維持既有（觀測）
     'fm_only_dealer_self': ([_FM_FOREIGN, _FM_TRUST, _FM_DSELF], frozenset()),
-    # 外資自營商（Foreign_Dealer_Self）依既有迴圈歸外資（N2 既有限制）⇒ 不得誤標自營商
+    # 外資自營商（Foreign_Dealer_Self）不得誤標自營商。
+    # 📌 批 Z40（客戶 Q-z24＝A'）：口徑由「依既有迴圈歸外資（N2 既有限制）⇒ 其缺值標外資 {_FK}」改為
+    #   「外資自營商不計入任何一類 ⇒ 其缺值不標任何類 frozenset()」（外資淨額本就只含 Foreign_Investor）。
     'fm_foreign_dealer_bad': ([_FM_FOREIGN, _fm('Foreign_Dealer_Self', None, 1), _FM_TRUST, _FM_DSELF],
-                              frozenset({_FK})),
+                              frozenset()),
 }
 
 
@@ -578,14 +586,18 @@ def _digest(ek, r) -> str:
 #: 修前（基底 `0ef68f93`）同一支 harness 實跑：消費點完整輸出 sha256（⛔ 不由現行碼反推）
 _QZ20_GOLDEN: dict = {
     ('chips', 'foreign_dealer_dashdash'): '1e1b51070c3720489be4a5dcf697db12cc92397cb363c39b48b5b3f1d610f697',
-    ('chips', 'foreign_dealer_parsed'): 'eb1564fee86240aa4c0984b645189b53ec75ca3f59350237b9cca3ae62222cc0',
+    # 📌 批 Z40（Q-z24＝A'）：外資自營商不再併入自營商 ⇒ foreign_dealer_parsed 的消費點輸入與 normal_pos 逐字相同
+    #   ⇒ golden 改為 normal_pos 值；舊值 eb1564fe…（自營商 6.5 雙計口徑）由
+    #   tests/test_batch_z40.py::test_z36_foreign_dealer_parsed_old_golden_is_double_count 以 Z40 前解析器重現。
+    ('chips', 'foreign_dealer_parsed'): '1e1b51070c3720489be4a5dcf697db12cc92397cb363c39b48b5b3f1d610f697',
     ('chips', 'minus_zero'): '775fdb4c62ef83f04dbcbc9c268b531bc0b9acc0d98d1312c6e3b7c9460b7ac2',
     ('chips', 'normal_neg'): '658765f304ef52b396c05a6aefed5021bc2e9e4d06ddaaf3ad531ac47d3a8245',
     ('chips', 'normal_pos'): '1e1b51070c3720489be4a5dcf697db12cc92397cb363c39b48b5b3f1d610f697',
     ('chips', 'plain_dict'): '1e1b51070c3720489be4a5dcf697db12cc92397cb363c39b48b5b3f1d610f697',
     ('chips', 'real_zero'): '775fdb4c62ef83f04dbcbc9c268b531bc0b9acc0d98d1312c6e3b7c9460b7ac2',
     ('news', 'foreign_dealer_dashdash'): 'acc07faec62abfbd4c31410a3f748a3cb40832d0a4732ed02f5d046215afae9b',
-    ('news', 'foreign_dealer_parsed'): '257b3837464adc0c162898eba18aeee08fce4ec1262cd084e6be31c66273ab3e',
+    # 📌 批 Z40：同上（舊值 257b3837…＝自營商 6.5 雙計口徑，見 test_batch_z40.py 同名測試）
+    ('news', 'foreign_dealer_parsed'): 'acc07faec62abfbd4c31410a3f748a3cb40832d0a4732ed02f5d046215afae9b',
     ('news', 'minus_zero'): '7d1f21b005df043e0cf6cc13d3fbfd90e66437a7a80bea169c1dae342c3edf94',
     ('news', 'normal_neg'): 'ead5de0836ed3004bb757b8d4f8f58725e638b86fb145fdaec1fed46bb33f94b',
     ('news', 'normal_pos'): 'acc07faec62abfbd4c31410a3f748a3cb40832d0a4732ed02f5d046215afae9b',
@@ -602,7 +614,9 @@ _QZ20_GOLDEN: dict = {
 #: 修前 FinMind 補救 (repr(inst), sorted(unobserved_net))（⛔ 不由現行碼反推）
 _QZ20_FM_GOLDEN: dict = {
     'fm_dealer_sell_bad': ('c5dfcbf3133bbf88be2ba6ebee5e5c0060d1c580454643658e34ec88a24dce7f', []),
-    'fm_foreign_dealer_bad': ('aa2f899ce2bb7c36239348d572fe2f869e96a02b9533228891588a12f6c94ef8', ['外資及陸資']),
+    # 📌 批 Z40（Q-z24＝A'）：值不變（外資淨額本就只有 Foreign_Investor −250.0）；旗標 ['外資及陸資'] → []
+    #   （外資自營商不再歸外資 ⇒ 其缺值不標外資；行為測試見 tests/test_batch_z40.py::TestFinMindRescue）。
+    'fm_foreign_dealer_bad': ('aa2f899ce2bb7c36239348d572fe2f869e96a02b9533228891588a12f6c94ef8', []),
     'fm_good': ('56550c57691a288ac47f886c890e7f2c0bcbda2fa6e82f8e825b652400681f59', []),
     'fm_only_dealer_self': ('aa2f899ce2bb7c36239348d572fe2f869e96a02b9533228891588a12f6c94ef8', []),
     'fm_real_zero': ('b22246bca693f7f7287e12eb0d945ad797a7fed96123c3f5f6b1a531359dbbbf', []),
@@ -625,7 +639,9 @@ class TestQz20Fixtures:
         assert [OBSERVED['normal_neg']()[k]['net'] for k in (_FK, _TK, _DK)] == [-201.0, -8.0, -3.0]
         for name in ('minus_zero', 'foreign_dealer_dashdash', 'foreign_dealer_parsed'):
             assert OBSERVED[name]().unobserved_net == frozenset(), name
-        assert OBSERVED['foreign_dealer_parsed']()[_DK]['net'] == 6.5    # 4.5 ＋ 外資自營商 2.0（既有歸類，未改）
+        # 批 Z40（Q-z24＝A'）：口徑由「4.5 ＋ 外資自營商 2.0 ＝ 6.5」（重複計算）改為官方「自行＋避險 ＝ 4.5」
+        assert OBSERVED['foreign_dealer_parsed']()[_DK]['net'] == 4.5
+        assert repr(OBSERVED['foreign_dealer_parsed']()) == repr(OBSERVED['normal_pos']())
         assert BFI_UNOBSERVED['dealer_one_dashdash'][0]()[_DK]['net'] == 10.0   # 值照舊加總
 
     def test_dealer_subrow_absent_is_known_limit(self):
@@ -767,6 +783,13 @@ class TestQz20ParserMutation:
         monkeypatch.setattr(sys.modules[__name__], '_parse_bfi82u_rows',
                             z36_pre_module(_DDF)._parse_bfi82u_rows)
         pre = OBSERVED[case]()
+        if case == 'foreign_dealer_parsed':
+            # 批 Z40（Q-z24＝A'）：修前（基底 0ef68f93）外資自營商 2.0 併入自營商（6.5）；Z40 起不計入（4.5）。
+            #   其餘 key 與旗標仍逐字同修前。
+            assert now[_DK]['net'] == 4.5 and pre[_DK]['net'] == 6.5
+            assert ({k: v for k, v in now.items() if k != _DK} == {k: v for k, v in pre.items() if k != _DK})
+            assert now.unobserved_net == pre.unobserved_net
+            return
         assert repr(now) == repr(pre) and now.unobserved_net == pre.unobserved_net
 
     @pytest.mark.parametrize('case', sorted(BFI_UNOBSERVED))
@@ -775,7 +798,13 @@ class TestQz20ParserMutation:
         now = BFI_UNOBSERVED[case][0]()
         monkeypatch.setattr(sys.modules[__name__], '_parse_bfi82u_rows',
                             z36_pre_module(_DDF)._parse_bfi82u_rows)
-        assert repr(now) == repr(BFI_UNOBSERVED[case][0]())
+        pre = BFI_UNOBSERVED[case][0]()
+        if case == 'only_foreign_dealer':
+            # 批 Z40（Q-z24＝A'）：修前外資自營商 2.0 被加進自營商；Z40 起不計入 ⇒ 自營商留預填 0.0（仍標未觀測）。
+            assert now[_DK]['net'] == 0.0 and pre[_DK]['net'] == 2.0
+            assert ({k: v for k, v in now.items() if k != _DK} == {k: v for k, v in pre.items() if k != _DK})
+            return
+        assert repr(now) == repr(pre)
 
 
 class TestQz20Mutation:

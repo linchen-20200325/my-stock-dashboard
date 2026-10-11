@@ -58,6 +58,10 @@ Z37_BASE_SHA = {_LI: '1693dc611e8977e761858ee08ca31a0cd73594be8014acb0059d6ad994
 
 
 def z37_revert(rel: str, code: str) -> str:
+    # 批 Z40 跟進（客戶 Q-z25＝A／Q-z21）改了 `twse_institutional_day` ⇒ 先換回該批之前的寫法，再還原本批
+    #   （同 Z36 串 Z40 慣例；⛔ 不動 `Z37_REVERT_PAIRS` 本身，錨點行逐字保留）。
+    from tests.test_batch_z40b import z40b_revert_for
+    code = z40b_revert_for(rel, code)
     for new, old in Z37_REVERT_PAIRS[rel]:
         assert code.count(new) == 1, f'{rel} 替換點不唯一或已不存在：{new!r}'
         code = code.replace(new, old)

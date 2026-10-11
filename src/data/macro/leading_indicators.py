@@ -912,8 +912,12 @@ def twse_institutional_day(date_ymd):
                 result["外資"] = diff_bn
         if self_diff is not None and hedge_diff is not None:
             result["自營"] = round(self_diff + hedge_diff, 1)
-        elif self_diff is not None:
-            result["自營"] = self_diff
+        # 批 Z40 跟進（客戶 Q-z25＝A：自營商＝自行＋避險；Q-z21：半套不當完整）：自行、避險任一列缺／
+        #   不可解析 ⇒ 不給「自營」key（＝本函式既有缺值表示，下游 `inst.get("自營")` → None → 表格「-」），
+        #   ⛔ 不退回只取自行買賣（修前半套）。外資自營商列不進任何一類（上方分支皆不命中）。
+        elif self_diff is not None or hedge_diff is not None:
+            print(f"[twse_institutional_day] {date_ymd} 自營商半套（自行={self_diff} 避險={hedge_diff}）"
+                  f"→ 自營商為缺值（不以單邊充當自營商）", file=sys.stderr)
         return result
     except Exception as _e:  # v18.241 D3 (§1 Fail Loud)
         print(f"[twse_institutional_day] swallow: {type(_e).__name__}: {_e}", file=sys.stderr)

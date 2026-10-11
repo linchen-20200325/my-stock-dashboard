@@ -8,7 +8,10 @@
 * 🟢 離線層（讀 `data_cache/` parquet/json,**免 API key、免網路**）
     - `stock_fundamentals`  全市場季財報（load_fundamentals_snapshot）
     - `market_index`        加權指數日K（twii_ohlcv.parquet）
-    - `institutional_flow`  外資買賣超（finmind_inst.parquet,單位 億元）
+    - `institutional_flow`  外資買賣超（finmind_inst.parquet,單位 億元；批 Z40 口徑標註：
+                            2017-12-18 前含外資自營商(FinMind 來源端)、2017-12-18 起至 Z40 上線日
+                            存 Foreign_Investor＋Foreign_Dealer_Self(含)、Z40 上線日起只取
+                            Foreign_Investor(不含外資自營商)；歷史不重抓,見 write_institutional_flow）
     - `margin`              融資餘額（finmind_margin.parquet,**單位 元**；
                             B3 v19.179 加 §3.2 sanity gate：全列須 ∈[500,10000]億,
                             否則整表略過 + 警告,不把混口徑序列外送下游）
@@ -129,6 +132,11 @@ def write_market_index(conn: sqlite3.Connection) -> int:
 
 def write_institutional_flow(conn: sqlite3.Connection) -> int:
     # foreign_buy 單位 億元（net）；投信/自營未落地,故僅外資。
+    # 批 Z40（客戶 Q-z24＝A'）口徑標註：parquet 既有列口徑隨寫入時點而異（見
+    #   scripts/update_macro_history.py::fetch_finmind_inst docstring）—— 2017-12-18 前 FinMind
+    #   Foreign_Investor 本身含外資自營商；2017-12-18 起至 Z40 上線日存 FI＋FDS 加總（含外資自營商）；
+    #   Z40 上線日起只取 Foreign_Investor（不含）。歷史不重抓；外資自營商 2024 年起實測約 0。
+    #   本表不帶 source 欄（schema 不變）；需分辨口徑時讀 parquet 的列級 source。
     df = _read_cache_parquet("finmind_inst", ["date", "foreign_buy"])
     df.to_sql("institutional_flow", conn, if_exists="replace", index=False)
     return len(df)

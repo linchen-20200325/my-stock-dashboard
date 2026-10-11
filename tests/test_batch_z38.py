@@ -108,7 +108,8 @@ class TestForeignColumnMapping:
         # 真實 0 保留為 0.0（不是 NaN）
         assert d["1101"]["外資"] == 0.0 and not math.isnan(d["1101"]["外資"])
         out = capsys.readouterr().out
-        assert "f_idx=4 t_idx=10 d_idx=14" in out
+        # 批 Z40（Q-z25＝A）：自營商欄由 idx 14「自營商買賣超股數(自行買賣)」改為 idx 11「自營商買賣超股數」（自行＋避險）
+        assert "f_idx=4 t_idx=10 d_idx=11" in out
 
     def test_foreign_dealer_column_not_selected(self, t86_env):
         # 外陸資 +5,000,000；外資自營商 +10,000 → 外資必須是 5000.0 而非 10.0
@@ -116,12 +117,14 @@ class TestForeignColumnMapping:
         assert ifx._get_t86_day("20261009")["2330"]["外資"] == 5000.0
 
     def test_trust_dealer_unchanged(self, t86_env):
-        # 投信 idx 10、自營商 idx 14（自行買賣）與修前相同
+        # 投信 idx 10 與修前相同。
+        # 批 Z40（客戶 Q-z25＝A）：自營商口徑由 idx 14「只取自行買賣」（50.0）改為 idx 11「自行＋避險」
+        #   （50,000 ＋ −20,000 股 ＝ 30.0 張）。
         t86_env(FIELDS_NOW, [_row_now("2330", 5_000_000, trust=-200_000,
                                       d_self=50_000, d_hedge=-20_000)])
         v = ifx._get_t86_day("20261009")["2330"]
         assert v["投信"] == -200.0
-        assert v["自營商"] == 50.0
+        assert v["自營商"] == 30.0
 
     def test_prod_log_first5_fields_verbatim(self):
         assert FIELDS_NOW[:5] == PROD_LOG_FIRST5
@@ -131,8 +134,9 @@ class TestForeignColumnMapping:
         v = ifx._get_t86_day("20170101")["2330"]
         assert v["外資"] == 1234.0
         assert v["投信"] == -200.0
-        assert v["自營商"] == 50.0
-        assert "f_idx=4 t_idx=7 d_idx=11" in capsys.readouterr().out
+        # 批 Z40（Q-z25＝A）：自營商由 idx 11（自行買賣，50.0）改為 idx 8「自營商買賣超股數」（自行＋避險，30.0）
+        assert v["自營商"] == 30.0
+        assert "f_idx=4 t_idx=7 d_idx=8" in capsys.readouterr().out
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -153,8 +157,8 @@ class TestForeignColumnMissing:
         assert isinstance(v["外資"], float) and math.isnan(v["外資"])
         # 外資自營商欄不得被當外資撿走
         assert v["外資"] != 10.0
-        # 投信 / 自營商照常
-        assert v["投信"] == -200.0 and v["自營商"] == 50.0
+        # 投信 / 自營商照常（批 Z40 Q-z25＝A：自營商＝自行 50,000 ＋ 避險 −20,000 股 ＝ 30.0，修前只取自行 50.0）
+        assert v["投信"] == -200.0 and v["自營商"] == 30.0
         assert "f_idx=None" in capsys.readouterr().out
 
     def test_fallback_main_total_is_missing_not_fake(self, t86_env):
@@ -236,6 +240,8 @@ class TestSectorFlowDownstream:
         # 5000 張 × 1000 股 × 1000 元 / 1e8 = 50 億
         assert r["foreign_yi"] == pytest.approx(50.0)
         assert r["trust_yi"] == pytest.approx(-2.0)
-        assert r["dealer_yi"] == pytest.approx(0.5)
-        assert r["net_amt_yi"] == pytest.approx(50.0 - 2.0 + 0.5)
+        # 批 Z40（客戶 Q-z25＝A，泡泡圖自營商＝自行＋避險）：30 張 × 1000 股 × 1000 元 / 1e8 ＝ 0.3 億
+        #   （修前只取自行 50 張 ⇒ 0.5 億）
+        assert r["dealer_yi"] == pytest.approx(0.3)
+        assert r["net_amt_yi"] == pytest.approx(50.0 - 2.0 + 0.3)
         assert r["foreign_yi"] != 0.0

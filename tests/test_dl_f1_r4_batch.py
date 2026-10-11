@@ -301,7 +301,9 @@ class TestS40EachGateConditionStillDiscriminates:
 _INST_NAMES = ("Foreign_Investor", "Foreign_Dealer_Self", "Investment_Trust", "Dealer_self",
                "Dealer_Hedging", "total")                  # FinMind 實際 name 值（見 fetch_finmind_inst 註解）
 _INST_DATES = ("2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25")
-_INST_SRC = "FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign"
+# 批 Z40（客戶 Q-z24＝A'）：列級 source 由 `...:Foreign` 改為 `...:Foreign_Investor`（＝ 列級口徑標記，
+#   舊列仍是 `...:Foreign`，見 update_macro_history.fetch_finmind_inst docstring）。
+_INST_SRC = "FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign_Investor"
 
 
 def _raw_inst(seed: int = 20260928) -> pd.DataFrame:
@@ -315,8 +317,11 @@ def _raw_inst(seed: int = 20260928) -> pd.DataFrame:
 
 
 def _pre_s43_formula(raw: pd.DataFrame) -> pd.DataFrame:
-    """修正前的算式（逐字；`fillna(0)` 在此只當對照組 —— 有值的日子，修正後必須與它逐位相同）。"""
-    fi = raw[raw["name"].astype(str).str.contains("Foreign", na=False)].copy()
+    """修正前的算式（`fillna(0)` 在此只當對照組 —— 有值的日子，修正後必須與它逐位相同）。
+
+    批 Z40（客戶 Q-z24＝A' 官方口徑）：篩列由 `str.contains("Foreign")`（Foreign_Investor ＋ Foreign_Dealer_Self）
+    改為只取 `name == "Foreign_Investor"`（外資不含外資自營商）；對照組的 fillna(0)／相減／依日加總算式不變。"""
+    fi = raw[raw["name"].astype(str) == "Foreign_Investor"].copy()
     fi["foreign_buy"] = (pd.to_numeric(fi.get("buy"), errors="coerce").fillna(0)
                          - pd.to_numeric(fi.get("sell"), errors="coerce").fillna(0)) / 1e8
     out = fi.groupby("date", as_index=False)["foreign_buy"].sum()
@@ -345,7 +350,9 @@ class TestS43ForeignNetNeverFabricated:
         assert "剔除" not in capsys.readouterr().out
 
     @pytest.mark.parametrize("col", ["buy", "sell"])
-    @pytest.mark.parametrize("name", ["Foreign_Investor", "Foreign_Dealer_Self"])
+    # 批 Z40：外資組成列只剩 Foreign_Investor（Foreign_Dealer_Self 不再是外資組成列 ——
+    #   其缺值不剔除該日，改由下方 test_missing_value_outside_foreign_rows_changes_nothing 參數化守）
+    @pytest.mark.parametrize("name", ["Foreign_Investor"])
     @pytest.mark.parametrize("bad", [None, float("nan"), "--"], ids=["None", "NaN", "非數值"])
     def test_one_missing_component_drops_the_whole_day(self, monkeypatch, capsys, col, name, bad):
         clean = _raw_inst()
@@ -365,14 +372,17 @@ class TestS43ForeignNetNeverFabricated:
         assert "剔除 1 個日期" in out and day in out and "1 列缺值" in out, out
 
     def test_counts_every_dropped_day(self, monkeypatch, capsys):
+        # 批 Z40：原以 Foreign_Dealer_Self 缺值造 3 個剔除日（＋1 列 Foreign_Investor）＝「3 日／4 列」；
+        #   外資自營商已不是外資組成列 ⇒ 改以 Foreign_Investor 缺值造 3 個剔除日（每日 1 列 ⇒「3 日／3 列」），
+        #   另在第 3 日放一列 Foreign_Dealer_Self 缺值 ⇒ 該日**不得**被剔除。
         raw = _raw_inst().astype({"sell": object})
         for d in _INST_DATES[:2] + _INST_DATES[3:4]:
-            raw.loc[(raw["date"] == d) & (raw["name"] == "Foreign_Dealer_Self"), "sell"] = None
-        raw.loc[(raw["date"] == _INST_DATES[0]) & (raw["name"] == "Foreign_Investor"), "sell"] = None
+            raw.loc[(raw["date"] == d) & (raw["name"] == "Foreign_Investor"), "sell"] = None
+        raw.loc[(raw["date"] == _INST_DATES[2]) & (raw["name"] == "Foreign_Dealer_Self"), "sell"] = None
         got = _run_inst(monkeypatch, raw)
         out = capsys.readouterr().out
         assert [str(d) for d in got["date"]] == [_INST_DATES[2], _INST_DATES[4]]
-        assert "剔除 3 個日期" in out and "4 列缺值" in out, out
+        assert "剔除 3 個日期" in out and "3 列缺值" in out, out
 
     def test_every_day_missing_gives_empty_frame(self, monkeypatch, capsys):
         raw = _raw_inst().astype({"buy": object})
@@ -381,11 +391,13 @@ class TestS43ForeignNetNeverFabricated:
         assert got.empty
         assert f"剔除 {len(_INST_DATES)} 個日期" in capsys.readouterr().out
 
-    def test_missing_value_outside_foreign_rows_changes_nothing(self, monkeypatch, capsys):
-        """只有外資的組成列算數：投信／自營商列缺值不影響外資淨額，該日照常產出。"""
+    # 批 Z40：外資自營商（Foreign_Dealer_Self）不再是外資組成列 ⇒ 與投信／自營商同列此處
+    @pytest.mark.parametrize("other", ["Investment_Trust", "Foreign_Dealer_Self", "Dealer_self", "Dealer_Hedging"])
+    def test_missing_value_outside_foreign_rows_changes_nothing(self, monkeypatch, capsys, other):
+        """只有外資的組成列算數：投信／自營商／外資自營商列缺值不影響外資淨額，該日照常產出。"""
         clean = _raw_inst()
         raw = clean.astype({"sell": object})
-        raw.loc[(raw["date"] == _INST_DATES[1]) & (raw["name"] == "Investment_Trust"), "sell"] = None
+        raw.loc[(raw["date"] == _INST_DATES[1]) & (raw["name"] == other), "sell"] = None
         got = _run_inst(monkeypatch, raw)
         _assert_bitwise(got, _pre_s43_formula(clean))
         assert "剔除" not in capsys.readouterr().out
@@ -506,7 +518,9 @@ class TestS39HeaderDocstringMatchesCode:
         assert "三大法人總買賣超" not in umh.__doc__
         assert "外資淨買賣超" in umh.fetch_finmind_inst.__doc__
         assert "三大法人總買賣超" not in umh.fetch_finmind_inst.__doc__
-        assert 'str.contains("Foreign"' in inspect.getsource(umh.fetch_finmind_inst)
+        # 批 Z40（Q-z24＝A'）：篩列由 `str.contains("Foreign")` 改為只取 Foreign_Investor（L0 判定 SSOT）
+        _src = inspect.getsource(umh.fetch_finmind_inst)
+        assert 'map(is_finmind_foreign_investor)' in _src and 'str.contains("Foreign"' not in _src
 
     def test_finmind_tables_are_direct_not_proxy(self):
         import inspect

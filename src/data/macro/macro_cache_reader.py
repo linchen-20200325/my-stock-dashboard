@@ -342,6 +342,11 @@ def load_extreme_risk_legs(
         print(f"[macro_cache_reader/load_extreme_risk_legs] TWII 僅 {len(_tw)} 列,"
               f"不足 21 列算 20 日報酬")
 
+    # 批 Z40（客戶 Q-z24＝A'）口徑標註：finmind_inst.parquet 的 foreign_buy 口徑隨寫入時點而異 ——
+    #   2017-12-18 前 FinMind Foreign_Investor 本身含外資自營商；2017-12-18 起至 Z40 上線日存 Foreign_Investor
+    #   ＋ Foreign_Dealer_Self（含外資自營商）；Z40 上線日起只取 Foreign_Investor（不含）。歷史不重抓；
+    #   列級 `source` 欄可分辨（`...:Foreign` 舊／`...:Foreign_Investor` 新），詳
+    #   scripts/update_macro_history.py::fetch_finmind_inst。外資自營商 2024 年起實測約 0（派工規格轉述）。
     _fi, _fi_latest = _leg_series(
         load_parquet_safe(cache_dir / "finmind_inst.parquet", {"date", "foreign_buy"}),
         "date", "foreign_buy", _MAX_AGE, today)

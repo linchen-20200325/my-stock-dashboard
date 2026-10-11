@@ -34,6 +34,7 @@ except ImportError:
         cache_resource = cache_data
     st = _NoOpST()  # noqa
 
+from shared.inst_labels import is_finmind_foreign_investor, is_foreign_dealer_label  # 批 Z40 SSOT(L0)
 from shared.ttls import TTL_30MIN
 from src.data.core.provenance import prov_log
 
@@ -62,11 +63,17 @@ def fetch_foreign_flow_series(days: int, token: str) -> tuple[pd.DataFrame, str]
     if df is None or df.empty:
         return pd.DataFrame(columns=["date", "foreign_net_yi"]), "無資料回傳(可能為非交易日區間)"
 
-    # 過濾「外資」類別(含 Foreign_Investor / 外資及陸資 等變體)
+    # 過濾「外資」類別。批 Z40（客戶 Q-z24＝A' 官方口徑）：外資 ＝ 只取 name == "Foreign_Investor"
+    #   （＝外資及陸資，不含外資自營商）；中文退路：含「外資」且**非**外資自營商列
+    #   （⚠️ 不能單純排除含「自營」——「外資及陸資(不含外資自營商)」本身就含「自營」）。
+    #   修前 `contains("Foreign|外資")` 會把 Foreign_Dealer_Self 一起加進外資。
     name_col = next((c for c in ("name", "institutional_investors") if c in df.columns), None)
     if name_col is None:
         return pd.DataFrame(columns=["date", "foreign_net_yi"]), f"FinMind 缺類別欄(cols={list(df.columns)[:8]})"
-    mask = df[name_col].astype(str).str.contains("Foreign|外資", case=False, na=False, regex=True)
+    _names = df[name_col].astype(str)
+    mask = (_names.map(is_finmind_foreign_investor)
+            | (_names.str.contains("外資", na=False, regex=False)
+               & ~_names.map(is_foreign_dealer_label)))
     fdf = df.loc[mask].copy()
     if fdf.empty:
         return pd.DataFrame(columns=["date", "foreign_net_yi"]), "FinMind 無 Foreign 類別資料"
@@ -80,13 +87,13 @@ def fetch_foreign_flow_series(days: int, token: str) -> tuple[pd.DataFrame, str]
     # v18.357 PR-Q5c S-PROV-1 phase 19:DataFrame attrs
     try:
         _result.attrs.setdefault('source',
-            'FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign(via leading_indicators.finmind_get)')
+            'FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign_Investor(via leading_indicators.finmind_get)')
         _result.attrs.setdefault('fetched_at', pd.Timestamp.now('UTC').isoformat())
     except Exception:
         pass
     # provenance log
     prov_log('fetch_foreign_flow_series',
-             'FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign',
+             'FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign_Investor',
              f'days={days}:DataFrame:rows={len(_result)}')
     # Phase 2 pandera Priority 2 v18.434:log-mode foreign flow schema
     # (date ascending + foreign_net_yi 億 TWD ∈ ±9999 防單位混淆)
