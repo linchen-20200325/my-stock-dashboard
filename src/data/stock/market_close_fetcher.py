@@ -26,6 +26,7 @@ import os as _os
 
 import requests
 
+from shared.http_diag import scrubbed_body_head
 from shared.roc_calendar import gregorian_to_roc_year
 
 FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
@@ -118,6 +119,17 @@ def fetch_twse_close_day(ds: str) -> dict:
         return {}
 
 
+#: 批 Z39(客戶 Q-z28 診斷;零行為變更):`fetch_tpex_close_day(ds)` 最近一次呼叫的結果狀態。
+#:   ok / empty(aaData 空)/ parse_zero(有列但解析 0 筆)/ http_none(None)/
+#:   http_error(非 200)/ json_error(非 JSON)/ exception。回傳值一字不變。
+_TPEX_CLOSE_DIAG: dict[str, str] = {}
+
+
+def get_tpex_close_status(ds: str) -> str | None:
+    """`fetch_tpex_close_day(ds)` 最近一次呼叫的狀態;從未呼叫 → None。"""
+    return _TPEX_CLOSE_DIAG.get(ds)
+
+
 def fetch_tpex_close_day(ds: str) -> dict:
     """TPEX 上櫃全市場單日收盤價。ds=YYYYMMDD。回 {股票代碼: 收盤價(元/股)}。
 
@@ -125,7 +137,9 @@ def fetch_tpex_close_day(ds: str) -> dict:
     aaData 每列:[代號, 名稱, 收盤, 漲跌, 開盤, 最高, 最低, 成交股數, 成交金額, ...]。
     收盤欄位以「代號右側第一個有效數值」動態定位(勿硬編),避免版本欄序差異。
     假日/無資料 → aaData 空 → 回 {}(§1 自然排除)。
+    批 Z39:各分支記 `_TPEX_CLOSE_DIAG[ds]`;「解析 0 筆」與例外分支印洗過的 body 前 500 字。
     """
+    r = None
     try:
         dt = _dt.date(int(ds[:4]), int(ds[4:6]), int(ds[6:8]))
         roc_date = f"{gregorian_to_roc_year(dt.year)}/{dt.month:02d}/{dt.day:02d}"
@@ -136,9 +150,17 @@ def fetch_tpex_close_day(ds: str) -> dict:
             timeout=20,
             headers={**_HDR_JSON, "Referer": "https://www.tpex.org.tw/"})
         if r is None or getattr(r, "status_code", 0) != 200:
+            _TPEX_CLOSE_DIAG[ds] = "http_none" if r is None else "http_error"
             print(f"[TPEX close] {ds} HTTP={getattr(r, 'status_code', 'None')}")
             return {}
-        j = r.json()
+        try:
+            j = r.json()
+        except ValueError as e:
+            # 批 Z39:非 JSON 單獨記狀態;回傳 / log 前綴同原 except 分支
+            _TPEX_CLOSE_DIAG[ds] = "json_error"
+            print(f"[TPEX close] {ds} 失敗: {type(e).__name__}: {e} "
+                  f"body[:500]={scrubbed_body_head(r)!r}")
+            return {}
         rows = j.get("aaData") or j.get("data") or []
         out: dict = {}
         for row in rows:
@@ -156,12 +178,17 @@ def fetch_tpex_close_day(ds: str) -> dict:
             if code and close is not None and close > 0:
                 out[code] = close
         if not out:
-            print(f"[TPEX close] {ds} ({roc_date}) 解析 0 筆")
+            _TPEX_CLOSE_DIAG[ds] = "parse_zero" if rows else "empty"
+            print(f"[TPEX close] {ds} ({roc_date}) 解析 0 筆 "
+                  f"body[:500]={scrubbed_body_head(r)!r}")
         else:
+            _TPEX_CLOSE_DIAG[ds] = "ok"
             print(f"[TPEX close] {ds} ({roc_date}): {len(out)} 檔")
         return out
     except Exception as e:
-        print(f"[TPEX close] {ds} 失敗: {type(e).__name__}: {e}")
+        _TPEX_CLOSE_DIAG[ds] = "exception"
+        _body = f" body[:500]={scrubbed_body_head(r)!r}" if r is not None else ""
+        print(f"[TPEX close] {ds} 失敗: {type(e).__name__}: {e}{_body}")
         return {}
 
 

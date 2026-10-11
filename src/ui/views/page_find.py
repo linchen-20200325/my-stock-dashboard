@@ -320,7 +320,9 @@ from shared.sector_heatmap import (
     SECTOR_PERIOD_LABELS,
 )
 from shared.sector_flow_thresholds import (
+    SECTOR_FLOW_TWSE_ONLY_NOTE,
     WINDOW_SIZE,
+    format_unavailable_caption,
     WINDOW_X,
     WINDOW_Y_MIN_DAYS,
     WINDOW_Y_PRIOR,
@@ -732,6 +734,10 @@ HEATMAP_ERROR_NOW: str = "**熱力圖畫不出來**"
 FLOW_FAILED_NOW: str = "**板塊資金圖無法產生**"
 FLOW_STALE_NOW: str = "**畫的是最後一次成功凍結的快照，不是今天的**"
 FLOW_EMPTY_NOW: str = "**板塊資金快取尚未產生**"
+#: 批 Z39（客戶 Q-z26=A）：快照存在，但每個板塊都標「未取得」（窗口內有缺值、不補 0）。
+#: 灰（empty）不是紅：沒有人壞掉的證據，只是這一份快照沒有可畫的板塊；
+#: ⛔ 不能沿用 `FLOW_EMPTY_NOW`（「快取尚未產生」對這一態是錯的說法）。
+FLOW_ALL_UNAVAILABLE_NOW: str = "**快照裡每個板塊都未取得**"
 #: 泡泡圖快照「去哪補」—— 2026-09-27 B6-r1 自灰態（快取尚未產生）where 原文**上提**（字面一字未改），
 #: 讓紅態（快照壞檔）讀同一句（⛔ 不手抄第二份）。
 FLOW_REGEN_WHERE: str = ("等當日盤後的「Update Sector Flow」排程；"
@@ -835,6 +841,10 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = {
          "等盤後排程；重按不會變新"),
     ("find.sector_flow", FLOW_EMPTY_NOW):
         ("板塊資金快取尚未產生", "盤後任務還沒產生，不是故障",
+         "等盤後排程或手動跑該工作流程"),
+    # 批 Z39（Q-z26=A）：每個板塊都未取得。去哪補同上一列（同一句 `FLOW_REGEN_WHERE`）。
+    ("find.sector_flow", FLOW_ALL_UNAVAILABLE_NOW):
+        ("每個板塊都未取得", "淨額有缺值，不補 0",
          "等盤後排程或手動跑該工作流程"),
     # ── 條件表單（只有「因子清單載不進來」這一種會畫成卡）─────────
     ("find.screen_form", FORM_UNAVAILABLE_NOW):
@@ -1373,6 +1383,16 @@ class SectorFlowReadout:
     stale_reason: str = ""
     n_days: str = ""
     error: str = ""
+    #: 批 Z39（Q-z26=A）：L2 標 `unavailable`（窗口內缺值、不補 0、不畫）的板塊名。
+    unavailable: tuple[str, ...] = ()
+    #: 批 Z39（Q-z28=A）：窗口內 TPEx 全數成功 → True；舊快照缺鍵 → None（⇒ 顯示僅含上市提示）。
+    tpex_complete: bool | None = None
+
+    @property
+    def n_plottable(self) -> int:
+        """可畫板塊數 ＝ 全部 − 未取得（批 Z39：卡面板塊數 / has_value 以此計，
+        避免全部未取得時仍寫「43 個板塊」）。"""
+        return max(len(self.sectors) - len(self.unavailable), 0)
 
 
 def _etf_tickers(session: Mapping[str, Any]) -> list[str]:
@@ -1445,6 +1465,9 @@ def load_sector_flow(session: Mapping[str, Any], *,
     _sectors = tuple(_view.get("sectors") or ())
     _insuf = tuple(str(_s.get("sector")) for _s in _sectors
                    if isinstance(_s, Mapping) and _s.get("insufficient"))
+    _unav = tuple(str(_s.get("sector")) for _s in _sectors
+                  if isinstance(_s, Mapping) and _s.get("unavailable") is True)
+    _tpc = _view.get("tpex_complete")
     return SectorFlowReadout(
         requested=True, ok=True,
         stale=bool(_view.get("is_stale")),
@@ -1457,6 +1480,8 @@ def load_sector_flow(session: Mapping[str, Any], *,
         meta_updated_at=str(_view.get("meta_updated_at") or ""),
         stale_reason=str(_view.get("stale_reason") or ""),
         n_days=str(_view.get("n_trading_days_used") or ""),
+        unavailable=_unav,
+        tpex_complete=_tpc if isinstance(_tpc, bool) else None,
     )
 
 
@@ -1840,7 +1865,7 @@ def build_sector_flow_card(flow: SectorFlowReadout
     _state = classify_ui_state(
         requested=flow.requested,
         error=flow.error or None,
-        has_value=bool(flow.sectors),
+        has_value=flow.n_plottable > 0,   # 批 Z39：以可畫板塊計（未取得不算有值）
         discriminative=not flow.stale,
     )
     _facts: list[tuple[str, str]] = []
@@ -1857,7 +1882,7 @@ def build_sector_flow_card(flow: SectorFlowReadout
         "未偵測到 —— 到 ETF 組合按「計算組合」，或設定個股組合雲端清單後才會標出"))
 
     if _state == UI_LIVE:
-        _value = f"{len(flow.sectors)} 個板塊"
+        _value = f"{flow.n_plottable} 個板塊"
         return Card(key="find.sector_flow", label="三大法人資金流向泡泡圖",
                     state=UI_LIVE, value=_value), tuple(_facts)
 
@@ -1883,6 +1908,13 @@ def build_sector_flow_card(flow: SectorFlowReadout
                    f"重複{press(ACTION_LOAD_MAP_LABEL)}不會讓快照變新"))
         return Card(key="find.sector_flow", label="三大法人資金流向泡泡圖",
                     state=UI_DEGRADED, note=_note), tuple(_facts)
+    elif flow.ok and flow.sectors:
+        # 批 Z39（Q-z26=A）：快照在、板塊也在，但每個都未取得（缺值不補 0 ⇒ 沒有可畫的）。
+        _note = Note(
+            now=FLOW_ALL_UNAVAILABLE_NOW,
+            why=(f"快照裡 {len(flow.sectors)} 個板塊的近 {WINDOW_SIZE} 交易日淨額"
+                 "都有缺值 —— 缺值不補 0，所以畫不出泡泡"),
+            where=FLOW_REGEN_WHERE)
     else:   # UI_EMPTY —— 快取還沒產生。灰，不是紅（沒有人壞掉）。
         _note = Note(
             now=FLOW_EMPTY_NOW,
@@ -2314,6 +2346,14 @@ def _render_map_leaf(session: Mapping[str, Any]) -> None:
                 "🔴 泡泡圖畫不出來（資料讀到了，是繪圖層的問題）："
                 f"{_err or UNKNOWN_ERROR_TEXT}",
                 icon="🔴")
+
+        # 批 Z39（客戶 Q-z28=A）：窗口內 TPEx 未全數成功 → 圖下方灰字逐字提示（資料驅動）。
+        if _flow.tpex_complete is not True:
+            st.caption(SECTOR_FLOW_TWSE_ONLY_NOTE)
+        # 批 Z39（客戶 Q-z26=A）：缺值板塊不畫，列名（沿用既有「⬜ 未取得：」字樣）。
+        _unav_cap = format_unavailable_caption(_flow.sectors)
+        if _unav_cap:
+            st.caption(_unav_cap)
 
         # ── 3 欄圖例（線框葉2 的 `n` 原文）。象限名讀資料本身，零轉抄。──
         section_header("圖例 — 這一份快照的象限分佈")

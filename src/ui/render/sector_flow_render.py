@@ -9,6 +9,9 @@
 §8.2 L4:**純繪圖,零 I/O**,資料由 caller 傳入,不 import streamlit / 不抓資料 / 不算指標。
 回 `plotly.graph_objects.Figure`(對齊 chart_plotter.py 慣例),caller(L5)自行 st.plotly_chart。
 §1:insufficient(交易日 < 10、Y 不可算)板塊 **不硬塞象限位置**,改以角落標註計數。
+§1(批 Z39,客戶 Q-z26=A):`unavailable`(窗口內缺值 → 未取得)或 x / size 為 None/NaN 的板塊
+**一律不畫** —— 不得把 None 畫在 x=0 或畫成最小泡泡(那是把缺值畫成「觀測到 0」)。
+缺值板塊的列名交 L5 以「⬜ 未取得：」caption 呈現(L0 `format_unavailable_caption`)。
 §3.3:配色走 shared.colors SSOT;泡泡像素下限/上限為本檔頂具名常數(純呈現參數)。
 """
 from __future__ import annotations
@@ -62,13 +65,27 @@ _QUADRANT_DESC: dict = {
 
 
 def _is_missing(v) -> bool:
-    """None 或 NaN(insufficient 板塊的 y_yi,JSON allow_nan 讀回為 float nan)。"""
-    return v is None or (isinstance(v, float) and math.isnan(v))
+    """None / NaN / ±inf / 非數值 → 缺值(批 Z39:JSON null、舊檔 NaN token 皆視為缺,不當 0)。"""
+    if v is None or isinstance(v, bool):
+        return v is None
+    try:
+        return not math.isfinite(float(v))
+    except (TypeError, ValueError):
+        return True
+
+
+def is_unavailable(r) -> bool:
+    """板塊是否「未取得」:L2 旗標 `unavailable`,或 x / size 缺值(防線:舊 JSON 無旗標)。"""
+    return bool(r.get("unavailable")) or _is_missing(r.get("x_yi")) \
+        or _is_missing(r.get("size_yi"))
 
 
 def _size_px(size_yi, max_abs: float) -> float:
-    """|size_yi| → 泡泡像素直徑(面積 ∝ size → 直徑 ∝ sqrt)。max_abs<=0 → 最小值。"""
-    s = abs(float(size_yi or 0.0))
+    """|size_yi| → 泡泡像素直徑(面積 ∝ size → 直徑 ∝ sqrt)。max_abs<=0 → 最小值。
+
+    批 Z39:只對「可畫」板塊呼叫(caller 已濾掉缺值),故不再 `or 0.0` 把 None 變最小泡泡。
+    """
+    s = abs(float(size_yi))
     if max_abs <= 0:
         return _BUBBLE_MIN_PX
     return _BUBBLE_MIN_PX + (_BUBBLE_MAX_PX - _BUBBLE_MIN_PX) * math.sqrt(s / max_abs)
@@ -89,11 +106,14 @@ def build_sector_flow_figure(sectors, *, highlight_sectors=None,
     """
     _hl = {str(s).strip() for s in (highlight_sectors or set())}
     rows = list(sectors or [])
-    # 可畫者:非 insufficient 且 Y 可算(§1:資料不足不硬塞象限位置)
+    # 批 Z39:未取得(旗標或 x/size 缺值)一律不畫 —— 不落 x=0、不當最小泡泡
+    unavail = [r for r in rows if is_unavailable(r) and not r.get("insufficient")]
+    # 可畫者:非 insufficient、非未取得且 Y 可算(§1:資料不足不硬塞象限位置)
     plot = [r for r in rows
-            if not r.get("insufficient") and not _is_missing(r.get("y_yi"))]
-    insuf = [r for r in rows
-             if r.get("insufficient") or _is_missing(r.get("y_yi"))]
+            if not r.get("insufficient") and not is_unavailable(r)
+            and not _is_missing(r.get("y_yi"))]
+    _taken = {id(r) for r in (*unavail, *plot)}
+    insuf = [r for r in rows if id(r) not in _taken]
 
     fig = go.Figure()
 
@@ -106,7 +126,7 @@ def build_sector_flow_figure(sectors, *, highlight_sectors=None,
         fig.update_layout(title=title, height=520)
         return fig
 
-    _max_abs = max((abs(float(r.get("size_yi") or 0.0)) for r in plot), default=0.0)
+    _max_abs = max((abs(float(r.get("size_yi"))) for r in plot), default=0.0)
 
     # 象限分界線(x=0 / y=0)
     fig.add_hline(y=0, line=dict(color="#888888", width=1, dash="dash"))
@@ -118,8 +138,8 @@ def build_sector_flow_figure(sectors, *, highlight_sectors=None,
         if not _pts:
             continue
         fig.add_trace(go.Scatter(
-            x=[float(r.get("x_yi") or 0.0) for r in _pts],
-            y=[float(r.get("y_yi") or 0.0) for r in _pts],
+            x=[float(r.get("x_yi")) for r in _pts],
+            y=[float(r.get("y_yi")) for r in _pts],
             mode="markers",
             name=f"{_q}（{_QUADRANT_DESC.get(_q, '')}）",
             text=[str(r.get("sector")) for r in _pts],
@@ -129,7 +149,7 @@ def build_sector_flow_figure(sectors, *, highlight_sectors=None,
                 opacity=0.72,
                 line=dict(width=1, color="rgba(255,255,255,0.55)"),
             ),
-            customdata=[[float(r.get("size_yi") or 0.0),
+            customdata=[[float(r.get("size_yi")),
                          int(r.get("n_days") or 0),
                          str(r.get("quadrant"))] for r in _pts],
             hovertemplate=(
@@ -146,8 +166,8 @@ def build_sector_flow_figure(sectors, *, highlight_sectors=None,
     _hpts = [r for r in plot if str(r.get("sector")).strip() in _hl]
     if _hpts:
         fig.add_trace(go.Scatter(
-            x=[float(r.get("x_yi") or 0.0) for r in _hpts],
-            y=[float(r.get("y_yi") or 0.0) for r in _hpts],
+            x=[float(r.get("x_yi")) for r in _hpts],
+            y=[float(r.get("y_yi")) for r in _hpts],
             mode="markers+text",
             name="⭐ 你的持股",
             text=["你的持股"] * len(_hpts),

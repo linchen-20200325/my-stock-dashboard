@@ -7,7 +7,7 @@
 - 無產業別 → 未分類桶(§4.6 不猜)
 - X 近 5 日總和 / size 近 20 日絕對值 / Y 兩段 5 日日均之差(正負號)
 - 四象限 + 邊界(x=0) + 交易日不足 → 資料不足
-- 交易日軸缺格顯式補 0 + meta 計數
+- 交易日軸缺格維持 NaN + meta 計數(批 Z39 改;原「顯式補 0」)
 - 空輸入邊界 / map_tickers_to_sectors
 """
 from __future__ import annotations
@@ -233,20 +233,29 @@ def test_insufficient_history_flags():
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 7. 交易日軸缺格顯式補 0(§1 顯式 + meta 計數)
+# 7. 交易日軸缺格(批 Z39,客戶 Q-z26=A:原「顯式補 0」改為維持 NaN + 計數 → 未取得)
 # ══════════════════════════════════════════════════════════════════════
-def test_absent_sector_day_filled_zero_counted():
+def test_absent_sector_day_kept_nan_counted():
+    """批 Z39 更新(原 `test_absent_sector_day_filled_zero_counted`):缺席格**不是**觀測到的 0。
+
+    舊斷言 `n_filled_absent_cells == 10` 與 `B size = |0*10 + 5*2| = 10` 正是 Q-z26 要拔掉的
+    假 0;改斷言缺席維持 NaN、計數 `n_absent_cells`,B 窗口內有缺 → 未取得、不給 size。
+    """
     dates = _bdays(12)
-    # A 每天都有;B 只有最後 2 天 → 前 10 天缺格應被顯式補 0
+    # A 每天都有;B 只有最後 2 天 → 前 10 天缺格維持 NaN(不補 0)
     dfa = _sector_series("A", dates, [1.0] * 12)
     dfb = _sector_series("B", dates[-2:], [5.0, 5.0])
     sd = pd.concat([dfa, dfb], ignore_index=True)
     bubble, meta = compute_bubble(sd)
-    # 12 交易日 × 2 板塊 = 24 格,實有 12(A) + 2(B) = 14 → 補 10 格
-    assert meta["n_filled_absent_cells"] == 10
+    # 12 交易日 × 2 板塊 = 24 格,實有 12(A) + 2(B) = 14 → 缺席 10 格
+    assert meta["n_absent_cells"] == 10
+    assert "n_filled_absent_cells" not in meta
     b = bubble[bubble["sector"] == "B"].iloc[0]
-    # B size = |0*10 + 5*2| = 10
-    assert math.isclose(b["size_yi"], 10.0, abs_tol=1e-9)
+    assert bool(b["unavailable"]) and b["n_missing_days"] == 10
+    assert pd.isna(b["size_yi"]) and pd.isna(b["x_yi"])
+    a = bubble[bubble["sector"] == "A"].iloc[0]
+    assert not bool(a["unavailable"])
+    assert math.isclose(a["size_yi"], 12.0, abs_tol=1e-9)
 
 
 # ══════════════════════════════════════════════════════════════════════
