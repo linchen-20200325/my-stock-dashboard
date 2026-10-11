@@ -29,7 +29,8 @@ import requests
 from shared.http_diag import scrubbed_body_head
 from shared.tpex_schema import (  # 批 Z41 TPEx 官方新網站 JSON 結構契約 SSOT(L0)
     TPEX_CLOSE_COL_AMOUNT, TPEX_CLOSE_COL_CLOSE, TPEX_CLOSE_COL_CODE, TPEX_CLOSE_COL_HIGH,
-    TPEX_CLOSE_COL_LOW, TPEX_CLOSE_COL_VOLUME, TPEX_CLOSE_N_FIELDS, TPEX_CLOSE_REQUIRED_COLS,
+    TPEX_CLOSE_COL_LOW, TPEX_CLOSE_COL_VOLUME, TPEX_CLOSE_N_FIELDS, TPEX_CLOSE_REQUIRE_TABLE_DATE,
+    TPEX_CLOSE_REQUIRED_COLS,
     TPEX_CLOSE_TITLE_PREFIX, TPEX_CLOSE_UNIT_GUARD_MIN_PASS_RATIO, TPEX_CLOSE_VWAP_REL_TOL,
     check_tpex_envelope, clean_tpex_field_name, parse_tpex_price, tpex_query_date,
     tpex_redirected_to_error, tpex_roc_date)
@@ -240,7 +241,7 @@ def fetch_tpex_close_day(ds: str) -> dict:
             return _tpex_close_fail(ds, "json_error", r, f"{type(e).__name__}: {e}")
         # tables[0].date 探針未記錄是否存在 → 有就必須＝民國請求日、沒有不臆測(頂層回聲仍強制)
         status, why, t0 = check_tpex_envelope(j, ds, title_prefix=TPEX_CLOSE_TITLE_PREFIX,
-                                              require_table_date=False)
+                                              require_table_date=TPEX_CLOSE_REQUIRE_TABLE_DATE)
         if status != "ok":
             return _tpex_close_fail(ds, status, r, why)
         status, why, out = _parse_tpex_close_rows(ds, list(t0.get("fields") or []),

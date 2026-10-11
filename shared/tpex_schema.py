@@ -66,7 +66,12 @@ TPEX_IDX_OUT_TRUST: int = TPEX_G_TRUST[2]               # 13
 TPEX_IDX_OUT_DEALER: int = TPEX_G_DEALER[2]             # 22
 
 #: 不可解析列（任一數值欄不可解析 / 代號空 / 代號重複）佔比 > 本值 ⇒ 整日 `parse_error`（非 ok）。
+#: ≤ 本值時該代號輸出三分項 NaN（批 Z41 修正 QA M1：缺值不省略、不當 0）。
 TPEX_INST_MAX_INVALID_ROW_RATIO: float = 0.01
+#: 批 Z41 修正（QA M2）：**資料守衛**（7 組 買−賣＝超、G5＋G6＝G7、T＝G1＋G4＋G7）不成立列佔比 > 本值
+#: ⇒ 整日 `identity_failed`；≤ 本值時該代號三分項 NaN。**語意守衛** G1＋G2＝G3 不受本門檻寬限：
+#: 任一列不成立即整日 `identity_failed`（G1/G3 欄位對調的唯一偵測）。
+TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO: float = 0.01
 
 # ══════════════════════════════════════════════════════════════════════
 # 2. 上櫃股票每日收盤行情（afterTrading/otc）
@@ -93,6 +98,11 @@ TPEX_CLOSE_UNIT_GUARD_MIN_PASS_RATIO: float = 0.95
 # ══════════════════════════════════════════════════════════════════════
 # 3. 回應守衛
 # ══════════════════════════════════════════════════════════════════════
+#: 批 Z41 修正：外殼守衛的「表內日期」是否必填（集中於此，runner 實測若不同時單點修正）。
+#: 法人表 `tables[0].date` 探針實測存在 → 必填；收盤表探針未記錄 → 有出現才比對。
+TPEX_INST_REQUIRE_TABLE_DATE: bool = True
+TPEX_CLOSE_REQUIRE_TABLE_DATE: bool = False
+
 #: 舊端點下架後 302 轉往的錯誤頁路徑片段（最終 HTTP 200 的 HTML 404 頁）。
 TPEX_ERROR_PATH_FRAGMENT: str = "/errors"
 
@@ -162,7 +172,8 @@ def check_tpex_envelope(j, ds: str, *, title_exact: str | None = None,
 
     status：
     - `'schema_error'`：非 dict／`stat != 'ok'`／頂層 `date` ≠ 請求日（含回退前一交易日）／
-      無 `tables[0]`／`data` 非 list／`totalCount` 與 `data` 空否矛盾／title 不符／
+      無 `tables[0]`／`data` 非 list／`totalCount` 可轉整數但 ≠ `len(data)`（批 Z41 修正 QA L2：
+      防分頁／截斷靜默只收部分市場）／title 不符／
       `tables[0].date` ≠ 民國請求日。
     - `'empty'`：`data == []`（且 `totalCount` 缺或為 0）—— **非 ok**；空表不能等同休市
       （舊收盤端點在交易日也回空），由 caller 以 TWSE 同日是否有資料判定。
@@ -191,12 +202,10 @@ def check_tpex_envelope(j, ds: str, *, title_exact: str | None = None,
         tc_i = None if tc is None else int(tc)
     except (TypeError, ValueError):
         return "schema_error", f"totalCount 不可解析 {tc!r}", None
+    if tc_i is not None and tc_i != len(data):
+        return "schema_error", f"totalCount={tc_i} ≠ data 列數 {len(data)}(分頁/截斷?)", None
     if not data:
-        if tc_i not in (None, 0):
-            return "schema_error", f"data 空但 totalCount={tc_i}", None
         return "empty", "totalCount=0 且 data=[]", t0
-    if tc_i == 0:
-        return "schema_error", f"totalCount=0 但 data 有 {len(data)} 列", None
     title = str(t0.get("title", "")).strip()
     if title_exact is not None and title != title_exact:
         return "schema_error", f"title {title!r} ≠ {title_exact!r}", None

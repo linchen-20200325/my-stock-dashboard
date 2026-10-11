@@ -23,7 +23,8 @@ from shared.tpex_schema import (  # 批 Z41 TPEx 官方新網站 JSON 結構契�
     TPEX_ALL_GROUPS, TPEX_G_DEALER, TPEX_G_DEALER_HEDGE, TPEX_G_DEALER_SELF,
     TPEX_G_FOREIGN_DEALER, TPEX_G_FOREIGN_EXCL_FD, TPEX_G_FOREIGN_INCL_FD, TPEX_G_TRUST,
     TPEX_IDX_OUT_DEALER, TPEX_IDX_OUT_FOREIGN, TPEX_IDX_OUT_TRUST, TPEX_IDX_TOTAL_NET,
-    TPEX_INST_FIELDS, TPEX_INST_MAX_INVALID_ROW_RATIO, TPEX_INST_N_FIELDS, TPEX_INST_TITLE,
+    TPEX_INST_FIELDS, TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO, TPEX_INST_MAX_INVALID_ROW_RATIO,
+    TPEX_INST_N_FIELDS, TPEX_INST_REQUIRE_TABLE_DATE, TPEX_INST_TITLE,
     check_tpex_envelope, parse_tpex_int, tpex_query_date, tpex_redirected_to_error, tpex_roc_date)
 from shared.ttls import TTL_15MIN  # noqa: F401  (部分 fetcher inline 引用)
 from src.data.proxy import fetch_url as _fetch_url_dl
@@ -232,16 +233,31 @@ def _tpex_day_fail(ds: str, status: str, r, reason: str) -> dict:
     return {}
 
 
+def _tpex_lots(shares: int | None) -> float:
+    """股 → 張。批 Z41 修正(QA L1):與上市 `_get_t86_day` 內 `_lots` **同一規則**
+    `round(v / 1000, 1)`(None → NaN);兩者一致性由 tests/test_batch_z41 逐值比對守住。"""
+    return float('nan') if shares is None else round(shares / 1000, 1)
+
+
+_TPEX_NAN_ROW: dict = {'外資': float('nan'), '投信': float('nan'), '自營商': float('nan')}
+
+
 def _parse_tpex_inst_rows(ds: str, data: list) -> tuple[str, str, dict]:
     """批 Z41:`tables[0].data` 逐列驗證 → (status, reason, day_data)。純解析,無 I/O。
 
     - 列長 ≠ 24 → schema_error(整日)。
-    - 代號 strip 後空 / 任一數值欄不可解析 / 代號重複 → 該列無效(⛔ 不當 0),該股不輸出(缺值);
-      無效列 > 0 → warning;比例 > TPEX_INST_MAX_INVALID_ROW_RATIO → parse_error(整日)。
-    - 有效列逐列恆等式(容差 0):7 組 買−賣＝超;G1＋G2＝G3(買/賣/超);G5＋G6＝G7(買/賣/超);
-      T＝G1超＋G4超＋G7超。任一列不成立 → identity_failed(整日,不猜、不部分採用)。
+    - 批 Z41 修正(QA M1):代號重複 / 任一數值欄不可解析 → 該代號**輸出三分項 NaN**(缺值,⛔ 不當 0,
+      也不整檔省略 —— 省略會讓 L2 當成「沒有這檔」而 0 貢獻、metadata 看不到),口徑同上市 T86
+      (缺欄／髒值 → NaN)。代號空 → 無法輸出,只計數。無效列比例 > TPEX_INST_MAX_INVALID_ROW_RATIO
+      → parse_error(整日)。
+    - 批 Z41 修正(QA M2)恆等式分級(容差 0):
+      * **語意守衛** G1＋G2＝G3(買/賣/超任一)不成立 → 整日 identity_failed(G1/G3 對調的唯一偵測,
+        不得部分採用);
+      * **資料守衛** 7 組 買−賣＝超、G5＋G6＝G7、T＝G1超＋G4超＋G7超 不成立 → 該代號三分項 NaN 並計數;
+        此類列比例 > TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO → 整日 identity_failed。
     - G2(外資自營商)任一列非零 → warning(G1/G3 區分首次有數值證據,且已由 G1＋G2＝G3 逐列驗過)。
-    - 輸出口徑(Q-z24 A'/Q-z25 A,同上市 T86):外資＝G1 超、投信＝G4 超、自營商＝G7 超;股 → 張(/1000,不捨入)。
+    - 輸出口徑(Q-z24 A'/Q-z25 A,同上市 T86):外資＝G1 超、投信＝G4 超、自營商＝G7 超;
+      股 → 張 `_tpex_lots`(同 T86 `round(v/1000, 1)`)。
     """
     n_cols = TPEX_INST_N_FIELDS
     bad_len = [i for i, row in enumerate(data)
@@ -249,52 +265,67 @@ def _parse_tpex_inst_rows(ds: str, data: list) -> tuple[str, str, dict]:
     if bad_len:
         return ('schema_error',
                 f'{len(bad_len)} 列長度≠{n_cols}(首例第 {bad_len[0]} 列)', {})
-    parsed: dict = {}
+    rows: list = []
     codes_seen: dict = {}
-    invalid: list = []
     for row in data:
         code = str(row[0]).strip()
         vals = [None, None] + [parse_tpex_int(row[i]) for i in range(2, n_cols)]
-        if not code or any(v is None for v in vals[2:]):
-            invalid.append(code or '<空代號>')
-            continue
-        codes_seen[code] = codes_seen.get(code, 0) + 1
-        parsed[code] = vals
-    for c in [c for c, n in codes_seen.items() if n > 1]:
-        parsed.pop(c, None)                         # 代號重複:無法判定取哪列 → 該股缺值
-        invalid.extend([c] * codes_seen[c])
+        rows.append((code, vals, all(v is not None for v in vals[2:])))
+        if code:
+            codes_seen[code] = codes_seen.get(code, 0) + 1
+    parsed: dict = {}
+    nan_codes: set = set()
+    invalid: list = []
+    for code, vals, ok in rows:
+        if not code:
+            invalid.append('<空代號>')                # 無代號 → 無法輸出,只計數
+        elif not ok or codes_seen[code] > 1:          # 不可解析 / 代號重複(兩列皆不可信)
+            invalid.append(code)
+            nan_codes.add(code)
+        else:
+            parsed[code] = vals
     if invalid:
         print(f'[TPEx] ⚠️ {ds} 不可解析/重複代號列 {len(invalid)}/{len(data)}'
-              f'(該股缺值,不當 0):{invalid[:10]}')
+              f'(該代號三分項 NaN,不當 0):{invalid[:10]}')
         if len(invalid) / len(data) > TPEX_INST_MAX_INVALID_ROW_RATIO:
             return ('parse_error', f'不可解析列 {len(invalid)}/{len(data)} > '
                     f'{TPEX_INST_MAX_INVALID_ROW_RATIO:.0%}', {})
-    fails: list = []
+    sem_fails: list = []
+    data_fail_codes: list = []
     n_g2_nonzero = 0
     g1, g2, g3 = TPEX_G_FOREIGN_EXCL_FD, TPEX_G_FOREIGN_DEALER, TPEX_G_FOREIGN_INCL_FD
     g4, g5, g6, g7 = TPEX_G_TRUST, TPEX_G_DEALER_SELF, TPEX_G_DEALER_HEDGE, TPEX_G_DEALER
     for code, v in parsed.items():
-        for gi, (b, s, n) in enumerate(TPEX_ALL_GROUPS, start=1):
-            if v[b] - v[s] != v[n]:
-                fails.append(f'{code}:G{gi} 買−賣≠超')
         for k in range(3):
             if v[g1[k]] + v[g2[k]] != v[g3[k]]:
-                fails.append(f'{code}:G1+G2≠G3[{k}]')
-            if v[g5[k]] + v[g6[k]] != v[g7[k]]:
-                fails.append(f'{code}:G5+G6≠G7[{k}]')
+                sem_fails.append(f'{code}:G1+G2≠G3[{k}]')
+        bad = [gi for gi, (b, s, n) in enumerate(TPEX_ALL_GROUPS, start=1) if v[b] - v[s] != v[n]]
+        bad += [f'G5+G6≠G7[{k}]' for k in range(3) if v[g5[k]] + v[g6[k]] != v[g7[k]]]
         if v[TPEX_IDX_TOTAL_NET] != v[g1[2]] + v[g4[2]] + v[g7[2]]:
-            fails.append(f'{code}:T≠G1+G4+G7')
+            bad.append('T')
+        if bad:
+            data_fail_codes.append(f'{code}:{bad}')
+            nan_codes.add(code)
         if v[g2[0]] or v[g2[1]] or v[g2[2]]:
             n_g2_nonzero += 1
-    if fails:
-        return ('identity_failed', f'逐列恆等式不成立 {len(fails)} 處(首例 {fails[:5]})', {})
+    if sem_fails:
+        return ('identity_failed', f'語意守衛 G1+G2=G3 不成立 {len(sem_fails)} 處'
+                f'(疑似 G1/G3 欄位對調,整日不採用;首例 {sem_fails[:5]})', {})
+    if data_fail_codes:
+        print(f'[TPEx] ⚠️ {ds} 資料守衛(買−賣=超/G5+G6=G7/T)不成立 {len(data_fail_codes)}/{len(data)} 列'
+              f'(該代號三分項 NaN):{data_fail_codes[:5]}')
+        if len(data_fail_codes) / len(data) > TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO:
+            return ('identity_failed', f'資料守衛不成立列 {len(data_fail_codes)}/{len(data)} > '
+                    f'{TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO:.0%}(首例 {data_fail_codes[:5]})', {})
     if n_g2_nonzero:
         print(f'[TPEx] ⚠️ {ds} 外資自營商(G2)非零 {n_g2_nonzero} 列 —— G1(不含)/G3(含)首次有數值'
               '證據可區分,已逐列驗 G1+G2=G3 通過')
-    day_data = {code: {'外資': v[TPEX_IDX_OUT_FOREIGN] / 1000,
-                       '投信': v[TPEX_IDX_OUT_TRUST] / 1000,
-                       '自營商': v[TPEX_IDX_OUT_DEALER] / 1000}
-                for code, v in parsed.items()}
+    day_data = {code: {'外資': _tpex_lots(v[TPEX_IDX_OUT_FOREIGN]),
+                       '投信': _tpex_lots(v[TPEX_IDX_OUT_TRUST]),
+                       '自營商': _tpex_lots(v[TPEX_IDX_OUT_DEALER])}
+                for code, v in parsed.items() if code not in nan_codes}
+    for c in nan_codes:
+        day_data[c] = dict(_TPEX_NAN_ROW)
     return TPEX_DAY_STATUS_OK, '', day_data
 
 
@@ -335,7 +366,8 @@ def _get_tpex_day(ds: str) -> dict:
         except ValueError as e:
             # 批 Z39:非 JSON(改版/擋爬 HTML)單獨記狀態 + 印 body
             return _tpex_day_fail(ds, 'json_error', r, f'{type(e).__name__}: {e}')
-        _st, _why, t0 = check_tpex_envelope(j, ds, title_exact=TPEX_INST_TITLE)
+        _st, _why, t0 = check_tpex_envelope(j, ds, title_exact=TPEX_INST_TITLE,
+                                            require_table_date=TPEX_INST_REQUIRE_TABLE_DATE)
         if _st != TPEX_DAY_STATUS_OK:
             return _tpex_day_fail(ds, _st, r, _why)
         fields = tuple(str(f).strip() for f in (t0.get('fields') or []))

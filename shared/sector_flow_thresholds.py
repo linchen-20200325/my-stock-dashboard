@@ -79,11 +79,25 @@ FOREIGN_CCY_CODE_CHAR_INDEX: int = 5
 FOREIGN_CCY_CODE_6TH_CHARS: frozenset = frozenset({"K", "C", "M", "S"})
 
 
+#: 批 Z41 修正(QA L3):官方 notes 只說「**ETF** 證券代號第六碼…」⇒ 只對 ETF 代號(以 "00" 開頭)
+#: 判定;`03001C`、`02001S` 等非 ETF 代號不排除。
+FOREIGN_CCY_ETF_CODE_PREFIX: str = "00"
+
+
 def is_foreign_ccy_code(code) -> bool:
-    """證券代號第六碼 ∈ {K, C, M, S}(外幣交易 ETF)→ True。代號不足 6 碼 → False。"""
+    """ETF 代號(以 "00" 開頭、長度 ≥ 6)且第六碼 ∈ {K, C, M, S}(外幣交易 ETF)→ True;其餘 False。"""
     s = str(code).strip().upper()
-    return len(s) > FOREIGN_CCY_CODE_CHAR_INDEX and \
-        s[FOREIGN_CCY_CODE_CHAR_INDEX] in FOREIGN_CCY_CODE_6TH_CHARS
+    return (s.startswith(FOREIGN_CCY_ETF_CODE_PREFIX)
+            and len(s) > FOREIGN_CCY_CODE_CHAR_INDEX
+            and s[FOREIGN_CCY_CODE_CHAR_INDEX] in FOREIGN_CCY_CODE_6TH_CHARS)
+
+
+# ── 批 Z41 修正(QA H1):產業別對映可信度門檻 ─────────────────────────────────
+#: 本次 `fetch_industry_map_bulk` 清洗後代號數相對上一份 ticker_sector.json **縮水超過**本比例
+#: → 視為來源部分失敗(例:FinMind 被 gate、openapi 只回一個市場),cron 不改寫任何既有日。
+#: 理由:全市場上市櫃(含 ETF)約 3,000+ 檔,日常增減(新上市/下市)每日僅數檔、一年 < 5%;
+#: 20% 遠高於正常波動、遠低於「少掉整個市場」(上櫃約佔 1/3)的故障幅度,兩側都有餘裕。
+INDUSTRY_MAP_MAX_SHRINK_RATIO: float = 0.20
 
 
 #: 一個板塊在某交易日「有效成分股」數量下限;低於此該板塊當日流入代表性不足。

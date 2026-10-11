@@ -27,6 +27,7 @@ import functools
 import hashlib
 import importlib.util
 import json
+import math
 import pathlib
 import sys
 import time
@@ -49,7 +50,7 @@ _DIAG = "shared/http_diag.py"
 #: 本批 L1 兩檔：修後逐字 → 基底 `f0a32a3b` 逐字（difflib 由實檔產生、round-trip 驗過）。
 Z41_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
     _INST: (
-        ('    is_foreign_dealer_label)\nfrom shared.tpex_schema import (  # 批 Z41 TPEx 官方新網站 JSON 結構契約 SSOT(L0)\n    TPEX_ALL_GROUPS, TPEX_G_DEALER, TPEX_G_DEALER_HEDGE, TPEX_G_DEALER_SELF,\n    TPEX_G_FOREIGN_DEALER, TPEX_G_FOREIGN_EXCL_FD, TPEX_G_FOREIGN_INCL_FD, TPEX_G_TRUST,\n    TPEX_IDX_OUT_DEALER, TPEX_IDX_OUT_FOREIGN, TPEX_IDX_OUT_TRUST, TPEX_IDX_TOTAL_NET,\n    TPEX_INST_FIELDS, TPEX_INST_MAX_INVALID_ROW_RATIO, TPEX_INST_N_FIELDS, TPEX_INST_TITLE,\n    check_tpex_envelope, parse_tpex_int, tpex_query_date, tpex_redirected_to_error, tpex_roc_date)\nfrom shared.ttls import TTL_15MIN  # noqa: F401  (部分 fetcher inline 引用)\n',
+        ('    is_foreign_dealer_label)\nfrom shared.tpex_schema import (  # 批 Z41 TPEx 官方新網站 JSON 結構契約 SSOT(L0)\n    TPEX_ALL_GROUPS, TPEX_G_DEALER, TPEX_G_DEALER_HEDGE, TPEX_G_DEALER_SELF,\n    TPEX_G_FOREIGN_DEALER, TPEX_G_FOREIGN_EXCL_FD, TPEX_G_FOREIGN_INCL_FD, TPEX_G_TRUST,\n    TPEX_IDX_OUT_DEALER, TPEX_IDX_OUT_FOREIGN, TPEX_IDX_OUT_TRUST, TPEX_IDX_TOTAL_NET,\n    TPEX_INST_FIELDS, TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO, TPEX_INST_MAX_INVALID_ROW_RATIO,\n    TPEX_INST_N_FIELDS, TPEX_INST_REQUIRE_TABLE_DATE, TPEX_INST_TITLE,\n    check_tpex_envelope, parse_tpex_int, tpex_query_date, tpex_redirected_to_error, tpex_roc_date)\nfrom shared.ttls import TTL_15MIN  # noqa: F401  (部分 fetcher inline 引用)\n',
          '    is_foreign_dealer_label)\nfrom shared.roc_calendar import gregorian_to_roc_year\nfrom shared.ttls import TTL_15MIN  # noqa: F401  (部分 fetcher inline 引用)\n'),
         ('\n_TPEX_DAY_CACHE: dict = {}  # {日期字串: {股票代碼: {外資,投信,自營商}}} TPEx 進程級快取（批 Z41：只收 status=ok 的日子）\n# P1 v19.159(團隊稽核 QA-Med):TPEX 暫時性失敗(網路 None/例外)原本把 {} 永久釘進\n',
          '\n_TPEX_DAY_CACHE: dict = {}  # {日期字串: {股票代碼: {外資,投信,自營商}}} TPEx 進程級快取\n# P1 v19.159(團隊稽核 QA-Med):TPEX 暫時性失敗(網路 None/例外)原本把 {} 永久釘進\n'),
@@ -59,7 +60,7 @@ Z41_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '_TPEX_FAIL_TS: dict = {}   # {日期字串: 失敗時間 epoch};TTL_15MIN 內不重打\n# 批 Z39(客戶 Q-z28 診斷;零行為變更):每次**實際打出請求**後記錄該日的結果狀態,\n# 供 cron 區分「TPEx 假日回空」與「交易日 TPEx 失敗」。回傳值與快取語意一字不變。\n#   ok             JSON 有 aaData 且欄位驗證(buy-sell≈net)通過\n#   empty          JSON 正常但 aaData 空(假日或 TPEx 交易日回空,需由 caller 對照 TWSE 判定)\n#   http_none      fetch_url 回 None(網路/proxy/非 2xx)\n#   json_error     回應不是 JSON(例:改版或擋爬回 HTML)\n#   col_unverified 欄位驗證 for/else 失敗(仍沿用預設索引回資料,但不得當成成功)\n#   exception      其他例外\n# 快取命中 / 負快取命中不重設狀態(沿用上一次實際請求的結果)。\n'),
         ('TPEX_DAY_STATUS_OK: str = "ok"\n#: 批 Z41:`get_tpex_day_status` 可能回傳的全部狀態(只有 ok 代表有可用資料)。\nTPEX_DAY_STATUSES: tuple[str, ...] = (\n    "ok", "empty", "http_none", "redirect_error", "json_error", "schema_error",\n    "identity_failed", "parse_error", "exception")\n#: 批 Z41:櫃買中心官方新網站「三大法人買賣明細資訊」JSON(探針 run 38104351927 等驗證)。\nTPEX_INST_URL: str = "https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade"\n\n',
          'TPEX_DAY_STATUS_OK: str = "ok"\n\n'),
-        ('\ndef _tpex_day_fail(ds: str, status: str, r, reason: str) -> dict:\n    """批 Z41:非 ok 統一出口 —— 記狀態 + 短 TTL 負快取(**不**進永久快取)+ log(含洗過的 body)。"""\n    import time as _t_tpf\n    _TPEX_DAY_DIAG[ds] = status\n    _TPEX_FAIL_TS[ds] = _t_tpf.time()\n    print(f\'[TPEx] {ds} 非 ok（{status}）：{reason}\')\n    if r is not None:\n        _log_tpex_body(ds, status, r)\n    return {}\n\n\ndef _parse_tpex_inst_rows(ds: str, data: list) -> tuple[str, str, dict]:\n    """批 Z41:`tables[0].data` 逐列驗證 → (status, reason, day_data)。純解析,無 I/O。\n\n    - 列長 ≠ 24 → schema_error(整日)。\n    - 代號 strip 後空 / 任一數值欄不可解析 / 代號重複 → 該列無效(⛔ 不當 0),該股不輸出(缺值);\n      無效列 > 0 → warning;比例 > TPEX_INST_MAX_INVALID_ROW_RATIO → parse_error(整日)。\n    - 有效列逐列恆等式(容差 0):7 組 買−賣＝超;G1＋G2＝G3(買/賣/超);G5＋G6＝G7(買/賣/超);\n      T＝G1超＋G4超＋G7超。任一列不成立 → identity_failed(整日,不猜、不部分採用)。\n    - G2(外資自營商)任一列非零 → warning(G1/G3 區分首次有數值證據,且已由 G1＋G2＝G3 逐列驗過)。\n    - 輸出口徑(Q-z24 A\'/Q-z25 A,同上市 T86):外資＝G1 超、投信＝G4 超、自營商＝G7 超;股 → 張(/1000,不捨入)。\n    """\n    n_cols = TPEX_INST_N_FIELDS\n    bad_len = [i for i, row in enumerate(data)\n               if not isinstance(row, (list, tuple)) or len(row) != n_cols]\n    if bad_len:\n        return (\'schema_error\',\n                f\'{len(bad_len)} 列長度≠{n_cols}(首例第 {bad_len[0]} 列)\', {})\n    parsed: dict = {}\n    codes_seen: dict = {}\n    invalid: list = []\n    for row in data:\n        code = str(row[0]).strip()\n        vals = [None, None] + [parse_tpex_int(row[i]) for i in range(2, n_cols)]\n        if not code or any(v is None for v in vals[2:]):\n            invalid.append(code or \'<空代號>\')\n            continue\n        codes_seen[code] = codes_seen.get(code, 0) + 1\n        parsed[code] = vals\n    for c in [c for c, n in codes_seen.items() if n > 1]:\n        parsed.pop(c, None)                         # 代號重複:無法判定取哪列 → 該股缺值\n        invalid.extend([c] * codes_seen[c])\n    if invalid:\n        print(f\'[TPEx] ⚠️ {ds} 不可解析/重複代號列 {len(invalid)}/{len(data)}\'\n              f\'(該股缺值,不當 0):{invalid[:10]}\')\n        if len(invalid) / len(data) > TPEX_INST_MAX_INVALID_ROW_RATIO:\n            return (\'parse_error\', f\'不可解析列 {len(invalid)}/{len(data)} > \'\n                    f\'{TPEX_INST_MAX_INVALID_ROW_RATIO:.0%}\', {})\n    fails: list = []\n    n_g2_nonzero = 0\n    g1, g2, g3 = TPEX_G_FOREIGN_EXCL_FD, TPEX_G_FOREIGN_DEALER, TPEX_G_FOREIGN_INCL_FD\n    g4, g5, g6, g7 = TPEX_G_TRUST, TPEX_G_DEALER_SELF, TPEX_G_DEALER_HEDGE, TPEX_G_DEALER\n    for code, v in parsed.items():\n        for gi, (b, s, n) in enumerate(TPEX_ALL_GROUPS, start=1):\n            if v[b] - v[s] != v[n]:\n                fails.append(f\'{code}:G{gi} 買−賣≠超\')\n        for k in range(3):\n            if v[g1[k]] + v[g2[k]] != v[g3[k]]:\n                fails.append(f\'{code}:G1+G2≠G3[{k}]\')\n            if v[g5[k]] + v[g6[k]] != v[g7[k]]:\n                fails.append(f\'{code}:G5+G6≠G7[{k}]\')\n        if v[TPEX_IDX_TOTAL_NET] != v[g1[2]] + v[g4[2]] + v[g7[2]]:\n            fails.append(f\'{code}:T≠G1+G4+G7\')\n        if v[g2[0]] or v[g2[1]] or v[g2[2]]:\n            n_g2_nonzero += 1\n    if fails:\n        return (\'identity_failed\', f\'逐列恆等式不成立 {len(fails)} 處(首例 {fails[:5]})\', {})\n    if n_g2_nonzero:\n        print(f\'[TPEx] ⚠️ {ds} 外資自營商(G2)非零 {n_g2_nonzero} 列 —— G1(不含)/G3(含)首次有數值\'\n              \'證據可區分,已逐列驗 G1+G2=G3 通過\')\n    day_data = {code: {\'外資\': v[TPEX_IDX_OUT_FOREIGN] / 1000,\n                       \'投信\': v[TPEX_IDX_OUT_TRUST] / 1000,\n                       \'自營商\': v[TPEX_IDX_OUT_DEALER] / 1000}\n                for code, v in parsed.items()}\n    return TPEX_DAY_STATUS_OK, \'\', day_data\n\n\ndef _get_tpex_day(ds: str) -> dict:\n',
+        ('\ndef _tpex_day_fail(ds: str, status: str, r, reason: str) -> dict:\n    """批 Z41:非 ok 統一出口 —— 記狀態 + 短 TTL 負快取(**不**進永久快取)+ log(含洗過的 body)。"""\n    import time as _t_tpf\n    _TPEX_DAY_DIAG[ds] = status\n    _TPEX_FAIL_TS[ds] = _t_tpf.time()\n    print(f\'[TPEx] {ds} 非 ok（{status}）：{reason}\')\n    if r is not None:\n        _log_tpex_body(ds, status, r)\n    return {}\n\n\ndef _tpex_lots(shares: int | None) -> float:\n    """股 → 張。批 Z41 修正(QA L1):與上市 `_get_t86_day` 內 `_lots` **同一規則**\n    `round(v / 1000, 1)`(None → NaN);兩者一致性由 tests/test_batch_z41 逐值比對守住。"""\n    return float(\'nan\') if shares is None else round(shares / 1000, 1)\n\n\n_TPEX_NAN_ROW: dict = {\'外資\': float(\'nan\'), \'投信\': float(\'nan\'), \'自營商\': float(\'nan\')}\n\n\ndef _parse_tpex_inst_rows(ds: str, data: list) -> tuple[str, str, dict]:\n    """批 Z41:`tables[0].data` 逐列驗證 → (status, reason, day_data)。純解析,無 I/O。\n\n    - 列長 ≠ 24 → schema_error(整日)。\n    - 批 Z41 修正(QA M1):代號重複 / 任一數值欄不可解析 → 該代號**輸出三分項 NaN**(缺值,⛔ 不當 0,\n      也不整檔省略 —— 省略會讓 L2 當成「沒有這檔」而 0 貢獻、metadata 看不到),口徑同上市 T86\n      (缺欄／髒值 → NaN)。代號空 → 無法輸出,只計數。無效列比例 > TPEX_INST_MAX_INVALID_ROW_RATIO\n      → parse_error(整日)。\n    - 批 Z41 修正(QA M2)恆等式分級(容差 0):\n      * **語意守衛** G1＋G2＝G3(買/賣/超任一)不成立 → 整日 identity_failed(G1/G3 對調的唯一偵測,\n        不得部分採用);\n      * **資料守衛** 7 組 買−賣＝超、G5＋G6＝G7、T＝G1超＋G4超＋G7超 不成立 → 該代號三分項 NaN 並計數;\n        此類列比例 > TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO → 整日 identity_failed。\n    - G2(外資自營商)任一列非零 → warning(G1/G3 區分首次有數值證據,且已由 G1＋G2＝G3 逐列驗過)。\n    - 輸出口徑(Q-z24 A\'/Q-z25 A,同上市 T86):外資＝G1 超、投信＝G4 超、自營商＝G7 超;\n      股 → 張 `_tpex_lots`(同 T86 `round(v/1000, 1)`)。\n    """\n    n_cols = TPEX_INST_N_FIELDS\n    bad_len = [i for i, row in enumerate(data)\n               if not isinstance(row, (list, tuple)) or len(row) != n_cols]\n    if bad_len:\n        return (\'schema_error\',\n                f\'{len(bad_len)} 列長度≠{n_cols}(首例第 {bad_len[0]} 列)\', {})\n    rows: list = []\n    codes_seen: dict = {}\n    for row in data:\n        code = str(row[0]).strip()\n        vals = [None, None] + [parse_tpex_int(row[i]) for i in range(2, n_cols)]\n        rows.append((code, vals, all(v is not None for v in vals[2:])))\n        if code:\n            codes_seen[code] = codes_seen.get(code, 0) + 1\n    parsed: dict = {}\n    nan_codes: set = set()\n    invalid: list = []\n    for code, vals, ok in rows:\n        if not code:\n            invalid.append(\'<空代號>\')                # 無代號 → 無法輸出,只計數\n        elif not ok or codes_seen[code] > 1:          # 不可解析 / 代號重複(兩列皆不可信)\n            invalid.append(code)\n            nan_codes.add(code)\n        else:\n            parsed[code] = vals\n    if invalid:\n        print(f\'[TPEx] ⚠️ {ds} 不可解析/重複代號列 {len(invalid)}/{len(data)}\'\n              f\'(該代號三分項 NaN,不當 0):{invalid[:10]}\')\n        if len(invalid) / len(data) > TPEX_INST_MAX_INVALID_ROW_RATIO:\n            return (\'parse_error\', f\'不可解析列 {len(invalid)}/{len(data)} > \'\n                    f\'{TPEX_INST_MAX_INVALID_ROW_RATIO:.0%}\', {})\n    sem_fails: list = []\n    data_fail_codes: list = []\n    n_g2_nonzero = 0\n    g1, g2, g3 = TPEX_G_FOREIGN_EXCL_FD, TPEX_G_FOREIGN_DEALER, TPEX_G_FOREIGN_INCL_FD\n    g4, g5, g6, g7 = TPEX_G_TRUST, TPEX_G_DEALER_SELF, TPEX_G_DEALER_HEDGE, TPEX_G_DEALER\n    for code, v in parsed.items():\n        for k in range(3):\n            if v[g1[k]] + v[g2[k]] != v[g3[k]]:\n                sem_fails.append(f\'{code}:G1+G2≠G3[{k}]\')\n        bad = [gi for gi, (b, s, n) in enumerate(TPEX_ALL_GROUPS, start=1) if v[b] - v[s] != v[n]]\n        bad += [f\'G5+G6≠G7[{k}]\' for k in range(3) if v[g5[k]] + v[g6[k]] != v[g7[k]]]\n        if v[TPEX_IDX_TOTAL_NET] != v[g1[2]] + v[g4[2]] + v[g7[2]]:\n            bad.append(\'T\')\n        if bad:\n            data_fail_codes.append(f\'{code}:{bad}\')\n            nan_codes.add(code)\n        if v[g2[0]] or v[g2[1]] or v[g2[2]]:\n            n_g2_nonzero += 1\n    if sem_fails:\n        return (\'identity_failed\', f\'語意守衛 G1+G2=G3 不成立 {len(sem_fails)} 處\'\n                f\'(疑似 G1/G3 欄位對調,整日不採用;首例 {sem_fails[:5]})\', {})\n    if data_fail_codes:\n        print(f\'[TPEx] ⚠️ {ds} 資料守衛(買−賣=超/G5+G6=G7/T)不成立 {len(data_fail_codes)}/{len(data)} 列\'\n              f\'(該代號三分項 NaN):{data_fail_codes[:5]}\')\n        if len(data_fail_codes) / len(data) > TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO:\n            return (\'identity_failed\', f\'資料守衛不成立列 {len(data_fail_codes)}/{len(data)} > \'\n                    f\'{TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO:.0%}(首例 {data_fail_codes[:5]})\', {})\n    if n_g2_nonzero:\n        print(f\'[TPEx] ⚠️ {ds} 外資自營商(G2)非零 {n_g2_nonzero} 列 —— G1(不含)/G3(含)首次有數值\'\n              \'證據可區分,已逐列驗 G1+G2=G3 通過\')\n    day_data = {code: {\'外資\': _tpex_lots(v[TPEX_IDX_OUT_FOREIGN]),\n                       \'投信\': _tpex_lots(v[TPEX_IDX_OUT_TRUST]),\n                       \'自營商\': _tpex_lots(v[TPEX_IDX_OUT_DEALER])}\n                for code, v in parsed.items() if code not in nan_codes}\n    for c in nan_codes:\n        day_data[c] = dict(_TPEX_NAN_ROW)\n    return TPEX_DAY_STATUS_OK, \'\', day_data\n\n\ndef _get_tpex_day(ds: str) -> dict:\n',
          '\ndef _get_tpex_day(ds: str) -> dict:\n'),
         ('    """抓取 TPEx 特定日期的全市場法人資料（上櫃股），進程內快取。\n    回傳 {股票代碼: {\'外資\':float, \'投信\':float, \'自營商\':float}}，單位：張\n\n    批 Z41(客戶 Q-z27＝A 受控遷移):改接櫃買中心官方新網站 `insti/dailyTrade`(sect=EW、西元\n    `YYYY/MM/DD`)。口徑同上市 `_get_t86_day`(Z40):外資＝外資及陸資(不含外資自營商)、投信、\n    自營商＝自行＋避險;外資自營商不加到任何一類。守衛(任一不過 → 非 ok、回 {}、短 TTL 負快取):\n    轉址 /errors、非 JSON、stat、日期回聲(頂層 YYYYMMDD + tables[0] 民國)、title、fields 逐字 24 欄、\n    列長、數值可解析(無效列 ≤1%)、逐列恆等式。只有 ok 進 `_TPEX_DAY_CACHE`(永久)。\n    """\n    if ds in _TPEX_DAY_CACHE:\n',
          '    """抓取 TPEx 特定日期的全市場法人資料（上櫃股），進程內快取。\n    回傳 {股票代碼: {\'外資\':float, \'投信\':float, \'自營商\':float}}，單位：張"""\n    if ds in _TPEX_DAY_CACHE:\n'),
@@ -71,7 +72,7 @@ Z41_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          "        r = _fetch_url_dl(\n            'https://www.tpex.org.tw/web/stock/3insti/daily_report/3itrade_hedge_result.php',\n            params={'l': 'zh-tw', 'se': 'EW', 't': 'D', 'd': roc_date, 'o': 'json'},\n            headers=HDR, timeout=5)\n"),
         ('        if r is None:\n            return _tpex_day_fail(ds, \'http_none\', None, \'fetch_url 回 None\')\n        if getattr(r, \'status_code\', 200) != 200:\n            return _tpex_day_fail(ds, \'http_none\', r, f\'HTTP {getattr(r, "status_code", None)}\')\n        if tpex_redirected_to_error(r):\n            return _tpex_day_fail(ds, \'redirect_error\', r,\n                                  f\'被轉往官方錯誤頁 url={getattr(r, "url", None)!r}\')\n        try:\n',
          "        if r is None:\n            _TPEX_DAY_DIAG[ds] = 'http_none'\n            _TPEX_FAIL_TS[ds] = _t_tp.time()   # P1:暫時性 → 短 TTL 負快取,不永久釘\n            return {}\n        try:\n"),
-        ("        except ValueError as e:\n            # 批 Z39:非 JSON(改版/擋爬 HTML)單獨記狀態 + 印 body\n            return _tpex_day_fail(ds, 'json_error', r, f'{type(e).__name__}: {e}')\n        _st, _why, t0 = check_tpex_envelope(j, ds, title_exact=TPEX_INST_TITLE)\n        if _st != TPEX_DAY_STATUS_OK:\n            return _tpex_day_fail(ds, _st, r, _why)\n        fields = tuple(str(f).strip() for f in (t0.get('fields') or []))\n        if fields != TPEX_INST_FIELDS:\n            return _tpex_day_fail(ds, 'schema_error', r,\n                                  f'fields 非逐字 {TPEX_INST_N_FIELDS} 欄常數'\n                                  f'(實得 {len(fields)} 欄:{list(fields)})')\n        _st, _why, day_data = _parse_tpex_inst_rows(ds, t0['data'])\n        if _st != TPEX_DAY_STATUS_OK:\n            return _tpex_day_fail(ds, _st, r, _why)\n        _TPEX_DAY_CACHE[ds] = day_data\n",
+        ("        except ValueError as e:\n            # 批 Z39:非 JSON(改版/擋爬 HTML)單獨記狀態 + 印 body\n            return _tpex_day_fail(ds, 'json_error', r, f'{type(e).__name__}: {e}')\n        _st, _why, t0 = check_tpex_envelope(j, ds, title_exact=TPEX_INST_TITLE,\n                                            require_table_date=TPEX_INST_REQUIRE_TABLE_DATE)\n        if _st != TPEX_DAY_STATUS_OK:\n            return _tpex_day_fail(ds, _st, r, _why)\n        fields = tuple(str(f).strip() for f in (t0.get('fields') or []))\n        if fields != TPEX_INST_FIELDS:\n            return _tpex_day_fail(ds, 'schema_error', r,\n                                  f'fields 非逐字 {TPEX_INST_N_FIELDS} 欄常數'\n                                  f'(實得 {len(fields)} 欄:{list(fields)})')\n        _st, _why, day_data = _parse_tpex_inst_rows(ds, t0['data'])\n        if _st != TPEX_DAY_STATUS_OK:\n            return _tpex_day_fail(ds, _st, r, _why)\n        _TPEX_DAY_CACHE[ds] = day_data\n",
          "        except ValueError as e:\n            # 批 Z39:非 JSON(改版/擋爬 HTML)單獨記狀態 + 印 body;回傳與負快取同原 except 分支\n            _TPEX_DAY_DIAG[ds] = 'json_error'\n            _log_tpex_body(ds, 'json_error', r)\n            print(f'[TPEx] {ds} 失敗: {e}')\n            _TPEX_FAIL_TS[ds] = _t_tp.time()\n            return {}\n        rows_data = j.get('aaData', [])\n        if not rows_data:\n            _TPEX_DAY_DIAG[ds] = 'empty'\n            _log_tpex_body(ds, 'empty', r)\n            _TPEX_DAY_CACHE[ds] = {}\n            return {}\n\n        def _pn_tp(row, idx):\n            if idx is None or idx >= len(row): return 0.0\n            try: return round(int(str(row[idx]).replace(',', '').replace('+', '') or 0) / 1000, 1)\n            # v19.82:裸 except 收窄(§3.3);髒儲存格 → 0.0 為既有 fail-token 語意\n            except (ValueError, TypeError): return 0.0\n\n        def _int_tp(row, idx):\n            try: return int(str(row[idx]).replace(',', '').replace('+', '') or 0)\n            # v19.82:裸 except 收窄(§3.3);此 helper 無 idx 前置守衛,補 IndexError\n            except (ValueError, TypeError, IndexError): return 0\n\n        # ── 動態偵測欄位索引（sColumns 或 buy-sell-net 驗證）──────────\n        # TPEx 標準格式：[0]代號 [1]名稱\n        # 外資 [2]買 [3]賣 [4]淨  投信 [5]買 [6]賣 [7]淨\n        # 自營(自行) [8]買 [9]賣 [10]淨  [11..13]避險  [14]合計\n        f_idx, t_idx, d_idx = 4, 7, 10  # 預設索引\n        _status = TPEX_DAY_STATUS_OK   # 批 Z39:for/else 失敗 → col_unverified\n\n        # 用第一筆有效資料驗證 buy - sell ≈ net（容許 1 張以內誤差）\n        for _sample in rows_data[:5]:\n            if len(_sample) < 11: continue\n            _f_buy = _int_tp(_sample, 2); _f_sell = _int_tp(_sample, 3); _f_net = _int_tp(_sample, 4)\n            _t_buy = _int_tp(_sample, 5); _t_sell = _int_tp(_sample, 6); _t_net = _int_tp(_sample, 7)\n            if abs(_f_net - (_f_buy - _f_sell)) <= 1000 and abs(_t_net - (_t_buy - _t_sell)) <= 1000:\n                break  # 驗證通過，使用預設索引\n        else:\n            # 若驗證全失敗，嘗試欄位較少的格式（部分 TPEx API 版本省略避險欄）\n            # [0]代號 [1]名稱 [2]外買 [3]外賣 [4]外淨 [5]投買 [6]投賣 [7]投淨 [8]自買 [9]自賣 [10]自淨\n            print(f'[TPEx] {ds} 欄位驗證失敗，row長度={len(rows_data[0]) if rows_data else 0}，使用預設索引')\n            _status = 'col_unverified'\n            _log_tpex_body(ds, _status, r)\n\n        day_data = {}\n        for row in rows_data:\n            code = str(row[0]).strip()\n            if not code or len(row) < 11: continue\n            day_data[code] = {\n                '外資': _pn_tp(row, f_idx),\n                '投信': _pn_tp(row, t_idx),\n                '自營商': _pn_tp(row, d_idx),\n            }\n        _TPEX_DAY_CACHE[ds] = day_data\n"),
         ("        _TPEX_DAY_CACHE[ds] = day_data\n        _TPEX_DAY_DIAG[ds] = TPEX_DAY_STATUS_OK\n        print(f'[TPEx] {ds} ({tpex_roc_date(ds)}): {len(day_data)} 支(官方新網站 dailyTrade,守衛全過)')\n        return day_data\n",
          "        _TPEX_DAY_CACHE[ds] = day_data\n        _TPEX_DAY_DIAG[ds] = _status\n        print(f'[TPEx] {ds} ({roc_date}): {len(day_data)} 支 idx=({f_idx},{t_idx},{d_idx})')\n        return day_data\n"),
@@ -85,7 +86,7 @@ Z41_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '   - `fetch_twse_close_day(ds)` : TWSE MI_INDEX(帶 date,官方 T1、免 token),回 {code: close}\n   - `fetch_tpex_close_day(ds)` : TPEX 上櫃每日收盤(帶 ROC date,官方 T1、免 token)\n   兩者皆「逐日全市場」介面(給定 YYYYMMDD 回當日全市場),bootstrap 逐日回補 +\n'),
         ('\nimport os as _os\n',
          '\nimport datetime as _dt\nimport os as _os\n'),
-        ('from shared.http_diag import scrubbed_body_head\nfrom shared.tpex_schema import (  # 批 Z41 TPEx 官方新網站 JSON 結構契約 SSOT(L0)\n    TPEX_CLOSE_COL_AMOUNT, TPEX_CLOSE_COL_CLOSE, TPEX_CLOSE_COL_CODE, TPEX_CLOSE_COL_HIGH,\n    TPEX_CLOSE_COL_LOW, TPEX_CLOSE_COL_VOLUME, TPEX_CLOSE_N_FIELDS, TPEX_CLOSE_REQUIRED_COLS,\n    TPEX_CLOSE_TITLE_PREFIX, TPEX_CLOSE_UNIT_GUARD_MIN_PASS_RATIO, TPEX_CLOSE_VWAP_REL_TOL,\n    check_tpex_envelope, clean_tpex_field_name, parse_tpex_price, tpex_query_date,\n    tpex_redirected_to_error, tpex_roc_date)\n\n',
+        ('from shared.http_diag import scrubbed_body_head\nfrom shared.tpex_schema import (  # 批 Z41 TPEx 官方新網站 JSON 結構契約 SSOT(L0)\n    TPEX_CLOSE_COL_AMOUNT, TPEX_CLOSE_COL_CLOSE, TPEX_CLOSE_COL_CODE, TPEX_CLOSE_COL_HIGH,\n    TPEX_CLOSE_COL_LOW, TPEX_CLOSE_COL_VOLUME, TPEX_CLOSE_N_FIELDS, TPEX_CLOSE_REQUIRE_TABLE_DATE,\n    TPEX_CLOSE_REQUIRED_COLS,\n    TPEX_CLOSE_TITLE_PREFIX, TPEX_CLOSE_UNIT_GUARD_MIN_PASS_RATIO, TPEX_CLOSE_VWAP_REL_TOL,\n    check_tpex_envelope, clean_tpex_field_name, parse_tpex_price, tpex_query_date,\n    tpex_redirected_to_error, tpex_roc_date)\n\n',
          'from shared.http_diag import scrubbed_body_head\nfrom shared.roc_calendar import gregorian_to_roc_year\n\n'),
         ('\n#: 批 Z39(客戶 Q-z28 診斷):`fetch_tpex_close_day(ds)` 最近一次呼叫的結果狀態。\n#:   ok / empty(空表)/ parse_zero(有列但解析 0 筆)/ http_none(None)/\n#:   http_error(非 200)/ json_error(非 JSON)/ exception。\n#: 批 Z41(客戶 Q-z27＝A):改接官方新網站 `afterTrading/otc`,新增\n#:   redirect_error(轉往 /errors)/ schema_error(stat／日期回聲／title／fields 非 17 欄或必要欄名找不到／列長)/\n#:   unit_error(整表單位守衛:有成交列「成交金額÷成交股數 ∈ [最低,最高]」成立率不足)。只有 ok 回資料。\n_TPEX_CLOSE_DIAG: dict[str, str] = {}\n',
          '\n#: 批 Z39(客戶 Q-z28 診斷;零行為變更):`fetch_tpex_close_day(ds)` 最近一次呼叫的結果狀態。\n#:   ok / empty(aaData 空)/ parse_zero(有列但解析 0 筆)/ http_none(None)/\n#:   http_error(非 200)/ json_error(非 JSON)/ exception。回傳值一字不變。\n_TPEX_CLOSE_DIAG: dict[str, str] = {}\n'),
@@ -101,7 +102,7 @@ Z41_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '        r = _fetch(\n            "https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/"\n            "stk_wn1430_result.php",\n            params={"l": "zh-tw", "d": roc_date, "o": "json"},\n            timeout=20,\n'),
         ('            headers={**_HDR_JSON, "Referer": "https://www.tpex.org.tw/"})\n        if r is None:\n            return _tpex_close_fail(ds, "http_none", None, "fetch 回 None")\n        if getattr(r, "status_code", 0) != 200:\n            return _tpex_close_fail(ds, "http_error", r, f"HTTP={getattr(r, \'status_code\', None)}")\n        if tpex_redirected_to_error(r):\n            return _tpex_close_fail(ds, "redirect_error", r,\n                                    f"被轉往官方錯誤頁 url={getattr(r, \'url\', None)!r}")\n        try:\n',
          '            headers={**_HDR_JSON, "Referer": "https://www.tpex.org.tw/"})\n        if r is None or getattr(r, "status_code", 0) != 200:\n            _TPEX_CLOSE_DIAG[ds] = "http_none" if r is None else "http_error"\n            print(f"[TPEX close] {ds} HTTP={getattr(r, \'status_code\', \'None\')}")\n            return {}\n        try:\n'),
-        ('        except ValueError as e:\n            return _tpex_close_fail(ds, "json_error", r, f"{type(e).__name__}: {e}")\n        # tables[0].date 探針未記錄是否存在 → 有就必須＝民國請求日、沒有不臆測(頂層回聲仍強制)\n        status, why, t0 = check_tpex_envelope(j, ds, title_prefix=TPEX_CLOSE_TITLE_PREFIX,\n                                              require_table_date=False)\n        if status != "ok":\n            return _tpex_close_fail(ds, status, r, why)\n        status, why, out = _parse_tpex_close_rows(ds, list(t0.get("fields") or []),\n                                                  t0["data"])\n        if status != "ok":\n            return _tpex_close_fail(ds, status, r, why)\n        _TPEX_CLOSE_DIAG[ds] = "ok"\n        print(f"[TPEX close] {ds} ({tpex_roc_date(ds)}): {len(out)} 檔")\n        return out\n',
+        ('        except ValueError as e:\n            return _tpex_close_fail(ds, "json_error", r, f"{type(e).__name__}: {e}")\n        # tables[0].date 探針未記錄是否存在 → 有就必須＝民國請求日、沒有不臆測(頂層回聲仍強制)\n        status, why, t0 = check_tpex_envelope(j, ds, title_prefix=TPEX_CLOSE_TITLE_PREFIX,\n                                              require_table_date=TPEX_CLOSE_REQUIRE_TABLE_DATE)\n        if status != "ok":\n            return _tpex_close_fail(ds, status, r, why)\n        status, why, out = _parse_tpex_close_rows(ds, list(t0.get("fields") or []),\n                                                  t0["data"])\n        if status != "ok":\n            return _tpex_close_fail(ds, status, r, why)\n        _TPEX_CLOSE_DIAG[ds] = "ok"\n        print(f"[TPEX close] {ds} ({tpex_roc_date(ds)}): {len(out)} 檔")\n        return out\n',
          '        except ValueError as e:\n            # 批 Z39:非 JSON 單獨記狀態;回傳 / log 前綴同原 except 分支\n            _TPEX_CLOSE_DIAG[ds] = "json_error"\n            print(f"[TPEX close] {ds} 失敗: {type(e).__name__}: {e} "\n                  f"body[:500]={scrubbed_body_head(r)!r}")\n            return {}\n        rows = j.get("aaData") or j.get("data") or []\n        out: dict = {}\n        for row in rows:\n            if not isinstance(row, (list, tuple)) or len(row) < 3:\n                continue\n            code = str(row[0]).strip()\n            if not code or not code[0].isdigit():\n                continue\n            # 收盤 = 代號、名稱之後的第一個有效數值(通常 index 2)\n            close = None\n            for idx in range(2, min(len(row), 6)):\n                close = _to_float(row[idx])\n                if close is not None:\n                    break\n            if code and close is not None and close > 0:\n                out[code] = close\n        if not out:\n            _TPEX_CLOSE_DIAG[ds] = "parse_zero" if rows else "empty"\n            print(f"[TPEX close] {ds} ({roc_date}) 解析 0 筆 "\n                  f"body[:500]={scrubbed_body_head(r)!r}")\n        else:\n            _TPEX_CLOSE_DIAG[ds] = "ok"\n            print(f"[TPEX close] {ds} ({roc_date}): {len(out)} 檔")\n        return out\n'),
         ('    except Exception as e:\n        return _tpex_close_fail(ds, "exception", r, f"{type(e).__name__}: {e}")\n\n',
          '    except Exception as e:\n        _TPEX_CLOSE_DIAG[ds] = "exception"\n        _body = f" body[:500]={scrubbed_body_head(r)!r}" if r is not None else ""\n        print(f"[TPEX close] {ds} 失敗: {type(e).__name__}: {e}{_body}")\n        return {}\n\n'),
@@ -198,11 +199,13 @@ _REAL = {
     "8299": ("群聯", "693,766|941,594|-247,828|0|0|0|693,766|941,594|-247,828|28,359|200|28,159|"
                     "7,200|10,104|-2,904|75,933|71,665|4,268|83,133|81,769|1,364|-218,305"),
 }
-#: 期望輸出（張）＝ 外資 idx4／投信 idx13／自營商 idx22 ÷ 1000
+#: 期望輸出（張）＝ round(外資 idx4／投信 idx13／自營商 idx22 ÷ 1000, 1)
+#: 批 Z41 修正（QA L1）：與上市 T86 同規則 `round(v/1000, 1)`（修前不捨入：-1301.158／4.25…）。
+#: 註：4.25 → 4.2（Python round 半數取偶，T86 同一規則同一結果）。
 _EXPECT = {
-    "6488": {"外資": -1301.158, "投信": -988.9, "自營商": 4.25},
-    "5347": {"外資": 1086.746, "投信": -642.0, "自營商": 17.393},
-    "8299": {"外資": -247.828, "投信": 28.159, "自營商": 1.364},
+    "6488": {"外資": -1301.2, "投信": -988.9, "自營商": 4.2},
+    "5347": {"外資": 1086.7, "投信": -642.0, "自營商": 17.4},
+    "8299": {"外資": -247.8, "投信": 28.2, "自營商": 1.4},
 }
 
 
@@ -304,8 +307,8 @@ class TestInstRealRows:
                                  ("Investment_Trust", 11, 12), ("Dealer_self", 14, 15),
                                  ("Dealer_Hedging", 17, 18))])
             pv = ifx._normalize_inst_pivot(raw).iloc[0]
-            for k in ("外資", "投信", "自營商"):
-                assert pv[k] == pytest.approx(got[code][k], abs=1e-9), (code, k)
+            for k in ("外資", "投信", "自營商"):     # FinMind pivot 不捨入 → 同規則捨入後逐值相等
+                assert round(pv[k], 1) == pytest.approx(got[code][k], abs=1e-9), (code, k)
 
     def test_same_basis_as_twse_t86(self, monkeypatch, tp):
         """同一檔假想股，上市 T86（Z40）與上櫃新 parser 輸出同口徑、同單位（張）。"""
@@ -326,6 +329,27 @@ class TestInstRealRows:
         monkeypatch.setattr(ifx, "_fetch_url_dl", _f)
         a, b = ifx._get_t86_day(_DS)["9999"], ifx._get_tpex_day(_DS)["9999"]
         assert a == b == {"外資": 1234.5, "投信": -200.0, "自營商": 30.0}
+
+    @pytest.mark.parametrize("shares", [0, 1, 49, 50, 51, 149, 150, 250, 350, 4_250, -4_250,
+                                        -1_301_158, 1_086_746, 17_393, 1_364, 999_950, -50])
+    def test_lots_same_rule_as_t86(self, monkeypatch, shares):
+        """批 Z41 修正（QA L1）：上櫃 `_tpex_lots` 與上市 `_get_t86_day` 逐值相同（含 .x5 邊界）。"""
+        from tests.test_batch_z38 import FIELDS_NOW
+        row = ["9999", "假想", "0", "0", _fmt(shares), "0", "0", "0", "0", "0", _fmt(shares),
+               _fmt(shares), "0", "0", _fmt(shares), "0", "0", "0", _fmt(3 * shares)]
+        monkeypatch.setattr(ifx, "_T86_DAY_CACHE", {})
+        monkeypatch.setattr(ifx, "_T86_FAIL_TS", {})
+        monkeypatch.setattr(ifx, "_fetch_url_dl", lambda *a, **k: _Resp(
+            {"stat": "OK", "fields": FIELDS_NOW, "data": [row]}))
+        t86 = ifx._get_t86_day(_DS)["9999"]
+        assert t86["外資"] == ifx._tpex_lots(shares)
+        assert t86["投信"] == ifx._tpex_lots(shares)
+
+    def test_mutant_lots_unrounded(self, tp):
+        M = _mut(_INST, [("    return float('nan') if shares is None else round(shares / 1000, 1)\n",
+                          "    return float('nan') if shares is None else shares / 1000\n")])
+        _got, _st = _status_of(tp, _Resp(_inst_payload()), M)
+        assert _got["6488"]["外資"] == pytest.approx(-1301.158)    # 修前精度 ≠ 上市
 
     def test_codes_kept_as_strings(self, tp):
         rows = [_tp_row(" 00687C "), _tp_row("00411A"), _tp_row("006201")]
@@ -495,13 +519,19 @@ class TestInstGuards:
     def _many(self, n=150):
         return [_tp_row(f"{1000 + i}") for i in range(n)]
 
-    def test_invalid_row_below_ratio_is_missing_not_zero(self, tp, capsys):
+    @staticmethod
+    def _all_nan(d):
+        return all(math.isnan(d[k]) for k in ("外資", "投信", "自營商"))
+
+    def test_invalid_row_below_ratio_is_nan_not_zero(self, tp, capsys):
+        """批 Z41 修正（QA M1）：不可解析列 → 該代號三分項 NaN（不省略、不當 0）。"""
         rows = self._many()
         rows[0][5] = "--"           # G2 買（真值 0）不可解析 → 該股缺值（不得當 0）
         tp(_Resp(_inst_payload(rows)))
         got = ifx._get_tpex_day(_DS)
         assert ifx.get_tpex_day_status(_DS) == "ok"
-        assert "1000" not in got and len(got) == 149
+        assert len(got) == 150 and self._all_nan(got["1000"])
+        assert not self._all_nan(got["1001"])
         assert "不可解析/重複代號列 1/150" in capsys.readouterr().out
 
     def test_mutant_unparsable_as_zero(self, tp, monkeypatch):
@@ -511,18 +541,103 @@ class TestInstGuards:
         rows = self._many()
         rows[0][5] = "--"
         tp(_Resp(_inst_payload(rows)))
-        assert "1000" in ifx._get_tpex_day(_DS)        # 修前式「髒值當 0」⇒ 缺值被冒充成有值
+        assert not self._all_nan(ifx._get_tpex_day(_DS)["1000"])   # 髒值當 0 ⇒ 缺值被冒充成有值
 
-    def test_duplicate_code_dropped(self, tp):
+    def test_mutant_invalid_rows_omitted(self, tp):
+        """修前（QA M1 前）寫法：無效列整檔省略 ⇒ L2 看不到缺值、當 0 貢獻。"""
+        M = _mut(_INST, [("    for c in nan_codes:\n        day_data[c] = dict(_TPEX_NAN_ROW)\n", "")])
+        rows = self._many()
+        rows[0][5] = "--"
+        got, _st = _status_of(tp, _Resp(_inst_payload(rows)), M)
+        assert "1000" not in got
+
+    def test_duplicate_code_is_nan(self, tp):
         rows = self._many(300)
-        rows[1][0] = rows[0][0]          # 代號重複 → 無法判定取哪列 → 兩列皆無效（2/300 ≤ 1%）
+        rows[1][0] = rows[0][0]          # 代號重複 → 兩列皆不可信（2/300 ≤ 1%）→ 該代號 NaN
         tp(_Resp(_inst_payload(rows)))
         got = ifx._get_tpex_day(_DS)
-        assert "1000" not in got and ifx.get_tpex_day_status(_DS) == "ok" and len(got) == 298
+        assert ifx.get_tpex_day_status(_DS) == "ok" and len(got) == 299
+        assert self._all_nan(got["1000"])
+
+    def test_nan_reaches_l2_missing_counts(self, tp, monkeypatch):
+        """無效列 NaN 一路到 L2：O1 遮罩讓該板塊三分項 NaN，`n_missing_*` 計數 1（不是 0 貢獻）。"""
+        import tests.test_batch_z39 as Z39
+        rows = self._many()
+        rows[0][5] = "--"
+        tp(_Resp(_inst_payload(rows)))
+        tpex = ifx._get_tpex_day(_DS)
+        day = dict(t86={"2330": {"外資": 1.0, "投信": 0.0, "自營商": 0.0}}, tpex=tpex,
+                   tpex_status="ok", tpex_close_status="ok", twse_close={"2330": 100.0},
+                   tpex_close={c: 10.0 for c in tpex})
+        Z39._install(monkeypatch, U, {_DS: day})
+        inst, price, _d = U._collect_days([pd.Timestamp(_DS).date()])
+        imap = {c: "上櫃測試" for c in tpex} | {"2330": "上市測試"}
+        sd, cov = compute_sector_daily_net(inst, price, imap)
+        assert cov["n_missing_foreign_stock_days"] == 1
+        otc = sd[sd["sector"] == "上櫃測試"].iloc[0]
+        assert math.isnan(otc["foreign_yi"]) and math.isnan(otc["net_amt_yi"])
 
     def test_total_count_inconsistent(self, tp):
+        """批 Z41 修正（QA L2）：totalCount ≠ len(data) → schema_error（防分頁／截斷）。"""
         _assert_fail(tp, _Resp(_inst_payload(total=0)), "schema_error")
         _assert_fail(tp, _Resp(_inst_payload([], total=5)), "schema_error")
+        _assert_fail(tp, _Resp(_inst_payload(total=4)), "schema_error")
+        _assert_fail(tp, _Resp(_inst_payload(total=2)), "schema_error")
+        _assert_fail(tp, _Resp(_inst_payload(total="2")), "schema_error")
+        tp(_Resp(_inst_payload(total="3")))
+        assert ifx._get_tpex_day(_DS) and ifx.get_tpex_day_status(_DS) == "ok"
+
+    def test_mutant_total_count_check_removed(self, tp, monkeypatch):
+        monkeypatch.setattr(ifx, "check_tpex_envelope", _envelope_mut([(
+            "    if tc_i is not None and tc_i != len(data):\n", "    if False:\n")]))
+        assert _status_of(tp, _Resp(_inst_payload(total=900)))[1] == "ok"   # 截斷被靜默接受
+
+    # ── 批 Z41 修正（QA M2）恆等式分級 ──────────────────────────────────────
+    def test_data_guard_below_ratio_row_nan(self, tp, capsys):
+        rows = self._many()
+        rows[3][13] = _fmt(int(rows[3][13].replace(",", "")) + 1)    # G4 買−賣≠超（資料守衛）
+        tp(_Resp(_inst_payload(rows)))
+        got = ifx._get_tpex_day(_DS)
+        assert ifx.get_tpex_day_status(_DS) == "ok"
+        assert self._all_nan(got["1003"]) and not self._all_nan(got["1004"])
+        assert "資料守衛" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("col", [4, 13, 19, 22, 23], ids=["G1", "G4", "G6", "G7", "T"])
+    def test_data_guard_above_ratio_identity_failed(self, tp, col):
+        rows = self._many()
+        for i in (0, 1):                                           # 2/150 > 1%
+            rows[i][col] = _fmt(int(rows[i][col].replace(",", "")) + 1)
+        _assert_fail(tp, _Resp(_inst_payload(rows)), "identity_failed")
+
+    def test_mutant_data_guard_ratio_removed(self, tp):
+        M = _mut(_INST, [("        if len(data_fail_codes) / len(data) > TPEX_INST_MAX_IDENTITY_FAIL_ROW_RATIO:\n",
+                          "        if False:\n")])
+        rows = self._many()
+        for i in range(10):
+            rows[i][13] = _fmt(int(rows[i][13].replace(",", "")) + 1)
+        assert _status_of(tp, _Resp(_inst_payload(rows)), M)[1] == "ok"
+
+    def test_mutant_data_guard_rows_not_nan(self, tp):
+        M = _mut(_INST, [("            data_fail_codes.append(f'{code}:{bad}')\n            nan_codes.add(code)\n",
+                          "            data_fail_codes.append(f'{code}:{bad}')\n")])
+        rows = self._many()
+        rows[3][13] = _fmt(int(rows[3][13].replace(",", "")) + 1)
+        got, _st = _status_of(tp, _Resp(_inst_payload(rows)), M)
+        assert not self._all_nan(got["1003"])                    # 錯的列被當成有效值採用
+
+    def test_semantic_guard_single_row_fails_whole_day(self, tp):
+        """G1＋G2＝G3 不成立即使只有 1/150 列 → 整日 identity_failed（不受 1% 寬限）。"""
+        rows = self._many()
+        rows[0][8] = _fmt(int(rows[0][8].replace(",", "")) + 1)      # G3 買 ≠ G1 買 + G2 買
+        rows[0][10] = _fmt(int(rows[0][10].replace(",", "")) + 1)    # G3 自身 買−賣＝超 仍成立
+        _assert_fail(tp, _Resp(_inst_payload(rows)), "identity_failed")
+
+    def test_mutant_semantic_guard_downgraded(self, tp):
+        M = _mut(_INST, [("    if sem_fails:\n", "    if False:\n")])
+        rows = self._many()
+        rows[0][8] = _fmt(int(rows[0][8].replace(",", "")) + 1)
+        rows[0][10] = _fmt(int(rows[0][10].replace(",", "")) + 1)
+        assert _status_of(tp, _Resp(_inst_payload(rows)), M)[1] == "ok"   # 對調證據被當成單列髒資料
 
     def test_exception(self, tp):
         _assert_fail(tp, _Resp(["not", "a", "dict"]), "schema_error")
@@ -531,6 +646,38 @@ class TestInstGuards:
             def json(self):
                 raise RuntimeError("boom")
         _assert_fail(tp, _Boom(), "exception")
+
+
+_SECRET = "SECRETTOKEN0123456789abcdef"
+_LEAKY_BODY = (f"<html>token={_SECRET} proxy=http://px:S3cretPw@10.0.0.9:3128 "
+               f'Cookie: SESS=c00kieval {{"sessionid": "jsonsess"}} ' + "x" * 3000 + "</html>")
+_LEAKS = (_SECRET, "S3cretPw", "c00kieval", "jsonsess")
+
+
+class TestFailLogScrubbed:
+    """批 Z41 修正（QA L5）：現行碼的失敗 log 印的 body 已過 `scrubbed_body_head`（含 token／proxy 密碼／Cookie）。"""
+
+    def test_inst_fail_log_scrubbed(self, tp, capsys):
+        _assert_fail(tp, _Resp(raise_json=True, text=_LEAKY_BODY), "json_error")
+        out = capsys.readouterr().out
+        assert "body[:500]=" in out and not any(x in out for x in _LEAKS)
+
+    def test_mutant_inst_raw_body(self, tp, capsys):
+        M = _mut(_INST, [("    print(f'[TPEx] {ds} status={status} body[:500]={scrubbed_body_head(r)!r}')\n",
+                          "    print(f'[TPEx] {ds} status={status} body[:500]={r.text[:500]!r}')\n")])
+        _status_of(tp, _Resp(raise_json=True, text=_LEAKY_BODY), M)
+        assert _SECRET in capsys.readouterr().out
+
+    def test_close_fail_log_scrubbed(self, cl, capsys):
+        assert _close(cl, _Resp(raise_json=True, text=_LEAKY_BODY)) == ({}, "json_error")
+        out = capsys.readouterr().out
+        assert "body[:500]=" in out and not any(x in out for x in _LEAKS)
+
+    def test_mutant_close_raw_body(self, cl, capsys):
+        M = _mut(_CLOSE, [('    _body = f" body[:500]={scrubbed_body_head(r)!r}" if r is not None else ""\n',
+                           '    _body = f" body[:500]={r.text[:500]!r}" if r is not None else ""\n')])
+        _close(cl, _Resp(raise_json=True, text=_LEAKY_BODY), M)
+        assert _SECRET in capsys.readouterr().out
 
 
 class TestInstEmptyAndCache:
@@ -614,8 +761,8 @@ class TestFallbackNewSemantics:
         failed: dict = {}
         out = ifx._fetch_tpex_inst_fallback("6488", pd.DataFrame({"date": [d]}), failed=failed)
         assert not failed
-        assert out.loc[0, "外資"] == pytest.approx(-1301.158)
-        assert out.loc[0, "主力合計"] == pytest.approx(-1301.158 - 988.9 + 4.25)
+        assert out.loc[0, "外資"] == pytest.approx(-1301.2)
+        assert out.loc[0, "主力合計"] == pytest.approx(-1301.2 - 988.9 + 4.2)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -756,6 +903,15 @@ class TestClose:
     def test_envelope(self, cl, kw, status):
         assert _close(cl, _Resp(_close_payload(**kw))) == ({}, status)
 
+    def test_total_count_mismatch(self, cl):
+        """批 Z41 修正（QA L2）：收盤表 totalCount（若有）≠ 列數 → schema_error；沒有 totalCount 不臆測。"""
+        p = _close_payload()
+        p["tables"][0]["totalCount"] = len(_close_rows()) + 1
+        assert _close(cl, _Resp(p)) == ({}, "schema_error")
+        p2 = _close_payload()
+        del p2["tables"][0]["totalCount"]
+        assert _close(cl, _Resp(p2))[1] == "ok"
+
     def test_table_date_absent_ok_present_must_match(self, cl):
         """收盤表探針未記錄 `tables[0].date` 是否存在 → 沒有就不臆測（頂層回聲仍強制）、有就必須相符。"""
         p = _close_payload()
@@ -785,6 +941,7 @@ class TestForeignCcy:
     @pytest.mark.parametrize("code,exp", [
         ("00687C", True), ("00636K", True), ("00625K", True), ("0061XM", True), ("00700S", True),
         (" 00687c ", True), ("00981A", False), ("006208", False), ("2330", False),
+        ("03001C", False), ("02001S", False), ("12345K", False), ("0061XS", True),
         ("6488", False), ("00411A", False), ("", False)])
     def test_is_foreign_ccy_code(self, code, exp):
         assert is_foreign_ccy_code(code) is exp
@@ -907,19 +1064,20 @@ def _good_day(tpex_ok=True):
                 tpex_close_status="ok" if tpex_ok else "empty")
 
 
-def _run(monkeypatch, mod, tmp_path, today, spec):
+def _run(monkeypatch, mod, tmp_path, today, spec, imap=None, argv=()):
     import tests.test_batch_z39 as Z39
     Z39._install(monkeypatch, mod, spec)
     for k, f in (("CACHE_DIR", ""), ("PARQUET_PATH", "daily_net.parquet"),
                  ("BUBBLE_PATH", "bubble_latest.json"), ("META_PATH", "metadata.json"),
                  ("TICKER_SECTOR_PATH", "ticker_sector.json")):
         monkeypatch.setattr(mod, k, tmp_path / f if f else tmp_path)
-    monkeypatch.setattr(mod, "fetch_industry_map_bulk", lambda: dict(_IMAP))
+    _m = dict(_IMAP) if imap is None else dict(imap)
+    monkeypatch.setattr(mod, "fetch_industry_map_bulk", lambda: dict(_m))
     monkeypatch.setattr(mod, "_today", lambda: today)
     seen: list = []
     _orig = mod._collect_days
     monkeypatch.setattr(mod, "_collect_days", lambda days: (seen.append(list(days)), _orig(days))[1])
-    rc = mod.main([])
+    rc = mod.main(list(argv))
     meta = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
     return rc, (seen[0] if seen else []), meta
 
@@ -1007,7 +1165,7 @@ class TestBackfill:
         assert meta3["tpex_backfill"]["attempted_on"] == nxt.isoformat()
 
     def test_mutant_once_per_day_guard_removed(self, monkeypatch, tmp_path):
-        M = _mut(_SCRIPT, [("        if _bf_on == today.isoformat():\n", "        if False:\n")])
+        M = _mut(_SCRIPT, [("    if _bf_cands and _bf_on == today.isoformat():\n", "    if False:\n")])
         _old_parquet(tmp_path / "daily_net.parquet")
         _run(monkeypatch, M, tmp_path, _TODAY, _all_days(tpex_ok=False))
         _rc, seen2, _m = _run(monkeypatch, M, tmp_path, _TODAY, _all_days(tpex_ok=False))
@@ -1036,6 +1194,98 @@ class TestBackfill:
         _rc, seen, meta = _run(monkeypatch, U, tmp_path, _TODAY, _all_days())
         assert not (set(_OLD_DATES) & set(seen))
         assert meta["tpex_backfill"]["candidates"] == []
+
+
+def _prev_ticker_sector(tmp_path, n=100):
+    m = {f"{1000 + i}": "某產業" for i in range(n)} | dict(_IMAP)
+    (tmp_path / "ticker_sector.json").write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+    return m
+
+
+class TestIndustryMapGuard:
+    """批 Z41 修正（QA H1）：產業別對映為空／縮水 > 20% → 禁止改寫任何既有日、回補全部跳過。"""
+
+    def _old_rows(self, pq):
+        return pq[pq["date"] <= pd.Timestamp(_OLD_DATES[-1])].sort_values(
+            ["date", "sector"]).reset_index(drop=True)
+
+    def test_qa_repro_empty_map_does_not_rewrite(self, monkeypatch, tmp_path):
+        """QA 情境：TPEx 成功、產業別 {} → 既有 18 日不得被改寫成「未分類」並標 tpex_ok=True。"""
+        before = _old_parquet(tmp_path / "daily_net.parquet")
+        _prev_ticker_sector(tmp_path)
+        rc, seen, meta = _run(monkeypatch, U, tmp_path, _TODAY, _all_days(), imap={})
+        assert rc == 0 and not (set(_OLD_DATES) & set(seen))       # 回補全部跳過
+        pq = pd.read_parquet(tmp_path / "daily_net.parquet")
+        old = self._old_rows(pq)
+        exp = before.sort_values(["date", "sector"]).reset_index(drop=True)
+        assert old[list(exp.columns)].astype(str).equals(exp.astype(str))   # 既有 18 日原封不動
+        assert "tpex_ok" not in pq.columns or not pq.loc[
+            pq["date"] <= pd.Timestamp(_OLD_DATES[-1]), "tpex_ok"].fillna(False).any()
+        assert "產業別" in (meta["tpex_backfill"]["skipped"] or "")
+        assert meta["tpex_backfill"]["attempted_on"] != _TODAY.isoformat()   # 明日再試
+        assert meta["backfilled_days"] == []
+        assert meta["last_error"] and "產業別" in meta["last_error"]
+        assert any("產業別對映異常" in w for w in meta["warnings"])
+        # 新日照寫（含 warning）
+        assert pd.Timestamp(_TODAY) in set(pq["date"])
+        assert json.loads((tmp_path / "ticker_sector.json").read_text(encoding="utf-8"))   # 上一份保留
+
+    def test_mutant_guard_removed_rewrites_window(self, monkeypatch, tmp_path):
+        M = _mut(_SCRIPT, [("    _ind_guard = _industry_map_guard(industry_map)\n",
+                            "    _ind_guard = None\n")])
+        _old_parquet(tmp_path / "daily_net.parquet")
+        _prev_ticker_sector(tmp_path)
+        _run(monkeypatch, M, tmp_path, _TODAY, _all_days(), imap={})
+        pq = pd.read_parquet(tmp_path / "daily_net.parquet")
+        old = pq[pq["date"] <= pd.Timestamp(_OLD_DATES[-1])]
+        assert set(old["sector"]) == {"未分類"} and old["tpex_ok"].all()   # QA H1 的錯誤鎖定
+
+    def test_shrink_over_threshold_guarded(self, monkeypatch, tmp_path):
+        _old_parquet(tmp_path / "daily_net.parquet")
+        prev = _prev_ticker_sector(tmp_path, n=100)             # 104 檔
+        shrunk = dict(list(prev.items())[:70])                 # 縮水 ~33%
+        shrunk |= dict(_IMAP)
+        rc, seen, meta = _run(monkeypatch, U, tmp_path, _TODAY, _all_days(), imap=shrunk)
+        assert rc == 0 and not (set(_OLD_DATES) & set(seen))
+        assert "縮水" in meta["last_error"]
+        kept = json.loads((tmp_path / "ticker_sector.json").read_text(encoding="utf-8"))
+        assert kept == prev                                     # 縮水版不覆寫上一份
+
+    def test_shrink_within_threshold_backfills(self, monkeypatch, tmp_path):
+        _old_parquet(tmp_path / "daily_net.parquet")
+        prev = _prev_ticker_sector(tmp_path, n=100)
+        ok_map = dict(list(prev.items())[:90]) | dict(_IMAP)   # 縮水 < 20%
+        rc, seen, meta = _run(monkeypatch, U, tmp_path, _TODAY, _all_days(), imap=ok_map)
+        assert set(_OLD_DATES) <= set(seen) and meta["last_error"] is None
+        assert len(meta["backfilled_days"]) == 18
+
+    def test_guard_function(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(U, "TICKER_SECTOR_PATH", tmp_path / "t.json")
+        assert U._industry_map_guard({}) and U._industry_map_guard({"1": " "})
+        assert U._industry_map_guard({"1": "A"}) is None          # 無上一份 → 只看是否為空
+        (tmp_path / "t.json").write_text(json.dumps({str(i): "A" for i in range(10)}), encoding="utf-8")
+        assert U._industry_map_guard({str(i): "A" for i in range(8)}) is None      # 縮 20% 不算超過
+        assert U._industry_map_guard({str(i): "A" for i in range(7)})               # 縮 30%
+        assert U.INDUSTRY_MAP_MAX_SHRINK_RATIO == 0.20
+
+    def test_bootstrap_with_bad_map_keeps_existing(self, monkeypatch, tmp_path):
+        before = _old_parquet(tmp_path / "daily_net.parquet")
+        _prev_ticker_sector(tmp_path)
+        import tests.test_batch_z39 as Z39
+        Z39._install(monkeypatch, U, _all_days())
+        for k, f in (("CACHE_DIR", ""), ("PARQUET_PATH", "daily_net.parquet"),
+                     ("BUBBLE_PATH", "bubble_latest.json"), ("META_PATH", "metadata.json"),
+                     ("TICKER_SECTOR_PATH", "ticker_sector.json")):
+            monkeypatch.setattr(U, k, tmp_path / f if f else tmp_path)
+        monkeypatch.setattr(U, "fetch_industry_map_bulk", lambda: {})
+        monkeypatch.setattr(U, "_today", lambda: _TODAY)
+        monkeypatch.setattr(U, "_candidate_trading_days",
+                            lambda *a, **k: _OLD_DATES + [_TODAY])
+        assert U.main(["--bootstrap"]) == 0
+        pq = pd.read_parquet(tmp_path / "daily_net.parquet")
+        old = self._old_rows(pq)
+        exp = before.sort_values(["date", "sector"]).reset_index(drop=True)
+        assert old[list(exp.columns)].astype(str).equals(exp.astype(str))
 
 
 class TestCollectDaysCloseStatus:
@@ -1073,8 +1323,41 @@ class TestJsonCookieScrub:
         out = scrubbed_body_head(_Resp(text='{"stat":"ok","Cookie": "SESS=topsecret"}'))
         assert "topsecret" not in out
 
+    @pytest.mark.parametrize("raw,expect", [
+        ('{"Cookie": ["a", ["n"]], "k": 1}', '{"Cookie": "***", "k": 1}'),
+        ('{"sid": {"x": 1}, "k": 2}', '{"sid": "***", "k": 2}'),
+        ('{"sid": {"x": "}]", "y": [1, {"z": "q"}]}, "k": [3]}', '{"sid": "***", "k": [3]}'),
+        ("{'Set-Cookie': [['a=b'], {'c': 'd'}], 'ok': True}", "{'Set-Cookie': \"***\", 'ok': True}"),
+        ('[{"sessionid": {"a": [1, 2]}}, {"keep": 1}]', '[{"sessionid": "***"}, {"keep": 1}]'),
+    ])
+    def test_nested_values_fully_masked(self, raw, expect):
+        """批 Z41 修正（QA L6）：巢狀陣列／物件整段遮，不外洩內層、不截壞外層結構。"""
+        out = scrub_session_values(raw)
+        assert out == expect
+        if raw.startswith(("{\"", "[")):
+            json.loads(out)
+
+    def test_truncated_nested_value_masked_to_end(self):
+        out = scrub_session_values('{"Cookie": ["a", ["topsecret"')
+        assert "topsecret" not in out and out.endswith('"***"')
+
+    @pytest.mark.parametrize("raw", [
+        '{"sid":' + "[" * 20_000, '{"sid": "' + "a" * 20_000, '{"sid":' + '{"x":' * 4_000,
+        '"sid":' * 4_000, '{"Cookie": "' + "\\" * 10_000, "x" * 20_000])
+    def test_no_redos_linear(self, raw):
+        t0 = time.perf_counter()
+        scrub_session_values(raw)
+        assert time.perf_counter() - t0 < 1.0
+
+    def test_mutant_flat_regex_leaks_nested(self):
+        """修前（QA L6 前）只遮不巢狀陣列：巢狀時遮不完整（外洩內層或截壞結構）。"""
+        D = _mut(_DIAG, [("        vend = _json_value_end(text, vstart)\n",
+                          "        vend = text.find(']', vstart) + 1 or len(text)\n")])
+        out = D.scrub_session_values('{"Cookie": ["a", ["n"]], "k": 1}')
+        assert out != '{"Cookie": "***", "k": 1}'
+
     def test_mutant_json_rule_removed(self):
-        D = _mut(_DIAG, [("    text = _JSON_SECRET_KEY_RE.sub(_mask_json_secret, text)\n", "")])
+        D = _mut(_DIAG, [("    text = _mask_json_secrets(text)\n", "")])
         assert "zzz" in D.scrub_session_values('{"sessionid":"zzz"}')
 
 

@@ -76,7 +76,10 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from shared.sector_flow_thresholds import WINDOW_SIZE  # noqa: E402
+from shared.sector_flow_thresholds import (  # noqa: E402
+    INDUSTRY_MAP_MAX_SHRINK_RATIO,
+    WINDOW_SIZE,
+)
 from src.compute.sector_flow import (  # noqa: E402
     compute_bubble,
     compute_sector_daily_net,
@@ -447,6 +450,42 @@ def _write_bubble_json(full: pd.DataFrame) -> dict:
     return meta
 
 
+def _clean_industry_map(industry_map: dict | None) -> dict:
+    """{代號: 產業別} 去掉代號或產業別為空的髒列(不臆造)。"""
+    return {str(k).strip(): str(v).strip() for k, v in (industry_map or {}).items()
+            if str(k).strip() and v is not None and str(v).strip()}
+
+
+def _prev_ticker_sector_count() -> int | None:
+    """上一份 ticker_sector.json 的代號數;檔缺 / 壞檔 / 非 dict → None(無從比較)。"""
+    if not TICKER_SECTOR_PATH.exists():
+        return None
+    try:
+        _v = json.loads(TICKER_SECTOR_PATH.read_text(encoding="utf-8"))
+    except Exception as e:  # noqa: BLE001 — 壞檔不得讓 cron 整個炸;印出來
+        print(f"[sector_flow] ⚠️ 讀上一份 ticker_sector.json 失敗({type(e).__name__}: {e})")
+        return None
+    return len(_v) if isinstance(_v, dict) else None
+
+
+def _industry_map_guard(industry_map: dict | None) -> str | None:
+    """批 Z41 修正(QA H1):本次產業別對映不可信 → 回傳原因字串;可信 → None。
+
+    不可信 ＝ 清洗後為空,或代號數相對上一份 `ticker_sector.json` 縮水超過
+    `INDUSTRY_MAP_MAX_SHRINK_RATIO`。不可信時 main **禁止改寫任何既有日**(回補全部跳過),
+    新日照寫但記 warning + last_error;且不覆寫 ticker_sector.json(保留上一份可信對映,
+    否則下一次會拿縮水版當基準而放行)。
+    """
+    n_now = len(_clean_industry_map(industry_map))
+    if n_now == 0:
+        return "產業別整表為空(FinMind + openapi 皆敗)"
+    n_prev = _prev_ticker_sector_count()
+    if n_prev and n_now < n_prev * (1 - INDUSTRY_MAP_MAX_SHRINK_RATIO):
+        return (f"產業別代號數 {n_now} 較上一份 ticker_sector.json {n_prev} 縮水 "
+                f"{1 - n_now / n_prev:.0%} > {INDUSTRY_MAP_MAX_SHRINK_RATIO:.0%}")
+    return None
+
+
 def _write_ticker_sector_json(industry_map: dict) -> None:
     """多存一份 {裸股號: 產業別} 供 Stage 2 UI 把持股對映板塊(highlight)。
 
@@ -483,6 +522,9 @@ def _write_metadata(full: pd.DataFrame, diag: dict, cov: dict,
                      + ",".join(_summary["TPEx"]["fail_dates"]) + "(該日只含上市)")
     if diag.get("unresolved_days"):
         _warn.append("上市(TWSE)未成功、未寫入日:" + ",".join(diag["unresolved_days"]))
+    if diag.get("industry_map_guard"):
+        _warn.append("產業別對映異常 → 本次不改寫任何既有日、回補全部跳過:"
+                     + str(diag["industry_map_guard"]))
     if diag.get("unresolved_expired"):
         _warn.append("unresolved_expired(超出重抓回溯窗,移出清單):"
                      + ",".join(diag["unresolved_expired"]))
@@ -548,46 +590,61 @@ def main(argv=None) -> int:
     _bf_days: list[_dt.date] = []
     _bf_skip = None
     _bf_on = _load_prev_backfill_attempt()
-    if _bf_cands:
-        if _bf_on == today.isoformat():
-            _bf_skip = f"今日({_bf_on})已回補過一次,不重打"
-            print(f"[sector_flow] TPEx 回補略過:{_bf_skip}(候選 {len(_bf_cands)} 日)")
-        else:
-            _bf_days, _bf_on = list(_bf_cands), today.isoformat()
-            cand = sorted(set(cand) | set(_bf_days))
-            print(f"[sector_flow] TPEx 回補候選(窗口內 tpex_ok 非 True):"
-                  f"{[d.isoformat() for d in _bf_days]}")
+    if _bf_cands and _bf_on == today.isoformat():
+        _bf_skip = f"今日({_bf_on})已回補過一次,不重打"
+        print(f"[sector_flow] TPEx 回補略過:{_bf_skip}(候選 {len(_bf_cands)} 日)")
     if _retry:
         print(f"[sector_flow] 重抓上次未解日:{[d.isoformat() for d in _retry]}")
-    if not cand:
+    if not cand and (not _bf_cands or _bf_skip):
         print("[sector_flow] 已是最新,無新交易日待抓")
         # 仍重算 bubble(交易日軸可能因日期前進而右移),但不改長表
         if existing is not None and not existing.empty:
             _write_bubble_json(existing)
         return 0
 
-    print(f"[sector_flow] 抓 {cand[0]} ~ {cand[-1]}(共 {len(cand)} 候選日,"
-          f"bootstrap={args.bootstrap})")
-
     # 產業別整表(一次抓,全日共用)
     industry_map = fetch_industry_map_bulk()
     if not industry_map:
         # §1:無產業別 → L2 會全歸「未分類」;仍可算「全市場」但失去板塊維度 → loud
         print("[sector_flow] ⚠️ 產業別整表為空,全部將歸『未分類』桶")
+    # 批 Z41 修正(QA H1):產業別不可信(空 / 縮水 > 門檻)→ 禁止改寫任何既有日(回補全部跳過,
+    # attempted_on 不前進 → 明日再試),新日照寫但記 warning + last_error。⛔ 否則回補會把整窗
+    # 改寫成「未分類」且標 tpex_ok=True,之後永不再回補(錯誤資料被永久鎖定)。
+    _ind_guard = _industry_map_guard(industry_map)
+    if _ind_guard:
+        print(f"[sector_flow] ⚠️ 產業別對映異常:{_ind_guard} → 不改寫任何既有日、回補全部跳過")
+        if _bf_cands and not _bf_skip:
+            _bf_skip = f"產業別對映異常,回補全部跳過(不改寫既有日):{_ind_guard}"
+    elif _bf_cands and not _bf_skip:
+        _bf_days, _bf_on = list(_bf_cands), today.isoformat()
+        cand = sorted(set(cand) | set(_bf_days))
+        print(f"[sector_flow] TPEx 回補候選(窗口內 tpex_ok 非 True):"
+              f"{[d.isoformat() for d in _bf_days]}")
+    if cand:
+        print(f"[sector_flow] 抓 {cand[0]} ~ {cand[-1]}(共 {len(cand)} 候選日,"
+              f"bootstrap={args.bootstrap})")
 
     # 持股→板塊對映(Stage 2 UI highlight)**只依賴 industry_map**,與「當日三大法人是否
     # 已公布」完全無關 → 抓到 map 就立刻落地。若擺在後段 happy-path,盤前手動跑(inst 未出)
     # 會走下面 `inst_df.empty` 早退 → ticker_sector.json 永遠不生成(highlight 失效)。
     # 空 map 由 `_write_ticker_sector_json` 內 §1 守衛不寫、保留既有。
-    _write_ticker_sector_json(industry_map)
+    # 批 Z41 修正(QA H1):縮水 map 同樣不寫(保留上一份可信對映;否則明日以縮水版為基準而放行)。
+    if _ind_guard and industry_map:
+        print("[sector_flow] ⚠️ 產業別對映縮水 → 不覆寫 ticker_sector.json(保留上一份)")
+    else:
+        _write_ticker_sector_json(industry_map)
 
     inst_df, price_df, diag = _collect_days(cand)
     _carry_unresolved(diag, _retry, _expired)
     _settle_backfill(diag, _bf_days, _bf_on, _bf_cands, _bf_skip)
+    if _ind_guard:
+        diag["industry_map_guard"] = _ind_guard
     print(f"[sector_flow] fetch 診斷:{diag}")
 
     if inst_df.empty:
         msg = "所有候選交易日皆無三大法人資料(假日/來源全敗)"
+        if _ind_guard:
+            msg = f"產業別對映異常:{_ind_guard}(不改寫既有日);" + msg
         if diag.get("unresolved_days"):
             msg += f";上市(TWSE)未成功日 {','.join(diag['unresolved_days'])} 未寫入"
         print(f"[sector_flow] ❌ {msg} → 不覆寫既有 parquet")
@@ -622,6 +679,21 @@ def main(argv=None) -> int:
     sector_daily = _norm_flag_cols(sector_daily)
     sector_daily["fetched_at"] = pd.Timestamp.now("UTC").isoformat()
 
+    # 批 Z41 修正(QA H1):產業別不可信 → 已在檔內的日子一律不改寫(含 bootstrap 模式:以磁碟上的
+    # 既有 parquet 為基底,不整檔覆蓋),只寫入真正的新日。
+    _last_err = None
+    if _ind_guard:
+        _last_err = f"產業別對映異常:{_ind_guard};本次不改寫任何既有日、TPEx 回補全部跳過"
+        if existing is None:
+            existing = _load_existing()
+        if existing is not None and not existing.empty:
+            _dd = list(set(pd.to_datetime(existing["date"]).dt.normalize()))
+            _keep_new = ~sector_daily["date"].isin(_dd)
+            if not _keep_new.all():
+                print(f"[sector_flow] ⚠️ 產業別異常 → 略過改寫既有日 "
+                      f"{int((~_keep_new).sum())} 列")
+            sector_daily = sector_daily[_keep_new.to_numpy()]
+
     # 批 Z41:本次寫入的日子先刪 parquet 中該日所有舊列(不可只靠 (date,sector) keep=last ——
     # 舊板塊列會殘留);未寫入的日子(TWSE 失敗 / 回空)不在 sector_daily → 既有列不動。
     _base = existing
@@ -633,13 +705,17 @@ def main(argv=None) -> int:
             print(f"[sector_flow] 重寫既有日 {len(_replaced)} 日(先刪該日所有舊列):"
                   f"{[pd.Timestamp(x).date().isoformat() for x in _replaced]}")
         _base = existing[~_exd.isin(list(_new_dates)).to_numpy()]
-    full = _norm_flag_cols(_merge_dedupe(_base, sector_daily))
-    full.to_parquet(PARQUET_PATH, compression="snappy", index=False)
-    print(f"[sector_flow] ✅ 寫入 {len(full)} 列 → {PARQUET_PATH}")
+    if sector_daily.empty and _base is not None and not _base.empty:
+        full = _base      # 批 Z41 修正(QA H1):沒有可寫的新日 → 長表原封不動
+        print("[sector_flow] 無可寫入的新日(既有日不改寫)→ parquet 不變")
+    else:
+        full = _norm_flag_cols(_merge_dedupe(_base, sector_daily))
+        full.to_parquet(PARQUET_PATH, compression="snappy", index=False)
+        print(f"[sector_flow] ✅ 寫入 {len(full)} 列 → {PARQUET_PATH}")
 
     # ticker_sector.json 已於前段 industry_map 抓取後就落地(與 inst 資料解耦),此處不再重寫。
     _bm = _write_bubble_json(full)
-    _write_metadata(full, diag, cov, last_error=None, bubble_meta=_bm)
+    _write_metadata(full, diag, cov, last_error=_last_err, bubble_meta=_bm)
     if diag.get("unresolved_days") or not _bm.get("tpex_complete"):
         print(f"[sector_flow] ⚠️ unresolved_days={diag.get('unresolved_days')} "
               f"tpex_complete={_bm.get('tpex_complete')}(見 metadata warnings)")
