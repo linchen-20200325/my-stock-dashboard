@@ -120,17 +120,17 @@ SECTOR_FLOW_UNAVAILABLE_PREFIX: str = "⬜ 未取得："
 
 
 def format_unavailable_caption(sectors) -> str | None:
-    """「⬜ 未取得：A（缺 3 日）、B（缺 20 日）」;沒有未取得板塊 → None(L5 不畫 caption)。
+    """「⬜ 未取得：A、B」;沒有未取得板塊 → None(L5 不畫 caption)。
 
     批 Z39:兩個 UI 消費點(`tab_sector_flow` / v2 `page_find`)共用同一份格式(純函式、零 I/O)。
-    只列 `unavailable` 為 True 的板塊(`n_missing_days` 由 L2 計);交易日不足(insufficient)
+    只列 `unavailable` 為 True 的板塊;交易日不足(insufficient)
     的板塊另有既有「🕓 資料不足」說明,不在此重複。
+    批 Z42:只輸出核准前綴＋板塊名(以「、」串接)。原「（缺 N 日）」片段無客戶核准出處 → 移除;
+    `n_missing_days` 資料欄位仍由 L2 計算並保留於 metadata,只是不顯示。
     """
     _items = []
     for r in sectors or ():
         if not hasattr(r, "get") or r.get("unavailable") is not True or r.get("insufficient"):
             continue
-        _n = r.get("n_missing_days")
-        _items.append(f"{r.get('sector')}（缺 {_n} 日）" if _n is not None
-                      else str(r.get("sector")))
+        _items.append(str(r.get("sector")))
     return (SECTOR_FLOW_UNAVAILABLE_PREFIX + "、".join(_items)) if _items else None

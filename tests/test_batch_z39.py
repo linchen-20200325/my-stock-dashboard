@@ -667,7 +667,8 @@ _VIEW_SECTORS = [
     {"sector": "上櫃光電", "x_yi": None, "y_yi": None, "size_yi": None, "quadrant": "未取得",
      "n_days": 20, "insufficient": False, "unavailable": True, "n_missing_days": 3},
 ]
-_UNAV_CAP = "⬜ 未取得：上櫃光電（缺 3 日）"
+#: 批 Z42：口徑由「⬜ 未取得：上櫃光電（缺 3 日）」改為「⬜ 未取得：上櫃光電」——「（缺 N 日）」無客戶核准出處，移除。
+_UNAV_CAP = "⬜ 未取得：上櫃光電"
 
 
 def _view(tpex_complete="absent", sectors=_VIEW_SECTORS):
@@ -765,7 +766,7 @@ class TestPageFind:
         ro = self._readout(monkeypatch, _view(True, _VIEW_SECTORS[1:]))
         card, _f = P.build_sector_flow_card(ro)
         assert card.note.now == f"**{QUADRANT_UNAVAILABLE}**"
-        assert card.note.why == scrub_state_glyphs(_UNAV_CAP)[0] == "未取得：上櫃光電（缺 3 日）"
+        assert card.note.why == scrub_state_glyphs(_UNAV_CAP)[0] == "未取得：上櫃光電"
         assert card.note.where == P.FLOW_REGEN_WHERE
         short = [v for _k, v in P.v2_short_rows(card)[0]]
         assert short == [QUADRANT_UNAVAILABLE, "未取得：" + P.V2_EXCERPT_GAP,
