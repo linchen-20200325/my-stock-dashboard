@@ -12,7 +12,7 @@
 每晚 TW 17:30(收盤後)跑:
 - incremental:讀既有 parquet last_date → 只補 (last+1 .. today) 的交易日(通常 1 日)
 - --bootstrap:回抓近 `--days` 日曆日(預設 30 ≈ 20 交易日,湊滿 WINDOW_SIZE)
-- 走與畫面同源的 L1 fetcher(T86 selectType=ALL / TPEX 3itrade / MI_INDEX / TPEX 收盤)
+- 走與畫面同源的 L1 fetcher(T86 selectType=ALL / TPEX 官方新網站 insti/dailyTrade / MI_INDEX / TPEX 官方新網站 afterTrading/otc;批 Z41)
 - 直連即可(fetch_url 內 PROXY_URL 未設自動降級直連,官方 endpoint 全球可達)
 
 §1 Fail Loud, Never Fake
@@ -22,11 +22,26 @@
   metadata 記 `days_missing_price` 供排查(不補價、不 ffill,§4.6 停牌不可 ffill)。
 - **全部交易日皆無有效資料** → 不覆寫既有 parquet + 非零 exit(§1 寧缺勿錯)。
 - 冪等(§5):同交易日重跑覆蓋同 (date,sector) 列(dedupe keep='last'),不產重複。
+  批 Z41:本次**實際寫入**的日子,寫入前先刪掉 parquet 中該日**所有**舊列(不只同 sector 的列),
+  避免舊板塊列殘留(例:舊列含已不存在的板塊)。
+
+批 Z41(客戶 Q-z27=A 受控遷移):R1 上櫃(TPEx)自動回補
+------------------------------------------------------
+- TPEx 法人 / 收盤已改接櫃買中心官方新網站 JSON(L1 守衛見各 fetcher)。
+- 每次執行候選日 = 新日期 ∪ 上次 unresolved_days ∪ **parquet 最近 WINDOW_SIZE 個交易日中
+  `tpex_ok` 不為 True 的日子**(含舊列無旗標 → NA);回補日單次上限 `_TPEX_BACKFILL_MAX_DAYS`。
+- **每日最多一次**:metadata `tpex_backfill.attempted_on` == 今天 → 本次不再回補(TPEx 仍故障時
+  不會同日反覆轟炸;請求間無額外節流,沿用各 fetcher 既有行為)。
+- 回補日重抓成功 → 先刪該日舊列再寫新列(`tpex_ok=True`、source 含 TPEx);TPEx 仍失敗 →
+  重寫為只含上市(`tpex_ok=False`,下次再試);回補日 TWSE 這次失敗 / 兩邊回空 → **保留既有列不動**,
+  不列入 unresolved_days(該日已有上市資料)。
+- 窗口內全部 `tpex_ok=True` 後,`bubble_latest.json.tpex_complete` 轉 True,UI「目前僅含上市資料」
+  自動消失(Z39 既有資料驅動判斷)。metadata 記 `backfilled_days` 與 `tpex_backfill` 明細。
 
 批 Z39(客戶 Q-z26=A / Q-z28=A):逐日分市場判定(上市 TWSE / 上櫃 TPEx 各自成敗)
 ------------------------------------------------------------------------------
 - TWSE ok ＝ T86 非空 且 MI_INDEX 收盤非空 且 兩者代號交集 > 0。
-- TPEx ok ＝ 3itrade 非空 且 `get_tpex_day_status(ds) == "ok"` 且 TPEx 收盤非空 且 交集 > 0。
+- TPEx ok ＝ 法人非空 且 `get_tpex_day_status(ds) == "ok"` 且 TPEx 收盤非空 且 `get_tpex_close_status(ds) == "ok"`(批 Z41 補)且 交集 > 0。
 - **invariant**:當日 TWSE/TPEx 任一有法人資料(交易日)而 TPEx 回空 / 非 JSON / 欄位驗證失敗 /
   收盤空 / 交集 0 → TPEx **失敗**(不是假日),不得標 TPEx success;該日 TPEx 法人列**不納入**
   彙總(讓該日一致只含上市),`source` 只列實際成功的市場。
@@ -95,7 +110,10 @@ _UNRESOLVED_RETRY_DAYS = _DEFAULT_BOOTSTRAP_DAYS
 _DEDUPE_KEYS = ["date", "sector"]
 #: 批 Z39:`source` 欄依日只列實際成功使用的市場。
 _SOURCE_TWSE = "TWSE:T86+MI_INDEX"
-_SOURCE_TPEX = "TPEX:3itrade+otc_quotes"
+#: 批 Z41:TPEx 改接官方新網站(法人 insti/dailyTrade + 收盤 afterTrading/otc);§2.2 provenance 同步。
+_SOURCE_TPEX = "TPEX:insti/dailyTrade+afterTrading/otc"
+#: 批 Z41 R1:單次執行回補「tpex_ok 不為 True」的窗口內交易日上限(> WINDOW_SIZE,只作安全上限)。
+_TPEX_BACKFILL_MAX_DAYS = 25
 
 
 # ── I/O helpers(照 update_macro_history 範式)────────────────────────────
@@ -183,6 +201,61 @@ def _carry_unresolved(diag: dict, retry: list[_dt.date], expired: list[str]) -> 
     diag["unresolved_expired"] = sorted(expired)
 
 
+def _tpex_backfill_days(existing: pd.DataFrame | None, today: _dt.date) -> list[_dt.date]:
+    """批 Z41 R1:parquet 最近 WINDOW_SIZE 個交易日中 `tpex_ok` 不為 True 的日子(舊列無欄 → NA 也算)。
+
+    同日任一列非 True 即算(同日各板塊旗標相同;保守取「全為 True 才算成功」)。
+    超過 `_TPEX_BACKFILL_MAX_DAYS` → 取最近的那些。
+    """
+    if existing is None or existing.empty or "date" not in existing.columns:
+        return []
+    _d = pd.to_datetime(existing["date"], errors="coerce").dt.normalize()
+    _dates = sorted(x for x in _d.dropna().unique() if pd.Timestamp(x).date() <= today)
+    recent = _dates[-int(WINDOW_SIZE):]
+    if "tpex_ok" in existing.columns:
+        _ok = existing["tpex_ok"].map(lambda v: v is True or v is np.True_)
+        _all_ok = _ok.groupby(_d).all()
+        out = [pd.Timestamp(x).date() for x in recent if not bool(_all_ok.get(x, False))]
+    else:
+        out = [pd.Timestamp(x).date() for x in recent]
+    return out[-_TPEX_BACKFILL_MAX_DAYS:]
+
+
+def _load_prev_backfill_attempt() -> str | None:
+    """上一份 metadata 的 `tpex_backfill.attempted_on`(ISO 日期);缺 / 壞檔 → None。"""
+    if not META_PATH.exists():
+        return None
+    try:
+        _v = (json.loads(META_PATH.read_text(encoding="utf-8")).get("tpex_backfill") or {})
+    except Exception as e:  # noqa: BLE001 — 壞檔不得讓 cron 整個炸;印出來
+        print(f"[sector_flow] ⚠️ 讀上一份 metadata(tpex_backfill)失敗({type(e).__name__}: {e})")
+        return None
+    return _v.get("attempted_on") if isinstance(_v, dict) else None
+
+
+def _settle_backfill(diag: dict, bf_days: list[_dt.date], attempted_on: str | None,
+                     candidates: list[_dt.date], skipped: str | None) -> None:
+    """批 Z41 R1:回補結果併入 diag(就地)。回補日(已在 parquet)這次 TWSE 失敗 → 移出
+    unresolved_days(既有上市列保留不動,不是「未寫入」)。"""
+    _pd = diag.get("per_day") or {}
+    _bf = [d.strftime("%Y%m%d") for d in bf_days]
+    ok = [ds for ds in _bf if _pd.get(ds, {}).get("written") and _pd.get(ds, {}).get("tpex_ok")]
+    kept = [ds for ds in _bf if not _pd.get(ds, {}).get("written")]
+    diag["unresolved_days"] = [ds for ds in (diag.get("unresolved_days") or []) if ds not in set(_bf)]
+    diag["tpex_backfill"] = {
+        "attempted_on": attempted_on,
+        "candidates": [d.strftime("%Y%m%d") for d in candidates],
+        "attempted": _bf,
+        "backfilled_days": ok,
+        "still_twse_only": [ds for ds in _bf if ds not in ok and ds not in kept],
+        "kept_existing": kept,
+        "skipped": skipped,
+    }
+    if _bf:
+        print(f"[sector_flow] TPEx 回補:嘗試 {len(_bf)} 日、成功 {len(ok)} 日 {ok};"
+              f"仍只含上市 {diag['tpex_backfill']['still_twse_only']};保留既有 {kept}")
+
+
 def _candidate_trading_days(today: _dt.date, existing: pd.DataFrame | None,
                             bootstrap: bool, days: int) -> list[_dt.date]:
     """要抓的候選日曆日(已濾週末)。假日由 fetcher 回空自然排除(§4.5 自證法)。"""
@@ -240,7 +313,8 @@ def _collect_days(days: list[_dt.date]) -> tuple[pd.DataFrame, pd.DataFrame, dic
         twse_ok = bool(t86) and bool(twse_close) and bool(set(t86) & set(twse_close))
         # invariant:TPEx 0 筆 / parser failure / 欄位未驗證 / 收盤空 / 交集 0 → 不得標成功
         tpex_ok = (bool(tpex) and _day["tpex_inst_status"] == TPEX_DAY_STATUS_OK
-                   and bool(tpex_close) and bool(set(tpex) & set(tpex_close)))
+                   and bool(tpex_close) and _day["tpex_close_status"] == "ok"
+                   and bool(set(tpex) & set(tpex_close)))
         _day["twse_ok"], _day["tpex_ok"] = bool(twse_ok), bool(tpex_ok)
         if not twse_ok:
             # TWSE 失敗(含只有 TPEx 成功)→ 不寫入,交 metadata 列 unresolved(不寫半套日)
@@ -432,13 +506,16 @@ def _write_metadata(full: pd.DataFrame, diag: dict, cov: dict,
         "n_days": int(pd.to_datetime(full["date"]).dt.normalize().nunique())
                   if full is not None and not full.empty else 0,
         "fetch_diag": {k: v for k, v in diag.items()
-                       if k not in ("per_day", "unresolved_days")},
+                       if k not in ("per_day", "unresolved_days", "tpex_backfill")},
         "coverage": cov,
         "last_error": last_error,
         "warnings": _warn,
         "per_day": diag.get("per_day") or {},
         "markets_summary": _summary,
         "unresolved_days": list(diag.get("unresolved_days") or []),
+        # 批 Z41 R1:本次 TPEx 回補成功(寫入且 tpex_ok=True)的日子 + 回補明細(含 attempted_on 每日一次閘)
+        "backfilled_days": list((diag.get("tpex_backfill") or {}).get("backfilled_days") or []),
+        "tpex_backfill": diag.get("tpex_backfill"),
         "bubble_window": ({k: bubble_meta.get(k) for k in
                            ("n_trading_days_used", "n_days_tpex_ok", "tpex_complete",
                             "n_absent_cells", "n_missing_value_cells")}
@@ -466,6 +543,20 @@ def main(argv=None) -> int:
     # 批 Z39 修正(QA N1):上次 TWSE 未成功、未寫入的日子併入候選重抓(不再永遠跳過)。
     _retry, _expired = _split_retry_unresolved(_load_prev_unresolved(), today)
     cand = sorted(set(cand) | set(_retry))
+    # 批 Z41 R1:窗口內 tpex_ok 不為 True 的既有日子併入候選(每日最多一次、上限 25 日)。
+    _bf_cands = [] if args.bootstrap else _tpex_backfill_days(existing, today)
+    _bf_days: list[_dt.date] = []
+    _bf_skip = None
+    _bf_on = _load_prev_backfill_attempt()
+    if _bf_cands:
+        if _bf_on == today.isoformat():
+            _bf_skip = f"今日({_bf_on})已回補過一次,不重打"
+            print(f"[sector_flow] TPEx 回補略過:{_bf_skip}(候選 {len(_bf_cands)} 日)")
+        else:
+            _bf_days, _bf_on = list(_bf_cands), today.isoformat()
+            cand = sorted(set(cand) | set(_bf_days))
+            print(f"[sector_flow] TPEx 回補候選(窗口內 tpex_ok 非 True):"
+                  f"{[d.isoformat() for d in _bf_days]}")
     if _retry:
         print(f"[sector_flow] 重抓上次未解日:{[d.isoformat() for d in _retry]}")
     if not cand:
@@ -492,6 +583,7 @@ def main(argv=None) -> int:
 
     inst_df, price_df, diag = _collect_days(cand)
     _carry_unresolved(diag, _retry, _expired)
+    _settle_backfill(diag, _bf_days, _bf_on, _bf_cands, _bf_skip)
     print(f"[sector_flow] fetch 診斷:{diag}")
 
     if inst_df.empty:
@@ -530,7 +622,18 @@ def main(argv=None) -> int:
     sector_daily = _norm_flag_cols(sector_daily)
     sector_daily["fetched_at"] = pd.Timestamp.now("UTC").isoformat()
 
-    full = _norm_flag_cols(_merge_dedupe(existing, sector_daily))
+    # 批 Z41:本次寫入的日子先刪 parquet 中該日所有舊列(不可只靠 (date,sector) keep=last ——
+    # 舊板塊列會殘留);未寫入的日子(TWSE 失敗 / 回空)不在 sector_daily → 既有列不動。
+    _base = existing
+    if existing is not None and not existing.empty:
+        _new_dates = set(pd.to_datetime(sector_daily["date"]).dt.normalize())
+        _exd = pd.to_datetime(existing["date"]).dt.normalize()
+        _replaced = sorted(set(_exd) & _new_dates)
+        if _replaced:
+            print(f"[sector_flow] 重寫既有日 {len(_replaced)} 日(先刪該日所有舊列):"
+                  f"{[pd.Timestamp(x).date().isoformat() for x in _replaced]}")
+        _base = existing[~_exd.isin(list(_new_dates)).to_numpy()]
+    full = _norm_flag_cols(_merge_dedupe(_base, sector_daily))
     full.to_parquet(PARQUET_PATH, compression="snappy", index=False)
     print(f"[sector_flow] ✅ 寫入 {len(full)} 列 → {PARQUET_PATH}")
 

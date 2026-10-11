@@ -5,7 +5,8 @@
 
 1. 全市場**每日收盤價**(元/股)—— 供「張 → 金額」換算:
    - `fetch_twse_close_day(ds)` : TWSE MI_INDEX(帶 date,官方 T1、免 token),回 {code: close}
-   - `fetch_tpex_close_day(ds)` : TPEX 上櫃每日收盤(帶 ROC date,官方 T1、免 token)
+   - `fetch_tpex_close_day(ds)` : TPEX 上櫃每日收盤(官方 T1、免 token;批 Z41 改接官方新網站
+     `afterTrading/otc` JSON,帶西元 date,欄位以清洗後完全相等定位 + 逐列/整表守衛)
    兩者皆「逐日全市場」介面(給定 YYYYMMDD 回當日全市場),bootstrap 逐日回補 +
    incremental 每晚只補最新交易日,皆走同一函式(§5 冪等/可重現)。
 
@@ -21,13 +22,17 @@ GitHub runner 免 proxy 自動直連),**不 import streamlit**、不算業務邏
 """
 from __future__ import annotations
 
-import datetime as _dt
 import os as _os
 
 import requests
 
 from shared.http_diag import scrubbed_body_head
-from shared.roc_calendar import gregorian_to_roc_year
+from shared.tpex_schema import (  # 批 Z41 TPEx 官方新網站 JSON 結構契約 SSOT(L0)
+    TPEX_CLOSE_COL_AMOUNT, TPEX_CLOSE_COL_CLOSE, TPEX_CLOSE_COL_CODE, TPEX_CLOSE_COL_HIGH,
+    TPEX_CLOSE_COL_LOW, TPEX_CLOSE_COL_VOLUME, TPEX_CLOSE_N_FIELDS, TPEX_CLOSE_REQUIRED_COLS,
+    TPEX_CLOSE_TITLE_PREFIX, TPEX_CLOSE_UNIT_GUARD_MIN_PASS_RATIO, TPEX_CLOSE_VWAP_REL_TOL,
+    check_tpex_envelope, clean_tpex_field_name, parse_tpex_price, tpex_query_date,
+    tpex_redirected_to_error, tpex_roc_date)
 
 FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
 _HDR_JSON = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
@@ -119,10 +124,15 @@ def fetch_twse_close_day(ds: str) -> dict:
         return {}
 
 
-#: 批 Z39(客戶 Q-z28 診斷;零行為變更):`fetch_tpex_close_day(ds)` 最近一次呼叫的結果狀態。
-#:   ok / empty(aaData 空)/ parse_zero(有列但解析 0 筆)/ http_none(None)/
-#:   http_error(非 200)/ json_error(非 JSON)/ exception。回傳值一字不變。
+#: 批 Z39(客戶 Q-z28 診斷):`fetch_tpex_close_day(ds)` 最近一次呼叫的結果狀態。
+#:   ok / empty(空表)/ parse_zero(有列但解析 0 筆)/ http_none(None)/
+#:   http_error(非 200)/ json_error(非 JSON)/ exception。
+#: 批 Z41(客戶 Q-z27＝A):改接官方新網站 `afterTrading/otc`,新增
+#:   redirect_error(轉往 /errors)/ schema_error(stat／日期回聲／title／fields 非 17 欄或必要欄名找不到／列長)/
+#:   unit_error(整表單位守衛:有成交列「成交金額÷成交股數 ∈ [最低,最高]」成立率不足)。只有 ok 回資料。
 _TPEX_CLOSE_DIAG: dict[str, str] = {}
+#: 批 Z41:櫃買中心官方新網站「上櫃股票每日收盤行情(不含定價)」JSON(探針 run 38105352894 等驗證)。
+TPEX_CLOSE_URL = "https://www.tpex.org.tw/www/zh-tw/afterTrading/otc"
 
 
 def get_tpex_close_status(ds: str) -> str | None:
@@ -130,66 +140,118 @@ def get_tpex_close_status(ds: str) -> str | None:
     return _TPEX_CLOSE_DIAG.get(ds)
 
 
+def _tpex_close_fail(ds: str, status: str, r, reason: str) -> dict:
+    """批 Z41:非 ok 統一出口 —— 記狀態 + log(含洗過的 body 前 500 字)。"""
+    _TPEX_CLOSE_DIAG[ds] = status
+    _body = f" body[:500]={scrubbed_body_head(r)!r}" if r is not None else ""
+    print(f"[TPEX close] {ds} 非 ok({status}):{reason}{_body}")
+    return {}
+
+
+def _parse_tpex_close_rows(ds: str, fields: list, data: list) -> tuple[str, str, dict]:
+    """批 Z41:收盤表欄位定位 + 逐列守衛 + 整表單位守衛 → (status, reason, {代號: 收盤})。純解析。
+
+    - fields 以 `clean_tpex_field_name` 清洗後**完全相等**比對必要欄(各恰一次),欄數須 17;
+      列長須 17 —— 任一不符 → schema_error。
+    - 收盤 `'----'`／不可解析／≤0 → 該股無收盤(缺值,⛔ 不退去相鄰欄);最高或最低不可解析、或
+      `最低 ≤ 收盤 ≤ 最高` 不成立 → 該股缺值並計數。
+    - 單位守衛:有成交(成交股數>0 且 成交金額>0 且 高低可解析)列中,
+      `成交金額/成交股數 ∈ [最低×(1−tol), 最高×(1+tol)]` 成立率 < 門檻(或 0 列可驗)→ unit_error。
+    """
+    names = [clean_tpex_field_name(f) for f in fields]
+    if len(names) != TPEX_CLOSE_N_FIELDS:
+        return "schema_error", f"fields {len(names)} 欄 ≠ {TPEX_CLOSE_N_FIELDS}:{names}", {}
+    idx = {}
+    for col in TPEX_CLOSE_REQUIRED_COLS:
+        hits = [i for i, n in enumerate(names) if n == col]
+        if len(hits) != 1:
+            return "schema_error", f"必要欄 {col!r} 命中 {len(hits)} 次(清洗後 fields={names})", {}
+        idx[col] = hits[0]
+    bad_len = [i for i, row in enumerate(data)
+               if not isinstance(row, (list, tuple)) or len(row) != TPEX_CLOSE_N_FIELDS]
+    if bad_len:
+        return ("schema_error",
+                f"{len(bad_len)} 列長度≠{TPEX_CLOSE_N_FIELDS}(首例第 {bad_len[0]} 列)", {})
+    out: dict = {}
+    n_no_close = n_hl_bad = n_unit_ok = n_unit_chk = 0
+    tol = TPEX_CLOSE_VWAP_REL_TOL
+    for row in data:
+        code = str(row[idx[TPEX_CLOSE_COL_CODE]]).strip()
+        close = parse_tpex_price(row[idx[TPEX_CLOSE_COL_CLOSE]])
+        hi = parse_tpex_price(row[idx[TPEX_CLOSE_COL_HIGH]])
+        lo = parse_tpex_price(row[idx[TPEX_CLOSE_COL_LOW]])
+        vol = parse_tpex_price(row[idx[TPEX_CLOSE_COL_VOLUME]])
+        amt = parse_tpex_price(row[idx[TPEX_CLOSE_COL_AMOUNT]])
+        if hi is not None and lo is not None and vol and amt and vol > 0 and amt > 0:
+            n_unit_chk += 1
+            if lo * (1 - tol) <= amt / vol <= hi * (1 + tol):
+                n_unit_ok += 1
+        if not code or close is None or close <= 0:
+            n_no_close += 1
+            continue
+        if hi is None or lo is None or not (lo <= close <= hi):
+            n_hl_bad += 1
+            continue
+        out[code] = close
+    if n_hl_bad:
+        print(f"[TPEX close] ⚠️ {ds} 最高/最低不可解析或 最低≤收盤≤最高 不成立 {n_hl_bad} 列 → 該股缺值")
+    if n_unit_chk == 0:
+        return "unit_error", "無任何有成交列可驗單位(成交金額/成交股數)", {}
+    ratio = n_unit_ok / n_unit_chk
+    if ratio < TPEX_CLOSE_UNIT_GUARD_MIN_PASS_RATIO:
+        return ("unit_error", f"成交金額/成交股數 ∈ [最低,最高] 成立率 {ratio:.1%} "
+                f"({n_unit_ok}/{n_unit_chk}) < {TPEX_CLOSE_UNIT_GUARD_MIN_PASS_RATIO:.0%}", {})
+    if not out:
+        return "parse_zero", f"有 {len(data)} 列但解析 0 筆有效收盤", {}
+    print(f"[TPEX close] {ds}: 無收盤 {n_no_close} 列(缺值)、單位守衛 {n_unit_ok}/{n_unit_chk}")
+    return "ok", "", out
+
+
 def fetch_tpex_close_day(ds: str) -> dict:
     """TPEX 上櫃全市場單日收盤價。ds=YYYYMMDD。回 {股票代碼: 收盤價(元/股)}。
 
-    來源:櫃買「上櫃股票每日收盤行情(不含定價)」RWD php(帶 ROC date,可回補歷史)。
-    aaData 每列:[代號, 名稱, 收盤, 漲跌, 開盤, 最高, 最低, 成交股數, 成交金額, ...]。
-    收盤欄位以「代號右側第一個有效數值」動態定位(勿硬編),避免版本欄序差異。
-    假日/無資料 → aaData 空 → 回 {}(§1 自然排除)。
-    批 Z39:各分支記 `_TPEX_CLOSE_DIAG[ds]`;「解析 0 筆」與例外分支印洗過的 body 前 500 字。
+    批 Z41(客戶 Q-z27＝A 受控遷移):來源改為櫃買中心官方新網站「上櫃股票每日收盤行情(不含定價)」
+    JSON(`afterTrading/otc?type=EW`,西元 `YYYY/MM/DD`)。舊 RWD php 交易日回 `totalCount=0` 空表
+    (探針實測)已不可用。守衛(任一不過 → 非 ok、回 {}):轉址 /errors、非 JSON、stat、日期回聲
+    (頂層 YYYYMMDD + tables[0] 民國)、title 以「上櫃股票每日收盤行情」開頭、fields 清洗後完全相等定位
+    (17 欄)、列長、逐列 最低≤收盤≤最高、整表單位守衛。收盤 `----`/不可解析 → 該股缺值(⛔ 不退相鄰欄)。
+    外幣交易 ETF(代號第六碼 K/C)收盤**照原值保留**於 L1;板塊金額換算的幣別排除在 L2
+    (`src/compute/sector_flow.compute_sector_daily_net`)。
+    批 Z39:各分支記 `_TPEX_CLOSE_DIAG[ds]`;非 ok 分支印洗過的 body 前 500 字。
     """
     r = None
     try:
-        dt = _dt.date(int(ds[:4]), int(ds[4:6]), int(ds[6:8]))
-        roc_date = f"{gregorian_to_roc_year(dt.year)}/{dt.month:02d}/{dt.day:02d}"
         r = _fetch(
-            "https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/"
-            "stk_wn1430_result.php",
-            params={"l": "zh-tw", "d": roc_date, "o": "json"},
+            TPEX_CLOSE_URL,
+            params={"date": tpex_query_date(ds), "type": "EW", "id": "",
+                    "response": "json"},
             timeout=20,
             headers={**_HDR_JSON, "Referer": "https://www.tpex.org.tw/"})
-        if r is None or getattr(r, "status_code", 0) != 200:
-            _TPEX_CLOSE_DIAG[ds] = "http_none" if r is None else "http_error"
-            print(f"[TPEX close] {ds} HTTP={getattr(r, 'status_code', 'None')}")
-            return {}
+        if r is None:
+            return _tpex_close_fail(ds, "http_none", None, "fetch 回 None")
+        if getattr(r, "status_code", 0) != 200:
+            return _tpex_close_fail(ds, "http_error", r, f"HTTP={getattr(r, 'status_code', None)}")
+        if tpex_redirected_to_error(r):
+            return _tpex_close_fail(ds, "redirect_error", r,
+                                    f"被轉往官方錯誤頁 url={getattr(r, 'url', None)!r}")
         try:
             j = r.json()
         except ValueError as e:
-            # 批 Z39:非 JSON 單獨記狀態;回傳 / log 前綴同原 except 分支
-            _TPEX_CLOSE_DIAG[ds] = "json_error"
-            print(f"[TPEX close] {ds} 失敗: {type(e).__name__}: {e} "
-                  f"body[:500]={scrubbed_body_head(r)!r}")
-            return {}
-        rows = j.get("aaData") or j.get("data") or []
-        out: dict = {}
-        for row in rows:
-            if not isinstance(row, (list, tuple)) or len(row) < 3:
-                continue
-            code = str(row[0]).strip()
-            if not code or not code[0].isdigit():
-                continue
-            # 收盤 = 代號、名稱之後的第一個有效數值(通常 index 2)
-            close = None
-            for idx in range(2, min(len(row), 6)):
-                close = _to_float(row[idx])
-                if close is not None:
-                    break
-            if code and close is not None and close > 0:
-                out[code] = close
-        if not out:
-            _TPEX_CLOSE_DIAG[ds] = "parse_zero" if rows else "empty"
-            print(f"[TPEX close] {ds} ({roc_date}) 解析 0 筆 "
-                  f"body[:500]={scrubbed_body_head(r)!r}")
-        else:
-            _TPEX_CLOSE_DIAG[ds] = "ok"
-            print(f"[TPEX close] {ds} ({roc_date}): {len(out)} 檔")
+            return _tpex_close_fail(ds, "json_error", r, f"{type(e).__name__}: {e}")
+        # tables[0].date 探針未記錄是否存在 → 有就必須＝民國請求日、沒有不臆測(頂層回聲仍強制)
+        status, why, t0 = check_tpex_envelope(j, ds, title_prefix=TPEX_CLOSE_TITLE_PREFIX,
+                                              require_table_date=False)
+        if status != "ok":
+            return _tpex_close_fail(ds, status, r, why)
+        status, why, out = _parse_tpex_close_rows(ds, list(t0.get("fields") or []),
+                                                  t0["data"])
+        if status != "ok":
+            return _tpex_close_fail(ds, status, r, why)
+        _TPEX_CLOSE_DIAG[ds] = "ok"
+        print(f"[TPEX close] {ds} ({tpex_roc_date(ds)}): {len(out)} 檔")
         return out
     except Exception as e:
-        _TPEX_CLOSE_DIAG[ds] = "exception"
-        _body = f" body[:500]={scrubbed_body_head(r)!r}" if r is not None else ""
-        print(f"[TPEX close] {ds} 失敗: {type(e).__name__}: {e}{_body}")
-        return {}
+        return _tpex_close_fail(ds, "exception", r, f"{type(e).__name__}: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════

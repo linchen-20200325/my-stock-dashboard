@@ -330,6 +330,8 @@ def chips_env(monkeypatch):
     """`chips_env(fm=, twse=, tpex=)`：fm 'down'/'quota'/'none'；twse/tpex 'down'/'none'。"""
     def _day(cache_name, mode):
         def _get(ds):
+            # 批 Z41：TPEx 真實 `_get_tpex_day` 只有 status=ok（通過全部守衛、但沒有這一檔）才進日快取；
+            #   空表（含假日）改走短 TTL 負快取、不算「有回答」。本替身只模擬「有回答」這個抽象狀態，斷言不變。
             if mode == "none":             # 有回答（例如假日／沒有這一檔）→ 進日快取
                 getattr(IF, cache_name)[ds] = {}
             return {}                      # "down"：網路失敗 → 不進日快取

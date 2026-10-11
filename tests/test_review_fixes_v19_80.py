@@ -88,6 +88,10 @@ class TestT86NegativeCache:
 # (對稱補上 T86 早有、TPEX 一直漏的護欄;暫時性失敗不再永久釘空 dict)
 # ══════════════════════════════════════════════════════════════
 class TestTPEXNegativeCache:
+    # 批 Z41(客戶 Q-z27＝A):本測試斷言一字未改仍成立(網路 None → http_none → 短 TTL 負快取)。
+    # 語意**刻意擴大**:Z41 起不只暫時性失敗,連「空表」也不再永久快取(舊:空表 = 假日 → 永久 {}),
+    # 改走同一個短 TTL 負快取 —— 空表無法區分休市與交易日故障。新語意的正反測試見
+    # tests/test_batch_z41.py::TestInstEmptyAndCache(含「改回永久快取」突變)。
     def test_transient_fail_uses_fail_ts_not_day_cache(self, monkeypatch):
         import src.data.core.data_loader_inst_fetchers as ifx
         calls = {"n": 0}

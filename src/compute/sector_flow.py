@@ -56,6 +56,7 @@ from shared.sector_flow_thresholds import (
     WINDOW_Y_PRIOR,
     WINDOW_Y_RECENT,
     YUAN_PER_YI,
+    is_foreign_ccy_code,
 )
 
 _logger = _log.getLogger(__name__)
@@ -119,11 +120,17 @@ def compute_sector_daily_net(
                                  dealer_yi, n_stocks],按 date, sector 排序。
         coverage     : dict — n_stock_days_with_net / n_dropped_missing_price /
                        n_unclassified_stock_days / n_sectors / n_days /
-                       n_missing_{foreign,trust,dealer}_stock_days(批 Z39)。
+                       n_missing_{foreign,trust,dealer}_stock_days(批 Z39)/
+                       n_excluded_foreign_ccy_stock_days(批 Z41)。
 
     批 Z39(Q-z26=A):分項缺欄 / 不可解析(None、"<NA>"、"NaN"、±inf…)→ NaN,**不補 0**;
     `net_amt_yi` 三分項任一 NaN → NaN;板塊彙總 O1 —— 該日任一成分股該類別 NaN → 板塊該日
     該類別 NaN(`net_amt_yi` 同理)。真實 0 仍為 0、有效正負值原值。輸出欄位維持 7 欄。
+
+    批 Z41(客戶 Q-z27=A,§4.1 幣別混用 Level 1):外幣交易 ETF(代號第六碼 K/C/M/S,
+    `shared.sector_flow_thresholds.is_foreign_ccy_code`)的收盤是外幣報價,張×收盤≠新台幣金額
+    ⇒ 該股日**排除**(不可比值,不是補值;個股法人張數本身不動),計入
+    `n_excluded_foreign_ccy_stock_days` 並 log;不計入 `n_stock_days_with_net`。
     """
     cov = {
         "n_stock_days_with_net": 0,
@@ -134,6 +141,7 @@ def compute_sector_daily_net(
         "n_missing_foreign_stock_days": 0,
         "n_missing_trust_stock_days": 0,
         "n_missing_dealer_stock_days": 0,
+        "n_excluded_foreign_ccy_stock_days": 0,
     }
     empty_cols = ["date", "sector", "net_amt_yi", "foreign_yi", "trust_yi",
                   "dealer_yi", "n_stocks"]
@@ -151,6 +159,14 @@ def compute_sector_daily_net(
     # 保留所有 (date,stock) 列(含全 0 淨額:不影響加總、計入 coverage 分母);
     # 僅剔除 date 無法解析(NaT)的髒列。§1:不靜默丟真實資料。
     inst = inst[["date", "stock_id", *_LOT_COLS]].dropna(subset=["date"])
+    # 批 Z41:外幣交易 ETF 排除(上市上櫃共用;幣別不可比 → 不得換算成新台幣金額加總)
+    _fx = inst["stock_id"].map(is_foreign_ccy_code).astype(bool)
+    cov["n_excluded_foreign_ccy_stock_days"] = int(_fx.sum())
+    if cov["n_excluded_foreign_ccy_stock_days"] > 0:
+        _logger.warning("[sector_flow] 排除外幣交易 ETF %d 個 (股,日)(代號第六碼 K/C/M/S,"
+                        "收盤非新台幣)例:%s", cov["n_excluded_foreign_ccy_stock_days"],
+                        sorted(set(inst.loc[_fx, "stock_id"]))[:10])
+    inst = inst[~_fx]
     cov["n_stock_days_with_net"] = int(len(inst))
     for c, k in zip(_LOT_COLS, ("foreign", "trust", "dealer")):
         cov[f"n_missing_{k}_stock_days"] = int(inst[c].isna().sum())

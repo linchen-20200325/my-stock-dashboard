@@ -29,7 +29,6 @@ import pytest
 
 import scripts.update_sector_flow as U
 import src.data.core.data_loader_inst_fetchers as ifx
-import src.data.stock.market_close_fetcher as mcf
 from shared.sector_flow_thresholds import (
     QUADRANT_INSUFFICIENT,
     QUADRANT_UNAVAILABLE,
@@ -125,11 +124,26 @@ Z39_BASE_SHA = {
 }
 
 
+def _z41_pairs(rel: str):
+    """批 Z41（客戶 Q-z27＝A）把 `_INST`／`_CLOSE` 的 TPEx 兩支 fetcher 整支改接官方新網站 ⇒ 還原鏈最先換回
+    Z41 之前的寫法（⛔ 不動 `Z39_REVERT_PAIRS` 本身）。"""
+    from tests.test_batch_z41 import Z41_REVERT_PAIRS
+    return tuple(Z41_REVERT_PAIRS.get(rel, ()))
+
+
 def _z40_pairs(rel: str):
     """批 Z40（客戶 Q-z24＝A'／Q-z25＝A）改了 `_INST`（T86／FinMind pivot 法人口徑）⇒ 還原鏈先換回 Z40 之前的寫法
-    （同 Z33 串 Z34 慣例；⛔ 不動 `Z39_REVERT_PAIRS` 本身，錨點行逐字保留）。"""
+    （同 Z33 串 Z34 慣例；⛔ 不動 `Z39_REVERT_PAIRS` 本身，錨點行逐字保留）。批 Z41 起前面再串 Z41 還原。"""
     from tests.test_batch_z40 import Z40_REVERT_PAIRS
-    return tuple(Z40_REVERT_PAIRS.get(rel, ()))
+    return _z41_pairs(rel) + tuple(Z40_REVERT_PAIRS.get(rel, ()))
+
+
+@functools.lru_cache(maxsize=None)
+def z41_pre_module(rel: str):
+    """批 Z41 之前（＝ Z39＋Z40 修後）的 L1 模組。Z39 對 L1 兩檔的「零行為變更」宣稱是針對 Z39 那次改動，
+    批 Z41 刻意整支換掉 TPEx fetcher（新端點、新語意：空表不再永久快取、驗不過不回資料）後，
+    該宣稱改在本還原體上驗證（不刪弱）；新端點行為由 `tests/test_batch_z41.py` 覆蓋。"""
+    return _mutant(rel, _z41_pairs(rel), tag="z41pre")
 
 
 def z39_revert(rel: str, code: str) -> str:
@@ -478,8 +492,9 @@ class TestMarketJudgement:
         inst, _p, diag = _one(monkeypatch, U, _day_ok())
         assert diag["per_day"][_DS[0]]["tpex_ok"] is True
         assert set(inst["stock_id"]) == set(IMAP)
+        # 批 Z41：TPEx source 標籤隨端點遷移改為 `U._SOURCE_TPEX`（provenance 同步，斷言語意不變）
         assert U._day_flags_frame(diag)["source"].tolist() == [
-            "TWSE:T86+MI_INDEX / TPEX:3itrade+otc_quotes"]
+            f"TWSE:T86+MI_INDEX / {U._SOURCE_TPEX}"]
 
     def test_twse_fail_tpex_only_is_unresolved(self, monkeypatch):
         inst, _p, diag = _one(monkeypatch, U, {**_day_ok(), "t86": {}})
@@ -526,7 +541,7 @@ class TestMainEndToEnd:
         assert not d10["tpex_ok"].any() and d10["twse_ok"].all()
         assert "上櫃光電" not in set(d10["sector"])
         d0 = pq[pq["date"] == pd.Timestamp(_DAYS[0])]
-        assert set(d0["source"]) == {"TWSE:T86+MI_INDEX / TPEX:3itrade+otc_quotes"}
+        assert set(d0["source"]) == {f"TWSE:T86+MI_INDEX / {U._SOURCE_TPEX}"}   # 批 Z41 標籤同步
 
         text = (tmp_path / "bubble_latest.json").read_text(encoding="utf-8")
         _no_nan_token(text)
@@ -852,16 +867,20 @@ def _assert_body_log_clean(out: str) -> None:
 
 
 class TestL1TpexDayDiag:
+    """批 Z41 起：「now」＝ `z41_pre_module(_INST)`（Z41 之前的 Z39＋Z40 修後碼，舊 aaData 端點）——
+    Z39 宣稱的是「Z39 那次改動零行為變更」，Z41 整支換端點後在還原體上照驗（不刪弱）。"""
+
     @pytest.mark.parametrize("status", list(_TPEX_CASES))
     def test_status_and_zero_behavior_change(self, monkeypatch, capsys, status):
         base = z39_pre_module(_INST)
+        now = z41_pre_module(_INST)
         got = {}
-        for name, mod in (("now", ifx), ("base", base)):
+        for name, mod in (("now", now), ("base", base)):
             _fresh_inst(monkeypatch, mod, _TPEX_CASES[status]())
             ret = mod._get_tpex_day(_DS[0])
             got[name] = (ret, dict(mod._TPEX_DAY_CACHE), set(mod._TPEX_FAIL_TS))
             if name == "now":
-                assert ifx.get_tpex_day_status(_DS[0]) == status
+                assert now.get_tpex_day_status(_DS[0]) == status
                 out = capsys.readouterr().out
                 if status not in ("ok", "http_none"):
                     _assert_body_log_clean(out)
@@ -870,22 +889,26 @@ class TestL1TpexDayDiag:
         assert got["now"] == got["base"]            # 回傳值 / 永久快取 / 負快取 同基底
 
     def test_cache_hit_keeps_status(self, monkeypatch):
-        _fresh_inst(monkeypatch, ifx, _TPEX_CASES["empty"]())
-        ifx._get_tpex_day(_DS[0])
-        monkeypatch.setattr(ifx, "_fetch_url_dl", lambda *a, **k: _TPEX_CASES["ok"]())
-        assert ifx._get_tpex_day(_DS[0]) == {}       # 永久快取 {} 語意不變
-        assert ifx.get_tpex_day_status(_DS[0]) == "empty"
-        assert ifx.get_tpex_day_status("19990101") is None
+        # 批 Z41：「空表永久快取」是 Z41 之前的語意（Z41 刻意改為短 TTL 負快取，見 test_batch_z41
+        #   TestInstEmptyAndCache）⇒ 本測試改在 Z41 之前的還原體上驗 Z39 當時的宣稱。
+        now = z41_pre_module(_INST)
+        _fresh_inst(monkeypatch, now, _TPEX_CASES["empty"]())
+        now._get_tpex_day(_DS[0])
+        monkeypatch.setattr(now, "_fetch_url_dl", lambda *a, **k: _TPEX_CASES["ok"]())
+        assert now._get_tpex_day(_DS[0]) == {}       # 永久快取 {} 語意不變（Z39 當時）
+        assert now.get_tpex_day_status(_DS[0]) == "empty"
+        assert now.get_tpex_day_status("19990101") is None
 
     def test_mutant_empty_reported_ok(self, monkeypatch):
-        M = _mutant(_INST, [("            _TPEX_DAY_DIAG[ds] = 'empty'\n",
-                             "            _TPEX_DAY_DIAG[ds] = 'ok'\n")])
+        M = _mutant(_INST, _z41_pairs(_INST) + (("            _TPEX_DAY_DIAG[ds] = 'empty'\n",
+                                                 "            _TPEX_DAY_DIAG[ds] = 'ok'\n"),))
         _fresh_inst(monkeypatch, M, _TPEX_CASES["empty"]())
         M._get_tpex_day(_DS[0])
         assert M.get_tpex_day_status(_DS[0]) == "ok"
 
     def test_mutant_col_unverified_reported_ok(self, monkeypatch):
-        M = _mutant(_INST, [("            _status = 'col_unverified'\n", "            pass\n")])
+        M = _mutant(_INST, _z41_pairs(_INST) + (("            _status = 'col_unverified'\n",
+                                                 "            pass\n"),))
         _fresh_inst(monkeypatch, M, _TPEX_CASES["col_unverified"]())
         M._get_tpex_day(_DS[0])
         assert M.get_tpex_day_status(_DS[0]) == "ok"
@@ -913,15 +936,18 @@ _CLOSE_CASES = {
 
 
 class TestL1TpexCloseDiag:
+    """批 Z41 起：「now」＝ `z41_pre_module(_CLOSE)`（理由同 `TestL1TpexDayDiag`）。"""
+
     @pytest.mark.parametrize("status", list(_CLOSE_CASES))
     def test_status_and_zero_behavior_change(self, monkeypatch, capsys, status):
         base = z39_pre_module(_CLOSE)
+        now = z41_pre_module(_CLOSE)
         rets = {}
-        for name, mod in (("now", mcf), ("base", base)):
+        for name, mod in (("now", now), ("base", base)):
             monkeypatch.setattr(mod, "_fetch", lambda *a, **k: _CLOSE_CASES[status]())
             rets[name] = mod.fetch_tpex_close_day(_DS[0])
             if name == "now":
-                assert mcf.get_tpex_close_status(_DS[0]) == status
+                assert now.get_tpex_close_status(_DS[0]) == status
                 out = capsys.readouterr().out
                 if status in ("empty", "parse_zero", "json_error", "exception"):
                     _assert_body_log_clean(out)

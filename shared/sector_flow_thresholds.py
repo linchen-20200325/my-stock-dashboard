@@ -69,6 +69,23 @@ def canonical_sector(label) -> str:
     s = str(label or "").strip()
     return SECTOR_ETF_CANONICAL if s in SECTOR_ETF_FAMILY_ALIASES else s
 
+# ── 批 Z41(客戶 Q-z27＝A):外幣交易 ETF 幣別混用防護(§4.1 Level 1 單位錯誤)──────────
+#: 板塊金額 = 張 × 1000 × 收盤(元)。外幣交易 ETF 的收盤是**外幣**報價,乘進去＝把美元/人民幣
+#: 當新台幣加總(不可比值)。官方 notes 原文:
+#:   TPEx「ETF證券代號第六碼為K、C者，表示該ETF以外幣交易」;TWSE 為 K、M、S、C。
+#: ⇒ 上市上櫃共用:代號第六碼(0-based index 5)落在下列集合 → L2 排除該股日(計數、log),
+#: **不是補值、不動個股法人張數本身**。
+FOREIGN_CCY_CODE_CHAR_INDEX: int = 5
+FOREIGN_CCY_CODE_6TH_CHARS: frozenset = frozenset({"K", "C", "M", "S"})
+
+
+def is_foreign_ccy_code(code) -> bool:
+    """證券代號第六碼 ∈ {K, C, M, S}(外幣交易 ETF)→ True。代號不足 6 碼 → False。"""
+    s = str(code).strip().upper()
+    return len(s) > FOREIGN_CCY_CODE_CHAR_INDEX and \
+        s[FOREIGN_CCY_CODE_CHAR_INDEX] in FOREIGN_CCY_CODE_6TH_CHARS
+
+
 #: 一個板塊在某交易日「有效成分股」數量下限;低於此該板塊當日流入代表性不足。
 #: 目前僅作為 coverage 診斷欄位輸出(不濾除),Stage 2 畫圖可據此決定是否淡化顯示。
 MIN_SECTOR_STOCKS: int = 1

@@ -31,8 +31,25 @@ _SESSION_KV_RE = re.compile(
     r"session[_-]?id|sessid|sid))(\s*[=:]\s*)([^;&\s\"'<>,]+)")
 
 
+#: 批 Z41(Z39 QA 殘留缺口):JSON / dict repr 內**帶引號的 key**(`{"Cookie": "a=b"}`、
+#: `{'sessionid':'zzz'}`、`{"Set-Cookie": ["a=b", "c=d"]}`、`{"sid": 12345}`)—— 上面兩條要求 key 後
+#: 直接接 `:`/`=`,遇到收尾引號就漏遮。值為字串 → 遮引號內;陣列(不巢狀)→ 遮整個 `[...]`;
+#: 其他純量 → 遮到 `,` / `}` / `]` / 空白。
+_JSON_SECRET_KEY_RE = re.compile(
+    r"""(?i)(["'])((?:set-)?cookie|jsessionid|phpsessid|asp\.net_sessionid|connect\.sid|"""
+    r"""session[_-]?id|sessid|sid)\1(\s*:\s*)"""
+    r"""(?:(["'])(?:\\.|(?!\4)[^\\])*\4|\[[^\[\]]*\]|[^,}\]\s]+)""")
+
+
+def _mask_json_secret(m) -> str:
+    """JSON key 命中 → 保留 key 與引號樣式,值改 `"***"`(字串值沿用原引號)。"""
+    q = m.group(4) or '"'
+    return f"{m.group(1)}{m.group(2)}{m.group(1)}{m.group(3)}{q}{_MASK}{q}"
+
+
 def scrub_session_values(text: str) -> str:
-    """遮蔽 Cookie / Set-Cookie 值與 session id 類值(批 Z39 修正 QA N4;純函式)。"""
+    """遮蔽 Cookie / Set-Cookie 值與 session id 類值(批 Z39 修正 QA N4;批 Z41 補 JSON 帶引號 key;純函式)。"""
+    text = _JSON_SECRET_KEY_RE.sub(_mask_json_secret, text)
     text = _COOKIE_HEADER_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{_MASK}", text)
     return _SESSION_KV_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{_MASK}", text)
 
