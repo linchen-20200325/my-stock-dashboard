@@ -358,7 +358,9 @@ def _parse_bfi82u_rows(fields: list, data: list) -> dict | None:
             continue
         _dom_dealer_ok = _dom_dealer_ok or _is_dom_dealer
         _net = round(int(_vs) / TWD_PER_YI, 2)  # 元 → 億元(§4.1,L0 SSOT 1e8)
-        if '外資及陸資' in _nm:
+        # 批 Z40 跟進三（QA F-A）：「外資及陸資(含外資自營商)」這類混有外資自營商的列不收為外資
+        #   （客戶口徑外資＝不含外資自營商；收進來＝口徑錯＋重複計入）⇒ 落到下方外資自營商分支略過 ⇒ 外資未觀測。
+        if '外資及陸資' in _nm and not is_foreign_dealer_label(_nm):
             _inst['外資及陸資']['net'] = _net
             _seen.add('外資及陸資')
         elif '投信' in _nm:

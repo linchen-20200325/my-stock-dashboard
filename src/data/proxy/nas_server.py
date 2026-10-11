@@ -188,7 +188,9 @@ def _fetch_institutional(date_str: Optional[str] = None):
                 if _fd_rows:
                     print(f"[NAS/institutional] {ds} 略過外資自營商列 {_fd_rows}（官方口徑：已含在自營商內，不另計）")
                 dealer = sum(v for k, v in raw.items() if "自營商" in k and "外資" not in k)
-                foreign = next((v for k, v in raw.items() if "外資" in k and "陸資" in k), None)
+                # 批 Z40 跟進三（QA F-A）：「外資及陸資(含外資自營商)」混有外資自營商 ⇒ 不收為外資（同下方退路的排除）。
+                foreign = next((v for k, v in raw.items()
+                                if "外資" in k and "陸資" in k and not is_foreign_dealer_label(k)), None)
                 if foreign is None:
                     foreign = next((v for k, v in raw.items()
                                     if "外資" in k and not is_foreign_dealer_label(k)), 0)

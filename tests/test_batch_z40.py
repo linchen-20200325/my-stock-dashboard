@@ -76,6 +76,18 @@ Z40F2_DDF_DEALER_NEW = (
     "            #   修前 `'自營' in _nm` —— F5 後「外資(不包含外資自營商)」這類非官方外資列不再被當外資自營商略過，\n"
     "            #   若沿用舊條件會掉進本分支被加進自營商；改後不進任何一類 ⇒ 外資未觀測（缺值），不誤計。\n"
 )
+#: 批 Z40 跟進三（QA F-A）BFI82U 外資分支修後逐字（混有外資自營商的列不收為外資）
+Z40F3_DDF_FOREIGN_NEW = (
+    "        # 批 Z40 跟進三（QA F-A）：「外資及陸資(含外資自營商)」這類混有外資自營商的列不收為外資\n"
+    "        #   （客戶口徑外資＝不含外資自營商；收進來＝口徑錯＋重複計入）⇒ 落到下方外資自營商分支略過 ⇒ 外資未觀測。\n"
+    "        if '外資及陸資' in _nm and not is_foreign_dealer_label(_nm):\n"
+)
+#: 批 Z40 跟進三（QA F-A）NAS 外資主取值修後逐字
+Z40F3_NAS_FOREIGN_NEW = (
+    '                # 批 Z40 跟進三（QA F-A）：「外資及陸資(含外資自營商)」混有外資自營商 ⇒ 不收為外資（同下方退路的排除）。\n'
+    '                foreign = next((v for k, v in raw.items()\n'
+    '                                if "外資" in k and "陸資" in k and not is_foreign_dealer_label(k)), None)\n'
+)
 #: 修後逐字 → 修前逐字（每組在現行檔恰一處）。key ＝ repo 相對路徑。
 Z40_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
     _DDF: (
@@ -87,6 +99,8 @@ Z40_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          ''),
         # 批 Z40 跟進二（QA F5 連帶）：BFI82U 國內自營商分支改用 `_is_dom_dealer`（同檔同批跟進 ⇒ 併入本表）。
         (Z40F2_DDF_DEALER_NEW, "        elif '自營' in _nm:\n"),
+        # 批 Z40 跟進三（QA F-A）：BFI82U 外資分支排除混有外資自營商的列（同檔同批跟進 ⇒ 併入本表）。
+        (Z40F3_DDF_FOREIGN_NEW, "        if '外資及陸資' in _nm:\n"),
     ),
     _ORCH: (
         ('from shared.inst_labels import (  # 批 Z40 法人身分別判定 SSOT(L0)\n    is_finmind_dealer, is_finmind_foreign_investor, is_foreign_dealer_label)\n',
@@ -109,6 +123,9 @@ Z40_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '                dealer = sum(v for k, v in raw.items() if "自營商" in k)\n'),
         ('                    foreign = next((v for k, v in raw.items()\n                                    if "外資" in k and not is_foreign_dealer_label(k)), 0)\n',
          '                    foreign = next((v for k, v in raw.items() if "外資" in k), 0)\n'),
+        # 批 Z40 跟進三（QA F-A）：外資主取值排除混有外資自營商的列。
+        (Z40F3_NAS_FOREIGN_NEW,
+         '                foreign = next((v for k, v in raw.items() if "外資" in k and "陸資" in k), None)\n'),
     ),
     _FFF: (
         ('from shared.inst_labels import is_finmind_foreign_investor, is_foreign_dealer_label  # 批 Z40 SSOT(L0)\n',
@@ -885,8 +902,12 @@ class TestT86:
 # 8. 批 Z40 跟進二（獨立 QA non-blocking 發現 F5／F6／F4）
 # ══════════════════════════════════════════════════════════════════════════
 _LBL = 'shared/inst_labels.py'
-#: F5 修前判定（只排除含「不含」二字者）—— 單點突變用
-_F5_NEW = '    return "外資自營商" in _strip_paren_modifiers(s)\n'
+#: 現行判定（批 Z40 跟進三）末行逐字 —— 單點突變的替換點
+_F5_NEW = ('    return (_FD in _strip_paren_modifiers(s)\n'
+           '            or _paren_mentions_foreign_dealer_affirmatively(s))\n')
+#: 批 Z40 跟進二（commit 6c421802）判定：只看名稱本體 —— 跟進三單點突變用（還原 ⇒ QA F-A／F-B 重現）
+_F5_Z40F2 = '    return "外資自營商" in _strip_paren_modifiers(s)\n'
+#: F5 修前判定（批 Z40 原版，只排除含「不含」二字者）—— 單點突變用
 _F5_OLD = '    return "外資自營商" in s and "不含" not in s\n'
 
 #: 官方名稱 31 個 ＝ TWSE T86 19 欄 ＋ TWSE BFI82U 6 列 ＋ FinMind name 6 值（均為本檔上方既用的官方實測名稱）
@@ -896,8 +917,23 @@ _FINMIND_NAMES = ['Foreign_Investor', 'Foreign_Dealer_Self', 'Investment_Trust',
 _OFFICIAL_31 = FIELDS_NOW + _BFI82U_ROWS + _FINMIND_NAMES
 _OFFICIAL_FD_TRUE = {'外資自營商買進股數', '外資自營商賣出股數', '外資自營商買賣超股數', '外資自營商',
                      'Foreign_Dealer_Self'}
-#: 非官方措辭（QA F5 點名）：括號內的「外資自營商」只是修飾外資列口徑 ⇒ 不是外資自營商
-_UNOFFICIAL_NOT_FD = ['外資及陸資(含外資自營商)', '外資(不包含外資自營商)', '外資及陸資(未含外資自營商)']
+#: 非官方措辭，括號為**否定**修飾（QA F5 點名＋跟進三補）：名稱就是客戶口徑的外資 ⇒ 不是外資自營商
+_UNOFFICIAL_NOT_FD = ['外資(不包含外資自營商)', '外資及陸資(未含外資自營商)']
+_NEGATED_NOT_FD = _UNOFFICIAL_NOT_FD + [
+    '外資（不包含外資自營商）', '外陸資買賣超股數（不含外資自營商）', '外資及陸資(不包括外資自營商)',
+    '外資及陸資(不計外資自營商)', '外資(外資自營商除外)', '外資及陸資（排除外資自營商）', '外資(非外資自營商)']
+#: 跟進三第 2 類（QA F-A）：括號**肯定**含外資自營商、本體非空 ⇒ 混有外資自營商，不得收為外資
+_MIXED_WITH_FD = ['外資及陸資(含外資自營商)', '外資及陸資（含外資自營商）', ' 外資及陸資(含外資自營商) ',
+                  '外資及陸資(含外資自營商', '外資(包含外資自營商)', '外資及陸資(含括外資自營商)',
+                  '外資(外資自營商)', '外資(不含外資自營商，含外資自營商避險)']
+#: 跟進三第 3 類（QA F-B）：本體為空、括號內就是外資自營商 ⇒ 外資自營商
+_PAREN_ONLY_FD = ['(外資自營商)', '（外資自營商）', ' (外資自營商) ']
+#: QA F-A 主例
+_MIXED = '外資及陸資(含外資自營商)'
+
+
+def _f5(tag: str, old: str):
+    return _mutant_module(_LBL, [(_F5_NEW, old)], tag)
 
 
 def test_official_31_names_count():
@@ -908,41 +944,161 @@ class TestF5ForeignDealerParenModifier:
     @pytest.mark.parametrize('name', _OFFICIAL_31)
     def test_official_names(self, name):
         assert L.is_foreign_dealer_label(name) is (name in _OFFICIAL_FD_TRUE)
+        assert not L.is_foreign_mixed_with_dealer_label(name)
 
     @pytest.mark.parametrize('name', _OFFICIAL_31)
     def test_official_names_unchanged_vs_pre_fix(self, name):
         """既有官方名稱判定與修前一字不變（修前＝單點突變還原 `_F5_OLD`）。"""
-        pre = _mutant_module(_LBL, [(_F5_NEW, _F5_OLD)], 'f5_pre')
-        assert L.is_foreign_dealer_label(name) is pre.is_foreign_dealer_label(name)
+        assert L.is_foreign_dealer_label(name) is _f5('f5_pre', _F5_OLD).is_foreign_dealer_label(name)
 
-    @pytest.mark.parametrize('name', _UNOFFICIAL_NOT_FD + [
-        '外資及陸資（含外資自營商）', '外資（不包含外資自營商）', '外陸資買賣超股數（不含外資自營商）',
-        ' 外資及陸資(含外資自營商) ', '外資及陸資(含外資自營商'])
-    def test_paren_modifier_is_not_foreign_dealer(self, name):
+    @pytest.mark.parametrize('name', _OFFICIAL_31)
+    def test_official_names_unchanged_vs_6c421802(self, name):
+        """批 Z40 跟進三：官方名稱判定與跟進二（6c421802）逐一相同。"""
+        assert L.is_foreign_dealer_label(name) is _f5('f5_z40f2', _F5_Z40F2).is_foreign_dealer_label(name)
+
+    @pytest.mark.parametrize('name', _NEGATED_NOT_FD)
+    def test_negated_paren_modifier_is_not_foreign_dealer(self, name):
+        """第 1 類：括號否定修飾 ⇒ 不是外資自營商（外資列照收）。"""
         assert not L.is_foreign_dealer_label(name)
+        assert not L.is_foreign_mixed_with_dealer_label(name)
+
+    @pytest.mark.parametrize('name', _MIXED_WITH_FD)
+    def test_affirmative_paren_is_mixed_and_excluded(self, name):
+        """第 2 類（QA F-A）：括號肯定含 ⇒ 混有外資自營商 ⇒ `is_foreign_dealer_label` 亦 True（所有 caller 排除）。"""
+        assert L.is_foreign_mixed_with_dealer_label(name)
+        assert L.is_foreign_dealer_label(name)
+
+    @pytest.mark.parametrize('name', _PAREN_ONLY_FD)
+    def test_paren_only_is_foreign_dealer(self, name):
+        """第 3 類（QA F-B）：本體為空、括號內為外資自營商 ⇒ 外資自營商（非「混有」）。"""
+        assert L.is_foreign_dealer_label(name)
+        assert not L.is_foreign_mixed_with_dealer_label(name)
 
     @pytest.mark.parametrize('name', ['外資自營商(含避險)', '外資自營商（自行）', '外資自營商買賣超股數 '])
     def test_body_is_foreign_dealer_even_with_modifier(self, name):
         assert L.is_foreign_dealer_label(name)
+        assert not L.is_foreign_mixed_with_dealer_label(name)
 
     @pytest.mark.parametrize('name', _UNOFFICIAL_NOT_FD)
     def test_mutant_pre_fix_misjudges(self, name):
-        """單點突變（還原修前「只排除『不含』」）⇒ 三個非官方措辭被誤判為外資自營商 ⇒ 上方斷言轉紅。"""
-        pre = _mutant_module(_LBL, [(_F5_NEW, _F5_OLD)], 'f5_pre')
-        assert pre.is_foreign_dealer_label(name)
+        """單點突變（還原修前「只排除『不含』」）⇒ 否定措辭被誤判為外資自營商 ⇒ 上方斷言轉紅。"""
+        assert _f5('f5_pre', _F5_OLD).is_foreign_dealer_label(name)
 
-    def test_pivot_keeps_foreign_with_paren_modifier(self, monkeypatch, capsys):
-        """行為：`外資及陸資(含外資自營商)` 欄在 pivot 歸外資、不被當外資自營商 drop；修前判定 ⇒ 外資欄消失。"""
-        raw = pd.DataFrame([{'date': '2026-10-08', 'name': n, 'buy': b, 'sell': s} for n, b, s in [
-            ('外資及陸資(含外資自營商)', 5000, 1000), ('投信', 100, 300),
-            ('自營商(自行買賣)', 2000, 0), ('自營商(避險)', 0, 500)]])
-        r = IFX._normalize_inst_pivot(raw).iloc[0]
-        assert r['外資'] == 4.0 and r['主力合計'] == pytest.approx(5.3)
-        assert '略過外資自營商欄' not in capsys.readouterr().out
-        pre = _mutant_module(_LBL, [(_F5_NEW, _F5_OLD)], 'f5_pre')
-        monkeypatch.setattr(IFX, 'is_foreign_dealer_label', pre.is_foreign_dealer_label)
-        pv = IFX._normalize_inst_pivot(raw)
-        assert '外資' not in pv.columns
+    @pytest.mark.parametrize('name', _MIXED_WITH_FD + _PAREN_ONLY_FD)
+    def test_mutant_6c421802_misjudges(self, name):
+        """單點突變（還原跟進二 6c421802「只看本體」）⇒ 第 2／3 類判 False ⇒ 上方斷言轉紅。"""
+        assert not _f5('f5_z40f2', _F5_Z40F2).is_foreign_dealer_label(name)
+
+
+# ── 跟進三：五個 caller 各實跑 `外資及陸資(含外資自營商)`（＋純括號名稱），不得收為外資或自營商 ──────
+def _use_6c(mp, *targets):
+    """把 caller 模組的 `is_foreign_dealer_label` 換成 6c421802 判定（突變）。"""
+    fn = _f5('f5_z40f2', _F5_Z40F2).is_foreign_dealer_label
+    for t in targets:
+        mp.setattr(t, 'is_foreign_dealer_label', fn)
+
+
+class TestZ40F3MixedLabelCallers:
+    # 1. _normalize_inst_pivot
+    _PV = [(_MIXED, 5000, 1000), ('投信', 100, 300), ('自營商(自行買賣)', 2000, 0), ('自營商(避險)', 0, 500)]
+
+    def _pv(self, spec=None):
+        return pd.DataFrame([{'date': '2026-10-08', 'name': n, 'buy': b, 'sell': s}
+                             for n, b, s in (spec or self._PV)])
+
+    def test_pivot_drops_foreign_mixed_with_dealer(self, monkeypatch, capsys):
+        """QA F-A：`外資及陸資(含外資自營商)` 欄在 rename 前被 drop ⇒ 外資缺欄 ⇒ 主力合計 NaN（不是 4.0／5.3）。
+        （本測試取代跟進二的 `test_pivot_keeps_foreign_with_paren_modifier` —— 該測試把錯誤行為鎖成期望值。）"""
+        pv = IFX._normalize_inst_pivot(self._pv())
+        r = pv.iloc[0]
+        assert '外資' not in pv.columns and _MIXED not in pv.columns
+        assert math.isnan(r['主力合計'])
+        assert r['投信'] == pytest.approx(-0.2) and r['自營商'] == pytest.approx(1.5)   # 其他類照常
+        out = capsys.readouterr().out
+        assert '略過外資自營商欄' in out and _MIXED in out and "缺 ['外資'] 欄" in out
+        _use_6c(monkeypatch, IFX)
+        r6 = IFX._normalize_inst_pivot(self._pv()).iloc[0]
+        assert r6['外資'] == 4.0 and r6['主力合計'] == pytest.approx(5.3)      # 突變：6c421802 收為外資
+
+    def test_pivot_mixed_does_not_pollute_foreign_investor(self, monkeypatch):
+        spec = [('Foreign_Investor', 3000, 1000)] + self._PV
+        r = IFX._normalize_inst_pivot(self._pv(spec)).iloc[0]
+        assert r['外資'] == 2.0 and r['主力合計'] == pytest.approx(3.3)
+        _use_6c(monkeypatch, IFX)
+        assert IFX._normalize_inst_pivot(self._pv(spec)).iloc[0]['外資'] == 6.0   # 突變：重複計入
+
+    def test_pivot_paren_only_dropped(self, monkeypatch):
+        """QA F-B：`(外資自營商)` 欄被 drop，不因含「外」「資」被 rename 成外資。"""
+        spec = [('外資及陸資(不含外資自營商)', 3000, 1000), ('(外資自營商)', 9000, 0)] + self._PV[1:]
+        r = IFX._normalize_inst_pivot(self._pv(spec)).iloc[0]
+        assert r['外資'] == 2.0 and r['主力合計'] == pytest.approx(3.3)
+        _use_6c(monkeypatch, IFX)
+        assert IFX._normalize_inst_pivot(self._pv(spec)).iloc[0]['外資'] == 11.0  # 突變：外資自營商併入外資
+
+    # 2. macro_fetch_orchestrator `_fm_cat`
+    @pytest.mark.parametrize('name', [_MIXED, '(外資自營商)'])
+    def test_orchestrator_fm_cat_excludes(self, name, monkeypatch, capsys):
+        rows = [_fm(name, 30_000_000_000, 55_000_000_000)] + _FM_ZH[2:]
+        inst = _fm_inst(monkeypatch, rows)
+        assert '外資及陸資' not in inst                         # 外資缺值，不是 -250.0
+        assert inst['投信']['net'] == 20.0 and inst['自營商']['net'] == 20.0
+        assert '略過外資自營商 1 列' in capsys.readouterr().out
+        import src.services.macro_fetch_orchestrator as ORCH
+        _use_6c(monkeypatch, ORCH)
+        assert _fm_inst(monkeypatch, rows)['外資及陸資']['net'] == -250.0       # 突變：收為外資
+
+    # 3. foreign_flow_fetcher
+    @pytest.mark.parametrize('name', [_MIXED, '(外資自營商)'])
+    def test_foreign_flow_excludes(self, name, monkeypatch):
+        import src.data.macro as _pkg
+        rows = [(name, 30_000_000_000, 55_000_000_000), ('投信', 5_000_000_000, 3_000_000_000)]
+        monkeypatch.setattr(_pkg, 'finmind_get', lambda *a, **k: _flow_df(rows), raising=False)
+        fn = FFF.fetch_foreign_flow_series
+        if hasattr(fn, 'clear'):
+            fn.clear()
+        df, err = fn(4101, 'tok')
+        assert df.empty and err == 'FinMind 無 Foreign 類別資料'
+        _use_6c(monkeypatch, FFF)
+        assert _flow(monkeypatch, FFF, rows, 4102) == -250.0                     # 突變：收為外資
+
+    # 4. daily_data_fetchers._parse_bfi82u_rows
+    def _bfi_mixed(self):
+        rows = _bfi_rows(fd=None)
+        return [[_MIXED] + r[1:] if r[0] == '外資及陸資(不含外資自營商)' else r for r in rows]
+
+    def test_bfi82u_mixed_not_foreign_nor_dealer(self, monkeypatch, capsys):
+        inst = _parse_bfi82u_rows(_BFI_FIELDS, self._bfi_mixed())
+        assert '外資及陸資' in inst.unobserved_net                  # 外資未觀測（缺值），不是 150.0
+        assert inst['外資及陸資']['net'] == 0.0                     # 既有預填（保留給既有消費點，旗標標缺值）
+        assert inst['自營商']['net'] == 4.5 and '自營商' not in inst.unobserved_net
+        assert inst['投信']['net'] == 12.3
+        assert f'略過「{_MIXED}」列 150.0 億' in capsys.readouterr().out
+        import src.data.daily.daily_data_fetchers as DDF
+        _use_6c(monkeypatch, DDF)
+        inst6 = _parse_bfi82u_rows(_BFI_FIELDS, self._bfi_mixed())
+        assert inst6['外資及陸資']['net'] == 150.0 and '外資及陸資' not in inst6.unobserved_net   # 突變
+
+    def test_bfi82u_mutant_without_foreign_guard(self):
+        """單點突變：拿掉外資分支的 `not is_foreign_dealer_label` ⇒ 混有外資自營商的列被收為外資。"""
+        m = _mutant_module(_DDF, [(Z40F3_DDF_FOREIGN_NEW, "        if '外資及陸資' in _nm:\n")], 'ddf_f3')
+        assert m._parse_bfi82u_rows(_BFI_FIELDS, self._bfi_mixed())['外資及陸資']['net'] == 150.0
+
+    # 5. nas_server._fetch_institutional
+    def test_nas_mixed_not_foreign_nor_dealer(self, monkeypatch):
+        mod = _nas_module(monkeypatch)
+        out = _nas_fetch(monkeypatch, mod, self._bfi_mixed())
+        assert out['外資及陸資']['net'] != 150.0                    # 不收為外資（缺外資列 ⇒ 既有退路預設）
+        assert out['自營商']['net'] == 4.5 and out['投信']['net'] == 12.3
+        _use_6c(monkeypatch, mod)
+        assert _nas_fetch(monkeypatch, mod, self._bfi_mixed())['外資及陸資']['net'] == 150.0   # 突變
+
+    def test_nas_mutant_without_foreign_guard(self, monkeypatch):
+        """單點突變：外資主取值拿掉 `not is_foreign_dealer_label` ⇒ 混有外資自營商的列被收為外資。"""
+        _stub_web(monkeypatch)
+        m = _mutant_module(_NAS, [(Z40F3_NAS_FOREIGN_NEW,
+                                   '                foreign = next((v for k, v in raw.items() '
+                                   'if "外資" in k and "陸資" in k), None)\n')], 'nas_f3')
+        assert _nas_fetch(monkeypatch, m, self._bfi_mixed())['外資及陸資']['net'] == 150.0
 
 
 class TestF6T86FieldStrip:
