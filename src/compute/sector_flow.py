@@ -12,11 +12,16 @@ DataFrame。抓取由 L1 fetcher + `scripts/update_sector_flow.py`(entrypoint �
 ------------------------
 - 有法人淨額但**缺當日收盤**的股 → 該股該日剔除 + coverage 計數(不假設價、不 ffill)。
 - 有淨額+收盤但**無產業別** → 歸 `SECTOR_UNCLASSIFIED` 桶 + 計數(不猜產業)。
-- 「某板塊在某交易日無任何有效成分股」→ 該 (date,sector) 自然不存在;
-  `compute_bubble` 在**已成交的交易日軸**上把缺格顯式補 0(代表該日該板塊 ~0 淨流入,
-  非缺資料),並在回傳 meta 記錄補格數(§1「填補必須顯式 + log + 帶旗標」)。
-  ⚠️ 整日全市場抓取失敗的情境由 cron 負責:全敗日**不寫入** parquet → 不會出現在交易日軸,
-  故本層看到的每個交易日都是「市場有成交且有資料」的日子。
+- 「某板塊在某交易日無任何有效成分股」→ 該 (date,sector) 自然不存在。
+  ~~`compute_bubble` 在已成交的交易日軸上把缺格顯式補 0(代表該日該板塊 ~0 淨流入)~~
+  **批 Z39(客戶 Q-z26=A)更正 —— 有意識的政策變更,不是漏刪**:缺席格**不是**觀測到的 0
+  (缺席 = 沒有任何成分股同時具法人列與有效收盤,例:TPEx 失敗日的純上櫃板塊),
+  一律維持 NaN 並計數 `n_absent_cells`;窗口內有 NaN 的指標 → NaN → 板塊標 `未取得`。
+  舊理由(交易日軸上無成分股 ≈ 0 流入)在「資料源完整」時近似成立,但無法與「來源掛了」
+  區分 —— 錯誤的 0 比缺值更危險(§1)。
+- 法人分項缺值(例:Z38 T86 找不到外資欄 → NaN)**不 fillna(0)**:該股該類別 NaN →
+  該股淨額 NaN → 板塊該日該類別 / 淨額 NaN(O1:成分股任一缺即缺,不把半套當完整)。
+  ⚠️ 整日全市場抓取失敗的情境由 cron 負責:全敗日**不寫入** parquet → 不會出現在交易日軸。
 - 交易日數 < `WINDOW_Y_MIN_DAYS`(動能兩段窗)→ Y=NaN、quadrant=`資料不足`,不硬編 0。
 
 §4.1 單位陷阱:張→股 ×SHARES_PER_LOT、元→億 ÷YUAN_PER_YI,全走 SSOT 常數。
@@ -34,6 +39,7 @@ from __future__ import annotations
 import logging as _log
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 
 from shared.sector_flow_thresholds import (
@@ -41,6 +47,7 @@ from shared.sector_flow_thresholds import (
     QUADRANT_INSUFFICIENT,
     QUADRANT_RISING,
     QUADRANT_ROTATING,
+    QUADRANT_UNAVAILABLE,
     QUADRANT_WATCHING,
     SECTOR_UNCLASSIFIED,
     SHARES_PER_LOT,
@@ -61,6 +68,12 @@ _CAMP_YI = {
     "trust_lots": "trust_yi",
     "dealer_lots": "dealer_yi",
 }
+
+
+def _finite_or_nan(ser: pd.Series) -> pd.Series:
+    """批 Z39:→ float64;不可解析(None/"<NA>"/"NaN"/亂字)與 ±inf 一律 NaN(缺值,不是 0)。"""
+    out = pd.to_numeric(ser, errors="coerce").astype("float64")
+    return out.where(np.isfinite(out))
 
 
 def _norm_dates(df: pd.DataFrame, col: str = "date") -> pd.DataFrame:
@@ -105,7 +118,12 @@ def compute_sector_daily_net(
         sector_daily : DataFrame[date, sector, net_amt_yi, foreign_yi, trust_yi,
                                  dealer_yi, n_stocks],按 date, sector 排序。
         coverage     : dict — n_stock_days_with_net / n_dropped_missing_price /
-                       n_unclassified_stock_days / n_sectors / n_days。
+                       n_unclassified_stock_days / n_sectors / n_days /
+                       n_missing_{foreign,trust,dealer}_stock_days(批 Z39)。
+
+    批 Z39(Q-z26=A):分項缺欄 / 不可解析(None、"<NA>"、"NaN"、±inf…)→ NaN,**不補 0**;
+    `net_amt_yi` 三分項任一 NaN → NaN;板塊彙總 O1 —— 該日任一成分股該類別 NaN → 板塊該日
+    該類別 NaN(`net_amt_yi` 同理)。真實 0 仍為 0、有效正負值原值。輸出欄位維持 7 欄。
     """
     cov = {
         "n_stock_days_with_net": 0,
@@ -113,6 +131,9 @@ def compute_sector_daily_net(
         "n_unclassified_stock_days": 0,
         "n_sectors": 0,
         "n_days": 0,
+        "n_missing_foreign_stock_days": 0,
+        "n_missing_trust_stock_days": 0,
+        "n_missing_dealer_stock_days": 0,
     }
     empty_cols = ["date", "sector", "net_amt_yi", "foreign_yi", "trust_yi",
                   "dealer_yi", "n_stocks"]
@@ -124,12 +145,18 @@ def compute_sector_daily_net(
     inst["stock_id"] = inst["stock_id"].astype(str).str.strip()
     for c in _LOT_COLS:
         if c not in inst.columns:
-            inst[c] = 0.0
-        inst[c] = pd.to_numeric(inst[c], errors="coerce").fillna(0.0)
+            inst[c] = np.nan   # 批 Z39:缺欄 = 未取得(NaN),不是 0
+        # 批 Z39:不可解析 → NaN;±inf 不是有效張數 → 同視為缺值(不 fillna,§1)
+        inst[c] = _finite_or_nan(inst[c])
     # 保留所有 (date,stock) 列(含全 0 淨額:不影響加總、計入 coverage 分母);
     # 僅剔除 date 無法解析(NaT)的髒列。§1:不靜默丟真實資料。
     inst = inst[["date", "stock_id", *_LOT_COLS]].dropna(subset=["date"])
     cov["n_stock_days_with_net"] = int(len(inst))
+    for c, k in zip(_LOT_COLS, ("foreign", "trust", "dealer")):
+        cov[f"n_missing_{k}_stock_days"] = int(inst[c].isna().sum())
+        if cov[f"n_missing_{k}_stock_days"] > 0:
+            _logger.warning("[sector_flow] %s 缺值 %d 個 (股,日) → 維持 NaN,不補 0",
+                            c, cov[f"n_missing_{k}_stock_days"])
 
     if price_df is None or price_df.empty:
         _logger.warning("[sector_flow] price_df 為空 → 全部缺價,無法換算金額(§1 不造假)")
@@ -138,7 +165,7 @@ def compute_sector_daily_net(
 
     price = _norm_dates(price_df)
     price["stock_id"] = price["stock_id"].astype(str).str.strip()
-    price["close"] = pd.to_numeric(price["close"], errors="coerce")
+    price["close"] = _finite_or_nan(price["close"])
     price = price.dropna(subset=["date", "close"])
     # §3.2 收盤價須為正(元/股);非正值視為髒資料剔除
     price = price[price["close"] > 0][["date", "stock_id", "close"]]
@@ -158,7 +185,9 @@ def compute_sector_daily_net(
     _scale = SHARES_PER_LOT / YUAN_PER_YI   # 張×元 → 億 的合併係數
     for c in _LOT_COLS:
         merged[_CAMP_YI[c]] = merged[c] * merged["close"] * _scale
-    merged["net_amt_yi"] = merged[[_CAMP_YI[c] for c in _LOT_COLS]].sum(axis=1)
+    # 批 Z39:三分項任一 NaN → 淨額 NaN(min_count=3;不把半套當完整)
+    merged["net_amt_yi"] = merged[[_CAMP_YI[c] for c in _LOT_COLS]].sum(
+        axis=1, min_count=len(_LOT_COLS))
 
     # ── 產業別對映(§4.6 無產業 → 未分類桶,不猜)────────────────────────
     _imap = {str(k).strip(): (str(v).strip() if v is not None and str(v).strip()
@@ -172,13 +201,21 @@ def compute_sector_daily_net(
                      cov["n_unclassified_stock_days"], unclassified_label)
 
     # ── groupby (date, sector) 加總(向量化)──────────────────────────────
-    agg = merged.groupby(["date", "sector"], as_index=False).agg(
+    # 批 Z39 O1:groupby.sum 預設跳過 NaN(= 把缺值當 0)→ 另算每組 NaN 個數,>0 的組遮成 NaN。
+    _val_cols = ["net_amt_yi", *(_CAMP_YI[c] for c in _LOT_COLS)]
+    _na = merged[_val_cols].isna().astype("int64").add_prefix("_na_")
+    _g = pd.concat([merged[["date", "sector", "stock_id", *_val_cols]], _na], axis=1)
+    agg = _g.groupby(["date", "sector"], as_index=False).agg(
         net_amt_yi=("net_amt_yi", "sum"),
         foreign_yi=("foreign_yi", "sum"),
         trust_yi=("trust_yi", "sum"),
         dealer_yi=("dealer_yi", "sum"),
         n_stocks=("stock_id", "nunique"),
+        **{f"_na_{c}": (f"_na_{c}", "sum") for c in _val_cols},
     )
+    for c in _val_cols:
+        agg[c] = agg[c].where(agg[f"_na_{c}"] == 0)
+    agg = agg.drop(columns=[f"_na_{c}" for c in _val_cols])
     agg = agg.sort_values(["date", "sector"]).reset_index(drop=True)
     cov["n_sectors"] = int(agg["sector"].nunique())
     cov["n_days"] = int(agg["date"].nunique())
@@ -201,16 +238,23 @@ def compute_bubble(
                R=window_y_recent, P=window_y_prior
         size = | Σ_{i=1..window_size} net_amt_yi[i] |                        (億)
 
+    批 Z39(Q-z26=A,W1 嚴格):X / Y / size 各自窗口內只要有一格 NaN(值缺或板塊當日缺席)
+    → 該指標 NaN;X 或 size 為 NaN → `unavailable=True`、quadrant=`未取得`,
+    `n_missing_days` = 窗口(近 window_size 交易日)內缺格日數。`insufficient`(窗口太短)
+    的象限優先序不被蓋掉。**不補 0**。
+
     Returns
     -------
     (bubble, meta)
         bubble : DataFrame[sector, x_yi, y_yi, size_yi, quadrant, n_days,
-                           insufficient]。
-        meta   : dict — n_trading_days_used / n_filled_absent_cells / n_sectors。
+                           insufficient, unavailable, n_missing_days]。
+        meta   : dict — n_trading_days_used / n_absent_cells / n_missing_value_cells /
+                 n_sectors / n_days_tpex_ok(輸入無 `tpex_ok` 欄 → None)。
     """
-    meta = {"n_trading_days_used": 0, "n_filled_absent_cells": 0, "n_sectors": 0}
+    meta = {"n_trading_days_used": 0, "n_absent_cells": 0,
+            "n_missing_value_cells": 0, "n_sectors": 0, "n_days_tpex_ok": None}
     out_cols = ["sector", "x_yi", "y_yi", "size_yi", "quadrant", "n_days",
-                "insufficient"]
+                "insufficient", "unavailable", "n_missing_days"]
     if sector_daily is None or sector_daily.empty:
         _logger.warning("[sector_flow] sector_daily 為空 → 回空 bubble")
         return pd.DataFrame(columns=out_cols), meta
@@ -222,28 +266,36 @@ def compute_bubble(
     meta["n_trading_days_used"] = len(recent_dates)
 
     sd = sd[sd["date"].isin(recent_dates)]
-    # pivot 成 sector × date(元格 = 該板塊該日 net_amt_yi)
-    pv = sd.pivot_table(index="sector", columns="date", values="net_amt_yi",
-                        aggfunc="sum")
-    # 補齊缺格:某板塊在「有成交的交易日」缺席 = 該日 ~0 淨流入(顯式補 0 + 計數,§1)
+    if "tpex_ok" in sd.columns:
+        # 批 Z39:cron 端 schema-additive 欄;舊列(無此欄 → NaN/None)視為「未知 ≠ True」
+        _tp = sd["tpex_ok"].map(lambda v: v is True or v is np.True_)
+        meta["n_days_tpex_ok"] = int(_tp.groupby(sd["date"]).all().sum())
+    # pivot 成 sector × date(元格 = 該板塊該日 net_amt_yi)。批 Z39:改 pivot 不聚合
+    # —— 重複 (date,sector) 直接 raise(§1),不靜默相加。
+    _sd = sd.assign(_present=1.0)
+    pv = _sd.pivot(index="sector", columns="date", values="net_amt_yi")
+    present = _sd.pivot(index="sector", columns="date", values="_present")
+    # 欄(date)由舊到新排序(recent_dates 已排序),方便用「尾端 = 最近」切窗
     pv = pv.reindex(columns=recent_dates)
-    meta["n_filled_absent_cells"] = int(pv.isna().sum().sum())
-    if meta["n_filled_absent_cells"] > 0:
-        _logger.info("[sector_flow] 交易日軸上顯式補 0 共 %d 格"
-                     "(板塊當日無有效成分股 = 0 億淨流入,非缺資料)",
-                     meta["n_filled_absent_cells"])
-    pv = pv.fillna(0.0)
-    # 欄(date)由舊到新排序,方便用「尾端 = 最近」切窗
-    pv = pv.reindex(columns=sorted(pv.columns))
+    present = present.reindex(index=pv.index, columns=recent_dates)
+    _absent = present.isna()
+    meta["n_absent_cells"] = int(_absent.to_numpy().sum())
+    meta["n_missing_value_cells"] = int((pv.isna() & ~_absent).to_numpy().sum())
+    if meta["n_absent_cells"] or meta["n_missing_value_cells"]:
+        # 批 Z39:缺席格(板塊當日無成分股同時具法人列與有效收盤)與值缺格一律維持 NaN,
+        # **不補 0**(缺席 ≠ 觀測到 0 淨流入)。
+        _logger.warning("[sector_flow] 交易日軸上缺席 %d 格、值缺 %d 格 → 維持 NaN(不補 0)",
+                        meta["n_absent_cells"], meta["n_missing_value_cells"])
 
     n_days = pv.shape[1]
     rows = []
     for sector, ser in pv.iterrows():
         vals = ser.to_numpy(dtype="float64")   # 由舊到新
+        # 批 Z39 W1:numpy sum/mean 遇 NaN 即 NaN —— 窗口內任一缺格 → 該指標 NaN(不補 0)
         # X:近 window_x 交易日總和(不足則用現有,仍為總和語意)
-        x_yi = float(vals[-int(window_x):].sum()) if n_days else 0.0
+        x_yi = float(vals[-int(window_x):].sum()) if n_days else float("nan")
         # size:近 window_size 交易日淨額絕對值(pv 已只留 window_size 天)
-        size_yi = float(abs(vals.sum())) if n_days else 0.0
+        size_yi = float(abs(vals.sum())) if n_days else float("nan")
         # Y:需近段 R + 前段 P 完整交易日(§1:不足不硬編 0,標資料不足)
         if n_days >= int(window_y_recent) + int(window_y_prior):
             recent = vals[-int(window_y_recent):]
@@ -254,14 +306,23 @@ def compute_bubble(
         else:
             y_yi = float("nan")
             insufficient = True
+        unavailable = bool(np.isnan(x_yi) or np.isnan(size_yi))
+        if insufficient:
+            quadrant = QUADRANT_INSUFFICIENT      # 窗口太短優先(不被「未取得」蓋掉)
+        elif unavailable:
+            quadrant = QUADRANT_UNAVAILABLE
+        else:
+            quadrant = classify_quadrant(x_yi, y_yi)
         rows.append({
             "sector": sector,
             "x_yi": x_yi,
             "y_yi": y_yi,
             "size_yi": size_yi,
-            "quadrant": classify_quadrant(x_yi, y_yi),
+            "quadrant": quadrant,
             "n_days": int(n_days),
             "insufficient": bool(insufficient),
+            "unavailable": unavailable,
+            "n_missing_days": int(np.isnan(vals).sum()),
         })
 
     bubble = pd.DataFrame(rows, columns=out_cols)

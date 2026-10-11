@@ -92,7 +92,10 @@ def read_sector_flow_cache(*, strict: bool = False) -> dict:
           'is_stale': bool,             # metadata.updated_at 距今 > 門檻
           'stale_reason': str | None,
           'meta_updated_at': str | None,
+          'tpex_complete': bool | None, # 批 Z39:窗口內 TPEx 全成功;舊 JSON 缺鍵 → None
+          'n_absent_cells': int | None, # 批 Z39:交易日軸缺席格數(不補 0);缺鍵 → None
         }
+        板塊層 `unavailable` / `n_missing_days`(批 Z39)隨 `sectors` 原樣透傳。
     缺 bubble_latest.json / 壞檔 / schema 不符:
         {'ok': False, 'reason': str}
     """
@@ -128,4 +131,7 @@ def read_sector_flow_cache(*, strict: bool = False) -> dict:
         "is_stale": is_stale,
         "stale_reason": stale_reason,
         "meta_updated_at": meta_upd,
+        # 批 Z39(Q-z28=A):原樣透傳,缺鍵 → None(UI 以 `is not True` 判 → 顯示「目前僅含上市資料」)
+        "tpex_complete": bubble.get("tpex_complete"),
+        "n_absent_cells": bubble.get("n_absent_cells"),
     }

@@ -43,6 +43,9 @@ QUADRANT_ROTATING: str = "輪動"    # X>=0, Y<0 :仍淨流入但動能轉弱(�
 QUADRANT_EBBING: str = "退潮"      # X<0,  Y<0 :資金流出且加速
 QUADRANT_WATCHING: str = "觀望"    # X<0,  Y>=0:淨流出但動能回升(觸底觀察)
 QUADRANT_INSUFFICIENT: str = "資料不足"   # 交易日 < WINDOW_Y_MIN_DAYS,動能無法判定
+#: 批 Z39(客戶 Q-z26=A):板塊在 X/size 窗口內有缺值(未取得/未觀測)→ 不補 0、不畫泡泡,
+#: 標此態。與 `QUADRANT_INSUFFICIENT`(窗口太短)並列;兩者同時成立時 `資料不足` 優先。
+QUADRANT_UNAVAILABLE: str = "未取得"
 
 # ── 板塊/產業(§4.6 邊界:無產業別的股票不猜產業)────────────────────────
 #: ticker 無 industry_category(新上市未收錄 / ETF / 權證)→ 歸此桶,不臆造。
@@ -75,3 +78,28 @@ MIN_SECTOR_STOCKS: int = 1
 #: 業務語意是「允許落後 2 個交易日」;但跨週末 2 個交易日最長 = 週五→週二 = 4 個日曆日,
 #: 故以 4 個日曆日作為 metadata.updated_at 距今的 staleness wall-clock 門檻(超過 → is_stale)。
 SECTOR_FLOW_STALE_MAX_CALENDAR_DAYS: int = 4
+
+# ── 批 Z39(客戶 Q-z28=A):上櫃(TPEx)未納入時的提示文字(兩個 UI 消費點共用,逐字)──
+#: 泡泡圖窗口內只要有一個交易日 TPEx 沒成功納入 → bubble_latest.json `tpex_complete` 非 True
+#: → `tab_sector_flow` 與 v2「🔍 找標的」葉2 在圖下方以灰字 caption 顯示本句;
+#: TPEx 恢復且整個窗口皆驗證成功 → `tpex_complete is True` → 自動不顯示(資料驅動)。
+SECTOR_FLOW_TWSE_ONLY_NOTE: str = "目前僅含上市資料"
+#: 缺值板塊列名的前綴(沿用 `src/ui/tabs/macro/section_chips.py` 既有「⬜ 未取得：」字樣)。
+SECTOR_FLOW_UNAVAILABLE_PREFIX: str = "⬜ 未取得："
+
+
+def format_unavailable_caption(sectors) -> str | None:
+    """「⬜ 未取得：A（缺 3 日）、B（缺 20 日）」;沒有未取得板塊 → None(L5 不畫 caption)。
+
+    批 Z39:兩個 UI 消費點(`tab_sector_flow` / v2 `page_find`)共用同一份格式(純函式、零 I/O)。
+    只列 `unavailable` 為 True 的板塊(`n_missing_days` 由 L2 計);交易日不足(insufficient)
+    的板塊另有既有「🕓 資料不足」說明,不在此重複。
+    """
+    _items = []
+    for r in sectors or ():
+        if not hasattr(r, "get") or r.get("unavailable") is not True or r.get("insufficient"):
+            continue
+        _n = r.get("n_missing_days")
+        _items.append(f"{r.get('sector')}（缺 {_n} 日）" if _n is not None
+                      else str(r.get("sector")))
+    return (SECTOR_FLOW_UNAVAILABLE_PREFIX + "、".join(_items)) if _items else None

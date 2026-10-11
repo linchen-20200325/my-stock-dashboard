@@ -62,8 +62,20 @@ def render_tab_sector_flow() -> None:
 
     _highlight = view.get("highlight_sectors") or set()
     from src.ui.render.sector_flow_render import build_sector_flow_figure
+    from shared.sector_flow_thresholds import (
+        SECTOR_FLOW_TWSE_ONLY_NOTE,
+        format_unavailable_caption,
+    )
     fig = build_sector_flow_figure(view["sectors"], highlight_sectors=_highlight)
     st.plotly_chart(fig, use_container_width=True)
+
+    # 批 Z39(客戶 Q-z28=A):窗口內 TPEx 未全數成功 → 灰字逐字提示;恢復後資料驅動自動消失
+    if view.get("tpex_complete") is not True:
+        st.caption(SECTOR_FLOW_TWSE_ONLY_NOTE)
+    # 批 Z39(客戶 Q-z26=A):缺值板塊不畫泡泡,列名「⬜ 未取得：」
+    _unav_cap = format_unavailable_caption(view["sectors"])
+    if _unav_cap:
+        st.caption(_unav_cap)
 
     # ── 持股板塊摘要 ─────────────────────────────────────────────────
     if _highlight:

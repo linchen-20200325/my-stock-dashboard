@@ -14,6 +14,7 @@ import datetime
 
 import pandas as pd
 
+from shared.http_diag import scrubbed_body_head
 from shared.roc_calendar import gregorian_to_roc_year
 from shared.ttls import TTL_15MIN  # noqa: F401  (部分 fetcher inline 引用)
 from src.data.proxy import fetch_url as _fetch_url_dl
@@ -139,6 +140,27 @@ _TPEX_DAY_CACHE: dict = {}  # {日期字串: {股票代碼: {外資,投信,自�
 # 對稱補上與 T86 相同的短 TTL 負快取(N2c v19.80 當時只補 T86,漏了 TPEX)。
 # 「aaData 為空」(TPEX 明確回無資料,如假日)仍永久快取 — 該日資料永不出現,語意正確。
 _TPEX_FAIL_TS: dict = {}   # {日期字串: 失敗時間 epoch};TTL_15MIN 內不重打
+# 批 Z39(客戶 Q-z28 診斷;零行為變更):每次**實際打出請求**後記錄該日的結果狀態,
+# 供 cron 區分「TPEx 假日回空」與「交易日 TPEx 失敗」。回傳值與快取語意一字不變。
+#   ok             JSON 有 aaData 且欄位驗證(buy-sell≈net)通過
+#   empty          JSON 正常但 aaData 空(假日或 TPEx 交易日回空,需由 caller 對照 TWSE 判定)
+#   http_none      fetch_url 回 None(網路/proxy/非 2xx)
+#   json_error     回應不是 JSON(例:改版或擋爬回 HTML)
+#   col_unverified 欄位驗證 for/else 失敗(仍沿用預設索引回資料,但不得當成成功)
+#   exception      其他例外
+# 快取命中 / 負快取命中不重設狀態(沿用上一次實際請求的結果)。
+_TPEX_DAY_DIAG: dict[str, str] = {}
+TPEX_DAY_STATUS_OK: str = "ok"
+
+
+def get_tpex_day_status(ds: str) -> str | None:
+    """`_get_tpex_day(ds)` 最近一次實際請求的狀態(見 `_TPEX_DAY_DIAG`);從未請求 → None。"""
+    return _TPEX_DAY_DIAG.get(ds)
+
+
+def _log_tpex_body(ds: str, status: str, r) -> None:
+    """批 Z39:失敗分支印 response body 前 500 字(先洗秘密;只印 body,不印 headers/proxy/token)。"""
+    print(f'[TPEx] {ds} status={status} body[:500]={scrubbed_body_head(r)!r}')
 
 
 def _get_tpex_day(ds: str) -> dict:
@@ -152,6 +174,7 @@ def _get_tpex_day(ds: str) -> dict:
         return {}   # 負快取生效中(短 TTL),不重打
     HDR = {'User-Agent': 'Mozilla/5.0', 'Accept': '*/*',
            'Referer': 'https://www.tpex.org.tw/'}
+    r = None   # 批 Z39:例外分支印 body 用(請求前就炸 → 無 body 可印)
     try:
         dt = datetime.date(int(ds[:4]), int(ds[4:6]), int(ds[6:8]))
         roc_year = gregorian_to_roc_year(dt.year)
@@ -161,11 +184,22 @@ def _get_tpex_day(ds: str) -> dict:
             params={'l': 'zh-tw', 'se': 'EW', 't': 'D', 'd': roc_date, 'o': 'json'},
             headers=HDR, timeout=5)
         if r is None:
+            _TPEX_DAY_DIAG[ds] = 'http_none'
             _TPEX_FAIL_TS[ds] = _t_tp.time()   # P1:暫時性 → 短 TTL 負快取,不永久釘
             return {}
-        j = r.json()
+        try:
+            j = r.json()
+        except ValueError as e:
+            # 批 Z39:非 JSON(改版/擋爬 HTML)單獨記狀態 + 印 body;回傳與負快取同原 except 分支
+            _TPEX_DAY_DIAG[ds] = 'json_error'
+            _log_tpex_body(ds, 'json_error', r)
+            print(f'[TPEx] {ds} 失敗: {e}')
+            _TPEX_FAIL_TS[ds] = _t_tp.time()
+            return {}
         rows_data = j.get('aaData', [])
         if not rows_data:
+            _TPEX_DAY_DIAG[ds] = 'empty'
+            _log_tpex_body(ds, 'empty', r)
             _TPEX_DAY_CACHE[ds] = {}
             return {}
 
@@ -185,6 +219,7 @@ def _get_tpex_day(ds: str) -> dict:
         # 外資 [2]買 [3]賣 [4]淨  投信 [5]買 [6]賣 [7]淨
         # 自營(自行) [8]買 [9]賣 [10]淨  [11..13]避險  [14]合計
         f_idx, t_idx, d_idx = 4, 7, 10  # 預設索引
+        _status = TPEX_DAY_STATUS_OK   # 批 Z39:for/else 失敗 → col_unverified
 
         # 用第一筆有效資料驗證 buy - sell ≈ net（容許 1 張以內誤差）
         for _sample in rows_data[:5]:
@@ -197,6 +232,8 @@ def _get_tpex_day(ds: str) -> dict:
             # 若驗證全失敗，嘗試欄位較少的格式（部分 TPEx API 版本省略避險欄）
             # [0]代號 [1]名稱 [2]外買 [3]外賣 [4]外淨 [5]投買 [6]投賣 [7]投淨 [8]自買 [9]自賣 [10]自淨
             print(f'[TPEx] {ds} 欄位驗證失敗，row長度={len(rows_data[0]) if rows_data else 0}，使用預設索引')
+            _status = 'col_unverified'
+            _log_tpex_body(ds, _status, r)
 
         day_data = {}
         for row in rows_data:
@@ -208,10 +245,14 @@ def _get_tpex_day(ds: str) -> dict:
                 '自營商': _pn_tp(row, d_idx),
             }
         _TPEX_DAY_CACHE[ds] = day_data
+        _TPEX_DAY_DIAG[ds] = _status
         print(f'[TPEx] {ds} ({roc_date}): {len(day_data)} 支 idx=({f_idx},{t_idx},{d_idx})')
         return day_data
     except Exception as e:
         print(f'[TPEx] {ds} 失敗: {e}')
+        _TPEX_DAY_DIAG[ds] = 'exception'
+        if r is not None:
+            _log_tpex_body(ds, 'exception', r)
         _TPEX_FAIL_TS[ds] = _t_tp.time()   # P1:暫時性 → 短 TTL 負快取,不永久釘
         return {}
 

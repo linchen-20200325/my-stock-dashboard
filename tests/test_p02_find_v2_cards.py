@@ -86,6 +86,11 @@ SCENARIOS = [
         P.SectorFlowReadout(requested=True, ok=False, reason="快照未產生")), UI_EMPTY),
     ("flow.live", lambda: P.build_sector_flow_card(P.SectorFlowReadout(
         requested=True, ok=True, sectors=_SECTORS)), UI_LIVE),
+    # 批 Z39（Q-z26=A）：快照在、但每個板塊都未取得（缺值不補 0）→ 灰，⛔ 不是「快取尚未產生」。
+    ("flow.all_unavailable", lambda: P.build_sector_flow_card(P.SectorFlowReadout(
+        requested=True, ok=True, unavailable=("半導體",), sectors=(
+            {"sector": "半導體", "quadrant": "未取得", "unavailable": True,
+             "insufficient": False, "n_missing_days": 3},))), UI_EMPTY),
     # 條件表單（只有這一種會畫成卡）
     ("form.failed", lambda: (P.build_form_unavailable_card("ImportError('x')"), ()), UI_FAILED),
 ]
