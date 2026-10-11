@@ -31,6 +31,10 @@
   收盤空 / 交集 0 → TPEx **失敗**(不是假日),不得標 TPEx success;該日 TPEx 法人列**不納入**
   彙總(讓該日一致只含上市),`source` 只列實際成功的市場。
 - TWSE 失敗(僅 TPEx 成功或兩邊都失敗)的交易日 → **不寫入**,記入 metadata `unresolved_days`。
+- 批 Z39 修正(QA N1):`unresolved_days` **跨次執行累積、會被重抓** —— 每次執行先讀上一份
+  metadata 的 `unresolved_days`,落在近 `_UNRESOLVED_RETRY_DAYS` 日曆天內(平日)者併入本次候選日;
+  重抓成功 → 寫入並自清單移除;仍失敗 → 保留;重抓時兩邊法人都回空(上次已知是交易日)→ 仍保留
+  (不得因來源全掛被誤判成假日而消失);超出回溯窗者移出清單並記 `fetch_diag.unresolved_expired`。
 - 兩邊法人都空 → 假日/休市(跳過)。
 - 法人分項缺鍵 → NaN(不是 0);bubble_latest.json 的 NaN 一律寫成 `null`(不寫非標準 NaN token)。
 
@@ -84,6 +88,9 @@ TICKER_SECTOR_PATH = CACHE_DIR / "ticker_sector.json"
 
 #: bootstrap 預設回溯日曆天(≈ 20 交易日 + 週末/短假緩衝,湊滿 WINDOW_SIZE)。
 _DEFAULT_BOOTSTRAP_DAYS = 30
+#: 批 Z39 修正(QA N1):上一份 metadata 的 unresolved_days 只重抓近 N 日曆天內者
+#: (= bootstrap 回溯窗,涵蓋泡泡圖 WINDOW_SIZE 交易日;更舊的已不在窗口內)。
+_UNRESOLVED_RETRY_DAYS = _DEFAULT_BOOTSTRAP_DAYS
 #: 交易日軸鍵。
 _DEDUPE_KEYS = ["date", "sector"]
 #: 批 Z39:`source` 欄依日只列實際成功使用的市場。
@@ -121,6 +128,59 @@ def _merge_dedupe(old: pd.DataFrame | None, new: pd.DataFrame) -> pd.DataFrame:
     out = (out.drop_duplicates(subset=_DEDUPE_KEYS, keep="last")
               .sort_values(_DEDUPE_KEYS).reset_index(drop=True))
     return out
+
+
+def _today() -> _dt.date:
+    """執行日(台灣 cron 當地日)。獨立成函式供測試注入。"""
+    return _dt.date.today()
+
+
+def _load_prev_unresolved() -> list[str]:
+    """上一份 metadata.json 的 `unresolved_days`(YYYYMMDD 字串)。檔缺 / 壞檔 → [](印 log)。"""
+    if not META_PATH.exists():
+        return []
+    try:
+        _v = json.loads(META_PATH.read_text(encoding="utf-8")).get("unresolved_days")
+    except Exception as e:  # noqa: BLE001 — 壞檔不得讓 cron 整個炸;印出來
+        print(f"[sector_flow] ⚠️ 讀上一份 metadata 失敗({type(e).__name__}: {e})"
+              "→ 本次無法重抓上次的 unresolved_days")
+        return []
+    if not isinstance(_v, list):
+        return []
+    return [str(x) for x in _v]
+
+
+def _split_retry_unresolved(prev: list[str], today: _dt.date
+                            ) -> tuple[list[_dt.date], list[str]]:
+    """上一份 unresolved_days → (本次要重抓的日期, 超出回溯窗 / 無法解析而移出的日期字串)。"""
+    retry: list[_dt.date] = []
+    expired: list[str] = []
+    _floor = today - _dt.timedelta(days=_UNRESOLVED_RETRY_DAYS)
+    for ds in sorted(set(prev)):
+        try:
+            d = _dt.datetime.strptime(ds, "%Y%m%d").date()
+        except ValueError:
+            expired.append(ds)
+            continue
+        if _floor <= d <= today and d.weekday() < 5:
+            retry.append(d)
+        else:
+            expired.append(ds)
+    return retry, expired
+
+
+def _carry_unresolved(diag: dict, retry: list[_dt.date], expired: list[str]) -> None:
+    """把上次未解的日子併回本次 diag(就地):重抓成功 → 已不在清單;仍失敗 → 本次已列;
+    重抓時兩邊都回空(上次已知是交易日)→ 保留,不當假日丟掉。"""
+    _unres = set(diag.get("unresolved_days") or [])
+    for d in retry:
+        ds = d.strftime("%Y%m%d")
+        if (diag.get("per_day") or {}).get(ds, {}).get("holiday"):
+            _unres.add(ds)
+            print(f"[sector_flow] ⚠️ {ds} 為上次未解日,本次重抓兩邊都回空 → 仍列 unresolved_days")
+    diag["unresolved_days"] = sorted(_unres)
+    diag["unresolved_retried"] = sorted(d.strftime("%Y%m%d") for d in retry)
+    diag["unresolved_expired"] = sorted(expired)
 
 
 def _candidate_trading_days(today: _dt.date, existing: pd.DataFrame | None,
@@ -260,15 +320,28 @@ def _norm_flag_cols(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _markets_summary(diag: dict) -> dict:
-    """本次抓取的分市場成敗(假日不計)。"""
+    """本次抓取的分市場成敗(假日不計)。
+
+    批 Z39 修正(QA N7a):TPEx 的 ok 只計**已寫入**日 —— 「TPEx 成功但 TWSE 失敗、未寫入」
+    的日子 TPEx 資料並未入庫,不得算進 TPEx ok_days;該類日子列 `not_written_dates`
+    (兩個市場同一份,= TWSE 未成功日),TPEx fail 只計「已寫入但不含上櫃」的日子。
+    """
     out = {}
+    _pd = diag.get("per_day") or {}
+    _trading = {ds: v for ds, v in _pd.items() if not v.get("holiday")}
+    _not_written = sorted(ds for ds, v in _trading.items() if not v.get("written"))
     for mkt, key in (("TWSE", "twse_ok"), ("TPEx", "tpex_ok")):
-        ok = sorted(ds for ds, v in (diag.get("per_day") or {}).items()
-                    if not v.get("holiday") and v.get(key))
-        fail = sorted(ds for ds, v in (diag.get("per_day") or {}).items()
-                      if not v.get("holiday") and not v.get(key))
+        if mkt == "TWSE":
+            ok = sorted(ds for ds, v in _trading.items() if v.get(key))
+            fail = sorted(ds for ds, v in _trading.items() if not v.get(key))
+        else:
+            ok = sorted(ds for ds, v in _trading.items()
+                        if v.get("written") and v.get(key))
+            fail = sorted(ds for ds, v in _trading.items()
+                          if v.get("written") and not v.get(key))
         out[mkt] = {"ok_days": len(ok), "fail_days": len(fail),
-                    "ok_dates": ok, "fail_dates": fail}
+                    "ok_dates": ok, "fail_dates": fail,
+                    "not_written_dates": _not_written}
     return out
 
 
@@ -336,6 +409,15 @@ def _write_metadata(full: pd.DataFrame, diag: dict, cov: dict,
                      + ",".join(_summary["TPEx"]["fail_dates"]) + "(該日只含上市)")
     if diag.get("unresolved_days"):
         _warn.append("上市(TWSE)未成功、未寫入日:" + ",".join(diag["unresolved_days"]))
+    if diag.get("unresolved_expired"):
+        _warn.append("unresolved_expired(超出重抓回溯窗,移出清單):"
+                     + ",".join(diag["unresolved_expired"]))
+    # 批 Z39 修正(QA N7b):L2 coverage 有法人分項缺值股日 → 結構化警示(該股日 net=NaN、不補 0)
+    for _k in ("n_missing_foreign_stock_days", "n_missing_trust_stock_days",
+               "n_missing_dealer_stock_days"):
+        _n = (cov or {}).get(_k)
+        if isinstance(_n, (int, np.integer)) and not isinstance(_n, bool) and _n > 0:
+            _warn.append(f"coverage.{_k}={int(_n)}")
     if bubble_meta:
         _n_used = bubble_meta.get("n_trading_days_used") or 0
         _n_tp = bubble_meta.get("n_days_tpex_ok")
@@ -377,10 +459,15 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    today = _dt.date.today()
+    today = _today()
     existing = None if args.bootstrap else _load_existing()
 
     cand = _candidate_trading_days(today, existing, args.bootstrap, args.days)
+    # 批 Z39 修正(QA N1):上次 TWSE 未成功、未寫入的日子併入候選重抓(不再永遠跳過)。
+    _retry, _expired = _split_retry_unresolved(_load_prev_unresolved(), today)
+    cand = sorted(set(cand) | set(_retry))
+    if _retry:
+        print(f"[sector_flow] 重抓上次未解日:{[d.isoformat() for d in _retry]}")
     if not cand:
         print("[sector_flow] 已是最新,無新交易日待抓")
         # 仍重算 bubble(交易日軸可能因日期前進而右移),但不改長表
@@ -404,6 +491,7 @@ def main(argv=None) -> int:
     _write_ticker_sector_json(industry_map)
 
     inst_df, price_df, diag = _collect_days(cand)
+    _carry_unresolved(diag, _retry, _expired)
     print(f"[sector_flow] fetch 診斷:{diag}")
 
     if inst_df.empty:

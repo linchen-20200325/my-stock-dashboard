@@ -102,7 +102,7 @@ def build_sector_flow_figure(sectors, *, highlight_sectors=None,
 
     Returns:
         plotly.graph_objects.Figure(caller 自行 st.plotly_chart)。空/全 insufficient →
-        回帶「尚無足夠資料」註解的空圖(不炸)。
+        回帶「尚無足夠資料」註解的空圖(不炸);全部「未取得」→ 不帶該註解的空圖(批 Z39 修正)。
     """
     _hl = {str(s).strip() for s in (highlight_sectors or set())}
     rows = list(sectors or [])
@@ -118,11 +118,14 @@ def build_sector_flow_figure(sectors, *, highlight_sectors=None,
     fig = go.Figure()
 
     if not plot:
-        fig.add_annotation(
-            text="尚無足夠資料可繪製(交易日不足或快取為空)",
-            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
-            font=dict(size=14, color=TRAFFIC_NEUTRAL),
-        )
+        # 批 Z39 修正(QA N5b):板塊**全部**都是「未取得」時,「交易日不足或快取為空」是錯的原因
+        # → 不畫該註解(L5 的「⬜ 未取得：」caption 已列名說明);⛔ 不新增句子。
+        if not (rows and len(unavail) == len(rows)):
+            fig.add_annotation(
+                text="尚無足夠資料可繪製(交易日不足或快取為空)",
+                xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
+                font=dict(size=14, color=TRAFFIC_NEUTRAL),
+            )
         fig.update_layout(title=title, height=520)
         return fig
 

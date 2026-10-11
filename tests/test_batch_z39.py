@@ -730,8 +730,40 @@ class TestPageFind:
         card, _f = P.build_sector_flow_card(ro)
         assert card.state == UI_EMPTY
         assert card.note.now == P.FLOW_ALL_UNAVAILABLE_NOW != P.FLOW_EMPTY_NOW
-        assert "1 個板塊" in card.note.why
         assert P.v2_card_html(card, _f)                  # 短句表有登記、畫得出卡
+
+    def test_all_unavailable_note_reuses_only_approved_text(self, monkeypatch):
+        """批 Z39 修正（客戶規則：新可見文字須經核准）：灰卡三段 ＋ 卡面短句只准是既有字面。
+
+        now ＝ L0 象限名（圖例同一字面）；why ＝ L0 `format_unavailable_caption()` 輸出
+        （狀態 glyph 由徽章供給，經 SSOT 移除）；where ＝ 既有 `FLOW_REGEN_WHERE`。
+        """
+        import src.ui.views.page_find as P
+        from src.ui.tabs.tab_today import scrub_state_glyphs
+        ro = self._readout(monkeypatch, _view(True, _VIEW_SECTORS[1:]))
+        card, _f = P.build_sector_flow_card(ro)
+        assert card.note.now == f"**{QUADRANT_UNAVAILABLE}**"
+        assert card.note.why == scrub_state_glyphs(_UNAV_CAP)[0] == "未取得：上櫃光電（缺 3 日）"
+        assert card.note.where == P.FLOW_REGEN_WHERE
+        short = [v for _k, v in P.v2_short_rows(card)[0]]
+        assert short == [QUADRANT_UNAVAILABLE, "未取得：" + P.V2_EXCERPT_GAP,
+                         P.V2_SHORT_ROWS[("find.sector_flow", P.FLOW_EMPTY_NOW)][2]]
+        out = P.v2_card_html(card, _f)
+        for bad in ("快照裡每個板塊都未取得", "每個板塊都未取得", "淨額有缺值",
+                    "快取尚未產生", "畫不出泡泡"):
+            assert bad not in out, f"灰卡出現未核准／錯誤說法：{bad}"
+        assert "快照裡每個板塊都未取得" not in (_ROOT / _PF).read_text(encoding="utf-8")
+
+    def test_all_unavailable_without_row_flags_uses_names(self):
+        """板塊列沒帶旗標（例：同時交易日不足 → L0 格式排除）時，以 `flow.unavailable`
+        名單走同一個格式器，⛔ 不退回「快取尚未產生」、⛔ 不新寫句子。"""
+        import src.ui.views.page_find as P
+        card, _f = P.build_sector_flow_card(P.SectorFlowReadout(
+            requested=True, ok=True, sectors=({"sector": "甲", "insufficient": True,
+                                               "unavailable": True},),
+            unavailable=("甲",), insufficient=("甲",)))
+        assert card.state == UI_EMPTY and card.note.now == P.FLOW_ALL_UNAVAILABLE_NOW
+        assert card.note.why == "未取得：甲"
 
     def test_mutant_has_value_counts_all(self, monkeypatch):
         ro = self._readout(monkeypatch, _view(True, _VIEW_SECTORS[1:]))
@@ -852,7 +884,8 @@ class TestL1TpexDayDiag:
         assert M.get_tpex_day_status(_DS[0]) == "ok"
 
     def test_mutant_unscrubbed_leaks(self, monkeypatch, capsys):
-        D = _mutant(_DIAG, [("    return scrub_secrets(str(_text)[:_SCRUB_WINDOW_CHARS])[:LOG_BODY_HEAD_CHARS]",
+        D = _mutant(_DIAG, [("    return scrub_session_values(\n"
+                             "        scrub_secrets(str(_text)[:_SCRUB_WINDOW_CHARS]))[:LOG_BODY_HEAD_CHARS]",
                              "    return str(_text)[:_SCRUB_WINDOW_CHARS][:LOG_BODY_HEAD_CHARS]")])
         _fresh_inst(monkeypatch, ifx, _TPEX_CASES["json_error"]())
         monkeypatch.setattr(ifx, "scrubbed_body_head", D.scrubbed_body_head)
@@ -938,3 +971,199 @@ class TestJunkInputs:
 def test_json_safe_helper():
     assert U._json_safe({"a": float("nan"), "b": [np.float64("inf"), np.int64(3)], "c": True}) \
         == {"a": None, "b": [None, 3], "c": True}
+
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 12. 批 Z39 修正（獨立 QA 回報 N1 / N4 / N5b / N7）
+# ══════════════════════════════════════════════════════════════════════════
+_D12, _D13, _D14, _D15 = (pd.Timestamp(f"2026-10-{d}").date() for d in (12, 13, 14, 15))
+_S12, _S13, _S14, _S15 = (d.strftime("%Y%m%d") for d in (_D12, _D13, _D14, _D15))
+
+
+def _run_main_at(monkeypatch, mod, tmp_path, today, spec, argv=()):
+    """以真 `_candidate_trading_days`（不 patch）跑 main；回傳本次送進 `_collect_days` 的日子。"""
+    _install(monkeypatch, mod, spec)
+    monkeypatch.setattr(mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(mod, "PARQUET_PATH", tmp_path / "daily_net.parquet")
+    monkeypatch.setattr(mod, "BUBBLE_PATH", tmp_path / "bubble_latest.json")
+    monkeypatch.setattr(mod, "META_PATH", tmp_path / "metadata.json")
+    monkeypatch.setattr(mod, "TICKER_SECTOR_PATH", tmp_path / "ticker_sector.json")
+    monkeypatch.setattr(mod, "fetch_industry_map_bulk", lambda: dict(IMAP))
+    monkeypatch.setattr(mod, "_today", lambda: today)
+    seen: list = []
+    _orig = mod._collect_days
+
+    def _spy(days):
+        seen.append(list(days))
+        return _orig(days)
+    monkeypatch.setattr(mod, "_collect_days", _spy)
+    rc = mod.main(list(argv))
+    meta = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
+    return rc, (seen[0] if seen else []), meta
+
+
+def _round1(monkeypatch, mod, tmp_path):
+    """QA 重現第一輪：today=10-14，10-12 TWSE 失敗（TPEx 成功）、10-13/14 成功。"""
+    spec = {_S12: {**_day_ok(0), "t86": {}}, _S13: _day_ok(1), _S14: _day_ok(2)}
+    rc, _seen, meta = _run_main_at(monkeypatch, mod, tmp_path, _D14, spec)
+    assert rc == 0 and meta["unresolved_days"] == [_S12]
+    return spec
+
+
+class TestN1UnresolvedRetry:
+    def test_qa_repro_retry_succeeds_and_is_removed(self, monkeypatch, tmp_path):
+        spec = _round1(monkeypatch, U, tmp_path)
+        spec[_S12] = _day_ok(0)          # 第二輪 10-12 重抓成功
+        spec[_S15] = _day_ok(3)
+        rc, seen, meta = _run_main_at(monkeypatch, U, tmp_path, _D15, spec)
+        assert rc == 0
+        assert _D12 in seen and _D15 in seen          # 10-12 必須在候選內
+        assert meta["unresolved_days"] == []
+        pq = pd.read_parquet(tmp_path / "daily_net.parquet")
+        assert pd.Timestamp(_D12) in set(pq["date"])  # 已寫入
+        assert meta["fetch_diag"]["unresolved_retried"] == [_S12]
+
+    def test_retry_still_failing_is_kept(self, monkeypatch, tmp_path):
+        spec = _round1(monkeypatch, U, tmp_path)
+        spec[_S15] = _day_ok(3)
+        _rc, seen, meta = _run_main_at(monkeypatch, U, tmp_path, _D15, spec)
+        assert _D12 in seen and meta["unresolved_days"] == [_S12]
+        assert pd.Timestamp(_D12) not in set(
+            pd.read_parquet(tmp_path / "daily_net.parquet")["date"])
+
+    def test_retry_both_empty_is_not_dropped_as_holiday(self, monkeypatch, tmp_path):
+        spec = _round1(monkeypatch, U, tmp_path)
+        spec[_S12] = {}                  # 來源全掛：兩邊都回空（上次已知是交易日）
+        spec[_S15] = _day_ok(3)
+        _rc, _seen, meta = _run_main_at(monkeypatch, U, tmp_path, _D15, spec)
+        assert meta["unresolved_days"] == [_S12]
+
+    def test_accumulates_across_runs(self, monkeypatch, tmp_path):
+        spec = _round1(monkeypatch, U, tmp_path)
+        spec[_S15] = {**_day_ok(3), "t86": {}}      # 第二輪新的 TWSE 失敗日
+        _rc, _seen, meta = _run_main_at(monkeypatch, U, tmp_path, _D15, spec)
+        assert meta["unresolved_days"] == [_S12, _S15]   # 累積,不是被本次覆蓋
+
+    def test_outside_lookback_expires(self, monkeypatch, tmp_path):
+        old = (_D15 - pd.Timedelta(days=U._UNRESOLVED_RETRY_DAYS + 3)).strftime("%Y%m%d")
+        retry, expired = U._split_retry_unresolved([old, _S12, "junk"], _D15)
+        assert retry == [_D12] and expired == sorted([old, "junk"])
+
+    def test_corrupt_prev_metadata_does_not_crash(self, monkeypatch, tmp_path, capsys):
+        (tmp_path / "metadata.json").write_text("{not json", encoding="utf-8")
+        monkeypatch.setattr(U, "META_PATH", tmp_path / "metadata.json")
+        assert U._load_prev_unresolved() == []
+        assert "讀上一份 metadata 失敗" in capsys.readouterr().out
+
+    def test_mutant_no_union_skips_unresolved_day(self, monkeypatch, tmp_path):
+        M = _mutant(_SCRIPT, [("    cand = sorted(set(cand) | set(_retry))\n", "")])
+        spec = _round1(monkeypatch, M, tmp_path)
+        spec[_S12] = _day_ok(0)
+        spec[_S15] = _day_ok(3)
+        _rc, seen, meta = _run_main_at(monkeypatch, M, tmp_path, _D15, spec)
+        assert _D12 not in seen                       # 修前:10-12 永遠不重抓
+        assert meta["unresolved_days"] == []          # 而且清單被覆蓋掉 = 看起來完整
+
+    def test_mutant_holiday_carry_removed(self, monkeypatch, tmp_path):
+        M = _mutant(_SCRIPT, [("        if (diag.get(\"per_day\") or {}).get(ds, {}).get(\"holiday\"):\n",
+                               "        if False:\n")])
+        spec = _round1(monkeypatch, M, tmp_path)
+        spec[_S12] = {}
+        spec[_S15] = _day_ok(3)
+        _rc, _seen, meta = _run_main_at(monkeypatch, M, tmp_path, _D15, spec)
+        assert meta["unresolved_days"] == []          # 修前:被當假日丟掉
+
+
+class TestN7MetaSummary:
+    def test_tpex_ok_counts_only_written_days(self, monkeypatch, tmp_path):
+        _install(monkeypatch, U, _e2e_spec())
+        _patch_paths(monkeypatch, U, tmp_path, _DAYS[:12])
+        U.main([])
+        meta = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
+        tp = meta["markets_summary"]["TPEx"]
+        assert _DS[11] not in tp["ok_dates"] and _DS[11] not in tp["fail_dates"]
+        assert tp["not_written_dates"] == [_DS[11]] and tp["ok_days"] == 10
+        assert meta["markets_summary"]["TWSE"]["fail_dates"] == [_DS[11]]
+
+    def test_mutant_unwritten_counted_as_tpex_ok(self):
+        M = _mutant(_SCRIPT, [("            ok = sorted(ds for ds, v in _trading.items()\n"
+                               "                        if v.get(\"written\") and v.get(key))\n",
+                               "            ok = sorted(ds for ds, v in _trading.items() if v.get(key))\n")])
+        diag = {"per_day": {"d1": {"holiday": False, "written": False, "twse_ok": False,
+                                   "tpex_ok": True}}}
+        assert M._markets_summary(diag)["TPEx"]["ok_dates"] == ["d1"]
+        assert U._markets_summary(diag)["TPEx"]["ok_dates"] == []
+
+    @pytest.mark.parametrize("key", ["n_missing_foreign_stock_days", "n_missing_trust_stock_days",
+                                     "n_missing_dealer_stock_days"])
+    def test_cov_missing_warns(self, monkeypatch, tmp_path, key):
+        monkeypatch.setattr(U, "META_PATH", tmp_path / "m.json")
+        U._write_metadata(pd.DataFrame(), {}, {key: np.int64(2)}, last_error=None)
+        meta = json.loads((tmp_path / "m.json").read_text(encoding="utf-8"))
+        assert f"coverage.{key}=2" in meta["warnings"]
+
+    def test_cov_zero_no_warning(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(U, "META_PATH", tmp_path / "m.json")
+        U._write_metadata(pd.DataFrame(), {}, {"n_missing_foreign_stock_days": 0}, last_error=None)
+        meta = json.loads((tmp_path / "m.json").read_text(encoding="utf-8"))
+        assert not [w for w in meta["warnings"] if w.startswith("coverage.")]
+
+    def test_e2e_missing_foreign_warns(self, monkeypatch, tmp_path):
+        spec = {ds: _day_ok(i) for i, ds in enumerate(_DS[:3])}
+        spec[_DS[1]]["t86"]["2330"] = {"投信": 1.0, "自營商": 1.0}   # 外資缺鍵
+        _install(monkeypatch, U, spec)
+        _patch_paths(monkeypatch, U, tmp_path, _DAYS[:3])
+        U.main([])
+        meta = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
+        assert "coverage.n_missing_foreign_stock_days=1" in meta["warnings"]
+
+
+class TestN4SessionScrub:
+    _BODY = ("<html>Set-Cookie: JSESSIONID=AbC123secret; Path=/; HttpOnly\n"
+             "cookie: TS01=zzzTOKEN; foo=bar\n"
+             '<a href="/x;jsessionid=DEF456secret">x</a> sessionid=GHI789secret '
+             "PHPSESSID=JKL000secret consider=1</html>")
+
+    def _out(self, mod=None):
+        from shared import http_diag as H
+        r = _Resp(text=self._BODY)
+        return (mod or H).scrubbed_body_head(r)
+
+    def test_cookie_and_session_values_masked(self):
+        out = self._out()
+        for leak in ("AbC123secret", "zzzTOKEN", "DEF456secret", "GHI789secret", "JKL000secret"):
+            assert leak not in out, leak
+        assert "Set-Cookie: ***" in out and "jsessionid=***" in out
+        assert "consider=1" in out                       # 不誤殺一般字
+
+    def test_mutant_without_session_scrub_leaks(self):
+        D = _mutant(_DIAG, [("    return scrub_session_values(\n"
+                             "        scrub_secrets(str(_text)[:_SCRUB_WINDOW_CHARS]))[:LOG_BODY_HEAD_CHARS]",
+                             "    return scrub_secrets(str(_text)[:_SCRUB_WINDOW_CHARS])[:LOG_BODY_HEAD_CHARS]")])
+        assert "GHI789secret" in self._out(D)
+
+
+class TestN5bRenderAllUnavailable:
+    _ALL_UNAV = [{"sector": "甲", "x_yi": None, "y_yi": None, "size_yi": None,
+                  "quadrant": QUADRANT_UNAVAILABLE, "insufficient": False, "unavailable": True},
+                 {"sector": "乙", "x_yi": None, "y_yi": None, "size_yi": None,
+                  "quadrant": QUADRANT_UNAVAILABLE, "insufficient": False, "unavailable": True}]
+
+    def test_no_wrong_reason_when_all_unavailable(self):
+        from src.ui.render.sector_flow_render import build_sector_flow_figure
+        fig = build_sector_flow_figure(self._ALL_UNAV)
+        assert not fig.layout.annotations and not fig.data
+
+    def test_empty_and_insufficient_keep_existing_note(self):
+        from src.ui.render.sector_flow_render import build_sector_flow_figure
+        for rows in ([], [{"sector": "丙", "x_yi": 1.0, "y_yi": None, "size_yi": 1.0,
+                           "quadrant": QUADRANT_INSUFFICIENT, "insufficient": True}]):
+            fig = build_sector_flow_figure(rows)
+            assert any("尚無足夠資料可繪製" in str(a.text) for a in fig.layout.annotations)
+
+    def test_mutant_annotation_unconditional(self):
+        M = _mutant(_RENDER, [("        if not (rows and len(unavail) == len(rows)):\n",
+                               "        if True:\n")])
+        fig = M.build_sector_flow_figure(self._ALL_UNAV)
+        assert any("交易日不足或快取為空" in str(a.text) for a in fig.layout.annotations)

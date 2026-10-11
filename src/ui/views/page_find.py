@@ -320,7 +320,9 @@ from shared.sector_heatmap import (
     SECTOR_PERIOD_LABELS,
 )
 from shared.sector_flow_thresholds import (
+    QUADRANT_UNAVAILABLE,
     SECTOR_FLOW_TWSE_ONLY_NOTE,
+    SECTOR_FLOW_UNAVAILABLE_PREFIX,
     WINDOW_SIZE,
     format_unavailable_caption,
     WINDOW_X,
@@ -737,7 +739,10 @@ FLOW_EMPTY_NOW: str = "**板塊資金快取尚未產生**"
 #: 批 Z39（客戶 Q-z26=A）：快照存在，但每個板塊都標「未取得」（窗口內有缺值、不補 0）。
 #: 灰（empty）不是紅：沒有人壞掉的證據，只是這一份快照沒有可畫的板塊；
 #: ⛔ 不能沿用 `FLOW_EMPTY_NOW`（「快取尚未產生」對這一態是錯的說法）。
-FLOW_ALL_UNAVAILABLE_NOW: str = "**快照裡每個板塊都未取得**"
+#: 批 Z39 修正（客戶規則：新可見文字須經核准）：⛔ 不新寫句子 —— `now` 只重用 L0 象限名
+#: `QUADRANT_UNAVAILABLE`（與圖例「**未取得**　N 個板塊」同一字面），`why` 是 L0
+#: `format_unavailable_caption()` 的輸出（見 `build_sector_flow_card`），`where` 是 `FLOW_REGEN_WHERE`。
+FLOW_ALL_UNAVAILABLE_NOW: str = f"**{QUADRANT_UNAVAILABLE}**"
 #: 泡泡圖快照「去哪補」—— 2026-09-27 B6-r1 自灰態（快取尚未產生）where 原文**上提**（字面一字未改），
 #: 讓紅態（快照壞檔）讀同一句（⛔ 不手抄第二份）。
 FLOW_REGEN_WHERE: str = ("等當日盤後的「Update Sector Flow」排程；"
@@ -842,9 +847,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = {
     ("find.sector_flow", FLOW_EMPTY_NOW):
         ("板塊資金快取尚未產生", "盤後任務還沒產生，不是故障",
          "等盤後排程或手動跑該工作流程"),
-    # 批 Z39（Q-z26=A）：每個板塊都未取得。去哪補同上一列（同一句 `FLOW_REGEN_WHERE`）。
+    # 批 Z39（Q-z26=A）：每個板塊都未取得。⛔ 不新寫短句（客戶規則：新可見文字須經核准）：
+    # 現在 ＝ L0 象限名原字；為什麼 ＝ L0「未取得：」前綴（去狀態 glyph）＋ 既有摘錄記號
+    # （名單逐字在詳細）；去哪補同上一列（同一句 `FLOW_REGEN_WHERE`）。
     ("find.sector_flow", FLOW_ALL_UNAVAILABLE_NOW):
-        ("每個板塊都未取得", "淨額有缺值，不補 0",
+        (QUADRANT_UNAVAILABLE,
+         scrub_state_glyphs(SECTOR_FLOW_UNAVAILABLE_PREFIX)[0] + V2_EXCERPT_GAP,
          "等盤後排程或手動跑該工作流程"),
     # ── 條件表單（只有「因子清單載不進來」這一種會畫成卡）─────────
     ("find.screen_form", FORM_UNAVAILABLE_NOW):
@@ -1910,10 +1918,17 @@ def build_sector_flow_card(flow: SectorFlowReadout
                     state=UI_DEGRADED, note=_note), tuple(_facts)
     elif flow.ok and flow.sectors:
         # 批 Z39（Q-z26=A）：快照在、板塊也在，但每個都未取得（缺值不補 0 ⇒ 沒有可畫的）。
+        # 批 Z39 修正：`why` ＝ 既有已核准的 L0 `format_unavailable_caption()` 輸出（⛔ 不新寫句子）。
+        # 狀態 glyph（「⬜」）經 SSOT `scrub_state_glyphs()` 移除 —— `Note` 拒收狀態 glyph，
+        # 卡的狀態燈由徽章供給一次（同 `_error_why` 的作法）。
+        # 板塊列帶旗標者走第一支；全部未取得的板塊同時也是交易日不足（L0 格式排除它們）時，
+        # 以 `flow.unavailable` 名單走同一個格式器（只列名；交易日不足的名單另見 facts）。
+        _cap = (format_unavailable_caption(flow.sectors)
+                or format_unavailable_caption(
+                    [{"sector": _n, "unavailable": True} for _n in flow.unavailable]))
         _note = Note(
             now=FLOW_ALL_UNAVAILABLE_NOW,
-            why=(f"快照裡 {len(flow.sectors)} 個板塊的近 {WINDOW_SIZE} 交易日淨額"
-                 "都有缺值 —— 缺值不補 0，所以畫不出泡泡"),
+            why=scrub_state_glyphs(_cap or "")[0],
             where=FLOW_REGEN_WHERE)
     else:   # UI_EMPTY —— 快取還沒產生。灰，不是紅（沒有人壞掉）。
         _note = Note(
