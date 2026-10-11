@@ -14,8 +14,12 @@
 - 走 production 同一條 `src.data.proxy.fetch_url`(NAS Squid → 直連降級),
   量到的就是正式環境會看到的
 
-執行模式(2026-10-11 第 5 輪起;probe workflow 只跑 `python scripts/probe_tw_sources.py` 不帶參數):
-- 無參數(預設)→ 只跑第 5 輪 `probe_round5()`(批 Z41 正式切換前實測,**唯讀**、不寫 repo 任何檔):
+執行模式(2026-10-11 第 6 輪起;probe workflow 只跑 `python scripts/probe_tw_sources.py` 不帶參數):
+- 無參數(預設)→ 只跑第 6 輪 `probe_round6()`(上櫃外資量級對帳,**唯讀**、不寫檔):20260918/20260923/
+  20261008 以正式碼 `_get_tpex_day` + `fetch_tpex_close_day` 算 Σ(外資淨張×1000×收盤)億元 vs TPEx
+  insti/summary「外資及陸資(不含外資自營商)」買賣差額比值;以 `data_cache/sector_flow/ticker_sector.json`
+  映射板塊,印「半導體業」上櫃外資合計 + 前 10 大個股;印 summary 外資買進/賣出總額。請求上限 20、間隔 ≥1.5s。
+- `--round5` → 只跑第 5 輪 `probe_round5()`(批 Z41 正式切換前實測,**唯讀**、不寫 repo 任何檔):
   ① 直接呼叫正式碼 `_get_tpex_day`/`get_tpex_day_status`、`fetch_tpex_close_day`/`get_tpex_close_status`
   (交易日 20261008/20261007/20261001/20260918、非交易日 20261009/20261010);② fetch_url 直打新法人/
   新收盤端點印外殼原值(U1 收盤 tables[0].date / U2 收盤頂層 date / U3 法人 title / U4 totalCount);
@@ -32,7 +36,7 @@
   欄位口徑 + FinMind 匿名交叉驗證;探針內直接驗算(買−賣==買賣超、合計關係、
   最低<=收盤<=最高…)並印成立比例。請求數上限 40、間隔 1.5s、timeout 25s。
 - `--legacy` → 只跑舊版 PMI/出口 TARGETS + deep dumps + production smoke(原預設行為)。
-- `--all` → 第 5 輪 + 第 4 輪 + 第 3 輪 + 第 1/2 輪 + legacy 全跑。
+- `--all` → 第 6 輪 + 第 5 輪 + 第 4 輪 + 第 3 輪 + 第 1/2 輪 + legacy 全跑。
 """
 from __future__ import annotations
 
@@ -2303,6 +2307,159 @@ def probe_round5(fetch_url=None) -> int:
     return 0
 
 
+# ── 第 6 輪(2026-10-11):上櫃外資量級對帳 —— 板塊資金 🤖 7c1adf8a 首次 TPEx 回補後,
+#    上櫃外資板塊合計 09-18 +230.86 億 / 09-23 −172.49 億 / 10-08 −86.15 億,極端日幾乎全來自
+#    上櫃「半導體業」。以 TPEx insti/summary(官方獨立彙總)驗量級。唯讀、不寫檔。
+_R6_DATES = ('20260918', '20260923', '20261008')
+_R6_MAX_REQ = 20
+_R6_SECTOR = '半導體業'
+_R6_TOPN = 10
+
+
+def _r6_ticker_sector() -> dict:
+    p = _REPO_ROOT / 'data_cache' / 'sector_flow' / 'ticker_sector.json'
+    try:
+        d = _tw_json.loads(p.read_text(encoding='utf-8'))
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ 讀 {p} 失敗 {type(e).__name__}: {e}')
+        return {}
+    print(f'   ticker_sector.json 筆數={len(d)}(路徑 {p.relative_to(_REPO_ROOT)})')
+    return {str(k): str(v) for k, v in d.items()} if isinstance(d, dict) else {}
+
+
+def _r6_names(fetch_url, ds: str) -> dict:
+    """收盤表 cell 0/1 = 代號/名稱(同 URL+params 與正式碼一致 → 多半 Storm Shield 命中不計數)。"""
+    from shared.tpex_schema import tpex_query_date
+    try:
+        r = fetch_url(_R3_OTC, headers=_TW_HDR_TPEX_NEW,
+                      params={'date': tpex_query_date(ds), 'type': 'EW', 'id': '', 'response': 'json'},
+                      timeout=20, attempts=1)
+        _, rows = _tw_first_table(r.json() if r is not None else None)
+    except Exception as e:  # noqa: BLE001
+        print(f'   ⚠️ 名稱表取得失敗 {type(e).__name__}: {e}(名稱留空)')
+        return {}
+    return {str(_tw_cell(x, 0)).strip(): str(_tw_cell(x, 1)).strip()
+            for x in rows if isinstance(x, (list, tuple)) and len(x) > 1}
+
+
+def _r6_day(fetch_url, ds: str, sector_map: dict, parquet_df) -> None:
+    import math as _m
+    from shared.sector_flow_thresholds import is_foreign_ccy_code
+    from src.data.core.data_loader_inst_fetchers import _get_tpex_day, get_tpex_day_status
+    from src.data.stock.market_close_fetcher import fetch_tpex_close_day, get_tpex_close_status
+    print(f'\n══ {ds} ══')
+    tp = _get_tpex_day(ds) or {}
+    tc = fetch_tpex_close_day(ds) or {}
+    print(f'   法人 status={get_tpex_day_status(ds)!r} 筆數={len(tp)} | '
+          f'收盤 status={get_tpex_close_status(ds)!r} 筆數={len(tc)}')
+    tot_yi, n_used, n_nan, n_nopx, n_fx = 0.0, 0, 0, 0, 0
+    sec_rows, sec_sum = [], 0.0
+    by_sector: dict = {}
+    for code, v in tp.items():
+        fl, px = v.get('外資'), tc.get(code)
+        if fl is None or (isinstance(fl, float) and _m.isnan(fl)):
+            n_nan += 1
+            continue
+        if px is None:
+            n_nopx += 1
+            continue
+        if is_foreign_ccy_code(code):
+            n_fx += 1
+            continue
+        amt = fl * 1000 * px / 1e8   # 張 × 1000 股 × 收盤(元/股) → 億
+        tot_yi += amt
+        n_used += 1
+        sec = sector_map.get(code, '〔ticker_sector 無此代號〕')
+        by_sector[sec] = by_sector.get(sec, 0.0) + amt
+        if sec == _R6_SECTOR:
+            sec_sum += amt
+            sec_rows.append((code, fl, px, amt))
+    print(f'   Σ外資淨(張×1000×收盤/1e8)={tot_yi:,.2f} 億(用 {n_used} 檔;外資NaN 略過 {n_nan};'
+          f'無收盤 略過 {n_nopx};外幣 ETF 略過 {n_fx})')
+    try:
+        js = fetch_url(_R3_SUMMARY, headers=_TW_HDR_TPEX_NEW,
+                       params={'type': 'Daily', 'date': f'{ds[:4]}/{ds[4:6]}/{ds[6:]}',
+                               'response': 'json'}, timeout=25, attempts=1)
+        jsum = js.json() if js is not None else None
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ insti/summary 例外 {type(e).__name__}: {e}')
+        jsum = None
+    if isinstance(jsum, dict):
+        _, srows = _tw_first_table(jsum)
+        print('   insti/summary 全部列(元):')
+        for sr in srows:
+            print(f'     {list(sr)!r}')
+    lab, row = _r3_summary_row(jsum, '不含') if isinstance(jsum, dict) else (None, None)
+    buy, sell, net = ((_tw_n(_tw_cell(row, i)) for i in (1, 2, 3)) if row is not None
+                      else (None, None, None))
+    yi = (lambda x: None if x is None else x / 1e8)
+    print(f'   summary {lab!r}:買進={yi(buy)!r} 億 賣出={yi(sell)!r} 億 買賣差額={yi(net)!r} 億')
+    ratio = (tot_yi / (net / 1e8)) if net else None
+    print(f'   ▶ R6 對帳 {ds}:Σ外資金額={tot_yi:,.2f} 億 vs summary 外資差額='
+          f'{(net / 1e8 if net is not None else float("nan")):,.2f} 億 → 比值={ratio!r}')
+    if buy and sell:
+        print(f'     差額/成交(買+賣)={(net or 0) / (buy + sell):.4%};Σ金額/買進={tot_yi * 1e8 / buy:.4%}')
+    print(f'   ▶ R6 板塊「{_R6_SECTOR}」上櫃外資合計={sec_sum:,.2f} 億(檔數 {len(sec_rows)})'
+          f';占上櫃Σ外資 {sec_sum / tot_yi:.1%}' if tot_yi else '')
+    names = _r6_names(fetch_url, ds)
+    print(f'   前 {_R6_TOPN} 大貢獻(|金額| 由大到小):代號 名稱 外資淨(張) 收盤 金額(億)')
+    for code, fl, px, amt in sorted(sec_rows, key=lambda t: -abs(t[3]))[:_R6_TOPN]:
+        print(f'     {code} {names.get(code, "?")} {fl:,.0f} {px:,.2f} {amt:,.2f}')
+    pos = sum(a for *_, a in sec_rows if a > 0)
+    neg = sum(a for *_, a in sec_rows if a < 0)
+    top_sum = sum(a for *_, a in sorted(sec_rows, key=lambda t: -abs(t[3]))[:_R6_TOPN])
+    print(f'     半導體 正貢獻合計={pos:,.2f} 負貢獻合計={neg:,.2f} 前{_R6_TOPN}合計={top_sum:,.2f} 億')
+    print('   上櫃各板塊外資合計(|值|前 8):'
+          + ' | '.join(f'{s}={a:,.2f}' for s, a in sorted(by_sector.items(), key=lambda t: -abs(t[1]))[:8]))
+    if parquet_df is not None:
+        import pandas as _pd
+        sub = parquet_df[(parquet_df['date'] == _pd.Timestamp(ds)) & (parquet_df['sector'] == _R6_SECTOR)]
+        if len(sub):
+            r0 = sub.iloc[0]
+            print(f'   參考:repo daily_net.parquet {ds} {_R6_SECTOR}(上市+上櫃合併)foreign_yi='
+                  f'{r0["foreign_yi"]:,.2f} n_stocks={int(r0["n_stocks"])} tpex_ok={r0["tpex_ok"]!r}')
+        else:
+            print(f'   參考:daily_net.parquet 無 {ds} {_R6_SECTOR} 列')
+
+
+def probe_round6(fetch_url=None) -> int:
+    """第 6 輪(預設執行段,2026-10-11):上櫃外資量級對帳,**唯讀**、不寫檔、不 commit 資料。
+    對 20260918/20260923/20261008:正式碼 `_get_tpex_day` + `fetch_tpex_close_day` 算
+    Σ(外資淨張×1000×收盤)億元 vs TPEx insti/summary「外資及陸資(不含外資自營商)」買賣差額;
+    以 data_cache/sector_flow/ticker_sector.json 映射板塊,印「半導體業」外資合計與前 10 大個股;
+    另印 summary 外資買進/賣出總額。請求上限 20(Storm Shield 命中不計)、間隔 ≥1.5s。"""
+    global _R5_MAX_REQ
+    print('🔬 probe_tw_sources 第 6 輪(上櫃外資量級對帳;唯讀診斷)')
+    print(f'   PROXY_URL 設定={"是" if _tw_os.environ.get("PROXY_URL") else "否"}(值一律不印)')
+    saved_max = _R5_MAX_REQ
+    _R5_MAX_REQ = _R6_MAX_REQ
+    _R5_STATE.update(n=0, last=0.0, refused=0, cache_hit=0)
+    wrapped, restore = _r5_install_throttle()
+    if fetch_url is None:
+        fetch_url = wrapped
+    try:
+        sector_map = _r6_ticker_sector()
+        try:
+            import pandas as _pd
+            pq = _pd.read_parquet(_REPO_ROOT / 'data_cache' / 'sector_flow' / 'daily_net.parquet')
+        except Exception as e:  # noqa: BLE001
+            print(f'   ⚠️ 讀 daily_net.parquet 失敗 {type(e).__name__}: {e}')
+            pq = None
+        for ds in _R6_DATES:
+            try:
+                _r6_day(fetch_url, ds, sector_map, pq)
+            except Exception as e:  # noqa: BLE001 — 一天炸了不擋下一天,但要印出來
+                import traceback
+                print(f'   ❌ {ds} 例外 {type(e).__name__}: {e}')
+                traceback.print_exc()
+    finally:
+        restore()
+        _R5_MAX_REQ = saved_max
+    print(f'\n══ 請求總結:送出 {_R5_STATE["n"]} 個(上限 {_R6_MAX_REQ})、Storm Shield 命中 '
+          f'{_R5_STATE["cache_hit"]}、因上限拒送 {_R5_STATE["refused"]} ══')
+    return 0
+
+
 def _legacy_main() -> int:
     """舊版預設段(v19.112~2026-08-27 PMI/出口探針);現需 `--legacy` 才執行。"""
     from src.data.proxy import fetch_url
@@ -2381,10 +2538,10 @@ def _prod_smoke() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI:無參數 → 只跑第 5 輪探針 `probe_round5()`(probe workflow 不帶參數,即此段);
-    `--round4` → 只跑第 4 輪 `probe_round4()`;`--round3` → 只跑第 3 輪 `probe_round3()`;
+    """CLI:無參數 → 只跑第 6 輪探針 `probe_round6()`(probe workflow 不帶參數,即此段);
+    `--round5` → 只跑第 5 輪 `probe_round5()`;`--round4` → 只跑第 4 輪 `probe_round4()`;`--round3` → 只跑第 3 輪 `probe_round3()`;
     `--round2` → 只跑第 1/2 輪 TPEx/TWSE 欄位探針 `probe_tpex_new_site()`;
-    `--legacy` → 只跑舊 PMI/出口探針;`--all` → 五段都跑(各段請求計數各自歸零)。"""
+    `--legacy` → 只跑舊 PMI/出口探針;`--all` → 六段都跑(各段請求計數各自歸零)。"""
     global _TW_REQ_COUNT
     argv = list(sys.argv[1:] if argv is None else argv)
     if '--legacy' in argv:
@@ -2395,8 +2552,11 @@ def main(argv: list[str] | None = None) -> int:
         return probe_round3()
     if '--round4' in argv:
         return probe_round4()
-    rc = probe_round5()
+    if '--round5' in argv:
+        return probe_round5()
+    rc = probe_round6()
     if '--all' in argv:
+        rc = probe_round5() or rc
         _TW_REQ_COUNT = 0
         rc = probe_round4() or rc
         _TW_REQ_COUNT = 0
