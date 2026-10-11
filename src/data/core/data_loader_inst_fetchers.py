@@ -15,6 +15,10 @@ import datetime
 import pandas as pd
 
 from shared.http_diag import scrubbed_body_head
+from shared.inst_labels import (  # 批 Z40 法人身分別判定 SSOT(L0)
+    T86_DEALER_HEDGE_NET_COL, T86_DEALER_NET_COL, T86_DEALER_SELF_NET_COL,
+    T86_FOREIGN_NET_COL, T86_FOREIGN_NET_COL_LEGACY, T86_TOTAL_NET_COL, T86_TRUST_NET_COL,
+    is_foreign_dealer_label)
 from shared.roc_calendar import gregorian_to_roc_year
 from shared.ttls import TTL_15MIN  # noqa: F401  (部分 fetcher inline 引用)
 from src.data.proxy import fetch_url as _fetch_url_dl
@@ -29,7 +33,8 @@ _T86_FAIL_TS: dict = {}   # {日期字串: 失敗時間 epoch};TTL_15MIN 內不�
 
 def _get_t86_day(ds: str) -> dict:
     """抓取 T86 特定日期的全市場法人資料，進程內快取避免重複請求。
-    回傳 {股票代碼: {'外資':float, '投信':float, '自營商':float}}，單位：張"""
+    回傳 {股票代碼: {'外資':float, '投信':float, '自營商':float}}，單位：張
+    批 Z40 官方口徑：外資不含外資自營商、自營商＝自行＋避險；缺欄／髒值／守衛不過 → 該格 NaN（不補 0）。"""
     if ds in _T86_DAY_CACHE:
         return _T86_DAY_CACHE[ds]
     import time as _t_t86
@@ -49,33 +54,65 @@ def _get_t86_day(ds: str) -> dict:
             _T86_DAY_CACHE[ds] = {}
             return {}
         fields = [str(f) for f in j.get('fields', [])]
-        fi = {n: i for i, n in enumerate(fields)}
         # T86 欄位名稱用「買賣超」而非「淨」，例如「外陸資買賣超股數」「投信買賣超股數」
         # 批 Z38(治理規則 Level 1 欄名對映 bug):現行欄名「外陸資買賣超股數(不含外資自營商)」
         # 括號內含「自營」→ 舊條件「不含自營」把它排除 → f_idx=None → 每檔外資假 0。
-        # 改先挑「含外陸資且含買賣超」(現行格式只命中此欄,與 BFI82U 外資口徑同:外資及陸資、
-        # 不含外資自營商);舊格式「外資買賣超股數」保留原判斷作備援,「外資自營商買賣超股數」
-        # 兩條件皆不命中。
-        f_idx = next((v for k, v in fi.items() if '外陸資' in k and '買賣超' in k), None)
+        # 批 Z40（客戶 Q-z24＝A' 官方口徑／Q-z25＝A）：欄名一律 strip 後**完全相等**比對（⛔ 子字串
+        #   `next()` —— 「外資自營商買賣超股數」含「自營商買賣超股數」、「外陸資…(不含外資自營商)」含「自營」）：
+        #   外資 ＝ `外陸資買賣超股數(不含外資自營商)`（2017-12-18 前舊格式備援 `外資買賣超股數`，當時官方口徑）；
+        #   投信 ＝ `投信買賣超股數`；自營商 ＝ `自營商買賣超股數`（idx 11，＝自行＋避險；修前只取「自行買賣」子欄）。
+        #   外資自營商欄不取（已含在自營商內）。任一類找不到欄 → 該類 NaN（Z38 只對外資，本批擴及投信／自營商）。
+        fi = {n.strip(): i for i, n in enumerate(fields)}
+        f_idx = fi.get(T86_FOREIGN_NET_COL)
         if f_idx is None:
-            f_idx = next((v for k, v in fi.items() if '外' in k and '買賣超' in k and '自營' not in k), None)
-        t_idx = next((v for k, v in fi.items() if '投信' in k and '買賣超' in k), None)
-        d_idx = next((v for k, v in fi.items() if '自營' in k and '買賣超' in k and '自行' in k), None)
-        print(f'[T86] {ds} fields={fields[:5]} f_idx={f_idx} t_idx={t_idx} d_idx={d_idx}')
+            f_idx = fi.get(T86_FOREIGN_NET_COL_LEGACY)
+        t_idx = fi.get(T86_TRUST_NET_COL)
+        d_idx = fi.get(T86_DEALER_NET_COL)
+        dself_idx = fi.get(T86_DEALER_SELF_NET_COL)
+        dhedge_idx = fi.get(T86_DEALER_HEDGE_NET_COL)
+        tot_idx = fi.get(T86_TOTAL_NET_COL)
+        print(f'[T86] {ds} fields={fields[:5]} f_idx={f_idx} t_idx={t_idx} d_idx={d_idx} '
+              f'd_self_idx={dself_idx} d_hedge_idx={dhedge_idx} total_idx={tot_idx}')
 
-        def _pn(row, idx):
-            if idx is None or idx >= len(row): return 0.0
-            try: return round(int(str(row[idx]).replace(',', '').replace('+', '') or 0) / 1000, 1)
-            # v19.82:裸 except 收窄(§3.3);髒儲存格 → 0.0 為既有 fail-token 語意
-            except (ValueError, TypeError): return 0.0
+        def _iv(row, idx):
+            """儲存格 → 股數 int。欄不存在／列太短／空白／'--'／非數字 → None（缺值）。
+            批 Z40：修前 `_pn` 對髒儲存格回 0.0（假 0），改回缺值；真 0（'0'）仍是 0。"""
+            if idx is None or idx >= len(row): return None
+            try: return int(str(row[idx]).replace(',', '').replace('+', '').strip())
+            except (ValueError, TypeError): return None
+
+        def _lots(v):
+            return float('nan') if v is None else round(v / 1000, 1)   # 股 → 張（單位不變）
 
         day_data = {}
+        _n_d_mismatch = _n_d_unverified = _n_tot_mismatch = 0
         for row in j['data']:
             code = str(row[0]).strip()
             if code:
-                # 批 Z38:找不到外資欄 → NaN(缺值),不回 _pn 的 0.0 假零;交下游既有缺值路徑
-                day_data[code] = {'外資': _pn(row, f_idx) if f_idx is not None else float('nan'),
-                                  '投信': _pn(row, t_idx), '自營商': _pn(row, d_idx)}
+                _f, _t, _d = _iv(row, f_idx), _iv(row, t_idx), _iv(row, d_idx)
+                # 批 Z40 守衛：自行、避險兩子欄都在 ⇒ 逐列驗 自行＋避險 == 自營商；不成立／子欄值不可解析
+                #   ⇒ 該列自營商 NaN（不 raise 整日，避免單列髒資料毀整日）。缺合計欄但兩子欄都在 ⇒ 兩者相加；
+                #   任一子欄缺 ⇒ NaN（⛔ 不得半套）。
+                if dself_idx is not None and dhedge_idx is not None:
+                    _ds_v, _dh_v = _iv(row, dself_idx), _iv(row, dhedge_idx)
+                    if d_idx is None:
+                        _d = None if (_ds_v is None or _dh_v is None) else _ds_v + _dh_v
+                    elif _d is not None and (_ds_v is None or _dh_v is None):
+                        _n_d_unverified += 1
+                        _d = None
+                    elif _d is not None and _ds_v + _dh_v != _d:
+                        _n_d_mismatch += 1
+                        _d = None
+                # log 層級對帳：外資＋投信＋自營商 == 三大法人買賣超股數（不成立只計數）
+                _tot = _iv(row, tot_idx)
+                if None not in (_f, _t, _d, _tot) and _f + _t + _d != _tot:
+                    _n_tot_mismatch += 1
+                day_data[code] = {'外資': _lots(_f), '投信': _lots(_t), '自營商': _lots(_d)}
+        if _n_d_mismatch or _n_d_unverified:
+            print(f'[TWSE T86] ⚠️ {ds} 自營商守衛：自行＋避險≠自營商 {_n_d_mismatch} 列、'
+                  f'子欄不可解析 {_n_d_unverified} 列 → 該列自營商為缺值(NaN)')
+        if _n_tot_mismatch:
+            print(f'[TWSE T86] ⚠️ {ds} 對帳：外資＋投信＋自營商≠三大法人買賣超股數 {_n_tot_mismatch} 列（僅記錄）')
         _T86_DAY_CACHE[ds] = day_data
         print(f'[TWSE T86] {ds}: {len(day_data)} 支')
         return day_data
@@ -321,24 +358,31 @@ def _normalize_inst_pivot(df_raw: pd.DataFrame) -> pd.DataFrame:
     for c in pv.columns:
         if c != 'date':
             pv[c] = pv[c] / 1000
+    # 批 Z40（客戶 Q-z24＝A' 官方口徑／Q-z25＝A）：外資自營商（Foreign_Dealer_Self／「外資自營商…」欄）
+    #   已含在自營商（自行＋避險）內 ⇒ 在 rename 之前明確 drop，不計入任何一類。
+    #   （修前註解「外資自營商屬外資陣營，應歸入外資」→ 英文 Foreign_Dealer_Self 被 'foreign' 歸外資；
+    #   若只改外資條件，它會掉進下方 'dealer' in cl 被加進自營商 —— 兩者都是重複計算。）
+    _fd_cols = [c for c in pv.columns if c != 'date' and is_foreign_dealer_label(c)]
+    if _fd_cols:
+        print(f'[INST-RENAME] 略過外資自營商欄 {_fd_cols}（官方口徑：已含在自營商自行＋避險內，不另計）')
+        pv = pv.drop(columns=_fd_cols)
     # 重命名：支援英文（Foreign_Investor）與中文（外陸資…）
-    # 注意：外資自營商 屬外資陣營，應歸入「外資」而非「自營商」
     rn = {}
     for c in pv.columns:
         cs = str(c); cl = cs.lower()
         cb = _re_ni.split(r'[（(買賣]', cs)[0].strip()
         if ('外' in cs and '資' in cs) or cs in ('外資', '外陸資', '外資及陸資'):
-            rn[c] = '外資'          # 外陸資(不含外資自營商) + 外資自營商 → 均歸外資
+            rn[c] = '外資'          # 外陸資(不含外資自營商)；外資自營商已於上方 drop（批 Z40）
         elif '投信' in cb:
             rn[c] = '投信'
         elif '自營' in cb and '外資' not in cs:  # 純國內自營商
             rn[c] = '自營商'
         elif 'foreign' in cl:
-            rn[c] = '外資'          # 英文名稱（含 dealer）
+            rn[c] = '外資'          # 英文名稱（Foreign_Investor；Foreign_Dealer_Self 已於上方 drop，批 Z40）
         elif 'investment' in cl or 'trust' in cl:
             rn[c] = '投信'
         elif 'dealer' in cl:
-            rn[c] = '自營商'
+            rn[c] = '自營商'        # Dealer_self ＋ Dealer_Hedging（自行＋避險，下方重複欄合併加總）
     print(f'[INST-RENAME] 欄位對應: {rn}')
     pv.rename(columns=rn, inplace=True)
     # 重複欄合併（pandas 3.0 相容）

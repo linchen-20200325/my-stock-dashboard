@@ -38,6 +38,7 @@ from urllib.parse import urlparse
 # 介面 0 改 caller(Streamlit Cloud → /api endpoint)。
 # P2-1 v18.380:_prov_log 統一至 src/data/core/provenance.py
 from src.data.core.provenance import prov_log as _prov_log_unified
+from shared.inst_labels import is_foreign_dealer_label  # 批 Z40 法人身分別判定 SSOT(L0)
 
 
 def _prov_log(fn_name: str, source: str, result_summary: str):
@@ -180,10 +181,17 @@ def _fetch_institutional(date_str: Optional[str] = None):
                             raw[name] = round(v / 1e8, 2)
                 if not raw:
                     continue
-                dealer = sum(v for k, v in raw.items() if "自營商" in k)
+                # 批 Z40（客戶 Q-z24＝A' 官方口徑／Q-z25＝A）：自營商 ＝ 自行＋避險（只加不含「外資」的自營商列）；
+                #   「外資自營商」列已含在自營商內 ⇒ 不加進自營商、也不當外資退路（修前兩處都會撿到它；
+                #   且修前 dealer 條件「含自營商」連「外資及陸資(不含外資自營商)」外資列都會加進來）。
+                _fd_rows = [k for k in raw if is_foreign_dealer_label(k)]
+                if _fd_rows:
+                    print(f"[NAS/institutional] {ds} 略過外資自營商列 {_fd_rows}（官方口徑：已含在自營商內，不另計）")
+                dealer = sum(v for k, v in raw.items() if "自營商" in k and "外資" not in k)
                 foreign = next((v for k, v in raw.items() if "外資" in k and "陸資" in k), None)
                 if foreign is None:
-                    foreign = next((v for k, v in raw.items() if "外資" in k), 0)
+                    foreign = next((v for k, v in raw.items()
+                                    if "外資" in k and not is_foreign_dealer_label(k)), 0)
                 trust = next((v for k, v in raw.items() if "投信" in k), 0)
                 print(f"[NAS/institutional] ✅ {ds}: 外資={foreign:.1f} 投信={trust:.1f} 自營={dealer:.1f}億")
                 _prov_log('_fetch_institutional', f'TWSE:BFI82U(NAS direct):date={ds}',

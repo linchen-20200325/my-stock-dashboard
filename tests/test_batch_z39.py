@@ -125,8 +125,15 @@ Z39_BASE_SHA = {
 }
 
 
+def _z40_pairs(rel: str):
+    """批 Z40（客戶 Q-z24＝A'／Q-z25＝A）改了 `_INST`（T86／FinMind pivot 法人口徑）⇒ 還原鏈先換回 Z40 之前的寫法
+    （同 Z33 串 Z34 慣例；⛔ 不動 `Z39_REVERT_PAIRS` 本身，錨點行逐字保留）。"""
+    from tests.test_batch_z40 import Z40_REVERT_PAIRS
+    return tuple(Z40_REVERT_PAIRS.get(rel, ()))
+
+
 def z39_revert(rel: str, code: str) -> str:
-    for new, old in Z39_REVERT_PAIRS[rel]:
+    for new, old in _z40_pairs(rel) + Z39_REVERT_PAIRS[rel]:
         assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)
     return code
@@ -134,7 +141,7 @@ def z39_revert(rel: str, code: str) -> str:
 
 @functools.lru_cache(maxsize=None)
 def z39_pre_module(rel: str):
-    return _mutant(rel, Z39_REVERT_PAIRS[rel], tag="pre")
+    return _mutant(rel, _z40_pairs(rel) + Z39_REVERT_PAIRS[rel], tag="pre")
 
 
 @pytest.mark.parametrize("rel", [_INST, _CLOSE])

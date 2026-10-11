@@ -5,7 +5,8 @@
 data_cache/twii_ohlcv.parquet              ← ^TWII 日 K（Yahoo Chart API `query1.finance.yahoo.com/v8/finance/chart`，
                                              經 proxy_helper；不經 yfinance 套件）
 data_cache/finmind_inst.parquet            ← 外資淨買賣超（億元；FinMind TaiwanStockTotalInstitutionalInvestors 的
-                                             Foreign_Investor ＋ Foreign_Dealer_Self；投信、自營商不取）
+                                             Foreign_Investor；批 Z40 起不含 Foreign_Dealer_Self（外資自營商）；
+                                             投信、自營商不取；歷史列口徑見 `fetch_finmind_inst` docstring）
 data_cache/finmind_margin.parquet          ← 融資餘額（FinMind）
 data_cache/finmind_m1m2.parquet            ← M1B／M2 餘額 ＋ M1B 年增率 − M2 年增率（CBC；FinMind 無此資料，
                                              表名 finmind_ 為歷史沿用；細節見下）
@@ -244,8 +245,24 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
 
     輸出欄位：date、foreign_buy（億元，外資淨買賣超）、source、fetched_at。
     FinMind 實際欄位：['buy', 'date', 'name', 'sell']（buy／sell 單位：元）。`name` 是英文投資人類型；
-    篩含 'Foreign' 的列（外資總額 = Foreign_Investor ＋ Foreign_Dealer_Self），每列 buy − sell，
+    只取 name == "Foreign_Investor" 的列（＝ 外資及陸資，不含外資自營商），每列 buy − sell，
     依日加總後 ÷ `TWD_PER_YI` 換成億元。
+
+    批 Z40（客戶 Q-z24＝A' 官方口徑，2026-10-11）口徑標註 —— **20 年歷史不重抓，只做標註**：
+    - 官方口徑：外資 ＝ 外資及陸資（不含外資自營商）；外資自營商已含在自營商（自行＋避險）內，
+      不另加到任何一類（TWSE BFI82U notes）。
+    - `data_cache/finmind_inst.parquet` 既有列的口徑（派工規格所載實測事實，本批未重抓驗證）：
+      · 2017-12-18 前：FinMind 來源端 Foreign_Investor 本身含外資自營商；
+      · 2017-12-18 起至本批上線日：本檔以 `contains("Foreign")` 存 Foreign_Investor ＋ Foreign_Dealer_Self
+        加總（仍含外資自營商）；
+      · 本批上線日起：只取 Foreign_Investor（不含外資自營商）。
+      外資自營商 2024 年起實測約 0（同上出處），故近年兩種口徑數值差異極小，但 2017-12-18 ~ 2023 年
+      個別日可能非零（例：BFI82U 2018-03-15 外資自營商差額 -35,206,790 元）。
+    - 列級 metadata：本批起寫出的列 `source` ＝ `FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign_Investor`；
+      本批之前寫出的列為 `...:Foreign`（或更早無 source 欄 → NaN）。增量更新只抓「最後一日之後」
+      （`update_one`：start ＝ last ＋ 1 日；`_merge_dedupe` 依 date 去重），既有列不會被覆寫
+      ⇒ **讀 `source` 欄即可分辨該列是新口徑還是舊口徑**。⚠️ 例外：`--bootstrap`（整段重抓）會以
+      本批口徑重寫全部列（屆時 2017-12-18 前的列仍是 FinMind 來源端含外資自營商的 Foreign_Investor）。
 
     DL-f1-s43（2026-09-28）：原本 buy／sell 先 `fillna(0)` 再相減（違 CLAUDE.md §1）—— sell 缺值時
     當日淨額被捏成大正數、buy 缺值時捏成大負數；缺整欄時 `fi.get()` 回 None → AttributeError。改為：
@@ -259,6 +276,7 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     - ⚠️ 某日「根本沒有」某一組成列（例：只有 Foreign_Investor）不在此列，照舊以有的列加總 ——
       這不是缺值；若也剔除，會連帶改掉有值日子的輸出。
     """
+    from shared.inst_labels import is_finmind_foreign_investor   # 批 Z40 SSOT(L0)
     from shared.margin_schema import TWD_PER_YI
 
     raw = _finmind_get("TaiwanStockTotalInstitutionalInvestors",
@@ -267,7 +285,8 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
         return raw
     # FinMind 實際 name 值為英文：Foreign_Investor / Foreign_Dealer_Self /
     # Investment_Trust / Dealer_self / Dealer_Hedging / total
-    # 外資總額 = Foreign_Investor + Foreign_Dealer_Self（兩者皆 'Foreign' prefix）
+    # 批 Z40（官方口徑）：外資 = 只取 Foreign_Investor；Foreign_Dealer_Self（外資自營商）不計入
+    #   （修前 `contains("Foreign")` 會把它加進外資）。
     def _missing_columns_error(missing: list) -> RuntimeError:
         return RuntimeError(
             f"缺欄 {missing}（欄位={list(raw.columns)}）→ 算不出外資淨買賣超；"
@@ -277,7 +296,7 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
         # DL-f1-s56：缺 name 欄 ＝ 上游 schema 漂移，與缺 date／buy／sell 同處置（raise），
         # 不回空表（空表會被 `update_one` 記成「抓取結果為空」＝讀取端當「沒有新資料」）。
         raise _missing_columns_error(["name"])
-    fi = raw[raw["name"].astype(str).str.contains("Foreign", na=False)]
+    fi = raw[raw["name"].astype(str).map(is_finmind_foreign_investor)]
     if fi.empty:
         print(f"[finmind_inst] name 欄位無 'Foreign' 列，unique={list(raw['name'].unique())[:10]}")
         return pd.DataFrame()
@@ -300,7 +319,8 @@ def fetch_finmind_inst(start: _dt.date, end: _dt.date, token: str) -> pd.DataFra
     out["date"] = pd.to_datetime(out["date"]).dt.date
     # S-PROV-1 phase 13 v18.259 — provenance(schema-additive)
     if not out.empty:
-        out["source"] = "FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign"
+        # 批 Z40：source 改記 `:Foreign_Investor` ＝ 列級口徑標記（舊列為 `:Foreign`，見 docstring）
+        out["source"] = "FinMind:TaiwanStockTotalInstitutionalInvestors:Foreign_Investor"
         out["fetched_at"] = pd.Timestamp.now('UTC').isoformat()
     return out
 

@@ -22,6 +22,8 @@ from __future__ import annotations
 from src.config import FINMIND_API_URL  # Batch 10b v18.412 SSOT
 from shared.margin_schema import TWD_PER_YI  # 元 → 億 換算 SSOT(L0,§4.1)
 from shared.inst_net import InstNetDict  # 2026-09-27 外資「未觀測」旗標(加性,L0)
+from shared.inst_labels import (  # 批 Z40 法人身分別判定 SSOT(L0)
+    is_finmind_dealer, is_finmind_foreign_investor, is_foreign_dealer_label)
 
 import datetime as _dt
 import time as _time
@@ -314,15 +316,31 @@ def fetch_macro_bundle(
                     #   外資列不可解析時,下面會算出「假淨額」(缺 buy → 淨額=−sell;兩欄都缺 → 0)。
                     #   既有消費點照舊拿那個值;只把外資格標成「未觀測」給 foreign_net 燈
                     #   (→ 灰燈,⛔ 不畫假數字)。見 shared/inst_net.py。
-                    _fm_foreign_rows = _df_i['name'].astype(str).map(
-                        lambda _n: 'foreign' in _n.lower() or '外資' in _n)
+                    # 批 Z40（客戶 Q-z24＝A' 官方口徑／Q-z25＝A）：列歸屬改走單一判定 `_fm_cat` ——
+                    #   外資 ＝ 只取 Foreign_Investor（中文相容：含「外資」且非外資自營商）；
+                    #   自營商 ＝ 只取 Dealer_self ＋ Dealer_Hedging（中文相容：含「自營」且不含「外資」）；
+                    #   Foreign_Dealer_Self／「外資自營商」（同時含 foreign 與 dealer 子字串）明確排除於所有類別
+                    #   （已含在自營商自行＋避險內；修前被 'foreign' 子字串歸進外資）。
+                    def _fm_cat(_n: str):
+                        if is_foreign_dealer_label(_n):
+                            return None
+                        if is_finmind_foreign_investor(_n) or '外資' in _n:
+                            return '外資'
+                        if 'investment_trust' in _n.lower() or '投信' in _n:
+                            return '投信'
+                        if is_finmind_dealer(_n) or ('自營' in _n and '外資' not in _n):
+                            return '自營'
+                        return None
+                    _fm_cats = _df_i['name'].astype(str).map(_fm_cat)
+                    _fm_fd_n = int(_df_i['name'].astype(str).map(is_foreign_dealer_label).sum())
+                    if _fm_fd_n:
+                        print(f'[FinMind-Inst] 略過外資自營商 {_fm_fd_n} 列（官方口徑：已含在自營商自行＋避險內，不另計）')
+                    _fm_foreign_rows = _fm_cats == '外資'
                     # 批 Z36（Q-z20，客戶 2026-10-10 核准 A）：投信／自營商比照外資記「未觀測」——
                     #   列歸屬與下方迴圈同序（外資優先 → 投信 → 自營），buy／sell 不可解析即不是觀測值
                     #   （⛔ 仍不改下兩行 fillna(0)；既有消費點照舊，只有讀旗標的消費點改走缺值路徑）。
-                    _fm_trust_rows = ~_fm_foreign_rows & _df_i['name'].astype(str).map(
-                        lambda _n: 'investment_trust' in _n.lower() or '投信' in _n)
-                    _fm_dealer_rows = ~_fm_foreign_rows & ~_fm_trust_rows & _df_i['name'].astype(str).map(
-                        lambda _n: 'dealer' in _n.lower() or '自營' in _n)
+                    _fm_trust_rows = _fm_cats == '投信'
+                    _fm_dealer_rows = _fm_cats == '自營'
                     if 'buy' in _df_i.columns and 'sell' in _df_i.columns:
                         _fm_bad_rows = (_pd.to_numeric(_df_i['buy'], errors='coerce').isna()
                                         | _pd.to_numeric(_df_i['sell'], errors='coerce').isna())
@@ -339,14 +357,13 @@ def fetch_macro_bundle(
                     # FinMind name 欄為英文 key(Foreign_Investor / Investment_Trust / Dealer_*)
                     # 與 tw_macro.py:151 / hot_money.py:157 一致採英文匹配,中文為向下相容
                     inst = {}
-                    for _nm, _net in zip(_df_i['name'].astype(str), _df_i['_net']):
-                        _nl = _nm.lower()
-                        if 'foreign' in _nl or '外資' in _nm:
+                    for _cat, _net in zip(_fm_cats, _df_i['_net']):
+                        if _cat == '外資':
                             inst.setdefault('_f', 0)
                             inst['_f'] = round(inst['_f'] + _net, 2)
-                        elif 'investment_trust' in _nl or '投信' in _nm:
+                        elif _cat == '投信':
                             inst['投信'] = {'net': _net}
-                        elif 'dealer' in _nl or '自營' in _nm:
+                        elif _cat == '自營':
                             inst.setdefault('_d', 0)
                             inst['_d'] = round(inst['_d'] + _net, 2)
                     if '_f' in inst:

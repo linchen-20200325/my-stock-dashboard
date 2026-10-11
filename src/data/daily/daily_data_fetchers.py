@@ -53,6 +53,7 @@ from shared.signal_thresholds import (  # v19.74 融資餘額 §3.2 合理區間
 from shared.ttls import TTL_30MIN, TTL_1HOUR
 from shared.fail_cooldown import CachedFailure as _CachedFailure  # D2-f15 2026-09-28
 from shared.inst_net import InstNetDict  # 2026-09-27 三大法人「未觀測」旗標(加性,L0)
+from shared.inst_labels import is_foreign_dealer_label  # 批 Z40 法人身分別判定 SSOT(L0)
 from src.config import TTL_CONFIG as _TTL_CFG
 
 
@@ -337,6 +338,8 @@ def _parse_bfi82u_rows(fields: list, data: list) -> dict | None:
     #   預填 0.0 對既有消費點原樣保留;沒觀測到的 key 另記在 `InstNetDict.unobserved_net`,
     #   只有 foreign_net 燈讀它(缺外資列 ⇒ 灰燈,⛔ 不顯示「0億」)。見 shared/inst_net.py。
     _seen: set = set()
+    # 📌 批 Z40（客戶 Q-z24＝A'）更正下段 Z36 註解的「加總值照舊」：自 Z40 起「外資自營商」列**不再**併入自營商加總
+    #   （官方口徑：已含在自營商自行＋避險內）；Z36 的自營觀測旗標判定本身不變。
     # 批 Z36（Q-z20，客戶 2026-10-10 核准 A）：自營商觀測判定只看「名稱含『自營』且不含『外資』」的國內自營列
     #   （不依賴子列確切名稱；外資自營商列解析與否不影響本旗標，加總值照舊 ⛔ 不改）：任一列在但值不可解析
     #   （'--'／空白／非數字）或沒有任何一列成功解析 ⇒ 自營商未觀測。真實 0（'0'／'-0'）仍為觀測值。
@@ -361,6 +364,11 @@ def _parse_bfi82u_rows(fields: list, data: list) -> dict | None:
         elif '投信' in _nm:
             _inst['投信']['net'] = _net
             _seen.add('投信')
+        elif is_foreign_dealer_label(_nm):
+            # 批 Z40（客戶 Q-z24＝A' 官方口徑）：「外資自營商」列已含在自營商（自行＋避險）內
+            #   （BFI82U notes：外資自營商買賣金額已計入自營商買賣金額）⇒ 不得再加進自營商（修前重複計算），
+            #   也不歸外資。明確略過並 log；`_seen`／Z36 自營觀測旗標語意不變（本列本就不算國內自營觀測）。
+            print(f'[三大法人/BFI82U] 略過「{_nm}」列 {_net} 億（官方口徑：已含在自營商自行＋避險內，不另計）')
         elif '自營' in _nm:
             _inst['自營商']['net'] += _net
             _seen.add('自營商')
