@@ -364,8 +364,10 @@ def _net(monkeypatch, mod=mcf, tpex=None, twse=None, fm=None, seen=None):
         raise AssertionError(f"未預期 URL {url}")
 
     monkeypatch.setattr(mod.requests, "get", _get)
-    import src.data.proxy as _px
-    monkeypatch.setattr(_px, "fetch_url", _furl, raising=False)
+    # ⚠️ 只 patch `proxy_helper.fetch_url`(`src.data.proxy` 以 PEP 562 `__getattr__` 即時轉發);
+    #    若 patch 套件屬性,undo 會把真函式寫成套件實體屬性 → 遮住轉發 → 污染其他測試的 patch。
+    import src.data.proxy.proxy_helper as _ph
+    monkeypatch.setattr(_ph, "fetch_url", _furl)
     if hasattr(mod, "_LAST_INDUSTRY_RAW"):
         monkeypatch.setattr(mod, "_LAST_INDUSTRY_RAW", {})
 
