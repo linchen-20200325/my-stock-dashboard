@@ -53,6 +53,20 @@
 - 兩邊法人都空 → 假日/休市(跳過)。
 - 法人分項缺鍵 → NaN(不是 0);bubble_latest.json 的 NaN 一律寫成 `null`(不寫非標準 NaN token)。
 
+批 Z43(客戶 Q-z29＝A):產業別改依官方產業代碼選列 + 同義板塊標準化合併
+------------------------------------------------------------------------
+- 產業別:`fetch_industry_map_bulk()`(L1)改依官方產業代碼選列;完整選列紀錄(FinMind 全部原始列、
+  官方市場/代碼/名稱/端點、chosen label/rule)落地 `industry_raw.json`(原始資料不覆寫、可追溯);
+  `ticker_sector.json` 維持扁平 {代號: chosen label}。某市場官方端點失敗 → 該市場官方查無的代號
+  沿用上一份 `industry_raw.json` 的 chosen(有才沿用),metadata.warnings 記錄。
+- 寫入列帶 `industry_scheme`(＝`shared.industry_codes.INDUSTRY_SCHEME_VERSION`;官方端點失敗日加後綴)。
+  窗口內 `industry_scheme` 缺 / ≠ 現行版本的日子併入 R1 回補(沿用上限 25 日、每日一次、先刪舊列、
+  industry_ok/H1 守衛照舊);寫入後即為現行版本 → 不會無限回補。
+- 泡泡:`daily_net.parquet` 的 `sector` **維持原始標籤**;只在算泡泡前以 L2 `canonicalize_sector_daily`
+  (別名表 SSOT `SECTOR_CANONICAL_ALIASES`)重新彙總到標準化軸(缺值不補 0、任一成員 NaN → NaN)。
+  `bubble_latest.json` 每板塊新增 `members`(原始標籤)、頂層新增 `sector_aliases_version`;metadata
+  `bubble_window` 另記原始軸 / 標準軸的板塊數與缺席格數。
+
 CLI
 ===
     python scripts/update_sector_flow.py                 # 每晚增量(補最新交易日)
@@ -80,7 +94,13 @@ from shared.sector_flow_thresholds import (  # noqa: E402
     INDUSTRY_MAP_MAX_SHRINK_RATIO,
     WINDOW_SIZE,
 )
+from shared.industry_codes import (  # noqa: E402
+    INDUSTRY_SCHEME_DEGRADED_SUFFIX,
+    INDUSTRY_SCHEME_VERSION,
+)
+from shared.sector_flow_thresholds import SECTOR_ALIASES_VERSION, canonical_sector  # noqa: E402
 from src.compute.sector_flow import (  # noqa: E402
+    canonicalize_sector_daily,
     compute_bubble,
     compute_sector_daily_net,
 )
@@ -91,10 +111,13 @@ from src.data.core.data_loader_inst_fetchers import (  # noqa: E402
     get_tpex_day_status,
 )
 from src.data.stock.market_close_fetcher import (  # noqa: E402
+    apply_prev_chosen,
     fetch_industry_map_bulk,
     fetch_tpex_close_day,
     fetch_twse_close_day,
+    get_last_industry_raw,
     get_tpex_close_status,
+    industry_map_from_raw,
 )
 
 CACHE_DIR = Path("data_cache/sector_flow")
@@ -103,6 +126,8 @@ BUBBLE_PATH = CACHE_DIR / "bubble_latest.json"
 META_PATH = CACHE_DIR / "metadata.json"
 #: Stage 2 UI 秒讀:{裸股號: 產業別},供把使用者持股對映板塊(highlight)。
 TICKER_SECTOR_PATH = CACHE_DIR / "ticker_sector.json"
+#: 批 Z43:產業別完整選列紀錄(原始列 + 官方 + chosen)檔名;路徑一律 `CACHE_DIR / 本名`(隨 CACHE_DIR)。
+INDUSTRY_RAW_NAME = "industry_raw.json"
 
 #: bootstrap 預設回溯日曆天(≈ 20 交易日 + 週末/短假緩衝,湊滿 WINDOW_SIZE)。
 _DEFAULT_BOOTSTRAP_DAYS = 30
@@ -222,10 +247,25 @@ def _industry_bad_dates(df: pd.DataFrame | None) -> set:
     return set(_d[_bad.to_numpy()].dropna())
 
 
+def _scheme_stale_dates(df: pd.DataFrame | None) -> set:
+    """批 Z43:`industry_scheme` 缺欄 / NA / ≠ `INDUSTRY_SCHEME_VERSION` 的日子(Timestamp 集合)。
+
+    舊取法(每檔取 FinMind 第一列)寫入的日子 → 需以官方代碼選列重算;同日任一列不符即算。
+    """
+    if df is None or df.empty or "date" not in df.columns:
+        return set()
+    _d = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+    if "industry_scheme" not in df.columns:
+        return set(_d.dropna())
+    _bad = df["industry_scheme"].map(lambda v: not (isinstance(v, str) and v == INDUSTRY_SCHEME_VERSION))
+    return set(_d[_bad.to_numpy()].dropna())
+
+
 def _tpex_backfill_days(existing: pd.DataFrame | None, today: _dt.date) -> list[_dt.date]:
     """批 Z41 R1:parquet 最近 WINDOW_SIZE 個交易日中**需重算**的日子:
     `tpex_ok` 不為 True(舊列無欄 → NA 也算),或(批 Z41 修正二 QA R1)`industry_ok` **明確為 False**
-    (產業別異常期間寫入、全歸「未分類」;舊列無欄 / NA → 可信,不納入,見 `_industry_bad_dates`)。
+    (產業別異常期間寫入、全歸「未分類」;舊列無欄 / NA → 可信,不納入,見 `_industry_bad_dates`),
+    或(批 Z43)`industry_scheme` 缺 / ≠ 現行版本(見 `_scheme_stale_dates`)。
 
     同日任一列非 True 即算(同日各板塊旗標相同;保守取「全為 True 才算成功」)。
     超過 `_TPEX_BACKFILL_MAX_DAYS` → 取最近的那些。
@@ -235,7 +275,7 @@ def _tpex_backfill_days(existing: pd.DataFrame | None, today: _dt.date) -> list[
     _d = pd.to_datetime(existing["date"], errors="coerce").dt.normalize()
     _dates = sorted(x for x in _d.dropna().unique() if pd.Timestamp(x).date() <= today)
     recent = _dates[-int(WINDOW_SIZE):]
-    _ind_bad = _industry_bad_dates(existing)
+    _ind_bad = _industry_bad_dates(existing) | _scheme_stale_dates(existing)
     if "tpex_ok" in existing.columns:
         _ok = existing["tpex_ok"].map(lambda v: v is True or v is np.True_)
         _all_ok = _ok.groupby(_d).all()
@@ -448,14 +488,44 @@ def _markets_summary(diag: dict) -> dict:
     return out
 
 
+def _window_rows(full: pd.DataFrame) -> pd.DataFrame:
+    """批 Z43:長表只留最近 WINDOW_SIZE 個交易日(與 `compute_bubble` 內部取窗一致)。"""
+    if full is None or full.empty or "date" not in full.columns:
+        return full
+    _d = pd.to_datetime(full["date"], errors="coerce").dt.normalize()
+    _win = sorted(_d.dropna().unique())[-int(WINDOW_SIZE):]
+    return full[_d.isin(_win).to_numpy()]
+
+
+def _axis_meta(m: dict) -> dict:
+    return {k: m.get(k) for k in ("n_sectors", "n_trading_days_used", "n_absent_cells",
+                                  "n_missing_value_cells", "n_days_tpex_ok")}
+
+
 def _write_bubble_json(full: pd.DataFrame) -> dict:
     """由完整長表算最新泡泡座標,落 bubble_latest.json(Stage 2 秒讀)。
 
     批 Z39:NaN → `null`(`allow_nan=False` 守門,不寫非標準 NaN token);
     `tpex_complete` ＝ 窗口內每個交易日 TPEx 皆成功(舊列無旗標 → 非 True → False);
     回傳 meta 追加 `tpex_complete`。
+    批 Z43:先取窗口(近 WINDOW_SIZE 交易日)→ L2 `canonicalize_sector_daily` 標準化軸 → `compute_bubble`;
+    長表(原始標籤)不變。每板塊加 `members`(原始標籤),頂層加 `sector_aliases_version`;
+    回傳 meta 追加 `raw_axis` / `canonical_axis` / `n_member_absent_cells`。
     """
-    bubble, meta = compute_bubble(full)
+    _win = _window_rows(full)
+    _canon, _cmeta = canonicalize_sector_daily(_win)
+    _, _raw_meta = compute_bubble(_win)
+    bubble, meta = compute_bubble(_canon)
+    _members = _cmeta.get("members") or {}
+    bubble["members"] = [list(_members.get(str(x), [str(x)])) for x in bubble["sector"]] \
+        if not bubble.empty else []
+    # 批 Z43 QA2-N4:窗口內「該標準板塊有列、但只出現部分成員標籤」的日數(可追溯;不顯示)
+    _mad = _cmeta.get("member_absent_days") or {}
+    bubble["n_member_absent_days"] = [int(_mad.get(str(x), 0)) for x in bubble["sector"]] \
+        if not bubble.empty else []
+    meta["raw_axis"] = _axis_meta(_raw_meta)
+    meta["canonical_axis"] = _axis_meta(meta)
+    meta["n_member_absent_cells"] = _cmeta.get("n_member_absent_cells")
     _n_used = meta.get("n_trading_days_used") or 0
     _n_tp = meta.get("n_days_tpex_ok")
     meta["tpex_complete"] = bool(_n_tp is not None and _n_used > 0 and _n_tp == _n_used)
@@ -466,6 +536,7 @@ def _write_bubble_json(full: pd.DataFrame) -> dict:
         "n_days_tpex_ok": _n_tp,
         "tpex_complete": meta["tpex_complete"],
         "n_absent_cells": meta.get("n_absent_cells"),
+        "sector_aliases_version": SECTOR_ALIASES_VERSION,
         "sectors": bubble.to_dict(orient="records"),
     })
     BUBBLE_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2,
@@ -533,6 +604,123 @@ def _write_ticker_sector_json(industry_map: dict) -> None:
     print(f"[sector_flow] ✅ ticker_sector.json:{len(clean)} 檔 → {TICKER_SECTOR_PATH}")
 
 
+def _industry_raw_path() -> Path:
+    return CACHE_DIR / INDUSTRY_RAW_NAME
+
+
+def _load_prev_industry_raw() -> dict | None:
+    """上一份 industry_raw.json;缺 / 壞檔 / 非 dict → None(印 log,不讓 cron 炸)。"""
+    p = _industry_raw_path()
+    if not p.exists():
+        return None
+    try:
+        _v = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as e:  # noqa: BLE001 — 壞檔不得讓 cron 整個炸;印出來
+        print(f"[sector_flow] ⚠️ 讀上一份 {INDUSTRY_RAW_NAME} 失敗({type(e).__name__}: {e})")
+        return None
+    return _v if isinstance(_v, dict) else None
+
+
+def _resolve_industry(industry_map: dict | None) -> tuple[dict, dict | None, str]:
+    """批 Z43:`fetch_industry_map_bulk()` 結果 → (最終 map, 選列紀錄 | None, industry_scheme)。
+
+    - 取 L1 `get_last_industry_raw()`;其扁平 map 須與 `industry_map` 完全相同才採用(防張冠李戴)。
+    - 有官方端點失敗的市場 → `apply_prev_chosen` 以上一份 industry_raw 的 chosen 覆蓋該市場代號;
+      scheme 加 `INDUSTRY_SCHEME_DEGRADED_SUFFIX`(≠ 現行版本 → 官方恢復後回補重算)。
+    - FinMind 失敗(`finmind_status.ok` 為 False)而官方成功 → 同樣加 `INDUSTRY_SCHEME_DEGRADED_SUFFIX`
+      (批 Z43 QA1-N3:官方查無者此時無產業別,不只靠縮水守衛;FinMind 恢復後回補重算)。
+    - 拿不到對應紀錄(例:測試替身直接給 map)→ map 原樣、不落地 industry_raw、metadata.industry 記
+      `raw_available=False` + 警示;scheme 照記現行版本 —— 回補重抓只會得到同一份 map、修不好「紀錄缺」,
+      標成過期只會每日空轉(與「官方端點失敗」不同:那種官方恢復後回補就能修好,故加後綴)。
+    """
+    _map = _clean_industry_map(industry_map)
+    raw = get_last_industry_raw()
+    if not raw or _clean_industry_map(industry_map_from_raw(raw)) != _map:
+        if industry_map:
+            print("[sector_flow] ⚠️ 產業別選列紀錄缺或與 map 不符 → 不落地 industry_raw(metadata 記警示)")
+        return dict(industry_map or {}), None, INDUSTRY_SCHEME_VERSION
+    scheme = INDUSTRY_SCHEME_VERSION
+    if raw.get("unavailable_markets"):
+        raw = apply_prev_chosen(raw, _load_prev_industry_raw())
+        scheme = INDUSTRY_SCHEME_VERSION + INDUSTRY_SCHEME_DEGRADED_SUFFIX
+        _n_prev = sum(1 for r in (raw.get("codes") or {}).values()
+                      if (r.get("chosen") or {}).get("from_prev"))
+        print(f"[sector_flow] ⚠️ 官方產業別端點不可用 {raw['unavailable_markets']} → "
+              f"沿用上一份 chosen {_n_prev} 檔;scheme={scheme}")
+    if (raw.get("finmind_status") or {}).get("ok") is False:
+        scheme = INDUSTRY_SCHEME_VERSION + INDUSTRY_SCHEME_DEGRADED_SUFFIX
+        print(f"[sector_flow] ⚠️ FinMind TaiwanStockInfo 失敗 → scheme={scheme}(FinMind 恢復後回補重算)")
+    raw["scheme_written"] = scheme
+    return industry_map_from_raw(raw), raw, scheme
+
+
+def _alias_consistency(raw: dict | None) -> dict:
+    """批 Z43 QA1-N2:以**當次** industry_raw 的 chosen label × 官方代碼,檢查別名表與官方代碼是否一致。
+
+    回 {"code_to_multi_canonical": {官方代碼: {標準標籤: 檔數}}(同一官方代碼對到 >1 個標準標籤 → 漏收別名),
+        "canonical_to_multi_code": {標準標籤: {官方代碼: 檔數}}(同一標準標籤成員分屬 >1 官方代碼 → 誤併)}。
+    官方查無(official None / 無代碼)不計。兩者皆空 ＝ 一致。純計算、不改 raw。
+    """
+    c2l: dict = {}
+    l2c: dict = {}
+    for rec in ((raw or {}).get("codes") or {}).values():
+        lab = ((rec or {}).get("chosen") or {}).get("label")
+        code = ((rec or {}).get("official") or {}).get("code")
+        if not lab or not code:
+            continue
+        canon = canonical_sector(lab)
+        c2l.setdefault(str(code), {}).setdefault(canon, 0)
+        c2l[str(code)][canon] += 1
+        l2c.setdefault(canon, {}).setdefault(str(code), 0)
+        l2c[canon][str(code)] += 1
+    return {"code_to_multi_canonical": {k: v for k, v in sorted(c2l.items()) if len(v) > 1},
+            "canonical_to_multi_code": {k: v for k, v in sorted(l2c.items()) if len(v) > 1}}
+
+
+def _industry_summary(raw: dict | None, scheme: str) -> dict:
+    """metadata 用:產業別選列摘要(不含逐檔紀錄;逐檔在 industry_raw.json)。"""
+    if not raw:
+        return {"scheme": scheme, "raw_available": False,
+                "warnings": ["產業別選列紀錄不可用(map 無對應的原始列 / 官方紀錄)→ 本次未落地 "
+                             + INDUSTRY_RAW_NAME]}
+    _rules: dict = {}
+    _prev = 0
+    for rec in (raw.get("codes") or {}).values():
+        ch = rec.get("chosen") or {}
+        _rules[ch.get("rule")] = _rules.get(ch.get("rule"), 0) + 1
+        _prev += bool(ch.get("from_prev"))
+    _cons = _alias_consistency(raw)
+    _warn = list(raw.get("warnings") or [])
+    if _cons["code_to_multi_canonical"]:
+        _warn.append("別名一致性:同一官方代碼對到多個標準標籤(別名表可能漏收)="
+                     + json.dumps(_cons["code_to_multi_canonical"], ensure_ascii=False, sort_keys=True))
+    if _cons["canonical_to_multi_code"]:
+        _warn.append("別名一致性:同一標準標籤成員分屬多個官方代碼(別名可能誤併)="
+                     + json.dumps(_cons["canonical_to_multi_code"], ensure_ascii=False, sort_keys=True))
+    return {"scheme": scheme, "raw_available": True, "fetched_at": raw.get("fetched_at"),
+            "rules": _rules, "n_from_prev": _prev,
+            "official_status": raw.get("official_status"),
+            "finmind_status": raw.get("finmind_status"),
+            "unavailable_markets": raw.get("unavailable_markets") or [],
+            "alias_consistency": _cons,
+            "warnings": _warn}
+
+
+def _write_industry_raw_json(raw: dict | None, scheme: str) -> None:
+    """批 Z43:落地完整選列紀錄(原始資料可追溯)。紀錄缺 / codes 空 / **扁平 map 為空**(QA2-N5:例 FinMind 失敗且
+    官方代碼皆不在代碼表 → codes 有、但沒有任何 label)→ 不寫(保留上一份,與 ticker_sector.json 同規則,§1)。"""
+    if not raw or not raw.get("codes"):
+        print(f"[sector_flow] ⚠️ 無產業別選列紀錄 → 不寫 {INDUSTRY_RAW_NAME}(保留既有)")
+        return
+    if not industry_map_from_raw(raw):
+        print(f"[sector_flow] ⚠️ 產業別選列紀錄無任何 label → 不寫 {INDUSTRY_RAW_NAME}(保留既有)")
+        return
+    _p = _industry_raw_path()
+    _p.write_text(json.dumps(_json_safe(raw), ensure_ascii=False, sort_keys=True,
+                             separators=(",", ":")) + "\n", encoding="utf-8")
+    print(f"[sector_flow] ✅ {INDUSTRY_RAW_NAME}:{len(raw['codes'])} 檔(scheme={scheme})→ {_p}")
+
+
 def _write_metadata(full: pd.DataFrame, diag: dict, cov: dict,
                     last_error: str | None, bubble_meta: dict | None = None) -> None:
     """批 Z39:追加 per_day / markets_summary / unresolved_days / warnings。
@@ -551,6 +739,8 @@ def _write_metadata(full: pd.DataFrame, diag: dict, cov: dict,
     if diag.get("industry_map_guard"):
         _warn.append("產業別對映異常 → 本次不改寫任何既有日、回補全部跳過:"
                      + str(diag["industry_map_guard"]))
+    for _w in ((diag.get("industry") or {}).get("warnings") or []):
+        _warn.append("產業別:" + str(_w))   # 批 Z43:官方端點不可用 / 選列紀錄缺 等
     if diag.get("unresolved_expired"):
         _warn.append("unresolved_expired(超出重抓回溯窗,移出清單):"
                      + ",".join(diag["unresolved_expired"]))
@@ -581,7 +771,7 @@ def _write_metadata(full: pd.DataFrame, diag: dict, cov: dict,
         "n_days": int(pd.to_datetime(full["date"]).dt.normalize().nunique())
                   if full is not None and not full.empty else 0,
         "fetch_diag": {k: v for k, v in diag.items()
-                       if k not in ("per_day", "unresolved_days", "tpex_backfill")},
+                       if k not in ("per_day", "unresolved_days", "tpex_backfill", "industry")},
         "coverage": cov,
         "last_error": last_error,
         "warnings": _warn,
@@ -593,8 +783,13 @@ def _write_metadata(full: pd.DataFrame, diag: dict, cov: dict,
         "tpex_backfill": diag.get("tpex_backfill"),
         "bubble_window": ({k: bubble_meta.get(k) for k in
                            ("n_trading_days_used", "n_days_tpex_ok", "tpex_complete",
-                            "n_absent_cells", "n_missing_value_cells")}
+                            "n_absent_cells", "n_missing_value_cells",
+                            # 批 Z43:原始軸 / 標準化軸對照(上面幾鍵為標準化軸,即泡泡實際所用)
+                            "raw_axis", "canonical_axis", "n_member_absent_cells")}
                           if bubble_meta else None),
+        # 批 Z43:板塊名稱標準化版本 + 產業別選列摘要(規則分布 / 官方端點狀態 / scheme)
+        "sector_aliases_version": SECTOR_ALIASES_VERSION,
+        "industry": diag.get("industry"),
     }
     META_PATH.write_text(json.dumps(_json_safe(payload), ensure_ascii=False, indent=2,
                                     allow_nan=False) + "\n",
@@ -637,6 +832,8 @@ def main(argv=None) -> int:
 
     # 產業別整表(一次抓,全日共用)
     industry_map = fetch_industry_map_bulk()
+    # 批 Z43:取完整選列紀錄 → 官方失敗市場沿用上一份 chosen → 扁平 map;決定本次寫入列的 scheme
+    industry_map, _ind_raw, _scheme = _resolve_industry(industry_map)
     if not industry_map:
         # §1:無產業別 → L2 會全歸「未分類」;仍可算「全市場」但失去板塊維度 → loud
         print("[sector_flow] ⚠️ 產業別整表為空,全部將歸『未分類』桶")
@@ -666,13 +863,16 @@ def main(argv=None) -> int:
         print("[sector_flow] ⚠️ 產業別對映縮水 → 不覆寫 ticker_sector.json(保留上一份)")
     else:
         _write_ticker_sector_json(industry_map)
+        _write_industry_raw_json(_ind_raw, _scheme)   # 批 Z43:與 ticker_sector 同進退
 
     inst_df, price_df, diag = _collect_days(cand)
     _carry_unresolved(diag, _retry, _expired)
     _settle_backfill(diag, _bf_days, _bf_on, _bf_cands, _bf_skip)
     if _ind_guard:
         diag["industry_map_guard"] = _ind_guard
-    print(f"[sector_flow] fetch 診斷:{diag}")
+    diag["industry"] = _industry_summary(_ind_raw, _scheme)
+    print(f"[sector_flow] fetch 診斷:{ {k: v for k, v in diag.items() if k != 'industry'} }")
+    print(f"[sector_flow] 產業別選列:{diag['industry']}")
 
     if inst_df.empty:
         msg = "所有候選交易日皆無三大法人資料(假日/來源全敗)"
@@ -711,6 +911,8 @@ def main(argv=None) -> int:
     sector_daily = sector_daily.merge(_day_flags_frame(diag), on="date", how="left")
     # 批 Z41 修正二(QA R1):本次產業別是否可信 —— 不可信期間寫入的日子標 False,供之後自動重算
     sector_daily["industry_ok"] = not bool(_ind_guard)
+    # 批 Z43:本次產業別取法版本(≠ 現行版本的日子之後會被回補重算)
+    sector_daily["industry_scheme"] = _scheme
     sector_daily = _norm_flag_cols(sector_daily)
     sector_daily["fetched_at"] = pd.Timestamp.now("UTC").isoformat()
 

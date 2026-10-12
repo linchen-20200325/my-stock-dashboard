@@ -11,9 +11,10 @@
    incremental 每晚只補最新交易日,皆走同一函式(§5 冪等/可重現)。
 
 2. ticker → **產業別**對照:
-   - `fetch_industry_map_bulk()` : FinMind `TaiwanStockInfo` 整表(不帶 data_id;
-     非時間序列,理論不受 date-bulk gate)為主 → TWSE `t187ap03_L` + TPEX `t187ap03_O`
-     官方 openapi(T1 免 token)補齊仍缺者。
+   - `fetch_industry_map_bulk()` : 批 Z43(客戶 Q-z29＝A)起依**官方產業別代碼**選列 ——
+     FinMind `TaiwanStockInfo` 整表原始列(不帶 data_id;每檔可多列)+ 官方 openapi
+     TWSE `t187ap03_L`(上市)/ TPEx `mopsfin_t187ap03_O`(上櫃)的產業別代碼(T1 免 token),
+     規則見 `select_industry_records`;完整選列紀錄由 `get_last_industry_raw()` 交 cron 落地。
 
 §8.2 layer:L1 Data — 只 `requests` + `src.data.proxy.fetch_url`(NAS proxy → 直連降級,
 GitHub runner 免 proxy 自動直連),**不 import streamlit**、不算業務邏輯(彙總在 L2)。
@@ -258,10 +259,37 @@ def fetch_tpex_close_day(ds: str) -> dict:
 # ══════════════════════════════════════════════════════════════════════
 # 2. ticker → 產業別對照(整表 bulk)
 # ══════════════════════════════════════════════════════════════════════
-def _finmind_industry_map(token: str) -> dict:
-    """FinMind TaiwanStockInfo 整表(不帶 data_id)→ {code: industry_category}。
+#: 批 Z43(客戶 Q-z29＝A):官方「公司基本資料」openapi(產業別欄＝兩位數**代碼**;代碼 ↔ 名稱 SSOT
+#: 見 `shared.industry_codes`)。GitHub runner 探針第 7 輪 run 38191149822 實測:上市 1095 筆、上櫃 893 筆。
+#: ⚠️ 上櫃舊 URL `openapi.twse.com.tw/v1/opendata/t187ap03_O` 回 HTML(JSONDecodeError)—— 舊備援從未生效。
+TWSE_COMPANY_INFO_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
+TPEX_COMPANY_INFO_URL = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O"
+MARKET_TWSE = "上市"
+MARKET_TPEX = "上櫃"
+#: (市場, 端點, 代號欄, 產業別代碼欄) —— 欄名**完全相等**定位(探針原文),找不到 → 該市場不可用(⛔ 不猜欄)。
+_OFFICIAL_INDUSTRY_SOURCES: tuple[tuple[str, str, str, str], ...] = (
+    (MARKET_TWSE, TWSE_COMPANY_INFO_URL, "公司代號", "產業別"),
+    (MARKET_TPEX, TPEX_COMPANY_INFO_URL, "SecuritiesCompanyCode", "SecuritiesIndustryCode"),
+)
+#: FinMind `TaiwanStockInfo` 的 `type` 欄 → 市場(用來判斷「官方查無」的代號是否屬於本次官方失敗的市場)。
+_FINMIND_TYPE_MARKET = {"twse": MARKET_TWSE, "tpex": MARKET_TPEX}
 
-    憑證只走 header(不進 query string,對齊 §資安慣例)。回空 = 失敗/被 gate。
+#: 選列規則(寫進 industry_raw 每檔 `chosen.rule`;決定論、可追溯)。
+RULE_OFFICIAL_MATCH = "official_match_finmind"   # FinMind 某列 ＝ 官方名(完全或去尾「業/類」)→ 用該列 FinMind 名
+RULE_OFFICIAL_NAME = "official_name"             # 官方有產業別、FinMind 無任何列相符 → 用官方名
+RULE_NO_OFFICIAL = "finmind_no_official"         # 官方查無 / 官方名空白 / 未知代碼 → FinMind 決定論
+RULE_OFFICIAL_UNAVAILABLE = "official_unavailable"  # 該代號所屬市場官方端點本次失敗
+
+#: 最近一次 `fetch_industry_map_bulk()` 的完整選列紀錄(原始列 + 官方 + chosen);cron 落地 industry_raw 用。
+_LAST_INDUSTRY_RAW: dict = {}
+
+
+def _finmind_industry_rows(token: str) -> list[dict] | None:
+    """FinMind TaiwanStockInfo 整表(不帶 data_id)→ 原始列 list(**不去重、不丟 type/date**)。
+
+    憑證只走 header(不進 query string,對齊 §資安慣例)。失敗/被 gate → None(與「0 列」區分)。
+    批 Z43:改回傳原始列;舊版「每檔取第一個非空列」(列順序不固定、多列 date 常相同 → 約 6 成多列股取錯)
+    已移除,選列改由 `select_industry_records` 依官方產業代碼決定。
     """
     hdr = dict(_HDR_JSON)
     if token:
@@ -271,72 +299,235 @@ def _finmind_industry_map(token: str) -> dict:
                          headers=hdr, timeout=30)
         if r.status_code != 200:
             print(f"[industry/FinMind] HTTP={r.status_code} body={r.text[:160]}")
-            return {}
+            return None
         d = r.json()
         if d.get("status") != 200:
             print(f"[industry/FinMind] status={d.get('status')} "
                   f"msg={d.get('msg', '')}")
-            return {}
-        out: dict = {}
-        for row in d.get("data", []) or []:
-            code = str(row.get("stock_id", "")).strip()
-            ind = str(row.get("industry_category", "")).strip()
-            if code and ind and code not in out:
-                out[code] = ind
-        print(f"[industry/FinMind] TaiwanStockInfo: {len(out)} 檔")
-        return out
+            return None
+        rows = [x for x in (d.get("data") or []) if isinstance(x, dict)]
+        print(f"[industry/FinMind] TaiwanStockInfo: {len(rows)} 列 / "
+              f"{len({str(x.get('stock_id', '')).strip() for x in rows})} 檔")
+        return rows
     except Exception as e:
         print(f"[industry/FinMind] ❌ {type(e).__name__}: {e}")
-        return {}
+        return None
 
 
-def _openapi_industry_map() -> dict:
-    """TWSE t187ap03_L(上市)+ TPEX t187ap03_O(上櫃)官方 openapi → {code: 產業別}。
+def _official_industry_codes() -> tuple[dict, dict]:
+    """官方 openapi(上市 t187ap03_L + 上櫃 mopsfin_t187ap03_O)→ ({代號: {market, code, endpoint}}, 狀態)。
 
-    T1 免 token 備援(FinMind 被 gate 時用)。欄名容錯:公司代號/Code、產業別/
-    Industry。回空 = 全失敗。
+    狀態 = {市場: {"ok": bool, "n": int, "reason": str|None, "endpoint": url}}。
+    某市場非 200 / 非 JSON / 非 list / 0 筆 / 欄名找不到 / 0 檔可解析 → ok=False(§1 不猜、不靜默退回)。
+    同代號兩市場皆出現(轉市場過渡)→ 先到者(上市)為準並 log。
+    走 `_fetch`(fetch_url:NAS→直連降級、失敗間隔退避、只快取 200)。
     """
     out: dict = {}
-    sources = [
-        "https://openapi.twse.com.tw/v1/opendata/t187ap03_L",
-        "https://openapi.twse.com.tw/v1/opendata/t187ap03_O",
-    ]
-    for url in sources:
+    status: dict = {}
+    for market, url, k_code, k_ind in _OFFICIAL_INDUSTRY_SOURCES:
+        st = {"ok": False, "n": 0, "reason": None, "endpoint": url}
+        status[market] = st
         try:
-            r = _fetch(url, timeout=15)
+            r = _fetch(url, timeout=20)
             if r is None or getattr(r, "status_code", 0) != 200:
-                print(f"[industry/openapi] {url.split('/')[-1]} "
-                      f"HTTP={getattr(r, 'status_code', 'None')}")
+                st["reason"] = f"HTTP={getattr(r, 'status_code', 'None')}"
+                print(f"[industry/official] {market} {st['reason']} {url}")
                 continue
-            data = r.json()
-            if not isinstance(data, list):
+            try:
+                data = r.json()
+            except ValueError as e:
+                st["reason"] = f"非 JSON:{type(e).__name__}"
+                print(f"[industry/official] {market} {st['reason']} body[:200]="
+                      f"{scrubbed_body_head(r)[:200]!r}")
                 continue
-            before = len(out)
+            if not isinstance(data, list) or not data:
+                st["reason"] = f"非 list 或 0 筆({type(data).__name__})"
+                print(f"[industry/official] {market} {st['reason']}")
+                continue
+            if not isinstance(data[0], dict) or k_code not in data[0] or k_ind not in data[0]:
+                _keys = list(data[0].keys()) if isinstance(data[0], dict) else type(data[0]).__name__
+                st["reason"] = f"欄名找不到 {k_code!r}/{k_ind!r}:{_keys}"
+                print(f"[industry/official] {market} {st['reason']}")
+                continue
+            n = 0
             for item in data:
-                code = str(item.get("公司代號", item.get("Code", ""))).strip()
-                ind = str(item.get("產業別",
-                                   item.get("Industry",
-                                            item.get("industry_category", "")))
-                          ).strip()
-                if code and ind and code not in out:
-                    out[code] = ind
-            print(f"[industry/openapi] {url.split('/')[-1]}: +{len(out) - before} 檔")
+                if not isinstance(item, dict):
+                    continue
+                code = str(item.get(k_code, "")).strip()
+                ind = str(item.get(k_ind, "")).strip()
+                if not code or not ind:
+                    continue
+                n += 1
+                if code in out:
+                    print(f"[industry/official] ⚠️ {code} 同時出現於 {out[code]['market']} 與 {market}"
+                          f" → 以 {out[code]['market']} 為準")
+                    continue
+                out[code] = {"market": market, "code": ind, "endpoint": url}
+            st["n"] = n
+            if n == 0:
+                st["reason"] = "0 檔可解析(代號或產業別代碼皆空)"
+                print(f"[industry/official] {market} {st['reason']}")
+                continue
+            st["ok"] = True
+            print(f"[industry/official] {market}:{n} 檔")
         except Exception as e:
-            print(f"[industry/openapi] {url.split('/')[-1]} ❌ "
-                  f"{type(e).__name__}: {e}")
+            st["reason"] = f"{type(e).__name__}: {e}"
+            print(f"[industry/official] {market} ❌ {st['reason']}")
+    return out, status
+
+
+def _finmind_deterministic(labels_dates: list[tuple[str, str]]) -> str | None:
+    """[(label, date)] → date 最新者;同 date 取名稱字典序最小(決定論、與 API 列順序無關)。空 → None。"""
+    xs = [(lab, str(dt or "")) for lab, dt in labels_dates if lab]
+    if not xs:
+        return None
+    _latest = max(dt for _, dt in xs)
+    return min(lab for lab, dt in xs if dt == _latest)
+
+
+def select_industry_records(finmind_rows, official: dict, *,
+                            unavailable_markets=()) -> dict:
+    """純函式:FinMind 原始列 + 官方 {代號: {market, code, endpoint}} → {代號: 選列紀錄}。
+
+    每檔規則(批 Z43,決定論):
+      1. 官方代碼 → 官方名稱(`shared.industry_codes`)。
+      2. FinMind 某列與官方名「完全相同」或「去尾『業/類』後相同」→ 用該列 **FinMind 名**
+         (`official_match_finmind`;多列皆符取完全相同者,否則 date 最新、名稱字典序)。
+      3. 官方有產業名但 FinMind 無任何列相符 → 用**官方名**(`official_name`)。
+      4. 官方查無 / 官方名空白('91' TDR)/ 未知代碼 → FinMind 決定論(`finmind_no_official`)。
+      5. 官方查無且該檔 FinMind `type` 屬於本次官方失敗的市場 → FinMind 決定論、rule=`official_unavailable`
+         (cron 再以上一份 industry_raw 的 chosen 覆蓋,見 `apply_prev_chosen`)。
+    紀錄 = {"finmind": [原始 {industry_category, type, date}, …](API 原順序),
+            "official": {market, code, name, endpoint} | None,
+            "chosen": {"label": str|None, "rule": str}}。⛔ 不臆造:無任何來源 → label None。
+    """
+    from shared.industry_codes import loose_industry_name, official_industry_name
+
+    _unavail = set(unavailable_markets or ())
+    by_id: dict = {}
+    for row in finmind_rows or []:
+        if not isinstance(row, dict):
+            continue
+        sid = str(row.get("stock_id", "")).strip()
+        if not sid:
+            continue
+        by_id.setdefault(sid, []).append({
+            "industry_category": str(row.get("industry_category") or "").strip(),
+            "type": (str(row.get("type")).strip() if row.get("type") is not None else None),
+            "date": (str(row.get("date")).strip() if row.get("date") is not None else None),
+        })
+    out: dict = {}
+    for code in sorted(set(by_id) | set(official or {})):
+        fm = by_id.get(code, [])
+        _ld = [(r["industry_category"], r["date"]) for r in fm if r["industry_category"]]
+        off = (official or {}).get(code)
+        off_rec = None
+        label, rule = None, RULE_NO_OFFICIAL
+        if off is not None:
+            name = official_industry_name(off.get("code"))
+            off_rec = {"market": off.get("market"), "code": off.get("code"), "name": name,
+                       "endpoint": off.get("endpoint")}
+            if name:
+                exact = [x for x in _ld if x[0] == name]
+                loose = [x for x in _ld if loose_industry_name(x[0]) == loose_industry_name(name)]
+                if exact or loose:
+                    label, rule = _finmind_deterministic(exact or loose), RULE_OFFICIAL_MATCH
+                else:
+                    label, rule = name, RULE_OFFICIAL_NAME
+            else:
+                label = _finmind_deterministic(_ld)
+        else:
+            _mk = {_FINMIND_TYPE_MARKET.get(r["type"]) for r in fm} - {None}
+            label = _finmind_deterministic(_ld)
+            if _mk & _unavail:
+                rule = RULE_OFFICIAL_UNAVAILABLE
+        out[code] = {"finmind": fm, "official": off_rec,
+                     "chosen": {"label": label, "rule": rule}}
     return out
 
 
-def fetch_industry_map_bulk(token: str | None = None) -> dict:
-    """全市場 {股票代碼: 產業別} 整表。FinMind 主 → openapi 補齊仍缺者。
+def apply_prev_chosen(raw: dict, prev_raw) -> dict:
+    """`official_unavailable` 的代號 → 沿用上一份 industry_raw 的 chosen.label(有才沿用)。回新 dict。
 
+    沿用時 chosen 追加 `from_prev=True` 與 `prev_rule`;上一份沒有該代號 → 維持 FinMind 決定論、
+    `from_prev=False`。⛔ 不改其他代號。
+    """
+    import copy
+    new = copy.deepcopy(raw or {})
+    _prev = ((prev_raw or {}).get("codes") or {}) if isinstance(prev_raw, dict) else {}
+    for code, rec in (new.get("codes") or {}).items():
+        ch = rec.get("chosen") or {}
+        if ch.get("rule") != RULE_OFFICIAL_UNAVAILABLE:
+            continue
+        p = (_prev.get(code) or {}).get("chosen") or {}
+        if p.get("label"):
+            ch["label"] = p["label"]
+            ch["from_prev"] = True
+            ch["prev_rule"] = p.get("rule")
+        else:
+            ch["from_prev"] = False
+    return new
+
+
+def industry_map_from_raw(raw) -> dict:
+    """industry_raw → 扁平 {代號: chosen.label}(label 空者不列,⛔ 不臆造)。"""
+    out: dict = {}
+    for code, rec in ((raw or {}).get("codes") or {}).items():
+        lab = ((rec or {}).get("chosen") or {}).get("label")
+        if code and lab:
+            out[str(code)] = str(lab)
+    return out
+
+
+def get_last_industry_raw() -> dict | None:
+    """最近一次 `fetch_industry_map_bulk()` 的選列紀錄(deep copy);從未呼叫 → None。"""
+    import copy
+    return copy.deepcopy(_LAST_INDUSTRY_RAW) if _LAST_INDUSTRY_RAW else None
+
+
+def fetch_industry_map_bulk(token: str | None = None) -> dict:
+    """全市場 {股票代碼: 產業別} 整表(批 Z43:依官方產業代碼選列)。
+
+    FinMind TaiwanStockInfo 原始列 + 官方 openapi 產業代碼 → `select_industry_records`。
+    完整紀錄(原始列 / 官方 / chosen / 來源 / 狀態)存 `_LAST_INDUSTRY_RAW`(`get_last_industry_raw()`),
+    由 cron 落地 `data_cache/sector_flow/industry_raw.json`(原始資料不覆寫、可追溯)。
     §1:兩源皆空 → 回 {}(caller 決定是否致命);絕不臆造產業別。
     """
+    import datetime as _dtm
+    _LAST_INDUSTRY_RAW.clear()
     _tok = token if token is not None else _os.environ.get("FINMIND_TOKEN", "")
-    out = _finmind_industry_map(_tok)
-    # 不論 FinMind 成敗都補 openapi:填 FinMind 缺漏(新上市未收錄 / gate)
-    fallback = _openapi_industry_map()
-    for code, ind in fallback.items():
-        out.setdefault(code, ind)
-    print(f"[industry] 合併後 {len(out)} 檔(FinMind + openapi)")
+    fm_rows = _finmind_industry_rows(_tok)
+    official, status = _official_industry_codes()
+    unavailable = sorted(m for m, s in status.items() if not s.get("ok"))
+    codes = select_industry_records(fm_rows or [], official, unavailable_markets=unavailable)
+    warnings: list[str] = []
+    for m in unavailable:
+        warnings.append(f"官方產業別端點不可用:{m}({status[m].get('reason')})→ 該市場官方查無的代號"
+                        f"記 {RULE_OFFICIAL_UNAVAILABLE}(沿用上一份 chosen,否則 FinMind 決定論)")
+    if fm_rows is None:
+        warnings.append("FinMind TaiwanStockInfo 失敗 → 只有官方代碼可用(官方查無者無產業別)")
+    from shared.industry_codes import OFFICIAL_INDUSTRY_CODE_NAMES, INDUSTRY_SCHEME_VERSION
+    _unknown = sorted({v["code"] for v in official.values()
+                       if v.get("code") not in OFFICIAL_INDUSTRY_CODE_NAMES})
+    if _unknown:
+        warnings.append(f"官方產業別代碼不在代碼表:{_unknown}(⛔ 不猜名稱 → FinMind 決定論)")
+    for w in warnings:
+        print(f"[industry] ⚠️ {w}")
+    _LAST_INDUSTRY_RAW.update({
+        "scheme": INDUSTRY_SCHEME_VERSION,
+        "fetched_at": _dtm.datetime.now(_dtm.timezone.utc).isoformat(),
+        "sources": {"finmind": f"{FINMIND_URL}?dataset=TaiwanStockInfo",
+                    MARKET_TWSE: TWSE_COMPANY_INFO_URL, MARKET_TPEX: TPEX_COMPANY_INFO_URL},
+        "finmind_status": {"ok": fm_rows is not None, "n_rows": len(fm_rows or [])},
+        "official_status": status,
+        "unavailable_markets": unavailable,
+        "warnings": warnings,
+        "codes": codes,
+    })
+    out = industry_map_from_raw(_LAST_INDUSTRY_RAW)
+    _rules: dict = {}
+    for rec in codes.values():
+        _r = rec["chosen"]["rule"]
+        _rules[_r] = _rules.get(_r, 0) + 1
+    print(f"[industry] 選列後 {len(out)} 檔(規則分布 {_rules})")
     return out

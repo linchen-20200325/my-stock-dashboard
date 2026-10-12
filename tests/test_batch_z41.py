@@ -123,7 +123,10 @@ _SEQ = [0]
 
 
 def z41_revert(rel: str, code: str) -> str:
-    """現行原始碼 → 本批之前（`f0a32a3b`）原始碼（無 pair 的檔原樣）。舊批次還原鏈串接用。"""
+    """現行原始碼 → 本批之前（`f0a32a3b`）原始碼（無 pair 的檔原樣）。舊批次還原鏈串接用。
+    批 Z43（客戶 Q-z29＝A）改了 `_CLOSE` 產業別段 ⇒ 先換回 Z43 之前寫法（⛔ 不動 `Z41_REVERT_PAIRS` 本身）。"""
+    from tests.test_batch_z43 import z43_revert
+    code = z43_revert(rel, code)
     for new, old in Z41_REVERT_PAIRS.get(rel, ()):
         assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)
@@ -1042,7 +1045,10 @@ _TODAY = pd.Timestamp("2026-10-12").date()      # 週一；新日期 10-09、10-
 _IMAP = {"2330": "半導體業", "2317": "其他電子業", "6488": "半導體業", "8446": "文化創意業"}
 
 
-def _old_parquet(path, dates=_OLD_DATES, with_flag=False, flag=None):
+def _old_parquet(path, dates=_OLD_DATES, with_flag=False, flag=None, scheme=True):
+    """批 Z43 起舊列預設帶**現行** `industry_scheme`(`scheme=True`):Z43 讓「缺 scheme 欄」本身觸發回補,
+    本檔各測試要隔離驗的是 Z41 的 tpex_ok / industry_ok 語意 → 固定 scheme 為現行版本;
+    缺 scheme 的行為由 `tests/test_batch_z43.py` 驗。`scheme=False` → 與 Z41 原 fixture 逐欄相同。"""
     rows = []
     for d in dates:
         for sec in ("半導體業", "其他電子業", "舊殘留板塊"):
@@ -1051,6 +1057,9 @@ def _old_parquet(path, dates=_OLD_DATES, with_flag=False, flag=None):
                          "source": "TWSE:T86+MI_INDEX / TPEX:3itrade+otc_quotes",
                          "fetched_at": "old"})
     df = pd.DataFrame(rows)
+    if scheme:
+        from shared.industry_codes import INDUSTRY_SCHEME_VERSION
+        df["industry_scheme"] = INDUSTRY_SCHEME_VERSION
     if with_flag:
         df["twse_ok"] = True
         df["tpex_ok"] = flag

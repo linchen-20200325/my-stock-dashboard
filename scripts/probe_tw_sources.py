@@ -14,8 +14,19 @@
 - 走 production 同一條 `src.data.proxy.fetch_url`(NAS Squid → 直連降級),
   量到的就是正式環境會看到的
 
-執行模式(2026-10-11 第 5 輪起;probe workflow 只跑 `python scripts/probe_tw_sources.py` 不帶參數):
-- 無參數(預設)→ 只跑第 5 輪 `probe_round5()`(批 Z41 正式切換前實測,**唯讀**、不寫 repo 任何檔):
+執行模式(2026-10-11 第 6 輪起;probe workflow 只跑 `python scripts/probe_tw_sources.py` 不帶參數):
+- 無參數(預設)→ 只跑第 8 輪 `probe_round8()`(批 Z43 乾跑,**唯讀**、不寫檔):正式碼新產業別取法
+  `fetch_industry_map_bulk()` + 別名群組官方代碼一致性 + 20261007/20261008 正式 `_collect_days` 以舊/新 map
+  `compute_sector_daily_net` → `canonicalize_sector_daily` → `compute_bubble` 對照。請求上限 30、間隔 ≥1.5s。
+- `--round7` → 只跑第 7 輪 `probe_round7()`(官方產業別欄位驗證,批 Z43 / Q-z29,**唯讀**、不寫檔):
+  TWSE openapi t187ap03_L + ISIN strMode=2、TPEx openapi mopsfin_t187ap03_O(+ repo 現行疑錯 URL)+ ISIN
+  strMode=4、ISIN 產業別查詢頁 option、FinMind TaiwanStockInfo 原始列;對 ticker_sector.json 全量比對 +
+  9 組同義候選 + ETF/ETN 官方分類。請求上限 40、間隔 ≥1.5s。
+- `--round6` → 只跑第 6 輪 `probe_round6()`(上櫃外資量級對帳,**唯讀**、不寫檔):20260918/20260923/
+  20261008 以正式碼 `_get_tpex_day` + `fetch_tpex_close_day` 算 Σ(外資淨張×1000×收盤)億元 vs TPEx
+  insti/summary「外資及陸資(不含外資自營商)」買賣差額比值;以 `data_cache/sector_flow/ticker_sector.json`
+  映射板塊,印「半導體業」上櫃外資合計 + 前 10 大個股;印 summary 外資買進/賣出總額。請求上限 20、間隔 ≥1.5s。
+- `--round5` → 只跑第 5 輪 `probe_round5()`(批 Z41 正式切換前實測,**唯讀**、不寫 repo 任何檔):
   ① 直接呼叫正式碼 `_get_tpex_day`/`get_tpex_day_status`、`fetch_tpex_close_day`/`get_tpex_close_status`
   (交易日 20261008/20261007/20261001/20260918、非交易日 20261009/20261010);② fetch_url 直打新法人/
   新收盤端點印外殼原值(U1 收盤 tables[0].date / U2 收盤頂層 date / U3 法人 title / U4 totalCount);
@@ -32,7 +43,7 @@
   欄位口徑 + FinMind 匿名交叉驗證;探針內直接驗算(買−賣==買賣超、合計關係、
   最低<=收盤<=最高…)並印成立比例。請求數上限 40、間隔 1.5s、timeout 25s。
 - `--legacy` → 只跑舊版 PMI/出口 TARGETS + deep dumps + production smoke(原預設行為)。
-- `--all` → 第 5 輪 + 第 4 輪 + 第 3 輪 + 第 1/2 輪 + legacy 全跑。
+- `--all` → 第 8 輪 + 第 7 輪 + 第 6 輪 + 第 5 輪 + 第 4 輪 + 第 3 輪 + 第 1/2 輪 + legacy 全跑。
 """
 from __future__ import annotations
 
@@ -2303,6 +2314,787 @@ def probe_round5(fetch_url=None) -> int:
     return 0
 
 
+# ── 第 6 輪(2026-10-11):上櫃外資量級對帳 —— 板塊資金 🤖 7c1adf8a 首次 TPEx 回補後,
+#    上櫃外資板塊合計 09-18 +230.86 億 / 09-23 −172.49 億 / 10-08 −86.15 億,極端日幾乎全來自
+#    上櫃「半導體業」。以 TPEx insti/summary(官方獨立彙總)驗量級。唯讀、不寫檔。
+_R6_DATES = ('20260918', '20260923', '20261008')
+_R6_MAX_REQ = 20
+_R6_SECTOR = '半導體業'
+_R6_TOPN = 10
+
+
+def _r6_ticker_sector() -> dict:
+    p = _REPO_ROOT / 'data_cache' / 'sector_flow' / 'ticker_sector.json'
+    try:
+        d = _tw_json.loads(p.read_text(encoding='utf-8'))
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ 讀 {p} 失敗 {type(e).__name__}: {e}')
+        return {}
+    print(f'   ticker_sector.json 筆數={len(d)}(路徑 {p.relative_to(_REPO_ROOT)})')
+    return {str(k): str(v) for k, v in d.items()} if isinstance(d, dict) else {}
+
+
+def _r6_names(fetch_url, ds: str) -> dict:
+    """收盤表 cell 0/1 = 代號/名稱(同 URL+params 與正式碼一致 → 多半 Storm Shield 命中不計數)。"""
+    from shared.tpex_schema import tpex_query_date
+    try:
+        r = fetch_url(_R3_OTC, headers=_TW_HDR_TPEX_NEW,
+                      params={'date': tpex_query_date(ds), 'type': 'EW', 'id': '', 'response': 'json'},
+                      timeout=20, attempts=1)
+        _, rows = _tw_first_table(r.json() if r is not None else None)
+    except Exception as e:  # noqa: BLE001
+        print(f'   ⚠️ 名稱表取得失敗 {type(e).__name__}: {e}(名稱留空)')
+        return {}
+    return {str(_tw_cell(x, 0)).strip(): str(_tw_cell(x, 1)).strip()
+            for x in rows if isinstance(x, (list, tuple)) and len(x) > 1}
+
+
+def _r6_day(fetch_url, ds: str, sector_map: dict, parquet_df) -> None:
+    import math as _m
+    from shared.sector_flow_thresholds import is_foreign_ccy_code
+    from src.data.core.data_loader_inst_fetchers import _get_tpex_day, get_tpex_day_status
+    from src.data.stock.market_close_fetcher import fetch_tpex_close_day, get_tpex_close_status
+    print(f'\n══ {ds} ══')
+    tp = _get_tpex_day(ds) or {}
+    tc = fetch_tpex_close_day(ds) or {}
+    print(f'   法人 status={get_tpex_day_status(ds)!r} 筆數={len(tp)} | '
+          f'收盤 status={get_tpex_close_status(ds)!r} 筆數={len(tc)}')
+    tot_yi, n_used, n_nan, n_nopx, n_fx = 0.0, 0, 0, 0, 0
+    sec_rows, sec_sum = [], 0.0
+    by_sector: dict = {}
+    for code, v in tp.items():
+        fl, px = v.get('外資'), tc.get(code)
+        if fl is None or (isinstance(fl, float) and _m.isnan(fl)):
+            n_nan += 1
+            continue
+        if px is None:
+            n_nopx += 1
+            continue
+        if is_foreign_ccy_code(code):
+            n_fx += 1
+            continue
+        amt = fl * 1000 * px / 1e8   # 張 × 1000 股 × 收盤(元/股) → 億
+        tot_yi += amt
+        n_used += 1
+        sec = sector_map.get(code, '〔ticker_sector 無此代號〕')
+        by_sector[sec] = by_sector.get(sec, 0.0) + amt
+        if sec == _R6_SECTOR:
+            sec_sum += amt
+            sec_rows.append((code, fl, px, amt))
+    print(f'   Σ外資淨(張×1000×收盤/1e8)={tot_yi:,.2f} 億(用 {n_used} 檔;外資NaN 略過 {n_nan};'
+          f'無收盤 略過 {n_nopx};外幣 ETF 略過 {n_fx})')
+    try:
+        js = fetch_url(_R3_SUMMARY, headers=_TW_HDR_TPEX_NEW,
+                       params={'type': 'Daily', 'date': f'{ds[:4]}/{ds[4:6]}/{ds[6:]}',
+                               'response': 'json'}, timeout=25, attempts=1)
+        jsum = js.json() if js is not None else None
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ insti/summary 例外 {type(e).__name__}: {e}')
+        jsum = None
+    if isinstance(jsum, dict):
+        _, srows = _tw_first_table(jsum)
+        print('   insti/summary 全部列(元):')
+        for sr in srows:
+            print(f'     {list(sr)!r}')
+    lab, row = _r3_summary_row(jsum, '不含') if isinstance(jsum, dict) else (None, None)
+    buy, sell, net = ((_tw_n(_tw_cell(row, i)) for i in (1, 2, 3)) if row is not None
+                      else (None, None, None))
+    yi = (lambda x: None if x is None else x / 1e8)
+    print(f'   summary {lab!r}:買進={yi(buy)!r} 億 賣出={yi(sell)!r} 億 買賣差額={yi(net)!r} 億')
+    ratio = (tot_yi / (net / 1e8)) if net else None
+    print(f'   ▶ R6 對帳 {ds}:Σ外資金額={tot_yi:,.2f} 億 vs summary 外資差額='
+          f'{(net / 1e8 if net is not None else float("nan")):,.2f} 億 → 比值={ratio!r}')
+    if buy and sell:
+        print(f'     差額/成交(買+賣)={(net or 0) / (buy + sell):.4%};Σ金額/買進={tot_yi * 1e8 / buy:.4%}')
+    print(f'   ▶ R6 板塊「{_R6_SECTOR}」上櫃外資合計={sec_sum:,.2f} 億(檔數 {len(sec_rows)})'
+          f';占上櫃Σ外資 {sec_sum / tot_yi:.1%}' if tot_yi else '')
+    names = _r6_names(fetch_url, ds)
+    print(f'   前 {_R6_TOPN} 大貢獻(|金額| 由大到小):代號 名稱 外資淨(張) 收盤 金額(億)')
+    for code, fl, px, amt in sorted(sec_rows, key=lambda t: -abs(t[3]))[:_R6_TOPN]:
+        print(f'     {code} {names.get(code, "?")} {fl:,.0f} {px:,.2f} {amt:,.2f}')
+    pos = sum(a for *_, a in sec_rows if a > 0)
+    neg = sum(a for *_, a in sec_rows if a < 0)
+    top_sum = sum(a for *_, a in sorted(sec_rows, key=lambda t: -abs(t[3]))[:_R6_TOPN])
+    print(f'     半導體 正貢獻合計={pos:,.2f} 負貢獻合計={neg:,.2f} 前{_R6_TOPN}合計={top_sum:,.2f} 億')
+    print('   上櫃各板塊外資合計(|值|前 8):'
+          + ' | '.join(f'{s}={a:,.2f}' for s, a in sorted(by_sector.items(), key=lambda t: -abs(t[1]))[:8]))
+    if parquet_df is not None:
+        import pandas as _pd
+        sub = parquet_df[(parquet_df['date'] == _pd.Timestamp(ds)) & (parquet_df['sector'] == _R6_SECTOR)]
+        if len(sub):
+            r0 = sub.iloc[0]
+            print(f'   參考:repo daily_net.parquet {ds} {_R6_SECTOR}(上市+上櫃合併)foreign_yi='
+                  f'{r0["foreign_yi"]:,.2f} n_stocks={int(r0["n_stocks"])} tpex_ok={r0["tpex_ok"]!r}')
+        else:
+            print(f'   參考:daily_net.parquet 無 {ds} {_R6_SECTOR} 列')
+
+
+def probe_round6(fetch_url=None) -> int:
+    """第 6 輪(預設執行段,2026-10-11):上櫃外資量級對帳,**唯讀**、不寫檔、不 commit 資料。
+    對 20260918/20260923/20261008:正式碼 `_get_tpex_day` + `fetch_tpex_close_day` 算
+    Σ(外資淨張×1000×收盤)億元 vs TPEx insti/summary「外資及陸資(不含外資自營商)」買賣差額;
+    以 data_cache/sector_flow/ticker_sector.json 映射板塊,印「半導體業」外資合計與前 10 大個股;
+    另印 summary 外資買進/賣出總額。請求上限 20(Storm Shield 命中不計)、間隔 ≥1.5s。"""
+    global _R5_MAX_REQ
+    print('🔬 probe_tw_sources 第 6 輪(上櫃外資量級對帳;唯讀診斷)')
+    print(f'   PROXY_URL 設定={"是" if _tw_os.environ.get("PROXY_URL") else "否"}(值一律不印)')
+    saved_max = _R5_MAX_REQ
+    _R5_MAX_REQ = _R6_MAX_REQ
+    _R5_STATE.update(n=0, last=0.0, refused=0, cache_hit=0)
+    wrapped, restore = _r5_install_throttle()
+    if fetch_url is None:
+        fetch_url = wrapped
+    try:
+        sector_map = _r6_ticker_sector()
+        try:
+            import pandas as _pd
+            pq = _pd.read_parquet(_REPO_ROOT / 'data_cache' / 'sector_flow' / 'daily_net.parquet')
+        except Exception as e:  # noqa: BLE001
+            print(f'   ⚠️ 讀 daily_net.parquet 失敗 {type(e).__name__}: {e}')
+            pq = None
+        for ds in _R6_DATES:
+            try:
+                _r6_day(fetch_url, ds, sector_map, pq)
+            except Exception as e:  # noqa: BLE001 — 一天炸了不擋下一天,但要印出來
+                import traceback
+                print(f'   ❌ {ds} 例外 {type(e).__name__}: {e}')
+                traceback.print_exc()
+    finally:
+        restore()
+        _R5_MAX_REQ = saved_max
+    print(f'\n══ 請求總結:送出 {_R5_STATE["n"]} 個(上限 {_R6_MAX_REQ})、Storm Shield 命中 '
+          f'{_R5_STATE["cache_hit"]}、因上限拒送 {_R5_STATE["refused"]} ══')
+    return 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 2026-10-12 第 7 輪(預設執行段):官方產業別欄位驗證(批 Z43 / 客戶 Q-z29,**唯讀診斷**)
+# ──────────────────────────────────────────────────────────────────────────
+# 目的:以 TWSE / TPEx 官方原始資料(openapi t187ap03_L / mopsfin_t187ap03_O + ISIN 公開頁
+# strMode=2/4 + ISIN 產業別查詢頁 option 表)驗證 repo 現行產業別 map
+# (`fetch_industry_map_bulk`:FinMind TaiwanStockInfo 整表、每檔取「第一列」)。
+# 只印證據與統計,不下同義/重分類結論(判定由總管與另組獨立審查)。
+# 請求上限 _R7_MAX_REQ、間隔 ≥ _TW_SLEEP_S;不寫 repo 任何檔。
+# ══════════════════════════════════════════════════════════════════════════
+_R7_MAX_REQ = 40
+_R7_SAMPLES = ('2344', '2308', '2327', '3037', '2357', '2382', '2330', '3105', '8299', '6488',
+               '0050', '00679B', '006201')
+_R7_TWSE_L = 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L'
+_R7_TPEX_O = 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O'
+_R7_TPEX_O_WRONG = 'https://openapi.twse.com.tw/v1/opendata/t187ap03_O'   # repo 現行(疑錯)URL
+_R7_ISIN = 'https://isin.twse.com.tw/isin/C_public.jsp'
+_R7_ISIN_CLASS = 'https://isin.twse.com.tw/isin/class_i.jsp'
+_R7_ISIN_MAIN = 'https://isin.twse.com.tw/isin/class_main.jsp'
+_R7_FM = 'https://api.finmindtrade.com/api/v4/data'
+#: 9 組同義候選(客戶清單原樣;每組列出要比對的所有名稱)
+_R7_PAIRS = (
+    ('觀光', ('觀光事業', '觀光餐旅')),
+    ('創新板', ('創新版股票', '創新板股票', '創新版', '創新板')),
+    ('數位雲端', ('數位雲端類', '數位雲端')),
+    ('綠能環保', ('綠能環保類', '綠能環保')),
+    ('居家生活', ('居家生活類', '居家生活')),
+    ('農業科技', ('農業科技業', '農業科技')),
+    ('其他電子', ('其他電子類', '其他電子業')),
+    ('金融', ('金融業', '金融保險')),
+    ('ETF', ('上櫃ETF', '上櫃指數股票型基金(ETF)', 'ETF')),
+    ('ETN', ('指數投資證券(ETN)', 'ETN')),
+)
+
+
+def _r7_norm(s: str) -> str:
+    """只供「名稱對照」報表用的寬鬆正規化(去尾「業」「類」、去空白);**不是**同義判定。"""
+    s = str(s or '').strip().replace(' ', '').replace('　', '')
+    for suf in ('業', '類'):
+        if len(s) > 2 and s.endswith(suf):
+            s = s[:-1]
+    return s
+
+
+def _r7_get(fetch_url, label: str, url: str, params: dict | None = None,
+            headers: dict | None = None, timeout: int = 40):
+    """經 throttle 包裝的 fetch_url;回 (status, bytes, content_type) 或 (None, b'', '')。"""
+    print(f'\n── {label}')
+    try:
+        r = fetch_url(url, headers=headers, params=params, timeout=timeout, attempts=2)
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ EXC {type(e).__name__}: {_tw_redact(str(e))}')
+        return None, b'', ''
+    if r is None:
+        print('   ❌ fetch_url 回 None(非 200 / NAS→直連→中繼皆敗;見上方 [proxy] log)')
+        return None, b'', ''
+    ct = ''
+    try:
+        ct = r.headers.get('Content-Type', '') if r.headers is not None else ''
+    except Exception:  # noqa: BLE001
+        pass
+    raw = r.content or b''
+    print(f'   HTTP {getattr(r, "status_code", "?")} | Content-Type: {ct or "(無)"} | {len(raw)} bytes')
+    return getattr(r, 'status_code', None), raw, ct
+
+
+def _r7_json_list(raw: bytes, label: str):
+    try:
+        j = _tw_json.loads(raw.decode('utf-8-sig', errors='replace'))
+    except Exception as e:  # noqa: BLE001
+        print(f'   ⚠️ {label} 非 JSON({type(e).__name__}: {e});body[:300]='
+              f'{_tw_redact(raw[:300].decode("utf-8", errors="replace"))!r}')
+        return None
+    if not isinstance(j, list):
+        print(f'   ⚠️ {label} JSON 頂層非 list:{type(j).__name__} {str(j)[:300]!r}')
+        return None
+    print(f'   {label}:{len(j)} 筆;首筆 keys={list(j[0].keys()) if j and isinstance(j[0], dict) else "?"}')
+    if j and isinstance(j[0], dict):
+        print(f'   首筆原文={_tw_json.dumps(j[0], ensure_ascii=False)[:600]}')
+    return j
+
+
+def _r7_pick_key(d: dict, *needles, exclude=()) -> str | None:
+    for k in d.keys():
+        if any(n in k for n in needles) and not any(x in k for x in exclude):
+            return k
+    return None
+
+
+def _r7_openapi_codes(rows, label: str) -> dict:
+    """openapi 基本資料 → {代號: 產業別欄原值};欄名動態偵測並印出。"""
+    if not rows or not isinstance(rows[0], dict):
+        return {}
+    k_code = (_r7_pick_key(rows[0], '公司代號') or _r7_pick_key(rows[0], 'SecuritiesCompanyCode')
+              or _r7_pick_key(rows[0], 'Code', exclude=('Industry',)))
+    k_ind = (_r7_pick_key(rows[0], '產業別') or _r7_pick_key(rows[0], 'Industry'))
+    print(f'   {label} 欄位定位:代號欄={k_code!r} 產業別欄={k_ind!r}')
+    if not k_code or not k_ind:
+        return {}
+    out = {}
+    for x in rows:
+        c = str(x.get(k_code, '')).strip()
+        if c:
+            out[c] = str(x.get(k_ind, '')).strip()
+    from collections import Counter
+    cnt = Counter(out.values())
+    print(f'   {label} 產業別欄值分布({len(cnt)} 種):'
+          + ', '.join(f'{k!r}:{v}' for k, v in sorted(cnt.items())))
+    return out
+
+
+def _r7_strip_tags(s: str) -> str:
+    s = re.sub(r'<[^>]+>', '', s)
+    return s.replace('&nbsp;', ' ').strip()
+
+
+def _r7_parse_isin(raw: bytes, label: str) -> dict:
+    """ISIN 公開頁(Big5/cp950)→ {代號: dict(name, isin, listed, market, industry, cfi, section)}。
+    section ＝ 該列所屬「證券類別」標題列(colspan 標題,例:股票 / ETF / ETN …)。"""
+    text = raw.decode('cp950', errors='replace')
+    print(f'   {label}:cp950 解碼 {len(text)} 字;替換字元 � 數={text.count(chr(0xFFFD))}')
+    m = re.search(r'<tr[^>]*>(.*?)</tr>', text, flags=re.S | re.I)
+    out: dict = {}
+    section = ''
+    header_printed = False
+    from collections import Counter
+    sec_cnt: Counter = Counter()
+    for tr in re.findall(r'<tr[^>]*>(.*?)</tr>', text, flags=re.S | re.I):
+        tds = [_r7_strip_tags(t) for t in re.findall(r'<td[^>]*>(.*?)</td>', tr, flags=re.S | re.I)]
+        if len(tds) == 1 and tds[0]:
+            section = tds[0].strip()
+            continue
+        if len(tds) < 5:
+            continue
+        if not header_printed and ('有價證券代號' in tds[0] or '國際證券' in ''.join(tds)):
+            print(f'   {label} 表頭={tds}')
+            header_printed = True
+            continue
+        first = tds[0].replace('　', ' ').strip()
+        parts = first.split(None, 1)
+        if not parts:
+            continue
+        code = parts[0].strip()
+        out[code] = dict(name=parts[1].strip() if len(parts) > 1 else '', isin=tds[1],
+                         listed=tds[2], market=tds[3], industry=tds[4],
+                         cfi=tds[5] if len(tds) > 5 else '', section=section)
+        sec_cnt[section] += 1
+    if m is None:
+        print(f'   ⚠️ {label} 找不到 <tr>;text[:300]={text[:300]!r}')
+    print(f'   {label}:解析 {len(out)} 列;證券類別(標題列)分布:'
+          + ', '.join(f'{k!r}:{v}' for k, v in sec_cnt.items()))
+    return out
+
+
+def _r7_decode(raw: bytes, ct: str) -> str:
+    """依 Content-Type charset 解碼(第 1 次實跑:class_i.jsp 為 utf-8、C_public.jsp 為 MS950)。"""
+    m = re.search(r'charset=([\w-]+)', ct or '', flags=re.I)
+    cs = (m.group(1).lower() if m else 'cp950')
+    cs = 'cp950' if cs in ('ms950', 'big5') else cs
+    return raw.decode(cs, errors='replace')
+
+
+def _r7_parse_class_main(raw: bytes, ct: str, label: str) -> None:
+    """ISIN 依產業別查詢結果頁 → 印表頭、列數、產業別欄值分布、前 5 列。"""
+    from collections import Counter
+    text = _r7_decode(raw, ct)
+    rows = []
+    for tr in re.findall(r'<tr[^>]*>(.*?)</tr>', text, flags=re.S | re.I):
+        tds = [_r7_strip_tags(t) for t in re.findall(r'<td[^>]*>(.*?)</td>', tr, flags=re.S | re.I)]
+        if len(tds) >= 5:
+            rows.append(tds)
+    if not rows:
+        print(f'   ⚠️ {label} 無表格列;text[:300]={text[:300]!r}')
+        return
+    hdr, body = rows[0], rows[1:]
+    print(f'   {label} 表頭={hdr};資料列 {len(body)}')
+    k = next((i for i, h in enumerate(hdr) if '產業別' in h), None)
+    if k is not None:
+        print(f'   {label} 產業別欄值分布={dict(Counter(r[k] for r in body if len(r) > k))}')
+    for r in body[:5]:
+        print(f'      {r}')
+
+
+def _r7_parse_class_options(raw: bytes, label: str, ct: str = '') -> None:
+    """ISIN 產業別查詢頁的 <select> option(value ↔ 文字)原樣印出(官方代碼↔名稱)。"""
+    text = _r7_decode(raw, ct)
+    sels = re.findall(r'<select[^>]*name=["\']?([\w]+)["\']?[^>]*>(.*?)</select>', text, flags=re.S | re.I)
+    if not sels:
+        print(f'   ⚠️ {label} 無 <select>;text[:400]={text[:400]!r}')
+    for name, body in sels:
+        opts = re.findall(r'<option[^>]*value=["\']?([^"\'>\s]*)["\']?[^>]*>([^<]*)', body, flags=re.I)
+        print(f'   {label} <select name={name}> {len(opts)} 個 option:')
+        print('      ' + ' | '.join(f'{v}={t.strip()}' for v, t in opts))
+
+
+def _r7_finmind_rows(token: str) -> list:
+    import requests
+    _r5_manual_count('FinMind TaiwanStockInfo 整表(與正式碼同:不帶 data_id;token 走 header)')
+    hdr = {'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}
+    if token:
+        hdr['Authorization'] = f'Bearer {token}'
+    try:
+        r = requests.get(_R7_FM, params={'dataset': 'TaiwanStockInfo'}, headers=hdr, timeout=60)
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ FinMind EXC {type(e).__name__}: {_tw_redact(str(e))}')
+        return []
+    finally:
+        _R5_STATE['last'] = _tw_time.time()
+    print(f'   FinMind HTTP {r.status_code} | {len(r.content)} bytes | token={"有" if token else "無(匿名)"}')
+    try:
+        d = r.json()
+    except Exception as e:  # noqa: BLE001
+        print(f'   ❌ FinMind 非 JSON {type(e).__name__};body[:200]={_tw_redact(r.text[:200])!r}')
+        return []
+    print(f'   FinMind status={d.get("status")} msg={d.get("msg")!r} rows={len(d.get("data") or [])}')
+    return list(d.get('data') or [])
+
+
+def _r7_examples(codes, n=3) -> str:
+    return ','.join(sorted(codes)[:n])
+
+
+def probe_round7(fetch_url=None) -> int:
+    """第 7 輪(預設執行段,2026-10-12):官方產業別欄位驗證(Q-z29),**唯讀**、不寫檔。"""
+    global _R5_MAX_REQ
+    from collections import Counter, defaultdict
+    print('🔬 probe_tw_sources 第 7 輪(官方產業別欄位驗證;唯讀診斷)')
+    print(f'   PROXY_URL 設定={"是" if _tw_os.environ.get("PROXY_URL") else "否"}(值一律不印)')
+    saved_max = _R5_MAX_REQ
+    _R5_MAX_REQ = _R7_MAX_REQ
+    _R5_STATE.update(n=0, last=0.0, refused=0, cache_hit=0)
+    wrapped, restore = _r5_install_throttle()
+    if fetch_url is None:
+        fetch_url = wrapped
+    hdr_html = {'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html,*/*'}
+    hdr_json = {'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}
+    try:
+        cur = _r6_ticker_sector()
+
+        print('\n════ ① TWSE 上市:openapi t187ap03_L + ISIN strMode=2 ════')
+        st, raw, _ = _r7_get(fetch_url, 'TWSE openapi t187ap03_L', _R7_TWSE_L, headers=hdr_json)
+        l_rows = _r7_json_list(raw, 't187ap03_L') if st == 200 else None
+        l_code = _r7_openapi_codes(l_rows, 't187ap03_L') if l_rows else {}
+        st, raw, _ = _r7_get(fetch_url, 'ISIN 上市 strMode=2', _R7_ISIN, params={'strMode': '2'},
+                             headers=hdr_html, timeout=60)
+        isin_l = _r7_parse_isin(raw, 'ISIN strMode=2') if st == 200 else {}
+
+        print('\n════ ② TPEx 上櫃:openapi mopsfin_t187ap03_O(正確 URL)+ repo 現行 URL + ISIN strMode=4 ════')
+        st, raw, _ = _r7_get(fetch_url, 'TPEx openapi mopsfin_t187ap03_O', _R7_TPEX_O, headers=hdr_json)
+        o_rows = _r7_json_list(raw, 'mopsfin_t187ap03_O') if st == 200 else None
+        o_code = _r7_openapi_codes(o_rows, 'mopsfin_t187ap03_O') if o_rows else {}
+        st, raw, ct = _r7_get(fetch_url, 'repo 現行 URL openapi.twse t187ap03_O(疑錯)', _R7_TPEX_O_WRONG,
+                              headers=hdr_json)
+        if st is not None:
+            print(f'   body[:300]={_tw_redact(raw[:300].decode("utf-8", errors="replace"))!r}')
+            _r7_json_list(raw, 'openapi.twse t187ap03_O')
+        st, raw, _ = _r7_get(fetch_url, 'ISIN 上櫃 strMode=4', _R7_ISIN, params={'strMode': '4'},
+                             headers=hdr_html, timeout=60)
+        isin_o = _r7_parse_isin(raw, 'ISIN strMode=4') if st == 200 else {}
+
+        print('\n════ ③ 官方 產業別代碼 ↔ 名稱 ════')
+        # 第 1 次實跑:kind=1 HTTP 200(utf-8);kind=2 HTTP 500 → 第 2 次只打 kind=1
+        st, raw, ct = _r7_get(fetch_url, 'ISIN 產業別查詢頁 class_i.jsp?kind=1', _R7_ISIN_CLASS,
+                              params={'kind': '1'}, headers=hdr_html)
+        if st == 200:
+            _r7_parse_class_options(raw, 'class_i kind=1', ct)
+        # 官方「依產業別查詢」結果頁:市場 × 產業別代碼(1=上市、2=上櫃;依 class_i market option)
+        for mkt, ic in (('1', '13'), ('2', '17'), ('1', '17'), ('2', '16'), ('1', '07')):
+            st, raw, ct = _r7_get(fetch_url, f'ISIN class_main market={mkt} industry_code={ic}', _R7_ISIN_MAIN,
+                                  params={'market': mkt, 'issuetype': '', 'industry_code': ic,
+                                          'owncode': '', 'stockname': '', 'isincode': '',
+                                          'Page': '1', 'chklike': 'Y'}, headers=hdr_html)
+            if st == 200:
+                _r7_parse_class_main(raw, ct, f'class_main m={mkt} ic={ic}')
+        for mk, codes, isin in (('上市', l_code, isin_l), ('上櫃', o_code, isin_o)):
+            pairs: dict = defaultdict(Counter)
+            for c, code in codes.items():
+                nm = isin.get(c, {}).get('industry')
+                if nm is not None:
+                    pairs[code][nm] += 1
+            print(f'   {mk}:openapi 代碼 × ISIN 名稱 交叉(代號 join;{len(codes)} 檔 openapi / '
+                  f'{sum(1 for c in codes if c in isin)} 檔 join 成功):')
+            for code in sorted(pairs, key=lambda x: (len(x), x)):
+                print(f'      代碼 {code!r} → ' + ', '.join(f'{n!r}×{k}' for n, k in pairs[code].most_common()))
+
+        print('\n════ ④ FinMind TaiwanStockInfo 原始列 ════')
+        fm = _r7_finmind_rows(_tw_os.environ.get('FINMIND_TOKEN', ''))
+        by_id: dict = defaultdict(list)
+        for row in fm:
+            by_id[str(row.get('stock_id', '')).strip()].append(row)
+        if fm:
+            print(f'   欄位={list(fm[0].keys())};不同 stock_id={len(by_id)};'
+                  f'多列者={sum(1 for v in by_id.values() if len(v) > 1)}')
+            print(f'   type 分布={dict(Counter(str(r.get("type")) for r in fm))}')
+        for t in _R7_SAMPLES:
+            rows = by_id.get(t, [])
+            print(f'   {t}:{len(rows)} 列(API 回傳順序;正式碼取第一列非空 industry_category)')
+            for r in rows:
+                print(f'      industry_category={r.get("industry_category")!r} type={r.get("type")!r} '
+                      f'date={r.get("date")!r} name={r.get("stock_name")!r}')
+            print(f'      ↳ 現行 map={cur.get(t)!r} | ISIN 上市={isin_l.get(t, {}).get("industry")!r} '
+                  f'類別={isin_l.get(t, {}).get("section")!r} | ISIN 上櫃={isin_o.get(t, {}).get("industry")!r} '
+                  f'類別={isin_o.get(t, {}).get("section")!r} | openapi 代碼 上市={l_code.get(t)!r} 上櫃={o_code.get(t)!r}')
+        # 重現正式碼取法(第一列非空)→ 與檔案比對;另算「最新 date 列」取法
+        first_map, latest_map = {}, {}
+        for sid, rows in by_id.items():
+            for r in rows:
+                ind = str(r.get('industry_category', '')).strip()
+                if ind and sid not in first_map:
+                    first_map[sid] = ind
+            dated = [r for r in rows if str(r.get('industry_category', '')).strip()]
+            if dated:
+                latest_map[sid] = str(max(dated, key=lambda r: str(r.get('date') or ''))
+                                      .get('industry_category')).strip()
+        if by_id:
+            same_file = sum(1 for k, v in cur.items() if first_map.get(k) == v)
+            in_fm = sum(1 for k in cur if k in first_map)
+            print(f'   重現正式碼「第一列」取法:現行檔 {len(cur)} 檔中 FinMind 有 {in_fm} 檔,'
+                  f'其中與檔案相同 {same_file} 檔')
+            diff_fl = Counter((first_map[k], latest_map[k]) for k in first_map
+                              if latest_map.get(k) and latest_map[k] != first_map[k])
+            print(f'   「第一列」≠「最新 date 列」:{sum(diff_fl.values())} 檔;前 20 組:')
+            for (a, b), n in diff_fl.most_common(20):
+                ex = [k for k in first_map if first_map[k] == a and latest_map.get(k) == b][:3]
+                print(f'      第一列={a!r} → 最新列={b!r} ×{n}  例 {ex}')
+            multi_ind = Counter()
+            for sid, rows in by_id.items():
+                cats = {str(r.get('industry_category', '')).strip() for r in rows}
+                if len(cats) > 1:
+                    multi_ind[tuple(sorted(cats))] += 1
+            print(f'   同一 stock_id 有多個不同 industry_category:{sum(multi_ind.values())} 檔;前 20 組:')
+            for cats, n in multi_ind.most_common(20):
+                print(f'      {list(cats)} ×{n}')
+
+        print('\n════ ⑤ 全量比對:現行 map vs 官方 ISIN 產業別 ════')
+        official: dict = {}
+        for c, d in isin_l.items():
+            official[c] = ('上市', d)
+        for c, d in isin_o.items():
+            official.setdefault(c, ('上櫃', d))
+        # ⑤-a FinMind 多列 vs 官方:哪一列(API 順序 index)與官方產業別完全相同
+        pos: Counter = Counter()
+        extra: Counter = Counter()
+        extra_ex: dict = defaultdict(list)
+        for sid, rows in by_id.items():
+            cats = [str(r.get('industry_category', '')).strip() for r in rows]
+            if len(set(cats)) < 2 or sid not in official or not official[sid][1]['industry']:
+                continue
+            oi = official[sid][1]['industry']
+            hit = [i for i, c in enumerate(cats) if c == oi]
+            hitn = [i for i, c in enumerate(cats) if _r7_norm(c) == _r7_norm(oi)]
+            pos['完全相同在第1列' if hit and hit[0] == 0 else '完全相同在第2+列' if hit
+                else '僅寬鬆相同在第1列' if hitn and hitn[0] == 0 else '僅寬鬆相同在第2+列' if hitn
+                else '無任何列相同'] += 1
+            for i, c in enumerate(cats):
+                if i not in hitn:
+                    key = (c, f'{official[sid][0]}:{oi}')
+                    extra[key] += 1
+                    if len(extra_ex[key]) < 3:
+                        extra_ex[key].append(sid)
+        print(f'   FinMind 多產業別列且官方有產業別者:與官方相同之列位置 {dict(pos)}')
+        print('   多列中「與官方不符的那一列」(FinMind 該列, 市場:官方名) 前 25:')
+        for k, n in extra.most_common(25):
+            print(f'      {k[0]!r} | 官方 {k[1]!r} ×{n}  例 {extra_ex[k]}')
+        same = norm_same = 0
+        mism: Counter = Counter()
+        mism_ex: dict = defaultdict(list)
+        missing = []
+        blank_official: Counter = Counter()
+        for c, v in cur.items():
+            o = official.get(c)
+            if o is None:
+                missing.append(c)
+                continue
+            oi = o[1]['industry']
+            if not oi:
+                blank_official[(v, o[0], o[1]['section'])] += 1
+                continue
+            if oi == v:
+                same += 1
+            else:
+                if _r7_norm(oi) == _r7_norm(v):
+                    norm_same += 1
+                mism[(v, f'{o[0]}:{oi}')] += 1
+                if len(mism_ex[(v, f'{o[0]}:{oi}')]) < 3:
+                    mism_ex[(v, f'{o[0]}:{oi}')].append(c)
+        print(f'   現行 map {len(cur)} 檔:官方產業別完全一致 {same};不一致 {sum(mism.values())}'
+              f'(其中僅差尾字「業/類」{norm_same});官方產業別欄空白 {sum(blank_official.values())};'
+              f'官方 ISIN 查無 {len(missing)}')
+        print('   不一致 (現行名, 市場:官方名) 前 30:')
+        for k, n in mism.most_common(30):
+            print(f'      {k[0]!r} vs {k[1]!r} ×{n}  例 {mism_ex[k]}')
+        print('   官方產業別空白者 (現行名, 市場, ISIN 證券類別) 前 20:')
+        for k, n in blank_official.most_common(20):
+            print(f'      {k} ×{n}')
+        print(f'   官方查無代號例(前 20):{sorted(missing)[:20]}')
+        print(f'   官方查無者 FinMind type 組合分布:'
+              f'{dict(Counter(tuple(sorted({str(r.get("type")) for r in by_id.get(c, [])})) for c in missing))}')
+        alt_ok = sum(1 for c, v in cur.items() if c in official and official[c][1]['industry']
+                     and official[c][1]['industry'] != v
+                     and any(str(r.get('industry_category', '')).strip() == official[c][1]['industry']
+                             for r in by_id.get(c, [])))
+        alt_n = sum(1 for c, v in cur.items() if c in official and official[c][1]['industry']
+                    and official[c][1]['industry'] != v
+                    and any(_r7_norm(str(r.get('industry_category', ''))) == _r7_norm(official[c][1]['industry'])
+                            for r in by_id.get(c, [])))
+        print(f'   不一致者中:FinMind 另有一列與官方完全相同 {alt_ok} 檔;寬鬆相同(去尾業/類){alt_n} 檔')
+        print(f'   官方查無者現行名分布:{dict(Counter(cur[c] for c in missing).most_common(15))}')
+        for tgt in ('電子工業', '化學生技醫療'):
+            codes = [c for c, v in cur.items() if v == tgt]
+            dist: Counter = Counter()
+            ex: dict = defaultdict(list)
+            for c in codes:
+                o = official.get(c)
+                key = f'{o[0]}:{o[1]["industry"] or "(空)"}' if o else '(官方查無)'
+                dist[key] += 1
+                if len(ex[key]) < 4:
+                    ex[key].append(c)
+            print(f'   現行「{tgt}」{len(codes)} 檔 → 官方產業別分布:')
+            for k, n in dist.most_common():
+                print(f'      {k} ×{n}  例 {ex[k]}')
+        off_l = Counter(d['industry'] for d in isin_l.values() if d['section'] == '股票')
+        off_o = Counter(d['industry'] for d in isin_o.values() if d['section'] == '股票')
+        print(f'   官方 ISIN 上市「股票」類別 產業別名稱({len(off_l)} 種):'
+              + ', '.join(f'{k!r}:{v}' for k, v in sorted(off_l.items())))
+        print(f'   官方 ISIN 上櫃「股票」類別 產業別名稱({len(off_o)} 種):'
+              + ', '.join(f'{k!r}:{v}' for k, v in sorted(off_o.items())))
+
+        print('\n════ ⑥ 同義候選驗證 ════')
+        for grp, names in _R7_PAIRS:
+            print(f'   ◆ {grp}')
+            for nm in names:
+                cur_codes = [c for c, v in cur.items() if v == nm]
+                fm_codes = [c for c, v in first_map.items() if v == nm]
+                isl = [c for c, d in isin_l.items() if d['industry'] == nm]
+                iso = [c for c, d in isin_o.items() if d['industry'] == nm]
+                seclist = [d['section'] for c, d in isin_l.items() if d['section'] == nm] + \
+                          [d['section'] for c, d in isin_o.items() if d['section'] == nm]
+                print(f'      {nm!r}:現行map {len(cur_codes)} 檔 例[{_r7_examples(cur_codes)}] | '
+                      f'FinMind第一列 {len(fm_codes)} | ISIN上市產業別 {len(isl)} 例[{_r7_examples(isl)}] | '
+                      f'ISIN上櫃產業別 {len(iso)} 例[{_r7_examples(iso)}] | 作為 ISIN 證券類別標題 {len(seclist)} 列')
+                nl = Counter(d['industry'] for d in isin_l.values() if d['industry'] and _r7_norm(d['industry']) == _r7_norm(nm))
+                no = Counter(d['industry'] for d in isin_o.values() if d['industry'] and _r7_norm(d['industry']) == _r7_norm(nm))
+                print(f'         ISIN 寬鬆同名(去尾業/類,僅供定位原文)上市{dict(nl)} 上櫃{dict(no)}')
+                if cur_codes:
+                    oc_l = Counter(l_code.get(c) for c in cur_codes if c in l_code)
+                    oc_o = Counter(o_code.get(c) for c in cur_codes if c in o_code)
+                    off = Counter(f'{official[c][0]}:{official[c][1]["industry"] or "(空)"}|'
+                                  f'{official[c][1]["section"]}' for c in cur_codes if c in official)
+                    print(f'         現行 map 成分股 → openapi 代碼 上市{dict(oc_l)} 上櫃{dict(oc_o)};'
+                          f' 官方 ISIN(市場:產業別|證券類別){dict(off.most_common(6))};'
+                          f' 官方查無 {sum(1 for c in cur_codes if c not in official)}')
+
+        print('\n════ ⑦ ETF / ETN 官方分類(ISIN 證券類別標題 + 產業別欄 + CFI) ════')
+        for mk, isin in (('上市', isin_l), ('上櫃', isin_o)):
+            secs = Counter(d['section'] for d in isin.values())
+            for sec in secs:
+                if any(k in sec for k in ('ETF', 'ETN', '指數', '受益', '存託')):
+                    rows = [(c, d) for c, d in isin.items() if d['section'] == sec]
+                    ind = Counter(d['industry'] or '(空)' for _, d in rows)
+                    cfi = Counter(d['cfi'][:2] for _, d in rows)
+                    print(f'   {mk} 證券類別={sec!r}:{len(rows)} 檔;產業別欄={dict(ind)};CFI 前2碼={dict(cfi)};'
+                          f'例 {[(c, d["name"]) for c, d in rows[:3]]}')
+            for t in ('0050', '00679B', '006201'):
+                if t in isin:
+                    print(f'      {mk} {t}:{isin[t]}')
+        etf_cur = Counter(v for c, v in cur.items() if c.startswith('00'))
+        print(f'   現行 map 中代號以 00 開頭者 現行名分布:{dict(etf_cur)}')
+    finally:
+        restore()
+        _R5_MAX_REQ = saved_max
+    print(f'\n══ 請求總結:送出 {_R5_STATE["n"]} 個(上限 {_R7_MAX_REQ})、Storm Shield 命中 '
+          f'{_R5_STATE["cache_hit"]}、因上限拒送 {_R5_STATE["refused"]} ══')
+    return 0
+
+
+_R8_MAX_REQ = 30
+_R8_DAYS = ('20261007', '20261008')
+
+
+def _r8_totals(df) -> dict:
+    """sector_daily → {date: (Σforeign, Σtrust, Σdealer, Σnet, Σn_stocks)}(NaN 列以 min_count=1 加總)。"""
+    out = {}
+    if df is None or df.empty:
+        return out
+    for d, g in df.groupby('date'):
+        out[str(d)[:10]] = tuple(round(float(g[c].sum(min_count=1)), 6)
+                                 for c in ('foreign_yi', 'trust_yi', 'dealer_yi', 'net_amt_yi')) \
+            + (int(g['n_stocks'].sum()),)
+    return out
+
+
+def probe_round8(fetch_url=None) -> int:
+    """第 8 輪(預設執行段,2026-10-12):批 Z43 新產業別取法 + 板塊標準化 乾跑(**唯讀**、不寫任何檔)。
+
+    ① 呼叫正式碼 `fetch_industry_map_bulk()`(FinMind 原始列 + 官方 openapi 代碼選列)→ 官方端點狀態 /
+       規則分布 / 舊 map(repo `ticker_sector.json`)vs 新 map 差異;
+    ② 別名群組官方代碼一致性(每個標準板塊的成員標籤,其成員股官方代碼是否同一)+ 同代碼多標準標籤檢查;
+    ③ 印 label→官方代碼 計數(一行 JSON,供測試 fixture);
+    ④ 20261007 / 20261008 以正式 `_collect_days` + `compute_sector_daily_net`(舊 map / 新 map)+
+       `canonicalize_sector_daily` + `compute_bubble` 乾跑:板塊數、成分股數變化前 20、每日三分項總額。
+    請求上限 30、間隔 ≥1.5s。
+    """
+    global _R5_MAX_REQ
+    from collections import Counter, defaultdict
+    import pandas as _pd
+    print('🔬 probe_tw_sources 第 8 輪(批 Z43 新產業別取法 + 板塊標準化乾跑;唯讀、不寫檔)')
+    saved_max = _R5_MAX_REQ
+    _R5_MAX_REQ = _R8_MAX_REQ
+    _R5_STATE.update(n=0, last=0.0, refused=0, cache_hit=0)
+    wrapped, restore = _r5_install_throttle()
+    try:
+        import scripts.update_sector_flow as U
+        import src.data.stock.market_close_fetcher as M
+        from shared.sector_flow_thresholds import (SECTOR_ALIASES_VERSION, SECTOR_CANONICAL_ALIASES,
+                                                   canonical_sector)
+        from src.compute.sector_flow import (canonicalize_sector_daily, compute_bubble,
+                                             compute_sector_daily_net)
+        old_map = _r6_ticker_sector()
+
+        print('\n════ ① 正式碼 fetch_industry_map_bulk()(新取法)════')
+        _r5_manual_count('FinMind TaiwanStockInfo(正式碼 requests.get)')
+        new_map = M.fetch_industry_map_bulk()
+        raw = M.get_last_industry_raw() or {}
+        print(f'   finmind_status={raw.get("finmind_status")}')
+        print(f'   official_status={_tw_json.dumps(raw.get("official_status"), ensure_ascii=False)}')
+        print(f'   unavailable_markets={raw.get("unavailable_markets")} warnings={raw.get("warnings")}')
+        codes = raw.get('codes') or {}
+        rules = Counter((r.get('chosen') or {}).get('rule') for r in codes.values())
+        print(f'   新 map {len(new_map)} 檔;選列紀錄 {len(codes)} 檔;規則分布={dict(rules)}')
+        _m2, _raw2, scheme = U._resolve_industry(new_map)
+        print(f'   cron _resolve_industry → scheme={scheme!r};map 一致={_m2 == new_map}')
+        for t in ('2344', '2308', '2330', '3105', '0050', '00679B', '2729', '6028', '2801', '2941', '6870'):
+            rec = codes.get(t) or {}
+            print(f'   {t}:舊={old_map.get(t)!r} 新={new_map.get(t)!r} rule={(rec.get("chosen") or {}).get("rule")} '
+                  f'官方={rec.get("official")} FinMind列={[(x["industry_category"], x["type"], x["date"]) for x in rec.get("finmind") or []]}')
+        flips = Counter((old_map.get(c), new_map.get(c)) for c in set(old_map) | set(new_map)
+                        if old_map.get(c) != new_map.get(c))
+        print(f'   舊 map vs 新 map 標籤不同:{sum(flips.values())} 檔;前 30 組 (舊→新):')
+        for (a, b), n in flips.most_common(30):
+            print(f'      {a!r} → {b!r} ×{n}')
+        print(f'   新 map 標籤種類 {len(set(new_map.values()))}(舊 {len(set(old_map.values()))});'
+              f'新 map 標籤分布={dict(Counter(new_map.values()).most_common())}')
+
+        print('\n════ ② 別名群組官方代碼一致性 ════')
+        lab_codes: dict = defaultdict(Counter)
+        for c, lab in new_map.items():
+            off = (codes.get(c) or {}).get('official') or {}
+            lab_codes[lab][off.get('code') or '-'] += 1
+        groups: dict = defaultdict(set)
+        for lab in lab_codes:
+            groups[canonical_sector(lab)].add(lab)
+        for canon, mem in sorted(groups.items()):
+            if len(mem) < 2:
+                continue
+            offc = Counter()
+            for lab in mem:
+                for k, n in lab_codes[lab].items():
+                    if k != '-':
+                        offc[k] += n
+            mark = '✅' if len(offc) <= 1 else '❌'
+            print(f'   {mark} 標準 {canon!r} ← 成員 {sorted(mem)};成員官方代碼 {dict(offc)};'
+                  f'各成員 {[(lab, dict(lab_codes[lab])) for lab in sorted(mem)]}')
+        code_canon: dict = defaultdict(Counter)
+        for lab, cc in lab_codes.items():
+            for k, n in cc.items():
+                if k != '-':
+                    code_canon[k][canonical_sector(lab)] += n
+        split = {k: dict(v) for k, v in code_canon.items() if len(v) > 1}
+        print(f'   同一官方代碼對到 >1 個標準標籤(別名候選):{_tw_json.dumps(split, ensure_ascii=False)}')
+        multi = {lab: dict(cc) for lab, cc in lab_codes.items() if len([k for k in cc if k != '-']) > 1}
+        print(f'   同一標籤成員官方代碼 >1 種(不得合併):{_tw_json.dumps(multi, ensure_ascii=False)}')
+        print(f'   別名表版本 {SECTOR_ALIASES_VERSION};別名表={_tw_json.dumps(SECTOR_CANONICAL_ALIASES, ensure_ascii=False)}')
+
+        print('\n════ ③ fixture:label → 官方代碼計數(新 map)════')
+        print('Z43_FIXTURE_LABEL_CODES=' + _tw_json.dumps({k: dict(v) for k, v in sorted(lab_codes.items())},
+                                                          ensure_ascii=False, sort_keys=True))
+
+        print('\n════ ④ 乾跑 20261007 / 20261008(正式 _collect_days;不寫檔)════')
+        import datetime as _dt
+        days = [_dt.datetime.strptime(x, '%Y%m%d').date() for x in _R8_DAYS]
+        inst, price, diag = U._collect_days(days)
+        print(f'   per_day={_tw_json.dumps(diag.get("per_day"), ensure_ascii=False)}')
+        sd_old, cov_old = compute_sector_daily_net(inst, price, old_map)
+        sd_new, cov_new = compute_sector_daily_net(inst, price, new_map)
+        print(f'   coverage 舊={cov_old}')
+        print(f'   coverage 新={cov_new}')
+        can_old, cm_old = canonicalize_sector_daily(sd_old)
+        can_new, cm_new = canonicalize_sector_daily(sd_new)
+        for nm, df in (('舊 map 原始軸', sd_old), ('新 map 原始軸', sd_new),
+                       ('舊 map 標準軸', can_old), ('新 map 標準軸', can_new)):
+            print(f'   {nm}:板塊數(每日)={dict(df.groupby("date")["sector"].nunique().rename(lambda x: str(x)[:10]))};'
+                  f'總額(外資,投信,自營,合計,n_stocks)={_r8_totals(df)}')
+        print(f'   標準化 members(新)={_tw_json.dumps({k: v for k, v in cm_new["members"].items() if len(v) > 1}, ensure_ascii=False)}')
+        print(f'   標準化 members(舊)={_tw_json.dumps({k: v for k, v in cm_old["members"].items() if len(v) > 1}, ensure_ascii=False)}')
+        for ds in _R8_DAYS:
+            d = _pd.Timestamp(ds)
+            a = sd_old[sd_old['date'] == d].set_index('sector')['n_stocks']
+            b = sd_new[sd_new['date'] == d].set_index('sector')['n_stocks']
+            ch = (b.reindex(a.index.union(b.index)).fillna(0) - a.reindex(a.index.union(b.index)).fillna(0))
+            ch = ch[ch != 0].sort_values(key=lambda s: -s.abs()).head(20)
+            print(f'   {ds} 原始軸成分股數變化(新−舊)前 20:{dict(ch.astype(int))}')
+            a = can_old[can_old['date'] == d].set_index('sector')['n_stocks']
+            b = can_new[can_new['date'] == d].set_index('sector')['n_stocks']
+            ch = (b.reindex(a.index.union(b.index)).fillna(0) - a.reindex(a.index.union(b.index)).fillna(0))
+            ch = ch[ch != 0].sort_values(key=lambda s: -s.abs()).head(20)
+            print(f'   {ds} 標準軸成分股數變化(新−舊)前 20:{dict(ch.astype(int))}')
+        # 第 8 輪補(別名表定版後重跑):乾跑兩日中仍掛「電子工業」「化學生技醫療」等官方查無標籤的實際交易個股
+        _traded = set(inst['stock_id'].astype(str)) & set(price['stock_id'].astype(str))
+        for _lab in ('電子工業', '化學生技醫療', '觀光事業', '金融業', '農業科技', '創新版股票', '其他'):
+            _ids = sorted(c for c in _traded if new_map.get(c) == _lab)
+            print(f'   乾跑兩日有法人+收盤、新 map 仍為 {_lab!r} 者 {len(_ids)} 檔:'
+                  + str([(c, (codes.get(c) or {}).get('chosen', {}).get('rule'),
+                          ((codes.get(c) or {}).get('official') or {}).get('code')) for c in _ids[:12]]))
+        print(f'   新 map 標準化後泡泡板塊(2 日)= {sorted(can_new["sector"].unique())}')
+        b_old, bm_old = compute_bubble(can_old)
+        b_new, bm_new = compute_bubble(can_new)
+        print(f'   泡泡(2 日窗,動能必為資料不足)舊 {bm_old} / 新 {bm_new}')
+        for nm, b in (('舊', b_old), ('新', b_new)):
+            print(f'   泡泡 {nm} 前 15(sector, x_yi, size_yi):'
+                  + str([(r.sector, round(r.x_yi, 3), round(r.size_yi, 3)) for r in b.head(15).itertuples()]))
+    finally:
+        restore()
+        _R5_MAX_REQ = saved_max
+    print(f'\n══ 請求總結:送出 {_R5_STATE["n"]} 個(上限 {_R8_MAX_REQ})、Storm Shield 命中 '
+          f'{_R5_STATE["cache_hit"]}、因上限拒送 {_R5_STATE["refused"]} ══')
+    return 0
+
+
 def _legacy_main() -> int:
     """舊版預設段(v19.112~2026-08-27 PMI/出口探針);現需 `--legacy` 才執行。"""
     from src.data.proxy import fetch_url
@@ -2381,10 +3173,10 @@ def _prod_smoke() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI:無參數 → 只跑第 5 輪探針 `probe_round5()`(probe workflow 不帶參數,即此段);
-    `--round4` → 只跑第 4 輪 `probe_round4()`;`--round3` → 只跑第 3 輪 `probe_round3()`;
+    """CLI:無參數 → 只跑第 8 輪探針 `probe_round8()`(probe workflow 不帶參數,即此段);
+    `--round7` → 只跑第 7 輪 `probe_round7()`;`--round6` → 只跑第 6 輪 `probe_round6()`;`--round5` → 只跑第 5 輪 `probe_round5()`;`--round4` → 只跑第 4 輪 `probe_round4()`;`--round3` → 只跑第 3 輪 `probe_round3()`;
     `--round2` → 只跑第 1/2 輪 TPEx/TWSE 欄位探針 `probe_tpex_new_site()`;
-    `--legacy` → 只跑舊 PMI/出口探針;`--all` → 五段都跑(各段請求計數各自歸零)。"""
+    `--legacy` → 只跑舊 PMI/出口探針;`--all` → 六段都跑(各段請求計數各自歸零)。"""
     global _TW_REQ_COUNT
     argv = list(sys.argv[1:] if argv is None else argv)
     if '--legacy' in argv:
@@ -2395,8 +3187,17 @@ def main(argv: list[str] | None = None) -> int:
         return probe_round3()
     if '--round4' in argv:
         return probe_round4()
-    rc = probe_round5()
+    if '--round5' in argv:
+        return probe_round5()
+    if '--round6' in argv:
+        return probe_round6()
+    if '--round7' in argv:
+        return probe_round7()
+    rc = probe_round8()
     if '--all' in argv:
+        rc = probe_round7() or rc
+        rc = probe_round6() or rc
+        rc = probe_round5() or rc
         _TW_REQ_COUNT = 0
         rc = probe_round4() or rc
         _TW_REQ_COUNT = 0

@@ -49,6 +49,7 @@ from shared.sector_flow_thresholds import (
     QUADRANT_ROTATING,
     QUADRANT_UNAVAILABLE,
     QUADRANT_WATCHING,
+    SECTOR_CANONICAL_ALIASES,
     SECTOR_UNCLASSIFIED,
     SHARES_PER_LOT,
     WINDOW_SIZE,
@@ -345,6 +346,108 @@ def compute_bubble(
     bubble = bubble.sort_values("size_yi", ascending=False).reset_index(drop=True)
     meta["n_sectors"] = int(len(bubble))
     return bubble, meta
+
+
+#: 批 Z43:旗標欄(同日同值)—— 標準化後依「同組全 True 才 True」合併。
+_FLAG_COLS = ("twse_ok", "tpex_ok", "industry_ok")
+
+
+def _merge_flags(ser: pd.Series):
+    """同組旗標:全為 True → True;任一明確 False → False;其餘(含 NA / 舊列無旗標)→ NA(未知 ≠ True)。"""
+    vals = list(ser)
+    if vals and all(v is True or v is np.True_ for v in vals):
+        return True
+    if any(v is False or v is np.False_ for v in vals):
+        return False
+    return pd.NA
+
+
+def canonicalize_sector_daily(
+    sector_daily: pd.DataFrame,
+    aliases: Optional[dict] = None,
+) -> tuple[pd.DataFrame, dict]:
+    """批 Z43(客戶 Q-z29＝A):原始板塊標籤 → 標準板塊標籤,(date, 標準標籤) 重新彙總。純函式、零 I/O。
+
+    `aliases` 預設 `shared.sector_flow_thresholds.SECTOR_CANONICAL_ALIASES`(原始 → 標準;不在表內 → 原樣)。
+    **只在呈現前的標準化軸套用**:輸入(daily_net 原始標籤)不被修改,cron 也不把結果寫回 parquet。
+
+    彙總規則(§1,同 O1「成分任一缺即缺」,⛔ 不 fillna、不補 0):
+      - 金額(net/foreign/trust/dealer)= 成員**列**加總(sum min_count=1);**任一成員該格 NaN → 標準格 NaN**。
+      - 某日只出現部分成員標籤 → 以出現的成員列加總(**不**因缺席遮 NaN),只計數
+        `n_member_absent_cells` 供診斷。理由:合併只是把個股重新分組 —— 成員標籤缺席 ＝ 該組部分個股當日
+        沒有(法人列 ∧ 有效收盤),與原始軸「板塊內部分個股缺席」同一語意(原始軸亦不遮 NaN);
+        上櫃整日失敗另由 `tpex_ok`(同組全 True 才 True)→ `tpex_complete` 揭露。
+        全部成員都缺席 → 該日不產生列(與原始軸「板塊缺席」語意一致,`compute_bubble` 照舊視為 NaN)。
+      - n_stocks = 成員相加(同一檔一天只會落在一個原始標籤);**任一成員 n_stocks 缺(NaN / 不可解析 /
+        無此欄)→ 標準格 n_stocks 為 `pd.NA`**(nullable Int64,⛔ 不把缺當 0)。
+      - twse_ok / tpex_ok / industry_ok(有欄才處理)= 同組全 True 才 True;任一 False → False;其餘 NA。
+      - 單一成員的組 ⇒ 結果與原始軸逐格相同(恆等)。
+    重複 (date, 原始標籤) → raise(§1,不靜默相加)。
+
+    Returns
+    -------
+    (canonical_daily, meta)
+        canonical_daily : DataFrame[date, sector, net_amt_yi, foreign_yi, trust_yi, dealer_yi, n_stocks,
+                                    (+ 輸入有的旗標欄)],sector = 標準標籤,依 date, sector 排序。
+        meta : {"members": {標準: [原始標籤…]}, "n_raw_sectors", "n_canonical_sectors",
+                "n_member_absent_cells"(只出現部分成員標籤的標準格數;診斷用,不遮 NaN),
+                "member_absent_days": {標準: 該組「有列但只出現部分成員標籤」的日數}(可追溯用)}。
+    """
+    _aliases = SECTOR_CANONICAL_ALIASES if aliases is None else dict(aliases)
+    _val_cols = ["net_amt_yi", *(_CAMP_YI[c] for c in _LOT_COLS)]
+    meta = {"members": {}, "n_raw_sectors": 0, "n_canonical_sectors": 0,
+            "n_member_absent_cells": 0, "member_absent_days": {}}
+    _flags = [c for c in _FLAG_COLS if sector_daily is not None and c in sector_daily.columns]
+    out_cols = ["date", "sector", *_val_cols, "n_stocks", *_flags]
+    if sector_daily is None or sector_daily.empty:
+        return pd.DataFrame(columns=out_cols), meta
+
+    sd = _norm_dates(sector_daily).dropna(subset=["date"])
+    sd["_raw"] = sd["sector"].astype(str).str.strip()
+    if sd.duplicated(subset=["date", "_raw"]).any():
+        _dup = sd.loc[sd.duplicated(subset=["date", "_raw"], keep=False), ["date", "_raw"]]
+        raise ValueError(f"[sector_flow] 重複 (date, sector) 列 {len(_dup)} 筆,不得靜默相加:"
+                         f"{_dup.head(5).to_dict('records')}")
+    sd["_canon"] = sd["_raw"].map(lambda s: str(_aliases.get(s, s)).strip())
+    for c in _val_cols:
+        sd[c] = _finite_or_nan(sd[c]) if c in sd.columns else np.nan
+    # n_stocks:缺 → NA(nullable Int64),不補 0(QA1-N4 / QA2-N3)
+    sd["n_stocks"] = (pd.to_numeric(sd["n_stocks"], errors="coerce") if "n_stocks" in sd.columns
+                      else pd.Series(np.nan, index=sd.index, dtype="float64"))
+    sd["_na_n_stocks"] = sd["n_stocks"].isna().astype("int64")
+    members = {k: sorted(set(v)) for k, v in sd.groupby("_canon")["_raw"]}
+    meta["members"] = members
+    meta["n_raw_sectors"] = int(sd["_raw"].nunique())
+    meta["n_canonical_sectors"] = int(len(members))
+
+    _na = sd[_val_cols].isna().astype("int64").add_prefix("_na_")
+    _g = pd.concat([sd[["date", "_canon", "_raw", "n_stocks", "_na_n_stocks", *_val_cols, *_flags]],
+                    _na], axis=1)
+    agg = _g.groupby(["date", "_canon"], as_index=False).agg(
+        **{c: (c, "sum") for c in _val_cols},
+        n_stocks=("n_stocks", "sum"),
+        _na_n_stocks=("_na_n_stocks", "sum"),
+        _n_members_present=("_raw", "nunique"),
+        **{f"_na_{c}": (f"_na_{c}", "sum") for c in _val_cols},
+        **{f: (f, _merge_flags) for f in _flags},
+    )
+    _n_members = agg["_canon"].map(lambda k: len(members[k]))
+    _absent = agg["_n_members_present"] < _n_members
+    meta["n_member_absent_cells"] = int(_absent.sum())
+    meta["member_absent_days"] = {str(k): int(v) for k, v in
+                                  _absent.groupby(agg["_canon"]).sum().items()}
+    for c in _val_cols:
+        agg[c] = agg[c].mask(agg[f"_na_{c}"] > 0)   # 任一成員 NaN → NaN(不補 0)
+    if meta["n_member_absent_cells"]:
+        _logger.info("[sector_flow] 標準化:%d 個 (日, 標準板塊) 只出現部分成員標籤(以出現者加總,僅計數)",
+                     meta["n_member_absent_cells"])
+    for f in _flags:
+        agg[f] = pd.array(list(agg[f]), dtype="boolean")
+    agg = agg.rename(columns={"_canon": "sector"})
+    agg["n_stocks"] = pd.array([pd.NA if na > 0 else int(round(v))       # 任一成員缺 → NA
+                                for v, na in zip(agg["n_stocks"], agg["_na_n_stocks"])], dtype="Int64")
+    agg = agg[out_cols].sort_values(["date", "sector"]).reset_index(drop=True)
+    return agg, meta
 
 
 def map_tickers_to_sectors(
