@@ -109,9 +109,13 @@ def _pre_source(k) -> str:
     # 📌 批 Z36（Q-z18／Q-z20，客戶 2026-10-10 核准 A，有意識的變更，⛔ 不是漏改）：本批改了 'ms'（整包未取得改缺值字）
     #   與 'chips'（投信／自營未觀測）—— 還原體一併換回本批那幾行（仍逐字等於基底 26a43064，`_PRE_FILE_SHA` 不改；
     #   同 Z33 串接 Z34 慣例）。⛔ 不動 `Z35_REVERT_PAIRS` 本身。
+    # 📌 批 Z44（客戶 Q3＝B，有意識的變更，⛔ 不是漏改）：'chips' 外資未取得結論句改用既有核准語句 —— 還原體一併
+    #   換回該行（仍逐字等於基底 26a43064，`_PRE_FILE_SHA` 不改；同上慣例）。⛔ 不動 `Z35_REVERT_PAIRS` 本身。
     from tests.test_batch_z36 import z36_pairs_for
+    from tests.test_batch_z44 import Z44_REVERT_PAIRS
     src = open(_MODS[k].__file__, encoding='utf-8').read()
-    for new, old in z36_pairs_for(_MODS[k].__file__) + Z35_REVERT_PAIRS[k]:
+    _z44 = Z44_REVERT_PAIRS.get('src/ui/tabs/macro/section_chips.py', ()) if k == 'chips' else ()
+    for new, old in _z44 + z36_pairs_for(_MODS[k].__file__) + Z35_REVERT_PAIRS[k]:
         assert src.count(new) == 1, f'替換點不唯一或已不存在：{new!r}'
         src = src.replace(new, old)
     return src

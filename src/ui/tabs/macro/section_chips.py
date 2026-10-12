@@ -189,7 +189,7 @@ def render_section_chips(inst: dict, margin, cd: dict) -> None:
         if _fn3 is None:
             _hye_c = TRAFFIC_NEUTRAL
             _hye_ind = '外資買賣超 ⬜ 未取得'
-            _hye_concl = '三大法人資料缺「外資」欄位，本卡不下籌碼結論'
+            _hye_concl = '外資買賣超未取得，本卡不下籌碼結論'
             _hye_act = ('先按「🚀 一鍵更新全部數據」；仍缺請看下方'
                         '「🔍 資料來源診斷」確認 TWSE BFI82U / FinMind 狀態')
         elif _fn3 >= 100:
