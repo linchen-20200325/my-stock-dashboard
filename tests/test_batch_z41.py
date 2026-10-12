@@ -1042,7 +1042,10 @@ _TODAY = pd.Timestamp("2026-10-12").date()      # 週一；新日期 10-09、10-
 _IMAP = {"2330": "半導體業", "2317": "其他電子業", "6488": "半導體業", "8446": "文化創意業"}
 
 
-def _old_parquet(path, dates=_OLD_DATES, with_flag=False, flag=None):
+def _old_parquet(path, dates=_OLD_DATES, with_flag=False, flag=None, scheme=True):
+    """批 Z43 起舊列預設帶**現行** `industry_scheme`(`scheme=True`):Z43 讓「缺 scheme 欄」本身觸發回補,
+    本檔各測試要隔離驗的是 Z41 的 tpex_ok / industry_ok 語意 → 固定 scheme 為現行版本;
+    缺 scheme 的行為由 `tests/test_batch_z43.py` 驗。`scheme=False` → 與 Z41 原 fixture 逐欄相同。"""
     rows = []
     for d in dates:
         for sec in ("半導體業", "其他電子業", "舊殘留板塊"):
@@ -1051,6 +1054,9 @@ def _old_parquet(path, dates=_OLD_DATES, with_flag=False, flag=None):
                          "source": "TWSE:T86+MI_INDEX / TPEX:3itrade+otc_quotes",
                          "fetched_at": "old"})
     df = pd.DataFrame(rows)
+    if scheme:
+        from shared.industry_codes import INDUSTRY_SCHEME_VERSION
+        df["industry_scheme"] = INDUSTRY_SCHEME_VERSION
     if with_flag:
         df["twse_ok"] = True
         df["tpex_ok"] = flag

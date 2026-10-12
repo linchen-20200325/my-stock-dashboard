@@ -15,7 +15,10 @@
   量到的就是正式環境會看到的
 
 執行模式(2026-10-11 第 6 輪起;probe workflow 只跑 `python scripts/probe_tw_sources.py` 不帶參數):
-- 無參數(預設)→ 只跑第 7 輪 `probe_round7()`(官方產業別欄位驗證,批 Z43 / Q-z29,**唯讀**、不寫檔):
+- 無參數(預設)→ 只跑第 8 輪 `probe_round8()`(批 Z43 乾跑,**唯讀**、不寫檔):正式碼新產業別取法
+  `fetch_industry_map_bulk()` + 別名群組官方代碼一致性 + 20261007/20261008 正式 `_collect_days` 以舊/新 map
+  `compute_sector_daily_net` → `canonicalize_sector_daily` → `compute_bubble` 對照。請求上限 30、間隔 ≥1.5s。
+- `--round7` → 只跑第 7 輪 `probe_round7()`(官方產業別欄位驗證,批 Z43 / Q-z29,**唯讀**、不寫檔):
   TWSE openapi t187ap03_L + ISIN strMode=2、TPEx openapi mopsfin_t187ap03_O(+ repo 現行疑錯 URL)+ ISIN
   strMode=4、ISIN 產業別查詢頁 option、FinMind TaiwanStockInfo 原始列;對 ticker_sector.json 全量比對 +
   9 組同義候選 + ETF/ETN 官方分類。請求上限 40、間隔 ≥1.5s。
@@ -40,7 +43,7 @@
   欄位口徑 + FinMind 匿名交叉驗證;探針內直接驗算(買−賣==買賣超、合計關係、
   最低<=收盤<=最高…)並印成立比例。請求數上限 40、間隔 1.5s、timeout 25s。
 - `--legacy` → 只跑舊版 PMI/出口 TARGETS + deep dumps + production smoke(原預設行為)。
-- `--all` → 第 7 輪 + 第 6 輪 + 第 5 輪 + 第 4 輪 + 第 3 輪 + 第 1/2 輪 + legacy 全跑。
+- `--all` → 第 8 輪 + 第 7 輪 + 第 6 輪 + 第 5 輪 + 第 4 輪 + 第 3 輪 + 第 1/2 輪 + legacy 全跑。
 """
 from __future__ import annotations
 
@@ -2939,6 +2942,151 @@ def probe_round7(fetch_url=None) -> int:
     return 0
 
 
+_R8_MAX_REQ = 30
+_R8_DAYS = ('20261007', '20261008')
+
+
+def _r8_totals(df) -> dict:
+    """sector_daily → {date: (Σforeign, Σtrust, Σdealer, Σnet, Σn_stocks)}(NaN 列以 min_count=1 加總)。"""
+    out = {}
+    if df is None or df.empty:
+        return out
+    for d, g in df.groupby('date'):
+        out[str(d)[:10]] = tuple(round(float(g[c].sum(min_count=1)), 6)
+                                 for c in ('foreign_yi', 'trust_yi', 'dealer_yi', 'net_amt_yi')) \
+            + (int(g['n_stocks'].sum()),)
+    return out
+
+
+def probe_round8(fetch_url=None) -> int:
+    """第 8 輪(預設執行段,2026-10-12):批 Z43 新產業別取法 + 板塊標準化 乾跑(**唯讀**、不寫任何檔)。
+
+    ① 呼叫正式碼 `fetch_industry_map_bulk()`(FinMind 原始列 + 官方 openapi 代碼選列)→ 官方端點狀態 /
+       規則分布 / 舊 map(repo `ticker_sector.json`)vs 新 map 差異;
+    ② 別名群組官方代碼一致性(每個標準板塊的成員標籤,其成員股官方代碼是否同一)+ 同代碼多標準標籤檢查;
+    ③ 印 label→官方代碼 計數(一行 JSON,供測試 fixture);
+    ④ 20261007 / 20261008 以正式 `_collect_days` + `compute_sector_daily_net`(舊 map / 新 map)+
+       `canonicalize_sector_daily` + `compute_bubble` 乾跑:板塊數、成分股數變化前 20、每日三分項總額。
+    請求上限 30、間隔 ≥1.5s。
+    """
+    global _R5_MAX_REQ
+    from collections import Counter, defaultdict
+    import pandas as _pd
+    print('🔬 probe_tw_sources 第 8 輪(批 Z43 新產業別取法 + 板塊標準化乾跑;唯讀、不寫檔)')
+    saved_max = _R5_MAX_REQ
+    _R5_MAX_REQ = _R8_MAX_REQ
+    _R5_STATE.update(n=0, last=0.0, refused=0, cache_hit=0)
+    wrapped, restore = _r5_install_throttle()
+    try:
+        import scripts.update_sector_flow as U
+        import src.data.stock.market_close_fetcher as M
+        from shared.sector_flow_thresholds import (SECTOR_ALIASES_VERSION, SECTOR_CANONICAL_ALIASES,
+                                                   canonical_sector)
+        from src.compute.sector_flow import (canonicalize_sector_daily, compute_bubble,
+                                             compute_sector_daily_net)
+        old_map = _r6_ticker_sector()
+
+        print('\n════ ① 正式碼 fetch_industry_map_bulk()(新取法)════')
+        _r5_manual_count('FinMind TaiwanStockInfo(正式碼 requests.get)')
+        new_map = M.fetch_industry_map_bulk()
+        raw = M.get_last_industry_raw() or {}
+        print(f'   finmind_status={raw.get("finmind_status")}')
+        print(f'   official_status={_tw_json.dumps(raw.get("official_status"), ensure_ascii=False)}')
+        print(f'   unavailable_markets={raw.get("unavailable_markets")} warnings={raw.get("warnings")}')
+        codes = raw.get('codes') or {}
+        rules = Counter((r.get('chosen') or {}).get('rule') for r in codes.values())
+        print(f'   新 map {len(new_map)} 檔;選列紀錄 {len(codes)} 檔;規則分布={dict(rules)}')
+        _m2, _raw2, scheme = U._resolve_industry(new_map)
+        print(f'   cron _resolve_industry → scheme={scheme!r};map 一致={_m2 == new_map}')
+        for t in ('2344', '2308', '2330', '3105', '0050', '00679B', '2729', '6028', '2801', '2941', '6870'):
+            rec = codes.get(t) or {}
+            print(f'   {t}:舊={old_map.get(t)!r} 新={new_map.get(t)!r} rule={(rec.get("chosen") or {}).get("rule")} '
+                  f'官方={rec.get("official")} FinMind列={[(x["industry_category"], x["type"], x["date"]) for x in rec.get("finmind") or []]}')
+        flips = Counter((old_map.get(c), new_map.get(c)) for c in set(old_map) | set(new_map)
+                        if old_map.get(c) != new_map.get(c))
+        print(f'   舊 map vs 新 map 標籤不同:{sum(flips.values())} 檔;前 30 組 (舊→新):')
+        for (a, b), n in flips.most_common(30):
+            print(f'      {a!r} → {b!r} ×{n}')
+        print(f'   新 map 標籤種類 {len(set(new_map.values()))}(舊 {len(set(old_map.values()))});'
+              f'新 map 標籤分布={dict(Counter(new_map.values()).most_common())}')
+
+        print('\n════ ② 別名群組官方代碼一致性 ════')
+        lab_codes: dict = defaultdict(Counter)
+        for c, lab in new_map.items():
+            off = (codes.get(c) or {}).get('official') or {}
+            lab_codes[lab][off.get('code') or '-'] += 1
+        groups: dict = defaultdict(set)
+        for lab in lab_codes:
+            groups[canonical_sector(lab)].add(lab)
+        for canon, mem in sorted(groups.items()):
+            if len(mem) < 2:
+                continue
+            offc = Counter()
+            for lab in mem:
+                for k, n in lab_codes[lab].items():
+                    if k != '-':
+                        offc[k] += n
+            mark = '✅' if len(offc) <= 1 else '❌'
+            print(f'   {mark} 標準 {canon!r} ← 成員 {sorted(mem)};成員官方代碼 {dict(offc)};'
+                  f'各成員 {[(lab, dict(lab_codes[lab])) for lab in sorted(mem)]}')
+        code_canon: dict = defaultdict(Counter)
+        for lab, cc in lab_codes.items():
+            for k, n in cc.items():
+                if k != '-':
+                    code_canon[k][canonical_sector(lab)] += n
+        split = {k: dict(v) for k, v in code_canon.items() if len(v) > 1}
+        print(f'   同一官方代碼對到 >1 個標準標籤(別名候選):{_tw_json.dumps(split, ensure_ascii=False)}')
+        multi = {lab: dict(cc) for lab, cc in lab_codes.items() if len([k for k in cc if k != '-']) > 1}
+        print(f'   同一標籤成員官方代碼 >1 種(不得合併):{_tw_json.dumps(multi, ensure_ascii=False)}')
+        print(f'   別名表版本 {SECTOR_ALIASES_VERSION};別名表={_tw_json.dumps(SECTOR_CANONICAL_ALIASES, ensure_ascii=False)}')
+
+        print('\n════ ③ fixture:label → 官方代碼計數(新 map)════')
+        print('Z43_FIXTURE_LABEL_CODES=' + _tw_json.dumps({k: dict(v) for k, v in sorted(lab_codes.items())},
+                                                          ensure_ascii=False, sort_keys=True))
+
+        print('\n════ ④ 乾跑 20261007 / 20261008(正式 _collect_days;不寫檔)════')
+        import datetime as _dt
+        days = [_dt.datetime.strptime(x, '%Y%m%d').date() for x in _R8_DAYS]
+        inst, price, diag = U._collect_days(days)
+        print(f'   per_day={_tw_json.dumps(diag.get("per_day"), ensure_ascii=False)}')
+        sd_old, cov_old = compute_sector_daily_net(inst, price, old_map)
+        sd_new, cov_new = compute_sector_daily_net(inst, price, new_map)
+        print(f'   coverage 舊={cov_old}')
+        print(f'   coverage 新={cov_new}')
+        can_old, cm_old = canonicalize_sector_daily(sd_old)
+        can_new, cm_new = canonicalize_sector_daily(sd_new)
+        for nm, df in (('舊 map 原始軸', sd_old), ('新 map 原始軸', sd_new),
+                       ('舊 map 標準軸', can_old), ('新 map 標準軸', can_new)):
+            print(f'   {nm}:板塊數(每日)={dict(df.groupby("date")["sector"].nunique().rename(lambda x: str(x)[:10]))};'
+                  f'總額(外資,投信,自營,合計,n_stocks)={_r8_totals(df)}')
+        print(f'   標準化 members(新)={_tw_json.dumps({k: v for k, v in cm_new["members"].items() if len(v) > 1}, ensure_ascii=False)}')
+        print(f'   標準化 members(舊)={_tw_json.dumps({k: v for k, v in cm_old["members"].items() if len(v) > 1}, ensure_ascii=False)}')
+        for ds in _R8_DAYS:
+            d = _pd.Timestamp(ds)
+            a = sd_old[sd_old['date'] == d].set_index('sector')['n_stocks']
+            b = sd_new[sd_new['date'] == d].set_index('sector')['n_stocks']
+            ch = (b.reindex(a.index.union(b.index)).fillna(0) - a.reindex(a.index.union(b.index)).fillna(0))
+            ch = ch[ch != 0].sort_values(key=lambda s: -s.abs()).head(20)
+            print(f'   {ds} 原始軸成分股數變化(新−舊)前 20:{dict(ch.astype(int))}')
+            a = can_old[can_old['date'] == d].set_index('sector')['n_stocks']
+            b = can_new[can_new['date'] == d].set_index('sector')['n_stocks']
+            ch = (b.reindex(a.index.union(b.index)).fillna(0) - a.reindex(a.index.union(b.index)).fillna(0))
+            ch = ch[ch != 0].sort_values(key=lambda s: -s.abs()).head(20)
+            print(f'   {ds} 標準軸成分股數變化(新−舊)前 20:{dict(ch.astype(int))}')
+        b_old, bm_old = compute_bubble(can_old)
+        b_new, bm_new = compute_bubble(can_new)
+        print(f'   泡泡(2 日窗,動能必為資料不足)舊 {bm_old} / 新 {bm_new}')
+        for nm, b in (('舊', b_old), ('新', b_new)):
+            print(f'   泡泡 {nm} 前 15(sector, x_yi, size_yi):'
+                  + str([(r.sector, round(r.x_yi, 3), round(r.size_yi, 3)) for r in b.head(15).itertuples()]))
+    finally:
+        restore()
+        _R5_MAX_REQ = saved_max
+    print(f'\n══ 請求總結:送出 {_R5_STATE["n"]} 個(上限 {_R8_MAX_REQ})、Storm Shield 命中 '
+          f'{_R5_STATE["cache_hit"]}、因上限拒送 {_R5_STATE["refused"]} ══')
+    return 0
+
+
 def _legacy_main() -> int:
     """舊版預設段(v19.112~2026-08-27 PMI/出口探針);現需 `--legacy` 才執行。"""
     from src.data.proxy import fetch_url
@@ -3017,8 +3165,8 @@ def _prod_smoke() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI:無參數 → 只跑第 7 輪探針 `probe_round7()`(probe workflow 不帶參數,即此段);
-    `--round6` → 只跑第 6 輪 `probe_round6()`;`--round5` → 只跑第 5 輪 `probe_round5()`;`--round4` → 只跑第 4 輪 `probe_round4()`;`--round3` → 只跑第 3 輪 `probe_round3()`;
+    """CLI:無參數 → 只跑第 8 輪探針 `probe_round8()`(probe workflow 不帶參數,即此段);
+    `--round7` → 只跑第 7 輪 `probe_round7()`;`--round6` → 只跑第 6 輪 `probe_round6()`;`--round5` → 只跑第 5 輪 `probe_round5()`;`--round4` → 只跑第 4 輪 `probe_round4()`;`--round3` → 只跑第 3 輪 `probe_round3()`;
     `--round2` → 只跑第 1/2 輪 TPEx/TWSE 欄位探針 `probe_tpex_new_site()`;
     `--legacy` → 只跑舊 PMI/出口探針;`--all` → 六段都跑(各段請求計數各自歸零)。"""
     global _TW_REQ_COUNT
@@ -3035,8 +3183,11 @@ def main(argv: list[str] | None = None) -> int:
         return probe_round5()
     if '--round6' in argv:
         return probe_round6()
-    rc = probe_round7()
+    if '--round7' in argv:
+        return probe_round7()
+    rc = probe_round8()
     if '--all' in argv:
+        rc = probe_round7() or rc
         rc = probe_round6() or rc
         rc = probe_round5() or rc
         _TW_REQ_COUNT = 0

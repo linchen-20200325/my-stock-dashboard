@@ -53,21 +53,57 @@ SECTOR_UNCLASSIFIED: str = "未分類"
 
 # ── ETF 家族板塊別名正規化(§3.3 別名走 SSOT,不 inline)──────────────────
 #: `fetch_industry_map_bulk` 對不同上市/上櫃 ETF 給的細分標籤不一致
-#: (上市 → "ETF"、上櫃 → "上櫃ETF"、部分來源 → "上市/上櫃指數股票型基金(ETF)"),
-#: 但泡泡圖三大法人聚合桶只會出現單一 "ETF"。做持股→泡泡 highlight 交集時,
-#: 需把 ETF 家族細分標籤正規化成同一 canonical,否則持有上櫃 ETF(如 00980D→上櫃ETF)
-#: 永遠對不到 "ETF" 泡泡。⚠️ ETN / 受益證券 / 存託憑證屬不同商品,**不**併入。
+#: (上市 → "ETF"、上櫃 → "上櫃ETF" 或 "上櫃指數股票型基金(ETF)")。
+#: ~~但泡泡圖三大法人聚合桶只會出現單一 "ETF"~~ —— 批 Z43 更正(事實更正,不是漏刪):
+#: 舊句不實,實際 daily_net 的原始桶同時有 "ETF"、"上櫃ETF"、"上櫃指數股票型基金(ETF)" 三個;
+#: 自批 Z43 起泡泡改在**標準化軸**彙總(`SECTOR_CANONICAL_ALIASES` → 單一 "ETF" 泡泡)。
+#: ⚠️ ETN / 受益證券 / 存託憑證屬不同商品,**不**併入 ETF。
 SECTOR_ETF_CANONICAL: str = "ETF"
 SECTOR_ETF_FAMILY_ALIASES: frozenset = frozenset({
     "ETF", "上市ETF", "上櫃ETF",
     "指數股票型基金(ETF)", "上市指數股票型基金(ETF)", "上櫃指數股票型基金(ETF)",
 })
 
+# ── 批 Z43(客戶 Q-z29＝A):板塊名稱標準化別名表 SSOT ─────────────────────────
+#: 原始板塊標籤 → 標準板塊標籤。**資料層不覆寫**(daily_net.parquet `sector` 欄、ticker_sector.json
+#: 維持原始標籤),只在 L2 `canonicalize_sector_daily`(泡泡彙總前)與持股高亮比對時套用。
+#: 收錄原則:**只**收「官方定義或實際成分確認為同義」者,每項附證據;不因名稱相似就合併。
+#: 證據來源:GitHub runner 探針第 7 輪 run 38191149822(官方 openapi 產業別代碼 × ISIN 公開頁)。
+#: ❌ 刻意不收:「創新版股票/創新板股票」(官方「創新板」是**證券類別**不是產業別,個股各有官方產業別,
+#:    由產業別取法改依官方代碼解決);「農業科技/農業科技業」(現行成員官方產業別不同,不得合併);
+#:    ETN ⛔ 不併入 ETF(官方證券類別不同:ETF CFI CE、ETN CFI CM)。
+SECTOR_CANONICAL_ALIASES: dict[str, str] = {
+    # 官方產業別代碼 16「觀光餐旅」:'觀光事業' 現行成員 → openapi 代碼 上市 16×17、上櫃 16×24
+    #   (另 4 檔官方為別的產業 → 由官方代碼選列解決,不是靠別名)
+    "觀光事業": "觀光餐旅",
+    # 代碼 36「數位雲端」:'數位雲端類' 成員 → 上櫃 36×2;FinMind 同檔另有 '數位雲端' 列
+    "數位雲端類": "數位雲端",
+    # 代碼 35「綠能環保」:'綠能環保類' 成員 → 上櫃 35×2
+    "綠能環保類": "綠能環保",
+    # 代碼 38「居家生活」:'居家生活類' 成員 → 上櫃 38×2
+    "居家生活類": "居家生活",
+    # 代碼 31「其他電子業」:'其他電子類' 成員 → 上櫃 31×38(其餘由官方代碼選列解決)
+    "其他電子類": "其他電子業",
+    # 代碼 17「金融保險業」:上櫃 '金融業' 成員 → 上櫃 17×9;上市 '金融保險' 成員 → 上市 17×31(客戶已裁)
+    "金融業": "金融保險",
+    # ETF 家族(客戶已裁):官方同屬「ETF」證券類別、CFI 前 2 碼 CE、產業別欄空白(上市 241 / 上櫃 119 檔)
+    **{_a: SECTOR_ETF_CANONICAL for _a in sorted(SECTOR_ETF_FAMILY_ALIASES)
+       if _a != SECTOR_ETF_CANONICAL},
+    # ETN:官方同屬「ETN」證券類別、CFI 前 2 碼 CM(上市 15 / 上櫃 6 檔)
+    "指數投資證券(ETN)": "ETN",
+}
+#: 別名表版本(寫進 bubble_latest.json `sector_aliases_version`;別名表任何增刪都要遞增)。
+SECTOR_ALIASES_VERSION: str = "z43-v1"
+
 
 def canonical_sector(label) -> str:
-    """ETF 家族細分標籤 → canonical "ETF";其餘板塊原樣返回(highlight 交集前用)。"""
+    """原始板塊標籤 → 標準板塊標籤(`SECTOR_CANONICAL_ALIASES` SSOT;不在表內 → 原樣)。
+
+    批 Z43 前只正規化 ETF 家族;起改以別名表為 SSOT(ETF 家族照舊對到 "ETF",持股高亮比對與泡泡
+    標準化軸一致)。純函式、零 I/O。
+    """
     s = str(label or "").strip()
-    return SECTOR_ETF_CANONICAL if s in SECTOR_ETF_FAMILY_ALIASES else s
+    return SECTOR_CANONICAL_ALIASES.get(s, s)
 
 # ── 批 Z41(客戶 Q-z27＝A):外幣交易 ETF 幣別混用防護(§4.1 Level 1 單位錯誤)──────────
 #: 板塊金額 = 張 × 1000 × 收盤(元)。外幣交易 ETF 的收盤是**外幣**報價,乘進去＝把美元/人民幣
