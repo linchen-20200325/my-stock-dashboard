@@ -3073,6 +3073,14 @@ def probe_round8(fetch_url=None) -> int:
             ch = (b.reindex(a.index.union(b.index)).fillna(0) - a.reindex(a.index.union(b.index)).fillna(0))
             ch = ch[ch != 0].sort_values(key=lambda s: -s.abs()).head(20)
             print(f'   {ds} 標準軸成分股數變化(新−舊)前 20:{dict(ch.astype(int))}')
+        # 第 8 輪補(別名表定版後重跑):乾跑兩日中仍掛「電子工業」「化學生技醫療」等官方查無標籤的實際交易個股
+        _traded = set(inst['stock_id'].astype(str)) & set(price['stock_id'].astype(str))
+        for _lab in ('電子工業', '化學生技醫療', '觀光事業', '金融業', '農業科技', '創新版股票', '其他'):
+            _ids = sorted(c for c in _traded if new_map.get(c) == _lab)
+            print(f'   乾跑兩日有法人+收盤、新 map 仍為 {_lab!r} 者 {len(_ids)} 檔:'
+                  + str([(c, (codes.get(c) or {}).get('chosen', {}).get('rule'),
+                          ((codes.get(c) or {}).get('official') or {}).get('code')) for c in _ids[:12]]))
+        print(f'   新 map 標準化後泡泡板塊(2 日)= {sorted(can_new["sector"].unique())}')
         b_old, bm_old = compute_bubble(can_old)
         b_new, bm_new = compute_bubble(can_new)
         print(f'   泡泡(2 日窗,動能必為資料不足)舊 {bm_old} / 新 {bm_new}')

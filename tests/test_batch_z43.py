@@ -175,7 +175,6 @@ from shared.sector_flow_thresholds import (  # noqa: E402
 from src.compute.sector_flow import (  # noqa: E402
     canonicalize_sector_daily,
     compute_bubble,
-    compute_sector_daily_net,
 )
 
 _FIX = _ROOT / "tests" / "fixtures" / "z43_label_official_codes.json"
@@ -686,8 +685,9 @@ class TestCron:
         bj = json.loads((tmp_path / "bubble_latest.json").read_text(encoding="utf-8"))
         assert bj["sector_aliases_version"] == SECTOR_ALIASES_VERSION
         secs = {s["sector"]: s for s in bj["sectors"]}
-        assert "上櫃ETF" not in secs and "金融業" not in secs
-        assert secs["ETF"]["members"] == ["ETF", "上櫃ETF"]
+        assert "上櫃ETF" not in secs and "金融保險業" not in secs
+        assert secs["ETF"]["members"] == ["ETF", "上櫃ETF"]                 # 客戶裁示(2):單一 ETF 泡泡
+        assert secs["金融保險"]["members"] == ["金融保險", "金融保險業"]      # 同官方代碼 17
         assert secs["半導體業"]["members"] == ["半導體業"]
         bw = meta["bubble_window"]
         assert bw["raw_axis"]["n_sectors"] > bw["canonical_axis"]["n_sectors"] == len(bj["sectors"])
