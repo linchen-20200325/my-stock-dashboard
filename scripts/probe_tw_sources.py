@@ -2481,6 +2481,7 @@ _R7_TPEX_O = 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O'
 _R7_TPEX_O_WRONG = 'https://openapi.twse.com.tw/v1/opendata/t187ap03_O'   # repo 現行(疑錯)URL
 _R7_ISIN = 'https://isin.twse.com.tw/isin/C_public.jsp'
 _R7_ISIN_CLASS = 'https://isin.twse.com.tw/isin/class_i.jsp'
+_R7_ISIN_MAIN = 'https://isin.twse.com.tw/isin/class_main.jsp'
 _R7_FM = 'https://api.finmindtrade.com/api/v4/data'
 #: 9 組同義候選(客戶清單原樣;每組列出要比對的所有名稱)
 _R7_PAIRS = (
@@ -2616,9 +2617,38 @@ def _r7_parse_isin(raw: bytes, label: str) -> dict:
     return out
 
 
-def _r7_parse_class_options(raw: bytes, label: str) -> None:
+def _r7_decode(raw: bytes, ct: str) -> str:
+    """依 Content-Type charset 解碼(第 1 次實跑:class_i.jsp 為 utf-8、C_public.jsp 為 MS950)。"""
+    m = re.search(r'charset=([\w-]+)', ct or '', flags=re.I)
+    cs = (m.group(1).lower() if m else 'cp950')
+    cs = 'cp950' if cs in ('ms950', 'big5') else cs
+    return raw.decode(cs, errors='replace')
+
+
+def _r7_parse_class_main(raw: bytes, ct: str, label: str) -> None:
+    """ISIN 依產業別查詢結果頁 → 印表頭、列數、產業別欄值分布、前 5 列。"""
+    from collections import Counter
+    text = _r7_decode(raw, ct)
+    rows = []
+    for tr in re.findall(r'<tr[^>]*>(.*?)</tr>', text, flags=re.S | re.I):
+        tds = [_r7_strip_tags(t) for t in re.findall(r'<td[^>]*>(.*?)</td>', tr, flags=re.S | re.I)]
+        if len(tds) >= 5:
+            rows.append(tds)
+    if not rows:
+        print(f'   ⚠️ {label} 無表格列;text[:300]={text[:300]!r}')
+        return
+    hdr, body = rows[0], rows[1:]
+    print(f'   {label} 表頭={hdr};資料列 {len(body)}')
+    k = next((i for i, h in enumerate(hdr) if '產業別' in h), None)
+    if k is not None:
+        print(f'   {label} 產業別欄值分布={dict(Counter(r[k] for r in body if len(r) > k))}')
+    for r in body[:5]:
+        print(f'      {r}')
+
+
+def _r7_parse_class_options(raw: bytes, label: str, ct: str = '') -> None:
     """ISIN 產業別查詢頁的 <select> option(value ↔ 文字)原樣印出(官方代碼↔名稱)。"""
-    text = raw.decode('cp950', errors='replace')
+    text = _r7_decode(raw, ct)
     sels = re.findall(r'<select[^>]*name=["\']?([\w]+)["\']?[^>]*>(.*?)</select>', text, flags=re.S | re.I)
     if not sels:
         print(f'   ⚠️ {label} 無 <select>;text[:400]={text[:400]!r}')
@@ -2694,11 +2724,19 @@ def probe_round7(fetch_url=None) -> int:
         isin_o = _r7_parse_isin(raw, 'ISIN strMode=4') if st == 200 else {}
 
         print('\n════ ③ 官方 產業別代碼 ↔ 名稱 ════')
-        for kind in ('1', '2'):
-            st, raw, _ = _r7_get(fetch_url, f'ISIN 產業別查詢頁 class_i.jsp?kind={kind}', _R7_ISIN_CLASS,
-                                 params={'kind': kind}, headers=hdr_html)
+        # 第 1 次實跑:kind=1 HTTP 200(utf-8);kind=2 HTTP 500 → 第 2 次只打 kind=1
+        st, raw, ct = _r7_get(fetch_url, 'ISIN 產業別查詢頁 class_i.jsp?kind=1', _R7_ISIN_CLASS,
+                              params={'kind': '1'}, headers=hdr_html)
+        if st == 200:
+            _r7_parse_class_options(raw, 'class_i kind=1', ct)
+        # 官方「依產業別查詢」結果頁:市場 × 產業別代碼(1=上市、2=上櫃;依 class_i market option)
+        for mkt, ic in (('1', '13'), ('2', '17'), ('1', '17'), ('2', '16'), ('1', '07')):
+            st, raw, ct = _r7_get(fetch_url, f'ISIN class_main market={mkt} industry_code={ic}', _R7_ISIN_MAIN,
+                                  params={'market': mkt, 'issuetype': '', 'industry_code': ic,
+                                          'owncode': '', 'stockname': '', 'isincode': '',
+                                          'Page': '1', 'chklike': 'Y'}, headers=hdr_html)
             if st == 200:
-                _r7_parse_class_options(raw, f'class_i kind={kind}')
+                _r7_parse_class_main(raw, ct, f'class_main m={mkt} ic={ic}')
         for mk, codes, isin in (('上市', l_code, isin_l), ('上櫃', o_code, isin_o)):
             pairs: dict = defaultdict(Counter)
             for c, code in codes.items():
@@ -2765,6 +2803,30 @@ def probe_round7(fetch_url=None) -> int:
             official[c] = ('上市', d)
         for c, d in isin_o.items():
             official.setdefault(c, ('上櫃', d))
+        # ⑤-a FinMind 多列 vs 官方:哪一列(API 順序 index)與官方產業別完全相同
+        pos: Counter = Counter()
+        extra: Counter = Counter()
+        extra_ex: dict = defaultdict(list)
+        for sid, rows in by_id.items():
+            cats = [str(r.get('industry_category', '')).strip() for r in rows]
+            if len(set(cats)) < 2 or sid not in official or not official[sid][1]['industry']:
+                continue
+            oi = official[sid][1]['industry']
+            hit = [i for i, c in enumerate(cats) if c == oi]
+            hitn = [i for i, c in enumerate(cats) if _r7_norm(c) == _r7_norm(oi)]
+            pos['完全相同在第1列' if hit and hit[0] == 0 else '完全相同在第2+列' if hit
+                else '僅寬鬆相同在第1列' if hitn and hitn[0] == 0 else '僅寬鬆相同在第2+列' if hitn
+                else '無任何列相同'] += 1
+            for i, c in enumerate(cats):
+                if i not in hitn:
+                    key = (c, f'{official[sid][0]}:{oi}')
+                    extra[key] += 1
+                    if len(extra_ex[key]) < 3:
+                        extra_ex[key].append(sid)
+        print(f'   FinMind 多產業別列且官方有產業別者:與官方相同之列位置 {dict(pos)}')
+        print('   多列中「與官方不符的那一列」(FinMind 該列, 市場:官方名) 前 25:')
+        for k, n in extra.most_common(25):
+            print(f'      {k[0]!r} | 官方 {k[1]!r} ×{n}  例 {extra_ex[k]}')
         same = norm_same = 0
         mism: Counter = Counter()
         mism_ex: dict = defaultdict(list)
@@ -2797,6 +2859,17 @@ def probe_round7(fetch_url=None) -> int:
         for k, n in blank_official.most_common(20):
             print(f'      {k} ×{n}')
         print(f'   官方查無代號例(前 20):{sorted(missing)[:20]}')
+        print(f'   官方查無者 FinMind type 組合分布:'
+              f'{dict(Counter(tuple(sorted({str(r.get("type")) for r in by_id.get(c, [])})) for c in missing))}')
+        alt_ok = sum(1 for c, v in cur.items() if c in official and official[c][1]['industry']
+                     and official[c][1]['industry'] != v
+                     and any(str(r.get('industry_category', '')).strip() == official[c][1]['industry']
+                             for r in by_id.get(c, [])))
+        alt_n = sum(1 for c, v in cur.items() if c in official and official[c][1]['industry']
+                    and official[c][1]['industry'] != v
+                    and any(_r7_norm(str(r.get('industry_category', ''))) == _r7_norm(official[c][1]['industry'])
+                            for r in by_id.get(c, [])))
+        print(f'   不一致者中:FinMind 另有一列與官方完全相同 {alt_ok} 檔;寬鬆相同(去尾業/類){alt_n} 檔')
         print(f'   官方查無者現行名分布:{dict(Counter(cur[c] for c in missing).most_common(15))}')
         for tgt in ('電子工業', '化學生技醫療'):
             codes = [c for c, v in cur.items() if v == tgt]
