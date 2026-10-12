@@ -44,4 +44,6 @@ jobs:
           PROXY_URL: ${{ secrets.PROXY_URL }}
           NAS_BASE_URL: ${{ secrets.NAS_BASE_URL }}
           NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
+          # 第 7 輪:FinMind TaiwanStockInfo 與正式 update_sector_flow 同用 token(header;值不印,_tw_redact 遮)
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
         run: python scripts/probe_tw_sources.py
