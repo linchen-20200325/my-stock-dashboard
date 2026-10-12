@@ -147,6 +147,10 @@ def z36_revert(rel: str, code: str) -> str:
     #   （同 Z33 串 Z34 慣例；⛔ 不動 `Z36_REVERT_PAIRS` 本身，錨點行逐字保留）。
     from tests.test_batch_z40 import z40_revert_for
     code = z40_revert_for(rel, code)
+    # 📌 批 Z44（客戶 Q3＝B，有意識的變更，⛔ 不是漏改）：_CHIPS 外資未取得結論句改用既有核准語句 ⇒ 同上先換回
+    #   Z44 之前的寫法（Z36_BASE_SHA 不改；⛔ 不動 `Z36_REVERT_PAIRS` 本身）。
+    from tests.test_batch_z44 import z44_revert_for
+    code = z44_revert_for(rel, code)
     for new, old in Z36_REVERT_PAIRS[rel]:
         assert code.count(new) == 1, f'{rel} 替換點不唯一或已不存在：{new!r}'
         code = code.replace(new, old)

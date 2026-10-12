@@ -338,11 +338,20 @@ from tests.test_batch_z36 import z36_pairs_for as _z36_pairs_for  # noqa: E402
 from tests.test_batch_z36 import z36_pre_module as _z36_pre_module  # noqa: E402
 for _ek36 in ('chips', 'news', 'op'):
     _REVERT[_ek36] = _REVERT[_ek36] + _z36_pairs_for(_mods()[_ek36].__file__)
+# 📌 批 Z44（客戶 Q3＝B，有意識的變更，⛔ 不是漏改）：§三 籌碼卡外資未取得（`_fn3 is None`）的結論句改用既有核准語句
+#   「外資買賣超未取得，本卡不下籌碼結論」（顏色／指標列／行動建議不動）。還原體一併換回該行（仍逐字等於基底
+#   a56ccf37，_BASE_SHA 不改）；`no_foreign_key` 在 §三 籌碼卡的「現行」取拿掉 Z44 修改的還原體（golden 為修前實跑）。
+#   現行行為由 tests/test_batch_z44.py 斷言。⛔ 不動 `Z33_INST_REVERT_PAIRS` 本身。
+from tests.test_batch_z44 import Z44_CHIPS_PAIR as _Z44_CHIPS_PAIR  # noqa: E402
+from tests.test_batch_z44 import z44_pre_chips_module as _z44_pre_chips_module  # noqa: E402
+_REVERT['chips'] = _REVERT['chips'] + (_Z44_CHIPS_PAIR,)
 
 
 def _now_mod(ek: str, case: str = ''):
     if ek == 'chips' and case == 'other_row_unobserved':
         return _z36_pre_module('src/ui/tabs/macro/section_chips.py')
+    if ek == 'chips' and case == 'no_foreign_key':
+        return _z44_pre_chips_module()
     return _z34_pre_module(ek) if ek in ('mid', 'news') else _mods()[ek]
 
 
@@ -537,7 +546,9 @@ class TestKeyStrings:
         out = _run_chips(_mods()['chips'], UNOBSERVED[case](), monkeypatch)
         txt = _text('chips', out)
         assert '外資買賣超 ⬜ 未取得' in txt
-        assert '三大法人資料缺「外資」欄位，本卡不下籌碼結論' in txt
+        # 批 Z44（客戶 Q3＝B）：結論句改用既有核准語句（原「三大法人資料缺「外資」欄位，本卡不下籌碼結論」）
+        assert '外資買賣超未取得，本卡不下籌碼結論' in txt
+        assert '三大法人資料缺「外資」欄位' not in txt
         assert '⬜ 未取得：外資（該類今日無資料，非買賣超 0 億）' in txt
         bars = [t for k, t in out if k == 'plotly']
         assert bars and all("'外資'" not in b for b in bars)
