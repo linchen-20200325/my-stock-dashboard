@@ -98,7 +98,7 @@ from shared.industry_codes import (  # noqa: E402
     INDUSTRY_SCHEME_DEGRADED_SUFFIX,
     INDUSTRY_SCHEME_VERSION,
 )
-from shared.sector_flow_thresholds import SECTOR_ALIASES_VERSION  # noqa: E402
+from shared.sector_flow_thresholds import SECTOR_ALIASES_VERSION, canonical_sector  # noqa: E402
 from src.compute.sector_flow import (  # noqa: E402
     canonicalize_sector_daily,
     compute_bubble,
@@ -519,6 +519,10 @@ def _write_bubble_json(full: pd.DataFrame) -> dict:
     _members = _cmeta.get("members") or {}
     bubble["members"] = [list(_members.get(str(x), [str(x)])) for x in bubble["sector"]] \
         if not bubble.empty else []
+    # 批 Z43 QA2-N4:窗口內「該標準板塊有列、但只出現部分成員標籤」的日數(可追溯;不顯示)
+    _mad = _cmeta.get("member_absent_days") or {}
+    bubble["n_member_absent_days"] = [int(_mad.get(str(x), 0)) for x in bubble["sector"]] \
+        if not bubble.empty else []
     meta["raw_axis"] = _axis_meta(_raw_meta)
     meta["canonical_axis"] = _axis_meta(meta)
     meta["n_member_absent_cells"] = _cmeta.get("n_member_absent_cells")
@@ -623,6 +627,8 @@ def _resolve_industry(industry_map: dict | None) -> tuple[dict, dict | None, str
     - 取 L1 `get_last_industry_raw()`;其扁平 map 須與 `industry_map` 完全相同才採用(防張冠李戴)。
     - 有官方端點失敗的市場 → `apply_prev_chosen` 以上一份 industry_raw 的 chosen 覆蓋該市場代號;
       scheme 加 `INDUSTRY_SCHEME_DEGRADED_SUFFIX`(≠ 現行版本 → 官方恢復後回補重算)。
+    - FinMind 失敗(`finmind_status.ok` 為 False)而官方成功 → 同樣加 `INDUSTRY_SCHEME_DEGRADED_SUFFIX`
+      (批 Z43 QA1-N3:官方查無者此時無產業別,不只靠縮水守衛;FinMind 恢復後回補重算)。
     - 拿不到對應紀錄(例:測試替身直接給 map)→ map 原樣、不落地 industry_raw、metadata.industry 記
       `raw_available=False` + 警示;scheme 照記現行版本 —— 回補重抓只會得到同一份 map、修不好「紀錄缺」,
       標成過期只會每日空轉(與「官方端點失敗」不同:那種官方恢復後回補就能修好,故加後綴)。
@@ -641,8 +647,34 @@ def _resolve_industry(industry_map: dict | None) -> tuple[dict, dict | None, str
                       if (r.get("chosen") or {}).get("from_prev"))
         print(f"[sector_flow] ⚠️ 官方產業別端點不可用 {raw['unavailable_markets']} → "
               f"沿用上一份 chosen {_n_prev} 檔;scheme={scheme}")
+    if (raw.get("finmind_status") or {}).get("ok") is False:
+        scheme = INDUSTRY_SCHEME_VERSION + INDUSTRY_SCHEME_DEGRADED_SUFFIX
+        print(f"[sector_flow] ⚠️ FinMind TaiwanStockInfo 失敗 → scheme={scheme}(FinMind 恢復後回補重算)")
     raw["scheme_written"] = scheme
     return industry_map_from_raw(raw), raw, scheme
+
+
+def _alias_consistency(raw: dict | None) -> dict:
+    """批 Z43 QA1-N2:以**當次** industry_raw 的 chosen label × 官方代碼,檢查別名表與官方代碼是否一致。
+
+    回 {"code_to_multi_canonical": {官方代碼: {標準標籤: 檔數}}(同一官方代碼對到 >1 個標準標籤 → 漏收別名),
+        "canonical_to_multi_code": {標準標籤: {官方代碼: 檔數}}(同一標準標籤成員分屬 >1 官方代碼 → 誤併)}。
+    官方查無(official None / 無代碼)不計。兩者皆空 ＝ 一致。純計算、不改 raw。
+    """
+    c2l: dict = {}
+    l2c: dict = {}
+    for rec in ((raw or {}).get("codes") or {}).values():
+        lab = ((rec or {}).get("chosen") or {}).get("label")
+        code = ((rec or {}).get("official") or {}).get("code")
+        if not lab or not code:
+            continue
+        canon = canonical_sector(lab)
+        c2l.setdefault(str(code), {}).setdefault(canon, 0)
+        c2l[str(code)][canon] += 1
+        l2c.setdefault(canon, {}).setdefault(str(code), 0)
+        l2c[canon][str(code)] += 1
+    return {"code_to_multi_canonical": {k: v for k, v in sorted(c2l.items()) if len(v) > 1},
+            "canonical_to_multi_code": {k: v for k, v in sorted(l2c.items()) if len(v) > 1}}
 
 
 def _industry_summary(raw: dict | None, scheme: str) -> dict:
@@ -657,18 +689,31 @@ def _industry_summary(raw: dict | None, scheme: str) -> dict:
         ch = rec.get("chosen") or {}
         _rules[ch.get("rule")] = _rules.get(ch.get("rule"), 0) + 1
         _prev += bool(ch.get("from_prev"))
+    _cons = _alias_consistency(raw)
+    _warn = list(raw.get("warnings") or [])
+    if _cons["code_to_multi_canonical"]:
+        _warn.append("別名一致性:同一官方代碼對到多個標準標籤(別名表可能漏收)="
+                     + json.dumps(_cons["code_to_multi_canonical"], ensure_ascii=False, sort_keys=True))
+    if _cons["canonical_to_multi_code"]:
+        _warn.append("別名一致性:同一標準標籤成員分屬多個官方代碼(別名可能誤併)="
+                     + json.dumps(_cons["canonical_to_multi_code"], ensure_ascii=False, sort_keys=True))
     return {"scheme": scheme, "raw_available": True, "fetched_at": raw.get("fetched_at"),
             "rules": _rules, "n_from_prev": _prev,
             "official_status": raw.get("official_status"),
             "finmind_status": raw.get("finmind_status"),
             "unavailable_markets": raw.get("unavailable_markets") or [],
-            "warnings": list(raw.get("warnings") or [])}
+            "alias_consistency": _cons,
+            "warnings": _warn}
 
 
 def _write_industry_raw_json(raw: dict | None, scheme: str) -> None:
-    """批 Z43:落地完整選列紀錄(原始資料可追溯)。紀錄缺 / codes 空 → 不寫(保留上一份,§1 不造假)。"""
+    """批 Z43:落地完整選列紀錄(原始資料可追溯)。紀錄缺 / codes 空 / **扁平 map 為空**(QA2-N5:例 FinMind 失敗且
+    官方代碼皆不在代碼表 → codes 有、但沒有任何 label)→ 不寫(保留上一份,與 ticker_sector.json 同規則,§1)。"""
     if not raw or not raw.get("codes"):
         print(f"[sector_flow] ⚠️ 無產業別選列紀錄 → 不寫 {INDUSTRY_RAW_NAME}(保留既有)")
+        return
+    if not industry_map_from_raw(raw):
+        print(f"[sector_flow] ⚠️ 產業別選列紀錄無任何 label → 不寫 {INDUSTRY_RAW_NAME}(保留既有)")
         return
     _p = _industry_raw_path()
     _p.write_text(json.dumps(_json_safe(raw), ensure_ascii=False, sort_keys=True,

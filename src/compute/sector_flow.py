@@ -378,7 +378,8 @@ def canonicalize_sector_daily(
         沒有(法人列 ∧ 有效收盤),與原始軸「板塊內部分個股缺席」同一語意(原始軸亦不遮 NaN);
         上櫃整日失敗另由 `tpex_ok`(同組全 True 才 True)→ `tpex_complete` 揭露。
         全部成員都缺席 → 該日不產生列(與原始軸「板塊缺席」語意一致,`compute_bubble` 照舊視為 NaN)。
-      - n_stocks = 成員相加(同一檔一天只會落在一個原始標籤)。
+      - n_stocks = 成員相加(同一檔一天只會落在一個原始標籤);**任一成員 n_stocks 缺(NaN / 不可解析 /
+        無此欄)→ 標準格 n_stocks 為 `pd.NA`**(nullable Int64,⛔ 不把缺當 0)。
       - twse_ok / tpex_ok / industry_ok(有欄才處理)= 同組全 True 才 True;任一 False → False;其餘 NA。
       - 單一成員的組 ⇒ 結果與原始軸逐格相同(恆等)。
     重複 (date, 原始標籤) → raise(§1,不靜默相加)。
@@ -389,12 +390,13 @@ def canonicalize_sector_daily(
         canonical_daily : DataFrame[date, sector, net_amt_yi, foreign_yi, trust_yi, dealer_yi, n_stocks,
                                     (+ 輸入有的旗標欄)],sector = 標準標籤,依 date, sector 排序。
         meta : {"members": {標準: [原始標籤…]}, "n_raw_sectors", "n_canonical_sectors",
-                "n_member_absent_cells"(只出現部分成員標籤的標準格數;診斷用,不遮 NaN)}。
+                "n_member_absent_cells"(只出現部分成員標籤的標準格數;診斷用,不遮 NaN),
+                "member_absent_days": {標準: 該組「有列但只出現部分成員標籤」的日數}(可追溯用)}。
     """
     _aliases = SECTOR_CANONICAL_ALIASES if aliases is None else dict(aliases)
     _val_cols = ["net_amt_yi", *(_CAMP_YI[c] for c in _LOT_COLS)]
     meta = {"members": {}, "n_raw_sectors": 0, "n_canonical_sectors": 0,
-            "n_member_absent_cells": 0}
+            "n_member_absent_cells": 0, "member_absent_days": {}}
     _flags = [c for c in _FLAG_COLS if sector_daily is not None and c in sector_daily.columns]
     out_cols = ["date", "sector", *_val_cols, "n_stocks", *_flags]
     if sector_daily is None or sector_daily.empty:
@@ -409,18 +411,22 @@ def canonicalize_sector_daily(
     sd["_canon"] = sd["_raw"].map(lambda s: str(_aliases.get(s, s)).strip())
     for c in _val_cols:
         sd[c] = _finite_or_nan(sd[c]) if c in sd.columns else np.nan
-    sd["n_stocks"] = pd.to_numeric(sd.get("n_stocks"), errors="coerce").fillna(0).astype("int64") \
-        if "n_stocks" in sd.columns else 0
+    # n_stocks:缺 → NA(nullable Int64),不補 0(QA1-N4 / QA2-N3)
+    sd["n_stocks"] = (pd.to_numeric(sd["n_stocks"], errors="coerce") if "n_stocks" in sd.columns
+                      else pd.Series(np.nan, index=sd.index, dtype="float64"))
+    sd["_na_n_stocks"] = sd["n_stocks"].isna().astype("int64")
     members = {k: sorted(set(v)) for k, v in sd.groupby("_canon")["_raw"]}
     meta["members"] = members
     meta["n_raw_sectors"] = int(sd["_raw"].nunique())
     meta["n_canonical_sectors"] = int(len(members))
 
     _na = sd[_val_cols].isna().astype("int64").add_prefix("_na_")
-    _g = pd.concat([sd[["date", "_canon", "_raw", "n_stocks", *_val_cols, *_flags]], _na], axis=1)
+    _g = pd.concat([sd[["date", "_canon", "_raw", "n_stocks", "_na_n_stocks", *_val_cols, *_flags]],
+                    _na], axis=1)
     agg = _g.groupby(["date", "_canon"], as_index=False).agg(
         **{c: (c, "sum") for c in _val_cols},
         n_stocks=("n_stocks", "sum"),
+        _na_n_stocks=("_na_n_stocks", "sum"),
         _n_members_present=("_raw", "nunique"),
         **{f"_na_{c}": (f"_na_{c}", "sum") for c in _val_cols},
         **{f: (f, _merge_flags) for f in _flags},
@@ -428,6 +434,8 @@ def canonicalize_sector_daily(
     _n_members = agg["_canon"].map(lambda k: len(members[k]))
     _absent = agg["_n_members_present"] < _n_members
     meta["n_member_absent_cells"] = int(_absent.sum())
+    meta["member_absent_days"] = {str(k): int(v) for k, v in
+                                  _absent.groupby(agg["_canon"]).sum().items()}
     for c in _val_cols:
         agg[c] = agg[c].mask(agg[f"_na_{c}"] > 0)   # 任一成員 NaN → NaN(不補 0)
     if meta["n_member_absent_cells"]:
@@ -436,7 +444,8 @@ def canonicalize_sector_daily(
     for f in _flags:
         agg[f] = pd.array(list(agg[f]), dtype="boolean")
     agg = agg.rename(columns={"_canon": "sector"})
-    agg["n_stocks"] = agg["n_stocks"].astype("int64")
+    agg["n_stocks"] = pd.array([pd.NA if na > 0 else int(round(v))       # 任一成員缺 → NA
+                                for v, na in zip(agg["n_stocks"], agg["_na_n_stocks"])], dtype="Int64")
     agg = agg[out_cols].sort_values(["date", "sector"]).reset_index(drop=True)
     return agg, meta
 

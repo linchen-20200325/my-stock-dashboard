@@ -89,7 +89,7 @@ Z43_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
     _L0: (
         ('#: `fetch_industry_map_bulk` 對不同上市/上櫃 ETF 給的細分標籤不一致\n#: (上市 → "ETF"、上櫃 → "上櫃ETF" 或 "上櫃指數股票型基金(ETF)")。\n#: ~~但泡泡圖三大法人聚合桶只會出現單一 "ETF"~~ —— 批 Z43 更正(事實更正,不是漏刪):\n#: 舊句不實,實際 daily_net 的原始桶同時有 "ETF"、"上櫃ETF"、"上櫃指數股票型基金(ETF)" 三個;\n#: 自批 Z43 起泡泡改在**標準化軸**彙總(`SECTOR_CANONICAL_ALIASES` → 單一 "ETF" 泡泡)。\n#: ⚠️ ETN / 受益證券 / 存託憑證屬不同商品,**不**併入 ETF。\nSECTOR_ETF_CANONICAL: str = "ETF"\n',
          '#: `fetch_industry_map_bulk` 對不同上市/上櫃 ETF 給的細分標籤不一致\n#: (上市 → "ETF"、上櫃 → "上櫃ETF"、部分來源 → "上市/上櫃指數股票型基金(ETF)"),\n#: 但泡泡圖三大法人聚合桶只會出現單一 "ETF"。做持股→泡泡 highlight 交集時,\n#: 需把 ETF 家族細分標籤正規化成同一 canonical,否則持有上櫃 ETF(如 00980D→上櫃ETF)\n#: 永遠對不到 "ETF" 泡泡。⚠️ ETN / 受益證券 / 存託憑證屬不同商品,**不**併入。\nSECTOR_ETF_CANONICAL: str = "ETF"\n'),
-        ('\n# ── 批 Z43(客戶 Q-z29＝A):板塊名稱標準化別名表 SSOT ─────────────────────────\n#: 原始板塊標籤 → 標準板塊標籤。**資料層不覆寫**(daily_net.parquet `sector` 欄、ticker_sector.json\n#: 維持原始標籤),只在 L2 `canonicalize_sector_daily`(泡泡彙總前)與持股高亮比對時套用。\n#: 收錄原則:**只**收「官方定義或實際成分確認為同義」者,每項附證據;不因名稱相似就合併。\n#: 證據來源:GitHub runner 探針第 7 輪 run 38191149822(官方 openapi 產業別代碼 × ISIN 公開頁)。\n#: ❌ 刻意不收:「創新版股票/創新板股票」(官方「創新板」是**證券類別**不是產業別,個股各有官方產業別,\n#:    由產業別取法改依官方代碼解決);「農業科技/農業科技業」(現行成員官方產業別不同,不得合併);\n#:    ETN ⛔ 不併入 ETF(官方證券類別不同:ETF CFI CE、ETN CFI CM)。\nSECTOR_CANONICAL_ALIASES: dict[str, str] = {\n    # 官方產業別代碼 16「觀光餐旅」:\'觀光事業\' 現行成員 → openapi 代碼 上市 16×17、上櫃 16×24\n    #   (另 4 檔官方為別的產業 → 由官方代碼選列解決,不是靠別名)\n    "觀光事業": "觀光餐旅",\n    # 代碼 36「數位雲端」:\'數位雲端類\' 成員 → 上櫃 36×2;FinMind 同檔另有 \'數位雲端\' 列\n    "數位雲端類": "數位雲端",\n    # 代碼 35「綠能環保」:\'綠能環保類\' 成員 → 上櫃 35×2\n    "綠能環保類": "綠能環保",\n    # 代碼 38「居家生活」:\'居家生活類\' 成員 → 上櫃 38×2\n    "居家生活類": "居家生活",\n    # 代碼 31「其他電子業」:\'其他電子類\' 成員 → 上櫃 31×38(其餘由官方代碼選列解決)\n    "其他電子類": "其他電子業",\n    # 代碼 17「金融保險業」:上櫃 \'金融業\' 成員 → 上櫃 17×9;上市 \'金融保險\' 成員 → 上市 17×31(客戶已裁)\n    "金融業": "金融保險",\n    # ── 以下兩項:改依官方代碼選列後「同一官方代碼卻兩種標籤」(探針第 8 輪 run 38192607977 實測;\n    #    證據＝成員官方代碼完全相同,見 tests/fixtures/z43_label_official_codes.json)──\n    # 代碼 17:\'金融保險業\'(上櫃 9 檔,FinMind 只有「金融業」列、無相符列 → 取官方名)全為 17,\'金融保險\' 為 17×31\n    "金融保險業": "金融保險",\n    # 代碼 37「運動休閒」:\'運動休閒類\' 成員官方代碼 37×8、\'運動休閒\' 37×19\n    "運動休閒類": "運動休閒",\n    # ETF 家族(客戶已裁):官方同屬「ETF」證券類別、CFI 前 2 碼 CE、產業別欄空白(上市 241 / 上櫃 119 檔)\n    **{_a: SECTOR_ETF_CANONICAL for _a in sorted(SECTOR_ETF_FAMILY_ALIASES)\n       if _a != SECTOR_ETF_CANONICAL},\n    # ETN:官方同屬「ETN」證券類別、CFI 前 2 碼 CM(上市 15 / 上櫃 6 檔)\n    "指數投資證券(ETN)": "ETN",\n}\n#: 別名表版本(寫進 bubble_latest.json `sector_aliases_version`;別名表任何增刪都要遞增)。\nSECTOR_ALIASES_VERSION: str = "z43-v1"\n\n\n',
+        ('\n# ── 批 Z43(客戶 Q-z29＝A):板塊名稱標準化別名表 SSOT ─────────────────────────\n#: 原始板塊標籤 → 標準板塊標籤。**資料層不覆寫**(daily_net.parquet `sector` 欄、ticker_sector.json\n#: 維持原始標籤),只在 L2 `canonicalize_sector_daily`(泡泡彙總前)與持股高亮比對時套用。\n#: 收錄原則:**只**收「官方定義或實際成分確認為同義」者,每項附證據;不因名稱相似就合併。\n#: 證據來源:GitHub runner 探針第 7 輪 run 38191149822(官方 openapi 產業別代碼 × ISIN 公開頁)。\n#: ❌ 刻意不收:「創新版股票/創新板股票」(官方「創新板」是**證券類別**不是產業別,個股各有官方產業別,\n#:    由產業別取法改依官方代碼解決);「農業科技/農業科技業」(新 map 下「農業科技」3 檔成員**皆官方查無**、\n#:    「農業科技業」4 檔為代碼 33 —— 無法證明同代碼,不得合併;舊 map 成員官方為 20/22 亦不同);\n#:    ETN ⛔ 不併入 ETF(官方證券類別不同:ETF CFI CE、ETN CFI CM)。\nSECTOR_CANONICAL_ALIASES: dict[str, str] = {\n    # 證據分兩種(據實):「舊 map」＝批 Z43 前取第一列的 ticker_sector.json 成員 × 官方代碼(探針第 7 輪\n    #   run 38191149822);「新 map」＝改依官方代碼選列後(探針第 8 輪 run 38193131712,\n    #   tests/fixtures/z43_label_official_codes.json,\'-\' ＝ 官方查無)。\n    # 代碼 16「觀光餐旅」:\'觀光事業\' **舊 map** 成員 → openapi 上市 16×17、上櫃 16×24(另 4 檔官方為別的產業)。\n    #   ⚠️ 新 map 下這些股已直接選到 FinMind「觀光餐旅」列,\'觀光事業\' 只剩 1 檔且為官方查無 → 新 map 無法再\n    #   以代碼佐證;保留理由:①舊取法寫入的歷史列(daily_net 回補前)仍帶此標籤;②FinMind 對官方查無標的\n    #   仍可能給此名稱;同義性已由舊 map 的官方代碼證明。\n    "觀光事業": "觀光餐旅",\n    # 代碼 36「數位雲端」:\'數位雲端類\' 舊 map 成員 → 上櫃 36×2;新 map 36×18(與 \'數位雲端\' 36×22 同代碼)\n    "數位雲端類": "數位雲端",\n    # 代碼 35「綠能環保」:\'綠能環保類\' 舊 map → 上櫃 35×2;新 map 35×15(與 \'綠能環保\' 35×31 同代碼)\n    "綠能環保類": "綠能環保",\n    # 代碼 38「居家生活」:\'居家生活類\' 舊 map → 上櫃 38×2;新 map 38×21(與 \'居家生活\' 38×15 同代碼)\n    "居家生活類": "居家生活",\n    # 代碼 31「其他電子業」:\'其他電子類\' 舊 map → 上櫃 31×38;新 map 31×40(與 \'其他電子業\' 31×54 同代碼)\n    "其他電子類": "其他電子業",\n    # 代碼 17「金融保險業」(客戶已裁):\'金融業\' **舊 map** 成員 → 上櫃 17×9;上市 \'金融保險\' → 17×31。\n    #   ⚠️ 新 map 下那 9 檔改選官方名 \'金融保險業\'(見下),\'金融業\' 只剩 6 檔且皆官方查無 → 新 map 無法再以\n    #   代碼佐證;保留理由同 \'觀光事業\'(舊取法歷史列 + FinMind 對官方查無標的的命名),且為客戶明示裁示。\n    "金融業": "金融保險",\n    # ── 以下兩項:改依官方代碼選列後「同一官方代碼卻兩種標籤」(探針第 8 輪 run 38192607977 實測;\n    #    證據＝成員官方代碼完全相同,見 tests/fixtures/z43_label_official_codes.json)──\n    # 代碼 17:\'金融保險業\'(上櫃 9 檔,FinMind 只有「金融業」列、無相符列 → 取官方名)全為 17,\'金融保險\' 為 17×31\n    "金融保險業": "金融保險",\n    # 代碼 37「運動休閒」:\'運動休閒類\' 成員官方代碼 37×8、\'運動休閒\' 37×19\n    "運動休閒類": "運動休閒",\n    # ETF 家族(客戶已裁):官方同屬「ETF」證券類別、CFI 前 2 碼 CE、產業別欄空白(上市 241 / 上櫃 119 檔)。\n    #   成員直接取自**既有**(批 Z43 前即存在、持股高亮已在用)的 `SECTOR_ETF_FAMILY_ALIASES`,不是本批新增;\n    #   其中 \'上市ETF\' / \'指數股票型基金(ETF)\' / \'上市指數股票型基金(ETF)\' 在新舊 map 皆未出現(探針第 7/8 輪),\n    #   保留只為維持既有 ETF 家族行為不變。實際出現者:\'上櫃ETF\'、\'上櫃指數股票型基金(ETF)\'。\n    **{_a: SECTOR_ETF_CANONICAL for _a in sorted(SECTOR_ETF_FAMILY_ALIASES)\n       if _a != SECTOR_ETF_CANONICAL},\n    # ETN:官方同屬「ETN」證券類別、CFI 前 2 碼 CM(上市 15 / 上櫃 6 檔)\n    "指數投資證券(ETN)": "ETN",\n}\n#: 別名表版本(寫進 bubble_latest.json `sector_aliases_version`;別名表任何增刪都要遞增)。\nSECTOR_ALIASES_VERSION: str = "z43-v1"\n\n\n',
          '\n\n'),
         ('def canonical_sector(label) -> str:\n    """原始板塊標籤 → 標準板塊標籤(`SECTOR_CANONICAL_ALIASES` SSOT;不在表內 → 原樣)。\n\n    批 Z43 前只正規化 ETF 家族;起改以別名表為 SSOT(ETF 家族照舊對到 "ETF",持股高亮比對與泡泡\n    標準化軸一致)。純函式、零 I/O。\n    """\n    s = str(label or "").strip()\n',
          'def canonical_sector(label) -> str:\n    """ETF 家族細分標籤 → canonical "ETF";其餘板塊原樣返回(highlight 交集前用)。"""\n    s = str(label or "").strip()\n'),
@@ -344,12 +344,15 @@ _TPEX_JSON = [{"Date": "1151012", "SecuritiesCompanyCode": c, "CompanyName": "x"
 _WRONG_TPEX = "https://openapi.twse.com.tw/v1/opendata/t187ap03_O"
 
 
-def _net(monkeypatch, mod=mcf, tpex=None, twse=None, fm=None, seen=None):
-    """mock FinMind(requests.get)與官方(fetch_url)。錯誤的上櫃 URL 一律回 HTML(探針實測)。"""
+def _net(monkeypatch, mod=mcf, tpex=None, twse=None, fm=None, seen=None, fm_fail=False):
+    """mock FinMind(requests.get)與官方(fetch_url)。錯誤的上櫃 URL 一律回 HTML(探針實測)。
+    `fm_fail=True` → FinMind 回 HTTP 500(`_finmind_industry_rows` → None)。"""
     _fm_rows = copy.deepcopy(_FM_ROWS if fm is None else fm)
 
     def _get(url, params=None, headers=None, timeout=None):
         assert "finmind" in url
+        if fm_fail:
+            return _Resp(None, status=500, text="server error")
         return _Resp({"status": 200, "msg": "success", "data": _fm_rows})
 
     def _furl(url, params=None, timeout=20, headers=None, attempts=3):
@@ -632,14 +635,14 @@ def _day():
                 tpex_close_status="ok")
 
 
-def _run(monkeypatch, tmp_path, today, spec, *, tpex=None, argv=()):
+def _run(monkeypatch, tmp_path, today, spec, *, tpex=None, twse=None, fm_fail=False, argv=()):
     import tests.test_batch_z39 as Z39
     Z39._install(monkeypatch, U, spec)
     for k, f in (("CACHE_DIR", ""), ("PARQUET_PATH", "daily_net.parquet"),
                  ("BUBBLE_PATH", "bubble_latest.json"), ("META_PATH", "metadata.json"),
                  ("TICKER_SECTOR_PATH", "ticker_sector.json")):
         monkeypatch.setattr(U, k, tmp_path / f if f else tmp_path)
-    _net(monkeypatch, tpex=tpex)                       # 真 fetch_industry_map_bulk + mock 網路
+    _net(monkeypatch, tpex=tpex, twse=twse, fm_fail=fm_fail)   # 真 fetch_industry_map_bulk + mock 網路
     monkeypatch.setattr(U, "_today", lambda: today)
     seen: list = []
     _orig = U._collect_days
@@ -777,3 +780,163 @@ class TestCron:
         monkeypatch.setattr(R, "read_sector_flow_cache", lambda **k: dict(view))
         out = S.get_sector_flow_view(etf_tickers=["00679B.TWO", "6028"], include_stock_watchlists=False)
         assert out["highlight_sectors"] == {"金融保險", "ETF"}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7. QA 修正(兩組獨立 QA 的 non-blocking 項)
+# ══════════════════════════════════════════════════════════════════════════
+_LOOSE_LINE = ("                loose = [x for x in _ld if loose_industry_name(x[0]) == loose_industry_name(name)]\n")
+_LOOSE_SUBSTR = ("                loose = [x for x in _ld if loose_industry_name(name) in loose_industry_name(x[0])"
+                 " or loose_industry_name(x[0]) in loose_industry_name(name)]\n")
+
+
+def _loose_cases(sel):
+    """QA1-N1:寬鬆比對必須是「去尾後完全相等」,不是子字串包含。"""
+    r = sel([_fm("A31", "其他", "tpex", "2026-10-11"), _fm("A31", "其他電子類", "tpex", "2025-01-01")],
+            {"A31": _off("31", "上櫃")})
+    assert r["A31"]["chosen"] == {"label": "其他電子類", "rule": mcf.RULE_OFFICIAL_MATCH}
+    r = sel([_fm("A20", "其他電子業")], {"A20": _off("20")})
+    assert r["A20"]["chosen"] == {"label": "其他業", "rule": mcf.RULE_OFFICIAL_NAME}   # 不得匹配「其他電子業」
+
+
+class TestQaLooseNotSubstring:
+    def test_behaviour(self):
+        _loose_cases(mcf.select_industry_records)
+
+    def test_mutant_substring_turns_red(self):
+        M = _mut(_CLOSE, [(_LOOSE_LINE, _LOOSE_SUBSTR)])
+        with pytest.raises(AssertionError):
+            _loose_cases(M.select_industry_records)
+
+
+def _raw_of(rows):
+    """[(代號, label, 官方代碼|None)] → industry_raw 形狀。"""
+    return {"codes": {c: {"finmind": [], "official": ({"code": k} if k else None),
+                          "chosen": {"label": lab, "rule": "x"}} for c, lab, k in rows}}
+
+
+class TestQaAliasConsistency:
+    def test_pure(self):
+        ok = _raw_of([("1", "金融保險", "17"), ("2", "金融保險業", "17"), ("3", "金融業", None),
+                      ("4", "運動休閒類", "37"), ("5", "運動休閒", "37"), ("6", "ETF", None)])
+        assert U._alias_consistency(ok) == {"code_to_multi_canonical": {}, "canonical_to_multi_code": {}}
+        bad = _raw_of([("1", "觀光餐旅", "16"), ("2", "觀光新名", "16"),      # 同代碼兩個標準 → 漏收
+                       ("3", "金融保險", "17"), ("4", "金融業", "99")])        # 同標準兩代碼 → 誤併
+        r = U._alias_consistency(bad)
+        assert r["code_to_multi_canonical"] == {"16": {"觀光餐旅": 1, "觀光新名": 1}}
+        assert r["canonical_to_multi_code"] == {"金融保險": {"17": 1, "99": 1}}
+        assert U._alias_consistency(None) == {"code_to_multi_canonical": {}, "canonical_to_multi_code": {}}
+
+    def test_cron_writes_structured_warning(self, monkeypatch, tmp_path):
+        """別名表漏收(以 identity 模擬)→ 當次 metadata 結構化欄位 + warnings 非空;正常表 → 空。"""
+        days = [pd.Timestamp("2026-10-09").date(), _TODAY]
+        _rc, _s, meta = _run(monkeypatch, tmp_path, _TODAY, _spec(days), argv=["--bootstrap", "--days", "3"])
+        assert meta["industry"]["alias_consistency"] == {"code_to_multi_canonical": {},
+                                                         "canonical_to_multi_code": {}}
+        assert not any("別名一致性" in w for w in meta["warnings"])
+        monkeypatch.setattr(U, "canonical_sector", lambda x: str(x or "").strip())
+        _rc, _s, meta = _run(monkeypatch, tmp_path, _TODAY, _spec(days), argv=["--bootstrap", "--days", "3"])
+        assert meta["industry"]["alias_consistency"]["code_to_multi_canonical"]["17"] == \
+            {"金融保險": 1, "金融保險業": 1}
+        assert any("別名一致性" in w and '"17"' in w for w in meta["warnings"])
+
+    def test_mutant_no_warning_turns_red(self, monkeypatch, tmp_path):
+        M = _mut(_SCRIPT, [('    if _cons["code_to_multi_canonical"]:\n',
+                            '    if False:\n')])
+        summ = M._industry_summary(_raw_of([("1", "觀光餐旅", "16"), ("2", "觀光新名", "16")]),
+                                   IC.INDUSTRY_SCHEME_VERSION)
+        with pytest.raises(AssertionError):
+            assert any("別名一致性" in w for w in summ["warnings"])
+
+
+class TestQaFinmindFailDegrades:
+    def test_scheme_degraded_and_backfilled(self, monkeypatch, tmp_path):
+        days = [pd.Timestamp("2026-10-09").date(), _TODAY]
+        _rc, _s, meta = _run(monkeypatch, tmp_path, _TODAY, _spec(days), fm_fail=True,
+                             argv=["--bootstrap", "--days", "3"])
+        _deg = IC.INDUSTRY_SCHEME_VERSION + IC.INDUSTRY_SCHEME_DEGRADED_SUFFIX
+        assert meta["industry"]["scheme"] == _deg
+        assert meta["industry"]["finmind_status"]["ok"] is False
+        assert meta["industry"]["unavailable_markets"] == []           # 官方都 ok,只有 FinMind 失敗
+        pq = pd.read_parquet(tmp_path / "daily_net.parquet")
+        assert set(pq["industry_scheme"]) == {_deg}
+        assert set(U._tpex_backfill_days(pq, _TODAY)) >= set(days)      # FinMind 恢復後會重算
+
+    def test_mutant_not_degraded_turns_red(self, monkeypatch, tmp_path):
+        M = _mut(_SCRIPT, [('    if (raw.get("finmind_status") or {}).get("ok") is False:\n',
+                            '    if False:\n')])
+        monkeypatch.setattr(sys.modules[__name__], "U", M)
+        with pytest.raises(AssertionError):
+            self.test_scheme_degraded_and_backfilled(monkeypatch, tmp_path)
+
+
+class TestQaNStocksNotZero:
+    def _sd(self):
+        sd = _sd_rows([_r("2026-10-07", "金融保險", 1.0, 0.0, 0.0, 40),
+                       _r("2026-10-07", "金融業", 1.0, 0.0, 0.0, 8),
+                       _r("2026-10-07", "半導體業", 1.0, 0.0, 0.0, 200)])
+        sd["n_stocks"] = sd["n_stocks"].astype("float64")
+        sd.loc[sd["sector"] == "金融業", "n_stocks"] = np.nan
+        return sd
+
+    def _check(self, fn):
+        c, _ = fn(self._sd())
+        d = c.set_index("sector")
+        assert pd.isna(d.loc["金融保險", "n_stocks"])                  # 成員缺 → NA,不是 40
+        assert d.loc["半導體業", "n_stocks"] == 200
+        assert d.loc["金融保險", "net_amt_yi"] == pytest.approx(2.0)   # 金額不受 n_stocks 缺影響
+        assert str(c["n_stocks"].dtype) == "Int64"
+        c2, _ = fn(self._sd().drop(columns="n_stocks"))
+        assert c2["n_stocks"].isna().all()                              # 無此欄 → 全 NA,不是 0
+
+    def test_behaviour(self):
+        self._check(canonicalize_sector_daily)
+
+    def test_mutant_fillna_zero_turns_red(self):
+        M = _mut(_L2, [("    agg[\"n_stocks\"] = pd.array([pd.NA if na > 0 else int(round(v))       # 任一成員缺 → NA\n",
+                        "    agg[\"n_stocks\"] = pd.array([int(round(v))\n")])
+        with pytest.raises(AssertionError):
+            self._check(M.canonicalize_sector_daily)
+
+
+class TestQaEmptyMapKeepsRaw:
+    def _go(self, monkeypatch, tmp_path, mod):
+        monkeypatch.setattr(sys.modules[__name__], "U", mod)
+        (tmp_path / "industry_raw.json").write_text('{"PREV": true}\n', encoding="utf-8")
+        (tmp_path / "ticker_sector.json").write_text('{"2330": "半導體業"}\n', encoding="utf-8")
+        twse = _Resp([{"公司代號": "2330", "產業別": "99"}])            # 官方 ok,但代碼不在代碼表
+        tpex = _Resp([{"SecuritiesCompanyCode": "6028", "SecuritiesIndustryCode": "98"}])
+        days = [pd.Timestamp("2026-10-09").date(), _TODAY]
+        _run(monkeypatch, tmp_path, _TODAY, _spec(days), fm_fail=True, twse=twse, tpex=tpex,
+             argv=["--bootstrap", "--days", "3"])
+        raw = mcf.get_last_industry_raw()
+        assert raw["codes"] and not mcf.industry_map_from_raw(raw)       # 前提:codes 非空、map 空
+        assert (tmp_path / "industry_raw.json").read_text(encoding="utf-8") == '{"PREV": true}\n'
+        assert json.loads((tmp_path / "ticker_sector.json").read_text(encoding="utf-8")) == {"2330": "半導體業"}
+
+    def test_behaviour(self, monkeypatch, tmp_path):
+        self._go(monkeypatch, tmp_path, U)
+
+    def test_mutant_turns_red(self, monkeypatch, tmp_path):
+        M = _mut(_SCRIPT, [("    if not industry_map_from_raw(raw):\n", "    if False:\n")])
+        with pytest.raises(AssertionError):
+            self._go(monkeypatch, tmp_path, M)
+
+
+class TestQaMemberAbsentDays:
+    def test_meta(self):
+        _c, meta = canonicalize_sector_daily(TestCanonicalize()._base())
+        assert meta["member_absent_days"] == {"ETF": 1, "半導體業": 0, "金融保險": 0}
+
+    def test_bubble_field(self, monkeypatch, tmp_path):
+        d1, d2 = pd.Timestamp("2026-10-09").date(), _TODAY
+        spec = _spec([d1, d2])
+        day2 = _day()
+        day2["tpex"] = {k: v for k, v in day2["tpex"].items() if k != "00679B"}   # 10-12 上櫃 ETF 成員缺席
+        spec[d2.strftime("%Y%m%d")] = day2
+        _run(monkeypatch, tmp_path, _TODAY, spec, argv=["--bootstrap", "--days", "3"])
+        bj = json.loads((tmp_path / "bubble_latest.json").read_text(encoding="utf-8"))
+        secs = {s["sector"]: s for s in bj["sectors"]}
+        assert secs["ETF"]["n_member_absent_days"] == 1 and secs["ETF"]["members"] == ["ETF", "上櫃ETF"]
+        assert all(isinstance(s["n_member_absent_days"], int) for s in bj["sectors"])
+        assert secs["半導體業"]["n_member_absent_days"] == 0
