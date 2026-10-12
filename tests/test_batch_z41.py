@@ -123,7 +123,10 @@ _SEQ = [0]
 
 
 def z41_revert(rel: str, code: str) -> str:
-    """現行原始碼 → 本批之前（`f0a32a3b`）原始碼（無 pair 的檔原樣）。舊批次還原鏈串接用。"""
+    """現行原始碼 → 本批之前（`f0a32a3b`）原始碼（無 pair 的檔原樣）。舊批次還原鏈串接用。
+    批 Z43（客戶 Q-z29＝A）改了 `_CLOSE` 產業別段 ⇒ 先換回 Z43 之前寫法（⛔ 不動 `Z41_REVERT_PAIRS` 本身）。"""
+    from tests.test_batch_z43 import z43_revert
+    code = z43_revert(rel, code)
     for new, old in Z41_REVERT_PAIRS.get(rel, ()):
         assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)

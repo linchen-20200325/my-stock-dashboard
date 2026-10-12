@@ -126,9 +126,11 @@ Z39_BASE_SHA = {
 
 def _z41_pairs(rel: str):
     """批 Z41（客戶 Q-z27＝A）把 `_INST`／`_CLOSE` 的 TPEx 兩支 fetcher 整支改接官方新網站 ⇒ 還原鏈最先換回
-    Z41 之前的寫法（⛔ 不動 `Z39_REVERT_PAIRS` 本身）。"""
+    Z41 之前的寫法（⛔ 不動 `Z39_REVERT_PAIRS` 本身）。
+    批 Z43（客戶 Q-z29＝A）改了 `_CLOSE` 產業別段 ⇒ 再往前串 Z43 還原（同樣不動 `Z39_REVERT_PAIRS`）。"""
     from tests.test_batch_z41 import Z41_REVERT_PAIRS
-    return tuple(Z41_REVERT_PAIRS.get(rel, ()))
+    from tests.test_batch_z43 import Z43_REVERT_PAIRS
+    return tuple(Z43_REVERT_PAIRS.get(rel, ())) + tuple(Z41_REVERT_PAIRS.get(rel, ()))
 
 
 def _z40_pairs(rel: str):

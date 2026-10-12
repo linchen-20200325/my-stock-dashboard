@@ -66,6 +66,11 @@ _MUT_SEQ = [0]
 
 
 def z42_revert(rel: str, code: str, pairs=None) -> str:
+    """`pairs=None` → 現行檔還原到基底 `9c09df3e`。批 Z43（客戶 Q-z29＝A）改了 `_L0` 別名段 ⇒ 先換回 Z43 之前
+    寫法（⛔ 不動 `Z42_REVERT_PAIRS` 本身）；顯式 `pairs`（突變用）照舊只作用於現行檔。"""
+    if pairs is None:
+        from tests.test_batch_z43 import z43_revert
+        code = z43_revert(rel, code)
     for new, old in (Z42_REVERT_PAIRS[rel] if pairs is None else pairs):
         assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)
