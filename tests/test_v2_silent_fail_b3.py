@@ -443,7 +443,10 @@ class TestL5Card:
         assert PH.V2_SHORT_ROWS[("hold.deep.dividend_cash", PH.CASH_FAILED_NOW)][1:] == (
             # Q1-r4-f1（2026-09-27）：追加持股清單出處候選（上游持股讀不到時）；本批仍命中第一個。
             (PH._v2_raised(PH.SRC_DIV_CASH), PH._v2_raised(PH.SRC_HOLDINGS),
-             "整批抓取失敗 —— 看該列的錯誤訊息"),
+             "整批抓取失敗 —— 看該列的錯誤訊息",
+             # 批 Z49（2026-10-13，同步錨點）：追加「張數資料異常」候選（持有列張數是異常值時）；
+             # 本批仍命中第一個。
+             PH.invalid_data_text(PH.ITEM_LOTS)),
             (PH._V2_NO_EXIT_REPORT, PH._V2_CHECK_NET))
         card = PH.build_dividend_cash_card(_deep(_cash(failed_tickers=("0056",))))[0]
         short = dict(PH.v2_short_rows(card)[0])

@@ -272,7 +272,7 @@ from shared import ia_nav
 # 同 `page_hold` 批次 B 的作法，遮罩沿用 `***`、⛔ 不加說明字）。
 from shared.secret_scrub import scrub_secrets
 # L0 SSOT：均線週期。**禁止在 UI 端寫死 20 / 60 / 120 / 240**（§3.3）。
-from shared.station_specs import MISS_NOT_APPLICABLE, MISS_TEXT
+from shared.station_specs import MISS_NOT_APPLICABLE, MISS_TEXT, invalid_data_text
 from shared.ui_state import (
     NO_VALUE_STATES,
     UI_FAILED,
@@ -1354,6 +1354,9 @@ class ValuationReadout:
         price: 這一輪用的現價（沿用個股那一輪 `fetch_metrics` 的
             `current_price`，**不另外再抓一次**）。
         error: 取數或計算拋出的例外 `repr(e)`；空字串 = 沒有錯誤。
+        invalid_items: 批 Z49（客戶 2026-10-13 裁示 B）—— 資料異常（NaN／±inf／轉不成數字）
+            的項目名（例：`("配息",)`）。非空 ⇒ 本輪**不呼叫 L2**、卡片紅態、說明只用
+            `invalid_data_text(項目)`。空 tuple ＝ 沒有異常（修前行為）。
     """
 
     requested: bool
@@ -1367,6 +1370,7 @@ class ValuationReadout:
     years_n: int = 0
     price: float | None = None
     error: str = ""
+    invalid_items: tuple[str, ...] = ()
 
     @property
     def has_zone(self) -> bool:
@@ -1433,6 +1437,13 @@ def load_valuation(verdict: KindVerdict, stock: StockReadout
         return ValuationReadout(
             requested=True, price=stock.price,
             error=_error_why(SRC_DIVIDENDS, repr(_e)))
+
+    if getattr(_div, "invalid", False):
+        # 批 Z49（客戶 2026-10-13 裁示 B）：配息資料異常 → 不呼叫 L2（⛔ 不拿異常值算殖利率、
+        # ⛔ 不下位階結論），平均股利／配息年數一律不帶（L3 已給 `None`）。
+        return ValuationReadout(
+            requested=True, price=stock.price, source=_div.source,
+            years_n=len(_div.years), invalid_items=("配息",))
 
     try:
         from src.compute.strategy.v5_modules import calc_dividend_yield_357
@@ -2013,9 +2024,11 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
     ⚠️ **中文說法一律讀 L2 的 `signal` / `msg`**，本檔不寫第二份
     便宜／合理／昂貴對照表（§2.1；判型那一格立的是同一個判例）。
     """
+    # 批 Z49：資料異常 → 走本卡既有的紅態（說明只用客戶核准的那一句）。
+    _invalid_why = "".join(invalid_data_text(_i) for _i in val.invalid_items)
     _state = classify_ui_state(
         requested=val.requested,
-        error=val.error or None,
+        error=val.error or _invalid_why or None,
         has_value=val.has_zone)
 
     # ⚠️ **缺值的括號說明只在 `empty` 時給**（自審實測後改）：
@@ -2061,7 +2074,7 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
         _note = Note(now=SINGLE_IDLE_NOW, why=SINGLE_IDLE_WHY,
                      where=SINGLE_IDLE_WHERE)
     elif _state == UI_FAILED:
-        _note = Note(now=VALUATION_FAILED_NOW, why=val.error,
+        _note = Note(now=VALUATION_FAILED_NOW, why=val.error or _invalid_why,
                      where="先確認代碼與網路／proxy")
     else:   # UI_EMPTY —— **有效結果**：這套法則不適用這一檔，或缺一半輸入。
         # 「是缺股價還是缺配息」由 L2 的 `msg` 說（它已經寫明），本檔不再判一次；
@@ -2590,7 +2603,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "新上市或剛換季的標的等資料補齊")),
        _v2_rows_for("inspect.stock.valuation", VALUATION_FAILED_NOW, (
            None, (_v2_raised(SRC_DIVIDENDS), _v2_raised(SRC_357), _v2_raised(SRC_METRICS),
-                  _v2_raised(SRC_METRICS, "回報失敗")), _V2_CHECK_NET)),
+                  _v2_raised(SRC_METRICS, "回報失敗"),
+                  # 批 Z49：配息資料異常（整句就是摘錄）。
+                  invalid_data_text("配息")), _V2_CHECK_NET)),
        _v2_rows_for("inspect.stock.valuation", VALUATION_EMPTY_NOW, (
            None,
            # 候選依序（QA F2：「為什麼」⛔ 不得丟掉**原因**）：

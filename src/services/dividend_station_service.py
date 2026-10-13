@@ -437,6 +437,20 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
             _lots = h.get("lots")
             _avg = h.get("avg_price")
             _cur = m.get("current_price")
+            # 批 Z49（客戶 2026-10-13 裁示 B）：NaN／±inf／轉不成數字 ＝ 資料異常 —— 該值**不參與
+            # 計算**（⛔ 不換成 0／前值／任何替代值），並在列上標出是哪幾項（`SS.KEY_INVALID_INPUTS`，
+            # 只有異常時才有這一鍵）。修前：`inf` 通過下面的 `> 0` 擋關 → 市值／損益% 變 inf；
+            # 轉不成數字則整列落進 except 被講成「整批抓取失敗」。
+            _invalid = tuple(_item for _item, _v in ((SS.ITEM_LOTS, _lots),
+                                                     (SS.ITEM_AVG_PRICE, _avg),
+                                                     (SS.ITEM_PRICE, _cur))
+                             if SS.is_invalid_number(_v))
+            if _invalid:
+                print(f"[dividend_station] {tk} 資料異常（{'、'.join(_invalid)}）→ 不參與計算")
+                _row[SS.KEY_INVALID_INPUTS] = _invalid
+                _lots = None if SS.ITEM_LOTS in _invalid else _lots
+                _avg = None if SS.ITEM_AVG_PRICE in _invalid else _avg
+                _cur = None if SS.ITEM_PRICE in _invalid else _cur
             _row["市值"] = (float(_lots) * float(_cur)
                             if _lots and _cur and float(_lots) > 0 and float(_cur) > 0 else None)
             _row["損益%"] = (round((float(_cur) / float(_avg) - 1.0) * 100.0, 1)
@@ -1022,6 +1036,9 @@ def compute_portfolio_totals(rows: list[dict]) -> dict | None:
         if not r.get("held") or (r.get("_detail") or {}).get("error"):
             continue
         _held_n += 1
+        if r.get(SS.KEY_INVALID_INPUTS):
+            # 批 Z49：張數／均價／現價任一是異常值 → 整個總額不算（⛔ 不剔除那一檔後照算）。
+            return None
         _lots, _avg, _cur = r.get("張數"), r.get("均價"), r.get("現價")
         if not all(isinstance(_v, (int, float)) and _v > 0
                    for _v in (_lots, _avg, _cur)):
@@ -1057,6 +1074,10 @@ def compute_allocation_split(rows: list[dict]) -> dict | None:
         if not r.get("held") or r.get("_detail", {}).get("error"):
             continue
         _held_n += 1
+        if {SS.ITEM_LOTS, SS.ITEM_PRICE} & set(r.get(SS.KEY_INVALID_INPUTS) or ()):
+            # 批 Z49：市值的兩個輸入（張數／現價）任一是異常值 → 整個比例不算
+            # （⛔ 不剔除那一檔後照算；均價不進市值，只有均價異常時不影響本函式）。
+            return None
         _v = r.get("市值")
         if not isinstance(_v, (int, float)) or _v <= 0:
             continue

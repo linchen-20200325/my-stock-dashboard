@@ -247,7 +247,16 @@ def health_a(total_return_1y_pct: float | None,
       重跑確實有機會補回來。
     兩者皆缺 → 取較根本者（`most_fundamental_miss`,歷史不足擋在前面）。
     **不改判燈**:三種缺法一律 ⚪、一律不判定,只是各自說出自己為什麼缺。
+
+    批 Z49（客戶 2026-10-13 裁示 B）：任一輸入是 NaN／±inf／轉不成數字 → ⚪ 不判定、
+    說明一律用 `SS.INVALID_DATA_TEXT`（⛔ 不判 🔴 汰弱、⛔ 不判 🟢）。`miss_reason` 留空 ——
+    `MISS_*` 每一個都講「沒有值」，套在「值壞了」上都是錯的指引（見 `SS.INVALID_DATA_TEXT`）。
     """
+    _bad = [_item for _item, _v in (("近一年總報酬", total_return_1y_pct),
+                                    ("配息率", annual_yield_pct))
+            if SS.is_invalid_number(_v)]
+    if _bad:
+        return Flag("⚪", "".join(SS.invalid_data_text(_i) for _i in _bad))
     if total_return_1y_pct is None and annual_yield_pct is None:
         return Flag("⚪", "A 資料不足（近一年報酬與配息率都缺）",
                     miss_reason=SS.most_fundamental_miss(
@@ -298,7 +307,13 @@ def health_c(weekly_close: pd.Series) -> Flag:
 
 
 def health_d(premium_pct: float | None) -> Flag:
-    """D 折溢價（ETF專屬）：市價溢價 > 1.5% → 🟡 高溢價不追高。"""
+    """D 折溢價（ETF專屬）：市價溢價 > 1.5% → 🟡 高溢價不追高。
+
+    批 Z49：NaN／±inf／轉不成數字 → ⚪ 不判定（⛔ 不判 🟢 正常），說明用 `SS.INVALID_DATA_TEXT`
+    （`miss_reason` 留空，理由同 `health_a`）。
+    """
+    if SS.is_invalid_number(premium_pct):
+        return Flag("⚪", SS.invalid_data_text("折溢價"))
     if premium_pct is None:
         return Flag("⚪", "D 無折溢價資料", miss_reason=SS.MISS_NO_INPUT)
     if premium_pct > T.PREMIUM_ALERT_PCT:

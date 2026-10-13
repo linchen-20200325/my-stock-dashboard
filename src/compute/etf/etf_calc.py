@@ -640,11 +640,17 @@ def calc_portfolio_stress_test(rows: list, total_value: float,
     SSOT 政策:任何投組層壓力測試呼叫本函式,不再 inline Beta 加權計算。
     P3-A(§1/§3.1):beta 缺(None/0)或 cast 失敗 → 以 1.0 估算但**帶 _beta_imputed 旗標**
     (原 `or 1.0` 靜默捏造),count/tickers 回傳供 UI 誠實揭示。
+    📌 批 Z49（客戶 2026-10-13 裁示 B；有意識的變更，⛔ 不是漏改）：上一句的「或 cast 失敗」
+    已不成立 —— Beta 是 NaN／±inf／轉不成數字 ⇒ **資料異常、不補 1.0**，該檔 `Beta`／`_loss`
+    為 NaN，代號列進 `beta_invalid_tickers`（**只有異常時才有這一鍵**），呼叫端不得拿
+    `total_loss`／`loss_pct` 下結論。查無 Beta（None／0）以 1.0 估算的既有行為不變。
     """
     from shared.signal_thresholds import PORTFOLIO_STRESS_TEST_DROP_PCT
     if drop_pct is None:
         drop_pct = PORTFOLIO_STRESS_TEST_DROP_PCT
+    from shared.station_specs import is_invalid_number   # 批 Z49：L0 判「有給但不是有效數字」
     _per_etf = []
+    _invalid: list = []     # 批 Z49：Beta 資料異常的代號（只在非空時才放進回傳值）
     _total_loss = 0.0
     _drop_ratio = drop_pct / 100
     for r in rows:
@@ -654,10 +660,19 @@ def calc_portfolio_stress_test(rows: list, total_value: float,
         #   不再靜默捏造。原 `or 1.0` 把缺 beta 的 ETF 悄悄以 1.0 算進壓測總虧損,無標記。
         _imputed = not _beta_raw
         _beta = 1.0
-        if _beta_raw:
+        if _beta_raw and is_invalid_number(_beta_raw):
+            # 批 Z49（客戶 2026-10-13 裁示 B）：NaN／±inf／轉不成數字 ＝ 資料異常 ——
+            # ⛔ 不補 1.0（修前：NaN／inf 是 truthy → 直接拿去乘出 nan／inf；轉不成數字 → 補 1.0）。
+            # 這一檔不算虧損（`_loss` 為 NaN），代號列進 `beta_invalid_tickers`，由呼叫端整卡不算。
+            # 查無 Beta（None／0）→ 1.0 估算那條既有路徑不變。
+            print(f"[calc_portfolio_stress_test] {r['ticker']} beta 資料異常（{_beta_raw!r}）→ 不估算")
+            _beta, _imputed = math.nan, False
+            _invalid.append(r['ticker'])
+        elif _beta_raw:
             try:
                 _beta = float(_beta_raw)
             except Exception as _e_beta:
+                # 走到這裡只剩「只有空白的字串」（`is_invalid_number` 視為缺值）→ 同查無 Beta。
                 print(f"[calc_portfolio_stress_test] {r['ticker']} beta cast 失敗:"
                       f'{type(_e_beta).__name__},以 1.0 估算')
                 _beta, _imputed = 1.0, True
@@ -672,7 +687,7 @@ def calc_portfolio_stress_test(rows: list, total_value: float,
         })
     _loss_pct = (abs(_total_loss) / total_value * 100) if total_value > 0 else 0.0
     _imputed_tickers = [e['ETF'] for e in _per_etf if e['_beta_imputed']]
-    return {
+    _out = {
         'per_etf': _per_etf,
         'total_loss': _total_loss,
         'loss_pct': _loss_pct,
@@ -680,6 +695,11 @@ def calc_portfolio_stress_test(rows: list, total_value: float,
         'beta_imputed_count': len(_imputed_tickers),    # §1:估算檔數(0=全真實)
         'beta_imputed_tickers': _imputed_tickers,
     }
+    if _invalid:
+        # 批 Z49：**只有異常時才有這一鍵** —— 正常輸入的回傳 dict 與修前逐鍵相同。
+        # 非空 ⇒ `total_loss`／`loss_pct` 不是有效數字，呼叫端不得拿來下結論。
+        _out['beta_invalid_tickers'] = _invalid
+    return _out
 
 
 def calc_tracking_error(df: pd.DataFrame, bench_df: pd.DataFrame) -> float:

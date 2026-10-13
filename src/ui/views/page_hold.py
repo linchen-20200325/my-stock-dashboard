@@ -307,10 +307,14 @@ import streamlit as st
 from shared import ia_nav
 # L0 SSOT：燈號規格表（含 `discriminative` 旗標）與缺值原因語彙。
 from shared.station_specs import (
+    ITEM_AVG_PRICE,
+    ITEM_LOTS,
+    ITEM_PRICE,
     KEY_HEALTH_A,
     KEY_HEALTH_B,
     KEY_HEALTH_C,
     KEY_HEALTH_D,
+    KEY_INVALID_INPUTS,
     KEY_STOCK_HEALTH,
     KEY_STOCK_KD,
     KEY_STOCK_SWAP,
@@ -319,6 +323,7 @@ from shared.station_specs import (
     MISS_NO_INPUT,
     MISS_TEXT,
     SPECS_BY_KEY,
+    invalid_data_text,
 )
 # L0 SSOT：80/20 目標、衛星停利門檻、VIX 三段門檻。**本檔不寫死任何一個數字。**
 from shared.dividend_station_thresholds import (
@@ -1746,6 +1751,12 @@ def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
 
 def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
     """金額那幾列。**算不出來就不放這個數字，不填 0**（§1）。"""
+    # 批 Z49（客戶 2026-10-13 裁示 B）：張數／均價／現價任一是異常值 → 金額整列不算、只列
+    # 「代號：{項目}資料異常，無法計算，不下結論。」（L3 `compute_portfolio_totals()` 此時回 None；
+    # 排在下面那句「持股缺張數／均價／現價」之前 —— 異常不是缺）。
+    _bad = _invalid_groups(station.rows, (ITEM_LOTS, ITEM_AVG_PRICE, ITEM_PRICE))
+    if _bad:
+        return [("未實現損益／總市值", _invalid_why(_bad))]
     _t = station.totals
     if not _t:
         # 批 H3 H1-f8（v2 版的 H1-f6）：持有列**全部**整批抓取失敗時，L3 `compute_portfolio_totals()`
@@ -1780,6 +1791,37 @@ def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
             + ("；沒有納入：" + "、".join(dict.fromkeys(_codes))
                if _codes and len(_codes) == _held_n - _valued_n else "")))
     return _out
+
+
+def _invalid_groups(rows: Sequence[Mapping[str, Any]], items: Sequence[str], *,
+                    stock_only: bool = False) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """批 Z49：持有列裡被 L3 標了資料異常（`KEY_INVALID_INPUTS`）的 → `((項目, (代號, …)), …)`。
+
+    只看 `items` 列出的項目（各卡只管會影響自己結論的那幾項），順序照 `items`。
+    條件同本檔其他「沒被計入」的判法：持有、非整批抓取失敗（整批失敗的列走既有那一句）。
+    """
+    _out: list[tuple[str, tuple[str, ...]]] = []
+    for _item in items:
+        _codes = tuple(
+            str(_r.get("代號", "")) for _r in rows
+            if _r.get("held") and not (_r.get("_detail") or {}).get("error")
+            and (not stock_only or _r.get("種類") == "個股")
+            and _item in (_r.get(KEY_INVALID_INPUTS) or ()))
+        if _codes:
+            _out.append((_item, _codes))
+    return tuple(_out)
+
+
+def _invalid_codes(groups: Sequence[tuple[str, Sequence[str]]]) -> tuple[str, ...]:
+    """`_invalid_groups()` 的代號（去重、保序）—— 給狀態判定用，不給畫面。"""
+    return tuple(dict.fromkeys(_c for _, _codes in groups for _c in _codes))
+
+
+def _invalid_why(groups: Sequence[tuple[str, Sequence[str]]]) -> str:
+    """`代號、代號：{項目}資料異常，無法計算，不下結論。` 逐項目串起來（列舉方式同本檔
+    「沒被計入」那幾句：代號清單 ＋「：」＋ 句子）。句子一律走 L0 `invalid_data_text()`。"""
+    return "".join(f"{'、'.join(_codes)}：{invalid_data_text(_item)}"
+                   for _item, _codes in groups)
 
 
 def _unvalued_codes(station: StationReadout) -> tuple[str, ...]:
@@ -2305,6 +2347,8 @@ def _split_uncounted(station: StationReadout) -> tuple[tuple[str, ...], tuple[st
     _unpriced = tuple(
         str(_r.get("代號", "")) for _r in _held
         if not (_r.get("_detail") or {}).get("error")
+        # 批 Z49：現價是**異常值**（L3 已把它設成 None）≠ 抓不到 → 由 `_invalid_groups()` 另列。
+        and ITEM_PRICE not in (_r.get(KEY_INVALID_INPUTS) or ())
         and not (isinstance(_r.get("現價"), (int, float)) and _r["現價"] > 0))
     return _failed, _unpriced
 
@@ -2319,6 +2363,8 @@ def _split_state(station: StationReadout) -> str:
     """
     _failed, _unpriced = _split_uncounted(station)
     _uncounted = _failed + _unpriced
+    # 批 Z49：市值的兩個輸入（張數／現價）是異常值 → 同樣沒被計入（L3 此時回 None）→ 紅。
+    _uncounted += _invalid_codes(_invalid_groups(station.rows, (ITEM_LOTS, ITEM_PRICE)))
     return classify_ui_state(
         requested=station.requested,
         error=station.error or None,
@@ -2371,7 +2417,9 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
                 for _codes, _sentence in (
                     (_failed, MISS_TEXT[MISS_FETCH_FAILED].removeprefix("這一檔")),
                     (_unpriced, NO_PRICE_WHY))
-                if _codes),
+                if _codes)
+            # 批 Z49：張數／現價異常（客戶核准句；接在既有兩種之後）。
+            + _invalid_why(_invalid_groups(station.rows, (ITEM_LOTS, ITEM_PRICE))),
             where=STATION_ERROR_WHERE)
     elif not station.has_rows:
         _note = _station_note(station, now=SPLIT_NO_HOLDINGS_NOW,
@@ -2421,12 +2469,18 @@ def build_take_profit_card(station: StationReadout) -> _Built:
         str(_r.get("代號", "")) for _r in station.rows
         if _r.get("held") and _r.get("種類") == "個股"
         and not (_r.get("_detail") or {}).get("error")
+        # 批 Z49：現價是**異常值** ≠ 抓不到 → 由下面的 `_tp_invalid` 另列。
+        and ITEM_PRICE not in (_r.get(KEY_INVALID_INPUTS) or ())
         and not isinstance(_r.get("損益%"), (int, float))
         and not (isinstance(_r.get("現價"), (int, float)) and _r.get("現價") > 0))
+    # 批 Z49（客戶 2026-10-13 裁示 B）：持有衛星的**損益%兩個輸入**（均價／現價）是異常值 →
+    # L3 不算那一列的損益%（⛔ 不拿異常值算）→ 同樣沒被判過 → 整卡紅、不下「可停利」。
+    # 張數不進損益%，⛔ 不在此列。
+    _tp_invalid = _invalid_groups(station.rows, (ITEM_AVG_PRICE, ITEM_PRICE), stock_only=True)
     # 兩種都是「這一檔沒被判過」→ 有任一檔時 `has_value` 一律視為 False
     # （同 ④ 換股（批次 2）：旁邊還有沒判過的，已列出的達標清單就不是完整的結論；
     #  已算出的達標檔照樣列在 facts，不藏）。
-    _unjudged = _fetch_failed + _no_price
+    _unjudged = _fetch_failed + _no_price + _invalid_codes(_tp_invalid)
     _state = classify_ui_state(
         requested=station.requested,
         error=station.error or None,
@@ -2470,6 +2524,7 @@ def build_take_profit_card(station: StationReadout) -> _Built:
                      f"{MISS_TEXT[MISS_FETCH_FAILED].removeprefix('這一檔')}")
         if _no_price:
             _why += f"{'、'.join(_no_price)}：{NO_PRICE_WHY}"
+        _why += _invalid_why(_tp_invalid)       # 批 Z49
         _note = Note(now=TP_FAILED_NOW, why=_why, where=STATION_ERROR_WHERE)
     elif not station.has_rows:
         _note = _station_note(station, now=TP_NO_HOLDINGS_NOW,
@@ -2625,6 +2680,9 @@ class DeepReadout:
             （`priced_rows()`／`_shares_of()` 不收 `_detail.error` 的列，壓測／VaR 也不收沒現價的列；
             前者連 `held_n` 都不計）—— 不帶下來的話，三格會把「抓不到」畫成灰卡
             「有效的結果」，或畫成一個**沒講它漏了哪幾檔**的數字。預設空 = 修前行為。
+        invalid_rows: 批 Z49 —— 持有列裡 L3 標了資料異常（張數／均價／現價是 NaN／±inf／
+            轉不成數字）的 `((項目, (代號, …)), …)`，由 `_invalid_groups(station.rows, …)` 帶下來。
+            各格只取會影響自己結論的項目（壓測／VaR：三項；配息：張數）。預設空 = 修前行為。
     """
 
     requested: bool
@@ -2642,6 +2700,7 @@ class DeepReadout:
     failed_rows: tuple[str, ...] = ()
     unpriced_rows: tuple[str, ...] = ()
     error_src: str | None = None
+    invalid_rows: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @property
     def scope_idle(self) -> bool:
@@ -2674,7 +2733,10 @@ def load_deep(station: StationReadout) -> DeepReadout:
         return DeepReadout(requested=True, **_shared)
     # Q3：持有列取數失敗的那幾檔（見 `DeepReadout.failed_rows`）。只讀列上既有的兩欄，零 L3 呼叫。
     _failed_rows, _unpriced_rows = _split_uncounted(station)
-    _shared = {**_shared, "failed_rows": _failed_rows, "unpriced_rows": _unpriced_rows}
+    _shared = {**_shared, "failed_rows": _failed_rows, "unpriced_rows": _unpriced_rows,
+               # 批 Z49：資料異常的持有列（同上，只讀列上 L3 標好的那一鍵）。
+               "invalid_rows": _invalid_groups(station.rows,
+                                               (ITEM_LOTS, ITEM_AVG_PRICE, ITEM_PRICE))}
 
     # ⚠️ **三支各自具名 import，不用 `getattr(module, name)`**：
     # 動態取屬性會直接繞過 `tests/test_p04_hold_view.py::TestReadOnly` 的
@@ -2745,7 +2807,8 @@ def _deep_note(deep: DeepReadout, *, now: str, source: str,
     return Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
 
 
-def _deep_uncounted_why(failed: Sequence[str], unpriced: Sequence[str]) -> str:
+def _deep_uncounted_why(failed: Sequence[str], unpriced: Sequence[str],
+                       invalid: Sequence[tuple[str, Sequence[str]]] = ()) -> str:
     """Q3：⑥ 三格「持有列取數失敗」的 why —— 與 ⑤⑥ 核心／衛星（Q2）、⑤ 停利卡**逐字同一套**
     （同一頁、同一檔、同一條失敗路徑 ⛔ 不給兩種說法）。⛔ 不新寫：L0 `MISS_TEXT` 摘掉開頭
     單數主詞（只刪不改）＋ `NO_PRICE_WHY`（已截掉在快取內不成立的「可以重跑一次」）。
@@ -2755,7 +2818,7 @@ def _deep_uncounted_why(failed: Sequence[str], unpriced: Sequence[str]) -> str:
         for _codes, _sentence in (
             (failed, MISS_TEXT[MISS_FETCH_FAILED].removeprefix("這一檔")),
             (unpriced, NO_PRICE_WHY))
-        if _codes)
+        if _codes) + _invalid_why(invalid)      # 批 Z49：資料異常（預設空 ＝ 修前）
 
 
 def _deep_reason(result: Any) -> str:
@@ -2985,7 +3048,13 @@ def build_stress_card(deep: DeepReadout) -> _Built:
     # Q3（2026-09-26）：持有列**取數失敗**（整批失敗／現價抓不到）→ L3 靜靜跳過那幾列 ⇒
     # 全部失敗時落在灰卡「有效的結果」、部分失敗時畫一個漏了那幾檔的虧損。一律升紅
     # （同 ⑤⑥ 核心／衛星 Q2：旁邊還有沒算到的，算出來的就不是整個組合的數字）。
+    # 批 Z49（客戶 2026-10-13 裁示 B）：持有列的張數／均價／現價、或 L3 回報的 Beta 是異常值
+    # （NaN／±inf／轉不成數字）→ 同樣整卡紅、不下「門檻內／超過門檻」（⛔ 不補 Beta 1.0）。
+    _stress_bad = deep.invalid_rows + (
+        (("Beta", tuple(getattr(_res, "beta_invalid", ()) or ())),)
+        if _res is not None and getattr(_res, "beta_invalid", ()) else ())
     _stress_skipped = deep.failed_rows + deep.unpriced_rows
+    _stress_skipped += _invalid_codes(_stress_bad)
     # Q3-r3：後綴判定時被接住的例外（L3 `strict=True` 帶回；只在沒有呼叫期例外時才看）
     # → 那幾檔的 Beta 是拿錯後綴查的，走本卡既有的例外紅卡（錯誤原文照印）。
     _stress_fetch_err = "；".join(
@@ -3042,7 +3111,8 @@ def build_stress_card(deep: DeepReadout) -> _Built:
     elif _state == UI_FAILED and not (deep.stress_error or deep.error or _stress_fetch_err):
         # Q3：沒有例外、但有持有列取數失敗（見上）。why／where 與 ⑤⑥ Q2 同一套既有文字。
         _note = Note(now=STRESS_FAILED_NOW,
-                     why=_deep_uncounted_why(deep.failed_rows, deep.unpriced_rows),
+                     why=_deep_uncounted_why(deep.failed_rows, deep.unpriced_rows,
+                                             _stress_bad),
                      where=STATION_ERROR_WHERE)
     elif _state == UI_FAILED:
         _note = _deep_note(deep, now=STRESS_FAILED_NOW, source=SRC_STRESS,
@@ -3095,6 +3165,8 @@ def build_var_card(deep: DeepReadout) -> _Built:
     _degraded = _degraded_bits(_res) if _res is not None else []
     # Q3：持有列取數失敗 → 升紅（同壓測那一格，理由見 `build_stress_card()`）。
     _var_skipped = deep.failed_rows + deep.unpriced_rows
+    # 批 Z49：持有列的張數／均價／現價是異常值 → 同樣整卡紅（權重的分子分母都用到這三項）。
+    _var_skipped += _invalid_codes(deep.invalid_rows)
     # 批 Z48：歷史收盤價含 0／負值／無效值 → L3 回 `computed=False` ＋ `invalid_close`（不畫數字）。
     _invalid = tuple(getattr(_res, "invalid_close", ()) or ()) if _res is not None else ()
     _state = classify_ui_state(
@@ -3161,7 +3233,8 @@ def build_var_card(deep: DeepReadout) -> _Built:
     elif _state == UI_FAILED and not (deep.var_error or deep.error or _dead_src):
         # Q3：沒有例外、但有持有列取數失敗。why／where 與 ⑤⑥ Q2 同一套既有文字。
         _note = Note(now=VAR_FAILED_NOW,
-                     why=_deep_uncounted_why(deep.failed_rows, deep.unpriced_rows),
+                     why=_deep_uncounted_why(deep.failed_rows, deep.unpriced_rows,
+                                             deep.invalid_rows),
                      where=STATION_ERROR_WHERE)
     elif _state == UI_FAILED:
         _note = _deep_note(deep, now=VAR_FAILED_NOW, source=SRC_VAR,
@@ -3237,7 +3310,13 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
     # 「有效的結果」，部分失敗時是一個漏了那幾檔的 live 總額。同上，一律紅。
     # ⚠️ 只收整批失敗、⛔ 不收「現價抓不到」：配息這一路不需要現價（`_shares_of()` 只看張數），
     #    沒現價的列**照樣進了總額** —— 把它算成失敗是假警報。
+    # 批 Z49：持有列的**張數**是異常值 → 那幾檔沒進總額 → 同樣整卡紅（配息只用張數，
+    # 均價／現價異常不影響本卡，⛔ 不在此列）。
+    _cash_bad = (() if (deep.cash_error or deep.error)
+                 else tuple(_g for _g in deep.invalid_rows if _g[0] == ITEM_LOTS))
     _cash_skipped = () if (deep.cash_error or deep.error) else deep.failed_rows
+    _cash_row_failed = _cash_skipped     # 批 Z49：why 的「整批抓取失敗」那一段只講這幾檔
+    _cash_skipped += _invalid_codes(_cash_bad)
     _cash_failed = _cash_l1_failed + _cash_skipped
     _state = classify_ui_state(
         requested=deep.requested,
@@ -3326,7 +3405,7 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
         # Q3：只有持有列整批抓取失敗（見上）。why／where 與 ⑤⑥ Q2、⑤ 停利卡同一套既有文字
         # （這一條失敗在戰情表那一層，⛔ 不掛到 L3 配息現金流的「拋出例外」名下）。
         _note = Note(now=CASH_FAILED_NOW,
-                     why=_deep_uncounted_why(_cash_skipped, ()),
+                     why=_deep_uncounted_why(_cash_row_failed, (), _cash_bad),
                      where=STATION_ERROR_WHERE)
     elif _state == UI_FAILED:
         # 兩種失敗都走本卡既有的 error 分支（文字一字未改）：
@@ -4027,6 +4106,9 @@ _V2_CHECK_NET: str = "先確認網路與 Google 授權是否仍有效"
 _V2_NO_EXIT_REPORT: str = NO_EXIT_MARKER + V2_EXCERPT_GAP + "請把上面那行訊息回報給維護者"
 _V2_NO_EXIT_UNWIRED: str = NO_EXIT_MARKER + " —— 這是待接線項，不是你操作的問題"
 _V2_FILL_LOTS: str = "到既有的 📁 組合管理分頁把持股的張數與均價補齊，回本頁" + _V2_PRESS_RUN
+#: 批 Z49：持有列資料異常那一句（客戶核准句；整句就是摘錄，代號清單在摺疊區原文）。
+_V2_INVALID_WHY: tuple[str, ...] = tuple(
+    invalid_data_text(_i) for _i in (ITEM_LOTS, ITEM_AVG_PRICE, ITEM_PRICE))
 
 #: 上游例外的「為什麼」：`{出處}拋出例外：{repr(e)}` 摘成「{出處的前綴}…拋出例外」
 #: （出處全名與例外原文在摺疊區）。出處前綴取該 `SRC_*` 常數本身的開頭。
@@ -4156,7 +4238,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     + [_v2_rows_for(_k, SPLIT_FAILED_NOW, (
            None, (*_V2_STATION_RAISED,
                   "整批抓取失敗 —— 看該列的錯誤訊息",
-                  NO_PRICE_WHY),
+                  NO_PRICE_WHY,
+                  *_V2_INVALID_WHY),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET)))
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
     + [_v2_rows_for(_k, SPLIT_NO_VALUE_NOW, (
@@ -4171,7 +4254,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     + [_v2_rows_for("hold.take_profit", TP_FAILED_NOW, (
            None, (*_V2_STATION_RAISED,
                   "整批抓取失敗 —— 看該列的錯誤訊息",
-                  NO_PRICE_WHY),
+                  NO_PRICE_WHY,
+                  *_V2_INVALID_WHY),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.take_profit", TP_EMPTY_NOW, (
            None, "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此判不了",
@@ -4198,7 +4282,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.deep.stress", STRESS_FAILED_NOW, (
            None, (_v2_raised(SRC_STRESS), _v2_raised(SRC_HOLDINGS),
                   "整批抓取失敗 —— 看該列的錯誤訊息",
-                  NO_PRICE_WHY),
+                  NO_PRICE_WHY,
+                  *_V2_INVALID_WHY, invalid_data_text("Beta")),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.deep.stress", STRESS_EMPTY_NOW, (
            None, "這是一個有效的結果" + V2_EXCERPT_GAP + "本站不用檔數當權重頂替",
@@ -4206,7 +4291,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.deep.var", VAR_FAILED_NOW, (
            None, (_v2_raised(SRC_VAR), _v2_raised(SRC_HOLDINGS),
                   "整批抓取失敗 —— 看該列的錯誤訊息",
-                  NO_PRICE_WHY),
+                  NO_PRICE_WHY,
+                  *_V2_INVALID_WHY),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        # 批 W H1-f1：摘錄末段改引 `IF_LOTS_AVG_MISSING_WHERE`（字一個位元組都沒改）。
        _v2_rows_for("hold.deep.var", VAR_EMPTY_NOW, (
@@ -4220,7 +4306,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            v2_plain(VAR_INVALID_CLOSE_WHERE))),
        _v2_rows_for("hold.deep.dividend_cash", CASH_FAILED_NOW, (
            None, (_v2_raised(SRC_DIV_CASH), _v2_raised(SRC_HOLDINGS),
-                  "整批抓取失敗 —— 看該列的錯誤訊息"),
+                  "整批抓取失敗 —— 看該列的錯誤訊息",
+                  invalid_data_text(ITEM_LOTS)),
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.deep.dividend_cash", CASH_NO_PAYOUT_NOW, (
            None, "可能是你手上這幾檔近一年真的沒有除息，也可能是上游沒有這幾檔的配息紀錄",

@@ -79,7 +79,7 @@ import 都會先跑它。這是 `src/services/` 的既有性質，本批不動�
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 def get_pe_name_maps(*, failed_markets: list[str] | None = None) -> tuple[dict, dict]:
@@ -143,6 +143,10 @@ class StockDividends:
     paying_years: int | None = None
     years: tuple[dict, ...] = ()
     source: str = ""
+    #: 批 Z49（客戶 2026-10-13 裁示 B；加性）：上游給的平均股利或逐年金額是 NaN／±inf／
+    #: 轉不成數字 ⇒ `True`，此時 `avg_div_twd`／`paying_years` 一律 `None`（⛔ 不參與計算），
+    #: 呼叫端整卡不算、不下結論。`repr=False, compare=False`：正常結果的 repr／相等比較與修前相同。
+    invalid: bool = field(default=False, repr=False, compare=False)
 
     @property
     def has_record(self) -> bool:
@@ -199,6 +203,16 @@ def get_stock_dividends(code: str, *, strict: bool = False) -> StockDividends:
     _avg, _yearly, _source = (fetch_dividend_data(_sid) if not strict
                               else fetch_dividend_data(_sid, failed=_legs))
 
+    _rows = tuple(_r for _r in (_yearly or ()) if isinstance(_r, dict))
+    # 批 Z49（客戶 2026-10-13 裁示 B）：平均股利、或任一年的現金股利是 NaN／±inf／轉不成數字
+    # ⇒ 資料異常。⛔ 不參與計算（修前：NaN／inf 通過下面的 `<= 0` 擋關 → 估值印 nan／inf 並下結論；
+    # 逐年的 NaN 被 L2 數成「沒配息的一年」）。⛔ 不換成 0 或任何替代值。
+    from shared.station_specs import is_invalid_number
+    if (is_invalid_number(_avg)
+            or any(is_invalid_number(_r.get("cash")) for _r in _rows)):
+        print(f"[valuation_service] {_sid} 配息資料異常（平均 {_avg!r}）→ 不參與計算")
+        return StockDividends(years=_rows, source=str(_source or ""), invalid=True)
+
     # §1：L1 用 `0.0` 當「什麼都沒找到」的哨兵值 —— 轉成 `None`。
     # 留著 0.0 會讓下游看到「平均股利 0 元」這個**結論**，而事實是「沒有數字」。
     try:
@@ -208,7 +222,6 @@ def get_stock_dividends(code: str, *, strict: bool = False) -> StockDividends:
     if _avg_f is not None and _avg_f <= 0:
         _avg_f = None
 
-    _rows = tuple(_r for _r in (_yearly or ()) if isinstance(_r, dict))
     if strict and _avg_f is None and not _rows:
         from src.data.stock.app_stock_fetchers import DIVIDEND_LEGS
         if all(_leg in _legs for _leg in DIVIDEND_LEGS):
