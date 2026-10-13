@@ -357,3 +357,140 @@ def test_mutation_ui_branch_removed_turns_red(monkeypatch):
     assert pre_card.note.now == PH.VAR_EMPTY_NOW
     assert "這是一個有效的結果" in pre_card.note.why     # 還原體：把資料異常講成有效結果
     assert _card(PH, res)[0].note.now == PH.VAR_INVALID_CLOSE_NOW
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 批 Z48 第 2 項：新 UI 個股頁籌碼卡「單日爆量檢查」—— 倍數非有限值改用客戶核准文案
+# ══════════════════════════════════════════════════════════════════════════
+# L2 回 `ok`／`outlier`、倍數卻是 NaN／±inf → L3 `_outlier_fields` 判 `OUTLIER_UNKNOWN`（原因仍是
+# `ok`／`outlier`）。修前畫面落到 `CHIPS_OUTLIER_UNKNOWN_OTHER`「上游的回傳字彙可能改了」（與實因不符），
+# 且 HEAD 印出「（上游原因：`ok`）」與「沒有異常」字樣。修後整列只出客戶核准的那一句。
+import src.data.stock.app_stock_fetchers as F_STK  # noqa: E402
+import src.services.stock_chips_service as CHIPS  # noqa: E402
+import src.ui.views.page_inspect as PI  # noqa: E402
+from src.compute.risk import inst_sanity as INST  # noqa: E402
+
+_INSPECT = 'src/ui/views/page_inspect.py'
+#: 客戶 2026-10-13 核准逐字文案（⛔ 一字不改）—— 測試這一邊**手抄**，不讀實作常數。
+_APPROVED = "主力買賣超倍數資料異常，無法判定是否達到異常門檻。"
+
+#: ④ L5 `_outlier_fact` 的新分支（拔掉 ＝ 落回 HEAD ＋ OTHER）。
+Z48_CHIPS_PAIR = (
+    '    if _v == OUTLIER_UNKNOWN and chips.outlier_reason in ("ok", "outlier"):\n'
+    "        # 批 Z48 第 2 項：L2 判得出來的兩個原因卻落到判不出來 ⇒ 只可能是倍數非有限（L3 `_outlier_fields`）。\n"
+    "        return (CHIPS_OUTLIER_LABEL, CHIPS_OUTLIER_UNKNOWN_NONFINITE)\n"
+    "\n",
+    "",
+)
+
+
+@functools.lru_cache(maxsize=None)
+def z48_pre_inspect():
+    return _load_variant(_INSPECT, (Z48_CHIPS_PAIR,), '_z48_pre_inspect')
+
+
+class _ChipsVerdict:
+    requested = True
+    is_stock = True
+    code = '2330'
+
+
+class _ChipsReq:
+    period_days = 120
+
+
+def _chips_df(inst_last=100.0, vol_last=None):
+    n = 40
+    d = pd.DataFrame({'外資': [50.0] * n, '投信': [10.0] * n,
+                      '主力合計': [60.0] * n, 'volume': [1000.0] * n},
+                     index=pd.date_range('2026-01-01', periods=n))
+    d.iloc[-1, d.columns.get_loc('主力合計')] = inst_last
+    if vol_last is not None:
+        d.iloc[-1, d.columns.get_loc('volume')] = vol_last
+    return d
+
+
+def _chips_built(ui_mod, monkeypatch, df=None, l2=None):
+    """L1（合成 df）→ L3 → `load_chips` → `build_chips_card`。`l2` 給了就換掉 L2 的判定結果。"""
+    monkeypatch.setattr(F_STK, 'fetch_price_data',
+                        lambda sid, days: (_chips_df() if df is None else df, 'X', ''))
+    if l2 is not None:
+        monkeypatch.setattr(INST, 'flag_latest_inst_outlier_from_df', lambda _df, **_k: l2)
+    return ui_mod.build_chips_card(ui_mod.load_chips(_ChipsVerdict(), _ChipsReq()))
+
+
+def _row_of(built, ui_mod=PI):
+    return dict(built[1]).get(ui_mod.CHIPS_OUTLIER_LABEL)
+
+
+#: 三個指定情境（ok＋NaN／outlier＋inf／outlier＋-inf）走 L2 替身；另兩例走真 L2（合成 df）。
+_NONFINITE_L2 = {
+    'ok_nan': INST.InstNetSanityResult(is_outlier=False, ratio=float('nan'), reason='ok'),
+    'outlier_inf': INST.InstNetSanityResult(is_outlier=True, ratio=float('inf'), reason='outlier'),
+    'outlier_neg_inf': INST.InstNetSanityResult(is_outlier=True, ratio=float('-inf'),
+                                                reason='outlier'),
+}
+_NONFINITE_DF = {
+    'real_l2_ok_nan': dict(inst_last=np.inf, vol_last=np.inf),      # inf / inf = NaN、reason='ok'
+    'real_l2_outlier_inf': dict(inst_last=np.inf),                   # inf / 1000 = inf、reason='outlier'
+}
+_FORBIDDEN_IN_ROW = ("nan", "inf", "有異常", "沒有異常", "上游的回傳字彙", "上游原因", "`ok`", "`outlier`")
+
+
+def _assert_approved_only(built):
+    row = _row_of(built)
+    assert row == _APPROVED, f"整列應只呈現客戶核准那一句：{row!r}"
+    for _w in _FORBIDDEN_IN_ROW:
+        assert _w not in row.lower() if _w in ("nan", "inf") else _w not in row
+    _all = repr(built).lower()
+    assert "nan" not in _all and "inf" not in _all
+
+
+@pytest.mark.parametrize("case", sorted(_NONFINITE_L2), ids=str)
+def test_chips_nonfinite_ratio_shows_approved_sentence(case, monkeypatch):
+    built = _chips_built(PI, monkeypatch, l2=_NONFINITE_L2[case])
+    assert CHIPS.OUTLIER_UNKNOWN == "unknown"
+    _assert_approved_only(built)
+
+
+@pytest.mark.parametrize("case", sorted(_NONFINITE_DF), ids=str)
+def test_chips_nonfinite_ratio_from_real_l2(case, monkeypatch):
+    r = INST.flag_latest_inst_outlier_from_df(_chips_df(**_NONFINITE_DF[case]))
+    assert r.reason in ("ok", "outlier") and not math.isfinite(r.ratio)   # 前提成立
+    _assert_approved_only(_chips_built(PI, monkeypatch, df=_chips_df(**_NONFINITE_DF[case])))
+
+
+def test_chips_constant_is_the_approved_text_verbatim():
+    assert PI.CHIPS_OUTLIER_UNKNOWN_NONFINITE == _APPROVED
+
+
+def test_chips_truly_unknown_vocab_still_goes_other():
+    v = PI.ChipsView(requested=True, outlier_verdict="unknown", outlier_reason="brand_new_token")
+    row = PI._outlier_fact(v)[1]
+    assert PI.CHIPS_OUTLIER_UNKNOWN_OTHER in row and _APPROVED not in row
+    assert row == z48_pre_inspect()._outlier_fact(v)[1]           # 與修前逐字相同
+
+
+@pytest.mark.parametrize("reason", ["vol_unavailable", "inst_net_zero", "", "brand_new_token"])
+def test_chips_other_unknown_reasons_unchanged(reason):
+    v = PI.ChipsView(requested=True, outlier_verdict="unknown", outlier_reason=reason)
+    assert PI._outlier_fact(v) == z48_pre_inspect()._outlier_fact(v)
+    assert _APPROVED not in PI._outlier_fact(v)[1]
+
+
+@pytest.mark.parametrize("kw", [dict(inst_last=100.0), dict(inst_last=100000.0), dict(inst_last=0.0)],
+                         ids=["normal", "anomaly", "zero"])
+def test_chips_finite_paths_identical_to_pre(kw, monkeypatch):
+    now = _chips_built(PI, monkeypatch, df=_chips_df(**kw))
+    pre = _chips_built(z48_pre_inspect(), monkeypatch, df=_chips_df(**kw))
+    assert repr(now) == repr(pre)
+    assert _APPROVED not in repr(now)
+
+
+def test_chips_mutation_branch_removed_turns_red(monkeypatch):
+    pre = z48_pre_inspect()
+    for _l2 in _NONFINITE_L2.values():
+        row = _row_of(_chips_built(pre, monkeypatch, l2=_l2), pre)
+        assert row != _APPROVED                                    # 還原體：不是核准文案
+        assert "上游的回傳字彙" in row and "沒有異常" in row      # 還原體：OTHER ＋ HEAD
+        assert _row_of(_chips_built(PI, monkeypatch, l2=_l2)) == _APPROVED
