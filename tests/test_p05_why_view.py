@@ -170,6 +170,11 @@ def _entry(status: str, **kw) -> dict:
 _ALLOWED_L3: frozenset[tuple[str, str]] = frozenset({
     ("src.services.app_ai_service", "get_gemini_api_key"),
     ("src.services.ai_qa_service", "run_agent"),
+    # 批 Z54：進階診斷「資料源清單」卡接線（唯讀、純 session 彙總、零網路；
+    #   只在勾開進階診斷後呼叫 —— `tests/test_batch_z54.py` 守 gate）。
+    ("src.services.data_registry_summary_service", "summarize_data_registry"),
+    # 批 Z54（QA D1）：「門檻校準」卡取判燈程式此刻實際使用的值（L3 → L2 常數 ＋ L0 檔內原值）。
+    ("src.services.calibration_status_service", "get_calibration_status"),
 })
 
 #: 既有診斷面板。**一支都不准 import** —— 它們自己直接讀別頁的 session

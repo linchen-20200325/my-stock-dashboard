@@ -738,7 +738,7 @@ def _pw_engineer(mod, monkeypatch_, raw: str) -> str:
         monkeypatch.setattr(mod, "load_sources", lambda: mod.SourceScan(scanned=True, probes=(
             mod.probe_from_entry("fetch_x", {"last_status": mod.STATUS_FAILED, "last_error": raw}),
             mod.probe_from_entry("fetch_y", {"last_status": mod.STATUS_OK}))))
-        mod._render_engineer_block()
+        mod._render_engineer_block({})   # 批 Z54：改收 session mapping（資料源清單卡用）；空 = 本 session 未寫入
         frames = [c for c in fake.mock_calls if c[0].rsplit(".", 1)[-1] == "dataframe"]
         assert len(frames) == 1
         rows = {r["fetcher"]: r for r in frames[0][1][0]}

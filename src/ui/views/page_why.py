@@ -146,7 +146,7 @@
 方向，不受 §8.2 任何一條硬規則限制。**「一律走 L3」規範的是「取數」，
 不是「讀常數」。**
 
-**未接線（五項，各自的「去哪補」都不同 —— 它們卡住的位置不一樣）**::
+**未接線（~~五項~~ 批 Z54 起見 ④ 註，各自的「去哪補」都不同 —— 它們卡住的位置不一樣）**::
 
     ① FinMind **額度**的健康燈
        （原本這一項還包含 FRED 與 TWSE —— FE-20 已在 L1 補上 `@monitored`，
@@ -168,6 +168,9 @@
     ④ 工程師版六個面板裡的五個（資料源清單 / 雙演算法對帳 / API 根因 /
        原始資料表 / 門檻校準）
        → 現行實作都在 L5，且各自直接讀 `st.session_state` 或直呼 L1 / `scripts/`。
+       📌 批 Z54（2026-10-13，有意識的更正，⛔ 不是漏刪）：**資料源清單**（L3 `services.data_registry_summary_service`）
+       與**門檻校準**（L0 `shared.macro_calibration.read_calibration_meta`，唯讀）已接線，
+       剩雙演算法對帳 / API 根因 / 原始資料表三個；「重跑校準」仍不在本頁。
     ⑤ AI 問答的「就地設定金鑰入口」
        → 那是**收憑證**，需要客戶先拍板「這一頁可以收金鑰」，本批不做。
 
@@ -748,11 +751,19 @@ SCALES_EMPTY_NOW: str = "**兩套刻度的定義讀不出來**"
 LEGACY_NOW: str = "**既有的完整教學內容還沒有搬到這一頁**"
 ENGINEER_IDLE_NOW: str = "**進階診斷未載入**"
 ENGINEER_FAILED_NOW: str = "**進階診斷本身讀不出來**"
-ENGINEER_REGISTRY_NOW: str = "**全站來源清單本頁讀不到**"
 ENGINEER_RECONCILE_NOW: str = "**雙演算法對帳本頁跑不了**"
 ENGINEER_API_ROOT_NOW: str = "**API 根因診斷本頁不做**"
 ENGINEER_RAW_NOW: str = "**原始資料表本頁看不到**"
-ENGINEER_CALIBRATION_NOW: str = "**門檻校準本頁跑不了**"
+# 📌 批 Z54（2026-10-13）：`ENGINEER_REGISTRY_NOW`「全站來源清單本頁讀不到」與
+#    `ENGINEER_CALIBRATION_NOW`「門檻校準本頁跑不了」**已刪**（有意識的清理，⛔ 不是漏刪）——
+#    兩張卡本批接上線，那兩句未接線說法因本次改動成為 0 引用（§-1.5.F 判定 3(4) 的收尾義務）。
+#: 「資料源清單」卡：這個 session 還沒有人寫過 `data_registry`（舊診斷面板既有原文）。
+REGISTRY_NOT_WRITTEN_NOW: str = "**尚未觸發 data_registry 載入**"
+#: 「資料源清單」卡讀取失敗（文字與 `L0_FAILED_NOW_TEMPLATE` 同形）。
+#: ⚠️ 指路**不**沿用 `build_l0_card()` 那句「這是規格表本身的問題」—— 這張讀的不是規格表（出處要講對）。
+#: 「門檻校準」的紅卡則依總管裁示直接走 `L0_FAILED_NOW_TEMPLATE.format(label="門檻校準")`
+#: （常數 `CALIBRATION_FAILED_NOW`，定義在該卡旁），指路同樣不沿用規格表那句。
+REGISTRY_FAILED_NOW: str = "**資料源清單讀不出來**"
 QA_IDLE_NOW: str = "**尚未提問**"
 QA_NO_KEY_NOW: str = "**AI 問答未啟用**"
 QA_FAILED_NOW: str = "**這一輪問答失敗了**"
@@ -1857,21 +1868,14 @@ def build_wall_registry_failed_card(scan: SourceScan) -> _Built:
     return (replace(_card, key=WALL_REGISTRY_FAILED_KEY), _facts, _signal)
 
 
-#: 工程師版六個面板裡**未接線的五個**（線框 live 原文列的六項，扣掉 Fetcher 監控）。
+#: 工程師版六個面板裡**未接線的**~~五個~~**三個**（線框 live 原文列的六項，扣掉 Fetcher 監控）。
 #: ⚠️ 每一項的「去哪補」都不同 —— 它們卡住的位置不一樣。
+#: 📌 批 Z54（2026-10-13，有意識的更正，⛔ 不是漏刪）：「資料源清單」與「門檻校準」兩張
+#:    本批接上線（`build_registry_card()` / `build_calibration_card()`），已自本表移出 ——
+#:    它們原本寫的補法（「在 `src/services/` 補一支回傳來源清單的唯讀 L3」／
+#:    「可由 L3 轉出 `shared/macro_calibration.py` 讀到的當前值」）正是本批照做的事。
+#:    「重跑校準」**仍不在本頁**（會改到全站判燈，屬不可逆操作，需要客戶拍板）。
 ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
-    L0CardSpec(
-        key="why.engineer.registry", label="資料源清單",
-        wired=False,
-        now=ENGINEER_REGISTRY_NOW,
-        why=("清單的 SSOT 住在 L1 `src/data/core/data_registry.py`，"
-             "現行的診斷面板是直接讀 `st.session_state['data_registry']`（由總經頁寫入）。"
-             "本頁是 L5，既不得直呼 L1，也不想依賴「你得先去過另一頁」"),
-        where=(f"{NO_EXIT_PREFIX}"
-               "在 `src/services/` 補一支回傳來源清單的唯讀 L3"
-               "（把 `data_registry` 轉出來即可，不需要新的取數）"),
-        facts=(("線框對這一格的期待", "全站資料來源逐筆列出，含最新時間戳"),
-               ("卡住的那一步", "L1 的清單沒有 L3 轉出"))),
     L0CardSpec(
         key="why.engineer.reconcile", label="雙演算法對帳（§4.3）",
         wired=False,
@@ -1910,33 +1914,212 @@ ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
                "正解是由 L3 提供一份具名的快照介面，而不是讓 UI 互相翻 session"),
         facts=(("線框對這一格的期待", "各來源原始 DataFrame 就地展開"),
                ("卡住的那一步", "沒有具名介面，只有各頁私有的 session key"))),
-    L0CardSpec(
-        key="why.engineer.calibration", label="門檻校準",
-        wired=False,
-        now=ENGINEER_CALIBRATION_NOW,
-        why=("校準是一支 `scripts/` 下的離線工作（季度 cron ＋ PR 審閱後才寫入），"
-             "現行面板是從 UI 直接 import `scripts/`。"
-             "本頁不從 UI 觸發離線腳本 —— 那會讓一次點擊變成一次可能改到門檻的動作"),
-        where=(f"{NO_EXIT_PREFIX}"
-               "要在本頁**唯讀顯示**校準結果，可由 L3 轉出 "
-               "`shared/macro_calibration.py` 讀到的當前值；"
-               "**觸發重新校準**則屬另一件事，需要客戶拍板"),
-        facts=(("線框對這一格的期待", "當前校準值與上次校準時間"),
-               ("卡住的那一步", "現行入口是從 UI import `scripts/`"),
-               ("⚠️ 兩件事要分開",
-                "「顯示現在的門檻」是唯讀，可以做；"
-                "「重跑校準」會改到全站判燈，屬不可逆操作"))),
 )
 
 
 def build_engineer_panel_cards() -> tuple[_Built, ...]:
-    """工程師版六項裡**未接線的五項**。
+    """工程師版六項裡**未接線的**~~五項~~**三項**（批 Z54：資料源清單／門檻校準已接線，見下方兩支）。
 
     ⚠️ **只有在 gate 打開時才會被建構** —— 沒打開時整段不畫，
     只留一張 idle 卡（`build_engineer_card`）。這正是「三態不得混」的落點：
     「還沒打開」與「打開了但這一項沒接線」是兩件事，**不會同時出現在畫面上**。
     """
     return tuple(build_l0_card(_s) for _s in ENGINEER_PANEL_SPECS)
+
+
+# ── 工程師版：本批（Z54）接上線的兩個面板 ────────────────────────────────
+#: 出處（例外的「為什麼」與卡上的「這一格的出處」共用；做法同 `SRC_MONITOR`）。
+SRC_REGISTRY: str = (
+    "L3 資料源清單（`services.data_registry_summary_service.summarize_data_registry`）")
+SRC_CALIBRATION: str = (
+    "L3 門檻校準（`services.calibration_status_service.get_calibration_status`）")
+#: 「門檻校準」紅卡的現在 —— **走既有的 `L0_FAILED_NOW_TEMPLATE`**（讀不出來／檔內值不是生效值兩種紅共用）。
+CALIBRATION_FAILED_NOW: str = L0_FAILED_NOW_TEMPLATE.format(label="門檻校準")
+#: 檔內值 ≠ 判燈程式此刻使用的值時的「為什麼」（兩組值都寫出來，⛔ 不拿檔內值冒充生效值）。
+CALIBRATION_MISMATCH_WHY_TEMPLATE: str = (
+    "{src}：檔內寫的不是判燈程式實際使用的值 —— "
+    "macro_thresholds.json 寫 HEALTH_DEFENSE_THRESHOLD={fh} / BULL_MIN_SCORE={fb}，"
+    "判燈程式（`macro_helpers`）實際使用 HEALTH_DEFENSE_THRESHOLD={eh} / BULL_MIN_SCORE={eb}")
+
+#: 「資料源清單」灰卡的為什麼 —— 「這是『還沒叫』，不是『叫了沒回』」沿用「🚦 今天」頁冷啟動那句既有原文。
+REGISTRY_NOT_WRITTEN_WHY: str = (
+    "這個 session 的 `session_state['data_registry']` 還不存在 —— "
+    "這是「還沒叫」，不是「叫了沒回」")
+#: 去哪補：線框狀態列 grey 原文「到「🚦 今天」更新」（頁名走 `ia_nav`，不手抄）。
+#: 那一頁的「🚀 更新今日戰情」會跑 L3 `macro_refresh_service` 的「資料登錄中心掃描」那一步寫入它。
+REGISTRY_NOT_WRITTEN_WHERE: str = f"到{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}更新"
+#: 兩張卡讀取失敗的指路（`NO_EXIT_MARKER` ＋ 本頁既有的升級路徑「請把上面那行訊息回報給維護者」）。
+PANEL_REPORT_WHERE: str = f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"
+#: 卡上「這一格的出處」那一列的標籤（沿用 `build_empty_registry_card()` 既有的列標籤）。
+PANEL_SOURCE_FACT_KEY: str = "這一格的出處"
+
+
+@dataclass(frozen=True)
+class RegistryReadout:
+    """「資料源清單」那一格的讀數。
+
+    Attributes:
+        requested: ← `EngineerRequest.opened`（那一顆 checkbox）。⛔ 不從資料反推。
+        summary: L3 `RegistrySummary` 原樣搬運（`written` / `groups` / `total`）。
+        error: 讀取期例外 `repr(e)`。非空 = 紅。
+    """
+
+    requested: bool
+    summary: Any = None
+    error: str = ""
+
+
+def load_registry(req: EngineerRequest, session: Mapping[str, Any]) -> RegistryReadout:
+    """「資料源清單」。**`req.opened` 為 False 時一行 L3 都不呼叫。**
+
+    路徑：L3 `services.data_registry_summary_service.summarize_data_registry(session)` ——
+    純讀 session、零網路、零 L1（session 由本頁傳入，L3 不 import streamlit）。
+    邊界：
+      (a) 沒勾 → `requested=False`（呼叫端本來就不會建這張卡）。
+      (b) 這個 session 還沒有人寫過 `data_registry` → `summary.written=False` → 灰（有效結果）。
+      (c) 寫過、分組成功 → live。
+      (d) L3 拋例外（登錄表形狀不對／寫成空的）→ 紅。
+    """
+    if not req.opened:
+        return RegistryReadout(requested=False)
+    try:
+        from src.services.data_registry_summary_service import summarize_data_registry
+        return RegistryReadout(requested=True, summary=summarize_data_registry(session))
+    except Exception as _e:  # noqa: BLE001 — 轉成紅卡顯示，不吞
+        print(f"[views/page_why] 資料源清單讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
+        return RegistryReadout(requested=True, error=repr(_e))
+
+
+def build_registry_card(r: RegistryReadout) -> _Built:
+    """「資料源清單」—— 已接線、唯讀。依 SSOT 分類逐組列出筆數與最後更新。
+
+    ⚠️ **最後更新是原樣轉出、不判新鮮度**：寫入端那一欄的語意是混的
+    （有的是資料日、有的是抓取日的代理，見舊面板 `data_registry_panel._freshness_emoji`
+    的 docstring），本卡不在它上面再蓋一層燈號。
+    """
+    _summary = r.summary
+    _written = bool(getattr(_summary, "written", False))
+    # `reason=MISS_NO_INPUT`：同 `build_empty_registry_card()`（「還沒有人寫過」→ 缺漏 · 可重跑 #7，
+    #  去「🚦 今天」更新一次就會有）—— ⛔ 不是紅。
+    _state = classify_ui_state(
+        requested=r.requested,
+        error=r.error or None,
+        has_value=_written,
+        reason=MISS_NO_INPUT)
+    _facts: list[tuple[str, str]] = [(PANEL_SOURCE_FACT_KEY, SRC_REGISTRY)]
+    if _state == UI_LIVE:
+        for _g in _summary.groups:
+            _facts.append((
+                _g.category,
+                f"{_g.count} 筆 · 最後更新 {_g.latest}"
+                + (f" · 缺 {_g.missing}" if _g.missing else "")))
+        return (Card(key="why.engineer.registry", label="資料源清單", state=UI_LIVE,
+                     value=f"{_summary.total} 筆"),
+                tuple(_facts), "")
+    if _state == UI_FAILED:
+        _note = Note(now=REGISTRY_FAILED_NOW, why=_error_why(SRC_REGISTRY, r.error),
+                     where=PANEL_REPORT_WHERE)
+    elif _state == UI_IDLE:
+        raise ValueError(
+            "「資料源清單」卡在進階診斷沒勾的情況下被建構 —— gate 應該在呼叫端就擋住"
+            "（`_render_engineer_block`）")
+    else:   # UI_MISSING_RETRYABLE —— 這個 session 還沒有人寫過。有效結果。
+        _note = Note(now=REGISTRY_NOT_WRITTEN_NOW, why=REGISTRY_NOT_WRITTEN_WHY,
+                     where=REGISTRY_NOT_WRITTEN_WHERE)
+    return (Card(key="why.engineer.registry", label="資料源清單", state=_state, note=_note),
+            tuple(_facts), "")
+
+
+@dataclass(frozen=True)
+class CalibrationReadout:
+    """「門檻校準」那一格的讀數（`requested` ← `EngineerRequest.opened`）。
+
+    `status` 是 L3 `CalibrationStatus` 原樣搬運（生效值與檔內值分開帶）。
+    """
+
+    requested: bool
+    status: Any = None
+    error: str = ""
+
+
+def load_calibration(req: EngineerRequest) -> CalibrationReadout:
+    """「門檻校準」。**唯讀顯示**：L3 `services.calibration_status_service.get_calibration_status()`。
+
+    ⚠️ 「重跑校準」**不在本頁**（會改到全站判燈）。這裡只讀、零網路。
+    缺檔／壞 JSON／缺欄位 → L3（經 L0）raise → 紅（§1，⛔ 不退回預設值假裝正常）。
+    """
+    if not req.opened:
+        return CalibrationReadout(requested=False)
+    try:
+        from src.services.calibration_status_service import get_calibration_status
+        return CalibrationReadout(requested=True, status=get_calibration_status())
+    except Exception as _e:  # noqa: BLE001 — 轉成紅卡顯示，不吞
+        print(f"[views/page_why] 門檻校準讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
+        return CalibrationReadout(requested=True, error=repr(_e))
+
+
+#: JSON `null` 的顯示字面 —— **如實呈現，⛔ 不美化成「尚未校準」之類的說法**（客戶指示）。
+JSON_NULL_TEXT: str = "null"
+
+
+def _json_scalar_text(value: Any) -> str:
+    return JSON_NULL_TEXT if value is None else str(value)
+
+
+def calibration_mismatch_why(status: Any) -> str:
+    """檔內值 ≠ 生效值時的「為什麼」（兩組值都寫出來）。"""
+    return CALIBRATION_MISMATCH_WHY_TEMPLATE.format(
+        src=SRC_CALIBRATION,
+        fh=status.file_health_defense_threshold, fb=status.file_bull_min_score,
+        eh=status.effective_health_defense_threshold, eb=status.effective_bull_min_score)
+
+
+def build_calibration_card(r: CalibrationReadout) -> _Built:
+    """「門檻校準」—— 已接線、唯讀。
+
+    · **數值一律是判燈程式此刻實際使用的值**（L2 `macro_helpers` 常數，經 L3 取得）；
+      `last_calibrated` / `method` 照 `macro_thresholds.json` 原值（`null` 照印 `null`）。
+    · 檔內值 ≠ 生效值 → **紅**（`L0_FAILED_NOW_TEMPLATE`，「為什麼」寫出兩組值）——
+      ⛔ 不顯示檔內值冒充生效值，也 ⛔ 不在綠卡上默默只印其中一組。
+    · 讀不出來（缺檔／壞檔）→ 紅。
+    大字放 `method` 原值（例：`default (uncalibrated)`）；列標籤一律是欄位名（⛔ 不新造說法）。
+    """
+    _status = r.status
+    _mismatch = bool(_status is not None and not _status.consistent)
+    _state = classify_ui_state(
+        requested=r.requested,
+        error=(r.error or (calibration_mismatch_why(_status) if _mismatch else "")) or None,
+        has_value=_status is not None)
+    _facts: list[tuple[str, str]] = [(PANEL_SOURCE_FACT_KEY, SRC_CALIBRATION)]
+    if _state == UI_LIVE:
+        _facts += [
+            ("HEALTH_DEFENSE_THRESHOLD", str(_status.effective_health_defense_threshold)),
+            ("BULL_MIN_SCORE", str(_status.effective_bull_min_score)),
+            ("last_calibrated", _json_scalar_text(_status.last_calibrated)),
+        ]
+        return (Card(key="why.engineer.calibration", label="門檻校準", state=UI_LIVE,
+                     value=_json_scalar_text(_status.method)),
+                tuple(_facts), "")
+    if _state == UI_IDLE:
+        raise ValueError(
+            "「門檻校準」卡在進階診斷沒勾的情況下被建構 —— gate 應該在呼叫端就擋住"
+            "（`_render_engineer_block`）")
+    # 只剩 UI_FAILED：讀不出來，或檔內值不是生效值。
+    _why = (calibration_mismatch_why(_status) if _mismatch
+            else _error_why(SRC_CALIBRATION, r.error))
+    _note = Note(now=L0_FAILED_NOW_TEMPLATE.format(label="門檻校準"), why=_why,
+                 where=PANEL_REPORT_WHERE)
+    return (Card(key="why.engineer.calibration", label="門檻校準", state=_state, note=_note),
+            tuple(_facts), "")
+
+
+def build_engineer_panel_row(registry: RegistryReadout,
+                             calibration: CalibrationReadout) -> tuple[_Built, ...]:
+    """進階診斷那一列五張卡，**順序沿用原本 `ENGINEER_PANEL_SPECS` 的順序**
+    （資料源清單 → 雙演算法對帳 → API 根因 → 原始資料表 → 門檻校準）。"""
+    return ((build_registry_card(registry),)
+            + build_engineer_panel_cards()
+            + (build_calibration_card(calibration),))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -2225,9 +2408,6 @@ V2_SHORT_ROW_HEADS: tuple[tuple[str, str], ...] = (
 )
 
 _V2_UNWIRED_PANELS: tuple[tuple[str, str, str], ...] = (
-    ("why.engineer.registry", ENGINEER_REGISTRY_NOW,
-     # QA nit：「既…也…」⛔ 不得只剩前半句（第二個原因「不想依賴先去過另一頁」也留）。
-     "清單的 SSOT 住在 L1" + V2_EXCERPT_GAP + "本頁是 L5，既不得直呼 L1，也不想依賴「你得先去過另一頁」"),
     ("why.engineer.reconcile", ENGINEER_RECONCILE_NOW,
      # QA nit：「沒有任何一支」的主詞（src/services/）⛔ 不得略。
      "對帳的純函式在 L2" + V2_EXCERPT_GAP + "但 src/services/ 沒有任何一支把它包起來"),
@@ -2237,8 +2417,6 @@ _V2_UNWIRED_PANELS: tuple[tuple[str, str, str], ...] = (
     ("why.engineer.raw", ENGINEER_RAW_NOW,
      # QA F4 同類：耦合的**後果**（對方改一個 key 這裡就靜默變空）⛔ 不得略。
      "本頁去翻別頁的 session key" + V2_EXCERPT_GAP + "對方改一個 key，這裡就會靜默變空"),
-    ("why.engineer.calibration", ENGINEER_CALIBRATION_NOW,
-     "本頁不從 UI 觸發離線腳本" + V2_EXCERPT_GAP + "那會讓一次點擊變成一次可能改到門檻的動作"),
 )
 
 
@@ -2311,7 +2489,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
                   "這格只比較最近兩季，看不出趨勢" + V2_EXCERPT_GAP
                   + "真要看趨勢請到 🏆 個股組合的「📊 財報趨勢×轉機」區塊"),
            NO_EXIT_MARKER + " —— 這是規格層面的已知限制，不是這一輪抓壞了，重按幾次都一樣"))]
-    # ── 葉2 工程師版：整段的狀態 ＋ 五個未接線面板 ─────────────────────
+    # ── 葉2 工程師版：整段的狀態 ＋ ~~五個~~三個未接線面板（批 Z54） ─────────────
     + [_v2_rows_for("why.engineer.gate", ENGINEER_IDLE_NOW, (
            None, "六個面板各自會組大量表格，預設不跑",
            # QA F4：勾選的代價「（較耗時，部分項目會實際打外部 API）」⛔ 不得略。
@@ -2322,6 +2500,17 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("why.source.wall", ENGINEER_FAILED_NOW, _V2_REGISTRY_FAILED)]
     + [_v2_rows_for(_k, _now, (None, _why, _V2_NO_EXIT_UNWIRED))
        for _k, _now, _why in _V2_UNWIRED_PANELS]
+    # ── 葉2 工程師版：批 Z54 接上線的兩張（灰／紅）。短句一律是原文摘錄。
+    + [_v2_rows_for("why.engineer.registry", REGISTRY_NOT_WRITTEN_NOW, (
+           None, "還不存在" + V2_EXCERPT_GAP + "這是「還沒叫」，不是「叫了沒回」",
+           v2_plain(REGISTRY_NOT_WRITTEN_WHERE))),
+       _v2_rows_for("why.engineer.registry", REGISTRY_FAILED_NOW, (
+           None, _v2_raised(SRC_REGISTRY), v2_plain(PANEL_REPORT_WHERE))),
+       _v2_rows_for("why.engineer.calibration", CALIBRATION_FAILED_NOW, (
+           None, (_v2_raised(SRC_CALIBRATION),
+                  v2_plain(SRC_CALIBRATION).split("（", 1)[0] + V2_EXCERPT_GAP
+                  + "檔內寫的不是判燈程式實際使用的值"),
+           v2_plain(PANEL_REPORT_WHERE)))]
     # ── 葉3 AI 問答 ───────────────────────────────────────────────
     + [_v2_rows_for("why.qa", QA_IDLE_NOW, (
            None, "AI 只根據本站已經載入的資料作答，不自行上網查",
@@ -2757,7 +2946,7 @@ def _render_user_health_wall() -> None:
     st.caption(COVERAGE_DISCLOSURE)
 
 
-def _render_engineer_block() -> None:
+def _render_engineer_block(session: Mapping[str, Any]) -> None:
     """葉2 工程師版：**摺疊 ＋ 一顆 checkbox 全有全無 · 不加 form**。
 
     ⚠️ **兩步，兩個不同的 label**（線框 N5 補註逐字記載上一輪把它們混成一個）：
@@ -2775,9 +2964,13 @@ def _render_engineer_block() -> None:
         if not _opened:
             return
 
-        st.caption("**六個面板** —— 目前只有「Fetcher 監控」接得上；"
-                   "其餘五個各自卡在不同的地方，逐項寫在下面。")
-        _render_row(build_engineer_panel_cards())
+        # 📌 批 Z54：資料源清單／門檻校準兩張接上線 ⇒ 下面這句的「只有」「其餘五個」已改
+        #    （有意識的更正，⛔ 不是漏刪；原句：「目前只有「Fetcher 監控」接得上；
+        #     其餘五個各自卡在不同的地方，逐項寫在下面。」）。
+        st.caption("**六個面板** —— 目前「Fetcher 監控」「資料源清單」「門檻校準」接得上；"
+                   "其餘三個各自卡在不同的地方，逐項寫在下面。")
+        _render_row(build_engineer_panel_row(load_registry(_req, session),
+                                             load_calibration(_req)))
 
         st.caption("**🛰️ Fetcher 監控（`@monitored` 自我登錄）** —— "
                    "「未執行」＝ 本 session 尚無真實外抓"
@@ -2878,6 +3071,6 @@ def render_page_why() -> None:
         _render_edu_leaf()
     with _leaf2:
         _render_user_health_wall()
-        _render_engineer_block()
+        _render_engineer_block(_session)
     with _leaf3:
         _render_qa_leaf(_session)
