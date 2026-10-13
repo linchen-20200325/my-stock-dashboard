@@ -499,6 +499,17 @@ def test_switch_card_and_prompt_do_not_recommend_invalid_row(case, bad, monkeypa
     row = next(_r for _r in st.rows if _r["代號"] == "0056")
     if not (case.startswith("C_") and bad == "text"):
         assert row[SS.KEY_INVALID_LIGHTS] == want
+    if case.startswith("333_"):
+        # ⚠️ 批 Z51 有意的規則修正（總管 2026-10-13 裁定）：換入規則本來就不看 3-3-3（修前 3-3-3 ❌
+        # 也不擋換入），故 3-3-3 異常**不**連帶排除換入 —— 換入結果與 Z50 之前（L3 拔掉列標記與
+        # 換入排除）相同。原斷言「3-3-3 異常 → 不推換入」是 Z50 判斷過寬，非客戶核准規則。
+        _p_st, p_sw, (p_card, p_facts, _p_sig), p_prompt = _switch_run(
+            monkeypatch, over(_BAD_S[bad]), Smod=_svc_pre())
+        assert [d["代號"] for d in sw.switch_in] == ["0056"] and sw.switch_in_src == "watchlist"
+        assert (sw.switch_in, sw.switch_in_src) == (p_sw.switch_in, p_sw.switch_in_src)
+        assert card.value == p_card.value and _in_line(prompt) == _in_line(p_prompt)
+        _no_nonfinite(_blob((card, facts, _sig)))
+        return
     assert all(_d.get("代號") != "0056" for _d in sw.switch_in)
     assert sw.switch_in == () and "換入 1" not in card.value
     assert not any("建議換入" in _k for _k, _v in facts)

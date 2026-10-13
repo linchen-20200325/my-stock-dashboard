@@ -87,7 +87,12 @@ Z51_L3_SWITCH_PAIR = (
 Z51_L3_DIGEST_PAIR = ("    if _invalid_rows:\n", "    if False:\n")
 #: L3 `build_summary_prompt`：有異常 → 附事實列、不送「續抱」指示（只拔這一環 → QA D1 重現）。
 Z51_L3_PROMPT_PAIR = ('    _inv = digest.get("invalid") or []\n', "    _inv = []\n")
-_PRE_L3_PAIRS = (Z51_L3_VIX_PAIR, Z51_L3_SWITCH_PAIR, Z51_L3_DIGEST_PAIR, Z51_L3_PROMPT_PAIR)
+#: L3 `_SWITCH_IN_IGNORED_INVALID` 的 3-3-3 子項（只拔這一環 → 3-3-3 異常又連帶排除換入）。
+Z51_L3_SWITCH_333_PAIR = (
+    "_SWITCH_IN_IGNORED_INVALID |= {SS.KEY_SCREEN_INCEPTION, SS.KEY_SCREEN_RETURN, SS.KEY_SCREEN_PEER}\n",
+    "")
+_PRE_L3_PAIRS = (Z51_L3_VIX_PAIR, Z51_L3_SWITCH_PAIR, Z51_L3_DIGEST_PAIR, Z51_L3_PROMPT_PAIR,
+                 Z51_L3_SWITCH_333_PAIR)
 _PRE_L2_PAIRS = (Z51_L2_GUARD_PAIR, Z51_L2_WINDOW_PAIR, Z51_L2_AGG_PAIR)
 
 
@@ -472,6 +477,47 @@ def test_switch_235_invalid_does_not_change_switch_in(case, monkeypatch):
     assert "00878" not in prompt
 
 
+#: 只有 3-3-3 異常的情境（健檢 A–D 照常 🟢）：(覆寫, 預期 `_invalid_lights`)。
+_SW_333_ONLY = {
+    **{f"inception_{b}": ({"inception_years": v}, (SS.KEY_SCREEN_INCEPTION,))
+       for b, v in _BAD_ANY.items()},
+    **{f"ann_{b}": ({"ann_return_3y_pct": v}, (SS.KEY_SCREEN_RETURN,)) for b, v in _BAD.items()},
+    **{f"peer_{b}": ({"peer_ranks": {3: .2, 6: v, 12: .2}}, (SS.KEY_SCREEN_PEER,))
+       for b, v in _BAD.items()},
+    "all_three": ({"inception_years": float("nan"), "cum_return_3y_pct": float("inf"),
+                   "peer_ranks": {3: float("-inf"), 6: .2, 12: .2}},
+                  (SS.KEY_SCREEN_INCEPTION, SS.KEY_SCREEN_RETURN, SS.KEY_SCREEN_PEER)),
+    "333_and_235": ({"inception_years": float("nan"), "weekly_close": _wk_at(-30, float("inf"))},
+                    (SS.KEY_SCREEN_INCEPTION, SS.KEY_LIGHT235)),
+}
+
+
+@pytest.mark.parametrize("case", list(_SW_333_ONLY))
+def test_switch_333_invalid_does_not_change_switch_in(case, monkeypatch):
+    """⚠️ 有意的規則修正（總管 2026-10-13 裁定）：換入規則本來就不看 3-3-3 → 3-3-3 異常**不**
+    連帶排除換入（Z50 曾一併排除，屬判斷過寬）。選股池有候選：仍推觀察清單 0056，與正常時相同。"""
+    over, want = _SW_333_ONLY[case]
+    st, sw, (card, facts, _s), prompt = _run(monkeypatch, over, held=False, cands=_POOL)
+    row = next(_r for _r in st.rows if _r["代號"] == "0056")
+    assert row["健檢"] == "🟢" and row[SS.KEY_INVALID_LIGHTS] == want
+    assert (sw.switch_in_src, [d["代號"] for d in sw.switch_in]) == ("watchlist", ["0056"])
+    _n_st, n_sw, (n_card, _nf, _ns), _np = _run(monkeypatch, {}, held=False, cands=_POOL)
+    assert (sw.switch_in, sw.switch_in_src, card.value) == \
+        (n_sw.switch_in, n_sw.switch_in_src, n_card.value)
+    assert "00878" not in prompt
+
+
+@pytest.mark.parametrize("case", ["A_yield", "D_premium", "C_last"])
+def test_switch_health_invalid_with_333_still_excluded(case, monkeypatch):
+    """健檢 A／C／D 異常照舊排除換入，即使同列也有 3-3-3／235 異常。"""
+    over = {"A_yield": {"annual_yield_pct": float("nan")},
+            "D_premium": {"premium_pct": float("inf")},
+            "C_last": {"weekly_close": _wk_at(-1, float("-inf"))}}[case]
+    _st, sw, _c, _p = _run(monkeypatch, {**over, "inception_years": float("nan")}, held=False,
+                           cands=_POOL)
+    assert (sw.switch_in_src, [d["代號"] for d in sw.switch_in]) == ("screener", ["00878"])
+
+
 @pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))
 def test_switch_health_c_invalid_still_excluded(bad, monkeypatch):
     """健檢C 會直接影響換入（`健檢` 欄）→ 異常時照舊排除（Z50），改由選股池遞補。"""
@@ -594,6 +640,19 @@ def test_mut_agg_drops_structured_flag(monkeypatch):
     st2, *_r2 = _run(monkeypatch, over, held=False)
     assert next(_x for _x in st2.rows if _x["代號"] == "0056")[SS.KEY_INVALID_LIGHTS] == \
         (SS.KEY_LIGHT235,)
+
+
+@pytest.mark.parametrize("over", [{"inception_years": float("nan")},
+                                  {"ann_return_3y_pct": float("inf")},
+                                  {"peer_ranks": {3: .2, 6: float("-inf"), 12: .2}}], ids=repr)
+def test_mut_switch_333_reopens_over_exclusion(over, monkeypatch):
+    """只拔 L3「3-3-3 不連帶排除」→ Z50 的過寬排除重現：觀察清單 0056 改由選股池遞補。"""
+    m = _variant(_SVC, (Z51_L3_SWITCH_333_PAIR,), "_z51_no_switch_333")
+    _st, sw, _c, _p = _run(monkeypatch, over, held=False, svc_mod=m, cands=_POOL)
+    assert (sw.switch_in_src, [d["代號"] for d in sw.switch_in]) == ("screener", ["00878"]), \
+        "拔掉 → 3-3-3 異常連帶排除換入重現"
+    _st2, sw2, _c2, _p2 = _run(monkeypatch, over, held=False, cands=_POOL)
+    assert (sw2.switch_in_src, [d["代號"] for d in sw2.switch_in]) == ("watchlist", ["0056"])
 
 
 @pytest.mark.parametrize("bad", ["nan", "pos_inf", "text"])
