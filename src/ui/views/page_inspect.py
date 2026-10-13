@@ -589,6 +589,11 @@ CHIPS_OUTLIER_UNKNOWN_ZERO: str = (
 CHIPS_OUTLIER_UNKNOWN_OTHER: str = (
     "本站沒有對應這個原因的說法 —— 上游的回傳字彙可能改了。"
     "**不替它猜一個意思**；請照上面那個原文去對上游的程式碼")
+#: 批 Z48 第 2 項（客戶 2026-10-13 核准逐字文案，⛔ 一字不改）：L2 回 `ok`／`outlier`、但倍數非有限
+#: （NaN／±inf）→ L3 判 `OUTLIER_UNKNOWN`。這一種**整列只出這一句**：⛔ 不帶 `CHIPS_OUTLIER_UNKNOWN_HEAD`
+#: （它會印出上游原因 `ok`／`outlier` —— 兩個字讀起來就是「沒事／有異常」的結論，且 HEAD 本身含
+#: 「沒有異常」字樣），⛔ 不走 `CHIPS_OUTLIER_UNKNOWN_OTHER`（「上游的回傳字彙可能改了」與實因不符）。
+CHIPS_OUTLIER_UNKNOWN_NONFINITE: str = "主力買賣超倍數資料異常，無法判定是否達到異常門檻。"
 #: 判出來了的兩句。`{}` 全部由 L3 帶上來，**本檔不寫門檻、也不寫窗長度**（§3.3）。
 CHIPS_OUTLIER_ANOMALY_TEXT: str = (
     "**有異常**：最新一日主力買賣超達均量的 {ratio} 倍，"
@@ -629,6 +634,7 @@ def _outlier_fact(chips: "ChipsView") -> tuple[str, str] | None:
     from src.services.stock_chips_service import (
         OUTLIER_ANOMALY,
         OUTLIER_NORMAL,
+        OUTLIER_UNKNOWN,
     )
 
     _win = (CHIPS_OUTLIER_WINDOW_TEXT.format(window=chips.outlier_window)
@@ -643,6 +649,10 @@ def _outlier_fact(chips: "ChipsView") -> tuple[str, str] | None:
                             window=_win,
                             threshold=_fmt_num(chips.outlier_threshold,
                                                digits=1)))
+
+    if _v == OUTLIER_UNKNOWN and chips.outlier_reason in ("ok", "outlier"):
+        # 批 Z48 第 2 項：L2 判得出來的兩個原因卻落到判不出來 ⇒ 只可能是倍數非有限（L3 `_outlier_fields`）。
+        return (CHIPS_OUTLIER_LABEL, CHIPS_OUTLIER_UNKNOWN_NONFINITE)
 
     _tail = {"vol_unavailable": CHIPS_OUTLIER_UNKNOWN_VOL,
              "inst_net_zero": CHIPS_OUTLIER_UNKNOWN_ZERO}.get(

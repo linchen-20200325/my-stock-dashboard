@@ -441,9 +441,13 @@ class TestExistingCallersUnchanged:
         prices, _ = world
         prices["0056.TW"] = _ohlcv()
         prices["2330.TW"] = ConnectionError("yahoo 429")
-        old = _mutant(PDS, ("    _rets, _missing, _errors = (_daily_returns(list(_w), strict=True)"
-                            " if strict\n                                else _daily_returns("
-                            "list(_w)))\n", "    _rets, _missing, _errors = _daily_returns(list(_w))\n"))
+        # 批 Z48：呼叫行多帶必填的 `invalid=_invalid`（收盤價異常的出口）→ 突變點逐字同步；
+        # 突變的語意不變（仍是「拔掉 strict 分派、一律走非 strict」）。
+        old = _mutant(PDS, ("    _rets, _missing, _errors = (_daily_returns(list(_w), strict=True,"
+                            " invalid=_invalid)\n                                if strict else"
+                            " _daily_returns(list(_w), invalid=_invalid))\n",
+                            "    _rets, _missing, _errors = _daily_returns(list(_w),"
+                            " invalid=_invalid)\n"))
         for rows in ([_OK_A, _OK_B], [_OK_A], [_ERR, _NOPX], [_NOLOTS]):
             assert (dataclasses.asdict(PDS.get_portfolio_var(rows))
                     == dataclasses.asdict(old.get_portfolio_var(rows))), rows
