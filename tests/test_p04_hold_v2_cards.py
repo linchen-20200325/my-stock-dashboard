@@ -281,6 +281,10 @@ def _enumerate():
         add(P.build_stress_card, _dq)
         add(P.build_var_card, _dq)
         add(P.build_dividend_cash_card, _dq)
+    # 批 Z48（2026-10-13）：歷史收盤價含 0／負值／無效值 → VaR 灰「無法計算」（`VAR_INVALID_CLOSE_NOW`）。
+    add(P.build_var_card, P.DeepReadout(
+        requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,
+        var=_var_res(computed=False, reason="r", invalid_close=(("2330", "2025-02-13"),))))
     return notes, builts
 
 

@@ -1620,6 +1620,17 @@ STRESS_EMPTY_NOW: str = "**有持股，但壓力測試算不出來**"
 VAR_FAILED_NOW: str = "**VaR 算不出來**"
 VAR_NO_HOLDINGS_NOW: str = "**還沒有可以算 VaR 的持股**"
 VAR_EMPTY_NOW: str = "**有持股，但 VaR 算不出來**"
+#: 批 Z48（客戶 2026-10-13 裁示）：歷史收盤價含 0／負值／NaN／±inf → VaR **整張不計算**
+#: （L3 `REASON_INVALID_CLOSE`）。灰態（`UI_EMPTY`，同 `VAR_EMPTY_NOW` 那一種），但 `now` 另立一句：
+#: `VAR_EMPTY_NOW` 的卡面短句由 `tests/test_v2_batch_w_0928.py` 守「逐字不變」，而且它的 why
+#: 第一句「這是一個有效的結果」對資料異常不成立。why／where 只陳述客觀事實，
+#: ⛔ 不含投資判斷、⛔ 不含尾端風險結論。why ＝ 開頭 ＋「代號（第一個異常日 …）」＋ 結尾。
+VAR_INVALID_CLOSE_NOW: str = "**歷史收盤價有異常值，VaR 無法計算**"
+VAR_INVALID_CLOSE_WHY_HEAD: str = "歷史收盤價含 0、負值或無效值（空值或無限大）"
+VAR_INVALID_CLOSE_WHY_TAIL: str = "本卡不剔除異常日、不替換異常值，整張不計算"
+VAR_INVALID_CLOSE_WHERE: str = f"{NO_EXIT_MARKER} —— 異常值在上游回傳的歷史價格裡，本頁不修改上游資料"
+#: 卡面 fact 列的標籤（代號清單掛在這一列，卡面看得到；完整 why 在「▸ 詳細」）。
+VAR_INVALID_CLOSE_FACT: str = "⚠️ 這幾檔的歷史收盤價含 0 或無效值"
 CASH_FAILED_NOW: str = "**配息現金流算不出來**"
 CASH_NO_HOLDINGS_NOW: str = "**還沒有可以算配息的持股**"
 #: E3-r1（客戶 2026-09-27 逐字提供，⛔ 一字不改）：配息卡**只有觀察清單、沒有任何持有列**
@@ -3052,6 +3063,11 @@ def build_stress_card(deep: DeepReadout) -> _Built:
                 state=_state, note=_note), tuple(_facts), ""
 
 
+def _var_invalid_list(invalid: Sequence[tuple[str, str]]) -> str:
+    """批 Z48：`((代號, 第一個異常日), …)` → `'2330.TW（第一個異常日 2025-02-13）、…'`。"""
+    return "、".join(f"{_t}（第一個異常日 {_d}）" if _d else str(_t) for _t, _d in invalid)
+
+
 def build_var_card(deep: DeepReadout) -> _Built:
     """線框 ⑥ 的「VaR」—— **本批新接線**。
 
@@ -3079,6 +3095,8 @@ def build_var_card(deep: DeepReadout) -> _Built:
     _degraded = _degraded_bits(_res) if _res is not None else []
     # Q3：持有列取數失敗 → 升紅（同壓測那一格，理由見 `build_stress_card()`）。
     _var_skipped = deep.failed_rows + deep.unpriced_rows
+    # 批 Z48：歷史收盤價含 0／負值／無效值 → L3 回 `computed=False` ＋ `invalid_close`（不畫數字）。
+    _invalid = tuple(getattr(_res, "invalid_close", ()) or ()) if _res is not None else ()
     _state = classify_ui_state(
         requested=deep.requested,
         error=deep.var_error or deep.error or _dead_src or None,
@@ -3101,6 +3119,9 @@ def build_var_card(deep: DeepReadout) -> _Built:
         _facts.append(("⚠️ 這幾檔沒有價格序列",
                        "、".join(_res.no_price)
                        + " —— 抓不到就**不納入**（不是當成 0% 報酬）"))
+    if _invalid:
+        # 批 Z48：代號 ＋ 第一個異常日（L3 拿不到日期時是空字串 → 只列代號，⛔ 不編日期）。
+        _facts.insert(0, (VAR_INVALID_CLOSE_FACT, _var_invalid_list(_invalid)))
     if _state in (UI_LIVE, UI_DEGRADED) and _res is not None:
         _facts.insert(1, ("樣本",
                           f"{_res.n_common} 個共同交易日"
@@ -3148,6 +3169,18 @@ def build_var_card(deep: DeepReadout) -> _Built:
     elif not deep.has_station_rows:
         _note = _deep_note(deep, now=VAR_NO_HOLDINGS_NOW,
                            source=SRC_VAR, error="")
+    elif _invalid:
+        # 批 Z48：灰「無法計算」。⛔ 不寫「這是一個有效的結果」（這是資料異常，不是有效結果），
+        # ⛔ 不沿用「等歷史累積」那句 where（等多久都不會讓異常值消失）。
+        _note = Note(now=VAR_INVALID_CLOSE_NOW,
+                     why=(f"{VAR_INVALID_CLOSE_WHY_HEAD}：{_var_invalid_list(_invalid)}。"
+                          f"{VAR_INVALID_CLOSE_WHY_TAIL}"),
+                     where=VAR_INVALID_CLOSE_WHERE)
+        # 卡上沒有數字 ⇒ 解釋數字的那幾列（意思／樣本怎麼取／涵蓋範圍）一併不出，只留事實：
+        # 哪幾檔異常（＋ 既有的「沒有價格序列」列，若有）。「樣本怎麼取」那句「缺的日子一律剔除」
+        # 掛在「本卡不剔除異常日」旁邊會被讀成兩句相反的話。
+        _facts = [_f for _f in _facts
+                  if _f[0] in (VAR_INVALID_CLOSE_FACT, "⚠️ 這幾檔沒有價格序列")]
     else:
         _note = Note(
             now=VAR_EMPTY_NOW,
@@ -4181,6 +4214,10 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            + "本站寧可不給，也不給一個用補值撐出來的尾部估計",
            "若是新上市／剛買進的標的，等歷史累積" + V2_EXCERPT_GAP
            + IF_LOTS_AVG_MISSING_WHERE)),
+       # 批 Z48：歷史收盤價異常（why 摘開頭與結尾；代號清單在 fact 列與「▸ 詳細」摺疊區）。
+       _v2_rows_for("hold.deep.var", VAR_INVALID_CLOSE_NOW, (
+           None, "歷史收盤價含 0、負值或無效值" + V2_EXCERPT_GAP + VAR_INVALID_CLOSE_WHY_TAIL,
+           v2_plain(VAR_INVALID_CLOSE_WHERE))),
        _v2_rows_for("hold.deep.dividend_cash", CASH_FAILED_NOW, (
            None, (_v2_raised(SRC_DIV_CASH), _v2_raised(SRC_HOLDINGS),
                   "整批抓取失敗 —— 看該列的錯誤訊息"),

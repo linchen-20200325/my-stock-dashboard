@@ -202,6 +202,12 @@ REASON_NO_LOTS_ROWS: str = "沒有任何一列有張數"
 REASON_NO_RETURNS: str = "一檔的歷史價格都抓不到，沒有日報酬可以算"
 REASON_NO_COMMON_DAYS: str = "各檔沒有共同交易日（不補值、不 ffill）"
 REASON_SHORT_SAMPLE: str = "共同交易日不足一個月，樣本太短的尾部估計會過度樂觀"
+#: 批 Z48（客戶 2026-10-13 裁示）：參與 VaR 的任一檔，歷史收盤價含 0／負值／NaN／±inf
+#: → **整個 VaR 不計算**（不剔除異常日、不只剔那一檔、不把異常值換成 0 或前值）。
+#: 哪幾檔、第一個異常日見 `VarResult.invalid_close`。
+REASON_INVALID_CLOSE: str = (
+    "有持股的歷史收盤價含 0、負值或無效值（空值或無限大）—— "
+    "不剔除異常日、不替換異常值，整個 VaR 不計算")
 REASON_NO_COVERED_VALUE: str = (
     "進到分布裡的那幾檔算不出市值 —— 沒有分子就沒有元金額（不拿全組合市值頂替）")
 REASON_DIVIDEND_CONTRACT_DRIFT: str = (
@@ -651,6 +657,10 @@ class VarResult:
             ⚠️ 它與 `no_price` **不是同一件事**（v3 §02「介面狀態嚴格分離」）：
             回一份空資料是「這檔沒有歷史」（灰），**拋例外是上游掛了**（紅）。
             混成一種，Yahoo 整個掛掉的那一天使用者會以為「我的股票太新」。
+        invalid_close: 批 Z48 —— 歷史收盤價含 0／負值／NaN／±inf 的持股，
+            `(代號, 第一個異常日 'YYYY-MM-DD')`（日期拿不到為空字串，**不編一個**）。
+            非空 ⇒ `computed=False` ＋ `REASON_INVALID_CLOSE`，**五個元金額一律不算**
+            （不是剔除那幾天／那幾檔後照算 —— 客戶 2026-10-13 裁示）。
     """
 
     computed: bool = False
@@ -678,6 +688,7 @@ class VarResult:
     tickers_used: tuple[str, ...] = ()
     no_price: tuple[str, ...] = ()
     fetch_errors: tuple[str, ...] = ()
+    invalid_close: tuple[tuple[str, str], ...] = ()
     valued_n: int = 0
     held_n: int = 0
     reconciled: bool = True
@@ -711,8 +722,15 @@ class VarResult:
         return bool(self.computed) and _is_full(self.coverage_pct)
 
 
-def _daily_returns(tickers, *, strict: bool = False) -> tuple[dict, list[str], list[str]]:
+def _daily_returns(tickers, *, invalid: list, strict: bool = False
+                   ) -> tuple[dict, list[str], list[str]]:
     """`{ticker: 日報酬 Series}` ＋ 沒有資料的代號 ＋ **拋了例外**的代號。
+
+    `invalid=`（批 Z48，2026-10-13，**必填**）：收盤價序列含 0／負值／NaN／±inf 的那一檔
+    → append `(代號, 第一個異常日)`，**不放進日報酬**（也不算「沒有資料」）。判定在 L2
+    `find_invalid_closes()`（只判不改）。⚠️ 呼叫端拿到非空的 `invalid` **必須整個不算**
+    —— 本函式只負責「不讓異常值變成報酬」，不負責決定「剩下的還算不算」。
+    做成必填是故意的：沒有這個出口，異常的那一檔只會**悄悄消失**在日報酬裡。
 
     `strict=`（Q3，2026-09-26，**加性參數；預設 `False` → 行為與修前逐位元組相同**）：
     `True` → L1 `fetch_etf_price` **自己接住的例外**（它回空 df、在 `attrs` 掛旗標，見
@@ -735,6 +753,8 @@ def _daily_returns(tickers, *, strict: bool = False) -> tuple[dict, list[str], l
     key 用 `.TWO`、權重用 `.TW` 會讓那一檔的權重查成 0 → 悄悄掉出組合。
     後綴只是「拿去打上游的字串」，**不是**這檔股票在本檔的身分。
     """
+    from src.compute.etf.etf_calc import find_invalid_closes   # L3 → L2（批 Z48）
+
     _rets: dict = {}
     _missing: list[str] = []
     _errors: list[str] = []
@@ -759,6 +779,14 @@ def _daily_returns(tickers, *, strict: bool = False) -> tuple[dict, list[str], l
             continue
         if _used and _used != _tk:
             print(f"[portfolio_deep/var] {_tk} 上市代號抓不到，改用上櫃 {_used}")
+        # 批 Z48：**算報酬之前**先判收盤價本身（0 → 隔天 +inf；NaN → 被下面的 dropna 吃掉那一天）。
+        _bad = find_invalid_closes(_df["Close"])
+        if _bad["n_invalid"]:
+            _first = _day_str(_bad["first_invalid"])
+            print(f"[portfolio_deep/var] {_tk} 歷史收盤價含 {_bad['n_invalid']} 筆 0／負值／無效值"
+                  f"（第一筆 {_first or '日期不明'}）→ 不算報酬")
+            invalid.append((_tk, _first))
+            continue
         _s = _df["Close"].pct_change().dropna()
         if len(_s) == 0:
             _missing.append(_tk)
@@ -799,6 +827,9 @@ def get_portfolio_var(rows, *, strict: bool = False) -> VarResult:
     Returns:
         `VarResult`。共同交易日不足一個月 → `computed=False` ＋
         `REASON_SHORT_SAMPLE`（**不報一個樣本 3 天的 VaR**）。
+        批 Z48（2026-10-13）：任一檔歷史收盤價含 0／負值／NaN／±inf → `computed=False` ＋
+        `REASON_INVALID_CLOSE` ＋ `invalid_close`（`strict` 與否皆然；上面「預設 `False` →
+        與修前逐位元組相同」只對**收盤價全部正常**的輸入成立 —— 修前那種輸入會算出 nan／inf）。
 
     ⚠️ 對齊方式**完全交給 L2** `align_portfolio_returns`：只取「全員皆有交易」
     的共同日，**絕不** ffill／fillna(0)。本檔不自己對齊（那會是第二套規則）。
@@ -825,9 +856,17 @@ def get_portfolio_var(rows, *, strict: bool = False) -> VarResult:
              "reconciled": _ok, "reference_value_twd": _ref}
 
     _value = _value_by_ticker(_priced)
-    # 不傳 strict 時呼叫形狀逐字同修前（不多帶關鍵字）。
-    _rets, _missing, _errors = (_daily_returns(list(_w), strict=True) if strict
-                                else _daily_returns(list(_w)))
+    # 不傳 strict 時呼叫形狀同修前（不多帶 strict 關鍵字；`invalid=` 是批 Z48 的必填出口）。
+    _invalid: list[tuple[str, str]] = []
+    _rets, _missing, _errors = (_daily_returns(list(_w), strict=True, invalid=_invalid)
+                                if strict else _daily_returns(list(_w), invalid=_invalid))
+    if _invalid:
+        # 批 Z48（客戶 2026-10-13 裁示）：**任一檔**收盤價有異常 → 整個 VaR 不算。
+        # ⛔ 不剔除異常日後照算、⛔ 不只剔那一檔、⛔ 不把異常值換成 0／前值。
+        # 排在 `not _rets` 之前：全員都異常時講的是「價格有異常」，不是「抓不到」。
+        return VarResult(reason=REASON_INVALID_CLOSE, invalid_close=tuple(_invalid),
+                         no_price=tuple(_missing), fetch_errors=tuple(_errors),
+                         excluded_tickers=tuple(sorted(_w)), **_base)
     if not _rets:
         # 一檔都沒抓成：有例外 → `upstream_down` 為真（呼叫端判紅）；
         # 全是空資料 → 灰（「這幾檔沒有那段歷史」是有效結果）。
@@ -1099,6 +1138,6 @@ __all__ = [
     "priced_rows",
     "REASON_DIVIDEND_CONTRACT_DRIFT", "REASON_NO_COMMON_DAYS",
     "REASON_NO_COVERED_VALUE", "REASON_NO_LOTS_ROWS", "REASON_NO_PRICED_ROWS",
-    "REASON_NO_RETURNS", "REASON_SHORT_SAMPLE",
+    "REASON_INVALID_CLOSE", "REASON_NO_RETURNS", "REASON_SHORT_SAMPLE",
     "TRADING_DAYS_PER_MONTH",
 ]

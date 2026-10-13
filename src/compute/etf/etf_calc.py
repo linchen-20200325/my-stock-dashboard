@@ -1178,6 +1178,37 @@ def align_portfolio_returns(var_rets, weights):
             'limiter_start': starts.get(limiter), 'tickers_used': tickers_used}
 
 
+def find_invalid_closes(close):
+    """批 Z48：收盤價序列裡的**異常值**（≤ 0、NaN、±inf、非數值）—— 純函式,零 I/O,**只判不改**。
+
+    收盤價是「一股的成交價」,0 或負值不是一個價格;NaN／±inf 也不是。拿含這些值的序列去算
+    `pct_change()`:0 會在隔天變成 +inf、NaN 會被後面的 `dropna()` 靜靜吃掉那一天 ——
+    前者讓分位數／平均數變成 nan、後者等於**剔除異常日後照樣給出一個數字**(§1 兩條都違反)。
+    本函式只負責**找出來**;找到之後怎麼辦(整個 VaR 不算)由呼叫端(L3)決定。
+
+    ⛔ 不回傳任何「修好的」序列、不 fillna／ffill／replace —— 那正是客戶 2026-10-13 裁示禁止的事。
+    `pd.to_numeric(errors='coerce')` 只用在**判斷**上(把字串之類的非數值也判成異常),
+    結果不寫回、不往外傳。
+
+    Args:
+        close: 收盤價序列(`pd.Series`,index 通常是交易日)。`None` / 空序列 → 沒有異常。
+
+    Returns:
+        dict:`n_invalid`(異常筆數,int)/ `first_invalid`(第一個異常值的 index 標籤;
+        沒有異常為 `None`)。
+    """
+    if close is None or len(close) == 0:
+        return {'n_invalid': 0, 'first_invalid': None}
+    _s = close if isinstance(close, pd.Series) else pd.Series(close)
+    _arr = pd.to_numeric(_s, errors='coerce').to_numpy(dtype='float64', na_value=np.nan)
+    with np.errstate(invalid='ignore'):
+        _bad = ~np.isfinite(_arr) | (_arr <= 0)
+    _n = int(_bad.sum())
+    if _n == 0:
+        return {'n_invalid': 0, 'first_invalid': None}
+    return {'n_invalid': _n, 'first_invalid': _s.index[int(np.argmax(_bad))]}
+
+
 def compute_portfolio_vs_benchmark(per_asset_returns, weights, bench_returns):
     """§1 誠實對齊:組合 + 個別持股 vs 基準(0050)的「累積報酬曲線」—— 純函式,零 I/O。
 
