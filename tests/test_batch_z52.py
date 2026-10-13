@@ -31,9 +31,12 @@ import sys
 import types
 
 import numpy as np
+import pandas as pd
 import pytest
 
+import src.services.dividend_station_service as S
 import src.ui.views.page_hold as PH
+from shared import station_specs as SS
 from shared.ui_state import UI_EMPTY, UI_FAILED, UI_IDLE, UI_LIVE
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -65,7 +68,12 @@ Z52_CARD_PAIR = (
     "    _invalid = False and (vix.invalid\n")
 #: `load_vix` 的異常分流（只拔這一環 → L3 回 inf／字串時併成「抓不到」，叫人重跑）。
 Z52_LOAD_PAIR = ("    if is_invalid_number(_v):\n", "    if False:\n")
+#: L3 `build_station_digest`：持有列的持股輸入異常進 `invalid`（只拔這一環 → 修前：⑦ 看不到、續抱引導還在）。
+Z52_DIGEST_PAIR = (
+    '        return tuple(r.get(SS.KEY_INVALID_INPUTS) or ()) if r.get("held") else ()\n',
+    "        return ()\n")
 _PRE_PAGE_PAIRS = (Z52_CARD_PAIR, Z52_LOAD_PAIR)
+_PRE_SVC_PAIRS = (Z52_DIGEST_PAIR,)
 
 
 def _exec_module(name: str, path: pathlib.Path, code: str) -> types.ModuleType:
@@ -91,8 +99,12 @@ def _page_pre() -> types.ModuleType:
     return _variant(_PAGE, _PRE_PAGE_PAIRS, "_z52_pre_page_hold")
 
 
+def _svc_pre() -> types.ModuleType:
+    return _variant(_SVC, _PRE_SVC_PAIRS, "_z52_pre_svc")
+
+
 def test_revert_pairs_are_unique_anchors():
-    for rel, pairs in ((_PAGE, _PRE_PAGE_PAIRS),):
+    for rel, pairs in ((_PAGE, _PRE_PAGE_PAIRS), (_SVC, _PRE_SVC_PAIRS)):
         code = (_ROOT / rel).read_text(encoding="utf-8")
         for new, _old in pairs:
             assert code.count(new) == 1, new
@@ -230,3 +242,188 @@ def test_mut_load_reopens_fetch_failed_wording(bad, monkeypatch):
     assert vx.fetch_failed is True and vx.invalid is False
     card = m.build_vix_card(vx)[0]
     assert "沒抓到" in card.note.why and card.note.why != _sentence("VIX")
+
+
+# ══════════════════════════════════════════════════════════════════
+# B. ⑦ AI 輸入（Z51-n2）
+# ══════════════════════════════════════════════════════════════════
+_WK = pd.Series(np.linspace(20, 30, 120),
+                index=pd.date_range("2023-01-06", periods=120, freq="W-FRI"))
+
+
+def _etf_metrics(**over) -> dict:
+    base = dict(weekly_close=_WK, premium_pct=0.3, sharpe=0.8, total_return_1y_pct=10.0,
+                annual_yield_pct=5.0, inception_years=5.0, ann_return_3y_pct=8.0,
+                cum_return_3y_pct=25.0, peer_ranks={3: .2, 6: .2, 12: .2}, current_price=30.0)
+    base.update(over)
+    return base
+
+
+def _stock_metrics(price) -> dict:
+    return {"mj_grade": None, "mj_score_pct": None, "mj_headline": "", "mj_fail_items": [],
+            "kd_state": None, "current_price": price, "name": "", "trend_verdict": None}
+
+
+def _h(tk, kind, lots=1.0, avg=100.0, held=True) -> dict:
+    return {"ticker": tk, "name": tk, "asset_kind": kind, "lots": lots, "avg_price": avg,
+            "held": held}
+
+
+#: 衛星 2330（受測）、2317（個股）＋ 核心 0050（ETF，受測）＋ 觀察清單 00878（ETF）。
+def _holdings(s_lots=1.0, s_avg=100.0, e_lots=3.0, e_avg=25.0, w_lots=None, w_avg=None):
+    return [_h("2330", "stock", lots=s_lots, avg=s_avg),
+            _h("2317", "stock", lots=2.0, avg=100.0),
+            _h("0050", "etf", lots=e_lots, avg=e_avg),
+            _h("00878", "etf", lots=w_lots, avg=w_avg, held=False)]
+
+
+_ORIG_DIGEST = S.build_station_digest
+_ORIG_PROMPT = S.build_summary_prompt
+
+
+def _run(monkeypatch, *, holdings, prices=None, etf_over=None, svc_mod=None, vix=15.0):
+    """走新 UI 真的 `load_station` → `load_ai_summary`（⑦）；只把 L3 抓取換成合成列。"""
+    prices = {"2330": 120.0, "2317": 118.0, "0050": 30.0, "00878": 20.0, **(prices or {})}
+
+    def mf(tk, kind):
+        if kind == "etf":
+            return _etf_metrics(**{"current_price": prices.get(tk),
+                                   **((etf_over or {}) if tk == "0050" else {})})
+        return _stock_metrics(prices.get(tk))
+    monkeypatch.setattr("src.services.dividend_station_service.get_station_rows",
+                        lambda hs: (S.build_station_rows(hs, vix=vix, metrics_fn=mf), vix))
+    _svc = svc_mod
+    monkeypatch.setattr("src.services.dividend_station_service.build_station_digest",
+                        _svc.build_station_digest if _svc is not None else _ORIG_DIGEST)
+    monkeypatch.setattr("src.services.dividend_station_service.build_summary_prompt",
+                        _svc.build_summary_prompt if _svc is not None else _ORIG_PROMPT)
+    _cap: dict = {}
+
+    def _gem(prompt, max_tokens=None, **k):
+        _cap["prompt"] = prompt
+        return "摘要OK"
+    monkeypatch.setattr("src.services.app_ai_service.gemini_call", _gem)
+    h = PH.HoldingsReadout(requested=True, submitted=True, bound=True, holdings=tuple(holdings))
+    st = PH.load_station(h)
+    ai = PH.load_ai_summary(True, st, PH.SwitchReadout(requested=False))
+    return st, ai, _cap.get("prompt", "")
+
+
+def _prompt_line(prompt: str, head: str) -> str:
+    assert prompt, "⑦ 沒有被呼叫"
+    _l = [ln for ln in prompt.splitlines() if ln.startswith(head)]
+    assert len(_l) == 1, prompt
+    return _l[0]
+
+
+def _fact(*rows) -> str:
+    return _FACT_HEAD + "、".join(
+        f"{_c}（" + "　".join(f"{_l}：{_t}" for _l, _t in _items) + "）" for _c, _items in rows)
+
+
+def _inp(*items) -> tuple:
+    return tuple((_i, _sentence(_i)) for _i in items)
+
+
+#: 情境：(holdings 參數, prices 覆寫, 期望事實列)
+_CASES: dict = {}
+for _b, _v in _BAD_STR.items():
+    _CASES[f"stock_lots_{_b}"] = ({"s_lots": _v}, {}, (("2330", _inp("張數")),))
+    _CASES[f"stock_avg_{_b}"] = ({"s_avg": _v}, {}, (("2330", _inp("均價")),))
+    _CASES[f"stock_px_{_b}"] = ({}, {"2330": _v}, (("2330", _inp("現價")),))
+    _CASES[f"etf_lots_{_b}"] = ({"e_lots": _v}, {}, (("0050", _inp("張數")),))
+for _b, _v in _BAD.items():
+    _CASES[f"stock_all3_{_b}"] = ({"s_lots": _v, "s_avg": _v}, {"2330": _v},
+                                  (("2330", _inp("張數", "均價", "現價")),))
+    _CASES[f"two_rows_{_b}"] = ({"s_avg": _v, "e_lots": _v}, {},
+                                (("2330", _inp("均價")), ("0050", _inp("張數"))))
+
+
+@pytest.mark.parametrize("case", list(_CASES))
+def test_prompt_lists_held_input_invalid_and_drops_keep(case, monkeypatch):
+    hk, px, want = _CASES[case]
+    st, ai, prompt = _run(monkeypatch, holdings=_holdings(**hk), prices=px)
+    assert "續抱、定期定額即可" not in prompt, "持股輸入資料異常時不得引導 AI 說續抱"
+    assert _prompt_line(prompt, _FACT_HEAD) == _fact(*want)
+    _no_nonfinite(prompt)
+    assert st.digest["invalid"] == [{"代號": _c, "項目": _it} for _c, _it in want]
+    # 新 UI ⑦ 卡（卡片、facts、v2 HTML）也不得出現 nan／inf。
+    _no_nonfinite(_blob(PH, PH.build_ai_summary_card(ai, st)))
+    # 除了拿掉那句指示、加上事實列，prompt 其餘逐字同修前。
+    _st, _ai, pre = _run(monkeypatch, holdings=_holdings(**hk), prices=px, svc_mod=_svc_pre())
+    assert _KEEP in pre and _FACT_HEAD not in pre
+    _anchor = _prompt_line(pre, "- 抓取失敗未納入：") + "\n"
+    assert prompt == pre.replace(_KEEP, "").replace(_anchor, _anchor + _fact(*want) + "\n")
+
+
+@pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))
+def test_prompt_light_and_input_invalid_on_same_row_combined(bad, monkeypatch):
+    """同一列燈（批 Z51）與持股輸入（本批）都異常 → 一列一個括號，燈的項目在前。"""
+    st, _ai, prompt = _run(monkeypatch, holdings=_holdings(e_lots=_BAD[bad]),
+                           etf_over={"premium_pct": _BAD[bad]})
+    assert _prompt_line(prompt, _FACT_HEAD) == _fact(
+        ("0050", (("健檢D", _sentence("折溢價")),) + _inp("張數")))
+    assert "續抱、定期定額即可" not in prompt
+    _no_nonfinite(prompt)
+
+
+@pytest.mark.parametrize("bad", list(_BAD_STR), ids=list(_BAD_STR))
+def test_prompt_watchlist_input_invalid_not_listed(bad, monkeypatch):
+    """觀察清單列的持股輸入不進 allocation／take_profit → 不列、prompt 與修前逐字相同。"""
+    st, _ai, prompt = _run(monkeypatch, holdings=_holdings(), prices={"00878": _BAD_STR[bad]})
+    row = next(_r for _r in st.rows if _r["代號"] == "00878")
+    assert SS.ITEM_PRICE in row[SS.KEY_INVALID_INPUTS]
+    assert "invalid" not in st.digest
+    _st, _ai2, pre = _run(monkeypatch, holdings=_holdings(), prices={"00878": _BAD_STR[bad]},
+                          svc_mod=_svc_pre())
+    assert prompt == pre and _KEEP in prompt
+
+
+_NORMAL = {
+    "all_normal": ({}, {}),
+    "lots_none": ({"s_lots": None}, {}),
+    "avg_none": ({"s_avg": None}, {}),
+    "px_none": ({}, {"2330": None}),
+    "etf_avg_zero": ({"e_avg": 0.0}, {}),
+    "lots_negative": ({"s_lots": -1.0}, {}),
+    "take_profit_hit": ({"s_avg": 80.0}, {}),
+    "watch_has_lots": ({"w_lots": 1.0, "w_avg": 18.0}, {}),
+}
+
+
+@pytest.mark.parametrize("vix", [None, 15.0, 35.0])
+@pytest.mark.parametrize("case", list(_NORMAL))
+def test_prompt_normal_and_missing_identical_to_pre(case, vix, monkeypatch):
+    """沒有異常（含一般缺資料）：digest 鍵與 prompt 逐字同修前，仍帶續抱指示。"""
+    hk, px = _NORMAL[case]
+    st, _ai, prompt = _run(monkeypatch, holdings=_holdings(**hk), prices=px, vix=vix)
+    _st, _ai2, pre = _run(monkeypatch, holdings=_holdings(**hk), prices=px, vix=vix,
+                          svc_mod=_svc_pre())
+    assert "invalid" not in st.digest
+    assert list(st.digest) == list(_st.digest)
+    assert prompt == pre and _KEEP in prompt and _FACT_HEAD not in prompt
+
+
+@pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))
+def test_digest_pure_function_held_only_and_error_rows_skipped(bad):
+    rows = [{"代號": "A", "held": True, SS.KEY_INVALID_INPUTS: (SS.ITEM_PRICE,), "_detail": {}},
+            {"代號": "B", "held": False, SS.KEY_INVALID_INPUTS: (SS.ITEM_PRICE,), "_detail": {}},
+            {"代號": "C", "held": True, SS.KEY_INVALID_INPUTS: (SS.ITEM_LOTS,),
+             "_detail": {"error": "x"}}]
+    d = S.build_station_digest(rows, vix=_BAD[bad])
+    assert d["invalid"] == [{"代號": "A", "項目": _inp("現價")}]
+    assert d["errors"] == ["C"]
+    p = S.build_summary_prompt(d)
+    _no_nonfinite(p)
+    assert _KEEP not in p and _prompt_line(p, _FACT_HEAD) == _fact(("A", _inp("現價")))
+
+
+def test_mut_digest_reopens_keep_instruction(monkeypatch):
+    """只拔 digest 那一環 → 修前重現：衛星現價異常、停利判不出，⑦ 仍被引導說續抱。"""
+    m = _variant(_SVC, (Z52_DIGEST_PAIR,), "_z52_no_digest")
+    st, _ai, prompt = _run(monkeypatch, holdings=_holdings(), prices={"2330": float("inf")},
+                           svc_mod=m)
+    assert "invalid" not in st.digest and _KEEP in prompt and _FACT_HEAD not in prompt, \
+        "拔掉 → 持股輸入異常不進 ⑦、續抱引導重現"
+    st2, _ai2, prompt2 = _run(monkeypatch, holdings=_holdings(), prices={"2330": float("inf")})
+    assert _KEEP not in prompt2 and _FACT_HEAD in prompt2

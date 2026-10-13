@@ -1160,6 +1160,10 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
     - take_profit：衛星獲利達 15% 嚴格停利清單（有損益%才判;#38）
     - invalid（批 Z51，**只有異常時才有這一鍵**）：有燈因資料異常不判定的列
       （`SS.KEY_INVALID_TEXTS`）→ [{"代號", "項目": ((項目, 客戶句), …)}]。正常時 digest 逐鍵不變。
+      批 Z52：**持有列**的持股輸入異常（`SS.KEY_INVALID_INPUTS`，批 Z49 的張數／均價／現價）
+      同樣列入（項目＝`SS.ITEM_*`、句子＝`SS.invalid_data_text(項目)`，接在該列燈的項目之後）——
+      張數／現價壞 → 配置那一行不寫；衛星均價／現價壞 → 停利判不出，兩者都是「判不出來」不是「沒事」。
+      觀察清單列不列（這三個值只進 `allocation`／`take_profit`，兩者都只看持有列）。
     """
     reds: list[dict] = []
     adds: list[dict] = []
@@ -1180,9 +1184,17 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
     _out = {"total": valid, "vix": vix, "reds": reds, "adds": adds, "errors": errors,
             "allocation": compute_allocation_split(rows),
             "take_profit": flag_take_profit(rows)}
-    _invalid_rows = [{"代號": str(r.get("代號", "")), "項目": tuple(r[SS.KEY_INVALID_TEXTS])}
+
+    def _bad_inputs(r: dict) -> tuple:
+        # 批 Z52：持有列被 L3 標了異常的持股輸入（張數 → 均價 → 現價，L3 固定順序）。
+        return tuple(r.get(SS.KEY_INVALID_INPUTS) or ()) if r.get("held") else ()
+
+    _invalid_rows = [{"代號": str(r.get("代號", "")),
+                      "項目": tuple(r.get(SS.KEY_INVALID_TEXTS) or ())
+                      + tuple((_i, SS.invalid_data_text(_i)) for _i in _bad_inputs(r))}
                      for r in (rows or [])
-                     if not r.get("_detail", {}).get("error") and r.get(SS.KEY_INVALID_TEXTS)]
+                     if not r.get("_detail", {}).get("error")
+                     and (r.get(SS.KEY_INVALID_TEXTS) or _bad_inputs(r))]
     if _invalid_rows:
         _out["invalid"] = _invalid_rows
     return _out
