@@ -153,6 +153,7 @@ from dataclasses import dataclass, field
 
 # L3 → L0（正常方向）。張→股 的 1000 一律取自這裡，本檔不寫死（§3.3）。
 from shared.sector_flow_thresholds import SHARES_PER_LOT
+from shared.station_specs import invalid_data_text
 from shared.signal_thresholds import (
     PORTFOLIO_STRESS_TEST_DROP_PCT,
     PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT,
@@ -208,6 +209,9 @@ REASON_SHORT_SAMPLE: str = "共同交易日不足一個月，樣本太短的尾�
 REASON_INVALID_CLOSE: str = (
     "有持股的歷史收盤價含 0、負值或無效值（空值或無限大）—— "
     "不剔除異常日、不替換異常值，整個 VaR 不計算")
+#: 批 Z49（客戶 2026-10-13 裁示 B，逐字句）：參與壓測的任一檔 Beta 是 NaN／±inf／轉不成數字
+#: → **整個壓測不計算**（⛔ 不補 1.0、⛔ 不剔除那一檔後照算）。哪幾檔見 `StressResult.beta_invalid`。
+REASON_INVALID_BETA: str = invalid_data_text("Beta")
 REASON_NO_COVERED_VALUE: str = (
     "進到分布裡的那幾檔算不出市值 —— 沒有分子就沒有元金額（不拿全組合市值頂替）")
 REASON_DIVIDEND_CONTRACT_DRIFT: str = (
@@ -282,7 +286,8 @@ def _pos(value) -> float | None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
     _v = float(value)
-    if _v != _v or _v <= 0:     # NaN 或非正
+    # 批 Z49：±inf 同 NaN 一律不收（修前 `inf > 0` 通過 → 市值／權重變 inf、壓測印 nan）。
+    if not math.isfinite(_v) or _v <= 0:     # NaN／±inf 或非正
         return None
     return _v
 
@@ -534,6 +539,9 @@ class StressResult:
     #: 非空 → 那幾檔的 Beta 是拿錯後綴去查的（查無 → 1.0 估算），數字不可信 → 畫面轉紅。
     #: `repr=False, compare=False`：預設呼叫端的 repr／相等比較與修前逐位元組相同。
     fetch_errors: tuple[str, ...] = field(default=(), repr=False, compare=False)
+    #: 批 Z49（加性）：Beta 資料異常（NaN／±inf／轉不成數字）的代號（正規化身分）。
+    #: 非空 ⇒ `computed=False` ＋ `REASON_INVALID_BETA`。`repr=False, compare=False` 理由同上。
+    beta_invalid: tuple[str, ...] = field(default=(), repr=False, compare=False)
 
     @property
     def partial(self) -> bool:
@@ -594,6 +602,14 @@ def get_portfolio_stress(rows, *, drop_pct: float | None = None,
         _total, drop_pct=_drop)
     # ⚠️ 換回正規化代號再交給畫面：同一頁上「VaR 講 5314.TW、壓測講 5314.TWO」
     #    會被讀成兩檔股票。後綴是打上游用的，不是身分。
+    _bad_beta = tuple(dict.fromkeys(_back.get(str(_t), str(_t))
+                                    for _t in (_res.get("beta_invalid_tickers") or ())))
+    if _bad_beta:
+        # 批 Z49（客戶 2026-10-13 裁示 B）：任一檔 Beta 是異常值 → 整個壓測不算、不下結論
+        # （L2 那幾檔的虧損是 NaN；⛔ 不補 1.0、⛔ 不剔除那幾檔後照算）。
+        return StressResult(reason=REASON_INVALID_BETA, drop_pct=_drop, held_n=_held,
+                            warn_pct=float(PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT),
+                            beta_invalid=_bad_beta)
     _imputed = tuple(dict.fromkeys(_back.get(str(_t), str(_t))
                                    for _t in (_res.get("beta_imputed_tickers") or ())))
     _imputed_value = sum(_value.get(_t, 0.0) for _t in _imputed)
@@ -1165,6 +1181,7 @@ __all__ = [
     "priced_rows",
     "REASON_DIVIDEND_CONTRACT_DRIFT", "REASON_NO_COMMON_DAYS",
     "REASON_NO_COVERED_VALUE", "REASON_NO_LOTS_ROWS", "REASON_NO_PRICED_ROWS",
-    "REASON_INVALID_CLOSE", "REASON_NO_RETURNS", "REASON_SHORT_SAMPLE",
+    "REASON_INVALID_BETA", "REASON_INVALID_CLOSE", "REASON_NO_RETURNS",
+    "REASON_SHORT_SAMPLE",
     "TRADING_DAYS_PER_MONTH",
 ]

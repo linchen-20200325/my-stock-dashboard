@@ -594,3 +594,49 @@ STATE_META: dict[str, tuple[str, str]] = {
     STATE_MISSING: ("無資料", "▨"),
     STATE_UNWIRED: ("未接線", "⛔"),
 }
+
+
+# ══════════════════════════════════════════════════════════════════
+# 批 Z49：數值資料異常（NaN／±inf／無法轉成數字）
+# ══════════════════════════════════════════════════════════════════
+#: 客戶 2026-10-13 裁示 B（逐字，⛔ 一字不改、⛔ 不另寫其他說明）：數值資料異常時
+#: 該卡停止計算、不下結論，說明一律用這一句；`{item}` 填最直接的資料名稱。
+#: ⚠️ 與 `MISS_*` **不是同一件事**：`MISS_*` 講「沒有值」（缺、不足、不適用），本句講
+#:    「**有值、但值不是有效數字**」。故不登記成 `MISS_*`（`MISS_TEXT` 是逐原因一句、
+#:    不帶項目名，且排序表 `MISS_PRIORITY` 的「解釋力涵蓋範圍」準則套不上「值壞了」）。
+INVALID_DATA_TEXT: str = "{item}資料異常，無法計算，不下結論。"
+
+#: 持股列三個輸入的項目名（＝ `INVALID_DATA_TEXT` 的 `{item}`，也是 L3 標記的值）。
+ITEM_LOTS: str = "張數"
+ITEM_AVG_PRICE: str = "均價"
+ITEM_PRICE: str = "現價"
+
+#: L3 `dividend_station_service.build_station_rows` 在**持股列**上標「哪幾個輸入是異常值」
+#: 的非顯示欄（底線開頭，同 `_detail` / `_lights` 慣例，不進表格）。值 ＝ 上面三個項目名
+#: 的 tuple（固定依 張數 → 均價 → 現價 排序）。⚠️ **只有異常時才有這一鍵** —— 正常列
+#: 與修前逐鍵相同（下游 `dict` 比對、鍵清單守衛都不受影響）。
+KEY_INVALID_INPUTS: str = "_invalid_inputs"
+
+
+def invalid_data_text(item: str) -> str:
+    """`INVALID_DATA_TEXT` 填入項目名。"""
+    return INVALID_DATA_TEXT.format(item=item)
+
+
+def is_invalid_number(value) -> bool:
+    """這個值是不是「**有給、但不是有效數字**」（批 Z49）。
+
+    - `None`／空字串（含只有空白）→ `False`：那是**缺值**，由各呼叫端既有的缺值規則處理。
+    - 轉不成 `float`（如 `"abc"`、`object()`）→ `True`。
+    - NaN／+inf／-inf → `True`。
+    - 其餘（有限數，含 0 與負數）→ `False`：0／負數照各呼叫端既有規則處理，本函式不管。
+    """
+    import math     # 區域 import：不在檔頭加行，免得他處引用的 `station_specs.py:<行號>` 漂移
+
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return False
+    try:
+        _f = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return True
+    return not math.isfinite(_f)

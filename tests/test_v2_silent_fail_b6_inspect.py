@@ -522,9 +522,14 @@ _REVERT_L5 = (
      "           _V2_CHECK_NET)),\n       _v2_rows_for(\"inspect.stock.health\", HEALTH_EMPTY_NOW",
      "None, _v2_raised(SRC_METRICS), _V2_CHECK_NET)),\n"
      "       _v2_rows_for(\"inspect.stock.health\", HEALTH_EMPTY_NOW"),
+    # 批 Z49（2026-10-13，同步錨點，⛔ 不是改語意）：正式碼在這一列的候選尾端追加了
+    # 「配息資料異常」那一個候選（另一批的東西）→ 錨點兩邊都帶著它，本突變仍只拔本批那兩個。
     ("None, (_v2_raised(SRC_DIVIDENDS), _v2_raised(SRC_357), _v2_raised(SRC_METRICS),\n"
-     "                  _v2_raised(SRC_METRICS, \"回報失敗\")), _V2_CHECK_NET)),",
-     "None, (_v2_raised(SRC_DIVIDENDS), _v2_raised(SRC_357)), _V2_CHECK_NET)),"),
+     "                  _v2_raised(SRC_METRICS, \"回報失敗\"),\n"
+     "                  # 批 Z49：配息資料異常（整句就是摘錄）。\n"
+     "                  invalid_data_text(\"配息\")), _V2_CHECK_NET)),",
+     "None, (_v2_raised(SRC_DIVIDENDS), _v2_raised(SRC_357),\n"
+     "                  invalid_data_text(\"配息\")), _V2_CHECK_NET)),"),
     ("None, (_v2_raised(SRC_METRICS), _v2_raised(SRC_METRICS, \"回報失敗\")),\n"
      "           _V2_CHECK_NET)) for _k, _l in _V2_ETF_LABELS]",
      "None, _v2_raised(SRC_METRICS), _V2_CHECK_NET)) for _k, _l in _V2_ETF_LABELS]"),

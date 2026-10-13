@@ -13,6 +13,7 @@ R-2 audit Task C P2 「抽函式重構」+ R-3 audit Task C1 「分級邏輯抽�
 """
 from __future__ import annotations
 
+import math
 from unittest.mock import patch
 
 import pandas as pd
@@ -155,8 +156,25 @@ class TestCalcPortfolioStressTest:
         mock_info.return_value = {'beta': 'invalid'}
         rows = [{'ticker': 'X', 'actual_pct': 100}]
         r = calc_portfolio_stress_test(rows, total_value=1_000_000)
-        # fallback beta=1.0 → loss = -200,000
+        # ~~fallback beta=1.0 → loss = -200,000~~ ← 批 Z49（客戶 2026-10-13 裁示 B；有意識的
+        # 政策變更，⛔ 不是漏改）：Beta 轉不成數字 ＝ 資料異常，「Beta 不得自動補 1.0」。
+        # 舊期望（補 1.0 照算）正是被裁示禁止的行為 ⇒ 改釘新契約：不補 1.0、不當成估算、
+        # 代號列進 `beta_invalid_tickers`、虧損不是有效數字（呼叫端整卡不算）。
+        # 查無 Beta（None／0）→ 1.0 估算的既有行為不變（見下一條補例）。
+        assert r['beta_invalid_tickers'] == ['X']
+        assert r['beta_imputed_count'] == 0 and r['beta_imputed_tickers'] == []
+        assert not math.isfinite(r['total_loss'])
+
+    @patch('src.compute.etf.etf_calc.fetch_etf_info')
+    def test_beta_missing_still_imputes_one_z49(self, mock_info):
+        """批 Z49 補例：查無 Beta（None）的既有 1.0 估算路徑不變，且不帶異常鍵。"""
+        from src.compute.etf import calc_portfolio_stress_test
+        mock_info.return_value = {'beta': None}
+        rows = [{'ticker': 'X', 'actual_pct': 100}]
+        r = calc_portfolio_stress_test(rows, total_value=1_000_000)
         assert abs(r['total_loss'] - (-200_000)) < 1
+        assert r['beta_imputed_tickers'] == ['X']
+        assert 'beta_invalid_tickers' not in r
 
     @patch('src.compute.etf.etf_calc.fetch_etf_info')
     def test_custom_drop_pct(self, mock_info):
