@@ -1356,6 +1356,10 @@ class SwitchReadout:
     #: 對它們是略過的（沒被判過換出／換入）。由 `load_switch()` 判一次，卡與 ⑦ 都讀這一份。
     rows_failed: tuple[str, ...] = ()
     error_src: str | None = None
+    #: 批 Z53：持有列健檢 A 資料異常、判不出要不要換出的 `((代號, (客戶句, …)), …)` ——
+    #: 取自 L3 `build_switch_advice()` 的 `switch_out_invalid`（只有異常時才有）。
+    #: 預設空 ＝ 修前行為。
+    rows_invalid: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @property
     def scope_idle(self) -> bool:
@@ -1364,11 +1368,15 @@ class SwitchReadout:
 
     @property
     def failed(self) -> bool:
-        """這一輪換股建議**算不完整**（呼叫期例外，或有列整批抓取失敗）。
+        """這一輪換股建議**算不完整**（呼叫期例外，或有列整批抓取失敗，
+        或批 Z53：沒有任何 🔴 換出、又有持有列的健檢資料異常沒被判過要不要換出）。
 
         ④ 卡的紅態與 ⑦ 摘要「不帶換股段」都看這一個 —— 同一個判定，不各寫一份。
+        ⚠️ 批 Z53：已有 🔴 換出時，異常列**不**讓這一輪變成算不完整 —— 🔴 照常下結論、
+        照常進 ⑦；異常列只在 ④ 卡 facts 另外標出（同 Z51 換入不過度封鎖）。
         """
-        return bool(self.error or self.rows_failed)
+        return bool(self.error or self.rows_failed
+                    or (self.rows_invalid and not self.switch_out))
 
     @property
     def has_advice(self) -> bool:
@@ -1440,7 +1448,11 @@ def load_switch(station: StationReadout, macro: MacroReadout,
         excluded_n=len(_exclude),
         error=_cands_err if _in_failed else "",
         rows_failed=tuple(str(_r.get("代號", "")) for _r in station.rows
-                          if (_r.get("_detail") or {}).get("error")))
+                          if (_r.get("_detail") or {}).get("error")),
+        # 批 Z53：L3 標好的「健檢資料異常、判不出要不要換出」的持有列（只讀，不重判）。
+        rows_invalid=tuple(
+            (str(_d.get("代號", "")), tuple(str(_t[1]) for _t in (_d.get("項目") or ())))
+            for _d in (_adv.get("switch_out_invalid") or ())))
 
 
 def _macro_payload(macro: MacroReadout) -> dict:
@@ -2158,6 +2170,27 @@ def build_vix_card(vix: VixReadout) -> _Built:
 
 
 # ── ④ 換股建議（搭配總經位階）─────────────────────────────────────
+def _switch_invalid_groups(rows: Sequence[tuple[str, Sequence[str]]]
+                           ) -> tuple[tuple[tuple[str, ...], str], ...]:
+    """批 Z53：`((代號, …), 客戶句)` —— 同一句的代號併在一起（保序、去重）。
+
+    句子是 L2 該盞燈不判定時的說明（`SS.INVALID_DATA_TEXT` 組成，經 L3 `switch_out_invalid` 帶下來），
+    本檔一字不改、⛔ 不另寫。
+    """
+    _by: dict[str, list[str]] = {}
+    for _code, _sentences in rows:
+        for _s in _sentences:
+            _codes = _by.setdefault(str(_s), [])
+            if _code not in _codes:
+                _codes.append(_code)
+    return tuple((tuple(_codes), _s) for _s, _codes in _by.items())
+
+
+def _switch_invalid_why(rows: Sequence[tuple[str, Sequence[str]]]) -> str:
+    """批 Z53：`代號、代號：{客戶句}`（列舉方式同 `_invalid_why()`）。空 ＝ 空字串（修前）。"""
+    return "".join(f"{'、'.join(_codes)}：{_s}" for _codes, _s in _switch_invalid_groups(rows))
+
+
 def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
     """線框葉1 ④「換股建議」—— **已接線（換出 ＋ 換入兩半都在）**。
 
@@ -2187,11 +2220,19 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
     #    根本沒判過，那不是完整的建議；已算出的換出／換入照樣列在 facts（不藏）。
     # 判定本身在 `load_switch()`（`SwitchReadout.rows_failed`），本卡只讀。
     _rows_failed = () if switch.error else switch.rows_failed
+    # 批 Z53（客戶 2026-10-13 裁示 B）：持有列的健檢 A 資料異常 → 那幾檔**沒被判過要不要換出**
+    # （⛔ 不等於「沒有紅燈」）。
+    #   · 沒有任何 🔴 換出 → 這一輪「換出幾檔」的結論被它影響 → 同上一則（整批抓取失敗）：
+    #     `has_value` 視為 False → 紅；why 只用客戶句（L2 該燈的說明）；
+    #   · 已有 🔴 換出 → 🔴 照常下結論（狀態／數值／訊號同修前），異常列只在 facts 另外標出
+    #     （「代號｜客戶句」，⛔ 不新寫文案）。
+    _rows_invalid = () if switch.error else switch.rows_invalid
+    _invalid_blocks = () if switch.switch_out else _rows_invalid
     _state = classify_ui_state(
         requested=switch.requested,
         error=switch.error or None,
-        has_value=switch.has_advice and not _rows_failed,
-        reason=MISS_FETCH_FAILED if _rows_failed else "")
+        has_value=switch.has_advice and not _rows_failed and not _invalid_blocks,
+        reason=MISS_FETCH_FAILED if (_rows_failed or _invalid_blocks) else "")
     _STANCE = {"defensive": "轉守 → 換入從嚴（少給候選）",
                "aggressive": "偏多 → 換入給滿",
                "neutral": "中性 → 換入給滿",
@@ -2222,6 +2263,9 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
         _facts.append((f"建議換入（來源：{_src}）",
                        "、".join(f"{_d.get('代號', '')} {_d.get('名稱', '')}".strip()
                                  for _d in switch.switch_in)))
+    if _rows_invalid and switch.switch_out:      # 批 Z53：有 🔴 時異常列另外標出
+        _facts.extend(("、".join(_codes), _s)
+                      for _codes, _s in _switch_invalid_groups(_rows_invalid))
     if _state == UI_LIVE:
         return (Card(key="hold.switch", label="換股建議（該換）", state=UI_LIVE,
                      value=(f"換出 {len(switch.switch_out)} 檔 → "
@@ -2241,11 +2285,18 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
                          where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者；"
                                 "換出那一半只需要你的持股，換入那一半還要選股池，"
                                 "兩者任一失敗都會走到這裡"))
-        else:
+        elif _rows_failed:
             _note = Note(now=SWITCH_FAILED_NOW,
                          why=(f"{'、'.join(_rows_failed)}："
-                              f"{MISS_TEXT[MISS_FETCH_FAILED].removeprefix('這一檔')}"),
+                              f"{MISS_TEXT[MISS_FETCH_FAILED].removeprefix('這一檔')}"
+                              + _switch_invalid_why(_invalid_blocks)),
                          where=STATION_ERROR_WHERE)
+        else:
+            # 批 Z53：只有健檢資料異常。where 沿用 ③ VIX 卡資料異常那一句
+            # （⛔ 不叫人重跑、⛔ 不叫人確認網路：值有給、是壞的）。
+            _note = Note(now=SWITCH_FAILED_NOW,
+                         why=_switch_invalid_why(_invalid_blocks),
+                         where=f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者")
     elif not station.has_rows:
         # 沒有持股 ≠ 沒有一檔要換。三種「沒有」在這裡照樣不可以混。
         _note = _station_note(station, now=SWITCH_NO_HOLDINGS_NOW,
@@ -3344,7 +3395,14 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
     _cash_skipped = () if (deep.cash_error or deep.error) else deep.failed_rows
     _cash_row_failed = _cash_skipped     # 批 Z49：why 的「整批抓取失敗」那一段只講這幾檔
     _cash_skipped += _invalid_codes(_cash_bad)
-    _cash_failed = _cash_l1_failed + _cash_skipped
+    # 批 Z53（客戶 2026-10-13 裁示 B）：近一年配息含 NaN／±inf／轉不成數字的那幾檔（L3
+    # `invalid_tickers`）→ 那幾檔沒進總額、也**不是**「貢獻 0 元」→ 同 L1 抓取失敗一律紅；
+    # why 只用客戶句。只在沒有例外時才看（同上）。
+    _cash_invalid = (() if (deep.cash_error or deep.error or _res is None)
+                     else tuple(getattr(_res, "invalid_tickers", ()) or ()))
+    _cash_invalid_why = (f"{'、'.join(_cash_invalid)}：{invalid_data_text(ITEM_DIVIDEND)}"
+                         if _cash_invalid else "")
+    _cash_failed = _cash_l1_failed + _cash_skipped + _cash_invalid
     _state = classify_ui_state(
         requested=deep.requested,
         error=deep.cash_error or deep.error or None,
@@ -3431,9 +3489,12 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
     elif _state == UI_FAILED and not (deep.cash_error or deep.error or _cash_l1_failed):
         # Q3：只有持有列整批抓取失敗（見上）。why／where 與 ⑤⑥ Q2、⑤ 停利卡同一套既有文字
         # （這一條失敗在戰情表那一層，⛔ 不掛到 L3 配息現金流的「拋出例外」名下）。
+        # 批 Z53：只有配息資料異常（沒有戰情表那一層的失敗）→ where 沿用 ③ VIX 卡資料異常那一句
+        # （⛔ 不叫人確認網路：值有給、是壞的）；與戰情表那一層的失敗同時出現 → 照修前 where。
         _note = Note(now=CASH_FAILED_NOW,
-                     why=_deep_uncounted_why(_cash_row_failed, (), _cash_bad),
-                     where=STATION_ERROR_WHERE)
+                     why=_deep_uncounted_why(_cash_row_failed, (), _cash_bad) + _cash_invalid_why,
+                     where=(STATION_ERROR_WHERE if (_cash_row_failed or _cash_bad)
+                            else f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
     elif _state == UI_FAILED:
         # 兩種失敗都走本卡既有的 error 分支（文字一字未改）：
         # L3 呼叫期例外 → 原樣；有持股的配息抓取失敗（見上）→ 把 L1 的失敗訊息
@@ -3445,6 +3506,8 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
             deep, now=CASH_FAILED_NOW, source=SRC_DIV_CASH,
             error=deep.cash_error or ("；".join(
                 getattr(_res, "failed_detail", ()) or _cash_l1_failed)))
+        if _cash_invalid_why:      # 批 Z53：L1 抓取失敗與配息資料異常同時出現 → 兩件都講
+            _note = Note(now=_note.now, why=_note.why + _cash_invalid_why, where=_note.where)
     elif not deep.has_station_rows:
         _note = _deep_note(deep, now=CASH_NO_HOLDINGS_NOW,
                            source=SRC_DIV_CASH, error="")
@@ -4136,6 +4199,15 @@ _V2_FILL_LOTS: str = "到既有的 📁 組合管理分頁把持股的張數與�
 #: 批 Z49：持有列資料異常那一句（客戶核准句；整句就是摘錄，代號清單在摺疊區原文）。
 _V2_INVALID_WHY: tuple[str, ...] = tuple(
     invalid_data_text(_i) for _i in (ITEM_LOTS, ITEM_AVG_PRICE, ITEM_PRICE))
+#: 批 Z53：⑥ 配息現金流卡「配息資料異常」的項目名（同 L3 `dividend_tax_service.INVALID_DIVIDEND_TEXT`
+#: 與找標的頁配息卡既有的 `invalid_data_text("配息")`；兩邊一致由 `tests/test_batch_z53.py` 守）。
+ITEM_DIVIDEND: str = "配息"
+#: 批 Z53：④ 換股卡「健檢資料異常」的客戶句（整句就是摘錄，代號清單在摺疊區原文）。
+#: 項目名＝L2 `compute.etf.dividend_station.health_a` 不判定時填進 `INVALID_DATA_TEXT` 的那兩個
+#: （近一年總報酬／配息率；④ 只有健檢 A 異常會影響換出，見 L3 `_SWITCH_OUT_INVALID_KEYS`）。
+#: L2 改了項目名 → 這裡對不上 → `KeyError` → 看得見的紅卡（⛔ 不靜默），且 `tests/test_batch_z53.py` 守住。
+_V2_SWITCH_INVALID_WHY: tuple[str, ...] = tuple(
+    invalid_data_text(_i) for _i in ("近一年總報酬", "配息率"))
 
 #: 上游例外的「為什麼」：`{出處}拋出例外：{repr(e)}` 摘成「{出處的前綴}…拋出例外」
 #: （出處全名與例外原文在摺疊區）。出處前綴取該 `SRC_*` 常數本身的開頭。
@@ -4243,7 +4315,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     # 兩個候選：換股 L3 拋例外（既有）／有列整批抓取失敗（沿用 ⑤ 停利卡同一句短句）。
     + [_v2_rows_for("hold.switch", SWITCH_FAILED_NOW, (
            None, (_v2_raised(SRC_SWITCH), _v2_raised(SRC_HOLDINGS),
-                  "整批抓取失敗 —— 看該列的錯誤訊息"),
+                  "整批抓取失敗 —— 看該列的錯誤訊息",
+                  *_V2_SWITCH_INVALID_WHY),         # 批 Z53：健檢資料異常
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.switch", SWITCH_NO_HOLDINGS_NOW, _V2_STATION_ERROR),
        _v2_rows_for("hold.switch", SWITCH_EMPTY_NOW, (
@@ -4335,7 +4408,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.deep.dividend_cash", CASH_FAILED_NOW, (
            None, (_v2_raised(SRC_DIV_CASH), _v2_raised(SRC_HOLDINGS),
                   "整批抓取失敗 —— 看該列的錯誤訊息",
-                  invalid_data_text(ITEM_LOTS)),
+                  invalid_data_text(ITEM_LOTS),
+                  invalid_data_text(ITEM_DIVIDEND)),    # 批 Z53：配息資料異常
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.deep.dividend_cash", CASH_NO_PAYOUT_NOW, (
            None, "可能是你手上這幾檔近一年真的沒有除息，也可能是上游沒有這幾檔的配息紀錄",

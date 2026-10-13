@@ -241,8 +241,10 @@ class TestHoldSwitchRowFetchFailure:
         assert "fundamentals snapshot missing" in built[0].note.why
 
     def test_c_mutation_removing_the_check_turns_a_green_again(self, monkeypatch):
-        m = _mutant(PH, "has_value=switch.has_advice and not _rows_failed,\n"
-                        '        reason=MISS_FETCH_FAILED if _rows_failed else "")',
+        # 批 Z53（2026-10-13，同步錨點，突變語意不變）：判定式多了 `_invalid_blocks`（健檢 A 資料異常），
+        # 錨點跟著改；拔掉的仍是「有列沒被判過 → 不得當有效結果」這整個判定。
+        m = _mutant(PH, "has_value=switch.has_advice and not _rows_failed and not _invalid_blocks,\n"
+                        '        reason=MISS_FETCH_FAILED if (_rows_failed or _invalid_blocks) else "")',
                     'has_value=switch.has_advice,\n        reason="")')
         built, _, _ = _run(m, (_HELD_OK, _ROW_ERR), monkeypatch, [])
         assert built[0].state == UI_EMPTY and _VALID in built[0].note.why

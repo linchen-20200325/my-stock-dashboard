@@ -29,6 +29,7 @@ except ImportError:
         cache_resource = cache_data
     st = _NoOpST()  # noqa
 
+from shared import station_specs as SS
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 from shared.signal_thresholds import (  # C2 v18.402:ETF 星等 SSOT
     ETF_RATING_EXCELLENT_MIN,
@@ -63,13 +64,30 @@ _YCV_LO = 0.6
 _BETA_HI = 0.1
 _BETA_LO = 0.8
 
+#: 批 Z53（客戶 2026-10-13 裁示 B）：三個原始輸入的項目名（＝ `SS.INVALID_DATA_TEXT` 的 `{item}`）。
+#: 值是 NaN／±inf／轉不成數字 → 該因子 `score=None`，且整體評等 `stars=None`（不給星等結論）。
+#: ⚠️ 修前 NaN／+inf 會因 `min(1.0, nan) == 1.0` 這類比較拿到**滿分**；字串會在比較時拋 TypeError。
+INVALID_ITEM_AUM: str = "AUM"
+INVALID_ITEM_EXPENSE: str = "費用率"
+INVALID_ITEM_BETA: str = "Beta"
+#: 批 Z53 追加（總管 2026-10-13 裁定）：配息序列在評分窗（近 3Y）內含異常值 → 殖利率穩定度不評、
+#: 整體不評等。項目名沿用本檔既有因子中文名 `_FACTOR_NAMES['yield_cv']`。
+#: ⚠️ 修前：+inf 讓年度平均為 inf、std 為 NaN → CV 為 NaN → `min(1.0, nan) == 1.0` 滿分；
+#:    NaN 則被 groupby sum 跳過（拿其餘幾筆算）。
+INVALID_ITEM_YIELD_CV: str = "殖利率穩定度"
+
 
 # ══════════════════════════════════════════════════════════════
 # 4 個 pure 評分函式（0-1 浮點，缺資料回 None）
 # ══════════════════════════════════════════════════════════════
 
 def score_aum(aum: float | None) -> float | None:
-    """AUM (元) → 0-1 分。log10 線性，10 億 → 0、100 億 → 1。"""
+    """AUM (元) → 0-1 分。log10 線性，10 億 → 0、100 億 → 1。
+
+    批 Z53：NaN／±inf／轉不成數字 → `None`（⛔ 不給滿分）。
+    """
+    if SS.is_invalid_number(aum):
+        return None
     if aum is None or aum <= 0:
         return None
     _log = math.log10(float(aum))
@@ -77,18 +95,35 @@ def score_aum(aum: float | None) -> float | None:
 
 
 def score_expense(expense_ratio: float | None) -> float | None:
-    """費用率（比例形式 0.003=0.3%）→ 0-1 分。越低越好。"""
+    """費用率（比例形式 0.003=0.3%）→ 0-1 分。越低越好。
+
+    批 Z53：NaN／±inf／轉不成數字 → `None`（⛔ 不給滿分）。
+    """
+    if SS.is_invalid_number(expense_ratio):
+        return None
     if expense_ratio is None or expense_ratio < 0:
         return None
     return max(0.0, min(1.0, (_EXP_LO - float(expense_ratio)) / (_EXP_LO - _EXP_HI)))
+
+
+def _recent_divs(divs: pd.Series) -> pd.Series:
+    """評分窗（近 3Y）內的配息 —— `_yield_cv` 與批 Z53 異常判定共用同一個窗。"""
+    _cutoff = pd.Timestamp(_dt.date.today() - _dt.timedelta(days=3 * 365))
+    return divs[divs.index >= _cutoff]
+
+
+def _divs_invalid(divs: pd.Series | None) -> bool:
+    """批 Z53：評分窗內任一筆配息是 NaN／±inf／轉不成數字。None／空序列 → False（那是缺值）。"""
+    if divs is None or divs.empty:
+        return False
+    return any(SS.is_invalid_number(_v) for _v in _recent_divs(divs).values)
 
 
 def _yield_cv(divs: pd.Series | None) -> float | None:
     """近 3Y 年度配息變異係數（std/mean）；樣本不足回 None。內部 helper。"""
     if divs is None or divs.empty:
         return None
-    _cutoff = pd.Timestamp(_dt.date.today() - _dt.timedelta(days=3 * 365))
-    _recent = divs[divs.index >= _cutoff]
+    _recent = _recent_divs(divs)
     if len(_recent) < 4:
         return None
     _by_year = _recent.groupby(_recent.index.year).sum()
@@ -101,7 +136,12 @@ def _yield_cv(divs: pd.Series | None) -> float | None:
 
 
 def score_yield_cv(divs: pd.Series | None) -> float | None:
-    """殖利率穩定度：CV ≤ 0.15→1 / ≥ 0.6→0；資料不足回 None。"""
+    """殖利率穩定度：CV ≤ 0.15→1 / ≥ 0.6→0；資料不足回 None。
+
+    批 Z53：評分窗內配息含 NaN／±inf／轉不成數字 → `None`（⛔ 不給滿分）。
+    """
+    if _divs_invalid(divs):
+        return None
     _cv = _yield_cv(divs)
     if _cv is None:
         return None
@@ -109,7 +149,12 @@ def score_yield_cv(divs: pd.Series | None) -> float | None:
 
 
 def score_beta(beta: float | None) -> float | None:
-    """Beta 合理性：|β-1| 越小越好。"""
+    """Beta 合理性：|β-1| 越小越好。
+
+    批 Z53：NaN／±inf／轉不成數字 → `None`（⛔ 不給滿分）。
+    """
+    if SS.is_invalid_number(beta):
+        return None
     if beta is None:
         return None
     _dev = abs(float(beta) - 1.0)
@@ -129,6 +174,10 @@ def compute_etf_quality(ticker: str) -> dict:
     dict
       成功：{stars: 1-5, score: float, factors: {...}, weakest: str, coverage: float}
       失敗：{stars: None, _err: str}
+      批 Z53 資料異常：{stars: None, _err: 客戶句（逐項串接）, invalid_items: (項目, …), factors}
+        —— AUM／費用率／Beta 任一是 NaN／±inf／轉不成數字，或評分窗內配息含這類值
+        → **整體不評等**
+        （⛔ 不把壞因子當缺資料、拿其餘因子重新歸一化出一個星等）。
     """
     try:
         _info = fetch_etf_info(ticker) or {}
@@ -139,7 +188,8 @@ def compute_etf_quality(ticker: str) -> dict:
     except Exception as _e:
         return {'stars': None, '_err': f'抓取失敗 {type(_e).__name__}'}
     # _yield_cv 只算 1 次；score_yield_cv 是純轉換不再做 groupby
-    _ycv_raw = _yield_cv(_divs)
+    _divs_bad = _divs_invalid(_divs)          # 批 Z53：壞值不進 CV 計算
+    _ycv_raw = None if _divs_bad else _yield_cv(_divs)
     _factors = {
         'aum':      {'val': _aum,  'score': score_aum(_aum)},
         'expense':  {'val': _exp,  'score': score_expense(_exp)},
@@ -147,6 +197,19 @@ def compute_etf_quality(ticker: str) -> dict:
                      'score': score_yield_cv(_divs)},
         'beta':     {'val': _beta, 'score': score_beta(_beta)},
     }
+    # 批 Z53：原始輸入異常 → 不評等（說明一律 `SS.invalid_data_text`）。`factors` 照帶
+    # （異常那一項 score=None）—— 只是不給星等結論；其餘既有讀 `factors` 的 caller 形狀不變。
+    # 順序同因子順序（AUM → 費用率 → 殖利率穩定度 → Beta）。
+    _bad = tuple(_item for _item, _is_bad in ((INVALID_ITEM_AUM, SS.is_invalid_number(_aum)),
+                                               (INVALID_ITEM_EXPENSE, SS.is_invalid_number(_exp)),
+                                               (INVALID_ITEM_YIELD_CV, _divs_bad),
+                                               (INVALID_ITEM_BETA, SS.is_invalid_number(_beta)))
+                 if _is_bad)
+    if _bad:
+        return {'stars': None,
+                '_err': ''.join(SS.invalid_data_text(_i) for _i in _bad),
+                'invalid_items': _bad,
+                'factors': _factors}
     # ── 單迴圈合一：valid_w / weighted_score / weakest 一次跑完 ──
     _valid_w = 0.0
     _weighted = 0.0
