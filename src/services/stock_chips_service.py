@@ -112,6 +112,7 @@ L1 `src/data/core/data_loader.py` 的 `fill_cols` 對 `主力合計` 做了
 from __future__ import annotations
 
 import inspect
+import math
 import sys
 from dataclasses import dataclass
 
@@ -193,9 +194,12 @@ def _num(value) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     try:
-        return float(value)
+        _f = float(value)
     except (TypeError, ValueError):
         return None
+    if not math.isfinite(_f):   # NaN／±inf ＝ 缺值（§1：不印 nan／inf；對齊 page_inspect._num）
+        return None
+    return _f
 
 
 def _int(value) -> int | None:
@@ -249,9 +253,11 @@ def _outlier_fields(df) -> dict:
     _reason = str(getattr(_res, "reason", "") or "")
     _ratio = _num(getattr(_res, "ratio", None))
 
-    if bool(getattr(_res, "is_outlier", False)):
+    # `_ratio is None` 在 L2 判得出來的兩條路上只會因為 ratio 非有限（NaN／±inf）
+    # —— 倍數本身不是數字，就不替它下「有／沒有異常」的結論（§1），落到下面判不出來。
+    if bool(getattr(_res, "is_outlier", False)) and _ratio is not None:
         _verdict = OUTLIER_ANOMALY
-    elif _reason == "ok":
+    elif _reason == "ok" and _ratio is not None:
         _verdict = OUTLIER_NORMAL
     else:
         # `vol_unavailable`（缺欄／均量窗不足／df 空）與 `inst_net_zero`
