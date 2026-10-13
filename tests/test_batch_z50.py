@@ -366,7 +366,10 @@ def test_mut_screen_333_page_reopens_cruise(monkeypatch):
 #  旗標鏈：L2 `Flag.invalid`／`Screen333.invalid_keys` → `HoldingAssessment.invalid_keys`
 #  → L3 `row_from_assessment` 的 `SS.KEY_INVALID_LIGHTS`（只有異常才有）→ 換入篩選排除。
 _SVC = "src/services/dividend_station_service.py"
-Z50_L3_SWITCH_PAIR = ("                     and not r.get(SS.KEY_INVALID_LIGHTS)\n", "")
+#: 批 Z51：換入篩選改為略過「與換入無關」的 235 異常（`_SWITCH_IN_IGNORED_INVALID`）—— 錨點跟著換行。
+Z50_L3_SWITCH_PAIR = (
+    "                     and not (set(r.get(SS.KEY_INVALID_LIGHTS) or ()) - _SWITCH_IN_IGNORED_INVALID)\n",
+    "")
 Z50_L3_MARK_PAIR = ("    if a.invalid_keys:\n", "    if False:\n")
 Z50_L2_AGG_PAIR = ("                     if _f.invalid) + sc.invalid_keys\n",
                    "                     if False) + ()\n")
@@ -439,9 +442,11 @@ def _in_line(prompt: str) -> str:
 
 _BAD_S = {**_BAD, "text": "abc"}
 #: 被測列的異常情境：(覆寫, 預期 invalid_keys)
+#: 批 Z51：週收異常同樣讓 235 燈不下結論 → C 兩案的預期多一個 `KEY_LIGHT235`（接在尾端）。
 _SW_CASES = {
-    "C_last": (lambda v: {"weekly_close": _wk_at(-1, v)}, (SS.KEY_HEALTH_C,)),
-    "C_slope_only": (lambda v: {"weekly_close": _wk_at(-14, v)}, (SS.KEY_HEALTH_C,)),
+    "C_last": (lambda v: {"weekly_close": _wk_at(-1, v)}, (SS.KEY_HEALTH_C, SS.KEY_LIGHT235)),
+    "C_slope_only": (lambda v: {"weekly_close": _wk_at(-14, v)},
+                     (SS.KEY_HEALTH_C, SS.KEY_LIGHT235)),
     "A_yield": (lambda v: {"annual_yield_pct": v}, (SS.KEY_HEALTH_A,)),
     "A_ret": (lambda v: {"total_return_1y_pct": v}, (SS.KEY_HEALTH_A,)),
     "D": (lambda v: {"premium_pct": v}, (SS.KEY_HEALTH_D,)),
@@ -494,6 +499,17 @@ def test_switch_card_and_prompt_do_not_recommend_invalid_row(case, bad, monkeypa
     row = next(_r for _r in st.rows if _r["代號"] == "0056")
     if not (case.startswith("C_") and bad == "text"):
         assert row[SS.KEY_INVALID_LIGHTS] == want
+    if case.startswith("333_"):
+        # ⚠️ 批 Z51 有意的規則修正（總管 2026-10-13 裁定）：換入規則本來就不看 3-3-3（修前 3-3-3 ❌
+        # 也不擋換入），故 3-3-3 異常**不**連帶排除換入 —— 換入結果與 Z50 之前（L3 拔掉列標記與
+        # 換入排除）相同。原斷言「3-3-3 異常 → 不推換入」是 Z50 判斷過寬，非客戶核准規則。
+        _p_st, p_sw, (p_card, p_facts, _p_sig), p_prompt = _switch_run(
+            monkeypatch, over(_BAD_S[bad]), Smod=_svc_pre())
+        assert [d["代號"] for d in sw.switch_in] == ["0056"] and sw.switch_in_src == "watchlist"
+        assert (sw.switch_in, sw.switch_in_src) == (p_sw.switch_in, p_sw.switch_in_src)
+        assert card.value == p_card.value and _in_line(prompt) == _in_line(p_prompt)
+        _no_nonfinite(_blob((card, facts, _sig)))
+        return
     assert all(_d.get("代號") != "0056" for _d in sw.switch_in)
     assert sw.switch_in == () and "換入 1" not in card.value
     assert not any("建議換入" in _k for _k, _v in facts)

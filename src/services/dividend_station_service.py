@@ -93,6 +93,17 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
     if a.invalid_keys:
         # 批 Z50：有燈因資料異常不判定 → 標記（只有異常才有這一鍵，正常列逐鍵不變）。
         _row[SS.KEY_INVALID_LIGHTS] = tuple(a.invalid_keys)
+        # 批 Z51：哪一項、哪一句（給 ⑦ AI 輸入列事實；項目沿用戰情表既有名稱，句子就是 L2 的客戶句）。
+        _k = set(a.invalid_keys)
+        _row[SS.KEY_INVALID_TEXTS] = tuple(
+            [(_lbl, _f.msg) for _lbl, _key, _f in (
+                ("健檢A", SS.KEY_HEALTH_A, a.health_a), ("健檢B", SS.KEY_HEALTH_B, a.health_b),
+                ("健檢C", SS.KEY_HEALTH_C, a.health_c), ("健檢D", SS.KEY_HEALTH_D, a.health_d))
+             if _key in _k]
+            + ([("3-3-3", a.screen.invalid_text)]
+               if _k & {SS.KEY_SCREEN_INCEPTION, SS.KEY_SCREEN_RETURN, SS.KEY_SCREEN_PEER}
+               else [])
+            + ([("235", "".join(a.light.reasons))] if SS.KEY_LIGHT235 in _k else []))
     return _row
 
 
@@ -957,6 +968,17 @@ def _pick_candidates(_df, _exclude: set, top_n: int) -> list[dict]:
     return _out
 
 
+#: 批 Z51：`SS.KEY_INVALID_LIGHTS` 裡**與換入結論無關**、不得連帶排除換入的燈。
+#: 換入篩選只看 `健檢`（A–D 取最嚴重）；235 加碼燈（含 VIX）不參與換入判定 —— VIX 是全市場
+#: 同一個值，若連帶排除，一次 VIX 異常就會讓整份觀察清單改由選股池遞補（改了與 235 無關的結論）。
+#: 3-3-3 三子項同理：換入規則本來就不看 3-3-3（修前 3-3-3 ❌ 也不擋換入）→ 異常不改變換入結論。
+#: （批 Z50 曾一併排除 3-3-3 異常，屬判斷過寬、非客戶核准規則；2026-10-13 總管裁定更正。）
+#: 健檢 A–D 會直接決定 `健檢` 欄 → 異常照舊排除（不在本集合）。
+#: ⚠️ `_invalid_lights` 本身仍完整保留這些 key（⑦ prompt 的「資料異常未判」要用），只在這裡略過。
+_SWITCH_IN_IGNORED_INVALID: frozenset[str] = frozenset({SS.KEY_LIGHT235})
+_SWITCH_IN_IGNORED_INVALID |= {SS.KEY_SCREEN_INCEPTION, SS.KEY_SCREEN_RETURN, SS.KEY_SCREEN_PEER}
+
+
 def build_switch_advice(rows: list[dict], macro: dict | None,
                         candidates: list[dict] | None) -> dict:
     """換股建議（純函式,離線可測,§1 不生標的）。
@@ -967,6 +989,8 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
       從嚴（少給幾檔 + stance=defensive）;未評估 → stance=unknown（只給汰弱,不套攻守）。
     - 批 Z50：有燈因**資料異常**不判定的列（`SS.KEY_INVALID_LIGHTS`）**不得**列入換入 ——
       `健檢` 把 ⚪ 排最低，一盞異常加三盞 🟢 仍是 🟢，不能當「綠燈」推薦。缺資料的 ⚪ 照舊。
+    - 批 Z51：**235 燈**與 **3-3-3** 的資料異常**不**連帶排除換入 —— 換入規則不看 235／VIX／
+      3-3-3，判不出來只讓那盞不下結論（見 `_SWITCH_IN_IGNORED_INVALID`）。健檢 A–D 異常照舊排除。
     """
     _macro = macro or {}
     _loaded = bool(_macro.get("loaded"))
@@ -983,7 +1007,7 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
                       "綜合分": None}
                      for r in (rows or [])
                      if (not r.get("held")) and (not r.get("_detail", {}).get("error"))
-                     and not r.get(SS.KEY_INVALID_LIGHTS)
+                     and not (set(r.get(SS.KEY_INVALID_LIGHTS) or ()) - _SWITCH_IN_IGNORED_INVALID)
                      and r.get("健檢") == "🟢"]
     if _watch_greens:
         switch_in = _watch_greens[:_in_n]
@@ -1134,6 +1158,8 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
     - errors：抓取失敗未納入判斷的代號（§1 誠實排除,不當作「無事」）
     - allocation：80/20 實際配置偏離（只納入市值＝張數×現價 > 0 的持有列;全無市值 → None,#38）
     - take_profit：衛星獲利達 15% 嚴格停利清單（有損益%才判;#38）
+    - invalid（批 Z51，**只有異常時才有這一鍵**）：有燈因資料異常不判定的列
+      （`SS.KEY_INVALID_TEXTS`）→ [{"代號", "項目": ((項目, 客戶句), …)}]。正常時 digest 逐鍵不變。
     """
     reds: list[dict] = []
     adds: list[dict] = []
@@ -1151,9 +1177,15 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
             adds.append({"代號": str(r.get("代號", "")),
                          "235": str(r.get("235 燈號", "")),
                          "加碼金": str(r.get("加碼金", ""))})
-    return {"total": valid, "vix": vix, "reds": reds, "adds": adds, "errors": errors,
+    _out = {"total": valid, "vix": vix, "reds": reds, "adds": adds, "errors": errors,
             "allocation": compute_allocation_split(rows),
             "take_profit": flag_take_profit(rows)}
+    _invalid_rows = [{"代號": str(r.get("代號", "")), "項目": tuple(r[SS.KEY_INVALID_TEXTS])}
+                     for r in (rows or [])
+                     if not r.get("_detail", {}).get("error") and r.get(SS.KEY_INVALID_TEXTS)]
+    if _invalid_rows:
+        _out["invalid"] = _invalid_rows
+    return _out
 
 
 def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
@@ -1163,20 +1195,30 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
     """
     _vix = digest.get("vix")
     _vix_txt = f"{_vix:.1f}" if isinstance(_vix, (int, float)) else "抓取失敗"
+    if SS.is_invalid_number(_vix):
+        # 批 Z51：VIX 是 NaN／±inf／轉不成數字 → 不把 nan／inf 送進 ⑦ prompt，改客戶句（None 照舊）。
+        _vix_txt = SS.invalid_data_text("VIX")
     _reds = "、".join(f"{d['代號']}（{d['建議動作']}）" for d in digest.get("reds", [])) or "無"
     _adds = "、".join(f"{d['代號']} {d['235']} 加碼{d['加碼金']}"
                       for d in digest.get("adds", [])) or "無"
     _errs = "、".join(digest.get("errors", [])) or "無"
+    # 批 Z51：有燈因資料異常不判定 → 附一行事實（客戶句組成），且**不送**「續抱」那句指示 ——
+    # 「235 加碼觸發：無」在這時是「判不出來」不是「沒觸發」，引導 AI 說續抱等於替它下結論。
+    _inv = digest.get("invalid") or []
     _base = (
         "你是台股『存股戰情室』的推播助理。根據以下今日持股健檢結果,用繁體中文寫 3~6 句的推播摘要,"
         "聚焦『今天要不要動作』。只能引用下列數據,嚴禁自行杜撰任何代號、數字或未列出的結論;"
-        "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。\n"
+        + ("" if _inv else "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。") + "\n"
         f"- 目前 VIX：{_vix_txt}\n"
         f"- 有效判斷檔數：{digest.get('total', 0)}\n"
         f"- 健檢紅燈需汰弱：{_reds}\n"
         f"- 235 加碼觸發：{_adds}\n"
         f"- 抓取失敗未納入：{_errs}\n"
     )
+    if _inv:
+        _base += ("- 資料異常未判："
+                  + "、".join(f"{d['代號']}（" + "　".join(f"{_lbl}：{_txt}" for _lbl, _txt in d["項目"])
+                             + "）" for d in _inv) + "\n")
     _alloc = digest.get("allocation")
     if _alloc:
         _partial = "（部分持股缺金額,僅供參考）" if _alloc.get("partial") else ""

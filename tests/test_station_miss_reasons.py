@@ -120,8 +120,11 @@ class TestNaNIsNotAValue:
         lt = ds.light_235(vix=NAN, weekly_close=NAN, ma4w=NAN, ma13w=NAN,
                           ma52w=NAN, z=NAN)
         assert lt.axes_used == ()
-        assert lt.miss_reason == SS.MISS_NO_INPUT
-        assert lt.light == T.LIGHT_CRUISE      # 判燈不變
+        # 批 Z51（客戶 2026-10-13 裁示）：NaN 是「資料異常」不是「沒有值」→ 不登記 MISS_*、
+        # 整盞不下結論（客戶句、不加碼）。修前此處斷言 `MISS_NO_INPUT`（NaN 當缺資料）。
+        assert lt.miss_reason == "" and lt.invalid is True
+        assert lt.reasons == ["VIX資料異常，無法計算，不下結論。週收資料異常，無法計算，不下結論。"]
+        assert lt.light == T.LIGHT_CRUISE and lt.deploy_pct == 0.0
 
     def test_inf_is_not_a_value_either(self):
         lt = ds.light_235(vix=float("inf"), weekly_close=100.0, ma4w=90.0,
@@ -134,7 +137,9 @@ class TestNaNIsNotAValue:
         wk.iloc[-1] = NAN
         a = _assess(wk, vix=None)
         assert a.light.axes_used == ()
-        assert a.light.miss_reason == SS.MISS_NO_INPUT
+        # 批 Z51：最後一筆 NaN ＝ 資料異常 → 235 不下結論、不登記 MISS_*（修前斷言 `MISS_NO_INPUT`）。
+        assert a.light.miss_reason == "" and a.light.invalid is True
+        assert a.light.reasons == ["週收資料異常，無法計算，不下結論。"]
 
     def test_weekly_axis_needs_both_close_and_a_moving_average(self):
         """只有週收沒有均線 → 比不出高低，不算可用（反之亦然）。"""
@@ -374,9 +379,11 @@ class TestJudgementIsUntouched:
         # ↓ 缺軸版本：少了 VIX / 少了布林，**燈不准變**（只有依據數變少）
         ((None, 80.0, 95.0, 90.0, 100.0, -3.5), (T.LIGHT_3, T.DEPLOY_LIGHT3_PCT, None)),
         ((27.0, None, None, None, None, None), (T.LIGHT_2, T.DEPLOY_LIGHT2_PCT, None)),
-        # NaN 的 VIX / 布林軸不觸發任何條件（跟改動前一樣）→ 只剩週線軸,
-        # 週收 90 同時跌破月線 95(燈一)與季線 100(燈二)→ 取最嚴重的燈二。
-        ((NAN, 90.0, 95.0, 100.0, 110.0, NAN), (T.LIGHT_2, T.DEPLOY_LIGHT2_PCT, None)),
+        # 批 Z51（客戶 2026-10-13 裁示）更正：NaN 的 VIX / 布林是「資料異常」不是「缺軸」→
+        # 整盞不下結論、不加碼（⛔ 不退回只看週線軸判燈二）。修前此列預期
+        # (T.LIGHT_2, T.DEPLOY_LIGHT2_PCT, None)：NaN 當缺軸、剩週線軸照判加碼 30%。
+        # 上面 `None` 的缺軸列（真的缺資料）照舊用其餘軸判，不受影響。
+        ((NAN, 90.0, 95.0, 100.0, 110.0, NAN), (T.LIGHT_CRUISE, 0.0, None)),
     ]
 
     @pytest.mark.parametrize("args,expect", GOLDEN)

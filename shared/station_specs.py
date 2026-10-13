@@ -623,6 +623,12 @@ KEY_INVALID_INPUTS: str = "_invalid_inputs"
 #: 前必須排除帶這一鍵的列 —— 整列 `健檢` 把 ⚪ 排最低，一盞異常加三盞 🟢 仍顯示 🟢。
 KEY_INVALID_LIGHTS: str = "_invalid_lights"
 
+#: 批 Z51：與 `KEY_INVALID_LIGHTS` 同時出現（**只有異常時才有**）的非顯示欄 ——
+#: `((項目, 客戶句), …)`，項目沿用戰情表既有名稱（「健檢A」～「健檢D」「3-3-3」「235」），
+#: 客戶句即 L2 該盞燈不判定時的說明（`INVALID_DATA_TEXT` 組成）。供 ⑦ AI 輸入列出
+#: 「資料異常未判」的事實（L3 `build_station_digest` → `build_summary_prompt`），⛔ 不解析 `_detail`。
+KEY_INVALID_TEXTS: str = "_invalid_texts"
+
 
 def invalid_data_text(item: str) -> str:
     """`INVALID_DATA_TEXT` 填入項目名。"""
