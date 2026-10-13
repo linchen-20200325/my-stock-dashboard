@@ -485,7 +485,10 @@ class TestCallSites:
             "src/services/portfolio_binding_service.py", "src/services/holdings_service.py",
             "src/ui/views/page_hold.py",
             # Q1-r1（2026-09-27 D12）：全域狀態列讀它來改印既有字樣「取得失敗」（有意識的新增讀者）
-            "src/ui/tabs/portfolio_status_bar.py"}
+            "src/ui/tabs/portfolio_status_bar.py",
+            # 批 Z54（2026-10-13）：「🚦 今天」頂部狀態列「Sheet 綁定」卡接線 —— 同頁4 的 (e)，
+            #   把 L3 吞成 unbound 的讀失敗還原成紅卡（有意識的新增讀者，`tests/test_batch_z54.py` 守）
+            "src/ui/views/page_today.py"}
 
     def test_only_l3_binding_calls_the_new_l1_probe(self):
         assert self._refs("_oauth_import_error") == {

@@ -52,6 +52,35 @@ def get_binding_state() -> BindingState:
     """
     from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1(正常方向)
 
+    _logged, _sid, _read_err = _read_login_and_sheet(_gsp)
+
+    if not _logged or not _sid:
+        return BindingState(logged_in=_logged, sheet_id=_sid,
+                            portfolio_count=None, status=STATUS_UNBOUND,
+                            read_error=_read_err)
+
+    # 已登入 + 已綁 → 看有沒有組合資料(區分 🟡 空 vs 🟢 有)。
+    # ⚠️ 明確傳 sheet_id=_sid(而非預設 None):list_portfolios 以參數為 @st.cache_data 快取鍵,
+    # 傳 None 時鍵恆為空、內部才靠 session 解析 active sheet → 換 Sheet 後 15 分鐘內會拿到
+    # **上一本的本數**(張冠李戴)。傳 _sid 讓快取鍵隨 Sheet 變動,一併正確定位(§ P3a 稽核 #3)。
+    try:
+        _count = len(_gsp.list_portfolios(sheet_id=_sid))
+    except Exception:  # noqa: BLE001 — 讀組合清單失敗 → 中性「已綁定」,不炸狀態列、不腦補
+        return BindingState(logged_in=_logged, sheet_id=_sid,
+                            portfolio_count=None, status=STATUS_BOUND)
+    if _count == 0:
+        return BindingState(logged_in=_logged, sheet_id=_sid,
+                            portfolio_count=0, status=STATUS_BOUND_EMPTY)
+    return BindingState(logged_in=_logged, sheet_id=_sid,
+                        portfolio_count=_count, status=STATUS_BOUND)
+
+
+def _read_login_and_sheet(_gsp) -> "tuple[bool, str, str]":
+    """「登入 token / Sheet 識別碼」那兩次讀取(**不連 Google、不讀組合清單**)。
+
+    回 `(logged_in, sheet_id, read_error)`。批 Z54 自 `get_binding_state()` 原樣抽出(一行未改,
+    該函式行為不變),讓 `get_binding_presence()` 共用同一份判定 —— ⛔ 不抄第二份。
+    """
     _errs: list[str] = []
     try:
         _logged = bool(_gsp._has_oauth_tokens())
@@ -77,23 +106,34 @@ def get_binding_state() -> BindingState:
         if _sec and not any(_x.startswith(_sec + "(") for _x in _errs):
             _errs.append(_sec)
     _read_err = "; ".join(_errs)
+    return _logged, _sid, _read_err
 
-    if not _logged or not _sid:
-        return BindingState(logged_in=_logged, sheet_id=_sid,
-                            portfolio_count=None, status=STATUS_UNBOUND,
-                            read_error=_read_err)
 
-    # 已登入 + 已綁 → 看有沒有組合資料(區分 🟡 空 vs 🟢 有)。
-    # ⚠️ 明確傳 sheet_id=_sid(而非預設 None):list_portfolios 以參數為 @st.cache_data 快取鍵,
-    # 傳 None 時鍵恆為空、內部才靠 session 解析 active sheet → 換 Sheet 後 15 分鐘內會拿到
-    # **上一本的本數**(張冠李戴)。傳 _sid 讓快取鍵隨 Sheet 變動,一併正確定位(§ P3a 稽核 #3)。
-    try:
-        _count = len(_gsp.list_portfolios(sheet_id=_sid))
-    except Exception:  # noqa: BLE001 — 讀組合清單失敗 → 中性「已綁定」,不炸狀態列、不腦補
-        return BindingState(logged_in=_logged, sheet_id=_sid,
-                            portfolio_count=None, status=STATUS_BOUND)
-    if _count == 0:
-        return BindingState(logged_in=_logged, sheet_id=_sid,
-                            portfolio_count=0, status=STATUS_BOUND_EMPTY)
-    return BindingState(logged_in=_logged, sheet_id=_sid,
-                        portfolio_count=_count, status=STATUS_BOUND)
+@dataclass(frozen=True)
+class BindingPresence:
+    """「有沒有綁」—— 只回答這一件事,**不含組合本數**(批 Z54)。
+
+    Attributes:
+        logged_in: Google 有沒有登入。
+        sheet_bound: 已登入 **且** 已設 Sheet 識別碼(同 `get_binding_state()` 的非 unbound 判定)。
+        read_error: 同 `BindingState.read_error`(讀 token / Sheet 識別碼拋例外時的 repr)。
+    """
+
+    logged_in: bool
+    sheet_bound: bool
+    read_error: str = ""
+
+
+def get_binding_presence() -> BindingPresence:
+    """只讀「有沒有綁」,**⛔ 不呼叫 `list_portfolios`(不連 Google)**。純讀不寫。
+
+    給「🚦 今天」頂部狀態列「Sheet 綁定」那一格用:那一格只回答有沒有綁,
+    不需要組合本數;改走 `get_binding_state()` 的話,已登入＋已設 Sheet 時每一輪都會
+    讀組合清單,而讀失敗(L3 吞成中性 bound、⛔ 不入快取)會讓**每一次 rerun 都重打 Google**。
+    判定與 `get_binding_state()` 共用 `_read_login_and_sheet()`(同一份,⛔ 不抄第二份)。
+    """
+    from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1(正常方向)
+
+    _logged, _sid, _read_err = _read_login_and_sheet(_gsp)
+    return BindingPresence(logged_in=_logged, sheet_bound=bool(_logged and _sid),
+                           read_error=_read_err)

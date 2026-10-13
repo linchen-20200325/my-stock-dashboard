@@ -1592,8 +1592,13 @@ NOT_BOUND_WHY: str = (
     "戰情室的每一盞燈都以「你實際持有什麼」為輸入，沒有綁定就沒有清單可讀。"
     "本站**不拿範例持股頂替** —— 那會讓你以為畫面上那幾檔是你的。"
     "新使用者在這裡看到灰色是正常的")
+#: 📌 批 Z54（2026-10-13，有意識的更正，⛔ 不是漏刪）：~~「**現行入口在既有的 📁 組合管理分頁**」~~ ——
+#:    新版戰情室模式下 `app.py` 在畫完側欄後 `st.stop()`，舊 7 個頁籤（含 📁 組合管理）**不會畫出來**，
+#:    使用者在這一頁看不到那個分頁 ⇒ 舊指路是假的。改指**同一畫面上看得到的**側欄入口，
+#:    字面逐字取自 `app.py` 側欄的區塊標題「🔐 Google 帳號」與欄位標籤（`tests/test_batch_z54.py` 對 app.py 原始碼核對）。
+#:    舊句在「不使用」模式下仍是真的，只是本頁不在那個模式裡。
 NOT_BOUND_WHERE: str = (
-    "用 Google 登入後選一本持股 Sheet —— **現行入口在既有的 📁 組合管理分頁**"
+    "用 Google 登入後選一本持股 Sheet —— **現行入口在側欄「🔐 Google 帳號」的「Google Sheet ID 或完整 URL（系統會自動解析 ID）」**"
     "（本頁只讀不寫，所以不在這裡放選 Sheet 的控制項）；"
     "綁定狀態在下面的**葉2 組合設定**看得到")
 
@@ -4086,8 +4091,9 @@ SETUP_UNWIRED_SPECS: tuple[UnwiredSpec, ...] = (
         key="hold.setup.pick_sheet", label="Sheet 選擇",
         now=PICK_SHEET_UNWIRED_NOW,
         why=READONLY_WHY, where=READONLY_WHERE,
+        # 批 Z54：「現行入口」同 `NOT_BOUND_WHERE` 的更正（新版模式看不到 📁 組合管理分頁）。
         facts=(("為什麼", "選 Sheet 會改寫你的綁定設定 —— 那是寫入"),
-               ("現行入口", "既有的 📁 組合管理分頁"))),
+               ("現行入口", "側欄「🔐 Google 帳號」的「Google Sheet ID 或完整 URL（系統會自動解析 ID）」"))),
     UnwiredSpec(
         key="hold.setup.watchlist", label="觀察清單管理",
         now=WATCHLIST_UNWIRED_NOW,
@@ -4226,7 +4232,7 @@ _V2_SHARED_SHORT: dict[str, tuple[object, object, object]] = {
         "到" + SETUP_WHERE + "把選項改成「加讀 Google Sheet" + V2_EXCERPT_GAP + "」"),
     NOT_BOUND_NOW: ("你還沒有綁定持股 Sheet",
                     "這是一個有效的結果" + V2_EXCERPT_GAP + "沒有綁定就沒有清單可讀",
-                    "用 Google 登入後選一本持股 Sheet —— 現行入口在既有的 📁 組合管理分頁"),
+                    "用 Google 登入後選一本持股 Sheet" + V2_EXCERPT_GAP + "現行入口在側欄「🔐 Google 帳號」"),
     EMPTY_SHEET_NOW: ("Sheet 綁好了，但裡面還沒有任何一列持股",
                       "這是一個有效的結果" + V2_EXCERPT_GAP + "你已經綁好了，缺的是內容",
                       "到既有的 📁 組合管理分頁新增一本組合並填入持股列"

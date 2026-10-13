@@ -111,6 +111,20 @@ def _enumerate():
     add(P.build_engineer_card(P.EngineerRequest(opened=True), scan))
     for b in P.build_engineer_panel_cards():
         add(b)
+    # 批 Z54：資料源清單／門檻校準兩張接上線 —— 每一態各建一張（灰／綠／紅）。
+    from src.services.data_registry_summary_service import RegistryGroup, RegistrySummary
+    for r in (P.RegistryReadout(requested=True, summary=RegistrySummary(written=False)),
+              P.RegistryReadout(requested=True, summary=RegistrySummary(
+                  written=True, groups=(RegistryGroup("🌐 國際金融", 3, 1, "2026-10-01"),))),
+              P.RegistryReadout(requested=True, error=_E)):
+        add(P.build_registry_card(r))
+    from src.services.calibration_status_service import CalibrationStatus
+    _cs = CalibrationStatus(35, 4, 35, 4, None, "default (uncalibrated)")
+    for c in (P.CalibrationReadout(requested=True, status=_cs),                       # 一致 → 綠
+              P.CalibrationReadout(requested=True, status=dataclasses.replace(
+                  _cs, file_health_defense_threshold=99)),                            # 檔≠生效 → 紅
+              P.CalibrationReadout(requested=True, error=_E)):                         # 讀不出來 → 紅
+        add(P.build_calibration_card(c))
     # ── 葉3 AI 問答 ────────────────────────────────────────────────
     for qa in (P.QaReadout(asked=False),
                P.QaReadout(asked=True, key_missing=True, error=P.NO_KEY_ERROR),
@@ -472,7 +486,10 @@ def test_existing_facts_all_stay_on_the_face_after_the_short_rows(built):
 #: 「去哪補」必須留住金鑰的來處 —— 環境變數名本身就是那個來處，略成「…」就等於沒說。
 #: `src/services/`（13 字，只超出上限 1 字）：QA nit 要求雙演算法對帳的「為什麼」留住
 #: 「沒有任何一支把它包起來」的**主詞** —— 那個目錄名本身就是主詞，略成「…」句子就沒有主詞。
-_SHORT_ROW_ASCII_ALLOWED: frozenset[str] = frozenset({"GEMINI_API_KEY", "src/services/"})
+#: `data_registry`（13 字）：批 Z54「資料源清單」灰卡的「現在」沿用舊診斷面板原文
+#: 「尚未觸發 data_registry 載入」—— 那個 session key 名本身就是「還沒寫入的是什麼」，略成「…」就沒有受詞。
+_SHORT_ROW_ASCII_ALLOWED: frozenset[str] = frozenset(
+    {"GEMINI_API_KEY", "src/services/", "data_registry"})
 
 
 def test_face_has_no_long_unbroken_ascii_run():
@@ -833,11 +850,14 @@ _BASELINE_NOW_LITERALS: dict[str, str] = {
     "LEGACY_NOW": "**既有的完整教學內容還沒有搬到這一頁**",
     "ENGINEER_IDLE_NOW": "**進階診斷未載入**",
     "ENGINEER_FAILED_NOW": "**進階診斷本身讀不出來**",
-    "ENGINEER_REGISTRY_NOW": "**全站來源清單本頁讀不到**",
     "ENGINEER_RECONCILE_NOW": "**雙演算法對帳本頁跑不了**",
     "ENGINEER_API_ROOT_NOW": "**API 根因診斷本頁不做**",
     "ENGINEER_RAW_NOW": "**原始資料表本頁看不到**",
-    "ENGINEER_CALIBRATION_NOW": "**門檻校準本頁跑不了**",
+    # 批 Z54：上面原有的 `ENGINEER_REGISTRY_NOW` / `ENGINEER_CALIBRATION_NOW`（未接線說法）隨兩張卡接線刪除；
+    #   換成接線後的三則（灰一則、紅兩則）。
+    "REGISTRY_NOT_WRITTEN_NOW": "**尚未觸發 data_registry 載入**",
+    "REGISTRY_FAILED_NOW": "**資料源清單讀不出來**",
+    "CALIBRATION_FAILED_NOW": "**門檻校準讀不出來**",
     "QA_IDLE_NOW": "**尚未提問**",
     "QA_NO_KEY_NOW": "**AI 問答未啟用**",
     "QA_FAILED_NOW": "**這一輪問答失敗了**",
@@ -855,7 +875,7 @@ def test_every_now_constant_in_the_module_is_pinned():
     """模組裡**每一個** `*_NOW` / `*_NOW_TEMPLATE` / `*_NOW_HEAD` 都在上表 —— 新增一則而沒釘 ⇒ 紅燈。"""
     names = {n for n in vars(P) if re.fullmatch(_NOW_NAME_RE, n)}
     assert names == set(_BASELINE_NOW_LITERALS), names ^ set(_BASELINE_NOW_LITERALS)
-    assert len(names) == 24
+    assert len(names) == 25   # 批 Z54：-2（兩則未接線說法刪除）+3（接線後灰一則、紅兩則）
 
 
 # ── 10. QA F4：卡面短句的**忠實度** —— 原文拿來限定的條件／原因／去處／升級路徑，
@@ -896,13 +916,16 @@ _MUST_KEEP: dict[str, dict[str, tuple[str, ...]]] = {
     "ENGINEER_FAILED_NOW": {_WHY: ("拋出例外",),
                             _WHERE: (NO_EXIT_MARKER, "L0 登錄表的問題", "不是某一個資料來源壞掉",
                                      _REPORT)},
-    "ENGINEER_REGISTRY_NOW": {_WHY: ("SSOT 住在 L1", "不得直呼 L1", "也不想依賴「你得先去過另一頁」"), _WHERE: _UNWIRED},
     "ENGINEER_RECONCILE_NOW": {_WHY: ("純函式在 L2", "但 src/services/ 沒有任何一支把它包起來"), _WHERE: _UNWIRED},
     "ENGINEER_API_ROOT_NOW": {_WHY: ("會當場對外送出請求", "L5 直接打外部 API", "明文禁止"),
                               _WHERE: _UNWIRED},
     "ENGINEER_RAW_NOW": {_WHY: ("去翻別頁的 session key", "對方改一個 key，這裡就會靜默變空"),
                          _WHERE: _UNWIRED},
-    "ENGINEER_CALIBRATION_NOW": {_WHY: ("不從 UI 觸發離線腳本", "可能改到門檻"), _WHERE: _UNWIRED},
+    "REGISTRY_NOT_WRITTEN_NOW": {_WHY: ("還不存在", "這是「還沒叫」，不是「叫了沒回」"),
+                                 _WHERE: ("到「🚦 今天」更新",)},
+    "REGISTRY_FAILED_NOW": {_WHY: ("拋出例外",), _WHERE: (NO_EXIT_MARKER, _REPORT)},
+    # 兩種紅共用同一則 now（讀不出來／檔內值≠生效值）⇒ 只要求出處留在卡面；各自的原因見 test_batch_z54。
+    "CALIBRATION_FAILED_NOW": {_WHY: ("L3 門檻校準",), _WHERE: (NO_EXIT_MARKER, _REPORT)},
     "QA_IDLE_NOW": {_WHY: ("只根據本站已經載入的資料作答", "不自行上網查"),
                     _WHERE: ("在下方輸入問題並送出",)},
     "QA_NO_KEY_NOW": {_WHY: ("未偵測到 Gemini API 金鑰", "部署端沒有設，或這個環境讀不到"),

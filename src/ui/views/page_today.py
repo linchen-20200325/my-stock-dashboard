@@ -824,6 +824,38 @@ SRC_DANGER: str = (
 SRC_KEY_ALERTS: str = "L2 `compute.macro.daily_key_alerts`（今日關鍵）"
 SRC_RENDER: str = "本頁的渲染層（`views/_ui_kit.render_card`）"
 
+# ══════════════════════════════════════════════════════════════════
+# （跨頁）頂部狀態列「Sheet 綁定」那一格 —— 批 Z54 接線
+# ══════════════════════════════════════════════════════════════════
+#: ⚠️ **文案一律是既有原文，⛔ 沒有新造句**（客戶：新造白話 ＝ §1 捏造）：
+#:   · 已綁 / 未綁的「現在」← 線框 `stock_ia_v1.html` 狀態列 live / grey 原文
+#:     「🔗 已綁 Sheet「我的持股」」「🔗 尚未綁定 Sheet」。
+#:     🔴 **live 原文裡的 Sheet 名稱「我的持股」刻意不畫**：L3 `BindingState`
+#:     **沒有 Sheet 名稱這個欄位**（只有 `sheet_id`，而識別碼本站一律不上畫面）。
+#:     畫一個名字就是捏造（§1）。
+#:   · 未綁的「為什麼／去哪補」、讀失敗的三要素 ← 同一件事在 💼 我的持股頁
+#:     （`page_hold.NOT_BOUND_WHY` / `NOT_BOUND_WHERE` / `BINDING_FAILED_NOW` /
+#:     `SRC_BINDING` 與其紅卡指路）的既有原文（`tests/test_batch_z54.py` 釘住兩邊一致）。
+#:     ⚠️ **為什麼不 import 那幾個常數**：`page_hold` 是整頁模組（module level 會拉一串
+#:     L3/L0），頁1 為了一張狀態卡去載整個頁4 ＝ 檔頭那條「不相干模組連坐 ⇒ 整頁空白」。
+#:   · 🔴 **線框 grey 的「去哪補」原文「Sheet 到「💼 我的持股 › 組合設定」綁」⛔ 不採用**：
+#:     那一葉現在**只顯示**綁定狀態、**不提供選 Sheet 的控制項**（`page_hold`
+#:     `hold.setup.pick_sheet` 卡自陳「本頁不提供選 Sheet 的控制項」）⇒ 照線框寫是假指路。
+#:     改用頁4 同一件事的寫法（`page_hold.NOT_BOUND_WHERE` 開頭那一段）。
+#:     📌 QA 抓到：頁4 原本那句「現行入口在既有的 📁 組合管理分頁」在新版模式下也是假指路
+#:     （`app.py` 畫完側欄就 `st.stop()`，舊頁籤不畫）⇒ 兩頁同批改指側欄實際入口。
+SHEET_BOUND_VALUE: str = "🔗 已綁 Sheet"
+SHEET_UNBOUND_NOW: str = "尚未綁定 Sheet"
+SHEET_UNBOUND_WHY: str = "**這是一個有效的結果**（已經去讀過，不是還沒讀、也不是故障）"
+SHEET_UNBOUND_WHERE: str = "用 Google 登入後選一本持股 Sheet —— **現行入口在側欄「🔐 Google 帳號」的「Google Sheet ID 或完整 URL（系統會自動解析 ID）」**"
+SHEET_FAILED_NOW: str = "**綁定狀態讀不出來**"
+SHEET_FAILED_WHERE: str = "先確認網路與 Google 授權是否仍有效"
+SRC_BINDING: str = (
+    "L3 綁定狀態（`services.portfolio_binding_service.get_binding_presence`）")
+#: 狀態列裡被本頁換掉的那一格的 key（對面 `build_status_bar_cards()` 產的）。
+SHEET_CARD_KEY: str = "statusbar.sheet"
+SHEET_CARD_LABEL: str = "Sheet 綁定"
+
 
 def _error_why(source: str, error: Any) -> str:
     """把上游例外轉成一句可以放進 `Note.why` 的話，**出處講對**。
@@ -1947,6 +1979,73 @@ def _load_allocation() -> tuple[Any, str]:
         return None, repr(_e)
 
 
+def load_sheet_binding() -> tuple[Any, str]:
+    """（跨頁）狀態列「Sheet 綁定」那一格的讀數。回 `(BindingPresence | None, err)`。
+
+    路徑：L3 `services.portfolio_binding_service.get_binding_presence()` ——
+    **只讀「登入 token / Sheet 識別碼」，⛔ 不呼叫 `list_portfolios`（不連 Google）**。
+    ⚠️ 為什麼不用 `get_binding_state()`（批 Z54 QA D3）：那一支在已登入＋已設 Sheet 時會讀
+    組合清單，而讀失敗不會進快取（L3 吞成中性 `bound`）⇒ 本頁每一次 rerun 都會重打 Google。
+    這一格只回答「有沒有綁」，用不到本數。
+    ⚠️ **每一輪都讀、⛔ 不加 gate**：`get_binding_presence()` 只讀 session 與 secrets、**零網路**；
+    加 gate 等於在狀態列上多一個控制項 ＝ 版面異動（草稿先行，§-1.5.A-8），本批不做。
+    ⚠️ **L3 把「讀登入 token／Sheet 識別碼時拋例外」記在 `read_error`**；
+    本頁把它還原成紅色（同 `page_hold.load_binding` 的 (e)）—— 否則「讀不到」會被畫成
+    「你還沒綁」的灰卡（§1）。
+    """
+    try:
+        from src.services.portfolio_binding_service import get_binding_presence
+        _s = get_binding_presence()
+    except Exception as _e:  # noqa: BLE001 — 轉成紅卡顯示，不吞
+        print(f"[views/page_today] 綁定狀態讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
+        return None, repr(_e)
+    _read_err = str(getattr(_s, "read_error", "") or "")
+    if _read_err:
+        print(f"[views/page_today] 綁定狀態讀取失敗 → 轉紅態：{scrub_secrets(_read_err)}")
+        return None, _read_err
+    return _s, ""
+
+
+def build_sheet_binding_card(binding: Any, *, error: str = "") -> Card:
+    """（跨頁）狀態列的「Sheet 綁定」那一格 —— **已接線、唯讀**。
+
+    三態（⛔ 不混）：
+      · 讀失敗（L3 拋例外，或 `read_error` 非空）→ `failed`（紅）。
+      · 讀到了、`sheet_bound=False`（未登入或沒設 Sheet）→ `empty`（灰）—— **有效結果**，不是故障。
+      · 讀到了、`sheet_bound=True` → `live`。這一格只回答「有沒有綁」，
+        Sheet 裡有幾本組合是 💼 我的持股頁另一張卡的事（本頁不讀本數）。
+    ⚠️ `requested=True` 是陳述「本頁每一輪都讀」（見 `load_sheet_binding`），⛔ 不是從資料反推。
+    """
+    _state = classify_ui_state(
+        requested=True,
+        error=error or None,
+        has_value=bool(binding is not None and getattr(binding, "sheet_bound", False)))
+    if _state == UI_LIVE:
+        return Card(key=SHEET_CARD_KEY, label=SHEET_CARD_LABEL, state=UI_LIVE,
+                    value=SHEET_BOUND_VALUE)
+    if _state == UI_FAILED:
+        _note = Note(now=SHEET_FAILED_NOW, why=_error_why(SRC_BINDING, error),
+                     where=SHEET_FAILED_WHERE)
+    else:   # UI_EMPTY —— 還沒綁。有效結果。
+        _note = Note(now=SHEET_UNBOUND_NOW, why=SHEET_UNBOUND_WHY,
+                     where=SHEET_UNBOUND_WHERE)
+    return Card(key=SHEET_CARD_KEY, label=SHEET_CARD_LABEL, state=_state, note=_note)
+
+
+def status_bar_cards_with_sheet(bars: Sequence[Card], sheet: Card) -> tuple[Card, ...]:
+    """把對面 `build_status_bar_cards()` 產的「Sheet 綁定」未接線格換成本頁接好的那一格。
+
+    ⛔ **只換那一格**：交易日／總經兩格原物件照用（`tab_today.py` 一個字都沒動 ——
+    它的骨架與 `tests/test_p01_today_skeleton.py` 照舊）。
+    對面沒有那一格（key 改了／被刪了）→ `KeyError`（§1：⛔ 不靜默少畫、⛔ 不憑空多一格）。
+    """
+    if sum(1 for _c in bars if _c.key == sheet.key) != 1:
+        raise KeyError(
+            f"`build_status_bar_cards()` 沒有恰好一格 {sheet.key!r} "
+            f"（實際：{[_c.key for _c in bars]}）—— 對面的狀態列改過了，本頁不猜位置。")
+    return tuple(sheet if _c.key == sheet.key else _c for _c in bars)
+
+
 def _load_regime() -> tuple[Mapping[str, Any] | None, str]:
     """`get_macro_regime()`（市場位階 SSOT）。回 `(regime_dict, err)`。"""
     try:
@@ -2227,6 +2326,9 @@ V2_EXIT_PHRASES: tuple[tuple[str, str], ...] = (
     (EXIT_DEGRADED_READ_DIRECTION, "改看方向，別照門檻讀"),
     (CONTRACT_NO_EXIT_WHERE,      NO_EXIT_MARKER),
     (STAGED_ROLLOUT_WHERE,        NO_EXIT_MARKER),
+    # 批 Z54：狀態列「Sheet 綁定」接線後的兩句指路（皆為頁4 既有原文，短語＝原文的一段）。
+    (SHEET_UNBOUND_WHERE,         "現行入口在側欄「🔐 Google 帳號」"),
+    (SHEET_FAILED_WHERE,          SHEET_FAILED_WHERE),
 )
 
 #: 三要素**第三列**（`Note.where`）的 fact 列標籤。用語沿用鐵律 4 的三要素字面。
@@ -3304,13 +3406,20 @@ def render_page_today() -> None:
                 icon="⚠️")
 
     # ── （跨頁）頂部狀態列：常駐一條，位在兩葉之上 ───────────────────
-    # 三張卡完全復用 `tab_today.build_status_bar_cards()`（交易日 / 總經 /
-    # Sheet 綁定），本檔一個字都不重寫。
+    # ~~三張卡完全復用 `tab_today.build_status_bar_cards()`（交易日 / 總經 /
+    # Sheet 綁定），本檔一個字都不重寫。~~
+    # 📌 批 Z54 事實更正（有意識的更正，⛔ 不是漏刪）：交易日／總經兩格仍完全復用；
+    #    「Sheet 綁定」那一格由本檔換成接好線的版本（見下方）。
     # 🔴 2026-09-24 整頁卡化：三張狀態卡改走 v2 卡面（`_tiles_of_cards()` 橋接）。
     #    **內容仍然完全復用 `tab_today.build_status_bar_cards()`，本檔一個字都不重寫**；
     #    換的只有畫它的那一層（`render_cards` → `_render_tiles` → v2 卡面）。
-    _render_tiles(_tiles_of_cards(
-        build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None)))
+    # 📌 批 Z54（2026-10-13）：「Sheet 綁定」那一格改由本檔接上 L3 綁定狀態
+    #    （`build_sheet_binding_card()`）—— 交易日／總經兩格仍原物件照用，
+    #    `tab_today.py` 一個字都沒動（它那份骨架仍標未接線，`render_tab_today` 無 production caller）。
+    _sheet_state, _sheet_err = load_sheet_binding()
+    _render_tiles(_tiles_of_cards(status_bar_cards_with_sheet(
+        build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None),
+        build_sheet_binding_card(_sheet_state, error=_sheet_err))))
 
     _leaf1, _leaf2 = st.tabs([
         ia_nav.SECTION_LABELS[LEAF_CONCLUSION],
