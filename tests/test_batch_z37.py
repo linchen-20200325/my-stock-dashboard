@@ -90,7 +90,7 @@ def test_reverted_source_equals_base_file():
 # 1. harness：FinMind 三大法人形狀 → build_leading_fast（其餘來源離線）
 # ══════════════════════════════════════════════════════════════════════════
 #: 固定「今天」＝ golden 錄製日 2026-10-10（週六）⇒ _D 恆為 10/06～10/09（表格「10月X日」標籤進 PRE_GOLDEN sha）。
-#: `build_leading_fast` 以 `datetime.date.today()` 決定取數窗口 ⇒ `_patch` 讓 production 看到同一天（測試不隨執行日飄）。
+#: `build_leading_fast` 以 `datetime.date.today()` 決定取數窗口 ⇒ `_fast` 只在 production 呼叫期間讓它看到同一天（測試不隨執行日飄）。
 _TODAY = dt.date(2026, 10, 10)
 
 
@@ -199,13 +199,14 @@ def _patch(mp, df_inst, tmp_path, mod=LI):
         for k in _OFFLINE:
             mp.setattr(m, k, fakes[k])
     mp.setattr(LI.time, 'sleep', lambda s: None)
-    mp.setattr(dt, 'date', _FixedDate)                      # production `_dt.date.today()` ＝ _TODAY
     mp.setattr(CL, '_PKL_DIR', str(tmp_path))
 
 
 def _fast(mp, tmp_path, case, mod=LI):
     _patch(mp, CASES[case](), tmp_path, mod)
-    df = mod.build_leading_fast(days=7, token=f'z37-{next(_tok)}')
+    with pytest.MonkeyPatch.context() as m2:                # 只包 production 呼叫：`_dt.date.today()` ＝ _TODAY
+        m2.setattr(dt, 'date', _FixedDate)
+        df = mod.build_leading_fast(days=7, token=f'z37-{next(_tok)}')
     df['fetched_at'] = '2026-10-10T00:00:00+00:00'          # 時間戳固定（golden／比對用）
     return df
 
@@ -404,7 +405,9 @@ class TestDownstream:
         import src.services.ai_qa_service as QA
         _patch(monkeypatch, CASES[case](), tmp_path)
         monkeypatch.setattr(QA, '_finmind_token', lambda: 'z37')
-        r = QA._tool_get_market_leading(days=7)
+        with pytest.MonkeyPatch.context() as m2:            # 同 `_fast`：只包 production 呼叫
+            m2.setattr(dt, 'date', _FixedDate)
+            r = QA._tool_get_market_leading(days=7)
         assert r['ok'] is True
         d = r['data']
         missing = ('外資', '投信', '自營') if case == 'no_buy_col' else ('自營',)
