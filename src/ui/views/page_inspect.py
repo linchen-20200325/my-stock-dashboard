@@ -1703,13 +1703,15 @@ class BatchReadout:
 
 
 def _fmt_pct(value: float | None, *, digits: int = 2) -> str:
-    """百分比 → 顯示字串。`None` → `'—'`，**不寫 0%**（§1 不假報）。"""
-    return "—" if value is None else f"{value:+.{digits}f}%"
+    """百分比 → 顯示字串。`None`／非有限值 → `'—'`，**不寫 0%**（§1 不假報）。"""
+    return ("—" if value is None or not math.isfinite(value)
+            else f"{value:+.{digits}f}%")
 
 
 def _fmt_num(value: float | None, *, digits: int = 1, unit: str = "") -> str:
-    """數值 → 顯示字串。`None` → `'—'`，**不寫 0**（§1 不假報）。"""
-    return "—" if value is None else f"{value:.{digits}f}{unit}"
+    """數值 → 顯示字串。`None`／非有限值 → `'—'`，**不寫 0**（§1 不假報）。"""
+    return ("—" if value is None or not math.isfinite(value)
+            else f"{value:.{digits}f}{unit}")
 
 
 def _batch_row(code: str, *, stock_kind: str, etf_kind: str,

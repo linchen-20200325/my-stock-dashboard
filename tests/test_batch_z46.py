@@ -101,9 +101,10 @@ def test_premium_card_finite_still_live():
 def test_mutation_revert_turns_red():
     pre = z46_pre_inspect_module()
     assert math.isnan(pre._num(float('nan')))                  # 還原體：nan 漏過
-    assert pre._fmt_num(pre._num('nan')) == 'nan'
+    # Z47 起 `_fmt_num`／`_fmt_pct` 自己也擋非有限值（第二道），所以只還原 `_num`
+    # 時症狀從「印 nan」變成「nan 漏成綠燈卡（值印 —）」—— 仍是錯的態，照樣抓得到。
     card = _premium_card(pre, float('nan'))[0]
-    assert card.state == 'live' and 'nan' in str(card.value)   # 還原體：綠燈卡印 nan
+    assert card.state == 'live'                                # 還原體：nan 漏成綠燈卡
     # 本尊對同樣輸入給出相反結果 → A／B 在還原體上必紅
     assert PI._num(float('nan')) is None
     assert _premium_card(PI, float('nan'))[0].state != 'live'
