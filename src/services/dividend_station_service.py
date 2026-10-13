@@ -957,6 +957,13 @@ def _pick_candidates(_df, _exclude: set, top_n: int) -> list[dict]:
     return _out
 
 
+#: 批 Z51：`SS.KEY_INVALID_LIGHTS` 裡**與換入結論無關**、不得連帶排除換入的燈。
+#: 換入篩選只看 `健檢`（A–D 取最嚴重）；235 加碼燈（含 VIX）不參與換入判定 —— VIX 是全市場
+#: 同一個值，若連帶排除，一次 VIX 異常就會讓整份觀察清單改由選股池遞補（改了與 235 無關的結論）。
+#: ⚠️ `_invalid_lights` 本身仍完整保留 light235（⑦ prompt 的「資料異常未判」要用），只在這裡略過。
+_SWITCH_IN_IGNORED_INVALID: frozenset[str] = frozenset({SS.KEY_LIGHT235})
+
+
 def build_switch_advice(rows: list[dict], macro: dict | None,
                         candidates: list[dict] | None) -> dict:
     """換股建議（純函式,離線可測,§1 不生標的）。
@@ -967,6 +974,8 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
       從嚴（少給幾檔 + stance=defensive）;未評估 → stance=unknown（只給汰弱,不套攻守）。
     - 批 Z50：有燈因**資料異常**不判定的列（`SS.KEY_INVALID_LIGHTS`）**不得**列入換入 ——
       `健檢` 把 ⚪ 排最低，一盞異常加三盞 🟢 仍是 🟢，不能當「綠燈」推薦。缺資料的 ⚪ 照舊。
+    - 批 Z51：**235 燈**的資料異常（`SS.KEY_LIGHT235`）**不**連帶排除換入 —— 換入規則不看 235
+      與 VIX，235 判不出來只讓 235 那盞不下結論（見 `_SWITCH_IN_IGNORED_INVALID`）。
     """
     _macro = macro or {}
     _loaded = bool(_macro.get("loaded"))
@@ -983,7 +992,7 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
                       "綜合分": None}
                      for r in (rows or [])
                      if (not r.get("held")) and (not r.get("_detail", {}).get("error"))
-                     and not r.get(SS.KEY_INVALID_LIGHTS)
+                     and not (set(r.get(SS.KEY_INVALID_LIGHTS) or ()) - _SWITCH_IN_IGNORED_INVALID)
                      and r.get("健檢") == "🟢"]
     if _watch_greens:
         switch_in = _watch_greens[:_in_n]

@@ -366,7 +366,10 @@ def test_mut_screen_333_page_reopens_cruise(monkeypatch):
 #  旗標鏈：L2 `Flag.invalid`／`Screen333.invalid_keys` → `HoldingAssessment.invalid_keys`
 #  → L3 `row_from_assessment` 的 `SS.KEY_INVALID_LIGHTS`（只有異常才有）→ 換入篩選排除。
 _SVC = "src/services/dividend_station_service.py"
-Z50_L3_SWITCH_PAIR = ("                     and not r.get(SS.KEY_INVALID_LIGHTS)\n", "")
+#: 批 Z51：換入篩選改為略過「與換入無關」的 235 異常（`_SWITCH_IN_IGNORED_INVALID`）—— 錨點跟著換行。
+Z50_L3_SWITCH_PAIR = (
+    "                     and not (set(r.get(SS.KEY_INVALID_LIGHTS) or ()) - _SWITCH_IN_IGNORED_INVALID)\n",
+    "")
 Z50_L3_MARK_PAIR = ("    if a.invalid_keys:\n", "    if False:\n")
 Z50_L2_AGG_PAIR = ("                     if _f.invalid) + sc.invalid_keys\n",
                    "                     if False) + ()\n")

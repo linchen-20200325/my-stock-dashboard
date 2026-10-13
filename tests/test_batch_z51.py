@@ -78,6 +78,12 @@ Z51_L2_WINDOW_PAIR = ("                   weekly_window_invalid=_z51_wk_bad)\n",
 Z51_L2_AGG_PAIR = ("    if lt.invalid:", "    if False:")
 #: L3 `build_summary_prompt` 的 VIX 文字（只拔這一環 → ⑦ prompt 出現 nan／inf）。
 Z51_L3_VIX_PAIR = ("    if SS.is_invalid_number(_vix):\n", "    if False:\n")
+#: L3 `build_switch_advice`：235 異常不連帶排除換入（只拔這一環 → 回到「任一異常燈都排除」，
+#: VIX 異常會讓整份觀察清單改由選股池遞補 —— QA D2）。
+Z51_L3_SWITCH_PAIR = (
+    "                     and not (set(r.get(SS.KEY_INVALID_LIGHTS) or ()) - _SWITCH_IN_IGNORED_INVALID)\n",
+    "                     and not r.get(SS.KEY_INVALID_LIGHTS)\n")
+_PRE_L3_PAIRS = (Z51_L3_VIX_PAIR, Z51_L3_SWITCH_PAIR)
 _PRE_L2_PAIRS = (Z51_L2_GUARD_PAIR, Z51_L2_WINDOW_PAIR, Z51_L2_AGG_PAIR)
 
 
@@ -106,11 +112,11 @@ def _pre() -> types.ModuleType:
 
 
 def _svc_pre() -> types.ModuleType:
-    return _variant(_SVC, (Z51_L3_VIX_PAIR,), "_z51_pre_svc")
+    return _variant(_SVC, _PRE_L3_PAIRS, "_z51_pre_svc")
 
 
 def test_revert_pairs_are_unique_anchors():
-    for rel, pairs in ((_L2, _PRE_L2_PAIRS), (_SVC, (Z51_L3_VIX_PAIR,))):
+    for rel, pairs in ((_L2, _PRE_L2_PAIRS), (_SVC, _PRE_L3_PAIRS)):
         code = (_ROOT / rel).read_text(encoding="utf-8")
         for new, _old in pairs:
             assert code.count(new) == 1, new
@@ -325,6 +331,10 @@ def _hold(held: bool = True) -> list[dict]:
              "avg_price": 25.0, "held": True}]
 
 
+_ORIG_PROMPT = S.build_summary_prompt
+_ORIG_SWITCH = S.build_switch_advice
+
+
 def _run(monkeypatch, over: dict, *, vix=15.0, held: bool = True, ds_mod=None, svc_mod=None,
          cands=()):
     """走新 UI 真的 `load_station` → ①／待辦 → `load_switch` → ④ → `load_ai_summary` → ⑦。"""
@@ -337,8 +347,11 @@ def _run(monkeypatch, over: dict, *, vix=15.0, held: bool = True, ds_mod=None, s
         return _etf_metrics(**(over if tk == "0056" else {}))
     monkeypatch.setattr("src.services.dividend_station_service.get_station_rows",
                         lambda h: (S.build_station_rows(h, vix=vix, metrics_fn=mf), vix))
+    # ⚠️ 用載入時存下的本尊，不讀 `S.<名>`：同一個測試內前一次 `_run` 的 monkeypatch 尚未還原。
     monkeypatch.setattr("src.services.dividend_station_service.build_summary_prompt",
-                        _svc.build_summary_prompt)
+                        _svc.build_summary_prompt if svc_mod is not None else _ORIG_PROMPT)
+    monkeypatch.setattr("src.services.dividend_station_service.build_switch_advice",
+                        _svc.build_switch_advice if svc_mod is not None else _ORIG_SWITCH)
     monkeypatch.setattr("src.services.dividend_station_service.get_switch_in_candidates",
                         lambda **k: [dict(_c) for _c in cands])
     _cap: dict = {}
@@ -425,16 +438,41 @@ def test_page_qa_repro_no_add_signal(bad, monkeypatch):
     assert "急跌加碼" not in prompt and "0056 🟡" not in prompt
 
 
-@pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))
-def test_switch_does_not_recommend_235_invalid_row(bad, monkeypatch):
-    """觀察清單 0056 只有 235 異常（第 -30 筆：季線窗外、年線窗內，健檢C 照常 🟢）→ 不推換入。"""
-    st, sw, (card, facts, _s), prompt = _run(
-        monkeypatch, {"weekly_close": _wk_at(-30, _BAD[bad])}, held=False)
+_POOL = ({"代碼": "00878", "名稱": "池子候選", "綜合分": 80},)
+#: 只有 235 異常的情境（健檢 A–D 照常 🟢）：(覆寫, VIX)。
+_SW_235_ONLY = {
+    **{f"vix_{b}": ({}, v) for b, v in _BAD_ANY.items() if b != "obj"},
+    **{f"wk_m30_{b}": ({"weekly_close": _wk_at(-30, v)}, 15.0) for b, v in _BAD.items()},
+}
+
+
+@pytest.mark.parametrize("case", list(_SW_235_ONLY))
+def test_switch_235_invalid_does_not_change_switch_in(case, monkeypatch):
+    """QA D2：換入規則只看健檢，不看 235／VIX → 235 異常**不**連帶排除換入。
+    選股池**有候選**，才驗得到「不會改推選股池」：仍推觀察清單 0056，與正常時（修前）相同。"""
+    over, vix = _SW_235_ONLY[case]
+    st, sw, (card, facts, _s), prompt = _run(monkeypatch, over, vix=vix, held=False,
+                                            cands=_POOL)
     row = next(_r for _r in st.rows if _r["代號"] == "0056")
-    assert row["健檢"] == "🟢" and row[SS.KEY_INVALID_LIGHTS] == (SS.KEY_LIGHT235,)
-    assert sw.switch_in == () and "換入 1" not in card.value
-    assert not any("建議換入" in _k for _k, _v in facts)
-    assert not [ln for ln in prompt.splitlines() if "建議換入" in ln and "0056" in ln]
+    assert row["健檢"] == "🟢" and SS.KEY_LIGHT235 in row[SS.KEY_INVALID_LIGHTS]
+    assert row[SS.KEY_INVALID_LIGHTS] == (SS.KEY_LIGHT235,), "健檢類沒有異常"
+    assert (sw.switch_in_src, [d["代號"] for d in sw.switch_in]) == ("watchlist", ["0056"])
+    _n_st, n_sw, (n_card, n_facts, _n_s), _n_p = _run(monkeypatch, {}, vix=15.0, held=False,
+                                                       cands=_POOL)
+    assert (sw.switch_in, sw.switch_in_src) == (n_sw.switch_in, n_sw.switch_in_src)
+    assert card.value == n_card.value
+    assert dict(facts)["建議換入（來源：你的觀察清單）"] == dict(n_facts)["建議換入（來源：你的觀察清單）"]
+    assert "00878" not in prompt
+
+
+@pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))
+def test_switch_health_c_invalid_still_excluded(bad, monkeypatch):
+    """健檢C 會直接影響換入（`健檢` 欄）→ 異常時照舊排除（Z50），改由選股池遞補。"""
+    st, sw, _c, _p = _run(monkeypatch, {"weekly_close": _wk_at(-1, _BAD[bad])}, held=False,
+                          cands=_POOL)
+    row = next(_r for _r in st.rows if _r["代號"] == "0056")
+    assert row[SS.KEY_INVALID_LIGHTS] == (SS.KEY_HEALTH_C, SS.KEY_LIGHT235)
+    assert (sw.switch_in_src, [d["代號"] for d in sw.switch_in]) == ("screener", ["00878"])
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -540,15 +578,27 @@ def test_mut_window_reopens_conclusion(w):
     _assert_light_unjudged(_assess(DSL2, w).light, ("週收",))
 
 
-def test_mut_agg_reopens_switch_in(monkeypatch):
-    """只拔「彙整進 invalid_keys」→ 觀察清單 235 異常列被推成換入。"""
+def test_mut_agg_drops_structured_flag(monkeypatch):
+    """只拔「彙整進 invalid_keys」→ 列上的結構化旗標 `_invalid_lights` 不再標出 235 異常。"""
     m = _variant(_L2, (Z51_L2_AGG_PAIR,), "_z51_no_agg")
     over = {"weekly_close": _wk_at(-30, float("inf"))}
-    _st, sw, (card, facts, _s), prompt = _run(monkeypatch, over, held=False, ds_mod=m)
-    assert [d["代號"] for d in sw.switch_in] == ["0056"], "拔掉 → 修前的錯誤換入重現"
-    assert card.value.endswith("換入 1 檔")
-    _st2, sw2, _c2, _p2 = _run(monkeypatch, over, held=False)
-    assert sw2.switch_in == ()
+    st, *_r = _run(monkeypatch, over, held=False, ds_mod=m)
+    assert SS.KEY_INVALID_LIGHTS not in next(_x for _x in st.rows if _x["代號"] == "0056")
+    st2, *_r2 = _run(monkeypatch, over, held=False)
+    assert next(_x for _x in st2.rows if _x["代號"] == "0056")[SS.KEY_INVALID_LIGHTS] == \
+        (SS.KEY_LIGHT235,)
+
+
+@pytest.mark.parametrize("bad", ["nan", "pos_inf", "text"])
+def test_mut_switch_reopens_over_exclusion(bad, monkeypatch):
+    """只拔 L3「235 不連帶排除」→ QA D2 重現：VIX 異常讓觀察清單 0056 改由選股池遞補。"""
+    m = _variant(_SVC, (Z51_L3_SWITCH_PAIR,), "_z51_no_switch_ignore")
+    _st, sw, _c, _p = _run(monkeypatch, {}, vix=_BAD_ANY[bad], held=False, svc_mod=m,
+                           cands=_POOL)
+    assert (sw.switch_in_src, [d["代號"] for d in sw.switch_in]) == ("screener", ["00878"]), \
+        "拔掉 → 修前的過度排除重現"
+    _st2, sw2, _c2, _p2 = _run(monkeypatch, {}, vix=_BAD_ANY[bad], held=False, cands=_POOL)
+    assert (sw2.switch_in_src, [d["代號"] for d in sw2.switch_in]) == ("watchlist", ["0056"])
 
 
 @pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))
