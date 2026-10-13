@@ -293,7 +293,14 @@ def health_b(sharpe: float | None) -> Flag:
 
 
 def health_c(weekly_close: pd.Series) -> Flag:
-    """C 趨勢防守：週收 < 13週季線 且 季線下彎 → 🟡 趨勢轉弱,暫停加碼。"""
+    """C 趨勢防守：週收 < 13週季線 且 季線下彎 → 🟡 趨勢轉弱,暫停加碼。
+
+    批 Z50（客戶 2026-10-13 裁示，沿用批 Z49 的處置）：最後一筆週收、13 週季線或其斜率
+    是 NaN／±inf → ⚪ 不判定（⛔ 不判 🟢 守穩、⛔ 不判 🟡 轉弱），說明用
+    `SS.INVALID_DATA_TEXT`、項目名取原始資料「週收」（季線與斜率都由週收算出）；
+    `miss_reason` 留空（理由同 `health_a`）。修前 NaN／inf 的比較為 False → 亮 🟢
+    「週收 inf vs 季線 inf」。
+    """
     ma13 = week_ma(weekly_close, T.MA_QUARTER_WEEKS)
     slope = week_ma_slope(weekly_close, T.MA_QUARTER_WEEKS)
     if ma13 is None or slope is None:
@@ -301,6 +308,8 @@ def health_c(weekly_close: pd.Series) -> Flag:
         return Flag("⚪", f"C 週數不足（<{T.MA_QUARTER_WEEKS}週季線）",
                     miss_reason=SS.MISS_NOT_ENOUGH)
     close = float(weekly_close.iloc[-1])
+    if any(SS.is_invalid_number(_v) for _v in (close, ma13, slope)):
+        return Flag("⚪", SS.invalid_data_text("週收"))
     if close < ma13 and slope < 0:
         return Flag("🟡", f"趨勢轉弱：週收 {close:.2f} < 季線 {ma13:.2f} 且季線下彎 → 暫停加碼")
     return Flag("🟢", f"趨勢守穩：週收 {close:.2f} vs 季線 {ma13:.2f}")
@@ -501,31 +510,47 @@ def screen_333(*, inception_years: float | None,
 
     peer_ranks: {月數: 百分位}(0=最強,1=最弱);None 或不齊 → 該項不可判定。
     三項須皆 True 才 passed；任一不可判定 → passed=False（§1 不足不放行）。
+
+    批 Z50（客戶 2026-10-13 裁示，沿用批 Z49 的處置）：某子項的輸入是 NaN／±inf／轉不成數字
+    → 該子項不可判定（❔，⛔ 不判 ✅、⛔ 不判 ❌；報酬項的年化與累積任一異常即整項不判，
+    不拿另一個值替代），`detail` 尾端附 `SS.INVALID_DATA_TEXT` 逐字句；該子項
+    **不登記** `miss_reasons`（理由同 `health_a`：`MISS_*` 講的都是「沒有值」）。
+    修前 NaN 比大小恆為 False、±inf 照大小比 → 照樣判 ✅／❌（QA 實測：成立／同儕 NaN 判 ❌、
+    年化 NaN 由累積撐成 ✅）。
     """
-    inception_ok = (None if inception_years is None
+    _peer_vals = ([peer_ranks.get(m) for m in T.PEER_WINDOWS_MONTHS] if peer_ranks else [])
+    #: (子項 key, 項目名)，依 成立 → 年化 → 累積 → 同儕 的固定順序。
+    _z50_bad: list[tuple[str, str]] = [(_k, _item) for _k, _item, _vs in (
+        (SS.KEY_SCREEN_INCEPTION, "成立年數", (inception_years,)),
+        (SS.KEY_SCREEN_RETURN, "近三年年化報酬", (ann_return_3y_pct,)),
+        (SS.KEY_SCREEN_RETURN, "近三年累積報酬", (cum_return_3y_pct,)),
+        (SS.KEY_SCREEN_PEER, "同儕排名", tuple(_peer_vals)))
+        if any(SS.is_invalid_number(_v) for _v in _vs)]
+    _bad_keys = {_k for _k, _item in _z50_bad}
+    _ret_bad = SS.KEY_SCREEN_RETURN in _bad_keys
+    inception_ok = (None if inception_years is None or SS.KEY_SCREEN_INCEPTION in _bad_keys
                     else inception_years >= T.MIN_INCEPTION_YEARS)
-    if ann_return_3y_pct is None and cum_return_3y_pct is None:
+    if (ann_return_3y_pct is None and cum_return_3y_pct is None) or _ret_bad:
         return_ok = None
     else:
         return_ok = ((ann_return_3y_pct is not None and ann_return_3y_pct >= T.MIN_ANN_RETURN_3Y_PCT)
                      or (cum_return_3y_pct is not None and cum_return_3y_pct >= T.MIN_CUM_RETURN_3Y_PCT))
     peer_ok = None
-    if peer_ranks:
-        _vals = [peer_ranks.get(m) for m in T.PEER_WINDOWS_MONTHS]
-        if all(v is not None for v in _vals):
-            peer_ok = all(v <= T.PEER_TOP_FRACTION for v in _vals)
+    if peer_ranks and SS.KEY_SCREEN_PEER not in _bad_keys:
+        if all(v is not None for v in _peer_vals):
+            peer_ok = all(v <= T.PEER_TOP_FRACTION for v in _peer_vals)
 
     # ── 三個 ❔ 各自的病因（**不影響 passed / 三個 ok 旗標**,只是說明）─────────
     _miss: dict[str, str] = {}
-    if inception_ok is None:
+    if inception_ok is None and SS.KEY_SCREEN_INCEPTION not in _bad_keys:
         # 成立年數算不出 = 上游沒給成立日/最早資料日。注意「年數不夠」不會走到這裡 ——
         # 那會算出 False（明確未過）,不是不可判定。故這裡是**輸入沒到**,不是資料不足。
         _miss[SS.KEY_SCREEN_INCEPTION] = SS.MISS_NO_INPUT
-    if return_ok is None:
+    if return_ok is None and not _ret_bad:
         # 年化與累積兩種算法**都**回 None → 上游取不到「3 年前那一天」的收盤,
         # 也就是日線歷史不足 3 年(新上市)。重跑不會生出歷史 → 是資料不足不是抓取失敗。
         _miss[SS.KEY_SCREEN_RETURN] = SS.MISS_NOT_ENOUGH
-    if peer_ok is None:
+    if peer_ok is None and SS.KEY_SCREEN_PEER not in _bad_keys:
         # 同儕不可判定有兩條上游路徑:
         #   (a) `peer_ranks` 整包缺 —— **主因**是同類 ETF 少於 `PEER_MIN_GROUP_SIZE`
         #       檔（分類表裡沒收這檔 → 直接 0 個同儕）,**少數**是同儕價格抓取失敗;
@@ -543,6 +568,8 @@ def screen_333(*, inception_years: float | None,
         f"3年報酬{'✅' if return_ok else ('❔' if return_ok is None else '❌')}",
         f"同儕前1/3{'✅' if peer_ok else ('❔' if peer_ok is None else '❌')}",
     ]
+    if _z50_bad:
+        parts.append("".join(SS.invalid_data_text(_i) for _k, _i in _z50_bad))
     return Screen333(passed=passed, inception_ok=inception_ok, return_ok=return_ok,
                      peer_ok=peer_ok, detail="　".join(parts), miss_reasons=_miss)
 
