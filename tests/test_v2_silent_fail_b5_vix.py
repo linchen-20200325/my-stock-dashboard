@@ -259,11 +259,19 @@ class TestFetchFailureIsRed:
         assert face[PH.V2_WHY_FACT_KEY] == PH._v2_raised(PH.SRC_VIX)
 
     def test_a_non_numeric_from_l3_is_not_a_valid_empty_either(self, monkeypatch):
-        """L3 若回了 NaN（契約外）→ `_num()` 之後沒有值 → 同樣是紅，⛔ 不落到灰卡。"""
+        """L3 若回了 NaN（契約外）→ 同樣是紅，⛔ 不落到灰卡。
+
+        ~~`_num()` 之後沒有值 → `fetch_failed=True`（講成「抓不到」）。~~
+        ← **批 Z52（客戶 2026-10-13 裁示 B）有意識的更正，⛔ 不是漏刪**：NaN／±inf／轉不成數字
+        ＝ **資料異常**（值有給、是壞的），`load_vix` 先分流成 `invalid=True`，卡片說明改用客戶句、
+        ⛔ 不叫人重跑。本條原本要守的「⛔ 不落到灰卡」不變（仍是紅）。
+        """
         monkeypatch.setattr(S, "fetch_vix", lambda **_k: float("nan"))
         r = PH.load_vix(_SUBMITTED)
-        assert r.vix is None and r.fetch_failed is True
-        assert _card(PH, r)[0].state == UI_FAILED
+        assert r.vix is None and r.fetch_failed is False and r.invalid is True
+        card = _card(PH, r)[0]
+        assert card.state == UI_FAILED
+        assert card.note.why == "VIX資料異常，無法計算，不下結論。"
 
     def test_a_the_page_asks_l3_to_be_strict(self, monkeypatch):
         seen = []
@@ -458,7 +466,10 @@ class TestMutations:
         assert m.fetch_vix(strict=True) is None, "拿掉 strict 分支後例外又被吞 —— L3 測試必須抓到"
 
     def test_c_flag_from_raw_none_instead_of_num_misses_nan(self, monkeypatch):
-        m = _mutant(PH, ("fetch_failed=_vx is None)", "fetch_failed=_v is None)"))
+        # 批 Z52 起 NaN 先被 `load_vix` 的資料異常分流接走（不會走到 `_num()`）；
+        # 要讓本突變仍測到「旗標該從 `_num()` 之後判」這一條，一併拔掉 Z52 那一道分流。
+        m = _mutant(PH, ("fetch_failed=_vx is None)", "fetch_failed=_v is None)"),
+                    ("    if is_invalid_number(_v):\n", "    if False:\n"))
         monkeypatch.setattr(S, "fetch_vix", lambda **_k: float("nan"))
         card = _card(m, m.load_vix(m.HoldRequest(submitted=True)))[0]
         assert card.state == UI_EMPTY, "NaN 又落回灰卡 —— (a) 的 NaN 那一條必須抓到"

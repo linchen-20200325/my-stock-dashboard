@@ -300,6 +300,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
+from dataclasses import replace as _dc_replace
 from typing import Any, Mapping, Sequence
 
 import streamlit as st
@@ -324,6 +325,7 @@ from shared.station_specs import (
     MISS_TEXT,
     SPECS_BY_KEY,
     invalid_data_text,
+    is_invalid_number,
 )
 # L0 SSOT：80/20 目標、衛星停利門檻、VIX 三段門檻。**本檔不寫死任何一個數字。**
 from shared.dividend_station_thresholds import (
@@ -769,6 +771,9 @@ class VixReadout:
     vix: float | None = None
     error: str = ""
     fetch_failed: bool = False
+    #: 批 Z52（客戶 2026-10-13 裁示 B）：L3 回了值、但不是有效數字（NaN／±inf／轉不成數字）。
+    #: ⛔ 不是「抓不到」（`fetch_failed`）—— 值有給、是壞的；卡片不下結論，說明用客戶句。
+    invalid: bool = False
 
 
 def load_vix(req: HoldRequest) -> VixReadout:
@@ -781,6 +786,11 @@ def load_vix(req: HoldRequest) -> VixReadout:
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] VIX 取數失敗 → 轉紅態：{_e!r}")
         return VixReadout(requested=True, error=repr(_e))
+    # 批 Z52：NaN／±inf／轉不成數字 ＝ **資料異常**（⛔ 不併成「抓不到」：那一句會叫人重跑，
+    # 而值有給、是壞的）→ 標 `invalid`，卡片不下結論。`None`／空字串照舊走下面（逐字不變）。
+    if is_invalid_number(_v):
+        print(f"[views/page_hold] VIX 資料異常（{_v!r}）→ 不下結論")
+        return VixReadout(requested=True, invalid=True)
     # 批次 5：L3 回 `None` ＝「抓不到」（L3 契約）→ 標 `fetch_failed`，卡片升紅。
     # 以 `_num()` 之後為準：非數字／NaN 同樣是「沒拿到可用的值」，⛔ 不落到灰卡「有效的結果」。
     _vx = _num(_v)
@@ -2086,7 +2096,19 @@ def build_vix_card(vix: VixReadout) -> _Built:
     empty 分支保留（直接構造 `VixReadout(requested=True)` 仍走得到），但 `load_vix()` 不再產生它。
 
     ⚠️ **門檻三段一律讀 L0**（`VIX_LIGHT1/2/3`），本檔不寫死數字。
+
+    批 Z52（客戶 2026-10-13 裁示 B）：VIX 是 NaN／±inf／轉不成數字（`invalid`，或直接構造時
+    `vix` 本身就是異常值）→ **不下結論**：⛔ 不畫「運作中」、⛔ 不印 nan／inf，走本卡既有的紅態，
+    說明只用客戶句 `invalid_data_text("VIX")`。`None` 的既有行為逐字不變。
     """
+    # `requested` 也要成立：沒送出過卻帶著值，照舊交給 `classify_ui_state` 當殘值擋下（修前行為）。
+    _invalid = vix.requested and (vix.invalid
+                                  or (vix.vix is not None and is_invalid_number(vix.vix)))
+    if _invalid:
+        # 異常值 ⛔ 不進卡（不印、不判燈）：本函式內的複本拿掉值；升紅沿用「已去要、沒拿到可用值」
+        # 那一條（L0 `MISS_FETCH_FAILED`，由 `FAILED_REASONS` 決定）。說明在下面另一則（客戶句），
+        # ⛔ 不落到「沒抓到、稍後重跑」那一則。呼叫端的 `VixReadout` 本身不動（frozen，`replace` 回新物件）。
+        vix = _dc_replace(vix, vix=None, fetch_failed=True)
     _state = classify_ui_state(
         requested=vix.requested,
         error=vix.error or None,
@@ -2105,6 +2127,11 @@ def build_vix_card(vix: VixReadout) -> _Built:
                 _facts, "")
     if _state == UI_IDLE:
         _note = Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
+    elif _state == UI_FAILED and not vix.error and _invalid:
+        # 批 Z52：資料異常。now 沿用本卡紅態既有那一句；why 只用客戶句；
+        # where 沿用本檔既有「沒有出口 —— 回報維護者」那一句（⛔ 不叫人重跑：值有給、是壞的）。
+        _note = Note(now=VIX_FAILED_NOW, why=invalid_data_text("VIX"),
+                     where=f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者")
     elif _state == UI_FAILED and not vix.error:
         # 批次 5：已經去要、L3 回 `None`（抓不到）。文字全部沿用既有的（⛔ 不新造）：
         # L0 `MISS_TEXT[MISS_NO_INPUT]`（摘掉開頭主詞「這盞燈」—— 只刪、不改寫）
@@ -4206,7 +4233,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        # 兩個候選：VIX L3 拋例外（既有）／抓不到（批次 5：why 摘自 L0 `MISS_TEXT`，
        # where 同 empty 那一則 —— 兩段摘錄都是本表既有的字串）。
        _v2_rows_for("hold.vix", VIX_FAILED_NOW, (
-           None, (_v2_raised(SRC_VIX), "需要的數字沒抓到 —— 通常是上游來源這輪失敗"),
+           None, (_v2_raised(SRC_VIX), "需要的數字沒抓到 —— 通常是上游來源這輪失敗",
+                  invalid_data_text("VIX")),       # 批 Z52：資料異常（整句就是摘錄）
            (_V2_NO_EXIT_REPORT, "稍後" + _V2_PRESS_RUN + "再試一次"))),
        _v2_rows_for("hold.vix", VIX_EMPTY_NOW, (
            None, "上游這一輪沒有回最新收盤。本站不拿舊值或 0 頂替",

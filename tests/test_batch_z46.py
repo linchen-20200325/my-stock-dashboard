@@ -178,6 +178,18 @@ def test_hold_mutation_revert_turns_red(monkeypatch):
     assert pre._num(float('inf')) == float('inf')               # 還原體：inf 漏過
     assert pre._fmt_lots('inf') == 'inf'
     assert pre._num(float('nan')) is None                       # NaN 既有行為（修前即擋）
-    card = _vix_card(pre, float('inf'), monkeypatch)
-    assert card.state == pre.UI_LIVE and 'inf' in str(card.value)
+    # 批 Z52 起 VIX 卡另有兩道「資料異常」判定（`load_vix` 分流＋`build_vix_card`）——
+    # 只拔 Z46 這一道時 inf 會被 Z52 擋成資料異常紅卡；要重現 Z46 修前的 inf 漏網，三道一起拔。
+    from tests.test_batch_z52 import Z52_CARD_PAIR, Z52_LOAD_PAIR
+    _code = (_ROOT / _HOLD).read_text(encoding='utf-8')
+    for _new, _old in (Z46_HOLD_PAIR, Z52_CARD_PAIR, Z52_LOAD_PAIR):
+        assert _code.count(_new) == 1, '替換點不唯一或已不存在'
+        _code = _code.replace(_new, _old)
+    pre3 = types.ModuleType('_z46_pre_hold_z52')
+    pre3.__file__ = str(_ROOT / _HOLD)
+    sys.modules[pre3.__name__] = pre3
+    exec(compile(_code, str(_ROOT / _HOLD), 'exec'), pre3.__dict__)
+    card = _vix_card(pre3, float('inf'), monkeypatch)
+    assert card.state == pre3.UI_LIVE and 'inf' in str(card.value)
+    assert _vix_card(pre, float('inf'), monkeypatch).state != pre.UI_LIVE   # Z52 仍擋
     assert PH._num(float('inf')) is None and PH._fmt_lots('inf') == '—'
