@@ -260,6 +260,7 @@ streamlit ＋ 33 個 `src.*` 模組**（含 `src.data.core.data_loader`）。
 """
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
@@ -1036,9 +1037,12 @@ def _num(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     try:
-        return float(value)
+        _f = float(value)
     except (TypeError, ValueError):
         return None
+    if not math.isfinite(_f):   # NaN／±inf ＝ 缺值（§1：不印 nan／inf）
+        return None
+    return _f
 
 
 def _fetch_metrics(code: str, kind: str, *, failed: dict | None = None

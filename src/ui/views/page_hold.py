@@ -297,6 +297,7 @@ L3 的 `full_coverage=False` —— 有張數的持股沒有全部進到 `gross_
 """
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
@@ -1450,7 +1451,7 @@ def _num(value: Any) -> float | None:
         _f = float(value)
     except (TypeError, ValueError):
         return None
-    if _f != _f:        # NaN
+    if not math.isfinite(_f):   # NaN／±inf ＝ 缺值（§1：不印 nan／inf）
         return None
     return _f
 
