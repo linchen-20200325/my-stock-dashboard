@@ -83,7 +83,11 @@ Z51_L3_VIX_PAIR = ("    if SS.is_invalid_number(_vix):\n", "    if False:\n")
 Z51_L3_SWITCH_PAIR = (
     "                     and not (set(r.get(SS.KEY_INVALID_LIGHTS) or ()) - _SWITCH_IN_IGNORED_INVALID)\n",
     "                     and not r.get(SS.KEY_INVALID_LIGHTS)\n")
-_PRE_L3_PAIRS = (Z51_L3_VIX_PAIR, Z51_L3_SWITCH_PAIR)
+#: L3 `build_station_digest`：把「資料異常未判」的列帶進 digest（只拔這一環 → ⑦ 看不到異常）。
+Z51_L3_DIGEST_PAIR = ("    if _invalid_rows:\n", "    if False:\n")
+#: L3 `build_summary_prompt`：有異常 → 附事實列、不送「續抱」指示（只拔這一環 → QA D1 重現）。
+Z51_L3_PROMPT_PAIR = ('    _inv = digest.get("invalid") or []\n', "    _inv = []\n")
+_PRE_L3_PAIRS = (Z51_L3_VIX_PAIR, Z51_L3_SWITCH_PAIR, Z51_L3_DIGEST_PAIR, Z51_L3_PROMPT_PAIR)
 _PRE_L2_PAIRS = (Z51_L2_GUARD_PAIR, Z51_L2_WINDOW_PAIR, Z51_L2_AGG_PAIR)
 
 
@@ -332,6 +336,7 @@ def _hold(held: bool = True) -> list[dict]:
 
 
 _ORIG_PROMPT = S.build_summary_prompt
+_ORIG_DIGEST = S.build_station_digest
 _ORIG_SWITCH = S.build_switch_advice
 
 
@@ -352,6 +357,8 @@ def _run(monkeypatch, over: dict, *, vix=15.0, held: bool = True, ds_mod=None, s
                         _svc.build_summary_prompt if svc_mod is not None else _ORIG_PROMPT)
     monkeypatch.setattr("src.services.dividend_station_service.build_switch_advice",
                         _svc.build_switch_advice if svc_mod is not None else _ORIG_SWITCH)
+    monkeypatch.setattr("src.services.dividend_station_service.build_station_digest",
+                        _svc.build_station_digest if svc_mod is not None else _ORIG_DIGEST)
     monkeypatch.setattr("src.services.dividend_station_service.get_switch_in_candidates",
                         lambda **k: [dict(_c) for _c in cands])
     _cap: dict = {}
@@ -609,3 +616,102 @@ def test_mut_l3_vix_text_reopens_nonfinite(bad, monkeypatch):
     _no_nonfinite(S.build_summary_prompt(d))
     _st, _sw, _swc, prompt = _run(monkeypatch, {}, vix=_BAD[bad], svc_mod=m)
     assert _NONFINITE_RE.search(prompt)
+
+
+# ══════════════════════════════════════════════════════════════════
+# F. ⑦ AI 輸入：資料異常未判 → 附事實列、不送「續抱」指示（QA D1／Z50-n3）
+# ══════════════════════════════════════════════════════════════════
+#  呼叫鏈（新 UI）：`page_hold.load_ai_summary` → L3 `build_ai_summary(digest, …)` →
+#  `build_summary_prompt`；digest ＝ `load_station` 裡 L3 `build_station_digest(rows, vix)`。
+#  旗標鏈：L2 `invalid_keys` ＋ 各燈客戶句 → L3 `row_from_assessment` 的
+#  `SS.KEY_INVALID_TEXTS`（只有異常才有）→ digest `invalid`（只有異常才有）→ prompt。
+_KEEP = "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。"
+_FACT_HEAD = "- 資料異常未判："
+
+
+def _fact(*rows: tuple[str, tuple[tuple[str, str], ...]]) -> str:
+    return _FACT_HEAD + "、".join(
+        f"{_c}（" + "　".join(f"{_l}：{_t}" for _l, _t in _items) + "）" for _c, _items in rows)
+
+
+_WK_C_235 = (("健檢C", _sentence("週收")), ("235", _sentence("週收")))
+_PROMPT_CASES = {
+    **{f"wk_last_{b}": ({"weekly_close": _wk_at(-1, v)}, 15.0, (("0056", _WK_C_235),))
+       for b, v in _BAD.items()},
+    **{f"wk_m5_{b}": ({"weekly_close": _wk_at(-5, v)}, 15.0, (("0056", _WK_C_235),))
+       for b, v in _BAD.items()},
+    **{f"wk_m30_{b}": ({"weekly_close": _wk_at(-30, v)}, 15.0,
+                       (("0056", (("235", _sentence("週收")),)),)) for b, v in _BAD.items()},
+    **{f"vix_{b}": ({}, v, tuple((_c, (("235", _sentence("VIX")),)) for _c in ("0056", "0050")))
+       for b, v in _BAD_ANY.items() if b != "obj"},
+    "health_d": ({"premium_pct": float("nan")}, 15.0,
+                 (("0056", (("健檢D", _sentence("折溢價")),)),)),
+    "health_a": ({"annual_yield_pct": float("inf")}, 15.0,
+                 (("0056", (("健檢A", _sentence("配息率")),)),)),
+    "333_ann": ({"ann_return_3y_pct": float("nan")}, 15.0,
+                (("0056", (("3-3-3", _sentence("近三年年化報酬")),)),)),
+    "333_two": ({"inception_years": float("nan"), "peer_ranks": {3: .2, 6: float("inf"), 12: .2}},
+                15.0, (("0056", (("3-3-3", _sentence("成立年數") + _sentence("同儕排名")),)),)),
+    "d_and_235": ({"premium_pct": float("-inf"), "weekly_close": _wk_at(-30, float("inf"))}, 15.0,
+                  (("0056", (("健檢D", _sentence("折溢價")), ("235", _sentence("週收")))),)),
+}
+
+
+@pytest.mark.parametrize("held", [True, False])
+@pytest.mark.parametrize("case", list(_PROMPT_CASES))
+def test_prompt_lists_invalid_and_drops_keep_instruction(case, held, monkeypatch):
+    over, vix, want = _PROMPT_CASES[case]
+    _st, _sw, _swc, prompt = _run(monkeypatch, over, vix=vix, held=held, cands=_POOL)
+    assert "續抱、定期定額即可" not in prompt, "資料異常未判時不得引導 AI 說續抱"
+    assert _prompt_line(prompt, _FACT_HEAD) == _fact(*want)
+    _no_nonfinite(prompt)
+    # 除了拿掉那句指示、加上事實列之外，prompt 其餘逐字同修前（不新增任何指示或文案）。
+    _st_p, _sw_p, _swc_p, pre = _run(monkeypatch, over, vix=vix, held=held, cands=_POOL,
+                                     svc_mod=_variant(_SVC, (Z51_L3_PROMPT_PAIR,),
+                                                      "_z51_no_prompt"))
+    assert _KEEP in pre and _FACT_HEAD not in pre
+    assert prompt == pre.replace(_KEEP, "").replace(
+        _prompt_line(pre, "- 抓取失敗未納入：") + "\n",
+        _prompt_line(pre, "- 抓取失敗未納入：") + "\n" + _fact(*want) + "\n")
+
+
+def test_prompt_digest_carries_structured_rows(monkeypatch):
+    st, *_r = _run(monkeypatch, {"weekly_close": _wk_at(-1, float("inf"))})
+    assert st.digest["invalid"] == [{"代號": "0056", "項目": _WK_C_235}]
+    row = next(_x for _x in st.rows if _x["代號"] == "0056")
+    assert row[SS.KEY_INVALID_TEXTS] == _WK_C_235
+
+
+@pytest.mark.parametrize("vix", [None, 15.0, 35.0])
+@pytest.mark.parametrize("over", _NORMAL_OVERS + [{"premium_pct": None}, {"sharpe": None},
+                                                  {"weekly_close": _WK.iloc[-2:]}], ids=repr)
+def test_prompt_normal_identical_and_keeps_instruction(over, vix, monkeypatch):
+    """沒有異常（含一般缺資料）：digest 沒有 `invalid` 鍵、prompt 與修前逐字相同、仍帶「續抱」指示。"""
+    st, _sw, _swc, prompt = _run(monkeypatch, over, vix=vix)
+    assert "invalid" not in st.digest
+    assert all(SS.KEY_INVALID_TEXTS not in _x for _x in st.rows)
+    _st2, _sw2, _swc2, pre = _run(monkeypatch, over, vix=vix, ds_mod=_pre(), svc_mod=_svc_pre())
+    assert prompt == pre and _KEEP in prompt and _FACT_HEAD not in prompt
+
+
+def test_mut_prompt_reopens_keep_instruction(monkeypatch):
+    """只拔 prompt 那一環 → QA D1 重現：235 判不出來，AI 仍被要求說「續抱、定期定額即可」。"""
+    m = _variant(_SVC, (Z51_L3_PROMPT_PAIR,), "_z51_no_prompt")
+    _st, _sw, _c, prompt = _run(monkeypatch, {}, vix=float("nan"), svc_mod=m)
+    assert _KEEP in prompt and _FACT_HEAD not in prompt, "拔掉 → 修前的續抱引導重現"
+    assert _prompt_line(prompt, "- 235 加碼觸發：") == "- 235 加碼觸發：無"
+
+
+def test_mut_digest_hides_invalid_from_prompt(monkeypatch):
+    m = _variant(_SVC, (Z51_L3_DIGEST_PAIR,), "_z51_no_digest")
+    st, _sw, _c, prompt = _run(monkeypatch, {"weekly_close": _wk_at(-30, float("inf"))},
+                               svc_mod=m)
+    assert "invalid" not in st.digest and _KEEP in prompt and _FACT_HEAD not in prompt, \
+        "拔掉 → ⑦ 看不到資料異常、續抱引導重現"
+
+
+def test_mut_l2_agg_hides_235_from_prompt(monkeypatch):
+    m = _variant(_L2, (Z51_L2_AGG_PAIR,), "_z51_no_agg")
+    _st, _sw, _c, prompt = _run(monkeypatch, {"weekly_close": _wk_at(-30, float("inf"))},
+                                ds_mod=m)
+    assert _KEEP in prompt and _FACT_HEAD not in prompt, "拔掉 → 235 異常不進 ⑦、續抱引導重現"

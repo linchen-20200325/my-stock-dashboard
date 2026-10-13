@@ -548,6 +548,9 @@ class Screen333:
     #: （`SS.KEY_SCREEN_*`，固定 成立 → 報酬 → 同儕 順序）。缺資料的 ❔ **不在**這裡
     #: （那些在 `miss_reasons`）。結構化旗標，供下游排除正面結論，⛔ 不解析 `detail`。
     invalid_keys: tuple[str, ...] = ()
+    #: 批 Z51：異常子項的客戶句（與 `detail` 尾端那一段逐字相同；沒有異常＝空字串）。
+    #: 供 L3 把「哪一項資料異常」結構化帶給 ⑦ AI 輸入，⛔ 不解析 `detail`。
+    invalid_text: str = ""
 
 
 def screen_333(*, inception_years: float | None,
@@ -623,7 +626,8 @@ def screen_333(*, inception_years: float | None,
                      invalid_keys=tuple(_k for _k in (SS.KEY_SCREEN_INCEPTION,
                                                       SS.KEY_SCREEN_RETURN,
                                                       SS.KEY_SCREEN_PEER)
-                                        if _k in _bad_keys))
+                                        if _k in _bad_keys),
+                     invalid_text="".join(SS.invalid_data_text(_i) for _k, _i in _z50_bad))
 
 
 # ── 彙總單一標的 → 一列 ─────────────────────────────────────────────────
