@@ -58,7 +58,7 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
                        (SS.KEY_HEALTH_C, a.health_c), (SS.KEY_HEALTH_D, a.health_d))
         if _f.level == "⚪" and _f.miss_reason
     }
-    return {
+    _row = {
         "代號": a.ticker,
         "名稱": a.name,
         "種類": "個股" if _is_stock else "ETF",
@@ -90,6 +90,10 @@ def row_from_assessment(a: ds.HoldingAssessment) -> dict:
         # 逐盞燈的判定 + 四態(ETF 8 盞)。上面三個鍵是「只有缺的才有」,本鍵是**全部都有**。
         "_lights": ds.light_cells(a),
     }
+    if a.invalid_keys:
+        # 批 Z50：有燈因資料異常不判定 → 標記（只有異常才有這一鍵，正常列逐鍵不變）。
+        _row[SS.KEY_INVALID_LIGHTS] = tuple(a.invalid_keys)
+    return _row
 
 
 def stock_row_from_assessment(sa: ds.StockAssessment) -> dict:
@@ -961,6 +965,8 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
     - 換入 = **優先**你親手選進「觀察清單(held=False)」且健檢綠燈的標的（#34）;觀察清單無
       綠燈才 fallback 選股池 candidates（caller 已排除已持有）。總經**轉守(defense)** → 換入
       從嚴（少給幾檔 + stance=defensive）;未評估 → stance=unknown（只給汰弱,不套攻守）。
+    - 批 Z50：有燈因**資料異常**不判定的列（`SS.KEY_INVALID_LIGHTS`）**不得**列入換入 ——
+      `健檢` 把 ⚪ 排最低，一盞異常加三盞 🟢 仍是 🟢，不能當「綠燈」推薦。缺資料的 ⚪ 照舊。
     """
     _macro = macro or {}
     _loaded = bool(_macro.get("loaded"))
@@ -977,6 +983,7 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
                       "綜合分": None}
                      for r in (rows or [])
                      if (not r.get("held")) and (not r.get("_detail", {}).get("error"))
+                     and not r.get(SS.KEY_INVALID_LIGHTS)
                      and r.get("健檢") == "🟢"]
     if _watch_greens:
         switch_in = _watch_greens[:_in_n]

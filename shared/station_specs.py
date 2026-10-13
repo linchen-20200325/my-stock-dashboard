@@ -617,6 +617,12 @@ ITEM_PRICE: str = "現價"
 #: 與修前逐鍵相同（下游 `dict` 比對、鍵清單守衛都不受影響）。
 KEY_INVALID_INPUTS: str = "_invalid_inputs"
 
+#: 批 Z50：L3 `dividend_station_service.row_from_assessment` 在 **ETF 列**上標「哪幾盞燈因
+#: 資料異常而不判定」的非顯示欄（值 ＝ L2 `HoldingAssessment.invalid_keys`，規格表 key 的 tuple）。
+#: ⚠️ **只有異常時才有這一鍵**（正常列與修前逐鍵相同）。下游要下**正面結論**（例：換入建議）
+#: 前必須排除帶這一鍵的列 —— 整列 `健檢` 把 ⚪ 排最低，一盞異常加三盞 🟢 仍顯示 🟢。
+KEY_INVALID_LIGHTS: str = "_invalid_lights"
+
 
 def invalid_data_text(item: str) -> str:
     """`INVALID_DATA_TEXT` 填入項目名。"""

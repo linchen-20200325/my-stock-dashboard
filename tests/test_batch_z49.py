@@ -595,8 +595,8 @@ Z49_L3_TOTALS_PAIR = (
 Z49_L3_SPLIT_PAIR = ("        if {SS.ITEM_LOTS, SS.ITEM_PRICE} & set(r.get(SS.KEY_INVALID_INPUTS) or ()):",
                      "        if False:")
 Z49_L2_D_PAIR = ("    if SS.is_invalid_number(premium_pct):", "    if False:")
-Z49_L2_A_PAIR = ("    if _bad:\n        return Flag(\"⚪\", \"\".join(SS.invalid_data_text(_i) for _i in _bad))",
-                 "    if False:\n        return Flag(\"⚪\", \"\".join(SS.invalid_data_text(_i) for _i in _bad))")
+Z49_L2_A_PAIR = ("    if _bad:\n        return Flag(\"⚪\", \"\".join(SS.invalid_data_text(_i) for _i in _bad),",
+                 "    if False:\n        return Flag(\"⚪\", \"\".join(SS.invalid_data_text(_i) for _i in _bad),")
 Z49_L2_BETA_PAIR = ("        if _beta_raw and is_invalid_number(_beta_raw):", "        if False:")
 Z49_L3_BETA_PAIR = ("    if _bad_beta:\n", "    if False:\n")
 Z49_L3_POS_PAIR = ("    if not math.isfinite(_v) or _v <= 0:     # NaN／±inf 或非正",

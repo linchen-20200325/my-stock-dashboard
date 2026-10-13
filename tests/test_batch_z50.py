@@ -62,8 +62,9 @@ def _no_nonfinite(text: str) -> None:
 # revert-pair（修後逐字, 修前逐字）與變體載入
 # ══════════════════════════════════════════════════════════════════
 Z50_L2_C_PAIR = (
-    "    if any(SS.is_invalid_number(_v) for _v in (close, ma13, slope)):\n"
-    "        return Flag(\"⚪\", SS.invalid_data_text(\"週收\"))\n", "")
+    "    _used = tuple(weekly_close.iloc[-(T.MA_QUARTER_WEEKS + 1):])\n"
+    "    if any(SS.is_invalid_number(_v) for _v in (close, ma13, slope, *_used)):\n"
+    "        return Flag(\"⚪\", SS.invalid_data_text(\"週收\"), invalid=True)\n", "")
 Z50_L2_333_PAIR = ("        if any(SS.is_invalid_number(_v) for _v in _vs)]",
                    "        if False]")
 _PRE_PAIRS = (Z50_L2_C_PAIR, Z50_L2_333_PAIR)
@@ -168,9 +169,9 @@ def test_l2_health_c_invalid_last_close_is_unjudged(bad):
     assert f.level == "⚪" and f.msg == _sentence("週收") and f.miss_reason == ""
 
 
-@pytest.mark.parametrize("bad", ["pos_inf", "neg_inf"])
+@pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))
 def test_l2_health_c_invalid_ma13_is_unjudged(bad):
-    """季線窗內有 ±inf（最後一筆有限）→ 季線／斜率非有限 → 同樣不判定。"""
+    """季線窗內有 NaN／±inf（最後一筆有限）→ 同樣不判定（NaN 不靠 skipna 跳過）。"""
     w = _WK.copy()
     w.iloc[-5] = _BAD[bad]
     f = DSL2.health_c(w)
@@ -258,9 +259,9 @@ def _normal_weeklies():
     for _ in range(12):
         out.append(pd.Series(30 + np.cumsum(rng.normal(0, 1, 60)),
                              index=pd.date_range("2024-01-05", periods=60, freq="W-FRI")))
-    # 窗內有 NaN 破洞（skipna 照算，本批不動）：
+    # 窗外（第 -15 筆之前）有 NaN 破洞：不在季線／斜率的計算窗內 → 照舊判定。
     w = _WK.copy()
-    w.iloc[-5] = float("nan")
+    w.iloc[-20] = float("nan")
     out.append(w)
     return out
 
@@ -353,3 +354,207 @@ def test_mut_screen_333_page_reopens_cruise(monkeypatch):
     _pre_card = PH.build_action_card(st)[0].value
     _new_card = PH.build_action_card(st2)[0].value
     assert _pre_card == st.cruise_text and _pre_card != _new_card, "拔掉 → ① 巡航結論重現"
+
+
+# ══════════════════════════════════════════════════════════════════
+# E. 第 3 項（QA D1）：有燈因資料異常不判定的列，不得列入換入建議
+# ══════════════════════════════════════════════════════════════════
+#  呼叫鏈（新 UI）：`render_page_hold` → `load_switch(station, macro, holdings)` →
+#  L3 `build_switch_advice(list(station.rows), …)` → ④ `build_switch_card`（「建議換入」facts、
+#  「換入 N 檔」）；`load_ai_summary` → L3 `build_ai_summary(…, switch=_switch_payload(switch))`
+#  → `build_summary_prompt`（「建議換入（來源：…）」一行）。
+#  旗標鏈：L2 `Flag.invalid`／`Screen333.invalid_keys` → `HoldingAssessment.invalid_keys`
+#  → L3 `row_from_assessment` 的 `SS.KEY_INVALID_LIGHTS`（只有異常才有）→ 換入篩選排除。
+_SVC = "src/services/dividend_station_service.py"
+Z50_L3_SWITCH_PAIR = ("                     and not r.get(SS.KEY_INVALID_LIGHTS)\n", "")
+Z50_L3_MARK_PAIR = ("    if a.invalid_keys:\n", "    if False:\n")
+Z50_L2_AGG_PAIR = ("                     if _f.invalid) + sc.invalid_keys\n",
+                   "                     if False) + ()\n")
+
+
+@functools.lru_cache(maxsize=None)
+def _svc_variant(pairs: tuple[tuple[str, str], ...], name: str) -> types.ModuleType:
+    path = _ROOT / _SVC
+    code = path.read_text(encoding="utf-8")
+    for new, old in pairs:
+        assert code.count(new) == 1, f"替換點不唯一或已不存在：{new[:70]!r}"
+        code = code.replace(new, old)
+    return _exec_module(name, path, code)
+
+
+def _svc_pre() -> types.ModuleType:
+    """修前（第 3 項之前）的 L3：拔掉列標記與換入排除。"""
+    return _svc_variant((Z50_L3_SWITCH_PAIR, Z50_L3_MARK_PAIR), "_z50_pre_svc")
+
+
+def _wk_at(pos: int, v) -> pd.Series:
+    w = _WK.astype(object).copy() if isinstance(v, str) else _WK.copy()
+    w.iloc[pos] = v
+    return w
+
+
+def _watch_hold() -> list[dict]:
+    """觀察清單 0056（被測列）＋ 持有 0050（正常）。"""
+    return [{"ticker": "0056", "name": "0056", "asset_kind": "etf", "lots": 1.0,
+             "avg_price": 25.0, "held": False},
+            {"ticker": "0050", "name": "0050", "asset_kind": "etf", "lots": 3.0,
+             "avg_price": 25.0, "held": True}]
+
+
+def _switch_run(monkeypatch, over: dict, Smod=None, cands=()):
+    """走新 UI 真的 `load_station` → `load_switch` → ④ 卡 → ⑦ prompt（外部全部替身）。"""
+    Smod = Smod or S
+    hs = _watch_hold()
+
+    def mf(tk, kind):
+        return _etf_metrics(**(over if tk == "0056" else {}))
+    monkeypatch.setattr(
+        "src.services.dividend_station_service.get_station_rows",
+        lambda h: (Smod.build_station_rows(h, vix=15.0, metrics_fn=mf), 15.0))
+    monkeypatch.setattr("src.services.dividend_station_service.build_switch_advice",
+                        Smod.build_switch_advice)
+    monkeypatch.setattr("src.services.dividend_station_service.get_switch_in_candidates",
+                        lambda **k: [dict(_c) for _c in cands])
+    _cap: dict = {}
+
+    def _gem(prompt, max_tokens=None, **k):
+        _cap["prompt"] = prompt
+        return "摘要OK"
+    monkeypatch.setattr("src.services.app_ai_service.gemini_call", _gem)
+    h = PH.HoldingsReadout(requested=True, submitted=True, bound=True, holdings=tuple(hs))
+    st = PH.load_station(h)
+    sw = PH.load_switch(st, PH.MacroReadout(requested=True, loaded=False), h)
+    card = PH.build_switch_card(sw, st)
+    PH.load_ai_summary(True, st, sw)
+    return st, sw, card, _cap.get("prompt", "")
+
+
+def _in_line(prompt: str) -> str:
+    """⑦ prompt 的「建議換入」那一行；這一輪沒有換股建議時 prompt 不含換股段 → ""。"""
+    assert prompt, "⑦ 沒有被呼叫"
+    _l = [ln for ln in prompt.splitlines() if "建議換入" in ln]
+    assert len(_l) <= 1, prompt
+    return _l[0] if _l else ""
+
+
+_BAD_S = {**_BAD, "text": "abc"}
+#: 被測列的異常情境：(覆寫, 預期 invalid_keys)
+_SW_CASES = {
+    "C_last": (lambda v: {"weekly_close": _wk_at(-1, v)}, (SS.KEY_HEALTH_C,)),
+    "C_slope_only": (lambda v: {"weekly_close": _wk_at(-14, v)}, (SS.KEY_HEALTH_C,)),
+    "A_yield": (lambda v: {"annual_yield_pct": v}, (SS.KEY_HEALTH_A,)),
+    "A_ret": (lambda v: {"total_return_1y_pct": v}, (SS.KEY_HEALTH_A,)),
+    "D": (lambda v: {"premium_pct": v}, (SS.KEY_HEALTH_D,)),
+    "333_inception": (lambda v: {"inception_years": v}, (SS.KEY_SCREEN_INCEPTION,)),
+    "333_ann": (lambda v: {"ann_return_3y_pct": v}, (SS.KEY_SCREEN_RETURN,)),
+    "333_peer": (lambda v: {"peer_ranks": {3: .2, 6: v, 12: .2}}, (SS.KEY_SCREEN_PEER,)),
+}
+
+
+@pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))
+def test_l2_slope_only_invalid_is_unjudged(bad):
+    """只有第 -14 筆異常：季線（後 13 筆）有限、斜率非有限 → 仍不判定。"""
+    w = _wk_at(-14, _BAD[bad])
+    assert DSL2.week_ma(w, 13) == pytest.approx(float(_WK.iloc[-13:].mean()))
+    f = DSL2.health_c(w)
+    assert (f.level, f.msg, f.miss_reason, f.invalid) == ("⚪", _sentence("週收"), "", True)
+
+
+@pytest.mark.parametrize("v", ["abc", "nan", "inf", object()], ids=repr)
+def test_l2_string_invalid_inputs(v):
+    """轉不成數字／字串形態的異常值：健檢 A、D 與 3-3-3 子項同樣不判定、帶結構化旗標。"""
+    fa = DSL2.health_a(10.0, v)
+    fd = DSL2.health_d(v)
+    sc = DSL2.screen_333(**{**_333_BASE, "inception_years": v})
+    assert fa.level == fd.level == "⚪" and fa.invalid and fd.invalid
+    assert sc.inception_ok is None and sc.invalid_keys == (SS.KEY_SCREEN_INCEPTION,)
+
+
+@pytest.mark.parametrize("bad", list(_BAD_S), ids=list(_BAD_S))
+@pytest.mark.parametrize("case", list(_SW_CASES))
+def test_assessment_carries_structured_invalid_keys(case, bad):
+    over, want = _SW_CASES[case]
+    m = _etf_metrics(**over(_BAD_S[bad]))
+    m.pop("current_price")
+    if case.startswith("C_") and bad == "text":
+        # 週收序列混入字串 → 季線算不出來（型別錯）→ L3 整列記為抓取失敗（另一條既有路徑）。
+        with pytest.raises((TypeError, ValueError)):
+            DSL2.assess_holding(ticker="0056", name="x", asset_class="core", vix=15.0, **m)
+        return
+    a = DSL2.assess_holding(ticker="0056", name="x", asset_class="core", vix=15.0, **m)
+    assert a.invalid_keys == want
+    assert a.worst_health == "🟢", "前提：`_worst_level` 排序不改，整列仍是 🟢"
+
+
+@pytest.mark.parametrize("bad", list(_BAD_S), ids=list(_BAD_S))
+@pytest.mark.parametrize("case", list(_SW_CASES))
+def test_switch_card_and_prompt_do_not_recommend_invalid_row(case, bad, monkeypatch):
+    over, want = _SW_CASES[case]
+    st, sw, (card, facts, _sig), prompt = _switch_run(monkeypatch, over(_BAD_S[bad]))
+    row = next(_r for _r in st.rows if _r["代號"] == "0056")
+    if not (case.startswith("C_") and bad == "text"):
+        assert row[SS.KEY_INVALID_LIGHTS] == want
+    assert all(_d.get("代號") != "0056" for _d in sw.switch_in)
+    assert sw.switch_in == () and "換入 1" not in card.value
+    assert not any("建議換入" in _k for _k, _v in facts)
+    assert "0056" not in _in_line(prompt)
+    _no_nonfinite(_blob((card, facts, _sig)))
+
+
+@pytest.mark.parametrize("bad", ["nan", "pos_inf"])
+def test_switch_falls_back_to_screener_not_to_invalid_row(bad, monkeypatch):
+    """觀察清單唯一的「綠燈」是異常列 → 換入改走既有 fallback（選股池），不推它。"""
+    st, sw, (card, facts, _s), prompt = _switch_run(
+        monkeypatch, {"premium_pct": _BAD[bad]},
+        cands=[{"代碼": "00878", "名稱": "國泰永續高股息", "綜合分": 80}])
+    assert sw.switch_in_src == "screener" and [d["代號"] for d in sw.switch_in] == ["00878"]
+    assert "0056" not in _in_line(prompt)
+
+
+# ── 正常與一般缺資料：換入結果與修前逐值相同 ───────────────────────────
+_SW_NORMAL = [{}, {"premium_pct": None}, {"annual_yield_pct": None},
+              {"total_return_1y_pct": None, "annual_yield_pct": None},
+              {"weekly_close": _WK.iloc[:10]}, {"inception_years": None},
+              {"ann_return_3y_pct": None, "cum_return_3y_pct": None}, {"peer_ranks": None},
+              {"peer_ranks": {3: .2, 6: None, 12: .2}}, {"sharpe": None},
+              {"premium_pct": 2.0}, {"total_return_1y_pct": 2.0}, {"sharpe": -0.3},
+              {"weekly_close": _WK[::-1].set_axis(_IDX)}]
+
+
+@pytest.mark.parametrize("over", _SW_NORMAL, ids=repr)
+@pytest.mark.parametrize("cands", [(), ({"代碼": "00878", "名稱": "x", "綜合分": 80},)],
+                         ids=["no_cands", "cands"])
+def test_normal_switch_identical_to_pre(over, cands, monkeypatch):
+    new = _switch_run(monkeypatch, over, cands=cands)
+    pre = _switch_run(monkeypatch, over, Smod=_svc_pre(), cands=cands)
+    assert all(SS.KEY_INVALID_LIGHTS not in _r for _r in new[0].rows)
+    assert _norm(new[0].rows) == _norm(pre[0].rows)
+    assert new[1] == pre[1]
+    assert _blob(new[2]) == _blob(pre[2])
+    assert new[3] == pre[3]
+    rows = list(new[0].rows)
+    _mac = {"loaded": True, "defense": False, "regime": "bull"}
+    assert S.build_switch_advice(rows, _mac, list(cands)) == \
+        _svc_pre().build_switch_advice(rows, _mac, list(cands))
+
+
+# ── revert-pair 突變：每一環一組 ──────────────────────────────────────
+@pytest.mark.parametrize("which", ["switch", "mark"])
+def test_mut_l3_switch_reopens_recommendation(which, monkeypatch):
+    pair = {"switch": Z50_L3_SWITCH_PAIR, "mark": Z50_L3_MARK_PAIR}[which]
+    m = _svc_variant((pair,), f"_z50_no_{which}_svc")
+    _st, sw, (card, facts, _s), prompt = _switch_run(
+        monkeypatch, {"weekly_close": _wk_last(float("inf"))}, Smod=m)
+    assert [d["代號"] for d in sw.switch_in] == ["0056"], "拔掉 → 修前的錯誤換入重現"
+    assert card.value.endswith("換入 1 檔") and "0056" in _in_line(prompt)
+    assert any(_k == "建議換入（來源：你的觀察清單）" for _k, _v in facts)
+
+
+def test_mut_l2_aggregation_reopens_recommendation(monkeypatch):
+    l2 = _variant((Z50_L2_AGG_PAIR,), "_z50_no_agg_l2")
+    monkeypatch.setattr(S, "ds", l2)
+    _st, sw, _c, _p = _switch_run(monkeypatch, {"premium_pct": float("nan")})
+    assert [d["代號"] for d in sw.switch_in] == ["0056"], "拔掉 → 修前的錯誤換入重現"
+    monkeypatch.setattr(S, "ds", DSL2)
+    _st, sw2, _c, _p = _switch_run(monkeypatch, {"premium_pct": float("nan")})
+    assert sw2.switch_in == ()
