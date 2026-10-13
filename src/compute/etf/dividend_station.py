@@ -367,11 +367,15 @@ class Light235:
     #:   (2) tuple 是 immutable,放進 frozen dataclass 不需要 default_factory,
     #:       也不會被消費端就地改掉。
     axes_used: tuple[str, ...] = ()
+    #: 批 Z51：True ＝ 這盞燈因輸入**資料異常**（NaN／±inf／轉不成數字）而**不下結論**
+    #: （⚪、`deploy_pct=0`、不停利、`axes_used=()`、`miss_reason` 留空）。與 `Flag.invalid`
+    #: 同一語意，供 `assess_holding` 彙整進 `invalid_keys`，⛔ 不解析 label／reasons。
+    invalid: bool = False
 
 
 def light_235(*, vix: float | None, weekly_close: float | None,
               ma4w: float | None, ma13w: float | None, ma52w: float | None,
-              z: float | None) -> Light235:
+              z: float | None, weekly_window_invalid: bool = False) -> Light235:
     """依「VIX × 週線 × 20週布林」三取一,取最嚴重那一盞。純函式。
 
     參數皆為**最新值純量**（weekly_close = 最新週收）。缺值不觸發該條件（§1）。
@@ -390,7 +394,37 @@ def light_235(*, vix: float | None, weekly_close: float | None,
 
     故改為**逐軸**判可用性（見下方 `_ok`）。判燈邏輯一個字都沒動 —— 缺值仍然
     「不觸發該條件」（這是對的）,只是把「為什麼沒觸發」記下來。
+
+    ## 批 Z51：資料異常 ≠ 缺資料（客戶 2026-10-13 裁示，沿用批 Z49／Z50 的處置）
+
+    上面「缺一軸 → 用其餘軸判（degraded）」只適用於**沒有值**（`None`：VIX 抓不到、
+    週數不足算不出均線／布林）。輸入**有值、但不是有效數字**（NaN／±inf／轉不成數字）
+    → 整盞燈**不下結論**，⛔ 不退回「只看剩下的軸照判加碼」：
+    - 任一純量輸入（`vix`／`weekly_close`／三條均線／`z`）異常，或呼叫端告知週收計算窗內
+      有異常（`weekly_window_invalid=True`，由 `assess_holding` 依實際用到的窗判定 —— 窗內
+      NaN 會被均線的 skipna 跳過、±inf 會讓布林 z 回 None，純量看不出來）→
+      ⚪、`deploy_pct=0`（不觸發加碼）、不停利、無深水註記、`axes_used=()`、`invalid=True`；
+      `label`／`reasons` 一律是客戶句 `SS.INVALID_DATA_TEXT`（項目名：VIX → 「VIX」；
+      週收／均線／布林 z 都由週收算出 → 「週收」），`miss_reason` 留空（理由同 `health_a`）。
+    - 修前：13 週窗內有 +inf → 季線 inf → `30 < inf` 成立 → 亮 🟡「急跌加碼 30%：週收<季線」，
+      與同列健檢C 的 ⚪「週收資料異常…」矛盾；VIX=+inf → 亮 🔴 崩盤加碼。
+    `None` 的既有行為（含三軸全缺的 `MISS_NO_INPUT`）逐值不變。
     """
+    # ── 批 Z51：資料異常 → 不下結論（先於一切判燈）─────────────────────
+    _z51_bad = tuple(_item for _item, _bad in (
+        ("VIX", SS.is_invalid_number(vix)),
+        ("週收", weekly_window_invalid or any(
+            SS.is_invalid_number(_v) for _v in (weekly_close, ma4w, ma13w, ma52w, z))))
+        if _bad)
+    if _z51_bad:
+        _z51_txt = "".join(SS.invalid_data_text(_i) for _i in _z51_bad)
+        # `light` 用 cruise 只因它是唯一「不動用加碼金」的燈值（deploy 0）；畫面上的 label 是
+        # 客戶句、不是「巡航」—— 巡航本身就是一個結論，資料異常時不能講。
+        return Light235(light=T.LIGHT_CRUISE, icon=T.LIGHT_META[T.LIGHT_CRUISE]["icon"],
+                        label=_z51_txt, deploy_pct=0.0, reasons=[_z51_txt],
+                        take_profit=None, deepwater_note=None, miss_reason="",
+                        axes_used=(), invalid=True)
+
     conds: list[tuple[str, str]] = []
 
     def _ok(v: float | None) -> bool:
@@ -398,6 +432,9 @@ def light_235(*, vix: float | None, weekly_close: float | None,
 
         刻意不做 `float(v)` 轉型:非數值型別（如上游誤傳字串）應該跟改動前一樣
         在這裡就 `TypeError` 炸出來,而不是被轉型「救回來」變成一個假的可用軸（§1）。
+
+        ⚠️ 批 Z51 起 NaN／±inf／轉不成數字的值**到不了這裡**（上方已整盞不下結論）；
+        仍會走到這裡的非數值只剩「轉得成數字的字串」（如 `"15"`），行為照舊 `TypeError`。
         """
         return v is not None and math.isfinite(v)
 
@@ -604,7 +641,8 @@ class HoldingAssessment:
     worst_health: str                # 🔴/🟡/🟢/⚪ 取最嚴重
     asset_kind: str = T.KIND_ETF     # stock / etf（個股 D折溢價、3-3-3 不適用）
     #: 批 Z50：因輸入**資料異常**而不判定的燈（規格表 key，固定 健檢A/B/C/D → 3-3-3 三子項
-    #: 的順序）。空 tuple ＝ 沒有異常。⚠️ `worst_health` 把 ⚪ 排最低（不改）—— 一盞異常 ⚪
+    #: → 235 燈（批 Z51 追加於尾端）的順序）。空 tuple ＝ 沒有異常。
+    #: ⚠️ `worst_health` 把 ⚪ 排最低（不改）—— 一盞異常 ⚪
     #: 加三盞 🟢 仍是 🟢，下游要下**正面結論**（例：換入建議）前必須先看這一欄。
     invalid_keys: tuple[str, ...] = ()
 
@@ -651,7 +689,14 @@ def assess_holding(*, ticker: str, name: str, asset_class: str,
     fb = health_b(sharpe)
     fc = health_c(weekly_close)
     fd = health_d(premium_pct) if _is_etf else Flag("⚪", "個股不適用（無折溢價/iNAV）", miss_reason=SS.MISS_NOT_APPLICABLE)
-    lt = light_235(vix=vix, weekly_close=last_close, ma4w=ma4, ma13w=ma13, ma52w=ma52, z=z)
+    # 批 Z51：235 燈實際用到的週收 ＝ 算得出來的最長一個窗（月線 4／季線 13／布林 20／年線 52；
+    # 都算不出來時只剩最後一筆）。窗內任一筆 NaN／±inf／轉不成數字 → 235 不下結論
+    # （NaN 會被均線 skipna 跳過、±inf 會讓布林 z 回 None —— 純量看不出來，故在這裡逐筆看）。
+    _z51_k = max((_p for _p in (T.MA_MONTH_WEEKS, T.MA_QUARTER_WEEKS, T.BOLL_PERIOD_WEEKS,
+                                T.MA_YEAR_WEEKS) if len(weekly_close) >= _p), default=1)
+    _z51_wk_bad = any(SS.is_invalid_number(_v) for _v in weekly_close.iloc[-_z51_k:])
+    lt = light_235(vix=vix, weekly_close=last_close, ma4w=ma4, ma13w=ma13, ma52w=ma52, z=z,
+                   weekly_window_invalid=_z51_wk_bad)
     if _is_etf:
         sc = screen_333(inception_years=inception_years, ann_return_3y_pct=ann_return_3y_pct,
                         cum_return_3y_pct=cum_return_3y_pct, peer_ranks=peer_ranks)
@@ -668,6 +713,8 @@ def assess_holding(*, ticker: str, name: str, asset_class: str,
     _invalid = tuple(_k for _k, _f in ((SS.KEY_HEALTH_A, fa), (SS.KEY_HEALTH_B, fb),
                                        (SS.KEY_HEALTH_C, fc), (SS.KEY_HEALTH_D, fd))
                      if _f.invalid) + sc.invalid_keys
+    if lt.invalid:                   # 批 Z51：235 燈資料異常 → 同一條排除鏈（接在尾端，既有順序不動）
+        _invalid += (SS.KEY_LIGHT235,)
     return HoldingAssessment(
         ticker=ticker, name=name, asset_class=asset_class, asset_kind=asset_kind,
         health_a=fa, health_b=fb, health_c=fc, health_d=fd,

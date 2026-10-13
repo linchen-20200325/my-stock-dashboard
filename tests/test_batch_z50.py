@@ -439,9 +439,11 @@ def _in_line(prompt: str) -> str:
 
 _BAD_S = {**_BAD, "text": "abc"}
 #: 被測列的異常情境：(覆寫, 預期 invalid_keys)
+#: 批 Z51：週收異常同樣讓 235 燈不下結論 → C 兩案的預期多一個 `KEY_LIGHT235`（接在尾端）。
 _SW_CASES = {
-    "C_last": (lambda v: {"weekly_close": _wk_at(-1, v)}, (SS.KEY_HEALTH_C,)),
-    "C_slope_only": (lambda v: {"weekly_close": _wk_at(-14, v)}, (SS.KEY_HEALTH_C,)),
+    "C_last": (lambda v: {"weekly_close": _wk_at(-1, v)}, (SS.KEY_HEALTH_C, SS.KEY_LIGHT235)),
+    "C_slope_only": (lambda v: {"weekly_close": _wk_at(-14, v)},
+                     (SS.KEY_HEALTH_C, SS.KEY_LIGHT235)),
     "A_yield": (lambda v: {"annual_yield_pct": v}, (SS.KEY_HEALTH_A,)),
     "A_ret": (lambda v: {"total_return_1y_pct": v}, (SS.KEY_HEALTH_A,)),
     "D": (lambda v: {"premium_pct": v}, (SS.KEY_HEALTH_D,)),

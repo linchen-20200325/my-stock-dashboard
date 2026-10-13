@@ -1163,6 +1163,9 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
     """
     _vix = digest.get("vix")
     _vix_txt = f"{_vix:.1f}" if isinstance(_vix, (int, float)) else "抓取失敗"
+    if SS.is_invalid_number(_vix):
+        # 批 Z51：VIX 是 NaN／±inf／轉不成數字 → 不把 nan／inf 送進 ⑦ prompt，改客戶句（None 照舊）。
+        _vix_txt = SS.invalid_data_text("VIX")
     _reds = "、".join(f"{d['代號']}（{d['建議動作']}）" for d in digest.get("reds", [])) or "無"
     _adds = "、".join(f"{d['代號']} {d['235']} 加碼{d['加碼金']}"
                       for d in digest.get("adds", [])) or "無"
