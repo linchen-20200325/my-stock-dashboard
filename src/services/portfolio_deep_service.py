@@ -1007,6 +1007,10 @@ class DividendCashResult:
             它們的 0 元**不是結果** —— 非空時 `gross_twd` 是缺了這幾檔的總額，
             畫面必須當成失敗處理，**不得**列為「貢獻 0 元」或「沒有配息」。
         failed_detail: 與 `failed_tickers` 同序的 `"{代號}: {L1 失敗訊息}"`（給畫面照實顯示）。
+        invalid_tickers: 批 Z53 —— 近一年配息含 NaN／±inf／轉不成數字的代號（本檔的身分，排序）；
+            上游 `get_dividend_tax_view()` 的 `invalid`。同 `failed_tickers`：它們的 0 元**不是結果**，
+            非空時畫面必須當成失敗處理（說明用客戶句 `SS.invalid_data_text("配息")`），
+            **不得**列為「貢獻 0 元」或「沒有配息」。預設空 ＝ 修前。
         lots_n / held_n: 有張數 / 持有的列數。
         shares_total: 換算後的總股數（**張 × `SHARES_PER_LOT`**，給畫面對帳看）。
     """
@@ -1023,6 +1027,7 @@ class DividendCashResult:
     no_payout_tickers: tuple[str, ...] = ()
     failed_tickers: tuple[str, ...] = ()
     failed_detail: tuple[str, ...] = ()
+    invalid_tickers: tuple[str, ...] = ()
     coverage_pct: float = 0.0
     tw_n: int = 0
     lots_n: int = 0
@@ -1151,6 +1156,9 @@ def get_dividend_cash_flow(rows, *, strict: bool = False) -> DividendCashResult:
     _failed_detail = tuple(f"{_t}: {_fail_by_id[_t]}" for _t in _failed)
     for _d in _failed_detail:
         print(f"[portfolio_deep/dividend] 配息抓取失敗（不當成 0 筆配息）：{_d}")
+    # 批 Z53：近一年配息含異常值的那幾檔（上游 `invalid`；缺這個鍵 → 空，行為同修前）。
+    _inv_map = ((_view or {}).get("invalid") or {}) if isinstance(_view, dict) else {}
+    _invalid = tuple(sorted({str(_back.get(str(_t), str(_t))) for _t in _inv_map}))
     _accounted = set(_counted) | set(_overseas)
     _excluded = tuple(sorted(set(_overseas)
                              | {_s["ticker"] for _s in _shares
@@ -1166,9 +1174,11 @@ def get_dividend_cash_flow(rows, *, strict: bool = False) -> DividendCashResult:
         excluded_tickers=_excluded,
         no_payout_tickers=tuple(str(_p.get("代號")) for _p in _per
                                 if not int(_p.get("配息筆數") or 0)
-                                and str(_p.get("代號")) not in _failed),
+                                and str(_p.get("代號")) not in _failed
+                                and str(_p.get("代號")) not in _invalid),
         failed_tickers=_failed,
         failed_detail=_failed_detail,
+        invalid_tickers=_invalid,
         coverage_pct=(len(_counted) / len(_shares) * 100.0) if _shares else 0.0,
         tw_n=int((_view or {}).get("n_tw") or 0),
         **_base)

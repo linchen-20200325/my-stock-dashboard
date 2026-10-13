@@ -978,6 +978,14 @@ def _pick_candidates(_df, _exclude: set, top_n: int) -> list[dict]:
 _SWITCH_IN_IGNORED_INVALID: frozenset[str] = frozenset({SS.KEY_LIGHT235})
 _SWITCH_IN_IGNORED_INVALID |= {SS.KEY_SCREEN_INCEPTION, SS.KEY_SCREEN_RETURN, SS.KEY_SCREEN_PEER}
 
+#: 批 Z53：換出判定是 `健檢 == 🔴`，`健檢` ＝ L2 `_worst_level`（健檢 A–D 取最嚴重）。
+#: 四盞裡**只有 A、B 會亮 🔴**（C、D 最多 🟡），而 B 沒有資料異常路徑（L2 不標 `invalid`）
+#: ⇒ 會改變換出結論的資料異常只有**健檢 A**：A 判得出來時可能是 🔴，判不出來就不知道該不該換出。
+#: C／D 異常只影響 🟡／🟢，不改變換出結論 → 不列（照舊由 ⑦「資料異常未判」揭露）。
+#: 標籤沿用 `row_from_assessment()` 寫進 `SS.KEY_INVALID_TEXTS` 的項目名。
+_SWITCH_OUT_INVALID_KEYS: frozenset[str] = frozenset({SS.KEY_HEALTH_A})
+_SWITCH_OUT_INVALID_LABELS: tuple[str, ...] = ("健檢A",)
+
 
 def build_switch_advice(rows: list[dict], macro: dict | None,
                         candidates: list[dict] | None) -> dict:
@@ -991,6 +999,11 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
       `健檢` 把 ⚪ 排最低，一盞異常加三盞 🟢 仍是 🟢，不能當「綠燈」推薦。缺資料的 ⚪ 照舊。
     - 批 Z51：**235 燈**與 **3-3-3** 的資料異常**不**連帶排除換入 —— 換入規則不看 235／VIX／
       3-3-3，判不出來只讓那盞不下結論（見 `_SWITCH_IN_IGNORED_INVALID`）。健檢 A–D 異常照舊排除。
+    - 批 Z53：**持有列**的健檢 A（四盞裡唯一會亮 🔴 且有資料異常路徑的燈）因資料異常不判定、
+      且該列 `健檢` 不是 🔴 → 那一列**沒被判過要不要換出**（不是「沒有紅燈」）→ 另列在
+      `switch_out_invalid`：`[{"代號", "項目": ((項目, 客戶句), …)}]`（項目／句子取自列上
+      `SS.KEY_INVALID_TEXTS`，只取健檢 A；理由見 `_SWITCH_OUT_INVALID_KEYS`）。**只有異常時才有這一鍵**
+      —— 正常輸出逐鍵不變；`switch_out` 本身不動（🔴 照列）。整批抓取失敗的列不列（另有出口）。
     """
     _macro = macro or {}
     _loaded = bool(_macro.get("loaded"))
@@ -1027,7 +1040,7 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
     else:
         stance = "neutral"
 
-    return {
+    _out = {
         "regime": _macro.get("regime"), "loaded": _loaded, "defense": _defense,
         "posture": _macro.get("posture_label"), "posture_range": _macro.get("posture_range"),
         "stance": stance,
@@ -1035,6 +1048,19 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
         "switch_in": switch_in,     # 換入候選（優先觀察清單綠燈,否則選股池）
         "switch_in_src": switch_in_src,   # "watchlist"(你選的) / "screener"(全自動 fallback)
     }
+    # 批 Z53：持有列健檢 A（唯一會亮 🔴 且有資料異常路徑的燈）資料異常、判不出要不要換出
+    # （見 `_SWITCH_OUT_INVALID_KEYS`；只有異常時才有這一鍵）。
+    _out_invalid = [
+        {"代號": str(r.get("代號", "")),
+         "項目": tuple(_t for _t in (r.get(SS.KEY_INVALID_TEXTS) or ())
+                       if _t[0] in _SWITCH_OUT_INVALID_LABELS)}
+        for r in (rows or [])
+        if r.get("held") and r.get("健檢") != "🔴"
+        and not r.get("_detail", {}).get("error")
+        and set(r.get(SS.KEY_INVALID_LIGHTS) or ()) & _SWITCH_OUT_INVALID_KEYS]
+    if _out_invalid:
+        _out["switch_out_invalid"] = _out_invalid
+    return _out
 
 
 # ── 第 1 層結論卡:組合層彙總（純函式,#階段C）────────────────────────────

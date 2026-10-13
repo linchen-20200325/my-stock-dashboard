@@ -18,11 +18,17 @@ import datetime as _dt
 
 import pandas as pd
 
+from shared import station_specs as SS
 from src.data.etf import DIVIDENDS_FETCH_FAILED_ATTR, fetch_etf_dividends
 from src.compute.etf.portfolio_fx import CURRENCY_USD, holding_currency
 from src.compute.etf.dividend_tax import after_tax_dividend, nhi_premium
 
 _LOOKBACK_DAYS = 365
+
+#: 批 Z53（客戶 2026-10-13 裁示 B）：近一年配息值是 NaN／±inf／轉不成數字 → 這一檔的配息
+#: **不計算、不下結論**（⛔ 不把壞值當 0／當沒付、⛔ 不只丟掉壞的那幾筆算其餘的）。
+#: 句子一律走 L0 `SS.invalid_data_text()`；項目名「配息」同新 UI 找標的頁配息卡既有用法。
+INVALID_DIVIDEND_TEXT: str = SS.invalid_data_text("配息")
 
 
 def _recent_payments_twd(ticker, shares: int) -> list[float]:
@@ -55,6 +61,11 @@ def _recent_payments_and_failure(ticker, shares: int) -> tuple[list[float], str]
         return [], ""
     _cutoff = pd.Timestamp(_dt.date.today() - _dt.timedelta(days=_LOOKBACK_DAYS))
     _recent = _div_s[_div_s.index >= _cutoff]
+    # 批 Z53：近一年任一筆是異常值 → 整檔不算（金額 `[]`），失敗說明＝客戶句
+    # （呼叫端 `get_dividend_tax_view` 依這一句另列 `invalid`，⛔ 不併進「抓取失敗」）。
+    if any(SS.is_invalid_number(_v) for _v in _recent.values):
+        print(f"[dividend_tax/{ticker}] 近一年配息含異常值 → 不計算：{INVALID_DIVIDEND_TEXT}")
+        return [], INVALID_DIVIDEND_TEXT
     return ([float(_v) * shares for _v in _recent.values if float(_v or 0.0) > 0],
             "")
 
@@ -74,11 +85,15 @@ def get_dividend_tax_view(holdings, *, marginal_rate=None) -> dict:
         fetch_failed  {代號: 失敗訊息} —— L1 配息**抓取失敗**的台幣 ETF（它們照舊
                   出現在 per_etf、金額 0；本鍵是**附加**的，既有讀 per_etf/summary 的
                   caller 不受影響）。空 dict = 沒有抓取失敗。
+        invalid   批 Z53，**只有異常時才有這一鍵**：{代號: 客戶句} —— 近一年配息含 NaN／±inf／
+                  轉不成數字的台幣 ETF（同 fetch_failed：照舊出現在 per_etf、金額 0，
+                  **不是**「沒配息」）。正常時回傳 dict 逐鍵同修前。
     """
     _tw_payments_all: list[float] = []
     _per_etf: list[dict] = []
     _overseas: list[str] = []
     _failed: dict[str, str] = {}
+    _invalid: dict[str, str] = {}
 
     for _h in holdings or []:
         _tk = str((_h or {}).get("ticker") or "").strip()
@@ -92,7 +107,9 @@ def get_dividend_tax_view(holdings, *, marginal_rate=None) -> dict:
             _overseas.append(_tk)
             continue
         _pays, _fail = _recent_payments_and_failure(_tk, _sh)
-        if _fail:
+        if _fail == INVALID_DIVIDEND_TEXT:      # 批 Z53：資料異常 ≠ 抓取失敗，分開列
+            _invalid[_tk] = _fail
+        elif _fail:
             _failed[_tk] = _fail
         _tw_payments_all.extend(_pays)
         _per_etf.append({
@@ -104,10 +121,13 @@ def get_dividend_tax_view(holdings, *, marginal_rate=None) -> dict:
         })
 
     _summary = after_tax_dividend(_tw_payments_all, marginal_rate=marginal_rate)
-    return {
+    _view = {
         "summary": _summary,
         "per_etf": _per_etf,
         "overseas": _overseas,
         "n_tw": len(_per_etf),
         "fetch_failed": _failed,
     }
+    if _invalid:                                # 批 Z53：只有異常時才有這一鍵
+        _view["invalid"] = _invalid
+    return _view

@@ -350,7 +350,8 @@ class TestL3:
         assert res.failed_tickers == () and res.no_payout_tickers == ("0056.TW",)
 
     def test_c_mutation_dropping_the_l3_marker_hides_the_failure(self, monkeypatch):
-        m = _mutant(DTS, "        if _fail:\n", "        if False:\n")
+        # 批 Z53（同步錨點，突變語意不變）：前面多了「資料異常」那一支 → `if` 變 `elif`。
+        m = _mutant(DTS, "        elif _fail:\n", "        elif False:\n")
         monkeypatch.setattr(DTS, "get_dividend_tax_view", m.get_dividend_tax_view)
         monkeypatch.setattr(m, "holding_currency", lambda t: "TWD")
         res = _l3(monkeypatch, {"0056.TW": RuntimeError("HTTP 429")})
@@ -358,7 +359,10 @@ class TestL3:
         assert res.no_payout_tickers == ("0056.TW",)                # 修前的謊
 
     def test_c_mutation_dropping_the_no_payout_exclusion_leaks_again(self, monkeypatch):
-        m = _mutant(PDS, '                                and str(_p.get("代號")) not in _failed),\n',
+        # 批 Z53（同步錨點，突變語意不變）：排除條件多了 `_invalid` 一行（本測試沒有異常值，
+        # 一併拔掉不影響這裡要驗的「抓取失敗的又漏進 0 元清單」）。
+        m = _mutant(PDS, '                                and str(_p.get("代號")) not in _failed\n'
+                         '                                and str(_p.get("代號")) not in _invalid),\n',
                     "                                ),\n")
         res = _l3(monkeypatch, {"0056.TW": RuntimeError("HTTP 429")}, mod=m)
         assert res.no_payout_tickers == ("0056.TW",)
@@ -446,7 +450,10 @@ class TestL5Card:
              "整批抓取失敗 —— 看該列的錯誤訊息",
              # 批 Z49（2026-10-13，同步錨點）：追加「張數資料異常」候選（持有列張數是異常值時）；
              # 本批仍命中第一個。
-             PH.invalid_data_text(PH.ITEM_LOTS)),
+             PH.invalid_data_text(PH.ITEM_LOTS),
+             # 批 Z53（2026-10-13，同步錨點）：追加「配息資料異常」候選（近一年配息含異常值時）；
+             # 本批仍命中第一個。
+             PH.invalid_data_text(PH.ITEM_DIVIDEND)),
             (PH._V2_NO_EXIT_REPORT, PH._V2_CHECK_NET))
         card = PH.build_dividend_cash_card(_deep(_cash(failed_tickers=("0056",))))[0]
         short = dict(PH.v2_short_rows(card)[0])

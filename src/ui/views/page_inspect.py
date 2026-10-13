@@ -2350,7 +2350,13 @@ def build_peer_card(etf: EtfReadout) -> _Built:
         (f"近 {_m} 月分位", _fmt_num(_num(_peer.get(_m)), digits=2))
         for _m in (3, 6, 12) if _peer.get(_m) is not None)
     if etf.quality:
-        _facts += (("品質評等", str(etf.quality.get("stars") or "—")),)
+        # 批 Z53（客戶 2026-10-13 裁示 B）：L2 標了資料異常（`invalid_items`：AUM／費用率／Beta 是
+        # NaN／±inf／轉不成數字，`stars=None`）→ 這一列只放客戶句，⛔ 不給星等、⛔ 不放「—」
+        # （「—」讀起來像「沒有評等」，而這一輪是「有值、但值壞了」）。沒有這一鍵 ＝ 修前。
+        _q_bad = tuple(str(_i) for _i in (etf.quality.get("invalid_items") or ()))
+        _facts += (("品質評等",
+                    "".join(invalid_data_text(_i) for _i in _q_bad) if _q_bad
+                    else str(etf.quality.get("stars") or "—")),)
     if etf.inception_years is not None:
         _facts += (("成立年數", _fmt_num(etf.inception_years, digits=1, unit=" 年")),)
     return _etf_card(
