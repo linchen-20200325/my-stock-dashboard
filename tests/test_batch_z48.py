@@ -47,9 +47,14 @@ _HOLD = 'src/ui/views/page_hold.py'
 Z48_DETECT_PAIR = (
     "        # 批 Z48：**算報酬之前**先判收盤價本身（0 → 隔天 +inf；NaN → 被下面的 dropna 吃掉那一天）。\n"
     "        _bad = find_invalid_closes(_df[\"Close\"])\n"
-    "        if _bad[\"n_invalid\"]:\n"
-    "            _first = _day_str(_bad[\"first_invalid\"])\n"
-    "            print(f\"[portfolio_deep/var] {_tk} 歷史收盤價含 {_bad['n_invalid']} 筆 0／負值／無效值\"\n"
+    "        # 批 Z48（QA r1）：L1 已用前值補掉的 Close NaN —— 值上看不出來，只能讀 L1 留下的旗標。\n"
+    "        _ffilled = _ffilled_close_days(_df)\n"
+    "        if _bad[\"n_invalid\"] or _ffilled:\n"
+    "            _cands = [_d for _d in (_day_str(_bad[\"first_invalid\"]),\n"
+    "                                    _ffilled[0] if _ffilled else \"\") if _d]\n"
+    "            _first = min(_cands) if _cands else \"\"\n"
+    "            print(f\"[portfolio_deep/var] {_tk} 歷史收盤價含 {_bad['n_invalid']} 筆 0／負值／無效值、\"\n"
+    "                  f\"{len(_ffilled)} 筆上游以前值補過的空值\"\n"
     "                  f\"（第一筆 {_first or '日期不明'}）→ 不算報酬\")\n"
     "            invalid.append((_tk, _first))\n"
     "            continue\n",
@@ -494,3 +499,208 @@ def test_chips_mutation_branch_removed_turns_red(monkeypatch):
         assert row != _APPROVED                                    # 還原體：不是核准文案
         assert "上游的回傳字彙" in row and "沒有異常" in row      # 還原體：OTHER ＋ HEAD
         assert _row_of(_chips_built(PI, monkeypatch, l2=_l2)) == _APPROVED
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 批 Z48 第 3 項（獨立 QA r1 FAIL）：L1 `_fetch_etf_price_max_cached` 的 `df.ffill()`
+# ══════════════════════════════════════════════════════════════════════════
+# 中段／最後一筆的 Close NaN 先被 L1 用前值補掉 → L3 的 `find_invalid_closes` 看不到 → VaR 照算
+# （＝客戶禁止的「把異常值改成前值」）。上面的測試替換的是 `fetch_etf_price`，整段跳過了 L1。
+# 修法：L1 在 ffill **之前**記下 Close 被補的日子放進 `attrs[PRICE_CLOSE_FFILLED_ATTR]`（只附加），
+# L3 讀到（且落在 1y 切片內）→ 列入 invalid → 既有整卡中止路徑。
+# 本段**只替換 yfinance 底層**（`_history_or_raise` ＋ `yf.Ticker`），L1 的 ffill／快取／切片全走真的。
+import pickle  # noqa: E402
+
+import src.data.etf.etf_fetch as EF  # noqa: E402
+
+_L1 = 'src/data/etf/etf_fetch.py'
+_L1N = 300
+_L1_IDX = pd.bdate_range(end="2026-09-30", periods=_L1N)
+_L1_CUTOFF = _L1_IDX[-1] - pd.Timedelta(days=365)          # `fetch_etf_price(period='1y')` 的切點
+_MID, _TAIL, _OLD = _L1N - 50, _L1N - 1, 5
+assert _L1_IDX[_MID] >= _L1_CUTOFF and _L1_IDX[_OLD] < _L1_CUTOFF   # 前提：一個在窗內、一個在窗外
+
+#: ⑤ L1：補值前的記錄（拔掉 ＝ 不留旗標，ffill 照舊）。
+Z48_L1_RECORD_PAIR = (
+    "    _ffilled = _close_ffilled_days(df)      # 批 Z48：補值**之前**記下 Close 被補的那幾天\n",
+    "    _ffilled = ()\n",
+)
+#: ⑥ L3：讀 L1 旗標（拔掉 ＝ 只看值，被補過的那天看不到）。
+Z48_L3_READ_PAIR = (
+    "        _ffilled = _ffilled_close_days(_df)\n",
+    "        _ffilled = ()\n",
+)
+
+
+@functools.lru_cache(maxsize=None)
+def z48_l1_no_record():
+    return _load_variant(_L1, (Z48_L1_RECORD_PAIR,), '_z48_l1_no_record')
+
+
+@functools.lru_cache(maxsize=None)
+def z48_l3_no_read():
+    return _load_variant(_SVC, (Z48_L3_READ_PAIR,), '_z48_l3_no_read')
+
+
+def _yahoo_df(bad_at=None, bad=float("nan")):
+    """yfinance `history()` 會回的形狀（大寫 OHLCV、tz-aware index）。只有 Close 那一格放異常值。"""
+    v = [100.0 + (i % 7) * 0.8 for i in range(_L1N)]
+    close = list(v)
+    if bad_at is not None:
+        close[bad_at] = bad
+    return pd.DataFrame({"Open": v, "High": v, "Low": v, "Close": close,
+                         "Volume": [1000] * _L1N},
+                        index=_L1_IDX.tz_localize("Asia/Taipei"))
+
+
+class _FakeTicker:
+    def __init__(self, ticker):
+        self.ticker = ticker
+
+
+@pytest.fixture
+def yahoo(monkeypatch):
+    """只換 yfinance 底層。回傳 `(set_df, calls)`：`set_df(df, mod=EF)` 指定這一輪 Yahoo 回什麼。"""
+    calls: list = []
+
+    def set_df(df, mod=EF):
+        def _hist(tk, ticker, period, **_k):
+            calls.append(ticker)
+            return None if df is None else df.copy()
+        monkeypatch.setattr(mod, "_history_or_raise", _hist)
+        monkeypatch.setattr(mod.yf, "Ticker", _FakeTicker)
+        mod._fetch_etf_price_max.clear()
+
+    yield set_df, calls
+    EF._fetch_etf_price_max.clear()
+    for _m in (z48_l1_no_record(),):
+        _m._fetch_etf_price_max.clear()
+
+
+def _l1_var(mod_l3=D, l1=EF, monkeypatch=None):
+    if l1 is not EF:
+        monkeypatch.setattr("src.data.etf.etf_fetch.fetch_etf_price", l1.fetch_etf_price)
+    return mod_l3.get_portfolio_var(_ROWS_ONE, strict=True)
+
+
+@pytest.mark.parametrize("at", [_MID, _TAIL], ids=["mid_nan", "last_nan"])
+def test_l1_records_ffilled_close_days(at, yahoo):
+    set_df, _ = yahoo
+    set_df(_yahoo_df(at))
+    out = EF.fetch_etf_price("2330.TW", period="max")
+    assert out.attrs[EF.PRICE_CLOSE_FFILLED_ATTR] == (_L1_IDX[at].strftime("%Y-%m-%d"),)
+    assert not out["Close"].isna().any(), "前提：L1 的 ffill 照舊（值上已看不出那一天）"
+
+
+def test_l1_values_identical_to_pre_batch(yahoo):
+    """其他 caller 看到的 df：值與修前逐值相同；attrs 只多一個鍵。"""
+    set_df, _ = yahoo
+    for period in ("1y", "5y", "max"):
+        set_df(_yahoo_df(_MID))
+        now = EF.fetch_etf_price("2330.TW", period=period)
+        pre_mod = z48_l1_no_record()
+        set_df(_yahoo_df(_MID), mod=pre_mod)
+        pre = pre_mod.fetch_etf_price("2330.TW", period=period)
+        pd.testing.assert_frame_equal(now, pre)
+        _a = {k: v for k, v in now.attrs.items() if k not in ("fetched_at", EF.PRICE_CLOSE_FFILLED_ATTR)}
+        _b = {k: v for k, v in pre.attrs.items() if k != "fetched_at"}
+        assert _a == _b and EF.PRICE_CLOSE_FFILLED_ATTR not in pre.attrs
+
+
+def test_l1_normal_data_has_no_flag(yahoo):
+    set_df, _ = yahoo
+    set_df(_yahoo_df())
+    out = EF.fetch_etf_price("2330.TW", period="1y")
+    assert EF.PRICE_CLOSE_FFILLED_ATTR not in out.attrs
+    assert set(out.attrs) == {"source", "fetched_at", "price_basis"}
+
+
+def test_l1_leading_nan_is_not_called_ffilled(yahoo):
+    """開頭沒有前值可補 → 仍是 NaN（不記成被補）；L3 由值本身看得到。"""
+    set_df, _ = yahoo
+    set_df(_yahoo_df(0))
+    out = EF.fetch_etf_price("2330.TW", period="max")
+    assert EF.PRICE_CLOSE_FFILLED_ATTR not in out.attrs and math.isnan(out["Close"].iloc[0])
+
+
+def test_l1_flag_survives_cache_hit_and_pickle(yahoo):
+    """attrs 穿過 `@st.cache_data`（命中時回的是反序列化的複本）與 `fetch_etf_price` 的切片包裝。"""
+    set_df, calls = yahoo
+    set_df(_yahoo_df(_MID))
+    first = EF._fetch_etf_price_max_cached("2330.TW")
+    second = EF._fetch_etf_price_max_cached("2330.TW")
+    assert calls == ["2330.TW"], f"第二次應命中快取：{calls}"
+    assert second is not first, "前提：命中時是另一個物件（經序列化）"
+    _want = (_L1_IDX[_MID].strftime("%Y-%m-%d"),)
+    assert second.attrs[EF.PRICE_CLOSE_FFILLED_ATTR] == _want
+    assert pickle.loads(pickle.dumps(first)).attrs[EF.PRICE_CLOSE_FFILLED_ATTR] == _want
+    assert EF.fetch_etf_price("2330.TW", period="1y").attrs[EF.PRICE_CLOSE_FFILLED_ATTR] == _want
+    assert calls == ["2330.TW"]
+
+
+@pytest.mark.parametrize("at", [_MID, _TAIL], ids=["mid_nan", "last_nan"])
+def test_var_through_real_l1_ffilled_nan_stops_the_card(at, yahoo):
+    set_df, _ = yahoo
+    set_df(_yahoo_df(at))
+    res = _l1_var()
+    assert res.computed is False and res.reason == D.REASON_INVALID_CLOSE
+    assert res.invalid_close == (("2330.TW", _L1_IDX[at].strftime("%Y-%m-%d")),)
+    assert all(getattr(res, _f) == 0.0 for _f in _MONEY)
+    built = _card(PH, res)
+    assert built[0].state == UI_EMPTY and built[0].note.now == PH.VAR_INVALID_CLOSE_NOW
+    _blob_l = _blob(PH, built).lower()
+    assert "nan" not in _blob_l and "inf" not in _blob_l
+
+
+@pytest.mark.parametrize("bad", [0.0, -5.0, float("inf")], ids=["zero", "negative", "inf"])
+def test_var_through_real_l1_other_bad_values(bad, yahoo):
+    set_df, _ = yahoo
+    set_df(_yahoo_df(_MID, bad))
+    res = _l1_var()
+    assert res.computed is False and res.invalid_close == (("2330.TW", _L1_IDX[_MID].strftime("%Y-%m-%d")),)
+
+
+def test_var_through_real_l1_normal_unchanged(yahoo, monkeypatch):
+    set_df, _ = yahoo
+    set_df(_yahoo_df())
+    now = dataclasses.asdict(_l1_var())
+    pre = dataclasses.asdict(_l1_var(mod_l3=z48_pre_svc()))
+    assert now == pre and now["computed"] is True
+
+
+def test_var_ignores_ffill_outside_the_1y_window(yahoo):
+    """L1 旗標記的是 max 整段；落在 1y 切片外的補值與本次 VaR 無關 → 照算（且與修前相同）。"""
+    set_df, _ = yahoo
+    set_df(_yahoo_df(_OLD))
+    res = _l1_var()
+    assert EF._fetch_etf_price_max("2330.TW").attrs[EF.PRICE_CLOSE_FFILLED_ATTR]   # 前提：L1 有記
+    assert res.computed is True and res.invalid_close == ()
+    assert dataclasses.asdict(res) == dataclasses.asdict(_l1_var(mod_l3=z48_pre_svc()))
+
+
+def test_l3_ffilled_days_without_date_range_keeps_all():
+    df = pd.DataFrame({"Close": [1.0, 2.0]}, index=[0, 1])
+    df.attrs[EF.PRICE_CLOSE_FFILLED_ATTR] = ("2026-01-05",)
+    assert D._ffilled_close_days(df) == ("2026-01-05",)
+    assert D._ffilled_close_days(pd.DataFrame({"Close": [1.0]})) == ()
+
+
+# ── 突變：拔掉 L1 記錄／拔掉 L3 讀取 → 中段 NaN 又照算 ──────────────────────
+def test_mutation_l1_record_removed_turns_red(yahoo, monkeypatch):
+    set_df, _ = yahoo
+    _orig = EF.fetch_etf_price
+    m = z48_l1_no_record()
+    set_df(_yahoo_df(_MID), mod=m)
+    res = _l1_var(l1=m, monkeypatch=monkeypatch)
+    assert res.computed is True and res.invalid_close == ()     # 還原體：前值補過的那天照算
+    set_df(_yahoo_df(_MID))
+    monkeypatch.setattr("src.data.etf.etf_fetch.fetch_etf_price", _orig)
+    assert _l1_var().computed is False
+
+
+def test_mutation_l3_read_removed_turns_red(yahoo):
+    set_df, _ = yahoo
+    set_df(_yahoo_df(_MID))
+    res = _l1_var(mod_l3=z48_l3_no_read())
+    assert res.computed is True and res.invalid_close == ()     # 還原體：看不到 L1 的旗標
+    assert _l1_var().computed is False

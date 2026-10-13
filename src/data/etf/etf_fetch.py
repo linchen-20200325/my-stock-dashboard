@@ -195,6 +195,24 @@ def _get_etf_launch_price(ticker: str, df: "pd.DataFrame|None" = None):
 #: 不要就地把這個字串改掉 —— 那會讓三個算式同時改變意思而沒有任何一條測試變紅。
 PRICE_BASIS_ADJUSTED = "adjusted"
 
+#: 批 Z48（2026-10-13）：`_fetch_etf_price_max_cached()` 那行 `df.ffill()` 把 **Close** 欄的 NaN 用前值補掉
+#: 的那幾天（`'YYYY-MM-DD'` 升冪 tuple）。**只附加、不改值**：ffill 與回傳值對所有 caller 與修前相同；
+#: 沒有任何一天被補時**不放這個鍵**（attrs 也與修前相同）。開頭沒有前值可補的 NaN 不算（它仍是 NaN，
+#: 由使用端自己看得到）。用途：VaR（L3 `portfolio_deep_service`）要分得出「這一天原本沒有收盤價」——
+#: 客戶 2026-10-13 裁示不得把異常值換成前值後照算，而補過之後在值上已經分不出來。
+PRICE_CLOSE_FFILLED_ATTR = "close_ffilled_days"
+
+
+def _close_ffilled_days(df: pd.DataFrame) -> tuple:
+    """`df.ffill()` **之前**呼叫：Close 為 NaN、但 ffill 後會有值的那幾天（補值前後對照，只讀不改）。"""
+    if "Close" not in getattr(df, "columns", ()):
+        return ()
+    _c = df["Close"]
+    if not isinstance(_c, pd.Series):
+        return ()
+    _filled = (_c.isna() & _c.ffill().notna()).to_numpy()
+    return tuple(pd.Timestamp(_d).strftime("%Y-%m-%d") for _d in df.index[_filled])
+
 # v18.228 P1-S1：fetch_etf_price 跨 tab period 集中
 # 原本 cache key = (ticker, period)，同檔 ETF 因 1y/5y/10y 不同 period 重抓 2~3 次。
 # 改為單一 'max' fetch + 記憶體內切片，cache key 只剩 ticker。
@@ -246,6 +264,7 @@ def _fetch_etf_price_max_cached(ticker: str) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame()
     df.index = pd.to_datetime(df.index).tz_localize(None)
+    _ffilled = _close_ffilled_days(df)      # 批 Z48：補值**之前**記下 Close 被補的那幾天
     out = df.ffill()
     # S-PROV-1 v18.251:provenance via DataFrame.attrs(§2.2)
     out.attrs["source"] = f"Yahoo:{ticker}:history_max_adj"
@@ -253,6 +272,8 @@ def _fetch_etf_price_max_cached(ticker: str) -> pd.DataFrame:
     # 還原價標記 —— 蓋在「向上游要 auto_adjust=True 的**同一個函式**」裡,
     # 這樣「有標記」與「真的要了還原價」不會各自漂移(§2.2 血緣)。
     out.attrs["price_basis"] = PRICE_BASIS_ADJUSTED
+    if _ffilled:
+        out.attrs[PRICE_CLOSE_FFILLED_ATTR] = _ffilled
     return out
 
 

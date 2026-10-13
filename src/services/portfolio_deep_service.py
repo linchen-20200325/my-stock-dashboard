@@ -781,9 +781,14 @@ def _daily_returns(tickers, *, invalid: list, strict: bool = False
             print(f"[portfolio_deep/var] {_tk} 上市代號抓不到，改用上櫃 {_used}")
         # 批 Z48：**算報酬之前**先判收盤價本身（0 → 隔天 +inf；NaN → 被下面的 dropna 吃掉那一天）。
         _bad = find_invalid_closes(_df["Close"])
-        if _bad["n_invalid"]:
-            _first = _day_str(_bad["first_invalid"])
-            print(f"[portfolio_deep/var] {_tk} 歷史收盤價含 {_bad['n_invalid']} 筆 0／負值／無效值"
+        # 批 Z48（QA r1）：L1 已用前值補掉的 Close NaN —— 值上看不出來，只能讀 L1 留下的旗標。
+        _ffilled = _ffilled_close_days(_df)
+        if _bad["n_invalid"] or _ffilled:
+            _cands = [_d for _d in (_day_str(_bad["first_invalid"]),
+                                    _ffilled[0] if _ffilled else "") if _d]
+            _first = min(_cands) if _cands else ""
+            print(f"[portfolio_deep/var] {_tk} 歷史收盤價含 {_bad['n_invalid']} 筆 0／負值／無效值、"
+                  f"{len(_ffilled)} 筆上游以前值補過的空值"
                   f"（第一筆 {_first or '日期不明'}）→ 不算報酬")
             invalid.append((_tk, _first))
             continue
@@ -793,6 +798,28 @@ def _daily_returns(tickers, *, invalid: list, strict: bool = False
             continue
         _rets[_tk] = _s
     return _rets, _missing, _errors
+
+
+def _ffilled_close_days(df) -> tuple[str, ...]:
+    """批 Z48（QA r1）：L1 `fetch_etf_price` 回的 df 裡，**原本是 NaN、被 L1 用前值補掉**的 Close 日
+    （讀 L1 `PRICE_CLOSE_FFILLED_ATTR`），只留**落在這份 df 日期範圍內**的那幾天（升冪）。
+
+    ⚠️ L1 的旗標記的是 `period='max'` 整段；VaR 只用 1y 切片 ⇒ 範圍外的補值與本次計算無關，
+    不因此拒算（客戶裁示的對象是「參與 VaR 的序列」）。df 的日期範圍讀不出來時 **全部保留**
+    （寧可不算，也不因為判不了範圍就放過）。沒有這個鍵（含測試替身、其他來源）→ `()`。
+    """
+    from src.data.etf import PRICE_CLOSE_FFILLED_ATTR    # L3 → L1（常數）
+
+    _days = tuple(str(_d) for _d in
+                  ((getattr(df, "attrs", None) or {}).get(PRICE_CLOSE_FFILLED_ATTR) or ()))
+    if not _days:
+        return ()
+    _idx = getattr(df, "index", ())
+    _lo = _day_str(_idx.min()) if len(_idx) else ""
+    _hi = _day_str(_idx.max()) if len(_idx) else ""
+    if not (_lo and _hi):
+        return tuple(sorted(_days))
+    return tuple(sorted(_d for _d in _days if _lo <= _d <= _hi))
 
 
 def _day_str(value) -> str:
