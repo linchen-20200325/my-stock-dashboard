@@ -201,3 +201,41 @@ def test_mutation_revert_turns_red(monkeypatch):
     exec(compile(code.replace(new, old), m.__file__, 'exec'), m.__dict__)
     monkeypatch.setattr(F, 'fetch_price_data', lambda sid, days: (_df(inst_last=np.inf), 'X', ''))
     assert m.get_chips_readout('2330', days=120).outlier_verdict == m.OUTLIER_ANOMALY
+
+
+# ── E：`elif _reason == "ok" and _ratio is not None` 的行為測試（QA 補缺口）──
+#: 只還原 NORMAL 那一行的 pair（ANOMALY 那一行保留修後）
+Z47_OK_LINE_PAIR = ('    elif _reason == "ok" and _ratio is not None:\n',
+                    '    elif _reason == "ok":\n')
+
+
+def _df_inf_inst_and_vol():
+    d = _df(inst_last=np.inf)
+    d['volume'] = d['volume'].astype(float)
+    d.iloc[-1, d.columns.get_loc('volume')] = np.inf      # ratio = inf / inf = NaN、reason='ok'
+    return d
+
+
+def test_l2_precondition_nan_ratio_reason_ok():
+    from src.compute.risk.inst_sanity import flag_latest_inst_outlier_from_df
+    r = flag_latest_inst_outlier_from_df(_df_inf_inst_and_vol())
+    assert r.reason == 'ok' and not r.is_outlier and math.isnan(r.ratio)
+
+
+def test_nan_ratio_ok_not_judged_normal(monkeypatch):
+    card = _render(SVC, PI, _df_inf_inst_and_vol(), monkeypatch)
+    out = repr(card)
+    assert '判過了，沒有異常' not in out
+    assert 'nan' not in out.lower()
+
+
+def test_mutation_ok_line_only_turns_red(monkeypatch):
+    code = (_ROOT / _SVC).read_text(encoding='utf-8')
+    new, old = Z47_OK_LINE_PAIR
+    assert code.count(new) == 1, '替換點不唯一或已不存在'
+    m = types.ModuleType('_z47_pre_ok_line_only')
+    m.__file__ = str(_ROOT / _SVC)
+    sys.modules[m.__name__] = m
+    exec(compile(code.replace(new, old), m.__file__, 'exec'), m.__dict__)
+    out = repr(_render(m, PI, _df_inf_inst_and_vol(), monkeypatch))
+    assert '判過了，沒有異常' in out                     # 還原體：NaN 倍數被判成「沒有異常」
