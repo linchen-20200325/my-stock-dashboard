@@ -234,6 +234,9 @@ class Flag:
     #: **不改判燈**,只是把原因從中文 msg 裡抽成可程式判讀的欄位
     #: （解析 msg 字串太脆弱 —— 改一個字就壞）。
     miss_reason: str = ""
+    #: 批 Z50：True ＝ 這盞 ⚪ 是因為輸入**資料異常**（NaN／±inf／轉不成數字）才不判定，
+    #: 不是缺資料。結構化旗標，供下游排除正面結論（例：換入建議），⛔ 不解析 msg。
+    invalid: bool = False
 
 
 def health_a(total_return_1y_pct: float | None,
@@ -256,7 +259,8 @@ def health_a(total_return_1y_pct: float | None,
                                     ("配息率", annual_yield_pct))
             if SS.is_invalid_number(_v)]
     if _bad:
-        return Flag("⚪", "".join(SS.invalid_data_text(_i) for _i in _bad))
+        return Flag("⚪", "".join(SS.invalid_data_text(_i) for _i in _bad),
+                    invalid=True)
     if total_return_1y_pct is None and annual_yield_pct is None:
         return Flag("⚪", "A 資料不足（近一年報酬與配息率都缺）",
                     miss_reason=SS.most_fundamental_miss(
@@ -293,7 +297,15 @@ def health_b(sharpe: float | None) -> Flag:
 
 
 def health_c(weekly_close: pd.Series) -> Flag:
-    """C 趨勢防守：週收 < 13週季線 且 季線下彎 → 🟡 趨勢轉弱,暫停加碼。"""
+    """C 趨勢防守：週收 < 13週季線 且 季線下彎 → 🟡 趨勢轉弱,暫停加碼。
+
+    批 Z50（客戶 2026-10-13 裁示，沿用批 Z49 的處置）：最後一筆週收、13 週季線或其斜率、
+    或季線／斜率窗內（最後 14 筆）任一週收是 NaN／±inf → ⚪ 不判定（⛔ 不判 🟢 守穩、
+    ⛔ 不判 🟡 轉弱），`Flag.invalid=True`，說明用 `SS.INVALID_DATA_TEXT`、項目名取原始資料
+    「週收」（季線與斜率都由週收算出）；
+    `miss_reason` 留空（理由同 `health_a`）。修前 NaN／inf 的比較為 False → 亮 🟢
+    「週收 inf vs 季線 inf」。
+    """
     ma13 = week_ma(weekly_close, T.MA_QUARTER_WEEKS)
     slope = week_ma_slope(weekly_close, T.MA_QUARTER_WEEKS)
     if ma13 is None or slope is None:
@@ -301,6 +313,10 @@ def health_c(weekly_close: pd.Series) -> Flag:
         return Flag("⚪", f"C 週數不足（<{T.MA_QUARTER_WEEKS}週季線）",
                     miss_reason=SS.MISS_NOT_ENOUGH)
     close = float(weekly_close.iloc[-1])
+    # 季線與斜率實際用到的最後 N+1 筆（批 Z50 第 3 項：窗內任一筆異常也算，不讓 skipna 跳過）。
+    _used = tuple(weekly_close.iloc[-(T.MA_QUARTER_WEEKS + 1):])
+    if any(SS.is_invalid_number(_v) for _v in (close, ma13, slope, *_used)):
+        return Flag("⚪", SS.invalid_data_text("週收"), invalid=True)
     if close < ma13 and slope < 0:
         return Flag("🟡", f"趨勢轉弱：週收 {close:.2f} < 季線 {ma13:.2f} 且季線下彎 → 暫停加碼")
     return Flag("🟢", f"趨勢守穩：週收 {close:.2f} vs 季線 {ma13:.2f}")
@@ -313,7 +329,7 @@ def health_d(premium_pct: float | None) -> Flag:
     （`miss_reason` 留空，理由同 `health_a`）。
     """
     if SS.is_invalid_number(premium_pct):
-        return Flag("⚪", SS.invalid_data_text("折溢價"))
+        return Flag("⚪", SS.invalid_data_text("折溢價"), invalid=True)
     if premium_pct is None:
         return Flag("⚪", "D 無折溢價資料", miss_reason=SS.MISS_NO_INPUT)
     if premium_pct > T.PREMIUM_ALERT_PCT:
@@ -491,6 +507,10 @@ class Screen333:
     #: 會讓消費端誤以為它也缺（`in` 判斷就此失效）。
     #: 2026-08-25 新增。additive + 預設空 dict → 既有 positional 建構不受影響。
     miss_reasons: dict[str, str] = field(default_factory=dict)
+    #: 批 Z50：因輸入**資料異常**（NaN／±inf／轉不成數字）而不判定的子項
+    #: （`SS.KEY_SCREEN_*`，固定 成立 → 報酬 → 同儕 順序）。缺資料的 ❔ **不在**這裡
+    #: （那些在 `miss_reasons`）。結構化旗標，供下游排除正面結論，⛔ 不解析 `detail`。
+    invalid_keys: tuple[str, ...] = ()
 
 
 def screen_333(*, inception_years: float | None,
@@ -501,31 +521,47 @@ def screen_333(*, inception_years: float | None,
 
     peer_ranks: {月數: 百分位}(0=最強,1=最弱);None 或不齊 → 該項不可判定。
     三項須皆 True 才 passed；任一不可判定 → passed=False（§1 不足不放行）。
+
+    批 Z50（客戶 2026-10-13 裁示，沿用批 Z49 的處置）：某子項的輸入是 NaN／±inf／轉不成數字
+    → 該子項不可判定（❔，⛔ 不判 ✅、⛔ 不判 ❌；報酬項的年化與累積任一異常即整項不判，
+    不拿另一個值替代），`detail` 尾端附 `SS.INVALID_DATA_TEXT` 逐字句；該子項
+    **不登記** `miss_reasons`（理由同 `health_a`：`MISS_*` 講的都是「沒有值」）。
+    修前 NaN 比大小恆為 False、±inf 照大小比 → 照樣判 ✅／❌（QA 實測：成立／同儕 NaN 判 ❌、
+    年化 NaN 由累積撐成 ✅）。
     """
-    inception_ok = (None if inception_years is None
+    _peer_vals = ([peer_ranks.get(m) for m in T.PEER_WINDOWS_MONTHS] if peer_ranks else [])
+    #: (子項 key, 項目名)，依 成立 → 年化 → 累積 → 同儕 的固定順序。
+    _z50_bad: list[tuple[str, str]] = [(_k, _item) for _k, _item, _vs in (
+        (SS.KEY_SCREEN_INCEPTION, "成立年數", (inception_years,)),
+        (SS.KEY_SCREEN_RETURN, "近三年年化報酬", (ann_return_3y_pct,)),
+        (SS.KEY_SCREEN_RETURN, "近三年累積報酬", (cum_return_3y_pct,)),
+        (SS.KEY_SCREEN_PEER, "同儕排名", tuple(_peer_vals)))
+        if any(SS.is_invalid_number(_v) for _v in _vs)]
+    _bad_keys = {_k for _k, _item in _z50_bad}
+    _ret_bad = SS.KEY_SCREEN_RETURN in _bad_keys
+    inception_ok = (None if inception_years is None or SS.KEY_SCREEN_INCEPTION in _bad_keys
                     else inception_years >= T.MIN_INCEPTION_YEARS)
-    if ann_return_3y_pct is None and cum_return_3y_pct is None:
+    if (ann_return_3y_pct is None and cum_return_3y_pct is None) or _ret_bad:
         return_ok = None
     else:
         return_ok = ((ann_return_3y_pct is not None and ann_return_3y_pct >= T.MIN_ANN_RETURN_3Y_PCT)
                      or (cum_return_3y_pct is not None and cum_return_3y_pct >= T.MIN_CUM_RETURN_3Y_PCT))
     peer_ok = None
-    if peer_ranks:
-        _vals = [peer_ranks.get(m) for m in T.PEER_WINDOWS_MONTHS]
-        if all(v is not None for v in _vals):
-            peer_ok = all(v <= T.PEER_TOP_FRACTION for v in _vals)
+    if peer_ranks and SS.KEY_SCREEN_PEER not in _bad_keys:
+        if all(v is not None for v in _peer_vals):
+            peer_ok = all(v <= T.PEER_TOP_FRACTION for v in _peer_vals)
 
     # ── 三個 ❔ 各自的病因（**不影響 passed / 三個 ok 旗標**,只是說明）─────────
     _miss: dict[str, str] = {}
-    if inception_ok is None:
+    if inception_ok is None and SS.KEY_SCREEN_INCEPTION not in _bad_keys:
         # 成立年數算不出 = 上游沒給成立日/最早資料日。注意「年數不夠」不會走到這裡 ——
         # 那會算出 False（明確未過）,不是不可判定。故這裡是**輸入沒到**,不是資料不足。
         _miss[SS.KEY_SCREEN_INCEPTION] = SS.MISS_NO_INPUT
-    if return_ok is None:
+    if return_ok is None and not _ret_bad:
         # 年化與累積兩種算法**都**回 None → 上游取不到「3 年前那一天」的收盤,
         # 也就是日線歷史不足 3 年(新上市)。重跑不會生出歷史 → 是資料不足不是抓取失敗。
         _miss[SS.KEY_SCREEN_RETURN] = SS.MISS_NOT_ENOUGH
-    if peer_ok is None:
+    if peer_ok is None and SS.KEY_SCREEN_PEER not in _bad_keys:
         # 同儕不可判定有兩條上游路徑:
         #   (a) `peer_ranks` 整包缺 —— **主因**是同類 ETF 少於 `PEER_MIN_GROUP_SIZE`
         #       檔（分類表裡沒收這檔 → 直接 0 個同儕）,**少數**是同儕價格抓取失敗;
@@ -543,8 +579,14 @@ def screen_333(*, inception_years: float | None,
         f"3年報酬{'✅' if return_ok else ('❔' if return_ok is None else '❌')}",
         f"同儕前1/3{'✅' if peer_ok else ('❔' if peer_ok is None else '❌')}",
     ]
+    if _z50_bad:
+        parts.append("".join(SS.invalid_data_text(_i) for _k, _i in _z50_bad))
     return Screen333(passed=passed, inception_ok=inception_ok, return_ok=return_ok,
-                     peer_ok=peer_ok, detail="　".join(parts), miss_reasons=_miss)
+                     peer_ok=peer_ok, detail="　".join(parts), miss_reasons=_miss,
+                     invalid_keys=tuple(_k for _k in (SS.KEY_SCREEN_INCEPTION,
+                                                      SS.KEY_SCREEN_RETURN,
+                                                      SS.KEY_SCREEN_PEER)
+                                        if _k in _bad_keys))
 
 
 # ── 彙總單一標的 → 一列 ─────────────────────────────────────────────────
@@ -561,6 +603,10 @@ class HoldingAssessment:
     screen: Screen333
     worst_health: str                # 🔴/🟡/🟢/⚪ 取最嚴重
     asset_kind: str = T.KIND_ETF     # stock / etf（個股 D折溢價、3-3-3 不適用）
+    #: 批 Z50：因輸入**資料異常**而不判定的燈（規格表 key，固定 健檢A/B/C/D → 3-3-3 三子項
+    #: 的順序）。空 tuple ＝ 沒有異常。⚠️ `worst_health` 把 ⚪ 排最低（不改）—— 一盞異常 ⚪
+    #: 加三盞 🟢 仍是 🟢，下游要下**正面結論**（例：換入建議）前必須先看這一欄。
+    invalid_keys: tuple[str, ...] = ()
 
 
 def _worst_level(*flags: Flag) -> str:
@@ -619,10 +665,14 @@ def assess_holding(*, ticker: str, name: str, asset_class: str,
                                                SS.KEY_SCREEN_RETURN,
                                                SS.KEY_SCREEN_PEER)})
 
+    _invalid = tuple(_k for _k, _f in ((SS.KEY_HEALTH_A, fa), (SS.KEY_HEALTH_B, fb),
+                                       (SS.KEY_HEALTH_C, fc), (SS.KEY_HEALTH_D, fd))
+                     if _f.invalid) + sc.invalid_keys
     return HoldingAssessment(
         ticker=ticker, name=name, asset_class=asset_class, asset_kind=asset_kind,
         health_a=fa, health_b=fb, health_c=fc, health_d=fd,
-        light=lt, screen=sc, worst_health=_worst_level(fa, fb, fc, fd))
+        light=lt, screen=sc, worst_health=_worst_level(fa, fb, fc, fd),
+        invalid_keys=_invalid)
 
 
 def suggest_action(a: HoldingAssessment) -> str:
