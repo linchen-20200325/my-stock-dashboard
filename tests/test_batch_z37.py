@@ -89,8 +89,19 @@ def test_reverted_source_equals_base_file():
 # ══════════════════════════════════════════════════════════════════════════
 # 1. harness：FinMind 三大法人形狀 → build_leading_fast（其餘來源離線）
 # ══════════════════════════════════════════════════════════════════════════
+#: 固定「今天」＝ golden 錄製日 2026-10-10（週六）⇒ _D 恆為 10/06～10/09（表格「10月X日」標籤進 PRE_GOLDEN sha）。
+#: `build_leading_fast` 以 `datetime.date.today()` 決定取數窗口 ⇒ `_patch` 讓 production 看到同一天（測試不隨執行日飄）。
+_TODAY = dt.date(2026, 10, 10)
+
+
+class _FixedDate(dt.date):
+    @classmethod
+    def today(cls):
+        return _TODAY
+
+
 def _weekdays(n: int) -> list[dt.date]:
-    out, d = [], dt.date.today()
+    out, d = [], _TODAY
     while len(out) < n:
         d -= dt.timedelta(days=1)
         if d.weekday() < 5:
@@ -188,6 +199,7 @@ def _patch(mp, df_inst, tmp_path, mod=LI):
         for k in _OFFLINE:
             mp.setattr(m, k, fakes[k])
     mp.setattr(LI.time, 'sleep', lambda s: None)
+    mp.setattr(dt, 'date', _FixedDate)                      # production `_dt.date.today()` ＝ _TODAY
     mp.setattr(CL, '_PKL_DIR', str(tmp_path))
 
 
