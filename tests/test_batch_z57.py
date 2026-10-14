@@ -180,7 +180,8 @@ class TestGreyWhyMatchesBehaviour:
 
     def test_text_states_the_real_condition_and_no_false_order_claim(self):
         why = P.reconcile_not_triggered_why(RS.RECONCILE_SESSION_KEYS)
-        assert "`jingqi_info` 不存在或為空（`None`、空 dict）時改讀 `warroom_summary['jingqi_avg']`" in why
+        # 批 Z58（Z57-n1）：「為空」→「為假值（如 …）」—— `if _jq_info:` 對任何假值都改讀 warroom。
+        assert "`jingqi_info` 不存在或為假值（如 `None`、空 dict）時改讀 `warroom_summary['jingqi_avg']`" in why
         assert "依讀取順序" not in why and "不存在時讀" not in why
         assert "（依對帳列順序）" in why
 
@@ -206,7 +207,7 @@ class TestGreyWhyMatchesBehaviour:
             "三列對帳都是「未觸發」—— 每一列都至少缺一邊的值。對帳讀的是（依對帳列順序）："
             "`macro_info['us10y']['value']`、`cl_data['intl']['10Y公債殖利率']`、"
             "`t2_data['rev_yoy_self']`／`t2_data['rev_yoy_finmind']`、"
-            "`jingqi_info['avg']`（`jingqi_info` 不存在或為空（`None`、空 dict）時改讀 "
+            "`jingqi_info['avg']`（`jingqi_info` 不存在或為假值（如 `None`、空 dict）時改讀 "
             "`warroom_summary['jingqi_avg']`）、"
             "`mkt_info['score']`、`mkt_info['max_score']`、`cl_data['inst']` 外資 net")
 

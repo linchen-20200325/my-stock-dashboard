@@ -1060,9 +1060,12 @@ def indicator_state(rec: Mapping[str, Any], spec: Any, *, requested: bool,
     理由**（總管 2026-09-07 裁定）。同源 ⇒ 讀側車零收益；多一條路 ⇒
     多一個可以讓 L0 說謊的入口。**收益為零、風險為正，就不要留那條路。**
 
-    ⚠️ 冷啟動時側車是空的：讀 `spec` 讓 `foreign_net`（`wired=False`）
-    照樣畫成「未接線」而不是「尚未載入」—— 它**永遠不會載入**，處置完全不同，
-    且線框的灰態原文明寫 `0／16 …（無資料 15 · **未接線 1**）`。
+    ⚠️ 冷啟動時側車是空的：讀 `spec` 讓 `wired=False` 的燈照樣畫成「未接線」而不是
+    「尚未載入」—— 它**永遠不會載入**，處置完全不同（線框的灰態原文寫
+    `0／16 …（無資料 15 · **未接線 1**）`，那個 1 指的是當時的 `foreign_net`）。
+    批 Z58 更正（事實更正）：上面原寫「讓 `foreign_net`（`wired=False`）照樣畫成未接線」，
+    但 `foreign_net` 已於 2026-09-27 接線（`shared/macro_buckets.py` 該 `DangerSpec` 的註解），
+    現行規格表**沒有** `wired=False` 的燈；這條讀 `spec` 的路仍保留給日後任何 `wired=False` 的燈。
     """
     _reason = _sidecar_reason(rec)   # 批 Z4 D4-n2：被擋值全是非有限值 → no_value
     _has_value = rec.get("state") == "ok" and rec.get("value") is not None

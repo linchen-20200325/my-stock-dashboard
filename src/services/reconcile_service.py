@@ -12,7 +12,9 @@
 對帳），只有兩處刻意不同：
 
 1. **旌旗指數 `jqavg` 改為 `jingqi_info` 優先**（`warroom_summary['jingqi_avg']` 只在 `jingqi_info`
-   不存在或為空（`None`、空 dict）時才用；`jingqi_info` 非空但沒有 `avg` ⇒ 缺值，⛔ 不退回 warroom）。
+   不存在或為假值（如 `None`、空 dict）時才用；`jingqi_info` 為真值但沒有 `avg` ⇒ 缺值，⛔ 不退回 warroom）。
+   📌 批 Z58（Z57-n1，事實更正）：Z57 寫「不存在或為空（`None`、空 dict）」仍不精確 ——
+   `if _jq_info:` 對**任何假值**（`0`、`""`、`[]`…）都改讀 warroom，故改為「假值」措辭；程式行為未動。
    📌 批 Z57（有意識的更正，⛔ 不是漏刪）：原句「只在 `jingqi_info` 不存在時才用」與程式條件
    `if _jq_info:` 不符（空 dict 也會改讀 warroom）—— 只改文字使其屬實，程式行為未動。理由：新 UI「🚀 更新今日戰情」（L3 `macro_refresh_service.refresh_macro_now`）
    會寫 `jingqi_info`、**不寫** `warroom_summary`；舊面板先讀 warroom，會吃到舊「🌍 總經」分頁
@@ -85,7 +87,7 @@ RECONCILE_SESSION_KEYS: tuple[SessionRead, ...] = (
     SessionRead(ROW_REV_YOY, ("t2_data",),
                 "`t2_data['rev_yoy_self']`／`t2_data['rev_yoy_finmind']`"),
     SessionRead(ROW_HEALTH, ("jingqi_info", "warroom_summary"),
-                "`jingqi_info['avg']`（`jingqi_info` 不存在或為空（`None`、空 dict）時改讀 "
+                "`jingqi_info['avg']`（`jingqi_info` 不存在或為假值（如 `None`、空 dict）時改讀 "
                 "`warroom_summary['jingqi_avg']`）"),
     SessionRead(ROW_HEALTH, ("mkt_info",), "`mkt_info['score']`、`mkt_info['max_score']`"),
     SessionRead(ROW_HEALTH, ("cl_data",), "`cl_data['inst']` 外資 net"),
@@ -195,8 +197,9 @@ def health_inputs(session: Mapping[str, Any]) -> dict[str, Any]:
 
     · `jq`：`jingqi_info` 存在（非空）就**只用它**的 `avg` —— 沒有 `avg` 時該值為缺值，
       ⛔ 不退回 warroom（新 UI 路徑不寫 warroom，那裡可能是舊頁籤殘留的過期值；同
-      `section_inputs.build_section_inputs`）；`jingqi_info` 不存在或為空（`None`、空 dict）時才採用
-      `warroom_summary['jingqi_avg']`（批 Z57 文字更正：原寫「不存在時」，與 `if _jq_info:` 不符）。
+      `section_inputs.build_section_inputs`）；`jingqi_info` 不存在或為假值（如 `None`、空 dict）時才採用
+      `warroom_summary['jingqi_avg']`（批 Z57 文字更正：原寫「不存在時」，與 `if _jq_info:` 不符；
+      批 Z58 再更正：Z57 的「為空」不涵蓋 `0`／`""`／`[]` 等其他假值，改為「假值」）。
     · `score` / `max_score`：`mkt_info` 原值。
     · `fnet`：`cl_data['inst']` 第一個含「外資」的鍵的 `net`；**未觀測**（`is_net_observed` 為 False，
       L1 預填 0.0／L3 補零推出）⇒ `None`（同舊面板批 Z33）。

@@ -214,6 +214,8 @@ _ALLOWED_L3: frozenset[tuple[str, str]] = frozenset({
     ("src.services.dividend_station_service", "compute_portfolio_totals"),
     ("src.services.dividend_station_service", "get_switch_in_candidates"),
     ("src.services.dividend_station_service", "build_switch_advice"),
+    # 批 Z58：觀察清單列健檢資料異常（純函式，只讀 rows，不寫任何東西）。
+    ("src.services.dividend_station_service", "switch_in_invalid_rows"),
     ("src.services.dividend_station_service", "fetch_vix"),
     ("src.services.dividend_station_service", "get_station_macro"),
     # ⑥ 組合深度分析（FE-19 新增）—— 它自己也受
