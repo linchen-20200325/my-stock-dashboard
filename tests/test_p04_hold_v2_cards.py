@@ -155,9 +155,11 @@ def _enumerate():
     add(P.build_macro_stage_card, P.MacroReadout(
         requested=True, loaded=True, regime="bull", health=60.0, posture_label="積極",
         posture_range="30-50%", defense=False))
+    # 📌 批 Z65 QA（有意識的修改）：live 的前提多了「有有效系統風險上限」（客戶 Q-z34～36）；
+    #   沒有上限的那一態（「建議持股：無法判定」）由下方 product 迴圈的 is_loaded=True 產生。
     add(P.build_position_cap_card, P.AllocationReadout(
         requested=True, is_loaded=True, range_text="30-50%", posture="中性",
-        cap_name="VIX", drivers=("a",), conflicts=("b",)))
+        cap_name="VIX", drivers=("a",), conflicts=("b",), has_risk_cap=True))
     add(P.build_holdings_preview_card, P.HoldingsReadout(
         requested=True, submitted=True, bound=True, portfolio_name="p", watchlist_name="w",
         more_portfolios=True, watchlist_error="E",

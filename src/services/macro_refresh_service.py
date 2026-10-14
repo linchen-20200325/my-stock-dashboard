@@ -995,11 +995,17 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
     #   （registry 掃描不讀本步驟的任何產出）。
     # ⚠️ 本步驟**不寫 session**（`STEP_WRITES[STEP_RISK_CAP] == ()`），只寫檔
     #   （`STEP_FILE_WRITES`）。仍包 `_writes_recorded`：哪天它開始寫 session，寫入對帳會當場抓到。
-    _trio_ok = any(_t.name == STEP_TRIO and _t.ok for _t in _steps)
+    # 📌 批 Z65 QA：TRIO 是否寫齊以**實際量到的寫入**判定（三個子任務各有 truthy guard，
+    #   步驟 `ok=True` 不代表三個 key 都更新了）；沒寫齊 ⇒ 揭露本輪用的是 session 既有的哪幾個值。
+    _trio_written = _writes.get(STEP_TRIO, [])
+    _trio_missing = [_k for _k in STEP_WRITES[STEP_TRIO] if _k not in _trio_written]
+    _trio_ok = len(_trio_written) == len(STEP_WRITES[STEP_TRIO])
     _rc_inputs_note = _stale_inputs_note + (
         "" if _trio_ok else
-        "；⚠️ M1B-M2 / 年線乖離 / 6 源總經快照這一輪沒有成功：`macro_info` / `bias_info` / "
-        "`m1b_m2_info` 是 session **現有**的（可能是上一輪的值，或根本沒有；過期者由新鮮度規則判不計分）")
+        "；⚠️ M1B-M2 / 年線乖離 / 6 源總經快照這一輪沒寫齊（沒寫到："
+        + "、".join(f"`{_k}`" for _k in _trio_missing)
+        + "）：本輪用的是 session 既有的 " + "、".join(f"`{_k}`" for _k in _trio_missing)
+        + " 值（可能是上一輪的值，或根本沒有；過期者由新鮮度規則判不計分）")
     try:
         from shared.staleness import MACRO_VERDICT_MAX_AGE_DAYS
         from src.services.risk_cap_apply import compute_and_lock_risk_cap
@@ -1020,7 +1026,7 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
         else:
             _step(STEP_RISK_CAP, True,
                   f"{_rc.reason}（既有 macro_state.json 若在 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內，"
-                  "卡①仍沿用它的上限；過期或不存在 ＝ 沒有這條天花板）"
+                  "卡①仍沿用它的上限；過期或不存在時，新頁的建議持股顯示「無法判定」）"
                   + _rc_inputs_note,
                   skipped=True)
     except Exception as _e:  # noqa: BLE001 — 例外已由 risk_cap_apply 原樣拋出；此處據實記成失敗

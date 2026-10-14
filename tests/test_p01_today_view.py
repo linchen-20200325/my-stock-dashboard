@@ -80,6 +80,12 @@ class _Alloc:
         self.drivers = ("總經健康分 62 → 姿態「中性偏多」",) if is_loaded else ()
         self.cap_text = ""
         self.conflicts = ()
+        # 📌 批 Z65 QA（有意識的修改，⛔ 不是放寬）：客戶規則「取不到有效的系統風險上限 → 建議持股
+        #   『無法判定』」落地後，卡① live 的前提多了一條：allocation 的 `caps` 要有「系統風險上限」。
+        #   替身預設帶一條（=真實 `get_allocation` 在有有效上限時的形狀），本檔守的其他東西不變；
+        #   「沒有上限 → 無法判定」由 tests/test_batch_z65.py 正反向釘住。
+        from shared.allocation_decision import Cap
+        self.caps = ((Cap("系統風險上限", 60, "test"),) if is_loaded else ())
 
 
 def _tiles(**kw):
@@ -618,7 +624,13 @@ class TestDegradedRegimeIsNotCalledUnevaluated:
 
         _mine = _tiles(regime=DEGRADED_REGIME)["verdict.regime"].card.note
         _ssot = build_status_bar_card(DEGRADED_REGIME).note
-        assert (_mine.now, _mine.why) == (_ssot.now, _ssot.why), "兩份文案漂開了＝兩種解釋"
+        # 📌 批 Z65 QA（有意識的修改，⛔ 不是放寬）：`why` 也是例外 —— 對面那句「AI 鎖定快照……
+        #   上一次鎖的結論，不是這一輪算的」自 Z65 起在本頁不屬實（同一輪 `STEP_RISK_CAP` 就可能
+        #   寫檔，且檔案由規則引擎產生）。本頁換成 `P.SNAPSHOT_SOURCE_WHY`；`now` 仍逐字等於對面，
+        #   `why` 改釘「恰為對面那句經 `snapshot_why_retargeted` 的結果」（前提自證：真的被換掉）。
+        assert _mine.now == _ssot.now, "兩份文案漂開了＝兩種解釋"
+        assert _mine.why == P.snapshot_why_retargeted(_ssot.why) == P.SNAPSHOT_SOURCE_WHY
+        assert _ssot.why != P.SNAPSHOT_SOURCE_WHY, "前提變了：對面快照態的 why 被改過"
         assert _mine.where is P.EXIT_RETRY_HERE, (
             "卡③ degraded 的出口必須是「按本頁按鈕可重抓」（Z60 起按鈕寫得到 warroom）")
         assert _ssot.where is CONTRACT_NO_EXIT_WHERE, "前提變了：對面 degraded 的出口被改過"

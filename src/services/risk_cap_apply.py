@@ -20,7 +20,8 @@
      本路徑薩姆一律送 None ⇒ 等同「8 項全缺」）；
   2. `exposure_limit_pct` 不是有限數（含 bool）。
 此時**一個位元組都不寫**：既有 `macro_state.json` 若仍在 `MACRO_VERDICT_MAX_AGE_DAYS` 內，
-`get_macro_state()` 照舊讀到那一次的有效上限；過期或不存在 ＝ 沒有這條天花板（既有行為）。
+`get_macro_state()` 照舊讀到那一次的有效上限；過期或不存在時，`get_macro_state()` 不給上限，
+新頁的建議持股顯示「無法判定」（客戶 Q-z34～36 規則；`src/ui/views/risk_cap_gate.py`）。
 ⛔ 不寫一份 fail-safe 檔去蓋掉它 —— 那等於把「這一輪沒資料」變成「上一次的有效上限被刪掉」。
 
 ═══ 與舊 UI 寫檔的關係 ═════════════════════════════════════════════════
@@ -68,8 +69,8 @@ ATTACHED_KEYS: tuple[str, ...] = ("engine_source", "input_detail", "m1b_m2_data_
 #: 無法計算的兩種原因（步驟報告與回傳值共用，⛔ 不在呼叫端另寫一份）。
 REASON_FAIL_SAFE: str = (
     "規則引擎 8 項數值輸入本輪全部無法計分（未取得或已過期）→ 引擎回 fail-safe「系統異常」；"
-    "本輪無法計算，未覆寫既有上限")
-REASON_NOT_FINITE: str = "引擎回傳的曝險上限不是有限數（{value!r}）；本輪無法計算，未覆寫既有上限"
+    "本輪無法計算，不寫檔（既有檔若有，保留不動）")
+REASON_NOT_FINITE: str = "引擎回傳的曝險上限不是有限數（{value!r}）；本輪無法計算，不寫檔（既有檔若有，保留不動）"
 
 #: 紅線 reason 內的非有限值 repr（`nan` / `inf` / `-inf` / `infinity`）→ 改寫成這幾個字。
 #: 只改字面、不改語意：上游值是 NaN 時，Z64 的 reason 會帶「（nan）」，落檔後讀者分不出那是

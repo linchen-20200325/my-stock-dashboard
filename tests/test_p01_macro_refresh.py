@@ -884,6 +884,7 @@ class TestOutOfReachIsMeasured:
                  "src/services/market_assessment_apply.py",
                  "src/services/macro_trio_orchestrator.py",
                  "src/services/warroom_apply.py",           # 批 Z60 新接的那一步
+                 "src/services/risk_cap_apply.py",          # 批 Z65 新接的那一步（0 個 session key）
                  "src/services/data_registry_scanner.py")
         _keys: set[str] = set()
         for _rel in _mods:

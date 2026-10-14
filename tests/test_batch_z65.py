@@ -369,7 +369,7 @@ class TestComputeAndLock:
         assert get_macro_state(None, state_file_path=str(f), now=NOW)["exposure_limit_pct"] == 30
         res = RC.compute_and_lock_risk_cap({}, now=NOW, state_file_path=str(f))
         assert not res.written and res.reason == RC.REASON_FAIL_SAFE
-        assert "本輪無法計算，未覆寫既有上限" in res.reason
+        assert "本輪無法計算，不寫檔（既有檔若有，保留不動）" in res.reason
         assert res.engine_result["veto_flags"]["fail_safe"] is True
         assert f.read_bytes() == before
         assert get_macro_state(None, state_file_path=str(f), now=NOW)["exposure_limit_pct"] == 30
@@ -471,7 +471,7 @@ class TestComputeAndLock:
 # 3. refresh 整合（risk_cap_apply 用真的，其餘外部相依換替身）
 # ══════════════════════════════════════════════════════════════════════════
 def _run_refresh(monkeypatch, tmp_path, *, session=None, pmi_hist=None, risk_cap=None,
-                 registry_ok=True):
+                 registry_ok=True, trio_keys=()):
     import src.services.data_registry_scanner as _REG
     import src.services.jingqi_calc as _JQ
     import src.services.macro_fetch_orchestrator as _ORCH
@@ -503,7 +503,12 @@ def _run_refresh(monkeypatch, tmp_path, *, session=None, pmi_hist=None, risk_cap
     monkeypatch.setattr(_ORCH, "fetch_macro_bundle", _bundle)
     monkeypatch.setattr(_APPLY, "apply_macro_bundle", lambda *a, **k: ({}, ()))
     monkeypatch.setattr(_JQ, "compute_and_store_jingqi", lambda df: order.append("jingqi"))
-    monkeypatch.setattr(_TRIO, "run_macro_trio_and_persist", lambda **k: order.append("trio"))
+    def _trio(**k):
+        order.append("trio")
+        for _k in trio_keys:       # 照真模組寫法：整個 key 重新賦值（量測以 id 判寫入）
+            fake.session_state[_k] = copy.copy(fake.session_state.get(_k)) \
+                if isinstance(fake.session_state.get(_k), dict) else {"v": 1}
+    monkeypatch.setattr(_TRIO, "run_macro_trio_and_persist", _trio)
     monkeypatch.setattr(_MKT, "compute_and_apply_market_assessment",
                         lambda **k: order.append("market"))
 
@@ -566,7 +571,8 @@ class TestRefreshIntegration:
         r, _, _ = _run_refresh(monkeypatch, tmp_path, session={})
         s = _step(r, RS.STEP_RISK_CAP)
         assert s.ok and s.skipped
-        assert "本輪無法計算，未覆寫既有上限" in s.detail and "7 天有效期" in s.detail
+        assert "本輪無法計算，不寫檔（既有檔若有，保留不動）" in s.detail and "7 天有效期" in s.detail
+        assert "新頁的建議持股顯示「無法判定」" in s.detail
         assert (tmp_path / "macro_state.json").read_bytes() == before
         assert r.ok   # skipped 不算失敗（綠燈另由 refresh_is_clean 排除 skipped）
 
@@ -788,3 +794,270 @@ class TestMutations:
         mod = _mutated_module("src/services/macro_refresh_service.py",
                               ("    STEP_RISK_CAP: (),\n", ""))
         assert mod.STEP_RISK_CAP not in mod.STEP_WRITES   # 原版 test_declarations 必紅
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7. 批 Z65 QA 追加
+# ══════════════════════════════════════════════════════════════════════════
+_TRIO_ALL = ("m1b_m2_info", "bias_info", "macro_info")
+_STALE_PHRASES = ("不是這一輪算的", "AI 鎖定")
+
+
+def _as_session(monkeypatch, session: dict):
+    from src.services import allocation_service as AS
+    from tests.test_m2n2_no_zero_fill import _FakeST as _ASFake
+    monkeypatch.setattr(AS, "st", _ASFake(copy.deepcopy(session)))
+    return AS
+
+
+def _today_tiles(AS, P):
+    alloc, regime = AS.get_allocation(), AS.get_macro_regime()
+    tiles = {t.card.key: t for t in P.build_verdict_tiles(
+        alloc=alloc, alloc_error="", danger=None, danger_error="",
+        danger_requested=False, regime=regime, regime_error="")}
+    return tiles, alloc, regime
+
+
+_WR_LIVE = {"traffic_light": "🟢 多頭市場", "health_score": 90.0, "regime": "bull",
+            "effective_regime": "bull", "light": "🟢", "regime_source": "test"}
+_WR_NO_HEALTH = dict(_WR_LIVE, health_score=None)
+
+
+class TestB1SnapshotWhy:
+    """先寫檔、warroom 健康分缺 ⇒ 位階走規則引擎快照（degraded）：why 屬實、無「不是這一輪算的」「AI 鎖定」。"""
+
+    def _setup(self, l1, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        kw = _inputs()
+        l1(kw["pmi_history"])
+        assert RC.compute_and_lock_risk_cap(_session_from(kw), now=NOW).written
+        return _as_session(monkeypatch, {"warroom_summary": dict(_WR_NO_HEALTH)})
+
+    def _whys(self, AS, P):
+        from src.ui.tabs.tab_today import build_status_bar_cards, build_today_blocks
+        from shared.regime_arbiter import SOURCE_FILE_RULE_ENGINE
+        tiles, alloc, regime = _today_tiles(AS, P)
+        assert regime["source"] == SOURCE_FILE_RULE_ENGINE and regime["is_loaded"]   # 前提自證
+        bar = {c.key: P.contract_exit_retargeted(c) for c in build_status_bar_cards(regime)}
+        blocks = {b.key: b for b in build_today_blocks(macro_state=regime)}
+        summ = {t.card.key: t for t in P.build_summary_tiles(
+            blocks["today.summary"].cards, danger=None, danger_error="",
+            danger_requested=False)}
+        return {"card3": tiles["verdict.regime"].card.note,
+                "statusbar": bar["statusbar.macro"].note,
+                "summary": summ["summary.regime"].card.note,
+                "card1": tiles["verdict.exposure"].card.note}, alloc
+
+    def test_snapshot_why_is_truthful(self, l1, tmp_path, monkeypatch):
+        from src.ui.views import page_today as P
+        AS = self._setup(l1, tmp_path, monkeypatch)
+        notes, alloc = self._whys(AS, P)
+        for name in ("card3", "statusbar", "summary"):
+            n = notes[name]
+            assert n.why == P.SNAPSHOT_SOURCE_WHY, name
+            assert not any(x in n.why for x in _STALE_PHRASES), name
+            assert "規則引擎快照" in n.why and "本輪按鈕剛寫的" in n.why
+            assert n.where is P.EXIT_RETRY_HERE, name
+            assert "快照" in n.now   # now 不動（沿用對面）
+
+    def test_card1_unloaded_why_is_not_universal(self, l1, tmp_path, monkeypatch):
+        from src.ui.views import page_today as P
+        AS = self._setup(l1, tmp_path, monkeypatch)
+        notes, alloc = self._whys(AS, P)
+        assert not alloc.is_loaded
+        why = notes["card1"].why
+        assert "兩條來源本輪都沒有值" not in why
+        assert "總經健康分本輪沒有值" in why and "有系統風險上限" in why
+        assert notes["card1"].where is P.EXIT_RETRY_HERE
+
+    def test_card1_unloaded_why_when_nothing(self, monkeypatch, tmp_path):
+        from src.ui.views import page_today as P
+        monkeypatch.chdir(tmp_path)
+        AS = _as_session(monkeypatch, {"warroom_summary": dict(_WR_NO_HEALTH)})
+        tiles, _, _ = _today_tiles(AS, P)
+        # 兩條來源都沒有 ⇒ 契約 `source=unloaded` ⇒ 走既有 idle 那一句（「還沒叫」），不是本 helper
+        assert tiles["verdict.exposure"].card.state == P.UI_IDLE
+        why = P._alloc_unloaded_why({"health": None, "exposure_limit_pct": None})
+        assert "總經健康分本輪沒有值" in why and "也沒有有效值" in why
+        assert P._alloc_unloaded_why(None).startswith("L3 建議持股契約回報未評估")
+
+    def test_mutant_why_not_retargeted(self, l1, tmp_path, monkeypatch):
+        """突變：拿掉 why 的換句 → 狀態列／三欄摘要／卡③ 回到「AI 鎖定……不是這一輪算的」。"""
+        from src.ui.views import page_today as P
+        mod = _mutated_module("src/ui/views/page_today.py", (
+            '    return SNAPSHOT_SOURCE_WHY if why and why == _tab_today_snapshot_why() else why',
+            '    return why'))
+        AS = self._setup(l1, tmp_path, monkeypatch)
+        notes, _ = self._whys(AS, mod)
+        for name in ("card3", "statusbar", "summary"):
+            assert any(x in notes[name].why for x in _STALE_PHRASES), name
+        assert P.SNAPSHOT_SOURCE_WHY not in notes["card3"].why
+
+
+_PCT = re.compile(r"\d+\s*[%％]|\d+\s*[-–~～]\s*\d+")
+
+
+def _no_pct(*texts):
+    for t in texts:
+        assert not _PCT.search(str(t or "")), t
+
+
+class TestNoRiskCapMeansUndetermined:
+    """客戶 Q-z34～36：新頁取不到有效系統風險上限 → 建議持股「無法判定」（灰），不印任何百分比。"""
+
+    def _gate_asserts(self, P, tile):
+        c = tile.card
+        assert c.state == P.UI_EMPTY and c.value in (None, "")
+        assert "無法判定" in c.note.now and c.note.why == P.RISK_CAP_UNAVAILABLE_WHY
+        assert c.note.where is P.EXIT_RETRY_HERE
+        _no_pct(c.note.now, c.note.why, c.value, tile.signal_text,
+                *[v for _k, v in (tile.facts or ())])
+
+    def _scenario(self, monkeypatch, tmp_path, kind, l1=None):
+        monkeypatch.chdir(tmp_path)
+        f = tmp_path / "macro_state.json"
+        if kind == "expired":
+            data = {"market_regime": "多頭", "systemic_risk_level": "安全", "exposure_limit_pct": 80,
+                    "Macro_Phase": "環境正常",
+                    "timestamp": (datetime.now(TPE) - timedelta(days=30)).strftime(MSL._TIMESTAMP_FMT)}
+            f.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        elif kind == "fail_safe":
+            res = RC.compute_and_lock_risk_cap({}, now=NOW)
+            assert not res.written and not f.exists()
+        elif kind == "valid":
+            kw = _inputs()
+            l1(kw["pmi_history"])
+            assert RC.compute_and_lock_risk_cap(_session_from(kw), now=NOW).written
+        return _as_session(monkeypatch, {"warroom_summary": dict(_WR_LIVE)})
+
+    @pytest.mark.parametrize("kind", ["missing", "expired", "fail_safe"])
+    def test_today_card1_undetermined(self, l1, monkeypatch, tmp_path, kind):
+        from src.ui.views import page_today as P
+        AS = self._scenario(monkeypatch, tmp_path, kind)
+        tiles, alloc, regime = _today_tiles(AS, P)
+        assert alloc.is_loaded and alloc.final_hi is not None   # 前提：共用層照舊算得出區間（未改）
+        assert regime["exposure_limit_pct"] is None
+        self._gate_asserts(P, tiles["verdict.exposure"])
+
+    @pytest.mark.parametrize("kind", ["missing", "expired", "fail_safe"])
+    def test_hold_position_cap_undetermined(self, l1, monkeypatch, tmp_path, kind):
+        from src.ui.views import page_hold as PH
+        self._scenario(monkeypatch, tmp_path, kind)
+        card, facts, sig = PH.build_position_cap_card(
+            PH.load_allocation(PH.HoldRequest(submitted=True)))
+        assert card.state == PH.UI_EMPTY and card.note.now == PH.RISK_CAP_UNAVAILABLE_NOW
+        assert card.note.why == PH.RISK_CAP_UNAVAILABLE_WHY and sig == ""
+        _no_pct(card.note.now, card.note.why, card.value, *[v for _k, v in facts])
+
+    def test_valid_cap_regression(self, l1, monkeypatch, tmp_path):
+        from src.ui.views import page_hold as PH
+        from src.ui.views import page_today as P
+        AS = self._scenario(monkeypatch, tmp_path, "valid", l1)
+        tiles, alloc, _ = _today_tiles(AS, P)
+        assert tiles["verdict.exposure"].card.state == P.UI_LIVE
+        assert tiles["verdict.exposure"].card.value == alloc.range_text
+        card, _, _ = PH.build_position_cap_card(PH.load_allocation(PH.HoldRequest(submitted=True)))
+        assert card.state == PH.UI_LIVE and card.value == alloc.range_text
+
+    def test_cap_name_matches_shared_layer(self):
+        from shared.allocation_decision import build_allocation_decision
+        from src.ui.views.risk_cap_gate import SYSTEM_RISK_CAP_NAME, has_system_risk_cap
+        d = build_allocation_decision({"is_loaded": True, "regime": "bull", "health": 80.0,
+                                       "defense": False, "exposure_limit_pct": 40})
+        assert has_system_risk_cap(d.caps)
+        assert [c.name for c in d.caps] == [SYSTEM_RISK_CAP_NAME]
+        d2 = build_allocation_decision({"is_loaded": True, "regime": "bull", "health": 80.0,
+                                        "defense": False, "exposure_limit_pct": None})
+        assert not has_system_risk_cap(d2.caps) and d2.final_hi is not None
+
+    def test_mutant_today_gate_removed(self, monkeypatch, tmp_path):
+        mod = _mutated_module("src/ui/views/page_today.py", (
+            "    if _alloc_state == UI_LIVE and not has_system_risk_cap(getattr(alloc, \"caps\", ())):",
+            "    if False:"))
+        AS = self._scenario(monkeypatch, tmp_path, "missing")
+        tiles, alloc, _ = _today_tiles(AS, mod)
+        c = tiles["verdict.exposure"].card
+        assert c.state == mod.UI_LIVE and c.value == alloc.range_text   # 突變體照印區間 ⇒ 原版守衛必紅
+
+    def test_mutant_hold_gate_removed(self, monkeypatch, tmp_path):
+        mod = _mutated_module("src/ui/views/page_hold.py", (
+            "    if _state == UI_LIVE and not alloc.has_risk_cap:", "    if False:"))
+        self._scenario(monkeypatch, tmp_path, "missing")
+        card, _, _ = mod.build_position_cap_card(mod.load_allocation(mod.HoldRequest(submitted=True)))
+        assert card.state == mod.UI_LIVE
+
+
+class TestTrioDisclosure:
+    """`_trio_ok` 以實際寫入判定；沒寫齊 ⇒ RISK_CAP 報告揭露用的是 session 既有的哪幾個值。"""
+
+    def test_partial_trio_disclosed_in_written_branch(self, monkeypatch, tmp_path):
+        kw = _inputs()
+        r, _, _ = _run_refresh(monkeypatch, tmp_path, session=_session_from(kw),
+                               pmi_hist=kw["pmi_history"], trio_keys=("m1b_m2_info",))
+        assert _step(r, RS.STEP_TRIO).ok        # 前提：TRIO 步驟本身「成功」
+        s = _step(r, RS.STEP_RISK_CAP)
+        assert s.ok and not s.skipped and "已寫入 macro_state.json" in s.detail
+        assert "沒寫齊" in s.detail and "`bias_info`" in s.detail and "`macro_info`" in s.detail
+        assert "本輪用的是 session 既有的" in s.detail
+        assert "`m1b_m2_info`" not in s.detail
+
+    def test_full_trio_no_note(self, monkeypatch, tmp_path):
+        kw = _inputs()
+        r, _, _ = _run_refresh(monkeypatch, tmp_path, session=_session_from(kw),
+                               pmi_hist=kw["pmi_history"], trio_keys=_TRIO_ALL)
+        assert "沒寫齊" not in _step(r, RS.STEP_RISK_CAP).detail
+
+    def test_skipped_branch_also_discloses(self, monkeypatch, tmp_path):
+        r, _, _ = _run_refresh(monkeypatch, tmp_path, session={}, trio_keys=())
+        s = _step(r, RS.STEP_RISK_CAP)
+        assert s.skipped and "沒寫齊" in s.detail
+
+    def _mutant_run(self, monkeypatch, tmp_path, swap):
+        mod = _mutated_module("src/services/macro_refresh_service.py", swap)
+        kw = _inputs()
+        _run_refresh(monkeypatch, tmp_path, session=_session_from(kw), pmi_hist=kw["pmi_history"],
+                     trio_keys=("m1b_m2_info",))         # 只為掛好替身與 L1 mock
+        monkeypatch.setattr(mod, "st", RS.st)
+        monkeypatch.setattr(mod, "_utc_now", lambda: NOW)
+        r = mod.refresh_macro_now(mode=mod.MODE_WARM)
+        return [x for x in r.steps if x.name == mod.STEP_RISK_CAP][0]
+
+    def test_m11_trio_ok_always_true(self, monkeypatch, tmp_path):
+        s = self._mutant_run(monkeypatch, tmp_path, (
+            "    _trio_ok = len(_trio_written) == len(STEP_WRITES[STEP_TRIO])",
+            "    _trio_ok = True"))
+        assert "沒寫齊" not in s.detail    # 突變體吞掉揭露 ⇒ 原版 test_partial_trio_disclosed 必紅
+
+    def test_m16_written_branch_drops_note(self, monkeypatch, tmp_path):
+        s = self._mutant_run(monkeypatch, tmp_path, (
+            '                  + "；薩姆規則目前無資料來源、未評估（不代表已通過）"\n'
+            '                  + _rc_inputs_note)',
+            '                  + "；薩姆規則目前無資料來源、未評估（不代表已通過）")'))
+        assert s.ok and "沒寫齊" not in s.detail
+
+
+class TestLowSeverity:
+    def test_m6_single_side_month_none(self):
+        import dataclasses
+        b = _build(_inputs())
+        assert RC._m1b_m2_data_month(b) == "2026-08"
+        for drop in ("M1B_YoY_pct", "M2_YoY_pct"):
+            nb = dataclasses.replace(b, macro_numbers=dict(b.macro_numbers, **{drop: None}))
+            assert RC._m1b_m2_data_month(nb) is None, drop
+
+    def test_m6_mutant(self):
+        mod = _mutated_module("src/services/risk_cap_apply.py", (
+            '    if nums.get("M1B_YoY_pct") is None or nums.get("M2_YoY_pct") is None:',
+            '    if nums.get("M1B_YoY_pct") is None:'))
+        import dataclasses
+        b = _build(_inputs())
+        nb = dataclasses.replace(b, macro_numbers=dict(b.macro_numbers, M2_YoY_pct=None))
+        assert mod._m1b_m2_data_month(nb) == "2026-08"   # 突變體 ⇒ 原版 test_m6 必紅
+
+    def test_m17_wording(self):
+        for txt in (RC.REASON_FAIL_SAFE, RC.REASON_NOT_FINITE):
+            assert "不寫檔（既有檔若有，保留不動）" in txt and "未覆寫" not in txt
+        src = (REPO / "src/services/macro_refresh_service.py").read_text(encoding="utf-8")
+        assert "新頁的建議持股顯示「無法判定」" in src and "＝ 沒有這條天花板" not in src
+        rc = (REPO / "src/services/risk_cap_apply.py").read_text(encoding="utf-8")
+        assert "＝ 沒有這條天花板" not in rc and "無法判定" in rc
