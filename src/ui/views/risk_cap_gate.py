@@ -18,8 +18,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.staleness import MACRO_VERDICT_MAX_AGE_DAYS
-
 #: `shared/allocation_decision.build_allocation_decision` 為 macro_state 曝險上限建的 `Cap.name`。
 #: 共用層以字面寫在函式內（本批禁改共用層），故這裡對齊同一字面；
 #: 一致性由 `tests/test_batch_z65.py` 以真的 `build_allocation_decision` 輸出守住。
@@ -27,8 +25,9 @@ SYSTEM_RISK_CAP_NAME: str = "系統風險上限"
 
 #: 缺上限時卡片的 now / why（where 由各頁用自己的「按本頁按鈕可重算」出口）。
 RISK_CAP_UNAVAILABLE_NOW: str = "**建議持股：無法判定**"
+#: 批 Z65 複驗 R2-1：⛔ 不宣稱是哪一種原因（本頁分不出是沒算、算不出、過期還是讀壞）。
 RISK_CAP_UNAVAILABLE_WHY: str = (
-    f"系統風險上限目前無法取得（本輪無法計算，{MACRO_VERDICT_MAX_AGE_DAYS} 天內也沒有可沿用的上限）；"
+    "目前沒有可用的系統風險上限（尚未計算、本輪算不出來、檔案已過期或讀不出來都會如此）；"
     "系統不會在缺上限的情況下給持股數字")
 
 

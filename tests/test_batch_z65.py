@@ -1061,3 +1061,38 @@ class TestLowSeverity:
         assert "新頁的建議持股顯示「無法判定」" in src and "＝ 沒有這條天花板" not in src
         rc = (REPO / "src/services/risk_cap_apply.py").read_text(encoding="utf-8")
         assert "＝ 沒有這條天花板" not in rc and "無法判定" in rc
+
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. 批 Z65 複驗 R2：兩處文字
+# ══════════════════════════════════════════════════════════════════════════
+class TestR2Wording:
+    def test_r2_1_why_does_not_claim_a_cause(self):
+        from src.ui.views.risk_cap_gate import RISK_CAP_UNAVAILABLE_WHY as W
+        assert W == ("目前沒有可用的系統風險上限（尚未計算、本輪算不出來、檔案已過期或讀不出來都會如此）；"
+                     "系統不會在缺上限的情況下給持股數字")
+        assert "本輪無法計算" not in W and "7 天內也沒有" not in W
+
+    def _band_text(self, mod):
+        r = mod.MacroReadout(requested=True, loaded=True, regime="bull", health=60.0,
+                             posture_label="積極", posture_range="30-50%", defense=False)
+        rows = [(k, v) for k, v in mod.build_macro_stage_card(r)[1] if "姿態油門帶" in k]
+        assert len(rows) == 1
+        return rows[0][0] + rows[0][1]
+
+    def test_r2_2_band_wording(self):
+        from src.ui.views import page_hold as PH
+        txt = self._band_text(PH)
+        assert "exposure_limit_pct" not in txt and "系統風險上限任何一條天花板" in txt
+        assert "這不是建議持股；系統風險上限取不到時，建議持股為『無法判定』，不得以本帶代替" in txt
+        assert "30-50%" in txt   # 數字照舊（只改文字）
+
+    def test_r2_mutants(self):
+        m1 = _mutated_module("src/ui/views/risk_cap_gate.py",
+                             ('    "目前沒有可用的系統風險上限（尚未計算、本輪算不出來、檔案已過期或讀不出來都會如此）；"',
+                              '    "系統風險上限目前無法取得（本輪無法計算）；"'))
+        assert "本輪無法計算" in m1.RISK_CAP_UNAVAILABLE_WHY      # 原版 r2_1 守衛必紅
+        m2 = _mutated_module("src/ui/views/page_hold.py",
+                             ('             "這不是建議持股；系統風險上限取不到時，建議持股為『無法判定』，不得以本帶代替。"\n', ""))
+        assert "不得以本帶代替" not in self._band_text(m2)         # 原版 r2_2 守衛必紅

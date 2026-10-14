@@ -2393,7 +2393,8 @@ def build_macro_stage_card(macro: MacroReadout) -> _Built:
         _facts.append(
             ("姿態油門帶（**未套天花板的原始帶**）",
              f"{macro.posture_range} —— 這是 L3 `get_station_macro()` 直接給的"
-             "姿態帶，**沒套** VIX／三環／`exposure_limit_pct` 任何一條天花板。"
+             "姿態帶，**沒套** VIX／三環／系統風險上限任何一條天花板。"
+             "這不是建議持股；系統風險上限取不到時，建議持股為『無法判定』，不得以本帶代替。"
              "**最終水位請看 ⑤「建議持股水位（市場端）」那一格**"
              "（走 `get_allocation()`，已套天花板）—— "
              "同一頁的兩個持股區間口徑不同，別把它們讀成同一個數字"))
@@ -4439,7 +4440,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN)),
        # 批 Z65 QA：取不到有效系統風險上限（客戶 Q-z34～36 規則）。摘錄自原文（K1）。
        _v2_rows_for("hold.position_cap", RISK_CAP_UNAVAILABLE_NOW, (
-           None, "系統風險上限目前無法取得" + V2_EXCERPT_GAP + "系統不會在缺上限的情況下給持股數字",
+           None, "目前沒有可用的系統風險上限" + V2_EXCERPT_GAP + "系統不會在缺上限的情況下給持股數字",
            "重算系統風險上限之後，回到本頁" + _V2_PRESS_RUN))]
     # ── ⑥ 組合深度分析 ──────────────────────────────────────────
     + [_v2_rows_for("hold.deep.rebalance", REBALANCE_UNWIRED_NOW, (
