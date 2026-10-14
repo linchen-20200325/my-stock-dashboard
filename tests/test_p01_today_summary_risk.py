@@ -204,6 +204,7 @@ def test_summary_block_cols_unchanged():
 # ══════════════════════════════════════════════════════════════════
 # 5. 畫面端真的接上（拔掉接線 ⇒ 轉紅）
 # ══════════════════════════════════════════════════════════════════
+@pytest.mark.usefixtures("stub_trading_day_status")  # 批 Z59：交易日格不連外網
 @pytest.mark.slow
 @pytest.mark.parametrize("mode", ["cold", "live"])
 def test_page_renders_the_wired_risk_cell(tmp_path, mode):
@@ -291,6 +292,8 @@ def _drive_page(monkeypatch, danger: str) -> dict:
                         lambda _r: (_sc["danger"], _sc["danger_error"], _src))
     monkeypatch.setattr(P, "_load_key_alerts", lambda _s: (None, False, ""))
     monkeypatch.setattr(P, "_load_lamp_directions", lambda _s=None: {})
+    # 批 Z59：狀態列「交易日」格每輪都讀 L3（會對外抓）—— 本組不碰網路，照其他 loader 注入。
+    monkeypatch.setattr(P, "load_trading_day_status", lambda: (None, "RuntimeError('offline')"))
     monkeypatch.setattr(P, "_render_tiles",
                         lambda tiles, cols=None: _drawn.extend(tiles))
     P.render_page_today()

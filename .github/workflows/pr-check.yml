@@ -33,7 +33,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pyflakes
+          # 批 Z59（客戶 Q-z33＝A）：markdown-it-py 是**測試依賴**（production 0 import），
+          # 與 pytest 同列、⛔ 不進 requirements.txt（那份會裝上 Streamlit Cloud）。
+          # 沒裝時 22 個 CommonMark 守衛會靜默 skip —— tests/test_batch_z59.py 改成紅燈。
+          pip install pytest pyflakes "markdown-it-py>=3.0.0,<5.0.0"
 
       - name: Run pytest fast lane
         run: pytest -v

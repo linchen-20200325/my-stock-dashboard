@@ -257,15 +257,21 @@ def _assert_sheet_wired(md: str) -> None:
     assert "Sheet 綁定狀態尚未接線" not in md, "狀態列仍畫著未接線那一格"
 
 
+# 批 Z59：交易日格每輪都讀休市表（對外連線）—— fast lane 不碰網路，stub 在 L3。
+@pytest.mark.usefixtures("stub_trading_day_status")
 def test_today_page_apptest_draws_the_wired_sheet_card(tmp_path):
     _assert_sheet_wired(_run_today(tmp_path, unwire=False))
 
 
+# 批 Z59：交易日格每輪都讀休市表（對外連線）—— fast lane 不碰網路，stub 在 L3。
+@pytest.mark.usefixtures("stub_trading_day_status")
 def test_today_page_unwiring_turns_the_guard_red(tmp_path):
     with pytest.raises(AssertionError):
         _assert_sheet_wired(_run_today(tmp_path, unwire=True))
 
 
+# 批 Z59：交易日格每輪都讀休市表（對外連線）—— fast lane 不碰網路，stub 在 L3。
+@pytest.mark.usefixtures("stub_trading_day_status")
 def test_today_page_cold_start_real_binding_service_has_no_red_sheet_card(tmp_path):
     """冷啟動、真的 L3（沙箱沒有 Google 登入）→ 整頁無例外，Sheet 那一格是灰的「尚未綁定 Sheet」。"""
     from streamlit.testing.v1 import AppTest
