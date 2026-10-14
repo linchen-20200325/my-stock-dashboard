@@ -200,8 +200,10 @@ L3 `services.macro_refresh_service.refresh_macro_now()` → 報告落
 
 ⛔ **這是一條「平行路徑」，不是收編舊分頁。** `src/ui/tabs/**` 本階段
 **一個字都沒有動**（客戶明令舊 7 頁籤保留原樣），所以本頁按鈕**碰不到**
-舊分頁其他區塊寫的東西 —— 建議持股（卡①）／市場位階（卡③）／今日關鍵的
-門檻層／新聞桶都在射程外。**摸不到的一律逐條列在畫面上**
+舊分頁其他區塊寫的東西 —— ~~建議持股（卡①）／市場位階（卡③）／~~今日關鍵的
+門檻層／新聞桶／建議持股的「系統風險上限」（`macro_state.json`）都在射程外。
+（📌 批 Z60：卡①③ 吃的 `warroom_summary` 改由 L3 `STEP_WARROOM` 平行組裝、本頁按鈕寫得到；
+刪除線是有意識的更正 —— 舊句在寫下的當天為真。）**摸不到的一律逐條列在畫面上**
 （清單 SSOT：`macro_refresh_service.UNTOUCHED_BLOCKS`），
 不留白讓人以為整頁都是今天的（§1）。
 
@@ -556,7 +558,9 @@ PAGE_REFRESH_SCOPE_WHY: str = (
 # 舊碼 15 個灰態 / 紅態全部共用同一句 `NO_LOAD_EXIT_WHERE`。按鈕接上取數之後，
 # 若把那 15 處**全部**改成「按本頁按鈕」，就會製造一種新的假指路 ——
 # **契約漂移（`out_of_range` / `no_extraction`）那幾處按一百次也沒用**，
-# 而建議持股 / 市場位階 / 今日關鍵的門檻層**本頁按鈕根本摸不到**。
+# 而今日關鍵的門檻層**本頁按鈕根本摸不到**（批 Z60 前還有建議持股 / 市場位階；
+# 那兩張卡吃的 `warroom_summary` 現在由本頁按鈕寫得到，只剩建議持股的「系統風險上限」
+# 那一條天花板讀 `macro_state.json`，本頁摸不到 —— 逐條見 `UNTOUCHED_BLOCKS`）。
 # 三句話對應三種**處置**，不是三種語氣。
 
 #: (a) 這一格**可以**靠本頁的按鈕重抓 —— 它就是這條路徑會更新的東西。
@@ -618,16 +622,18 @@ EXIT_DEGRADED_READ_DIRECTION: str = (
     "改看它相對自身近年區間的變化方向；"
     f"門檻本身要不要改屬另案，見 {ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
 
-#: 16 盞燈裡**本頁按鈕摸不到**的那幾盞（其餘 14 盞都在射程內）。
+#: 16 盞燈裡**本頁按鈕摸不到**的那幾盞（其餘都在射程內）。
 #:
 #: 推導（兩步，各自可查，**不是**在這裡另立一份「燈 → 來源」對照）：
-#:   1. L2 `macro_helpers` 的 readiness 取值表寫明 `health` 讀
-#:      `warroom_summary.health_score`、`news_systemic` 讀 `_macro_news_items`；
-#:   2. L3 `macro_refresh_service.WRITES_SESSION_KEYS` 沒有這兩個 key
-#:      （它們的寫入點都在 `src/ui/tabs/**`，本階段不准動）。
-#: 第 2 步由 `tests/test_p01_macro_refresh.py::TestOutOfReachLightsAreReallyOutOfReach`
-#: 現場比對 —— 哪天這兩個 key 被接進本路徑，那支測試會紅，這裡就得跟著改。
-OUT_OF_REACH_LIGHT_KEYS: frozenset[str] = frozenset({"health", "news_systemic"})
+#:   1. L2 `macro_helpers` 的 readiness 取值表寫明 `news_systemic` 讀 `_macro_news_items`；
+#:   2. L3 `macro_refresh_service.WRITES_SESSION_KEYS` 沒有這個 key
+#:      （它的寫入點在 `src/ui/tabs/**`，本階段不准動）。
+#: 第 2 步由 `tests/test_p01_macro_refresh.py::TestOutOfReachIsMeasured`
+#: 現場比對 —— 哪天這個 key 被接進本路徑，那支測試會紅，這裡就得跟著改。
+#: 📌 批 Z60（有意識的修改，不是漏刪）：原本還有 `health`（讀 `warroom_summary.health_score`）。
+#:    那時它確實摸不到 —— `warroom_summary` 只有舊分頁寫；Z60 起 L3 `STEP_WARROOM` 會寫它，
+#:    `health` 因此移出本集合（出口改回「按本頁按鈕會重抓」）。
+OUT_OF_REACH_LIGHT_KEYS: frozenset[str] = frozenset({"news_systemic"})
 
 #: 五桶裡整桶都摸不到的那一桶（`news` 桶旗下只有 `news_systemic` 一盞燈）。
 OUT_OF_REACH_BUCKETS: frozenset[str] = frozenset({"news"})

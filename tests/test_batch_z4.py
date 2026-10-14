@@ -405,11 +405,21 @@ class TestD4n2TodayPage:
         assert PT.reason_is_unregistered(_rec(*vals, key=key)) is False
 
     def test_out_of_reach_light_keeps_its_exit(self):
-        """`health`（本頁按鈕摸不到）：一樣轉灰，但出口照舊是「不在本頁射程內」。"""
+        """`health`：一樣轉灰；出口跟著 `OUT_OF_REACH_LIGHT_KEYS` 走。
+
+        批 Z60（有意識的修改，不是放寬）：原斷言「`health` 本頁按鈕摸不到 ⇒ 出口是
+        『不在本頁射程內』」在它寫下的當天為真；Z60 起 `warroom_summary` 由 L3
+        `STEP_WARROOM` 寫得到，`health` 移出摸不到的集合，出口改回「按一次就會重抓」。
+        本支要守的「非有限值轉灰時，出口仍由分流決定、不被灰態覆蓋」不變 ——
+        改拿目前仍摸不到的 `news_systemic` 守那一半，`health` 守另一半。
+        """
         from src.ui.views import page_today as PT
         t = _today_tile("health", _rec(NAN, key="health"))
         assert t.card.state == UI_MISSING_RETRYABLE
-        assert t.card.note.where is PT.EXIT_OUT_OF_REACH
+        assert t.card.note.where is PT.EXIT_RETRY_HERE
+        t2 = _today_tile("news_systemic", _rec(NAN, key="news_systemic"))
+        assert t2.card.state == UI_MISSING_RETRYABLE
+        assert t2.card.note.where is PT.EXIT_OUT_OF_REACH
 
     @pytest.mark.parametrize("vals", [(NAN, 46.3), (46.3,), (INF, 25.0, -INF)])
     def test_finite_or_mixed_stays_red(self, vals):

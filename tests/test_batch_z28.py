@@ -412,8 +412,16 @@ class TestZ6n1WhySentence:
         assert _block('futures_net').why == _OLD_WHY.replace(_DELETED, '')
 
     def test_rest_of_block_and_other_blocks_unchanged(self):
-        assert [b.session_key for b in R.UNTOUCHED_BLOCKS] == list(_BLOCKS_BASE)
+        # 批 Z60（有意識的修改，不是放寬）：`warroom_summary / macro_state.json` 那一列被改寫成
+        #   `macro_state.json`（`warroom_summary` 自 Z60 起由 `STEP_WARROOM` 寫得到，原句「本路徑一個
+        #   都沒寫」已不成立）。本支守的是「Z6-n1 只刪 futures_net 那一句、其餘各列不動」——
+        #   被 Z60 有意改寫的那一列改由 `tests/test_batch_z60.py` 逐欄釘住，這裡只保留位置對應；
+        #   其餘 5 列照舊逐位比 sha。
+        _z60 = {'macro_state.json': 'warroom_summary / macro_state.json'}
+        assert [_z60.get(b.session_key, b.session_key) for b in R.UNTOUCHED_BLOCKS] == list(_BLOCKS_BASE)
         for b in R.UNTOUCHED_BLOCKS:
+            if b.session_key in _z60:
+                continue
             if b.session_key == 'futures_net':
                 b = dataclasses.replace(b, why=_OLD_WHY)
             assert hashlib.sha256(repr(dataclasses.astuple(b)).encode()).hexdigest() == _BLOCKS_BASE[b.session_key]
