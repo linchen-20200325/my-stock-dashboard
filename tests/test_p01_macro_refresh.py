@@ -357,6 +357,7 @@ def _run_refresh_with_fakes(service, monkeypatch, *, df_adl,
     import src.services.macro_trio_orchestrator as _TRIO
     import src.services.market_assessment_apply as _MKT
     import src.services.data_registry_scanner as _REG
+    import src.services.warroom_apply as _WR
 
     def _fake_bundle(**kw):
         _cb = kw.get("on_job_done")
@@ -364,6 +365,10 @@ def _run_refresh_with_fakes(service, monkeypatch, *, df_adl,
             for _n in report_jobs:
                 _cb(_n, True, "1.0s")
         return _bundle(df_adl_raw=df_adl) if bundle is None else bundle
+
+    def _fake_warroom():
+        _calls.append("warroom")
+        return _WR.WarroomApplyResult(written=True)
 
     monkeypatch.setattr(_ORCH, "fetch_macro_bundle", _fake_bundle)
     monkeypatch.setattr(_APPLY, "apply_macro_bundle",
@@ -376,6 +381,11 @@ def _run_refresh_with_fakes(service, monkeypatch, *, df_adl,
                         lambda **k: _calls.append("market"))
     monkeypatch.setattr(_REG, "scan_and_write_data_registry",
                         lambda **k: _calls.append("registry"))
+    # 批 Z60：`STEP_WARROOM` 是新接上的相依。本 helper 的契約是「**每一個**外部相依都換成
+    #   替身」—— 不換的話它會去碰真的 `streamlit.session_state`（不是本測試的假 session），
+    #   既不封閉、也會讓「三來源全空 → skipped」把這裡每一支測試的綠燈判準一起拖下水。
+    #   真模組的行為由 `tests/test_batch_z60.py` 另外以假 session 實跑驗證。
+    monkeypatch.setattr(_WR, "compute_and_store_warroom_summary", _fake_warroom)
     _report = service.refresh_macro_now(mode=service.MODE_WARM)
     return _report, _calls
 
@@ -539,18 +549,24 @@ class TestExitCopyIsRouted:
             assert P.bucket_exit(_b) == P.EXIT_RETRY_HERE
 
     def test_the_grey_indicator_note_actually_uses_the_router(self):
-        """端到端：`health`（摸不到）與 `vix`（摸得到）拿到不同的 `where`。
+        """端到端：`news_systemic`（摸不到）與 `vix`（摸得到）拿到不同的 `where`。
+
+        批 Z60：原本拿 `health` 當「摸不到」的代表；Z60 起它在射程內（`STEP_WARROOM`），
+        改用目前唯一仍摸不到的燈 `news_systemic`。另加一條：`health` 現在拿「可以重抓」。
 
         ⚠️ 兩邊都餵**有登記的**缺值原因：`reason` 空的那一種另有分流
         （★3 → `EXIT_FIX_CODE`），混在這裡會讓本測試守到別條規則上去。
         """
         from shared.macro_buckets import MISSING_NO_VALUE
         _rec = {"state": "missing", "reason": MISSING_NO_VALUE}
-        _h = P.build_indicator_tile("health", _rec, requested=True, error="")
+        _h = P.build_indicator_tile("news_systemic", _rec, requested=True, error="")
         _v = P.build_indicator_tile("vix", _rec, requested=True, error="")
         assert _h.card.note is not None and _v.card.note is not None
         assert _h.card.note.where == P.EXIT_OUT_OF_REACH
         assert _v.card.note.where == P.EXIT_RETRY_HERE
+        _hl = P.build_indicator_tile("health", _rec, requested=True, error="")
+        assert _hl.card.note is not None
+        assert _hl.card.note.where == P.EXIT_RETRY_HERE
 
     def test_contract_drift_never_gets_the_retry_copy(self):
         """量綱漂移 / 沒有取值路徑 → 重抓沒用，必須是 `EXIT_FIX_CODE`。"""
@@ -682,11 +698,13 @@ class TestMutationExitCopy:
         monkeypatch.setattr(P, "indicator_exit",
                             lambda _k, _rec=None: P.EXIT_RETRY_HERE)
         from shared.macro_buckets import MISSING_NO_VALUE
+        # 批 Z60：代表燈由 `health` 換成 `news_systemic`（`health` 已在射程內，拿它當探針
+        #   突變前後都是 EXIT_RETRY_HERE，這支測試會變成守不到任何東西的假綠）。
         _h = P.build_indicator_tile(
-            "health", {"state": "missing", "reason": MISSING_NO_VALUE},
+            "news_systemic", {"state": "missing", "reason": MISSING_NO_VALUE},
             requested=True, error="")
         assert _h.card.note.where == P.EXIT_RETRY_HERE, (
-            "把分流拔掉之後 `health` 居然還是拿到「摸不到」的文案 —— "
+            "把分流拔掉之後 `news_systemic` 居然還是拿到「摸不到」的文案 —— "
             "表示 `build_indicator_tile` 根本沒在用 `indicator_exit`，請修 code")
 
     def test_collapsing_the_bucket_router_is_visible(self, monkeypatch):
@@ -831,6 +849,24 @@ def _session_writers(key: str) -> set[str]:
     return _out
 
 
+#: 不是 session key、而是**檔案**的「寫入對象」→ 寫它的唯一 API（批 Z60）。
+_FILE_KEY_WRITER_API = {
+    "macro_state.json": ("execute_and_lock", "lock_system_state_only"),
+}
+
+
+def _method_callers(attr: str) -> set[str]:
+    """全 repo 掃**真的呼叫** `<任何物件>.<attr>(...)` 的檔（AST，不是 grep；註解不算）。"""
+    _out: set[str] = set()
+    for _p in (list((_ROOT / "src").rglob("*.py"))
+               + list((_ROOT / "scripts").rglob("*.py")) + [_ROOT / "app.py"]):
+        for _n in ast.walk(ast.parse(_p.read_text(encoding="utf-8"))):
+            if (isinstance(_n, ast.Call) and isinstance(_n.func, ast.Attribute)
+                    and _n.func.attr == attr):
+                _out.add(_p.relative_to(_ROOT).as_posix())
+    return _out
+
+
 class TestOutOfReachIsMeasured:
 
     def test_written_keys_cover_every_module_this_path_calls(self):
@@ -838,6 +874,7 @@ class TestOutOfReachIsMeasured:
         _mods = ("src/services/jingqi_calc.py",
                  "src/services/market_assessment_apply.py",
                  "src/services/macro_trio_orchestrator.py",
+                 "src/services/warroom_apply.py",           # 批 Z60 新接的那一步
                  "src/services/data_registry_scanner.py")
         _keys: set[str] = set()
         for _rel in _mods:
@@ -856,7 +893,11 @@ class TestOutOfReachIsMeasured:
             f"這條路徑呼叫的模組會寫 {_missing}，但 `WRITES_SESSION_KEYS` 沒列 —— "
             "畫面上的「有更新到 / 沒更新到」會少講一項")
 
-    @pytest.mark.parametrize("key", ["warroom_summary", "_macro_news_items",
+    # 批 Z60（有意識的修改，不是放寬）：清單拿掉 `warroom_summary` —— 它自 Z60 起由
+    #   `STEP_WARROOM` 寫入，「本路徑寫不到」這句話對它已經是假的；正向斷言（它**在**
+    #   宣告裡、且宣告＝模組真的賦值的 key）由 `TestWrittenKeysMatchTheModules` 的
+    #   `_STEP_MODULES[STEP_WARROOM]` 與 `tests/test_batch_z60.py` 接手。其餘 6 個 key 照舊。
+    @pytest.mark.parametrize("key", ["_macro_news_items",
                                      "macro_alerts", "macro_state",
                                      "chips_loaded", "intl_snap", "ma_snap"])
     def test_the_untouched_keys_are_really_not_written_by_this_path(self, key):
@@ -865,7 +906,10 @@ class TestOutOfReachIsMeasured:
             "`UNTOUCHED_BLOCKS` 與 `page_today.OUT_OF_REACH_*` 要一起改，"
             "否則畫面會說一件已經不成立的事")
 
-    @pytest.mark.parametrize("key", ["warroom_summary", "_macro_news_items",
+    # 批 Z60：同上，拿掉 `warroom_summary` —— 它現在多一個寫入點
+    #   `src/services/warroom_apply.py`（就是本批新增的那一個，不在舊分頁裡）。
+    #   「寫入點恰為舊頁兩處 ＋ warroom_apply」由 `tests/test_batch_z60.py` 以同一支 AST 掃描釘住。
+    @pytest.mark.parametrize("key", ["_macro_news_items",
                                      "macro_alerts", "macro_state", "ma_snap"])
     def test_their_writers_are_all_inside_the_old_tabs(self, key):
         """「寫得到它的是舊分頁」這句話是**量**出來的。"""
@@ -891,6 +935,15 @@ class TestOutOfReachIsMeasured:
         """
         _keys = [_k.strip() for _k in block.session_key.split("/") if _k.strip()]
         _measured = {_p for _k in _keys for _p in _session_writers(_k)}
+        # 批 Z60：`macro_state.json` 是**檔案**不是 session key，`_session_writers` 量不到它
+        #   （量出來恆為空，宣告任何寫入點都會被判成假的）。改量**寫檔 API 的呼叫點**：
+        #   L3 `MacroStateLocker` 對外只有 `execute_and_lock` / `lock_system_state_only`
+        #   兩支會走到 `_write_state_lock`（`open(temp_path, "w")` + 原子替換），
+        #   呼叫它們的檔 ＝ 寫得到這個檔的地方。
+        #   ⚠️ 不是放寬：宣告與量測仍逐檔雙向比對，量法換成適用於檔案的那一種。
+        _measured |= {_p for _k in _keys if _k in _FILE_KEY_WRITER_API
+                      for _api in _FILE_KEY_WRITER_API[_k]
+                      for _p in _method_callers(_api)}
         _declared = set(re.findall(r"[\w./]+\.py", block.writer))
         for _d in _declared:
             assert any(_m.endswith(_d) for _m in _measured), (
@@ -909,11 +962,19 @@ class TestOutOfReachIsMeasured:
             "`UNTOUCHED_BLOCKS` 裡「全 repo 沒有任何一處寫這個 key」那句已經過期")
 
     def test_the_untouched_list_names_every_out_of_reach_light(self):
-        """16 盞燈裡判為摸不到的那兩盞，都在畫面列出的清單裡有交代。"""
+        """16 盞燈裡判為摸不到的那幾盞，都在畫面列出的清單裡有交代。
+
+        批 Z60（有意識的修改）：原本還斷言 `warroom_summary` 在清單裡（health 那盞）。
+        Z60 起 health 移出 `OUT_OF_REACH_LIGHT_KEYS`（`STEP_WARROOM` 寫得到它），
+        清單裡**不該**再說它摸不到 —— 改成反向斷言。
+        """
         _blob = " ".join(f"{b.label} {b.session_key} {b.why}"
                          for b in RS.UNTOUCHED_BLOCKS)
-        assert "warroom_summary" in _blob      # health 那盞
         assert "_macro_news_items" in _blob    # news_systemic 那盞
+        assert "health" not in P.OUT_OF_REACH_LIGHT_KEYS
+        assert not any("warroom_summary" in b.session_key
+                       for b in RS.UNTOUCHED_BLOCKS), (
+            "`warroom_summary` 本路徑已寫得到，清單卻還說它摸不到")
 
     def test_every_out_of_reach_light_key_is_a_real_spec(self):
         from shared.macro_buckets import SPECS_BY_KEY
@@ -934,6 +995,8 @@ _STEP_MODULES = {
     RS.STEP_JINGQI: "src/services/jingqi_calc.py",
     RS.STEP_TRIO: "src/services/macro_trio_orchestrator.py",
     RS.STEP_MARKET: "src/services/market_assessment_apply.py",
+    # 批 Z60：新步驟 —— 宣告必須等於該模組真的賦值的 key（`warroom_summary`）。
+    RS.STEP_WARROOM: "src/services/warroom_apply.py",
     RS.STEP_REGISTRY: "src/services/data_registry_scanner.py",
 }
 
@@ -967,6 +1030,7 @@ def _run_refresh_writing(service, monkeypatch, *, trio_keys=(
     import src.services.macro_trio_orchestrator as _TRIO
     import src.services.market_assessment_apply as _MKT
     import src.services.data_registry_scanner as _REG
+    import src.services.warroom_apply as _WR
 
     _st = _FakeST({})
     monkeypatch.setattr(service, "st", _st)
@@ -1004,6 +1068,14 @@ def _run_refresh_writing(service, monkeypatch, *, trio_keys=(
     monkeypatch.setattr(_MKT, "compute_and_apply_market_assessment",
                         lambda **k: _write("mkt_info"))
     monkeypatch.setattr(_REG, "scan_and_write_data_registry", _fake_registry)
+
+    # 批 Z60：新步驟 `STEP_WARROOM` 的替身，照真模組的寫法（整個 key 賦值一個新 dict）。
+    #   理由同 `_run_refresh_with_fakes`：不換會碰真的 `streamlit.session_state`。
+    #   真模組 ＋ 本 helper 同一個假 session 的整合版見 `tests/test_batch_z60.py`。
+    def _fake_warroom():
+        _write("warroom_summary")
+        return _WR.WarroomApplyResult(written=True)
+    monkeypatch.setattr(_WR, "compute_and_store_warroom_summary", _fake_warroom)
     return service.refresh_macro_now(mode=service.MODE_WARM)
 
 
@@ -1720,7 +1792,14 @@ class TestStageOneBoundaries:
 
     @pytest.mark.parametrize("rel", _NEW_FILES + ("src/ui/views/page_today.py",))
     def test_no_second_throttle_implementation(self, rel):
-        """動工條件 ③：throttle / 13-key warroom 契約不得在本批長出第二份。"""
+        """動工條件 ③：throttle / 13-key warroom 契約不得在本批長出第二份。
+
+        📌 批 Z60（總管拍板方案 a，有意識的範圍變更）：13 欄 warroom 現在**多一個組裝點**
+        `src/compute/macro/warroom_summary.py`（L2，呼叫同一支 L0 `compute_position_throttle`，
+        零門檻數字），由 `src/services/warroom_apply.py` 寫入。它**不是**第二套演算法 ——
+        與舊頁 TL→SS 的等價性由 `tests/test_batch_z60.py`（端到端 golden ＋ 對舊原文的格點
+        比對）釘住。本支守的這四個檔仍不得自己算 throttle / 自己寫 warroom，照舊。
+        """
         _t = _code_only(rel)
         assert "compute_position_throttle" not in _t, (
             f"{rel} 自己算了 throttle —— SSOT 在 `section_traffic_light.py`，"

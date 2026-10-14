@@ -9,7 +9,7 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
 兩條並存。收編舊分頁是第二階段，**尚未獲准**。
 
 ⚠️ **本檔刻意不宣稱「與 `tab_macro` 零行為變更」** —— 那句話是假的。
-已知的**刻意差異**共三處，每一處都在下面就地寫明理由：
+已知的**刻意差異**共四處，每一處都在下面就地寫明理由：
   1. **`compute_and_store_jingqi` 帶 `df_adl is not None` 守衛**（`_step_jingqi`）
      —— `tab_macro` 沒有這個守衛，cron `scripts/update_macro_forward_test.py` 有。
      本檔跟 cron 站同一邊，理由見該處。
@@ -17,6 +17,22 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
      （`_run_with_timeout`）—— `tab_macro` 是直接同步呼叫，可以無限期卡住。
   3. **強制重抓模式不 pop 任何 session key** —— `tab_macro` 的
      `handlers._macro_session_reset()` 會 pop 14 個 key。理由見 `clear_macro_caches`。
+  4. **`warroom_summary` 由本路徑自己組一份**（`STEP_WARROOM`，批 Z60）—— 舊頁是
+     `section_traffic_light`（整包賦值）＋ `section_state`（就地 update）兩段**渲染期**
+     寫入，本路徑不渲染那兩段，改呼叫 L3 `warroom_apply.compute_and_store_warroom_summary`
+     組出「舊頁 TL 先、SS 後」的**最終結果**（等價性由 `tests/test_batch_z60.py` 釘住）。
+     與舊頁不同處：(a) 指定新 dict 而非就地 update（`_writes_recorded` 以 id 量測）；
+     (b) 整理不出結論 / 例外時 **pop** 既有的那份（舊頁是按更新時先 pop）；「三來源全空」
+     看 session 的原始 `mkt_info` / `jingqi_info` / `cl_data`，**不**拿上一份 warroom 的
+     `jingqi_avg` 退路當本輪來源（舊頁 rerun 會，那等於上一輪結論冒充今天的）；
+     (c) 不寫 session `macro_state`（只有舊頁讀）；(d) 不產生舊 `section_mid` 那句
+     「三環火力分級偏多被壓制」說明（只影響說明，不影響數字）；(e) `mkt_info` 沒有
+     `regime` 鍵時寫 `None` —— 舊頁 TL→SS 的最終結果同樣是 `None`，但舊頁**只跑到 TL**
+     的那一輪是 `'neutral'`（TL 捏的預設值）。新路徑較誠實：⛔ 不以缺值推導「中性」。
+     ⚠️ 若 `STEP_MARKET` 這一輪沒成功（含逾時），組裝用的是 session **現有**的
+     `mkt_info`（可能是上一輪的）—— 步驟報告會寫明。
+     ⚠️ 同理，若 `STEP_APPLY` 這一輪沒成功，`cl_data` / `cl_ts` / `li_latest` 仍是 session
+     **現有**的（籌碼資料與先行指標本輪未更新）—— 步驟報告同樣寫明。
 
 ═══ 分層（CLAUDE.md §8.2）═════════════════════════════════════════════
 **L3 Service**：編排 L1 fetcher（`src.data.daily.daily_data_fetchers`）
@@ -86,6 +102,7 @@ STEP_APPLY: str = "apply"
 STEP_JINGQI: str = "jingqi"
 STEP_TRIO: str = "trio"
 STEP_MARKET: str = "market"
+STEP_WARROOM: str = "warroom"
 STEP_REGISTRY: str = "registry"
 STEP_SOURCE_AUDIT: str = "source_audit"
 STEP_CONTENT_AUDIT: str = "content_audit"
@@ -98,6 +115,7 @@ STEP_LABELS: dict[str, str] = {
     STEP_JINGQI: "旌旗指數（上漲佔比 5 日均）",
     STEP_TRIO: "M1B-M2 / 年線乖離 / 6 源總經快照",
     STEP_MARKET: "市場評估（mkt_info）",
+    STEP_WARROOM: "紅綠燈結論（warroom_summary：燈號 / 健康分 / 位階）",
     STEP_REGISTRY: "資料登錄中心掃描",
     STEP_SOURCE_AUDIT: "逐來源回報的完整性",
     STEP_CONTENT_AUDIT: "逐來源實際收到的內容（判空）",
@@ -122,6 +140,7 @@ _MARKET_ASSESS_TIMEOUT_S: int = 45
 #:   · `STEP_JINGQI`   ← `services.jingqi_calc`
 #:   · `STEP_TRIO`     ← `services.macro_trio_orchestrator`（**三個** key）
 #:   · `STEP_MARKET`   ← `services.market_assessment_apply`
+#:   · `STEP_WARROOM`  ← `services.warroom_apply`（批 Z60）
 #:   · `STEP_REGISTRY` ← `services.data_registry_scanner`
 #: `tests/test_p01_macro_refresh.py::TestWrittenKeysMatchTheModules` 逐模組
 #: AST 比對，任何一支多寫 / 少寫一個 key 而這裡沒跟著改 → 紅燈。
@@ -135,6 +154,7 @@ STEP_WRITES: dict[str, tuple[str, ...]] = {
     STEP_JINGQI: ("jingqi_info",),
     STEP_TRIO: ("m1b_m2_info", "bias_info", "macro_info"),
     STEP_MARKET: ("mkt_info",),
+    STEP_WARROOM: ("warroom_summary",),
     STEP_REGISTRY: ("data_registry",),
 }
 
@@ -190,14 +210,21 @@ UNTOUCHED_BLOCKS: tuple[UntouchedBlock, ...] = (
              "本輪之後那張卡最多是「已列出急變層、門檻層未評估」，**不會變綠**"),
         writer="src/ui/tabs/macro/section_mid.py（全 repo 唯一寫入點）",
     ),
+    # ⚠️ 批 Z60 改寫（有意識的修改，不是漏刪）：本列原為「建議持股（卡①）與市場位階（卡③）」
+    #    ／`warroom_summary / macro_state.json`／「本路徑一個都沒寫」。那句話**在它寫下的當天
+    #    為真**；Z60 起 `STEP_WARROOM` 會寫 `warroom_summary`（燈號 / 健康分 / 位階 / 姿態帶都在
+    #    射程內），**剩下摸不到的只有 `macro_state.json`** —— 這一列只講還成立的那一半。
     UntouchedBlock(
-        label="建議持股（卡①）與市場位階（卡③）",
-        session_key="warroom_summary / macro_state.json",
-        why=("兩張卡都讀 L3 `macro_state_locker.get_macro_state()`，"
-             "而它的四條來源是 `warroom_summary` 與 `macro_state.json` —— "
-             "本路徑一個都沒寫。**它們顯示的是上一次跑舊分頁的結果**"),
-        writer=("src/ui/tabs/macro/section_traffic_light.py ＋ "
-                "src/ui/tabs/macro/section_state.py"),
+        label="建議持股（卡①）的「系統風險上限」那一條天花板",
+        session_key="macro_state.json",
+        why=("卡①的最終建議持股 ＝ 姿態帶與各條硬否決天花板取低；其中「系統風險上限」"
+             "（`get_macro_state()` 的 `exposure_limit_pct`）只來自 `macro_state.json`"
+             "（AI 規則引擎的鎖定快照），本路徑不跑那個引擎、不寫那個檔。"
+             "**那一條顯示的是上一次在舊分頁跑 AI 裁決留下的值**（檔不存在或已過期 ＝ 沒有這條天花板）。"
+             "另外：本輪紅綠燈若算不出健康分，`warroom_summary` 會被視為未載入，"
+             "市場位階（卡③）此時也退回讀這個檔"),
+        writer=("src/ui/tabs/macro/section_news_ai.py"
+                "（經 L3 `MacroStateLocker.lock_system_state_only` 寫檔）"),
     ),
     UntouchedBlock(
         label="新聞桶（🗞 系統性風險新聞數）",
@@ -625,6 +652,10 @@ def clear_macro_caches() -> tuple[str, ...]:
     （唯一寫入點在 `section_traffic_light.py`，見 `UNTOUCHED_BLOCKS`）——
     清掉它等於讓使用者按一次「更新」之後，建議持股與市場位階兩張卡
     從「上一輪的舊值」變成「完全沒有」。**那不是更新，是刪資料。**
+    📌 批 Z60 更正（上一段保留不刪，它在寫下的當天為真）：`warroom_summary` 現在由
+    `STEP_WARROOM` 寫得回來；但本函式**仍然不做** `_macro_session_reset()` —— 那 14 個 key
+    裡其餘幾個（`_last_inst` / `_ndc_hist_cache` …）本路徑一樣寫不回來，理由不變。
+    `warroom_summary` 的「整理不出結論就刪」由 `STEP_WARROOM` 自己處理（見 `warroom_apply`）。
     代價：強制重抓模式下，舊值會被新值覆蓋而不是先歸零 —— 若某一源全敗，
     畫面上留的是上一輪的值。這一點由 `cl_ts` 時間戳與本報告的失敗清單承載。
     """
@@ -888,6 +919,53 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
         print(f"[總經刷新] ❌ 市場評估失敗 / 逾時：{_e!r}")
         _step(STEP_MARKET, False,
               f"{type(_e).__name__}: {_e or f'超過 {_MARKET_ASSESS_TIMEOUT_S}s'}")
+
+    # ── 5b. 紅綠燈結論 warroom_summary（批 Z60，RA-1）─────────────
+    # ⚠️ **順序是故意的**：放在市場評估之後（要吃本輪的 `mkt_info`）、資料登錄中心之前
+    #   （registry 掃描的旌旗那一列走 `load_section_inputs` 的 warroom 退路，
+    #   要讓它看到**本輪**的 warroom，不是上一輪的）。
+    # ⚠️ 刪除也要記：`compute_and_store_warroom_summary` 整理不出結論 / 拋例外時會
+    #   pop 既有的那份 —— 「有沒有被刪」用**量**的（前後比對 key 在不在），不靠回傳值，
+    #   因為拋例外的那一條根本沒有回傳值。
+    _market_ok = any(_t.name == STEP_MARKET and _t.ok for _t in _steps)
+    _stale_inputs_note = ("" if _market_ok else
+                          "；⚠️ 市場評估這一輪沒有成功（含逾時），組裝用的是 session **現有**的"
+                          " `mkt_info`（可能是上一輪的值）")
+    # 📌 批 Z60 QA：`STEP_APPLY` 失敗時，它負責的 `MACRO_PATCH_KEYS`（`cl_data` / `cl_ts` /
+    #   `li_latest` …）沒被本輪覆蓋；`apply_macro_bundle` 是先算整份 patch（純函式）再一次
+    #   `update`，算的時候炸 ⇒ 一個 key 都沒寫。這一步照樣會吃 session 現有的那兩份輸入
+    #   （`load_section_inputs` 讀 `cl_data` 與 `li_latest`；後者是外資期貨與韭菜指數的來源）
+    #   —— 與上面市場評估同構，同樣據實揭露。
+    _apply_ok = any(_t.name == STEP_APPLY and _t.ok for _t in _steps)
+    _stale_inputs_note += ("" if _apply_ok else
+                           "；⚠️ 寫入 session（cl_data / 先行指標 / 時間戳）這一輪沒有成功："
+                           "籌碼資料（`cl_data`）與先行指標（`li_latest`：外資期貨、韭菜指數的來源）"
+                           "本輪未更新，組裝用的是 session **現有**的那兩份（可能是上一輪的值，或根本沒有）")
+    _wr_had = "warroom_summary" in st.session_state
+    try:
+        from src.services.warroom_apply import compute_and_store_warroom_summary
+        with _writes_recorded(_writes.setdefault(STEP_WARROOM, [])):
+            _wr_res = compute_and_store_warroom_summary()
+        if _wr_res.written:
+            _step(STEP_WARROOM, True,
+                  "寫入 warroom_summary"
+                  + ("（⚠️ 健康分兩條腿都缺 → `get_macro_state()` 把這份 warroom 視同**未載入**："
+                     "建議持股的姿態帶算不出來；市場位階若有可用的 macro_state.json 會改讀它）"
+                     if _wr_res.health_missing else "")
+                  + _stale_inputs_note)
+        else:
+            _step(STEP_WARROOM, True,
+                  f"{_wr_res.reason}"
+                  + ("；**已刪除上一份 warroom_summary**（不讓上一輪的結論冒充今天的）"
+                     if _wr_res.popped else "")
+                  + _stale_inputs_note,
+                  skipped=True)
+    except Exception as _e:  # noqa: BLE001
+        print(f"[總經刷新] ❌ compute_and_store_warroom_summary 失敗：{_e!r}")
+        _step(STEP_WARROOM, False, f"{type(_e).__name__}: {_e}" + _stale_inputs_note)
+    finally:
+        if _wr_had and "warroom_summary" not in st.session_state:
+            _popped = tuple(dict.fromkeys((*_popped, "warroom_summary")))
 
     # ── 6. 資料登錄中心（純 session 掃描，無對外請求）───────────
     try:

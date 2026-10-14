@@ -169,11 +169,16 @@ def test_every_summary_card_renders_on_the_v2_face(regime, danger):
 # ══════════════════════════════════════════════════════════════════
 @pytest.mark.parametrize("regime", sorted(REGIME_SCENARIOS))
 def test_danger_outcome_never_touches_regime_or_momentum(regime):
+    # 📌 批 Z60 複驗（有意識的修改，⛔ 不是放寬）：期望值由 `P.Tile(card)` 改為
+    #    `P.Tile(P.contract_exit_retargeted(card))` —— 本頁對「位階」格唯一的改動是把對面
+    #    `CONTRACT_NO_EXIT_WHERE` 換成 `EXIT_RETRY_HERE`（Z60 起按鈕寫得到 warroom，舊句在本頁
+    #    不成立）。那個改動與危險度無關、對每一個危險度情境都一樣；本支要守的「危險度不染色
+    #    另兩格」仍是逐欄全等，比對沒有放寬。
     _cards = {_c.key: _c for _c in _summary_cards(**REGIME_SCENARIOS[regime])}
     for _d in DANGER_SCENARIOS:
         _tiles = _summary(regime=regime, danger=_d)
         for _k in ("summary.regime", "summary.momentum"):
-            assert _tiles[_k] == P.Tile(_cards[_k]), (
+            assert _tiles[_k] == P.Tile(P.contract_exit_retargeted(_cards[_k])), (
                 f"危險度 {_d} 染到了 {_k}")
 
 
