@@ -87,14 +87,22 @@ _REVERT_VIEW = (("api_key=_key,\n                         fail_on_blocked_reply=
                  "api_key=_key)"),)
 
 
+# 📌 批 Z56（有意識的變更，⛔ 不是漏改）：Z56 在同一段加了 `stop_on_invalid_number`（L3 預設 False；
+#    新 UI 傳 True）⇒ 先把 Z56 的改動換回（`tests/test_batch_z56.py::Z56_REVERT_PAIRS`），再中和本批 ——
+#    同 Z33 串 Z34、Z36 串 Z40 的慣例；⛔ 不動 `_REVERT_L3`／`_REVERT_VIEW` 本身。
+def _z56_pairs(mod: types.ModuleType) -> tuple:
+    from tests.test_batch_z56 import z56_pairs_for
+    return tuple(z56_pairs_for(mod.__file__))
+
+
 @functools.lru_cache(maxsize=None)
 def _old_l3() -> types.ModuleType:
-    return _mutant(S, *_REVERT_L3)
+    return _mutant(S, *_z56_pairs(S), *_REVERT_L3)
 
 
 @functools.lru_cache(maxsize=None)
 def _old_view() -> types.ModuleType:
-    return _mutant(P, *_REVERT_VIEW)
+    return _mutant(P, *_z56_pairs(P), *_REVERT_VIEW)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -465,7 +473,7 @@ def _card_with(monkeypatch, l3, key_or_resp):
 
 class TestMutations:
     def test_c_the_view_not_opting_in_turns_a_back_into_a_valid_result(self, monkeypatch):
-        m = _mutant(P, *_REVERT_VIEW)
+        m = _mutant(P, *_z56_pairs(P), *_REVERT_VIEW)   # 批 Z56：先換回 Z56 的呼叫參數（見 `_z56_pairs`）
         _qa, built, _c = _pipeline(monkeypatch, _BLOCKED["answer_safety_no_content"][0], view=m)
         assert built[0].state != UI_FAILED and _VALID in built[0].note.why
 
@@ -542,8 +550,9 @@ class TestMutations:
         assert card.state == UI_FAILED, "有字的回答被改判 —— (b) 必須抓到"
 
     def test_c_flipping_the_default_changes_the_legacy_caller(self):
-        m = _mutant(S, ("              fail_on_blocked_reply: bool = False) -> QAResult:",
-                        "              fail_on_blocked_reply: bool = True) -> QAResult:"))
+        # 批 Z56：簽名多了 `stop_on_invalid_number` 一行 ⇒ 錨點改成只含本參數的那一行（突變內容不變）。
+        m = _mutant(S, ("              fail_on_blocked_reply: bool = False,\n",
+                        "              fail_on_blocked_reply: bool = True,\n"))
         resp = _BLOCKED["answer_safety_no_content"][0]
         new = m.run_agent(_Q, api_key="x", gemini_http=lambda _p: resp, tools={})
         old = _old_l3().run_agent(_Q, api_key="x", gemini_http=lambda _p: resp, tools={})

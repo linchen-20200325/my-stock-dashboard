@@ -75,6 +75,11 @@ class QAResult:
     error: Optional[str] = None
     model: str = DEFAULT_MODEL
     tool_calls: list = field(default_factory=list)   # [{"name","args","result"}]
+    #: 批 Z56（客戶 2026-10-13 裁示 B）：`run_agent(stop_on_invalid_number=True)` 在工具結果裡
+    #: 掃到 NaN／±inf 時停下，這裡放「哪幾個項目」（項目名規則見 `_invalid_number_items`）。
+    #: 空 tuple ＝ 沒有異常（修前行為；預設值讓既有建構方式逐字不變）。
+    #: `repr=False`：舊 UI（`tab_ai_chat`，不傳旗標）拿到的 `QAResult` 連 repr 都與修前逐字相同。
+    invalid_items: tuple = field(default=(), repr=False)
 
 
 @dataclass
@@ -455,6 +460,55 @@ def _json_safe(obj):
         return str(obj)
 
 
+# ── 批 Z56：工具結果裡的無效數值（NaN／±inf）→ 停止，不送 Gemini ──────────────────
+#: 英文欄名的工具 → 項目名。⛔ 不新造：每一個都是該工具 `TOOLS_SCHEMA` 描述裡的既有字串
+#: （守衛：`tests/test_batch_z56.py` 逐一驗「是 description 的子字串」）。
+#: 工具 data 的欄名本身是中文（例：`get_market_leading` 的「外資」「選PCR」、
+#: `get_financial_health` 的「毛利率(%)」）時，直接用那個欄名，不查本表。
+TOOL_ITEM_NAMES: dict = {
+    "get_market_state": "目前總經/大盤狀態",
+    "get_stock_score": "個股量化評分",
+    "get_financial_health": "個股財務體質",
+    "get_market_leading": "大盤先行/籌碼",
+    "get_risk_plan": "停損與倉位",
+    "get_etf_quality": "ETF 品質評分",
+}
+
+
+def _has_cjk(text: str) -> bool:
+    return any("\u4e00" <= _ch <= "\u9fff" for _ch in str(text))
+
+
+def _invalid_number_items(tool_name: str, result) -> tuple:
+    """`_json_safe` 之後的工具結果裡，**數值型**欄位是 NaN／±inf（`shared.station_specs.is_invalid_number`）
+    的項目名（依出現順序、去重）。沒有 → `()`。
+
+    · 只看 int／float（⛔ 不看 bool、⛔ 不看字串：字串欄位如股名、來源、日期本來就不是數字，
+      拿 `is_invalid_number` 去判會把每一個字串都判成異常）。
+    · 項目名：最近一層**含中文**的欄名；一路上都是英文欄名 → `TOOL_ITEM_NAMES[tool_name]`
+      （查無此工具 → 工具名本身，只有測試注入的工具會走到）。
+    """
+    from shared.station_specs import is_invalid_number   # 區域 import：L0 純函式，零依賴
+
+    _fallback = TOOL_ITEM_NAMES.get(tool_name, tool_name)
+    _out: list = []
+
+    def _walk(node, label: str) -> None:
+        if isinstance(node, dict):
+            for _k, _v in node.items():
+                _walk(_v, str(_k) if _has_cjk(_k) else label)
+        elif isinstance(node, (list, tuple)):
+            for _v in node:
+                _walk(_v, label)
+        elif (isinstance(node, (int, float)) and not isinstance(node, bool)
+              and is_invalid_number(node)):
+            if label not in _out:
+                _out.append(label)
+
+    _walk(result, _fallback)
+    return tuple(_out)
+
+
 def _parts(resp: dict) -> list:
     try:
         return resp["candidates"][0]["content"]["parts"] or []
@@ -761,7 +815,8 @@ def _history_to_contents(history: Optional[list], max_turns: int = 8) -> list:
 def run_agent(question: str, history: Optional[list] = None, *, api_key: Optional[str] = None,
               gemini_http: Optional[Callable[[dict], dict]] = None, tools: Optional[dict] = None,
               model: str = DEFAULT_MODEL, max_rounds: int = 4,
-              fail_on_blocked_reply: bool = False) -> QAResult:
+              fail_on_blocked_reply: bool = False,
+              stop_on_invalid_number: bool = False) -> QAResult:
     """自由問答(tool-calling 迴圈)。
 
     fail_on_blocked_reply:
@@ -769,6 +824,13 @@ def run_agent(question: str, history: Optional[list] = None, *, api_key: Optiona
         `ok=False` ＋ 上游原文,⛔ 不再回 `ok=True` ＋ 空字串冒充「模型沒話說」(§1)。
         格式完整、自然結束的空回答照舊 `ok=True, text=""`;有文字的回答一律不受影響。
         預設 False = 本參數出現之前的行為,一個 byte 不差(🧬 AI 問答舊分頁 `tab_ai_chat` 不傳)。
+    stop_on_invalid_number:
+        批 Z56(客戶 2026-10-13 裁示 B)。True → 每一輪工具跑完後掃結果(`_invalid_number_items`);
+        有 NaN／±inf → **不送下一輪給 Gemini**,回 `ok=False`、`error` 為客戶句
+        `{項目}資料異常，無法計算，不下結論。`(逐項串接)、`invalid_items` 為項目名。
+        ⛔ 不拿替代值補、⛔ 不把異常值改寫後照送(資料層與 AI 層分離:AI 收不到這份資料)。
+        修前此情境會在 `requests.post(json=...)` 拋 InvalidJSONError,被畫成「Gemini 呼叫失敗」。
+        預設 False = 本參數出現之前的行為,一個 byte 不差(`tab_ai_chat` 不傳)。
     """
     tools = tools if tools is not None else REAL_TOOLS
     http = gemini_http or _make_default_http(api_key or "", model)
@@ -785,11 +847,20 @@ def run_agent(question: str, history: Optional[list] = None, *, api_key: Optiona
         if fcalls:
             contents.append({"role": "model", "parts": [{"functionCall": fc} for fc in fcalls]})
             rparts = []
+            _bad: list = []
             for fc in fcalls:
                 name, args = fc.get("name", ""), (fc.get("args") or {})
                 result = _run_tool(tools, name, args)
                 tool_calls.append({"name": name, "args": args, "result": result})
                 rparts.append({"functionResponse": {"name": name, "response": result}})
+                if stop_on_invalid_number:
+                    _bad += [_i for _i in _invalid_number_items(name, result) if _i not in _bad]
+            if _bad:
+                from shared.station_specs import invalid_data_text
+                _msg = "".join(invalid_data_text(_i) for _i in _bad)
+                print(f"[ai_qa run_agent] 工具結果含無效數值(NaN/±inf)→ 停止、不送 Gemini:{_bad}")
+                return QAResult(ok=False, error=_msg, model=model, tool_calls=tool_calls,
+                                invalid_items=tuple(_bad))
             contents.append({"role": "user", "parts": rparts})
             continue
         text = "".join(p.get("text", "") for p in parts if isinstance(p, dict) and "text" in p).strip()

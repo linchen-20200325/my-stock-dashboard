@@ -175,6 +175,9 @@ _ALLOWED_L3: frozenset[tuple[str, str]] = frozenset({
     ("src.services.data_registry_summary_service", "summarize_data_registry"),
     # 批 Z54（QA D1）：「門檻校準」卡取判燈程式此刻實際使用的值（L3 → L2 常數 ＋ L0 檔內原值）。
     ("src.services.calibration_status_service", "get_calibration_status"),
+    # 批 Z56：進階診斷「雙演算法對帳」卡接線（唯讀、純讀 session ＋ L2 純函式、零網路；
+    #   只在勾開進階診斷後呼叫 —— `tests/test_batch_z56.py` 守 gate）。
+    ("src.services.reconcile_service", "compute_reconcile"),
 })
 
 #: 既有診斷面板。**一支都不准 import** —— 它們自己直接讀別頁的 session

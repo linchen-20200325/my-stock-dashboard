@@ -127,11 +127,23 @@ def _enumerate():
                   _cs, file_health_defense_threshold=99)),                            # 檔≠生效 → 紅
               P.CalibrationReadout(requested=True, error=_E)):                         # 讀不出來 → 紅
         add(P.build_calibration_card(c))
+    # 批 Z56：雙演算法對帳接上線 —— 每一態各建一張（灰／綠／紅）。
+    from src.services.reconcile_service import compute_reconcile
+    for rr in (P.ReconcileReadout(requested=True, report=compute_reconcile({})),          # 全缺 → 灰
+               P.ReconcileReadout(requested=True, report=compute_reconcile(
+                   {"mkt_info": {"score": 3, "max_score": 4}, "jingqi_info": {"avg": 60.0},
+                    "cl_data": {"inst": {"外資": {"net": 1.0}}}})),                     # 有可比對列 → 綠
+               P.ReconcileReadout(requested=True, error=_E)):                          # 讀不出來 → 紅
+        add(P.build_reconcile_card(rr))
     # ── 葉3 AI 問答 ────────────────────────────────────────────────
     for qa in (P.QaReadout(asked=False),
                P.QaReadout(asked=True, key_missing=True, error=P.NO_KEY_ERROR),
                P.QaReadout(asked=True, error=_E),
                P.QaReadout(asked=True, error=P.UNKNOWN_ERROR_TEXT, model="m"),
+               # 批 Z56：資料異常紅卡（同一則 now、另一種 why）—— 一項放得下（卡面帶項目名）、三項放不下（退回通用段）。
+               P.QaReadout(asked=True, error="外資資料異常，無法計算，不下結論。",
+                           tool_calls=("get_market_leading",), invalid_items=("外資",)),
+               P.QaReadout(asked=True, error="x", invalid_items=("毛利率(%)", "負債比率(%)", "現金佔總資產(%)")),
                P.QaReadout(asked=True),
                P.QaReadout(asked=True, answered=True, text="答", model="gemini",
                            tool_calls=("get_health", "get_macro"))):
@@ -854,7 +866,9 @@ _BASELINE_NOW_LITERALS: dict[str, str] = {
     "LEGACY_NOW": "**既有的完整教學內容還沒有搬到這一頁**",
     "ENGINEER_IDLE_NOW": "**進階診斷未載入**",
     "ENGINEER_FAILED_NOW": "**進階診斷本身讀不出來**",
-    "ENGINEER_RECONCILE_NOW": "**雙演算法對帳本頁跑不了**",
+    # 批 Z56：`ENGINEER_RECONCILE_NOW`（未接線說法）隨雙演算法對帳接線刪除；換成接線後的灰一則、紅一則。
+    "RECONCILE_NOT_TRIGGERED_NOW": "**未觸發**",
+    "RECONCILE_FAILED_NOW": "**雙演算法對帳讀不出來**",
     "ENGINEER_API_ROOT_NOW": "**API 根因診斷本頁不做**",
     "ENGINEER_RAW_NOW": "**原始資料表本頁看不到**",
     # 批 Z54：上面原有的 `ENGINEER_REGISTRY_NOW` / `ENGINEER_CALIBRATION_NOW`（未接線說法）隨兩張卡接線刪除；
@@ -879,7 +893,7 @@ def test_every_now_constant_in_the_module_is_pinned():
     """模組裡**每一個** `*_NOW` / `*_NOW_TEMPLATE` / `*_NOW_HEAD` 都在上表 —— 新增一則而沒釘 ⇒ 紅燈。"""
     names = {n for n in vars(P) if re.fullmatch(_NOW_NAME_RE, n)}
     assert names == set(_BASELINE_NOW_LITERALS), names ^ set(_BASELINE_NOW_LITERALS)
-    assert len(names) == 25   # 批 Z54：-2（兩則未接線說法刪除）+3（接線後灰一則、紅兩則）；批 Z55：-1+1
+    assert len(names) == 26   # 批 Z54：-2（兩則未接線說法刪除）+3（接線後灰一則、紅兩則）；批 Z55：-1+1；批 Z56：-1+2
 
 
 # ── 10. QA F4：卡面短句的**忠實度** —— 原文拿來限定的條件／原因／去處／升級路徑，
@@ -921,7 +935,10 @@ _MUST_KEEP: dict[str, dict[str, tuple[str, ...]]] = {
     "ENGINEER_FAILED_NOW": {_WHY: ("拋出例外",),
                             _WHERE: (NO_EXIT_MARKER, "L0 登錄表的問題", "不是某一個資料來源壞掉",
                                      _REPORT)},
-    "ENGINEER_RECONCILE_NOW": {_WHY: ("純函式在 L2", "但 src/services/ 沒有任何一支把它包起來"), _WHERE: _UNWIRED},
+    # 批 Z56：灰 —— 為什麼（輸入一個都沒有）與去處（到「🚦 今天」更新）；紅 —— 出處與升級路徑。
+    "RECONCILE_NOT_TRIGGERED_NOW": {_WHY: ("三列對帳都是「未觸發」", "每一列都至少缺一邊的值"),
+                                    _WHERE: ("到「🚦 今天」更新",)},
+    "RECONCILE_FAILED_NOW": {_WHY: ("L3 雙演算法對帳", "拋出例外"), _WHERE: (NO_EXIT_MARKER, _REPORT)},
     "ENGINEER_API_ROOT_NOW": {_WHY: ("會當場對外送出請求", "L5 直接打外部 API", "明文禁止"),
                               _WHERE: _UNWIRED},
     "ENGINEER_RAW_NOW": {_WHY: ("去翻別頁的 session key", "對方改一個 key，這裡就會靜默變空"),
@@ -936,6 +953,9 @@ _MUST_KEEP: dict[str, dict[str, tuple[str, ...]]] = {
     "QA_NO_KEY_NOW": {_WHY: ("未偵測到 Gemini API 金鑰", "部署端沒有設，或這個環境讀不到"),
                       _WHERE: ("金鑰目前由部署端提供", "環境變數的 GEMINI_API_KEY", NO_EXIT_MARKER)},
     "QA_FAILED_NOW": {_WHY: ("拋出例外",), _WHERE: ("換個問法再送一次", "若持續失敗", _REPORT)},
+    # 批 Z56：同一則 now 的第二種紅（工具結果資料異常）—— 依 why 來源分開（見 `_must_keep_name`）：
+    #   卡面必留客戶句的核心段與升級路徑；⛔ 不得出現「換個問法」（重問一百次也一樣）。
+    "QA_FAILED_NOW#invalid": {_WHY: ("資料異常，無法計算，不下結論。",), _WHERE: (NO_EXIT_MARKER, _REPORT)},
     "QA_EMPTY_NOW": {_WHY: ("沒有回報錯誤", "也沒有給任何文字", "不是故障"),
                      _WHERE: ("換一個更具體的問法",)},
 }
@@ -967,8 +987,26 @@ def _const_name_of(now: str) -> str:
     raise AssertionError(f"這則 now 不在釘死表裡：{now!r}")
 
 
+#: 同一則 now 依 why 來源再分的變體（批 Z56）：`{變體名: 判斷函式(Note) -> bool}`。
+_NOW_VARIANTS: dict[str, object] = {
+    # 依 why 來源分：資料異常紅卡的 Note 帶 L3 回報的項目名（`_InvalidDataNote.invalid_items`）。
+    "QA_FAILED_NOW#invalid": lambda note: bool(getattr(note, "invalid_items", ())),
+}
+
+
+def _must_keep_name(card) -> str:
+    name = _const_name_of(card.note.now)
+    for variant, hit in _NOW_VARIANTS.items():
+        if variant.split("#", 1)[0] == name and hit(card.note):
+            return variant
+    return name
+
+
 def test_must_keep_table_covers_every_pinned_now():
-    assert set(_MUST_KEEP) == set(_BASELINE_NOW_LITERALS)
+    assert set(_MUST_KEEP) == set(_BASELINE_NOW_LITERALS) | set(_NOW_VARIANTS)
+    # 每一個變體都真的被窮舉到（⛔ 不讓變體表成為放寬某一則的死規則）
+    used = {_must_keep_name(b[0]) for b in _NOTES.values()}
+    assert set(_NOW_VARIANTS) <= used, set(_NOW_VARIANTS) - used
     flagged = {b[0].key for b in _BUILTS if b[0].key.startswith("why.spec.")}
     assert flagged == set(_SPEC_WHY), flagged ^ set(_SPEC_WHY)
 
@@ -977,11 +1015,13 @@ def test_must_keep_table_covers_every_pinned_now():
                          ids=[f"{k[0]}|{k[1][:10]}|{i}" for i, k in enumerate(sorted(_NOTES))])
 def test_face_rows_keep_the_qualifiers_of_their_full_text(key):
     card = _NOTES[key][0]
-    name = _const_name_of(card.note.now)
+    name = _must_keep_name(card)   # 批 Z56：同一則 now 依 why 來源分變體（原為 `_const_name_of(card.note.now)`）
     face = dict(_face_rows(_html(_NOTES[key])))
     for label, phrases in _MUST_KEEP[name].items():
         for ph in phrases:
             assert ph in face[label], f"{card.key}「{label}」卡面少了「{ph}」：{face[label]!r}"
+    if name == "QA_FAILED_NOW#invalid":
+        assert "換個問法" not in face[_WHERE], face[_WHERE]
     if name == "SOURCE_UNKNOWN_NOW_HEAD":
         assert any(all(ph in face[_WHY] for ph in g) for g in _UNKNOWN_WHY_ANY), face[_WHY]
     if card.key.startswith("why.spec."):
