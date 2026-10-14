@@ -108,6 +108,9 @@ _HDR_JSON = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 #:     proxy 丟 SYN（三段全走）**267.7 秒**（量測日 2026-10-14）；
 #:   · 修後（timeout=6、attempts=1）同一「proxy 丟 SYN」情境 **18.05 秒**（量測日 2026-10-14）；
 #:     守衛：`tests/test_batch_z59.py::TestBlockingBound`。
+#: ⚠️ **上限的適用範圍**：只涵蓋「連不上」與「接了不回」。**不涵蓋** DNS 解析卡住（不受 requests
+#:    timeout 管），也不涵蓋對方慢速吐資料 —— requests 的 timeout 是**連線**與**兩次讀取之間的間隔**
+#:    各自計時，不是整個請求的總時限；每隔幾秒吐一點的上游可以讓單一請求遠超過 6 秒。
 HOLIDAY_FETCH_TIMEOUT_SEC: int = 6
 HOLIDAY_FETCH_ATTEMPTS: int = 1
 

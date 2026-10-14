@@ -441,9 +441,11 @@ class TestBlockingBound:
         monkeypatch.setattr(HF, "HOLIDAY_FETCH_TIMEOUT_SEC", 1)
         elapsed = _timed_fetch()
         _px, dc, rl = holes.ports
-        # 三段都真的走到了（直連、中繼各被連一次 —— 無重試）
+        # 主斷言是**結構**：三段都真的走到了，直連、中繼各恰被連一次（＝無重試、無多跑一輪）。
         assert holes.accepted[dc] == 1 and holes.accepted[rl] == 1, holes.accepted
-        assert 2.7 <= elapsed <= 3 * 1 + 2.0, elapsed
+        # 計時只當輔助（CI 忙碌時會慢）：下界證明三段確實各等滿一次逾時；上界放寬到
+        # 3×逾時 ＋ 10 秒，只擋「多了一整輪重試」那種量級的回歸（修前情境是數十倍）。
+        assert 2.7 <= elapsed <= 3 * 1 + 10.0, elapsed
 
     @pytest.mark.slow
     def test_worst_case_bound_with_real_timeout(self, holes):

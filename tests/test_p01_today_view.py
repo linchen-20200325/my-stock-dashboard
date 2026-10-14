@@ -848,6 +848,7 @@ class TestNoGlobalUniquenessClaim:
 # ══════════════════════════════════════════════════════════════════
 # 冒煙（slow lane）：這一頁真的畫得出來
 # ══════════════════════════════════════════════════════════════════
+@pytest.mark.usefixtures("stub_trading_day_status")  # 批 Z59：交易日格不連外網
 @pytest.mark.slow
 def test_page_mounts_clean(tmp_path):
     """冷啟動 session 整頁 mount：**沒有 uncaught exception、不是半截頁面**。"""

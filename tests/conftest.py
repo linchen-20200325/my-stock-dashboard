@@ -261,3 +261,57 @@ def stub_trading_day_status(monkeypatch):
                                    next_trading_day=date(2026, 9, 7))
     monkeypatch.setattr(_tcs, "get_today_trading_status", lambda now=None: _fixed)
     return _fixed
+
+
+#: 批 Z59 QA：證交所休市表端點的辨識字樣（今天頁狀態列「交易日」格每一輪都讀它）。
+_LIVE_HOLIDAY_HOST = "openapi.twse.com.tw"
+_LIVE_HOLIDAY_PATH = "holidaySchedule"
+
+
+@pytest.fixture(autouse=True)
+def _forbid_live_holiday_schedule():
+    """守衛：任何測試**真的**去打證交所休市表（`openapi.twse.com.tw/v1/holidaySchedule/…`）⇒ 該測試失敗。
+
+    ⚠️ 攔在 `requests.Session.request`：L1 `twse_holiday_fetcher._fetch_json` → `proxy_helper.fetch_url`
+    的 proxy／降級直連兩段走 thread-local `Session.get`，NAS 中繼走 `requests.get`（內部也是
+    `Session.request`，目標 URL 放在 `params={'url': …}`）—— 三段都經過這一層，故連 `params` 一起比。
+    ⚠️ **只 raise 不夠**：`fetch_url` 與 `nas_relay_fetch` 會 `except Exception` 吞掉並回 None，
+    頁面照樣畫出紅卡、測試照樣綠 ⇒ 另外記下來，在 teardown 用 `pytest.fail` 讓測試本身轉紅。
+    ⚠️ 不影響：已用 `stub_trading_day_status`（stub 在 L3，根本不會走到 L1）、直接 patch
+    `fetch_url`／`fetch_twse_holiday_calendar` 的測試、以及 127.0.0.1 黑洞測試（host 不符）。
+    刻意不分 fast／slow lane：slow lane 同樣 ⛔ 不得依賴外網。
+    ⚠️ **刻意不用 `monkeypatch` 夾具**：autouse 夾具若先要了 `monkeypatch`，那個（與測試共用的）
+    實例會比測試模組自己的 autouse 夾具**更晚**拆除 ⇒ 模組夾具 teardown 時還看得到測試的 patch
+    （實測 `test_d5_twse_holiday_calendar.py::_clear` 因此 AttributeError）。改成手動裝／還原。
+    """
+    import requests
+
+    # ⚠️ L1 失敗後有 180 秒冷卻（冷卻期內不打上游、直接再拋）⇒ 同一個 pytest 行程裡只有**第一支**
+    #    連網的測試會走到 requests 層被抓到，其餘的被冷卻遮住、照樣綠。每支測試開始前清掉
+    #    L1 的快取與冷卻（只在模組已載入時；不為此 import 任何東西）。
+    _hf = sys.modules.get("src.data.stock.twse_holiday_fetcher")
+    _clear = getattr(getattr(_hf, "fetch_twse_holiday_calendar", None), "clear", None)
+    if callable(_clear):
+        _clear()
+
+    _hits: list[str] = []
+    _orig = requests.Session.request
+
+    def _guarded(self, method, url, *args, **kwargs):
+        _params = kwargs.get("params", args[0] if args else None)
+        _blob = f"{url} {_params!r}"
+        if _LIVE_HOLIDAY_HOST in _blob and _LIVE_HOLIDAY_PATH in _blob:
+            _hits.append(f"{method} {url} params={_params!r}")
+            raise RuntimeError(
+                "測試不得連真實的證交所休市表 —— 請掛 `stub_trading_day_status` 夾具"
+                "（tests/conftest.py）或 patch L1／L3")
+        return _orig(self, method, url, *args, **kwargs)
+
+    requests.Session.request = _guarded
+    try:
+        yield
+    finally:
+        requests.Session.request = _orig
+    if _hits:
+        pytest.fail("本測試對外連了證交所休市表（fast／slow lane 皆不得依賴外網）：\n  "
+                    + "\n  ".join(_hits), pytrace=False)

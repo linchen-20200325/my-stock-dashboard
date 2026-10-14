@@ -425,6 +425,7 @@ class TestNothingRunsUntilYouPick:
                 "§1：要紅態說出來，不是假裝使用者沒選")
 
 
+@pytest.mark.usefixtures("stub_trading_day_status")  # 批 Z59：交易日格不連外網
 @pytest.mark.slow
 class TestPickingAPageReplacesTheWholeMainArea:
     """選新頁 → 頁籤列與置底條都不出現；免責聲明照出。"""

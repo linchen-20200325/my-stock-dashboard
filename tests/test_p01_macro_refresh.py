@@ -1487,6 +1487,7 @@ class TestMutationContentAudit:
             "真版的進度列必須看得出「只拿到一部分」"
 
 
+@pytest.mark.usefixtures("stub_trading_day_status")  # 批 Z59：交易日格不連外網
 class TestTheReportReachesTheScreen:
     """端到端：★1 / ★2 的結論**真的畫得出來**（不是只存在報告物件裡）。
 
@@ -1538,6 +1539,7 @@ class TestTheReportReachesTheScreen:
             "一輪有空桶的更新居然還在畫面上說「都拿到了」"
 
 
+@pytest.mark.usefixtures("stub_trading_day_status")  # 批 Z59：交易日格不連外網
 class TestAStaleReportDoesNotBlankThePage:
     """熱重載後 session 留著舊格式的報告 → 要變成紅字，不是整頁空白。"""
 

@@ -204,6 +204,7 @@ def test_summary_block_cols_unchanged():
 # ══════════════════════════════════════════════════════════════════
 # 5. 畫面端真的接上（拔掉接線 ⇒ 轉紅）
 # ══════════════════════════════════════════════════════════════════
+@pytest.mark.usefixtures("stub_trading_day_status")  # 批 Z59：交易日格不連外網
 @pytest.mark.slow
 @pytest.mark.parametrize("mode", ["cold", "live"])
 def test_page_renders_the_wired_risk_cell(tmp_path, mode):
