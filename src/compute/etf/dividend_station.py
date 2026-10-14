@@ -287,7 +287,14 @@ def health_b(sharpe: float | None) -> Flag:
     （抓取失敗的話 `assess_holding` 早在週K 為空時就 raise 了）。實測 health_b 與
     health_c 在**完全相同的週數**翻燈（13 週 ⚪ / 14 週 🟢）,同一個病因不該標成兩種原因。
     標成「可以重跑一次」對新上市 ETF 是錯誤指引 —— 該等的是時間,不是重跑。
+
+    批 Z58（客戶 2026-10-13 裁示 B，沿用批 Z49 健檢 A／D 的處置）：Sharpe 是 NaN／±inf／
+    轉不成數字 → ⚪ 不判定（⛔ 不判 🔴 汰弱、⛔ 不判 🟢），`Flag.invalid=True`，說明用
+    `SS.INVALID_DATA_TEXT`（項目名「夏普」）；`miss_reason` 留空（理由同 `health_a`）。
+    修前 NaN 的 `< 0` 為 False → 亮 🟢「Sharpe nan ≥ 0」；-inf → 🔴「Sharpe -inf < 0」。
     """
+    if SS.is_invalid_number(sharpe):
+        return Flag("⚪", SS.invalid_data_text("夏普"), invalid=True)
     if sharpe is None:
         return Flag("⚪", "B 無夏普（週數不足或波動為零,算不出來）",
                     miss_reason=SS.MISS_NOT_ENOUGH)

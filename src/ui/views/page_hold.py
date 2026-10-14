@@ -76,6 +76,7 @@
     配息現金流    L3 `services.portfolio_deep_service.get_dividend_cash_flow` ← **本批新增**
     換入候選      L3 `services.dividend_station_service.get_switch_in_candidates`
     換股建議      L3 `services.dividend_station_service.build_switch_advice`
+    換入異常列    L3 `services.dividend_station_service.switch_in_invalid_rows`  ← 批 Z58（純函式，唯讀）
     綁定狀態      L3 `services.portfolio_binding_service.get_binding_state`
     VIX（單獨）   L3 `services.dividend_station_service.fetch_vix`
     總經位階      L3 `services.dividend_station_service.get_station_macro`
@@ -1358,10 +1359,14 @@ class SwitchReadout:
     #: 對它們是略過的（沒被判過換出／換入）。由 `load_switch()` 判一次，卡與 ⑦ 都讀這一份。
     rows_failed: tuple[str, ...] = ()
     error_src: str | None = None
-    #: 批 Z53：持有列健檢 A 資料異常、判不出要不要換出的 `((代號, (客戶句, …)), …)` ——
+    #: 批 Z53：持有列健檢 A（批 Z58 起含 B）資料異常、判不出要不要換出的 `((代號, (客戶句, …)), …)` ——
     #: 取自 L3 `build_switch_advice()` 的 `switch_out_invalid`（只有異常時才有）。
     #: 預設空 ＝ 修前行為。
     rows_invalid: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    #: 批 Z58：**觀察清單列**因健檢資料異常、沒被判過能不能換入的 `((代號, (客戶句, …)), …)` ——
+    #: 取自 L3 `switch_in_invalid_rows()`。只在這一輪**沒有任何建議**時才影響結論
+    #: （「沒有可換入」判不出來）。預設空 ＝ 修前行為。
+    rows_invalid_in: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @property
     def scope_idle(self) -> bool:
@@ -1377,6 +1382,8 @@ class SwitchReadout:
         ⚠️ 批 Z53：已有 🔴 換出時，異常列**不**讓這一輪變成算不完整 —— 🔴 照常下結論、
         照常進 ⑦；異常列只在 ④ 卡 facts 另外標出（同 Z51 換入不過度封鎖）。
         """
+        if self.rows_invalid_in and not self.has_advice:   # 批 Z58：觀察清單列異常、這一輪 0 建議
+            return True
         return bool(self.error or self.rows_failed
                     or (self.rows_invalid and not self.switch_out))
 
@@ -1414,6 +1421,7 @@ def load_switch(station: StationReadout, macro: MacroReadout,
         from src.services.dividend_station_service import (
             build_switch_advice,
             get_switch_in_candidates,
+            switch_in_invalid_rows,
         )
         # strict=True（批次 2，2026-09-26）：選股池取不到時 L3 **拋例外**，不回 [] ——
         # 否則「選股池沒拿到」會被畫成「這一輪沒有候選」（灰「有效的結果」）或
@@ -1427,6 +1435,7 @@ def load_switch(station: StationReadout, macro: MacroReadout,
         except Exception as _ce:  # noqa: BLE001 — 下方依是否用到選股池決定轉紅
             _cands, _cands_err = [], repr(_ce)
         _adv = build_switch_advice(list(station.rows), _macro_payload(macro), _cands)
+        _in_invalid = switch_in_invalid_rows(list(station.rows))    # 批 Z58
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] 換股建議失敗 → 轉紅態：{_e!r}")
         return SwitchReadout(requested=True, submitted=station.submitted,
@@ -1454,7 +1463,11 @@ def load_switch(station: StationReadout, macro: MacroReadout,
         # 批 Z53：L3 標好的「健檢資料異常、判不出要不要換出」的持有列（只讀，不重判）。
         rows_invalid=tuple(
             (str(_d.get("代號", "")), tuple(str(_t[1]) for _t in (_d.get("項目") or ())))
-            for _d in (_adv.get("switch_out_invalid") or ())))
+            for _d in (_adv.get("switch_out_invalid") or ())),
+        # 批 Z58：L3 標好的「健檢資料異常、判不出能不能換入」的觀察清單列（只讀，不重判）。
+        rows_invalid_in=tuple(
+            (str(_d.get("代號", "")), tuple(str(_t[1]) for _t in (_d.get("項目") or ())))
+            for _d in (_in_invalid or ())))
 
 
 def _macro_payload(macro: MacroReadout) -> dict:
@@ -2181,8 +2194,8 @@ def _switch_invalid_groups(rows: Sequence[tuple[str, Sequence[str]]]
                            ) -> tuple[tuple[tuple[str, ...], str], ...]:
     """批 Z53：`((代號, …), 客戶句)` —— 同一句的代號併在一起（保序、去重）。
 
-    句子是 L2 該盞燈不判定時的說明（`SS.INVALID_DATA_TEXT` 組成，經 L3 `switch_out_invalid` 帶下來），
-    本檔一字不改、⛔ 不另寫。
+    句子是 L2 該盞燈不判定時的說明（`SS.INVALID_DATA_TEXT` 組成，經 L3 `switch_out_invalid` 帶下來；
+    批 Z58 起觀察清單列另經 L3 `switch_in_invalid_rows()` 帶下來），本檔一字不改、⛔ 不另寫。
     """
     _by: dict[str, list[str]] = {}
     for _code, _sentences in rows:
@@ -2227,7 +2240,7 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
     #    根本沒判過，那不是完整的建議；已算出的換出／換入照樣列在 facts（不藏）。
     # 判定本身在 `load_switch()`（`SwitchReadout.rows_failed`），本卡只讀。
     _rows_failed = () if switch.error else switch.rows_failed
-    # 批 Z53（客戶 2026-10-13 裁示 B）：持有列的健檢 A 資料異常 → 那幾檔**沒被判過要不要換出**
+    # 批 Z53（客戶 2026-10-13 裁示 B）：持有列的健檢 A（批 Z58 起含 B）資料異常 → 那幾檔**沒被判過要不要換出**
     # （⛔ 不等於「沒有紅燈」）。
     #   · 沒有任何 🔴 換出 → 這一輪「換出幾檔」的結論被它影響 → 同上一則（整批抓取失敗）：
     #     `has_value` 視為 False → 紅；why 只用客戶句（L2 該燈的說明）；
@@ -2235,6 +2248,12 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
     #     （「代號｜客戶句」，⛔ 不新寫文案）。
     _rows_invalid = () if switch.error else switch.rows_invalid
     _invalid_blocks = () if switch.switch_out else _rows_invalid
+    # 批 Z58：只有**觀察清單列**健檢資料異常、而這一輪換出換入都是 0 → 「沒有可換入」判不出來，
+    # ⛔ 不得落到灰卡「這是一個有效的結果」。處置同上一則（紅；why 只用 L2 客戶句，⛔ 不新寫文案）。
+    # 有任何換出／換入時不封鎖（同 Z53：有結論時照常下結論、facts 附異常行，見下方 facts 那一則）。
+    # 📌 批 Z58 F1 更正（有意識的更正，⛔ 不是漏刪）：本行原寫「同 Z51：不過度封鎖已算出的結論」——
+    #    不精確：Z51 講的是 235／3-3-3 不參與換入判定；本處的對稱先例是 Z53 持有列的處置。
+    _invalid_blocks += () if (switch.error or switch.has_advice) else switch.rows_invalid_in
     _state = classify_ui_state(
         requested=switch.requested,
         error=switch.error or None,
@@ -2273,6 +2292,13 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
     if _rows_invalid and switch.switch_out:      # 批 Z53：有 🔴 時異常列另外標出
         _facts.extend(("、".join(_codes), _s)
                       for _codes, _s in _switch_invalid_groups(_rows_invalid))
+    # 批 Z58 F1（比照上一則 Z53 的對稱處置）：觀察清單列健檢資料異常、而這一輪**有建議**（有換出或
+    # 有換入）→ 結論照常（不封鎖），但那一列沒被判過能不能換入（若它其實是綠燈，換入會改成它）→
+    # facts 附「代號｜客戶句」，格式與 helper 同上一則；無建議時已在上面轉紅、why 已講，這裡不重複。
+    _rows_invalid_in = () if switch.error else switch.rows_invalid_in
+    if _rows_invalid_in and switch.has_advice:
+        _facts.extend(("、".join(_codes), _s)
+                      for _codes, _s in _switch_invalid_groups(_rows_invalid_in))
     if _state == UI_LIVE:
         return (Card(key="hold.switch", label="換股建議（該換）", state=UI_LIVE,
                      value=(f"換出 {len(switch.switch_out)} 檔 → "
@@ -4218,10 +4244,17 @@ _V2_INVALID_WHY: tuple[str, ...] = tuple(
 ITEM_DIVIDEND: str = "配息"
 #: 批 Z53：④ 換股卡「健檢資料異常」的客戶句（整句就是摘錄，代號清單在摺疊區原文）。
 #: 項目名＝L2 `compute.etf.dividend_station.health_a` 不判定時填進 `INVALID_DATA_TEXT` 的那兩個
-#: （近一年總報酬／配息率；④ 只有健檢 A 異常會影響換出，見 L3 `_SWITCH_OUT_INVALID_KEYS`）。
+#: （近一年總報酬／配息率；~~④ 只有健檢 A 異常會影響換出~~，見 L3 `_SWITCH_OUT_INVALID_KEYS`）。
+#: 📌 批 Z58 更正（有意識的更正，⛔ 不是漏刪）：「只有健檢 A」已不成立 —— 健檢 B 也有資料異常路徑且會亮 🔴，
+#:    同樣影響換出（其客戶句「夏普…」登記在下方 `_V2_SWITCH_INVALID_WHY_Z58`）。本常數內容一字未動。
 #: L2 改了項目名 → 這裡對不上 → `KeyError` → 看得見的紅卡（⛔ 不靜默），且 `tests/test_batch_z53.py` 守住。
 _V2_SWITCH_INVALID_WHY: tuple[str, ...] = tuple(
     invalid_data_text(_i) for _i in ("近一年總報酬", "配息率"))
+#: 批 Z58：同上，補 ④ 新增會出現的客戶句 —— 持有列健檢 B（L2 `health_b` 的「夏普」，B 會亮 🔴 →
+#: 影響換出），以及觀察清單列健檢 B／C／D（L2 `health_b`「夏普」／`health_c`「週收」／
+#: `health_d`「折溢價」→ 影響「沒有可換入」）。項目名照抄 L2，⛔ 不新寫；上一個常數一字未動。
+_V2_SWITCH_INVALID_WHY_Z58: tuple[str, ...] = tuple(
+    invalid_data_text(_i) for _i in ("夏普", "週收", "折溢價"))
 
 #: 上游例外的「為什麼」：`{出處}拋出例外：{repr(e)}` 摘成「{出處的前綴}…拋出例外」
 #: （出處全名與例外原文在摺疊區）。出處前綴取該 `SRC_*` 常數本身的開頭。
@@ -4330,7 +4363,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     + [_v2_rows_for("hold.switch", SWITCH_FAILED_NOW, (
            None, (_v2_raised(SRC_SWITCH), _v2_raised(SRC_HOLDINGS),
                   "整批抓取失敗 —— 看該列的錯誤訊息",
-                  *_V2_SWITCH_INVALID_WHY),         # 批 Z53：健檢資料異常
+                  *_V2_SWITCH_INVALID_WHY,          # 批 Z53：健檢資料異常
+                  *_V2_SWITCH_INVALID_WHY_Z58),     # 批 Z58：健檢 B（持有）／B·C·D（觀察清單）
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.switch", SWITCH_NO_HOLDINGS_NOW, _V2_STATION_ERROR),
        _v2_rows_for("hold.switch", SWITCH_EMPTY_NOW, (

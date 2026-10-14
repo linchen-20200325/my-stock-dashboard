@@ -2202,8 +2202,10 @@ def _render_screen_form(labels: Mapping[str, str]) -> bool:
                        if labels[_l] == DEFAULT_FACTOR_KEY]
     if not _default_labels:
         # §1 Fail Loud：預設因子從 SSOT 消失了 → **就地降級並說明**，
-        # 不靜默退回「第一項」（第一項正好是本頁未接線的估值因子，
-        # 那會讓每個人的預設名單都少算一個因子而沒有任何跡象）。
+        # 不靜默退回「第一項」（第一項正好是估值因子 `PE_FACTOR_KEY`，每一次都要額外
+        # 打 TWSE ＋ TPEX 取數；那會讓每個人的預設名單都悄悄換成另一個因子而沒有任何跡象）。
+        # 批 Z58 更正（事實更正）：原寫「第一項正好是本頁未接線的估值因子」—— 估值已於
+        # 2026-09-07 FE-18 接線（見 `DEFAULT_FACTOR_KEY` / `PE_FACTOR_KEY` 的註解），「未接線」不再屬實。
         st.warning(
             f"⚠️ 預設因子 `{DEFAULT_FACTOR_KEY}` 不在 L3 `SCREEN_ANGLE_LABELS` "
             "裡（對面可能改了因子 key）—— 本次表單**不預選任何因子**，"
