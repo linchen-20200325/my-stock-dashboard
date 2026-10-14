@@ -856,6 +856,43 @@ SRC_BINDING: str = (
 SHEET_CARD_KEY: str = "statusbar.sheet"
 SHEET_CARD_LABEL: str = "Sheet 綁定"
 
+# ══════════════════════════════════════════════════════════════════
+# （跨頁）頂部狀態列「交易日」那一格 —— 批 Z59 接線（客戶 Q-z31：切換前必做）
+# ══════════════════════════════════════════════════════════════════
+#: 來源：L3 `services.trading_calendar_service.get_today_trading_status()`（批 D5）。
+#: ⚠️ **文案出處據實標明**（客戶：新造白話 ＝ §1 捏造，⛔ 不得冒稱線框原文）：
+#:   · 交易日的大字**格式**取自線框 `stock_ia_v1.html` 狀態列 live 原文
+#:     「09/05 週五 ✅ 交易日」—— 日期與星期換成 L3 回的**台北當日**，⛔ 不是寫死的字面。
+#:   · 其餘（休市的大字、讀不出來的三要素、已知限制）**線框沒有原文**，
+#:     是批 Z59 實作組**內部擬稿**（L3 檔頭自陳「L5 待文案規格（K1）」），交總管審。
+#:   · 休市**原因**（例：國慶日）⛔ 不畫：L3 `TradingDayStatus` **沒有這個欄位**
+#:     （L1 表內有 `Name`，但 L3 沒帶出來）。畫一個原因就是捏造（§1）。
+TRADING_DAY_CARD_KEY: str = "statusbar.trading_day"
+#: 標籤沿用對面 `build_status_bar_cards()` 那一格的原字面（⛔ 不改名：畫面上同一格不換標題）。
+TRADING_DAY_CARD_LABEL: str = "交易日"
+#: 星期幾的字（`date.weekday()` 0=週一）。與線框「週五」同寫法。
+TRADING_DAY_WEEKDAY_CHARS: str = "一二三四五六日"
+#: 大字的兩種結論。交易日那句的「✅ 交易日」逐字取自線框 live 原文。
+TRADING_DAY_OPEN_TEXT: str = "✅ 交易日"
+TRADING_DAY_CLOSED_TEXT: str = "休市"
+TRADING_DAY_FAILED_NOW: str = "**今天是不是交易日判不出來**"
+TRADING_DAY_FAILED_WHERE: str = (
+    "今天開不開市請以臺灣證券交易所公告為準；若只是來源暫時連不上，"
+    "稍後重新整理頁面會再試一次（失敗後短時間內不重打來源，以免轟炸上游）")
+#: L3 回報「無法判定」（不是拋例外）時 why 的**後綴**（接在 L3 給的原因後面的括號裡）。
+#: ⚠️ 原因放前面、出處放括號：卡面 why 列在子句邊界收尾（`_v2_why_phrase`），
+#:    出處放前面的話卡面只剩「L3 交易日曆服務」這半句、真正的原因只活在 hover。
+TRADING_DAY_UNDETERMINED_WHY: str = "回報無法判定；不以「平日就是交易日」代替"
+SRC_TRADING_CALENDAR: str = (
+    "L3 交易日曆服務（`services.trading_calendar_service.get_today_trading_status`）")
+#: 只放 hover（`V2_HOVER_ONLY_FACTS`）的揭露列。L2 `compute/trading_calendar.py` 檔頭
+#: 「已知限制」明文要求：**呼叫端若要顯示，須自行揭露**臨時休市不在官方年度表內。
+#: 它是免責說明、⛔ 不是觀測值 ⇒ 不佔卡面（不增卡面欄位），滑過看得到。
+TRADING_DAY_LIMIT_FACT_KEY: str = "已知限制"
+TRADING_DAY_LIMIT_TEXT: str = (
+    "颱風等臨時休市不在證交所年度休市表內 —— 那一天本格仍可能顯示交易日，"
+    "請以當天主管機關公告為準")
+
 
 def _error_why(source: str, error: Any) -> str:
     """把上游例外轉成一句可以放進 `Note.why` 的話，**出處講對**。
@@ -2049,6 +2086,87 @@ def status_bar_cards_with_sheet(bars: Sequence[Card], sheet: Card) -> tuple[Card
     return tuple(sheet if _c.key == sheet.key else _c for _c in bars)
 
 
+def load_trading_day_status() -> tuple[Any, str]:
+    """（跨頁）狀態列「交易日」那一格的讀數。回 `(TradingDayStatus | None, err)`。
+
+    `err` 非空 ⇔ L3 **拋了例外**（`repr(e)`）；L3 自己回報「無法判定」時照樣回物件
+    （`status.error` 非空），由 `build_trading_day_tile()` 轉紅 —— 兩種紅的出處說法不同。
+
+    ⚠️ **每一輪都讀、⛔ 不加按鈕 gate**（批 Z59 判斷，交總管審）：
+    客戶裁示的判準是「冷啟動會對外抓**且無快取保護**才改觸發方式」。L1
+    `twse_holiday_fetcher` 有兩層保護 —— 成功結果 `TTL_1DAY` 快取（鍵帶台北當年），
+    失敗走 `FailCooldown` 退避（冷卻期內直接再拋、不打上游）—— 判準不成立。
+    加按鈕 ＝ 狀態列多一個控制項 ＝ 版面異動（草稿先行），本批不做（同 Sheet 那一格）。
+    ⚠️ **代價據實揭露**：當天第一次（或冷卻期過後重試時）那一輪會同步等上游回應
+    （沙箱 proxy 拒連時實測就有可感的延遲，逾時情形更久；⛔ 不寫秒數 —— 沒有守衛在守它）。
+    """
+    try:
+        from src.services.trading_calendar_service import get_today_trading_status
+        return get_today_trading_status(), ""
+    except Exception as _e:  # noqa: BLE001 — 轉成紅卡顯示，不吞
+        print(f"[views/page_today] 交易日讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
+        return None, repr(_e)
+
+
+def _trading_day_value(day: Any, text: str) -> str:
+    """線框格式「09/05 週五 ✅ 交易日」—— 日期與星期一律取 L3 回的台北當日。"""
+    return f"{day:%m/%d} 週{TRADING_DAY_WEEKDAY_CHARS[day.weekday()]} {text}"
+
+
+def build_trading_day_tile(status: Any, *, error: str = "") -> Tile:
+    """（跨頁）狀態列的「交易日」那一格 —— **已接線、唯讀**。
+
+    三態（⛔ 不混）：
+      · 交易日 → `live`（綠），大字「MM/DD 週X ✅ 交易日」。
+      · 休市   → `live`（綠）—— **有效結果**（判得出來，只是今天不開市），大字「MM/DD 週X 休市」。
+      · 判不出來 → `failed`（紅）：L3 拋例外（`error` 非空）、L3 回報無法判定
+        （`status.error` 非空），或回了 `is_trading_day=None` 卻沒附原因（契約漂移，⛔ 不猜）。
+    ⛔ 沒有灰態：本頁每一輪都讀（見 `load_trading_day_status`），不存在「還沒叫」。
+    ⚠️ `requested=True` 是陳述「本頁每一輪都讀」，⛔ 不是從資料反推。
+    每一態都帶 `TRADING_DAY_LIMIT_FACT_KEY` 那一列（只進 hover，見 `V2_HOVER_ONLY_FACTS`）。
+    """
+    _limit = ((TRADING_DAY_LIMIT_FACT_KEY, TRADING_DAY_LIMIT_TEXT),)
+    _verdict = None if status is None else getattr(status, "is_trading_day", None)
+    _why = ""
+    if error:
+        _why = _error_why(SRC_TRADING_CALENDAR, error)
+    elif status is None or _verdict is None:
+        _l3_err = "" if status is None else str(getattr(status, "error", "") or "")
+        _l3_err = _l3_err or (
+            "L3 回傳 is_trading_day=None 卻沒有附 error（契約漂移）" if status is not None
+            else "L3 沒有回傳任何結果")
+        _clean, _n = scrub_state_glyphs(scrub_secrets(_l3_err))
+        _why = f"{_clean}（{SRC_TRADING_CALENDAR}{TRADING_DAY_UNDETERMINED_WHY}）"
+        if _n:
+            _why += ("（上游訊息裡的狀態符號已移除，"
+                     "以免和這張卡自己的狀態燈混成兩個互相矛盾的說法）")
+    _state = classify_ui_state(requested=True, error=_why or None,
+                               has_value=_verdict is not None)
+    if _state == UI_LIVE:
+        _text = TRADING_DAY_OPEN_TEXT if _verdict else TRADING_DAY_CLOSED_TEXT
+        return Tile(Card(key=TRADING_DAY_CARD_KEY, label=TRADING_DAY_CARD_LABEL,
+                         state=UI_LIVE, value=_trading_day_value(status.today, _text)),
+                    facts=_limit)
+    return Tile(Card(key=TRADING_DAY_CARD_KEY, label=TRADING_DAY_CARD_LABEL, state=_state,
+                     note=Note(now=TRADING_DAY_FAILED_NOW, why=_why,
+                               where=TRADING_DAY_FAILED_WHERE)),
+                facts=_limit)
+
+
+def status_bar_tiles_with_trading_day(tiles: Sequence[Tile], trading: Tile) -> tuple[Tile, ...]:
+    """把狀態列的「交易日」未接線格換成本頁接好的那一格。**只換那一格**（同 Sheet 那一格的作法）。
+
+    ⛔ `tab_today.py` 一個字都沒動：它那份骨架仍標未接線（`render_tab_today` 無 production caller）。
+    對面沒有恰好一格（key 改了／被刪了）→ `KeyError`（§1：⛔ 不靜默少畫、⛔ 不憑空多一格）。
+    """
+    _key = trading.card.key
+    if sum(1 for _t in tiles if _t.card.key == _key) != 1:
+        raise KeyError(
+            f"狀態列沒有恰好一格 {_key!r} "
+            f"（實際：{[_t.card.key for _t in tiles]}）—— 對面的狀態列改過了，本頁不猜位置。")
+    return tuple(trading if _t.card.key == _key else _t for _t in tiles)
+
+
 def _load_regime() -> tuple[Mapping[str, Any] | None, str]:
     """`get_macro_regime()`（市場位階 SSOT）。回 `(regime_dict, err)`。"""
     try:
@@ -2332,6 +2450,8 @@ V2_EXIT_PHRASES: tuple[tuple[str, str], ...] = (
     # 批 Z54：狀態列「Sheet 綁定」接線後的兩句指路（皆為頁4 既有原文，短語＝原文的一段）。
     (SHEET_UNBOUND_WHERE,         "現行入口在側欄「🔐 Google 帳號」"),
     (SHEET_FAILED_WHERE,          SHEET_FAILED_WHERE),
+    # 批 Z59：狀態列「交易日」接線後的紅態指路（實作組內部擬稿，短語＝原文開頭的一段）。
+    (TRADING_DAY_FAILED_WHERE,    "以證交所公告為準"),
 )
 
 #: 三要素**第三列**（`Note.where`）的 fact 列標籤。用語沿用鐵律 4 的三要素字面。
@@ -2422,6 +2542,9 @@ V2_WHY_MAX_CHARS: int = v2_markup.FACT_VALUE_MAX_CHARS
 #:    是觀測值 → ⛔ 不准移進來（那就是把使用者該看到的東西藏進 hover）。
 V2_HOVER_ONLY_FACTS: dict[str, frozenset[str]] = {
     "verdict.regime": frozenset({REGIME_SCOPE_FACT_KEY}),
+    # 批 Z59：交易日格的「已知限制」—— 同樣是**免責說明、⛔ 不是觀測值**（判準見上），
+    #    且狀態列卡面原本就沒有 fact 列；放卡面 ＝ 狀態列多一列欄位（版面異動）。
+    TRADING_DAY_CARD_KEY: frozenset({TRADING_DAY_LIMIT_FACT_KEY}),
 }
 
 #: 🔴 **2026-09-25 客戶核可線框：16 盞燈卡（`detail.*`）的三列出處說明收進「▸ 詳細」。**
@@ -3419,10 +3542,15 @@ def render_page_today() -> None:
     # 📌 批 Z54（2026-10-13）：「Sheet 綁定」那一格改由本檔接上 L3 綁定狀態
     #    （`build_sheet_binding_card()`）—— 交易日／總經兩格仍原物件照用，
     #    `tab_today.py` 一個字都沒動（它那份骨架仍標未接線，`render_tab_today` 無 production caller）。
+    # 📌 批 Z59（2026-10-14）：「交易日」那一格改由本檔接上 L3 交易日曆
+    #    （`build_trading_day_tile()`）—— 總經一格仍原物件照用，`tab_today.py` 一個字都沒動。
     _sheet_state, _sheet_err = load_sheet_binding()
-    _render_tiles(_tiles_of_cards(status_bar_cards_with_sheet(
-        build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None),
-        build_sheet_binding_card(_sheet_state, error=_sheet_err))))
+    _trading_status, _trading_err = load_trading_day_status()
+    _render_tiles(status_bar_tiles_with_trading_day(
+        _tiles_of_cards(status_bar_cards_with_sheet(
+            build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None),
+            build_sheet_binding_card(_sheet_state, error=_sheet_err))),
+        build_trading_day_tile(_trading_status, error=_trading_err)))
 
     _leaf1, _leaf2 = st.tabs([
         ia_nav.SECTION_LABELS[LEAF_CONCLUSION],

@@ -291,6 +291,8 @@ def _drive_page(monkeypatch, danger: str) -> dict:
                         lambda _r: (_sc["danger"], _sc["danger_error"], _src))
     monkeypatch.setattr(P, "_load_key_alerts", lambda _s: (None, False, ""))
     monkeypatch.setattr(P, "_load_lamp_directions", lambda _s=None: {})
+    # 批 Z59：狀態列「交易日」格每輪都讀 L3（會對外抓）—— 本組不碰網路，照其他 loader 注入。
+    monkeypatch.setattr(P, "load_trading_day_status", lambda: (None, "RuntimeError('offline')"))
     monkeypatch.setattr(P, "_render_tiles",
                         lambda tiles, cols=None: _drawn.extend(tiles))
     P.render_page_today()

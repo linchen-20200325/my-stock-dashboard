@@ -270,6 +270,8 @@ def _pt_drive(mod, monkeypatch_, *, regime_error: str = "", l4_error: str = "",
         monkeypatch.setattr(mod, "_load_danger", lambda _r: (None, "", ""))
         monkeypatch.setattr(mod, "_load_key_alerts", lambda _s: (None, False, ""))
         monkeypatch.setattr(mod, "_load_lamp_directions", lambda _s=None: {})
+        # 批 Z59：狀態列「交易日」格每輪都讀 L3（會對外抓）—— 本組不碰網路，照其他 loader 注入。
+        monkeypatch.setattr(mod, "load_trading_day_status", lambda: (None, "RuntimeError('offline')"))
         monkeypatch.setattr(mod, "_render_tiles", lambda tiles, cols=None: _drawn.extend(tiles))
         if old_report_exc is not None:
             def _boom(_r):
