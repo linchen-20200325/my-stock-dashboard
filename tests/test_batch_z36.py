@@ -143,6 +143,11 @@ def z36_pairs_for(file_path) -> tuple[tuple[str, str], ...]:
 
 
 def z36_revert(rel: str, code: str) -> str:
+    # 📌 批 Z62（freshness F2，schema-additive，有意識的變更，⛔ 不是漏改）：_MS 的 `get_market_assessment`
+    #   新增 `index_as_of` 一鍵 ⇒ 先換回 Z62 之前的寫法（Z36_BASE_SHA 不改；
+    #   ⛔ 不動 `Z36_REVERT_PAIRS` 本身）。
+    from tests.test_batch_z62 import z62_revert_for
+    code = z62_revert_for(rel, code)
     # 批 Z40（客戶 Q-z24＝A'／Q-z25＝A）改了 _DDF／_ORCH ⇒ 先換回 Z40 之前的寫法，再還原本批
     #   （同 Z33 串 Z34 慣例；⛔ 不動 `Z36_REVERT_PAIRS` 本身，錨點行逐字保留）。
     from tests.test_batch_z40 import z40_revert_for
@@ -193,7 +198,10 @@ from tests import test_lamp_foreign_net_wiring as LAMP  # noqa: E402
 
 
 def _h(x) -> str:
-    return hashlib.sha256(repr(x).encode('utf-8')).hexdigest()
+    # 📌 批 Z62（有意識的變更，⛔ 不是漏改）：mkt_info 新增 `index_as_of`（schema-additive）——
+    #   golden 是修前整份 dict 的雜湊，比對前拿掉這個鍵（其餘逐字比對不變；golden 值不改）。
+    from tests.test_batch_z62 import z62_strip_new_keys
+    return hashlib.sha256(repr(z62_strip_new_keys(x)).encode('utf-8')).hexdigest()
 
 
 @pytest.mark.parametrize('rel', sorted(Z36_REVERT_PAIRS))

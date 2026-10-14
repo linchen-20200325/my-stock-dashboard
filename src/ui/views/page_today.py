@@ -922,8 +922,9 @@ TRADING_DAY_FAILED_WHERE: str = (
 TRADING_DAY_UNDETERMINED_WHY: str = "回報無法判定；不以「平日就是交易日」代替"
 SRC_TRADING_CALENDAR: str = (
     "L3 交易日曆服務（`services.trading_calendar_service.get_today_trading_status`）")
-#: 只放 hover（`V2_HOVER_ONLY_FACTS`）的揭露列。L2 `compute/trading_calendar.py` 檔頭
-#: 「已知限制」明文要求：**呼叫端若要顯示，須自行揭露**臨時休市不在官方年度表內。
+#: 只放 hover（`V2_HOVER_ONLY_FACTS`）的揭露列。L0 `shared/trading_days.py` 檔頭
+#: （批 Z61 自 L2 `compute/trading_calendar.py` 下沉，原檔改 re-export）「已知限制」
+#: 明文要求：**呼叫端若要顯示，須自行揭露**臨時休市不在官方年度表內。
 #: 它是免責說明、⛔ 不是觀測值 ⇒ 不佔卡面（不增卡面欄位），滑過看得到。
 TRADING_DAY_LIMIT_FACT_KEY: str = "已知限制"
 TRADING_DAY_LIMIT_TEXT: str = (

@@ -27,13 +27,45 @@
 
 已知待接線事項（留給接線批，本批未處理）
 ──────────────────────────────────────
-1. `shared/staleness.py` 的 `STALE_DAYS_DAILY`（7 曆日）與由它衍生的
-   `MACRO_VERDICT_MAX_AGE_DAYS` 仍在。它們是**診斷頁的曆日尺**（顯示「資料多舊」用），
-   **不是計分規則**；計分的日頻新鮮度一律以本檔 `DAILY_MAX_LAG_TRADING_DAYS`（交易日）為準。
-   接線時須確認計分路徑不再引用那把曆日尺，避免出現兩套日頻規則。
-2. L1 休市表 → `shared.trading_days.CalendarSets` 的轉換目前沒有現成函式
-   （L3 `trading_calendar_service` 只以 `**dict` 傳給 `classify_day`）。
-   接線批須決定由哪一層組出 `CalendarSets`（候選：L3 service），並處理「休市表取不到 → 傳 None」。
+⭐ **計分輸入的 freshness 一律以本檔 `FRESHNESS_POLICY` 為準**（日頻 = `DAILY_MAX_LAG_TRADING_DAYS`
+個**交易日**）。下表是 repo 內現存的「日頻 × 曆日」規則（批 Z62 依第 30 次自檢 B 組盤點登記，
+**只登記、不改**）。它們各有用途，⛔ 接線時不得拿其中任何一條當成第二套計分新鮮度門檻，
+也 ⛔ 不得因為「跟本檔重複」就順手刪掉 —— 用途不同。
+
+==========================================================  =======  =================================================
+規則（檔案::名稱）                                           值        用途／接線時的處置
+==========================================================  =======  =================================================
+`shared/staleness.py::STALE_DAYS_DAILY`                     7 曆日   **顯示用**（資料診斷頁、健康檢查頁的日頻紅燈）
+                                                                     ＋ **AI 標記**（`ai_qa_service`、`macro_cache_reader`
+                                                                     經 `stale_days_threshold('daily')`）。不是計分規則。
+`shared/staleness.py::MACRO_VERDICT_MAX_AGE_DAYS`           7 曆日   **裁決有效期（決策閘，客戶已核准）**：
+                                                                     `macro_state_locker.macro_state_is_expired` 用它判斷
+                                                                     `macro_state.json` 的「系統風險上限」天花板是否仍生效
+                                                                     （`ai_qa_service` 亦引用）—— 無法計算時保留 7 天內最近
+                                                                     一次有效的上限。與**輸入資料**的 freshness 是兩回事，
+                                                                     **接線時保留**。（批 Z61 檔頭把它寫成「診斷頁曆日尺」
+                                                                     是錯的，批 Z62 更正。）
+`src/services/market_strategy.py::get_market_assessment`    7 曆日   inline magic number `_days_old > 7`：^TWII 末筆超過 7 個
+  （`_days_old > 7`）                                                自然日 → 整份評估回 None，閘住 ^TWII 位階（regime）與
+                                                                     MA5（`mkt_info` 整份消失），與本檔「逐項判缺」語意不同。
+                                                                     接線批須決定它與 `Index_Below_MA5` 判定的關係（舊 UI 依賴）。
+`src/data/macro/leading_indicators.py::_STALE_MAX_AGE_MIN`  3×24×60  **快取 pickle 的存活上限**（上游當次抓空時，最多沿用多舊
+                                                            分鐘     的 pickle，fallback 用），按**日曆天**算，不是計分規則。
+`shared/signal_thresholds.py::EXTREME_STALE_MAX_CALENDAR_DAYS`  10   極端風險兩腿（^TWII 20 日跌幅、外資 5 日賣超）來源 parquet
+                                                            曆日     最多可落後的天數（`macro_cache_reader`）。
+`shared/global_lead_markets.py::LEAD_QUOTE_MAX_AGE_DAYS`    5 曆日   領先市場報價可接受的最大落後（`macro_cache_reader`），
+                                                                     超過判為未取得。
+`shared/sector_flow_thresholds.py::`                        4 曆日   **顯示用**：板塊資金潮汐快取 metadata 距今的過期門檻
+  `SECTOR_FLOW_STALE_MAX_CALENDAR_DAYS`                              （`src/data/sector_flow/reader.py` → `is_stale`）。
+`shared/data_freshness.py::FROZEN_STALE_PERIODS_LEADING`    3 期     **凍結值判定**（連續 N 期一階差分為 0），量的是「值有沒有
+                                                                     動」而不是「資料多舊」—— 與本檔性質不同。
+==========================================================  =======  =================================================
+
+其他待接線事項：
+
+1. L1 休市表 → `shared.trading_days.CalendarSets` 的轉換：批 Z62 已補 L1
+   `HolidayCalendar.as_sets()`（四個集合與 L3 `trading_calendar_service` 現行傳給 `classify_day`
+   的參數逐一相同，測試守住）；「由哪一層呼叫、休市表取不到時傳 None」仍留給接線批。
 """
 from __future__ import annotations
 
@@ -43,8 +75,9 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Literal, Mapping, Union
 
-from shared.dated_value import AssessedValue, DatedValue
+from shared.dated_value import AssessedValue, DatedValue, _is_scorable
 from shared.staleness import MACRO_PUBLICATION_LAG_DAYS, monthly_release_status
+from shared.station_specs import INVALID_DATA_TEXT  # 批 Z62：資料異常核准句（L0 SSOT）
 from shared.trading_days import (
     CalendarSets,
     count_trading_days_after,
@@ -63,6 +96,11 @@ class FreshnessStatus(str, Enum):
 #: 出處：客戶 2026-10-14 Q-z37=A（「最新有效資料落後超過 3 個交易日 → 未評估、標已過期、不計分」）。
 #: ⛔ 本數字只在這裡定義一次；其他地方一律 import 本常數。
 DAILY_MAX_LAG_TRADING_DAYS: int = 3
+
+#: 值不是有限數值時的缺值原因：沿用 L0 `shared.station_specs.INVALID_DATA_TEXT`（客戶 2026-10-13
+#: 裁示 B 核准句「{項目}資料異常，無法計算，不下結論。」，⛔ 不另寫一份）。`item` 暫填 series_key，
+#: UI 呈現時再對應中文名。
+NON_FINITE_REASON_FMT: str = INVALID_DATA_TEXT
 
 CalendarKind = Literal["twse", "weekday"]
 _CALENDAR_KINDS: frozenset[str] = frozenset({"twse", "weekday"})
@@ -170,6 +208,10 @@ def assess_daily(as_of: date | None, *, today: date, calendar: CalendarSets | No
     _check_today(today)
     if calendar_kind not in _CALENDAR_KINDS:
         raise ValueError(f"未知的 calendar_kind：{calendar_kind!r}")
+    # 批 Z62（Z61 QA 低嚴重度遺留）：與 `DailyPolicy.__post_init__` 同一條檢查 ——
+    #   直接呼叫本函式時也不得傳負數／bool／非整數（例：3.5 會讓「≤ 上限」的比較悄悄變寬）。
+    if isinstance(max_lag, bool) or not isinstance(max_lag, int) or max_lag < 0:
+        raise ValueError(f"max_lag 必須是非負整數：{max_lag!r}")
     unit = LAG_UNIT_WEEKDAY if calendar_kind == "weekday" else LAG_UNIT_TRADING_DAY
     if as_of is None:
         return FreshnessVerdict(FreshnessStatus.MISSING, None, unit, None,
@@ -261,6 +303,8 @@ def assess(dv: DatedValue, *, today: date, calendar: CalendarSets | None) -> Ass
 
     設定錯誤（日頻帶 data_month、月頻帶 as_of）→ `ValueError`。
     值為 None → MISSING（原因取 `dv.missing_reason`）。
+    值不是有限數值（NaN／±inf／非數值；bool 除外）→ MISSING，原因「{series_key}資料異常，無法計算，
+    不下結論。」—— 在日期判斷之前（批 Z62）。
     """
     try:
         policy = FRESHNESS_POLICY[dv.series_key]
@@ -281,6 +325,16 @@ def assess(dv: DatedValue, *, today: date, calendar: CalendarSets | None) -> Ass
         reason = dv.missing_reason or "無值"
         return AssessedValue(dv, FreshnessVerdict(FreshnessStatus.MISSING, None, unit, None,
                                                   reason, today))
+
+    # 批 Z62（自檢 A 組）：值不是有限數值（NaN／±inf／非數值；bool 除外）→ 一律 MISSING，
+    #   ⛔ 放在日期判斷之前。修前 status 會照日期判成 FRESH、只靠 `scoring_value` 擋成 None ——
+    #   接線／UI 層若直接讀 status，會把資料異常的值顯示成「新鮮」。
+    #   reason 用核准句格式「{項目}資料異常，無法計算，不下結論。」（項目暫用 series_key，UI 再對應中文）。
+    if not _is_scorable(dv.value):
+        _check_today(today)
+        return AssessedValue(dv, FreshnessVerdict(
+            FreshnessStatus.MISSING, None, unit, None,
+            NON_FINITE_REASON_FMT.format(item=dv.series_key), today))
 
     if isinstance(policy, DailyPolicy):
         verdict = assess_daily(dv.as_of, today=today, calendar=calendar,
