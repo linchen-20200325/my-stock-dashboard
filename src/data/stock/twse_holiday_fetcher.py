@@ -97,6 +97,20 @@ COMPLETENESS_ANCHORS: tuple[tuple[int, int], ...] = ((1, 1), (2, 28), (10, 10))
 
 _HDR_JSON = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 
+#: 批 Z59 QA（2026-10-14）：本表**唯一** production 路徑是「🚦 今天」頂部狀態列**每一輪都讀**
+#: （`views/page_today.load_trading_day_status` → L3 `trading_calendar_service`），
+#: 而 render 期間沒有 spinner —— 上游不回應時整頁就停在那裡。故改走 `fetch_url` 的**精簡路徑**：
+#: 單次嘗試（`attempts=1` ⇒ lean Session，無 urllib3 內層 Retry、無層間 sleep），逾時縮短。
+#: ⚠️ 其餘 caller：0（grep 全 repo，含 scripts／舊 UI；量測日 2026-10-14）⇒ 直接改本檔，不另開參數。
+#: ⚠️ 快取 TTL（`TTL_1DAY`）與失敗冷卻（`FailCooldown`）語意**未動**。
+#: **最壞阻塞上限**（proxy／直連／NAS 中繼三段全落空，各吃滿一次逾時）≈ 3 × 逾時：
+#:   · 修前（timeout=20、attempts=2）本機黑洞實測：proxy 接了不回 **101.9 秒**；
+#:     proxy 丟 SYN（三段全走）**267.7 秒**（量測日 2026-10-14）；
+#:   · 修後（timeout=6、attempts=1）同一「proxy 丟 SYN」情境 **18.05 秒**（量測日 2026-10-14）；
+#:     守衛：`tests/test_batch_z59.py::TestBlockingBound`。
+HOLIDAY_FETCH_TIMEOUT_SEC: int = 6
+HOLIDAY_FETCH_ATTEMPTS: int = 1
+
 
 class HolidayCalendarUnavailable(RuntimeError):
     """休市表拿不到或格式不對 —— 呼叫端必須顯示「無法判定」，⛔ 不得當成交易日。"""
@@ -209,7 +223,8 @@ def parse_holiday_schedule(payload: object, *, fetched_at: datetime) -> HolidayC
 def _fetch_json() -> object:
     """打官方端點（NAS proxy → 直連降級 → NAS 中繼，見 `proxy_helper.fetch_url`）。"""
     from src.data.proxy import fetch_url as _furl
-    r = _furl(TWSE_HOLIDAY_URL, headers=_HDR_JSON, timeout=20, attempts=2)
+    r = _furl(TWSE_HOLIDAY_URL, headers=_HDR_JSON,
+              timeout=HOLIDAY_FETCH_TIMEOUT_SEC, attempts=HOLIDAY_FETCH_ATTEMPTS)
     if r is None:
         raise HolidayCalendarUnavailable(f"{SOURCE_ID} 無回應（proxy／直連／中繼皆失敗）")
     if getattr(r, "status_code", None) != 200:

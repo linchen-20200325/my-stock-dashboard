@@ -2097,8 +2097,10 @@ def load_trading_day_status() -> tuple[Any, str]:
     `twse_holiday_fetcher` 有兩層保護 —— 成功結果 `TTL_1DAY` 快取（鍵帶台北當年），
     失敗走 `FailCooldown` 退避（冷卻期內直接再拋、不打上游）—— 判準不成立。
     加按鈕 ＝ 狀態列多一個控制項 ＝ 版面異動（草稿先行），本批不做（同 Sheet 那一格）。
-    ⚠️ **代價據實揭露**：當天第一次（或冷卻期過後重試時）那一輪會同步等上游回應
-    （沙箱 proxy 拒連時實測就有可感的延遲，逾時情形更久；⛔ 不寫秒數 —— 沒有守衛在守它）。
+    ⚠️ **代價據實揭露**：當天第一次（或冷卻期過後重試時）那一輪會同步等上游回應。
+    批 Z59 QA 後 L1 改走精簡路徑（單次嘗試、短逾時），最壞阻塞的實測值與上限守衛在
+    L1 `twse_holiday_fetcher.HOLIDAY_FETCH_TIMEOUT_SEC` 的註解與 `tests/test_batch_z59.py::TestBlockingBound`
+    （⛔ 本頁不抄秒數 —— 本頁的秒數守衛 `test_the_page_declares_no_second_bound` 也不准）。
     """
     try:
         from src.services.trading_calendar_service import get_today_trading_status
@@ -2450,7 +2452,10 @@ V2_EXIT_PHRASES: tuple[tuple[str, str], ...] = (
     # 批 Z54：狀態列「Sheet 綁定」接線後的兩句指路（皆為頁4 既有原文，短語＝原文的一段）。
     (SHEET_UNBOUND_WHERE,         "現行入口在側欄「🔐 Google 帳號」"),
     (SHEET_FAILED_WHERE,          SHEET_FAILED_WHERE),
-    # 批 Z59：狀態列「交易日」接線後的紅態指路（實作組內部擬稿，短語＝原文開頭的一段）。
+    # 批 Z59：狀態列「交易日」接線後的紅態指路（實作組內部擬稿）。
+    #    ⚠️ 短語「以證交所公告為準」是原文首句「今天開不開市請以臺灣證券交易所公告為準」的
+    #    **縮寫改寫**（「臺灣證券交易所」→「證交所」、去掉「今天開不開市請」），⛔ 不是原文子字串；
+    #    完整原文照舊掛在卡的 `title=`。
     (TRADING_DAY_FAILED_WHERE,    "以證交所公告為準"),
 )
 

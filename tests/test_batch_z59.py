@@ -12,15 +12,20 @@
 """
 from __future__ import annotations
 
+import contextlib
 import importlib
 import pathlib
 import re
+import socket
+import threading
+import time
 from datetime import date, datetime, timezone
 from unittest import mock
 
 import pytest
 
 from shared.ui_state import UI_FAILED, UI_IDLE, UI_LIVE, UI_UNWIRED
+from src.data.proxy import proxy_helper as PH
 from src.data.stock import twse_holiday_fetcher as HF
 from src.services import trading_calendar_service as TCS
 from src.services.trading_calendar_service import TradingDayStatus
@@ -58,7 +63,9 @@ class TestMarkdownItDependency:
         """測試依賴走 CI fast lane 的 `pip install pytest …` 那一行（production 0 import ⇒ ⛔ 不進 requirements.txt）。"""
         wf = (_ROOT / ".github" / "workflows" / "pr-check.yml").read_text(encoding="utf-8")
         fast = wf.split("slow-tests:")[0]
-        line = next(ln for ln in fast.splitlines() if ln.strip().startswith("pip install pytest"))
+        # 先去掉 `#` 之後的內容：「同一行把套件註解掉」不得被當成有裝（批 Z59 QA 4）。
+        code = [ln.split("#", 1)[0] for ln in fast.splitlines()]
+        line = next(ln for ln in code if ln.strip().startswith("pip install pytest"))
         assert re.search(r'"markdown-it-py>=[\d.]+,<[\d.]+"', line), line
         req = (_ROOT / "requirements.txt").read_text(encoding="utf-8")
         assert not re.search(r"^markdown-it-py", req, re.M), "測試依賴不得裝上 production"
@@ -325,3 +332,120 @@ class TestReplaceAndBoundaries:
         """檔頭：module-level import 失敗 ＝ 整頁空白 ⇒ L3 一律 late import。"""
         src = (_ROOT / "src" / "ui" / "views" / "page_today.py").read_text(encoding="utf-8")
         assert not re.search(r"^from src\.services\.trading_calendar_service", src, re.M)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 批 Z59 QA 1：狀態列每輪都讀 ⇒ L1 走精簡路徑，最壞阻塞時間有上限（黑洞伺服器實測）
+# ══════════════════════════════════════════════════════════════════
+class _Holes:
+    """本機假上游（只綁 127.0.0.1，⛔ 不碰外網）。
+
+    · `blackhole()`：接受連線、永遠不回一個 byte ⇒ 對方吃滿**讀取**逾時（TLS 握手亦同）。
+    · `syndrop()`：listen backlog 0 且先塞滿 ⇒ 新 SYN 被丟 ⇒ 對方吃滿**連線**逾時。
+      用在 proxy 那一段：連不上 proxy 會被 requests 報成 `ProxyError` ⇒ `fetch_url`
+      才會再走「降級直連」—— 三段（proxy／直連／NAS 中繼）全部各吃滿一次逾時＝最壞情境。
+    """
+
+    def __init__(self):
+        self._socks: list = []
+        self.accepted: dict[int, int] = {}
+
+    def blackhole(self) -> int:
+        s = socket.socket()
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("127.0.0.1", 0))
+        s.listen(64)
+        port = s.getsockname()[1]
+        self._socks.append(s)
+        self.accepted[port] = 0
+
+        def _loop():
+            while True:
+                try:
+                    c, _ = s.accept()
+                except OSError:
+                    return
+                self._socks.append(c)
+                self.accepted[port] += 1
+        threading.Thread(target=_loop, daemon=True).start()
+        return port
+
+    def syndrop(self) -> int:
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        s.listen(0)
+        port = s.getsockname()[1]
+        self._socks.append(s)
+        for _ in range(4):
+            c = socket.socket()
+            c.setblocking(False)
+            with contextlib.suppress(BlockingIOError):
+                c.connect(("127.0.0.1", port))
+            self._socks.append(c)
+        time.sleep(0.2)
+        return port
+
+    def close(self):
+        for s in self._socks:
+            with contextlib.suppress(OSError):
+                s.close()
+
+
+@pytest.fixture
+def holes(monkeypatch):
+    h = _Holes()
+    px, dc, rl = h.syndrop(), h.blackhole(), h.blackhole()
+    monkeypatch.setattr(PH, "get_proxy_config",
+                        lambda: {"http": f"http://127.0.0.1:{px}", "https": f"http://127.0.0.1:{px}"})
+    monkeypatch.setattr(PH, "get_nas_relay", lambda: (f"http://127.0.0.1:{rl}", "k"))
+    monkeypatch.setattr(HF, "TWSE_HOLIDAY_URL", f"https://127.0.0.1:{dc}/v1/holidaySchedule/holidaySchedule")
+    h.ports = (px, dc, rl)
+    yield h
+    h.close()
+
+
+def _timed_fetch() -> float:
+    t0 = time.monotonic()
+    with pytest.raises(HF.HolidayCalendarUnavailable):
+        HF._fetch_json()
+    return time.monotonic() - t0
+
+
+class TestBlockingBound:
+    """最壞阻塞 ≈ 3 × `HOLIDAY_FETCH_TIMEOUT_SEC`（proxy／直連／NAS 中繼各一次逾時，單次嘗試）。
+
+    **量測（2026-10-14，沙箱，本機黑洞：proxy 丟 SYN、直連與中繼接了不回）**：
+      · 修前（timeout=20、attempts=2）：proxy 接了不回 **101.9 秒**；proxy 丟 SYN **267.7 秒**；
+      · 修後（timeout=6、attempts=1；proxy 丟 SYN ⇒ 三段全走）：**18.05 秒**（理論上限 18 秒 ＋ 開銷）。
+    fast lane 這一條把逾時壓到 1 秒驗**結構**（三段、各一次、無重試、無層間 sleep）；
+    真實常數（6 秒）那一條在 slow lane。
+    """
+
+    def test_lean_constants(self):
+        assert HF.HOLIDAY_FETCH_ATTEMPTS == 1
+        assert 5 <= HF.HOLIDAY_FETCH_TIMEOUT_SEC <= 8
+
+    def test_fetch_json_uses_the_lean_constants(self, monkeypatch):
+        seen = {}
+
+        def _spy(url, headers=None, params=None, timeout=None, attempts=None):
+            seen.update(timeout=timeout, attempts=attempts)
+            return None
+        monkeypatch.setattr(PH, "fetch_url", _spy)
+        with pytest.raises(HF.HolidayCalendarUnavailable):
+            HF._fetch_json()
+        assert seen == {"timeout": HF.HOLIDAY_FETCH_TIMEOUT_SEC,
+                        "attempts": HF.HOLIDAY_FETCH_ATTEMPTS}
+
+    def test_worst_case_is_three_timeouts_structure(self, holes, monkeypatch):
+        monkeypatch.setattr(HF, "HOLIDAY_FETCH_TIMEOUT_SEC", 1)
+        elapsed = _timed_fetch()
+        _px, dc, rl = holes.ports
+        # 三段都真的走到了（直連、中繼各被連一次 —— 無重試）
+        assert holes.accepted[dc] == 1 and holes.accepted[rl] == 1, holes.accepted
+        assert 2.7 <= elapsed <= 3 * 1 + 2.0, elapsed
+
+    @pytest.mark.slow
+    def test_worst_case_bound_with_real_timeout(self, holes):
+        elapsed = _timed_fetch()
+        assert elapsed <= 3 * HF.HOLIDAY_FETCH_TIMEOUT_SEC + 2.0, elapsed

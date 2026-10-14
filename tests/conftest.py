@@ -241,3 +241,23 @@ def synthetic_unwired_lamp():
     finally:
         _mb.SPECS_BY_KEY[_key] = _orig
         _mb.BUCKET_DANGER_SPECS[_idx] = _orig
+
+
+@pytest.fixture
+def stub_trading_day_status(monkeypatch):
+    """批 Z59：「🚦 今天」狀態列「交易日」格**每一輪都讀** L3 → L1 證交所休市表（會對外連線）。
+
+    整頁 render（含 AppTest）的測試用這個夾具把 L3 換成固定結果，fast lane ⛔ 不碰真實網路。
+    ⚠️ **刻意不是 autouse**：全域 stub 會讓 `tests/test_d5_twse_holiday_calendar.py` 等直接測 L3／L1
+    的測試失去施力點；需要的測試明文掛上（`@pytest.mark.usefixtures("stub_trading_day_status")`）。
+    stub 打在 **L3**（`get_today_trading_status`），⛔ 不是頁面的 loader —— 頁面 loader 的
+    late import 與例外處理照樣被走到。回傳那份固定結果（交易日，2026-09-04 週五）。
+    """
+    from datetime import date
+
+    from src.services import trading_calendar_service as _tcs
+
+    _fixed = _tcs.TradingDayStatus(today=date(2026, 9, 4), is_trading_day=True,
+                                   next_trading_day=date(2026, 9, 7))
+    monkeypatch.setattr(_tcs, "get_today_trading_status", lambda now=None: _fixed)
+    return _fixed
