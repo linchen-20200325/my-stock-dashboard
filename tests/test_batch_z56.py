@@ -269,12 +269,37 @@ class TestQaCard:
         assert len(dict(full)[P.V2_WHY_FACT_KEY]) > P.v2_markup.FACT_VALUE_MAX_CHARS
         assert dict(short)[P.V2_WHY_FACT_KEY] == "資料異常，無法計算，不下結論。"
 
-    def test_runtime_candidate_never_accepts_non_approved_text(self):
-        """執行期候選只收「整段都是客戶句」—— 例外紅卡的原文（含 Gemini 訊息）⛔ 不得整句上卡面。"""
+    def test_runtime_candidate_needs_equality_with_the_rebuilt_sentence(self):
+        """執行期候選只收「由 `invalid_items` 重組的客戶句、與原文相等、且放得下」—— ⛔ 不靠長相猜。"""
         acc = P._V2_INVALID_WHOLE.accept
-        assert acc("外資資料異常，無法計算，不下結論。")
-        assert not acc("Gemini 呼叫失敗:外資資料異常，無法計算，不下結論。x")
-        assert not acc("L3 AI 問答拋出例外：boom")
+        ok = P._InvalidDataNote(now=P.QA_FAILED_NOW, why="外資資料異常，無法計算，不下結論。",
+                                where=P.PANEL_REPORT_WHERE, invalid_items=("外資",))
+        assert acc("外資資料異常，無法計算，不下結論。", ok)
+        for text in ("請立即賣出資料異常，無法計算，不下結論。",
+                     "L3 AI 問答（`services.ai_qa_service.run_agent`）拋出例外：外資資料異常，無法計算，不下結論。",
+                     "投信資料異常，無法計算，不下結論。"):
+            assert not acc(text, ok), text
+            plain = P.Note(now=P.QA_FAILED_NOW, why=text, where=P.PANEL_REPORT_WHERE)
+            assert not acc(text, plain), text   # 一般 Note（沒帶項目名）一律不收
+
+    @pytest.mark.parametrize("why", [
+        "請立即賣出資料異常，無法計算，不下結論。",
+        "L3 AI 問答（`services.ai_qa_service.run_agent`）拋出例外：外資資料異常，無法計算，不下結論。"])
+    def test_lookalike_text_never_goes_on_the_face_whole(self, why):
+        card = P.Card(key="why.qa", label="AI 問答", state=UI_FAILED,
+                      note=P.Note(now=P.QA_FAILED_NOW, why=why, where=P.PANEL_REPORT_WHERE))
+        face = dict(P.v2_short_rows(card)[0])[P.V2_WHY_FACT_KEY]
+        assert face != P.v2_plain(why)
+        assert face in ("資料異常，無法計算，不下結論。", P._v2_raised(P.SRC_QA_AGENT))
+
+    def test_c9_exception_card_still_hits_the_raised_candidate_first(self):
+        """C9：一般例外紅卡（即使訊息裡夾著像客戶句的字）仍命中「…拋出例外」，⛔ 不被整句候選搶先。"""
+        for err in ("RuntimeError('boom')", "ValueError('外資資料異常，無法計算，不下結論。')"):
+            card = P.build_qa_card(P.QaReadout(asked=True, error=err))[0]
+            assert type(card.note) is P.Note
+            assert dict(P.v2_short_rows(card)[0])[P.V2_WHY_FACT_KEY] == P._v2_raised(P.SRC_QA_AGENT)
+        why = P.V2_SHORT_ROWS[("why.qa", P.QA_FAILED_NOW)][1]
+        assert why.index(P._v2_raised(P.SRC_QA_AGENT)) < why.index(P._V2_INVALID_WHOLE)
 
     def test_mutation_dropping_the_runtime_candidate_loses_the_item_name(self, monkeypatch):
         key = ("why.qa", P.QA_FAILED_NOW)
@@ -582,11 +607,38 @@ class TestReconcileCard:
         with pytest.raises(AssertionError):
             self.test_only_invalid_inputs_show_the_invalid_sentence_not_grey()
 
-    def test_mutation_back_to_has_input_turns_red(self, monkeypatch):
-        monkeypatch.setattr(RS.ReconcileReport, "comparable",
-                            property(lambda self: self.has_input))
+    def test_mutation_back_to_any_input_turns_red(self, monkeypatch):
+        """判準不分可比對與否（只要算得出列就當有值；原 `has_input` 判準的同類放寬）⇒ 只有 score 時變綠 ⇒ 守衛轉紅。"""
+        monkeypatch.setattr(RS.ReconcileReport, "comparable", property(lambda self: bool(self.rows)))
         with pytest.raises(AssertionError):
             self.test_only_mkt_score_is_grey()
+
+    def test_c5_only_a_disagree_row_is_live(self):
+        """C5：只有一列 disagree（其餘兩列缺）⇒ 綠（可比對），該列寫「🔴 不一致(警示)」。"""
+        s = {"macro_info": {"us10y": {"value": 3.1}},
+             "cl_data": {"intl": {"10Y公債殖利率": _tnx(4.27)}}}
+        built = P.build_reconcile_card(P.load_reconcile(_REQ, s))
+        assert built[0].state == UI_LIVE
+        assert dict(built[1])[RS.ROW_US10Y].startswith("🔴 不一致(警示)")
+
+    def test_mutation_comparable_only_counting_agree_turns_red(self, monkeypatch):
+        monkeypatch.setattr(RS.ReconcileReport, "comparable", property(lambda self: any(
+            _r.invalid_items or (_r.result or {}).get("status") == "agree" for _r in self.rows)))
+        with pytest.raises(AssertionError):
+            self.test_c5_only_a_disagree_row_is_live()
+
+    def test_grey_why_lists_every_key_read_in_order(self):
+        why = P.RECONCILE_NOT_TRIGGERED_WHY
+        keys = ["macro_info['us10y']['value']", "cl_data['intl']['10Y公債殖利率']",
+                "t2_data['rev_yoy_self']", "t2_data['rev_yoy_finmind']", "jingqi_info['avg']",
+                "warroom_summary['jingqi_avg']", "mkt_info['score']", "mkt_info['max_score']",
+                "cl_data['inst']"]
+        pos = [why.index(k) for k in keys]
+        assert pos == sorted(pos), keys
+
+    def test_has_input_orphan_removed(self):
+        assert not hasattr(RS.ReconcileReport, "has_input")
+        assert "has_input" not in {f.name for f in __import__("dataclasses").fields(RS.ReconcileRow)}
 
     def test_never_refreshed_is_grey_with_existing_where(self):
         card, facts, _ = P.build_reconcile_card(P.load_reconcile(_REQ, {}))

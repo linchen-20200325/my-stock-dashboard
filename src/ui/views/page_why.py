@@ -2172,10 +2172,11 @@ SRC_RECONCILE: str = "L3 雙演算法對帳（`services.reconcile_service.comput
 #: 對帳要的輸入一個都沒有時的「為什麼」—— 逐項列出讀哪幾個 session key（事實，⛔ 不猜是「還沒叫」
 #: 還是「叫了全失敗」：兩者在這裡分不出來）。
 RECONCILE_NOT_TRIGGERED_WHY: str = (
-    "三列對帳都是「未觸發」—— 每一列都至少缺一邊的值。對帳讀的是："
+    "三列對帳都是「未觸發」—— 每一列都至少缺一邊的值。對帳讀的是（依讀取順序）："
     "`macro_info['us10y']['value']`、`cl_data['intl']['10Y公債殖利率']`、"
-    "`jingqi_info['avg']`、`mkt_info['score']`、`cl_data['inst']` 外資 net、"
-    "`t2_data['rev_yoy_self']`／`t2_data['rev_yoy_finmind']`")
+    "`t2_data['rev_yoy_self']`／`t2_data['rev_yoy_finmind']`、"
+    "`jingqi_info['avg']`（`jingqi_info` 不存在時讀 `warroom_summary['jingqi_avg']`）、"
+    "`mkt_info['score']`、`mkt_info['max_score']`、`cl_data['inst']` 外資 net")
 #: 月營收 YoY 那一列兩邊皆缺時的事實句（「全 repo 沒有任何一處寫這個 key（實測 0 個寫入點）」沿用
 #: L3 `macro_refresh_service.UNTOUCHED_BLOCKS` 既有用語；守衛：`tests/test_batch_z56.py`）。
 RECONCILE_REV_YOY_NO_WRITER: str = (
@@ -2413,6 +2414,14 @@ def load_qa(req: QaRequest) -> QaReadout:
                      model=_model, tool_calls=_tools)
 
 
+@dataclass(frozen=True)
+class _InvalidDataNote(Note):
+    """批 Z56：資料異常紅卡的 `Note` —— 多帶 L3 回報的項目名，讓 v2 卡面以**重組後相等比對**判斷
+    「為什麼」能否整句上卡面（`_v2_invalid_whole_ok`）。三要素與驗證完全沿用 `Note`。"""
+
+    invalid_items: tuple[str, ...] = ()
+
+
 def build_qa_card(qa: QaReadout) -> _Built:
     """線框葉3 的狀態卡。**回答本身不畫在卡上**（那是聊天氣泡，見渲染段）。
 
@@ -2451,9 +2460,10 @@ def build_qa_card(qa: QaReadout) -> _Built:
         # 工具結果有 NaN／±inf，L3 停下、沒有送 Gemini。now 沿用本卡紅態既有那一句；
         # why 只用客戶句；where 用本頁既有「沒有出口 —— 回報給維護者」（⛔ 不叫人換問法重送：
         # 值有給、是壞的，重問一百次也一樣）。
-        _note = Note(now=QA_FAILED_NOW,
-                     why="".join(invalid_data_text(_i) for _i in qa.invalid_items),
-                     where=PANEL_REPORT_WHERE)
+        _note = _InvalidDataNote(now=QA_FAILED_NOW,
+                                 why="".join(invalid_data_text(_i) for _i in qa.invalid_items),
+                                 where=PANEL_REPORT_WHERE,
+                                 invalid_items=tuple(qa.invalid_items))
     elif _state == UI_FAILED:
         _note = Note(now=QA_FAILED_NOW,
                      why=_error_why(SRC_QA_AGENT, qa.error),
@@ -2574,7 +2584,7 @@ _V2_INVALID_TAIL: str = INVALID_DATA_TEXT.split("{item}", 1)[1]
 
 @dataclass(frozen=True, eq=False)
 class _V2WholeIfFits:
-    """執行期候選（QA T1）：**原文整句本身**當摘錄 —— 只在 `accept(原文)` 成立時採用，否則換下一個候選。
+    """執行期候選（QA T1）：**原文整句本身**當摘錄 —— 只在 `accept(原文, note)` 成立時採用，否則換下一個候選。
 
     原文整句當然是原文的摘錄（K1 成立，⛔ 沒有任何改寫）；用途是讓「項目名執行期才知道」的客戶句
     （例：`外資資料異常，無法計算，不下結論。`）在放得下時**連項目名一起**上卡面，
@@ -2595,12 +2605,22 @@ class _V2WholeIfFits:
         return hash(self.name)
 
 
-_V2_INVALID_RE = re.compile("(?:[^。]+?" + re.escape(_V2_INVALID_TAIL) + ")+")
-#: 資料異常紅卡的「為什麼」：整段都是客戶句（逐項串接，同 `build_qa_card` 的合併規則）且卡面放得下。
+def _v2_invalid_whole_ok(full: str, note: Any) -> bool:
+    """資料異常紅卡的「為什麼」能不能整句上卡面（QA 第二輪：⛔ 不用正則猜「長得像客戶句」）。
+
+    只認 `_InvalidDataNote`：由它帶的 `invalid_items` **重組**客戶句（同 `build_qa_card` 的合併規則
+    `"".join(invalid_data_text(i) for i in items)`），與原文**相等**、而且卡面放得下才採用。
+    """
+    _items = tuple(getattr(note, "invalid_items", ()) or ()) if isinstance(note, _InvalidDataNote) else ()
+    if not _items:
+        return False
+    _want = v2_plain("".join(invalid_data_text(_i) for _i in _items))
+    return full == _want and len(full) <= v2_markup.FACT_VALUE_MAX_CHARS
+
+
+#: 資料異常紅卡的「為什麼」：由 `invalid_items` 重組的客戶句與原文相等、且卡面放得下。
 _V2_INVALID_WHOLE: _V2WholeIfFits = _V2WholeIfFits(
-    accept=lambda full: (bool(_V2_INVALID_RE.fullmatch(full))
-                         and len(full) <= v2_markup.FACT_VALUE_MAX_CHARS),
-    name="客戶句整句（放得下時）")
+    accept=_v2_invalid_whole_ok, name="客戶句整句（由 invalid_items 重組、相等且放得下時）")
 _V2_SPEC_REPORT: str = f"{NO_EXIT_MARKER} —— 這是規格表本身的問題，請把上面那行訊息回報給維護者"
 
 
@@ -2761,7 +2781,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
 )
 
 
-def _v2_pick_excerpt(spec: object, full: str, *, what: str) -> str:
+def _v2_pick_excerpt(spec: object, full: str, *, what: str, note: Any = None) -> str:
     """一格短句規格 → 實際上卡面的那一段。**逐段驗「原文裡依序真的有這幾段」。**
 
     `spec` 是一段摘錄（`str`）或多個候選（tuple，取第一個對得上的）；候選也可以是
@@ -2772,7 +2792,7 @@ def _v2_pick_excerpt(spec: object, full: str, *, what: str) -> str:
     _alts = (spec,) if isinstance(spec, str) else tuple(spec)   # type: ignore[arg-type]
     for _alt in _alts:
         if isinstance(_alt, _V2WholeIfFits):   # 執行期候選：原文整句（見該類別）
-            if _alt.accept(full):
+            if _alt.accept(full, note):
                 return full
             continue
         _pos, _ok = 0, True
@@ -2821,7 +2841,7 @@ def v2_short_rows(card: Card) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[
              (V2_WHY_FACT_KEY, v2_plain(_note.why)),
              (V2_GUIDE_FACT_KEY, v2_plain(_note.where)))
     _short = tuple(
-        (_label, _v2_pick_excerpt(_s, _text, what=f"{card.key} 的「{_label}」"))
+        (_label, _v2_pick_excerpt(_s, _text, what=f"{card.key} 的「{_label}」", note=_note))
         for _s, (_label, _text) in zip(_spec, _full))
     return _short, _full
 

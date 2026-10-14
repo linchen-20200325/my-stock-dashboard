@@ -989,7 +989,8 @@ def _const_name_of(now: str) -> str:
 
 #: 同一則 now 依 why 來源再分的變體（批 Z56）：`{變體名: 判斷函式(Note) -> bool}`。
 _NOW_VARIANTS: dict[str, object] = {
-    "QA_FAILED_NOW#invalid": lambda note: bool(P._V2_INVALID_RE.fullmatch(note.why)),
+    # 依 why 來源分：資料異常紅卡的 Note 帶 L3 回報的項目名（`_InvalidDataNote.invalid_items`）。
+    "QA_FAILED_NOW#invalid": lambda note: bool(getattr(note, "invalid_items", ())),
 }
 
 

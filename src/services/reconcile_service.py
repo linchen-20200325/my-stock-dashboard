@@ -67,13 +67,11 @@ class ReconcileRow:
         result: L2 `reconcile_pair` 標準回傳（`status` / `value_a` / `value_b` / `source_*` /
             `delta_abs` …）原樣。`invalid_items` 非空時為 `None`（⛔ 沒交給 L2）。
         invalid_items: 這一列哪幾個輸入是無效數值（依輸入順序、去重）。空 ＝ 沒有異常。
-        has_input: 這一列至少有一個輸入不是 `None`（含無效數值）。
     """
 
     name: str
     result: Optional[dict] = None
     invalid_items: tuple[str, ...] = ()
-    has_input: bool = False
 
 
 @dataclass(frozen=True)
@@ -87,10 +85,8 @@ class ReconcileReport:
         return any(_r.invalid_items or (_r.result or {}).get("status") in ("agree", "disagree")
                    for _r in self.rows)
 
-    @property
-    def has_input(self) -> bool:
-        """三列裡至少一個輸入有東西。全部 `None` ＝ 這個 session 從沒更新過、或全部沒抓到。"""
-        return any(_r.has_input for _r in self.rows)
+    # 📌 批 Z56 收尾（有意識的刪除，⛔ 不是漏刪）：原有 `has_input`（任一輸入非 None）與
+    #    `ReconcileRow.has_input` 欄位，因卡片改按 `comparable` 判灰／綠而成 0 引用（v3 §01-2 收尾）。
 
 
 def _get(m: Any, key: str) -> Any:
@@ -138,28 +134,25 @@ def _to_float_or_none(v: Any) -> Optional[float]:
 
 def _us10y_row(session: Mapping[str, Any]) -> ReconcileRow:
     _fred_raw, _tnx_raw = us10y_inputs(session)
-    _has = _fred_raw is not None or _tnx_raw is not None
     if is_invalid_number(_fred_raw) or is_invalid_number(_tnx_raw):
-        return ReconcileRow(ROW_US10Y, invalid_items=(ITEM_US10Y,), has_input=True)
+        return ReconcileRow(ROW_US10Y, invalid_items=(ITEM_US10Y,))
     # 有效值才轉 float（舊面板 FRED 原樣交 L2、^TNX 先 float 再交 L2；有效數值兩者結果相同）。
     # QA D1：一律走 `_to_float_or_none` —— 空字串／空白視為缺值（該列 ⬜ 未觸發），⛔ 不讓 `float("")`
     #   的 ValueError 把整張卡變紅；轉不成數字的字串在上一行已由 `is_invalid_number` 判成資料異常。
     _r = reconcile_us10y_yield(_to_float_or_none(_fred_raw), _to_float_or_none(_tnx_raw))
-    return ReconcileRow(ROW_US10Y, result=_r, has_input=_has)
+    return ReconcileRow(ROW_US10Y, result=_r)
 
 
 # ── 輸入：月營收 YoY ─────────────────────────────────────────────────
 def _rev_yoy_row(session: Mapping[str, Any]) -> ReconcileRow:
     _t2 = session.get("t2_data", {}) or {}
     _self, _fm = _t2.get("rev_yoy_self"), _t2.get("rev_yoy_finmind")
-    _has = _self is not None or _fm is not None
     if is_invalid_number(_self) or is_invalid_number(_fm):
-        return ReconcileRow(ROW_REV_YOY, invalid_items=(ITEM_REV_YOY,), has_input=True)
+        return ReconcileRow(ROW_REV_YOY, invalid_items=(ITEM_REV_YOY,))
     # QA D1：同上，先轉 float（空字串 → 缺值），⛔ 不把字串原樣交 L2 做算術而把例外拋到卡層。
     return ReconcileRow(ROW_REV_YOY,
                         result=reconcile_monthly_revenue_yoy(_to_float_or_none(_self),
-                                                             _to_float_or_none(_fm)),
-                        has_input=_has)
+                                                             _to_float_or_none(_fm)))
 
 
 # ── 輸入：健康評分 ───────────────────────────────────────────────────
@@ -215,7 +208,6 @@ def score_pct_from(score: Any, max_score: Any) -> Optional[float]:
 
 def _health_row(session: Mapping[str, Any]) -> ReconcileRow:
     _in = health_inputs(session)
-    _has = any(_in[_k] is not None for _k in ("jq", "score", "fnet"))
     _bad: list[str] = []
     if is_invalid_number(_in["jq"]):
         _bad.append(ITEM_JINGQI)
@@ -226,11 +218,11 @@ def _health_row(session: Mapping[str, Any]) -> ReconcileRow:
     if is_invalid_number(_in["fnet"]):
         _bad.append(ITEM_FOREIGN)
     if _bad:
-        return ReconcileRow(ROW_HEALTH, invalid_items=_dedupe(_bad), has_input=True)
+        return ReconcileRow(ROW_HEALTH, invalid_items=_dedupe(_bad))
     _jq = _to_float_or_none(_in["jq"])
     _fnet = _to_float_or_none(_in["fnet"])
     _r = reconcile_health_score(_jq, score_pct_from(_in["score"], _in["max_score"]), _fnet)
-    return ReconcileRow(ROW_HEALTH, result=_r, has_input=_has)
+    return ReconcileRow(ROW_HEALTH, result=_r)
 
 
 def compute_reconcile(session: Mapping[str, Any]) -> ReconcileReport:
