@@ -46,8 +46,9 @@ from src.ui_v2 import page_today as V2
 _VIEW = pathlib.Path(P.__file__)
 _E = "RuntimeError('boom')"
 
-_STOCK_ENTRY = "🔬 個股分頁（本頁不重複掛載，避免撞 DuplicateWidgetID）"
-_ETF_ENTRY = "🏦 ETF 分頁（本頁不重複掛載，避免撞 DuplicateWidgetID）"
+# 批 Z55：view 的「現行入口」已去掉「避免撞 DuplicateWidgetID」（側欄 radio ＋ `st.stop()` 後不成立），此處同步。
+_STOCK_ENTRY = "🔬 個股分頁（本頁不重複掛載）"
+_ETF_ENTRY = "🏦 ETF 分頁（本頁不重複掛載）"
 
 
 def _enumerate():
@@ -809,7 +810,8 @@ _MUST_KEEP: dict[str, dict[str, tuple[str, ...]]] = {
     "PROFIT_EMPTY_NOW_TEMPLATE": {_WHERE: ("其餘兩格若有值就照常顯示", "不必重按",
                                            "季報補齊後這一格會自己回來")},
     "ETF_FAILED_NOW_TEMPLATE": {_WHY: ("拋出例外",), _WHERE: ("代碼與網路／proxy",)},
-    "DETAIL_UNWIRED_NOW_TEMPLATE": {_WHY: ("在本頁再掛一次會撞",
+    # 批 Z55：前一半「在本頁再掛一次會撞」已不成立（同 FE-36），改留仍成立的理由。
+    "DETAIL_UNWIRED_NOW_TEMPLATE": {_WHY: ("同名 key 照樣互相污染",
                                            "而把取數抄一份到本頁則會變成第二個真相源"),
                                     _WHERE: (NO_EXIT_MARKER, "這是待接線項，不是你操作的問題")},
     "BATCH_IDLE_NOW": {_WHY: ("在你送出之前", "一次 L3 取數都不會發"), _WHERE: ("批次分析",)},

@@ -1322,9 +1322,10 @@ class TestThreeColumnGrid:
 # 【11】未接線的卡
 # ══════════════════════════════════════════════════════════════════
 def _all_unwired_builts():
+    # 批 Z55：「健康評分六因子」已接線（L0 `shared.health_score_factors`），自本清單移出。
     return (P.build_unmeasured_cards()
             + P.build_engineer_panel_cards()
-            + (P.build_health6_card(), P.build_legacy_edu_card()))
+            + (P.build_legacy_edu_card(),))
 
 
 #: ⚠️ **唯一一張「有出口」的未接線卡**，據實登記為例外。
@@ -1372,12 +1373,15 @@ class TestUnwiredStaysUnwired:
             assert _facts, f"{_card.key} 沒有任何 facts（接線後長什麼樣要看得見）"
 
     def test_the_health_six_factor_card_refuses_to_copy_the_weights(self):
-        """⚠️ 在「解釋數字怎麼來」的頁面上貼一份沒有出處的權重 = 造第三份。"""
+        """⚠️ 在「解釋數字怎麼來」的頁面上貼一份沒有出處的權重 = 造第三份。
+
+        批 Z55：卡已接線 —— 這條的精神不變（⛔ 本頁不抄配分），改為驗「卡上的配分全部來自 L0 SSOT，
+        本頁原始碼裡沒有任何一份配分抄本」（接線前驗的是未接線說法裡沒有數字，該前提已不存在）。
+        """
+        from shared.health_score_factors import HEALTH_SCORE_FACTORS
         _card, _facts, _sig = P.build_health6_card()
-        _text = _card.note.now + _card.note.why + _card.note.where
-        for _w in ("30", "20", "15", "10"):
-            assert f"{_w}分" not in _text and f"+{_w}" not in _text
-        assert "抄第三份" in _card.note.why
+        assert dict(_facts) | dict((_n, f"{_p} 分") for _n, _p in HEALTH_SCORE_FACTORS) == dict(_facts)
+        assert ("SRC_HEALTH6" in _src()) and not re.search(r"趨勢[^\n]{0,6}30", _src())
 
 
 # ══════════════════════════════════════════════════════════════════

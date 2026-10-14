@@ -460,7 +460,10 @@ FONT_STACKS: Final[Mapping[str, str]] = _frozen({
 # 5. 斷點與欄數 —— UI_COMPONENTS.md 前言「斷點＝`≤640 手機 / 641–880 平板 / ≥881 桌機`」
 #                ＋ UI_PAGE_TODAY.md ①「排列（三斷點）」段
 # ⚠️ UI_COMPONENTS.md 該行同時記載 CSS 現況是 `640 / 940 / 560`、`880`／`881`
-#    在 `@media` 零命中 → 那是**實作待修**，規格值就是下面這組。
+#    在 `@media` 零命中 → ~~那是**實作待修**~~，規格值就是下面這組。
+#    📌 批 Z55（2026-10-13，事實更正，⛔ 不是漏刪）：已不待修 —— v2 樣式表的 `@media` 由
+#    `markup._breakpoint_rules()` 直接讀本表產出（實測 `markup.page_css()` 只出
+#    `@media (max-width:880px)` 與 `@media (max-width:640px)` 兩條）。
 # ══════════════════════════════════════════════════════════════════
 BREAKPOINTS: Final[Mapping[str, int]] = _frozen({
     "mobile_max_px": 640,

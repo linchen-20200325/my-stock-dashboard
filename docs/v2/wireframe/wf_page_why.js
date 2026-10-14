@@ -36,6 +36,8 @@
  *
  * 4. ⛔ 沒有把任何缺口寫小。三處特別點名（原文全在 evidence，白話版仍在 states）：
  *    · `why.edu.health6`：六因子配分**說不出來**、「這一格空著是誠實的」—— 全留；
+ *      📌 批 Z55 更正（上句保留作紀錄，不是漏改）：六因子卡已接線，配分讀 L0
+ *      `shared/health_score_factors.py`（L2 `calc_health_score` 讀同一份），「說不出來」已不成立。
  *    · `why.source.unmeasured.finmind_quota`：「這一批沒有做到」「不宣稱做得到也不
  *      宣稱做不到」—— 全留；
  *    · `why.source.coverage`：「**這面牆上沒有紅燈，不等於全站都好**」「只有 9 支掛了
@@ -227,7 +229,7 @@ window.WF_PAGES.push({
         { key: 'why.edu.health6', name: '② 健康評分六因子', leaf: 'l1',
           cols: { desktop: 3, tablet: 2, phone: 1 },
           states: {
-            live: null,
+            live: '📌 批 Z55：🟢 大字「合計 100」（L0 `HEALTH_SCORE_TOTAL` 原值）＋ 列「這一格的出處」與六個因子各一列「因子名｜配分 分」（L0 `shared/health_score_factors.HEALTH_SCORE_FACTORS` 原值，L2 `calc_health_score` 讀同一份）；讀不出來 → 🔴「健康評分六因子讀不出來」。下方 unwired 為接線前的描述，保留作紀錄。',
             idle: null,
             loading: null,
             empty: null,
@@ -564,7 +566,7 @@ window.WF_PAGES.push({
             error: '🔴 該面板；其他四個維持原樣'
           },
           asOf: null,
-          evidence: '📌 批 Z54 更正（下段描述的是接線前）：`ENGINEER_PANEL_SPECS` 現只剩三筆（雙演算法對帳／API 根因／原始資料表，`wired=False`）；資料源清單／門檻校準改由 `build_registry_card()`／`build_calibration_card()` 建，經 `build_engineer_panel_row()` 依原順序排成五張。\n【（批 Z54 前）為什麼五張的 live 是 null】五個 `L0CardSpec` 全部寫死 `wired=False`（:1683 / :1695 / :1708 / :1721 / :1733），而 `classify_ui_state` 的第 1 條就是 `if not wired: return UI_UNWIRED`（`shared/ui_state.py:199-200`），**排在所有其他條件之前** ⇒ 任何值、任何請求都不改變它。旗標在 L0 被翻回 `True` 之前，這五張**只有 unwired 一態**。\n【⚠️ 每一筆的「去哪補」都不同，這是刻意的】:1678-1679 逐字：「每一項的『去哪補』都不同 —— 它們卡住的位置不一樣。」共用一句「未接線」會讓「補哪一步就會好」這個資訊消失。\n⇒ 這是指令第 4 點在**同一態內**的延伸：三個灰要分開講，而**同一種灰的不同原因也要分開講**。\n【⛔ 這五張不准被說成「不適用」】它們對這一頁**完全適用**（線框對每一格都有明確期待，逐格寫在 fact「線框對這一格的期待」裡），只是接不上。說成「不適用」等於宣稱這五件事不該存在。\n【與 S1-3B §3.5.9 的對應】§3.5.9 列的三件「本頁已知做不到的事」中，第 1 項（「備援鏈跑到第幾層」的揭露）**repo 裡不存在這個資訊**，⛔ **不承諾尚未存在的東西** —— 本線框因此**沒有**為它開任何一格。\n\n【文案瘦身 2026-09-14｜從 states／name 搬進來的實作備註（原文照收，非新結論）】\n· idle 原文：引 `page_why.py:1750-1757` 逐字「**只有在 gate 打開時才會被建構**…『三態不得混』的落點」。\n· unwired 原文（**五條的完整技術理由，全文照收**）：\n  ① 本組實跑：`build_engineer_panel_cards()` → 5 張，state 皆 `unwired`，chip 皆 `("未接線","⛔","#888888")`。\n  ②「**資料源清單**：清單 SSOT 住 L1 `data_registry.py`，現行診斷面板直接讀 `st.session_state[...]`（由總經頁寫入）。本頁是 L5，**既不得直呼 L1，也不想依賴「你得先去過另一頁」** → 要在 `src/services/` 補一支唯讀 L3。」\n  ③「**雙演算法對帳（§4.3）**：純函式在 L2（`src/compute/risk/reconcile.py`），但 `src/services/` **沒有**任何一支把它包起來，而且輸入也得由上游餵進來 → 補 L3 wrapper。」\n  ④「**API 根因診斷**：現行實作（`src/ui/pages/api_diagnostic.py`）會**當場對外送出請求**比對「走 proxy vs 直連」—— 那是 L5 直接打外部 API，正是 `CLAUDE.md §8.2` 明文禁止的；把它 import 進來**等於把違憲一起繼承** → 探測要先搬到 L1／L3。」\n  ⑤「**原始資料表**：要的是「這一輪各頁抓回來的 DataFrame 本體」，那些只存在於各頁自己的 `st.session_state`。本頁去翻別頁的 session key 等於**跟那些頁面用約定俗成的字串耦合** —— 對方改一個 key，這裡就會**靜默變空**。」\n  ⑥「**門檻校準**：校準是 `scripts/` 下的離線工作（季度 cron ＋ PR 審閱後才寫入），現行面板從 UI 直接 import `scripts/`…「**重跑校準**」會改到全站判燈，屬不可逆操作，**需要客戶拍板**。」\n· error 原文：⛔ 不染其他四個。',
+          evidence: '📌 批 Z55 更正（舊文保留作紀錄，不是漏改）：三張未接線卡原有的 fact「線框對這一格的期待」經查 v1 線框只列名稱、三句皆無出處，已自程式刪除；下文「逐格寫在 fact「線框對這一格的期待」裡」為刪除前的描述。\n📌 批 Z54 更正（下段描述的是接線前）：`ENGINEER_PANEL_SPECS` 現只剩三筆（雙演算法對帳／API 根因／原始資料表，`wired=False`）；資料源清單／門檻校準改由 `build_registry_card()`／`build_calibration_card()` 建，經 `build_engineer_panel_row()` 依原順序排成五張。\n【（批 Z54 前）為什麼五張的 live 是 null】五個 `L0CardSpec` 全部寫死 `wired=False`（:1683 / :1695 / :1708 / :1721 / :1733），而 `classify_ui_state` 的第 1 條就是 `if not wired: return UI_UNWIRED`（`shared/ui_state.py:199-200`），**排在所有其他條件之前** ⇒ 任何值、任何請求都不改變它。旗標在 L0 被翻回 `True` 之前，這五張**只有 unwired 一態**。\n【⚠️ 每一筆的「去哪補」都不同，這是刻意的】:1678-1679 逐字：「每一項的『去哪補』都不同 —— 它們卡住的位置不一樣。」共用一句「未接線」會讓「補哪一步就會好」這個資訊消失。\n⇒ 這是指令第 4 點在**同一態內**的延伸：三個灰要分開講，而**同一種灰的不同原因也要分開講**。\n【⛔ 這五張不准被說成「不適用」】它們對這一頁**完全適用**（線框對每一格都有明確期待，逐格寫在 fact「線框對這一格的期待」裡），只是接不上。說成「不適用」等於宣稱這五件事不該存在。\n【與 S1-3B §3.5.9 的對應】§3.5.9 列的三件「本頁已知做不到的事」中，第 1 項（「備援鏈跑到第幾層」的揭露）**repo 裡不存在這個資訊**，⛔ **不承諾尚未存在的東西** —— 本線框因此**沒有**為它開任何一格。\n\n【文案瘦身 2026-09-14｜從 states／name 搬進來的實作備註（原文照收，非新結論）】\n· idle 原文：引 `page_why.py:1750-1757` 逐字「**只有在 gate 打開時才會被建構**…『三態不得混』的落點」。\n· unwired 原文（**五條的完整技術理由，全文照收**）：\n  ① 本組實跑：`build_engineer_panel_cards()` → 5 張，state 皆 `unwired`，chip 皆 `("未接線","⛔","#888888")`。\n  ②「**資料源清單**：清單 SSOT 住 L1 `data_registry.py`，現行診斷面板直接讀 `st.session_state[...]`（由總經頁寫入）。本頁是 L5，**既不得直呼 L1，也不想依賴「你得先去過另一頁」** → 要在 `src/services/` 補一支唯讀 L3。」\n  ③「**雙演算法對帳（§4.3）**：純函式在 L2（`src/compute/risk/reconcile.py`），但 `src/services/` **沒有**任何一支把它包起來，而且輸入也得由上游餵進來 → 補 L3 wrapper。」\n  ④「**API 根因診斷**：現行實作（`src/ui/pages/api_diagnostic.py`）會**當場對外送出請求**比對「走 proxy vs 直連」—— 那是 L5 直接打外部 API，正是 `CLAUDE.md §8.2` 明文禁止的；把它 import 進來**等於把違憲一起繼承** → 探測要先搬到 L1／L3。」\n  ⑤「**原始資料表**：要的是「這一輪各頁抓回來的 DataFrame 本體」，那些只存在於各頁自己的 `st.session_state`。本頁去翻別頁的 session key 等於**跟那些頁面用約定俗成的字串耦合** —— 對方改一個 key，這裡就會**靜默變空**。」\n  ⑥「**門檻校準**：校準是 `scripts/` 下的離線工作（季度 cron ＋ PR 審閱後才寫入），現行面板從 UI 直接 import `scripts/`…「**重跑校準**」會改到全站判燈，屬不可逆操作，**需要客戶拍板**。」\n· error 原文：⛔ 不染其他四個。',
           src: 'src/ui/views/page_why.py:1680（ENGINEER_PANEL_SPECS 五筆）＋ :1750（builder）＋ :2133（render）',
           flags: [] }
       ] },

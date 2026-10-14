@@ -108,6 +108,9 @@
         —— `@dataclass(frozen=True)` 常數表，**零 I/O**。
            `unwired_reason` / `degraded_reason` / `no_level_reason` **原文透傳**
            （線框 note 明文要求「直接讀自 SSOT」）。
+    健康評分六因子（葉1，批 Z55 接線）
+        L0 `shared/health_score_factors.py`（`HEALTH_SCORE_FACTORS` ＋ `HEALTH_SCORE_TOTAL`）
+        —— 純常數，**零 I/O**；L2 `calc_health_score` 讀的是同一份。
 
 ═══ ⚠️ 2026-09-09 修掉的四件事（都屬「把畫面修回它本來就該長的樣子」）═════
 本頁在門檻這一段講了四句與實情不符的話。四件都是**資料誠實度**問題，
@@ -158,10 +161,13 @@
          回 403），而本 repo 早已移除 FinMind SDK（`requirements.txt` v19.79
          的註記），沒有本地介面可以反查。**在確認之前不猜、不接**；
          尤其**不得**拿「已用次數」冒充「剩餘額度」（那是兩個不同的數）。
-    ② 健康評分六因子的「因子名 ＋ 配分」
-       → 權重是 L2 `compute/scoring/scoring_helpers.calc_health_score` 內的
+    ② ~~健康評分六因子的「因子名 ＋ 配分」~~
+       → ~~權重是 L2 `compute/scoring/scoring_helpers.calc_health_score` 內的
          **inline 數字**，L0 `shared/position_throttle.py` 的註解另抄了一份
-         （兩份會漂移）。**沒有任何一份是可讀的資料結構。**
+         （兩份會漂移）。**沒有任何一份是可讀的資料結構。**~~
+       📌 批 Z55（2026-10-13，有意識的更正，⛔ 不是漏刪）：**已接線**。L0 補上
+       `shared/health_score_factors.HEALTH_SCORE_FACTORS`，L2 `calc_health_score` 改讀它
+       （golden test 釘零行為變更），本頁讀同一份；`position_throttle.py` 那份註解改為指向它。
     ③ 既有 1,582 行靜態教學內容的搬遷
        → 線框 DECISIONS #9 裁決「原樣搬過來」，但那是跨檔搬遷，
          屬 `CLAUDE.md §8.4` step 4 的範圍問題，**本批不夾帶**。
@@ -745,7 +751,10 @@ FINMIND_QUOTA_NOW: str = "**額度這件事本頁看不到**"
 SPEC_FLAG_UNWIRED_NOW: str = "**這一盞刻意沒有接**"
 SPEC_FLAG_DEGRADED_NOW: str = "**這一盞會亮，但別照門檻讀**"
 LIGHTS_EMPTY_NOW: str = "**門檻表讀不出來**"
-HEALTH6_NOW: str = "**六個因子各佔幾分，本頁還說不出來**"
+# 📌 批 Z55（2026-10-13）：`HEALTH6_NOW`「六個因子各佔幾分，本頁還說不出來」**已刪**（有意識的清理，
+#    ⛔ 不是漏刪）—— 「健康評分六因子」卡本批接上 L0 `shared.health_score_factors`，那句未接線說法
+#    因本次改動成為 0 引用（§-1.5.F 判定 3(4)）；讀不出來時的紅卡改用下一行。
+HEALTH6_FAILED_NOW: str = L0_FAILED_NOW_TEMPLATE.format(label="健康評分六因子")
 SCALES_DEGRADED_NOW: str = "**兩套刻度目前有一側已失準，本頁不提供跨頁比較**"
 SCALES_EMPTY_NOW: str = "**兩套刻度的定義讀不出來**"
 LEGACY_NOW: str = "**既有的完整教學內容還沒有搬到這一頁**"
@@ -871,6 +880,10 @@ class L0CardSpec:
         now / why / where: 非 live 時的三要素。三個都不得為空（`Note` 會 raise）。
         facts: 中繼資料列。**任何狀態都可帶** —— 這些不是「這一輪量到的數字」，
             而是「這一格本來長什麼樣」，未接線時照樣該讓人看見。
+        error_source / error_where: `error` 非空時紅卡的「出處」與「去哪補」。
+            空字串＝沿用 L0 規格表那一組（`SRC_SPECS`、「這是規格表本身的問題…」）。
+            批 Z55：讀的不是規格表的卡（「健康評分六因子」讀 L0 配分表）要把出處講對，
+            ⛔ 不得沿用「規格表本身的問題」那句（同 Z54 `REGISTRY_FAILED_NOW` 的處置）。
     """
 
     key: str
@@ -885,6 +898,8 @@ class L0CardSpec:
     reason: str = MISS_NO_INPUT
     error: str = ""
     facts: tuple[tuple[str, str], ...] = field(default_factory=tuple)
+    error_source: str = ""
+    error_where: str = ""
 
 
 def build_l0_card(spec: L0CardSpec) -> _Built:
@@ -912,9 +927,10 @@ def build_l0_card(spec: L0CardSpec) -> _Built:
                 tuple(spec.facts), "")
     if _state == UI_FAILED and spec.error:
         _note = Note(now=L0_FAILED_NOW_TEMPLATE.format(label=spec.label),
-                     why=_error_why(SRC_SPECS, spec.error),
-                     where=(f"{NO_EXIT_MARKER} —— 這是規格表本身的問題，"
-                            "請把上面那行訊息回報給維護者"))
+                     why=_error_why(spec.error_source or SRC_SPECS, spec.error),
+                     where=(spec.error_where
+                            or (f"{NO_EXIT_MARKER} —— 這是規格表本身的問題，"
+                                "請把上面那行訊息回報給維護者")))
     else:
         _note = Note(now=spec.now, why=spec.why, where=spec.where)
     return (Card(key=spec.key, label=spec.label, state=_state, note=_note),
@@ -1614,39 +1630,69 @@ def build_lights_card(scan: SpecScan) -> _Built:
              "再加一張**不算燈**的「參考走勢」"))))
 
 
-#: 六因子的**權重**在 repo 裡的實況（實測 2026-09-07）。
-#: ⚠️ 這裡**只描述現況、不重抄權重數字** —— 重抄就變成第三份。
-HEALTH6_WHY: str = (
-    "「健康評分六因子」的因子名與配分**沒有任何一份是可讀的資料結構**："
-    "權重是 L2 `src/compute/scoring/scoring_helpers.py::calc_health_score` 裡的"
-    "**inline 數字**，而 L0 `shared/position_throttle.py` 的註解裡另外抄了一份文字版"
-    "（實測 2026-09-07：兩處各一份）。本頁一律走 L3／L0，"
-    "**不去讀 L2 的函式內文，也不把那組數字在這裡抄第三份** —— "
-    "抄第三份就是再製造一次漂移，而漂移正是這一頁存在的理由")
-
-HEALTH6_WHERE: str = (
-    f"{NO_EXIT_PREFIX}"
-    "要接上，正解是在 L0 補一份 `((因子名, 配分), …)` 的常數表，"
-    "讓 L2 的 `calc_health_score` 與本頁**讀同一份**；"
-    "退而求其次也可以在 `src/services/` 補一支回傳因子表的 L3。"
-    "⚠️ **在那之前，這一格空著是誠實的** —— "
-    "在這裡貼一份手抄的權重，等於在「解釋數字怎麼來」的頁面上放一個沒有出處的數字")
+# 📌 批 Z55（2026-10-13，有意識的清理，⛔ 不是漏刪）：原本這裡的 `HEALTH6_WHY`／`HEALTH6_WHERE`
+#    （「配分沒有任何一份是可讀的資料結構」「要接上，正解是在 L0 補一份 `((因子名, 配分), …)`
+#    的常數表，讓 L2 的 `calc_health_score` 與本頁讀同一份」）已刪 —— 本批照它指定的補法做了：
+#    L0 `shared/health_score_factors.py` 補上那份常數表，L2 改讀它（golden test 釘零行為變更），
+#    本卡讀**同一份**。兩句未接線說法因本次改動成為 0 引用（§-1.5.F 判定 3(4)）。
+#: 出處（紅卡的「為什麼」與卡上「這一格的出處」共用；做法同 `SRC_REGISTRY`）。
+SRC_HEALTH6: str = "L0 六因子配分表（`shared.health_score_factors.HEALTH_SCORE_FACTORS`）"
 
 
-def build_health6_card() -> _Built:
-    """線框葉1 的「健康評分六因子」—— **本批未接線**。"""
+@dataclass(frozen=True)
+class Health6Readout:
+    """「健康評分六因子」那一格的讀數 —— L0 配分表原樣搬運（**本頁不抄任何一個配分**）。
+
+    Attributes:
+        factors: `((因子名, 配分), …)`，L0 原樣。
+        total: 六項合計（L0 `HEALTH_SCORE_TOTAL`，⛔ 不在本頁自己加總）。
+        error: 讀取期例外 `repr(e)`。非空 = 紅。
+    """
+
+    factors: tuple[tuple[str, int], ...] = ()
+    total: int | None = None
+    error: str = ""
+
+
+def load_health6() -> Health6Readout:
+    """讀 L0 配分表。零 I/O（純常數）；import 或 L0 自身的對帳失敗 → 紅（§1，⛔ 不退回空白冒充）。"""
+    try:
+        from shared.health_score_factors import HEALTH_SCORE_FACTORS, HEALTH_SCORE_TOTAL
+        return Health6Readout(factors=tuple(HEALTH_SCORE_FACTORS), total=HEALTH_SCORE_TOTAL)
+    except Exception as _e:  # noqa: BLE001 — 轉成紅卡顯示，不吞
+        print(f"[views/page_why] 六因子配分表讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
+        return Health6Readout(error=repr(_e))
+
+
+def build_health6_card(readout: Health6Readout | None = None) -> _Built:
+    """線框葉1 的「健康評分六因子」—— 批 Z55 起**已接線**（讀 L0 `shared.health_score_factors`）。
+
+    · live：大字＝六項合計（L0 原值）；facts 逐項列出因子名與配分（L0 原值，順序照 L0）。
+      這正是本卡原本 fact「接線後的樣子」寫的那一句：「六個因子逐項列出名稱與配分，合計 100」。
+    · 讀不出來 → 紅（`L0_FAILED_NOW_TEMPLATE`，出處講對：讀的是配分表，不是規格表）。
+    """
+    _r = load_health6() if readout is None else readout
+    # 沒有例外卻也沒有任何一列（L0 自身對帳會擋，理論上走不到）→ 一律當紅，⛔ 不畫成空白或灰。
+    _err = _r.error or ("" if (_r.factors and _r.total is not None)
+                        else "ValueError('L0 六因子配分表沒有回傳任何一列')")
+    _facts: list[tuple[str, str]] = [(PANEL_SOURCE_FACT_KEY, SRC_HEALTH6)]
+    _facts += [(_name, f"{_pts} 分") for _name, _pts in _r.factors]
+    _facts.append(
+        ("⚠️ 順帶一提",
+         "L0 `shared/health_thresholds.py` 有的是**等第分界**"
+         "（A 級 / B 級的下界），那是**另一件事** —— "
+         "分界說的是「幾分算好」，因子說的是「這幾分怎麼算出來的」"))
     return build_l0_card(L0CardSpec(
         key="why.edu.health6", label="健康評分六因子",
-        wired=False,
-        now=HEALTH6_NOW,
-        why=HEALTH6_WHY,
-        where=HEALTH6_WHERE,
-        facts=(("接線後的樣子", "六個因子逐項列出名稱與配分，合計 100"),
-               ("卡住的那一步", "配分沒有 SSOT（L2 inline ＋ L0 註解各一份）"),
-               ("⚠️ 順帶一提",
-                "L0 `shared/health_thresholds.py` 有的是**等第分界**"
-                "（A 級 / B 級的下界），那是**另一件事** —— "
-                "分界說的是「幾分算好」，因子說的是「這幾分怎麼算出來的」"))))
+        error=_err,
+        has_value=not _err,
+        value=(f"合計 {_r.total}" if _r.total is not None else ""),
+        now=HEALTH6_FAILED_NOW,
+        why=_error_why(SRC_HEALTH6, _err),
+        where=PANEL_REPORT_WHERE,
+        error_source=SRC_HEALTH6,
+        error_where=PANEL_REPORT_WHERE,
+        facts=tuple(_facts)))
 
 
 def _scale_rows(keys: Sequence[str]) -> tuple[SpecRow, ...]:
@@ -1875,6 +1921,12 @@ def build_wall_registry_failed_card(scan: SourceScan) -> _Built:
 #:    它們原本寫的補法（「在 `src/services/` 補一支回傳來源清單的唯讀 L3」／
 #:    「可由 L3 轉出 `shared/macro_calibration.py` 讀到的當前值」）正是本批照做的事。
 #:    「重跑校準」**仍不在本頁**（會改到全站判燈，屬不可逆操作，需要客戶拍板）。
+#: 📌 批 Z55（2026-10-13，有意識的刪除，⛔ 不是漏刪）：三筆原本各有一列 fact「線框對這一格的期待」
+#:    （「同一個指標兩種算法並排，差額超過容差就標紅」「金鑰來源 · proxy 設定 · 各 endpoint 雙跑比對」
+#:    「各來源原始 DataFrame 就地展開」）。逐句查 `docs/wireframes/stock_ia_v1.html` 與
+#:    `docs/v2/wireframe/wf_page_why.js`：v1 線框對這三格只列了名稱（「雙演算法對帳 · API 根因 ·
+#:    原始資料表」），三句**都沒有出處** ⇒ 標「線框期待」是冒稱，整列刪掉（只刪不改、不另寫新句）；
+#:    其餘欄位一字未動。
 ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
     L0CardSpec(
         key="why.engineer.reconcile", label="雙演算法對帳（§4.3）",
@@ -1887,8 +1939,7 @@ ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
         where=(f"{NO_EXIT_PREFIX}"
                "在 `src/services/` 補一支 L3 wrapper，"
                "由它負責取輸入並回傳兩種算法的差額"),
-        facts=(("線框對這一格的期待", "同一個指標兩種算法並排，差額超過容差就標紅"),
-               ("卡住的那一步", "L2 有純函式，但沒有 L3 wrapper、也沒有輸入來源"))),
+        facts=(("卡住的那一步", "L2 有純函式，但沒有 L3 wrapper、也沒有輸入來源"),)),
     L0CardSpec(
         key="why.engineer.api_root", label="API 根因診斷",
         wired=False,
@@ -1900,8 +1951,7 @@ ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
         where=(f"{NO_EXIT_PREFIX}"
                "要在本頁做，得先把那段探測搬到 L1／L3（連線探測本來就是取數），"
                "本頁只負責顯示結果。⚠️ 在那之前，既有的 🔎 資料診斷分頁**沒有下架**"),
-        facts=(("線框對這一格的期待", "金鑰來源 · proxy 設定 · 各 endpoint 雙跑比對"),
-               ("卡住的那一步", "探測邏輯住在 L5 且會直接對外連線"))),
+        facts=(("卡住的那一步", "探測邏輯住在 L5 且會直接對外連線"),)),
     L0CardSpec(
         key="why.engineer.raw", label="原始資料表",
         wired=False,
@@ -1912,8 +1962,7 @@ ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
              "對方改一個 key，這裡就會靜默變空（而空白看起來像沒問題）"),
         where=(f"{NO_EXIT_PREFIX}"
                "正解是由 L3 提供一份具名的快照介面，而不是讓 UI 互相翻 session"),
-        facts=(("線框對這一格的期待", "各來源原始 DataFrame 就地展開"),
-               ("卡住的那一步", "沒有具名介面，只有各頁私有的 session key"))),
+        facts=(("卡住的那一步", "沒有具名介面，只有各頁私有的 session key"),)),
 )
 
 
@@ -2436,8 +2485,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     + [_v2_rows_for("why.edu.lights", LIGHTS_EMPTY_NOW, (
            None, "L0 規格表這一輪沒有回傳任何一盞燈的定義",
            NO_EXIT_MARKER + " —— 這是規格表本身的問題，請回報給維護者")),
-       _v2_rows_for("why.edu.health6", HEALTH6_NOW, (
-           None, "因子名與配分沒有任何一份是可讀的資料結構", _V2_NO_EXIT_UNWIRED)),
+       # 批 Z55：六因子卡接線 —— 原「未接線」那一列隨 `HEALTH6_NOW` 刪除；換成讀不出來的紅卡（原文摘錄）。
+       _v2_rows_for("why.edu.health6", HEALTH6_FAILED_NOW, (
+           None, _v2_raised(SRC_HEALTH6), v2_plain(PANEL_REPORT_WHERE))),
        _v2_rows_for("why.edu.scales", SCALES_DEGRADED_NOW, (
            # QA F4：「逐盞原因見…」是**去處**（原因寫在哪），⛔ 不得略。
            None, "其中一側" + V2_EXCERPT_GAP + "燈會亮、也有等級，只是別照門檻讀" + V2_EXCERPT_GAP
