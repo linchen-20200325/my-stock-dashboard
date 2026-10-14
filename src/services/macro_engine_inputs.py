@@ -1,7 +1,11 @@
 """src/services/macro_engine_inputs.py — 規則引擎輸入組裝＋規則引擎執行（L3 編排）。
 
-批 Z64（freshness 第四批 F4，2026-10-14）。⛔ **本批不接線**：沒有任何呼叫端改用本檔；
-`refresh_macro_now`、`macro_state.json`、任何頁面（含舊 UI `section_news_ai`）行為一律不變。
+批 Z64（freshness 第四批 F4，2026-10-14）。~~⛔ **本批不接線**：沒有任何呼叫端改用本檔；
+`refresh_macro_now`、`macro_state.json`、任何頁面（含舊 UI `section_news_ai`）行為一律不變。~~
+📌 **批 Z65（F5）更新 —— 有意識的更正，不是漏刪**：上句在 Z64 當天為真。Z65 起 L3
+`src/services/risk_cap_apply.py` 呼叫本檔（`load_engine_inputs_from_session` → `run_rule_engine(...,
+include_veto_flags=True)`），由新 UI「🚀 更新今日戰情」（`refresh_macro_now` 的 `STEP_RISK_CAP`）
+寫 `macro_state.json`。舊 UI `section_news_ai` 仍不呼叫本檔、行為不變。
 
 做什麼
 ──────
@@ -391,15 +395,21 @@ def load_engine_inputs_from_session(session: Any, *, now: datetime) -> EngineInp
 # ══════════════════════════════════════════════════════════════════════
 
 
-def run_rule_engine(bundle: EngineInputBundle) -> dict:
+def run_rule_engine(bundle: EngineInputBundle, *, include_veto_flags: bool = False) -> dict:
     """呼叫**未修改**的 `calculate_system_state`，回傳引擎原有鍵（一個都不覆寫）＋ 追溯資訊。
 
     附加鍵：`input_asof`（dict）、`not_evaluated`（list）、`red_lines`（{name: {status, reason, inputs}}）。
     引擎輸出若已含附加鍵名 → `RuntimeError`（⛔ 不覆寫）。
+
+    `include_veto_flags`（批 Z65）：True → 轉給引擎同名參數，引擎輸出多帶 `veto_flags`（引擎自己的鍵，
+    在三條紅線分支內設定；見 `calculate_system_state` docstring）。預設 False ⇒ 呼叫方式與 Z64 逐字相同。
     """
     if not isinstance(bundle, EngineInputBundle):
         raise TypeError(f"bundle 必須是 EngineInputBundle：{type(bundle).__name__}")
-    engine_result = calculate_system_state(dict(bundle.macro_numbers))
+    if include_veto_flags:
+        engine_result = calculate_system_state(dict(bundle.macro_numbers), include_veto_flags=True)
+    else:
+        engine_result = calculate_system_state(dict(bundle.macro_numbers))
     out = dict(engine_result)
     clash = [k for k in EXTRA_RESULT_KEYS if k in out]
     if clash:

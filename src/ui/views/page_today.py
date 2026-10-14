@@ -201,9 +201,12 @@ L3 `services.macro_refresh_service.refresh_macro_now()` → 報告落
 ⛔ **這是一條「平行路徑」，不是收編舊分頁。** `src/ui/tabs/**` 本階段
 **一個字都沒有動**（客戶明令舊 7 頁籤保留原樣），所以本頁按鈕**碰不到**
 舊分頁其他區塊寫的東西 —— ~~建議持股（卡①）／市場位階（卡③）／~~今日關鍵的
-門檻層／新聞桶／建議持股的「系統風險上限」（`macro_state.json`）都在射程外。
+門檻層／新聞桶~~／建議持股的「系統風險上限」（`macro_state.json`）~~都在射程外。
 （📌 批 Z60：卡①③ 吃的 `warroom_summary` 改由 L3 `STEP_WARROOM` 平行組裝、本頁按鈕寫得到；
-刪除線是有意識的更正 —— 舊句在寫下的當天為真。）**摸不到的一律逐條列在畫面上**
+刪除線是有意識的更正 —— 舊句在寫下的當天為真。）
+（📌 批 Z65：「系統風險上限」改由 L3 `STEP_RISK_CAP`（`risk_cap_apply`）以同一個規則引擎重算、
+經同一支 `lock_system_state_only` 寫 `macro_state.json` —— 按本頁按鈕可重算；算不出來時不覆寫，
+沿用 7 天內最近一次的有效上限。第二處刪除線同樣是有意識的更正，舊句在 Z60 當天為真。）**摸不到的一律逐條列在畫面上**
 （清單 SSOT：`macro_refresh_service.UNTOUCHED_BLOCKS`），
 不留白讓人以為整頁都是今天的（§1）。
 
@@ -568,8 +571,11 @@ PAGE_REFRESH_SCOPE_WHY: str = (
 # 若把那 15 處**全部**改成「按本頁按鈕」，就會製造一種新的假指路 ——
 # **契約漂移（`out_of_range` / `no_extraction`）那幾處按一百次也沒用**，
 # 而今日關鍵的門檻層**本頁按鈕根本摸不到**（批 Z60 前還有建議持股 / 市場位階；
-# 那兩張卡吃的 `warroom_summary` 現在由本頁按鈕寫得到，只剩建議持股的「系統風險上限」
-# 那一條天花板讀 `macro_state.json`，本頁摸不到 —— 逐條見 `UNTOUCHED_BLOCKS`）。
+# 那兩張卡吃的 `warroom_summary` 現在由本頁按鈕寫得到，~~只剩建議持股的「系統風險上限」
+# 那一條天花板讀 `macro_state.json`，本頁摸不到~~ —— 逐條見 `UNTOUCHED_BLOCKS`）。
+# 📌 批 Z65（有意識的更正，不是漏刪；舊句在 Z60 當天為真）：「系統風險上限」那條天花板
+#    現由 L3 `STEP_RISK_CAP` 重算並寫 `macro_state.json`，按本頁按鈕可重算（算不出來時不覆寫，
+#    沿用 7 天內最近一次的有效上限）；`UNTOUCHED_BLOCKS` 已移除那一列。
 # 三句話對應三種**處置**，不是三種語氣。
 
 #: (a) 這一格**可以**靠本頁的按鈕重抓 —— 它就是這條路徑會更新的東西。
@@ -1774,8 +1780,11 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
         #    —— 當時 `warroom_summary` 只有舊分頁寫；Z60 起 L3 `STEP_WARROOM` 會寫它，按一次
         #    「🚀 更新今日戰情」這張卡就有機會從未評估變 live（本輪輸入算得出健康分時），`UNTOUCHED_BLOCKS` 也不再列它 ⇒
         #    舊出口變成假指路（§1）。改走 `EXIT_RETRY_HERE`。
-        #    ⚠️ 卡①只有「系統風險上限」那一條天花板讀 `macro_state.json`（本頁摸不到），
-        #    但那條天花板**不決定**這張卡會不會從未評估變 live —— 所以出口仍是可重抓。
+        #    ⚠️ ~~卡①只有「系統風險上限」那一條天花板讀 `macro_state.json`（本頁摸不到），
+        #    但那條天花板**不決定**這張卡會不會從未評估變 live —— 所以出口仍是可重抓。~~
+        #    📌 批 Z65（有意識的更正，不是漏刪；舊句在 Z60 當天為真）：那條天花板現由 L3
+        #    `STEP_RISK_CAP` 重算並寫 `macro_state.json`，本頁按鈕摸得到（算不出來時不覆寫，沿用
+        #    7 天內最近一次的有效上限）。出口仍是 `EXIT_RETRY_HERE` —— 現在連那一條也屬實。
         #    錯誤分支（`alloc_error`）維持 `EXIT_FIX_CODE`，未動。
         _tiles.append(Tile(Card(
             key="verdict.exposure", label="能不能出手 · 出手到幾成",

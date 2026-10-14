@@ -502,7 +502,7 @@ _ENGINE_NUMERIC_INPUTS: tuple = (
 )
 
 
-def calculate_system_state(macro_numbers: dict) -> dict:
+def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = False) -> dict:
     """
     Rule-based quantitative engine (理科 brain).
     包含三大硬否決紅線（Physical Lock），覆蓋分數計算結果。
@@ -546,6 +546,17 @@ def calculate_system_state(macro_numbers: dict) -> dict:
         regime／風險／曝險／Macro_Phase（「系統異常」）＋ `missing_inputs`（批 Z34，客戶 Q-z14）。
     兩個 bool 輸入（Sahm／MA5）不在此列，照舊（None → False）。
 
+    `include_veto_flags`（批 Z65，客戶 2026-10-14 題2＝A；預設 False ⇒ 輸出與修前逐字相同）
+    ────────────────────────────────────────────────────────────────
+    True → 回傳多一個 `veto_flags`：``{"sahm", "pmi_contraction", "futures_ma5": bool,
+    "fail_safe": bool}``。三條紅線的值**就是下方該分支是否實際進入**（在分支內設定，⛔ 不另寫一份
+    條件重算）；`fail_safe=True` 只出現在「8 項數值全缺」的 fail-safe 回傳 —— 此時三條一律 False，
+    語意是「**沒有評估**」，⛔ 不是「未觸發」。其餘既有鍵的值一個都不受影響。
+    **為什麼是 opt-in 而不是一律帶**：舊 UI `section_news_ai` 把整份 `_system_state`
+    `json.dumps` 進 AI prompt、並原樣 `**` 進 `lock_system_state_only` 落檔 —— 一律帶等於改了
+    舊 UI 送給 LLM 的內容與寫出的檔（客戶 2026-10-13 舊 UI 凍結）。只有新 UI 的
+    `src/services/risk_cap_apply.py` 會傳 True。
+
     本函式**刻意不在內部塞刻度判斷**：規則引擎的職責是「照契約算分」，
     一旦引擎自己猜刻度，錯誤就會被吸收在引擎裡、caller 永遠不會發現送錯值
     （§1：掩蓋問題 ≠ 解決問題）。守衛屬於取值端。
@@ -578,13 +589,18 @@ def calculate_system_state(macro_numbers: dict) -> dict:
     #   `_DEFAULT_STATE`（「系統異常」；`get_macro_state` 既有規則視同未載入、不給曝險上限），不新增任何數字。
     #   薩姆規則 bool 已觸發屬「有資料」，照舊走下方紅線（not sahm 才短路）。至少一項有效 → 本段不進、輸出逐字不變。
     if len(missing_inputs) == len(_ENGINE_NUMERIC_INPUTS) and not sahm:
-        return {
+        _fs_out = {
             "market_regime": _DEFAULT_STATE["market_regime"],
             "systemic_risk_level": _DEFAULT_STATE["systemic_risk_level"],
             "exposure_limit_pct": _DEFAULT_STATE["exposure_limit_pct"],
             "Macro_Phase": _DEFAULT_STATE["Macro_Phase"],
             "missing_inputs": missing_inputs,
         }
+        if include_veto_flags:
+            # 批 Z65：fail-safe 沒有跑任何紅線 ⇒ 三條 False ＋ fail_safe=True（＝未評估，⛔ 不是「未觸發」）
+            _fs_out["veto_flags"] = {"sahm": False, "pmi_contraction": False,
+                                     "futures_ma5": False, "fail_safe": True}
+        return _fs_out
 
     score = 60  # 中性基準
 
@@ -627,6 +643,8 @@ def calculate_system_state(macro_numbers: dict) -> dict:
 
     # ── 三大硬否決紅線 (Hard Veto Physical Lock) ────────────
     veto_labels: list[str] = []
+    # 批 Z65：各分支**實際進入**時才設 True（`include_veto_flags=True` 時輸出；預設不輸出）
+    _veto_sahm = _veto_pmi = _veto_futures = False
 
     # v19.178 AI-SSOT：以下 6 個門檻原為 inline 裸數字，本版抽為模組常數（§3.3）。
     # **數值完全未變**，行為零位移；抽出目的是讓 AI prompt 能引用同一份真相。
@@ -635,17 +653,20 @@ def calculate_system_state(macro_numbers: dict) -> dict:
     if sahm:
         exposure = min(exposure, MACRO_VETO_SAHM_EXPOSURE_CAP_PCT)
         veto_labels.append("🚨薩姆規則觸發")
+        _veto_sahm = True
 
     # 紅線二：ISM PMI 連兩月低於收縮水位 → 強制上限
     if (pmi is not None and pmi_prev is not None
             and pmi < MACRO_VETO_PMI_CONTRACTION_LEVEL and pmi_prev < MACRO_VETO_PMI_CONTRACTION_LEVEL):
         exposure = min(exposure, MACRO_VETO_PMI_EXPOSURE_CAP_PCT)
         veto_labels.append(f"⚠️PMI連兩月收縮({pmi_prev:.1f}→{pmi:.1f})")
+        _veto_pmi = True
 
     # 紅線三：外資期貨大額淨空 + 指數跌破 MA5 → 強制上限
     if futures_net is not None and futures_net < MACRO_VETO_FUTURES_NET_SHORT_LOTS and below_ma5:
         exposure = min(exposure, MACRO_VETO_FUTURES_EXPOSURE_CAP_PCT)
         veto_labels.append(f"🚨期貨淨空{abs(futures_net):.0f}口+破MA5")
+        _veto_futures = True
 
     # ── 依硬否決後的曝險重新評定等級 ────────────────────────
     if exposure >= MACRO_EXPOSURE_BULLISH_MIN_PCT:   risk_level, regime = "安全", "多頭"
@@ -674,6 +695,9 @@ def calculate_system_state(macro_numbers: dict) -> dict:
     if missing_inputs:
         # M2N-f3：有缺才帶（8 個都有值時回傳與修前逐字相同）
         _out["missing_inputs"] = missing_inputs
+    if include_veto_flags:
+        _out["veto_flags"] = {"sahm": _veto_sahm, "pmi_contraction": _veto_pmi,
+                              "futures_ma5": _veto_futures, "fail_safe": False}
     return _out
 
 

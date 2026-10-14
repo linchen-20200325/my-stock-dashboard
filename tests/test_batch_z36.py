@@ -156,6 +156,10 @@ def z36_revert(rel: str, code: str) -> str:
     #   Z44 之前的寫法（Z36_BASE_SHA 不改；⛔ 不動 `Z36_REVERT_PAIRS` 本身）。
     from tests.test_batch_z44 import z44_revert_for
     code = z44_revert_for(rel, code)
+    # 📌 批 Z65（有意識的變更，⛔ 不是漏改）：`calculate_system_state` 加 opt-in `include_veto_flags`（預設輸出逐字不變）
+    #   ⇒ 同上先換回 Z65 之前的寫法（Z36_BASE_SHA 不改；⛔ 不動 `Z36_REVERT_PAIRS` 本身）。
+    from tests.test_batch_z65 import z65_revert_for
+    code = z65_revert_for(rel, code)
     for new, old in Z36_REVERT_PAIRS[rel]:
         assert code.count(new) == 1, f'{rel} 替換點不唯一或已不存在：{new!r}'
         code = code.replace(new, old)

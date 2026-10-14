@@ -741,6 +741,10 @@ def z34_revert(key: str, code: str) -> str:
     #   ⇒ 先換回 Z56 之前的寫法（`tests/test_batch_z56.py::Z56_REVERT_PAIRS`；`_Z34_BASE_SHA` 不改）。
     from tests.test_batch_z56 import z56_revert_for
     code = z56_revert_for(_Z34_FILES[key][0], code)
+    # 📌 批 Z65（有意識的變更，⛔ 不是漏改）：Z65 改了 'msl'（`calculate_system_state` 加 opt-in `include_veto_flags`，
+    #   預設輸出逐字不變）⇒ 先換回 Z65 之前的寫法（`tests/test_batch_z65.py::Z65_REVERT_PAIRS`；`_Z34_BASE_SHA` 不改）。
+    from tests.test_batch_z65 import z65_revert_for
+    code = z65_revert_for(_Z34_FILES[key][0], code)
     for old, new in z36_pairs_for(_Z34_FILES[key][0]) + Z34_REVERT_PAIRS[key]:
         assert code.count(old) == 1, f'{key} 替換點不唯一或已不存在：{old!r}'
         code = code.replace(old, new)
