@@ -2194,8 +2194,8 @@ def _switch_invalid_groups(rows: Sequence[tuple[str, Sequence[str]]]
                            ) -> tuple[tuple[tuple[str, ...], str], ...]:
     """批 Z53：`((代號, …), 客戶句)` —— 同一句的代號併在一起（保序、去重）。
 
-    句子是 L2 該盞燈不判定時的說明（`SS.INVALID_DATA_TEXT` 組成，經 L3 `switch_out_invalid` 帶下來），
-    本檔一字不改、⛔ 不另寫。
+    句子是 L2 該盞燈不判定時的說明（`SS.INVALID_DATA_TEXT` 組成，經 L3 `switch_out_invalid` 帶下來；
+    批 Z58 起觀察清單列另經 L3 `switch_in_invalid_rows()` 帶下來），本檔一字不改、⛔ 不另寫。
     """
     _by: dict[str, list[str]] = {}
     for _code, _sentences in rows:
@@ -2250,7 +2250,9 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
     _invalid_blocks = () if switch.switch_out else _rows_invalid
     # 批 Z58：只有**觀察清單列**健檢資料異常、而這一輪換出換入都是 0 → 「沒有可換入」判不出來，
     # ⛔ 不得落到灰卡「這是一個有效的結果」。處置同上一則（紅；why 只用 L2 客戶句，⛔ 不新寫文案）。
-    # 有任何換出／換入時不動（同 Z51：不過度封鎖已算出的結論）。
+    # 有任何換出／換入時不封鎖（同 Z53：有結論時照常下結論、facts 附異常行，見下方 facts 那一則）。
+    # 📌 批 Z58 F1 更正（有意識的更正，⛔ 不是漏刪）：本行原寫「同 Z51：不過度封鎖已算出的結論」——
+    #    不精確：Z51 講的是 235／3-3-3 不參與換入判定；本處的對稱先例是 Z53 持有列的處置。
     _invalid_blocks += () if (switch.error or switch.has_advice) else switch.rows_invalid_in
     _state = classify_ui_state(
         requested=switch.requested,
@@ -2290,6 +2292,13 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
     if _rows_invalid and switch.switch_out:      # 批 Z53：有 🔴 時異常列另外標出
         _facts.extend(("、".join(_codes), _s)
                       for _codes, _s in _switch_invalid_groups(_rows_invalid))
+    # 批 Z58 F1（比照上一則 Z53 的對稱處置）：觀察清單列健檢資料異常、而這一輪**有建議**（有換出或
+    # 有換入）→ 結論照常（不封鎖），但那一列沒被判過能不能換入（若它其實是綠燈，換入會改成它）→
+    # facts 附「代號｜客戶句」，格式與 helper 同上一則；無建議時已在上面轉紅、why 已講，這裡不重複。
+    _rows_invalid_in = () if switch.error else switch.rows_invalid_in
+    if _rows_invalid_in and switch.has_advice:
+        _facts.extend(("、".join(_codes), _s)
+                      for _codes, _s in _switch_invalid_groups(_rows_invalid_in))
     if _state == UI_LIVE:
         return (Card(key="hold.switch", label="換股建議（該換）", state=UI_LIVE,
                      value=(f"換出 {len(switch.switch_out)} 檔 → "
@@ -4235,7 +4244,9 @@ _V2_INVALID_WHY: tuple[str, ...] = tuple(
 ITEM_DIVIDEND: str = "配息"
 #: 批 Z53：④ 換股卡「健檢資料異常」的客戶句（整句就是摘錄，代號清單在摺疊區原文）。
 #: 項目名＝L2 `compute.etf.dividend_station.health_a` 不判定時填進 `INVALID_DATA_TEXT` 的那兩個
-#: （近一年總報酬／配息率；④ 只有健檢 A 異常會影響換出，見 L3 `_SWITCH_OUT_INVALID_KEYS`）。
+#: （近一年總報酬／配息率；~~④ 只有健檢 A 異常會影響換出~~，見 L3 `_SWITCH_OUT_INVALID_KEYS`）。
+#: 📌 批 Z58 更正（有意識的更正，⛔ 不是漏刪）：「只有健檢 A」已不成立 —— 健檢 B 也有資料異常路徑且會亮 🔴，
+#:    同樣影響換出（其客戶句「夏普…」登記在下方 `_V2_SWITCH_INVALID_WHY_Z58`）。本常數內容一字未動。
 #: L2 改了項目名 → 這裡對不上 → `KeyError` → 看得見的紅卡（⛔ 不靜默），且 `tests/test_batch_z53.py` 守住。
 _V2_SWITCH_INVALID_WHY: tuple[str, ...] = tuple(
     invalid_data_text(_i) for _i in ("近一年總報酬", "配息率"))

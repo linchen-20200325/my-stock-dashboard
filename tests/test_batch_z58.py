@@ -72,12 +72,17 @@ Z58_CARD_PAIR = ("    _invalid_blocks += () if (switch.error or switch.has_advic
 #: ② L5 `SwitchReadout.failed`：不看觀察清單列的異常。
 Z58_FAILED_PAIR = ("        if self.rows_invalid_in and not self.has_advice:"
                    "   # 批 Z58：觀察清單列異常、這一輪 0 建議\n            return True\n", "")
+#: F1 L5 ④ 卡：有建議時不在 facts 附觀察清單列異常行（＝ F1 修前）。
+Z58_F1_PAIR = ("    _rows_invalid_in = () if switch.error else switch.rows_invalid_in\n"
+               "    if _rows_invalid_in and switch.has_advice:\n"
+               "        _facts.extend((\"、\".join(_codes), _s)\n"
+               "                      for _codes, _s in _switch_invalid_groups(_rows_invalid_in))\n", "")
 #: ①② L5 v2 摘錄：不登記新出現的客戶句（→ `v2_short_rows` KeyError）。
 Z58_V2_PAIR = ("                  *_V2_SWITCH_INVALID_WHY_Z58),     # 批 Z58：健檢 B（持有）／B·C·D（觀察清單）\n",
                "                  ),\n")
 
 _ALL_PAIRS = {_L2: (Z58_HB_PAIR,), _SVC: (Z58_OUT_PAIR,),
-              _PAGE: (Z58_CARD_PAIR, Z58_FAILED_PAIR, Z58_V2_PAIR)}
+              _PAGE: (Z58_CARD_PAIR, Z58_FAILED_PAIR, Z58_V2_PAIR, Z58_F1_PAIR)}
 
 
 def _exec_module(name: str, path: pathlib.Path, code: str) -> types.ModuleType:
@@ -108,7 +113,7 @@ def _svc_pre():
 
 
 def _page_pre():
-    return _variant(_PAGE, (Z58_CARD_PAIR, Z58_FAILED_PAIR), "_z58_pre_page")
+    return _variant(_PAGE, (Z58_CARD_PAIR, Z58_FAILED_PAIR, Z58_F1_PAIR), "_z58_pre_page")
 
 
 def test_revert_pairs_are_unique_anchors():
@@ -367,8 +372,9 @@ def test_normal_path_identical_to_pre(case, held, cands, monkeypatch):
 
     例外一處（設計如此）：觀察清單列健檢 A 異常 ＋ 無候選 ＋ 無 🔴 —— 正是 ② 要修的情境，另測。"""
     o56, o50 = _NORMAL_CASES[case]
-    if case == "a_invalid_z53" and not held and not cands:
-        pytest.skip("② 的修正情境（見 test_card_watchlist_only_invalid_*）")
+    if case == "a_invalid_z53" and not held:
+        pytest.skip("② 的修正情境（無候選：見 test_card_watchlist_only_invalid_*；"
+                    "有候選：見 F1 test_f1_*／test_watchlist_invalid_with_any_advice_unchanged）")
     _now = _switch_run(monkeypatch, o56, o50, held_0056=held, cands=cands)
     _pre = _pre_run(monkeypatch, o56, o50, held_0056=held, cands=cands)
     assert _norm(_now[4]) == _norm(_pre[4]), "L3 列逐鍵同修前"
@@ -439,14 +445,18 @@ def test_mut_v2_pair_breaks_excerpt(monkeypatch):
 
 @pytest.mark.parametrize("cands", [(), _CAND], ids=["no_cands", "cands"])
 def test_watchlist_invalid_with_any_advice_unchanged(cands, monkeypatch):
-    """有任何換出（0050 🔴）或換入（選股池）→ 卡片照修前下結論（同 Z51：不過度封鎖）。"""
+    """有任何換出（0050 🔴）或換入（選股池）→ 卡片照修前下結論（同 Z53：有結論時照常下結論）；
+    批 Z58 F1：facts 尾端多一列「0056｜客戶句」（格式同 Z53 持有列），其餘逐字同修前。"""
     o50 = _RED if not cands else None
     _now = _switch_run(monkeypatch, {"annual_yield_pct": float("nan")}, o50,
                        held_0056=False, cands=cands)
     _pre = _switch_run(monkeypatch, {"annual_yield_pct": float("nan")}, o50,
                        held_0056=False, cands=cands, Pmod=_page_pre())
-    assert _now[2][0].state == UI_LIVE
-    assert repr(_now[2]) == repr(_pre[2]) and _now[3] == _pre[3]
+    card, facts, sig = _now[2]
+    pcard, pfacts, psig = _pre[2]
+    assert card.state == UI_LIVE and repr(card) == repr(pcard) and sig == psig
+    assert tuple(facts) == tuple(pfacts) + (("0056", _sentence("配息率")),)
+    assert _now[3] == _pre[3], "⑦ prompt 逐字同修前"
     assert _now[1].failed is False
 
 
@@ -557,3 +567,54 @@ def test_reconcile_wording_says_falsy():
     assert "不存在或為空（" not in _desc
     text = _src("src/services/reconcile_service.py")
     assert text.count("不存在或為假值（如 `None`、空 dict）") == 3
+
+
+# ══════════════════════════════════════════════════════════════════
+# F1（QA follow-up，總管裁定比照 Z53）：觀察清單列健檢異常 ＋ 這一輪有建議
+#   → 結論照常（live、failed=False、⑦ 照常帶換股段），facts 附「代號｜核准句」異常行
+# ══════════════════════════════════════════════════════════════════
+_F1_CASES = {
+    # 觀察列 A 異常 ＋ 選股池有候選（換入由選股池遞補 00878）
+    "A_with_screener_in": ({"annual_yield_pct": float("nan")}, None, _CAND, _sentence("配息率")),
+    # 觀察列 B 異常 ＋ 持有 0050 🔴 換出
+    "B_with_red_out": ({"sharpe": float("-inf")}, _RED, (), _SHARPE_SENT),
+}
+
+
+@pytest.mark.parametrize("case", list(_F1_CASES), ids=list(_F1_CASES))
+def test_f1_watchlist_invalid_with_advice_flags_in_facts(case, monkeypatch):
+    o56, o50, cands, sentence = _F1_CASES[case]
+    _now = _switch_run(monkeypatch, o56, o50, held_0056=False, cands=cands)
+    _pre = _switch_run(monkeypatch, o56, o50, held_0056=False, cands=cands, Pmod=_page_pre())
+    st, sw, built, prompt, _r = _now
+    card, facts, sig = built
+    pcard, pfacts, psig = _pre[2]
+    assert sw.has_advice and sw.rows_invalid_in == (("0056", (sentence,)),)
+    assert card.state == UI_LIVE and sw.failed is False
+    assert repr(card) == repr(pcard) and sig == psig, "狀態／數值／訊號同修前"
+    assert tuple(facts) == tuple(pfacts) + (("0056", sentence),), "只多一列異常行"
+    assert prompt == _pre[3] and "── 換股建議 ──" in prompt, "⑦ 照常帶換股段、逐字同修前"
+    assert PH.v2_short_rows(card) == ((), ()), "live 無 Note，v2 摘錄不受影響"
+    PH.v2_card_html(card, facts, sig)
+    _no_nonfinite(_blob(built))
+
+
+def test_f1_fact_format_identical_to_z53_held_row(monkeypatch):
+    """同一句、同一 helper：觀察列異常行與 Z53 持有列異常行格式完全相同（「代號」｜「客戶句」）。"""
+    _held = _switch_run(monkeypatch, {"sharpe": float("nan")}, _RED)[2][1]
+    _watch = _switch_run(monkeypatch, {"sharpe": float("nan")}, _RED, held_0056=False)[2][1]
+    assert _held[-1] == _watch[-1] == ("0056", _SHARPE_SENT)
+
+
+def test_f1_no_advice_stays_red_without_fact_duplication(monkeypatch):
+    """無建議時維持紅態（本 PR ②），why 已講 → facts 不重複附異常行。"""
+    card, facts, _s = _switch_run(monkeypatch, {"sharpe": float("nan")}, held_0056=False)[2]
+    assert card.state == UI_FAILED and _SHARPE_SENT not in repr(tuple(facts))
+
+
+def test_f1_mut_pair_drops_fact(monkeypatch):
+    """revert-pair：拿掉 F1 → facts 不再揭露觀察清單列異常（＝ QA 指出的缺口）。"""
+    P0 = _variant(_PAGE, (Z58_F1_PAIR,), "_z58_mut_f1")
+    o56, o50, cands, sentence = _F1_CASES["A_with_screener_in"]
+    facts = _switch_run(monkeypatch, o56, o50, held_0056=False, cands=cands, Pmod=P0)[2][1]
+    assert ("0056", sentence) not in tuple(facts)
