@@ -691,7 +691,7 @@ class TestNoFakeWireframeClaims:
     def test_reverting_the_facts_turns_the_guard_red(self):
         old = P.build_l0_card(P.L0CardSpec(
             key="why.engineer.reconcile", label="雙演算法對帳（§4.3）", wired=False,
-            now=P.ENGINEER_RECONCILE_NOW, why="x", where="y",
+            now=P.ENGINEER_RAW_NOW, why="x", where="y",   # 批 Z56：原 `ENGINEER_RECONCILE_NOW` 隨該卡接線刪除，改借同表另一則 now（本測試不看 now）
             facts=((_WF_LABEL, _UNSOURCED[0]),)))
         with pytest.raises(AssertionError):
             _assert_no_unsourced_wireframe_claim((old,))

@@ -416,7 +416,10 @@ class TestOtherInstConsumersByteIdentical:
                         "src/ui/tabs/stock_sections/section_op_recommendation.py",
                         # 批 Z35（Q-z16）：市場評估外資訊號（未觀測 ⇒ 0 分＋同頁既有缺值字；行為測試見 tests/test_batch_z35.py）
                         #   （calc_traffic_light 同檔 macro_helpers.py 已在清單內；Q-z15 行為測試同見該檔）
-                        "src/services/market_assessment_apply.py"}, hits
+                        "src/services/market_assessment_apply.py",
+                        # 批 Z56：新 UI「📖 憑什麼」雙演算法對帳卡的 L3 wrapper —— 取值規則移植自上列
+                        #   `src/ui/pages/reconcile_panel.py`（未觀測 ⇒ None，同舊面板；行為測試見 tests/test_batch_z56.py）
+                        "src/services/reconcile_service.py"}, hits
         # 📌 批 Z36（Q-z20，客戶 2026-10-10 核准 A）：投信／自營商旗標 —— 寫入端（daily_data_fetchers 自營觀測判定、
         #   macro_fetch_orchestrator FinMind 補救）與讀取端（section_chips／section_news_ai／section_op_recommendation）
         #   皆為上列已登記檔，本批未新增讀旗標檔（集合精確比對不變）；行為測試見 tests/test_batch_z36.py。

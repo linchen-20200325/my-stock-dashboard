@@ -177,6 +177,8 @@
        📌 批 Z54（2026-10-13，有意識的更正，⛔ 不是漏刪）：**資料源清單**（L3 `services.data_registry_summary_service`）
        與**門檻校準**（L0 `shared.macro_calibration.read_calibration_meta`，唯讀）已接線，
        剩雙演算法對帳 / API 根因 / 原始資料表三個；「重跑校準」仍不在本頁。
+       📌 批 Z56（2026-10-14，有意識的更正，⛔ 不是漏刪）：**雙演算法對帳**（L3 `services.reconcile_service`，
+       取值規則移植自舊面板、⛔ 不 import 舊面板）已接線，剩 API 根因 / 原始資料表兩個。
     ⑤ AI 問答的「就地設定金鑰入口」
        → 那是**收憑證**，需要客戶先拍板「這一頁可以收金鑰」，本批不做。
 
@@ -310,6 +312,8 @@ from shared.station_specs import (
     SPECS_BY_KEY,
     STATION_GROUP_TITLES,
     STATION_SPECS,
+    INVALID_DATA_TEXT,
+    invalid_data_text,
 )
 from shared.ui_state import (
     UI_FAILED,
@@ -760,7 +764,9 @@ SCALES_EMPTY_NOW: str = "**兩套刻度的定義讀不出來**"
 LEGACY_NOW: str = "**既有的完整教學內容還沒有搬到這一頁**"
 ENGINEER_IDLE_NOW: str = "**進階診斷未載入**"
 ENGINEER_FAILED_NOW: str = "**進階診斷本身讀不出來**"
-ENGINEER_RECONCILE_NOW: str = "**雙演算法對帳本頁跑不了**"
+# 📌 批 Z56（2026-10-14）：`ENGINEER_RECONCILE_NOW`「雙演算法對帳本頁跑不了」**已刪**（有意識的清理，
+#    ⛔ 不是漏刪）—— 「雙演算法對帳（§4.3）」卡本批接上 L3 `services.reconcile_service`，那句未接線說法
+#    因本次改動成為 0 引用（§-1.5.F 判定 3(4)）；接線後的灰／紅兩則見下方 `RECONCILE_*_NOW`。
 ENGINEER_API_ROOT_NOW: str = "**API 根因診斷本頁不做**"
 ENGINEER_RAW_NOW: str = "**原始資料表本頁看不到**"
 # 📌 批 Z54（2026-10-13）：`ENGINEER_REGISTRY_NOW`「全站來源清單本頁讀不到」與
@@ -773,6 +779,11 @@ REGISTRY_NOT_WRITTEN_NOW: str = "**尚未觸發 data_registry 載入**"
 #: 「門檻校準」的紅卡則依總管裁示直接走 `L0_FAILED_NOW_TEMPLATE.format(label="門檻校準")`
 #: （常數 `CALIBRATION_FAILED_NOW`，定義在該卡旁），指路同樣不沿用規格表那句。
 REGISTRY_FAILED_NOW: str = "**資料源清單讀不出來**"
+#: 批 Z56「雙演算法對帳」卡：對帳要的輸入一個都沒有（「未觸發」＝ 舊對帳面板 caption 既有用語
+#: 「🟢 一致 / 🔴 不一致(警示)/ ⬜ 未觸發」的第三項；glyph 由狀態頻道統一供給，⛔ 不寫進 Note）。
+RECONCILE_NOT_TRIGGERED_NOW: str = "**未觸發**"
+#: 批 Z56「雙演算法對帳」卡讀取失敗（走既有 `L0_FAILED_NOW_TEMPLATE`，同「門檻校準」）。
+RECONCILE_FAILED_NOW: str = L0_FAILED_NOW_TEMPLATE.format(label="雙演算法對帳")
 QA_IDLE_NOW: str = "**尚未提問**"
 QA_NO_KEY_NOW: str = "**AI 問答未啟用**"
 QA_FAILED_NOW: str = "**這一輪問答失敗了**"
@@ -1914,7 +1925,7 @@ def build_wall_registry_failed_card(scan: SourceScan) -> _Built:
     return (replace(_card, key=WALL_REGISTRY_FAILED_KEY), _facts, _signal)
 
 
-#: 工程師版六個面板裡**未接線的**~~五個~~**三個**（線框 live 原文列的六項，扣掉 Fetcher 監控）。
+#: 工程師版六個面板裡**未接線的**~~五個~~~~三個~~**兩個**（線框 live 原文列的六項，扣掉 Fetcher 監控；批 Z56 起雙演算法對帳也已接線）。
 #: ⚠️ 每一項的「去哪補」都不同 —— 它們卡住的位置不一樣。
 #: 📌 批 Z54（2026-10-13，有意識的更正，⛔ 不是漏刪）：「資料源清單」與「門檻校準」兩張
 #:    本批接上線（`build_registry_card()` / `build_calibration_card()`），已自本表移出 ——
@@ -1927,19 +1938,11 @@ def build_wall_registry_failed_card(scan: SourceScan) -> _Built:
 #:    `docs/v2/wireframe/wf_page_why.js`：v1 線框對這三格只列了名稱（「雙演算法對帳 · API 根因 ·
 #:    原始資料表」），三句**都沒有出處** ⇒ 標「線框期待」是冒稱，整列刪掉（只刪不改、不另寫新句）；
 #:    其餘欄位一字未動。
+#: 📌 批 Z56（2026-10-14，有意識的更正，⛔ 不是漏刪）：「雙演算法對帳（§4.3）」本批接上線
+#:    （`build_reconcile_card()`），已自本表移出 —— 它原本寫的補法（「在 `src/services/` 補一支 L3 wrapper，
+#:    由它負責取輸入並回傳兩種算法的差額」）正是本批照做的事（`services/reconcile_service.py`）。
+#:    本表因此只剩兩筆（API 根因／原始資料表）。
 ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
-    L0CardSpec(
-        key="why.engineer.reconcile", label="雙演算法對帳（§4.3）",
-        wired=False,
-        now=ENGINEER_RECONCILE_NOW,
-        why=("對帳的純函式在 L2（`src/compute/risk/reconcile.py` 的"
-             "`compute_health_score_arithmetic` / `_min_of_factors`），"
-             "但 `src/services/` **沒有**任何一支把它包起來，"
-             "而且它要的輸入也得由上游餵進來"),
-        where=(f"{NO_EXIT_PREFIX}"
-               "在 `src/services/` 補一支 L3 wrapper，"
-               "由它負責取輸入並回傳兩種算法的差額"),
-        facts=(("卡住的那一步", "L2 有純函式，但沒有 L3 wrapper、也沒有輸入來源"),)),
     L0CardSpec(
         key="why.engineer.api_root", label="API 根因診斷",
         wired=False,
@@ -1967,7 +1970,8 @@ ENGINEER_PANEL_SPECS: tuple[L0CardSpec, ...] = (
 
 
 def build_engineer_panel_cards() -> tuple[_Built, ...]:
-    """工程師版六項裡**未接線的**~~五項~~**三項**（批 Z54：資料源清單／門檻校準已接線，見下方兩支）。
+    """工程師版六項裡**未接線的**~~五項~~~~三項~~**兩項**（批 Z54：資料源清單／門檻校準已接線，見下方兩支；
+    批 Z56：雙演算法對帳已接線，見 `build_reconcile_card()`）。
 
     ⚠️ **只有在 gate 打開時才會被建構** —— 沒打開時整段不畫，
     只留一張 idle 卡（`build_engineer_card`）。這正是「三態不得混」的落點：
@@ -2162,11 +2166,133 @@ def build_calibration_card(r: CalibrationReadout) -> _Built:
             tuple(_facts), "")
 
 
+# ── 工程師版：本批（Z56）接上線的「雙演算法對帳（§4.3）」 ─────────────────────
+#: 出處（例外的「為什麼」與卡上「這一格的出處」共用；做法同 `SRC_REGISTRY`）。
+SRC_RECONCILE: str = "L3 雙演算法對帳（`services.reconcile_service.compute_reconcile`）"
+#: 對帳要的輸入一個都沒有時的「為什麼」—— 逐項列出讀哪幾個 session key（事實，⛔ 不猜是「還沒叫」
+#: 還是「叫了全失敗」：兩者在這裡分不出來）。
+RECONCILE_NOT_TRIGGERED_WHY: str = (
+    "三列對帳都是「未觸發」—— 每一列都至少缺一邊的值。對帳讀的是："
+    "`macro_info['us10y']['value']`、`cl_data['intl']['10Y公債殖利率']`、"
+    "`jingqi_info['avg']`、`mkt_info['score']`、`cl_data['inst']` 外資 net、"
+    "`t2_data['rev_yoy_self']`／`t2_data['rev_yoy_finmind']`")
+#: 月營收 YoY 那一列兩邊皆缺時的事實句（「全 repo 沒有任何一處寫這個 key（實測 0 個寫入點）」沿用
+#: L3 `macro_refresh_service.UNTOUCHED_BLOCKS` 既有用語；守衛：`tests/test_batch_z56.py`）。
+RECONCILE_REV_YOY_NO_WRITER: str = (
+    "`t2_data['rev_yoy_self']`／`t2_data['rev_yoy_finmind']`："
+    "全 repo 沒有任何一處寫這兩個 key（實測 0 個寫入點）")
+#: 每一列的狀態用語 —— 舊對帳面板 caption 原文「🟢 一致 / 🔴 不一致(警示)/ ⬜ 未觸發」逐項沿用。
+#: ⚠️ 「不一致」是**資料警示**，不是系統故障：整張卡不因此變紅（v3 §02），只在該列寫出來。
+RECONCILE_STATUS_TEXT: dict[str, str] = {
+    "agree": "🟢 一致",
+    "disagree": "🔴 不一致(警示)",
+    "a_missing": "⬜ 未觸發",
+    "b_missing": "⬜ 未觸發",
+    "both_missing": "⬜ 未觸發",
+}
+
+
+@dataclass(frozen=True)
+class ReconcileReadout:
+    """「雙演算法對帳」那一格的讀數（`requested` ← `EngineerRequest.opened`）。
+
+    `report` 是 L3 `ReconcileReport` 原樣搬運；`error` 非空 ＝ 紅。
+    """
+
+    requested: bool
+    report: Any = None
+    error: str = ""
+
+
+def load_reconcile(req: EngineerRequest, session: Mapping[str, Any]) -> ReconcileReadout:
+    """「雙演算法對帳」。**`req.opened` 為 False 時一行 L3 都不呼叫。**
+
+    路徑：L3 `services.reconcile_service.compute_reconcile(session)` —— 純讀 session、零網路、
+    零 L1（session 由本頁傳入，L3 不 import streamlit）；對帳本身是 L2 `compute/risk/reconcile.py`。
+    """
+    if not req.opened:
+        return ReconcileReadout(requested=False)
+    try:
+        from src.services.reconcile_service import compute_reconcile
+        return ReconcileReadout(requested=True, report=compute_reconcile(session))
+    except Exception as _e:  # noqa: BLE001 — 轉成紅卡顯示，不吞
+        print(f"[views/page_why] 雙演算法對帳讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
+        return ReconcileReadout(requested=True, error=repr(_e))
+
+
+def _reconcile_num(v: Any) -> str:
+    """數值格式沿用舊對帳面板（`:.3g`；`None` → `—`）。呼叫端只會傳有限數或 `None`（L3 已擋異常值）。"""
+    return f"{v:.3g}" if v is not None else "—"
+
+
+def reconcile_row_text(row: Any) -> str:
+    """一列對帳 → 卡上 fact 的值。
+
+    · 資料異常（`invalid_items` 非空）→ 只放客戶句（⛔ 不出數值、⛔ 不判一致與否）。
+    · 月營收 YoY 兩邊皆缺 → 事實句「沒有寫入者」（⛔ 不顯示數值）。
+    · 其餘 → 狀態（舊面板 caption 用語）｜v1（來源）｜v2（來源）｜差距（欄名同舊面板表頭 v1／v2／差距）。
+    """
+    if row.invalid_items:
+        return "".join(invalid_data_text(_i) for _i in row.invalid_items)
+    _r = row.result
+    if (row.name == _RECONCILE_ROW_REV_YOY and _r.get("status") == "both_missing"):
+        return RECONCILE_REV_YOY_NO_WRITER
+    return (f"{RECONCILE_STATUS_TEXT[_r['status']]}"
+            f" ｜ v1 {_reconcile_num(_r.get('value_a'))}（{_r.get('source_a')}）"
+            f" ｜ v2 {_reconcile_num(_r.get('value_b'))}（{_r.get('source_b')}）"
+            f" ｜ 差距 {_reconcile_num(_r.get('delta_abs'))}")
+
+
+#: 月營收列名（L3 `reconcile_service.ROW_REV_YOY` 的同值，⛔ 本檔不在 module 層 import `src.services`；
+#: 兩邊一致由 `tests/test_batch_z56.py` 守）。
+_RECONCILE_ROW_REV_YOY: str = "月營收 YoY(待個股觸發)"
+
+
+def build_reconcile_card(r: ReconcileReadout) -> _Built:
+    """「雙演算法對帳（§4.3）」—— 批 Z56 起**已接線**、唯讀。
+
+    · 三列全是 ⬜ 未觸發（每列至少缺一邊）且沒有資料異常列 → 灰（`MISS_NO_INPUT`，去「🚦 今天」更新）。
+    · L3 拋例外 → 紅。
+    · 其餘 → live（綠）：大字＝列數；facts 逐列寫狀態。**「不一致」只寫在該列，不讓整卡變紅**
+      —— 那是資料警示，不是系統故障（v3 §02）。
+    """
+    _report = r.report
+    _state = classify_ui_state(
+        requested=r.requested,
+        error=r.error or None,
+        # QA D2：按「可比對的列」判 —— 任一列有比對結果或資料異常 ⇒ live；三列全 ⬜ 未觸發 ⇒ 灰。
+        has_value=bool(_report is not None and _report.comparable),
+        reason=MISS_NO_INPUT)
+    _facts: list[tuple[str, str]] = [(PANEL_SOURCE_FACT_KEY, SRC_RECONCILE)]
+    if _state == UI_LIVE:
+        _facts += [(_row.name, reconcile_row_text(_row)) for _row in _report.rows]
+        return (Card(key="why.engineer.reconcile", label="雙演算法對帳（§4.3）", state=UI_LIVE,
+                     value=f"{len(_report.rows)} 個對帳"),
+                tuple(_facts), "")
+    if _state == UI_FAILED:
+        _note = Note(now=RECONCILE_FAILED_NOW, why=_error_why(SRC_RECONCILE, r.error),
+                     where=PANEL_REPORT_WHERE)
+    elif _state == UI_IDLE:
+        raise ValueError(
+            "「雙演算法對帳」卡在進階診斷沒勾的情況下被建構 —— gate 應該在呼叫端就擋住"
+            "（`_render_engineer_block`）")
+    else:   # UI_MISSING_RETRYABLE —— 三列都沒有可比對的兩邊值。有效結果，⛔ 不是紅。
+        _note = Note(now=RECONCILE_NOT_TRIGGERED_NOW, why=RECONCILE_NOT_TRIGGERED_WHY,
+                     where=REGISTRY_NOT_WRITTEN_WHERE)
+    return (Card(key="why.engineer.reconcile", label="雙演算法對帳（§4.3）", state=_state,
+                 note=_note),
+            tuple(_facts), "")
+
+
 def build_engineer_panel_row(registry: RegistryReadout,
-                             calibration: CalibrationReadout) -> tuple[_Built, ...]:
+                             calibration: CalibrationReadout,
+                             reconcile: ReconcileReadout) -> tuple[_Built, ...]:
     """進階診斷那一列五張卡，**順序沿用原本 `ENGINEER_PANEL_SPECS` 的順序**
-    （資料源清單 → 雙演算法對帳 → API 根因 → 原始資料表 → 門檻校準）。"""
-    return ((build_registry_card(registry),)
+    （資料源清單 → 雙演算法對帳 → API 根因 → 原始資料表 → 門檻校準）。
+
+    批 Z56：雙演算法對帳改由 `build_reconcile_card()` 建（`reconcile` 為必填 —— ⛔ 不給預設值，
+    免得哪個呼叫端漏傳時這張卡悄悄消失或退回舊的未接線說法）。"""
+    return ((build_registry_card(registry), build_reconcile_card(reconcile))
             + build_engineer_panel_cards()
             + (build_calibration_card(calibration),))
 
@@ -2216,6 +2342,9 @@ class QaReadout:
         text / model / tool_calls: L3 原樣透傳。
         error: 呼叫期例外、上游回報的錯誤、或「沒有金鑰」。非空 = 紅。
         key_missing: 錯誤是不是「沒金鑰」這一種（文案完全不同，故分開帶）。
+        invalid_items: 批 Z56（客戶 2026-10-13 裁示 B）—— L3 在工具結果裡掃到 NaN／±inf 而停下時的
+            項目名（L3 `QAResult.invalid_items` 原樣）。非空 ⇒ 紅，說明只用客戶句
+            `invalid_data_text(項目)`。空 tuple ＝ 沒有異常（修前行為）。
     """
 
     asked: bool
@@ -2225,6 +2354,7 @@ class QaReadout:
     tool_calls: tuple[str, ...] = ()
     error: str = ""
     key_missing: bool = False
+    invalid_items: tuple[str, ...] = ()
 
 
 def load_qa(req: QaRequest) -> QaReadout:
@@ -2261,8 +2391,10 @@ def load_qa(req: QaRequest) -> QaReadout:
         return QaReadout(asked=True, key_missing=True, error=NO_KEY_ERROR)
     try:
         from src.services.ai_qa_service import run_agent
+        # 批 Z56：`stop_on_invalid_number=True` —— 工具結果有 NaN／±inf 時 L3 停下、⛔ 不送 Gemini，
+        #   回 `ok=False` ＋ 客戶句（修前：送出時 `requests` 拋 InvalidJSONError → 誤導的「Gemini 呼叫失敗」）。
         _res = run_agent(req.question, list(req.history), api_key=_key,
-                         fail_on_blocked_reply=True)
+                         fail_on_blocked_reply=True, stop_on_invalid_number=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_why] AI 問答失敗 → 轉紅態：{_e!r}")
         return QaReadout(asked=True, error=repr(_e))
@@ -2273,9 +2405,10 @@ def load_qa(req: QaRequest) -> QaReadout:
     _tools = tuple(
         str((_c or {}).get("name", "") if isinstance(_c, Mapping) else _c)
         for _c in (getattr(_res, "tool_calls", ()) or ()))
+    _invalid = tuple(str(_i) for _i in (getattr(_res, "invalid_items", ()) or ()))
     if (not _ok) or _err:
         return QaReadout(asked=True, model=_model, tool_calls=_tools,
-                         error=_err or UNKNOWN_ERROR_TEXT)
+                         error=_err or UNKNOWN_ERROR_TEXT, invalid_items=_invalid)
     return QaReadout(asked=True, answered=bool(_text), text=_text,
                      model=_model, tool_calls=_tools)
 
@@ -2313,6 +2446,14 @@ def build_qa_card(qa: QaReadout) -> _Built:
     elif qa.key_missing:
         _note = Note(now=QA_NO_KEY_NOW,
                      why=NO_KEY_ERROR, where=NO_KEY_WHERE)
+    elif _state == UI_FAILED and qa.invalid_items:
+        # 批 Z56（客戶 2026-10-13 裁示 B，比照「💼 我的持股」頁 VIX 卡批 Z52 的作法）：
+        # 工具結果有 NaN／±inf，L3 停下、沒有送 Gemini。now 沿用本卡紅態既有那一句；
+        # why 只用客戶句；where 用本頁既有「沒有出口 —— 回報給維護者」（⛔ 不叫人換問法重送：
+        # 值有給、是壞的，重問一百次也一樣）。
+        _note = Note(now=QA_FAILED_NOW,
+                     why="".join(invalid_data_text(_i) for _i in qa.invalid_items),
+                     where=PANEL_REPORT_WHERE)
     elif _state == UI_FAILED:
         _note = Note(now=QA_FAILED_NOW,
                      why=_error_why(SRC_QA_AGENT, qa.error),
@@ -2427,6 +2568,39 @@ V2_EXCERPT_GAP: str = "…"
 #:    L0 改寫那段話、或新標記一盞燈時，這一格會**對不上 → 紅卡**（⛔ 不會靜默退回長句或新寫一句）；
 #:    `tests/test_p05_why_v2_cards.py` 以**當下的 L0 規格表**實跑窮舉，對不上就 CI 紅燈。
 _V2_NO_EXIT_UNWIRED: str = v2_plain(NO_EXIT_PREFIX).rstrip("；")
+#: 批 Z56：客戶句 `INVALID_DATA_TEXT` 的 `{item}` 之後那一段（原文連續段，⛔ 不改寫）。
+_V2_INVALID_TAIL: str = INVALID_DATA_TEXT.split("{item}", 1)[1]
+
+
+@dataclass(frozen=True, eq=False)
+class _V2WholeIfFits:
+    """執行期候選（QA T1）：**原文整句本身**當摘錄 —— 只在 `accept(原文)` 成立時採用，否則換下一個候選。
+
+    原文整句當然是原文的摘錄（K1 成立，⛔ 沒有任何改寫）；用途是讓「項目名執行期才知道」的客戶句
+    （例：`外資資料異常，無法計算，不下結論。`）在放得下時**連項目名一起**上卡面，
+    放不下（超過 `markup.FACT_VALUE_MAX_CHARS`）才退回下一個（不含項目名的通用段）。
+    """
+
+    accept: Any
+    name: str
+
+    def __repr__(self) -> str:
+        return f"<執行期候選 {self.name}>"
+
+    # 以名稱比對（`accept` 是函式物件，同一份原始碼載兩次也不相等）—— 讓「同一份短句表」比得出相等。
+    def __eq__(self, other: object) -> bool:
+        return type(other).__name__ == type(self).__name__ and getattr(other, "name", None) == self.name
+
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+
+_V2_INVALID_RE = re.compile("(?:[^。]+?" + re.escape(_V2_INVALID_TAIL) + ")+")
+#: 資料異常紅卡的「為什麼」：整段都是客戶句（逐項串接，同 `build_qa_card` 的合併規則）且卡面放得下。
+_V2_INVALID_WHOLE: _V2WholeIfFits = _V2WholeIfFits(
+    accept=lambda full: (bool(_V2_INVALID_RE.fullmatch(full))
+                         and len(full) <= v2_markup.FACT_VALUE_MAX_CHARS),
+    name="客戶句整句（放得下時）")
 _V2_SPEC_REPORT: str = f"{NO_EXIT_MARKER} —— 這是規格表本身的問題，請把上面那行訊息回報給維護者"
 
 
@@ -2456,10 +2630,9 @@ V2_SHORT_ROW_HEADS: tuple[tuple[str, str], ...] = (
     (SOURCE_UNKNOWN_NOW_HEAD, "（L0 回 "),
 )
 
+# 📌 批 Z56：原本第一列（`why.engineer.reconcile` / `ENGINEER_RECONCILE_NOW`）隨該卡接線刪除（死列）；
+#    接線後的灰／紅兩列見下方「批 Z56」段。
 _V2_UNWIRED_PANELS: tuple[tuple[str, str, str], ...] = (
-    ("why.engineer.reconcile", ENGINEER_RECONCILE_NOW,
-     # QA nit：「沒有任何一支」的主詞（src/services/）⛔ 不得略。
-     "對帳的純函式在 L2" + V2_EXCERPT_GAP + "但 src/services/ 沒有任何一支把它包起來"),
     ("why.engineer.api_root", ENGINEER_API_ROOT_NOW,
      # QA F4 同類：本頁**為什麼不做**（L5 直接打外部 API ＝ §8.2 明文禁止）⛔ 不得只剩「它會做什麼」。
      "會當場對外送出請求" + V2_EXCERPT_GAP + "L5 直接打外部 API，正是 CLAUDE.md §8.2 明文禁止的"),
@@ -2539,7 +2712,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
                   "這格只比較最近兩季，看不出趨勢" + V2_EXCERPT_GAP
                   + "真要看趨勢請到 🏆 個股組合的「📊 財報趨勢×轉機」區塊"),
            NO_EXIT_MARKER + " —— 這是規格層面的已知限制，不是這一輪抓壞了，重按幾次都一樣"))]
-    # ── 葉2 工程師版：整段的狀態 ＋ ~~五個~~三個未接線面板（批 Z54） ─────────────
+    # ── 葉2 工程師版：整段的狀態 ＋ ~~五個~~~~三個~~兩個未接線面板（批 Z54；批 Z56） ─────────────
     + [_v2_rows_for("why.engineer.gate", ENGINEER_IDLE_NOW, (
            None, "六個面板各自會組大量表格，預設不跑",
            # QA F4：勾選的代價「（較耗時，部分項目會實際打外部 API）」⛔ 不得略。
@@ -2561,6 +2734,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
                   v2_plain(SRC_CALIBRATION).split("（", 1)[0] + V2_EXCERPT_GAP
                   + "檔內寫的不是判燈程式實際使用的值"),
            v2_plain(PANEL_REPORT_WHERE)))]
+    # ── 葉2 工程師版：批 Z56 接上線的「雙演算法對帳」（灰／紅）。短句一律是原文摘錄。
+    + [_v2_rows_for("why.engineer.reconcile", RECONCILE_NOT_TRIGGERED_NOW, (
+           None, "三列對帳都是「未觸發」—— 每一列都至少缺一邊的值",
+           v2_plain(REGISTRY_NOT_WRITTEN_WHERE))),
+       _v2_rows_for("why.engineer.reconcile", RECONCILE_FAILED_NOW, (
+           None, _v2_raised(SRC_RECONCILE), v2_plain(PANEL_REPORT_WHERE)))]
     # ── 葉3 AI 問答 ───────────────────────────────────────────────
     + [_v2_rows_for("why.qa", QA_IDLE_NOW, (
            None, "AI 只根據本站已經載入的資料作答，不自行上網查",
@@ -2570,9 +2749,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            # QA F4：金鑰的**來處**（部署端提供、環境變數名）⛔ 不得略。46 字放不下整句 ＋「沒有出口」
            # 標記 ⇒ 略過括號裡的 `st.secrets 或`（原文在摺疊區），條件＋來處＋出口標記三者都留。
            "金鑰目前由部署端提供（" + V2_EXCERPT_GAP + "環境變數的 GEMINI_API_KEY）；" + NO_EXIT_MARKER)),
+       # 批 Z56：同一則 now 多一種紅（工具結果資料異常）⇒「為什麼」「去哪補」改候選 tuple；
+       #   第二個候選是客戶句 `INVALID_DATA_TEXT` 去掉 `{item}` 後的原文段（項目名執行期才知道，全文在摺疊區）。
        _v2_rows_for("why.qa", QA_FAILED_NOW, (
-           None, _v2_raised(SRC_QA_AGENT),
-           "可以換個問法再送一次；若持續失敗，請把上面那行訊息回報給維護者")),
+           None, (_v2_raised(SRC_QA_AGENT), _V2_INVALID_WHOLE, _V2_INVALID_TAIL),
+           ("可以換個問法再送一次；若持續失敗，請把上面那行訊息回報給維護者",
+            v2_plain(PANEL_REPORT_WHERE)))),
        _v2_rows_for("why.qa", QA_EMPTY_NOW, (
            None, "上游沒有回報錯誤，但也沒有給任何文字" + V2_EXCERPT_GAP + "不是故障",
            "換一個更具體的問法再送一次（例如指名一檔代號）"))]
@@ -2582,12 +2764,17 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
 def _v2_pick_excerpt(spec: object, full: str, *, what: str) -> str:
     """一格短句規格 → 實際上卡面的那一段。**逐段驗「原文裡依序真的有這幾段」。**
 
-    `spec` 是一段摘錄（`str`）或多個候選（tuple，取第一個對得上的）。
+    `spec` 是一段摘錄（`str`）或多個候選（tuple，取第一個對得上的）；候選也可以是
+    `_V2WholeIfFits`（批 Z56：原文整句，條件成立才採用）。
     ⛔ 一個都對不上 → `KeyError`（§1 ＋ K1：⛔ 不把一句原文裡沒有的話畫上卡面，
     ⛔ 也不偷偷退回長句 —— 由 `_render_one_v2()` 轉成看得見的紅卡）。
     """
     _alts = (spec,) if isinstance(spec, str) else tuple(spec)   # type: ignore[arg-type]
     for _alt in _alts:
+        if isinstance(_alt, _V2WholeIfFits):   # 執行期候選：原文整句（見該類別）
+            if _alt.accept(full):
+                return full
+            continue
         _pos, _ok = 0, True
         for _piece in str(_alt).split(V2_EXCERPT_GAP):
             _at = full.find(_piece, _pos) if _piece else -1
@@ -3017,10 +3204,14 @@ def _render_engineer_block(session: Mapping[str, Any]) -> None:
         # 📌 批 Z54：資料源清單／門檻校準兩張接上線 ⇒ 下面這句的「只有」「其餘五個」已改
         #    （有意識的更正，⛔ 不是漏刪；原句：「目前只有「Fetcher 監控」接得上；
         #     其餘五個各自卡在不同的地方，逐項寫在下面。」）。
-        st.caption("**六個面板** —— 目前「Fetcher 監控」「資料源清單」「門檻校準」接得上；"
-                   "其餘三個各自卡在不同的地方，逐項寫在下面。")
+        # 📌 批 Z56：雙演算法對帳接上線 ⇒「其餘三個」改「其餘兩個」（有意識的更正，⛔ 不是漏刪；
+        #    批 Z54 版原句：「**六個面板** —— 目前「Fetcher 監控」「資料源清單」「門檻校準」接得上；
+        #    其餘三個各自卡在不同的地方，逐項寫在下面。」）。
+        st.caption("**六個面板** —— 目前「Fetcher 監控」「資料源清單」「雙演算法對帳（§4.3）」「門檻校準」接得上；"
+                   "其餘兩個各自卡在不同的地方，逐項寫在下面。")
         _render_row(build_engineer_panel_row(load_registry(_req, session),
-                                             load_calibration(_req)))
+                                             load_calibration(_req),
+                                             load_reconcile(_req, session)))
 
         st.caption("**🛰️ Fetcher 監控（`@monitored` 自我登錄）** —— "
                    "「未執行」＝ 本 session 尚無真實外抓"

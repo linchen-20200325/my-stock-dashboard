@@ -21,7 +21,7 @@
     ⛔ 不再借用 `why.engineer.gate`（QA 2026-09-26 F1／F2：同一輪兩張同 id 的摺疊、且誤掛 t4）。
   · 規格 `why.spec.flags` 是**容器**：程式每一盞被 L0 標記的燈畫一張卡，key 是
     `why.spec.<L0 spec key>` —— 同樣由 L0 決定有幾張。
-  · 規格 `why.engineer.panels` 是**容器**：程式畫成五張卡（`why.engineer.registry` …；批 Z54 起其中資料源清單／門檻校準兩張已接線，其餘三張未接線）。
+  · 規格 `why.engineer.panels` 是**容器**：程式畫成五張卡（`why.engineer.registry` …；批 Z54 起其中資料源清單／門檻校準兩張已接線，~~其餘三張未接線~~；批 Z56 起雙演算法對帳也已接線，其餘兩張未接線）。
   ⇒ 固定 key 照程式登記；兩個**動態**容器以規格 key 本身登記，程式卡 key 經
   `block_for_card()` 的**前綴表**歸到它（⛔ 不猜：前綴對不上 → `KeyError`）。
 

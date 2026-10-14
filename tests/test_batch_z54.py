@@ -558,19 +558,24 @@ def _assert_panels_wired(builts) -> None:
     states = {b[0].key: b[0].state for b in builts}
     assert states["why.engineer.registry"] != UI_UNWIRED, "資料源清單沒接上"
     assert states["why.engineer.calibration"] != UI_UNWIRED, "門檻校準沒接上"
-    for k in ("why.engineer.reconcile", "why.engineer.api_root", "why.engineer.raw"):
+    # 📌 批 Z56（有意識的更正，⛔ 不是漏改）：雙演算法對帳於批 Z56 接線 ⇒ 自「應維持未接線」移出
+    #    （原句：`for k in ("why.engineer.reconcile", "why.engineer.api_root", "why.engineer.raw")`）。
+    assert states["why.engineer.reconcile"] != UI_UNWIRED, "雙演算法對帳沒接上（批 Z56）"
+    for k in ("why.engineer.api_root", "why.engineer.raw"):
         assert states[k] == UI_UNWIRED, f"{k} 不在本批範圍，應維持未接線"
 
 
 def _real_row():
     req = P.EngineerRequest(opened=True)
+    # 批 Z56：`build_engineer_panel_row` 多一個必填的雙演算法對帳讀數。
     return P.build_engineer_panel_row(P.load_registry(req, {"data_registry": _REG}),
-                                      P.load_calibration(req))
+                                      P.load_calibration(req),
+                                      P.load_reconcile(req, {"mkt_info": {"score": 3}}))
 
 
 def test_panel_row_is_wired_in_the_original_order():
     _assert_panels_wired(_real_row())
-    assert len(P.build_engineer_panel_cards()) == 3   # 其餘三張仍是未接線
+    assert len(P.build_engineer_panel_cards()) == 2   # 其餘兩張仍是未接線（批 Z56：原為 3，雙演算法對帳接線）
 
 
 def test_unwiring_the_panels_turns_the_guard_red(monkeypatch):
@@ -583,7 +588,8 @@ def test_unwiring_the_panels_turns_the_guard_red(monkeypatch):
 
 
 def test_other_panel_cards_unchanged():
-    """沒動到的三張（雙演算法對帳／API 根因／原始資料表）三要素與 facts 逐字不變。"""
+    """沒動到的~~三張（雙演算法對帳／API 根因／原始資料表）~~兩張（API 根因／原始資料表；批 Z56 雙演算法對帳已接線）
+    三要素與 facts 逐字不變。"""
     by_key = {b[0].key: b for b in P.build_engineer_panel_cards()}
     for spec in P.ENGINEER_PANEL_SPECS:
         card, facts, _s = by_key[spec.key]
@@ -610,7 +616,9 @@ def _assert_caption_matches_wiring(caption: str) -> None:
     for label in ["Fetcher 監控", *wired]:
         assert f"「{label}」" in caption, f"caption 沒提到已接線的「{label}」：{caption}"
     assert "只有「Fetcher 監控」" not in caption, caption
-    assert f"其餘{'零一二三四五六'[n_unwired]}個" in caption, caption
+    # 批 Z56：量詞前的 2 讀「兩」（「其餘兩個」），原表 '零一二三四五六' 的「二」在中文裡不這樣用；
+    #   批 Z54 時 n=3 用不到這一格，本批 n=2 才踩到 —— 只改這一個字。
+    assert f"其餘{'零一兩三四五六'[n_unwired]}個" in caption, caption
 
 
 def test_m27_caption_matches_the_wiring():
