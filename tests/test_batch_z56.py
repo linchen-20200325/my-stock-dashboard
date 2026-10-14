@@ -628,7 +628,8 @@ class TestReconcileCard:
             self.test_c5_only_a_disagree_row_is_live()
 
     def test_grey_why_lists_every_key_read_in_order(self):
-        why = P.RECONCILE_NOT_TRIGGERED_WHY
+        # 批 Z57：原寫死常數 `RECONCILE_NOT_TRIGGERED_WHY` 改由 L3 `RECONCILE_SESSION_KEYS` 組出。
+        why = P.reconcile_not_triggered_why(RS.RECONCILE_SESSION_KEYS)
         keys = ["macro_info['us10y']['value']", "cl_data['intl']['10Y公債殖利率']",
                 "t2_data['rev_yoy_self']", "t2_data['rev_yoy_finmind']", "jingqi_info['avg']",
                 "warroom_summary['jingqi_avg']", "mkt_info['score']", "mkt_info['max_score']",

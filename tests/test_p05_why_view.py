@@ -178,6 +178,9 @@ _ALLOWED_L3: frozenset[tuple[str, str]] = frozenset({
     # 批 Z56：進階診斷「雙演算法對帳」卡接線（唯讀、純讀 session ＋ L2 純函式、零網路；
     #   只在勾開進階診斷後呼叫 —— `tests/test_batch_z56.py` 守 gate）。
     ("src.services.reconcile_service", "compute_reconcile"),
+    # 批 Z57（Z56-n2）：同一個 late import 多帶唯讀常數 —— 灰態「為什麼」的 session key 清單 SSOT
+    #   （`tests/test_batch_z57.py` 以記錄式假 session 守它與 L3 實際讀取一致）。
+    ("src.services.reconcile_service", "RECONCILE_SESSION_KEYS"),
 })
 
 #: 既有診斷面板。**一支都不准 import** —— 它們自己直接讀別頁的 session

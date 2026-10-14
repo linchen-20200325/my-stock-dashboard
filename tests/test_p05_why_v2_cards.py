@@ -128,8 +128,11 @@ def _enumerate():
               P.CalibrationReadout(requested=True, error=_E)):                         # 讀不出來 → 紅
         add(P.build_calibration_card(c))
     # 批 Z56：雙演算法對帳接上線 —— 每一態各建一張（灰／綠／紅）。
-    from src.services.reconcile_service import compute_reconcile
-    for rr in (P.ReconcileReadout(requested=True, report=compute_reconcile({})),          # 全缺 → 灰
+    # 批 Z57：灰態「為什麼」改由 L3 `RECONCILE_SESSION_KEYS` 組出 —— 灰態 readout 須帶 `session_reads`
+    #   （同 `load_reconcile`；沒帶 ⇒ `ValueError`，⛔ 不印一句沒有 key 清單的說明）。
+    from src.services.reconcile_service import RECONCILE_SESSION_KEYS, compute_reconcile
+    for rr in (P.ReconcileReadout(requested=True, report=compute_reconcile({}),           # 全缺 → 灰
+                                  session_reads=RECONCILE_SESSION_KEYS),
                P.ReconcileReadout(requested=True, report=compute_reconcile(
                    {"mkt_info": {"score": 3, "max_score": 4}, "jingqi_info": {"avg": 60.0},
                     "cl_data": {"inst": {"外資": {"net": 1.0}}}})),                     # 有可比對列 → 綠
