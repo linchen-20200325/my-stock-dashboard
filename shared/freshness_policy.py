@@ -22,7 +22,18 @@
         upper ≤ 上限 → FRESH；lower > 上限 → STALE；其餘 → UNDETERMINED
     VIX（美股）用「平日上界」日曆：(a, t] 內週一～週五都計，不需休市表（偏嚴、不會假新鮮）。
 月頻：沿用 `shared.staleness.monthly_release_status`（含 `MONTHLY_PUBLICATION_MARGIN_DAYS`）。
+    資料月 ≥ 今天所在月份 → UNDETERMINED（該月尚未結束、不可能已發布，日期可疑）；
     periods_behind None → UNDETERMINED；≥ 1 → STALE；≤ 0 → FRESH。
+
+已知待接線事項（留給接線批，本批未處理）
+──────────────────────────────────────
+1. `shared/staleness.py` 的 `STALE_DAYS_DAILY`（7 曆日）與由它衍生的
+   `MACRO_VERDICT_MAX_AGE_DAYS` 仍在。它們是**診斷頁的曆日尺**（顯示「資料多舊」用），
+   **不是計分規則**；計分的日頻新鮮度一律以本檔 `DAILY_MAX_LAG_TRADING_DAYS`（交易日）為準。
+   接線時須確認計分路徑不再引用那把曆日尺，避免出現兩套日頻規則。
+2. L1 休市表 → `shared.trading_days.CalendarSets` 的轉換目前沒有現成函式
+   （L3 `trading_calendar_service` 只以 `**dict` 傳給 `classify_day`）。
+   接線批須決定由哪一層組出 `CalendarSets`（候選：L3 service），並處理「休市表取不到 → 傳 None」。
 """
 from __future__ import annotations
 
@@ -221,10 +232,13 @@ def assess_monthly(data_month: date | None, *, today: date, lag_key: str) -> Fre
     if data_month.day != 1:
         raise ValueError(f"data_month 必須是月初（收到 {data_month}）")
     month_s = data_month.strftime("%Y-%m")
-    if data_month > today:
+    # 總管裁定（2026-10-14，Z61 疑義 1）：資料月是今天所在月份或更晚 → UNDETERMINED。
+    # 一個月的資料不可能在該月結束前發布；出現這種日期代表上游日期有誤。
+    # ⛔ 刻意不用「應發布日（due）」來擋：真實發布可能比 lag 估計得早，用 due 擋會誤丟有效的新資料。
+    if data_month >= date(today.year, today.month, 1):
         return FreshnessVerdict(
             FreshnessStatus.UNDETERMINED, None, unit, None,
-            f"資料月 {month_s} 晚於評估日 {today.isoformat()}，無法判定新鮮度", today)
+            f"資料月 {month_s} 尚未結束，不可能已發布，日期可疑，無法判定", today)
 
     behind, overdue = monthly_release_status(data_month, indicator=lag_key, today=today)
     if behind is None:

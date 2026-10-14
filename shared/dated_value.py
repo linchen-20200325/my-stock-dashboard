@@ -82,7 +82,12 @@ class AssessedValue:
 
     @property
     def scoring_value(self) -> Any:
-        """唯一的計分入口：FRESH 且值為有限數值或 bool → 回值；否則 None。"""
+        """唯一的計分入口：FRESH 且值為有限數值或 bool → 回值；否則 None。
+
+        ⚠️ 只接受 Python `bool` 與 `numbers.Real`（含 numpy 浮點數）。numpy 的 `bool_`
+        不是 `numbers.Real`，會回 None —— 接線批由 L3 先轉成 Python `bool` 再包進 `DatedValue`
+        （總管 2026-10-14 裁定維持現狀）。
+        """
         from shared.freshness_policy import FreshnessStatus
 
         if self.verdict.status != FreshnessStatus.FRESH:

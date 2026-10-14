@@ -285,6 +285,24 @@ class TestMonthly:
         v = assess_monthly(_d("2026-11-01"), today=_d("2026-10-14"), lag_key="m1b_m2")
         assert v.status == UND
 
+    @pytest.mark.parametrize("key", ["ism_pmi", "m1b_m2"])
+    def test_current_month_undetermined(self, key):
+        # 當月資料不可能在該月結束前發布 → 日期可疑，UNDETERMINED（不得 FRESH）
+        v = assess_monthly(_d("2026-10-01"), today=_d("2026-10-14"), lag_key=key)
+        assert v.status == UND and v.lag is None
+        assert "尚未結束" in v.reason
+        # 月初當天也一樣
+        v = assess_monthly(_d("2026-10-01"), today=_d("2026-10-01"), lag_key=key)
+        assert v.status == UND
+
+    def test_previous_month_still_fresh(self):
+        # 上個月資料：不得被「當月」守衛誤擋（不以 due 日擋，提早發布仍有效）
+        v = assess_monthly(_d("2026-09-01"), today=_d("2026-10-14"), lag_key="ism_pmi")
+        assert v.status == FRESH
+        # M1B lag 27：9 月資料 10/14 尚未到估計 due，但若上游提早給了，仍視為有效當期
+        v = assess_monthly(_d("2026-09-01"), today=_d("2026-10-14"), lag_key="m1b_m2")
+        assert v.status == FRESH
+
     def test_unregistered_lag_key_raises(self):
         with pytest.raises(KeyError):
             assess_monthly(_d("2026-09-01"), today=_d("2026-10-14"), lag_key="nope")
