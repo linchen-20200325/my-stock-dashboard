@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import math
+import re
 import numbers
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -81,11 +82,18 @@ def _is_scorable(v: Any) -> bool:
 # L2（`src/compute/macro/dated_inputs.py` 抽取器）共用同一份判定，避免三層各寫一份。
 # ⛔ 一律「解析不了就回 None」—— 不猜格式、不退回今天、不拿抓取時間頂替（§1）。
 
-#: 接受的日期字串格式（逐一嚴格比對，不交給 pandas 寬鬆解析 —— 寬鬆解析會把
-#: 整數、「3」這種字串硬解成某個日子）。
-_DATE_STR_FORMATS: tuple[str, ...] = ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d")
-#: 月份字串格式（`m1b_m2_info['data_month']` 為 'YYYY-MM'）。
-_MONTH_STR_FORMATS: tuple[str, ...] = ("%Y-%m",)
+#: 接受的日期字串格式：(先過的完整位數 regex, strptime 格式)。逐一嚴格比對，不交給 pandas
+#: 寬鬆解析 —— 寬鬆解析會把整數、「3」這種字串硬解成某個日子。
+#: ⚠️ 批 Z62 QA B1：`strptime` 的 `%m`／`%d` 允許一位數 ⇒ '2026101' 會被解成 2026-10-01、
+#:    '202612' 解成 2026-01-02、'2026-10-1' 解成 2026-10-01 —— 那是**捏造資料日期**（§1）。
+#:    故一律先以 regex `fullmatch` 擋下位數不對的字串，再交給 strptime 驗月日範圍。
+_DATE_STR_FORMATS: tuple[tuple[str, str], ...] = (
+    (r"\d{4}-\d{2}-\d{2}", "%Y-%m-%d"),
+    (r"\d{8}", "%Y%m%d"),
+    (r"\d{4}/\d{2}/\d{2}", "%Y/%m/%d"),
+)
+#: 月份字串格式（`m1b_m2_info['data_month']` 為 'YYYY-MM'）；同上先 fullmatch（擋 '2026-8'）。
+_MONTH_STR_FORMATS: tuple[tuple[str, str], ...] = ((r"\d{4}-\d{2}", "%Y-%m"),)
 
 
 def coerce_plain_date(v: Any) -> date | None:
@@ -95,7 +103,8 @@ def coerce_plain_date(v: Any) -> date | None:
     - `datetime`／`pandas.Timestamp`（含帶時區）→ `.date()`（取它自己的牆上日期，不換時區）。
       `NaT` → None。
     - `numpy.datetime64` → 經 pandas 轉成 Timestamp 後同上；`NaT` → None。
-    - 字串 → 只接受 'YYYY-MM-DD'、'YYYYMMDD'、'YYYY/MM/DD'（前後空白容許）。
+    - 字串 → 只接受**位數完整**的 'YYYY-MM-DD'、'YYYYMMDD'、'YYYY/MM/DD'（前後空白容許）；
+      '2026-10-1'、'2026101'、'202612' 這類殘缺字串一律 None（⛔ 不讓 strptime 猜）。
     - 其餘（None、bool、整數、浮點、其他型別、格式不符的字串）→ None。
     """
     if v is None or isinstance(v, bool):
@@ -119,26 +128,31 @@ def coerce_plain_date(v: Any) -> date | None:
         return None
     if isinstance(v, str):
         s = v.strip()
-        for fmt in _DATE_STR_FORMATS:
+        for pat, fmt in _DATE_STR_FORMATS:
+            if not re.fullmatch(pat, s, re.ASCII):   # re.ASCII：\d 不收全形數字
+                continue
             try:
                 return datetime.strptime(s, fmt).date()
             except ValueError:
-                continue
+                return None
     return None
 
 
 def coerce_month_start(v: Any) -> date | None:
     """把一個「資料月份」收斂成該月**月初**的純 `date`；解析不了 → None。
 
-    字串先試 'YYYY-MM'，再試 `coerce_plain_date` 接受的日期格式；日期一律取月初。
+    字串先試位數完整的 'YYYY-MM'（'2026-8' 不收），再試 `coerce_plain_date` 接受的日期格式；
+    日期一律取月初。
     """
     if isinstance(v, str):
         s = v.strip()
-        for fmt in _MONTH_STR_FORMATS:
+        for pat, fmt in _MONTH_STR_FORMATS:
+            if not re.fullmatch(pat, s, re.ASCII):   # re.ASCII：\d 不收全形數字
+                continue
             try:
                 return datetime.strptime(s, fmt).date().replace(day=1)
             except ValueError:
-                continue
+                return None
     d = coerce_plain_date(v)
     return d.replace(day=1) if d is not None else None
 

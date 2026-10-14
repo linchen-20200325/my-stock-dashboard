@@ -31,8 +31,15 @@
 1. **先行指標逐欄往回找**：舊 UI 只看 `li_latest.iloc[-1]`，最後一列該欄沒值就判缺；
    本檔對 `選PCR`、`外資大小` **各自獨立**往回找最後一個有效（有限）值，日期取**該列**的 `_date`。
    補出來、沒有資料的平日列（值為 None／NaN）不算有效。是否過期交給 `freshness_policy` 判。
-2. **VIX／PMI／BIAS240 的非有限值**：舊 UI 原值照送（引擎 `_is_finite_number` 會當缺）；
-   本檔直接回 None ＋ 原因 —— 引擎端效果相同，但缺值原因寫得出來。
+2. **VIX／PMI／BIAS240 不是「有限實數」的值**：
+   - NaN／±inf：舊 UI 原值照送（引擎 `_is_finite_number` 會當缺）；本檔直接回 None ＋ 原因 ——
+     引擎端效果相同，但缺值原因寫得出來。
+   - ⚠️ **數字字串（如 '20.5'）或 bool**：舊 UI 原值照送，引擎 `_is_finite_number` 先 `float()`
+     ⇒ 當成 20.5／1.0 **計分**；本檔回 None（判缺）。這是**真的行為差異**（批 Z62 QA L1 據實補記；
+     原句「引擎端效果相同」只對 NaN／inf 成立）。依 §1 Fail Loud 維持判缺 —— 數值欄出現字串／bool
+     代表上游型別壞了，不應猜成數字。**目前所有 producer 都只輸出 float**（`fetch_vix_block`
+     `round(float(v), 1)`、`compute_twii_bias` `calc_bias_pct`、PMI 各源 `float`），故**沒有實際影響**；
+     tests/test_batch_z62.py 釘住此差異。
 3. **MA5 判缺更嚴**：`ma5`、`index_price` 任一不是有限數值（例：末 5 筆收盤含 NaN ⇒ ma5 為 NaN）、
    `index_below_ma5` 不是 bool、`index_as_of` 缺或無法解析 → 一律判缺。
    舊 UI 在這些情形會送 `bool(...)`（缺鍵時為 `False`＝「指數在 MA5 之上」）。

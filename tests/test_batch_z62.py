@@ -859,3 +859,101 @@ class TestRealProducerFormats:
         bi = snap.compute_twii_bias(_twii(260, "2026-10-13"))
         assert bi["as_of"] == "2026-10-13"
         assert DI.extract_bias240(bi)["BIAS240_pct"].as_of == date(2026, 10, 13)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. 獨立 QA 回饋（B1 阻擋 ＋ L1／L2 低嚴重度）
+# ══════════════════════════════════════════════════════════════════════════
+class TestQaB1StrictDateStrings:
+    @pytest.mark.parametrize("bad", ["2026101", "2026111", "202612", "2026-1-5", "2026-10-1",
+                                     "2026/1/05", "2026-1-05", "2026/10/1", "202610131",
+                                     "２０２６１０１３", "2026-10-13T00:00", "2026-13-01", "20261301"])
+    def test_truncated_or_malformed_day_strings_are_none(self, bad):
+        """B1：strptime 的 %m／%d 收一位數 ⇒ 殘缺字串會被捏成日期。先 fullmatch 位數，不合格一律 None（§1）。"""
+        assert coerce_plain_date(bad) is None
+
+    @pytest.mark.parametrize("bad", ["2026-8", "2026-1", "202608", "2026/08", "2026-13", "2026-8-01"])
+    def test_truncated_month_strings_are_none(self, bad):
+        assert coerce_month_start(bad) is None
+
+    @pytest.mark.parametrize("good,expect", [("2026-10-13", date(2026, 10, 13)), ("20261013", date(2026, 10, 13)),
+                                             ("2026/10/13", date(2026, 10, 13)), (" 2026-10-13 ", date(2026, 10, 13))])
+    def test_full_formats_still_parse(self, good, expect):
+        assert coerce_plain_date(good) == expect
+
+    def test_extract_vix_truncated_date_is_missing(self):
+        dv = DI.extract_vix({"vix": {"current": 17.3, "date": "2026101"}})["VIX_Index"]
+        assert dv.value is None and dv.as_of is None and dv.missing_reason == "無資料日期"
+
+    def test_extract_leading_truncated_date_is_missing(self):
+        out = DI.extract_leading(_li([{"_date": "2026101", "選PCR": 120.0, "外資大小": 1.0}]))
+        assert out["PCR"].value is None and out["PCR"].missing_reason.startswith("無資料日期")
+
+
+class TestQaL1StringOrBoolIsMissing:
+    @pytest.mark.parametrize("raw", ["20.5", True, False, "0"])
+    def test_vix_pmi_bias_string_or_bool_delta(self, raw):
+        """⚠️ 刻意差異（docstring「刻意差異 2」）：數字字串／bool —— 舊 UI 原值照送、引擎當成數字計分；
+        新抽取器判缺（§1：數值欄出現字串／bool 代表上游型別壞了，不猜）。目前 producer 只出 float，無實際影響。"""
+        kw = _full()
+        kw["macro_info"]["vix"]["current"] = raw
+        kw["macro_info"]["ism_pmi"]["value"] = raw
+        kw["bias_info"]["bias_240"] = raw
+        old = _old_numbers(**kw)
+        new = _new_values(**kw)
+        for k in ("VIX_Index", "ISM_PMI_or_OECD_CLI", "BIAS240_pct"):
+            assert old[k] is raw and _eff(old[k]) is not None, k        # 舊：引擎會計分
+            assert new[k].value is None and "非有限值" in new[k].missing_reason, k   # 新：判缺
+
+    def test_docstring_states_the_delta(self):
+        doc = DI.__doc__ or ""
+        assert "數字字串（如 '20.5'）或 bool" in doc and "目前所有 producer 都只輸出 float" in doc
+
+
+class TestQaL2Gaps:
+    @pytest.mark.parametrize("last", [float("inf"), float("-inf"), "NaN", "inf", float("nan")])
+    def test_m2_non_finite_last_pcr_steps_back(self, last):
+        """M2：現行規則 —— 非有限值（inf／'NaN'／'inf'）一律視為無效、繼續往回找；
+        「刻度不明」只限**有限**值（≤0 或 >500，見 test_last_valid_pcr_out_of_scale_is_missing_not_skipped）。"""
+        li = _li([{"_date": "20261012", "選PCR": 120.0, "外資大小": 1.0},
+                  {"_date": "20261013", "選PCR": last, "外資大小": 1.0}], dtype=object)
+        dv = DI.extract_leading(li)["PCR"]
+        assert dv.value == pytest.approx(1.2) and dv.as_of == date(2026, 10, 12)
+
+    @pytest.mark.parametrize("out_of_scale", [0.0, -3.0, 600.0])
+    def test_m2_finite_out_of_scale_does_not_step_back(self, out_of_scale):
+        li = _li([{"_date": "20261012", "選PCR": 120.0, "外資大小": 1.0},
+                  {"_date": "20261013", "選PCR": out_of_scale, "外資大小": 1.0}])
+        dv = DI.extract_leading(li)["PCR"]
+        assert dv.value is None and dv.as_of == date(2026, 10, 13) and "刻度" in dv.missing_reason
+
+    def test_m11_numpy_float64_types_match_old_path(self):
+        """M11：np.float64 輸入 —— 輸出型別與舊路徑逐一相同（golden 為準：舊路徑原物件照送 ⇒ np.float64）。"""
+        kw = _full()
+        kw["macro_info"]["vix"]["current"] = np.float64(17.3)
+        kw["macro_info"]["ism_pmi"]["value"] = np.float64(51.2)
+        kw["bias_info"]["bias_240"] = np.float64(12.3)
+        kw["m1b"] = dict(_M1B_FULL, m1b_yoy=np.float64(3.2), m2_yoy=np.float64(5.1))
+        old = _old_numbers(**kw)
+        new = _new_values(**kw)
+        for k in ("VIX_Index", "ISM_PMI_or_OECD_CLI", "BIAS240_pct", "M1B_YoY_pct", "M2_YoY_pct"):
+            assert type(old[k]) is np.float64, k
+            assert type(new[k].value) is np.float64 and new[k].value == old[k], k
+        # PCR／外資期貨：舊路徑經 float()（PCR 再 ÷100）⇒ Python float；新路徑相同
+        for k in ("PCR", "Futures_Net_Short"):
+            assert type(old[k]) is float and type(new[k].value) is float, k
+
+    @pytest.mark.parametrize("raw,expect", [
+        ("2026-09", date(2026, 9, 1)),        # 'YYYY-MM' ⇒ 取月初
+        ("2026-09-15", date(2026, 9, 1)),     # 非月初日期 ⇒ 取月初（現行規則）
+        ("2026-09-01", date(2026, 9, 1)),
+        ("2026-9", None),                     # 殘缺 ⇒ 判缺（B1）
+        ("2026-09-1", None),
+    ])
+    def test_m17_pmi_date_shapes(self, raw, expect):
+        """M17：PMI date 的形狀 —— 現行規則：'YYYY-MM' 與非月初日期一律取月初；殘缺字串判缺。"""
+        dv = DI.extract_monthly({"ism_pmi": {"value": 51.2, "date": raw}}, {})["ISM_PMI_or_OECD_CLI"]
+        if expect is None:
+            assert dv.value is None and dv.missing_reason == "無資料月份"
+        else:
+            assert dv.value == 51.2 and dv.data_month == expect
