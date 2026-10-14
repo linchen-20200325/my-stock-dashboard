@@ -31,8 +31,8 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
      的那一輪是 `'neutral'`（TL 捏的預設值）。新路徑較誠實：⛔ 不以缺值推導「中性」。
      ⚠️ 若 `STEP_MARKET` 這一輪沒成功（含逾時），組裝用的是 session **現有**的
      `mkt_info`（可能是上一輪的）—— 步驟報告會寫明。
-     ⚠️ 同理，若 `STEP_APPLY` 這一輪沒成功，`cl_data` / `cl_ts` 仍是 session **現有**的
-     （籌碼資料本輪未更新）—— 步驟報告同樣寫明。
+     ⚠️ 同理，若 `STEP_APPLY` 這一輪沒成功，`cl_data` / `cl_ts` / `li_latest` 仍是 session
+     **現有**的（籌碼資料與先行指標本輪未更新）—— 步驟報告同樣寫明。
 
 ═══ 分層（CLAUDE.md §8.2）═════════════════════════════════════════════
 **L3 Service**：編排 L1 fetcher（`src.data.daily.daily_data_fetchers`）
@@ -931,12 +931,16 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
     _stale_inputs_note = ("" if _market_ok else
                           "；⚠️ 市場評估這一輪沒有成功（含逾時），組裝用的是 session **現有**的"
                           " `mkt_info`（可能是上一輪的值）")
-    # 📌 批 Z60 QA：`STEP_APPLY` 失敗時 `cl_data` / `cl_ts` 沒被本輪覆蓋，
-    #   這一步照樣會吃 session 現有的那份 —— 與上面市場評估同構，同樣據實揭露。
+    # 📌 批 Z60 QA：`STEP_APPLY` 失敗時，它負責的 `MACRO_PATCH_KEYS`（`cl_data` / `cl_ts` /
+    #   `li_latest` …）沒被本輪覆蓋；`apply_macro_bundle` 是先算整份 patch（純函式）再一次
+    #   `update`，算的時候炸 ⇒ 一個 key 都沒寫。這一步照樣會吃 session 現有的那兩份輸入
+    #   （`load_section_inputs` 讀 `cl_data` 與 `li_latest`；後者是外資期貨與韭菜指數的來源）
+    #   —— 與上面市場評估同構，同樣據實揭露。
     _apply_ok = any(_t.name == STEP_APPLY and _t.ok for _t in _steps)
     _stale_inputs_note += ("" if _apply_ok else
-                           "；⚠️ 寫入 session（cl_data / 時間戳）這一輪沒有成功：籌碼資料本輪未更新，"
-                           "組裝用的是 session **現有**的 `cl_data`（可能是上一輪的值，或根本沒有）")
+                           "；⚠️ 寫入 session（cl_data / 先行指標 / 時間戳）這一輪沒有成功："
+                           "籌碼資料（`cl_data`）與先行指標（`li_latest`：外資期貨、韭菜指數的來源）"
+                           "本輪未更新，組裝用的是 session **現有**的那兩份（可能是上一輪的值，或根本沒有）")
     _wr_had = "warroom_summary" in st.session_state
     try:
         from src.services.warroom_apply import compute_and_store_warroom_summary

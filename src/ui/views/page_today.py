@@ -233,7 +233,7 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dc_replace
 from html import escape as html_escape
 from typing import TYPE_CHECKING, Any, Final, Mapping, Sequence
 
@@ -319,6 +319,12 @@ from src.ui.tabs.tab_today import (
     #    查表，查不到就 `raise` ⇒ 不登記的話，`degraded` 的位階卡會在 v2 卡面
     #    **當場炸成紅卡**（本輪實跑抓到，⛔ 不是推測）。**import 它是為了「認得它」，
     #    ⛔ 不是為了「用它」** —— 兩件事不一樣。
+    # 📌 **批 Z60 複驗更正（上面兩段保留不刪，它們在寫下的當天為真）。**
+    #    Z60 起本頁按鈕寫得到 `warroom_summary`，這句「按它不會讓這一格離開現在的狀態」
+    #    在本頁不再成立 ⇒ 卡③ degraded、狀態列「總經」、三欄摘要「位階」三處的 `where`
+    #    一律換成 `EXIT_RETRY_HERE`（`now` / `why` 照舊沿用對面，見 `contract_exit_retargeted()`）。
+    #    ⇒ 本頁畫面上**不再出現**這句；仍 import 它，是為了在 `contract_exit_retargeted()`
+    #    以物件身分**認出它再換掉**（`V2_EXIT_PHRASES` 那一列亦保留：漏網時寧可畫短語也不炸）。
     CONTRACT_NO_EXIT_WHERE,
     LEAF_CONCLUSION,
     LEAF_DETAIL,
@@ -688,6 +694,28 @@ def bucket_exit(bucket: str) -> str:
     """一整桶的灰態該給哪一種出口。"""
     return (EXIT_OUT_OF_REACH if bucket in OUT_OF_REACH_BUCKETS
             else EXIT_RETRY_HERE)
+
+
+def contract_exit_retargeted(card: Card) -> Card:
+    """對面 `tab_today` 總經契約那幾格的出口，換成本頁現在真的成立的那一句。
+
+    📌 **批 Z60 複驗（有意識的與舊頁不同，⛔ 不是漏改對面）。**
+    `tab_today.CONTRACT_NO_EXIT_WHERE` 寫的是「本批的按「🚀 更新今日戰情」**還沒接上取數**，
+    在這一頁按它不會讓這一格離開現在的狀態」。那句話是 **Z60 之前**寫的，在它自己那一頁
+    （`render_tab_today`，無 production caller）至今仍為真，`tests/test_p01_today_skeleton.py`
+    照舊守著它 —— ⛔ `tab_today.py` 一個字都不動。
+    **但在本頁它已經是假指路**：Z60 起本頁按鈕經 L3 `STEP_WARROOM` 寫 `warroom_summary`，
+    只要本輪算得出健康分，`get_macro_state()` 就改走 warroom 那條來源 ⇒ 總經契約那幾格
+    （狀態列「總經」、三欄摘要「位階」、卡③ 位階）可以從未評估 / 快照態變成 live。
+    ⇒ 本頁沿用對面的 `now` / `why`（§2.1：⛔ 不另寫一份文案），**只把 `where` 換成
+    `EXIT_RETRY_HERE`**。
+
+    以**物件身分**（`is`）比對，與 `_v2_exit_phrase()` 同一個慣例：只換確實是
+    `CONTRACT_NO_EXIT_WHERE` 那一句的卡；其他出口（未接線、讀取失敗）原樣不動。
+    """
+    if card.note is not None and card.note.where is CONTRACT_NO_EXIT_WHERE:
+        return dc_replace(card, note=dc_replace(card.note, where=EXIT_RETRY_HERE))
+    return card
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1812,11 +1840,17 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
         # 對面拿同樣的輸入只會得到同一個 `UI_DEGRADED`。
         # `Card.__post_init__` 保證非 live 必附 `Note`；真的取不到就讓
         # `Card(...)` 當場 fail loud，**不吞**（§1）。
+        # 📌 批 Z60 複驗（有意識的與舊頁不同，⛔ 不是漏刪）：`now` / `why` 照舊整份沿用對面，
+        #    **只有 `where` 換成 `EXIT_RETRY_HERE`**。對面那一句（`CONTRACT_NO_EXIT_WHERE`
+        #    「按它不會讓這一格離開現在的狀態」）是 Z60 之前寫的；Z60 起本頁按鈕會寫
+        #    `warroom_summary`，算得出健康分時 `get_macro_state()` 就改走 warroom、這張卡變 live
+        #    ⇒ 在本頁照抄那句就是假指路（§1）。理由全文見 `contract_exit_retargeted()`。
         _tiles.append(Tile(
             Card(key="verdict.regime", label=REGIME_CARD_LABEL,
                  state=_regime_state,
-                 note=build_status_bar_card(regime,
-                                            error=regime_error or None).note),
+                 note=dc_replace(build_status_bar_card(regime,
+                                                       error=regime_error or None).note,
+                                 where=EXIT_RETRY_HERE)),
             # 非 live 不得帶 `value`（`Card.__post_init__`）→ 現值改掛 facts，
             # 與 `build_indicator_tile()` 的 degraded 同一個走法（那裡也是
             # `_facts.insert(0, ("現值", ...))`），不是第二種做法。
@@ -2449,6 +2483,10 @@ SRC_V2_MARKUP: str = (
 #: 是**那一支**給的物件。三張卡全部改走 v2 卡面之後，這一態會走進 `_v2_exit_phrase()`
 #: ⇒ 漏登＝`KeyError`＝**畫成紅卡**。⚠️ 它的短語沿用該常數自己開頭的
 #: `NO_EXIT_MARKER` 字面（⛔ 不新造名詞）；**完整原文照舊掛在外層 `title=`**。
+#: 📌 批 Z60 複驗：本頁三處沿用對面總經契約 `Note` 的卡（卡③ degraded／狀態列「總經」／
+#: 三欄摘要「位階」）自此 `where` 一律換成 `EXIT_RETRY_HERE`（`contract_exit_retargeted()`），
+#: ⇒ 正常路徑不再有卡走到 `CONTRACT_NO_EXIT_WHERE` 這一列。**仍保留登記**：理由同上一條
+#: ——漏登的後果是渲染當下才炸，登記的成本是一行。
 #: 🔴 **2026-09-24 整頁卡化新增兩列（`EXIT_DEGRADED_READ_DIRECTION` /
 #: `STAGED_ROLLOUT_WHERE`），並新增一道 fallback（見 `_v2_exit_phrase()` 第 2 段）。**
 #: 原因是**實跑窮舉**出來的，⛔ 不是推測：本輪把 33 張卡在
@@ -3198,6 +3236,9 @@ def build_summary_tiles(cards: Sequence[Card], *,
       同一段文案**（⛔ 不另寫一份）；key 與標題沿用 `tab_today` 那一格自己的
       （`card.key` / `card.label`），⛔ 不新造標題字串。
     · 位階 / 動能兩格原樣橋接（`Tile(card)`），⛔ 不碰。
+      📌 批 Z60 複驗：唯一的例外是「位階」格的 `where` —— 對面那句
+      `CONTRACT_NO_EXIT_WHERE`（「按它不會讓這一格離開現在的狀態」）Z60 起在本頁不成立，
+      經 `contract_exit_retargeted()` 換成 `EXIT_RETRY_HERE`；`now` / `why` 原樣。
     · **逐格獨立判態**（`UI_PAGE_TODAY.md` ④A「一格壞不染色另兩格」）：
       危險度的成敗只進「風險」這一格，另兩格的輸入裡根本沒有它。
     · `tab_today.py` 一個字都沒動（它的 `summary.risk` 仍是 staged 卡，舊分頁與
@@ -3209,7 +3250,7 @@ def build_summary_tiles(cards: Sequence[Card], *,
                       danger_requested=danger_requested,
                       danger_source=danger_source,
                       band_zh_color=band_zh_color, l4_error=l4_error)
-         if _c.key == SUMMARY_RISK_KEY else Tile(_c))
+         if _c.key == SUMMARY_RISK_KEY else Tile(contract_exit_retargeted(_c)))
         for _c in cards)
 
 
@@ -3571,9 +3612,12 @@ def render_page_today() -> None:
     #    （`build_trading_day_tile()`）—— 總經一格仍原物件照用，`tab_today.py` 一個字都沒動。
     _sheet_state, _sheet_err = load_sheet_binding()
     _trading_status, _trading_err = load_trading_day_status()
+    # 📌 批 Z60 複驗：「總經」一格的 `where` 經 `contract_exit_retargeted()` 換成
+    #    `EXIT_RETRY_HERE`（對面那句 Z60 起在本頁不成立）；其餘欄位原物件照用。
+    _bar_cards = build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None)
     _render_tiles(status_bar_tiles_with_trading_day(
         _tiles_of_cards(status_bar_cards_with_sheet(
-            build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None),
+            tuple(contract_exit_retargeted(_c) for _c in _bar_cards),
             build_sheet_binding_card(_sheet_state, error=_sheet_err))),
         build_trading_day_tile(_trading_status, error=_trading_err)))
 

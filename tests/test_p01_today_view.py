@@ -605,13 +605,23 @@ class TestDegradedRegimeIsNotCalledUnevaluated:
             "「來自快照」要有證據可看，不能只是一句話")
 
     def test_the_wording_is_the_status_bar_ssot_not_a_second_copy(self):
-        """文案**不得另寫一份** —— 對面對同一個狀態已經有推敲過的說法。"""
-        from src.ui.tabs.tab_today import build_status_bar_card
+        """文案**不得另寫一份** —— 對面對同一個狀態已經有推敲過的說法。
+
+        📌 批 Z60 複驗（有意識的修改，⛔ 不是放寬）：原斷言三欄（now / why / where）
+        全等。`where` 是唯一的例外 —— 對面那句 `CONTRACT_NO_EXIT_WHERE`
+        （「按它不會讓這一格離開現在的狀態」）是 Z60 之前寫的；Z60 起本頁按鈕會寫
+        `warroom_summary`，本頁照抄就是假指路，故本頁換成 `EXIT_RETRY_HERE`。
+        `now` / `why` 仍逐字等於對面（比對沒有放寬），`where` 改釘死「必須是可重抓」，
+        並反向釘住對面那句仍是 `CONTRACT_NO_EXIT_WHERE`（前提自證：真的有東西被換掉）。
+        """
+        from src.ui.tabs.tab_today import CONTRACT_NO_EXIT_WHERE, build_status_bar_card
 
         _mine = _tiles(regime=DEGRADED_REGIME)["verdict.regime"].card.note
         _ssot = build_status_bar_card(DEGRADED_REGIME).note
-        assert (_mine.now, _mine.why, _mine.where) == (
-            _ssot.now, _ssot.why, _ssot.where), "兩份文案漂開了＝兩種解釋"
+        assert (_mine.now, _mine.why) == (_ssot.now, _ssot.why), "兩份文案漂開了＝兩種解釋"
+        assert _mine.where is P.EXIT_RETRY_HERE, (
+            "卡③ degraded 的出口必須是「按本頁按鈕可重抓」（Z60 起按鈕寫得到 warroom）")
+        assert _ssot.where is CONTRACT_NO_EXIT_WHERE, "前提變了：對面 degraded 的出口被改過"
         assert "快照" in _mine.now, "前提變了：對面的 degraded 文案被改過"
 
     def test_cold_start_still_says_unevaluated(self):

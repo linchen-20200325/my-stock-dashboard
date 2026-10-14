@@ -28,6 +28,9 @@
   7. `TestOldFilesUntouched` —— 舊 UI 檔對基底 `e64ea2f5` 零 diff。
   8. `TestVerdictIdleExitIsRetry` —— 卡①③ 未評估（非錯誤）時出口是「按本頁按鈕可重抓」，
      ⛔ 不再是「不在本頁射程內」（Z60 QA 阻擋項）；錯誤分支出口不變。
+  9. `TestDegradedRegimeExitIsRetry` / `TestNoContractNoExitOnThePage` —— 沿用對面
+     `tab_today` 總經契約 Note 的卡（卡③ degraded、狀態列「總經」、三欄摘要「位階」），
+     `where` 不得再是 `CONTRACT_NO_EXIT_WHERE`（Z60 複驗）。
 
 harness 沿用 `tests/test_batch_z8.py`（`_FakeST`、情境 N1–N5／F1–F4、門檻釘死、不觸網、cwd 換到
 tmp）與 `tests/test_p01_macro_refresh.py`（`_mutated_module`、`_FakeST` 型 session 替身）。
@@ -649,10 +652,15 @@ class TestRefreshIntegration:
         assert not _step(r, RS.STEP_APPLY).ok and not r.ok
         s = _step(r, RS.STEP_WARROOM)
         assert s.ok and "warroom_summary" in fake.session_state     # 照樣寫 —— 所以才要揭露
-        assert "籌碼資料本輪未更新" in s.detail and "cl_data" in s.detail
+        # 揭露與實際行為一致：`apply_macro_bundle` 負責的 key 裡，warroom 吃的是 cl_data 與 li_latest
+        from src.compute.macro.macro_session_patch import MACRO_PATCH_KEYS
+        assert {"cl_data", "li_latest"} <= set(MACRO_PATCH_KEYS)
+        assert "本輪未更新" in s.detail
+        assert "cl_data" in s.detail and "li_latest" in s.detail
+        assert "籌碼資料" in s.detail and "先行指標" in s.detail
         assert "市場評估這一輪沒有成功" not in s.detail             # 兩條揭露各管各的
         r, _, _ = _run_refresh(_pinned)
-        assert "籌碼資料本輪未更新" not in _step(r, RS.STEP_WARROOM).detail
+        assert "本輪未更新" not in _step(r, RS.STEP_WARROOM).detail
 
     def test_an_exception_is_a_failed_step_and_a_pop(self, _pinned):
         def _boom(*a, **k):
@@ -818,6 +826,120 @@ class TestVerdictIdleExitIsRetry:
                                regime_error='RuntimeError("boom")')
         assert tiles["verdict.exposure"].card.note.where is P.EXIT_FIX_CODE
         assert tiles["verdict.regime"].card.note.where is P.EXIT_FIX_CODE
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 9. 沿用對面 `tab_today` 總經契約 Note 的卡：`where` 不得再是「按了也不會變」（批 Z60 複驗）
+# ══════════════════════════════════════════════════════════════════════════
+def _write_fresh_macro_state(tmp_path) -> None:
+    """cwd（`_pinned` 已換到 tmp_path）放一份**未過期**的 `macro_state.json`。"""
+    import json
+
+    from src.services.macro_state_locker import _now_str
+    (tmp_path / "macro_state.json").write_text(json.dumps(
+        {"market_regime": "多頭", "exposure_limit_pct": 60, "timestamp": _now_str()},
+        ensure_ascii=False), encoding="utf-8")
+
+
+class TestDegradedRegimeExitIsRetry:
+    """session 沒有可用的 warroom、cwd 有一份未過期的 `macro_state.json` ⇒ 卡③ degraded。
+
+    修前卡③ 整份沿用 `build_status_bar_card().note`，`where` 是 `CONTRACT_NO_EXIT_WHERE`
+    （「本批的按鈕還沒接上取數，按它不會讓這一格離開現在的狀態」）—— Z60 起按鈕會寫
+    warroom，算得出健康分時 `get_macro_state` 就改走 warroom、卡③ 變 live ⇒ 假指路。
+    """
+
+    def test_degraded_card3_and_empty_card1(self, _pinned, tmp_path):
+        from shared.ui_state import UI_DEGRADED, UI_EMPTY
+        _write_fresh_macro_state(tmp_path)
+        P, tiles = TestVerdictIdleExitIsRetry._tiles(_pinned, {})
+        reg, exp = tiles["verdict.regime"].card, tiles["verdict.exposure"].card
+        assert reg.state == UI_DEGRADED, reg.state            # 前提自證：真的走到 degraded
+        assert reg.note.where is P.EXIT_RETRY_HERE
+        assert reg.note.where is not P.CONTRACT_NO_EXIT_WHERE
+        assert "快照" in reg.note.now                          # now/why 照舊沿用對面
+        assert exp.state == UI_EMPTY, exp.state
+        assert exp.note.where is P.EXIT_RETRY_HERE
+
+    def test_degraded_with_health_none_warroom(self, _pinned, tmp_path):
+        """warroom 在但健康分缺（視同未載入）＋ 快照 ⇒ 同樣 degraded、同樣可重抓。"""
+        from shared.ui_state import UI_DEGRADED
+        s = TestVerdictIdleExitIsRetry._health_none_session(_pinned)
+        _write_fresh_macro_state(tmp_path)
+        P, tiles = TestVerdictIdleExitIsRetry._tiles(_pinned, s)
+        assert tiles["verdict.regime"].card.state == UI_DEGRADED
+        assert tiles["verdict.regime"].card.note.where is P.EXIT_RETRY_HERE
+
+    def test_retarget_only_touches_the_contract_exit(self):
+        """`contract_exit_retargeted` 只換 `CONTRACT_NO_EXIT_WHERE`；未接線 / 失敗的出口原樣。"""
+        from src.ui.tabs.tab_today import build_status_bar_cards
+        from src.ui.views import page_today as P
+        for regime, err in ((None, None), ({"source": "x", "is_loaded": True,
+                                             "regime": "bull"}, None),
+                            (None, 'RuntimeError("boom")')):
+            for c in build_status_bar_cards(regime, error=err):
+                out = P.contract_exit_retargeted(c)
+                if c.note is not None and c.note.where is P.CONTRACT_NO_EXIT_WHERE:
+                    assert out.note.where is P.EXIT_RETRY_HERE
+                    assert (out.key, out.label, out.state, out.value, out.note.now, out.note.why) == (
+                        c.key, c.label, c.state, c.value, c.note.now, c.note.why)
+                else:
+                    assert out is c
+
+
+def _drive_page(monkeypatch, regime):
+    """整頁 render（同 `tests/test_batch_z59.py::_drive`）：收集畫出來的每一張 Tile。"""
+    from unittest import mock
+
+    from src.ui.views import page_today as T
+    drawn: list = []
+    fake = mock.MagicMock(name="st")
+    fake.session_state = {}
+    fake.tabs.side_effect = lambda labels: [mock.MagicMock() for _ in labels]
+    monkeypatch.setattr(T, "st", fake)
+    for name, val in [
+            ("_inject_v2_css", lambda: None), ("_render_update_form", lambda _s: None),
+            ("section_header", lambda *a, **k: None), ("render_note", lambda *a, **k: None),
+            ("load_macro_readout", lambda _s: T.MacroReadout(requested=False)),
+            ("_load_l4_labels", lambda: (None, None, None, "")),
+            ("_load_allocation", lambda: (None, "")), ("_load_regime", lambda: (regime, "")),
+            ("_load_danger", lambda _r: (None, "", "")),
+            ("_load_key_alerts", lambda _s: (None, False, "")),
+            ("_load_lamp_directions", lambda _s=None: {}),
+            ("load_sheet_binding", lambda: (None, "")),
+            ("load_trading_day_status", lambda: (None, "")),
+            ("_render_tiles", lambda tiles, cols=None: drawn.extend(tiles))]:
+        monkeypatch.setattr(T, name, val)
+    T.render_page_today()
+    return T, drawn
+
+
+class TestNoContractNoExitOnThePage:
+    """整頁掃：沿用對面總經契約 Note 的三格（狀態列「總經」／三欄摘要「位階」／卡③）
+    在冷啟動與 degraded 兩態下，`where` 都是可重抓；全頁沒有任何一張卡還掛著
+    `CONTRACT_NO_EXIT_WHERE`。"""
+
+    _COLD = {"regime": "unknown", "light": "⬜", "source": "unloaded", "is_loaded": False}  # 下方以 SOURCE_UNLOADED 自證
+
+    @pytest.mark.parametrize("which", ["cold", "degraded"])
+    def test_the_three_contract_cells(self, monkeypatch, which):
+        from shared.ui_state import UI_DEGRADED, UI_IDLE
+        from shared.regime_arbiter import SOURCE_FILE_RULE_ENGINE, SOURCE_UNLOADED
+        assert self._COLD["source"] == SOURCE_UNLOADED
+        regime = (dict(self._COLD) if which == "cold" else
+                  {"regime": "bull", "light": "🟢", "traffic_light": "多頭",
+                   "source": SOURCE_FILE_RULE_ENGINE, "is_loaded": True})
+        T, drawn = _drive_page(monkeypatch, regime)
+        by_key = {}
+        for t in drawn:
+            by_key.setdefault(t.card.key, []).append(t)
+        want = UI_IDLE if which == "cold" else UI_DEGRADED
+        for key in ("statusbar.macro", "summary.regime", "verdict.regime"):
+            (t,) = by_key[key]
+            assert t.card.state == want, (key, t.card.state)
+            assert t.card.note.where is T.EXIT_RETRY_HERE, key
+        assert not [t.card.key for t in drawn if t.card.note is not None
+                    and t.card.note.where is T.CONTRACT_NO_EXIT_WHERE]
 
 
 def test_nan_is_canonicalised():
