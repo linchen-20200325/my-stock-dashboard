@@ -219,6 +219,9 @@ def z40_revert_for(file_path, code: str) -> str:
     """
     p = pathlib.Path(file_path)
     rel = (p.resolve().relative_to(_ROOT) if p.is_absolute() else p).as_posix()
+    # 批 Z63（freshness F3）在 `_MCR` 新增 `load_tw_pmi_history` ⇒ 先換回 Z63 之前寫法（⛔ 不動本表）。
+    from tests.test_batch_z63 import z63_revert_for
+    code = z63_revert_for(rel, code)
     from tests.test_batch_z41 import z41_revert
     code = z41_revert(rel, code)
     for new, old in Z40_REVERT_PAIRS.get(rel, ()):

@@ -11,6 +11,8 @@
 - `DEFAULT_PARQUET_CACHE_DIR`:預設 cache 目錄(Path("data_cache"))
 - `load_parquet_safe(path, required_cols) -> DataFrame | None`:通用 safe loader
 - `load_twii_close(cache_dir) -> Series`:讀 twii_ohlcv.parquet → close series
+- `load_tw_pmi_history(cache_dir) -> DataFrame | None`:讀 tw_pmi.parquet 原樣回傳(批 Z63,
+  供 L2 `dated_inputs.extract_pmi_prev` 取「前一資料月官方值」;未接線)
 - `load_v2_chart_series(cache_dir) -> dict[str, Series]`:總經 v2 走勢卡的長歷史序列
 - `read_cache_metadata(cache_dir) -> dict`:讀 `data_cache/metadata.json`(cron 的自陳狀態)
 - `compute_cache_staleness(dataset, ...) -> dict`:單一 parquet 的年齡判定(§1 誠實預設)
@@ -222,6 +224,36 @@ def load_parquet_safe(path: Path, required_cols: set) -> Optional[pd.DataFrame]:
     except Exception as e:  # noqa: BLE001
         print(f"[macro_cache_reader/load_parquet_safe] {path.name} 讀檔失敗:{e}")
         return None
+
+
+#: 台灣 PMI 月資料歷史 parquet 檔名(cron `scripts/update_macro_history.py` 寫入,dgtw 6100)。
+#: 實測 schema(2026-10-14):`date`(object,值為 `datetime.date`,每月 1 日)/ `pmi`(float64)/
+#: `source`(str)/ `fetched_at`(str,ISO UTC);2012-07 ~ 2026-09 共 171 列、無重複月。
+#: ⚠️ `services/macro_v2_service._TW_PMI_PARQUET_NAME` 是同一個檔名的既有私有副本(批 Z63 不接線,未動)。
+TW_PMI_PARQUET_NAME = "tw_pmi.parquet"
+#: `load_tw_pmi_history` 要求的欄位(缺任一 → 回 None)。
+TW_PMI_REQUIRED_COLS: frozenset = frozenset({"date", "pmi"})
+
+
+def load_tw_pmi_history(
+    cache_dir: Path = DEFAULT_PARQUET_CACHE_DIR,
+) -> Optional[pd.DataFrame]:
+    """讀 `tw_pmi.parquet` → **原樣** DataFrame(批 Z63,freshness F3;⛔ 未接線)。
+
+    用途:L2 `src/compute/macro/dated_inputs.extract_pmi_prev` 從這份歷史取「前一資料月官方值」
+    (客戶 2026-10-14 Q-z34 Q1=B)。**不新增網路來源**,只讀 cron 已寫好的本地檔。
+
+    - 不轉型、不排序、不去重、不補值 —— 日期解析、重複月判定都交給 L2(那裡寫得出原因)。
+    - 缺檔 / 壞檔 / 空檔 / 缺 `date`、`pmi` 欄 → 印一行 log 並回 None(§1 出聲不吞)。
+    - ⛔ 不判新鮮度:這份檔的新舊不代表前月值有效與否,有效性由 L0
+      `shared.freshness_policy.assess_previous_month` 跟著當期判。
+    """
+    path = cache_dir / TW_PMI_PARQUET_NAME
+    df = load_parquet_safe(path, set(TW_PMI_REQUIRED_COLS))
+    if df is None:
+        print(f"[macro_cache_reader/load_tw_pmi_history] {TW_PMI_PARQUET_NAME} 讀不到、為空"
+              f"或缺欄(需要 {sorted(TW_PMI_REQUIRED_COLS)})→ 回 None")
+    return df
 
 
 def load_twii_close(

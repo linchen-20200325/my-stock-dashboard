@@ -45,11 +45,20 @@
    舊 UI 在這些情形會送 `bool(...)`（缺鍵時為 `False`＝「指數在 MA5 之上」）。
 4. 所有輸入**沒有日期就判缺**（舊 UI 不看日期）。
 
-未涵蓋：`PMI_Prev_Month`（留給 F3）。
+`PMI_Prev_Month`（批 Z63，freshness F3；⛔ 同樣未接線）
+──────────────────────────────────────────────────────
+客戶裁示（2026-10-14 Q-z34 Q1=B）：「PMI 連兩月低於 48」必須用**兩個不同的資料月**；上一個月取既有
+PMI history 裡的「**前一資料月官方值**」，取不到 → 該紅線判「無法判定」。⛔ 禁止用本月值、
+session_state、上次按按鈕的值頂替（舊 UI `section_news_ai` 的 `_s10_prev_pmi_value` 正是後者，未改）。
+⇒ `extract_pmi_prev(history_df, anchor_data_month)`：在 cron 寫的 `data_cache/tw_pmi.parquet` 歷史
+（L1 `macro_cache_reader.load_tw_pmi_history` 原樣讀出）裡找 data_month 恰好是**當期前一個月**的那一列。
+⚠️ 當期（live 8 源賽跑或其 stale-cache）與前月（parquet 歷史）**可能來自不同來源** —— 兩者都在
+`DatedValue.source` 如實記錄；前月有效與否由 L0 `assess_previous_month` **跟著當期**判。
 """
 from __future__ import annotations
 
-from datetime import date
+import math
+from datetime import date, datetime
 from typing import Any, Mapping
 
 from shared.dated_value import (
@@ -70,11 +79,16 @@ KEY_MA5 = "Index_Below_MA5"
 KEY_PMI = "ISM_PMI_or_OECD_CLI"
 KEY_M1B = "M1B_YoY_pct"
 KEY_M2 = "M2_YoY_pct"
+KEY_PMI_PREV = "PMI_Prev_Month"
 
-#: 本批抽取器涵蓋的引擎輸入（`PMI_Prev_Month` 留給 F3）。
-COVERED_ENGINE_INPUTS: tuple[str, ...] = (
+#: 由 **session 原始結構**抽取的引擎輸入（批 Z62；舊 UI golden 比對的範圍）。
+SESSION_ENGINE_INPUTS: tuple[str, ...] = (
     KEY_VIX, KEY_BIAS240, KEY_PCR, KEY_FUTURES, KEY_MA5, KEY_PMI, KEY_M1B, KEY_M2,
 )
+#: 由 **PMI 歷史 parquet** 抽取的引擎輸入（批 Z63；舊 UI 取自 session_state，⛔ 不做 golden 比對）。
+HISTORY_ENGINE_INPUTS: tuple[str, ...] = (KEY_PMI_PREV,)
+#: 本檔抽取器涵蓋的全部引擎輸入（批 Z63 起含 `PMI_Prev_Month` ⇒ 等於 `FRESHNESS_POLICY` 全部 key）。
+COVERED_ENGINE_INPUTS: tuple[str, ...] = SESSION_ENGINE_INPUTS + HISTORY_ENGINE_INPUTS
 
 # ── 來源標籤（provenance；上游 dict 自帶 `source` 字串時優先用它）──
 SRC_VIX = "macro_info['vix']（yfinance ^VIX 日線）"
@@ -84,6 +98,12 @@ SRC_FUTURES = "li_latest['外資大小']（先行指標表，外資期貨淨口�
 SRC_MA5 = "mkt_info（market_strategy.get_market_assessment，^TWII 收盤 vs MA5）"
 SRC_PMI = "macro_info['ism_pmi']（台灣 PMI，CIER）"
 SRC_M1B_M2 = "m1b_m2_info（M1B／M2 年增率）"
+SRC_PMI_PREV = "PMI 歷史（data_cache/tw_pmi.parquet，cron 寫入）前一資料月官方值"
+
+#: PMI 歷史表的欄位（L1 `macro_cache_reader.load_tw_pmi_history` 原樣回傳）。
+PMI_HIST_DATE_COL = "date"
+PMI_HIST_VALUE_COL = "pmi"
+PMI_HIST_SOURCE_COL = "source"
 
 #: 舊 UI 判定 PCR 儲存格「沒有值」的字串（`section_news_ai` 原文同一組）。
 _PCR_EMPTY_STRS: frozenset[str] = frozenset({"", "-", "nan", "None"})
@@ -338,3 +358,101 @@ def extract_monthly(macro_info: Any, m1b_m2_info: Any) -> dict[str, DatedValue]:
     out[KEY_M1B] = _monthly(KEY_M1B, m1b, dm, source=src, why_if_missing=why)
     out[KEY_M2] = _monthly(KEY_M2, m2, dm, source=src, why_if_missing=why)
     return out
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PMI 前一資料月（批 Z63）
+# ══════════════════════════════════════════════════════════════════════
+
+
+def _prev_month_start(m: date) -> date:
+    return date(m.year - 1, 12, 1) if m.month == 1 else date(m.year, m.month - 1, 1)
+
+
+def _pmi_hist_problem(df: Any) -> str:
+    """PMI 歷史表無法逐列找值的原因；可以找 → ''。"""
+    if df is None:
+        return "PMI 歷史（tw_pmi.parquet）讀不到"
+    cols = getattr(df, "columns", None)
+    if cols is None or not hasattr(df, "iloc"):
+        return f"PMI 歷史型別不明：{type(df).__name__}"
+    if getattr(df, "empty", True):
+        return "PMI 歷史為空"
+    for c in (PMI_HIST_DATE_COL, PMI_HIST_VALUE_COL):
+        if c not in cols:
+            return f"PMI 歷史無「{c}」欄"
+    return ""
+
+
+def _same_value(a: float, b: float) -> bool:
+    return math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12)
+
+
+def extract_pmi_prev(history_df: Any, anchor_data_month: date | None) -> dict[str, DatedValue]:
+    """PMI 歷史 → `{"PMI_Prev_Month": DatedValue}`：取**當期前一個資料月**的官方值。
+
+    這是客戶裁示（2026-10-14 Q-z34 Q1=B）「上一個月取既有 PMI history 裡的前一資料月官方值」的取法。
+
+    - `history_df`：L1 `load_tw_pmi_history()` 原樣回傳（實測欄位 `date`〔`datetime.date`，每月 1 日〕
+      ／`pmi`〔float〕／`source`／`fetched_at`）；None／空／缺欄 → 判缺。
+    - `anchor_data_month`：**當期** PMI 的資料月月初（`extract_monthly` 回的 `data_month`）；
+      None → 判缺（當期沒有資料月，前月無從定位）。不是月初的純 `date` → `ValueError`（呼叫端錯誤）。
+
+    取值規則（找 data_month 恰好是 anchor 前一個月的列；跨年：2026-01 的前月是 2025-12）：
+    - 找不到 → 判缺「PMI 歷史中找不到前一資料月 YYYY-MM」；
+    - 該月任一列的值不是有限數值 → 判缺（⛔ 不往前找、不改取別月）；
+    - 該月有重複列且值不一致 → 判缺；重複但值一致（容差 `math.isclose`）→ 取該值；
+    - 其餘 → `DatedValue(float(pmi), "PMI_Prev_Month", source, data_month=前一個月)`。
+    ⛔ **不取最後一列**、不拿本月值、不用 session 值頂替。日期解析不了的列不參與比對
+    （它不可能被證明是前一資料月）。
+
+    `source`：`SRC_PMI_PREV`；表內有 `source` 欄時另附「原始來源：…」（重複列的不同來源一併列出）。
+    當期（live）與前月（parquet）來源可能不同 —— 有效性由 L0 `assess_previous_month` 跟著當期判。
+    """
+    if anchor_data_month is None:
+        return {KEY_PMI_PREV: DatedValue(
+            None, KEY_PMI_PREV, SRC_PMI_PREV,
+            missing_reason="當期台灣 PMI 無資料月份，無法定位前一資料月")}
+    if (not isinstance(anchor_data_month, date) or isinstance(anchor_data_month, datetime)
+            or anchor_data_month.day != 1):
+        raise ValueError(f"anchor_data_month 必須是月初的 datetime.date：{anchor_data_month!r}")
+
+    target = _prev_month_start(anchor_data_month)
+    target_s = target.strftime("%Y-%m")
+    problem = _pmi_hist_problem(history_df)
+    if problem:
+        return {KEY_PMI_PREV: DatedValue(None, KEY_PMI_PREV, SRC_PMI_PREV,
+                                         missing_reason=f"{problem}，無法取前一資料月 {target_s}")}
+
+    dates = history_df[PMI_HIST_DATE_COL]
+    vals = history_df[PMI_HIST_VALUE_COL]
+    has_src = PMI_HIST_SOURCE_COL in history_df.columns
+    raws: list[Any] = []
+    srcs: list[str] = []
+    for i in range(len(history_df)):
+        if coerce_month_start(dates.iloc[i]) != target:
+            continue
+        raws.append(vals.iloc[i])
+        if has_src:
+            _s = history_df[PMI_HIST_SOURCE_COL].iloc[i]
+            if isinstance(_s, str) and _s and _s not in srcs:
+                srcs.append(_s)
+
+    if not raws:
+        return {KEY_PMI_PREV: DatedValue(
+            None, KEY_PMI_PREV, SRC_PMI_PREV,
+            missing_reason=f"PMI 歷史中找不到前一資料月 {target_s}")}
+    parsed = [finite_or_none(r) for r in raws]
+    bad = [r for r, v in zip(raws, parsed) if v is None]
+    if bad:
+        return {KEY_PMI_PREV: DatedValue(
+            None, KEY_PMI_PREV, SRC_PMI_PREV,
+            missing_reason=f"前一資料月 {target_s} 的 PMI 數值非有限值（{bad[0]!r}），不計分")}
+    first = float(parsed[0])
+    if any(not _same_value(first, float(v)) for v in parsed[1:]):
+        return {KEY_PMI_PREV: DatedValue(
+            None, KEY_PMI_PREV, SRC_PMI_PREV,
+            missing_reason=(f"前一資料月 {target_s} 在 PMI 歷史中有 {len(parsed)} 列且值不一致"
+                            f"（{'、'.join(repr(float(v)) for v in parsed)}），不猜哪一列對"))}
+    source = SRC_PMI_PREV + (f"；原始來源：{'、'.join(srcs)}" if srcs else "")
+    return {KEY_PMI_PREV: DatedValue(first, KEY_PMI_PREV, source, data_month=target)}

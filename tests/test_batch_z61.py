@@ -315,7 +315,10 @@ class TestMonthly:
 
     def test_policy_lag_keys(self):
         assert FRESHNESS_POLICY["ISM_PMI_or_OECD_CLI"] == MonthlyPolicy("ism_pmi")
-        assert FRESHNESS_POLICY["PMI_Prev_Month"] == MonthlyPolicy("ism_pmi")
+        # 批 Z63：前一資料月改為「跟著當期走」（獨立套月頻規則在正常情況下也會判 STALE），
+        #   原斷言 `== MonthlyPolicy("ism_pmi")` 隨之更新；規則細節見 tests/test_batch_z63.py。
+        from shared.freshness_policy import PreviousMonthOfPolicy
+        assert FRESHNESS_POLICY["PMI_Prev_Month"] == PreviousMonthOfPolicy(anchor_key="ISM_PMI_or_OECD_CLI")
         assert FRESHNESS_POLICY["M1B_YoY_pct"] == MonthlyPolicy("m1b_m2")
         assert FRESHNESS_POLICY["M2_YoY_pct"] == MonthlyPolicy("m1b_m2")
 

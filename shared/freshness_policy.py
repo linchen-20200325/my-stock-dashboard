@@ -24,6 +24,23 @@
 月頻：沿用 `shared.staleness.monthly_release_status`（含 `MONTHLY_PUBLICATION_MARGIN_DAYS`）。
     資料月 ≥ 今天所在月份 → UNDETERMINED（該月尚未結束、不可能已發布，日期可疑）；
     periods_behind None → UNDETERMINED；≥ 1 → STALE；≤ 0 → FRESH。
+PMI 前一資料月（批 Z63，客戶 2026-10-14 Q-z34 Q1=B）：⛔ 不獨立套月頻規則 ——
+    前一資料月本來就比當期落後一期，獨立判會在正常情況下被判 STALE（例：今天 10/14，
+    當期 9 月 FRESH、前月 8 月獨立判是 STALE），「PMI 連兩月低於 48」紅線就永遠無法評估。
+    改用 `PreviousMonthOfPolicy` ＋ `assess_previous_month(prev_dv, anchor)`：**跟著當期走** ——
+    當期不是 FRESH → UNDETERMINED；值缺／非有限 → MISSING；沒有資料月 → MISSING；
+    不是當期的恰好前一個資料月 → MISSING（「前一資料月不符」）；其餘 → FRESH。
+    ⛔ 不得用本月值、session_state、上次按按鈕的值頂替前月（門檻 48、上限 40% 不在本檔、未改）。
+
+⭐ 快取存活時間 ≠ 資料新鮮度（批 Z63，客戶 2026-10-14 Q-z38=A）
+──────────────────────────────────────────────────────────────
+`src/data/macro/macro_core.py` 的 PMI 取數裡有兩個「90 天」：
+- 各來源的 `max_age_days=90`：**來源合理性篩選**（資料月月初距今超過 90 天的頁面不收）；
+- `_MACRO_CACHE_TTL_DAYS=90`：**快取保留**（`cached_at` 距今未滿 90 天的快照才回）。
+兩者都**不代表資料仍有效**。計分一律由本檔 `assess_monthly` 依**資料月**判斷 ——
+快取昨天才寫入、但資料月已落後 2 期 → 照樣 STALE（tests/test_batch_z63.py 守住）。
+90 天必須 ≥ 月頻新鮮窗的最大天數（`ism_pmi` 實算為 69 天：資料月 M 月初到 STALE 起點前一天，
+31＋31＋7），保證篩選不會比本規則先把仍新鮮的資料擋掉（同測試檔守住）。
 
 已知待接線事項（留給接線批，本批未處理）
 ──────────────────────────────────────
@@ -137,11 +154,28 @@ class MonthlyPolicy:
             raise KeyError(f"月頻 lag_key 未登錄於 MACRO_PUBLICATION_LAG_DAYS：{self.lag_key!r}")
 
 
-Policy = Union[DailyPolicy, MonthlyPolicy]
+@dataclass(frozen=True)
+class PreviousMonthOfPolicy:
+    """「當期的前一資料月」規則（批 Z63）。⛔ 不獨立判新鮮度，一律改用 `assess_previous_month`。
+
+    `anchor_key`：當期那一項的引擎輸入名（必須在 `FRESHNESS_POLICY` 內且為 `MonthlyPolicy`，
+    由 tests/test_batch_z63.py 守住；這裡無法在定義時檢查 —— 規則表在本類別之後才建）。
+    """
+
+    anchor_key: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.anchor_key, str) or not self.anchor_key:
+            raise ValueError(f"anchor_key 必須是非空字串：{self.anchor_key!r}")
+
+
+Policy = Union[DailyPolicy, MonthlyPolicy, PreviousMonthOfPolicy]
 
 #: 引擎輸入名 → 新鮮度規則。key 對齊 `src/services/macro_state_locker._ENGINE_NUMERIC_INPUTS`
 #: ＋ bool 輸入 `Index_Below_MA5`（一致性由 tests/test_batch_z61.py 守住）。
 #: ⚠️ `"ism_pmi"` 是歷史誤稱：該 key 在 `MACRO_PUBLICATION_LAG_DAYS` 內實為**台灣 PMI**（CIER）。
+#: 批 Z63：`PMI_Prev_Month` 由 `MonthlyPolicy("ism_pmi")` 改為 `PreviousMonthOfPolicy` ——
+#:   前一資料月獨立套月頻規則會在正常情況下被判 STALE（見檔頭「PMI 前一資料月」）。
 FRESHNESS_POLICY: Mapping[str, Policy] = MappingProxyType({
     "VIX_Index":           DailyPolicy(calendar="weekday"),
     "BIAS240_pct":         DailyPolicy(calendar="twse"),
@@ -149,7 +183,7 @@ FRESHNESS_POLICY: Mapping[str, Policy] = MappingProxyType({
     "Futures_Net_Short":   DailyPolicy(calendar="twse"),
     "Index_Below_MA5":     DailyPolicy(calendar="twse"),
     "ISM_PMI_or_OECD_CLI": MonthlyPolicy("ism_pmi"),
-    "PMI_Prev_Month":      MonthlyPolicy("ism_pmi"),
+    "PMI_Prev_Month":      PreviousMonthOfPolicy(anchor_key="ISM_PMI_or_OECD_CLI"),
     "M1B_YoY_pct":         MonthlyPolicy("m1b_m2"),
     "M2_YoY_pct":          MonthlyPolicy("m1b_m2"),
 })
@@ -311,6 +345,12 @@ def assess(dv: DatedValue, *, today: date, calendar: CalendarSets | None) -> Ass
     except KeyError:
         raise KeyError(f"series_key 未登錄於 FRESHNESS_POLICY：{dv.series_key!r}") from None
 
+    # 批 Z63：「前一資料月」不得獨立套月頻規則（正常情況下也會被判 STALE），⛔ 不默默退回 MonthlyPolicy。
+    if isinstance(policy, PreviousMonthOfPolicy):
+        raise ValueError(
+            f"{dv.series_key} 是「{policy.anchor_key} 的前一資料月」，不得獨立判新鮮度；"
+            f"請改用 assess_previous_month(prev_dv, anchor)，anchor 為 {policy.anchor_key} 的評估結果")
+
     if isinstance(policy, DailyPolicy):
         if dv.data_month is not None:
             raise ValueError(f"{dv.series_key} 為日頻，卻帶了 data_month={dv.data_month}（應給 as_of）")
@@ -351,3 +391,77 @@ def assess(dv: DatedValue, *, today: date, calendar: CalendarSets | None) -> Ass
 def is_previous_data_month(cur: date, prev: date) -> bool:
     """`prev` 是否恰好是 `cur` 的上一個資料月（只看年月；跨年：2026-01 的上一月是 2025-12）。"""
     return (cur.year * 12 + cur.month) - (prev.year * 12 + prev.month) == 1
+
+
+def assess_previous_month(prev_dv: DatedValue, anchor: AssessedValue) -> AssessedValue:
+    """「當期的前一資料月」新鮮度（批 Z63；客戶 2026-10-14 Q-z34 Q1=B）。
+
+    `prev_dv` 的規則必須是 `PreviousMonthOfPolicy`，`anchor` 必須是該規則 `anchor_key` 那一項的
+    `assess(...)` 結果；不符 → `ValueError`（設定錯誤，不猜）。`prev_dv` 帶 `as_of` → `ValueError`。
+
+    判定順序（第一個成立者為準）：
+    1. 當期不可用（`anchor` 不是 FRESH，或 FRESH 卻沒有可計分值）→ UNDETERMINED；
+    2. 前月值為 None → MISSING（原因取 `prev_dv.missing_reason`）；
+       前月值不是有限數值 → MISSING（核准句「{項目}資料異常，無法計算，不下結論。」）；
+    3. 前月沒有 data_month → MISSING；
+    4. 不是當期的恰好前一個資料月（`is_previous_data_month`）→ MISSING「前一資料月不符」；
+    5. 其餘 → FRESH。
+
+    ⛔ 不另判前月自己落後幾期：前一資料月本來就比當期落後一期，有效性完全跟著當期走。
+    `lag`／`overdue_days` 一律 None（「落後期數」對前月沒有意義，見 reason）；
+    `evaluated_on` 沿用 `anchor.verdict.evaluated_on`（同一次評估）。
+    """
+    if not isinstance(prev_dv, DatedValue):
+        raise TypeError(f"prev_dv 必須是 DatedValue：{prev_dv!r}")
+    if not isinstance(anchor, AssessedValue):
+        raise TypeError(f"anchor 必須是 AssessedValue：{anchor!r}")
+    try:
+        policy = FRESHNESS_POLICY[prev_dv.series_key]
+    except KeyError:
+        raise KeyError(f"series_key 未登錄於 FRESHNESS_POLICY：{prev_dv.series_key!r}") from None
+    if not isinstance(policy, PreviousMonthOfPolicy):
+        raise ValueError(f"{prev_dv.series_key} 的規則不是 PreviousMonthOfPolicy（{policy!r}），"
+                         f"請改用 assess()")
+    if anchor.dv.series_key != policy.anchor_key:
+        raise ValueError(f"{prev_dv.series_key} 的當期應為 {policy.anchor_key}，"
+                         f"收到 {anchor.dv.series_key}")
+    if prev_dv.as_of is not None:
+        raise ValueError(f"{prev_dv.series_key} 為月頻，卻帶了 as_of={prev_dv.as_of}（應給 data_month）")
+
+    today = anchor.verdict.evaluated_on
+    _check_today(today)
+    unit = LAG_UNIT_PERIOD
+
+    def _v(status: FreshnessStatus, reason: str) -> AssessedValue:
+        return AssessedValue(prev_dv, FreshnessVerdict(status, None, unit, None, reason, today))
+
+    # 1. 當期不可用 → 前月無從定位（⛔ 不拿前月自己的日期去判）
+    if anchor.verdict.status != FreshnessStatus.FRESH or anchor.scoring_value is None:
+        return _v(FreshnessStatus.UNDETERMINED,
+                  f"當期 {policy.anchor_key} 不可用（{anchor.verdict.status.value}："
+                  f"{anchor.verdict.reason}），無法判定前一資料月")
+    cur_month = anchor.dv.data_month
+    if cur_month is None:  # FRESH 的月頻值必有 data_month；防手工組裝的 AssessedValue
+        return _v(FreshnessStatus.UNDETERMINED,
+                  f"當期 {policy.anchor_key} 無資料月份，無法判定前一資料月")
+
+    # 2. 值
+    if prev_dv.value is None:
+        return _v(FreshnessStatus.MISSING, prev_dv.missing_reason or "無值")
+    if not _is_scorable(prev_dv.value):
+        return _v(FreshnessStatus.MISSING, NON_FINITE_REASON_FMT.format(item=prev_dv.series_key))
+
+    # 3. 資料月
+    if prev_dv.data_month is None:
+        return _v(FreshnessStatus.MISSING, "前一資料月無資料月份，不得以無日期的值計分")
+
+    # 4. 必須恰好是當期的前一個資料月
+    cur_s = cur_month.strftime("%Y-%m")
+    prev_s = prev_dv.data_month.strftime("%Y-%m")
+    if not is_previous_data_month(cur_month, prev_dv.data_month):
+        return _v(FreshnessStatus.MISSING,
+                  f"前一資料月不符：當期 {cur_s}，收到 {prev_s}（應為當期的前一個月）")
+
+    # 5.
+    return _v(FreshnessStatus.FRESH,
+              f"資料月 {prev_s}，為當期 {cur_s} 的前一資料月（有效性隨當期判定）")

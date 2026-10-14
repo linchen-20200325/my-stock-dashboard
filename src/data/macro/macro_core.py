@@ -67,6 +67,10 @@ YF_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
 # v18.225 T1：PMI / Export 9-10 段全失敗時的 stale-cache fallback；TTL 90 天
 # (覆蓋 CIER 月度公布 + 假日緩衝)；只當 in-memory race 失敗時讀，UI 標 🟡 stale
 _MACRO_CACHE_DIR = _os.path.join("cache", "macro_snapshot")
+# ⭐ 批 Z63(客戶 2026-10-14 Q-z38=A):本 TTL 只代表**快取保留多久**(以 `cached_at` 計),
+#    **不代表資料仍有效**。計分一律由 L0 `shared.freshness_policy.assess_monthly` 依**資料月**
+#    (payload 的 `date`)判斷 —— 快取昨天才寫、但資料月已落後 2 期,照樣 STALE。
+#    ⛔ 不得拿 `cached_at` / 本 TTL 當新鮮度依據(tests/test_batch_z63.py 守住)。
 _MACRO_CACHE_TTL_DAYS = 90
 # v19.118：durable（committed）快照層。`cache/` 為 Streamlit Cloud **ephemeral** 磁碟
 # （每次 container 重啟/重部署/休眠喚醒即抹），故 v18.225 的「命中即存 cache/、全敗讀
@@ -1082,6 +1086,14 @@ def fetch_ism_pmi(fred_api_key: str = "", *, max_age_days: int = 90) -> dict:
 def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     """抓取台灣製造業 PMI（8 來源並行賽跑，依優先序取最高優先的有效值；月頻）。
 
+    ⭐ 批 Z63（客戶 2026-10-14 Q-z38=A）—— 本函式裡的兩個「90 天」都**不是**新鮮度規則：
+    - `max_age_days`：**來源合理性篩選**（資料月月初距今超過此天數的頁面不收，防抓到舊文章）；
+    - `_MACRO_CACHE_TTL_DAYS`：**快取保留**（`cached_at` 距今未滿此天數的快照才回）。
+    資料是否仍可參與風險判定，一律由 L0 `shared.freshness_policy.assess_monthly` 依**資料月**判。
+    `max_age_days` 必須 ≥ 月頻新鮮窗的最大天數（`ism_pmi` 實算 69 天），否則篩選會比規則
+    先把仍新鮮的資料擋掉 —— tests/test_batch_z63.py 守住。stale-cache 回傳保留**原始資料月**
+    的 `date`（只改 `source`／`is_stale`／`stale_err`／`fetched_at`）。
+
     來源優先序：CIER-EN → data.gov.tw → NDC → CIER(首頁) → StockFeel
                 → Cnyes → CIER(cid8) → MoneyDJ
     (v19.113 拔除 MacroMicro 段 — 探針 run 29182317622 實錘 host 級無回應;
@@ -1152,6 +1164,9 @@ def fetch_tw_pmi(*, max_age_days: int = 90) -> dict:
     err_msg = ' | '.join(errs) or 'all 8 stages failed'
     print(f'[macro_core/TW-PMI] ❌ 8 段並行全失敗：{err_msg}')
     # v18.225 T1：8 段全失敗 → 讀 stale cache（90 天 TTL），UI 端顯示 🟡 而非 🔴
+    # 批 Z63：90 天 TTL 只決定「快取還在不在」，不決定「資料還有沒有效」——
+    #   回傳的 `date` 是快取當時的**資料月**（下面只改 source／is_stale／stale_err／fetched_at），
+    #   有效性由 L0 `freshness_policy.assess_monthly` 依資料月判（快取再新，資料月落後 2 期照樣 STALE）。
     _stale = _macro_cache_load('tw_pmi')
     if _stale:
         _stale = dict(_stale)
