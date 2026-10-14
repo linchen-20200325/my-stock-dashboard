@@ -39,7 +39,10 @@ _MA_MISSING = '外資買賣超 ⬜ 未取得'        # 同頁 §三 籌碼卡既
 
 
 def _h(x) -> str:
-    return hashlib.sha256(repr(x).encode('utf-8')).hexdigest()
+    # 📌 批 Z62（有意識的變更，⛔ 不是漏改）：mkt_info 新增 `index_as_of`／`ma5_insufficient`（schema-additive）——
+    #   golden 是修前整份 dict 的雜湊，比對前拿掉這兩鍵（其餘逐字比對不變；golden 值不改）。
+    from tests.test_batch_z62 import z62_strip_new_keys
+    return hashlib.sha256(repr(z62_strip_new_keys(x)).encode('utf-8')).hexdigest()
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -114,6 +117,10 @@ def _pre_source(k) -> str:
     from tests.test_batch_z36 import z36_pairs_for
     from tests.test_batch_z44 import Z44_REVERT_PAIRS
     src = open(_MODS[k].__file__, encoding='utf-8').read()
+    # 📌 批 Z62（freshness F2，有意識的變更，⛔ 不是漏改）：'ms' 的 `get_market_assessment` 新增兩鍵 ⇒ 先換回
+    #   Z62 之前的寫法（`_PRE_FILE_SHA` 不改；⛔ 不動 `Z35_REVERT_PAIRS` 本身）。
+    from tests.test_batch_z62 import z62_revert_for
+    src = z62_revert_for(_MODS[k].__file__, src)
     _z44 = Z44_REVERT_PAIRS.get('src/ui/tabs/macro/section_chips.py', ()) if k == 'chips' else ()
     for new, old in _z44 + z36_pairs_for(_MODS[k].__file__) + Z35_REVERT_PAIRS[k]:
         assert src.count(new) == 1, f'替換點不唯一或已不存在：{new!r}'

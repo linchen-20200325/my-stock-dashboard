@@ -19,6 +19,12 @@
    `if _jq_info:` 不符（空 dict 也會改讀 warroom）—— 只改文字使其屬實，程式行為未動。理由：新 UI「🚀 更新今日戰情」（L3 `macro_refresh_service.refresh_macro_now`）
    會寫 `jingqi_info`、**不寫** `warroom_summary`；舊面板先讀 warroom，會吃到舊「🌍 總經」分頁
    留下的舊值。優先序與 L3 `section_inputs.build_section_inputs` 一致。
+   📌 批 Z62（Z60 更正；有意識的更正，⛔ 不是漏刪 —— 上面那句保留，它在寫下的當天為真）：
+   ~~新 UI「🚀 更新今日戰情」**不寫** `warroom_summary`~~ 自批 Z60 起已不成立 —— 該路徑的
+   `STEP_WARROOM`（L3 `warroom_apply.compute_and_store_warroom_summary`）會寫 `warroom_summary`。
+   **`jingqi_info` 優先的處置不變**，理由改為：`jingqi_info` 是旌旗指數的**來源**，
+   `warroom_summary['jingqi_avg']` 是由它（或上一份 warroom）**推導出來的結論**，可能落後一輪
+   或來自舊「🌍 總經」分頁 —— 來源在時以來源為準（程式行為未動，只改註解）。
 2. **每個輸入先過 `shared.station_specs.is_invalid_number`**（客戶 2026-10-13 裁示 B）：
    NaN／±inf／轉不成數字 ⇒ 該列**不交給 L2**、不出數值、不判一致與否，只帶項目名
    （畫面說明一律 `{項目}資料異常，無法計算，不下結論。`）。
@@ -200,6 +206,9 @@ def health_inputs(session: Mapping[str, Any]) -> dict[str, Any]:
       `section_inputs.build_section_inputs`）；`jingqi_info` 不存在或為假值（如 `None`、空 dict）時才採用
       `warroom_summary['jingqi_avg']`（批 Z57 文字更正：原寫「不存在時」，與 `if _jq_info:` 不符；
       批 Z58 再更正：Z57 的「為空」不涵蓋 `0`／`""`／`[]` 等其他假值，改為「假值」）。
+      📌 批 Z62（Z60 更正，上句保留不刪）：括號內「新 UI 路徑不寫 warroom」自批 Z60 起不成立
+      （`STEP_WARROOM` 會寫 `warroom_summary`）；`jingqi_info` 優先仍維持 —— 它是來源，
+      warroom 的 `jingqi_avg` 是推導出的結論、可能落後一輪或來自舊頁籤（程式行為未動）。
     · `score` / `max_score`：`mkt_info` 原值。
     · `fnet`：`cl_data['inst']` 第一個含「外資」的鍵的 `net`；**未觀測**（`is_net_observed` 為 False，
       L1 預填 0.0／L3 補零推出）⇒ `None`（同舊面板批 Z33）。
@@ -208,6 +217,8 @@ def health_inputs(session: Mapping[str, Any]) -> dict[str, Any]:
     _jq_info = session.get("jingqi_info")
     if _jq_info:
         _jq = _get(_jq_info, "avg")      # 沒有 avg ⇒ None（缺值），⛔ 不退回 warroom（可能是舊頁籤殘留）
+        # 📌 批 Z62（Z60 更正，上行註解保留）：Z60 起新 UI 也會寫 warroom，但其 `jingqi_avg` 是由
+        #   `jingqi_info`（或上一份 warroom）推導的結論 ⇒ 來源在時仍以 `jingqi_info` 為準（行為未動）。
     else:
         _jq = _get(_wr, "jingqi_avg")
     _mkt = session.get("mkt_info", {}) or {}

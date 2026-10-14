@@ -37,6 +37,7 @@ except ImportError:
     st = _NoOpST()  # noqa
 
 from shared.calc_helpers import calc_bias_pct
+from shared.dated_value import coerce_plain_date  # 批 Z62:bias_info['as_of'] 收斂(L0)
 # (v19.85)FINMIND_API_URL import 移除 — 唯一 caller 出口鏈方案 FM 已拔(假 dataset)
 from shared.ttls import TTL_1HOUR
 from shared.staleness import monthly_periods_behind  # DL-f1-s12／s13：資料月過期閘（L0 SSOT）
@@ -398,8 +399,11 @@ def compute_twii_bias(twii_local) -> dict | None:
 
     Returns:
         dict | None:
-            {bias_20/60/240, price, ma20/60/120/240, data_days, is_estimated}
+            {bias_20/60/240, price, ma20/60/120/240, data_days, is_estimated, as_of}
             data_days < 240 時 is_estimated=True(caller 顯示「估算」chip)。
+            as_of(批 Z62,schema-additive):`datetime.date` —— **實際用來算 bias_240 的那份
+            Close 序列**(dropna 後)最後一筆的日期;走 2 年 fallback 時就是 fallback frame
+            的日期(⛔ 不取 local frame、⛔ 不取 now()、⛔ 不取 fetched_at)。index 無法解析 → None。
             twii 全空 / Close 欄缺失 / fetch 全敗 → None。
 
     ⚠️ **消費端契約(I2, 2026-08-10)**:`is_estimated=True` 時 `ma240` 其實是
@@ -477,6 +481,11 @@ def compute_twii_bias(twii_local) -> dict | None:
         'bias_240': _b240,
         'price': _lp, 'ma20': _ma20, 'ma60': _ma60, 'ma120': _ma120, 'ma240': _ma240,
         'data_days': _n, 'is_estimated': _n < 240,
+        # 批 Z62(freshness F2):可追溯的資料日期。取 `_cs`(上面真正拿來算均線／乖離的
+        #   Close 序列,已 dropna)的最後一個 index —— 走 2 年 fallback 時 `_twii` 已換成
+        #   fallback frame,故自然取到 fallback 的日期。index 不是日期(或 NaT)→ None,
+        #   下游新鮮度判定視為「無資料日期」(§1:不補今天、不拿抓取時間頂替)。
+        'as_of': coerce_plain_date(_cs.index[-1]),
     }
 
 

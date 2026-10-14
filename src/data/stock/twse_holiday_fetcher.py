@@ -58,6 +58,7 @@ from shared.fail_cooldown import NO_HIT as _FC_NO_HIT
 from shared.fail_cooldown import FailCooldown as _FailCooldown
 from shared.roc_calendar import roc_to_gregorian_year
 from shared.ttls import TTL_1DAY
+from shared.trading_days import CalendarSets  # 批 Z62:HolidayCalendar.as_sets()(L1 → L0 合法)
 
 # §8.2.A EX-CACHE-1:條件 import streamlit + 無 UI 呼叫 fallback。
 # 本檔僅用 @st.cache_data,無真 UI 呼叫。
@@ -153,6 +154,18 @@ class HolidayCalendar:
         if kind == "unclassified":
             return frozenset(e.day for e in self.entries if e.kind == kind) | conflict
         return frozenset(e.day for e in self.entries if e.kind == kind) - conflict
+
+    def as_sets(self) -> CalendarSets:
+        """轉成 L0 `shared.trading_days.CalendarSets`（批 Z62，freshness F2）。
+
+        四個集合與 L3 `trading_calendar_service.get_today_trading_status` 傳給 `classify_day`
+        的 `**dict` **逐一相同**（closed／trading／unclassified 走 `dates_of`，衝突日只歸
+        unclassified；covered_years 原樣）—— 由 tests/test_batch_z62.py 守住，⛔ 不要另寫一份分類邏輯。
+        """
+        return CalendarSets(closed=self.dates_of("closed"),
+                            trading=self.dates_of("trading"),
+                            unclassified=self.dates_of("unclassified"),
+                            covered_years=frozenset(self.covered_years))
 
 
 def parse_roc_date(raw: object) -> date:
