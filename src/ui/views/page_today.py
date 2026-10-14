@@ -302,6 +302,9 @@ from src.ui.tabs.tab_today import (
     #    那句話寫死「本批的按鈕**還沒接上取數**」，而頁1 的按鈕當天已經
     #    接上了 —— 對本頁而言它已成假敘述。位階卡改用本檔的
     #    `EXIT_OUT_OF_REACH`（**接上了，但這一格不在射程內**，那才是實話）。
+    #    📌 批 Z60 更正（上句保留不刪，它在寫下的當天為真）：位階卡吃的 `warroom_summary`
+    #    自 Z60 起由 L3 `STEP_WARROOM` 寫得到，未評估態的出口已改為 `EXIT_RETRY_HERE`
+    #    （見 `build_verdict_tiles()` 卡③ 的註）。「不 import `CONTRACT_NO_EXIT_WHERE`」不變。
     #    ⛔ `tab_today.py` 本身一個字都沒動（檔案邊界）：那句話在**它自己那一頁**
     #    仍然為真，`tests/test_p01_today_skeleton.py` 照舊守著它。
     #
@@ -1737,12 +1740,20 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             _why = ("L3 建議持股契約回報未評估（`is_loaded=False`）—— "
                     "總經健康分與規則引擎快照兩條來源本輪都沒有值；"
                     "**本站不以缺值推導一個安全水位**")
+        # 📌 批 Z60 QA（有意識的修改，不是漏刪）：非錯誤分支的出口原為 `EXIT_OUT_OF_REACH`
+        #    （「按本頁按鈕不會讓它離開現在的狀態，報告會列出它」）。那句話在它寫下的當天為真
+        #    —— 當時 `warroom_summary` 只有舊分頁寫；Z60 起 L3 `STEP_WARROOM` 會寫它，按一次
+        #    「🚀 更新今日戰情」這張卡就有機會從未評估變 live（本輪輸入算得出健康分時），`UNTOUCHED_BLOCKS` 也不再列它 ⇒
+        #    舊出口變成假指路（§1）。改走 `EXIT_RETRY_HERE`。
+        #    ⚠️ 卡①只有「系統風險上限」那一條天花板讀 `macro_state.json`（本頁摸不到），
+        #    但那條天花板**不決定**這張卡會不會從未評估變 live —— 所以出口仍是可重抓。
+        #    錯誤分支（`alloc_error`）維持 `EXIT_FIX_CODE`，未動。
         _tiles.append(Tile(Card(
             key="verdict.exposure", label="能不能出手 · 出手到幾成",
             state=_alloc_state,
             note=Note(now="**今天能不能出手：尚未評估**", why=_why,
                       where=(EXIT_FIX_CODE if alloc_error
-                             else EXIT_OUT_OF_REACH)))))
+                             else EXIT_RETRY_HERE)))))
 
     # ② 指標危險度（16 盞燈的 worst-of，**不含多空方向**）。
     #    ⚠️ 這一張**完全不看 regime**；regime 掛掉時它照樣要算得出來。
@@ -1824,7 +1835,10 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                 why=(upstream_error_why(scrub_secrets(regime_error)) if regime_error else
                      "L3 canonical 契約四條來源本輪皆無值 → 回 `unknown`，"
                      "**不是** `neutral`；本站不以缺值推導「中性」"),
-                where=(EXIT_OUT_OF_REACH if not regime_error
+                # 📌 批 Z60 QA（有意識的修改，不是漏刪）：非錯誤分支原為 `EXIT_OUT_OF_REACH`；
+                #    Z60 起 `STEP_WARROOM` 寫得到 `warroom_summary`，按本頁按鈕就有機會讓這張卡
+                #    離開未評估 ⇒ 改走 `EXIT_RETRY_HERE`（理由同卡①）。錯誤分支未動。
+                where=(EXIT_RETRY_HERE if not regime_error
                        else EXIT_FIX_CODE))),
             facts=((REGIME_SCOPE_FACT_KEY, REGIME_SCOPE_NOTE),)))
     return tuple(_tiles)

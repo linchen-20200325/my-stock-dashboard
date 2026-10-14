@@ -33,6 +33,12 @@ golden 與格點比對釘住。
      那一句被壓制訊號**（`register_conflict`）—— 那是舊頁渲染中期桶時登記的
      **說明文字**，不影響任何數字；本路徑不渲染中期桶。
   5. **沒有時間戳**：13 欄契約本來就沒有時間欄位，本批不改契約。
+  6. **`mkt_info` 沒有 `regime` 鍵時寫 `None`，不寫 `'neutral'`。** 舊 TL 用
+     `mkt_info.get('regime', 'neutral')` 捏一個「中性」，緊接著 SS 用 `.get('regime')`
+     蓋回 `None` —— 所以舊頁 **TL→SS 的最終結果**與本檔相同（golden 情境
+     `X_mkt_no_regime` 釘住）；但舊頁**只跑到 TL、SS 沒跑**的那一輪，session 裡留的是
+     `'neutral'`。本檔一律照 SS 寫 `None`：缺值就是缺值，⛔ 不以缺值推導「中性」（§1）——
+     新路徑較誠實，這是刻意的差異。
 
 ⚠️ **自我回授照舊頁，但「三來源全空」以本輪真的輸入判定**：
 `load_section_inputs` 在 session 沒有 `jingqi_info` 時會退回**上一份** warroom 的
@@ -92,7 +98,7 @@ def compute_and_store_warroom_summary() -> WarroomApplyResult:
 
     Raises:
         任何取輸入 / 判燈 / 組裝時的例外 —— **先** pop 掉既有的 `warroom_summary`，
-        再原樣往上拋（⛔ 吞）。
+        再原樣往上拋（⛔ 不吞）。
     """
     try:
         _inp = load_section_inputs(st.session_state)

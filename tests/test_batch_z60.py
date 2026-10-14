@@ -26,6 +26,8 @@
   6. `TestRefreshIntegration` —— 接進 `refresh_macro_now` 之後：寫入被量到、對帳通過、
      順序對、pop 有記、市場評估失敗時有揭露。
   7. `TestOldFilesUntouched` —— 舊 UI 檔對基底 `e64ea2f5` 零 diff。
+  8. `TestVerdictIdleExitIsRetry` —— 卡①③ 未評估（非錯誤）時出口是「按本頁按鈕可重抓」，
+     ⛔ 不再是「不在本頁射程內」（Z60 QA 阻擋項）；錯誤分支出口不變。
 
 harness 沿用 `tests/test_batch_z8.py`（`_FakeST`、情境 N1–N5／F1–F4、門檻釘死、不觸網、cwd 換到
 tmp）與 `tests/test_p01_macro_refresh.py`（`_mutated_module`、`_FakeST` 型 session 替身）。
@@ -537,7 +539,7 @@ class TestMutations:
 # ══════════════════════════════════════════════════════════════════════════
 # 6. 接進 refresh_macro_now
 # ══════════════════════════════════════════════════════════════════════════
-def _run_refresh(monkeypatch, *, initial=None, market_ok=True, write_inputs=True):
+def _run_refresh(monkeypatch, *, initial=None, market_ok=True, write_inputs=True, apply_ok=True):
     """`refresh_macro_now` 一輪：外部相依全換替身，**`warroom_apply` 用真的**，同一個假 session。"""
     import src.services.data_registry_scanner as _REG
     import src.services.jingqi_calc as _JQ
@@ -558,6 +560,8 @@ def _run_refresh(monkeypatch, *, initial=None, market_ok=True, write_inputs=True
         return _content_bundle()
 
     def _apply(*a, **k):
+        if not apply_ok:
+            raise RuntimeError("寫 session 炸了")
         if write_inputs:
             fake.session_state["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
             fake.session_state["li_latest"] = _li((5000.0, 6000.0, 7000.0, 8000.0))
@@ -637,6 +641,19 @@ class TestRefreshIntegration:
         r, _, _ = _run_refresh(_pinned)
         assert "市場評估這一輪沒有成功" not in _step(r, RS.STEP_WARROOM).detail
 
+    def test_apply_failure_is_disclosed(self, _pinned):
+        """批 Z60 QA：`STEP_APPLY` 失敗 ⇒ `cl_data` 沿用上一輪，`STEP_WARROOM` 的報告要講出來。"""
+        prior = {"cl_data": _cl_data(inst=_INST, adl=_ADL),
+                 "li_latest": _li((5000.0, 6000.0, 7000.0, 8000.0))}
+        r, fake, _ = _run_refresh(_pinned, initial=prior, apply_ok=False)
+        assert not _step(r, RS.STEP_APPLY).ok and not r.ok
+        s = _step(r, RS.STEP_WARROOM)
+        assert s.ok and "warroom_summary" in fake.session_state     # 照樣寫 —— 所以才要揭露
+        assert "籌碼資料本輪未更新" in s.detail and "cl_data" in s.detail
+        assert "市場評估這一輪沒有成功" not in s.detail             # 兩條揭露各管各的
+        r, _, _ = _run_refresh(_pinned)
+        assert "籌碼資料本輪未更新" not in _step(r, RS.STEP_WARROOM).detail
+
     def test_an_exception_is_a_failed_step_and_a_pop(self, _pinned):
         def _boom(*a, **k):
             raise RuntimeError("判燈炸了")
@@ -701,6 +718,10 @@ class TestOldFilesUntouched:
     改為釘住基底 `e64ea2f5` 時這 91 個 `.py` 的內容指紋（逐檔 sha256 → 依路徑排序 → 再 sha256；
     CRLF 先正規化成 LF，免得 Windows checkout 誤紅）。實作組於基底實跑寫死，當時
     `git diff --stat e64ea2f5 -- …` 為空、`git ls-files` 同為 91 檔（無未追蹤檔）。
+
+    ⚠️ **這是本批（Z60）的一次性守衛，不是永久凍結舊 UI。** 日後若有**經核准**的舊 UI 改動
+    （或舊 UI 增刪檔），本支會紅 —— 那時請同步更新 `_BASE_COUNT` / `_BASE_DIGEST`
+    （與對應的基底 commit 說明），⛔ 不要為了讓它綠而回退那個核准過的改動。
     """
 
     _BASE_COUNT = 91
@@ -720,6 +741,83 @@ class TestOldFilesUntouched:
         assert (len(files), h.hexdigest()) == (self._BASE_COUNT, self._BASE_DIGEST), (
             "舊 UI 檔（src/ui/tabs|etf|pages|render、app.py）與基底 e64ea2f5 不同 —— "
             "本批承諾舊檔零改動")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. 卡①③ 未評估時的出口（批 Z60 QA 阻擋項）
+# ══════════════════════════════════════════════════════════════════════════
+class TestVerdictIdleExitIsRetry:
+    """Z60 起 `STEP_WARROOM` 寫得到 `warroom_summary`，卡①（建議持股）／卡③（市場位階）
+    按一次「🚀 更新今日戰情」就能離開未評估 —— 未評估（非錯誤）時的出口必須是
+    `EXIT_RETRY_HERE`，⛔ 不得再是 `EXIT_OUT_OF_REACH`（「按本頁按鈕不會讓它離開現在的狀態」
+    已是假指路，且 `UNTOUCHED_BLOCKS` 不再列它）。錯誤分支維持 `EXIT_FIX_CODE`。
+
+    alloc / regime 走**真的** L3 `get_allocation()` / `get_macro_regime()`（`_pinned`：cwd 在空
+    tmp 目錄，沒有 `macro_state.json`），不是手捏的替身 —— 守的是 production 會走到的那一態。
+    """
+
+    @staticmethod
+    def _tiles(monkeypatch, session: dict, *, alloc_error="", regime_error=""):
+        from src.ui.views import page_today as P
+        fake = _FakeST(copy.deepcopy(session))
+        monkeypatch.setattr(AS, "st", fake)
+        alloc = None if alloc_error else AS.get_allocation()
+        regime = None if regime_error else AS.get_macro_regime()
+        tiles = P.build_verdict_tiles(
+            alloc=alloc, alloc_error=alloc_error, danger=None, danger_error="",
+            danger_requested=False, regime=regime, regime_error=regime_error)
+        return P, {t.card.key: t for t in tiles}
+
+    @staticmethod
+    def _health_none_session(monkeypatch) -> dict:
+        """新路徑在 F1（三來源全敗）寫出的那份 warroom：`health_score is None`。"""
+        wr, res, fake = _new(monkeypatch, _state("F1_all_failed"))
+        assert res.written and res.health_missing and wr["health_score"] is None
+        return dict(fake.session_state)
+
+    def _assert_retry(self, P, tiles):
+        for key in ("verdict.exposure", "verdict.regime"):
+            card = tiles[key].card
+            assert card.state != P.UI_LIVE, (key, card.state)   # 真的走到非 live 那一支
+            assert card.note.where is P.EXIT_RETRY_HERE, key
+            assert card.note.where is not P.EXIT_OUT_OF_REACH, key
+
+    def test_no_warroom(self, _pinned):
+        P, tiles = self._tiles(_pinned, {})
+        assert tiles["verdict.exposure"].card.state == P.UI_IDLE
+        assert tiles["verdict.regime"].card.state == P.UI_IDLE
+        self._assert_retry(P, tiles)
+
+    def test_no_warroom_but_inputs_present(self, _pinned):
+        """有本輪輸入、還沒組 warroom（按鈕前的典型 session）—— 同樣是可重抓。"""
+        s = _state("N1_bull")
+        s.pop("warroom_summary", None)
+        P, tiles = self._tiles(_pinned, s)
+        self._assert_retry(P, tiles)
+
+    def test_warroom_health_none(self, _pinned):
+        P, tiles = self._tiles(_pinned, self._health_none_session(_pinned))
+        self._assert_retry(P, tiles)
+
+    def test_exposure_requested_but_unloaded(self):
+        """卡①第三支（契約叫過了、建議持股仍未評估）同樣是可重抓 —— 健康分補上就會 live。"""
+        from types import SimpleNamespace
+
+        from src.ui.views import page_today as P
+        alloc = SimpleNamespace(is_loaded=False, range_text="--", posture="未評估",
+                                drivers=(), cap_text="", conflicts=())
+        regime = {"regime": "bull", "light": "🟢", "source": "warroom", "is_loaded": True}
+        (t,) = [t for t in P.build_verdict_tiles(
+            alloc=alloc, alloc_error="", danger=None, danger_error="", danger_requested=False,
+            regime=regime, regime_error="") if t.card.key == "verdict.exposure"]
+        assert t.card.state not in (P.UI_LIVE, P.UI_IDLE), t.card.state
+        assert t.card.note.where is P.EXIT_RETRY_HERE
+
+    def test_error_branches_unchanged(self, _pinned):
+        P, tiles = self._tiles(_pinned, {}, alloc_error='RuntimeError("boom")',
+                               regime_error='RuntimeError("boom")')
+        assert tiles["verdict.exposure"].card.note.where is P.EXIT_FIX_CODE
+        assert tiles["verdict.regime"].card.note.where is P.EXIT_FIX_CODE
 
 
 def test_nan_is_canonicalised():

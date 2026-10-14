@@ -26,9 +26,13 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
      看 session 的原始 `mkt_info` / `jingqi_info` / `cl_data`，**不**拿上一份 warroom 的
      `jingqi_avg` 退路當本輪來源（舊頁 rerun 會，那等於上一輪結論冒充今天的）；
      (c) 不寫 session `macro_state`（只有舊頁讀）；(d) 不產生舊 `section_mid` 那句
-     「三環火力分級偏多被壓制」說明（只影響說明，不影響數字）。
+     「三環火力分級偏多被壓制」說明（只影響說明，不影響數字）；(e) `mkt_info` 沒有
+     `regime` 鍵時寫 `None` —— 舊頁 TL→SS 的最終結果同樣是 `None`，但舊頁**只跑到 TL**
+     的那一輪是 `'neutral'`（TL 捏的預設值）。新路徑較誠實：⛔ 不以缺值推導「中性」。
      ⚠️ 若 `STEP_MARKET` 這一輪沒成功（含逾時），組裝用的是 session **現有**的
      `mkt_info`（可能是上一輪的）—— 步驟報告會寫明。
+     ⚠️ 同理，若 `STEP_APPLY` 這一輪沒成功，`cl_data` / `cl_ts` 仍是 session **現有**的
+     （籌碼資料本輪未更新）—— 步驟報告同樣寫明。
 
 ═══ 分層（CLAUDE.md §8.2）═════════════════════════════════════════════
 **L3 Service**：編排 L1 fetcher（`src.data.daily.daily_data_fetchers`）
@@ -924,9 +928,15 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
     #   pop 既有的那份 —— 「有沒有被刪」用**量**的（前後比對 key 在不在），不靠回傳值，
     #   因為拋例外的那一條根本沒有回傳值。
     _market_ok = any(_t.name == STEP_MARKET and _t.ok for _t in _steps)
-    _market_note = ("" if _market_ok else
-                    "；⚠️ 市場評估這一輪沒有成功（含逾時），組裝用的是 session **現有**的"
-                    " `mkt_info`（可能是上一輪的值）")
+    _stale_inputs_note = ("" if _market_ok else
+                          "；⚠️ 市場評估這一輪沒有成功（含逾時），組裝用的是 session **現有**的"
+                          " `mkt_info`（可能是上一輪的值）")
+    # 📌 批 Z60 QA：`STEP_APPLY` 失敗時 `cl_data` / `cl_ts` 沒被本輪覆蓋，
+    #   這一步照樣會吃 session 現有的那份 —— 與上面市場評估同構，同樣據實揭露。
+    _apply_ok = any(_t.name == STEP_APPLY and _t.ok for _t in _steps)
+    _stale_inputs_note += ("" if _apply_ok else
+                           "；⚠️ 寫入 session（cl_data / 時間戳）這一輪沒有成功：籌碼資料本輪未更新，"
+                           "組裝用的是 session **現有**的 `cl_data`（可能是上一輪的值，或根本沒有）")
     _wr_had = "warroom_summary" in st.session_state
     try:
         from src.services.warroom_apply import compute_and_store_warroom_summary
@@ -938,17 +948,17 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
                   + ("（⚠️ 健康分兩條腿都缺 → `get_macro_state()` 把這份 warroom 視同**未載入**："
                      "建議持股的姿態帶算不出來；市場位階若有可用的 macro_state.json 會改讀它）"
                      if _wr_res.health_missing else "")
-                  + _market_note)
+                  + _stale_inputs_note)
         else:
             _step(STEP_WARROOM, True,
                   f"{_wr_res.reason}"
                   + ("；**已刪除上一份 warroom_summary**（不讓上一輪的結論冒充今天的）"
                      if _wr_res.popped else "")
-                  + _market_note,
+                  + _stale_inputs_note,
                   skipped=True)
     except Exception as _e:  # noqa: BLE001
         print(f"[總經刷新] ❌ compute_and_store_warroom_summary 失敗：{_e!r}")
-        _step(STEP_WARROOM, False, f"{type(_e).__name__}: {_e}" + _market_note)
+        _step(STEP_WARROOM, False, f"{type(_e).__name__}: {_e}" + _stale_inputs_note)
     finally:
         if _wr_had and "warroom_summary" not in st.session_state:
             _popped = tuple(dict.fromkeys((*_popped, "warroom_summary")))
