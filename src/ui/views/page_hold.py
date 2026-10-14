@@ -197,7 +197,9 @@ TestNothingIsCalledBeforeYouAsk` 用不繼承 `Exception` 的毒藥實測，不�
      `marginal_rate=None`（L3 明文支援：只算二代健保）。
      卡面**必須把「不含綜所稅」講出來**，否則「稅後」兩個字就是在說謊。
   3. ⛔ **⑥ 葡萄串領息**。實作在 L5 `tabs.grape_ladder`、自帶寫死的 widget key，
-     在本頁再掛一次會撞 `DuplicateWidgetID`。
+     ~~在本頁再掛一次會撞 `DuplicateWidgetID`。~~
+     📌 批 Z55（2026-10-13，事實更正，⛔ 不是漏刪；同 `page_find` 檔頭 FE-36）：`b5bdb36` 之後
+     本頁與既有分頁不再同輪渲染，撞不起來；仍成立的理由見 `DEEP_SPECS` 葡萄串那一筆的 `why`。
   4. ✅ **⑦ AI 戰情總結 —— 2026-09-07 FE-31 已接線。**
      四支 L3 都在（`build_station_digest` → `build_summary_prompt` →
      `build_ai_summary`，`gemini_fn` 由 `app_ai_service.gemini_call` 注入），
@@ -2721,9 +2723,15 @@ DEEP_SPECS: tuple[UnwiredSpec, ...] = (
     UnwiredSpec(
         key="hold.deep.grape", label="葡萄串領息",
         now=GRAPE_UNWIRED_NOW,
+        # 📌 批 Z55（2026-10-13，事實更正，同 `page_find` 檔頭 FE-36 —— 結論不變，理由換了）：
+        #    原句「在本頁再掛一次會撞 `DuplicateWidgetID`，那不是「畫得醜」，是整頁當場拋例外」自
+        #    `b5bdb36`（側欄 radio ＋ `st.stop()`）起對既有分頁已不成立；改寫成仍成立的理由。
         why=("這一格的實作**住在 L5**（`tabs.grape_ladder`）而不是 L3，"
-             "而且它自帶寫死的 widget key —— 在本頁再掛一次會撞 "
-             "`DuplicateWidgetID`，那不是「畫得醜」，是**整頁當場拋例外**"),
+             "而且它自帶寫死的 widget key —— 本頁與既有分頁不再同輪渲染，"
+             "兩邊進不到同一個 script run 裡，撞不起來；但它讀的 "
+             "`st.session_state['etf_portfolio_rows']` 是既有分頁寫入的**普通旗標**"
+             "（不是 widget key），它**跨 rerun、跨頁存活**，本頁若掛它，"
+             "讀到的就是既有分頁寫進去的那一份"),
         where=_unwired_where(
             "要接上需先讓現行實作能被外部重複掛載（widget key 加前綴參數、"
             "取數改走 L3、gate 由 caller 提供）—— 那是改既有分頁，"

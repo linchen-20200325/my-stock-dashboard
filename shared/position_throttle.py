@@ -15,7 +15,7 @@
     (`shared/macro_calibration.HEALTH_DEFENSE_THRESHOLD_DEFAULT` / macro_thresholds.json)——
     那條線本來就長在**總經 health** 這個尺度上,同尺度,可以對齊。
   - ⛔ **A=70 不對齊 `HEALTH_GRADE_A_MIN`(=80),而且禁止拿去對齊。**
-    `HEALTH_GRADE_A_MIN` 是**個股六因子健康分**(趨勢30+RSI20+量比15+IBS10+KD15+布林10)
+    `HEALTH_GRADE_A_MIN` 是**個股六因子健康分**(配分 SSOT:`shared/health_score_factors.py`)
     的 A 級線,與總經 health 是**兩個不同尺度的量**:總經 health 值域被壓縮在 [21.6, 78.1],
     照 80 切會讓「積極」帶在 2007-2026 的 4,769 個交易日裡**一次都不觸發**。
     借出方 `shared/health_thresholds.py` 的 docstring 自己就明文禁止這種借用
@@ -64,7 +64,8 @@ from __future__ import annotations
 #       廣度評分、ETF 星評等獨立評分系統的閾值——**那些屬不同維度**。」
 #
 # 兩個尺度差在哪(實測):
-#   - 個股健康分 = 趨勢30+RSI20+量比15+IBS10+KD15+布林10,滿分 100 且**真的會到 80+**
+#   - 個股健康分 = 六因子加總(配分 SSOT:`shared/health_score_factors.py`;批 Z55 起不在此抄數字),
+#     滿分 100 且**真的會到 80+**
 #     (`src/compute/scoring/scoring_helpers.calc_health_score`)。
 #   - 總經 health = 0.6×jqavg + 0.4×score_pct,而 jqavg(σ=3.32)在數學上是個
 #     **準常數 ≈ +29.8**(它貢獻 health 變異僅 2.8%;corr(health, score_pct)=0.987)。

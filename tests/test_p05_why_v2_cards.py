@@ -81,6 +81,8 @@ def _enumerate():
     scales = P.build_scale_disclosure()
     for b in P.build_edu_cards(specs, scales):
         add(b)
+    # 批 Z55：六因子卡接線 —— 冷啟動是 live（無 Note），讀不出來的紅卡另建一張。
+    add(P.build_health6_card(P.Health6Readout(error=_E)))
     add(P.build_lights_card(P.SpecScan(error=_E)))
     add(P.build_lights_card(P.SpecScan()))
     add(P.build_scale_card(P.ScaleDisclosure(error=_E)))
@@ -395,7 +397,7 @@ def test_no_exit_stays_no_exit_and_keeps_its_next_step():
         if NO_EXIT_MARKER in where_s:
             assert where_s != NO_EXIT_MARKER, f"{card.key}: 只剩標記，原文的下一步被吞掉了"
             seen += 1
-    assert seen >= 10, "未接線五面板／額度／六因子／規格標記／契約漂移都該有「沒有出口」"
+    assert seen >= 10, "未接線三面板／額度／規格標記／契約漂移／讀不出來的紅卡都該有「沒有出口」"
 
 
 def test_unknown_status_head_matches_only_its_own_shape():
@@ -732,7 +734,8 @@ def test_cold_page_mounts_with_v2_cards_no_red_and_three_tables(tmp_path):
     assert not any(_badge_of(c) == 6 for c in cards if not _is_wall(c)), (
         "冷啟動不得有紅卡（假性錯誤）")
     edu = [c for c in cards if 'class="blk blk-t1"' in c]
-    assert [_badge_of(c) for c in edu] == [1, 5, 4, 5], "葉1 四張的狀態（live/unwired/degraded/unwired）"
+    # 批 Z55：第二張（健康評分六因子）由未接線 5 → live 1。
+    assert [_badge_of(c) for c in edu] == [1, 1, 4, 5], "葉1 四張的狀態（live/live/degraded/unwired）"
     assert sum(P.V2_WHY_CARD_CSS in m for m in md) == 1, "樣式表應恰吐一次"
     assert len(at.dataframe) == 3
     assert not any(t in "\n".join(md) for t in ("<table", "<tr", "<td")), "卡化不得畫新表格"
@@ -844,7 +847,8 @@ _BASELINE_NOW_LITERALS: dict[str, str] = {
     "SPEC_FLAG_UNWIRED_NOW": "**這一盞刻意沒有接**",
     "SPEC_FLAG_DEGRADED_NOW": "**這一盞會亮，但別照門檻讀**",
     "LIGHTS_EMPTY_NOW": "**門檻表讀不出來**",
-    "HEALTH6_NOW": "**六個因子各佔幾分，本頁還說不出來**",
+    # 批 Z55：`HEALTH6_NOW`（未接線說法）隨六因子卡接線刪除；換成接線後讀不出來的紅卡一則。
+    "HEALTH6_FAILED_NOW": "**健康評分六因子讀不出來**",
     "SCALES_DEGRADED_NOW": "**兩套刻度目前有一側已失準，本頁不提供跨頁比較**",
     "SCALES_EMPTY_NOW": "**兩套刻度的定義讀不出來**",
     "LEGACY_NOW": "**既有的完整教學內容還沒有搬到這一頁**",
@@ -875,7 +879,7 @@ def test_every_now_constant_in_the_module_is_pinned():
     """模組裡**每一個** `*_NOW` / `*_NOW_TEMPLATE` / `*_NOW_HEAD` 都在上表 —— 新增一則而沒釘 ⇒ 紅燈。"""
     names = {n for n in vars(P) if re.fullmatch(_NOW_NAME_RE, n)}
     assert names == set(_BASELINE_NOW_LITERALS), names ^ set(_BASELINE_NOW_LITERALS)
-    assert len(names) == 25   # 批 Z54：-2（兩則未接線說法刪除）+3（接線後灰一則、紅兩則）
+    assert len(names) == 25   # 批 Z54：-2（兩則未接線說法刪除）+3（接線後灰一則、紅兩則）；批 Z55：-1+1
 
 
 # ── 10. QA F4：卡面短句的**忠實度** —— 原文拿來限定的條件／原因／去處／升級路徑，
@@ -904,7 +908,8 @@ _MUST_KEEP: dict[str, dict[str, tuple[str, ...]]] = {
     "SPEC_FLAG_UNWIRED_NOW": {_WHERE: _SPEC_WHERE},
     "SPEC_FLAG_DEGRADED_NOW": {_WHERE: _SPEC_WHERE},
     "LIGHTS_EMPTY_NOW": {_WHY: ("沒有回傳任何一盞燈的定義",), _WHERE: (NO_EXIT_MARKER, _REPORT)},
-    "HEALTH6_NOW": {_WHY: ("沒有任何一份是可讀的資料結構",), _WHERE: _UNWIRED},
+    # 批 Z55：出處（讀的是 L0 配分表，⛔ 不是規格表）與升級路徑都要留在卡面。
+    "HEALTH6_FAILED_NOW": {_WHY: ("L0 六因子配分表", "拋出例外"), _WHERE: (NO_EXIT_MARKER, _REPORT)},
     "SCALES_DEGRADED_NOW": {_WHY: ("別照門檻讀", "逐盞原因見「⚠️ 已失準」與這張卡下面的對照表"),  # 批 D4 SA2-f11
                             _WHERE: _SCALES},
     "SCALES_EMPTY_NOW": {_WHY: ("沒有回傳可用的燈號定義",), _WHERE: _SCALES},

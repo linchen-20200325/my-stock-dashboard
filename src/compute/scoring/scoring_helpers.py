@@ -23,6 +23,8 @@ import pandas as _pd_fs
 
 from shared.signal_thresholds import BB_BW_SHRINK_WARN_RATIO  # v18.430 Batch 5b 漏網收尾
 from shared.thresholds import YIELD_HIGH, YIELD_MID, YIELD_LOW
+# 批 Z55：六因子配分 SSOT（calc_health_score 讀這份；⛔ 不在本檔寫死配分）
+from shared.health_score_factors import HEALTH_SCORE_FACTOR_POINTS, HEALTH_SCORE_TOTAL
 
 
 def calc_fundamental_score(qtr_df, yearly_df, avg_div):
@@ -121,14 +123,18 @@ def calc_fundamental_score(qtr_df, yearly_df, avg_div):
 
 def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
     """
-    綜合健康度評分，各因子分述：
-    - 趨勢（MA20/MA100）    : 30分
-    - RSI動能              : 20分
-    - 量比                 : 15分
-    - IBS位置              : 10分
-    - KD排列               : 15分
-    - 布林位置              : 10分
+    綜合健康度評分，六個因子：趨勢（MA20/MA100）· RSI動能 · 量比 · IBS位置 · KD排列 · 布林位置。
+
+    各因子的**配分**（滿分）與合計上限讀 L0 SSOT `shared/health_score_factors.py`
+    （批 Z55：原本寫死在本函式與本段註解；⛔ 不要在這裡再抄一份數字）。
+    各因子**內部的分段給分**（例：趨勢「多箱整理」、RSI「中性偏弱」）不是配分，仍留在下面。
     """
+    _W_TREND = HEALTH_SCORE_FACTOR_POINTS['趨勢']
+    _W_RSI = HEALTH_SCORE_FACTOR_POINTS['RSI']
+    _W_VR = HEALTH_SCORE_FACTOR_POINTS['量比']
+    _W_IBS = HEALTH_SCORE_FACTOR_POINTS['IBS']
+    _W_KD = HEALTH_SCORE_FACTOR_POINTS['KD']
+    _W_BB = HEALTH_SCORE_FACTOR_POINTS['布林']
     score = 0
     details = {}
 
@@ -137,51 +143,51 @@ def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
         ma20   = float(df['MA20'].iloc[-1])  if 'MA20'  in df.columns else None
         ma100  = float(df['MA100'].iloc[-1]) if 'MA100' in df.columns else None
 
-        # 趨勢 (30分)
+        # 趨勢（配分 _W_TREND）
         if ma20 and ma100:
             if price > ma20 > ma100:
-                score += 30
-                details['趨勢'] = ('多頭排列', 30, 30)
+                score += _W_TREND
+                details['趨勢'] = ('多頭排列', _W_TREND, _W_TREND)
             elif price > ma100 and price > ma20:
                 # P6修正: 需同時站上ma20和ma100才算「多箱整理」
                 score += 18
-                details['趨勢'] = ('多箱整理(站上雙均)', 18, 30)
+                details['趨勢'] = ('多箱整理(站上雙均)', 18, _W_TREND)
             elif price > ma20 and price < ma100:
                 # 站上短均但低於長均 → 反彈初期，偏謹慎
                 score += 10
-                details['趨勢'] = ('短線反彈(低於長均)', 10, 30)
+                details['趨勢'] = ('短線反彈(低於長均)', 10, _W_TREND)
             elif price < ma20 and price > ma100:
                 # 短均跌破但長均支撐 → 整理中
                 score += 8
-                details['趨勢'] = ('整理中(長均支撐)', 8, 30)
+                details['趨勢'] = ('整理中(長均支撐)', 8, _W_TREND)
             else:
                 score += 0
-                details['趨勢'] = ('空頭排列', 0,  30)
+                details['趨勢'] = ('空頭排列', 0,  _W_TREND)
         else:
             score += 15
-            details['趨勢'] = ('無MA數據', 15, 30)
+            details['趨勢'] = ('無MA數據', 15, _W_TREND)
 
-    # RSI (20分) — C-1 v18.382:50/40 inline 補抽(70/30 已在 config.py SSOT)
+    # RSI（配分 _W_RSI）— C-1 v18.382:50/40 inline 補抽(70/30 已在 config.py SSOT)
     if rsi is not None:
         from shared.signal_thresholds import RSI_STRONG_LOW, RSI_NEUTRAL_WEAK_LOW
         from src.config import RSI_OVERBOUGHT, RSI_OVERSOLD
         if RSI_STRONG_LOW <= rsi <= RSI_OVERBOUGHT:
-            score += 20
-            details['RSI'] = (f'{rsi}（強勢區間）', 20, 20)
+            score += _W_RSI
+            details['RSI'] = (f'{rsi}（強勢區間）', _W_RSI, _W_RSI)
         elif RSI_NEUTRAL_WEAK_LOW <= rsi < RSI_STRONG_LOW:
             score += 12
-            details['RSI'] = (f'{rsi}（中性偏弱）', 12, 20)
+            details['RSI'] = (f'{rsi}（中性偏弱）', 12, _W_RSI)
         elif RSI_OVERSOLD <= rsi < RSI_NEUTRAL_WEAK_LOW:
             score += 8
-            details['RSI'] = (f'{rsi}（超賣邊緣）', 8,  20)
+            details['RSI'] = (f'{rsi}（超賣邊緣）', 8,  _W_RSI)
         elif rsi < RSI_OVERSOLD:
             score += 14
-            details['RSI'] = (f'{rsi}（超賣反彈機會）', 14, 20)
+            details['RSI'] = (f'{rsi}（超賣反彈機會）', 14, _W_RSI)
         else:  # >70
             score += 8
-            details['RSI'] = (f'{rsi}（超買注意）', 8,  20)
+            details['RSI'] = (f'{rsi}（超買注意）', 8,  _W_RSI)
 
-    # 量比 (15分)
+    # 量比（配分 _W_VR）
     if vr is not None:
         # P2-3 v18.381:3.0 inline → shared SSOT
         # v18.436 #8:1.5/1.0/0.5 改用既有 VOLUME_RATIO_SURGE/MILD/DRY SSOT(原 inline 重複定義)
@@ -192,34 +198,34 @@ def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
         if vr > VOLUME_RATIO_SURGE_HIGH:
             # P7修正: 量比>3.0是重大消息/主力介入，給高分
             score += 12
-            details['量比'] = (f'{vr}（主力介入）', 12, 15)
+            details['量比'] = (f'{vr}（主力介入）', 12, _W_VR)
         elif VOLUME_RATIO_SURGE <= vr <= VOLUME_RATIO_SURGE_HIGH:
-            score += 15
-            details['量比'] = (f'{vr}（異常放量）', 15, 15)
+            score += _W_VR
+            details['量比'] = (f'{vr}（異常放量）', _W_VR, _W_VR)
         elif VOLUME_RATIO_MILD <= vr < VOLUME_RATIO_SURGE:
             score += 10
-            details['量比'] = (f'{vr}（溫和放量）', 10, 15)
+            details['量比'] = (f'{vr}（溫和放量）', 10, _W_VR)
         elif VOLUME_RATIO_DRY <= vr < VOLUME_RATIO_MILD:
             score += 5
-            details['量比'] = (f'{vr}（量縮整理）', 5,  15)
+            details['量比'] = (f'{vr}（量縮整理）', 5,  _W_VR)
         else:
             score += 2
-            details['量比'] = (f'{vr}（極度縮量）', 2,  15)
+            details['量比'] = (f'{vr}（極度縮量）', 2,  _W_VR)
 
-    # IBS (10分) — v18.436 #9:0.2/0.8 inline → SSOT
+    # IBS（配分 _W_IBS）— v18.436 #9:0.2/0.8 inline → SSOT
     if ibs is not None:
         from shared.signal_thresholds import IBS_OVERSOLD_THRESHOLD, IBS_OVERBOUGHT_THRESHOLD
         if ibs <= IBS_OVERSOLD_THRESHOLD:
-            score += 10
-            details['IBS'] = (f'{ibs}（收低≤20%，隔日易反彈）', 10, 10)
+            score += _W_IBS
+            details['IBS'] = (f'{ibs}（收低≤20%，隔日易反彈）', _W_IBS, _W_IBS)
         elif ibs >= IBS_OVERBOUGHT_THRESHOLD:
             score += 2
-            details['IBS'] = (f'{ibs}（收高≥80%，隔日易賣壓）', 2,  10)
+            details['IBS'] = (f'{ibs}（收高≥80%，隔日易賣壓）', 2,  _W_IBS)
         else:
             score += 6
-            details['IBS'] = (f'{ibs}（中性）', 6, 10)
+            details['IBS'] = (f'{ibs}（中性）', 6, _W_IBS)
 
-    # KD (15分) — v18.436 #7:20/80 inline → SSOT;v19.94 加鈍化/背離修正(§7 user 核准)
+    # KD（配分 _W_KD）— v18.436 #7:20/80 inline → SSOT;v19.94 加鈍化/背離修正(§7 user 核准)
     if k_val is not None and d_val is not None:
         from shared.signal_thresholds import KD_OVERBOUGHT_LEVEL, KD_OVERSOLD_LEVEL
         from src.compute.strategy.tech_indicators import analyze_kd_state
@@ -228,50 +234,50 @@ def calc_health_score(df, rsi, ibs, vr, k_val, d_val, bb):
         _bear = bool(_kd.get('bearish_divergence'))
         _bull = bool(_kd.get('bullish_divergence'))
         if k_val > d_val and k_val < KD_OVERBOUGHT_LEVEL:
-            score += 15
-            details['KD'] = (f'K={k_val} D={d_val}（黃金交叉）', 15, 15)
+            score += _W_KD
+            details['KD'] = (f'K={k_val} D={d_val}（黃金交叉）', _W_KD, _W_KD)
         elif k_val > d_val and k_val >= KD_OVERBOUGHT_LEVEL:
             # v19.94 高檔黃叉分流:頂背離=真警訊(降5);高檔鈍化=強勢續漲不誤扣(15);否則注意(8)
             if _bear:
                 score += 5
-                details['KD'] = (f'K={k_val} D={d_val}（高檔黃叉但頂背離⚠️）', 5, 15)
+                details['KD'] = (f'K={k_val} D={d_val}（高檔黃叉但頂背離⚠️）', 5, _W_KD)
             elif _hp:
-                score += 15
-                details['KD'] = (f'K={k_val} D={d_val}（高檔鈍化·強勢續漲）', 15, 15)
+                score += _W_KD
+                details['KD'] = (f'K={k_val} D={d_val}（高檔鈍化·強勢續漲）', _W_KD, _W_KD)
             else:
                 score += 8
-                details['KD'] = (f'K={k_val} D={d_val}（高檔黃叉注意）', 8, 15)
+                details['KD'] = (f'K={k_val} D={d_val}（高檔黃叉注意）', 8, _W_KD)
         elif k_val < d_val and k_val > KD_OVERSOLD_LEVEL:
             score += 5
-            details['KD'] = (f'K={k_val} D={d_val}（死亡交叉）', 5, 15)
+            details['KD'] = (f'K={k_val} D={d_val}（死亡交叉）', 5, _W_KD)
         else:
             # v19.94 低檔死叉:底背離=反轉向上訊號(加分13);否則低檔可守(10)
             if _bull:
                 score += 13
-                details['KD'] = (f'K={k_val} D={d_val}（低檔死叉但底背離↗）', 13, 15)
+                details['KD'] = (f'K={k_val} D={d_val}（低檔死叉但底背離↗）', 13, _W_KD)
             else:
                 score += 10
-                details['KD'] = (f'K={k_val} D={d_val}（低檔死叉可守）', 10, 15)
+                details['KD'] = (f'K={k_val} D={d_val}（低檔死叉可守）', 10, _W_KD)
 
-    # 布林 (10分)
+    # 布林（配分 _W_BB）
     if bb is not None:
         if bb['near_upper']:
             score += 8
-            details['布林'] = ('黏近上軌（強勢）', 8, 10)
+            details['布林'] = ('黏近上軌（強勢）', 8, _W_BB)
         elif bb['price'] > bb['ma']:
             score += 6
-            details['布林'] = ('站上中軌', 6, 10)
+            details['布林'] = ('站上中軌', 6, _W_BB)
         elif bb['bw'] < bb['bw_mean'] * BB_BW_SHRINK_WARN_RATIO:
             # v18.430 Batch 5b 漏網收尾:0.7 改 SSOT(BB_BW_SHRINK_WARN_RATIO=0.7)
             # 註:scoring fn 用 WARN 級門檻(同 section_health_score / section_vcp_bollinger KPI),
             # 雖然 label 寫「極度收縮」與 ACTION 級訊號框同字串,但歷史上即用 0.7 評 9 分(從寬給分)
             score += 9
-            details['布林'] = ('帶寬極度收縮（即將爆發）', 9, 10)
+            details['布林'] = ('帶寬極度收縮（即將爆發）', 9, _W_BB)
         else:
             score += 3
-            details['布林'] = ('低於中軌', 3, 10)
+            details['布林'] = ('低於中軌', 3, _W_BB)
 
-    return min(score, 100), details
+    return min(score, HEALTH_SCORE_TOTAL), details
 
 
 def health_grade(score):

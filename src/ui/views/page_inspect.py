@@ -183,7 +183,10 @@ L0 的鐵律：**`idle` 只能由上游帶下來，禁止由 `if not data:` 推�
    VCP・布林 / 月營收 / 什麼時候買賣 / 心理檢查）。**只有 💰 獲利能力診斷
    這一段接上了。** 其餘七段的現行實作是 `src/ui/tabs/stock_sections/section_*.py`，
    每一支都直接 import L1（`src.data.core` / `src.data.stock`）並自帶 widget key，
-   在本頁再掛一次會撞 `DuplicateWidgetID`。→ **標 `unwired`**，見 `DETAIL_WHERE`。
+   ~~在本頁再掛一次會撞 `DuplicateWidgetID`。~~ → **標 `unwired`**，見 `DETAIL_WHERE`。
+   📌 批 Z55（2026-10-13，事實更正，⛔ 不是漏刪；同 `page_find` 檔頭 FE-36）：`b5bdb36` 之後
+   本頁與既有分頁不再同輪渲染，撞不起來；仍成立的理由是 `st.session_state` 普通旗標
+   跨 rerun、跨頁存活（見 `DETAIL_WHY`）。
 4. ⛔ **葉1-B ETF 明細的七段**（淨值 vs 市價 / 折溢價帶 / 配息紀錄與以息養股 /
    成分股與集中度 / 同儕 7 維 / 標準差買賣帶 / 破發檢查）。同 3。
    ⚠️ 線框對這一葉的紅隊註記是「**與個股分支重疊近零**（13 個個股概念在 ETF 頁
@@ -667,10 +670,16 @@ DETAIL_WHERE: str = (
     "要接上需先讓 `src/ui/tabs/stock_sections/section_*.py` 與 "
     "`src/ui/etf/etf_tab_*.py` 的每一段能被外部重複掛載"
     "（widget key 加前綴參數、取數改走 L3、gate 由 caller 提供）")
+#: 📌 批 Z55（2026-10-13，事實更正，同 `page_find` 檔頭 FE-36 —— 結論不變，理由換了）：
+#:    原句「在本頁再掛一次會撞 `DuplicateWidgetID`」自 `b5bdb36`（側欄 radio ＋ `st.stop()`）起
+#:    對既有分頁已不成立 —— 兩邊進不到同一個 script run 裡；改寫成仍成立的理由
+#:    （那幾段也用 `st.session_state` 存普通旗標，例：`etf_s_active`、`score_hist_{代號}`（`section_kline_chart` 的 `_score_hist_key`），跨 rerun、跨頁存活）。
 DETAIL_WHY: str = (
     "那幾段的現行實作各自直接 import L1（`src.data.core` / `src.data.stock` / "
-    "`src.data.etf`）並自帶寫死的 widget key；在本頁再掛一次會撞 "
-    "`DuplicateWidgetID`，而把取數抄一份到本頁則會變成第二個真相源")
+    "`src.data.etf`）並自帶寫死的 widget key；本頁與既有分頁不再同輪渲染，"
+    "兩邊進不到同一個 script run 裡，撞不起來 —— 但它們也用 `st.session_state` "
+    "存**普通旗標**（不是 widget key），它**跨 rerun、跨頁存活**，同名 key 照樣互相污染；"
+    "而把取數抄一份到本頁則會變成第二個真相源")
 
 #: 表單下方常駐的接線揭露（**不隨狀態消失**）。
 WIRING_DISCLOSURE_SINGLE: str = (
@@ -2670,8 +2679,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        for _k, _l in _V2_PROFIT_LABELS]
     # ── 第三層：兩支明細（未接線）＋ 葉2 批次總覽卡 ─────────────────
     + [_v2_rows_for(_k, DETAIL_UNWIRED_NOW_TEMPLATE.format(label=_l), (
-           # 「而把…」⛔ 不得沒有前一半（原文是兩條路都不行：再掛一次會撞 / 抄一份會變第二個真相源）。
-           None, "寫死的 widget key；在本頁再掛一次會撞" + V2_EXCERPT_GAP
+           # 「而把…」⛔ 不得沒有前一半（原文是兩條路都不行：同名 key 照樣互相污染 / 抄一份會變第二個真相源）。
+           # 批 Z55：前一半原為「在本頁再掛一次會撞」，隨 `DETAIL_WHY` 事實更正改摘新原文。
+           None, "同名 key 照樣互相污染" + V2_EXCERPT_GAP
            + "而把取數抄一份到本頁則會變成第二個真相源",
            NO_EXIT_MARKER + " —— 這是待接線項，不是你操作的問題")) for _k, _l in _V2_DETAIL_LABELS]
     + [_v2_rows_for("inspect.batch", BATCH_IDLE_NOW, (
@@ -3034,7 +3044,7 @@ def _render_stock_branch(verdict: KindVerdict, req: InspectRequest) -> None:
     _render_one(build_detail_card(
         req.submitted, key="inspect.stock.detail", label="個股明細",
         sections=STOCK_DETAIL_SECTIONS,
-        entry="🔬 個股分頁（本頁不重複掛載，避免撞 DuplicateWidgetID）"))
+        entry="🔬 個股分頁（本頁不重複掛載）"))   # 批 Z55：「避免撞 DuplicateWidgetID」已不成立（見 `DETAIL_WHY`）
 
     section_header("💰 獲利能力診斷",
                    "線框 F11：原 `st.columns(5)` → **3 欄 × 2 排**。"
@@ -3055,7 +3065,7 @@ def _render_etf_branch(verdict: KindVerdict, req: InspectRequest) -> None:
     _render_one(build_detail_card(
         req.submitted, key="inspect.etf.detail", label="ETF 明細",
         sections=ETF_DETAIL_SECTIONS,
-        entry="🏦 ETF 分頁（本頁不重複掛載，避免撞 DuplicateWidgetID）"))
+        entry="🏦 ETF 分頁（本頁不重複掛載）"))   # 批 Z55：同上
 
 
 def _render_single_leaf(session: Mapping[str, Any]) -> None:
