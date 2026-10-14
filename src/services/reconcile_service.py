@@ -12,9 +12,9 @@
 對帳），只有兩處刻意不同：
 
 1. **旌旗指數 `jqavg` 改為 `jingqi_info` 優先**（`warroom_summary['jingqi_avg']` 只在 `jingqi_info`
-   不存在、或沒有 `avg` 時才用）。理由：新 UI「🚀 更新今日戰情」（L3 `macro_refresh_service.refresh_macro_now`）
+   不存在時才用；`jingqi_info` 存在但沒有 `avg` ⇒ 缺值，⛔ 不退回 warroom）。理由：新 UI「🚀 更新今日戰情」（L3 `macro_refresh_service.refresh_macro_now`）
    會寫 `jingqi_info`、**不寫** `warroom_summary`；舊面板先讀 warroom，會吃到舊「🌍 總經」分頁
-   留下的舊值。
+   留下的舊值。優先序與 L3 `section_inputs.build_section_inputs` 一致。
 2. **每個輸入先過 `shared.station_specs.is_invalid_number`**（客戶 2026-10-13 裁示 B）：
    NaN／±inf／轉不成數字 ⇒ 該列**不交給 L2**、不出數值、不判一致與否，只帶項目名
    （畫面說明一律 `{項目}資料異常，無法計算，不下結論。`）。
@@ -166,15 +166,18 @@ def _rev_yoy_row(session: Mapping[str, Any]) -> ReconcileRow:
 def health_inputs(session: Mapping[str, Any]) -> dict[str, Any]:
     """健康評分對帳的**原值**：`jq` / `score` / `max_score` / `fnet`（尚未判有效與否、尚未換算）。
 
-    · `jq`：`jingqi_info['avg']` 優先；`jingqi_info` 不存在、或存在但沒有 `avg`（`None`）時，
-      才退 `warroom_summary['jingqi_avg']`（總管 2026-10-14 內部裁定，QA B10）。
+    · `jq`：`jingqi_info` 存在（非空）就**只用它**的 `avg` —— 沒有 `avg` 時該值為缺值，
+      ⛔ 不退回 warroom（新 UI 路徑不寫 warroom，那裡可能是舊頁籤殘留的過期值；同
+      `section_inputs.build_section_inputs`）；`jingqi_info` 不存在時才讀 `warroom_summary['jingqi_avg']`。
     · `score` / `max_score`：`mkt_info` 原值。
     · `fnet`：`cl_data['inst']` 第一個含「外資」的鍵的 `net`；**未觀測**（`is_net_observed` 為 False，
       L1 預填 0.0／L3 補零推出）⇒ `None`（同舊面板批 Z33）。
     """
     _wr = session.get("warroom_summary", {}) or {}
-    _jq = _get(session.get("jingqi_info"), "avg")
-    if _jq is None:
+    _jq_info = session.get("jingqi_info")
+    if _jq_info:
+        _jq = _get(_jq_info, "avg")      # 沒有 avg ⇒ None（缺值），⛔ 不退回 warroom（可能是舊頁籤殘留）
+    else:
         _jq = _get(_wr, "jingqi_avg")
     _mkt = session.get("mkt_info", {}) or {}
     _cl = session.get("cl_data", {}) or {}

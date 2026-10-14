@@ -465,17 +465,23 @@ class TestMaxScoreAndSources:
         s.pop("jingqi_info")
         assert RS.health_inputs(s)["jq"] == 90.0
 
-    def test_jingqi_info_without_avg_falls_back_to_warroom(self):
-        """QA B10：`jingqi_info` 存在但沒有 `avg` ⇒ 退回 `warroom_summary['jingqi_avg']`。"""
+    @staticmethod
+    def _assert_no_warroom_fallback(mod):
+        """QA B10：`jingqi_info` 存在但沒有 `avg` ⇒ 缺值，⛔ 不讀 warroom（可能是舊頁籤殘留）。"""
         for jq in ({"regime": "多"}, {"avg": None}):
             s = _full_session(jingqi_info=jq, warroom_summary={"jingqi_avg": 90.0})
-            assert RS.health_inputs(s)["jq"] == 90.0
+            assert mod.health_inputs(s)["jq"] is None
+            assert mod.compute_reconcile(s).rows[2].result["status"] == "both_missing"
 
-    def test_mutation_no_warroom_fallback_turns_red(self):
-        m = _mutant_rs(('    if _jq is None:\n        _jq = _get(_wr, "jingqi_avg")\n', ""))
-        s = _full_session(jingqi_info={"regime": "多"}, warroom_summary={"jingqi_avg": 90.0})
+    def test_jingqi_info_without_avg_does_not_read_warroom(self):
+        self._assert_no_warroom_fallback(RS)
+
+    def test_mutation_adding_the_warroom_fallback_turns_red(self):
+        m = _mutant_rs(('        _jq = _get(_jq_info, "avg")',
+                        '        _jq = _get(_jq_info, "avg")\n'
+                        '        if _jq is None:\n            _jq = _get(_wr, "jingqi_avg")'))
         with pytest.raises(AssertionError):
-            assert m.health_inputs(s)["jq"] == 90.0
+            self._assert_no_warroom_fallback(m)
 
     def test_unobserved_foreign_net_is_none(self):
         from shared.inst_net import InstNetDict
