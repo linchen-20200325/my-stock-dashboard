@@ -158,7 +158,9 @@ def _assert_same_as_old(old: dict, new: dict, ctx) -> None:
     - 舊值非有限（None／NaN／±inf）→ 新值為 None（引擎眼中同為缺；新抽取器直接回 None ＋ 原因）；
     - MA5：bool 逐一相同。
     """
-    for k in DI.COVERED_ENGINE_INPUTS:
+    # 批 Z63：golden 只比 session 抽取的 8 項；`PMI_Prev_Month` 改取 PMI 歷史（舊 UI 取 session_state，
+    #   依客戶 Q-z34 Q1=B 刻意不同），見 tests/test_batch_z63.py。
+    for k in DI.SESSION_ENGINE_INPUTS:
         o, n = old[k], new[k].value
         if k == DI.KEY_MA5:
             assert n is not None and type(n) is bool and n == bool(o), (ctx, k, o, n)
@@ -579,9 +581,12 @@ class TestExtractorDates:
 # ══════════════════════════════════════════════════════════════════════════
 class TestKeysAndLayering:
     def test_covered_keys(self):
-        assert set(DI.COVERED_ENGINE_INPUTS) == (set(_ENGINE_NUMERIC_INPUTS) | {"Index_Below_MA5"}) - {"PMI_Prev_Month"}
+        # 批 Z63：`PMI_Prev_Month` 納入 COVERED（由 `extract_pmi_prev` 自 PMI 歷史抽取）；
+        #   session 抽取器涵蓋的範圍改名為 SESSION_ENGINE_INPUTS（仍是原本 8 項）。
+        assert set(DI.SESSION_ENGINE_INPUTS) == (set(_ENGINE_NUMERIC_INPUTS) | {"Index_Below_MA5"}) - {"PMI_Prev_Month"}
+        assert set(DI.COVERED_ENGINE_INPUTS) == set(_ENGINE_NUMERIC_INPUTS) | {"Index_Below_MA5"}
         assert set(DI.COVERED_ENGINE_INPUTS) <= set(FRESHNESS_POLICY)
-        assert set(_new_values(**_full())) == set(DI.COVERED_ENGINE_INPUTS)
+        assert set(_new_values(**_full())) == set(DI.SESSION_ENGINE_INPUTS)
 
     def test_l2_imports_only_l0_stdlib_pandas(self):
         tree = ast.parse((REPO / "src/compute/macro/dated_inputs.py").read_text(encoding="utf-8"))
