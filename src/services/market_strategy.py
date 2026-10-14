@@ -18,7 +18,7 @@ except ImportError:
 # v18.449:市場廣度中性門檻 SSOT(原 inline `1.0`，尺度語意錯誤，見下方 market_regime docstring）
 from shared.signal_thresholds import M1B_M2_LEG_ENABLED, MARKET_BREADTH_NEUTRAL_PCT
 from shared.macro_provenance import M1B_PROXY_VALUE_NOTE  # DL-f1-s23：代理註記（L0 SSOT，K1）
-from shared.dated_value import coerce_plain_date  # 批 Z62：index_as_of 收斂（L0）
+from shared.dated_value import iso_date_or_none  # 批 Z62：index_as_of 收斂（L0）
 
 # P0-2 v18.369 深層拔毒:portfolio_exposure SSOT 收攏至 L2 risk_control(原本兩處同名異實作)
 from src.compute.risk.risk_control import portfolio_exposure  # noqa: F401
@@ -509,15 +509,13 @@ def get_market_assessment(df_index=None, foreign_net=None,
     result['ma200']          = round(ma200, 2)
     result['index_below_ma5'] = current_price < ma5
     # 批 Z62(freshness F2,schema-additive;既有鍵與值一律不變):
-    #   · `index_as_of`:df_index 最後一筆的日期(純 `date`)—— 即上面 current_price／ma5
-    #     所屬的那一天。index 無法解析 → None(下游判「無資料日期」,§1 不補今天)。
-    #   · `ma5_insufficient`:資料不足 5 筆時為 True。
-    #   ⚠️ 上面 `ma5` 在 `< 5` 筆時仍是 `current_price`(假值),`index_below_ma5` 因此恆 False ——
-    #     這是**刻意保留的舊行為**(舊 UI 依賴它,本批不接線、不改)。新路徑
-    #     (`src/compute/macro/dated_inputs.extract_ma5`)看到 `ma5_insufficient=True` 一律判缺,
-    #     ⛔ 不得把那個假的 False 當成「指數在 MA5 之上」計分。
-    result['index_as_of']     = coerce_plain_date(df_index.index[-1])
-    result['ma5_insufficient'] = len(df_index) < 5
+    #   · `index_as_of`:df_index 最後一筆的日期,ISO 字串 'YYYY-MM-DD'(即上面 current_price／ma5
+    #     所屬的那一天)。index 無法解析 → None(下游判「無資料日期」,§1 不補今天)。
+    #     用字串不用 date 物件:舊 ETF AI prompt 會把 mkt_info 的 int／float 值逐一列出,字串不會被撿到。
+    #   ⚠️ 上面 `ma5` 在 `< 5` 筆時是 `current_price`(假值)—— 但本函式在不足 120 筆時已先回 None
+    #     (MA120 閘),production 走不到那條路徑(tests/test_batch_z62.py 守住),故不另設旗標;
+    #     新路徑 `dated_inputs.extract_ma5` 另要求 ma5／index_price 為有限數值。
+    result['index_as_of']     = iso_date_or_none(df_index.index[-1])
     result['foreign_net']   = foreign_net
     result['exposure']      = portfolio_exposure(regime_result['regime'])
     result['exposure_pct']  = f"{portfolio_exposure(regime_result['regime'])*100:.0f}%"

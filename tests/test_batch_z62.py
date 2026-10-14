@@ -5,7 +5,8 @@
 
 本檔守：
 1. L1 `compute_twii_bias` 新增 `as_of`（取實際算乖離那份 Close 序列的最後日期；fallback 取 fallback frame）。
-2. L3 `get_market_assessment` 新增 `index_as_of`、`ma5_insufficient`（既有鍵不變）。
+2. L3 `get_market_assessment` 新增 `index_as_of`（ISO 字串；既有鍵不變）；`< 5` 筆假值路徑走不到（不足 120 筆先回 None）。
+   L1 `bias_info['as_of']` 同為 ISO 字串（總管裁定：新增日期鍵一律 'YYYY-MM-DD'，舊 UI 輸出逐字不變）。
 3. L1 `HolidayCalendar.as_sets()` 與 L3 service 傳給 `classify_day` 的四個集合逐一相同。
 4. L2 `src/compute/macro/dated_inputs.py` 抽取器：
    - **Golden**：完整新鮮資料下，值與舊 UI（`section_news_ai.py` 原文切片 exec）逐一相同；
@@ -28,24 +29,22 @@ _MS_REL = "src/services/market_strategy.py"
 Z62_REVERT_PAIRS: dict = {
     _MS_REL: (
         ("from shared.macro_provenance import M1B_PROXY_VALUE_NOTE  # DL-f1-s23：代理註記（L0 SSOT，K1）\n"
-         "from shared.dated_value import coerce_plain_date  # 批 Z62：index_as_of 收斂（L0）\n",
+         "from shared.dated_value import iso_date_or_none  # 批 Z62：index_as_of 收斂（L0）\n",
          "from shared.macro_provenance import M1B_PROXY_VALUE_NOTE  # DL-f1-s23：代理註記（L0 SSOT，K1）\n"),
         ("    result['index_below_ma5'] = current_price < ma5\n"
          "    # 批 Z62(freshness F2,schema-additive;既有鍵與值一律不變):\n"
-         "    #   · `index_as_of`:df_index 最後一筆的日期(純 `date`)—— 即上面 current_price／ma5\n"
-         "    #     所屬的那一天。index 無法解析 → None(下游判「無資料日期」,§1 不補今天)。\n"
-         "    #   · `ma5_insufficient`:資料不足 5 筆時為 True。\n"
-         "    #   ⚠️ 上面 `ma5` 在 `< 5` 筆時仍是 `current_price`(假值),`index_below_ma5` 因此恆 False ——\n"
-         "    #     這是**刻意保留的舊行為**(舊 UI 依賴它,本批不接線、不改)。新路徑\n"
-         "    #     (`src/compute/macro/dated_inputs.extract_ma5`)看到 `ma5_insufficient=True` 一律判缺,\n"
-         "    #     ⛔ 不得把那個假的 False 當成「指數在 MA5 之上」計分。\n"
-         "    result['index_as_of']     = coerce_plain_date(df_index.index[-1])\n"
-         "    result['ma5_insufficient'] = len(df_index) < 5\n",
+         "    #   · `index_as_of`:df_index 最後一筆的日期,ISO 字串 'YYYY-MM-DD'(即上面 current_price／ma5\n"
+         "    #     所屬的那一天)。index 無法解析 → None(下游判「無資料日期」,§1 不補今天)。\n"
+         "    #     用字串不用 date 物件:舊 ETF AI prompt 會把 mkt_info 的 int／float 值逐一列出,字串不會被撿到。\n"
+         "    #   ⚠️ 上面 `ma5` 在 `< 5` 筆時是 `current_price`(假值)—— 但本函式在不足 120 筆時已先回 None\n"
+         "    #     (MA120 閘),production 走不到那條路徑(tests/test_batch_z62.py 守住),故不另設旗標;\n"
+         "    #     新路徑 `dated_inputs.extract_ma5` 另要求 ma5／index_price 為有限數值。\n"
+         "    result['index_as_of']     = iso_date_or_none(df_index.index[-1])\n",
          "    result['index_below_ma5'] = current_price < ma5\n"),
     ),
 }
 #: 本批在 `get_market_assessment` 回傳 dict 新增的鍵（schema-additive）。
-Z62_NEW_MKT_KEYS: tuple = ("index_as_of", "ma5_insufficient")
+Z62_NEW_MKT_KEYS: tuple = ("index_as_of",)
 _ROOT_Z62 = _pl.Path(__file__).resolve().parents[1]
 
 
@@ -179,8 +178,8 @@ TODAY = date(2026, 10, 14)
 _VIX_FULL = {"current": 17.3, "date": "2026-10-13", "source": "yfinance:^VIX:3mo:1d"}
 _PMI_FULL = {"value": 51.2, "date": "2026-09-01", "source": "CIER"}
 _M1B_FULL = {"m1b_yoy": 3.2, "m2_yoy": 5.1, "data_month": "2026-08", "source": "CBC-tier1"}
-_BIAS_FULL = {"bias_240": 12.3, "as_of": date(2026, 10, 13), "data_days": 300, "is_estimated": False}
-_MKT_FULL = {"index_below_ma5": True, "ma5_insufficient": False, "index_as_of": date(2026, 10, 13),
+_BIAS_FULL = {"bias_240": 12.3, "as_of": "2026-10-13", "data_days": 300, "is_estimated": False}
+_MKT_FULL = {"index_below_ma5": True, "index_as_of": "2026-10-13",
              "ma5": 22000.0, "index_price": 21900.0}
 _LI_FULL = [
     {"_date": "20261009", "選PCR": 101.5, "外資大小": -15000.0},
@@ -271,7 +270,7 @@ class TestGolden:
         _assert_same_as_old(_old_numbers(**kw), new, "is_proxy")
         assert new["M1B_YoY_pct"].value is None and "代理" in new["M1B_YoY_pct"].missing_reason
 
-    @pytest.mark.parametrize("below", [True, False, np.bool_(True), np.bool_(False), 1, 0])
+    @pytest.mark.parametrize("below", [True, False, np.bool_(True), np.bool_(False)])
     def test_ma5_values(self, below):
         kw = _full()
         kw["mkt"]["index_below_ma5"] = below
@@ -336,12 +335,19 @@ class TestDelta:
         assert out["PCR"].value is None and out["PCR"].as_of == date(2026, 10, 13)
         assert "刻度" in out["PCR"].missing_reason
 
-    def test_ma5_insufficient_is_missing(self):
-        """`ma5_insufficient=True` → 判缺（舊 UI 會送假的 False）。"""
-        mkt = dict(_MKT_FULL, index_below_ma5=False, ma5_insufficient=True)
-        assert _old_numbers({}, mkt=mkt)["Index_Below_MA5"] is False
+    @pytest.mark.parametrize("patch,frag", [
+        ({"ma5": float("nan")}, "MA5 不是有限數值"),       # 末 5 筆收盤含 NaN ⇒ ma5 為 NaN
+        ({"ma5": None}, "MA5 不是有限數值"),
+        ({"index_price": float("inf")}, "現價不是有限數值"),
+        ({"index_below_ma5": 1}, "不是 bool"),
+        ({"index_below_ma5": 0}, "不是 bool"),
+    ])
+    def test_ma5_stricter_than_old_ui(self, patch, frag):
+        """⚠️ 刻意差異：ma5／index_price 非有限、index_below_ma5 不是 bool → 判缺；舊 UI 照送 `bool(...)`。"""
+        mkt = dict(_MKT_FULL, **patch)
+        assert type(_old_numbers({}, mkt=mkt)["Index_Below_MA5"]) is bool
         dv = DI.extract_ma5(mkt)["Index_Below_MA5"]
-        assert dv.value is None and "不足 5 筆" in dv.missing_reason
+        assert dv.value is None and frag in dv.missing_reason
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -358,7 +364,7 @@ class TestBiasAsOf:
         monkeypatch.setattr(snap, "fetch_twii_2y_for_ma240",
                             lambda: pytest.fail("≥240 天不應走 fallback"))
         out = snap.compute_twii_bias(_twii(300, "2026-03-20"))
-        assert out["as_of"] == date(2026, 3, 20) and type(out["as_of"]) is date
+        assert out["as_of"] == "2026-03-20" and type(out["as_of"]) is str
 
     def test_fallback_takes_fallback_frame_date(self, monkeypatch):
         """local 只有 90 天（末筆 2026-01-30）→ 走 2 年 fallback（末筆 2026-10-13）→ as_of 取 fallback。"""
@@ -366,13 +372,13 @@ class TestBiasAsOf:
         monkeypatch.setattr(snap, "fetch_twii_2y_for_ma240", lambda: _twii(500, "2026-10-13"))
         out = snap.compute_twii_bias(_twii(90, "2026-01-30"))
         assert out["data_days"] == 500
-        assert out["as_of"] == date(2026, 10, 13)
+        assert out["as_of"] == "2026-10-13"
 
     def test_fallback_failed_uses_local_date(self, monkeypatch):
         from src.data.macro import macro_snapshot as snap
         monkeypatch.setattr(snap, "fetch_twii_2y_for_ma240", lambda: None)
         out = snap.compute_twii_bias(_twii(90, "2026-01-30"))
-        assert out["is_estimated"] is True and out["as_of"] == date(2026, 1, 30)
+        assert out["is_estimated"] is True and out["as_of"] == "2026-01-30"
 
     def test_trailing_nan_close_dropped(self, monkeypatch):
         """as_of 是 dropna 後**實際用來算**的那份序列的末日（末筆 NaN 不算）。"""
@@ -380,12 +386,12 @@ class TestBiasAsOf:
         df = _twii(300, "2026-03-20")
         df.iloc[-1, 0] = np.nan
         out = snap.compute_twii_bias(df)
-        assert out["as_of"] == date(2026, 3, 19)
+        assert out["as_of"] == "2026-03-19"
 
     def test_tz_aware_index_wall_date(self):
         from src.data.macro import macro_snapshot as snap
         out = snap.compute_twii_bias(_twii(300, "2026-03-20 00:00", tz="Asia/Taipei"))
-        assert out["as_of"] == date(2026, 3, 20)
+        assert out["as_of"] == "2026-03-20"
 
     def test_unparseable_index_none(self):
         from src.data.macro import macro_snapshot as snap
@@ -414,9 +420,9 @@ class TestIndexAsOf:
         df = self._df(end)
         r = get_market_assessment(df_index=df, foreign_net=1.0)
         assert r is not None
-        assert r["index_as_of"] == df.index[-1].date() and type(r["index_as_of"]) is date
-        assert r["index_as_of"] != date.today()
-        assert r["ma5_insufficient"] is False
+        assert r["index_as_of"] == df.index[-1].date().isoformat() and type(r["index_as_of"]) is str
+        assert r["index_as_of"] != date.today().isoformat()
+        assert "ma5_insufficient" not in r
         # 既有鍵不變
         assert r["ma5"] == round(float(df["Close"].tail(5).mean()), 2)
         assert r["index_below_ma5"] == (float(df["Close"].iloc[-1]) < float(df["Close"].tail(5).mean()))
@@ -428,12 +434,22 @@ class TestIndexAsOf:
         assert hashlib.sha256(code.encode("utf-8")).hexdigest() == \
             "3fb731a5f5f982524801e39fbc7542753bfb8a697f950446b9acf562fcfa1807"
 
+    @pytest.mark.parametrize("n", [1, 4, 5, 60, 119])
+    def test_under_120_rows_returns_none(self, n):
+        """守衛（總管裁定）：df 不足 120 筆 → 回 None（MA120 閘）。
+        ⇒ `< 5` 筆時 `ma5=current_price` 的假值路徑在 production 到不了，不需要旗標。"""
+        from src.services.market_strategy import get_market_assessment
+        end = pd.Timestamp.now().normalize() - pd.Timedelta(days=1)
+        idx = pd.date_range(end=end, periods=n, freq="B")
+        df = pd.DataFrame({"Close": np.linspace(20000.0, 21000.0, n), "Volume": np.full(n, 1000.0)},
+                          index=idx)
+        assert get_market_assessment(df_index=df, foreign_net=1.0) is None
+
     def test_ma5_fake_value_kept_in_source(self):
-        """舊的 `<5` 筆 ma5=current_price 假值保持原樣；新旗標以同一個條件計算。"""
+        """舊的 `<5` 筆 ma5=current_price 假值保持原樣（走不到，見上一條）；不再新增 ma5_insufficient。"""
         src = (REPO / "src/services/market_strategy.py").read_text(encoding="utf-8")
         assert "ma5   = float(_close.rolling(5).mean().iloc[-1]) if len(df_index) >= 5 else current_price" in src
-        assert "result['ma5_insufficient'] = len(df_index) < 5" in src
-
+        assert "result['ma5_insufficient']" not in src
 
 class TestExtractorDates:
     def test_li_date_parse(self):
@@ -472,10 +488,13 @@ class TestExtractorDates:
 
     @pytest.mark.parametrize("mkt", [
         dict(_MKT_FULL, index_as_of=None),
+        dict(_MKT_FULL, index_as_of="2026/13/45"),
         {k: v for k, v in _MKT_FULL.items() if k != "index_as_of"},
         {k: v for k, v in _MKT_FULL.items() if k != "index_below_ma5"},
-        {k: v for k, v in _MKT_FULL.items() if k != "ma5_insufficient"},
+        {k: v for k, v in _MKT_FULL.items() if k != "ma5"},
+        {k: v for k, v in _MKT_FULL.items() if k != "index_price"},
         dict(_MKT_FULL, index_below_ma5=None),
+        dict(_MKT_FULL, ma5=float("-inf")),
         None, {},
     ])
     def test_ma5_missing(self, mkt):
@@ -501,6 +520,9 @@ class TestExtractorDates:
         assert coerce_month_start("2026-09") == date(2026, 9, 1)
         assert coerce_month_start("2026-09-15") == date(2026, 9, 1)
         assert coerce_month_start("2026/9") is None
+        from shared.dated_value import iso_date_or_none
+        assert iso_date_or_none(pd.Timestamp("2026-10-13")) == "2026-10-13"
+        assert iso_date_or_none("20261013") == "2026-10-13" and iso_date_or_none("x") is None
 
     def test_results_independent_of_today(self, monkeypatch):
         """抽取器結果與今天無關：把 `time.time` 與 `pandas.Timestamp.now／today` 換成
@@ -530,12 +552,12 @@ class TestExtractorDates:
                     assert node.attr not in ("now", "today", "utcnow"), (rel, node.attr)
                 if isinstance(node, ast.Constant) and node.value == "fetched_at":
                     pytest.fail(f"{rel} 讀取 fetched_at")
-        for rel, anchor in (("src/data/macro/macro_snapshot.py", "'as_of': coerce_plain_date("),
+        for rel, anchor in (("src/data/macro/macro_snapshot.py", "'as_of': iso_date_or_none("),
                             ("src/services/market_strategy.py", "result['index_as_of']")):
             line = next(ln for ln in (REPO / rel).read_text(encoding="utf-8").splitlines() if anchor in ln)
             assert "now" not in line and "today" not in line and "fetched_at" not in line, line
         snap_src = (REPO / "src/data/macro/macro_snapshot.py").read_text(encoding="utf-8")
-        assert "'as_of': coerce_plain_date(_cs.index[-1])," in snap_src
+        assert "'as_of': iso_date_or_none(_cs.index[-1])," in snap_src
 
     def test_end_to_end_assess(self):
         """抽出的值可直接交給 L0 `assess` 判新鮮度（本批不接線，只確認型別契約對得上）。"""
@@ -696,3 +718,144 @@ class TestZ61Leftovers:
         src = (REPO / "src/ui/views/page_today.py").read_text(encoding="utf-8")
         assert "L0 `shared/trading_days.py` 檔頭" in src
         assert "L2 `compute/trading_calendar.py` 檔頭" not in src
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7. 補件（總管裁定）：舊 UI 輸出逐字不變 ＋ 實際產出路徑的日期格式
+# ══════════════════════════════════════════════════════════════════════════
+_ETF_REL = "src/ui/etf/etf_tab_ai.py"
+_ETF_SRC = _slice(_ETF_REL, "for _k, _v in mkt_info.items():", "_macro_str = '\\n'.join(_macro_lines)")
+_ETF_CODE = compile(_ETF_SRC, "<etf_tab_ai mkt_info 逐值掃描段>", "exec")
+
+
+def _z62_pre_market_strategy():
+    """現行 market_strategy 只把本批改動換回 Z62 之前（獨立模組物件，不影響本尊）。"""
+    import importlib.util
+    import sys
+    path = REPO / _MS_REL
+    name = "_z62_pre_market_strategy"
+    if name in sys.modules:
+        return sys.modules[name]
+    m = importlib.util.module_from_spec(importlib.util.spec_from_loader(name, loader=None))
+    m.__file__ = str(path)
+    sys.modules[name] = m
+    exec(compile(z62_revert_for(_MS_REL, path.read_text(encoding="utf-8")), str(path), "exec"), m.__dict__)
+    return m
+
+
+def _etf_macro_str(mkt_info) -> str:
+    ns = {"mkt_info": mkt_info, "_macro_lines": ["• 大盤狀態：多頭"]}
+    exec(_ETF_CODE, ns)
+    return ns["_macro_str"]
+
+
+class TestOldUiUnchanged:
+    def _df(self, n=130, end_days_ago=2):
+        end = pd.Timestamp.now().normalize() - pd.Timedelta(days=end_days_ago)
+        idx = pd.date_range(end=end, periods=n, freq="B")
+        close = np.linspace(20000.0, 21000.0, n)
+        close[-1] = close[-2] - 50.0          # 讓 index_below_ma5 為 True（真 bool 值會被逐值列出）
+        return pd.DataFrame({"Close": close, "Volume": np.full(n, 1000.0)}, index=idx)
+
+    def test_slice_is_the_enumeration_loop(self):
+        assert "isinstance(_v, (int, float))" in _ETF_SRC and "_macro_lines.append(f'• {_k}: {_v}')" in _ETF_SRC
+
+    @pytest.mark.parametrize("foreign_net", [1.5e9, -2.0e9])
+    def test_etf_ai_prompt_identical_before_after_z62(self, foreign_net):
+        """舊 ETF AI prompt 的 mkt_info 逐值段：Z62 前（還原體）後（現行）逐字相同。"""
+        from src.services import market_strategy as MS
+        df = self._df()
+        new = MS.get_market_assessment(df_index=df.copy(), foreign_net=foreign_net)
+        old = _z62_pre_market_strategy().get_market_assessment(df_index=df.copy(), foreign_net=foreign_net)
+        assert new is not None and old is not None
+        assert "index_as_of" in new and "index_as_of" not in old
+        assert {k: v for k, v in new.items() if k != "index_as_of"} == old
+        assert _etf_macro_str(new) == _etf_macro_str(old)
+        assert "index_as_of" not in _etf_macro_str(new)
+        assert "index_below_ma5: True" in _etf_macro_str(new)    # 證明掃描段真的有在列 bool
+
+    def test_new_keys_are_str_not_date(self):
+        """新增日期鍵一律 ISO 字串（不是 date 物件）—— 可序列化，也不會被 int／float 掃描撿到。"""
+        import json
+        from src.data.macro import macro_snapshot as snap
+        from src.services import market_strategy as MS
+        r = MS.get_market_assessment(df_index=self._df(), foreign_net=1.0)
+        bi = snap.compute_twii_bias(_twii(300, "2026-03-20"))
+        for v in (r["index_as_of"], bi["as_of"]):
+            assert type(v) is str and len(v) == 10 and v[4] == "-" and v[7] == "-"
+            assert not isinstance(v, (int, float))
+        json.dumps({"index_as_of": r["index_as_of"], "as_of": bi["as_of"]})
+
+
+# ── 實際產出路徑的日期格式（不是手造字串）──────────────────────────────────
+class TestRealProducerFormats:
+    def test_li_latest_date_from_build_leading_fast(self, monkeypatch, tmp_path):
+        """`build_leading_fast` 真實路徑（FinMind 回應以 z25 同款合成框餵入、其餘來源離線）→
+        `_date` 實際為 str 'YYYYMMDD'；`extract_leading` 讀得出日期（不會永遠判缺）。"""
+        from shared import cache_layer as CL
+        from src.data.macro import leading_indicators as LI
+        from tests.test_batch_z25 import _D, _DK, _MTX, _TX, _frame, _patch
+
+        _patch(monkeypatch, _frame(_TX), _frame(_MTX))
+        monkeypatch.setattr(CL, "_PKL_DIR", str(tmp_path))
+        df = LI.build_leading_fast(days=7, token="z62-real-path")
+        assert df is not None and not df.empty
+        kinds = {type(v) for v in df["_date"]}
+        assert kinds == {str}, kinds
+        assert all(len(v) == 8 and v.isdigit() for v in df["_date"])
+        assert set(df["_date"]) >= set(_DK)
+        out = DI.extract_leading(df)
+        fut = out["Futures_Net_Short"]
+        assert fut.value is not None and fut.as_of == max(_D)
+        # 經 pickle 快取讀回（第二次呼叫走新鮮快取）：型別不變
+        df2 = LI.build_leading_fast(days=7, token="z62-real-path")
+        assert {type(v) for v in df2["_date"]} == {str}
+        assert DI.extract_leading(df2)["Futures_Net_Short"].as_of == max(_D)
+
+    def test_vix_date_from_fetch_vix_block(self, monkeypatch):
+        """`fetch_vix_block` 真實路徑（yfinance.download 以合成日線替換）→ `date` 為 str 'YYYY-MM-DD'。"""
+        import yfinance
+        from src.data.macro import macro_snapshot as snap
+        idx = pd.date_range("2026-07-01", periods=40, freq="B")
+        monkeypatch.setattr(yfinance, "download",
+                            lambda *a, **k: pd.DataFrame({"Close": np.linspace(15.0, 18.0, 40)}, index=idx))
+        if hasattr(snap.fetch_vix_block, "clear"):
+            snap.fetch_vix_block.clear()
+        try:
+            blk = snap.fetch_vix_block()
+        finally:
+            if hasattr(snap.fetch_vix_block, "clear"):
+                snap.fetch_vix_block.clear()
+        d = blk["vix"]["date"]
+        assert type(d) is str and d == idx[-1].strftime("%Y-%m-%d")
+        dv = DI.extract_vix(blk)["VIX_Index"]
+        assert dv.value == blk["vix"]["current"] and dv.as_of == idx[-1].date()
+
+    def test_pmi_date_from_real_parser(self):
+        """台灣 PMI 各源一律組成 'YYYY-MM-01' 字串；以 data.gov.tw 真實解析器（`_parse_dgtw_pmi_csv`）驗。"""
+        from src.data.macro import macro_core
+        got = macro_core._parse_dgtw_pmi_csv("Date,PMI,NMI\n202607,55.0,-\n202608,56.2,-\n",
+                                              today=date(2026, 10, 14), max_age_days=120)
+        assert got == {"value": 56.2, "date": "2026-08-01"}
+        dv = DI.extract_monthly({"ism_pmi": got}, {})["ISM_PMI_or_OECD_CLI"]
+        assert dv.value == 56.2 and dv.data_month == date(2026, 8, 1)
+
+    def test_m1b_data_month_from_cbc_tier(self, monkeypatch):
+        """`fetch_cbc_m1b_m2` 真實路徑（Tier 1 解析以合成結果替換）→ `data_month` 為 str 'YYYY-MM'。"""
+        from src.data.macro import tw_macro as TM
+        monkeypatch.setattr(TM, "_try_cbc_ms1_dated", lambda url: (3.2, 5.1, date(2026, 8, 1)))
+        monkeypatch.setattr(TM, "_today_tw", lambda: date(2026, 10, 14))
+        res = TM.fetch_cbc_m1b_m2(include_proxy=False)
+        assert res["data_month"] == "2026-08" and type(res["data_month"]) is str
+        info = {"m1b_yoy": res["m1b_yoy"], "m2_yoy": res["m2_yoy"], "data_month": res["data_month"],
+                "source": "CBC-tier1"}
+        out = DI.extract_monthly({}, info)
+        assert out["M1B_YoY_pct"].data_month == date(2026, 8, 1) and out["M1B_YoY_pct"].value == 3.2
+
+    def test_bias_as_of_from_trio_path(self, monkeypatch):
+        """L3 `macro_trio_orchestrator` 呼叫的就是 `compute_twii_bias(tw_raw['台股加權指數'])` → as_of 為 ISO 字串。"""
+        from src.data.macro import macro_snapshot as snap
+        monkeypatch.setattr(snap, "fetch_twii_2y_for_ma240", lambda: None)
+        bi = snap.compute_twii_bias(_twii(260, "2026-10-13"))
+        assert bi["as_of"] == "2026-10-13"
+        assert DI.extract_bias240(bi)["BIAS240_pct"].as_of == date(2026, 10, 13)

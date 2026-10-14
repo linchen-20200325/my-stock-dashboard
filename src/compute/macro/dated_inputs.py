@@ -33,9 +33,9 @@
    補出來、沒有資料的平日列（值為 None／NaN）不算有效。是否過期交給 `freshness_policy` 判。
 2. **VIX／PMI／BIAS240 的非有限值**：舊 UI 原值照送（引擎 `_is_finite_number` 會當缺）；
    本檔直接回 None ＋ 原因 —— 引擎端效果相同，但缺值原因寫得出來。
-3. **MA5 判缺更嚴**：`ma5_insufficient=True`（資料不足 5 筆，`ma5` 是以現價代替的假值）、
-   缺 `index_below_ma5`、缺／無法確認 `ma5_insufficient`、無 `index_as_of` → 一律判缺。
-   舊 UI 在這些情形會送 `False`（＝「指數在 MA5 之上」）。
+3. **MA5 判缺更嚴**：`ma5`、`index_price` 任一不是有限數值（例：末 5 筆收盤含 NaN ⇒ ma5 為 NaN）、
+   `index_below_ma5` 不是 bool、`index_as_of` 缺或無法解析 → 一律判缺。
+   舊 UI 在這些情形會送 `bool(...)`（缺鍵時為 `False`＝「指數在 MA5 之上」）。
 4. 所有輸入**沒有日期就判缺**（舊 UI 不看日期）。
 
 未涵蓋：`PMI_Prev_Month`（留給 F3）。
@@ -233,15 +233,23 @@ def extract_leading(li_latest: Any) -> dict[str, DatedValue]:
     }
 
 
-def extract_ma5(mkt_info: Any) -> dict[str, DatedValue]:
-    """`mkt_info` → `{"Index_Below_MA5": DatedValue(bool)}`；as_of 取 `index_as_of`（批 Z62 L3 新增）。
+def _is_bool(v: Any) -> bool:
+    """Python bool 或 numpy bool_（`current_price < ma5` 兩邊若是 numpy 純量會得到後者）。"""
+    return isinstance(v, bool) or (type(v).__module__ == "numpy"
+                                   and type(v).__name__ in ("bool", "bool_"))
 
-    判缺（一律 `value=None`）：
-    - `mkt_info` 不是 dict（未載入）；
-    - 缺 `index_below_ma5`，或其值為 None；
-    - `ma5_insufficient` 為 True（資料不足 5 筆，`ma5` 是以現價代替的假值）；
-    - 缺 `ma5_insufficient` 或其值不是 bool（無法確認 MA5 以足量資料計算）；
+
+def extract_ma5(mkt_info: Any) -> dict[str, DatedValue]:
+    """`mkt_info` → `{"Index_Below_MA5": DatedValue(bool)}`；as_of 取 `index_as_of`（批 Z62 L3 新增，ISO 字串）。
+
+    判缺（一律 `value=None`，原因寫明）：
+    - `mkt_info` 不是 dict 或為空（未載入）；
+    - `ma5` 不是有限數值（缺、None、NaN／±inf —— 末 5 筆收盤含 NaN 時即為 NaN）；
+    - `index_price` 不是有限數值；
+    - `index_below_ma5` 不是 bool（缺鍵、None、0／1 之類的數字一律不收）；
     - `index_as_of` 缺或無法解析。
+    ⚠️ `get_market_assessment` 在 `< 5` 筆時的 `ma5=current_price` 假值路徑：該函式不足 120 筆
+    已先回 None，production 走不到（tests/test_batch_z62.py 守住），故不另設旗標。
     值一律轉成 Python `bool`（`AssessedValue.scoring_value` 不收 numpy `bool_`）。
     """
     if not isinstance(mkt_info, Mapping) or not mkt_info:
@@ -249,13 +257,14 @@ def extract_ma5(mkt_info: Any) -> dict[str, DatedValue]:
                                     missing_reason="大盤評估（mkt_info）未載入")}
     as_of = coerce_plain_date(mkt_info.get("index_as_of"))
     raw = mkt_info.get("index_below_ma5")
-    insufficient = mkt_info.get("ma5_insufficient")
-    if raw is None:
-        why = "大盤評估缺「指數是否跌破 MA5」（index_below_ma5）"
-    elif insufficient is True:
-        why = "加權指數資料不足 5 筆，MA5 是以現價代替的假值，不得計分"
-    elif not isinstance(insufficient, bool):
-        why = "無法確認 MA5 以足量資料計算（缺 ma5_insufficient）"
+    ma5 = mkt_info.get("ma5")
+    px = mkt_info.get("index_price")
+    if finite_or_none(ma5) is None:
+        why = f"MA5 不是有限數值（{ma5!r}），無法判斷指數是否跌破 MA5"
+    elif finite_or_none(px) is None:
+        why = f"加權指數現價不是有限數值（{px!r}），無法判斷指數是否跌破 MA5"
+    elif not _is_bool(raw):
+        why = f"大盤評估的「指數是否跌破 MA5」（index_below_ma5）不是 bool（{raw!r}）"
     elif as_of is None:
         why = NO_DATE
     else:

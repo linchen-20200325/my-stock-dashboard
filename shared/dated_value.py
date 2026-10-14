@@ -6,8 +6,9 @@
   ＋ 來源。⛔ 沒有日期的值不得被當成新鮮（客戶 2026-10-14 Q-z37=A：不得用無日期的值頂替）。
 - `AssessedValue`：`DatedValue` ＋ `FreshnessVerdict`。`scoring_value` 是**唯一的計分入口** ——
   只有判定為 FRESH 且值為有限數值（或 bool）時才回值，其餘一律 None（§1：判不出來 ≠ 新鮮）。
-- 批 Z62（F2）新增三個 L0 helper：`coerce_plain_date`／`coerce_month_start`（資料日期收斂，
-  解析不了回 None）、`finite_or_none`（與 L5 `_finite_yoy` 逐一等價的有限值判定）。
+- 批 Z62（F2）新增 L0 helper：`coerce_plain_date`／`coerce_month_start`（資料日期收斂，
+  解析不了回 None）、`iso_date_or_none`（同上，回 'YYYY-MM-DD' 字串）、`finite_or_none`
+  （與 L5 `_finite_yoy` 逐一等價的有限值判定）。
 """
 from __future__ import annotations
 
@@ -140,6 +141,17 @@ def coerce_month_start(v: Any) -> date | None:
                 continue
     d = coerce_plain_date(v)
     return d.replace(day=1) if d is not None else None
+
+
+def iso_date_or_none(v: Any) -> str | None:
+    """`coerce_plain_date(v)` 的 ISO 字串版（'YYYY-MM-DD'）；解析不了 → None。
+
+    批 Z62 補件（總管裁定）：寫進共用 session dict（`mkt_info['index_as_of']`、
+    `bias_info['as_of']`）的新增日期一律用 ISO 字串，不放 date 物件 —— 字串可直接序列化，
+    也不會被舊 UI「把 int／float 值逐一列進 prompt」的掃描撿到。
+    """
+    d = coerce_plain_date(v)
+    return d.isoformat() if d is not None else None
 
 
 def finite_or_none(v: Any) -> Any:
