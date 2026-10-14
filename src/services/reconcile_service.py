@@ -12,7 +12,9 @@
 對帳），只有兩處刻意不同：
 
 1. **旌旗指數 `jqavg` 改為 `jingqi_info` 優先**（`warroom_summary['jingqi_avg']` 只在 `jingqi_info`
-   不存在時才用；`jingqi_info` 存在但沒有 `avg` ⇒ 缺值，⛔ 不退回 warroom）。理由：新 UI「🚀 更新今日戰情」（L3 `macro_refresh_service.refresh_macro_now`）
+   不存在或為空（`None`、空 dict）時才用；`jingqi_info` 非空但沒有 `avg` ⇒ 缺值，⛔ 不退回 warroom）。
+   📌 批 Z57（有意識的更正，⛔ 不是漏刪）：原句「只在 `jingqi_info` 不存在時才用」與程式條件
+   `if _jq_info:` 不符（空 dict 也會改讀 warroom）—— 只改文字使其屬實，程式行為未動。理由：新 UI「🚀 更新今日戰情」（L3 `macro_refresh_service.refresh_macro_now`）
    會寫 `jingqi_info`、**不寫** `warroom_summary`；舊面板先讀 warroom，會吃到舊「🌍 總經」分頁
    留下的舊值。優先序與 L3 `section_inputs.build_section_inputs` 一致。
 2. **每個輸入先過 `shared.station_specs.is_invalid_number`**（客戶 2026-10-13 裁示 B）：
@@ -29,7 +31,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, NamedTuple, Optional
 
 from shared.inst_net import is_net_observed  # 批 Z33：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
 from shared.station_specs import is_invalid_number
@@ -56,6 +58,38 @@ ITEM_REV_YOY: str = "月營收 YoY"
 ITEM_JINGQI: str = "旌旗指數"
 ITEM_MKT_SCORE: str = "大盤評分"
 ITEM_FOREIGN: str = "外資"
+
+
+class SessionRead(NamedTuple):
+    """對帳讀的一組 session 值（批 Z57）。
+
+    Attributes:
+        row: 讀這組值的對帳列（`ROW_*`）。
+        keys: 這組值用到的**頂層** session key（`compute_reconcile` 對傳入 mapping 直接 `.get` 的 key）。
+        desc: 子鍵描述（畫面「為什麼」逐字引用；條件分支照程式行為寫）。
+    """
+
+    row: str
+    keys: tuple[str, ...]
+    desc: str
+
+
+#: 批 Z57（Z56-n2）：`compute_reconcile` 讀的 session 值 —— **唯讀 SSOT**（tuple，依對帳列順序：
+#: US10Y → 月營收 YoY → 健康評分）。新 UI「📖 憑什麼」對帳卡灰態的「為什麼」由它組出
+#: （`page_why.reconcile_not_triggered_why`），⛔ 不在 L5 另寫一份 key 清單。
+#: 守衛：`tests/test_batch_z57.py` 以記錄式假 session 實跑各分支 —— 實際讀到的頂層 key ⊆ 本常數、
+#: 本常數每個 key 都會被讀到（無死條目）、每列讀的 key 與該列條目相等。
+RECONCILE_SESSION_KEYS: tuple[SessionRead, ...] = (
+    SessionRead(ROW_US10Y, ("macro_info",), "`macro_info['us10y']['value']`"),
+    SessionRead(ROW_US10Y, ("cl_data",), "`cl_data['intl']['10Y公債殖利率']`"),
+    SessionRead(ROW_REV_YOY, ("t2_data",),
+                "`t2_data['rev_yoy_self']`／`t2_data['rev_yoy_finmind']`"),
+    SessionRead(ROW_HEALTH, ("jingqi_info", "warroom_summary"),
+                "`jingqi_info['avg']`（`jingqi_info` 不存在或為空（`None`、空 dict）時改讀 "
+                "`warroom_summary['jingqi_avg']`）"),
+    SessionRead(ROW_HEALTH, ("mkt_info",), "`mkt_info['score']`、`mkt_info['max_score']`"),
+    SessionRead(ROW_HEALTH, ("cl_data",), "`cl_data['inst']` 外資 net"),
+)
 
 
 @dataclass(frozen=True)
@@ -161,7 +195,8 @@ def health_inputs(session: Mapping[str, Any]) -> dict[str, Any]:
 
     · `jq`：`jingqi_info` 存在（非空）就**只用它**的 `avg` —— 沒有 `avg` 時該值為缺值，
       ⛔ 不退回 warroom（新 UI 路徑不寫 warroom，那裡可能是舊頁籤殘留的過期值；同
-      `section_inputs.build_section_inputs`）；`jingqi_info` 不存在時才讀 `warroom_summary['jingqi_avg']`。
+      `section_inputs.build_section_inputs`）；`jingqi_info` 不存在或為空（`None`、空 dict）時才採用
+      `warroom_summary['jingqi_avg']`（批 Z57 文字更正：原寫「不存在時」，與 `if _jq_info:` 不符）。
     · `score` / `max_score`：`mkt_info` 原值。
     · `fnet`：`cl_data['inst']` 第一個含「外資」的鍵的 `net`；**未觀測**（`is_net_observed` 為 False，
       L1 預填 0.0／L3 補零推出）⇒ `None`（同舊面板批 Z33）。

@@ -2169,14 +2169,30 @@ def build_calibration_card(r: CalibrationReadout) -> _Built:
 # ── 工程師版：本批（Z56）接上線的「雙演算法對帳（§4.3）」 ─────────────────────
 #: 出處（例外的「為什麼」與卡上「這一格的出處」共用；做法同 `SRC_REGISTRY`）。
 SRC_RECONCILE: str = "L3 雙演算法對帳（`services.reconcile_service.compute_reconcile`）"
-#: 對帳要的輸入一個都沒有時的「為什麼」—— 逐項列出讀哪幾個 session key（事實，⛔ 不猜是「還沒叫」
+#: 對帳要的輸入一個都沒有時的「為什麼」開頭；後面逐項列出讀哪幾個 session 值（事實，⛔ 不猜是「還沒叫」
 #: 還是「叫了全失敗」：兩者在這裡分不出來）。
-RECONCILE_NOT_TRIGGERED_WHY: str = (
-    "三列對帳都是「未觸發」—— 每一列都至少缺一邊的值。對帳讀的是（依讀取順序）："
-    "`macro_info['us10y']['value']`、`cl_data['intl']['10Y公債殖利率']`、"
-    "`t2_data['rev_yoy_self']`／`t2_data['rev_yoy_finmind']`、"
-    "`jingqi_info['avg']`（`jingqi_info` 不存在時讀 `warroom_summary['jingqi_avg']`）、"
-    "`mkt_info['score']`、`mkt_info['max_score']`、`cl_data['inst']` 外資 net")
+#: 📌 批 Z57（Z56-n1／n2，有意識的更正，⛔ 不是漏刪）：原常數 `RECONCILE_NOT_TRIGGERED_WHY` 是寫死的
+#:    整句，有兩處與 L3 實際行為不符 ——（1）「`jingqi_info` 不存在時讀 warroom」，但程式條件是
+#:    `if _jq_info:`（空 dict 也改讀 warroom）；（2）「依讀取順序」，但 `health_inputs` 實際先取
+#:    `warroom_summary` 再取 `jingqi_info`。改為：開頭留在本檔，key 清單由 L3
+#:    `reconcile_service.RECONCILE_SESSION_KEYS`（唯讀 SSOT）組出（`reconcile_not_triggered_why`），
+#:    順序說法改為「依對帳列順序」（該常數本身的排列；守衛 `tests/test_batch_z57.py`）。
+RECONCILE_NOT_TRIGGERED_WHY_HEAD: str = (
+    "三列對帳都是「未觸發」—— 每一列都至少缺一邊的值。對帳讀的是（依對帳列順序）：")
+
+
+def reconcile_not_triggered_why(session_reads: Sequence[Any]) -> str:
+    """灰態「為什麼」＝ 開頭 ＋ L3 `RECONCILE_SESSION_KEYS` 每一項的 `desc`（以「、」串接，順序照搬）。
+
+    `session_reads` 空 ⇒ `ValueError`（§1：⛔ 不印一句沒有 key 清單的說明假裝完整）。
+    """
+    _descs = tuple(str(getattr(_r, "desc", "") or "") for _r in (session_reads or ()))
+    if not _descs or not all(_descs):
+        raise ValueError(
+            "雙演算法對帳灰態的 session key 清單是空的或有空描述 —— 應由 `load_reconcile` 從 L3 "
+            f"`reconcile_service.RECONCILE_SESSION_KEYS` 帶進來（收到 {session_reads!r}）")
+    return RECONCILE_NOT_TRIGGERED_WHY_HEAD + "、".join(_descs)
+
 #: 月營收 YoY 那一列兩邊皆缺時的事實句（「全 repo 沒有任何一處寫這個 key（實測 0 個寫入點）」沿用
 #: L3 `macro_refresh_service.UNTOUCHED_BLOCKS` 既有用語；守衛：`tests/test_batch_z56.py`）。
 RECONCILE_REV_YOY_NO_WRITER: str = (
@@ -2198,11 +2214,13 @@ class ReconcileReadout:
     """「雙演算法對帳」那一格的讀數（`requested` ← `EngineerRequest.opened`）。
 
     `report` 是 L3 `ReconcileReport` 原樣搬運；`error` 非空 ＝ 紅。
+    `session_reads`（批 Z57）是 L3 `RECONCILE_SESSION_KEYS` 原樣搬運 —— 灰態「為什麼」由它組出。
     """
 
     requested: bool
     report: Any = None
     error: str = ""
+    session_reads: tuple = ()
 
 
 def load_reconcile(req: EngineerRequest, session: Mapping[str, Any]) -> ReconcileReadout:
@@ -2214,8 +2232,9 @@ def load_reconcile(req: EngineerRequest, session: Mapping[str, Any]) -> Reconcil
     if not req.opened:
         return ReconcileReadout(requested=False)
     try:
-        from src.services.reconcile_service import compute_reconcile
-        return ReconcileReadout(requested=True, report=compute_reconcile(session))
+        from src.services.reconcile_service import RECONCILE_SESSION_KEYS, compute_reconcile
+        return ReconcileReadout(requested=True, report=compute_reconcile(session),
+                                session_reads=tuple(RECONCILE_SESSION_KEYS))
     except Exception as _e:  # noqa: BLE001 — 轉成紅卡顯示，不吞
         print(f"[views/page_why] 雙演算法對帳讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
         return ReconcileReadout(requested=True, error=repr(_e))
@@ -2278,7 +2297,8 @@ def build_reconcile_card(r: ReconcileReadout) -> _Built:
             "「雙演算法對帳」卡在進階診斷沒勾的情況下被建構 —— gate 應該在呼叫端就擋住"
             "（`_render_engineer_block`）")
     else:   # UI_MISSING_RETRYABLE —— 三列都沒有可比對的兩邊值。有效結果，⛔ 不是紅。
-        _note = Note(now=RECONCILE_NOT_TRIGGERED_NOW, why=RECONCILE_NOT_TRIGGERED_WHY,
+        _note = Note(now=RECONCILE_NOT_TRIGGERED_NOW,
+                     why=reconcile_not_triggered_why(r.session_reads),
                      where=REGISTRY_NOT_WRITTEN_WHERE)
     return (Card(key="why.engineer.reconcile", label="雙演算法對帳（§4.3）", state=_state,
                  note=_note),
