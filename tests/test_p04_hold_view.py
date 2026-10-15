@@ -1331,7 +1331,7 @@ class TestNoHardcodedPositionPct:
     def test_the_position_range_is_passed_through_from_l3(self):
         _card = P.build_position_cap_card(P.AllocationReadout(
             requested=True, is_loaded=True, range_text="30-50%",
-            posture="中性偏多"))[0]
+            posture="中性偏多", has_risk_cap=True))[0]   # 📌 批 Z65 QA：live 前提多了有效上限
         assert _card.value == "30-50%", "本頁重排版了 SSOT 的區間字串"
 
     def test_the_vix_bands_come_from_l0(self):

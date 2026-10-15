@@ -201,9 +201,12 @@ L3 `services.macro_refresh_service.refresh_macro_now()` → 報告落
 ⛔ **這是一條「平行路徑」，不是收編舊分頁。** `src/ui/tabs/**` 本階段
 **一個字都沒有動**（客戶明令舊 7 頁籤保留原樣），所以本頁按鈕**碰不到**
 舊分頁其他區塊寫的東西 —— ~~建議持股（卡①）／市場位階（卡③）／~~今日關鍵的
-門檻層／新聞桶／建議持股的「系統風險上限」（`macro_state.json`）都在射程外。
+門檻層／新聞桶~~／建議持股的「系統風險上限」（`macro_state.json`）~~都在射程外。
 （📌 批 Z60：卡①③ 吃的 `warroom_summary` 改由 L3 `STEP_WARROOM` 平行組裝、本頁按鈕寫得到；
-刪除線是有意識的更正 —— 舊句在寫下的當天為真。）**摸不到的一律逐條列在畫面上**
+刪除線是有意識的更正 —— 舊句在寫下的當天為真。）
+（📌 批 Z65：「系統風險上限」改由 L3 `STEP_RISK_CAP`（`risk_cap_apply`）以同一個規則引擎重算、
+經同一支 `lock_system_state_only` 寫 `macro_state.json` —— 按本頁按鈕可重算；算不出來時不覆寫，
+沿用 7 天內最近一次的有效上限。第二處刪除線同樣是有意識的更正，舊句在 Z60 當天為真。）**摸不到的一律逐條列在畫面上**
 （清單 SSOT：`macro_refresh_service.UNTOUCHED_BLOCKS`），
 不留白讓人以為整頁都是今天的（§1）。
 
@@ -281,6 +284,7 @@ from shared.station_specs import (
 )
 # L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（SEC-2，2026-09-26；
 # 同 `page_hold` 批次 B 的作法，遮罩沿用 `***`、⛔ 不加說明字）。
+from shared import staleness as _staleness
 from shared.secret_scrub import MASK as SECRET_MASK
 from shared.secret_scrub import scrub_secrets
 from shared.ui_state import (
@@ -322,7 +326,7 @@ from src.ui.tabs.tab_today import (
     # 📌 **批 Z60 複驗更正（上面兩段保留不刪，它們在寫下的當天為真）。**
     #    Z60 起本頁按鈕寫得到 `warroom_summary`，這句「按它不會讓這一格離開現在的狀態」
     #    在本頁不再成立 ⇒ 卡③ degraded、狀態列「總經」、三欄摘要「位階」三處的 `where`
-    #    一律換成 `EXIT_RETRY_HERE`（`now` / `why` 照舊沿用對面，見 `contract_exit_retargeted()`）。
+    #    一律換成 `EXIT_RETRY_HERE`（`now` 照舊沿用對面；`why` 的快照句自批 Z65 QA 起另換屬實版，見 `contract_exit_retargeted()`）。
     #    ⇒ 本頁畫面上**不再出現**這句；仍 import 它，是為了在 `contract_exit_retargeted()`
     #    以物件身分**認出它再換掉**（`V2_EXIT_PHRASES` 那一列亦保留：漏網時寧可畫短語也不炸）。
     CONTRACT_NO_EXIT_WHERE,
@@ -346,6 +350,11 @@ from src.ui.tabs.tab_today import (
     classify_macro_contract,
     scrub_state_glyphs,
     upstream_error_why,
+)
+from src.ui.views.risk_cap_gate import (
+    RISK_CAP_UNAVAILABLE_NOW,
+    RISK_CAP_UNAVAILABLE_WHY,
+    has_system_risk_cap,
 )
 from src.ui.views._ui_kit import (
     MAX_COLS,
@@ -568,8 +577,11 @@ PAGE_REFRESH_SCOPE_WHY: str = (
 # 若把那 15 處**全部**改成「按本頁按鈕」，就會製造一種新的假指路 ——
 # **契約漂移（`out_of_range` / `no_extraction`）那幾處按一百次也沒用**，
 # 而今日關鍵的門檻層**本頁按鈕根本摸不到**（批 Z60 前還有建議持股 / 市場位階；
-# 那兩張卡吃的 `warroom_summary` 現在由本頁按鈕寫得到，只剩建議持股的「系統風險上限」
-# 那一條天花板讀 `macro_state.json`，本頁摸不到 —— 逐條見 `UNTOUCHED_BLOCKS`）。
+# 那兩張卡吃的 `warroom_summary` 現在由本頁按鈕寫得到，~~只剩建議持股的「系統風險上限」
+# 那一條天花板讀 `macro_state.json`，本頁摸不到~~ —— 逐條見 `UNTOUCHED_BLOCKS`）。
+# 📌 批 Z65（有意識的更正，不是漏刪；舊句在 Z60 當天為真）：「系統風險上限」那條天花板
+#    現由 L3 `STEP_RISK_CAP` 重算並寫 `macro_state.json`，按本頁按鈕可重算（算不出來時不覆寫，
+#    沿用 7 天內最近一次的有效上限）；`UNTOUCHED_BLOCKS` 已移除那一列。
 # 三句話對應三種**處置**，不是三種語氣。
 
 #: (a) 這一格**可以**靠本頁的按鈕重抓 —— 它就是這條路徑會更新的東西。
@@ -712,10 +724,49 @@ def contract_exit_retargeted(card: Card) -> Card:
 
     以**物件身分**（`is`）比對，與 `_v2_exit_phrase()` 同一個慣例：只換確實是
     `CONTRACT_NO_EXIT_WHERE` 那一句的卡；其他出口（未接線、讀取失敗）原樣不動。
+
+    📌 **批 Z65 QA（有意識的與舊頁不同，⛔ 不是漏改對面）：`why` 的快照句也一併換掉。**
+    對面快照態（degraded）的 `why` 寫「本輪生效的是來源優先序第 3 條（`macro_state.json` 的
+    AI 鎖定快照）—— 它是**上一次**鎖的結論，不是這一輪算的」。Z65 起本頁按鈕的
+    `STEP_RISK_CAP` 在同一輪就可能寫這個檔，而且檔案是**規則引擎**產生的，不是 AI ——
+    在本頁那句話已經不屬實。只換**逐字等於**對面那一句的 `why`（見 `snapshot_why_retargeted`），
+    `now` 不動；`tab_today.py` 照舊一個字都不動。
     """
-    if card.note is not None and card.note.where is CONTRACT_NO_EXIT_WHERE:
-        return dc_replace(card, note=dc_replace(card.note, where=EXIT_RETRY_HERE))
-    return card
+    if card.note is None:
+        return card
+    _note = card.note
+    if _note.where is CONTRACT_NO_EXIT_WHERE:
+        _note = dc_replace(_note, where=EXIT_RETRY_HERE)
+    _why = snapshot_why_retargeted(_note.why)
+    if _why is not _note.why:
+        _note = dc_replace(_note, why=_why)
+    return card if _note is card.note else dc_replace(card, note=_note)
+
+
+#: 本頁對「位階來自規則引擎快照」那一態的 `why`（批 Z65 QA）。
+#: ⚠️ 不寫「上一次的結論」：Z65 起同一輪的 `STEP_RISK_CAP` 就可能寫這個檔；
+#:    也不寫「AI 鎖定」：檔案由規則引擎（`calculate_system_state`）產生。
+#:    天數引 L0 `MACRO_VERDICT_MAX_AGE_DAYS`（⛔ 不寫死）。
+SNAPSHOT_SOURCE_WHY: str = (
+    "位階來自規則引擎快照（`macro_state.json`）—— 可能是本輪按鈕剛寫的，"
+    f"也可能是 {_staleness.MACRO_VERDICT_MAX_AGE_DAYS} 天內較早的一次"
+    "（更早的已過期、不採用）；契約沒有把時間帶出來，所以這裡不編一個時間")
+
+
+def _tab_today_snapshot_why() -> str:
+    """對面 `build_status_bar_card()` 在快照態（`source == SOURCE_FILE_RULE_ENGINE`）產的 `why`。
+
+    ⛔ 不在本頁抄一份對面的字面 —— 現場呼叫同一支純函式取得，對面改字也對得上。
+    """
+    from shared import regime_arbiter as _RA
+    _n = build_status_bar_card({"source": _RA.SOURCE_FILE_RULE_ENGINE, "is_loaded": True,
+                                "regime": "neutral", "light": "🟡"}).note
+    return _n.why if _n is not None else ""
+
+
+def snapshot_why_retargeted(why: str) -> str:
+    """`why` 逐字等於對面快照態那一句 → 換成 `SNAPSHOT_SOURCE_WHY`；否則原物件回傳。"""
+    return SNAPSHOT_SOURCE_WHY if why and why == _tab_today_snapshot_why() else why
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1693,6 +1744,29 @@ def _danger_tile(*, key: str, label: str,
                          else EXIT_RETRY_HERE))))
 
 
+def _alloc_unloaded_why(regime: Mapping[str, Any] | None) -> str:
+    """卡①「L3 建議持股契約回報未評估」的 why —— 依**實際缺的來源**組句（批 Z65 QA）。
+
+    `build_allocation_decision` 在 `health is None` 時一律回未評估；姿態帶要靠健康分才算得出來。
+    契約讀不到（`regime` 為 None）時只講單點可驗的那件事，⛔ 不下全稱句。
+    """
+    _head = "L3 建議持股契約回報未評估（`is_loaded=False`）—— "
+    _tail = "；**本站不以缺值推導一個安全水位**"
+    if not isinstance(regime, Mapping):
+        return _head + "建議持股需要總經健康分算出姿態帶，本輪沒有取得" + _tail
+    _parts: list[str] = []
+    if regime.get("health") is None:
+        _parts.append("總經健康分本輪沒有值（紅綠燈沒有算出健康分），姿態帶算不出來")
+    else:
+        _parts.append("總經健康分有值，但契約仍回未評估")
+    if regime.get("exposure_limit_pct") is None:
+        _parts.append("系統風險上限（規則引擎快照 `macro_state.json`）也沒有有效值")
+    else:
+        _parts.append("規則引擎快照（`macro_state.json`）有系統風險上限，"
+                      "但它只是天花板、不能單獨決定建議持股")
+    return _head + "；".join(_parts) + _tail
+
+
 def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                         danger: tuple[str, str] | None, danger_error: str,
                         danger_requested: bool,
@@ -1746,7 +1820,16 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
         error=alloc_error or None,
         has_value=bool(getattr(alloc, "is_loaded", False)),
     )
-    if _alloc_state == UI_LIVE:
+    # 📌 批 Z65 QA（客戶 Q-z34～36 已核准規則）：取不到有效的「系統風險上限」⇒ 建議持股「無法判定」。
+    #    判斷只看 allocation 的 `caps` 有沒有那一條（與 `get_allocation` 內部同一份有效判斷，見
+    #    `risk_cap_gate`）；⛔ 不印任何持股百分比（`drivers` 也帶百分比，一併不出）。灰（UI_EMPTY），不是紅。
+    if _alloc_state == UI_LIVE and not has_system_risk_cap(getattr(alloc, "caps", ())):
+        _tiles.append(Tile(Card(
+            key="verdict.exposure", label="能不能出手 · 出手到幾成",
+            state=UI_EMPTY,
+            note=Note(now=RISK_CAP_UNAVAILABLE_NOW, why=RISK_CAP_UNAVAILABLE_WHY,
+                      where=EXIT_RETRY_HERE))))
+    elif _alloc_state == UI_LIVE:
         _drv = "；".join(getattr(alloc, "drivers", ()) or ()) or "—"
         _facts = [("推導依據", _drv), ("姿態", str(alloc.posture))]
         if alloc.cap_text:
@@ -1766,16 +1849,19 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                     "`unloaded`：四條來源一條都沒寫進來）—— "
                     "這是「還沒叫」，不是「叫了沒回」，更不是「今天不能出手」")
         else:
-            _why = ("L3 建議持股契約回報未評估（`is_loaded=False`）—— "
-                    "總經健康分與規則引擎快照兩條來源本輪都沒有值；"
-                    "**本站不以缺值推導一個安全水位**")
+            # ~~"總經健康分與規則引擎快照兩條來源本輪都沒有值"~~ —— 📌 批 Z65 QA（有意識的修改，
+            #    不是漏刪）：全稱句。規則引擎快照有值、只是健康分缺時，這句不屬實 ⇒ 依實際缺的來源組句。
+            _why = _alloc_unloaded_why(regime)
         # 📌 批 Z60 QA（有意識的修改，不是漏刪）：非錯誤分支的出口原為 `EXIT_OUT_OF_REACH`
         #    （「按本頁按鈕不會讓它離開現在的狀態，報告會列出它」）。那句話在它寫下的當天為真
         #    —— 當時 `warroom_summary` 只有舊分頁寫；Z60 起 L3 `STEP_WARROOM` 會寫它，按一次
         #    「🚀 更新今日戰情」這張卡就有機會從未評估變 live（本輪輸入算得出健康分時），`UNTOUCHED_BLOCKS` 也不再列它 ⇒
         #    舊出口變成假指路（§1）。改走 `EXIT_RETRY_HERE`。
-        #    ⚠️ 卡①只有「系統風險上限」那一條天花板讀 `macro_state.json`（本頁摸不到），
-        #    但那條天花板**不決定**這張卡會不會從未評估變 live —— 所以出口仍是可重抓。
+        #    ⚠️ ~~卡①只有「系統風險上限」那一條天花板讀 `macro_state.json`（本頁摸不到），
+        #    但那條天花板**不決定**這張卡會不會從未評估變 live —— 所以出口仍是可重抓。~~
+        #    📌 批 Z65（有意識的更正，不是漏刪；舊句在 Z60 當天為真）：那條天花板現由 L3
+        #    `STEP_RISK_CAP` 重算並寫 `macro_state.json`，本頁按鈕摸得到（算不出來時不覆寫，沿用
+        #    7 天內最近一次的有效上限）。出口仍是 `EXIT_RETRY_HERE` —— 現在連那一條也屬實。
         #    錯誤分支（`alloc_error`）維持 `EXIT_FIX_CODE`，未動。
         _tiles.append(Tile(Card(
             key="verdict.exposure", label="能不能出手 · 出手到幾成",
@@ -1846,12 +1932,14 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
         #    「按它不會讓這一格離開現在的狀態」）是 Z60 之前寫的；Z60 起本頁按鈕會寫
         #    `warroom_summary`，算得出健康分時 `get_macro_state()` 就改走 warroom、這張卡變 live
         #    ⇒ 在本頁照抄那句就是假指路（§1）。理由全文見 `contract_exit_retargeted()`。
+        _bar_note = build_status_bar_card(regime, error=regime_error or None).note
         _tiles.append(Tile(
             Card(key="verdict.regime", label=REGIME_CARD_LABEL,
                  state=_regime_state,
-                 note=dc_replace(build_status_bar_card(regime,
-                                                       error=regime_error or None).note,
-                                 where=EXIT_RETRY_HERE)),
+                 # 📌 批 Z65 QA：`why` 的快照句同步換成屬實版（`snapshot_why_retargeted`，理由見
+                 #    `contract_exit_retargeted`）；`now` 照舊沿用對面。
+                 note=dc_replace(_bar_note, where=EXIT_RETRY_HERE,
+                                 why=snapshot_why_retargeted(_bar_note.why))),
             # 非 live 不得帶 `value`（`Card.__post_init__`）→ 現值改掛 facts，
             # 與 `build_indicator_tile()` 的 degraded 同一個走法（那裡也是
             # `_facts.insert(0, ("現值", ...))`），不是第二種做法。
@@ -3239,7 +3327,7 @@ def build_summary_tiles(cards: Sequence[Card], *,
     · 位階 / 動能兩格原樣橋接（`Tile(card)`），⛔ 不碰。
       📌 批 Z60 複驗：唯一的例外是「位階」格的 `where` —— 對面那句
       `CONTRACT_NO_EXIT_WHERE`（「按它不會讓這一格離開現在的狀態」）Z60 起在本頁不成立，
-      經 `contract_exit_retargeted()` 換成 `EXIT_RETRY_HERE`；`now` / `why` 原樣。
+      經 `contract_exit_retargeted()` 換成 `EXIT_RETRY_HERE`；`now` 原樣，`why` 的快照句自批 Z65 QA 起換成屬實版。
     · **逐格獨立判態**（`UI_PAGE_TODAY.md` ④A「一格壞不染色另兩格」）：
       危險度的成敗只進「風險」這一格，另兩格的輸入裡根本沒有它。
     · `tab_today.py` 一個字都沒動（它的 `summary.risk` 仍是 staged 卡，舊分頁與

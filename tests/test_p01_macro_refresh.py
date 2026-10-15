@@ -386,6 +386,15 @@ def _run_refresh_with_fakes(service, monkeypatch, *, df_adl,
     #   既不封閉、也會讓「三來源全空 → skipped」把這裡每一支測試的綠燈判準一起拖下水。
     #   真模組的行為由 `tests/test_batch_z60.py` 另外以假 session 實跑驗證。
     monkeypatch.setattr(_WR, "compute_and_store_warroom_summary", _fake_warroom)
+    # 批 Z65：`STEP_RISK_CAP` 同理換替身（真模組會取 L1 休市表／parquet、寫 macro_state.json）；
+    #   真模組與 refresh 的整合由 `tests/test_batch_z65.py` 另外以 tmp 檔實跑驗證。
+    import src.services.risk_cap_apply as _RC
+
+    def _fake_risk_cap(session, *, now):
+        _calls.append("risk_cap")
+        return _RC.RiskCapApplyResult(True, "", {"not_evaluated": [], "red_lines": {}},
+                                      {"exposure_limit_pct": 60})
+    monkeypatch.setattr(_RC, "compute_and_lock_risk_cap", _fake_risk_cap)
     _report = service.refresh_macro_now(mode=service.MODE_WARM)
     return _report, _calls
 
@@ -875,6 +884,7 @@ class TestOutOfReachIsMeasured:
                  "src/services/market_assessment_apply.py",
                  "src/services/macro_trio_orchestrator.py",
                  "src/services/warroom_apply.py",           # 批 Z60 新接的那一步
+                 "src/services/risk_cap_apply.py",          # 批 Z65 新接的那一步（0 個 session key）
                  "src/services/data_registry_scanner.py")
         _keys: set[str] = set()
         for _rel in _mods:
@@ -997,6 +1007,8 @@ _STEP_MODULES = {
     RS.STEP_MARKET: "src/services/market_assessment_apply.py",
     # 批 Z60：新步驟 —— 宣告必須等於該模組真的賦值的 key（`warroom_summary`）。
     RS.STEP_WARROOM: "src/services/warroom_apply.py",
+    # 批 Z65：新步驟 —— 只寫檔、不寫 session ⇒ 宣告 `()` 必須等於該模組真的賦值的 key（空集）。
+    RS.STEP_RISK_CAP: "src/services/risk_cap_apply.py",
     RS.STEP_REGISTRY: "src/services/data_registry_scanner.py",
 }
 
@@ -1076,6 +1088,11 @@ def _run_refresh_writing(service, monkeypatch, *, trio_keys=(
         _write("warroom_summary")
         return _WR.WarroomApplyResult(written=True)
     monkeypatch.setattr(_WR, "compute_and_store_warroom_summary", _fake_warroom)
+    # 批 Z65：`STEP_RISK_CAP` 的替身 —— 真模組只寫檔、0 個 session key（`STEP_WRITES[STEP_RISK_CAP] == ()`），
+    #   替身照樣什麼 session 都不寫。
+    import src.services.risk_cap_apply as _RC
+    monkeypatch.setattr(_RC, "compute_and_lock_risk_cap", lambda session, *, now: _RC.RiskCapApplyResult(
+        True, "", {"not_evaluated": [], "red_lines": {}}, {"exposure_limit_pct": 60}))
     return service.refresh_macro_now(mode=service.MODE_WARM)
 
 

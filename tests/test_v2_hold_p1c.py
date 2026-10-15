@@ -34,7 +34,7 @@ import src.services.allocation_service as AL
 import src.services.dividend_tax_service as DTS
 import src.services.macro_state_locker as MSL
 import src.services.portfolio_deep_service as PDS
-from shared.ui_state import UI_FAILED, UI_LIVE
+from shared.ui_state import UI_EMPTY, UI_FAILED, UI_LIVE
 from src.ui.views import page_hold as PH
 
 _SUBMITTED = PH.HoldRequest(submitted=True)
@@ -113,12 +113,19 @@ class TestB6r4PositionCap:
         assert MSL.get_macro_state(_WR, strict=True) == MSL.get_macro_state(_WR)
         assert "file_error" not in MSL.get_macro_state(_WR, strict=True)
         _now = _cap()
-        assert _now[0].state == UI_LIVE
+        # 📌 批 Z65 QA（有意識的修改，⛔ 不是放寬）：沒有檔 ＝ 沒有有效系統風險上限 ⇒ 客戶規則
+        #   （Q-z34～36）「建議持股：無法判定」（灰 UI_EMPTY）；修前是 UI_LIVE（缺上限照印區間＝放寬風控）。
+        #   本支守的「strict 與否逐位元組相同」不變。
+        assert _now[0].state == UI_EMPTY and _now[0].note.now == PH.RISK_CAP_UNAVAILABLE_NOW
         _pre = _mutant(PH, ("_a = get_allocation(strict=True)", "_a = get_allocation()"))
         assert repr(_now) == repr(_cap(_pre))
 
     def test_c_valid_file_is_byte_identical(self, cap_dir):
-        _write(cap_dir / "macro_state.json", _GOOD_STATE)
+        # 📌 批 Z65 QA（有意識的修改）：`_GOOD_STATE` 沒有 timestamp ⇒ `get_macro_state` 視為過期
+        #   （DL-f1-s65）⇒ 沒有系統風險上限 ⇒ 依客戶規則顯示「無法判定」。「有效的檔」補上現在的
+        #   timestamp 才名實相符（`_GOOD_STATE` 本身一字未改）。
+        from src.services.macro_state_locker import _now_str
+        _write(cap_dir / "macro_state.json", dict(_GOOD_STATE, timestamp=_now_str()))
         assert MSL.get_macro_state(_WR, strict=True) == MSL.get_macro_state(_WR)
         _now = _cap()
         assert _now[0].state == UI_LIVE
@@ -137,13 +144,17 @@ class TestB6r4PositionCap:
         _m = _mutant(AL, *_AL_REVERT)
         _m.st = AL.st
         monkeypatch.setattr(AL, "get_allocation", _m.get_allocation)
-        assert _cap()[0].state == UI_LIVE, "拿掉 L3 allocation 守衛後應回到修前（靜默 live）"
+        # 📌 批 Z65 QA（有意識的修改）：拿掉守衛後讀壞的檔＝沒有上限 ⇒ 不再是「靜默 live」，而是
+        #   客戶規則的灰「無法判定」；本支守的「守衛拿掉就不紅」不變。
+        _c = _cap()[0]
+        assert _c.state != UI_FAILED and _c.state == UI_EMPTY, "拿掉 L3 allocation 守衛後應回到修前（不紅）"
 
     def test_e_mutant_locker_flag(self, cap_dir, monkeypatch):
         _write(cap_dir / "macro_state.json", "{bad json")
         _m = _mutant(MSL, *_MSL_REVERT)
         monkeypatch.setattr(MSL, "get_macro_state", _m.get_macro_state)
-        assert _cap()[0].state == UI_LIVE, "拿掉 file_error 旗標後應回到修前（靜默 live）"
+        _c = _cap()[0]   # 📌 批 Z65 QA：同上，修前的「靜默 live」現為灰「無法判定」
+        assert _c.state != UI_FAILED and _c.state == UI_EMPTY, "拿掉 file_error 旗標後應回到修前（不紅）"
 
 
 # ══════════════════════════════════════════════════════════════════

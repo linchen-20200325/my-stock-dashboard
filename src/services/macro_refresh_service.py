@@ -9,7 +9,7 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
 兩條並存。收編舊分頁是第二階段，**尚未獲准**。
 
 ⚠️ **本檔刻意不宣稱「與 `tab_macro` 零行為變更」** —— 那句話是假的。
-已知的**刻意差異**共四處，每一處都在下面就地寫明理由：
+已知的**刻意差異**共五處（批 Z65 起；原為四處），每一處都在下面就地寫明理由：
   1. **`compute_and_store_jingqi` 帶 `df_adl is not None` 守衛**（`_step_jingqi`）
      —— `tab_macro` 沒有這個守衛，cron `scripts/update_macro_forward_test.py` 有。
      本檔跟 cron 站同一邊，理由見該處。
@@ -33,6 +33,14 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
      `mkt_info`（可能是上一輪的）—— 步驟報告會寫明。
      ⚠️ 同理，若 `STEP_APPLY` 這一輪沒成功，`cl_data` / `cl_ts` / `li_latest` 仍是 session
      **現有**的（籌碼資料與先行指標本輪未更新）—— 步驟報告同樣寫明。
+  5. **系統風險上限由本路徑自己算並寫 `macro_state.json`**（`STEP_RISK_CAP`，批 Z65，客戶
+     2026-10-14 題2＝A）—— 舊頁是 `section_news_ai` §十一「執行 AI 裁決」按鈕
+     （`calculate_system_state` → `lock_system_state_only`）。本路徑呼叫 L3
+     `risk_cap_apply.compute_and_lock_risk_cap`：同一個引擎（公式／門檻／權重一個都沒動）、
+     同一支寫檔 API。輸入端的刻意差異沿用 Z64（`macro_engine_inputs` 檔頭逐條：PMI 前月取
+     parquet 真正前一資料月、過期輸入不計分、PCR／外資期貨逐欄往回找、bool／字串判缺、
+     薩姆送 None）。**無法計算時不寫檔**（舊頁會寫一份 fail-safe 檔）—— 保住 7 天內最近一次的
+     有效上限（`MACRO_VERDICT_MAX_AGE_DAYS`），⛔ 不讓「這一輪沒資料」刪掉上一次的有效上限。
 
 ═══ 分層（CLAUDE.md §8.2）═════════════════════════════════════════════
 **L3 Service**：編排 L1 fetcher（`src.data.daily.daily_data_fetchers`）
@@ -103,6 +111,7 @@ STEP_JINGQI: str = "jingqi"
 STEP_TRIO: str = "trio"
 STEP_MARKET: str = "market"
 STEP_WARROOM: str = "warroom"
+STEP_RISK_CAP: str = "risk_cap"
 STEP_REGISTRY: str = "registry"
 STEP_SOURCE_AUDIT: str = "source_audit"
 STEP_CONTENT_AUDIT: str = "content_audit"
@@ -116,6 +125,7 @@ STEP_LABELS: dict[str, str] = {
     STEP_TRIO: "M1B-M2 / 年線乖離 / 6 源總經快照",
     STEP_MARKET: "市場評估（mkt_info）",
     STEP_WARROOM: "紅綠燈結論（warroom_summary：燈號 / 健康分 / 位階）",
+    STEP_RISK_CAP: "系統風險上限（規則引擎 → macro_state.json）",
     STEP_REGISTRY: "資料登錄中心掃描",
     STEP_SOURCE_AUDIT: "逐來源回報的完整性",
     STEP_CONTENT_AUDIT: "逐來源實際收到的內容（判空）",
@@ -141,6 +151,8 @@ _MARKET_ASSESS_TIMEOUT_S: int = 45
 #:   · `STEP_TRIO`     ← `services.macro_trio_orchestrator`（**三個** key）
 #:   · `STEP_MARKET`   ← `services.market_assessment_apply`
 #:   · `STEP_WARROOM`  ← `services.warroom_apply`（批 Z60）
+#:   · `STEP_RISK_CAP` ← `services.risk_cap_apply`（批 Z65）—— **0 個 session key**：
+#:     它只寫檔案 `macro_state.json`（登記在 `STEP_FILE_WRITES`，見下）
 #:   · `STEP_REGISTRY` ← `services.data_registry_scanner`
 #: `tests/test_p01_macro_refresh.py::TestWrittenKeysMatchTheModules` 逐模組
 #: AST 比對，任何一支多寫 / 少寫一個 key 而這裡沒跟著改 → 紅燈。
@@ -155,7 +167,20 @@ STEP_WRITES: dict[str, tuple[str, ...]] = {
     STEP_TRIO: ("m1b_m2_info", "bias_info", "macro_info"),
     STEP_MARKET: ("mkt_info",),
     STEP_WARROOM: ("warroom_summary",),
+    STEP_RISK_CAP: (),
     STEP_REGISTRY: ("data_registry",),
+}
+
+#: **哪一步**寫得到哪些**檔案**（批 Z65）。
+#:
+#: ⚠️ **為什麼不塞進 `STEP_WRITES`**：`STEP_WRITES` 是 **session key** 的宣告 ——
+#: 它推導出 `WRITES_SESSION_KEYS`，再被拿去做寫入對帳（`STEP_WRITE_AUDIT`，以 session
+#: 物件 id 量測）與「宣稱寫得到、這一輪沒寫到」（`MacroRefreshReport.not_written_keys`）。
+#: 檔案不在 session 裡，量測永遠量不到它 ⇒ 若混進去，畫面會**每一輪**都說
+#: 「`macro_state.json` 這一輪沒寫到」，包括真的寫了的那一輪 —— 那是假話（§1）。
+#: 這一步寫沒寫，看步驟報告（`STEP_RISK_CAP` 的 detail）。
+STEP_FILE_WRITES: dict[str, tuple[str, ...]] = {
+    STEP_RISK_CAP: ("macro_state.json",),
 }
 
 #: 本路徑**可能**寫入的 session key 全集。
@@ -210,22 +235,11 @@ UNTOUCHED_BLOCKS: tuple[UntouchedBlock, ...] = (
              "本輪之後那張卡最多是「已列出急變層、門檻層未評估」，**不會變綠**"),
         writer="src/ui/tabs/macro/section_mid.py（全 repo 唯一寫入點）",
     ),
-    # ⚠️ 批 Z60 改寫（有意識的修改，不是漏刪）：本列原為「建議持股（卡①）與市場位階（卡③）」
-    #    ／`warroom_summary / macro_state.json`／「本路徑一個都沒寫」。那句話**在它寫下的當天
-    #    為真**；Z60 起 `STEP_WARROOM` 會寫 `warroom_summary`（燈號 / 健康分 / 位階 / 姿態帶都在
-    #    射程內），**剩下摸不到的只有 `macro_state.json`** —— 這一列只講還成立的那一半。
-    UntouchedBlock(
-        label="建議持股（卡①）的「系統風險上限」那一條天花板",
-        session_key="macro_state.json",
-        why=("卡①的最終建議持股 ＝ 姿態帶與各條硬否決天花板取低；其中「系統風險上限」"
-             "（`get_macro_state()` 的 `exposure_limit_pct`）只來自 `macro_state.json`"
-             "（AI 規則引擎的鎖定快照），本路徑不跑那個引擎、不寫那個檔。"
-             "**那一條顯示的是上一次在舊分頁跑 AI 裁決留下的值**（檔不存在或已過期 ＝ 沒有這條天花板）。"
-             "另外：本輪紅綠燈若算不出健康分，`warroom_summary` 會被視為未載入，"
-             "市場位階（卡③）此時也退回讀這個檔"),
-        writer=("src/ui/tabs/macro/section_news_ai.py"
-                "（經 L3 `MacroStateLocker.lock_system_state_only` 寫檔）"),
-    ),
+    # ⚠️ 批 Z65 刪除（有意識的修改，不是漏刪；決策：客戶 2026-10-14 題2＝A）：本處原有一列
+    #    「建議持股（卡①）的「系統風險上限」那一條天花板」／`macro_state.json`／寫入點
+    #    `section_news_ai.py`，說「本路徑不跑那個引擎、不寫那個檔」。那句話**在它寫下的當天為真**；
+    #    Z65 起 `STEP_RISK_CAP` 會跑同一個引擎、經同一支 `lock_system_state_only` 寫這個檔
+    #    （算不出來時不寫、保留 7 天內最近一次的有效上限）⇒ 這一列已不成立，整列移除。
     UntouchedBlock(
         label="新聞桶（🗞 系統性風險新聞數）",
         session_key="_macro_news_items",
@@ -693,6 +707,12 @@ def _secret(key: str) -> str:
         return ""
 
 
+def _utc_now():
+    """`STEP_RISK_CAP` 的基準時間（帶時區的 UTC `datetime`）。獨立成函式只為讓測試能釘住時鐘。"""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc)
+
+
 def refresh_macro_now(*, mode: str = MODE_WARM,
                       on_event: Callable[[str, Any], None] | None = None,
                       ) -> MacroRefreshReport:
@@ -966,6 +986,53 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
     finally:
         if _wr_had and "warroom_summary" not in st.session_state:
             _popped = tuple(dict.fromkeys((*_popped, "warroom_summary")))
+
+    # ── 5c. 系統風險上限 → macro_state.json（批 Z65，F5）───────────────
+    # ⚠️ **順序是故意的**：引擎要吃前序步驟寫好的 session —— `macro_info` / `bias_info` /
+    #   `m1b_m2_info`（STEP_TRIO）、`li_latest`（STEP_APPLY：PCR／外資期貨）、`mkt_info`
+    #   （STEP_MARKET：指數是否跌破 MA5）—— 所以排在它們與 WARROOM 之後；排在 REGISTRY 之前，
+    #   是為了不動 Z60 定下的「WARROOM 緊接在 REGISTRY 前一段」之外的任何相對順序
+    #   （registry 掃描不讀本步驟的任何產出）。
+    # ⚠️ 本步驟**不寫 session**（`STEP_WRITES[STEP_RISK_CAP] == ()`），只寫檔
+    #   （`STEP_FILE_WRITES`）。仍包 `_writes_recorded`：哪天它開始寫 session，寫入對帳會當場抓到。
+    # 📌 批 Z65 QA：TRIO 是否寫齊以**實際量到的寫入**判定（三個子任務各有 truthy guard，
+    #   步驟 `ok=True` 不代表三個 key 都更新了）；沒寫齊 ⇒ 揭露本輪用的是 session 既有的哪幾個值。
+    _trio_written = _writes.get(STEP_TRIO, [])
+    _trio_missing = [_k for _k in STEP_WRITES[STEP_TRIO] if _k not in _trio_written]
+    _trio_ok = len(_trio_written) == len(STEP_WRITES[STEP_TRIO])
+    _rc_inputs_note = _stale_inputs_note + (
+        "" if _trio_ok else
+        "；⚠️ M1B-M2 / 年線乖離 / 6 源總經快照這一輪沒寫齊（沒寫到："
+        + "、".join(f"`{_k}`" for _k in _trio_missing)
+        + "）：本輪用的是 session 既有的 " + "、".join(f"`{_k}`" for _k in _trio_missing)
+        + " 值（可能是上一輪的值，或根本沒有；過期者由新鮮度規則判不計分）")
+    try:
+        from shared.staleness import MACRO_VERDICT_MAX_AGE_DAYS
+        from src.services.risk_cap_apply import compute_and_lock_risk_cap
+        with _writes_recorded(_writes.setdefault(STEP_RISK_CAP, [])):
+            _rc = compute_and_lock_risk_cap(st.session_state, now=_utc_now())
+        if _rc.written:
+            _ne = list((_rc.bundle_summary or {}).get("not_evaluated") or ())
+            _rl = (_rc.bundle_summary or {}).get("red_lines") or {}
+            _und = [k for k, v in _rl.items() if v == "undetermined"]
+            _step(STEP_RISK_CAP, True,
+                  f"已寫入 macro_state.json：系統風險上限 "
+                  f"{(_rc.engine_result or {}).get('exposure_limit_pct')}%；"
+                  f"未評估 {len(_ne)} 項"
+                  + (f"（{'、'.join(_ne)}；缺項不計分）" if _ne else "")
+                  + (f"；硬否決紅線無法判定：{'、'.join(_und)}" if _und else "")
+                  + "；薩姆規則目前無資料來源、未評估（不代表已通過）"
+                  + _rc_inputs_note)
+        else:
+            _step(STEP_RISK_CAP, True,
+                  f"{_rc.reason}（既有 macro_state.json 若在 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內，"
+                  "卡①仍沿用它的上限；過期或不存在時，新頁的建議持股顯示「無法判定」）"
+                  + _rc_inputs_note,
+                  skipped=True)
+    except Exception as _e:  # noqa: BLE001 — 例外已由 risk_cap_apply 原樣拋出；此處據實記成失敗
+        print(f"[總經刷新] ❌ compute_and_lock_risk_cap 失敗：{_e!r}")
+        _step(STEP_RISK_CAP, False,
+              f"{type(_e).__name__}: {_e}（既有 macro_state.json 不會因此被清除）" + _rc_inputs_note)
 
     # ── 6. 資料登錄中心（純 session 掃描，無對外請求）───────────
     try:

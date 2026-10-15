@@ -344,6 +344,7 @@ from shared.dividend_station_thresholds import (
 from shared.secret_scrub import scrub_secrets
 from shared.ui_state import (
     UI_DEGRADED,
+    UI_EMPTY,
     UI_FAILED,
     UI_IDLE,
     UI_LIVE,
@@ -354,6 +355,11 @@ from src.ui.tabs.tab_today import (
     Card,
     Note,
     scrub_state_glyphs,
+)
+from src.ui.views.risk_cap_gate import (
+    RISK_CAP_UNAVAILABLE_NOW,
+    RISK_CAP_UNAVAILABLE_WHY,
+    has_system_risk_cap,
 )
 from src.ui.views._ui_kit import (
     MAX_COLS,
@@ -902,6 +908,9 @@ class AllocationReadout:
     drivers: tuple[str, ...] = ()
     conflicts: tuple[str, ...] = ()
     error: str = ""
+    #: 批 Z65 QA：L3 `caps` 裡有沒有有效的「系統風險上限」（`risk_cap_gate.has_system_risk_cap`）。
+    #: 預設 False（⛔ 不推定有上限）；只由 `load_allocation` 依 L3 實際回傳設定。
+    has_risk_cap: bool = False
 
 
 def load_allocation(req: HoldRequest) -> AllocationReadout:
@@ -926,7 +935,8 @@ def load_allocation(req: HoldRequest) -> AllocationReadout:
         posture=_clean_signal(getattr(_a, "posture", "")),
         cap_name=str(getattr(_a, "cap_name", "") or ""),
         drivers=tuple(str(_d) for _d in (getattr(_a, "drivers", ()) or ())),
-        conflicts=tuple(str(_c) for _c in (getattr(_a, "conflicts", ()) or ())))
+        conflicts=tuple(str(_c) for _c in (getattr(_a, "conflicts", ()) or ())),
+        has_risk_cap=has_system_risk_cap(getattr(_a, "caps", ())))
 
 
 @dataclass(frozen=True)
@@ -1659,6 +1669,10 @@ TP_NO_HOLDINGS_NOW: str = "**還沒有可以判停利的持股**"
 TP_EMPTY_NOW: str = "**沒有任何一檔衛星達停利門檻**"
 CAP_FAILED_NOW: str = "**建議持股水位讀不出來**"
 CAP_EMPTY_NOW: str = "**總經未評估，本站不給建議水位**"
+#: 批 Z65 QA：⑤ 取不到有效系統風險上限時的指路（now／why 走 `risk_cap_gate` 的共用常數）。
+CAP_NO_RISK_CAP_WHERE: str = (
+    f"到{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}"
+    f"重算系統風險上限之後，回到本頁{press(ACTION_RUN_WARROOM_LABEL)}")
 REBALANCE_UNWIRED_NOW: str = "**再平衡未接線**"
 GRAPE_UNWIRED_NOW: str = "**葡萄串領息未接線**"
 STRESS_FAILED_NOW: str = "**壓力測試算不出來**"
@@ -2379,7 +2393,8 @@ def build_macro_stage_card(macro: MacroReadout) -> _Built:
         _facts.append(
             ("姿態油門帶（**未套天花板的原始帶**）",
              f"{macro.posture_range} —— 這是 L3 `get_station_macro()` 直接給的"
-             "姿態帶，**沒套** VIX／三環／`exposure_limit_pct` 任何一條天花板。"
+             "姿態帶，**沒套** VIX／三環／系統風險上限任何一條天花板。"
+             "這不是建議持股；系統風險上限取不到時，建議持股為『無法判定』，不得以本帶代替。"
              "**最終水位請看 ⑤「建議持股水位（市場端）」那一格**"
              "（走 `get_allocation()`，已套天花板）—— "
              "同一頁的兩個持股區間口徑不同，別把它們讀成同一個數字"))
@@ -2692,6 +2707,15 @@ def build_position_cap_card(alloc: AllocationReadout) -> _Built:
         # L3 明寫「與最終結論相反、但被壓制的訊號（**要顯示，不要藏**）」。
         _facts.append(("被壓制但仍要看見的反向訊號", "、".join(alloc.conflicts)))
 
+    # 📌 批 Z65 QA（客戶 Q-z34～36 已核准規則）：取不到有效的「系統風險上限」⇒ 建議持股「無法判定」。
+    #    ⛔ 不印任何持股百分比：`drivers`／`conflicts`／生效天花板都可能帶百分比，一併不出，
+    #    只留上面三條靜態說明。灰（UI_EMPTY），不是紅。
+    if _state == UI_LIVE and not alloc.has_risk_cap:
+        return (Card(key="hold.position_cap", label="建議持股水位（市場端）",
+                     state=UI_EMPTY,
+                     note=Note(now=RISK_CAP_UNAVAILABLE_NOW, why=RISK_CAP_UNAVAILABLE_WHY,
+                               where=CAP_NO_RISK_CAP_WHERE)),
+                tuple(_facts[:3]), "")
     if _state == UI_LIVE:
         return (Card(key="hold.position_cap", label="建議持股水位（市場端）",
                      state=UI_LIVE, value=alloc.range_text or "—"),
@@ -4413,7 +4437,11 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            None, _v2_raised(SRC_ALLOC), _V2_NO_EXIT_REPORT)),
        _v2_rows_for("hold.position_cap", CAP_EMPTY_NOW, (
            None, "填一個看起來合理的區間，等於替你做了一個沒有依據的決定",
-           "到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN))]
+           "到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN)),
+       # 批 Z65 QA：取不到有效系統風險上限（客戶 Q-z34～36 規則）。摘錄自原文（K1）。
+       _v2_rows_for("hold.position_cap", RISK_CAP_UNAVAILABLE_NOW, (
+           None, "目前沒有可用的系統風險上限" + V2_EXCERPT_GAP + "系統不會在缺上限的情況下給持股數字",
+           "重算系統風險上限之後，回到本頁" + _V2_PRESS_RUN))]
     # ── ⑥ 組合深度分析 ──────────────────────────────────────────
     + [_v2_rows_for("hold.deep.rebalance", REBALANCE_UNWIRED_NOW, (
            None, "缺的是目標權重" + V2_EXCERPT_GAP + "你的持股帳本那張表" + V2_EXCERPT_GAP

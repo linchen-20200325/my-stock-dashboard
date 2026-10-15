@@ -588,6 +588,11 @@ def _run_refresh(monkeypatch, *, initial=None, market_ok=True, write_inputs=True
     monkeypatch.setattr(_TRIO, "run_macro_trio_and_persist", lambda **k: None)
     monkeypatch.setattr(_MKT, "compute_and_apply_market_assessment", _market)
     monkeypatch.setattr(_REG, "scan_and_write_data_registry", _registry)
+    # 批 Z65：新步驟 `STEP_RISK_CAP` 的替身（真模組會取 L1 休市表／parquet、寫 macro_state.json）。
+    #   本檔守的是 warroom；risk cap 的真模組＋refresh 整合由 `tests/test_batch_z65.py` 實跑驗證。
+    import src.services.risk_cap_apply as _RC
+    monkeypatch.setattr(_RC, "compute_and_lock_risk_cap", lambda session, *, now: _RC.RiskCapApplyResult(
+        True, "", {"not_evaluated": [], "red_lines": {}}, {"exposure_limit_pct": 60}))
     return RS.refresh_macro_now(mode=RS.MODE_WARM), fake, seen
 
 
@@ -673,9 +678,12 @@ class TestRefreshIntegration:
 
     def test_untouched_block_rewritten_truthfully(self):
         keys = [b.session_key for b in RS.UNTOUCHED_BLOCKS]
-        assert "macro_state.json" in keys and not any("warroom_summary" in k for k in keys)
-        (b,) = [b for b in RS.UNTOUCHED_BLOCKS if b.session_key == "macro_state.json"]
-        assert "系統風險上限" in b.label and "section_news_ai.py" in b.writer
+        assert not any("warroom_summary" in k for k in keys)
+        # 批 Z65（有意識的修改，不是放寬）：Z60 改寫後剩下的 `macro_state.json`（系統風險上限）那一列
+        #   自 Z65 起已不成立（`STEP_RISK_CAP` 重算並寫該檔）⇒ 整列移除；正向斷言改由
+        #   `tests/test_batch_z65.py` 接手。這裡改成反向守衛：清單裡不得再說它摸不到。
+        assert "macro_state.json" not in keys
+        assert not any("系統風險上限" in b.label for b in RS.UNTOUCHED_BLOCKS)
 
     def test_macro_state_json_writer_api_list_is_complete(self):
         """`test_p01` 量 `macro_state.json` 寫入點用的兩支 API ＝ 真的會走到 `_write_state_lock` 的全部。"""

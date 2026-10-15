@@ -418,7 +418,11 @@ class TestZ6n1WhySentence:
         #   被 Z60 有意改寫的那一列改由 `tests/test_batch_z60.py` 逐欄釘住，這裡只保留位置對應；
         #   其餘 5 列照舊逐位比 sha。
         _z60 = {'macro_state.json': 'warroom_summary / macro_state.json'}
-        assert [_z60.get(b.session_key, b.session_key) for b in R.UNTOUCHED_BLOCKS] == list(_BLOCKS_BASE)
+        # 批 Z65（有意識的修改，不是放寬）：Z60 改寫後的那一列（`macro_state.json`，系統風險上限）
+        #   自 Z65 起整列移除（`STEP_RISK_CAP` 寫得到該檔，見 `tests/test_batch_z65.py`）⇒ 期望序列
+        #   扣掉它；其餘 5 列的位置與 sha 照舊逐位比。
+        _expected = [k for k in _BLOCKS_BASE if k != 'warroom_summary / macro_state.json']
+        assert [_z60.get(b.session_key, b.session_key) for b in R.UNTOUCHED_BLOCKS] == _expected
         for b in R.UNTOUCHED_BLOCKS:
             if b.session_key in _z60:
                 continue
