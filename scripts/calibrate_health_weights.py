@@ -46,6 +46,7 @@ if str(_REPO) not in sys.path:
 
 from src.compute.macro.health_calibration import (  # noqa: E402
     ad_ratio_from_twii,
+    align_monthly_to_daily_pit,
     breadth_from_twii,
     fit_health_weights,
     risk_posture_label,
@@ -55,6 +56,9 @@ from src.services.market_strategy import market_regime  # noqa: E402
 _CACHE = _REPO / "data_cache"
 _FEATURES = ["jqavg", "score_norm", "fnet"]
 # PIT 對齊容差（§2.3）:外資 T+1（給 7d 容納連假）、m1b_m2 月頻 backward 40d
+# 📌 2026-10-15:m1b_m2 的 40d 自**可用日**（`align_monthly_to_daily_pit`,發布延遲走
+#    `shared.staleness`）起算,不再自資料月月初起算;值不變。
+_M1M2_INDICATOR = "m1b_m2"   # shared.staleness.MACRO_PUBLICATION_LAG_DAYS 的 key
 _INST_TOLERANCE = pd.Timedelta("7D")
 _M1M2_TOLERANCE = pd.Timedelta("40D")
 
@@ -93,7 +97,16 @@ def reconstruct_score(close: pd.Series, inst_df: pd.DataFrame,
                       m1m2_df: pd.DataFrame) -> pd.DataFrame:
     """逐日呼叫**真** `market_regime`（SSOT parity）重建 score / max_score / score_norm / fnet。
 
-    PIT-safe（§2.3）:外資 backward merge（T+1、無 lookahead）、m1b_m2 月頻 backward 40d。
+    PIT-safe（§2.3）:外資 backward merge（T+1、無 lookahead）、~~m1b_m2 月頻 backward 40d。~~
+    ⚠️ **2026-10-15 更正(刪除線保留原句)**:上句對 m1b_m2 **不實**。`finmind_m1m2.parquet`
+    的 `date` 是資料月**月初**,原碼直接以它對每日收盤 backward merge_asof、無發布延遲位移
+    ⇒ M 月資料在 M/01 就被看到,正確可用日是次月 1 日 + lag(2026-10-15 時 lag=27)
+    ⇒ 最早提前「M 月天數 + lag」= 55～58 天(look-ahead)。
+    現行:m1b_m2 走 L2 `align_monthly_to_daily_pit` —— 可用日 =
+    `shared.staleness.monthly_publication_due(M, indicator="m1b_m2")`
+    (= 次月 1 日 + `MACRO_PUBLICATION_LAG_DAYS["m1b_m2"]`),以可用日 backward 40d。
+    `gap_prev`(上一期)仍以**資料月順序** shift(1) 後再對齊,與當期同列帶出。
+    (外資那半句本次未複查,原文照留。)
     僅在 MA120 有效（≥120 日歷史）的日子評分,不足者 score_norm=NaN（訓練 drop）。
     回傳 index=close.index 的 DataFrame。
     """
@@ -111,11 +124,12 @@ def reconstruct_score(close: pd.Series, inst_df: pd.DataFrame,
     m = m1m2_df[["date", "m1b_m2_gap"]].copy()
     m["date"] = pd.to_datetime(m["date"])
     m = m.dropna(subset=["m1b_m2_gap"]).sort_values("date")
-    m["gap_prev"] = m["m1b_m2_gap"].shift(1)          # 上一（月）期 gap
-    gapdf = pd.merge_asof(
-        pd.DataFrame({"date": close.index}), m,
-        on="date", direction="backward", tolerance=_M1M2_TOLERANCE,
-    ).set_index("date")
+    m["gap_prev"] = m["m1b_m2_gap"].shift(1)          # 上一（月）期 gap（資料月順序）
+    # 2026-10-15:以「可用日」(發布延遲 SSOT)對齊,不再以資料月月初對齊(look-ahead 修正)
+    gapdf = align_monthly_to_daily_pit(
+        close.index, m, ["m1b_m2_gap", "gap_prev"],
+        indicator=_M1M2_INDICATOR, tolerance=_M1M2_TOLERANCE,
+    )
 
     rows = []
     for dt in close.index:
