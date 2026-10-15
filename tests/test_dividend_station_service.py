@@ -186,23 +186,27 @@ def test_row_detail_has_health_and_235():
 
 # ── AI 戰情總結（digest 純函式 + AI 潤稿注入）──────────────────────────────
 def _rows_fixture():
-    """涵蓋：紅燈汰弱 / 235 加碼 / 抓取失敗 / 正常 四種列。"""
+    """涵蓋：紅燈汰弱 / 235 加碼 / 抓取失敗 / 正常 四種列。
+
+    AUD-C3（2026-10-15）：digest 的加碼段改以 `_action == ds.ACTION_ADD` 且 `held` 判定
+    （`row_from_assessment` / `build_station_rows` 產出的列一律帶這兩鍵）→ 手寫列補上。
+    """
     return [
         {"代號": "2412", "健檢": "🔴", "加碼金": "", "235 燈號": "⚪ 巡航",
-         "建議動作": "汰弱：賺息賠本", "_detail": {}},
+         "建議動作": "汰弱：賺息賠本", "_action": ds.ACTION_CUT, "held": True, "_detail": {}},
         {"代號": "0056", "健檢": "🟡", "加碼金": "20%", "235 燈號": "🟢 小跌加碼",
-         "建議動作": "小跌加碼", "_detail": {}},
+         "建議動作": "小跌加碼", "_action": ds.ACTION_ADD, "held": True, "_detail": {}},
         {"代號": "9999", "健檢": "⚪", "加碼金": "", "235 燈號": "—",
          "建議動作": "⚠️ 資料不足/抓取失敗：無日線", "_detail": {"error": "無日線"}},
         {"代號": "00878", "健檢": "🟢", "加碼金": "", "235 燈號": "⚪ 巡航",
-         "建議動作": "續抱", "_detail": {}},
+         "建議動作": "續抱", "_action": ds.ACTION_CRUISE, "held": True, "_detail": {}},
     ]
 
 
 def test_digest_classifies_reds_adds_errors():
     d = svc.build_station_digest(_rows_fixture(), vix=22.5)
     assert [r["代號"] for r in d["reds"]] == ["2412"]        # 只有 🔴 進汰弱
-    assert [a["代號"] for a in d["adds"]] == ["0056"]        # 加碼金非空 = 235 觸發
+    assert [a["代號"] for a in d["adds"]] == ["0056"]        # 持有 + 建議動作走加碼分支(AUD-C3)
     assert d["errors"] == ["9999"]                           # error 列誠實排除
     assert d["total"] == 3                                   # 有效 = 4 - 1 抓取失敗
     assert d["vix"] == 22.5
@@ -216,8 +220,8 @@ def test_digest_no_fake_config_key():
 
 def test_digest_empty_rows():
     d = svc.build_station_digest([], vix=None)
-    assert d == {"total": 0, "vix": None, "reds": [], "adds": [], "errors": [],
-                 "allocation": None, "take_profit": []}
+    assert d == {"total": 0, "vix": None, "reds": [], "adds": [], "watch_adds": [],
+                 "errors": [], "allocation": None, "take_profit": []}
 
 
 def test_summary_prompt_contains_facts_and_hold_instruction():

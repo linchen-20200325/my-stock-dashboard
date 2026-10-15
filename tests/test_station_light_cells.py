@@ -520,9 +520,12 @@ class TestRowIsAdditiveOnly:
     def test_lights_is_the_only_new_key(self):
         """釘住鍵集合:多一個少一個都要有人看到（畫面 diff 必須為 0）。"""
         etf = set(svc.row_from_assessment(_full_etf()))
+        # AUD-C3（2026-10-15）多一個非顯示欄 `_action`（`建議動作` 的分支代碼，
+        # 推播 digest 加碼段用）；底線開頭，不進表格（`_ETF_COLS` 不含）。
         assert etf == {"代號", "名稱", "種類", "類別", "健檢", "235 燈號", "加碼金",
-                       "3-3-3", "建議動作", "_detail", "_health_miss", "_miss_reason",
-                       "_light_miss", "_light_axes_used", "_screen_miss", "_lights"}
+                       "3-3-3", "建議動作", "_action", "_detail", "_health_miss",
+                       "_miss_reason", "_light_miss", "_light_axes_used", "_screen_miss",
+                       "_lights"}
         stock = set(svc.stock_row_from_assessment(_stock()))
         assert stock == {"代號", "名稱", "種類", "類別", "財報體檢", "KD", "財報趨勢",
                          "健檢", "建議動作", "_detail", "_miss_reason", "_lights"}

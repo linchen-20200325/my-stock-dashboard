@@ -1038,10 +1038,13 @@ class TestSuggestActionUntouched:
         釘住這件事,是為了避免有人在 UI 端另立一套「什麼算紅燈」——
         那會讓畫面與推播對同一個組合講不同的話。
         """
+        # AUD-C3（2026-10-15）：加碼段改以 `_action == ds.ACTION_ADD` 且 `held` 判定
+        # （`row_from_assessment` / `build_station_rows` 的列一律帶這兩鍵）→ 手寫列補上。
         _rows = [
-            {"代號": "A", "健檢": "🔴", "建議動作": "汰弱", "加碼金": "", "_detail": {}},
+            {"代號": "A", "健檢": "🔴", "建議動作": "汰弱", "加碼金": "",
+             "_action": ds.ACTION_CUT, "held": True, "_detail": {}},
             {"代號": "B", "健檢": "🟢", "建議動作": "加碼", "加碼金": "20%",
-             "235 燈號": "🟢 小跌加碼", "_detail": {}},
+             "235 燈號": "🟢 小跌加碼", "_action": ds.ACTION_ADD, "held": True, "_detail": {}},
             {"代號": "C", "健檢": "⚪", "建議動作": "x", "加碼金": "",
              "_detail": {"error": "無日線"}},
         ]

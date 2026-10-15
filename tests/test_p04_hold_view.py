@@ -3371,6 +3371,7 @@ class TestTheAiIsAlwaysDisclosedAsAi:
         _said = {
             "reds": "健檢紅燈汰弱",
             "adds": "235 加碼觸發",
+            "watch_adds": "觀察清單（未持有）235 燈號",   # AUD-C3
             "errors": "整批抓取失敗",
             "total": "有效判斷檔數",
             "vix": "VIX",
