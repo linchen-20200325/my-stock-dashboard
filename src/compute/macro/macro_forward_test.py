@@ -14,18 +14,25 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Optional
+from datetime import date as _date_t
+from datetime import datetime, time, timedelta, timezone
+from typing import Any, Iterable, Optional, Union
 
 import pandas as pd
 
 from shared.macro_forward_test_schema import (
+    DATE_SOURCE_LIVE,
     FWD_EVAL_HORIZON_DAYS,
     FWD_EVAL_MDD_THR_PCT,
     FWD_EVAL_RET_MAX_PCT,
+    MACRO_FWD_TEST_DATE_SOURCES,
     MACRO_FWD_TEST_HEADERS,
     MACRO_FWD_TEST_SCHEMA_VERSION,
     MISSING_SEP,
+    TW_CASH_CLOSE_HHMM,
 )
+
+_TW = timezone(timedelta(hours=8))   # §4.5 TW = UTC+8(本層只做換算,不取系統時間)
 
 
 def compute_ruleset_hash() -> str:
@@ -77,12 +84,16 @@ def build_signal_row(
     inputs_as_of: Optional[str] = None,
     git_sha: str = '',
     ruleset_hash: str = '',
+    date_source: Optional[str] = None,
 ) -> dict[str, Any]:
     """把一次 `calc_traffic_light` 輸出轉成一列快照。
 
     Args:
         tl: `macro_helpers.calc_traffic_light` 的回傳 dict。
-        date: 'YYYY-MM-DD' 交易日(TW)。唯一鍵。
+        date: 'YYYY-MM-DD' 觀測所屬的 TW 交易日(schema v2)。唯一鍵。
+        date_source: `date` 的來源(見 `MACRO_FWD_TEST_DATE_SOURCES`)。
+            `live_as_of` 時強制 `date == inputs_as_of`(C-2:觀測日 = 實抓 K 棒日,
+            不得是執行當下的日期)。
         captured_at: ISO8601 跑批時刻(caller 注入,本層不取系統時間)。
         twii_close: 當日 ^TWII 收盤。**None 是允許的**,但該列日後無法對帳。
         inputs_as_of: 輸入腿的資料日(外資 T+1 / Yahoo EOD 可能 ≠ date)。
@@ -96,6 +107,12 @@ def build_signal_row(
         raise ValueError('build_signal_row: tl 為空 —— 不落空殼列(§1)')
     if not date:
         raise ValueError('build_signal_row: date 必填(唯一鍵)')
+    if date_source is not None and date_source not in MACRO_FWD_TEST_DATE_SOURCES:
+        raise ValueError(f'build_signal_row: date_source 不合法:{date_source!r}')
+    if date_source == DATE_SOURCE_LIVE and str(inputs_as_of or '') != str(date):
+        raise ValueError(
+            f'build_signal_row: date_source={DATE_SOURCE_LIVE!r} 時 date 必須等於 '
+            f'inputs_as_of(實抓 K 棒交易日);得 date={date!r} inputs_as_of={inputs_as_of!r}')
 
     _groups = tl.get('conf_groups') or {}
     _missing = tl.get('missing_sources') or []
@@ -118,6 +135,7 @@ def build_signal_row(
         'missing_sources': MISSING_SEP.join(str(m) for m in _missing),
         'twii_close': _opt_float(twii_close),
         'inputs_as_of': str(inputs_as_of) if inputs_as_of else None,
+        'date_source': date_source,
         'git_sha': str(git_sha or ''),
         'ruleset_hash': str(ruleset_hash or ''),
         'schema_version': MACRO_FWD_TEST_SCHEMA_VERSION,
@@ -126,6 +144,71 @@ def build_signal_row(
     if _unknown:
         raise ValueError(f'build_signal_row 產出 schema 外的欄位:{sorted(_unknown)}')
     return row
+
+
+def _to_tw_datetime(captured_at: Union[str, datetime]) -> datetime:
+    """ISO8601 字串 / datetime → TW tz-aware datetime。**naive 一律拒收**(時區不明 = 猜)。"""
+    dt = datetime.fromisoformat(captured_at) if isinstance(captured_at, str) else captured_at
+    if not isinstance(dt, datetime) or dt.tzinfo is None:
+        raise ValueError(f'captured_at 必須是帶時區的 ISO8601:{captured_at!r}')
+    return dt.astimezone(_TW)
+
+
+def _to_date(d) -> _date_t:
+    if isinstance(d, datetime):
+        return d.date()
+    if isinstance(d, _date_t):
+        return d
+    return pd.Timestamp(str(d)).date()
+
+
+def session_has_closed(trade_date, captured_at: Union[str, datetime]) -> bool:
+    """`trade_date` 那一盤在 `captured_at` 當下是否已收盤(TW 13:30,`TW_CASH_CLOSE_HHMM`)。
+
+    trade_date 早於 captured_at 的 TW 日期 → True;同日 → 13:30(含)之後才 True;
+    晚於 → False(未來的 K 棒不可能已收)。
+    """
+    td = _to_date(trade_date)
+    now = _to_tw_datetime(captured_at)
+    if td < now.date():
+        return True
+    if td > now.date():
+        return False
+    return now.time() >= time(*TW_CASH_CLOSE_HHMM)
+
+
+def derive_observation_date(
+    captured_at: Union[str, datetime],
+    trading_days: Iterable,
+    *,
+    calendar_complete_through,
+) -> str:
+    """由「跑批時刻 + 已證實的交易日曆」推導該次觀測所屬交易日('YYYY-MM-DD')。
+
+    規則(C-2 歷史修復用,寫成純函式以便測試,不只存在一次性腳本裡):
+        觀測日 = trading_days 中 **≤ captured_at 的 TW 日期**、且在 captured_at 當下
+        **已收盤**(`session_has_closed`)的最後一個交易日。
+
+    Args:
+        trading_days: 已證實為交易日的日期集合(由 caller 從已落地資料組出;本層不 I/O)。
+        calendar_complete_through: caller 保證 trading_days 在此日(含)之前**完整**。
+            captured_at 的 TW 日期晚於此日 → 無法排除「當天其實有開盤」→ raise,不猜。
+
+    Raises:
+        ValueError: captured_at 無時區 / 超出日曆完整範圍 / 範圍內找不到任何已收盤交易日。
+    """
+    now = _to_tw_datetime(captured_at)
+    through = _to_date(calendar_complete_through)
+    if now.date() > through:
+        raise ValueError(
+            f'derive_observation_date: captured_at {now.isoformat()} 超出交易日曆完整範圍'
+            f'(≤ {through}),無法證明觀測日')
+    cands = sorted({_to_date(d) for d in trading_days})
+    ok = [d for d in cands if session_has_closed(d, now)]
+    if not ok:
+        raise ValueError(
+            f'derive_observation_date: {now.isoformat()} 之前交易日曆內無已收盤交易日')
+    return ok[-1].strftime('%Y-%m-%d')
 
 
 def _opt_float(v) -> Optional[float]:

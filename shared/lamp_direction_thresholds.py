@@ -87,12 +87,18 @@
   比的是兩段**不重疊**的 5 日窗，彼此幾乎不相關，差值仍是雜訊 → 同 adl 原則不出箭頭。
   （因此也**沒有**把 `jingqi_calc` 的 5 日均抽成純函式 —— 用不到就不動 L3。）
 - **health（總經健康評分）** — 唯一的歷史是前進式驗證凍結檔
-  `data_cache/macro_forward_test/signals.parquet`（唯讀，24 列，2026-08-20 ~ 09-25）。
+  `data_cache/macro_forward_test/signals.parquet`（唯讀，~~24 列~~，2026-08-20 ~ 09-25）。
   兩邊都讀 `calc_traffic_light(...)['health']`（ruleset_hash 全為 532c3a57698f），但：
-  (1) `date` 是**cron 執行日**不是交易日（有 2026-08-29 週六列；`inputs_as_of` 24 列全為 None）。
-      對照 twii 交易日曆，檔案區間內缺 **4** 個交易日（08-27 / 08-31 / 09-14 / 09-21）；
-      09-22 不是交易日，且與 09-23 同值（73.3，過期重複列）
+  (1) `date` 是**cron 執行日**不是交易日（有 2026-08-29 週六列；`inputs_as_of` ~~24 列~~全為 None）。
+      ~~對照 twii 交易日曆，檔案區間內缺 **4** 個交易日（08-27 / 08-31 / 09-14 / 09-21）；~~
+      ~~09-22 不是交易日~~，且與 09-23 同值（73.3，過期重複列）
       ⇒「往前 20 列」≠「近 20 交易日」，視窗文字會說謊；
+      📌 **2026-10-15 事實更正**：帳本已依 C-2 修復，見 `tests/test_macro_fwd_test_c12.py`。
+      上面劃線的三處是**量測當時（2026-09-26）對修復前帳本為真**的敘述，修復後不再成立：
+      `date` 已改為觀測所屬交易日（`date_source` 欄標明來源）、08-27 / 08-31 / 09-14 / 09-21
+      已由 git 史撈回或依 captured_at 推導補上、09-22 經 FinMind 三大法人／融資與 twii 歷史 K 棒
+      證實**是**交易日（`twii_ohlcv.parquet` HEAD 漏了這一根）；列數亦已變動。
+      本段其餘判定（不出 health 箭頭）未重新評估，本更正只動事實、不動結論。
   (2) 燈值取自 `warroom_summary['health_score']`，該 dict **不帶 `health_partial`**；
       輸入也不同（cron 走 `fetch_macro_bundle` 自抓一輪、燈值走頁面 session）⇒ 末值一般
       對不上燈值；且 `page_today.OUT_OF_REACH_LIGHT_KEYS` 本來就列著 health（寫入點不在本頁路徑）。

@@ -16,7 +16,10 @@
    全被記成「沒中」，系統性低估 precision。
 5. **規則版本可追**：`ruleset_hash` 必須隨「會改變燈號的常數」變動——
    2026-08-19 一天之內燈號規則改了三次，沒有這欄整份資料的可稽核性歸零。
-6. **同日重跑後寫者勝**（與 `forward_test_store` 的「保留最早」相反，且是刻意的）。
+6. ~~**同日重跑後寫者勝**（與 `forward_test_store` 的「保留最早」相反，且是刻意的）。~~
+   **現行（2026-10-15 C-2）：同觀測日保留既有那筆、不覆寫**（與 `forward_test_store`
+   同慣例）。舊設計在 `date` 取執行當下日期時實測吃掉 5 筆真實觀測，見
+   `tests/test_macro_fwd_test_c12.py`。
 """
 from __future__ import annotations
 
@@ -134,18 +137,18 @@ class TestStore:
         got = load_signals(p)
         assert len(got) == 1 and got[0]['date'] == '2026-08-18'
 
-    def test_same_date_last_writer_wins(self, tmp_path):
-        """與 forward_test_store 的「保留最早」相反，且是刻意的：
+    def test_same_date_keeps_existing_row(self, tmp_path):
+        """2026-10-15 C-2：同觀測日 → 保留既有那筆、不覆寫（凍結帳本）。
 
-        那邊存的是真實進場價（改掉 = 竄改成交紀錄）；這邊存的是「這套規則對
-        那天的判定」，而規則會改。重跑通常正是為了記錄新規則。
+        修前是「後寫者勝」；在 `date` 取執行當下日期的年代，那讓隔天的跑批覆寫掉
+        前一個交易日的真實觀測（實測 5 筆）。
         """
         p = tmp_path / 'signals.parquet'
-        append_signals([_row()], p)
-        append_signals([_row(tl=_tl(icon='🟡', label='中性'))], p)
+        assert append_signals([_row()], p) == 1
+        assert append_signals([_row(tl=_tl(icon='🟡', label='中性'))], p) == 0
         got = load_signals(p)
         assert len(got) == 1, '同一天堆了兩列 → precision 統計會把那天算兩次'
-        assert got[0]['icon'] == '🟡'
+        assert got[0]['icon'] == '🔴', '既有觀測被後寫覆蓋了'
 
     def test_missing_key_raises(self, tmp_path):
         bad = _row(); bad.pop(MACRO_FWD_TEST_KEY)
@@ -260,7 +263,13 @@ class TestCronScriptNeverWritesAPartialRow:
         import src.data.macro.macro_fwd_test_store as store
         import src.services.jingqi_calc as JQ
         import src.services.market_assessment_apply as MA
-        monkeypatch.setattr(S, '_fetch_live_bundle', lambda *a, **k: {'tw_raw': {}, 'inst': {}})
+        _twii = pd.DataFrame({'close': [23400.0, 23500.0]},
+                             index=pd.to_datetime(['2026-08-17', '2026-08-18']))
+        monkeypatch.setattr(S, '_fetch_live_bundle',
+                            lambda *a, **k: {'tw_raw': {'台股加權指數': _twii}, 'inst': {}})
+        from datetime import datetime as _dt
+        monkeypatch.setattr(S, '_now_tw',
+                            lambda: _dt.fromisoformat('2026-08-18T17:40:00+08:00'))
         monkeypatch.setattr(S, '_git_sha', lambda: 'test0000')
         monkeypatch.setattr(MA, 'compute_and_apply_market_assessment', lambda **k: None)
         monkeypatch.setattr(JQ, 'compute_and_store_jingqi', lambda *a, **k: None)
@@ -292,5 +301,7 @@ class TestCronScriptNeverWritesAPartialRow:
         rows = calls[0][0]
         assert len(rows) == 1 and rows[0]['date'] == '2026-08-18'
         assert rows[0]['icon'] == '🔴'
-        # 無 tw_raw ⇒ 沒有收盤價。誠實記 None，不可捏造（該列日後無法對帳）。
-        assert rows[0]['twii_close'] is None
+        # C-1：小寫 `close`（L1 契約）必須讀得到；修前恆為 None。
+        assert rows[0]['twii_close'] == 23500.0
+        assert rows[0]['inputs_as_of'] == '2026-08-18'
+        assert rows[0]['date_source'] == 'live_as_of'
