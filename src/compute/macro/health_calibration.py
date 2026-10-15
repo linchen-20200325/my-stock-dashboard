@@ -3,12 +3,15 @@
 方法論定案見 `MACRO_HEALTH_REWEIGHT_PROPOSAL.md`。
 User 決策(AskUserQuestion)：①風險姿態 ②20日 ③現 3 輸入(jqavg/score/fnet) ④建管線 + 數學式照定義。
 
-§8.2 L2 純函式：**無 I/O、無 streamlit、無 requests**（只 numpy + pandas）。三個演算法：
+§8.2 L2 純函式：**無 I/O、無 streamlit、無 requests**（只 numpy + pandas + L0 `shared.staleness`）。演算法：
 - `breadth_from_twii()` — 由 ^TWII 日 K 重建 jqavg（live jqavg 的 PROXY tier）。
   ⚠️ **不是** live `fetch_adl` 的鏡像,見下方 `ad_ratio_from_twii` 的 parity 警語。
 - `risk_posture_label()` — 未來 20 交易日最大回撤 → 風險姿態真值 y∈{0,1}（1=該防禦）。
 - `fit_health_weights()` — walk-forward L2-logistic（**純 numpy，不引 sklearn/scipy**）擬 3 權重
   + robustness voting + overfit guard。資料不足 → raise（§1 fail loud，不回偽權重）。
+- `align_monthly_to_daily_pit()` — 月頻（date=資料月月初）→ 日頻的 PIT 對齊:以 L0
+  `shared.staleness.monthly_publication_due` 算可用日再 backward merge_asof（2026-10-15 新增,
+  `calibrate_health_weights` / `calibrate_macro_traffic` 共用,消除兩腳本各自的 look-ahead）。
 
 「跑真實資料 → 產出提案權重」在 `scripts/` + 部署 cron；本層只提供**可單測的演算法**。
 """
@@ -16,6 +19,9 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+
+# L2 → L0（發布延遲 SSOT；純函式、無 I/O）。
+from shared.staleness import monthly_publication_due
 
 # ── domain-local SSOT 常數（同 etf_margin_simulator 先例：單功能常數 domain-local，
 #    不外移 shared/ — §-1 避免多餘抽象。若未來他模組共用再升格）──────────────
@@ -213,6 +219,80 @@ def risk_posture_label(
         mdd = float(dd[1:].max())          # 未來 1..h 的最大回撤（不含 t 自身 dd=0）
         y[t] = 1.0 if mdd * 100.0 >= theta_dd_pct else 0.0
     return pd.Series(y, index=close.index)
+
+
+def align_monthly_to_daily_pit(
+    daily_index,
+    monthly_df: pd.DataFrame,
+    value_cols: list[str],
+    *,
+    indicator: str,
+    tolerance: pd.Timedelta,
+) -> pd.DataFrame:
+    """月頻序列 → 日頻 index 的 **Point-in-Time** 對齊（§2.3，2026-10-15 新增）。
+
+    `monthly_df["date"]` 是**資料歸屬月月初**（例：`finmind_m1m2.parquet`，見
+    `scripts/update_macro_history.py` 檔頭），**不是**公布日。直接拿它對日序列做
+    backward join，等於讓每個交易日提前一個多月看到該月資料（look-ahead）。
+
+    本函式先把每一期換算成「可用日」，再以可用日做 backward `merge_asof`：
+
+        可用日(M)   = `shared.staleness.monthly_publication_due(M, indicator=indicator)`
+                    = (M+1)/01 + MACRO_PUBLICATION_LAG_DAYS[indicator]   （grace 0）
+        日 t 取到的 = 可用日 ≤ t 的最新一期，且 t − 可用日 ≤ tolerance（超過 → NaN）
+
+    發布延遲一律走 L0 SSOT，本函式不另寫一套延遲數字。
+
+    Parameters
+    ----------
+    daily_index : 類 DatetimeIndex
+        日頻序列的日期（可不排序、可重複；輸出依原順序回傳）。
+    monthly_df : DataFrame
+        需含 `date` 與 `value_cols`。缺值列請呼叫端自行處理（本函式不 dropna、不填補）。
+    value_cols : list[str]
+        要帶到日頻的欄位（可含呼叫端預先以資料月順序算好的衍生欄，如上一期值）。
+    indicator : str
+        `MACRO_PUBLICATION_LAG_DAYS` 的 key（例 `"m1b_m2"`）。
+    tolerance : Timedelta
+        自**可用日**起算，一期值最多沿用多久。
+
+    Returns
+    -------
+    DataFrame
+        index = `daily_index`（原順序），欄 = `value_cols` + `data_month`
+        （取到的那一期的資料月月初；取不到 → NaT）。
+
+    Raises
+    ------
+    ValueError
+        `date` 有 NaT／無法解析，或 `indicator` 未登錄發布延遲（§1：不猜延遲）。
+    """
+    _idx = pd.DatetimeIndex(pd.to_datetime(daily_index))
+    m = monthly_df[["date", *value_cols]].copy()
+    m["date"] = pd.to_datetime(m["date"], errors="coerce")
+    if m["date"].isna().any():
+        raise ValueError(
+            f"[align_monthly_to_daily_pit] {indicator}: date 欄有 "
+            f"{int(m['date'].isna().sum())} 筆 NaT/無法解析,無法換算可用日")
+    _due = [monthly_publication_due(d, indicator=indicator) for d in m["date"]]
+    if any(d is None for d in _due):
+        raise ValueError(
+            f"[align_monthly_to_daily_pit] 無法取得 {indicator!r} 的發布應到日"
+            "(MACRO_PUBLICATION_LAG_DAYS 未登錄?)")
+    # pandas ≥2 的 datetime 解析度(s/us/ns)可能不同,merge_asof 要求一致 → 一律 ns
+    m["_avail"] = pd.to_datetime(_due).astype("datetime64[ns]")
+    m = (m.rename(columns={"date": "data_month"})
+         .sort_values(["_avail", "data_month"], kind="mergesort"))
+
+    left = pd.DataFrame({"_avail": _idx.astype("datetime64[ns]"),
+                         "_pos": np.arange(len(_idx))})
+    left = left.sort_values("_avail", kind="mergesort")
+    merged = pd.merge_asof(left, m, on="_avail", direction="backward",
+                           tolerance=tolerance)
+    merged = merged.sort_values("_pos", kind="mergesort")
+    out = merged[[*value_cols, "data_month"]]
+    out.index = _idx
+    return out
 
 
 def _sigmoid(z: np.ndarray) -> np.ndarray:

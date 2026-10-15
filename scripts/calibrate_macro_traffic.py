@@ -84,7 +84,18 @@ def load_from_cache(years: int = 5) -> Optional[pd.DataFrame]:
 
 
 def _enrich_with_finmind(df_twii: pd.DataFrame) -> pd.DataFrame:
-    """對齊 FinMind 欄位到 TWII 日 index：左 join + ffill 月頻欄位。
+    """對齊 FinMind 欄位到 TWII 日 index：~~左 join + ffill 月頻欄位。~~
+
+    ⚠️ **2026-10-15 更正(刪除線保留原句)**:月頻欄位(m1b_m2_gap)原本「左 join + 無上限 ffill」,
+    有兩個錯:① `finmind_m1m2.parquet` 的 `date` 是資料月**月初**,以它 join 等於資料月當月
+    1 日就看到該月數值(look-ahead;正確可用日是次月 1 日 + lag,2026-10-15 時 lag=27
+    ⇒ 最早提前 55～58 天);② 月初遇週末/假日,該列在 TWII 日 index
+    上找不到對應日 → 被左 join 丟掉,整個月改 ffill 上一期。
+    現行:日頻欄位(foreign_buy / margin_balance)照舊左 join;月頻欄位改走 L2
+    `align_monthly_to_daily_pit` —— 可用日 = `shared.staleness.monthly_publication_due`
+    (次月 1 日 + `MACRO_PUBLICATION_LAG_DAYS["m1b_m2"]`),以可用日 backward merge_asof,
+    tolerance = `shared.signal_thresholds.MACRO_MERGE_ASOF_TOLERANCE_DAYS`(40d,自可用日起算;
+    與 `calibrate_health_weights._M1M2_TOLERANCE` 同值)。
 
     新增欄位（缺檔自動 NaN）：
       - foreign_buy: 三大法人外資淨買賣（億）
@@ -93,10 +104,11 @@ def _enrich_with_finmind(df_twii: pd.DataFrame) -> pd.DataFrame:
     """
     import os as _os
     out = df_twii.copy()
-    for fname, cols, ffill in [
-        ("finmind_inst.parquet", ["foreign_buy"], False),
-        ("finmind_margin.parquet", ["margin_balance"], False),
-        ("finmind_m1m2.parquet", ["m1b_m2_gap"], True),  # 月頻 → ffill 到日
+    # 第三欄:月頻序列的 `MACRO_PUBLICATION_LAG_DAYS` key;None = 日頻,照舊左 join。
+    for fname, cols, monthly_indicator in [
+        ("finmind_inst.parquet", ["foreign_buy"], None),
+        ("finmind_margin.parquet", ["margin_balance"], None),
+        ("finmind_m1m2.parquet", ["m1b_m2_gap"], "m1b_m2"),  # 月頻 → PIT 對齊到日
     ]:
         path = _os.path.join(_CACHE_DIR, fname)
         if not _os.path.exists(path):
@@ -106,10 +118,21 @@ def _enrich_with_finmind(df_twii: pd.DataFrame) -> pd.DataFrame:
         try:
             sub = pd.read_parquet(path)
             sub["date"] = pd.to_datetime(sub["date"])
-            sub = sub.set_index("date").sort_index()
-            out = out.join(sub[cols], how="left")
-            if ffill:
-                out[cols] = out[cols].ffill()
+            if monthly_indicator is None:
+                sub = sub.set_index("date").sort_index()
+                out = out.join(sub[cols], how="left")
+            else:
+                from shared.signal_thresholds import MACRO_MERGE_ASOF_TOLERANCE_DAYS
+                from src.compute.macro.health_calibration import (
+                    align_monthly_to_daily_pit,
+                )
+                aligned = align_monthly_to_daily_pit(
+                    out.index, sub.dropna(subset=cols), cols,
+                    indicator=monthly_indicator,
+                    tolerance=pd.Timedelta(days=MACRO_MERGE_ASOF_TOLERANCE_DAYS),
+                )
+                for c in cols:
+                    out[c] = aligned[c].to_numpy()
         except Exception as e:
             print(f"[calibrate/enrich] {fname} 讀檔失敗：{type(e).__name__}: {e}")
             for c in cols:
