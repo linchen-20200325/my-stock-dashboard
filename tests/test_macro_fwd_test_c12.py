@@ -250,7 +250,10 @@ class TestDeriveObservationDate:
 # ══════════════════════════════════════════════════════════════════
 # 修復後的帳本（git 追蹤的 data_cache/macro_forward_test/signals.parquet）
 # ══════════════════════════════════════════════════════════════════
-_REPAIR_THROUGH = '2026-10-14'
+#: 歷史修復（回填列）涵蓋到的最後交易日。2026-10-15 merge origin/main 時併入一筆以舊邏輯
+#: 落地的 10-15 列（captured_at 2026-10-15T22:24:22），故由 10-14 延到 10-15。
+#: 此後的列應為 live_as_of，不再增加回填列。
+_REPAIR_THROUGH = '2026-10-15'
 
 #: 自 git 史撈回的 5 筆（HEAD 曾被後寫覆蓋）—— captured_at → (觀測日, icon, health, jqavg, git_sha, 來源 commit)
 _RESTORED = {
@@ -259,6 +262,11 @@ _RESTORED = {
     '2026-09-22T00:01:09+08:00': ('2026-09-21', '🟢', 71.9, 53.22, '6cc73c8', '8e813536'),
     '2026-10-02T00:41:47+08:00': ('2026-10-01', '🟢', 69.9, 49.86, '8499493', '91dbaac2'),
     '2026-10-14T01:07:55+08:00': ('2026-10-13', '🟢', 63.5, 52.52, '456be94', 'd8e00b18'),
+}
+
+#: merge origin/main（645784e0）時併入的舊邏輯列 —— captured_at → (觀測日, icon, health, git_sha)
+_MERGED_FROM_MAIN = {
+    '2026-10-15T22:24:22+08:00': ('2026-10-15', '🟢', 59.9, '9a8827f'),
 }
 
 #: 推導後與較早一筆同觀測日、依「保留最早」排除（仍在 git 史）。
@@ -303,7 +311,7 @@ class TestRepairedLedger:
 
     def test_backfill_rows_have_no_fabricated_values(self, ledger):
         bf = ledger[ledger['date_source'] == DATE_SOURCE_BACKFILL]
-        assert len(bf) >= 36
+        assert len(bf) == 37, f'回填列數應為 36（首次修復）+ 1（merge 併入 10-15）= 37，得 {len(bf)}'
         assert bf['twii_close'].isna().all(), '回填列出現了 twii_close —— 當時沒抓到就是沒抓到'
         assert bf['inputs_as_of'].isna().all(), '推導日被偽裝成當時實抓的 inputs_as_of'
 
@@ -327,6 +335,16 @@ class TestRepairedLedger:
                 d, icon, sha, DATE_SOURCE_BACKFILL)
             assert r['health'] == pytest.approx(health) and r['jqavg'] == pytest.approx(jq)
             assert r['ruleset_hash'] == '532c3a57698f' and int(r['schema_version']) == 1
+
+    def test_merged_row_present_and_unchanged(self, ledger):
+        by_cap = ledger.set_index('captured_at')
+        for cap, (d, icon, health, sha) in _MERGED_FROM_MAIN.items():
+            assert cap in by_cap.index, f'merge 併入的列不見了:{cap}'
+            r = by_cap.loc[cap]
+            assert (r['date'], r['icon'], r['git_sha'], r['date_source']) == (
+                d, icon, sha, DATE_SOURCE_BACKFILL)
+            assert r['health'] == pytest.approx(health)
+            assert r['twii_close'] is None or pd.isna(r['twii_close'])
 
     def test_dedup_excluded_rows_not_in_head(self, ledger):
         assert not (_EXCLUDED & set(ledger['captured_at']))
