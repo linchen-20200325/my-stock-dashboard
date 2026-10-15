@@ -1,0 +1,161 @@
+# Backlog ＆ Decision Register
+
+> **用途**：本檔是本 repo **未完成事項的唯一持久化來源**（formal Backlog），並登記**客戶裁示**（Decision Register）。
+> `HANDOFF.md`（分支 `claude/stock-dashboard-handoff-g9dtm0`）只留 **current state／active work／next step／major blocker & decision**，
+> 細項一律指向本檔。制度來源見 **DR-2026-10-15-4**。
+>
+> 建立：2026-10-15（文件編修組起草；首批自 `HANDOFF.md`「4. 待辦」Correctness 分組 AUD-C3～C16 遷入，並登記同日 Data Gap Audit 後續發現）。
+
+## 0. 怎麼讀、怎麼改
+
+### 0.1 欄位定義（「Open items」表）
+
+| 欄位 | 意思 |
+|---|---|
+| ID | 穩定識別碼；**永不重用**。`AUD-C*`＝2026-10-15 Data Gap Audit 的 Correctness 項；`AUD-M*`＝Mobile；`AUD-L*`＝Audit 低優先雜項；`BL-*`＝本檔自身的維運項 |
+| 標題 | 一句話問題描述 |
+| sev／pri | 嚴重度（高／中／低；CRITICAL 另標）；未另給優先序者，優先序＝嚴重度 |
+| status | 見 0.2 |
+| evidence | 位置一律寫 **`檔案::符號`**、commit、實測數字；⛔ **不寫行號**（`CLAUDE.md` §8.2.A.0 規則 1） |
+| affected area | 受影響的功能／畫面／cron／資料 |
+| dependency | 前置項（ID 或外部條件） |
+| customer decision | `需要`（未裁示）／`不需要`／`已裁示 DR-…`；`部分` 須寫明哪一部分 |
+| source／PR | 發現來源；修復 PR／分支 |
+| next action | 下一步具體動作 |
+| 驗證組數 | 該 evidence 經幾組**獨立**驗證；**1 組＝未經第二組驗，⛔ 不得當成已複驗事實或後續動作的前提**（`CLAUDE.md` §-2 規則 6） |
+
+### 0.2 狀態值
+
+`open`（未動工）／`in-progress`（有分支或 PR）／`blocked-on-customer`（需客戶裁示且未裁示，⛔ 未經裁示不得實作）／`done`（已合併且 main CI 綠，移入「已結案」段）。
+
+### 0.3 更新規則
+
+1. 完成時把該列**移到「3. 已結案」**並附 **PR 號＋merge sha＋main CI run**；⛔ **不刪除**任何列。
+2. 改動既有列的狀態或內容時，舊值以刪除線保留並註明日期與理由（沿用 `CLAUDE.md` 慣例：有意識的變更，不是漏刪）。
+3. ⛔ 不寫「共 N 處」「全部查過」這類會漂移的窮舉宣稱（§8.2.A.0 規則 2／4）；必要的量測值附量測日。
+4. 新客戶裁示先登記於「1. Decision Register」，再在受影響列的 customer decision 欄引用其 ID。
+5. `HANDOFF.md` 只寫「見 `docs/BACKLOG.md` <ID>」，⛔ 不在 HANDOFF 重複維護細項。
+
+### 0.4 證據來源揭露（§-2 規則 6）
+
+本檔首版的 evidence 與實測數字**全部為總管轉述**（Audit 各稽核組結果），編修組未重跑。
+編修組只以 `git` 核對過：(a) 下列 commit 存在 —— `a7c0bf5e`、`01abd357`（AUD-C3 實作 commit，已 squash 為 #855 `5b7b73b2`）、`5b7b73b2`、`6e5a334b`、`ff5f00da`、`0d063d7f`、`8ed6d6ac`；
+(b) 下列符號在 main `8ed6d6ac` 存在 —— `dividend_station_service::build_station_digest`、`dividend_station::suggest_action`、`cross_quarter_trends::compute_cross_quarter_trends`、`macro_state_locker::calculate_system_state`、`risk_cap_apply::compute_and_lock_risk_cap`、`mops_bulk_fetcher::_find_col`、`signal_thresholds::M1B_M2_LEG_ENABLED`、`page_today` 的 `EXIT_RETRY_HERE`、`station_cards` 的「該加碼」字樣、`leading_indicators` 的 `_bps()`。**符號存在 ≠ 問題成立**；問題本身的成立以「驗證組數」欄為準。
+
+---
+
+## 1. Decision Register（客戶裁示）
+
+> 只登記**客戶**的裁示。總管轉述者標明；⛔ 編修組未見客戶逐字原文者不得改寫為逐字引用。
+
+| ID | 日期 | 問題 | 裁示（摘要；總管轉述） | 影響項目 |
+|---|---|---|---|---|
+| **DR-2026-10-15-1**（Q1） | 2026-10-15 | 第一個 correctness Batch 做哪一項？ | **A：先做 AUD-C3 推播行動一致性。** 原則：(1) 只**重用** `suggest_action` 既有優先序；(2) 汰弱／停利／暫停加碼的標的**不得**出現在加碼段；(3) watchlist（觀察清單）與持股**分流**，且**不得**描述為「持股加碼」；(4) ⛔ 不新增公式／比例／權重／新 action semantics；(5) 補**真實引擎** regression test（不得只用手刻 row）。 | AUD-C3（#855 `5b7b73b2` 已合併）、AUD-C3-FU |
+| **DR-2026-10-15-2**（Q2） | 2026-10-15 | 系統風險上限部分輸入時怎麼辦？（總管曾提 A／B：「少於一半輸入就不寫上限」等） | **不接受** A／B 二選一 —— 「4/8 門檻」缺證據。**AUD-C6／C7 留 Backlog，先做 semantics audit**，六點要求：(1) 列出全部 input；(2) 每項分 Core／Optional／Context；(3) 每項缺失時的現行處理；(4) 為何只剩 VIX 就給 70%；(5) 最小 fail-safe，⛔ 不發明 N/8 門檻；(6) C7 追 M1B 歷史／contribution／停用語意，⛔ 不因他處停用就刪。**方向原則**：真正 Required Core 缺失 → 無法判定；Optional／Context 缺失不得在無證據下讓 Decision 癱瘓。 | AUD-C6、AUD-C7、AUD-C8、AUD-C18、AUD-C19 |
+| **DR-2026-10-15-3**（Q3） | 2026-10-15 | AUD-C4 季財報累計值怎麼修？（拆單季／TTM／只用 YoY） | **A 方向：朝正確拆單季再算趨勢。** 施工前須驗證：Q1 基準、YTD→單季、fiscal boundary、缺季、restatement、missing、⛔ 不補 0、historical no-look-ahead；**若出現多個合理財務語意，再停下送裁示。** | AUD-C4、AUD-C4-YOY、AUD-C4-3UP |
+| **DR-2026-10-15-4** | 2026-10-15 | 未完成事項放哪？ | **formal Backlog 與 HANDOFF 分離**：本檔即其實作；HANDOFF 只留 current state／active work／next step／blocker & decision。 | 全檔；BL-MIGRATE-1 |
+
+### 1.1 待裁示（已整理、尚未送題或尚未裁示）
+
+| 題 | 來源列 | 內容 | 總管推薦 |
+|---|---|---|---|
+| PQ-C4-1 | AUD-C4-YOY | `revenue_yoy` 定義：現為**累計對累計** YoY；docstring 寫單季 | 單季 YoY（兩組語意稽核皆列為業務語意） |
+| PQ-C4-2 | AUD-C4-3UP | prescreen「三率三升」現為累計對累計（數學一致；市場慣例常指單季） | 未給（另案） |
+| PQ-C6-1 | AUD-C6 | 是否設 Required Core？成員為何？（兩組建議分歧，見該列） | 未給 |
+| PQ-C6-2 | AUD-C6 | Core 缺時：「無法判定」vs 沿用 7 天快照 | 未給 |
+| PQ-C7-1 | AUD-C7 | 引擎是否比照 `M1B_M2_LEG_ENABLED=False` 停用 M1B 腿，或等 DL-f1-s8 重跑 | 未給 |
+| PQ-C6-3 | AUD-C6／C8 | Cap 理由字串與「N 項未評估」上卡（欄位增減，須先線框；屬 F6／Q-z39～41） | 未給 |
+| PQ-C3-1 | AUD-C3-FU (b)(g)(h) | 舊 UI `station_cards`／`etf_tab_dividend_station` 與新 UI `page_hold` 加碼措辭／計數說明（文案；spec gap；舊 UI 凍結）、舊 UI 持股與觀察清單同代號兩列 | 未給 |
+| （未送題） | AUD-C10、C12、C13（凍結檔部分）、C15、C16 (a)、C17（重抓排程） | 見各列 | 見各列 |
+
+---
+
+## 2. Open items
+
+> 排序：嚴重度高→低；同級依 ID。**原 HANDOFF 列原文完整照搬於「附錄 A」**，本表為結構化欄位版；兩者衝突時以附錄 A 原文為準並回報。
+
+| ID | 標題 | sev／pri | status | evidence | affected area | dependency | customer decision | source／PR | next action | 驗證組數 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **AUD-C6** | 系統風險上限引擎部分輸入也落檔 | 高 | blocked-on-customer | **原 evidence**：`macro_state_locker::calculate_system_state` 缺項當中性、只有 8 項全缺才 fail-safe；實跑僅 VIX=13 ⇒ `risk_cap_apply::compute_and_lock_risk_cap` written=True、上限 70、多頭／安全；僅 M1B／M2 ⇒ 上限 80。<br>**semantics audit 結果（DR-2 要求；2 組獨立）**：只有 8 項數值全缺**且**薩姆未觸發才 fail-safe；缺項當中性；紅線必要輸入缺 ⇒ 等同未觸發；只剩 VIX=13 ⇒ 70% 多頭並寫檔；只剩 M1B／M2（差額>3）⇒ 80。逐項缺失影響（組 A 實跑）：缺外資期貨或 MA5 可放寬至 +70pp、缺 PMI 當期 +60pp。<br>**既有客戶裁示**（組 B 查 HANDOFF；總管轉述、⚠️ 未核原文）：L3-G2；Q-z14＝A（只有全缺才系統異常；部分有效時不改模型、門檻、權重）；Q-z35＝A（維持缺項不計分；新 UI 須顯示「N 項未評估，上限可能偏寬」；否決「任一缺就不更新」）；Q-z34～36（算不出保留 7 天、新頁取不到 ⇒ 無法判定）；題 2＝A（不得因此放寬風控；舊公式有錯或多解 ⇒ 停止 🔴）。部分輸入照算已由 `tests/test_batch_z34.py`、z65 golden 釘住。<br>**Required Core 建議分歧**：組 A＝{VIX, 台灣 PMI 當期}；組 B＝{VIX, PMI 當期, PMI 前月, 外資期貨＋MA5}；兩組皆同意 Sahm **不得**列入（無來源），M1B／M2、PCR、BIAS240 不列入。<br>**最小 fail-safe 建議位置**：只在 `risk_cap_apply::compute_and_lock_risk_cap` 寫檔前檢查 core，⛔ 不動 `calculate_system_state`（舊 UI 與 golden 依賴）；core 缺 ⇒ 不寫檔、沿用 7 天快照、新頁無法判定 | 系統風險上限（`macro_state.json`）與新頁顯示 —— 新頁不會顯示「無法判定」 | 與既有裁示 Q-z14／Q-z35 的關係須客戶確認；AUD-C12（持久化） | 已裁示 **DR-2026-10-15-2**（方向）；**需要**：PQ-C6-1、PQ-C6-2、PQ-C6-3 | 2026-10-15 Data Gap Audit；semantics audit 2026-10-15 | 送 PQ-C6-1／2／3；⛔ 未裁示不得實作 | 原 evidence 2（Context 稽核組＋引擎獨立複驗組實跑）；semantics audit 2（Required Core 成員兩組分歧）；逐項 pp 影響 1（組 A）；既有裁示清單 1（組 B，未核原文） |
+| **AUD-C12** | `macro_state.json`（系統風險上限）只存在 Streamlit Cloud ephemeral 磁碟、全 session 共用，容器重啟即消失 | 高 | blocked-on-customer（未送題） | `macro_state.json` 落檔位置為 ephemeral 磁碟；兩組皆確認無排程提供、runtime 才寫入；⚠️「Cloud 為 ephemeral」依 repo 內 `macro_core` 註解，未實測雲端 | 系統風險上限持久化與跨 session 共用 | 與 AUD-C6、AUD-C19 相關 | **需要**（持久化位置選擇）；⚠️ 換位置可能撞五類 ③（資料層） | 2026-10-15 Data Gap Audit | 送題（附推薦方案） | 2（儲存稽核組＋Mobile 稽核組） |
+| **AUD-C4** | 季財報快照（MOPS t163sb04）損益欄為年初累計，跨季趨勢把累計當逐季算毛利率／營益率斜率 | 中 | open（方向已裁示；修法規則已由語意驗證定案，可排批） | **原 evidence**：`cross_quarter_trends::compute_cross_quarter_trends`；只修斜率時 1978 檔中 310 檔（約 15.7%）`favorable_count` 改變。<br>**語意驗證結果（DR-3 要求；2 組獨立）**：三率斜率單季化是**單一明確** correctness 修法。規則：鍵 (stock_id, roc_year, season)；season=1 單季＝累計；season n＝累計n−累計(n−1)，**限同 roc_year**；前季缺、任一端 NaN、相減後單季營收<0（停業單位重分類口徑斷層）⇒ 該季 revenue／gross_profit／op_income 單季判 NaN 並記旗標；⛔ 不補 0；存量欄不相減；EPS 與 net_income **不**單季化；修在 **L2**（`cross_quarter_trends` 內或同套件純函式）；⛔ 不改 loader 既有欄（會改 prescreen 累計對累計 YoY 與 `export_stock_db` 外送語意）。影響：毛利／營益斜率正負號翻轉約 9.5%。<br>**限制揭露**：跨版本差分（舊季不重抓；實測 115Q2 兩版僅 1806 一檔變動）；保險業 115 年起 revenue 整欄 NaN（疑 IFRS 17，**未查證**）；前進式凍結 4 個 cohort 用舊 trend（`picks.parquet` 無方法版本，⛔ 不得改寫凍結檔）；`tests/test_cross_quarter_trends.py` fixture 為單季形狀需改；docstring「5 季」實為 6 季 | trend 因子 —— `fundamental_screener_service.get_ranked_picks` 與每月 `scripts/update_forward_test_freeze.py` 凍結（畫面預設未勾） | 不依賴 PQ-C4-1（`revenue_yoy` 另列） | 已裁示 **DR-2026-10-15-3** | 2026-10-15 Data Gap Audit；語意驗證 2026-10-15 | 依上列規則實作（L2）＋改 fixture＋docstring；揭露凍結 cohort 方法差異 | 原 evidence 2（指標盤點組＋獨立複驗組）；語意規則 2；限制揭露各項以總管轉述為準 |
+| **AUD-C4-YOY** | `revenue_yoy` 定義為累計對累計 YoY，與 docstring（單季）不符 | 中 | blocked-on-customer | 115Q2 起 244／1885 檔累計 YoY 與單季 YoY 正負號不同 | 營收 YoY 因子／顯示 | AUD-C4 規則（單季化方法） | **需要**：PQ-C4-1（推薦單季 YoY） | AUD-C4 語意驗證（兩組皆列為業務語意） | 送 PQ-C4-1 | 2 |
+| **AUD-C4-3UP** | prescreen「三率三升」為累計對累計 | 中（另案） | blocked-on-customer | 數學上一致，但市場慣例常指單季 | 基本面初篩 | — | **需要**：PQ-C4-2 | AUD-C4 語意驗證 | 另案送題 | 未標（總管轉述） |
+| **AUD-C17** | `mops_bulk_fetcher::_find_col` 子字串比對，「本期淨利（淨損）」先命中「繼續營業單位本期淨利（淨損）」 | 中 | open | net_income 欄實為**繼續營業單位淨利**；NI 與 EPS 正負號相反 138 列／86 檔（例 3708）；影響 prescreen net_margin；AUD-C4 趨勢不受影響 | 季財報快照 net_income；prescreen `net_margin` | 修正需重抓快照（cron／網路）；欄位語意確認 | **不需要**（correctness）；但重抓歷史季屬**資料重建、需排程** | AUD-C4 語意組 A | 第二組驗證 → 修 `_find_col` 精確比對 → 排程重抓 | ⚠️ 1（C4 語意組 A；未經第二組驗） |
+| **AUD-C7** | 引擎仍計 M1B−M2 腿（+15／+5／−10），與 `M1B_M2_LEG_ENABLED=False` 不一致 | 中 | blocked-on-customer | **原 evidence**：`signal_thresholds::M1B_M2_LEG_ENABLED=False`；中性情境下 M1B 8／M2 4 ⇒ 上限 80，M1B 0／M2 4 ⇒ 50。<br>**semantics audit 結果（2 組獨立）**：M1B−M2 腿自 repo 最早 commit `6e5a334b` 即存在、**從未校準**；`M1B_M2_LEG_ENABLED=False`（`ff5f00da` #620；AUC 0.5366，重建前量測，待 DL-f1-s8 重跑）正式範圍**只限 market_regime**；判為「遺漏同步」可能性高，但形式上屬**既有已核准公式**（題 2／Q-z14），⛔ 不得逕刪；近 12 月有 6 個月使上限 +10；HANDOFF DL-f1-s8 列「gap 不進分數」與引擎現況不符 | 系統風險上限引擎（`macro_state_locker`） | DL-f1-s8 重跑（HANDOFF 舊待辦） | 已裁示 **DR-2026-10-15-2**（方向）；**需要**：PQ-C7-1 | 2026-10-15 Data Gap Audit；semantics audit | 送 PQ-C7-1；同步修正 HANDOFF DL-f1-s8 描述（待 BL-MIGRATE-1） | 原 evidence 2（Context 稽核組＋引擎獨立複驗組實跑）；semantics audit 2 |
+| **AUD-C9** | 系統性風險新聞關鍵字純子字串比對，誤中灌高五桶 news_systemic 燈 | 中 | open | `news_fetcher::fetch_macro_news` 的 `SYSTEMIC_RISK_KEYWORDS`：war⊂software／award／router、rout⊂router、default | 五桶 `news_systemic` 燈 | — | 不需要（確認 bug、單一安全修法）；⚠️ 若改關鍵字清單本身則涉判讀語意 | 2026-10-15 Data Gap Audit | 可自主排入 | 2（Context 稽核組＋引擎獨立複驗組；實跑子字串命中） |
+| **AUD-C10** | VIX≥30 時同頁並列「建議持股上限 10%」與 235「崩盤加碼 50%（閒置加碼金）」，方向相反、無仲裁 | 中 | blocked-on-customer（未送題） | `page_hold` 同頁兩訊號；引擎複驗判 PARTIAL：分母不同（閒置加碼金 vs 總資產），但行動方向相反 | 我的持股頁（`page_hold`） | AUD-C3-FU (d) 同類 | **需要**（投資語意）；⚠️ 畫面調整可能撞五類 ① | 2026-10-15 Data Gap Audit | 送題 | 2 |
+| **AUD-C11** | 選股網 cron 與四支 cron 直推 main 為裸 `git push`，無 concurrency／rebase／retry | 中 | open | 各 workflow 裸 git push；實際落地只相隔數分鐘 | `.github/workflows` 直推 main 的 cron（選股網 cron＋四支） | — | 不需要 | 2026-10-15 Data Gap Audit | 第二組驗證後可自主排入 | ⚠️ 1 |
+| **AUD-C18** | allocation 的 VIX 否決權與三環第一環讀 session 原值、不看 freshness | 中 | open | 一個月前 VIX=36 仍生效（總管轉述；位置未由編修組核對） | allocation 決策、三環第一環 | RA-2a freshness SSOT（HANDOFF 進行中） | 待判（是否僅 freshness 接線＝內部自決，或涉行動語意） | AUD-C6/C7 semantics audit 附帶發現 | 第二組驗證 | ⚠️ 1 |
+| **AUD-C19** | 舊 UI `section_news_ai` 與新 UI 共用 `macro_state.json`；舊 UI 無 freshness／core 閘門可覆寫新 UI 檔，且全缺時寫 fail-safe 檔蓋掉 7 天快照 | 中 | open | 總管轉述；位置未由編修組核對 | 系統風險上限檔；新舊 UI 交叉 | AUD-C6、AUD-C12；⚠️ 舊 UI 凍結（客戶 2026-10-13），修法需走共用層例外判定 | 待判 | AUD-C6/C7 semantics audit 附帶發現 | 第二組驗證；判是否屬「新 UI 必要共用層」 | ⚠️ 1 |
+| **AUD-C3-FU** | AUD-C3 後續 8 項（(a)～(d) Audit；(e)～(h) #855 紅隊 NON-BLOCKING） | 低 | open | (a) 只剩暫停加碼時推播印「今日無需動作」，暫停訊號在推播不可見；(b) 舊 UI `src/ui/render/station_cards.py`「該加碼＝235 有加碼金」與新 UI `page_hold`「亮加碼燈」措辭，C3 修後不精確（舊 UI 凍結）；(c) digest `reds` 與 prompt「健檢紅燈需汰弱」仍含觀察清單 🔴；(d) VIX 行「手上部位先不動」與加碼段並存；(e) `tests/test_p04_hold_view.py` 對 `reds` 的欄位檢查因子字串比對而變弱，`AI_INPUT_BLOCKS`「以上＝全部欄位」嚴格說不成立；(f) 換入（switch_in）只看健檢 🟢，觀察清單中正在強制停利（>+3σ）的標的仍被列為建議換入；(g) 舊 UI 不去重，持股與觀察清單同代號出現兩列；(h) 舊頁 `etf_tab_dividend_station`（`app.py` 線上有掛）「該加碼」卡／AI 總結「✅ 無 235 加碼觸發」與新頁「N 檔亮加碼燈」現只算持有＋加碼分支，`station_cards.py`「該加碼 = 235 有加碼金」說明與數字不符（與 (b) 同源） | 每日推播；AI 總結 prompt；`page_hold`；舊 UI `etf_tab_dividend_station`／`station_cards` 文案與計數；相關測試 | AUD-C3（已合併 #855）；(b)(g)(h) 受舊 UI 凍結限制（客戶 2026-10-13） | (a)(c)(d)(e) 不需要（可自主）；(f) 待判（是否屬既有 `suggest_action` 優先序的重用＝內部自決，或涉新 action semantics）；**(b)(g)(h) 需要**：PQ-C3-1（舊 UI 凍結＋文案 spec gap） | (a)～(d) AUD-C3 實作／稽核；(e)～(h) #855 紅隊稽核 NON-BLOCKING | 排 (a)(c)(d)(e)；(f) 先判；(b)(g)(h) 送題 | (a)～(d) 未標（總管轉述）；(e)～(h) ⚠️ 1（紅隊稽核組單組） |
+| **AUD-C8** | 系統風險上限 cap 理由字串宣稱含「薩姆」，但輸入恆為 None | 低 | open | `shared/allocation_decision.py` cap 理由字串；`macro_engine_inputs` 恆送 Sahm=None（no_source） | 系統風險上限的理由說明文字 | PQ-C6-3（理由字串上卡屬欄位增減） | 不需要（確認 bug、單一安全修法）；⚠️ 若改字句涉新文案，依既有文案規則 | 2026-10-15 Data Gap Audit | 可自主排入（文案部分依規則） | 2 |
+| **AUD-C13** | 帳本後續小項 | 低 | open（凍結檔部分 blocked-on-customer） | (1) 09-23@22:25 與 09-22 同值，疑似過期重複列；(2) 平日國定假日異常 K 棒只擋週末；(3) c12 測試依賴 cron 更新檔的時間窗；(4) `max_score` 全 null（`calc_traffic_light` 無此 key）；(5) `data_cache/twii_ohlcv.parquet` HEAD 缺 09-22 K 棒、git 史含 09-20 週日假 K 棒；(6) forward-test 帳本 C-2 修復（#853）後 `--date` 已不能回填（改為斷言）；(7) NB-1 `ruleset_hash` 註解已補（#853） | 總經燈號前進式驗證帳本、`data_cache/twii_ohlcv.parquet`、相關測試 | — | **部分**：動凍結檔需客戶（不可逆，`CLAUDE.md` §-1.5.F 判定 3(5)），其餘不需要 | 2026-10-15 Data Gap Audit | 非凍結檔部分可排；凍結檔部分送題 | 2（實作組＋紅隊稽核組） |
+| **AUD-C14** | 評分函式缺資料回 50（假中性）；`calc_rs_score` 以 iloc 位置對齊、非日期 | 低 | open | `scoring_engine.calc_revenue_yoy_score`、`calc_rs_score`、`calc_chip_score`（Audit 雜項「`calc_rs_score` iloc 位置對齊」已併入本列，不另立） | 選股評分 | — | 不需要；⚠️ 缺值改為「無法判定」會改變評分輸出，動工前先判 | 2026-10-15 Data Gap Audit | 可自主排入（先判輸出變化） | 混合：`calc_chip_score` 回 50 為 2 組；其餘 ⚠️ 1 組 |
+| **AUD-C15** | `recalibrate_macro.yml` 2026-10-01 run 失敗、`auto/recalibrate-20261001` 孤兒分支無 PR；`data` branch 每日 force 覆蓋、無回退版本 | 低 | blocked-on-customer（未送題） | 2026-10-01 run 失敗；遠端孤兒分支 `auto/recalibrate-20261001`；`data` branch 每日 force 覆蓋 | 每季重校準 cron、`data` branch | — | **需要**（分支刪除；⛔ 不得自主執行，客戶 2026-10-09 裁示） | 2026-10-15 Data Gap Audit | 送題 | ⚠️ 1 |
+| **AUD-C16** | M1B 校準修復（#854）後殘留 3 項 | 低 | open（(a) blocked-on-customer，未送題） | (a) `monthly_publication_due` 的 lag=27 僅一個觀測點 —— 2026-08 期 due 9/28，但 9/28 20:00 仍未上架 ⇒ 校準可能殘留 ≤1 交易日提前；本函式不看發布時刻；(b) `_enrich_with_finmind` 收到 tz-aware index 時 TypeError 被 except 吞成整欄 NaN、只 print（現 cache 無 tz，不觸發）；(c) 兩支校準腳本 gap_prev 算法不一致（資料月 shift(1) vs 22 交易日前），皆 PIT-safe，屬既有差異 | `scripts/calibrate_health_weights.py`、`scripts/calibrate_macro_traffic.py` 離線校準 | — | **(a) 需要**（資料語意；建議另案評估 grace 1 天或 t+1 對齊）；(b)(c) 不需要 | #854 紅隊稽核 NON-BLOCKING | (a) 送題；(b) 可自主 | ⚠️ 1（紅隊稽核組單組） |
+| **AUD-C20** | 曝險取整為 banker's rounding（65→60、75→80） | 低 | open | 總管轉述；位置未由編修組核對 | 系統風險上限／曝險顯示 | — | 待判（改取整法會改數字） | AUD-C6/C7 semantics audit 附帶發現 | 第二組驗證 | ⚠️ 1 |
+| **AUD-M1** | Mobile 可用性（保留、暫不施工） | 低 | open（暫不施工） | 預設舊 UI、新 UI 藏在收起側欄、選擇不進 URL；CTA 在 375px 約第 2.45 屏；卡片寫「按上方 🚀 更新」但按鈕在下方（`src/ui/views/page_today.py` `EXIT_RETRY_HERE`）；首屏無資料時間；`leading_indicators` module-level `_bps()` TCP 探測；Playwright 375px 驗證可行 | 手機版新 UI | 新 UI 切換時程（HANDOFF RA 系列） | **版面類需要**（須先出線框，v3 §03-2 ①）；文字指向錯誤（「上方」）屬修正錯誤 vs 改設計待判 | 2026-10-15 Data Gap Audit（Mobile 稽核組） | 暫不施工；排程時先出線框 | 未標（總管轉述） |
+| **AUD-L1** | 選股初篩四項 AND 一票否決造成 Track B 誤殺 | 低 | open | 總管轉述 | 基本面初篩 | — | 待判（篩選規則屬業務語意可能性高） | 2026-10-15 Data Gap Audit | 第二組驗證 | ⚠️ 1 |
+| **AUD-L2** | `eps_high` 以絕對 EPS 為因子 | 低 | open | 總管轉述（符號見 `fundamental_screener_service`） | 選股評分 | — | 待判（因子語意） | 同上 | 第二組驗證 | ⚠️ 1 |
+| **AUD-L3** | 缺貨掃描只看 EPS 前 50 | 低 | open | 總管轉述；位置未由編修組核對 | 缺貨篩選 | — | 待判 | 同上 | 第二組驗證 | ⚠️ 1 |
+| **AUD-L4** | PE 河流圖 Q4 +60 天 lookahead（僅圖） | 低 | open | 總管轉述；位置未由編修組核對 | PE 河流圖 | ⚠️ 若圖僅在舊 UI，受舊 UI 凍結限制 | 不需要（PIT 修正）；先判新舊 UI 歸屬 | 同上 | 第二組驗證＋判 call path | ⚠️ 1 |
+| **AUD-L5** | forward_test 個股價格報酬 vs 0050 含息報酬不對稱 | 低 | open | 總管轉述（`src/compute/screener/forward_test.py` 範圍） | 前進式驗證對帳 | ⛔ 不得改寫凍結檔 `picks.parquet` | **需要**（含息 vs 不含息屬業務語意，§-1.5.A-4） | 同上 | 第二組驗證後送題 | ⚠️ 1 |
+| **AUD-L6** | HEALTH_WEIGHT 0.6／0.4 證據基礎過期（壞資料＋look-ahead＋腿停用） | 低 | open | 總管轉述；#854 只修腳本、未動 production 權重 | 健康評分權重 | **需模型變更流程** | 需要（改權重屬模型變更） | 同上 | 待模型變更流程 | ⚠️ 1 |
+| **AUD-L7** | 推播無 dedup／cooldown／狀態 | 低 | open | 總管轉述 | 每日推播 | — | 待判 | 同上 | 第二組驗證 | ⚠️ 1 |
+| **AUD-L8** | 推播與新頁「建議持股」兩套邏輯 | 低 | open | 總管轉述 | 推播 vs `page_hold` | AUD-C3 | 待判 | 同上 | 第二組驗證 | ⚠️ 1 |
+| **AUD-L9** | 持股帳本無現金／目標權重／thesis | 低 | open | 總管轉述 | 持股帳本（Google Sheets，使用者資產） | — | 需要（新增欄位＝規格變更） | 同上 | 僅登記 | ⚠️ 1 |
+| **AUD-L10** | news 來源無可信度分級 | 低 | open | 總管轉述 | 新聞（T4） | — | 待判 | 同上 | 僅登記 | ⚠️ 1 |
+| **AUD-L11** | MOPS 重大訊息未抓取 | 低 | open | 總管轉述 | 新聞／事件 | 需新資料源（五類 ④） | 需要（新源） | 同上 | 僅登記 | ⚠️ 1 |
+| **BL-MIGRATE-1** | HANDOFF 舊待辦（§4 優先 0～7，91 條）尚未遷入本檔 | 低 | open | `HANDOFF.md`「4. 待辦」優先 0～7（2026-10-15 計數 91） | 本檔完整性 | — | 不需要 | DR-2026-10-15-4 | 分批遷入，原文照搬至附錄 | — |
+
+> 註：Audit 雜項中「`calc_rs_score` iloc 位置對齊」已併入 **AUD-C14**；「`update_macro_forward_test --date`」已於 #853 改為斷言，列入「3. 已結案」作結案註記（亦見 AUD-C13 (6)）。
+
+---
+
+## 3. 已結案
+
+| ID | 標題 | PR | merge sha | main CI | 備註 |
+|---|---|---|---|---|---|
+| AUD-C1 | 總經燈號前進式驗證帳本 `twii_close`／`inputs_as_of` 全為 None（`Close`／`close` 大小寫不符） | #853 | `0d063d7f` | run 38760898327 success | 原列原文見附錄 B |
+| AUD-C2 | 同帳本 observation date 以執行時間計 —— 跨午夜偏移、同日後寫覆蓋前寫，5 筆觀測被蓋 | #853 | `0d063d7f` | run 38760898327 success | 恢復 5 筆、排除 3 列留 git 史；原列原文見附錄 B |
+| AUD-C5 | 校準腳本 M1B／M2 look-ahead：以資料月月初對齊、無發布延遲位移 | #854 | `8ed6d6ac` | run 38766479536 success | production 權重 0.6／0.4 未動；殘留見 AUD-C16；原列原文見附錄 B |
+| AUD-C3 | 每日持股推播同一檔同時出現「🔴 建議換出（汰弱）」與「➕ 235 加碼 50%」（CRITICAL） | #855 | `5b7b73b2` | ⚠️ 待確認（PR CI fast＋slow 綠，總管轉述） | 依 DR-2026-10-15-1：adds 只收「持有＋`suggest_action` 加碼分支」、觀察清單另段只列代號、AI prompt 汰弱行只列持股、有換出不說「今日無需動作」；舊 UI 檔未改（merge commit 訊息）；PR head `5f99a46a`（編修組 GitHub REST API 實測）；後續見 AUD-C3-FU；原 Open items 列與 HANDOFF 原列原文見本表下方註與附錄 A |
+| AUD-L-DATE | `update_macro_forward_test --date` 回填語意 | #853 | `0d063d7f` | run 38760898327 success | 結案註記：#853 起 `--date` 已不能回填、改為斷言（總管轉述）；後續觀察併 AUD-C13 (6) |
+
+**AUD-C3 結案前的 Open items 列（2026-10-15 移入本段，原文保留；欄位同「2. Open items」）**：
+
+| ID | 標題 | sev／pri | status | evidence | affected area | dependency | customer decision | source／PR | next action | 驗證組數 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **AUD-C3** | 每日持股推播同一檔同時出現「🔴 建議換出（汰弱）」與「➕ 235 加碼 50%」 | **高（CRITICAL）** | ~~in-progress：PR 待開，分支 `claude/stock-dashboard-audit-gap-end60n` commits `a7c0bf5e`＋`01abd357`~~ **done**（#855 `5b7b73b2`，2026-10-15） | `dividend_station_service::build_station_digest` 的 adds 只看 `加碼金`（deploy_pct>0），繞過 `dividend_station::suggest_action` 優先序；adds 含觀察清單；健檢 C 🟡 季線轉弱必然同時觸發 235 燈二 ⇒「暫停加碼」被推播成「加碼 30%」；`tests/test_dividend_station_service.py` 只用手刻 row | `push_holdings_daily.yml` 每日推播；`build_summary_prompt`；UI 加碼計數（`etf_tab_dividend_station`、`page_hold`、`station_cards`）；「今日無需動作」判定 —— 皆共用同一份 adds | — | 已裁示 **DR-2026-10-15-1** | 2026-10-15 Data Gap Audit；分支 `claude/stock-dashboard-audit-gap-end60n` | 開 PR → QA → merge；後續見 AUD-C3-FU | 2（兩組皆以 production 函式實跑重現） |
+
+---
+
+## 附錄 A：自 `HANDOFF.md`「4. 待辦」Correctness 分組照搬的原列原文（2026-10-15，handoff 分支 `d9888186`）
+
+> 逐字照搬，一字未改；欄位為 `項目｜狀態｜merge hash｜還缺什麼＋誰決定`。**本附錄是歷史原文**：其中「需客戶裁示、未送題」等狀態已被「1. Decision Register」與「2. Open items」更新者，以正文為準。
+
+**分組前言原文**：
+
+**【Correctness（2026-10-15 Architecture & Investment Decision Data Gap Audit 發現）】（13；~~15~~）〔2026-10-15 #853／#854 登記：AUD-C1、C2（#853 `0d063d7f`）、AUD-C5（#854 `8ed6d6ac`）結案移出（原列照搬於 `HANDOFF_DONE_ARCHIVE.md` #853、#854 行末）；新登 AUD-C16（+1，#854 紅隊 NON-BLOCKING）；15−3＋1＝13〕—— 2026-10-15 新立（總管指示）：Architecture & Investment Decision Data Gap Audit 發現的資料／計算正確性問題 AUD-C1～C16；本分組不是優先層，與優先 0～7 並列、另計；嚴重度依總管指定；evidence 與實測數字皆為總管轉述，編修組只以 `git log` 查證 AUD-C2 所列 8 個 commit 存在（皆為 cron「🤖 總經燈號落地」commit），其餘未重跑（⚠️ 總管轉述）；驗證組數依總管 2026-10-15 補登（各列寫明；總管轉述）：現存 13 列中 2 組 9 列（C3、C4、C6～C10、C12、C13）、1 組 3 列（C11、C15、C16）、C14 混合（`calc_chip_score` 2 組、其餘 1 組）；1 組者 ⛔ 不得當成已複驗；需客戶裁示（是：AUD-C3、C4、C6、C7、C10、C12、C15、C16 (a)；部分：C13 動凍結檔）者尚未送題、未在「6. 等你答」立題（總管將於 Audit 報告一併送題；未計入等你答），⛔ 未經裁示不得實作；可自主排入：C8、C9、C11、C14（確認 bug、單一安全修法）。欄位對映：項目欄＝ID＋標題＋嚴重度＋evidence＋affected area；狀態欄＝修復狀態＋驗證狀態；末欄＝是否需客戶裁示＋誰決定。**
+
+| 項目 | 狀態 | merge hash | 還缺什麼＋誰決定 |
+|---|---|---|---|
+| 【Correctness】 AUD-C3 **CRITICAL** 每日持股推播同一檔同時出現「🔴 建議換出（汰弱）」與「➕ 235 加碼 50%」（**嚴重度：高（CRITICAL）**｜**evidence**：`src/services/dividend_station_service.py::build_station_digest` 的 adds 只看 `加碼金`（deploy_pct>0），繞過 `src/compute/etf/dividend_station.py::suggest_action` 的優先序；adds 含觀察清單；健檢 C 🟡 季線轉弱必然同時觸發 235 燈二 ⇒「暫停加碼」被推播成「加碼 30%」；`tests/test_dividend_station_service.py` 只用手刻 row｜**affected area**：`push_holdings_daily.yml` 每日推播；`build_summary_prompt`；UI 加碼計數（`etf_tab_dividend_station`、`page_hold`、`station_cards`）；「今日無需動作」判定 —— 皆共用同一份 adds；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修；需客戶裁示；未送題；⛔ 未經裁示不得實作）｜驗證：2 組（兩組皆以 production 函式實跑重現）（總管轉述） | — | **需客戶裁示**：修法有多個方向（adds 改走 `suggest_action` 結果／排除汰弱・停利・暫停加碼・未持有／觀察清單另段顯示），且動到推播的行動語意。總管將於 Audit 報告一併送題（附推薦方案）。客戶 |
+| 【Correctness】 AUD-C4 季財報快照（MOPS t163sb04）損益欄為年初累計，跨季趨勢把累計當逐季算毛利率／營益率斜率（**嚴重度：中**｜**evidence**：`src/compute/screener/cross_quarter_trends.py::compute_cross_quarter_trends`；只修斜率時 1978 檔中 310 檔（約 15.7%）`favorable_count` 改變｜**affected area**：trend 因子 —— `fundamental_screener_service.get_ranked_picks` 與每月 `scripts/update_forward_test_freeze.py` 凍結（畫面預設未勾）；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修；待決定）｜驗證：2 組（指標盤點組＋獨立複驗組；複驗修正影響為約 15.7%）（總管轉述） | — | **需客戶裁示**（屬投資因子語意：拆單季 vs 改用 TTM vs 只用 YoY）。總管將於 Audit 報告一併送題（附推薦方案）。客戶 |
+| 【Correctness】 AUD-C6 系統風險上限引擎部分輸入也落檔（**嚴重度：高**｜**evidence**：`src/services/macro_state_locker.py::calculate_system_state` 缺項當中性、只有 8 項全缺才 fail-safe；實跑僅 VIX=13 ⇒ `risk_cap_apply.compute_and_lock_risk_cap` written=True、上限 70、多頭／安全；僅 M1B／M2 ⇒ 上限 80｜**affected area**：系統風險上限（`macro_state.json`）與新頁顯示 —— 新頁不會顯示「無法判定」；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修；需客戶裁示；未送題；⛔ 未經裁示不得實作）｜驗證：2 組（Context 稽核組＋引擎獨立複驗組實跑）（總管轉述） | — | **需客戶裁示**：最低覆蓋規則（幾項輸入到位才可落檔／顯示上限）。總管將於 Audit 報告一併送題（附推薦方案）。客戶 |
+| 【Correctness】 AUD-C7 引擎仍計 M1B−M2 腿（+15／+5／−10），與 `M1B_M2_LEG_ENABLED=False` 不一致（**嚴重度：中**｜**evidence**：`shared/signal_thresholds.py::M1B_M2_LEG_ENABLED=False`；中性情境下 M1B 8／M2 4 ⇒ 上限 80，M1B 0／M2 4 ⇒ 50｜**affected area**：系統風險上限引擎（`macro_state_locker`）；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修；需客戶裁示；未送題；⛔ 未經裁示不得實作）｜驗證：2 組（Context 稽核組＋引擎獨立複驗組實跑）（總管轉述） | — | **需客戶裁示**（引擎是否照旗標停用 M1B−M2 腿，會改變上限數字）。總管將於 Audit 報告一併送題（附推薦方案）。客戶 |
+| 【Correctness】 AUD-C8 系統風險上限 cap 理由字串宣稱含「薩姆」，但輸入恆為 None（**嚴重度：低**｜**evidence**：`shared/allocation_decision.py` cap 理由字串；`macro_engine_inputs` 恆送 Sahm=None（no_source）｜**affected area**：系統風險上限的理由說明文字；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修）｜驗證：2 組（Context 稽核組＋引擎獨立複驗組實跑）（總管轉述） | — | 否（確認 bug、單一安全修法，可自主排入）；⚠️ 若改字句涉新文案，依既有文案規則處理。總管 |
+| 【Correctness】 AUD-C9 系統性風險新聞關鍵字純子字串比對，誤中灌高五桶 news_systemic 燈（**嚴重度：中**｜**evidence**：`src/data/news/news_fetcher.py::fetch_macro_news` 的 `SYSTEMIC_RISK_KEYWORDS`：war⊂software／award／router、rout⊂router、default｜**affected area**：五桶 `news_systemic` 燈；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修）｜驗證：2 組（Context 稽核組＋引擎獨立複驗組；實跑子字串命中）（總管轉述） | — | 否（確認 bug、單一安全修法，可自主排入）；⚠️ 若改關鍵字清單本身則涉判讀語意。總管 |
+| 【Correctness】 AUD-C10 VIX≥30 時同頁並列「建議持股上限 10%」與 235「崩盤加碼 50%（閒置加碼金）」，方向相反、無仲裁（**嚴重度：中**｜**evidence**：`page_hold` 同頁兩訊號｜**affected area**：我的持股頁（`page_hold`）；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修；需客戶裁示；未送題；⛔ 未經裁示不得實作）｜驗證：2 組（引擎複驗判 PARTIAL：分母不同〔閒置加碼金 vs 總資產〕，但行動方向相反）（總管轉述） | — | **需客戶裁示：是**（屬投資語意）；⚠️ 畫面調整可能撞五類 ①。總管將於 Audit 報告一併送題。客戶 |
+| 【Correctness】 AUD-C11 選股網 cron 與四支 cron 直推 main 為裸 `git push`，無 concurrency／rebase／retry（**嚴重度：中**｜**evidence**：各 workflow 裸 git push；實際落地只相隔數分鐘｜**affected area**：`.github/workflows` 直推 main 的 cron（選股網 cron＋四支）；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修）｜驗證：⚠️ 1 組（單組，未經第二組驗）（總管轉述） | — | 否（確認 bug、單一安全修法，可自主排入）。總管 |
+| 【Correctness】 AUD-C12 `macro_state.json`（系統風險上限）只存在 Streamlit Cloud ephemeral 磁碟、全 session 共用，容器重啟即消失（**嚴重度：高**｜**evidence**：`macro_state.json` 落檔位置為 ephemeral 磁碟｜**affected area**：系統風險上限持久化與跨 session 共用；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修；需客戶裁示；未送題；⛔ 未經裁示不得實作）｜驗證：2 組（儲存稽核組＋Mobile 稽核組皆確認無排程提供、runtime 才寫入）；⚠️「Cloud 為 ephemeral」依 repo 內 `macro_core` 註解，未實測雲端（總管轉述） | — | **需客戶裁示：是**（持久化位置選擇）；⚠️ 換持久化位置可能撞五類 ③（資料層）。總管將於 Audit 報告一併送題。客戶 |
+| 【Correctness】 AUD-C13 帳本後續小項（**嚴重度：低**｜**evidence**：(1) 09-23@22:25 與 09-22 同值，疑似過期重複列；(2) 平日國定假日異常 K 棒只擋週末；(3) c12 測試依賴 cron 更新檔的時間窗；(4) `max_score` 全 null（`calc_traffic_light` 無此 key）；(5) `data_cache/twii_ohlcv.parquet` HEAD 缺 09-22 K 棒、git 史含 09-20 週日假 K 棒；(6) forward-test 帳本 C-2 修復（#853）後 `--date` 已不能回填（改為斷言）；(7) NB-1 `ruleset_hash` 註解已補（#853）｜**affected area**：總經燈號前進式驗證帳本、`data_cache/twii_ohlcv.parquet`、相關測試；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修；凍結檔部分需客戶裁示、未送題）｜驗證：2 組（實作組＋紅隊稽核組）（總管轉述） | — | **需客戶裁示：部分** —— 動凍結檔需客戶（⚠️ 動凍結檔／歷史快照屬不可逆、須先請示，`CLAUDE.md` §-1.5.F 判定 3(5)；總管將於 Audit 報告一併送題），其餘否。總管（凍結檔部分：客戶） |
+| 【Correctness】 AUD-C14 評分函式缺資料回 50（假中性）；`calc_rs_score` 以 iloc 位置對齊、非日期（**嚴重度：低**｜**evidence**：`scoring_engine.calc_revenue_yoy_score`、`calc_rs_score`、`calc_chip_score`｜**affected area**：選股評分；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修）｜驗證：`calc_chip_score` 回 50 為 2 組；其餘（`calc_revenue_yoy_score`、`calc_rs_score` 回 50 與 iloc 對齊）⚠️ 1 組（總管轉述） | — | 否（確認 bug、單一安全修法，可自主排入）；⚠️ 缺值改為「無法判定」會改變評分輸出，動工前先判。總管 |
+| 【Correctness】 AUD-C15 `recalibrate_macro.yml` 2026-10-01 run 失敗、`auto/recalibrate-20261001` 孤兒分支無 PR；`data` branch 每日 force 覆蓋、無回退版本（**嚴重度：低**｜**evidence**：2026-10-01 run 失敗；遠端孤兒分支 `auto/recalibrate-20261001`；`data` branch 每日 force 覆蓋｜**affected area**：每季重校準 cron、`data` branch；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修；需客戶裁示；未送題；⛔ 未經裁示不得實作）｜驗證：⚠️ 1 組（單組）（總管轉述） | — | **需客戶裁示：是**（分支刪除）；⛔ 分支刪除不得自主執行（客戶 2026-10-09 裁示）。總管將於 Audit 報告一併送題。客戶 |
+| 【Correctness】 AUD-C16 M1B 校準修復（#854）後殘留 3 項（**嚴重度：低**｜**evidence**：(a) `monthly_publication_due` 的 lag=27 僅一個觀測點 —— 2026-08 期 due 9/28，但 9/28 20:00 仍未上架 ⇒ 校準可能殘留 ≤1 交易日提前；本函式不看發布時刻；(b) `_enrich_with_finmind` 收到 tz-aware index 時 TypeError 被 except 吞成整欄 NaN、只 print（現 cache 無 tz，不觸發）；(c) 兩支校準腳本 gap_prev 算法不一致（資料月 shift(1) vs 22 交易日前），皆 PIT-safe，屬既有差異｜**affected area**：`scripts/calibrate_health_weights.py`、`scripts/calibrate_macro_traffic.py` 離線校準；#854 紅隊稽核 NON-BLOCKING 發現；2026-10-15 新登；⚠️ 總管轉述） | **待辦**（未修；(a) 需客戶裁示、未送題）｜驗證：⚠️ 1 組（紅隊稽核組單組）（總管轉述） | — | **需客戶裁示：(a) 是**（屬資料語意；建議另案評估 grace 1 天或 t+1 對齊；總管將於 Audit 報告一併送題）；(b) 否；(c) 否。(a) 客戶／(b)(c) 總管 |
+
+## 附錄 B：已結案列原文（自 `HANDOFF_DONE_ARCHIVE.md` #853、#854 行照搬，handoff 分支 `d9888186`）
+
+- #854 `8ed6d6ac`（完整 `8ed6d6acf04128ae280edc78a267b69e44cc4595`）｜AUD-C5（修正校準腳本 M1B/M2 look-ahead：改以發布可用日對齊（§2.3 PIT）〔merge commit 標題〕：2026-10-15 Data Gap Audit Correctness 分組 AUD-C5；`scripts/calibrate_health_weights.py::reconstruct_score`、`scripts/calibrate_macro_traffic.py::_enrich_with_finmind` 改依 `shared/staleness.py::MACRO_PUBLICATION_LAG_DAYS` 以發布可用日對齊；production 權重 0.6／0.4 未動（以上總管轉述）；共 4 檔 386 insertions／16 deletions（非測試 3：`scripts/calibrate_health_weights.py`、`scripts/calibrate_macro_traffic.py`、`src/compute/macro/health_calibration.py`；測試 1：新增 `tests/test_calibration_m1b_pit.py`〔253 行〕；編修組 `git show --stat 8ed6d6ac` 實測）；紅隊稽核 NON-BLOCKING 殘留 3 項登記為 `HANDOFF.md`「4. 待辦」Correctness 分組 AUD-C16；PR head `5f88edd9`〔分支 `claude/stock-dashboard-audit-gap-end60n`；編修組 GitHub REST API 實測〕；PR CI fast＋slow 綠（總管轉述）→ squash merge → `8ed6d6ac`（2026-10-15 16:08:36Z＝台北 2026-10-16 00:08；父 `0d063d7f`〔#853〕；編修組 `git log` 實測）；main push PR Check run 38766479536（push，於 `8ed6d6ac`）~~**編修組 2026-10-15 GitHub REST API 實測 in_progress** ⇒ ⚠️ main CI 待確認~~ completed／success（2026-10-15 16:39Z 實測）｜原列原文（自「4. 待辦」Correctness 分組照搬）：| 【Correctness】 AUD-C5 校準腳本 M1B／M2 look-ahead：以資料月月初對齊、無發布延遲位移（**嚴重度：中**｜**evidence**：`scripts/calibrate_health_weights.py::reconstruct_score`、`scripts/calibrate_macro_traffic.py::_enrich_with_finmind`；離線重跑位移前後 val AUC 0.7269→0.7188｜**affected area**：離線校準腳本；production 權重 0.6／0.4 **不在**本修範圍（改權重需模型變更流程）；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修；總管已排入下一個 correctness 批，依 `shared/staleness.py::MACRO_PUBLICATION_LAG_DAYS` 位移）｜驗證：2 組（時間語意組＋獨立複驗組；複驗降級為 MEDIUM：證據污染、非線上錯誤）（總管轉述） | — | 不需客戶裁示（腳本對齊修正）；⛔ 不改 production 權重（若要改，另走模型變更流程）。總管 |
+- #853 `0d063d7f`（完整 `0d063d7fbede758d96999fb84ee56c66f5bc83a9`）｜AUD-C1、AUD-C2（總經燈號前進式驗證帳本 C-1/C-2 修正：收盤欄大小寫、觀測日語意、凍結去重、恢復 5 筆被覆蓋觀測〔merge commit 標題〕：2026-10-15 Data Gap Audit Correctness 分組 AUD-C1、C2；C1 修 `Close`／`close` 大小寫（`twii_close`／`inputs_as_of` 不再全 None）；C2 觀測日改依資料日語意、凍結去重；恢復 5 筆被覆蓋觀測（`f6fc4018`、`9d24ae06`、`8e813536`、`91dbaac2`、`d8e00b18`），排除 3 列（`f9aea73d`、`3390328b`、`2b1b71be`，留 git 史）；帳本最終 37 列；新增 `date_source` 欄；schema v2（`ruleset_hash` `532c3a57698f`→`5fb5e04ba2b8`，僅因 schema 欄變動）；驗證 2 組（儲存稽核組＋獨立複驗組），修復另經紅隊稽核組重建帳本 0 差異（以上總管轉述）；共 9 檔 656 insertions／59 deletions（非測試 7：`.github/workflows/update_macro_forward_test.yml`、`data_cache/macro_forward_test/signals.parquet`、`scripts/update_macro_forward_test.py`、`shared/lamp_direction_thresholds.py`、`shared/macro_forward_test_schema.py`、`src/compute/macro/macro_forward_test.py`、`src/data/macro/macro_fwd_test_store.py`；測試 2：新增 `tests/test_macro_fwd_test_c12.py`〔388 行〕、`tests/test_p7_macro_forward_test.py`；編修組 `git show --stat 0d063d7f` 實測）；後續小項（`--date` 已不能回填、NB-1 註解已補）見 AUD-C13；PR head `36ceadbc`〔分支 `claude/stock-dashboard-audit-gap-end60n`；編修組 GitHub REST API 實測〕→ squash merge → `0d063d7f`（2026-10-15 15:30:13Z＝台北 23:30；父 `645784e0`〔🤖 總經燈號落地：2026-10-15〕；編修組 `git log` 實測）；main push PR Check run 38760898327（push，於 `0d063d7f`）success（fast＋slow；編修組 GitHub REST API 實測 completed／success）｜原列原文（自「4. 待辦」Correctness 分組照搬）：| 【Correctness】 AUD-C1 總經燈號前進式驗證帳本 `twii_close`／`inputs_as_of` 全為 None（`Close`／`close` 大小寫不符）（**嚴重度：高**｜**evidence**：帳本兩欄實測全 None，根因為欄名大小寫 `Close` vs `close`｜**affected area**：總經燈號前進式驗證帳本〔每筆觀測的加權指數收盤與輸入資料日〕；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（修復中：PR #853，未合併）｜驗證：2 組（儲存稽核組＋獨立複驗組；修復另經紅隊稽核組重建帳本 0 差異）（總管轉述） | —（PR #853 未合併；合併後補 sha） | 不需客戶裁示（欄名大小寫屬內部自決）。總管 | | 【Correctness】 AUD-C2 同帳本 observation date 以執行時間計 —— 跨午夜偏移、同日後寫覆蓋前寫，5 筆觀測被蓋（**嚴重度：高**｜**evidence**：被蓋觀測所在 commit `f6fc4018`、`9d24ae06`、`8e813536`、`91dbaac2`、`d8e00b18`；排除 3 列 `f9aea73d`、`3390328b`、`2b1b71be`（留 git 史）〔8 個 commit 編修組 `git log` 實測存在，內容未查〕｜**affected area**：總經燈號前進式驗證帳本〔觀測日對齊、同日去重〕；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（修復中：PR #853，未合併；PR 內已恢復 5 筆、排除 3 列留 git 史）｜驗證：2 組（儲存稽核組＋獨立複驗組；修復另經紅隊稽核組重建帳本 0 差異）（總管轉述） | —（PR #853 未合併；合併後補 sha） | 不需客戶裁示（觀測日對齊屬資料修復、內部自決）。總管 |
