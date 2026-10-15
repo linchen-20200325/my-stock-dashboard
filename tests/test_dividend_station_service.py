@@ -220,7 +220,7 @@ def test_digest_no_fake_config_key():
 
 def test_digest_empty_rows():
     d = svc.build_station_digest([], vix=None)
-    assert d == {"total": 0, "vix": None, "reds": [], "adds": [], "watch_adds": [],
+    assert d == {"total": 0, "vix": None, "reds": [], "held_reds": [], "adds": [], "watch_adds": [],
                  "errors": [], "allocation": None, "take_profit": []}
 
 

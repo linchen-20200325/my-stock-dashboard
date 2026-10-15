@@ -135,9 +135,9 @@ def _adds_lines(digest: dict) -> list[str]:
 def _watch_adds_lines(digest: dict) -> list[str]:
     """觀察清單（未持有）的 235 燈號（AUD-C3）。空 → 略過。
 
-    與持股加碼段**分開**：你沒持有這些標的,故只列代號 + 235 燈號 emoji,
-    **不寫「加碼 N%」**（那是對持股的操作指令）、也不帶燈號名稱（名稱含「加碼」字樣,
-    如「急跌加碼」）,也不計入「今日要動作」。
+    與持股加碼段**分開**：你沒持有這些標的,故**只列代號**,
+    **不寫「加碼 N%」**（那是對持股的操作指令）、不帶燈號名稱（名稱含「加碼」字樣,
+    如「急跌加碼」）、也不帶燈號 emoji（燈三是 🔴,易被讀成汰弱紅燈）,也不計入「今日要動作」。
     同樣受 `suggest_action` 優先序約束（汰弱 / 停利 / 暫停加碼者不會出現在這裡,由 L3 篩）。
     """
     _w = digest.get("watch_adds") or []
@@ -145,7 +145,7 @@ def _watch_adds_lines(digest: dict) -> list[str]:
         return []
     _lines = ["🚦 觀察清單（未持有）235 燈號"]
     for d in _w:
-        _lines.append(f"　・{_code(d)} {_code(d, '燈號')}".rstrip())
+        _lines.append(f"　・{_code(d)}")
     return _lines
 
 

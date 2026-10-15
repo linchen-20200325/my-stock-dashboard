@@ -96,6 +96,8 @@ def _section_lines(msg: str, header_prefix: str) -> list[str]:
 
 
 _ADD_HDR = "➕ 235 逢低加碼觸發"
+#: 觀察清單（未持有）行不得出現的字：加碼指令／比例、以及 235 燈號 emoji（🔴 易被讀成汰弱）
+_WATCH_FORBIDDEN = ("加碼", "%", "🔴", "🟡", "🟢")
 _OUT_HDR = "🔴 建議換出"
 _WATCH_HDR = "🚦 觀察清單（未持有）235 燈號"
 
@@ -222,15 +224,14 @@ def test_watchlist_add_signal_is_separated_from_holding_adds():
     assert _ADD_HDR not in msg
     _icon = rows[0]["235 燈號"].split(" ", 1)[0]
     assert _icon == "🔴"                                         # 崩盤燈三的 emoji
-    assert digest["watch_adds"] == [{"代號": "00907", "燈號": _icon}]
+    assert digest["watch_adds"] == [{"代號": "00907", "燈號": _icon}]   # digest 保留供 UI
     _w = _section_lines(msg, _WATCH_HDR)
-    assert _w == [f"　・00907 {_icon}"]                          # 只列代號 + 燈號 emoji
-    assert not any("%" in _l for _l in _w)                       # 不是加碼指令
+    assert _w == ["　・00907"]                                   # 推播只列代號
     _p_watch = _prompt_line(prompt, "觀察清單（未持有）235 燈號")
-    assert _p_watch == f"- 觀察清單（未持有）235 燈號：00907 {_icon}"
-    # 觀察清單段與其 prompt 行不得出現「加碼」二字（燈號名稱「崩盤/深水加碼」不得帶入）
-    assert "加碼" not in "\n".join([_WATCH_HDR, *_w])
-    assert "加碼" not in _p_watch
+    assert _p_watch == "- 觀察清單（未持有）235 燈號：00907"     # prompt 只列代號
+    # 觀察清單行不得出現「加碼」、燈號 emoji（燈三 🔴 易被讀成汰弱紅燈）或 %
+    for _txt in (*_w, _p_watch):
+        assert not any(_x in _txt for _x in _WATCH_FORBIDDEN), _txt
     assert "00907" not in _prompt_line(prompt, "235 加碼觸發")
     # 觀察清單不是持股動作 → 不阻擋「今日無需動作」
     assert "今日無需動作" in msg
@@ -289,9 +290,16 @@ def test_random_portfolios_never_get_contradictory_directives(seed):
     _add = set(_section_codes(msg, _ADD_HDR))
     _out = set(_section_codes(msg, _OUT_HDR))
     _watch = set(_section_codes(msg, _WATCH_HDR))
-    assert "加碼" not in "\n".join(_section_lines(msg, _WATCH_HDR))
+    for _ln in _section_lines(msg, _WATCH_HDR):
+        assert not any(_x in _ln for _x in _WATCH_FORBIDDEN), _ln
     if digest["watch_adds"]:
-        assert "加碼" not in _prompt_line(prompt, "觀察清單（未持有）235 燈號")
+        _pw = _prompt_line(prompt, "觀察清單（未持有）235 燈號")
+        assert not any(_x in _pw for _x in _WATCH_FORBIDDEN), _pw
+    # 「健檢紅燈需汰弱」只列持股的 🔴
+    _p_red = _prompt_line(prompt, "健檢紅燈需汰弱")
+    for code, r in by.items():
+        if r.get("健檢") == "🔴":
+            assert (code in _p_red) == bool(r["held"]), (code, r["held"], _p_red)
     _p_add = _prompt_line(prompt, "235 加碼觸發")
     for code, r in by.items():
         if code in _add:
@@ -308,3 +316,55 @@ def test_random_portfolios_never_get_contradictory_directives(seed):
             assert code in _add
     if _out or _add:
         assert "今日無需動作" not in msg
+
+
+# ════════════════════════════════════════════════════════════════
+# 8.（紅隊追加）優先序與深水註記 golden —— 釘住稽核時存活的突變
+# ════════════════════════════════════════════════════════════════
+def _assess(series, vix, *, tr1y=10.0, weekly=None):
+    return ds.assess_holding(
+        ticker="00901", name="x", asset_class=T.ASSET_CORE, asset_kind=T.KIND_ETF,
+        weekly_close=_SERIES[series] if weekly is None else weekly, vix=vix,
+        premium_pct=0.1, sharpe=0.8, total_return_1y_pct=tr1y, annual_yield_pct=5.0,
+        inception_years=5, ann_return_3y_pct=5.0, cum_return_3y_pct=15.0, peer_ranks=None)
+
+
+@pytest.mark.parametrize("vix", [_CALM_VIX, _CRASH_VIX])
+def test_cut_outranks_take_profit(vix):
+    """汰弱（健檢 A 🔴）與停利（布林 >+3σ）同時成立 → 汰弱優先。"""
+    a = _assess("spike", vix, tr1y=1.0)
+    assert a.health_a.level == "🔴" and a.light.take_profit == "force"   # 兩者同時成立
+    assert ds.action_branch(a) == ds.ACTION_CUT
+    assert ds.suggest_action(a) == "🔴 汰弱：賺息賠本：年報酬 1.0% < 配息率 5.0%（吃到本金）"
+
+
+#: 跌破年線後站回季線（深水防守「落底回升」註記）。健檢 C 🟢、布林未到 +2σ。
+_DEEPWATER = pd.Series(np.r_[np.full(80, 30.0), np.linspace(30, 20, 20),
+                             np.linspace(20, 22, 20)], index=_IDX)
+
+
+def test_add_string_with_deepwater_note_golden():
+    a = _assess("up", _CRASH_VIX, weekly=_DEEPWATER)
+    assert a.light.deepwater_note                                        # 前置：有深水註記
+    assert ds.action_branch(a) == ds.ACTION_ADD
+    assert ds.suggest_action(a) == (
+        "🔴 加碼 50%：VIX≥30（已站回 13 週季線 → 留意落底回升訊號）")
+
+
+# ════════════════════════════════════════════════════════════════
+# 9.（紅隊追加）prompt「健檢紅燈需汰弱」只列持股 🔴
+# ════════════════════════════════════════════════════════════════
+def test_prompt_red_line_lists_only_held_reds():
+    rows, digest, switch, msg, prompt = _run(
+        [_holding("00901", series="up", tr1y=1.0),                 # 持有 🔴
+         _holding("00909", series="up", tr1y=1.0, held=False)],    # 觀察清單 🔴
+        _CALM_VIX)
+    assert [d["代號"] for d in digest["reds"]] == ["00901", "00909"]   # reds 結構不動
+    assert [d["代號"] for d in digest["held_reds"]] == ["00901"]
+    _p_red = _prompt_line(prompt, "健檢紅燈需汰弱")
+    assert "00901" in _p_red and "00909" not in _p_red
+
+
+def test_prompt_red_line_is_none_when_only_watchlist_red():
+    *_, prompt = _run([_holding("00909", series="up", tr1y=1.0, held=False)], _CALM_VIX)
+    assert _prompt_line(prompt, "健檢紅燈需汰弱") == "- 健檢紅燈需汰弱：無"
