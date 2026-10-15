@@ -72,6 +72,9 @@ MACRO_FWD_TEST_HEADERS: tuple[str, ...] = (
 #: 「本輪實際取得的加權指數最後一根 K 棒的交易日」,並新增 `date_source`。
 #: ⚠️ 歷史列的 `schema_version` 維持其寫入當時的值(1)—— 那是寫入者的版本,
 #: 不是本欄被重新詮釋後的版本;重新推導的 date 以 `date_source` 標記。
+#: ⚠️ `ruleset_hash`:`compute_ruleset_hash` 的 payload 含本常數(`'schema'`),故 v1 列的
+#: `532c3a57698f` 與 v2 列的 `5fb5e04ba2b8` 是**同一套燈號規則** —— 差異只來自 schema 欄
+#: (1→2),不是規則改版(2026-10-15 總管裁定:hash 演算法不改,在此註明)。
 MACRO_FWD_TEST_SCHEMA_VERSION: int = 2
 
 #: 去重鍵。一個交易日只該有一列;同一 date 已存在 → **保留既有那筆、不覆寫**

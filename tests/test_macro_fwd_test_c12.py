@@ -330,3 +330,41 @@ class TestRepairedLedger:
 
     def test_dedup_excluded_rows_not_in_head(self, ledger):
         assert not (_EXCLUDED & set(ledger['captured_at']))
+
+
+# ══════════════════════════════════════════════════════════════════
+# NB-2（2026-10-15 稽核追加）
+# ══════════════════════════════════════════════════════════════════
+class TestNb2Guards:
+    def test_append_signals_rejects_duplicate_keys_in_one_batch(self, tmp_path):
+        from src.data.macro.macro_fwd_test_store import append_signals
+        row = build_signal_row(_tl(), date='2026-08-18', captured_at='2026-08-18T18:00:00+08:00')
+        p = tmp_path / 'signals.parquet'
+        with pytest.raises(ValueError, match='同批'):
+            append_signals([row, dict(row, icon='🟢')], p)
+        assert not p.exists(), '同批重複鍵仍寫出了檔案'
+
+    def test_github_output_key_matches_workflow(self, monkeypatch, tmp_path):
+        import re
+
+        import scripts.update_macro_forward_test as S
+        out = tmp_path / 'gh_output'
+        monkeypatch.setenv('GITHUB_OUTPUT', str(out))
+        S._emit_github_output('2026-08-18')
+        emitted = dict(line.split('=', 1) for line in out.read_text(encoding='utf-8').splitlines())
+        assert emitted, '_emit_github_output 沒有寫出任何 key'
+
+        yml = (_REPO / '.github' / 'workflows' / 'update_macro_forward_test.yml').read_text(
+            encoding='utf-8')
+        assert re.search(r'^\s*id:\s*capture\s*$', yml, re.M), 'workflow 腳本步驟缺 id: capture'
+        used = set(re.findall(r'steps\.capture\.outputs\.(\w+)', yml))
+        assert used, 'workflow 沒有讀 steps.capture.outputs.*'
+        assert used <= set(emitted), (
+            f'workflow 讀的 key {sorted(used)} 腳本沒寫出（腳本寫的是 {sorted(emitted)}）'
+            ' —— commit 訊息會靜默退回 runner 日期')
+        assert emitted['observation_date'] == '2026-08-18'
+
+    def test_twii_unsorted_index_uses_last_trading_day(self):
+        import scripts.update_macro_forward_test as S
+        df = _twii(['2026-08-18', '2026-08-14', '2026-08-17'], [103.0, 101.0, 102.0])
+        assert S._twii_close_and_asof({'台股加權指數': df}) == (103.0, '2026-08-18')
