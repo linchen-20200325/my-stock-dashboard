@@ -1220,7 +1220,8 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
       加碼）→ 同一檔同時被推「建議換出」與「加碼 50%」、每檔「暫停加碼」都被推成加碼，
       且觀察清單（未持有）也被推成加碼。`加碼金` 欄本身（235 燈 deploy_pct）不動。
     - watch_adds：**觀察清單（未持有）**列中、`建議動作` 同樣走「加碼」分支者
-      （鍵同 adds）。分開放，避免未持有標的被描述成持股加碼操作；不計入「今日要動作」。
+      → [{"代號", "燈號"}]（燈號＝235 燈 emoji，不帶含「加碼」字樣的燈號名稱、不帶加碼金）。
+      分開放，避免未持有標的被描述成持股加碼操作；不計入「今日要動作」。
     - errors：抓取失敗未納入判斷的代號（§1 誠實排除,不當作「無事」）
     - allocation：80/20 實際配置偏離（只納入市值＝張數×現價 > 0 的持有列;全無市值 → None,#38）
     - take_profit：衛星獲利達 15% 嚴格停利清單（有損益%才判;#38）
@@ -1247,10 +1248,16 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
         if r.get("_action") == ds.ACTION_ADD:
             # 持有 / 觀察的判法同 `build_switch_advice`（`r.get("held")` 為真＝持有，
             # 否則＝觀察清單）—— 換出段與加碼段對同一列不會一邊算持有、一邊算觀察。
-            (adds if r.get("held") else watch_adds).append(
-                {"代號": str(r.get("代號", "")),
-                 "235": str(r.get("235 燈號", "")),
-                 "加碼金": str(r.get("加碼金", ""))})
+            if r.get("held"):
+                adds.append({"代號": str(r.get("代號", "")),
+                             "235": str(r.get("235 燈號", "")),
+                             "加碼金": str(r.get("加碼金", ""))})
+            else:
+                # 觀察清單只帶燈號 emoji：`235 燈號` 欄＝`f"{icon} {label}"`（見
+                # `row_from_assessment`），label 本身含「加碼」字樣（「急跌加碼」…），
+                # 未持有的標的不得被讀成加碼指令 → 只取空白前的 icon，不帶 label、不帶加碼金。
+                watch_adds.append({"代號": str(r.get("代號", "")),
+                                   "燈號": str(r.get("235 燈號", "") or "").split(" ", 1)[0]})
     _out = {"total": valid, "vix": vix, "reds": reds, "adds": adds,
             "watch_adds": watch_adds, "errors": errors,
             "allocation": compute_allocation_split(rows),
@@ -1286,7 +1293,7 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
                       for d in digest.get("adds", [])) or "無"
     _errs = "、".join(digest.get("errors", [])) or "無"
     # AUD-C3：觀察清單（未持有）的 235 燈號另起一行（只有非空時才有這行，原 prompt 逐字不變）；
-    # 不寫「加碼 N%」—— 未持有的標的不是持股加碼操作。
+    # 只給代號 + 燈號 emoji（不寫「加碼 N%」、不帶含「加碼」的燈號名稱）—— 未持有的標的不是持股加碼操作。
     _watch = digest.get("watch_adds") or []
     # 批 Z51：有燈因資料異常不判定 → 附一行事實（客戶句組成），且**不送**「續抱」那句指示 ——
     # 「235 加碼觸發：無」在這時是「判不出來」不是「沒觸發」，引導 AI 說續抱等於替它下結論。
@@ -1300,7 +1307,7 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
         f"- 健檢紅燈需汰弱：{_reds}\n"
         f"- 235 加碼觸發：{_adds}\n"
         + ("- 觀察清單（未持有）235 燈號："
-           + "、".join(f"{d['代號']} {d['235']}" for d in _watch) + "\n" if _watch else "")
+           + "、".join(f"{d['代號']} {d['燈號']}" for d in _watch) + "\n" if _watch else "")
         + f"- 抓取失敗未納入：{_errs}\n"
     )
     if _inv:

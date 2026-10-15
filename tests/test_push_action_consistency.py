@@ -220,12 +220,18 @@ def test_watchlist_add_signal_is_separated_from_holding_adds():
     assert digest["adds"] == []
     assert [d["代號"] for d in digest["watch_adds"]] == ["00907"]   # 暫停者不列
     assert _ADD_HDR not in msg
+    _icon = rows[0]["235 燈號"].split(" ", 1)[0]
+    assert _icon == "🔴"                                         # 崩盤燈三的 emoji
+    assert digest["watch_adds"] == [{"代號": "00907", "燈號": _icon}]
     _w = _section_lines(msg, _WATCH_HDR)
-    assert _w == [f"　・00907 {rows[0]['235 燈號']}"]
+    assert _w == [f"　・00907 {_icon}"]                          # 只列代號 + 燈號 emoji
     assert not any("%" in _l for _l in _w)                       # 不是加碼指令
+    _p_watch = _prompt_line(prompt, "觀察清單（未持有）235 燈號")
+    assert _p_watch == f"- 觀察清單（未持有）235 燈號：00907 {_icon}"
+    # 觀察清單段與其 prompt 行不得出現「加碼」二字（燈號名稱「崩盤/深水加碼」不得帶入）
+    assert "加碼" not in "\n".join([_WATCH_HDR, *_w])
+    assert "加碼" not in _p_watch
     assert "00907" not in _prompt_line(prompt, "235 加碼觸發")
-    assert _prompt_line(prompt, "觀察清單（未持有）235 燈號") == (
-        f"- 觀察清單（未持有）235 燈號：00907 {rows[0]['235 燈號']}")
     # 觀察清單不是持股動作 → 不阻擋「今日無需動作」
     assert "今日無需動作" in msg
 
@@ -283,6 +289,9 @@ def test_random_portfolios_never_get_contradictory_directives(seed):
     _add = set(_section_codes(msg, _ADD_HDR))
     _out = set(_section_codes(msg, _OUT_HDR))
     _watch = set(_section_codes(msg, _WATCH_HDR))
+    assert "加碼" not in "\n".join(_section_lines(msg, _WATCH_HDR))
+    if digest["watch_adds"]:
+        assert "加碼" not in _prompt_line(prompt, "觀察清單（未持有）235 燈號")
     _p_add = _prompt_line(prompt, "235 加碼觸發")
     for code, r in by.items():
         if code in _add:
