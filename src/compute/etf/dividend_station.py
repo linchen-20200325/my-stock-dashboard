@@ -733,30 +733,68 @@ def assess_holding(*, ticker: str, name: str, asset_class: str,
         invalid_keys=_invalid)
 
 
+#: `suggest_action` 走到的**分支代碼**（AUD-C3 2026-10-15）。
+#:
+#: 只是把 `suggest_action` 既有的 7 條分支**命名出來**，讓下游（推播 digest 的「加碼」段）
+#: 能以結構化結果判定「這一檔的建議動作是不是加碼」，而不必比對中文字串。
+#: 零新增判定：條件、優先序、輸出字串與 `suggest_action` 原本一字不差（兩者共用
+#: `action_branch` 這一份條件，見下）。
+ACTION_CUT = "cut"                              # 1) 汰弱（健檢 A / B 🔴）
+ACTION_TAKE_PROFIT_FORCE = "take_profit_force"  # 2) 強制停利（>+3σ）
+ACTION_TAKE_PROFIT_PARTIAL = "take_profit_partial"  # 2) 分批停利（>+2σ）
+ACTION_PAUSE_ADD = "pause_add"                  # 3) 235 亮但健檢 C 🟡 → 暫停加碼
+ACTION_ADD = "add"                              # 3) 235 加碼
+ACTION_PREMIUM = "premium"                      # 4) 高溢價不追高（健檢 D 🟡）
+ACTION_CRUISE = "cruise"                        # 5) 巡航
+
+
+def action_branch(a: HoldingAssessment) -> str:
+    """`suggest_action` 的優先序判定，回**分支代碼**（`ACTION_*`，純函式）。
+
+    汰弱 > 停利 > 趨勢暫停 > 加碼 > 高溢價 > 巡航 —— 這是 `suggest_action`
+    唯一的一份條件；`suggest_action` 依本函式結果組字串，兩者不會漂移。
+    """
+    # 1) 吃本金 / 夏普<0 → 汰弱留強（最優先）
+    if a.health_a.level == "🔴" or a.health_b.level == "🔴":
+        return ACTION_CUT
+    # 2) 停利（超漲）
+    if a.light.take_profit == "force":
+        return ACTION_TAKE_PROFIT_FORCE
+    if a.light.take_profit == "partial":
+        return ACTION_TAKE_PROFIT_PARTIAL
+    # 3) 235 亮加碼燈,但趨勢轉弱 → 暫停加碼（防守優先）
+    if a.light.light in (T.LIGHT_1, T.LIGHT_2, T.LIGHT_3):
+        if a.health_c.level == "🟡":
+            return ACTION_PAUSE_ADD
+        return ACTION_ADD
+    # 4) 高溢價不追高
+    if a.health_d.level == "🟡":
+        return ACTION_PREMIUM
+    # 5) 巡航
+    return ACTION_CRUISE
+
+
 def suggest_action(a: HoldingAssessment) -> str:
     """依優先序給單一建議（純函式）：汰弱 > 停利 > 趨勢暫停 > 加碼 > 高溢價 > 巡航。
 
     ⚠️ 存股防守邏輯：即使 235 亮加碼燈,若健檢 C「趨勢轉弱」→ **暫停加碼**（不追）。
+    分支判定在 `action_branch`（AUD-C3 抽出；輸出字串逐字不變）。
     """
-    # 1) 吃本金 / 夏普<0 → 汰弱留強（最優先）
-    if a.health_a.level == "🔴" or a.health_b.level == "🔴":
+    _b = action_branch(a)
+    if _b == ACTION_CUT:
         _why = a.health_a.msg if a.health_a.level == "🔴" else a.health_b.msg
         return f"🔴 汰弱：{_why}"
-    # 2) 停利（超漲）
-    if a.light.take_profit == "force":
+    if _b == ACTION_TAKE_PROFIT_FORCE:
         return "💰 強制停利（>+3σ）：獲利轉回核心資產"
-    if a.light.take_profit == "partial":
+    if _b == ACTION_TAKE_PROFIT_PARTIAL:
         return "💰 分批停利（>+2σ）：部分獲利轉回核心"
-    # 3) 235 亮加碼燈,但趨勢轉弱 → 暫停加碼（防守優先）
-    if a.light.light in (T.LIGHT_1, T.LIGHT_2, T.LIGHT_3):
-        if a.health_c.level == "🟡":
-            return f"🟡 {a.light.icon} 訊號亮但季線轉弱 → 暫停加碼、先觀望"
+    if _b == ACTION_PAUSE_ADD:
+        return f"🟡 {a.light.icon} 訊號亮但季線轉弱 → 暫停加碼、先觀望"
+    if _b == ACTION_ADD:
         _dw = f"（{a.light.deepwater_note}）" if a.light.deepwater_note else ""
         return f"{a.light.icon} 加碼 {a.light.deploy_pct:.0f}%：{'、'.join(a.light.reasons)}{_dw}"
-    # 4) 高溢價不追高
-    if a.health_d.level == "🟡":
+    if _b == ACTION_PREMIUM:
         return f"🟡 {a.health_d.msg}"
-    # 5) 巡航
     return "⚪ 巡航：維持定期定額"
 
 

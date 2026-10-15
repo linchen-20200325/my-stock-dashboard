@@ -120,7 +120,8 @@ def _picks_lines(picks) -> list[str]:
 
 
 def _adds_lines(digest: dict) -> list[str]:
-    """235 逢低加碼觸發。空 → 略過。"""
+    """235 逢低加碼觸發（**只含持有列**、且建議動作就是「加碼」那條分支，見 L3
+    `build_station_digest`；AUD-C3）。空 → 略過。"""
     _adds = digest.get("adds") or []
     if not _adds:
         return []
@@ -128,6 +129,23 @@ def _adds_lines(digest: dict) -> list[str]:
     for d in _adds:
         _lines.append(f"　・{_code(d)} {_code(d, '235')}"
                       f" 加碼{_code(d, '加碼金')}".rstrip())
+    return _lines
+
+
+def _watch_adds_lines(digest: dict) -> list[str]:
+    """觀察清單（未持有）的 235 燈號（AUD-C3）。空 → 略過。
+
+    與持股加碼段**分開**：你沒持有這些標的,故**只列代號**,
+    **不寫「加碼 N%」**（那是對持股的操作指令）、不帶燈號名稱（名稱含「加碼」字樣,
+    如「急跌加碼」）、也不帶燈號 emoji（燈三是 🔴,易被讀成汰弱紅燈）,也不計入「今日要動作」。
+    同樣受 `suggest_action` 優先序約束（汰弱 / 停利 / 暫停加碼者不會出現在這裡,由 L3 篩）。
+    """
+    _w = digest.get("watch_adds") or []
+    if not _w:
+        return []
+    _lines = ["🚦 觀察清單（未持有）235 燈號"]
+    for d in _w:
+        _lines.append(f"　・{_code(d)}")
     return _lines
 
 
@@ -173,6 +191,7 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     """digest(+switch+picks) → 每日持股續抱/換股 LINE 訊息（純函式,§1 數字全來自上游）。
 
     區段:標題 → VIX → 換出 → 換入 → 今日選股 Top N（換股池）→ 235 加碼 →
+    觀察清單（未持有）235 燈號 →
     衛星停利 → 配置 → 抓取失敗 → 免責。
 
     ⚠️ 2026-08-24 起**不再有「總經位階」那一行**(user 指定移除)。原本它在標題與 VIX
@@ -188,6 +207,8 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     picks（get_switch_in_candidates 的清單,已排除持股）併入「每日選股」→ 一則涵蓋
     持股續抱/換股 + 選股清單（§ user 2026-08-23 合併需求）;None → 不顯示該段（向後相容）。
     「今日無需動作」判定:無換出、無加碼、無停利 → 明講續抱（對齊 build_summary_prompt 語氣）。
+    「加碼」只看 digest.adds（持有列；AUD-C3）—— 觀察清單（未持有）的 235 燈號
+    (`watch_adds`)不是持股動作,不阻擋這句。
     """
     digest = digest or {}
     _vix = _num(digest.get("vix"))
@@ -224,7 +245,7 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
         # 換入段抹平 → 防禦盤易讀成「買這 10 檔」。補「換股從嚴」提醒,不需 AI 也看得到防禦訊號。
         if (switch or {}).get("stance") == "defensive":
             lines += ["　⚠️ 總經轉守：換股從嚴、優先汰弱、勿追高（此為換股池,非全數買進建議）"]
-    for _seg in (_adds_lines(digest), _take_profit_lines(digest),
+    for _seg in (_adds_lines(digest), _watch_adds_lines(digest), _take_profit_lines(digest),
                  _allocation_line(digest), _errors_line(digest)):
         if _seg:
             lines += [""] + _seg

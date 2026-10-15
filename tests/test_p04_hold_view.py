@@ -3370,7 +3370,9 @@ class TestTheAiIsAlwaysDisclosedAsAi:
         #: L3 欄位 → 畫面上用的中文說法（本測試是這兩者之間唯一的對照表）。
         _said = {
             "reds": "健檢紅燈汰弱",
+            "held_reds": "持股健檢紅燈汰弱",   # AUD-C3：prompt 只送持股的 🔴
             "adds": "235 加碼觸發",
+            "watch_adds": "觀察清單（未持有）235 燈號",   # AUD-C3
             "errors": "整批抓取失敗",
             "total": "有效判斷檔數",
             "vix": "VIX",
