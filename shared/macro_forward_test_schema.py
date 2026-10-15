@@ -38,8 +38,10 @@ from __future__ import annotations
 #: 一列 = 一個交易日的燈號快照。順序即 parquet 欄序。
 MACRO_FWD_TEST_HEADERS: tuple[str, ...] = (
     # ── 身分 / 去重鍵 ──────────────────────────────────────────────
-    "date",             # str 'YYYY-MM-DD'(TW 交易日)。**唯一鍵**,重跑同日覆蓋
-    "captured_at",      # str ISO8601 +08:00,實際跑批時刻(≠ date,用來抓 cron 漂移)
+    "date",             # str 'YYYY-MM-DD' **觀測所屬的 TW 交易日**(v2 起,見下方 C-2 說明)。
+                        #     **唯一鍵**;同一 date 已存在 → **保留既有那筆、不覆寫**(凍結帳本)
+    "captured_at",      # str ISO8601 +08:00,實際跑批時刻(provenance;≠ date,用來抓 cron 漂移)
+    "date_source",      # str `date` 怎麼來的(v2 新增):見 MACRO_FWD_TEST_DATE_SOURCES
     # ── 燈號結論(這就是要驗的東西)────────────────────────────────
     "icon",             # str '🟢'/'🟡'/'🔴'/'⬜'
     "label",            # str 畫面上那句話(如「空頭防禦｜降低部位」)
@@ -66,10 +68,28 @@ MACRO_FWD_TEST_HEADERS: tuple[str, ...] = (
 )
 
 #: 破壞性改欄(刪欄 / 改語意)時 +1;純新增欄不必動。
-MACRO_FWD_TEST_SCHEMA_VERSION: int = 1
+#: v2(2026-10-15,C-1/C-2 修正):`date` 語意由「cron 執行當下的 TW 日期」改為
+#: 「本輪實際取得的加權指數最後一根 K 棒的交易日」,並新增 `date_source`。
+#: ⚠️ 歷史列的 `schema_version` 維持其寫入當時的值(1)—— 那是寫入者的版本,
+#: 不是本欄被重新詮釋後的版本;重新推導的 date 以 `date_source` 標記。
+MACRO_FWD_TEST_SCHEMA_VERSION: int = 2
 
-#: 去重鍵。一個交易日只該有一列;重跑同日 → 後寫者勝(規則可能已改)。
+#: 去重鍵。一個交易日只該有一列;同一 date 已存在 → **保留既有那筆、不覆寫**
+#: (凍結帳本不可被後寫蓋掉;與 `forward_test_store.append_picks_local` 保留最早一筆同慣例)。
 MACRO_FWD_TEST_KEY: str = "date"
+
+#: `date_source` 的合法值。
+#: - live_as_of:cron 當輪實抓的 ^TWII 最後一根 K 棒交易日(= `inputs_as_of`)。
+#: - backfill_from_captured_at:2026-10-15 一次性修復 —— 舊列當時沒抓到 as_of
+#:   (C-1),由 `captured_at` + 已落地的交易日曆依 `derive_observation_date` 推得。
+#:   **不是當時實抓值**;該類列的 `inputs_as_of` 維持原值(None),不回填。
+DATE_SOURCE_LIVE: str = "live_as_of"
+DATE_SOURCE_BACKFILL: str = "backfill_from_captured_at"
+MACRO_FWD_TEST_DATE_SOURCES: tuple[str, ...] = (DATE_SOURCE_LIVE, DATE_SOURCE_BACKFILL)
+
+#: 台股現貨收盤時刻(TW, 時, 分)。captured_at 早於此刻 ⇒ 當日 K 棒尚未收定,
+#: 觀測只能歸屬前一交易日。
+TW_CASH_CLOSE_HHMM: tuple[int, int] = (13, 30)
 
 #: parquet 落地路徑(相對 repo root)。子目錄是刻意的 —— `.gitignore` 有
 #: `data_cache/*.parquet` 頂層規則,放子目錄才追蹤得到(同 forward_test/ 手法)。

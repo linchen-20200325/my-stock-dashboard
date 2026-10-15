@@ -26,15 +26,21 @@
 - 資料全敗 / 燈號算不出來 → **exit 0 且不寫列**(不落空殼;空殼會被日後統計
   當成一個真實觀測)。exit 0 而非 1 —— 休市日走的是同一條路,不該讓 cron 紅燈。
 - 部分腿缺 → 照樣寫列並記 `missing_sources`(缺失本身就是要驗的東西之一)。
+- **取不到 ^TWII 收盤或其交易日 → 不寫列、exit 1**(2026-10-15 C-1)。
+  沒有觀測日就沒有唯一鍵,也無法對帳;修前因欄名大小寫(L1 契約是小寫 `close`,
+  本檔卻只認 `Close`)34 列全數 twii_close / inputs_as_of 為 None 卻只 warn 不擋。
 
-§2.3 對齊:cron 排 TW 17:40(收盤後)。外資 T+1、Yahoo EOD 使得部分腿的資料日
-可能早於 `date`,故另存 `inputs_as_of` 供事後分辨。
+§2.3 對齊(2026-10-15 C-2,schema v2):列的 `date` = **本輪實抓 ^TWII 最後一根
+K 棒的交易日**(= `inputs_as_of`),不是執行當下日期。cron 名義 TW 17:40,實測常延遲
+到台北午夜後 —— 修前以 `now()` 當 date,日期偏一天、週末/假日也生列,且同 date
+後寫者勝吃掉了真實觀測。`captured_at` 仍是實際執行時刻(provenance)。
+同觀測日已存在 → store 保留既有那筆(休市日重跑 = 同一根 K 棒 = 不新增)。
 
 用法::
 
-    python scripts/update_macro_forward_test.py            # 寫入今天(TW)
+    python scripts/update_macro_forward_test.py            # 寫入本輪實抓的觀測日
     python scripts/update_macro_forward_test.py --dry-run  # 只印不寫
-    python scripts/update_macro_forward_test.py --date 2026-08-18
+    python scripts/update_macro_forward_test.py --date 2026-08-18  # 斷言觀測日,不符即失敗
 """
 from __future__ import annotations
 
@@ -49,6 +55,23 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 _TW = timezone(timedelta(hours=8))
+
+
+def _now_tw() -> datetime:
+    """執行當下(TW)。抽成函式只為讓測試能注入跨午夜 / 週末時刻。"""
+    return datetime.now(_TW)
+
+
+def _emit_github_output(observation_date: str) -> None:
+    """在 GitHub Actions 下把觀測日交給下一步(commit message 用);非 Actions 環境 no-op。"""
+    _gh = os.environ.get('GITHUB_OUTPUT')
+    if not _gh:
+        return
+    try:
+        with open(_gh, 'a', encoding='utf-8') as _f:
+            _f.write(f'observation_date={observation_date}\n')
+    except OSError as _e:
+        print(f'[macro_fwd] GITHUB_OUTPUT 寫入失敗({type(_e).__name__}),commit 訊息退回 runner 日期')
 
 
 def _git_sha() -> str:
@@ -84,20 +107,38 @@ def _fetch_live_bundle(fm_token: str) -> dict:
 
 
 def _twii_close_and_asof(tw_raw: dict):
-    """從 bundle 的 tw_raw 取 ^TWII 收盤 + 該筆的資料日。
+    """從 bundle 的 tw_raw 取 ^TWII 收盤 + 該筆的交易日('YYYY-MM-DD')。
 
-    取不到 → (None, None)。**不猜、不用前一日頂替** —— 沒有收盤價的列
-    日後無法對帳,那是它真實的狀態,不該被掩蓋。
+    收盤欄**大小寫不敏感**(C-1):L1 `_fetch_single_cached` 的契約是小寫 `close`
+    (全站依賴,不改 fetcher);舊資料 / 其他路徑可能是 `Close`。兩者都有時取小寫。
+
+    取不到 → (None, None) 並 print 原因。**不猜、不用前一日頂替** —— caller 據此
+    fail loud(不寫列、exit 1)。
     """
+    import pandas as pd
+
     df = (tw_raw or {}).get('台股加權指數')
     try:
-        if df is None or getattr(df, 'empty', True) or 'Close' not in df.columns:
+        if df is None or getattr(df, 'empty', True):
+            print('[macro_fwd] ^TWII 無資料(tw_raw 缺「台股加權指數」或為空)')
             return None, None
-        s = df['Close'].dropna()
+        _cols = list(df.columns)
+        _col = 'close' if 'close' in _cols else next(
+            (c for c in _cols if str(c).lower() == 'close'), None)
+        if _col is None:
+            print(f'[macro_fwd] ^TWII 無收盤欄(大小寫不敏感找 close 失敗):欄位={_cols}')
+            return None, None
+        s = pd.to_numeric(df[_col], errors='coerce')
+        s.index = pd.DatetimeIndex(pd.to_datetime(df.index))
+        s = s.dropna().sort_index()
         if s.empty:
+            print('[macro_fwd] ^TWII 收盤欄全為 NaN')
             return None, None
         _asof = s.index[-1]
-        return float(s.iloc[-1]), str(getattr(_asof, 'date', lambda: _asof)())
+        if pd.isna(_asof):
+            print('[macro_fwd] ^TWII 最後一根 K 棒日期為 NaT')
+            return None, None
+        return float(s.iloc[-1]), _asof.strftime('%Y-%m-%d')
     except Exception as _e:  # noqa: BLE001
         print(f'[macro_fwd] twii 收盤解析失敗:{type(_e).__name__}: {_e}')
         return None, None
@@ -111,13 +152,17 @@ def main(argv=None) -> int:
 
     import streamlit as st
     from src.compute.macro import calc_traffic_light
-    from src.compute.macro.macro_forward_test import build_signal_row, compute_ruleset_hash
-    from src.data.macro.macro_fwd_test_store import MACRO_FWD_TEST_PATH, append_signals
+    from shared.macro_forward_test_schema import DATE_SOURCE_LIVE
+    from src.compute.macro.macro_forward_test import (
+        build_signal_row, compute_ruleset_hash, session_has_closed,
+    )
+    import src.data.macro.macro_fwd_test_store as _store
     from src.services.jingqi_calc import compute_and_store_jingqi
     from src.services.market_assessment_apply import compute_and_apply_market_assessment
 
-    _now = datetime.now(_TW)
-    _date = args.date.strip() or _now.strftime('%Y-%m-%d')
+    _now = _now_tw()
+    _want = args.date.strip()
+    _run_tag = _want or f'run@{_now.strftime("%Y-%m-%d %H:%M")}'
 
     from src.config import get_finmind_token
     _fm = get_finmind_token() or os.environ.get('FINMIND_TOKEN', '')
@@ -154,14 +199,33 @@ def main(argv=None) -> int:
         df_li,
     )
     if not tl:
-        print(f'[macro_fwd] {_date} 三來源全空 → 不寫列(§1 不落空殼)')
+        print(f'[macro_fwd] {_run_tag} 三來源全空 → 不寫列(§1 不落空殼)')
         return 0
 
+    # ── C-1/C-2:觀測日 = 實抓 ^TWII 最後一根 K 棒交易日;取不到就 fail loud ──
     _close, _asof = _twii_close_and_asof(tw_raw)
+    if _close is None or _asof is None:
+        print(f'[macro_fwd] ❌ {_run_tag} 取不到 ^TWII 收盤/交易日 → 無觀測日、無法對帳,'
+              f'不寫列(exit 1)')
+        return 1
+    if datetime.strptime(_asof, '%Y-%m-%d').weekday() >= 5:
+        # 實測 data_cache/twii_ohlcv.parquet 的 git 史曾出現 2026-09-20(週日)一根 Yahoo K 棒。
+        print(f'[macro_fwd] ❌ ^TWII 最後一根 K 棒落在週末 {_asof}(上游異常 K 棒)→ 不寫列(exit 1)')
+        return 1
+    if not session_has_closed(_asof, _now):
+        print(f'[macro_fwd] ❌ ^TWII 最後一根 K 棒 {_asof} 在 {_now.isoformat(timespec="seconds")} '
+              f'尚未收盤(盤中值不是觀測)→ 不寫列(exit 1)')
+        return 1
+    if _want and _want != _asof:
+        print(f'[macro_fwd] ❌ --date {_want} 與實抓觀測日 {_asof} 不符 —— 本腳本只能記錄'
+              f'「本輪實抓到的那一天」,不能回填別天 → 不寫列(exit 1)')
+        return 1
+    _date = _asof
     row = build_signal_row(
         tl, date=_date, captured_at=_now.isoformat(timespec='seconds'),
         twii_close=_close, inputs_as_of=_asof,
         git_sha=_git_sha(), ruleset_hash=compute_ruleset_hash(),
+        date_source=DATE_SOURCE_LIVE,
     )
     print(f"[macro_fwd] {_date} {row['icon']} {row['label']} | "
           f"health={row['health']} score={row['score']}/{row['max_score']} "
@@ -169,14 +233,16 @@ def main(argv=None) -> int:
           f"| ruleset={row['ruleset_hash']}")
     if row['missing_sources']:
         print(f"[macro_fwd] 缺失來源:{row['missing_sources']}")
-    if row['twii_close'] is None:
-        print('[macro_fwd] ⚠️ 無 ^TWII 收盤 —— 本列日後無法對帳(仍寫入,誠實記錄狀態)')
 
     if args.dry_run:
         print('[macro_fwd] --dry-run:不寫檔')
         return 0
-    n = append_signals([row])
-    print(f'[macro_fwd] ✅ 寫入 {n} 列 → {MACRO_FWD_TEST_PATH}')
+    n = _store.append_signals([row])
+    if n:
+        print(f'[macro_fwd] ✅ 寫入 {n} 列 → {_store.MACRO_FWD_TEST_PATH}')
+        _emit_github_output(_date)
+    else:
+        print(f'[macro_fwd] 觀測日 {_date} 已有列 → 保留既有、本輪不寫(休市日 / 重跑屬正常)')
     return 0
 
 
