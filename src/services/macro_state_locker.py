@@ -419,7 +419,8 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     if _file_expired:
         _file_ok = False
     _is_loaded = _wr_ok or _file_ok
-    # 批 Z36（Q-z19，客戶 2026-10-10 核准 A）：規則引擎 8 項數值輸入**全缺**時落檔的 fail-safe（「系統異常」＋
+    # 批 Z36（Q-z19，客戶 2026-10-10 核准 A）：規則引擎 ~~8 項~~數值輸入**全缺**時落檔的 fail-safe（「系統異常」＋
+    #   [📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏刪）：「全缺」自 Z66 起＝**所有啟用中的**數值輸入全缺（停用的 M1B／M2 不算）]
     #   `missing_inputs`，批 Z34；判斷式同 §十一 `section_news_ai`／`ai_qa_service`）是「缺資料、尚未形成有效評估」，
     #   不是「讀壞了」⇒ strict 也比照非 strict／檔不存在走既有未評估路徑（不拋、不帶 `file_error`）。
     #   AI 裁決失敗檔（`execute_and_lock` 寫的 fail-safe，無 `missing_inputs`）、讀檔／JSON 失敗、缺 `market_regime` 照舊。
@@ -574,8 +575,11 @@ def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = Fa
       · BIAS240 的「VIX 偏高或 PMI 收縮」共振條件：缺的那一個視為不成立（同修前預設值的結果）；
       · 回傳多一個 `missing_inputs`（缺的輸入鍵名，依上表順序）—— **只在有缺時才帶**，
         8 個都是有限數值時回傳與修前逐字相同。
-      · 8 個**全缺**（且薩姆未觸發）→ 不計分，回既有 fail-safe `_DEFAULT_STATE` 的
-        regime／風險／曝險／Macro_Phase（「系統異常」）＋ `missing_inputs`（批 Z34，客戶 Q-z14）。
+      · ~~8 個**全缺**（且薩姆未觸發）→ 不計分，回既有 fail-safe `_DEFAULT_STATE` 的~~
+        ~~regime／風險／曝險／Macro_Phase（「系統異常」）＋ `missing_inputs`（批 Z34，客戶 Q-z14）。~~
+        📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏刪）：**所有啟用中的**數值輸入全缺（且薩姆未觸發）→ 不計分，回既有 fail-safe
+        `_DEFAULT_STATE` 的 regime／風險／曝險／Macro_Phase（「系統異常」）＋ `missing_inputs`（批 Z34，
+        客戶 Q-z14）。M1B-M2 腿停用時「啟用中」＝其餘 6 項（見下段）；腿開啟時＝8 項（＝修前）。
     兩個 bool 輸入（Sahm／MA5）不在此列，照舊（None → False）。
 
     M1B-M2 腿停用（批 Z66，客戶 2026-10-16 Q2；開關 `shared.signal_thresholds.M1B_M2_LEG_ENABLED`）
@@ -594,7 +598,8 @@ def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = Fa
     ────────────────────────────────────────────────────────────────
     True → 回傳多一個 `veto_flags`：``{"sahm", "pmi_contraction", "futures_ma5": bool,
     "fail_safe": bool}``。三條紅線的值**就是下方該分支是否實際進入**（在分支內設定，⛔ 不另寫一份
-    條件重算）；`fail_safe=True` 只出現在「8 項數值全缺」的 fail-safe 回傳 —— 此時三條一律 False，
+    條件重算）；~~`fail_safe=True` 只出現在「8 項數值全缺」的 fail-safe 回傳~~
+    （📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏刪））`fail_safe=True` 只出現在「**所有啟用中的**數值輸入全缺」的 fail-safe 回傳 —— 此時三條一律 False，
     語意是「**沒有評估**」，⛔ 不是「未觸發」。其餘既有鍵的值一個都不受影響。
     **為什麼是 opt-in 而不是一律帶**：舊 UI `section_news_ai` 把整份 `_system_state`
     `json.dumps` 進 AI prompt、並原樣 `**` 進 `lock_system_state_only` 落檔 —— 一律帶等於改了
@@ -631,7 +636,7 @@ def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = Fa
     sahm        = _b("Sahm_Rule_Triggered")
     below_ma5   = _b("Index_Below_MA5")
 
-    # 批 Z34（Z9-n2，客戶 2026-10-10 Q-z14＝A）：8 項數值輸入**全缺**時，下方計分只剩中性基準 60，
+    # 批 Z34（Z9-n2，客戶 2026-10-10 Q-z14＝A）：~~8 項~~數值輸入**全缺**時，下方計分只剩中性基準 60，
     #   修前落檔「震盪／警告／曝險上限 60%」—— 沒有任何資料卻給出正常投資結論。改回既有 fail-safe
     #   `_DEFAULT_STATE`（「系統異常」；`get_macro_state` 既有規則視同未載入、不給曝險上限），不新增任何數字。
     #   薩姆規則 bool 已觸發屬「有資料」，照舊走下方紅線（not sahm 才短路）。至少一項有效 → 本段不進、輸出逐字不變。

@@ -1019,15 +1019,15 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
         _dis_note = (f"；M1B-M2 資金活水已停用、不計分（{'、'.join(_dis)}；不屬未評估）" if _dis else "")
         if _rc.written:
             _ne = list((_rc.bundle_summary or {}).get("not_evaluated") or ())
-            _rl = (_rc.bundle_summary or {}).get("red_lines") or {}
-            _und = [k for k, v in _rl.items() if v == "undetermined"]
+            # 批 Z66（Q1）收尾（v3 §01-2：因本次改動才變成死碼）：修前此處另有「硬否決紅線無法判定」那一句（列出 undetermined 的紅線）。
+            #   兩條硬紅線（PMI 連兩月、外資期貨＋MA5）的必要輸入全屬 Required Core，`risk_cap_apply` 的
+            #   核心閘門保證「寫得出檔 ⇒ 紅線必可評估」⇒ 那句永遠不會出現，已刪（tests/test_batch_z66b.py 守）。
             _step(STEP_RISK_CAP, True,
                   f"已寫入 macro_state.json：系統風險上限 "
                   f"{(_rc.engine_result or {}).get('exposure_limit_pct')}%；"
                   f"未評估 {len(_ne)} 項"
                   + (f"（{'、'.join(_ne)}；缺項不計分）" if _ne else "")
                   + _dis_note
-                  + (f"；硬否決紅線無法判定：{'、'.join(_und)}" if _und else "")
                   + "；薩姆規則目前無資料來源、未評估（不代表已通過）"
                   + _rc_inputs_note)
         else:

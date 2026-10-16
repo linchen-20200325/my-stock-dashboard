@@ -389,3 +389,81 @@ class TestSourceMutations:
         out = mod.calculate_system_state({"VIX_Index": 18.0})
         assert "M1B_YoY_pct" in out["missing_inputs"]          # 突變體 ⇒ test_disabled_is_not_missing 會紅
         assert "M1B_YoY_pct" not in calculate_system_state({"VIX_Index": 18.0})["missing_inputs"]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. 現行路徑（開關 False＝production 值）下的舊 UI 消費端：§十一 AI 裁決 prompt ／ AI 問答市場狀態
+#    （舊 UI 檔一個字未動；只以既有測試替身驅動它，見 tests/test_dl_f1_s5_m1b_proxy_label.py::run）
+# ══════════════════════════════════════════════════════════════════════════
+from tests.test_dl_f1_s5_m1b_proxy_label import _FakeST as _NewsFakeST, _Rerun, _real  # noqa: E402
+
+_RAW_KEYS = ("M1B_YoY_pct", "M2_YoY_pct", "disabled_inputs")
+
+
+def _news_verdict(monkeypatch, m1b_info: dict):
+    """按下 §十一「🔒 執行 AI 裁決」（舊 UI 原文 exec，⛔ 不改舊檔）→ 攔下送 Gemini 的 prompt 與要落檔的 state。
+
+    與 `test_dl_f1_s5_m1b_proxy_label.run.news` 同一套替身；差別只在 `_macro_info` 帶 VIX／PMI，
+    讓啟用中的輸入不全缺（否則引擎回 fail-safe，看不出 M1B-M2 有沒有計分）。
+    """
+    import src.data.news as N
+    import src.services.app_ai_service as A
+    import src.ui.tabs.macro.section_news_ai as NA
+    fake = _NewsFakeST({"m1b_m2_info": m1b_info}, clicked={"btn_run_verdict"})
+    prompts: list = []
+    locked: list = []
+
+    class _Locker:
+        def lock_system_state_only(self, state):
+            locked.append(state)
+    monkeypatch.setattr(NA, "st", fake)
+    monkeypatch.setattr(NA, "render_macro_bucket_summary_bar", lambda *a, **k: None)
+    monkeypatch.setattr(NA, "MacroStateLocker", _Locker)
+    monkeypatch.setattr(A, "gemini_call", lambda prompt, max_tokens=2048: prompts.append(prompt) or "（替身）")
+    monkeypatch.setattr(N, "fetch_macro_news", lambda *a, **k: [])
+    with pytest.raises(_Rerun):
+        NA.render_section_news_ai({"vix": {"current": 18.0}, "ism_pmi": {"value": 51.0}}, "unknown")
+    assert len(prompts) == 1 and len(locked) == 1, "替身沒被呼叫到 —— patch 目標失效"
+    return prompts[0], locked[0]
+
+
+class TestOldUiLivePath:
+    def test_flag_is_production_value(self):
+        assert ST.M1B_M2_LEG_ENABLED is False
+
+    def test_news_ai_prompt_no_longer_scores_leg(self, monkeypatch):
+        """§十一：spread +3.1（strong，修前 +15）／−3.8（negative，修前 −10＋「資金緊縮」）／無 M1B → 上限相同、無「資金緊縮」。"""
+        p_strong, s_strong = _news_verdict(monkeypatch, _real("strong"))
+        p_neg, s_neg = _news_verdict(monkeypatch, _real("negative"))
+        p_none, s_none = _news_verdict(monkeypatch, {})
+        assert s_none["market_regime"] != "系統異常"            # 前提：不是 fail-safe
+        assert s_strong["exposure_limit_pct"] == s_neg["exposure_limit_pct"] == s_none["exposure_limit_pct"]
+        for p, s in ((p_strong, s_strong), (p_neg, s_neg), (p_none, s_none)):
+            assert "資金緊縮" not in s["Macro_Phase"] and "資金緊縮" not in p
+            assert s["disabled_inputs"] == list(_LEG)
+            assert not any(k in s["Macro_Phase"] for k in _RAW_KEYS), s["Macro_Phase"]
+        assert MSL.M1B_M2_LEG_DISABLED_LABEL in s_strong["Macro_Phase"]
+        assert MSL.M1B_M2_LEG_DISABLED_LABEL in s_neg["Macro_Phase"]
+
+    def test_news_ai_leg_on_reference_differs(self, monkeypatch):
+        """反向自證：開關 True（修前語意）時同一條路徑的上限確實不同、且貼「資金緊縮」。"""
+        monkeypatch.setattr(ST, "M1B_M2_LEG_ENABLED", True)
+        _, s_strong = _news_verdict(monkeypatch, _real("strong"))
+        _, s_neg = _news_verdict(monkeypatch, _real("negative"))
+        assert s_strong["exposure_limit_pct"] != s_neg["exposure_limit_pct"]
+        assert "資金緊縮" in s_neg["Macro_Phase"]
+
+    def test_ai_qa_market_state_live(self, monkeypatch, tmp_path):
+        """舊 UI 寫的檔（引擎輸出原樣落檔）→ AI 問答市場狀態：無「資金緊縮」、使用者可見欄位無原始鍵名。"""
+        from src.services import ai_qa_service as Q
+        monkeypatch.chdir(tmp_path)
+        st_ = calculate_system_state({"VIX_Index": 18.0, "ISM_PMI_or_OECD_CLI": 51.0, "PMI_Prev_Month": 51.0,
+                                      "BIAS240_pct": 0.0, "PCR": 1.0, "Futures_Net_Short": 0.0,
+                                      "M1B_YoY_pct": 1.0, "M2_YoY_pct": 5.0})
+        MSL.MacroStateLocker(state_file_path="macro_state.json").lock_system_state_only(st_)
+        out = Q._tool_get_market_state()
+        assert out["ok"] and out["data"]["exposure_limit_pct"] == 60
+        txt = json.dumps(out, ensure_ascii=False)
+        assert "資金緊縮" not in txt
+        extra = out["data"]["鎖定快照額外欄位_macro_state_json"]
+        assert not any(k in json.dumps(extra, ensure_ascii=False) for k in _RAW_KEYS), extra

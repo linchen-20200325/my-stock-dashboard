@@ -106,6 +106,10 @@ Z66B_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          ''),
     ),
     'src/services/macro_refresh_service.py': (
+        ('            # 批 Z66（Q1）收尾（v3 §01-2：因本次改動才變成死碼）：修前此處另有「硬否決紅線無法判定」那一句（列出 undetermined 的紅線）。\n            #   兩條硬紅線（PMI 連兩月、外資期貨＋MA5）的必要輸入全屬 Required Core，`risk_cap_apply` 的\n            #   核心閘門保證「寫得出檔 ⇒ 紅線必可評估」⇒ 那句永遠不會出現，已刪（tests/test_batch_z66b.py 守）。\n',
+         '            _rl = (_rc.bundle_summary or {}).get("red_lines") or {}\n            _und = [k for k, v in _rl.items() if v == "undetermined"]\n'),
+        ('                  + "；薩姆規則目前無資料來源、未評估（不代表已通過）"\n',
+         '                  + (f"；硬否決紅線無法判定：{\'、\'.join(_und)}" if _und else "")\n                  + "；薩姆規則目前無資料來源、未評估（不代表已通過）"\n'),
         ('            # 批 Z66（客戶 2026-10-16 Q1）：沒寫檔時一律點名哪幾個 Required Core 無法評估、Optional 哪幾項未評估；\n            #   沿用規則改寫成「7 天內的**有效**快照」（核心齊全＋現行規則版本）—— 舊 UI 寫的、舊版本的檔新頁不認。\n            from shared.risk_cap_policy import REQUIRED_CORE_INPUTS, REQUIRED_CORE_LABELS\n            _mc = list(getattr(_rc, "missing_core", ()) or ())\n            _ne = list((_rc.bundle_summary or {}).get("not_evaluated") or ())\n            _opt_ne = [k for k in _ne if k not in REQUIRED_CORE_INPUTS]\n            _core_note = (\n                ("；Required Core 無法評估：" + "、".join(f"{REQUIRED_CORE_LABELS.get(k, k)}（{k}）" for k in _mc)\n                 + "（本輪不產生新的系統風險上限）") if _mc and not _rc.reason.startswith("Required Core") else "")\n            _opt_note = (f"；選配項未評估：{\'、\'.join(_opt_ne)}（缺項不計分）" if _opt_ne else "")\n',
          ''),
         ('                  f"{_rc.reason}" + _core_note + _opt_note\n                  + f"（既有 macro_state.json 若是 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內的有效快照"\n                  "〔Required Core 齊全、現行規則版本〕，卡①仍沿用它的上限；過期、不存在、"\n                  "舊版或核心不齊的檔，新頁的建議持股顯示「無法判定」）"\n',
@@ -116,8 +120,16 @@ Z66B_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '                    now=None) -> dict:\n'),
         ('\n    require_valid_risk_cap（批 Z66，客戶 2026-10-16 Q1；預設 False = 既有行為一字不變，舊 UI 不傳）:\n      True → `exposure_limit_pct`（系統風險上限）**只**取自 `shared.risk_cap_policy.is_valid_risk_cap_snapshot`\n      為 True 的檔（`required_core_ok is True` 且規則版本＝現行）；其餘檔（舊 UI 寫的、批 Z66 以前的、\n      核心不齊的）→ `exposure_limit_pct=None`（＝沒有系統風險上限 ⇒ 新頁「建議持股：無法判定」）。\n      7 天有效期照舊由上方 `macro_state_is_expired` 判（同一條）。⚠️ 只管**上限**這一個值：\n      位階（來源優先序第 3 條）、`is_loaded`、`strict` 的拋錯判斷一律不受影響。\n      新 UI（`src/ui/views/**`）與它呼叫的服務經 `allocation_service.get_allocation(require_valid_risk_cap=True)`\n      ／`get_macro_regime(require_valid_risk_cap=True)`／`ai_qa_service.run_agent(require_valid_risk_cap=True)` 傳入。\n',
          ''),
+        ('    # 批 Z36（Q-z19，客戶 2026-10-10 核准 A）：規則引擎 ~~8 項~~數值輸入**全缺**時落檔的 fail-safe（「系統異常」＋\n    #   [📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏刪）：「全缺」自 Z66 起＝**所有啟用中的**數值輸入全缺（停用的 M1B／M2 不算）]\n',
+         '    # 批 Z36（Q-z19，客戶 2026-10-10 核准 A）：規則引擎 8 項數值輸入**全缺**時落檔的 fail-safe（「系統異常」＋\n'),
         ('    if require_valid_risk_cap and _exposure is not None:\n        # 批 Z66（Q1）：只認核心齊全＋現行規則版本的檔（fail-safe 方向：認不出來 ⇒ 沒有上限 ⇒「無法判定」）\n        from shared.risk_cap_policy import is_valid_risk_cap_snapshot\n        if not is_valid_risk_cap_snapshot(_file):\n            _exposure = None\n',
          ''),
+        ('      · ~~8 個**全缺**（且薩姆未觸發）→ 不計分，回既有 fail-safe `_DEFAULT_STATE` 的~~\n        ~~regime／風險／曝險／Macro_Phase（「系統異常」）＋ `missing_inputs`（批 Z34，客戶 Q-z14）。~~\n        📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏刪）：**所有啟用中的**數值輸入全缺（且薩姆未觸發）→ 不計分，回既有 fail-safe\n        `_DEFAULT_STATE` 的 regime／風險／曝險／Macro_Phase（「系統異常」）＋ `missing_inputs`（批 Z34，\n        客戶 Q-z14）。M1B-M2 腿停用時「啟用中」＝其餘 6 項（見下段）；腿開啟時＝8 項（＝修前）。\n',
+         '      · 8 個**全缺**（且薩姆未觸發）→ 不計分，回既有 fail-safe `_DEFAULT_STATE` 的\n        regime／風險／曝險／Macro_Phase（「系統異常」）＋ `missing_inputs`（批 Z34，客戶 Q-z14）。\n'),
+        ('    條件重算）；~~`fail_safe=True` 只出現在「8 項數值全缺」的 fail-safe 回傳~~\n    （📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏刪））`fail_safe=True` 只出現在「**所有啟用中的**數值輸入全缺」的 fail-safe 回傳 —— 此時三條一律 False，\n',
+         '    條件重算）；`fail_safe=True` 只出現在「8 項數值全缺」的 fail-safe 回傳 —— 此時三條一律 False，\n'),
+        ('    # 批 Z34（Z9-n2，客戶 2026-10-10 Q-z14＝A）：~~8 項~~數值輸入**全缺**時，下方計分只剩中性基準 60，\n',
+         '    # 批 Z34（Z9-n2，客戶 2026-10-10 Q-z14＝A）：8 項數值輸入**全缺**時，下方計分只剩中性基準 60，\n'),
     ),
     'src/services/risk_cap_apply.py': (
         ('判定（三條任一成立；批 Z66 加第 3 條，見下）：\n',
@@ -201,6 +213,7 @@ def test_z66b_revert_is_exact_base_source(rel):
 # 以下才 import 專案與舊批次測試
 # ══════════════════════════════════════════════════════════════════════════
 import ast  # noqa: E402
+import re  # noqa: E402
 import json  # noqa: E402
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
@@ -563,3 +576,30 @@ class TestMutations:
         from src.ui.views.risk_cap_gate import has_system_risk_cap
         assert not has_system_risk_cap(P._load_allocation()[0].caps)
         assert has_system_risk_cap(mod._load_allocation()[0].caps)   # 突變體認了舊 UI 的檔 ⇒ 原版守衛必紅
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6. 收尾（v3 §01-2）：寫得出檔 ⇒ 紅線必可評估；步驟報告「紅線無法判定」那句已刪
+# ══════════════════════════════════════════════════════════════════════════
+class TestWrittenNeverUndetermined:
+    @pytest.mark.parametrize("kw", [{}, dict(bias=None), dict(pcr=float("nan")), dict(m1b=None, m2=None),
+                                    dict(bias=float("nan"), pcr=float("nan"), m1b=float("nan"))]
+                             + [v for v in _CORE_ALONE.values()])
+    def test_written_has_no_undetermined_red_line(self, l1, tmp_path, kw):
+        k = _inputs(**kw)
+        l1(k["pmi_history"])
+        f = tmp_path / "macro_state.json"
+        res = RC.compute_and_lock_risk_cap(_session_from(k), now=NOW, state_file_path=str(f))
+        und = [n for n, s in res.bundle_summary["red_lines"].items() if s == "undetermined"]
+        if res.written:
+            assert und == [], (kw, und)
+            st = json.loads(f.read_text(encoding="utf-8"))
+            assert all(v["status"] != "undetermined" for v in st["red_lines"].values())
+        else:
+            assert res.missing_core             # 沒寫 ⇔ 核心缺（含所有「紅線無法判定」的情境）
+        if und:
+            assert not res.written, (kw, und)   # 反向自證：有紅線無法判定的情境一律被擋下
+
+    def test_report_clause_removed(self):
+        src = (REPO / "src/services/macro_refresh_service.py").read_text(encoding="utf-8")
+        assert "硬否決紅線無法判定：" not in src and not re.search(r"\b_und\b", src)

@@ -197,6 +197,7 @@ class TestMacroStageAndCap:
         # 與「修前的 L5」（拿掉 strict=True 的突變體）逐欄相同
         _pre = _mutant(PH, ("_m = get_station_macro(strict=True)", "_m = get_station_macro()"),
                        # 📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更）：新頁呼叫多帶 `require_valid_risk_cap=True` ⇒ 突變點跟著換（守的事不變）。
+                       # ~~("_a = get_allocation(strict=True)", "_a = get_allocation()")~~（修前突變點，Z66 Q1 起呼叫字面已變）
                        ("_a = get_allocation(strict=True, require_valid_risk_cap=True)",
                         "_a = get_allocation(require_valid_risk_cap=True)"))
         assert repr(_m) == repr(_macro_card(_pre))
@@ -236,6 +237,7 @@ class TestMacroStageAndCap:
         _write(macro_dir / "macro_state.json", _FAILSAFE)
         _m = _mutant(PH, ("_m = get_station_macro(strict=True)", "_m = get_station_macro()"),
                      # 📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更）：新頁呼叫多帶 `require_valid_risk_cap=True` ⇒ 突變點跟著換（守的事不變）。
+                     # ~~("_a = get_allocation(strict=True)", "_a = get_allocation()")~~（修前突變點，Z66 Q1 起呼叫字面已變）
                      ("_a = get_allocation(strict=True, require_valid_risk_cap=True)",
                       "_a = get_allocation(require_valid_risk_cap=True)"))
         assert _macro_card(_m).state == UI_EMPTY
