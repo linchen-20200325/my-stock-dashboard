@@ -5,6 +5,8 @@
 > 細項一律指向本檔。制度來源見 **DR-2026-10-15-4**。
 >
 > 建立：2026-10-15（文件編修組起草；首批自 `HANDOFF.md`「4. 待辦」Correctness 分組 AUD-C3～C16 遷入，並登記同日 Data Gap Audit 後續發現）。
+>
+> 📌 **2026-10-16 Constitution v1.0 指標（append-only 加註；本檔既有列一字未改）**：專案 AI 工作規則見 `PROJECT_RULES.md`；裁示與正式決策的 DEC 索引見 `docs/DECISIONS.md`（本檔 §1 的 DR-* 列照舊保留於此，DECISIONS 以 DEC 編號互指）；現況見 `docs/HANDOFF.md`。Constitution 遷移時**未升格**為 Decision 的項目登記於本檔**第 4 節**（`CV1-*`）。
 
 ## 0. 怎麼讀、怎麼改
 
@@ -120,6 +122,15 @@
 
 > 註：Audit 雜項中「`calc_rs_score` iloc 位置對齊」已併入 **AUD-C14**；「`update_macro_forward_test --date`」已於 #853 改為斷言，列入「3. 已結案」作結案註記（亦見 AUD-C13 (6)）。
 
+> 📌 **BL-MIGRATE-1 補註（2026-10-16，Constitution v1.0 治理批；append-only，上方 BL-MIGRATE-1 列原文一字未改、狀態不變、未結案）**：實際尚未遷入的舊範圍**大於**該列標題所寫的「§4 91 條」。handoff 分支 `claude/stock-dashboard-handoff-g9dtm0` 的 `HANDOFF.md@1510f3f0` 上，下列內容**仍以該檔為權威、直到遷入本檔為止**（該分支未刪除）：
+> - §3 進行中 **1** 列（約行 1892 起；RA-2a）；
+> - §4 待辦 **91** 列（約行 1921 起；優先 0～7）；
+> - §5 卡住 **42** 列（約行 2178 起）；
+> - §6 等你答 **25** 題（約行 2259 起；含各題括號內的承接列清單 —— 承接列只以題目為載體，須連同題目一起遷）；
+> - 不佔待辦列的 📌 註：**Z6x-a1 → a2 → b → c → d → e** 持股／觀察清單寫入功能批次表（約行 1935；客戶已核准線框，見 `docs/DECISIONS.md` DEC-021，實作未開始）；**SA-only 部署在舊頁下架後無編輯入口**的預留待裁示題（約行 1937；「下架舊頁前才問、暫不送」）；以及約行 **1962～2040** 的觀察註（約 140 個暫編 ID 字串，未逐項判定 open／closed，遷移時應整段照搬、不逐 ID 篩選）。
+> - Q-z39～Q-z41（§6 內）**可能**已被 DR-2026-10-16-4／-5（#862）實質吸收，但 DR 未逐題宣告 —— **需確認，未結案**（見本檔第 4 節 `CV1-DR-06`）。
+> - 計數為 2026-10-16 盤點組單組抽取並與各段自報計數對帳（`CLAUDE.md` §-2 規則 6：未經第二組驗）。本補註**不關閉、不合併、不改寫**任何舊項目。
+
 ---
 
 ## 3. 已結案
@@ -201,3 +212,36 @@
 
 - #854 `8ed6d6ac`（完整 `8ed6d6acf04128ae280edc78a267b69e44cc4595`）｜AUD-C5（修正校準腳本 M1B/M2 look-ahead：改以發布可用日對齊（§2.3 PIT）〔merge commit 標題〕：2026-10-15 Data Gap Audit Correctness 分組 AUD-C5；`scripts/calibrate_health_weights.py::reconstruct_score`、`scripts/calibrate_macro_traffic.py::_enrich_with_finmind` 改依 `shared/staleness.py::MACRO_PUBLICATION_LAG_DAYS` 以發布可用日對齊；production 權重 0.6／0.4 未動（以上總管轉述）；共 4 檔 386 insertions／16 deletions（非測試 3：`scripts/calibrate_health_weights.py`、`scripts/calibrate_macro_traffic.py`、`src/compute/macro/health_calibration.py`；測試 1：新增 `tests/test_calibration_m1b_pit.py`〔253 行〕；編修組 `git show --stat 8ed6d6ac` 實測）；紅隊稽核 NON-BLOCKING 殘留 3 項登記為 `HANDOFF.md`「4. 待辦」Correctness 分組 AUD-C16；PR head `5f88edd9`〔分支 `claude/stock-dashboard-audit-gap-end60n`；編修組 GitHub REST API 實測〕；PR CI fast＋slow 綠（總管轉述）→ squash merge → `8ed6d6ac`（2026-10-15 16:08:36Z＝台北 2026-10-16 00:08；父 `0d063d7f`〔#853〕；編修組 `git log` 實測）；main push PR Check run 38766479536（push，於 `8ed6d6ac`）~~**編修組 2026-10-15 GitHub REST API 實測 in_progress** ⇒ ⚠️ main CI 待確認~~ completed／success（2026-10-15 16:39Z 實測）｜原列原文（自「4. 待辦」Correctness 分組照搬）：| 【Correctness】 AUD-C5 校準腳本 M1B／M2 look-ahead：以資料月月初對齊、無發布延遲位移（**嚴重度：中**｜**evidence**：`scripts/calibrate_health_weights.py::reconstruct_score`、`scripts/calibrate_macro_traffic.py::_enrich_with_finmind`；離線重跑位移前後 val AUC 0.7269→0.7188｜**affected area**：離線校準腳本；production 權重 0.6／0.4 **不在**本修範圍（改權重需模型變更流程）；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（未修；總管已排入下一個 correctness 批，依 `shared/staleness.py::MACRO_PUBLICATION_LAG_DAYS` 位移）｜驗證：2 組（時間語意組＋獨立複驗組；複驗降級為 MEDIUM：證據污染、非線上錯誤）（總管轉述） | — | 不需客戶裁示（腳本對齊修正）；⛔ 不改 production 權重（若要改，另走模型變更流程）。總管 |
 - #853 `0d063d7f`（完整 `0d063d7fbede758d96999fb84ee56c66f5bc83a9`）｜AUD-C1、AUD-C2（總經燈號前進式驗證帳本 C-1/C-2 修正：收盤欄大小寫、觀測日語意、凍結去重、恢復 5 筆被覆蓋觀測〔merge commit 標題〕：2026-10-15 Data Gap Audit Correctness 分組 AUD-C1、C2；C1 修 `Close`／`close` 大小寫（`twii_close`／`inputs_as_of` 不再全 None）；C2 觀測日改依資料日語意、凍結去重；恢復 5 筆被覆蓋觀測（`f6fc4018`、`9d24ae06`、`8e813536`、`91dbaac2`、`d8e00b18`），排除 3 列（`f9aea73d`、`3390328b`、`2b1b71be`，留 git 史）；帳本最終 37 列；新增 `date_source` 欄；schema v2（`ruleset_hash` `532c3a57698f`→`5fb5e04ba2b8`，僅因 schema 欄變動）；驗證 2 組（儲存稽核組＋獨立複驗組），修復另經紅隊稽核組重建帳本 0 差異（以上總管轉述）；共 9 檔 656 insertions／59 deletions（非測試 7：`.github/workflows/update_macro_forward_test.yml`、`data_cache/macro_forward_test/signals.parquet`、`scripts/update_macro_forward_test.py`、`shared/lamp_direction_thresholds.py`、`shared/macro_forward_test_schema.py`、`src/compute/macro/macro_forward_test.py`、`src/data/macro/macro_fwd_test_store.py`；測試 2：新增 `tests/test_macro_fwd_test_c12.py`〔388 行〕、`tests/test_p7_macro_forward_test.py`；編修組 `git show --stat 0d063d7f` 實測）；後續小項（`--date` 已不能回填、NB-1 註解已補）見 AUD-C13；PR head `36ceadbc`〔分支 `claude/stock-dashboard-audit-gap-end60n`；編修組 GitHub REST API 實測〕→ squash merge → `0d063d7f`（2026-10-15 15:30:13Z＝台北 23:30；父 `645784e0`〔🤖 總經燈號落地：2026-10-15〕；編修組 `git log` 實測）；main push PR Check run 38760898327（push，於 `0d063d7f`）success（fast＋slow；編修組 GitHub REST API 實測 completed／success）｜原列原文（自「4. 待辦」Correctness 分組照搬）：| 【Correctness】 AUD-C1 總經燈號前進式驗證帳本 `twii_close`／`inputs_as_of` 全為 None（`Close`／`close` 大小寫不符）（**嚴重度：高**｜**evidence**：帳本兩欄實測全 None，根因為欄名大小寫 `Close` vs `close`｜**affected area**：總經燈號前進式驗證帳本〔每筆觀測的加權指數收盤與輸入資料日〕；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（修復中：PR #853，未合併）｜驗證：2 組（儲存稽核組＋獨立複驗組；修復另經紅隊稽核組重建帳本 0 差異）（總管轉述） | —（PR #853 未合併；合併後補 sha） | 不需客戶裁示（欄名大小寫屬內部自決）。總管 | | 【Correctness】 AUD-C2 同帳本 observation date 以執行時間計 —— 跨午夜偏移、同日後寫覆蓋前寫，5 筆觀測被蓋（**嚴重度：高**｜**evidence**：被蓋觀測所在 commit `f6fc4018`、`9d24ae06`、`8e813536`、`91dbaac2`、`d8e00b18`；排除 3 列 `f9aea73d`、`3390328b`、`2b1b71be`（留 git 史）〔8 個 commit 編修組 `git log` 實測存在，內容未查〕｜**affected area**：總經燈號前進式驗證帳本〔觀測日對齊、同日去重〕；2026-10-15 Data Gap Audit 發現；新登；⚠️ 總管轉述） | **待辦**（修復中：PR #853，未合併；PR 內已恢復 5 筆、排除 3 列留 git 史）｜驗證：2 組（儲存稽核組＋獨立複驗組；修復另經紅隊稽核組重建帳本 0 差異）（總管轉述） | —（PR #853 未合併；合併後補 sha） | 不需客戶裁示（觀測日對齊屬資料修復、內部自決）。總管 |
+
+---
+
+## 4. Decision Required／Research Candidate（Constitution v1.0 遷移，未升格為 Decision）
+
+> 2026-10-16 新增（append-only）。來源：Constitution v1.0 治理批兩份獨立證據清單（文件／客戶裁示角度、git history 角度）中**證據不足或題意不明、因而未升格為 `docs/DECISIONS.md` DEC 條目**的項目，合併去重後逐項登記。
+> **ID 前綴**：`CV1-DR-*`＝Decision Required（須客戶裁示）；`CV1-RC-*`＝Research Candidate（須先查證或研究，未必需要裁示）；`CV1-HX-*`＝僅歷史紀錄（不需動作，登記只為可追溯）。**永不重用**。
+> ⛔ 本節**不提出解法、不擇一**；登記不構成動工授權（`CLAUDE.md` §-1）。各項來源行號為 2026-10-16 實測，`H`＝`HANDOFF.md@1510f3f0`（handoff 分支）。
+> ⚠️ 由單一撰寫組整理，待第二組獨立 evidence audit（`CLAUDE.md` §-2 規則 6）。
+
+| ID | 類別 | 優先 | 議題（中立描述） | 來源 pointer | status | next action |
+|---|---|---|---|---|---|---|
+| **CV1-DR-01** | Decision Required | **高** | 合規母法「全站不產生任何直接買賣建議」（禁用語含「建議買進、應該加碼」；再平衡只做偏離提示／客觀對照／情境試算），與客戶 2026-10-15 對 Action Layer 的長期目標（明確輸出「建立第一筆部位／加碼／續抱／暫停加碼／減碼／全部退出／無法判定」）字面上衝突；另現行推播已有「汰弱／停利／暫停加碼／加碼」`suggest_action` 語意（DR-2026-10-15-1 要求重用）。客戶未裁示兩者在何範圍內何者優先。 | `docs/v2/spec/S1-6_COMPLIANCE_COPY_GUIDE.md@f0a6c474:23-25`；`H:4668`；客戶訊息 2026-10-15T13:40Z §7（本 session）；`docs/DECISIONS.md` DEC-022、DEC-045 | blocked-on-customer（未送題） | 整理成請示題（附總管推薦方案）；裁示前兩者皆不得被引用來推翻對方 |
+| **CV1-DR-02** | Decision Required | 低 | QA 分級 C 級（文件、交接本）「自驗，不派稽核」是否仍適用；客戶 2026-10-16 要求本治理批派獨立 evidence audit，未明示是否全面取代 C 級。另：C 級「自驗」與 `CLAUDE.md` §-2 規則 5（會寫入檔案、會下結論者一律派工；調查／稽核依規則 4 多組獨立）亦有張力，而 `CLAUDE.md` 自稱凌駕全檔 | `H:58`、`H:56-95`；客戶訊息 2026-10-16T13:54Z 第 9 點；DEC-010、DEC-016 | blocked-on-customer（未送題） | 暫行取嚴（`PROJECT_RULES.md` 第 8 節）；擇時送題 |
+| **CV1-DR-03** | Decision Required | 低（切換前才需要） | 2026-10-01 常設藍圖「舊 UI 退場」三關（並行觀察 ≥2 週、先隱藏後刪檔預設不做）是否被 2026-10-13 正式切換路線取代 | `H:128`；`H:1287` 起；DEC-020 | open | 正式入口切換前送題 |
+| **CV1-DR-04** | Decision Required | 低 | PR-f1：`PROCESS.md` §4「merge 後存檔 STATE.md」與登記本（HANDOFF、現又有 `docs/BACKLOG.md`、`docs/HANDOFF.md`）的關係 | `PROCESS.md@f0a6c474:47`；`H:2625`；DEC-004 | blocked-on-customer（舊題，已在 handoff 分支 §5／§6） | 隨 BL-MIGRATE-1 遷移時併入；不另重送（DEC-013） |
+| **CV1-DR-05** | Decision Required | 低 | `docs/HANDOFF.md` 建立後，handoff 分支是否算「已安全遷移」而可刪（原裁示：HANDOFF 尚未安全遷移或有明確替代方案前不得刪除） | `H:2488-2515` 區塊；DEC-012 | open | ⛔ 本批不刪；BL-MIGRATE-1 完成後才可送題 |
+| **CV1-DR-06** | Decision Required（確認題） | 中 | Q-z39（9 項明細放哪）、Q-z40（「▸ 詳細」預設收起／展開）、Q-z41（是否採用舊分頁上限）是否已被 DR-2026-10-16-4／-5（#862）實質吸收；DR 未逐題宣告，Q-z40 未見明確對應 | `H:2259`（§6 標題）；本檔 DR-2026-10-16-4／-5；`docs/DECISIONS.md` DEC-051、DEC-052 | open（未結案） | 人工對照後向客戶確認；⛔ 勿逕寫「已裁示」 |
+| **CV1-DR-07** | Decision Required | 低 | `S1-6_COMPLIANCE_COPY_GUIDE.md` §6「待客戶確認清單」（含「燈號可否留」）與 `S2-PRD.md` §7「★ 待客戶拍板清單」各題是否已有裁示 | `docs/v2/spec/S1-6_COMPLIANCE_COPY_GUIDE.md@f0a6c474:1049`；`docs/v2/spec/S2-PRD.md@1510f3f0:557` | open | 另組逐題核對 handoff 分支是否有答；未答者整理送題 |
+| **CV1-DR-08** | Decision Required | 中 | 客戶 2026-10-10 資料源接入規則允許「同一指標定義、同口徑、高可信、免費、不改公式門檻策略」的新來源**直接最小整合**；客戶 2026-10-15 §25 則把「新／替換資料來源、新 API / MCP」一律列為必須停下裁示。兩者寬嚴不同、客戶未明示關係 | `H:503-560`（§五）；客戶訊息 2026-10-15T13:40Z §25；DEC-008、DEC-009 | open | 暫行取嚴（`PROJECT_RULES.md` 第 4 節）；研究／PoC 不受影響 |
+| **CV1-DR-09** | Decision Required | 低 | 2026-10-02「資料層修錯授權限三類（失敗不快取／缺值不填 0／擋非有限值）、⛔ 不擴大」與 2026-10-10「Level 1：程式沒取到＝bug 可修」的範圍關係未明示 | `H:2266`；`H:410` 起；DEC-038、DEC-008 | open | 擇時送題 |
+| **CV1-RC-01** | Research Candidate | 中 | 客戶 2026-10-15 MSG 1 §1～§17 產品方向：Core Decision＋Context Overlay、Track A／B 最小 metrics、Per-decision Core、Structured Thesis（condition_id…status 四態）、Decision Log 瘦身欄位、Storage／Concurrency 不預設、Live 與 Historical 分離、Conservative Safe Effective Cutoff、Event 來源 Level 1～4＋Unverified Lead、產業雷達不得假精確分數、Signal Families／double-counting、Mobile Read Latest Valid Snapshot／375px 候選驗收 | 客戶訊息 2026-10-15T13:40Z §1～§17（本 session）；客戶自陳「只是候選策略，不是現在直接寫死的 production rule」（§9） | open | 任何一項施工前依 `PROJECT_RULES.md` 第 4 節走 Decision Gate；⛔ 不預設為 Batch 1（DEC-015） |
+| **CV1-RC-02** | Research Candidate | 低 | handoff 分支多處以 `CLAUDE.md` §-1.2（v2 治理／上線路線）、§-1.5.H（回覆紀律）為依據；main 的 `CLAUDE.md` 無此兩節 | `H:1608`、`H:1637`；`CLAUDE.md@f0a6c474` 章節列表 | open | 查 `v2` 分支 `CLAUDE.md`；確認前以這兩節為依據的規則不升格 |
+| **CV1-RC-03** | Research Candidate | 低 | D-1～D-5（v2 五頁爭點，客戶 2026-09-23 裁示）的落地 commit `17998e9`／`aaa8fcf`／`3e91739`／`f6fe758` 只在 `v2` 與 handoff 分支、不在 main；對 main 的效力未查證 | `docs/v2/spec/DECISIONS_PENDING.md@1510f3f0:108-114`；`git merge-base --is-ancestor` 實測 | open | 查證 main 對應現況後再決定是否升格 |
+| **CV1-RC-04** | Research Candidate | 低 | 「路線 A：UI 全新重寫（資料層與計算層唯讀呼叫）」只見 AI 撰寫的 commit（#663 `8f81e96a`、#665 `340be68b`）與 `CLAUDE.md` 轉述，無客戶原文 | 同左；`CLAUDE.md@f0a6c474` §-1.5.F 判定 1 📌 | open | 找到客戶原文前不升格；DEC-017／DEC-019 已涵蓋現行邊界 |
+| **CV1-RC-05** | Research Candidate | 低 | Q-z30＝B（解讀為「開發線 9/21 五個『fix(合規)』commit 不帶入 main」）—— 原文只有「裁示：B。」，題意靠編修組對映 | handoff 分支 commit `d836a2f2` | open | 核對當時題目原文 |
+| **CV1-RC-06** | Research Candidate | 低 | 台股資料 MCP server（`mcp_server/`）標題標「暫擱」，語意（停用？保留？）與核准者未寫明；查無撤銷或恢復 commit | #574 `ff964410` | open | 釐清現況；任何接入 production 依 DEC-009 走 Decision Gate |
+| **CV1-HX-01** | 歷史 | — | 2026-10-12〈接手自主巡航＋超嚴格靜默〉指示：總管轉述非逐字，已被 2026-10-13 版覆蓋 | `H:934` | 僅歷史 | 無 |
+| **CV1-HX-02** | 歷史 | — | 2026-10-15「安全收尾模式」：一次性 session 指示（其中「`stash@{0}` 不得還原」禁令仍見 DEC-019） | `H:100` | 僅歷史 | 無 |
+| **CV1-HX-03** | 歷史 | — | `86aa6f01`「風險等級 MEDIUM」（2026-09-23）：單一 PR 風險評級，非 repo 層 Decision | commit `86aa6f01` | 僅歷史 | 無 |
+| **CV1-HX-04** | 歷史 | — | v19.112「失敗不進快取」（`d432ca2f`「user 核准提案①+②」）：技術提案層，已被 `CLAUDE.md` v3 §02 第 3 點涵蓋 | commit `d432ca2f` | 僅歷史（佐證） | 無 |
+
+> 另：證據清單中已屬本檔既有列的待裁示／待判項（AUD-C10、C12、C15、C16(a)、C18、C20、C22、C27、C28、AUD-L1～L11、PQ-C4-2、PQ-C3-1）**沿用原列，不在本節重複立項**；handoff 分支 §6 的 25 題等舊待辦見上方 BL-MIGRATE-1 補註。
