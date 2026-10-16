@@ -14,12 +14,24 @@
   拆成單季(同一 roc_year 內 累計n − 累計(n−1);Q1 = 累計;不跨年相減),再算單季比率。
   - 存量欄(total_assets / total_liab)是期末時點值,**不相減**;負債比斜率不變。
   - EPS / net_income **不**單季化(本模組不用)。
-  - `revenue_yoy` **不改**:仍是「最新季的年初至今累計營收 vs 去年同期年初至今累計營收」
-    (例:最新季為 115Q2 → 115 上半年 vs 114 上半年)。是否改成單季 YoY 屬客戶待裁示(PQ-C4-1)。
+  - ~~`revenue_yoy` **不改**:仍是「最新季的年初至今累計營收 vs 去年同期年初至今累計營收」
+    (例:最新季為 115Q2 → 115 上半年 vs 114 上半年)。是否改成單季 YoY 屬客戶待裁示(PQ-C4-1)。~~
+    —— 有意識的修改,不是漏刪(2026-10-16,客戶裁示 PQ-C4-1 = 推薦方案「單季對去年同季單季」)。
+    舊定義的理由仍成立:累計對累計數學上自洽、季節性互相抵消,且不受前季缺/斷層影響;
+    被權衡掉的原因:累計 YoY 把「最新一季」稀釋進年初以來的平均,最新季轉弱/轉強會被前幾季
+    蓋過(量測日 2026-10-16:兩種算法皆算得出的 1886 檔中 244 檔正負號相反),與因子
+    「最新季規模成長」的語意不符。
+  - **現行** `revenue_yoy` = 單季營收(roc_year y, season s) / 單季營收(y−1, s) − 1,
+    單季值取自同一個 `ytd_to_single_quarter`(sq_revenue)。錨定季 = 該檔「最新一個有累計營收」的季
+    (與修前同一錨定規則,只換算式)。任一端單季 NaN(缺季 / 前季缺 / 口徑斷層)或去年同季單季
+    營收 ≤ 0 → NaN;**錨定季單季 NaN 時不回退到更早的季**(回退 = 拿舊季冒充最新季)。
 
 ⚠️ 前進式凍結(forward_test)方法版本:**2026-10-15 起 trend 因子(favorable_count)改單季斜率**;
   `data_cache/forward_test/picks.parquet` 的 2026-07-22、2026-08-02、2026-09-02、2026-10-02
   四個 cohort 凍結時用的是**累計版**斜率(凍結紀錄不可改寫,picks.parquet 無方法版本欄)。
+  **2026-10-16 起 favorable_count 的 revenue_yoy 因子亦改單季 YoY**(PQ-C4-1);上述四個 cohort
+  凍結時用的是**累計對累計** YoY。程式內無方法版本常數 / 欄位可標記(凍結 schema 不改),
+  方法切換紀錄以本段 + docs 決策紀錄為準。
 
 ⚠️ 資料限制(§1 誠實):
   ~~現有快照僅 5 季(114Q1–115Q1)、無 113 前。~~ —— 有意識的修改,不是漏刪(2026-10-15):
@@ -27,6 +39,8 @@
   6 季(114Q1–115Q2)、無 113 前;需要時現場量測 `data_cache/fundamentals/`。故
   - 趨勢用「線性斜率」而非「連續成長季數」(後者季數少 + QoQ 季節性會造假訊號)。
   - 營收 YoY 只算得出最新季 vs 去年同季一個點(無更早年可連續)。
+  - 單季 YoY 需要「去年同季」的單季值:去年同季若 season ≥ 2,還需要去年同季的**前一季**快照
+    (例:錨定 115Q2 → 需 114Q1、114Q2);缺 → NaN。
   - 單季化已知限制:
     (1) 跨版本差分:舊季快照不重抓,若前季事後更正,當季單季值會含更正額;
     (2) 保險業 115 年起 revenue 欄 NaN,疑 IFRS 17 口徑斷層(**未查證**)→ 該季單季 NaN;
@@ -43,12 +57,13 @@
   - gross_margin_slope  單季毛利率跨季斜率, > 0 為佳(獲利品質走揚)
   - op_margin_slope     單季營益率跨季斜率, > 0 為佳(本業經營改善)
   - debt_ratio_slope    負債比(期末存量)跨季斜率, < 0 為佳(逐季去槓桿)
-  - revenue_yoy         最新季年初累計營收 vs 去年同期累計, > 0 為佳(規模成長)
+  - revenue_yoy         最新季**單季**營收 vs 去年同季單季營收, > 0 為佳(規模成長)
 favorable_count = 上述有資料的因子中「方向為佳」的個數;favorable_of = 有資料的因子數。
 single_quarter_breaks = 該檔被判「單季營收 < 0 口徑斷層」而作廢的季數(可追溯,不默默吞掉)。
 
 §1 / §3.3:斜率有效點 < CROSS_QUARTER_MIN_POINTS(SSOT)→ 回 NaN(不硬配);
-  單季 revenue ≤ 0 / total_assets ≤ 0 → 該比率 NaN(不 silent 0);缺去年同季 → yoy NaN;
+  單季 revenue ≤ 0 / total_assets ≤ 0 → 該比率 NaN(不 silent 0);
+  缺去年同季 / 任一端單季 NaN / 去年同季單季營收 ≤ 0 → yoy NaN;
   單季化缺前季 / 任一端 NaN → 單季 NaN(不補 0、不前值填補)。
 §8.2:L2 純函式,零 I/O、零 streamlit。
 """
@@ -156,18 +171,25 @@ def _slope(t: np.ndarray, y: np.ndarray) -> float:
     return float(np.polyfit(t[mask], y[mask], 1)[0])
 
 
-def _revenue_yoy(qord: np.ndarray, revenue: np.ndarray) -> float:
-    """最新季**年初至今累計**營收 vs 去年同季(qord−4)累計;缺任一 / 去年同季 ≤0 → NaN。
+def _revenue_yoy(qord: np.ndarray, revenue: np.ndarray, sq_revenue: np.ndarray) -> float:
+    """最新季**單季**營收 vs 去年同季(qord−4)**單季**營收 − 1(PQ-C4-1,2026-10-16)。
 
-    輸入 revenue 是年初累計(見模組 docstring),同 season 相比 = 「年初至今 vs 去年同期」。
+    Args:
+        qord: 季序 ordinal(roc_year*4 + season−1)。
+        revenue: 年初至今**累計**營收 —— 只用來定錨定季(最新一個有累計營收的季,修前同規則)。
+        sq_revenue: `ytd_to_single_quarter` 的單季營收(缺前季 / 口徑斷層已是 NaN)。
+
+    錨定季單季 NaN、去年同季列不存在或單季 NaN、去年同季單季 ≤ 0 → NaN(§1,不補 0、
+    不回退到更早的季)。
     """
-    _by_q = {int(q): float(r) for q, r in zip(qord, revenue) if r == r}
-    if not _by_q:
+    _cum = {int(q): float(r) for q, r in zip(qord, revenue) if r == r}
+    if not _cum:
         return float("nan")
-    _latest = max(_by_q)
-    _cur = _by_q.get(_latest)
-    _prev = _by_q.get(_latest - _QUARTERS_PER_YEAR)
-    if _cur is None or _prev is None or not (_prev > 0):
+    _latest = max(_cum)
+    _sq = {int(q): float(v) for q, v in zip(qord, sq_revenue)}
+    _cur = _sq.get(_latest, float("nan"))
+    _prev = _sq.get(_latest - _QUARTERS_PER_YEAR, float("nan"))
+    if not (_cur == _cur) or not (_prev > 0):     # NaN > 0 → False:去年同季 NaN 亦擋
         return float("nan")
     return _cur / _prev - 1.0
 
@@ -217,7 +239,8 @@ def compute_cross_quarter_trends(all_quarters: pd.DataFrame) -> pd.DataFrame:
         _gm_s = _slope(_t, g["_gm"].to_numpy())
         _om_s = _slope(_t, g["_om"].to_numpy())
         _debt_s = _slope(_t, g["_debt"].to_numpy())
-        _yoy = _revenue_yoy(_q, g["revenue"].to_numpy())   # 累計對累計(不改,PQ-C4-1)
+        _yoy = _revenue_yoy(_q, g["revenue"].to_numpy(),
+                            g["sq_revenue"].to_numpy())     # 單季對單季(PQ-C4-1)
         # 方向為佳:毛利/營益率漲、負債比降、營收 YoY 正
         _checks = [(_gm_s, _gm_s > 0), (_om_s, _om_s > 0),
                    (_debt_s, _debt_s < 0), (_yoy, _yoy > 0)]
