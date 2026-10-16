@@ -200,9 +200,9 @@ Effort：Low / Medium / High
 | D16 | 法人口徑統一官方口徑；**官方只缺外資時不跨來源拼 FinMind**，誠實顯示「未取得」（範圍限此情形；既有已核准的 fallback 鏈 —— DEC-008 Level 2、`CLAUDE.md` §2.1 衝突裁決 —— 不受影響） | DEC-033、DEC-035 |
 | D17 | 正式加減碼比例未經「資料驗證 → 規則設計 → 回測／Shadow Mode → 客戶裁示」不得進 production | DEC-053 |
 | D18 | 公式、資料語意、新／替換 production source、API／MCP 接入 production 資料鏈、重大 UI flow → **Decision Gate**（第 4 節） | DEC-009、DEC-008、DEC-003 |
-| D19 | 全站不產生直接買賣建議（合規母法）—— ⚠️ 與客戶 2026-10-15 Action Layer 長期目標有**未調和張力**，見 `CV1-DR-01`；裁示前兩者皆不得被引用來推翻對方 | DEC-022 |
+| D19 | ~~全站不產生直接買賣建議（合規母法）—— ⚠️ 與客戶 2026-10-15 Action Layer 長期目標有**未調和張力**，見 `CV1-DR-01`；裁示前兩者皆不得被引用來推翻對方~~（2026-10-16 更新：`CV1-DR-01` 已裁示）<br>**方向性 Action 允許但有條件**（七種 Action；須可追溯資料＋正式規則、理由、as-of／freshness、關鍵風險；資料不足 →「無法判定」；不得繞過 Risk Cap；禁無證據強斷言；強 Action 不得只靠生成式 AI）；DEC-022 各護欄的去留逐項見 **DEC-054 承接表**（再平衡射程待確認，`CV1-FU-02`）；⚠️ 不是實作授權。⚠️ `S1-6_COMPLIANCE_COPY_GUIDE.md` 尚未同步（`CV1-FU-01`）；撰寫組讀法：該指南中由「全面禁止」推導出的判準，在改版前不得被引用來推翻 DEC-054。 | DEC-054、DEC-022（部分取代） |
 
-**產品方向原則（Research Candidate，不是硬規則）**：客戶 2026-10-15 MSG 1 §1～§17 的 Core Decision＋Context Overlay、雙軌 Track A／B、Per-decision Core、Structured Thesis、Decision Log 瘦身、Live／Historical 分離、Safe Effective Cutoff、Event 來源分級、產業雷達不得假精確分數、Mobile 讀最新有效快照等，客戶自陳為方向與候選策略、尚無規格落地 → `docs/BACKLOG.md` `CV1-RC-01`。施工前須依第 4 節走 Decision Gate。
+**產品方向原則（Research Candidate，不是硬規則）**：客戶 2026-10-15 MSG 1 §1～§17 的 Core Decision＋Context Overlay、雙軌 Track A／B、Per-decision Core、Structured Thesis、Decision Log 瘦身、Live／Historical 分離、Safe Effective Cutoff、Event 來源分級、產業雷達不得假精確分數、Mobile 讀最新有效快照等，客戶自陳為方向與候選策略、尚無規格落地 → `docs/BACKLOG.md` `CV1-RC-01`。施工前須依第 4 節走 Decision Gate。（2026-10-16 加註：MSG 1 §7 的 Action Layer **方向**已由 DEC-054 採用（D19）；DEC-054 稱為「既有風險護欄」的 Thesis、Core Decision／Context Overlay 在本 repo 仍無正式規格 → `CV1-FU-04`；本段其餘不變。）
 
 ## 第 14 節｜未調和的衝突
 
