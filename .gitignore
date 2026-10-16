@@ -20,6 +20,10 @@ temp/
 
 # Runtime state (generated at runtime, must not be committed)
 macro_state.json
+# AUD-C21（2026-10-16）：新 UI 自己的系統風險上限快照（shared/risk_cap_policy.RISK_CAP_STATE_FILE）；
+# 暫存檔名＝路徑＋".tmp"（macro_state_locker._write_state_lock）
+risk_cap_state.json
+risk_cap_state.json.tmp
 
 # Test coverage
 .coverage

@@ -2,13 +2,16 @@
 
 客戶規則（Q-z34～36 已核准；批 Z65 QA 實測缺口）：
 「新頁取不到有效的系統風險上限 → 建議持股『無法判定』」。
+📌 AUD-C21（2026-10-16，有意識的更正）：下文的「檔」自本批起是新 UI 自己的 `risk_cap_state.json`
+（`get_macro_state(require_valid_risk_cap=True)` 只讀它；舊 UI 照舊用 `macro_state.json`）。
 修前：沒有 `macro_state.json`、檔案過期、或 fail-safe 且沒有舊檔時，卡①（今天頁）與 ⑤（持股頁）
 仍照姿態帶印出持股區間，天花板清單是空的 —— 等於在缺一條硬否決天花板的情況下**放寬風控**。
 
 判斷依據（⛔ 不另寫一套過期／有效判斷）：
 `get_allocation()` 內部的 `build_allocation_decision` 只在 `get_macro_state()['exposure_limit_pct']`
 **有值且可轉成整數**時，才把名為「系統風險上限」的 `Cap` 放進 `caps`；而 `get_macro_state()` 已把
-過期（`MACRO_VERDICT_MAX_AGE_DAYS`）、fail-safe「系統異常」、讀不出來的檔一律當成沒有上限。
+過期（`MACRO_VERDICT_MAX_AGE_DAYS`）、fail-safe「系統異常」、讀不出來的檔一律當成沒有上限
+（📌 AUD-C21：另加未蓋戳／版本不符、上限值不是 0~100 整數值的新檔）。
 ⇒ 本檔只看 allocation 的 `caps` 裡**有沒有那一條**，與 `get_allocation` 內部的有效判斷同一份。
 
 ⚠️ 只管新頁（`src/ui/views/**`）。共用層 `get_allocation` / `build_allocation_decision` 不改
@@ -34,3 +37,94 @@ RISK_CAP_UNAVAILABLE_WHY: str = (
 def has_system_risk_cap(caps: Any) -> bool:
     """allocation 的 `caps` 裡有沒有一條有效的「系統風險上限」。"""
     return any(getattr(c, "name", None) == SYSTEM_RISK_CAP_NAME for c in (caps or ()))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PQ-C6-3（客戶 2026-10-16 核准線框）：系統風險上限的資料完整性揭露 —— 卡面一列＋詳細
+# ══════════════════════════════════════════════════════════════════════════
+# 兩張卡（今天頁卡① `verdict.exposure`、持股頁卡⑤ `hold.position_cap`）共用本段，⛔ 各頁不另寫一份字。
+# 揭露資料一律來自 L3 `get_allocation()` 回傳的 `AllocationDecision.risk_cap_disclosure`
+# （與上限出自同一次讀檔；本檔⛔ 不讀檔、不取數）。只在「有系統風險上限」時呈現；
+# 「建議持股：無法判定」那一態一個字都不加（客戶裁示）。
+# ⛔ 顏色不是唯一載體：完整性一律用字講（「未評估：…」）。
+
+#: 卡面那一列的標籤。
+RISK_CAP_COMPLETENESS_LABEL: str = "資料完整性"
+#: 有 Optional 未評估時，接在項目清單後面的中性句（客戶逐字；⛔ 不寫「上限可能偏寬」）。
+RISK_CAP_INCOMPLETE_SENTENCE: str = "部分訊號未納入，本次上限資訊不完整"
+#: Optional 全部可評估時（客戶逐字）。
+RISK_CAP_COMPLETE_TEXT: str = "必要與選用訊號皆已評估"
+#: 「已停用（不計分）」那一項（客戶逐字）。
+RISK_CAP_DISABLED_LABEL: str = "已停用（不計分）"
+#: 薩姆規則的固定說明（與步驟報告「薩姆規則目前無資料來源、未評估（不代表已通過）」同義、⛔ 不換說法）。
+RISK_CAP_SAHM_NO_SOURCE_TEXT: str = "目前無資料來源、未評估（不代表已通過）"
+#: 詳細裡各列的標籤。
+RISK_CAP_SNAPSHOT_TS_LABEL: str = "快照時間"
+RISK_CAP_NOT_EVALUATED_LABEL: str = "未評估項目"
+RISK_CAP_SAHM_LABEL: str = "薩姆規則"
+
+#: 新鮮度狀態 → 客戶語言（`shared.freshness_policy.FreshnessStatus` 的值；與 L3 步驟報告同一組字）。
+#: `fresh` 會出現在未評估清單裡只有一種情形：時間新鮮但值不能計分（例如非有限數）。
+_STATUS_TEXT: dict[str, str] = {
+    "missing": "未取得",
+    "stale": "已過期",
+    "undetermined": "無法判定",
+    "fresh": "資料異常、無法計分",
+}
+
+
+def _label(key: str) -> str:
+    from shared.risk_cap_policy import OPTIONAL_INPUT_LABELS, REQUIRED_CORE_LABELS
+    return OPTIONAL_INPUT_LABELS.get(key) or REQUIRED_CORE_LABELS.get(key) or key
+
+
+def _dedup(items) -> list[str]:
+    return list(dict.fromkeys(items))
+
+
+def risk_cap_face_text(disclosure: Any) -> str:
+    """卡面那一列的值。有未評估項 ⇒「未評估：PCR、BIAS240；部分訊號未納入，本次上限資訊不完整」。
+
+    項目清單**排在最前**（卡面若被截斷，「未評估」與項目名仍在）；⛔ 停用的 M1B−M2 不在這裡
+    （`RiskCapDisclosure.not_evaluated` 本來就不含停用項，這裡再擋一次）。
+    """
+    _dis = set(getattr(disclosure, "disabled", ()) or ())
+    _ne = [k for k, _s, _d in (getattr(disclosure, "not_evaluated", ()) or ()) if k not in _dis]
+    if not _ne:
+        return RISK_CAP_COMPLETE_TEXT
+    return f"未評估：{'、'.join(_dedup(_label(k) for k in _ne))}；{RISK_CAP_INCOMPLETE_SENTENCE}"
+
+
+def risk_cap_detail_rows(disclosure: Any) -> tuple[tuple[str, str], ...]:
+    """詳細（持股頁「▸ 詳細」／今天頁的完整文字）各列：快照時間、未評估項目、已停用、薩姆規則。
+
+    ⛔ 未取得的項目**不給日期**（檔內那一格存的是「預期資料日」，不是資料日）；已過期才帶最新資料日。
+    """
+    _rows: list[tuple[str, str]] = [
+        (RISK_CAP_SNAPSHOT_TS_LABEL, str(getattr(disclosure, "snapshot_ts", "") or "未記錄"))]
+    _dis = set(getattr(disclosure, "disabled", ()) or ())
+    _items = []
+    for k, status, as_of in (getattr(disclosure, "not_evaluated", ()) or ()):
+        if k in _dis:
+            continue
+        _txt = f"{_label(k)} {_STATUS_TEXT.get(status, '無法評估')}"
+        if status == "stale" and as_of:
+            _txt += f"（最新資料日 {as_of}）"
+        _items.append(_txt)
+    if _items:
+        _rows.append((RISK_CAP_NOT_EVALUATED_LABEL, "；".join(_items)))
+    if _dis:
+        _rows.append((RISK_CAP_DISABLED_LABEL, "、".join(_dedup(_label(k) for k in
+                                                          getattr(disclosure, "disabled", ())))))
+    if getattr(disclosure, "sahm_status", None) == "no_source":
+        _rows.append((RISK_CAP_SAHM_LABEL, RISK_CAP_SAHM_NO_SOURCE_TEXT))
+    return tuple(_rows)
+
+
+#: 今天頁卡①「詳細」那一列的標籤（該列只進 hover，⛔ 不上卡面；見 `page_today.V2_HOVER_OPTIONAL_FACTS`）。
+RISK_CAP_DETAIL_FACT_KEY: str = "資料完整性（詳細）"
+
+
+def risk_cap_detail_text(disclosure: Any) -> str:
+    """詳細各列接成一段（今天頁卡① hover 用）：「快照時間：…；未評估項目：…；已停用（不計分）：…；薩姆規則：…」。"""
+    return "；".join(f"{_k}：{_v}" for _k, _v in risk_cap_detail_rows(disclosure))

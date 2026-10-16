@@ -44,6 +44,10 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
      📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更）：上句「公式／門檻／權重一個都沒動」在 Z65 當天為真；
      Z66 起引擎與 `shared.signal_thresholds.M1B_M2_LEG_ENABLED = False` 同步、M1B-M2 腿停用不計分
      （新舊 UI 共用同一個引擎，兩邊一起生效）；步驟報告把它寫成「已停用、不計分」，⛔ 不算「未評估」。
+     📌 AUD-C21（客戶 2026-10-16，有意識的變更）：本步驟改為**雙寫** —— 先寫新 UI 自己的
+     `risk_cap_state.json`（`shared.risk_cap_policy.RISK_CAP_STATE_FILE`；新頁的上限只讀它），再把同一份內容
+     寫 `macro_state.json`（舊 UI 的上限來源、`get_macro_state()` 位階第 3 順位來源，照舊）。上句「寫
+     `macro_state.json`」仍屬實，只是不再是唯一的檔；逐檔結果見步驟報告與 `STEP_FILE_WRITES`。
 
 ═══ 分層（CLAUDE.md §8.2）═════════════════════════════════════════════
 **L3 Service**：編排 L1 fetcher（`src.data.daily.daily_data_fetchers`）
@@ -80,6 +84,7 @@ from typing import Any, Callable, Mapping
 import streamlit as st
 
 from shared.macro_compute import tw_now_str
+from shared.risk_cap_policy import RISK_CAP_STATE_FILE
 from src.compute.macro.macro_session_patch import MACRO_PATCH_KEYS
 
 # ══════════════════════════════════════════════════════════════════
@@ -128,7 +133,8 @@ STEP_LABELS: dict[str, str] = {
     STEP_TRIO: "M1B-M2 / 年線乖離 / 6 源總經快照",
     STEP_MARKET: "市場評估（mkt_info）",
     STEP_WARROOM: "紅綠燈結論（warroom_summary：燈號 / 健康分 / 位階）",
-    STEP_RISK_CAP: "系統風險上限（規則引擎 → macro_state.json）",
+    # ~~STEP_RISK_CAP: "系統風險上限（規則引擎 → macro_state.json）",~~ —— 📌 AUD-C21（有意識的變更）：雙寫
+    STEP_RISK_CAP: "系統風險上限（規則引擎 → risk_cap_state.json ＋ macro_state.json）",
     STEP_REGISTRY: "資料登錄中心掃描",
     STEP_SOURCE_AUDIT: "逐來源回報的完整性",
     STEP_CONTENT_AUDIT: "逐來源實際收到的內容（判空）",
@@ -182,8 +188,11 @@ STEP_WRITES: dict[str, tuple[str, ...]] = {
 #: 檔案不在 session 裡，量測永遠量不到它 ⇒ 若混進去，畫面會**每一輪**都說
 #: 「`macro_state.json` 這一輪沒寫到」，包括真的寫了的那一輪 —— 那是假話（§1）。
 #: 這一步寫沒寫，看步驟報告（`STEP_RISK_CAP` 的 detail）。
+#: ~~`STEP_RISK_CAP: ("macro_state.json",),`~~
+#: 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：雙寫 —— 新 UI 自己的快照檔在前（寫入順序），
+#:    `macro_state.json` 照舊（舊 UI 的上限來源＋位階第 3 順位來源，AUD-C22 不動）。
 STEP_FILE_WRITES: dict[str, tuple[str, ...]] = {
-    STEP_RISK_CAP: ("macro_state.json",),
+    STEP_RISK_CAP: (RISK_CAP_STATE_FILE, "macro_state.json"),
 }
 
 #: 本路徑**可能**寫入的 session key 全集。
@@ -1022,8 +1031,13 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
             # 批 Z66（Q1）收尾（v3 §01-2：因本次改動才變成死碼）：修前此處另有「硬否決紅線無法判定」那一句（列出 undetermined 的紅線）。
             #   兩條硬紅線（PMI 連兩月、外資期貨＋MA5）的必要輸入全屬 Required Core，`risk_cap_apply` 的
             #   核心閘門保證「寫得出檔 ⇒ 紅線必可評估」⇒ 那句永遠不會出現，已刪（tests/test_batch_z66b.py 守）。
+            # ~~f"已寫入 macro_state.json：系統風險上限 "~~ —— 📌 AUD-C21（有意識的變更，⛔ 不是漏刪）：雙寫，逐檔照實報。
+            _files = tuple(getattr(_rc, "files_written", ()) or ())
             _step(STEP_RISK_CAP, True,
-                  f"已寫入 macro_state.json：系統風險上限 "
+                  "；".join(f"已寫入 {_fn}" + ("（新 UI 讀的系統風險上限）" if _fn == RISK_CAP_STATE_FILE
+                                              else "（舊 UI 與市場位階備援，內容相同）")
+                           for _fn in _files)
+                  + "：系統風險上限 "
                   f"{(_rc.engine_result or {}).get('exposure_limit_pct')}%；"
                   f"未評估 {len(_ne)} 項"
                   + (f"（{'、'.join(_ne)}；缺項不計分）" if _ne else "")
@@ -1043,15 +1057,26 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
             _opt_note = (f"；選配項未評估：{'、'.join(_opt_ne)}（缺項不計分）" if _opt_ne else "")
             _step(STEP_RISK_CAP, True,
                   f"{_rc.reason}" + _core_note + _opt_note
-                  + f"（既有 macro_state.json 若是 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內的有效快照"
+                  # ~~（既有 macro_state.json 若是…~~ —— 📌 AUD-C21：新頁的上限只讀新 UI 自己的檔（有意識的更正）
+                  + f"（兩個檔都不動；既有 {RISK_CAP_STATE_FILE} 若是 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內的有效快照"
                   "〔Required Core 齊全、現行規則版本〕，卡①仍沿用它的上限；過期、不存在、"
                   "舊版或核心不齊的檔，新頁的建議持股顯示「無法判定」）"
                   + _dis_note + _rc_inputs_note,
                   skipped=True)
     except Exception as _e:  # noqa: BLE001 — 例外已由 risk_cap_apply 原樣拋出；此處據實記成失敗
         print(f"[總經刷新] ❌ compute_and_lock_risk_cap 失敗：{_e!r}")
-        _step(STEP_RISK_CAP, False,
-              f"{type(_e).__name__}: {_e}（既有 macro_state.json 不會因此被清除）" + _rc_inputs_note)
+        if type(_e).__name__ == "RiskCapRestoreFailed":
+            # 📌 AUD-C21 NB-3：還原本身失敗 ⇒ ⛔ 不說「已還原」；照實講兩個檔可能不一致，原例外照列。
+            _step(STEP_RISK_CAP, False,
+                  f"{type(_e).__name__}: {_e}（⚠️ macro_state.json 寫入失敗後，{RISK_CAP_STATE_FILE} 的還原也失敗："
+                  f"{RISK_CAP_STATE_FILE} 可能是本輪的內容、macro_state.json 是上一輪的，兩個檔可能不一致）"
+                  + _rc_inputs_note)
+        else:
+            _step(STEP_RISK_CAP, False,
+                  # ~~（既有 macro_state.json 不會因此被清除）~~ —— 📌 AUD-C21：雙寫，兩個檔都照實講（有意識的更正）
+                  f"{type(_e).__name__}: {_e}（既有 {RISK_CAP_STATE_FILE} 與 macro_state.json 不會因此被清除；"
+                  f"若 {RISK_CAP_STATE_FILE} 已先寫入、macro_state.json 寫入失敗，{RISK_CAP_STATE_FILE} 已還原成寫入前的內容）"
+                  + _rc_inputs_note)
 
     # ── 6. 資料登錄中心（純 session 掃描，無對外請求）───────────
     try:

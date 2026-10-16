@@ -47,6 +47,16 @@
 寫檔前的 JSON 檢查（`allow_nan=False`）先跑，炸了就不會碰檔案；`_write_state_lock` 是暫存檔＋
 `os.replace`，寫到一半失敗也不會留下殘缺或被清空的 `macro_state.json`。⛔ 失敗時不清既有檔。
 
+═══ AUD-C21：雙寫（客戶 2026-10-16 裁示；有意識的變更）═══════════════════════════
+新 UI 自己的快照檔 `shared.risk_cap_policy.RISK_CAP_STATE_FILE`（`risk_cap_state.json`）——
+舊 UI 每次寫 `macro_state.json` 都整份覆寫（兩個戳記一起洗掉），新 UI 的有效上限因此不能再住在那個檔裡。
+寫入順序：**先新檔、再 `macro_state.json`**，內容逐位元組相同（`lock_system_state_only` 回傳的那一份，
+經 `write_state_snapshot` 原樣寫第二份）。為什麼仍寫 `macro_state.json`：它是舊 UI 的上限來源、也是
+`get_macro_state()` 位階的第 3 順位來源（warroom 缺席或沒有健康分時）—— 不寫就會改變位階與舊 UI 的資料流
+（AUD-C22，客戶指示本批不動）。上方「無法計算 ⇒ 不寫檔」對**兩個檔**同樣成立（一個位元組都不動）。
+全有或全無（盡力）：新檔寫成、`macro_state.json` 寫失敗 ⇒ 新檔還原成寫入前的內容（原本不存在就刪掉），
+再把原例外往上拋（⛔ 不留下「新檔是本輪、舊檔是上一輪」的半套狀態）。逐檔結果見 `files_written`。
+
 分層（CLAUDE.md §8.2）：L3 —— 依賴 L3（`macro_engine_inputs` / `macro_state_locker`），
 零 L4 / L5 import、不 import streamlit、**不寫 session**（session 由呼叫端傳入，唯讀）。
 """
@@ -55,6 +65,7 @@ from __future__ import annotations
 import json
 import math
 import numbers
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -69,7 +80,7 @@ from src.services.macro_engine_inputs import (
     run_rule_engine,
 )
 from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION, RISK_CAP_RULESET_VERSION_KEY
-from src.services.macro_state_locker import MacroStateLocker
+from src.services.macro_state_locker import MacroStateLocker, risk_cap_state_path
 
 #: 寫進檔案的來源標記。
 #: ~~`"new_ui_risk_cap_v1"`~~ 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏改）：M1B-M2 腿停用、
@@ -110,6 +121,8 @@ class RiskCapApplyResult:
             （不含 `analysis_summary` / `timestamp`，那兩個由 `lock_system_state_only` 補）。
         missing_core: 批 Z66（Q1）：無法評估的 Required Core 鍵名（依 `REQUIRED_CORE_INPUTS` 順序；
             核心齊全 ⇒ `()`）。不論有沒有寫檔都照實帶（fail-safe 時通常也是全缺）。
+        files_written: AUD-C21：這一輪**實際寫成**的檔（檔名、依寫入順序：新 UI 檔在前、`macro_state.json` 在後）。
+            `written=True` ⇔ 兩個都在；沒寫 ⇒ `()`。
     """
 
     written: bool
@@ -117,6 +130,7 @@ class RiskCapApplyResult:
     bundle_summary: dict
     engine_result: dict | None
     missing_core: tuple[str, ...] = ()
+    files_written: tuple[str, ...] = ()
 
 
 def _json_scalar(v: Any) -> Any:
@@ -188,15 +202,46 @@ def _is_finite_cap(v: Any) -> bool:
     return math.isfinite(float(v))
 
 
+class RiskCapRestoreFailed(RuntimeError):
+    """AUD-C21 NB-3：`macro_state.json` 寫失敗後，要把新 UI 快照檔還原成寫入前的內容 —— **還原本身也失敗了**。
+
+    此時新 UI 快照檔可能是本輪的內容、`macro_state.json` 是上一輪的（半套狀態）。⛔ 不說「已還原」。
+    原例外（第二個檔為什麼寫不成）掛在 `__cause__`（`raise … from`），還原失敗的例外在 `restore_error`。
+    """
+
+    def __init__(self, rc_path: str, original: BaseException, restore_error: BaseException) -> None:
+        self.rc_path = rc_path
+        self.original = original
+        self.restore_error = restore_error
+        super().__init__(
+            f"{os.path.basename(rc_path)} 還原失敗（{restore_error!r}）；"
+            f"macro_state.json 寫入失敗的原例外：{original!r}")
+
+
+def _restore_file(path: str, previous: bytes | None) -> None:
+    """把 `path` 還原成 `previous`（None ⇒ 原本不存在 ⇒ 刪掉）。暫存檔＋`os.replace`，⛔ 不留半截檔。"""
+    if previous is None:
+        if os.path.exists(path):
+            os.remove(path)
+        return
+    _tmp = path + ".tmp"
+    with open(_tmp, "wb") as f:
+        f.write(previous)
+    os.replace(_tmp, path)
+
+
 def compute_and_lock_risk_cap(session: Any, *, now: datetime,
-                              state_file_path: str = "macro_state.json") -> RiskCapApplyResult:
-    """算一次系統風險上限；算得出來才寫 `macro_state.json`（經 `lock_system_state_only`）。
+                              state_file_path: str = "macro_state.json",
+                              risk_cap_state_file_path: str | None = None) -> RiskCapApplyResult:
+    """算一次系統風險上限；算得出來才寫（AUD-C21：先寫新 UI 的 `risk_cap_state.json`，再寫 `macro_state.json`）。
 
     Args:
         session: 讀 `macro_info`／`bias_info`／`m1b_m2_info`／`li_latest`／`mkt_info` 的 mapping
             （通常是 `st.session_state`）。**唯讀**。
         now: 帶時區的 `datetime`（naive → `ValueError`，見 Z64）。
         state_file_path: 與 `get_macro_state()` 預設同一個相對路徑。
+        risk_cap_state_file_path: AUD-C21 新 UI 快照檔；None ⇒ `state_file_path` 同目錄的
+            `RISK_CAP_STATE_FILE`（與 `get_macro_state()` 讀端同一條預設規則）。
 
     Returns:
         `RiskCapApplyResult`。無法計算 → `written=False`，檔案一個位元組都不動。
@@ -243,6 +288,29 @@ def compute_and_lock_risk_cap(session: Any, *, now: datetime,
     # 寫檔前先驗：任何 NaN／±inf 數值 → ValueError（此時尚未碰檔案）。
     json.dumps(payload, ensure_ascii=False, allow_nan=False)
 
-    # ⚠️ 寫檔之後不再做任何可能拋例外的事（含 print）：例外 ⇔ 這一輪沒有寫成功，呼叫端據此報告。
-    MacroStateLocker(state_file_path=state_file_path).lock_system_state_only(payload)
-    return RiskCapApplyResult(True, "", summary, payload)
+    # ~~# ⚠️ 寫檔之後不再做任何可能拋例外的事（含 print）：例外 ⇔ 這一輪沒有寫成功，呼叫端據此報告。~~
+    # ~~MacroStateLocker(state_file_path=state_file_path).lock_system_state_only(payload)~~
+    # ~~return RiskCapApplyResult(True, "", summary, payload)~~
+    # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：單寫 `macro_state.json` → 雙寫（新檔在前）。
+    #   舊寫法「寫檔後不再做可能拋例外的事」的理由仍然成立，照守：第二個檔寫完之後同樣什麼都不做。
+    _rc_path = (risk_cap_state_file_path if risk_cap_state_file_path is not None
+                else risk_cap_state_path(state_file_path))     # 與讀端同一條路徑規則
+    try:
+        with open(_rc_path, "rb") as _f:
+            _rc_before: bytes | None = _f.read()
+    except FileNotFoundError:
+        _rc_before = None
+    _final = MacroStateLocker(state_file_path=_rc_path).lock_system_state_only(payload)   # ① 新 UI 檔
+    try:
+        MacroStateLocker(state_file_path=state_file_path).write_state_snapshot(_final)     # ② macro_state.json
+    except BaseException as _orig:
+        # ~~_restore_file(_rc_path, _rc_before)      # 盡力全有或全無；還原本身失敗會蓋過原例外往上拋（⛔ 不吞）~~
+        # 📌 AUD-C21 NB-3（有意識的變更）：還原失敗另拋 `RiskCapRestoreFailed`（原例外掛 `__cause__`），
+        #   呼叫端據此⛔ 不說「已還原」。
+        try:
+            _restore_file(_rc_path, _rc_before)  # 盡力全有或全無
+        except BaseException as _restore_exc:
+            raise RiskCapRestoreFailed(_rc_path, _orig, _restore_exc) from _orig
+        raise
+    return RiskCapApplyResult(True, "", summary, payload, files_written=(
+        os.path.basename(_rc_path), os.path.basename(state_file_path)))

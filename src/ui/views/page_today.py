@@ -356,6 +356,12 @@ from src.ui.views.risk_cap_gate import (
     RISK_CAP_UNAVAILABLE_WHY,
     has_system_risk_cap,
 )
+from src.ui.views.risk_cap_gate import (   # PQ-C6-3
+    RISK_CAP_COMPLETENESS_LABEL,
+    RISK_CAP_DETAIL_FACT_KEY,
+    risk_cap_detail_text,
+    risk_cap_face_text,
+)
 from src.ui.views._ui_kit import (
     MAX_COLS,
     assert_signal_text_clean,
@@ -1759,10 +1765,12 @@ def _alloc_unloaded_why(regime: Mapping[str, Any] | None) -> str:
         _parts.append("總經健康分本輪沒有值（紅綠燈沒有算出健康分），姿態帶算不出來")
     else:
         _parts.append("總經健康分有值，但契約仍回未評估")
+    # ~~`macro_state.json`~~ → `risk_cap_state.json`：📌 AUD-C21（客戶 2026-10-16，有意識的更正，⛔ 不是漏刪）——
+    #   本頁的系統風險上限自本批起只讀新 UI 自己的快照檔（`shared.risk_cap_policy.RISK_CAP_STATE_FILE`）。只改字。
     if regime.get("exposure_limit_pct") is None:
-        _parts.append("系統風險上限（規則引擎快照 `macro_state.json`）也沒有有效值")
+        _parts.append("系統風險上限（規則引擎快照 `risk_cap_state.json`）也沒有有效值")
     else:
-        _parts.append("規則引擎快照（`macro_state.json`）有系統風險上限，"
+        _parts.append("規則引擎快照（`risk_cap_state.json`）有系統風險上限，"
                       "但它只是天花板、不能單獨決定建議持股")
     return _head + "；".join(_parts) + _tail
 
@@ -1834,6 +1842,14 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
         _facts = [("推導依據", _drv), ("姿態", str(alloc.posture))]
         if alloc.cap_text:
             _facts.append(("硬否決天花板", alloc.cap_text))
+        # PQ-C6-3（客戶 2026-10-16 核准線框）：系統風險上限的資料完整性**上卡面**（不只藏在詳細裡）。
+        #   卡面那一列只放摘要句（與持股頁卡⑤同一句；項目清單排在最前，超過字數預算也只截後面的中性句）；
+        #   快照時間／未評估項目狀態／已停用／薩姆另起一列，**只進 hover**（`V2_HOVER_OPTIONAL_FACTS`）。
+        #   只有「有系統風險上限」才走到這裡（上方無上限分支一個字都沒加）。
+        _disc = getattr(alloc, "risk_cap_disclosure", None)
+        if _disc is not None:
+            _facts.append((RISK_CAP_COMPLETENESS_LABEL, risk_cap_face_text(_disc)))
+            _facts.append((RISK_CAP_DETAIL_FACT_KEY, risk_cap_detail_text(_disc)))
         if alloc.conflicts:
             # 「與結論相反但被壓制的訊號**要顯示，不要藏**」（SSOT docstring 原文）。
             _facts.append(("被壓制的反向訊號", "；".join(alloc.conflicts)))
@@ -2156,8 +2172,9 @@ def _load_allocation() -> tuple[Any, str]:
     """`get_allocation()`（建議持股 SSOT）。回 `(decision, err)`。"""
     try:
         from src.services.allocation_service import get_allocation
-        # 批 Z66（客戶 2026-10-16 Q1）：系統風險上限只認核心齊全＋現行規則版本的 `macro_state.json`
+        # 批 Z66（客戶 2026-10-16 Q1）：系統風險上限只認核心齊全＋現行規則版本的 ~~`macro_state.json`~~ 快照
         #   （舊 UI 寫的、舊版本的檔 ⇒ 沒有上限 ⇒ 建議持股「無法判定」）。
+        #   📌 AUD-C21（2026-10-16，有意識的更正，⛔ 不是漏刪）：那份快照自本批起是新 UI 自己的 `risk_cap_state.json`（舊 UI 會整份覆寫 `macro_state.json`）。
         return get_allocation(require_valid_risk_cap=True), ""
     except Exception as _e:  # noqa: BLE001
         print(f"[views/page_today] get_allocation 失敗：{_e!r}")
@@ -2318,8 +2335,9 @@ def _load_regime() -> tuple[Mapping[str, Any] | None, str]:
     """`get_macro_regime()`（市場位階 SSOT）。回 `(regime_dict, err)`。"""
     try:
         from src.services.allocation_service import get_macro_regime
-        # 批 Z66（客戶 2026-10-16 Q1）：系統風險上限只認核心齊全＋現行規則版本的 `macro_state.json`
+        # 批 Z66（客戶 2026-10-16 Q1）：系統風險上限只認核心齊全＋現行規則版本的 ~~`macro_state.json`~~ 快照
         #   （卡①未評估時的說明句讀 `exposure_limit_pct`，須與卡①同一個判斷）。
+        #   📌 AUD-C21（2026-10-16，有意識的更正，⛔ 不是漏刪）：那份快照自本批起是新 UI 自己的 `risk_cap_state.json`（舊 UI 會整份覆寫 `macro_state.json`）。
         return get_macro_regime(require_valid_risk_cap=True), ""
     except Exception as _e:  # noqa: BLE001
         print(f"[views/page_today] get_macro_regime 失敗：{_e!r}")
@@ -2701,6 +2719,14 @@ V2_HOVER_ONLY_FACTS: dict[str, frozenset[str]] = {
     # 批 Z59：交易日格的「已知限制」—— 同樣是**免責說明、⛔ 不是觀測值**（判準見上），
     #    且狀態列卡面原本就沒有 fact 列；放卡面 ＝ 狀態列多一列欄位（版面異動）。
     TRADING_DAY_CARD_KEY: frozenset({TRADING_DAY_LIMIT_FACT_KEY}),
+}
+
+#: PQ-C6-3（2026-10-16）：**有才搬、沒有不報錯**的 hover-only 列（卡 key → 標籤集合）。
+#: 與 `V2_HOVER_ONLY_FACTS` 的差別只有一件：那張表登記的列每一態都必須在（不在 ⇒ `KeyError` 紅卡）；
+#: 本表的列只在特定態出現 —— 卡①的「資料完整性（詳細）」只有「有系統風險上限」才有，
+#: 「建議持股：無法判定」／未評估那幾態本來就沒有它（客戶：無上限那一態不加字）。
+V2_HOVER_OPTIONAL_FACTS: dict[str, frozenset[str]] = {
+    "verdict.exposure": frozenset({RISK_CAP_DETAIL_FACT_KEY}),
 }
 
 #: 🔴 **2026-09-25 客戶核可線框：16 盞燈卡（`detail.*`）的三列出處說明收進「▸ 詳細」。**
@@ -3160,8 +3186,11 @@ def v2_card_html(tile: Tile) -> str:
             f"卡 {_card.key!r} 登記了要移進 hover 的 fact "
             f"{sorted(_hover_keys)!r}，但這張卡一列都沒有 —— 標籤改過了嗎？"
             "⛔ 不要把登記拿掉了事，那會讓揭露悄悄消失。")
+    # PQ-C6-3：「有才搬」的 hover-only 列（`V2_HOVER_OPTIONAL_FACTS`）接在後面，同一個 hover 槽。
+    _opt_keys = V2_HOVER_OPTIONAL_FACTS.get(_card.key, frozenset())
+    _moved = _moved + tuple(f"{_k}：{_v}" for _k, _v in tile.facts if _k in _opt_keys)
     _facts = tuple((v2_plain(_k), v2_plain(_v))
-                   for _k, _v in tile.facts if _k not in _hover_keys)
+                   for _k, _v in tile.facts if _k not in _hover_keys and _k not in _opt_keys)
     if _guide_rows:
         # 🔴 三要素**排在最前** —— 使用者要先知道「這一格現在怎樣」，
         #    才輪得到「門檻帶」「命中來源」這些中繼資料。

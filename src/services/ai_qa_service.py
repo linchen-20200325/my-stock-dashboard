@@ -124,7 +124,8 @@ def _macro_state(*, require_valid_risk_cap: bool = False) -> dict:
     所以這裡是 try/except 而不是「有沒有裝 streamlit」的判斷。
 
     require_valid_risk_cap（批 Z66，客戶 2026-10-16 Q1；預設 False = 既有行為一字不變）：True → 兩條來源都透傳
-    同名參數 ⇒ `exposure_limit_pct` 只認核心齊全＋現行規則版本的 `macro_state.json`。
+    同名參數 ⇒ `exposure_limit_pct` 只認核心齊全＋現行規則版本的 ~~`macro_state.json`~~ 快照
+    （📌 AUD-C21，有意識的更正：自本批起是新 UI 自己的 `risk_cap_state.json`，見 `get_macro_state`）。
     """
     _kw = {"require_valid_risk_cap": True} if require_valid_risk_cap else {}
     try:
@@ -211,7 +212,21 @@ def _tool_get_market_state(*, require_valid_risk_cap: bool = False) -> dict:
     _file = {}
     try:
         from src.services.macro_state_locker import load_macro_state, macro_state_is_expired
-        _file = load_macro_state() or {}
+        # ~~_file = load_macro_state() or {}~~
+        # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：旗標開（新 UI 問答頁）⇒ 附加欄位／有效判斷／
+        #   `as_of` 改讀新 UI 自己的系統風險上限快照（與 `get_macro_state` 收上限的同一個檔），⛔ 不再讀
+        #   舊 UI 會整份覆寫的 `macro_state.json`；旗標關 ⇒ 逐字同修前。
+        if require_valid_risk_cap:
+            # 📌 AUD-C21 N2／NB-5（有意識的變更）：路徑走與 `get_macro_state` 同一支 `risk_cap_state_path`
+            #   （⛔ 不寫 cwd 相對字面）；且**只有**同一次契約真的收了新檔上限（帶回 `risk_cap_disclosure`、
+            #   快照時間對得上）才附它的欄位與 `as_of` —— 沒收 ⇒ 與「沒有上限」同樣處理（不附、as_of=None）。
+            from src.services.macro_state_locker import risk_cap_state_path
+            _disc = _ms.get("risk_cap_disclosure")
+            _file = (load_macro_state(risk_cap_state_path()) or {}) if _disc is not None else {}
+            if _file and _file.get("timestamp") != getattr(_disc, "snapshot_ts", None):
+                _file = {}      # 兩次讀檔之間被換掉了 ⇒ 不是收上限的那一份，⛔ 不附
+        else:
+            _file = load_macro_state() or {}
         # DL-f1-s65：過期裁決（`MACRO_VERDICT_MAX_AGE_DAYS`）的附加欄位不送 AI 問答 ——
         # 與 canonical 契約同一條期限（`get_macro_state` 已把過期檔當不存在）。
         if macro_state_is_expired(_file):
@@ -229,7 +244,9 @@ def _tool_get_market_state(*, require_valid_risk_cap: bool = False) -> dict:
         if not is_valid_risk_cap_snapshot(_file):
             _extra = {}
     if _extra:
-        _data["鎖定快照額外欄位_macro_state_json"] = _extra
+        # AUD-C21：旗標開時這幾個欄位來自 `risk_cap_state.json` ⇒ 鍵名照實標來源（旗標關逐字同修前）。
+        _data["鎖定快照額外欄位_risk_cap_state_json" if require_valid_risk_cap
+              else "鎖定快照額外欄位_macro_state_json"] = _extra
     return {"ok": True, "data": _data,
             "provenance": {"source": f"canonical 總經契約(仲裁來源:{_ms.get('source')})",
                            "as_of": _file.get("timestamp")}}
@@ -845,7 +862,8 @@ def run_agent(question: str, history: Optional[list] = None, *, api_key: Optiona
     require_valid_risk_cap:
         批 Z66(客戶 2026-10-16 Q1)。True 且 `tools` 未指定 → `get_market_state` 改用
         `_tool_get_market_state(require_valid_risk_cap=True)`:系統風險上限只認核心齊全＋現行規則版本的
-        `macro_state.json`,其餘(舊 UI 寫的、舊版本)→ `exposure_limit_pct=None`。新 UI 問答頁傳 True。
+        ~~`macro_state.json`~~ 快照(📌 AUD-C21 有意識的更正:新 UI 自己的 `risk_cap_state.json`),
+        其餘(舊 UI 寫的、舊版本)→ `exposure_limit_pct=None`。新 UI 問答頁傳 True。
         預設 False = 本參數出現之前的行為,一個 byte 不差(`tab_ai_chat` 不傳)。
     """
     if tools is None and require_valid_risk_cap:

@@ -860,7 +860,9 @@ def _session_writers(key: str) -> set[str]:
 
 #: 不是 session key、而是**檔案**的「寫入對象」→ 寫它的唯一 API（批 Z60）。
 _FILE_KEY_WRITER_API = {
-    "macro_state.json": ("execute_and_lock", "lock_system_state_only"),
+    # ~~"macro_state.json": ("execute_and_lock", "lock_system_state_only"),~~
+    # 📌 AUD-C21（2026-10-16，有意識的變更）：新 UI 雙寫的第二份經 `write_state_snapshot` 寫入（見 tests/test_batch_z60.py）。
+    "macro_state.json": ("execute_and_lock", "lock_system_state_only", "write_state_snapshot"),
 }
 
 

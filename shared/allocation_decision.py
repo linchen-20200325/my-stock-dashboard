@@ -52,7 +52,7 @@ caller::
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Sequence
 
 # ── L0 → L0 SSOT(同層 import,無迴圈:macro_buckets 只 import signal_thresholds + colors)──
 from shared.macro_buckets import SPECS_BY_KEY as _SPECS_BY_KEY
@@ -180,6 +180,10 @@ class AllocationDecision:
         capped:      最終是否被硬否決壓低
         drivers:     推導依據(給「為何是這個數字」用)
         conflicts:   與最終結論相反、但被壓制的訊號(要顯示，不要藏)
+        risk_cap_disclosure: AUD-C21／PQ-C6-3（2026-10-16）：「系統風險上限」那條 `Cap` 的資料完整性揭露
+                     （`shared.risk_cap_policy.RiskCapDisclosure`），由 `macro_state['risk_cap_disclosure']`
+                     原樣帶入；**只有**那條 Cap 真的進了 `caps` 才有值，否則 None。舊 UI（不傳旗標）恆為 None。
+                     刻意放最後一欄、有預設值 ⇒ 既有建構（全部 keyword-only）一個都不用改。
     """
     is_loaded: bool
     regime: str
@@ -197,6 +201,7 @@ class AllocationDecision:
     capped: bool = False
     drivers: tuple[str, ...] = ()
     conflicts: tuple[str, ...] = ()
+    risk_cap_disclosure: Any = None
 
     # ── 顯示用 helper(集中在此，避免各頁各自 f-string 出不同格式)──────
     @property
@@ -290,6 +295,7 @@ def build_allocation_decision(
     # ── 蒐集所有硬否決天花板 ──────────────────────────────────────
     _caps: list[Cap] = list(caps)
     _sys_cap = _ms.get('exposure_limit_pct')
+    _disclosure = None   # AUD-C21／PQ-C6-3：只跟著「系統風險上限」那條 Cap 走
     if _sys_cap is not None:
         # v19.170:macro_state.json 是磁碟檔、可能被手改或寫入異常值。
         # 這裡顯式夾限 0-100 並在越界時 log(§1：填補須顯式 + 留跡)，
@@ -307,6 +313,7 @@ def build_allocation_decision(
             _caps.append(Cap('系統風險上限', _clamped,
                              SYSTEM_RISK_CAP_BASIS_LEG_ON if _ST.M1B_M2_LEG_ENABLED
                              else SYSTEM_RISK_CAP_BASIS_LEG_OFF))
+            _disclosure = _ms.get('risk_cap_disclosure')
 
     _cap_pct: int | None = None
     _cap_name = ''
@@ -346,6 +353,7 @@ def build_allocation_decision(
         final_lo=_f_lo, final_hi=_f_hi, final_mid=round((_f_lo + _f_hi) / 2),
         capped=_capped,
         drivers=tuple(_drivers), conflicts=tuple(conflicts),
+        risk_cap_disclosure=_disclosure,
     )
 
 

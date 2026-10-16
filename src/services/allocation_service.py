@@ -265,11 +265,19 @@ def get_allocation(*, strict: bool = False,
     strict（v2「💼 我的持股」建議水位卡用；預設 False = 既有行為一字不變）：
     True → `get_macro_state(strict=True)` 的例外**不吞**（「總經讀壞了」≠「未評估」）；
     且 warroom 可用、`macro_state.json` 存在卻不可用（回傳帶 `file_error`，B6-r4）→ 也拋。
+    📌 AUD-C21（2026-10-16，有意識的更正）：上句在 `require_valid_risk_cap=False`（舊 UI）時照舊成立；旗標開時
+    ~~warroom 可用、`macro_state.json` 存在卻不可用 → 也拋~~ 改為：`file_error` 只來自**新 UI 快照檔**
+    `risk_cap_state.json`（存在卻讀不出來、或上限值不是 0~100 整數值）；舊檔讀壞只在 warroom 不可用、
+    位階真的落到舊檔時才拋（B1，見 `macro_state_locker.get_macro_state`）。
 
     require_valid_risk_cap（批 Z66，客戶 2026-10-16 Q1；預設 False = 既有行為一字不變，舊 UI 不傳）：
     True → 透傳 `get_macro_state(require_valid_risk_cap=True)`：「系統風險上限」只取自核心齊全＋現行規則版本
-    的檔；否則沒有那條 `Cap` ⇒ 新頁「建議持股：無法判定」（`src/ui/views/risk_cap_gate.py`）。
+    的檔（📌 AUD-C21：新 UI 自己的 `risk_cap_state.json`，⛔ 不退回 `macro_state.json`）；
+    否則沒有那條 `Cap` ⇒ 新頁「建議持股：無法判定」（`src/ui/views/risk_cap_gate.py`）。
     快取簽章本來就含 `exposure_limit_pct`，新舊 UI 同一 session 交替呼叫不會互拿對方的結果。
+    📌 AUD-C21（2026-10-16，有意識的更正，⛔ 不是漏刪）：上句只在「兩邊上限值不同」時成立 —— 新 UI 的上限自本批起
+    讀自己的 `risk_cap_state.json`、舊 UI 讀 `macro_state.json`，兩者值相同時簽章會撞。現行簽章另含旗標與
+    `risk_cap_disclosure`（新 UI 的資料完整性揭露，與上限出自同一次讀檔），兩邊不再互拿。
     """
     _wr = st.session_state.get('warroom_summary') or {}
     _extra = st.session_state.get(_EXTRA_CAPS_KEY) or {}
@@ -285,8 +293,10 @@ def get_allocation(*, strict: bool = False,
         _ms = {'is_loaded': False, 'regime': 'unknown', 'health': None,
                'defense': False, 'exposure_limit_pct': None}
     if strict and _ms.get('file_error'):
-        # B6-r4：warroom 可用、但 macro_state.json 存在卻讀壞了 → 仲裁少了「曝險上限」
+        # B6-r4：warroom 可用、但 ~~macro_state.json~~ 存在卻讀壞了 → 仲裁少了「曝險上限」
         # 那條輸入；照算會畫出一個**悄悄少一條天花板**的區間。strict 下改拋（caller 轉紅）。
+        # 📌 AUD-C21（有意識的更正）：「那個檔」旗標關（舊 UI）＝ `macro_state.json`；旗標開（新 UI）＝
+        #   `risk_cap_state.json`（新檔讀壞／上限值格式錯；舊檔的 `file_error` 在 warroom 可用時不帶，B1）。
         raise RuntimeError(str(_ms['file_error']))
 
     _intrinsic, _auto_conf = _derive_intrinsic_caps()
@@ -305,6 +315,10 @@ def get_allocation(*, strict: bool = False,
         _ms.get('exposure_limit_pct'), _ms.get('is_loaded'),
         tuple(sorted((c.name, c.pct) for c in _caps)),
         _conf,
+        # AUD-C21／PQ-C6-3（2026-10-16）：揭露是決策物件的一部分 ⇒ 進簽章（只換 `not_evaluated` 也要失效）；
+        #   旗標本身也進簽章：新舊 UI 同一 session 交替呼叫、上限值剛好相同時，⛔ 不互拿對方那一份
+        #   （新 UI 那份帶揭露、舊 UI 那份不帶）。
+        bool(require_valid_risk_cap), _ms.get('risk_cap_disclosure'),
     )
     if st.session_state.get(_ALLOC_SIG_KEY) == _sig:
         _cached = st.session_state.get(_ALLOC_CACHE_KEY)
