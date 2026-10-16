@@ -211,7 +211,15 @@ def _tool_get_market_state(*, require_valid_risk_cap: bool = False) -> dict:
     _file = {}
     try:
         from src.services.macro_state_locker import load_macro_state, macro_state_is_expired
-        _file = load_macro_state() or {}
+        # ~~_file = load_macro_state() or {}~~
+        # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：旗標開（新 UI 問答頁）⇒ 附加欄位／有效判斷／
+        #   `as_of` 改讀新 UI 自己的系統風險上限快照（與 `get_macro_state` 收上限的同一個檔），⛔ 不再讀
+        #   舊 UI 會整份覆寫的 `macro_state.json`；旗標關 ⇒ 逐字同修前。
+        if require_valid_risk_cap:
+            from shared.risk_cap_policy import RISK_CAP_STATE_FILE
+            _file = load_macro_state(RISK_CAP_STATE_FILE) or {}
+        else:
+            _file = load_macro_state() or {}
         # DL-f1-s65：過期裁決（`MACRO_VERDICT_MAX_AGE_DAYS`）的附加欄位不送 AI 問答 ——
         # 與 canonical 契約同一條期限（`get_macro_state` 已把過期檔當不存在）。
         if macro_state_is_expired(_file):
@@ -229,7 +237,9 @@ def _tool_get_market_state(*, require_valid_risk_cap: bool = False) -> dict:
         if not is_valid_risk_cap_snapshot(_file):
             _extra = {}
     if _extra:
-        _data["鎖定快照額外欄位_macro_state_json"] = _extra
+        # AUD-C21：旗標開時這幾個欄位來自 `risk_cap_state.json` ⇒ 鍵名照實標來源（旗標關逐字同修前）。
+        _data["鎖定快照額外欄位_risk_cap_state_json" if require_valid_risk_cap
+              else "鎖定快照額外欄位_macro_state_json"] = _extra
     return {"ok": True, "data": _data,
             "provenance": {"source": f"canonical 總經契約(仲裁來源:{_ms.get('source')})",
                            "as_of": _file.get("timestamp")}}

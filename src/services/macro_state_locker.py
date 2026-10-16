@@ -202,8 +202,12 @@ class MacroStateLocker:
             self._write_state_lock(_fs)
             return False
 
-    def lock_system_state_only(self, system_state: dict) -> None:
+    def lock_system_state_only(self, system_state: dict) -> dict:
         """Write rule-based system_state to the state lock without calling AI.
+
+        AUD-C21（2026-10-16）：回傳**實際落檔的那一份** dict（舊 UI 呼叫端不接回傳值，行為不變）——
+        新 UI 寫端（`risk_cap_apply`）拿它經 `write_state_snapshot` 原樣再寫一份到 `macro_state.json`，
+        兩個檔逐位元組相同（同一個 `timestamp`，⛔ 不呼叫兩次各取一次時鐘）。
 
         DL-f1-s13／s65：呼叫端（§十一）會在 `system_state` 裡多帶 `m1b_m2_data_month`
         （本次計分實際用到的 M1B/M2 資料月；代理／缺值 → None），照 `**system_state` 原樣落檔。
@@ -222,6 +226,15 @@ class MacroStateLocker:
             "timestamp": _now_str(),
         }
         self._write_state_lock(final)
+        return final
+
+    def write_state_snapshot(self, state_dict: dict) -> None:
+        """把一份**已組好**的快照原子寫入 `state_file_path`（AUD-C21；與 `lock_system_state_only` 同一支寫檔）。
+
+        ⛔ 不補 `timestamp`／`analysis_summary`、不夾 `exposure_limit_pct` —— 呼叫端給的就是最終內容
+        （新 UI 雙寫：第二個檔要與第一個檔逐位元組相同）。
+        """
+        self._write_state_lock(state_dict)
 
     # ── 內部方法 ────────────────────────────────────────────
     def _build_prompt(self, state_json_str: str, news_str: str, macro_context: str = "") -> str:
@@ -336,7 +349,8 @@ def get_macro_state(warroom_summary: dict | None = None, *,
                     state_file_path: str = "macro_state.json",
                     strict: bool = False,
                     now=None,
-                    require_valid_risk_cap: bool = False) -> dict:
+                    require_valid_risk_cap: bool = False,
+                    risk_cap_state_file_path: str | None = None) -> dict:
     """『總經 tab 已算好的狀態』→ 全站唯一的 canonical 總經契約（① 接線 + C1 仲裁）。
 
     來源優先序（§2.1 上層贏、**禁止平均**）::
@@ -393,6 +407,18 @@ def get_macro_state(warroom_summary: dict | None = None, *,
       位階（來源優先序第 3 條）、`is_loaded`、`strict` 的拋錯判斷一律不受影響。
       新 UI（`src/ui/views/**`）與它呼叫的服務經 `allocation_service.get_allocation(require_valid_risk_cap=True)`
       ／`get_macro_regime(require_valid_risk_cap=True)`／`ai_qa_service.run_agent(require_valid_risk_cap=True)` 傳入。
+      📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏改）：上段「只取自…為 True 的檔」的那個檔，自本批起是
+      新 UI 自己的 `risk_cap_state_file_path`（預設 ＝ `state_file_path` 同目錄的
+      `shared.risk_cap_policy.RISK_CAP_STATE_FILE`；production 兩者都用預設 ⇒ `risk_cap_state.json`），
+      **不再是** `state_file_path`（`macro_state.json`，舊 UI 每次寫入都會整份覆寫它）。收件條件：讀得出來、
+      `market_regime` 非 None／「系統異常」、`macro_state_is_expired` 為 False（看**它自己的** timestamp）、
+      `is_valid_risk_cap_snapshot` 為 True、`exposure_limit_pct` 有值。⛔ 沒有退回讀 `macro_state.json`
+      上限的路（沒有新檔 ⇒ 沒有上限 ⇒「無法判定」）。位階／`is_loaded`／strict 拋錯／舊檔的 `file_error`
+      一律照舊只看 `state_file_path`（AUD-C22 不在本批）。
+      回傳 dict 多一個鍵 `risk_cap_disclosure`（`shared.risk_cap_policy.RiskCapDisclosure`；收了新檔的上限才有值，
+      否則 None）—— 資料完整性揭露與上限出自**同一次讀檔**。strict ＋ 新檔**存在卻讀不出來** ⇒ 帶
+      `file_error`（舊檔沒有 `file_error` 時才帶；舊檔的 `file_error` 逐字不變）。新檔不存在 ⇒ 沒有上限（不是錯誤）。
+      旗標關（預設、舊 UI）⇒ 本段全部不執行、回傳逐鍵同修前。
     """
     from shared import regime_arbiter as _RA
 
@@ -446,11 +472,22 @@ def get_macro_state(warroom_summary: dict | None = None, *,
 
     _health = _wr.get("health_score") if _wr_ok else None
     _exposure = _file.get("exposure_limit_pct") if _file_ok else None
-    if require_valid_risk_cap and _exposure is not None:
-        # 批 Z66（Q1）：只認核心齊全＋現行規則版本的檔（fail-safe 方向：認不出來 ⇒ 沒有上限 ⇒「無法判定」）
-        from shared.risk_cap_policy import is_valid_risk_cap_snapshot
-        if not is_valid_risk_cap_snapshot(_file):
-            _exposure = None
+    # ~~if require_valid_risk_cap and _exposure is not None:~~
+    # ~~    # 批 Z66（Q1）：只認核心齊全＋現行規則版本的檔（fail-safe 方向：認不出來 ⇒ 沒有上限 ⇒「無法判定」）~~
+    # ~~    from shared.risk_cap_policy import is_valid_risk_cap_snapshot~~
+    # ~~    if not is_valid_risk_cap_snapshot(_file):~~
+    # ~~        _exposure = None~~
+    # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：舊寫法的有效判斷（核心齊全＋現行版本）**照搬**到
+    #   新 UI 自己的檔；被權衡掉的只是「上限讀 `macro_state.json`」這個前提 —— 舊 UI 每次寫入都把它整份覆寫。
+    _rc_disclosure = None
+    if require_valid_risk_cap:
+        _exposure, _rc_disclosure, _rc_error = _read_risk_cap_snapshot(
+            risk_cap_state_file_path if risk_cap_state_file_path is not None
+            else _sibling_risk_cap_path(state_file_path), now=now)
+        if _rc_error:
+            print(f"[macro_state_locker] ⚠️ 新 UI 系統風險上限快照讀不出來 → 本輪沒有上限：{_rc_error}")
+            if strict and not _file_error:
+                _file_error = _rc_error
     _trend_regime = _wr.get("regime") if _wr_ok else None
 
     if _wr_ok:
@@ -506,9 +543,42 @@ def get_macro_state(warroom_summary: dict | None = None, *,
         "traffic_light": (_wr.get("traffic_light") if _wr_ok else None),
         "is_loaded": bool(_is_loaded),
     }
+    if require_valid_risk_cap:
+        _out["risk_cap_disclosure"] = _rc_disclosure
     if _file_error:
         _out["file_error"] = _file_error
     return _out
+
+
+def _sibling_risk_cap_path(state_file_path: str) -> str:
+    """`state_file_path` 同目錄的 `RISK_CAP_STATE_FILE`（預設 `macro_state.json` ⇒ `risk_cap_state.json`）。"""
+    from shared.risk_cap_policy import RISK_CAP_STATE_FILE
+    return os.path.join(os.path.dirname(state_file_path), RISK_CAP_STATE_FILE)
+
+
+def _read_risk_cap_snapshot(path: str, *, now=None):
+    """AUD-C21：讀新 UI 的系統風險上限快照 →（上限或 None, 揭露或 None, 讀檔錯誤字串或 ""）。
+
+    只有一種情形回上限：讀得出來、`market_regime` 非 None／「系統異常」、未過期、`is_valid_risk_cap_snapshot`、
+    `exposure_limit_pct` 有值。檔不存在 ⇒ `(None, None, "")`（沒有上限，⛔ 不是錯誤）；
+    存在卻讀不出來／JSON 壞／值無法轉整數 ⇒ `(None, None, "<檔名>: <repr>")`。
+    ⛔ 不讀、不退回 `macro_state.json`。
+    """
+    from shared.risk_cap_policy import is_valid_risk_cap_snapshot, risk_cap_disclosure_from_snapshot
+    data, exc = _load_macro_state_checked(path)
+    if exc is not None:
+        if isinstance(exc, FileNotFoundError):
+            return None, None, ""
+        return None, None, f"{os.path.basename(path)}: {exc!r}"
+    if data.get("market_regime") in (None, "系統異常"):
+        return None, None, ""
+    if macro_state_is_expired(data, now=now):
+        return None, None, ""
+    if not is_valid_risk_cap_snapshot(data):
+        return None, None, ""
+    if data.get("exposure_limit_pct") is None:
+        return None, None, ""
+    return data["exposure_limit_pct"], risk_cap_disclosure_from_snapshot(data), ""
 
 
 # ── 理科引擎：Python 規則計算總經狀態 ─────────────────────

@@ -361,6 +361,11 @@ from src.ui.views.risk_cap_gate import (
     RISK_CAP_UNAVAILABLE_WHY,
     has_system_risk_cap,
 )
+from src.ui.views.risk_cap_gate import (   # PQ-C6-3
+    RISK_CAP_COMPLETENESS_LABEL,
+    risk_cap_detail_rows,
+    risk_cap_face_text,
+)
 from src.ui.views._ui_kit import (
     MAX_COLS,
     banned_signal_glyphs,
@@ -911,6 +916,9 @@ class AllocationReadout:
     #: 批 Z65 QA：L3 `caps` 裡有沒有有效的「系統風險上限」（`risk_cap_gate.has_system_risk_cap`）。
     #: 預設 False（⛔ 不推定有上限）；只由 `load_allocation` 依 L3 實際回傳設定。
     has_risk_cap: bool = False
+    #: PQ-C6-3（客戶 2026-10-16）：L3 `AllocationDecision.risk_cap_disclosure` 原樣透傳（與上限出自同一次讀檔）。
+    #: 預設 None；只由 `load_allocation` 依 L3 實際回傳設定。⛔ 渲染期不讀檔。
+    risk_cap_disclosure: Any = None
 
 
 def load_allocation(req: HoldRequest) -> AllocationReadout:
@@ -938,7 +946,8 @@ def load_allocation(req: HoldRequest) -> AllocationReadout:
         cap_name=str(getattr(_a, "cap_name", "") or ""),
         drivers=tuple(str(_d) for _d in (getattr(_a, "drivers", ()) or ())),
         conflicts=tuple(str(_c) for _c in (getattr(_a, "conflicts", ()) or ())),
-        has_risk_cap=has_system_risk_cap(getattr(_a, "caps", ())))
+        has_risk_cap=has_system_risk_cap(getattr(_a, "caps", ())),
+        risk_cap_disclosure=getattr(_a, "risk_cap_disclosure", None))
 
 
 @dataclass(frozen=True)
@@ -2689,8 +2698,10 @@ def build_position_cap_card(alloc: AllocationReadout) -> _Built:
     _facts: list[tuple[str, str]] = [
         ("這個數字的分母",
          "**整體資產**（市場端上限），不是核心／衛星那個組合內部的比例"),
+        # ~~「姿態油門 × macro_state 曝險上限 × …」~~ —— 📌 AUD-C21（2026-10-16，有意識的更正，⛔ 不是漏刪）：
+        #   本頁的系統風險上限自本批起讀新 UI 自己的快照檔（不再是 `macro_state.json`）⇒ 只改字、照實說。
         ("來源", "L3 `get_allocation()`，本頁不自行再算 —— 它仲裁"
-                 "「姿態油門 × macro_state 曝險上限 × VIX／三環天花板」"
+                 "「姿態油門 × 系統風險上限 × VIX／三環天花板」"
                  "三條輸入，**取最低**"),
         # 誠實揭露：舊文案寫「全站唯一的建議持股 SSOT」，實測為假。
         # 只把「全站唯一」四個字刪掉不夠 —— 讀者仍會以為全站只有這一處。
@@ -2719,6 +2730,12 @@ def build_position_cap_card(alloc: AllocationReadout) -> _Built:
                                where=CAP_NO_RISK_CAP_WHERE)),
                 tuple(_facts[:3]), "")
     if _state == UI_LIVE:
+        # PQ-C6-3（客戶 2026-10-16 核准線框）：有系統風險上限 ⇒ 卡面多一列「資料完整性」（未評估項目名＋中性句，
+        #   ⛔ 不靠顏色），詳細各列只進「▸ 詳細」（`V2_FOLD_ONLY_FACT_KEYS`）。無上限那一態（上一段）一個字都沒加。
+        _disc = alloc.risk_cap_disclosure
+        if _disc is not None:
+            _facts.insert(0, (RISK_CAP_COMPLETENESS_LABEL, risk_cap_face_text(_disc)))
+            _facts.extend(risk_cap_detail_rows(_disc))
         return (Card(key="hold.position_cap", label="建議持股水位（市場端）",
                      state=UI_LIVE, value=alloc.range_text or "—"),
                 tuple(_facts), alloc.posture or "")
@@ -4629,6 +4646,13 @@ def _v2_face_value(value: str) -> str:
     return _out
 
 
+#: PQ-C6-3（2026-10-16）：**只進「▸ 詳細」、不上卡面**的 fact 列（卡 key → 標籤集合）。
+#: 同「🚦 今天」頁 `V2_FOLDED_FACT_KEYS` 的作法（以標籤登記）。列不在時什麼都不做（無上限那一態本來就沒有）。
+V2_FOLD_ONLY_FACT_KEYS: dict[str, frozenset[str]] = {
+    "hold.position_cap": frozenset({"快照時間", "未評估項目", "已停用（不計分）", "薩姆規則"}),
+}
+
+
 def v2_fold_id(card: Card) -> str:
     """摺疊開關 `id` ＝ `markup.fold_dom_id(card.key)` ⇒ `fold-hold-conclusion-action` 這樣。
 
@@ -4652,12 +4676,16 @@ def v2_card_html(card: Card, facts: Sequence[tuple[str, str]] = (),
     _v2_state, _reason = V2_STATE_VOCAB[card.state]   # 未知狀態 → KeyError（⛔ 不兜底）
     _badge_n = v2_card_badge_n(card)   # 2026-09-26：三頁共用（#11 登記制在 page_today）
     _short, _full = v2_short_rows(card)
+    # PQ-C6-3：登記為「只進詳細」的列先分出來（不上卡面），原文照樣接在摺疊區最後。
+    _fold_only_keys = V2_FOLD_ONLY_FACT_KEYS.get(card.key, frozenset())
+    _fold_only = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts if _k in _fold_only_keys)
+    facts = tuple((_k, _v) for _k, _v in facts if _k not in _fold_only_keys)
     _plain_facts = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts)
     _face_facts = tuple((_k, _v2_face_value(_v)) for _k, _v in _plain_facts)
     # 卡面值被摘過或會被契約層截斷的列 → 整列原文進摺疊區。
     _long = tuple(_r for _r, _f in zip(_plain_facts, _face_facts)
                   if _r != _f or len(_r[1]) > v2_markup.FACT_VALUE_MAX_CHARS)
-    _folded = tuple(_full) + _long
+    _folded = tuple(_full) + _long + _fold_only
     return v2_markup.card_html(
         block=card.key,
         state=_v2_state,

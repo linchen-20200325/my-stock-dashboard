@@ -270,6 +270,9 @@ def get_allocation(*, strict: bool = False,
     True → 透傳 `get_macro_state(require_valid_risk_cap=True)`：「系統風險上限」只取自核心齊全＋現行規則版本
     的檔；否則沒有那條 `Cap` ⇒ 新頁「建議持股：無法判定」（`src/ui/views/risk_cap_gate.py`）。
     快取簽章本來就含 `exposure_limit_pct`，新舊 UI 同一 session 交替呼叫不會互拿對方的結果。
+    📌 AUD-C21（2026-10-16，有意識的更正，⛔ 不是漏刪）：上句只在「兩邊上限值不同」時成立 —— 新 UI 的上限自本批起
+    讀自己的 `risk_cap_state.json`、舊 UI 讀 `macro_state.json`，兩者值相同時簽章會撞。現行簽章另含旗標與
+    `risk_cap_disclosure`（新 UI 的資料完整性揭露，與上限出自同一次讀檔），兩邊不再互拿。
     """
     _wr = st.session_state.get('warroom_summary') or {}
     _extra = st.session_state.get(_EXTRA_CAPS_KEY) or {}
@@ -305,6 +308,10 @@ def get_allocation(*, strict: bool = False,
         _ms.get('exposure_limit_pct'), _ms.get('is_loaded'),
         tuple(sorted((c.name, c.pct) for c in _caps)),
         _conf,
+        # AUD-C21／PQ-C6-3（2026-10-16）：揭露是決策物件的一部分 ⇒ 進簽章（只換 `not_evaluated` 也要失效）；
+        #   旗標本身也進簽章：新舊 UI 同一 session 交替呼叫、上限值剛好相同時，⛔ 不互拿對方那一份
+        #   （新 UI 那份帶揭露、舊 UI 那份不帶）。
+        bool(require_valid_risk_cap), _ms.get('risk_cap_disclosure'),
     )
     if st.session_state.get(_ALLOC_SIG_KEY) == _sig:
         _cached = st.session_state.get(_ALLOC_CACHE_KEY)

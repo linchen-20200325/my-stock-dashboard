@@ -565,8 +565,12 @@ class TestRefreshIntegration:
     def test_declarations(self):
         assert RS.STEP_RISK_CAP == "risk_cap" and RS.STEP_RISK_CAP in RS.STEP_LABELS
         assert RS.STEP_WRITES[RS.STEP_RISK_CAP] == ()
-        assert RS.STEP_FILE_WRITES == {RS.STEP_RISK_CAP: ("macro_state.json",)}
+        # ~~assert RS.STEP_FILE_WRITES == {RS.STEP_RISK_CAP: ("macro_state.json",)}~~
+        # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏改）：雙寫 —— 新 UI 自己的快照檔在前（寫入順序）、
+        #   `macro_state.json` 照舊（tests/test_batch_c21.py 守兩個檔逐位元組相同）。
+        assert RS.STEP_FILE_WRITES == {RS.STEP_RISK_CAP: ("risk_cap_state.json", "macro_state.json")}
         assert "macro_state.json" not in RS.WRITES_SESSION_KEYS
+        assert "risk_cap_state.json" not in RS.WRITES_SESSION_KEYS
 
     def test_untouched_list_no_longer_claims_the_cap(self):
         assert not any(b.session_key == "macro_state.json" or "系統風險上限" in b.label
@@ -588,6 +592,9 @@ class TestRefreshIntegration:
         assert s.ok and not s.skipped and not s.partial
         assert f"系統風險上限 {state['exposure_limit_pct']}%" in s.detail
         assert "已寫入 macro_state.json" in s.detail
+        # 📌 AUD-C21（客戶 2026-10-16，有意識的變更）：雙寫 ⇒ 逐檔照實報；新 UI 的檔先寫、兩份內容逐位元組相同。
+        assert s.detail.index("已寫入 risk_cap_state.json") < s.detail.index("已寫入 macro_state.json")
+        assert (tmp_path / "risk_cap_state.json").read_bytes() == (tmp_path / "macro_state.json").read_bytes()
         assert "未評估 1 項（BIAS240_pct；缺項不計分）" in s.detail
         # ~~assert "硬否決紅線無法判定：pmi_contraction" in s.detail~~ —— Z66 Q1：紅線的必要輸入全是
         #   Required Core ⇒ 寫得出檔的那一輪，紅線必定可評估（「無法判定」那句只會出現在未寫檔時不印）。

@@ -25,7 +25,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, Mapping, NamedTuple
 
 RISK_CAP_RULESET_VERSION: str = "risk_cap.v2"
 """系統風險上限的規則版本（寫進 `macro_state.json` 的 `risk_cap_ruleset_version`）。
@@ -97,3 +97,94 @@ def is_valid_risk_cap_snapshot(state: Any) -> bool:
         return False
     return (state.get(REQUIRED_CORE_OK_KEY) is True
             and state.get(RISK_CAP_RULESET_VERSION_KEY) == RISK_CAP_RULESET_VERSION)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# AUD-C21（客戶 2026-10-16 裁示）：新 UI 自己的系統風險上限快照檔
+# ══════════════════════════════════════════════════════════════════════════
+RISK_CAP_STATE_FILE: str = "risk_cap_state.json"
+"""新 UI 的系統風險上限快照檔（相對路徑，與 `macro_state.json` 同一個工作目錄）。
+
+為什麼另開一個檔：舊 UI（`src/ui/tabs/macro/section_news_ai.py`，凍結）每次按「執行 AI 裁決」都經
+`MacroStateLocker()` **整份覆寫** `macro_state.json`（兩個戳記一起被洗掉）⇒ 新 UI 剛寫好的有效快照會被
+舊 UI 一次寫入蓋成「不認得的檔」。客戶裁示：新 UI 用自己的檔，舊 UI 照舊用原檔、一個字都不改。
+
+- 寫端：`src/services/risk_cap_apply.compute_and_lock_risk_cap` **先寫本檔、再寫 `macro_state.json`**
+  （同一份內容；`macro_state.json` 仍是舊 UI 的上限來源與 `get_macro_state()` 位階的第 3 順位來源 ——
+  位階行為屬 AUD-C22，本批不動，故雙寫）。舊 UI 只寫 `macro_state.json`，**碰不到本檔**。
+- 讀端：`macro_state_locker.get_macro_state(require_valid_risk_cap=True)` 的 `exposure_limit_pct`
+  **只**取自本檔（Required Core ＋ 規則版本 ＋ 7 天有效期都過才收）；⛔ 沒有退回讀 `macro_state.json` 上限的路。
+- ⛔ 不從 `macro_state.json` 搬遷（那等於一條被禁止的退路）：首次部署時本檔不存在 ⇒ 新 UI「無法判定」，
+  直到按一次「🚀 更新今日戰情」。
+"""
+
+#: Optional 輸入的客戶語言名稱（揭露「未評估／已停用」用；與 `REQUIRED_CORE_LABELS` 同一張表的另一半）。
+#: 順序即揭露順序（客戶 2026-10-16 PQ-C6-3 線框逐字「未評估：PCR、BIAS240」）。
+#: M1B／M2 兩個鍵是同一條「M1B−M2 資金活水」腿 ⇒ 同一個名稱（呈現時去重）。
+OPTIONAL_INPUT_LABELS: Mapping[str, str] = MappingProxyType({
+    "PCR": "PCR",
+    "BIAS240_pct": "BIAS240",
+    "M1B_YoY_pct": "M1B−M2",
+    "M2_YoY_pct": "M1B−M2",
+})
+
+#: 各規則版本**依定義**停用（不計分、⛔ 不算未評估）的輸入。`risk_cap.v2` ＝ M1B-M2 腿停用（見上方版本史）。
+#: 揭露時與檔內 `disabled_inputs` 取聯集 ⇒ 就算檔內少寫，M1B／M2 也不可能被列成「未評估」。
+RULESET_DISABLED_INPUTS: Mapping[str, tuple[str, ...]] = MappingProxyType({
+    RISK_CAP_RULESET_VERSION: ("M1B_YoY_pct", "M2_YoY_pct"),
+})
+
+
+class RiskCapDisclosure(NamedTuple):
+    """系統風險上限快照的**資料完整性揭露**（PQ-C6-3；與上限出自同一次讀檔，⛔ 渲染期不再讀檔）。
+
+    用 `NamedTuple`（凍結、可雜湊 ⇒ 可進 `allocation_service` 的快取簽章）；L0 只准 import
+    `__future__`／`types`／`typing`／`shared.*`（`tests/test_batch_z66b.py` 守），故不用 dataclasses。
+
+    Attributes:
+        snapshot_ts: 快照的 `timestamp`（台北時間字串，`macro_state_locker._TIMESTAMP_FMT`）。
+        not_evaluated: `((鍵名, 新鮮度狀態, 資料日或 None), ...)` —— 只列**Optional、未停用**的未評估項。
+            資料日**只有 `stale`（已過期）才給**：`missing` 的 `as_of_or_month` 存的是「預期資料日」，
+            不是真的資料日 ⇒ ⛔ 不得當日期顯示（§1 不造假）。
+        disabled: 停用、不計分的輸入鍵（依 `OPTIONAL_INPUTS` 順序）。
+        sahm_status: 檔內 `red_lines.sahm.status`（目前恆為 `"no_source"`）；缺 → None。
+    """
+
+    snapshot_ts: str
+    not_evaluated: tuple[tuple[str, str, str | None], ...]
+    disabled: tuple[str, ...]
+    sahm_status: str | None
+
+
+def risk_cap_disclosure_from_snapshot(state: Mapping[str, Any]) -> RiskCapDisclosure:
+    """**已通過** `is_valid_risk_cap_snapshot` 的快照 → 揭露（純函式、不讀檔、不判有效性）。
+
+    ⛔ 停用的輸入（檔內 `disabled_inputs` ∪ `RULESET_DISABLED_INPUTS[版本]`）一律不進 `not_evaluated`。
+    """
+    _version = state.get(RISK_CAP_RULESET_VERSION_KEY)
+    _dis_raw = state.get("disabled_inputs") or ()
+    _dis_set = ({k for k in _dis_raw if isinstance(k, str)}
+                | set(RULESET_DISABLED_INPUTS.get(_version, ())))
+    disabled = tuple(k for k in OPTIONAL_INPUTS if k in _dis_set) + tuple(
+        sorted(k for k in _dis_set if k not in OPTIONAL_INPUTS))
+    _ne_raw = [k for k in (state.get("not_evaluated") or ()) if isinstance(k, str)]
+    _order = list(OPTIONAL_INPUT_LABELS) + [k for k in _ne_raw if k not in OPTIONAL_INPUT_LABELS]
+    _detail = state.get("input_detail")
+    _detail = _detail if isinstance(_detail, Mapping) else {}
+    rows: list[tuple[str, str, str | None]] = []
+    for k in _order:
+        if k not in _ne_raw or k in _dis_set:
+            continue
+        _d = _detail.get(k)
+        _d = _d if isinstance(_d, Mapping) else {}
+        _status = str(_d.get("status") or "missing")
+        _asof = _d.get("as_of_or_month") if _status == "stale" else None
+        rows.append((k, _status, str(_asof) if _asof else None))
+    _rl = state.get("red_lines")
+    _sahm = _rl.get("sahm") if isinstance(_rl, Mapping) else None
+    _sahm_status = _sahm.get("status") if isinstance(_sahm, Mapping) else None
+    return RiskCapDisclosure(
+        snapshot_ts=str(state.get("timestamp") or ""),
+        not_evaluated=tuple(rows),
+        disabled=disabled,
+        sahm_status=(str(_sahm_status) if _sahm_status is not None else None))

@@ -138,6 +138,12 @@ class TestB6r4PositionCap:
         _write(cap_dir / "macro_state.json", dict(_GOOD_STATE, timestamp=_now_str(),
                                                   **{REQUIRED_CORE_OK_KEY: True,
                                                      RISK_CAP_RULESET_VERSION_KEY: RISK_CAP_RULESET_VERSION}))
+        # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是放寬）：新頁的系統風險上限自本批起只讀新 UI 自己的
+        #   `risk_cap_state.json`（`macro_state.json` 會被舊 UI 整份覆寫）⇒「有效的檔」同一份內容也放進新檔才名實相符。
+        #   本支守的「strict 與否逐位元組相同」不變；舊檔那一行一字未改（位階／舊 UI 照舊讀它）。
+        _write(cap_dir / "risk_cap_state.json", dict(_GOOD_STATE, timestamp=_now_str(),
+                                                     **{REQUIRED_CORE_OK_KEY: True,
+                                                        RISK_CAP_RULESET_VERSION_KEY: RISK_CAP_RULESET_VERSION}))
         assert MSL.get_macro_state(_WR, strict=True) == MSL.get_macro_state(_WR)
         _now = _cap()
         assert _now[0].state == UI_LIVE

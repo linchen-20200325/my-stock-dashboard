@@ -696,7 +696,11 @@ class TestRefreshIntegration:
                     if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
                             and n.func.attr == "_write_state_lock"):
                         callers.add(fn.name)
-        assert callers == {"execute_and_lock", "lock_system_state_only"}
+        # ~~assert callers == {"execute_and_lock", "lock_system_state_only"}~~
+        # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是放寬）：新 UI 雙寫需要第二份檔與第一份逐位元組相同
+        #   ⇒ `MacroStateLocker` 多一支 `write_state_snapshot`（寫已組好的快照）。清單照舊窮舉、照舊「＝」比對，
+        #   `test_p01_macro_refresh._FILE_KEY_WRITER_API` 同步補上（兩邊一起改，量法仍是全部 API）。
+        assert callers == {"execute_and_lock", "lock_system_state_only", "write_state_snapshot"}
 
     def test_health_light_is_in_reach(self):
         from src.ui.views import page_today as P

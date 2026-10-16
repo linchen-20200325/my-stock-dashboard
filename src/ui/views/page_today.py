@@ -356,6 +356,7 @@ from src.ui.views.risk_cap_gate import (
     RISK_CAP_UNAVAILABLE_WHY,
     has_system_risk_cap,
 )
+from src.ui.views.risk_cap_gate import RISK_CAP_COMPLETENESS_LABEL, risk_cap_full_text   # PQ-C6-3
 from src.ui.views._ui_kit import (
     MAX_COLS,
     assert_signal_text_clean,
@@ -1759,10 +1760,12 @@ def _alloc_unloaded_why(regime: Mapping[str, Any] | None) -> str:
         _parts.append("總經健康分本輪沒有值（紅綠燈沒有算出健康分），姿態帶算不出來")
     else:
         _parts.append("總經健康分有值，但契約仍回未評估")
+    # ~~`macro_state.json`~~ → `risk_cap_state.json`：📌 AUD-C21（客戶 2026-10-16，有意識的更正，⛔ 不是漏刪）——
+    #   本頁的系統風險上限自本批起只讀新 UI 自己的快照檔（`shared.risk_cap_policy.RISK_CAP_STATE_FILE`）。只改字。
     if regime.get("exposure_limit_pct") is None:
-        _parts.append("系統風險上限（規則引擎快照 `macro_state.json`）也沒有有效值")
+        _parts.append("系統風險上限（規則引擎快照 `risk_cap_state.json`）也沒有有效值")
     else:
-        _parts.append("規則引擎快照（`macro_state.json`）有系統風險上限，"
+        _parts.append("規則引擎快照（`risk_cap_state.json`）有系統風險上限，"
                       "但它只是天花板、不能單獨決定建議持股")
     return _head + "；".join(_parts) + _tail
 
@@ -1834,6 +1837,12 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
         _facts = [("推導依據", _drv), ("姿態", str(alloc.posture))]
         if alloc.cap_text:
             _facts.append(("硬否決天花板", alloc.cap_text))
+        # PQ-C6-3（客戶 2026-10-16 核准線框）：系統風險上限的資料完整性**上卡面**（不只藏在詳細裡）。
+        #   值＝卡面句＋「｜」＋詳細；卡面超過字數預算時契約層只截顯示、完整原文進 hover（項目清單排在最前）。
+        #   只有「有系統風險上限」才走到這裡（上方無上限分支一個字都沒加）。
+        _disc = getattr(alloc, "risk_cap_disclosure", None)
+        if _disc is not None:
+            _facts.append((RISK_CAP_COMPLETENESS_LABEL, risk_cap_full_text(_disc)))
         if alloc.conflicts:
             # 「與結論相反但被壓制的訊號**要顯示，不要藏**」（SSOT docstring 原文）。
             _facts.append(("被壓制的反向訊號", "；".join(alloc.conflicts)))

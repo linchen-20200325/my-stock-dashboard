@@ -190,6 +190,11 @@ def z66b_revert_for(file_path, code: str, *, only=None, skip=()) -> str:
     rel = (p.resolve().relative_to(REPO) if p.is_absolute() else p).as_posix()
     if (only is not None and rel not in only) or rel in skip:
         return code
+    # 📌 AUD-C21（2026-10-16，有意識的變更，⛔ 不是漏改）：AUD-C21 在本批之後又改了同幾檔 ⇒ 先換回 C21 之前的寫法
+    #   （`tests/test_batch_c21.py::C21_REVERT_PAIRS`），再還原本批 —— 同 Z66 串 Z66b、Z56 串 Z66b 的慣例。
+    #   串在本支的 `only`／`skip` 判斷之後 ⇒ z56／z66 兩條鏈各自只換自己管的檔，同一處不會被換兩次。
+    from tests.test_batch_c21 import c21_revert_for
+    code = c21_revert_for(file_path, code)
     for new, old in Z66B_REVERT_PAIRS.get(rel, ()):
         assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)
@@ -200,7 +205,9 @@ def z66b_pairs_for(file_path) -> tuple:
     """給模組 `__file__`（或 repo 相對路徑），回本批該檔的還原組（無則空 tuple；供以 pair 清單串接的舊測試用）。"""
     p = Path(file_path)
     rel = (p.resolve().relative_to(REPO) if p.is_absolute() else p).as_posix()
-    return Z66B_REVERT_PAIRS.get(rel, ())
+    # ~~return Z66B_REVERT_PAIRS.get(rel, ())~~ —— 📌 AUD-C21（有意識的變更）：先串 C21 的還原組（依序套用）。
+    from tests.test_batch_c21 import c21_pairs_for
+    return tuple(c21_pairs_for(file_path)) + Z66B_REVERT_PAIRS.get(rel, ())
 
 
 @__import__("pytest").mark.parametrize("rel", sorted(Z66B_REVERT_PAIRS))
@@ -323,7 +330,12 @@ class TestWriteGate:
         l1(kw["pmi_history"])
         f = tmp_path / "macro_state.json"
         before = _file(f, days_ago=3, cap=30)
+        # 📌 AUD-C21（客戶 2026-10-16，有意識的變更）：新 UI 的有效快照住在自己的 `risk_cap_state.json` ⇒
+        #   「7 天內的有效舊檔」放在那裡；閘門擋下時兩個檔都一個位元組不動。
+        rc = tmp_path / "risk_cap_state.json"
+        rc_before = _file(rc, days_ago=3, cap=30)
         res = RC.compute_and_lock_risk_cap(_session_from(kw), now=NOW, state_file_path=str(f))
+        assert rc.read_bytes() == rc_before and not (tmp_path / "risk_cap_state.json.tmp").exists()
         assert not res.written and key in res.missing_core
         assert res.reason.startswith("Required Core 無法評估：")
         assert f"{RP.REQUIRED_CORE_LABELS[key]}（{key}：" in res.reason
@@ -393,14 +405,22 @@ class TestReadSide:
     ])
     def test_get_macro_state(self, tmp_path, kind, days, stamp, expect):
         f = tmp_path / "macro_state.json"
-        _file(f, days_ago=days, cap=30, **stamp)
+        _file(f, days_ago=days, cap=30, **dict(stamp))
+        # 📌 AUD-C21（客戶 2026-10-16，有意識的變更）：新 UI 的上限只讀自己的 `risk_cap_state.json` ⇒ 同一份內容
+        #   也放一份在那裡，本表六種檔照舊驗「只認有效快照」（「不退回讀舊檔」另見 tests/test_batch_c21.py）。
+        _file(tmp_path / "risk_cap_state.json", days_ago=days, cap=30, **dict(stamp))
         got = get_macro_state(None, state_file_path=str(f), now=NOW, require_valid_risk_cap=True)
         assert got["exposure_limit_pct"] == expect, kind
         # 預設（舊 UI 呼叫方式）：一字不變 —— 未過期的檔照舊給上限
         legacy = get_macro_state(None, state_file_path=str(f), now=NOW)
         assert legacy["exposure_limit_pct"] == (None if days > 7 else 30), kind
         # 只動上限：位階／is_loaded 與預設相同
-        assert {k: v for k, v in got.items() if k != "exposure_limit_pct"} == \
+        # ~~assert {k: v for k, v in got.items() if k != "exposure_limit_pct"} == \~~
+        # 📌 AUD-C21／PQ-C6-3（有意識的變更）：旗標開多一個 `risk_cap_disclosure`（上限的資料完整性揭露，
+        #   與上限同一次讀檔）⇒ 它與上限同屬「上限」那一組；其餘鍵照舊逐鍵相同（⛔ 沒有放寬）。
+        assert set(got) - set(legacy) == {"risk_cap_disclosure"}, kind
+        assert (got["risk_cap_disclosure"] is None) is (expect is None), kind
+        assert {k: v for k, v in got.items() if k not in ("exposure_limit_pct", "risk_cap_disclosure")} == \
                {k: v for k, v in legacy.items() if k != "exposure_limit_pct"}
 
     def test_strict_unaffected(self, tmp_path):
@@ -422,6 +442,8 @@ class TestReadSide:
             if stamp.pop("stamp", True):
                 data = _stamped(data, **stamp)
             f.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            # 📌 AUD-C21（有意識的變更）：新 UI 讀自己的 `risk_cap_state.json` ⇒ 同一份內容也寫一份（雙寫的樣子）。
+            (tmp_path / "risk_cap_state.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         return _write
 
     @pytest.mark.parametrize("stamp,has_cap", [(dict(stamp=False), False), (dict(version="v0"), False),
@@ -462,8 +484,11 @@ class TestReadSide:
         assert "鎖定快照額外欄位_macro_state_json" in legacy["data"]
         assert new["data"]["exposure_limit_pct"] is None
         assert "鎖定快照額外欄位_macro_state_json" not in new["data"]
+        # 📌 AUD-C21：旗標開時附加欄位改讀 `risk_cap_state.json`、鍵名照實標來源 ⇒ 新鍵名也必須不在
+        assert "鎖定快照額外欄位_risk_cap_state_json" not in new["data"]
         fresh()
         assert Q._tool_get_market_state(require_valid_risk_cap=True)["data"]["exposure_limit_pct"] == 30
+        assert "鎖定快照額外欄位_risk_cap_state_json" in Q._tool_get_market_state(require_valid_risk_cap=True)["data"]
 
     def test_run_agent_opt_in_routes_tool(self, fresh, monkeypatch):
         from src.services import ai_qa_service as Q
@@ -542,11 +567,15 @@ class TestMutations:
         assert f.read_bytes() != before          # 突變體蓋掉舊檔 ⇒ 原版的 bytes 守衛抓得到
 
     def test_read_side_check_removed(self, tmp_path):
+        # ~~("        if not is_valid_risk_cap_snapshot(_file):\n", "        if False:\n")~~
+        # 📌 AUD-C21（有意識的變更）：有效判斷搬到讀新 UI 快照檔的 `_read_risk_cap_snapshot` ⇒ 突變點跟著換；
+        #   未蓋戳的檔也放進新檔（新 UI 只讀它）。本支守的「拿掉讀端戳記檢查 ⇒ 紅」不變。
         mod = _mutated_module("src/services/macro_state_locker.py",
-                              ("        if not is_valid_risk_cap_snapshot(_file):\n",
-                               "        if False:\n"))
+                              ("    if not is_valid_risk_cap_snapshot(data):\n",
+                               "    if False:\n"))
         f = tmp_path / "macro_state.json"
         _file(f, days_ago=1.0, stamp=False)
+        _file(tmp_path / "risk_cap_state.json", days_ago=1.0, stamp=False)
         assert get_macro_state(None, state_file_path=str(f), now=NOW,
                                require_valid_risk_cap=True)["exposure_limit_pct"] is None
         assert mod.get_macro_state(None, state_file_path=str(f), now=NOW,
