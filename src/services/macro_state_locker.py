@@ -16,6 +16,7 @@ import os
 import re
 from typing import Callable
 
+from shared import signal_thresholds as _ST
 from src.config import TAIWAN_ADVISOR_PERSONA as _PERSONA
 
 
@@ -501,6 +502,22 @@ _ENGINE_NUMERIC_INPUTS: tuple = (
     "BIAS240_pct", "PCR", "Futures_Net_Short",
 )
 
+#: M1B-M2 資金項（spread）用到的兩個輸入（批 Z66，客戶 2026-10-16 Q2）。
+_M1B_M2_LEG_INPUTS: tuple = ("M1B_YoY_pct", "M2_YoY_pct")
+
+#: M1B-M2 腿停用時寫進 `Macro_Phase` 的揭露字（措辭比照 `market_strategy` 的「M1B-M2 資金活水已停用…不計分」）。
+M1B_M2_LEG_DISABLED_LABEL: str = "M1B-M2 資金活水已停用（不計分）"
+
+
+def engine_disabled_inputs() -> tuple:
+    """規則引擎**目前停用**（不計分、也不算「未評估」）的數值輸入，依 `_ENGINE_NUMERIC_INPUTS` 順序。
+
+    批 Z66（客戶 2026-10-16 Q2）：M1B-M2 腿與 `shared.signal_thresholds.M1B_M2_LEG_ENABLED` 同步 ——
+    False ⇒ `("M1B_YoY_pct", "M2_YoY_pct")`；True ⇒ `()`。**呼叫當下**才讀 L0 開關（不在 import 時綁死），
+    引擎與 L3 `macro_engine_inputs`（`not_evaluated`）共用這一支，⛔ 不各自判斷。
+    """
+    return () if _ST.M1B_M2_LEG_ENABLED else _M1B_M2_LEG_INPUTS
+
 
 def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = False) -> dict:
     """
@@ -546,6 +563,18 @@ def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = Fa
         regime／風險／曝險／Macro_Phase（「系統異常」）＋ `missing_inputs`（批 Z34，客戶 Q-z14）。
     兩個 bool 輸入（Sahm／MA5）不在此列，照舊（None → False）。
 
+    M1B-M2 腿停用（批 Z66，客戶 2026-10-16 Q2；開關 `shared.signal_thresholds.M1B_M2_LEG_ENABLED`）
+    ────────────────────────────────────────────────────────────────
+    開關為 False（現行）→ M1B／M2 **停用、不計分**：
+      · spread 計分（＞3 → +15、＞0 → +5、＜−3 → −10）與「資金緊縮」標記整條不算 ——
+        客戶：已有正式停用語意、現有證據區分力不足，⛔ 不得讓停用的訊號繼續默默抬高風險上限；
+      · M1B／M2 **不算缺值**（不進 `missing_inputs`、不算進「N 項未評估」）；改回報
+        `disabled_inputs`（停用的鍵名，依上表順序；**只在開關為 False 時才帶**）；
+      · 上游兩邊都給了有限值時，`Macro_Phase` 多一個 `M1B_M2_LEG_DISABLED_LABEL` 揭露（停用 ≠ 缺資料）；
+      · 「全缺」fail-safe 改為「**啟用中**的數值輸入全缺」—— 只有 M1B／M2 有值的輸入照樣 fail-safe。
+    開關為 True → 與修前逐字相同（M1B-M2 照舊計分；無 `disabled_inputs`）。計分程式碼刻意保留不刪
+    （同 `market_strategy` 的處置；重新啟用是另一次裁示，且須升 `shared.risk_cap_policy.RISK_CAP_RULESET_VERSION`）。
+
     `include_veto_flags`（批 Z65，客戶 2026-10-14 題2＝A；預設 False ⇒ 輸出與修前逐字相同）
     ────────────────────────────────────────────────────────────────
     True → 回傳多一個 `veto_flags`：``{"sahm", "pmi_contraction", "futures_ma5": bool,
@@ -572,7 +601,10 @@ def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = Fa
         return float(v) if _is_finite_number(v) else None
 
     _nums = {k: _f(k) for k in _ENGINE_NUMERIC_INPUTS}
-    missing_inputs = [k for k in _ENGINE_NUMERIC_INPUTS if _nums[k] is None]
+    # 批 Z66（Q2）：停用的輸入不計分、也不算缺（開關 True 時 `_disabled` 為空 ⇒ 與修前逐字相同）
+    _disabled = engine_disabled_inputs()
+    _enabled = tuple(k for k in _ENGINE_NUMERIC_INPUTS if k not in _disabled)
+    missing_inputs = [k for k in _enabled if _nums[k] is None]
     vix         = _nums["VIX_Index"]
     pmi         = _nums["ISM_PMI_or_OECD_CLI"]
     pmi_prev    = _nums["PMI_Prev_Month"]
@@ -588,7 +620,8 @@ def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = Fa
     #   修前落檔「震盪／警告／曝險上限 60%」—— 沒有任何資料卻給出正常投資結論。改回既有 fail-safe
     #   `_DEFAULT_STATE`（「系統異常」；`get_macro_state` 既有規則視同未載入、不給曝險上限），不新增任何數字。
     #   薩姆規則 bool 已觸發屬「有資料」，照舊走下方紅線（not sahm 才短路）。至少一項有效 → 本段不進、輸出逐字不變。
-    if len(missing_inputs) == len(_ENGINE_NUMERIC_INPUTS) and not sahm:
+    #   批 Z66（Q2）：「全缺」＝**啟用中**的數值輸入全缺（停用的 M1B／M2 有值也不能讓它逃過 fail-safe）。
+    if len(missing_inputs) == len(_enabled) and not sahm:
         _fs_out = {
             "market_regime": _DEFAULT_STATE["market_regime"],
             "systemic_risk_level": _DEFAULT_STATE["systemic_risk_level"],
@@ -596,6 +629,8 @@ def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = Fa
             "Macro_Phase": _DEFAULT_STATE["Macro_Phase"],
             "missing_inputs": missing_inputs,
         }
+        if _disabled:
+            _fs_out["disabled_inputs"] = list(_disabled)
         if include_veto_flags:
             # 批 Z65：fail-safe 沒有跑任何紅線 ⇒ 三條 False ＋ fail_safe=True（＝未評估，⛔ 不是「未觸發」）
             _fs_out["veto_flags"] = {"sahm": False, "pmi_contraction": False,
@@ -619,7 +654,10 @@ def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = Fa
         elif pmi > 52:   score += 5
 
     # M1B-M2 資金流動（任一缺 → 整條不算；不以 0 代入另一邊）
-    spread = (m1b_yoy - m2_yoy) if (m1b_yoy is not None and m2_yoy is not None) else None
+    # 批 Z66（Q2）：腿停用 ⇒ spread 不算（不計分、不貼「資金緊縮」）；兩邊都有值時只做停用揭露
+    _leg_on = not _disabled
+    _m1b_m2_both = m1b_yoy is not None and m2_yoy is not None
+    spread = (m1b_yoy - m2_yoy) if (_leg_on and _m1b_m2_both) else None
     if spread is not None:
         if spread > 3:    score += 15
         elif spread > 0:  score += 5
@@ -680,6 +718,8 @@ def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = Fa
         labels.append(f"VIX高波動({vix:.1f})")
     if spread is not None and spread < 0:
         labels.append("資金緊縮")
+    if not _leg_on and _m1b_m2_both:                       # 批 Z66：停用 ≠ 缺資料，要說出來
+        labels.append(M1B_M2_LEG_DISABLED_LABEL)
     if bias240 is not None and bias240 > 15 and _bias_resonance:
         labels.append("均線過熱")
     if missing_inputs:                                     # 批 Z9（X2-n1）：N>0 才寫，N=0 ⛔「0 項未評估」
@@ -695,6 +735,9 @@ def calculate_system_state(macro_numbers: dict, *, include_veto_flags: bool = Fa
     if missing_inputs:
         # M2N-f3：有缺才帶（8 個都有值時回傳與修前逐字相同）
         _out["missing_inputs"] = missing_inputs
+    if _disabled:
+        # 批 Z66（Q2）：停用的輸入（開關 False 時一律帶；True 時不帶 ⇒ 與修前逐字相同）
+        _out["disabled_inputs"] = list(_disabled)
     if include_veto_flags:
         _out["veto_flags"] = {"sahm": _veto_sahm, "pmi_contraction": _veto_pmi,
                               "futures_ma5": _veto_futures, "fail_safe": False}

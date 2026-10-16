@@ -99,8 +99,11 @@ class TestOldBugReproduction:
             "PCR 百分比刻度直送引擎應該剛好吃掉 10 個百分點的曝險 —— "
             "這是本次要修掉的系統性偏差")
 
-    def test_fix_removes_the_penalty(self):
+    def test_fix_removes_the_penalty(self, monkeypatch):
         """**修後**：取值端換算完再進引擎 → 與無 PCR 的基準完全相同。"""
+        # 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更）：本例對照的是 M1B-M2 腿仍計分的引擎輸出 ⇒ 開關設 True 證原等價；
+        #   腿停用行為見 tests/test_batch_z66.py。
+        monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
         ratio, _src = normalize_pcr_to_ratio(126.80)
         fixed = calculate_system_state(_neutral(PCR=ratio))
         assert fixed["exposure_limit_pct"] == 60

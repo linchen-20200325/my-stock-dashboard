@@ -31,6 +31,9 @@ include_veto_flags=True)`），由新 UI「🚀 更新今日戰情」（`refresh
   ⛔ 不得宣稱「該紅線已通過」。
 - 外資期貨或 MA5 缺值 → 該紅線「無法判定」。
 - Freshness（Q-z37／Q-z38）：規則 SSOT 是 `shared/freshness_policy.py`，本檔只讀。
+- 批 Z66（客戶 2026-10-16 Q2）：M1B-M2 腿停用（`shared.signal_thresholds.M1B_M2_LEG_ENABLED = False`）
+  ⇒ M1B／M2 **不算進 `not_evaluated`**，改列 `EngineInputBundle.disabled_inputs`（停用 ≠ 未評估）；
+  哪些鍵停用由 L3 `macro_state_locker.engine_disabled_inputs()` 決定（與引擎同一支，⛔ 不另判）。
 
 與舊 UI 組裝（`src/ui/tabs/macro/section_news_ai.py`，原文未改）的**刻意差異**
 ────────────────────────────────────────────────────────────────────────
@@ -67,7 +70,7 @@ from shared.trading_days import CalendarSets
 from src.compute.macro import dated_inputs as _di
 from src.data.macro import macro_cache_reader as _mcr
 from src.data.stock import twse_holiday_fetcher as _hf
-from src.services.macro_state_locker import calculate_system_state
+from src.services.macro_state_locker import calculate_system_state, engine_disabled_inputs
 from src.services.trading_calendar_service import taipei_today
 
 # ── 引擎輸入名（與 L2 抽取器同一份；一致性由 tests/test_batch_z64.py 守住）──
@@ -140,6 +143,9 @@ class EngineInputBundle:
     input_asof: Mapping[str, str | None]
     today: date
     calendar_error: str | None = field(default=None)
+    #: 批 Z66（客戶 2026-10-16 Q2）：引擎**停用**的輸入（M1B-M2 腿停用時為 M1B／M2）。
+    #: 停用 ≠ 未評估 ⇒ 這些鍵**不在** `not_evaluated` 裡（資料本身照樣抽取、評估新鮮度，見 `assessed`）。
+    disabled_inputs: tuple[str, ...] = field(default=())
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -333,9 +339,12 @@ def build_engine_inputs(*, macro_info: Any, bias_info: Any, m1b_m2_info: Any, li
     macro_numbers: dict[str, Any] = {k: assessed[k].scoring_value for k in ENGINE_INPUT_KEYS}
     macro_numbers[KEY_SAHM] = None
 
+    # 批 Z66（Q2）：停用的輸入（M1B-M2 腿）不計分，但**不是**「未評估」—— 另列 `disabled_inputs`。
+    disabled = tuple(k for k in ENGINE_INPUT_KEYS if k in engine_disabled_inputs())
     not_evaluated = tuple(k for k in ENGINE_INPUT_KEYS
-                          if assessed[k].verdict.status != FreshnessStatus.FRESH
-                          or assessed[k].scoring_value is None)
+                          if k not in disabled
+                          and (assessed[k].verdict.status != FreshnessStatus.FRESH
+                               or assessed[k].scoring_value is None))
     red_lines = {name: _red_line(name, assessed) for name in RED_LINE_INPUTS}
     input_asof = {k: _asof_str(assessed[k].dv) for k in ENGINE_INPUT_KEYS}
 
@@ -347,6 +356,7 @@ def build_engine_inputs(*, macro_info: Any, bias_info: Any, m1b_m2_info: Any, li
         input_asof=MappingProxyType(input_asof),
         today=today,
         calendar_error=calendar_error,
+        disabled_inputs=disabled,
     )
 
 

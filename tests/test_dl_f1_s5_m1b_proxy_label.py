@@ -423,6 +423,11 @@ def _m1b_line(prompt: str) -> str:
 
 
 class TestNewsAiPrompt:
+    @pytest.fixture(autouse=True)
+    def _z66_m1b_m2_leg_on_reference(self, monkeypatch):
+        """📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是放寬）：M1B-M2 腿自 Z66 起在引擎停用。本類（真值 M1B 會改變引擎結果的前提守衛）比對的是**腿仍計分**的修前引擎 ⇒ 開關設 True 證原等價（不改 golden）；腿停用（開關 False）的行為由 tests/test_batch_z66.py 守。"""
+        monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
+
 
     def test_harness_reaches_gemini(self, run):
         prompt, _ = run.news(_real())

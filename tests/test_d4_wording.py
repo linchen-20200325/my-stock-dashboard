@@ -200,8 +200,17 @@ def test_dl_f1_s66_system_cap_basis_wording():
     from shared.allocation_decision import build_allocation_decision
     import inspect as _inspect
     src = _inspect.getsource(build_allocation_decision)
-    assert ("'macro_state 規則引擎（分數計算：VIX／PMI／M1B-M2／BIAS240／PCR；"
-            "三大硬否決紅線：薩姆／PMI／外資期貨）'") in src
+    # ~~assert ("'macro_state 規則引擎（分數計算：VIX／PMI／M1B-M2／BIAS240／PCR；"~~
+    # ~~        "三大硬否決紅線：薩姆／PMI／外資期貨）'") in src~~
+    # 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏改）：M1B-M2 腿停用 ⇒ 說明改依開關二選一、
+    #   字面移到模組常數（函式內只引用）。腿停用時的實際輸出由 tests/test_batch_z66.py 實跑守住。
+    import shared.allocation_decision as _AD
+    assert _AD.SYSTEM_RISK_CAP_BASIS_LEG_ON == (
+        "macro_state 規則引擎（分數計算：VIX／PMI／M1B-M2／BIAS240／PCR；三大硬否決紅線：薩姆／PMI／外資期貨）")
+    assert _AD.SYSTEM_RISK_CAP_BASIS_LEG_OFF == (
+        "macro_state 規則引擎（分數計算：VIX／PMI／BIAS240／PCR；M1B-M2 資金活水已停用、不計分；"
+        "三大硬否決紅線：薩姆／PMI／外資期貨）")
+    assert "SYSTEM_RISK_CAP_BASIS_LEG_ON if _ST.M1B_M2_LEG_ENABLED" in src
     assert "外資期貨硬否決）" not in src
 
 

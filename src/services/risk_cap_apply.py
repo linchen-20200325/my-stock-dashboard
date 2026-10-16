@@ -16,8 +16,8 @@
 
 ═══ 無法計算 ⇒ 不寫檔、不覆寫（保住 7 天保留機制）══════════════════════════
 判定（兩條任一成立）：
-  1. 引擎回 fail-safe（`veto_flags["fail_safe"] is True`：8 項數值全缺且薩姆未觸發；
-     本路徑薩姆一律送 None ⇒ 等同「8 項全缺」）；
+  1. 引擎回 fail-safe（`veto_flags["fail_safe"] is True`：**啟用中的**數值輸入全缺且薩姆未觸發；
+     本路徑薩姆一律送 None ⇒ 等同「啟用中的數值輸入全缺」。批 Z66 起 M1B／M2 停用、不算在內）；
   2. `exposure_limit_pct` 不是有限數（含 bool）。
 此時**一個位元組都不寫**：既有 `macro_state.json` 若仍在 `MACRO_VERDICT_MAX_AGE_DAYS` 內，
 `get_macro_state()` 照舊讀到那一次的有效上限；過期或不存在時，`get_macro_state()` 不給上限，
@@ -29,8 +29,10 @@
   analysis_summary, timestamp}`），**不保留也不合併**既有檔內任何欄位 —— 與舊 UI 每次按鈕的行為相同。
   （`execute_and_lock` 才會寫 AI 解讀欄位；它 0 個 production 呼叫點。）
 - 附帶欄位（舊 UI 沒有，讀端一律 `.get` 具名鍵，多了不影響 —— 消費端盤點見 tests/test_batch_z65.py）：
-  `engine_source`、`input_asof`、`not_evaluated`、`red_lines`、`veto_flags`、`input_detail`；
-  `m1b_m2_data_month` 比照舊 UI（只在 M1B／M2 真的進了計分時才有值，否則 None）。
+  `engine_source`、`input_asof`、`not_evaluated`、`red_lines`、`veto_flags`、`input_detail`、
+  `risk_cap_ruleset_version`（批 Z66：L0 `shared.risk_cap_policy.RISK_CAP_RULESET_VERSION`）；
+  `m1b_m2_data_month` 比照舊 UI（只在 M1B／M2 真的進了計分時才有值，否則 None —— 批 Z66 起 M1B-M2 腿
+  停用 ⇒ 恆為 None）；引擎輸出另帶 `disabled_inputs`（停用、不計分的輸入；≠ `not_evaluated`）。
 - 刻意差異（輸入端）沿用 Z64，逐條見 `macro_engine_inputs` 檔頭（PMI 前月取 parquet 真正前一資料月、
   過期不計分、PCR／外資期貨逐欄往回找、bool／字串判缺、薩姆送 None）。
 
@@ -58,17 +60,22 @@ from src.services.macro_engine_inputs import (
     load_engine_inputs_from_session,
     run_rule_engine,
 )
+from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION, RISK_CAP_RULESET_VERSION_KEY
 from src.services.macro_state_locker import MacroStateLocker
 
-#: 寫進檔案的來源標記（供日後 Q3 判斷來源；本批不依它過濾）。
-ENGINE_SOURCE: str = "new_ui_risk_cap_v1"
+#: 寫進檔案的來源標記。
+#: ~~`"new_ui_risk_cap_v1"`~~ 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏改）：M1B-M2 腿停用、
+#: 檔案多帶規則版本 ⇒ 升 v2。v1 字樣只出現在批 Z65～Z66 之間寫的舊檔裡（不改寫歷史檔）。
+ENGINE_SOURCE: str = "new_ui_risk_cap_v2"
 
 #: 附帶欄位（引擎原有鍵以外、本檔加進檔案的鍵）。⛔ 不得與引擎輸出重名。
-ATTACHED_KEYS: tuple[str, ...] = ("engine_source", "input_detail", "m1b_m2_data_month")
+ATTACHED_KEYS: tuple[str, ...] = ("engine_source", "input_detail", "m1b_m2_data_month",
+                                  RISK_CAP_RULESET_VERSION_KEY)
 
 #: 無法計算的兩種原因（步驟報告與回傳值共用，⛔ 不在呼叫端另寫一份）。
+#: 📌 批 Z66：「8 項」→「啟用中的」（M1B／M2 停用後，fail-safe 只看啟用中的輸入；有意識的措辭更正）。
 REASON_FAIL_SAFE: str = (
-    "規則引擎 8 項數值輸入本輪全部無法計分（未取得或已過期）→ 引擎回 fail-safe「系統異常」；"
+    "規則引擎啟用中的數值輸入本輪全部無法計分（未取得或已過期）→ 引擎回 fail-safe「系統異常」；"
     "本輪無法計算，不寫檔（既有檔若有，保留不動）")
 REASON_NOT_FINITE: str = "引擎回傳的曝險上限不是有限數（{value!r}）；本輪無法計算，不寫檔（既有檔若有，保留不動）"
 
@@ -87,7 +94,7 @@ class RiskCapApplyResult:
         written: 這一輪有沒有寫 `macro_state.json`。
         reason: 沒寫的原因（`written=True` 時為空字串）。
         bundle_summary: 取值結果摘要（可 JSON 化）：today / calendar_error / not_evaluated /
-            input_asof / red_lines（名稱 → status）。
+            disabled_inputs（批 Z66：停用、不計分；≠ 未評估）/ input_asof / red_lines（名稱 → status）。
         engine_result: 引擎輸出（含 `veto_flags` 與 Z64 附加鍵）；寫檔時就是落檔前的那份
             （不含 `analysis_summary` / `timestamp`，那兩個由 `lock_system_state_only` 補）。
     """
@@ -137,13 +144,19 @@ def _bundle_summary(bundle: EngineInputBundle) -> dict:
         "today": bundle.today.isoformat(),
         "calendar_error": bundle.calendar_error,
         "not_evaluated": list(bundle.not_evaluated),
+        "disabled_inputs": list(bundle.disabled_inputs),
         "input_asof": dict(bundle.input_asof),
         "red_lines": {k: v.status for k, v in bundle.red_lines.items()},
     }
 
 
 def _m1b_m2_data_month(bundle: EngineInputBundle) -> str | None:
-    """比照舊 UI：M1B 與 M2 **都真的進了計分**才回資料月（'YYYY-MM'）；否則 None。"""
+    """比照舊 UI：M1B 與 M2 **都真的進了計分**才回資料月（'YYYY-MM'）；否則 None。
+
+    批 Z66（Q2）：M1B-M2 腿停用時兩者都不進計分 ⇒ 一律 None（⛔ 不寫一個「本次計分用到的資料月」假象）。
+    """
+    if any(k in bundle.disabled_inputs for k in ("M1B_YoY_pct", "M2_YoY_pct")):
+        return None
     nums = bundle.macro_numbers
     if nums.get("M1B_YoY_pct") is None or nums.get("M2_YoY_pct") is None:
         return None
@@ -198,6 +211,7 @@ def compute_and_lock_risk_cap(session: Any, *, now: datetime,
     payload["engine_source"] = ENGINE_SOURCE
     payload["input_detail"] = _input_detail(bundle)
     payload["m1b_m2_data_month"] = _m1b_m2_data_month(bundle)
+    payload[RISK_CAP_RULESET_VERSION_KEY] = RISK_CAP_RULESET_VERSION   # 批 Z66：規則版本（L0 SSOT）
     # 寫檔前先驗：任何 NaN／±inf 數值 → ValueError（此時尚未碰檔案）。
     json.dumps(payload, ensure_ascii=False, allow_nan=False)
 

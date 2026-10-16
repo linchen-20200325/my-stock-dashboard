@@ -99,6 +99,10 @@ Z65_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
 
 def z65_revert_for(file_path, code: str) -> str:
     """舊批次還原鏈串接用：給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批之前的寫法（無 pair 則原樣）。"""
+    # 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏改）：Z66 改了 `calculate_system_state`（M1B-M2 腿停用）
+    #   ⇒ 先換回 Z66 之前的寫法（`tests/test_batch_z66.py::Z66_REVERT_PAIRS`；`Z65_BASE_SHA` 不改、本表不動）。
+    from tests.test_batch_z66 import z66_revert_for
+    code = z66_revert_for(file_path, code)
     p = Path(file_path)
     rel = (p.resolve().relative_to(REPO) if p.is_absolute() else p).as_posix()
     for new, old in Z65_REVERT_PAIRS.get(rel, ()):
@@ -203,6 +207,11 @@ def _grid_digest(engine) -> str:
 
 
 class TestEngineVetoFlags:
+    @pytest.fixture(autouse=True)
+    def _z66_m1b_m2_leg_on_reference(self, monkeypatch):
+        """📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是放寬）：M1B-M2 腿自 Z66 起在引擎停用。本類（golden 由修前引擎 049911dc 實跑）比對的是**腿仍計分**的修前引擎 ⇒ 開關設 True 證原等價（不改 golden）；腿停用（開關 False）的行為由 tests/test_batch_z66.py 守。"""
+        monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
+
     def test_default_output_is_byte_identical_to_pre_z65_engine(self):
         assert _grid_digest(calculate_system_state) == _PRE_Z65_ENGINE_DIGEST
 
@@ -304,8 +313,12 @@ class TestComputeAndLock:
         for k, v in expect.items():
             assert state[k] == v, k
         assert state["exposure_limit_pct"] == expect["exposure_limit_pct"]
-        assert state["engine_source"] == RC.ENGINE_SOURCE == "new_ui_risk_cap_v1"
-        assert state["m1b_m2_data_month"] == "2026-08"
+        # ~~assert state["engine_source"] == RC.ENGINE_SOURCE == "new_ui_risk_cap_v1"~~
+        # ~~assert state["m1b_m2_data_month"] == "2026-08"~~
+        # 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏改）：來源標記升 v2；M1B-M2 腿停用 ⇒
+        #   M1B／M2 沒有進計分 ⇒ 資料月 None（腿開啟時仍回 "2026-08"，見 tests/test_batch_z66.py）。
+        assert state["engine_source"] == RC.ENGINE_SOURCE == "new_ui_risk_cap_v2"
+        assert state["m1b_m2_data_month"] is None
         assert state["not_evaluated"] == []
         assert state["red_lines"]["sahm"]["status"] == "no_source"
         assert set(state["input_detail"]) == set(M.ENGINE_INPUT_KEYS)
@@ -1037,6 +1050,11 @@ class TestTrioDisclosure:
 
 
 class TestLowSeverity:
+    @pytest.fixture(autouse=True)
+    def _z66_m1b_m2_leg_on_reference(self, monkeypatch):
+        """📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是放寬）：M1B-M2 腿自 Z66 起在引擎停用。本類 m6（M1B／M2 進了計分才回資料月）比對的是**腿仍計分**的修前引擎 ⇒ 開關設 True 證原等價（不改 golden）；腿停用（開關 False）的行為由 tests/test_batch_z66.py 守。"""
+        monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
+
     def test_m6_single_side_month_none(self):
         import dataclasses
         b = _build(_inputs())

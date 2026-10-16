@@ -630,7 +630,11 @@ class TestLoadFromSession:
                             lambda *, taipei_year: self._hf_cal())
         monkeypatch.setattr(M._mcr, "load_tw_pmi_history", lambda: None)
         b = M.load_engine_inputs_from_session({}, now=NOW)
-        assert set(b.not_evaluated) == set(M.ENGINE_INPUT_KEYS)
+        # ~~assert set(b.not_evaluated) == set(M.ENGINE_INPUT_KEYS)~~
+        # 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更）：M1B-M2 腿停用 ⇒ M1B／M2 是「停用」不是「未評估」，
+        #   改列 `disabled_inputs`（停用 ≠ 未評估）；其餘 7 項仍全數未評估。
+        assert b.disabled_inputs == ("M1B_YoY_pct", "M2_YoY_pct")
+        assert set(b.not_evaluated) == set(M.ENGINE_INPUT_KEYS) - set(b.disabled_inputs)
         r = M.run_rule_engine(b)
         assert r["Macro_Phase"] == "系統異常"   # 引擎既有全缺 fail-safe
 

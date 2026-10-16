@@ -160,7 +160,10 @@ _LT_PMI_PTS = {49.9: (-1, 0.25), 50.0: (0, 0.45), 50.1: (0, 0.45)}
 
 
 @pytest.mark.parametrize('v', [49.9, 50.0, 50.1])
-def test_locker_scoring_unchanged(v):
+def test_locker_scoring_unchanged(v, monkeypatch):
+    # 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更）：golden 是 M1B-M2 腿仍計分的引擎輸出 ⇒ 開關設 True 證原等價；
+    #   腿停用行為見 tests/test_batch_z66.py。
+    monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
     from src.services.macro_state_locker import calculate_system_state
     assert calculate_system_state(dict(_LOCKER_BASE, ISM_PMI_or_OECD_CLI=v)) == _LOCKER_GOLD[v]
 
