@@ -167,22 +167,71 @@ class TestB6r4PositionCap:
         assert "file_error" not in AL.get_macro_regime()
         assert AL.get_allocation().is_loaded is True       # 不拋、照舊
 
+    # ~~def test_e_mutant_allocation_guard(self, cap_dir, monkeypatch):~~
+    # ~~    _write(cap_dir / "macro_state.json", "{bad json")~~
+    # ~~    _m = _mutant(AL, *_AL_REVERT); _m.st = AL.st~~
+    # ~~    monkeypatch.setattr(AL, "get_allocation", _m.get_allocation)~~
+    # ~~    _c = _cap()[0]~~
+    # ~~    assert _c.state != UI_FAILED and _c.state == UI_EMPTY, "拿掉 L3 allocation 守衛後應回到修前（不紅）"~~
+    # ~~def test_e_mutant_locker_flag(self, cap_dir, monkeypatch):~~
+    # ~~    _write(cap_dir / "macro_state.json", "{bad json")~~
+    # ~~    _m = _mutant(MSL, *_MSL_REVERT)~~
+    # ~~    monkeypatch.setattr(MSL, "get_macro_state", _m.get_macro_state)~~
+    # ~~    _c = _cap()[0]~~
+    # ~~    assert _c.state != UI_FAILED and _c.state == UI_EMPTY, "拿掉 file_error 旗標後應回到修前（不紅）"~~
+    # 📌 AUD-C21 B1 之後（2026-10-16，有意識的變更，⛔ 不是放寬；兩個突變錨點一字未動）：上面兩支在「新頁卡⑤＋
+    #   舊檔讀壞＋warroom 可用」情境下，原版本身也不紅了 ⇒ 分不出原版與突變體（死覆蓋）。改指向 B1 之後這兩道守衛
+    #   **仍在作用**的情境：
+    #   · 舊 UI 呼叫方式（不帶旗標）＋ warroom 可用 ＋ 舊檔讀壞 ⇒ 原版 strict 拋、突變體不拋（兩道守衛都適用）；
+    #   · 新頁卡⑤（帶旗標）＋ warroom 可用 ＋ **新檔**讀壞 ⇒ 原版紅、拿掉 allocation 守衛的突變體不紅。
+    #   ⚠️ 為什麼⛔ 不用「warroom 缺席／無健康分」：實測該情境原版紅、**兩個突變體也紅** —— 紅來自
+    #   `get_macro_state` 未載入路徑的 strict 拋錯，`_AL_REVERT`／`_MSL_REVERT` 都碰不到它 ⇒ 一樣分不出來
+    #   （下面 `test_e_warroom_absent_cannot_discriminate` 把這件事釘住，免得日後有人改回去）。
+    def _old_ui_strict(self):
+        try:
+            AL.get_allocation(strict=True)            # 舊 UI 呼叫方式：不帶 require_valid_risk_cap
+        except RuntimeError as _e:
+            return repr(_e)
+        return None
+
     def test_e_mutant_allocation_guard(self, cap_dir, monkeypatch):
         _write(cap_dir / "macro_state.json", "{bad json")
+        assert "macro_state.json" in (self._old_ui_strict() or "")                     # 原版：拋
         _m = _mutant(AL, *_AL_REVERT)
         _m.st = AL.st
         monkeypatch.setattr(AL, "get_allocation", _m.get_allocation)
-        # 📌 批 Z65 QA（有意識的修改）：拿掉守衛後讀壞的檔＝沒有上限 ⇒ 不再是「靜默 live」，而是
-        #   客戶規則的灰「無法判定」；本支守的「守衛拿掉就不紅」不變。
+        assert self._old_ui_strict() is None, "拿掉 L3 allocation 守衛後應回到修前（不拋）"
+        # 新頁卡⑤：新檔讀壞 ⇒ 原版紅（見下）、突變體不紅
+        _write(cap_dir / "risk_cap_state.json", "{bad json")
+        assert _cap()[0].state != UI_FAILED
+
+    def test_e_new_file_broken_is_red(self, cap_dir):
+        _write(cap_dir / "risk_cap_state.json", "{bad json")
         _c = _cap()[0]
-        assert _c.state != UI_FAILED and _c.state == UI_EMPTY, "拿掉 L3 allocation 守衛後應回到修前（不紅）"
+        assert _c.state == UI_FAILED and "risk_cap_state.json" in _c.note.why
 
     def test_e_mutant_locker_flag(self, cap_dir, monkeypatch):
         _write(cap_dir / "macro_state.json", "{bad json")
+        assert "macro_state.json" in (self._old_ui_strict() or "")                     # 原版：拋
         _m = _mutant(MSL, *_MSL_REVERT)
         monkeypatch.setattr(MSL, "get_macro_state", _m.get_macro_state)
-        _c = _cap()[0]   # 📌 批 Z65 QA：同上，修前的「靜默 live」現為灰「無法判定」
-        assert _c.state != UI_FAILED and _c.state == UI_EMPTY, "拿掉 file_error 旗標後應回到修前（不紅）"
+        assert self._old_ui_strict() is None, "拿掉 file_error 旗標後應回到修前（不拋）"
+
+    @pytest.mark.parametrize("wr", [None, {"health_score": None, "effective_regime": "bull"}])
+    def test_e_warroom_absent_cannot_discriminate(self, cap_dir, monkeypatch, wr):
+        AL.st.session_state.clear()
+        if wr is not None:
+            AL.st.session_state["warroom_summary"] = dict(wr)
+        _write(cap_dir / "macro_state.json", "{bad json")
+        assert _cap()[0].state == UI_FAILED                                            # 原版：紅（未載入路徑 strict 拋）
+        for _mod, _pairs, _attr in ((AL, _AL_REVERT, "get_allocation"),
+                                    (MSL, _MSL_REVERT, "get_macro_state")):
+            _m = _mutant(_mod, *_pairs)
+            if _mod is AL:
+                _m.st = AL.st
+            with monkeypatch.context() as _mp:
+                _mp.setattr(_mod, _attr, getattr(_m, _attr))
+                assert _cap()[0].state == UI_FAILED                                    # 突變體：也紅 ⇒ 分不出
 
 
 # ══════════════════════════════════════════════════════════════════
