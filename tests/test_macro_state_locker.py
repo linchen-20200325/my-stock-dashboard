@@ -65,7 +65,10 @@ class TestCalculateSystemState:
         result = calculate_system_state({"ISM_PMI_or_OECD_CLI": 47})
         assert "PMI收縮" in result["Macro_Phase"]
 
-    def test_normal_env_label(self):
+    def test_normal_env_label(self, monkeypatch):
+        # 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更）：本例是 M1B-M2 腿仍計分時的行為 ⇒ 開關設 True 證原行為；
+        #   腿停用（現行）的對應斷言見 tests/test_batch_z66.py。
+        monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
         # 批 Z9 X2-n1：8 項齊全（N=0）才回「環境正常」；缺 6 項 → 「6 項未評估（缺資料不計分）」
         full = {"VIX_Index": 18, "ISM_PMI_or_OECD_CLI": 51, "PMI_Prev_Month": 51,
                 "M1B_YoY_pct": 3.0, "M2_YoY_pct": 3.0, "BIAS240_pct": 0.0, "PCR": 1.0,
@@ -510,8 +513,11 @@ class TestCalculateSystemStateBias240:
         })
         assert isinstance(result["exposure_limit_pct"], int)
 
-    def test_negative_m1b_m2_spread_labels_tightening(self):
+    def test_negative_m1b_m2_spread_labels_tightening(self, monkeypatch):
         """M1B YoY < M2 YoY（資金緊縮）→ Macro_Phase 含「資金緊縮」"""
+        # 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更）：本例是 M1B-M2 腿仍計分時的行為 ⇒ 開關設 True 證原行為；
+        #   腿停用（現行）的對應斷言見 tests/test_batch_z66.py。
+        monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
         result = calculate_system_state({
             "VIX_Index": 18.0,
             "M1B_YoY_pct": 1.0,

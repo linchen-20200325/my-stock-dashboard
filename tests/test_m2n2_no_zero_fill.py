@@ -599,6 +599,11 @@ def _scored(state: dict) -> dict:
 
 
 class TestL3MissingPath:
+    @pytest.fixture(autouse=True)
+    def _z66_m1b_m2_leg_on_reference(self, monkeypatch):
+        """📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是放寬）：M1B-M2 腿自 Z66 起在引擎停用。本類（M1B／M2 缺值路徑）比對的是**腿仍計分**的引擎行為 ⇒ 開關設 True 證原等價（不改 golden）；腿停用（開關 False）的行為由 tests/test_batch_z66.py 守。"""
+        monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
+
 
     # 📌 批 Z34（客戶 2026-10-10 Q-z14＝A，有意識的變更）：原 `{}` 底在 M1B／M2 皆 None 時＝8 項全缺 ⇒ 本批起走
     #   fail-safe「系統異常」、不計分，不再能拿來比「資金項不加不扣」。改用只帶一項「不計分的中性值」（PCR 1.0，
@@ -701,6 +706,11 @@ _PRE_FIX_BROKEN = {
 
 
 class TestPreFixWasBroken:
+    @pytest.fixture(autouse=True)
+    def _z66_m1b_m2_leg_on_reference(self, monkeypatch):
+        """📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是放寬）：M1B-M2 腿自 Z66 起在引擎停用。本類（§十一 修前 M1B／M2 造假的對照）比對的是**腿仍計分**的引擎行為 ⇒ 開關設 True 證原等價（不改 golden）；腿停用（開關 False）的行為由 tests/test_batch_z66.py 守。"""
+        monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
+
 
     @pytest.mark.parametrize("ek", _EXITS)
     def test_pre_fix_broken_set(self, ek, pre_fix, monkeypatch):

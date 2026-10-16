@@ -413,6 +413,9 @@ _Z36_OLD_FD_PARSED_GOLDEN = {
 def test_z36_foreign_dealer_parsed_old_golden_is_double_count(ek, monkeypatch):
     """Z36 golden 更新的佐證：舊 golden ＝ Z40 前解析器（外資自營商併入自營商 6.5）餵進同一批消費點的輸出；
     新解析器輸出 ＝ normal_pos 的 golden（外資自營商不計入）。"""
+    # 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更）：本例對照的是 M1B-M2 腿仍計分的引擎輸出 ⇒ 開關設 True 證原等價；
+    #   腿停用行為見 tests/test_batch_z66.py。
+    monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
     from tests import test_batch_z36 as Z36
     now = Z36.OBSERVED['foreign_dealer_parsed']()
     assert Z36._digest(ek, Z36._RUN[ek](Z36._mod(ek), now, monkeypatch)) == Z36._QZ20_GOLDEN[(ek, 'normal_pos')]

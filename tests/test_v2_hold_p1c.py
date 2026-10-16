@@ -117,7 +117,11 @@ class TestB6r4PositionCap:
         #   （Q-z34～36）「建議持股：無法判定」（灰 UI_EMPTY）；修前是 UI_LIVE（缺上限照印區間＝放寬風控）。
         #   本支守的「strict 與否逐位元組相同」不變。
         assert _now[0].state == UI_EMPTY and _now[0].note.now == PH.RISK_CAP_UNAVAILABLE_NOW
-        _pre = _mutant(PH, ("_a = get_allocation(strict=True)", "_a = get_allocation()"))
+        # 📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更）：新頁呼叫多帶 `require_valid_risk_cap=True` ⇒ 突變點跟著換；
+        #   本支守的「strict 與否逐位元組相同」不變。
+        # ~~("_a = get_allocation(strict=True)", "_a = get_allocation()")~~（修前突變點，Z66 Q1 起呼叫字面已變）
+        _pre = _mutant(PH, ("_a = get_allocation(strict=True, require_valid_risk_cap=True)",
+                            "_a = get_allocation(require_valid_risk_cap=True)"))
         assert repr(_now) == repr(_cap(_pre))
 
     def test_c_valid_file_is_byte_identical(self, cap_dir):
@@ -125,11 +129,23 @@ class TestB6r4PositionCap:
         #   （DL-f1-s65）⇒ 沒有系統風險上限 ⇒ 依客戶規則顯示「無法判定」。「有效的檔」補上現在的
         #   timestamp 才名實相符（`_GOOD_STATE` 本身一字未改）。
         from src.services.macro_state_locker import _now_str
-        _write(cap_dir / "macro_state.json", dict(_GOOD_STATE, timestamp=_now_str()))
+        # ~~_write(cap_dir / "macro_state.json", dict(_GOOD_STATE, timestamp=_now_str()))~~
+        # 📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更，⛔ 不是放寬）：新頁只認 Required Core 齊全＋現行規則版本
+        #   的檔（`shared.risk_cap_policy.is_valid_risk_cap_snapshot`）⇒「有效的檔」補上兩個戳記才名實相符
+        #   （`_GOOD_STATE` 本身一字未改；未蓋戳的檔新頁顯示「無法判定」，見 tests/test_batch_z66b.py）。
+        from shared.risk_cap_policy import (REQUIRED_CORE_OK_KEY, RISK_CAP_RULESET_VERSION,
+                                            RISK_CAP_RULESET_VERSION_KEY)
+        _write(cap_dir / "macro_state.json", dict(_GOOD_STATE, timestamp=_now_str(),
+                                                  **{REQUIRED_CORE_OK_KEY: True,
+                                                     RISK_CAP_RULESET_VERSION_KEY: RISK_CAP_RULESET_VERSION}))
         assert MSL.get_macro_state(_WR, strict=True) == MSL.get_macro_state(_WR)
         _now = _cap()
         assert _now[0].state == UI_LIVE
-        _pre = _mutant(PH, ("_a = get_allocation(strict=True)", "_a = get_allocation()"))
+        # 📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更）：新頁呼叫多帶 `require_valid_risk_cap=True` ⇒ 突變點跟著換；
+        #   本支守的「strict 與否逐位元組相同」不變。
+        # ~~("_a = get_allocation(strict=True)", "_a = get_allocation()")~~（修前突變點，Z66 Q1 起呼叫字面已變）
+        _pre = _mutant(PH, ("_a = get_allocation(strict=True, require_valid_risk_cap=True)",
+                            "_a = get_allocation(require_valid_risk_cap=True)"))
         assert repr(_now) == repr(_cap(_pre))
 
     def test_d_default_callers_unchanged(self, cap_dir):

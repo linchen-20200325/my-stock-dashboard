@@ -92,7 +92,11 @@ _REVERT_VIEW = (("api_key=_key,\n                         fail_on_blocked_reply=
 #    同 Z33 串 Z34、Z36 串 Z40 的慣例；⛔ 不動 `_REVERT_L3`／`_REVERT_VIEW` 本身。
 def _z56_pairs(mod: types.ModuleType) -> tuple:
     from tests.test_batch_z56 import z56_pairs_for
-    return tuple(z56_pairs_for(mod.__file__))
+    # ~~return tuple(z56_pairs_for(mod.__file__))~~（Z66 以前的寫法，改為下方先串 z66b）
+    # 📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更，⛔ 不是漏改）：Z66 第二個 commit 在同一段加了
+    #   `require_valid_risk_cap`（L3 預設 False；新 UI 傳 True）⇒ 先換回 Z66 之前的寫法（同上慣例）。
+    from tests.test_batch_z66b import z66b_pairs_for
+    return tuple(z66b_pairs_for(mod.__file__)) + tuple(z56_pairs_for(mod.__file__))
 
 
 @functools.lru_cache(maxsize=None)

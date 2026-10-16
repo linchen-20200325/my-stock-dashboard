@@ -41,6 +41,12 @@ from src.services.macro_state_locker import (
     calculate_system_state,
 )
 
+@pytest.fixture(autouse=True)
+def _z66_m1b_m2_leg_on_reference(monkeypatch):
+    """📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是放寬）：M1B-M2 腿自 Z66 起在引擎停用。本檔 A／B／C 全部比對的是**腿仍計分**的修前引擎 ⇒ 開關設 True 證原等價（不改 golden）；腿停用（開關 False）的行為由 tests/test_batch_z66.py 守。"""
+    monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
+
+
 _KEYS = ("VIX_Index", "ISM_PMI_or_OECD_CLI", "PMI_Prev_Month", "M1B_YoY_pct", "M2_YoY_pct",
          "BIAS240_pct", "PCR", "Futures_Net_Short")
 

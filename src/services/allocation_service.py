@@ -232,7 +232,8 @@ def _invalidate() -> None:
 
 
 # ── 對外：唯一取數入口 ─────────────────────────────────────────────
-def get_allocation(*, strict: bool = False) -> AllocationDecision:
+def get_allocation(*, strict: bool = False,
+                   require_valid_risk_cap: bool = False) -> AllocationDecision:
     """回傳全站唯一的建議持股決策(唯讀)。
 
     來源鏈(§2.1 上層贏、不平均)::
@@ -264,13 +265,19 @@ def get_allocation(*, strict: bool = False) -> AllocationDecision:
     strict（v2「💼 我的持股」建議水位卡用；預設 False = 既有行為一字不變）：
     True → `get_macro_state(strict=True)` 的例外**不吞**（「總經讀壞了」≠「未評估」）；
     且 warroom 可用、`macro_state.json` 存在卻不可用（回傳帶 `file_error`，B6-r4）→ 也拋。
+
+    require_valid_risk_cap（批 Z66，客戶 2026-10-16 Q1；預設 False = 既有行為一字不變，舊 UI 不傳）：
+    True → 透傳 `get_macro_state(require_valid_risk_cap=True)`：「系統風險上限」只取自核心齊全＋現行規則版本
+    的檔；否則沒有那條 `Cap` ⇒ 新頁「建議持股：無法判定」（`src/ui/views/risk_cap_gate.py`）。
+    快取簽章本來就含 `exposure_limit_pct`，新舊 UI 同一 session 交替呼叫不會互拿對方的結果。
     """
     _wr = st.session_state.get('warroom_summary') or {}
     _extra = st.session_state.get(_EXTRA_CAPS_KEY) or {}
 
     try:
         from src.services.macro_state_locker import get_macro_state
-        _ms = get_macro_state(_wr, strict=True) if strict else get_macro_state(_wr)
+        _kw = {'require_valid_risk_cap': True} if require_valid_risk_cap else {}
+        _ms = get_macro_state(_wr, strict=True, **_kw) if strict else get_macro_state(_wr, **_kw)
     except Exception as _e:  # noqa: BLE001 — 讀檔/匯入失敗當未評估，不炸畫面
         if strict:
             raise
@@ -318,7 +325,7 @@ def get_allocation(*, strict: bool = False) -> AllocationDecision:
     return _decision
 
 
-def get_macro_regime(*, strict: bool = False) -> dict:
+def get_macro_regime(*, strict: bool = False, require_valid_risk_cap: bool = False) -> dict:
     """回傳全站唯一的大盤 regime 契約（C1 v19.182；唯讀）。
 
     這是 `macro_state_locker.get_macro_state()`（L3 純函式）與 Streamlit
@@ -347,14 +354,18 @@ def get_macro_regime(*, strict: bool = False) -> dict:
 
     strict（預設 False = 既有行為一字不變）：True → 透傳 `get_macro_state(strict=True)`，
     例外**不吞**、不降級成未評估（「讀壞了」≠「未評估」）。
+
+    require_valid_risk_cap（批 Z66，客戶 2026-10-16 Q1；預設 False = 既有行為一字不變）：True → 透傳
+    `get_macro_state(require_valid_risk_cap=True)`（回傳的 `exposure_limit_pct` 只認核心齊全＋現行規則版本的檔）。
     """
     _wr = st.session_state.get('warroom_summary') or {}
+    _kw = {'require_valid_risk_cap': True} if require_valid_risk_cap else {}
     if strict:
         from src.services.macro_state_locker import get_macro_state
-        return get_macro_state(_wr, strict=True)
+        return get_macro_state(_wr, strict=True, **_kw)
     try:
         from src.services.macro_state_locker import get_macro_state
-        return get_macro_state(_wr)
+        return get_macro_state(_wr, **_kw)
     except Exception as _e:  # noqa: BLE001 — 讀檔/匯入失敗當未評估，不炸畫面
         print(f'[allocation] get_macro_regime failed: {type(_e).__name__}: {_e}')
         from shared.regime_arbiter import UNLOADED_VERDICT as _UV

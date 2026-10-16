@@ -447,6 +447,11 @@ _ENGINE_ALL_MISSING_BASE = {'market_regime': '震盪', 'systemic_risk_level': '�
 
 
 class TestQz14AllMissingFailSafe:
+    @pytest.fixture(autouse=True)
+    def _z66_m1b_m2_leg_on_reference(self, monkeypatch):
+        """📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是放寬）：M1B-M2 腿自 Z66 起在引擎停用。本類（8 項全缺 fail-safe／部分與完整輸入不變）比對的是**腿仍計分**的修前引擎 ⇒ 開關設 True 證原等價（不改 golden）；腿停用（開關 False）的行為由 tests/test_batch_z66.py 守。"""
+        monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
+
     @pytest.mark.parametrize('case', sorted(_ALL_MISSING))
     def test_all_missing_is_failsafe(self, case):
         got = MSL.calculate_system_state(_ALL_MISSING[case])
@@ -820,6 +825,11 @@ def _write_lock(mp, d, inp=None, *, ai_fail=False):
 
 
 class TestQaDownstreamAllMissing:
+    @pytest.fixture(autouse=True)
+    def _z66_m1b_m2_leg_on_reference(self, monkeypatch):
+        """📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是放寬）：M1B-M2 腿自 Z66 起在引擎停用。本類（ai_qa／§十一 下游對照修前碼）比對的是**腿仍計分**的修前引擎 ⇒ 開關設 True 證原等價（不改 golden）；腿停用（開關 False）的行為由 tests/test_batch_z66.py 守。"""
+        monkeypatch.setattr("shared.signal_thresholds.M1B_M2_LEG_ENABLED", True)
+
     def test_ai_qa_no_danger_extra(self, monkeypatch, tmp_path):
         """全缺落檔＋session 有紅綠燈結論：ai_qa 仍 ok（結論來自紅綠燈），但不附「危險／系統異常」。"""
         d = _write_lock(monkeypatch, tmp_path / 'q1', {})

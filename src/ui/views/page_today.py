@@ -2156,7 +2156,9 @@ def _load_allocation() -> tuple[Any, str]:
     """`get_allocation()`（建議持股 SSOT）。回 `(decision, err)`。"""
     try:
         from src.services.allocation_service import get_allocation
-        return get_allocation(), ""
+        # 批 Z66（客戶 2026-10-16 Q1）：系統風險上限只認核心齊全＋現行規則版本的 `macro_state.json`
+        #   （舊 UI 寫的、舊版本的檔 ⇒ 沒有上限 ⇒ 建議持股「無法判定」）。
+        return get_allocation(require_valid_risk_cap=True), ""
     except Exception as _e:  # noqa: BLE001
         print(f"[views/page_today] get_allocation 失敗：{_e!r}")
         return None, repr(_e)
@@ -2316,7 +2318,9 @@ def _load_regime() -> tuple[Mapping[str, Any] | None, str]:
     """`get_macro_regime()`（市場位階 SSOT）。回 `(regime_dict, err)`。"""
     try:
         from src.services.allocation_service import get_macro_regime
-        return get_macro_regime(), ""
+        # 批 Z66（客戶 2026-10-16 Q1）：系統風險上限只認核心齊全＋現行規則版本的 `macro_state.json`
+        #   （卡①未評估時的說明句讀 `exposure_limit_pct`，須與卡①同一個判斷）。
+        return get_macro_regime(require_valid_risk_cap=True), ""
     except Exception as _e:  # noqa: BLE001
         print(f"[views/page_today] get_macro_regime 失敗：{_e!r}")
         return None, repr(_e)

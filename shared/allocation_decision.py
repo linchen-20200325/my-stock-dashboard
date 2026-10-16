@@ -56,7 +56,17 @@ from typing import Iterable, Sequence
 
 # ── L0 → L0 SSOT(同層 import,無迴圈:macro_buckets 只 import signal_thresholds + colors)──
 from shared.macro_buckets import SPECS_BY_KEY as _SPECS_BY_KEY
+from shared import signal_thresholds as _ST
 from shared.signal_thresholds import VIX_MEDIUM_RISK_THRESHOLD
+
+#: 「系統風險上限」那條 `Cap` 的依據說明（持股頁「推導依據」會原樣顯示）。
+#: 批 Z66（客戶 2026-10-16 Q2）：M1B-M2 腿停用後，說明不得再宣稱它在計分 ⇒ 依
+#: `shared.signal_thresholds.M1B_M2_LEG_ENABLED`（**呼叫當下**讀）二選一，與規則引擎同一個開關。
+SYSTEM_RISK_CAP_BASIS_LEG_ON: str = (
+    'macro_state 規則引擎（分數計算：VIX／PMI／M1B-M2／BIAS240／PCR；三大硬否決紅線：薩姆／PMI／外資期貨）')
+SYSTEM_RISK_CAP_BASIS_LEG_OFF: str = (
+    'macro_state 規則引擎（分數計算：VIX／PMI／BIAS240／PCR；M1B-M2 資金活水已停用、不計分；'
+    '三大硬否決紅線：薩姆／PMI／外資期貨）')
 
 # ── 邊界對齊既有 SSOT(不另立矛盾數字)──────────────────────────────
 # 防禦帶上界 20 = EXPOSURE_BEAR(config.py) = position_throttle._DEFENSE_HI_PCT。
@@ -295,7 +305,8 @@ def build_allocation_decision(
             if _clamped != _raw:
                 print(f'[allocation] exposure_limit_pct={_raw} 越界，已夾限為 {_clamped}')
             _caps.append(Cap('系統風險上限', _clamped,
-                             'macro_state 規則引擎（分數計算：VIX／PMI／M1B-M2／BIAS240／PCR；三大硬否決紅線：薩姆／PMI／外資期貨）'))
+                             SYSTEM_RISK_CAP_BASIS_LEG_ON if _ST.M1B_M2_LEG_ENABLED
+                             else SYSTEM_RISK_CAP_BASIS_LEG_OFF))
 
     _cap_pct: int | None = None
     _cap_name = ''

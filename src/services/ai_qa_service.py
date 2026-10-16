@@ -102,7 +102,7 @@ def _finmind_token() -> Optional[str]:
     return os.environ.get("FINMIND_TOKEN")
 
 
-def _macro_state() -> dict:
+def _macro_state(*, require_valid_risk_cap: bool = False) -> dict:
     """canonical 總經契約(`macro_state_locker.get_macro_state()` 的回傳)。取不到 → `{}`。
 
     ⚠️ I1 2026-08-10:本檔**所有**碰 regime 的地方一律只走這一支 —— 既包含「消費」
@@ -122,16 +122,20 @@ def _macro_state() -> dict:
 
     註:1 讀 `st.session_state`,在無 Streamlit runtime 時會拋 —— 那正是走 2 的時機,
     所以這裡是 try/except 而不是「有沒有裝 streamlit」的判斷。
+
+    require_valid_risk_cap（批 Z66，客戶 2026-10-16 Q1；預設 False = 既有行為一字不變）：True → 兩條來源都透傳
+    同名參數 ⇒ `exposure_limit_pct` 只認核心齊全＋現行規則版本的 `macro_state.json`。
     """
+    _kw = {"require_valid_risk_cap": True} if require_valid_risk_cap else {}
     try:
         from src.services.allocation_service import get_macro_regime
-        return get_macro_regime()
+        return get_macro_regime(**_kw)
     except Exception as _e:      # noqa: BLE001 — 無 session context 屬預期,退第 2 順位
         print(f"[ai_qa regime] get_macro_regime 不可用({type(_e).__name__}: {_e})"
               f" → 退回 macro_state_locker.get_macro_state()(僅讀 macro_state.json)")
     try:
         from src.services.macro_state_locker import get_macro_state
-        return get_macro_state()
+        return get_macro_state(**_kw)
     except Exception as _e:      # noqa: BLE001 — §1:取數失敗就是失敗,不猜一個 regime
         print(f"[ai_qa regime] get_macro_state 也失敗:{type(_e).__name__}: {_e}")
         return {}
@@ -174,14 +178,16 @@ def _regime_blocked_error(dec: ScoringRegimeDecision) -> str:
     )
 
 
-def _tool_get_market_state() -> dict:
+def _tool_get_market_state(*, require_valid_risk_cap: bool = False) -> dict:
     """目前總經/大盤狀態 —— 與 `get_stock_score` 用的是**同一份** canonical 契約。
 
     I1 2026-08-10 改:原碼直接讀 `macro_state.json` 的 `market_regime`(AI 鎖定快照),
     而評分那邊(修好之後)走 C1 仲裁契約。兩者在「快照過期」或「只有 warroom 有結論」
     時會給出不同的多空結論 —— 同一段對話兩個 regime。現在都走 `_macro_state()`。
     """
-    _ms = _macro_state()
+    # 批 Z66（Q1）：`require_valid_risk_cap=True`（新 UI 問答頁經 `run_agent` 傳入）⇒ 曝險上限只認有效快照，
+    #   且非有效快照的「鎖定快照額外欄位」（風險等級／Macro_Phase）也不附 —— 那是同一份上限的說明。
+    _ms = _macro_state(require_valid_risk_cap=True) if require_valid_risk_cap else _macro_state()
     if not isinstance(_ms, dict) or not _ms.get("is_loaded"):
         return {"ok": False,
                 "error": ("總經尚未評估:🌍 總經紅綠燈本次 session 未算出結論,"
@@ -218,6 +224,10 @@ def _tool_get_market_state() -> dict:
     #   AI 失敗檔（無 missing_inputs）、部分有效檔（不是「系統異常」）照舊附。
     if _file.get("market_regime") == "系統異常" and _file.get("missing_inputs"):
         _extra = {}
+    if require_valid_risk_cap:
+        from shared.risk_cap_policy import is_valid_risk_cap_snapshot
+        if not is_valid_risk_cap_snapshot(_file):
+            _extra = {}
     if _extra:
         _data["鎖定快照額外欄位_macro_state_json"] = _extra
     return {"ok": True, "data": _data,
@@ -816,7 +826,8 @@ def run_agent(question: str, history: Optional[list] = None, *, api_key: Optiona
               gemini_http: Optional[Callable[[dict], dict]] = None, tools: Optional[dict] = None,
               model: str = DEFAULT_MODEL, max_rounds: int = 4,
               fail_on_blocked_reply: bool = False,
-              stop_on_invalid_number: bool = False) -> QAResult:
+              stop_on_invalid_number: bool = False,
+              require_valid_risk_cap: bool = False) -> QAResult:
     """自由問答(tool-calling 迴圈)。
 
     fail_on_blocked_reply:
@@ -831,7 +842,15 @@ def run_agent(question: str, history: Optional[list] = None, *, api_key: Optiona
         ⛔ 不拿替代值補、⛔ 不把異常值改寫後照送(資料層與 AI 層分離:AI 收不到這份資料)。
         修前此情境會在 `requests.post(json=...)` 拋 InvalidJSONError,被畫成「Gemini 呼叫失敗」。
         預設 False = 本參數出現之前的行為,一個 byte 不差(`tab_ai_chat` 不傳)。
+    require_valid_risk_cap:
+        批 Z66(客戶 2026-10-16 Q1)。True 且 `tools` 未指定 → `get_market_state` 改用
+        `_tool_get_market_state(require_valid_risk_cap=True)`:系統風險上限只認核心齊全＋現行規則版本的
+        `macro_state.json`,其餘(舊 UI 寫的、舊版本)→ `exposure_limit_pct=None`。新 UI 問答頁傳 True。
+        預設 False = 本參數出現之前的行為,一個 byte 不差(`tab_ai_chat` 不傳)。
     """
+    if tools is None and require_valid_risk_cap:
+        tools = {**REAL_TOOLS,
+                 "get_market_state": lambda: _tool_get_market_state(require_valid_risk_cap=True)}
     tools = tools if tools is not None else REAL_TOOLS
     http = gemini_http or _make_default_http(api_key or "", model)
     contents = _history_to_contents(history) + [{"role": "user", "parts": [{"text": question}]}]

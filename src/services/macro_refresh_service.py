@@ -41,6 +41,9 @@ T3-1（客戶 2026-09-09 裁決：頁1 的按鈕要**原地**觸發台股今日�
      parquet 真正前一資料月、過期輸入不計分、PCR／外資期貨逐欄往回找、bool／字串判缺、
      薩姆送 None）。**無法計算時不寫檔**（舊頁會寫一份 fail-safe 檔）—— 保住 7 天內最近一次的
      有效上限（`MACRO_VERDICT_MAX_AGE_DAYS`），⛔ 不讓「這一輪沒資料」刪掉上一次的有效上限。
+     📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更）：上句「公式／門檻／權重一個都沒動」在 Z65 當天為真；
+     Z66 起引擎與 `shared.signal_thresholds.M1B_M2_LEG_ENABLED = False` 同步、M1B-M2 腿停用不計分
+     （新舊 UI 共用同一個引擎，兩邊一起生效）；步驟報告把它寫成「已停用、不計分」，⛔ 不算「未評估」。
 
 ═══ 分層（CLAUDE.md §8.2）═════════════════════════════════════════════
 **L3 Service**：編排 L1 fetcher（`src.data.daily.daily_data_fetchers`）
@@ -1011,23 +1014,39 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
         from src.services.risk_cap_apply import compute_and_lock_risk_cap
         with _writes_recorded(_writes.setdefault(STEP_RISK_CAP, [])):
             _rc = compute_and_lock_risk_cap(st.session_state, now=_utc_now())
+        # 批 Z66（客戶 2026-10-16 Q2）：停用 ≠ 未評估 —— M1B-M2 腿停用時另起一句，⛔ 不算進「未評估 N 項」。
+        _dis = list((_rc.bundle_summary or {}).get("disabled_inputs") or ())
+        _dis_note = (f"；M1B-M2 資金活水已停用、不計分（{'、'.join(_dis)}；不屬未評估）" if _dis else "")
         if _rc.written:
             _ne = list((_rc.bundle_summary or {}).get("not_evaluated") or ())
-            _rl = (_rc.bundle_summary or {}).get("red_lines") or {}
-            _und = [k for k, v in _rl.items() if v == "undetermined"]
+            # 批 Z66（Q1）收尾（v3 §01-2：因本次改動才變成死碼）：修前此處另有「硬否決紅線無法判定」那一句（列出 undetermined 的紅線）。
+            #   兩條硬紅線（PMI 連兩月、外資期貨＋MA5）的必要輸入全屬 Required Core，`risk_cap_apply` 的
+            #   核心閘門保證「寫得出檔 ⇒ 紅線必可評估」⇒ 那句永遠不會出現，已刪（tests/test_batch_z66b.py 守）。
             _step(STEP_RISK_CAP, True,
                   f"已寫入 macro_state.json：系統風險上限 "
                   f"{(_rc.engine_result or {}).get('exposure_limit_pct')}%；"
                   f"未評估 {len(_ne)} 項"
                   + (f"（{'、'.join(_ne)}；缺項不計分）" if _ne else "")
-                  + (f"；硬否決紅線無法判定：{'、'.join(_und)}" if _und else "")
+                  + _dis_note
                   + "；薩姆規則目前無資料來源、未評估（不代表已通過）"
                   + _rc_inputs_note)
         else:
+            # 批 Z66（客戶 2026-10-16 Q1）：沒寫檔時一律點名哪幾個 Required Core 無法評估、Optional 哪幾項未評估；
+            #   沿用規則改寫成「7 天內的**有效**快照」（核心齊全＋現行規則版本）—— 舊 UI 寫的、舊版本的檔新頁不認。
+            from shared.risk_cap_policy import REQUIRED_CORE_INPUTS, REQUIRED_CORE_LABELS
+            _mc = list(getattr(_rc, "missing_core", ()) or ())
+            _ne = list((_rc.bundle_summary or {}).get("not_evaluated") or ())
+            _opt_ne = [k for k in _ne if k not in REQUIRED_CORE_INPUTS]
+            _core_note = (
+                ("；Required Core 無法評估：" + "、".join(f"{REQUIRED_CORE_LABELS.get(k, k)}（{k}）" for k in _mc)
+                 + "（本輪不產生新的系統風險上限）") if _mc and not _rc.reason.startswith("Required Core") else "")
+            _opt_note = (f"；選配項未評估：{'、'.join(_opt_ne)}（缺項不計分）" if _opt_ne else "")
             _step(STEP_RISK_CAP, True,
-                  f"{_rc.reason}（既有 macro_state.json 若在 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內，"
-                  "卡①仍沿用它的上限；過期或不存在時，新頁的建議持股顯示「無法判定」）"
-                  + _rc_inputs_note,
+                  f"{_rc.reason}" + _core_note + _opt_note
+                  + f"（既有 macro_state.json 若是 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內的有效快照"
+                  "〔Required Core 齊全、現行規則版本〕，卡①仍沿用它的上限；過期、不存在、"
+                  "舊版或核心不齊的檔，新頁的建議持股顯示「無法判定」）"
+                  + _dis_note + _rc_inputs_note,
                   skipped=True)
     except Exception as _e:  # noqa: BLE001 — 例外已由 risk_cap_apply 原樣拋出；此處據實記成失敗
         print(f"[總經刷新] ❌ compute_and_lock_risk_cap 失敗：{_e!r}")
