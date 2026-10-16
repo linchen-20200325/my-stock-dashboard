@@ -45,6 +45,7 @@ C21_BASE_SHA = {
     'src/services/risk_cap_apply.py': 'be6f957790c7a114d76a20c2e9d374606d31855993bd903119a411f655e211de',
     'src/ui/views/page_hold.py': 'ff8c8e0972cf1ca3e51c40d0cd6fefc2ec813cf0a429f40f3e5659d8f19e57a3',
     'src/ui/views/page_today.py': '154817fd126b3910ba01e35c25489f8fe128e5045c6b3230f67f9913796741ca',
+    'src/ui/views/page_why.py': '5091aaf980c856646522da1c2078a02abe488e81a9002454e1065972bf630954',
     'src/ui/views/risk_cap_gate.py': '7dbab4306614fdbe18120ac1d583d0aa5ce95c7724364eff072b1fcb5d782d67',
 }
 C21_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
@@ -69,10 +70,14 @@ C21_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '            and state.get(RISK_CAP_RULESET_VERSION_KEY) == RISK_CAP_RULESET_VERSION)\n'),
     ),
     'src/services/ai_qa_service.py': (
-        ('        from src.services.macro_state_locker import load_macro_state, macro_state_is_expired\n        # ~~_file = load_macro_state() or {}~~\n        # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：旗標開（新 UI 問答頁）⇒ 附加欄位／有效判斷／\n        #   `as_of` 改讀新 UI 自己的系統風險上限快照（與 `get_macro_state` 收上限的同一個檔），⛔ 不再讀\n        #   舊 UI 會整份覆寫的 `macro_state.json`；旗標關 ⇒ 逐字同修前。\n        if require_valid_risk_cap:\n            from shared.risk_cap_policy import RISK_CAP_STATE_FILE\n            _file = load_macro_state(RISK_CAP_STATE_FILE) or {}\n        else:\n            _file = load_macro_state() or {}\n        # DL-f1-s65：過期裁決（`MACRO_VERDICT_MAX_AGE_DAYS`）的附加欄位不送 AI 問答 ——\n',
+        ('    require_valid_risk_cap（批 Z66，客戶 2026-10-16 Q1；預設 False = 既有行為一字不變）：True → 兩條來源都透傳\n    同名參數 ⇒ `exposure_limit_pct` 只認核心齊全＋現行規則版本的 ~~`macro_state.json`~~ 快照\n    （📌 AUD-C21，有意識的更正：自本批起是新 UI 自己的 `risk_cap_state.json`，見 `get_macro_state`）。\n    """\n',
+         '    require_valid_risk_cap（批 Z66，客戶 2026-10-16 Q1；預設 False = 既有行為一字不變）：True → 兩條來源都透傳\n    同名參數 ⇒ `exposure_limit_pct` 只認核心齊全＋現行規則版本的 `macro_state.json`。\n    """\n'),
+        ('        from src.services.macro_state_locker import load_macro_state, macro_state_is_expired\n        # ~~_file = load_macro_state() or {}~~\n        # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：旗標開（新 UI 問答頁）⇒ 附加欄位／有效判斷／\n        #   `as_of` 改讀新 UI 自己的系統風險上限快照（與 `get_macro_state` 收上限的同一個檔），⛔ 不再讀\n        #   舊 UI 會整份覆寫的 `macro_state.json`；旗標關 ⇒ 逐字同修前。\n        if require_valid_risk_cap:\n            # 📌 AUD-C21 N2／NB-5（有意識的變更）：路徑走與 `get_macro_state` 同一支 `risk_cap_state_path`\n            #   （⛔ 不寫 cwd 相對字面）；且**只有**同一次契約真的收了新檔上限（帶回 `risk_cap_disclosure`、\n            #   快照時間對得上）才附它的欄位與 `as_of` —— 沒收 ⇒ 與「沒有上限」同樣處理（不附、as_of=None）。\n            from src.services.macro_state_locker import risk_cap_state_path\n            _disc = _ms.get("risk_cap_disclosure")\n            _file = (load_macro_state(risk_cap_state_path()) or {}) if _disc is not None else {}\n            if _file and _file.get("timestamp") != getattr(_disc, "snapshot_ts", None):\n                _file = {}      # 兩次讀檔之間被換掉了 ⇒ 不是收上限的那一份，⛔ 不附\n        else:\n            _file = load_macro_state() or {}\n        # DL-f1-s65：過期裁決（`MACRO_VERDICT_MAX_AGE_DAYS`）的附加欄位不送 AI 問答 ——\n',
          '        from src.services.macro_state_locker import load_macro_state, macro_state_is_expired\n        _file = load_macro_state() or {}\n        # DL-f1-s65：過期裁決（`MACRO_VERDICT_MAX_AGE_DAYS`）的附加欄位不送 AI 問答 ——\n'),
         ('    if _extra:\n        # AUD-C21：旗標開時這幾個欄位來自 `risk_cap_state.json` ⇒ 鍵名照實標來源（旗標關逐字同修前）。\n        _data["鎖定快照額外欄位_risk_cap_state_json" if require_valid_risk_cap\n              else "鎖定快照額外欄位_macro_state_json"] = _extra\n    return {"ok": True, "data": _data,\n',
          '    if _extra:\n        _data["鎖定快照額外欄位_macro_state_json"] = _extra\n    return {"ok": True, "data": _data,\n'),
+        ('        `_tool_get_market_state(require_valid_risk_cap=True)`:系統風險上限只認核心齊全＋現行規則版本的\n        ~~`macro_state.json`~~ 快照(📌 AUD-C21 有意識的更正:新 UI 自己的 `risk_cap_state.json`),\n        其餘(舊 UI 寫的、舊版本)→ `exposure_limit_pct=None`。新 UI 問答頁傳 True。\n        預設 False = 本參數出現之前的行為,一個 byte 不差(`tab_ai_chat` 不傳)。\n',
+         '        `_tool_get_market_state(require_valid_risk_cap=True)`:系統風險上限只認核心齊全＋現行規則版本的\n        `macro_state.json`,其餘(舊 UI 寫的、舊版本)→ `exposure_limit_pct=None`。新 UI 問答頁傳 True。\n        預設 False = 本參數出現之前的行為,一個 byte 不差(`tab_ai_chat` 不傳)。\n'),
     ),
     'src/services/allocation_service.py': (
         ('    快取簽章本來就含 `exposure_limit_pct`，新舊 UI 同一 session 交替呼叫不會互拿對方的結果。\n    📌 AUD-C21（2026-10-16，有意識的更正，⛔ 不是漏刪）：上句只在「兩邊上限值不同」時成立 —— 新 UI 的上限自本批起\n    讀自己的 `risk_cap_state.json`、舊 UI 讀 `macro_state.json`，兩者值相同時簽章會撞。現行簽章另含旗標與\n    `risk_cap_disclosure`（新 UI 的資料完整性揭露，與上限出自同一次讀檔），兩邊不再互拿。\n    """\n',
@@ -85,7 +90,7 @@ C21_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '     （新舊 UI 共用同一個引擎，兩邊一起生效）；步驟報告把它寫成「已停用、不計分」，⛔ 不算「未評估」。\n\n'),
         ('from shared.macro_compute import tw_now_str\nfrom shared.risk_cap_policy import RISK_CAP_STATE_FILE\nfrom src.compute.macro.macro_session_patch import MACRO_PATCH_KEYS\n',
          'from shared.macro_compute import tw_now_str\nfrom src.compute.macro.macro_session_patch import MACRO_PATCH_KEYS\n'),
-        ('    STEP_WARROOM: "紅綠燈結論（warroom_summary：燈號 / 健康分 / 位階）",\n    STEP_RISK_CAP: "系統風險上限（規則引擎 → risk_cap_state.json ＋ macro_state.json）",\n    STEP_REGISTRY: "資料登錄中心掃描",\n',
+        ('    STEP_WARROOM: "紅綠燈結論（warroom_summary：燈號 / 健康分 / 位階）",\n    # ~~STEP_RISK_CAP: "系統風險上限（規則引擎 → macro_state.json）",~~ —— 📌 AUD-C21（有意識的變更）：雙寫\n    STEP_RISK_CAP: "系統風險上限（規則引擎 → risk_cap_state.json ＋ macro_state.json）",\n    STEP_REGISTRY: "資料登錄中心掃描",\n',
          '    STEP_WARROOM: "紅綠燈結論（warroom_summary：燈號 / 健康分 / 位階）",\n    STEP_RISK_CAP: "系統風險上限（規則引擎 → macro_state.json）",\n    STEP_REGISTRY: "資料登錄中心掃描",\n'),
         ('#: 這一步寫沒寫，看步驟報告（`STEP_RISK_CAP` 的 detail）。\n#: ~~`STEP_RISK_CAP: ("macro_state.json",),`~~\n#: 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：雙寫 —— 新 UI 自己的快照檔在前（寫入順序），\n#:    `macro_state.json` 照舊（舊 UI 的上限來源＋位階第 3 順位來源，AUD-C22 不動）。\nSTEP_FILE_WRITES: dict[str, tuple[str, ...]] = {\n    STEP_RISK_CAP: (RISK_CAP_STATE_FILE, "macro_state.json"),\n}\n',
          '#: 這一步寫沒寫，看步驟報告（`STEP_RISK_CAP` 的 detail）。\nSTEP_FILE_WRITES: dict[str, tuple[str, ...]] = {\n    STEP_RISK_CAP: ("macro_state.json",),\n}\n'),
@@ -93,8 +98,8 @@ C21_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '            #   核心閘門保證「寫得出檔 ⇒ 紅線必可評估」⇒ 那句永遠不會出現，已刪（tests/test_batch_z66b.py 守）。\n            _step(STEP_RISK_CAP, True,\n                  f"已寫入 macro_state.json：系統風險上限 "\n                  f"{(_rc.engine_result or {}).get(\'exposure_limit_pct\')}%；"\n'),
         ('                  f"{_rc.reason}" + _core_note + _opt_note\n                  # ~~（既有 macro_state.json 若是…~~ —— 📌 AUD-C21：新頁的上限只讀新 UI 自己的檔（有意識的更正）\n                  + f"（兩個檔都不動；既有 {RISK_CAP_STATE_FILE} 若是 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內的有效快照"\n                  "〔Required Core 齊全、現行規則版本〕，卡①仍沿用它的上限；過期、不存在、"\n',
          '                  f"{_rc.reason}" + _core_note + _opt_note\n                  + f"（既有 macro_state.json 若是 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內的有效快照"\n                  "〔Required Core 齊全、現行規則版本〕，卡①仍沿用它的上限；過期、不存在、"\n'),
-        ('        _step(STEP_RISK_CAP, False,\n              # ~~（既有 macro_state.json 不會因此被清除）~~ —— 📌 AUD-C21：雙寫，兩個檔都照實講（有意識的更正）\n              f"{type(_e).__name__}: {_e}（既有 {RISK_CAP_STATE_FILE} 與 macro_state.json 不會因此被清除；"\n              f"若 {RISK_CAP_STATE_FILE} 已先寫入、macro_state.json 寫入失敗，{RISK_CAP_STATE_FILE} 已還原成寫入前的內容）"\n              + _rc_inputs_note)\n\n',
-         '        _step(STEP_RISK_CAP, False,\n              f"{type(_e).__name__}: {_e}（既有 macro_state.json 不會因此被清除）" + _rc_inputs_note)\n\n'),
+        ('        print(f"[總經刷新] ❌ compute_and_lock_risk_cap 失敗：{_e!r}")\n        if type(_e).__name__ == "RiskCapRestoreFailed":\n            # 📌 AUD-C21 NB-3：還原本身失敗 ⇒ ⛔ 不說「已還原」；照實講兩個檔可能不一致，原例外照列。\n            _step(STEP_RISK_CAP, False,\n                  f"{type(_e).__name__}: {_e}（⚠️ macro_state.json 寫入失敗後，{RISK_CAP_STATE_FILE} 的還原也失敗："\n                  f"{RISK_CAP_STATE_FILE} 可能是本輪的內容、macro_state.json 是上一輪的，兩個檔可能不一致）"\n                  + _rc_inputs_note)\n        else:\n            _step(STEP_RISK_CAP, False,\n                  # ~~（既有 macro_state.json 不會因此被清除）~~ —— 📌 AUD-C21：雙寫，兩個檔都照實講（有意識的更正）\n                  f"{type(_e).__name__}: {_e}（既有 {RISK_CAP_STATE_FILE} 與 macro_state.json 不會因此被清除；"\n                  f"若 {RISK_CAP_STATE_FILE} 已先寫入、macro_state.json 寫入失敗，{RISK_CAP_STATE_FILE} 已還原成寫入前的內容）"\n                  + _rc_inputs_note)\n\n',
+         '        print(f"[總經刷新] ❌ compute_and_lock_risk_cap 失敗：{_e!r}")\n        _step(STEP_RISK_CAP, False,\n              f"{type(_e).__name__}: {_e}（既有 macro_state.json 不會因此被清除）" + _rc_inputs_note)\n\n'),
     ),
     'src/services/macro_state_locker.py': (
         ('\n    def lock_system_state_only(self, system_state: dict) -> dict:\n        """Write rule-based system_state to the state lock without calling AI.\n\n        AUD-C21（2026-10-16）：回傳**實際落檔的那一份** dict（舊 UI 呼叫端不接回傳值，行為不變）——\n        新 UI 寫端（`risk_cap_apply`）拿它經 `write_state_snapshot` 原樣再寫一份到 `macro_state.json`，\n        兩個檔逐位元組相同（同一個 `timestamp`，⛔ 不呼叫兩次各取一次時鐘）。\n\n',
@@ -103,13 +108,15 @@ C21_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '        self._write_state_lock(final)\n\n'),
         ('                    now=None,\n                    require_valid_risk_cap: bool = False,\n                    risk_cap_state_file_path: str | None = None) -> dict:\n    """『總經 tab 已算好的狀態』→ 全站唯一的 canonical 總經契約（① 接線 + C1 仲裁）。\n',
          '                    now=None,\n                    require_valid_risk_cap: bool = False) -> dict:\n    """『總經 tab 已算好的狀態』→ 全站唯一的 canonical 總經契約（① 接線 + C1 仲裁）。\n'),
-        ('      ／`get_macro_regime(require_valid_risk_cap=True)`／`ai_qa_service.run_agent(require_valid_risk_cap=True)` 傳入。\n      📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏改）：上段「只取自…為 True 的檔」的那個檔，自本批起是\n      新 UI 自己的 `risk_cap_state_file_path`（預設 ＝ `state_file_path` 同目錄的\n      `shared.risk_cap_policy.RISK_CAP_STATE_FILE`；production 兩者都用預設 ⇒ `risk_cap_state.json`），\n      **不再是** `state_file_path`（`macro_state.json`，舊 UI 每次寫入都會整份覆寫它）。收件條件：讀得出來、\n      `market_regime` 非 None／「系統異常」、`macro_state_is_expired` 為 False（看**它自己的** timestamp）、\n      `is_valid_risk_cap_snapshot` 為 True、`exposure_limit_pct` 有值。⛔ 沒有退回讀 `macro_state.json`\n      上限的路（沒有新檔 ⇒ 沒有上限 ⇒「無法判定」）。位階／`is_loaded`／strict 拋錯／舊檔的 `file_error`\n      一律照舊只看 `state_file_path`（AUD-C22 不在本批）。\n      回傳 dict 多一個鍵 `risk_cap_disclosure`（`shared.risk_cap_policy.RiskCapDisclosure`；收了新檔的上限才有值，\n      否則 None）—— 資料完整性揭露與上限出自**同一次讀檔**。strict ＋ 新檔**存在卻讀不出來** ⇒ 帶\n      `file_error`（舊檔沒有 `file_error` 時才帶；舊檔的 `file_error` 逐字不變）。新檔不存在 ⇒ 沒有上限（不是錯誤）。\n      旗標關（預設、舊 UI）⇒ 本段全部不執行、回傳逐鍵同修前。\n    """\n',
+        ('      ／`get_macro_regime(require_valid_risk_cap=True)`／`ai_qa_service.run_agent(require_valid_risk_cap=True)` 傳入。\n      📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏改）：上段「只取自…為 True 的檔」的那個檔，自本批起是\n      新 UI 自己的 `risk_cap_state_file_path`（預設 ＝ `state_file_path` 同目錄的\n      `shared.risk_cap_policy.RISK_CAP_STATE_FILE`；production 兩者都用預設 ⇒ `risk_cap_state.json`），\n      **不再是** `state_file_path`（`macro_state.json`，舊 UI 每次寫入都會整份覆寫它）。收件條件：讀得出來、\n      `market_regime` 非 None／「系統異常」、`macro_state_is_expired` 為 False（看**它自己的** timestamp）、\n      `is_valid_risk_cap_snapshot` 為 True、`exposure_limit_pct` 有值。⛔ 沒有退回讀 `macro_state.json`\n      上限的路（沒有新檔 ⇒ 沒有上限 ⇒「無法判定」）。位階／`is_loaded`／strict 拋錯／舊檔的 `file_error`\n      一律照舊只看 `state_file_path`（AUD-C22 不在本批）。\n      回傳 dict 多一個鍵 `risk_cap_disclosure`（`shared.risk_cap_policy.RiskCapDisclosure`；收了新檔的上限才有值，\n      否則 None）—— 資料完整性揭露與上限出自**同一次讀檔**。strict ＋ 新檔**存在卻讀不出來** ⇒ 帶\n      `file_error`（舊檔沒有 `file_error` 時才帶；舊檔的 `file_error` 逐字不變）。新檔不存在 ⇒ 沒有上限（不是錯誤）。\n      旗標關（預設、舊 UI）⇒ 本段全部不執行、回傳逐鍵同修前。\n      📌 AUD-C21 B1（AI 總管決策）：上句「舊檔的 `file_error` 逐字不變」只在 warroom **不可用**時成立；\n      旗標開 ＋ warroom 可用 ⇒ ⛔ 不帶舊檔的 `file_error`（新 UI 的上限不讀舊檔、位階不靠舊檔）。\n      新檔上限值格式不對（字串／bool／NaN／非整數／超出 0~100）⇒ 沒有上限，strict 帶新檔的 `file_error`。\n    """\n',
          '      ／`get_macro_regime(require_valid_risk_cap=True)`／`ai_qa_service.run_agent(require_valid_risk_cap=True)` 傳入。\n    """\n'),
-        ('    _exposure = _file.get("exposure_limit_pct") if _file_ok else None\n    # ~~if require_valid_risk_cap and _exposure is not None:~~\n    # ~~    # 批 Z66（Q1）：只認核心齊全＋現行規則版本的檔（fail-safe 方向：認不出來 ⇒ 沒有上限 ⇒「無法判定」）~~\n    # ~~    from shared.risk_cap_policy import is_valid_risk_cap_snapshot~~\n    # ~~    if not is_valid_risk_cap_snapshot(_file):~~\n    # ~~        _exposure = None~~\n    # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：舊寫法的有效判斷（核心齊全＋現行版本）**照搬**到\n    #   新 UI 自己的檔；被權衡掉的只是「上限讀 `macro_state.json`」這個前提 —— 舊 UI 每次寫入都把它整份覆寫。\n    _rc_disclosure = None\n    if require_valid_risk_cap:\n        _exposure, _rc_disclosure, _rc_error = _read_risk_cap_snapshot(\n            risk_cap_state_file_path if risk_cap_state_file_path is not None\n            else _sibling_risk_cap_path(state_file_path), now=now)\n        if _rc_error:\n            print(f"[macro_state_locker] ⚠️ 新 UI 系統風險上限快照讀不出來 → 本輪沒有上限：{_rc_error}")\n            if strict and not _file_error:\n                _file_error = _rc_error\n    _trend_regime = _wr.get("regime") if _wr_ok else None\n',
+        ('        _file_error = _strict_detail\n    # 📌 AUD-C21 B1（2026-10-16，AI 總管決策，有意識的變更，⛔ 不是漏改）：旗標開（新 UI）＋ warroom 可用時，\n    #   上面那條 B6-r4 `file_error` 守的「曝險上限那條輸入讀壞了」已不成立 —— 新 UI 的上限自本批起不讀\n    #   `macro_state.json`（只讀新檔）；位階又由 warroom 撐住、不靠舊檔。若照舊帶出，舊 UI 一次 AI 裁決失敗\n    #   （`execute_and_lock` 寫的 fail-safe）就會把持股頁卡⑤打成紅、而新檔的有效上限一個字都沒變。\n    #   ⇒ 旗標開且 warroom 可用：⛔ 不帶舊檔的 `file_error`。warroom 不可用時（位階真的落到舊檔，AUD-C22）\n    #   上方 strict 拋錯與本段一律照舊；旗標關（舊 UI）逐位元組同修前。\n    if require_valid_risk_cap and _wr_ok:\n        _file_error = ""\n\n',
+         '        _file_error = _strict_detail\n\n'),
+        ('    _exposure = _file.get("exposure_limit_pct") if _file_ok else None\n    # ~~if require_valid_risk_cap and _exposure is not None:~~\n    # ~~    # 批 Z66（Q1）：只認核心齊全＋現行規則版本的檔（fail-safe 方向：認不出來 ⇒ 沒有上限 ⇒「無法判定」）~~\n    # ~~    from shared.risk_cap_policy import is_valid_risk_cap_snapshot~~\n    # ~~    if not is_valid_risk_cap_snapshot(_file):~~\n    # ~~        _exposure = None~~\n    # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：舊寫法的有效判斷（核心齊全＋現行版本）**照搬**到\n    #   新 UI 自己的檔；被權衡掉的只是「上限讀 `macro_state.json`」這個前提 —— 舊 UI 每次寫入都把它整份覆寫。\n    _rc_disclosure = None\n    if require_valid_risk_cap:\n        _exposure, _rc_disclosure, _rc_error = _read_risk_cap_snapshot(\n            risk_cap_state_file_path if risk_cap_state_file_path is not None\n            else risk_cap_state_path(state_file_path), now=now)\n        if _rc_error:\n            print(f"[macro_state_locker] ⚠️ 新 UI 系統風險上限快照讀不出來 → 本輪沒有上限：{_rc_error}")\n            if strict and not _file_error:\n                _file_error = _rc_error\n    _trend_regime = _wr.get("regime") if _wr_ok else None\n',
          '    _exposure = _file.get("exposure_limit_pct") if _file_ok else None\n    if require_valid_risk_cap and _exposure is not None:\n        # 批 Z66（Q1）：只認核心齊全＋現行規則版本的檔（fail-safe 方向：認不出來 ⇒ 沒有上限 ⇒「無法判定」）\n        from shared.risk_cap_policy import is_valid_risk_cap_snapshot\n        if not is_valid_risk_cap_snapshot(_file):\n            _exposure = None\n    _trend_regime = _wr.get("regime") if _wr_ok else None\n'),
         ('    }\n    if require_valid_risk_cap:\n        _out["risk_cap_disclosure"] = _rc_disclosure\n    if _file_error:\n',
          '    }\n    if _file_error:\n'),
-        ('    return _out\n\n\ndef _sibling_risk_cap_path(state_file_path: str) -> str:\n    """`state_file_path` 同目錄的 `RISK_CAP_STATE_FILE`（預設 `macro_state.json` ⇒ `risk_cap_state.json`）。"""\n    from shared.risk_cap_policy import RISK_CAP_STATE_FILE\n    return os.path.join(os.path.dirname(state_file_path), RISK_CAP_STATE_FILE)\n\n\ndef _read_risk_cap_snapshot(path: str, *, now=None):\n    """AUD-C21：讀新 UI 的系統風險上限快照 →（上限或 None, 揭露或 None, 讀檔錯誤字串或 ""）。\n\n    只有一種情形回上限：讀得出來、`market_regime` 非 None／「系統異常」、未過期、`is_valid_risk_cap_snapshot`、\n    `exposure_limit_pct` 有值。檔不存在 ⇒ `(None, None, "")`（沒有上限，⛔ 不是錯誤）；\n    存在卻讀不出來／JSON 壞／值無法轉整數 ⇒ `(None, None, "<檔名>: <repr>")`。\n    ⛔ 不讀、不退回 `macro_state.json`。\n    """\n    from shared.risk_cap_policy import is_valid_risk_cap_snapshot, risk_cap_disclosure_from_snapshot\n    data, exc = _load_macro_state_checked(path)\n    if exc is not None:\n        if isinstance(exc, FileNotFoundError):\n            return None, None, ""\n        return None, None, f"{os.path.basename(path)}: {exc!r}"\n    if data.get("market_regime") in (None, "系統異常"):\n        return None, None, ""\n    if macro_state_is_expired(data, now=now):\n        return None, None, ""\n    if not is_valid_risk_cap_snapshot(data):\n        return None, None, ""\n    if data.get("exposure_limit_pct") is None:\n        return None, None, ""\n    return data["exposure_limit_pct"], risk_cap_disclosure_from_snapshot(data), ""\n\n',
+        ('    return _out\n\n\ndef risk_cap_state_path(state_file_path: str = "macro_state.json") -> str:\n    """新 UI 系統風險上限快照檔的路徑：`state_file_path` 同目錄的 `RISK_CAP_STATE_FILE`。\n\n    預設 `macro_state.json` ⇒ `risk_cap_state.json`。讀端（`get_macro_state`）、寫端（`risk_cap_apply`）、\n    AI 問答（`ai_qa_service`）一律經本函式解析，⛔ 不各自拼路徑。\n    """\n    from shared.risk_cap_policy import RISK_CAP_STATE_FILE\n    return os.path.join(os.path.dirname(state_file_path), RISK_CAP_STATE_FILE)\n\n\ndef _valid_new_cap(raw):\n    """AUD-C21 N1：新檔上限值必須是**真的數字**（int／float，⛔ bool、⛔ 字串）、有限、0~100、而且是整數值。\n\n    ⛔ 不截斷：50.9 不是「50」—— 本 repo 沒有上限值的進位 SSOT（寫端 `lock_system_state_only` 一律落 int），\n    非整數值 ⇒ 檔案不是寫端寫的樣子 ⇒ 視為格式錯誤。50.0 這種整數值浮點數照收（轉 int，不是捨入）。\n    回 int 或 None（不合格）。只用在新檔；舊檔路徑（`_load_macro_state_checked`）一字未動。\n    """\n    import math as _m\n    if isinstance(raw, bool) or not isinstance(raw, (int, float)):\n        return None\n    if isinstance(raw, float) and (not _m.isfinite(raw) or not raw.is_integer()):\n        return None\n    if not (0 <= raw <= 100):\n        return None\n    return int(raw)\n\n\ndef _read_risk_cap_snapshot(path: str, *, now=None):\n    """AUD-C21：讀新 UI 的系統風險上限快照 →（上限或 None, 揭露或 None, 讀檔錯誤字串或 ""）。\n\n    只有一種情形回上限：讀得出來、是 JSON 物件、`market_regime` 非 None／「系統異常」、未過期、\n    `is_valid_risk_cap_snapshot`、`exposure_limit_pct` 是 0~100 的整數值（`_valid_new_cap`）。\n    檔不存在 ⇒ `(None, None, "")`（沒有上限，⛔ 不是錯誤）；存在卻讀不出來／JSON 壞／不是物件 ⇒ 錯誤字串；\n    其餘條件都過、只有上限值格式不對（字串、bool、NaN、非整數、超出 0~100）⇒ 沒有上限＋錯誤字串\n    （格式錯誤的檔 ≠「無法判定」，strict 呼叫端據此轉紅）。上限值為 null／缺 ⇒ 沒有上限、不算錯誤。\n    ⛔ 不讀、不退回 `macro_state.json`。\n    """\n    from shared.risk_cap_policy import is_valid_risk_cap_snapshot, risk_cap_disclosure_from_snapshot\n    _name = os.path.basename(path)\n    try:\n        with open(path, "r", encoding="utf-8") as f:\n            data = json.load(f)\n    except FileNotFoundError:\n        return None, None, ""\n    except Exception as _e:  # noqa: BLE001 — 讀壞了：據實回錯誤字串（呼叫端 log／strict 轉紅）\n        return None, None, f"{_name}: {_e!r}"\n    if not isinstance(data, dict):\n        return None, None, f"{_name}: 內容不是 JSON 物件（{type(data).__name__}）"\n    if data.get("market_regime") in (None, "系統異常"):\n        return None, None, ""\n    if macro_state_is_expired(data, now=now):\n        return None, None, ""\n    if not is_valid_risk_cap_snapshot(data):\n        return None, None, ""\n    _raw = data.get("exposure_limit_pct")\n    if _raw is None:\n        return None, None, ""\n    _cap = _valid_new_cap(_raw)\n    if _cap is None:\n        return None, None, f"{_name}: exposure_limit_pct={_raw!r} 不是 0~100 的整數值"\n    return _cap, risk_cap_disclosure_from_snapshot(data), ""\n\n',
          '    return _out\n\n'),
     ),
     'src/services/risk_cap_apply.py': (
@@ -117,22 +124,24 @@ C21_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '\n分層（CLAUDE.md §8.2）：L3 —— 依賴 L3（`macro_engine_inputs` / `macro_state_locker`），\n'),
         ('import numbers\nimport os\nimport re\n',
          'import numbers\nimport re\n'),
-        ('from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION, RISK_CAP_RULESET_VERSION_KEY\nfrom shared.risk_cap_policy import RISK_CAP_STATE_FILE\nfrom src.services.macro_state_locker import MacroStateLocker\n',
-         'from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION, RISK_CAP_RULESET_VERSION_KEY\nfrom src.services.macro_state_locker import MacroStateLocker\n'),
+        ('from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION, RISK_CAP_RULESET_VERSION_KEY\nfrom src.services.macro_state_locker import MacroStateLocker, risk_cap_state_path\n\n',
+         'from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION, RISK_CAP_RULESET_VERSION_KEY\nfrom src.services.macro_state_locker import MacroStateLocker\n\n'),
         ('            核心齊全 ⇒ `()`）。不論有沒有寫檔都照實帶（fail-safe 時通常也是全缺）。\n        files_written: AUD-C21：這一輪**實際寫成**的檔（檔名、依寫入順序：新 UI 檔在前、`macro_state.json` 在後）。\n            `written=True` ⇔ 兩個都在；沒寫 ⇒ `()`。\n    """\n',
          '            核心齊全 ⇒ `()`）。不論有沒有寫檔都照實帶（fail-safe 時通常也是全缺）。\n    """\n'),
         ('    missing_core: tuple[str, ...] = ()\n    files_written: tuple[str, ...] = ()\n\n',
          '    missing_core: tuple[str, ...] = ()\n\n'),
-        ('\ndef _restore_file(path: str, previous: bytes | None) -> None:\n    """把 `path` 還原成 `previous`（None ⇒ 原本不存在 ⇒ 刪掉）。暫存檔＋`os.replace`，⛔ 不留半截檔。"""\n    if previous is None:\n        if os.path.exists(path):\n            os.remove(path)\n        return\n    _tmp = path + ".tmp"\n    with open(_tmp, "wb") as f:\n        f.write(previous)\n    os.replace(_tmp, path)\n\n\ndef compute_and_lock_risk_cap(session: Any, *, now: datetime,\n                              state_file_path: str = "macro_state.json",\n                              risk_cap_state_file_path: str | None = None) -> RiskCapApplyResult:\n    """算一次系統風險上限；算得出來才寫（AUD-C21：先寫新 UI 的 `risk_cap_state.json`，再寫 `macro_state.json`）。\n\n',
+        ('\nclass RiskCapRestoreFailed(RuntimeError):\n    """AUD-C21 NB-3：`macro_state.json` 寫失敗後，要把新 UI 快照檔還原成寫入前的內容 —— **還原本身也失敗了**。\n\n    此時新 UI 快照檔可能是本輪的內容、`macro_state.json` 是上一輪的（半套狀態）。⛔ 不說「已還原」。\n    原例外（第二個檔為什麼寫不成）掛在 `__cause__`（`raise … from`），還原失敗的例外在 `restore_error`。\n    """\n\n    def __init__(self, rc_path: str, original: BaseException, restore_error: BaseException) -> None:\n        self.rc_path = rc_path\n        self.original = original\n        self.restore_error = restore_error\n        super().__init__(\n            f"{os.path.basename(rc_path)} 還原失敗（{restore_error!r}）；"\n            f"macro_state.json 寫入失敗的原例外：{original!r}")\n\n\ndef _restore_file(path: str, previous: bytes | None) -> None:\n    """把 `path` 還原成 `previous`（None ⇒ 原本不存在 ⇒ 刪掉）。暫存檔＋`os.replace`，⛔ 不留半截檔。"""\n    if previous is None:\n        if os.path.exists(path):\n            os.remove(path)\n        return\n    _tmp = path + ".tmp"\n    with open(_tmp, "wb") as f:\n        f.write(previous)\n    os.replace(_tmp, path)\n\n\ndef compute_and_lock_risk_cap(session: Any, *, now: datetime,\n                              state_file_path: str = "macro_state.json",\n                              risk_cap_state_file_path: str | None = None) -> RiskCapApplyResult:\n    """算一次系統風險上限；算得出來才寫（AUD-C21：先寫新 UI 的 `risk_cap_state.json`，再寫 `macro_state.json`）。\n\n',
          '\ndef compute_and_lock_risk_cap(session: Any, *, now: datetime,\n                              state_file_path: str = "macro_state.json") -> RiskCapApplyResult:\n    """算一次系統風險上限；算得出來才寫 `macro_state.json`（經 `lock_system_state_only`）。\n\n'),
         ('        state_file_path: 與 `get_macro_state()` 預設同一個相對路徑。\n        risk_cap_state_file_path: AUD-C21 新 UI 快照檔；None ⇒ `state_file_path` 同目錄的\n            `RISK_CAP_STATE_FILE`（與 `get_macro_state()` 讀端同一條預設規則）。\n\n',
          '        state_file_path: 與 `get_macro_state()` 預設同一個相對路徑。\n\n'),
-        ('\n    # ~~# ⚠️ 寫檔之後不再做任何可能拋例外的事（含 print）：例外 ⇔ 這一輪沒有寫成功，呼叫端據此報告。~~\n    # ~~MacroStateLocker(state_file_path=state_file_path).lock_system_state_only(payload)~~\n    # ~~return RiskCapApplyResult(True, "", summary, payload)~~\n    # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：單寫 `macro_state.json` → 雙寫（新檔在前）。\n    #   舊寫法「寫檔後不再做可能拋例外的事」的理由仍然成立，照守：第二個檔寫完之後同樣什麼都不做。\n    _rc_path = (risk_cap_state_file_path if risk_cap_state_file_path is not None\n                else os.path.join(os.path.dirname(state_file_path), RISK_CAP_STATE_FILE))\n    try:\n        with open(_rc_path, "rb") as _f:\n            _rc_before: bytes | None = _f.read()\n    except FileNotFoundError:\n        _rc_before = None\n    _final = MacroStateLocker(state_file_path=_rc_path).lock_system_state_only(payload)   # ① 新 UI 檔\n    try:\n        MacroStateLocker(state_file_path=state_file_path).write_state_snapshot(_final)     # ② macro_state.json\n    except BaseException:\n        _restore_file(_rc_path, _rc_before)      # 盡力全有或全無；還原本身失敗會蓋過原例外往上拋（⛔ 不吞）\n        raise\n    return RiskCapApplyResult(True, "", summary, payload, files_written=(\n        os.path.basename(_rc_path), os.path.basename(state_file_path)))\n',
+        ('\n    # ~~# ⚠️ 寫檔之後不再做任何可能拋例外的事（含 print）：例外 ⇔ 這一輪沒有寫成功，呼叫端據此報告。~~\n    # ~~MacroStateLocker(state_file_path=state_file_path).lock_system_state_only(payload)~~\n    # ~~return RiskCapApplyResult(True, "", summary, payload)~~\n    # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：單寫 `macro_state.json` → 雙寫（新檔在前）。\n    #   舊寫法「寫檔後不再做可能拋例外的事」的理由仍然成立，照守：第二個檔寫完之後同樣什麼都不做。\n    _rc_path = (risk_cap_state_file_path if risk_cap_state_file_path is not None\n                else risk_cap_state_path(state_file_path))     # 與讀端同一條路徑規則\n    try:\n        with open(_rc_path, "rb") as _f:\n            _rc_before: bytes | None = _f.read()\n    except FileNotFoundError:\n        _rc_before = None\n    _final = MacroStateLocker(state_file_path=_rc_path).lock_system_state_only(payload)   # ① 新 UI 檔\n    try:\n        MacroStateLocker(state_file_path=state_file_path).write_state_snapshot(_final)     # ② macro_state.json\n    except BaseException as _orig:\n        # ~~_restore_file(_rc_path, _rc_before)      # 盡力全有或全無；還原本身失敗會蓋過原例外往上拋（⛔ 不吞）~~\n        # 📌 AUD-C21 NB-3（有意識的變更）：還原失敗另拋 `RiskCapRestoreFailed`（原例外掛 `__cause__`），\n        #   呼叫端據此⛔ 不說「已還原」。\n        try:\n            _restore_file(_rc_path, _rc_before)  # 盡力全有或全無\n        except BaseException as _restore_exc:\n            raise RiskCapRestoreFailed(_rc_path, _orig, _restore_exc) from _orig\n        raise\n    return RiskCapApplyResult(True, "", summary, payload, files_written=(\n        os.path.basename(_rc_path), os.path.basename(state_file_path)))\n',
          '\n    # ⚠️ 寫檔之後不再做任何可能拋例外的事（含 print）：例外 ⇔ 這一輪沒有寫成功，呼叫端據此報告。\n    MacroStateLocker(state_file_path=state_file_path).lock_system_state_only(payload)\n    return RiskCapApplyResult(True, "", summary, payload)\n'),
     ),
     'src/ui/views/page_hold.py': (
-        ('    has_system_risk_cap,\n)\nfrom src.ui.views.risk_cap_gate import (   # PQ-C6-3\n    RISK_CAP_COMPLETENESS_LABEL,\n    risk_cap_detail_rows,\n    risk_cap_face_text,\n)\n',
+        ('    has_system_risk_cap,\n)\nfrom src.ui.views.risk_cap_gate import (   # PQ-C6-3\n    RISK_CAP_COMPLETENESS_LABEL,\n    RISK_CAP_DISABLED_LABEL,\n    RISK_CAP_NOT_EVALUATED_LABEL,\n    RISK_CAP_SAHM_LABEL,\n    RISK_CAP_SNAPSHOT_TS_LABEL,\n    risk_cap_detail_rows,\n    risk_cap_face_text,\n)\n',
          '    has_system_risk_cap,\n)\n'),
+        ('    本頁顯示的持股水位一律取自 L3 `get_allocation()`，本頁不自行再算；\n    它仲裁「姿態油門 × ~~macro_state 曝險上限~~ 系統風險上限 × VIX／三環天花板」三條輸入，\n    **取最低**。（📌 AUD-C21，有意識的更正：新頁的系統風險上限自本批起讀 `risk_cap_state.json`。）\n\n',
+         '    本頁顯示的持股水位一律取自 L3 `get_allocation()`，本頁不自行再算；\n    它仲裁「姿態油門 × macro_state 曝險上限 × VIX／三環天花板」三條輸入，\n    **取最低**。\n\n'),
         ('    has_risk_cap: bool = False\n    #: PQ-C6-3（客戶 2026-10-16）：L3 `AllocationDecision.risk_cap_disclosure` 原樣透傳（與上限出自同一次讀檔）。\n    #: 預設 None；只由 `load_allocation` 依 L3 實際回傳設定。⛔ 渲染期不讀檔。\n    risk_cap_disclosure: Any = None\n\n',
          '    has_risk_cap: bool = False\n\n'),
         ('        conflicts=tuple(str(_c) for _c in (getattr(_a, "conflicts", ()) or ())),\n        has_risk_cap=has_system_risk_cap(getattr(_a, "caps", ())),\n        risk_cap_disclosure=getattr(_a, "risk_cap_disclosure", None))\n\n',
@@ -141,7 +150,7 @@ C21_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '         "**整體資產**（市場端上限），不是核心／衛星那個組合內部的比例"),\n        ("來源", "L3 `get_allocation()`，本頁不自行再算 —— 它仲裁"\n                 "「姿態油門 × macro_state 曝險上限 × VIX／三環天花板」"\n                 "三條輸入，**取最低**"),\n'),
         ('    if _state == UI_LIVE:\n        # PQ-C6-3（客戶 2026-10-16 核准線框）：有系統風險上限 ⇒ 卡面多一列「資料完整性」（未評估項目名＋中性句，\n        #   ⛔ 不靠顏色），詳細各列只進「▸ 詳細」（`V2_FOLD_ONLY_FACT_KEYS`）。無上限那一態（上一段）一個字都沒加。\n        _disc = alloc.risk_cap_disclosure\n        if _disc is not None:\n            _facts.insert(0, (RISK_CAP_COMPLETENESS_LABEL, risk_cap_face_text(_disc)))\n            _facts.extend(risk_cap_detail_rows(_disc))\n        return (Card(key="hold.position_cap", label="建議持股水位（市場端）",\n',
          '    if _state == UI_LIVE:\n        return (Card(key="hold.position_cap", label="建議持股水位（市場端）",\n'),
-        ('\n#: PQ-C6-3（2026-10-16）：**只進「▸ 詳細」、不上卡面**的 fact 列（卡 key → 標籤集合）。\n#: 同「🚦 今天」頁 `V2_FOLDED_FACT_KEYS` 的作法（以標籤登記）。列不在時什麼都不做（無上限那一態本來就沒有）。\nV2_FOLD_ONLY_FACT_KEYS: dict[str, frozenset[str]] = {\n    "hold.position_cap": frozenset({"快照時間", "未評估項目", "已停用（不計分）", "薩姆規則"}),\n}\n\n\ndef v2_fold_id(card: Card) -> str:\n',
+        ('\n#: PQ-C6-3（2026-10-16）：**只進「▸ 詳細」、不上卡面**的 fact 列（卡 key → 標籤集合）。\n#: 同「🚦 今天」頁 `V2_FOLDED_FACT_KEYS` 的作法（以標籤登記）。列不在時什麼都不做（無上限那一態本來就沒有）。\nV2_FOLD_ONLY_FACT_KEYS: dict[str, frozenset[str]] = {\n    "hold.position_cap": frozenset({RISK_CAP_SNAPSHOT_TS_LABEL, RISK_CAP_NOT_EVALUATED_LABEL,\n                                    RISK_CAP_DISABLED_LABEL, RISK_CAP_SAHM_LABEL}),\n}\n\n\ndef v2_fold_id(card: Card) -> str:\n',
          '\ndef v2_fold_id(card: Card) -> str:\n'),
         ('    _short, _full = v2_short_rows(card)\n    # PQ-C6-3：登記為「只進詳細」的列先分出來（不上卡面），原文照樣接在摺疊區最後。\n    _fold_only_keys = V2_FOLD_ONLY_FACT_KEYS.get(card.key, frozenset())\n    _fold_only = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts if _k in _fold_only_keys)\n    facts = tuple((_k, _v) for _k, _v in facts if _k not in _fold_only_keys)\n    _plain_facts = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts)\n',
          '    _short, _full = v2_short_rows(card)\n    _plain_facts = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts)\n'),
@@ -160,8 +169,16 @@ C21_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
         ('            "⛔ 不要把登記拿掉了事，那會讓揭露悄悄消失。")\n    # PQ-C6-3：「有才搬」的 hover-only 列（`V2_HOVER_OPTIONAL_FACTS`）接在後面，同一個 hover 槽。\n    _opt_keys = V2_HOVER_OPTIONAL_FACTS.get(_card.key, frozenset())\n    _moved = _moved + tuple(f"{_k}：{_v}" for _k, _v in tile.facts if _k in _opt_keys)\n    _facts = tuple((v2_plain(_k), v2_plain(_v))\n                   for _k, _v in tile.facts if _k not in _hover_keys and _k not in _opt_keys)\n    if _guide_rows:\n',
          '            "⛔ 不要把登記拿掉了事，那會讓揭露悄悄消失。")\n    _facts = tuple((v2_plain(_k), v2_plain(_v))\n                   for _k, _v in tile.facts if _k not in _hover_keys)\n    if _guide_rows:\n'),
     ),
+    'src/ui/views/page_why.py': (
+        ('        # 批 Z66（客戶 2026-10-16 Q1）：`require_valid_risk_cap=True` —— 問答工具回報的系統風險上限\n        #   只認核心齊全＋現行規則版本的 ~~`macro_state.json`~~ 快照（與今天頁卡①同一條判斷）。\n        #   📌 AUD-C21（有意識的更正）：那份快照自本批起是新 UI 自己的 `risk_cap_state.json`。\n        _res = run_agent(req.question, list(req.history), api_key=_key,\n',
+         '        # 批 Z66（客戶 2026-10-16 Q1）：`require_valid_risk_cap=True` —— 問答工具回報的系統風險上限\n        #   只認核心齊全＋現行規則版本的 `macro_state.json`（與今天頁卡①同一條判斷）。\n        _res = run_agent(req.question, list(req.history), api_key=_key,\n'),
+    ),
     'src/ui/views/risk_cap_gate.py': (
-        ('    return any(getattr(c, "name", None) == SYSTEM_RISK_CAP_NAME for c in (caps or ()))\n\n\n# ══════════════════════════════════════════════════════════════════════════\n# PQ-C6-3（客戶 2026-10-16 核准線框）：系統風險上限的資料完整性揭露 —— 卡面一列＋詳細\n# ══════════════════════════════════════════════════════════════════════════\n# 兩張卡（今天頁卡① `verdict.exposure`、持股頁卡⑤ `hold.position_cap`）共用本段，⛔ 各頁不另寫一份字。\n# 揭露資料一律來自 L3 `get_allocation()` 回傳的 `AllocationDecision.risk_cap_disclosure`\n# （與上限出自同一次讀檔；本檔⛔ 不讀檔、不取數）。只在「有系統風險上限」時呈現；\n# 「建議持股：無法判定」那一態一個字都不加（客戶裁示）。\n# ⛔ 顏色不是唯一載體：完整性一律用字講（「未評估：…」）。\n\n#: 卡面那一列的標籤。\nRISK_CAP_COMPLETENESS_LABEL: str = "資料完整性"\n#: 有 Optional 未評估時，接在項目清單後面的中性句（客戶逐字；⛔ 不寫「上限可能偏寬」）。\nRISK_CAP_INCOMPLETE_SENTENCE: str = "部分訊號未納入，本次上限資訊不完整"\n#: Optional 全部可評估時（客戶逐字）。\nRISK_CAP_COMPLETE_TEXT: str = "必要與選用訊號皆已評估"\n#: 「已停用（不計分）」那一項（客戶逐字）。\nRISK_CAP_DISABLED_LABEL: str = "已停用（不計分）"\n#: 薩姆規則的固定說明（與步驟報告「薩姆規則目前無資料來源、未評估（不代表已通過）」同義、⛔ 不換說法）。\nRISK_CAP_SAHM_NO_SOURCE_TEXT: str = "目前無資料來源、未評估（不代表已通過）"\n#: 詳細裡各列的標籤。\nRISK_CAP_SNAPSHOT_TS_LABEL: str = "快照時間"\nRISK_CAP_NOT_EVALUATED_LABEL: str = "未評估項目"\nRISK_CAP_SAHM_LABEL: str = "薩姆規則"\n\n#: 新鮮度狀態 → 客戶語言（`shared.freshness_policy.FreshnessStatus` 的值；與 L3 步驟報告同一組字）。\n#: `fresh` 會出現在未評估清單裡只有一種情形：時間新鮮但值不能計分（例如非有限數）。\n_STATUS_TEXT: dict[str, str] = {\n    "missing": "未取得",\n    "stale": "已過期",\n    "undetermined": "無法判定",\n    "fresh": "資料異常、無法計分",\n}\n\n\ndef _label(key: str) -> str:\n    from shared.risk_cap_policy import OPTIONAL_INPUT_LABELS, REQUIRED_CORE_LABELS\n    return OPTIONAL_INPUT_LABELS.get(key) or REQUIRED_CORE_LABELS.get(key) or key\n\n\ndef _dedup(items) -> list[str]:\n    return list(dict.fromkeys(items))\n\n\ndef risk_cap_face_text(disclosure: Any) -> str:\n    """卡面那一列的值。有未評估項 ⇒「未評估：PCR、BIAS240；部分訊號未納入，本次上限資訊不完整」。\n\n    項目清單**排在最前**（卡面若被截斷，「未評估」與項目名仍在）；⛔ 停用的 M1B−M2 不在這裡\n    （`RiskCapDisclosure.not_evaluated` 本來就不含停用項，這裡再擋一次）。\n    """\n    _dis = set(getattr(disclosure, "disabled", ()) or ())\n    _ne = [k for k, _s, _d in (getattr(disclosure, "not_evaluated", ()) or ()) if k not in _dis]\n    if not _ne:\n        return RISK_CAP_COMPLETE_TEXT\n    return f"未評估：{\'、\'.join(_dedup(_label(k) for k in _ne))}；{RISK_CAP_INCOMPLETE_SENTENCE}"\n\n\ndef risk_cap_detail_rows(disclosure: Any) -> tuple[tuple[str, str], ...]:\n    """詳細（持股頁「▸ 詳細」／今天頁的完整文字）各列：快照時間、未評估項目、已停用、薩姆規則。\n\n    ⛔ 未取得的項目**不給日期**（檔內那一格存的是「預期資料日」，不是資料日）；已過期才帶最新資料日。\n    """\n    _rows: list[tuple[str, str]] = [\n        (RISK_CAP_SNAPSHOT_TS_LABEL, str(getattr(disclosure, "snapshot_ts", "") or "未記錄"))]\n    _dis = set(getattr(disclosure, "disabled", ()) or ())\n    _items = []\n    for k, status, as_of in (getattr(disclosure, "not_evaluated", ()) or ()):\n        if k in _dis:\n            continue\n        _txt = f"{_label(k)} {_STATUS_TEXT.get(status, \'無法評估\')}"\n        if status == "stale" and as_of:\n            _txt += f"（最新資料日 {as_of}）"\n        _items.append(_txt)\n    if _items:\n        _rows.append((RISK_CAP_NOT_EVALUATED_LABEL, "；".join(_items)))\n    if _dis:\n        _rows.append((RISK_CAP_DISABLED_LABEL, "、".join(_dedup(_label(k) for k in\n                                                          getattr(disclosure, "disabled", ())))))\n    if getattr(disclosure, "sahm_status", None) == "no_source":\n        _rows.append((RISK_CAP_SAHM_LABEL, RISK_CAP_SAHM_NO_SOURCE_TEXT))\n    return tuple(_rows)\n\n\n#: 今天頁卡①「詳細」那一列的標籤（該列只進 hover，⛔ 不上卡面；見 `page_today.V2_HOVER_OPTIONAL_FACTS`）。\nRISK_CAP_DETAIL_FACT_KEY: str = "資料完整性（詳細）"\n\n\ndef risk_cap_detail_text(disclosure: Any) -> str:\n    """詳細各列接成一段（今天頁卡① hover 用）：「快照時間：…；未評估項目：…；已停用（不計分）：…；薩姆規則：…」。"""\n    return "；".join(f"{_k}：{_v}" for _k, _v in risk_cap_detail_rows(disclosure))\n\n\ndef risk_cap_full_text(disclosure: Any) -> str:\n    """卡面值＋詳細接成一段（今天頁卡①那一格的完整文字：卡面截斷後掛在 hover 的就是這段）。"""\n    return "｜".join([risk_cap_face_text(disclosure)]\n                    + [f"{_k}：{_v}" for _k, _v in risk_cap_detail_rows(disclosure)])\n',
+        ('「新頁取不到有效的系統風險上限 → 建議持股『無法判定』」。\n📌 AUD-C21（2026-10-16，有意識的更正）：下文的「檔」自本批起是新 UI 自己的 `risk_cap_state.json`\n（`get_macro_state(require_valid_risk_cap=True)` 只讀它；舊 UI 照舊用 `macro_state.json`）。\n修前：沒有 `macro_state.json`、檔案過期、或 fail-safe 且沒有舊檔時，卡①（今天頁）與 ⑤（持股頁）\n',
+         '「新頁取不到有效的系統風險上限 → 建議持股『無法判定』」。\n修前：沒有 `macro_state.json`、檔案過期、或 fail-safe 且沒有舊檔時，卡①（今天頁）與 ⑤（持股頁）\n'),
+        ('**有值且可轉成整數**時，才把名為「系統風險上限」的 `Cap` 放進 `caps`；而 `get_macro_state()` 已把\n過期（`MACRO_VERDICT_MAX_AGE_DAYS`）、fail-safe「系統異常」、讀不出來的檔一律當成沒有上限\n（📌 AUD-C21：另加未蓋戳／版本不符、上限值不是 0~100 整數值的新檔）。\n⇒ 本檔只看 allocation 的 `caps` 裡**有沒有那一條**，與 `get_allocation` 內部的有效判斷同一份。\n',
+         '**有值且可轉成整數**時，才把名為「系統風險上限」的 `Cap` 放進 `caps`；而 `get_macro_state()` 已把\n過期（`MACRO_VERDICT_MAX_AGE_DAYS`）、fail-safe「系統異常」、讀不出來的檔一律當成沒有上限。\n⇒ 本檔只看 allocation 的 `caps` 裡**有沒有那一條**，與 `get_allocation` 內部的有效判斷同一份。\n'),
+        ('    return any(getattr(c, "name", None) == SYSTEM_RISK_CAP_NAME for c in (caps or ()))\n\n\n# ══════════════════════════════════════════════════════════════════════════\n# PQ-C6-3（客戶 2026-10-16 核准線框）：系統風險上限的資料完整性揭露 —— 卡面一列＋詳細\n# ══════════════════════════════════════════════════════════════════════════\n# 兩張卡（今天頁卡① `verdict.exposure`、持股頁卡⑤ `hold.position_cap`）共用本段，⛔ 各頁不另寫一份字。\n# 揭露資料一律來自 L3 `get_allocation()` 回傳的 `AllocationDecision.risk_cap_disclosure`\n# （與上限出自同一次讀檔；本檔⛔ 不讀檔、不取數）。只在「有系統風險上限」時呈現；\n# 「建議持股：無法判定」那一態一個字都不加（客戶裁示）。\n# ⛔ 顏色不是唯一載體：完整性一律用字講（「未評估：…」）。\n\n#: 卡面那一列的標籤。\nRISK_CAP_COMPLETENESS_LABEL: str = "資料完整性"\n#: 有 Optional 未評估時，接在項目清單後面的中性句（客戶逐字；⛔ 不寫「上限可能偏寬」）。\nRISK_CAP_INCOMPLETE_SENTENCE: str = "部分訊號未納入，本次上限資訊不完整"\n#: Optional 全部可評估時（客戶逐字）。\nRISK_CAP_COMPLETE_TEXT: str = "必要與選用訊號皆已評估"\n#: 「已停用（不計分）」那一項（客戶逐字）。\nRISK_CAP_DISABLED_LABEL: str = "已停用（不計分）"\n#: 薩姆規則的固定說明（與步驟報告「薩姆規則目前無資料來源、未評估（不代表已通過）」同義、⛔ 不換說法）。\nRISK_CAP_SAHM_NO_SOURCE_TEXT: str = "目前無資料來源、未評估（不代表已通過）"\n#: 詳細裡各列的標籤。\nRISK_CAP_SNAPSHOT_TS_LABEL: str = "快照時間"\nRISK_CAP_NOT_EVALUATED_LABEL: str = "未評估項目"\nRISK_CAP_SAHM_LABEL: str = "薩姆規則"\n\n#: 新鮮度狀態 → 客戶語言（`shared.freshness_policy.FreshnessStatus` 的值；與 L3 步驟報告同一組字）。\n#: `fresh` 會出現在未評估清單裡只有一種情形：時間新鮮但值不能計分（例如非有限數）。\n_STATUS_TEXT: dict[str, str] = {\n    "missing": "未取得",\n    "stale": "已過期",\n    "undetermined": "無法判定",\n    "fresh": "資料異常、無法計分",\n}\n\n\ndef _label(key: str) -> str:\n    from shared.risk_cap_policy import OPTIONAL_INPUT_LABELS, REQUIRED_CORE_LABELS\n    return OPTIONAL_INPUT_LABELS.get(key) or REQUIRED_CORE_LABELS.get(key) or key\n\n\ndef _dedup(items) -> list[str]:\n    return list(dict.fromkeys(items))\n\n\ndef risk_cap_face_text(disclosure: Any) -> str:\n    """卡面那一列的值。有未評估項 ⇒「未評估：PCR、BIAS240；部分訊號未納入，本次上限資訊不完整」。\n\n    項目清單**排在最前**（卡面若被截斷，「未評估」與項目名仍在）；⛔ 停用的 M1B−M2 不在這裡\n    （`RiskCapDisclosure.not_evaluated` 本來就不含停用項，這裡再擋一次）。\n    """\n    _dis = set(getattr(disclosure, "disabled", ()) or ())\n    _ne = [k for k, _s, _d in (getattr(disclosure, "not_evaluated", ()) or ()) if k not in _dis]\n    if not _ne:\n        return RISK_CAP_COMPLETE_TEXT\n    return f"未評估：{\'、\'.join(_dedup(_label(k) for k in _ne))}；{RISK_CAP_INCOMPLETE_SENTENCE}"\n\n\ndef risk_cap_detail_rows(disclosure: Any) -> tuple[tuple[str, str], ...]:\n    """詳細（持股頁「▸ 詳細」／今天頁的完整文字）各列：快照時間、未評估項目、已停用、薩姆規則。\n\n    ⛔ 未取得的項目**不給日期**（檔內那一格存的是「預期資料日」，不是資料日）；已過期才帶最新資料日。\n    """\n    _rows: list[tuple[str, str]] = [\n        (RISK_CAP_SNAPSHOT_TS_LABEL, str(getattr(disclosure, "snapshot_ts", "") or "未記錄"))]\n    _dis = set(getattr(disclosure, "disabled", ()) or ())\n    _items = []\n    for k, status, as_of in (getattr(disclosure, "not_evaluated", ()) or ()):\n        if k in _dis:\n            continue\n        _txt = f"{_label(k)} {_STATUS_TEXT.get(status, \'無法評估\')}"\n        if status == "stale" and as_of:\n            _txt += f"（最新資料日 {as_of}）"\n        _items.append(_txt)\n    if _items:\n        _rows.append((RISK_CAP_NOT_EVALUATED_LABEL, "；".join(_items)))\n    if _dis:\n        _rows.append((RISK_CAP_DISABLED_LABEL, "、".join(_dedup(_label(k) for k in\n                                                          getattr(disclosure, "disabled", ())))))\n    if getattr(disclosure, "sahm_status", None) == "no_source":\n        _rows.append((RISK_CAP_SAHM_LABEL, RISK_CAP_SAHM_NO_SOURCE_TEXT))\n    return tuple(_rows)\n\n\n#: 今天頁卡①「詳細」那一列的標籤（該列只進 hover，⛔ 不上卡面；見 `page_today.V2_HOVER_OPTIONAL_FACTS`）。\nRISK_CAP_DETAIL_FACT_KEY: str = "資料完整性（詳細）"\n\n\ndef risk_cap_detail_text(disclosure: Any) -> str:\n    """詳細各列接成一段（今天頁卡① hover 用）：「快照時間：…；未評估項目：…；已停用（不計分）：…；薩姆規則：…」。"""\n    return "；".join(f"{_k}：{_v}" for _k, _v in risk_cap_detail_rows(disclosure))\n',
          '    return any(getattr(c, "name", None) == SYSTEM_RISK_CAP_NAME for c in (caps or ()))\n'),
     ),
 }
@@ -319,7 +336,11 @@ class TestOldUiOverwrite:
 # 2. 位階矩陣：上限以外的每一個鍵與修前逐鍵相同
 # ══════════════════════════════════════════════════════════════════════════
 _WR_CASES = {"absent": None, "live": _WR_LIVE, "no_health": _WR_NO_HEALTH}
-_FILE_CASES = ("old_only", "new_only", "both", "neither")
+_FILE_CASES = ("old_only", "new_only", "both", "neither",
+               # AUD-C21 B1：舊檔不可用的兩種（舊 UI AI 裁決失敗檔、讀壞的檔）—— 見下方記錄在案的例外
+               "old_ai_failsafe", "old_corrupt")
+_AI_FAILSAFE = {"market_regime": "系統異常", "systemic_risk_level": "危險", "exposure_limit_pct": 0,
+                "Macro_Phase": "系統異常", "analysis_summary": "x", "timestamp": ""}
 _CAP_KEYS = ("exposure_limit_pct", "risk_cap_disclosure")
 
 
@@ -334,6 +355,10 @@ class TestRegimeMatrix:
             _put(old, _snapshot(regime="空頭", cap=30))
         if files in ("new_only", "both"):
             _put(new, _snapshot(regime="多頭", cap=50))      # 位階故意與舊檔不同：位階⛔ 不得改讀新檔
+        if files == "old_ai_failsafe":
+            _put(old, dict(_AI_FAILSAFE, timestamp=_snapshot()["timestamp"]))
+        if files == "old_corrupt":
+            _put(old, "{bad json")
         wr = copy.deepcopy(_WR_CASES[wr_name])
         for flag in (False, True):
             kw = dict(state_file_path=str(old), strict=strict, now=NOW, require_valid_risk_cap=flag)
@@ -347,10 +372,20 @@ class TestRegimeMatrix:
             if not flag:
                 assert c == r                                   # 旗標關：逐鍵逐值同修前
                 continue
-            assert {k: v for k, v in c.items() if k not in _CAP_KEYS} == \
-                   {k: v for k, v in r.items() if k not in _CAP_KEYS}
+            # ~~上限以外每一個鍵（含舊檔的 `file_error`）一律同修前~~
+            # 📌 AUD-C21 B1（2026-10-16，AI 總管決策，記錄在案的例外，⛔ 不是放寬）：旗標開 ＋ warroom 可用 ＋ strict
+            #   ＋ 舊檔不可用 ⇒ 修前帶舊檔的 B6-r4 `file_error`（持股頁卡⑤轉紅），現行⛔ 不帶 —— 新 UI 上限不讀舊檔、
+            #   位階由 warroom 撐住。warroom 不可用（absent／no_health）時逐鍵同修前（位階真的落到舊檔，AUD-C22）。
+            skip = _CAP_KEYS
+            if strict and wr_name == "live" and files in ("old_ai_failsafe", "old_corrupt"):
+                assert r["file_error"].startswith(_OLD) and "file_error" not in c, files
+                skip = _CAP_KEYS + ("file_error",)
+            assert {k: v for k, v in c.items() if k not in skip} == \
+                   {k: v for k, v in r.items() if k not in skip}
             # 上限只看新檔（⛔ 無退路）
             assert c["exposure_limit_pct"] == (50 if files in ("new_only", "both") else None)
+            if wr_name != "live":
+                assert c.get("file_error") == r.get("file_error")
             assert (c["risk_cap_disclosure"] is None) is (files not in ("new_only", "both"))
 
 
@@ -541,7 +576,8 @@ class TestDisclosure:
         d = alloc.risk_cap_disclosure
         assert d is not None and _cap_of(alloc) is not None
         assert G.risk_cap_face_text(d) == face
-        assert "上限可能偏寬" not in G.risk_cap_full_text(d)
+        # ~~assert "上限可能偏寬" not in G.risk_cap_full_text(d)~~ —— NB-8：`risk_cap_full_text` 已刪（0 production caller）
+        assert "上限可能偏寬" not in G.risk_cap_face_text(d) + G.risk_cap_detail_text(d)
         assert all(k not in ("M1B_YoY_pct", "M2_YoY_pct") for k, _s, _a in d.not_evaluated)
         # ── 今天頁卡①：卡面一列「資料完整性」＝摘要句（與持股頁卡⑤同一句）；詳細只在 hover ──
         # ~~tf[G.RISK_CAP_COMPLETENESS_LABEL].startswith(face)~~（第一版：卡面值＝摘要＋「｜」＋詳細、截 46 字）
@@ -607,7 +643,8 @@ class TestDisclosure:
         expected = state["input_detail"]["BIAS240_pct"]["as_of_or_month"]
         assert state["input_detail"]["BIAS240_pct"]["status"] == "missing" and expected
         assert ("BIAS240_pct", "missing", None) in alloc.risk_cap_disclosure.not_evaluated
-        full = G.risk_cap_full_text(alloc.risk_cap_disclosure)
+        # ~~full = G.risk_cap_full_text(...)~~ —— NB-8：已刪，改用卡面句＋詳細兩支（production 實際用的）
+        full = G.risk_cap_face_text(alloc.risk_cap_disclosure) + G.risk_cap_detail_text(alloc.risk_cap_disclosure)
         assert "BIAS240 未取得（" not in full and expected not in full
         assert expected not in PH.v2_card_html(card, facts, sig) and expected not in P.v2_card_html(tile)
 
@@ -665,7 +702,7 @@ class TestDisclosure:
 # ══════════════════════════════════════════════════════════════════════════
 class TestMutations:
     def test_reader_falls_back_to_old_file(self, tmp_path):
-        mod = _mutated_module(_MSL_REL, ("            else _sibling_risk_cap_path(state_file_path), now=now)",
+        mod = _mutated_module(_MSL_REL, ("            else risk_cap_state_path(state_file_path), now=now)",
                                          "            else state_file_path, now=now)"))
         _put(tmp_path / _OLD, _snapshot(cap=30))
         kw = dict(state_file_path=str(tmp_path / _OLD), now=NOW, require_valid_risk_cap=True)
@@ -759,4 +796,188 @@ class TestOtherPaths:
 
 
 def _sibling_default() -> str:
-    return MSL._sibling_risk_cap_path("macro_state.json")
+    return MSL.risk_cap_state_path("macro_state.json")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 8. 紅隊複核追加（B1／N1／N2／NB-3／NB-5／NB-9）
+# ══════════════════════════════════════════════════════════════════════════
+class TestB1OldFileErrorNotSurfaced:
+    """旗標開 ＋ warroom 可用：舊檔不可用（AI 失敗檔／讀壞）⛔ 不再把持股頁卡⑤打紅；warroom 缺席照舊。"""
+
+    def _hold(self):
+        from src.ui.views import page_hold as PH
+        return PH, PH.build_position_cap_card(PH.load_allocation(PH.HoldRequest(submitted=True)))[0]
+
+    def _old_ai_failsafe(self):
+        ok = MSL.MacroStateLocker(llm_client=lambda p: "⚠️ AI 失敗").execute_and_lock(
+            {"market_regime": "多頭", "exposure_limit_pct": 80}, [])
+        assert ok is False                                        # 真的走舊 UI 的 AI 失敗 fail-safe 寫檔
+        state = json.loads(Path(_OLD).read_text(encoding="utf-8"))
+        assert state["market_regime"] == "系統異常" and "missing_inputs" not in state
+
+    @pytest.mark.parametrize("old_kind", ["ai_failsafe", "corrupt"])
+    def test_warroom_usable_hold_card_live_with_new_cap(self, tmp_path, monkeypatch, old_kind):
+        monkeypatch.chdir(tmp_path)
+        _put(tmp_path / _NEW, _snapshot(cap=40, days_ago=0.0, now=_now_tpe()))
+        if old_kind == "ai_failsafe":
+            self._old_ai_failsafe()
+        else:
+            _put(tmp_path / _OLD, "{bad json")
+        AS = _as_session(monkeypatch, {"warroom_summary": dict(_WR_LIVE)})
+        PH, card = self._hold()
+        assert card.state == PH.UI_LIVE
+        assert _cap_of(AS.get_allocation(strict=True, require_valid_risk_cap=True)) == 40
+        with pytest.raises(RuntimeError, match=_OLD):            # 舊 UI 呼叫方式（不帶旗標）逐字照舊
+            AS.get_allocation(strict=True)
+
+    @pytest.mark.parametrize("old_kind", ["ai_failsafe", "corrupt"])
+    def test_warroom_absent_identical_to_base(self, tmp_path, monkeypatch, old_kind):
+        monkeypatch.chdir(tmp_path)
+        _put(tmp_path / _NEW, _snapshot(cap=40, days_ago=0.0, now=_now_tpe()))
+        if old_kind == "ai_failsafe":
+            self._old_ai_failsafe()
+        else:
+            _put(tmp_path / _OLD, "{bad json")
+        base = _base(_MSL_REL)
+        for wr in (None, dict(_WR_NO_HEALTH)):
+            for strict in (False, True):
+                kw = dict(strict=strict, require_valid_risk_cap=True)
+                cur = _run(lambda: MSL.get_macro_state(copy.deepcopy(wr), **kw))
+                ref = _run(lambda: base.get_macro_state(copy.deepcopy(wr), **kw))
+                assert cur[0] == ref[0] and (cur == ref if cur[0] == "raise" else True), (wr, strict)
+                if cur[0] == "ok":
+                    assert {k: v for k, v in cur[1].items() if k not in _CAP_KEYS} == \
+                           {k: v for k, v in ref[1].items() if k not in _CAP_KEYS}
+        _as_session(monkeypatch, {})
+        PH, card = self._hold()
+        assert card.state == PH.UI_FAILED                        # 位階真的落到舊檔、舊檔讀壞 ⇒ 照舊紅
+
+    def test_mutation_restore_old_file_error(self, tmp_path):
+        mod = _mutated_module(_MSL_REL, ("    if require_valid_risk_cap and _wr_ok:\n        _file_error = \"\"\n",
+                                         "    if False:\n        _file_error = \"\"\n"))
+        _put(tmp_path / _OLD, "{bad json")
+        _put(tmp_path / _NEW, _snapshot(cap=40))
+        kw = dict(state_file_path=str(tmp_path / _OLD), now=NOW, strict=True, require_valid_risk_cap=True)
+        assert "file_error" not in MSL.get_macro_state(dict(_WR_LIVE), **kw)
+        assert mod.get_macro_state(dict(_WR_LIVE), **kw)["file_error"].startswith(_OLD)   # 突變體 ⇒ 原版守衛必紅
+
+
+class TestN1CapValueStrict:
+    @pytest.mark.parametrize("raw", ["50", True, 50.9, -5, 150, float("nan"), float("inf"), [50]])
+    def test_bad_cap_no_cap_and_strict_error(self, tmp_path, raw):
+        _put(tmp_path / _NEW, _snapshot(cap=raw))
+        kw = dict(state_file_path=str(tmp_path / _OLD), now=NOW, require_valid_risk_cap=True)
+        s = MSL.get_macro_state(dict(_WR_LIVE), **kw)
+        assert s["exposure_limit_pct"] is None and s["risk_cap_disclosure"] is None and "file_error" not in s
+        e = MSL.get_macro_state(dict(_WR_LIVE), strict=True, **kw)
+        assert e["exposure_limit_pct"] is None and e["file_error"].startswith(_NEW + ": exposure_limit_pct=")
+
+    @pytest.mark.parametrize("raw,want", [(0, 0), (100, 100), (50, 50), (50.0, 50)])
+    def test_good_cap_accepted(self, tmp_path, raw, want):
+        _put(tmp_path / _NEW, _snapshot(cap=raw))
+        got = MSL.get_macro_state(dict(_WR_LIVE), state_file_path=str(tmp_path / _OLD), now=NOW,
+                                  require_valid_risk_cap=True)["exposure_limit_pct"]
+        assert got == want and type(got) is int
+
+    @pytest.mark.parametrize("raw", ["50", True, 50.9, -5, 150])
+    def test_old_path_unchanged(self, tmp_path, raw):
+        _put(tmp_path / _OLD, _snapshot(cap=raw))
+        base = _base(_MSL_REL)
+        kw = dict(state_file_path=str(tmp_path / _OLD), now=NOW)
+        assert _run(lambda: MSL.get_macro_state(dict(_WR_LIVE), **kw)) == \
+            _run(lambda: base.get_macro_state(dict(_WR_LIVE), **kw))
+
+    def test_bad_cap_strict_turns_hold_card_red(self, tmp_path, monkeypatch):
+        from src.ui.views import page_hold as PH
+        monkeypatch.chdir(tmp_path)
+        _put(tmp_path / _NEW, _snapshot(cap="50", days_ago=0.0, now=_now_tpe()))
+        _as_session(monkeypatch, {"warroom_summary": dict(_WR_LIVE)})
+        card, _, _ = PH.build_position_cap_card(PH.load_allocation(PH.HoldRequest(submitted=True)))
+        assert card.state == PH.UI_FAILED
+
+    def test_mutation_allocation_guard_removed_new_file(self, tmp_path, monkeypatch):
+        """新檔讀壞時「轉紅」靠的是 allocation 的 strict `file_error` 守衛 —— 拿掉 ⇒ 不紅（原版守衛必紅）。"""
+        from src.ui.views import page_hold as PH
+        monkeypatch.chdir(tmp_path)
+        _put(tmp_path / _NEW, "{bad json")
+        AS = _as_session(monkeypatch, {"warroom_summary": dict(_WR_LIVE)})
+        mod = _mutated_module(_AS_REL, ("    if strict and _ms.get('file_error'):", "    if False:"))
+        mod.st = AS.st
+        monkeypatch.setattr(AS, "get_allocation", mod.get_allocation)
+        card, _, _ = PH.build_position_cap_card(PH.load_allocation(PH.HoldRequest(submitted=True)))
+        assert card.state != PH.UI_FAILED
+
+
+class TestN2AsOfOnlyWhenAccepted:
+    @pytest.mark.parametrize("snap", [dict(ok=None, version=None), dict(version="risk_cap.v1"),
+                                      dict(cap="50"), dict(regime="系統異常")])
+    def test_rejected_new_snapshot_no_as_of_no_extras(self, tmp_path, monkeypatch, snap):
+        from src.services import ai_qa_service as Q
+        monkeypatch.chdir(tmp_path)
+        _put(tmp_path / _OLD, _snapshot(cap=30, days_ago=0.0, now=_now_tpe()))
+        _put(tmp_path / _NEW, _snapshot(**{"cap": 50, "days_ago": 0.0, "now": _now_tpe(), **snap}))
+        _as_session(monkeypatch, {"warroom_summary": dict(_WR_LIVE)})
+        out = Q._tool_get_market_state(require_valid_risk_cap=True)
+        assert out["data"]["exposure_limit_pct"] is None
+        assert out["provenance"]["as_of"] is None
+        assert not any(k.startswith("鎖定快照額外欄位") for k in out["data"])
+
+    def test_nb5_path_resolved_by_shared_helper(self, tmp_path, monkeypatch):
+        """NB-5：AI 問答與讀端用同一支 `risk_cap_state_path`（⛔ 不是 cwd 相對字面）。"""
+        from src.services import ai_qa_service as Q
+        monkeypatch.chdir(tmp_path)
+        other = tmp_path / "elsewhere" / "rc.json"
+        other.parent.mkdir()
+        snap = _snapshot(cap=50, days_ago=0.0, now=_now_tpe())
+        _put(other, snap)
+        monkeypatch.setattr(MSL, "risk_cap_state_path", lambda state_file_path="macro_state.json": str(other))
+        _as_session(monkeypatch, {"warroom_summary": dict(_WR_LIVE)})
+        out = Q._tool_get_market_state(require_valid_risk_cap=True)
+        assert out["data"]["exposure_limit_pct"] == 50 and out["provenance"]["as_of"] == snap["timestamp"]
+        assert not (tmp_path / _NEW).exists()
+
+
+class TestNB3RestoreFailed:
+    def test_restore_failure_is_chained_and_named(self, l1, tmp_path, monkeypatch):
+        kw = _inputs()
+        l1(kw["pmi_history"])
+        _put(tmp_path / _OLD, _snapshot(cap=30))
+
+        def boom_write(self, state):
+            raise OSError("第二個檔寫壞了")
+
+        def boom_restore(path, previous):
+            raise PermissionError("還原也寫不進去")
+        monkeypatch.setattr(MSL.MacroStateLocker, "write_state_snapshot", boom_write)
+        monkeypatch.setattr(RC, "_restore_file", boom_restore)
+        with pytest.raises(RC.RiskCapRestoreFailed) as ei:
+            RC.compute_and_lock_risk_cap(_session_from(kw), now=NOW, state_file_path=str(tmp_path / _OLD))
+        e = ei.value
+        assert isinstance(e.__cause__, OSError) and "第二個檔寫壞了" in str(e.__cause__)
+        assert isinstance(e.restore_error, PermissionError) and "還原失敗" in str(e) and "第二個檔寫壞了" in str(e)
+
+    def test_step_report_does_not_claim_restored(self, monkeypatch, tmp_path):
+        def raiser(session, *, now):
+            orig = OSError("第二個檔寫壞了")
+            raise RC.RiskCapRestoreFailed(_NEW, orig, PermissionError("還原也寫不進去")) from orig
+        r, _, _ = _run_refresh(monkeypatch, tmp_path, session={}, risk_cap=raiser)
+        s = _step(r, RS.STEP_RISK_CAP)
+        assert not s.ok and "還原也失敗" in s.detail and "第二個檔寫壞了" in s.detail
+        assert "已還原成寫入前的內容" not in s.detail
+
+    def test_ordinary_failure_text_unchanged(self, monkeypatch, tmp_path):
+        def raiser(session, *, now):
+            raise OSError("一般失敗")
+        r, _, _ = _run_refresh(monkeypatch, tmp_path, session={}, risk_cap=raiser)
+        s = _step(r, RS.STEP_RISK_CAP)
+        assert not s.ok and "還原也失敗" not in s.detail and "不會因此被清除" in s.detail
+
+
+class TestNB9FoldKeysAreConstants:
+    def test_hold_fold_only_keys_are_gate_constants(self):
+        from src.ui.views import page_hold as PH
+        assert PH.V2_FOLD_ONLY_FACT_KEYS["hold.position_cap"] == frozenset({
+            G.RISK_CAP_SNAPSHOT_TS_LABEL, G.RISK_CAP_NOT_EVALUATED_LABEL,
+            G.RISK_CAP_DISABLED_LABEL, G.RISK_CAP_SAHM_LABEL})
+        assert not hasattr(G, "risk_cap_full_text")              # NB-8：0 production caller，已刪

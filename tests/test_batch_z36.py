@@ -426,6 +426,20 @@ class TestQz19RealErrorsStayRed:
         """(2)(3) AI 裁決失敗檔／讀壞的檔／檔不存在 ⇒ 兩張卡逐字同修前 golden。"""
         d, ss = hold_dir
         _qz19_case(name, d, ss)
+        if name == 'ai_failed_wr':
+            # ~~assert _h(_cards()) == _QZ19_GOLDEN[name]~~（本情境）
+            # 📌 AUD-C21 B1（2026-10-16，AI 總管決策，有意識的變更，⛔ 不是放寬）：新頁的系統風險上限自本批起只讀
+            #   新 UI 自己的 `risk_cap_state.json`，warroom 可用時位階也不靠 `macro_state.json` ⇒ 舊 UI 寫的
+            #   AI 失敗檔不再把卡⑤打紅（那條 B6-r4 `file_error` 守的輸入已不存在）。卡④（位階）照舊逐字同 golden
+            #   （修前模組重算比對），卡⑤＝沒有新檔 ⇒「建議持股：無法判定」（灰）。舊 UI 的 strict 路徑照舊拋（見下支）。
+            m, c = _cards()
+            _with_pre = z36_pre_module(_MSL)
+            import pytest as _pt
+            with _pt.MonkeyPatch.context() as mp:
+                _with_msl(mp, _with_pre)
+                assert _h(m) == _h(_cards()[0])
+            assert c.state == UI_EMPTY and c.note.now == PH.RISK_CAP_UNAVAILABLE_NOW
+            return
         assert _h(_cards()) == _QZ19_GOLDEN[name]
 
     def test_ai_failed_is_red(self, hold_dir):
@@ -437,11 +451,15 @@ class TestQz19RealErrorsStayRed:
         assert m.state == UI_FAILED and c.state == UI_FAILED
 
     def test_ai_failed_with_warroom_cap_is_red(self, hold_dir):
-        """(2) warroom 可用 ＋ AI 失敗檔 ⇒ 建議水位卡照舊紅（B6-r4 file_error）。"""
+        """(2) warroom 可用 ＋ AI 失敗檔 ⇒ ~~建議水位卡照舊紅（B6-r4 file_error）~~ 舊 UI 的 strict 路徑照舊拋；
+        新頁卡⑤（旗標開）不再被舊檔打紅（📌 AUD-C21 B1，有意識的變更；理由見上一支）。"""
         d, ss = hold_dir
         ss['warroom_summary'] = dict(_WR)
         _write_ai_failed(d / 'macro_state.json')
-        assert _cards()[1].state == UI_FAILED
+        # ~~assert _cards()[1].state == UI_FAILED~~
+        assert _cards()[1].state == UI_EMPTY
+        with pytest.raises(RuntimeError, match='macro_state.json'):
+            AL.get_allocation(strict=True)                    # 不帶旗標（舊 UI 呼叫方式）逐字照舊
 
     def test_program_exception_is_red(self, hold_dir, monkeypatch):
         """(3) 程式例外（L3 拋非預期例外）⇒ 照舊紅錯；與「全缺」不共用語意。"""

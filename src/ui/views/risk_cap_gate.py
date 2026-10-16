@@ -2,13 +2,16 @@
 
 客戶規則（Q-z34～36 已核准；批 Z65 QA 實測缺口）：
 「新頁取不到有效的系統風險上限 → 建議持股『無法判定』」。
+📌 AUD-C21（2026-10-16，有意識的更正）：下文的「檔」自本批起是新 UI 自己的 `risk_cap_state.json`
+（`get_macro_state(require_valid_risk_cap=True)` 只讀它；舊 UI 照舊用 `macro_state.json`）。
 修前：沒有 `macro_state.json`、檔案過期、或 fail-safe 且沒有舊檔時，卡①（今天頁）與 ⑤（持股頁）
 仍照姿態帶印出持股區間，天花板清單是空的 —— 等於在缺一條硬否決天花板的情況下**放寬風控**。
 
 判斷依據（⛔ 不另寫一套過期／有效判斷）：
 `get_allocation()` 內部的 `build_allocation_decision` 只在 `get_macro_state()['exposure_limit_pct']`
 **有值且可轉成整數**時，才把名為「系統風險上限」的 `Cap` 放進 `caps`；而 `get_macro_state()` 已把
-過期（`MACRO_VERDICT_MAX_AGE_DAYS`）、fail-safe「系統異常」、讀不出來的檔一律當成沒有上限。
+過期（`MACRO_VERDICT_MAX_AGE_DAYS`）、fail-safe「系統異常」、讀不出來的檔一律當成沒有上限
+（📌 AUD-C21：另加未蓋戳／版本不符、上限值不是 0~100 整數值的新檔）。
 ⇒ 本檔只看 allocation 的 `caps` 裡**有沒有那一條**，與 `get_allocation` 內部的有效判斷同一份。
 
 ⚠️ 只管新頁（`src/ui/views/**`）。共用層 `get_allocation` / `build_allocation_decision` 不改
@@ -125,9 +128,3 @@ RISK_CAP_DETAIL_FACT_KEY: str = "資料完整性（詳細）"
 def risk_cap_detail_text(disclosure: Any) -> str:
     """詳細各列接成一段（今天頁卡① hover 用）：「快照時間：…；未評估項目：…；已停用（不計分）：…；薩姆規則：…」。"""
     return "；".join(f"{_k}：{_v}" for _k, _v in risk_cap_detail_rows(disclosure))
-
-
-def risk_cap_full_text(disclosure: Any) -> str:
-    """卡面值＋詳細接成一段（今天頁卡①那一格的完整文字：卡面截斷後掛在 hover 的就是這段）。"""
-    return "｜".join([risk_cap_face_text(disclosure)]
-                    + [f"{_k}：{_v}" for _k, _v in risk_cap_detail_rows(disclosure)])

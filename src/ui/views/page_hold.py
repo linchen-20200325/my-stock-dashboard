@@ -363,6 +363,10 @@ from src.ui.views.risk_cap_gate import (
 )
 from src.ui.views.risk_cap_gate import (   # PQ-C6-3
     RISK_CAP_COMPLETENESS_LABEL,
+    RISK_CAP_DISABLED_LABEL,
+    RISK_CAP_NOT_EVALUATED_LABEL,
+    RISK_CAP_SAHM_LABEL,
+    RISK_CAP_SNAPSHOT_TS_LABEL,
     risk_cap_detail_rows,
     risk_cap_face_text,
 )
@@ -870,8 +874,8 @@ class AllocationReadout:
     """建議持股水位那一輪的 L3 產出（`get_allocation()` 的仲裁結果）。
 
     本頁顯示的持股水位一律取自 L3 `get_allocation()`，本頁不自行再算；
-    它仲裁「姿態油門 × macro_state 曝險上限 × VIX／三環天花板」三條輸入，
-    **取最低**。
+    它仲裁「姿態油門 × ~~macro_state 曝險上限~~ 系統風險上限 × VIX／三環天花板」三條輸入，
+    **取最低**。（📌 AUD-C21，有意識的更正：新頁的系統風險上限自本批起讀 `risk_cap_state.json`。）
 
     ⚠️ **這不是「全站唯一」的持股水位算法**（舊文案這樣寫，實測為假）。
     全站另有**沒有進到上面那個 min() 裡**的獨立算法，實測至少四支
@@ -4649,7 +4653,8 @@ def _v2_face_value(value: str) -> str:
 #: PQ-C6-3（2026-10-16）：**只進「▸ 詳細」、不上卡面**的 fact 列（卡 key → 標籤集合）。
 #: 同「🚦 今天」頁 `V2_FOLDED_FACT_KEYS` 的作法（以標籤登記）。列不在時什麼都不做（無上限那一態本來就沒有）。
 V2_FOLD_ONLY_FACT_KEYS: dict[str, frozenset[str]] = {
-    "hold.position_cap": frozenset({"快照時間", "未評估項目", "已停用（不計分）", "薩姆規則"}),
+    "hold.position_cap": frozenset({RISK_CAP_SNAPSHOT_TS_LABEL, RISK_CAP_NOT_EVALUATED_LABEL,
+                                    RISK_CAP_DISABLED_LABEL, RISK_CAP_SAHM_LABEL}),
 }
 
 

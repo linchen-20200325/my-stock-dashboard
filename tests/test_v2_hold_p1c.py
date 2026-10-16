@@ -97,8 +97,14 @@ class TestB6r4PositionCap:
     def test_a_warroom_ok_but_file_broken_is_red(self, cap_dir, content):
         _write(cap_dir / "macro_state.json", content)
         _c = _cap()[0]
-        assert _c.state == UI_FAILED and _c.note.now == PH.CAP_FAILED_NOW
-        assert "macro_state.json" in _c.note.why
+        # ~~assert _c.state == UI_FAILED and _c.note.now == PH.CAP_FAILED_NOW~~
+        # ~~assert "macro_state.json" in _c.note.why~~
+        # 📌 AUD-C21 B1（2026-10-16，AI 總管決策，有意識的變更，⛔ 不是放寬）：新頁（旗標開）的系統風險上限只讀
+        #   `risk_cap_state.json`、warroom 可用時位階也不靠舊檔 ⇒ 舊檔讀壞不再把卡⑤打紅（沒有新檔 ⇒ 灰「無法判定」）。
+        #   B6-r4 的「讀壞 ≠ 沒有天花板」改由**新檔**讀壞時接手（tests/test_batch_c21.py）；舊 UI 呼叫方式照舊拋：
+        assert _c.state == UI_EMPTY and _c.note.now == PH.RISK_CAP_UNAVAILABLE_NOW
+        with pytest.raises(RuntimeError, match="macro_state.json"):
+            AL.get_allocation(strict=True)
 
     def test_b_partial_regime_still_evaluated_but_file_error_surfaced(self, cap_dir):
         """部分失敗：位階由 warroom 撐住（不拋、is_loaded=True），但 file_error 必須帶出來。"""

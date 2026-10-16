@@ -419,6 +419,9 @@ def get_macro_state(warroom_summary: dict | None = None, *,
       否則 None）—— 資料完整性揭露與上限出自**同一次讀檔**。strict ＋ 新檔**存在卻讀不出來** ⇒ 帶
       `file_error`（舊檔沒有 `file_error` 時才帶；舊檔的 `file_error` 逐字不變）。新檔不存在 ⇒ 沒有上限（不是錯誤）。
       旗標關（預設、舊 UI）⇒ 本段全部不執行、回傳逐鍵同修前。
+      📌 AUD-C21 B1（AI 總管決策）：上句「舊檔的 `file_error` 逐字不變」只在 warroom **不可用**時成立；
+      旗標開 ＋ warroom 可用 ⇒ ⛔ 不帶舊檔的 `file_error`（新 UI 的上限不讀舊檔、位階不靠舊檔）。
+      新檔上限值格式不對（字串／bool／NaN／非整數／超出 0~100）⇒ 沒有上限，strict 帶新檔的 `file_error`。
     """
     from shared import regime_arbiter as _RA
 
@@ -469,6 +472,14 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     if (strict and _wr_ok and not _file_ok and os.path.exists(state_file_path)
             and not _file_expired and not _file_no_data):
         _file_error = _strict_detail
+    # 📌 AUD-C21 B1（2026-10-16，AI 總管決策，有意識的變更，⛔ 不是漏改）：旗標開（新 UI）＋ warroom 可用時，
+    #   上面那條 B6-r4 `file_error` 守的「曝險上限那條輸入讀壞了」已不成立 —— 新 UI 的上限自本批起不讀
+    #   `macro_state.json`（只讀新檔）；位階又由 warroom 撐住、不靠舊檔。若照舊帶出，舊 UI 一次 AI 裁決失敗
+    #   （`execute_and_lock` 寫的 fail-safe）就會把持股頁卡⑤打成紅、而新檔的有效上限一個字都沒變。
+    #   ⇒ 旗標開且 warroom 可用：⛔ 不帶舊檔的 `file_error`。warroom 不可用時（位階真的落到舊檔，AUD-C22）
+    #   上方 strict 拋錯與本段一律照舊；旗標關（舊 UI）逐位元組同修前。
+    if require_valid_risk_cap and _wr_ok:
+        _file_error = ""
 
     _health = _wr.get("health_score") if _wr_ok else None
     _exposure = _file.get("exposure_limit_pct") if _file_ok else None
@@ -483,7 +494,7 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     if require_valid_risk_cap:
         _exposure, _rc_disclosure, _rc_error = _read_risk_cap_snapshot(
             risk_cap_state_file_path if risk_cap_state_file_path is not None
-            else _sibling_risk_cap_path(state_file_path), now=now)
+            else risk_cap_state_path(state_file_path), now=now)
         if _rc_error:
             print(f"[macro_state_locker] ⚠️ 新 UI 系統風險上限快照讀不出來 → 本輪沒有上限：{_rc_error}")
             if strict and not _file_error:
@@ -550,35 +561,67 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     return _out
 
 
-def _sibling_risk_cap_path(state_file_path: str) -> str:
-    """`state_file_path` 同目錄的 `RISK_CAP_STATE_FILE`（預設 `macro_state.json` ⇒ `risk_cap_state.json`）。"""
+def risk_cap_state_path(state_file_path: str = "macro_state.json") -> str:
+    """新 UI 系統風險上限快照檔的路徑：`state_file_path` 同目錄的 `RISK_CAP_STATE_FILE`。
+
+    預設 `macro_state.json` ⇒ `risk_cap_state.json`。讀端（`get_macro_state`）、寫端（`risk_cap_apply`）、
+    AI 問答（`ai_qa_service`）一律經本函式解析，⛔ 不各自拼路徑。
+    """
     from shared.risk_cap_policy import RISK_CAP_STATE_FILE
     return os.path.join(os.path.dirname(state_file_path), RISK_CAP_STATE_FILE)
+
+
+def _valid_new_cap(raw):
+    """AUD-C21 N1：新檔上限值必須是**真的數字**（int／float，⛔ bool、⛔ 字串）、有限、0~100、而且是整數值。
+
+    ⛔ 不截斷：50.9 不是「50」—— 本 repo 沒有上限值的進位 SSOT（寫端 `lock_system_state_only` 一律落 int），
+    非整數值 ⇒ 檔案不是寫端寫的樣子 ⇒ 視為格式錯誤。50.0 這種整數值浮點數照收（轉 int，不是捨入）。
+    回 int 或 None（不合格）。只用在新檔；舊檔路徑（`_load_macro_state_checked`）一字未動。
+    """
+    import math as _m
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    if isinstance(raw, float) and (not _m.isfinite(raw) or not raw.is_integer()):
+        return None
+    if not (0 <= raw <= 100):
+        return None
+    return int(raw)
 
 
 def _read_risk_cap_snapshot(path: str, *, now=None):
     """AUD-C21：讀新 UI 的系統風險上限快照 →（上限或 None, 揭露或 None, 讀檔錯誤字串或 ""）。
 
-    只有一種情形回上限：讀得出來、`market_regime` 非 None／「系統異常」、未過期、`is_valid_risk_cap_snapshot`、
-    `exposure_limit_pct` 有值。檔不存在 ⇒ `(None, None, "")`（沒有上限，⛔ 不是錯誤）；
-    存在卻讀不出來／JSON 壞／值無法轉整數 ⇒ `(None, None, "<檔名>: <repr>")`。
+    只有一種情形回上限：讀得出來、是 JSON 物件、`market_regime` 非 None／「系統異常」、未過期、
+    `is_valid_risk_cap_snapshot`、`exposure_limit_pct` 是 0~100 的整數值（`_valid_new_cap`）。
+    檔不存在 ⇒ `(None, None, "")`（沒有上限，⛔ 不是錯誤）；存在卻讀不出來／JSON 壞／不是物件 ⇒ 錯誤字串；
+    其餘條件都過、只有上限值格式不對（字串、bool、NaN、非整數、超出 0~100）⇒ 沒有上限＋錯誤字串
+    （格式錯誤的檔 ≠「無法判定」，strict 呼叫端據此轉紅）。上限值為 null／缺 ⇒ 沒有上限、不算錯誤。
     ⛔ 不讀、不退回 `macro_state.json`。
     """
     from shared.risk_cap_policy import is_valid_risk_cap_snapshot, risk_cap_disclosure_from_snapshot
-    data, exc = _load_macro_state_checked(path)
-    if exc is not None:
-        if isinstance(exc, FileNotFoundError):
-            return None, None, ""
-        return None, None, f"{os.path.basename(path)}: {exc!r}"
+    _name = os.path.basename(path)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return None, None, ""
+    except Exception as _e:  # noqa: BLE001 — 讀壞了：據實回錯誤字串（呼叫端 log／strict 轉紅）
+        return None, None, f"{_name}: {_e!r}"
+    if not isinstance(data, dict):
+        return None, None, f"{_name}: 內容不是 JSON 物件（{type(data).__name__}）"
     if data.get("market_regime") in (None, "系統異常"):
         return None, None, ""
     if macro_state_is_expired(data, now=now):
         return None, None, ""
     if not is_valid_risk_cap_snapshot(data):
         return None, None, ""
-    if data.get("exposure_limit_pct") is None:
+    _raw = data.get("exposure_limit_pct")
+    if _raw is None:
         return None, None, ""
-    return data["exposure_limit_pct"], risk_cap_disclosure_from_snapshot(data), ""
+    _cap = _valid_new_cap(_raw)
+    if _cap is None:
+        return None, None, f"{_name}: exposure_limit_pct={_raw!r} 不是 0~100 的整數值"
+    return _cap, risk_cap_disclosure_from_snapshot(data), ""
 
 
 # ── 理科引擎：Python 規則計算總經狀態 ─────────────────────

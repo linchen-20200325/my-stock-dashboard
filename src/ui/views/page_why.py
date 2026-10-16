@@ -2415,7 +2415,8 @@ def load_qa(req: QaRequest) -> QaReadout:
         # 批 Z56：`stop_on_invalid_number=True` —— 工具結果有 NaN／±inf 時 L3 停下、⛔ 不送 Gemini，
         #   回 `ok=False` ＋ 客戶句（修前：送出時 `requests` 拋 InvalidJSONError → 誤導的「Gemini 呼叫失敗」）。
         # 批 Z66（客戶 2026-10-16 Q1）：`require_valid_risk_cap=True` —— 問答工具回報的系統風險上限
-        #   只認核心齊全＋現行規則版本的 `macro_state.json`（與今天頁卡①同一條判斷）。
+        #   只認核心齊全＋現行規則版本的 ~~`macro_state.json`~~ 快照（與今天頁卡①同一條判斷）。
+        #   📌 AUD-C21（有意識的更正）：那份快照自本批起是新 UI 自己的 `risk_cap_state.json`。
         _res = run_agent(req.question, list(req.history), api_key=_key,
                          fail_on_blocked_reply=True, stop_on_invalid_number=True,
                          require_valid_risk_cap=True)

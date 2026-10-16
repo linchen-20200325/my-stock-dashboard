@@ -133,6 +133,7 @@ STEP_LABELS: dict[str, str] = {
     STEP_TRIO: "M1B-M2 / 年線乖離 / 6 源總經快照",
     STEP_MARKET: "市場評估（mkt_info）",
     STEP_WARROOM: "紅綠燈結論（warroom_summary：燈號 / 健康分 / 位階）",
+    # ~~STEP_RISK_CAP: "系統風險上限（規則引擎 → macro_state.json）",~~ —— 📌 AUD-C21（有意識的變更）：雙寫
     STEP_RISK_CAP: "系統風險上限（規則引擎 → risk_cap_state.json ＋ macro_state.json）",
     STEP_REGISTRY: "資料登錄中心掃描",
     STEP_SOURCE_AUDIT: "逐來源回報的完整性",
@@ -1064,11 +1065,18 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
                   skipped=True)
     except Exception as _e:  # noqa: BLE001 — 例外已由 risk_cap_apply 原樣拋出；此處據實記成失敗
         print(f"[總經刷新] ❌ compute_and_lock_risk_cap 失敗：{_e!r}")
-        _step(STEP_RISK_CAP, False,
-              # ~~（既有 macro_state.json 不會因此被清除）~~ —— 📌 AUD-C21：雙寫，兩個檔都照實講（有意識的更正）
-              f"{type(_e).__name__}: {_e}（既有 {RISK_CAP_STATE_FILE} 與 macro_state.json 不會因此被清除；"
-              f"若 {RISK_CAP_STATE_FILE} 已先寫入、macro_state.json 寫入失敗，{RISK_CAP_STATE_FILE} 已還原成寫入前的內容）"
-              + _rc_inputs_note)
+        if type(_e).__name__ == "RiskCapRestoreFailed":
+            # 📌 AUD-C21 NB-3：還原本身失敗 ⇒ ⛔ 不說「已還原」；照實講兩個檔可能不一致，原例外照列。
+            _step(STEP_RISK_CAP, False,
+                  f"{type(_e).__name__}: {_e}（⚠️ macro_state.json 寫入失敗後，{RISK_CAP_STATE_FILE} 的還原也失敗："
+                  f"{RISK_CAP_STATE_FILE} 可能是本輪的內容、macro_state.json 是上一輪的，兩個檔可能不一致）"
+                  + _rc_inputs_note)
+        else:
+            _step(STEP_RISK_CAP, False,
+                  # ~~（既有 macro_state.json 不會因此被清除）~~ —— 📌 AUD-C21：雙寫，兩個檔都照實講（有意識的更正）
+                  f"{type(_e).__name__}: {_e}（既有 {RISK_CAP_STATE_FILE} 與 macro_state.json 不會因此被清除；"
+                  f"若 {RISK_CAP_STATE_FILE} 已先寫入、macro_state.json 寫入失敗，{RISK_CAP_STATE_FILE} 已還原成寫入前的內容）"
+                  + _rc_inputs_note)
 
     # ── 6. 資料登錄中心（純 session 掃描，無對外請求）───────────
     try:

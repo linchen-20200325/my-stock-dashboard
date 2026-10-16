@@ -80,8 +80,7 @@ from src.services.macro_engine_inputs import (
     run_rule_engine,
 )
 from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION, RISK_CAP_RULESET_VERSION_KEY
-from shared.risk_cap_policy import RISK_CAP_STATE_FILE
-from src.services.macro_state_locker import MacroStateLocker
+from src.services.macro_state_locker import MacroStateLocker, risk_cap_state_path
 
 #: 寫進檔案的來源標記。
 #: ~~`"new_ui_risk_cap_v1"`~~ 📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏改）：M1B-M2 腿停用、
@@ -203,6 +202,22 @@ def _is_finite_cap(v: Any) -> bool:
     return math.isfinite(float(v))
 
 
+class RiskCapRestoreFailed(RuntimeError):
+    """AUD-C21 NB-3：`macro_state.json` 寫失敗後，要把新 UI 快照檔還原成寫入前的內容 —— **還原本身也失敗了**。
+
+    此時新 UI 快照檔可能是本輪的內容、`macro_state.json` 是上一輪的（半套狀態）。⛔ 不說「已還原」。
+    原例外（第二個檔為什麼寫不成）掛在 `__cause__`（`raise … from`），還原失敗的例外在 `restore_error`。
+    """
+
+    def __init__(self, rc_path: str, original: BaseException, restore_error: BaseException) -> None:
+        self.rc_path = rc_path
+        self.original = original
+        self.restore_error = restore_error
+        super().__init__(
+            f"{os.path.basename(rc_path)} 還原失敗（{restore_error!r}）；"
+            f"macro_state.json 寫入失敗的原例外：{original!r}")
+
+
 def _restore_file(path: str, previous: bytes | None) -> None:
     """把 `path` 還原成 `previous`（None ⇒ 原本不存在 ⇒ 刪掉）。暫存檔＋`os.replace`，⛔ 不留半截檔。"""
     if previous is None:
@@ -279,7 +294,7 @@ def compute_and_lock_risk_cap(session: Any, *, now: datetime,
     # 📌 AUD-C21（客戶 2026-10-16，有意識的變更，⛔ 不是漏刪）：單寫 `macro_state.json` → 雙寫（新檔在前）。
     #   舊寫法「寫檔後不再做可能拋例外的事」的理由仍然成立，照守：第二個檔寫完之後同樣什麼都不做。
     _rc_path = (risk_cap_state_file_path if risk_cap_state_file_path is not None
-                else os.path.join(os.path.dirname(state_file_path), RISK_CAP_STATE_FILE))
+                else risk_cap_state_path(state_file_path))     # 與讀端同一條路徑規則
     try:
         with open(_rc_path, "rb") as _f:
             _rc_before: bytes | None = _f.read()
@@ -288,8 +303,14 @@ def compute_and_lock_risk_cap(session: Any, *, now: datetime,
     _final = MacroStateLocker(state_file_path=_rc_path).lock_system_state_only(payload)   # ① 新 UI 檔
     try:
         MacroStateLocker(state_file_path=state_file_path).write_state_snapshot(_final)     # ② macro_state.json
-    except BaseException:
-        _restore_file(_rc_path, _rc_before)      # 盡力全有或全無；還原本身失敗會蓋過原例外往上拋（⛔ 不吞）
+    except BaseException as _orig:
+        # ~~_restore_file(_rc_path, _rc_before)      # 盡力全有或全無；還原本身失敗會蓋過原例外往上拋（⛔ 不吞）~~
+        # 📌 AUD-C21 NB-3（有意識的變更）：還原失敗另拋 `RiskCapRestoreFailed`（原例外掛 `__cause__`），
+        #   呼叫端據此⛔ 不說「已還原」。
+        try:
+            _restore_file(_rc_path, _rc_before)  # 盡力全有或全無
+        except BaseException as _restore_exc:
+            raise RiskCapRestoreFailed(_rc_path, _orig, _restore_exc) from _orig
         raise
     return RiskCapApplyResult(True, "", summary, payload, files_written=(
         os.path.basename(_rc_path), os.path.basename(state_file_path)))
