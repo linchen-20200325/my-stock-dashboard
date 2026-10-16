@@ -356,7 +356,12 @@ from src.ui.views.risk_cap_gate import (
     RISK_CAP_UNAVAILABLE_WHY,
     has_system_risk_cap,
 )
-from src.ui.views.risk_cap_gate import RISK_CAP_COMPLETENESS_LABEL, risk_cap_full_text   # PQ-C6-3
+from src.ui.views.risk_cap_gate import (   # PQ-C6-3
+    RISK_CAP_COMPLETENESS_LABEL,
+    RISK_CAP_DETAIL_FACT_KEY,
+    risk_cap_detail_text,
+    risk_cap_face_text,
+)
 from src.ui.views._ui_kit import (
     MAX_COLS,
     assert_signal_text_clean,
@@ -1838,11 +1843,13 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
         if alloc.cap_text:
             _facts.append(("硬否決天花板", alloc.cap_text))
         # PQ-C6-3（客戶 2026-10-16 核准線框）：系統風險上限的資料完整性**上卡面**（不只藏在詳細裡）。
-        #   值＝卡面句＋「｜」＋詳細；卡面超過字數預算時契約層只截顯示、完整原文進 hover（項目清單排在最前）。
+        #   卡面那一列只放摘要句（與持股頁卡⑤同一句；項目清單排在最前，超過字數預算也只截後面的中性句）；
+        #   快照時間／未評估項目狀態／已停用／薩姆另起一列，**只進 hover**（`V2_HOVER_OPTIONAL_FACTS`）。
         #   只有「有系統風險上限」才走到這裡（上方無上限分支一個字都沒加）。
         _disc = getattr(alloc, "risk_cap_disclosure", None)
         if _disc is not None:
-            _facts.append((RISK_CAP_COMPLETENESS_LABEL, risk_cap_full_text(_disc)))
+            _facts.append((RISK_CAP_COMPLETENESS_LABEL, risk_cap_face_text(_disc)))
+            _facts.append((RISK_CAP_DETAIL_FACT_KEY, risk_cap_detail_text(_disc)))
         if alloc.conflicts:
             # 「與結論相反但被壓制的訊號**要顯示，不要藏**」（SSOT docstring 原文）。
             _facts.append(("被壓制的反向訊號", "；".join(alloc.conflicts)))
@@ -2712,6 +2719,14 @@ V2_HOVER_ONLY_FACTS: dict[str, frozenset[str]] = {
     TRADING_DAY_CARD_KEY: frozenset({TRADING_DAY_LIMIT_FACT_KEY}),
 }
 
+#: PQ-C6-3（2026-10-16）：**有才搬、沒有不報錯**的 hover-only 列（卡 key → 標籤集合）。
+#: 與 `V2_HOVER_ONLY_FACTS` 的差別只有一件：那張表登記的列每一態都必須在（不在 ⇒ `KeyError` 紅卡）；
+#: 本表的列只在特定態出現 —— 卡①的「資料完整性（詳細）」只有「有系統風險上限」才有，
+#: 「建議持股：無法判定」／未評估那幾態本來就沒有它（客戶：無上限那一態不加字）。
+V2_HOVER_OPTIONAL_FACTS: dict[str, frozenset[str]] = {
+    "verdict.exposure": frozenset({RISK_CAP_DETAIL_FACT_KEY}),
+}
+
 #: 🔴 **2026-09-25 客戶核可線框：16 盞燈卡（`detail.*`）的三列出處說明收進「▸ 詳細」。**
 #: 摺起來的是這三個**標籤**（`build_indicator_tile` 逐字組的那三列）；
 #: 卡面留：標題＋徽章、大字、判決行、「變化方向」、「門檻帶」；
@@ -3169,8 +3184,11 @@ def v2_card_html(tile: Tile) -> str:
             f"卡 {_card.key!r} 登記了要移進 hover 的 fact "
             f"{sorted(_hover_keys)!r}，但這張卡一列都沒有 —— 標籤改過了嗎？"
             "⛔ 不要把登記拿掉了事，那會讓揭露悄悄消失。")
+    # PQ-C6-3：「有才搬」的 hover-only 列（`V2_HOVER_OPTIONAL_FACTS`）接在後面，同一個 hover 槽。
+    _opt_keys = V2_HOVER_OPTIONAL_FACTS.get(_card.key, frozenset())
+    _moved = _moved + tuple(f"{_k}：{_v}" for _k, _v in tile.facts if _k in _opt_keys)
     _facts = tuple((v2_plain(_k), v2_plain(_v))
-                   for _k, _v in tile.facts if _k not in _hover_keys)
+                   for _k, _v in tile.facts if _k not in _hover_keys and _k not in _opt_keys)
     if _guide_rows:
         # 🔴 三要素**排在最前** —— 使用者要先知道「這一格現在怎樣」，
         #    才輪得到「門檻帶」「命中來源」這些中繼資料。

@@ -149,15 +149,19 @@ C21_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '                  if _r != _f or len(_r[1]) > v2_markup.FACT_VALUE_MAX_CHARS)\n    _folded = tuple(_full) + _long\n    return v2_markup.card_html(\n'),
     ),
     'src/ui/views/page_today.py': (
-        (')\nfrom src.ui.views.risk_cap_gate import RISK_CAP_COMPLETENESS_LABEL, risk_cap_full_text   # PQ-C6-3\nfrom src.ui.views._ui_kit import (\n',
-         ')\nfrom src.ui.views._ui_kit import (\n'),
+        ('    has_system_risk_cap,\n)\nfrom src.ui.views.risk_cap_gate import (   # PQ-C6-3\n    RISK_CAP_COMPLETENESS_LABEL,\n    RISK_CAP_DETAIL_FACT_KEY,\n    risk_cap_detail_text,\n    risk_cap_face_text,\n)\n',
+         '    has_system_risk_cap,\n)\n'),
         ('        _parts.append("總經健康分有值，但契約仍回未評估")\n    # ~~`macro_state.json`~~ → `risk_cap_state.json`：📌 AUD-C21（客戶 2026-10-16，有意識的更正，⛔ 不是漏刪）——\n    #   本頁的系統風險上限自本批起只讀新 UI 自己的快照檔（`shared.risk_cap_policy.RISK_CAP_STATE_FILE`）。只改字。\n    if regime.get("exposure_limit_pct") is None:\n        _parts.append("系統風險上限（規則引擎快照 `risk_cap_state.json`）也沒有有效值")\n    else:\n        _parts.append("規則引擎快照（`risk_cap_state.json`）有系統風險上限，"\n                      "但它只是天花板、不能單獨決定建議持股")\n',
          '        _parts.append("總經健康分有值，但契約仍回未評估")\n    if regime.get("exposure_limit_pct") is None:\n        _parts.append("系統風險上限（規則引擎快照 `macro_state.json`）也沒有有效值")\n    else:\n        _parts.append("規則引擎快照（`macro_state.json`）有系統風險上限，"\n                      "但它只是天花板、不能單獨決定建議持股")\n'),
-        ('            _facts.append(("硬否決天花板", alloc.cap_text))\n        # PQ-C6-3（客戶 2026-10-16 核准線框）：系統風險上限的資料完整性**上卡面**（不只藏在詳細裡）。\n        #   值＝卡面句＋「｜」＋詳細；卡面超過字數預算時契約層只截顯示、完整原文進 hover（項目清單排在最前）。\n        #   只有「有系統風險上限」才走到這裡（上方無上限分支一個字都沒加）。\n        _disc = getattr(alloc, "risk_cap_disclosure", None)\n        if _disc is not None:\n            _facts.append((RISK_CAP_COMPLETENESS_LABEL, risk_cap_full_text(_disc)))\n        if alloc.conflicts:\n',
+        ('            _facts.append(("硬否決天花板", alloc.cap_text))\n        # PQ-C6-3（客戶 2026-10-16 核准線框）：系統風險上限的資料完整性**上卡面**（不只藏在詳細裡）。\n        #   卡面那一列只放摘要句（與持股頁卡⑤同一句；項目清單排在最前，超過字數預算也只截後面的中性句）；\n        #   快照時間／未評估項目狀態／已停用／薩姆另起一列，**只進 hover**（`V2_HOVER_OPTIONAL_FACTS`）。\n        #   只有「有系統風險上限」才走到這裡（上方無上限分支一個字都沒加）。\n        _disc = getattr(alloc, "risk_cap_disclosure", None)\n        if _disc is not None:\n            _facts.append((RISK_CAP_COMPLETENESS_LABEL, risk_cap_face_text(_disc)))\n            _facts.append((RISK_CAP_DETAIL_FACT_KEY, risk_cap_detail_text(_disc)))\n        if alloc.conflicts:\n',
          '            _facts.append(("硬否決天花板", alloc.cap_text))\n        if alloc.conflicts:\n'),
+        ('\n#: PQ-C6-3（2026-10-16）：**有才搬、沒有不報錯**的 hover-only 列（卡 key → 標籤集合）。\n#: 與 `V2_HOVER_ONLY_FACTS` 的差別只有一件：那張表登記的列每一態都必須在（不在 ⇒ `KeyError` 紅卡）；\n#: 本表的列只在特定態出現 —— 卡①的「資料完整性（詳細）」只有「有系統風險上限」才有，\n#: 「建議持股：無法判定」／未評估那幾態本來就沒有它（客戶：無上限那一態不加字）。\nV2_HOVER_OPTIONAL_FACTS: dict[str, frozenset[str]] = {\n    "verdict.exposure": frozenset({RISK_CAP_DETAIL_FACT_KEY}),\n}\n\n#: 🔴 **2026-09-25 客戶核可線框：16 盞燈卡（`detail.*`）的三列出處說明收進「▸ 詳細」。**\n',
+         '\n#: 🔴 **2026-09-25 客戶核可線框：16 盞燈卡（`detail.*`）的三列出處說明收進「▸ 詳細」。**\n'),
+        ('            "⛔ 不要把登記拿掉了事，那會讓揭露悄悄消失。")\n    # PQ-C6-3：「有才搬」的 hover-only 列（`V2_HOVER_OPTIONAL_FACTS`）接在後面，同一個 hover 槽。\n    _opt_keys = V2_HOVER_OPTIONAL_FACTS.get(_card.key, frozenset())\n    _moved = _moved + tuple(f"{_k}：{_v}" for _k, _v in tile.facts if _k in _opt_keys)\n    _facts = tuple((v2_plain(_k), v2_plain(_v))\n                   for _k, _v in tile.facts if _k not in _hover_keys and _k not in _opt_keys)\n    if _guide_rows:\n',
+         '            "⛔ 不要把登記拿掉了事，那會讓揭露悄悄消失。")\n    _facts = tuple((v2_plain(_k), v2_plain(_v))\n                   for _k, _v in tile.facts if _k not in _hover_keys)\n    if _guide_rows:\n'),
     ),
     'src/ui/views/risk_cap_gate.py': (
-        ('    return any(getattr(c, "name", None) == SYSTEM_RISK_CAP_NAME for c in (caps or ()))\n\n\n# ══════════════════════════════════════════════════════════════════════════\n# PQ-C6-3（客戶 2026-10-16 核准線框）：系統風險上限的資料完整性揭露 —— 卡面一列＋詳細\n# ══════════════════════════════════════════════════════════════════════════\n# 兩張卡（今天頁卡① `verdict.exposure`、持股頁卡⑤ `hold.position_cap`）共用本段，⛔ 各頁不另寫一份字。\n# 揭露資料一律來自 L3 `get_allocation()` 回傳的 `AllocationDecision.risk_cap_disclosure`\n# （與上限出自同一次讀檔；本檔⛔ 不讀檔、不取數）。只在「有系統風險上限」時呈現；\n# 「建議持股：無法判定」那一態一個字都不加（客戶裁示）。\n# ⛔ 顏色不是唯一載體：完整性一律用字講（「未評估：…」）。\n\n#: 卡面那一列的標籤。\nRISK_CAP_COMPLETENESS_LABEL: str = "資料完整性"\n#: 有 Optional 未評估時，接在項目清單後面的中性句（客戶逐字；⛔ 不寫「上限可能偏寬」）。\nRISK_CAP_INCOMPLETE_SENTENCE: str = "部分訊號未納入，本次上限資訊不完整"\n#: Optional 全部可評估時（客戶逐字）。\nRISK_CAP_COMPLETE_TEXT: str = "必要與選用訊號皆已評估"\n#: 「已停用（不計分）」那一項（客戶逐字）。\nRISK_CAP_DISABLED_LABEL: str = "已停用（不計分）"\n#: 薩姆規則的固定說明（與步驟報告「薩姆規則目前無資料來源、未評估（不代表已通過）」同義、⛔ 不換說法）。\nRISK_CAP_SAHM_NO_SOURCE_TEXT: str = "目前無資料來源、未評估（不代表已通過）"\n#: 詳細裡各列的標籤。\nRISK_CAP_SNAPSHOT_TS_LABEL: str = "快照時間"\nRISK_CAP_NOT_EVALUATED_LABEL: str = "未評估項目"\nRISK_CAP_SAHM_LABEL: str = "薩姆規則"\n\n#: 新鮮度狀態 → 客戶語言（`shared.freshness_policy.FreshnessStatus` 的值；與 L3 步驟報告同一組字）。\n#: `fresh` 會出現在未評估清單裡只有一種情形：時間新鮮但值不能計分（例如非有限數）。\n_STATUS_TEXT: dict[str, str] = {\n    "missing": "未取得",\n    "stale": "已過期",\n    "undetermined": "無法判定",\n    "fresh": "資料異常、無法計分",\n}\n\n\ndef _label(key: str) -> str:\n    from shared.risk_cap_policy import OPTIONAL_INPUT_LABELS, REQUIRED_CORE_LABELS\n    return OPTIONAL_INPUT_LABELS.get(key) or REQUIRED_CORE_LABELS.get(key) or key\n\n\ndef _dedup(items) -> list[str]:\n    return list(dict.fromkeys(items))\n\n\ndef risk_cap_face_text(disclosure: Any) -> str:\n    """卡面那一列的值。有未評估項 ⇒「未評估：PCR、BIAS240；部分訊號未納入，本次上限資訊不完整」。\n\n    項目清單**排在最前**（卡面若被截斷，「未評估」與項目名仍在）；⛔ 停用的 M1B−M2 不在這裡\n    （`RiskCapDisclosure.not_evaluated` 本來就不含停用項，這裡再擋一次）。\n    """\n    _dis = set(getattr(disclosure, "disabled", ()) or ())\n    _ne = [k for k, _s, _d in (getattr(disclosure, "not_evaluated", ()) or ()) if k not in _dis]\n    if not _ne:\n        return RISK_CAP_COMPLETE_TEXT\n    return f"未評估：{\'、\'.join(_dedup(_label(k) for k in _ne))}；{RISK_CAP_INCOMPLETE_SENTENCE}"\n\n\ndef risk_cap_detail_rows(disclosure: Any) -> tuple[tuple[str, str], ...]:\n    """詳細（持股頁「▸ 詳細」／今天頁的完整文字）各列：快照時間、未評估項目、已停用、薩姆規則。\n\n    ⛔ 未取得的項目**不給日期**（檔內那一格存的是「預期資料日」，不是資料日）；已過期才帶最新資料日。\n    """\n    _rows: list[tuple[str, str]] = [\n        (RISK_CAP_SNAPSHOT_TS_LABEL, str(getattr(disclosure, "snapshot_ts", "") or "未記錄"))]\n    _dis = set(getattr(disclosure, "disabled", ()) or ())\n    _items = []\n    for k, status, as_of in (getattr(disclosure, "not_evaluated", ()) or ()):\n        if k in _dis:\n            continue\n        _txt = f"{_label(k)} {_STATUS_TEXT.get(status, \'無法評估\')}"\n        if status == "stale" and as_of:\n            _txt += f"（最新資料日 {as_of}）"\n        _items.append(_txt)\n    if _items:\n        _rows.append((RISK_CAP_NOT_EVALUATED_LABEL, "；".join(_items)))\n    if _dis:\n        _rows.append((RISK_CAP_DISABLED_LABEL, "、".join(_dedup(_label(k) for k in\n                                                          getattr(disclosure, "disabled", ())))))\n    if getattr(disclosure, "sahm_status", None) == "no_source":\n        _rows.append((RISK_CAP_SAHM_LABEL, RISK_CAP_SAHM_NO_SOURCE_TEXT))\n    return tuple(_rows)\n\n\ndef risk_cap_full_text(disclosure: Any) -> str:\n    """卡面值＋詳細接成一段（今天頁卡①那一格的完整文字：卡面截斷後掛在 hover 的就是這段）。"""\n    return "｜".join([risk_cap_face_text(disclosure)]\n                    + [f"{_k}：{_v}" for _k, _v in risk_cap_detail_rows(disclosure)])\n',
+        ('    return any(getattr(c, "name", None) == SYSTEM_RISK_CAP_NAME for c in (caps or ()))\n\n\n# ══════════════════════════════════════════════════════════════════════════\n# PQ-C6-3（客戶 2026-10-16 核准線框）：系統風險上限的資料完整性揭露 —— 卡面一列＋詳細\n# ══════════════════════════════════════════════════════════════════════════\n# 兩張卡（今天頁卡① `verdict.exposure`、持股頁卡⑤ `hold.position_cap`）共用本段，⛔ 各頁不另寫一份字。\n# 揭露資料一律來自 L3 `get_allocation()` 回傳的 `AllocationDecision.risk_cap_disclosure`\n# （與上限出自同一次讀檔；本檔⛔ 不讀檔、不取數）。只在「有系統風險上限」時呈現；\n# 「建議持股：無法判定」那一態一個字都不加（客戶裁示）。\n# ⛔ 顏色不是唯一載體：完整性一律用字講（「未評估：…」）。\n\n#: 卡面那一列的標籤。\nRISK_CAP_COMPLETENESS_LABEL: str = "資料完整性"\n#: 有 Optional 未評估時，接在項目清單後面的中性句（客戶逐字；⛔ 不寫「上限可能偏寬」）。\nRISK_CAP_INCOMPLETE_SENTENCE: str = "部分訊號未納入，本次上限資訊不完整"\n#: Optional 全部可評估時（客戶逐字）。\nRISK_CAP_COMPLETE_TEXT: str = "必要與選用訊號皆已評估"\n#: 「已停用（不計分）」那一項（客戶逐字）。\nRISK_CAP_DISABLED_LABEL: str = "已停用（不計分）"\n#: 薩姆規則的固定說明（與步驟報告「薩姆規則目前無資料來源、未評估（不代表已通過）」同義、⛔ 不換說法）。\nRISK_CAP_SAHM_NO_SOURCE_TEXT: str = "目前無資料來源、未評估（不代表已通過）"\n#: 詳細裡各列的標籤。\nRISK_CAP_SNAPSHOT_TS_LABEL: str = "快照時間"\nRISK_CAP_NOT_EVALUATED_LABEL: str = "未評估項目"\nRISK_CAP_SAHM_LABEL: str = "薩姆規則"\n\n#: 新鮮度狀態 → 客戶語言（`shared.freshness_policy.FreshnessStatus` 的值；與 L3 步驟報告同一組字）。\n#: `fresh` 會出現在未評估清單裡只有一種情形：時間新鮮但值不能計分（例如非有限數）。\n_STATUS_TEXT: dict[str, str] = {\n    "missing": "未取得",\n    "stale": "已過期",\n    "undetermined": "無法判定",\n    "fresh": "資料異常、無法計分",\n}\n\n\ndef _label(key: str) -> str:\n    from shared.risk_cap_policy import OPTIONAL_INPUT_LABELS, REQUIRED_CORE_LABELS\n    return OPTIONAL_INPUT_LABELS.get(key) or REQUIRED_CORE_LABELS.get(key) or key\n\n\ndef _dedup(items) -> list[str]:\n    return list(dict.fromkeys(items))\n\n\ndef risk_cap_face_text(disclosure: Any) -> str:\n    """卡面那一列的值。有未評估項 ⇒「未評估：PCR、BIAS240；部分訊號未納入，本次上限資訊不完整」。\n\n    項目清單**排在最前**（卡面若被截斷，「未評估」與項目名仍在）；⛔ 停用的 M1B−M2 不在這裡\n    （`RiskCapDisclosure.not_evaluated` 本來就不含停用項，這裡再擋一次）。\n    """\n    _dis = set(getattr(disclosure, "disabled", ()) or ())\n    _ne = [k for k, _s, _d in (getattr(disclosure, "not_evaluated", ()) or ()) if k not in _dis]\n    if not _ne:\n        return RISK_CAP_COMPLETE_TEXT\n    return f"未評估：{\'、\'.join(_dedup(_label(k) for k in _ne))}；{RISK_CAP_INCOMPLETE_SENTENCE}"\n\n\ndef risk_cap_detail_rows(disclosure: Any) -> tuple[tuple[str, str], ...]:\n    """詳細（持股頁「▸ 詳細」／今天頁的完整文字）各列：快照時間、未評估項目、已停用、薩姆規則。\n\n    ⛔ 未取得的項目**不給日期**（檔內那一格存的是「預期資料日」，不是資料日）；已過期才帶最新資料日。\n    """\n    _rows: list[tuple[str, str]] = [\n        (RISK_CAP_SNAPSHOT_TS_LABEL, str(getattr(disclosure, "snapshot_ts", "") or "未記錄"))]\n    _dis = set(getattr(disclosure, "disabled", ()) or ())\n    _items = []\n    for k, status, as_of in (getattr(disclosure, "not_evaluated", ()) or ()):\n        if k in _dis:\n            continue\n        _txt = f"{_label(k)} {_STATUS_TEXT.get(status, \'無法評估\')}"\n        if status == "stale" and as_of:\n            _txt += f"（最新資料日 {as_of}）"\n        _items.append(_txt)\n    if _items:\n        _rows.append((RISK_CAP_NOT_EVALUATED_LABEL, "；".join(_items)))\n    if _dis:\n        _rows.append((RISK_CAP_DISABLED_LABEL, "、".join(_dedup(_label(k) for k in\n                                                          getattr(disclosure, "disabled", ())))))\n    if getattr(disclosure, "sahm_status", None) == "no_source":\n        _rows.append((RISK_CAP_SAHM_LABEL, RISK_CAP_SAHM_NO_SOURCE_TEXT))\n    return tuple(_rows)\n\n\n#: 今天頁卡①「詳細」那一列的標籤（該列只進 hover，⛔ 不上卡面；見 `page_today.V2_HOVER_OPTIONAL_FACTS`）。\nRISK_CAP_DETAIL_FACT_KEY: str = "資料完整性（詳細）"\n\n\ndef risk_cap_detail_text(disclosure: Any) -> str:\n    """詳細各列接成一段（今天頁卡① hover 用）：「快照時間：…；未評估項目：…；已停用（不計分）：…；薩姆規則：…」。"""\n    return "；".join(f"{_k}：{_v}" for _k, _v in risk_cap_detail_rows(disclosure))\n\n\ndef risk_cap_full_text(disclosure: Any) -> str:\n    """卡面值＋詳細接成一段（今天頁卡①那一格的完整文字：卡面截斷後掛在 hover 的就是這段）。"""\n    return "｜".join([risk_cap_face_text(disclosure)]\n                    + [f"{_k}：{_v}" for _k, _v in risk_cap_detail_rows(disclosure)])\n',
          '    return any(getattr(c, "name", None) == SYSTEM_RISK_CAP_NAME for c in (caps or ()))\n'),
     ),
 }
@@ -539,19 +543,27 @@ class TestDisclosure:
         assert G.risk_cap_face_text(d) == face
         assert "上限可能偏寬" not in G.risk_cap_full_text(d)
         assert all(k not in ("M1B_YoY_pct", "M2_YoY_pct") for k, _s, _a in d.not_evaluated)
-        # ── 今天頁卡①：一列「資料完整性」；卡面看得到項目名，詳細在 hover ──
+        # ── 今天頁卡①：卡面一列「資料完整性」＝摘要句（與持股頁卡⑤同一句）；詳細只在 hover ──
+        # ~~tf[G.RISK_CAP_COMPLETENESS_LABEL].startswith(face)~~（第一版：卡面值＝摘要＋「｜」＋詳細、截 46 字）
+        # 📌 協調端 2026-10-16 修正（有意識的變更）：卡面值只放摘要；詳細另起一列、只進 hover。
         tf = dict(tile.facts)
-        assert tile.card.state == P.UI_LIVE and tf[G.RISK_CAP_COMPLETENESS_LABEL].startswith(face)
-        t_face, _ = _face_and_fold(P.v2_card_html(tile))
-        t_full = P.v2_card_html(tile)
-        assert face in t_face                    # 卡面句整句可見（項目清單排最前，截斷也截不到它）
+        assert tile.card.state == P.UI_LIVE and tf[G.RISK_CAP_COMPLETENESS_LABEL] == face
+        t_html = P.v2_card_html(tile)
+        t_face, _ = _face_and_fold(t_html)
+        _m = re.match(r'<div title="([^"]*)">', t_html)
+        assert _m, "卡①應有 hover 槽"
+        t_hover = _m.group(1)
+        assert face in t_face                    # 摘要句整句可見（≤46 字，未被截斷）
         if case != "all_valid":
             assert "未評估：" in t_face
             for lbl in ("PCR", "BIAS240"):
                 assert (lbl in t_face) is (lbl in face), lbl
-        assert "薩姆" not in t_face and "薩姆規則：目前無資料來源、未評估（不代表已通過）" in t_full
-        assert "已停用（不計分）：M1B−M2" in t_full
-        assert "M1B" not in tf[G.RISK_CAP_COMPLETENESS_LABEL].split("｜")[0]
+        for bad in ("快照時間", "已停用", "薩姆", "M1B", G.RISK_CAP_DETAIL_FACT_KEY, d.snapshot_ts):
+            assert bad not in t_face, bad
+        assert f"{G.RISK_CAP_DETAIL_FACT_KEY}：快照時間：{d.snapshot_ts}" in t_hover
+        assert "已停用（不計分）：M1B−M2" in t_hover
+        assert "薩姆規則：目前無資料來源、未評估（不代表已通過）" in t_hover
+        assert (G.RISK_CAP_NOT_EVALUATED_LABEL in t_hover) is (case != "all_valid")
         # ── 持股頁卡⑤：卡面一列；「▸ 詳細」列快照時間／未評估項目／已停用／薩姆 ──
         assert card.state == PH.UI_LIVE
         assert facts[0] == (G.RISK_CAP_COMPLETENESS_LABEL, face)
@@ -571,6 +583,21 @@ class TestDisclosure:
             assert "M1B" not in ne and not _DATE.search(ne)     # 缺項（未取得）⛔ 不給日期
             assert all(f"{lbl} 未取得" in ne for lbl in face[4:face.index("；")].split("、"))
             assert ne in h_fold
+
+    def test_face_length_item_list_always_visible(self):
+        """卡面摘要的字數：四種情境 ≤ 46；任何未停用 Optional 組合的「未評估：<清單>」也 ≤ 46（截斷只截後面的句子）。"""
+        import itertools
+        from src.ui_v2 import markup as MK
+        for _make, face in _CASES.values():
+            assert len(face) <= MK.FACT_VALUE_MAX_CHARS, face
+        keys = [k for k in RP.OPTIONAL_INPUTS if k not in RP.RULESET_DISABLED_INPUTS[RP.RISK_CAP_RULESET_VERSION]]
+        for n in range(1, len(keys) + 1):
+            for combo in itertools.permutations(keys, n):
+                d = RP.RiskCapDisclosure("t", tuple((k, "missing", None) for k in combo),
+                                         ("M1B_YoY_pct", "M2_YoY_pct"), "no_source")
+                face = G.risk_cap_face_text(d)
+                head = face.split("；", 1)[0]
+                assert face.startswith("未評估：") and len(head) <= MK.FACT_VALUE_MAX_CHARS, face
 
     def test_bias_missing_expected_date_never_shown(self, l1, tmp_path, monkeypatch):
         """BIAS240 缺時檔內 `input_asof`／`as_of_or_month` 存的是**預期**資料日 ⇒ 卡面與詳細都⛔ 不出現。"""

@@ -118,6 +118,15 @@ def risk_cap_detail_rows(disclosure: Any) -> tuple[tuple[str, str], ...]:
     return tuple(_rows)
 
 
+#: 今天頁卡①「詳細」那一列的標籤（該列只進 hover，⛔ 不上卡面；見 `page_today.V2_HOVER_OPTIONAL_FACTS`）。
+RISK_CAP_DETAIL_FACT_KEY: str = "資料完整性（詳細）"
+
+
+def risk_cap_detail_text(disclosure: Any) -> str:
+    """詳細各列接成一段（今天頁卡① hover 用）：「快照時間：…；未評估項目：…；已停用（不計分）：…；薩姆規則：…」。"""
+    return "；".join(f"{_k}：{_v}" for _k, _v in risk_cap_detail_rows(disclosure))
+
+
 def risk_cap_full_text(disclosure: Any) -> str:
     """卡面值＋詳細接成一段（今天頁卡①那一格的完整文字：卡面截斷後掛在 hover 的就是這段）。"""
     return "｜".join([risk_cap_face_text(disclosure)]
