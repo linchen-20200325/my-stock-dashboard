@@ -1,4 +1,5 @@
-"""tests/test_cross_quarter_trends.py — 全台股跨季趨勢因子(v19.139 A-1;AUD-C4 單季化 2026-10-15)。
+"""tests/test_cross_quarter_trends.py — 全台股跨季趨勢因子(v19.139 A-1;AUD-C4 單季化 2026-10-15;
+PQ-C4-1 單季 YoY 2026-10-16)。
 
 驗趨勢斜率方向 + YoY + favorable_count + §1 誠實邊界(季數不足/缺去年同季/除零),
 以及 AUD-C4:損益流量欄由「年初至今累計」拆單季後才算毛利率/營益率斜率。
@@ -60,7 +61,7 @@ def test_rising_stock_all_favorable():
     assert r["gross_margin_slope"] == pytest.approx(0.02, abs=1e-9)   # 單季毛利率每季 +2pp
     assert r["op_margin_slope"] == pytest.approx(0.02, abs=1e-9)
     assert r["debt_ratio_slope"] < 0
-    # Q1 累計 = 單季 → 1400/1000-1(累計對累計,AUD-C4 不改 yoy 定義)
+    # Q1 單季 = 累計 → 1400/1000-1(PQ-C4-1 單季對單季;Q1 兩種算法同值)
     assert r["revenue_yoy"] == pytest.approx(0.4, abs=1e-6)
     assert r["favorable_count"] == 4 and r["favorable_of"] == 4
     assert r["single_quarter_breaks"] == 0
@@ -251,6 +252,113 @@ def test_ytd_rejects_duplicate_keys_and_bad_season():
                    _q("A", np.nan, 2, rev=2, gp=1, op=1, ta=1, tl=1)])
 
 
+# ── PQ-C4-1 單季 YoY(2026-10-16 客戶裁示)─────────────────────────
+def _yoy_of(rows, *, ytd=True):
+    df = _ytd(rows) if ytd else pd.DataFrame(rows)
+    return compute_cross_quarter_trends(df).iloc[0]
+
+
+def _flat(sid, roc, season, rev):
+    """單季意圖的一列(毛利/營益/存量固定),只為控制營收。"""
+    return _q(sid, roc, season, rev=rev, gp=rev * 0.3, op=rev * 0.1, ta=1000, tl=500)
+
+
+def test_yoy_q1_single_vs_prior_year_q1_single():
+    """(1) Q1:單季 115Q1 1200 vs 單季 114Q1 1000 → +20%。"""
+    rows = [_flat("Y1", 114, s, r) for s, r in ((1, 1000), (2, 5000), (3, 5000), (4, 5000))]
+    rows.append(_flat("Y1", 115, 1, 1200))
+    r = _yoy_of(rows)
+    assert r["revenue_yoy"] == pytest.approx(0.2, abs=1e-12)
+
+
+def test_yoy_q3_uses_single_quarter_and_differs_in_sign_from_cumulative():
+    """(2) Q3:單季 Q3(累計Q3 − 累計Q2)對去年單季 Q3;數字刻意讓累計對累計的正負號相反。
+
+    114 單季 100/100/100(累計 Q3 = 300);115 單季 300/300/90(累計 Q3 = 690)。
+    單季 YoY = 90/100 − 1 = −10%;累計 YoY = 690/300 − 1 = +130%(反號 → 證明不是累計)。
+    """
+    rows = [_flat("Y3", 114, s, 100) for s in (1, 2, 3)]
+    rows += [_flat("Y3", 115, 1, 300), _flat("Y3", 115, 2, 300), _flat("Y3", 115, 3, 90)]
+    df = _ytd(rows)
+    _c = df.set_index(["roc_year", "season"])["revenue"]
+    _cum_yoy = _c[(115, 3)] / _c[(114, 3)] - 1.0
+    assert _cum_yoy > 0                                  # fixture 自證:累計版為正
+    r = compute_cross_quarter_trends(df).iloc[0]
+    assert r["revenue_yoy"] == pytest.approx(-0.1, abs=1e-12)
+    assert r["revenue_yoy"] < 0
+
+
+def test_yoy_prior_year_single_quarter_nonpositive_is_nan():
+    """(3) 去年同季單季 ≤ 0 → NaN:(a) 去年 Q2 單季 = 0(累計持平);(b) 去年 Q1 單季 < 0。"""
+    # (a) 114Q2 累計 = 114Q1 累計 → 單季 0;115Q2 單季 500
+    rows = [_q("Z0", 114, 1, rev=1000, gp=300, op=100, ta=1000, tl=500),
+            _q("Z0", 114, 2, rev=1000, gp=300, op=100, ta=1000, tl=500),
+            _q("Z0", 115, 1, rev=800, gp=240, op=80, ta=1000, tl=500),
+            _q("Z0", 115, 2, rev=1300, gp=390, op=130, ta=1000, tl=500)]
+    r = _yoy_of(rows, ytd=False)
+    assert np.isnan(r["revenue_yoy"])
+    # (b) 114Q1 申報負營收(Q1 不判斷層 → 單季 = −50)→ 115Q1 YoY NaN(不得算出 −25 這種假讀數)
+    rows = [_flat("ZN", 114, 1, -50), _flat("ZN", 114, 2, 100), _flat("ZN", 115, 1, 1200)]
+    r = _yoy_of(rows)
+    assert np.isnan(r["revenue_yoy"])
+
+
+def test_yoy_prior_year_same_quarter_missing_is_nan():
+    """(4a) 去年同季那列不存在 / 去年同季的前一季不存在(單季算不出)→ NaN。"""
+    # 去年同季(114Q2)列不存在
+    rows = [_flat("M1", 114, 1, 100), _flat("M1", 114, 3, 100),
+            _flat("M1", 115, 1, 100), _flat("M1", 115, 2, 100)]
+    r = _yoy_of(rows, ytd=False)
+    assert np.isnan(r["revenue_yoy"])
+    # 去年同季(114Q2)存在,但 114Q1 不存在 → 114Q2 單季 NaN → YoY NaN(不得拿累計頂替)
+    rows = [_q("M2", 114, 2, rev=200, gp=60, op=20, ta=1000, tl=500),
+            _q("M2", 115, 1, rev=100, gp=30, op=10, ta=1000, tl=500),
+            _q("M2", 115, 2, rev=210, gp=63, op=21, ta=1000, tl=500)]
+    r = _yoy_of(rows, ytd=False)
+    assert np.isnan(r["revenue_yoy"])
+
+
+def test_yoy_current_year_single_quarter_break_is_nan_no_fallback():
+    """(4b) 當年錨定季單季算不出 → NaN,且**不回退**到更早一季的 YoY。
+
+    (i) 同年前季缺:115Q1 列缺 → 115Q2 單季 NaN(即使 114Q2 單季正常、累計版算得出數)。
+    (ii) 單季營收 < 0(口徑斷層):115Q2 累計 < 115Q1 累計 → NaN,且計入 single_quarter_breaks;
+         115Q1 自身 YoY 算得出(+20%),但錨定季是 115Q2 → 結果仍是 NaN。
+    """
+    base = [_q("B", 114, 1, rev=1000, gp=300, op=100, ta=1000, tl=500),
+            _q("B", 114, 2, rev=2000, gp=600, op=200, ta=1000, tl=500)]
+    r = _yoy_of(base + [_q("B", 115, 2, rev=2500, gp=750, op=250, ta=1000, tl=500)], ytd=False)
+    assert np.isnan(r["revenue_yoy"])
+    rows = base + [_q("B", 115, 1, rev=1200, gp=360, op=120, ta=1000, tl=500),
+                   _q("B", 115, 2, rev=1100, gp=330, op=110, ta=1000, tl=500)]   # 單季 −100
+    r = _yoy_of(rows, ytd=False)
+    assert np.isnan(r["revenue_yoy"])
+    assert r["single_quarter_breaks"] == 1
+
+
+def test_yoy_nan_stays_nan_no_zero_fill_and_other_columns_unaffected():
+    """(5) 不補 0:yoy NaN 就是 NaN(不是 0、不算進 favorable);其他欄照算、值與手算一致。
+
+    單季意圖:114Q1–Q4 營收各 1000、單季毛利率 .30/.28/.26/.24、單季營益率 .20/.18/.16/.14;
+    115 只有 Q2(115Q1 缺)→ 115Q2 單季 NaN → yoy NaN,且 115Q2 不入毛利/營益斜率有效點。
+    """
+    gms, oms = [0.30, 0.28, 0.26, 0.24], [0.20, 0.18, 0.16, 0.14]
+    rows = [_q("N", 114, s, rev=1000, gp=1000 * g, op=1000 * o, ta=1000, tl=600 - 50 * s)
+            for s, g, o in zip((1, 2, 3, 4), gms, oms)]
+    rows.append(_q("N", 115, 2, rev=1100, gp=330, op=110, ta=1000, tl=350))
+    r = _yoy_of(rows)
+    assert np.isnan(r["revenue_yoy"]) and r["revenue_yoy"] != 0
+    _t4 = np.arange(4.0)
+    assert r["gross_margin_slope"] == pytest.approx(np.polyfit(_t4, gms, 1)[0], abs=1e-12)
+    assert r["op_margin_slope"] == pytest.approx(np.polyfit(_t4, oms, 1)[0], abs=1e-12)
+    _t = np.array([0.0, 1, 2, 3, 5])                      # 115Q2 季序 = 5(間距感知)
+    _d = np.array([550, 500, 450, 400, 350]) / 1000
+    assert r["debt_ratio_slope"] == pytest.approx(np.polyfit(_t, _d, 1)[0], abs=1e-12)
+    assert r["n_quarters"] == 5 and r["single_quarter_breaks"] == 0
+    # yoy NaN 不計入:3 個斜率有資料(毛利/營益降 → 不佳;負債比降 → 佳)
+    assert r["favorable_of"] == 3 and r["favorable_count"] == 1
+
+
 # ── 真實資料(repo 內季快照 parquet,離線)──────────────────────
 def _real_all():
     from src.data.stock.fundamentals_snapshot_loader import _load_all_quarters_impl
@@ -342,11 +450,14 @@ def test_real_never_turns_missing_into_zero():
         assert m.loc[m[c].isna(), "sq_" + c].isna().all()
 
 
-# ── golden:revenue_yoy / 負債比斜率 與修前算法逐值相同 ──────────────
+# ── golden:負債比斜率與修前算法逐值相同;revenue_yoy 已改單季(PQ-C4-1)──────────
 def _ref_pre_fix(all_quarters: pd.DataFrame) -> pd.DataFrame:
     """修前(AUD-C4 之前)版本的 revenue_yoy 與 debt_ratio_slope 參考實作(逐字搬自修前邏輯)。
 
-    兩者都不吃單季化結果:yoy 是累計對累計、負債比是存量 —— AUD-C4 規格要求數值不變。
+    負債比是存量,不吃單季化 —— 規格要求數值不變。
+    ⚠️ 本函式的 revenue_yoy 是**舊定義(累計對累計)**,2026-10-16 起(PQ-C4-1)只當「舊算法」
+    對照用:證明新值確實與舊算法不同,**不再**當 golden。新值的 golden 見
+    `_ref_single_quarter_yoy`(獨立手算)。
     """
     from shared.cross_quarter_thresholds import CROSS_QUARTER_MIN_POINTS as _MIN
     df = all_quarters.copy()
@@ -380,15 +491,72 @@ def _same_or_both_nan(a: pd.Series, b: pd.Series) -> bool:
     return bool(((a == b) | (a.isna() & b.isna())).all())
 
 
-def test_real_revenue_yoy_and_debt_slope_golden_unchanged():
-    """(h)(i) 全市場:revenue_yoy 與 debt_ratio_slope 與修前算法逐值相同(位元相等)。"""
+def test_real_debt_slope_golden_unchanged_and_yoy_no_longer_cumulative():
+    """(h)(i) 全市場:debt_ratio_slope 與修前算法逐值相同(位元相等);
+    revenue_yoy 與舊「累計對累計」算法**有**差異(PQ-C4-1 切換確實生效,不是空改)。
+
+    ~~revenue_yoy 與修前算法逐值相同~~ —— 有意識的修改,不是漏刪(2026-10-16,客戶裁示
+    PQ-C4-1):revenue_yoy 改單季對單季,舊 golden 不再成立;新 golden 見
+    test_real_revenue_yoy_matches_hand_computed_single_quarter。
+    """
     _all = _real_all()
     post = compute_cross_quarter_trends(_all).set_index("stock_id")
     ref = _ref_pre_fix(_all)
     assert set(post.index) == set(ref.index)
     post = post.loc[ref.index]
-    assert _same_or_both_nan(post["revenue_yoy"], ref["revenue_yoy"])
     assert _same_or_both_nan(post["debt_ratio_slope"], ref["debt_ratio_slope"])
+    _both = post["revenue_yoy"].notna() & ref["revenue_yoy"].notna()
+    _flip = _both & (np.sign(post["revenue_yoy"]) != np.sign(ref["revenue_yoy"]))
+    assert int(_flip.sum()) > 0       # 真實資料上確有「累計 vs 單季」正負號相反的檔
+
+
+def _ref_single_quarter_yoy(all_quarters: pd.DataFrame) -> pd.Series:
+    """單季 YoY 的**獨立**參考實作(dict 查表,不經 ytd_to_single_quarter;§4.3 第二種算法)。
+
+    錨定季 = 最新一個有累計營收的季;單季 = Q1 累計 / 同年 累計n − 累計(n−1)(前季列缺 → NaN,
+    相減 < 0 → NaN);任一端 NaN 或去年同季單季 ≤ 0 → NaN。
+    """
+    df = all_quarters.copy()
+    df["stock_id"] = df["stock_id"].astype(str).str.strip()
+    for c in ("revenue", "roc_year", "season"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    df = df.dropna(subset=["roc_year", "season"])
+    df["_q"] = (df["roc_year"] * 4 + (df["season"] - 1)).astype(int)
+    df = df.drop_duplicates(subset=["stock_id", "_q"], keep="last")
+    cum = {(s, q): r for s, q, r in zip(df["stock_id"], df["_q"], df["revenue"])}
+
+    def _sq(s, q):
+        if (s, q) not in cum:
+            return float("nan")
+        if q % 4 == 0:                       # season 1
+            return cum[(s, q)]
+        if (s, q - 1) not in cum:
+            return float("nan")
+        v = cum[(s, q)] - cum[(s, q - 1)]
+        return float("nan") if v < 0 else v
+
+    out = {}
+    for s, g in df.groupby("stock_id"):
+        _has = g.loc[g["revenue"].notna(), "_q"]
+        if _has.empty:
+            out[s] = float("nan")
+            continue
+        q = int(_has.max())
+        cur, prv = _sq(s, q), _sq(s, q - 4)
+        out[s] = cur / prv - 1.0 if (cur == cur and prv == prv and prv > 0) else float("nan")
+    return pd.Series(out, dtype=float)
+
+
+def test_real_revenue_yoy_matches_hand_computed_single_quarter():
+    """全市場 golden:revenue_yoy = 獨立手算單季 YoY(逐值,容差 1e-12;NaN 對 NaN)。"""
+    _all = _real_all()
+    post = compute_cross_quarter_trends(_all).set_index("stock_id")
+    ref = _ref_single_quarter_yoy(_all)
+    assert set(post.index) == set(ref.index)
+    a, b = post.loc[ref.index, "revenue_yoy"], ref
+    ok = ((a - b).abs() <= 1e-12) | (a.isna() & b.isna())
+    assert bool(ok.all()), a[~ok].head().to_dict()
+    assert int(a.notna().sum()) > 100           # 不是全 NaN 的空洞相等
 
 
 def test_real_snapshot_smoke():
