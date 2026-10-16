@@ -936,8 +936,10 @@ def load_allocation(req: HoldRequest) -> AllocationReadout:
         return AllocationReadout(requested=False)
     try:
         from src.services.allocation_service import get_allocation
-        # 批 Z66（客戶 2026-10-16 Q1）：系統風險上限只認核心齊全＋現行規則版本的 `macro_state.json`
+        # 批 Z66（客戶 2026-10-16 Q1）：系統風險上限只認核心齊全＋現行規則版本的 ~~`macro_state.json`~~ 快照
         #   （舊 UI 寫的、舊版本的檔 ⇒ 沒有上限 ⇒ 建議持股「無法判定」）。
+        #   📌 AUD-C21（2026-10-16，有意識的更正，⛔ 不是漏刪）：那份快照自本批起是新 UI 自己的 `risk_cap_state.json`（舊 UI 會整份覆寫 `macro_state.json`）。
+        #   strict：新檔存在卻讀不出來／上限值格式錯 ⇒ 紅；舊檔讀壞只在 warroom 不可用時才紅（B1，見 `get_macro_state`）。
         _a = get_allocation(strict=True, require_valid_risk_cap=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] 建議持股水位取數失敗 → 轉紅態：{_e!r}")
