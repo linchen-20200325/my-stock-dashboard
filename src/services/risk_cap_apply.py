@@ -15,10 +15,16 @@
       → MacroStateLocker.lock_system_state_only(...) ← 與舊 UI 同一支寫檔 API（原子寫入）
 
 ═══ 無法計算 ⇒ 不寫檔、不覆寫（保住 7 天保留機制）══════════════════════════
-判定（兩條任一成立）：
+判定（三條任一成立；批 Z66 加第 3 條，見下）：
   1. 引擎回 fail-safe（`veto_flags["fail_safe"] is True`：**啟用中的**數值輸入全缺且薩姆未觸發；
      本路徑薩姆一律送 None ⇒ 等同「啟用中的數值輸入全缺」。批 Z66 起 M1B／M2 停用、不算在內）；
-  2. `exposure_limit_pct` 不是有限數（含 bool）。
+  2. `exposure_limit_pct` 不是有限數（含 bool）；
+  3. 批 Z66（客戶 2026-10-16 Q1）：**Required Core**（L0 `shared.risk_cap_policy.REQUIRED_CORE_INPUTS`：
+     VIX、台灣 PMI 當月、台灣 PMI 前月、外資期貨淨空單＋加權指數跌破 MA5）任一無法評估 ⇒
+     本輪**不產生新的系統風險上限**（`REASON_CORE_MISSING`，點名缺的核心項）。引擎本身的「缺項不計分」
+     計算不改（Q1 是「能不能產生新上限」的閘門，不是引擎變更）；Optional（M1B／M2、PCR、BIAS240）
+     缺時照寫、`not_evaluated` 揭露。核心齊全才寫，並蓋 `required_core_ok: True`＋規則版本 ——
+     新 UI 讀端（`get_macro_state(require_valid_risk_cap=True)`）只認這種檔。
 此時**一個位元組都不寫**：既有 `macro_state.json` 若仍在 `MACRO_VERDICT_MAX_AGE_DAYS` 內，
 `get_macro_state()` 照舊讀到那一次的有效上限；過期或不存在時，`get_macro_state()` 不給上限，
 新頁的建議持股顯示「無法判定」（客戶 Q-z34～36 規則；`src/ui/views/risk_cap_gate.py`）。
@@ -54,10 +60,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from shared.risk_cap_policy import REQUIRED_CORE_LABELS, REQUIRED_CORE_OK_KEY
 from src.services.macro_engine_inputs import (
     ENGINE_INPUT_KEYS,
     EngineInputBundle,
     load_engine_inputs_from_session,
+    required_core_gaps,
     run_rule_engine,
 )
 from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION, RISK_CAP_RULESET_VERSION_KEY
@@ -70,13 +78,16 @@ ENGINE_SOURCE: str = "new_ui_risk_cap_v2"
 
 #: 附帶欄位（引擎原有鍵以外、本檔加進檔案的鍵）。⛔ 不得與引擎輸出重名。
 ATTACHED_KEYS: tuple[str, ...] = ("engine_source", "input_detail", "m1b_m2_data_month",
-                                  RISK_CAP_RULESET_VERSION_KEY)
+                                  RISK_CAP_RULESET_VERSION_KEY, REQUIRED_CORE_OK_KEY)
 
 #: 無法計算的兩種原因（步驟報告與回傳值共用，⛔ 不在呼叫端另寫一份）。
 #: 📌 批 Z66：「8 項」→「啟用中的」（M1B／M2 停用後，fail-safe 只看啟用中的輸入；有意識的措辭更正）。
 REASON_FAIL_SAFE: str = (
     "規則引擎啟用中的數值輸入本輪全部無法計分（未取得或已過期）→ 引擎回 fail-safe「系統異常」；"
     "本輪無法計算，不寫檔（既有檔若有，保留不動）")
+#: 批 Z66（Q1）：Required Core 缺 ⇒ 不產生新上限。`{items}` ＝ 缺的核心項（客戶語言名稱＋鍵名＋狀態）。
+REASON_CORE_MISSING: str = (
+    "Required Core 無法評估：{items} → 本輪不產生新的系統風險上限，不寫檔（既有檔若有，保留不動）")
 REASON_NOT_FINITE: str = "引擎回傳的曝險上限不是有限數（{value!r}）；本輪無法計算，不寫檔（既有檔若有，保留不動）"
 
 #: 紅線 reason 內的非有限值 repr（`nan` / `inf` / `-inf` / `infinity`）→ 改寫成這幾個字。
@@ -97,12 +108,15 @@ class RiskCapApplyResult:
             disabled_inputs（批 Z66：停用、不計分；≠ 未評估）/ input_asof / red_lines（名稱 → status）。
         engine_result: 引擎輸出（含 `veto_flags` 與 Z64 附加鍵）；寫檔時就是落檔前的那份
             （不含 `analysis_summary` / `timestamp`，那兩個由 `lock_system_state_only` 補）。
+        missing_core: 批 Z66（Q1）：無法評估的 Required Core 鍵名（依 `REQUIRED_CORE_INPUTS` 順序；
+            核心齊全 ⇒ `()`）。不論有沒有寫檔都照實帶（fail-safe 時通常也是全缺）。
     """
 
     written: bool
     reason: str
     bundle_summary: dict
     engine_result: dict | None
+    missing_core: tuple[str, ...] = ()
 
 
 def _json_scalar(v: Any) -> Any:
@@ -163,6 +177,11 @@ def _m1b_m2_data_month(bundle: EngineInputBundle) -> str | None:
     return bundle.input_asof.get("M1B_YoY_pct")
 
 
+def _core_items_text(gaps: tuple[tuple[str, str], ...]) -> str:
+    """`required_core_gaps` → 「VIX（VIX_Index：未取得（…））、…」。"""
+    return "、".join(f"{REQUIRED_CORE_LABELS.get(k, k)}（{k}：{why}）" for k, why in gaps)
+
+
 def _is_finite_cap(v: Any) -> bool:
     if isinstance(v, bool) or not isinstance(v, numbers.Real):
         return False
@@ -188,18 +207,26 @@ def compute_and_lock_risk_cap(session: Any, *, now: datetime,
     bundle = load_engine_inputs_from_session(session, now=now)
     engine = run_rule_engine(bundle, include_veto_flags=True)
     summary = _bundle_summary(bundle)
+    gaps = required_core_gaps(bundle)
+    missing_core = tuple(k for k, _ in gaps)
 
     veto = engine.get("veto_flags")
     if not isinstance(veto, dict) or "fail_safe" not in veto:
         raise RuntimeError(f"規則引擎輸出缺 `veto_flags`（契約破損，⛔ 不猜）：{veto!r}")
     if veto["fail_safe"] is True:
         print(f"[risk_cap_apply] ⚠️ {REASON_FAIL_SAFE}")
-        return RiskCapApplyResult(False, REASON_FAIL_SAFE, summary, engine)
+        return RiskCapApplyResult(False, REASON_FAIL_SAFE, summary, engine, missing_core)
     cap = engine.get("exposure_limit_pct")
     if not _is_finite_cap(cap):
         why = REASON_NOT_FINITE.format(value=cap)
         print(f"[risk_cap_apply] ⚠️ {why}")
-        return RiskCapApplyResult(False, why, summary, engine)
+        return RiskCapApplyResult(False, why, summary, engine, missing_core)
+    # 批 Z66（客戶 2026-10-16 Q1）：Required Core 任一無法評估 ⇒ 不產生新上限、不寫檔（⛔ 不因缺資料放寬風控）。
+    #   排在 fail-safe／非有限數之後：那兩條是「引擎根本沒給出可用上限」，原因照舊報；本條是「給得出、但不准用」。
+    if gaps:
+        why = REASON_CORE_MISSING.format(items=_scrub_nonfinite_text(_core_items_text(gaps)))
+        print(f"[risk_cap_apply] ⚠️ {why}")
+        return RiskCapApplyResult(False, why, summary, engine, missing_core)
 
     clash = [k for k in ATTACHED_KEYS if k in engine]
     if clash:
@@ -212,6 +239,7 @@ def compute_and_lock_risk_cap(session: Any, *, now: datetime,
     payload["input_detail"] = _input_detail(bundle)
     payload["m1b_m2_data_month"] = _m1b_m2_data_month(bundle)
     payload[RISK_CAP_RULESET_VERSION_KEY] = RISK_CAP_RULESET_VERSION   # 批 Z66：規則版本（L0 SSOT）
+    payload[REQUIRED_CORE_OK_KEY] = True     # 批 Z66（Q1）：走到這裡 ⇔ Required Core 全部可評估
     # 寫檔前先驗：任何 NaN／±inf 數值 → ValueError（此時尚未碰檔案）。
     json.dumps(payload, ensure_ascii=False, allow_nan=False)
 

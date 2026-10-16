@@ -335,11 +335,21 @@ class TestComputeAndLock:
                    parse_constant=lambda c: pytest.fail(f"檔內出現 {c}"))
 
     def test_nan_input_scrubbed_and_partial(self, l1, tmp_path):
-        """上游 PMI 是 NaN、外資期貨缺：照寫；紅線 reason 不含 nan 字面；not_evaluated／undetermined 正確。"""
+        """上游 PMI 是 NaN、外資期貨缺：~~照寫~~；紅線 reason 不含 nan 字面；not_evaluated／undetermined 正確。
+
+        📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更，⛔ 不是漏改）：PMI 當月／前月與外資期貨都是 Required Core ⇒
+        本輪**不寫檔**（修前照寫）。本支改驗：不寫、原因不含 nan 字面；紅線與 not_evaluated 的判定
+        改用「修前會寫進檔的那份 payload」（`TestComputeAndLock` 原意）—— 以拿掉 Q1 閘門的突變體產生。
+        """
         kw = _inputs(pmi=float("nan"), fut=float("nan"))
         l1(kw["pmi_history"])
         f = tmp_path / "macro_state.json"
         res = RC.compute_and_lock_risk_cap(_session_from(kw), now=NOW, state_file_path=str(f))
+        assert not res.written and not f.exists()
+        assert set(res.missing_core) == {"ISM_PMI_or_OECD_CLI", "PMI_Prev_Month", "Futures_Net_Short"}
+        _assert_no_nonfinite(res.reason)
+        _nogate = _mutated_module("src/services/risk_cap_apply.py", ("    if gaps:\n", "    if False:\n"))
+        res = _nogate.compute_and_lock_risk_cap(_session_from(kw), now=NOW, state_file_path=str(f))
         assert res.written
         state = json.loads(f.read_text(encoding="utf-8"))
         b = _build(kw)
@@ -358,13 +368,16 @@ class TestComputeAndLock:
         assert RC.NONFINITE_TEXT in state["red_lines"]["pmi_contraction"]["reason"]
 
     def test_partial_missing_prev_month(self, l1, tmp_path):
-        kw = _inputs(prev_month=None)
+        # ~~kw = _inputs(prev_month=None)~~ —— 📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更，⛔ 不是漏改）：PMI 前月是 Required Core，
+        #   缺它 ⇒ 不寫檔（見 tests/test_batch_z66b.py）。本支原意是「部分缺漏照寫、揭露正確」⇒ 改用
+        #   **Optional**（BIAS240）缺；PMI 紅線 undetermined 的斷言改為 evaluable（核心齊 ⇒ 兩條紅線必可評估）。
+        kw = _inputs(bias=None)
         l1(kw["pmi_history"])
         f = tmp_path / "macro_state.json"
         res = RC.compute_and_lock_risk_cap(_session_from(kw), now=NOW, state_file_path=str(f))
         state = json.loads(f.read_text(encoding="utf-8"))
-        assert res.written and state["not_evaluated"] == ["PMI_Prev_Month"]
-        assert state["red_lines"]["pmi_contraction"]["status"] == "undetermined"
+        assert res.written and state["not_evaluated"] == ["BIAS240_pct"]
+        assert state["red_lines"]["pmi_contraction"]["status"] == "evaluable"
         assert state["red_lines"]["futures_ma5"]["status"] == "evaluable"
         assert state["Macro_Phase"].endswith("1 項未評估（缺資料不計分）")
 
@@ -560,7 +573,9 @@ class TestRefreshIntegration:
                        or "系統風險上限" in b.why for b in RS.UNTOUCHED_BLOCKS)
 
     def test_written_report_and_order(self, monkeypatch, tmp_path):
-        kw = _inputs(prev_month=None)
+        # ~~kw = _inputs(prev_month=None)~~ —— 📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更，⛔ 不是漏改）：PMI 前月是 Required Core ⇒
+        #   缺它不寫檔；本支要走「已寫入」分支 ⇒ 改缺 Optional（BIAS240）。
+        kw = _inputs(bias=None)
         r, fake, order = _run_refresh(monkeypatch, tmp_path, session=_session_from(kw),
                                       pmi_hist=kw["pmi_history"])
         names = [s.name for s in r.steps]
@@ -573,8 +588,10 @@ class TestRefreshIntegration:
         assert s.ok and not s.skipped and not s.partial
         assert f"系統風險上限 {state['exposure_limit_pct']}%" in s.detail
         assert "已寫入 macro_state.json" in s.detail
-        assert "未評估 1 項（PMI_Prev_Month；缺項不計分）" in s.detail
-        assert "硬否決紅線無法判定：pmi_contraction" in s.detail
+        assert "未評估 1 項（BIAS240_pct；缺項不計分）" in s.detail
+        # ~~assert "硬否決紅線無法判定：pmi_contraction" in s.detail~~ —— Z66 Q1：紅線的必要輸入全是
+        #   Required Core ⇒ 寫得出檔的那一輪，紅線必定可評估（「無法判定」那句只會出現在未寫檔時不印）。
+        assert "硬否決紅線無法判定" not in s.detail
         assert "薩姆規則目前無資料來源、未評估（不代表已通過）" in s.detail
         assert _step(r, RS.STEP_WRITE_AUDIT).ok and r.ok, r.failures
         assert "macro_state.json" not in r.written_keys + r.not_written_keys
@@ -743,8 +760,17 @@ class TestMutations:
                               ('    if veto["fail_safe"] is True:', '    if False:'))
         f = tmp_path / "macro_state.json"
         before = _write_old_valid_file(f)
-        mod.compute_and_lock_risk_cap({}, now=NOW, state_file_path=str(f))
-        assert f.read_bytes() != before     # 突變體真的蓋掉了 ⇒ 原版的 bytes 守衛抓得到
+        res = mod.compute_and_lock_risk_cap({}, now=NOW, state_file_path=str(f))
+        # ~~assert f.read_bytes() != before     # 突變體真的蓋掉了 ⇒ 原版的 bytes 守衛抓得到~~
+        # 📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更，⛔ 不是漏改）：全缺時 Required Core 必缺 ⇒ Q1 閘門也擋得住，
+        #   只拿掉 fail-safe 已不會寫檔（兩道防線）。突變體改由「原因」被抓到：原版 test_fail_safe_keeps_old_file_bytes
+        #   斷言 reason == REASON_FAIL_SAFE ⇒ 突變體必紅。兩道都拿掉才會蓋檔（下一行）。
+        assert f.read_bytes() == before and res.reason != RC.REASON_FAIL_SAFE
+        mod2 = _mutated_module("src/services/risk_cap_apply.py",
+                               ('    if veto["fail_safe"] is True:', '    if False:'),
+                               ("    if gaps:\n", "    if False:\n"))
+        mod2.compute_and_lock_risk_cap({}, now=NOW, state_file_path=str(f))
+        assert f.read_bytes() != before
 
     def test_exception_clears_file(self, l1, tmp_path):
         """突變：失敗時先刪檔 → 原版守衛（bytes 不變）在突變體上必紅。"""
@@ -796,7 +822,8 @@ class TestMutations:
             ('            "lag_unit": str(av.verdict.lag_unit),',
              '            "lag_unit": str(av.verdict.lag_unit),\n'
              '            "reason": str(av.verdict.reason),'))
-        kw = _inputs(pmi=float("nan"))
+        # ~~kw = _inputs(pmi=float("nan"))~~ —— Z66 Q1：PMI 當月是 Required Core ⇒ 不寫檔；改用 Optional（BIAS240）NaN
+        kw = _inputs(bias=float("nan"))
         l1(kw["pmi_history"])
         f = tmp_path / "macro_state.json"
         mod.compute_and_lock_risk_cap(_session_from(kw), now=NOW, state_file_path=str(f))

@@ -809,6 +809,11 @@ def z56_pairs_for(file_path) -> tuple:
 
 
 def z56_revert_for(file_path, code: str) -> str:
+    # 📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更，⛔ 不是漏改）：Z66 第二個 commit 改了 `ai_qa_service.py`
+    #   （`run_agent` 加 opt-in `require_valid_risk_cap`）與 `page_why.py`（傳 True）⇒ 先換回 Z66 之前的寫法
+    #   （`tests/test_batch_z66b.py::Z66B_REVERT_PAIRS`，只還原 `Z66B_VIA_Z56` 兩檔；`Z56_AI_QA_BASE_SHA` 不改、本表不動）。
+    from tests.test_batch_z66b import Z66B_VIA_Z56, z66b_revert_for
+    code = z66b_revert_for(file_path, code, only=Z66B_VIA_Z56)
     for new, old in z56_pairs_for(file_path):
         assert code.count(new) == 1, f"{file_path} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)

@@ -924,7 +924,9 @@ def load_allocation(req: HoldRequest) -> AllocationReadout:
         return AllocationReadout(requested=False)
     try:
         from src.services.allocation_service import get_allocation
-        _a = get_allocation(strict=True)
+        # 批 Z66（客戶 2026-10-16 Q1）：系統風險上限只認核心齊全＋現行規則版本的 `macro_state.json`
+        #   （舊 UI 寫的、舊版本的檔 ⇒ 沒有上限 ⇒ 建議持股「無法判定」）。
+        _a = get_allocation(strict=True, require_valid_risk_cap=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] 建議持股水位取數失敗 → 轉紅態：{_e!r}")
         return AllocationReadout(requested=True, error=repr(_e))

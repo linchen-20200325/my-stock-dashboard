@@ -1031,9 +1031,21 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
                   + "；薩姆規則目前無資料來源、未評估（不代表已通過）"
                   + _rc_inputs_note)
         else:
+            # 批 Z66（客戶 2026-10-16 Q1）：沒寫檔時一律點名哪幾個 Required Core 無法評估、Optional 哪幾項未評估；
+            #   沿用規則改寫成「7 天內的**有效**快照」（核心齊全＋現行規則版本）—— 舊 UI 寫的、舊版本的檔新頁不認。
+            from shared.risk_cap_policy import REQUIRED_CORE_INPUTS, REQUIRED_CORE_LABELS
+            _mc = list(getattr(_rc, "missing_core", ()) or ())
+            _ne = list((_rc.bundle_summary or {}).get("not_evaluated") or ())
+            _opt_ne = [k for k in _ne if k not in REQUIRED_CORE_INPUTS]
+            _core_note = (
+                ("；Required Core 無法評估：" + "、".join(f"{REQUIRED_CORE_LABELS.get(k, k)}（{k}）" for k in _mc)
+                 + "（本輪不產生新的系統風險上限）") if _mc and not _rc.reason.startswith("Required Core") else "")
+            _opt_note = (f"；選配項未評估：{'、'.join(_opt_ne)}（缺項不計分）" if _opt_ne else "")
             _step(STEP_RISK_CAP, True,
-                  f"{_rc.reason}（既有 macro_state.json 若在 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內，"
-                  "卡①仍沿用它的上限；過期或不存在時，新頁的建議持股顯示「無法判定」）"
+                  f"{_rc.reason}" + _core_note + _opt_note
+                  + f"（既有 macro_state.json 若是 {MACRO_VERDICT_MAX_AGE_DAYS} 天有效期內的有效快照"
+                  "〔Required Core 齊全、現行規則版本〕，卡①仍沿用它的上限；過期、不存在、"
+                  "舊版或核心不齊的檔，新頁的建議持股顯示「無法判定」）"
                   + _dis_note + _rc_inputs_note,
                   skipped=True)
     except Exception as _e:  # noqa: BLE001 — 例外已由 risk_cap_apply 原樣拋出；此處據實記成失敗

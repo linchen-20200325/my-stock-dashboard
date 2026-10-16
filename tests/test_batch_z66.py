@@ -58,6 +58,11 @@ Z66_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
 
 def z66_revert_for(file_path, code: str) -> str:
     """舊批次還原鏈串接用：給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批之前的寫法（無 pair 則原樣）。"""
+    # 📌 批 Z66 第二個 commit（Q1，有意識的變更，⛔ 不是漏改）：先換回 Q1 之前的寫法
+    #   （`tests/test_batch_z66b.py::Z66B_REVERT_PAIRS`；`Z66_BASE_SHA` 不改、本表不動）。
+    #   `Z66B_VIA_Z56` 那兩檔由 `test_batch_z56.z56_revert_for` 還原，這裡跳過（避免同一處被還原兩次）。
+    from tests.test_batch_z66b import Z66B_VIA_Z56, z66b_revert_for
+    code = z66b_revert_for(file_path, code, skip=Z66B_VIA_Z56)
     p = Path(file_path)
     rel = (p.resolve().relative_to(REPO) if p.is_absolute() else p).as_posix()
     for new, old in Z66_REVERT_PAIRS.get(rel, ()):

@@ -348,8 +348,21 @@ def _cards(mod=PH):
 
 
 def _with_msl(monkeypatch, msl_mod):
-    """讓 L3 的 strict 讀取點改用指定的 `get_macro_state`（突變／修前用）。"""
-    monkeypatch.setattr(MSL, 'get_macro_state', msl_mod.get_macro_state)
+    """讓 L3 的 strict 讀取點改用指定的 `get_macro_state`（突變／修前用）。
+
+    📌 批 Z66（客戶 2026-10-16 Q1，有意識的變更，⛔ 不是放寬）：新頁改傳 `require_valid_risk_cap=True`，
+    修前模組（還原體）沒有這個參數 ⇒ 轉呼叫時拿掉它（呼叫形狀回到修前）。本類各情境（AI 失敗檔／
+    讀壞的檔／檔不存在／全缺 fail-safe）本來就沒有可用的系統風險上限，帶不帶該參數結果相同；golden 不改。
+    """
+    import inspect as _inspect
+    _fn = msl_mod.get_macro_state
+    if 'require_valid_risk_cap' in _inspect.signature(_fn).parameters:
+        monkeypatch.setattr(MSL, 'get_macro_state', _fn)
+        return
+
+    def _pre_shape(*a, require_valid_risk_cap=False, **k):
+        return _fn(*a, **k)
+    monkeypatch.setattr(MSL, 'get_macro_state', _pre_shape)
 
 
 class TestQz19AllMissingIsNotEvaluated:

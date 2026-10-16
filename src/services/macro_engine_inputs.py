@@ -66,6 +66,7 @@ from typing import Any, Literal, Mapping
 
 from shared.dated_value import AssessedValue, DatedValue, coerce_month_start, coerce_plain_date
 from shared.freshness_policy import FreshnessStatus, assess, assess_previous_month
+from shared.risk_cap_policy import REQUIRED_CORE_INPUTS
 from shared.trading_days import CalendarSets
 from src.compute.macro import dated_inputs as _di
 from src.data.macro import macro_cache_reader as _mcr
@@ -101,6 +102,11 @@ RED_LINE_INPUTS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     RL_FUTURES: (_di.KEY_FUTURES, _di.KEY_MA5),
     RL_SAHM: (),
 })
+
+# 📌 批 Z66（客戶 2026-10-16 Q1）：系統風險上限的 Required Core `REQUIRED_CORE_INPUTS`（檔頭由 L0
+#   `shared.risk_cap_policy` import，本檔可經 `M.REQUIRED_CORE_INPUTS` 取用）緊鄰紅線表對照：
+#   外資期貨＋MA5 ＝ `RED_LINE_INPUTS[RL_FUTURES]`、PMI 當月＋前月 ＝ `RED_LINE_INPUTS[RL_PMI]`、再加 VIX。
+#   「能不能評估」用的是與 `_red_line` 同一條判定（見 `required_core_gaps`）。
 
 #: Sahm 固定原因（客戶 2026-10-14 Q-z34：必須明說是現況，不得宣稱該紅線已通過）。
 SAHM_NO_SOURCE_REASON = "目前無資料來源，未評估（不代表紅線已通過）"
@@ -291,6 +297,20 @@ def _red_line(name: str, assessed: Mapping[str, AssessedValue]) -> RedLineStatus
     parts = [f"{k}{_STATUS_TEXT[assessed[k].verdict.status]}（{assessed[k].verdict.reason}）"
              for k in bad]
     return RedLineStatus("undetermined", "無法判定：" + "；".join(parts), inputs)
+
+
+def required_core_gaps(bundle: "EngineInputBundle") -> tuple[tuple[str, str], ...]:
+    """Required Core 中**無法評估**的項目：`((鍵名, 「狀態（原因）」), ...)`，依 `REQUIRED_CORE_INPUTS` 順序。
+
+    判定與 `_red_line` 相同：新鮮度非 FRESH，或計分值為 None。全部可評估 ⇒ `()`。
+    （批 Z66，客戶 2026-10-16 Q1；⛔ 不另寫一套判斷。）
+    """
+    out: list[tuple[str, str]] = []
+    for k in REQUIRED_CORE_INPUTS:
+        av = bundle.assessed[k]
+        if av.verdict.status != FreshnessStatus.FRESH or av.scoring_value is None:
+            out.append((k, f"{_STATUS_TEXT[av.verdict.status]}（{av.verdict.reason}）"))
+    return tuple(out)
 
 
 def build_engine_inputs(*, macro_info: Any, bias_info: Any, m1b_m2_info: Any, li_latest: Any,

@@ -335,7 +335,8 @@ def normalize_regime(value) -> str:
 def get_macro_state(warroom_summary: dict | None = None, *,
                     state_file_path: str = "macro_state.json",
                     strict: bool = False,
-                    now=None) -> dict:
+                    now=None,
+                    require_valid_risk_cap: bool = False) -> dict:
     """『總經 tab 已算好的狀態』→ 全站唯一的 canonical 總經契約（① 接線 + C1 仲裁）。
 
     來源優先序（§2.1 上層贏、**禁止平均**）::
@@ -383,6 +384,15 @@ def get_macro_state(warroom_summary: dict | None = None, *,
       warroom **可用**、檔存在卻不可用(B6-r4)→ 不拋(位階由 warroom 撐得住),
       但回傳多一個 `file_error` 鍵(str)—— 曝險上限那條輸入是讀壞了,不是「沒有天花板」。
       只有這一種情形才有該鍵;strict=False 一律沒有。
+
+    require_valid_risk_cap（批 Z66，客戶 2026-10-16 Q1；預設 False = 既有行為一字不變，舊 UI 不傳）:
+      True → `exposure_limit_pct`（系統風險上限）**只**取自 `shared.risk_cap_policy.is_valid_risk_cap_snapshot`
+      為 True 的檔（`required_core_ok is True` 且規則版本＝現行）；其餘檔（舊 UI 寫的、批 Z66 以前的、
+      核心不齊的）→ `exposure_limit_pct=None`（＝沒有系統風險上限 ⇒ 新頁「建議持股：無法判定」）。
+      7 天有效期照舊由上方 `macro_state_is_expired` 判（同一條）。⚠️ 只管**上限**這一個值：
+      位階（來源優先序第 3 條）、`is_loaded`、`strict` 的拋錯判斷一律不受影響。
+      新 UI（`src/ui/views/**`）與它呼叫的服務經 `allocation_service.get_allocation(require_valid_risk_cap=True)`
+      ／`get_macro_regime(require_valid_risk_cap=True)`／`ai_qa_service.run_agent(require_valid_risk_cap=True)` 傳入。
     """
     from shared import regime_arbiter as _RA
 
@@ -435,6 +445,11 @@ def get_macro_state(warroom_summary: dict | None = None, *,
 
     _health = _wr.get("health_score") if _wr_ok else None
     _exposure = _file.get("exposure_limit_pct") if _file_ok else None
+    if require_valid_risk_cap and _exposure is not None:
+        # 批 Z66（Q1）：只認核心齊全＋現行規則版本的檔（fail-safe 方向：認不出來 ⇒ 沒有上限 ⇒「無法判定」）
+        from shared.risk_cap_policy import is_valid_risk_cap_snapshot
+        if not is_valid_risk_cap_snapshot(_file):
+            _exposure = None
     _trend_regime = _wr.get("regime") if _wr_ok else None
 
     if _wr_ok:
