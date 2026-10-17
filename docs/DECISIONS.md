@@ -252,6 +252,36 @@
   - **DEC-019**（舊 UI 凍結）、**DEC-020**（切換路線、舊 UI 刪除前置）、**DEC-012**（分支刪除）、**DEC-053**（加減碼比例程序含 Shadow Mode）、**DEC-022** 再平衡三項限制：皆**繼續有效**，本條未改變。
   - ⚠️ **Blueprint 缺口**：第 4 點指名「Blueprint：最終產品方向」，但 main 上撰寫組 `git grep -il -e blueprint -e 藍圖 -- docs PROJECT_RULES.md` 只命中稽核／重構舊文件，**查無現行 Blueprint 文件**（`S2-PRD.md` 只在 handoff 分支）。本批依客戶第 7 點不新建大型文件；缺口登記 `docs/BACKLOG.md` `VN-00`。在 Blueprint 建立前，方向的持久落點＝本條＋BACKLOG 第 5 節。
 
+### DEC-057｜指派 VN-00：建立 vNext Product Blueprint（產品架構／UX／IA 設計批；只設計、不施工）
+> 2026-10-17 追加（第 8 節「收到當輪追加」）。ID 照序取下一個未用號（撰寫組 `git grep -oh "DEC-0[0-9]*" | sort -u` 實測最大為 DEC-056）。BACKLOG 登記：DR-2026-10-17-2；落點 `docs/BACKLOG.md` `VN-00` 與第 5.1 節。
+- **內容**（逐點對應客戶原文，引號內為原文）：
+  1. **取代先前提示**：「本訊息取代先前尚未執行的 UI Audit／UI 改善提示語。」
+  2. **本批性質**：「這是一個「產品架構／UX／資訊架構設計批」。」
+     - 可以（逐字）：「可以讀 code」「可以實際啟動新 UI」「可以做 Desktop + Mobile audit」「可以建立 wireframe / spec / architecture proposal」「可以更新治理文件／BACKLOG（若符合現行 Constitution）」「可以提出後續 Batch 切分」。
+     - 禁止（逐字）：「修改產品 UI code」「修改產品行為」「修改選股公式」「修改 Risk Cap」「實作 Action Layer」「接新 API / MCP」「修改 production data source」「修改舊 UI」「刪除舊 UI」「刪 branch」「production switch」。
+     - 「任何尚未有正式規格的部分不得自行用 AI 猜規則。」
+     - 產出：「請建立一份可長期維護的 vNext Product Blueprint。」
+  3. **客戶明示的產品原則**（⛔ 全部是**方向，不是實作授權**；逐點短引）：
+     - 產品定位：「每天替使用者過濾市場噪音，只把真正需要做決定的事情送到面前；每個結論都可以一路追溯到正式規則與客觀資料。」
+     - 核心 UX：「Decision first / → Attention / → Risk / → Evidence / → Raw data」。
+     - 分層：「資料層、規則層、決策層、AI 解釋層必須保持分離。」「AI 不得成為客觀資料來源，也不得偷偷修改正式規則。」
+     - Google 登入：「請盤點並優先「重用」舊 UI／既有資料層 OAuth 能力，不重造 OAuth。」「Google 登入不是觀看所有公開市場資料的硬 Gate。」「公開市場功能仍可匿名使用。」
+     - 使用者語言：「一般 User UI 不直接暴露內部程式術語。」
+     - 首頁：「首頁不是 Dashboard。」「不要為了讓首頁有內容而製造 Action。」「不要為了 engagement 製造訊號。」
+     - Action 與部位：「Action Engine： / 決定方向。」「Position Sizing Engine： / 決定幅度。」「沒有正式 sizing 規則時禁止 fake precision。」
+     - 現金：「UI 不得暗示： / 「沒買股票 = 錯失機會」。」「「維持現金」可以是合理結果。」
+     - 選股：「現行 fundamental prescreen 必須先盤點，但本批禁止修改公式。」「不要再設計一條很長的 hard Gate chain。」「只有有正式風險理由時才 hard veto。」（雙軌 Track A／B 與 Core Decision＋Context Overlay 的**方向**；條件與門檻見下第 4 點）
+  4. **仍需客戶裁示**（客戶原文第五十一節，逐字）：「Backlog ≠ implementation authorization。」「任何： / - 投資公式 / - threshold / - 新資料語意 / - 新 production source / - API/MCP / - Action formula / - Sizing / - major UI flow final approval / 仍需客戶裁示。」
+  5. **完成條件與停點**：「本批不要因為藍圖完成就開始施工。」「然後停在安全點。」「不要開始 vNext 1.0 implementation。」「完成後停止，不開始施工。」
+  6. **Blueprint 位置**：`docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（附 `docs/vnext/UI_AUDIT_2026-10-17.md`）。⚠️ 位置與檔名是**總管內部決定**（`CLAUDE.md` §-1.5 v3 §03-1「目錄如何動態拆分、資料夾如何命名」屬內部自決），**不是客戶裁示**。
+- **範圍**：產品方向／治理｜**日期**：2026-10-17｜**決策者**：客戶（第 6 點位置：AI 總管內部）｜**狀態**：生效（指派）；Blueprint 內所有線框、BP-DR-* **皆待客戶裁示**，實作狀態＝未開始
+- **來源**：D 客戶訊息 2026-10-17（本 session；本檔首次入庫；UTC 時間撰寫組無法取得）「客戶已正式同意將新 UI 朝「投資決策 OS / Investment Inbox」方向改善。」；「請建立一份可長期維護的 vNext Product Blueprint。」
+- **與其他 DEC 的關係**（撰寫組單組判讀，⚠️ 待第二組 evidence audit）：
+  - **實作 DEC-056 第 4 點**（「Blueprint：最終產品方向」），**不取代任何 DEC**；DEC-056 第 3 點 Decision Gate 清單與本條第 4 點取聯集。
+  - **DEC-017**（IA v2 五頁線框）**不因本條改變**：Blueprint 提議的主導航改動（今天／機會／持股／我的，2.0 加動態）列為 Blueprint **BP-DR-01**，未裁示前五頁 IA 照舊。
+  - **DEC-003**（草稿先行）：Blueprint 線框即「文字線框草稿」，未經客戶拍板（Blueprint **BP-DR-16**）不得寫 UI code。
+  - **DEC-019**、**DEC-020**、**DEC-012**、**DEC-022**、**DEC-053**、**DEC-054**、**DEC-055**：繼續有效，本條未改變。
+
 ## 3. 資料語意（data semantics）
 
 ### DEC-026｜Missing ≠ 0：未觀測→缺值、真實 0→0、有效值→原值；不得 fillna(0) 或自估合理值

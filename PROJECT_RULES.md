@@ -29,6 +29,8 @@
 | `docs/BACKLOG.md` | 所有未完成工作、待裁示題、Research Candidate | 動工授權 |
 | `docs/HANDOFF.md` | 短、可接手的現況：在哪、最近完成、blocker、下一安全接手點 | 完成或正確的證明；完整歷史 |
 
+**Blueprint 指標**（2026-10-17 新增，DEC-057）：`docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md` ＝ DEC-056 第 4 點「Blueprint：最終產品方向」的承載者（附 `docs/vnext/UI_AUDIT_2026-10-17.md`）。⚠️ 它**不是實作授權**、不帶 Decision 效力；其中線框與 `BP-DR-*` 未經客戶裁示前不得施工（DEC-003、DEC-057）；與本表四檔或 `CLAUDE.md` 牴觸時以後者為準。上表標題「四檔」不因本指標改變。
+
 **上位與既有文件（本批不改）**：`CLAUDE.md`、`PROCESS.md`、`ARCHITECTURE.md`、`SPEC.md`、`STATE.md`、`docs/v2/spec/*`。
 **歷史全文**：分支 `claude/stock-dashboard-handoff-g9dtm0` 的 `HANDOFF.md`（約 5150 行，含舊待辦、等你答、逐字收錄的客戶裁示）—— **未刪除、未凍結宣告**；其中尚未遷入的待辦見 `docs/BACKLOG.md` `BL-MIGRATE-1` 📌 註。
 
@@ -160,7 +162,7 @@ Effort：Low / Medium / High
 （機制依客戶 2026-10-16 列舉之共通治理機制建立，DEC-016。）
 
 - 完整階段（milestone）結束時是建議換對話的時點；換對話前先達到 Safe Checkpoint（第 6 節）並更新四檔。
-- 新對話依序讀：`CLAUDE.md` → 本檔 → `docs/HANDOFF.md` → `docs/BACKLOG.md` → `docs/DECISIONS.md`；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。
+- 新對話依序讀：`CLAUDE.md` → 本檔 → `docs/HANDOFF.md` → `docs/BACKLOG.md` → `docs/DECISIONS.md`；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。做新 UI／產品方向相關工作時另讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（2026-10-17 新增；依據 DEC-056 第 4 點、DEC-057）。
 - **不得要求客戶重講已落盤資訊**（`PROCESS.md` §1「嚴禁要求使用者重複解釋」；DEC-014「不重新摘要；不重問；不重做」）。
 - AI 自動產生的對話壓縮摘要**不是客戶原文**，不得當 Decision 來源（DEC 來源類別規則，`docs/DECISIONS.md` 0.1）。
 
