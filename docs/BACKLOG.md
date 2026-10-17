@@ -64,6 +64,7 @@
 | **DR-2026-10-16-6**（答 CV1-DR-01） | 2026-10-16 | 合規母法「全站不產生任何直接買賣建議」與 Action Layer 何者優先？ | 「客戶 2026-10-16 裁示」（客戶訊息 2026-10-16T16:26Z；**撰寫組自客戶原文摘錄**，逐點全文見 `docs/DECISIONS.md` **DEC-054**）：採用 Action Layer 的較新方向，**解除**「全站不得產生任何直接買賣建議」作為全面禁止規則。(1) 允許輸出方向性行動：建立第一筆部位／加碼／續抱／暫停加碼／減碼／全部退出／無法判定；(2) 不是無條件推薦，每個 Action 須由既有、可追溯資料與正式決策規則支持，並說明主要理由、資料 as-of／freshness 與關鍵風險；(3) 資料不足不得硬給方向（missing ≠ 0、unavailable ≠ neutral、not evaluated ≠ safe；Required Core 不足 →「無法判定」；不得由 AI 補造客觀資料）；(4) Risk Cap、Position Sizing、Thesis、Core Decision／Context Overlay 等既有風險護欄繼續有效，不得繞過；(5) 禁止無證據強斷言（必漲／必跌、保證獲利、無風險、AI 自行生成目標價或客觀市場資料）；(6) 「全部退出」等強 Action 須由明確條件／Thesis break／風險規則或其他正式 Decision 支持，不得只靠生成式 AI 主觀判斷；(7) 新增 DEC、不竄改 DEC-022；新 Decision 只取代其「全面禁止方向性 Action」部分。⛔ 本批只做治理語意對齊，不改產品 code、UI、公式、門檻、資料來源或 Action Layer 實作。 | CV1-DR-01（結案）；DEC-022（部分取代）；CV1-FU-01～04（後續） |
 | **DR-2026-10-16-7**（答 CV1-FU-01） | 2026-10-16 | S1-6 合規指南與 `AI_QA_DISCLOSURE` 如何與 DEC-054 對齊？ | 「客戶 2026-10-16 裁示」（客戶訊息 2026-10-16T22:15Z；撰寫組自客戶原文摘錄）：(1) S1-6 不再以「全站不產生任何直接買賣建議」作為現行全面母法；(2)(3) 文件須忠實反映 DEC-054 七種 Action 與其條件；(4) `AI_QA_DISCLOSURE` 中與 DEC-054 不相容的強制文案「只修正到與 DEC-054 一致」、不另設計免責體系、保留一般「非投資建議」類揭露；(5) 不把 DEC-054 擴張到投資組合再平衡，`CV1-FU-02` 保持待裁示，DEC-022 再平衡三項限制繼續有效；(6) 不處理 `CV1-FU-03`；(7) 不處理 `CV1-FU-04`；(8) 全 repo 搜尋 active 舊規則引用，同一 DEC-054 造成的文件漂移可做 Minimum Necessary Change，歷史紀錄不得改寫；(9) 只允許文件／治理語意同步（`AI_QA_DISCLOSURE` 為第 4 點明文例外），⛔ 不改產品 code、UI、公式／門檻／資料來源，不實作 Action Layer，不開始 CV1-DR-02～09。→ `docs/DECISIONS.md` **DEC-055**（實作 DEC-054，不修改 DEC-054）。 | CV1-FU-01（結案）；CV1-FU-05、CV1-FU-06（新增）；DEC-054、DEC-055 |
 | **DR-2026-10-17-1**（產品方向） | 2026-10-17 | 新 UI 長期產品方向？ | 「客戶已正式同意後續新 UI 朝「投資決策 OS / Investment Inbox」方向發展。」（客戶訊息 2026-10-17T01:52Z）；只核准方向、不是實作授權；Decision Gate 清單與關閉規則見 DEC-056 | 本檔第 5 節 `VN-*`；`docs/DECISIONS.md` DEC-056 |
+| **DR-2026-10-17-2**（VN-00 指派） | 2026-10-17 | 誰、何時建立 Blueprint（`VN-00`）？ | 客戶指派本批建立 Blueprint：「請建立一份可長期維護的 vNext Product Blueprint。」；本批為「產品架構／UX／資訊架構設計批」，只設計、不施工；「不要開始 vNext 1.0 implementation。」（D 客戶訊息 2026-10-17，本 session）；可做／禁止清單與客戶明示的產品原則（方向，非實作授權）逐字見 DEC-057 | `VN-00`；本檔第 5.1 節；`docs/DECISIONS.md` DEC-057；`docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md` |
 
 ### 1.1 待裁示（已整理、尚未送題或尚未裁示）
 
@@ -109,7 +110,7 @@
 | **AUD-C26** | N2 的兩道防線重疊、缺兩次讀取競態測試 | 低 | open | N2 的兩道防線（揭露存在／時間戳相符）重疊：單獨拿掉任一道測試仍過；沒有兩次讀取之間競態的測試 | 上限揭露一致性 | AUD-C21 | 不需要 | `c21-split` 紅隊 NON-BLOCKING（2026-10-16） | 補測試或收斂防線 | ⚠️ 1 |
 | **AUD-C27** | 新檔格式錯誤時 ⑤ 紅、① 灰 | 低 | open | 新檔格式錯誤時，⑤（嚴格）顯示紅、①（非嚴格）顯示灰；同樣的不一致在本次之前就存在 | 持股卡 ⑤ 與 ① 的錯誤呈現 | AUD-C21 | 待判（狀態色屬 v3 §02 灰／紅分離） | `c21-split` 紅隊 NON-BLOCKING（2026-10-16） | 判定是否統一 | ⚠️ 1 |
 | **AUD-C28** | 「必要與選用訊號皆已評估」與薩姆從未評估並存（供客戶知悉） | 低 | open | PCR 與 BIAS240 皆有效時，卡面顯示「必要與選用訊號皆已評估」，但薩姆紅線從未被評估（無資料來源；AUD-C8）；措辭在核准範圍內，但貼近 v3 §02「無誤導」 | 系統風險上限卡面 | DR-2026-10-16-4；AUD-C8 | **需要**（供客戶知悉；改措辭屬文案） | `c21-split` 紅隊 NON-BLOCKING（2026-10-16） | 告知客戶，必要時送題 | ⚠️ 1 |
-| **AUD-M1** | Mobile 可用性（保留、暫不施工） | 低 | open（暫不施工） | 預設舊 UI、新 UI 藏在收起側欄、選擇不進 URL；CTA 在 375px 約第 2.45 屏；卡片寫「按上方 🚀 更新」但按鈕在下方（`src/ui/views/page_today.py` `EXIT_RETRY_HERE`）；首屏無資料時間；`leading_indicators` module-level `_bps()` TCP 探測；Playwright 375px 驗證可行 | 手機版新 UI | 新 UI 切換時程（HANDOFF RA 系列） | **版面類需要**（須先出線框，v3 §03-2 ①）；文字指向錯誤（「上方」）屬修正錯誤 vs 改設計待判 | 2026-10-15 Data Gap Audit（Mobile 稽核組） | 暫不施工；排程時先出線框 | 未標（總管轉述） |
+| **AUD-M1** | Mobile 可用性（保留、暫不施工） | 低 | open（暫不施工） | 預設舊 UI、新 UI 藏在收起側欄、選擇不進 URL；CTA 在 375px 約第 2.45 屏；卡片寫「按上方 🚀 更新」但按鈕在下方（`src/ui/views/page_today.py` `EXIT_RETRY_HERE`）；首屏無資料時間；`leading_indicators` module-level `_bps()` TCP 探測；Playwright 375px 驗證可行 | 手機版新 UI | 新 UI 切換時程（HANDOFF RA 系列） | **版面類需要**（須先出線框，v3 §03-2 ①）；文字指向錯誤（「上方」）屬修正錯誤 vs 改設計待判 | 2026-10-15 Data Gap Audit（Mobile 稽核組）；📌 2026-10-17 補充（VN-00 批 UIA-03，append-only）：今天頁「葉 1」只有 4 張卡（總經、能不能出手、指標危險度、市場位階）說「上方」但按鈕在下方，③ 兩張在按鈕下方、說「上方」是對的；另「葉 2」有多處「按上方 🚀 更新」而葉 2 **沒有按鈕**（根因 `page_today.py::V2_EXIT_PHRASES` 的 `EXIT_RETRY_HERE`）；Blueprint 判「指路文字去方位」屬修正錯誤（`BP-B0c`），搬操作列屬版面變更須線框 | 暫不施工；排程時先出線框 | 未標（總管轉述）；UIA-03 補充＝UI 實測 1 組＋獨立複驗 V 組（PARTIAL）共 2 組 |
 | **AUD-L1** | 選股初篩四項 AND 一票否決造成 Track B 誤殺 | 低 | open | 總管轉述 | 基本面初篩 | — | 待判（篩選規則屬業務語意可能性高） | 2026-10-15 Data Gap Audit | 第二組驗證 | ⚠️ 1 |
 | **AUD-L2** | `eps_high` 以絕對 EPS 為因子 | 低 | open | 總管轉述（符號見 `fundamental_screener_service`） | 選股評分 | — | 待判（因子語意） | 同上 | 第二組驗證 | ⚠️ 1 |
 | **AUD-L3** | 缺貨掃描只看 EPS 前 50 | 低 | open | 總管轉述；位置未由編修組核對 | 缺貨篩選 | — | 待判 | 同上 | 第二組驗證 | ⚠️ 1 |
@@ -280,7 +281,7 @@
 
 | ID | 方向（客戶原文） | 類別 | 範圍（一行，不含規格） | Gate | cross-ref | status |
 |---|---|---|---|---|---|---|
-| **VN-00** | （Blueprint：最終產品方向） | Decision Required | 客戶第 5 點指定 Blueprint 承載最終產品方向；main 查無現行 Blueprint 文件。何時、以何形式建立待客戶指派；建立前以 DEC-056＋本節為落點 | — | DEC-056；handoff 分支 `S2-PRD.md`（非 main） | open |
+| **VN-00** | （Blueprint：最終產品方向） | ~~Decision Required~~ Approved Backlog（2026-10-17 更新：「何時、以何形式建立」已由客戶指派，DEC-057；Blueprint 內各 `BP-DR-*` 仍為 Decision Required，見第 5.1 節） | ~~客戶第 5 點指定 Blueprint 承載最終產品方向；main 查無現行 Blueprint 文件。何時、以何形式建立待客戶指派；建立前以 DEC-056＋本節為落點~~ 客戶第 5 點指定 Blueprint 承載最終產品方向；**Blueprint v1 已建立**：`docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（附 `docs/vnext/UI_AUDIT_2026-10-17.md`；2026-10-17 VN-00 批，DEC-057）。線框為文字草稿，未經客戶拍板不得寫 UI code（DEC-003；`BP-DR-16`） | — | DEC-056、DEC-057；handoff 分支 `S2-PRD.md`（非 main） | ~~open~~ in-progress（2026-10-17 更新）：Blueprint v1 已建立（本批 PR），待客戶裁示 `BP-DR-01`～`BP-DR-21`；依 DEC-056 第 5 點關閉規則，Blueprint 是長期維護文件，**不得**因 v1 建立而關閉；⚠️ 已知文件錯誤見第 5.1.1 節 `BP-ERR-01`（未修，DEC-010 回修上限） |
 | **VN-01** | Google OAuth / Google Sheet onboarding | Approved Backlog | 新使用者以 Google OAuth 連接並建立／選擇 Google Sheet 的 onboarding 流程 | G5? G6?（依實作） | `CLAUDE.md` §8.2.A.1 EX-OAUTH-1；DEC-021（換一本／建新 Sheet） | open |
 | **VN-02** | Mobile-first / Investment Inbox / Today redesign | UX-Mobile | 新 UI 以 mobile-first 重設 Investment Inbox／Today 畫面 | G9、G10（取代舊 UI 時） | DEC-019、DEC-020；AUD-M* | open |
 | **VN-03** | user-facing 中文化，engineering jargon 下沉至 diagnostics | UX-Mobile | 使用者面文字中文化，工程術語移到 diagnostics 區 | — | — | open |
@@ -318,4 +319,64 @@
 | **VN-35** | Quiet Mode | UX-Mobile | 降低打擾的安靜模式 | — | CV1-RC-07（推播） | open |
 | **VN-36** | Desktop / Mobile 不同資訊密度 | UX-Mobile | 桌機與手機呈現不同資訊密度 | — | AUD-M*；DEC-003 | open |
 
-> 類別計數（量測日 2026-10-17）：Approved Backlog 11／Research Candidate 17／UX-Mobile 5／Correctness-Tech Debt 3／Decision Required 1（VN-00）／Data Gap 0／Blocked 0。「?」＝依實作方式才可能觸發。
+> ~~類別計數（量測日 2026-10-17）：Approved Backlog 11／Research Candidate 17／UX-Mobile 5／Correctness-Tech Debt 3／Decision Required 1（VN-00）／Data Gap 0／Blocked 0。~~「?」＝依實作方式才可能觸發。
+> 類別計數（2026-10-17 VN-00 批更新，量測日 2026-10-17；只計本表 VN-* 列）：Approved Backlog 12（含 VN-00）／Research Candidate 17／UX-Mobile 5／Correctness-Tech Debt 3／Decision Required 0／Data Gap 0／Blocked 0。第 5.1 節另計。
+
+### 5.1 VN-00 Blueprint 批新增項（2026-10-17）
+
+> 2026-10-17 新增（append-only；本檔既有內容除 `VN-00`、`AUD-M1` 兩列與第 5 節頁尾類別計數句以刪除線／📌 加註外一字未改 —— 撰寫組以 `git diff` 單組核對，未經第二組驗）。來源：VN-00 Blueprint 批（DEC-057、DR-2026-10-17-2）。詳細內容以 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（下稱 **BP**）與 `docs/vnext/UI_AUDIT_2026-10-17.md`（下稱 **UIA 報告**）為準，本節只做登記與指標。
+> **ID 前綴**：`SEC-*`＝安全／隱私；`UIA-*`＝2026-10-17 新 UI 實機 Audit；`BP-DR-*`＝Blueprint 待客戶裁示題；`BP-RC-*`＝Blueprint 研究候選。**永不重用**（撰寫組 `git grep -e 'SEC-[0-9]' -e 'UIA-[0-9]' -e 'BP-DR-' -e 'BP-RC-' -- docs PROJECT_RULES.md` 實測：本批之前只命中 `docs/vnext/` 兩檔）。
+> ⛔ **登記不構成動工授權**（`CLAUDE.md` §-1；DEC-057：「不要開始 vNext 1.0 implementation。」）。「不需客戶裁示」＝修法方向單一、屬內部自決，**仍須客戶指派批次、派工、獨立稽核、CI**；本批依 DEC-057 禁止「修改產品行為」，一律未施工。
+> **驗證組數**：UI 實測（U 組）＝1 組；OAuth 盤點（O 組）＝1 組；獨立複驗（V 組）只覆蓋 UIA-01／02／03／07、SEC-1／2 → 這六項為 2 組，其餘為 1 組（⛔ 1 組者不得當成已複驗事實）。V 組的重現為讀碼＋Python 直呼函式／mock，**未在真實部署（Streamlit Cloud＋真 Google 登入）實測**。
+
+#### 5.1.1 Correctness／Security（bug；修法方向單一者不包裝成裁示題，`PROJECT_RULES.md` 第 4 節反向禁令）
+
+| ID | 標題 | sev | status | evidence（檔案::符號） | customer decision | next action | 驗證組數 |
+|---|---|---|---|---|---|---|---|
+| **SEC-1** | 持股／觀察清單讀取快取不分使用者：任何人帶同一 Sheet ID，15 分鐘內可讀到他人已載入的持股 | **高**（隱私外洩） | open（本批禁止施工） | `src/data/portfolio/gsheet_portfolio.py::list_portfolios`、`::load_portfolio`、`::list_stock_watchlists`、`::load_stock_watchlist` 皆 `@_cache_data(ttl=TTL_15MIN)`（程序全域 `st.cache_data`），快取鍵只含 `name`／`sheet_id` 等參數、不含使用者身分；V 組 mock 重現：無讀取權限的 B 讀到 A 的持股、Google 只被呼叫一次；Sheet ID 可在側欄自由輸入，亦會由網址 `?sheet=` 還原。寫入路徑會真打 API，受權限擋下 | **不需要**（修法方向單一：快取鍵帶使用者身分或改 per-session） | BP `BP-B0a`：建議客戶指派後**優先派工**（`CLAUDE.md` §-1「security」屬允許動工觸發；BP 第 26 節）；修好前不擴大登入入口（BP 第 7.8 節） | 2（O 組發現＋V 組複驗） |
+| **SEC-2** | Google 登入防偽造（OAuth state）實際不生效 | 中（login CSRF） | blocked-on-customer | `src/data/portfolio/oauth_state.py::_oauth_state_ok` 在 expected state 為空時放行（docstring 自陳為修 v19.63 登入迴圈）；nonce 存 `st.session_state['_oauth_state']`，而登入鈕 `st.link_button` 開新分頁、整頁外部轉跳皆重建 session → 正常流程下 nonce 恆空。副作用：「Sheet ID 隨 state 帶回自動綁定」也從不執行（往安全側失效） | **需要**：`BP-DR-18`（修法改變憑證保存機制，有多種合理方向，DEC-009 credentials） | 依 `BP-DR-18` 裁示後施工，施工前安全稽核 | 2（O 組推論＋V 組讀碼與 streamlit 原始碼確認） |
+| **UIA-01** | 今天頁：只有部分總經指標有值時，「指標危險度」「風險」卡顯示 🟢 運作中與「五桶全綠」（缺資料畫成沒危險） | P0 | open | `src/ui/tabs/tab_macro_v2.py::overall_verdict` 先濾掉灰桶再取最差桶；`src/ui/views/page_today.py::_danger_tile` 以非灰即判運作中；V 組只餵台灣 PMI 一值即重現截圖字樣；16 項全缺時為灰（洞在「部分有值」）。舊 UI 亦呼叫 `overall_verdict`（未逐頁看畫面）。與 `AUD-C14`（`scoring_engine` 假中性 50）同類、不同 code | **部分**：(a) 部分有值時不得寫「全綠／運作中」、須揭露有資料項數 → **不需要**（單一安全修法，BP `BP-B0b`）；(b) 部分資料下燈色語意與「資料健康：正常」的充分性定義 → **需要**：`BP-DR-19`（DEC-046 已拒絕無證據的 N/8 門檻） | (a) 客戶指派後施工，修在共用層根因；「修共用層是否算動舊 UI」依 DEC-019 於施工批再確認（BP 第 26 節） | 2（U 組＋V 組） |
+| **UIA-02** | 憑什麼頁 › 資料體檢：資料源回 0 列仍顯示 🟢 運作中，且與今天頁說法矛盾 | P0 | open | `shared/fetch_monitor.py::monitored` 無成功判定時不拋例外即記成功；`src/ui/views/page_why.py::build_source_card` 不看列數；被監控取數函式多數未設成功判定（V 組 grep，單組窮舉）；呼叫紀錄為程序全域、跨 session 共用。⚠️ 回 0 列不一定是失敗（非交易日、尚未公布），須依來源區分 | **不需要**（「0 列」與「有回值」分兩態、兩頁同源判空） | BP `BP-B0b` | 2（U 組＋V 組） |
+| **UIA-07** | 今天頁：更新失敗後「能不能出手」仍顯示灰色「尚未載入／還沒有人叫過」，誤把失敗當未嘗試 | P0 | open | `src/ui/tabs/tab_today.py::classify_macro_contract` 只看契約來源是否 `unloaded`；`src/services/warroom_apply.py::compute_and_store_warroom_summary` 失敗時刪除結果，來源退回 `unloaded`。外網正常時行為未測 | **不需要**（區分「已嘗試但失敗」與「未嘗試」） | BP `BP-B0c` | 2（U 組＋V 組） |
+| **UIA-14** | 找標的：選股結果卡 🟢 運作中，但名稱與本益比都沒取得（部分失敗未揭露） | P0 | open | UIA 報告 UIA-14（U 組實測截圖）；根因符號**未查證** | **不需要**（部分失敗用「部分可用」態）—— ⚠️ 根因未查，施工前先確認修法是否單一 | BP `BP-B0b`；施工前先查根因 | 1（U 組；⛔ 未經第二組驗） |
+| **BP-ERR-01** | Blueprint 文件錯誤（Correctness／文件）：§8.9 Desktop 線框各桶「長期 0/4 · 中期 1/6 · 短線 0/2 · 籌碼 0/3 · 新聞 0/1」分母與正式註冊表不符，且與該圖標示的情境 A（Required Core 全到齊）矛盾；§29.3 自查全稱句「全檔沒有找到其他與 DEC-048 不一致的線框」因此不成立 | 中（文件；在 `BP-DR-16` 核准範圍內） | blocked-on-customer | R2 第 3 輪複驗：`shared/macro_buckets.py::BUCKET_DANGER_SPECS` 實測各桶分母為長期 3／中期 6／短線 3／籌碼 3／新聞 1（合計 16）；VIX 與外資期貨淨口屬 Required Core（DEC-048）且在短線桶（`vix`、`fut_net`），情境 A 下短線不可能為 0；右欄「✓ 正常 12」與左欄「1/16 有資料」亦互相矛盾。**處置**：藍圖檔已回修 2 輪，依 DEC-010「同檔回修超過 2 輪停手問客戶」**未修**；施工或送線框拍板時一律以 `BUCKET_DANGER_SPECS` 為準，§8.9 該處數字視為〈n〉/〈m〉佔位 | **需要**：是否允許第 4 輪修正，或併入下一次藍圖改版 | 待客戶 | 1（R2 第 3 輪複驗；⛔ 未經第二組驗） |
+| **BP-ERR-02** | Blueprint 已知限制（揭露，不改文件；R2 第 3 輪列「可列為已知限制」）：(1) §8.9 右欄示意數字「✓ 正常 12 · ✕ 失敗 1 · 🕘 過期 1」與 §8.2 情境 A「資料健康：1 項取得失敗」不一致（不影響規則語意）；(2) §8.9 線框內「（燈色待 BP-DR-19）」為審閱註記，施工時**不得**出現在畫面上；(3) §15 (a)「依現行程式既有的計數方式揭露」—— 現行計數方式**未讀碼確認**（UIA-27「訊號可信度 0／16」顯示既有計數存在，口徑未驗）；(4) 情境 B「也不算一次變化」是 `BP-DR-13` 的推薦，裁示前只是示意 | 低（文件） | open | R2 第 3 輪複驗報告 R3-2 | 不需要（揭露）；(4) 隨 `BP-DR-13` 裁示 | 施工或下一次藍圖改版時處理；併 `BP-ERR-01` 送題時一起說明 | 1（R2 第 3 輪複驗） |
+
+`UIA-03` 不另開列：已併入既有 `AUD-M1`（見該列 📌 2026-10-17 補充）。
+
+#### 5.1.2 Decision Required（Blueprint 待客戶裁示題；詳見 BP 第 23 節）
+
+> 推薦方案為總管推薦（附理由見 BP）；Gate 代號同第 5 節（G1～G11），另以 DEC-003 ① 表示「版面／欄位／動線（草稿先行）」、DEC-009-cred 表示 credentials／account access、DEC-009-AI 表示 substantive AI behavior。status 一律 `blocked-on-customer`（未送題）；驗證組數：題目本身為 Blueprint 撰寫組提出；Blueprint 經 Review A（UX／Mobile）／B（投資系統／資料語意）兩組獨立審閱，修訂後由第三組 R2 複驗，R2 指出的殘留項於第 3 輪修訂；R2 第 3 輪複驗 **PASS-WITH-FIXES，殘留 `BP-ERR-01`（DEC-010 回修上限，未修）**；`BP-DR-19`～`BP-DR-21` 為 review 後新增，僅經 R2 複驗。**推薦方案未經客戶確認**。
+
+| ID | 問題（一句話） | Gate | 對應 VN | 總管推薦（摘要） |
+|---|---|---|---|---|
+| **BP-DR-01** | 主頁改為「今天／機會／持股／我的」（2.0 加「動態」），取代 DEC-017 五頁？ | DEC-003 ① | VN-02、VN-36 | 核准；「查一檔」改為詳情頁、「憑什麼」改為每個結論上的「為什麼？」 |
+| **BP-DR-02** | handoff 分支「UI 目標架構（V3）」永久排除條款在 DEC-054／056 後是否仍有效？ | — | VN-09 | 與 DEC-054 衝突的「買賣建議不落地」視為被取代；保留「AI 自生目標價不落地」與 DEC-022 再平衡限制 |
+| **BP-DR-03** | 首屏放一行 Google 登入晶片、「我的」頁放完整登入卡？ | DEC-003 ① | VN-01 | 核准；重用既有元件、不改 scope；前提 SEC-1 先修 |
+| **BP-DR-04** | 重新整理後保持登入、個人設定與已讀狀態是否持久化？ | DEC-009-cred | VN-01 | 1.0 暫不做，畫面誠實揭露 |
+| **BP-DR-05** | Sheet 選擇放哪？持股頁唯讀邊界？持股頁是否預設讀持股？ | DEC-003 ① | VN-01 | app 層晶片＋「我的」頁；持股頁維持唯讀；已綁定時預設讀持股 |
+| **BP-DR-06** | 單人或多人部署？匿名訪客能否經 Service Account 讀到個人 Sheet？ | DEC-009-cred | VN-01 | 以多人安全為準：匿名不走 SA 讀寫個人 Sheet；SA 只給排程 |
+| **BP-DR-07** | 雙軌選股條件、各軌必要資料、門檻，與現行「四項全過」的關係？ | G1 | VN-05、VN-06 | 研究批定義 → Shadow Mode 並存比較 → 裁示後上線；1.0 沿用現行規則只改呈現 |
+| **BP-DR-08** | 七種 Action 的正式規則、狀態轉移、有效期、是否封閉清單、Action 卡免責？ | G2、G1 | VN-09 | 先做「Action 規格批」（只寫規格、不寫 code）送裁示；規格未定前不顯示七種 Action（併 `CV1-FU-03`） |
+| **BP-DR-09** | Thesis（投資理由）規格？ | G1 | VN-13、VN-14 | 2.0 再開規格批（併 `CV1-FU-04`、`AUD-L9`） |
+| **BP-DR-10** | 判斷可信度「高／中／低」怎麼判定？ | G4 | VN-09 | 只用三級＋拆解、不顯示數字；與 Action 規格批一起定 |
+| **BP-DR-11** | 需要處理／值得注意／觀察／資訊四層的觸發條件與推播範圍？ | G1、G6? | VN-19、VN-20 | 首頁只放前兩層；推播只推「需要處理」；1.0 只用資料異常、系統風險上限變化兩種事件 |
+| **BP-DR-12** | 官方與第三方數字不一致時，差多少算衝突、是否暫停相關判斷？ | G1、G7 | VN-18 | 仍依既有優先序取值；超過容差時揭露「來源不一致」；只有 Required Core 衝突才「無法判定」；容差待定 |
+| **BP-DR-13** | 首頁「和上次比」的「上次」定義？7 天沿用期間怎麼比？ | G1 | VN-02 | 上一次通過新鮮度檢查、規則版本相同的有效快照；沿用期不算新變化；前提 `AUD-C12` |
+| **BP-DR-14** | 持股首屏四組（需要處理／注意／正常／無法判定）如何從既有訊號對映？ | G1 | VN-11 | 用既有訊號建對映表送裁示、不新增公式；`AUD-C10`、`AUD-C14` 一併處理 |
+| **BP-DR-15** | 「接近機會」怎麼定義？ | G1 | VN-08 | 2.0 與雙軌條件一起定；線框不寫具體 trigger |
+| **BP-DR-16** | 標【1.0】的線框是否核准為 vNext 1.0 UI 依據？ | DEC-003 ① | VN-02、VN-03、VN-04 | 先核准 1.0 線框；【2.0】線框只看方向 |
+| **BP-DR-17** | 新舊 UI 並存期的兩個入口？何時讓新 UI 成為預設？ | DEC-003 ①、G9 | VN-02 | 1.0 加入口、不切預設；切換依 DEC-020 另送 |
+| **BP-DR-18** | SEC-2 防偽造修法方向（簽章 cookie／伺服器端短期儲存／PKCE）？ | DEC-009-cred | VN-01 | 伺服器端短期儲存；施工前安全稽核 |
+| **BP-DR-19** | 部分資料時總經彙總燈怎麼呈現？「資料健康：正常」怎麼定義？ | G1 | VN-04 | 不另創 N/M 門檻；「正常」綁各 Decision 的 Required Core；燈色維持最差＋揭露「只根據 N/M 項」 |
+| **BP-DR-20** | AI 解釋要放進哪些「為什麼」？自動或按鈕生成？能否轉述正式買賣判斷？ | DEC-009-AI | VN-16 | 1.0 不擴大（只保留現有兩個 AI 呼叫點）；先解 `CV1-FU-05`／`06` |
+| **BP-DR-21** | 系統風險上限的畫面名稱？「風險預算」等新說法能否使用？上限與建議持股區間怎麼並列不混淆？ | G1、G3 | VN-12 | 1.0 沿用「系統風險上限」、一卡一數字；新說法待 2.0 有現金欄後送裁示；不得讀成可買額度 |
+
+另：BP 建議**首次送題**兩個既有項 —— `AUD-C12`（快照持久化，BP-B4 關鍵路徑）、`AUD-L9`（帳本現金／投資理由欄位，建議 2.0 才送）；兩列本身未改，送題時以該列為準。
+
+#### 5.1.3 Research Candidate／UX-Mobile（合併登記）
+
+| ID | 類別 | 內容 | 指標 | status | 驗證組數 |
+|---|---|---|---|---|---|
+| **BP-RC-01～BP-RC-12** | Research Candidate | 雙軌最小 metrics、Context factor 分群、Evidence 去重、Regime as Context、真實曝險、替代標的、Scenario、產業雷達、週報／晨報、Streamlit Mobile 導覽 PoC、Decision Log 儲存方案、「尚未公布」預計發布日來源（逐題見 BP 第 24 節，各題對應 VN-ID） | BP 第 24 節 | open | 1（Blueprint 撰寫組；經 A／B review 審閱，修訂後經 R2 複驗（第 3 輪 PASS-WITH-FIXES，殘留 `BP-ERR-01`）；`BP-RC-12` 為 review 後新增，僅經 R2 複驗） |
+| **UIA-P1P2** | UX-Mobile | 新 UI 實機 Audit 其餘項（P1 10／P2 13／P3 1，量測日 2026-10-17；含入口藏在收合側欄、工程術語外露、卡片過高、出口指向新 UI 模式下不顯示的舊分頁、手機表格截斷、Streamlit 頂列約佔 120px 等）＋工程術語 P0／P1／Dev 分級 | UIA 報告；BP 第 21 節 Gap 表、第 26 節 `BP-B1`～`BP-B7` | open（版面類須先出線框，DEC-003 ①；純文案修正屬內部自決） | 1（U 組；工程術語分級為 C 組單組 AST 掃描） |
