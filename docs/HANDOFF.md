@@ -33,7 +33,7 @@
 | #860 | `ef7cf41c` | 停用 M1B−M2 腿＋Required Core 閘門（DR-2026-10-16-1／2；DEC-048、DEC-049） |
 | #859 | `8b8f9e1e` | `revenue_yoy` 改單季對去年同季單季（DR-2026-10-16-3；DEC-050） |
 
-各 PR 的 main CI run 編號見 `docs/BACKLOG.md`「3. 已結案」（#864～#869 非 Backlog「3. 已結案」項（`BP-ERR-01` 除外）），run 編號寫在上表）。
+各 PR 的 main CI run 編號見 `docs/BACKLOG.md`「3. 已結案」（#869 所含 `BP-ERR-01` 已列入「3. 已結案」；其餘 #864～#869 非 Backlog「3. 已結案」項，run 編號寫在上表）。
 
 ## 3. Blocker／Decision Required（只列指標，細節見 BACKLOG）
 
@@ -53,7 +53,7 @@
 ## 4. 下一安全接手點
 
 1. ~~DEC-054 治理 PR：evidence audit → PR → CI → merge → main verification（客戶 2026-10-16T16:26Z 指示）。~~（#865 已合併）~~`CV1-FU-01` 批（DEC-055）：evidence audit → PR → CI → merge → main verification（客戶 2026-10-16T22:15Z 指示）。~~（#866 已合併，2026-10-17 更新）~~**目前無進行中工作**；新對話先依第 5 節重查 GitHub，再**等待客戶指示下一批**。~~（2026-10-17 更新）~~**VN-00 Blueprint 批**：#868 → CI → merge → main verification；合併後**停在安全點**（本版隨 #868 合併；讀到本檔時若 #868 已合併，即處於此安全點）。⛔ 客戶原文「不要開始 vNext 1.0 implementation。」「完成後停止，不開始施工。」（DEC-057）~~（#868 已合併，2026-10-17 更新）**`BP-ERR-01` 第 4 輪文件修正批**（DEC-058）：PR → CI → merge → main verification → 收尾同步補登 BACKLOG（PR 號／merge sha／main CI，`BP-ERR-01` 移入「3. 已結案」）；之後**停在安全點**（讀到本檔時若本版 PR 已合併，即處於此安全點）。⛔ 客戶原文「不開始 vNext 1.0 implementation。」（DEC-058）、「不要開始 vNext 1.0 implementation。」（DEC-057）
-2. ~~~~**停在安全點**（2026-10-17 收尾；客戶原文「不開始下一個 Batch」）。~~ 下一批須客戶指派。Blueprint 建議第一批（**只是建議**，DEC-015）：`BP-B0a`（`SEC-1` 安全修復）、`BP-B0b`（`UIA-01` (a)／`UIA-02`／`UIA-14` 假綠燈類 bug）—— 見 Blueprint 第 26 節。⛔ 客戶原文「不要自行開始 CV1-DR-02 或產品功能 Batch。」（2026-10-16T22:15Z 重申：不開始 CV1-DR-02、不開始產品 Action Layer）；⛔ **DEC-054、DEC-056、DEC-057 都不是實作授權**（DEC-015、DEC-002、DEC-009）。~~（2026-10-17 更新）本版 PR（`SEC-1` 安全修復＋治理同步）合併並完成 main verification 後**停在安全點**；客戶原文「完成後依 Silent Autonomous Cruise 規則精簡回報，不開始下一個 Batch。」下一批（例：`BP-B0b` 假綠燈）須客戶指派。
+2. ~~**停在安全點**（2026-10-17 收尾；客戶原文「不開始下一個 Batch」）。~~ ~~下一批須客戶指派。Blueprint 建議第一批（**只是建議**，DEC-015）：`BP-B0a`（`SEC-1` 安全修復）、`BP-B0b`（`UIA-01` (a)／`UIA-02`／`UIA-14` 假綠燈類 bug）—— 見 Blueprint 第 26 節。⛔ 客戶原文「不要自行開始 CV1-DR-02 或產品功能 Batch。」（2026-10-16T22:15Z 重申：不開始 CV1-DR-02、不開始產品 Action Layer）；⛔ **DEC-054、DEC-056、DEC-057 都不是實作授權**（DEC-015、DEC-002、DEC-009）。~~（2026-10-17 更新）本版 PR（`SEC-1` 安全修復＋治理同步）合併並完成 main verification 後**停在安全點**；客戶原文「完成後依 Silent Autonomous Cruise 規則精簡回報，不開始下一個 Batch。」下一批（例：`BP-B0b` 假綠燈）須客戶指派。
 3. BACKLOG 各列的 next action **不構成動工授權**；有客戶指派或實際 bug 觸發才動（`CLAUDE.md` §-1）。
 
 ## 5. 新對話 takeover
