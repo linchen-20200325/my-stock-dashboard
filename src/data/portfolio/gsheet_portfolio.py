@@ -43,7 +43,9 @@ Schema
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import math
+from collections.abc import Mapping
 from typing import Any
 
 try:
@@ -71,9 +73,10 @@ def clear_read_cache() -> None:
 
     §5 可觀測性 + §1:寫入(save/delete)一律清 → 使用者自己的編輯即時可見,不服務髒資料;
     外部直接改 Sheet 者靠 TTL_15MIN 過期,或 UI 的「🔄 重新載入」手動呼叫本函式。
+    SEC-1:快取住在 `_*_cached` 內部函式(鍵含身分),public 四支本身不再帶快取。
     """
-    for _fn in (list_portfolios, load_portfolio,
-                list_stock_watchlists, load_stock_watchlist):
+    for _fn in (_list_portfolios_cached, _load_portfolio_cached,
+                _list_stock_watchlists_cached, _load_stock_watchlist_cached):
         _clear = getattr(_fn, 'clear', None)
         if callable(_clear):
             _clear()
@@ -270,6 +273,66 @@ def _build_client():
     return gspread.authorize(creds)
 
 
+# ── SEC-1:讀取快取依「實際呼叫 Google 的身分」隔離 ──────────────────────────────
+# `st.cache_data` 是 **server 級、跨 session 共用** 的快取。修前四支讀取函式的快取鍵只有
+# (name, sheet_id, keep_blank),不含身分 → A 讀過後,B / 未登入者 / 失效 token 以相同參數
+# 呼叫就直接拿到 A 的資料,完全不經 Google ACL;`sheet_id=None` 時鍵還與 session 的 Sheet 無關。
+# 修法:public 函式先解析 (身分, 實際 sheet_id),再呼叫鍵含兩者的 `_*_cached` 內部函式;
+# 解析不出身分 → **不碰快取**,直接走原讀取路徑(`_build_client` 照舊 fail loud)。
+#: 身分種類前綴(§3.3 具名常數)。OAuth 與 SA 分屬不同前綴 ⇒ 兩條路徑永不共用快取項。
+_IDENTITY_KIND_OAUTH = 'oauth'
+_IDENTITY_KIND_SA = 'sa'
+
+
+def _identity_fingerprint(kind: str, credential: str) -> str:
+    """`<kind>:<sha256>` —— 快取鍵只放單向雜湊,⛔ 不放 token / 帳號原文(st 快取鍵可被他處觀察)。"""
+    _digest = hashlib.sha256(f'{kind}\x00{credential}'.encode('utf-8')).hexdigest()
+    return f'{kind}:{_digest}'
+
+
+def _cache_identity() -> str:
+    """回傳 `_build_client()` **此刻會用來呼叫 Google 的身分** 的指紋;定不出身分 → 空字串。
+
+    判斷順序與 `_build_client()` **逐條相同**(OAuth 有 token 優先,否則 SA):
+      · OAuth:指紋取 `refresh_token`(同一授權在 access_token refresh 後**不變** ⇒ refresh 只是
+        同一身分,照常命中);沒有 refresh_token 才退用 `access_token`(refresh 後變 ⇒ 只是 cache
+        miss,安全側)。兩者皆無 → 空字串(此時 `_get_oauth_client` 本來就會拋 OAuthError)。
+      · SA:指紋取 `client_email`(一把 SA 一個身分);缺 → 空字串(建 credentials 本來就會失敗)。
+    ⚠️ 空字串的意思是「**不准用快取**」,不是「匿名身分」—— caller 必須繞過快取(見
+    `_identity_scoped_read`),否則未登入者會命中彼此的快取項。
+    """
+    if st is None:
+        return ''
+    if _has_oauth_tokens():
+        _toks = st.session_state.get('gsheet_tokens')
+        if not isinstance(_toks, Mapping):
+            return ''
+        _cred = str(_toks.get('refresh_token') or _toks.get('access_token') or '')
+        return _identity_fingerprint(_IDENTITY_KIND_OAUTH, _cred) if _cred else ''
+    if _sa_configured():
+        try:
+            _info = st.secrets['gcp_service_account']
+            _email = str(_info.get('client_email', '') or '').strip()
+        except (KeyError, FileNotFoundError, AttributeError, TypeError):
+            return ''
+        return _identity_fingerprint(_IDENTITY_KIND_SA, _email) if _email else ''
+    return ''
+
+
+def _require_identity(identity: str) -> None:
+    """快取 miss 真要打 Google 前,再確認身分沒在解析後變掉(防禦:鍵與實際呼叫者必須一致)。"""
+    if _cache_identity() != identity:
+        raise RuntimeError('Google Sheet 讀取身分在解析後改變 —— 拒絕寫入快取,請重新整理頁面')
+
+
+def _identity_scoped_read(cached_fn, raw_fn, **kwargs):
+    """有身分 → `cached_fn(identity, **kwargs)`(鍵含身分);無身分 → `raw_fn(**kwargs)`(不碰快取)。"""
+    _identity = _cache_identity()
+    if not _identity:
+        return raw_fn(**kwargs)
+    return cached_fn(_identity, **kwargs)
+
+
 def _col_letter(n_cols: int) -> str:
     """1-based 欄數 → A1 欄字母(headers ≤ 26 欄,單字母 A..Z)。
 
@@ -429,13 +492,25 @@ def parse_watchlist_records(records: list[dict[str, Any]]) -> list[str]:
     return out
 
 
-@_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def list_portfolios(*, sheet_id: str | None = None) -> list[str]:
     """列出所有不重複的組合名稱（按字母排序）。
 
     sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
     ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
+    SEC-1:快取鍵含 (身分指紋, 實際 sheet_id);無身分不用快取(見 `_identity_scoped_read`)。
     """
+    return _identity_scoped_read(_list_portfolios_cached, _list_portfolios_raw,
+                                 sheet_id=sheet_id or _get_active_sheet_id())
+
+
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
+def _list_portfolios_cached(identity: str, *, sheet_id: str) -> list[str]:
+    # ⚠️ 參數名**不可**加底線前綴:st.cache_data 會把 `_` 開頭的參數排除在快取鍵外。
+    _require_identity(identity)
+    return _list_portfolios_raw(sheet_id=sheet_id)
+
+
+def _list_portfolios_raw(*, sheet_id: str) -> list[str]:
     names: set[str] = set()
     for rec in _all_records(sheet_id=sheet_id):
         n = str(rec.get('name', '')).strip()
@@ -444,7 +519,6 @@ def list_portfolios(*, sheet_id: str | None = None) -> list[str]:
     return sorted(names)
 
 
-@_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def load_portfolio(name: str, *, sheet_id: str | None = None,
                    keep_blank: bool = False) -> list[dict[str, Any]]:
     """讀取指定名稱的組合，回傳 `[{ticker, lots, avg_price}, ...]`。
@@ -453,10 +527,25 @@ def load_portfolio(name: str, *, sheet_id: str | None = None,
     keep_blank:透傳 `parse_portfolio_records`（預設 False ＝ 既有行為;True → 張數／均價
         空白的列保留、該欄 `None`）。它是參數 ⇒ 屬快取鍵,兩種模式不共用快取項。
     ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
+    SEC-1:快取鍵含 (身分指紋, 實際 sheet_id);無身分不用快取(見 `_identity_scoped_read`)。
     """
     name = (name or '').strip()
     if not name:
         return []
+    return _identity_scoped_read(_load_portfolio_cached, _load_portfolio_raw,
+                                 name=name, sheet_id=sheet_id or _get_active_sheet_id(),
+                                 keep_blank=keep_blank)
+
+
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
+def _load_portfolio_cached(identity: str, *, name: str, sheet_id: str,
+                           keep_blank: bool) -> list[dict[str, Any]]:
+    _require_identity(identity)   # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+    return _load_portfolio_raw(name=name, sheet_id=sheet_id, keep_blank=keep_blank)
+
+
+def _load_portfolio_raw(*, name: str, sheet_id: str,
+                        keep_blank: bool) -> list[dict[str, Any]]:
     recs = [r for r in _all_records(sheet_id=sheet_id)
             if str(r.get('name', '')).strip() == name]
     if keep_blank:
@@ -653,13 +742,24 @@ def add_to_stock_watchlist(name: str, tickers: list[str], *,
     return save_stock_watchlist(name, _merged, sheet_id=sheet_id)
 
 
-@_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def list_stock_watchlists(*, sheet_id: str | None = None) -> list[str]:
     """列出 `stock_watchlist` 分頁內所有不重複的清單名稱(字母排序)。
 
     sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合)。
     ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
+    SEC-1:快取鍵含 (身分指紋, 實際 sheet_id);無身分不用快取(見 `_identity_scoped_read`)。
     """
+    return _identity_scoped_read(_list_stock_watchlists_cached, _list_stock_watchlists_raw,
+                                 sheet_id=sheet_id or _get_active_sheet_id())
+
+
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
+def _list_stock_watchlists_cached(identity: str, *, sheet_id: str) -> list[str]:
+    _require_identity(identity)   # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+    return _list_stock_watchlists_raw(sheet_id=sheet_id)
+
+
+def _list_stock_watchlists_raw(*, sheet_id: str) -> list[str]:
     names: set[str] = set()
     for rec in _all_records(sheet_id=sheet_id,
                             worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
@@ -670,16 +770,27 @@ def list_stock_watchlists(*, sheet_id: str | None = None) -> list[str]:
     return sorted(names)
 
 
-@_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def load_stock_watchlist(name: str, *, sheet_id: str | None = None) -> list[str]:
     """讀取指定名稱的**純代碼**清單(保序、去重),回傳 `list[str]`,**無**價格欄位。
 
     sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合)。
     ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
+    SEC-1:快取鍵含 (身分指紋, 實際 sheet_id);無身分不用快取(見 `_identity_scoped_read`)。
     """
     name = (name or '').strip()
     if not name:
         return []
+    return _identity_scoped_read(_load_stock_watchlist_cached, _load_stock_watchlist_raw,
+                                 name=name, sheet_id=sheet_id or _get_active_sheet_id())
+
+
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
+def _load_stock_watchlist_cached(identity: str, *, name: str, sheet_id: str) -> list[str]:
+    _require_identity(identity)   # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+    return _load_stock_watchlist_raw(name=name, sheet_id=sheet_id)
+
+
+def _load_stock_watchlist_raw(*, name: str, sheet_id: str) -> list[str]:
     recs = [r for r in _all_records(sheet_id=sheet_id,
                                     worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
                                     headers=_STOCK_WATCHLIST_HEADERS)

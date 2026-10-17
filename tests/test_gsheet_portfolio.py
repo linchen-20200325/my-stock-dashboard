@@ -1199,7 +1199,9 @@ def test_read_cache_hit_avoids_refetch():
     def _counting_ws(**kwargs):
         calls['n'] += 1
         return ws
-    with patch.object(gsp, '_ws', side_effect=_counting_ws):
+    # SEC-1:快取鍵含身分;無身分不用快取 → 這裡固定一個身分驗「同身分命中」
+    with patch.object(gsp, '_ws', side_effect=_counting_ws), \
+         patch.object(gsp, '_cache_identity', return_value='oauth:test'):
         r1 = gsp.list_portfolios(sheet_id='SID_X')
         r2 = gsp.list_portfolios(sheet_id='SID_X')
     assert r1 == r2 == ['A']
@@ -1214,7 +1216,8 @@ def test_clear_read_cache_forces_refetch():
     def _counting_ws(**kwargs):
         calls['n'] += 1
         return ws
-    with patch.object(gsp, '_ws', side_effect=_counting_ws):
+    with patch.object(gsp, '_ws', side_effect=_counting_ws), \
+         patch.object(gsp, '_cache_identity', return_value='oauth:test'):
         gsp.list_portfolios(sheet_id='SID_Y')
         gsp.clear_read_cache()
         gsp.list_portfolios(sheet_id='SID_Y')
