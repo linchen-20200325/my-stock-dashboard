@@ -61,6 +61,7 @@
 3. 依序讀：`CLAUDE.md` → `PROJECT_RULES.md` → 本檔 → `docs/BACKLOG.md` → `docs/DECISIONS.md`；做新 UI／產品方向相關工作時另讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（DEC-056 第 4 點、DEC-057）；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。
 4. 確認 working tree 乾淨；⛔ 不還原舊 UI 壓測 `stash@{0}`（DEC-019）。
 5. 不要求客戶重講已落盤資訊（`PROJECT_RULES.md` 第 11 節）。
+6. 推理強度（Minimum Sufficient Effort、雙向提醒）與靜默自主巡航為永久規則：見 `PROJECT_RULES.md` 第 9 節、第 3 節（DEC-059）；本檔不複製規則。
 
 ## 6. 本檔沒查證的部分
 
