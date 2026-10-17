@@ -313,7 +313,7 @@
   - **DEC-014**（模型／模式／Effort 自主管理）：**部分取代** —— Effort 的分級改依本條清單、Effort-only 切換改用本條格式並改為雙向提醒；DEC-014 的模型／模式切換格式、「改好了」後不重摘要／不重問／不重做、等 CI 不切換等仍有效（`PROJECT_RULES.md` 9.3）。
   - **DEC-013**（不重問）、**DEC-009**（Decision Gate）：同向；本條打斷清單逐項對映 `PROJECT_RULES.md` 第 4 節既有表，未增刪該表。
   - **DEC-001**（派工）／`CLAUDE.md` §-2：不變 —— 巡航擴大的是「不必問客戶」，不是「不必派工」；Effort 不影響派工與稽核。
-  - **`CLAUDE.md`**：不取代、不修改。≤5 行回報與 `CLAUDE.md` §-2 規則 6／§-1.5.A-7 揭露義務並存；與 `CLAUDE.md` §-1.5 v1 第三條「自我審核五段呈現」的張力登記 `docs/BACKLOG.md` `CV1-DR-10`，裁示前以 `CLAUDE.md` 為準。
+  - **`CLAUDE.md`**：不取代、不修改。≤5 行回報與 `CLAUDE.md` §-2 規則 6／§-1.5.A-7 揭露義務並存；與 `CLAUDE.md` §-1.5 v1 第三條「自我審核五段呈現」、§-1.5 第四條／v3 §04 三段式交付報告（含判定 6 清理項目），以及 `PROCESS.md` §1（/compact 提醒）、§4（四段報告）的張力登記 `docs/BACKLOG.md` `CV1-DR-10`，裁示前以 `CLAUDE.md` 為準。
 
 ## 3. 資料語意（data semantics）
 

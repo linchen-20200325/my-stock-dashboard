@@ -76,7 +76,7 @@
   2. **真正需要客戶裁示**：即第 4 節「必須停下問客戶」表（客戶 2026-10-17 清單的逐項對映見該表下方註）；已經有正式 DEC 的問題不得重新詢問（DEC-013）。
   3. **需要切換 Effort**：僅依第 9 節 Minimum Sufficient Effort 規則，在安全停點提醒。
 - 已確認的 bug，若修法單一且不涉及 Decision Gate，應自行修正、測試、audit、CI，不要包裝成客戶選擇題（第 4 節反向禁令）。
-- ⚠️ **≤5 行與揭露義務並存**：「原則 ≤5 行」是長度原則，**不豁免**下方限定第 4 條 —— 未經第二組驗證的全稱句、沒實測的部分仍須在回報中標明（可濃縮成一句並指向 PR／BACKLOG 的完整記錄）。`CLAUDE.md` §-1.5 v1 第三條「代碼產出後自我審核五段呈現」與 ≤5 行的關係見 `docs/BACKLOG.md` `CV1-DR-10`（衝突時以 `CLAUDE.md` 為準）。
+- ⚠️ **≤5 行與揭露義務並存**：「原則 ≤5 行」是長度原則，**不豁免**下方限定第 4 條 —— 未經第二組驗證的全稱句、沒實測的部分仍須在回報中標明（可濃縮成一句並指向 PR／BACKLOG 的完整記錄）。`CLAUDE.md` §-1.5 v1 第三條「代碼產出後自我審核五段呈現」、§-1.5 第四條／v3 §04 三段式交付報告（含 §-1.5.F 判定 6 清理項目逐檔列出），以及 `PROCESS.md` §1（/compact 提醒）、§4（四段報告）與 ≤5 行的關係見 `docs/BACKLOG.md` `CV1-DR-10`（衝突時以 `CLAUDE.md` 為準）。
 - **限定（缺一不可）**：
   1. 巡航只在**已指派或已核准**範圍內；沒有指派 → 停手等指令（DEC-002）。不得創造新需求、不得自行開新功能 Batch（DEC-006、DEC-015）。
   2. 巡航擴大的是「不必問客戶」，**不是「不必派工」**（DEC-001）。
@@ -102,7 +102,7 @@
 | 9 | credentials／account access | DEC-009 |
 | 10 | 業務邏輯互斥；有多個合理方向且有產品意義；無法安全自行解決的 blocker | DEC-003、DEC-009 |
 
-**客戶 2026-10-17 打斷清單對映（DEC-059；不另立第二份清單）**：投資公式／threshold → #1；新 data semantics → #2；新／替換 production source → #3；API／MCP → #4；substantive AI behavior → #6；major UI flow 尚未裁示 → #7；irreversible operation、production switch、old UI deletion、branch deletion → #8；credentials／account access → #9；多個合理方案且 repo 無既有裁示、真正 blocker → #10。客戶清單每一項在上表皆有對應，上表未因此增刪。
+**客戶 2026-10-17 打斷清單對映（DEC-059；不另立第二份清單）**：投資公式／threshold → #1；新 data semantics → #2；新／替換 production source → #3；API／MCP → #4；substantive AI behavior → #6；major UI flow 尚未裁示 → #7；irreversible operation、production switch、old UI deletion、branch deletion → #8；credentials／account access → #9；多個合理方案且 repo 無既有裁示、真正 blocker → #10。客戶清單每一項在上表皆有對應（GA 已驗，2026-10-17），上表未因此增刪。
 
 **第 4 項的精確讀法**：客戶 2026-10-10 規則**允許**主動研究、建立 PoC、測試與比較新 API／MCP（DEC-008 §五）—— 這**不是禁令**；但**第一次接入正式投資資料鏈前**，除須驗證該規則列的 16 項外，依客戶 2026-10-15 §25（DEC-009，較嚴）**一律送 Decision Gate**。2026-10-10 規則中「同口徑高可信免費源可直接最小整合」一款，在客戶另裁前**暫不適用**（暫行取嚴，`docs/BACKLOG.md` `CV1-DR-08`）。
 
