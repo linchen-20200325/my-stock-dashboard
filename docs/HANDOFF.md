@@ -45,7 +45,7 @@
 - 2026-10-17 產品方向登記（客戶 MSG 14，2026-10-17T01:52Z）：新 UI 方向「投資決策 OS／Investment Inbox」→ `docs/DECISIONS.md` DEC-056；方向項目 `docs/BACKLOG.md` 第 5 節（`VN-00`～`VN-36`）。**只核准方向、不是實作授權**；本登記隨收尾同步 PR #867 一起合併（同分支 `claude/stock-close-sync`）。最後合併仍為 #866（`2647a0fd`）。
 - 2026-10-17 VN-00 Blueprint 批（DEC-057）：**待客戶裁示 `BP-DR-01`～`BP-DR-21`**（見 `docs/BACKLOG.md` 第 5.1.2 節；推薦方案見 Blueprint 第 23 節）。
 - ⚠️ **`SEC-1`（高，隱私）**：持股讀取快取不分使用者 —— 見 `docs/BACKLOG.md` 第 5.1.1 節；修法單一、不需裁示，但須客戶指派批次（本批禁止施工）。另 `SEC-2`（`BP-DR-18`）、P0 bug `UIA-01`／`UIA-02`／`UIA-07`／`UIA-14` 同節。
-- ~~⚠️ **`BP-ERR-01`**：Blueprint §8.9 Desktop 線框各桶分母錯誤、§29.3 自查宣稱不成立；依 DEC-010 回修上限未修，待客戶決定是否允許第 4 輪修正 —— 見 `docs/BACKLOG.md` 第 5.1.1 節（另 `BP-ERR-02` 已知限制）。施工時以 `shared/macro_buckets.py::BUCKET_DANGER_SPECS` 為準。~~（2026-10-17 更新）**`BP-ERR-01`**：客戶 2026-10-17 授權第 4 輪最小必要文件修正（DEC-058／DR-2026-10-17-3），**本批處理**（本版所隨 PR）；不再是 blocker。`BP-ERR-02` 第 2、4 項仍 open —— 見 `docs/BACKLOG.md` 第 5.1.1 節。施工時仍以 `shared/macro_buckets.py::BUCKET_DANGER_SPECS` 為準。
+- ~~⚠️ **`BP-ERR-01`**：Blueprint §8.9 Desktop 線框各桶分母錯誤、§29.3 自查宣稱不成立；依 DEC-010 回修上限未修，待客戶決定是否允許第 4 輪修正 —— 見 `docs/BACKLOG.md` 第 5.1.1 節（另 `BP-ERR-02` 已知限制）。施工時以 `shared/macro_buckets.py::BUCKET_DANGER_SPECS` 為準。~~（2026-10-17 更新）**`BP-ERR-01`**：客戶 2026-10-17 授權第 4 輪最小必要文件修正（DEC-058／DR-2026-10-17-3），**本批處理**（本版所隨 PR）；~~不再是 blocker。~~ 本 PR 修正，合併後生效（2026-10-17 更正，V4 SF-1）。`BP-ERR-02` 第 2、4 項仍 open —— 見 `docs/BACKLOG.md` 第 5.1.1 節。施工時仍以 `shared/macro_buckets.py::BUCKET_DANGER_SPECS` 為準。
 - 供客戶知悉：`AUD-C28`（「必要與選用訊號皆已評估」與薩姆從未評估並存）。
 
 ## 4. 下一安全接手點
@@ -66,7 +66,7 @@
 ## 6. 本檔沒查證的部分
 
 - ~~open PR＝0、CI conclusion 為 2026-10-17 量測當下快照；本收尾同步 PR 開立後 open PR 至少為 1。~~~~（2026-10-17 更新）main CI（run 38995150529）為 VN-00 批撰寫組量測當下快照；#868 開立後、合併前 open PR 至少為 1。~~（2026-10-17 更新）main CI（run 39000890158）為 `BP-ERR-01` 文件修正組量測當下快照；本版 PR 開立後、合併前 open PR 至少為 1。
-- `BP-ERR-01` 第 4 輪修正（各桶分母讀碼、其他寫死分母處的核對）為文件修正組單組結論，未再派複驗，未經第二組驗證。
+- ~~`BP-ERR-01` 第 4 輪修正（各桶分母讀碼、其他寫死分母處的核對）為文件修正組單組結論，未再派複驗，未經第二組驗證。~~（2026-10-17 更新）`BP-ERR-01` 第 4 輪修正經 V4 獨立複驗（2026-10-17，PASS-WITH-FIXES，0 MUST-FIX），驗證組數 2；「其他寫死分母處已核對」仍非窮舉宣稱。
 - VN-00 批：`SEC-*`／`UIA-*` 的重現**未在真實部署**（Streamlit Cloud＋真 Google 登入）實測；`UIA-14` 根因未查；Blueprint 的 BP-DR 推薦方案為總管推薦、未經客戶確認。
 - ~~「cron commit 只動 `data_cache/**`」只對 `f0a6c474..82e19dbd` 實測（`git diff --name-only`），不宣稱未來 cron 亦然。~~（2026-10-16 更新：該量測屬上一版快照；本版未重測 cron 改動範圍）
 - `CV1-FU-*` 的衝突掃描為單組 `git grep`，「其他地方無衝突」未經第二組驗證（`CV1-FU-01` 批的全 repo 掃描同為單組）。
