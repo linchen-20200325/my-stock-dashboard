@@ -281,7 +281,7 @@
 
 | ID | 方向（客戶原文） | 類別 | 範圍（一行，不含規格） | Gate | cross-ref | status |
 |---|---|---|---|---|---|---|
-| **VN-00** | （Blueprint：最終產品方向） | ~~Decision Required~~ Approved Backlog（2026-10-17 更新：「何時、以何形式建立」已由客戶指派，DEC-057；Blueprint 內各 `BP-DR-*` 仍為 Decision Required，見第 5.1 節） | ~~客戶第 5 點指定 Blueprint 承載最終產品方向；main 查無現行 Blueprint 文件。何時、以何形式建立待客戶指派；建立前以 DEC-056＋本節為落點~~ 客戶第 5 點指定 Blueprint 承載最終產品方向；**Blueprint v1 已建立**：`docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（附 `docs/vnext/UI_AUDIT_2026-10-17.md`；2026-10-17 VN-00 批，DEC-057）。線框為文字草稿，未經客戶拍板不得寫 UI code（DEC-003；`BP-DR-16`） | — | DEC-056、DEC-057；handoff 分支 `S2-PRD.md`（非 main） | ~~open~~ in-progress（2026-10-17 更新）：Blueprint v1 已建立（本批 PR），待客戶裁示 `BP-DR-01`～`BP-DR-21`；依 DEC-056 第 5 點關閉規則，Blueprint 是長期維護文件，**不得**因 v1 建立而關閉 |
+| **VN-00** | （Blueprint：最終產品方向） | ~~Decision Required~~ Approved Backlog（2026-10-17 更新：「何時、以何形式建立」已由客戶指派，DEC-057；Blueprint 內各 `BP-DR-*` 仍為 Decision Required，見第 5.1 節） | ~~客戶第 5 點指定 Blueprint 承載最終產品方向；main 查無現行 Blueprint 文件。何時、以何形式建立待客戶指派；建立前以 DEC-056＋本節為落點~~ 客戶第 5 點指定 Blueprint 承載最終產品方向；**Blueprint v1 已建立**：`docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（附 `docs/vnext/UI_AUDIT_2026-10-17.md`；2026-10-17 VN-00 批，DEC-057）。線框為文字草稿，未經客戶拍板不得寫 UI code（DEC-003；`BP-DR-16`） | — | DEC-056、DEC-057；handoff 分支 `S2-PRD.md`（非 main） | ~~open~~ in-progress（2026-10-17 更新）：Blueprint v1 已建立（本批 PR），待客戶裁示 `BP-DR-01`～`BP-DR-21`；依 DEC-056 第 5 點關閉規則，Blueprint 是長期維護文件，**不得**因 v1 建立而關閉；⚠️ 已知文件錯誤見第 5.1.1 節 `BP-ERR-01`（未修，DEC-010 回修上限） |
 | **VN-01** | Google OAuth / Google Sheet onboarding | Approved Backlog | 新使用者以 Google OAuth 連接並建立／選擇 Google Sheet 的 onboarding 流程 | G5? G6?（依實作） | `CLAUDE.md` §8.2.A.1 EX-OAUTH-1；DEC-021（換一本／建新 Sheet） | open |
 | **VN-02** | Mobile-first / Investment Inbox / Today redesign | UX-Mobile | 新 UI 以 mobile-first 重設 Investment Inbox／Today 畫面 | G9、G10（取代舊 UI 時） | DEC-019、DEC-020；AUD-M* | open |
 | **VN-03** | user-facing 中文化，engineering jargon 下沉至 diagnostics | UX-Mobile | 使用者面文字中文化，工程術語移到 diagnostics 區 | — | — | open |
@@ -339,12 +339,14 @@
 | **UIA-02** | 憑什麼頁 › 資料體檢：資料源回 0 列仍顯示 🟢 運作中，且與今天頁說法矛盾 | P0 | open | `shared/fetch_monitor.py::monitored` 無成功判定時不拋例外即記成功；`src/ui/views/page_why.py::build_source_card` 不看列數；被監控取數函式多數未設成功判定（V 組 grep，單組窮舉）；呼叫紀錄為程序全域、跨 session 共用。⚠️ 回 0 列不一定是失敗（非交易日、尚未公布），須依來源區分 | **不需要**（「0 列」與「有回值」分兩態、兩頁同源判空） | BP `BP-B0b` | 2（U 組＋V 組） |
 | **UIA-07** | 今天頁：更新失敗後「能不能出手」仍顯示灰色「尚未載入／還沒有人叫過」，誤把失敗當未嘗試 | P0 | open | `src/ui/tabs/tab_today.py::classify_macro_contract` 只看契約來源是否 `unloaded`；`src/services/warroom_apply.py::compute_and_store_warroom_summary` 失敗時刪除結果，來源退回 `unloaded`。外網正常時行為未測 | **不需要**（區分「已嘗試但失敗」與「未嘗試」） | BP `BP-B0c` | 2（U 組＋V 組） |
 | **UIA-14** | 找標的：選股結果卡 🟢 運作中，但名稱與本益比都沒取得（部分失敗未揭露） | P0 | open | UIA 報告 UIA-14（U 組實測截圖）；根因符號**未查證** | **不需要**（部分失敗用「部分可用」態）—— ⚠️ 根因未查，施工前先確認修法是否單一 | BP `BP-B0b`；施工前先查根因 | 1（U 組；⛔ 未經第二組驗） |
+| **BP-ERR-01** | Blueprint 文件錯誤（Correctness／文件）：§8.9 Desktop 線框各桶「長期 0/4 · 中期 1/6 · 短線 0/2 · 籌碼 0/3 · 新聞 0/1」分母與正式註冊表不符，且與該圖標示的情境 A（Required Core 全到齊）矛盾；§29.3 自查全稱句「全檔沒有找到其他與 DEC-048 不一致的線框」因此不成立 | 中（文件；在 `BP-DR-16` 核准範圍內） | blocked-on-customer | R2 第 3 輪複驗：`shared/macro_buckets.py::BUCKET_DANGER_SPECS` 實測各桶分母為長期 3／中期 6／短線 3／籌碼 3／新聞 1（合計 16）；VIX 與外資期貨淨口屬 Required Core（DEC-048）且在短線桶（`vix`、`fut_net`），情境 A 下短線不可能為 0；右欄「✓ 正常 12」與左欄「1/16 有資料」亦互相矛盾。**處置**：藍圖檔已回修 2 輪，依 DEC-010「同檔回修超過 2 輪停手問客戶」**未修**；施工或送線框拍板時一律以 `BUCKET_DANGER_SPECS` 為準，§8.9 該處數字視為〈n〉/〈m〉佔位 | **需要**：是否允許第 4 輪修正，或併入下一次藍圖改版 | 待客戶 | 1（R2 第 3 輪複驗；⛔ 未經第二組驗） |
+| **BP-ERR-02** | Blueprint 已知限制（揭露，不改文件；R2 第 3 輪列「可列為已知限制」）：(1) §8.9 右欄示意數字「✓ 正常 12 · ✕ 失敗 1 · 🕘 過期 1」與 §8.2 情境 A「資料健康：1 項取得失敗」不一致（不影響規則語意）；(2) §8.9 線框內「（燈色待 BP-DR-19）」為審閱註記，施工時**不得**出現在畫面上；(3) §15 (a)「依現行程式既有的計數方式揭露」—— 現行計數方式**未讀碼確認**（UIA-27「訊號可信度 0／16」顯示既有計數存在，口徑未驗）；(4) 情境 B「也不算一次變化」是 `BP-DR-13` 的推薦，裁示前只是示意 | 低（文件） | open | R2 第 3 輪複驗報告 R3-2 | 不需要（揭露）；(4) 隨 `BP-DR-13` 裁示 | 施工或下一次藍圖改版時處理；併 `BP-ERR-01` 送題時一起說明 | 1（R2 第 3 輪複驗） |
 
 `UIA-03` 不另開列：已併入既有 `AUD-M1`（見該列 📌 2026-10-17 補充）。
 
 #### 5.1.2 Decision Required（Blueprint 待客戶裁示題；詳見 BP 第 23 節）
 
-> 推薦方案為總管推薦（附理由見 BP）；Gate 代號同第 5 節（G1～G11），另以 DEC-003 ① 表示「版面／欄位／動線（草稿先行）」、DEC-009-cred 表示 credentials／account access、DEC-009-AI 表示 substantive AI behavior。status 一律 `blocked-on-customer`（未送題）；驗證組數：題目本身為 Blueprint 撰寫組提出；Blueprint 經 Review A（UX／Mobile）／B（投資系統／資料語意）兩組獨立審閱，修訂後由第三組 R2 複驗（PASS-WITH-FIXES），R2 指出的殘留項於第 3 輪修訂；`BP-DR-19`～`BP-DR-21` 為 review 後新增，僅經 R2 複驗。**推薦方案未經客戶確認**。
+> 推薦方案為總管推薦（附理由見 BP）；Gate 代號同第 5 節（G1～G11），另以 DEC-003 ① 表示「版面／欄位／動線（草稿先行）」、DEC-009-cred 表示 credentials／account access、DEC-009-AI 表示 substantive AI behavior。status 一律 `blocked-on-customer`（未送題）；驗證組數：題目本身為 Blueprint 撰寫組提出；Blueprint 經 Review A（UX／Mobile）／B（投資系統／資料語意）兩組獨立審閱，修訂後由第三組 R2 複驗，R2 指出的殘留項於第 3 輪修訂；R2 第 3 輪複驗 **PASS-WITH-FIXES，殘留 `BP-ERR-01`（DEC-010 回修上限，未修）**；`BP-DR-19`～`BP-DR-21` 為 review 後新增，僅經 R2 複驗。**推薦方案未經客戶確認**。
 
 | ID | 問題（一句話） | Gate | 對應 VN | 總管推薦（摘要） |
 |---|---|---|---|---|
@@ -376,5 +378,5 @@
 
 | ID | 類別 | 內容 | 指標 | status | 驗證組數 |
 |---|---|---|---|---|---|
-| **BP-RC-01～BP-RC-12** | Research Candidate | 雙軌最小 metrics、Context factor 分群、Evidence 去重、Regime as Context、真實曝險、替代標的、Scenario、產業雷達、週報／晨報、Streamlit Mobile 導覽 PoC、Decision Log 儲存方案、「尚未公布」預計發布日來源（逐題見 BP 第 24 節，各題對應 VN-ID） | BP 第 24 節 | open | 1（Blueprint 撰寫組；經 A／B review 審閱，修訂後經 R2 複驗；`BP-RC-12` 為 review 後新增，僅經 R2 複驗） |
+| **BP-RC-01～BP-RC-12** | Research Candidate | 雙軌最小 metrics、Context factor 分群、Evidence 去重、Regime as Context、真實曝險、替代標的、Scenario、產業雷達、週報／晨報、Streamlit Mobile 導覽 PoC、Decision Log 儲存方案、「尚未公布」預計發布日來源（逐題見 BP 第 24 節，各題對應 VN-ID） | BP 第 24 節 | open | 1（Blueprint 撰寫組；經 A／B review 審閱，修訂後經 R2 複驗（第 3 輪 PASS-WITH-FIXES，殘留 `BP-ERR-01`）；`BP-RC-12` 為 review 後新增，僅經 R2 複驗） |
 | **UIA-P1P2** | UX-Mobile | 新 UI 實機 Audit 其餘項（P1 10／P2 13／P3 1，量測日 2026-10-17；含入口藏在收合側欄、工程術語外露、卡片過高、出口指向新 UI 模式下不顯示的舊分頁、手機表格截斷、Streamlit 頂列約佔 120px 等）＋工程術語 P0／P1／Dev 分級 | UIA 報告；BP 第 21 節 Gap 表、第 26 節 `BP-B1`～`BP-B7` | open（版面類須先出線框，DEC-003 ①；純文案修正屬內部自決） | 1（U 組；工程術語分級為 C 組單組 AST 掃描） |
