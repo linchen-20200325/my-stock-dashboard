@@ -63,6 +63,7 @@
 | **DR-2026-10-16-5**（答 AUD-C21） | 2026-10-16 | 凍結舊 UI 可覆寫新 UI 有效快照，怎麼修？ | 「客戶 2026-10-16 裁示」（第二輪）**採推薦方案**（總管轉述）：(1) 新 UI 改用**獨立**的系統風險上限狀態檔；舊 UI 保留原檔、不修改；(2) 舊 UI 寫入不得再覆蓋新 UI 的有效快照；(3) 新 UI 只接受符合 Required Core、版本蓋章與 freshness 的快照；(4) 舊 UI 維持凍結；(5) ⛔ 不改寫歷史決策與凍結驗證；(6) 分檔後須逐一檢查新 UI 的讀寫路徑，確認沒有任何退回舊檔的 fallback；(7) AUD-C22 維持另案，⛔ 不擴大範圍。 | AUD-C21 —— **已實作：#862 `fa26914b`（2026-10-16）**；AUD-C19、AUD-C12、AUD-C22（相關） |
 | **DR-2026-10-16-6**（答 CV1-DR-01） | 2026-10-16 | 合規母法「全站不產生任何直接買賣建議」與 Action Layer 何者優先？ | 「客戶 2026-10-16 裁示」（客戶訊息 2026-10-16T16:26Z；**撰寫組自客戶原文摘錄**，逐點全文見 `docs/DECISIONS.md` **DEC-054**）：採用 Action Layer 的較新方向，**解除**「全站不得產生任何直接買賣建議」作為全面禁止規則。(1) 允許輸出方向性行動：建立第一筆部位／加碼／續抱／暫停加碼／減碼／全部退出／無法判定；(2) 不是無條件推薦，每個 Action 須由既有、可追溯資料與正式決策規則支持，並說明主要理由、資料 as-of／freshness 與關鍵風險；(3) 資料不足不得硬給方向（missing ≠ 0、unavailable ≠ neutral、not evaluated ≠ safe；Required Core 不足 →「無法判定」；不得由 AI 補造客觀資料）；(4) Risk Cap、Position Sizing、Thesis、Core Decision／Context Overlay 等既有風險護欄繼續有效，不得繞過；(5) 禁止無證據強斷言（必漲／必跌、保證獲利、無風險、AI 自行生成目標價或客觀市場資料）；(6) 「全部退出」等強 Action 須由明確條件／Thesis break／風險規則或其他正式 Decision 支持，不得只靠生成式 AI 主觀判斷；(7) 新增 DEC、不竄改 DEC-022；新 Decision 只取代其「全面禁止方向性 Action」部分。⛔ 本批只做治理語意對齊，不改產品 code、UI、公式、門檻、資料來源或 Action Layer 實作。 | CV1-DR-01（結案）；DEC-022（部分取代）；CV1-FU-01～04（後續） |
 | **DR-2026-10-16-7**（答 CV1-FU-01） | 2026-10-16 | S1-6 合規指南與 `AI_QA_DISCLOSURE` 如何與 DEC-054 對齊？ | 「客戶 2026-10-16 裁示」（客戶訊息 2026-10-16T22:15Z；撰寫組自客戶原文摘錄）：(1) S1-6 不再以「全站不產生任何直接買賣建議」作為現行全面母法；(2)(3) 文件須忠實反映 DEC-054 七種 Action 與其條件；(4) `AI_QA_DISCLOSURE` 中與 DEC-054 不相容的強制文案「只修正到與 DEC-054 一致」、不另設計免責體系、保留一般「非投資建議」類揭露；(5) 不把 DEC-054 擴張到投資組合再平衡，`CV1-FU-02` 保持待裁示，DEC-022 再平衡三項限制繼續有效；(6) 不處理 `CV1-FU-03`；(7) 不處理 `CV1-FU-04`；(8) 全 repo 搜尋 active 舊規則引用，同一 DEC-054 造成的文件漂移可做 Minimum Necessary Change，歷史紀錄不得改寫；(9) 只允許文件／治理語意同步（`AI_QA_DISCLOSURE` 為第 4 點明文例外），⛔ 不改產品 code、UI、公式／門檻／資料來源，不實作 Action Layer，不開始 CV1-DR-02～09。→ `docs/DECISIONS.md` **DEC-055**（實作 DEC-054，不修改 DEC-054）。 | CV1-FU-01（結案）；CV1-FU-05、CV1-FU-06（新增）；DEC-054、DEC-055 |
+| **DR-2026-10-17-1**（產品方向） | 2026-10-17 | 新 UI 長期產品方向？ | 「客戶已正式同意後續新 UI 朝「投資決策 OS / Investment Inbox」方向發展。」（客戶訊息 2026-10-17T01:52Z）；只核准方向、不是實作授權；Decision Gate 清單與關閉規則見 DEC-056 | 本檔第 5 節 `VN-*`；`docs/DECISIONS.md` DEC-056 |
 
 ### 1.1 待裁示（已整理、尚未送題或尚未裁示）
 
@@ -267,3 +268,54 @@
 | **CV1-FU-04** | 缺口（非文字衝突） | 中 | DEC-054 第 4 點稱 Thesis、Core Decision／Context Overlay、Position Sizing 為「既有風險護欄」，第 6 點允許以 Thesis break 支持「全部退出」；本 repo 查無 Thesis、Core Decision／Context Overlay 的正式 DEC 或規格（只在 `CV1-RC-01` 候選方向；`AUD-L9` 持股帳本無 thesis 欄），Position Sizing 已落盤者只有 DEC-040／DEC-044／DEC-048／DEC-053。⇒ 依 Thesis break 產生強 Action 目前沒有正式依據可引 | `docs/BACKLOG.md` `CV1-RC-01`、`AUD-L9`；DEC-054 | open | 無（登記防誤用）；任何以 Thesis／Core Decision 為依據的 Action 施工前，先依 `PROJECT_RULES.md` 第 4 節走 Decision Gate |
 | **CV1-FU-05** | 缺口（Action Layer 設計批） | 低 | 2026-10-16 新增（`CV1-FU-01` 改版時發現；append-only）。DEC-054 之後站上可有正式 Action，但下列 **AI 層／通用免責**文案的寫法都是「AI／本系統不給任何買賣動作」，**尚未區分**「模型自己說出的方向」與「轉述一則正式 Action」：(a) `S1-6` §3.3 人設改寫稿第 6 條第一款「不給任何買賣動作」；(b) `S1-6` §3.4「建議新增：禁止輸出 L3/L4 句式」；(b′) AI prompt 層：`src/compute/notify/ai_judgment.py:84`「也不給任何具體買賣點或目標價」與 `:107`「買賣請自己決定」、`src/compute/notify/weekly_review_prompt.py:55`（同 :84）與 `:74`（同 :107）、`src/services/ai_structured_summary.py:222`「買賣請自己決定」（行號為 2026-10-16 對 `f91dfb56` 實測，會漂移）；(c) 各處通用免責「本系統非投資顧問，不構成買賣建議」等（例 `src/ui/tabs/tab_edu.py`、`src/ui/tabs/tab_stock.py`，舊 UI 凍結 DEC-019）。今日站上無正式 Action，故**目前不構成衝突**（撰寫組判讀）；Action Layer 落地時若與正式 Action 同屏，可能出現 S1-6 §3.2 第 3 點所說的自相矛盾。⚠️ 客戶 2026-10-16T22:15Z 第 4 點已指示保留一般「非投資建議」類揭露、不另設計免責體系 —— 本列**不**主張修改它們 | `docs/v2/spec/S1-6_COMPLIANCE_COPY_GUIDE.md` §3.3、§3.4（含 2026-10-16 📌 註）；`src/compute/notify/ai_judgment.py`、`src/compute/notify/weekly_review_prompt.py`、`src/services/ai_structured_summary.py`；`src/ui/tabs/tab_edu.py`、`src/ui/tabs/tab_stock.py` 的「不構成買賣建議」字樣；DEC-054、DEC-019 | open | 無（登記防遺漏）；Action Layer 設計批一併檢視，⛔ 不構成動工授權（`CLAUDE.md` §-1） |
 | **CV1-FU-06** | 既有衝突（產品 code） | 中 | 2026-10-16 新增（append-only）。`src/config/persona.py` 的 `TAIWAN_ADVISOR_PERSONA` 第 1 條仍寫「請給出明確的動作與情緒形容。」，經 `systemInstruction` 注入多個 AI 出口（S1-6 §3.0／§3.3 早已登記此為根因）。**本批之前即存在**，不是 DEC-054 造成的文件漂移；在 DEC-054 下仍衝突：模型自己給出的方向不是由可追溯資料＋正式決策規則支持的 Action（第 2 點），強 Action 不得只靠生成式 AI（第 6 點）。屬產品 code，依 DEC-055 第 9 點**本批未改** | `src/config/persona.py::TAIWAN_ADVISOR_PERSONA`；`docs/v2/spec/S1-6_COMPLIANCE_COPY_GUIDE.md` §3.0、§3.3；DEC-054、DEC-055 | open | 另案；改 persona 會改變全站 AI 出口語氣，依 S1-6 §6 議題 8 先出新舊樣張；⛔ 不構成動工授權（`CLAUDE.md` §-1） |
+
+## 5. vNext 產品方向：投資決策 OS／Investment Inbox（DEC-056）
+
+> 2026-10-17 新增（append-only；本檔第 0～4 節既有列一字未改）。來源：D 客戶訊息 2026-10-17T01:52Z（MSG 14），裁示見 `docs/DECISIONS.md` **DEC-056**、本檔 DR-2026-10-17-1。
+> **ID 前綴** `VN-*`＝vNext 產品方向項；**永不重用**（撰寫組 `git grep 'VN-'` 實測本次之前 docs／PROJECT_RULES 0 命中）。項目名稱照客戶原文。
+> ⛔ **方向 ≠ 實作授權**（客戶第 3 點）：「這次客戶同意的是「產品方向」，不是一次授權全部實作。」`Approved Backlog`＝**方向已核准**，實作仍須獨立 Batch、客戶指派與下列 Decision Gate；其餘類別（Research Candidate 等）同樣只是登記。登記不構成動工授權（`CLAUDE.md` §-1）。
+> ⛔ **仍須未來獨立 Decision Gate**（客戶第 4 點，下表「Gate」欄代號）：G1「投資公式與 threshold」／G2「Action transition rules」／G3「Position Sizing」／G4「Confidence calculation」／G5「新資料來源」／G6「API / MCP」／G7「production source replacement」／G8「irreversible migration」／G9「production switch」／G10「old UI deletion」／G11「branch deletion」。Gate 欄為撰寫組依項目字面判讀的**最少**適用 gate，非窮舉；任何 UI 版面／欄位／動線變更另受 DEC-003（線框先行）。
+> ⛔ **關閉規則**（客戶第 6 點）：「只有真正完成、經測試／audit／CI／main verification 的項目才能關閉；部分完成不得把整個長期方向標成完成。」→ 部分完成時拆子列（新 ID）結案，本表方向列維持 open。
+> 類別值（客戶第 3 點）：Approved Backlog／Research Candidate／UX-Mobile／Data Gap／Correctness-Tech Debt／Decision Required／Blocked。各列類別、範圍描述與 cross-ref 為撰寫組單組判讀，⚠️ 待第二組 evidence audit（`CLAUDE.md` §-2 規則 6）。
+
+| ID | 方向（客戶原文） | 類別 | 範圍（一行，不含規格） | Gate | cross-ref | status |
+|---|---|---|---|---|---|---|
+| **VN-00** | （Blueprint：最終產品方向） | Decision Required | 客戶第 5 點指定 Blueprint 承載最終產品方向；main 查無現行 Blueprint 文件。何時、以何形式建立待客戶指派；建立前以 DEC-056＋本節為落點 | — | DEC-056；handoff 分支 `S2-PRD.md`（非 main） | open |
+| **VN-01** | Google OAuth / Google Sheet onboarding | Approved Backlog | 新使用者以 Google OAuth 連接並建立／選擇 Google Sheet 的 onboarding 流程 | G5? G6?（依實作） | `CLAUDE.md` §8.2.A.1 EX-OAUTH-1；DEC-021（換一本／建新 Sheet） | open |
+| **VN-02** | Mobile-first / Investment Inbox / Today redesign | UX-Mobile | 新 UI 以 mobile-first 重設 Investment Inbox／Today 畫面 | G9、G10（取代舊 UI 時） | DEC-019、DEC-020；AUD-M* | open |
+| **VN-03** | user-facing 中文化，engineering jargon 下沉至 diagnostics | UX-Mobile | 使用者面文字中文化，工程術語移到 diagnostics 區 | — | — | open |
+| **VN-04** | Data State UX | UX-Mobile | 資料狀態（缺／過期／未評估等）的使用者呈現 | — | DEC-040、DEC-029；`CLAUDE.md` §1.A 第 4 點 | open |
+| **VN-05** | 雙軌選股：Growth/Momentum + Value/Mispricing | Research Candidate | 兩條選股軌並行 | G1、G5? | CV1-RC-01（Track A／B） | open |
+| **VN-06** | Core Decision + Context Overlay | Research Candidate | 決策核心與情境疊加分層 | G1 | CV1-RC-01；CV1-FU-04；DEC-054 第 4 點 | open |
+| **VN-07** | Why selected / not selected / removed | Approved Backlog | 說明標的入選／未入選／被移除的原因 | — | — | open |
+| **VN-08** | Near Opportunity / Watchlist | Approved Backlog | 接近條件的標的與觀察清單 | G1（「接近」門檻） | DEC-021（加入觀察清單） | open |
+| **VN-09** | Action Layer 與 Action lifecycle | Approved Backlog | 方向性 Action 與其生命週期 | G2、G1 | DEC-054、DEC-055；CV1-FU-03、CV1-FU-05 | open |
+| **VN-10** | Action 與 Position Sizing 分離 | Approved Backlog | Action 方向與部位大小分開決定 | G3 | DEC-053；DEC-054 第 4 點；CV1-FU-04 | open |
+| **VN-11** | Portfolio Context / Cash as Asset | Research Candidate | 以投組脈絡（含現金視為資產）看決策 | G1、G3 | DEC-022 再平衡三項限制（續有效）；CV1-FU-02 | open |
+| **VN-12** | Risk Cap as Risk Budget | Research Candidate | 把 Risk Cap 視為風險預算 | G1、G3 | DEC-041～DEC-044、DEC-046、DEC-048、DEC-049、DEC-051～DEC-053 | open |
+| **VN-13** | machine-evaluable Thesis | Research Candidate | 可由機器評估的 Thesis | G1 | CV1-RC-01（Structured Thesis）；CV1-FU-04；AUD-L9 | open |
+| **VN-14** | Thesis weakening / broken / not_evaluable | Research Candidate | Thesis 狀態（weakening／broken／not_evaluable） | G1、G2 | CV1-RC-01；DEC-054 第 6 點 | open |
+| **VN-15** | supporting evidence / counter evidence / Known Unknowns | Research Candidate | 支持證據、反證、已知未知並列 | — | CV1-RC-01 | open |
+| **VN-16** | Evidence / Why / Data lineage | Approved Backlog | 證據、理由與資料血緣呈現 | — | `CLAUDE.md` §2.2；DEC-054 第 2 點 | open |
+| **VN-17** | provenance / as-of / freshness | Correctness-Tech Debt | 資料 provenance、as-of、freshness 帶到決策與畫面 | — | DEC-029、DEC-040；`CLAUDE.md` §2.2／§2.4 | open |
+| **VN-18** | Data conflict handling | Correctness-Tech Debt | 多源資料衝突的處理與揭露 | G7? | `CLAUDE.md` §2.1 衝突裁決（禁止平均）；CV1-DR-08 | open |
+| **VN-19** | Attention Inbox | Approved Backlog | 需要使用者注意事項的收件匣 | G1（觸發門檻） | CV1-RC-07 | open |
+| **VN-20** | Web / Mobile / LINE 共用 Attention semantics | Research Candidate | 三個出口共用同一套 Attention 語意 | G6? | CV1-RC-07（§18 推播）；AUD-L7、AUD-L8；DEC-045 | open |
+| **VN-21** | Event → Company → Thesis → Portfolio → Action | Research Candidate | 事件經公司、Thesis、投組到 Action 的傳導鏈 | G1、G2、G5? | CV1-RC-01（Event 來源 Level 1～4） | open |
+| **VN-22** | Evidence 去重與 factor clustering | Research Candidate | 證據去重與因子分群，避免重複計分 | G1 | — | open |
+| **VN-23** | Market Regime as Context | Research Candidate | 市場 regime 作為 Context（非 Core） | G1 | CV1-RC-01；DEC-009（Context → Core／hard Veto 須裁示） | open |
+| **VN-24** | Portfolio true exposure / Thesis concentration | Research Candidate | 投組真實曝險與 Thesis 集中度 | G1 | `src/compute/risk/concentration.py`（既有，未查證是否對應） | open |
+| **VN-25** | candidate relative comparison | Research Candidate | 候選標的相互比較 | G1 | — | open |
+| **VN-26** | replacement candidates / opportunity cost | Research Candidate | 替代候選與機會成本 | G1、G3 | DEC-022 再平衡三項限制（續有效）；CV1-FU-02 | open |
+| **VN-27** | Decision Log | Approved Backlog | 記錄每次決策 | G8?（儲存格式） | CV1-RC-01（Decision Log 瘦身欄位、Storage 不預設） | open |
+| **VN-28** | User Override | Approved Backlog | 使用者覆寫系統決策並留紀錄 | G2 | 依賴 VN-27 | open |
+| **VN-29** | Decision Review | Approved Backlog | 事後檢討決策 | — | 依賴 VN-27；`CLAUDE.md` §2.3 forward-test | open |
+| **VN-30** | Rule / Data / Thesis versioning | Correctness-Tech Debt | 規則、資料、Thesis 版本化 | G8? | — | open |
+| **VN-31** | Shadow Mode | Research Candidate | 新規則先影子運行不進 production | G9 | DEC-053（回測／Shadow Mode 程序） | open |
+| **VN-32** | Scenario Analysis | Research Candidate | 情境分析 | G1 | DEC-022（情境試算為允許項） | open |
+| **VN-33** | Industry / Paradigm Shift Radar | Research Candidate | 產業／典範轉移雷達 | G5、G1 | — | open |
+| **VN-34** | Daily Brief / Weekly Review | Approved Backlog | 每日簡報與每週回顧 | G6?（推播出口） | CV1-RC-07；DEC-045 | open |
+| **VN-35** | Quiet Mode | UX-Mobile | 降低打擾的安靜模式 | — | CV1-RC-07（推播） | open |
+| **VN-36** | Desktop / Mobile 不同資訊密度 | UX-Mobile | 桌機與手機呈現不同資訊密度 | — | AUD-M*；DEC-003 | open |
+
+> 類別計數（量測日 2026-10-17）：Approved Backlog 11／Research Candidate 17／UX-Mobile 5／Correctness-Tech Debt 3／Decision Required 1（VN-00）／Data Gap 0／Blocked 0。「?」＝依實作方式才可能觸發。

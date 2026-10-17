@@ -38,6 +38,7 @@
 - 其餘 Constitution 遷移時未升格的項目：`docs/BACKLOG.md` 第 4 節（`CV1-DR-*`、`CV1-RC-*`）。
 - **舊待辦與「等你答」**：handoff 分支 `HANDOFF.md@1510f3f0` §3（1）、§4（91）、§5（42）、§6 等你答（25 題）及不佔列註，尚未遷入、仍以該檔為權威 —— 見 `docs/BACKLOG.md` `BL-MIGRATE-1` 補註。
 - 2026-10-17 收尾同步補登：`CV1-RC-07`（客戶 MSG 1 §18 推播三類警報方向、§26 最終產品原則；原只在聊天）—— Research Candidate，不構成動工授權。
+- 2026-10-17 產品方向登記（客戶 MSG 14，2026-10-17T01:52Z）：新 UI 方向「投資決策 OS／Investment Inbox」→ `docs/DECISIONS.md` DEC-056；方向項目 `docs/BACKLOG.md` 第 5 節（`VN-00`～`VN-36`）。**只核准方向、不是實作授權**；本登記隨收尾同步 PR #867 一起合併（同分支 `claude/stock-close-sync`）。最後合併仍為 #866（`2647a0fd`）。
 - 供客戶知悉：`AUD-C28`（「必要與選用訊號皆已評估」與薩姆從未評估並存）。
 
 ## 4. 下一安全接手點

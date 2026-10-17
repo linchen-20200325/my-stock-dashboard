@@ -234,6 +234,24 @@
 - **來源**：D 客戶訊息 2026-10-16T22:15Z（本 session；本檔首次入庫）「先處理 CV1-FU-01，不開始 CV1-DR-02，也不要開始產品 Action Layer。」；「本批目標：讓既有合規文件與 DEC-054 對齊，消除「治理允許方向性 Action，但 S1-6 文件仍全面禁止」的規格漂移。」
 - **與其他 DEC 的關係**：**實作 DEC-054，不修改 DEC-054**；不取代任何 DEC。DEC-022 再平衡三項限制依本條第 5 點繼續有效（`CV1-FU-02`）。BACKLOG 登記：DR-2026-10-16-7。
 
+### DEC-056｜新 UI 產品方向＝「投資決策 OS／Investment Inbox」（只核准方向，不是實作授權）
+> 2026-10-17 追加（第 8 節「收到當輪追加」）。ID 照序取下一個未用號（撰寫組 `git grep -oh "DEC-0[0-9]*" | sort -u` 實測最大為 DEC-055）。BACKLOG 登記：DR-2026-10-17-1；方向項目逐項見 `docs/BACKLOG.md` **第 5 節（`VN-*`）**。
+- **內容**（逐點對應客戶原文，引號內為原文）：
+  1. 「客戶已正式同意後續新 UI 朝「投資決策 OS / Investment Inbox」方向發展。」長期方向清單（客戶原文第 2 點，逐項）全數登記於 `docs/BACKLOG.md` 第 5 節，本條不重抄。
+  2. 「這次客戶同意的是「產品方向」，不是一次授權全部實作。」
+  3. **仍須未來獨立 Decision Gate、不得因本次登記視為已核准**（客戶原文第 4 點，逐字）：「投資公式與 threshold」「Action transition rules」「Position Sizing」「Confidence calculation」「新資料來源」「API / MCP」「production source replacement」「irreversible migration」「production switch」「old UI deletion」「branch deletion」。
+  4. **四檔責任**（客戶原文第 5 點，逐字）：「Blueprint：最終產品方向」「BACKLOG：尚未完成的工作」「DECISIONS：正式客戶裁示」「HANDOFF：目前接手位置」；「不得把長期方向只塞進 HANDOFF。」
+  5. **關閉規則**（客戶原文第 6 點）：「後續只有真正完成、經測試／audit／CI／main verification 的項目才能關閉；部分完成不得把整個長期方向標成完成。」
+  6. 本批範圍（客戶原文第 7 點）：「本次只做治理登記與必要文件同步。」「不要開始 vNext UI、OAuth、選股、Action、Thesis 或其他產品實作。」「不要修改產品 code。」「不要修改舊 UI。」「不要刪 branch。」
+- **範圍**：產品方向／治理｜**日期**：2026-10-17｜**決策者**：客戶｜**狀態**：生效（方向）；**所有方向項目實作狀態＝未開始**
+- **來源**：D 客戶訊息 2026-10-17T01:52Z（本 session MSG 14；本檔首次入庫）「請把這批已確認的長期產品方向正式保存到 repo，避免只存在聊天紀錄而在後續對話遺失。」
+- **與其他 DEC／項目的關係**（撰寫組單組判讀，⚠️ 待第二組 evidence audit）：
+  - **不取代任何 DEC**。DEC-009（Decision Gate 清單）同向，第 3 點清單是 DEC-009 的重申／補列（新增明列「Action transition rules」「Confidence calculation」），兩者取聯集。
+  - **DEC-054／DEC-055**：Action Layer 方向與 DEC-054 一致；DEC-054 仍不是實作授權，`CV1-FU-02`（再平衡射程）、`CV1-FU-03`（七種 Action 封閉清單）、`CV1-FU-04`（Thesis／Core Decision 規格缺口）**不因本條裁示**。
+  - **CV1-RC-01**（MSG 1 §1～§17）、**CV1-RC-07**（§18 推播、§26）：其中與本條清單重疊的方向（Core Decision＋Context Overlay、雙軌、Thesis、Decision Log、LINE 推播）已由客戶核准為**方向**；兩列的**規格細節**（欄位、四態、metrics 等）未因本條裁示，仍為 Research Candidate。對映見 `docs/BACKLOG.md` 第 5 節 cross-ref 欄。
+  - **DEC-019**（舊 UI 凍結）、**DEC-020**（切換路線、舊 UI 刪除前置）、**DEC-012**（分支刪除）、**DEC-053**（加減碼比例程序含 Shadow Mode）、**DEC-022** 再平衡三項限制：皆**繼續有效**，本條未改變。
+  - ⚠️ **Blueprint 缺口**：第 4 點指名「Blueprint：最終產品方向」，但 main 上撰寫組 `git grep -il -e blueprint -e 藍圖 -- docs PROJECT_RULES.md` 只命中稽核／重構舊文件，**查無現行 Blueprint 文件**（`S2-PRD.md` 只在 handoff 分支）。本批依客戶第 7 點不新建大型文件；缺口登記 `docs/BACKLOG.md` `VN-00`。在 Blueprint 建立前，方向的持久落點＝本條＋BACKLOG 第 5 節。
+
 ## 3. 資料語意（data semantics）
 
 ### DEC-026｜Missing ≠ 0：未觀測→缺值、真實 0→0、有效值→原值；不得 fillna(0) 或自估合理值

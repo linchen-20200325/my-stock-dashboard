@@ -204,6 +204,8 @@ Effort：Low / Medium / High
 
 **產品方向原則（Research Candidate，不是硬規則）**：客戶 2026-10-15 MSG 1 §1～§17 的 Core Decision＋Context Overlay、雙軌 Track A／B、Per-decision Core、Structured Thesis、Decision Log 瘦身、Live／Historical 分離、Safe Effective Cutoff、Event 來源分級、產業雷達不得假精確分數、Mobile 讀最新有效快照等，客戶自陳為方向與候選策略、尚無規格落地 → `docs/BACKLOG.md` `CV1-RC-01`（MSG 1 §18 推播「未來研究方向」與 §26 最終產品原則 → `CV1-RC-07`，2026-10-17 補指標）。施工前須依第 4 節走 Decision Gate。（2026-10-16 加註：MSG 1 §7 的 Action Layer **方向**已由 DEC-054 採用（D19）；DEC-054 稱為「既有風險護欄」的 Thesis、Core Decision／Context Overlay 在本 repo 仍無正式規格 → `CV1-FU-04`；本段其餘不變。）
 
+📌 **2026-10-17 指標（append-only）**：新 UI 產品方向「投資決策 OS／Investment Inbox」由客戶核准**方向**（不是實作授權）→ `docs/DECISIONS.md` **DEC-056**；方向項目 → `docs/BACKLOG.md` **第 5 節（`VN-*`）**。
+
 ## 第 14 節｜未調和的衝突
 
 不在本檔裁定。全部登記於 `docs/BACKLOG.md` 第 4 節（`CV1-DR-*` Decision Required、`CV1-RC-*` Research Candidate），並由 `docs/DECISIONS.md` 第 6 節索引。暫行讀法：**任一套規則要求停下就停下**。
