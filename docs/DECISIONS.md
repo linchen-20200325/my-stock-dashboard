@@ -263,19 +263,20 @@
      - 產出：「請建立一份可長期維護的 vNext Product Blueprint。」
   3. **客戶明示的產品原則**（⛔ 全部是**方向，不是實作授權**；逐點短引）：
      - 產品定位：「每天替使用者過濾市場噪音，只把真正需要做決定的事情送到面前；每個結論都可以一路追溯到正式規則與客觀資料。」
-     - 核心 UX：「Decision first / → Attention / → Risk / → Evidence / → Raw data」。
+     - 核心 UX：「Decision first / → Attention / → Risk / → Evidence / → Raw data」。Mobile 核心：「現在怎麼做 / → 為什麼 / → 下一步」；「禁止把 Desktop Dashboard 直接縮小當 Mobile UI。」
      - 分層：「資料層、規則層、決策層、AI 解釋層必須保持分離。」「AI 不得成為客觀資料來源，也不得偷偷修改正式規則。」
-     - Google 登入：「請盤點並優先「重用」舊 UI／既有資料層 OAuth 能力，不重造 OAuth。」「Google 登入不是觀看所有公開市場資料的硬 Gate。」「公開市場功能仍可匿名使用。」
+     - Google 登入：「使用者開啟 App 後，Google 登入應成為非常明顯的第一級入口。」「請盤點並優先「重用」舊 UI／既有資料層 OAuth 能力，不重造 OAuth。」「Google 登入不是觀看所有公開市場資料的硬 Gate。」「公開市場功能仍可匿名使用。」
      - 使用者語言：「一般 User UI 不直接暴露內部程式術語。」
      - 首頁：「首頁不是 Dashboard。」「不要為了讓首頁有內容而製造 Action。」「不要為了 engagement 製造訊號。」
      - Action 與部位：「Action Engine： / 決定方向。」「Position Sizing Engine： / 決定幅度。」「沒有正式 sizing 規則時禁止 fake precision。」
      - 現金：「UI 不得暗示： / 「沒買股票 = 錯失機會」。」「「維持現金」可以是合理結果。」
-     - 選股：「現行 fundamental prescreen 必須先盤點，但本批禁止修改公式。」「不要再設計一條很長的 hard Gate chain。」「只有有正式風險理由時才 hard veto。」（雙軌 Track A／B 與 Core Decision＋Context Overlay 的**方向**；條件與門檻見下第 4 點）
+     - 選股：「選股方向正式改為雙軌產品設計」（客戶原文標題）；「現行 fundamental prescreen 必須先盤點，但本批禁止修改公式。」「不要再設計一條很長的 hard Gate chain。」「只有有正式風險理由時才 hard veto。」（雙軌 Track A／B 與 Core Decision＋Context Overlay 的**方向**；條件與門檻屬 G1，見下第 4 點與 Blueprint `BP-DR-07`）
+     - Not Now：「本輪請建立「Not Now / Won't Do Without Decision」清單。」—— 客戶列舉的「至少」各項逐項收錄於 Blueprint 第 27 節；該清單是客戶列的禁止事項，未經客戶裁示不得做。
   4. **仍需客戶裁示**（客戶原文第五十一節，逐字）：「Backlog ≠ implementation authorization。」「任何： / - 投資公式 / - threshold / - 新資料語意 / - 新 production source / - API/MCP / - Action formula / - Sizing / - major UI flow final approval / 仍需客戶裁示。」
   5. **完成條件與停點**：「本批不要因為藍圖完成就開始施工。」「然後停在安全點。」「不要開始 vNext 1.0 implementation。」「完成後停止，不開始施工。」
   6. **Blueprint 位置**：`docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（附 `docs/vnext/UI_AUDIT_2026-10-17.md`）。⚠️ 位置與檔名是**總管內部決定**（`CLAUDE.md` §-1.5 v3 §03-1「目錄如何動態拆分、資料夾如何命名」屬內部自決），**不是客戶裁示**。
 - **範圍**：產品方向／治理｜**日期**：2026-10-17｜**決策者**：客戶（第 6 點位置：AI 總管內部）｜**狀態**：生效（指派）；Blueprint 內所有線框、BP-DR-* **皆待客戶裁示**，實作狀態＝未開始
-- **來源**：D 客戶訊息 2026-10-17（本 session；本檔首次入庫；UTC 時間撰寫組無法取得）「客戶已正式同意將新 UI 朝「投資決策 OS / Investment Inbox」方向改善。」；「請建立一份可長期維護的 vNext Product Blueprint。」
+- **來源**：D 客戶訊息 2026-10-17（本 session；本檔首次入庫；確切 UTC 時戳未記錄，只保留日期）「客戶已正式同意將新 UI 朝「投資決策 OS / Investment Inbox」方向改善。」；「請建立一份可長期維護的 vNext Product Blueprint。」
 - **與其他 DEC 的關係**（撰寫組單組判讀，⚠️ 待第二組 evidence audit）：
   - **實作 DEC-056 第 4 點**（「Blueprint：最終產品方向」），**不取代任何 DEC**；DEC-056 第 3 點 Decision Gate 清單與本條第 4 點取聯集。
   - **DEC-017**（IA v2 五頁線框）**不因本條改變**：Blueprint 提議的主導航改動（今天／機會／持股／我的，2.0 加動態）列為 Blueprint **BP-DR-01**，未裁示前五頁 IA 照舊。

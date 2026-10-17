@@ -6,6 +6,8 @@
 
 ## 1. 現況（量測：2026-10-17，`origin/main`＝`312c7fee`；main CI 由 GitHub Actions API 實測）
 
+> 本節為現況快照，每版整表替換（不逐格加刪除線；沿用 #867 作法），歷史見第 2 節與 git history。
+
 | 項目 | 現況 |
 |---|---|
 | 最後一個功能／治理合併（非 cron、非本批 PR） | `312c7fee`（#867 squash merge，`docs(治理)：對話收尾同步（HANDOFF 現況至 #866、結案證據、CV1-RC-07）`；含 DEC-056、BACKLOG 第 5 節 `VN-*`）；parent `2647a0fd`（#866） |

@@ -324,7 +324,7 @@
 
 ### 5.1 VN-00 Blueprint 批新增項（2026-10-17）
 
-> 2026-10-17 新增（append-only；本檔既有列除 `VN-00`、`AUD-M1` 兩處以刪除線／📌 加註外一字未改）。來源：VN-00 Blueprint 批（DEC-057、DR-2026-10-17-2）。詳細內容以 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（下稱 **BP**）與 `docs/vnext/UI_AUDIT_2026-10-17.md`（下稱 **UIA 報告**）為準，本節只做登記與指標。
+> 2026-10-17 新增（append-only；本檔既有內容除 `VN-00`、`AUD-M1` 兩列與第 5 節頁尾類別計數句以刪除線／📌 加註外一字未改 —— 撰寫組以 `git diff` 單組核對，未經第二組驗）。來源：VN-00 Blueprint 批（DEC-057、DR-2026-10-17-2）。詳細內容以 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（下稱 **BP**）與 `docs/vnext/UI_AUDIT_2026-10-17.md`（下稱 **UIA 報告**）為準，本節只做登記與指標。
 > **ID 前綴**：`SEC-*`＝安全／隱私；`UIA-*`＝2026-10-17 新 UI 實機 Audit；`BP-DR-*`＝Blueprint 待客戶裁示題；`BP-RC-*`＝Blueprint 研究候選。**永不重用**（撰寫組 `git grep -e 'SEC-[0-9]' -e 'UIA-[0-9]' -e 'BP-DR-' -e 'BP-RC-' -- docs PROJECT_RULES.md` 實測：本批之前只命中 `docs/vnext/` 兩檔）。
 > ⛔ **登記不構成動工授權**（`CLAUDE.md` §-1；DEC-057：「不要開始 vNext 1.0 implementation。」）。「不需客戶裁示」＝修法方向單一、屬內部自決，**仍須客戶指派批次、派工、獨立稽核、CI**；本批依 DEC-057 禁止「修改產品行為」，一律未施工。
 > **驗證組數**：UI 實測（U 組）＝1 組；OAuth 盤點（O 組）＝1 組；獨立複驗（V 組）只覆蓋 UIA-01／02／03／07、SEC-1／2 → 這六項為 2 組，其餘為 1 組（⛔ 1 組者不得當成已複驗事實）。V 組的重現為讀碼＋Python 直呼函式／mock，**未在真實部署（Streamlit Cloud＋真 Google 登入）實測**。
@@ -344,7 +344,7 @@
 
 #### 5.1.2 Decision Required（Blueprint 待客戶裁示題；詳見 BP 第 23 節）
 
-> 推薦方案為總管推薦（附理由見 BP）；Gate 代號同第 5 節（G1～G11），另以 DEC-003 ① 表示「版面／欄位／動線（草稿先行）」、DEC-009-cred 表示 credentials／account access、DEC-009-AI 表示 substantive AI behavior。status 一律 `blocked-on-customer`（未送題）；驗證組數：題目本身為 Blueprint 撰寫組提出、經兩組獨立 review（A：UX／Mobile；B：投資系統／資料語意）審閱，**推薦方案未經客戶確認**。
+> 推薦方案為總管推薦（附理由見 BP）；Gate 代號同第 5 節（G1～G11），另以 DEC-003 ① 表示「版面／欄位／動線（草稿先行）」、DEC-009-cred 表示 credentials／account access、DEC-009-AI 表示 substantive AI behavior。status 一律 `blocked-on-customer`（未送題）；驗證組數：題目本身為 Blueprint 撰寫組提出；Blueprint 經 Review A（UX／Mobile）／B（投資系統／資料語意）兩組獨立審閱，修訂後由第三組 R2 複驗（PASS-WITH-FIXES），R2 指出的殘留項於第 3 輪修訂；`BP-DR-19`～`BP-DR-21` 為 review 後新增，僅經 R2 複驗。**推薦方案未經客戶確認**。
 
 | ID | 問題（一句話） | Gate | 對應 VN | 總管推薦（摘要） |
 |---|---|---|---|---|
@@ -376,5 +376,5 @@
 
 | ID | 類別 | 內容 | 指標 | status | 驗證組數 |
 |---|---|---|---|---|---|
-| **BP-RC-01～BP-RC-12** | Research Candidate | 雙軌最小 metrics、Context factor 分群、Evidence 去重、Regime as Context、真實曝險、替代標的、Scenario、產業雷達、週報／晨報、Streamlit Mobile 導覽 PoC、Decision Log 儲存方案、「尚未公布」預計發布日來源（逐題見 BP 第 24 節，各題對應 VN-ID） | BP 第 24 節 | open | 1（Blueprint 撰寫組；經 A／B review 審閱） |
+| **BP-RC-01～BP-RC-12** | Research Candidate | 雙軌最小 metrics、Context factor 分群、Evidence 去重、Regime as Context、真實曝險、替代標的、Scenario、產業雷達、週報／晨報、Streamlit Mobile 導覽 PoC、Decision Log 儲存方案、「尚未公布」預計發布日來源（逐題見 BP 第 24 節，各題對應 VN-ID） | BP 第 24 節 | open | 1（Blueprint 撰寫組；經 A／B review 審閱，修訂後經 R2 複驗；`BP-RC-12` 為 review 後新增，僅經 R2 複驗） |
 | **UIA-P1P2** | UX-Mobile | 新 UI 實機 Audit 其餘項（P1 10／P2 13／P3 1，量測日 2026-10-17；含入口藏在收合側欄、工程術語外露、卡片過高、出口指向新 UI 模式下不顯示的舊分頁、手機表格截斷、Streamlit 頂列約佔 120px 等）＋工程術語 P0／P1／Dev 分級 | UIA 報告；BP 第 21 節 Gap 表、第 26 節 `BP-B1`～`BP-B7` | open（版面類須先出線框，DEC-003 ①；純文案修正屬內部自決） | 1（U 組；工程術語分級為 C 組單組 AST 掃描） |
