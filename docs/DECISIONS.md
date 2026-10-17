@@ -283,6 +283,38 @@
   - **DEC-003**（草稿先行）：Blueprint 線框即「文字線框草稿」，未經客戶拍板（Blueprint **BP-DR-16**）不得寫 UI code。
   - **DEC-019**、**DEC-020**、**DEC-012**、**DEC-022**、**DEC-053**、**DEC-054**、**DEC-055**：繼續有效，本條未改變。
 
+### DEC-058｜授權 `BP-ERR-01` 第 4 輪最小必要文件修正（Blueprint §8.9 分母、§29.3 自查敘述）
+> 2026-10-17 追加（第 8 節「收到當輪追加」）。ID 照序取下一個未用號（文件修正組 `git grep -oh "DEC-0[0-9]*" | sort -u` 實測最大為 DEC-057）。BACKLOG 登記：DR-2026-10-17-3；落點 `docs/BACKLOG.md` 第 5.1.1 節 `BP-ERR-01`。
+- **內容**（引號內為客戶原文）：
+  1. **授權**：「允許針對 "BP-ERR-01" 進行第 4 輪最小必要文件修正。」
+  2. **事實來源**：「請以目前 GitHub main 與實際 production code／"shared/macro_buckets.py::BUCKET_DANGER_SPECS" 為事實來源」。
+  3. **修正對象**：「修正 Blueprint §8.9 的錯誤分母，以及因此失效的 §29.3 自查敘述。」
+  4. **範圍限制**：「本次只修文件 correctness，不改產品 code、不改公式、不改資料語意、不擴大 Blueprint 產品方向，也不開始 vNext 1.0 implementation。」
+- **範圍**：治理／文件｜**日期**：2026-10-17｜**決策者**：客戶｜**狀態**：生效（一次性授權；限 `BP-ERR-01`）
+- **來源**：D 客戶訊息 2026-10-17（本 session；本檔首次入庫；確切 UTC 時戳未記錄，只保留日期）「允許針對 "BP-ERR-01" 進行第 4 輪最小必要文件修正。」
+- **與其他 DEC 的關係**（文件修正組單組判讀，⚠️ 待第二組 evidence audit）：
+  - **DEC-010**（同檔回修超過 2 輪停手問客戶）：本條是**依 DEC-010 停手問過之後**的客戶授權，**不取代、不放寬** DEC-010；授權只涵蓋本次 `BP-ERR-01`，日後 Blueprint 再回修仍適用 DEC-010。
+  - **DEC-057**（Blueprint 只設計、不施工）、**DEC-003**（草稿先行）：不變；本次只更正線框示意數字，不是核准線框（BP-DR-16 仍待裁示）。
+  - **DEC-049**：不變；Blueprint 只揭露「M1B−M2 現行仍計入危險度燈長期桶分母」這個程式事實，分母要不要排除仍屬 Blueprint `BP-DR-19`。
+
+### DEC-059｜永久治理：Minimum Sufficient Effort、Effort 雙向主動提醒、Silent Autonomous Cruise 強化
+> 2026-10-17 追加（第 8 節「收到當輪追加」）。ID 照序取下一個未用號（治理編修組 `git grep -oh "DEC-0[0-9]*" | sort -u` 實測最大為 DEC-058）。BACKLOG 登記：DR-2026-10-17-4。規則本文落點：`PROJECT_RULES.md` 第 3 節（巡航）、第 4 節（打斷清單對映註）、第 9 節（9.1～9.3）、第 11 節（自動繼承）。
+- **內容**（引號內為客戶原文）：
+  1. **目的**：「請新增一項永久治理要求，避免客戶未來每個對話重複提醒。」
+  2. **A. Minimum Sufficient Effort**：「將「推理強度採夠用即可，避免不必要 token／額度浪費」寫入正式 "PROJECT_RULES.md"。」「使用「能可靠完成下一完整階段的最低 Effort」。」「不得因為 High 比較強就預設 High。」「若 Low 足夠，不使用 Medium。/ 若 Medium 足夠，不使用 High。」「等待 CI、等待 audit、等待 workflow 等待狀態，不得要求提高 Effort。」Low／Medium／High 適用清單逐項收錄於 `PROJECT_RULES.md` 9.1。
+  3. **B. Effort 主動提醒**：「如果「下一完整階段」明顯應使用不同 Effort，專案 AI 必須在安全停點主動提醒客戶，不得等客戶詢問。」格式「⏸️ 建議切換推理強度 / 下一階段：___ / 建議 Effort：Low / Medium / High / 原因：___ / 切換完成後請回覆「改好了」。」；「若目前 Effort 已足夠：/ - 不要提醒 / - 不要每次重複報告目前 Effort / - 直接工作」；不得在「未 commit 的實作中途」「PR 尚在修正中途」「CI 正在跑」「一個不可安全中斷的完整工作階段中」要求切換；「Effort 切換本身不是產品 Decision Gate。」
+  4. **B 追加（同批，雙向）**：「若客戶目前選擇的 Effort 高於下一階段實際所需，且已到安全停點，也應主動提醒「可以降低 Effort」，以避免不必要的 token／額度消耗。」範例格式（逐字收錄於 `PROJECT_RULES.md` 9.2）。撰寫組讀法：第 3 點「若目前 Effort 已足夠：不要提醒」在追加後讀作「目前 Effort 恰好合適時不提醒」（⚠️ 讀法，客戶可推翻）。
+  5. **C. Silent Autonomous Cruise**：「預設採靜默自主巡航。」可自行完成的流程鏈（研究 → 實作 → tests → independent audit / review → 修正 → push → PR → CI → 修 CI → merge → main verification → BACKLOG / HANDOFF / DECISIONS 必要同步）；「安全工作以最多 3 個緊密相關項目為一批，避免 scope creep。」禁止回報的中間狀態清單（逐項收錄於 `PROJECT_RULES.md` 第 3 節）；「只有三種情況可以主動打斷客戶」：完整階段完成（「精簡回報，原則 ≤5 行。」）、真正需要客戶裁示、需要切換 Effort；「已經有正式 DECISION 的問題不得重新詢問客戶。」「已確認的 bug，若修法單一且不涉及 Decision Gate，應自行修正、測試、audit、CI，不要包裝成客戶選擇題。」
+  6. **D. 持久化**：「"PROJECT_RULES.md"：永久規則」「"docs/HANDOFF.md"：只放 pointer，不複製整套規則」「不得只寫在 HANDOFF。/ 不得只留在 Claude 對話。/ 不得只寫進單次 prompt。」「若已有，整合／強化，不建立互相重複或矛盾的第二套規則。」「保留既有治理優先序。」
+- **範圍**：治理｜**日期**：2026-10-17｜**決策者**：客戶｜**狀態**：生效（隨本批 PR 合併）
+- **來源**：D 客戶訊息 2026-10-17（本 session；本檔首次入庫；確切 UTC 時戳未記錄，只保留日期）「請新增一項永久治理要求，避免客戶未來每個對話重複提醒。」；同批追加「若客戶目前選擇的 Effort 高於下一階段實際所需…也應主動提醒「可以降低 Effort」」。
+- **與其他 DEC 的關係**（治理編修組單組判讀，⚠️ 待第二組 evidence audit）：
+  - **DEC-007**、**DEC-006**（巡航、每批 ≤3 項）：**強化**，不取代；DEC-006 的停止條件與防膨脹 Gate 不變。
+  - **DEC-014**（模型／模式／Effort 自主管理）：**部分取代** —— Effort 的分級改依本條清單、Effort-only 切換改用本條格式並改為雙向提醒；DEC-014 的模型／模式切換格式、「改好了」後不重摘要／不重問／不重做、等 CI 不切換等仍有效（`PROJECT_RULES.md` 9.3）。
+  - **DEC-013**（不重問）、**DEC-009**（Decision Gate）：同向；本條打斷清單逐項對映 `PROJECT_RULES.md` 第 4 節既有表，未增刪該表。
+  - **DEC-001**（派工）／`CLAUDE.md` §-2：不變 —— 巡航擴大的是「不必問客戶」，不是「不必派工」；Effort 不影響派工與稽核。
+  - **`CLAUDE.md`**：不取代、不修改。≤5 行回報與 `CLAUDE.md` §-2 規則 6／§-1.5.A-7 揭露義務並存；與 `CLAUDE.md` §-1.5 v1 第三條「自我審核五段呈現」、§-1.5 第四條／v3 §04 三段式交付報告（含判定 6 清理項目），以及 `PROCESS.md` §1（/compact 提醒）、§4（四段報告）的張力登記 `docs/BACKLOG.md` `CV1-DR-10`，裁示前以 `CLAUDE.md` 為準。
+
 ## 3. 資料語意（data semantics）
 
 ### DEC-026｜Missing ≠ 0：未觀測→缺值、真實 0→0、有效值→原值；不得 fillna(0) 或自估合理值
