@@ -42,9 +42,11 @@ L3 → L1（`gsheet_portfolio`）是 §8.2 的正常方向。
 **這是判定，不是全稱句**：本檔沒有查證過「repo 內只有那兩處」。
 
 ═══ 為什麼一定要**顯式**把 `sheet_id` 傳下去（踩過的坑）═══════════════
-L1 的四支讀取函式都是 `@st.cache_data(ttl=TTL_15MIN)`，而 `sheet_id` 是**參數**
-＝ 快取鍵的一部分。傳 `None` 時鍵**恆為空**、真正的 sheet 在函式內部才解析 ——
-於是**換一本 Sheet 之後 15 分鐘內會拿到上一本的資料**（張冠李戴）。
+L1 的四支讀取函式背後是 `@st.cache_data(ttl=TTL_15MIN)` 的內部 `_*_cached` 函式。
+（SEC-1 起快取鍵＝（呼叫 Google 的身分指紋, 實際 sheet_id, …）—— L1 已自行把 `None`
+解析成 active sheet 再建鍵；修 SEC-1 之前鍵裡**沒有身分**，且傳 `None` 時鍵**恆為空**、
+真正的 sheet 在函式內部才解析 —— 於是**換一本 Sheet 之後 15 分鐘內會拿到上一本的資料**
+（張冠李戴）。）顯式傳 `sheet_id=` 仍是本檔的做法：讀哪一本由 caller 說清楚，不靠 L1 猜。
 `portfolio_binding_service.get_binding_state()` 的註解已把這個坑寫明白
 （「§ P3a 稽核 #3」）。本檔照辦：**每一次呼叫都顯式帶 `sheet_id=`。**
 
@@ -179,8 +181,8 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
             冒充有效結果（2026-09-26 批次 7）。訊息＝`read_error` 原文。
 
     ⚠️ 一次呼叫最多打 Google 四次（列組合名 / 讀組合 / 列清單名 / 讀清單），
-    四支在 L1 都是 `@st.cache_data(ttl=TTL_15MIN)`，且本檔**顯式帶 `sheet_id=`**
-    讓快取鍵隨 Sheet 變動（見檔頭「為什麼一定要顯式傳 sheet_id」）。
+    四支在 L1 背後都是 `@st.cache_data(ttl=TTL_15MIN)`（SEC-1 起鍵含身分指紋＋實際
+    sheet_id），且本檔**顯式帶 `sheet_id=`**（見檔頭「為什麼一定要顯式傳 sheet_id」）。
     """
     from src.data.portfolio import gsheet_portfolio as _gsp    # L3 → L1（正常方向）
     from src.services.portfolio_binding_service import (       # L3 → L3
