@@ -37,7 +37,7 @@ def get_binding_state() -> BindingState:
     """讀目前投組 Sheet 綁定狀態,回三態。**純讀不寫**。
 
     未登入 / 未綁 → unbound(登入才是使用綁定的前提,故未登入一律 unbound,即使 ?sheet= 已還原)。
-    已登入 + 已綁 → 讀 list_portfolios(active sheet,cached TTL_15MIN)判空/有;失敗回中性 bound。
+    已登入 + 已綁 → 讀 list_portfolios(active sheet,cached TTL_15MIN,SEC-1 起鍵含身分)判空/有;失敗回中性 bound。
 
     「沒有」與「讀失敗」分開記(`read_error`,批次 7):
       · token 不在 / Sheet 識別碼沒設 → unbound,`read_error=""`(**有效結果**)。
@@ -60,9 +60,10 @@ def get_binding_state() -> BindingState:
                             read_error=_read_err)
 
     # 已登入 + 已綁 → 看有沒有組合資料(區分 🟡 空 vs 🟢 有)。
-    # ⚠️ 明確傳 sheet_id=_sid(而非預設 None):list_portfolios 以參數為 @st.cache_data 快取鍵,
-    # 傳 None 時鍵恆為空、內部才靠 session 解析 active sheet → 換 Sheet 後 15 分鐘內會拿到
-    # **上一本的本數**(張冠李戴)。傳 _sid 讓快取鍵隨 Sheet 變動,一併正確定位(§ P3a 稽核 #3)。
+    # ⚠️ 明確傳 sheet_id=_sid(而非預設 None)。SEC-1 起 L1 快取鍵＝(身分指紋, 實際 sheet_id),
+    # None 也會先解析成 active sheet 再建鍵;但修 SEC-1 前鍵只有參數,傳 None 時鍵恆為空 →
+    # 換 Sheet 後 15 分鐘內拿到**上一本的本數**(張冠李戴,§ P3a 稽核 #3)。顯式傳 _sid 讓讀哪一本
+    # 由本檔說清楚,不依賴 L1 的解析細節。
     try:
         _count = len(_gsp.list_portfolios(sheet_id=_sid))
     except Exception:  # noqa: BLE001 — 讀組合清單失敗 → 中性「已綁定」,不炸狀態列、不腦補

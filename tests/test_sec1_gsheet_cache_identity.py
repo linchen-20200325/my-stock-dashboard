@@ -244,3 +244,82 @@ def test_clear_read_cache_still_forces_refetch(env):
     gsp.clear_read_cache()
     gsp.list_portfolios(sheet_id='SID_A')
     assert env.calls == [('A', 'SID_A'), ('A', 'SID_A')]
+
+
+# ── SA2 SHOULD-2:`_get_oauth_client()` 回 None → `_build_client` 會退回 SA ──────────
+# 修前:快取鍵是 B 的 `oauth:` 指紋,實際卻用 SA 讀 → SA 能讀、B 本人(OAuth)讀不到的資料
+# 被存進 B 的 oauth 鍵,B 之後 OAuth 恢復時 15 分鐘內會從快取拿到「SA 身分讀到的資料」。
+# 修後:快取路徑內身分種類被釘住,OAuth 鍵下**拒絕** SA fallback(fail loud,例外不入快取)。
+def test_oauth_identity_never_caches_sa_fallback_read(env):
+    env.sa()                                    # SA 備齊(能讀 SID_SA)
+    env.oauth('B')                               # B 已登入 OAuth(B 沒有 SID_SA 的 ACL)
+    gsp.st.secrets = {gsp.PORTFOLIO_SHEET_KEY: 'SID_SA',
+                      'gcp_service_account': {'client_email': 'sa@p.iam.gserviceaccount.com'}}
+    with patch('src.data.portfolio.oauth_state._get_oauth_client', return_value=None):
+        with pytest.raises(RuntimeError, match='OAuth'):
+            gsp.list_portfolios(sheet_id='SID_SA')
+    assert ('SA', 'SID_SA') not in env.calls, 'oauth 鍵之下不可改用 SA 讀資料'
+    # OAuth 恢復後 B 必須重新經 Google ACL(被拒),不得命中 SA 讀到的資料
+    with pytest.raises(PermissionError):
+        gsp.list_portfolios(sheet_id='SID_SA')
+    # 另一位使用者 C 也不會拿到任何東西
+    env.oauth('C')
+    with pytest.raises(PermissionError):
+        gsp.list_portfolios(sheet_id='SID_SA')
+
+
+def test_sa_fallback_unchanged_outside_cache_path(env):
+    """非快取路徑(寫入 / 列檔)的 `_build_client` OAuth→SA fallback 行為不變。"""
+    env.sa()
+    env.oauth('B')
+    gsp.st.secrets = {gsp.PORTFOLIO_SHEET_KEY: 'SID_SA',
+                      'gcp_service_account': {'client_email': 'sa@p.iam.gserviceaccount.com'}}
+    with patch('src.data.portfolio.oauth_state._get_oauth_client', return_value=None):
+        assert gsp._build_client().who == 'SA'
+
+
+# ── SA1 SHOULD-2:走真實 save_* / delete_* 路徑,同一使用者寫完再讀是新值 ──────────
+@pytest.fixture
+def fake_sheets():
+    from tests.test_gsheet_portfolio import _FakeWorksheet
+    sheets = {
+        gsp._WORKSHEET_NAME: _FakeWorksheet([gsp._HEADERS,
+                                             ['舊組', '0050', 1, 100, 't']]),
+        gsp._STOCK_WATCHLIST_WORKSHEET: _FakeWorksheet([gsp._STOCK_WATCHLIST_HEADERS,
+                                                        ['舊清單', '2330', 't']]),
+    }
+    calls = {'n': 0}
+
+    def _ws(*, sheet_id=None, worksheet_name=gsp._WORKSHEET_NAME, headers=gsp._HEADERS):
+        calls['n'] += 1
+        return sheets[worksheet_name]
+    gsp.clear_read_cache()
+    with patch.object(gsp, '_ws', side_effect=_ws), \
+         patch.object(gsp, '_cache_identity', return_value='oauth:same-user'):
+        yield calls
+    gsp.clear_read_cache()
+
+
+def test_save_then_read_sees_new_value_same_user(fake_sheets):
+    assert gsp.list_portfolios(sheet_id='S') == ['舊組']
+    assert gsp.load_portfolio('舊組', sheet_id='S')[0]['lots'] == 1
+    _n = fake_sheets['n']
+    assert gsp.list_portfolios(sheet_id='S') == ['舊組']
+    assert fake_sheets['n'] == _n, '先確認確實有快取(否則下面的「讀到新值」是空轉)'
+    gsp.save_portfolio('舊組', [{'ticker': '0050', 'lots': 7, 'avg_price': 100}], sheet_id='S')
+    gsp.save_portfolio('新組', [{'ticker': '2330', 'lots': 2, 'avg_price': 500}], sheet_id='S')
+    assert gsp.load_portfolio('舊組', sheet_id='S')[0]['lots'] == 7
+    assert gsp.list_portfolios(sheet_id='S') == ['新組', '舊組']
+    gsp.delete_portfolio('新組', sheet_id='S')
+    assert gsp.list_portfolios(sheet_id='S') == ['舊組']
+
+
+def test_watchlist_save_delete_then_read_sees_new_value_same_user(fake_sheets):
+    assert gsp.load_stock_watchlist('舊清單', sheet_id='S') == ['2330']
+    assert gsp.list_stock_watchlists(sheet_id='S') == ['舊清單']
+    gsp.save_stock_watchlist('舊清單', ['2330', '2454'], sheet_id='S')
+    assert gsp.load_stock_watchlist('舊清單', sheet_id='S') == ['2330', '2454']
+    gsp.add_to_stock_watchlist('新清單', ['1101'], sheet_id='S')
+    assert gsp.list_stock_watchlists(sheet_id='S') == ['新清單', '舊清單']
+    gsp.delete_stock_watchlist('新清單', sheet_id='S')
+    assert gsp.list_stock_watchlists(sheet_id='S') == ['舊清單']

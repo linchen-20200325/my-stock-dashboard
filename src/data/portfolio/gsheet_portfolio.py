@@ -46,6 +46,7 @@ import datetime as _dt
 import hashlib
 import math
 from collections.abc import Mapping
+from contextvars import ContextVar
 from typing import Any
 
 try:
@@ -252,11 +253,18 @@ def _build_client():
     OAuth 判斷只看「有 token + 有 OAuth Client」，不綁 sheet_id —
     讓「列檔挑 Sheet」流程能在 sheet_id 還沒設定前先建 client。
     """
+    _pinned = _CACHED_READ_KIND.get()   # SEC-1:快取路徑內被釘住的身分種類(非快取路徑為 '')
     if _has_oauth_tokens():
+        if _pinned == _IDENTITY_KIND_SA:
+            raise RuntimeError('Google Sheet 讀取快取以 SA 身分建鍵,實際卻要走 OAuth —— 拒絕讀取')
         from src.data.portfolio.oauth_state import _get_oauth_client
         cli = _get_oauth_client()
         if cli is not None:
             return cli
+    # SEC-1(SA2 SHOULD-2):快取鍵是 OAuth 指紋時**不准**退回 SA —— 否則 SA 讀到的資料會存進
+    # 這位使用者的 oauth 鍵,OAuth 恢復後 TTL 內從快取拿到他本人 ACL 讀不到的資料。fail loud。
+    if _pinned == _IDENTITY_KIND_OAUTH:
+        raise RuntimeError('OAuth client 建立失敗,快取讀取路徑不退回 Service Account —— 請重新登入 Google')
     # Fallback: Service Account（OAuth 沒登入或建 client 失敗才走這條）
     if not _sa_configured():
         raise RuntimeError(
@@ -282,6 +290,9 @@ def _build_client():
 #: 身分種類前綴(§3.3 具名常數)。OAuth 與 SA 分屬不同前綴 ⇒ 兩條路徑永不共用快取項。
 _IDENTITY_KIND_OAUTH = 'oauth'
 _IDENTITY_KIND_SA = 'sa'
+#: 快取 miss 執行期間「快取鍵是哪一種身分」;`_build_client` 據此拒絕與鍵不符的 client
+#: (ContextVar:per-thread／per-context,Streamlit 多 session 並行時互不干擾)。
+_CACHED_READ_KIND: ContextVar[str] = ContextVar('_CACHED_READ_KIND', default='')
 
 
 def _identity_fingerprint(kind: str, credential: str) -> str:
@@ -323,6 +334,20 @@ def _require_identity(identity: str) -> None:
     """快取 miss 真要打 Google 前,再確認身分沒在解析後變掉(防禦:鍵與實際呼叫者必須一致)。"""
     if _cache_identity() != identity:
         raise RuntimeError('Google Sheet 讀取身分在解析後改變 —— 拒絕寫入快取,請重新整理頁面')
+
+
+def _run_as_identity(identity: str, raw_fn, **kwargs):
+    """快取 miss 時執行 `raw_fn`:先驗身分未變,再把身分種類釘進 `_CACHED_READ_KIND`。
+
+    釘住之後 `_build_client` 只會建出與快取鍵同種類的 client(OAuth 鍵不退回 SA,反之亦然),
+    保證「鍵上的身分」＝「實際呼叫 Google 的身分」。
+    """
+    _require_identity(identity)
+    _token = _CACHED_READ_KIND.set(identity.partition(':')[0])
+    try:
+        return raw_fn(**kwargs)
+    finally:
+        _CACHED_READ_KIND.reset(_token)
 
 
 def _identity_scoped_read(cached_fn, raw_fn, **kwargs):
@@ -506,8 +531,7 @@ def list_portfolios(*, sheet_id: str | None = None) -> list[str]:
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def _list_portfolios_cached(identity: str, *, sheet_id: str) -> list[str]:
     # ⚠️ 參數名**不可**加底線前綴:st.cache_data 會把 `_` 開頭的參數排除在快取鍵外。
-    _require_identity(identity)
-    return _list_portfolios_raw(sheet_id=sheet_id)
+    return _run_as_identity(identity, _list_portfolios_raw, sheet_id=sheet_id)
 
 
 def _list_portfolios_raw(*, sheet_id: str) -> list[str]:
@@ -540,8 +564,9 @@ def load_portfolio(name: str, *, sheet_id: str | None = None,
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def _load_portfolio_cached(identity: str, *, name: str, sheet_id: str,
                            keep_blank: bool) -> list[dict[str, Any]]:
-    _require_identity(identity)   # identity 不加底線:底線參數不進 st.cache_data 快取鍵
-    return _load_portfolio_raw(name=name, sheet_id=sheet_id, keep_blank=keep_blank)
+    # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+    return _run_as_identity(identity, _load_portfolio_raw,
+                            name=name, sheet_id=sheet_id, keep_blank=keep_blank)
 
 
 def _load_portfolio_raw(*, name: str, sheet_id: str,
@@ -755,8 +780,8 @@ def list_stock_watchlists(*, sheet_id: str | None = None) -> list[str]:
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def _list_stock_watchlists_cached(identity: str, *, sheet_id: str) -> list[str]:
-    _require_identity(identity)   # identity 不加底線:底線參數不進 st.cache_data 快取鍵
-    return _list_stock_watchlists_raw(sheet_id=sheet_id)
+    # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+    return _run_as_identity(identity, _list_stock_watchlists_raw, sheet_id=sheet_id)
 
 
 def _list_stock_watchlists_raw(*, sheet_id: str) -> list[str]:
@@ -786,8 +811,8 @@ def load_stock_watchlist(name: str, *, sheet_id: str | None = None) -> list[str]
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def _load_stock_watchlist_cached(identity: str, *, name: str, sheet_id: str) -> list[str]:
-    _require_identity(identity)   # identity 不加底線:底線參數不進 st.cache_data 快取鍵
-    return _load_stock_watchlist_raw(name=name, sheet_id=sheet_id)
+    # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+    return _run_as_identity(identity, _load_stock_watchlist_raw, name=name, sheet_id=sheet_id)
 
 
 def _load_stock_watchlist_raw(*, name: str, sheet_id: str) -> list[str]:
