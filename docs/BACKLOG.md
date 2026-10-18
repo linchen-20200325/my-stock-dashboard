@@ -93,7 +93,7 @@
 
 | ID | 標題 | sev／pri | status | evidence | affected area | dependency | customer decision | source／PR | next action | 驗證組數 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **AUD-C12** | `macro_state.json`（系統風險上限）只存在 Streamlit Cloud ephemeral 磁碟、全 session 共用，容器重啟即消失 | 高 | blocked-on-customer（未送題） | `macro_state.json` 落檔位置為 ephemeral 磁碟；兩組皆確認無排程提供、runtime 才寫入；⚠️「Cloud 為 ephemeral」依 repo 內 `macro_core` 註解，未實測雲端<br>**2026-10-16 註**：自 AUD-C21（`c21-split`）起，新 UI 的上限檔是 `risk_cap_state.json`，`macro_state.json` 只剩舊 UI 與 regime 退路使用；ephemeral 磁碟的疑慮**兩個檔都適用** | 系統風險上限持久化與跨 session 共用 | 與 AUD-C6、AUD-C19 相關 | **需要**（持久化位置選擇）；⚠️ 換位置可能撞五類 ③（資料層） | 2026-10-15 Data Gap Audit | 送題（附推薦方案） | 2（儲存稽核組＋Mobile 稽核組） |
+| **AUD-C12** | `macro_state.json`（系統風險上限）只存在 Streamlit Cloud ephemeral 磁碟、全 session 共用，容器重啟即消失 | 高 | blocked-on-customer（未送題） | `macro_state.json` 落檔位置為 ephemeral 磁碟；兩組皆確認無排程提供、runtime 才寫入；⚠️「Cloud 為 ephemeral」依 repo 內 `macro_core` 註解，未實測雲端<br>**2026-10-16 註**：自 AUD-C21（`c21-split`）起，新 UI 的上限檔是 `risk_cap_state.json`，`macro_state.json` 只剩舊 UI 與 regime 退路使用；ephemeral 磁碟的疑慮**兩個檔都適用** | 系統風險上限持久化與跨 session 共用 | 與 AUD-C6、AUD-C19 相關 | **需要**（持久化位置選擇）；⚠️ 換位置可能撞五類 ③（資料層） | 2026-10-15 Data Gap Audit | 送題（附推薦方案）<br>📌 **2026-10-18 補註（append-only）**：送題已併入 `VN1-Q4` 附帶問題（「每日系統風險上限紀錄要存在 repo 追蹤檔嗎？」，總管推薦：是；技術細節內部）—— 見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md`、DR-2026-10-18-2 | 2（儲存稽核組＋Mobile 稽核組） |
 | **AUD-C4-3UP** | prescreen「三率三升」為累計對累計 | 中（另案） | blocked-on-customer | 數學上一致，但市場慣例常指單季 | 基本面初篩 | — | **需要**：PQ-C4-2 | AUD-C4 語意驗證 | 另案送題 | 未標（總管轉述） |
 | **AUD-C17** | `mops_bulk_fetcher::_find_col` 子字串比對，「本期淨利（淨損）」先命中「繼續營業單位本期淨利（淨損）」 | 中 | open | net_income 欄實為**繼續營業單位淨利**；NI 與 EPS 正負號相反 138 列／86 檔（例 3708）；影響 prescreen net_margin；AUD-C4 趨勢不受影響 | 季財報快照 net_income；prescreen `net_margin` | 修正需重抓快照（cron／網路）；欄位語意確認 | **不需要**（correctness）；但重抓歷史季屬**資料重建、需排程** | AUD-C4 語意組 A | 第二組驗證 → 修 `_find_col` 精確比對 → 排程重抓 | ⚠️ 1（C4 語意組 A；未經第二組驗） |
 | **AUD-C9** | 系統性風險新聞關鍵字純子字串比對，誤中灌高五桶 news_systemic 燈 | 中 | open | `news_fetcher::fetch_macro_news` 的 `SYSTEMIC_RISK_KEYWORDS`：war⊂software／award／router、rout⊂router、default | 五桶 `news_systemic` 燈 | — | 不需要（確認 bug、單一安全修法）；⚠️ 若改關鍵字清單本身則涉判讀語意 | 2026-10-15 Data Gap Audit | 可自主排入 | 2（Context 稽核組＋引擎獨立複驗組；實跑子字串命中） |
@@ -417,9 +417,9 @@
 | ID | 問題（一句話） | 涵蓋 | status | 總管推薦（摘要） | 驗證組數 |
 |---|---|---|---|---|---|
 | **VN1-Q1** | 1.0 新畫面先核准哪些：全部 1.0 線框，或先核准客戶點名的 1.0 重點（四格導覽、登入晶片／卡、Sheet 選擇、持股唯讀直讀、新舊並存兩入口、今天頁、BP §2.1／§15） | `BP-DR-01`、`03`、`05`、`16`、`17`、`14`（延後）、`UIA-FU-2` | blocked-on-customer | B（先核准 1.0 重點；持股四組分組延後，`AUD-C10` 未仲裁）；擋所有 1.0 UI code（DEC-003） | 2（兩組分析分群一致；推薦分歧由總管裁決） |
-| **VN1-Q2** | 重新整理後要不要保持登入 | `BP-DR-04` | blocked-on-customer | B（保持登入：先修 `SEC-2`、再驗可行性，不過退回 A；與 BP 原推薦 A 不同）；`SEC-2` 機制屬內部決定 | 2（兩組皆推薦 B；可行性未驗證） |
+| **VN1-Q2** | 重新整理後要不要保持登入 | `BP-DR-04`、`BP-DR-18`（附帶同意） | blocked-on-customer | B（保持登入：先修 `SEC-2`、再驗可行性，不過退回 A；與 BP 原推薦 A 不同）；附帶同意「伺服器短期保存一次性驗證碼」推薦同意（機制內部，DEC-009 保留同意） | 2（兩組皆推薦 B；可行性未驗證） |
 | **VN1-Q3** | 沒登入的人能不能讀到你的持股 | `BP-DR-06`、`SEC-3` | blocked-on-customer | A（只有登入且有權限者可讀；系統帳號只給排程）；附問 production 是否設定系統帳號（未知） | 2 |
-| **VN1-Q4** | 今天頁「和上次比」比什麼 | `BP-DR-13`、`BP-DR-11`（1.0 部分）、`AUD-C12` | blocked-on-customer | A（比上一份通過新鮮度、規則版本相同的紀錄；沿用期不算變化；只提醒取數失敗與上限正式值有變）；保存方式驗證前先用 B | 2（保存方式未驗證） |
+| **VN1-Q4** | 今天頁「和上次比」比什麼 | `BP-DR-13`、`BP-DR-11`（1.0 部分）、`AUD-C12`（附帶問題） | blocked-on-customer | A（比上一份通過新鮮度、規則版本相同的紀錄；沿用期不算變化；只提醒取數失敗與上限正式值有變）；保存方式驗證前先用 B；附帶問題「存 repo 追蹤檔」推薦是 | 2（保存方式未驗證） |
 | **VN1-Q5** | 資料不齊時今天頁怎麼說 | `BP-DR-19`、`UIA-FU-4` | blocked-on-customer | A（維持最差燈＋「只根據 N／M 項」；「資料正常」綁 Required Core；分母沿用 DEC-037／049／051／044，請客戶確認是否適用彙總燈） | 2 |
 
 另：BP 建議**首次送題**兩個既有項 —— `AUD-C12`（快照持久化，BP-B4 關鍵路徑）、`AUD-L9`（帳本現金／投資理由欄位，建議 2.0 才送）；兩列本身未改，送題時以該列為準。
