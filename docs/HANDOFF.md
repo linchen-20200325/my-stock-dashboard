@@ -71,6 +71,7 @@
 4. 確認 working tree 乾淨；⛔ 不還原舊 UI 壓測 `stash@{0}`（DEC-019）。
 5. 不要求客戶重講已落盤資訊（`PROJECT_RULES.md` 第 11 節）。
 6. 推理強度（Minimum Sufficient Effort、雙向提醒）與靜默自主巡航為永久規則：見 `PROJECT_RULES.md` 第 9 節、第 3 節（DEC-059；回報格式 DEC-060）；本檔不複製規則。
+7. 每個階段邊界（含「merge＋main verification → 收尾同步」）強制內部 Effort Check、雙向提醒：見 `PROJECT_RULES.md` 9.2（DEC-061）；本檔不複製規則。
 
 ## 6. 本檔沒查證的部分
 
