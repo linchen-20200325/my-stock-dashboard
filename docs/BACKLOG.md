@@ -69,6 +69,7 @@
 | **DR-2026-10-17-4**（永久治理：Effort／巡航） | 2026-10-17 | 推理強度與回報模式能否寫成永久規則、避免每個對話重複提醒？ | 「請新增一項永久治理要求，避免客戶未來每個對話重複提醒。」：(A) Minimum Sufficient Effort「使用「能可靠完成下一完整階段的最低 Effort」。」；(B) 在安全停點主動提醒切換 Effort，同批追加雙向（「也應主動提醒「可以降低 Effort」」）；(C) 預設靜默自主巡航、只有三種情況可打斷客戶；(D) 寫入 `PROJECT_RULES.md`，HANDOFF 只放 pointer。逐點見 `docs/DECISIONS.md` **DEC-059**；規則落點 `PROJECT_RULES.md` 第 3、9、11 節 | `PROJECT_RULES.md` 第 3／4／9／11 節；`CV1-DR-10`（新登） |
 | **DR-2026-10-17-5**（`CV1-DR-10` 裁示：回報格式） | 2026-10-17 | ≤5 行完成回報與 `CLAUDE.md`／`PROCESS.md` 既有報告格式的張力怎麼解？ | 「同意 CV1-DR-10 推薦方案：」「完整技術／稽核證據留在 PR。」「對客戶的一般完成回報原則 ≤5 行。」「若真正需要客戶裁示，可超過 5 行，但只保留完成裁示所需資訊。」「請正式同步治理文件，消除 CLAUDE.md／PROCESS.md／PROJECT_RULES 之間的回報格式張力。」（D 客戶訊息 2026-10-17，本 session；逐字見 DEC-060） | `CV1-DR-10`；`PROJECT_RULES.md` 第 3 節；`CLAUDE.md` §-1.5.A-3／A-7／§-1.5.F 判定 6 加註；`PROCESS.md` §1、§4 加註；`docs/DECISIONS.md` DEC-060 |
 | **DR-2026-10-18-1**（Effort 防漏：強制 Effort Check） | 2026-10-18 | #872 高推理批合併後進入收尾同步時未主動提醒降 Effort，如何永久防漏而不建重複規則？ | 「3. 從今以後，每個「完整工作階段結束／下一完整階段開始前」都必須先做一次內部 Effort Check」「4. 若一致：保持靜默，直接繼續。」「5. 若不一致：必須在開始下一完整階段前停下，主動使用既定格式提醒客戶升級或降級。」「6. 特別注意「High → Medium／Low」也必須主動提醒，不能只提醒升級。」（D 客戶訊息 2026-10-18，本 session；8 點逐字見 DEC-061） | `PROJECT_RULES.md` 9.2（就地修改）、第 3 節／9.1 pointer；`docs/DECISIONS.md` DEC-061 |
+| **DR-2026-10-18-2**（vNext 1.0 Decision Gate 收斂指派） | 2026-10-18 | `BP-DR-01`～`BP-DR-21` 等待裁示題如何收斂成 1.0 必問的少數題？ | 客戶指派本批做 vNext 1.0 Decision Gate 收斂（總管轉述；研究整理，不施工、不改產品 code）：21 題 BP-DR＋`SEC-2`／`SEC-3`／`UIA-FU-2`／`UIA-FU-4` 收斂為 5 題 `VN1-Q1`～`VN1-Q5`，其餘分為建議延後 2.0／1.0 維持現狀不需問／內部決定。⛔ 這是**收斂結果與送題準備，不是裁示**；各 BP-DR 狀態不變（延後只是建議）。詳見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` | 本檔 5.1.2 `VN1-Q1`～`VN1-Q5`；`BP-DR-01`～`21`（狀態不變）；`docs/vnext/VNEXT_1_0_DECISION_GATES.md` |
 
 ### 1.1 待裁示（已整理、尚未送題或尚未裁示）
 
@@ -81,6 +82,7 @@
 | PQ-C7-1 | AUD-C7 | 引擎是否比照 `M1B_M2_LEG_ENABLED=False` 停用 M1B 腿，或等 DL-f1-s8 重跑 | ~~未給~~ **已裁示 DR-2026-10-16-2**（2026-10-16 更新） |
 | PQ-C6-3 | AUD-C6／C8 | Cap 理由字串與「N 項未評估」上卡（欄位增減，須先線框；屬 F6／Q-z39～41） | ~~未給；⚠️ 仍待裁示（2026-10-16：上卡需先出線框；不在 DR-2026-10-16-1 範圍內）；2026-10-16 註：卡片目前**不揭露**未評估的 Optional 項目，揭露現在只在更新報告與檔案的 `not_evaluated` 欄；要上卡須先出線框~~ **已裁示 DR-2026-10-16-4**（2026-10-16 更新）；~~實作於分支 `c21-split`（見 AUD-C21）~~ **已實作：#862 `fa26914b`（2026-10-16）** |
 | PQ-C3-1 | AUD-C3-FU (b)(g)(h) | 舊 UI `station_cards`／`etf_tab_dividend_station` 與新 UI `page_hold` 加碼措辭／計數說明（文案；spec gap；舊 UI 凍結）、舊 UI 持股與觀察清單同代號兩列 | 未給 |
+| VN1-Q1～VN1-Q5 | 5.1.2 | vNext 1.0 Decision Gate 收斂後的 5 題（2026-10-18，DR-2026-10-18-2）；逐題見本檔 5.1.2 與 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` | 見該檔各題 |
 | （未送題） | AUD-C10、C12、C13（凍結檔部分）、C15、C16 (a)、C17（重抓排程） | 見各列 | 見各列 |
 
 ---
@@ -91,7 +93,7 @@
 
 | ID | 標題 | sev／pri | status | evidence | affected area | dependency | customer decision | source／PR | next action | 驗證組數 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **AUD-C12** | `macro_state.json`（系統風險上限）只存在 Streamlit Cloud ephemeral 磁碟、全 session 共用，容器重啟即消失 | 高 | blocked-on-customer（未送題） | `macro_state.json` 落檔位置為 ephemeral 磁碟；兩組皆確認無排程提供、runtime 才寫入；⚠️「Cloud 為 ephemeral」依 repo 內 `macro_core` 註解，未實測雲端<br>**2026-10-16 註**：自 AUD-C21（`c21-split`）起，新 UI 的上限檔是 `risk_cap_state.json`，`macro_state.json` 只剩舊 UI 與 regime 退路使用；ephemeral 磁碟的疑慮**兩個檔都適用** | 系統風險上限持久化與跨 session 共用 | 與 AUD-C6、AUD-C19 相關 | **需要**（持久化位置選擇）；⚠️ 換位置可能撞五類 ③（資料層） | 2026-10-15 Data Gap Audit | 送題（附推薦方案） | 2（儲存稽核組＋Mobile 稽核組） |
+| **AUD-C12** | `macro_state.json`（系統風險上限）只存在 Streamlit Cloud ephemeral 磁碟、全 session 共用，容器重啟即消失 | 高 | blocked-on-customer（未送題） | `macro_state.json` 落檔位置為 ephemeral 磁碟；兩組皆確認無排程提供、runtime 才寫入；⚠️「Cloud 為 ephemeral」依 repo 內 `macro_core` 註解，未實測雲端<br>**2026-10-16 註**：自 AUD-C21（`c21-split`）起，新 UI 的上限檔是 `risk_cap_state.json`，`macro_state.json` 只剩舊 UI 與 regime 退路使用；ephemeral 磁碟的疑慮**兩個檔都適用** | 系統風險上限持久化與跨 session 共用 | 與 AUD-C6、AUD-C19 相關 | **需要**（持久化位置選擇）；⚠️ 換位置可能撞五類 ③（資料層） | 2026-10-15 Data Gap Audit | 送題（附推薦方案）<br>📌 **2026-10-18 補註（append-only）**：送題已併入 `VN1-Q4` 附帶問題（「每日系統風險上限紀錄要存在 repo 追蹤檔嗎？」，總管推薦：是；技術細節內部）—— 見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md`、DR-2026-10-18-2 | 2（儲存稽核組＋Mobile 稽核組） |
 | **AUD-C4-3UP** | prescreen「三率三升」為累計對累計 | 中（另案） | blocked-on-customer | 數學上一致，但市場慣例常指單季 | 基本面初篩 | — | **需要**：PQ-C4-2 | AUD-C4 語意驗證 | 另案送題 | 未標（總管轉述） |
 | **AUD-C17** | `mops_bulk_fetcher::_find_col` 子字串比對，「本期淨利（淨損）」先命中「繼續營業單位本期淨利（淨損）」 | 中 | open | net_income 欄實為**繼續營業單位淨利**；NI 與 EPS 正負號相反 138 列／86 檔（例 3708）；影響 prescreen net_margin；AUD-C4 趨勢不受影響 | 季財報快照 net_income；prescreen `net_margin` | 修正需重抓快照（cron／網路）；欄位語意確認 | **不需要**（correctness）；但重抓歷史季屬**資料重建、需排程** | AUD-C4 語意組 A | 第二組驗證 → 修 `_find_col` 精確比對 → 排程重抓 | ⚠️ 1（C4 語意組 A；未經第二組驗） |
 | **AUD-C9** | 系統性風險新聞關鍵字純子字串比對，誤中灌高五桶 news_systemic 燈 | 中 | open | `news_fetcher::fetch_macro_news` 的 `SYSTEMIC_RISK_KEYWORDS`：war⊂software／award／router、rout⊂router、default | 五桶 `news_systemic` 燈 | — | 不需要（確認 bug、單一安全修法）；⚠️ 若改關鍵字清單本身則涉判讀語意 | 2026-10-15 Data Gap Audit | 可自主排入 | 2（Context 稽核組＋引擎獨立複驗組；實跑子字串命中） |
@@ -382,6 +384,8 @@
 
 #### 5.1.2 Decision Required（Blueprint 待客戶裁示題；詳見 BP 第 23 節）
 
+> 📌 **2026-10-18 收斂指標（DR-2026-10-18-2；本節既有內容一字未改）**：下表 21 題已收斂為 5 題客戶問題 `VN1-Q1`～`VN1-Q5`（列於本節表後），逐題對映見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` 第 3 節。各 BP-DR 列 status **不變**（仍 `blocked-on-customer`）；「延後 2.0」「1.0 維持現狀不需問」「內部決定」皆為總管建議，未經客戶裁示。
+
 > 推薦方案為總管推薦（附理由見 BP）；Gate 代號同第 5 節（G1～G11），另以 DEC-003 ① 表示「版面／欄位／動線（草稿先行）」、DEC-009-cred 表示 credentials／account access、DEC-009-AI 表示 substantive AI behavior。status 一律 `blocked-on-customer`（未送題）；驗證組數：題目本身為 Blueprint 撰寫組提出；Blueprint 經 Review A（UX／Mobile）／B（投資系統／資料語意）兩組獨立審閱，修訂後由第三組 R2 複驗，R2 指出的殘留項於第 3 輪修訂；R2 第 3 輪複驗 **PASS-WITH-FIXES，殘留 `BP-ERR-01`~~（DEC-010 回修上限，未修）~~**（2026-10-17 更新：客戶授權第 4 輪，DEC-058；本 PR 修正，合併後生效；第 4 輪修正經 V4 獨立複驗（2026-10-17，PASS-WITH-FIXES，0 MUST-FIX））（2026-10-17 更新：「本 PR」＝#869，已合併，`BP-ERR-01` 已結案，見「3. 已結案」）；`BP-DR-19`～`BP-DR-21` 為 review 後新增，僅經 R2 複驗。**推薦方案未經客戶確認**。
 
 | ID | 問題（一句話） | Gate | 對應 VN | 總管推薦（摘要） |
@@ -407,6 +411,16 @@
 | **BP-DR-19** | 部分資料時總經彙總燈怎麼呈現？「資料健康：正常」怎麼定義？ | G1 | VN-04 | 不另創 N/M 門檻；「正常」綁各 Decision 的 Required Core；燈色維持最差＋揭露「只根據 N/M 項」 |
 | **BP-DR-20** | AI 解釋要放進哪些「為什麼」？自動或按鈕生成？能否轉述正式買賣判斷？ | DEC-009-AI | VN-16 | 1.0 不擴大（只保留現有兩個 AI 呼叫點）；先解 `CV1-FU-05`／`06` |
 | **BP-DR-21** | 系統風險上限的畫面名稱？「風險預算」等新說法能否使用？上限與建議持股區間怎麼並列不混淆？ | G1、G3 | VN-12 | 1.0 沿用「系統風險上限」、一卡一數字；新說法待 2.0 有現金欄後送裁示；不得讀成可買額度 |
+
+**vNext 1.0 Decision Gate 收斂題（2026-10-18，DR-2026-10-18-2；未送題前狀態一律 `blocked-on-customer`）**
+
+| ID | 問題（一句話） | 涵蓋 | status | 總管推薦（摘要） | 驗證組數 |
+|---|---|---|---|---|---|
+| **VN1-Q1** | 1.0 新畫面先核准哪些：全部 1.0 線框，或先核准客戶點名的 1.0 重點（四格導覽、登入晶片／卡、Sheet 選擇、持股唯讀直讀、新舊並存兩入口、今天頁、BP §2.1／§15） | `BP-DR-01`、`03`、`05`、`16`、`17`、`14`（延後）、`UIA-FU-2` | blocked-on-customer | B（先核准 1.0 重點；持股四組分組延後，`AUD-C10` 未仲裁）；擋所有 1.0 UI code（DEC-003） | 2（兩組分析分群一致；推薦分歧由總管裁決） |
+| **VN1-Q2** | 重新整理後要不要保持登入 | `BP-DR-04`、`BP-DR-18`（附帶同意） | blocked-on-customer | B（保持登入：先修 `SEC-2`、再驗可行性，不過退回 A；與 BP 原推薦 A 不同）；附帶同意「伺服器短期保存一次性驗證碼」推薦同意（機制內部，DEC-009 保留同意） | 2（兩組皆推薦 B；可行性未驗證） |
+| **VN1-Q3** | 沒登入的人能不能讀到你的持股 | `BP-DR-06`、`SEC-3` | blocked-on-customer | A（只有登入且有權限者可讀；系統帳號只給排程）；附問 production 是否設定系統帳號（未知） | 2 |
+| **VN1-Q4** | 今天頁「和上次比」比什麼 | `BP-DR-13`、`BP-DR-11`（1.0 部分）、`AUD-C12`（附帶問題） | blocked-on-customer | A（比上一份通過新鮮度、規則版本相同的紀錄；沿用期不算變化；只提醒取數失敗與上限正式值有變）；保存方式驗證前先用 B；附帶問題「存 repo 追蹤檔」推薦是 | 2（保存方式未驗證） |
+| **VN1-Q5** | 資料不齊時今天頁怎麼說 | `BP-DR-19`、`UIA-FU-4` | blocked-on-customer | A（維持最差燈＋「只根據 N／M 項」；「資料正常」綁 Required Core；分母沿用 DEC-037／049／051／044，請客戶確認是否適用彙總燈） | 2 |
 
 另：BP 建議**首次送題**兩個既有項 —— `AUD-C12`（快照持久化，BP-B4 關鍵路徑）、`AUD-L9`（帳本現金／投資理由欄位，建議 2.0 才送）；兩列本身未改，送題時以該列為準。
 
