@@ -4,23 +4,24 @@
 > 本檔由 Constitution v1.0 治理 PR #864 建立（DEC-016）；~~本版隨 DEC-054（`CV1-DR-01` 裁示）治理 PR 一起合併（分支 `claude/stock-cv1-dr01`）。~~ ~~本版隨 `CV1-FU-01`（S1-6 合規指南對齊 DEC-054）PR 一起合併（分支 `claude/stock-cv1-fu01`；2026-10-16 更新）。~~ ~~**本版由對話收尾同步 PR 更新**（分支 `claude/stock-close-sync`；2026-10-17，客戶 2026-10-17T01:31Z「對話結束完整性檢查」；純文件同步）。最後一個功能／治理合併為 #866；本同步 PR 合併後 main 會前進，cron 亦會推進 tip —— **main tip 以 GitHub 為準**。~~ ~~**本版隨 #868（VN-00 Blueprint 批）合併**（分支 `claude/investment-inbox-product-design-m1lu7v`；2026-10-17，DEC-057；文件批，無產品 code）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~ ~~**本版隨 `BP-ERR-01` 第 4 輪文件修正 PR 合併**（同分支名，已重置到 main `f7c60cae` 後重做；2026-10-17，客戶授權，DEC-058；文件批，無產品 code）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~ ~~**本版隨 vNext 0.9 第一安全修復批（`SEC-1`）＋治理同步（DEC-060、`BP-ERR-01` 結案）PR 合併**（同分支名，已重置到 main `15bc173e` 後重做；2026-10-17，客戶授權）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~ ~~**本版隨 #870 後的收尾同步 PR 合併**（同分支名，基於 main `7b803b4f`；2026-10-18；docs-only：`SEC-1` 結案登記、DEC-059／DEC-060 狀態補證據）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#871 已合併，`d3425a91`；2026-10-18 更新）~~**本版隨 vNext 0.9 第二批地基修復 PR 合併**（同分支名 `claude/investment-inbox-product-design-m1lu7v`，基於 main `d3425a91`；2026-10-18，客戶指派；產品 code commit `98118b3f`、`a6e500b2` ＋本文件同步）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#872 已合併，`c41ee3fb`；2026-10-18 更新）~~**本版隨 #872 後的收尾同步 PR 合併**（同分支名，基於 main `c41ee3fb`；2026-10-18；docs-only：`UIA-01`／`UIA-02`／`UIA-07` 結案登記）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#873 已合併，`6e71ec60`；其後 #874 `5cec364e` 合併 DEC-061）**本版隨 vNext 1.0 Decision Gate 收斂批 PR 合併**（同分支名，基於 main `5cec364e`；2026-10-18，客戶指派；docs-only，研究整理、不施工）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。
 > **完整歷史**：分支 `claude/stock-dashboard-handoff-g9dtm0` 的 `HANDOFF.md`（`1510f3f0`，約 5150 行；**未刪除**；其 current-state 行寫 main＝`fa26914b`，已過期、不含 #863）。本檔不搬歷史。
 
-## 1. 現況（量測：2026-10-18，`origin/main`＝`87afe5ae`；main CI 由撰寫組 `gh run list` 實查）
+## 1. 現況（量測：2026-10-18，`origin/main`＝`a9ba83c1`；main CI 依總管轉述）
 
 > 本節為現況快照，每版整表替換（不逐格加刪除線；沿用 #867 作法），歷史見第 2 節與 git history。
 
 | 項目 | 現況 |
 |---|---|
-| 最後一個功能／治理合併（非 cron、不含本版所隨的 PR） | `87afe5ae`（#876；DEC-062 裁示登記）；其前為 `3192ef11`（#875，Decision Gate 收斂）、`5cec364e`（#874） |
-| main tip | 量測時 tip＝`87afe5ae`。本版 PR 合併後 tip 會前進（合併後 main SHA 以 GitHub 為準）；cron 亦會持續推進 tip，引用前重查 |
-| main CI | `87afe5ae`：run 39121214945（main push）`success`（2026-10-18 撰寫組 `gh run list` 實查） |
-| open PR | 本批 PR 開立後至少為 1，合併後現況以 GitHub 為準 |
-| active work | **`1.0-B1` 安全地基進行中**（DEC-062 Q2／Q3；分支 `claude/investment-inbox-product-design-m1lu7v`，commits `abb44a90`、`5be0e9dd`；總管轉述）：`SEC-2`（OAuth state 綁瀏覽器的一次性 nonce）＋`SEC-3`（關閉匿名經 SA 讀 Sheet）→ `in-progress`，**PR 待開／未合併**；`SEC-1-FU` 刻意未併入。後續 `B1-FU-1`～`3` 已登記 —— 見 `docs/BACKLOG.md` 5.1.1 |
-| ⚠️ 過期值 | `70416a6a` 是 #852／Z65（2026-10-15）的舊 commit，**不是目前 main**；`5cec364e`（#874）亦已不是最後合併 |
+| 最後一個功能／治理合併（非 cron、不含本版所隨的 PR） | `a9ba83c1`（#877；`1.0-B1` 安全地基 SEC-2／SEC-3）；其前為 `87afe5ae`（#876，DEC-062 裁示登記） |
+| main tip | 量測時 tip＝`a9ba83c1`。本版收尾同步合併後 tip 會前進；cron 亦會持續推進 tip，引用前重查 |
+| main CI | `a9ba83c1`：run 39132620519（main push）`success`，Fast＋Slow 兩 lane（總管轉述） |
+| open PR | 本收尾同步 PR 開立後至少為 1，合併後現況以 GitHub 為準 |
+| active work | **無進行中工作**。`1.0-B1` 已完成（#877）。下一批＝`1.0-B2` 登入持續性 PoC＋Streamlit Cloud 驗證［High］，**未開始**，開工前須依 `PROJECT_RULES.md` 9.2 Effort Check（需 High 先停下提醒客戶）。⚠️ 未驗證：Streamlit Cloud 真實登入未實測（`B1-FU-2`，屬 `1.0-B2`）；production SA 是否存在仍 unknown；production `[google_oauth]` 是否設定 unknown。已請客戶做一次 production Google 登入；若被拒，救援閥門為 Streamlit secrets `oauth_csrf_enforce = false`；建議自 Streamlit secrets 移除 `[gcp_service_account]` |
+| ⚠️ 過期值 | `87afe5ae`（#876）已不是最後合併；`70416a6a`（#852）為舊 commit，**不是目前 main** |
 
 ## 2. 最近完成（皆已合併、main CI success）
 
 | PR | merge sha | 內容 |
 |---|---|---|
+| #877 | `a9ba83c1` | `1.0-B1` 安全地基：`SEC-3` 關閉匿名經 Service Account 讀 Sheet、`SEC-2` OAuth state 綁瀏覽器一次性 nonce（DEC-062；兩項已結案）；main CI run 39132620519 success（Fast＋Slow；總管轉述）；⚠️ Streamlit Cloud 真實登入未實測（`B1-FU-2`） |
 | #876 | `87afe5ae` | DEC-062：登記 `VN1-Q1`～`Q5` 裁示＋production SA 檢查（unknown）＋`VN1-STORE` 研究項＋建議小批次（docs-only）；main CI run 39121214945 success（2026-10-18 撰寫組 `gh run list` 實查） |
 | #875 | `3192ef11` | vNext 1.0 Decision Gate 收斂（`BP-DR-01`～`21` → `VN1-Q1`～`Q5`；DR-2026-10-18-2；docs-only）；main CI run 39114405647 success（2026-10-18 撰寫組 `gh run list` 實查） |
 | #874 | `5cec364e` | DEC-061：每個階段邊界強制內部 Effort Check、High → Medium／Low 主動降級提醒（`PROJECT_RULES.md` 9.2；docs-only）；main CI run 39107408166 success（2026-10-18 總管 GitHub 實查） |
@@ -40,7 +41,7 @@
 | #860 | `ef7cf41c` | 停用 M1B−M2 腿＋Required Core 閘門（DR-2026-10-16-1／2；DEC-048、DEC-049） |
 | #859 | `8b8f9e1e` | `revenue_yoy` 改單季對去年同季單季（DR-2026-10-16-3；DEC-050） |
 
-各 PR 的 main CI run 編號見 `docs/BACKLOG.md`「3. 已結案」（#869 所含 `BP-ERR-01`、#870 所含 `SEC-1`、#872 所含 `UIA-01`／`UIA-02`／`UIA-07` 已列入「3. 已結案」；其餘 #864～#869 非 Backlog「3. 已結案」項，run 編號寫在上表）。
+各 PR 的 main CI run 編號見 `docs/BACKLOG.md`「3. 已結案」（#869 所含 `BP-ERR-01`、#870 所含 `SEC-1`、#872 所含 `UIA-01`／`UIA-02`／`UIA-07`、#877 所含 `SEC-2`／`SEC-3` 已列入「3. 已結案」；其餘 #864～#869 非 Backlog「3. 已結案」項，run 編號寫在上表）。
 
 ## 3. Blocker／Decision Required（只列指標，細節見 BACKLOG）
 
@@ -57,7 +58,7 @@
 - ~~⚠️ **`SEC-1`（高，隱私）**：持股讀取快取不分使用者 —— 見 `docs/BACKLOG.md` 第 5.1.1 節；修法單一、不需裁示，但須客戶指派批次（本批禁止施工）。另 `SEC-2`（`BP-DR-18`）、P0 bug `UIA-01`／`UIA-02`／`UIA-07`／`UIA-14` 同節。~~（2026-10-17 更新）⚠️ **`SEC-1`**：客戶已授權 vNext 0.9 第一安全修復批，**本版 PR 修復**，合併且 main CI 綠後結案 —— 見 `docs/BACKLOG.md` 第 5.1.1 節。`SEC-2`（`BP-DR-18`）、P0 bug `UIA-01`／`UIA-02`／`UIA-07`／`UIA-14` 仍 open（另批）。修復批安全稽核殘留：`SEC-3`（SA 模式匿名讀分享 Sheet，待 `BP-DR-06`）、`SEC-1-FU`（撤銷授權後自身快取 TTL 內仍命中、`clear_read_cache` 清全體；已知限制）—— 見同節。（2026-10-18 更新：`SEC-1` **已結案** —— #870、`7b803b4f`、main CI run 39042558728，移入 `docs/BACKLOG.md`「3. 已結案」，不再是 blocker。仍 open 的指標：`SEC-2`（待 `BP-DR-18`）、`SEC-3`（待 `BP-DR-06`）、`SEC-1-FU`（已知限制）、P0 bug `UIA-01`／`UIA-02`／`UIA-07`／`UIA-14`（須客戶指派批次）、`BP-DR-01`～`BP-DR-21` 待裁示。）
 - ~~⚠️ **`BP-ERR-01`**：Blueprint §8.9 Desktop 線框各桶分母錯誤、§29.3 自查宣稱不成立；依 DEC-010 回修上限未修，待客戶決定是否允許第 4 輪修正 —— 見 `docs/BACKLOG.md` 第 5.1.1 節（另 `BP-ERR-02` 已知限制）。施工時以 `shared/macro_buckets.py::BUCKET_DANGER_SPECS` 為準。~~（2026-10-17 更新）**`BP-ERR-01`**：客戶 2026-10-17 授權第 4 輪最小必要文件修正（DEC-058／DR-2026-10-17-3），**本批處理**（本版所隨 PR）；~~不再是 blocker。~~ 本 PR 修正，合併後生效（2026-10-17 更正，V4 SF-1）。`BP-ERR-02` 第 2、4 項仍 open —— 見 `docs/BACKLOG.md` 第 5.1.1 節。施工時仍以 `shared/macro_buckets.py::BUCKET_DANGER_SPECS` 為準。（2026-10-17 更新：已結案 —— #869、`15bc173e`、main CI run 39019586971，移入 `docs/BACKLOG.md`「3. 已結案」）
 - ~~（2026-10-18 新增）**vNext 0.9 第二批地基修復進行中**：`UIA-01`／`UIA-02`／`UIA-07` → `in-progress`（本批 PR，未合併）；`UIA-14` 仍 open（不在本批）。本批後續：`UIA-FU-1`（失敗被說成未載入，另批）、`UIA-FU-2`（待 `BP-DR-16`，新增徽章屬視覺規格）、`UIA-FU-3`（取數監控殘留；「哪些來源回空＝失敗」屬資料語意，待裁示）、`UIA-FU-4`（待 `BP-DR-19`）—— 見 `docs/BACKLOG.md` 第 5.1.1 節。`UIA-01` (b) 燈色語意仍待 `BP-DR-19`，本批未改燈色。~~（2026-10-18 更新：#872 已合併，`UIA-01`／`02`／`07` 已結案；有意識的變更，不是漏刪）**仍 open／待裁示的指標**：`SEC-2`（待 `BP-DR-18`）、`SEC-3`（待 `BP-DR-06`）、`SEC-1-FU`（已知限制）、`UIA-14` 及其他 UIA 項（`UIA-P1P2`）、`UIA-FU-1`（另批）、`UIA-FU-2`（待 `BP-DR-16`）、`UIA-FU-3`（資料語意部分待裁示）、`UIA-FU-4`（待 `BP-DR-19`）、`BP-DR-01`～`BP-DR-21` —— 見 `docs/BACKLOG.md` 第 5.1.1～5.1.3 節。
-- （2026-10-18）**`1.0-B1` 進行中**（`SEC-2`／`SEC-3` → `in-progress`，本批 PR 未合併）。後續（只列指標，見 `docs/BACKLOG.md` 5.1.1）：`B1-FU-1`（未登入時舊 UI 誤導文案；舊 UI 凍結 DEC-019）、`B1-FU-2`（`SEC-2` Streamlit Cloud 實測：需客戶登入一次、查 log reason codes；屬 `1.0-B2`）、`B1-FU-3`（cookie 綁定殘留風險；建議客戶自 Streamlit secrets 移除 `[gcp_service_account]`）；`SEC-1-FU` 仍 open。
+- ~~（2026-10-18）**`1.0-B1` 進行中**（`SEC-2`／`SEC-3` → `in-progress`，本批 PR 未合併）。~~ （2026-10-18 更新）**`1.0-B1` 完成**（#877、`a9ba83c1`、run 39132620519；`SEC-2`／`SEC-3` 已結案）。後續（只列指標，見 `docs/BACKLOG.md` 5.1.1）：`B1-FU-1`（未登入時舊 UI 誤導文案；舊 UI 凍結 DEC-019）、`B1-FU-2`（`SEC-2` Streamlit Cloud 實測：需客戶登入一次、查 log reason codes；屬 `1.0-B2`）、`B1-FU-3`（cookie 綁定殘留風險；建議客戶自 Streamlit secrets 移除 `[gcp_service_account]`）；`SEC-1-FU` 仍 open。
 - 供客戶知悉：`AUD-C28`（「必要與選用訊號皆已評估」與薩姆從未評估並存）。
 
 ## 4. 下一安全接手點
@@ -69,7 +70,8 @@
 3b. ~~（2026-10-18）**現處於安全點**：本版收尾同步 PR 合併後即停。下一批（例：`UIA-14`、`UIA-FU-1`）**須客戶指派**；需裁示者（`UIA-FU-2`／`UIA-FU-4`／`SEC-2`／`SEC-3`、`BP-DR-*`）待客戶裁示；⛔ 不開始 vNext 1.0（DEC-057「不要開始 vNext 1.0 implementation。」）。~~（2026-10-18 更新：客戶已指派 vNext 1.0 Decision Gate 收斂批，現況見 3c；有意識的變更，不是漏刪）
 3c. （2026-10-18）**現處於安全點，等待客戶裁示 `VN1-Q1`～`VN1-Q5`**（`docs/vnext/VNEXT_1_0_DECISION_GATES.md`）。裁示後施工仍須客戶指派批次；`VN1-Q1` 未裁示前不得寫任何 1.0 UI code（DEC-003）；⛔ 不開始 vNext 1.0（DEC-057）。
 3d. （2026-10-18）裁示已登記（DEC-062）；**下一安全接手點＝`1.0-B1`**（安全地基 SEC-2／SEC-3；先依最新 repo／依賴／風險確認最小安全批次），開工前依 `PROJECT_RULES.md` 9.2 Effort Check，需 High 則先停下提醒客戶切換。建議批次見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` 第 6 節（建議，不是授權）。3c 由本項接續。（2026-10-18：3d 由 3e 接續 —— `1.0-B1` 已開工）
-3e. （2026-10-18）**本批 `1.0-B1`**：開立 PR → CI → merge → main verification → **收尾同步**（`SEC-2`／`SEC-3` 移入 `docs/BACKLOG.md`「3. 已結案」並附 PR 號＋merge sha＋main CI run；本檔現況改至新 main）→ 下一批 **`1.0-B2`**（登入持續性 PoC，含 `B1-FU-2` 實測），開工前依 `PROJECT_RULES.md` 9.2 Effort Check（預期 High → 先提醒客戶切換）。
+3e. ~~（2026-10-18）**本批 `1.0-B1`**：開立 PR → CI → merge → main verification → **收尾同步**（`SEC-2`／`SEC-3` 移入 `docs/BACKLOG.md`「3. 已結案」並附 PR 號＋merge sha＋main CI run；本檔現況改至新 main）→ 下一批 **`1.0-B2`**（登入持續性 PoC，含 `B1-FU-2` 實測），開工前依 `PROJECT_RULES.md` 9.2 Effort Check（預期 High → 先提醒客戶切換）。~~（#877 已合併，收尾同步即本版）
+3f. （2026-10-18）**現處於安全點，無進行中工作**。下一安全接手點＝`1.0-B2` 登入持續性 PoC（只存一次性驗證碼、不存 Google 憑證）＋Streamlit Cloud 實測（`B1-FU-2`）［High］，**未開始**；開工前依 `PROJECT_RULES.md` 9.2 Effort Check，需 High 先停下提醒客戶。⚠️ 未驗證：Streamlit Cloud 真實登入未實測（`B1-FU-2`，屬 `1.0-B2`）；production SA 是否存在仍 unknown；production `[google_oauth]` 是否設定 unknown。已請客戶做一次 production Google 登入；若被拒，救援閥門為 Streamlit secrets `oauth_csrf_enforce = false`；建議自 Streamlit secrets 移除 `[gcp_service_account]`。
 4. BACKLOG 各列的 next action **不構成動工授權**；有客戶指派或實際 bug 觸發才動（`CLAUDE.md` §-1）。
 
 ## 5. 新對話 takeover
