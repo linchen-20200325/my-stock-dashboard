@@ -750,6 +750,20 @@ L0_FAILED_NOW_TEMPLATE: str = "**{label}讀不出來**"
 SOURCE_IDLE_NOW: str = "**未檢查**"
 SOURCE_UNKNOWN_NOW_HEAD: str = "**這一盞的狀態本頁看不懂**"
 SOURCE_FAILED_NOW: str = "**最後一次真實抓取失敗了**"
+#: UIA-02（2026-10-18）：L0 記 `ok`，但附加欄 `last_has_content=False`（回 0 列／None）。灰，⛔ 不綠、⛔ 不紅。
+SOURCE_EMPTY_NOW: str = "**有呼叫、沒報錯，但回 0 列／None**"
+SOURCE_EMPTY_WHY: str = (
+    "分不出是上游今天沒資料（非交易日／尚未公布）還是備援全敗 —— "
+    "沒報錯不等於有資料，所以這一盞**不畫綠**；"
+    "本頁也沒有依據說它壞了，所以**不畫紅**。"
+    "判空規則與「今天」頁的更新報告同一支（`shared.fetch_monitor.has_content`：只有 None 與空容器算空，數值 0 算有值）")
+#: ⚠️ UIA-02 R1（2026-10-18）徽章據實揭露：這張灰卡的 v2 徽章是裸 `UI_EMPTY` 的既有裁決 #7「缺漏 · 可重跑」。
+#:   既有 11 顆裡**沒有一顆**是「空、而且不宣稱能不能重跑」：#8 宣稱「重跑無效」（同樣說不準）；
+#:   #11「無資料」限「上游成功算完、結果真的是空」的登記卡 —— 這張卡正是**分不出**是不是備援全敗被吞成空，
+#:   ⛔ 不符 #11 的登記判準。⇒ 照 v2 SSOT 維持 #7，⛔ 不新造徽章；已上報總管待裁。
+SOURCE_EMPTY_WHERE: str = (
+    "到會用到它的那一頁重按一次更新；"
+    "若在交易日、資料應已公布時仍持續回空，請把這一列回報給維護者")
 EMPTY_REGISTRY_NOW: str = "**這個 session 還沒有任何 fetcher 登錄**"
 FINMIND_QUOTA_NOW: str = "**額度這件事本頁看不到**"
 SPEC_FLAG_UNWIRED_NOW: str = "**這一盞刻意沒有接**"
@@ -964,6 +978,9 @@ class SourceProbe:
         last_called_at / rows / ms: L0 原樣透傳，只做顯示。
         unknown_status: L0 給了本檔不認得的狀態字面值時，原文放這裡。
             ⚠️ **不認得一律當紅**，絕不當綠（見 `probe_from_entry`）。
+        empty: UIA-02（2026-10-18）。`ok=True` 但 L0 附加欄 `last_has_content` **明確是 False**
+            （有呼叫、沒報錯，但回 0 列／None）→ 灰（`UI_EMPTY`）。
+            舊紀錄沒有這一欄（或為 None）→ False ＝ 行為與修前相同。
     """
 
     name: str
@@ -976,6 +993,7 @@ class SourceProbe:
     rows: str = ""
     ms: str = ""
     unknown_status: str = ""
+    empty: bool = False
 
 
 @dataclass(frozen=True)
@@ -1040,7 +1058,9 @@ def probe_from_entry(name: str, entry: Mapping[str, Any]) -> SourceProbe:
     if _status == STATUS_NEVER_RUN:
         return SourceProbe(called=False, ok=False, **_common)
     if _status == STATUS_OK:
-        return SourceProbe(called=True, ok=True, **_common)
+        # UIA-02：只認**明確的 False**（`is False`）—— 舊紀錄缺欄 / None 照舊畫綠（修前行為）。
+        return SourceProbe(called=True, ok=True,
+                           empty=entry.get("last_has_content") is False, **_common)
     if _status == STATUS_FAILED:
         return SourceProbe(called=True, ok=False,
                            error=_last_error or UNKNOWN_ERROR_TEXT, **_common)
@@ -1102,11 +1122,13 @@ def build_source_card(probe: SourceProbe) -> _Built:
     `last_status` 不是資料，它是 `@monitored` 在呼叫當下寫下的**紀錄**
     —— 那正是「上游帶下來的 gate 旗標」的定義。
     """
+    # UIA-02：ok 但回空 → `has_value=False` 且**不帶** `MISS_FETCH_FAILED`（帶了會升紅）
+    #   ⇒ L0 判成 `UI_EMPTY`（灰）。分不出是上游今天沒資料還是備援全敗，⛔ 不綠、⛔ 不紅。
     _state = classify_ui_state(
         requested=probe.called,
         error=probe.error or None,
-        has_value=probe.ok,
-        reason=MISS_FETCH_FAILED)
+        has_value=(probe.ok and not probe.empty),
+        reason=("" if (probe.ok and probe.empty) else MISS_FETCH_FAILED))
     _facts: list[tuple[str, str]] = []
     if probe.category:
         _facts.append(("分類", probe.category))
@@ -1126,6 +1148,10 @@ def build_source_card(probe: SourceProbe) -> _Built:
     _label = probe.name
     if _state == UI_IDLE:
         _note = Note(now=SOURCE_IDLE_NOW, why=NEVER_RUN_WHY, where=NEVER_RUN_WHERE)
+    elif probe.ok and probe.empty:
+        # UIA-02：時間照樣列出（它是「最後一次真實呼叫」的觀測），但不當結論放大字區。
+        _facts.insert(0, ("最後真實抓取", probe.last_called_at or "（L0 沒有記下時間）"))
+        _note = Note(now=SOURCE_EMPTY_NOW, why=SOURCE_EMPTY_WHY, where=SOURCE_EMPTY_WHERE)
     elif probe.unknown_status:
         # SA2-f12（2026-10-01）：狀態字面值是**上游原文**，帶狀態 glyph 時先過 `scrub_state_glyphs()`
         #   SSOT 再放進 `now` —— 不洗，`Note.__post_init__` 直接 `ValueError`，而本卡建在
@@ -2726,6 +2752,11 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            # QA F4：升級路徑「若持續失敗請…回報給維護者」⛔ 不得略（重按不是唯一的一步）。
            "上游來源的問題，不是你操作的問題" + V2_EXCERPT_GAP
            + "到會用到它的那一頁重按一次更新；若持續失敗請" + V2_EXCERPT_GAP + "回報給維護者")),
+       # UIA-02：ok 但回 0 列／None 的灰卡（三段皆原文摘錄）。
+       _v2_rows_for("why.source.wall", SOURCE_EMPTY_NOW, (
+           None, "分不出是上游今天沒資料（非交易日／尚未公布）還是備援全敗",
+           "到會用到它的那一頁重按一次更新；若" + V2_EXCERPT_GAP + "持續回空，請" + V2_EXCERPT_GAP
+           + "回報給維護者")),
        _v2_rows_for("why.source.wall", SOURCE_UNKNOWN_NOW_HEAD, (
            v2_plain(SOURCE_UNKNOWN_NOW_HEAD),
            # 兩種原文各自的原因：不認得的狀態值 ／ 這一列不是 Mapping（QA F4 同類：⛔ 只剩結論沒有原因）。

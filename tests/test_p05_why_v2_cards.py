@@ -34,6 +34,7 @@ from shared.ui_state import (
     UI_FAILED,
     UI_IDLE,
     UI_LIVE,
+    UI_EMPTY,
     UI_MISSING_RETRYABLE,
     UI_UNWIRED,
 )
@@ -91,6 +92,9 @@ def _enumerate():
     # ── 葉2 使用者版 ───────────────────────────────────────────────
     scan = _scan_of({
         "fetch_fred": _entry("ok", last_called_at="2026-09-26 09:00", last_rows=12, last_ms=34),
+        # UIA-02（2026-10-18）：ok 但回 0 列／None（L0 附加欄 last_has_content=False）→ 灰卡，一則新 Note。
+        "fetch_empty_ok": {**_entry("ok", last_called_at="2026-10-18 09:00", last_rows=0),
+                           "last_has_content": False},
         "twse_volume": _entry("未執行"),
         "fetch_tw_pmi": _entry("failed", last_error=_E),
         "fetch_margin_balance": _entry("failed"),
@@ -447,7 +451,10 @@ def test_the_badges_mean_what_the_old_card_meant():
     """灰／紅／橘不得互換：live → #1、idle → #3、degraded → #4、unwired → #5、failed → #6、
     缺漏（再試一次有用）→ #7。"""
     want = {UI_LIVE: 1, UI_IDLE: 3, UI_DEGRADED: 4, UI_UNWIRED: 5, UI_FAILED: 6,
-            UI_MISSING_RETRYABLE: 7}
+            UI_MISSING_RETRYABLE: 7,
+            # UIA-02（2026-10-18）：ok 但回 0 列／None 的來源燈 → 灰 `UI_EMPTY`；徽章走 v2 SSOT
+            #   `resolve_badge` 對裸 empty 的既有裁決（#7），⛔ 不是 #1（綠）、⛔ 不是 #6（紅）。
+            UI_EMPTY: 7}
     seen: set[str] = set()
     for b in _BUILTS:
         assert b[0].state in want, (b[0].key, b[0].state)
@@ -857,6 +864,7 @@ _BASELINE_NOW_LITERALS: dict[str, str] = {
     # `build_source_card` 的 f-string `f"**這一盞的狀態本頁看不懂**（L0 回 {…!r}）"` 的固定開頭。
     "SOURCE_UNKNOWN_NOW_HEAD": "**這一盞的狀態本頁看不懂**",
     "SOURCE_FAILED_NOW": "**最後一次真實抓取失敗了**",
+    "SOURCE_EMPTY_NOW": "**有呼叫、沒報錯，但回 0 列／None**",   # UIA-02
     "EMPTY_REGISTRY_NOW": "**這個 session 還沒有任何 fetcher 登錄**",
     "FINMIND_QUOTA_NOW": "**額度這件事本頁看不到**",
     "SPEC_FLAG_UNWIRED_NOW": "**這一盞刻意沒有接**",
@@ -896,7 +904,7 @@ def test_every_now_constant_in_the_module_is_pinned():
     """模組裡**每一個** `*_NOW` / `*_NOW_TEMPLATE` / `*_NOW_HEAD` 都在上表 —— 新增一則而沒釘 ⇒ 紅燈。"""
     names = {n for n in vars(P) if re.fullmatch(_NOW_NAME_RE, n)}
     assert names == set(_BASELINE_NOW_LITERALS), names ^ set(_BASELINE_NOW_LITERALS)
-    assert len(names) == 26   # 批 Z54：-2（兩則未接線說法刪除）+3（接線後灰一則、紅兩則）；批 Z55：-1+1；批 Z56：-1+2
+    assert len(names) == 27   # UIA-02：+1（`SOURCE_EMPTY_NOW`）；批 Z54：-2（兩則未接線說法刪除）+3（接線後灰一則、紅兩則）；批 Z55：-1+1；批 Z56：-1+2
 
 
 # ── 10. QA F4：卡面短句的**忠實度** —— 原文拿來限定的條件／原因／去處／升級路徑，
@@ -916,6 +924,9 @@ _MUST_KEEP: dict[str, dict[str, tuple[str, ...]]] = {
     "SOURCE_FAILED_NOW": {_WHY: ("拋出例外",),
                           _WHERE: ("上游來源的問題", "不是你操作的問題", "到會用到它的那一頁",
                                    "重按一次更新", "若持續失敗請", _REPORT)},
+    # UIA-02：灰的理由（分不出哪一種）與升級路徑都 ⛔ 不得略。
+    "SOURCE_EMPTY_NOW": {_WHY: ("分不出是上游今天沒資料", "還是備援全敗"),
+                         _WHERE: ("到會用到它的那一頁", "重按一次更新", "持續回空", _REPORT)},
     "EMPTY_REGISTRY_NOW": {_WHY: ("如果你是直接打開這一頁", "還沒去過任何會取數的分頁",
                                   "這是正常的，不是壞掉"),
                            _WHERE: ("會抓資料的分頁載入一次", _DH)},

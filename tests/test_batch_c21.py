@@ -208,6 +208,9 @@ def c21_revert_for(file_path, code: str) -> str:
     ⇒ z56／z66 兩條鏈各自只換自己管的檔，同一處不會被換兩次。
     """
     rel = _rel(file_path)
+    # UIA-01/02/07（2026-10-18）：更新的批次先換回（還原鏈頭往前接一節），再套本批的還原組。
+    from tests.test_uia_01_02_07_data_state import uia_revert_for
+    code = uia_revert_for(file_path, code)
     for new, old in C21_REVERT_PAIRS.get(rel, ()):
         assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)

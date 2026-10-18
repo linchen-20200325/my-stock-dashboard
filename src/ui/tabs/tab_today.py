@@ -277,8 +277,66 @@ def _staged_card(key: str, label: str, *, now: str) -> Card:
     )
 
 
+#: UIA-07（2026-10-18）：`classify_macro_contract(attempt=)` 的狀態字面值。
+#: 來源是新 UI 本頁按鈕那一輪更新報告裡 `STEP_WARROOM` 那一步（`ok` / `skipped` / 失敗）。
+MACRO_ATTEMPT_FAILED: str = "failed"
+MACRO_ATTEMPT_SKIPPED: str = "skipped"
+MACRO_ATTEMPT_OK: str = "ok"
+MACRO_ATTEMPT_STATUSES: frozenset[str] = frozenset(
+    {MACRO_ATTEMPT_FAILED, MACRO_ATTEMPT_SKIPPED, MACRO_ATTEMPT_OK})
+
+
+def _macro_attempt(attempt: Any) -> tuple[str, str] | None:
+    """`attempt` → `(status, reason)`；None → None。未知狀態 / 形狀不對 → `ValueError`（§1，⛔ 不猜）。"""
+    if attempt is None:
+        return None
+    try:
+        _status, _reason = attempt
+    except (TypeError, ValueError) as _e:
+        raise ValueError(f"attempt 必須是 (status, reason)，收到 {attempt!r}") from _e
+    if _status not in MACRO_ATTEMPT_STATUSES:
+        raise ValueError(
+            f"未知的更新嘗試狀態 {_status!r}（認得的是 {sorted(MACRO_ATTEMPT_STATUSES)}）")
+    return str(_status), ("" if _reason is None else str(_reason))
+
+
+def macro_attempt_applies(state: Mapping[str, Any] | None, *, error: Any = None,
+                          attempt: Any = None) -> bool:
+    """UIA-07：`attempt` 在這一份契約上**生不生效** ＝ 有給 attempt、讀契約沒拋例外、契約 `source` 仍是 `unloaded`。
+
+    有效契約永遠優先（`source` 不是 unloaded ⇒ attempt 一律不理）。
+    """
+    from shared import regime_arbiter as _RA
+
+    if _macro_attempt(attempt) is None or error is not None:
+        return False
+    return (dict(state or {}).get("source") or _RA.SOURCE_UNLOADED) == _RA.SOURCE_UNLOADED
+
+
+def macro_attempt_failed_reason(state: Mapping[str, Any] | None, *, error: Any = None,
+                                attempt: Any = None) -> str | None:
+    """UIA-07：attempt 生效（見 `macro_attempt_applies`）且上一次更新的紅綠燈步驟**失敗** → 原因字串；
+    其餘一律 None。**`classify_macro_contract` 與各卡文案共用這一支判斷**（⛔ 兩把尺）。"""
+    if not macro_attempt_applies(state, error=error, attempt=attempt):
+        return None
+    _status, _reason = _macro_attempt(attempt)   # type: ignore[misc]
+    if _status != MACRO_ATTEMPT_FAILED:
+        return None
+    return _reason or "（沒有給原因）"
+
+
+def macro_attempt_failed_why(reason: Any) -> str:
+    """UIA-07：上一次更新時紅綠燈整理失敗 → 一句可以放進 `Note.why` 的話（同 `upstream_error_why` 的洗 glyph 作法）。"""
+    _clean, _n = scrub_state_glyphs(reason)
+    _why = f"上一次更新時紅綠燈整理失敗：{_clean or '（沒有給原因）'}"
+    if _n:
+        _why += ("（原因裡的狀態符號已移除，"
+                 "以免和這張卡自己的狀態燈混成兩個互相矛盾的說法）")
+    return _why
+
+
 def classify_macro_contract(state: Mapping[str, Any] | None,
-                            *, error: Any = None) -> str:
+                            *, error: Any = None, attempt: Any = None) -> str:
     """L3 總經契約 → 本頁的畫面狀態（走 L0 SSOT，本檔不自己判態）。
 
     Args:
@@ -297,6 +355,14 @@ def classify_macro_contract(state: Mapping[str, Any] | None,
       **這是線框 N4 補的第 3 條來源**：走 `macro_state.json` 的 AI 鎖定
       快照時 `is_loaded=True`、畫面會長得像正常的 🟢，**但它是上一次鎖的
       結論，不是這一輪算的** → 已失準（有值但不能拿來下判斷）。
+
+    📌 **UIA-07（2026-10-18）`attempt=`（選填，預設 None ⇒ 輸出與修前逐一相同）**：
+    `(status, reason)`，取自本 session 上一次「更新今日戰情」報告的 `STEP_WARROOM` 那一步。
+    **只在契約 `source` 仍是 `unloaded`、且讀契約沒拋例外時才生效**（有效契約永遠優先）：
+      · `failed` → `requested=True` ＋ `error=reason` ⇒ `UI_FAILED`（紅）—— 修前這一態被畫成
+        灰色「尚未載入／還沒有人叫過」，⛔ 那句話不屬實：本頁按鈕叫過了，而且失敗了。
+      · `skipped` / `ok`（按過、沒有失敗、但契約仍未評估）→ `requested=True`、沒有值 ⇒ `UI_EMPTY`（灰）。
+    未知狀態 → `ValueError`（§1）。
     """
     from shared import regime_arbiter as _RA
 
@@ -306,24 +372,32 @@ def classify_macro_contract(state: Mapping[str, Any] | None,
     # 不補這一項的話 `classify_ui_state` 會因為「沒叫過卻有錯」而 raise，
     # 把一個真故障變成第二個例外（§1：紅態要看得見，不是換一種炸法）。
     _attempted = (error is not None) or (_source != _RA.SOURCE_UNLOADED)
+    _error = error
+    # UIA-07：本頁按鈕那一輪的紅綠燈步驟 —— 只在契約仍 unloaded、讀契約沒拋例外時補上。
+    if macro_attempt_applies(state, error=error, attempt=attempt):
+        _attempted = True
+        _error = macro_attempt_failed_reason(state, error=error, attempt=attempt)
     return classify_ui_state(
         requested=_attempted,
-        error=error,
+        error=_error,
         has_value=bool(_s.get("is_loaded")),
         discriminative=(_source != _RA.SOURCE_FILE_RULE_ENGINE),
     )
 
 
 def build_status_bar_card(state: Mapping[str, Any] | None,
-                          *, error: Any = None) -> Card:
+                          *, error: Any = None, attempt: Any = None) -> Card:
     """（跨頁）頂部狀態列 —— 線框 `PAGES[0].blocks[6]`。
 
     ⚠️ **刻意不顯示「更新於 hh:mm」**：`get_macro_state()` 的回傳 dict
     只有 9 個 key，**不含 timestamp**（檔內有，契約沒帶出來）。要顯示真實
     時間就得改回傳契約 —— 那是 L3 `.py` 變更，本批不做。
     **寧可寫「時間不明」，也不編一個時間出來**（線框 N4 原文）。
+
+    UIA-07：`attempt=` 原樣交給 `classify_macro_contract`（預設 None ⇒ 與修前逐一相同）。
     """
-    _st = classify_macro_contract(state, error=error)
+    _st = classify_macro_contract(state, error=error, attempt=attempt)
+    _att_fail = macro_attempt_failed_reason(state, error=error, attempt=attempt)
     _s = dict(state or {})
     if _st == UI_LIVE:
         # 位階的中文說法**讀契約自己的 `traffic_light`**（它的 docstring 寫明
@@ -343,6 +417,17 @@ def build_status_bar_card(state: Mapping[str, Any] | None,
                 why=("本輪生效的是來源優先序第 3 條（`macro_state.json` 的 "
                      "AI 鎖定快照）—— 它是**上一次**鎖的結論，不是這一輪算的；"
                      "契約沒有把時間帶出來，所以這裡不編一個時間"),
+                where=CONTRACT_NO_EXIT_WHERE,
+            ),
+        )
+    if _st == UI_FAILED and _att_fail is not None:
+        # UIA-07：紅的是本頁按鈕那一輪的紅綠燈步驟，⛔ 不是讀契約拋例外 ——
+        #   ⛔ 不套用下面「讀 L3 canonical 契約時拋出例外」那句（那會把出處講錯）。
+        return Card(
+            key="statusbar.macro", label="總經", state=UI_FAILED,
+            note=Note(
+                now="總經未評估：上一次更新時紅綠燈整理失敗",
+                why=macro_attempt_failed_why(_att_fail),
                 where=CONTRACT_NO_EXIT_WHERE,
             ),
         )
@@ -369,7 +454,7 @@ def build_status_bar_card(state: Mapping[str, Any] | None,
 
 
 def build_status_bar_cards(state: Mapping[str, Any] | None,
-                           *, error: Any = None) -> tuple[Card, ...]:
+                           *, error: Any = None, attempt: Any = None) -> tuple[Card, ...]:
     """（跨頁）頂部狀態列的**三個元素** —— 線框 `PAGES[0].blocks[6]`。
 
     線框 live 原文是「`09/05 週五 ✅ 交易日 | 🟢 總經 偏多 · 建議 70% |
@@ -384,7 +469,7 @@ def build_status_bar_cards(state: Mapping[str, Any] | None,
     return (
         _staged_card("statusbar.trading_day", "交易日",
                      now="今天是不是交易日，尚未接線"),
-        build_status_bar_card(state, error=error),
+        build_status_bar_card(state, error=error, attempt=attempt),   # UIA-07：原樣轉交
         Card(
             key="statusbar.sheet", label="Sheet 綁定", state=UI_UNWIRED,
             note=Note(
@@ -399,13 +484,15 @@ def build_status_bar_cards(state: Mapping[str, Any] | None,
 
 
 def build_today_blocks(*, macro_state: Mapping[str, Any] | None = None,
-                       macro_error: Any = None) -> tuple[Block, ...]:
+                       macro_error: Any = None,
+                       macro_attempt: Any = None) -> tuple[Block, ...]:
     """本頁的**完整區塊清單**（線框 `PAGES[0].blocks` 七塊，一塊不少）。
 
     純函式：不碰 session、不 import streamlit。渲染端把 session 讀出來
     再傳進來，這樣整張畫面的狀態可以在沒有 streamlit 的情況下驗。
     """
-    _bars = build_status_bar_cards(macro_state, error=macro_error)
+    # UIA-07：`macro_attempt` 原樣轉交（預設 None ⇒ 與修前逐一相同）。
+    _bars = build_status_bar_cards(macro_state, error=macro_error, attempt=macro_attempt)
     _bar = next(_c for _c in _bars if _c.key == "statusbar.macro")
     _regime_card = Card(
         key="summary.regime", label="位階", state=_bar.state,

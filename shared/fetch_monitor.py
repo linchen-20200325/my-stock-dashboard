@@ -32,8 +32,46 @@ _TW_TZ = timezone(timedelta(hours=8))   # §4.5 repo 慣例（app.py:47）
 
 # name → {category, frequency, registry_key,
 #          last_status('未執行'|'ok'|'failed'), last_error, last_rows, last_ms,
-#          last_called_at('YYYY-MM-DD HH:MM:SS' TW)}
+#          last_called_at('YYYY-MM-DD HH:MM:SS' TW),
+#          last_has_content(True|False|None)}
+# UIA-02（2026-10-18）：`last_has_content` 是**附加欄**，`last_status` 語意一字未改 ——
+#   沒拋例外即 'ok'（或 success_check 判）；另外記「回傳值算不算有資料」（`has_content`）。
+#   None ＝ 沒有真實回傳可判（未執行 / 拋例外 / 判定器本身炸）。讀者（新 UI「資料體檢」）
+#   據此把「ok 但回 0 列／None」畫成灰，⛔ 不畫綠；舊 UI 的監控表只讀具名欄位，不受影響。
 _MONITOR_REGISTRY: dict[str, dict] = {}
+
+
+def has_content(result) -> bool:
+    """一個取回來的東西**算不算有資料**。（UIA-02：自 `macro_refresh_service._has_content` 下沉為 L0 SSOT）
+
+    「今天」頁的更新報告與「憑什麼」頁的資料體檢**用同一支判空**（兩把尺會漂開）。
+
+    三種形狀分別判，理由寫在這裡以免下一個人「順手統一成 `bool(value)`」：
+      · **DataFrame / Series**（有 `.empty`）：空表 ＝ 沒資料。
+        `bool(df)` 在 pandas 會直接 `ValueError`，不能用真假值判。
+      · **容器**（dict / list / str …）：長度 0 ＝ 沒資料。
+      · **純量**（例如融資餘額的 `float`）：**只認 `None` 是沒資料**。
+        ⚠️ 刻意**不**用 `bool()` —— `0.0` 是一個合法的數值，把它判成
+        「沒資料」等於本檔自己發明一條 fetcher 沒有宣告的規則（§1）。
+        缺值的界線由 fetcher 決定，而它們缺值時回的是 `None`。
+    """
+    if result is None:
+        return False
+    _empty = getattr(result, "empty", None)
+    if _empty is not None:
+        return not bool(_empty)
+    if isinstance(result, (dict, list, tuple, set, frozenset, str, bytes)):
+        return len(result) > 0
+    return True
+
+
+def _safe_has_content(result):
+    """`has_content` 的記錄用包裝：判定本身炸了 → None（⛔ 不影響 fetch 主流程、⛔ 不猜 True/False）。"""
+    try:
+        return bool(has_content(result))
+    except Exception as e:   # noqa: BLE001 — 只影響附加欄，log 後記 None
+        print(f'[fetch_monitor] has_content fail: {type(e).__name__}: {e}', file=sys.stderr)
+        return None
 
 
 def _infer_rows(result):
@@ -47,11 +85,16 @@ def _infer_rows(result):
         return None
 
 
-def _record(name: str, status: str, *, rows=None, error=None, ms=None) -> None:
-    """寫回 registry;任何失敗只 stderr log 不拋（fetch 主流程優先）。"""
+def _record(name: str, status: str, *, rows=None, error=None, ms=None,
+            has_content_=None) -> None:
+    """寫回 registry;任何失敗只 stderr log 不拋（fetch 主流程優先）。
+
+    `has_content_`：UIA-02 附加欄 `last_has_content`（None ＝ 沒有回傳值可判）。
+    """
     try:
         ent = _MONITOR_REGISTRY.setdefault(name, {})
         ent.update(last_status=status, last_rows=rows, last_error=error,
+                   last_has_content=has_content_,
                    last_ms=round(ms, 1) if ms is not None else None,
                    last_called_at=datetime.now(_TW_TZ).strftime('%Y-%m-%d %H:%M:%S'))
     except Exception as e:
@@ -81,6 +124,7 @@ def monitored(name: str, *, category: str = '', frequency: str = 'daily',
                 'registry_key': registry_key,
                 'last_status': '未執行', 'last_error': None,
                 'last_rows': None, 'last_ms': None, 'last_called_at': None,
+                'last_has_content': None,   # UIA-02：未執行 → 沒有回傳值可判
             }
         except Exception as e:   # 登錄失敗不阻擋模組 import
             print(f'[fetch_monitor] register {name} fail: {type(e).__name__}: {e}',
@@ -106,7 +150,8 @@ def monitored(name: str, *, category: str = '', frequency: str = 'daily',
                 if not _ok:
                     _err = 'success_check=False（回應無有效值）'
             _record(name, 'ok' if _ok else 'failed', rows=_infer_rows(result),
-                    error=_err, ms=(_time.perf_counter() - t0) * 1000)
+                    error=_err, ms=(_time.perf_counter() - t0) * 1000,
+                    has_content_=_safe_has_content(result))   # UIA-02 附加欄
             return result
         return wrapper
     return deco
