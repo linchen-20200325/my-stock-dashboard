@@ -155,7 +155,8 @@ implementation → relevant tests（含真實引擎路徑 regression）→ indep
 | **Medium** | 一般 UI／UX 實作；Blueprint／UX Audit；單一模組正常 bug fix；一般測試與低風險 wiring；有一定推理需求、但不涉及核心投資語意的工作 |
 | **High**（只在明顯需要時） | 投資公式；Risk Cap；選股核心邏輯；Action／Position Sizing 核心規則；Thesis 正式判定規則；financial／data semantics；Point-in-Time／look-ahead correctness；跨模組重大架構；高風險 correctness 問題；多個合理方案需要深入權衡 |
 
-- 等待 CI、等待 audit、等待 workflow 等待狀態，**不得**要求提高 Effort。
+- ~~等待 CI、等待 audit、等待 workflow 等待狀態，**不得**要求提高 Effort。~~（2026-10-18 改為 pointer，決策者客戶，DEC-061；有意識的修改，不是漏刪 —— 舊句只講提高方向，已由 9.2 雙向規則「不算新完整階段的短暫狀態」涵蓋，避免重複規則）
+- 等待狀態不觸發 Effort 切換（升或降）：見 9.2。
 - ⚠️ Effort 只決定推理強度，**不改變**派工、獨立稽核與揭露義務（`CLAUDE.md` §-2 規則 1／4／6；第 3 節限定第 2、4 條）：Low 不等於免派工、免稽核。
 
 ### 9.2 Effort 主動提醒（DEC-059；強制 Effort Check 由 DEC-061 強化）
@@ -194,7 +195,7 @@ implementation → relevant tests（含真實引擎路徑 regression）→ indep
 - ~~若目前 Effort 已足夠：不要提醒；不要每次重複報告目前 Effort；直接工作。~~（2026-10-17 同批客戶追加「可以降低 Effort」提醒後改讀，決策者客戶，DEC-059；有意識的修改，不是漏刪 —— 「已足夠」會把「高於所需」也算進去而不提醒，與降低提醒衝突）
 - 若目前 Effort **恰好合適**：不要提醒；不要每次重複報告目前 Effort；直接工作。
 - ~~不得在下列時機要求切換：未 commit 的實作中途；PR 尚在修正中途；CI 正在跑；一個不可安全中斷的完整工作階段中。~~（2026-10-18 補列並釐清射程，決策者客戶，DEC-061；有意識的修改，不是漏刪 —— 原四項全數保留，另加客戶原文「PR 修復途中」，並釐清「完整工作階段」不延伸到收尾同步：舊句曾被讀成整批到收尾都不可中斷）
-- 不得在下列時機要求切換（現行）：未 commit 的實作中途；未提交實作；PR 尚在修正中途／PR 修復途中；CI 正在跑；一個不可安全中斷的完整工作階段中。⚠️ 「不可分割的完整工作階段」以上方階段邊界為界 —— merge＋main verification 完成即是邊界，收尾同步前**必須**做 Check。
+- 不得在下列時機要求切換（現行）：未 commit 的實作中途；未提交實作（客戶原文）；PR 尚在修正中途／PR 修復途中（客戶原文）；CI 正在跑；一個不可安全中斷的完整工作階段中（客戶原文：不可分割工作階段）。⚠️ 「不可分割的完整工作階段」以上方階段邊界為界 —— merge＋main verification 完成即是邊界，收尾同步前**必須**做 Check。
 - Effort 切換本身**不是**產品 Decision Gate。
 - 客戶回覆「改好了」後：直接繼續；不重新摘要；不重問；不重做；不再解釋（DEC-014，續有效）。
 
@@ -217,7 +218,8 @@ Effort：Low / Medium / High
 - 等待 CI／workflow／稽核時**不得**要求切模式，也不回報等待狀態。
 - ~~分級原則（客戶原文要點）：純 GitHub／Backlog／HANDOFF／低風險機械工作 → Low；一般 bug／tests／低風險 UI wiring → Medium；資料語意／財報計算／跨模組 correctness／架構 → High；投資公式／System Risk Cap／look-ahead／重大資料語意 → 高能力模型＋High。~~（2026-10-17 Effort 分級由 9.1 清單取代，決策者客戶，DEC-059；有意識的整合，不是漏刪 —— 舊行的分級方向與 9.1 一致，9.1 更細並加上「最低夠用」原則；舊行「高能力模型」一點仍保留為模型選擇參考，見下一點）
 - 投資公式／System Risk Cap／look-ahead／重大資料語意：除 High 外，建議高能力模型（沿用 DEC-014 舊分級中的模型建議）。
-- 不要頻繁切換；模型／模式／Effort 切換**不算**客戶裁示題。
+- ~~不要頻繁切換；模型／模式／Effort 切換**不算**客戶裁示題。~~（2026-10-18 去重，決策者客戶，DEC-061；有意識的修改，不是漏刪 —— 「不要頻繁切換」已統一寫在 9.2，此處改為 pointer；後半句不變）
+- 模型／模式／Effort 切換**不算**客戶裁示題；「不要頻繁切換」見 9.2。
 
 ## 第 10 節｜Branch／PR Lifecycle
 
