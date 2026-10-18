@@ -28,6 +28,12 @@ OAUTH_STATE_TTL_SEC: int = TTL_15MIN
 #: 只會在 callback 看到「連結過期」並重按一次登入（fail closed，不會放行）。
 OAUTH_STATE_MAX_ENTRIES: int = 10_000
 
+#: 「已過期而被清掉」的 nonce 墓碑上限筆數(只存 nonce 字串,約 32 bytes/筆 ⇒ 1 萬筆 ≈ 0.5 MB)。
+#: 理由(SEC-2 審計 SA1-S1):過期項通常在**別的 session** 的 `issue()` 被順手清掉,沒有墓碑時
+#: callback 只會看到 `unknown`,而 docs 把「持續 unknown」解讀成多副本／重啟 —— 誤導診斷。
+#: 墓碑讓「閒置超過 TTL 才回來」照實回報 `expired`;與 nonce 表同量級即可(滿了丟最舊,FIFO)。
+OAUTH_STATE_EXPIRED_TOMBSTONE_MAX: int = OAUTH_STATE_MAX_ENTRIES
+
 #: Streamlit 發給瀏覽器的 XSRF cookie 名稱（streamlit 1.59 `XSRF_COOKIE_NAME`；本 repo
 #: **不 import streamlit 內部模組**，故在此具名）。格式 v2：`2|<mask hex>|<masked token hex>|<ts>`，
 #: mask 每個回應都會換，**真正不變的是解遮罩後的 token bytes**（見 oauth_state._decode_xsrf_token）。

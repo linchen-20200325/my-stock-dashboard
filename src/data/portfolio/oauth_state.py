@@ -13,7 +13,8 @@
 
 外部 API
 ========
-- _gsa_secret / _sheet_id_secret  (secrets 讀取)
+- (SEC-3 審計:原 `_gsa_secret` / `_sheet_id_secret` module global 已刪 —— 前者在 import 時把整份
+  SA secret(含私鑰)常駐記憶體,而網頁端已不再用 SA;唯一 caller app.py 側欄 caption 分支一併刪除)
 - _resolve_oauth_cfg()             (config 優先序:secrets > session_state;每次呼叫動態解析)
 - get_oauth_cfg() / is_oauth_configured()  (動態包裝;caller 必用這兩個,不要直接 import module-level)
 - _get_oauth_client()              (建 gspread client)
@@ -35,7 +36,6 @@ SEC-2(login CSRF)
 ======
 - app.py:sidebar 渲染前呼叫 handle_oauth_callback()
 - src/data/portfolio/gsheet_portfolio.py:取 _get_oauth_client() 給 gspread 用(L1→L1 同層)
-- src/ui/etf/etf_tab_portfolio.py:取 get_oauth_cfg / _gsa_secret / _sheet_id_secret 顯示登入狀態(L5→L1 EX-PASSTHRU-1)
 """
 from __future__ import annotations
 
@@ -70,10 +70,6 @@ def _safe_secret(key: str, default=None):
     except Exception:
         pass
     return default
-
-
-_gsa_secret      = _safe_secret("gcp_service_account")
-_sheet_id_secret = _safe_secret("portfolio_sheet_id", "")
 
 
 def _resolve_oauth_cfg() -> "dict | None":
@@ -162,6 +158,10 @@ def _csrf_enforced() -> bool:
     return str(_v).strip().lower() not in {"false", "0", "no", "off"}
 
 
+#: session_state 旗標:本 session 已記過「發 nonce 時讀不到 cookie」(每 session 只記一次)。
+_NO_COOKIE_LOGGED_KEY = "_oauth_no_cookie_logged"
+
+
 def get_login_state() -> str:
     """回傳本 session 專屬的 OAuth nonce,並在 server 端登記 / 延長(綁定目前瀏覽器)。
 
@@ -175,7 +175,13 @@ def get_login_state() -> str:
     if not _s:
         _s = generate_state()
         st.session_state["_oauth_state"] = _s
-    _nonce_store.issue(_s, _browser_binding())
+    _binding = _browser_binding()
+    if _binding is None and not st.session_state.get(_NO_COOKIE_LOGGED_KEY):
+        # SEC-2 審計 SA1-S2:沒 cookie 時不登記是刻意的(fail closed),但不能靜默 ——
+        # 每個 session 記一次 reason code(⛔ 不記任何值),供 docs/OAUTH_SETUP.md 量測對照。
+        print(f"[oauth_state] SEC-2 login nonce 未登記 reason={_nonce_store.REASON_NO_COOKIE}")
+        st.session_state[_NO_COOKIE_LOGGED_KEY] = True
+    _nonce_store.issue(_s, _binding)
     return _s
 
 

@@ -754,7 +754,11 @@ class TestOldFilesUntouched:
     # 📌 SEC-3（2026-10-18，核准過的共用 chrome 改動，⛔ 不是漏改）：只改 `app.py` 側欄兩句 caption
     #   （「使用 Service Account（舊版部署）」與「（或改用 Service Account）」在網頁端已無 SA 讀取後不實）。
     #   其餘 90 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
-    _BASE_DIGEST = "a5293369d2f1a97ae3cfa28259fb8cb7d7dc7e4bac564723f2e75a1d3b243fd1"
+    # ~~"a5293369d2f1a97ae3cfa28259fb8cb7d7dc7e4bac564723f2e75a1d3b243fd1"~~（SEC-3 第一版 caption，abb44a90）
+    # 📌 SEC-3 審計 round 1（2026-10-18，核准過的共用 chrome 改動，⛔ 不是漏改）：`app.py` 側欄刪掉 SA caption
+    #   分支（及其 `_gsa_secret` / `_sheet_id_secret` import），else caption 改為「網頁讀取持股一律需 Google 登入；
+    #   Service Account 不再用於網頁」。其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "63fa451e9b9d269c710c5d57b2ab8fd8af2750b14e964cafae8d957282ad80d8"
 
     def test_no_diff_against_base(self):
         import hashlib

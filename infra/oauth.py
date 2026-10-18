@@ -24,6 +24,7 @@ v11.0 分層歸位：本檔屬於 Infrastructure Layer，純 HTTP OAuth flow，�
 from __future__ import annotations
 
 from typing import Any
+import re
 import time
 
 
@@ -42,7 +43,33 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
 class OAuthError(Exception):
-    """所有 oauth flow 對外丟出的錯誤都用這個 class。"""
+    """所有 oauth flow 對外丟出的錯誤都用這個 class。
+
+    ⚠️ SEC-2 審計(SA1-S3):訊息會被 callback 原樣畫在 `st.error` 上、也可能進 log ——
+    **⛔ 不得含任何 token / code / client_secret / 回應本文**。只放「哪一步、HTTP 狀態、
+    Google 的 error 代碼、缺哪個欄位(鍵名)」。組訊息一律走下方 `_error_code()` / `_keys_only()`。
+    """
+
+
+#: Google token 端點錯誤代碼的白名單字母集(例:`invalid_grant`);不符 → 不顯示原文。
+_ERROR_CODE_RE = re.compile(r"[A-Za-z0-9_.\-]{1,64}")
+
+
+def _error_code(resp) -> str:
+    """非 200 回應 → 只取 JSON 的 `error` 代碼(白名單字元);取不到 → 固定字串。⛔ 不回本文。"""
+    try:
+        _code = resp.json().get("error")
+    except Exception:  # noqa: BLE001 — 本文不是 JSON:不顯示,避免把任何內容帶上畫面
+        return "(無法解析)"
+    _code = str(_code or "")
+    return _code if _ERROR_CODE_RE.fullmatch(_code) else "(無法解析)"
+
+
+def _keys_only(payload) -> str:
+    """回應 dict → 只列鍵名(排序),⛔ 不列值(值可能就是 token)。"""
+    if not isinstance(payload, dict):
+        return f"(非物件:{type(payload).__name__})"
+    return ", ".join(sorted(str(_k) for _k in payload)) or "(空)"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -129,14 +156,14 @@ def exchange_code_for_tokens(
             timeout=15,
         )
     except Exception as e:
-        raise OAuthError(f"token exchange 網路失敗：{e}") from e
+        raise OAuthError(f"token exchange 網路失敗：{type(e).__name__}") from e
 
     if r.status_code != 200:
-        raise OAuthError(f"token exchange 失敗 ({r.status_code})：{r.text[:200]}")
+        raise OAuthError(f"token exchange 失敗 ({r.status_code})：{_error_code(r)}")
 
     tokens = r.json()
     if "access_token" not in tokens:
-        raise OAuthError(f"token response 缺 access_token：{tokens}")
+        raise OAuthError(f"token response 缺 access_token（回應欄位：{_keys_only(tokens)}）")
     tokens["expires_at"] = int(time.time()) + int(tokens.get("expires_in", 3600))
     return tokens
 
@@ -165,14 +192,14 @@ def refresh_access_token(
             timeout=15,
         )
     except Exception as e:
-        raise OAuthError(f"refresh token 網路失敗：{e}") from e
+        raise OAuthError(f"refresh token 網路失敗：{type(e).__name__}") from e
 
     if r.status_code != 200:
-        raise OAuthError(f"refresh token 失敗 ({r.status_code})：{r.text[:200]}")
+        raise OAuthError(f"refresh token 失敗 ({r.status_code})：{_error_code(r)}")
 
     tokens = r.json()
     if "access_token" not in tokens:
-        raise OAuthError(f"refresh response 缺 access_token：{tokens}")
+        raise OAuthError(f"refresh response 缺 access_token（回應欄位：{_keys_only(tokens)}）")
     tokens["expires_at"]   = int(time.time()) + int(tokens.get("expires_in", 3600))
     tokens["refresh_token"] = tokens.get("refresh_token", refresh_token)  # Google 通常不換
     return tokens

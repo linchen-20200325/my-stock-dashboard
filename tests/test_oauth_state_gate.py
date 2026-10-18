@@ -31,8 +31,10 @@ _B_ATTACKER = hashlib.sha256(b'attacker-xsrf-token').hexdigest()
 @pytest.fixture(autouse=True)
 def _fresh_store():
     ns._STORE.clear()
+    ns._EXPIRED.clear()
     yield
     ns._STORE.clear()
+    ns._EXPIRED.clear()
 
 
 class _Clock:
@@ -264,3 +266,75 @@ def test_get_login_state_without_cookie_does_not_register(monkeypatch):
     monkeypatch.setattr(ost, 'st', _StWithCtx({}))
     assert ost.get_login_state()
     assert ns._STORE == {}
+
+
+# ── 審計 round 1(SA1-S1):過期項被別的 session 清掉後,仍回 expired 而非 unknown ──────────
+def test_expired_purged_by_other_session_still_reports_expired(monkeypatch):
+    clk = _Clock()
+    monkeypatch.setattr(ns, '_now', clk)
+    ns.issue('IDLE_TAB', _B_VICTIM)
+    clk.t += OAUTH_STATE_TTL_SEC + 1
+    ns.issue('OTHER_SESSION', _B_ATTACKER)          # 別人的 issue() 順手清掉 IDLE_TAB
+    assert 'IDLE_TAB' not in ns._STORE
+    assert ns.consume('IDLE_TAB', _B_VICTIM) == (False, ns.REASON_EXPIRED)
+    assert ns.consume('IDLE_TAB', _B_VICTIM) == (False, ns.REASON_UNKNOWN), '墓碑也一次性'
+
+
+def test_tombstones_bounded_fifo(monkeypatch):
+    clk = _Clock()
+    monkeypatch.setattr(ns, '_now', clk)
+    monkeypatch.setattr(ns, 'OAUTH_STATE_EXPIRED_TOMBSTONE_MAX', 3)
+    for i in range(5):
+        ns.issue(f'E{i}', _B_VICTIM)
+    clk.t += OAUTH_STATE_TTL_SEC + 1
+    ns.issue('TRIGGER', _B_VICTIM)
+    assert list(ns._EXPIRED) == ['E2', 'E3', 'E4']
+    assert ns.consume('E0', _B_VICTIM) == (False, ns.REASON_UNKNOWN)
+    assert ns.consume('E4', _B_VICTIM) == (False, ns.REASON_EXPIRED)
+
+
+def test_tombstone_constant_and_capacity_eviction_stays_unknown():
+    from shared.oauth_csrf_policy import OAUTH_STATE_EXPIRED_TOMBSTONE_MAX
+    assert OAUTH_STATE_EXPIRED_TOMBSTONE_MAX == OAUTH_STATE_MAX_ENTRIES
+    for i in range(3):
+        ns.issue(f'C{i}', _B_VICTIM, max_entries=2)
+    assert ns._EXPIRED == {}, '容量淘汰不是過期,不進墓碑'
+    assert ns.consume('C0', _B_VICTIM) == (False, ns.REASON_UNKNOWN)
+
+
+def test_reissue_clears_tombstone(monkeypatch):
+    clk = _Clock()
+    monkeypatch.setattr(ns, '_now', clk)
+    ns.issue('N', _B_VICTIM)
+    clk.t += OAUTH_STATE_TTL_SEC + 1
+    ns.issue('X', _B_VICTIM)
+    ns.issue('N', _B_VICTIM)                        # 同一 session 又畫了一次登入鈕
+    assert 'N' not in ns._EXPIRED
+    assert ns.consume('N', _B_VICTIM) == (True, ns.REASON_OK)
+
+
+# ── 審計 round 1(SA1-S2):沒 cookie 不登記時要記一行 reason,每 session 一次,不含值 ──────
+def test_no_cookie_logged_once_per_session(monkeypatch, capsys):
+    fst = _StWithCtx({})
+    monkeypatch.setattr(ost, 'st', fst)
+    n = ost.get_login_state()
+    ost.get_login_state()
+    out = capsys.readouterr().out
+    assert out.count('reason=no_cookie') == 1
+    assert n not in out
+    fst2 = _StWithCtx({})                            # 另一個 session 會再記一次
+    monkeypatch.setattr(ost, 'st', fst2)
+    ost.get_login_state()
+    assert capsys.readouterr().out.count('reason=no_cookie') == 1
+
+
+def test_cookie_present_logs_nothing(monkeypatch, capsys):
+    monkeypatch.setattr(ost, 'st', _StWithCtx({STREAMLIT_XSRF_COOKIE_NAME: _v2(os.urandom(16), b'\x01\x02\x03\x04')}))
+    ost.get_login_state()
+    assert 'no_cookie' not in capsys.readouterr().out
+
+
+# ── 審計 round 1(SA2-S2):SA secret 不再在 import 時常駐 oauth_state ───────────────────
+def test_sa_secret_globals_removed():
+    assert not hasattr(ost, '_gsa_secret')
+    assert not hasattr(ost, '_sheet_id_secret')

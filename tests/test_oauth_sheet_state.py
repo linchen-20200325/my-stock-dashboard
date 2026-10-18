@@ -24,8 +24,10 @@ _BROWSER = hashlib.sha256(b'this-browser-xsrf').hexdigest()
 @pytest.fixture(autouse=True)
 def _fresh_store():
     ns._STORE.clear()
+    ns._EXPIRED.clear()
     yield
     ns._STORE.clear()
+    ns._EXPIRED.clear()
 
 
 # ── 消毒:只放行純 [A-Za-z0-9_-] ─────────────────────────────────────────

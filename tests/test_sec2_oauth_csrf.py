@@ -24,8 +24,10 @@ _ATTACKER = hashlib.sha256(b'attacker-browser').hexdigest()
 @pytest.fixture(autouse=True)
 def _fresh_store():
     ns._STORE.clear()
+    ns._EXPIRED.clear()
     yield
     ns._STORE.clear()
+    ns._EXPIRED.clear()
 
 
 class _Rerun(Exception):

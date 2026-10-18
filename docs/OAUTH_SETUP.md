@@ -19,16 +19,23 @@ Google 轉跳回來時，只有「登記過、未過期、同一瀏覽器、第�
 [oauth_state] SEC-2 callback state 驗證未通過 reason=<代碼> enforce=<on|off>
 ```
 
+另外，畫登入鈕時若讀不到 cookie（nonce 因此不登記），每個 session 記一次：
+
+```
+[oauth_state] SEC-2 login nonce 未登記 reason=no_cookie
+```
+
 | reason | 意思 | 正常會出現嗎 |
 |---|---|---|
-| `unknown` | 查無此 nonce：已用過（重新整理回呼網址）、被擠掉、**或回呼落到另一個 process**（多副本／重啟） | 偶發可以；**正常登入就一直出現** ⇒ 懷疑多副本或 process 重啟 |
-| `expired` | 按登入後超過 15 分鐘才回來 | 偶發 |
+| `unknown` | 查無此 nonce：已用過（重新整理回呼網址）、被容量上限擠掉、**或回呼落到另一個 process**（多副本／重啟） | 偶發可以；**正常登入就一直出現** ⇒ 懷疑多副本或 process 重啟 |
+| `expired` | 登入鈕最後一次畫出後超過 15 分鐘才回來。過期項即使已被別的 session 順手清掉，也留有墓碑（只存 nonce，上限 1 萬筆、滿了丟最舊）⇒ 仍回 `expired`，**不會**混進 `unknown` | 偶發（例：分頁閒置很久才按登入） |
 | `mismatch` | 回呼的瀏覽器不是發起登入的那個（login CSRF 的樣子，或在 A 瀏覽器按、B 瀏覽器開回呼） | 不應常見 |
-| `no_cookie` | 回呼請求讀不到 `_streamlit_xsrf` cookie | **正常登入就出現** ⇒ 正式環境拿不到 cookie |
+| `no_cookie` | 回呼請求讀不到 `_streamlit_xsrf` cookie | **正常登入就出現**（且畫登入鈕時也有上面那行 `login nonce 未登記`）⇒ 正式環境拿不到 cookie |
 
 2026-10-18 本機實測（streamlit 1.59.2 starlette server，真 websocket 連線）：同一瀏覽器兩個
 session（cookie 已被重新遮罩）綁定值相同、不同瀏覽器不同、沒 cookie 為 None。
 ⚠️ **未在 Streamlit Cloud 實測**（沙箱連不到）。
+⚠️ 墓碑也在單一 process 記憶體內：process 重啟後，重啟前發出的 nonce 一律回 `unknown`。
 
 ## 安全閥（只給擁有者在正式環境登入壞掉時用）
 
