@@ -48,13 +48,15 @@ UIA_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '    **永不回 None**，於是那個運算式恆為 True → 卡① 沒有 idle 態。\n    """\n'),
         ('    """\n    return classify_macro_contract(regime, error=error, attempt=attempt) != UI_IDLE\n\n',
          '    """\n    return classify_macro_contract(regime, error=error) != UI_IDLE\n\n'),
-        ('\n#: UIA-01（2026-10-18）：危險度卡在「有燈沒值」時的口徑揭露列（標籤與值）。\nDANGER_BASIS_FACT_KEY: str = "計算口徑"\nDANGER_BASIS_TEMPLATE: str = (\n    "分母為全部 {m} 項（含未接線）；分子 {n} 項 ＝ 本輪有值的燈"\n    "（含門檻已失準與代理值；代理值只顯示不計分）")\n#: UIA-01：危險度卡在「有燈沒值」時，原本放大字區的結論改掛這一列（非 live 不得帶 `value`）。\nDANGER_DETAIL_FACT_KEY: str = "彙總結果"\n\n\ndef danger_completeness(danger: Any) -> tuple[int, int] | None:\n    """危險度讀數的 `(N, M)`；舊形狀 `(band, detail)`（或第三元素不是兩個整數）→ None。\n\n    None ＝ 呼叫端沒帶完整度 ⇒ 當資料齊全處理（＝ 修前行為；只為手組讀數的向下相容）。\n    """\n    if danger is None or len(danger) < 3:\n        return None\n    _cov = danger[2]\n    try:\n        _n, _m = int(_cov[0]), int(_cov[1])\n    except (TypeError, ValueError, IndexError) as _e:\n        # §1：形狀不對 ⇒ 出聲（log），不猜一組數字；退回修前行為。\n        print(f"[views/page_today] 危險度完整度形狀不對 {_cov!r}：{_e!r} —— 當作沒帶")\n        return None\n    return _n, _m\n\n\ndef _danger_tile(*, key: str, label: str,\n',
+        ('    facts: tuple[tuple[str, str], ...] = ()\n    #: UIA-01 R1（2026-10-18）：`UI_PARTIAL` 卡的 `(N, M)`，交給 v2 徽章解析（`v2_card_badge_n(coverage=)`）\n    #: 才畫得出既有 #9「◧ N／M 計入」。預設 None ⇒ 徽章解析與加欄前逐一相同。\n    badge_coverage: tuple[int, int] | None = None\n\n',
+         '    facts: tuple[tuple[str, str], ...] = ()\n\n'),
+        ('\n#: UIA-01（2026-10-18）：危險度卡在「有燈沒值」時的口徑揭露列（標籤與值）。\nDANGER_BASIS_FACT_KEY: str = "計算口徑"\n#: 📌 UIA-01 R1（2026-10-18，有意識的縮短，⛔ 不是漏字）：修前那句 54 字以上，超過卡面 fact 值的顯示\n#:   上限 `v2_markup.FACT_VALUE_MAX_CHARS`（46），手機（無 hover）只看得到「…代理…」前半。\n#:   現行句在 M、N 皆兩位數時仍 ≤ 46 字（測試釘住）；「代理值只顯示不計分」那半句已在燈卡本身揭露，此處讓位。\nDANGER_BASIS_TEMPLATE: str = "分母＝全部 {m} 項（含未接線）；分子＝有值的 {n} 項（含已失準、代理值）"\n#: UIA-01 R1：危險度卡在「有燈沒值」時的 `why`（同上，必須整句進 `V2_WHY_MAX_CHARS`，⛔ 不被子句收尾砍掉）。\nDANGER_PARTIAL_WHY_TEMPLATE: str = (\n    "{k} 項本輪沒有值（無資料／未接線／故障）；沒有值不等於沒有踩線，所以不畫成運作中")\n#: UIA-01：危險度卡在「有燈沒值」時，原本放大字區的結論改掛這一列（非 live 不得帶 `value`）。\nDANGER_DETAIL_FACT_KEY: str = "彙總結果"\n\n\ndef danger_completeness(danger: Any) -> tuple[int, int] | None:\n    """危險度讀數的 `(N, M)`；舊形狀 `(band, detail)`（或第三元素不是兩個整數）→ None。\n\n    None ＝ 呼叫端沒帶完整度 ⇒ 當資料齊全處理（＝ 修前行為；只為手組讀數的向下相容）。\n    """\n    if danger is None or len(danger) < 3:\n        return None\n    _cov = danger[2]\n    try:\n        _n, _m = int(_cov[0]), int(_cov[1])\n    except (TypeError, ValueError, IndexError) as _e:\n        # §1：形狀不對 ⇒ 出聲（log），不猜一組數字；退回修前行為。\n        print(f"[views/page_today] 危險度完整度形狀不對 {_cov!r}：{_e!r} —— 當作沒帶")\n        return None\n    return _n, _m\n\n\ndef _danger_tile(*, key: str, label: str,\n',
          '\ndef _danger_tile(*, key: str, label: str,\n'),
         ('def _danger_tile(*, key: str, label: str,\n                 danger: tuple[str, str] | tuple[str, str, tuple[int, int]] | None,\n                 danger_error: str,\n                 danger_requested: bool, danger_source: str,\n',
          'def _danger_tile(*, key: str, label: str,\n                 danger: tuple[str, str] | None, danger_error: str,\n                 danger_requested: bool, danger_source: str,\n'),
         ('    )\n    _cov = danger_completeness(danger)\n    if _danger_state == UI_LIVE:\n',
          '    )\n    if _danger_state == UI_LIVE:\n'),
-        ('            _dfacts = (("燈號", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"),)\n        if _cov is not None and _cov[0] < _cov[1]:\n            # 📌 UIA-01（2026-10-18）：有燈沒值 ⇒ ⛔ 不畫「🟢 運作中」—— 改走既有的 `UI_PARTIAL`\n            #   （「N／M 計入」）。燈號頻道（`_zh` / `_hex`）**照舊**，worst-of 一位未動（改燈色是\n            #   BP-DR-19 的事，未裁示）。非 live 不得帶 `value` ⇒ 結論改掛 fact（同 degraded 燈卡\n            #   把「現值」掛 fact 的走法），並在卡上寫明分子分母的口徑。\n            _n, _m = _cov\n            _now = (f"**指標危險度：{_zh}\u3000·\u3000只根據 {_n}／{_m} 項有資料**" if _zh\n                    else f"**指標危險度：只根據 {_n}／{_m} 項有資料**")\n            return Tile(\n                Card(key=key, label=label, state=UI_PARTIAL,\n                     note=Note(\n                         now=_now,\n                         why=(f"{_m} 項裡有 {_m - _n} 項本輪沒有值（無資料／未接線／故障），"\n                              f"這張卡的燈只彙總了有值的 {_n} 項 —— "\n                              "**沒有值不等於沒有踩線**，所以不畫成「運作中」"),\n                         where=EXIT_RETRY_HERE)),\n                signal_text=_zh, signal_color=_hex,\n                facts=((DANGER_DETAIL_FACT_KEY, str(danger[1])),\n                       (DANGER_BASIS_FACT_KEY, DANGER_BASIS_TEMPLATE.format(n=_n, m=_m)),\n                       *_dfacts))\n        return Tile(\n',
+        ('            _dfacts = (("燈號", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"),)\n        if _cov is not None and _cov[0] < _cov[1]:\n            # 📌 UIA-01（2026-10-18）：有燈沒值 ⇒ ⛔ 不畫「🟢 運作中」—— 改走既有的 `UI_PARTIAL`。\n            #   徽章：Tile 帶 `badge_coverage=(N, M)` ⇒ `v2_card_badge_n(coverage=)` → `resolve_badge`\n            #   拿得到分子分母 ⇒ 既有 #9「◧ N／M 計入」。⚠️ 不帶的話 `resolve_badge` 會 fail-safe 降成\n            #   #7「缺漏 · 可重跑」—— 缺的多半是未接線，「可重跑」是錯的指引（UIA-01 R1 修掉的就是這個）。\n            #   燈號頻道（`_zh` / `_hex`）**照舊**，worst-of 一位未動（改燈色是 BP-DR-19 的事，未裁示）。\n            #   非 live 不得帶 `value` ⇒ 結論改掛 fact（同 degraded 燈卡把「現值」掛 fact 的走法），\n            #   並在卡上寫明分子分母的口徑。三段字都控制在卡面顯示上限內（手機沒有 hover）。\n            _n, _m = _cov\n            _now = (f"**指標危險度：{_zh}\u3000·\u3000只根據 {_n}／{_m} 項有資料**" if _zh\n                    else f"**指標危險度：只根據 {_n}／{_m} 項有資料**")\n            return Tile(\n                Card(key=key, label=label, state=UI_PARTIAL,\n                     note=Note(\n                         now=_now,\n                         why=DANGER_PARTIAL_WHY_TEMPLATE.format(k=_m - _n),\n                         where=EXIT_RETRY_HERE)),\n                signal_text=_zh, signal_color=_hex, badge_coverage=(_n, _m),\n                facts=((DANGER_DETAIL_FACT_KEY, str(danger[1])),\n                       (DANGER_BASIS_FACT_KEY, DANGER_BASIS_TEMPLATE.format(n=_n, m=_m)),\n                       *_dfacts))\n        return Tile(\n',
          '            _dfacts = (("燈號", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"),)\n        return Tile(\n'),
         ('def build_verdict_tiles(*, alloc: Any, alloc_error: str,\n                        danger: tuple[Any, ...] | None, danger_error: str,\n                        danger_requested: bool,\n',
          'def build_verdict_tiles(*, alloc: Any, alloc_error: str,\n                        danger: tuple[str, str] | None, danger_error: str,\n                        danger_requested: bool,\n'),
@@ -82,6 +84,14 @@ UIA_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '        from src.ui.tabs.tab_macro_v2 import (\n            build_rows, bucket_summary, overall_verdict,\n        )\n'),
         ('        )\n        _summary = bucket_summary(build_rows(dict(readout.readiness)))\n        _band, _detail = overall_verdict(_summary)\n        return (_band, _detail, summary_coverage(_summary)), "", ""\n    except Exception as _e:  # noqa: BLE001\n',
          '        )\n        return overall_verdict(\n            bucket_summary(build_rows(dict(readout.readiness)))), "", ""\n    except Exception as _e:  # noqa: BLE001\n'),
+        ('\ndef v2_card_badge_n(card: Card, *, coverage: tuple[int, int] | None = None) -> int:\n    """一張 `Card` → v2 徽章號。**三頁共用**（今天／找標的／我的持股都走這一支）。\n',
+         '\ndef v2_card_badge_n(card: Card) -> int:\n    """一張 `Card` → v2 徽章號。**三頁共用**（今天／找標的／我的持股都走這一支）。\n'),
+        ('    未知狀態 → `KeyError`（⛔ 不兜底，同改動前）。\n\n    📌 UIA-01 R1（2026-10-18）`coverage=`（選填，預設 None ⇒ 與加參數前逐一相同）：\n    `UI_PARTIAL` 卡的 `(N, M)`，原樣交給 `resolve_badge(numerator=, denominator=)` ⇒ #9「◧ N／M 計入」。\n    只在 `card.state == UI_PARTIAL` 時才傳（其餘狀態帶了也不理，⛔ 不讓它改到別的態）。\n    """\n',
+         '    未知狀態 → `KeyError`（⛔ 不兜底，同改動前）。\n    """\n'),
+        ('                    and (card.key, card.note.now) in v2_valid_empty_pairs())\n    if coverage is not None and card.state == UI_PARTIAL:\n        return v2_page.resolve_badge(state=_v2_state, miss_reason=_reason,\n                                     numerator=int(coverage[0]),\n                                     denominator=int(coverage[1]),\n                                     valid_empty=_valid_empty)\n    return v2_page.resolve_badge(state=_v2_state, miss_reason=_reason,\n',
+         '                    and (card.key, card.note.now) in v2_valid_empty_pairs())\n    return v2_page.resolve_badge(state=_v2_state, miss_reason=_reason,\n'),
+        ('    _v2_state, _reason = V2_STATE_VOCAB[_card.state]\n    # 2026-09-26：改走三頁共用的那一支（#11 登記制）；UIA-01 R1：partial 卡帶 (N, M) ⇒ #9。\n    _badge_n = v2_card_badge_n(_card, coverage=tile.badge_coverage)\n    _level, _guide_rows, _full = v2_level_line(tile)\n',
+         '    _v2_state, _reason = V2_STATE_VOCAB[_card.state]\n    _badge_n = v2_card_badge_n(_card)   # 2026-09-26：改走三頁共用的那一支（#11 登記制）\n    _level, _guide_rows, _full = v2_level_line(tile)\n'),
         ('def build_summary_tiles(cards: Sequence[Card], *,\n                        danger: tuple[Any, ...] | None, danger_error: str,\n                        danger_requested: bool,\n',
          'def build_summary_tiles(cards: Sequence[Card], *,\n                        danger: tuple[str, str] | None, danger_error: str,\n                        danger_requested: bool,\n'),
         ('    _alerts, _scanned, _alerts_err = _load_key_alerts(_session)\n    # UIA-07：本 session 上一次「更新今日戰情」的紅綠燈步驟（沒按過 → None ⇒ 判態與修前相同）。\n    try:\n        _attempt = warroom_attempt(_session.get(SS_REFRESH_REPORT))\n    except Exception as _e:  # noqa: BLE001 — 讀不出來就當沒有，log 出聲（⛔ 不炸整頁、⛔ 不猜）\n        print(f"[views/page_today] 讀不出上一次更新的紅綠燈步驟：{_e!r} —— 當作沒有")\n        _attempt = None\n\n',
@@ -94,7 +104,7 @@ UIA_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '            regime=_regime, regime_error=_regime_err,\n            band_zh_color=_band_zh, l4_error=_l4_err))\n\n'),
     ),
     'src/ui/views/page_why.py': (
-        ('SOURCE_FAILED_NOW: str = "**最後一次真實抓取失敗了**"\n#: UIA-02（2026-10-18）：L0 記 `ok`，但附加欄 `last_has_content=False`（回 0 列／None）。灰，⛔ 不綠、⛔ 不紅。\nSOURCE_EMPTY_NOW: str = "**有呼叫、沒報錯，但回 0 列／None**"\nSOURCE_EMPTY_WHY: str = (\n    "分不出是上游今天沒資料（非交易日／尚未公布）還是備援全敗 —— "\n    "沒報錯不等於有資料，所以這一盞**不畫綠**；"\n    "本頁也沒有依據說它壞了，所以**不畫紅**。"\n    "判空規則與「今天」頁的更新報告同一支（`shared.fetch_monitor.has_content`：只有 None 與空容器算空，數值 0 算有值）")\nSOURCE_EMPTY_WHERE: str = (\n    "到會用到它的那一頁重按一次更新；"\n    "若在交易日、資料應已公布時仍持續回空，請把這一列回報給維護者")\nEMPTY_REGISTRY_NOW: str = "**這個 session 還沒有任何 fetcher 登錄**"\n',
+        ('SOURCE_FAILED_NOW: str = "**最後一次真實抓取失敗了**"\n#: UIA-02（2026-10-18）：L0 記 `ok`，但附加欄 `last_has_content=False`（回 0 列／None）。灰，⛔ 不綠、⛔ 不紅。\nSOURCE_EMPTY_NOW: str = "**有呼叫、沒報錯，但回 0 列／None**"\nSOURCE_EMPTY_WHY: str = (\n    "分不出是上游今天沒資料（非交易日／尚未公布）還是備援全敗 —— "\n    "沒報錯不等於有資料，所以這一盞**不畫綠**；"\n    "本頁也沒有依據說它壞了，所以**不畫紅**。"\n    "判空規則與「今天」頁的更新報告同一支（`shared.fetch_monitor.has_content`：只有 None 與空容器算空，數值 0 算有值）")\n#: ⚠️ UIA-02 R1（2026-10-18）徽章據實揭露：這張灰卡的 v2 徽章是裸 `UI_EMPTY` 的既有裁決 #7「缺漏 · 可重跑」。\n#:   既有 11 顆裡**沒有一顆**是「空、而且不宣稱能不能重跑」：#8 宣稱「重跑無效」（同樣說不準）；\n#:   #11「無資料」限「上游成功算完、結果真的是空」的登記卡 —— 這張卡正是**分不出**是不是備援全敗被吞成空，\n#:   ⛔ 不符 #11 的登記判準。⇒ 照 v2 SSOT 維持 #7，⛔ 不新造徽章；已上報總管待裁。\nSOURCE_EMPTY_WHERE: str = (\n    "到會用到它的那一頁重按一次更新；"\n    "若在交易日、資料應已公布時仍持續回空，請把這一列回報給維護者")\nEMPTY_REGISTRY_NOW: str = "**這個 session 還沒有任何 fetcher 登錄**"\n',
          'SOURCE_FAILED_NOW: str = "**最後一次真實抓取失敗了**"\nEMPTY_REGISTRY_NOW: str = "**這個 session 還沒有任何 fetcher 登錄**"\n'),
         ('            ⚠️ **不認得一律當紅**，絕不當綠（見 `probe_from_entry`）。\n        empty: UIA-02（2026-10-18）。`ok=True` 但 L0 附加欄 `last_has_content` **明確是 False**\n            （有呼叫、沒報錯，但回 0 列／None）→ 灰（`UI_EMPTY`）。\n            舊紀錄沒有這一欄（或為 None）→ False ＝ 行為與修前相同。\n    """\n',
          '            ⚠️ **不認得一律當紅**，絕不當綠（見 `probe_from_entry`）。\n    """\n'),
@@ -112,7 +122,6 @@ UIA_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '           + "到會用到它的那一頁重按一次更新；若持續失敗請" + V2_EXCERPT_GAP + "回報給維護者")),\n       _v2_rows_for("why.source.wall", SOURCE_UNKNOWN_NOW_HEAD, (\n'),
     ),
 }
-
 
 
 def _uia_rel(file_path) -> str:
@@ -332,7 +341,7 @@ class TestUIA01Tiles:
         assert (tile.signal_text, tile.signal_color) == _BAND_ZH["green"]   # 燈號頻道照舊
         facts = dict(tile.facts)
         assert facts[PT.DANGER_DETAIL_FACT_KEY] == danger[1]
-        assert f"分母為全部 {_M} 項（含未接線）" in facts[PT.DANGER_BASIS_FACT_KEY]
+        assert f"分母＝全部 {_M} 項（含未接線）" in facts[PT.DANGER_BASIS_FACT_KEY]
         assert f"1／{_M}" in tile.card.note.now
         html = PT.v2_card_html(tile)
         assert "<span>運作中</span>" not in html and "bdg-1 " not in html   # 徽章不是 #1 運作中
@@ -556,3 +565,82 @@ class TestUIA07Tiles:
             TT.MACRO_ATTEMPT_OK, "寫入")
         assert PT.warroom_attempt(mk(StepResult("other", False, "x"))) is None
         assert PT.warroom_attempt(NS()) is None                      # 舊格式報告不炸
+
+
+# ══════════════════════════════════════════════════════════════════
+# Round 1（獨立稽核 PASS-WITH-FIXES ＋ 桌機／手機 QA）
+# ══════════════════════════════════════════════════════════════════
+from src.ui_v2 import markup as V2M  # noqa: E402
+from src.ui_v2 import page_today as V2P  # noqa: E402
+
+
+def _partial_danger():
+    danger, _, _ = PT._load_danger(
+        PT.MacroReadout(requested=True, readiness=_rd({"ndc_signal": 23.0})))
+    return danger
+
+
+class TestR1Badge:
+    def test_partial_danger_tiles_show_badge_9_not_7(self):
+        danger = _partial_danger()
+        cards = next(b for b in TT.build_today_blocks() if b.key == "today.summary").cards
+        risk = next(t for t in PT.build_summary_tiles(
+            cards, danger=danger, danger_error="", danger_requested=True,
+            band_zh_color=_BAND_ZH) if t.card.key == PT.SUMMARY_RISK_KEY)
+        for tile in (_danger_tile(danger), risk):
+            assert tile.badge_coverage == (1, _M)
+            assert PT.v2_card_badge_n(tile.card, coverage=tile.badge_coverage) == 9
+            html = PT.v2_card_html(tile)
+            assert "bdg-9 " in html and "bdg-7 " not in html
+            assert "可重跑" not in html
+
+    @pytest.mark.parametrize("state", sorted(PT.V2_STATE_VOCAB))
+    def test_default_badge_resolution_unchanged_for_every_state(self, state):
+        # 其他頁（找標的／我的持股／憑什麼）呼叫 `v2_card_badge_n(card)` 不帶 coverage ⇒ 與修前公式逐一相同；
+        # 非 partial 卡就算帶了 coverage 也不改徽章。
+        note = None if state == UI_LIVE else TT.Note(now="x", why="y", where="z")
+        card = TT.Card(key="k", label="l", state=state, note=note)
+        v2_state, reason = PT.V2_STATE_VOCAB[state]
+        old = V2P.resolve_badge(state=v2_state, miss_reason=reason, valid_empty=False)
+        assert PT.v2_card_badge_n(card) == old
+        assert PT.v2_card_badge_n(card, coverage=None) == old
+        if state != UI_PARTIAL:
+            assert PT.v2_card_badge_n(card, coverage=(3, 16)) == old
+
+    def test_tiles_without_coverage_render_byte_identical(self):
+        tile = _danger_tile(("green", "x"))     # live，badge_coverage=None
+        assert tile.badge_coverage is None
+        for t in _verdict_tiles(_FAILED).values():
+            assert t.badge_coverage is None
+            html = PT.v2_card_html(t)
+            assert f"bdg-{PT.v2_card_badge_n(t.card)} " in html
+
+
+class TestR1MobileVisibleText:
+    def test_partial_texts_fit_visible_limit_worst_case(self):
+        lim = V2M.FACT_VALUE_MAX_CHARS
+        assert len(PT.DANGER_BASIS_TEMPLATE.format(n=99, m=99)) <= lim
+        assert len(PT.DANGER_PARTIAL_WHY_TEMPLATE.format(k=99)) <= PT.V2_WHY_MAX_CHARS
+        longest = (f"9 桶紅、9 桶黃　·　最差是「短線急殺」　·　"
+                   f"{TV.COVERAGE_SUFFIX_TEMPLATE.format(n=99, m=99)}")
+        assert len(longest) <= lim
+
+    def test_essential_disclosure_visible_without_hover(self):
+        html = PT.v2_card_html(_danger_tile(_partial_danger()))
+        face = html[html.index('<div class="blk'):]          # 去掉外層 hover 槽
+        assert f"只根據 1／{_M} 項有資料" in face
+        assert "含未接線" in face
+        assert "沒有值不等於沒有踩線" in face
+        assert V2M.FACT_VALUE_ELLIPSIS + "</span>" not in face      # 沒有任何一格被截斷
+
+
+def test_r1_warroom_attempt_masks_secrets():
+    from src.services.macro_refresh_service import STEP_WARROOM, MacroRefreshReport, StepResult
+    key = "AIzaSyABCDEFGHIJKLMNOPQRSTUV"
+    rep = MacroRefreshReport(mode="warm", started_at="t", elapsed_s=0.0, steps=(
+        StepResult(STEP_WARROOM, False, f"HTTPError: 403 https://x?key={key} bare {key}"),))
+    status, reason = PT.warroom_attempt(rep)
+    assert status == TT.MACRO_ATTEMPT_FAILED
+    assert key not in reason and "HTTPError: 403" in reason
+    exp = _verdict_tiles((status, reason))["verdict.exposure"]
+    assert key not in exp.card.note.why

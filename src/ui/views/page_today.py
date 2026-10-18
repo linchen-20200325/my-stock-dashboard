@@ -1279,6 +1279,9 @@ class Tile:
     signal_text: str = ""
     signal_color: str = ""
     facts: tuple[tuple[str, str], ...] = ()
+    #: UIA-01 R1（2026-10-18）：`UI_PARTIAL` 卡的 `(N, M)`，交給 v2 徽章解析（`v2_card_badge_n(coverage=)`）
+    #: 才畫得出既有 #9「◧ N／M 計入」。預設 None ⇒ 徽章解析與加欄前逐一相同。
+    badge_coverage: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         """【7】2026-09-07：**訊號頻道在建構期就驗，不留到渲染期。**
@@ -1729,9 +1732,13 @@ REGIME_SCOPE_FACT_KEY: str = "位階的出處"
 
 #: UIA-01（2026-10-18）：危險度卡在「有燈沒值」時的口徑揭露列（標籤與值）。
 DANGER_BASIS_FACT_KEY: str = "計算口徑"
-DANGER_BASIS_TEMPLATE: str = (
-    "分母為全部 {m} 項（含未接線）；分子 {n} 項 ＝ 本輪有值的燈"
-    "（含門檻已失準與代理值；代理值只顯示不計分）")
+#: 📌 UIA-01 R1（2026-10-18，有意識的縮短，⛔ 不是漏字）：修前那句 54 字以上，超過卡面 fact 值的顯示
+#:   上限 `v2_markup.FACT_VALUE_MAX_CHARS`（46），手機（無 hover）只看得到「…代理…」前半。
+#:   現行句在 M、N 皆兩位數時仍 ≤ 46 字（測試釘住）；「代理值只顯示不計分」那半句已在燈卡本身揭露，此處讓位。
+DANGER_BASIS_TEMPLATE: str = "分母＝全部 {m} 項（含未接線）；分子＝有值的 {n} 項（含已失準、代理值）"
+#: UIA-01 R1：危險度卡在「有燈沒值」時的 `why`（同上，必須整句進 `V2_WHY_MAX_CHARS`，⛔ 不被子句收尾砍掉）。
+DANGER_PARTIAL_WHY_TEMPLATE: str = (
+    "{k} 項本輪沒有值（無資料／未接線／故障）；沒有值不等於沒有踩線，所以不畫成運作中")
 #: UIA-01：危險度卡在「有燈沒值」時，原本放大字區的結論改掛這一列（非 live 不得帶 `value`）。
 DANGER_DETAIL_FACT_KEY: str = "彙總結果"
 
@@ -1785,10 +1792,13 @@ def _danger_tile(*, key: str, label: str,
             # L4 載不進來 → 誠實留白 ＋ 就地說明，不自己編一組中文與色碼。
             _dfacts = (("燈號", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"),)
         if _cov is not None and _cov[0] < _cov[1]:
-            # 📌 UIA-01（2026-10-18）：有燈沒值 ⇒ ⛔ 不畫「🟢 運作中」—— 改走既有的 `UI_PARTIAL`
-            #   （「N／M 計入」）。燈號頻道（`_zh` / `_hex`）**照舊**，worst-of 一位未動（改燈色是
-            #   BP-DR-19 的事，未裁示）。非 live 不得帶 `value` ⇒ 結論改掛 fact（同 degraded 燈卡
-            #   把「現值」掛 fact 的走法），並在卡上寫明分子分母的口徑。
+            # 📌 UIA-01（2026-10-18）：有燈沒值 ⇒ ⛔ 不畫「🟢 運作中」—— 改走既有的 `UI_PARTIAL`。
+            #   徽章：Tile 帶 `badge_coverage=(N, M)` ⇒ `v2_card_badge_n(coverage=)` → `resolve_badge`
+            #   拿得到分子分母 ⇒ 既有 #9「◧ N／M 計入」。⚠️ 不帶的話 `resolve_badge` 會 fail-safe 降成
+            #   #7「缺漏 · 可重跑」—— 缺的多半是未接線，「可重跑」是錯的指引（UIA-01 R1 修掉的就是這個）。
+            #   燈號頻道（`_zh` / `_hex`）**照舊**，worst-of 一位未動（改燈色是 BP-DR-19 的事，未裁示）。
+            #   非 live 不得帶 `value` ⇒ 結論改掛 fact（同 degraded 燈卡把「現值」掛 fact 的走法），
+            #   並在卡上寫明分子分母的口徑。三段字都控制在卡面顯示上限內（手機沒有 hover）。
             _n, _m = _cov
             _now = (f"**指標危險度：{_zh}　·　只根據 {_n}／{_m} 項有資料**" if _zh
                     else f"**指標危險度：只根據 {_n}／{_m} 項有資料**")
@@ -1796,11 +1806,9 @@ def _danger_tile(*, key: str, label: str,
                 Card(key=key, label=label, state=UI_PARTIAL,
                      note=Note(
                          now=_now,
-                         why=(f"{_m} 項裡有 {_m - _n} 項本輪沒有值（無資料／未接線／故障），"
-                              f"這張卡的燈只彙總了有值的 {_n} 項 —— "
-                              "**沒有值不等於沒有踩線**，所以不畫成「運作中」"),
+                         why=DANGER_PARTIAL_WHY_TEMPLATE.format(k=_m - _n),
                          where=EXIT_RETRY_HERE)),
-                signal_text=_zh, signal_color=_hex,
+                signal_text=_zh, signal_color=_hex, badge_coverage=(_n, _m),
                 facts=((DANGER_DETAIL_FACT_KEY, str(danger[1])),
                        (DANGER_BASIS_FACT_KEY, DANGER_BASIS_TEMPLATE.format(n=_n, m=_m)),
                        *_dfacts))
@@ -2945,16 +2953,25 @@ def v2_valid_empty_pairs() -> frozenset[tuple[str, str]]:
     return _V2_VALID_EMPTY_CACHE[0]
 
 
-def v2_card_badge_n(card: Card) -> int:
+def v2_card_badge_n(card: Card, *, coverage: tuple[int, int] | None = None) -> int:
     """一張 `Card` → v2 徽章號。**三頁共用**（今天／找標的／我的持股都走這一支）。
 
     ＝ `V2_STATE_VOCAB` 翻字面 → `v2_page.resolve_badge()`；**唯一多做的一件事**是查
     `v2_valid_empty_pairs()`：登記過的有效空結果 → #11，其餘行為與改動前逐一相同。
     未知狀態 → `KeyError`（⛔ 不兜底，同改動前）。
+
+    📌 UIA-01 R1（2026-10-18）`coverage=`（選填，預設 None ⇒ 與加參數前逐一相同）：
+    `UI_PARTIAL` 卡的 `(N, M)`，原樣交給 `resolve_badge(numerator=, denominator=)` ⇒ #9「◧ N／M 計入」。
+    只在 `card.state == UI_PARTIAL` 時才傳（其餘狀態帶了也不理，⛔ 不讓它改到別的態）。
     """
     _v2_state, _reason = V2_STATE_VOCAB[card.state]
     _valid_empty = (card.state == UI_EMPTY and card.note is not None
                     and (card.key, card.note.now) in v2_valid_empty_pairs())
+    if coverage is not None and card.state == UI_PARTIAL:
+        return v2_page.resolve_badge(state=_v2_state, miss_reason=_reason,
+                                     numerator=int(coverage[0]),
+                                     denominator=int(coverage[1]),
+                                     valid_empty=_valid_empty)
     return v2_page.resolve_badge(state=_v2_state, miss_reason=_reason,
                                  valid_empty=_valid_empty)
 
@@ -3275,7 +3292,8 @@ def v2_card_html(tile: Tile) -> str:
     _card = tile.card
     # 未知狀態 → `KeyError`。⛔ 不 `.get()` 兜底（兜底＝挑一顆看起來合理的徽章）。
     _v2_state, _reason = V2_STATE_VOCAB[_card.state]
-    _badge_n = v2_card_badge_n(_card)   # 2026-09-26：改走三頁共用的那一支（#11 登記制）
+    # 2026-09-26：改走三頁共用的那一支（#11 登記制）；UIA-01 R1：partial 卡帶 (N, M) ⇒ #9。
+    _badge_n = v2_card_badge_n(_card, coverage=tile.badge_coverage)
     _level, _guide_rows, _full = v2_level_line(tile)
     # 🔴 **移出卡面、只留 hover** 的那幾列（見 `V2_HOVER_ONLY_FACTS` 的判準與理由）。
     #    🔴 餵進 hover 的是 `tile.facts` 的**原字串**，⛔ 不過 `v2_plain()` ——
