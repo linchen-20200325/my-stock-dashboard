@@ -517,8 +517,25 @@ def build_reference_row(key: str, value: float | None) -> Row:
     )
 
 
+#: UIA-01（2026-10-18）：`build_rows` 產出的列裡，**沒有值**的兩態（與 `build_rows` 的四態判定同源：
+#: `unwired` ＝ 刻意沒接、`missing` ＝ 這一輪沒取到值）。⛔ **不含** `degraded`（有值、門檻失準，
+#: 例：融資餘額恆為 degraded）與代理值列（m1b 退到動能代理時 state 照樣有值、只是燈不計分）——
+#: 它們**有值**，只是不照門檻讀 / 不計分。
+NO_VALUE_ROW_STATES: frozenset[str] = frozenset({"missing", "unwired"})
+
+#: UIA-01：有任何一盞沒有值時，取代「五桶全綠」的那一句（⛔ 不宣稱「全綠」—— 沒值的燈沒得判）。
+PARTIAL_NO_ALERT_TEXT: str = "有資料的指標未見黃／紅燈"
+#: UIA-01：有任何一盞沒有值時，接在結論後面的分子分母揭露。分母 ＝ 全部列數（含未接線），⛔ 不寫死 16。
+COVERAGE_SUFFIX_TEMPLATE: str = "只根據 {n}／{m} 項有資料"
+
+
 def bucket_summary(rows: list[Row]) -> list[dict]:
-    """每桶:最差燈 + 指標數 + 不可信數。worst-of rollup,與現行五桶同語意。"""
+    """每桶:最差燈 + 指標數 + 不可信數。worst-of rollup,與現行五桶同語意。
+
+    UIA-01（2026-10-18）：每桶多一欄 `n_no_value` ＝ 該桶成員裡 state ∈ `NO_VALUE_ROW_STATES`
+    （沒有值）的列數。**只加欄**：`band` / `worst_*` / `n` / `n_bad` 的算法一位未動
+    （worst-of、排除灰列、分母照舊）。
+    """
     rank = {"green": 0, "yellow": 1, "red": 2, "gray": -1}
     out = []
     for bkey in _BUCKET_ORDER:
@@ -535,8 +552,23 @@ def bucket_summary(rows: list[Row]) -> list[dict]:
                             f"{worst.value_note}" if worst else "—"),
             "n": len(members),
             "n_bad": sum(1 for r in members if r.state != "live"),
+            "n_no_value": sum(1 for r in members if r.state in NO_VALUE_ROW_STATES),
         })
     return out
+
+
+def summary_coverage(summary: list[dict]) -> tuple[int, int]:
+    """`bucket_summary()` 的輸出 → `(有值的列數 N, 全部列數 M)`。**`overall_verdict` 與新 UI 共用這一支。**
+
+    UIA-01：M ＝ 各桶 `n` 加總（＝ `build_rows` 的列數，含未接線；⛔ 不寫死 16）；
+    N ＝ M − 各桶 `n_no_value` 加總。
+    ⚠️ **向下相容**：手組的 summary 沒有 `n_no_value` 欄 → 當 0（＝ 修前行為：不揭露、不改字）。
+    那是**舊呼叫端的相容預設，⛔ 不是「缺欄就當資料齊」的判斷** —— 正式路徑一律經 `bucket_summary`，
+    它每一桶都帶這一欄。
+    """
+    _m = sum(int(b.get("n", 0) or 0) for b in summary)
+    _miss = sum(int(b.get("n_no_value", 0) or 0) for b in summary)
+    return _m - _miss, _m
 
 
 def overall_verdict(summary: list[dict]) -> tuple[str, str]:
@@ -553,6 +585,14 @@ def overall_verdict(summary: list[dict]) -> tuple[str, str]:
     **本函式不吃、也不得吃 regime** —— 並列揭露的重點就是兩者各自算完
     擺在一起(見 `parallel_verdict`),誰調和誰都會毀掉這個資訊。
 
+    📌 **UIA-01（2026-10-18）：只改說明文字，`band` 一位未動。**
+    修前有燈沒值時，灰桶被排除後剩下的桶全綠就印「五桶全綠」—— 只餵 1 盞燈也一樣，
+    畫面因此宣稱一個沒發生過的全面檢查（§1）。現行：只要有任何一列沒有值（`summary_coverage`
+    的 N < M），⛔ 不印「五桶全綠」，改印 `PARTIAL_NO_ALERT_TEXT`；紅／黃照舊，
+    兩者都在尾端接「只根據 N／M 項有資料」。資料齊全（N == M）→ 輸出與修前**逐字相同**；
+    全部無值 → 照舊 `('gray', '尚未載入資料')`。⛔ 沒有加任何 N／M 門檻、⛔ 沒有改 worst-of 與分母
+    （那是 DEC-046／BP-DR-19 尚未裁示的事）。
+
     Returns: (band, 說明文字)
     """
     rank = {"green": 0, "yellow": 1, "red": 2}
@@ -567,8 +607,14 @@ def overall_verdict(summary: list[dict]) -> tuple[str, str]:
         bits.append(f"{n_red} 桶紅")
     if n_yellow:
         bits.append(f"{n_yellow} 桶黃")
-    detail = "、".join(bits) or "五桶全綠"
-    return worst["band"], f"{detail}　·　最差是「{worst['name']}」"
+    _n, _m = summary_coverage(summary)
+    if _n >= _m:
+        detail = "、".join(bits) or "五桶全綠"
+        return worst["band"], f"{detail}　·　最差是「{worst['name']}」"
+    _suffix = COVERAGE_SUFFIX_TEMPLATE.format(n=_n, m=_m)
+    if not bits:
+        return worst["band"], f"{PARTIAL_NO_ALERT_TEXT}　·　{_suffix}"
+    return worst["band"], f"{'、'.join(bits)}　·　最差是「{worst['name']}」　·　{_suffix}"
 
 
 # ══════════════════════════════════════════════════════════════════════

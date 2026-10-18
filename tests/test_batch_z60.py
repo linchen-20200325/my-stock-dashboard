@@ -745,7 +745,12 @@ class TestOldFilesUntouched:
     """
 
     _BASE_COUNT = 91
-    _BASE_DIGEST = "6922b203519e9679d4a29bfbdd123b401a4147ebc41d60a1e8f652636c19f819"
+    # ~~"6922b203519e9679d4a29bfbdd123b401a4147ebc41d60a1e8f652636c19f819"~~（基底 e64ea2f5，至 d3425a91 仍成立）
+    # 📌 UIA-01／UIA-07（2026-10-18，核准過的舊檔改動，⛔ 不是漏改）：只動到**新舊 UI 共用**的純函式 ——
+    #   `src/ui/tabs/tab_macro_v2.py`（`bucket_summary` / `overall_verdict` ＋ 新增 `summary_coverage`）、
+    #   `src/ui/tabs/tab_today.py`（`classify_macro_contract(attempt=)` 與轉交它的三支 builder，皆選填 kwarg、
+    #   預設輸出不變）。其餘 89 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
+    _BASE_DIGEST = "45f5162d4b71038eced69d7d119dcefacd2070dac4307f49659f41f237964e35"
 
     def test_no_diff_against_base(self):
         import hashlib

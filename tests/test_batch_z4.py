@@ -185,9 +185,12 @@ class TestR9Consumers:
         assert tile.signal_text == zh
         assert dict(tile.facts)["門檻帶"] == "紅 ≤16 / 黃 ≤22　黃 ≥32 / 紅 ≥38"
 
+    # UIA-01（2026-10-18）：本測只餵 `ndc_signal` 一盞（其餘 15 盞無值）—— 修前期待「五桶全綠」，
+    #   那正是 UIA-01 的 bug（只有 1 盞有值卻宣稱五桶全綠）。燈色（band）不變；說明改為不宣稱全綠
+    #   ＋ 揭露「只根據 1／16 項有資料」。
     @pytest.mark.parametrize("score,band,verdict", [
-        (22, "yellow", ("yellow", "1 桶黃　·　最差是「長期」")),
-        (23, "green", ("green", "五桶全綠　·　最差是「長期」")),
+        (22, "yellow", ("yellow", "1 桶黃　·　最差是「長期」　·　只根據 1／16 項有資料")),
+        (23, "green", ("green", "有資料的指標未見黃／紅燈　·　只根據 1／16 項有資料")),
     ])
     def test_v2_macro_page_rows_and_danger(self, score, band, verdict):
         """v2 總經頁（與 v2 今天頁「指標危險度」卡同一條 build_rows→bucket_summary→overall_verdict）。"""

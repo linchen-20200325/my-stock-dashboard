@@ -83,6 +83,7 @@ from typing import Any, Callable, Mapping
 
 import streamlit as st
 
+from shared.fetch_monitor import has_content
 from shared.macro_compute import tw_now_str
 from shared.risk_cap_policy import RISK_CAP_STATE_FILE
 from src.compute.macro.macro_session_patch import MACRO_PATCH_KEYS
@@ -378,26 +379,10 @@ class SourceContent:
         return self.text
 
 
-def _has_content(value: Any) -> bool:
-    """一個取回來的東西**算不算有資料**。
-
-    三種形狀分別判，理由寫在這裡以免下一個人「順手統一成 `bool(value)`」：
-      · **DataFrame / Series**（有 `.empty`）：空表 ＝ 沒資料。
-        `bool(df)` 在 pandas 會直接 `ValueError`，不能用真假值判。
-      · **容器**（dict / list / str …）：長度 0 ＝ 沒資料。
-      · **純量**（例如融資餘額的 `float`）：**只認 `None` 是沒資料**。
-        ⚠️ 刻意**不**用 `bool()` —— `0.0` 是一個合法的數值，把它判成
-        「沒資料」等於本檔自己發明一條 fetcher 沒有宣告的規則（§1）。
-        缺值的界線由 fetcher 決定，而它們缺值時回的是 `None`。
-    """
-    if value is None:
-        return False
-    _empty = getattr(value, "empty", None)
-    if _empty is not None:
-        return not bool(_empty)
-    if isinstance(value, (dict, list, tuple, set, frozenset, str, bytes)):
-        return len(value) > 0
-    return True
+#: UIA-02（2026-10-18）：判空規則下沉到 L0 `shared.fetch_monitor.has_content`（規則一字未改），
+#: 讓「今天」頁的更新報告與「憑什麼」頁的資料體檢**用同一支判空**（兩把尺會漂開）。
+#: 舊私有名保留為別名（本檔 `audit_source_contents` 照舊呼叫它；突變測試可照舊拔它）。
+_has_content = has_content
 
 
 def audit_source_contents(bundle: Mapping[str, Any], *,

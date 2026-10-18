@@ -348,6 +348,12 @@ from src.ui.tabs.tab_today import (
     build_status_bar_cards,
     build_today_blocks,
     classify_macro_contract,
+    macro_attempt_applies,       # UIA-07
+    macro_attempt_failed_reason,  # UIA-07
+    macro_attempt_failed_why,     # UIA-07
+    MACRO_ATTEMPT_FAILED,         # UIA-07
+    MACRO_ATTEMPT_OK,             # UIA-07
+    MACRO_ATTEMPT_SKIPPED,        # UIA-07
     scrub_state_glyphs,
     upstream_error_why,
 )
@@ -1079,8 +1085,30 @@ def upstream_requested(session: Mapping[str, Any]) -> bool:
     return any(_k in session for _k in UPSTREAM_SESSION_KEYS)
 
 
+def warroom_attempt(report: Any) -> tuple[str, str] | None:
+    """UIA-07：本 session 上一次「更新今日戰情」報告裡 `STEP_WARROOM` 那一步 → `(status, reason)`。
+
+    沒有報告（新 session、還沒按過）/ 報告裡沒有這一步 → None（⛔ 不猜；卡片維持修前的判態）。
+    `reason` 先過 `scrub_secrets`（上游例外原文可能帶金鑰；它會被畫上卡面）。
+    舊格式報告（熱重載後殘留、欄位缺）→ `getattr` 讀不到就當沒有這一步，⛔ 不炸整頁。
+    """
+    if report is None:
+        return None
+    from src.services.macro_refresh_service import STEP_WARROOM
+    for _step in tuple(getattr(report, "steps", ()) or ()):
+        if getattr(_step, "name", None) != STEP_WARROOM:
+            continue
+        _reason = scrub_secrets(str(getattr(_step, "detail", "") or ""))
+        if getattr(_step, "skipped", False):
+            return MACRO_ATTEMPT_SKIPPED, _reason
+        if not getattr(_step, "ok", False):
+            return MACRO_ATTEMPT_FAILED, _reason
+        return MACRO_ATTEMPT_OK, _reason
+    return None
+
+
 def contract_attempted(regime: Mapping[str, Any] | None,
-                       *, error: Any = None) -> bool:
+                       *, error: Any = None, attempt: Any = None) -> bool:
     """L3 總經契約**這一輪有沒有被叫過**（卡① 的 gate 旗標）。
 
     Args:
@@ -1102,8 +1130,10 @@ def contract_attempted(regime: Mapping[str, Any] | None,
     ⚠️ **為什麼不直接用 `alloc is not None`**（這就是修掉的那個 bug）：
     `get_allocation()` 的 return 只有 `return _cached` / `return _decision`，
     **永不回 None**，於是那個運算式恆為 True → 卡① 沒有 idle 態。
+
+    UIA-07：`attempt=`（`warroom_attempt()` 的輸出）原樣轉交 —— 本頁按鈕按過 ⇒ 不再是 idle。
     """
-    return classify_macro_contract(regime, error=error) != UI_IDLE
+    return classify_macro_contract(regime, error=error, attempt=attempt) != UI_IDLE
 
 
 def load_macro_readout(session: Mapping[str, Any]) -> MacroReadout:
@@ -1697,8 +1727,35 @@ REGIME_SCOPE_NOTE: str = (
 REGIME_SCOPE_FACT_KEY: str = "位階的出處"
 
 
+#: UIA-01（2026-10-18）：危險度卡在「有燈沒值」時的口徑揭露列（標籤與值）。
+DANGER_BASIS_FACT_KEY: str = "計算口徑"
+DANGER_BASIS_TEMPLATE: str = (
+    "分母為全部 {m} 項（含未接線）；分子 {n} 項 ＝ 本輪有值的燈"
+    "（含門檻已失準與代理值；代理值只顯示不計分）")
+#: UIA-01：危險度卡在「有燈沒值」時，原本放大字區的結論改掛這一列（非 live 不得帶 `value`）。
+DANGER_DETAIL_FACT_KEY: str = "彙總結果"
+
+
+def danger_completeness(danger: Any) -> tuple[int, int] | None:
+    """危險度讀數的 `(N, M)`；舊形狀 `(band, detail)`（或第三元素不是兩個整數）→ None。
+
+    None ＝ 呼叫端沒帶完整度 ⇒ 當資料齊全處理（＝ 修前行為；只為手組讀數的向下相容）。
+    """
+    if danger is None or len(danger) < 3:
+        return None
+    _cov = danger[2]
+    try:
+        _n, _m = int(_cov[0]), int(_cov[1])
+    except (TypeError, ValueError, IndexError) as _e:
+        # §1：形狀不對 ⇒ 出聲（log），不猜一組數字；退回修前行為。
+        print(f"[views/page_today] 危險度完整度形狀不對 {_cov!r}：{_e!r} —— 當作沒帶")
+        return None
+    return _n, _m
+
+
 def _danger_tile(*, key: str, label: str,
-                 danger: tuple[str, str] | None, danger_error: str,
+                 danger: tuple[str, str] | tuple[str, str, tuple[int, int]] | None,
+                 danger_error: str,
                  danger_requested: bool, danger_source: str,
                  band_zh_color: Mapping[str, tuple[str, str]] | None,
                  l4_error: str) -> Tile:
@@ -1720,12 +1777,33 @@ def _danger_tile(*, key: str, label: str,
         error=danger_error or None,
         has_value=(danger is not None and _band != "gray"),
     )
+    _cov = danger_completeness(danger)
     if _danger_state == UI_LIVE:
         _zh, _hex = (band_zh_color or {}).get(_band, ("", ""))
         _dfacts: tuple[tuple[str, str], ...] = ()
         if not _zh:
             # L4 載不進來 → 誠實留白 ＋ 就地說明，不自己編一組中文與色碼。
             _dfacts = (("燈號", f"{L4_LABEL_UNAVAILABLE}`{scrub_secrets(l4_error)}`"),)
+        if _cov is not None and _cov[0] < _cov[1]:
+            # 📌 UIA-01（2026-10-18）：有燈沒值 ⇒ ⛔ 不畫「🟢 運作中」—— 改走既有的 `UI_PARTIAL`
+            #   （「N／M 計入」）。燈號頻道（`_zh` / `_hex`）**照舊**，worst-of 一位未動（改燈色是
+            #   BP-DR-19 的事，未裁示）。非 live 不得帶 `value` ⇒ 結論改掛 fact（同 degraded 燈卡
+            #   把「現值」掛 fact 的走法），並在卡上寫明分子分母的口徑。
+            _n, _m = _cov
+            _now = (f"**指標危險度：{_zh}　·　只根據 {_n}／{_m} 項有資料**" if _zh
+                    else f"**指標危險度：只根據 {_n}／{_m} 項有資料**")
+            return Tile(
+                Card(key=key, label=label, state=UI_PARTIAL,
+                     note=Note(
+                         now=_now,
+                         why=(f"{_m} 項裡有 {_m - _n} 項本輪沒有值（無資料／未接線／故障），"
+                              f"這張卡的燈只彙總了有值的 {_n} 項 —— "
+                              "**沒有值不等於沒有踩線**，所以不畫成「運作中」"),
+                         where=EXIT_RETRY_HERE)),
+                signal_text=_zh, signal_color=_hex,
+                facts=((DANGER_DETAIL_FACT_KEY, str(danger[1])),
+                       (DANGER_BASIS_FACT_KEY, DANGER_BASIS_TEMPLATE.format(n=_n, m=_m)),
+                       *_dfacts))
         return Tile(
             Card(key=key, label=label,
                  state=_danger_state, value=str(danger[1])),
@@ -1776,25 +1854,29 @@ def _alloc_unloaded_why(regime: Mapping[str, Any] | None) -> str:
 
 
 def build_verdict_tiles(*, alloc: Any, alloc_error: str,
-                        danger: tuple[str, str] | None, danger_error: str,
+                        danger: tuple[Any, ...] | None, danger_error: str,
                         danger_requested: bool,
                         danger_source: str = SRC_DANGER,
                         regime: Mapping[str, Any] | None,
                         regime_error: str,
                         band_zh_color: Mapping[str, tuple[str, str]] | None = None,
-                        l4_error: str = "") -> tuple[Tile, ...]:
+                        l4_error: str = "",
+                        macro_attempt: tuple[str, str] | None = None) -> tuple[Tile, ...]:
     """葉1 ① 今日結論 —— **三張並排的卡，沒有第四張「合成結論」**。
 
     Args:
         alloc / alloc_error: `_load_allocation()` 的兩個回傳。
         danger / danger_error / danger_requested / danger_source:
             `_load_danger()` 的三個回傳 ＋ 五桶的 gate 旗標。
-            `danger` 是 `overall_verdict()` 的 `(band, detail)`，**不含方向**。
+            `danger` 是 `overall_verdict()` 的 `(band, detail)`，**不含方向**；
+            UIA-01 起 `_load_danger()` 多帶第三元素 `(N, M)`（兩元素舊形狀照收）。
         regime / regime_error: `_load_regime()` 的兩個回傳（市場位階契約）。
         band_zh_color: L4 `macro_v2_cards.BAND_META`（band → 中文 + 色碼）。
             `None` = L4 載不進來 → 燈號頻道誠實留白並就地說明，
             **不在這裡另寫一份「綠 / 黃 / 紅」對照表**（那才是第二把尺）。
         l4_error: L4 載入失敗時的 `repr(e)`。
+        macro_attempt: UIA-07（2026-10-18）`warroom_attempt()` 的輸出（本頁按鈕上一次更新的
+            紅綠燈步驟）。只影響「契約仍未評估」時卡① / 卡③ 的判態與文案；預設 None ⇒ 與修前逐一相同。
 
     ⚠️ **【1】2026-09-07 修：三張卡的取數與失敗完全獨立。**
     修前 `_load_parallel()` 開頭是 `if regime is None: return None, ""` ——
@@ -1813,7 +1895,13 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
     # 位階契約的態先判一次：卡③ 用它，卡① 的 gate 旗標也從它衍生
     # （`get_allocation()` 的 `is_loaded` 就是同一次 `get_macro_state()`
     #  帶下來的 —— 同一次仲裁的兩個出口，不會一個叫過一個沒叫過）。
-    _regime_state = classify_macro_contract(regime, error=regime_error or None)
+    _regime_state = classify_macro_contract(regime, error=regime_error or None,
+                                            attempt=macro_attempt)
+    # UIA-07：上一次更新的紅綠燈步驟失敗（且契約仍未評估）→ 原因；否則 None。
+    _att_fail = macro_attempt_failed_reason(regime, error=regime_error or None,
+                                            attempt=macro_attempt)
+    _att_applies = macro_attempt_applies(regime, error=regime_error or None,
+                                         attempt=macro_attempt)
 
     # ① 能不能出手 / 出手到幾成 —— **本頁一律取自** L3 `get_allocation()`。
     #    （2026-09-07 FIX-4：原文宣稱這是本站的唯一出處，改成單點可驗的
@@ -1822,11 +1910,14 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
     #    本檔**不寫任何水位數字**，一律取 `range_text` / `posture`（動態）。
     #    ⚠️ `requested=` **不得**寫成 `alloc is not None`（恆真式，見
     #    `contract_attempted()` 的 docstring）。
+    _alloc_loaded = bool(getattr(alloc, "is_loaded", False))
     _alloc_state = classify_ui_state(
         requested=(bool(alloc_error)
-                   or contract_attempted(regime, error=regime_error or None)),
-        error=alloc_error or None,
-        has_value=bool(getattr(alloc, "is_loaded", False)),
+                   or contract_attempted(regime, error=regime_error or None,
+                                         attempt=macro_attempt)),
+        # UIA-07：契約未評估是因為上一次更新的紅綠燈步驟失敗 ⇒ 紅（⛔ 不再畫成「還沒有人叫過」）。
+        error=(alloc_error or (None if _alloc_loaded else _att_fail) or None),
+        has_value=_alloc_loaded,
     )
     # 📌 批 Z65 QA（客戶 Q-z34～36 已核准規則）：取不到有效的「系統風險上限」⇒ 建議持股「無法判定」。
     #    判斷只看 allocation 的 `caps` 有沒有那一條（與 `get_allocation` 內部同一份有效判斷，見
@@ -1860,6 +1951,9 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
     else:
         if alloc_error:
             _why = _error_why(SRC_ALLOCATION, alloc_error)
+        elif _att_fail is not None:
+            # UIA-07：失敗路徑的 why ＝ 那一步的原因（⛔ 不是「還沒有人叫過」）。
+            _why = macro_attempt_failed_why(_att_fail)
         elif _alloc_state == UI_IDLE:
             _why = ("L3 總經契約這一輪**還沒有人叫過**（`source` 仍是 "
                     "`unloaded`：四條來源一條都沒寫進來）—— "
@@ -1868,6 +1962,11 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             # ~~"總經健康分與規則引擎快照兩條來源本輪都沒有值"~~ —— 📌 批 Z65 QA（有意識的修改，
             #    不是漏刪）：全稱句。規則引擎快照有值、只是健康分缺時，這句不屬實 ⇒ 依實際缺的來源組句。
             _why = _alloc_unloaded_why(regime)
+            if _att_applies:
+                # UIA-07：按過更新、沒有失敗、但契約仍未評估 ⇒ 把那一步的原因放在最前面。
+                #   （`_att_applies` 為真 ⇒ `macro_attempt` 必不為 None。）
+                _reason = scrub_state_glyphs(macro_attempt[1])[0] if macro_attempt else ""
+                _why = f"已按過更新：{_reason or '紅綠燈這一步沒有給原因'}；" + _why
         # 📌 批 Z60 QA（有意識的修改，不是漏刪）：非錯誤分支的出口原為 `EXIT_OUT_OF_REACH`
         #    （「按本頁按鈕不會讓它離開現在的狀態，報告會列出它」）。那句話在它寫下的當天為真
         #    —— 當時 `warroom_summary` 只有舊分頁寫；Z60 起 L3 `STEP_WARROOM` 會寫它，按一次
@@ -1972,6 +2071,8 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                 # 續用對面的 SSOT `upstream_error_why()`（見 `_error_why` 註）。
                 # SEC-2：對面那支只洗 glyph，秘密在這裡先洗（⛔ 不改 `tab_today.py`）。
                 why=(upstream_error_why(scrub_secrets(regime_error)) if regime_error else
+                     # UIA-07：紅的是上一次更新的紅綠燈步驟（⛔ 不是讀契約拋例外）。
+                     macro_attempt_failed_why(_att_fail) if _att_fail is not None else
                      "L3 canonical 契約四條來源本輪皆無值 → 回 `unknown`，"
                      "**不是** `neutral`；本站不以缺值推導「中性」"),
                 # 📌 批 Z60 QA（有意識的修改，不是漏刪）：非錯誤分支原為 `EXIT_OUT_OF_REACH`；
@@ -2344,8 +2445,13 @@ def _load_regime() -> tuple[Mapping[str, Any] | None, str]:
         return None, repr(_e)
 
 
-def _load_danger(readout: MacroReadout) -> tuple[tuple[str, str] | None, str, str]:
-    """**指標危險度那一半**（16 盞燈 worst-of）。回 `((band, detail), err, 出處)`。
+def _load_danger(readout: MacroReadout
+                 ) -> tuple[tuple[str, str, tuple[int, int]] | None, str, str]:
+    """**指標危險度那一半**（16 盞燈 worst-of）。回 `((band, detail, (N, M)), err, 出處)`。
+
+    📌 UIA-01（2026-10-18）：讀數多帶第三元素 `(N, M)` ＝ `tab_macro_v2.summary_coverage()`
+    （有值的列數 / 全部列數，與 `overall_verdict` 內部用的是**同一支**）。`_danger_tile()` 照舊
+    也收兩元素 `(band, detail)` 的舊形狀（手組讀數的相容：當資料齊全處理，＝ 修前行為）。
 
     走 `tab_macro_v2` 既有的三支純函式（`build_rows` → `bucket_summary` →
     `overall_verdict`），**本檔不重寫一套 worst-of** —— 重寫就是第二把尺。
@@ -2373,10 +2479,11 @@ def _load_danger(readout: MacroReadout) -> tuple[tuple[str, str] | None, str, st
         return None, readout.error, SRC_FIVE_BUCKET
     try:
         from src.ui.tabs.tab_macro_v2 import (
-            build_rows, bucket_summary, overall_verdict,
+            build_rows, bucket_summary, overall_verdict, summary_coverage,
         )
-        return overall_verdict(
-            bucket_summary(build_rows(dict(readout.readiness)))), "", ""
+        _summary = bucket_summary(build_rows(dict(readout.readiness)))
+        _band, _detail = overall_verdict(_summary)
+        return (_band, _detail, summary_coverage(_summary)), "", ""
     except Exception as _e:  # noqa: BLE001
         print(f"[views/page_today] 指標危險度算不出來：{_e!r}")
         return None, repr(_e), SRC_DANGER
@@ -3347,7 +3454,7 @@ SUMMARY_RISK_KEY: str = "summary.risk"
 
 
 def build_summary_tiles(cards: Sequence[Card], *,
-                        danger: tuple[str, str] | None, danger_error: str,
+                        danger: tuple[Any, ...] | None, danger_error: str,
                         danger_requested: bool,
                         danger_source: str = SRC_DANGER,
                         band_zh_color: Mapping[str, tuple[str, str]] | None = None,
@@ -3680,6 +3787,12 @@ def render_page_today() -> None:
     #    誰失敗只影響誰那一張卡（修前是 regime 掛掉就連坐危險度）。
     _danger, _danger_err, _danger_src = _load_danger(_readout)
     _alerts, _scanned, _alerts_err = _load_key_alerts(_session)
+    # UIA-07：本 session 上一次「更新今日戰情」的紅綠燈步驟（沒按過 → None ⇒ 判態與修前相同）。
+    try:
+        _attempt = warroom_attempt(_session.get(SS_REFRESH_REPORT))
+    except Exception as _e:  # noqa: BLE001 — 讀不出來就當沒有，log 出聲（⛔ 不炸整頁、⛔ 不猜）
+        print(f"[views/page_today] 讀不出上一次更新的紅綠燈步驟：{_e!r} —— 當作沒有")
+        _attempt = None
 
     _tiles_by_bucket = build_indicator_tiles(
         _readout, band_label=_band_label, thr_text=_thr_text, l4_error=_l4_err,
@@ -3690,7 +3803,8 @@ def render_page_today() -> None:
     #    「位階」格 —— 對面只洗 glyph，秘密在交出去之前先洗（⛔ 不改 `tab_today.py`）。
     #    非空的例外洗完仍非空（遮罩留 `***`）⇒ 對面的判態不受影響。
     _blocks = {_b.key: _b for _b in build_today_blocks(
-        macro_state=_regime, macro_error=scrub_secrets(_regime_err) or None)}
+        macro_state=_regime, macro_error=scrub_secrets(_regime_err) or None,
+        macro_attempt=_attempt)}
 
     st.markdown(f"## {ia_nav.page_label(ia_nav.PAGE_TODAY)}")
     st.caption("回答「今天能不能出手、出手到幾成」。")
@@ -3736,7 +3850,8 @@ def render_page_today() -> None:
     _trading_status, _trading_err = load_trading_day_status()
     # 📌 批 Z60 複驗：「總經」一格的 `where` 經 `contract_exit_retargeted()` 換成
     #    `EXIT_RETRY_HERE`（對面那句 Z60 起在本頁不成立）；其餘欄位原物件照用。
-    _bar_cards = build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None)
+    _bar_cards = build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None,
+                                        attempt=_attempt)
     _render_tiles(status_bar_tiles_with_trading_day(
         _tiles_of_cards(status_bar_cards_with_sheet(
             tuple(contract_exit_retargeted(_c) for _c in _bar_cards),
@@ -3756,7 +3871,8 @@ def render_page_today() -> None:
             danger=_danger, danger_error=_danger_err,
             danger_requested=_readout.requested, danger_source=_danger_src,
             regime=_regime, regime_error=_regime_err,
-            band_zh_color=_band_zh, l4_error=_l4_err))
+            band_zh_color=_band_zh, l4_error=_l4_err,
+            macro_attempt=_attempt))
 
         section_header("② 操作列")
         _render_update_form(_session)

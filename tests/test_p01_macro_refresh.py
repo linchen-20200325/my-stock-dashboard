@@ -1546,8 +1546,10 @@ class TestMutationContentAudit:
         ("        _step(STEP_CONTENT_AUDIT,\n              not _empty_c,",
          "        _step(STEP_CONTENT_AUDIT,\n              True,",
          "判空還在，但結論永遠是成功"),
-        ("    if value is None:\n        return False",
-         "    if value is None:\n        return True",
+        # UIA-02（2026-10-18）：判空本體下沉 L0 `shared.fetch_monitor.has_content`，本檔只剩別名
+        #   `_has_content = has_content` ⇒ 突變點改成「別名把 None 當成有資料」（守的是同一件事）。
+        ("_has_content = has_content",
+         "_has_content = lambda _v: True if _v is None else has_content(_v)",
          "`None` 被當成有資料"),
     ])
     def test_a_run_with_nothing_in_it_would_go_green(self, monkeypatch,

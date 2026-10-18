@@ -134,8 +134,10 @@ _MUT: dict[str, dict[str, tuple[str, str]]] = {
                       '(("燈號", f"{L4_LABEL_UNAVAILABLE}`{l4_error}`"),)'),
         "regime": ("upstream_error_why(scrub_secrets(regime_error))", "upstream_error_why(regime_error)"),
         "blocks": ("macro_error=scrub_secrets(_regime_err) or None", "macro_error=_regime_err or None"),
-        "statusbar": ("build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None)",
-                      "build_status_bar_cards(_regime, error=_regime_err or None)"),
+        # UIA-07（2026-10-18）：同一個呼叫多帶一個 `attempt=` kwarg（換行接在後面）⇒ 突變點的結尾由 `)` 改為 `,`；
+        #   被拔的仍是同一處 `scrub_secrets(...)`。
+        "statusbar": ("build_status_bar_cards(_regime, error=scrub_secrets(_regime_err) or None,",
+                      "build_status_bar_cards(_regime, error=_regime_err or None,"),
         "old_report": ("原始例外：`{scrub_secrets(repr(_e))}`", "原始例外：`{_e!r}`"),
         "l4_warn": ("`{scrub_secrets(_l4_err)}`", "`{_l4_err}`"),
         "on_event": ('_detail = _md_scrub(getattr(result, "detail", "") or "")',
