@@ -14,7 +14,7 @@
 | main tip | 量測時 tip＝`5cec364e`。本版 PR 合併後 tip 會前進（合併後 main SHA 以 GitHub 為準）；cron 亦會持續推進 tip，引用前重查 |
 | main CI | `5cec364e`：run 39107408166（main push）`success`（2026-10-18 總管 GitHub 實查） |
 | open PR | 本版 PR 開立後至少為 1，合併後現況以 GitHub 為準 |
-| active work | **vNext 1.0 Decision Gate 收斂完成**（`docs/vnext/VNEXT_1_0_DECISION_GATES.md`；DR-2026-10-18-2）：21 題 BP-DR 收斂為 5 題 `VN1-Q1`～`VN1-Q5`，**等待客戶裁示**。**未開始任何實作** ⛔ 不自行開始 vNext 1.0 implementation（DEC-057） |
+| active work | ~~**vNext 1.0 Decision Gate 收斂完成**（`docs/vnext/VNEXT_1_0_DECISION_GATES.md`；DR-2026-10-18-2）：21 題 BP-DR 收斂為 5 題 `VN1-Q1`～`VN1-Q5`，**等待客戶裁示**。**未開始任何實作** ⛔ 不自行開始 vNext 1.0 implementation（DEC-057）~~（2026-10-18 更新）**`VN1-Q1`～`Q5` 已由客戶裁示並登記（DEC-062／DR-2026-10-18-3）**；production 系統帳號＝unknown（無法確認）；`VN1-Q4` 保存方式未核准 → `VN1-STORE` 研究。**尚未開始任何實作**；下一步＝`1.0-B1`（SEC-2＋SEC-3 安全地基），開工前待 9.2 Effort Check（預期 High → 需先提醒客戶切換） |
 | ⚠️ 過期值 | `70416a6a` 是 #852／Z65（2026-10-15）的舊 commit，**不是目前 main**；`c41ee3fb`（#872）亦已不是最後合併 |
 
 ## 2. 最近完成（皆已合併、main CI success）
@@ -65,6 +65,7 @@
 3a. ~~（2026-10-18）**本批**：開立本批 PR → CI → merge → main verification → **收尾同步**（`UIA-01`／`02`／`07` 移入 `docs/BACKLOG.md`「3. 已結案」並附 PR 號＋merge sha＋main CI run；本檔現況改至新 main）→ **停在安全點**。其餘 vNext 0.9 項目（`UIA-14`、`UIA-FU-1`～`4`、`SEC-2` 待 `BP-DR-18`、`SEC-3` 待 `BP-DR-06`）**須客戶指派**；⛔ 不開始 vNext 1.0（DEC-057「不要開始 vNext 1.0 implementation。」）。~~（2026-10-18 更新：#872 已合併、main CI run 39098902005 success；有意識的變更，不是漏刪）
 3b. ~~（2026-10-18）**現處於安全點**：本版收尾同步 PR 合併後即停。下一批（例：`UIA-14`、`UIA-FU-1`）**須客戶指派**；需裁示者（`UIA-FU-2`／`UIA-FU-4`／`SEC-2`／`SEC-3`、`BP-DR-*`）待客戶裁示；⛔ 不開始 vNext 1.0（DEC-057「不要開始 vNext 1.0 implementation。」）。~~（2026-10-18 更新：客戶已指派 vNext 1.0 Decision Gate 收斂批，現況見 3c；有意識的變更，不是漏刪）
 3c. （2026-10-18）**現處於安全點，等待客戶裁示 `VN1-Q1`～`VN1-Q5`**（`docs/vnext/VNEXT_1_0_DECISION_GATES.md`）。裁示後施工仍須客戶指派批次；`VN1-Q1` 未裁示前不得寫任何 1.0 UI code（DEC-003）；⛔ 不開始 vNext 1.0（DEC-057）。
+3d. （2026-10-18）裁示已登記（DEC-062）；**下一安全接手點＝`1.0-B1`**（安全地基 SEC-2／SEC-3；先依最新 repo／依賴／風險確認最小安全批次），開工前依 `PROJECT_RULES.md` 9.2 Effort Check，需 High 則先停下提醒客戶切換。建議批次見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` 第 6 節（建議，不是授權）。3c 由本項接續。
 4. BACKLOG 各列的 next action **不構成動工授權**；有客戶指派或實際 bug 觸發才動（`CLAUDE.md` §-1）。
 
 ## 5. 新對話 takeover

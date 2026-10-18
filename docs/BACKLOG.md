@@ -70,6 +70,7 @@
 | **DR-2026-10-17-5**（`CV1-DR-10` 裁示：回報格式） | 2026-10-17 | ≤5 行完成回報與 `CLAUDE.md`／`PROCESS.md` 既有報告格式的張力怎麼解？ | 「同意 CV1-DR-10 推薦方案：」「完整技術／稽核證據留在 PR。」「對客戶的一般完成回報原則 ≤5 行。」「若真正需要客戶裁示，可超過 5 行，但只保留完成裁示所需資訊。」「請正式同步治理文件，消除 CLAUDE.md／PROCESS.md／PROJECT_RULES 之間的回報格式張力。」（D 客戶訊息 2026-10-17，本 session；逐字見 DEC-060） | `CV1-DR-10`；`PROJECT_RULES.md` 第 3 節；`CLAUDE.md` §-1.5.A-3／A-7／§-1.5.F 判定 6 加註；`PROCESS.md` §1、§4 加註；`docs/DECISIONS.md` DEC-060 |
 | **DR-2026-10-18-1**（Effort 防漏：強制 Effort Check） | 2026-10-18 | #872 高推理批合併後進入收尾同步時未主動提醒降 Effort，如何永久防漏而不建重複規則？ | 「3. 從今以後，每個「完整工作階段結束／下一完整階段開始前」都必須先做一次內部 Effort Check」「4. 若一致：保持靜默，直接繼續。」「5. 若不一致：必須在開始下一完整階段前停下，主動使用既定格式提醒客戶升級或降級。」「6. 特別注意「High → Medium／Low」也必須主動提醒，不能只提醒升級。」（D 客戶訊息 2026-10-18，本 session；8 點逐字見 DEC-061） | `PROJECT_RULES.md` 9.2（就地修改）、第 3 節／9.1 pointer；`docs/DECISIONS.md` DEC-061 |
 | **DR-2026-10-18-2**（vNext 1.0 Decision Gate 收斂指派） | 2026-10-18 | `BP-DR-01`～`BP-DR-21` 等待裁示題如何收斂成 1.0 必問的少數題？ | 客戶指派本批做 vNext 1.0 Decision Gate 收斂（總管轉述；研究整理，不施工、不改產品 code）：21 題 BP-DR＋`SEC-2`／`SEC-3`／`UIA-FU-2`／`UIA-FU-4` 收斂為 5 題 `VN1-Q1`～`VN1-Q5`，其餘分為建議延後 2.0／1.0 維持現狀不需問／內部決定。⛔ 這是**收斂結果與送題準備，不是裁示**；各 BP-DR 狀態不變（延後只是建議）。詳見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` | 本檔 5.1.2 `VN1-Q1`～`VN1-Q5`；`BP-DR-01`～`21`（狀態不變）；`docs/vnext/VNEXT_1_0_DECISION_GATES.md` |
+| **DR-2026-10-18-3**（vNext 1.0 Decision Gate 裁示） | 2026-10-18 | `VN1-Q1`～`VN1-Q5` 怎麼裁？ | 「Q1：B。」「Q2：B，並同意短期保存一次性驗證碼；不得保存 Google 密碼或憑證。」「Q3：A。」「Q4：A；但暫不核准「每日紀錄存 repo 追蹤檔」。」「Q5：A，並確認代理值不計分、停用項明示停用、無資料來源不得宣稱通過。」「vNext 1.0 請分安全小批次執行，不要一次全面施工。」（D 客戶訊息 2026-10-18，本 session；簡短版與正式詳細版皆逐字見 DEC-062）；production SA＝unknown；**尚未開始實作** | `VN1-Q1`～`Q5`、`VN1-STORE`（新）、`SEC-2`、`SEC-3`、`AUD-C12`、`BP-DR-01`／`03`／`04`／`05`／`06`／`11`／`13`／`14`／`16`／`17`／`18`／`19`；`docs/DECISIONS.md` DEC-062 |
 
 ### 1.1 待裁示（已整理、尚未送題或尚未裁示）
 
@@ -82,7 +83,7 @@
 | PQ-C7-1 | AUD-C7 | 引擎是否比照 `M1B_M2_LEG_ENABLED=False` 停用 M1B 腿，或等 DL-f1-s8 重跑 | ~~未給~~ **已裁示 DR-2026-10-16-2**（2026-10-16 更新） |
 | PQ-C6-3 | AUD-C6／C8 | Cap 理由字串與「N 項未評估」上卡（欄位增減，須先線框；屬 F6／Q-z39～41） | ~~未給；⚠️ 仍待裁示（2026-10-16：上卡需先出線框；不在 DR-2026-10-16-1 範圍內）；2026-10-16 註：卡片目前**不揭露**未評估的 Optional 項目，揭露現在只在更新報告與檔案的 `not_evaluated` 欄；要上卡須先出線框~~ **已裁示 DR-2026-10-16-4**（2026-10-16 更新）；~~實作於分支 `c21-split`（見 AUD-C21）~~ **已實作：#862 `fa26914b`（2026-10-16）** |
 | PQ-C3-1 | AUD-C3-FU (b)(g)(h) | 舊 UI `station_cards`／`etf_tab_dividend_station` 與新 UI `page_hold` 加碼措辭／計數說明（文案；spec gap；舊 UI 凍結）、舊 UI 持股與觀察清單同代號兩列 | 未給 |
-| VN1-Q1～VN1-Q5 | 5.1.2 | vNext 1.0 Decision Gate 收斂後的 5 題（2026-10-18，DR-2026-10-18-2）；逐題見本檔 5.1.2 與 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` | 見該檔各題 |
+| VN1-Q1～VN1-Q5 | 5.1.2 | vNext 1.0 Decision Gate 收斂後的 5 題（2026-10-18，DR-2026-10-18-2）；逐題見本檔 5.1.2 與 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` | 見該檔各題<br>📌 2026-10-18 **已裁示 DR-2026-10-18-3／DEC-062**（Q4 保存方式未核准 → `VN1-STORE` 研究） |
 | （未送題） | AUD-C10、C12、C13（凍結檔部分）、C15、C16 (a)、C17（重抓排程） | 見各列 | 見各列 |
 
 ---
@@ -93,7 +94,7 @@
 
 | ID | 標題 | sev／pri | status | evidence | affected area | dependency | customer decision | source／PR | next action | 驗證組數 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **AUD-C12** | `macro_state.json`（系統風險上限）只存在 Streamlit Cloud ephemeral 磁碟、全 session 共用，容器重啟即消失 | 高 | blocked-on-customer（未送題） | `macro_state.json` 落檔位置為 ephemeral 磁碟；兩組皆確認無排程提供、runtime 才寫入；⚠️「Cloud 為 ephemeral」依 repo 內 `macro_core` 註解，未實測雲端<br>**2026-10-16 註**：自 AUD-C21（`c21-split`）起，新 UI 的上限檔是 `risk_cap_state.json`，`macro_state.json` 只剩舊 UI 與 regime 退路使用；ephemeral 磁碟的疑慮**兩個檔都適用** | 系統風險上限持久化與跨 session 共用 | 與 AUD-C6、AUD-C19 相關 | **需要**（持久化位置選擇）；⚠️ 換位置可能撞五類 ③（資料層） | 2026-10-15 Data Gap Audit | 送題（附推薦方案）<br>📌 **2026-10-18 補註（append-only）**：送題已併入 `VN1-Q4` 附帶問題（「每日系統風險上限紀錄要存在 repo 追蹤檔嗎？」，總管推薦：是；技術細節內部）—— 見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md`、DR-2026-10-18-2 | 2（儲存稽核組＋Mobile 稽核組） |
+| **AUD-C12** | `macro_state.json`（系統風險上限）只存在 Streamlit Cloud ephemeral 磁碟、全 session 共用，容器重啟即消失 | 高 | blocked-on-customer（未送題） | `macro_state.json` 落檔位置為 ephemeral 磁碟；兩組皆確認無排程提供、runtime 才寫入；⚠️「Cloud 為 ephemeral」依 repo 內 `macro_core` 註解，未實測雲端<br>**2026-10-16 註**：自 AUD-C21（`c21-split`）起，新 UI 的上限檔是 `risk_cap_state.json`，`macro_state.json` 只剩舊 UI 與 regime 退路使用；ephemeral 磁碟的疑慮**兩個檔都適用** | 系統風險上限持久化與跨 session 共用 | 與 AUD-C6、AUD-C19 相關 | **需要**（持久化位置選擇）；⚠️ 換位置可能撞五類 ③（資料層） | 2026-10-15 Data Gap Audit | 送題（附推薦方案）<br>📌 **2026-10-18 補註（append-only）**：送題已併入 `VN1-Q4` 附帶問題（「每日系統風險上限紀錄要存在 repo 追蹤檔嗎？」，總管推薦：是；技術細節內部）—— 見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md`、DR-2026-10-18-2<br>📌 **2026-10-18（DEC-062，append-only）**：客戶**暫不核准**存 repo 追蹤檔、不得把 Git repo 當 production datastore；改為研究 `VN1-STORE`（5.1.2）；本列仍 open／未決 | 2（儲存稽核組＋Mobile 稽核組） |
 | **AUD-C4-3UP** | prescreen「三率三升」為累計對累計 | 中（另案） | blocked-on-customer | 數學上一致，但市場慣例常指單季 | 基本面初篩 | — | **需要**：PQ-C4-2 | AUD-C4 語意驗證 | 另案送題 | 未標（總管轉述） |
 | **AUD-C17** | `mops_bulk_fetcher::_find_col` 子字串比對，「本期淨利（淨損）」先命中「繼續營業單位本期淨利（淨損）」 | 中 | open | net_income 欄實為**繼續營業單位淨利**；NI 與 EPS 正負號相反 138 列／86 檔（例 3708）；影響 prescreen net_margin；AUD-C4 趨勢不受影響 | 季財報快照 net_income；prescreen `net_margin` | 修正需重抓快照（cron／網路）；欄位語意確認 | **不需要**（correctness）；但重抓歷史季屬**資料重建、需排程** | AUD-C4 語意組 A | 第二組驗證 → 修 `_find_col` 精確比對 → 排程重抓 | ⚠️ 1（C4 語意組 A；未經第二組驗） |
 | **AUD-C9** | 系統性風險新聞關鍵字純子字串比對，誤中灌高五桶 news_systemic 燈 | 中 | open | `news_fetcher::fetch_macro_news` 的 `SYSTEMIC_RISK_KEYWORDS`：war⊂software／award／router、rout⊂router、default | 五桶 `news_systemic` 燈 | — | 不需要（確認 bug、單一安全修法）；⚠️ 若改關鍵字清單本身則涉判讀語意 | 2026-10-15 Data Gap Audit | 可自主排入 | 2（Context 稽核組＋引擎獨立複驗組；實跑子字串命中） |
@@ -366,8 +367,8 @@
 | ID | 標題 | sev | status | evidence（檔案::符號） | customer decision | next action | 驗證組數 |
 |---|---|---|---|---|---|---|---|
 | ~~**SEC-1**~~ | ~~持股／觀察清單讀取快取不分使用者：任何人帶同一 Sheet ID，15 分鐘內可讀到他人已載入的持股~~ → **已結案**，2026-10-18 移入「3. 已結案」（#870、`7b803b4f`、main CI run 39042558728 success）；本列原文保留於第 3 節「SEC-1 結案前的 Open items 列」（有意識的移列，不是漏刪） | — | done | 見第 3 節 | 不需要（已確認 bug；客戶 2026-10-17 指派 vNext 0.9 第一安全批） | 無；殘留另列 `SEC-3`、`SEC-1-FU`（皆仍 open） | 2 |
-| **SEC-2** | Google 登入防偽造（OAuth state）實際不生效 | 中（login CSRF） | blocked-on-customer | `src/data/portfolio/oauth_state.py::_oauth_state_ok` 在 expected state 為空時放行（docstring 自陳為修 v19.63 登入迴圈）；nonce 存 `st.session_state['_oauth_state']`，而登入鈕 `st.link_button` 開新分頁、整頁外部轉跳皆重建 session → 正常流程下 nonce 恆空。副作用：「Sheet ID 隨 state 帶回自動綁定」也從不執行（往安全側失效） | **需要**：`BP-DR-18`（修法改變憑證保存機制，有多種合理方向，DEC-009 credentials） | 依 `BP-DR-18` 裁示後施工，施工前安全稽核 | 2（O 組推論＋V 組讀碼與 streamlit 原始碼確認） |
-| **SEC-3** | Service Account 模式下，匿名訪客可帶 `?sheet=` 讀取任何已分享給 Service Account 的 Sheet（2026-10-17 `SEC-1` 修復批安全稽核殘留；只登記、未施工） | 中（授權設計） | blocked-on-customer | `src/data/portfolio/gsheet_portfolio.py::_build_client` OAuth 不可用時降到 SA（全權 drive scope）；`SEC-1` 修復後快取已依身分隔離，但 SA 身分本身可讀所有分享給它的 Sheet —— **修復前即存在**，非 `SEC-1` 修法引入 | **需要**：`BP-DR-06`（單人／多人部署；匿名訪客能否經 SA 讀個人 Sheet；DEC-009 credentials／account access） | 依 `BP-DR-06` 裁示後另批施工 | 2（SA1＋SA2 兩組安全稽核） |
+| **SEC-2** | Google 登入防偽造（OAuth state）實際不生效 | 中（login CSRF） | ~~blocked-on-customer~~ open：客戶已核准於 1.0 登入批內部修（DEC-062 Q2；⛔ 不得保存 Google 密碼／憑證）；未施工（2026-10-18；有意識的變更，不是漏刪） | `src/data/portfolio/oauth_state.py::_oauth_state_ok` 在 expected state 為空時放行（docstring 自陳為修 v19.63 登入迴圈）；nonce 存 `st.session_state['_oauth_state']`，而登入鈕 `st.link_button` 開新分頁、整頁外部轉跳皆重建 session → 正常流程下 nonce 恆空。副作用：「Sheet ID 隨 state 帶回自動綁定」也從不執行（往安全側失效） | **需要**：`BP-DR-18`（修法改變憑證保存機制，有多種合理方向，DEC-009 credentials）；📌 2026-10-18 **已裁示 DEC-062**（Q2＝B＋附帶同意） | 依 `BP-DR-18` 裁示後施工，施工前安全稽核 | 2（O 組推論＋V 組讀碼與 streamlit 原始碼確認） |
+| **SEC-3** | Service Account 模式下，匿名訪客可帶 `?sheet=` 讀取任何已分享給 Service Account 的 Sheet（2026-10-17 `SEC-1` 修復批安全稽核殘留；只登記、未施工） | 中（授權設計） | ~~blocked-on-customer~~ open：客戶核准 A（關閉匿名經 SA 讀取路徑；DEC-062 Q3）；未施工（2026-10-18；有意識的變更，不是漏刪） | `src/data/portfolio/gsheet_portfolio.py::_build_client` OAuth 不可用時降到 SA（全權 drive scope）；`SEC-1` 修復後快取已依身分隔離，但 SA 身分本身可讀所有分享給它的 Sheet —— **修復前即存在**，非 `SEC-1` 修法引入 | **需要**：`BP-DR-06`（單人／多人部署；匿名訪客能否經 SA 讀個人 Sheet；DEC-009 credentials／account access）；📌 2026-10-18 **已裁示 DEC-062**（Q3＝A）。production 是否設 `[gcp_service_account]`＝**unknown**：repo 無 secrets.toml、範例檔無此項；GitHub Actions secret `GCP_SERVICE_ACCOUNT_JSON` 依 `push_holdings_daily` 排程 success 推論存在（非 Streamlit Cloud）；Streamlit Cloud secrets 沙箱無法讀取（詳見 gates 檔 VN1-Q3 節） | 依 `BP-DR-06` 裁示後另批施工 | 2（SA1＋SA2 兩組安全稽核） |
 | **SEC-1-FU** | `SEC-1` 修復的已知限制：使用者撤銷 Google 授權後，**同一使用者自身**的讀取快取最多仍在 TTL（15 分鐘）內命中（不跨使用者）；`clear_read_cache` 一次清除全體使用者快取（2026-10-17 `SEC-1` 修復批安全稽核殘留；只登記、未施工） | 低 | open | `src/data/portfolio/gsheet_portfolio.py` 讀取快取（`SEC-1` 修復後鍵含使用者身分）；`clear_read_cache` | 不需要（已知限制揭露）；「登出／撤銷時清除該使用者快取」屬行為變更，另案時依第 4 節判斷 | 另案；有客戶指派或實際 bug 觸發才動（`CLAUDE.md` §-1） | 2（SA1＋SA2 兩組安全稽核） |
 | ~~**UIA-01**~~ | ~~今天頁：只有部分總經指標有值時，「指標危險度」「風險」卡顯示 🟢 運作中與「五桶全綠」（缺資料畫成沒危險）~~ → **已結案**，2026-10-18 移入「3. 已結案」（#872、`c41ee3fb`、main CI run 39098902005 success）；本列原文保留於第 3 節「UIA-01／UIA-02／UIA-07 結案前的 Open items 列」（有意識的移列，不是漏刪） | — | done | 見第 3 節 | 部分：(a) 不需要（本批 #872 結案）；(b) 燈色語意仍待 `BP-DR-19` | 無；(b) 待 `BP-DR-19`；後續另列 `UIA-FU-1`、`UIA-FU-4`（仍 open／blocked） | 2 |
 | ~~**UIA-02**~~ | ~~憑什麼頁 › 資料體檢：資料源回 0 列仍顯示 🟢 運作中，且與今天頁說法矛盾~~ → **已結案**，2026-10-18 移入「3. 已結案」（#872、`c41ee3fb`、main CI run 39098902005 success）；本列原文保留於第 3 節「UIA-01／UIA-02／UIA-07 結案前的 Open items 列」（有意識的移列，不是漏刪） | — | done | 見第 3 節 | 不需要（已確認 bug；客戶 2026-10-18 指派 vNext 0.9 第二批） | 無；未處理部分另列 `UIA-FU-2`、`UIA-FU-3`（仍 open／blocked） | 2 |
@@ -390,25 +391,25 @@
 
 | ID | 問題（一句話） | Gate | 對應 VN | 總管推薦（摘要） |
 |---|---|---|---|---|
-| **BP-DR-01** | 主頁改為「今天／機會／持股／我的」（2.0 加「動態」），取代 DEC-017 五頁？ | DEC-003 ① | VN-02、VN-36 | 核准；「查一檔」改為詳情頁、「憑什麼」改為每個結論上的「為什麼？」 |
+| **BP-DR-01** | 主頁改為「今天／機會／持股／我的」（2.0 加「動態」），取代 DEC-017 五頁？ | DEC-003 ① | VN-02、VN-36 | 核准；「查一檔」改為詳情頁、「憑什麼」改為每個結論上的「為什麼？」<br>📌 2026-10-18（DEC-062，append-only）：Q1-B：納入 1.0 送審範圍；未施工 |
 | **BP-DR-02** | handoff 分支「UI 目標架構（V3）」永久排除條款在 DEC-054／056 後是否仍有效？ | — | VN-09 | 與 DEC-054 衝突的「買賣建議不落地」視為被取代；保留「AI 自生目標價不落地」與 DEC-022 再平衡限制 |
-| **BP-DR-03** | 首屏放一行 Google 登入晶片、「我的」頁放完整登入卡？ | DEC-003 ① | VN-01 | 核准；重用既有元件、不改 scope；前提 SEC-1 先修（📌 2026-10-18：`SEC-1` 已隨 #870 `7b803b4f` 結案；本題仍待客戶裁示） |
-| **BP-DR-04** | 重新整理後保持登入、個人設定與已讀狀態是否持久化？ | DEC-009-cred | VN-01 | 1.0 暫不做，畫面誠實揭露 |
-| **BP-DR-05** | Sheet 選擇放哪？持股頁唯讀邊界？持股頁是否預設讀持股？ | DEC-003 ① | VN-01 | app 層晶片＋「我的」頁；持股頁維持唯讀；已綁定時預設讀持股 |
-| **BP-DR-06** | 單人或多人部署？匿名訪客能否經 Service Account 讀到個人 Sheet？ | DEC-009-cred | VN-01 | 以多人安全為準：匿名不走 SA 讀寫個人 Sheet；SA 只給排程 |
+| **BP-DR-03** | 首屏放一行 Google 登入晶片、「我的」頁放完整登入卡？ | DEC-003 ① | VN-01 | 核准；重用既有元件、不改 scope；前提 SEC-1 先修（📌 2026-10-18：`SEC-1` 已隨 #870 `7b803b4f` 結案；本題仍待客戶裁示）<br>📌 2026-10-18（DEC-062，append-only）：Q1-B：納入 1.0 送審範圍；未施工 |
+| **BP-DR-04** | 重新整理後保持登入、個人設定與已讀狀態是否持久化？ | DEC-009-cred | VN-01 | 1.0 暫不做，畫面誠實揭露<br>📌 2026-10-18（DEC-062，append-only）：Q2-B：保持登入為目標（先 SEC-2＋可行性驗證，不過退回 A）；設定／已讀延 2.0；未施工 |
+| **BP-DR-05** | Sheet 選擇放哪？持股頁唯讀邊界？持股頁是否預設讀持股？ | DEC-003 ① | VN-01 | app 層晶片＋「我的」頁；持股頁維持唯讀；已綁定時預設讀持股<br>📌 2026-10-18（DEC-062，append-only）：Q1-B：納入 1.0 送審範圍（持股唯讀、預設讀持股）；未施工 |
+| **BP-DR-06** | 單人或多人部署？匿名訪客能否經 Service Account 讀到個人 Sheet？ | DEC-009-cred | VN-01 | 以多人安全為準：匿名不走 SA 讀寫個人 Sheet；SA 只給排程<br>📌 2026-10-18（DEC-062，append-only）：Q3-A：匿名不得經 SA 讀私人 Sheet；production SA＝unknown；未施工 |
 | **BP-DR-07** | 雙軌選股條件、各軌必要資料、門檻，與現行「四項全過」的關係？ | G1 | VN-05、VN-06 | 研究批定義 → Shadow Mode 並存比較 → 裁示後上線；1.0 沿用現行規則只改呈現 |
 | **BP-DR-08** | 七種 Action 的正式規則、狀態轉移、有效期、是否封閉清單、Action 卡免責？ | G2、G1 | VN-09 | 先做「Action 規格批」（只寫規格、不寫 code）送裁示；規格未定前不顯示七種 Action（併 `CV1-FU-03`） |
 | **BP-DR-09** | Thesis（投資理由）規格？ | G1 | VN-13、VN-14 | 2.0 再開規格批（併 `CV1-FU-04`、`AUD-L9`） |
 | **BP-DR-10** | 判斷可信度「高／中／低」怎麼判定？ | G4 | VN-09 | 只用三級＋拆解、不顯示數字；與 Action 規格批一起定 |
-| **BP-DR-11** | 需要處理／值得注意／觀察／資訊四層的觸發條件與推播範圍？ | G1、G6? | VN-19、VN-20 | 首頁只放前兩層；推播只推「需要處理」；1.0 只用資料異常、系統風險上限變化兩種事件 |
+| **BP-DR-11** | 需要處理／值得注意／觀察／資訊四層的觸發條件與推播範圍？ | G1、G6? | VN-19、VN-20 | 首頁只放前兩層；推播只推「需要處理」；1.0 只用資料異常、系統風險上限變化兩種事件<br>📌 2026-10-18（DEC-062，append-only）：僅 1.0 部分依 Q4-A（兩種事件、不設大小門檻）；四層觸發／推播仍待 2.0；未施工 |
 | **BP-DR-12** | 官方與第三方數字不一致時，差多少算衝突、是否暫停相關判斷？ | G1、G7 | VN-18 | 仍依既有優先序取值；超過容差時揭露「來源不一致」；只有 Required Core 衝突才「無法判定」；容差待定 |
-| **BP-DR-13** | 首頁「和上次比」的「上次」定義？7 天沿用期間怎麼比？ | G1 | VN-02 | 上一次通過新鮮度檢查、規則版本相同的有效快照；沿用期不算新變化；前提 `AUD-C12` |
-| **BP-DR-14** | 持股首屏四組（需要處理／注意／正常／無法判定）如何從既有訊號對映？ | G1 | VN-11 | 用既有訊號建對映表送裁示、不新增公式；`AUD-C10`、`AUD-C14` 一併處理 |
+| **BP-DR-13** | 首頁「和上次比」的「上次」定義？7 天沿用期間怎麼比？ | G1 | VN-02 | 上一次通過新鮮度檢查、規則版本相同的有效快照；沿用期不算新變化；前提 `AUD-C12`<br>📌 2026-10-18（DEC-062，append-only）：Q4-A 方向；保存方式待 `VN1-STORE` 研究，過渡採 B；未施工 |
+| **BP-DR-14** | 持股首屏四組（需要處理／注意／正常／無法判定）如何從既有訊號對映？ | G1 | VN-11 | 用既有訊號建對映表送裁示、不新增公式；`AUD-C10`、`AUD-C14` 一併處理<br>📌 2026-10-18（DEC-062，append-only）：Q1-B：延 2.0（仍 blocked-on-customer）；未施工 |
 | **BP-DR-15** | 「接近機會」怎麼定義？ | G1 | VN-08 | 2.0 與雙軌條件一起定；線框不寫具體 trigger |
-| **BP-DR-16** | 標【1.0】的線框是否核准為 vNext 1.0 UI 依據？ | DEC-003 ① | VN-02、VN-03、VN-04 | 先核准 1.0 線框；【2.0】線框只看方向 |
-| **BP-DR-17** | 新舊 UI 並存期的兩個入口？何時讓新 UI 成為預設？ | DEC-003 ①、G9 | VN-02 | 1.0 加入口、不切預設；切換依 DEC-020 另送 |
-| **BP-DR-18** | SEC-2 防偽造修法方向（簽章 cookie／伺服器端短期儲存／PKCE）？ | DEC-009-cred | VN-01 | 伺服器端短期儲存；施工前安全稽核 |
-| **BP-DR-19** | 部分資料時總經彙總燈怎麼呈現？「資料健康：正常」怎麼定義？ | G1 | VN-04 | 不另創 N/M 門檻；「正常」綁各 Decision 的 Required Core；燈色維持最差＋揭露「只根據 N/M 項」 |
+| **BP-DR-16** | 標【1.0】的線框是否核准為 vNext 1.0 UI 依據？ | DEC-003 ① | VN-02、VN-03、VN-04 | 先核准 1.0 線框；【2.0】線框只看方向<br>📌 2026-10-18（DEC-062，append-only）：Q1-B：送審範圍＝Q1 B 案清單；線框本身仍待拍板；未施工 |
+| **BP-DR-17** | 新舊 UI 並存期的兩個入口？何時讓新 UI 成為預設？ | DEC-003 ①、G9 | VN-02 | 1.0 加入口、不切預設；切換依 DEC-020 另送<br>📌 2026-10-18（DEC-062，append-only）：Q1-B：兩入口、新版不設 production default；未施工 |
+| **BP-DR-18** | SEC-2 防偽造修法方向（簽章 cookie／伺服器端短期儲存／PKCE）？ | DEC-009-cred | VN-01 | 伺服器端短期儲存；施工前安全稽核<br>📌 2026-10-18（DEC-062，append-only）：Q2 附帶同意：已同意短期保存一次性驗證碼；⛔ 不得保存 Google 密碼或憑證；未施工 |
+| **BP-DR-19** | 部分資料時總經彙總燈怎麼呈現？「資料健康：正常」怎麼定義？ | G1 | VN-04 | 不另創 N/M 門檻；「正常」綁各 Decision 的 Required Core；燈色維持最差＋揭露「只根據 N/M 項」<br>📌 2026-10-18（DEC-062，append-only）：Q5-A：已裁示（含 Required Core 完整且新鮮才稱「資料正常」）；未施工 |
 | **BP-DR-20** | AI 解釋要放進哪些「為什麼」？自動或按鈕生成？能否轉述正式買賣判斷？ | DEC-009-AI | VN-16 | 1.0 不擴大（只保留現有兩個 AI 呼叫點）；先解 `CV1-FU-05`／`06` |
 | **BP-DR-21** | 系統風險上限的畫面名稱？「風險預算」等新說法能否使用？上限與建議持股區間怎麼並列不混淆？ | G1、G3 | VN-12 | 1.0 沿用「系統風險上限」、一卡一數字；新說法待 2.0 有現金欄後送裁示；不得讀成可買額度 |
 
@@ -416,12 +417,15 @@
 
 | ID | 問題（一句話） | 涵蓋 | status | 總管推薦（摘要） | 驗證組數 |
 |---|---|---|---|---|---|
-| **VN1-Q1** | 1.0 新畫面先核准哪些：全部 1.0 線框，或先核准客戶點名的 1.0 重點（四格導覽、登入晶片／卡、Sheet 選擇、持股唯讀直讀、新舊並存兩入口、今天頁、BP §2.1／§15） | `BP-DR-01`、`03`、`05`、`16`、`17`、`14`（延後）、`UIA-FU-2` | blocked-on-customer | B（先核准 1.0 重點；持股四組分組延後，`AUD-C10` 未仲裁）；擋所有 1.0 UI code（DEC-003） | 2（兩組分析分群一致；推薦分歧由總管裁決） |
-| **VN1-Q2** | 重新整理後要不要保持登入 | `BP-DR-04`、`BP-DR-18`（附帶同意） | blocked-on-customer | B（保持登入：先修 `SEC-2`、再驗可行性，不過退回 A；與 BP 原推薦 A 不同）；附帶同意「伺服器短期保存一次性驗證碼」推薦同意（機制內部，DEC-009 保留同意） | 2（兩組皆推薦 B；可行性未驗證） |
-| **VN1-Q3** | 沒登入的人能不能讀到你的持股 | `BP-DR-06`、`SEC-3` | blocked-on-customer | A（只有登入且有權限者可讀；系統帳號只給排程）；附問 production 是否設定系統帳號（未知） | 2 |
-| **VN1-Q4** | 今天頁「和上次比」比什麼 | `BP-DR-13`、`BP-DR-11`（1.0 部分）、`AUD-C12`（附帶問題） | blocked-on-customer | A（比上一份通過新鮮度、規則版本相同的紀錄；沿用期不算變化；只提醒取數失敗與上限正式值有變）；保存方式驗證前先用 B；附帶問題「存 repo 追蹤檔」推薦是 | 2（保存方式未驗證） |
-| **VN1-Q5** | 資料不齊時今天頁怎麼說 | `BP-DR-19`、`UIA-FU-4` | blocked-on-customer | A（維持最差燈＋「只根據 N／M 項」；「資料正常」綁 Required Core；分母沿用 DEC-037／049／051／044，請客戶確認是否適用彙總燈） | 2 |
+| **VN1-Q1** | 1.0 新畫面先核准哪些：全部 1.0 線框，或先核准客戶點名的 1.0 重點（四格導覽、登入晶片／卡、Sheet 選擇、持股唯讀直讀、新舊並存兩入口、今天頁、BP §2.1／§15） | `BP-DR-01`、`03`、`05`、`16`、`17`、`14`（延後）、`UIA-FU-2` | ~~blocked-on-customer~~ **已裁示 DEC-062**／DR-2026-10-18-3（2026-10-18；有意識的變更，不是漏刪）；B（送審範圍；線框仍須送審拍板後才寫 UI code，DEC-003） | B（先核准 1.0 重點；持股四組分組延後，`AUD-C10` 未仲裁）；擋所有 1.0 UI code（DEC-003） | 2（兩組分析分群一致；推薦分歧由總管裁決） |
+| **VN1-Q2** | 重新整理後要不要保持登入 | `BP-DR-04`、`BP-DR-18`（附帶同意） | ~~blocked-on-customer~~ **已裁示 DEC-062**／DR-2026-10-18-3（2026-10-18；有意識的變更，不是漏刪）；B＋同意短期保存一次性驗證碼；⛔ 不得保存 Google 密碼或憑證；不可可靠實作則退回 A；尚未施工 | B（保持登入：先修 `SEC-2`、再驗可行性，不過退回 A；與 BP 原推薦 A 不同）；附帶同意「伺服器短期保存一次性驗證碼」推薦同意（機制內部，DEC-009 保留同意） | 2（兩組皆推薦 B；可行性未驗證） |
+| **VN1-Q3** | 沒登入的人能不能讀到你的持股 | `BP-DR-06`、`SEC-3` | ~~blocked-on-customer~~ **已裁示 DEC-062**／DR-2026-10-18-3（2026-10-18；有意識的變更，不是漏刪）；A；production 系統帳號＝unknown（無法確認，檢查見 gates 檔 VN1-Q3 節）；尚未施工 | A（只有登入且有權限者可讀；系統帳號只給排程）；附問 production 是否設定系統帳號（未知） | 2 |
+| **VN1-Q4** | 今天頁「和上次比」比什麼 | `BP-DR-13`、`BP-DR-11`（1.0 部分）、`AUD-C12`（附帶問題） | ~~blocked-on-customer~~ **已裁示 DEC-062**／DR-2026-10-18-3（2026-10-18；有意識的變更，不是漏刪）；方向 A；⛔ 存 repo 追蹤檔**未核准**、不得把 Git repo 當 production datastore → 保存方式研究另列 `VN1-STORE`；過渡採 B「從今天開始記錄」、不得製造不存在的歷史比較、不得新增變動大小門檻 | A（比上一份通過新鮮度、規則版本相同的紀錄；沿用期不算變化；只提醒取數失敗與上限正式值有變）；保存方式驗證前先用 B；附帶問題「存 repo 追蹤檔」推薦是 | 2（保存方式未驗證） |
+| **VN1-Q5** | 資料不齊時今天頁怎麼說 | `BP-DR-19`、`UIA-FU-4` | ~~blocked-on-customer~~ **已裁示 DEC-062**／DR-2026-10-18-3（2026-10-18；有意識的變更，不是漏刪）；A；代理值不計分、停用明示、無資料來源不得宣稱通過，同樣適用總經彙總燈 | A（維持最差燈＋「只根據 N／M 項」；「資料正常」綁 Required Core；分母沿用 DEC-037／049／051／044，請客戶確認是否適用彙總燈） | 2 |
+| **VN1-STORE** | 系統風險上限每日紀錄的保存方式研究（只研究、不實作）：最小、可靠、可持久化、符合「資料層 ≠ AI 推理層」；須涵蓋 Streamlit Cloud persistence、restart/deployment、concurrency、寫入可靠性、資料責任；⛔ 不得把 Git repo 當 production datastore | `VN1-Q4`、`AUD-C12`、`BP-DR-13` | open（研究；結果附推薦方案送客戶裁示） | 建議批次 `1.0-B3`（Medium）；研究結論前今天頁採「從今天開始記錄」 | 1（DEC-062 登記） |
 
+
+📌 **2026-10-18 裁示後建議小批次（DEC-062；建議，不是授權）**：`1.0-B1` 安全地基 SEC-2＋SEC-3（＋SEC-1-FU 視最新 repo 確認）［High］→ `1.0-B2` 登入持續性 PoC（只存一次性驗證碼、不存 Google 憑證）［High］→ `1.0-B3` `VN1-STORE` 研究（不實作）［Medium］→ `1.0-B4` 依 Q1-B 線框送審（DEC-003）［Medium］→ 線框核准後 UI 實作分批。每批前依 9.2 Effort Check；需 High 先停下提醒客戶。詳見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` 第 6 節。
 另：BP 建議**首次送題**兩個既有項 —— `AUD-C12`（快照持久化，BP-B4 關鍵路徑）、`AUD-L9`（帳本現金／投資理由欄位，建議 2.0 才送）；兩列本身未改，送題時以該列為準。
 
 #### 5.1.3 Research Candidate／UX-Mobile（合併登記）
