@@ -384,9 +384,11 @@ with st.sidebar:
             st.link_button('🔐 用 Google 登入', _sb_url, use_container_width=True)
             st.caption('登入後可在「📁 組合管理」頁雲端存取')
     elif _sb_gsa and _sb_sid:
-        st.caption('ℹ️ 使用 Service Account（舊版部署）')
+        # SEC-3:網頁端已不再以 Service Account 讀寫 Sheet(gsheet_portfolio 無 SA fallback),
+        # SA 只剩排程(gsheet_sa_reader 讀 os.environ)用 → 原「使用 Service Account（舊版部署）」不實。
+        st.caption('ℹ️ Service Account 僅供排程；網頁讀取持股需 Google 登入（OAuth 尚未設定 — 需於部署端 secrets.toml 設定 [google_oauth]）')
     else:
-        st.caption('⚙️ OAuth 尚未設定 — 需於部署端 secrets.toml 設定 [google_oauth]（或改用 Service Account）')
+        st.caption('⚙️ OAuth 尚未設定 — 需於部署端 secrets.toml 設定 [google_oauth]（網頁讀取持股需 Google 登入）')
 
     st.markdown('---')
     st.markdown('### 🔌 連線狀態')

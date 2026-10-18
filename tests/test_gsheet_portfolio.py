@@ -139,10 +139,23 @@ def test_is_configured_missing_keys():
         assert gsp.is_configured() is False
 
 
-def test_is_configured_ok():
+def test_is_configured_sa_secrets_alone_is_not_configured():
+    """SEC-3(有意識的改寫,不是漏測):修前 SA secrets 備齊 → True(匿名訪客可經 SA 讀 Sheet)。
+    現在網頁端只認 OAuth 登入;SA secrets 再齊也不算可用。"""
     fake_st = MagicMock()
+    fake_st.session_state = {}
     fake_st.secrets = {'portfolio_sheet_id': 'abc', 'gcp_service_account': {'x': 1}}
-    with patch.object(gsp, 'st', fake_st):
+    with patch.object(gsp, 'st', fake_st), \
+         patch('src.data.portfolio.oauth_state.is_oauth_configured', return_value=True):
+        assert gsp.is_configured() is False
+
+
+def test_is_configured_ok_when_oauth_logged_in_with_sheet():
+    fake_st = MagicMock()
+    fake_st.session_state = {'gsheet_tokens': {'access_token': 'a'}, 'portfolio_sheet_id': 'abc'}
+    fake_st.secrets = {}
+    with patch.object(gsp, 'st', fake_st), \
+         patch('src.data.portfolio.oauth_state.is_oauth_configured', return_value=True):
         assert gsp.is_configured() is True
 
 

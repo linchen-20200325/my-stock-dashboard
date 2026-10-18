@@ -750,7 +750,11 @@ class TestOldFilesUntouched:
     #   `src/ui/tabs/tab_macro_v2.py`（`bucket_summary` / `overall_verdict` ＋ 新增 `summary_coverage`）、
     #   `src/ui/tabs/tab_today.py`（`classify_macro_contract(attempt=)` 與轉交它的三支 builder，皆選填 kwarg、
     #   預設輸出不變）。其餘 89 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
-    _BASE_DIGEST = "45f5162d4b71038eced69d7d119dcefacd2070dac4307f49659f41f237964e35"
+    # ~~"45f5162d4b71038eced69d7d119dcefacd2070dac4307f49659f41f237964e35"~~（UIA-01／UIA-07 後，至 87afe5ae 仍成立）
+    # 📌 SEC-3（2026-10-18，核准過的共用 chrome 改動，⛔ 不是漏改）：只改 `app.py` 側欄兩句 caption
+    #   （「使用 Service Account（舊版部署）」與「（或改用 Service Account）」在網頁端已無 SA 讀取後不實）。
+    #   其餘 90 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
+    _BASE_DIGEST = "a5293369d2f1a97ae3cfa28259fb8cb7d7dc7e4bac564723f2e75a1d3b243fd1"
 
     def test_no_diff_against_base(self):
         import hashlib

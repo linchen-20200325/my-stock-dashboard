@@ -17,7 +17,19 @@
 - _resolve_oauth_cfg()             (config 優先序:secrets > session_state;每次呼叫動態解析)
 - get_oauth_cfg() / is_oauth_configured()  (動態包裝;caller 必用這兩個,不要直接 import module-level)
 - _get_oauth_client()              (建 gspread client)
-- handle_oauth_callback()          (URL ?code= 換 token)
+- handle_oauth_callback()          (URL ?code= 換 token;SEC-2 起只認 server 端 nonce ＋ 同一瀏覽器)
+
+SEC-2(login CSRF)
+==================
+修前:Google 轉跳回來是整頁載入 ⇒ 新 session ⇒ `session_state` 裡的期望 state 幾乎一定不在,
+而舊 `_oauth_state_ok` 對「沒有期望值」**放行**(v19.63 修迴圈)⇒ 任何 `?code=`(含攻擊者自己的
+授權碼)都會被吞下,受害者被登入成攻擊者帳號、之後的寫入落進攻擊者的 Sheet。
+修後:nonce 存在 server 端 `oauth_nonce_store`(process 級),綁定發起者瀏覽器的
+`_streamlit_xsrf` cookie(解遮罩後的 token bytes 取 sha256);callback **唯一**成功路徑 =
+`consume()` 回 ok(一次性、未過期、同一瀏覽器)。失敗:清 query params、顯示中文錯誤、
+**不** rerun、**不**自動轉跳(不會迴圈),只記 reason code(⛔ 不記任何值)。
+安全閥:secrets `oauth_csrf_enforce = false` → 驗證失敗仍放行登入但照記 reason code
+(預設嚴格;量測方法見 docs/OAUTH_SETUP.md「SEC-2 量測」)。
 
 呼叫端
 ======
@@ -27,9 +39,17 @@
 """
 from __future__ import annotations
 
+import binascii
+import hashlib
 import re
 
 import streamlit as st
+
+from shared.oauth_csrf_policy import (
+    OAUTH_CSRF_ENFORCE_SECRET_KEY,
+    STREAMLIT_XSRF_COOKIE_NAME,
+)
+from src.data.portfolio import oauth_nonce_store as _nonce_store
 
 from infra.oauth import (
     OAuthError,
@@ -88,18 +108,74 @@ def is_oauth_configured() -> bool:
     return _resolve_oauth_cfg() is not None
 
 
-def get_login_state() -> str:
-    """回傳本 session 專屬的 OAuth state（沒有就產生一個並存進 session_state）。
+#: XSRF cookie v2 格式的段數 / 版本字首 / mask 長度(§3.3:對照 streamlit 1.59
+#: `generate_xsrf_token_string`:`"2|" + mask(4 bytes hex) + "|" + masked token hex + "|" + ts`)。
+_XSRF_V2_PREFIX = "2"
+_XSRF_V2_PARTS = 4
+_XSRF_MASK_BYTES = 4
 
-    修「登入互相踢掉」核心：每個瀏覽器 session 各有一組隨機 state，寫進 authorize URL；
-    Google 回呼帶回同一 state，`handle_oauth_callback()` 只認 state 相符者 →
-    別的 session / 分頁發起的授權碼不會被本 session 吞掉，反之亦然。
-    產一次後在本 session 內固定（跨 rerun 穩定），登入成功後清除。
+
+def _decode_xsrf_token(raw) -> "bytes | None":
+    """`_streamlit_xsrf` cookie 原文 → 解遮罩後的 token bytes;解析不了 → None。純函式,易測。
+
+    ⚠️ 不能比 cookie **字串**:Streamlit 每個 HTTP 回應都換一個隨機 mask 重發 cookie,
+    同一瀏覽器的字串會變;不變的是 `masked XOR mask`(＝ token bytes)。
+    只認 v2(`2|mask|masked|timestamp`);自寫解碼,⛔ 不 import streamlit 內部模組。
+    """
+    if not isinstance(raw, str):
+        return None
+    _v = raw.strip().strip("\"'")
+    _parts = _v.split("|")
+    if len(_parts) != _XSRF_V2_PARTS or _parts[0] != _XSRF_V2_PREFIX:
+        return None
+    try:
+        _mask = binascii.a2b_hex(_parts[1].encode("ascii"))
+        _masked = binascii.a2b_hex(_parts[2].encode("ascii"))
+        int(_parts[3])
+    except (binascii.Error, ValueError, UnicodeEncodeError):
+        return None
+    if len(_mask) != _XSRF_MASK_BYTES or not _masked:
+        return None
+    return bytes(_b ^ _mask[_i % _XSRF_MASK_BYTES] for _i, _b in enumerate(_masked))
+
+
+def _browser_binding() -> "str | None":
+    """目前這個瀏覽器的綁定值 = sha256(XSRF token bytes) 的 hex;讀不到 / 解析不了 → None。
+
+    `st.context.cookies` 是本 session 建立時(websocket 握手)瀏覽器送來的 cookie,
+    同一瀏覽器跨整頁載入(含 Google 轉跳回來)不變;攻擊者讀不到也寫不進受害者的 cookie。
+    只交雜湊出去(nonce 表只存雜湊),⛔ 不記錄 / 不存 cookie 原文。
+    """
+    try:
+        _raw = st.context.cookies.get(STREAMLIT_XSRF_COOKIE_NAME)
+    except Exception:  # noqa: BLE001 — 無 script run context / 舊版無 st.context → 當作沒有 cookie
+        return None
+    _tok = _decode_xsrf_token(_raw)
+    return hashlib.sha256(_tok).hexdigest() if _tok else None
+
+
+def _csrf_enforced() -> bool:
+    """安全閥:secrets `oauth_csrf_enforce` 明確設成 false 才放寬;沒設 / 其他值一律嚴格。"""
+    _v = _safe_secret(OAUTH_CSRF_ENFORCE_SECRET_KEY, True)
+    if isinstance(_v, bool):
+        return _v
+    return str(_v).strip().lower() not in {"false", "0", "no", "off"}
+
+
+def get_login_state() -> str:
+    """回傳本 session 專屬的 OAuth nonce,並在 server 端登記 / 延長(綁定目前瀏覽器)。
+
+    修「登入互相踢掉」:每個瀏覽器 session 各有一組隨機 nonce,寫進 authorize URL。
+    SEC-2:每次呼叫(每次 rerun 畫登入鈕)都 `issue()` 一次 → nonce 活到最後一次畫鈕後
+    `OAUTH_STATE_TTL_SEC`;callback 時以 `consume()` 驗「登記過、未過期、同一瀏覽器」。
+    讀不到瀏覽器 cookie → 不登記(callback 會以 `no_cookie` 拒絕,fail closed)。
+    產一次後在本 session 內固定(跨 rerun 穩定),callback 處理後清除。
     """
     _s = st.session_state.get("_oauth_state")
     if not _s:
         _s = generate_state()
         st.session_state["_oauth_state"] = _s
+    _nonce_store.issue(_s, _browser_binding())
     return _s
 
 
@@ -111,8 +187,8 @@ def get_login_state() -> str:
 #
 # 安全前提(對照 §1 + P2 架構說明):
 #   1. **只有 Sheet ID 上車,refresh_token 等憑證永遠不進 state/URL**(那是 A-full,未做)。
-#   2. **CSRF 不被稀釋**:nonce 仍是唯一被 _oauth_state_ok 驗證的部分;Sheet ID 是乘客,
-#      不參與比對,無法放行任何原本會被擋的 callback。
+#   2. **CSRF 不被稀釋**:nonce 仍是唯一被驗證的部分(SEC-2 起由 oauth_nonce_store.consume
+#      驗);Sheet ID 是乘客,不參與比對,無法放行任何原本會被擋的 callback。
 #   3. **Sheet ID 當不可信輸入**:寫回 session/URL 前先過 _sanitize_sheet_id。
 # 分隔符用 '.':nonce 是 token_urlsafe(base64url,無 '.'),Sheet ID 是 [A-Za-z0-9_-](無 '.')
 # → partition('.') 零歧義。§3.3:分隔符 + 字母集/長度界抽成具名常數,不散 inline。
@@ -166,23 +242,10 @@ def _get_oauth_client():
     return gspread.authorize(creds)
 
 
-def _oauth_state_ok(expected_state, got_state) -> bool:
-    """OAuth state 檢查(v19.63 修「登入無限迴圈」)。純函式,易測。
-
-    只有『本 session 確實發起過 OAuth(有 expected_state)且 URL 回傳 state 不符』
-    才拒絕(= 別的 session 發起的授權碼)。session_state 在外部轉跳 / Streamlit Cloud
-    app 重啟間可能遺失(expected=None)——此時**放行**,否則正常使用者會卡在
-    「登入→回來又說沒登入」的無限迴圈(舊 v18.462 嚴格版把 expected=None 也拒絕)。
-
-    truth table:
-      expected=ABC, got=ABC  → True (正常登入)
-      expected=None, got=ABC → True (session 遺失 → 放行,修迴圈)
-      expected=ABC, got=XYZ  → False(真·別的 session → 擋)
-      expected=ABC, got=None → True (URL 未帶 state)
-    """
-    if expected_state and got_state and got_state != expected_state:
-        return False
-    return True
+#: callback 驗證失敗時給使用者看的訊息(§3.3 具名常數;不含任何技術值)。
+OAUTH_STATE_REJECTED_MSG = (
+    "Google 登入驗證未通過（連結過期、已使用或非本瀏覽器發起），"
+    "請按側欄『🔐 用 Google 登入』重新登入")
 
 
 def handle_oauth_callback() -> None:
@@ -196,35 +259,35 @@ def handle_oauth_callback() -> None:
         return
     _qp = st.query_params
     if "code" in _qp and "gsheet_tokens" not in st.session_state:
-        # state 檢查(v19.63 修「登入無限迴圈」):只有『本 session 有發起(expected)
-        # 且 URL state 不符』才拒絕;session_state 在外部轉跳/app 重啟間遺失
-        # (expected=None)時放行,避免正常登入卡死。詳見 _oauth_state_ok docstring。
-        # P2(v19.206):state 現為 `nonce.sheetid`,只用 **nonce** 做 CSRF 檢查(語意不變),
-        # sheetid 是搭便車的乘客,不參與比對。
-        _expected_state = st.session_state.get("_oauth_state")
+        # SEC-2:唯一成功路徑 = server 端 nonce 表 consume ok(登記過、未過期、同一瀏覽器、一次性)。
+        # 修前的 `_oauth_state_ok` 對「session 沒有期望值」(整頁轉跳後幾乎必然)與「URL 沒帶 state」
+        # 一律放行 —— 那兩條放行路徑已刪除。P2:state = `nonce.sheetid`,只有 nonce 參與驗證。
         _got_nonce, _got_sheet = _split_login_state(_qp.get("state"))
-        if not _oauth_state_ok(_expected_state, _got_nonce):
-            return  # 別的 session 發起的授權碼 → 不吞
-        # R1(v19.206 安全硬化,順手併入 P2):本 session 確實發起過 OAuth(有 _expected_state)
-        # 卻收到**空 nonce** 的 callback → 絕非本 session 的合法回呼(我們一定把 nonce 塞進
-        # authorize URL 的 state,Google 一定原樣帶回)。擋掉 login-CSRF / session-fixation 的
-        # 空 nonce 變體(`state=.xxx` / 無 state)。**不動** expected=None 的迴圈修正
-        # (session 遺失時仍放行,見 _oauth_state_ok row 2)—— 只收「有自己的 nonce 卻收到空」這條。
-        if _expected_state and not _got_nonce:
-            return
-        # P2 F1(安全稽核 blocker 修正):**回綁 Sheet 只在 CSRF 強驗通過時執行**。
-        # `_oauth_state_ok` 為修「登入無限迴圈」刻意保留放行路徑(expected=None / nonce 空 → True),
-        # 但那條路徑下 state 載荷**不可信**(攻擊者可構造 `state=.<自己的Sheet>` 空 nonce 繞檢查)。
-        # 若在放行路徑也回綁 → 跨帳號 Sheet 注入(受害者後續寫入可能落到攻擊者的可寫 Sheet)。
-        # 故:登入照舊放行(不動迴圈修正),但 Sheet 回綁只信「本 session 自己的 nonce 相符」。
-        _strong_state = bool(_expected_state) and _got_nonce == _expected_state
+        _ok, _reason = _nonce_store.consume(_got_nonce, _browser_binding())
+        # 本 session 的 nonce 不論成敗都換新(已燒掉;下一個登入鈕用新的)。
+        st.session_state.pop("_oauth_state", None)
+        _enforce = _csrf_enforced()
+        if not _ok:
+            # 只記 reason code(⛔ 不記 nonce / cookie / code / token 值)。
+            print(f"[oauth_state] SEC-2 callback state 驗證未通過 reason={_reason} "
+                  f"enforce={'on' if _enforce else 'off'}")
+            if _enforce:
+                # 不 rerun、不自動轉跳 → 不會迴圈;清掉 ?code= 讓下一輪不再處理同一個授權碼。
+                st.query_params.clear()
+                st.error(OAUTH_STATE_REJECTED_MSG)
+                return
+        # P2 F1:**回綁 Sheet 只在 CSRF 強驗通過時執行** —— state 載荷只有 consume ok 才可信
+        # (否則攻擊者可構造 `state=<任意>.<自己的Sheet>` 造成跨帳號 Sheet 注入)。
+        # SEC-2 更正:修前 `_strong_state` 要求「本 session 有期望值」,而整頁轉跳後 session 是新的
+        # ⇒ 正常登入路徑上幾乎恆為 False,P2 #639 的回綁實際上沒生效;現在 = consume ok,正常登入就會回綁。
+        # 安全閥(enforce=off)放行的登入**不**回綁。
+        _strong_state = _ok
         try:
             _tokens = exchange_code_for_tokens(
                 _qp["code"], cfg["client_id"],
                 cfg["client_secret"], cfg["redirect_uri"])
             st.session_state["gsheet_tokens"] = _tokens
             st.session_state["gsheet_email"] = decode_id_token_email(_tokens)
-            st.session_state.pop("_oauth_state", None)  # 用完即棄，下次登入重新產
             # P2:把 state 便車帶回的 Sheet ID 回綁兩通道 + 重掛 ?sheet=(取代原本的
             # blanket clear —— 那正是把 ?sheet= 沖掉、逼使用者再繞組合管理的元凶之一)。
             # sheetid 已於 _split_login_state 消毒;非憑證,回綁只是「還原上次用哪本」。
@@ -240,4 +303,6 @@ def handle_oauth_callback() -> None:
             st.success(f"✅ Google 登入成功{('：' + _email) if _email else ''}")
             st.rerun()
         except OAuthError as _oe:
+            # 授權碼在 Google 端已是一次性;清掉 ?code= 免得下一輪拿已燒掉的 nonce 再報一次錯。
+            st.query_params.clear()
             st.error(f"❌ OAuth 失敗：{_oe}")

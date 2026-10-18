@@ -5,12 +5,27 @@
 
 本檔釘住:編碼/拆解/消毒 + callback 端到端(CSRF 語意不變、回綁兩通道 + ?sheet=、
 安全:錯 nonce 擋登入、髒 sheetid 消毒、向後相容純 nonce 不回綁)。
+
+SEC-2:callback 改由 server 端 nonce 表＋瀏覽器綁定把關 —— 本檔 callback 測試改為先
+`oauth_nonce_store.issue()` 登記 nonce,並 stub `_browser_binding`(模擬同一瀏覽器的 XSRF cookie)。
 """
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
+import src.data.portfolio.oauth_nonce_store as ns
 import src.data.portfolio.oauth_state as ost
+
+_BROWSER = hashlib.sha256(b'this-browser-xsrf').hexdigest()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_store():
+    ns._STORE.clear()
+    yield
+    ns._STORE.clear()
 
 
 # ── 消毒:只放行純 [A-Za-z0-9_-] ─────────────────────────────────────────
@@ -82,9 +97,14 @@ class _FakeSt:
         raise _Rerun
 
 
-def _wire_callback(monkeypatch, *, session, qp):
+def _wire_callback(monkeypatch, *, session, qp, issued=('NONCE',), binding=_BROWSER):
+    """SEC-2:`issued` 內的 nonce 先以本瀏覽器綁定登記(＝本瀏覽器按過登入鈕);
+    callback 端的 `_browser_binding()` 回 `binding`。"""
+    for _n in issued:
+        ns.issue(_n, _BROWSER)
     fst = _FakeSt(session, qp)
     monkeypatch.setattr(ost, 'st', fst)
+    monkeypatch.setattr(ost, '_browser_binding', lambda: binding)
     monkeypatch.setattr(ost, '_resolve_oauth_cfg',
                         lambda: {'client_id': 'c', 'client_secret': 's', 'redirect_uri': 'r'})
     monkeypatch.setattr(ost, 'exchange_code_for_tokens',
@@ -124,6 +144,7 @@ def test_callback_csrf_rejects_wrong_nonce(monkeypatch):
 
     assert 'gsheet_tokens' not in fst.session_state, 'CSRF 不符不該換 token'
     assert 'portfolio_sheet_id' not in fst.session_state, 'CSRF 不符不該回綁 Sheet'
+    assert 'code' not in fst.query_params, 'SEC-2:拒絕後清 query params(不迴圈)'
 
 
 def test_callback_backward_compat_pure_nonce(monkeypatch):
@@ -174,17 +195,36 @@ def test_callback_empty_nonce_with_active_session_is_rejected(monkeypatch):
     assert 'sheet' not in fst.query_params
 
 
-def test_callback_session_lost_does_not_rebind(monkeypatch):
-    """session 遺失(expected=None,轉跳/重啟)→ 放行登入,但無自己的 nonce 可強驗
-    → 不信 state 載荷、不回綁(此時使用者可走 A 的 ?sheet= 或 P1 就地重挑)。"""
+def test_callback_session_lost_unregistered_nonce_is_rejected(monkeypatch):
+    """SEC-2(有意識的改寫,不是漏測):修前「session 遺失(expected=None)→ 放行登入」——
+    那正是 login CSRF 漏洞(整頁轉跳後 session 恆為新的)。現在 nonce 沒在 server 端登記過
+    → **拒絕**登入、不換 token、不回綁。"""
     fst = _wire_callback(
         monkeypatch,
         session={},                       # 無 _oauth_state
-        qp={'code': 'CODE', 'state': 'SOMENONCE.ABC123'})
+        qp={'code': 'CODE', 'state': 'SOMENONCE.ABC123'},
+        issued=())
+
+    ost.handle_oauth_callback()           # 拒絕:不應 raise _Rerun
+
+    assert 'gsheet_tokens' not in fst.session_state
+    assert 'portfolio_sheet_id' not in fst.session_state
+    assert 'sheet' not in fst.query_params and 'code' not in fst.query_params
+
+
+def test_callback_new_session_same_browser_logs_in_and_rebinds(monkeypatch):
+    """SEC-2 更正:整頁轉跳回來是新 session(session_state 空),但 nonce 在 server 端、
+    綁定同一瀏覽器 → 登入成功,且 **P2 #639 的 Sheet 回綁現在真的會執行**
+    (修前 `_strong_state` 要求本 session 有期望值,正常路徑上恆為 False)。"""
+    fst = _wire_callback(
+        monkeypatch,
+        session={},
+        qp={'code': 'CODE', 'state': 'NONCE.ABC123'})
 
     with pytest.raises(_Rerun):
         ost.handle_oauth_callback()
 
-    assert fst.session_state['gsheet_tokens']['access_token'] == 'AT'   # 登入成功(迴圈修正不變)
-    assert 'portfolio_sheet_id' not in fst.session_state               # 弱驗 → 不回綁
-    assert 'sheet' not in fst.query_params
+    assert fst.session_state['gsheet_tokens']['access_token'] == 'AT'
+    assert fst.session_state['portfolio_sheet_id'] == 'ABC123'
+    assert fst.session_state['stock_portfolio_sheet_id'] == 'ABC123'
+    assert fst.query_params.get('sheet') == 'ABC123'

@@ -2183,6 +2183,10 @@ with tab_edu:
 | `_ws()` | 每次重新建立（OAuth token 可能 refresh，**不可** `st.cache_resource` 化）|
 | 寫入策略 | `save_portfolio` 先取 `get_all_values` → 過濾舊 name 列 → `clear` + `append_row(HEADERS)` + `append_rows(keep + new)` |
 
+> 📌 **2026-10-18 SEC-3 / SEC-2 —— 有意識的變更，不是漏刪**：上圖「SA fallback」分支與上表 `is_configured()` / `_sa_configured()` / `_build_client()` 三列**已不成立**。
+> 現行：`is_configured()` ＝ `_oauth_active()`；`_sa_configured()` 已刪；`_build_client()` 只走 OAuth，否則 `LoginRequiredError`（網頁端不再以 Service Account 讀寫；SA 只留給排程 `gsheet_sa_reader`）。
+> OAuth callback 由新 L1 `src/data/portfolio/oauth_nonce_store.py`（server 端一次性 nonce，綁 `_streamlit_xsrf` cookie 雜湊；常數 `shared/oauth_csrf_policy.py`）把關，見 `docs/OAUTH_SETUP.md`。
+
 **`oauth_state.py`** — OAuth 設定解析 + gspread client + callback handler
 
 | 函式 | 說明 |
