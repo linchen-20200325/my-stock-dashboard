@@ -272,6 +272,11 @@ CLAUDE.md v2.0 §4：「請直接 merge PR + 存檔(STATE.md) 與也同步 ARCHI
 
 OAuth 條件不滿足時自動降級為 SA，兩者皆缺則 `is_configured() = False`，UI 顯示設定面板。
 
+> 📌 **2026-10-18 SEC-3（DEC-062 Q3＝A）—— 有意識的政策變更，不是漏刪**：上表「SA fallback」列與上句「自動降級為 SA」**已不成立**。
+> 現行：`is_configured()` ＝ `_oauth_active()`；`_build_client()` 只建本人 OAuth client，未登入 / client 建不起來 → `LoginRequiredError`（`RuntimeError` 子類，訊息「請先登入 Google 才能讀取持股」），**所有**讀／寫／Drive 函式 fail closed。
+> 舊設計的理由（管理員部署免登入）仍成立，但它讓匿名訪客能以 SA 身分讀到 SA 有權限的任何 Sheet（含 `?sheet=` 任意 ID）。`st.secrets['portfolio_sheet_id']` 仍可當預設 Sheet ID（非憑證）；SA 只留給排程（`gsheet_sa_reader`，讀 `os.environ`）。
+> 同批 SEC-2：OAuth callback 只認 server 端一次性 nonce ＋ 同一瀏覽器（`oauth_nonce_store`），見 `docs/OAUTH_SETUP.md`。
+
 ### §8.2 OAuth Client 配置來源優先序
 
 `oauth_state._resolve_oauth_cfg()`：

@@ -199,30 +199,37 @@ def test_tokens_without_any_credential_bypass_cache(env):
 
 
 # ── SA 與 OAuth 身分不共用快取 ─────────────────────────────────────────────────
-def test_sa_cache_not_served_to_oauth_user(env):
+# SEC-3(有意識的改寫,不是漏測):修前 SA 是一種可讀的身分(有自己的 `sa:` 快取鍵);
+# 現在網頁端沒有 SA 路徑 —— 「SA 環境」＝匿名 ＋ SA secrets,一律 LoginRequiredError、
+# 從不以 SA 身分呼叫 Google。下列三條改釘這個新語意(快取仍不會在 OAuth / 匿名之間流動)。
+def test_sa_secrets_anonymous_refused_then_oauth_user_goes_to_google(env):
     env.sa()
-    assert gsp.list_portfolios(sheet_id='SID_SA') == ['SA組合']
+    with pytest.raises(gsp.LoginRequiredError):
+        gsp.list_portfolios(sheet_id='SID_SA')
     env.oauth('A')
     with pytest.raises(PermissionError):
         gsp.list_portfolios(sheet_id='SID_SA')
     assert ('A', 'SID_SA') in env.calls
+    assert not any(who == 'SA' for who, _ in env.calls)
 
 
-def test_oauth_cache_not_served_to_sa_path(env):
+def test_oauth_cache_not_served_to_anonymous_sa_env(env):
     env.oauth('A')
     gsp.list_portfolios(sheet_id='SID_A')
     env.sa()
-    with pytest.raises(PermissionError):
+    with pytest.raises(gsp.LoginRequiredError):
         gsp.list_portfolios(sheet_id='SID_A')
-    assert ('SA', 'SID_A') in env.calls
+    assert not any(who == 'SA' for who, _ in env.calls)
 
 
-def test_different_service_accounts_do_not_share(env):
+def test_service_accounts_never_read(env):
     env.sa(email='sa1@p.iam.gserviceaccount.com')
-    gsp.list_portfolios(sheet_id='SID_SA')
+    with pytest.raises(gsp.LoginRequiredError):
+        gsp.list_portfolios(sheet_id='SID_SA')
     env.sa(email='sa2@p.iam.gserviceaccount.com')
-    gsp.list_portfolios(sheet_id='SID_SA')
-    assert env.calls.count(('SA', 'SID_SA')) == 2
+    with pytest.raises(gsp.LoginRequiredError):
+        gsp.list_portfolios(sheet_id='SID_SA')
+    assert ('SA', 'SID_SA') not in env.calls
 
 
 # ── 快取鍵不含 token 原文 ──────────────────────────────────────────────────────
@@ -232,8 +239,7 @@ def test_identity_key_has_no_raw_token(env):
     assert ident.startswith('oauth:')
     assert 'SECRET' not in ident
     env.sa(email='sa@proj.iam.gserviceaccount.com')
-    ident_sa = gsp._cache_identity()
-    assert ident_sa.startswith('sa:') and 'sa@proj' not in ident_sa
+    assert gsp._cache_identity() == '', 'SEC-3:沒有 SA 身分(匿名 + SA secrets → 不用快取)'
     env.anon()
     assert gsp._cache_identity() == ''
 
@@ -256,7 +262,7 @@ def test_oauth_identity_never_caches_sa_fallback_read(env):
     gsp.st.secrets = {gsp.PORTFOLIO_SHEET_KEY: 'SID_SA',
                       'gcp_service_account': {'client_email': 'sa@p.iam.gserviceaccount.com'}}
     with patch('src.data.portfolio.oauth_state._get_oauth_client', return_value=None):
-        with pytest.raises(RuntimeError, match='OAuth'):
+        with pytest.raises(gsp.LoginRequiredError):
             gsp.list_portfolios(sheet_id='SID_SA')
     assert ('SA', 'SID_SA') not in env.calls, 'oauth 鍵之下不可改用 SA 讀資料'
     # OAuth 恢復後 B 必須重新經 Google ACL(被拒),不得命中 SA 讀到的資料
@@ -268,14 +274,17 @@ def test_oauth_identity_never_caches_sa_fallback_read(env):
         gsp.list_portfolios(sheet_id='SID_SA')
 
 
-def test_sa_fallback_unchanged_outside_cache_path(env):
-    """非快取路徑(寫入 / 列檔)的 `_build_client` OAuth→SA fallback 行為不變。"""
+def test_no_sa_fallback_outside_cache_path_either(env):
+    """SEC-3(有意識的改寫):修前非快取路徑(寫入 / 列檔)的 `_build_client` 會 OAuth→SA fallback;
+    現在 OAuth client 建不起來一律 LoginRequiredError,不論在不在快取路徑。"""
     env.sa()
     env.oauth('B')
     gsp.st.secrets = {gsp.PORTFOLIO_SHEET_KEY: 'SID_SA',
                       'gcp_service_account': {'client_email': 'sa@p.iam.gserviceaccount.com'}}
     with patch('src.data.portfolio.oauth_state._get_oauth_client', return_value=None):
-        assert gsp._build_client().who == 'SA'
+        with pytest.raises(gsp.LoginRequiredError):
+            gsp._build_client()
+    assert not any(who == 'SA' for who, _ in env.calls)
 
 
 # ── SA1 SHOULD-2:走真實 save_* / delete_* 路徑,同一使用者寫完再讀是新值 ──────────

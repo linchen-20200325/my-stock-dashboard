@@ -227,7 +227,11 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
     try:
         # L3 → L1 私有 accessor：**不是** V-PICKER-PRIV-1（那條管 L5→L1），
         # 沿用 `watchlist_service` / `portfolio_binding_service` 既成範式。見檔頭。
-        _stk_sid = str(_gsp._get_active_stock_sheet_id() or "")
+        # SEC-3:觀察清單那半也要先登入(與投資組合那半的 `_bound` 同一個前提)。
+        # 修前未登入仍會照 `?sheet=` 還原的個股 Sheet 去讀 —— SA fallback 拔掉後那條路
+        # 一定拋 LoginRequiredError,會把「還沒登入」畫成紅色的觀察清單錯誤(§1.A 第 4 點:
+        # 捏造故障)。未登入 → 不讀,`watchlist_error` 留空,由頁面畫灰色登入卡。
+        _stk_sid = str(_gsp._get_active_stock_sheet_id() or "") if _logged else ""
         if _stk_sid:
             _wnames = _gsp.list_stock_watchlists(sheet_id=_stk_sid) or []
             if _wnames:

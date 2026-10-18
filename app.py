@@ -333,15 +333,13 @@ with st.sidebar:
         from src.data.portfolio.oauth_state import (
             get_oauth_cfg as _sb_get_cfg,
             login_state_with_sheet as _sb_login_state_with_sheet,
-            _gsa_secret as _sb_gsa,
-            _sheet_id_secret as _sb_sid,
         )
         from infra.oauth import build_authorize_url as _sb_buildurl
         # 每次 rerun 動態解析，避免 module-level cache 過期
         _sb_cfg = _sb_get_cfg()
         _sb_oc = _sb_cfg is not None
     except Exception:
-        _sb_oc, _sb_cfg, _sb_gsa, _sb_sid, _sb_buildurl = False, None, None, '', None
+        _sb_oc, _sb_cfg, _sb_buildurl = False, None, None
     _sb_logged = bool(st.session_state.get('gsheet_tokens'))
     if _sb_oc:
         if _sb_logged:
@@ -383,10 +381,12 @@ with st.sidebar:
                                    state=_sb_login_state_with_sheet(_sb_cur_sid))
             st.link_button('🔐 用 Google 登入', _sb_url, use_container_width=True)
             st.caption('登入後可在「📁 組合管理」頁雲端存取')
-    elif _sb_gsa and _sb_sid:
-        st.caption('ℹ️ 使用 Service Account（舊版部署）')
     else:
-        st.caption('⚙️ OAuth 尚未設定 — 需於部署端 secrets.toml 設定 [google_oauth]（或改用 Service Account）')
+        # SEC-3:網頁端已不再以 Service Account 讀寫 Sheet(gsheet_portfolio 無 SA fallback)→
+        # 原「使用 Service Account（舊版部署）」分支與「或改用 Service Account」不實,分支刪除;
+        # 連帶不再於 import 時把整份 SA secret(含私鑰)載進 oauth_state 的 module global。
+        st.caption('⚙️ OAuth 尚未設定 — 需於部署端 secrets.toml 設定 [google_oauth]'
+                   '（網頁讀取持股一律需 Google 登入；Service Account 不再用於網頁）')
 
     st.markdown('---')
     st.markdown('### 🔌 連線狀態')

@@ -16,13 +16,17 @@ Schema
 
 多組命名 = 多列共用同一 worksheet；同一個 name 多列 = 該組合的所有持股 / 代碼。
 
-雙模式認證
+認證（只有 OAuth；SEC-3 起網頁端**不再**以 Service Account 讀寫）
 ==========
-- OAuth（推薦）：使用者在 sidebar 用 Google 登入，自帶 Sheet
+- OAuth：使用者在 sidebar 用 Google 登入，自帶 Sheet
   - secrets：`[google_oauth]` 或 in-app wizard 設定（client_id/secret/redirect_uri）
   - 個人 Sheet ID：UI 輸入 → session_state['portfolio_sheet_id']
-- Service Account（向後相容）：管理員部署
-  - secrets：`portfolio_sheet_id` + `[gcp_service_account]`
+  - secrets `portfolio_sheet_id` 仍可當**預設 Sheet ID**（Sheet ID 不是憑證，存取仍要
+    本人 OAuth token ＋ Sheet ACL）
+- 未登入 → `_build_client()` 拋 `LoginRequiredError`，所有讀 / 寫 / Drive 函式一律 fail closed。
+- ⚠️ SEC-3（修前）：未登入時 `_build_client()` 退回 secrets `[gcp_service_account]`，
+  任何匿名訪客（含 `?sheet=` 任意 Sheet ID）都能以 SA 身分讀到 SA 有權限的私人 Sheet。
+  Service Account 現在**只**給排程用（`gsheet_sa_reader` 讀 `os.environ`，與本檔無關）。
 
 依賴
 ====
@@ -46,7 +50,6 @@ import datetime as _dt
 import hashlib
 import math
 from collections.abc import Mapping
-from contextvars import ContextVar
 from typing import Any
 
 try:
@@ -97,7 +100,8 @@ _STOCK_DRIVE_FOLDER_NAME = '台股 Dashboard（個股組合）'
 
 # ── §3.3 session-key SSOT:個股 / ETF 雲端儲存分家(Phase 1)──────────────
 # 兩條 session channel,各自獨立指向不同 Google Sheet,互不污染:
-#   PORTFOLIO_SHEET_KEY       — ETF 組合 + legacy(含 SA secrets fallback);
+#   PORTFOLIO_SHEET_KEY       — ETF 組合 + legacy(含 secrets 預設 Sheet ID fallback;
+#                               Sheet ID 非憑證,讀寫仍須 OAuth 登入,SEC-3);
 #                               forward-test 亦沿用此 legacy 通道(_get_active_sheet_id)。
 #   STOCK_PORTFOLIO_SHEET_KEY — 個股組合專用(session-only,無 secrets fallback)。
 PORTFOLIO_SHEET_KEY = 'portfolio_sheet_id'
@@ -121,25 +125,28 @@ def _oauth_active() -> bool:
     return True
 
 
-def _sa_configured() -> bool:
-    """Service Account 模式：兩個 secrets 都有。"""
-    if st is None:
-        return False
-    try:
-        _ = st.secrets[PORTFOLIO_SHEET_KEY]
-        _ = st.secrets['gcp_service_account']
-        return True
-    except (KeyError, FileNotFoundError, AttributeError):
-        return False
+#: SEC-3:未登入時所有讀 / 寫 / Drive 呼叫的唯一錯誤訊息(§3.3 具名常數)。
+LOGIN_REQUIRED_MSG = '請先登入 Google 才能讀取持股'
+
+
+class LoginRequiredError(RuntimeError):
+    """SEC-3:沒有 OAuth 登入(或 OAuth client 建不起來)就不碰 Google。
+
+    繼承 RuntimeError ⇒ 既有 `except RuntimeError` / `except Exception` 的 caller 行為不變
+    (照舊顯示錯誤 / graceful 跳過),只是**不會再**以 Service Account 讀到資料。
+    """
 
 
 def is_configured() -> bool:
-    """OAuth 已登入＋有 Sheet ID，或 SA 已備齊；任一條件即可。"""
-    return _oauth_active() or _sa_configured()
+    """OAuth 已登入＋有 Sheet ID 才算可用(SEC-3:不再因 SA secrets 存在就回 True)。"""
+    return _oauth_active()
 
 
 def _get_active_sheet_id() -> str:
-    """OAuth 模式下取使用者輸入的 sheet id；SA 模式回 secrets 的值。
+    """取使用者輸入的 sheet id；沒有則回 secrets `portfolio_sheet_id`(預設 Sheet ID)。
+
+    Sheet ID 不是憑證:回傳值只決定「讀哪一本」,讀不讀得到仍由 `_build_client()`
+    (必須 OAuth 登入,SEC-3)＋ Google ACL 決定。
 
     ⚠️ 這是 **ETF / legacy** 通道(PORTFOLIO_SHEET_KEY + secrets fallback);
     forward-test(_ft_worksheet)亦沿用。個股組合請改用 `_get_active_stock_sheet_id()`。
@@ -248,37 +255,22 @@ def _secrets_read_error() -> str:
 
 
 def _build_client():
-    """依當前模式建一個 gspread client。OAuth 優先；fallback SA。
+    """以**本人 OAuth** 建一個 gspread client;沒登入 / client 建不起來 → `LoginRequiredError`。
 
     OAuth 判斷只看「有 token + 有 OAuth Client」，不綁 sheet_id —
     讓「列檔挑 Sheet」流程能在 sheet_id 還沒設定前先建 client。
+
+    SEC-3:修前此處在 OAuth 不可用時退回 secrets `[gcp_service_account]` —— 匿名訪客因此能以
+    SA 身分讀到 SA 有權限的任何 Sheet(含 `?sheet=` 帶進來的、與 secrets 預設的那本)。
+    現在**沒有任何退路**:所有讀 / 寫 / Drive 函式都經過這裡,故一律 fail closed。
     """
-    _pinned = _CACHED_READ_KIND.get()   # SEC-1:快取路徑內被釘住的身分種類(非快取路徑為 '')
-    if _has_oauth_tokens():
-        if _pinned == _IDENTITY_KIND_SA:
-            raise RuntimeError('Google Sheet 讀取快取以 SA 身分建鍵,實際卻要走 OAuth —— 拒絕讀取')
-        from src.data.portfolio.oauth_state import _get_oauth_client
-        cli = _get_oauth_client()
-        if cli is not None:
-            return cli
-    # SEC-1(SA2 SHOULD-2):快取鍵是 OAuth 指紋時**不准**退回 SA —— 否則 SA 讀到的資料會存進
-    # 這位使用者的 oauth 鍵,OAuth 恢復後 TTL 內從快取拿到他本人 ACL 讀不到的資料。fail loud。
-    if _pinned == _IDENTITY_KIND_OAUTH:
-        raise RuntimeError('OAuth client 建立失敗,快取讀取路徑不退回 Service Account —— 請重新登入 Google')
-    # Fallback: Service Account（OAuth 沒登入或建 client 失敗才走這條）
-    if not _sa_configured():
-        raise RuntimeError(
-            '尚未登入 Google 也未設定 Service Account — 請先「🔐 用 Google 登入」'
-            '或請管理員設定 `[gcp_service_account]` secret')
-    import gspread
-    from google.oauth2.service_account import Credentials
-    sa_info = dict(st.secrets['gcp_service_account'])
-    scopes = [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive',
-    ]
-    creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
-    return gspread.authorize(creds)
+    if not _has_oauth_tokens():
+        raise LoginRequiredError(LOGIN_REQUIRED_MSG)
+    from src.data.portfolio.oauth_state import _get_oauth_client
+    cli = _get_oauth_client()
+    if cli is None:
+        raise LoginRequiredError(LOGIN_REQUIRED_MSG)
+    return cli
 
 
 # ── SEC-1:讀取快取依「實際呼叫 Google 的身分」隔離 ──────────────────────────────
@@ -287,12 +279,9 @@ def _build_client():
 # 呼叫就直接拿到 A 的資料,完全不經 Google ACL;`sheet_id=None` 時鍵還與 session 的 Sheet 無關。
 # 修法:public 函式先解析 (身分, 實際 sheet_id),再呼叫鍵含兩者的 `_*_cached` 內部函式;
 # 解析不出身分 → **不碰快取**,直接走原讀取路徑(`_build_client` 照舊 fail loud)。
-#: 身分種類前綴(§3.3 具名常數)。OAuth 與 SA 分屬不同前綴 ⇒ 兩條路徑永不共用快取項。
+#: 身分種類前綴(§3.3 具名常數)。SEC-3 起只剩 OAuth 一種身分(SA 前綴與「釘住身分種類」的
+#: ContextVar 隨 SA fallback 一併移除 —— 只有一種 client,不再有「鍵與實際 client 種類不符」的可能)。
 _IDENTITY_KIND_OAUTH = 'oauth'
-_IDENTITY_KIND_SA = 'sa'
-#: 快取 miss 執行期間「快取鍵是哪一種身分」;`_build_client` 據此拒絕與鍵不符的 client
-#: (ContextVar:per-thread／per-context,Streamlit 多 session 並行時互不干擾)。
-_CACHED_READ_KIND: ContextVar[str] = ContextVar('_CACHED_READ_KIND', default='')
 
 
 def _identity_fingerprint(kind: str, credential: str) -> str:
@@ -304,11 +293,11 @@ def _identity_fingerprint(kind: str, credential: str) -> str:
 def _cache_identity() -> str:
     """回傳 `_build_client()` **此刻會用來呼叫 Google 的身分** 的指紋;定不出身分 → 空字串。
 
-    判斷順序與 `_build_client()` **逐條相同**(OAuth 有 token 優先,否則 SA):
+    判斷與 `_build_client()` 相同(只有 OAuth;SEC-3 起沒有 SA 身分):
       · OAuth:指紋取 `refresh_token`(同一授權在 access_token refresh 後**不變** ⇒ refresh 只是
         同一身分,照常命中);沒有 refresh_token 才退用 `access_token`(refresh 後變 ⇒ 只是 cache
         miss,安全側)。兩者皆無 → 空字串(此時 `_get_oauth_client` 本來就會拋 OAuthError)。
-      · SA:指紋取 `client_email`(一把 SA 一個身分);缺 → 空字串(建 credentials 本來就會失敗)。
+      · 未登入 → 空字串(`_build_client` 會拋 `LoginRequiredError`)。
     ⚠️ 空字串的意思是「**不准用快取**」,不是「匿名身分」—— caller 必須繞過快取(見
     `_identity_scoped_read`),否則未登入者會命中彼此的快取項。
     """
@@ -320,13 +309,6 @@ def _cache_identity() -> str:
             return ''
         _cred = str(_toks.get('refresh_token') or _toks.get('access_token') or '')
         return _identity_fingerprint(_IDENTITY_KIND_OAUTH, _cred) if _cred else ''
-    if _sa_configured():
-        try:
-            _info = st.secrets['gcp_service_account']
-            _email = str(_info.get('client_email', '') or '').strip()
-        except (KeyError, FileNotFoundError, AttributeError, TypeError):
-            return ''
-        return _identity_fingerprint(_IDENTITY_KIND_SA, _email) if _email else ''
     return ''
 
 
@@ -337,17 +319,13 @@ def _require_identity(identity: str) -> None:
 
 
 def _run_as_identity(identity: str, raw_fn, **kwargs):
-    """快取 miss 時執行 `raw_fn`:先驗身分未變,再把身分種類釘進 `_CACHED_READ_KIND`。
+    """快取 miss 時執行 `raw_fn`:先驗身分未變(鍵上的身分 ＝ 實際呼叫 Google 的身分)。
 
-    釘住之後 `_build_client` 只會建出與快取鍵同種類的 client(OAuth 鍵不退回 SA,反之亦然),
-    保證「鍵上的身分」＝「實際呼叫 Google 的身分」。
+    SEC-3 起 `_build_client` 只會建本人 OAuth client(無 SA 退路),故不再需要把身分種類
+    釘進 ContextVar;OAuth client 建不起來 → `LoginRequiredError`(例外不入快取)。
     """
     _require_identity(identity)
-    _token = _CACHED_READ_KIND.set(identity.partition(':')[0])
-    try:
-        return raw_fn(**kwargs)
-    finally:
-        _CACHED_READ_KIND.reset(_token)
+    return raw_fn(**kwargs)
 
 
 def _identity_scoped_read(cached_fn, raw_fn, **kwargs):
@@ -373,7 +351,7 @@ def _get_worksheet(*, sheet_id: str | None = None,
                    headers: list[str] = _HEADERS):
     """取得 (或建立) `worksheet_name` 這個 worksheet，並確保 header 列存在。
 
-    sheet_id=None(或空)→ 走 legacy `_get_active_sheet_id()`(ETF / SA / forward-test
+    sheet_id=None(或空)→ 走 legacy `_get_active_sheet_id()`(ETF / forward-test
     行為 byte-for-byte 不變);非空 sheet_id → 開 **那本** sheet(個股組合分家用)。
 
     worksheet_name / headers 預設為 `portfolios` 分頁(既有 caller 無感);個股純代碼
@@ -892,7 +870,7 @@ def list_user_sheets(folder_id: str = '') -> list[dict]:
     UI 下拉出現殭屍項目）。
     """
     if not _has_oauth_tokens():
-        # 未登入 OAuth → 無法列檔（SA 沒 drive.metadata.readonly scope）
+        # 未登入 OAuth → 無法列檔（SEC-3:網頁端只用本人 OAuth）
         return []
     client = _build_client()
     url = 'https://www.googleapis.com/drive/v3/files'
