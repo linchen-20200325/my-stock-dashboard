@@ -395,13 +395,26 @@
   - 第 9 點：PoC 後先獨立稽核、再回報與送客戶「建立 Sheet／帳號」精簡步驟；**新憑證或權限依 DEC-009 停下**。
   - 第 10 點：#881（研究文件）與 PoC 分批；#881 已合併（`8c4722f4`；main CI 撰寫組未查）。
   - ⛔ **尚未核准**正式 production 排程寫入；⛔ 未建立任何 Sheet／帳號／secret。
-- **範圍**：資料保存（DEC-009）、credentials／account access（DEC-009）、產品（「從今天開始記錄」維持）｜**日期**：2026-10-19｜**決策者**：客戶｜**狀態**：生效（方向＋PoC 授權；production 寫入未授權）<br>📌 2026-10-19 狀態補註（append-only）：PoC 已合併 #882（`a45c7405`、main CI run 39234825821 success）；Actions 環境實跑待客戶手動觸發（代理觸發 403）；Sheet／帳號／secrets 待客戶建立；production 寫入仍未授權
+- **範圍**：資料保存（DEC-009）、credentials／account access（DEC-009）、產品（「從今天開始記錄」維持）｜**日期**：2026-10-19｜**決策者**：客戶｜**狀態**：生效（方向＋PoC 授權；production 寫入未授權）<br>📌 2026-10-19 狀態補註（append-only）：PoC 已合併 #882（`a45c7405`、main CI run 39234825821 success）；Actions 環境實跑待客戶手動觸發（代理觸發 403）；Sheet／帳號／secrets 待客戶建立；production 寫入仍未授權<br>📌 2026-10-19 狀態補註（append-only）：憑證設計已裁示 DEC-064（G1 WIF 無 key writer、G2 唯讀 key reader、G3 只調查）；PoC Actions dry-run 客戶回報 run 39249934107 success；production 寫入仍未授權
 - **來源**：D 客戶訊息 2026-10-19（本 session；確切 UTC 時戳未記錄，只保留日期；經總管轉交，逐字未經第二組比對），原文如上。
 - **與其他 DEC 的關係**（撰寫組單組判讀，⚠️ 待第二組 evidence audit）：
   - **DEC-062**（Q4 附帶「Q4 保存位置**未同意**，維持待客戶」）：本條裁示了保存**方向**；DEC-062 該句的「未同意」自本條起只剩「production 寫入與新憑證未同意」—— DEC-062 原文不改（append-only）。
   - **DEC-009**：新 Sheet／兩支 service account／secrets 屬須客戶同意事項；本條**未**授權建立，第 9 點明示涉及時停下。
   - **DEC-027**（資料層 ≠ AI 分析層）：第 2 點重申；PoC 呼叫鏈直接檔案不 import AI 模組（AST 守衛，非全遞移圖）。
   - **SEC-3**（#877 已結案）：第 5 點要求不得重新引入；PoC 不使用個人持股 Sheet 的既有 SA 金鑰。
+
+### DEC-064｜`VN1-STORE` 憑證與權限裁示（G1／G2 核准、G3 只核准調查；production 寫入仍未核准）
+> 2026-10-19 追加（第 8 節「收到當輪追加」）。ID 照序取下一個未用號（撰寫組 `git grep -oh "DEC-0[0-9]*" | sort -u` 實測最大為 DEC-063）。BACKLOG 登記：DR-2026-10-19-2（append）。設定規格：`docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md`。
+- **內容**（客戶原文，逐字）：
+  「G1：核准。VN1-STORE writer 採 GitHub OIDC + Google Workload Identity Federation。建立專用 risk-cap-writer Service Account，但禁止建立 writer JSON key。
+  G2：核准。reader 採獨立 risk-cap-reader Service Account + 唯讀 JSON key。只允許讀 System Risk Cap 專用 Sheet，不得與 writer 共用身分。
+  G3：目前只核准調查，不核准修改。請確認既有 GCP_SERVICE_ACCOUNT_JSON 對應的 client_email / project_id，判斷它實際屬於哪個 Google Cloud 專案及目前用途。不得在回報中輸出 private_key、完整 JSON 或其他 Secret。不得刪除、輪換、替換既有 key，也不得改動既有每日持股推播。
+  共同權限原則：risk-cap-writer / reader 都不得取得個人持股 Sheet 權限。不得沿用 fund-nav。System Risk Cap Sheet 與 holdings Sheet 完全隔離。上線前必須做反向權限測試。正式每日 production 寫入仍未核准。」
+- **客戶補充（同日，經總管轉交；非逐字）**：既有 `GCP_SERVICE_ACCOUNT_JSON` 可能屬於 fund-dashboard 專案的 fund-nav SA。G3 調查範圍：確認是否為 fund-nav；股票 repo 哪些功能使用（現為 `push_holdings_daily.yml`＋`scripts/push_holdings_daily.py` 經 `gsheet_sa_reader.py`（`spreadsheets.readonly`），另手動 `scripts/diagnose_etf_total_return_fix.py`）；評估跨專案／權限過大風險；日後遷移到股票專用 SA 另案評估。⛔ 禁止修改／刪除／輪換／停用 fund-nav、影響每日持股推播、沿用 fund-nav 作 Risk Cap writer／reader。
+- **落地讀法**（撰寫組單組，⚠️ 待第二組 evidence audit）：GitHub secret `RISK_CAP_HISTORY_WRITER_SA_JSON` 退役、不建立（G1 無 writer key）；只新增 `RISK_CAP_HISTORY_SHEET_ID`；reader key 只放 Streamlit secrets 獨立表格（提案 `[risk_cap_history_reader]`，不得與 `[gcp_service_account]` 同名）。程式端保留名 `shared/risk_cap_history_policy.py:177` 於未來實作批次退役（本批不改 code）。
+- **範圍**：credentials／account access（DEC-009）｜**日期**：2026-10-19｜**決策者**：客戶｜**狀態**：生效（身分設計核准；資源由客戶手動建立；⛔ production 寫入未核准；⛔ G3 未核准任何修改）
+- **來源**：D 客戶訊息 2026-10-19（本 session；確切 UTC 時戳未記錄，只保留日期；經總管轉交，逐字未經第二組比對），原文如上。PoC Actions dry-run：客戶回報 run 39249934107 success（VALID、`exposure_limit_pct` 30、同日重跑 APPENDED→NOOP_DUPLICATE；撰寫組未重查）。
+- **與其他 DEC 的關係**：**補充 DEC-063**（第 5 點寫入／讀取權限分離的具體身分設計），不取代；DEC-009 credentials gate 由本條就 G1／G2 開放「客戶手動建立」，未開放 AI 建立任何資源；SEC-3（#877）不重新引入。
 
 ## 3. 資料語意（data semantics）
 
