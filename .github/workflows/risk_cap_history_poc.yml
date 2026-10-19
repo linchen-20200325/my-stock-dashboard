@@ -84,13 +84,14 @@ jobs:
     steps:
       # checkout 在 auth 之前：auth 產生的 gha-creds-*.json 落在 workspace（.gitignore 已擋），
       # post step 會自動刪除；persist-credentials: false ⇒ workspace 裡不留 GitHub token。
+      # 本 job 帶 id-token 請求環境變數 ⇒ 所有 action 一律以完整 commit SHA 釘版（tag 可被改指）。
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.11'
 

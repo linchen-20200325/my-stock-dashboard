@@ -5,12 +5,14 @@
    只 `workflow_dispatch`；頂層 permissions 恰好 `contents: read`；`id-token: write` **只在** `wif_auth_only` job；
    dry-run job 與加 mode 前逐步相同、沒有 id-token；auth action 以 40 字元 commit SHA 釘版；WIF provider／SA 逐字；
    ⛔ credentials_json／token_format／secrets／schedule／contents: write／--write／git push／Sheet ID／舊 SA 金鑰。
+   wif job 內每個 `uses:` 都以 40 字元 commit SHA 釘版並附 `# vX.Y.Z`（checkout／setup-python／auth）。
 2. 全 repo（git 追蹤的 .py／.yml，tests 除外）不得再出現退役的 writer JSON key 名稱。
 3. `scripts/risk_cap_wif_auth_check.py`：缺 GAC／`service_account` 型別一律拒絕（exit 2、不發請求）；
    假物件走 PASS；email 不符 → FAIL；refresh 例外 → FAIL 且 token／例外訊息不外洩；tokeninfo 用 POST body。
 4. 寫入閘門照樣拒絕、`PRODUCTION_WRITE_APPROVED` 仍為 False。
 5. 突變自驗（in-test）：拔掉 wif job 的 id-token、改 SA 字串、拔掉型別檢查 ⇒ 對應守衛必須轉紅。
 不連網：所有 Google／HTTP 依賴以假物件注入。
+⛔ 不依賴 PyYAML（PR Check 不裝）：workflow 以本檔內只用標準函式庫的受限 YAML 子集解析器讀（稽核修正第 1 輪 M1）。
 """
 from __future__ import annotations
 
@@ -22,7 +24,6 @@ import sys
 from pathlib import Path
 
 import pytest
-import yaml
 
 from shared import risk_cap_history_policy as P
 from src.data.macro import risk_cap_history as L1H
@@ -62,16 +63,138 @@ DRY_RUN_JOB_BEFORE = {
 # ══════════════════════════════════════════════════════════════════════════
 # 1. workflow 守衛（以文字為輸入，突變測試可重用）
 # ══════════════════════════════════════════════════════════════════════════
+# 稽核修正第 1 輪（2026-10-19，M1）：原本用 PyYAML 解析 —— 但 PyYAML 不在 requirements.txt、
+# PR Check 也不裝它 ⇒ 乾淨環境收集期 ModuleNotFoundError、整條 fast lane 紅。⛔ 不用 importorskip
+# （會讓守衛靜默 skip）、⛔ 不改 requirements／pr-check.yml；改為下方只用標準函式庫的**受限 YAML 子集**
+# 解析器：只認本檔用到的語法（縮排區塊 mapping、`- ` 序列、純量），其餘一律大聲失敗（⛔ 不猜）。
+
+
 def _wf_text() -> str:
     return (REPO / WORKFLOW_REL).read_text(encoding="utf-8")
 
 
+class UnsupportedWorkflowYaml(AssertionError):
+    """workflow 用了本解析器不支援的 YAML 語法 —— 守衛不猜，直接紅（請擴充解析器或改寫 workflow）。"""
+
+
+_KEY_RE = re.compile(r"^([A-Za-z0-9_][A-Za-z0-9_.\-]*):(?:\s+(.*))?$")
+
+
+def _strip_trailing_comment(line: str) -> str:
+    """去掉引號外、前面有空白的 `#` 起始註解。"""
+    quote = ""
+    for i, ch in enumerate(line):
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1] in " \t"):
+            return line[:i].rstrip()
+    if quote:
+        raise UnsupportedWorkflowYaml(f"引號未閉合：{line!r}")
+    return line.rstrip()
+
+
+def _yaml_lines(text: str) -> list[tuple[int, int, str]]:
+    out = []
+    for no, raw in enumerate(text.splitlines(), start=1):
+        if "\t" in raw[: len(raw) - len(raw.lstrip())]:
+            raise UnsupportedWorkflowYaml(f"第 {no} 行以 tab 縮排")
+        body = raw.strip()
+        if not body or body.startswith("#"):
+            continue
+        content = _strip_trailing_comment(raw.lstrip(" "))
+        out.append((no, len(raw) - len(raw.lstrip(" ")), content))
+    return out
+
+
+def _yaml_scalar(no: int, s: str):
+    if s[:1] in "[{&*!|>%@`":
+        raise UnsupportedWorkflowYaml(f"第 {no} 行：不支援的 YAML 語法 {s!r}")
+    if len(s) >= 2 and s[0] == s[-1] == '"':
+        if "\\" in s:
+            raise UnsupportedWorkflowYaml(f"第 {no} 行：雙引號字串含跳脫字元")
+        return s[1:-1]
+    if len(s) >= 2 and s[0] == s[-1] == "'":
+        return s[1:-1].replace("''", "'")
+    if s[:1] in "\"'":
+        raise UnsupportedWorkflowYaml(f"第 {no} 行：引號用法不支援 {s!r}")
+    if s in ("true", "false"):
+        return s == "true"
+    if s in ("null", "~", "yes", "no", "on", "off", "True", "False", "Yes", "No"):
+        raise UnsupportedWorkflowYaml(f"第 {no} 行：有歧義的純量 {s!r}（請加引號）")
+    if re.fullmatch(r"-?\d+", s):
+        return int(s)
+    return s
+
+
+def _yaml_block(lines: list, i: int, indent: int):
+    if lines[i][2] == "-" or lines[i][2].startswith("- "):
+        return _yaml_seq(lines, i, indent)
+    return _yaml_map(lines, i, indent)
+
+
+def _yaml_map(lines: list, i: int, indent: int):
+    out: dict = {}
+    while i < len(lines) and lines[i][1] >= indent:
+        no, ind, content = lines[i]
+        if ind != indent:
+            raise UnsupportedWorkflowYaml(f"第 {no} 行：縮排不一致（預期 {indent}，實際 {ind}）")
+        if content == "-" or content.startswith("- "):
+            raise UnsupportedWorkflowYaml(f"第 {no} 行：mapping 中出現序列項")
+        m = _KEY_RE.match(content)
+        if not m:
+            raise UnsupportedWorkflowYaml(f"第 {no} 行：不是 `key: value`：{content!r}")
+        key, rest = m.group(1), m.group(2)
+        if key in out:
+            raise UnsupportedWorkflowYaml(f"第 {no} 行：重複的鍵 {key!r}")
+        i += 1
+        if rest:
+            out[key] = _yaml_scalar(no, rest)
+        elif i < len(lines) and lines[i][1] > indent:
+            out[key], i = _yaml_block(lines, i, lines[i][1])
+        else:
+            raise UnsupportedWorkflowYaml(f"第 {no} 行：鍵 {key!r} 沒有值（或用了同層序列寫法）")
+    return out, i
+
+
+def _yaml_seq(lines: list, i: int, indent: int):
+    out: list = []
+    while i < len(lines) and lines[i][1] >= indent:
+        no, ind, content = lines[i]
+        if ind != indent or not (content == "-" or content.startswith("- ")):
+            raise UnsupportedWorkflowYaml(f"第 {no} 行：序列縮排／格式不一致")
+        body = content[1:].lstrip(" ")
+        if not body:
+            raise UnsupportedWorkflowYaml(f"第 {no} 行：空的序列項")
+        if _KEY_RE.match(body):
+            # `- key: v` ＝ 一個 mapping，第一個鍵在 indent + 2 + 額外空白
+            item_indent = ind + (len(content) - len(body))
+            lines = lines[:i] + [(no, item_indent, body)] + lines[i + 1:]
+            item, i = _yaml_map(lines, i, item_indent)
+            out.append(item)
+        else:
+            out.append(_yaml_scalar(no, body))
+            i += 1
+    return out, i
+
+
 def _parse(text: str) -> dict:
-    d = yaml.safe_load(text)
-    # PyYAML（YAML 1.1）把 `on` 讀成布林 True。
-    if True in d and "on" not in d:
-        d["on"] = d.pop(True)
+    """受限 YAML 子集 → dict。整份文件必須被完整吃掉（剩下任何一行 ⇒ 失敗）。"""
+    lines = _yaml_lines(text)
+    assert lines and lines[0][1] == 0, "workflow 第一個有效行必須頂格"
+    d, i = _yaml_map(lines, 0, 0)
+    if i != len(lines):
+        raise UnsupportedWorkflowYaml(f"第 {lines[i][0]} 行之後未被解析")
     return d
+
+
+def _job_text(text: str, job: str) -> str:
+    """取出某個 job 的原始文字區塊（`  <job>:` 起、到下一個同層 job 或檔尾）—— 給字串層守衛用。"""
+    m = re.search(rf"^  {re.escape(job)}:\n(.*?)(?=^  \S|\Z)", text, flags=re.MULTILINE | re.DOTALL)
+    assert m, f"找不到 job {job!r}"
+    return m.group(0)
 
 
 def _auth_step(job: dict) -> dict:
@@ -80,11 +203,22 @@ def _auth_step(job: dict) -> dict:
     return hits[0]
 
 
+#: wif job 內每一個 action 的預期 commit SHA（2026-10-19 `git ls-remote --tags` 實查；輕量 tag ⇒ 即 commit）。
+WIF_JOB_PINS = {
+    "actions/checkout": ("34e114876b0b11c390a56381ad16ebd13914f8d5", "v4.3.1"),       # commit 2025-11-13
+    "actions/setup-python": ("a26af69be951a213d495a4c3e4e4022e16d87065", "v5.6.0"),   # commit 2025-04-23
+    "google-github-actions/auth": ("7c6bc770dae815cd3e89ee6cdf493a5fab2cc093", "v3.0.0"),  # commit 2025-08-28
+}
+
+
 def assert_workflow_guards(text: str) -> None:
     """全部 workflow 守衛；任何一條不成立就 AssertionError（突變測試據此確認守衛會轉紅）。"""
     d = _parse(text)
+    assert set(d) == {"name", "on", "permissions", "concurrency", "jobs"}, set(d)
     # 觸發：只有 workflow_dispatch，mode 選單兩個選項、預設 dry-run
     assert set(d["on"]) == {"workflow_dispatch"}, d["on"]
+    assert set(d["on"]["workflow_dispatch"]) == {"inputs"}
+    assert set(d["on"]["workflow_dispatch"]["inputs"]) == {"mode"}
     mode = d["on"]["workflow_dispatch"]["inputs"]["mode"]
     assert mode["type"] == "choice" and mode["default"] == "dry-run"
     assert mode["options"] == ["dry-run", "wif-auth-only"]
@@ -97,36 +231,46 @@ def assert_workflow_guards(text: str) -> None:
     dry = dict(jobs["poc-dry-run"])
     assert dry.pop("if") == "${{ inputs.mode == 'dry-run' }}"
     assert dry == DRY_RUN_JOB_BEFORE, dry          # 行為與加 mode 前相同；⛔ 沒有 permissions／id-token
-    assert "id-token" not in yaml.safe_dump(jobs["poc-dry-run"])
+    assert "id-token" not in _job_text(text, "poc-dry-run")
 
     wif = jobs["wif_auth_only"]
     assert wif["if"] == "${{ inputs.mode == 'wif-auth-only' }}"
     assert wif["permissions"] == {"contents": "read", "id-token": "write"}, wif.get("permissions")
-    # id-token 全檔（YAML 鍵；註解不算）只出現在 wif job 這一處
+    # id-token 全檔（YAML 鍵；註解不算）只出現一次，且在 wif job 區塊內
     assert len(re.findall(r"^\s*id-token\s*:", text, flags=re.MULTILINE)) == 1
+    wif_text = _job_text(text, "wif_auth_only")
+    assert re.search(r"^      id-token: write$", wif_text, flags=re.MULTILINE)
 
     steps = wif["steps"]
-    uses = [s.get("uses", "") for s in steps]
-    i_checkout = next(i for i, u in enumerate(uses) if u.startswith("actions/checkout@"))
+    # 每一個 uses 都必須是 40 字元 commit SHA，且是預期版本、行尾附 `# vX.Y.Z`
+    uses = [s["uses"] for s in steps if "uses" in s]
+    assert {u.split("@", 1)[0] for u in uses} == set(WIF_JOB_PINS), uses
+    for u in uses:
+        action, ref = u.split("@", 1)
+        assert re.fullmatch(r"[0-9a-f]{40}", ref), f"wif job 的 action 必須以 40 字元 commit SHA 釘版：{u!r}"
+        sha, ver = WIF_JOB_PINS[action]
+        assert ref == sha, (u, sha)
+        assert re.search(rf"^\s*uses:\s*{re.escape(u)}\s+#\s*{re.escape(ver)}\s*$", wif_text, flags=re.MULTILINE), u
+    raw_uses = re.findall(r"^\s*-?\s*uses:", wif_text, flags=re.MULTILINE)
+    assert len(raw_uses) == len(uses)
+
+    i_checkout = next(i for i, s in enumerate(steps) if s.get("uses", "").startswith("actions/checkout@"))
     assert steps[i_checkout]["with"] == {"persist-credentials": False}
     auth = _auth_step(wif)
     i_auth = steps.index(auth)
-    ref = auth["uses"].split("@", 1)[1]
-    assert re.fullmatch(r"[0-9a-f]{40}", ref), f"auth action 必須以 40 字元 commit SHA 釘版：{ref!r}"
-    assert re.search(r"uses:\s*google-github-actions/auth@" + ref + r"\s+#\s*v\d+\.\d+\.\d+", text)
     assert auth["with"] == {"workload_identity_provider": WIF_PROVIDER, "service_account": WRITER_SA,
                             "create_credentials_file": True, "export_environment_variables": True}, auth["with"]
     runs = [(i, s["run"]) for i, s in enumerate(steps) if "run" in s]
     check = [(i, r) for i, r in runs if "scripts/risk_cap_wif_auth_check.py" in r]
-    assert check and check[0][1].strip() == (
-        f"python scripts/risk_cap_wif_auth_check.py --expect-sa {WRITER_SA}")
+    assert len(check) == 1 and check[0][1] == f"python scripts/risk_cap_wif_auth_check.py --expect-sa {WRITER_SA}"
     assert i_checkout < i_auth < check[0][0]
-    pip = [r for _, r in runs if r.strip().startswith("pip install")]
+    pip = [r for _, r in runs if r.startswith("pip install")]
     assert pip == ['pip install "google-auth>=2.0.0,<4.0" "requests>=2.31.0,<3.0.0"'], pip
+    assert all("env" not in s for s in steps) and "env" not in wif
 
-    wif_dump = yaml.safe_dump(wif, allow_unicode=True)
+    wif_code = "\n".join(c for _, _, c in _yaml_lines(wif_text))     # 不含註解
     for bad in ("secrets.", "credentials_json", "token_format", "gspread", "env:"):
-        assert bad not in wif_dump, bad
+        assert bad not in wif_code, bad
     for bad in ("credentials_json", "token_format", "schedule:", "cron:", "contents: write", "--write",
                 "git push", "git commit", "RISK_CAP_HISTORY_SHEET_ID", "GCP_SERVICE_ACCOUNT_JSON",
                 *RETIRED_LITERALS):
@@ -149,6 +293,40 @@ class TestWorkflow:
     def test_gitignore_blocks_gha_creds(self):
         gi = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
         assert "gha-creds-*.json" in gi
+
+    def test_guard_module_does_not_need_pyyaml(self):
+        """M1 回歸守衛：本檔不得 import yaml（PR Check 不裝 PyYAML）。"""
+        tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+        mods = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+        mods |= {n.module.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
+        assert "yaml" not in mods
+
+
+class TestMiniYamlParser:
+    """受限解析器自測：支援的語法解得對、不支援的一律失敗（⛔ 不猜）。"""
+
+    def test_parses_subset(self):
+        doc = ("name: x  # c\non:\n  a:\n    inputs:\n      m:\n        type: choice\n        options:\n"
+               "          - p\n          - q\n# full comment\njobs:\n  j:\n    steps:\n      - name: s1\n"
+               "        uses: o/r@abc # v1\n        with:\n          k: 'v # not comment'\n          n: 14\n"
+               "          b: false\n      - run: echo \"hi\"\n")
+        assert _parse(doc) == {"name": "x", "on": {"a": {"inputs": {"m": {"type": "choice", "options": ["p", "q"]}}}},
+                               "jobs": {"j": {"steps": [
+                                   {"name": "s1", "uses": "o/r@abc", "with": {"k": "v # not comment", "n": 14,
+                                                                               "b": False}},
+                                   {"run": 'echo "hi"'}]}}}
+
+    @pytest.mark.parametrize("doc", [
+        "a: |\n  multi\n", "a: [1, 2]\n", "a: {b: 1}\n", "a: &x 1\n", "a: 1\na: 2\n", "a:\n- b\n",
+        "a:\n  b: 1\n c: 2\n", "a: yes\n", "a:\n", "a: \"x\\n\"\n", "\ta: 1\n", "a: 'x\n",
+    ])
+    def test_rejects_unsupported(self, doc):
+        with pytest.raises(AssertionError):
+            _parse(doc)
+
+    def test_real_workflow_fully_consumed(self):
+        d = _parse(_wf_text())
+        assert d["jobs"]["poc-dry-run"]["steps"][-1]["with"]["retention-days"] == 14
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -180,6 +358,16 @@ class TestWriteGateStillRefuses:
             L1H.load_writer_credentials_or_refuse({P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: "x",
                                                    "GOOGLE_APPLICATION_CREDENTIALS": "/x.json"})
         assert P.PRODUCTION_WRITE_APPROVED is False
+
+    def test_gate_final_raise_even_if_approved(self, monkeypatch):
+        """稽核修正第 1 輪（NIT）：就算核准旗標被改成 True、總開關與 Sheet ID 都設了，最後那道
+        「未實作」仍必須拒絕 —— 守住「把最後的 raise 改成 return」這種突變。"""
+        monkeypatch.setattr(L1H, "PRODUCTION_WRITE_APPROVED", True)
+        with pytest.raises(L1H.ProductionWriteNotApproved, match="未實作"):
+            L1H.load_writer_credentials_or_refuse({P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: "x"})
+        # 旗標 True 但 Sheet ID 沒設 ⇒ 卡在目標未設定（不是「未實作」）
+        with pytest.raises(L1H.ProductionWriteNotApproved, match="寫入目標未設定"):
+            L1H.load_writer_credentials_or_refuse({P.WRITE_ENABLE_ENV_VAR: "1"})
 
     def test_gate_refuses_with_nothing_set(self):
         with pytest.raises(L1H.ProductionWriteNotApproved, match="尚未核准"):
@@ -550,6 +738,55 @@ class TestMutations:
                            "google-github-actions/auth@v3")
         with pytest.raises(AssertionError):
             assert_workflow_guards(mut)
+
+    def test_checkout_tag_in_wif_job_turns_red(self):
+        mut = self._mutate("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1",
+                           "actions/checkout@v4")
+        with pytest.raises(AssertionError):
+            assert_workflow_guards(mut)
+
+    def test_setup_python_wrong_sha_turns_red(self):
+        mut = self._mutate("actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0",
+                           "actions/setup-python@" + "0" * 40 + " # v5.6.0")
+        with pytest.raises(AssertionError):
+            assert_workflow_guards(mut)
+
+    def test_missing_version_comment_turns_red(self):
+        mut = self._mutate("auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0",
+                           "auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093")
+        with pytest.raises(AssertionError):
+            assert_workflow_guards(mut)
+
+    def test_secret_env_in_wif_job_turns_red(self):
+        mut = self._mutate("          export_environment_variables: true\n",
+                           "          export_environment_variables: true\n"
+                           "        env:\n          X: ${{ secrets.FINMIND_TOKEN }}\n")
+        with pytest.raises(AssertionError):
+            assert_workflow_guards(mut)
+
+    def test_dry_run_job_change_turns_red(self):
+        mut = self._mutate("        run: pip install -r requirements.txt\n",
+                           "        run: pip install -r requirements.txt gspread\n")
+        with pytest.raises(AssertionError):
+            assert_workflow_guards(mut)
+
+    def test_schedule_trigger_turns_red(self):
+        mut = self._mutate("on:\n  workflow_dispatch:\n",
+                           "on:\n  schedule:\n    - cron: '0 9 * * *'\n  workflow_dispatch:\n")
+        with pytest.raises(AssertionError):
+            assert_workflow_guards(mut)
+
+    def test_gate_final_raise_to_return_is_caught(self, monkeypatch):
+        """NIT 突變：最後的「未實作」raise 改成 return ⇒ 旗標被打開時就會放行；真實模組必須照樣拒絕。"""
+        mut = _mutated_module("src/data/macro/risk_cap_history.py", (
+            '    raise ProductionWriteNotApproved("本 PoC 未實作建立寫入 client',
+            '    return None\n    raise ProductionWriteNotApproved("本 PoC 未實作建立寫入 client'))
+        mut.PRODUCTION_WRITE_APPROVED = True
+        env = {P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: "x"}
+        assert mut.load_writer_credentials_or_refuse(env) is None       # 突變體放行
+        monkeypatch.setattr(L1H, "PRODUCTION_WRITE_APPROVED", True)
+        with pytest.raises(L1H.ProductionWriteNotApproved, match="未實作"):
+            L1H.load_writer_credentials_or_refuse(env)
 
     def test_script_without_type_check_accepts_sa_key(self, tmp_path):
         mut = _mutated_module(SCRIPT_REL, ('    if cred_type == "service_account":\n',
