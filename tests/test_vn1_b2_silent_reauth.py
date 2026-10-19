@@ -1009,6 +1009,9 @@ def vn1b2_revert_for(file_path, code: str) -> str:
     _repo = Path(__file__).resolve().parents[1]
     p = Path(file_path)
     rel = (p.resolve().relative_to(_repo) if p.is_absolute() else p).as_posix()
+    # VN1-STORE 最小 PoC（2026-10-19，有意識的接鏈，⛔ 不是漏改）：更新的那一批先換回（還原鏈頭往前接一節）。
+    from tests.test_vn1_store_poc import vn1store_revert_for
+    code = vn1store_revert_for(file_path, code)
     for new, old in VN1B2_REVERT_PAIRS.get(rel, ()):
         assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)

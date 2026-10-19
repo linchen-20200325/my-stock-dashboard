@@ -513,8 +513,13 @@ class TestReadSide:
                         and isinstance(kw.value, ast.Constant) and kw.value.value is True
                         for kw in n.keywords):
                     hits.add(p.relative_to(REPO).as_posix())
+        # ~~assert hits == {"src/ui/views/page_today.py", "src/ui/views/page_hold.py",~~
+        # ~~                "src/ui/views/page_why.py", "src/services/ai_qa_service.py"}, hits~~
+        # 📌 VN1-STORE 最小 PoC（客戶 2026-10-19 裁示 A，有意識的變更，⛔ 不是漏改）：無頭紀錄端
+        #   `risk_cap_history_service.build_record` 以官方讀端（同一條收件條件）判斷「這一輪是不是 VALID」。
         assert hits == {"src/ui/views/page_today.py", "src/ui/views/page_hold.py",
-                        "src/ui/views/page_why.py", "src/services/ai_qa_service.py"}, hits
+                        "src/ui/views/page_why.py", "src/services/ai_qa_service.py",
+                        "src/services/risk_cap_history_service.py"}, hits
         assert not any(h.startswith("src/ui/tabs") or h == "app.py" for h in hits)
 
 

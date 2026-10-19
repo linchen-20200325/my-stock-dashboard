@@ -78,7 +78,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
 import streamlit as st
@@ -469,6 +469,11 @@ class MacroRefreshReport:
     popped_keys: tuple[str, ...] = ()
     cleared: tuple[str, ...] = ()
     untouched: tuple[UntouchedBlock, ...] = UNTOUCHED_BLOCKS
+    #: VN1-STORE 最小 PoC（客戶 2026-10-19 裁示 A）：`STEP_RISK_CAP` 的結構化結論
+    #: （`risk_cap_apply.RiskCapApplyResult`；這一步沒跑到或拋例外 ⇒ None）。
+    #: 給無頭紀錄端（`risk_cap_history_service.build_record`）照實取狀態用，⛔ 不必解析步驟報告的中文 detail。
+    #: 畫面不讀它；`compare=False`／`repr=False` ⇒ 報告的相等判定與顯示逐字同修前。
+    risk_cap_result: Any = field(default=None, compare=False, repr=False)
 
     @property
     def failures(self) -> tuple[str, ...]:
@@ -712,6 +717,7 @@ def _utc_now():
 
 def refresh_macro_now(*, mode: str = MODE_WARM,
                       on_event: Callable[[str, Any], None] | None = None,
+                      risk_cap_state_file_path: str | None = None,
                       ) -> MacroRefreshReport:
     """原地重抓今日台股 / 總經資料，並把結果寫進 `st.session_state`。
 
@@ -727,6 +733,12 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
             會逼呼叫端自己查一次中文名、並且**看不到 `skipped`** ——
             那會讓「本輪沒有條件跑」在進度列上顯示成一個 ✅。
             **純顯示用**；自己拋例外不影響取數。
+        risk_cap_state_file_path: `STEP_RISK_CAP` 寫 `macro_state.json` 的路徑（新 UI 的
+            `risk_cap_state.json` 依 `risk_cap_state_path` 規則落在**同一目錄**）。
+            None（預設，畫面呼叫端一律不傳）⇒ 呼叫方式與修前逐字相同（`compute_and_lock_risk_cap`
+            用它自己的預設相對路徑）。VN1-STORE 最小 PoC（客戶 2026-10-19 裁示 A，`scripts/risk_cap_history_poc.py`）
+            傳暫存目錄，讓無頭驗證**不覆寫** app 工作目錄裡的兩個狀態檔。⛔ 只改「寫到哪」，
+            不改計算、不改判定、不改其餘任何步驟。
 
     Returns:
         `MacroRefreshReport` —— 逐來源、逐步驟的成敗，加上「這一輪寫了哪些
@@ -1003,11 +1015,16 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
         + "、".join(f"`{_k}`" for _k in _trio_missing)
         + "）：本輪用的是 session 既有的 " + "、".join(f"`{_k}`" for _k in _trio_missing)
         + " 值（可能是上一輪的值，或根本沒有；過期者由新鮮度規則判不計分）")
+    _rc_result = None
     try:
         from shared.staleness import MACRO_VERDICT_MAX_AGE_DAYS
         from src.services.risk_cap_apply import compute_and_lock_risk_cap
         with _writes_recorded(_writes.setdefault(STEP_RISK_CAP, [])):
-            _rc = compute_and_lock_risk_cap(st.session_state, now=_utc_now())
+            # VN1-STORE PoC：只有呼叫端明確傳了路徑才多帶這個參數（None ⇒ 與修前同一個呼叫）。
+            _rc_kw = ({} if risk_cap_state_file_path is None
+                      else {"state_file_path": risk_cap_state_file_path})
+            _rc = compute_and_lock_risk_cap(st.session_state, now=_utc_now(), **_rc_kw)
+        _rc_result = _rc
         # 批 Z66（客戶 2026-10-16 Q2）：停用 ≠ 未評估 —— M1B-M2 腿停用時另起一句，⛔ 不算進「未評估 N 項」。
         _dis = list((_rc.bundle_summary or {}).get("disabled_inputs") or ())
         _dis_note = (f"；M1B-M2 資金活水已停用、不計分（{'、'.join(_dis)}；不屬未評估）" if _dis else "")
@@ -1095,7 +1112,8 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
     _report = MacroRefreshReport(
         mode=mode, started_at=_started, elapsed_s=time.time() - _t0,
         sources=tuple(_sources), steps=tuple(_steps), contents=_contents,
-        written_keys=_written, popped_keys=_popped, cleared=_cleared)
+        written_keys=_written, popped_keys=_popped, cleared=_cleared,
+        risk_cap_result=_rc_result)
     print(f"[總經刷新] {'✅' if _report.ok else '⚠️'} "
           f"{_report.elapsed_s:.1f}s 失敗 {len(_report.failures)} 項"
           f"（全空 {len(_report.empties)} 桶 / 部分空 {len(_report.partials)} 桶）")

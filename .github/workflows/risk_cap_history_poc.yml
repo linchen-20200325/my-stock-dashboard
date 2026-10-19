@@ -1,0 +1,51 @@
+name: VN1-STORE 風險上限歷史 PoC（手動、dry-run、不寫 Sheet）
+
+# 客戶 2026-10-19 裁示 A：採用系統專用 Google Sheet 方向，但「先做最小 PoC；尚未核准正式 production 排程寫入」。
+# 本 workflow 只驗證「GitHub Actions 無頭環境能否用既有正式資料層與規則算出每日系統風險上限」：
+#   - ⛔ 沒有 schedule（只能手動觸發）；
+#   - ⛔ 不寫任何 Google Sheet、⛔ 不 commit、⛔ 不使用任何新 secret 或 Google 憑證；
+#   - 只用既有總經 cron（update_macro_forward_test.yml）已在用的取數環境變數；
+#   - 紀錄 JSON 以 artifact 上傳供人工檢查（非持久化方案；artifact 會過期）。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: risk-cap-history-poc
+  cancel-in-progress: false
+
+jobs:
+  poc-dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run PoC (dry-run + simulated same-day rerun)
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          NAS_BASE_URL: ${{ secrets.NAS_BASE_URL }}
+          NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
+        run: python scripts/risk_cap_history_poc.py --simulate-rerun --out risk_cap_history_poc_record.json
+
+      - name: Upload record JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: risk-cap-history-poc-record
+          path: risk_cap_history_poc_record.json
+          if-no-files-found: warn
+          retention-days: 14
