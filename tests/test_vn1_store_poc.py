@@ -50,7 +50,10 @@ NEW_FILES = (
 # ══════════════════════════════════════════════════════════════════════════
 #: origin/main `8c4722f4` 的 `macro_refresh_service.py` 原檔 sha256（`git show 8c4722f4:<rel> | sha256sum`）。
 VN1STORE_BASE_SHA = {"src/services/macro_refresh_service.py":
-                     "64275c87af4cd46b76ec0d6ac3b5c97d294a5729e7459ac90842ec21cb6b9e16"}
+                     "64275c87af4cd46b76ec0d6ac3b5c97d294a5729e7459ac90842ec21cb6b9e16",
+                     # 稽核修正輪（2026-10-19）：`_bundle_summary` 加 `input_source`（8c4722f4 原檔 sha256）。
+                     "src/services/risk_cap_apply.py":
+                     "4361f74753852e8ed6688c038134636f6381c94a2db7b1ca2073c69437b21e53"}
 VN1STORE_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
     "src/services/macro_refresh_service.py": (
         ('from dataclasses import dataclass, field\n',
@@ -67,6 +70,10 @@ VN1STORE_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
          '            _rc = compute_and_lock_risk_cap(st.session_state, now=_utc_now())\n'),
         ('        written_keys=_written, popped_keys=_popped, cleared=_cleared,\n        risk_cap_result=_rc_result)\n',
          '        written_keys=_written, popped_keys=_popped, cleared=_cleared)\n'),
+    ),
+    "src/services/risk_cap_apply.py": (
+        ('        "red_lines": {k: v.status for k, v in bundle.red_lines.items()},\n        # VN1-STORE PoC 稽核修正（2026-10-19，additive）：各輸入的來源標籤，原樣取自 L2 `dated_inputs`\n        #   產出的 `DatedValue.source`（上游 dict 自帶 `source` 時就是它，例如 L1 stale-cache 退路標的\n        #   「stale-cache(…)」）。⛔ 不另判新鮮度、不寫進快照檔（只在回傳值裡）。\n        "input_source": {k: bundle.assessed[k].dv.source for k in ENGINE_INPUT_KEYS},\n',
+         '        "red_lines": {k: v.status for k, v in bundle.red_lines.items()},\n'),
     ),
 }
 
@@ -224,6 +231,39 @@ class TestBuildRecord:
             H.build_record(_report(fetch_ok=False), state_dir=str(tmp_path),
                            now_utc=NOW.replace(tzinfo=None), run_id="", git_sha="")
 
+    def test_provenance_from_existing_outputs_only(self, tmp_path, l1):
+        """PMI 走 L1 stale-cache 退路時：來源標籤與 `is_stale` 原樣記下；其餘沒有旗標的一律 "unknown"。"""
+        kw = _inputs()
+        kw["macro_info"]["ism_pmi"].update({"source": "stale-cache(CIER-EN)", "is_stale": True})
+        l1(kw["pmi_history"])
+        d = tmp_path / "s"
+        d.mkdir()
+        sess = _session_from(kw)
+        res = RC.compute_and_lock_risk_cap(sess, now=NOW, state_file_path=str(d / "macro_state.json"))
+        rep = _report(rc_step=RS.StepResult(RS.STEP_RISK_CAP, True, ""), rc=res)
+        row = H.build_record(rep, state_dir=str(d), now_utc=NOW, run_id="", git_sha="", session=sess)
+        prov = json.loads(row[P.COL_CORE_INPUT_PROVENANCE])
+        from shared.risk_cap_policy import REQUIRED_CORE_INPUTS
+        assert list(prov) == sorted(REQUIRED_CORE_INPUTS) or set(prov) == set(REQUIRED_CORE_INPUTS)
+        assert prov["ISM_PMI_or_OECD_CLI"] == {"source": "stale-cache(CIER-EN)", "upstream_is_stale": True}
+        assert prov["VIX_Index"]["upstream_is_stale"] == "unknown"     # VIX 區塊不帶 is_stale ⇒ 不推定 False
+        for k in ("PMI_Prev_Month", "Futures_Net_Short", "Index_Below_MA5"):
+            assert prov[k]["upstream_is_stale"] == "unknown"
+            assert prov[k]["source"] == res.bundle_summary["input_source"][k]
+        assert row[P.COL_STATUS] == P.STATUS_VALID                     # 有效性規則不受 provenance 影響
+        assert P.COL_CORE_INPUT_PROVENANCE not in P.CONTENT_COLUMNS
+
+    def test_provenance_without_session_all_unknown_flags(self, tmp_path, l1):
+        row, _ = _valid_record(tmp_path, l1)
+        prov = json.loads(row[P.COL_CORE_INPUT_PROVENANCE])
+        assert {v["upstream_is_stale"] for v in prov.values()} == {"unknown"}
+
+    def test_provenance_fetch_failed_all_unknown(self, tmp_path):
+        row = H.build_record(_report(fetch_ok=False), state_dir=str(tmp_path), now_utc=NOW,
+                             run_id="", git_sha="", session={"macro_info": {"vix": {"is_stale": False}}})
+        prov = json.loads(row[P.COL_CORE_INPUT_PROVENANCE])
+        assert all(v == {"source": "unknown", "upstream_is_stale": "unknown"} for v in prov.values())
+
     def test_every_status_has_reason_code(self):
         assert set(P.STATUS_REASON_CODE) == set(P.RECORD_STATUSES)
 
@@ -240,6 +280,24 @@ def _row(**over):
               P.COL_SCHEMA_VERSION: P.HISTORY_SCHEMA_VERSION})
     r.update(over)
     return r
+
+
+class _FakeGsWS:
+    """gspread `Worksheet` 替身（v6 介面：`spreadsheet_id`／`title`）。"""
+
+    def __init__(self, calls, *, sheet_id="SYS_SHEET", title=P.HISTORY_WORKSHEET_NAME, rows=None):
+        self.spreadsheet_id = sheet_id
+        self.title = title
+        self._rows = [[1, "a"]] if rows is None else rows
+        self._calls = calls
+        self.reads = 0
+
+    def get_all_values(self):
+        self.reads += 1
+        return self._rows
+
+    def append_row(self, values, value_input_option=None):
+        self._calls.append((values, value_input_option))
 
 
 def _invalid(**over):
@@ -261,19 +319,46 @@ class TestUpsert:
             == P.UPSERT_NOOP_DUPLICATE
         assert len(L1H.rows_as_records(ws.get_all_values())) == 1
 
-    def test_valid_conflict_not_overwritten(self):
+    def test_valid_conflict_first_kept_conflict_row_recorded_once(self):
         ws = L1H.InMemoryWorksheet()
         L1H.upsert_record(ws, _row())
-        before = ws.get_all_values()
+        first = ws.get_all_values()[1]
         assert L1H.upsert_record(ws, _row(**{P.COL_EXPOSURE_LIMIT_PCT: "30"})) \
             == P.UPSERT_CONFLICT_KEPT_EXISTING
-        assert ws.get_all_values() == before
+        vals = ws.get_all_values()
+        assert vals[1] == first and len(vals) == 3            # 首筆一字不動；衝突另記一列
+        recs = L1H.rows_as_records(vals)
+        c = recs[1]
+        assert c[P.COL_STATUS] == P.STATUS_SAME_DAY_CONFLICT
+        assert c[P.COL_REASON_CODE] == P.REASON_CODE_SAME_DAY_CONFLICT
+        assert c[P.COL_EXPOSURE_LIMIT_PCT] == ""             # ⛔ 衝突列不是有效上限
+        assert "exposure_limit_pct：60 → 30" in c[P.COL_REASON_DETAIL]
+        # 同一個衝突重跑 → 仍回衝突碼，但不重複記
+        assert L1H.upsert_record(ws, _row(**{P.COL_EXPOSURE_LIMIT_PCT: "30", P.COL_RUN_ID: "7"})) \
+            == P.UPSERT_CONFLICT_KEPT_EXISTING
+        assert len(ws.get_all_values()) == 3
+        # 讀端仍以首筆 VALID 為當天紀錄
+        assert _cmp(recs).current[P.COL_EXPOSURE_LIMIT_PCT] == "60"
 
-    def test_invalid_after_valid_not_written(self):
+    def test_invalid_after_valid_appended_valid_untouched(self):
         ws = L1H.InMemoryWorksheet()
         L1H.upsert_record(ws, _row())
-        assert L1H.upsert_record(ws, _invalid()) == P.UPSERT_NOOP_VALID_EXISTS
-        assert len(L1H.rows_as_records(ws.get_all_values())) == 1
+        first = ws.get_all_values()[1]
+        assert L1H.upsert_record(ws, _invalid()) == P.UPSERT_APPENDED
+        assert L1H.upsert_record(ws, _invalid(**{P.COL_RUN_ID: "8"})) == P.UPSERT_NOOP_DUPLICATE
+        vals = ws.get_all_values()
+        assert vals[1] == first and len(vals) == 3
+        prev = _row(**{P.COL_RECORD_DATE: "2026-10-13", P.COL_EXPOSURE_LIMIT_PCT: "30"})
+        r = _cmp([prev] + L1H.rows_as_records(vals))         # 當天較晚的失敗不影響比較
+        assert r.status == P.COMPARE_COMPARABLE and r.current[P.COL_STATUS] == P.STATUS_VALID
+
+    def test_invalid_dedupe_distinguishes_reason_detail(self):
+        """同屬 REQUIRED_CORE_INCOMPLETE，「已過期」與「未取得」是兩個不同事實 ⇒ 不得當重跑吞掉。"""
+        ws = L1H.InMemoryWorksheet()
+        L1H.upsert_record(ws, _invalid(**{P.COL_REASON_DETAIL: "VIX（VIX_Index：未取得）"}))
+        assert L1H.upsert_record(ws, _invalid(**{P.COL_REASON_DETAIL: "VIX（VIX_Index：已過期）"})) \
+            == P.UPSERT_APPENDED
+        assert P.COL_REASON_DETAIL in P.CONTENT_COLUMNS
 
     def test_invalid_then_valid_appends_and_keeps_old_row(self):
         ws = L1H.InMemoryWorksheet()
@@ -319,19 +404,40 @@ class TestUpsert:
 
     def test_gspread_adapter_uses_raw(self):
         calls = []
-
-        class _WS:
-            def get_all_values(self):
-                return [[1, "a"]]
-
-            def append_row(self, values, value_input_option=None):
-                calls.append((values, value_input_option))
-        a = L1H.GspreadWorksheetAdapter(_WS())
+        ws = _FakeGsWS(calls)
+        a = L1H.GspreadWorksheetAdapter(ws, environ={P.HISTORY_SHEET_ID_ENV_VAR: "SYS_SHEET"})
         assert a.get_all_values() == [["1", "a"]]
         a.append_row(["x"])
         assert calls == [(["x"], "RAW")]
         with pytest.raises(ValueError):
-            L1H.GspreadWorksheetAdapter(None)
+            L1H.GspreadWorksheetAdapter(None, environ={P.HISTORY_SHEET_ID_ENV_VAR: "SYS_SHEET"})
+
+    @pytest.mark.parametrize("env,sheet_id,title", [
+        ({}, "SYS_SHEET", P.HISTORY_WORKSHEET_NAME),                                   # 沒設預期 ID
+        ({P.HISTORY_SHEET_ID_ENV_VAR: "SYS_SHEET"}, "PERSONAL_SHEET", P.HISTORY_WORKSHEET_NAME),  # ID 不符
+        ({P.HISTORY_SHEET_ID_ENV_VAR: "SYS_SHEET"}, None, P.HISTORY_WORKSHEET_NAME),   # 取不到 ID
+        ({P.HISTORY_SHEET_ID_ENV_VAR: "SYS_SHEET"}, "SYS_SHEET", "持股"),              # 工作表名稱不符
+    ])
+    def test_gspread_adapter_refuses_wrong_target(self, env, sheet_id, title):
+        calls = []
+        ws = _FakeGsWS(calls, sheet_id=sheet_id, title=title, rows=[])
+        with pytest.raises(L1H.HistoryTargetMismatch):
+            L1H.GspreadWorksheetAdapter(ws, environ=env)
+        assert calls == [] and ws.reads == 0                   # 連讀都不讀、表頭也不會被寫
+
+    def test_gspread_adapter_old_gspread_spreadsheet_attr(self):
+        ws = _FakeGsWS([], sheet_id=None)
+        ws.spreadsheet = type("S", (), {"id": "SYS_SHEET"})()
+        L1H.GspreadWorksheetAdapter(ws, environ={P.HISTORY_SHEET_ID_ENV_VAR: "SYS_SHEET"})
+
+    def test_upsert_through_adapter_wrong_target_never_writes_header(self):
+        calls = []
+        ws = _FakeGsWS(calls, rows=[])
+        a = L1H.GspreadWorksheetAdapter(ws, environ={P.HISTORY_SHEET_ID_ENV_VAR: "SYS_SHEET"})
+        ws.spreadsheet_id = "SOMETHING_ELSE"                  # 目標中途被換掉
+        with pytest.raises(L1H.HistoryTargetMismatch):
+            L1H.upsert_record(a, _row())
+        assert calls == []
 
     def test_real_valid_record_rerun_idempotent(self, tmp_path, l1):
         row, _ = _valid_record(tmp_path, l1)
@@ -384,6 +490,13 @@ class TestCompare:
         r = _cmp([prev, _row()])
         assert r.status == P.COMPARE_NO_NEW_DATA and r.previous is None
 
+    def test_same_input_asof_but_value_changed_is_comparable(self):
+        """資料日相同、正式上限值不同 ⇒ 真實官方值變化，⛔ 不得說成「沒有新資料」（不設門檻）。"""
+        prev = _row(**{P.COL_RECORD_DATE: "2026-10-13", P.COL_EXPOSURE_LIMIT_PCT: "59"})
+        r = _cmp([prev, _row()])
+        assert r.status == P.COMPARE_COMPARABLE
+        assert (r.previous[P.COL_EXPOSURE_LIMIT_PCT], r.current[P.COL_EXPOSURE_LIMIT_PCT]) == ("59", "60")
+
     def test_version_mismatch_excluded(self):
         prev = _row(**{P.COL_RECORD_DATE: "2026-10-13", P.COL_RULESET_VERSION: "risk_cap.v1",
                        P.COL_INPUT_ASOF: "{}"})
@@ -397,7 +510,19 @@ class TestCompare:
         assert r.status == P.COMPARE_COMPARABLE and r.previous[P.COL_RECORD_DATE] == "2026-10-10"
 
     def test_only_invalid_history_no_today(self):
-        assert _cmp([_invalid(**{P.COL_RECORD_DATE: "2026-10-13"})]).status == P.COMPARE_START_RECORDING
+        """~~修前期望 START_RECORDING~~（稽核修正 2026-10-19，有意識的變更）：已有紀錄（即使全是失敗列）
+        ⇒ 排程開跑過，今天沒紀錄＝排程沒跑／失敗 ⇒ STALE；說成「從今天開始記錄」會把失敗講成正常起點。"""
+        r = _cmp([_invalid(**{P.COL_RECORD_DATE: "2026-10-13"})])
+        assert r.status == P.COMPARE_STALE and r.reason == P.STALE_TODAY_RUN_MISSING
+
+    def test_only_invalid_history_today_invalid(self):
+        r = _cmp([_invalid(**{P.COL_RECORD_DATE: "2026-10-13"}), _invalid()])
+        assert r.status == P.COMPARE_CURRENT_NOT_VALID and r.previous is None
+
+    def test_conflict_rows_never_used(self):
+        prev = _row(**{P.COL_RECORD_DATE: "2026-10-13", P.COL_EXPOSURE_LIMIT_PCT: "30"})
+        conflict = _row(**{P.COL_STATUS: P.STATUS_SAME_DAY_CONFLICT, P.COL_EXPOSURE_LIMIT_PCT: ""})
+        assert _cmp([prev, conflict]).status == P.COMPARE_CURRENT_NOT_VALID
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -517,6 +642,13 @@ class TestScript:
         assert data["simulate_rerun"]["compare_status"] == P.COMPARE_CURRENT_NOT_VALID
         assert data["app_state_files_untouched"] is True
 
+    def test_conflict_exits_3(self, monkeypatch, tmp_path):
+        mod = _load_script()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(H, "run_headless_refresh", self._fake_run(_report(fetch_ok=False)))
+        monkeypatch.setattr(L1H, "upsert_record", lambda ws, row: P.UPSERT_CONFLICT_KEPT_EXISTING)
+        assert mod.main(["--simulate-rerun", "--state-dir", str(tmp_path / "sd")]) == 3
+
     def test_app_state_touched_exit_1(self, monkeypatch, tmp_path):
         mod = _load_script()
         monkeypatch.chdir(tmp_path)
@@ -558,8 +690,37 @@ class TestStaticGuards:
         imps = _imports(rel)
         assert not [i for i in imps if any(p in i for p in _PERSONAL_SHEET)], imps
         src = (REPO / rel).read_text(encoding="utf-8")
-        assert "GCP_SERVICE_ACCOUNT_JSON" not in src.replace("`GCP_SERVICE_ACCOUNT_JSON`", "")
+        assert "GCP_SERVICE_ACCOUNT_JSON" not in src
         assert not [i for i in imps if i.startswith("src.data.portfolio")]
+
+    def test_history_credential_names_confined(self):
+        """寫入／讀取兩支帳號的名稱只准出現在 L0 定義處（及測試）；個人持股 Sheet／登入路徑一處都不得出現。"""
+        names = (P.WRITER_SA_ENV_VAR, P.READER_SA_ENV_VAR, P.HISTORY_SHEET_ID_ENV_VAR, P.WRITE_ENABLE_ENV_VAR)
+        assert len(set(names)) == len(names)
+        assert P.READER_SA_ENV_VAR != P.WRITER_SA_ENV_VAR
+        assert P.READER_SCOPES == ("https://www.googleapis.com/auth/spreadsheets.readonly",)
+        assert all("readonly" not in s for s in P.WRITER_SCOPES)
+        hits = {}
+        for f in list((REPO / "src").rglob("*.py")) + list((REPO / "scripts").rglob("*.py")) \
+                + list((REPO / "shared").rglob("*.py")) + [REPO / "app.py"]:
+            t = f.read_text(encoding="utf-8")
+            for n in names:
+                if n in t:
+                    hits.setdefault(f.relative_to(REPO).as_posix(), set()).add(n)
+        # L0 定義處＋L1 唯一入口的 docstring（講拒絕順序）；其餘一律經 L0 常數引用，不寫字面。
+        assert set(hits) <= {"shared/risk_cap_history_policy.py", "src/data/macro/risk_cap_history.py"}, hits
+        assert P.READER_SA_ENV_VAR not in (REPO / "src/data/macro/risk_cap_history.py").read_text(encoding="utf-8")
+        for f in list((REPO / "src").rglob("*.py")):
+            rel = f.relative_to(REPO).as_posix()
+            if any(p in rel for p in _PERSONAL_SHEET) or "oauth" in rel:
+                t = f.read_text(encoding="utf-8")
+                assert "risk_cap_history" not in t, rel
+
+    def test_no_reader_code_path_in_app(self):
+        for f in list((REPO / "src").rglob("*.py")) + [REPO / "app.py"]:
+            rel = f.relative_to(REPO).as_posix()
+            if rel.startswith(("src/ui/", "app.py")):
+                assert "risk_cap_history" not in f.read_text(encoding="utf-8"), rel
 
     def test_l1_no_streamlit_no_upper_layers(self):
         imps = _imports("src/data/macro/risk_cap_history.py")
@@ -584,6 +745,7 @@ class TestStaticGuards:
         assert "schedule:" not in y and "cron:" not in y
         assert "contents: read" in y and "contents: write" not in y
         for bad in ("GCP_SERVICE_ACCOUNT_JSON", P.WRITER_SA_ENV_VAR, P.HISTORY_SHEET_ID_ENV_VAR,
+                    P.WRITE_ENABLE_ENV_VAR, P.READER_SA_ENV_VAR, "RISK_CAP_HISTORY",
                     "--write", "git push", "git commit", "GEMINI"):
             assert bad not in y, bad
 
@@ -594,19 +756,65 @@ class TestStaticGuards:
 class TestMutations:
     def test_upsert_without_valid_guard_duplicates(self):
         mut = _mutated_module("src/data/macro/risk_cap_history.py",
-                              ("    if valid_rows:\n", "    if False:\n"))
+                              ("    if row[COL_STATUS] == STATUS_VALID and valid_rows:\n",
+                               "    if False:\n"))
         ws = mut.InMemoryWorksheet()
         mut.upsert_record(ws, _row())
         mut.upsert_record(ws, _row(**{P.COL_EXPOSURE_LIMIT_PCT: "30"}))
-        assert len(mut.rows_as_records(ws.get_all_values())) == 2   # 突變體真的會重複／覆蓋語意失守
+        recs = mut.rows_as_records(ws.get_all_values())
+        assert [r[P.COL_STATUS] for r in recs] == [P.STATUS_VALID, P.STATUS_VALID]   # 突變體：同日兩筆 VALID
 
-    def test_compare_without_today_missing_branch_compares(self):
+    def test_compare_treating_latest_as_today_fakes_comparison(self):
+        """突變：「今天」改成「所有列」⇒ 今天沒跑也會拿昨天 vs 前天比 —— 假的「和上次比」。"""
         mut = _mutated_module("src/services/risk_cap_history_service.py",
-                              ("    if not today:\n        latest", "    if False:\n        latest"))
-        prev = _row(**{P.COL_RECORD_DATE: "2026-10-13"})
-        assert H.compare_status([prev], expected_date="2026-10-14", now=NOW).status == P.COMPARE_STALE
-        with pytest.raises(IndexError):      # 突變體：沒有今天的列也往下走 → today[-1] 炸
-            mut.compare_status([prev], expected_date="2026-10-14", now=NOW)
+                              ("    today = [r for r in same if r.get(P.COL_RECORD_DATE) == expected_date]\n",
+                               "    today = sorted(same, key=lambda r: r[P.COL_RECORD_DATE], reverse=True)[:1]\n"
+                               "    expected_date = today[0][P.COL_RECORD_DATE]\n"))
+        rows = [_row(**{P.COL_RECORD_DATE: "2026-10-12", P.COL_EXPOSURE_LIMIT_PCT: "30",
+                        P.COL_INPUT_ASOF: "{}"}),
+                _row(**{P.COL_RECORD_DATE: "2026-10-13"})]
+        real = H.compare_status(rows, expected_date="2026-10-14", now=NOW)
+        assert real.status == P.COMPARE_STALE and real.previous is None and real.current is None
+        fake = mut.compare_status(rows, expected_date="2026-10-14", now=NOW)
+        assert fake.status == P.COMPARE_COMPARABLE and fake.previous is not None   # 突變體產生假比較
+
+    def test_compare_value_change_mutation_hides_change(self):
+        mut = _mutated_module("src/services/risk_cap_history_service.py",
+                              ("            and previous.get(P.COL_EXPOSURE_LIMIT_PCT) == current.get(P.COL_EXPOSURE_LIMIT_PCT)):",
+                               "            and True):"))
+        rows = [_row(**{P.COL_RECORD_DATE: "2026-10-13", P.COL_EXPOSURE_LIMIT_PCT: "59"}), _row()]
+        assert H.compare_status(rows, expected_date="2026-10-14", now=NOW).status == P.COMPARE_COMPARABLE
+        assert mut.compare_status(rows, expected_date="2026-10-14", now=NOW).status == P.COMPARE_NO_NEW_DATA
+
+    def test_compare_start_recording_mutation_hides_stale(self):
+        mut = _mutated_module("src/services/risk_cap_history_service.py",
+                              ("    if not same:\n", "    if not any(r.get(P.COL_STATUS) == P.STATUS_VALID for r in same):\n"))
+        rows = [_invalid(**{P.COL_RECORD_DATE: "2026-10-13"})]
+        assert mut.compare_status(rows, expected_date="2026-10-14", now=NOW).status == P.COMPARE_START_RECORDING
+        assert H.compare_status(rows, expected_date="2026-10-14", now=NOW).status == P.COMPARE_STALE
+
+    def test_upsert_dropping_invalid_after_valid_mutation(self):
+        mut = _mutated_module("src/data/macro/risk_cap_history.py",
+                              ("    if row[COL_STATUS] != STATUS_VALID:\n",
+                               "    if row[COL_STATUS] != STATUS_VALID and valid_rows:\n        return UPSERT_NOOP_DUPLICATE\n"
+                               "    if row[COL_STATUS] != STATUS_VALID:\n"))
+        ws = mut.InMemoryWorksheet()
+        mut.upsert_record(ws, _row())
+        mut.upsert_record(ws, _invalid())
+        assert len(mut.rows_as_records(ws.get_all_values())) == 1            # 突變體吞掉當天較晚的失敗
+        ws2 = L1H.InMemoryWorksheet()
+        L1H.upsert_record(ws2, _row())
+        L1H.upsert_record(ws2, _invalid())
+        assert len(L1H.rows_as_records(ws2.get_all_values())) == 2
+
+    def test_adapter_without_id_check_mutation_writes_wrong_sheet(self):
+        mut = _mutated_module("src/data/macro/risk_cap_history.py",
+                              ("        if actual != self._expected_id:\n", "        if False:\n"))
+        calls = []
+        ws = _FakeGsWS(calls, sheet_id="PERSONAL_SHEET", rows=[])
+        a = mut.GspreadWorksheetAdapter(ws, environ={P.HISTORY_SHEET_ID_ENV_VAR: "SYS_SHEET"})
+        mut.upsert_record(a, _row())
+        assert calls and tuple(calls[0][0]) == P.HISTORY_COLUMNS          # 突變體把表頭寫進錯的試算表
 
     def test_build_record_without_reader_check_marks_valid(self, tmp_path, l1):
         mut = _mutated_module("src/services/risk_cap_history_service.py",

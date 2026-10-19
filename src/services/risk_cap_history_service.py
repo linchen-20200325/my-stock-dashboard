@@ -46,6 +46,27 @@ def run_headless_refresh(state_dir: str) -> Any:
         risk_cap_state_file_path=os.path.join(state_dir, MACRO_STATE_FILE_NAME))
 
 
+def headless_session() -> Any:
+    """`run_headless_refresh` 寫入的那一份 session（`macro_refresh_service` 用的同一個 `st.session_state`）。
+
+    只給 `build_record(session=...)` 讀上游 dict 自帶的 `is_stale` 旗標用（provenance）；⛔ 不寫。
+    """
+    from src.services import macro_refresh_service as RS
+    return RS.st.session_state
+
+
+#: Required Core 輸入 → 上游 session 原始 dict 的位置（只用來讀它**自帶的** `is_stale` 旗標）。
+#: None ＝ 該輸入的上游輸出沒有 `is_stale` 這種欄位（PMI 前月來自 parquet、外資期貨來自先行指標表、
+#: MA5 來自 mkt_info）⇒ provenance 一律記 "unknown"，⛔ 不推定。
+_CORE_UPSTREAM_STALE_FLAG: Mapping[str, tuple[str, str] | None] = {
+    "VIX_Index": ("macro_info", "vix"),
+    "ISM_PMI_or_OECD_CLI": ("macro_info", "ism_pmi"),
+    "PMI_Prev_Month": None,
+    "Futures_Net_Short": None,
+    "Index_Below_MA5": None,
+}
+UNKNOWN: str = "unknown"
+
 # ══════════════════════════════════════════════════════════════════════
 # 紀錄組裝
 # ══════════════════════════════════════════════════════════════════════
@@ -87,8 +108,28 @@ def _refresh_failed_names(report: Any) -> list[str]:
     return out
 
 
+def _upstream_is_stale(session: Mapping[str, Any] | None, key: str) -> Any:
+    where = _CORE_UPSTREAM_STALE_FLAG.get(key)
+    if session is None or where is None:
+        return UNKNOWN
+    outer = session.get(where[0])
+    inner = outer.get(where[1]) if isinstance(outer, Mapping) else None
+    flag = inner.get("is_stale") if isinstance(inner, Mapping) else None
+    return flag if isinstance(flag, bool) else UNKNOWN
+
+
+def core_input_provenance(summary: Mapping[str, Any],
+                          session: Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """Required Core 各輸入 → `{source, upstream_is_stale}`（全部取自既有輸出；取不到一律 "unknown"）。"""
+    from shared.risk_cap_policy import REQUIRED_CORE_INPUTS
+    src = summary.get("input_source") if isinstance(summary.get("input_source"), Mapping) else {}
+    return {k: {"source": src.get(k) or UNKNOWN, "upstream_is_stale": _upstream_is_stale(session, k)}
+            for k in REQUIRED_CORE_INPUTS}
+
+
 def build_record(report: Any, *, state_dir: str, now_utc: datetime,
-                 run_id: str, git_sha: str) -> dict[str, str]:
+                 run_id: str, git_sha: str,
+                 session: Mapping[str, Any] | None = None) -> dict[str, str]:
     """一次 `refresh_macro_now` 的結果 → 一列歷史紀錄（全字串、欄位＝`HISTORY_COLUMNS`）。
 
     Args:
@@ -97,6 +138,7 @@ def build_record(report: Any, *, state_dir: str, now_utc: datetime,
             否則「檔案存在」不代表「這一輪寫的」—— 本函式只認 `risk_cap_result.written`，不靠檔案存在判斷）。
         now_utc: 帶時區的 UTC 時刻（`written_at_utc`；VALID 判定的「現在」）。
         run_id / git_sha: provenance（取不到傳空字串，⛔ 不編造）。
+        session: 那一輪的 session（`headless_session()`）；只讀上游 `is_stale` 旗標。None ⇒ 全記 "unknown"。
     """
     from src.services import macro_refresh_service as RS
     from src.services.macro_state_locker import get_macro_state
@@ -157,6 +199,8 @@ def build_record(report: Any, *, state_dir: str, now_utc: datetime,
         P.COL_INPUT_ASOF: _s(snapshot.get("input_asof", summary.get("input_asof")) or {}),
         P.COL_ENGINE_SOURCE: _s(snapshot.get("engine_source")),
         P.COL_SNAPSHOT_TIMESTAMP: _s(snapshot.get("timestamp")),
+        # 沒有引擎輸入（抓取鏈整條失敗）⇒ 全記 "unknown"：session 裡可能是更早的殘值，⛔ 不拿來充當本輪來源。
+        P.COL_CORE_INPUT_PROVENANCE: _s(core_input_provenance(summary, session if rc is not None else None)),
         P.COL_REFRESH_OK: _s(bool(report.ok)),
         P.COL_REFRESH_FAILED: _s(_refresh_failed_names(report)),
         P.COL_WRITTEN_AT_UTC: now_utc.isoformat(timespec="seconds"),
@@ -204,6 +248,20 @@ def compare_status(rows: Sequence[Mapping[str, str]], *, expected_date: str,
                    ruleset_version: str = RISK_CAP_RULESET_VERSION, now: datetime) -> CompareResult:
     """這一刻能不能顯示「和上次比」。⛔ 沒有任何變動大小門檻；只決定「能不能比、跟誰比」。
 
+    判定順序（稽核修正 2026-10-19 後的現行版）：
+      1. 同規則版本**一列都沒有** ⇒ `START_RECORDING`（從今天開始記錄）。
+      2. 預期日期沒有紀錄 ⇒ `STALE`（排程沒跑／失敗；最新有效紀錄已超過既有 7 天有效期時原因另標）。
+         📌 修前「從來沒有 VALID、今天也沒紀錄 ⇒ START_RECORDING」—— 有意識的變更，不是漏刪：
+         已經有紀錄（即使全是失敗列）就代表排程開跑過，今天沒紀錄是「排程沒跑／失敗」，
+         說成「從今天開始記錄」會把失敗講成正常起點（客戶裁示第 7 點）。
+      3. 預期日期有紀錄、但沒有 VALID ⇒ `CURRENT_NOT_VALID`（照實帶最後一列的狀態）。
+      4. 預期日期有 VALID ⇒ 用**當天首筆 VALID**（同日較晚的失敗列／衝突列不影響它）；已過期 ⇒ `STALE`。
+      5. 沒有更早的同版本 VALID ⇒ `START_RECORDING`（第一筆有效紀錄）。
+      6. 與上一筆 VALID 的 `input_asof` **且** `exposure_limit_pct` 都相同 ⇒ `NO_NEW_DATA`（沿用期，不算變化）。
+         📌 修前只比 `input_asof` —— 有意識的變更：資料日相同但正式上限值不同（例如上游修正值）是真實的
+         官方值變化，客戶要求「任何變化都提醒、不設門檻」⇒ 必須 `COMPARABLE`。
+      7. 其餘 ⇒ `COMPARABLE`。
+
     Args:
         rows: 歷史表的列（`rows_as_records` 的輸出）。
         expected_date: 「應該要有紀錄」的台北日期（'YYYY-MM-DD'）。⚠️ 排程跑之前的時段要不要往前推一天，
@@ -213,11 +271,8 @@ def compare_status(rows: Sequence[Mapping[str, str]], *, expected_date: str,
     """
     same = [r for r in rows if r.get(P.COL_RULESET_VERSION) == ruleset_version]
     excluded = len(rows) - len(same)
-    if not any(r.get(P.COL_STATUS) == P.STATUS_VALID for r in same):
-        if not [r for r in same if r.get(P.COL_RECORD_DATE) == expected_date]:
-            # 沒有任何有效歷史，且今天也沒紀錄 ⇒ 仍是「從今天開始記錄」（沒有可比的東西）
-            return CompareResult(P.COMPARE_START_RECORDING, "no_valid_history",
-                                 excluded_other_version=excluded)
+    if not same:
+        return CompareResult(P.COMPARE_START_RECORDING, "no_history", excluded_other_version=excluded)
     today = [r for r in same if r.get(P.COL_RECORD_DATE) == expected_date]
     if not today:
         latest = previous_valid_record(same, before_date="9999-12-31", ruleset_version=ruleset_version)
@@ -236,8 +291,9 @@ def compare_status(rows: Sequence[Mapping[str, str]], *, expected_date: str,
     if previous is None:
         return CompareResult(P.COMPARE_START_RECORDING, "first_valid_record", current=current,
                              excluded_other_version=excluded)
-    if previous.get(P.COL_INPUT_ASOF) == current.get(P.COL_INPUT_ASOF):
-        return CompareResult(P.COMPARE_NO_NEW_DATA, "same_input_asof", current=current,
+    if (previous.get(P.COL_INPUT_ASOF) == current.get(P.COL_INPUT_ASOF)
+            and previous.get(P.COL_EXPOSURE_LIMIT_PCT) == current.get(P.COL_EXPOSURE_LIMIT_PCT)):
+        return CompareResult(P.COMPARE_NO_NEW_DATA, "same_input_asof_and_value", current=current,
                              excluded_other_version=excluded)
     return CompareResult(P.COMPARE_COMPARABLE, "", current=current, previous=previous,
                          excluded_other_version=excluded)

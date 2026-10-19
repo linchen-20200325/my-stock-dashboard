@@ -18,7 +18,9 @@
 - ⛔ 沒有 `if headless:` 分支、沒有自算公式（維護守則同 `scripts/update_macro_forward_test.py`）。
 
 結束碼：0 ＝ PoC 跑完（**不論紀錄狀態是不是 VALID** —— 照實的非有效狀態也是合格結果）；
-1 ＝ 契約破損／app 狀態檔被動到；2 ＝ `--write`（拒絕）。
+1 ＝ 契約破損／app 狀態檔被動到；2 ＝ `--write`（拒絕）；
+3 ＝ 寫入結果為同日有效紀錄衝突（`CONFLICT_KEPT_EXISTING`；稽核修正 2026-10-19：衝突必須讓排程顯示失敗，
+    ⛔ 不能只留在會過期的 Actions log —— 衝突列另記在表裡）。
 
 用法::
 
@@ -80,6 +82,7 @@ def main(argv=None) -> int:
         InMemoryWorksheet, ProductionWriteNotApproved, load_writer_credentials_or_refuse,
         rows_as_records, upsert_record,
     )
+    from shared.risk_cap_history_policy import UPSERT_CONFLICT_KEPT_EXISTING
 
     if args.write:
         try:
@@ -90,7 +93,7 @@ def main(argv=None) -> int:
         print("[risk_cap_history_poc] ❌ --write 意外通過憑證閘門（不應發生）→ 拒絕")
         return 2
 
-    from src.services import risk_cap_history_service as H
+    import src.services.risk_cap_history_service as H
 
     cwd = Path.cwd()
     before = _fingerprint(cwd)
@@ -105,7 +108,8 @@ def main(argv=None) -> int:
     report = H.run_headless_refresh(state_dir)
     now = _now_utc()
     record = H.build_record(report, state_dir=state_dir, now_utc=now,
-                            run_id=os.environ.get("GITHUB_RUN_ID", "local"), git_sha=_git_sha())
+                            run_id=os.environ.get("GITHUB_RUN_ID", "local"), git_sha=_git_sha(),
+                            session=H.headless_session())
 
     out: dict = {
         "record": record,
@@ -117,10 +121,12 @@ def main(argv=None) -> int:
                       for t in report.steps],
         },
     }
+    outcomes: list[str] = []
     if args.simulate_rerun:
         ws = InMemoryWorksheet()
         first = upsert_record(ws, record)
         second = upsert_record(ws, record)
+        outcomes += [first, second]
         rows = rows_as_records(ws.get_all_values())
         cmp = H.compare_status(rows, expected_date=record["record_date"], now=now)
         out["simulate_rerun"] = {
@@ -138,6 +144,9 @@ def main(argv=None) -> int:
     if before != after:
         print(f"[risk_cap_history_poc] ❌ app 工作目錄的狀態檔被動到：{before} → {after}")
         return 1
+    if UPSERT_CONFLICT_KEPT_EXISTING in outcomes:
+        print("[risk_cap_history_poc] ❌ 同日有效紀錄衝突（首筆不動、衝突列已另記）→ exit 3，需人工查看")
+        return 3
     print(f"[risk_cap_history_poc] 完成：status={record['status']}（dry-run，未寫任何真實 Sheet）")
     return 0
 

@@ -23,6 +23,7 @@ from typing import Mapping
 
 #: 紀錄 schema 版本（欄位增刪 ⇒ 升版；⛔ 只增不改，舊列不改寫）。
 HISTORY_SCHEMA_VERSION: str = "risk_cap_history.v1"
+# （稽核修正 2026-10-19 加 `core_input_provenance` 一欄仍標 v1：v1 尚未有任何一列落地到真實 Sheet。）
 
 #: 系統歷史 Sheet 內的工作表名稱。
 #: ⚠️ 這本 Sheet 與個人持股 Sheet **完全分離**（客戶裁示第 4 點）：⛔ 不得把本工作表開在使用者的持股 Sheet 裡。
@@ -44,6 +45,11 @@ COL_DISABLED_INPUTS = "disabled_inputs"    # 規則停用、不計分的輸入�
 COL_INPUT_ASOF = "input_asof"              # 各輸入的資料日（JSON，鍵排序）—— 判斷「是不是同一份資料」用它
 COL_ENGINE_SOURCE = "engine_source"        # `risk_cap_apply.ENGINE_SOURCE`
 COL_SNAPSHOT_TIMESTAMP = "snapshot_timestamp"      # 快照自己的 timestamp（台北時間；有效期 7 天由它判）
+#: 稽核修正（2026-10-19）：Required Core 各輸入的 provenance（JSON）——
+#: `{鍵名: {"source": 既有 L2 `DatedValue.source` 原文, "upstream_is_stale": True/False/"unknown"}}`。
+#: `upstream_is_stale` **只**取上游 dict 自帶的 `is_stale` 布林（L1 `macro_core` 的 stale-cache 退路會蓋 True）；
+#: 上游沒有這個欄位 ⇒ "unknown"（⛔ 不以缺欄推定 False、⛔ 不另判新鮮度）。有效性判定與此欄無關。
+COL_CORE_INPUT_PROVENANCE = "core_input_provenance"
 COL_REFRESH_OK = "refresh_ok"              # 這一輪整條更新鏈是否全部成功（`MacroRefreshReport.ok`）
 COL_REFRESH_FAILED = "refresh_failed"      # 失敗的來源／步驟**內部鍵名**（逗號分隔；⛔ 不放 detail 原文）
 COL_WRITTEN_AT_UTC = "written_at_utc"      # 本列產生時刻（UTC ISO8601）—— provenance，⛔ 不當資料日
@@ -55,7 +61,7 @@ HISTORY_COLUMNS: tuple[str, ...] = (
     COL_RECORD_DATE, COL_RULESET_VERSION, COL_STATUS, COL_REASON_CODE, COL_REASON_DETAIL,
     COL_EXPOSURE_LIMIT_PCT, COL_REQUIRED_CORE_OK, COL_MISSING_CORE, COL_NOT_EVALUATED,
     COL_DISABLED_INPUTS, COL_INPUT_ASOF, COL_ENGINE_SOURCE, COL_SNAPSHOT_TIMESTAMP,
-    COL_REFRESH_OK, COL_REFRESH_FAILED, COL_WRITTEN_AT_UTC, COL_RUN_ID, COL_GIT_SHA,
+    COL_CORE_INPUT_PROVENANCE, COL_REFRESH_OK, COL_REFRESH_FAILED, COL_WRITTEN_AT_UTC, COL_RUN_ID, COL_GIT_SHA,
     COL_SCHEMA_VERSION,
 )
 
@@ -63,10 +69,12 @@ HISTORY_COLUMNS: tuple[str, ...] = (
 IDEMPOTENCY_KEY_COLUMNS: tuple[str, ...] = (COL_RECORD_DATE, COL_RULESET_VERSION)
 
 #: 「內容」欄位：同鍵重跑時拿來判斷「是不是同一份結果」。
-#: ⛔ 不含 provenance（寫入時刻、run id、commit、快照 timestamp、整輪成敗）——
+#: ⛔ 不含 provenance（寫入時刻、run id、commit、快照 timestamp、整輪成敗、來源標籤）——
 #: 同一份資料在不同時刻重跑，provenance 必然不同，若算進來就永遠判成「內容不同」。
+#: 稽核修正（2026-10-19，有意識的變更）：加入 `reason_detail` —— 「核心輸入已過期」與「核心輸入未取得」
+#: 同屬 REQUIRED_CORE_INCOMPLETE，只有原因原文分得出來；不比它會把兩個不同的事實當成重跑而吞掉。
 CONTENT_COLUMNS: tuple[str, ...] = (
-    COL_STATUS, COL_REASON_CODE, COL_EXPOSURE_LIMIT_PCT, COL_REQUIRED_CORE_OK,
+    COL_STATUS, COL_REASON_CODE, COL_REASON_DETAIL, COL_EXPOSURE_LIMIT_PCT, COL_REQUIRED_CORE_OK,
     COL_MISSING_CORE, COL_NOT_EVALUATED, COL_DISABLED_INPUTS, COL_INPUT_ASOF, COL_ENGINE_SOURCE,
 )
 
@@ -88,10 +96,13 @@ STATUS_FETCH_FAILED = "FETCH_FAILED"
 STATUS_COMPUTE_ERROR = "COMPUTE_ERROR"
 #: 寫出了快照，但官方讀端不收（理論上不該發生；發生即代表寫端與讀端契約不一致）。
 STATUS_SNAPSHOT_REJECTED = "SNAPSHOT_REJECTED"
+#: 稽核修正（2026-10-19）：同日已有 VALID、本輪又算出內容不同的 VALID ⇒ 首筆不動，本輪結果以這個狀態
+#: **另記一列**（`exposure_limit_pct` 空白、差異寫在 `reason_detail`）。⛔ 不是有效紀錄、讀端不拿它比較。
+STATUS_SAME_DAY_CONFLICT = "SAME_DAY_CONFLICT"
 
 RECORD_STATUSES: tuple[str, ...] = (
     STATUS_VALID, STATUS_REQUIRED_CORE_INCOMPLETE, STATUS_ENGINE_FAILSAFE, STATUS_ENGINE_NOT_FINITE,
-    STATUS_FETCH_FAILED, STATUS_COMPUTE_ERROR, STATUS_SNAPSHOT_REJECTED,
+    STATUS_FETCH_FAILED, STATUS_COMPUTE_ERROR, STATUS_SNAPSHOT_REJECTED, STATUS_SAME_DAY_CONFLICT,
 )
 
 #: 機器讀的原因碼（與 status 一對一或更細；VALID 時為空字串）。
@@ -102,6 +113,7 @@ REASON_CODE_NOT_FINITE = "engine_not_finite"
 REASON_CODE_FETCH_EXCEPTION = "fetch_exception"
 REASON_CODE_COMPUTE_EXCEPTION = "compute_exception"
 REASON_CODE_READER_REJECTED = "reader_rejected"
+REASON_CODE_SAME_DAY_CONFLICT = "same_day_valid_conflict"
 
 STATUS_REASON_CODE: Mapping[str, str] = MappingProxyType({
     STATUS_VALID: REASON_CODE_NONE,
@@ -111,6 +123,7 @@ STATUS_REASON_CODE: Mapping[str, str] = MappingProxyType({
     STATUS_FETCH_FAILED: REASON_CODE_FETCH_EXCEPTION,
     STATUS_COMPUTE_ERROR: REASON_CODE_COMPUTE_EXCEPTION,
     STATUS_SNAPSHOT_REJECTED: REASON_CODE_READER_REJECTED,
+    STATUS_SAME_DAY_CONFLICT: REASON_CODE_SAME_DAY_CONFLICT,
 })
 
 # ══════════════════════════════════════════════════════════════════════
@@ -119,13 +132,15 @@ STATUS_REASON_CODE: Mapping[str, str] = MappingProxyType({
 UPSERT_APPENDED = "APPENDED"
 #: 同鍵、內容完全相同 → 不寫（重跑）。
 UPSERT_NOOP_DUPLICATE = "NOOP_DUPLICATE"
-#: 同鍵已有 VALID，本輪不是 VALID → 不寫（⛔ 後來的失敗不得蓋掉／稀釋當天已成立的有效紀錄）。
-UPSERT_NOOP_VALID_EXISTS = "NOOP_VALID_EXISTS"
-#: 同鍵已有 VALID，本輪也是 VALID 但內容不同 → ⛔ 不覆寫、不追加；回報衝突（需人看）。
+#: ~~`UPSERT_NOOP_VALID_EXISTS`（同鍵已有 VALID、本輪非 VALID → 不寫）~~ —— 📌 稽核修正（2026-10-19，有意識的變更，
+#:   不是漏刪）：後來的失敗也是當天的真實事實，改為**另記一列**（`UPSERT_APPENDED`）；首筆 VALID 照樣不動，
+#:   讀端只拿 VALID 比較，失敗列不會蓋掉或稀釋它。舊規則的理由（不讓失敗蓋掉有效紀錄）由「既有列永不修改」守住。
+#: 同鍵已有 VALID，本輪也是 VALID 但內容不同 → ⛔ 不覆寫首筆；本輪結果以 `STATUS_SAME_DAY_CONFLICT` 另記一列
+#: （同內容的衝突列不重複記），呼叫端（腳本）據此以非 0 結束 —— 衝突必須被人看見，⛔ 不能只留在 Actions log。
 UPSERT_CONFLICT_KEPT_EXISTING = "CONFLICT_KEPT_EXISTING"
 
 UPSERT_OUTCOMES: tuple[str, ...] = (
-    UPSERT_APPENDED, UPSERT_NOOP_DUPLICATE, UPSERT_NOOP_VALID_EXISTS, UPSERT_CONFLICT_KEPT_EXISTING,
+    UPSERT_APPENDED, UPSERT_NOOP_DUPLICATE, UPSERT_CONFLICT_KEPT_EXISTING,
 )
 
 # ══════════════════════════════════════════════════════════════════════
@@ -154,9 +169,16 @@ STALE_LATEST_VALID_EXPIRED = "latest_valid_expired"
 # ══════════════════════════════════════════════════════════════════════
 # 寫入憑證（**未來**的排程寫入帳號；本 PoC 不建立、不讀取任何 secret）
 # ══════════════════════════════════════════════════════════════════════
-#: 未來排程寫入 service account 的 JSON 所放的環境變數名（**新名稱**）。
-#: ⛔ 刻意不是既有的 `GCP_SERVICE_ACCOUNT_JSON`（個人持股 Sheet 的 SA 讀取路徑用；沿用＝重開 SEC-3 同類風險）。
+#: 未來排程寫入 service account 的 JSON 所放的環境變數名（**新名稱**；放 GitHub secrets）。
+#: ⛔ 刻意不沿用個人持股 Sheet 既有的 SA 金鑰名稱（沿用＝重開 SEC-3 同類風險）。
 WRITER_SA_ENV_VAR: str = "RISK_CAP_HISTORY_WRITER_SA_JSON"
+#: 寫入端 OAuth scope（只開試算表；⛔ 不含 Drive）。
+WRITER_SCOPES: tuple[str, ...] = ("https://www.googleapis.com/auth/spreadsheets",)
+#: 稽核修正（2026-10-19）：**保留**未來網站讀取端的名稱與 scope（放 Streamlit secrets）。
+#: 本 PoC **沒有**任何讀取端程式碼路徑；先定名只為讓寫入／讀取兩支帳號從一開始就分開。
+READER_SA_ENV_VAR: str = "RISK_CAP_HISTORY_READER_SA_JSON"
+#: 讀取端 OAuth scope：唯讀（`spreadsheets.readonly`）。
+READER_SCOPES: tuple[str, ...] = ("https://www.googleapis.com/auth/spreadsheets.readonly",)
 #: 未來系統歷史 Sheet 的 ID 所放的環境變數名（新名稱）。
 HISTORY_SHEET_ID_ENV_VAR: str = "RISK_CAP_HISTORY_SHEET_ID"
 #: 寫入總開關（新名稱）。本 PoC 階段**即使設了也拒絕**（production 寫入尚未核准）。

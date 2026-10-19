@@ -783,7 +783,7 @@ for _f, _m in (
     ("scripts/update_macro_forward_test.py", "src.services.market_assessment_apply"),
     # VN1-STORE 最小 PoC（客戶 2026-10-19 裁示 A）：無頭跑畫面同一條「🚀 更新今日戰情」鏈 ——
     # 與上列 cron 完全同一根因（CLI entrypoint 呼叫 L3 是設計本意，⛔ 不另寫一套公式）。
-    ("scripts/risk_cap_history_poc.py", "src.services"),
+    ("scripts/risk_cap_history_poc.py", "src.services.risk_cap_history_service"),
 ):
     _KNOWN_VIOLATIONS[("R5", _f, _m)] = _TODO_SCRIPTS_LAYER
 

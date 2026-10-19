@@ -175,6 +175,10 @@ def _bundle_summary(bundle: EngineInputBundle) -> dict:
         "disabled_inputs": list(bundle.disabled_inputs),
         "input_asof": dict(bundle.input_asof),
         "red_lines": {k: v.status for k, v in bundle.red_lines.items()},
+        # VN1-STORE PoC 稽核修正（2026-10-19，additive）：各輸入的來源標籤，原樣取自 L2 `dated_inputs`
+        #   產出的 `DatedValue.source`（上游 dict 自帶 `source` 時就是它，例如 L1 stale-cache 退路標的
+        #   「stale-cache(…)」）。⛔ 不另判新鮮度、不寫進快照檔（只在回傳值裡）。
+        "input_source": {k: bundle.assessed[k].dv.source for k in ENGINE_INPUT_KEYS},
     }
 
 
