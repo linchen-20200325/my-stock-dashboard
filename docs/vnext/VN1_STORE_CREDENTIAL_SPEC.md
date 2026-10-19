@@ -85,7 +85,7 @@
 ## 4. 客戶手動設定步驟（Google Cloud Shell）
 
 > **在哪裡跑**：Google Cloud Console 右上角「啟用 Cloud Shell」（`>_` 圖示）。所有指令可直接整段貼上。
-> **先做 G3 嗎？** 不必等 G3；但步驟 0 選專案時，請**不要**選既有持股推播 key 所在的專案以外的東西去猜 —— 照本步驟以 Mystock20260823 專案為準。
+> **先做 G3 嗎？** 不必等 G3。以步驟 0 確認的 Mystock20260823 專案為準；不要使用 fund-dashboard／fund-nav 所在專案。
 > ⛔ **整個過程中，不要把任何 key 內容、`private_key`、完整 JSON 貼到聊天、AI、issue、PR 或 commit。**
 
 ### 步驟 0｜確認選到正確專案（顯示名稱 ≠ 專案 ID）

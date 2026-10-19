@@ -10,6 +10,7 @@
 
 | 項目 | 現況 |
 |---|---|
+| 目前階段 | 目前階段：vNext 1.0（路線 0.9→1.0→2.0→3.0，見 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md` §20）；已完成批次不得重做。 |
 | 最後一個功能／治理合併（非 cron、不含本版） | `72a970a6`（#883；PoC 收尾同步 docs）；其前 `a45c7405`（#882；`VN1-STORE` 最小 PoC） |
 | main tip | 量測時 tip＝`72a970a6`；cron 會持續推進 tip，引用前重查 |
 | main CI | `72a970a6` 撰寫組未查；`a45c7405`：run 39234825821 success（總管轉述） |
@@ -83,7 +84,7 @@
 3h. ~~（2026-10-19）**現處於安全點，無進行中程式工作**。下一步：客戶於正式網站驗收 `B1-FU-2`／`B2-FU-1`（驗不過依裁示退回 A）；下一建議批 `1.0-B3` `VN1-STORE` 研究［Medium］**未開始**，開工前須 Effort Check（建議，不是授權）。~~（2026-10-19 更新：`1.0-B3` 研究已完成，見 3i；有意識的變更，不是漏刪）
 3i. ~~（2026-10-19）**`1.0-B3` 研究完成，現處於安全點，等待客戶裁示 `VN1-STORE` 保存位置**（DEC-009；推薦與裁示題見 `docs/vnext/VN1_STORE_RESEARCH.md` 第 5、6 節）。裁示前今天頁維持「從今天開始記錄」、不得製造不存在的歷史；裁示後實作仍須客戶指派批次並先做無頭寫入 PoC。並行待辦：客戶於正式網站驗收 `B1-FU-2`／`B2-FU-1`。下一建議批 `1.0-B4` 線框送審（建議，不是授權；開工前 Effort Check）。~~（2026-10-19 更新：客戶已裁示 DEC-063，最小 PoC 已做，見 3j；有意識的變更，不是漏刪）
 3j. （2026-10-19）**`VN1-STORE` 最小 PoC 完成、待開 PR**（DEC-063；DR-2026-10-19-2）：下一步 PR → CI → merge → 合併後手動觸發 PoC workflow 驗證 Actions 環境 → 送客戶「建立系統歷史 Sheet／寫入帳號／唯讀帳號」精簡步驟。⛔ production 排程寫入未核准；涉及新憑證或權限依 DEC-009 停下；今天頁維持「從今天開始記錄」、不得製造不存在的歷史比較。未決設計項見 `docs/vnext/VN1_STORE_RESEARCH.md` 8.4。並行待辦：客戶於正式網站驗收 `B1-FU-2`／`B2-FU-1`。
-3k. （2026-10-19）#882 已合併（`a45c7405`、run 39234825821），3j 由本項接續。**無進行中程式工作**；下一步全為客戶動作：手動觸發 `risk_cap_history_poc` workflow 並回報、建立系統歷史 Sheet（`risk_cap_daily`）、兩個新帳號（writer 編輯者／reader 檢視者，皆只對該 Sheet）、GitHub secrets `RISK_CAP_HISTORY_WRITER_SA_JSON`＋`RISK_CAP_HISTORY_SHEET_ID`（reader 金鑰留待 Streamlit secrets）；之後我們驗證 reader 讀不到持股 Sheet、再送 production 寫入核准題（⛔ 未核准，DEC-063）。並行：`B1-FU-2`／`B2-FU-1` 正式網站登入驗收。下一建議批 `1.0-B4` 依 Q1-B 線框送審**未開始**，開工前須 Effort Check（建議，不是授權）。
+3k. （2026-10-19）#882 已合併（`a45c7405`、run 39234825821），3j 由本項接續。**無進行中程式工作**；下一步全為客戶動作：手動觸發 `risk_cap_history_poc` workflow 並回報、建立系統歷史 Sheet（`risk_cap_daily`）、兩個新帳號（writer 編輯者／reader 檢視者，皆只對該 Sheet）、~~GitHub secrets `RISK_CAP_HISTORY_WRITER_SA_JSON`＋`RISK_CAP_HISTORY_SHEET_ID`（reader 金鑰留待 Streamlit secrets）~~（2026-10-19 由 3l／DEC-064 取代，有意識的變更，不是漏刪：`RISK_CAP_HISTORY_WRITER_SA_JSON` 退役不建立，只新增 `RISK_CAP_HISTORY_SHEET_ID`；reader key 只放 Streamlit secrets）；之後我們驗證 reader 讀不到持股 Sheet、再送 production 寫入核准題（⛔ 未核准，DEC-063）。並行：`B1-FU-2`／`B2-FU-1` 正式網站登入驗收。下一建議批 `1.0-B4` 依 Q1-B 線框送審**未開始**，開工前須 Effort Check（建議，不是授權）。
 3l. （2026-10-19）#883 已合併（`72a970a6`），3k 由本項接續；PoC Actions dry-run 客戶回報 run 39249934107 success。憑證裁示 DEC-064（G1／G2 核准、G3 只調查）。**新對話**：先重讀 `PROJECT_RULES.md`／`docs/BACKLOG.md`／`docs/DECISIONS.md`／本檔並依第 5 節重查 GitHub；⛔ 不開始 production 寫入。**第一個安全工作＝等待客戶依 `docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md` 完成手動設定**，之後執行規格第 5 節反向權限驗證（測試寫入前先送客戶確認範圍）。G3 調查（是否為 fund-nav、使用處、跨專案／過權風險；遷移另案）待客戶回報持股 Sheet 共用清單中的 SA email／專案 ID。並行：`B1-FU-2`／`B2-FU-1`。
 4. BACKLOG 各列的 next action **不構成動工授權**；有客戶指派或實際 bug 觸發才動（`CLAUDE.md` §-1）。
 
