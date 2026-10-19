@@ -184,7 +184,17 @@
 1. **「預期日期」**：每日排程跑之前的時段（例如早上）要不要把預期日期往前推一天 —— 否則每天排程前都會顯示「過期」。屬正式化設計，未定。
 2. **寫入端 concurrency group**：正式排程 workflow 需以 `concurrency` 序列化（單一寫入者前提）。
 3. **執行緒滯留**：約 7 分鐘的行程尾巴（見 8.2）；目前不強制結束。
-4. **cache 退路 provenance**：只有 VIX／台灣 PMI 當月的上游帶 `is_stale`；PMI 前月、外資期貨、MA5 的上游沒有此欄，紀錄為 "unknown"（不推定）。
+4. **cache 退路 provenance**：~~只有 VIX／台灣 PMI 當月的上游帶 `is_stale`；PMI 前月、外資期貨、MA5 的上游沒有此欄，紀錄為 "unknown"（不推定）。~~（2026-10-19 複稽核更正，有意識的變更，不是漏刪：VIX 上游從不帶 `is_stale`）
+   **現行**：全條取數鏈中，只有 **台灣 PMI 當月**的 stale-cache 退路（L1 `macro_core` 的台灣 PMI 多源賽跑全失敗後讀上次已知值快照）會把 `is_stale` 設為 True；即時命中時上游 dict 不帶此欄。**VIX 上游（`macro_snapshot.fetch_vix_block`）從不帶 `is_stale`** ⇒ VIX 的 `upstream_is_stale` **恆為 "unknown"**（⛔ 不推定 False）。PMI 前月、外資期貨、MA5 的上游同樣沒有此欄，一律 "unknown"。查證方法：對 `src/`、`shared/` grep `is_stale` 賦值處（撰寫組單組查證，未經第二組驗證）。
 5. **GitHub Actions 實跑**：合併後手動觸發 PoC workflow，確認真實環境的取數與狀態。
 6. 正式寫入需客戶建立 Sheet 與兩支 service account（寫入／唯讀分開），並另行核准（DEC-009）。
+
+**複稽核登記的待決設計項（2026-10-19；正式化前須決定，PoC 未處理）**
+
+7. **CompareResult 缺「是否有過任何有效歷史」訊號**：讀端目前只回比較結果；UI 若要同時區分「從今天開始記錄」（從未有 VALID）與失敗狀態（曾有 VALID、今天沒有），需自行再判。建議比較結果加一個 `has_prior_valid` 類訊號，由讀端回傳、UI 不另推。
+8. **長間隔下的 COMPARABLE 沒有間隔／過期訊號**：例如上一筆 VALID 在 20 天前，讀端仍回 COMPARABLE 並列「上次 vs 這次」，不提示間隔。UI 必須揭露 `previous.record_date`（上一筆的日期鍵），⛔ 不得讓「上次」看起來像昨天。是否另設間隔訊號屬正式化設計，未定（⛔ 本 PoC 不新增門檻）。
+9. **非有效列去重只比「同狀態最後一列」**：失敗序列 A→B→A 時，第三筆 A 與同狀態（A）最後一列內容相同而被略過 ⇒ 「A 又發生了一次」這個復發事實遺失。正式化時需決定是否改為與「全表最後一列」比較或另記復發。
+10. **`refresh_failed` 可能少報**：該欄照抄既有 `MacroRefreshReport` 的失敗清單語意，可能少於實際有問題的來源（哪些情形會漏列未逐一查證）。屬既有報告語意，本 PoC 未改；⛔ UI／讀端不得把「此欄空白」讀成「所有來源都正常」。
+11. **`core_input_provenance` 未經 `scrub_secrets`**：目前寫入的只有既有 L2 的常數來源標籤與布林／"unknown"，故未經清洗；若日後 source 字串可能夾帶 URL／錯誤原文，寫入前需改走 `scrub_secrets`。
+12. **完成後殘留執行緒約 6.5～7 分鐘未在 Actions 量測**：第 3 點的行程尾巴只在沙箱觀察到；GitHub Actions 上的實際時長與是否撞 job timeout **未量測**（須合併後手動觸發 PoC workflow 時一併觀察）。
 

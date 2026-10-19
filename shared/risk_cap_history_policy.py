@@ -47,7 +47,10 @@ COL_ENGINE_SOURCE = "engine_source"        # `risk_cap_apply.ENGINE_SOURCE`
 COL_SNAPSHOT_TIMESTAMP = "snapshot_timestamp"      # 快照自己的 timestamp（台北時間；有效期 7 天由它判）
 #: 稽核修正（2026-10-19）：Required Core 各輸入的 provenance（JSON）——
 #: `{鍵名: {"source": 既有 L2 `DatedValue.source` 原文, "upstream_is_stale": True/False/"unknown"}}`。
-#: `upstream_is_stale` **只**取上游 dict 自帶的 `is_stale` 布林（L1 `macro_core` 的 stale-cache 退路會蓋 True）；
+#: `upstream_is_stale` **只**取上游 dict 自帶的 `is_stale` 布林；
+#: 2026-10-19 複稽核更正（有意識的變更，不是漏刪）：舊註「L1 `macro_core` 的 stale-cache 退路會蓋 True」只對
+#: **台灣 PMI 當月**成立（多源全失敗 → 讀上次已知值快照時才設 True；即時命中時不帶此欄）；
+#: **VIX 上游（`macro_snapshot.fetch_vix_block`）從不帶 `is_stale`** ⇒ VIX 此欄恆為 "unknown"。
 #: 上游沒有這個欄位 ⇒ "unknown"（⛔ 不以缺欄推定 False、⛔ 不另判新鮮度）。有效性判定與此欄無關。
 COL_CORE_INPUT_PROVENANCE = "core_input_provenance"
 COL_REFRESH_OK = "refresh_ok"              # 這一輪整條更新鏈是否全部成功（`MacroRefreshReport.ok`）
