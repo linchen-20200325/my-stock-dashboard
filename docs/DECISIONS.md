@@ -412,7 +412,7 @@
   共同權限原則：risk-cap-writer / reader 都不得取得個人持股 Sheet 權限。不得沿用 fund-nav。System Risk Cap Sheet 與 holdings Sheet 完全隔離。上線前必須做反向權限測試。正式每日 production 寫入仍未核准。」
 - **客戶補充（同日，經總管轉交；非逐字）**：既有 `GCP_SERVICE_ACCOUNT_JSON` 可能屬於 fund-dashboard 專案的 fund-nav SA。G3 調查範圍：確認是否為 fund-nav；股票 repo 哪些功能使用（現為 `push_holdings_daily.yml`＋`scripts/push_holdings_daily.py` 經 `gsheet_sa_reader.py`（`spreadsheets.readonly`），另手動 `scripts/diagnose_etf_total_return_fix.py`）；評估跨專案／權限過大風險；日後遷移到股票專用 SA 另案評估。⛔ 禁止修改／刪除／輪換／停用 fund-nav、影響每日持股推播、沿用 fund-nav 作 Risk Cap writer／reader。
 - **落地讀法**（撰寫組單組，⚠️ 待第二組 evidence audit）：GitHub secret `RISK_CAP_HISTORY_WRITER_SA_JSON` 退役、不建立（G1 無 writer key）；只新增 `RISK_CAP_HISTORY_SHEET_ID`；reader key 只放 Streamlit secrets 獨立表格（提案 `[risk_cap_history_reader]`，不得與 `[gcp_service_account]` 同名）。程式端保留名 `shared/risk_cap_history_policy.py:177` 於未來實作批次退役（本批不改 code）。
-- **範圍**：credentials／account access（DEC-009）｜**日期**：2026-10-19｜**決策者**：客戶｜**狀態**：生效（身分設計核准；資源由客戶手動建立；⛔ production 寫入未核准；⛔ G3 未核准任何修改）
+- **範圍**：credentials／account access（DEC-009）｜**日期**：2026-10-19｜**決策者**：客戶｜**狀態**：生效（身分設計核准；資源由客戶手動建立；⛔ production 寫入未核准；⛔ G3 未核准任何修改）<br>📌 2026-10-19 狀態補註（append-only）：#884 已合併（`a6eaf72c`、PR Check run 39265077027 success；撰寫組 GitHub API 實查）；客戶回報 G1／G2 手動設定已完成（客戶回報，非 repo 查證；總管對照與本條一致，待確認項與反向權限測試未完成，見 `docs/BACKLOG.md` `VN1-STORE`）；程式接線未實作；G3 唯讀調查完成、遷移另案待客戶決定（`docs/BACKLOG.md` `VN1-G3-FU-1`）；production 寫入仍未核准
 - **來源**：D 客戶訊息 2026-10-19（本 session；確切 UTC 時戳未記錄，只保留日期；經總管轉交，逐字未經第二組比對），原文如上。PoC Actions dry-run：客戶回報 run 39249934107 success（VALID、`exposure_limit_pct` 30、同日重跑 APPENDED→NOOP_DUPLICATE；撰寫組未重查）。
 - **與其他 DEC 的關係**：**補充 DEC-063**（第 5 點寫入／讀取權限分離的具體身分設計），不取代；DEC-009 credentials gate 由本條就 G1／G2 開放「客戶手動建立」，未開放 AI 建立任何資源；SEC-3（#877）不重新引入。
 
