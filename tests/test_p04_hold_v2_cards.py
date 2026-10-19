@@ -289,6 +289,23 @@ def _enumerate():
     add(P.build_var_card, P.DeepReadout(
         requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,
         var=_var_res(computed=False, reason="r", invalid_close=(("2330", "2025-02-13"),))))
+    # vNext 1.0-B2 稽核修正（2026-10-19，有意識的新增，⛔ 不是漏列）：Google 登入已逾時 → 「還沒綁」那一批卡
+    # 換成 `LOGIN_EXPIRED_NOW`（灰）。readout 多一個 `login_expired` 旗標，窮舉要走到它，短句表才不會被判死列。
+    _le_st = P.StationReadout(requested=True, submitted=True, login_expired=True)
+    for fn in (P.build_action_card, P.build_confidence_card, P.build_todo_card,
+               P.build_lightwall_card, P.build_allocation_split_card,
+               P.build_take_profit_card, P.build_core_satellite_card):
+        add(fn, _le_st)
+    add(P.build_switch_card, P.SwitchReadout(requested=True, submitted=True), _le_st)
+    add(P.build_ai_summary_card, P.AiSummaryReadout(requested=True), _le_st)
+    _le_dq = P.DeepReadout(requested=True, submitted=True, login_expired=True)
+    for fn in (P.build_stress_card, P.build_var_card, P.build_dividend_cash_card):
+        add(fn, _le_dq)
+    add(P.build_binding_card, P.BindingReadout(requested=True, submitted=True, login_expired=True))
+    add(P.build_portfolio_count_card,
+        P.BindingReadout(requested=True, submitted=True, login_expired=True))
+    add(P.build_holdings_preview_card,
+        P.HoldingsReadout(requested=True, submitted=True, login_expired=True))
     return notes, builts
 
 

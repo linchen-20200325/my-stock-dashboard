@@ -118,6 +118,9 @@ class HoldingsResult:
     more_portfolios: bool = False
     more_watchlists: bool = False
     watchlist_error: str = ""
+    #: 1.0-B2(只加不改):登入已逾時(見 `BindingState.login_expired`)。為 True 時 `bound=False`
+    #: ＋ 空清單,呼叫端畫灰色「登入已逾時」卡(⛔ 不是紅色讀取失敗)。
+    login_expired: bool = False
 
     @property
     def held(self) -> tuple[dict, ...]:
@@ -198,12 +201,15 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
     _sid = str(getattr(_state, "sheet_id", "") or "")
     _bound = bool(_sid) and str(getattr(_state, "status", "")) != STATUS_UNBOUND
     _logged = bool(getattr(_state, "logged_in", False))
+    _expired = bool(getattr(_state, "login_expired", False))
 
     _out: list[dict] = []
     _pf_name = ""
     _more_pf = False
     if _bound:
         # ⚠️ 這一段**不包 try/except**：投資組合讀取失敗要往上拋（§1，見 docstring）。
+        # 1.0-B2：「登入在 binding 與這裡之間被清掉」（L1 `LoginRequiredError`）同樣往上拋 ——
+        # 那不是讀取失敗，由呼叫端（`page_hold.load_holdings`）經 `is_login_required_error()` 轉成灰卡。
         _names = _gsp.list_portfolios(sheet_id=_sid) or []
         if _names:
             _pf_name, _more_pf = _names[0], len(_names) > 1
@@ -259,7 +265,7 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
         print(f"[holdings_service] 名稱解析略過：{type(_e).__name__}: {_e}")
 
     return HoldingsResult(
-        holdings=tuple(_out), bound=_bound, logged_in=_logged,
+        holdings=tuple(_out), bound=_bound, logged_in=_logged, login_expired=_expired,
         portfolio_name=_pf_name, watchlist_name=_wl_name,
         more_portfolios=_more_pf, more_watchlists=_more_wl,
         watchlist_error=_wl_err)

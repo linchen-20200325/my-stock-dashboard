@@ -31,6 +31,38 @@ class BindingState:
     #: ⚠️ 組合清單(list_portfolios)讀取失敗**不**記在這裡 —— 那一種既有契約是
     #: status=bound + portfolio_count=None(綁定本身是讀到的),頁面另有處理。
     read_error: str = ""
+    #: 1.0-B2(只加不改):本 session 的 Google 登入因「token 過期且無 refresh_token」被清掉、之後還沒
+    #: 重新登入。只在 `logged_in=False` 時可能為 True。頁面據此把「未登入」那張**灰**卡寫成
+    #: 「登入已逾時，請重新整理」(⛔ 不是紅色錯誤,稽核 SA2 MUST-1)。既有 caller 不讀本欄,一字不變。
+    login_expired: bool = False
+
+
+def is_login_required_error(exc: BaseException) -> bool:
+    """`exc` 是不是 L1 的 `LoginRequiredError`(沒登入 / 登入已逾時)。
+
+    給 L5 頁面用:L5 不得直接 import L1(§8.2),經本支判斷「這不是讀取失敗,是沒有登入」。
+    L1 載不進來 → False(照舊當一般例外,由呼叫端畫紅 —— 那時確實是故障)。
+    """
+    try:
+        from src.data.portfolio.gsheet_portfolio import LoginRequiredError   # L3→L1
+    except Exception:  # noqa: BLE001
+        return False
+    return isinstance(exc, LoginRequiredError)
+
+
+def _login_expired(_gsp) -> bool:
+    try:
+        return bool(_gsp.login_expired())
+    except Exception:  # noqa: BLE001 — 讀不到旗標 ⇒ 退回一般「未登入」說法(仍是灰色有效態)
+        return False
+
+
+def _with_login_expired(state: BindingState, _gsp) -> BindingState:
+    """未登入時補上 `login_expired`(1.0-B2);已登入 → 原樣回傳。⛔ 不改其他任何欄位。"""
+    if state.logged_in or not _login_expired(_gsp):
+        return state
+    from dataclasses import replace
+    return replace(state, login_expired=True)
 
 
 def get_binding_state() -> BindingState:
@@ -55,9 +87,9 @@ def get_binding_state() -> BindingState:
     _logged, _sid, _read_err = _read_login_and_sheet(_gsp)
 
     if not _logged or not _sid:
-        return BindingState(logged_in=_logged, sheet_id=_sid,
+        return _with_login_expired(BindingState(logged_in=_logged, sheet_id=_sid,
                             portfolio_count=None, status=STATUS_UNBOUND,
-                            read_error=_read_err)
+                            read_error=_read_err), _gsp)
 
     # 已登入 + 已綁 → 看有沒有組合資料(區分 🟡 空 vs 🟢 有)。
     # ⚠️ 明確傳 sheet_id=_sid(而非預設 None)。SEC-1 起 L1 快取鍵＝(身分指紋, 實際 sheet_id),
@@ -66,7 +98,15 @@ def get_binding_state() -> BindingState:
     # 由本檔說清楚,不依賴 L1 的解析細節。
     try:
         _count = len(_gsp.list_portfolios(sheet_id=_sid))
-    except Exception:  # noqa: BLE001 — 讀組合清單失敗 → 中性「已綁定」,不炸狀態列、不腦補
+    except Exception as _e:  # noqa: BLE001 — 讀組合清單失敗 → 中性「已綁定」,不炸狀態列、不腦補
+        if is_login_required_error(_e):
+            # 1.0-B2(稽核 SA2 MUST-1):這一次讀取期間登入被清掉了(token 過期且無 refresh_token,
+            # L1 已清 session)→ **不是**讀取失敗,也⛔ 不得回舊的 logged_in=True(那會讓下游再打一次、
+            # 拿到「請先登入」並畫成紅卡)。重讀一次登入狀態 → 照實回「未登入 / 未綁」。
+            _logged, _sid, _read_err = _read_login_and_sheet(_gsp)
+            return _with_login_expired(BindingState(
+                logged_in=_logged, sheet_id=_sid, portfolio_count=None,
+                status=STATUS_UNBOUND, read_error=_read_err), _gsp)
         return BindingState(logged_in=_logged, sheet_id=_sid,
                             portfolio_count=None, status=STATUS_BOUND)
     if _count == 0:

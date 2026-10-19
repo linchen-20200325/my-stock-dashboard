@@ -170,12 +170,12 @@
 
 ## 6. 裁示後狀態與建議小批次順序（2026-10-18，DEC-062／DR-2026-10-18-3）
 
-> ⛔ **本節是總管建議，不是授權**。客戶原文：「不要一次施工整個 vNext 1.0」「後續按安全小 Batch 推進」「建議第一個 implementation Batch 優先處理安全前置依賴（SEC-2／SEC-3），但請先依最新 repo、依賴與風險自行確認最小安全批次」。每批開始前依 `PROJECT_RULES.md` 9.2 做 Effort Check（DEC-061）；若需 High，先停下提醒客戶切換。~~**目前尚未開始任何實作。**~~ 📌 2026-10-18 更新：~~`1.0-B1` 已開工（in-progress，PR 未合併；總管轉述；有意識的變更，不是漏刪）。~~ `1.0-B1` **完成**（#877、`a9ba83c1`、main CI run 39132620519 success；有意識的變更，不是漏刪）；其餘批次尚未開始。
+> ⛔ **本節是總管建議，不是授權**。客戶原文：「不要一次施工整個 vNext 1.0」「後續按安全小 Batch 推進」「建議第一個 implementation Batch 優先處理安全前置依賴（SEC-2／SEC-3），但請先依最新 repo、依賴與風險自行確認最小安全批次」。每批開始前依 `PROJECT_RULES.md` 9.2 做 Effort Check（DEC-061）；若需 High，先停下提醒客戶切換。~~**目前尚未開始任何實作。**~~ 📌 2026-10-18 更新：~~`1.0-B1` 已開工（in-progress，PR 未合併；總管轉述；有意識的變更，不是漏刪）。~~ `1.0-B1` **完成**（#877、`a9ba83c1`、main CI run 39132620519 success；有意識的變更，不是漏刪）；~~其餘批次尚未開始。~~ 📌 2026-10-19 更新：`1.0-B2` 已開工（in-progress，PR 未合併；總管轉述；有意識的變更，不是漏刪）；`1.0-B3` 起尚未開始。
 
 | 建議批次 | 內容 | 預期 Effort | 前提／限制 |
 |---|---|---|---|
 | **1.0-B1** 安全地基 | `SEC-2` 登入防偽造（只存一次性驗證碼、不存 Google 密碼／憑證）＋`SEC-3` 關閉匿名經系統帳號讀取（＋`SEC-1-FU` 登出清該使用者快取，是否併入由開工前依最新 repo 確認） | **High** | 開工前先依最新 repo／依賴／風險確認最小安全批次；修前安全稽核；不得重現 v19.63 登入迴圈<br>📌 2026-10-18 狀態（append-only，總管轉述）：**in-progress**（`SEC-2`＋`SEC-3`；`SEC-1-FU` 刻意未併入；commits `abb44a90`、`5be0e9dd`；PR 未合併）；後續 `B1-FU-1`～`3` 見 `docs/BACKLOG.md` 5.1.1<br>📌 2026-10-18 收尾（append-only）：**完成**（#877、`a9ba83c1`、main CI run 39132620519 success；`SEC-2`／`SEC-3` 已移入 BACKLOG「3. 已結案」）；⚠️ 未在 Streamlit Cloud 實測真實登入（`B1-FU-2`，屬 `1.0-B2`）；production SA／`[google_oauth]` 仍 unknown |
-| **1.0-B2** 登入持續性 PoC | 重新整理後維持登入的可行性驗證；不可可靠實作則退回 A | **High** | 依賴 B1（`SEC-2`）；同一硬限制 |
+| **1.0-B2** 登入持續性 PoC | 重新整理後維持登入的可行性驗證；不可可靠實作則退回 A | **High** | 依賴 B1（`SEC-2`）；同一硬限制<br>📌 2026-10-19 狀態（append-only，總管轉述）：**in-progress**（commits `23596359` 靜默恢復登入（Google `prompt=none`、網址記號；⛔ 不保存任何 Google 憑證，session 以外不留）、`1d169927`／`e7c2cba7` 稽核修正第 1／2 輪、`efd3d369` 第 3 輪；PR 未合併）。第 3 輪為 DEC-010 上限外、客戶 2026-10-19 核准（`docs/BACKLOG.md` DR-2026-10-19-1）：「裁示：A。核准依 DEC-010 進行第三輪小修，但範圍嚴格限定」—— 已登入 session 只信任 session 自身的 Sheet；已登入時 error 分支不寫 state 帶回的 Sheet。⛔ 客戶原文：「完成第三輪後不得再自行進入第四輪；若仍發現需要修改同一批檔案，重新停下裁示」。⚠️ 未在 Streamlit Cloud／真瀏覽器實測（`B2-FU-1`，客戶動作；本地測試不能替代）；可行性結論未定；後續 `B2-FU-1`～`5` 見 `docs/BACKLOG.md` 5.1.1 |
 | **1.0-B3** `VN1-STORE` 保存方式研究 | 研究並驗證（不實作）：Streamlit Cloud persistence、restart/deployment、concurrency、寫入可靠性、資料責任；不把 Git repo 當 production datastore | **Medium** | 結果送客戶裁示（附推薦方案） |
 | **1.0-B4** 線框送審 | 依 Q1-B 範圍出文字線框送客戶拍板（DEC-003） | **Medium** | 拍板前不寫 1.0 UI code |
 | 後續批 | 線框核准後的 UI 實作（今天頁先採「從今天開始記錄」、彙總燈依 Q5-A 等），逐批送 | 依批而定 | 線框核准後；每批 Effort Check |

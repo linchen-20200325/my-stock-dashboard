@@ -758,7 +758,15 @@ class TestOldFilesUntouched:
     # 📌 SEC-3 審計 round 1（2026-10-18，核准過的共用 chrome 改動，⛔ 不是漏改）：`app.py` 側欄刪掉 SA caption
     #   分支（及其 `_gsa_secret` / `_sheet_id_secret` import），else caption 改為「網頁讀取持股一律需 Google 登入；
     #   Service Account 不再用於網頁」。其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "63fa451e9b9d269c710c5d57b2ab8fd8af2750b14e964cafae8d957282ad80d8"
+    # ~~"63fa451e9b9d269c710c5d57b2ab8fd8af2750b14e964cafae8d957282ad80d8"~~（SEC-3 審計 round 1 後，至 4a576b19 仍成立）
+    # 📌 vNext 1.0-B2（2026-10-18，核准過的共用 chrome 改動，⛔ 不是漏改；DEC-062 Q2＝B）：`app.py` 只加最少的線 ——
+    #   OAuth callback 之後呼叫 `maybe_silent_reauth()`（重新整理後靜默恢復 Google 登入）、側欄登出多 import 並呼叫
+    #   `forget_silent_reauth()`（拿掉 `?gs=` 記號，否則登不出去）。其餘 90 檔一個字都沒動。
+    # ~~"7e3aa5539fcafccda019218eeddce8acc2473ffdd6618c1065777912f5f87b88"~~（1.0-B2 首版 23596359，至 1d169927 仍成立）
+    # 📌 vNext 1.0-B2 稽核修正第二輪（2026-10-19，核准過的共用 chrome 改動，⛔ 不是漏改）：`app.py` 再加最少的線 ——
+    #   OAuth hook 處多呼叫 `sync_silent_marker()`、側欄寫入新 `?sheet=` 後就地呼叫它（登入後換 Sheet 重算 `?gs=`
+    #   記號；稽核 MUST-1）。其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "bf2a00d0657f48efaf4e7ba40eb270a9513d2edc91e839a1d2c6d3cd7feb5897"
 
     def test_no_diff_against_base(self):
         import hashlib

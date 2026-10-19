@@ -132,6 +132,9 @@ def _uia_rel(file_path) -> str:
 def uia_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批（UIA-01/02/07）之前的寫法（無 pair 則原樣）。"""
     rel = _uia_rel(file_path)
+    # vNext 1.0-B2 稽核修正輪(2026-10-19,有意識的接鏈,⛔ 不是漏改):更新的那一輪先換回(還原鏈頭往前接一節)。
+    from tests.test_vn1_b2_silent_reauth import vn1b2_revert_for
+    code = vn1b2_revert_for(file_path, code)
     for new, old in UIA_REVERT_PAIRS.get(rel, ()):
         assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)

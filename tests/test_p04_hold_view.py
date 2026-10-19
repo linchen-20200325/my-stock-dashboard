@@ -230,6 +230,10 @@ _ALLOWED_L3: frozenset[tuple[str, str]] = frozenset({
     ("src.services.dividend_station_service", "build_ai_summary"),
     ("src.services.app_ai_service", "gemini_call"),
     ("src.services.allocation_service", "get_allocation"),
+    # vNext 1.0-B2 稽核修正（2026-10-19，有意識的新增，⛔ 不是漏列）：純判斷式（`isinstance`），
+    # 只讀例外物件、零 I/O、不寫任何東西 —— 讓本頁把「沒登入 / 登入已逾時」畫成灰卡而不是紅卡，
+    # 又不必 L5 直接 import L1 的 `LoginRequiredError`（§8.2）。
+    ("src.services.portfolio_binding_service", "is_login_required_error"),
     ("src.services.portfolio_binding_service", "get_binding_state"),
     ("src.services.portfolio_binding_service", "STATUS_BOUND"),
     ("src.services.portfolio_binding_service", "STATUS_UNBOUND"),

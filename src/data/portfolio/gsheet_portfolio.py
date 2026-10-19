@@ -57,6 +57,7 @@ try:
 except ImportError:
     st = None
 
+from shared.oauth_session_policy import OAUTH_LOGIN_EXPIRED_MSG   # L0 SSOT:1.0-B2 逾時訊息
 from shared.ttls import TTL_15MIN   # L0 SSOT(§3.3):Google Sheet 讀取快取 TTL
 
 
@@ -127,6 +128,11 @@ def _oauth_active() -> bool:
 
 #: SEC-3:未登入時所有讀 / 寫 / Drive 呼叫的唯一錯誤訊息(§3.3 具名常數)。
 LOGIN_REQUIRED_MSG = '請先登入 Google 才能讀取持股'
+
+#: 1.0-B2:access_token 過期且沒有 refresh_token(靜默恢復登入的常態,約 1 小時)時的訊息。
+#: ⛔ session 中途**不**自動轉跳 Google(v19.63 迴圈教訓);網址記號留著 ⇒ 重新整理即可靜默恢復。
+#: SSOT 在 L0(`shared.oauth_session_policy`,L5 畫灰卡也用同一句);此名保留給既有 caller / 測試。
+LOGIN_EXPIRED_MSG = OAUTH_LOGIN_EXPIRED_MSG
 
 
 class LoginRequiredError(RuntimeError):
@@ -254,8 +260,65 @@ def _secrets_read_error() -> str:
     return ''
 
 
+def _login_needs_reauth() -> bool:
+    """session 的 token 已過期(或沒有 expires_at)且**沒有 refresh_token** ⇒ 無法續期。純讀。
+
+    1.0-B2:靜默恢復登入(`prompt=none`)Google 通常不發 refresh_token ⇒ 約 1 小時後會走到這裡。
+    判斷與 `infra.oauth.ensure_fresh_tokens` 一致(同一支 `is_token_expired`,沒 expires_at 視為過期),
+    只是在它丟出原始 `OAuthError` 之前先攔下,改成看得懂的 `LoginRequiredError`。
+    """
+    if st is None:
+        return False
+    _toks = st.session_state.get('gsheet_tokens')
+    if not isinstance(_toks, Mapping) or not _toks or _toks.get('refresh_token'):
+        return False
+    from infra.oauth import is_token_expired
+    return is_token_expired(dict(_toks))
+
+
+def _expire_session_login() -> None:
+    """清掉本 session 的登入(token / email),並標記本 session 不再自動靜默恢復。
+
+    ⚠️ 網址記號**刻意保留**:使用者重新整理 ⇒ 新 session ⇒ 靜默恢復一次。
+    標記 `OAUTH_SILENT_ATTEMPTED_SESSION_KEY` ⇒ 本 session 下一輪 rerun **不會**自動轉跳(session 中途不轉)。
+    標記 `OAUTH_LOGIN_EXPIRED_SESSION_KEY` ⇒ 之後「沒有 token」的 `LoginRequiredError` 仍帶逾時訊息、
+    頁面畫灰色「登入已逾時」卡(稽核 SA2 MUST-1);下一次登入成功 / 登出時由 oauth_state 清掉。
+    """
+    from shared.oauth_session_policy import (
+        OAUTH_LOGIN_EXPIRED_SESSION_KEY,
+        OAUTH_SILENT_ATTEMPTED_SESSION_KEY,
+    )
+    for _k in ('gsheet_tokens', 'gsheet_email'):
+        st.session_state.pop(_k, None)
+    st.session_state[OAUTH_SILENT_ATTEMPTED_SESSION_KEY] = True
+    st.session_state[OAUTH_LOGIN_EXPIRED_SESSION_KEY] = True
+    print('[gsheet_portfolio] 1.0-B2 login_expired reason=no_refresh_token')
+
+
+def login_expired() -> bool:
+    """本 session 的登入是否因「token 過期且無 refresh_token」被清掉、且之後還沒重新登入。純讀。
+
+    唯一用途:讓 L3 / 頁面把「沒有 token」分成「從沒登入」與「登入已逾時」兩種說法(都是灰色有效態)。
+    """
+    if st is None:
+        return False
+    from shared.oauth_session_policy import OAUTH_LOGIN_EXPIRED_SESSION_KEY
+    try:
+        return bool(st.session_state.get(OAUTH_LOGIN_EXPIRED_SESSION_KEY))
+    except Exception:  # noqa: BLE001 — 讀不到 session ⇒ 當作沒有逾時(退回一般「請先登入」說法)
+        return False
+
+
+def _login_required_message() -> str:
+    """「沒有 token」時該說哪一句:逾時旗標在 → 逾時訊息;否則 → 請先登入。"""
+    return LOGIN_EXPIRED_MSG if login_expired() else LOGIN_REQUIRED_MSG
+
+
 def _build_client():
     """以**本人 OAuth** 建一個 gspread client;沒登入 / client 建不起來 → `LoginRequiredError`。
+
+    1.0-B2:token 過期且無 refresh_token → 清掉 session 登入並拋 `LoginRequiredError(LOGIN_EXPIRED_MSG)`
+    (取代深處的原始 `OAuthError`)。
 
     OAuth 判斷只看「有 token + 有 OAuth Client」，不綁 sheet_id —
     讓「列檔挑 Sheet」流程能在 sheet_id 還沒設定前先建 client。
@@ -265,7 +328,10 @@ def _build_client():
     現在**沒有任何退路**:所有讀 / 寫 / Drive 函式都經過這裡,故一律 fail closed。
     """
     if not _has_oauth_tokens():
-        raise LoginRequiredError(LOGIN_REQUIRED_MSG)
+        raise LoginRequiredError(_login_required_message())
+    if _login_needs_reauth():
+        _expire_session_login()
+        raise LoginRequiredError(LOGIN_EXPIRED_MSG)
     from src.data.portfolio.oauth_state import _get_oauth_client
     cli = _get_oauth_client()
     if cli is None:
@@ -282,6 +348,9 @@ def _build_client():
 #: 身分種類前綴(§3.3 具名常數)。SEC-3 起只剩 OAuth 一種身分(SA 前綴與「釘住身分種類」的
 #: ContextVar 隨 SA fallback 一併移除 —— 只有一種 client,不再有「鍵與實際 client 種類不符」的可能)。
 _IDENTITY_KIND_OAUTH = 'oauth'
+#: 1.0-B2:沒有 refresh_token 時改用 id_token 的 `sub`(Google 帳號永久 ID)。與上面分開的前綴 ⇒
+#: 兩種憑證來源的指紋空間互不重疊。
+_IDENTITY_KIND_OAUTH_SUB = 'oauth_sub'
 
 
 def _identity_fingerprint(kind: str, credential: str) -> str:
@@ -295,8 +364,12 @@ def _cache_identity() -> str:
 
     判斷與 `_build_client()` 相同(只有 OAuth;SEC-3 起沒有 SA 身分):
       · OAuth:指紋取 `refresh_token`(同一授權在 access_token refresh 後**不變** ⇒ refresh 只是
-        同一身分,照常命中);沒有 refresh_token 才退用 `access_token`(refresh 後變 ⇒ 只是 cache
-        miss,安全側)。兩者皆無 → 空字串(此時 `_get_oauth_client` 本來就會拋 OAuthError)。
+        同一身分,照常命中);沒有 refresh_token(1.0-B2 靜默恢復登入的常態)→ 取 id_token 的 `sub`
+        (同一人每次靜默恢復都相同、不同人必不同 ⇒ **仍是每人一格**,不會落進共用格);
+        連 `sub` 都沒有才退用 `access_token`(每次換新 ⇒ 只是 cache miss,安全側)。
+        全無 → 空字串(此時 `_get_oauth_client` 本來就會拋 OAuthError)。
+      · token 已過期且無 refresh_token(`_login_needs_reauth`)→ 空字串 ⇒ 不碰快取、走原路徑,
+        由 `_build_client` 清掉 session 並拋 `LoginRequiredError(LOGIN_EXPIRED_MSG)`。
       · 未登入 → 空字串(`_build_client` 會拋 `LoginRequiredError`)。
     ⚠️ 空字串的意思是「**不准用快取**」,不是「匿名身分」—— caller 必須繞過快取(見
     `_identity_scoped_read`),否則未登入者會命中彼此的快取項。
@@ -307,7 +380,16 @@ def _cache_identity() -> str:
         _toks = st.session_state.get('gsheet_tokens')
         if not isinstance(_toks, Mapping):
             return ''
-        _cred = str(_toks.get('refresh_token') or _toks.get('access_token') or '')
+        _rt = str(_toks.get('refresh_token') or '')
+        if _rt:
+            return _identity_fingerprint(_IDENTITY_KIND_OAUTH, _rt)
+        if _login_needs_reauth():
+            return ''
+        from infra.oauth import decode_id_token_sub
+        _sub = decode_id_token_sub(dict(_toks))
+        if _sub:
+            return _identity_fingerprint(_IDENTITY_KIND_OAUTH_SUB, _sub)
+        _cred = str(_toks.get('access_token') or '')
         return _identity_fingerprint(_IDENTITY_KIND_OAUTH, _cred) if _cred else ''
     return ''
 

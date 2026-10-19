@@ -347,9 +347,13 @@ class TestExistingCallersUnchanged:
         res = HS.get_holdings()
         assert calls == [(("核心",), {"sheet_id": _SID})], "預設路徑多帶了參數 —— L1 快取鍵變了"
         assert [(x["ticker"], x["lots"], x["avg_price"]) for x in res.held] == [("0056", 3.0, 30.0)]
+        # 📌 vNext 1.0-B2 稽核修正輪(2026-10-19,有意識的新增,⛔ 不是漏改):多一個**加性**欄位
+        #   `login_expired`(預設 False;登入已逾時 → 頁面畫灰卡,稽核 SA2 MUST-1)。本條守的是
+        #   「預設路徑對 L1 的呼叫一字不變」(上兩行),那一半不受影響。
         assert set(HS.HoldingsResult.__dataclass_fields__) == {
             "holdings", "bound", "logged_in", "portfolio_name", "watchlist_name",
-            "more_portfolios", "more_watchlists", "watchlist_error"}, "L3 回傳型別多了欄位"
+            "more_portfolios", "more_watchlists", "watchlist_error",
+            "login_expired"}, "L3 回傳型別多了欄位"
 
     def test_c_no_other_caller_passes_the_new_param(self):
         """只有本頁這一條鏈會開 `keep_blank`；📁 組合管理、ETF 存股戰情室、cron SA reader 都沒動。"""

@@ -86,7 +86,11 @@ st.set_page_config(page_title='台股AI戰情室 v3.0', layout='wide',
 # v18.400 D4:oauth_state 已從 src/ui/pages 歸位 src/data/portfolio
 try:
     from src.data.portfolio.oauth_state import handle_oauth_callback as _oauth_cb
+    from src.data.portfolio.oauth_state import maybe_silent_reauth as _oauth_silent
+    from src.data.portfolio.oauth_state import sync_silent_marker as _oauth_sync
     _oauth_cb()
+    _oauth_silent()   # 1.0-B2:重新整理後靜默恢復登入(網址有 ?gs= 記號才轉;每 session 最多一次)
+    _oauth_sync()     # 1.0-B2:登入後換了 Sheet(📁 組合管理寫完會 st.rerun)→ 重算 ?gs= 記號
 except Exception as _oauth_err:
     print(f'[oauth callback] {_oauth_err}')
 
@@ -333,6 +337,8 @@ with st.sidebar:
         from src.data.portfolio.oauth_state import (
             get_oauth_cfg as _sb_get_cfg,
             login_state_with_sheet as _sb_login_state_with_sheet,
+            forget_silent_reauth as _sb_forget_silent,
+            sync_silent_marker as _sb_sync_silent,
         )
         from infra.oauth import build_authorize_url as _sb_buildurl
         # 每次 rerun 動態解析，避免 module-level cache 過期
@@ -349,6 +355,7 @@ with st.sidebar:
                           use_container_width=True):
                 for _k in ('gsheet_tokens', 'gsheet_email', '_oauth_state'):
                     st.session_state.pop(_k, None)
+                _sb_forget_silent()   # 1.0-B2:拿掉 ?gs= 記號,否則重新整理又靜默登回去(登不出去)
                 st.rerun()
             # ── Google Sheet ID（集中於帳號區；亦可於「📁 組合管理」頁設定）──
             _sb_sid_cur = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
@@ -369,6 +376,7 @@ with st.sidebar:
                     st.query_params['sheet'] = _sb_sid_new
                 except Exception:  # noqa: BLE001 — query param 寫入失敗不擋設定
                     pass
+                _sb_sync_silent()   # 1.0-B2:側欄換 Sheet 後**這一輪**沒有再 rerun → 就地重算 ?gs= 記號
             if _sb_sid_new:
                 st.caption(f'✅ Sheet ID：`{_sb_sid_new}`')
             else:
