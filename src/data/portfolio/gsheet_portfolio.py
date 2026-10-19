@@ -57,6 +57,7 @@ try:
 except ImportError:
     st = None
 
+from shared.oauth_session_policy import OAUTH_LOGIN_EXPIRED_MSG   # L0 SSOT:1.0-B2 逾時訊息
 from shared.ttls import TTL_15MIN   # L0 SSOT(§3.3):Google Sheet 讀取快取 TTL
 
 
@@ -130,8 +131,8 @@ LOGIN_REQUIRED_MSG = '請先登入 Google 才能讀取持股'
 
 #: 1.0-B2:access_token 過期且沒有 refresh_token(靜默恢復登入的常態,約 1 小時)時的訊息。
 #: ⛔ session 中途**不**自動轉跳 Google(v19.63 迴圈教訓);網址記號留著 ⇒ 重新整理即可靜默恢復。
-LOGIN_EXPIRED_MSG = ('Google 登入已逾時，請重新整理頁面以自動恢復登入，'
-                     '或按側欄「🔐 用 Google 登入」重新登入。')
+#: SSOT 在 L0(`shared.oauth_session_policy`,L5 畫灰卡也用同一句);此名保留給既有 caller / 測試。
+LOGIN_EXPIRED_MSG = OAUTH_LOGIN_EXPIRED_MSG
 
 
 class LoginRequiredError(RuntimeError):
@@ -280,12 +281,37 @@ def _expire_session_login() -> None:
 
     ⚠️ 網址記號**刻意保留**:使用者重新整理 ⇒ 新 session ⇒ 靜默恢復一次。
     標記 `OAUTH_SILENT_ATTEMPTED_SESSION_KEY` ⇒ 本 session 下一輪 rerun **不會**自動轉跳(session 中途不轉)。
+    標記 `OAUTH_LOGIN_EXPIRED_SESSION_KEY` ⇒ 之後「沒有 token」的 `LoginRequiredError` 仍帶逾時訊息、
+    頁面畫灰色「登入已逾時」卡(稽核 SA2 MUST-1);下一次登入成功 / 登出時由 oauth_state 清掉。
     """
-    from shared.oauth_session_policy import OAUTH_SILENT_ATTEMPTED_SESSION_KEY
+    from shared.oauth_session_policy import (
+        OAUTH_LOGIN_EXPIRED_SESSION_KEY,
+        OAUTH_SILENT_ATTEMPTED_SESSION_KEY,
+    )
     for _k in ('gsheet_tokens', 'gsheet_email'):
         st.session_state.pop(_k, None)
     st.session_state[OAUTH_SILENT_ATTEMPTED_SESSION_KEY] = True
+    st.session_state[OAUTH_LOGIN_EXPIRED_SESSION_KEY] = True
     print('[gsheet_portfolio] 1.0-B2 login_expired reason=no_refresh_token')
+
+
+def login_expired() -> bool:
+    """本 session 的登入是否因「token 過期且無 refresh_token」被清掉、且之後還沒重新登入。純讀。
+
+    唯一用途:讓 L3 / 頁面把「沒有 token」分成「從沒登入」與「登入已逾時」兩種說法(都是灰色有效態)。
+    """
+    if st is None:
+        return False
+    from shared.oauth_session_policy import OAUTH_LOGIN_EXPIRED_SESSION_KEY
+    try:
+        return bool(st.session_state.get(OAUTH_LOGIN_EXPIRED_SESSION_KEY))
+    except Exception:  # noqa: BLE001 — 讀不到 session ⇒ 當作沒有逾時(退回一般「請先登入」說法)
+        return False
+
+
+def _login_required_message() -> str:
+    """「沒有 token」時該說哪一句:逾時旗標在 → 逾時訊息;否則 → 請先登入。"""
+    return LOGIN_EXPIRED_MSG if login_expired() else LOGIN_REQUIRED_MSG
 
 
 def _build_client():
@@ -302,7 +328,7 @@ def _build_client():
     現在**沒有任何退路**:所有讀 / 寫 / Drive 函式都經過這裡,故一律 fail closed。
     """
     if not _has_oauth_tokens():
-        raise LoginRequiredError(LOGIN_REQUIRED_MSG)
+        raise LoginRequiredError(_login_required_message())
     if _login_needs_reauth():
         _expire_session_login()
         raise LoginRequiredError(LOGIN_EXPIRED_MSG)

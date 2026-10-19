@@ -1,11 +1,16 @@
 """vNext 1.0-B2 迴歸:重新整理後靜默恢復 Google 登入(prompt=none,不保存任何 Google 憑證;DEC-062 Q2)。
 
 客戶硬性條件(原文):「不得保存 Google 密碼或 Google 憑證」⇒ token 只住在 session。
-做法:登入強驗成功 → 網址掛非憑證記號 `?gs=1`;重新整理(新 session、無 token)看到記號 →
-**先拿掉記號**、發 nonce、整頁轉 Google `prompt=none` → 回呼走 SEC-2 consume。
+做法:登入強驗成功 → 網址掛非憑證記號 `?gs=<MAC(sub, sheet)>`;重新整理(新 session、無 token)
+看到記號 → 標記 session、發 nonce(state＝`nonce.sheet.記號`)→ script 先 replaceState 拿掉記號再整頁轉
+Google `prompt=none` → 回呼走 SEC-2 consume,並以新的 sub 重算記號比對。
+
+稽核修正輪(2026-10-19)新增:記號綁帳號＋Sheet(攻擊者連結 / 換帳號 / 竄改 → 不登入)、
+上一頁陷阱(伺服器端不拿記號,改 script replaceState)、`?error=` 只在「靜默＋靜默失敗代碼」才燒 nonce、
+錯誤代碼只顯示標準表內的、登入逾時走灰卡(L1→L3→L5)。
 
 本檔釘住(每條對應一個宣稱):
-  1. 有記號的新 session → 恰好 1 個轉跳 script,記號被拿掉;同 session 再跑 → 0。
+  1. 有記號的新 session → 恰好 1 個轉跳 script(先 replaceState 拿掉記號);同 session 再跑 → 0。
   2. 有 code/state/error、已登入、OAuth 未設定、沒 cookie、開關關閉、登出後 → 0 轉跳。
   3. Google 每次都回 `error=login_required`,連續重新整理 N 次 → 轉跳總數 ≤ 1、每次失敗都有看得到的訊息。
   4. consume 失敗(unknown/mismatch/no_cookie/expired)→ 不掛記號,下一輪不轉跳。
@@ -36,14 +41,22 @@ from shared.oauth_csrf_policy import OAUTH_CSRF_ENFORCE_SECRET_KEY, OAUTH_STATE_
 from shared.oauth_session_policy import (
     OAUTH_SILENT_ATTEMPTED_SESSION_KEY,
     OAUTH_SILENT_FAILURE_ERROR_CODES,
+    OAUTH_LOGIN_EXPIRED_SESSION_KEY,
     OAUTH_SILENT_MARKER_PARAM as MK,
-    OAUTH_SILENT_MARKER_VALUE as MV,
     OAUTH_SILENT_REAUTH_SECRET_KEY,
 )
 
 _ME = hashlib.sha256(b'my-browser').hexdigest()
 _OTHER = hashlib.sha256(b'other-browser').hexdigest()
 _CFG = {'client_id': 'CID', 'client_secret': 'CSECRET', 'redirect_uri': 'https://app.example/'}
+
+
+def _tag(sub: str = 'SUB_ME', sheet: str = '') -> str:
+    """登入成功時會掛上的記號值(＝ MAC(client_secret, sub, sheet))。"""
+    return ost._silent_tag(_CFG['client_secret'], sub, sheet)
+
+
+MV = _tag()                       # 我、沒有綁 Sheet 時的記號
 
 
 def _id_token(**claims) -> str:
@@ -99,7 +112,7 @@ class _FakeSt:
 @pytest.fixture
 def wire(monkeypatch):
     """建一個「session」並接上 ost / gsp 的 st;binding = 這個瀏覽器的 cookie 雜湊(None ＝ 沒 cookie)。"""
-    state = {'binding': _ME, 'cfg': dict(_CFG), 'exchanged': []}
+    state = {'binding': _ME, 'cfg': dict(_CFG), 'exchanged': [], 'sub': 'SUB_ME'}
     monkeypatch.setattr(ost, '_browser_binding', lambda: state['binding'])
     monkeypatch.setattr(ost, '_resolve_oauth_cfg',
                         lambda: dict(state['cfg']) if state['cfg'] else None)
@@ -108,12 +121,13 @@ def wire(monkeypatch):
         state['exchanged'].append(code)
         # 靜默恢復:Google 不發 refresh_token(本檔預設情境)
         return {'access_token': 'AT_SECRET_' + code, 'expires_at': 9_999_999_999,
-                'id_token': _id_token(sub='SUB_ME', email='me@example.com')}
+                'id_token': _id_token(sub=state['sub'], email='me@example.com')}
     monkeypatch.setattr(ost, 'exchange_code_for_tokens', _exchange)
 
-    def _wire(*, qp, session=None, secrets=None, binding=_ME, cfg=True):
+    def _wire(*, qp, session=None, secrets=None, binding=_ME, cfg=True, sub='SUB_ME'):
         state['binding'] = binding
-        state['cfg'] = dict(_CFG) if cfg else None
+        state['sub'] = sub          # 這個瀏覽器目前登入的 Google 帳號(Google 換 token 時回這個 sub)
+        state['cfg'] = (dict(_CFG) if cfg is True else (dict(cfg) if cfg else None))
         fst = _FakeSt({} if session is None else session, qp, secrets)
         monkeypatch.setattr(ost, 'st', fst)
         monkeypatch.setattr(gsp, 'st', fst)
@@ -136,9 +150,14 @@ def _run_app(fst) -> None:
 def _redirect_url(fst) -> str:
     """從最後一個轉跳 script 取出 URL(JSON 字串常值)。"""
     body, _ = fst.htmls[-1]
-    m = re.search(r'var u=(".*?");var t;', body)
+    m = re.search(r'var u=(".*?");var k=', body)
     assert m, body
     return json.loads(m.group(1))
+
+
+def _browser_url_after_script(fst) -> dict:
+    """模擬 script 在最上層視窗執行 replaceState(拿掉記號)之後、導去 Google 之前的網址。"""
+    return {k: v for k, v in fst.query_params.items() if k != MK}
 
 
 def _qs(url: str) -> dict:
@@ -148,13 +167,17 @@ def _qs(url: str) -> dict:
 # ══════════════════════════════════════════════════════════════════════════
 # 1. 有記號 → 恰好一次轉跳,記號被拿掉;同 session 再跑 → 0
 # ══════════════════════════════════════════════════════════════════════════
-def test_fresh_session_with_marker_redirects_exactly_once_and_pops_marker(wire):
-    fst = wire(qp={MK: MV, 'sheet': 'SHEET_A'})
+def test_fresh_session_with_marker_redirects_exactly_once(wire):
+    tag = _tag(sheet='SHEET_A')
+    fst = wire(qp={MK: tag, 'sheet': 'SHEET_A'})
     _run_app(fst)
     assert len(fst.htmls) == 1
     body, unsafe = fst.htmls[0]
     assert unsafe is True, 'script 要能執行必須 unsafe_allow_javascript=True'
-    assert MK not in fst.query_params, '一次性:轉跳前必須先拿掉記號'
+    # 稽核 SA2 SHOULD-1:伺服器端**不**拿記號(那會在前端 pushState 多一筆帶記號的歷史 → 上一頁陷阱),
+    # 改由 script 在導頁前 replaceState 同一筆紀錄。
+    assert fst.query_params.get(MK) == tag
+    assert 'history.replaceState(' in body and 'searchParams.delete(k)' in body
     assert fst.query_params.get('sheet') == 'SHEET_A', 'sheet 不得被沖掉'
     assert fst.captions == [ost.OAUTH_SILENT_REAUTH_PENDING_MSG]
     assert fst.errors == [] and fst.infos == []
@@ -162,23 +185,22 @@ def test_fresh_session_with_marker_redirects_exactly_once_and_pops_marker(wire):
     assert url.startswith(GOOGLE_AUTH_URL + '?')
     q = _qs(url)
     assert q['prompt'] == 'none'
-    nonce, _, sheet = q['state'].partition('.')
+    nonce, sheet, got_tag = q['state'].split('.')
     assert sheet == 'SHEET_A', 'state 便車要帶著 sheet(新 session 從網址讀)'
+    assert got_tag == tag, '記號跟著 state 繞 Google 一圈,回呼才能比對'
     assert ns._STORE[nonce][1] == _ME, 'nonce 走既有 get_login_state 發放並綁本瀏覽器'
-    # 同一個 session 再跑(例如使用者在轉跳前點了什麼)→ 不再轉
-    _run_app(fst)
-    assert len(fst.htmls) == 1
-
-
-def test_session_guard_blocks_second_redirect_even_if_marker_reappears(wire):
-    """記號被拿掉之外,session 旗標是第二道閘:記號就算又出現(pop 失敗 / 別處寫回),同 session 不再轉。"""
-    fst = wire(qp={MK: MV})
-    _run_app(fst)
-    assert len(fst.htmls) == 1
-    fst.query_params[MK] = MV
+    # 同一個 session 再跑(例如使用者在轉跳前點了什麼;記號仍在伺服器端網址)→ 不再轉
     _run_app(fst)
     assert len(fst.htmls) == 1
     assert fst.session_state[OAUTH_SILENT_ATTEMPTED_SESSION_KEY] is True
+
+
+def test_session_guard_is_the_only_thing_stopping_a_second_redirect(wire):
+    """記號留在伺服器端網址 ⇒ 同 session 不再轉,完全靠 session 旗標(拿掉它這條必紅)。"""
+    fst = wire(qp={MK: MV})
+    for _ in range(4):
+        _run_app(fst)
+    assert len(fst.htmls) == 1
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -234,7 +256,8 @@ def test_flag_default_and_other_values_enable(wire, secrets):
     assert len(fst.htmls) == 1
 
 
-@pytest.mark.parametrize('val', ['0', '', 'true', '2'])
+@pytest.mark.parametrize('val', ['1', '0', '', 'true', 'a' * 31, 'a' * 33, 'A' * 32, 'g' * 32,
+                                 'a' * 31 + '.'])
 def test_marker_must_have_exact_value(wire, val):
     fst = wire(qp={MK: val})
     _run_app(fst)
@@ -275,7 +298,7 @@ def test_app_py_wires_hook_and_logout():
 # ══════════════════════════════════════════════════════════════════════════
 @pytest.mark.parametrize('err', sorted(OAUTH_SILENT_FAILURE_ERROR_CODES))
 def test_google_always_errors_no_loop(wire, err):
-    url_now = {'sheet': 'S', MK: MV}        # 使用者上次登入成功後的網址
+    url_now = {'sheet': 'S', MK: _tag(sheet='S')}   # 使用者上次登入成功後的網址
     redirects, failures = 0, 0
     for _refresh in range(6):
         fst = wire(qp=dict(url_now))         # 每次重新整理 = 新 session
@@ -283,6 +306,7 @@ def test_google_always_errors_no_loop(wire, err):
         url_now = dict(fst.query_params)
         if fst.htmls:
             redirects += 1
+            url_now = _browser_url_after_script(fst)    # script:replaceState 拿掉記號 → 導 Google
             # Google 收到 prompt=none,做不到 → 帶 error + 原 state 回固定 redirect_uri(新 session)
             st_param = _qs(_redirect_url(fst))['state']
             landing = wire(qp={'error': err, 'state': st_param})
@@ -297,8 +321,20 @@ def test_google_always_errors_no_loop(wire, err):
     assert redirects <= 1 and redirects == failures == 1
 
 
+def test_script_could_not_navigate_next_refresh_tries_once_more(wire):
+    """跨來源 iframe:script 什麼都不做 ⇒ 網址原封不動 ⇒ 下一次重新整理再試一次(每次動作最多一次)。"""
+    url_now = {MK: MV}
+    for n in range(1, 4):
+        fst = wire(qp=dict(url_now))
+        _run_app(fst)
+        _run_app(fst)                       # 同 session 多跑幾輪也只有一次
+        assert len(fst.htmls) == 1
+        url_now = dict(fst.query_params)    # 沒導走:網址仍帶記號
+        assert url_now.get(MK) == MV
+
+
 def test_error_branch_burns_nonce_and_restores_sheet_from_strong_state(wire):
-    fst = wire(qp={MK: MV, 'sheet': 'S1'})
+    fst = wire(qp={MK: _tag(sheet='S1'), 'sheet': 'S1'})
     _run_app(fst)
     st_param = _qs(_redirect_url(fst))['state']
     nonce = st_param.partition('.')[0]
@@ -311,22 +347,50 @@ def test_error_branch_burns_nonce_and_restores_sheet_from_strong_state(wire):
 
 def test_error_branch_foreign_state_does_not_rebind_sheet(wire):
     ns.issue('N_OTHER', _OTHER)
-    landing = wire(qp={'error': 'login_required', 'state': 'N_OTHER.EVIL'})
+    landing = wire(qp={'error': 'login_required', 'state': 'N_OTHER.EVIL.' + MV})
     _run_app(landing)
     assert 'portfolio_sheet_id' not in landing.session_state
     assert dict(landing.query_params) == {}
     assert landing.infos == [ost.OAUTH_SILENT_REAUTH_FAILED_MSG]
 
 
-@pytest.mark.parametrize('code,shown', [('access_denied', 'access_denied'),
-                                        ('<script>x</script>', '(無法解析)'),
-                                        ('', '(無法解析)')])
-def test_error_branch_other_codes_generic_message(wire, code, shown):
+@pytest.mark.parametrize('code,msg', [
+    ('access_denied', ost.OAUTH_LOGIN_INCOMPLETE_MSG.format(code='access_denied')),
+    ('server_error', ost.OAUTH_LOGIN_INCOMPLETE_MSG.format(code='server_error')),
+    ('visit-evil.com-to-fix', ost.OAUTH_LOGIN_INCOMPLETE_GENERIC_MSG),   # 稽核 SA1 NIT-1
+    ('<script>x</script>', ost.OAUTH_LOGIN_INCOMPLETE_GENERIC_MSG),
+    ('', ost.OAUTH_LOGIN_INCOMPLETE_GENERIC_MSG)])
+def test_error_branch_other_codes_message(wire, code, msg):
     landing = wire(qp={'error': code, 'sheet': 'KEEP'})       # 沒有 state 也要處理
     _run_app(landing)
-    assert landing.infos == [ost.OAUTH_LOGIN_INCOMPLETE_MSG.format(code=shown)]
+    assert landing.infos == [msg]
+    assert 'evil' not in ''.join(landing.infos)
     assert dict(landing.query_params) == {'sheet': 'KEEP'}
     assert landing.errors == [] and landing.successes == [] and landing.htmls == []
+
+
+def test_cancel_in_tab2_then_retry_from_tab1_still_works(wire):
+    """稽核 SA2 SHOULD-2:登入鈕在新分頁開 Google、按取消(access_denied + 一般 state)⇒ **不燒** nonce;
+    回原分頁再按同一顆鈕(同一個 nonce)要能登入(修前會被當成重放 → 紅字)。"""
+    ns.issue('N1', _ME)                                       # 分頁 1 的登入鈕
+    tab2 = wire(qp={'error': 'access_denied', 'state': 'N1.SHEET_A'})
+    _run_app(tab2)
+    assert tab2.infos == [ost.OAUTH_LOGIN_INCOMPLETE_MSG.format(code='access_denied')]
+    assert 'portfolio_sheet_id' not in tab2.session_state, '沒 consume 就不信 state 載荷'
+    assert 'N1' in ns._STORE, '非靜默的錯誤不得燒 nonce'
+    tab1_retry = wire(qp={'code': 'C', 'state': 'N1.SHEET_A'})
+    _run_app(tab1_retry)
+    assert tab1_retry.errors == []
+    assert tab1_retry.session_state['gsheet_tokens']['access_token'] == 'AT_SECRET_C'
+
+
+@pytest.mark.parametrize('state_fn', [lambda: 'N1', lambda: 'N1.S'])
+def test_silent_error_code_without_silent_state_does_not_burn(wire, state_fn):
+    ns.issue('N1', _ME)
+    landing = wire(qp={'error': 'login_required', 'state': state_fn()})
+    _run_app(landing)
+    assert 'N1' in ns._STORE
+    assert landing.infos == [ost.OAUTH_SILENT_REAUTH_FAILED_MSG]
 
 
 def test_error_branch_does_not_rerun(wire):
@@ -371,7 +435,7 @@ def test_success_with_consume_ok_sets_marker(wire):
     assert fst.session_state['gsheet_tokens']['access_token'] == 'AT_SECRET_C'
     assert fst.session_state['gsheet_email'] == 'me@example.com'
     assert fst.session_state['portfolio_sheet_id'] == 'SHEET_A'
-    assert dict(fst.query_params) == {'sheet': 'SHEET_A', MK: MV}
+    assert dict(fst.query_params) == {'sheet': 'SHEET_A', MK: _tag(sheet='SHEET_A')}
     assert fst.htmls == [], '剛登入的 session 有 token,不轉'
 
 
@@ -404,6 +468,7 @@ def test_full_roundtrip_refresh_restores_login(wire):
     ns.issue('N0', _ME)
     s1 = wire(qp={'code': 'C0', 'state': 'N0.SH'})         # 第一次手動登入
     _run_app(s1)
+    assert dict(s1.query_params) == {'sheet': 'SH', MK: _tag(sheet='SH')}
     s2 = wire(qp=dict(s1.query_params))                    # 重新整理
     _run_app(s2)
     assert len(s2.htmls) == 1 and 'gsheet_tokens' not in s2.session_state
@@ -412,8 +477,85 @@ def test_full_roundtrip_refresh_restores_login(wire):
     _run_app(s3)
     assert s3.session_state['gsheet_tokens']['access_token'] == 'AT_SECRET_C1'
     assert s3.session_state['portfolio_sheet_id'] == 'SH'
-    assert dict(s3.query_params) == {'sheet': 'SH', MK: MV}, '恢復後記號重新掛上,下次重新整理仍可恢復'
+    assert dict(s3.query_params) == {'sheet': 'SH', MK: _tag(sheet='SH')}, '恢復後記號重新掛上'
     assert s3.htmls == []
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5b. 記號綁帳號＋Sheet(稽核 SA1 SHOULD-1 ＋ 換帳號)
+# ══════════════════════════════════════════════════════════════════════════
+def _silent_roundtrip(wire, *, url, sub, tamper=None):
+    """重新整理(帶 url)→ 轉跳 → Google 以 `sub` 這個帳號回 code → 回呼。回落地那一個 session。"""
+    s = wire(qp=dict(url), sub=sub)
+    _run_app(s)
+    assert len(s.htmls) == 1
+    st_param = _qs(_redirect_url(s))['state']
+    if tamper:
+        st_param = tamper(st_param)
+    landing = wire(qp={'code': 'CS', 'state': st_param}, sub=sub)
+    _run_app(landing)
+    return landing
+
+
+def _assert_silent_rejected(landing):
+    assert 'gsheet_tokens' not in landing.session_state, '不得登入'
+    assert 'gsheet_email' not in landing.session_state
+    assert 'portfolio_sheet_id' not in landing.session_state, '不得回綁'
+    assert 'stock_portfolio_sheet_id' not in landing.session_state
+    assert MK not in landing.query_params and 'sheet' not in landing.query_params
+    assert landing.infos == [ost.OAUTH_SILENT_MISMATCH_MSG]
+    assert landing.errors == [] and landing.successes == []
+
+
+@pytest.mark.parametrize('forged', ['0' * 32, 'deadbeef' * 4, _tag(sub='SUB_ME', sheet='')])
+def test_attacker_link_with_own_sheet_does_not_log_in_or_bind(wire, forged):
+    """`?gs=<偽造 / 亂數 / 別本 Sheet 的合法記號>&sheet=EVIL` 寄給受害者 → 零點擊也不會登入、不會綁 EVIL。"""
+    landing = _silent_roundtrip(wire, url={MK: forged, 'sheet': 'EVIL'}, sub='SUB_ME')
+    _assert_silent_rejected(landing)
+
+
+def test_different_google_account_does_not_log_in(wire):
+    """同一台電腦換了 Google 帳號:記號是我(SUB_ME)的,Google 回的是別人(SUB_OTHER)→ 不靜默登入。"""
+    landing = _silent_roundtrip(wire, url={MK: _tag(sheet='S'), 'sheet': 'S'}, sub='SUB_OTHER')
+    _assert_silent_rejected(landing)
+
+
+def test_same_account_same_sheet_succeeds(wire):
+    landing = _silent_roundtrip(wire, url={MK: _tag(sheet='S'), 'sheet': 'S'}, sub='SUB_ME')
+    assert landing.session_state['gsheet_tokens']['access_token'] == 'AT_SECRET_CS'
+    assert landing.session_state['portfolio_sheet_id'] == 'S'
+
+
+@pytest.mark.parametrize('tamper', [
+    lambda st_: st_[:-1] + ('0' if st_[-1] != '0' else '1'),    # 改記號最後一碼
+    lambda st_: st_.rsplit('.', 1)[0] + '.zz',                   # 記號格式不合
+    lambda st_: st_.rsplit('.', 1)[0] + '.',                     # 記號空白(仍是三段)
+    lambda st_: st_.replace('.S.', '.EVIL.'),                    # 換 Sheet、記號不變
+])
+def test_tampered_state_tag_does_not_log_in(wire, tamper):
+    landing = _silent_roundtrip(wire, url={MK: _tag(sheet='S'), 'sheet': 'S'}, sub='SUB_ME',
+                                tamper=tamper)
+    _assert_silent_rejected(landing)
+
+
+def test_no_client_secret_disables_silent_reauth(wire, capsys):
+    fst = wire(qp={MK: MV}, cfg={'client_id': 'CID', 'client_secret': '',
+                                 'redirect_uri': 'https://app.example/'})
+    _run_app(fst)
+    assert fst.htmls == []
+    assert 'silent_reauth=skip reason=no_client_secret' in capsys.readouterr().out
+    assert ost._silent_tag('', 'SUB', 'S') == ''
+
+
+def test_marker_not_set_without_sub(wire, monkeypatch, capsys):
+    ns.issue('N1', _ME)
+    fst = wire(qp={'code': 'C', 'state': 'N1.S'})
+    monkeypatch.setattr(ost, 'exchange_code_for_tokens',
+                        lambda *a: {'access_token': 'AT', 'expires_at': 9_999_999_999})
+    _run_app(fst)
+    assert 'gsheet_tokens' in fst.session_state
+    assert MK not in fst.query_params
+    assert 'marker_not_set_no_sub' in capsys.readouterr().out
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -452,7 +594,8 @@ _EVIL_URL = GOOGLE_AUTH_URL + '?state=a";alert(1);//</script><img src=x onerror=
 
 def test_script_json_encodes_url_and_cannot_break_out():
     body = ost._silent_redirect_script(_EVIL_URL)
-    m = re.fullmatch(r'<script>\(function\(\)\{var u=(".*?");var t;(.*)\}\)\(\);</script>', body)
+    m = re.fullmatch(r'<script>\(function\(\)\{var u=(".*?");var k="gs";var t;(.*)\}\)\(\);</script>',
+                     body)
     assert m, body
     assert json.loads(m.group(1)) == _EVIL_URL, 'JS 端拿到的就是原 URL'
     literal = m.group(1)
@@ -473,11 +616,26 @@ def test_script_only_navigates_top_window():
     assert 't=window.top' in body
 
 
+def test_script_removes_marker_with_replace_state_before_navigating():
+    """稽核 SA2 SHOULD-1(上一頁陷阱):在**要導的那個視窗**上先 replaceState 拿掉記號,成功後才導走。"""
+    body = ost._silent_redirect_script(GOOGLE_AUTH_URL + '?a=1')
+    i_probe = body.index('void t.location.href;')
+    i_url = body.index('new URL(t.location.href)')
+    i_del = body.index('l.searchParams.delete(k)')
+    i_rs = body.index("t.history.replaceState(null,'',l.toString())")
+    i_nav = body.index('t.location.replace(u)')
+    assert i_probe < i_url < i_del < i_rs < i_nav
+    # replaceState 失敗 → return(不導):replaceState 與 replace 不在同一個 try 裡,中間隔著 return
+    assert body[i_rs:i_nav].count('catch(e){return;}') == 1
+    assert 'pushState' not in body and 'window.history' not in body, '只動最上層視窗(t)的歷史'
+
+
 def test_malicious_sheet_id_never_reaches_script(wire):
     fst = wire(qp={MK: MV, 'sheet': 'S";alert(1);//</script>'})
     _run_app(fst)
     url = _redirect_url(fst)
-    assert _qs(url)['state'].count('.') == 0, '消毒不過的 sheet 不上 state 便車'
+    _nonce, _sheet, _tg = _qs(url)['state'].split('.')
+    assert _sheet == '' and _tg == MV, '消毒不過的 sheet 不上 state 便車(只剩記號)'
     body = fst.htmls[0][0]
     assert 'alert' not in body and body.count('</script>') == 1
 
@@ -506,6 +664,12 @@ def test_expiry_without_refresh_token_raises_login_required_and_clears(wire, cap
     out = capsys.readouterr().out
     assert 'login_expired reason=no_refresh_token' in out
     assert 'AT_OLD_SECRET' not in out and 'me@example.com' not in out
+    # 之後「沒有 token」的讀取仍說「已逾時」(不是「請先登入」)
+    assert fst.session_state[OAUTH_LOGIN_EXPIRED_SESSION_KEY] is True
+    with patch('src.data.portfolio.oauth_state.is_oauth_configured', return_value=True):
+        with pytest.raises(gsp.LoginRequiredError) as ei2:
+            gsp._build_client()
+    assert str(ei2.value) == gsp.LOGIN_EXPIRED_MSG
     # 重新整理(新 session)→ 靜默恢復一次
     fst2 = wire(qp=dict(fst.query_params))
     _run_app(fst2)
@@ -606,14 +770,14 @@ def test_sec1_cached_read_isolated_between_silent_users(wire):
 # 10. log 不洩漏
 # ══════════════════════════════════════════════════════════════════════════
 def test_logs_contain_no_nonce_token_email_url(wire, capsys):
-    s1 = wire(qp={MK: MV, 'sheet': 'SHEETSECRET'})
+    s1 = wire(qp={MK: _tag(sheet='SHEETSECRET'), 'sheet': 'SHEETSECRET'})
     _run_app(s1)
     url = _redirect_url(s1)
     st_param = _qs(url)['state']
     nonce = st_param.partition('.')[0]
     s2 = wire(qp={'error': 'login_required', 'state': st_param})
     _run_app(s2)
-    s3 = wire(qp={MK: MV, 'sheet': 'SHEETSECRET'})
+    s3 = wire(qp={MK: _tag(sheet='SHEETSECRET'), 'sheet': 'SHEETSECRET'})
     _run_app(s3)
     st3 = _qs(_redirect_url(s3))['state']
     s4 = wire(qp={'code': 'CODESECRET', 'state': st3})
@@ -621,7 +785,8 @@ def test_logs_contain_no_nonce_token_email_url(wire, capsys):
     out = capsys.readouterr().out
     assert 'silent_reauth=redirect' in out
     assert 'callback error=login_required state=ok' in out
-    for leaked in (nonce, st3.partition('.')[0], 'SHEETSECRET', 'CODESECRET', 'AT_SECRET',
+    for leaked in (nonce, st3.partition('.')[0], st3.rsplit('.', 1)[1], MV, 'SHEETSECRET',
+                   'CODESECRET', 'AT_SECRET',
                    'me@example.com', 'accounts.google.com', 'CSECRET', 'CID', _ME):
         assert leaked not in out, leaked
 
@@ -650,7 +815,7 @@ def test_apptest_real_runtime_redirect_once(tmp_path, monkeypatch):
     monkeypatch.setenv('B2_TEST_BINDING', _ME)
     at = AppTest.from_file(str(p), default_timeout=30)
     at.secrets['google_oauth'] = dict(_CFG)
-    at.query_params[MK] = MV
+    at.query_params[MK] = _tag(sheet='SHEET_A')
     at.query_params['sheet'] = 'SHEET_A'
     at.run()
     assert not at.exception
@@ -659,8 +824,189 @@ def test_apptest_real_runtime_redirect_once(tmp_path, monkeypatch):
     assert len(htmls) == 1
     assert htmls[0].proto.unsafe_allow_javascript is True
     assert 'prompt=none' in htmls[0].proto.body
-    assert MK not in at.query_params and at.query_params.get('sheet') == ['SHEET_A']
+    assert 'history.replaceState(' in htmls[0].proto.body
+    # 伺服器端不拿記號(上一頁陷阱);script 在瀏覽器端拿
+    assert at.query_params.get(MK) == [_tag(sheet='SHEET_A')]
+    assert at.query_params.get('sheet') == ['SHEET_A']
     assert [c.value for c in at.caption] == [ost.OAUTH_SILENT_REAUTH_PENDING_MSG]
     at.run()                                  # 同 session 再跑一次 → 不再轉
     assert at.session_state['_silent_rv'] is False
     assert len(at.get('html')) == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 11. 稽核 SA2 MUST-1:登入逾時一路 L1 → L3 → L5 都是灰卡、文案是「已逾時」
+# ══════════════════════════════════════════════════════════════════════════
+def _expired_session():
+    return {'gsheet_tokens': {'access_token': 'AT_OLD', 'expires_at': 1,
+                              'id_token': _id_token(sub='SUB_ME')},
+            'gsheet_email': 'me@example.com',
+            gsp.PORTFOLIO_SHEET_KEY: 'SID_A', gsp.STOCK_PORTFOLIO_SHEET_KEY: 'SID_A'}
+
+
+def test_expiry_chain_l1_l3_l5_renders_gray_with_expiry_text(wire):
+    """修前:binding 讀組合清單 → L1 清 session 拋 LOGIN_EXPIRED → 被 L3 吞成舊的 logged_in=True/bound →
+    持股再讀一次 → 「請先登入」→ 頁面紅卡 ＋ repr。修後:兩張卡都是灰、都寫「Google 登入已逾時」。"""
+    from shared.ui_state import UI_EMPTY, UI_FAILED
+    from src.services.holdings_service import get_holdings
+    from src.services.portfolio_binding_service import STATUS_UNBOUND, get_binding_state
+    from src.ui.views import page_hold as P
+
+    fst = wire(qp={MK: MV}, session=_expired_session())
+    gsp.clear_read_cache()
+    with patch('src.data.portfolio.oauth_state.is_oauth_configured', return_value=True), \
+         patch('src.data.portfolio.oauth_state._get_oauth_client',
+               side_effect=AssertionError('不得走到 ensure_fresh_tokens')):
+        bs = get_binding_state()
+        assert (bs.logged_in, bs.status, bs.login_expired, bs.read_error) == (
+            False, STATUS_UNBOUND, True, ''), '⛔ 不得回舊的 logged_in=True / bound'
+        assert 'gsheet_tokens' not in fst.session_state
+        hr = get_holdings(keep_blank=True)
+        assert (hr.bound, hr.logged_in, hr.login_expired, hr.holdings) == (False, False, True, ())
+
+        req = P.HoldRequest(submitted=True, mode=P.SCOPE_WITH_BINDING)
+        b = P.load_binding(req)
+        h = P.load_holdings(req)
+    assert b.error == '' and h.error == ''
+    assert b.login_expired and h.login_expired
+    for card in (P.build_binding_card(b)[0], P.build_holdings_preview_card(h)[0],
+                 P.build_lightwall_card(P.load_station(h))[0]):
+        assert card.state == UI_EMPTY != UI_FAILED, card.key
+        assert card.note.now == P.LOGIN_EXPIRED_NOW, card.key
+        assert gsp.LOGIN_EXPIRED_MSG in card.note.where
+        assert 'LoginRequiredError' not in (card.note.why + card.note.where)
+    # 不轉跳(session 中途)
+    _run_app(fst)
+    assert fst.htmls == []
+
+
+def test_holdings_service_race_login_cleared_between_calls_reaches_page_as_gray(wire, monkeypatch):
+    """binding 那一刻還登入,持股讀組合清單時才逾時:L3 照舊往上拋(投資組合那半 fail loud 不變),
+    頁面經 `is_login_required_error()` 轉成灰色「登入已逾時」卡。"""
+    from shared.ui_state import UI_EMPTY
+    from src.services import portfolio_binding_service as PBS
+    from src.ui.views import page_hold as P
+
+    wire(qp={})
+    monkeypatch.setattr(PBS, 'get_binding_state', lambda: PBS.BindingState(
+        logged_in=True, sheet_id='SID_A', portfolio_count=1, status=PBS.STATUS_BOUND))
+
+    def _raise(**_k):
+        gsp.st.session_state[OAUTH_LOGIN_EXPIRED_SESSION_KEY] = True
+        raise gsp.LoginRequiredError(gsp.LOGIN_EXPIRED_MSG)
+    monkeypatch.setattr(gsp, 'list_portfolios', _raise)
+    h = P.load_holdings(P.HoldRequest(submitted=True, mode=P.SCOPE_WITH_BINDING))
+    assert h.error == '' and h.login_expired and not h.bound
+    card = P.build_holdings_preview_card(h)[0]
+    assert card.state == UI_EMPTY and card.note.now == P.LOGIN_EXPIRED_NOW
+
+
+def test_page_hold_load_holdings_maps_login_required_to_gray(wire, monkeypatch):
+    from shared.ui_state import UI_EMPTY
+    from src.services import holdings_service as HS
+    from src.ui.views import page_hold as P
+
+    def _raise(**_k):
+        raise gsp.LoginRequiredError(gsp.LOGIN_EXPIRED_MSG)
+    monkeypatch.setattr(HS, 'get_holdings', _raise)
+    h = P.load_holdings(P.HoldRequest(submitted=True, mode=P.SCOPE_WITH_BINDING))
+    assert h.error == '' and h.login_expired and not h.bound
+    assert P.build_holdings_preview_card(h)[0].state == UI_EMPTY
+
+    def _raise2(**_k):
+        raise gsp.LoginRequiredError(gsp.LOGIN_REQUIRED_MSG)
+    monkeypatch.setattr(HS, 'get_holdings', _raise2)
+    h2 = P.load_holdings(P.HoldRequest(submitted=True, mode=P.SCOPE_WITH_BINDING))
+    assert h2.error == '' and not h2.login_expired
+    assert P.build_holdings_preview_card(h2)[0].note.now == P.NOT_BOUND_NOW
+
+    def _boom(**_k):
+        raise RuntimeError('boom')
+    monkeypatch.setattr(HS, 'get_holdings', _boom)
+    h3 = P.load_holdings(P.HoldRequest(submitted=True, mode=P.SCOPE_WITH_BINDING))
+    assert h3.error, '真正的讀取失敗照舊紅'
+
+
+def test_expired_flag_cleared_on_login_and_logout(wire):
+    ns.issue('N1', _ME)
+    fst = wire(qp={'code': 'C', 'state': 'N1'}, session={OAUTH_LOGIN_EXPIRED_SESSION_KEY: True})
+    _run_app(fst)
+    assert 'gsheet_tokens' in fst.session_state
+    assert OAUTH_LOGIN_EXPIRED_SESSION_KEY not in fst.session_state, '重新登入後不再是「已逾時」'
+    fst2 = wire(qp={MK: MV}, session={OAUTH_LOGIN_EXPIRED_SESSION_KEY: True})
+    ost.forget_silent_reauth()
+    assert OAUTH_LOGIN_EXPIRED_SESSION_KEY not in fst2.session_state
+    with patch('src.data.portfolio.oauth_state.is_oauth_configured', return_value=True):
+        with pytest.raises(gsp.LoginRequiredError) as ei:
+            gsp._build_client()
+    assert str(ei.value) == gsp.LOGIN_REQUIRED_MSG
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 還原鏈(稽核修正輪動到 `src/ui/views/page_hold.py`)
+# ══════════════════════════════════════════════════════════════════════════
+#: 本輪(1.0-B2 稽核修正)對 page_hold 的改動 → 換回 23596359 的寫法。舊批次的「還原到基底」守衛
+#: (`test_batch_c21` / `test_batch_z66b` 經 `tests/test_uia_01_02_07_data_state.uia_revert_for`)
+#: 會先套本表再套它們自己的,⛔ 不必改它們寫死的基底 sha。本表由 difflib 自動產生後逐字貼上,
+#: 下方 `test_vn1b2_revert_is_exact_base_source` 釘住「換回去 == 23596359 的原文(sha 寫死)」。
+VN1B2_BASE_SHA = {"src/ui/views/page_hold.py": "471cb1155e7b737dc9a1592e14d8587aadddaead103a66b99e3bfcd562f98d7a"}
+VN1B2_REVERT_PAIRS = {
+    "src/ui/views/page_hold.py": (
+        ('    綁定狀態      L3 `services.portfolio_binding_service.get_binding_state`\n    沒登入判斷    L3 `services.portfolio_binding_service.is_login_required_error`  ← 1.0-B2（純判斷式，唯讀）\n    VIX（單獨）   L3 `services.dividend_station_service.fetch_vix`\n',
+         '    綁定狀態      L3 `services.portfolio_binding_service.get_binding_state`\n    VIX（單獨）   L3 `services.dividend_station_service.fetch_vix`\n'),
+        ('# L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（Q1-r5，2026-09-26）。\nfrom shared.oauth_session_policy import OAUTH_LOGIN_EXPIRED_MSG\nfrom shared.secret_scrub import scrub_secrets\n',
+         '# L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（Q1-r5，2026-09-26）。\nfrom shared.secret_scrub import scrub_secrets\n'),
+        ('    error: str = ""\n    #: 1.0-B2:登入已逾時(L3 `BindingState.login_expired`)→ 「未綁」灰卡改寫成「登入已逾時」(仍是灰)。\n    login_expired: bool = False\n\n',
+         '    error: str = ""\n\n'),
+        ('        submitted=req.submitted,\n        login_expired=bool(getattr(_s, "login_expired", False)),\n        logged_in=bool(getattr(_s, "logged_in", False)),\n',
+         '        submitted=req.submitted,\n        logged_in=bool(getattr(_s, "logged_in", False)),\n'),
+        ('    error: str = ""\n    #: 1.0-B2:登入已逾時 → `bound=False` ＋ 空清單,卡片畫灰色「登入已逾時」(⛔ 不是紅色讀取失敗)。\n    login_expired: bool = False\n\n',
+         '    error: str = ""\n\n'),
+        ('    except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞\n        # 1.0-B2(稽核 SA2 MUST-1):「沒有登入 / 登入已逾時」(L1 `LoginRequiredError`)不是讀取失敗 →\n        # 走既有的灰色「未綁」那一條(逾時時文案換成「登入已逾時」),⛔ 不進紅卡。\n        # L5 不 import L1:經 L3 `is_login_required_error()` 判斷(§8.2)。\n        from src.services.portfolio_binding_service import is_login_required_error\n        if is_login_required_error(_e):\n            print("[views/page_hold] 持股清單：未登入 / 登入已逾時 → 灰卡（不是讀取失敗）")\n            return HoldingsReadout(\n                requested=True, submitted=req.submitted, bound=False,\n                login_expired=str(_e) == OAUTH_LOGIN_EXPIRED_MSG)\n        print(f"[views/page_hold] 持股清單讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")\n',
+         '    except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞\n        print(f"[views/page_hold] 持股清單讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")\n'),
+        ('        more_watchlists=bool(getattr(_h, "more_watchlists", False)),\n        watchlist_error=str(getattr(_h, "watchlist_error", "") or ""),\n        login_expired=bool(getattr(_h, "login_expired", False)))\n\n',
+         '        more_watchlists=bool(getattr(_h, "more_watchlists", False)),\n        watchlist_error=str(getattr(_h, "watchlist_error", "") or ""))\n\n'),
+        ('    holdings_n: int = 0\n    #: 1.0-B2:由 `HoldingsReadout.login_expired` 帶下來 —— 「還沒綁」那幾張灰卡改說「登入已逾時」。\n    login_expired: bool = False\n    rows: tuple[dict, ...] = ()\n',
+         '    holdings_n: int = 0\n    rows: tuple[dict, ...] = ()\n'),
+        ('        return StationReadout(requested=True, submitted=holdings.submitted,\n                              bound=holdings.bound, login_expired=holdings.login_expired)\n    try:\n',
+         '        return StationReadout(requested=True, submitted=holdings.submitted,\n                              bound=holdings.bound)\n    try:\n'),
+        ('\n#: 1.0-B2(稽核 SA2 MUST-1):**登入已逾時**時取代上面那組「還沒綁」(同一批卡、同一個灰色)。\n#: 修前這一態一路變成紅卡 ＋ 例外 repr(「請先登入 Google 才能讀取持股」,還說錯了原因)。\n#: where 直接用 L0 那一句(`OAUTH_LOGIN_EXPIRED_MSG`,L1 拋例外也是同一句,⛔ 不寫第二份)。\nLOGIN_EXPIRED_NOW: str = "**Google 登入已逾時**"\nLOGIN_EXPIRED_WHY: str = (\n    "本站**不保存任何 Google 憑證**，登入只活在這個分頁的這一段連線裡；"\n    "自動恢復的登入大約 1 小時後就會逾時。**這不是故障**，你的 Sheet 也沒有出問題")\nLOGIN_EXPIRED_WHERE: str = OAUTH_LOGIN_EXPIRED_MSG\n\n\ndef _not_bound_note(login_expired: bool) -> Note:\n    """「還沒綁 / 沒登入」那一句 —— 登入已逾時時換成逾時那一組(兩者都是灰色有效態)。"""\n    if login_expired:\n        return Note(now=LOGIN_EXPIRED_NOW, why=LOGIN_EXPIRED_WHY, where=LOGIN_EXPIRED_WHERE)\n    return Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)\n\n\nEMPTY_SHEET_NOW: str = "**Sheet 綁好了，但裡面還沒有任何一列持股**"\n',
+         '\nEMPTY_SHEET_NOW: str = "**Sheet 綁好了，但裡面還沒有任何一列持股**"\n'),
+        ('        return Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY, where=EMPTY_SHEET_WHERE)\n    return _not_bound_note(station.login_expired)\n\n',
+         '        return Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY, where=EMPTY_SHEET_WHERE)\n    return Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)\n\n'),
+        ('    holdings_n: int = 0\n    #: 1.0-B2:由戰情表帶下來(同 `StationReadout.login_expired`)。\n    login_expired: bool = False\n    has_station_rows: bool = False\n',
+         '    holdings_n: int = 0\n    has_station_rows: bool = False\n'),
+        ('    _shared = {"submitted": station.submitted, "bound": station.bound,\n               "holdings_n": station.holdings_n, "login_expired": station.login_expired}\n    if not station.requested:\n',
+         '    _shared = {"submitted": station.submitted, "bound": station.bound,\n               "holdings_n": station.holdings_n}\n    if not station.requested:\n'),
+        ('                    where=EMPTY_SHEET_WHERE)\n    return _not_bound_note(deep.login_expired)\n\n',
+         '                    where=EMPTY_SHEET_WHERE)\n    return Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)\n\n'),
+        ('        #    改的時候一定會漏改一份，於是兩張卡對同一個狀況給出兩種說法。\n        _note = _not_bound_note(binding.login_expired)\n    return Card(key="hold.binding", label="Google Sheet 綁定",\n',
+         '        #    改的時候一定會漏改一份，於是兩張卡對同一個狀況給出兩種說法。\n        _note = Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)\n    return Card(key="hold.binding", label="Google Sheet 綁定",\n'),
+        ('    else:\n        _note = _not_bound_note(holdings.login_expired)\n    return Card(key="hold.setup.preview", label="持股列預覽",\n',
+         '    else:\n        _note = Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)\n    return Card(key="hold.setup.preview", label="持股列預覽",\n'),
+        ('                    "用 Google 登入後選一本持股 Sheet" + V2_EXCERPT_GAP + "現行入口在側欄「🔐 Google 帳號」"),\n    LOGIN_EXPIRED_NOW: ("Google 登入已逾時",\n                        "自動恢復的登入大約 1 小時後就會逾時",\n                        "請重新整理頁面以自動恢復登入"),\n    EMPTY_SHEET_NOW: ("Sheet 綁好了，但裡面還沒有任何一列持股",\n',
+         '                    "用 Google 登入後選一本持股 Sheet" + V2_EXCERPT_GAP + "現行入口在側欄「🔐 Google 帳號」"),\n    EMPTY_SHEET_NOW: ("Sheet 綁好了，但裡面還沒有任何一列持股",\n'),
+        ('    + [_v2_rows_for(_k, NOT_BOUND_NOW, _V2_SHARED_SHORT[NOT_BOUND_NOW])\n       for _k in _V2_NOT_BOUND_KEYS]\n    # 1.0-B2:「登入已逾時」與「還沒綁」出現在**同一批卡**(同一個 `_not_bound_note()`)。\n    + [_v2_rows_for(_k, LOGIN_EXPIRED_NOW, _V2_SHARED_SHORT[LOGIN_EXPIRED_NOW])\n       for _k in _V2_NOT_BOUND_KEYS]\n',
+         '    + [_v2_rows_for(_k, NOT_BOUND_NOW, _V2_SHARED_SHORT[NOT_BOUND_NOW])\n       for _k in _V2_NOT_BOUND_KEYS]\n'),
+    ),
+}
+
+
+def vn1b2_revert_for(file_path, code: str) -> str:
+    """給模組 `__file__`(或 repo 相對路徑)與原始碼,換回本輪之前的寫法(無 pair 則原樣)。"""
+    from pathlib import Path
+    _repo = Path(__file__).resolve().parents[1]
+    p = Path(file_path)
+    rel = (p.resolve().relative_to(_repo) if p.is_absolute() else p).as_posix()
+    for new, old in VN1B2_REVERT_PAIRS.get(rel, ()):
+        assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
+        code = code.replace(new, old)
+    return code
+
+
+def test_vn1b2_revert_is_exact_base_source():
+    from pathlib import Path
+    _repo = Path(__file__).resolve().parents[1]
+    for rel in sorted(VN1B2_REVERT_PAIRS):
+        code = vn1b2_revert_for(rel, (_repo / rel).read_text(encoding="utf-8"))
+        assert hashlib.sha256(code.encode("utf-8")).hexdigest() == VN1B2_BASE_SHA[rel], rel

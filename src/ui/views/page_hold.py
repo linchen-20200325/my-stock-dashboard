@@ -78,6 +78,7 @@
     換股建議      L3 `services.dividend_station_service.build_switch_advice`
     換入異常列    L3 `services.dividend_station_service.switch_in_invalid_rows`  ← 批 Z58（純函式，唯讀）
     綁定狀態      L3 `services.portfolio_binding_service.get_binding_state`
+    沒登入判斷    L3 `services.portfolio_binding_service.is_login_required_error`  ← 1.0-B2（純判斷式，唯讀）
     VIX（單獨）   L3 `services.dividend_station_service.fetch_vix`
     總經位階      L3 `services.dividend_station_service.get_station_macro`
     建議持股水位  L3 `services.allocation_service.get_allocation`
@@ -341,6 +342,7 @@ from shared.dividend_station_thresholds import (
     VIX_LIGHT3,
 )
 # L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（Q1-r5，2026-09-26）。
+from shared.oauth_session_policy import OAUTH_LOGIN_EXPIRED_MSG
 from shared.secret_scrub import scrub_secrets
 from shared.ui_state import (
     UI_DEGRADED,
@@ -992,6 +994,8 @@ class BindingReadout:
     portfolio_count: int | None = None
     count_missing_reason: str = ""
     error: str = ""
+    #: 1.0-B2:登入已逾時(L3 `BindingState.login_expired`)→ 「未綁」灰卡改寫成「登入已逾時」(仍是灰)。
+    login_expired: bool = False
 
     @property
     def count_gate(self) -> bool:
@@ -1088,6 +1092,7 @@ def load_binding(req: HoldRequest) -> BindingReadout:
     return BindingReadout(
         requested=True,
         submitted=req.submitted,
+        login_expired=bool(getattr(_s, "login_expired", False)),
         logged_in=bool(getattr(_s, "logged_in", False)),
         sheet_bound=_bound,
         status=_status,
@@ -1129,6 +1134,8 @@ class HoldingsReadout:
     more_watchlists: bool = False
     watchlist_error: str = ""
     error: str = ""
+    #: 1.0-B2:登入已逾時 → `bound=False` ＋ 空清單,卡片畫灰色「登入已逾時」(⛔ 不是紅色讀取失敗)。
+    login_expired: bool = False
 
     @property
     def has_holdings(self) -> bool:
@@ -1184,6 +1191,15 @@ def load_holdings(req: HoldRequest) -> HoldingsReadout:
         from src.services.holdings_service import get_holdings
         _h = get_holdings(keep_blank=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
+        # 1.0-B2(稽核 SA2 MUST-1):「沒有登入 / 登入已逾時」(L1 `LoginRequiredError`)不是讀取失敗 →
+        # 走既有的灰色「未綁」那一條(逾時時文案換成「登入已逾時」),⛔ 不進紅卡。
+        # L5 不 import L1:經 L3 `is_login_required_error()` 判斷(§8.2)。
+        from src.services.portfolio_binding_service import is_login_required_error
+        if is_login_required_error(_e):
+            print("[views/page_hold] 持股清單：未登入 / 登入已逾時 → 灰卡（不是讀取失敗）")
+            return HoldingsReadout(
+                requested=True, submitted=req.submitted, bound=False,
+                login_expired=str(_e) == OAUTH_LOGIN_EXPIRED_MSG)
         print(f"[views/page_hold] 持股清單讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
         return HoldingsReadout(requested=True, submitted=req.submitted,
                                error=repr(_e))
@@ -1195,7 +1211,8 @@ def load_holdings(req: HoldRequest) -> HoldingsReadout:
         watchlist_name=str(getattr(_h, "watchlist_name", "") or ""),
         more_portfolios=bool(getattr(_h, "more_portfolios", False)),
         more_watchlists=bool(getattr(_h, "more_watchlists", False)),
-        watchlist_error=str(getattr(_h, "watchlist_error", "") or ""))
+        watchlist_error=str(getattr(_h, "watchlist_error", "") or ""),
+        login_expired=bool(getattr(_h, "login_expired", False)))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1249,6 +1266,8 @@ class StationReadout:
     #: 沒有它們，戰情室每一張空卡就只能寫一句「沒有持股（可能是 A 也可能是 B）」。
     bound: bool = False
     holdings_n: int = 0
+    #: 1.0-B2:由 `HoldingsReadout.login_expired` 帶下來 —— 「還沒綁」那幾張灰卡改說「登入已逾時」。
+    login_expired: bool = False
     rows: tuple[dict, ...] = ()
     digest: Mapping[str, Any] | None = None
     totals: Mapping[str, Any] | None = None
@@ -1299,7 +1318,7 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
                               error_src=SRC_HOLDINGS)
     if not holdings.has_holdings:
         return StationReadout(requested=True, submitted=holdings.submitted,
-                              bound=holdings.bound)
+                              bound=holdings.bound, login_expired=holdings.login_expired)
     try:
         from src.services.dividend_station_service import (
             build_station_digest,
@@ -1644,6 +1663,23 @@ NOT_BOUND_WHERE: str = (
     "（本頁只讀不寫，所以不在這裡放選 Sheet 的控制項）；"
     "綁定狀態在下面的**葉2 組合設定**看得到")
 
+#: 1.0-B2(稽核 SA2 MUST-1):**登入已逾時**時取代上面那組「還沒綁」(同一批卡、同一個灰色)。
+#: 修前這一態一路變成紅卡 ＋ 例外 repr(「請先登入 Google 才能讀取持股」,還說錯了原因)。
+#: where 直接用 L0 那一句(`OAUTH_LOGIN_EXPIRED_MSG`,L1 拋例外也是同一句,⛔ 不寫第二份)。
+LOGIN_EXPIRED_NOW: str = "**Google 登入已逾時**"
+LOGIN_EXPIRED_WHY: str = (
+    "本站**不保存任何 Google 憑證**，登入只活在這個分頁的這一段連線裡；"
+    "自動恢復的登入大約 1 小時後就會逾時。**這不是故障**，你的 Sheet 也沒有出問題")
+LOGIN_EXPIRED_WHERE: str = OAUTH_LOGIN_EXPIRED_MSG
+
+
+def _not_bound_note(login_expired: bool) -> Note:
+    """「還沒綁 / 沒登入」那一句 —— 登入已逾時時換成逾時那一組(兩者都是灰色有效態)。"""
+    if login_expired:
+        return Note(now=LOGIN_EXPIRED_NOW, why=LOGIN_EXPIRED_WHY, where=LOGIN_EXPIRED_WHERE)
+    return Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
+
+
 EMPTY_SHEET_NOW: str = "**Sheet 綁好了，但裡面還沒有任何一列持股**"
 EMPTY_SHEET_WHY: str = (
     "**這是一個有效的結果**（已經讀完，不是還沒讀、也不是故障）—— "
@@ -1819,7 +1855,7 @@ def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
         return Note(now=NO_ROWS_NOW, why=NO_ROWS_WHY, where=NO_ROWS_WHERE)
     if station.bound:
         return Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY, where=EMPTY_SHEET_WHERE)
-    return Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
+    return _not_bound_note(station.login_expired)
 
 
 def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
@@ -2855,6 +2891,8 @@ class DeepReadout:
     submitted: bool = False
     bound: bool = False
     holdings_n: int = 0
+    #: 1.0-B2:由戰情表帶下來(同 `StationReadout.login_expired`)。
+    login_expired: bool = False
     has_station_rows: bool = False
     stress: Any = None
     var: Any = None
@@ -2889,7 +2927,7 @@ def load_deep(station: StationReadout) -> DeepReadout:
     L3 `portfolio_deep_service`（§4.1：同一個乘法不得散在 UI 各處）。
     """
     _shared = {"submitted": station.submitted, "bound": station.bound,
-               "holdings_n": station.holdings_n}
+               "holdings_n": station.holdings_n, "login_expired": station.login_expired}
     if not station.requested:
         return DeepReadout(requested=False, submitted=station.submitted)
     if station.error:
@@ -2970,7 +3008,7 @@ def _deep_note(deep: DeepReadout, *, now: str, source: str,
     if deep.bound:
         return Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY,
                     where=EMPTY_SHEET_WHERE)
-    return Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
+    return _not_bound_note(deep.login_expired)
 
 
 def _deep_uncounted_why(failed: Sequence[str], unpriced: Sequence[str],
@@ -4071,7 +4109,7 @@ def build_binding_card(binding: BindingReadout) -> _Built:
     else:   # UI_EMPTY —— **還沒綁。這是有效結果，不是故障。**
         # ⚠️ 與戰情室那幾張空卡**共用同一組常數**：同一件事在同一頁上寫兩份，
         #    改的時候一定會漏改一份，於是兩張卡對同一個狀況給出兩種說法。
-        _note = Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
+        _note = _not_bound_note(binding.login_expired)
     return Card(key="hold.binding", label="Google Sheet 綁定",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -4241,7 +4279,7 @@ def build_holdings_preview_card(holdings: HoldingsReadout) -> _Built:
         _note = Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY,
                      where=EMPTY_SHEET_WHERE)
     else:
-        _note = Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
+        _note = _not_bound_note(holdings.login_expired)
     return Card(key="hold.setup.preview", label="持股列預覽",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -4324,6 +4362,9 @@ _V2_SHARED_SHORT: dict[str, tuple[object, object, object]] = {
     NOT_BOUND_NOW: ("你還沒有綁定持股 Sheet",
                     "這是一個有效的結果" + V2_EXCERPT_GAP + "沒有綁定就沒有清單可讀",
                     "用 Google 登入後選一本持股 Sheet" + V2_EXCERPT_GAP + "現行入口在側欄「🔐 Google 帳號」"),
+    LOGIN_EXPIRED_NOW: ("Google 登入已逾時",
+                        "自動恢復的登入大約 1 小時後就會逾時",
+                        "請重新整理頁面以自動恢復登入"),
     EMPTY_SHEET_NOW: ("Sheet 綁好了，但裡面還沒有任何一列持股",
                       "這是一個有效的結果" + V2_EXCERPT_GAP + "你已經綁好了，缺的是內容",
                       "到既有的 📁 組合管理分頁新增一本組合並填入持股列"
@@ -4379,6 +4420,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     + [_v2_rows_for(_k, GOOGLE_NOT_ASKED_NOW, _V2_SHARED_SHORT[GOOGLE_NOT_ASKED_NOW])
        for _k in _V2_GOOGLE_NOT_ASKED_KEYS]
     + [_v2_rows_for(_k, NOT_BOUND_NOW, _V2_SHARED_SHORT[NOT_BOUND_NOW])
+       for _k in _V2_NOT_BOUND_KEYS]
+    # 1.0-B2:「登入已逾時」與「還沒綁」出現在**同一批卡**(同一個 `_not_bound_note()`)。
+    + [_v2_rows_for(_k, LOGIN_EXPIRED_NOW, _V2_SHARED_SHORT[LOGIN_EXPIRED_NOW])
        for _k in _V2_NOT_BOUND_KEYS]
     + [_v2_rows_for(_k, EMPTY_SHEET_NOW, _V2_SHARED_SHORT[EMPTY_SHEET_NOW])
        for _k in _V2_EMPTY_SHEET_KEYS]
