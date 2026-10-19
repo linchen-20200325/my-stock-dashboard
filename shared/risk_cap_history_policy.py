@@ -172,9 +172,15 @@ STALE_LATEST_VALID_EXPIRED = "latest_valid_expired"
 # ══════════════════════════════════════════════════════════════════════
 # 寫入憑證（**未來**的排程寫入帳號；本 PoC 不建立、不讀取任何 secret）
 # ══════════════════════════════════════════════════════════════════════
-#: 未來排程寫入 service account 的 JSON 所放的環境變數名（**新名稱**；放 GitHub secrets）。
-#: ⛔ 刻意不沿用個人持股 Sheet 既有的 SA 金鑰名稱（沿用＝重開 SEC-3 同類風險）。
-WRITER_SA_ENV_VAR: str = "RISK_CAP_HISTORY_WRITER_SA_JSON"
+#: 📌 2026-10-19（VN1-STORE WIF auth-only 批；有意識的變更，不是漏刪）：原本這裡定義的「writer
+#:   service account JSON key 所放的環境變數名」常數**已退役刪除**（DEC-064 G1：writer 採 GitHub OIDC＋
+#:   Workload Identity Federation impersonate `risk-cap-writer`，⛔ 禁止建立 writer JSON key ⇒ 那個
+#:   環境變數不會有任何合法內容；`docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md` 第 6 節第 4 點）。
+#:   舊名稱的理由（不沿用個人持股 Sheet 既有 SA 金鑰名稱，避免重開 SEC-3 同類風險）仍成立，
+#:   由「writer 根本沒有 key」更嚴格地守住。writer 憑證日後**只**經 WIF 取得的短效 ADC
+#:   （`google-github-actions/auth` 產生的 `external_account` 憑證檔）—— 由未來正式寫入批次接線；
+#:   本批只驗證能換到身分（`scripts/risk_cap_wif_auth_check.py`），不碰任何 Sheet。
+#:   舊名稱的字面只留在文件與測試的「禁止字面」守衛裡（`tests/test_vn1_wif_auth_only.py`）。
 #: 寫入端 OAuth scope（只開試算表；⛔ 不含 Drive）。
 WRITER_SCOPES: tuple[str, ...] = ("https://www.googleapis.com/auth/spreadsheets",)
 #: 稽核修正（2026-10-19）：**保留**未來網站讀取端的名稱與 scope（放 Streamlit secrets）。

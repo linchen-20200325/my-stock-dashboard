@@ -62,7 +62,6 @@ from shared.risk_cap_history_policy import (
     UPSERT_CONFLICT_KEPT_EXISTING,
     UPSERT_NOOP_DUPLICATE,
     WRITE_ENABLE_ENV_VAR,
-    WRITER_SA_ENV_VAR,
 )
 
 
@@ -248,9 +247,16 @@ def load_writer_credentials_or_refuse(environ: Mapping[str, str] | None = None) 
     拒絕順序（訊息照實講卡在哪）：
       1. `PRODUCTION_WRITE_APPROVED` 為 False（L0；改它需要客戶另一次裁示，DEC-009）；
       2. `RISK_CAP_HISTORY_WRITE_ENABLED` 沒設成 "1"；
-      3. 寫入 SA（`RISK_CAP_HISTORY_WRITER_SA_JSON`）或 Sheet ID（`RISK_CAP_HISTORY_SHEET_ID`）沒設。
-    ⛔ 不讀個人持股 Sheet 的既有 SA 金鑰；⛔ 不讀 `st.secrets`；⛔ 不讀網站讀取端的金鑰名稱。
-    即使 1~3 都過了，本 PoC 也**沒有**實作建立 client —— 那屬正式化批次（需客戶核准＋新憑證）。
+      3. Sheet ID（`RISK_CAP_HISTORY_SHEET_ID`）沒設；
+      4. 即使 1~3 都過了：本 PoC **沒有**實作建立寫入 client —— 仍拒絕。
+
+    📌 2026-10-19（VN1-STORE WIF auth-only 批；有意識的變更，不是漏刪）：原第 3 步「寫入 SA 的 JSON key
+    環境變數沒設 ⇒ 拒絕」**已移除** —— DEC-064 G1 禁止 writer JSON key，那個環境變數不會有合法內容；
+    檢查它等於把「放一把 writer key」寫成通過條件（`docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md` 第 6 節第 4 點）。
+    writer 憑證日後**只**經 GitHub OIDC＋Workload Identity Federation 取得的短效 ADC
+    （`external_account` 憑證檔，impersonate `risk-cap-writer`）；接線屬未來正式寫入批次
+    （需客戶另行核准 production 寫入）。本批的 `scripts/risk_cap_wif_auth_check.py` 只驗證換得到身分、不碰 Sheet。
+    ⛔ 不讀個人持股 Sheet 的既有 SA 金鑰；⛔ 不讀 `st.secrets`；⛔ 不讀網站讀取端的金鑰名稱；⛔ 不讀任何 JSON key。
     """
     env = os.environ if environ is None else environ
     if not PRODUCTION_WRITE_APPROVED:
@@ -259,7 +265,6 @@ def load_writer_credentials_or_refuse(environ: Mapping[str, str] | None = None) 
             "本 PoC 不寫任何真實 Sheet。")
     if env.get(WRITE_ENABLE_ENV_VAR) != "1":
         raise ProductionWriteNotApproved(f"{WRITE_ENABLE_ENV_VAR} 未設為 1")
-    missing = [k for k in (WRITER_SA_ENV_VAR, HISTORY_SHEET_ID_ENV_VAR) if not env.get(k)]
-    if missing:
-        raise ProductionWriteNotApproved(f"寫入憑證未設定：{missing}")
-    raise ProductionWriteNotApproved("本 PoC 未實作建立寫入 client（正式化批次另案）")
+    if not env.get(HISTORY_SHEET_ID_ENV_VAR):
+        raise ProductionWriteNotApproved(f"寫入目標未設定：{HISTORY_SHEET_ID_ENV_VAR}")
+    raise ProductionWriteNotApproved("本 PoC 未實作建立寫入 client（正式化批次另案；writer 憑證只走 WIF）")

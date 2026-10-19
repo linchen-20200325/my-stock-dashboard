@@ -607,14 +607,17 @@ class TestScript:
         mod = _load_script()
         monkeypatch.setattr(H, "run_headless_refresh", lambda d: pytest.fail("--write 不得跑取數"))
         monkeypatch.setenv(P.WRITE_ENABLE_ENV_VAR, "1")
-        monkeypatch.setenv(P.WRITER_SA_ENV_VAR, "{}")
+        # VN1-STORE WIF auth-only（2026-10-19，有意識的放寬）：原本還設了 writer JSON key 環境變數 ——
+        # 該常數已依 DEC-064 G1 退役（writer 只走 WIF，沒有 key），閘門不再檢查它；其餘條件照舊、照樣拒絕。
         monkeypatch.setenv(P.HISTORY_SHEET_ID_ENV_VAR, "x")
         assert mod.main(["--write"]) == 2
         assert "尚未核准" in capsys.readouterr().out
 
     def test_credentials_gate_refuses_even_if_configured(self):
         with pytest.raises(L1H.ProductionWriteNotApproved):
-            L1H.load_writer_credentials_or_refuse({P.WRITE_ENABLE_ENV_VAR: "1", P.WRITER_SA_ENV_VAR: "{}",
+            # VN1-STORE WIF auth-only（2026-10-19，有意識的放寬）：拿掉已退役的 writer JSON key 環境變數
+            # （DEC-064 G1）；「所有可設的條件都設了仍拒絕」這個守衛意圖不變。
+            L1H.load_writer_credentials_or_refuse({P.WRITE_ENABLE_ENV_VAR: "1",
                                                    P.HISTORY_SHEET_ID_ENV_VAR: "x"})
         assert P.PRODUCTION_WRITE_APPROVED is False
 
@@ -695,9 +698,12 @@ class TestStaticGuards:
 
     def test_history_credential_names_confined(self):
         """寫入／讀取兩支帳號的名稱只准出現在 L0 定義處（及測試）；個人持股 Sheet／登入路徑一處都不得出現。"""
-        names = (P.WRITER_SA_ENV_VAR, P.READER_SA_ENV_VAR, P.HISTORY_SHEET_ID_ENV_VAR, P.WRITE_ENABLE_ENV_VAR)
+        # VN1-STORE WIF auth-only（2026-10-19，有意識的放寬）：writer JSON key 環境變數常數已依 DEC-064 G1
+        # 退役（writer 只走 WIF），故從名單移除、改由 `tests/test_vn1_wif_auth_only.py` 守「全 repo 不得再出現」；
+        # 「讀取端名稱 ≠ 寫入端」改為「L0 不再有寫入端 key 名稱」。
+        names = (P.READER_SA_ENV_VAR, P.HISTORY_SHEET_ID_ENV_VAR, P.WRITE_ENABLE_ENV_VAR)
         assert len(set(names)) == len(names)
-        assert P.READER_SA_ENV_VAR != P.WRITER_SA_ENV_VAR
+        assert not hasattr(P, "WRITER_SA_ENV_VAR")
         assert P.READER_SCOPES == ("https://www.googleapis.com/auth/spreadsheets.readonly",)
         assert all("readonly" not in s for s in P.WRITER_SCOPES)
         hits = {}
@@ -744,7 +750,9 @@ class TestStaticGuards:
         y = (REPO / ".github/workflows/risk_cap_history_poc.yml").read_text(encoding="utf-8")
         assert "schedule:" not in y and "cron:" not in y
         assert "contents: read" in y and "contents: write" not in y
-        for bad in ("GCP_SERVICE_ACCOUNT_JSON", P.WRITER_SA_ENV_VAR, P.HISTORY_SHEET_ID_ENV_VAR,
+        # VN1-STORE WIF auth-only（2026-10-19，有意識的變更）：退役的 writer JSON key 名稱改以字面守住
+        # （常數已刪）；本測試仍掃全檔 —— 新增的 wif_auth_only job 也不得含下列任何一項。
+        for bad in ("GCP_SERVICE_ACCOUNT_JSON", "RISK_CAP_HISTORY_WRITER_SA_JSON", P.HISTORY_SHEET_ID_ENV_VAR,
                     P.WRITE_ENABLE_ENV_VAR, P.READER_SA_ENV_VAR, "RISK_CAP_HISTORY",
                     "--write", "git push", "git commit", "GEMINI"):
             assert bad not in y, bad
