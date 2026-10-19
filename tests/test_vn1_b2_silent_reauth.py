@@ -137,7 +137,7 @@ def wire(monkeypatch):
 
 
 def _run_app(fst) -> None:
-    """模擬 app.py 一輪:callback → (rerun 就再跑一輪,同 session)→ 靜默恢復。"""
+    """模擬 app.py 一輪:callback → (rerun 就再跑一輪,同 session)→ 靜默恢復 → 重算記號。"""
     for _ in range(3):
         try:
             ost.handle_oauth_callback()
@@ -145,6 +145,7 @@ def _run_app(fst) -> None:
             continue
         break
     ost.maybe_silent_reauth()
+    ost.sync_silent_marker()
 
 
 def _redirect_url(fst) -> str:
@@ -288,6 +289,10 @@ def test_app_py_wires_hook_and_logout():
     i_cb = src.index('    _oauth_cb()\n')
     i_si = src.index('    _oauth_silent()')
     assert i_cb < i_si and '\n' not in src[i_cb + len('    _oauth_cb()\n'):i_si].strip()
+    i_sync = src.index('    _oauth_sync()')
+    assert i_si < i_sync and '\n' not in src[src.index('\n', i_si) + 1:i_sync].strip()
+    i_sb_write = src.index("st.query_params['sheet'] = _sb_sid_new")
+    assert src.index('_sb_sync_silent()', i_sb_write) < src.index('if _sb_sid_new:', i_sb_write)
     i_logout = src.index("key='btn_oauth_logout_sb'")
     i_forget = src.index('_sb_forget_silent()', i_logout)
     assert i_forget < src.index('st.rerun()', i_logout)
@@ -349,8 +354,9 @@ def test_error_branch_foreign_state_does_not_rebind_sheet(wire):
     ns.issue('N_OTHER', _OTHER)
     landing = wire(qp={'error': 'login_required', 'state': 'N_OTHER.EVIL.' + MV})
     _run_app(landing)
-    assert 'portfolio_sheet_id' not in landing.session_state
-    assert dict(landing.query_params) == {}
+    assert 'portfolio_sheet_id' not in landing.session_state, 'consume 沒過 → 不回綁 session'
+    # 稽核第二輪:靜默 state 的 Sheet 只寫回網址(網址層級,既有信任模型)
+    assert dict(landing.query_params) == {'sheet': 'EVIL'}
     assert landing.infos == [ost.OAUTH_SILENT_REAUTH_FAILED_MSG]
 
 
@@ -494,6 +500,7 @@ def _silent_roundtrip(wire, *, url, sub, tamper=None):
         st_param = tamper(st_param)
     landing = wire(qp={'code': 'CS', 'state': st_param}, sub=sub)
     _run_app(landing)
+    landing.state_sheet = ost._split_silent_state(st_param)[1]
     return landing
 
 
@@ -502,7 +509,11 @@ def _assert_silent_rejected(landing):
     assert 'gsheet_email' not in landing.session_state
     assert 'portfolio_sheet_id' not in landing.session_state, '不得回綁'
     assert 'stock_portfolio_sheet_id' not in landing.session_state
-    assert MK not in landing.query_params and 'sheet' not in landing.query_params
+    # 稽核第二輪 MUST-1(b):不登入、不回綁 session、不掛記號;但 state 帶回的 Sheet 寫回**網址**
+    # (網址層級 ＝ app.py v19.204 `?sheet=` 還原的既有信任等級 —— 攻擊者本來就能直接寄 `?sheet=EVIL`)。
+    assert MK not in landing.query_params
+    _ss = landing.state_sheet
+    assert dict(landing.query_params) == ({'sheet': _ss} if _ss else {})
     assert landing.infos == [ost.OAUTH_SILENT_MISMATCH_MSG]
     assert landing.errors == [] and landing.successes == []
 
@@ -1010,3 +1021,203 @@ def test_vn1b2_revert_is_exact_base_source():
     for rel in sorted(VN1B2_REVERT_PAIRS):
         code = vn1b2_revert_for(rel, (_repo / rel).read_text(encoding="utf-8"))
         assert hashlib.sha256(code.encode("utf-8")).hexdigest() == VN1B2_BASE_SHA[rel], rel
+
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 12. 稽核修正第二輪 MUST-1:登入後才綁 / 換 Sheet → 重算記號;靜默沒成功時 Sheet 不弄丟
+# ══════════════════════════════════════════════════════════════════════════
+def _login_strict(wire, *, sheet='', sub='SUB_ME', secrets=None):
+    """手動按登入鈕、強驗通過(回落地 session;網址＝登入後的網址)。"""
+    ns.issue('NL', _ME)
+    fst = wire(qp={'code': 'C0', 'state': 'NL.' + sheet if sheet else 'NL'}, sub=sub,
+               secrets=secrets)
+    _run_app(fst)
+    assert 'gsheet_tokens' in fst.session_state
+    return fst
+
+
+def _bind_sheet_like_sidebar(fst, sid):
+    """app.py 側欄:寫兩通道 + `?sheet=` → 就地 `sync_silent_marker()`(這一輪不會再 rerun)。"""
+    fst.session_state['portfolio_sheet_id'] = sid
+    fst.session_state['stock_portfolio_sheet_id'] = sid
+    fst.query_params['sheet'] = sid
+    return ost.sync_silent_marker()
+
+
+def test_login_then_bind_sheet_remints_marker_and_refresh_restores_with_sheet(wire):
+    s1 = _login_strict(wire)
+    assert dict(s1.query_params) == {MK: _tag(sheet='')}
+    assert _bind_sheet_like_sidebar(s1, 'SID') is True
+    assert s1.query_params[MK] == _tag(sheet='SID'), '記號跟著新 Sheet 重算'
+    # 重新整理 → 靜默恢復 → 帶 SID 成功
+    s2 = wire(qp=dict(s1.query_params))
+    _run_app(s2)
+    st_param = _qs(_redirect_url(s2))['state']
+    s3 = wire(qp={'code': 'C1', 'state': st_param})
+    _run_app(s3)
+    assert s3.session_state['gsheet_tokens']['access_token'] == 'AT_SECRET_C1'
+    assert s3.session_state['portfolio_sheet_id'] == 'SID'
+    assert dict(s3.query_params) == {'sheet': 'SID', MK: _tag(sheet='SID')}
+
+
+def test_binder_path_resyncs_on_the_hook_after_its_rerun(wire):
+    """📁 組合管理 / 就地綁定(`apply_active_sheet` 只寫 `?sheet=`)之後都會 st.rerun → app.py 頂端的
+    hook 在那一輪重算(⛔ 不改凍結的舊 UI 檔)。"""
+    s1 = _login_strict(wire)
+    s1.query_params['sheet'] = 'SID2'          # apply_active_sheet 的效果(不碰 gs)
+    _run_app(s1)                               # st.rerun 之後的那一輪
+    assert s1.query_params[MK] == _tag(sheet='SID2')
+
+
+def test_refresh_right_after_sidebar_change_is_covered_by_the_inline_sync(wire):
+    """「換完 Sheet 還沒任何 rerun 就重新整理」:側欄那一行就地 sync 已經把記號改好 → 恢復成功。"""
+    s1 = _login_strict(wire)
+    _bind_sheet_like_sidebar(s1, 'SID')        # 同一輪內(沒有下一次 rerun)
+    s2 = wire(qp=dict(s1.query_params))        # 立刻重新整理
+    _run_app(s2)
+    s3 = wire(qp={'code': 'C1', 'state': _qs(_redirect_url(s2))['state']})
+    _run_app(s3)
+    assert s3.session_state['portfolio_sheet_id'] == 'SID'
+
+
+def test_stale_marker_mismatch_keeps_sheet_in_url_and_manual_login_rebinds_it(wire):
+    """萬一記號還是舊的(例:別的寫入 `?sheet=` 的地方沒有 rerun):對不上 → 不登入,但 Sheet 留在網址,
+    手動按一次登入就回綁那一本(修前:Sheet 一起被清掉,且每次重新整理都一樣)。"""
+    landing = _silent_roundtrip(wire, url={MK: _tag(sheet=''), 'sheet': 'SID'}, sub='SUB_ME')
+    _assert_silent_rejected(landing)
+    assert dict(landing.query_params) == {'sheet': 'SID'}
+    # 同一個落地 session:app.py 開機還原把 ?sheet= setdefault 進 session → 按登入鈕(state 帶那本)
+    landing.session_state.setdefault('portfolio_sheet_id', landing.query_params['sheet'])
+    st_btn = ost.login_state_with_sheet(landing.session_state['portfolio_sheet_id'])
+    back = wire(qp={'code': 'CM', 'state': st_btn})
+    _run_app(back)
+    assert back.session_state['portfolio_sheet_id'] == 'SID'
+    assert dict(back.query_params) == {'sheet': 'SID', MK: _tag(sheet='SID')}
+
+
+@pytest.mark.parametrize('code', ['server_error', 'temporarily_unavailable', 'access_denied',
+                                  'visit-evil.com-to-fix', 'login_required'])
+def test_silent_state_any_error_keeps_sheet(wire, code):
+    s = wire(qp={MK: _tag(sheet='S'), 'sheet': 'S'})
+    _run_app(s)
+    st_param = _qs(_redirect_url(s))['state']
+    landing = wire(qp={'error': code, 'state': st_param})
+    _run_app(landing)
+    assert dict(landing.query_params) == {'sheet': 'S'}, 'Sheet 不得被弄丟(稽核第二輪 SHOULD-A)'
+    assert MK not in landing.query_params and 'gsheet_tokens' not in landing.session_state
+    assert landing.session_state.get('portfolio_sheet_id') == 'S', 'consume ok → 照舊回綁 session'
+    assert st_param.partition('.')[0] not in ns._STORE, '靜默 nonce 任何錯誤都燒掉'
+    assert landing.htmls == [] and landing.errors == []
+
+
+def test_silent_callback_rejected_by_sec2_keeps_sheet(wire):
+    """process 重啟 → 回呼查無 nonce(unknown)→ SEC-2 紅字照舊,但靜默 state 的 Sheet 寫回網址。"""
+    s = wire(qp={MK: _tag(sheet='S'), 'sheet': 'S'})
+    _run_app(s)
+    st_param = _qs(_redirect_url(s))['state']
+    ns._STORE.clear()                                  # 模擬重啟
+    landing = wire(qp={'code': 'C', 'state': st_param})
+    _run_app(landing)
+    assert landing.errors == [ost.OAUTH_STATE_REJECTED_MSG]
+    assert dict(landing.query_params) == {'sheet': 'S'}
+    assert 'portfolio_sheet_id' not in landing.session_state, 'consume 沒過 → 不回綁 session'
+
+
+def test_silent_token_exchange_failure_keeps_sheet(wire, monkeypatch):
+    s = wire(qp={MK: _tag(sheet='S'), 'sheet': 'S'})
+    _run_app(s)
+    st_param = _qs(_redirect_url(s))['state']
+    landing = wire(qp={'code': 'C', 'state': st_param})
+
+    def _boom(*a):
+        raise ost.OAuthError('invalid_grant')
+    monkeypatch.setattr(ost, 'exchange_code_for_tokens', _boom)
+    _run_app(landing)
+    assert dict(landing.query_params) == {'sheet': 'S'}
+    assert 'gsheet_tokens' not in landing.session_state
+
+
+def test_normal_login_failures_still_clear_everything(wire, monkeypatch):
+    """一般登入(兩段 state)的失敗照舊全清 —— 不信未驗證的 state 載荷(與修前相同)。"""
+    landing = wire(qp={'code': 'C', 'state': 'UNKNOWN.EVIL'})
+    _run_app(landing)
+    assert dict(landing.query_params) == {}
+
+
+# ── sync 的閘:永遠只替「本 session 自己、強驗登入」的帳號算 ─────────────────────
+def test_sync_never_mints_for_valve_login(wire):
+    ns.issue('NV', _OTHER)
+    fst = wire(qp={'code': 'C', 'state': 'NV'},
+               secrets={OAUTH_CSRF_ENFORCE_SECRET_KEY: False})
+    _run_app(fst)
+    assert 'gsheet_tokens' in fst.session_state and MK not in fst.query_params
+    assert _bind_sheet_like_sidebar(fst, 'SID') is False
+    assert MK not in fst.query_params
+
+
+def test_sync_never_mints_when_disabled_no_secret_no_sub_logged_out(wire, monkeypatch):
+    s1 = _login_strict(wire)
+    # 開關後來關掉
+    s1.secrets = {OAUTH_SILENT_REAUTH_SECRET_KEY: 'off'}
+    assert _bind_sheet_like_sidebar(s1, 'A') is False
+    s1.secrets = {}
+    # 沒有 client_secret
+    monkeypatch.setattr(ost, '_resolve_oauth_cfg', lambda: {'client_id': 'CID', 'client_secret': '',
+                                                             'redirect_uri': 'r'})
+    assert _bind_sheet_like_sidebar(s1, 'B') is False
+    monkeypatch.setattr(ost, '_resolve_oauth_cfg', lambda: dict(_CFG))
+    # session 的 token 沒有 sub
+    _saved = s1.session_state['gsheet_tokens']
+    s1.session_state['gsheet_tokens'] = {'access_token': 'AT'}
+    assert _bind_sheet_like_sidebar(s1, 'C') is False
+    s1.session_state['gsheet_tokens'] = _saved
+    # 回呼參數還在網址上
+    s1.query_params['code'] = 'x'
+    assert _bind_sheet_like_sidebar(s1, 'D') is False
+    del s1.query_params['code']
+    # 值沒變 → 不改寫
+    assert _bind_sheet_like_sidebar(s1, 'E') is True
+    assert ost.sync_silent_marker() is False
+    # 登出 → 不再算
+    s1.session_state.pop('gsheet_tokens')
+    ost.forget_silent_reauth()
+    assert _bind_sheet_like_sidebar(s1, 'F') is False
+    assert MK not in s1.query_params
+    # 登出也清掉 eligibility 旗標(縱深防禦:即使日後有別的路徑把 token 放回 session,也不會替它重算)
+    from shared.oauth_session_policy import OAUTH_SILENT_ELIGIBLE_SESSION_KEY
+    assert OAUTH_SILENT_ELIGIBLE_SESSION_KEY not in s1.session_state
+
+
+def test_sync_never_mints_without_sub_at_login(wire, monkeypatch):
+    ns.issue('N1', _ME)
+    fst = wire(qp={'code': 'C', 'state': 'N1'})
+    monkeypatch.setattr(ost, 'exchange_code_for_tokens',
+                        lambda *a: {'access_token': 'AT', 'expires_at': 9_999_999_999})
+    _run_app(fst)
+    assert _bind_sheet_like_sidebar(fst, 'SID') is False and MK not in fst.query_params
+
+
+def test_sync_uses_only_the_sessions_own_sub(wire):
+    s1 = _login_strict(wire, sub='SUB_ME')
+    _bind_sheet_like_sidebar(s1, 'SID')
+    assert s1.query_params[MK] == _tag(sub='SUB_ME', sheet='SID')
+    assert s1.query_params[MK] != _tag(sub='SUB_OTHER', sheet='SID')
+    # 換人重新登入(強驗)→ 之後的重算用新的 sub
+    ns.issue('N2', _ME)
+    s2 = wire(qp={'code': 'C2', 'state': 'N2.SID'}, sub='SUB_OTHER')
+    _run_app(s2)
+    _bind_sheet_like_sidebar(s2, 'SID3')
+    assert s2.query_params[MK] == _tag(sub='SUB_OTHER', sheet='SID3')
+
+
+def test_relogin_via_valve_in_same_session_drops_eligibility(wire):
+    s1 = _login_strict(wire)
+    s1.session_state.pop('gsheet_tokens')                  # (例:逾時清掉)
+    ns.issue('NV', _OTHER)
+    s1.query_params.clear()
+    s1.query_params.update({'code': 'CV', 'state': 'NV'})
+    s1.secrets = {OAUTH_CSRF_ENFORCE_SECRET_KEY: False}
+    _run_app(s1)
+    assert 'gsheet_tokens' in s1.session_state
+    assert _bind_sheet_like_sidebar(s1, 'SID') is False, '安全閥放行的登入 ⇒ 不可重算記號'

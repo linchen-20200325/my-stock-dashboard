@@ -9,10 +9,15 @@
 ==========================================================================
 所以**沒有任何 token 活得比 Streamlit session 久**：沒有 server 端 token 表、不寫 cookie /
 localStorage、不用 `st.login`。重新整理 ＝ 新 session ＝ 沒有 token。恢復登入的做法是
-**靜默重新授權**：登入成功後在網址掛一個**非憑證**的一次性記號（`?gs=1`）；重新整理時看到
-記號 → 先把記號拿掉（一次性）→ 整個分頁轉去 Google 並帶 `prompt=none`（Google 不顯示任何畫面，
-已登入且授權過就直接帶 `code` 回原 redirect_uri；否則帶 `error=` 回來）→ 回呼走既有 SEC-2
-nonce 驗證 → token 一樣只住在 `st.session_state`。
+**靜默重新授權**：登入成功後在網址掛一個**非憑證**的記號（`?gs=<MAC>`，見下）；重新整理時
+（新 session、沒有 token）看到記號 → 標記本 session 已試過 → 發 nonce（state ＝ `nonce.sheet.記號`）→
+瀏覽器端 script 先以 `history.replaceState` 拿掉 `gs`（同一筆歷史紀錄，不新增 → 按「上一頁」不會又轉一次）
+→ 整個分頁轉去 Google 並帶 `prompt=none`（Google 不顯示任何畫面，已登入且授權過就直接帶 `code`
+回原 redirect_uri；否則帶 `error=` 回來）→ 回呼走既有 SEC-2 nonce 驗證 → token 一樣只住在
+`st.session_state`。
+（📌 2026-10-19 更正：23596359 初版這裡寫的是「固定值 `?gs=1`、伺服器端先拿掉記號（一次性）」——
+兩者都已在稽核修正輪改掉：固定值可偽造 → 改 MAC；伺服器端拿記號會多一筆帶記號的歷史紀錄 →
+上一頁陷阱 → 改由 script replaceState。舊說法據實保留於此，⛔ 不是漏改。）
 
 記號本身**不是**憑證：它只代表「上一次在這個網址、以**這個 Google 帳號 + 這本 Sheet** 登入成功過」。
 1.0-B2 稽核修正（SA1）：記號值 ＝ HMAC-SHA256（金鑰＝OAuth client_secret，訊息＝網域字串＋sub＋Sheet ID）
@@ -21,6 +26,10 @@ nonce 驗證 → token 一樣只住在 `st.session_state`。
   · 攻擊者給的 `?gs=<亂數>&sheet=<他的 Sheet>` → 算不出合法 MAC（沒有 client_secret）→ 不登入、不綁；
   · 同一台電腦換了 Google 帳號 → sub 不同 → 不會靜默登入成另一個人（守住 v19.293 選帳號的本意）。
 記號不含 sub / email 原文（單向 MAC），也不是任何 Google 憑證。
+金鑰由 OAuth client_secret 加網域分隔字串（`OAUTH_SILENT_MAC_DOMAIN`）推出；**輪換 client_secret ⇒
+所有舊記號一次失效**（使用者會看到一次「帳號或 Sheet 與上次不同」提示，按登入鈕即可）。
+登入後換了 Sheet（側欄 / 📁 組合管理）→ `oauth_state.sync_silent_marker()` 以**本 session 自己的** sub
+重算記號（只對「強驗登入」的 session 做；稽核修正第二輪 MUST-1）。
 """
 from __future__ import annotations
 
@@ -88,3 +97,8 @@ OAUTH_LOGIN_EXPIRED_SESSION_KEY: str = "_oauth_login_expired"
 #: 放 L0：L1 `gsheet_portfolio` 拋例外用、L5 `page_hold` 畫灰卡用 —— 同一句話只有一份。
 OAUTH_LOGIN_EXPIRED_MSG: str = ("Google 登入已逾時，請重新整理頁面以自動恢復登入，"
                                 "或按側欄「🔐 用 Google 登入」重新登入。")
+
+#: session_state 旗標：本 session 的登入是**強驗通過**（consume ok）且掛過記號的那一種。
+#: `sync_silent_marker()` 只對有這個旗標的 session 重算記號 —— 安全閥放行的登入、開關停用時的登入
+#: 一律沒有它（稽核修正第二輪 MUST-1）。登出 / 重新登入時重設。
+OAUTH_SILENT_ELIGIBLE_SESSION_KEY: str = "_oauth_silent_eligible"

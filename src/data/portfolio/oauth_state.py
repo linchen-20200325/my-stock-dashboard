@@ -22,6 +22,7 @@
                                     1.0-B2 起另處理 Google 帶回的 ?error=)
 - maybe_silent_reauth()            (1.0-B2:重新整理後靜默恢復登入 —— 網址有記號才整頁轉去 Google prompt=none)
 - forget_silent_reauth()           (1.0-B2:登出時拿掉網址記號,否則重新整理又登回去)
+- sync_silent_marker()             (1.0-B2 稽核第二輪:登入後換了 Sheet → 以本 session 自己的 sub 重算記號)
 
 SEC-2(login CSRF)
 ==================
@@ -51,12 +52,16 @@ SEC-2(login CSRF)
    藍色提示(st.info)「請按側欄登入」,落地網址沒有記號 ⇒ **不會迴圈**。
 4. 靜默恢復拿不到 refresh_token ⇒ 約 1 小時後 access_token 過期 → `gsheet_portfolio` 清掉 session
    token、標記「登入已逾時」並請使用者重新整理(session 中途**絕不**自動轉跳)。
+5. 稽核第二輪(MUST-1):登入後才綁 / 換 Sheet → `sync_silent_marker()` 重算記號(只對強驗登入的 session、
+   只用本 session 自己的 sub);靜默恢復沒成功(記號不符 / Google 回 error / 回呼被 SEC-2 拒絕 / 換 token 失敗)
+   時,state 帶回的 Sheet 寫回 `?sheet=`(**網址層級**,與 app.py v19.204 的 `?sheet=` 還原同一個信任等級)
+   ⇒ 手動登入時照常回綁,不會把 Sheet 弄丟。
 常數見 `shared/oauth_session_policy.py`。
 
 呼叫端
 ======
-- app.py:sidebar 渲染前呼叫 handle_oauth_callback(),緊接著 maybe_silent_reauth();側欄登出呼叫
-  forget_silent_reauth()
+- app.py:sidebar 渲染前呼叫 handle_oauth_callback(),緊接著 maybe_silent_reauth()、sync_silent_marker();
+  側欄登出呼叫 forget_silent_reauth();側欄寫入新的 ?sheet= 之後呼叫 sync_silent_marker()
 - src/data/portfolio/gsheet_portfolio.py:取 _get_oauth_client() 給 gspread 用(L1→L1 同層)
 """
 from __future__ import annotations
@@ -79,6 +84,7 @@ from shared.oauth_session_policy import (
     OAUTH_LOGIN_EXPIRED_SESSION_KEY,
     OAUTH_PROMPT_NONE,
     OAUTH_SILENT_ATTEMPTED_SESSION_KEY,
+    OAUTH_SILENT_ELIGIBLE_SESSION_KEY,
     OAUTH_SILENT_FAILURE_ERROR_CODES,
     OAUTH_SILENT_MAC_DOMAIN,
     OAUTH_SILENT_MARKER_PARAM,
@@ -379,6 +385,7 @@ SILENT_REJECT_NO_SUB = "no_sub"
 SILENT_MARKER_NOT_SET_NO_SUB = "marker_not_set_no_sub"
 SILENT_MARKER_SET_FAILED = "marker_set_failed"
 SILENT_MARKER_REMOVE_FAILED = "marker_remove_failed"
+SILENT_MARKER_RESYNCED = "marker_resynced"
 #: 值得記 log 的略過原因(網址**有**記號、使用者期待恢復,卻因設定 / 環境做不到)。
 #: 其餘(沒記號、已登入…)是每次 rerun 的常態,記了只會洗版。每 session 只記一次。
 _SILENT_LOGGED_SKIP_REASONS = frozenset({
@@ -407,7 +414,69 @@ def forget_silent_reauth() -> None:
         print(f"[oauth_state] 1.0-B2 silent_reauth={SILENT_MARKER_REMOVE_FAILED} "
               f"({type(_e).__name__})")
     st.session_state.pop(OAUTH_LOGIN_EXPIRED_SESSION_KEY, None)
+    st.session_state.pop(OAUTH_SILENT_ELIGIBLE_SESSION_KEY, None)
     st.session_state[OAUTH_SILENT_ATTEMPTED_SESSION_KEY] = True
+
+
+def _url_sheet() -> str:
+    """網址上的 `?sheet=`(消毒後)。記號一律跟「網址上的 sheet」一起算(那是重新整理後唯一留下來的)。"""
+    try:
+        return _sanitize_sheet_id(st.query_params.get("sheet"))
+    except Exception:  # noqa: BLE001 — 讀不到 query params ⇒ 當作沒有
+        return ""
+
+
+def sync_silent_marker() -> bool:
+    """1.0-B2 稽核第二輪(MUST-1):登入後換了 Sheet → 重算網址記號。回是否改寫了 `gs`。
+
+    修前:登入時記號 ＝ MAC(sub, 當時的 Sheet,常是空的),之後在側欄 / 📁 組合管理綁了 Sheet,網址變成
+    `?sheet=SID` 但記號沒變 → 下一次重新整理靜默恢復時 MAC(sub, SID) ≠ 記號 → 不登入、Sheet 也一起丟了,
+    而且**每一次**都這樣。
+    **全部**成立才改寫:開關啟用、有 client_secret、本 session 已登入、本 session 的登入是**強驗**掛過記號的
+    (`OAUTH_SILENT_ELIGIBLE_SESSION_KEY`;安全閥放行 / 開關停用時的登入沒有)、網址不是回呼、本 session 的
+    id_token 解得出 sub、新值與網址現值不同。
+    ⛔ 只用**本 session 自己的** sub(token 是本 server 向 Google 換來的)⇒ 永遠不會替別的帳號算出記號,
+    攻擊面不變;Sheet 取網址上的 `?sheet=`(消毒後,與 `maybe_silent_reauth` 同一個來源)。
+    """
+    if not st.session_state.get(OAUTH_SILENT_ELIGIBLE_SESSION_KEY):
+        return False
+    _toks = st.session_state.get("gsheet_tokens")
+    if not _toks or not isinstance(_toks, dict) or not _silent_reauth_enabled():
+        return False
+    try:
+        if any(_k in st.query_params for _k in OAUTH_CALLBACK_QUERY_KEYS):
+            return False
+        _cur = st.query_params.get(OAUTH_SILENT_MARKER_PARAM)
+    except Exception:  # noqa: BLE001
+        return False
+    _cfg = _resolve_oauth_cfg() or {}
+    _tag = _silent_tag(_cfg.get("client_secret", ""), decode_id_token_sub(_toks), _url_sheet())
+    if not _tag or _tag == _cur:
+        return False
+    try:
+        st.query_params[OAUTH_SILENT_MARKER_PARAM] = _tag
+    except Exception as _e:  # noqa: BLE001 — 寫不進去要講出來(§1),不擋主線
+        print(f"[oauth_state] 1.0-B2 silent_reauth={SILENT_MARKER_SET_FAILED} "
+              f"({type(_e).__name__})")
+        return False
+    print(f"[oauth_state] 1.0-B2 silent_reauth={SILENT_MARKER_RESYNCED}")
+    return True
+
+
+def _clear_query_keep_sheet(fallback_sheet: str = "") -> None:
+    """清掉網址 query(code / state / error / 記號…),但保留 `?sheet=`:網址原本有就留,否則用 `fallback_sheet`。
+
+    ⛔ 不碰 session(不回綁、不登入)、⛔ 不寫 `gs`。`fallback_sheet` 只在**靜默恢復**沒成功時傳入
+    (state 帶回的那本,已消毒):信任等級＝ app.py v19.204 的 `?sheet=` 網址還原 —— 有人能塞這個 state,
+    就一樣能直接寄 `?sheet=` 的連結(既有信任模型,另案追蹤),本函式沒有放大它。
+    """
+    _keep = _url_sheet() or _sanitize_sheet_id(fallback_sheet)
+    st.query_params.clear()
+    if _keep:
+        try:
+            st.query_params["sheet"] = _keep
+        except Exception:  # noqa: BLE001 — query param 寫入失敗不擋主線(§1:同成功路徑)
+            pass
 
 
 def _silent_reauth_skip_reason() -> "str | None":
@@ -484,11 +553,10 @@ def maybe_silent_reauth() -> bool:
     st.session_state[OAUTH_SILENT_ATTEMPTED_SESSION_KEY] = True
     cfg = _resolve_oauth_cfg()
     _tag = _silent_marker_value()
-    # 記號是跟著「網址上的 ?sheet=」一起算的 → 先讀網址;新 session 的 ?sheet= 還原在 app.py 更後面才跑。
-    _sid = (st.query_params.get("sheet")
-            or st.session_state.get("portfolio_sheet_id") or "")
+    # 記號一律跟「網址上的 ?sheet=」一起算(`sync_silent_marker` 同一個來源)→ 只讀網址。
+    # (稽核第二輪:修前會退回 session 的 Sheet,與記號的來源可能不同 → 平白對不上。)
     _url = build_authorize_url(cfg["client_id"], cfg["redirect_uri"],
-                               state=login_state_with_sheet(str(_sid), silent_tag=_tag),
+                               state=login_state_with_sheet(_url_sheet(), silent_tag=_tag),
                                prompt=OAUTH_PROMPT_NONE)
     if not _url.startswith(GOOGLE_AUTH_URL + "?"):
         # 防禦:轉跳目標只可能是 Google authorize 端點(實務上不會發生;發生就講出來,不轉)
@@ -504,6 +572,7 @@ def _set_silent_marker(cfg: dict, tokens: dict, sheet_id: str) -> None:
     """登入強驗成功 → 網址掛記號 ＝ MAC(這個帳號的 sub, 回綁的 Sheet)。開關停用時不掛。
 
     算不出來(id_token 沒有 sub / 沒 client_secret)→ 不掛、記代碼。寫入失敗不擋登入主線,但要講出來(§1)。
+    算得出來 → 本 session 記為「可重算記號」(`OAUTH_SILENT_ELIGIBLE_SESSION_KEY`,給 `sync_silent_marker`)。
     """
     if not _silent_reauth_enabled():
         return
@@ -511,6 +580,7 @@ def _set_silent_marker(cfg: dict, tokens: dict, sheet_id: str) -> None:
     if not _tag:
         print(f"[oauth_state] 1.0-B2 silent_reauth={SILENT_MARKER_NOT_SET_NO_SUB}")
         return
+    st.session_state[OAUTH_SILENT_ELIGIBLE_SESSION_KEY] = True
     try:
         st.query_params[OAUTH_SILENT_MARKER_PARAM] = _tag
     except Exception as _e:  # noqa: BLE001
@@ -530,9 +600,13 @@ def _handle_oauth_error_callback(qp) -> None:
     **不** rerun、**不**轉跳、**不**換 token。網址記號此時本來就不在(redirect_uri 是固定的)
     ⇒ 下一次重新整理不會再靜默轉跳 —— 這是「Google 一直回 login_required 也不迴圈」的關鍵。
 
-    燒不燒 nonce(稽核 SA2 SHOULD-2):**只有**「靜默恢復(state 是三段)＋ 靜默失敗代碼」才 consume
-    (那個 nonce 是靜默轉跳專用、不會再被誰用)。其他(例:一般登入在新分頁按了取消 → access_denied)
-    **不** consume、不回綁 —— 否則原分頁上那顆登入鈕(同一個 nonce)再按一次會被當成重放擋下(紅字)。
+    燒不燒 nonce(稽核 SA2 SHOULD-2):**只有**靜默恢復(state 是三段)才 consume —— 那個 nonce 是靜默
+    轉跳專用、不會再被誰用。~~只在「靜默失敗代碼」時 consume~~(稽核第二輪改為**任何**代碼:
+    server_error / temporarily_unavailable 等也是同一個用過即丟的靜默 nonce;有意識的修改)。
+    一般登入(兩段 state;例:在新分頁按了取消 → access_denied)**不** consume、不回綁 —— 否則原分頁上那顆
+    登入鈕(同一個 nonce)再按一次會被當成重放擋下(紅字)。
+    稽核第二輪 SHOULD-A:靜默 state 的任何錯誤都把 state 帶回的 Sheet 寫回 `?sheet=`(網址層級,
+    見 `_clear_query_keep_sheet`)—— 修前非靜默代碼會連 Sheet 一起丟掉。
     """
     _code = _displayable_error_code(qp.get("error"))
     _reason = "absent"
@@ -540,7 +614,7 @@ def _handle_oauth_error_callback(qp) -> None:
     if "state" in qp:
         _reason = "kept"
         _got_nonce, _sheet_in_state, _tag, _is_silent = _split_silent_state(qp.get("state"))
-        if _is_silent and _code in OAUTH_SILENT_FAILURE_ERROR_CODES:
+        if _is_silent:
             _ok, _reason = _nonce_store.consume(_got_nonce, _browser_binding())
             _got_sheet = _sheet_in_state
             st.session_state.pop("_oauth_state", None)
@@ -548,19 +622,12 @@ def _handle_oauth_error_callback(qp) -> None:
     # 只記代碼(不在標準表的記成 other;state 只記 consume 的 reason / kept / absent)。
     # ⛔ 不記 nonce / sheet / 記號 / URL。
     print(f"[oauth_state] 1.0-B2 callback error={_code or 'other'} state={_reason}")
-    # 保留 sheet:網址原本有就留(消毒後);沒有而「靜默 state 強驗通過」→ 還原 state 帶回的那本
-    # (與成功路徑同一個「只有 consume ok 才信 state 載荷」規則,P2 F1)。
-    _keep_sheet = _sanitize_sheet_id(qp.get("sheet"))
+    # 回綁 session 只在「靜默 state 強驗通過」(與成功路徑同一個「只有 consume ok 才信 state 載荷」規則,
+    # P2 F1);網址則保留 `?sheet=`:原本有就留,否則用靜默 state 帶回的那本(網址層級,見上)。
     if _ok and _got_sheet:
         st.session_state["portfolio_sheet_id"] = _got_sheet
         st.session_state["stock_portfolio_sheet_id"] = _got_sheet
-        _keep_sheet = _keep_sheet or _got_sheet
-    st.query_params.clear()
-    if _keep_sheet:
-        try:
-            st.query_params["sheet"] = _keep_sheet
-        except Exception:  # noqa: BLE001 — query param 寫入失敗不擋主線(§1:同成功路徑)
-            pass
+    _clear_query_keep_sheet(_got_sheet)
     if _code in OAUTH_SILENT_FAILURE_ERROR_CODES:
         st.info(OAUTH_SILENT_REAUTH_FAILED_MSG)
     elif _code:
@@ -598,7 +665,9 @@ def handle_oauth_callback() -> None:
                   f"enforce={'on' if _enforce else 'off'}")
             if _enforce:
                 # 不 rerun、不自動轉跳 → 不會迴圈;清掉 ?code= 讓下一輪不再處理同一個授權碼。
-                st.query_params.clear()
+                # 稽核第二輪:靜默恢復的回呼被拒(例:process 重啟 → unknown)→ Sheet 寫回網址(網址層級),
+                # 一般登入照舊全清(⛔ 不信未驗證的 state 載荷,與修前相同)。
+                _clear_query_keep_sheet(_got_sheet if _is_silent else "")
                 st.error(OAUTH_STATE_REJECTED_MSG)
                 return
         # P2 F1:**回綁 Sheet 只在 CSRF 強驗通過時執行** —— state 載荷只有 consume ok 才可信
@@ -621,12 +690,15 @@ def handle_oauth_callback() -> None:
                     del _tokens
                     print(f"[oauth_state] 1.0-B2 silent_reauth=reject reason="
                           f"{SILENT_REJECT_TAG_MISMATCH if _sub else SILENT_REJECT_NO_SUB}")
-                    st.query_params.clear()
+                    # 稽核第二輪 MUST-1(b):不登入、不回綁 session,但 Sheet 寫回網址 → 手動登入時照常回綁。
+                    # 只有 consume ok 時才用 state 帶回的那本(安全閥放行的不信)。⛔ 不寫 `gs`。
+                    _clear_query_keep_sheet(_got_sheet if _ok else "")
                     st.info(OAUTH_SILENT_MISMATCH_MSG)
                     return
             st.session_state["gsheet_tokens"] = _tokens
             st.session_state["gsheet_email"] = decode_id_token_email(_tokens)
             st.session_state.pop(OAUTH_LOGIN_EXPIRED_SESSION_KEY, None)   # 重新登入了 → 不再是「已逾時」
+            st.session_state.pop(OAUTH_SILENT_ELIGIBLE_SESSION_KEY, None)  # 下面強驗掛記號時才重設
             # P2:把 state 便車帶回的 Sheet ID 回綁兩通道 + 重掛 ?sheet=(取代原本的
             # blanket clear —— 那正是把 ?sheet= 沖掉、逼使用者再繞組合管理的元凶之一)。
             # sheetid 已於 _split_silent_state 消毒;非憑證,回綁只是「還原上次用哪本」。
@@ -647,5 +719,6 @@ def handle_oauth_callback() -> None:
             st.rerun()
         except OAuthError as _oe:
             # 授權碼在 Google 端已是一次性;清掉 ?code= 免得下一輪拿已燒掉的 nonce 再報一次錯。
-            st.query_params.clear()
+            # 稽核第二輪:靜默恢復且 consume ok → Sheet 寫回網址(網址層級);其他照舊全清。
+            _clear_query_keep_sheet(_got_sheet if (_is_silent and _ok) else "")
             st.error(f"❌ OAuth 失敗：{_oe}")

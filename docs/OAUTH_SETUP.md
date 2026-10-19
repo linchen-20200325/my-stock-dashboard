@@ -62,7 +62,12 @@ Streamlit session 久**：沒有 server 端 token 表、不寫 cookie / localSto
 
 1. 你按「🔐 用 Google 登入」成功、且 SEC-2 驗證是**強驗通過**（consume ok）時，網址會多一個記號
    `?gs=<32 個 hex>`（與 `?sheet=` 並列）。記號 ＝ HMAC-SHA256（金鑰＝OAuth client_secret，
-   內容＝網域字串＋你的 Google 帳號 ID（sub）＋這本 Sheet 的 ID）的前 32 個 hex。
+   內容＝網域分隔字串 `vn1-gs`＋你的 Google 帳號 ID（sub）＋網址上這本 Sheet 的 ID）的前 32 個 hex。
+   - 金鑰直接取自 OAuth client_secret、靠網域分隔字串與其他用途區隔 ⇒ **輪換 client_secret 會讓所有舊記號
+     一次失效**（每位使用者下一次重新整理會看到一次「帳號或 Sheet 與上次不同」，按登入鈕即可）。
+   - 登入後才綁 / 換 Sheet（側欄、📁 組合管理、💼 頁的就地綁定）→ app 會以**這個 session 自己的** Google
+     帳號 ID 重算記號（只對強驗登入的 session；安全閥放行的登入不會）。側欄是寫完就地重算；📁 組合管理與
+     就地綁定寫完都會重跑一輪，在那一輪重算 ⇒ 換完馬上重新整理也對得上。
 2. 重新整理 → 新 session 沒有 token，但網址有記號 → app 照原本的方式發一個 15 分鐘的 nonce，
    `state` 帶著 `nonce.Sheet.記號`；頁首短暫出現**灰字**（`st.caption`）「正在恢復 Google 登入…」；
    瀏覽器端的 script 先在**要導的那個視窗**上 `history.replaceState` 把網址裡的 `gs` 拿掉（同一筆
@@ -71,14 +76,20 @@ Streamlit session 久**：沒有 server 端 token 表、不寫 cookie / localSto
    換到 token 後，用**這次的** Google 帳號 ID 與 state 帶回的 Sheet **重算記號**比對：
    - 對得上 → 登入（token 一樣只放在這個 session 的記憶體）→ 記號重新掛上。
    - 對不上（換了 Google 帳號、網址上的 Sheet 被換掉、記號被竄改或偽造）→ **丟掉 token、不登入、
-     不綁 Sheet**，顯示**藍色提示**（`st.info`）「自動恢復登入的帳號或 Sheet 與上次不同，請按
-     「🔐 用 Google 登入」手動登入。」
+     不把 Sheet 綁進這個 session**，顯示**藍色提示**（`st.info`）「自動恢復登入的帳號或 Sheet 與上次不同，
+     請按「🔐 用 Google 登入」手動登入。」但 state 帶回的 Sheet 會**寫回網址的 `?sheet=`**
+     （只在 SEC-2 強驗通過時；⛔ 不寫 `gs`）⇒ 你手動登入時照常回綁那一本，不會弄丟。
 4. Google 做不到（要你選帳號、要同意、沒登入 Google…）→ 帶 `?error=` 回來 → **藍色提示**（`st.info`）
    「未能自動恢復登入（Google 需要你再確認一次），請按側欄「🔐 用 Google 登入」。」
-   落地網址沒有記號 ⇒ **不會再轉、不會迴圈**。
+   落地網址沒有記號 ⇒ **不會再轉、不會迴圈**。靜默恢復的回呼不論 Google 回哪一種錯誤
+   （含 `server_error` / `temporarily_unavailable`），或被 SEC-2 拒絕（例：process 重啟）、或換 token 失敗，
+   state 帶回的 Sheet 都會寫回網址的 `?sheet=` —— 網址原本有 `?sheet=` 就保留原本的。
 5. 按「🚪 登出」會拿掉**這個分頁**網址上的記號 ⇒ 重新整理不會又登回去（限制見下）。
-6. 同一個 session 最多轉一次（session 旗標）。若 script 沒能導走（見「iframe」限制），網址仍帶記號，
-   下一次你按重新整理會再試一次 —— 仍是「每一次使用者動作最多一次」。
+6. 同一個 session 最多轉一次（session 旗標）。script 沒成功時分兩種，結果不同：
+   - **還沒動到網址就停了**（app 在跨來源 iframe 裡、或 `replaceState` 本身失敗）→ 網址**仍帶記號**，
+     下一次你按重新整理會再試一次 —— 仍是「每一次使用者動作最多一次」。
+   - **網址已拿掉記號、但導去 Google 被瀏覽器擋下**（`location.replace` 失敗）→ 網址**已經沒有記號**，
+     頁首停在灰字「正在恢復 Google 登入…」，重新整理也不會再試，請手動按登入鈕。
 
 ### 存了什麼（全部不是 Google 憑證）
 
@@ -117,12 +128,13 @@ OAuth Client 沒有 client_secret 時（算不出記號）靜默恢復整個停�
 [oauth_state] 1.0-B2 silent_reauth=marker_not_set_no_sub           # 登入成功但 id_token 沒有帳號 ID → 不掛記號
 [oauth_state] 1.0-B2 silent_reauth=marker_set_failed (<例外型別>)   # 掛記號失敗（登入不受影響）
 [oauth_state] 1.0-B2 silent_reauth=marker_remove_failed (<例外型別>) # 登出時拿不掉記號
+[oauth_state] 1.0-B2 silent_reauth=marker_resynced                 # 登入後換了 Sheet → 記號已依新 Sheet 重算
 [oauth_state] 1.0-B2 callback error=<標準代碼|other> state=<ok|unknown|expired|mismatch|no_cookie|kept|absent>
 [gsheet_portfolio] 1.0-B2 login_expired reason=no_refresh_token    # 靜默恢復的登入用滿約 1 小時
 ```
 
-`callback error=` 的 `state=`：靜默恢復（三段 state）＋ 靜默失敗代碼時是燒掉 nonce 的 SEC-2 reason
-（意思見上方 SEC-2 表）；其他錯誤（例：一般登入在新分頁按了取消）**不燒** nonce → `kept`
+`callback error=` 的 `state=`：靜默恢復（三段 state）的任何錯誤都會燒掉那個一次性 nonce，記的是 SEC-2 reason
+（意思見上方 SEC-2 表）；一般登入（兩段 state）的錯誤（例：在新分頁按了取消）**不燒** nonce → `kept`
 （原分頁那顆登入鈕再按一次仍能登入）；`absent` ＝ 沒帶 state。不在標準錯誤代碼表裡的代碼記成 `other`，
 畫面上也只寫「Google 登入未完成。」不顯示代碼（避免網址上的字被搬上畫面）。
 
@@ -137,8 +149,21 @@ OAuth Client 沒有 client_secret 時（算不出記號）靜默恢復整個停�
   - ⚠️ 側欄「🔐 用 Google 登入」按鈕會**開新分頁**（`st.link_button` 的行為）。
   - ⚠️ 舊版頁籤（凍結、本批不改）：📁 組合管理會把逾時顯示成**紅色** `st.error`、股利站顯示成**黃色**
     警告 —— 文字是同一句逾時訊息，只有顏色與新版頁面不同。
-- **換了 Sheet 之後第一次重新整理**：記號綁的是「登入當時回綁的那本 Sheet」。之後在側欄換成另一本，
-  網址的 `sheet=` 變了、記號沒變 → 重新整理時對不上 → 藍色提示，按一次登入鈕即可（之後記號會綁新的那本）。
+- ~~**換了 Sheet 之後第一次重新整理**：……按一次登入鈕即可（之後記號會綁新的那本）。~~
+  （📌 2026-10-19 稽核第二輪更正：那句在 1d169927 不成立 —— 記號對不上時 Sheet 會被一起清掉、而且每次
+  重新整理都一樣。現行行為見「怎麼運作」第 1、3 點：換 Sheet 會重算記號；萬一仍對不上，Sheet 留在網址，
+  手動登入即回綁。舊句保留，⛔ 不是漏刪。）
+- **記號仍可能對不上的情況**：日後若新增一個「寫 `?sheet=` 但寫完不重跑、也沒呼叫 `sync_silent_marker()`」
+  的入口，換完 Sheet 立刻重新整理就會對不上一次（藍色提示、Sheet 留在網址、按一次登入即可）。
+  目前已知的三個入口（側欄、📁 組合管理、💼 頁就地綁定）都有涵蓋（2026-10-19 全 repo 搜尋 `query_params['sheet']`
+  只有側欄與 `portfolio_binder.apply_active_sheet` 兩處寫入，後者的呼叫點寫完都 `st.rerun()`；
+  ⚠️ 單組搜尋結果，未經第二組驗證）。
+- **`?sheet=` 的網址信任模型是既有的**（app.py v19.204：開新 session 時把網址上的 `?sheet=` 還原成「目前選的
+  Sheet」，未登入也會；登入時跟著 state 回綁）。任何人都能寄一個帶 `?sheet=<某本>` 的連結 —— 那一本仍要你自己的
+  Google 帳號有權限才讀得到。本批靜默恢復沒成功時「把 state 帶回的 Sheet 寫回網址」與它**同一個信任等級**，
+  沒有放大；網址還原本身沒消毒等問題已另案追蹤（不在本批範圍）。
+- **觀察清單那一半**：讀觀察清單的瞬間剛好逾時，會記成「觀察清單讀不到」（持股本身不受影響），
+  與其他讀取失敗同一個說法 —— 機率極低（要剛好落在兩次讀取之間），本批不另外處理。
 - **瀏覽器同時登入多個 Google 帳號**：Google 可能回 `account_selection_required` / `interaction_required`
   → 藍色提示，按一次登入鈕選帳號即可（不會迴圈）。
 - **Streamlit Cloud 的 iframe**：app 若被包在 iframe 裡，script 只會在「最上層頁面與 app **同源**」時
@@ -162,6 +187,8 @@ OAuth Client 沒有 client_secret 時（算不出記號）靜默恢復整個停�
 4. 若第 2 步停在灰字「正在恢復 Google 登入…」超過幾秒沒反應 → 代表 iframe 擋住了最上層轉跳（請回報）。
 5. 若第 2 步出現藍色「未能自動恢復登入…」→ 按一次登入鈕可登入；回報當時瀏覽器是否登入多個 Google 帳號。
 6. 按「🚪 登出」→ 再重新整理 → 預期**維持登出**（不會自己登回去）。
+6b. （第一次使用的情境）登入時還沒綁 Sheet → 登入後在側欄貼上 Sheet → **馬上**重新整理 → 預期仍自動恢復登入，
+   且持股讀的是剛綁的那一本（網址的 `gs=` 那串在綁 Sheet 後會變）。
 7. 登入後放著超過 1 小時，再到「💼 我的持股」按一次執行 → 預期綁定 / 持股卡是**灰色**「Google 登入已逾時」
    （**不是紅色**錯誤）→ 按重新整理 → 恢復登入（若有沒存的編輯會不見）。
 
