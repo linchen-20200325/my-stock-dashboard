@@ -65,6 +65,16 @@ def _error_code(resp) -> str:
     return _code if _ERROR_CODE_RE.fullmatch(_code) else "(無法解析)"
 
 
+def sanitize_error_code(raw) -> str:
+    """任意字串 → 白名單字元的 OAuth error 代碼;不符 → 固定字串 `(無法解析)`。
+
+    1.0-B2:Google 以 `?error=<代碼>` 帶回 authorize 失敗(含 `prompt=none` 做不到)。
+    那個值來自網址(**不可信輸入**),畫上畫面 / 進 log 前一律過這裡。
+    """
+    _code = str(raw or "")
+    return _code if _ERROR_CODE_RE.fullmatch(_code) else "(無法解析)"
+
+
 def _keys_only(payload) -> str:
     """回應 dict → 只列鍵名(排序),⛔ 不列值(值可能就是 token)。"""
     if not isinstance(payload, dict):
@@ -75,13 +85,25 @@ def _keys_only(payload) -> str:
 # ──────────────────────────────────────────────────────────────────────
 # Step 1: 產生 authorize URL，給使用者按下登入按鈕跳轉
 # ──────────────────────────────────────────────────────────────────────
+#: 預設 `prompt`(v19.293 port):強制帳號選擇器 + consent,避免 Chrome 已登入帳號被自動套用導致帳號錯誤,
+#: 並確保拿到 refresh_token。
+_DEFAULT_PROMPT = "select_account consent"
+
+
 def build_authorize_url(
     client_id: str,
     redirect_uri: str,
     state: str = "",
     scopes: list[str] | None = None,
+    prompt: str | None = None,
 ) -> str:
-    """組 Google OAuth authorize URL（離線存取 + 強制 consent，確保拿到 refresh_token）。"""
+    """組 Google OAuth authorize URL（離線存取 + 強制 consent，確保拿到 refresh_token）。
+
+    `prompt`:None(預設)＝ `_DEFAULT_PROMPT`,輸出與加這個參數前**逐字相同**。
+    1.0-B2 靜默恢復登入傳 `"none"`(`shared.oauth_session_policy.OAUTH_PROMPT_NONE`):
+    OpenID Connect 規定 `none` 必須**單獨**出現 —— 這裡只放它一個,不併 consent / select_account。
+    state / redirect_uri / scope / access_type 不因 prompt 而變。
+    """
     import urllib.parse as _up
     if not client_id or not redirect_uri:
         raise OAuthError("client_id / redirect_uri 不可為空")
@@ -90,8 +112,8 @@ def build_authorize_url(
         "redirect_uri":  redirect_uri,
         "response_type": "code",
         "scope":         " ".join(scopes or GOOGLE_OAUTH_SCOPES),
-        "access_type":   "offline",      # 拿 refresh_token
-        "prompt":        "select_account consent",  # v19.293 port: 強制帳號選擇器，避免 Chrome 已登入帳號被自動套用導致帳號錯誤
+        "access_type":   "offline",      # 拿 refresh_token(prompt=none 時 Google 通常不再發,見 docs/OAUTH_SETUP.md)
+        "prompt":        _DEFAULT_PROMPT if prompt is None else str(prompt).strip(),
         "include_granted_scopes": "true",
     }
     if state:
@@ -109,10 +131,8 @@ def generate_state(nbytes: int = 24) -> str:
     return _secrets.token_urlsafe(nbytes)
 
 
-def decode_id_token_email(tokens: dict) -> str:
-    """從 OpenID id_token(JWT)『無驗證』解出 email，純顯示用（讓使用者確認登入到哪個帳號）。
-    id_token 由 Google 於同一 token response 直接簽發(openid scope)，此處不做簽章驗證，
-    僅取 payload 的 email 欄位；失敗一律回空字串（防禦性:絕不 raise）。"""
+def _decode_id_token_claim(tokens: dict, claim: str) -> str:
+    """從 OpenID id_token(JWT)『無驗證』取一個 payload 欄位;失敗一律回空字串(防禦性:絕不 raise)。"""
     idt = (tokens or {}).get("id_token")
     if not idt:
         return ""
@@ -122,9 +142,27 @@ def decode_id_token_email(tokens: dict) -> str:
         _payload = idt.split(".")[1]
         _payload += "=" * (-len(_payload) % 4)  # 補 padding
         _data = _json.loads(_b64.urlsafe_b64decode(_payload))
-        return str(_data.get("email", "") or "")
+        return str(_data.get(claim, "") or "")
     except Exception:
         return ""
+
+
+def decode_id_token_email(tokens: dict) -> str:
+    """從 OpenID id_token(JWT)『無驗證』解出 email，純顯示用（讓使用者確認登入到哪個帳號）。
+    id_token 由 Google 於同一 token response 直接簽發(openid scope)，此處不做簽章驗證，
+    僅取 payload 的 email 欄位；失敗一律回空字串（防禦性:絕不 raise）。"""
+    return _decode_id_token_claim(tokens, "email")
+
+
+def decode_id_token_sub(tokens: dict) -> str:
+    """從 id_token 解出 `sub`(Google 帳號的永久不變 ID);失敗回空字串。
+
+    1.0-B2 用途:SEC-1 讀取快取的身分指紋。靜默恢復登入(`prompt=none`)拿不到 refresh_token,
+    需要一個「同一人穩定、不同人必不同」的值。不做簽章驗證的理由同 `decode_id_token_email`:
+    id_token 是本 server 以 client_secret 經 TLS 直接向 Google token 端點換來的
+    (OpenID Connect Core §3.1.3.7:此情況可以 TLS 驗證取代簽章驗證),不是使用者送上來的。
+    """
+    return _decode_id_token_claim(tokens, "sub")
 
 
 # ──────────────────────────────────────────────────────────────────────

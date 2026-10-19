@@ -18,7 +18,10 @@
 - _resolve_oauth_cfg()             (config 優先序:secrets > session_state;每次呼叫動態解析)
 - get_oauth_cfg() / is_oauth_configured()  (動態包裝;caller 必用這兩個,不要直接 import module-level)
 - _get_oauth_client()              (建 gspread client)
-- handle_oauth_callback()          (URL ?code= 換 token;SEC-2 起只認 server 端 nonce ＋ 同一瀏覽器)
+- handle_oauth_callback()          (URL ?code= 換 token;SEC-2 起只認 server 端 nonce ＋ 同一瀏覽器;
+                                    1.0-B2 起另處理 Google 帶回的 ?error=)
+- maybe_silent_reauth()            (1.0-B2:重新整理後靜默恢復登入 —— 網址有記號才整頁轉去 Google prompt=none)
+- forget_silent_reauth()           (1.0-B2:登出時拿掉網址記號,否則重新整理又登回去)
 
 SEC-2(login CSRF)
 ==================
@@ -32,15 +35,30 @@ SEC-2(login CSRF)
 安全閥:secrets `oauth_csrf_enforce = false` → 驗證失敗仍放行登入但照記 reason code
 (預設嚴格;量測方法見 docs/OAUTH_SETUP.md「SEC-2 量測」)。
 
+1.0-B2(重新整理後靜默恢復 Google 登入;DEC-062 Q2＝B)
+=====================================================
+客戶硬性條件(原文):「不得保存 Google 密碼或 Google 憑證」⇒ token **只**住在 `st.session_state`,
+沒有任何 token 活得比 session 久。重新整理 ＝ 新 session ＝ 沒 token。恢復方式:
+1. 登入成功且 **consume ok(強驗)** 時,在網址掛非憑證記號 `?gs=1`(與 `?sheet=` 並列)。
+   安全閥放行的登入**不**掛(退回「重新整理後再按一次登入」)。
+2. 重新整理 → `maybe_silent_reauth()` 看到記號、且本 session 沒 token、不是回呼、讀得到瀏覽器
+   cookie、本 session 沒試過 ⇒ **先拿掉記號**(一次性)→ 走原本的 nonce 發放 → 整個分頁轉去
+   Google `prompt=none` → 回呼照走 SEC-2 consume。Google 做不到(要選帳號 / 要同意…)就帶
+   `?error=` 回來 → 灰色提示「請按側欄登入」,網址已無記號 ⇒ **不會迴圈**(最多一次)。
+3. 靜默恢復拿不到 refresh_token ⇒ 約 1 小時後 access_token 過期 → `gsheet_portfolio` 清掉 session
+   token 並請使用者重新整理(session 中途**絕不**自動轉跳)。常數見 `shared/oauth_session_policy.py`。
+
 呼叫端
 ======
-- app.py:sidebar 渲染前呼叫 handle_oauth_callback()
+- app.py:sidebar 渲染前呼叫 handle_oauth_callback(),緊接著 maybe_silent_reauth();側欄登出呼叫
+  forget_silent_reauth()
 - src/data/portfolio/gsheet_portfolio.py:取 _get_oauth_client() 給 gspread 用(L1→L1 同層)
 """
 from __future__ import annotations
 
 import binascii
 import hashlib
+import json
 import re
 
 import streamlit as st
@@ -49,15 +67,28 @@ from shared.oauth_csrf_policy import (
     OAUTH_CSRF_ENFORCE_SECRET_KEY,
     STREAMLIT_XSRF_COOKIE_NAME,
 )
+from shared.oauth_session_policy import (
+    OAUTH_CALLBACK_QUERY_KEYS,
+    OAUTH_PROMPT_NONE,
+    OAUTH_SILENT_ATTEMPTED_SESSION_KEY,
+    OAUTH_SILENT_FAILURE_ERROR_CODES,
+    OAUTH_SILENT_MARKER_PARAM,
+    OAUTH_SILENT_MARKER_VALUE,
+    OAUTH_SILENT_REAUTH_SECRET_KEY,
+    SECRET_FLAG_OFF_STRINGS,
+)
 from src.data.portfolio import oauth_nonce_store as _nonce_store
 
 from infra.oauth import (
+    GOOGLE_AUTH_URL,
     OAuthError,
+    build_authorize_url,
     build_credentials_from_tokens,
     decode_id_token_email,
     ensure_fresh_tokens,
     exchange_code_for_tokens,
     generate_state,
+    sanitize_error_code,
 )
 
 
@@ -150,12 +181,22 @@ def _browser_binding() -> "str | None":
     return hashlib.sha256(_tok).hexdigest() if _tok else None
 
 
-def _csrf_enforced() -> bool:
-    """安全閥:secrets `oauth_csrf_enforce` 明確設成 false 才放寬;沒設 / 其他值一律嚴格。"""
-    _v = _safe_secret(OAUTH_CSRF_ENFORCE_SECRET_KEY, True)
+def _secret_flag_on(key: str) -> bool:
+    """secrets 布林開關:沒設 → True;只有 False / `SECRET_FLAG_OFF_STRINGS`(含整數 0)才 False。"""
+    _v = _safe_secret(key, True)
     if isinstance(_v, bool):
         return _v
-    return str(_v).strip().lower() not in {"false", "0", "no", "off"}
+    return str(_v).strip().lower() not in SECRET_FLAG_OFF_STRINGS
+
+
+def _csrf_enforced() -> bool:
+    """安全閥:secrets `oauth_csrf_enforce` 明確設成 false 才放寬;沒設 / 其他值一律嚴格。"""
+    return _secret_flag_on(OAUTH_CSRF_ENFORCE_SECRET_KEY)
+
+
+def _silent_reauth_enabled() -> bool:
+    """1.0-B2 開關:secrets `oauth_silent_reauth` 明確設成 false 才停用;沒設 / 其他值一律啟用。"""
+    return _secret_flag_on(OAUTH_SILENT_REAUTH_SECRET_KEY)
 
 
 #: session_state 旗標:本 session 已記過「發 nonce 時讀不到 cookie」(每 session 只記一次)。
@@ -253,6 +294,169 @@ OAUTH_STATE_REJECTED_MSG = (
     "Google 登入驗證未通過（連結過期、已使用或非本瀏覽器發起），"
     "請按側欄『🔐 用 Google 登入』重新登入")
 
+# ── 1.0-B2 使用者訊息(§3.3 具名常數;灰色提示 —— 不是系統錯誤,v3 §02 灰 vs 紅)──────────
+#: 發出靜默轉跳時畫在頁首的說明(轉跳成功的話使用者幾乎看不到;被擋住時它就是出口)。
+OAUTH_SILENT_REAUTH_PENDING_MSG = (
+    "正在恢復 Google 登入…若幾秒內沒有反應，請按側欄「🔐 用 Google 登入」。")
+#: Google 回 `OAUTH_SILENT_FAILURE_ERROR_CODES` 之一(需要使用者互動)。
+OAUTH_SILENT_REAUTH_FAILED_MSG = (
+    "未能自動恢復登入（Google 需要你再確認一次），請按側欄「🔐 用 Google 登入」。")
+#: 其他 `?error=`(例:access_denied)。`{code}` 只會是 `sanitize_error_code` 的白名單字元。
+OAUTH_LOGIN_INCOMPLETE_MSG = "Google 登入未完成（{code}）。"
+
+# ── 1.0-B2 log reason codes(§3.3;⛔ 只記代碼,不記 nonce / token / email / URL)──────────
+SILENT_REDIRECT = "redirect"
+SILENT_SKIP_NO_MARKER = "no_marker"
+SILENT_SKIP_DISABLED = "disabled"
+SILENT_SKIP_ATTEMPTED = "already_attempted"
+SILENT_SKIP_LOGGED_IN = "logged_in"
+SILENT_SKIP_CALLBACK = "callback_params"
+SILENT_SKIP_NOT_CONFIGURED = "not_configured"
+SILENT_SKIP_NO_COOKIE = "no_cookie"
+SILENT_SKIP_BAD_URL = "bad_url"
+#: 值得記 log 的略過原因(網址**有**記號、使用者期待恢復,卻因設定 / 環境做不到)。
+#: 其餘(沒記號、已登入…)是每次 rerun 的常態,記了只會洗版。每 session 只記一次。
+_SILENT_LOGGED_SKIP_REASONS = frozenset({
+    SILENT_SKIP_DISABLED, SILENT_SKIP_NOT_CONFIGURED, SILENT_SKIP_NO_COOKIE})
+
+
+def _silent_marker_present() -> bool:
+    try:
+        return st.query_params.get(OAUTH_SILENT_MARKER_PARAM) == OAUTH_SILENT_MARKER_VALUE
+    except Exception:  # noqa: BLE001 — 讀不到 query params ⇒ 當作沒有記號(不轉跳 = 安全側)
+        return False
+
+
+def forget_silent_reauth() -> None:
+    """拿掉網址記號 + 標記本 session 不再靜默恢復。登出時呼叫(否則重新整理又登回去 = 登不出去)。"""
+    try:
+        st.query_params.pop(OAUTH_SILENT_MARKER_PARAM, None)
+    except Exception as _e:  # noqa: BLE001 — 拿不掉要講出來(§1),但不擋登出主線
+        print(f"[oauth_state] 1.0-B2 forget_silent_reauth 無法移除網址記號 ({type(_e).__name__})")
+    st.session_state[OAUTH_SILENT_ATTEMPTED_SESSION_KEY] = True
+
+
+def _silent_reauth_skip_reason() -> "str | None":
+    """回 None ＝ 全部條件成立、可以轉跳;否則回略過原因代碼。順序:便宜的先查。"""
+    if not _silent_marker_present():
+        return SILENT_SKIP_NO_MARKER
+    if not _silent_reauth_enabled():
+        return SILENT_SKIP_DISABLED
+    if st.session_state.get(OAUTH_SILENT_ATTEMPTED_SESSION_KEY):
+        return SILENT_SKIP_ATTEMPTED
+    if st.session_state.get("gsheet_tokens"):
+        return SILENT_SKIP_LOGGED_IN
+    if any(_k in st.query_params for _k in OAUTH_CALLBACK_QUERY_KEYS):
+        return SILENT_SKIP_CALLBACK
+    if _resolve_oauth_cfg() is None:
+        return SILENT_SKIP_NOT_CONFIGURED
+    if _browser_binding() is None:
+        # 發得出 nonce 也綁不到瀏覽器 ⇒ 回呼必以 no_cookie 被拒 —— 不如別轉
+        return SILENT_SKIP_NO_COOKIE
+    return None
+
+
+def _silent_redirect_script(url: str) -> str:
+    """整頁(最上層視窗)轉去 `url` 的 script。純函式,易測。
+
+    - URL 以 `json.dumps` 編成 JS 字串常值,再把 `<` `>` `&` 轉成 `\\uXXXX`
+      ⇒ 任何內容都跳不出字串、也關不掉 `</script>`(⛔ 不用字串串接組 JS)。
+    - **只導最上層視窗**:本頁就是最上層 → 直接 replace;在 iframe 裡(Streamlit Cloud 外框)→
+      先讀 `top.location.href` 探同源,同源才 replace 最上層;跨來源讀取會丟例外 → 什麼都不做。
+      ⛔ 絕不導 iframe 自己去 Google(Google 拒絕被框 → 白畫面),畫面上的灰色提示就是出口。
+    - `replace` 不留歷史紀錄 ⇒ 按「上一頁」不會回到一個又要轉跳的頁面。
+    """
+    _js_url = (json.dumps(str(url))
+               .replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"))
+    return (
+        "<script>(function(){"
+        f"var u={_js_url};"
+        "var t;"
+        "try{t=window.top;if(t!==window){void t.location.href;}}catch(e){return;}"
+        "try{t.location.replace(u);}catch(e){}"
+        "})();</script>"
+    )
+
+
+def maybe_silent_reauth() -> bool:
+    """1.0-B2:重新整理後靜默恢復 Google 登入。回是否發出了轉跳。
+
+    app.py 在 `handle_oauth_callback()` 之後立刻呼叫。**全部**成立才轉跳:開關啟用、OAuth 已設定、
+    本 session 沒 token、網址有記號、網址沒有 code/error/state、讀得到瀏覽器 cookie、本 session
+    還沒試過。轉跳前**先**拿掉記號(一次性)並標記本 session 已試過 ⇒ 不論 Google 回什麼,
+    同一分頁最多轉一次(v19.63 迴圈教訓:不依賴 session 撐過整頁轉跳;記號在網址上、轉出去前已拿掉)。
+    """
+    _reason = _silent_reauth_skip_reason()
+    if _reason is not None:
+        if (_reason in _SILENT_LOGGED_SKIP_REASONS
+                and not st.session_state.get(OAUTH_SILENT_ATTEMPTED_SESSION_KEY)):
+            print(f"[oauth_state] 1.0-B2 silent_reauth=skip reason={_reason}")
+            st.session_state[OAUTH_SILENT_ATTEMPTED_SESSION_KEY] = True   # 每 session 只記一次
+        return False
+    # 一次性:先拿掉記號、先標記,再做任何可能失敗的事。
+    st.query_params.pop(OAUTH_SILENT_MARKER_PARAM, None)
+    st.session_state[OAUTH_SILENT_ATTEMPTED_SESSION_KEY] = True
+    cfg = _resolve_oauth_cfg()
+    # 新 session 的 ?sheet= 還原在 app.py 更後面才跑 → session 沒有就讀網址(login_state_with_sheet 會消毒)。
+    _sid = (st.session_state.get("portfolio_sheet_id")
+            or st.query_params.get("sheet") or "")
+    _url = build_authorize_url(cfg["client_id"], cfg["redirect_uri"],
+                               state=login_state_with_sheet(str(_sid)),
+                               prompt=OAUTH_PROMPT_NONE)
+    if not _url.startswith(GOOGLE_AUTH_URL + "?"):
+        # 防禦:轉跳目標只可能是 Google authorize 端點(實務上不會發生;發生就講出來,不轉)
+        print(f"[oauth_state] 1.0-B2 silent_reauth=skip reason={SILENT_SKIP_BAD_URL}")
+        return False
+    st.caption(OAUTH_SILENT_REAUTH_PENDING_MSG)
+    st.html(_silent_redirect_script(_url), unsafe_allow_javascript=True)
+    print(f"[oauth_state] 1.0-B2 silent_reauth={SILENT_REDIRECT}")
+    return True
+
+
+def _set_silent_marker() -> None:
+    """登入強驗成功 → 網址掛記號(開關停用時不掛)。寫入失敗不擋登入主線,但要講出來(§1)。"""
+    if not _silent_reauth_enabled():
+        return
+    try:
+        st.query_params[OAUTH_SILENT_MARKER_PARAM] = OAUTH_SILENT_MARKER_VALUE
+    except Exception as _e:  # noqa: BLE001
+        print(f"[oauth_state] 1.0-B2 無法設定網址記號 ({type(_e).__name__}) —— 重新整理後需再按登入")
+
+
+def _handle_oauth_error_callback(qp) -> None:
+    """Google 帶 `?error=`(有或沒有 state)回來:燒掉 nonce、清網址(保留 sheet)、灰色提示。
+
+    **不** rerun、**不**轉跳、**不**換 token。網址記號此時本來就不在(redirect_uri 是固定的)
+    ⇒ 下一次重新整理不會再靜默轉跳 —— 這是「Google 一直回 login_required 也不迴圈」的關鍵。
+    """
+    _code = sanitize_error_code(qp.get("error"))
+    _reason = "absent"
+    _ok, _got_sheet = False, ""
+    if "state" in qp:
+        _got_nonce, _got_sheet = _split_login_state(qp.get("state"))
+        _ok, _reason = _nonce_store.consume(_got_nonce, _browser_binding())
+        st.session_state.pop("_oauth_state", None)
+    st.session_state[OAUTH_SILENT_ATTEMPTED_SESSION_KEY] = True
+    # 只記代碼(error 已過白名單;state 只記 consume 的 reason)。⛔ 不記 nonce / sheet / URL。
+    print(f"[oauth_state] 1.0-B2 callback error={_code} state={_reason}")
+    # 保留 sheet:網址原本有就留(消毒後);沒有而 state 強驗通過 → 還原 state 帶回的那本
+    # (與成功路徑同一個「只有 consume ok 才信 state 載荷」規則,P2 F1)。
+    _keep_sheet = _sanitize_sheet_id(qp.get("sheet"))
+    if _ok and _got_sheet:
+        st.session_state["portfolio_sheet_id"] = _got_sheet
+        st.session_state["stock_portfolio_sheet_id"] = _got_sheet
+        _keep_sheet = _keep_sheet or _got_sheet
+    st.query_params.clear()
+    if _keep_sheet:
+        try:
+            st.query_params["sheet"] = _keep_sheet
+        except Exception:  # noqa: BLE001 — query param 寫入失敗不擋主線(§1:同成功路徑)
+            pass
+    if _code in OAUTH_SILENT_FAILURE_ERROR_CODES:
+        st.info(OAUTH_SILENT_REAUTH_FAILED_MSG)
+    else:
+        st.info(OAUTH_LOGIN_INCOMPLETE_MSG.format(code=_code))
+
 
 def handle_oauth_callback() -> None:
     """OAuth callback：URL 帶 ?code=... 時自動換 token。
@@ -264,6 +468,9 @@ def handle_oauth_callback() -> None:
     if cfg is None:
         return
     _qp = st.query_params
+    if "error" in _qp and "code" not in _qp:
+        _handle_oauth_error_callback(_qp)
+        return
     if "code" in _qp and "gsheet_tokens" not in st.session_state:
         # SEC-2:唯一成功路徑 = server 端 nonce 表 consume ok(登記過、未過期、同一瀏覽器、一次性)。
         # 修前的 `_oauth_state_ok` 對「session 沒有期望值」(整頁轉跳後幾乎必然)與「URL 沒帶 state」
@@ -305,6 +512,9 @@ def handle_oauth_callback() -> None:
                     st.query_params["sheet"] = _got_sheet
                 except Exception:  # noqa: BLE001 — query param 寫入失敗不擋登入主線(§1)
                     pass
+            # 1.0-B2:只有 consume ok(強驗)的登入才掛靜默恢復記號;安全閥放行的不掛(退回 A 行為)。
+            if _strong_state:
+                _set_silent_marker()
             _email = st.session_state.get("gsheet_email", "")
             st.success(f"✅ Google 登入成功{('：' + _email) if _email else ''}")
             st.rerun()

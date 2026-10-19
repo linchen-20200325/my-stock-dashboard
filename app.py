@@ -86,7 +86,9 @@ st.set_page_config(page_title='台股AI戰情室 v3.0', layout='wide',
 # v18.400 D4:oauth_state 已從 src/ui/pages 歸位 src/data/portfolio
 try:
     from src.data.portfolio.oauth_state import handle_oauth_callback as _oauth_cb
+    from src.data.portfolio.oauth_state import maybe_silent_reauth as _oauth_silent
     _oauth_cb()
+    _oauth_silent()   # 1.0-B2:重新整理後靜默恢復登入(網址有 ?gs=1 記號才轉;每 session 最多一次)
 except Exception as _oauth_err:
     print(f'[oauth callback] {_oauth_err}')
 
@@ -333,6 +335,7 @@ with st.sidebar:
         from src.data.portfolio.oauth_state import (
             get_oauth_cfg as _sb_get_cfg,
             login_state_with_sheet as _sb_login_state_with_sheet,
+            forget_silent_reauth as _sb_forget_silent,
         )
         from infra.oauth import build_authorize_url as _sb_buildurl
         # 每次 rerun 動態解析，避免 module-level cache 過期
@@ -349,6 +352,7 @@ with st.sidebar:
                           use_container_width=True):
                 for _k in ('gsheet_tokens', 'gsheet_email', '_oauth_state'):
                     st.session_state.pop(_k, None)
+                _sb_forget_silent()   # 1.0-B2:拿掉 ?gs= 記號,否則重新整理又靜默登回去(登不出去)
                 st.rerun()
             # ── Google Sheet ID（集中於帳號區；亦可於「📁 組合管理」頁設定）──
             _sb_sid_cur = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
