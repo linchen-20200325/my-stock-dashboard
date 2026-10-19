@@ -23,7 +23,7 @@
 ```
 【寫入端（GitHub Actions，無 key）】
  GitHub Actions job（main 分支、指定 workflow 檔）
-   │  1. 向 GitHub 要 OIDC ID token（需 workflow 宣告 permissions: id-token: write —— 未來批次）
+   │  1. 向 GitHub 要 OIDC ID token（workflow 宣告 permissions: id-token: write —— ~~未來批次~~ 2026-10-19 #886 已落地：job `wif_auth_only` 的 job 層級；有意識的變更，不是漏刪）
    ▼
  Google STS（sts.googleapis.com）
    │  2. WIF pool `github-pool` / provider `github-provider` 驗 token：
@@ -235,7 +235,9 @@ GitHub repo → Settings → Secrets and variables → Actions → New repositor
 | `RISK_CAP_HISTORY_SHEET_ID` | 步驟 6 的 Sheet ID | **唯一要新增的 GitHub secret** |
 
 - ⛔ **`RISK_CAP_HISTORY_WRITER_SA_JSON` 已退役，不要建立**（G1 禁止 writer key ⇒ 沒有東西可以放進這個 secret）。
-  📌 該名稱目前仍保留在程式碼 `shared/risk_cap_history_policy.py` 第 177 行（`WRITER_SA_ENV_VAR`），並被 `src/data/macro/risk_cap_history.py` 的寫入前置檢查列為必填。**本批不改 code**；將於未來實作批次退役、改為檢查 WIF 設定（見第 6 節）。在那之前，PoC 的寫入路徑本來就被 `PRODUCTION_WRITE_APPROVED=False` 擋下，不受影響。
+  ~~📌 該名稱目前仍保留在程式碼 `shared/risk_cap_history_policy.py` 第 177 行（`WRITER_SA_ENV_VAR`），並被 `src/data/macro/risk_cap_history.py` 的寫入前置檢查列為必填。**本批不改 code**；將於未來實作批次退役、改為檢查 WIF 設定（見第 6 節）。在那之前，PoC 的寫入路徑本來就被 `PRODUCTION_WRITE_APPROVED=False` 擋下，不受影響。~~
+  📌 2026-10-19 更新（有意識的變更，不是漏刪）：#886（main `2c693a20`）已自 `shared/risk_cap_history_policy.py` 與 `src/data/macro/risk_cap_history.py` 退役 `WRITER_SA_ENV_VAR`；寫入 gate 仍一律 raise（`PRODUCTION_WRITE_APPROVED=False`）。gate 改為檢查 WIF 憑證屬未來批次（第 6 節第 4 項）。
+  📌 `RISK_CAP_HISTORY_SHEET_ID` 尚未新增 —— 客戶刻意延到 Sheet 接線批（2026-10-19 客戶確認 (c)）。
 - **不是 secret、日後直接寫在 workflow 裡**：WIF provider 完整資源名稱（步驟 3 末）、writer SA email。它們本身不構成可用憑證（沒有通過 attribute-condition 的 GitHub token 就換不到 access token）。
 - ⛔ 不要修改、刪除既有 `GCP_SERVICE_ACCOUNT_JSON`（G3 只核准調查）。
 
@@ -297,17 +299,19 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 
 ---
 
-## 6. 日後仍需改 code／workflow 的事項（**未來實作批次，本批未做**）
+## 6. 日後仍需改 code／workflow 的事項（~~**未來實作批次，本批未做**~~ **第 1～3 項 #886 已完成、第 4 項半完成，其餘未做**；2026-10-19 更新，有意識的變更，不是漏刪）
 
 本批只寫規格。下列項目要等客戶指派實作批次、且 **production 寫入仍須另行核准**（DEC-063、DEC-009）：
 
-1. 寫入 workflow 宣告 `permissions: id-token: write`（目前 `risk_cap_history_poc.yml` 只有 `contents: read`）。
-2. 使用 `google-github-actions/auth` 以 WIF 取得 writer 憑證，**以完整 commit SHA 釘版**（不用 tag）；`workload_identity_provider` 與 `service_account` 直接寫在 workflow（非 secret）。
-3. `.gitignore` 加入 `gha-creds-*.json`（該 action 預設會在 workspace 產生暫存憑證檔；搭配 checkout 在 auth 之前、不 commit workspace）。
-4. 程式端政策常數改名：退役 `RISK_CAP_HISTORY_WRITER_SA_JSON`（`shared/risk_cap_history_policy.py:177` `WRITER_SA_ENV_VAR`），寫入前置檢查（`src/data/macro/risk_cap_history.py`）改為檢查 WIF 提供的憑證；讀取端名稱與 Streamlit secrets 表格名（步驟 8 提案）定案並同步；相關測試（`tests/test_vn1_store_poc.py`）同步更新。
+1. ✅ #886 已完成（job `wif_auth_only` job 層級 `id-token: write`；其他 job 不受影響）。寫入 workflow 宣告 `permissions: id-token: write`（目前 `risk_cap_history_poc.yml` 只有 `contents: read`）。
+2. ✅ #886 已完成（`google-github-actions/auth` v3.0.0 `7c6bc770`；checkout v4.3.1 `34e11487`、setup-python v5.6.0 `a26af69b`，皆完整 SHA）。使用 `google-github-actions/auth` 以 WIF 取得 writer 憑證，**以完整 commit SHA 釘版**（不用 tag）；`workload_identity_provider` 與 `service_account` 直接寫在 workflow（非 secret）。
+3. ✅ #886 已完成。`.gitignore` 加入 `gha-creds-*.json`（該 action 預設會在 workspace 產生暫存憑證檔；搭配 checkout 在 auth 之前、不 commit workspace）。
+4. ◐ #886 半完成：`WRITER_SA_ENV_VAR` 已退役；寫入前置檢查改為檢查 WIF 憑證、reader 端命名與 Streamlit 接線**未做**。程式端政策常數改名：退役 `RISK_CAP_HISTORY_WRITER_SA_JSON`（`shared/risk_cap_history_policy.py:177` `WRITER_SA_ENV_VAR`），寫入前置檢查（`src/data/macro/risk_cap_history.py`）改為檢查 WIF 提供的憑證；讀取端名稱與 Streamlit secrets 表格名（步驟 8 提案）定案並同步；相關測試（`tests/test_vn1_store_poc.py`）同步更新。
 5. 若正式 workflow 換檔名 → 依步驟 3 更新 attribute-condition。
 6. 寫入端 `concurrency` 序列化（單一寫入者，見 `VN1_STORE_RESEARCH.md` 8.4 第 2 點）。
-7. 第 5 節驗證計畫執行並記錄結果。
+7. 第 5 節驗證計畫執行並記錄結果。（⚠️ 2026-10-19：P1／P2／R1～R5 **仍未執行**；WIF auth-only PASS 不算第 5 節任何一項。）
+
+📌 2026-10-19 正式寫入前另需（已記錄、未做）：pip 安裝 hash-pin；GitHub environment（required reviewers）＋WIF condition 加 environment claim；WIF condition 加 `event_name`。另：checkout／setup-python 釘版觸發 Node 20 deprecation 警告（被強制以 Node 24 執行），屬日後 pin bump、不阻擋。
 8. `PRODUCTION_WRITE_APPROVED`（`shared/risk_cap_history_policy.py`）改為 `True` **只能在客戶另一次裁示後**（⛔ 不得自行改）。
 
 ---
@@ -325,4 +329,5 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 5. **Streamlit Cloud 無 workload identity**：撰寫組在 Streamlit Cloud 文件中**未找到**可對 Google 做 workload identity federation 的機制，故讀取端採 key（G2）。這是「文件中找不到」，**不是官方明文否定**。
 6. **attribute-condition 與 `google.subject` 長度**：GitHub `sub` 形如 `repo:linchen-20200325/my-stock-dashboard:ref:refs/heads/main`，預期不超過 Google 的 subject 長度上限；**未實測**。
 7. **PoC Actions 實跑**：客戶回報 run 39249934107 success（dry-run：狀態 VALID、`exposure_limit_pct` 30、同日重跑 APPENDED→NOOP_DUPLICATE）；撰寫組**未重查** run log／artifact。
-8. 本檔所有 gcloud 指令**未在真實專案實跑**；第一次照做時若有錯，以實際錯誤訊息修正本檔。
+8. ~~本檔所有 gcloud 指令**未在真實專案實跑**；~~（2026-10-19：客戶已依本檔在真實專案完成設定並確認 (a)～(f)，有意識的變更，不是漏刪）本檔 gcloud 指令以客戶實跑為準；第一次照做時若有錯，以實際錯誤訊息修正本檔。
+9. **WIF auth-only 實跑紀錄（2026-10-19）**：run 39336051675（客戶手動 dispatch，main `2c693a20`，`mode`＝`wif-auth-only`）—— job `wif_auth_only` success；步驟「Authenticate to Google Cloud (WIF, no key)」「Verify impersonated identity」success；`poc-dry-run` skipped。log：GitHub OIDC → WIF STS → impersonation PASS；impersonated_email＝`risk-cap-writer@mystock20260823.iam.gserviceaccount.com`；project `mystock20260823`；token lifetime 約 3599s；scope 僅 `userinfo.email`；**未讀寫任何 Sheet**；憑證檔於 post step 移除（總管 GitHub API 查證）。⚠️ 這**不是**第 5 節 P1／P2／R1～R5；writer 仍未分享給 Sheet、Streamlit reader 未接線、production 寫入未核准。
