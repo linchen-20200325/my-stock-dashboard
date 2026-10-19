@@ -2,6 +2,7 @@
 
 > **性質**：研究報告，**只研究、不實作**（DEC-062；`docs/BACKLOG.md` `VN1-STORE`；`docs/vnext/VNEXT_1_0_DECISION_GATES.md` 第 6 節 `1.0-B3`）。本批**沒有改任何程式碼、測試、secrets 或雲端設定**。
 > **來源**：兩組獨立研究（repo 端組：讀程式碼與既有文件；平台端組：查 Streamlit／GitHub／Google 平台行為），結論收斂一致；由撰寫組整併，並就「程式碼裡便宜可查」的事實逐項複查（標「撰寫組複查」）。
+> 📌 **2026-10-19 裁示（append-only）**：客戶裁示 **A ＝ 系統專用 Google Sheet**（DEC-063／DR-2026-10-19-2）；**只核准保存方向與最小 PoC，尚未核准正式 production 排程寫入**。下方「保存位置**未同意**」的敘述自本日起只剩「production 寫入與新憑證未同意」（有意識的變更，不是漏刪；原文保留）。PoC 結果見第 8 節。
 > **讀法**：**事實**（有出處、可重查）與**推論**（由事實推出）分開標示；平台行為若只來自論壇或研究組轉述、未在 Streamlit Cloud 實測，一律寫明。⛔ **本文推薦不是授權**：保存位置屬 DEC-009 須客戶同意事項（DEC-062 已明載「Q4 保存位置**未同意**，維持待客戶」）。
 
 ---
@@ -86,6 +87,8 @@
 - 取數失敗以**狀態**呈現／記錄，**絕不以數值**呈現（§1 Fail Loud）。
 - ⛔ 不新增任何變動大小門檻（DEC-062）。
 
+📌 2026-10-19（append-only）：最小 PoC 已做，結論見第 8 節 —— 無頭環境**可以**跑同一條 L3 鏈（`refresh_macro_now` 本身）；引擎輸入能否在 GitHub Actions **完整**產出仍未實跑。
+
 ⚠️ **未驗證（需 PoC）**：`refresh_macro_now` 與引擎輸入（`macro_info`、`bias_info`、`m1b_m2_info`、`li_latest`，見 `src/services/macro_engine_inputs.py`）能否在**無頭環境完整產出**。既有 `scripts/update_macro_forward_test.py` **並沒有**填這些輸入（它走 `fetch_macro_bundle` ＋ `calc_traffic_light`），所以「照抄就能跑」**不成立**，須實測。
 
 ---
@@ -138,3 +141,60 @@
 - F6「不經 AI」依讀碼，未窮舉整條呼叫鏈的所有分支。
 - 第 4 節「無頭能否完整產出引擎輸入」**完全未驗證**，是推薦方案能否落地的最大不確定點。
 - 「兩組結論收斂」與本文整體推薦為研究組＋撰寫組產出，**未經第三組獨立稽核**；送客戶前視為待驗。
+
+---
+
+## 8. PoC 結果（2026-10-19，DEC-063 授權的最小 PoC）
+
+> **性質**：最小 PoC，**不寫 production**：沒有寫任何真實 Sheet、沒有建立任何 Sheet／帳號／secret、沒有排程、沒有改 UI。
+> 程式在分支 `claude/investment-inbox-product-design-m1lu7v`（commits `f236507f`、`3edc0872`；未開 PR、未合併）。兩組獨立稽核（資料語意、安全）皆 0 MUST，SHOULD／NIT 已於稽核修正第 1 輪（DEC-010）併入。
+> **事實**與**推論**分開標示；下表「實測」＝撰寫組在沙箱實跑或單元測試實跑。
+
+### 8.1 做了什麼
+
+| 項目 | 內容 | 查證 |
+|---|---|---|
+| 無頭計算 | `scripts/risk_cap_history_poc.py` 直接呼叫畫面同一支 `macro_refresh_service.refresh_macro_now`（同一條取數 → 引擎 → 寫檔）；只多一個預設不帶的參數，把快照寫到**本輪新開的暫存目錄**（⛔ 不覆寫 app 工作目錄的兩個狀態檔；跑前跑後比對雜湊）。⛔ 沒有另寫公式、沒有 headless 分支 | 實測 |
+| 紀錄 schema | `shared/risk_cap_history_policy.py`：日期鍵、規則版本、狀態、原因、正式上限值（**只有 VALID 才填**）、Required Core 戳記、未評估／停用項、各輸入資料日、引擎來源、快照時間、核心輸入 provenance、整輪成敗、寫入時刻、run id、commit。欄位只取自既有快照欄位與 provenance，⛔ 無門檻、⛔ 無新投資語意 | 實測（單元測試） |
+| 狀態詞彙 | VALID（寫出快照**且**官方讀端 `get_macro_state(require_valid_risk_cap=True)` 收得下）／REQUIRED_CORE_INCOMPLETE／ENGINE_FAILSAFE／ENGINE_NOT_FINITE／FETCH_FAILED／COMPUTE_ERROR／SNAPSHOT_REJECTED／SAME_DAY_CONFLICT —— 全部對映既有判定 | 實測（單元測試） |
+| 寫入 | 只有記憶體假表（`--simulate-rerun`）；`--write` 一律失敗（production 寫入未核准）；gspread 轉接器核對試算表 ID 與工作表名稱，對不上連讀都不讀 | 實測（單元測試） |
+| Actions | 只能手動觸發的 dry-run workflow（`contents: read`、無排程、只用既有取數 secrets、紀錄 JSON 以 artifact 上傳） | ⚠️ **未實跑**（須合併後手動觸發） |
+
+### 8.2 沙箱實跑結果（事實）
+
+- 鏈可以在沒有 Streamlit 網頁的環境跑完（`st.session_state`／`@st.cache_data` 在無 runtime 下照常運作）。
+- 沙箱代理擋 Yahoo、TWSE、CIER、NDC 等 → 紀錄照實為 **REQUIRED_CORE_INCOMPLETE**：VIX、外資期貨淨空單、加權指數跌破 MA5 未取得；**上限值空白**；`app_state_files_untouched=true`。
+- 台灣 PMI 當月：即時來源全失敗，既有 L1 退回 repo 內的上次已知值快照（stale-cache）；既有新鮮度規則依資料月判為可用。稽核修正後紀錄的 `core_input_provenance` 會記下該來源標籤與 `is_stale`。
+- 同日重跑（記憶體假表）：第一次 APPENDED、第二次 NOOP_DUPLICATE、資料列 1 筆。
+- ⚠️ 腳本工作約 3 分鐘完成，但行程約再 7 分鐘才結束（取數池的逾時執行緒在背景跑完才退出）。
+- ⚠️ **VALID 路徑只有單元測試**（用真的 `compute_and_lock_risk_cap` 寫快照＋官方讀端判定）；真實網路下能否得到 VALID **未驗證**。
+
+### 8.3 同日重跑與歷史保真規則（現行）
+
+鍵＝（台北日期, 規則版本）；**既有列永不修改**。
+- 每個鍵至多一筆 VALID；當天第一筆有效紀錄不可變。
+- 同內容重跑 → 不寫。
+- 同日已有 VALID、本輪 VALID 內容不同 → 首筆不動，本輪以 SAME_DAY_CONFLICT **另記一列**（上限值空白、差異寫在原因），同一衝突不重複記；腳本以非 0 結束，讓排程顯示失敗。
+- 非有效結果（含發生在當天 VALID 之後的）→ 與同狀態最後一列內容（含原因原文）不同才追加 —— 「已過期」與「未取得」分得開。
+- 讀端只拿 VALID 比較：同版本一列都沒有 →「從今天開始記錄」；預期日期沒紀錄 → 過期（不比較）；預期日期沒有 VALID → 照實顯示該列狀態（不比較）；資料日與上限值都與上一筆相同 → 沒有新資料（不算變化）；其餘 → 可並列「上次 vs 這次」（⛔ 無變動大小門檻）。
+- ⚠️ 併發：讀全表再追加不是原子操作；前提是單一寫入者。
+
+### 8.4 尚待決定／尚待驗證
+
+1. **「預期日期」**：每日排程跑之前的時段（例如早上）要不要把預期日期往前推一天 —— 否則每天排程前都會顯示「過期」。屬正式化設計，未定。
+2. **寫入端 concurrency group**：正式排程 workflow 需以 `concurrency` 序列化（單一寫入者前提）。
+3. **執行緒滯留**：約 7 分鐘的行程尾巴（見 8.2）；目前不強制結束。
+4. **cache 退路 provenance**：~~只有 VIX／台灣 PMI 當月的上游帶 `is_stale`；PMI 前月、外資期貨、MA5 的上游沒有此欄，紀錄為 "unknown"（不推定）。~~（2026-10-19 複稽核更正，有意識的變更，不是漏刪：VIX 上游從不帶 `is_stale`）
+   **現行**：全條取數鏈中，只有 **台灣 PMI 當月**的 stale-cache 退路（L1 `macro_core` 的台灣 PMI 多源賽跑全失敗後讀上次已知值快照）會把 `is_stale` 設為 True；即時命中時上游 dict 不帶此欄。**VIX 上游（`macro_snapshot.fetch_vix_block`）從不帶 `is_stale`** ⇒ VIX 的 `upstream_is_stale` **恆為 "unknown"**（⛔ 不推定 False）。PMI 前月、外資期貨、MA5 的上游同樣沒有此欄，一律 "unknown"。查證方法：對 `src/`、`shared/` grep `is_stale` 賦值處（撰寫組單組查證，未經第二組驗證）。
+5. **GitHub Actions 實跑**：合併後手動觸發 PoC workflow，確認真實環境的取數與狀態。
+6. 正式寫入需客戶建立 Sheet 與兩支 service account（寫入／唯讀分開），並另行核准（DEC-009）。
+
+**複稽核登記的待決設計項（2026-10-19；正式化前須決定，PoC 未處理）**
+
+7. **CompareResult 缺「是否有過任何有效歷史」訊號**：讀端目前只回比較結果；UI 若要同時區分「從今天開始記錄」（從未有 VALID）與失敗狀態（曾有 VALID、今天沒有），需自行再判。建議比較結果加一個 `has_prior_valid` 類訊號，由讀端回傳、UI 不另推。
+8. **長間隔下的 COMPARABLE 沒有間隔／過期訊號**：例如上一筆 VALID 在 20 天前，讀端仍回 COMPARABLE 並列「上次 vs 這次」，不提示間隔。UI 必須揭露 `previous.record_date`（上一筆的日期鍵），⛔ 不得讓「上次」看起來像昨天。是否另設間隔訊號屬正式化設計，未定（⛔ 本 PoC 不新增門檻）。
+9. **非有效列去重只比「同狀態最後一列」**：失敗序列 A→B→A 時，第三筆 A 與同狀態（A）最後一列內容相同而被略過 ⇒ 「A 又發生了一次」這個復發事實遺失。正式化時需決定是否改為與「全表最後一列」比較或另記復發。
+10. **`refresh_failed` 可能少報**：該欄照抄既有 `MacroRefreshReport` 的失敗清單語意，可能少於實際有問題的來源（哪些情形會漏列未逐一查證）。屬既有報告語意，本 PoC 未改；⛔ UI／讀端不得把「此欄空白」讀成「所有來源都正常」。
+11. **`core_input_provenance` 未經 `scrub_secrets`**：目前寫入的只有既有 L2 的常數來源標籤與布林／"unknown"，故未經清洗；若日後 source 字串可能夾帶 URL／錯誤原文，寫入前需改走 `scrub_secrets`。
+12. **完成後殘留執行緒約 6.5～7 分鐘未在 Actions 量測**：第 3 點的行程尾巴只在沙箱觀察到；GitHub Actions 上的實際時長與是否撞 job timeout **未量測**（須合併後手動觸發 PoC workflow 時一併觀察）。
+
