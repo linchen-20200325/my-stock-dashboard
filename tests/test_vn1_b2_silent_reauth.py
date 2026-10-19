@@ -1061,13 +1061,81 @@ def test_login_then_bind_sheet_remints_marker_and_refresh_restores_with_sheet(wi
     assert dict(s3.query_params) == {'sheet': 'SID', MK: _tag(sheet='SID')}
 
 
-def test_binder_path_resyncs_on_the_hook_after_its_rerun(wire):
-    """📁 組合管理 / 就地綁定(`apply_active_sheet` 只寫 `?sheet=`)之後都會 st.rerun → app.py 頂端的
-    hook 在那一輪重算(⛔ 不改凍結的舊 UI 檔)。"""
+def test_binder_path_resyncs_on_the_hook_after_its_rerun(wire, monkeypatch):
+    """📁 組合管理 / 就地綁定(真的 `portfolio_binder.apply_active_sheet`:寫 session 兩通道 ＋ `?sheet=`,
+    不碰 gs)之後都會 st.rerun → app.py 頂端的 hook 在那一輪重算(⛔ 不改凍結的舊 UI 檔)。
+
+    📌 第三輪(2026-10-19,有意識的修改):修前本條只改網址 `s1.query_params['sheet'] = 'SID2'`、**沒寫 session**,
+    與真的 `apply_active_sheet` 不符(它先寫 session 兩通道再寫網址)。現在直接呼叫真函式;
+    sync 只信 session 的 Sheet,只改網址的那種寫法已不會(也不該)重算 —— 見下一條。"""
+    from src.ui.tabs import portfolio_binder as PB
     s1 = _login_strict(wire)
-    s1.query_params['sheet'] = 'SID2'          # apply_active_sheet 的效果(不碰 gs)
+    monkeypatch.setattr(PB, 'st', s1)
+    PB.apply_active_sheet(gsp, 'SID2')
+    assert s1.session_state['portfolio_sheet_id'] == 'SID2' and s1.query_params['sheet'] == 'SID2'
+    assert MK in s1.query_params and s1.query_params[MK] == _tag(sheet=''), 'apply_active_sheet 不碰 gs'
     _run_app(s1)                               # st.rerun 之後的那一輪
     assert s1.query_params[MK] == _tag(sheet='SID2')
+    # 重新整理 → 靜默恢復帶 SID2 成功
+    s2 = wire(qp=dict(s1.query_params))
+    _run_app(s2)
+    s3 = wire(qp={'code': 'C1', 'state': _qs(_redirect_url(s2))['state']})
+    _run_app(s3)
+    assert s3.session_state['gsheet_tokens'] and s3.session_state['portfolio_sheet_id'] == 'SID2'
+
+
+# ── 第三輪(客戶核准):已登入分頁的 Sheet 只信 session 設定值 ─────────────────────────
+def test_tampered_url_sheet_in_logged_in_session_is_not_minted(wire, capsys):
+    """已登入、綁 VICTIM;網址被外部改成 `?sheet=EVIL`(session 仍是 VICTIM)並觸發 rerun →
+    ⛔ 不得替自己的 sub 算出 MAC(sub, EVIL);之後重新整理也不會靜默綁上 EVIL。"""
+    s1 = _login_strict(wire, sheet='VICTIM')
+    assert s1.session_state['portfolio_sheet_id'] == 'VICTIM'
+    good = s1.query_params[MK]
+    assert good == _tag(sheet='VICTIM')
+    s1.query_params.clear()
+    s1.query_params.update({'sheet': 'EVIL', MK: good})     # 外部改 query(例:host 訊息)
+    _run_app(s1)                                           # 被觸發的那一輪
+    _run_app(s1)
+    assert s1.query_params[MK] == good != _tag(sheet='EVIL'), '不得替 EVIL 重算記號'
+    out = capsys.readouterr().out
+    assert out.count('resync_skip reason=url_sheet_not_session_sheet') == 1
+    assert 'EVIL' not in out and 'VICTIM' not in out
+    # 使用者接著重新整理(網址帶 EVIL ＋ VICTIM 的記號)→ 不會靜默綁 EVIL
+    s2 = wire(qp=dict(s1.query_params))
+    _run_app(s2)
+    s3 = wire(qp={'code': 'C1', 'state': _qs(_redirect_url(s2))['state']})
+    _run_app(s3)
+    assert 'gsheet_tokens' not in s3.session_state
+    assert s3.session_state.get('portfolio_sheet_id') != 'EVIL'
+    assert s3.infos == [ost.OAUTH_SILENT_MISMATCH_MSG]
+
+
+def test_url_only_sheet_change_without_session_does_not_remint(wire):
+    """只改網址、session 沒跟著改(不是使用者自己的 UI 操作)→ 不重算。"""
+    s1 = _login_strict(wire)
+    s1.query_params['sheet'] = 'SID2'
+    _run_app(s1)
+    assert s1.query_params[MK] == _tag(sheet='')
+
+
+def test_error_callback_in_logged_in_session_does_not_write_state_sheet(wire):
+    """已登入分頁收到 `?error=login_required&state=n.EVIL.tag` → 網址不會變成 EVIL,也不會替 EVIL 算記號。"""
+    s1 = _login_strict(wire, sheet='VICTIM')
+    s1.query_params.clear()
+    s1.query_params.update({'error': 'login_required', 'state': 'NX.EVIL.' + _tag(sheet='EVIL')})
+    _run_app(s1)
+    assert s1.query_params.get('sheet') != 'EVIL'
+    assert s1.query_params.get(MK) != _tag(sheet='EVIL')
+    assert s1.session_state['portfolio_sheet_id'] == 'VICTIM'
+    assert s1.session_state['gsheet_tokens'], '仍是登入狀態'
+
+
+def test_error_callback_in_logged_in_session_keeps_urls_own_sheet(wire):
+    s1 = _login_strict(wire, sheet='VICTIM')
+    s1.query_params.update({'error': 'server_error', 'state': 'NX.EVIL.' + MV})
+    _run_app(s1)
+    assert s1.query_params['sheet'] == 'VICTIM'
+    assert s1.query_params[MK] == _tag(sheet='VICTIM'), '同一輪 sync 依 session 的 VICTIM 重掛記號'
 
 
 def test_refresh_right_after_sidebar_change_is_covered_by_the_inline_sync(wire):

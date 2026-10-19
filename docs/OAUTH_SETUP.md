@@ -68,6 +68,10 @@ Streamlit session 久**：沒有 server 端 token 表、不寫 cookie / localSto
    - 登入後才綁 / 換 Sheet（側欄、📁 組合管理、💼 頁的就地綁定）→ app 會以**這個 session 自己的** Google
      帳號 ID 重算記號（只對強驗登入的 session；安全閥放行的登入不會）。側欄是寫完就地重算；📁 組合管理與
      就地綁定寫完都會重跑一輪，在那一輪重算 ⇒ 換完馬上重新整理也對得上。
+     ~~（重算時 Sheet 取網址上的 `?sheet=`）~~ 📌 2026-10-19 第三輪（客戶核准，有意識的修改）：重算時的 Sheet
+     **只信這個 session 裡使用者自己設定的那本**（側欄 / 組合管理 / 就地綁定 / 強驗登入回綁時寫入）；網址上的
+     `?sheet=` 若被外部改成別本、與 session 不同 → **不重算**（log `resync_skip reason=url_sheet_not_session_sheet`）。
+     修前這裡會替你自己的帳號算出「綁那本外來 Sheet」的記號，下次重新整理就自動綁上它。
 2. 重新整理 → 新 session 沒有 token，但網址有記號 → app 照原本的方式發一個 15 分鐘的 nonce，
    `state` 帶著 `nonce.Sheet.記號`；頁首短暫出現**灰字**（`st.caption`）「正在恢復 Google 登入…」；
    瀏覽器端的 script 先在**要導的那個視窗**上 `history.replaceState` 把網址裡的 `gs` 拿掉（同一筆
@@ -129,6 +133,7 @@ OAuth Client 沒有 client_secret 時（算不出記號）靜默恢復整個停�
 [oauth_state] 1.0-B2 silent_reauth=marker_set_failed (<例外型別>)   # 掛記號失敗（登入不受影響）
 [oauth_state] 1.0-B2 silent_reauth=marker_remove_failed (<例外型別>) # 登出時拿不掉記號
 [oauth_state] 1.0-B2 silent_reauth=marker_resynced                 # 登入後換了 Sheet → 記號已依新 Sheet 重算
+[oauth_state] 1.0-B2 silent_reauth=resync_skip reason=url_sheet_not_session_sheet  # 網址 Sheet ≠ session 設定的 Sheet → 不重算（每 session 一次）
 [oauth_state] 1.0-B2 callback error=<標準代碼|other> state=<ok|unknown|expired|mismatch|no_cookie|kept|absent>
 [gsheet_portfolio] 1.0-B2 login_expired reason=no_refresh_token    # 靜默恢復的登入用滿約 1 小時
 ```
@@ -162,6 +167,10 @@ OAuth Client 沒有 client_secret 時（算不出記號）靜默恢復整個停�
   Sheet」，未登入也會；登入時跟著 state 回綁）。任何人都能寄一個帶 `?sheet=<某本>` 的連結 —— 那一本仍要你自己的
   Google 帳號有權限才讀得到。本批靜默恢復沒成功時「把 state 帶回的 Sheet 寫回網址」與它**同一個信任等級**，
   沒有放大；網址還原本身沒消毒等問題已另案追蹤（不在本批範圍）。
+  📌 2026-10-19 第三輪（客戶核准）補限定：上句只對**未登入**的落地頁成立。**已登入**的分頁收到 `?error=…`
+  時**不**寫 state 帶回的 Sheet（網址原有的照留），重算記號也只信 session 的 Sheet（見「怎麼運作」第 1 點）——
+  ~~登入中的分頁也與 v19.204 同一個信任等級~~（修前 `?error=` 分支在已登入分頁也會寫，再被重算記號信任，
+  等於放大了；有意識的更正）。
 - **觀察清單那一半**：讀觀察清單的瞬間剛好逾時，會記成「觀察清單讀不到」（持股本身不受影響），
   與其他讀取失敗同一個說法 —— 機率極低（要剛好落在兩次讀取之間），本批不另外處理。
 - **瀏覽器同時登入多個 Google 帳號**：Google 可能回 `account_selection_required` / `interaction_required`

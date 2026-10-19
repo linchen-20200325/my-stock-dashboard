@@ -386,6 +386,10 @@ SILENT_MARKER_NOT_SET_NO_SUB = "marker_not_set_no_sub"
 SILENT_MARKER_SET_FAILED = "marker_set_failed"
 SILENT_MARKER_REMOVE_FAILED = "marker_remove_failed"
 SILENT_MARKER_RESYNCED = "marker_resynced"
+#: 第三輪:網址上的 `?sheet=` 與 session 的 Sheet 不同 → 不重算記號(只記代碼,⛔ 不記值)。
+SILENT_RESYNC_SKIP_UNTRUSTED = "url_sheet_not_session_sheet"
+#: session_state 旗標:本 session 已記過一次上面那個代碼(每 session 只記一次,免得每輪 rerun 洗版)。
+_RESYNC_SKIP_LOGGED_KEY = "_oauth_resync_skip_logged"
 #: 值得記 log 的略過原因(網址**有**記號、使用者期待恢復,卻因設定 / 環境做不到)。
 #: 其餘(沒記號、已登入…)是每次 rerun 的常態,記了只會洗版。每 session 只記一次。
 _SILENT_LOGGED_SKIP_REASONS = frozenset({
@@ -434,9 +438,14 @@ def sync_silent_marker() -> bool:
     而且**每一次**都這樣。
     **全部**成立才改寫:開關啟用、有 client_secret、本 session 已登入、本 session 的登入是**強驗**掛過記號的
     (`OAUTH_SILENT_ELIGIBLE_SESSION_KEY`;安全閥放行 / 開關停用時的登入沒有)、網址不是回呼、本 session 的
-    id_token 解得出 sub、新值與網址現值不同。
-    ⛔ 只用**本 session 自己的** sub(token 是本 server 向 Google 換來的)⇒ 永遠不會替別的帳號算出記號,
-    攻擊面不變;Sheet 取網址上的 `?sheet=`(消毒後,與 `maybe_silent_reauth` 同一個來源)。
+    id_token 解得出 sub、網址上的 `?sheet=` 與 **session 的 Sheet** 相同、新值與網址現值不同。
+    ⛔ 只用**本 session 自己的** sub(token 是本 server 向 Google 換來的)⇒ 永遠不會替別的帳號算出記號。
+    ~~攻擊面不變;Sheet 取網址上的 `?sheet=`~~(第三輪,客戶核准,有意識的修改:那句不成立 —— 已登入分頁的網址
+    若被外部改成 `?sheet=EVIL` 並觸發 rerun,修前會替**受害者自己的** sub 算出 MAC(sub, EVIL),下次重新整理就
+    靜默綁上 EVIL)。現行:Sheet **只信 session 的 `portfolio_sheet_id`**(只由使用者自己的 UI 操作 —— 側欄、
+    `portfolio_binder.apply_active_sheet` —— 或 consume ok 的回呼回綁寫入),且網址上的 `?sheet=` 必須與它相同
+    才改寫(網址是重新整理後 `maybe_silent_reauth` 唯一讀得到的來源,兩者不同時改寫只會製造下一次對不上);
+    不同 → 什麼都不做、只記代碼(每 session 一次,⛔ 不記值)。
     """
     if not st.session_state.get(OAUTH_SILENT_ELIGIBLE_SESSION_KEY):
         return False
@@ -449,8 +458,14 @@ def sync_silent_marker() -> bool:
         _cur = st.query_params.get(OAUTH_SILENT_MARKER_PARAM)
     except Exception:  # noqa: BLE001
         return False
+    _trusted = _sanitize_sheet_id(st.session_state.get("portfolio_sheet_id"))
+    if _url_sheet() != _trusted:
+        if not st.session_state.get(_RESYNC_SKIP_LOGGED_KEY):
+            print(f"[oauth_state] 1.0-B2 silent_reauth=resync_skip reason={SILENT_RESYNC_SKIP_UNTRUSTED}")
+            st.session_state[_RESYNC_SKIP_LOGGED_KEY] = True
+        return False
     _cfg = _resolve_oauth_cfg() or {}
-    _tag = _silent_tag(_cfg.get("client_secret", ""), decode_id_token_sub(_toks), _url_sheet())
+    _tag = _silent_tag(_cfg.get("client_secret", ""), decode_id_token_sub(_toks), _trusted)
     if not _tag or _tag == _cur:
         return False
     try:
@@ -607,8 +622,11 @@ def _handle_oauth_error_callback(qp) -> None:
     登入鈕(同一個 nonce)再按一次會被當成重放擋下(紅字)。
     稽核第二輪 SHOULD-A:靜默 state 的任何錯誤都把 state 帶回的 Sheet 寫回 `?sheet=`(網址層級,
     見 `_clear_query_keep_sheet`)—— 修前非靜默代碼會連 Sheet 一起丟掉。
+    第三輪(客戶核准):**本 session 已登入時不寫** state 帶回的 Sheet(網址原有的 `?sheet=` 照留)——
+    已登入分頁的 Sheet 只信使用者自己設定的值,外部塞進來的 `?error=…&state=n.EVIL.tag` 不得改它。
     """
     _code = _displayable_error_code(qp.get("error"))
+    _logged_in = bool(st.session_state.get("gsheet_tokens"))
     _reason = "absent"
     _ok, _got_sheet = False, ""
     if "state" in qp:
@@ -627,7 +645,7 @@ def _handle_oauth_error_callback(qp) -> None:
     if _ok and _got_sheet:
         st.session_state["portfolio_sheet_id"] = _got_sheet
         st.session_state["stock_portfolio_sheet_id"] = _got_sheet
-    _clear_query_keep_sheet(_got_sheet)
+    _clear_query_keep_sheet("" if _logged_in else _got_sheet)
     if _code in OAUTH_SILENT_FAILURE_ERROR_CODES:
         st.info(OAUTH_SILENT_REAUTH_FAILED_MSG)
     elif _code:
