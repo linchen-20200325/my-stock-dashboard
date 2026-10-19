@@ -147,7 +147,7 @@
 ## 8. PoC 結果（2026-10-19，DEC-063 授權的最小 PoC）
 
 > **性質**：最小 PoC，**不寫 production**：沒有寫任何真實 Sheet、沒有建立任何 Sheet／帳號／secret、沒有排程、沒有改 UI。
-> 程式在分支 `claude/investment-inbox-product-design-m1lu7v`（commits `f236507f`、`3edc0872`；未開 PR、未合併）。兩組獨立稽核（資料語意、安全）皆 0 MUST，SHOULD／NIT 已於稽核修正第 1 輪（DEC-010）併入。
+> 程式在分支 `claude/investment-inbox-product-design-m1lu7v`（commits `f236507f`、`3edc0872`~~；未開 PR、未合併~~、`6b0c7f2d`；**已合併** #882、merge sha `a45c7405`、main CI run 39234825821 success；2026-10-19 更新，有意識的變更，不是漏刪）。Actions 環境實跑**待客戶手動觸發**（代理觸發得 403）；production 寫入仍未核准（DEC-063）。兩組獨立稽核（資料語意、安全）皆 0 MUST，SHOULD／NIT 已於稽核修正第 1 輪（DEC-010）併入。
 > **事實**與**推論**分開標示；下表「實測」＝撰寫組在沙箱實跑或單元測試實跑。
 
 ### 8.1 做了什麼
