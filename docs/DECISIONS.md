@@ -385,6 +385,24 @@
   - **DEC-020**（新 UI 切預設另送）、**DEC-037**、**DEC-044**、**DEC-046**、**DEC-048**、**DEC-049**、**DEC-051**：不變；Q5 確認 DEC-037／049／051 與 DEC-044 的延伸同樣適用於總經彙總燈。
   - **DEC-061**：本條流程指示即依 DEC-061 執行，不新增規則。
 
+### DEC-063｜`VN1-STORE` 保存位置裁示 A：系統專用 Google Sheet（只核准方向＋最小 PoC，未核准 production 排程寫入）
+> 2026-10-19 追加。ID 照序取下一個未用號（撰寫組 `git grep -oh "DEC-0[0-9]*" | sort -u` 實測最大為 DEC-062）。BACKLOG 登記：DR-2026-10-19-2。研究與 PoC 結果見 `docs/vnext/VN1_STORE_RESEARCH.md`（第 8 節「PoC 結果」）。
+- **內容**（客戶原文，逐字）：
+  「裁示：A。採用「系統專用 Google Sheet」作為每日 System Risk Cap 歷史紀錄的持久化位置。但先不要直接進入正式 production 寫入，下一步先做最小 PoC：1. 驗證 GitHub Actions／無 Streamlit 網頁環境下，是否能依既有正式資料層與規則完整計算每日 System Risk Cap。2. 不得為了讓排程成功而另造一套公式、另造資料來源、補 0、猜測缺值，或讓 AI 參與客觀資料產生。3. 若 Required Core 不完整／資料過期／取數失敗，必須保留真實資料狀態；不得寫成正常有效 Risk Cap。4. 系統歷史 Sheet 與我的個人持股 Sheet 必須完全分離。5. 寫入端與網站讀取端權限分離：排程帳號：僅具必要寫入權限。網站帳號：只讀這張系統歷史 Sheet。不得重新引入 SEC-3。6. 每日紀錄須可追溯，至少保留 as-of、資料狀態、正式 Risk Cap 值、規則版本／必要 provenance；實際 schema 先依既有規則設計，不得自行新增投資語意。7. 歷史不存在時仍顯示「從今天開始記錄」；資料過期／排程失敗時不得產生假的「和上次比」。8. 同一天重跑的 idempotency／重複紀錄處理必須在 PoC 中驗證。9. PoC 完成後先做獨立稽核，再回報結果與需要我手動建立 Google Sheet／帳號的精簡步驟；涉及新憑證或權限時依 DEC-009 停下。10. PR #881 若 CI 全綠，可依既定流程先合併研究文件；PoC 另開小批次，不混入 #881。本次只核准保存方向 A 與最小 PoC；尚未核准正式 production 排程寫入。」
+- **逐點對映**（撰寫組單組判讀，⚠️ 待第二組 evidence audit）：
+  - 保存位置＝研究報告方案 (c) 系統專用 Google Sheet（`VN1_STORE_RESEARCH.md` 第 3、5 節）；次選 GCS 不採用。
+  - 第 1～8 點＝最小 PoC 的驗收條件；PoC 實作見分支 `claude/investment-inbox-product-design-m1lu7v` commits `f236507f`、`3edc0872`（未開 PR、未合併；總管轉述）。
+  - 第 9 點：PoC 後先獨立稽核、再回報與送客戶「建立 Sheet／帳號」精簡步驟；**新憑證或權限依 DEC-009 停下**。
+  - 第 10 點：#881（研究文件）與 PoC 分批；#881 已合併（`8c4722f4`；main CI 撰寫組未查）。
+  - ⛔ **尚未核准**正式 production 排程寫入；⛔ 未建立任何 Sheet／帳號／secret。
+- **範圍**：資料保存（DEC-009）、credentials／account access（DEC-009）、產品（「從今天開始記錄」維持）｜**日期**：2026-10-19｜**決策者**：客戶｜**狀態**：生效（方向＋PoC 授權；production 寫入未授權）
+- **來源**：D 客戶訊息 2026-10-19（本 session；確切 UTC 時戳未記錄，只保留日期；經總管轉交，逐字未經第二組比對），原文如上。
+- **與其他 DEC 的關係**（撰寫組單組判讀，⚠️ 待第二組 evidence audit）：
+  - **DEC-062**（Q4 附帶「Q4 保存位置**未同意**，維持待客戶」）：本條裁示了保存**方向**；DEC-062 該句的「未同意」自本條起只剩「production 寫入與新憑證未同意」—— DEC-062 原文不改（append-only）。
+  - **DEC-009**：新 Sheet／兩支 service account／secrets 屬須客戶同意事項；本條**未**授權建立，第 9 點明示涉及時停下。
+  - **DEC-027**（資料層 ≠ AI 分析層）：第 2 點重申；PoC 呼叫鏈直接檔案不 import AI 模組（AST 守衛，非全遞移圖）。
+  - **SEC-3**（#877 已結案）：第 5 點要求不得重新引入；PoC 不使用個人持股 Sheet 的既有 SA 金鑰。
+
 ## 3. 資料語意（data semantics）
 
 ### DEC-026｜Missing ≠ 0：未觀測→缺值、真實 0→0、有效值→原值；不得 fillna(0) 或自估合理值
