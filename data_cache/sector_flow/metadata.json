@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-16T14:07:47.005759+00:00",
-  "last_updated": "2026-10-16",
-  "row_count": 1069,
-  "n_days": 23,
+  "updated_at": "2026-10-19T16:35:34.207655+00:00",
+  "last_updated": "2026-10-19",
+  "row_count": 1115,
+  "n_days": 24,
   "fetch_diag": {
     "days_fetched": 1,
     "days_holiday_or_empty": 0,
@@ -11,24 +11,24 @@
     "unresolved_expired": []
   },
   "coverage": {
-    "n_stock_days_with_net": 20825,
-    "n_dropped_missing_price": 18607,
-    "n_unclassified_stock_days": 1,
-    "n_sectors": 47,
+    "n_stock_days_with_net": 20992,
+    "n_dropped_missing_price": 18770,
+    "n_unclassified_stock_days": 0,
+    "n_sectors": 46,
     "n_days": 1,
     "n_missing_foreign_stock_days": 0,
     "n_missing_trust_stock_days": 0,
     "n_missing_dealer_stock_days": 0,
-    "n_excluded_foreign_ccy_stock_days": 6
+    "n_excluded_foreign_ccy_stock_days": 4
   },
   "last_error": null,
   "warnings": [],
   "per_day": {
-    "20261016": {
-      "twse_inst": 19941,
-      "twse_close": 1369,
-      "tpex_inst": 890,
-      "tpex_close": 988,
+    "20261019": {
+      "twse_inst": 20108,
+      "twse_close": 1366,
+      "tpex_inst": 888,
+      "tpex_close": 992,
       "tpex_inst_status": "ok",
       "tpex_close_status": "ok",
       "twse_ok": true,
@@ -42,7 +42,7 @@
       "ok_days": 1,
       "fail_days": 0,
       "ok_dates": [
-        "20261016"
+        "20261019"
       ],
       "fail_dates": [],
       "not_written_dates": []
@@ -51,7 +51,7 @@
       "ok_days": 1,
       "fail_days": 0,
       "ok_dates": [
-        "20261016"
+        "20261019"
       ],
       "fail_dates": [],
       "not_written_dates": []
@@ -72,19 +72,19 @@
     "n_trading_days_used": 20,
     "n_days_tpex_ok": 20,
     "tpex_complete": true,
-    "n_absent_cells": 10,
+    "n_absent_cells": 11,
     "n_missing_value_cells": 0,
     "raw_axis": {
       "n_sectors": 47,
       "n_trading_days_used": 20,
-      "n_absent_cells": 10,
+      "n_absent_cells": 11,
       "n_missing_value_cells": 0,
       "n_days_tpex_ok": 20
     },
     "canonical_axis": {
       "n_sectors": 39,
       "n_trading_days_used": 20,
-      "n_absent_cells": 10,
+      "n_absent_cells": 11,
       "n_missing_value_cells": 0,
       "n_days_tpex_ok": 20
     },
@@ -94,17 +94,17 @@
   "industry": {
     "scheme": "z43-official-code-v1",
     "raw_available": true,
-    "fetched_at": "2026-10-16T14:07:34.043936+00:00",
+    "fetched_at": "2026-10-19T16:35:27.687077+00:00",
     "rules": {
       "finmind_no_official": 1181,
-      "official_match_finmind": 1969,
+      "official_match_finmind": 1970,
       "official_name": 9
     },
     "n_from_prev": 0,
     "official_status": {
       "上市": {
         "ok": true,
-        "n": 1095,
+        "n": 1096,
         "reason": null,
         "endpoint": "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
       },
@@ -117,7 +117,7 @@
     },
     "finmind_status": {
       "ok": true,
-      "n_rows": 4340
+      "n_rows": 4341
     },
     "unavailable_markets": [],
     "alias_consistency": {
