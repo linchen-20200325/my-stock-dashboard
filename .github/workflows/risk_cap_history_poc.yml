@@ -1,14 +1,36 @@
-name: VN1-STORE 風險上限歷史 PoC（手動、dry-run、不寫 Sheet）
+name: VN1-STORE 風險上限歷史 PoC（手動；dry-run／WIF auth-only；不寫 Sheet）
 
 # 客戶 2026-10-19 裁示 A：採用系統專用 Google Sheet 方向，但「先做最小 PoC；尚未核准正式 production 排程寫入」。
-# 本 workflow 只驗證「GitHub Actions 無頭環境能否用既有正式資料層與規則算出每日系統風險上限」：
-#   - ⛔ 沒有 schedule（只能手動觸發）；
-#   - ⛔ 不寫任何 Google Sheet、⛔ 不 commit、⛔ 不使用任何新 secret 或 Google 憑證；
+# 本 workflow ⛔ 沒有 schedule（只能手動觸發）、⛔ 不寫任何 Google Sheet、⛔ 不 commit。手動觸發時選 `mode`：
+#
+# ── mode = dry-run（預設；步驟與加 mode 前逐字相同，只多一行 job 條件）── job `poc-dry-run`
+#   只驗證「GitHub Actions 無頭環境能否用既有正式資料層與規則算出每日系統風險上限」：
+#   - ⛔ 不使用任何 Google 憑證、⛔ 沒有 id-token 權限；
 #   - 只用既有總經 cron（update_macro_forward_test.yml）已在用的取數環境變數；
 #   - 紀錄 JSON 以 artifact 上傳供人工檢查（非持久化方案；artifact 會過期）。
+#
+# ── mode = wif-auth-only（DEC-064 G1；VN1-STORE WIF auth-only 批）── job `wif_auth_only`
+#   只驗證「GitHub OIDC → Google Workload Identity Federation → impersonate risk-cap-writer」換得到短效身分：
+#   - 只有這個 job 有 `id-token: write`（向 GitHub 要 OIDC token 用）；dry-run job 沒有；
+#   - ⛔ 不用任何 secrets、⛔ 沒有 writer JSON key（DEC-064 G1 禁止）—— WIF provider 與 SA email 不是憑證，
+#     直接寫在下方（沒有通過 attribute condition 的 GitHub token 就換不到 access token）；
+#   - 驗證腳本只要 `userinfo.email` scope、以 tokeninfo 核對 email，⛔ 不讀寫任何 Sheet、⛔ 不印 token；
+#   - ⚠️ WIF attribute condition 釘了 `workflow_ref`＝本檔＠refs/heads/main：⛔ 不得改名／搬移本檔；
+#     只有從 main 觸發才換得到身分（從其他分支觸發被 STS 拒絕＝規格 5.2 反向測試 R4 的預期結果，
+#     所以這裡刻意**不**加「只限 main」的 job 條件，讓反向測試跑得起來）。
+#   ⛔ production 寫入仍未核准（DEC-063；`shared/risk_cap_history_policy.PRODUCTION_WRITE_APPROVED` = False）。
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run（預設：算一列紀錄、不碰 Google）或 wif-auth-only（只驗證 WIF 換得到 writer 身分、不碰 Sheet）"
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - wif-auth-only
 
 permissions:
   contents: read
@@ -19,6 +41,7 @@ concurrency:
 
 jobs:
   poc-dry-run:
+    if: ${{ inputs.mode == 'dry-run' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -49,3 +72,42 @@ jobs:
           path: risk_cap_history_poc_record.json
           if-no-files-found: warn
           retention-days: 14
+
+  wif_auth_only:
+    if: ${{ inputs.mode == 'wif-auth-only' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # 只有本 job 拿 id-token；contents 維持唯讀（job 層 permissions 會整組取代頂層設定，故兩項都要寫）。
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # checkout 在 auth 之前：auth 產生的 gha-creds-*.json 落在 workspace（.gitignore 已擋），
+      # post step 會自動刪除；persist-credentials: false ⇒ workspace 裡不留 GitHub token。
+      # 本 job 帶 id-token 請求環境變數 ⇒ 所有 action 一律以完整 commit SHA 釘版（tag 可被改指）。
+      - name: Checkout Repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      # 只裝驗證腳本要的兩個套件（版本範圍同 requirements.txt）；⛔ 不裝 gspread。
+      - name: Install auth-check deps
+        run: pip install "google-auth>=2.0.0,<4.0" "requests>=2.31.0,<3.0.0"
+
+      # 以完整 commit SHA 釘版（規格第 6 節第 2 點）；⛔ 不要求 access／id token 輸出（不讓 token 出現在
+      # step outputs）、⛔ 不給任何 JSON key 輸入。只產生 external_account 憑證檔並匯出 GOOGLE_APPLICATION_CREDENTIALS。
+      - name: Authenticate to Google Cloud (WIF, no key)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/847745640234/locations/global/workloadIdentityPools/stock-dashboard-github/providers/github-actions
+          service_account: risk-cap-writer@mystock20260823.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Verify impersonated identity (auth-only, no Sheet access)
+        run: python scripts/risk_cap_wif_auth_check.py --expect-sa risk-cap-writer@mystock20260823.iam.gserviceaccount.com

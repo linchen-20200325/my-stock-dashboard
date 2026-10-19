@@ -67,3 +67,7 @@ data_cache/*_snapshots/
 #       .claude/worktrees/ 是同一個機制,故在此擋掉。
 # 刻意只擋 worktrees 這一層:.claude/ 其餘內容(settings / skills 等)保留日後版控的可能。
 .claude/worktrees/
+
+# VN1-STORE WIF auth-only（2026-10-19）：google-github-actions/auth 在 $GITHUB_WORKSPACE 產生的
+# 短效 external_account 憑證檔（內含 GitHub OIDC 請求 token）—— 絕不 commit（spec §6 第 3 點）。
+gha-creds-*.json
