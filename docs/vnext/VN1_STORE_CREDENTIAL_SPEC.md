@@ -321,17 +321,18 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 
 ---
 
-## 6. 日後仍需改 code／workflow 的事項（~~**未來實作批次，本批未做**~~ ~~**第 1～3 項 #886 已完成、第 4 項半完成，其餘未做**；2026-10-19 更新，有意識的變更，不是漏刪~~ **第 1～4 項已完成（第 4 項由 Production Wiring 批補完，分支未合併）、第 6 項結構已接線，其餘未做**；2026-10-20 更新，有意識的變更，不是漏刪）
+## 6. 日後仍需改 code／workflow 的事項（~~**未來實作批次，本批未做**~~ ~~**第 1～3 項 #886 已完成、第 4 項半完成，其餘未做**；2026-10-19 更新，有意識的變更，不是漏刪~~ ~~**第 1～4 項已完成（第 4 項由 Production Wiring 批補完，分支未合併）、第 6 項結構已接線，其餘未做**；2026-10-20 更新，有意識的變更，不是漏刪~~ **第 1～4、6 項已完成（Production Wiring 批 #890 已合併、main `56904662`；第 6 項由 Pre-Hardening 批改為共用 group，見第 8 節），第 5、8 項未做**；2026-10-20 更新，有意識的變更，不是漏刪）
 
-本批只寫規格。下列項目要等客戶指派實作批次、且 **production 寫入仍須另行核准**（DEC-063、DEC-009）：
+~~本批只寫規格。~~（2026-10-20：本檔已不是「只寫規格」的批次產物，下列多數項目已實作；有意識的變更，不是漏刪）下列項目要等客戶指派實作批次、且 **production 寫入仍須另行核准**（DEC-063、DEC-009）：
 
-1. ✅ #886 已完成（job `wif_auth_only` job 層級 `id-token: write`；其他 job 不受影響）。寫入 workflow 宣告 `permissions: id-token: write`（目前 `risk_cap_history_poc.yml` 只有 `contents: read`）。
+1. ✅ #886 已完成（job `wif_auth_only` job 層級 `id-token: write`；其他 job 不受影響）。寫入 workflow 宣告 `permissions: id-token: write`~~（目前 `risk_cap_history_poc.yml` 只有 `contents: read`）~~（2026-10-20：已不成立 —— 頂層仍只有 `contents: read`，`id-token: write` 只在需要 WIF 的 job 層級宣告；有意識的變更，不是漏刪）。
 2. ✅ #886 已完成（`google-github-actions/auth` v3.0.0 `7c6bc770`；checkout v4.3.1 `34e11487`、setup-python v5.6.0 `a26af69b`，皆完整 SHA）。使用 `google-github-actions/auth` 以 WIF 取得 writer 憑證，**以完整 commit SHA 釘版**（不用 tag）；`workload_identity_provider` 與 `service_account` 直接寫在 workflow（非 secret）。
 3. ✅ #886 已完成。`.gitignore` 加入 `gha-creds-*.json`（該 action 預設會在 workspace 產生暫存憑證檔；搭配 checkout 在 auth 之前、不 commit workspace）。
 4. ◐ #886 半完成：`WRITER_SA_ENV_VAR` 已退役；寫入前置檢查改為檢查 WIF 憑證、reader 端命名與 Streamlit 接線**未做**。
    📌 2026-10-20 更新（Production Wiring 批；有意識的變更，不是漏刪）：寫入前置檢查已改為檢查 WIF `external_account` 憑證檔（`load_writer_credentials_or_refuse` 第 4 步；第 1 步仍是 `PRODUCTION_WRITE_APPROVED=False` ⇒ 一律拒絕）；reader 端命名已定案（步驟 8）、L3 讀取服務已實作。**仍未做**：畫面（Streamlit UI）接線、production 寫入核准。程式端政策常數改名：退役 `RISK_CAP_HISTORY_WRITER_SA_JSON`（`shared/risk_cap_history_policy.py:177` `WRITER_SA_ENV_VAR`），寫入前置檢查（`src/data/macro/risk_cap_history.py`）改為檢查 WIF 提供的憑證；讀取端名稱與 Streamlit secrets 表格名（步驟 8 提案）定案並同步；相關測試（`tests/test_vn1_store_poc.py`）同步更新。
 5. 若正式 workflow 換檔名 → 依步驟 3 更新 attribute-condition。
 6. 寫入端 `concurrency` 序列化（單一寫入者，見 `VN1_STORE_RESEARCH.md` 8.4 第 2 點）。
+   📌 2026-10-20（Pre-Hardening 批；有意識的變更，不是漏刪）：✅ 碰 Sheet／拿得到 writer 身分的 job（`wif_auth_only`、`permission_test_writer`、`permission_test_reader`、`production_write`）共用字面 job 層 group `risk-cap-history-sheet-write`（見第 8 節 C）；「讀全表再追加不是原子操作」的限制仍在，只靠序列化＋單一寫入者前提。
 7. ✅ 2026-10-20 已完成（P1／P2／R1～R5 全部 PASS，見 5.4）。第 5 節驗證計畫執行並記錄結果。（~~⚠️ 2026-10-19：P1／P2／R1～R5 **仍未執行**；WIF auth-only PASS 不算第 5 節任何一項。~~ 2026-10-20 已不成立，有意識的變更，不是漏刪）
 
 📌 2026-10-19 正式寫入前另需（已記錄、未做）：pip 安裝 hash-pin；GitHub environment（required reviewers）＋WIF condition 加 environment claim；WIF condition 加 `event_name`。另：checkout／setup-python 釘版觸發 Node 20 deprecation 警告（被強制以 Node 24 執行），屬日後 pin bump、不阻擋。
@@ -355,8 +356,110 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 8. ~~本檔所有 gcloud 指令**未在真實專案實跑**；~~（2026-10-19：客戶已依本檔在真實專案完成設定並確認 (a)～(f)，有意識的變更，不是漏刪）本檔 gcloud 指令以客戶實跑為準；第一次照做時若有錯，以實際錯誤訊息修正本檔。
 9. **WIF auth-only 實跑紀錄（2026-10-19）**：run 39336051675（客戶手動 dispatch，main `2c693a20`，`mode`＝`wif-auth-only`）—— job `wif_auth_only` success；步驟「Authenticate to Google Cloud (WIF, no key)」「Verify impersonated identity」success；`poc-dry-run` skipped。log：GitHub OIDC → WIF STS → impersonation PASS；impersonated_email＝`risk-cap-writer@mystock20260823.iam.gserviceaccount.com`；project `mystock20260823`；token lifetime 約 3599s；scope 僅 `userinfo.email`；**未讀寫任何 Sheet**；憑證檔於 post step 移除（總管 GitHub API 查證）。⚠️ 這**不是**第 5 節 P1／P2／R1～R5；writer 仍未分享給 Sheet、Streamlit reader 未接線、production 寫入未核准。
 10. **權限測試實跑紀錄（2026-10-20）**：P1／P2／R1～R5 全部 PASS（run 39372770704、39373289602、39374189381、39374562365；細節與限制見 5.4）。`VN1-STORE` 憑證／權限邊界 Gate **正式關閉**（⛔ 不是 production 授權）。仍未做（正式寫入前）：hash-pin pip；GitHub environment＋required reviewers＋WIF environment claim；WIF condition 加 `event_name`；Node 20 action pin bump；Streamlit reader 接線未實作；第 6 節第 4 項仍半完成。下一 Decision Gate（未指派）：是否開始 production writer／reader 接線批與 production 寫入核准。
-11. **Production Wiring 批（2026-10-20）**：Production Wiring 批（分支 `claude/jolly-mccarthy-sonbl8`，commits `67701562`、`ef905cf0`（回修第 1 輪）；兩組獨立 QA 對 `67701562` 均 0 MUST-FIX（總管轉述）；**未開 PR、未合併**）。reader：L3 `src/services/risk_cap_history_reader_service.read_history` 已接線（只讀 Streamlit secrets `[risk_cap_history_reader]`＋`risk_cap_history_sheet_id`；只快取成功讀取；VALID 列缺上限值 ⇒ `CONTENT_SUSPECT`、不比較；**沒有任何 UI 呼叫端**）；writer：workflow `risk_cap_history_poc.yml` 新增 `production-write` mode（compute job 無 id-token → main-only 寫入 job），寫入 job 在任何 auth 之前先檢查核准旗標 ⇒ **目前恆紅、什麼都不寫**；`PRODUCTION_WRITE_APPROVED` 仍為 `False`；無 schedule；未變更 IAM／WIF／Sheet 分享。
+11. **Production Wiring 批（2026-10-20）**：Production Wiring 批（分支 `claude/jolly-mccarthy-sonbl8`，commits `67701562`、`ef905cf0`（回修第 1 輪）；兩組獨立 QA 對 `67701562` 均 0 MUST-FIX（總管轉述）；~~**未開 PR、未合併**~~ **#890 已合併**，main `56904662`，PR Check run 39389812753 success（2026-10-20 撰寫組 `gh run view` 實查；有意識的變更，不是漏刪））。reader：L3 `src/services/risk_cap_history_reader_service.read_history` 已接線（只讀 Streamlit secrets `[risk_cap_history_reader]`＋`risk_cap_history_sheet_id`；只快取成功讀取；VALID 列缺上限值 ⇒ `CONTENT_SUSPECT`、不比較；**沒有任何 UI 呼叫端**）；writer：workflow `risk_cap_history_poc.yml` 新增 `production-write` mode（compute job 無 id-token → main-only 寫入 job），寫入 job 在任何 auth 之前先檢查核准旗標 ⇒ **目前恆紅、什麼都不寫**；`PRODUCTION_WRITE_APPROVED` 仍為 `False`；無 schedule；未變更 IAM／WIF／Sheet 分享。
     - **送交 production 每日寫入最終核准前仍需**：(1) write job 依賴 hash-pin＋精簡（目前裝完整 `requirements.txt`、經 `src.data.macro` barrel eager 載入；QA-A S1）；(2) GitHub Environment＋required reviewers＋WIF attribute condition 加 environment claim 與 `event_name`（目前核准只剩 L0 常數；QA-A S3）；(3) 首次實跑驗證計畫（核准後路徑 —— WIF 憑證 → gspread → `upsert_record` —— 未端到端實跑；QA-A S2）；(4) WIF 憑證檔 `audience` 未核對（QA-A N1）；(5) 只重跑寫入 job 會沿用舊 artifact（QA-A N2）；(6) 畫面顯示歷史須先過線框（DEC-003 ①）；(7) 每日 schedule 本身須另行核准（目前只有 workflow_dispatch）；(8) Streamlit secrets 實際內容（`[risk_cap_history_reader]`、`risk_cap_history_sheet_id`）為客戶回報、未查證；(9) Node 20 action pin bump —— **不阻擋核准**（理由見 `docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md` 第 6 節 📌：Node 20 deprecation 警告、runner 已強制以 Node 24 執行，屬日後 pin bump）；📌 2026-10-20 補列（有意識的調整，不是漏刪）：舊清單（規格第 7 節第 10 點）有此項、本清單初版漏列，現補回並標明不阻擋；(10) 寫入併發限制：L1 `src/data/macro/risk_cap_history.py` 檔頭記載「讀全表再追加不是原子操作，兩個寫入者同時跑仍可能各追加一筆」，目前只靠 workflow／job `concurrency` 序列化＋單一寫入者前提 —— 正式化前須處理或由客戶明確接受。
     - **刻意設計（2026-10-20 補記）**：`CONTENT_SUSPECT` 判定為**全表範圍**（任一 VALID 列不符 ⇒ 整次讀取不回傳），只要求上限值是「有限數字」、⛔ 不新增任何範圍門檻（`-5`、`1e3` 等數值仍算可解析、不判疑義）。
     - **本批限制**：Google／Streamlit 實際連線**未測**（全以假物件）；本機 Python 3.13、CI 3.11；QA-B NIT-2／NIT-4 依總管裁定不處理（內容見該輪 QA 回報，本檔未轉錄）。
     - ⚠️ 上一則（第 10 點）「Streamlit reader 接線未實作；第 6 節第 4 項仍半完成」「下一 Decision Gate（未指派）」自本批起不再成立（有意識的變更，不是漏刪）；production 每日寫入核准**仍未送題、未核准**。
+    - 📌 2026-10-20（Pre-Hardening 批；有意識的變更，不是漏刪）：上列前置清單各項的現況見**第 8 節 8.8**（(1) 已做；(3) 程式已備、未實跑；(4) 已查證；(5) 已加 sha256 比對；(10) 已改共用 group、限制仍在；(2)(6)(7) 仍是客戶 Gate）。L1 儲存端已由 `src/data/macro/risk_cap_history.py` 搬到 `src/data/risk_cap/history.py`（本節與第 6 節較早的舊路徑是當時紀錄，不改寫）。
+
+---
+
+## 8. Pre-Hardening 結果（2026-10-20；production 寫入**仍未核准**、`PRODUCTION_WRITE_APPROVED` 仍為 `False`）
+
+> **狀態**：程式＋文件批（分支 `claude/jolly-mccarthy-sonbl8`，基於 main `56904662`）。⛔ 無 schedule、⛔ 無新 workflow 檔、⛔ 未加 `environment:`、⛔ 未改 IAM／WIF／Sheet 分享／OAuth／fund-nav、⛔ 未改 Risk Cap 公式／門檻／語意／資料源、⛔ 畫面零變化。
+> 下文 8.6、8.7、8.9 是**未執行的設計提案**，每一步都是**客戶人工 Gate**；⛔ 本批一步都沒做。
+> ⚠️ provenance（`CLAUDE.md` §-2 規則 6）：本節由實作組單組撰寫；8.6／8.7 的修正依總管轉交之第二組獨立覆核意見（經總管轉述、非逐字）；其餘未經第二組驗證。
+
+### 8.1 A｜寫入依賴（hash 鎖定、精簡）
+
+- **搬移**：L1 儲存端 `src/data/macro/risk_cap_history.py` → `src/data/risk_cap/history.py`（`git mv`）；新套件 `__init__` 只有 docstring（⛔ barrel／re-export shim）。理由：`src.data.macro` 是 eager barrel，一 import 就載入 `macro_core`（pandas／streamlit…）。
+- **鎖定檔**：`requirements-risk-cap-writer.txt`（輸入 `requirements-risk-cap-writer.in`：gspread／google-auth／requests，版本範圍＝`requirements.txt` 同名行）。
+  產生方法：`uv pip compile requirements-risk-cap-writer.in --generate-hashes --python-version 3.11 --python-platform x86_64-unknown-linux-gnu --exclude-newer 2026-10-06 -o requirements-risk-cap-writer.txt`（uv 0.11.32；2026-10-20）。結果 15 個套件全部 `==` 釘版＋sha256（gspread 6.2.1、google-auth 2.60.0、requests 2.34.2 與其遞移依賴）；⛔ 無 pandas／numpy／streamlit。
+- **workflow**：寫入 job 改為 `pip install --require-hashes --no-deps -r requirements-risk-cap-writer.txt`（⛔ 不裝 `requirements.txt`）；compute job 照舊裝完整 `requirements.txt`。
+- **本機驗證（實作組，2026-10-20）**：乾淨 Python 3.11 venv —— `uv pip sync --require-hashes` 成功；`pip install --require-hashes --no-deps -r …` 成功；`--write`／`--precheck`／`--verify-written` 皆到閘門 exit 2，且 pandas／numpy／streamlit 一個都沒載入（該 venv 根本沒有裝）。守衛：`tests/test_vn1_prehardening.py`。
+- ⚠️ 限制：沒在 GitHub runner 上實跑安裝（寫入 job 在閘門就停，本批也不能觸發）。
+
+### 8.2 B｜WIF audience 證據（唯讀查證；⛔ 未改任何設定）
+
+- `google-github-actions/auth` v3.0.0（本 repo 釘 `7c6bc770dae815cd3e89ee6cdf493a5fab2cc093`）`src/main.ts` 第 80–81 行：`oidcTokenAudience = getInput('audience') || 'https://iam.googleapis.com/${workloadIdentityProvider}'` —— 沒給 `audience` 時，預設 aud＝`https://iam.googleapis.com/` ＋ provider 完整資源名稱（2026-10-20 實作組讀 raw 原始碼實查）。
+- 本 repo workflow **沒有** `audience:` 輸入（`grep audience .github/workflows/*.yml` 0 命中）。
+- 以預設 aud 的 STS 交換**已成功**：run 39336051675（wif-auth-only）、run 39372770704（permission-test-writer P1），兩者 conclusion＝success、皆在 main（2026-10-20 實作組 `gh run view` 實查 conclusion；log 內容見第 7 節第 9 點與 5.4）。
+- **客戶唯讀確認指令**（Cloud Shell；預期輸出為**空**＝只接受預設 aud）：
+  ```bash
+  gcloud iam workload-identity-pools providers describe github-actions \
+    --location=global --workload-identity-pool=stock-dashboard-github \
+    --format="value(oidc.allowedAudiences)"
+  ```
+  ⚠️ 這一步**未執行**（我們沒有 GCP 存取）；屬客戶唯讀確認。
+
+### 8.3 C｜併發
+
+- 碰 Sheet 或拿得到 writer 身分的 job —— `wif_auth_only`、`permission_test_writer`、`permission_test_reader`、`production_write` —— 共用**字面** job 層 group `risk-cap-history-sheet-write`（`cancel-in-progress: false`）。原 `production_write` 自己的 group `risk-cap-history-production-write` 已改名（workflow 內加刪除線註記）。
+- workflow 層 group `risk-cap-history-poc` 不變、與上者不同名。
+- 守衛：`tests/test_vn1_prehardening.py`（用 auth action／跑權限驗證腳本／`--write` 的 job 一律要有該 group；workflow group 字面且不同名；任何 job 不得有 `environment:`；拿掉 group ⇒ 紅燈）。
+- ⚠️ 限制照舊：讀全表再追加不是原子操作；序列化只保證「這個 repo 的這些 job」彼此不同時跑。GitHub 的 concurrency 對**排隊中**的 job 只保留最新一個（較早的排隊 job 會被取消 ⇒ 不寫、紅燈，安全方向）。
+
+### 8.4 D｜首次 production 寫入的驗證計畫（程式已備、**未執行**；只在閘門之後才走得到）
+
+- **寫入的紀錄**：就是 compute job 真算出來的那一列（與 dry-run 同一支腳本）；⛔ 不寫測試列。
+- **順序**（`scripts/risk_cap_history_poc.py --write`）：閘門（`PRODUCTION_WRITE_APPROVED`）→ 紀錄檔合 schema → **寫前檢查**（writer 身分的**唯讀** token 讀全表；L1 `precheck_target`）→ `upsert_record`（讀寫 token）→ **寫後讀回驗證**（唯讀 token；L1 `verify_written`）。
+- **寫前檢查**（全部列出、不短路）：表是空的或第一列逐字等於 schema 表頭；沒有第二列表頭／超長列；表內沒有 `PERMISSION_TEST…` 殘留；同（record_date, ruleset_version）沒有任何一列；`record_date`＝寫入當下台北日期；規則版本／schema 版本＝現行；本輪 `GITHUB_RUN_ID`＝紀錄裡的 run_id。
+- **寫後驗證**：表頭在第一列且唯一；run_id＋record_date 相符的列**恰好一列**；逐欄等於紀錄。
+- **fail closed、⛔ 不自動刪除**：任何一步失敗 ⇒ exit 非 0（4＝寫前檢查不過、什麼都沒寫；5＝寫後驗證不過；1＝I/O 失敗；3＝同日衝突）。**自動回滾（刪列）未經客戶核准** —— 需要的話須另行裁示；首筆真實紀錄寫進去後**保留**。
+- **artifact 完整性**：compute job 印出並輸出紀錄檔 sha256；寫入 job 下載後（任何 auth 之前）以 `sha256sum --check --strict` 比對，不一致或空值 ⇒ 紅燈不寫（處理 QA-A N2「只重跑寫入 job 會沿用舊 artifact」的**完整性**面；重跑本身仍會沿用同一 run 的 artifact）。
+- **證據**（首次實跑時收集）：run id、artifact sha256、`precheck:` 與 `verify:` 兩行 JSON（只含固定字彙、計數、sha256）。
+- **讀回兩條路**：(1) writer 身分唯讀 token（同一次 run 內）；(2) 網站 reader smoke（8.5，另一個身分）—— 兩者的最新列 sha256 應一致。
+- ⛔ **任何一步失敗 ⇒ 不開排程**（8.9）。
+- 守衛：`tests/test_vn1_first_write_verify.py`（空表、只有表頭、表頭錯、同鍵、殘留、日期、版本、0／1／2 列相符、欄位不同、突變自驗；workflow 內寫前／寫後步驟都在閘門之後）。
+
+### 8.5 R｜網站 reader 真連線 smoke（log-only、⛔ 畫面零變化；**未在 Streamlit Cloud 實跑**）
+
+- `app.py` 開機呼叫一次 `run_smoke_if_flagged()`；**只有** Streamlit secrets 頂層 `risk_cap_history_smoke = true`（TOML 布林，恰好 `True`）才跑，每個行程一次；沒設／字串 `"true"`／其他值 ⇒ 零 Google 呼叫。
+- smoke 走與畫面讀取同一條路徑（secrets → L1 reader client → `risk_cap_daily`），但**繞過快取**。印**一行** `[risk_cap_history_smoke] read_status=… identity_ok=… header_state=ABSENT|MATCH|MISMATCH|NOT_READ data_rows=… latest_record_date=… latest_run_id=… latest_row_sha256=… compare_status=…`；⛔ 不印任何儲存格值、Sheet ID、例外原文。smoke 本身若有程式 bug ⇒ 只印例外類別名、⛔ 不讓網站掛掉（全 repo 唯一刻意不往上拋的地方）。
+- **客戶步驟（人工 Gate、未執行）**：(1) Streamlit Cloud → Secrets 頂層加 `risk_cap_history_smoke = true` → 儲存（app 會重啟）；(2) 開一次網站；(3) Manage app → Logs 找 `[risk_cap_history_smoke]` 那一行回報（整行可貼，不含 secret）；(4) 看完把該行改回 `false` 或刪除。首次寫入前預期 `read_status=EMPTY`、`header_state=ABSENT` 或 `MATCH`。
+- 守衛：`tests/test_vn1_reader_smoke.py`；app.py 只准一行 import＋一行無參數呼叫（`tests/test_vn1_store_poc.py::assert_app_only_smoke_hook`）。
+
+### 8.6 GitHub Environment 設計（**提案、未執行；客戶人工 Gate**）
+
+- 名稱 `production-risk-cap`；required reviewer＝owner（唯一 reviewer）；**prevent self-review 關閉**（唯一 reviewer 就是觸發者，打開會永遠無法核准）；**關閉 admin bypass**；deployment branches＝只限 `main`；environment secret `RISK_CAP_HISTORY_SHEET_ID`（之後可移除 repo 層同名 secret —— 另行確認）。
+- ⚠️ **誠實定位**：這個 Gate 是「**刻意多按一次**」—— 唯一 reviewer＝觸發者，**不是職責分離、不是兩人控管**，也**防不了帳號被盜**（盜得到帳號就按得到核准）。它擋的是「誤觸發」與「沒有 environment 的 job 換到 writer token」（後者要配合 8.7）。
+- **順序（每一步都是客戶手動；⛔ 本批一步都沒做）**：
+  1. 客戶建立 environment（上列設定）；
+  2. 合併在 `production_write` job 加 `environment: production-risk-cap` 的 workflow 變更（⚠️ 先後不可顛倒：引用不存在的 environment 會**自動建立一個沒有保護的** environment）；
+  3. 客戶更新 WIF attribute condition（8.7）；
+  4. 反向測試：`wif-auth-only` 被 STS 拒絕（新的預期結果）；
+  5. `production-write` 觸發 ⇒ 停在等待核准 ⇒ 核准後在閘門紅燈（`PRODUCTION_WRITE_APPROVED` 仍 False）。
+
+### 8.7 WIF attribute condition 更新提案（**提案、未執行；客戶人工 Gate**）
+
+- **建議條件**：既有四條 `&& assertion.event_name=='workflow_dispatch' && assertion.environment=='production-risk-cap' && assertion.runner_environment=='github-hosted' && assertion.ref_type=='branch'`。
+  ```bash
+  gcloud iam workload-identity-pools providers update-oidc github-actions \
+    --location=global --workload-identity-pool=stock-dashboard-github \
+    --attribute-condition="assertion.repository_id=='1241930464' && assertion.repository_owner_id=='285537060' && assertion.ref=='refs/heads/main' && assertion.workflow_ref=='linchen-20200325/my-stock-dashboard/.github/workflows/risk_cap_history_poc.yml@refs/heads/main' && assertion.event_name=='workflow_dispatch' && assertion.environment=='production-risk-cap' && assertion.runner_environment=='github-hosted' && assertion.ref_type=='branch'"
+  ```
+  ⚠️ 執行前先以 5.3 C5 唯讀指令印出現行條件逐字比對前四條，⛔ 以現行字串為準（上面四條依本檔與 BACKLOG 紀錄重組，未對 GCP 實查）。
+- **替代方案與取捨**：(a) 更新既有 provider 條件 —— **推薦**；(b) 只靠 GitHub Environment、不改 WIF —— 否決：Environment 只管 workflow 層，STS 仍會發 token 給任何沒有 environment 的 job；(c) 另開 provider／pool —— 否決：**同一 pool 另開 provider 不行**（`principalSet` 綁定是 pool 範圍，舊 provider 仍可冒用）；**另開 pool 可行但目前不必要**（客戶已確認 pool 只有一個 provider）。
+- **後果（照實）**：條件更新後，同 workflow 的 `wif_auth_only`、`permission_test_writer` **會被 STS 拒絕**（除非也掛 environment）—— 屆時二擇一：退役，或保留為「預期被拒」的反向測試。**R4 語意改變**：沒有 environment 的 job 一律被拒，R4 不再單獨測「分支條件」。條件更新後須實測「無 environment 的 job 被 STS 拒」作為**新反向測試**。
+- **CEL 讀法**：缺席的 claim（例如沒有 environment 的 job 沒有 `environment`）在 CEL 下是 error；`&&` 下結果只會是 false 或 error，**不會是 true**。「GCP 把 error 視為拒絕」—— **官方文件未取得、待實測**（上一點的新反向測試即用來證明）。
+
+### 8.8 `VN1-STORE-PROD` 前置清單現況（對照 `docs/BACKLOG.md` 1.1）
+
+| # | 項目 | 現況 |
+|---|---|---|
+| (1) | write job 依賴 hash-pin＋精簡 | ✅ 本批（8.1） |
+| (2) | GitHub Environment＋WIF environment／event_name claim | ⏳ 設計已備（8.6／8.7），**客戶人工 Gate、未執行** |
+| (3) | 首次實跑驗證計畫 | ◐ 程式已備（8.4），**未實跑**（須翻旗標才走得到） |
+| (4) | WIF 憑證檔 `audience` | ✅ 原始碼＋實跑證據（8.2）；allowedAudiences 為空待客戶唯讀確認 |
+| (5) | 只重跑寫入 job 沿用舊 artifact | ◐ 加 sha256 比對（完整性）；沿用同一 run artifact 的行為不變 |
+| (6) | 畫面顯示歷史須先過線框 | ⏳ 未動（DEC-003 ①） |
+| (7) | 每日 schedule 另行核准 | ⏳ 未動；與 environment 核准互斥，見 8.9 |
+| (8) | Streamlit secrets 實際內容未查證 | ◐ smoke 已備（8.5），**未實跑** |
+| (9) | Node 20 action pin bump | 不阻擋（未動） |
+| (10) | 寫入併發 | ◐ 共用 group（8.3）；非原子限制仍在，須處理或客戶明確接受 |
+
+### 8.9 新 Decision Gate：每日排程 vs environment 人工核准（**未送題**）
+
+- 兩者**互斥**：掛了 required reviewer 的 environment，`schedule` 觸發的 run **每天都會停下等核准**（最長 30 天後失效）；且 8.7 的 `event_name=='workflow_dispatch'` 也必須放行 `schedule`。
+- ⇒ **開排程前必須客戶裁示信任模型**（例：每天人工按一次／排程不掛 reviewer 改靠其他控制／不開排程）。總管推薦方案待前置清單完成後一併附上；⛔ 本批不送題、不開排程。
