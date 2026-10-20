@@ -118,8 +118,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # 碰得到系統歷史 Sheet（或拿得到 writer 身分）的 job 共用**同一個字面** job 層 group ⇒ 跨 job、跨 run 序列化
-    # （cancel-in-progress: false；與 workflow 層 group 名稱刻意不同）。VN1-STORE Pre-Hardening 批 2026-10-20。
+    # 碰得到系統歷史 Sheet（或拿得到 writer 身分）的 job 共用**同一個字面** job 層 group（cancel-in-progress: false；
+    # 與 workflow 層 group 名稱刻意不同）。⚠️ 現況下 workflow 層 group 已讓本檔各 run 序列化，本 group **不增加額外保護**；
+    # 留著是為了日後拆檔／改 workflow group 時仍成立。VN1-STORE Pre-Hardening 批 2026-10-20。
     concurrency:
       group: risk-cap-history-sheet-write
       cancel-in-progress: false
@@ -176,8 +177,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # 碰得到系統歷史 Sheet（或拿得到 writer 身分）的 job 共用**同一個字面** job 層 group ⇒ 跨 job、跨 run 序列化
-    # （cancel-in-progress: false；與 workflow 層 group 名稱刻意不同）。VN1-STORE Pre-Hardening 批 2026-10-20。
+    # 碰得到系統歷史 Sheet（或拿得到 writer 身分）的 job 共用**同一個字面** job 層 group（cancel-in-progress: false；
+    # 與 workflow 層 group 名稱刻意不同）。⚠️ 現況下 workflow 層 group 已讓本檔各 run 序列化，本 group **不增加額外保護**；
+    # 留著是為了日後拆檔／改 workflow group 時仍成立。VN1-STORE Pre-Hardening 批 2026-10-20。
     concurrency:
       group: risk-cap-history-sheet-write
       cancel-in-progress: false
@@ -222,8 +224,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-    # 碰得到系統歷史 Sheet（或拿得到 writer 身分）的 job 共用**同一個字面** job 層 group ⇒ 跨 job、跨 run 序列化
-    # （cancel-in-progress: false；與 workflow 層 group 名稱刻意不同）。VN1-STORE Pre-Hardening 批 2026-10-20。
+    # 碰得到系統歷史 Sheet（或拿得到 writer 身分）的 job 共用**同一個字面** job 層 group（cancel-in-progress: false；
+    # 與 workflow 層 group 名稱刻意不同）。⚠️ 現況下 workflow 層 group 已讓本檔各 run 序列化，本 group **不增加額外保護**；
+    # 留著是為了日後拆檔／改 workflow group 時仍成立。VN1-STORE Pre-Hardening 批 2026-10-20。
     concurrency:
       group: risk-cap-history-sheet-write
       cancel-in-progress: false
@@ -316,9 +319,11 @@ jobs:
           NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
         run: python scripts/risk_cap_history_poc.py --out risk_cap_history_production_record.json
 
+      # 回修第 1 輪（2026-10-20）：明寫 bash＋`set -euo pipefail`（sha256sum 失敗不得被 pipe 吃掉）；空值 ⇒ 失敗。
       - name: Record artifact sha256
         id: record_sha256
-        run: sha=$(sha256sum risk_cap_history_production_record.json | cut -d' ' -f1) && echo "record artifact sha256=$sha" && echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: set -euo pipefail; sha=$(sha256sum risk_cap_history_production_record.json | cut -d' ' -f1); test -n "$sha"; echo "record artifact sha256=$sha"; echo "sha256=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Upload record JSON
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -198,6 +198,10 @@ READER_SCOPES: tuple[str, ...] = ("https://www.googleapis.com/auth/spreadsheets.
 HISTORY_SHEET_ID_ENV_VAR: str = "RISK_CAP_HISTORY_SHEET_ID"
 #: 寫入總開關（新名稱）。本 PoC 階段**即使設了也拒絕**（production 寫入尚未核准）。
 WRITE_ENABLE_ENV_VAR: str = "RISK_CAP_HISTORY_WRITE_ENABLED"
+#: Google Sheets API 每個 HTTP 請求的逾時（秒；requests 的 `(connect, read)` tuple，交給 gspread 6.x
+#: `Client.set_timeout`）。reader／writer（讀寫與唯讀 token）一律套用；逾時 ⇒ `requests.exceptions.Timeout`
+#: （`RequestException` 子類）⇒ L1 歸類為 API 錯誤（⛔ 不重試、⛔ 不吞）。未設定時 gspread 預設不逾時（會卡住）。
+SHEETS_HTTP_TIMEOUT_S: tuple[float, float] = (5.0, 10.0)
 #: production 寫入是否已獲客戶核准。⚠️ 改成 True 需要客戶另一次裁示（DEC-009），⛔ 不得自行改。
 PRODUCTION_WRITE_APPROVED: bool = False
 

@@ -180,12 +180,12 @@ class TestLockFile:
 def assert_install_guards(text: str) -> None:
     jobs = _parse(text)["jobs"]
     w = jobs["production_write"]
-    pips = [s["run"] for s in w["steps"] if "pip" in s.get("run", "")]
+    pips = [s["run"] for s in w["steps"] if "pip install" in s.get("run", "")]
     assert pips == [WRITER_PIP_RUN], pips
     code = "\n".join(ln for ln in _job_text(text, "production_write").splitlines() if not ln.lstrip().startswith("#"))
     assert "requirements.txt" not in code.replace(LOCK_REL, "")
     c = jobs["production_write_compute"]
-    assert [s["run"] for s in c["steps"] if "pip" in s.get("run", "")] == ["pip install -r requirements.txt"]
+    assert [s["run"] for s in c["steps"] if "pip install" in s.get("run", "")] == ["pip install -r requirements.txt"]
 
 
 class TestWorkflowInstall:
@@ -297,3 +297,89 @@ class TestConcurrency:
         with pytest.raises(AssertionError):
             assert_concurrency_guards(text.replace(block, block.replace(
                 old, old + "    environment: production-risk-cap\n")))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 回修第 1 輪（2026-10-20）：Google API 請求逾時
+# ══════════════════════════════════════════════════════════════════════════
+class TestSheetsTimeout:
+    def test_l0_constant_shape(self):
+        import math
+
+        from shared import risk_cap_history_policy as P
+        t = P.SHEETS_HTTP_TIMEOUT_S
+        assert isinstance(t, tuple) and len(t) == 2
+        assert all(isinstance(x, float) and math.isfinite(x) and x > 0 for x in t)
+
+    def test_authorized_client_sets_l0_timeout(self, monkeypatch):
+        import gspread
+
+        from shared import risk_cap_history_policy as P
+        from src.data.risk_cap import history as L1H
+        seen = []
+
+        class _C:
+            def set_timeout(self, timeout):
+                seen.append(timeout)
+        monkeypatch.setattr(gspread, "authorize", lambda creds: _C())
+        assert isinstance(L1H._authorized_client(object()), _C)
+        assert seen == [P.SHEETS_HTTP_TIMEOUT_S]
+
+    def test_real_gspread_client_carries_timeout(self):
+        """真的 `gspread.authorize`＋真的 google-auth 憑證物件（假 token、不發任何請求）：逾時落到 http_client，
+        而 gspread 6.x 的 `HTTPClient.request` 以 `timeout=self.timeout` 傳給 requests。"""
+        import inspect
+
+        from google.oauth2.credentials import Credentials
+        from gspread.http_client import HTTPClient
+
+        from shared import risk_cap_history_policy as P
+        from src.data.risk_cap import history as L1H
+        client = L1H._authorized_client(Credentials(token="not-a-token"))
+        assert client.http_client.timeout == P.SHEETS_HTTP_TIMEOUT_S
+        assert "timeout=self.timeout" in inspect.getsource(HTTPClient.request).replace(" ", "")
+
+    def test_reader_and_writer_both_use_helper(self):
+        tree = ast.parse((REPO / NEW_L1_REL).read_text(encoding="utf-8"))
+        fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+        for name in ("build_reader_client", "build_writer_client"):
+            calls = {ast.unparse(n.func) for n in ast.walk(fns[name]) if isinstance(n, ast.Call)}
+            assert "_authorized_client" in calls and "gspread.authorize" not in calls, name
+        helper = ast.unparse(fns["_authorized_client"])
+        assert "client.set_timeout(SHEETS_HTTP_TIMEOUT_S)" in helper
+        # 全檔只有 helper 呼叫 gspread.authorize
+        auth_calls = [f for f, fn in fns.items()
+                      if any(isinstance(n, ast.Call) and ast.unparse(n.func) == "gspread.authorize" for n in ast.walk(fn))]
+        assert auth_calls == ["_authorized_client"]
+
+    def test_mutation_without_timeout_turns_red(self, monkeypatch):
+        import gspread
+
+        from tests.test_p01_macro_refresh import _mutated_module
+        mut = _mutated_module(NEW_L1_REL, ("    client.set_timeout(SHEETS_HTTP_TIMEOUT_S)\n", ""))
+        seen = []
+
+        class _C:
+            def set_timeout(self, timeout):
+                seen.append(timeout)
+        monkeypatch.setattr(gspread, "authorize", lambda creds: _C())
+        mut._authorized_client(object())
+        assert seen == []                       # 突變體沒設逾時 ⇒ 上面的正向測試會紅
+
+    @pytest.mark.parametrize("exc_name", ["ReadTimeout", "ConnectTimeout", "Timeout"])
+    def test_timeout_classified_as_api_error(self, exc_name):
+        import requests.exceptions as rqe
+
+        from shared import risk_cap_history_policy as P
+        from src.data.risk_cap import history as L1H
+        from src.services import risk_cap_history_reader_service as R
+        from tests.test_vn1_production_wiring import _factory_for, _FakeWS, _secrets
+        exc = getattr(rqe, exc_name)("sheet-id-leak")
+        with pytest.raises(L1H.HistoryApiError) as ei:
+            L1H.read_history_values(_FakeWS([], exc=exc))
+        assert ei.value.error_type == exc_name and "leak" not in str(ei.value)
+        R.clear_read_cache()
+        res = R.read_history(expected_date="2026-10-14", now=__import__("tests.test_batch_z64", fromlist=["NOW"]).NOW,
+                             secrets=_secrets(), client_factory=_factory_for(_FakeWS([], exc=exc)))
+        R.clear_read_cache()
+        assert res.status == P.READ_STATUS_API_ERROR and exc_name in res.detail

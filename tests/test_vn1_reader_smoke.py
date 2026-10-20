@@ -159,6 +159,25 @@ class TestRunSmokeIfFlagged:
         assert R.run_smoke_if_flagged(now=NOW, secrets=_Boom(), client_factory=f) is None
         assert not calls and capsys.readouterr().out == ""
 
+    def test_st_secrets_attribute_raising_zero_calls(self, monkeypatch, capsys):
+        """回修第 1 輪（2026-10-20）：連取 `st.secrets` 屬性本身拋例外也包住 ⇒ 旗標沒開。"""
+        class _ST:
+            @property
+            def secrets(self):
+                raise RuntimeError("secrets unavailable")
+        monkeypatch.setattr(R, "st", _ST())
+        monkeypatch.setattr(L1H, "build_reader_client", lambda *a, **k: pytest.fail("旗標沒開不得建 client"))
+        assert R.run_smoke_if_flagged(now=NOW) is None
+        assert capsys.readouterr().out == ""
+
+    @pytest.mark.parametrize("exc", [KeyboardInterrupt, SystemExit])
+    def test_base_exceptions_not_swallowed(self, exc):
+        """只接 `Exception`：KeyboardInterrupt／SystemExit 照常往上（行程該停就停）。"""
+        sec = {**_secrets(), P.READER_SMOKE_SECRET_KEY: True}
+        f, _ = _counting(_FakeWS([], exc=exc()))
+        with pytest.raises(exc):
+            R.run_smoke_if_flagged(now=NOW, secrets=sec, client_factory=f)
+
     def test_flag_true_runs_once_per_process(self, capsys):
         sec = {**_secrets(), P.READER_SMOKE_SECRET_KEY: True}
         f, calls = _counting(_FakeWS(_values(_row())))

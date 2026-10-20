@@ -111,6 +111,7 @@ from shared.risk_cap_history_policy import (
     READER_SA_EMAIL,
     READER_SCOPES,
     REASON_CODE_SAME_DAY_CONFLICT,
+    SHEETS_HTTP_TIMEOUT_S,
     STATUS_SAME_DAY_CONFLICT,
     STATUS_VALID,
     UPSERT_APPENDED,
@@ -465,7 +466,15 @@ class VerifyResult:
 
 
 def _has_permission_test_residue(values: Sequence[Sequence[str]]) -> bool:
-    return any(str(c).startswith(PERMISSION_TEST_MARKER_PREFIX) for row in values for c in row)
+    """任一格（去頭尾空白、不分大小寫）以 `PERMISSION_TEST` 開頭 ⇒ 有殘留。從嚴：寧可誤擋、不可漏放（fail closed）。"""
+    prefix = PERMISSION_TEST_MARKER_PREFIX.casefold()
+    return any(str(c).strip().casefold().startswith(prefix) for row in values for c in row)
+
+
+def _loose_key(row: Mapping[str, str]) -> tuple[str, ...]:
+    """寫前檢查用的同鍵比對：去頭尾空白後比（既有列被手動改出空白也算同鍵 ⇒ 拒寫）。⛔ 只用於寫前檢查，
+    `upsert_record` 的既有冪等語意不變。"""
+    return tuple(str(v).strip() for v in _key(row))
 
 
 def _data_rows_check(values: Sequence[Sequence[str]], dup_code: str, long_code: str) -> list[str]:
@@ -488,8 +497,8 @@ def precheck_target(values: Sequence[Sequence[str]], record: Mapping[str, str], 
 
     1. 紀錄本身合 schema（否則只回 `RECORD_ROW_INVALID`，其餘無從檢查）；
     2. 表是空的，或第一列逐字等於 schema 表頭；資料區沒有第二列表頭、沒有超長列；
-    3. 表內任何一格都沒有權限驗證測試列標記（`PERMISSION_TEST…`）；
-    4. 同鍵（record_date, ruleset_version）**任何狀態**的列都不存在（首次寫入不碰既有同日紀錄）；
+    3. 表內任何一格都沒有權限驗證測試列標記（`PERMISSION_TEST…`；去頭尾空白、不分大小寫）；
+    4. 同鍵（record_date, ruleset_version；去頭尾空白後比）**任何狀態**的列都不存在（首次寫入不碰既有同日紀錄）；
     5. `record_date` ＝ 寫入當下的台北日期 `today_tw`（呼叫端給；跨午夜 ⇒ 拒寫，⛔ 不改日期）；
     6. 規則版本／schema 版本 ＝ 現行常數（舊程式算的列不准寫進來）。
     """
@@ -505,7 +514,7 @@ def precheck_target(values: Sequence[Sequence[str]], record: Mapping[str, str], 
         fails += _data_rows_check(values, PRECHECK_FAIL_DUPLICATE_HEADER, PRECHECK_FAIL_ROW_TOO_LONG)
     if _has_permission_test_residue(values):
         fails.append(PRECHECK_FAIL_PERMISSION_TEST_RESIDUE)
-    if state == HEADER_STATE_MATCH and any(_key(_padded(r)) == _key(record) for r in values[1:]):
+    if state == HEADER_STATE_MATCH and any(_loose_key(_padded(r)) == _loose_key(record) for r in values[1:]):
         fails.append(PRECHECK_FAIL_KEY_EXISTS)
     if record[COL_RECORD_DATE] != today_tw:
         fails.append(PRECHECK_FAIL_DATE_NOT_TODAY)
@@ -649,9 +658,7 @@ def build_writer_client(environ: Mapping[str, str] | None = None, *,
     creds, _project = google.auth.default(scopes=list(chosen))
     if getattr(creds, "service_account_email", None) != WRITER_SA_EMAIL:
         raise WriterCredentialRefused("WIF 憑證的 impersonation 身分不是 risk-cap-writer → 拒絕")
-    import gspread
-
-    return gspread.authorize(creds)
+    return _authorized_client(creds)
 
 
 def check_reader_identity(info: Any) -> str:
@@ -699,6 +706,17 @@ def build_reader_client(info: Mapping[str, Any]) -> Any:
         raise ReaderIdentityMismatch("reader 憑證建立後身分不是 risk-cap-reader → 拒絕")
     if tuple(getattr(creds, "scopes", None) or ()) != tuple(READER_SCOPES):
         raise ReaderIdentityMismatch("reader 憑證 scope 不是恰好 spreadsheets.readonly → 拒絕")
+    return _authorized_client(creds)
+
+
+def _authorized_client(creds: Any) -> Any:
+    """`gspread.authorize(creds)` ＋ 每個請求的逾時（L0 `SHEETS_HTTP_TIMEOUT_S`）。reader 與 writer 共用這一支。
+
+    📌 2026-10-20（Pre-Hardening 回修第 1 輪；有意識的變更）：gspread 預設不設逾時 ⇒ Google 端卡住時網站／排程會一直等。
+    逾時屬 `requests.exceptions.Timeout` ⇒ 讀取端歸類為 `HistoryApiError`（`_api_error_types` 已含 `RequestException`）。
+    """
     import gspread
 
-    return gspread.authorize(creds)
+    client = gspread.authorize(creds)
+    client.set_timeout(SHEETS_HTTP_TIMEOUT_S)
+    return client

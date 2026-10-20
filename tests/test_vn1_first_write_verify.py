@@ -111,6 +111,27 @@ class TestPrecheck:
         res = L1H.precheck_target(values, _row(), today_tw=TODAY)
         assert P.PRECHECK_FAIL_PERMISSION_TEST_RESIDUE in res.failures and not res.ok
 
+    @pytest.mark.parametrize("cell", ["  PERMISSION_TEST", "permission_test", "Permission_Test_R3_should_fail",
+                                      "\tpermission_test leftover "])
+    def test_residue_strip_casefold(self, cell):
+        """回修第 1 輪（2026-10-20）：殘留判斷去頭尾空白、不分大小寫（從嚴）。"""
+        res = L1H.precheck_target(_vals() + [[cell, "1"]], _row(), today_tw=TODAY)
+        assert P.PRECHECK_FAIL_PERMISSION_TEST_RESIDUE in res.failures
+
+    def test_residue_not_prefix_not_flagged(self):
+        assert L1H.precheck_target(_vals(_row(**{P.COL_RECORD_DATE: "2026-10-13",
+                                                 P.COL_REASON_DETAIL: "not a PERMISSION_TEST"})),
+                                   _row(), today_tw=TODAY).ok
+
+    @pytest.mark.parametrize("over", [{P.COL_RECORD_DATE: " 2026-10-14"}, {P.COL_RECORD_DATE: "2026-10-14\t"},
+                                      {P.COL_RULESET_VERSION: _row()[P.COL_RULESET_VERSION] + " "}])
+    def test_key_exists_after_strip(self, over):
+        """回修第 1 輪（2026-10-20）：既有列的鍵被改出頭尾空白也算同鍵 ⇒ 拒寫。`upsert_record` 語意不變。"""
+        res = L1H.precheck_target(_vals(_row(**over)), _row(), today_tw=TODAY)
+        assert res.failures == (P.PRECHECK_FAIL_KEY_EXISTS,)
+        ws = L1H.InMemoryWorksheet(_vals(_row(**over)))
+        assert L1H.upsert_record(ws, _row()) == P.UPSERT_APPENDED          # 冪等語意照舊（嚴格比對）
+
     def test_markers_match_permission_script(self):
         """L0 前綴與權限驗證腳本（本批不動）的兩個標記一致。"""
         spec = importlib.util.spec_from_file_location("_perm_fwv", REPO / "scripts/risk_cap_permission_test.py")
@@ -387,10 +408,24 @@ class TestMutations:
 
     def test_without_key_check(self):
         mut = _mutated_module(L1_REL, (
-            "    if state == HEADER_STATE_MATCH and any(_key(_padded(r)) == _key(record) for r in values[1:]):\n",
+            "    if state == HEADER_STATE_MATCH and any(_loose_key(_padded(r)) == _loose_key(record) for r in values[1:]):\n",
             "    if False:\n"))
         assert mut.precheck_target(_vals(_invalid()), _row(), today_tw=TODAY).ok
         assert not L1H.precheck_target(_vals(_invalid()), _row(), today_tw=TODAY).ok
+
+    def test_strict_key_mutation_misses_padded_key(self):
+        mut = _mutated_module(L1_REL, ("    return tuple(str(v).strip() for v in _key(row))\n",
+                                       "    return _key(row)\n"))
+        vals = _vals(_row(**{P.COL_RECORD_DATE: " 2026-10-14"}))
+        assert mut.precheck_target(vals, _row(), today_tw=TODAY).ok
+        assert not L1H.precheck_target(vals, _row(), today_tw=TODAY).ok
+
+    def test_case_sensitive_residue_mutation_misses(self):
+        mut = _mutated_module(L1_REL, ("    return any(str(c).strip().casefold().startswith(prefix) for row in values for c in row)\n",
+                                       "    return any(str(c).startswith(PERMISSION_TEST_MARKER_PREFIX) for row in values for c in row)\n"))
+        vals = _vals() + [[" permission_test", "1"]]
+        assert mut.precheck_target(vals, _row(), today_tw=TODAY).ok
+        assert not L1H.precheck_target(vals, _row(), today_tw=TODAY).ok
 
     def test_without_multiple_match_check(self):
         mut = _mutated_module(L1_REL, ("    if len(hits) > 1:\n", "    if False:\n"))

@@ -424,15 +424,24 @@ def google_fakes(monkeypatch):
     import gspread
     from google.oauth2 import service_account
 
-    seen = {"sa": [], "authorize": []}
+    seen = {"sa": [], "authorize": [], "timeout": []}
 
     def _from_info(info, scopes=None):
         seen["sa"].append((dict(info), tuple(scopes)))
         return _FakeCreds(info.get("client_email"), scopes)
 
+    class _Client:
+        """gspread `Client` 替身：只記 `set_timeout`（回修第 1 輪 2026-10-20：client 一律設逾時）。"""
+
+        def set_timeout(self, timeout):
+            seen["timeout"].append(timeout)
+
+    client = _Client()
+    seen["client"] = client
+
     def _authorize(creds):
         seen["authorize"].append(creds)
-        return "CLIENT"
+        return client
 
     def _default(*a, **k):
         raise AssertionError("google.auth.default 不得被呼叫")
@@ -445,9 +454,11 @@ def google_fakes(monkeypatch):
 
 class TestReaderClient:
     def test_builds_with_readonly_scope_only(self, google_fakes):
-        assert L1H.build_reader_client(_info()) == "CLIENT"
+        assert L1H.build_reader_client(_info()) is google_fakes["client"]
         assert google_fakes["sa"] == [(_info(), P.READER_SCOPES)]
         assert google_fakes["authorize"][0].scopes == list(P.READER_SCOPES)
+        # 📌 2026-10-20（Pre-Hardening 回修第 1 輪）：client 一律設逾時，值取自 L0
+        assert google_fakes["timeout"] == [P.SHEETS_HTTP_TIMEOUT_S]
 
     @pytest.mark.parametrize("info", [
         _info(client_email=P.WRITER_SA_EMAIL),
@@ -598,7 +609,10 @@ class TestWriteGate:
         assert load[0] == "assert_production_write_approved", load
         bw = _calls(fns["build_writer_client"])
         names = [c[2] for c in bw]
-        assert names.index("load_writer_credentials_or_refuse") < names.index("default") < names.index("authorize")
+        # 📌 2026-10-20（Pre-Hardening 回修第 1 輪；有意識的變更）：~~`authorize`~~ 改經 `_authorized_client`
+        #   （`gspread.authorize` ＋ L0 逾時；reader／writer 共用），順序意圖不變。
+        assert names.index("load_writer_credentials_or_refuse") < names.index("default") \
+            < names.index("_authorized_client")
         dflt = next(c[3] for c in bw if c[2] == "default")
         assert [k.arg for k in dflt.keywords] == ["scopes"]
         # 📌 2026-10-20（Pre-Hardening 批；有意識的變更，不是放寬）：~~`"WRITER_SCOPES" in unparse(scopes 引數)`~~ ——
@@ -794,8 +808,8 @@ COMPUTE_RUN = "python scripts/risk_cap_history_poc.py --out risk_cap_history_pro
 #: 📌 2026-10-20（Pre-Hardening 批）：寫入 job 只裝 hash 鎖定的最小依賴；compute job 的 sha256 交給寫入 job 比對。
 WRITER_PIP_RUN = "pip install --require-hashes --no-deps -r requirements-risk-cap-writer.txt"
 SHEET_WRITE_GROUP = "risk-cap-history-sheet-write"
-SHA_OUT_RUN = ('sha=$(sha256sum risk_cap_history_production_record.json | cut -d\' \' -f1) && '
-               'echo "record artifact sha256=$sha" && echo "sha256=$sha" >> "$GITHUB_OUTPUT"')
+SHA_OUT_RUN = ('set -euo pipefail; sha=$(sha256sum risk_cap_history_production_record.json | cut -d\' \' -f1); '
+               'test -n "$sha"; echo "record artifact sha256=$sha"; echo "sha256=$sha" >> "$GITHUB_OUTPUT"')
 SHA_CHECK_RUN = ('echo "$EXPECTED_RECORD_SHA256  production-record/risk_cap_history_production_record.json"'
                  ' | sha256sum --check --strict -')
 ARTIFACT = "risk-cap-history-production-record"
@@ -847,6 +861,8 @@ def assert_production_write_guards(text: str) -> None:
     i_up = [i for i, s in enumerate(c["steps"]) if s.get("uses", "").startswith("actions/upload-artifact@")]
     assert len(i_c) == len(i_sha) == len(i_up) == 1 and i_c[0] < i_sha[0] < i_up[0]
     assert c["steps"][i_sha[0]]["run"] == SHA_OUT_RUN and "env" not in c["steps"][i_sha[0]]
+    # 回修第 1 輪（2026-10-20）：明寫 bash＋set -euo pipefail
+    assert c["steps"][i_sha[0]].get("shell") == "bash" and SHA_OUT_RUN.startswith("set -euo pipefail; ")
     assert c["steps"][0].get("if") == "github.ref != 'refs/heads/main'" and c["steps"][0]["run"].endswith("exit 1")
     _pinned(c, ct)
     assert {s["uses"].split("@")[0] for s in c["steps"] if "uses" in s} == {
@@ -962,6 +978,9 @@ class TestWorkflowMutations:
          "    permissions:\n      contents: read\n      id-token: write\n"),
         ("production_write_compute", "        if: github.ref != 'refs/heads/main'\n", ""),
         ("production_write_compute", f"        run: {COMPUTE_RUN}\n", f"        run: {COMPUTE_RUN} --write\n"),
+        # 回修第 1 輪（2026-10-20）：sha 步驟拿掉 bash／pipefail ⇒ 紅
+        ("production_write_compute", "        shell: bash\n", ""),
+        ("production_write_compute", "set -euo pipefail; ", ""),
     ])
     def test_mutation_turns_red(self, job, old, new):
         with pytest.raises(AssertionError):

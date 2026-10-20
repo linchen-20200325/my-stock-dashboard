@@ -321,29 +321,37 @@ _SMOKE_LOCK = threading.Lock()
 _SMOKE_DONE = False
 
 
-def _smoke_flag_on(src: Any) -> bool:
-    """secrets 頂層 `risk_cap_history_smoke` **恰好**是 `True` 才算開（`"true"` 字串、1… 一律不算）。
+def _smoke_secrets(secrets: Mapping[str, Any] | None) -> Any | None:
+    """旗標**恰好**是 `True` ⇒ 回 secrets 物件；否則 None（`"true"` 字串、1… 一律不算）。
 
-    secrets 讀不到（本機沒有 secrets.toml）＝ 旗標沒開 —— 這是「功能沒啟用」，不是被吞掉的錯誤。
+    取 `st.secrets` 屬性與讀鍵都包在 try 內：secrets 讀不到（本機沒有 secrets.toml）＝ 旗標沒開 ——
+    這是「功能沒啟用」，不是被吞掉的錯誤。只接 `Exception`（⛔ 不接 KeyboardInterrupt／SystemExit）。
     """
     try:
-        return _secret_get(src, P.READER_SMOKE_SECRET_KEY) is True
+        src = st.secrets if secrets is None else secrets
+        return src if _secret_get(src, P.READER_SMOKE_SECRET_KEY) is True else None
     except Exception:  # noqa: BLE001 —— 沒有 secrets ⇒ 旗標沒開（⛔ 不視為開）
-        return False
+        return None
 
 
 def run_smoke_if_flagged(*, now: datetime | None = None, secrets: Mapping[str, Any] | None = None,
                          client_factory: ReaderClientFactory | None = None) -> SmokeResult | None:
-    """`app.py` 開機時呼叫：旗標恰好為 True 時，**每個行程只跑一次** `smoke_check` 並印一行固定格式 log。
+    """`app.py` 開機時呼叫：旗標恰好為 True 時，**每個行程只跑一次** `smoke_check` 並印一行
+    `[risk_cap_history_smoke]` 固定格式 log。
 
-    旗標沒開 ⇒ 回 None、零 Google 呼叫、零輸出。讀取失敗本身是 `SmokeResult` 裡的狀態（照實印出，⛔ 不吞）。
+    旗標沒開 ⇒ 回 None、零 Google 呼叫、零輸出。讀取失敗本身是 `SmokeResult` 裡的狀態（照實印出，⛔ 不吞）；
+    讀取失敗時**另會多一行**既有的 `[risk_cap_history_reader] <狀態>：<固定文字＋類別名>` 分類 log
+    （與 `read_history` 同一支 `_fail`；不含儲存格值、Sheet ID、例外原文）—— smoke 行仍只有一行。
     ⚠️ 本函式是全 repo **唯一**刻意「不讓例外往上拋」的地方：它跑在 app 開機路徑，smoke 只是觀測、
     不得讓網站掛掉。所以 `smoke_check` 本身若有程式 bug（非讀取錯誤），這裡只印例外**類別名**一行並繼續 ——
-    ⛔ 不印訊息原文（可能帶 Sheet ID）。範圍只包住 `smoke_check` 一個呼叫，其餘照常。
+    ⛔ 不印訊息原文（可能帶 Sheet ID）。保護範圍（寫死）：
+      - 只接 `Exception`；⛔ 不接 `BaseException`（KeyboardInterrupt／SystemExit 照常往上，行程該停就停）；
+      - 只包住「取 secrets／讀旗標」與 `smoke_check` 兩處，其餘照常；
+      - ⛔ 不保護 import 失敗：`app.py` 那行 `from … import run_smoke_if_flagged` 若失敗，照常炸（fail loud）。
     """
     global _SMOKE_DONE
-    src = st.secrets if secrets is None else secrets
-    if not _smoke_flag_on(src):
+    src = _smoke_secrets(secrets)
+    if src is None:
         return None
     with _SMOKE_LOCK:
         if _SMOKE_DONE:
