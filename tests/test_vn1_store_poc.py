@@ -20,6 +20,7 @@ import copy
 import importlib.util
 import json
 import os
+import re
 from datetime import timedelta
 from pathlib import Path
 
@@ -752,8 +753,19 @@ class TestStaticGuards:
         assert "contents: read" in y and "contents: write" not in y
         # VN1-STORE WIF auth-only（2026-10-19，有意識的變更）：退役的 writer JSON key 名稱改以字面守住
         # （常數已刪）；本測試仍掃全檔 —— 新增的 wif_auth_only job 也不得含下列任何一項。
-        for bad in ("GCP_SERVICE_ACCOUNT_JSON", "RISK_CAP_HISTORY_WRITER_SA_JSON", P.HISTORY_SHEET_ID_ENV_VAR,
-                    P.WRITE_ENABLE_ENV_VAR, P.READER_SA_ENV_VAR, "RISK_CAP_HISTORY",
+        # 📌 VN1-STORE Sheet 權限驗證 Gate（2026-10-20，有意識的放寬，不是漏改）：System Risk Cap Sheet ID 的
+        # secret（`P.HISTORY_SHEET_ID_ENV_VAR`）只准出現在兩個權限驗證 job（P1／P2／R3 要知道目標 Sheet）——
+        # 故 `P.HISTORY_SHEET_ID_ENV_VAR` 與前綴 "RISK_CAP_HISTORY" 改為只掃「去掉那兩個 job 區塊」後的全檔；
+        # 其餘各項照舊掃全檔（含新 job）。新 job 的完整守衛在 `tests/test_vn1_permission_gate.py`。
+        outside = y
+        for job in ("permission_test_writer", "permission_test_reader"):
+            m = re.search(rf"^  {job}:\n(.*?)(?=^  \S|\Z)", y, flags=re.MULTILINE | re.DOTALL)
+            assert m, job
+            outside = outside.replace(m.group(0), "")
+        for bad in (P.HISTORY_SHEET_ID_ENV_VAR, "RISK_CAP_HISTORY"):
+            assert bad not in outside, bad
+        for bad in ("GCP_SERVICE_ACCOUNT_JSON", "RISK_CAP_HISTORY_WRITER_SA_JSON",
+                    P.WRITE_ENABLE_ENV_VAR, P.READER_SA_ENV_VAR,
                     "--write", "git push", "git commit", "GEMINI"):
             assert bad not in y, bad
 

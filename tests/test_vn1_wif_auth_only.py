@@ -2,7 +2,9 @@
 
 守：
 1. `.github/workflows/risk_cap_history_poc.yml`（⛔ 不得改名／搬移：WIF attribute condition 釘了 workflow_ref）：
-   只 `workflow_dispatch`；頂層 permissions 恰好 `contents: read`；`id-token: write` **只在** `wif_auth_only` job；
+   只 `workflow_dispatch`；頂層 permissions 恰好 `contents: read`；`id-token: write` 只在 `wif_auth_only` job
+   （📌 2026-10-20 權限驗證 Gate 批，有意識的放寬：另加 `permission_test_writer`／`wif_negative_r4` 兩個 job，
+   新 job 的完整守衛在 `tests/test_vn1_permission_gate.py`；本檔對 `wif_auth_only` 的逐字守衛不變）；
    dry-run job 與加 mode 前逐步相同、沒有 id-token；auth action 以 40 字元 commit SHA 釘版；WIF provider／SA 逐字；
    ⛔ credentials_json／token_format／secrets／schedule／contents: write／--write／git push／Sheet ID／舊 SA 金鑰。
    wif job 內每個 `uses:` 都以 40 字元 commit SHA 釘版並附 `# vX.Y.Z`（checkout／setup-python／auth）。
@@ -221,12 +223,17 @@ def assert_workflow_guards(text: str) -> None:
     assert set(d["on"]["workflow_dispatch"]["inputs"]) == {"mode"}
     mode = d["on"]["workflow_dispatch"]["inputs"]["mode"]
     assert mode["type"] == "choice" and mode["default"] == "dry-run"
-    assert mode["options"] == ["dry-run", "wif-auth-only"]
+    # 📌 2026-10-20（VN1-STORE Sheet 權限驗證 Gate；有意識的放寬，不是漏改）：新增三個 mode。
+    #   新 mode／新 job 的守衛在 `tests/test_vn1_permission_gate.py`；前兩個選項與預設值不變。
+    assert mode["options"] == ["dry-run", "wif-auth-only", "permission-test-writer",
+                               "permission-test-reader", "wif-negative-r4"]
     # 頂層權限恰好 contents: read
     assert d["permissions"] == {"contents": "read"}, d["permissions"]
     assert d["concurrency"] == {"group": "risk-cap-history-poc", "cancel-in-progress": False}
     jobs = d["jobs"]
-    assert set(jobs) == {"poc-dry-run", "wif_auth_only"}, set(jobs)
+    assert set(jobs) == {"poc-dry-run", "wif_auth_only", "permission_test_writer", "permission_test_reader",
+                         "wif_negative_r4", "permission_test_branch_guard"}, set(jobs)
+    # 📌 2026-10-20 放寬：後四個（含非 main 觸發的紅燈守衛 job）見 test_vn1_permission_gate
 
     dry = dict(jobs["poc-dry-run"])
     assert dry.pop("if") == "${{ inputs.mode == 'dry-run' }}"
@@ -236,8 +243,13 @@ def assert_workflow_guards(text: str) -> None:
     wif = jobs["wif_auth_only"]
     assert wif["if"] == "${{ inputs.mode == 'wif-auth-only' }}"
     assert wif["permissions"] == {"contents": "read", "id-token": "write"}, wif.get("permissions")
-    # id-token 全檔（YAML 鍵；註解不算）只出現一次，且在 wif job 區塊內
-    assert len(re.findall(r"^\s*id-token\s*:", text, flags=re.MULTILINE)) == 1
+    # id-token 全檔（YAML 鍵；註解不算）：📌 2026-10-20 有意識的放寬 —— 原本「只出現一次」，現為恰好三次，
+    # 且只在 wif_auth_only／permission_test_writer／wif_negative_r4（dry-run 與 reader job 一律沒有）。
+    assert len(re.findall(r"^\s*id-token\s*:", text, flags=re.MULTILINE)) == 3
+    for job_name in ("wif_auth_only", "permission_test_writer", "wif_negative_r4"):
+        assert len(re.findall(r"^      id-token: write$", _job_text(text, job_name), flags=re.MULTILINE)) == 1
+    for job_name in ("poc-dry-run", "permission_test_reader"):
+        assert not re.search(r"^\s*id-token\s*:", _job_text(text, job_name), flags=re.MULTILINE), job_name
     wif_text = _job_text(text, "wif_auth_only")
     assert re.search(r"^      id-token: write$", wif_text, flags=re.MULTILINE)
 
@@ -272,9 +284,15 @@ def assert_workflow_guards(text: str) -> None:
     for bad in ("secrets.", "credentials_json", "token_format", "gspread", "env:"):
         assert bad not in wif_code, bad
     for bad in ("credentials_json", "token_format", "schedule:", "cron:", "contents: write", "--write",
-                "git push", "git commit", "RISK_CAP_HISTORY_SHEET_ID", "GCP_SERVICE_ACCOUNT_JSON",
-                *RETIRED_LITERALS):
+                "git push", "git commit", "GCP_SERVICE_ACCOUNT_JSON", *RETIRED_LITERALS):
         assert bad not in text, bad
+    # 📌 2026-10-20 有意識的放寬：System Risk Cap Sheet ID 的 secret 名稱現在只准出現在兩個權限驗證 job 內
+    # （P1／P2／R3 要知道目標 Sheet）；其餘區塊（含 wif_auth_only、dry-run、檔頭註解）照舊一處都不得出現。
+    outside = text
+    for job_name in ("permission_test_writer", "permission_test_reader"):
+        outside = outside.replace(_job_text(text, job_name), "")
+    assert "RISK_CAP_HISTORY_SHEET_ID" not in outside
+    assert "RISK_CAP_HISTORY_SHEET_ID" not in wif_text
 
 
 class TestWorkflow:
@@ -712,9 +730,14 @@ class TestScriptStatic:
 # ══════════════════════════════════════════════════════════════════════════
 class TestMutations:
     def _mutate(self, old: str, new: str) -> str:
+        """全檔唯一 ⇒ 直接換；否則（📌 2026-10-20：新 job 沿用同一組釘版／auth 輸入，字串不再全檔唯一）
+        必須在 `wif_auth_only` 區塊內恰好一次，只突變該區塊 —— 本檔的突變對象一直都是 wif job。"""
         text = _wf_text()
-        assert text.count(old) == 1, old
-        return text.replace(old, new)
+        if text.count(old) == 1:
+            return text.replace(old, new)
+        block = _job_text(text, "wif_auth_only")
+        assert block.count(old) == 1, old
+        return text.replace(block, block.replace(old, new))
 
     def test_removing_id_token_from_wif_job_turns_red(self):
         mut = self._mutate("      contents: read\n      id-token: write\n", "      contents: read\n")
