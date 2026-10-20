@@ -46,6 +46,11 @@ name: VN1-STORE 風險上限歷史 PoC（手動；dry-run／WIF auth-only／權�
 #     檢查核准旗標，False ⇒ 紅燈停止，後面的 auth／寫入步驟都不會跑。
 #     只有本 job 有 id-token；env 只有 System Risk Cap Sheet ID（⛔ 沒有持股 Sheet ID、⛔ 沒有 FinMind／proxy secrets）。
 #     job 層 concurrency 序列化寫入（cancel-in-progress: false；單一寫入者前提，見 L1 檔頭「併發」）。
+#   📌 2026-10-20（VN1-STORE Pre-Hardening 批；production 寫入仍未核准，以下全部在閘門之後、本批不會執行）：
+#     寫入 job 只裝 hash 鎖定的 `requirements-risk-cap-writer.txt`；下載紀錄後比對 compute job 的 sha256；
+#     寫入步驟（腳本內）依序：寫前檢查（唯讀）→ 寫入 → 寫後讀回驗證（唯讀）；任何失敗紅燈、⛔ 不自動刪除。
+#     兩個權限驗證 job、wif_auth_only 與寫入 job 共用字面 job 層 group `risk-cap-history-sheet-write`。
+#     ⛔ 本檔沒有 `environment:`（GitHub Environment 由客戶先建立，屬客戶人工 Gate；見規格第 9 節）。
 #   ⚠️ WIF attribute condition 釘了本檔 workflow_ref ⇒ 寫入 job 只能放在本檔（⛔ 不新增 workflow 檔）。
 
 on:
@@ -113,6 +118,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # 碰得到系統歷史 Sheet（或拿得到 writer 身分）的 job 共用**同一個字面** job 層 group ⇒ 跨 job、跨 run 序列化
+    # （cancel-in-progress: false；與 workflow 層 group 名稱刻意不同）。VN1-STORE Pre-Hardening 批 2026-10-20。
+    concurrency:
+      group: risk-cap-history-sheet-write
+      cancel-in-progress: false
     steps:
       # checkout 在 auth 之前：auth 產生的 gha-creds-*.json 落在 workspace（.gitignore 已擋），
       # post step 會自動刪除；persist-credentials: false ⇒ workspace 裡不留 GitHub token。
@@ -166,6 +176,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # 碰得到系統歷史 Sheet（或拿得到 writer 身分）的 job 共用**同一個字面** job 層 group ⇒ 跨 job、跨 run 序列化
+    # （cancel-in-progress: false；與 workflow 層 group 名稱刻意不同）。VN1-STORE Pre-Hardening 批 2026-10-20。
+    concurrency:
+      group: risk-cap-history-sheet-write
+      cancel-in-progress: false
     steps:
       # 帶 id-token 的 job ⇒ 每個 action 一律以完整 commit SHA 釘版（與 wif_auth_only 相同版本）。
       - name: Checkout Repository
@@ -207,6 +222,11 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+    # 碰得到系統歷史 Sheet（或拿得到 writer 身分）的 job 共用**同一個字面** job 層 group ⇒ 跨 job、跨 run 序列化
+    # （cancel-in-progress: false；與 workflow 層 group 名稱刻意不同）。VN1-STORE Pre-Hardening 批 2026-10-20。
+    concurrency:
+      group: risk-cap-history-sheet-write
+      cancel-in-progress: false
     steps:
       - name: Checkout Repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -265,6 +285,9 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
+    # 紀錄檔的 sha256（只是檔案指紋，⛔ 不是 secret）交給寫入 job 比對：寫入 job 下載後重算，不一致 ⇒ 不寫。
+    outputs:
+      record_sha256: ${{ steps.record_sha256.outputs.sha256 }}
     steps:
       # step 層 `if` 不加 `${{ }}`（GitHub 允許省略）：與 permission_test_branch_guard 的條件字面刻意不同，
       # 讓既有守衛的突變點維持全檔唯一。
@@ -293,6 +316,10 @@ jobs:
           NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
         run: python scripts/risk_cap_history_poc.py --out risk_cap_history_production_record.json
 
+      - name: Record artifact sha256
+        id: record_sha256
+        run: sha=$(sha256sum risk_cap_history_production_record.json | cut -d' ' -f1) && echo "record artifact sha256=$sha" && echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+
       - name: Upload record JSON
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -311,8 +338,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # 📌 2026-10-20（Pre-Hardening 批；有意識的變更，不是漏刪）：~~group: risk-cap-history-production-write~~
+    #   （只序列化本 job 自己）改為與兩個權限驗證 job、wif_auth_only 共用的字面 group —— 舊名的理由（寫入者單一）
+    #   仍成立，被權衡掉的是「權限驗證 P1 寫測試列」與正式寫入可能同時碰同一張表。
     concurrency:
-      group: risk-cap-history-production-write
+      group: risk-cap-history-sheet-write
       cancel-in-progress: false
     steps:
       - name: Checkout Repository
@@ -329,14 +359,23 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install deps
-        run: pip install -r requirements.txt
+      # 📌 2026-10-20（Pre-Hardening 批；有意識的變更，不是漏刪）：~~pip install -r requirements.txt~~ ——
+      #   寫入 job 只裝 hash 鎖定的最小依賴（gspread／google-auth／requests 與其遞移依賴），⛔ 不裝 pandas／streamlit。
+      #   `--no-deps`：鎖檔已含全部遞移依賴；任何一個 hash 對不上 ⇒ 安裝失敗、紅燈。
+      - name: Install writer deps (hash-locked)
+        run: pip install --require-hashes --no-deps -r requirements-risk-cap-writer.txt
 
       - name: Download record JSON
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: risk-cap-history-production-record
           path: production-record
+
+      # compute job 算出的 sha256 必須等於這裡下載到的檔（空值 ⇒ sha256sum 讀不到合法行 ⇒ 失敗）；任何 auth 之前。
+      - name: Verify record artifact sha256 (must match compute job)
+        env:
+          EXPECTED_RECORD_SHA256: ${{ needs.production_write_compute.outputs.record_sha256 }}
+        run: echo "$EXPECTED_RECORD_SHA256  production-record/risk_cap_history_production_record.json" | sha256sum --check --strict -
 
       # 與 wif_auth_only 完全相同的 auth 輸入：只產生 external_account 憑證檔；⛔ 不要求 token 輸出、⛔ 沒有 JSON key。
       - name: Authenticate to Google Cloud (WIF, no key)

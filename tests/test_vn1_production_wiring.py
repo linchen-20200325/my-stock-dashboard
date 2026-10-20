@@ -32,7 +32,7 @@ import pytest
 
 from shared import risk_cap_history_policy as P
 from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION
-from src.data.macro import risk_cap_history as L1H
+from src.data.risk_cap import history as L1H
 from src.services import risk_cap_history_reader_service as R
 from tests._git_tracked import REPO_MIN_TRACKED, only_tracked
 from tests.test_batch_z64 import NOW
@@ -51,7 +51,7 @@ REPO = Path(__file__).resolve().parents[1]
 WORKFLOW_REL = ".github/workflows/risk_cap_history_poc.yml"
 POC_SCRIPT_REL = "scripts/risk_cap_history_poc.py"
 READER_SVC_REL = "src/services/risk_cap_history_reader_service.py"
-L1_REL = "src/data/macro/risk_cap_history.py"
+L1_REL = "src/data/risk_cap/history.py"
 
 #: 測試用假 Sheet ID（⛔ 不是任何真實 Sheet）。
 SID = "TEST_SYSTEM_SHEET_ID"
@@ -601,7 +601,13 @@ class TestWriteGate:
         assert names.index("load_writer_credentials_or_refuse") < names.index("default") < names.index("authorize")
         dflt = next(c[3] for c in bw if c[2] == "default")
         assert [k.arg for k in dflt.keywords] == ["scopes"]
-        assert "WRITER_SCOPES" in ast.unparse(dflt.keywords[0].value)
+        # 📌 2026-10-20（Pre-Hardening 批；有意識的變更，不是放寬）：~~`"WRITER_SCOPES" in unparse(scopes 引數)`~~ ——
+        #   scope 改由 `writer_scopes(scopes)` 決定（只准恰好 WRITER_SCOPES 或 READER_SCOPES，寫後讀回用唯讀）。
+        #   舊斷言的意圖（預設就是讀寫 scope、不會拿到更大的 scope）改守：預設值是 WRITER_SCOPES、
+        #   傳給 `default` 的是 `writer_scopes` 的結果、且 `writer_scopes` 在閘門之後才呼叫。
+        assert ast.unparse(dflt.keywords[0].value) == "list(chosen)"
+        assert names.index("load_writer_credentials_or_refuse") < names.index("writer_scopes") < names.index("default")
+        assert ast.unparse(fns["build_writer_client"].args.kw_defaults[0]) == "WRITER_SCOPES"
         gate = fns["assert_production_write_approved"]
         assert "PRODUCTION_WRITE_APPROVED" in ast.unparse(gate)
         # 閘門函式沒有任何參數（⛔ 沒有繞過用的旗標／環境變數）
@@ -770,8 +776,12 @@ class TestStatic:
         assert P.READER_SECRETS_TABLE != "gcp_service_account"
 
     def test_ui_untouched(self):
-        for f in list((REPO / "src/ui").rglob("*.py")) + [REPO / "app.py"]:
+        # 📌 2026-10-20（Pre-Hardening 批；有意識的放寬，不是漏改）：app.py 只准 log-only smoke 的一行 import＋一行呼叫
+        #   （守衛 `tests/test_vn1_store_poc.py::assert_app_only_smoke_hook`）；src/ui/ 仍一字不得提到。
+        from tests.test_vn1_store_poc import assert_app_only_smoke_hook
+        for f in (REPO / "src/ui").rglob("*.py"):
             assert "risk_cap_history" not in f.read_text(encoding="utf-8"), f
+        assert_app_only_smoke_hook((REPO / "app.py").read_text(encoding="utf-8"))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -781,6 +791,13 @@ WRITE_RUN = ("python scripts/risk_cap_history_poc.py --write --record "
              "production-record/risk_cap_history_production_record.json")
 GATE_RUN = "python3 scripts/risk_cap_history_poc.py --check-write-gate"
 COMPUTE_RUN = "python scripts/risk_cap_history_poc.py --out risk_cap_history_production_record.json"
+#: 📌 2026-10-20（Pre-Hardening 批）：寫入 job 只裝 hash 鎖定的最小依賴；compute job 的 sha256 交給寫入 job 比對。
+WRITER_PIP_RUN = "pip install --require-hashes --no-deps -r requirements-risk-cap-writer.txt"
+SHEET_WRITE_GROUP = "risk-cap-history-sheet-write"
+SHA_OUT_RUN = ('sha=$(sha256sum risk_cap_history_production_record.json | cut -d\' \' -f1) && '
+               'echo "record artifact sha256=$sha" && echo "sha256=$sha" >> "$GITHUB_OUTPUT"')
+SHA_CHECK_RUN = ('echo "$EXPECTED_RECORD_SHA256  production-record/risk_cap_history_production_record.json"'
+                 ' | sha256sum --check --strict -')
 ARTIFACT = "risk-cap-history-production-record"
 EXTRA_PINS = {
     # 2026-10-20 `git ls-remote` 實查（輕量 tag ⇒ 即 commit）
@@ -822,7 +839,14 @@ def assert_production_write_guards(text: str) -> None:
     c, ct = jobs["production_write_compute"], _job_text(text, "production_write_compute")
     assert c["if"] == "${{ inputs.mode == 'production-write' }}"
     assert c["permissions"] == {"contents": "read"}
-    assert set(c) == {"if", "runs-on", "timeout-minutes", "permissions", "steps"}, set(c)
+    # 📌 2026-10-20（Pre-Hardening 批；有意識的變更）：多 `outputs`（只有紀錄檔 sha256，⛔ 不是 secret）。
+    assert set(c) == {"if", "runs-on", "timeout-minutes", "permissions", "outputs", "steps"}, set(c)
+    assert c["outputs"] == {"record_sha256": "${{ steps.record_sha256.outputs.sha256 }}"}
+    i_c = [i for i, s in enumerate(c["steps"]) if s.get("run") == COMPUTE_RUN]
+    i_sha = [i for i, s in enumerate(c["steps"]) if s.get("id") == "record_sha256"]
+    i_up = [i for i, s in enumerate(c["steps"]) if s.get("uses", "").startswith("actions/upload-artifact@")]
+    assert len(i_c) == len(i_sha) == len(i_up) == 1 and i_c[0] < i_sha[0] < i_up[0]
+    assert c["steps"][i_sha[0]]["run"] == SHA_OUT_RUN and "env" not in c["steps"][i_sha[0]]
     assert c["steps"][0].get("if") == "github.ref != 'refs/heads/main'" and c["steps"][0]["run"].endswith("exit 1")
     _pinned(c, ct)
     assert {s["uses"].split("@")[0] for s in c["steps"] if "uses" in s} == {
@@ -839,7 +863,9 @@ def assert_production_write_guards(text: str) -> None:
     assert w["if"] == "${{ inputs.mode == 'production-write' && github.ref == 'refs/heads/main' }}"
     assert w.get("needs") == "production_write_compute"
     assert w["permissions"] == {"contents": "read", "id-token": "write"}
-    assert w.get("concurrency") == {"group": "risk-cap-history-production-write", "cancel-in-progress": False}
+    # 📌 2026-10-20（Pre-Hardening 批；有意識的變更，不是漏刪）：~~group: risk-cap-history-production-write~~
+    #   改為碰 Sheet 的 job 共用的字面 group（跨 job 序列化；守衛另見 `tests/test_vn1_prehardening.py`）。
+    assert w.get("concurrency") == {"group": SHEET_WRITE_GROUP, "cancel-in-progress": False}
     assert set(w) == {"if", "needs", "runs-on", "timeout-minutes", "permissions", "concurrency", "steps"}, set(w)
     _pinned(w, wt)
     steps = w["steps"]
@@ -855,8 +881,18 @@ def assert_production_write_guards(text: str) -> None:
     assert len(i_write) == 1 and i_auth < i_write[0] == len(steps) - 1
     dl = [i for i, s in enumerate(steps) if s.get("uses", "").startswith("actions/download-artifact@")]
     assert len(dl) == 1 and dl[0] < i_auth and steps[dl[0]]["with"]["name"] == ARTIFACT
-    # env：只有寫入那一步有，且只有 System Risk Cap Sheet ID ＋寫入總開關
-    assert [i for i, s in enumerate(steps) if "env" in s] == i_write
+    # 📌 2026-10-20（Pre-Hardening 批）：只裝 hash 鎖定依賴（在閘門之後）；⛔ 不裝 requirements.txt
+    pips = [i for i, s in enumerate(steps) if "pip install" in s.get("run", "")]
+    assert len(pips) == 1 and steps[pips[0]]["run"] == WRITER_PIP_RUN and i_gate[0] < pips[0] < i_auth
+    assert "requirements.txt" not in _code(wt).replace("requirements-risk-cap-writer.txt", "")
+    # 下載後、任何 auth 之前比對 compute job 的 sha256
+    sha = [i for i, s in enumerate(steps) if s.get("run") == SHA_CHECK_RUN]
+    assert len(sha) == 1 and dl[0] < sha[0] < i_auth
+    assert steps[sha[0]]["env"] == {
+        "EXPECTED_RECORD_SHA256": "${{ needs.production_write_compute.outputs.record_sha256 }}"}
+    # env：只有 sha 比對與寫入兩步有；寫入那一步只有 System Risk Cap Sheet ID ＋寫入總開關
+    # （📌 2026-10-20 有意識的放寬：原「只有寫入那一步有 env」多准 sha 比對步驟，其 env 只有 compute job 的 sha256）
+    assert [i for i, s in enumerate(steps) if "env" in s] == sha + i_write
     assert steps[i_write[0]]["env"] == {
         P.HISTORY_SHEET_ID_ENV_VAR: "${{ secrets.RISK_CAP_HISTORY_SHEET_ID }}",
         P.WRITE_ENABLE_ENV_VAR: "1",

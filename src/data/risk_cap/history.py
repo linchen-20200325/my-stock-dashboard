@@ -1,4 +1,10 @@
-"""src/data/macro/risk_cap_history.py — 每日系統風險上限「系統歷史 Sheet」的儲存端（L1；VN1-STORE 最小 PoC）。
+"""src/data/risk_cap/history.py — 每日系統風險上限「系統歷史 Sheet」的儲存端（L1；VN1-STORE 最小 PoC）。
+
+📌 2026-10-20（VN1-STORE Pre-Hardening 批；有意識的搬移，不是漏刪）：本檔原在 ~~`src/data/macro/risk_cap_history.py`~~。
+   舊位置的理由（它屬總經 L1）仍成立；被權衡掉的原因：`src.data.macro` 是 eager barrel，一 import 就連帶載入
+   `macro_core`（pandas／streamlit…）⇒ production 寫入 job 無法只裝 hash 鎖定的最小依賴
+   （`requirements-risk-cap-writer.txt`）。新套件 `src/data/risk_cap/` ⛔ 不做 barrel／re-export shim；
+   寫入路徑只載標準函式庫＋L0（`tests/test_vn1_prehardening.py` 以子行程 `sys.modules` 守衛）。
 
 ═══ 範圍（客戶 2026-10-19 裁示 A）═══════════════════════════════════════════
 「本次只核准保存方向 A 與最小 PoC；尚未核准正式 production 排程寫入。」⇒ 本檔提供：
@@ -21,6 +27,15 @@
 9. `build_writer_client(environ)`：先過寫入閘門（核准旗標第一個檢查）→ ADC 憑證檔必須是 WIF 的
    `external_account`（拒任何 JSON key）→ 才 `google.auth.default(scopes=WRITER_SCOPES)`；⛔ 沒有任何退路。
    reader 與 writer 憑證**不可互換**（型別、身分、scope 三重分開）。
+
+═══ Pre-Hardening 批（2026-10-20；production 寫入**仍未核准**、以下全部**未執行**）新增 ═══════════════
+10. `record_sha256`／`header_state`／`read_history_values`：一列紀錄的指紋、表頭狀態、讀全表原樣。
+11. `precheck_target(values, record, *, today_tw)` → `PrecheckResult`：首次寫入前的目標檢查（空表或表頭逐字相符、
+    無權限驗證殘留、同鍵不存在、日期＝今天台北、規則／schema 版本＝現行）。
+12. `verify_written(values, record, run_id)` → `VerifyResult`：寫後讀回恰好一列相符、逐欄相等、表頭位置正確且唯一。
+    ⛔ 兩者都是純函式、⛔ 永不刪除任何列（自動回滾未經客戶核准 —— 失敗只紅燈＋人工查看）。
+13. `build_writer_client(..., scopes=READER_SCOPES)`：同一個 WIF writer 身分換唯讀 token（寫前檢查／寫後讀回用）；
+    scope 只准恰好 `WRITER_SCOPES` 或 `READER_SCOPES`（`writer_scopes`）。
 
 ⛔ 與個人持股 Sheet 完全分離（客戶裁示第 4、5 點）：本檔不 import、也不得 import 個人持股 Sheet 的
 讀取／登入模組，不讀個人持股 Sheet 的既有 SA 金鑰（`tests/test_vn1_store_poc.py` 以 AST／字串守衛）。
@@ -54,23 +69,43 @@ Google 套件（`gspread`／`google.auth`／`google.oauth2`）一律在函式內
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any, Iterable, Iterator, Mapping, Protocol, Sequence
 
 from shared.risk_cap_history_policy import (
     COL_EXPOSURE_LIMIT_PCT,
+    COL_RECORD_DATE,
+    COL_RULESET_VERSION,
+    COL_RUN_ID,
+    COL_SCHEMA_VERSION,
     COL_REASON_CODE,
     COL_REASON_DETAIL,
     COL_STATUS,
     CONTENT_COLUMNS,
     GAC_ENV_VAR,
+    HEADER_STATE_ABSENT,
+    HEADER_STATE_MATCH,
+    HEADER_STATE_MISMATCH,
     HISTORY_COLUMNS,
+    HISTORY_SCHEMA_VERSION,
     HISTORY_SHEET_ID_ENV_VAR,
     HISTORY_WORKSHEET_NAME,
     IDEMPOTENCY_KEY_COLUMNS,
+    PERMISSION_TEST_MARKER_PREFIX,
+    PRECHECK_FAIL_DATE_NOT_TODAY,
+    PRECHECK_FAIL_DUPLICATE_HEADER,
+    PRECHECK_FAIL_HEADER_MISMATCH,
+    PRECHECK_FAIL_KEY_EXISTS,
+    PRECHECK_FAIL_PERMISSION_TEST_RESIDUE,
+    PRECHECK_FAIL_ROW_INVALID,
+    PRECHECK_FAIL_ROW_TOO_LONG,
+    PRECHECK_FAIL_RULESET_VERSION,
+    PRECHECK_FAIL_SCHEMA_VERSION,
     PRODUCTION_WRITE_APPROVED,
     READER_CREDENTIAL_TYPE,
     READER_SA_EMAIL,
@@ -81,11 +116,18 @@ from shared.risk_cap_history_policy import (
     UPSERT_APPENDED,
     UPSERT_CONFLICT_KEPT_EXISTING,
     UPSERT_NOOP_DUPLICATE,
+    VERIFY_FAIL_DUPLICATE_HEADER,
+    VERIFY_FAIL_FIELD_MISMATCH,
+    VERIFY_FAIL_HEADER_MISMATCH,
+    VERIFY_FAIL_MULTIPLE_MATCHES,
+    VERIFY_FAIL_NO_MATCH,
+    VERIFY_FAIL_ROW_TOO_LONG,
     WRITE_ENABLE_ENV_VAR,
     WRITER_CREDENTIAL_TYPE,
     WRITER_SA_EMAIL,
     WRITER_SCOPES,
 )
+from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION
 
 
 class HistorySchemaMismatch(RuntimeError):
@@ -364,6 +406,138 @@ def upsert_record(ws: HistoryWorksheet, row: Mapping[str, str]) -> str:
     return UPSERT_APPENDED
 
 
+# ══════════════════════════════════════════════════════════════════════
+# 首次 production 寫入的前置檢查／寫後驗證（VN1-STORE Pre-Hardening 批，2026-10-20）
+# 純函式：只吃 `get_all_values()` 的結果與要寫的紀錄，⛔ 不做 I/O、⛔ 永不刪除任何列。
+# 只在寫入閘門之後才會被腳本呼叫（`PRODUCTION_WRITE_APPROVED` 仍為 False ⇒ 本批不可能走到）。
+# ══════════════════════════════════════════════════════════════════════
+def record_sha256(record: Mapping[str, str]) -> str:
+    """一列紀錄的指紋：依 `HISTORY_COLUMNS` 欄序的 `[欄名, 值]` 陣列 → 緊湊 JSON（UTF-8）→ sha256 hex。
+
+    欄序固定、⛔ 不 sort、⛔ 不正規化值（要比對的就是「寫進去的字串」本身）。列不合 schema ⇒ `HistoryRowInvalid`。
+    只印這個雜湊（⛔ 不印值）即可在 log／證據裡核對「compute 算的、寫進去的、讀回來的是同一列」。
+    """
+    _validate_row(record)
+    payload = json.dumps([[c, record[c]] for c in HISTORY_COLUMNS], ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def header_state(values: Sequence[Sequence[str]]) -> str:
+    """`get_all_values()` 的第一列 → `HEADER_STATE_ABSENT`／`MATCH`／`MISMATCH`（⛔ 不猜欄位對應）。"""
+    if not values:
+        return HEADER_STATE_ABSENT
+    return HEADER_STATE_MATCH if tuple(values[0]) == HISTORY_COLUMNS else HEADER_STATE_MISMATCH
+
+
+def read_history_values(ws: HistoryWorksheet) -> list[list[str]]:
+    """讀全表原樣（全字串）；錯誤分型同 `read_history_records`。給寫前檢查／寫後驗證／reader smoke 用。"""
+    with _classified_read_errors():
+        return [[str(c) for c in row] for row in ws.get_all_values()]
+
+
+@dataclass(frozen=True)
+class PrecheckResult:
+    """`precheck_target` 的結論。`failures` 為 `PRECHECK_FAIL_*`（空 ⇒ 可以寫）；`data_rows` ＝ 表頭以下的列數。"""
+
+    failures: tuple[str, ...]
+    header_state: str
+    data_rows: int
+
+    @property
+    def ok(self) -> bool:
+        return not self.failures
+
+
+@dataclass(frozen=True)
+class VerifyResult:
+    """`verify_written` 的結論。`failures` 為 `VERIFY_FAIL_*`；`matches` ＝ run_id＋record_date 相符的列數；
+    `mismatched_columns` ＝ 唯一相符列與紀錄不同的**欄名**（⛔ 不帶值）；`readback_sha256` ＝ 唯一相符列的
+    `record_sha256`（相符列不是恰好一列 ⇒ 空字串）。"""
+
+    failures: tuple[str, ...]
+    matches: int
+    mismatched_columns: tuple[str, ...] = ()
+    readback_sha256: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return not self.failures
+
+
+def _has_permission_test_residue(values: Sequence[Sequence[str]]) -> bool:
+    return any(str(c).startswith(PERMISSION_TEST_MARKER_PREFIX) for row in values for c in row)
+
+
+def _data_rows_check(values: Sequence[Sequence[str]], dup_code: str, long_code: str) -> list[str]:
+    """表頭正確時，資料區不得再有表頭列、不得有欄數超過表頭的列。"""
+    out: list[str] = []
+    rows = values[1:]
+    if any(tuple(r) == HISTORY_COLUMNS for r in rows):
+        out.append(dup_code)
+    if any(len(r) > len(HISTORY_COLUMNS) for r in rows):
+        out.append(long_code)
+    return out
+
+
+def _padded(raw: Sequence[str]) -> dict[str, str]:
+    return dict(zip(HISTORY_COLUMNS, list(raw) + [""] * (len(HISTORY_COLUMNS) - len(raw))))
+
+
+def precheck_target(values: Sequence[Sequence[str]], record: Mapping[str, str], *, today_tw: str) -> PrecheckResult:
+    """首次（以及每一次）寫入前的目標檢查。全部條件都過才可以寫；**列出所有**不符項（⛔ 不短路、⛔ 不修正）。
+
+    1. 紀錄本身合 schema（否則只回 `RECORD_ROW_INVALID`，其餘無從檢查）；
+    2. 表是空的，或第一列逐字等於 schema 表頭；資料區沒有第二列表頭、沒有超長列；
+    3. 表內任何一格都沒有權限驗證測試列標記（`PERMISSION_TEST…`）；
+    4. 同鍵（record_date, ruleset_version）**任何狀態**的列都不存在（首次寫入不碰既有同日紀錄）；
+    5. `record_date` ＝ 寫入當下的台北日期 `today_tw`（呼叫端給；跨午夜 ⇒ 拒寫，⛔ 不改日期）；
+    6. 規則版本／schema 版本 ＝ 現行常數（舊程式算的列不准寫進來）。
+    """
+    try:
+        _validate_row(record)
+    except HistoryRowInvalid:
+        return PrecheckResult((PRECHECK_FAIL_ROW_INVALID,), header_state(values), max(len(values) - 1, 0))
+    state = header_state(values)
+    fails: list[str] = []
+    if state == HEADER_STATE_MISMATCH:
+        fails.append(PRECHECK_FAIL_HEADER_MISMATCH)
+    if state == HEADER_STATE_MATCH:
+        fails += _data_rows_check(values, PRECHECK_FAIL_DUPLICATE_HEADER, PRECHECK_FAIL_ROW_TOO_LONG)
+    if _has_permission_test_residue(values):
+        fails.append(PRECHECK_FAIL_PERMISSION_TEST_RESIDUE)
+    if state == HEADER_STATE_MATCH and any(_key(_padded(r)) == _key(record) for r in values[1:]):
+        fails.append(PRECHECK_FAIL_KEY_EXISTS)
+    if record[COL_RECORD_DATE] != today_tw:
+        fails.append(PRECHECK_FAIL_DATE_NOT_TODAY)
+    if record[COL_RULESET_VERSION] != RISK_CAP_RULESET_VERSION:
+        fails.append(PRECHECK_FAIL_RULESET_VERSION)
+    if record[COL_SCHEMA_VERSION] != HISTORY_SCHEMA_VERSION:
+        fails.append(PRECHECK_FAIL_SCHEMA_VERSION)
+    return PrecheckResult(tuple(fails), state, max(len(values) - 1, 0))
+
+
+def verify_written(values: Sequence[Sequence[str]], record: Mapping[str, str], run_id: str) -> VerifyResult:
+    """寫後讀回驗證：表頭在第一列且唯一；`run_id`＋`record_date` 相符的列**恰好一列**，且逐欄等於紀錄。
+
+    0 列或 ≥2 列或任一欄不同 ⇒ 失敗。⛔ 永不刪除、⛔ 不修正 —— 自動回滾未經客戶核准；失敗只能紅燈＋人工查看。
+    """
+    _validate_row(record)
+    if header_state(values) != HEADER_STATE_MATCH:
+        return VerifyResult((VERIFY_FAIL_HEADER_MISMATCH,), 0)
+    fails = _data_rows_check(values, VERIFY_FAIL_DUPLICATE_HEADER, VERIFY_FAIL_ROW_TOO_LONG)
+    hits = [_padded(r) for r in values[1:]
+            if len(r) <= len(HISTORY_COLUMNS)
+            and _padded(r)[COL_RUN_ID] == run_id and _padded(r)[COL_RECORD_DATE] == record[COL_RECORD_DATE]]
+    if not hits:
+        return VerifyResult(tuple(fails + [VERIFY_FAIL_NO_MATCH]), 0)
+    if len(hits) > 1:
+        return VerifyResult(tuple(fails + [VERIFY_FAIL_MULTIPLE_MATCHES]), len(hits))
+    diff = tuple(c for c in HISTORY_COLUMNS if hits[0][c] != record[c])
+    if diff:
+        fails.append(VERIFY_FAIL_FIELD_MISMATCH)
+    return VerifyResult(tuple(fails), 1, diff, record_sha256(hits[0]))
+
+
 def assert_production_write_approved() -> None:
     """寫入閘門的**第一道**：`PRODUCTION_WRITE_APPROVED`（L0）為 False ⇒ 一律 `ProductionWriteNotApproved`。
 
@@ -441,21 +615,38 @@ def load_writer_credentials_or_refuse(environ: Mapping[str, str] | None = None) 
     return check_writer_credentials_file(env)
 
 
-def build_writer_client(environ: Mapping[str, str] | None = None) -> Any:
+def writer_scopes(scopes: Sequence[str]) -> tuple[str, ...]:
+    """writer 身分可用的 scope：**只**允許恰好 `WRITER_SCOPES`（寫入）或恰好 `READER_SCOPES`（寫前檢查／寫後讀回）。
+
+    其餘（含加 Drive、混搭、空）一律 `WriterCredentialRefused` —— ⛔ writer 身分不得拿到比試算表讀寫更大的權限。
+    """
+    chosen = tuple(scopes)
+    if chosen not in (tuple(WRITER_SCOPES), tuple(READER_SCOPES)):
+        raise WriterCredentialRefused("writer 身分只准用 spreadsheets 或 spreadsheets.readonly scope → 拒絕")
+    return chosen
+
+
+def build_writer_client(environ: Mapping[str, str] | None = None, *,
+                        scopes: Sequence[str] = WRITER_SCOPES) -> Any:
     """WIF writer 的 gspread client。**第一步就是寫入閘門**（`load_writer_credentials_or_refuse`）。
 
-    閘門過了才 `google.auth.default(scopes=WRITER_SCOPES)` —— 而且只在行程環境的
+    閘門過了才 `google.auth.default(scopes=...)` —— 而且只在行程環境的
     `GOOGLE_APPLICATION_CREDENTIALS` 就是剛檢查過的那個檔時（`google.auth.default` 只讀行程環境；
     注入的 `environ` 與行程環境不一致 ⇒ 拒絕，⛔ 不讓它去讀別的憑證）。取得的身分必須是 `risk-cap-writer`。
     ⛔ 沒有任何退路：不讀 JSON key、不讀 reader 表格、不讀 gcloud 使用者憑證、不讀 metadata server。
+
+    📌 2026-10-20（Pre-Hardening 批；有意識的擴充，不是放寬）：新增 `scopes`，預設仍是 `WRITER_SCOPES`；
+    **唯一**允許的另一個值是 `READER_SCOPES`（同一個 WIF writer 身分、唯讀 token —— 寫前檢查與寫後讀回用，
+    讀的時候手上就沒有寫權限）。身分檢查不變；閘門仍是第一步（scope 檢查在閘門之後）。
     """
     env = os.environ if environ is None else environ
     path = load_writer_credentials_or_refuse(env)
+    chosen = writer_scopes(scopes)
     if os.environ.get(GAC_ENV_VAR) != path:
         raise WriterCredentialRefused(f"行程環境的 {GAC_ENV_VAR} 不是剛檢查過的 WIF 憑證檔 → 拒絕")
     import google.auth
 
-    creds, _project = google.auth.default(scopes=list(WRITER_SCOPES))
+    creds, _project = google.auth.default(scopes=list(chosen))
     if getattr(creds, "service_account_email", None) != WRITER_SA_EMAIL:
         raise WriterCredentialRefused("WIF 憑證的 impersonation 身分不是 risk-cap-writer → 拒絕")
     import gspread
