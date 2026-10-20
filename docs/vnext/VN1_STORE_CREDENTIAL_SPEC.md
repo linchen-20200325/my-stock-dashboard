@@ -260,7 +260,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 
 ---
 
-## 5. 最小權限驗證計畫（**客戶完成第 4 節之後**才跑；本批未跑）
+## 5. 最小權限驗證計畫（**客戶完成第 4 節之後**才跑；~~本批未跑~~ **2026-10-20 P1／P2／R1～R5 全部 PASS，見 5.4**；有意識的變更，不是漏刪）
 
 > 執行者：設定完成後由我們（AI 團隊）設計測試，需要時請客戶在 Cloud Shell／Actions 觸發；結果記錄於 PR 與本檔。
 > ⛔ 第 5.2 節反向測試**全部通過前**，不送 production 寫入核准題。
@@ -297,6 +297,26 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 | C6 | 人工檢查：個人持股 Sheet「共用」清單 | **不含** `risk-cap-writer@…`、`risk-cap-reader@…` |
 | C7 | 人工檢查：System Risk Cap Sheet「一般存取權」 | 「限制」 |
 
+### 5.4 執行結果（2026-10-20；總管自 GitHub Actions log 查證；皆跑在 main `c01b74b9`＝#888 merge，#888 新增權限測試 job／腳本）
+
+| ID | 結果 | run／job | 觀測 |
+|---|---|---|---|
+| P1 | **PASS** | run 39372770704／`permission_test_writer` | WIF 身分 `risk-cap-writer`；append → readback → delete → verify_gone 皆 ok；測試列已刪除 |
+| R1 | **PASS** | run 39372770704（同上） | 兩個持股 Sheet（`PORTFOLIO_SHEET_ID`、`STOCK_PORTFOLIO_SHEET_ID`）讀取 GET → `403 PERMISSION_DENIED`（無 reason） |
+| P2 | **PASS** | run 39373289602／`permission_test_reader` | 身分 `risk-cap-reader`、readonly scope；metadata 200、values 200、rows＝0 |
+| R2 | **PASS** | run 39373289602（同上） | 兩個持股 Sheet → `403 PERMISSION_DENIED`（無 reason） |
+| R3 | **PASS** | run 39373289602（同上） | append → `403 PERMISSION_DENIED`，reason `ACCESS_TOKEN_SCOPE_INSUFFICIENT` |
+| R4 | **PASS** | run 39374189381／`wif_negative_r4`（暫時分支 `perm-test-r4·`） | STS `400 unauthorized_client`「The given credential is rejected by the attribute condition.」 |
+| R5 | **PASS** | run 39374562365／`risk_cap_wif_negative_r5.yml`（main） | 同 R4 的 STS 拒絕 |
+
+⚠️ **限制（照實保留）**：
+1. R3 只證明 **readonly scope** 擋下寫入；「reader 在該 Sheet 是檢視者（Viewer ACL）」由**客戶手動檢查共用清單**確認，不是本測試證明。
+2. P2 執行時 `risk_cap_daily` 為空 → 只證明「讀得到、分頁存在」，**不證明**既有歷史可讀。
+3. R1 只以讀取 GET 測（安全唯讀解讀，見 DEC-065）；未對持股 Sheet 做寫入嘗試。
+4. P2／R2／R3 使用一次性測試例外 secret `RISK_CAP_READER_TEST_SA_JSON`（DEC-065；不是 production 設計變更，reader key 仍只放 Streamlit secrets）。**客戶回報已清理**：該 GitHub secret 已刪除；2026-10-20 為測試建立的 reader JSON key 已自 GCP 刪除（2026-10-19 的 Streamlit 用 key 保留）；R4 暫時分支已刪除。
+5. 權限測試 harness 保留在 repo 以利重現；reader job 在該 secret 已刪除的狀態下會**拒絕執行**。
+6. ⛔ 全部 PASS **不是** production 授權：`PRODUCTION_WRITE_APPROVED` 仍為 `False`。
+
 ---
 
 ## 6. 日後仍需改 code／workflow 的事項（~~**未來實作批次，本批未做**~~ **第 1～3 項 #886 已完成、第 4 項半完成，其餘未做**；2026-10-19 更新，有意識的變更，不是漏刪）
@@ -309,7 +329,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 4. ◐ #886 半完成：`WRITER_SA_ENV_VAR` 已退役；寫入前置檢查改為檢查 WIF 憑證、reader 端命名與 Streamlit 接線**未做**。程式端政策常數改名：退役 `RISK_CAP_HISTORY_WRITER_SA_JSON`（`shared/risk_cap_history_policy.py:177` `WRITER_SA_ENV_VAR`），寫入前置檢查（`src/data/macro/risk_cap_history.py`）改為檢查 WIF 提供的憑證；讀取端名稱與 Streamlit secrets 表格名（步驟 8 提案）定案並同步；相關測試（`tests/test_vn1_store_poc.py`）同步更新。
 5. 若正式 workflow 換檔名 → 依步驟 3 更新 attribute-condition。
 6. 寫入端 `concurrency` 序列化（單一寫入者，見 `VN1_STORE_RESEARCH.md` 8.4 第 2 點）。
-7. 第 5 節驗證計畫執行並記錄結果。（⚠️ 2026-10-19：P1／P2／R1～R5 **仍未執行**；WIF auth-only PASS 不算第 5 節任何一項。）
+7. ✅ 2026-10-20 已完成（P1／P2／R1～R5 全部 PASS，見 5.4）。第 5 節驗證計畫執行並記錄結果。（~~⚠️ 2026-10-19：P1／P2／R1～R5 **仍未執行**；WIF auth-only PASS 不算第 5 節任何一項。~~ 2026-10-20 已不成立，有意識的變更，不是漏刪）
 
 📌 2026-10-19 正式寫入前另需（已記錄、未做）：pip 安裝 hash-pin；GitHub environment（required reviewers）＋WIF condition 加 environment claim；WIF condition 加 `event_name`。另：checkout／setup-python 釘版觸發 Node 20 deprecation 警告（被強制以 Node 24 執行），屬日後 pin bump、不阻擋。
 8. `PRODUCTION_WRITE_APPROVED`（`shared/risk_cap_history_policy.py`）改為 `True` **只能在客戶另一次裁示後**（⛔ 不得自行改）。
@@ -331,3 +351,4 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 7. **PoC Actions 實跑**：客戶回報 run 39249934107 success（dry-run：狀態 VALID、`exposure_limit_pct` 30、同日重跑 APPENDED→NOOP_DUPLICATE）；撰寫組**未重查** run log／artifact。
 8. ~~本檔所有 gcloud 指令**未在真實專案實跑**；~~（2026-10-19：客戶已依本檔在真實專案完成設定並確認 (a)～(f)，有意識的變更，不是漏刪）本檔 gcloud 指令以客戶實跑為準；第一次照做時若有錯，以實際錯誤訊息修正本檔。
 9. **WIF auth-only 實跑紀錄（2026-10-19）**：run 39336051675（客戶手動 dispatch，main `2c693a20`，`mode`＝`wif-auth-only`）—— job `wif_auth_only` success；步驟「Authenticate to Google Cloud (WIF, no key)」「Verify impersonated identity」success；`poc-dry-run` skipped。log：GitHub OIDC → WIF STS → impersonation PASS；impersonated_email＝`risk-cap-writer@mystock20260823.iam.gserviceaccount.com`；project `mystock20260823`；token lifetime 約 3599s；scope 僅 `userinfo.email`；**未讀寫任何 Sheet**；憑證檔於 post step 移除（總管 GitHub API 查證）。⚠️ 這**不是**第 5 節 P1／P2／R1～R5；writer 仍未分享給 Sheet、Streamlit reader 未接線、production 寫入未核准。
+10. **權限測試實跑紀錄（2026-10-20）**：P1／P2／R1～R5 全部 PASS（run 39372770704、39373289602、39374189381、39374562365；細節與限制見 5.4）。`VN1-STORE` 憑證／權限邊界 Gate **正式關閉**（⛔ 不是 production 授權）。仍未做（正式寫入前）：hash-pin pip；GitHub environment＋required reviewers＋WIF environment claim；WIF condition 加 `event_name`；Node 20 action pin bump；Streamlit reader 接線未實作；第 6 節第 4 項仍半完成。下一 Decision Gate（未指派）：是否開始 production writer／reader 接線批與 production 寫入核准。
