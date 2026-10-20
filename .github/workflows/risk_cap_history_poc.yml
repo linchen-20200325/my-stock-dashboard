@@ -50,7 +50,7 @@ name: VN1-STORE 風險上限歷史 PoC（手動；dry-run／WIF auth-only／權�
 #     寫入 job 只裝 hash 鎖定的 `requirements-risk-cap-writer.txt`；下載紀錄後比對 compute job 的 sha256；
 #     寫入步驟（腳本內）依序：寫前檢查（唯讀）→ 寫入 → 寫後讀回驗證（唯讀）；任何失敗紅燈、⛔ 不自動刪除。
 #     兩個權限驗證 job、wif_auth_only 與寫入 job 共用字面 job 層 group `risk-cap-history-sheet-write`。
-#     ⛔ 本檔沒有 `environment:`（GitHub Environment 由客戶先建立，屬客戶人工 Gate；見規格第 9 節）。
+#     ⛔ 本檔沒有 `environment:`（GitHub Environment 由客戶先建立，屬客戶人工 Gate；見規格 8.6、8.11）。
 #   ⚠️ WIF attribute condition 釘了本檔 workflow_ref ⇒ 寫入 job 只能放在本檔（⛔ 不新增 workflow 檔）。
 
 on:

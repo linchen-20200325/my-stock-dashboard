@@ -1,6 +1,7 @@
 # VN1-STORE 憑證設定規格（System Risk Cap 系統歷史 Sheet：寫入端／讀取端身分）
 
 > **狀態**：設定規格（docs-only）。**本檔不是施工授權、也不是 production 寫入核准。**
+> 📌 2026-10-20：production 寫入的客戶裁示見 `docs/DECISIONS.md` **DEC-066**（首次人工寫入有條件核准、Daily Schedule NOT APPROVED）；其盤點、Environment 設定要求與首次寫入 Runbook 見本檔 **8.11**。本檔本身仍不是核准。
 > **依據**：客戶 2026-10-19 裁示 G1／G2／G3 與共同權限原則 —— `docs/DECISIONS.md` **DEC-064**（保存方向見 DEC-063；BACKLOG 登記 DR-2026-10-19-2）。
 > **本批沒有做的事**：⛔ 未改任何 code／workflow／test；⛔ 未建立任何 Google Cloud 資源、service account、key、pool、Sheet 或 GitHub secret；⛔ 未讀取或輸出任何 secret。
 > ⚠️ **provenance（`CLAUDE.md` §-2 規則 6）**：本檔由單一撰寫組撰寫，**未經第二組獨立驗證**；gcloud 指令依撰寫組對 Google Cloud／GitHub 官方用法的理解寫成，**未在任何真實專案實跑**。客戶操作時若指令報錯，請把**錯誤訊息**（不含金鑰內容）回報，我們再修正本檔。
@@ -336,7 +337,9 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 7. ✅ 2026-10-20 已完成（P1／P2／R1～R5 全部 PASS，見 5.4）。第 5 節驗證計畫執行並記錄結果。（~~⚠️ 2026-10-19：P1／P2／R1～R5 **仍未執行**；WIF auth-only PASS 不算第 5 節任何一項。~~ 2026-10-20 已不成立，有意識的變更，不是漏刪）
 
 📌 2026-10-19 正式寫入前另需（已記錄、未做）：pip 安裝 hash-pin；GitHub environment（required reviewers）＋WIF condition 加 environment claim；WIF condition 加 `event_name`。另：checkout／setup-python 釘版觸發 Node 20 deprecation 警告（被強制以 Node 24 執行），屬日後 pin bump、不阻擋。
+📌 2026-10-20 現況（有意識的變更，不是漏刪）：pip hash-pin 已完成（寫入 job，8.1；compute job 未鎖、列 LATER 候選）；GitHub environment＋WIF environment claim＋`event_name` 由客戶裁示 **DEC-066 C** 定為**首寫前 MUST**、固定順序見 8.11；Node pin bump 仍不阻擋。
 8. `PRODUCTION_WRITE_APPROVED`（`shared/risk_cap_history_policy.py`）改為 `True` **只能在客戶另一次裁示後**（⛔ 不得自行改）。
+   📌 2026-10-20：該次裁示已作出 —— **DEC-066 A**：核准**未來以獨立 PR** 一次性改為 `True`（前提：DEC-066 C Step 1～3 完成），首次人工寫入後不論成敗立即以獨立 PR 改回 `False`；⛔ 本項至今**未執行**（旗標仍 `False`）。
 
 ---
 
@@ -362,6 +365,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
     - **本批限制**：Google／Streamlit 實際連線**未測**（全以假物件）；本機 Python 3.13、CI 3.11；QA-B NIT-2／NIT-4 依總管裁定不處理（內容見該輪 QA 回報，本檔未轉錄）。
     - ⚠️ 上一則（第 10 點）「Streamlit reader 接線未實作；第 6 節第 4 項仍半完成」「下一 Decision Gate（未指派）」自本批起不再成立（有意識的變更，不是漏刪）；production 每日寫入核准**仍未送題、未核准**。
     - 📌 2026-10-20（Pre-Hardening 批；有意識的變更，不是漏刪）：上列前置清單各項的現況見**第 8 節 8.8**（(1) 已做；(3) 程式已備、未實跑；(4) 已查證；(5) 已加 sha256 比對；(10) 已改共用 group、限制仍在；(2)(6)(7) 仍是客戶 Gate）。L1 儲存端已由 `src/data/macro/risk_cap_history.py` 搬到 `src/data/risk_cap/history.py`（本節與第 6 節較早的舊路徑是當時紀錄，不改寫）。
+    - 📌 2026-10-20（DEC-066；有意識的變更，不是漏刪）：上方「production 每日寫入核准**仍未送題、未核准**」自本日起不再成立 —— 客戶已裁示 DEC-066：首次人工寫入有條件核准、每日排程 NOT APPROVED；(8) reader smoke 空表狀態 PASS（8.10）；(10) 客戶已接受（DEC-066 D）。現況以 8.8、8.11 為準。
 
 ---
 
@@ -369,6 +373,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 
 > **狀態**：程式＋文件批（分支 `claude/jolly-mccarthy-sonbl8`，基於 main `56904662`）。⛔ 無 schedule、⛔ 無新 workflow 檔、⛔ 未加 `environment:`、⛔ 未改 IAM／WIF／Sheet 分享／OAuth／fund-nav、⛔ 未改 Risk Cap 公式／門檻／語意／資料源、⛔ 畫面零變化。
 > 下文 8.6、8.7、8.9 是**未執行的設計提案**，每一步都是**客戶人工 Gate**；⛔ 本批一步都沒做。
+> 📌 2026-10-20（DEC-066）：8.6／8.7 已由客戶裁示為**首寫前 MUST**（固定順序 Environment → workflow `environment:` → WIF condition → 首寫，見 8.11）；8.9 已裁示為**延後、另案**（Daily Schedule NOT APPROVED）。各步仍**未執行**。
 > ⚠️ provenance（`CLAUDE.md` §-2 規則 6）：本節由實作組單組撰寫；8.6／8.7 的修正依總管轉交之第二組獨立覆核意見（經總管轉述、非逐字）；其餘未經第二組驗證。
 
 ### 8.1 A｜寫入依賴（hash 鎖定、精簡）
@@ -407,7 +412,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 - **順序**（`scripts/risk_cap_history_poc.py --write`）：閘門（`PRODUCTION_WRITE_APPROVED`）→ 紀錄檔合 schema → **寫前檢查**（writer 身分的**唯讀** token 讀全表；L1 `precheck_target`）→ `upsert_record`（讀寫 token）→ **寫後讀回驗證**（唯讀 token；L1 `verify_written`）。
 - **寫前檢查**（全部列出、不短路）：表是空的或第一列逐字等於 schema 表頭；沒有第二列表頭／超長列；表內沒有 `PERMISSION_TEST…` 殘留（去頭尾空白、不分大小寫）；同（record_date, ruleset_version）沒有任何一列（去頭尾空白後比；只用於寫前檢查，`upsert_record` 語意不變）；`record_date`＝寫入當下台北日期；規則版本／schema 版本＝現行；本輪 `GITHUB_RUN_ID`＝紀錄裡的 run_id。
 - **寫後驗證**：表頭在第一列且唯一；run_id＋record_date 相符的列**恰好一列**；逐欄等於紀錄。
-- **fail closed、⛔ 不自動刪除**：任何一步失敗 ⇒ exit 非 0（4＝寫前檢查不過、什麼都沒寫；5＝寫後驗證不過；1＝I/O 失敗；3＝同日衝突）。**自動回滾（刪列）未經客戶核准** —— 需要的話須另行裁示；首筆真實紀錄寫進去後**保留**。
+- **fail closed、⛔ 不自動刪除**：任何一步失敗 ⇒ exit 非 0（4＝寫前檢查不過、什麼都沒寫；5＝寫後驗證不過；1＝I/O 失敗；3＝同日衝突）。~~**自動回滾（刪列）未經客戶核准** —— 需要的話須另行裁示；~~ 📌 2026-10-20 **DEC-066 E 定案**（有意識的變更，不是漏刪）：自動刪列／自動 rollback／自動覆寫／盲目 retry **永久禁止**；需刪無效列只能由客戶在 Google Sheets UI 人工執行、刪前先存證；production 程式永久不得因此新增自動刪列功能。首筆真實紀錄寫進去後**保留**（含不可抗力留下的非 VALID 列，DEC-066 B）。
 - **artifact 完整性**：compute job 印出並輸出紀錄檔 sha256；寫入 job 下載後（任何 auth 之前）以 `sha256sum --check --strict` 比對，不一致或空值 ⇒ 紅燈不寫（處理 QA-A N2「只重跑寫入 job 會沿用舊 artifact」的**完整性**面；重跑本身仍會沿用同一 run 的 artifact）。
 - **證據**（首次實跑時收集）：run id、artifact sha256、`precheck:` 與 `verify:` 兩行 JSON（只含固定字彙、計數、sha256）。
 - **讀回兩條路**：(1) writer 身分唯讀 token（同一次 run 內）；(2) 網站 reader smoke（8.5，另一個身分）—— 兩者的最新列 sha256 應一致。
@@ -421,9 +426,9 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 - **客戶步驟（人工 Gate、未執行）**：(1) Streamlit Cloud → Secrets 頂層加 `risk_cap_history_smoke = true` → 儲存（app 會重啟）；(2) 開一次網站；(3) Manage app → Logs 找 `[risk_cap_history_smoke]` 那一行回報（整行可貼，不含 secret）；(4) 看完把該行改回 `false` 或刪除。首次寫入前預期 `read_status=EMPTY`、`header_state=ABSENT` 或 `MATCH`。
 - 守衛：`tests/test_vn1_reader_smoke.py`；app.py 只准一行 import＋一行無參數呼叫（`tests/test_vn1_store_poc.py::assert_app_only_smoke_hook`）。
 
-### 8.6 GitHub Environment 設計（**提案、未執行；客戶人工 Gate**）
+### 8.6 GitHub Environment 設計（~~**提案、未執行；客戶人工 Gate**~~ **DEC-066 C：首寫前 MUST、仍未執行；客戶人工 Gate**；2026-10-20 更新，有意識的變更，不是漏刪）
 
-- 名稱 `production-risk-cap`；required reviewer＝owner（唯一 reviewer）；**prevent self-review 關閉**（唯一 reviewer 就是觸發者，打開會永遠無法核准）；**關閉 admin bypass**；deployment branches＝只限 `main`；environment secret `RISK_CAP_HISTORY_SHEET_ID`（之後可移除 repo 層同名 secret —— 另行確認）。
+- 名稱 `production-risk-cap`；required reviewer＝owner（唯一 reviewer）；**prevent self-review 關閉**（唯一 reviewer 就是觸發者，打開會永遠無法核准）；**關閉 admin bypass**（📌 2026-10-20 盤點：GitHub 預設**開**、須手動取消勾選；DEC-066 C：取當下 UI 可達成的最嚴格設定，UI 與盤點不同 ⇒ 不猜、停下回報）；deployment branches＝~~只限 `main`~~ **Selected branches → `main`**（2026-10-20 DEC-066 C 指定選項，有意識的變更，不是漏刪：main 未受保護，選「Protected branches only」會讓**所有分支**可部署）；environment secret `RISK_CAP_HISTORY_SHEET_ID`（之後可移除 repo 層同名 secret —— 另行確認）。
 - ⚠️ **誠實定位**：這個 Gate 是「**刻意多按一次**」—— 唯一 reviewer＝觸發者，**不是職責分離、不是兩人控管**，也**防不了帳號被盜**（盜得到帳號就按得到核准）。它擋的是「誤觸發」與「沒有 environment 的 job 換到 writer token」（後者要配合 8.7）。
 - **順序（每一步都是客戶手動；⛔ 本批一步都沒做）**：
   1. 客戶建立 environment（上列設定）；
@@ -431,8 +436,11 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
   3. 客戶更新 WIF attribute condition（8.7）；
   4. 反向測試：`wif-auth-only` 被 STS 拒絕（新的預期結果）；
   5. `production-write` 觸發 ⇒ 停在等待核准 ⇒ 核准後在閘門紅燈（`PRODUCTION_WRITE_APPROVED` 仍 False）。
+- 📌 2026-10-20 **DEC-066 C**（客戶裁示；有意識的變更，不是漏刪）：上列 1～3 步即 DEC-066 C Step 1～3，**順序固定**；Step 3 須先由客戶提供 provider **現行 describe 原文**、⛔ 不得猜測現行 condition。第 4、5 步為 Step 3 之後、Step 4（首寫）之前的驗證（撰寫組讀法）。總管上一輪推薦「首寫先跳過 Environment」**已被客戶否決**。設定細節與首寫 Runbook 見 8.11。
 
-### 8.7 WIF attribute condition 更新提案（**提案、未執行；客戶人工 Gate**）
+### 8.7 WIF attribute condition 更新提案（~~**提案、未執行；客戶人工 Gate**~~ **DEC-066 C Step 3：首寫前 MUST、仍未執行；客戶人工 Gate**；2026-10-20 更新，有意識的變更，不是漏刪）
+
+> 📌 2026-10-20 DEC-066 C：客戶點名新增 `environment == production-risk-cap`、`event_name == workflow_dispatch` 兩條；下方建議中的 `runner_environment`、`ref_type` **不在客戶點名範圍**，列 backlog 候選（`docs/BACKLOG.md` 5.1.4 `VN1-PG-L-CLAIMS`），⛔ 未經客戶另裁示不併入 Step 3。修改前以客戶提供的 describe 原文為準。
 
 - **建議條件**：既有四條 `&& assertion.event_name=='workflow_dispatch' && assertion.environment=='production-risk-cap' && assertion.runner_environment=='github-hosted' && assertion.ref_type=='branch'`。
   ```bash
@@ -450,25 +458,115 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 | # | 項目 | 現況 |
 |---|---|---|
 | (1) | write job 依賴 hash-pin＋精簡 | ✅ 本批（8.1） |
-| (2) | GitHub Environment＋WIF environment／event_name claim | ⏳ 設計已備（8.6／8.7），**客戶人工 Gate、未執行** |
-| (3) | 首次實跑驗證計畫 | ◐ 程式已備（8.4），**未實跑**（須翻旗標才走得到） |
+| (2) | GitHub Environment＋WIF environment／event_name claim | ⏳ 設計已備（8.6／8.7），**客戶人工 Gate、未執行**；📌 2026-10-20 **DEC-066 C：首寫前 MUST**，順序 Environment（`VN1-PG-ENV`）→ workflow `environment:`（`VN1-PG-WIRE`）→ WIF condition（`VN1-PG-WIF`）→ 首寫 |
+| (3) | 首次實跑驗證計畫 | ◐ 程式已備（8.4），**未實跑**（須翻旗標才走得到）；📌 2026-10-20 Runbook 見 8.11（DEC-066 A／B／E） |
 | (4) | WIF 憑證檔 `audience` | ✅ 原始碼＋實跑證據（8.2）；allowedAudiences 為空待客戶唯讀確認 |
 | (5) | 只重跑寫入 job 沿用舊 artifact | ◐ 加 sha256 比對（完整性）；沿用同一 run artifact 的行為不變 |
 | (6) | 畫面顯示歷史須先過線框 | ⏳ 未動（DEC-003 ①） |
-| (7) | 每日 schedule 另行核准 | ⏳ 未動；與 environment 核准互斥，見 8.9 |
-| (8) | Streamlit secrets 實際內容未查證 | ◐ smoke 已備（8.5），**未實跑** |
+| (7) | 每日 schedule 另行核准 | ⏳ 未動；與 environment 核准互斥，見 8.9；📌 2026-10-20 **DEC-066 F：NOT APPROVED**、獨立 Gate、⛔ 禁止新增 `schedule:` |
+| (8) | Streamlit secrets 實際內容未查證 | ◐ smoke 已備（8.5），~~**未實跑**~~ ✅ 2026-10-20 空表狀態真連線 **PASS**（8.10；有意識的變更，不是漏刪）；有資料狀態待首寫後（`VN1-PG-READBACK`，不是 blocker） |
 | (9) | Node 20 action pin bump | 不阻擋（未動） |
-| (10) | 寫入併發 | ◐ 共用 group（8.3）；非原子限制仍在，須處理或客戶明確接受 |
+| (10) | 寫入併發 | ◐ 共用 group（8.3）；非原子限制仍在，~~須處理或客戶明確接受~~ ✅ 2026-10-20 **客戶已接受**（DEC-066 D：單一 workflow writer＋concurrency；⛔ distributed lock、⛔ 第二 writer；出現第二 writer 重開 Decision Gate） |
+| (11) | 每日排程 vs environment 人工核准（8.9） | 📌 2026-10-20 DEC-066 F：延後到首次人工寫入驗證完成後另案裁示 |
+| (12) | 失敗政策 | 📌 2026-10-20 DEC-066 E：FAIL-STOP（見 8.11） |
 
-### 8.9 新 Decision Gate：每日排程 vs environment 人工核准（**未送題**）
+### 8.9 新 Decision Gate：每日排程 vs environment 人工核准（~~**未送題**~~ **已裁示 DEC-066 F：延後、另案**；2026-10-20 更新，有意識的變更，不是漏刪）
 
 - 兩者**互斥**：掛了 required reviewer 的 environment，`schedule` 觸發的 run **每天都會停下等核准**（最長 30 天後失效）；且 8.7 的 `event_name=='workflow_dispatch'` 也必須放行 `schedule`。
 - ⇒ **開排程前必須客戶裁示信任模型**（例：每天人工按一次／排程不掛 reviewer 改靠其他控制／不開排程）。總管推薦方案待前置清單完成後一併附上；⛔ 本批不送題、不開排程。
+- 📌 2026-10-20 **DEC-066 F**：Daily Schedule＝**NOT APPROVED**；首次人工寫入與每日排程是兩個獨立 Gate；⛔ 禁止新增 `schedule:`；排程設計、Environment 分流、unattended write 全部延後到首次人工寫入驗證完成後另案裁示。上句「待前置清單完成後一併附上」自本日起改為「待首次人工寫入驗證完成後另案送題」（有意識的變更，不是漏刪）。
 
 ### 8.10 reader 真連線 smoke 結果與空白分頁修正（2026-10-20）
 
 - **smoke 結果**（客戶於 Streamlit Cloud 實跑、總管轉述；撰寫組未見 log 原文）：`read_status=SCHEMA_MISMATCH header_state=MISMATCH data_rows=0`。⇒ 真實讀取路徑（Streamlit secrets → reader 身分 → 以 ID 開 `risk_cap_daily` → 讀全表）**已證明可連**；錯的是對空表的判讀。
 - **根因**：gspread 6.2.1 `gspread/worksheet.py:962` `values = response.get("values", [[]])`（Sheets API 對空範圍省略 `values` 鍵），`:964-967` `fill_gaps` 對 `[[]]`／`[]` 都回 `[[]]`（`gspread/utils.py:668-678`）；`get_all_values` 是別名。L1 只把 `[]` 當空表 ⇒ `[[]]` 被當成「表頭是空列」⇒ MISMATCH。舊測試假物件只用 `[]`，所以沒抓到。
-- **修正（本批）**：L1 `src/data/risk_cap/history.py::normalize_sheet_values` 單一真相源，**只**把 `[]`／`[[]]` 收斂成空表；`[[""]]`、第 1 列空白但下面有資料（`[["",…],[…]]`）仍判 MISMATCH（schema 守衛不放寬）。套用於 adapter 讀取邊界、`read_history_values`、`rows_as_records`、`header_state`、`precheck_target`、`verify_written`、`upsert_record`／`_append`、reader smoke 列數。守衛：`tests/test_vn1_empty_sheet_normalization.py`（含以真 gspread `Worksheet`＋假 HTTP client 驅動的契約測試與突變自驗）。
+- **修正（~~本批~~ #892 已合併，merge `35f67c0c`；2026-10-20 更新，有意識的變更，不是漏刪）**：L1 `src/data/risk_cap/history.py::normalize_sheet_values` 單一真相源，**只**把 `[]`／`[[]]` 收斂成空表；`[[""]]`、第 1 列空白但下面有資料（`[["",…],[…]]`）仍判 MISMATCH（schema 守衛不放寬）。套用於 adapter 讀取邊界、`read_history_values`、`rows_as_records`、`header_state`、`precheck_target`、`verify_written`、`upsert_record`／`_append`、reader smoke 列數。守衛：`tests/test_vn1_empty_sheet_normalization.py`（含以真 gspread `Worksheet`＋假 HTTP client 驅動的契約測試與突變自驗）。
 - 客戶指示（總管轉述）：修程式，⛔ 不要用手動輸入表頭的方式掩蓋。
-- **下一次 smoke 預期**（修正合併後、**尚未重跑**）：`read_status=EMPTY header_state=ABSENT data_rows=0 compare_status=START_RECORDING`。`PRODUCTION_WRITE_APPROVED` 仍為 `False`；⛔ 無 schedule、⛔ 無 `environment:`。
+- ~~**下一次 smoke 預期**（修正合併後、**尚未重跑**）：`read_status=EMPTY header_state=ABSENT data_rows=0 compare_status=START_RECORDING`。~~（2026-10-20：已重跑並符合預期，見下一點；有意識的變更，不是漏刪）`PRODUCTION_WRITE_APPROVED` 仍為 `False`；⛔ 無 schedule、⛔ 無 `environment:`。
+- **修正後 smoke 結果（2026-10-20）**（#892 合併後客戶於 Streamlit Cloud 實跑、總管轉述；撰寫組未見 log 原文）：`read_status=EMPTY identity_ok=True header_state=ABSENT data_rows=0 latest_record_date=- latest_run_id=- latest_row_sha256=- compare_status=START_RECORDING` ⇒ **PASS**。#892 PR Fast＋Slow success；合併後 main push run 39428438762 success（head `35f67c0c`；總管查證）；獨立 QA 0 MUST-FIX、突變測試轉紅（總管轉述）。
+- **旗標清理**：客戶已刪除 Streamlit secrets 的 `risk_cap_history_smoke = true`；保留 `risk_cap_history_sheet_id` 與 `[risk_cap_history_reader]`（客戶回報）。
+- **結論**：reader 後端 production readiness **完成**（空表狀態真連線 PASS）。⛔ **不是**「有資料的 reader 已真實驗證」—— 有資料狀態 smoke 待首次 production write 後執行（`docs/BACKLOG.md` `VN1-PG-READBACK`），不是首寫 blocker。
+
+### 8.11 Production Gate 盤點與客戶裁示（DEC-066；2026-10-20）
+
+> **裁示**：`docs/DECISIONS.md` **DEC-066**（客戶提示語原文經總管轉交；要點整理、**非逐字**；BACKLOG DR-2026-10-20-3）。**盤點**：本 session 四組獨立唯讀稽核，總管彙整、撰寫組未重查（`CLAUDE.md` §-2 規則 6）。
+> ⛔ 本節不含任何 Sheet ID、secret、私鑰。⛔ 本節登記批未翻旗標、未加 `environment:`／`schedule:`、未改 IAM／WIF。
+
+#### 8.11.1 盤點要點（事實；總管轉述）
+
+- **寫入鏈已具備**：閘門（`PRODUCTION_WRITE_APPROVED`）→ artifact sha256 比對 → hash 鎖定安裝 → WIF（無 key）→ 寫前檢查 → append → 寫後讀回驗證 → fail-stop（8.1～8.4）。
+- **正式路徑沒有 delete／rollback**；寫前檢查只要同鍵（record_date, ruleset_version）已有**任何一列（不論 status）**即 exit 4、什麼都不寫。
+- `RISK_CAP_HISTORY_WRITE_ENABLED: '1'` 在 workflow 寫入步驟**寫死** ⇒ 核准實質只剩 L0 常數（＋日後的 Environment）；架構是否調整列 LATER 候選（`docs/BACKLOG.md` 5.1.4 `VN1-PG-L-WRITE-ENABLED`）。
+- GitHub repo **public**、**個人帳號**；main **無分支保護、無 rulesets**。
+- Environment `production-risk-cap` **現存與否 UNKNOWN**（GitHub API 被代理擋）。
+- WIF provider **現行 attribute condition 在 repo 內沒有逐字原文**（只有客戶口頭回報＋實跑反推）⇒ 即時無法查證。
+- GitHub Environment 的 required reviewer 對 `schedule` 觸發**同樣要人工核准** ⇒ 與無人值守排程衝突（8.9）。
+
+#### 8.11.2 Environment 實際能力與設定要求（DEC-066 C Step 1；客戶手動）
+
+| 設定 | 要求 | 理由／盤點 |
+|---|---|---|
+| 名稱 | `production-risk-cap` | 與 8.6、8.7 一致；workflow 與 WIF condition 都會引用這個字面值 |
+| Required reviewers | **客戶本人**（唯一 reviewer） | 單人專案；誠實定位＝「刻意多按一次」，**不是**職責分離、也防不了帳號被盜（8.6） |
+| Prevent self-review | **關閉** | 唯一 reviewer 就是觸發者；打開會永遠無法核准 |
+| Deployment branches | **Selected branches → `main`** | ⛔ **不選「Protected branches only」**：main 未受保護，選它會讓**所有分支**可部署 |
+| Admin bypass（允許管理員略過保護規則） | **取當下 UI 可達成的最嚴格設定**（盤點：預設**開**，須手動取消勾選） | 個人帳號的 owner 即 admin；不關等於核准可被略過 |
+| 核准逾時 | 盤點：reviewer **30 天**未核准，run 自動失敗 | GitHub 行為，非設定項；失敗＝什麼都沒寫 |
+
+- ⚠️ 若 GitHub 當下 UI 的選項、名稱或能力與上表不同 ⇒ **不猜、停下回報**（DEC-066 C）。
+- ⛔ Environment 必須**先建好**，workflow 才能引用；先引用不存在的 Environment 會**自動建立一個無保護的** environment。
+- 8.6 提及的 environment secret（把 `RISK_CAP_HISTORY_SHEET_ID` 搬到 environment 層）**不在** DEC-066 範圍，維持「另行確認」。
+
+#### 8.11.3 正式順序（DEC-066 C；⛔ 不得跳步、不得調換）
+
+| Step | 誰 | 做什麼 | 完成判準 | 對應待辦 |
+|---|---|---|---|---|
+| 1 | 客戶 | 依 8.11.2 建立 Environment `production-risk-cap` | 客戶回報已建好（含各設定實際值） | `VN1-PG-ENV` |
+| 2 | 開發批（PR） | `production_write` job 加 `environment: production-risk-cap`＋同步測試守衛 | PR CI 綠、合併 | `VN1-PG-WIRE` |
+| 3 | 客戶（＋我們比對） | 客戶提供 WIF provider **現行 describe 原文**（唯讀；指令格式見 5.3 C5，pool／provider 名稱以 8.2／8.7 所用實際名稱為準）→ 確認原始 condition → 才修改 provider，新增 `environment == production-risk-cap`、`event_name == workflow_dispatch` | 新 condition 生效；實測無 environment 的 job 被 STS 拒（8.7） | `VN1-PG-WIF` |
+| 4 | 開發批＋客戶 | 首次寫入：開旗標 PR → 當天 dry-run → production-write → readback → 立即改回 `False` 的 PR | 見 8.11.4 | `VN1-PG-FIRST` |
+
+#### 8.11.4 首次寫入 Runbook（DEC-066 A／B／E；**未執行**）
+
+**寫入前核對（任一不符 ⇒ 當天不寫）**
+1. Step 1～3 已完成；開旗標 PR（`PRODUCTION_WRITE_APPROVED` → `True`＋政策測試同步）**已合併到 main**、main CI 綠。
+2. **當天**先在 `main` 跑 `mode=dry-run`：紀錄 `status=VALID`，且 `exposure_limit_pct` 等必要輸出正常。⛔ 非 VALID ⇒ 當天不觸發 production-write（DEC-066 B）。
+3. **避開台北時間 23:30–00:30**：寫前檢查要求 `record_date`＝寫入當下的台北日期；compute 與寫入跨過午夜會在寫前檢查被擋（exit 4）。
+4. Actions 頁確認**沒有其他** `risk_cap_history_poc` run 在執行或等待中（concurrency 只保留一個 pending）。
+
+**觸發**
+- Actions → `risk_cap_history_poc` → Run workflow → branch **`main`** → `mode`＝**`production-write`** → 停在 Environment 等待核准 → 客戶本人核准。
+
+**預期 log（全部符合才算成功）**
+1. 閘門：`production 寫入核准旗標為 True`。
+2. artifact：compute job 印 `record artifact sha256=<x>`；寫入 job `sha256sum --check --strict` 印 `OK`。
+3. 寫前檢查：`precheck:` 那行 JSON 為 `ok: true`、`failures: []`、`header_state: ABSENT`、`data_rows: 0`。
+4. 寫入：`寫入結果：APPENDED`。
+5. 寫後驗證：`verify:` 那行 JSON 為 `ok: true`、`matches: 1`、`mismatched_columns: []`。
+6. **三處列指紋一致**：`precheck.record_sha256`＝`verify.record_sha256`＝`verify.readback_sha256`。
+7. 最後一行：`寫入並讀回驗證通過`；job exit 0。
+
+**寫入後核對（人工）**
+1. Sheet `risk_cap_daily` 恰好 **2 列 × 20 欄**（表頭＋1 筆；欄序＝`HISTORY_COLUMNS`）。
+2. 欄值：`record_date`＝當天台北日期、`status` 與 `exposure_limit_pct` 與本次 compute job 紀錄一致（寫後驗證已逐欄比對）；與當天 dry-run 不同時**照實記錄、不改**（兩次 run 間輸入可能更新）。
+3. `run_id`＝本次 production-write run id；`git_sha`＝本次 main head。
+4. 表內**無** `PERMISSION_TEST` 殘留列。
+5. **存證據**：run id／URL、兩個 job 的完整 log、record artifact（**retention 7 天**，過期即消失 ⇒ 當天下載）、Sheet 截圖（分享時勿露出網址列 Sheet ID）。
+6. **立即**以獨立 PR 把 `PRODUCTION_WRITE_APPROVED` 改回 `False`（DEC-066 A；不論成功或失敗中斷，這都是下一個動作）。
+7. 之後：網站 reader 有資料狀態 smoke（`VN1-PG-READBACK`；預期 `read_status=OK header_state=MATCH data_rows=1`、`latest_row_sha256`＝`verify.readback_sha256`）。
+
+**失敗處置（DEC-066 E：FAIL-STOP）**
+
+| 結束碼／情況 | 意思 | 處置 |
+|---|---|---|
+| exit 4 | 寫前檢查阻擋（什麼都沒寫） | 維持原狀、**當天不再重跑**；保留 log；改回 `False` 的 PR 照開 |
+| exit 1／3／5 | I/O 失敗／同日衝突／寫後驗證不過（**可能已寫入**） | 保留完整 logs／evidence、人工檢查 Sheet、**停下等客戶裁示**；⛔ 自動刪列／rollback／覆寫／盲目 retry |
+| exit 2、Environment 被拒、逾時、取消 | 閘門未過或紀錄檔不合格等（DEC-066 未個別點名） | 撰寫組讀法：落在 E 總則 —— 保留證據、停下回報、不重試（**讀法，不是新裁示**） |
+| 留下非 VALID 列（dry-run VALID 但寫入時不可抗力） | 真實系統歷史 | **保留、不刪、不覆寫、當天不重寫**（DEC-066 B） |
+
+- 需刪無效列：**只能由客戶在 Google Sheets UI 人工執行**，刪前保存證據／截圖；production 程式**永久不得**因此新增自動刪列功能。
+
+#### 8.11.5 Daily Schedule：**NOT APPROVED**（DEC-066 F）
+
+- 首次人工寫入與 daily schedule 是**兩個獨立 Gate**；「Production Write 授權 ≠ Daily Schedule 授權」。
+- ⛔ 禁止新增 `schedule:`；排程設計、Environment 分流、unattended write 全部延後到首次人工寫入驗證完成後**另案裁示**（`docs/BACKLOG.md` 5.1.4 `VN1-PG-SCHED`）。
