@@ -28,7 +28,7 @@ import pytest
 
 from shared import risk_cap_history_policy as P
 from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION, RISK_CAP_STATE_FILE
-from src.data.macro import risk_cap_history as L1H
+from src.data.risk_cap import history as L1H
 from src.services import macro_refresh_service as RS
 from src.services import risk_cap_apply as RC
 from src.services import risk_cap_history_service as H
@@ -40,7 +40,7 @@ from src.services import macro_engine_inputs as M
 REPO = Path(__file__).resolve().parents[1]
 NEW_FILES = (
     "shared/risk_cap_history_policy.py",
-    "src/data/macro/risk_cap_history.py",
+    "src/data/risk_cap/history.py",
     "src/services/risk_cap_history_service.py",
     "scripts/risk_cap_history_poc.py",
 )
@@ -688,6 +688,25 @@ def _imports(rel: str) -> set[str]:
 _PERSONAL_SHEET = ("gsheet_portfolio", "gsheet_sa_reader", "oauth_state")
 
 
+def assert_app_only_smoke_hook(app_src: str) -> None:
+    """app.py 與系統歷史 Sheet 的唯一接點：恰好一行 `from …reader_service import run_smoke_if_flagged`
+    ＋恰好一個模組層、無參數、回傳值不被使用的 `run_smoke_if_flagged()` 呼叫；其餘一字不得提到。"""
+    tree = ast.parse(app_src)
+    assert app_src.count("risk_cap_history") == 1
+    imps = [n for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)
+            and "risk_cap_history" in (n.module or "")]
+    assert len(imps) == 1 and imps[0].module == "src.services.risk_cap_history_reader_service"
+    assert [(a.name, a.asname) for a in imps[0].names] == [("run_smoke_if_flagged", None)]
+    assert not [n for n in ast.walk(tree) if isinstance(n, ast.Import)
+                and any("risk_cap_history" in a.name for a in n.names)]
+    uses = [n for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id == "run_smoke_if_flagged"]
+    assert len(uses) == 1
+    stmts = [s for s in tree.body if isinstance(s, ast.Expr) and isinstance(s.value, ast.Call)
+             and isinstance(s.value.func, ast.Name) and s.value.func.id == "run_smoke_if_flagged"]
+    assert len(stmts) == 1 and not stmts[0].value.args and not stmts[0].value.keywords
+    assert stmts[0].value.func is uses[0]
+
+
 class TestStaticGuards:
     @pytest.mark.parametrize("rel", NEW_FILES)
     def test_no_personal_sheet_paths(self, rel):
@@ -715,18 +734,20 @@ class TestStaticGuards:
         hits = {}
         for f in list((REPO / "src").rglob("*.py")) + list((REPO / "scripts").rglob("*.py")) \
                 + list((REPO / "shared").rglob("*.py")) + [REPO / "app.py"]:
-            t = f.read_text(encoding="utf-8")
+            # 📌 2026-10-20（Pre-Hardening 批）：模組路徑 `risk_cap_history_reader_service` 字面上含 secrets 表格名
+            #   （`risk_cap_history_reader`）——那是 import 路徑不是憑證名稱，先去掉再比（app.py 的 smoke import 才不誤判）。
+            t = f.read_text(encoding="utf-8").replace("risk_cap_history_reader_service", "")
             for n in names:
                 if n in t:
                     hits.setdefault(f.relative_to(REPO).as_posix(), set()).add(n)
         # L0 定義處＋L1 唯一入口的 docstring（講拒絕順序）；其餘一律經 L0 常數引用，不寫字面。
         # 📌 2026-10-20（Production Wiring 批；有意識的放寬）：另准 L3 讀取端服務（docstring 講它只讀哪張 secrets 表）
         #   與 PoC 腳本（docstring 講 `--write` 用哪個 Sheet ID 環境變數）—— 兩者程式碼一律經 L0 常數引用。
-        assert set(hits) <= {"shared/risk_cap_history_policy.py", "src/data/macro/risk_cap_history.py",
+        assert set(hits) <= {"shared/risk_cap_history_policy.py", "src/data/risk_cap/history.py",
                              "src/services/risk_cap_history_reader_service.py",
                              "scripts/risk_cap_history_poc.py"}, hits
         # L1 不讀 secrets（reader 憑證由 L3 讀進來再交給 L1）⇒ L1 不得知道 secrets 表格名／鍵名。
-        l1_text = (REPO / "src/data/macro/risk_cap_history.py").read_text(encoding="utf-8")
+        l1_text = (REPO / "src/data/risk_cap/history.py").read_text(encoding="utf-8")
         assert P.READER_SECRETS_TABLE not in l1_text and P.READER_SHEET_ID_SECRET_KEY not in l1_text
         for f in list((REPO / "src").rglob("*.py")):
             rel = f.relative_to(REPO).as_posix()
@@ -735,13 +756,27 @@ class TestStaticGuards:
                 assert "risk_cap_history" not in t, rel
 
     def test_no_reader_code_path_in_app(self):
-        for f in list((REPO / "src").rglob("*.py")) + [REPO / "app.py"]:
-            rel = f.relative_to(REPO).as_posix()
-            if rel.startswith(("src/ui/", "app.py")):
-                assert "risk_cap_history" not in f.read_text(encoding="utf-8"), rel
+        # 📌 2026-10-20（VN1-STORE Pre-Hardening 批；有意識的放寬，不是漏改）：原「app.py 一字不得提到
+        #   risk_cap_history」放寬為「**只准**一行 import `run_smoke_if_flagged`＋一行無參數呼叫」（log-only smoke，
+        #   ⛔ 畫面零輸出）。原意圖（畫面不得有讀取端程式碼路徑、UI 不得顯示歷史）照守：src/ui/ 仍一字不得提到；
+        #   app.py 不得用到 reader 服務的其他任何符號。
+        for f in (REPO / "src/ui").rglob("*.py"):
+            assert "risk_cap_history" not in f.read_text(encoding="utf-8"), f.relative_to(REPO).as_posix()
+        assert_app_only_smoke_hook((REPO / "app.py").read_text(encoding="utf-8"))
+
+    def test_app_smoke_hook_guard_mutations(self):
+        src = (REPO / "app.py").read_text(encoding="utf-8")
+        line = "from src.services.risk_cap_history_reader_service import run_smoke_if_flagged  # noqa: E402\n"
+        assert src.count(line) == 1
+        for bad in (src.replace(line, line.replace("run_smoke_if_flagged", "run_smoke_if_flagged, read_history")),
+                    src.replace("\nrun_smoke_if_flagged()\n", "\nrun_smoke_if_flagged()\nrun_smoke_if_flagged()\n"),
+                    src.replace("\nrun_smoke_if_flagged()\n", "\nst.write(run_smoke_if_flagged())\n"),
+                    src + "\nfrom src.services import risk_cap_history_reader_service\n"):
+            with pytest.raises(AssertionError):
+                assert_app_only_smoke_hook(bad)
 
     def test_l1_no_streamlit_no_upper_layers(self):
-        imps = _imports("src/data/macro/risk_cap_history.py")
+        imps = _imports("src/data/risk_cap/history.py")
         assert not [i for i in imps if i == "streamlit" or i.startswith("streamlit.")]
         assert not [i for i in imps if i.startswith(("src.compute", "src.services", "src.ui"))]
 
@@ -790,7 +825,7 @@ class TestStaticGuards:
 # ══════════════════════════════════════════════════════════════════════════
 class TestMutations:
     def test_upsert_without_valid_guard_duplicates(self):
-        mut = _mutated_module("src/data/macro/risk_cap_history.py",
+        mut = _mutated_module("src/data/risk_cap/history.py",
                               ("    if row[COL_STATUS] == STATUS_VALID and valid_rows:\n",
                                "    if False:\n"))
         ws = mut.InMemoryWorksheet()
@@ -829,7 +864,7 @@ class TestMutations:
         assert H.compare_status(rows, expected_date="2026-10-14", now=NOW).status == P.COMPARE_STALE
 
     def test_upsert_dropping_invalid_after_valid_mutation(self):
-        mut = _mutated_module("src/data/macro/risk_cap_history.py",
+        mut = _mutated_module("src/data/risk_cap/history.py",
                               ("    if row[COL_STATUS] != STATUS_VALID:\n",
                                "    if row[COL_STATUS] != STATUS_VALID and valid_rows:\n        return UPSERT_NOOP_DUPLICATE\n"
                                "    if row[COL_STATUS] != STATUS_VALID:\n"))
@@ -843,7 +878,7 @@ class TestMutations:
         assert len(L1H.rows_as_records(ws2.get_all_values())) == 2
 
     def test_adapter_without_id_check_mutation_writes_wrong_sheet(self):
-        mut = _mutated_module("src/data/macro/risk_cap_history.py",
+        mut = _mutated_module("src/data/risk_cap/history.py",
                               ("        if actual != self._expected_id:\n", "        if False:\n"))
         calls = []
         ws = _FakeGsWS(calls, sheet_id="PERSONAL_SHEET", rows=[])

@@ -766,7 +766,13 @@ class TestOldFilesUntouched:
     # 📌 vNext 1.0-B2 稽核修正第二輪（2026-10-19，核准過的共用 chrome 改動，⛔ 不是漏改）：`app.py` 再加最少的線 ——
     #   OAuth hook 處多呼叫 `sync_silent_marker()`、側欄寫入新 `?sheet=` 後就地呼叫它（登入後換 Sheet 重算 `?gs=`
     #   記號；稽核 MUST-1）。其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "bf2a00d0657f48efaf4e7ba40eb270a9513d2edc91e839a1d2c6d3cd7feb5897"
+    # ~~"bf2a00d0657f48efaf4e7ba40eb270a9513d2edc91e839a1d2c6d3cd7feb5897"~~（1.0-B2 稽核修正第二輪後，至 56904662 仍成立）
+    # 📌 VN1-STORE Pre-Hardening（2026-10-20，經總管指派的 app.py 開機掛鉤，⛔ 不是漏改）：`app.py` 只加一行 import
+    #   ＋一行 `run_smoke_if_flagged()`（reader 真連線 smoke，只寫 log、⛔ 畫面零輸出；secrets 旗標預設關）＋三行註解
+    #   （回修第 1 輪更正：原寫「兩行註解」，實為三行）＋一行空行。
+    #   其餘 90 檔一個字都沒動。指紋依本 docstring 的指示同步更新；掛鉤的形狀由
+    #   `tests/test_vn1_store_poc.py::assert_app_only_smoke_hook` 另守。
+    _BASE_DIGEST = "1b47c591741190e6c9598d01129182a53e7a31ac13b649b9bbe81fc50e7614cc"
 
     def test_no_diff_against_base(self):
         import hashlib

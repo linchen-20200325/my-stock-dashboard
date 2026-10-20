@@ -1,0 +1,5 @@
+# requirements-risk-cap-writer.in — VN1-STORE production 寫入 job 的**直接**依賴（compile 輸入；版本範圍＝requirements.txt 同名行）。
+# 產物 `requirements-risk-cap-writer.txt`（hash 鎖定）由本檔編譯；重產指令見該檔檔頭。⛔ 不加 pandas／streamlit。
+gspread>=6.0.0,<8.0
+google-auth>=2.0.0,<4.0
+requests>=2.31.0,<3.0.0

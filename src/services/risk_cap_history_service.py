@@ -8,7 +8,7 @@
 3. Required Core 不齊／過期／取數失敗 ⇒ 照實記狀態（`STATUS_*`），`exposure_limit_pct` 一律空白。
 6. 每列可追溯：record_date、input_asof、狀態、正式上限值、規則版本、provenance（schema 見 L0）。
 7. `compare_status`：沒有歷史 ⇒「從今天開始記錄」；預期日期沒紀錄／不是有效紀錄／已過期 ⇒ ⛔ 不比較。
-8. 冪等見 L1 `src/data/macro/risk_cap_history.upsert_record`。
+8. 冪等見 L1 `src/data/risk_cap/history.upsert_record`。
 （第 4、5 點：本檔與個人持股 Sheet 路徑零交集；本 PoC 不寫任何真實 Sheet。）
 
 「VALID」的唯一判準：這一輪真的寫出快照，**且**官方讀端

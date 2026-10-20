@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 from shared import risk_cap_history_policy as P
-from src.data.macro import risk_cap_history as L1H
+from src.data.risk_cap import history as L1H
 from tests._git_tracked import REPO_MIN_TRACKED, only_tracked
 from tests.test_p01_macro_refresh import _mutated_module
 
@@ -820,7 +820,7 @@ class TestMutations:
     #   （Production Wiring 批；有意識的變更，不是漏刪）：「未實作」raise 已不存在，且本批禁止把旗標改 True。
     #   改守「拔掉第一道核准檢查」這個突變：突變體（旗標仍為 False）會一路放行到回傳憑證檔路徑；真模組照樣拒絕。
     def test_gate_without_approval_check_is_caught(self, tmp_path):
-        mut = _mutated_module("src/data/macro/risk_cap_history.py", (
+        mut = _mutated_module("src/data/risk_cap/history.py", (
             "    env = os.environ if environ is None else environ\n    assert_production_write_approved()\n",
             "    env = os.environ if environ is None else environ\n"))
         assert mut.PRODUCTION_WRITE_APPROVED is False

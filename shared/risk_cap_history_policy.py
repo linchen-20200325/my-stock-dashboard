@@ -13,11 +13,12 @@
 - 有效期沿用既有 `shared.staleness.MACRO_VERDICT_MAX_AGE_DAYS`（判定函式在 L3
   `macro_state_locker.macro_state_is_expired`，本檔不重寫）。
 
-分層（CLAUDE.md §8.2）：L0 —— 只 import 標準函式庫，被 L1（`src/data/macro/risk_cap_history.py`）
+分層（CLAUDE.md §8.2）：L0 —— 只 import 標準函式庫，被 L1（`src/data/risk_cap/history.py`）
 與 L3（`src/services/risk_cap_history_service.py`）import。
 """
 from __future__ import annotations
 
+from datetime import timedelta, timezone
 from types import MappingProxyType
 from typing import Mapping
 
@@ -197,6 +198,10 @@ READER_SCOPES: tuple[str, ...] = ("https://www.googleapis.com/auth/spreadsheets.
 HISTORY_SHEET_ID_ENV_VAR: str = "RISK_CAP_HISTORY_SHEET_ID"
 #: 寫入總開關（新名稱）。本 PoC 階段**即使設了也拒絕**（production 寫入尚未核准）。
 WRITE_ENABLE_ENV_VAR: str = "RISK_CAP_HISTORY_WRITE_ENABLED"
+#: Google Sheets API 每個 HTTP 請求的逾時（秒；requests 的 `(connect, read)` tuple，交給 gspread 6.x
+#: `Client.set_timeout`）。reader／writer（讀寫與唯讀 token）一律套用；逾時 ⇒ `requests.exceptions.Timeout`
+#: （`RequestException` 子類）⇒ L1 歸類為 API 錯誤（⛔ 不重試、⛔ 不吞）。未設定時 gspread 預設不逾時（會卡住）。
+SHEETS_HTTP_TIMEOUT_S: tuple[float, float] = (5.0, 10.0)
 #: production 寫入是否已獲客戶核准。⚠️ 改成 True 需要客戶另一次裁示（DEC-009），⛔ 不得自行改。
 PRODUCTION_WRITE_APPROVED: bool = False
 
@@ -254,3 +259,56 @@ READ_STATUSES: tuple[str, ...] = (
 #: 📌 只有 OK／EMPTY 會進快取（失敗 ⛔ 不快取 —— v3 §02「只快取成功結果」）：由 L3 快取函式「失敗一律拋」的結構保證，
 #:   不另立常數（回修第 1 輪 2026-10-20：原 `READ_STATUSES_CACHEABLE` 沒有任何程式使用，已移除 —— 該常數只存在於
 #:   未合併的本批分支，從未進 main）。
+
+# ══════════════════════════════════════════════════════════════════════
+# 首次 production 寫入的前置檢查／寫後驗證（VN1-STORE Pre-Hardening 批，2026-10-20；⛔ 本批不執行、
+# 只在寫入閘門之後才可能走到 —— `PRODUCTION_WRITE_APPROVED` 仍為 False）
+# ══════════════════════════════════════════════════════════════════════
+#: 工作表表頭狀態（L1 `header_state`；寫前檢查與 reader smoke 共用）。
+HEADER_STATE_ABSENT = "ABSENT"          # 全表空白（連表頭都沒有）
+HEADER_STATE_MATCH = "MATCH"            # 第一列逐字等於 `HISTORY_COLUMNS`
+HEADER_STATE_MISMATCH = "MISMATCH"      # 第一列存在但不等於 `HISTORY_COLUMNS`（⛔ 不猜欄位對應）
+#: reader smoke 沒讀到表（憑證／ID／API 失敗）⇒ 表頭狀態無從得知（⛔ 不推定 ABSENT）。
+HEADER_STATE_NOT_READ = "NOT_READ"
+
+#: `record_date` 的日曆時區（台北 UTC+8；CLAUDE.md §4.5 repo 慣例）。寫前檢查的「今天」與 reader smoke 的
+#: 「預期日期」都用它；⛔ 不另開一份 `timezone(timedelta(hours=8))`（`shared/macro_compute` 那份會連帶 import numpy，
+#: 寫入路徑不得載入）。
+RECORD_DATE_TZ = timezone(timedelta(hours=8))
+
+#: 權限驗證 P1／R3 測試列的 A 欄標記前綴（`scripts/risk_cap_permission_test.py` 的 `P1_MARKER`／`R3_MARKER`
+#: 都以它開頭；該腳本已實跑驗證過、本批不動 —— 兩者一致由 `tests/test_vn1_first_write_verify.py` 守衛）。
+#: 寫前檢查只要在表內任一格看到它 ⇒ 有測試殘留 ⇒ 拒寫（⛔ 不自動刪除）。
+PERMISSION_TEST_MARKER_PREFIX = "PERMISSION_TEST"
+
+#: 寫前檢查（`precheck_target`）的失敗碼（固定字彙；可印、⛔ 不含任何儲存格值）。
+PRECHECK_FAIL_ROW_INVALID = "RECORD_ROW_INVALID"            # 要寫的列缺欄／多欄／非字串
+PRECHECK_FAIL_HEADER_MISMATCH = "HEADER_MISMATCH"           # 表非空且第一列不是 schema 表頭
+PRECHECK_FAIL_DUPLICATE_HEADER = "DUPLICATE_HEADER"         # 資料區又出現一列表頭
+PRECHECK_FAIL_ROW_TOO_LONG = "DATA_ROW_TOO_LONG"            # 資料列欄數超過表頭
+PRECHECK_FAIL_PERMISSION_TEST_RESIDUE = "PERMISSION_TEST_RESIDUE"   # 表內殘留權限驗證測試列
+PRECHECK_FAIL_KEY_EXISTS = "KEY_ALREADY_PRESENT"            # 同（record_date, ruleset_version）已有任何一列
+PRECHECK_FAIL_DATE_NOT_TODAY = "RECORD_DATE_NOT_TODAY_TW"   # record_date ≠ 寫入當下的台北日期
+PRECHECK_FAIL_RULESET_VERSION = "RULESET_VERSION_NOT_CURRENT"
+PRECHECK_FAIL_SCHEMA_VERSION = "SCHEMA_VERSION_NOT_CURRENT"
+#: 腳本層（非 L1 純函式）：本輪 `GITHUB_RUN_ID` 缺或 ≠ 紀錄裡的 run_id（寫後驗證以 run id 找列 ⇒ 必須事前一致）。
+PRECHECK_FAIL_RUN_ID_MISMATCH = "RUN_ID_MISMATCH"
+
+#: 寫後驗證（`verify_written`）的失敗碼。⚠️ 任何失敗 ⛔ 不刪任何列（自動回滾未經客戶核准）—— 只紅燈＋人工查看。
+VERIFY_FAIL_HEADER_MISMATCH = "HEADER_MISMATCH"             # 第一列不是 schema 表頭（含全表空白）
+VERIFY_FAIL_DUPLICATE_HEADER = "DUPLICATE_HEADER"
+VERIFY_FAIL_ROW_TOO_LONG = "DATA_ROW_TOO_LONG"
+VERIFY_FAIL_NO_MATCH = "NO_MATCHING_ROW"                    # 找不到 run_id＋record_date 相符的列
+VERIFY_FAIL_MULTIPLE_MATCHES = "MULTIPLE_MATCHING_ROWS"     # 相符的列 ≥ 2
+VERIFY_FAIL_FIELD_MISMATCH = "FIELD_MISMATCH"               # 唯一相符列與要寫的紀錄有欄位不同
+
+# ══════════════════════════════════════════════════════════════════════
+# 網站 reader 真連線 smoke（VN1-STORE Pre-Hardening 批；只寫 log、⛔ 畫面零變化）
+# ══════════════════════════════════════════════════════════════════════
+#: Streamlit secrets **頂層**旗標鍵：值恰好是 TOML `true`（Python `True`）才跑一次 smoke；
+#: 其餘（沒設、`"true"` 字串、1…）一律不跑、零 Google 呼叫。
+READER_SMOKE_SECRET_KEY: str = "risk_cap_history_smoke"
+#: smoke 的 log 行前綴（固定格式，一個行程一行）。
+READER_SMOKE_LOG_PREFIX: str = "[risk_cap_history_smoke]"
+#: smoke 自己有程式 bug（非讀取錯誤）時 log 行的狀態字（只配例外類別名；⛔ 不是 `READ_STATUSES` 之一）。
+READER_SMOKE_STATUS_BUG: str = "SMOKE_BUG"

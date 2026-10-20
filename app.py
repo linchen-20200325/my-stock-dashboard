@@ -94,6 +94,12 @@ try:
 except Exception as _oauth_err:
     print(f'[oauth callback] {_oauth_err}')
 
+# ── VN1-STORE 系統歷史 Sheet reader 真連線 smoke（2026-10-20 Pre-Hardening 批）：只寫一行 log、⛔ 畫面零輸出；
+#    Streamlit secrets 頂層 smoke 旗標恰好為 true 才跑（鍵名見 L0 `READER_SMOKE_SECRET_KEY`）、每個行程一次；
+#    旗標沒開 ⇒ 零 Google 呼叫。⛔ 不會往上拋例外。
+from src.services.risk_cap_history_reader_service import run_smoke_if_flagged  # noqa: E402
+run_smoke_if_flagged()
+
 # ── App 初始化閘門（每個 Session 僅執行一次，防重複迴圈）────────────
 if '_app_boot_done' not in st.session_state:
     st.session_state['_app_boot_done'] = True

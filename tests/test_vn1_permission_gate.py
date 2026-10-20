@@ -105,7 +105,9 @@ def assert_gate_guards(text: str) -> None:
     w, wt = jobs["permission_test_writer"], _job_text(text, "permission_test_writer")
     assert w["if"] == "${{ inputs.mode == 'permission-test-writer' && github.ref == 'refs/heads/main' }}"
     assert w["permissions"] == {"contents": "read", "id-token": "write"}
-    assert set(w) == {"if", "runs-on", "timeout-minutes", "permissions", "steps"}, set(w)
+    # 📌 2026-10-20（Pre-Hardening 批；有意識的變更，不是放寬）：job 鍵集合多了 `concurrency`（共用字面 group
+    #   `risk-cap-history-sheet-write`，跨 job 序列化碰 Sheet 的工作）；group 本身的守衛在 `tests/test_vn1_prehardening.py`。
+    assert set(w) == {"if", "runs-on", "timeout-minutes", "permissions", "concurrency", "steps"}, set(w)
     _assert_pinned(w, wt, {"actions/checkout", "actions/setup-python", "google-github-actions/auth"})
     rest = _common_prefix(w)
     assert len(rest) == 2
@@ -125,7 +127,7 @@ def assert_gate_guards(text: str) -> None:
     r, rt = jobs["permission_test_reader"], _job_text(text, "permission_test_reader")
     assert r["if"] == "${{ inputs.mode == 'permission-test-reader' && github.ref == 'refs/heads/main' }}"
     assert r["permissions"] == {"contents": "read"}, r["permissions"]
-    assert set(r) == {"if", "runs-on", "timeout-minutes", "permissions", "steps"}, set(r)
+    assert set(r) == {"if", "runs-on", "timeout-minutes", "permissions", "concurrency", "steps"}, set(r)
     rt_code = "\n".join(c for _, _, c in _yaml_lines(rt))          # 不含註解（註解裡寫「沒有 id-token」）
     assert "id-token" not in rt_code and "google-github-actions" not in rt_code
     _assert_pinned(r, rt, {"actions/checkout", "actions/setup-python"})
