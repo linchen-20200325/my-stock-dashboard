@@ -187,8 +187,33 @@ class HistoryWorksheet(Protocol):
     def append_row(self, values: list[str]) -> Any: ...
 
 
+def normalize_sheet_values(values: Sequence[Sequence[Any]]) -> list[list[str]]:
+    """`get_all_values()` 的原始回傳 → 全字串的列；**空表的兩種表示法一律收斂成 `[]`**（單一真相源）。
+
+    📌 2026-10-20 真連線 smoke 實錘（`risk_cap_daily` 空白分頁讀成 `SCHEMA_MISMATCH`）—— 根因在 gspread：
+      - gspread 6.2.1 `gspread/worksheet.py:962` `values = response.get("values", [[]])`：Sheets API 對空範圍
+        **省略** `values` 鍵 ⇒ 預設值就是 `[[]]`；
+      - 同檔 `:964-967` `fill_gaps(values)`：`gspread/utils.py:668-678` 對 `[[]]` 回 `[[]]`（max_cols＝0），
+        對 `[]` 的 `max()` 拋 `ValueError` 後也回 `[[]]` ⇒ `{"values": []}` 同樣變成 `[[]]`；
+      - `get_all_values`（`worksheet.py:474-495`）只是 `get_values` 的別名。
+      ⇒ 真表空白時 L1 收到的是 `[[]]`，不是 `[]`（`tests/test_vn1_empty_sheet_normalization.py` 以真 gspread
+      Worksheet＋假 HTTP client 驅動釘住）。
+    ⛔ **只**收斂 `[]` 與 `[[]]`。`[[""]]`、`[["", ""]]`、任何含非空格的形狀都**不是**空表：Sheets API 永不回
+    列尾空白格／尾端空列，gspread 對空表也不會產生這些形狀；第 1 列空白但第 2 列以後有內容時 API 回
+    `[[], [...]]`，經 `fill_gaps` 變成 `[["", ...], [...]]` —— 那是「表頭被清掉的有資料表」，必須判 MISMATCH。
+    """
+    rows = [[str(c) for c in row] for row in values]
+    if not rows or rows == [[]]:
+        return []
+    return rows
+
+
 class InMemoryWorksheet:
-    """記憶體假表：PoC `--simulate-rerun` 與測試用。行為對齊 gspread（回字串、空表回 `[]`）。"""
+    """記憶體假表：PoC `--simulate-rerun` 與測試用。行為對齊 gspread（回字串、空表回 `[]`）。
+
+    `InMemoryWorksheet([[]])` 可模擬真 gspread 對空白分頁的回傳 `[[]]`（見 `normalize_sheet_values`）；
+    此時 `append_row` 與真 Sheets 一樣寫在第 1 列（不會留下一列空白）。
+    """
 
     def __init__(self, rows: Iterable[Sequence[str]] = ()) -> None:
         self._rows: list[list[str]] = [list(r) for r in rows]
@@ -199,6 +224,8 @@ class InMemoryWorksheet:
 
     def append_row(self, values: list[str]) -> None:
         self.append_calls += 1
+        if not normalize_sheet_values(self._rows):
+            self._rows = []
         self._rows.append([str(v) for v in values])
 
 
@@ -248,7 +275,7 @@ class GspreadWorksheetAdapter:
 
     def get_all_values(self) -> list[list[str]]:
         self._verify()
-        return [[str(c) for c in row] for row in self._ws.get_all_values()]
+        return normalize_sheet_values(self._ws.get_all_values())
 
     def append_row(self, values: list[str]) -> Any:
         self._verify()
@@ -327,11 +354,13 @@ def _validate_row(row: Mapping[str, str]) -> None:
         raise HistoryRowInvalid(f"欄位值必須是字串（序列化由 L3 build_record 負責）：{bad}")
 
 
-def rows_as_records(values: list[list[str]]) -> list[dict[str, str]]:
-    """`get_all_values()` → 每列一個 dict。空表 → `[]`。表頭不符 → `HistorySchemaMismatch`。
+def rows_as_records(values: Sequence[Sequence[str]]) -> list[dict[str, str]]:
+    """`get_all_values()` → 每列一個 dict。空表（`[]`／`[[]]`，見 `normalize_sheet_values`）→ `[]`。
+    表頭不符 → `HistorySchemaMismatch`。
 
     資料列欄數不足時以空字串補到表頭長度（Sheets 會省略列尾空白儲存格）；多於表頭 → 不符。
     """
+    values = normalize_sheet_values(values)
     if not values:
         return []
     header = list(values[0])
@@ -369,8 +398,8 @@ def _conflict_row(first_valid: Mapping[str, str], row: Mapping[str, str]) -> dic
     return out
 
 
-def _append(ws: HistoryWorksheet, values: list[list[str]], row: Mapping[str, str]) -> None:
-    if not values:
+def _append(ws: HistoryWorksheet, values: Sequence[Sequence[str]], row: Mapping[str, str]) -> None:
+    if not normalize_sheet_values(values):
         ws.append_row(list(HISTORY_COLUMNS))
     ws.append_row([row[c] for c in HISTORY_COLUMNS])
 
@@ -381,7 +410,7 @@ def upsert_record(ws: HistoryWorksheet, row: Mapping[str, str]) -> str:
     空表 ⇒ 先寫表頭再寫資料列。表頭不符 ⇒ `HistorySchemaMismatch`（不寫）。
     """
     _validate_row(row)
-    values = ws.get_all_values()
+    values = normalize_sheet_values(ws.get_all_values())
     existing = rows_as_records(values)
     same_key = [r for r in existing if _key(r) == _key(row)]
     valid_rows = [r for r in same_key if r.get(COL_STATUS) == STATUS_VALID]
@@ -424,7 +453,11 @@ def record_sha256(record: Mapping[str, str]) -> str:
 
 
 def header_state(values: Sequence[Sequence[str]]) -> str:
-    """`get_all_values()` 的第一列 → `HEADER_STATE_ABSENT`／`MATCH`／`MISMATCH`（⛔ 不猜欄位對應）。"""
+    """`get_all_values()` 的第一列 → `HEADER_STATE_ABSENT`／`MATCH`／`MISMATCH`（⛔ 不猜欄位對應）。
+
+    空表（`[]`／gspread 的 `[[]]`）⇒ ABSENT；其餘一律逐字比對第一列（schema 守衛不放寬）。
+    """
+    values = normalize_sheet_values(values)
     if not values:
         return HEADER_STATE_ABSENT
     return HEADER_STATE_MATCH if tuple(values[0]) == HISTORY_COLUMNS else HEADER_STATE_MISMATCH
@@ -433,7 +466,7 @@ def header_state(values: Sequence[Sequence[str]]) -> str:
 def read_history_values(ws: HistoryWorksheet) -> list[list[str]]:
     """讀全表原樣（全字串）；錯誤分型同 `read_history_records`。給寫前檢查／寫後驗證／reader smoke 用。"""
     with _classified_read_errors():
-        return [[str(c) for c in row] for row in ws.get_all_values()]
+        return normalize_sheet_values(ws.get_all_values())
 
 
 @dataclass(frozen=True)
@@ -501,7 +534,9 @@ def precheck_target(values: Sequence[Sequence[str]], record: Mapping[str, str], 
     4. 同鍵（record_date, ruleset_version；去頭尾空白後比）**任何狀態**的列都不存在（首次寫入不碰既有同日紀錄）；
     5. `record_date` ＝ 寫入當下的台北日期 `today_tw`（呼叫端給；跨午夜 ⇒ 拒寫，⛔ 不改日期）；
     6. 規則版本／schema 版本 ＝ 現行常數（舊程式算的列不准寫進來）。
+    空表的兩種表示法（`[]`／`[[]]`）先經 `normalize_sheet_values` 收斂。
     """
+    values = normalize_sheet_values(values)
     try:
         _validate_row(record)
     except HistoryRowInvalid:
@@ -531,6 +566,7 @@ def verify_written(values: Sequence[Sequence[str]], record: Mapping[str, str], r
     0 列或 ≥2 列或任一欄不同 ⇒ 失敗。⛔ 永不刪除、⛔ 不修正 —— 自動回滾未經客戶核准；失敗只能紅燈＋人工查看。
     """
     _validate_row(record)
+    values = normalize_sheet_values(values)
     if header_state(values) != HEADER_STATE_MATCH:
         return VerifyResult((VERIFY_FAIL_HEADER_MISMATCH,), 0)
     fails = _data_rows_check(values, VERIFY_FAIL_DUPLICATE_HEADER, VERIFY_FAIL_ROW_TOO_LONG)

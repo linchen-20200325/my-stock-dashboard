@@ -464,3 +464,11 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 
 - 兩者**互斥**：掛了 required reviewer 的 environment，`schedule` 觸發的 run **每天都會停下等核准**（最長 30 天後失效）；且 8.7 的 `event_name=='workflow_dispatch'` 也必須放行 `schedule`。
 - ⇒ **開排程前必須客戶裁示信任模型**（例：每天人工按一次／排程不掛 reviewer 改靠其他控制／不開排程）。總管推薦方案待前置清單完成後一併附上；⛔ 本批不送題、不開排程。
+
+### 8.10 reader 真連線 smoke 結果與空白分頁修正（2026-10-20）
+
+- **smoke 結果**（客戶於 Streamlit Cloud 實跑、總管轉述；撰寫組未見 log 原文）：`read_status=SCHEMA_MISMATCH header_state=MISMATCH data_rows=0`。⇒ 真實讀取路徑（Streamlit secrets → reader 身分 → 以 ID 開 `risk_cap_daily` → 讀全表）**已證明可連**；錯的是對空表的判讀。
+- **根因**：gspread 6.2.1 `gspread/worksheet.py:962` `values = response.get("values", [[]])`（Sheets API 對空範圍省略 `values` 鍵），`:964-967` `fill_gaps` 對 `[[]]`／`[]` 都回 `[[]]`（`gspread/utils.py:668-678`）；`get_all_values` 是別名。L1 只把 `[]` 當空表 ⇒ `[[]]` 被當成「表頭是空列」⇒ MISMATCH。舊測試假物件只用 `[]`，所以沒抓到。
+- **修正（本批）**：L1 `src/data/risk_cap/history.py::normalize_sheet_values` 單一真相源，**只**把 `[]`／`[[]]` 收斂成空表；`[[""]]`、第 1 列空白但下面有資料（`[["",…],[…]]`）仍判 MISMATCH（schema 守衛不放寬）。套用於 adapter 讀取邊界、`read_history_values`、`rows_as_records`、`header_state`、`precheck_target`、`verify_written`、`upsert_record`／`_append`、reader smoke 列數。守衛：`tests/test_vn1_empty_sheet_normalization.py`（含以真 gspread `Worksheet`＋假 HTTP client 驅動的契約測試與突變自驗）。
+- 客戶指示（總管轉述）：修程式，⛔ 不要用手動輸入表頭的方式掩蓋。
+- **下一次 smoke 預期**（修正合併後、**尚未重跑**）：`read_status=EMPTY header_state=ABSENT data_rows=0 compare_status=START_RECORDING`。`PRODUCTION_WRITE_APPROVED` 仍為 `False`；⛔ 無 schedule、⛔ 無 `environment:`。
