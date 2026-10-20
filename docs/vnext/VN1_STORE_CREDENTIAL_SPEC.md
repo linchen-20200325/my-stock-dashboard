@@ -321,7 +321,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 
 ---
 
-## 6. 日後仍需改 code／workflow 的事項（~~**未來實作批次，本批未做**~~ **第 1～3 項 #886 已完成、第 4 項半完成，其餘未做**；2026-10-19 更新，有意識的變更，不是漏刪）
+## 6. 日後仍需改 code／workflow 的事項（~~**未來實作批次，本批未做**~~ ~~**第 1～3 項 #886 已完成、第 4 項半完成，其餘未做**；2026-10-19 更新，有意識的變更，不是漏刪~~ **第 1～4 項已完成（第 4 項由 Production Wiring 批補完，分支未合併）、第 6 項結構已接線，其餘未做**；2026-10-20 更新，有意識的變更，不是漏刪）
 
 本批只寫規格。下列項目要等客戶指派實作批次、且 **production 寫入仍須另行核准**（DEC-063、DEC-009）：
 
@@ -355,3 +355,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 8. ~~本檔所有 gcloud 指令**未在真實專案實跑**；~~（2026-10-19：客戶已依本檔在真實專案完成設定並確認 (a)～(f)，有意識的變更，不是漏刪）本檔 gcloud 指令以客戶實跑為準；第一次照做時若有錯，以實際錯誤訊息修正本檔。
 9. **WIF auth-only 實跑紀錄（2026-10-19）**：run 39336051675（客戶手動 dispatch，main `2c693a20`，`mode`＝`wif-auth-only`）—— job `wif_auth_only` success；步驟「Authenticate to Google Cloud (WIF, no key)」「Verify impersonated identity」success；`poc-dry-run` skipped。log：GitHub OIDC → WIF STS → impersonation PASS；impersonated_email＝`risk-cap-writer@mystock20260823.iam.gserviceaccount.com`；project `mystock20260823`；token lifetime 約 3599s；scope 僅 `userinfo.email`；**未讀寫任何 Sheet**；憑證檔於 post step 移除（總管 GitHub API 查證）。⚠️ 這**不是**第 5 節 P1／P2／R1～R5；writer 仍未分享給 Sheet、Streamlit reader 未接線、production 寫入未核准。
 10. **權限測試實跑紀錄（2026-10-20）**：P1／P2／R1～R5 全部 PASS（run 39372770704、39373289602、39374189381、39374562365；細節與限制見 5.4）。`VN1-STORE` 憑證／權限邊界 Gate **正式關閉**（⛔ 不是 production 授權）。仍未做（正式寫入前）：hash-pin pip；GitHub environment＋required reviewers＋WIF environment claim；WIF condition 加 `event_name`；Node 20 action pin bump；Streamlit reader 接線未實作；第 6 節第 4 項仍半完成。下一 Decision Gate（未指派）：是否開始 production writer／reader 接線批與 production 寫入核准。
+11. **Production Wiring 批（2026-10-20）**：Production Wiring 批（分支 `claude/jolly-mccarthy-sonbl8`，commits `67701562`、`ef905cf0`（回修第 1 輪）；兩組獨立 QA 對 `67701562` 均 0 MUST-FIX（總管轉述）；**未開 PR、未合併**）。reader：L3 `src/services/risk_cap_history_reader_service.read_history` 已接線（只讀 Streamlit secrets `[risk_cap_history_reader]`＋`risk_cap_history_sheet_id`；只快取成功讀取；VALID 列缺上限值 ⇒ `CONTENT_SUSPECT`、不比較；**沒有任何 UI 呼叫端**）；writer：workflow `risk_cap_history_poc.yml` 新增 `production-write` mode（compute job 無 id-token → main-only 寫入 job），寫入 job 在任何 auth 之前先檢查核准旗標 ⇒ **目前恆紅、什麼都不寫**；`PRODUCTION_WRITE_APPROVED` 仍為 `False`；無 schedule；未變更 IAM／WIF／Sheet 分享。
+    - **送交 production 每日寫入最終核准前仍需**：(1) write job 依賴 hash-pin＋精簡（目前裝完整 `requirements.txt`、經 `src.data.macro` barrel eager 載入；QA-A S1）；(2) GitHub Environment＋required reviewers＋WIF attribute condition 加 environment claim 與 `event_name`（目前核准只剩 L0 常數；QA-A S3）；(3) 首次實跑驗證計畫（核准後路徑 —— WIF 憑證 → gspread → `upsert_record` —— 未端到端實跑；QA-A S2）；(4) WIF 憑證檔 `audience` 未核對（QA-A N1）；(5) 只重跑寫入 job 會沿用舊 artifact（QA-A N2）；(6) 畫面顯示歷史須先過線框（DEC-003 ①）；(7) 每日 schedule 本身須另行核准（目前只有 workflow_dispatch）；(8) Streamlit secrets 實際內容（`[risk_cap_history_reader]`、`risk_cap_history_sheet_id`）為客戶回報、未查證。
+    - **本批限制**：Google／Streamlit 實際連線**未測**（全以假物件）；本機 Python 3.13、CI 3.11；QA-B NIT-2／NIT-4 依總管裁定不處理（內容見該輪 QA 回報，本檔未轉錄）。
+    - ⚠️ 上一則（第 10 點）「Streamlit reader 接線未實作；第 6 節第 4 項仍半完成」「下一 Decision Gate（未指派）」自本批起不再成立（有意識的變更，不是漏刪）；production 每日寫入核准**仍未送題、未核准**。
