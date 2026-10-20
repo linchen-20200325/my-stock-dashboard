@@ -369,7 +369,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 
 ---
 
-## 8. Pre-Hardening 結果（2026-10-20；production 寫入**仍未核准**、`PRODUCTION_WRITE_APPROVED` 仍為 `False`）
+## 8. Pre-Hardening 結果（2026-10-20；~~production 寫入**仍未核准**、~~ 現況：首次人工寫入已有條件核准（DEC-066，前提未完成、旗標仍 `False`）；Daily Schedule 未核准；`PRODUCTION_WRITE_APPROVED` 仍為 `False`；2026-10-20 更新，有意識的變更，不是漏刪）
 
 > **狀態**：程式＋文件批（分支 `claude/jolly-mccarthy-sonbl8`，基於 main `56904662`）。⛔ 無 schedule、⛔ 無新 workflow 檔、⛔ 未加 `environment:`、⛔ 未改 IAM／WIF／Sheet 分享／OAuth／fund-nav、⛔ 未改 Risk Cap 公式／門檻／語意／資料源、⛔ 畫面零變化。
 > 下文 8.6、8.7、8.9 是**未執行的設計提案**，每一步都是**客戶人工 Gate**；⛔ 本批一步都沒做。
@@ -523,15 +523,15 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 |---|---|---|---|---|
 | 1 | 客戶 | 依 8.11.2 建立 Environment `production-risk-cap` | 客戶回報已建好（含各設定實際值） | `VN1-PG-ENV` |
 | 2 | 開發批（PR） | `production_write` job 加 `environment: production-risk-cap`＋同步測試守衛 | PR CI 綠、合併 | `VN1-PG-WIRE` |
-| 3 | 客戶（＋我們比對） | 客戶提供 WIF provider **現行 describe 原文**（唯讀；指令格式見 5.3 C5，pool／provider 名稱以 8.2／8.7 所用實際名稱為準）→ 確認原始 condition → 才修改 provider，新增 `environment == production-risk-cap`、`event_name == workflow_dispatch` | 新 condition 生效；實測無 environment 的 job 被 STS 拒（8.7） | `VN1-PG-WIF` |
-| 4 | 開發批＋客戶 | 首次寫入：開旗標 PR → 當天 dry-run → production-write → readback → 立即改回 `False` 的 PR | 見 8.11.4 | `VN1-PG-FIRST` |
+| 3 | 客戶（＋我們比對） | 客戶提供 WIF provider **完整 describe 原文**（唯讀；⚠️ 5.3 C5 指令以 `--format` 只印 `attributeCondition`，**不足**，須去掉 `--format` 取完整輸出；pool／provider 名稱以 8.2／8.7 所用實際名稱為準）→ 確認原始 condition → 才修改 provider，新增 `environment == production-risk-cap`、`event_name == workflow_dispatch` | 新 condition 生效；實測無 environment 的 job 被 STS 拒（8.7） | `VN1-PG-WIF` |
+| 4 | 開發批＋客戶 | （Step 4 為撰寫組依 DEC-066 A／B 整理，非客戶另立的步驟）首次寫入：開旗標 PR → 當天 dry-run → production-write → readback → 立即改回 `False` 的 PR | 見 8.11.4 | `VN1-PG-FIRST` |
 
 #### 8.11.4 首次寫入 Runbook（DEC-066 A／B／E；**未執行**）
 
 **寫入前核對（任一不符 ⇒ 當天不寫）**
 1. Step 1～3 已完成；開旗標 PR（`PRODUCTION_WRITE_APPROVED` → `True`＋政策測試同步）**已合併到 main**、main CI 綠。
 2. **當天**先在 `main` 跑 `mode=dry-run`：紀錄 `status=VALID`，且 `exposure_limit_pct` 等必要輸出正常。⛔ 非 VALID ⇒ 當天不觸發 production-write（DEC-066 B）。
-3. **避開台北時間 23:30–00:30**：寫前檢查要求 `record_date`＝寫入當下的台北日期；compute 與寫入跨過午夜會在寫前檢查被擋（exit 4）。
+3. **避開台北時間 23:30–00:30**：寫前檢查要求 `record_date`＝寫入當下的台北日期；compute 與寫入跨過午夜會在寫前檢查被擋（exit 4）。Environment 核准若拖過台北午夜，同樣會在寫前檢查 exit 4 ⇒ **觸發後須即時核准**。
 4. Actions 頁確認**沒有其他** `risk_cap_history_poc` run 在執行或等待中（concurrency 只保留一個 pending）。
 
 **觸發**
@@ -552,7 +552,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 3. `run_id`＝本次 production-write run id；`git_sha`＝本次 main head。
 4. 表內**無** `PERMISSION_TEST` 殘留列。
 5. **存證據**：run id／URL、兩個 job 的完整 log、record artifact（**retention 7 天**，過期即消失 ⇒ 當天下載）、Sheet 截圖（分享時勿露出網址列 Sheet ID）。
-6. **立即**以獨立 PR 把 `PRODUCTION_WRITE_APPROVED` 改回 `False`（DEC-066 A；不論成功或失敗中斷，這都是下一個動作）。
+6. **立即**以獨立 PR 把 `PRODUCTION_WRITE_APPROVED` 改回 `False`（DEC-066 A；不論成功或失敗中斷，這都是下一個動作）。⚠️ 第 1～5 點的核對與存證可與本點**並行**，但**下一個改 code 的動作一定是改回 `False`**（必要時把本點提到最前）。
 7. 之後：網站 reader 有資料狀態 smoke（`VN1-PG-READBACK`；預期 `read_status=OK header_state=MATCH data_rows=1`、`latest_row_sha256`＝`verify.readback_sha256`）。
 
 **失敗處置（DEC-066 E：FAIL-STOP）**
@@ -560,8 +560,8 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 | 結束碼／情況 | 意思 | 處置 |
 |---|---|---|
 | exit 4 | 寫前檢查阻擋（什麼都沒寫） | 維持原狀、**當天不再重跑**；保留 log；改回 `False` 的 PR 照開 |
-| exit 1／3／5 | I/O 失敗／同日衝突／寫後驗證不過（**可能已寫入**） | 保留完整 logs／evidence、人工檢查 Sheet、**停下等客戶裁示**；⛔ 自動刪列／rollback／覆寫／盲目 retry |
-| exit 2、Environment 被拒、逾時、取消 | 閘門未過或紀錄檔不合格等（DEC-066 未個別點名） | 撰寫組讀法：落在 E 總則 —— 保留證據、停下回報、不重試（**讀法，不是新裁示**） |
+| exit 1／3／5 | I/O 失敗／同日衝突／寫後驗證不過（**可能已寫入**） | **改回 `False` 的獨立 PR 照開（DEC-066 A）**；其餘停下：保留完整 logs／evidence、人工檢查 Sheet、**停下等客戶裁示**；⛔ 自動刪列／rollback／覆寫／盲目 retry |
+| exit 2、Environment 被拒、逾時、取消；以及腳本之前的 step 失敗（artifact sha256 比對、hash 鎖定安裝、WIF auth） | 閘門未過、紀錄檔不合格、或寫入腳本根本沒跑到等（DEC-066 未個別點名） | **改回 `False` 的獨立 PR 照開（DEC-066 A）**；其餘依撰寫組讀法落在 E 總則 —— 保留證據、停下回報等裁示、不重試（**讀法，不是新裁示**） |
 | 留下非 VALID 列（dry-run VALID 但寫入時不可抗力） | 真實系統歷史 | **保留、不刪、不覆寫、當天不重寫**（DEC-066 B） |
 
 - 需刪無效列：**只能由客戶在 Google Sheets UI 人工執行**，刪前保存證據／截圖；production 程式**永久不得**因此新增自動刪列功能。

@@ -12,7 +12,7 @@
 |---|---|
 | 目前階段 | 目前階段：vNext 1.0（路線 0.9→1.0→2.0→3.0，見 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md` §20）；已完成批次不得重做。 |
 | 最後一個功能／治理合併（非 cron、不含本版） | `35f67c0c`（#892；`VN1-STORE` 空白分頁 gspread `[[]]` 正規化；PR Fast＋Slow success；合併後 main push run 39428438762 success（head `35f67c0c`）＝最後一次驗證程式的 CI；總管查證）；其前 `49009687`（#891） |
-| main tip | 量測時 tip＝`574ac784`；#892 之後只有 3 個 github-actions[bot] 只改 `data_cache/` 的 commit（`fae8fcfa`、`f845201c`、`574ac784`；bot 以 GITHUB_TOKEN 推送，無 PR Check）；cron 會持續推進 tip，引用前重查；open PR 0（總管查證） |
+| main tip | 量測時 tip＝`574ac784`；#892 之後只有 3 個 github-actions[bot] 只改 `data_cache/` 的 commit（`fae8fcfa`、`f845201c`、`574ac784`；bot 以 GITHUB_TOKEN 推送，無 PR Check）；cron 會持續推進 tip，引用前重查；量測時 open PR 0（不含本 PR #893；總管查證） |
 | active work | **本 docs 批**：DEC-066 Production Gate 裁示登記＋#892／reader smoke 同步（分支 `claude/jolly-mccarthy-sonbl8`；未開 PR）。⛔ 無程式／政策／workflow 行為變更 |
 | `VN1-STORE` reader | **後端 production readiness 完成**：#892 後網站 reader 真連線 smoke（客戶實跑、總管轉述）`read_status=EMPTY identity_ok=True header_state=ABSENT data_rows=0 compare_status=START_RECORDING` ⇒ **PASS**；客戶已刪除 smoke 旗標（保留 `risk_cap_history_sheet_id`、`[risk_cap_history_reader]`）。⛔ 有資料狀態**未**真實驗證（首寫後執行，`VN1-PG-READBACK`；不是 blocker）；⛔ 無 UI 呼叫端 |
 | Production Gate | **已裁示 DEC-066**（DR-2026-10-20-3）：首次人工 production-write 有條件核准（獨立 PR 一次性翻旗標、Environment＋WIF 強化先行、FAIL-STOP、單一 writer）；`PRODUCTION_WRITE_APPROVED=False`（未翻）；⛔ 無 `schedule:`、⛔ 無 `environment:` |
