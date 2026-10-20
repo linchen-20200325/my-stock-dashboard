@@ -398,13 +398,14 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 - 碰 Sheet 或拿得到 writer 身分的 job —— `wif_auth_only`、`permission_test_writer`、`permission_test_reader`、`production_write` —— 共用**字面** job 層 group `risk-cap-history-sheet-write`（`cancel-in-progress: false`）。原 `production_write` 自己的 group `risk-cap-history-production-write` 已改名（workflow 內加刪除線註記）。
 - workflow 層 group `risk-cap-history-poc` 不變、與上者不同名。
 - 守衛：`tests/test_vn1_prehardening.py`（用 auth action／跑權限驗證腳本／`--write` 的 job 一律要有該 group；workflow group 字面且不同名；任何 job 不得有 `environment:`；拿掉 group ⇒ 紅燈）。
-- ⚠️ 限制照舊：讀全表再追加不是原子操作；序列化只保證「這個 repo 的這些 job」彼此不同時跑。GitHub 的 concurrency 對**排隊中**的 job 只保留最新一個（較早的排隊 job 會被取消 ⇒ 不寫、紅燈，安全方向）。
+- ⚠️ 限制照舊：讀全表再追加不是原子操作；序列化只保證「這個 repo 的這些 job」彼此不同時跑。~~GitHub 的 concurrency 對**排隊中**的 job 只保留最新一個（較早的排隊 job 會被取消 ⇒ 不寫、紅燈，安全方向）。~~（回修第 1 輪 2026-10-20 措辭更正，有意識的變更，不是漏刪：GitHub concurrency 沒有「排隊」）同一 group 同時最多一個執行中＋一個 pending；**新的 pending 取代舊的 pending、舊的被取消**＝fail-closed（被取消的那次什麼都不寫、紅燈）。
+- ⚠️ 照實：workflow 層 group `risk-cap-history-poc` 已讓本檔所有 run 彼此序列化 ⇒ 現況下這個 job 層共用 group **不增加額外保護**；它的用途是日後拆檔或改 workflow 層 group 時，碰 Sheet 的 job 仍互斥。
 
 ### 8.4 D｜首次 production 寫入的驗證計畫（程式已備、**未執行**；只在閘門之後才走得到）
 
 - **寫入的紀錄**：就是 compute job 真算出來的那一列（與 dry-run 同一支腳本）；⛔ 不寫測試列。
 - **順序**（`scripts/risk_cap_history_poc.py --write`）：閘門（`PRODUCTION_WRITE_APPROVED`）→ 紀錄檔合 schema → **寫前檢查**（writer 身分的**唯讀** token 讀全表；L1 `precheck_target`）→ `upsert_record`（讀寫 token）→ **寫後讀回驗證**（唯讀 token；L1 `verify_written`）。
-- **寫前檢查**（全部列出、不短路）：表是空的或第一列逐字等於 schema 表頭；沒有第二列表頭／超長列；表內沒有 `PERMISSION_TEST…` 殘留；同（record_date, ruleset_version）沒有任何一列；`record_date`＝寫入當下台北日期；規則版本／schema 版本＝現行；本輪 `GITHUB_RUN_ID`＝紀錄裡的 run_id。
+- **寫前檢查**（全部列出、不短路）：表是空的或第一列逐字等於 schema 表頭；沒有第二列表頭／超長列；表內沒有 `PERMISSION_TEST…` 殘留（去頭尾空白、不分大小寫）；同（record_date, ruleset_version）沒有任何一列（去頭尾空白後比；只用於寫前檢查，`upsert_record` 語意不變）；`record_date`＝寫入當下台北日期；規則版本／schema 版本＝現行；本輪 `GITHUB_RUN_ID`＝紀錄裡的 run_id。
 - **寫後驗證**：表頭在第一列且唯一；run_id＋record_date 相符的列**恰好一列**；逐欄等於紀錄。
 - **fail closed、⛔ 不自動刪除**：任何一步失敗 ⇒ exit 非 0（4＝寫前檢查不過、什麼都沒寫；5＝寫後驗證不過；1＝I/O 失敗；3＝同日衝突）。**自動回滾（刪列）未經客戶核准** —— 需要的話須另行裁示；首筆真實紀錄寫進去後**保留**。
 - **artifact 完整性**：compute job 印出並輸出紀錄檔 sha256；寫入 job 下載後（任何 auth 之前）以 `sha256sum --check --strict` 比對，不一致或空值 ⇒ 紅燈不寫（處理 QA-A N2「只重跑寫入 job 會沿用舊 artifact」的**完整性**面；重跑本身仍會沿用同一 run 的 artifact）。
@@ -416,7 +417,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 ### 8.5 R｜網站 reader 真連線 smoke（log-only、⛔ 畫面零變化；**未在 Streamlit Cloud 實跑**）
 
 - `app.py` 開機呼叫一次 `run_smoke_if_flagged()`；**只有** Streamlit secrets 頂層 `risk_cap_history_smoke = true`（TOML 布林，恰好 `True`）才跑，每個行程一次；沒設／字串 `"true"`／其他值 ⇒ 零 Google 呼叫。
-- smoke 走與畫面讀取同一條路徑（secrets → L1 reader client → `risk_cap_daily`），但**繞過快取**。印**一行** `[risk_cap_history_smoke] read_status=… identity_ok=… header_state=ABSENT|MATCH|MISMATCH|NOT_READ data_rows=… latest_record_date=… latest_run_id=… latest_row_sha256=… compare_status=…`；⛔ 不印任何儲存格值、Sheet ID、例外原文。smoke 本身若有程式 bug ⇒ 只印例外類別名、⛔ 不讓網站掛掉（全 repo 唯一刻意不往上拋的地方）。
+- smoke 走與畫面讀取同一條路徑（secrets → L1 reader client → `risk_cap_daily`），但**繞過快取**。印**一行** smoke log（讀取失敗時另會多一行既有的 `[risk_cap_history_reader]` 分類 log，固定文字＋類別名）：`[risk_cap_history_smoke] read_status=… identity_ok=… header_state=ABSENT|MATCH|MISMATCH|NOT_READ data_rows=… latest_record_date=… latest_run_id=… latest_row_sha256=… compare_status=…`；⛔ 不印任何儲存格值、Sheet ID、例外原文。smoke 本身若有程式 bug ⇒ 只印例外類別名、⛔ 不讓網站掛掉（全 repo 唯一刻意不往上拋的地方；只接 `Exception`、⛔ 不接 KeyboardInterrupt／SystemExit；⛔ 不保護 import 失敗）。Google API 請求一律設逾時（L0 `SHEETS_HTTP_TIMEOUT_S`＝connect 5 秒、read 10 秒；reader 與 writer 皆然），逾時歸 `API_ERROR`。
 - **客戶步驟（人工 Gate、未執行）**：(1) Streamlit Cloud → Secrets 頂層加 `risk_cap_history_smoke = true` → 儲存（app 會重啟）；(2) 開一次網站；(3) Manage app → Logs 找 `[risk_cap_history_smoke]` 那一行回報（整行可貼，不含 secret）；(4) 看完把該行改回 `false` 或刪除。首次寫入前預期 `read_status=EMPTY`、`header_state=ABSENT` 或 `MATCH`。
 - 守衛：`tests/test_vn1_reader_smoke.py`；app.py 只准一行 import＋一行無參數呼叫（`tests/test_vn1_store_poc.py::assert_app_only_smoke_hook`）。
 
