@@ -11,14 +11,22 @@
 2. 以 L3 `risk_cap_history_service.build_record` 組一列紀錄（狀態照實；非 VALID 不寫上限值），印成 JSON。
 3. `--simulate-rerun`：對**記憶體假表**寫兩次同一列，示範同日重跑不重複，並印出讀端比較結論。
 
+4. `--check-write-gate`（workflow `production-write` 寫入 job 的**第一個 Python 步驟**，在任何 auth 之前）：
+   只看 L0 `PRODUCTION_WRITE_APPROVED`；False ⇒ 印 `::error::` 並 exit 2（紅燈），⛔ 不 import 任何 src 模組
+   （系統 python3、未裝套件也能跑）。
+5. `--write --record <JSON>`（VN1-STORE Production Wiring 批 2026-10-20）：**閘門第一**
+   （`load_writer_credentials_or_refuse`；`PRODUCTION_WRITE_APPROVED=False` ⇒ 一律 exit 2）→
+   `build_writer_client`（只吃 WIF `external_account` 憑證檔）→ 以 `RISK_CAP_HISTORY_SHEET_ID` 開
+   `risk_cap_daily` → `upsert_record` 寫 compute job 產出的那一列。⛔ 不在寫入 job 裡重算、⛔ 不跑取數。
+
 ⛔ 不做
 ------
-- 不寫任何真實 Sheet：`--write` 一律失敗（production 寫入未核准、憑證未設定）。
+- 不寫任何真實 Sheet：`PRODUCTION_WRITE_APPROVED=False` 期間 `--write` 一律失敗（exit 2）。
 - 不讀任何新 secret；只用既有取數環境變數（FINMIND_TOKEN、PROXY_URL…，與既有總經 cron 相同）。
 - ⛔ 沒有 `if headless:` 分支、沒有自算公式（維護守則同 `scripts/update_macro_forward_test.py`）。
 
 結束碼：0 ＝ PoC 跑完（**不論紀錄狀態是不是 VALID** —— 照實的非有效狀態也是合格結果）；
-1 ＝ 契約破損／app 狀態檔被動到；2 ＝ `--write`（拒絕）；
+1 ＝ 契約破損／app 狀態檔被動到；2 ＝ `--write`／`--check-write-gate` 被閘門或憑證拒絕（含紀錄檔不合格）；
 3 ＝ 寫入結果為同日有效紀錄衝突（`CONFLICT_KEPT_EXISTING`；稽核修正 2026-10-19：衝突必須讓排程顯示失敗，
     ⛔ 不能只留在會過期的 Actions log —— 衝突列另記在表裡）。
 
@@ -26,6 +34,8 @@
 
     python scripts/risk_cap_history_poc.py                      # 預設 dry-run
     python scripts/risk_cap_history_poc.py --simulate-rerun --out record.json
+    python scripts/risk_cap_history_poc.py --check-write-gate   # 寫入 job 第一步（未核准 ⇒ exit 2）
+    python scripts/risk_cap_history_poc.py --write --record record.json   # 未核准 ⇒ exit 2
 """
 from __future__ import annotations
 
@@ -69,14 +79,76 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _check_write_gate() -> int:
+    """寫入 job 的第一道 Python 檢查：只讀 L0 核准旗標（stdlib-only 模組），⛔ 不 import src、⛔ 不碰任何憑證。"""
+    from shared.risk_cap_history_policy import PRODUCTION_WRITE_APPROVED
+    if PRODUCTION_WRITE_APPROVED is not True:
+        print("::error::production write is not approved (PRODUCTION_WRITE_APPROVED=False); "
+              "nothing was authenticated or written")
+        print("[risk_cap_history_poc] ❌ production 寫入尚未核准（DEC-063／DEC-009）→ 寫入 job 停在這裡（紅燈）")
+        return 2
+    print("[risk_cap_history_poc] production 寫入核准旗標為 True")
+    return 0
+
+
+def _write_record(record_path: str) -> int:
+    """閘門已過之後的真實寫入路徑：WIF writer client → 系統歷史 Sheet → `upsert_record`。
+
+    ⛔ Sheet ID 只取自 `RISK_CAP_HISTORY_SHEET_ID`（GitHub secret）、⛔ 永不印出；⛔ 不印任何憑證內容。
+    """
+    from shared.risk_cap_history_policy import (
+        HISTORY_COLUMNS, HISTORY_SHEET_ID_ENV_VAR, UPSERT_CONFLICT_KEPT_EXISTING,
+    )
+    from src.data.macro.risk_cap_history import (
+        ProductionWriteNotApproved, build_writer_client, open_history_worksheet, upsert_record,
+    )
+
+    if not record_path:
+        print("[risk_cap_history_poc] ❌ --write 需要 --record（compute job 的紀錄 JSON）→ 拒絕")
+        return 2
+    try:
+        data = json.loads(Path(record_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        print(f"[risk_cap_history_poc] ❌ 紀錄檔讀不到或不是 JSON（{type(e).__name__}）→ 拒絕")
+        return 2
+    record = data.get("record") if isinstance(data, dict) else None
+    if not isinstance(record, dict) or tuple(record) != HISTORY_COLUMNS:
+        print("[risk_cap_history_poc] ❌ 紀錄檔沒有欄位與 schema 一致的 record → 拒絕（⛔ 不補欄位）")
+        return 2
+    try:
+        client = build_writer_client()
+    except ProductionWriteNotApproved as e:
+        print(f"[risk_cap_history_poc] ❌ writer 憑證拒絕：{e}")
+        return 2
+    try:
+        ws = open_history_worksheet(client, os.environ[HISTORY_SHEET_ID_ENV_VAR])
+        outcome = upsert_record(ws, record)
+    except Exception as e:  # noqa: BLE001 —— 照樣失敗（exit 1）；只印類別名：例外原文可能帶 Sheet ID／回應內文
+        print(f"[risk_cap_history_poc] ❌ 寫入系統歷史 Sheet 失敗（{type(e).__name__}）→ exit 1（未確認是否寫入，請人工查看）")
+        return 1
+    print(f"[risk_cap_history_poc] 寫入結果：{outcome}（record_date={record.get('record_date')}，"
+          f"status={record.get('status')}）")
+    if outcome == UPSERT_CONFLICT_KEPT_EXISTING:
+        print("[risk_cap_history_poc] ❌ 同日有效紀錄衝突（首筆不動、衝突列已另記）→ exit 3，需人工查看")
+        return 3
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="VN1-STORE 最小 PoC（不寫 production）")
     ap.add_argument("--dry-run", action="store_true", default=True, help="預設即 dry-run（只印不寫）")
-    ap.add_argument("--write", action="store_true", help="寫真實 Sheet —— 本 PoC 一律拒絕")
+    ap.add_argument("--write", action="store_true",
+                    help="寫真實 Sheet（需 --record）—— PRODUCTION_WRITE_APPROVED=False 期間一律拒絕")
+    ap.add_argument("--record", default="", help="--write 要寫的紀錄 JSON（compute job 的 --out 產物）")
+    ap.add_argument("--check-write-gate", action="store_true",
+                    help="只檢查 production 寫入核准旗標（False ⇒ exit 2）；不 import 任何 src 模組")
     ap.add_argument("--simulate-rerun", action="store_true", help="對記憶體假表示範同日重跑冪等")
     ap.add_argument("--out", default="", help="另把紀錄 JSON 寫到這個路徑（artifact 用）")
     ap.add_argument("--state-dir", default="", help="快照暫存目錄（留空＝自動開新暫存目錄；必須是空目錄）")
     args = ap.parse_args(argv)
+
+    if args.check_write_gate:
+        return _check_write_gate()
 
     from src.data.macro.risk_cap_history import (
         InMemoryWorksheet, ProductionWriteNotApproved, load_writer_credentials_or_refuse,
@@ -86,12 +158,11 @@ def main(argv=None) -> int:
 
     if args.write:
         try:
-            load_writer_credentials_or_refuse()
+            load_writer_credentials_or_refuse()       # 閘門第一（核准旗標是它的第一個檢查）
         except ProductionWriteNotApproved as e:
             print(f"[risk_cap_history_poc] ❌ --write 拒絕：{e}")
             return 2
-        print("[risk_cap_history_poc] ❌ --write 意外通過憑證閘門（不應發生）→ 拒絕")
-        return 2
+        return _write_record(args.record)
 
     import src.services.risk_cap_history_service as H
 

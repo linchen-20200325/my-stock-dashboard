@@ -702,9 +702,14 @@ class TestStaticGuards:
         # VN1-STORE WIF auth-only（2026-10-19，有意識的放寬）：writer JSON key 環境變數常數已依 DEC-064 G1
         # 退役（writer 只走 WIF），故從名單移除、改由 `tests/test_vn1_wif_auth_only.py` 守「全 repo 不得再出現」；
         # 「讀取端名稱 ≠ 寫入端」改為「L0 不再有寫入端 key 名稱」。
-        names = (P.READER_SA_ENV_VAR, P.HISTORY_SHEET_ID_ENV_VAR, P.WRITE_ENABLE_ENV_VAR)
+        # 📌 2026-10-20（VN1-STORE Production Wiring 批；有意識的變更，不是漏刪）：環境變數式的讀取端名稱
+        # `READER_SA_ENV_VAR` 已退役（reader key 只放 Streamlit secrets 表格，規格步驟 8），名單改為
+        # Streamlit secrets 的表格名＋Sheet ID 鍵名；舊字面改由 `tests/test_vn1_production_wiring.py` 守「全 repo 不得再出現」。
+        names = (P.READER_SECRETS_TABLE, P.READER_SHEET_ID_SECRET_KEY, P.HISTORY_SHEET_ID_ENV_VAR,
+                 P.WRITE_ENABLE_ENV_VAR)
         assert len(set(names)) == len(names)
         assert not hasattr(P, "WRITER_SA_ENV_VAR")
+        assert not hasattr(P, "READER_SA_ENV_VAR")
         assert P.READER_SCOPES == ("https://www.googleapis.com/auth/spreadsheets.readonly",)
         assert all("readonly" not in s for s in P.WRITER_SCOPES)
         hits = {}
@@ -715,8 +720,14 @@ class TestStaticGuards:
                 if n in t:
                     hits.setdefault(f.relative_to(REPO).as_posix(), set()).add(n)
         # L0 定義處＋L1 唯一入口的 docstring（講拒絕順序）；其餘一律經 L0 常數引用，不寫字面。
-        assert set(hits) <= {"shared/risk_cap_history_policy.py", "src/data/macro/risk_cap_history.py"}, hits
-        assert P.READER_SA_ENV_VAR not in (REPO / "src/data/macro/risk_cap_history.py").read_text(encoding="utf-8")
+        # 📌 2026-10-20（Production Wiring 批；有意識的放寬）：另准 L3 讀取端服務（docstring 講它只讀哪張 secrets 表）
+        #   與 PoC 腳本（docstring 講 `--write` 用哪個 Sheet ID 環境變數）—— 兩者程式碼一律經 L0 常數引用。
+        assert set(hits) <= {"shared/risk_cap_history_policy.py", "src/data/macro/risk_cap_history.py",
+                             "src/services/risk_cap_history_reader_service.py",
+                             "scripts/risk_cap_history_poc.py"}, hits
+        # L1 不讀 secrets（reader 憑證由 L3 讀進來再交給 L1）⇒ L1 不得知道 secrets 表格名／鍵名。
+        l1_text = (REPO / "src/data/macro/risk_cap_history.py").read_text(encoding="utf-8")
+        assert P.READER_SECRETS_TABLE not in l1_text and P.READER_SHEET_ID_SECRET_KEY not in l1_text
         for f in list((REPO / "src").rglob("*.py")):
             rel = f.relative_to(REPO).as_posix()
             if any(p in rel for p in _PERSONAL_SHEET) or "oauth" in rel:
@@ -757,16 +768,20 @@ class TestStaticGuards:
         # secret（`P.HISTORY_SHEET_ID_ENV_VAR`）只准出現在兩個權限驗證 job（P1／P2／R3 要知道目標 Sheet）——
         # 故 `P.HISTORY_SHEET_ID_ENV_VAR` 與前綴 "RISK_CAP_HISTORY" 改為只掃「去掉那兩個 job 區塊」後的全檔；
         # 其餘各項照舊掃全檔（含新 job）。新 job 的完整守衛在 `tests/test_vn1_permission_gate.py`。
+        # 📌 2026-10-20（Production Wiring 批；有意識的放寬，不是漏改）：`production_write`（寫入 job）也需要 Sheet ID
+        #   與 `--write`／寫入總開關；只准出現在該 job，其完整守衛在 `tests/test_vn1_production_wiring.py`。
         outside = y
-        for job in ("permission_test_writer", "permission_test_reader"):
+        for job in ("permission_test_writer", "permission_test_reader", "production_write"):
             m = re.search(rf"^  {job}:\n(.*?)(?=^  \S|\Z)", y, flags=re.MULTILINE | re.DOTALL)
             assert m, job
             outside = outside.replace(m.group(0), "")
         for bad in (P.HISTORY_SHEET_ID_ENV_VAR, "RISK_CAP_HISTORY"):
             assert bad not in outside, bad
+        for bad in (P.WRITE_ENABLE_ENV_VAR, "--write"):
+            assert bad not in outside, bad
         for bad in ("GCP_SERVICE_ACCOUNT_JSON", "RISK_CAP_HISTORY_WRITER_SA_JSON",
-                    P.WRITE_ENABLE_ENV_VAR, P.READER_SA_ENV_VAR,
-                    "--write", "git push", "git commit", "GEMINI"):
+                    "RISK_CAP_HISTORY_READER_SA_JSON",
+                    "git push", "git commit", "GEMINI"):
             assert bad not in y, bad
 
 

@@ -8,7 +8,19 @@
    本檔**不載入任何憑證、不開任何 client**；建構時核對「試算表 ID ＝ 系統歷史 Sheet ID（環境變數）」
    且工作表名稱正確，對不上一律拒絕（含不自動寫表頭）。
 4. `upsert_record(ws, row)`：冪等寫入（規則見下）。
-5. `load_writer_credentials_or_refuse()`：未來排程寫入帳號的唯一入口；**本 PoC 階段一律拒絕**。
+5. `load_writer_credentials_or_refuse()`：排程寫入帳號的唯一入口；`PRODUCTION_WRITE_APPROVED=False` ⇒ **一律拒絕**。
+
+═══ Production Wiring 批（2026-10-20；production 寫入**仍未核准**）新增 ═══════════════════
+6. `GspreadWorksheetAdapter(ws, expected_sheet_id=...)`：預期 Sheet ID 可由呼叫端**注入**（受信任來源：
+   GitHub secret／Streamlit secrets；⛔ 不解析網址、⛔ 不吃使用者輸入）；未注入時沿用環境變數（PoC 既有行為）。
+7. `open_history_worksheet(client, sheet_id)`：以 ID 開 `risk_cap_daily` 並包成 adapter；錯誤分型
+   （`HistoryTabMissing`／`HistoryApiError`／`HistoryTargetMismatch`）。`read_history_records(adapter)`：
+   讀全表 → `rows_as_records`（表頭不符 ⇒ `HistorySchemaMismatch`）。⛔ 不補值、⛔ 不 fillna、⛔ 不轉 0。
+8. `build_reader_client(info)`：**只** `service_account.Credentials.from_service_account_info(info, READER_SCOPES)`；
+   身分必須是 `risk-cap-reader`（拒 writer／fund-nav／external_account）；⛔ 永不呼叫 `google.auth.default`。
+9. `build_writer_client(environ)`：先過寫入閘門（核准旗標第一個檢查）→ ADC 憑證檔必須是 WIF 的
+   `external_account`（拒任何 JSON key）→ 才 `google.auth.default(scopes=WRITER_SCOPES)`；⛔ 沒有任何退路。
+   reader 與 writer 憑證**不可互換**（型別、身分、scope 三重分開）。
 
 ⛔ 與個人持股 Sheet 完全分離（客戶裁示第 4、5 點）：本檔不 import、也不得 import 個人持股 Sheet 的
 讀取／登入模組，不讀個人持股 Sheet 的既有 SA 金鑰（`tests/test_vn1_store_poc.py` 以 AST／字串守衛）。
@@ -37,12 +49,16 @@
 `concurrency` group 序列化）；兩個寫入者同時跑仍可能各追加一筆 —— 已知限制，正式化前要處理。
 
 分層（CLAUDE.md §8.2）：L1 —— 只 import 標準函式庫與 L0（`shared.risk_cap_history_policy`）；
+Google 套件（`gspread`／`google.auth`／`google.oauth2`）一律在函式內延遲 import（I/O 屬 L1 本分）；
 ⛔ 不 import streamlit、⛔ 不 import L2／L3。
 """
 from __future__ import annotations
 
+import json
 import os
-from typing import Any, Iterable, Mapping, Protocol, Sequence
+import re
+from contextlib import contextmanager
+from typing import Any, Iterable, Iterator, Mapping, Protocol, Sequence
 
 from shared.risk_cap_history_policy import (
     COL_EXPOSURE_LIMIT_PCT,
@@ -50,11 +66,15 @@ from shared.risk_cap_history_policy import (
     COL_REASON_DETAIL,
     COL_STATUS,
     CONTENT_COLUMNS,
+    GAC_ENV_VAR,
     HISTORY_COLUMNS,
     HISTORY_SHEET_ID_ENV_VAR,
     HISTORY_WORKSHEET_NAME,
     IDEMPOTENCY_KEY_COLUMNS,
     PRODUCTION_WRITE_APPROVED,
+    READER_CREDENTIAL_TYPE,
+    READER_SA_EMAIL,
+    READER_SCOPES,
     REASON_CODE_SAME_DAY_CONFLICT,
     STATUS_SAME_DAY_CONFLICT,
     STATUS_VALID,
@@ -62,6 +82,9 @@ from shared.risk_cap_history_policy import (
     UPSERT_CONFLICT_KEPT_EXISTING,
     UPSERT_NOOP_DUPLICATE,
     WRITE_ENABLE_ENV_VAR,
+    WRITER_CREDENTIAL_TYPE,
+    WRITER_SA_EMAIL,
+    WRITER_SCOPES,
 )
 
 
@@ -79,6 +102,38 @@ class HistoryTargetMismatch(RuntimeError):
 
 class ProductionWriteNotApproved(RuntimeError):
     """production 寫入尚未核准（客戶 2026-10-19：只核准方向 A 與最小 PoC）或憑證未設定。"""
+
+
+class WriterCredentialRefused(ProductionWriteNotApproved):
+    """writer 憑證不合格（沒有 WIF 憑證檔、是 JSON key、身分不是 `risk-cap-writer`…）。
+
+    是 `ProductionWriteNotApproved` 的子類：既有呼叫端（`--write` 一律 exit 2）不必改就照樣拒絕。
+    ⛔ 訊息只含固定文字（不含檔案內容、檔案路徑、例外原文）。
+    """
+
+
+class HistoryReadError(RuntimeError):
+    """讀取系統歷史 Sheet 失敗（分型見子類；L3 據此分類狀態）。訊息只含固定文字＋例外類別名。"""
+
+
+class HistoryTabMissing(HistoryReadError):
+    """試算表內沒有 `risk_cap_daily` 分頁。"""
+
+
+class HistoryApiError(HistoryReadError):
+    """Google API／傳輸／權杖錯誤。`error_type` ＝ 原例外類別名（⛔ 不帶訊息原文：可能含 URL／ID）。"""
+
+    def __init__(self, error_type: str) -> None:
+        super().__init__(f"Google API／傳輸錯誤（{error_type}）")
+        self.error_type = error_type
+
+
+class ReaderIdentityMismatch(RuntimeError):
+    """reader 憑證身分不是 `risk-cap-reader`（含 writer、fund-nav、external_account、缺欄）—— ⛔ 不建 client。"""
+
+
+class ReaderCredentialInvalid(RuntimeError):
+    """reader 身分對，但 key 內容無法載入（例如 private_key 損壞）。訊息只含例外類別名。"""
 
 
 class HistoryWorksheet(Protocol):
@@ -116,18 +171,24 @@ class GspreadWorksheetAdapter:
     """包一個**呼叫端已建好**的 gspread `Worksheet`。⛔ 本類別不載入憑證、不開 client、不選 Sheet。
 
     建構時（以及每次讀寫前）核對：
-      - 預期 ID 取自環境變數 `RISK_CAP_HISTORY_SHEET_ID`（`environ` 可注入）；沒設 ⇒ 拒絕；
+      - 預期 ID：呼叫端注入的 `expected_sheet_id`（Production Wiring 批 2026-10-20；受信任來源 ——
+        GitHub secret／Streamlit secrets，⛔ 不是使用者輸入、⛔ 不解析網址，格式不符直接拒絕）；
+        未注入時取自環境變數 `RISK_CAP_HISTORY_SHEET_ID`（`environ` 可注入；PoC 既有行為）；都沒有 ⇒ 拒絕；
       - worksheet 所屬試算表 ID 必須等於它；取不到或不等 ⇒ 拒絕；
       - 工作表名稱必須是 `HISTORY_WORKSHEET_NAME`。
     ⇒ 寫錯目標（例如誤傳個人持股 Sheet 的工作表）時，連讀都不讀、表頭也不會被自動寫進去。
     寫入一律 `value_input_option="RAW"`（不讓 Sheets 把 "2026-10-19"、"30" 自動轉型；讀回仍是同一個字串）。
     """
 
-    def __init__(self, worksheet: Any, *, environ: Mapping[str, str] | None = None) -> None:
+    def __init__(self, worksheet: Any, *, expected_sheet_id: str | None = None,
+                 environ: Mapping[str, str] | None = None) -> None:
         if worksheet is None:
             raise ValueError("worksheet 不得為 None（本 PoC 不自行開 Sheet）")
-        env = os.environ if environ is None else environ
-        self._expected_id = env.get(HISTORY_SHEET_ID_ENV_VAR) or ""
+        if expected_sheet_id is not None:
+            self._expected_id = validate_sheet_id(expected_sheet_id)
+        else:
+            env = os.environ if environ is None else environ
+            self._expected_id = env.get(HISTORY_SHEET_ID_ENV_VAR) or ""
         self._ws = worksheet
         self._verify()
 
@@ -149,6 +210,68 @@ class GspreadWorksheetAdapter:
     def append_row(self, values: list[str]) -> Any:
         self._verify()
         return self._ws.append_row(list(values), value_input_option="RAW")
+
+
+#: Google Sheet ID 的字元集（網址 `/d/` 與 `/edit` 之間那段）。⛔ 含 `/`、`:`、空白 ⇒ 不是純 ID（多半是貼了網址）。
+_SHEET_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def validate_sheet_id(sheet_id: Any) -> str:
+    """受信任來源給的 Sheet ID → 原樣回傳；不是純 ID（空、非字串、含網址字元）⇒ `HistoryTargetMismatch`。
+
+    ⛔ 不解析網址、⛔ 不 strip 以外的任何修正（猜錯 ID ＝ 讀寫錯的試算表）。錯誤訊息 ⛔ 不含 ID 本身。
+    """
+    if not isinstance(sheet_id, str) or not _SHEET_ID_RE.fullmatch(sheet_id.strip()):
+        raise HistoryTargetMismatch("系統歷史 Sheet ID 未設定或不是純 ID（不接受網址）→ 拒絕")
+    return sheet_id.strip()
+
+
+def _api_error_types() -> tuple[type[BaseException], ...]:
+    """會被歸類成「Google API／傳輸錯誤」的例外類別（延遲 import；缺套件 ⇒ ImportError 照拋，⛔ 不吞）。
+
+    ⛔ 不含一般程式錯誤（TypeError／KeyError…）—— 那是 bug，必須照樣炸（CLAUDE.md §1）。
+    """
+    import gspread.exceptions as gse
+    import google.auth.exceptions as gae
+    import requests.exceptions as rqe
+    return (gse.GSpreadException, gae.GoogleAuthError, rqe.RequestException, OSError)
+
+
+@contextmanager
+def _classified_read_errors() -> Iterator[None]:
+    """把 Google 端錯誤分型：沒有分頁 ⇒ `HistoryTabMissing`；其餘 API／傳輸 ⇒ `HistoryApiError`（只帶類別名）。"""
+    import gspread.exceptions as gse
+    api_types = _api_error_types()
+    try:
+        yield
+    except gse.WorksheetNotFound:
+        raise HistoryTabMissing(f"試算表內沒有 {HISTORY_WORKSHEET_NAME!r} 分頁") from None
+    except HistoryReadError:
+        raise
+    except api_types as e:
+        raise HistoryApiError(type(e).__name__) from None
+
+
+def open_history_worksheet(client: Any, sheet_id: str) -> GspreadWorksheetAdapter:
+    """以**受信任注入**的 Sheet ID 開系統歷史 Sheet 的 `risk_cap_daily` 分頁，包成核對過的 adapter。
+
+    `client`：`build_reader_client`／`build_writer_client` 的回傳（gspread `Client` 介面：
+    `open_by_key(id).worksheet(title)`）。⛔ 不用 `open_by_url`／`open(title)`（不解析網址、不按名稱搜尋）。
+    """
+    sid = validate_sheet_id(sheet_id)
+    with _classified_read_errors():
+        ws = client.open_by_key(sid).worksheet(HISTORY_WORKSHEET_NAME)
+    return GspreadWorksheetAdapter(ws, expected_sheet_id=sid)
+
+
+def read_history_records(ws: HistoryWorksheet) -> list[dict[str, str]]:
+    """讀全表 → 每列一個 dict（全字串，原樣；⛔ 不補值、不轉 0）。空表 ⇒ `[]`。
+
+    API／傳輸錯誤 ⇒ `HistoryApiError`；表頭不符 ⇒ `HistorySchemaMismatch`；目標核對不符 ⇒ `HistoryTargetMismatch`。
+    """
+    with _classified_read_errors():
+        values = ws.get_all_values()
+    return rows_as_records(values)
 
 
 def _validate_row(row: Mapping[str, str]) -> None:
@@ -241,30 +364,146 @@ def upsert_record(ws: HistoryWorksheet, row: Mapping[str, str]) -> str:
     return UPSERT_APPENDED
 
 
-def load_writer_credentials_or_refuse(environ: Mapping[str, str] | None = None) -> None:
-    """未來排程寫入帳號的**唯一**入口。本 PoC 階段：**一律拒絕**（`ProductionWriteNotApproved`）。
+def assert_production_write_approved() -> None:
+    """寫入閘門的**第一道**：`PRODUCTION_WRITE_APPROVED`（L0）為 False ⇒ 一律 `ProductionWriteNotApproved`。
 
-    拒絕順序（訊息照實講卡在哪）：
-      1. `PRODUCTION_WRITE_APPROVED` 為 False（L0；改它需要客戶另一次裁示，DEC-009）；
-      2. `RISK_CAP_HISTORY_WRITE_ENABLED` 沒設成 "1"；
-      3. Sheet ID（`RISK_CAP_HISTORY_SHEET_ID`）沒設；
-      4. 即使 1~3 都過了：本 PoC **沒有**實作建立寫入 client —— 仍拒絕。
-
-    📌 2026-10-19（VN1-STORE WIF auth-only 批；有意識的變更，不是漏刪）：原第 3 步「寫入 SA 的 JSON key
-    環境變數沒設 ⇒ 拒絕」**已移除** —— DEC-064 G1 禁止 writer JSON key，那個環境變數不會有合法內容；
-    檢查它等於把「放一把 writer key」寫成通過條件（`docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md` 第 6 節第 4 點）。
-    writer 憑證日後**只**經 GitHub OIDC＋Workload Identity Federation 取得的短效 ADC
-    （`external_account` 憑證檔，impersonate `risk-cap-writer`）；接線屬未來正式寫入批次
-    （需客戶另行核准 production 寫入）。本批的 `scripts/risk_cap_wif_auth_check.py` 只驗證換得到身分、不碰 Sheet。
-    ⛔ 不讀個人持股 Sheet 的既有 SA 金鑰；⛔ 不讀 `st.secrets`；⛔ 不讀網站讀取端的金鑰名稱；⛔ 不讀任何 JSON key。
+    改它需要客戶另一次裁示（DEC-009）；⛔ 本檔沒有任何繞過它的參數或環境變數。
     """
-    env = os.environ if environ is None else environ
     if not PRODUCTION_WRITE_APPROVED:
         raise ProductionWriteNotApproved(
             "系統歷史 Sheet 的 production 寫入尚未核准（客戶 2026-10-19：只核准保存方向 A 與最小 PoC）；"
             "本 PoC 不寫任何真實 Sheet。")
+
+
+def check_writer_credentials_file(environ: Mapping[str, str]) -> str:
+    """writer ADC 憑證檔必須是 WIF 的 `external_account`，且**不是任何 key 檔**。回傳檔案路徑。
+
+    拒絕（`WriterCredentialRefused`）：`GOOGLE_APPLICATION_CREDENTIALS` 沒設／讀不到／不是 JSON 物件；
+    型別是 `service_account`（JSON key，DEC-064 G1 禁止）或任何非 `external_account`；檔內帶 `private_key`；
+    沒有 impersonation 目標，或目標不是 `risk-cap-writer`。
+    ⛔ 只讀 `type`／`private_key` 是否存在／impersonation URL；⛔ 錯誤訊息不含檔案內容或解析錯誤原文。
+    （`scripts/risk_cap_permission_test.py`／`risk_cap_wif_auth_check.py` 各有一份較寬的同類檢查，本批不動那兩支
+    已實跑驗證過的腳本；本函式是 production 寫入路徑的唯一檢查。）
+    """
+    path = environ.get(GAC_ENV_VAR, "")
+    if not path:
+        raise WriterCredentialRefused(f"{GAC_ENV_VAR} 未設定（auth step 沒有產生 WIF 憑證檔）→ 拒絕")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            info = json.load(fh)
+    except OSError:
+        raise WriterCredentialRefused(f"{GAC_ENV_VAR} 指向的檔案讀不到 → 拒絕") from None
+    except ValueError:
+        raise WriterCredentialRefused(f"{GAC_ENV_VAR} 指向的檔案不是合法 JSON → 拒絕") from None
+    if not isinstance(info, dict):
+        raise WriterCredentialRefused("writer 憑證檔不是 JSON 物件 → 拒絕")
+    cred_type = info.get("type")
+    if cred_type == READER_CREDENTIAL_TYPE:
+        raise WriterCredentialRefused("writer 憑證檔是 service_account JSON key —— writer JSON key 依 DEC-064 G1 禁止；"
+                                      "只接受 WIF 產生的 external_account 憑證 → 拒絕")
+    if cred_type != WRITER_CREDENTIAL_TYPE:
+        raise WriterCredentialRefused(f"writer 憑證檔類型不是 {WRITER_CREDENTIAL_TYPE}（只接受 WIF 短效憑證）→ 拒絕")
+    if "private_key" in info:
+        raise WriterCredentialRefused("writer 憑證檔含 private_key（任何 key 檔都不接受）→ 拒絕")
+    target = info.get("service_account_impersonation_url")
+    if not isinstance(target, str) or f"/serviceAccounts/{WRITER_SA_EMAIL}:" not in target:
+        raise WriterCredentialRefused("writer 憑證檔沒有 impersonate risk-cap-writer → 拒絕")
+    return path
+
+
+def load_writer_credentials_or_refuse(environ: Mapping[str, str] | None = None) -> str:
+    """排程寫入帳號的**唯一**入口。`PRODUCTION_WRITE_APPROVED=False` ⇒ **一律拒絕**（`ProductionWriteNotApproved`）。
+
+    拒絕順序（訊息照實講卡在哪；第 1 道永遠最先檢查）：
+      1. `PRODUCTION_WRITE_APPROVED` 為 False（L0；改它需要客戶另一次裁示，DEC-009）；
+      2. `RISK_CAP_HISTORY_WRITE_ENABLED` 沒設成 "1"；
+      3. Sheet ID（`RISK_CAP_HISTORY_SHEET_ID`）沒設或不是純 ID；
+      4. writer 憑證檔不是 WIF `external_account`（`check_writer_credentials_file`）。
+    全部通過 ⇒ 回傳已檢查的憑證檔路徑（給 `build_writer_client`）。
+
+    📌 2026-10-20（VN1-STORE Production Wiring 批；有意識的變更，不是漏刪）：原第 4 步
+    ~~「即使 1~3 都過了：本 PoC **沒有**實作建立寫入 client —— 仍拒絕」~~ 改為真正的 WIF 憑證檔檢查，
+    讓「核准之後」那條路是真的程式碼（規格第 6 節第 4 項）。舊做法的理由（未核准時絕不可能寫）由第 1 道
+    `PRODUCTION_WRITE_APPROVED=False` 守住 —— 它仍是第一個檢查、本批未改它的值。
+    📌 2026-10-19（WIF auth-only 批）：原「寫入 SA 的 JSON key 環境變數」檢查已移除（DEC-064 G1 禁止 writer key）。
+    ⛔ 不讀個人持股 Sheet 的既有 SA 金鑰；⛔ 不讀 `st.secrets`；⛔ 不讀 reader 的 secrets 表格；⛔ 不讀任何 JSON key。
+    """
+    env = os.environ if environ is None else environ
+    assert_production_write_approved()
     if env.get(WRITE_ENABLE_ENV_VAR) != "1":
         raise ProductionWriteNotApproved(f"{WRITE_ENABLE_ENV_VAR} 未設為 1")
     if not env.get(HISTORY_SHEET_ID_ENV_VAR):
         raise ProductionWriteNotApproved(f"寫入目標未設定：{HISTORY_SHEET_ID_ENV_VAR}")
-    raise ProductionWriteNotApproved("本 PoC 未實作建立寫入 client（正式化批次另案；writer 憑證只走 WIF）")
+    try:
+        validate_sheet_id(env.get(HISTORY_SHEET_ID_ENV_VAR))
+    except HistoryTargetMismatch:
+        raise ProductionWriteNotApproved(f"寫入目標格式不符：{HISTORY_SHEET_ID_ENV_VAR} 不是純 Sheet ID") from None
+    return check_writer_credentials_file(env)
+
+
+def build_writer_client(environ: Mapping[str, str] | None = None) -> Any:
+    """WIF writer 的 gspread client。**第一步就是寫入閘門**（`load_writer_credentials_or_refuse`）。
+
+    閘門過了才 `google.auth.default(scopes=WRITER_SCOPES)` —— 而且只在行程環境的
+    `GOOGLE_APPLICATION_CREDENTIALS` 就是剛檢查過的那個檔時（`google.auth.default` 只讀行程環境；
+    注入的 `environ` 與行程環境不一致 ⇒ 拒絕，⛔ 不讓它去讀別的憑證）。取得的身分必須是 `risk-cap-writer`。
+    ⛔ 沒有任何退路：不讀 JSON key、不讀 reader 表格、不讀 gcloud 使用者憑證、不讀 metadata server。
+    """
+    env = os.environ if environ is None else environ
+    path = load_writer_credentials_or_refuse(env)
+    if os.environ.get(GAC_ENV_VAR) != path:
+        raise WriterCredentialRefused(f"行程環境的 {GAC_ENV_VAR} 不是剛檢查過的 WIF 憑證檔 → 拒絕")
+    import google.auth
+
+    creds, _project = google.auth.default(scopes=list(WRITER_SCOPES))
+    if getattr(creds, "service_account_email", None) != WRITER_SA_EMAIL:
+        raise WriterCredentialRefused("WIF 憑證的 impersonation 身分不是 risk-cap-writer → 拒絕")
+    import gspread
+
+    return gspread.authorize(creds)
+
+
+def check_reader_identity(info: Any) -> str:
+    """reader key（L3 從 Streamlit secrets 讀進來的 key/value 表格）身分檢查。回傳 client_email。
+
+    必須：`type == "service_account"` 且 `client_email == risk-cap-reader`。
+    拒絕（`ReaderIdentityMismatch`）：external_account（WIF 設定檔不可當 reader）、writer 身分、fund-nav、
+    其他任何 SA、缺欄。⛔ 錯誤訊息不含 key 內容（只講是哪一類不符）。
+    """
+    if not isinstance(info, Mapping):
+        raise ReaderIdentityMismatch("reader 憑證不是 key/value 表格 → 拒絕")
+    cred_type = info.get("type")
+    if cred_type == WRITER_CREDENTIAL_TYPE:
+        raise ReaderIdentityMismatch("reader 憑證是 external_account（WIF 設定檔）—— reader 只接受 risk-cap-reader key → 拒絕")
+    if cred_type != READER_CREDENTIAL_TYPE:
+        raise ReaderIdentityMismatch("reader 憑證類型不是 service_account → 拒絕")
+    email = info.get("client_email")
+    if email == WRITER_SA_EMAIL:
+        raise ReaderIdentityMismatch("reader 憑證是 risk-cap-writer 身分（reader／writer 不得互換）→ 拒絕")
+    if isinstance(email, str) and "fund-nav" in email.lower():
+        raise ReaderIdentityMismatch("reader 憑證是 fund-nav 身分（不得沿用 fund-nav）→ 拒絕")
+    if email != READER_SA_EMAIL:
+        raise ReaderIdentityMismatch("reader 憑證身分不是 risk-cap-reader → 拒絕")
+    return email
+
+
+def build_reader_client(info: Mapping[str, Any]) -> Any:
+    """reader 的 gspread client：**只** `service_account.Credentials.from_service_account_info(info, READER_SCOPES)`。
+
+    ⛔ 永不呼叫 `google.auth.default`（不讀 ADC、不讀 `GOOGLE_APPLICATION_CREDENTIALS`、不讀 metadata server）。
+    建出的憑證身分必須仍是 `risk-cap-reader`、scope 必須恰好是唯讀。key 損壞 ⇒ `ReaderCredentialInvalid`（只帶類別名）。
+    """
+    check_reader_identity(info)
+    from google.oauth2 import service_account
+
+    try:
+        creds = service_account.Credentials.from_service_account_info(dict(info), scopes=list(READER_SCOPES))
+    except (ValueError, KeyError, TypeError) as e:
+        raise ReaderCredentialInvalid(f"reader key 無法載入（{type(e).__name__}）") from None
+    if getattr(creds, "service_account_email", None) != READER_SA_EMAIL:
+        raise ReaderIdentityMismatch("reader 憑證建立後身分不是 risk-cap-reader → 拒絕")
+    if tuple(getattr(creds, "scopes", None) or ()) != tuple(READER_SCOPES):
+        raise ReaderIdentityMismatch("reader 憑證 scope 不是恰好 spreadsheets.readonly → 拒絕")
+    import gspread
+
+    return gspread.authorize(creds)
