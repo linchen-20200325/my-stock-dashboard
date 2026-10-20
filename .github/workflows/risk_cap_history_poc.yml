@@ -130,6 +130,18 @@ jobs:
       - name: Verify impersonated identity (auth-only, no Sheet access)
         run: python scripts/risk_cap_wif_auth_check.py --expect-sa risk-cap-writer@mystock20260823.iam.gserviceaccount.com
 
+  permission_test_branch_guard:
+    # 權限驗證 job 只限 main；從其他分支觸發時 writer／reader 會被 skip —— skip 在 Actions 畫面上看起來像「綠色」，
+    # 容易被誤讀成「測過了」。本 job 讓這種觸發**明確紅燈**。⛔ 不 checkout、⛔ 沒有 secrets、⛔ 沒有 id-token。
+    if: ${{ (inputs.mode == 'permission-test-writer' || inputs.mode == 'permission-test-reader') && github.ref != 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Refuse non-main dispatch (nothing was tested)
+        run: echo "::error::permission tests must be dispatched on main; nothing was tested (ref=$GITHUB_REF)" && exit 1
+
   permission_test_writer:
     # P1＋R1。只限 main（WIF attribute condition 本來就只放行 main；這裡再擋一次，非 main 觸發直接 skip，
     # 避免被誤當成 R4 —— R4 有自己的 job `wif_negative_r4`）。

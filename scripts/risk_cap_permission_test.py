@@ -13,22 +13,24 @@ DEC-064 G1／G2；客戶 2026-10-20 決策（reader 測試用一次性例外 sec
 writer（scope＝`WRITER_SCOPES`）
 -------------------------------
 1. **R1（先做）**：對每個非空的個人持股 Sheet ID **只發唯讀 GET**（`spreadsheets/{id}?fields=spreadsheetId`）。
-   403 PERMISSION_DENIED（且 reason 不是 API 未啟用／scope 不足／API key 類）或 404 NOT_FOUND ⇒ PASS
+   **允許清單**：403 PERMISSION_DENIED 且沒有任何 details reason ⇒ PASS；404 NOT_FOUND（無 reason）⇒ PASS_NOT_FOUND
+   （也算通過，但另印提醒：確認持股 Sheet ID secret 是現行那本）；帶任何 reason 的 403、其他錯誤 ⇒ INCONCLUSIVE
    （連讀都不行 ⇒ 不可能寫；客戶 R1 安全解讀）。⛔ 永不對持股 Sheet 發任何非 GET 請求（`GuardedSheets` 硬擋）。
-   任何 R1 為 FAIL（2xx ⇒ writer 讀得到持股 Sheet）⇒ **立刻停下，不做 P1**。
+   任何 R1 不是 PASS／PASS_NOT_FOUND（FAIL＝2xx 讀得到，或 INCONCLUSIVE）⇒ **不做 P1、不寫任何列**。
 2. **P1**：只在 System Risk Cap Sheet 的工作表 `risk_cap_daily`：
    (i) 讀 metadata 找到該工作表的 sheetId（找不到 ⇒ FAIL）；
    (ii) `values:append` 一列測試列 `["PERMISSION_TEST", <run id>, <UTC ISO>, 說明]`（RAW／INSERT_ROWS），
         由回應的 `updates.updatedRange` 解析列號（必須恰好是 `A{r}:D{r}`）；
    (iii) 讀回該範圍、逐格比對；
-   (iv) `finally` 一律清理：刪除前**再讀一次**該列，A 欄＝標記且 B 欄＝本次 run id 才刪；不符 ⇒ 不刪那一列，
+   (iv) `finally` 一律清理（append 結果不明 —— 請求例外、回應無法解析、5xx —— 時另外一律印人工確認指引）：刪除前**再讀一次**該列，A 欄＝標記且 B 欄＝本次 run id 才刪；不符 ⇒ 不刪那一列，
         改在整個分頁 A:B 搜尋「標記＋run id」，**恰好一列**才刪那一列，否則 FAIL 並印人工清理指引（不含 Sheet ID）；
         刪除用 `batchUpdate deleteDimension ROWS [r-1, r)` —— ⛔ 不清除範圍、⛔ 不動其他任何一列；
    (v) 再讀 A:B 確認標記列已不存在。四步全部成功才 PASS。
 
 reader（scope 恰好 `spreadsheets.readonly`）
 -------------------------------------------
-- **P2**：讀 System Risk Cap Sheet metadata 與 `risk_cap_daily!A1:Z5` ⇒ 都 200 才 PASS（只回報列數；空分頁也算 PASS）。
+- **P2**：讀 System Risk Cap Sheet metadata 與 `risk_cap_daily!A1:Z5` ⇒ 都 200 才 PASS（只回報列數）。
+  P2 證明「讀得到＋分頁存在」；空分頁也算 PASS，但會明講「內容未被驗到」。
 - **R2**：對持股 Sheet 只發 GET，判定同 R1。
 - **R3**：對 `risk_cap_daily` 嘗試 append 標記列 ⇒ 只有 403 PERMISSION_DENIED 才 PASS；
   預期 reason＝ACCESS_TOKEN_SCOPE_INSUFFICIENT（scope 層擋下）—— 檢視者 ACL 層**沒有被單獨驗到**
@@ -37,7 +39,7 @@ reader（scope 恰好 `spreadsheets.readonly`）
 輸出（只有這些）：測試 ID、判定、HTTP 狀態碼、Google error.status、error.details[].reason、身分 email、固定說明文字。
 ⛔ 不印任何 Sheet ID、token、憑證內容、回應內文（除上述欄位）、例外訊息（只印例外類別名）。
 
-結束碼：0 ＝ 全部 PASS；1 ＝ 任一 FAIL／INCONCLUSIVE／SKIPPED；2 ＝ 前置條件被拒（REFUSED，未發任何 Sheets 請求）。
+結束碼：0 ＝ 全部 PASS／PASS_NOT_FOUND；1 ＝ 任一 FAIL／INCONCLUSIVE／SKIPPED；2 ＝ 前置條件被拒（REFUSED，未發任何 Sheets 請求）。
 """
 from __future__ import annotations
 
@@ -69,6 +71,10 @@ EXIT_FAIL = 1
 EXIT_REFUSED = 2
 
 PASS = "PASS"
+#: R1／R2 的 404 NOT_FOUND：也算通過（exit 0），但另立標籤 —— 可能只是 secret 裡的 ID 不是現行那本。
+PASS_NOT_FOUND = "PASS_NOT_FOUND"
+#: 算「通過」的判定（exit 0）。
+PASSING_VERDICTS: frozenset[str] = frozenset({"PASS", "PASS_NOT_FOUND"})
 FAIL = "FAIL"
 INCONCLUSIVE = "INCONCLUSIVE"
 SKIPPED = "SKIPPED"
@@ -140,7 +146,7 @@ class Report:
             return EXIT_REFUSED
         if self.setup_error or not self.results:
             return EXIT_FAIL
-        return EXIT_PASS if all(r.verdict == PASS for r in self.results) else EXIT_FAIL
+        return EXIT_PASS if all(r.verdict in PASSING_VERDICTS for r in self.results) else EXIT_FAIL
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -167,18 +173,21 @@ def _non_acl(reasons: Sequence[str]) -> bool:
 
 
 def classify_reverse_read(http: int, body: Any) -> tuple[str, str, str]:
-    """R1／R2（對持股 Sheet 的唯讀 GET）判定 → (verdict, status, reason 串)。
+    """R1／R2（對持股 Sheet 的唯讀 GET）判定 → (verdict, status, reason 串)。**允許清單**（稽核修正第 1 輪）：
 
-    PASS：403 PERMISSION_DENIED 且 reason 不屬 API 未啟用／scope 不足／API key／專案層；或 404 NOT_FOUND。
-    FAIL：任何 2xx（讀得到持股 Sheet）。其餘一律 INCONCLUSIVE（⛔ 不當 PASS）。
+    PASS：403、status＝PERMISSION_DENIED、且**沒有任何** details reason（一般的 "caller does not have permission"）。
+    PASS_NOT_FOUND：404、status＝NOT_FOUND、且沒有 reason（ID 不存在或看不到；另印提醒確認 secret 是現行 ID）。
+    FAIL：任何 2xx（讀得到持股 Sheet）。
+    其餘一律 INCONCLUSIVE —— 含**帶任何 reason** 的 403（SERVICE_DISABLED、ACCESS_TOKEN_SCOPE_INSUFFICIENT、
+    SECURITY_POLICY_VIOLATED、IAM_PERMISSION_DENIED、CONSUMER_SUSPENDED…）：那些證明不了是 Sheet ACL 擋下。
     """
     status, reasons = google_error(body)
     reason = ",".join(reasons)
     if 200 <= http < 300:
         return FAIL, status, reason
-    if http == 404 and status == "NOT_FOUND":
-        return PASS, status, reason
-    if http == 403 and status == "PERMISSION_DENIED" and not _non_acl(reasons):
+    if http == 404 and status == "NOT_FOUND" and not reasons:
+        return PASS_NOT_FOUND, status, reason
+    if http == 403 and status == "PERMISSION_DENIED" and not reasons:
         return PASS, status, reason
     return INCONCLUSIVE, status, reason
 
@@ -343,8 +352,10 @@ def reverse_read(api: GuardedSheets, test_id: str, sid: str) -> CheckResult:
         return CheckResult(test_id, INCONCLUSIVE, note=_exc_note("唯讀 GET", e))
     verdict, status, reason = classify_reverse_read(http, body)
     note = {PASS: "持股 Sheet 讀不到（唯讀 GET 被拒 ⇒ 也不可能寫）",
+            PASS_NOT_FOUND: ("ID not found or not visible — confirm the holdings Sheet ID secret is the live one "
+                             "(push_holdings_daily uses the same secret)"),
             FAIL: "⚠️⚠️ 讀得到個人持股 Sheet —— 立刻停下，移除該 SA 的分享並回報",
-            INCONCLUSIVE: "錯誤不是 Sheet ACL 拒絕（API 未啟用／scope／其他）—— 不能當通過"}[verdict]
+            INCONCLUSIVE: "不是單純的 403 PERMISSION_DENIED（無 reason）或 404 NOT_FOUND —— 不能當通過"}[verdict]
     return CheckResult(test_id, verdict, http, status, reason, note)
 
 
@@ -391,8 +402,9 @@ def find_marker_rows(api: GuardedSheets, sid: str, marker: str, run_id: str,
 
 
 def _manual_cleanup_text(marker: str, run_id: str, tab: str = HISTORY_WORKSHEET_NAME) -> str:
-    return (f"人工清理：開 System Risk Cap Sheet 的 `{tab}` 分頁，找 A 欄＝{marker}、B 欄＝{run_id} 的列，"
-            "刪除那一整列（⛔ 不要動其他任何一列）")
+    # 稽核修正第 1 輪：不假設標記一定在 A 欄（append 位置不明時可能落在別欄）—— 請在整個分頁搜尋。
+    return (f"人工確認／清理：開 System Risk Cap Sheet 的 `{tab}` 分頁，在整個分頁搜尋標記 {marker}"
+            f"（同一列應有 run id {run_id}）；找到就刪除那一整列，找不到就無需處理（⛔ 不要動其他任何一列）")
 
 
 def _delete_row(api: GuardedSheets, sid: str, sheet_id: int, row_no: int) -> bool:
@@ -447,6 +459,8 @@ def run_p1(api: GuardedSheets, sid: str, run_id: str, now_iso: str, manual: list
 
     row = [P1_MARKER, run_id, now_iso, P1_NOTE]
     append_ok = readback_ok = False
+    #: 稽核修正第 1 輪：append 結果不明（請求例外、回應無法解析、5xx）⇒ 不論清理搜尋結果，一律印人工確認指引。
+    append_unknown = True
     append_http: int | None = None
     append_status = append_reason = ""
     row_no: int | None = None
@@ -464,8 +478,9 @@ def run_p1(api: GuardedSheets, sid: str, run_id: str, now_iso: str, manual: list
             append_ok = True
             updates = abody.get("updates") if isinstance(abody, dict) else None
             row_no = parse_updated_row(updates.get("updatedRange") if isinstance(updates, dict) else None)
+            append_unknown = row_no is None
             if row_no is None:
-                step_note = "append 成功但 updatedRange 不是預期的單列 A:D"
+                step_note = "append 回 2xx 但 updatedRange 無法解析成預期的單列 A:D（寫入位置不明）"
             else:
                 # (iii) 讀回比對
                 http, rbody = api.get(_values_url(sid, f"{tab}!A{row_no}:D{row_no}"))
@@ -473,7 +488,10 @@ def run_p1(api: GuardedSheets, sid: str, run_id: str, now_iso: str, manual: list
                 if not readback_ok:
                     step_note = "讀回內容與寫入不符"
         else:
-            step_note = "append 被拒（writer 可能未被分享為編輯者）"
+            # 4xx（非 429）＝ 伺服器明確拒絕、沒寫入；5xx／429／無法解析 ＝ 結果不明。
+            append_unknown = append_http >= 500 or append_http == 429 or abody is None
+            step_note = ("append 結果不明（伺服器錯誤或回應無法解析）" if append_unknown
+                         else "append 被拒（writer 可能未被分享為編輯者）")
     except Exception as e:  # noqa: BLE001
         step_note = _exc_note("append／讀回", e)
     finally:
@@ -490,7 +508,7 @@ def run_p1(api: GuardedSheets, sid: str, run_id: str, now_iso: str, manual: list
         gone_ok = hits is not None and not hits
     except Exception:  # noqa: BLE001
         gone_ok = False
-    if not cleanup_ok or not gone_ok:
+    if not cleanup_ok or not gone_ok or append_unknown:
         manual.append(_manual_cleanup_text(P1_MARKER, run_id))
 
     passed = append_ok and readback_ok and cleanup_ok and gone_ok
@@ -532,8 +550,11 @@ def run_writer(environ: Mapping[str, str] | None = None, *,
 
     for name, sid in holdings.items():
         rep.results.append(reverse_read(api, f"R1[{name}]", sid))
-    if any(r.verdict == FAIL for r in rep.results):
-        rep.results.append(CheckResult("P1", SKIPPED, note="R1 失敗（writer 讀得到持股 Sheet）⇒ 立刻停下，未寫入任何列"))
+    # 稽核修正第 1 輪：任何 R1 不是 PASS／PASS_NOT_FOUND（含 INCONCLUSIVE）⇒ 不做 P1（不寫）。
+    if any(r.verdict not in PASSING_VERDICTS for r in rep.results):
+        why = ("R1 失敗（writer 讀得到持股 Sheet）⇒ 立刻停下" if any(r.verdict == FAIL for r in rep.results)
+               else "R1 未確認通過（INCONCLUSIVE）")
+        rep.results.append(CheckResult("P1", SKIPPED, note=f"{why}，未寫入任何列"))
         return rep
     rep.results.append(run_p1(api, rc, run_id, now_fn(), rep.manual_cleanup))
     return rep
@@ -587,8 +608,9 @@ def run_reader(environ: Mapping[str, str] | None = None, *,
     else:
         if mh == 200 and vh == 200:
             n = len(_values(vbody))
-            rep.results.append(CheckResult("P2", PASS, vh, note=f"metadata=200 values=200 rows={n}"
-                                           + ("（tab empty）" if n == 0 else "")))
+            rep.results.append(CheckResult("P2", PASS, vh, note=f"metadata=200 values=200 rows={n}；" + (
+                "P2 proves read access + tab exists; tab empty → content not demonstrated" if n == 0
+                else "P2 proves read access + tab exists")))
         else:
             bad = vbody if mh == 200 else mbody
             status, reasons = google_error(bad)

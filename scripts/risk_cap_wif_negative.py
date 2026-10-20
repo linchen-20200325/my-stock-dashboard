@@ -22,7 +22,7 @@ WIF provider 的 attribute condition 釘了 repository_id、repository_owner_id�
    scope＝cloud-platform。
 4. 判定：
    - **PASS**：HTTP 4xx，且 JSON `error` ∈ {unauthorized_client, invalid_grant}，且 `error_description` 含
-     "attribute condition"（不分大小寫）。Google STS 的實際格式（公開回報）：
+     "rejected by the attribute condition"（不分大小寫；"Error evaluating…"、"Invalid … expression" 不算）。Google STS 的實際格式（公開回報）：
      `{"error":"unauthorized_client","error_description":"The given credential is rejected by the attribute condition."}`。
    - **FAIL**：任何 2xx（換到了 token —— 大聲警告；⛔ 永不印 token）。
    - **INCONCLUSIVE**：其他一切（網路錯誤、5xx、其他 4xx、無法解析）—— ⛔ 永不當 PASS。
@@ -75,7 +75,9 @@ MAIN_REF = "refs/heads/main"
 POC_WORKFLOW_MARKER = "/risk_cap_history_poc.yml@"
 #: STS 拒絕且屬 attribute condition 的 error 碼（Google STS 回 OAuth 2.0 錯誤格式）。
 ATTRIBUTE_CONDITION_ERRORS: frozenset[str] = frozenset({"unauthorized_client", "invalid_grant"})
-ATTRIBUTE_CONDITION_TEXT = "attribute condition"
+#: 稽核修正第 1 輪：要求完整片語 —— "Error evaluating the attribute condition"、"Invalid attribute condition
+#: expression" 之類是**設定錯誤**，不是「被條件拒絕」，不得算 PASS。
+ATTRIBUTE_CONDITION_TEXT = "rejected by the attribute condition"
 #: 只印這幾個 claim（非機密）。
 PRINT_CLAIMS: tuple[str, ...] = ("ref", "workflow_ref", "repository_id", "event_name")
 HTTP_TIMEOUT_S = 20

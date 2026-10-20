@@ -50,7 +50,9 @@ READER_SA = "risk-cap-reader@mystock20260823.iam.gserviceaccount.com"
 READONLY = "https://www.googleapis.com/auth/spreadsheets.readonly"
 READER_SECRET = "RISK_CAP_READER_TEST_SA_JSON"
 PIP_LINE = 'pip install "google-auth>=2.0.0,<4.0" "requests>=2.31.0,<3.0.0"'
-NEW_JOBS = ("permission_test_writer", "permission_test_reader", "wif_negative_r4")
+NEW_JOBS = ("permission_test_writer", "permission_test_reader", "wif_negative_r4", "permission_test_branch_guard")
+BRANCH_GUARD_IF = ("${{ (inputs.mode == 'permission-test-writer' || inputs.mode == 'permission-test-reader') "
+                   "&& github.ref != 'refs/heads/main' }}")
 
 
 def _wf() -> str:
@@ -148,6 +150,21 @@ def assert_gate_guards(text: str) -> None:
     assert rest[0]["run"] == "python scripts/risk_cap_wif_negative.py --test R4"
     n_code = "\n".join(c for _, _, c in _yaml_lines(nt))
     assert "secrets." not in n_code and "google-github-actions" not in n_code
+
+    # ── 非 main 觸發權限驗證 ⇒ 明確紅燈（稽核修正第 1 輪）：無 checkout、無 secrets、無 id-token ──
+    g, gt = jobs["permission_test_branch_guard"], _job_text(text, "permission_test_branch_guard")
+    assert g["if"] == BRANCH_GUARD_IF
+    assert g["permissions"] == {"contents": "read"}
+    assert set(g) == {"if", "runs-on", "timeout-minutes", "permissions", "steps"}, set(g)
+    assert len(g["steps"]) == 1 and set(g["steps"][0]) == {"name", "run"}
+    run = g["steps"][0]["run"]
+    assert "permission tests must be dispatched on main; nothing was tested" in run and run.endswith("&& exit 1")
+    g_code = "\n".join(c for _, _, c in _yaml_lines(gt))
+    for bad in ("uses:", "secrets.", "id-token", "${{ github", "env:"):
+        assert bad not in g_code.replace(BRANCH_GUARD_IF, ""), bad
+    # 守衛條件必須恰好是 writer／reader 條件的補集（mode 相同、ref 相反）
+    for job in ("permission_test_writer", "permission_test_reader"):
+        assert jobs[job]["if"].endswith("&& github.ref == 'refs/heads/main' }}")
 
     # 一次性 reader secret：全檔只出現在 reader job（含註解都算）
     assert text.count(READER_SECRET) == rt.count(READER_SECRET) >= 2
@@ -264,6 +281,22 @@ class TestWorkflowMutations:
         with pytest.raises(AssertionError):
             assert_gate_guards(self._in_job(_wf(), job, old, new))
 
+    @pytest.mark.parametrize("old,new", [
+        ("  permission_test_branch_guard:\n", "  permission_test_branch_guard_disabled:\n"),
+        ("&& exit 1\n", "\n"),
+        ("github.ref != 'refs/heads/main' }}", "false }}"),
+        ("inputs.mode == 'permission-test-writer' || inputs.mode == 'permission-test-reader'",
+         "inputs.mode == 'permission-test-writer'"),
+        ("      - name: Refuse non-main dispatch (nothing was tested)\n",
+         "      - name: Refuse non-main dispatch (nothing was tested)\n"
+         "        env:\n          X: ${{ secrets.RISK_CAP_HISTORY_SHEET_ID }}\n"),
+    ])
+    def test_branch_guard_mutation_turns_red(self, old, new):
+        t = _wf()
+        assert t.count(old) == 1, old
+        with pytest.raises(AssertionError):
+            assert_gate_guards(t.replace(old, new))
+
     def test_schedule_added_turns_red(self):
         t = _wf()
         assert t.count("on:\n  workflow_dispatch:\n") == 1
@@ -341,7 +374,7 @@ _RANGE_RE = re.compile(r"^risk_cap_daily!([A-Z])(\d*):([A-Z])(\d*)$")
 class FakeSheets:
     """System Risk Cap Sheet（`risk_cap_daily` 分頁 in-memory）＋ 持股 Sheet（固定回應）的假後端。"""
 
-    def __init__(self, *, rows=None, holdings=(H1_ID, H2_ID), holdings_resp=NOT_FOUND, tab=True,
+    def __init__(self, *, rows=None, holdings=(H1_ID, H2_ID), holdings_resp=DENIED, tab=True,
                  append_resp=None, report_offset=0, readback_exc=False, tamper_readback=False):
         self.rows = [list(r) for r in (rows if rows is not None else [HEADER, OTHER_ROW])]
         self.holdings = set(holdings)
@@ -407,6 +440,23 @@ class FakeSheets:
         return [(u, j) for m, u, _, j in self.calls if m == "POST"]
 
 
+class _AppendRaises(FakeSheets):
+    """append 請求丟例外（`write_first=True` ＝ 伺服器其實已寫入、只是回應沒回來）。"""
+
+    def __init__(self, *, write_first: bool, **kw):
+        super().__init__(**kw)
+        self.write_first = write_first
+
+    def request(self, method, url, **kw):
+        if method == "POST" and url.endswith(":append"):
+            if self.write_first:
+                super().request(method, url, **kw)
+            else:
+                self.calls.append((method, url, dict(kw.get("params") or {}), kw.get("json")))
+            raise ConnectionError(f"reset {TOKEN_SENTINEL}")
+        return super().request(method, url, **kw)
+
+
 def assert_holdings_get_only(fake: FakeSheets) -> None:
     for method, url, params, body in fake.calls:
         if S.target_spreadsheet_id(url) in (H1_ID, H2_ID):
@@ -447,9 +497,17 @@ def _verdicts(rep) -> dict:
 class TestClassification:
     @pytest.mark.parametrize("http,body,verdict", [
         (*DENIED, "PASS"),
-        (*NOT_FOUND, "PASS"),
+        (*NOT_FOUND, "PASS_NOT_FOUND"),
         (*DISABLED, "INCONCLUSIVE"),
         (*SCOPE, "INCONCLUSIVE"),
+        # 稽核修正第 1 輪：允許清單 —— 帶任何 reason 的 403／404 一律 INCONCLUSIVE
+        (403, _gerr(403, "PERMISSION_DENIED", "SECURITY_POLICY_VIOLATED"), "INCONCLUSIVE"),
+        (403, _gerr(403, "PERMISSION_DENIED", "IAM_PERMISSION_DENIED"), "INCONCLUSIVE"),
+        (403, _gerr(403, "PERMISSION_DENIED", "CONSUMER_SUSPENDED"), "INCONCLUSIVE"),
+        (403, _gerr(403, "PERMISSION_DENIED", "SOME_FUTURE_REASON"), "INCONCLUSIVE"),
+        (404, _gerr(404, "NOT_FOUND", "SOME_REASON"), "INCONCLUSIVE"),
+        (403, {"error": {"code": 403, "status": "PERMISSION_DENIED", "details": []}}, "PASS"),
+        (403, {"error": {"code": 403, "status": "PERMISSION_DENIED"}}, "PASS"),
         (403, _gerr(403, "PERMISSION_DENIED", "API_KEY_INVALID"), "INCONCLUSIVE"),
         (403, _gerr(403, "PERMISSION_DENIED", "weird reason with spaces"), "INCONCLUSIVE"),
         (403, None, "INCONCLUSIVE"),
@@ -548,11 +606,45 @@ class TestWriter:
         rep = _run_writer(FakeSheets(holdings_resp=DENIED))
         assert rep.exit_code == 0
 
-    @pytest.mark.parametrize("resp", [DISABLED, SCOPE, (500, None)])
-    def test_r1_non_acl_errors_are_inconclusive(self, resp):
-        rep = _run_writer(FakeSheets(holdings_resp=resp))
+    def test_r1_404_is_pass_not_found_with_note(self):
+        fake = FakeSheets(holdings_resp=NOT_FOUND)
+        rep = _run_writer(fake)
+        out = _out(rep)
+        assert rep.exit_code == 0, out
+        assert _verdicts(rep) == {"R1[PORTFOLIO_SHEET_ID]": "PASS_NOT_FOUND",
+                                  "R1[STOCK_PORTFOLIO_SHEET_ID]": "PASS_NOT_FOUND", "P1": "PASS"}
+        assert ("ID not found or not visible — confirm the holdings Sheet ID secret is the live one "
+                "(push_holdings_daily uses the same secret)") in out
+        assert_no_leak(out)
+
+    @pytest.mark.parametrize("resp", [
+        DISABLED, SCOPE, (500, None),
+        (403, _gerr(403, "PERMISSION_DENIED", "SECURITY_POLICY_VIOLATED")),
+        (403, _gerr(403, "PERMISSION_DENIED", "IAM_PERMISSION_DENIED")),
+        (403, _gerr(403, "PERMISSION_DENIED", "CONSUMER_SUSPENDED")),
+    ])
+    def test_r1_non_plain_errors_are_inconclusive_and_skip_p1(self, resp):
+        """稽核修正第 1 輪：任何 R1 INCONCLUSIVE ⇒ P1 SKIPPED（不寫）。"""
+        fake = FakeSheets(holdings_resp=resp)
+        before = [list(r) for r in fake.rows]
+        rep = _run_writer(fake)
         assert rep.exit_code == 1
         assert _verdicts(rep)["R1[PORTFOLIO_SHEET_ID]"] == "INCONCLUSIVE"
+        assert _verdicts(rep)["P1"] == "SKIPPED" and "未寫入任何列" in _out(rep)
+        assert fake.posts() == [] and fake.methods_for(RC_ID) == [] and fake.rows == before
+
+    def test_one_inconclusive_r1_among_passes_still_skips_p1(self):
+        class _Mixed(FakeSheets):
+            def request(self, method, url, **kw):
+                if S.target_spreadsheet_id(url) == H2_ID:
+                    self.calls.append((method, url, dict(kw.get("params") or {}), kw.get("json")))
+                    return _Resp(*DISABLED)
+                return super().request(method, url, **kw)
+        fake = _Mixed()
+        rep = _run_writer(fake)
+        assert _verdicts(rep) == {"R1[PORTFOLIO_SHEET_ID]": "PASS", "R1[STOCK_PORTFOLIO_SHEET_ID]": "INCONCLUSIVE",
+                                  "P1": "SKIPPED"}
+        assert fake.posts() == []
 
     def test_r1_2xx_fails_and_stops_before_any_write(self):
         fake = FakeSheets(holdings_resp=(200, {"spreadsheetId": H1_ID}))
@@ -590,6 +682,48 @@ class TestWriter:
         assert "ConnectionError" in out
         assert_no_leak(out)
 
+    @pytest.mark.parametrize("write_first", [False, True])
+    def test_append_exception_always_prints_manual_check(self, write_first):
+        """稽核修正第 1 輪：append 請求例外 ⇒ 結果不明 ⇒ P1 FAIL、一律印人工確認指引（即使搜尋沒找到）；
+        若其實已寫入，搜尋到唯一標記列仍會刪掉。"""
+        fake = _AppendRaises(write_first=write_first)
+        before = [list(r) for r in fake.rows]
+        rep = _run_writer(fake)
+        out = _out(rep)
+        assert _verdicts(rep)["P1"] == "FAIL" and rep.exit_code == 1
+        assert fake.rows == before
+        assert len(rep.manual_cleanup) == 1
+        text = rep.manual_cleanup[0]
+        assert "PERMISSION_TEST" in text and RUN_ID in text and "risk_cap_daily" in text
+        assert "整個分頁搜尋" in text and "A 欄" not in text
+        assert "人工確認" in out and "ConnectionError" in out
+        assert_no_leak(out)
+
+    @pytest.mark.parametrize("updated", [None, "risk_cap_daily!B9:E9", "garbage"])
+    def test_append_2xx_unparseable_range_prints_manual_check(self, updated):
+        class _Odd(FakeSheets):
+            def request(self, method, url, **kw):
+                resp = super().request(method, url, **kw)
+                if method == "POST" and url.endswith(":append"):
+                    body = dict(resp._body)
+                    body["updates"] = {} if updated is None else {"updatedRange": updated}
+                    return _Resp(200, body)
+                return resp
+        fake = _Odd()
+        before = [list(r) for r in fake.rows]
+        rep = _run_writer(fake)
+        assert _verdicts(rep)["P1"] == "FAIL" and rep.manual_cleanup
+        assert fake.rows == before                                   # 搜尋到唯一標記列 ⇒ 仍清掉
+
+    @pytest.mark.parametrize("resp,unknown", [((503, None), True), ((500, _gerr(500, "INTERNAL")), True),
+                                              ((429, _gerr(429, "RESOURCE_EXHAUSTED")), True),
+                                              (DENIED, False), ((400, _gerr(400, "INVALID_ARGUMENT")), False)])
+    def test_append_error_manual_check_only_when_outcome_unknown(self, resp, unknown):
+        fake = FakeSheets(append_resp=resp)
+        rep = _run_writer(fake)
+        assert _verdicts(rep)["P1"] == "FAIL"
+        assert bool(rep.manual_cleanup) is unknown
+
     def test_readback_mismatch_fails_but_cleans_up(self):
         fake = FakeSheets(tamper_readback=True)
         before = [list(r) for r in fake.rows]
@@ -613,7 +747,7 @@ class TestWriter:
         assert _verdicts(rep)["P1"] == "FAIL" and rep.exit_code == 1
         assert [u for u, _ in fake.posts() if u.endswith(":batchUpdate")] == []
         assert fake.rows[:3] == [HEADER, orphan, OTHER_ROW] and len(fake.rows) == 4
-        assert rep.manual_cleanup and "PERMISSION_TEST" in out and RUN_ID in out and "人工清理" in out
+        assert rep.manual_cleanup and "PERMISSION_TEST" in out and RUN_ID in out and "人工確認／清理" in out
         assert_no_leak(out)
 
     def test_marker_with_other_run_id_is_untouched(self):
@@ -753,14 +887,16 @@ class TestReader:
 
     def test_p2_empty_tab_still_passes(self):
         rep = _run_reader(FakeSheets(rows=[], append_resp=SCOPE))
-        assert _verdicts(rep)["P2"] == "PASS" and "tab empty" in _out(rep)
+        out = _out(rep)
+        assert _verdicts(rep)["P2"] == "PASS" and "tab empty" in out
+        assert "P2 proves read access + tab exists; tab empty → content not demonstrated" in out
 
     def test_r3_2xx_fails_loud_with_manual_cleanup(self):
         fake = FakeSheets()                                          # append 成功 ＝ reader 寫得進去
         rep = _run_reader(fake)
         out = _out(rep)
         assert _verdicts(rep)["R3"] == "FAIL" and rep.exit_code == 1
-        assert "PERMISSION_TEST_R3_SHOULD_FAIL" in out and "人工清理" in out
+        assert "PERMISSION_TEST_R3_SHOULD_FAIL" in out and "人工確認／清理" in out
         assert [u for u, _ in fake.posts() if u.endswith(":batchUpdate")] == []   # reader 不嘗試刪除
         assert_no_leak(out)
 
@@ -989,6 +1125,11 @@ class TestWifNegative:
         (400, {"error": "invalid_target", "error_description": "The target service indicated by the audience is invalid"}),
         (400, {"error": "invalid_grant", "error_description": "The audience in ID Token does not match"}),
         (400, {"error": "unauthorized_client", "error_description": "something else"}),
+        # 稽核修正第 1 輪：設定錯誤 ≠ 被條件拒絕
+        (400, {"error": "invalid_grant", "error_description": "Error evaluating the attribute condition"}),
+        (400, {"error": "unauthorized_client", "error_description": "Invalid attribute condition expression"}),
+        (400, {"error": "invalid_request", "error_description": "rejected by the attribute condition"}),
+        (500, {"error": "unauthorized_client", "error_description": "rejected by the attribute condition"}),
         (403, {"error": {"code": 403, "status": "PERMISSION_DENIED"}}),
         (400, None),
         (302, None),
@@ -999,7 +1140,7 @@ class TestWifNegative:
 
     def test_invalid_grant_with_attribute_condition_passes(self):
         r = _neg("R4", _Net(_jwt(), sts=(400, {"error": "invalid_grant",
-                                               "error_description": "Rejected by ATTRIBUTE CONDITION"})))
+                                               "error_description": "Credential REJECTED BY THE ATTRIBUTE CONDITION"})))
         assert r.verdict == "PASS"
 
     def test_sts_exception_inconclusive_no_leak(self):
@@ -1071,17 +1212,55 @@ class TestWifNegative:
 # 4. 腳本突變自驗
 # ══════════════════════════════════════════════════════════════════════════
 class TestScriptMutations:
-    def test_accepting_service_disabled_is_caught(self):
+    @pytest.mark.parametrize("resp", [DISABLED, SCOPE,
+                                      (403, _gerr(403, "PERMISSION_DENIED", "SECURITY_POLICY_VIOLATED"))])
+    def test_r1_allow_list_dropped_is_caught(self, resp):
+        """突變：R1 允許清單拿掉「沒有 reason」條件（退回 block-list 前的寬鬆）⇒ 帶 reason 的 403 被判 PASS。"""
+        mut = _mutated_module(PERM_SCRIPT_REL, (
+            '    if http == 403 and status == "PERMISSION_DENIED" and not reasons:\n        return PASS, status, reason\n',
+            '    if http == 403 and status == "PERMISSION_DENIED":\n        return PASS, status, reason\n'))
+        assert mut.classify_reverse_read(*resp)[0] == "PASS"                # 突變體誤判 PASS
+        assert S.classify_reverse_read(*resp)[0] == "INCONCLUSIVE"          # 真模組：上方參數化測試守住
+
+    def test_not_found_label_collapsed_is_caught(self):
+        mut = _mutated_module(PERM_SCRIPT_REL, (
+            '        return PASS_NOT_FOUND, status, reason\n', '        return PASS, status, reason\n'))
+        assert mut.classify_reverse_read(*NOT_FOUND)[0] == "PASS"
+        assert S.classify_reverse_read(*NOT_FOUND)[0] == "PASS_NOT_FOUND"
+
+    def test_r3_accepting_service_disabled_is_caught(self):
         mut = _mutated_module(PERM_SCRIPT_REL, ('    "SERVICE_DISABLED", "ACCESS_TOKEN_SCOPE_INSUFFICIENT",',
                                                 '    "ACCESS_TOKEN_SCOPE_INSUFFICIENT",'))
-        assert mut.classify_reverse_read(*DISABLED)[0] == "PASS"            # 突變體誤判 PASS
-        assert S.classify_reverse_read(*DISABLED)[0] == "INCONCLUSIVE"      # 真模組：上方參數化測試守住
+        assert mut.classify_write_denied(*DISABLED)[0] == "PASS"
+        assert S.classify_write_denied(*DISABLED)[0] == "INCONCLUSIVE"
 
-    def test_accepting_scope_insufficient_on_r1_is_caught(self):
-        mut = _mutated_module(PERM_SCRIPT_REL, ('    "SERVICE_DISABLED", "ACCESS_TOKEN_SCOPE_INSUFFICIENT",',
-                                                '    "SERVICE_DISABLED",'))
-        assert mut.classify_reverse_read(*SCOPE)[0] == "PASS"
-        assert S.classify_reverse_read(*SCOPE)[0] == "INCONCLUSIVE"
+    def test_r1_inconclusive_still_writing_is_caught(self):
+        mut = _mutated_module(PERM_SCRIPT_REL, (
+            "    if any(r.verdict not in PASSING_VERDICTS for r in rep.results):\n",
+            "    if any(r.verdict == FAIL for r in rep.results):\n"))
+        fake = FakeSheets(holdings_resp=DISABLED)
+        mut.run_writer(_wenv(), creds_loader=lambda e: _WriterCreds(), session_factory=lambda c: fake,
+                       now_fn=lambda: NOW)
+        assert fake.posts()                                                 # 突變體照樣寫入
+        fake_ok = FakeSheets(holdings_resp=DISABLED)
+        _run_writer(fake_ok)
+        assert fake_ok.posts() == []
+
+    def test_sts_loose_phrase_is_caught(self):
+        mut = _mutated_module(NEG_SCRIPT_REL, ('ATTRIBUTE_CONDITION_TEXT = "rejected by the attribute condition"\n',
+                                               'ATTRIBUTE_CONDITION_TEXT = "attribute condition"\n'))
+        body = {"error": "invalid_grant", "error_description": "Error evaluating the attribute condition"}
+        assert mut.classify_sts(400, body)[0] == "PASS"
+        assert N.classify_sts(400, body)[0] == "INCONCLUSIVE"
+
+    def test_unknown_append_without_manual_note_is_caught(self):
+        mut = _mutated_module(PERM_SCRIPT_REL, (
+            "    if not cleanup_ok or not gone_ok or append_unknown:\n", "    if not cleanup_ok or not gone_ok:\n"))
+        fake = _AppendRaises(write_first=False)
+        rep = mut.run_writer(_wenv(), creds_loader=lambda e: _WriterCreds(), session_factory=lambda c: fake,
+                             now_fn=lambda: NOW)
+        assert rep.manual_cleanup == []                                     # 突變體不提醒
+        assert _run_writer(_AppendRaises(write_first=False)).manual_cleanup
 
     def test_holdings_post_is_caught_by_guard_and_by_test(self):
         swap = ('        http, body = api.get(_meta_url(sid), {"fields": "spreadsheetId"})\n',

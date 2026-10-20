@@ -232,7 +232,8 @@ def assert_workflow_guards(text: str) -> None:
     assert d["concurrency"] == {"group": "risk-cap-history-poc", "cancel-in-progress": False}
     jobs = d["jobs"]
     assert set(jobs) == {"poc-dry-run", "wif_auth_only", "permission_test_writer", "permission_test_reader",
-                         "wif_negative_r4"}, set(jobs)        # 📌 2026-10-20 放寬：後三個見 test_vn1_permission_gate
+                         "wif_negative_r4", "permission_test_branch_guard"}, set(jobs)
+    # 📌 2026-10-20 放寬：後四個（含非 main 觸發的紅燈守衛 job）見 test_vn1_permission_gate
 
     dry = dict(jobs["poc-dry-run"])
     assert dry.pop("if") == "${{ inputs.mode == 'dry-run' }}"
