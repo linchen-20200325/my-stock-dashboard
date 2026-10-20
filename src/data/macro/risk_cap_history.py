@@ -494,11 +494,15 @@ def build_reader_client(info: Mapping[str, Any]) -> Any:
     建出的憑證身分必須仍是 `risk-cap-reader`、scope 必須恰好是唯讀。key 損壞 ⇒ `ReaderCredentialInvalid`（只帶類別名）。
     """
     check_reader_identity(info)
+    import google.auth.exceptions as gae
     from google.oauth2 import service_account
 
+    # 回修第 1 輪（2026-10-20）：key 內容問題（google-auth 的 `GoogleAuthError` 系列，含 `MalformedError`；
+    # 以及私鑰解析的 `ValueError`）⇒ `ReaderCredentialInvalid`（L3 歸 NO_CREDENTIAL）。
+    # ⛔ 不再接 `KeyError`／`TypeError`：那多半是程式 bug，必須照樣炸（CLAUDE.md §1）。
     try:
         creds = service_account.Credentials.from_service_account_info(dict(info), scopes=list(READER_SCOPES))
-    except (ValueError, KeyError, TypeError) as e:
+    except (gae.GoogleAuthError, ValueError) as e:
         raise ReaderCredentialInvalid(f"reader key 無法載入（{type(e).__name__}）") from None
     if getattr(creds, "service_account_email", None) != READER_SA_EMAIL:
         raise ReaderIdentityMismatch("reader 憑證建立後身分不是 risk-cap-reader → 拒絕")

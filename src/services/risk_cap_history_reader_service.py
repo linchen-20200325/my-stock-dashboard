@@ -14,6 +14,8 @@
      空表 ⇒ EMPTY ＋ `START_RECORDING`（「從今天開始記錄」—— ⛔ 不是 0、不是中性）；
      過期 ⇒ 照樣 `STALE`；讀不到 ⇒ `compare=None`（⛔ 不假裝有歷史）。
   5. 缺值原樣：列是 L1 讀回的全字串 dict，空白就是空白（⛔ 不 fillna、不補 0、不沿用前值）。
+     回修第 1 輪（2026-10-20）：標 `VALID` 卻沒有可用上限值（空白／不是數字／不是有限數）的列 ⇒ 整次讀取回
+     `CONTENT_SUSPECT`（資料內容疑義），⛔ 不送進比較、⛔ 不補 0、⛔ 不略過該列，且 ⛔ 不快取（在快取函式內拋）。
   6. `detail` 只含固定文字＋例外類別名：⛔ 不含 Sheet ID、key 內容、例外訊息原文。
 
 ⛔ 本批**沒有**任何畫面呼叫本檔（UI 接線屬另案、須先出線框，CLAUDE.md §-1.5.A-8）。
@@ -24,6 +26,7 @@ L3（`risk_cap_history_service.compare_status`）；streamlit 依 EX-CACHE-1 慣
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Mapping
@@ -69,6 +72,30 @@ class ReadResult:
     detail: str = ""
 
 
+class HistoryContentSuspect(RuntimeError):
+    """表頭正確，但有列標 VALID 卻沒有可用上限值。`sheet_rows` ＝ 試算表列號（表頭是第 1 列）。"""
+
+    def __init__(self, sheet_rows: tuple[int, ...]) -> None:
+        super().__init__(f"VALID 列沒有可用上限值：第 {sheet_rows} 列")
+        self.sheet_rows = sheet_rows
+
+
+def _usable_limit(value: str) -> bool:
+    """上限值字串能否解析成有限數字（⛔ 只判「是不是數字」—— 不設範圍、不新增任何門檻）。"""
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _check_valid_rows(records: list[dict[str, str]]) -> None:
+    """VALID 列必須帶可用上限值；任一列不符 ⇒ `HistoryContentSuspect`（列出全部不符的試算表列號）。"""
+    bad = tuple(i + 2 for i, r in enumerate(records)
+                if r.get(P.COL_STATUS) == P.STATUS_VALID and not _usable_limit(r.get(P.COL_EXPOSURE_LIMIT_PCT, "")))
+    if bad:
+        raise HistoryContentSuspect(bad)
+
+
 def _log(status: str, detail: str) -> None:
     print(f"[risk_cap_history_reader] {status}：{detail}")
 
@@ -87,7 +114,9 @@ def _fetch_records_cached(sheet_id: str, reader_email: str, _info: Mapping[str, 
     """
     client = _client_factory(_info)
     ws = L1H.open_history_worksheet(client, sheet_id)
-    return L1H.read_history_records(ws)
+    records = L1H.read_history_records(ws)
+    _check_valid_rows(records)              # 內容疑義也是失敗 ⇒ 在快取函式內拋（⛔ 不快取）
+    return records
 
 
 def clear_read_cache() -> None:
@@ -155,6 +184,10 @@ def read_history(*, expected_date: str, now: datetime,
         return _fail(P.READ_STATUS_API_ERROR, f"Google API／傳輸錯誤（{e.error_type}）")
     except L1H.HistoryTargetMismatch:
         return _fail(P.READ_STATUS_IDENTITY_MISMATCH, "開到的試算表／分頁與系統歷史 Sheet 核對不符")
+    except HistoryContentSuspect as e:
+        rows_txt = "、".join(str(n) for n in e.sheet_rows)
+        return _fail(P.READ_STATUS_CONTENT_SUSPECT,
+                     f"資料內容疑義：試算表第 {rows_txt} 列狀態為 VALID 但上限值空白或不是有限數字（⛔ 不比較、不補 0）")
 
     rows = tuple(dict(r) for r in records)
     cmp = compare_status(list(rows), expected_date=expected_date, ruleset_version=ruleset_version, now=now)

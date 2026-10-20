@@ -148,6 +148,24 @@ def _clear_cache():
     R.clear_read_cache()
 
 
+def _assert_cache_ttl(mod, rel_text: str | None = None) -> None:
+    """快取 TTL 必須是 SSOT `TTL_30MIN`：模組常數、裝飾器實際收到的 ttl（有 streamlit 時）、原始碼裡的裝飾器寫法。"""
+    from shared.ttls import TTL_30MIN
+    assert mod.HISTORY_READ_TTL_S == TTL_30MIN
+    info = getattr(mod._fetch_records_cached, "_info", None)
+    if info is not None:
+        assert info.ttl == TTL_30MIN, info.ttl
+    tree = ast.parse(rel_text if rel_text is not None else (REPO / READER_SVC_REL).read_text(encoding="utf-8"))
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_fetch_records_cached")
+    decos = [d for d in fn.decorator_list if isinstance(d, ast.Call) and ast.unparse(d.func) == "st.cache_data"]
+    assert len(decos) == 1
+    ttl = [k.value for k in decos[0].keywords if k.arg == "ttl"]
+    assert len(ttl) == 1 and ast.unparse(ttl[0]) == "HISTORY_READ_TTL_S", [ast.unparse(t) for t in ttl]
+    imp = [n for n in tree.body if isinstance(n, ast.ImportFrom) and n.module == "shared.ttls"]
+    assert [(a.name, a.asname) for n in imp for a in n.names if (a.asname or a.name) == "TTL_30MIN"] == \
+        [("TTL_30MIN", None)]
+
+
 def _read(secrets=None, factory=None, *, expected="2026-10-14", now=NOW):
     return R.read_history(expected_date=expected, now=now, secrets=_secrets() if secrets is None else secrets,
                           client_factory=factory)
@@ -284,9 +302,83 @@ class TestReaderService:
         assert _read(factory=fail).status == P.READ_STATUS_TAB_MISSING
 
     def test_ttl_from_ssot(self):
-        from shared.ttls import TTL_30MIN
-        assert R.HISTORY_READ_TTL_S == TTL_30MIN
-        assert set(P.READ_STATUSES_CACHEABLE) == {P.READ_STATUS_OK, P.READ_STATUS_EMPTY}
+        _assert_cache_ttl(R)
+        assert not hasattr(P, "READ_STATUSES_CACHEABLE")     # 回修第 1 輪：沒人用的常數已移除
+
+    @pytest.mark.parametrize("old,new", [
+        ("@st.cache_data(ttl=HISTORY_READ_TTL_S, show_spinner=False)",
+         "@st.cache_data(ttl=None, show_spinner=False)"),
+        ("@st.cache_data(ttl=HISTORY_READ_TTL_S, show_spinner=False)", "@st.cache_data(show_spinner=False)"),
+        ("HISTORY_READ_TTL_S: int = TTL_30MIN\n", "HISTORY_READ_TTL_S: int = TTL_1HOUR\n"),
+        ("from shared.ttls import TTL_30MIN\n", "from shared.ttls import TTL_1HOUR as TTL_30MIN\n"),
+    ])
+    def test_ttl_mutation_turns_red(self, old, new):
+        swaps = [(old, new)]
+        if new.startswith("HISTORY_READ_TTL_S"):          # 換常數：另需把 TTL_1HOUR import 進來
+            swaps.append(("from shared.ttls import TTL_30MIN\n", "from shared.ttls import TTL_30MIN, TTL_1HOUR\n"))
+        mut = _mutated_module(READER_SVC_REL, *swaps)
+        with pytest.raises(AssertionError):
+            _assert_cache_ttl(mut, rel_text=(REPO / READER_SVC_REL).read_text(encoding="utf-8").replace(old, new))
+
+    @pytest.mark.parametrize("limit", ["", "   ", "abc", "nan", "inf", "-inf", "30%"])
+    def test_valid_row_without_usable_limit_is_content_suspect(self, limit, capsys):
+        rows = [_row(**{P.COL_RECORD_DATE: "2026-10-13", P.COL_EXPOSURE_LIMIT_PCT: "59"}),
+                _row(**{P.COL_EXPOSURE_LIMIT_PCT: limit})]
+        res = _read(factory=_factory_for(_FakeWS(_values(*rows))))
+        assert res.status == P.READ_STATUS_CONTENT_SUSPECT
+        assert res.compare is None and res.rows == ()                 # ⛔ 不送進比較、不回傳半套資料
+        assert "第 3 列" in res.detail and SID not in res.detail       # 表頭第 1 列 ⇒ 第 2 筆資料＝第 3 列
+        assert "0" not in [r.get(P.COL_EXPOSURE_LIMIT_PCT) for r in res.rows]
+        assert P.READ_STATUS_CONTENT_SUSPECT in capsys.readouterr().out
+
+    def test_content_suspect_lists_all_rows(self):
+        rows = [_row(**{P.COL_RECORD_DATE: "2026-10-12", P.COL_EXPOSURE_LIMIT_PCT: ""}),
+                _invalid(**{P.COL_RECORD_DATE: "2026-10-13"}),                  # 非 VALID 空白 ⇒ 正常
+                _row(**{P.COL_EXPOSURE_LIMIT_PCT: "x"})]
+        res = _read(factory=_factory_for(_FakeWS(_values(*rows))))
+        assert res.status == P.READ_STATUS_CONTENT_SUSPECT and "第 2、4 列" in res.detail
+
+    def test_valid_numeric_limits_are_ok(self):
+        rows = [_row(**{P.COL_RECORD_DATE: "2026-10-13", P.COL_EXPOSURE_LIMIT_PCT: "0"}),   # 0 是真值，不是缺值
+                _row(**{P.COL_EXPOSURE_LIMIT_PCT: "30.5"})]
+        assert _read(factory=_factory_for(_FakeWS(_values(*rows)))).status == P.READ_STATUS_OK
+
+    def test_content_suspect_not_cached(self):
+        bad = _factory_for(_FakeWS(_values(_row(**{P.COL_EXPOSURE_LIMIT_PCT: ""}))))
+        good = _factory_for(_FakeWS(_values(_row())))
+        assert _read(factory=bad).status == P.READ_STATUS_CONTENT_SUSPECT
+        assert _read(factory=good).status == P.READ_STATUS_OK               # 疑義結果沒有被快取
+
+    def test_content_check_mutation_turns_red(self):
+        mut = _mutated_module(READER_SVC_REL, ("    _check_valid_rows(records)", "    pass  # mutated"))
+        if callable(getattr(mut._fetch_records_cached, "clear", None)):
+            mut._fetch_records_cached.clear()
+        rows = [_row(**{P.COL_RECORD_DATE: "2026-10-13", P.COL_EXPOSURE_LIMIT_PCT: "59"}),
+                _row(**{P.COL_EXPOSURE_LIMIT_PCT: ""})]
+        res = mut.read_history(expected_date="2026-10-14", now=NOW, secrets=_secrets(),
+                               client_factory=_factory_for(_FakeWS(_values(*rows))))
+        assert res.status == P.READ_STATUS_OK and res.compare is not None    # 突變體把疑義資料送去比較
+        assert _read(factory=_factory_for(_FakeWS(_values(*rows)))).status == P.READ_STATUS_CONTENT_SUSPECT
+
+    def test_reader_build_errors_classified(self, monkeypatch):
+        """經真的 `build_reader_client`：key 內容錯（GoogleAuthError／ValueError）⇒ NO_CREDENTIAL；程式 bug 照樣炸。"""
+        import google.auth.exceptions as gae
+        import gspread
+        from google.oauth2 import service_account
+        monkeypatch.setattr(gspread, "authorize", lambda creds: pytest.fail("不得建 client"))
+        for exc in (gae.MalformedError(LEAK), gae.DefaultCredentialsError(LEAK), ValueError(LEAK)):
+            def _boom(info, scopes=None, _e=exc):
+                raise _e
+            monkeypatch.setattr(service_account.Credentials, "from_service_account_info", staticmethod(_boom))
+            res = _read(factory=None)
+            assert res.status == P.READ_STATUS_NO_CREDENTIAL and type(exc).__name__ in res.detail
+            assert LEAK not in res.detail
+        for exc in (TypeError("bug"), KeyError("bug"), AttributeError("bug")):
+            def _bug(info, scopes=None, _e=exc):
+                raise _e
+            monkeypatch.setattr(service_account.Credentials, "from_service_account_info", staticmethod(_bug))
+            with pytest.raises(type(exc)):
+                _read(factory=None)
 
     @pytest.mark.parametrize("info", [
         _info(client_email=P.WRITER_SA_EMAIL),
@@ -313,7 +405,7 @@ class TestReaderService:
         res = _read(factory=_factory_for(_FakeWS([])))
         with pytest.raises(Exception):
             res.status = "x"   # type: ignore[misc]
-        assert len(set(P.READ_STATUSES)) == 8
+        assert len(set(P.READ_STATUSES)) == len(P.READ_STATUSES) == 9
 
 
 # ══════════════════════════════════════════════════════════════════════════

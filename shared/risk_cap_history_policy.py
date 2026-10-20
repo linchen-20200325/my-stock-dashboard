@@ -241,10 +241,16 @@ READ_STATUS_SCHEMA_MISMATCH = "SCHEMA_MISMATCH"
 READ_STATUS_API_ERROR = "API_ERROR"
 #: 憑證身分不是 `risk-cap-reader`（含 writer、fund-nav、external_account、其他 SA），或開到的 Sheet／分頁核對不符。
 READ_STATUS_IDENTITY_MISMATCH = "IDENTITY_MISMATCH"
+#: 表頭正確，但**資料內容有疑義**：有列標 `VALID` 卻沒有可用的上限值（空白、不是數字、不是有限數）。
+#: 寫入端保證 VALID 一定帶上限值（L3 `build_record`）⇒ 讀到這種列代表表被手動改過或契約破損 ——
+#: ⛔ 不送進比較、⛔ 不補 0、⛔ 不略過該列假裝沒事；整次讀取照實回這個狀態（且不快取）。
+READ_STATUS_CONTENT_SUSPECT = "CONTENT_SUSPECT"
 
 READ_STATUSES: tuple[str, ...] = (
     READ_STATUS_OK, READ_STATUS_EMPTY, READ_STATUS_NO_CREDENTIAL, READ_STATUS_NO_SHEET_ID,
     READ_STATUS_TAB_MISSING, READ_STATUS_SCHEMA_MISMATCH, READ_STATUS_API_ERROR, READ_STATUS_IDENTITY_MISMATCH,
+    READ_STATUS_CONTENT_SUSPECT,
 )
-#: 只有這兩種讀取結果會進快取（失敗 ⛔ 不快取 —— v3 §02「只快取成功結果」）。
-READ_STATUSES_CACHEABLE: tuple[str, ...] = (READ_STATUS_OK, READ_STATUS_EMPTY)
+#: 📌 只有 OK／EMPTY 會進快取（失敗 ⛔ 不快取 —— v3 §02「只快取成功結果」）：由 L3 快取函式「失敗一律拋」的結構保證，
+#:   不另立常數（回修第 1 輪 2026-10-20：原 `READ_STATUSES_CACHEABLE` 沒有任何程式使用，已移除 —— 該常數只存在於
+#:   未合併的本批分支，從未進 main）。
