@@ -299,6 +299,7 @@ def smoke_check(now: datetime, *, secrets: Mapping[str, Any] | None = None,
         failed = _read_failure(e)
         return SmokeResult(read_status=failed.status,
                            identity_ok=False if failed.status == P.READ_STATUS_IDENTITY_MISMATCH else True)
+    values = L1H.normalize_sheet_values(values)      # 空表 `[[]]` ⇒ `[]`（L1 單一真相源；讀取路徑已收斂，這裡冪等）
     state = L1H.header_state(values)
     n_data = max(len(values) - 1, 0)
     try:
