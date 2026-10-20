@@ -1,7 +1,8 @@
-name: VN1-STORE 風險上限歷史 PoC（手動；dry-run／WIF auth-only；不寫 Sheet）
+name: VN1-STORE 風險上限歷史 PoC（手動；dry-run／WIF auth-only／權限驗證；不做正式寫入）
 
 # 客戶 2026-10-19 裁示 A：採用系統專用 Google Sheet 方向，但「先做最小 PoC；尚未核准正式 production 排程寫入」。
-# 本 workflow ⛔ 沒有 schedule（只能手動觸發）、⛔ 不寫任何 Google Sheet、⛔ 不 commit。手動觸發時選 `mode`：
+# 本 workflow ⛔ 沒有 schedule（只能手動觸發）、⛔ 不做正式（production）寫入、⛔ 不 commit。手動觸發時選 `mode`：
+# （唯一會碰 Sheet 的是下方「權限驗證 Gate」三個 mode：P1 只寫一列測試列並立刻刪除；其餘只讀或預期被拒。）
 #
 # ── mode = dry-run（預設；步驟與加 mode 前逐字相同，只多一行 job 條件）── job `poc-dry-run`
 #   只驗證「GitHub Actions 無頭環境能否用既有正式資料層與規則算出每日系統風險上限」：
@@ -18,19 +19,36 @@ name: VN1-STORE 風險上限歷史 PoC（手動；dry-run／WIF auth-only；不�
 #   - ⚠️ WIF attribute condition 釘了 `workflow_ref`＝本檔＠refs/heads/main：⛔ 不得改名／搬移本檔；
 #     只有從 main 觸發才換得到身分（從其他分支觸發被 STS 拒絕＝規格 5.2 反向測試 R4 的預期結果，
 #     所以這裡刻意**不**加「只限 main」的 job 條件，讓反向測試跑得起來）。
+#
+# ── VN1-STORE Sheet 權限驗證 Gate（規格 `docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md` 第 5 節；客戶 2026-10-20 決策）──
+#   以下三個 mode 只做第 5 節的「權限驗證」，⛔ 不是 production 寫入、⛔ 沒有排程、⛔ 不改 Risk Cap 公式／語意：
+#   - mode = permission-test-writer（job `permission_test_writer`，只限 main）：P1＋R1。
+#     WIF writer 身分；R1 對個人持股 Sheet **只發唯讀 GET**（`?fields=spreadsheetId`）—— 403／404 即證明連讀都不行
+#     ⇒ 也不可能寫（客戶 R1 安全解讀）；⛔ 永不對持股 Sheet 發任何會改變內容的請求。
+#     P1 只在 System Risk Cap Sheet 的 `risk_cap_daily` 分頁 append **一列明確標記的測試列**，讀回比對後立刻刪除
+#     （腳本以 try/finally 確保清理；刪除前再讀一次確認是自己那一列）；⛔ 不得成為正式歷史。
+#   - mode = permission-test-reader（job `permission_test_reader`，只限 main）：P2／R2／R3。
+#     使用客戶**一次性**測試例外 secret（名稱只寫在該 job 內；測後刪除；不是 production 設計變更），
+#     scope 恰好 `spreadsheets.readonly`；本 job ⛔ 沒有 id-token、⛔ 不用 auth action。
+#   - mode = wif-negative-r4（job `wif_negative_r4`）：R4。客戶從**非 main 分支**觸發；不用 auth action，
+#     腳本自己向 GitHub 要 OIDC token、向 Google STS 換 token，**被 attribute condition 拒絕才算通過**。
+#     （R5 ＝ 另一個 workflow 檔 `risk_cap_wif_negative_r5.yml`，從 main 觸發。）
 #   ⛔ production 寫入仍未核准（DEC-063；`shared/risk_cap_history_policy.PRODUCTION_WRITE_APPROVED` = False）。
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "dry-run（預設：算一列紀錄、不碰 Google）或 wif-auth-only（只驗證 WIF 換得到 writer 身分、不碰 Sheet）"
+        description: "dry-run（預設：算一列紀錄、不碰 Google）／wif-auth-only（只驗證 WIF 換得到 writer 身分）／permission-test-writer（P1＋R1）／permission-test-reader（P2／R2／R3）／wif-negative-r4（R4，從非 main 分支觸發）"
         type: choice
         required: true
         default: dry-run
         options:
           - dry-run
           - wif-auth-only
+          - permission-test-writer
+          - permission-test-reader
+          - wif-negative-r4
 
 permissions:
   contents: read
@@ -111,3 +129,104 @@ jobs:
 
       - name: Verify impersonated identity (auth-only, no Sheet access)
         run: python scripts/risk_cap_wif_auth_check.py --expect-sa risk-cap-writer@mystock20260823.iam.gserviceaccount.com
+
+  permission_test_writer:
+    # P1＋R1。只限 main（WIF attribute condition 本來就只放行 main；這裡再擋一次，非 main 觸發直接 skip，
+    # 避免被誤當成 R4 —— R4 有自己的 job `wif_negative_r4`）。
+    if: ${{ inputs.mode == 'permission-test-writer' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # job 層 permissions 整組取代頂層：contents 唯讀＋向 GitHub 要 OIDC token。
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # 帶 id-token 的 job ⇒ 每個 action 一律以完整 commit SHA 釘版（與 wif_auth_only 相同版本）。
+      - name: Checkout Repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      # 只裝兩個套件（版本範圍同 requirements.txt）；⛔ 不裝 gspread。
+      - name: Install permission-test deps
+        run: pip install "google-auth>=2.0.0,<4.0" "requests>=2.31.0,<3.0.0"
+
+      # 與 wif_auth_only 完全相同的 auth 輸入：只產生 external_account 憑證檔；⛔ 不要求 token 輸出、⛔ 沒有 JSON key。
+      - name: Authenticate to Google Cloud (WIF, no key)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/847745640234/locations/global/workloadIdentityPools/stock-dashboard-github/providers/github-actions
+          service_account: risk-cap-writer@mystock20260823.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      # Sheet ID 只從 secrets 於執行期注入（只給這一步）；腳本 ⛔ 永不印出任何 Sheet ID。
+      # 兩個持股 Sheet ID 各自測（非空者都測；至少要有一個），⛔ 只發唯讀 GET。
+      - name: Permission test (writer — P1 + R1)
+        env:
+          RISK_CAP_HISTORY_SHEET_ID: ${{ secrets.RISK_CAP_HISTORY_SHEET_ID }}
+          PORTFOLIO_SHEET_ID: ${{ secrets.PORTFOLIO_SHEET_ID }}
+          STOCK_PORTFOLIO_SHEET_ID: ${{ secrets.STOCK_PORTFOLIO_SHEET_ID }}
+        run: python scripts/risk_cap_permission_test.py writer
+
+  permission_test_reader:
+    # P2／R2／R3。只限 main。⛔ 沒有 id-token（reader 不得經 WIF 取得任何身分）、⛔ 不用 auth action。
+    if: ${{ inputs.mode == 'permission-test-reader' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      - name: Install permission-test deps
+        run: pip install "google-auth>=2.0.0,<4.0" "requests>=2.31.0,<3.0.0"
+
+      # RISK_CAP_READER_TEST_SA_JSON ＝ 客戶一次性測試例外 secret（測後刪除）；只在本步驟、只在本 job 出現。
+      # 腳本只核對 type／client_email、⛔ 永不印出內容；scope 恰好 spreadsheets.readonly。
+      - name: Permission test (reader — P2 / R2 / R3)
+        env:
+          RISK_CAP_READER_TEST_SA_JSON: ${{ secrets.RISK_CAP_READER_TEST_SA_JSON }}
+          RISK_CAP_HISTORY_SHEET_ID: ${{ secrets.RISK_CAP_HISTORY_SHEET_ID }}
+          PORTFOLIO_SHEET_ID: ${{ secrets.PORTFOLIO_SHEET_ID }}
+          STOCK_PORTFOLIO_SHEET_ID: ${{ secrets.STOCK_PORTFOLIO_SHEET_ID }}
+        run: python scripts/risk_cap_permission_test.py reader
+
+  wif_negative_r4:
+    # R4：客戶從**非 main 分支**觸發（腳本在 main 上會拒絕執行）。刻意不加「只限 main」。
+    # ⛔ 不用 auth action、⛔ 不用任何 secrets：腳本自己要 GitHub OIDC token → Google STS，被拒才算通過。
+    if: ${{ inputs.mode == 'wif-negative-r4' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      - name: Install negative-test deps
+        run: pip install "google-auth>=2.0.0,<4.0" "requests>=2.31.0,<3.0.0"
+
+      - name: WIF negative test R4 (non-main branch must be rejected by STS)
+        run: python scripts/risk_cap_wif_negative.py --test R4

@@ -1,0 +1,40 @@
+name: VN1-STORE WIF 反向測試 R5（手動；另一個 workflow 檔換 token 必須被拒）
+
+# 規格 `docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md` 第 5.2 節 R5：從**另一個 workflow 檔**（在 main 上）嘗試
+# GitHub OIDC → Google STS 換 token —— WIF attribute condition 釘了 `workflow_ref`＝risk_cap_history_poc.yml＠main，
+# 所以本檔換 token **必須被 STS 拒絕**；被拒（attribute condition）才算 PASS，任何 2xx 都是 FAIL。
+#   - 客戶從 **main** 觸發（腳本在非 main 或在 PoC workflow 檔內會拒絕執行，以隔離「只有 workflow_ref 不符」）；
+#   - ⛔ 沒有 schedule、⛔ 不用任何 secrets、⛔ 不用 google-github-actions/auth、⛔ 不碰任何 Google Sheet；
+#   - 只有本 job 有 `id-token: write`（向 GitHub 要 OIDC token 用）；腳本 ⛔ 永不印出任何 token。
+#   ⛔ production 寫入仍未核准（DEC-063）。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wif_negative_r5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # 帶 id-token 的 job ⇒ 每個 action 一律以完整 commit SHA 釘版。
+      - name: Checkout Repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      - name: Install negative-test deps
+        run: pip install "google-auth>=2.0.0,<4.0" "requests>=2.31.0,<3.0.0"
+
+      - name: WIF negative test R5 (other workflow file must be rejected by STS)
+        run: python scripts/risk_cap_wif_negative.py --test R5
