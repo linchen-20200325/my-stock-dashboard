@@ -225,15 +225,19 @@ def assert_workflow_guards(text: str) -> None:
     assert mode["type"] == "choice" and mode["default"] == "dry-run"
     # 📌 2026-10-20（VN1-STORE Sheet 權限驗證 Gate；有意識的放寬，不是漏改）：新增三個 mode。
     #   新 mode／新 job 的守衛在 `tests/test_vn1_permission_gate.py`；前兩個選項與預設值不變。
+    # 📌 2026-10-20（VN1-STORE Production Wiring 批；有意識的放寬，不是漏改）：新增 `production-write`
+    #   （寫入 job 在任何 auth 之前檢查核准旗標；完整守衛在 `tests/test_vn1_production_wiring.py`）。
     assert mode["options"] == ["dry-run", "wif-auth-only", "permission-test-writer",
-                               "permission-test-reader", "wif-negative-r4"]
+                               "permission-test-reader", "wif-negative-r4", "production-write"]
     # 頂層權限恰好 contents: read
     assert d["permissions"] == {"contents": "read"}, d["permissions"]
     assert d["concurrency"] == {"group": "risk-cap-history-poc", "cancel-in-progress": False}
     jobs = d["jobs"]
     assert set(jobs) == {"poc-dry-run", "wif_auth_only", "permission_test_writer", "permission_test_reader",
-                         "wif_negative_r4", "permission_test_branch_guard"}, set(jobs)
-    # 📌 2026-10-20 放寬：後四個（含非 main 觸發的紅燈守衛 job）見 test_vn1_permission_gate
+                         "wif_negative_r4", "permission_test_branch_guard",
+                         "production_write_compute", "production_write"}, set(jobs)
+    # 📌 2026-10-20 放寬：permission_* ／wif_negative_r4 四個（含非 main 觸發的紅燈守衛 job）見 test_vn1_permission_gate；
+    #   production_write_compute／production_write 兩個（Production Wiring 批）見 test_vn1_production_wiring
 
     dry = dict(jobs["poc-dry-run"])
     assert dry.pop("if") == "${{ inputs.mode == 'dry-run' }}"
@@ -245,10 +249,12 @@ def assert_workflow_guards(text: str) -> None:
     assert wif["permissions"] == {"contents": "read", "id-token": "write"}, wif.get("permissions")
     # id-token 全檔（YAML 鍵；註解不算）：📌 2026-10-20 有意識的放寬 —— 原本「只出現一次」，現為恰好三次，
     # 且只在 wif_auth_only／permission_test_writer／wif_negative_r4（dry-run 與 reader job 一律沒有）。
-    assert len(re.findall(r"^\s*id-token\s*:", text, flags=re.MULTILINE)) == 3
-    for job_name in ("wif_auth_only", "permission_test_writer", "wif_negative_r4"):
+    # 📌 2026-10-20 Production Wiring 批再放寬（有意識的變更）：恰好四次，多 `production_write`（寫入 job）；
+    #   其 compute job 一律沒有。
+    assert len(re.findall(r"^\s*id-token\s*:", text, flags=re.MULTILINE)) == 4
+    for job_name in ("wif_auth_only", "permission_test_writer", "wif_negative_r4", "production_write"):
         assert len(re.findall(r"^      id-token: write$", _job_text(text, job_name), flags=re.MULTILINE)) == 1
-    for job_name in ("poc-dry-run", "permission_test_reader"):
+    for job_name in ("poc-dry-run", "permission_test_reader", "production_write_compute"):
         assert not re.search(r"^\s*id-token\s*:", _job_text(text, job_name), flags=re.MULTILINE), job_name
     wif_text = _job_text(text, "wif_auth_only")
     assert re.search(r"^      id-token: write$", wif_text, flags=re.MULTILINE)
@@ -283,15 +289,18 @@ def assert_workflow_guards(text: str) -> None:
     wif_code = "\n".join(c for _, _, c in _yaml_lines(wif_text))     # 不含註解
     for bad in ("secrets.", "credentials_json", "token_format", "gspread", "env:"):
         assert bad not in wif_code, bad
-    for bad in ("credentials_json", "token_format", "schedule:", "cron:", "contents: write", "--write",
+    for bad in ("credentials_json", "token_format", "schedule:", "cron:", "contents: write",
                 "git push", "git commit", "GCP_SERVICE_ACCOUNT_JSON", *RETIRED_LITERALS):
         assert bad not in text, bad
     # 📌 2026-10-20 有意識的放寬：System Risk Cap Sheet ID 的 secret 名稱現在只准出現在兩個權限驗證 job 內
     # （P1／P2／R3 要知道目標 Sheet）；其餘區塊（含 wif_auth_only、dry-run、檔頭註解）照舊一處都不得出現。
+    # 📌 2026-10-20 Production Wiring 批再放寬（有意識的變更）：另准出現在 `production_write`（寫入 job）；
+    #   `--write` 原本全檔禁止，現在**只**准出現在該 job（閘門仍在任何 auth 之前）。
     outside = text
-    for job_name in ("permission_test_writer", "permission_test_reader"):
+    for job_name in ("permission_test_writer", "permission_test_reader", "production_write"):
         outside = outside.replace(_job_text(text, job_name), "")
     assert "RISK_CAP_HISTORY_SHEET_ID" not in outside
+    assert "--write" not in outside
     assert "RISK_CAP_HISTORY_SHEET_ID" not in wif_text
 
 
@@ -377,15 +386,18 @@ class TestWriteGateStillRefuses:
                                                    "GOOGLE_APPLICATION_CREDENTIALS": "/x.json"})
         assert P.PRODUCTION_WRITE_APPROVED is False
 
-    def test_gate_final_raise_even_if_approved(self, monkeypatch):
-        """稽核修正第 1 輪（NIT）：就算核准旗標被改成 True、總開關與 Sheet ID 都設了，最後那道
-        「未實作」仍必須拒絕 —— 守住「把最後的 raise 改成 return」這種突變。"""
-        monkeypatch.setattr(L1H, "PRODUCTION_WRITE_APPROVED", True)
-        with pytest.raises(L1H.ProductionWriteNotApproved, match="未實作"):
-            L1H.load_writer_credentials_or_refuse({P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: "x"})
-        # 旗標 True 但 Sheet ID 沒設 ⇒ 卡在目標未設定（不是「未實作」）
-        with pytest.raises(L1H.ProductionWriteNotApproved, match="寫入目標未設定"):
-            L1H.load_writer_credentials_or_refuse({P.WRITE_ENABLE_ENV_VAR: "1"})
+    # ~~`test_gate_final_raise_even_if_approved`（monkeypatch 把核准旗標改 True，守最後那道「未實作」raise）~~
+    # 📌 2026-10-20（VN1-STORE Production Wiring 批；有意識的變更，不是漏刪）：「未實作」那道已換成真正的
+    #   WIF 憑證檔檢查（核准後的路徑是真程式碼），且本批**禁止任何測試把 `PRODUCTION_WRITE_APPROVED` 改成 True**
+    #   （連 monkeypatch 都不行）。舊測試的意圖（就算其他條件全齊也不得放行）改由下面這條守住：
+    #   連合格的 WIF 憑證檔都備齊了，第一道核准旗標照樣擋下。核准後各步驟的檢查改直接測
+    #   `check_writer_credentials_file`（`tests/test_vn1_production_wiring.py`），不經過旗標。
+    def test_gate_refuses_even_with_valid_wif_file(self, tmp_path):
+        path = _ext_file(tmp_path)
+        with pytest.raises(L1H.ProductionWriteNotApproved, match="尚未核准"):
+            L1H.load_writer_credentials_or_refuse({P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: "x",
+                                                   P.GAC_ENV_VAR: path})
+        assert P.PRODUCTION_WRITE_APPROVED is False
 
     def test_gate_refuses_with_nothing_set(self):
         with pytest.raises(L1H.ProductionWriteNotApproved, match="尚未核准"):
@@ -788,8 +800,13 @@ class TestMutations:
             assert_workflow_guards(mut)
 
     def test_dry_run_job_change_turns_red(self):
-        mut = self._mutate("        run: pip install -r requirements.txt\n",
-                           "        run: pip install -r requirements.txt gspread\n")
+        # 📌 2026-10-20（Production Wiring 批）：`pip install -r requirements.txt` 不再全檔唯一（compute／寫入 job
+        # 也用它）⇒ 明確只突變 dry-run 區塊（突變對象本來就是 dry-run job；有意識的變更，不是漏改）。
+        text = _wf_text()
+        block = _job_text(text, "poc-dry-run")
+        old = "        run: pip install -r requirements.txt\n"
+        assert block.count(old) == 1
+        mut = text.replace(block, block.replace(old, "        run: pip install -r requirements.txt gspread\n"))
         with pytest.raises(AssertionError):
             assert_workflow_guards(mut)
 
@@ -799,16 +816,18 @@ class TestMutations:
         with pytest.raises(AssertionError):
             assert_workflow_guards(mut)
 
-    def test_gate_final_raise_to_return_is_caught(self, monkeypatch):
-        """NIT 突變：最後的「未實作」raise 改成 return ⇒ 旗標被打開時就會放行；真實模組必須照樣拒絕。"""
+    # ~~`test_gate_final_raise_to_return_is_caught`（突變體與真模組都把核准旗標改 True）~~ —— 📌 2026-10-20
+    #   （Production Wiring 批；有意識的變更，不是漏刪）：「未實作」raise 已不存在，且本批禁止把旗標改 True。
+    #   改守「拔掉第一道核准檢查」這個突變：突變體（旗標仍為 False）會一路放行到回傳憑證檔路徑；真模組照樣拒絕。
+    def test_gate_without_approval_check_is_caught(self, tmp_path):
         mut = _mutated_module("src/data/macro/risk_cap_history.py", (
-            '    raise ProductionWriteNotApproved("本 PoC 未實作建立寫入 client',
-            '    return None\n    raise ProductionWriteNotApproved("本 PoC 未實作建立寫入 client'))
-        mut.PRODUCTION_WRITE_APPROVED = True
-        env = {P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: "x"}
-        assert mut.load_writer_credentials_or_refuse(env) is None       # 突變體放行
-        monkeypatch.setattr(L1H, "PRODUCTION_WRITE_APPROVED", True)
-        with pytest.raises(L1H.ProductionWriteNotApproved, match="未實作"):
+            "    env = os.environ if environ is None else environ\n    assert_production_write_approved()\n",
+            "    env = os.environ if environ is None else environ\n"))
+        assert mut.PRODUCTION_WRITE_APPROVED is False
+        path = _ext_file(tmp_path)
+        env = {P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: "x", P.GAC_ENV_VAR: path}
+        assert mut.load_writer_credentials_or_refuse(env) == path       # 突變體放行
+        with pytest.raises(L1H.ProductionWriteNotApproved, match="尚未核准"):
             L1H.load_writer_credentials_or_refuse(env)
 
     def test_script_without_type_check_accepts_sa_key(self, tmp_path):

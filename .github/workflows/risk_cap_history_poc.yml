@@ -2,7 +2,9 @@ name: VN1-STORE 風險上限歷史 PoC（手動；dry-run／WIF auth-only／權�
 
 # 客戶 2026-10-19 裁示 A：採用系統專用 Google Sheet 方向，但「先做最小 PoC；尚未核准正式 production 排程寫入」。
 # 本 workflow ⛔ 沒有 schedule（只能手動觸發）、⛔ 不做正式（production）寫入、⛔ 不 commit。手動觸發時選 `mode`：
-# （唯一會碰 Sheet 的是下方「權限驗證 Gate」三個 mode：P1 只寫一列測試列並立刻刪除；其餘只讀或預期被拒。）
+# （唯一會碰 Sheet 的是下方「權限驗證 Gate」三個 mode：P1 只寫一列測試列並立刻刪除；其餘只讀或預期被拒。
+#  📌 2026-10-20 補註（有意識的變更，不是漏刪）：另有 `production-write` mode 的寫入 job —— 但在
+#  `PRODUCTION_WRITE_APPROVED` = False 期間它在任何 auth 之前就紅燈停止，**實際上仍不碰 Sheet**；見檔頭最後一段。）
 #
 # ── mode = dry-run（預設；步驟與加 mode 前逐字相同，只多一行 job 條件）── job `poc-dry-run`
 #   只驗證「GitHub Actions 無頭環境能否用既有正式資料層與規則算出每日系統風險上限」：
@@ -34,12 +36,23 @@ name: VN1-STORE 風險上限歷史 PoC（手動；dry-run／WIF auth-only／權�
 #     腳本自己向 GitHub 要 OIDC token、向 Google STS 換 token，**被 attribute condition 拒絕才算通過**。
 #     （R5 ＝ 另一個 workflow 檔 `risk_cap_wif_negative_r5.yml`，從 main 觸發。）
 #   ⛔ production 寫入仍未核准（DEC-063；`shared/risk_cap_history_policy.PRODUCTION_WRITE_APPROVED` = False）。
+#
+# ── mode = production-write（VN1-STORE Production Wiring 批，2026-10-20；⛔ 仍未核准、⛔ 沒有排程）──
+#   接線已就位，但 `PRODUCTION_WRITE_APPROVED` = False ⇒ 本 mode 目前**一定紅燈、什麼都不寫**：
+#   - job `production_write_compute`（只限 main；⛔ 沒有 id-token、⛔ 沒有任何 Google 憑證）：
+#     跑與 dry-run 同一支腳本（不加 --simulate-rerun）算一列紀錄 → 上傳 artifact；
+#     非 main 觸發 ⇒ 第一步就紅燈（不讓「寫入 job 被 skip」看起來像綠色）。
+#   - job `production_write`（只限 main、needs compute）：**第一個 Python 步驟**（checkout 之後、任何 auth 之前）
+#     檢查核准旗標，False ⇒ 紅燈停止，後面的 auth／寫入步驟都不會跑。
+#     只有本 job 有 id-token；env 只有 System Risk Cap Sheet ID（⛔ 沒有持股 Sheet ID、⛔ 沒有 FinMind／proxy secrets）。
+#     job 層 concurrency 序列化寫入（cancel-in-progress: false；單一寫入者前提，見 L1 檔頭「併發」）。
+#   ⚠️ WIF attribute condition 釘了本檔 workflow_ref ⇒ 寫入 job 只能放在本檔（⛔ 不新增 workflow 檔）。
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "dry-run（預設：算一列紀錄、不碰 Google）／wif-auth-only（只驗證 WIF 換得到 writer 身分）／permission-test-writer（P1＋R1）／permission-test-reader（P2／R2／R3）／wif-negative-r4（R4，從非 main 分支觸發）"
+        description: "dry-run（預設：算一列紀錄、不碰 Google）／wif-auth-only（只驗證 WIF 換得到 writer 身分）／permission-test-writer（P1＋R1）／permission-test-reader（P2／R2／R3）／wif-negative-r4（R4，從非 main 分支觸發）／production-write（正式寫入；未核准期間一律紅燈、不寫）"
         type: choice
         required: true
         default: dry-run
@@ -49,6 +62,7 @@ on:
           - permission-test-writer
           - permission-test-reader
           - wif-negative-r4
+          - production-write
 
 permissions:
   contents: read
@@ -242,3 +256,100 @@ jobs:
 
       - name: WIF negative test R4 (non-main branch must be rejected by STS)
         run: python scripts/risk_cap_wif_negative.py --test R4
+
+  production_write_compute:
+    # production-write 第一段：算一列紀錄（與 dry-run 同一支腳本、同一組取數 secrets）。只限 main。
+    # ⛔ 沒有 id-token、⛔ 沒有任何 Google 憑證、⛔ 不寫任何 Sheet。
+    if: ${{ inputs.mode == 'production-write' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      # step 層 `if` 不加 `${{ }}`（GitHub 允許省略）：與 permission_test_branch_guard 的條件字面刻意不同，
+      # 讓既有守衛的突變點維持全檔唯一。
+      - name: Refuse non-main dispatch (nothing was computed or written)
+        if: github.ref != 'refs/heads/main'
+        run: echo "::error::production-write must be dispatched on main; nothing was written (ref=$GITHUB_REF)"; exit 1
+
+      - name: Checkout Repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Compute record (same path as dry-run, no Google credentials)
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          NAS_BASE_URL: ${{ secrets.NAS_BASE_URL }}
+          NAS_API_KEY: ${{ secrets.NAS_API_KEY }}
+        run: python scripts/risk_cap_history_poc.py --out risk_cap_history_production_record.json
+
+      - name: Upload record JSON
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: risk-cap-history-production-record
+          path: risk_cap_history_production_record.json
+          if-no-files-found: error
+          retention-days: 7
+
+  production_write:
+    # production-write 第二段：寫入。只限 main、needs compute。
+    # ⚠️ 第一個 Python 步驟就是核准旗標檢查（任何 auth 之前）；PRODUCTION_WRITE_APPROVED = False ⇒ 在此紅燈停止。
+    if: ${{ inputs.mode == 'production-write' && github.ref == 'refs/heads/main' }}
+    needs: production_write_compute
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: risk-cap-history-production-write
+      cancel-in-progress: false
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      # 只 import L0（標準函式庫）⇒ 系統 python3 即可；未核准 ⇒ exit 2 紅燈，後續步驟（含 auth）全部不跑。
+      - name: Production write gate (must pass before any auth)
+        run: python3 scripts/risk_cap_history_poc.py --check-write-gate
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Download record JSON
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: risk-cap-history-production-record
+          path: production-record
+
+      # 與 wif_auth_only 完全相同的 auth 輸入：只產生 external_account 憑證檔；⛔ 不要求 token 輸出、⛔ 沒有 JSON key。
+      - name: Authenticate to Google Cloud (WIF, no key)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/847745640234/locations/global/workloadIdentityPools/stock-dashboard-github/providers/github-actions
+          service_account: risk-cap-writer@mystock20260823.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      # Sheet ID 只從 secrets 於執行期注入（只給這一步）；腳本 ⛔ 永不印出 Sheet ID。閘門在腳本內再檢查一次。
+      - name: Write record (gate first, WIF writer only)
+        env:
+          RISK_CAP_HISTORY_SHEET_ID: ${{ secrets.RISK_CAP_HISTORY_SHEET_ID }}
+          RISK_CAP_HISTORY_WRITE_ENABLED: '1'
+        run: python scripts/risk_cap_history_poc.py --write --record production-record/risk_cap_history_production_record.json

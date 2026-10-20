@@ -183,9 +183,14 @@ STALE_LATEST_VALID_EXPIRED = "latest_valid_expired"
 #:   舊名稱的字面只留在文件與測試的「禁止字面」守衛裡（`tests/test_vn1_wif_auth_only.py`）。
 #: 寫入端 OAuth scope（只開試算表；⛔ 不含 Drive）。
 WRITER_SCOPES: tuple[str, ...] = ("https://www.googleapis.com/auth/spreadsheets",)
-#: 稽核修正（2026-10-19）：**保留**未來網站讀取端的名稱與 scope（放 Streamlit secrets）。
-#: 本 PoC **沒有**任何讀取端程式碼路徑；先定名只為讓寫入／讀取兩支帳號從一開始就分開。
-READER_SA_ENV_VAR: str = "RISK_CAP_HISTORY_READER_SA_JSON"
+#: ~~稽核修正（2026-10-19）：**保留**未來網站讀取端的名稱與 scope（放 Streamlit secrets）。
+#: 本 PoC **沒有**任何讀取端程式碼路徑；先定名只為讓寫入／讀取兩支帳號從一開始就分開。~~
+#: ~~`READER_SA_ENV_VAR`（環境變數式的讀取端 key 名稱）~~
+#: 📌 2026-10-20（VN1-STORE Production Wiring 批；有意識的變更，不是漏刪）：上面那個**環境變數式**的讀取端名稱
+#:   **已退役刪除** —— reader key 依規格 `docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md` 步驟 8 **只放 Streamlit secrets**
+#:   的獨立 TOML 表格（下方 `READER_SECRETS_TABLE`），⛔ 不走環境變數；留著它等於留一條「把 reader key 放進
+#:   環境變數也行」的引用點。舊名稱的理由（讀取／寫入兩支帳號從一開始就分開）由 `READER_SECRETS_TABLE`
+#:   與 writer「只走 WIF、沒有 key」更嚴格地守住。舊字面只留在測試的「禁止字面」守衛裡。
 #: 讀取端 OAuth scope：唯讀（`spreadsheets.readonly`）。
 READER_SCOPES: tuple[str, ...] = ("https://www.googleapis.com/auth/spreadsheets.readonly",)
 #: 未來系統歷史 Sheet 的 ID 所放的環境變數名（新名稱）。
@@ -194,3 +199,58 @@ HISTORY_SHEET_ID_ENV_VAR: str = "RISK_CAP_HISTORY_SHEET_ID"
 WRITE_ENABLE_ENV_VAR: str = "RISK_CAP_HISTORY_WRITE_ENABLED"
 #: production 寫入是否已獲客戶核准。⚠️ 改成 True 需要客戶另一次裁示（DEC-009），⛔ 不得自行改。
 PRODUCTION_WRITE_APPROVED: bool = False
+
+# ══════════════════════════════════════════════════════════════════════
+# 身分與憑證來源（VN1-STORE Production Wiring 批，2026-10-20；規格 `docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md`）
+# ══════════════════════════════════════════════════════════════════════
+#: 客戶設定的固定身分（DEC-064 G1／G2；⛔ 不是 secret —— 規格第 4 節、第 5.4 節實跑紀錄皆已公開記載）。
+#: ⚠️ `scripts/risk_cap_permission_test.py` 另有同值字面（該腳本本批不動）；兩者一致由
+#:   `tests/test_vn1_production_wiring.py` 守衛。
+WRITER_SA_EMAIL: str = "risk-cap-writer@mystock20260823.iam.gserviceaccount.com"
+READER_SA_EMAIL: str = "risk-cap-reader@mystock20260823.iam.gserviceaccount.com"
+#: writer 憑證檔唯一接受的型別：WIF 產生的短效 federation 設定檔（`google-github-actions/auth`）。
+#: ⛔ `service_account`（任何 JSON key）一律拒絕（DEC-064 G1 禁止 writer JSON key）。
+WRITER_CREDENTIAL_TYPE: str = "external_account"
+#: reader 憑證唯一接受的型別：`risk-cap-reader` 的唯讀 JSON key（DEC-064 G2）。
+READER_CREDENTIAL_TYPE: str = "service_account"
+#: writer ADC 憑證檔路徑的環境變數（auth action 以 `create_credentials_file` 匯出）。
+GAC_ENV_VAR: str = "GOOGLE_APPLICATION_CREDENTIALS"
+#: Streamlit secrets 內 reader key 的 TOML 表格名（規格步驟 8：`[risk_cap_history_reader]`）。
+#: ⚠️ 必須與既有 `[gcp_service_account]` 不同名（SEC-3 同類風險）；讀取端 ⛔ 只讀這張表。
+READER_SECRETS_TABLE: str = "risk_cap_history_reader"
+#: Streamlit secrets 內系統歷史 Sheet ID 的頂層鍵（規格步驟 8：`risk_cap_history_sheet_id`）。
+#: ⚠️ 與 GitHub secret `RISK_CAP_HISTORY_SHEET_ID`（寫入端環境變數，上方 `HISTORY_SHEET_ID_ENV_VAR`）同值不同名。
+READER_SHEET_ID_SECRET_KEY: str = "risk_cap_history_sheet_id"
+
+# ══════════════════════════════════════════════════════════════════════
+# 讀取結果狀態（L3 `risk_cap_history_reader_service.read_history` 回傳；「讀得到嗎」，≠ 上面的比較狀態）
+# ══════════════════════════════════════════════════════════════════════
+#: 讀到表頭正確、至少一列資料（是否「能和上次比」另看 `compare`）。
+READ_STATUS_OK = "OK"
+#: 讀到了，但表是空的（沒有任何資料列；含連表頭都還沒有）⇒ `compare` 為 START_RECORDING（⛔ 不是 0、不是中性）。
+READ_STATUS_EMPTY = "EMPTY"
+#: Streamlit secrets 沒有 `[risk_cap_history_reader]` 表格（或空表、secrets 不可讀、key 內容無法載入）。
+READ_STATUS_NO_CREDENTIAL = "NO_CREDENTIAL"
+#: 沒有 `risk_cap_history_sheet_id`（或格式不是純 Sheet ID —— ⛔ 不接受網址、不解析）。
+READ_STATUS_NO_SHEET_ID = "NO_SHEET_ID"
+#: 試算表裡沒有 `risk_cap_daily` 分頁。
+READ_STATUS_TAB_MISSING = "TAB_MISSING"
+#: 表頭與 `HISTORY_COLUMNS` 不一致（缺欄／多欄／順序不同）或資料列欄數超過表頭 ⇒ ⛔ 不猜欄位對應。
+READ_STATUS_SCHEMA_MISMATCH = "SCHEMA_MISMATCH"
+#: Google API／傳輸／權杖錯誤（403、404、5xx、逾時…）。只記例外類別名，⛔ 不記訊息原文。
+READ_STATUS_API_ERROR = "API_ERROR"
+#: 憑證身分不是 `risk-cap-reader`（含 writer、fund-nav、external_account、其他 SA），或開到的 Sheet／分頁核對不符。
+READ_STATUS_IDENTITY_MISMATCH = "IDENTITY_MISMATCH"
+#: 表頭正確，但**資料內容有疑義**：有列標 `VALID` 卻沒有可用的上限值（空白、不是數字、不是有限數）。
+#: 寫入端保證 VALID 一定帶上限值（L3 `build_record`）⇒ 讀到這種列代表表被手動改過或契約破損 ——
+#: ⛔ 不送進比較、⛔ 不補 0、⛔ 不略過該列假裝沒事；整次讀取照實回這個狀態（且不快取）。
+READ_STATUS_CONTENT_SUSPECT = "CONTENT_SUSPECT"
+
+READ_STATUSES: tuple[str, ...] = (
+    READ_STATUS_OK, READ_STATUS_EMPTY, READ_STATUS_NO_CREDENTIAL, READ_STATUS_NO_SHEET_ID,
+    READ_STATUS_TAB_MISSING, READ_STATUS_SCHEMA_MISMATCH, READ_STATUS_API_ERROR, READ_STATUS_IDENTITY_MISMATCH,
+    READ_STATUS_CONTENT_SUSPECT,
+)
+#: 📌 只有 OK／EMPTY 會進快取（失敗 ⛔ 不快取 —— v3 §02「只快取成功結果」）：由 L3 快取函式「失敗一律拋」的結構保證，
+#:   不另立常數（回修第 1 輪 2026-10-20：原 `READ_STATUSES_CACHEABLE` 沒有任何程式使用，已移除 —— 該常數只存在於
+#:   未合併的本批分支，從未進 main）。
