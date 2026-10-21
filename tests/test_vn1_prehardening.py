@@ -321,9 +321,11 @@ class TestConcurrency:
 # ══════════════════════════════════════════════════════════════════════════
 # 有意識地更新守衛（理由＝DEC-066 C Step 2）：客戶已在 GitHub UI 建立 Environment `production-risk-cap`
 # （Step 1；總管轉述客戶畫面：Required reviewers＝客戶本人、Prevent self-review＝OFF、Wait timer＝OFF、
-# Admin bypass＝OFF、Selected branches → main、tags 0、secrets 0、variables 0）。DEC-066 C 只准**真正有寫入能力**
-# 的 job（`production_write`：needs compute、有 id-token、執行 `--write`）引用；compute／dry-run／wif_auth_only／
-# 權限驗證／R4 job 與 R5 檔一律不得掛（掛上會改變它們的 OIDC `sub`，且不在本批授權範圍）。
+# Admin bypass＝OFF、Selected branches → main、tags 0、secrets 0、variables 0）。DEC-066 C ~~只准**真正有寫入能力**
+# 的 job~~ 只准**正式寫入 job**（`production_write`：needs compute、有 id-token、執行 `--write`）引用；
+# `permission_test_writer` 雖能以 writer 身分 append／刪測試列（P1），依 DEC-066 C 範圍不掛（回修第 1 輪 2026-10-21，
+# 有意識的變更，不是漏刪）；compute／dry-run／wif_auth_only／其他權限驗證／R4 job 與 R5 檔一律不得掛
+# （掛上會改變它們的 OIDC `sub`，且不在本批授權範圍）。⚠️ Step 3 前，Environment 只擋 production_write。
 # ⛔ 本節不碰 WIF condition（Step 3）、不碰 `PRODUCTION_WRITE_APPROVED`（Step 4）。
 ENV_NAME = "production-risk-cap"
 ENV_JOB = "production_write"
