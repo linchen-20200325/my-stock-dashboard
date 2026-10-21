@@ -298,7 +298,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 | C2 | `gcloud iam service-accounts keys list --iam-account="$READER_SA" --managed-by=user` | **恰好 1 把** |
 | C3 | `gcloud projects get-iam-policy "$PROJECT_ID" --flatten="bindings[].members" --filter="bindings.members:risk-cap-" --format="table(bindings.role,bindings.members)"` | **空**（兩支 SA 無專案層 role） |
 | C4 | `gcloud iam service-accounts get-iam-policy "$WRITER_SA"`、`gcloud iam service-accounts get-iam-policy "$READER_SA"` | writer：只有步驟 4 那一條 `roles/iam.workloadIdentityUser`（principalSet＝本 repo ID）；reader：**無任何綁定**；兩者都不出現 fund-nav 相關成員 |
-| C5 | `gcloud iam workload-identity-pools providers describe github-provider --location=global --workload-identity-pool=github-pool --format="value(attributeCondition)"` | ~~與步驟 3 的四條件一致~~ 2026-10-21 起：四條件＋`environment=='production-risk-cap'`＋`event_name=='workflow_dispatch'`（8.7；pool／provider 實際名稱為 `stock-dashboard-github`／`github-actions`；有意識的變更，不是漏刪） |
+| C5 | `gcloud iam workload-identity-pools providers describe github-provider --location=global --workload-identity-pool=github-pool --format="value(attributeCondition)"`（📌 照抄時把 `github-provider`／`github-pool` 換成實際的 `github-actions`／`stock-dashboard-github`） | ~~與步驟 3 的四條件一致~~ 2026-10-21 起：四條件＋`environment=='production-risk-cap'`＋`event_name=='workflow_dispatch'`（8.7；pool／provider 實際名稱為 `stock-dashboard-github`／`github-actions`；有意識的變更，不是漏刪） |
 | C6 | 人工檢查：個人持股 Sheet「共用」清單 | **不含** `risk-cap-writer@…`、`risk-cap-reader@…` |
 | C7 | 人工檢查：System Risk Cap Sheet「一般存取權」 | 「限制」 |
 
