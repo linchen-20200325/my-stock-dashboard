@@ -426,7 +426,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 - **客戶步驟（人工 Gate、未執行）**：(1) Streamlit Cloud → Secrets 頂層加 `risk_cap_history_smoke = true` → 儲存（app 會重啟）；(2) 開一次網站；(3) Manage app → Logs 找 `[risk_cap_history_smoke]` 那一行回報（整行可貼，不含 secret）；(4) 看完把該行改回 `false` 或刪除。首次寫入前預期 `read_status=EMPTY`、`header_state=ABSENT` 或 `MATCH`。
 - 守衛：`tests/test_vn1_reader_smoke.py`；app.py 只准一行 import＋一行無參數呼叫（`tests/test_vn1_store_poc.py::assert_app_only_smoke_hook`）。
 
-### 8.6 GitHub Environment 設計（~~**提案、未執行；客戶人工 Gate**~~ **DEC-066 C：首寫前 MUST、仍未執行；客戶人工 Gate**；2026-10-20 更新，有意識的變更，不是漏刪）
+### 8.6 GitHub Environment 設計（~~**提案、未執行；客戶人工 Gate**~~ ~~**DEC-066 C：首寫前 MUST、仍未執行；客戶人工 Gate**；2026-10-20 更新，有意識的變更，不是漏刪~~ **DEC-066 C：Step 1 已完成（客戶建立）、Step 2 本 PR（workflow wiring）；Step 3／4 未做**；2026-10-21 更新，有意識的變更，不是漏刪）
 
 - 名稱 `production-risk-cap`；required reviewer＝owner（唯一 reviewer）；**prevent self-review 關閉**（唯一 reviewer 就是觸發者，打開會永遠無法核准）；**關閉 admin bypass**（📌 2026-10-20 盤點：GitHub 預設**開**、須手動取消勾選；DEC-066 C：取當下 UI 可達成的最嚴格設定，UI 與盤點不同 ⇒ 不猜、停下回報）；deployment branches＝~~只限 `main`~~ **Selected branches → `main`**（2026-10-20 DEC-066 C 指定選項，有意識的變更，不是漏刪：main 未受保護，選「Protected branches only」會讓**所有分支**可部署）；environment secret `RISK_CAP_HISTORY_SHEET_ID`（之後可移除 repo 層同名 secret —— 另行確認）。
 - ⚠️ **誠實定位**：這個 Gate 是「**刻意多按一次**」—— 唯一 reviewer＝觸發者，**不是職責分離、不是兩人控管**，也**防不了帳號被盜**（盜得到帳號就按得到核准）。它擋的是「誤觸發」與「沒有 environment 的 job 換到 writer token」（後者要配合 8.7）。
@@ -437,6 +437,12 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
   4. 反向測試：`wif-auth-only` 被 STS 拒絕（新的預期結果）；
   5. `production-write` 觸發 ⇒ 停在等待核准 ⇒ 核准後在閘門紅燈（`PRODUCTION_WRITE_APPROVED` 仍 False）。
 - 📌 2026-10-20 **DEC-066 C**（客戶裁示；有意識的變更，不是漏刪）：上列 1～3 步即 DEC-066 C Step 1～3，**順序固定**；Step 3 須先由客戶提供 provider **現行 describe 原文**、⛔ 不得猜測現行 condition。第 4、5 步為 Step 3 之後、Step 4（首寫）之前的驗證（撰寫組讀法）。總管上一輪推薦「首寫先跳過 Environment」**已被客戶否決**。設定細節與首寫 Runbook 見 8.11。
+- 📌 2026-10-21（DEC-066 C Step 1／2；有意識的變更，不是漏刪）：上列「⛔ 本批一步都沒做」描述的是 Pre-Hardening 批當時，仍屬實；自本日起現況為 ——
+  - **第 1 步 ✅**：客戶已在 GitHub UI 建立 `production-risk-cap`（客戶畫面逐項確認、總管轉述；實際設定見 8.11.2 末段）。
+  - **第 2 步 ✅ 本 PR**：`.github/workflows/risk_cap_history_poc.yml` 只有 job `production_write`（needs compute、有 id-token、執行 `--write` 的唯一 production 寫入 job）加 job 層純字串 `environment: production-risk-cap`；compute／dry-run／`wif_auth_only`／三個權限驗證 job／R4 與 R5 檔一律沒有。守衛：`tests/test_vn1_prehardening.py` E 節。
+  - **第 3～5 步 ⏳ 未做**（下一 Gate＝客戶提供 WIF provider 現行完整 describe 原文；⛔ 不得猜測現行 condition）。
+  - ⚠️ 掛上後 `production_write` 的 OIDC `sub` 由 `repo:linchen-20200325/my-stock-dashboard:ref:refs/heads/main` 變為 `repo:linchen-20200325/my-stock-dashboard:environment:production-risk-cap`（GitHub 官方文件：有 environment 的 job，`sub` 用 environment 形式），並多一個 `environment` claim。現行 WIF condition（依本檔第 4 節與 BACKLOG 紀錄）比對 repository_id／repository_owner_id／ref／workflow_ref、**不比對 sub**；`principalSet` 綁的是 `attribute.repository_id` ⇒ **預期**仍可換 token —— **依官方文件推論、未實測**（`PRODUCTION_WRITE_APPROVED`＝False，閘門在 auth 之前紅燈，本批不會實際換 token）。`google.subject` 對映 `assertion.sub`（第 4 節步驟 3），新值長度遠低於 127 bytes 上限。
+  - 掛上 environment 後，`production-write` 觸發時寫入 job 會先**停在等待核准**（compute job 不受影響、照常先跑）；核准後第一步閘門照舊紅燈。
 
 ### 8.7 WIF attribute condition 更新提案（~~**提案、未執行；客戶人工 Gate**~~ **DEC-066 C Step 3：首寫前 MUST、仍未執行；客戶人工 Gate**；2026-10-20 更新，有意識的變更，不是漏刪）
 
@@ -458,7 +464,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 | # | 項目 | 現況 |
 |---|---|---|
 | (1) | write job 依賴 hash-pin＋精簡 | ✅ 本批（8.1） |
-| (2) | GitHub Environment＋WIF environment／event_name claim | ⏳ 設計已備（8.6／8.7），**客戶人工 Gate、未執行**；📌 2026-10-20 **DEC-066 C：首寫前 MUST**，順序 Environment（`VN1-PG-ENV`）→ workflow `environment:`（`VN1-PG-WIRE`）→ WIF condition（`VN1-PG-WIF`）→ 首寫 |
+| (2) | GitHub Environment＋WIF environment／event_name claim | ⏳ 設計已備（8.6／8.7），**客戶人工 Gate、未執行**；📌 2026-10-20 **DEC-066 C：首寫前 MUST**，順序 Environment（`VN1-PG-ENV`）→ workflow `environment:`（`VN1-PG-WIRE`）→ WIF condition（`VN1-PG-WIF`）→ 首寫；📌 2026-10-21：Environment ✅（客戶建立）、workflow `environment:` ✅ 本 PR；WIF condition ⏳、首寫 ⏳ |
 | (3) | 首次實跑驗證計畫 | ◐ 程式已備（8.4），**未實跑**（須翻旗標才走得到）；📌 2026-10-20 Runbook 見 8.11（DEC-066 A／B／E） |
 | (4) | WIF 憑證檔 `audience` | ✅ 原始碼＋實跑證據（8.2）；allowedAudiences 為空待客戶唯讀確認 |
 | (5) | 只重跑寫入 job 沿用舊 artifact | ◐ 加 sha256 比對（完整性）；沿用同一 run artifact 的行為不變 |
@@ -498,7 +504,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 - **正式路徑沒有 delete／rollback**；寫前檢查只要同鍵（record_date, ruleset_version）已有**任何一列（不論 status）**即 exit 4、什麼都不寫。
 - `RISK_CAP_HISTORY_WRITE_ENABLED: '1'` 在 workflow 寫入步驟**寫死** ⇒ 核准實質只剩 L0 常數（＋日後的 Environment）；架構是否調整列 LATER 候選（`docs/BACKLOG.md` 5.1.4 `VN1-PG-L-WRITE-ENABLED`）。
 - GitHub repo **public**、**個人帳號**；main **無分支保護、無 rulesets**。
-- Environment `production-risk-cap` **現存與否 UNKNOWN**（GitHub API 被代理擋）。
+- ~~Environment `production-risk-cap` **現存與否 UNKNOWN**（GitHub API 被代理擋）。~~（2026-10-21：客戶已建立，見 8.11.2 末段；有意識的變更，不是漏刪）
 - WIF provider **現行 attribute condition 在 repo 內沒有逐字原文**（只有客戶口頭回報＋實跑反推）⇒ 即時無法查證。
 - GitHub Environment 的 required reviewer 對 `schedule` 觸發**同樣要人工核准** ⇒ 與無人值守排程衝突（8.9）。
 
@@ -516,15 +522,29 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 - ⚠️ 若 GitHub 當下 UI 的選項、名稱或能力與上表不同 ⇒ **不猜、停下回報**（DEC-066 C）。
 - ⛔ Environment 必須**先建好**，workflow 才能引用；先引用不存在的 Environment 會**自動建立一個無保護的** environment。
 - 8.6 提及的 environment secret（把 `RISK_CAP_HISTORY_SHEET_ID` 搬到 environment 層）**不在** DEC-066 範圍，維持「另行確認」。
+- 📌 **2026-10-21 客戶實際設定（DEC-066 C Step 1 完成；客戶 GitHub UI 畫面逐項確認、總管轉述；撰寫組未見畫面原件）**：
+
+  | 設定 | 實際值 | 對照上表要求 |
+  |---|---|---|
+  | 名稱 | `production-risk-cap` | 一致 |
+  | Required reviewers | `linchen-20200325`（客戶本人、唯一） | 一致 |
+  | Prevent self-review | OFF | 一致 |
+  | Wait timer | OFF | 上表未要求（無等待時間） |
+  | Allow administrators to bypass | OFF | 一致（最嚴格） |
+  | Deployment branches and tags | Selected branches and tags；allowed branch＝`main`；allowed tags＝0 | 一致 |
+  | Environment secrets | 0 | `RISK_CAP_HISTORY_SHEET_ID` 仍在 repo 層（上一點，另行確認） |
+  | Environment variables | 0 | — |
+
+  ⇒ 與上表要求一致，未發現「UI 能力與盤點不同」的情形。
 
 #### 8.11.3 正式順序（DEC-066 C；⛔ 不得跳步、不得調換）
 
 | Step | 誰 | 做什麼 | 完成判準 | 對應待辦 |
 |---|---|---|---|---|
-| 1 | 客戶 | 依 8.11.2 建立 Environment `production-risk-cap` | 客戶回報已建好（含各設定實際值） | `VN1-PG-ENV` |
-| 2 | 開發批（PR） | `production_write` job 加 `environment: production-risk-cap`＋同步測試守衛 | PR CI 綠、合併 | `VN1-PG-WIRE` |
-| 3 | 客戶（＋我們比對） | 客戶提供 WIF provider **完整 describe 原文**（唯讀；⚠️ 5.3 C5 指令以 `--format` 只印 `attributeCondition`，**不足**，須去掉 `--format` 取完整輸出；pool／provider 名稱以 8.2／8.7 所用實際名稱為準）→ 確認原始 condition → 才修改 provider，新增 `environment == production-risk-cap`、`event_name == workflow_dispatch` | 新 condition 生效；實測無 environment 的 job 被 STS 拒（8.7） | `VN1-PG-WIF` |
-| 4 | 開發批＋客戶 | （Step 4 為撰寫組依 DEC-066 A／B 整理，非客戶另立的步驟）首次寫入：開旗標 PR → 當天 dry-run → production-write → readback → 立即改回 `False` 的 PR | 見 8.11.4 | `VN1-PG-FIRST` |
+| 1 | 客戶 | 依 8.11.2 建立 Environment `production-risk-cap` | 客戶回報已建好（含各設定實際值） | `VN1-PG-ENV` —— ✅ 2026-10-21 完成（實際值見 8.11.2 末段） |
+| 2 | 開發批（PR） | `production_write` job 加 `environment: production-risk-cap`＋同步測試守衛 | PR CI 綠、合併 | `VN1-PG-WIRE` —— ✅ 本 PR（2026-10-21；只有 `production_write`） |
+| 3 | 客戶（＋我們比對） | 客戶提供 WIF provider **完整 describe 原文**（唯讀；⚠️ 5.3 C5 指令以 `--format` 只印 `attributeCondition`，**不足**，須去掉 `--format` 取完整輸出；pool／provider 名稱以 8.2／8.7 所用實際名稱為準）→ 確認原始 condition → 才修改 provider，新增 `environment == production-risk-cap`、`event_name == workflow_dispatch` | 新 condition 生效；實測無 environment 的 job 被 STS 拒（8.7） | `VN1-PG-WIF` —— ⏳ 未做（下一 Gate） |
+| 4 | 開發批＋客戶 | （Step 4 為撰寫組依 DEC-066 A／B 整理，非客戶另立的步驟）首次寫入：開旗標 PR → 當天 dry-run → production-write → readback → 立即改回 `False` 的 PR | 見 8.11.4 | `VN1-PG-FIRST` —— ⏳ 未做 |
 
 #### 8.11.4 首次寫入 Runbook（DEC-066 A／B／E；**未執行**）
 
