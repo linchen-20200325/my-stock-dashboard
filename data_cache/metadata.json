@@ -1,22 +1,22 @@
 {
-  "updated_at": "2026-10-20T14:13:18.255127+00:00",
+  "updated_at": "2026-10-21T14:25:40.990015+00:00",
   "datasets": {
     "twii_ohlcv": {
       "name": "twii_ohlcv",
-      "last_updated": "2026-10-20",
-      "row_count": 4901,
+      "last_updated": "2026-10-21",
+      "row_count": 4902,
       "last_error": null
     },
     "finmind_inst": {
       "name": "finmind_inst",
-      "last_updated": "2026-10-20",
-      "row_count": 4927,
+      "last_updated": "2026-10-21",
+      "row_count": 4928,
       "last_error": null
     },
     "finmind_margin": {
       "name": "finmind_margin",
-      "last_updated": "2026-10-20",
-      "row_count": 4927,
+      "last_updated": "2026-10-21",
+      "row_count": 4928,
       "last_error": null
     },
     "finmind_m1m2": {
