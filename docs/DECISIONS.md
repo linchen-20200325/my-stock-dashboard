@@ -451,6 +451,7 @@
   - **DEC-009**：Environment 由客戶手動建立；WIF provider 修改須以客戶提供的 describe 原文為準，AI 不建立、不修改任何 GCP／GitHub 設定資源（撰寫組讀法：修改的執行者客戶原文未逐字指明；依現況 AI 無 GCP 存取，預期由客戶手動執行）。
   - **DEC-003 ①**：畫面顯示歷史仍須先過線框；本條不涉 UI。
   - 規格 8.4「自動回滾（刪列）未經客戶核准 —— 需要的話須另行裁示」由本條 E **定案為永久禁止**；規格 8.9「每日排程 vs environment 人工核准（未送題）」由本條 F **裁示為延後、另案**。
+- 📌 2026-10-21 狀態補註（append-only；撰寫組依總管轉述＋GitHub API 實查）：C **Step 1**（Environment）、**Step 2**（#894 wiring，`17e8ee44`）、**Step 3**（WIF hardening＋反向驗證）完成。Step 3：客戶以 `update-oidc` 只改 `--attribute-condition`（四條保留＋`environment=='production-risk-cap'`、`event_name=='workflow_dispatch'`；mapping 不變、ACTIVE）；反向驗證 run 39589906182 預期失敗。總管撤回「暫時讓 `wif_auth_only` 掛 environment 做正向驗證」建議、改採靜態比對＋反向驗證，客戶依此執行 —— **不是新 DEC**。⚠️ 正向換 token 未實測（首次正向驗證＝Step 4）。下一 Gate＝Step 4（尚未開始）；`PRODUCTION_WRITE_APPROVED` 仍 `False`；F 不變。本條原文不改
 
 ## 3. 資料語意（data semantics）
 

@@ -286,6 +286,8 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 | R4 | 從**非 main 分支**（例：測試分支）觸發同一 workflow 嘗試 WIF 換 token | STS 拒絕（attribute condition 不符），拿不到 token |
 | R5 | 從**另一個 workflow 檔**（`main` 上）嘗試 WIF 換 token | STS 拒絕（`workflow_ref` 不符） |
 
+📌 2026-10-21 補註（有意識的變更，不是漏刪；上表原文不改）：WIF hardening（8.7）後，R4／R5 的 job 都沒有 environment ⇒ **仍預期被拒，但已無法隔離 ref／workflow_ref 變因**（被拒也可能只因缺 `environment` claim）；10-20 的 PASS 證據在當時條件下仍有效。P1（`permission_test_writer`）同理實質退役。
+
 📌 R1、R2 的錯誤碼不論是 403 還是 404 都算通過；**任何 2xx 都算失敗**，須立刻停下、移除該分享並回報。
 
 ### 5.3 設定檢查（Cloud Shell，唯讀）
@@ -296,7 +298,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 | C2 | `gcloud iam service-accounts keys list --iam-account="$READER_SA" --managed-by=user` | **恰好 1 把** |
 | C3 | `gcloud projects get-iam-policy "$PROJECT_ID" --flatten="bindings[].members" --filter="bindings.members:risk-cap-" --format="table(bindings.role,bindings.members)"` | **空**（兩支 SA 無專案層 role） |
 | C4 | `gcloud iam service-accounts get-iam-policy "$WRITER_SA"`、`gcloud iam service-accounts get-iam-policy "$READER_SA"` | writer：只有步驟 4 那一條 `roles/iam.workloadIdentityUser`（principalSet＝本 repo ID）；reader：**無任何綁定**；兩者都不出現 fund-nav 相關成員 |
-| C5 | `gcloud iam workload-identity-pools providers describe github-provider --location=global --workload-identity-pool=github-pool --format="value(attributeCondition)"` | 與步驟 3 的四條件一致 |
+| C5 | `gcloud iam workload-identity-pools providers describe github-provider --location=global --workload-identity-pool=github-pool --format="value(attributeCondition)"`（📌 照抄時把 `github-provider`／`github-pool` 換成實際的 `github-actions`／`stock-dashboard-github`） | ~~與步驟 3 的四條件一致~~ 2026-10-21 起：四條件＋`environment=='production-risk-cap'`＋`event_name=='workflow_dispatch'`（8.7；pool／provider 實際名稱為 `stock-dashboard-github`／`github-actions`；有意識的變更，不是漏刪） |
 | C6 | 人工檢查：個人持股 Sheet「共用」清單 | **不含** `risk-cap-writer@…`、`risk-cap-reader@…` |
 | C7 | 人工檢查：System Risk Cap Sheet「一般存取權」 | 「限制」 |
 
@@ -426,7 +428,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 - **客戶步驟（人工 Gate、未執行）**：(1) Streamlit Cloud → Secrets 頂層加 `risk_cap_history_smoke = true` → 儲存（app 會重啟）；(2) 開一次網站；(3) Manage app → Logs 找 `[risk_cap_history_smoke]` 那一行回報（整行可貼，不含 secret）；(4) 看完把該行改回 `false` 或刪除。首次寫入前預期 `read_status=EMPTY`、`header_state=ABSENT` 或 `MATCH`。
 - 守衛：`tests/test_vn1_reader_smoke.py`；app.py 只准一行 import＋一行無參數呼叫（`tests/test_vn1_store_poc.py::assert_app_only_smoke_hook`）。
 
-### 8.6 GitHub Environment 設計（~~**提案、未執行；客戶人工 Gate**~~ ~~**DEC-066 C：首寫前 MUST、仍未執行；客戶人工 Gate**；2026-10-20 更新，有意識的變更，不是漏刪~~ **DEC-066 C：Step 1 已完成（客戶建立）、Step 2 ~~本 PR~~ PR #894（workflow wiring；合併後完成）；Step 3／4 未做**；2026-10-21 更新，有意識的變更，不是漏刪）
+### 8.6 GitHub Environment 設計（📌 2026-10-21：**Step 1～3 ✅、Step 4 未做**；下方括號為前版狀態，保留追溯；~~**提案、未執行；客戶人工 Gate**~~ ~~**DEC-066 C：首寫前 MUST、仍未執行；客戶人工 Gate**；2026-10-20 更新，有意識的變更，不是漏刪~~ **DEC-066 C：Step 1 已完成（客戶建立）、Step 2 ~~本 PR~~ PR #894（workflow wiring；合併後完成）；Step 3／4 未做**；2026-10-21 更新，有意識的變更，不是漏刪）
 
 - 名稱 `production-risk-cap`；required reviewer＝owner（唯一 reviewer）；**prevent self-review 關閉**（唯一 reviewer 就是觸發者，打開會永遠無法核准）；**關閉 admin bypass**（📌 2026-10-20 盤點：GitHub 預設**開**、須手動取消勾選；DEC-066 C：取當下 UI 可達成的最嚴格設定，UI 與盤點不同 ⇒ 不猜、停下回報）；deployment branches＝~~只限 `main`~~ **Selected branches → `main`**（2026-10-20 DEC-066 C 指定選項，有意識的變更，不是漏刪：main 未受保護，選「Protected branches only」會讓**所有分支**可部署）；environment secret `RISK_CAP_HISTORY_SHEET_ID`（之後可移除 repo 層同名 secret —— 另行確認）。
 - ⚠️ **誠實定位**：這個 Gate 是「**刻意多按一次**」—— 唯一 reviewer＝觸發者，**不是職責分離、不是兩人控管**，也**防不了帳號被盜**（盜得到帳號就按得到核准）。它擋的是「誤觸發」與「沒有 environment 的 job 換到 writer token」（後者要配合 8.7）。
@@ -441,14 +443,25 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
   - **第 1 步 ✅**：客戶已在 GitHub UI 建立 `production-risk-cap`（客戶畫面逐項確認、總管轉述；實際設定見 8.11.2 末段）。
   - **第 2 步：~~✅ 本 PR~~ PR #894（合併後完成）**（2026-10-21 更新，有意識的變更，不是漏刪）：`.github/workflows/risk_cap_history_poc.yml` 只有 job `production_write`（needs compute、有 id-token、執行 `--write` 的唯一 production 寫入 job）加 job 層純字串 `environment: production-risk-cap`；compute／dry-run／`wif_auth_only`／三個權限驗證 job／R4 與 R5 檔一律沒有。守衛：`tests/test_vn1_prehardening.py` E 節。
   - **第 3～5 步 ⏳ 未做**（下一 Gate＝客戶提供 WIF provider 現行完整 describe 原文；⛔ 不得猜測現行 condition）。
+  - 📌 2026-10-21（有意識的變更，不是漏刪）：**第 3、4 步 ✅**（WIF condition 已更新；反向驗證 run 39589906182 `wif-auth-only` 被拒 ⇒ 預期結果）；第 5 步正向（`production-write` 換 token）**未實測**，將於首次人工 production write 發生。下一則「第 3 步完成前只擋 `production_write`」自本日起不再成立 —— 現況：無 environment 的 job 一律取不到 writer token。
   - ⚠️ **第 3 步（WIF environment condition）完成前，Environment 只擋 `production_write`**：`wif_auth_only` 與 `permission_test_writer` 在 main 上仍可**不經核准**取得 writer token（後者 P1 會以 writer 身分 append 再刪除一列測試列）；兩者依 DEC-066 C 範圍不掛 environment，等第 3 步讓 STS 拒絕無 environment 的 job 才收口（見 8.7「後果」）。
   - ⚠️ 掛上後 `production_write` 的 OIDC `sub` 由 `repo:linchen-20200325/my-stock-dashboard:ref:refs/heads/main` 變為 `repo:linchen-20200325/my-stock-dashboard:environment:production-risk-cap`（GitHub 官方文件：有 environment 的 job，`sub` 用 environment 形式），並多一個 `environment` claim。現行 WIF condition（依本檔第 4 節與 BACKLOG 紀錄）比對 repository_id／repository_owner_id／ref／workflow_ref、**不比對 sub**；`principalSet` 綁的是 `attribute.repository_id` ⇒ **預期**仍可換 token —— **依官方文件推論、未實測**（`PRODUCTION_WRITE_APPROVED`＝False，閘門在 auth 之前紅燈，本批不會實際換 token）。`google.subject` 對映 `assertion.sub`（第 4 節步驟 3），新值長度遠低於 127 bytes 上限。
   - 掛上 environment 後，`production-write` 觸發時寫入 job 會先**停在等待核准**（compute job 不受影響、照常先跑）；核准後第一步閘門照舊紅燈。
 
-### 8.7 WIF attribute condition 更新提案（~~**提案、未執行；客戶人工 Gate**~~ **DEC-066 C Step 3：首寫前 MUST、仍未執行；客戶人工 Gate**；2026-10-20 更新，有意識的變更，不是漏刪）
+### 8.7 WIF attribute condition 更新提案（📌 2026-10-21：**DEC-066 C Step 3 ✅ 完成**（客戶執行）；下方括號為前版狀態，保留追溯；~~**提案、未執行；客戶人工 Gate**~~ **DEC-066 C Step 3：首寫前 MUST、仍未執行；客戶人工 Gate**；2026-10-20 更新，有意識的變更，不是漏刪）
 
 > 📌 2026-10-20 DEC-066 C：客戶點名新增 `environment == production-risk-cap`、`event_name == workflow_dispatch` 兩條；下方建議中的 `runner_environment`、`ref_type` **不在客戶點名範圍**，列 backlog 候選（`docs/BACKLOG.md` 5.1.4 `VN1-PG-L-CLAIMS`），⛔ 未經客戶另裁示不併入 Step 3。修改前以客戶提供的 describe 原文為準。
 
+- 📌 **2026-10-21 實際執行（有意識的變更，不是漏刪）**：客戶於 Cloud Shell 以 `gcloud iam workload-identity-pools providers update-oidc github-actions --location=global --workload-identity-pool=stock-dashboard-github`（project `mystock20260823`）**只傳 `--attribute-condition`**。實際條件＝
+  ```
+  assertion.repository_id=='1241930464' && assertion.repository_owner_id=='285537060' && assertion.ref=='refs/heads/main' && assertion.workflow_ref=='linchen-20200325/my-stock-dashboard/.github/workflows/risk_cap_history_poc.yml@refs/heads/main' && assertion.environment=='production-risk-cap' && assertion.event_name=='workflow_dispatch'
+  ```
+  （總管提供字串；修改後 describe 由客戶確認一致，**撰寫組未見 describe 原文**）。attribute mapping 5 項（`attribute.ref`／`attribute.repository_id`／`attribute.repository_owner_id`／`attribute.workflow_ref`＝對應 assertion、`google.subject=assertion.sub`）**完全保留**、state ACTIVE。
+  - ⚠️ **未採用** 下方建議中的 `runner_environment`、`ref_type`（不在 DEC-066 點名範圍，`VN1-PG-L-CLAIMS`）；下方 8 條指令**保留作追溯、未執行**。
+  - mapping 未新增 `attribute.environment`／`attribute.event_name` 的依據：IAM API 允許 condition 直接引用 `assertion.*`；`google-github-actions/auth` 文件曾稱需映射，但 update 成功、無報錯（撰寫組讀法；未另行實測）。
+  - **反向驗證**：客戶在 main 手動 run 39589906182（`mode=wif-auth-only`、main、event `workflow_dispatch`、head `17e8ee44`、conclusion failure、2026-10-21 11:09Z；撰寫組 GitHub API 實查）；annotation 顯示 `google-github-actions/auth` 在產生 federated token 階段失敗、其他 job 未執行 ⇒ 預期結果。STS 回應原文撰寫組未見。
+  - **未驗證**：claim 缺席時 STS 的回應字樣；Environment 核准後 claim 不變；SA 綁定逐字內容；`production_write` 正向換 token（首次正向驗證＝Step 4 首次人工 production write）。
+  - 決策紀錄：總管撤回「暫時讓 `wif_auth_only` 掛 environment 做正向驗證」建議，改採靜態比對＋反向驗證；客戶依此執行（不是新 DEC）。
 - **建議條件**：既有四條 `&& assertion.event_name=='workflow_dispatch' && assertion.environment=='production-risk-cap' && assertion.runner_environment=='github-hosted' && assertion.ref_type=='branch'`。
   ```bash
   gcloud iam workload-identity-pools providers update-oidc github-actions \
@@ -506,7 +519,7 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 - `RISK_CAP_HISTORY_WRITE_ENABLED: '1'` 在 workflow 寫入步驟**寫死** ⇒ 核准實質只剩 L0 常數（＋日後的 Environment）；架構是否調整列 LATER 候選（`docs/BACKLOG.md` 5.1.4 `VN1-PG-L-WRITE-ENABLED`）。
 - GitHub repo **public**、**個人帳號**；main **無分支保護、無 rulesets**。
 - ~~Environment `production-risk-cap` **現存與否 UNKNOWN**（GitHub API 被代理擋）。~~（2026-10-21：客戶已建立，見 8.11.2 末段；有意識的變更，不是漏刪）
-- WIF provider **現行 attribute condition 在 repo 內沒有逐字原文**（只有客戶口頭回報＋實跑反推）⇒ 即時無法查證。
+- ~~WIF provider **現行 attribute condition 在 repo 內沒有逐字原文**（只有客戶口頭回報＋實跑反推）⇒ 即時無法查證。~~（2026-10-21：修改前逐字原文已由客戶提供 —— `assertion.repository_id=='1241930464' && assertion.repository_owner_id=='285537060' && assertion.ref=='refs/heads/main' && assertion.workflow_ref=='linchen-20200325/my-stock-dashboard/.github/workflows/risk_cap_history_poc.yml@refs/heads/main'`；mapping 5 項、ACTIVE、issuer `https://token.actions.githubusercontent.com`；修改後見 8.7；有意識的變更，不是漏刪）
 - GitHub Environment 的 required reviewer 對 `schedule` 觸發**同樣要人工核准** ⇒ 與無人值守排程衝突（8.9）。
 
 #### 8.11.2 Environment 實際能力與設定要求（DEC-066 C Step 1；客戶手動）
@@ -544,8 +557,8 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 |---|---|---|---|---|
 | 1 | 客戶 | 依 8.11.2 建立 Environment `production-risk-cap` | 客戶回報已建好（含各設定實際值） | `VN1-PG-ENV` —— ✅ 2026-10-21 完成（實際值見 8.11.2 末段） |
 | 2 | 開發批（PR） | `production_write` job 加 `environment: production-risk-cap`＋同步測試守衛 | PR CI 綠、合併 | `VN1-PG-WIRE` —— ~~✅ 本 PR~~ PR #894（合併後完成；依本表完成判準「PR CI 綠、合併」）（2026-10-21 更新，有意識的變更，不是漏刪）（只有 `production_write`） |
-| 3 | 客戶（＋我們比對） | 客戶提供 WIF provider **完整 describe 原文**（唯讀；⚠️ 5.3 C5 指令以 `--format` 只印 `attributeCondition`，**不足**，須去掉 `--format` 取完整輸出；pool／provider 名稱以 8.2／8.7 所用實際名稱為準）→ 確認原始 condition → 才修改 provider，新增 `environment == production-risk-cap`、`event_name == workflow_dispatch` | 新 condition 生效；實測無 environment 的 job 被 STS 拒（8.7） | `VN1-PG-WIF` —— ⏳ 未做（下一 Gate） |
-| 4 | 開發批＋客戶 | （Step 4 為撰寫組依 DEC-066 A／B 整理，非客戶另立的步驟）首次寫入：開旗標 PR → 當天 dry-run → production-write → readback → 立即改回 `False` 的 PR | 見 8.11.4 | `VN1-PG-FIRST` —— ⏳ 未做 |
+| 3 | 客戶（＋我們比對） | 客戶提供 WIF provider **完整 describe 原文**（唯讀；⚠️ 5.3 C5 指令以 `--format` 只印 `attributeCondition`，**不足**，須去掉 `--format` 取完整輸出；pool／provider 名稱以 8.2／8.7 所用實際名稱為準）→ 確認原始 condition → 才修改 provider，新增 `environment == production-risk-cap`、`event_name == workflow_dispatch` | 新 condition 生效；實測無 environment 的 job 被 STS 拒（8.7） | `VN1-PG-WIF` —— ~~⏳ 未做（下一 Gate）~~ ✅ 2026-10-21 完成（反向驗證 run 39589906182；見 8.7；有意識的變更，不是漏刪） |
+| 4 | 開發批＋客戶 | （Step 4 為撰寫組依 DEC-066 A／B 整理，非客戶另立的步驟）首次寫入：開旗標 PR → 當天 dry-run → production-write → readback → 立即改回 `False` 的 PR | 見 8.11.4 | `VN1-PG-FIRST` —— ⏳ 未做（**下一 Gate**，尚未開始） |
 
 #### 8.11.4 首次寫入 Runbook（DEC-066 A／B／E；**未執行**）
 
