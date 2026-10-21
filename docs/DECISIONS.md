@@ -452,6 +452,7 @@
   - **DEC-003 ①**：畫面顯示歷史仍須先過線框；本條不涉 UI。
   - 規格 8.4「自動回滾（刪列）未經客戶核准 —— 需要的話須另行裁示」由本條 E **定案為永久禁止**；規格 8.9「每日排程 vs environment 人工核准（未送題）」由本條 F **裁示為延後、另案**。
 - 📌 2026-10-21 狀態補註（append-only；撰寫組依總管轉述＋GitHub API 實查）：C **Step 1**（Environment）、**Step 2**（#894 wiring，`17e8ee44`）、**Step 3**（WIF hardening＋反向驗證）完成。Step 3：客戶以 `update-oidc` 只改 `--attribute-condition`（四條保留＋`environment=='production-risk-cap'`、`event_name=='workflow_dispatch'`；mapping 不變、ACTIVE）；反向驗證 run 39589906182 預期失敗。總管撤回「暫時讓 `wif_auth_only` 掛 environment 做正向驗證」建議、改採靜態比對＋反向驗證，客戶依此執行 —— **不是新 DEC**。⚠️ 正向換 token 未實測（首次正向驗證＝Step 4）。下一 Gate＝Step 4（尚未開始）；`PRODUCTION_WRITE_APPROVED` 仍 `False`；F 不變。本條原文不改
+- 📌 2026-10-21 狀態補註二（append-only；Step 4 子步驟 1；**不是新 DEC**）：客戶 2026-10-21 核准開立 DEC-066 A 的**一次性旗標 PR** —— `shared/risk_cap_history_policy.py::PRODUCTION_WRITE_APPROVED` 由 `False` 改 `True`＋政策測試同步（拒絕路徑測試改以 monkeypatch 回 `False` 繼續覆蓋閘門）。⚠️ 本 PR 只翻旗標：**production-write 尚未執行**、⛔ 未加 `schedule:`、未改 workflow job 邏輯／WIF／IAM／Environment。⛔ 依 A：首次寫入嘗試後**不論結果**，下一個 PR 必須立即把旗標改回 `False`；改回前不得有第二次寫入嘗試。F 不變。本條原文不改
 
 ## 3. 資料語意（data semantics）
 

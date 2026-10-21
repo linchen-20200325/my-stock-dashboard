@@ -11,7 +11,10 @@
 2. 全 repo（git 追蹤的 .py／.yml，tests 除外）不得再出現退役的 writer JSON key 名稱。
 3. `scripts/risk_cap_wif_auth_check.py`：缺 GAC／`service_account` 型別一律拒絕（exit 2、不發請求）；
    假物件走 PASS；email 不符 → FAIL；refresh 例外 → FAIL 且 token／例外訊息不外洩；tokeninfo 用 POST body。
-4. 寫入閘門照樣拒絕、`PRODUCTION_WRITE_APPROVED` 仍為 False。
+4. 寫入閘門照樣拒絕、~~`PRODUCTION_WRITE_APPROVED` 仍為 False~~。
+   📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；有意識的變更，不是漏刪）：L0 旗標已改 True（一次性旗標 PR，
+   首次寫入嘗試後下一個 PR 立刻改回 False）。拒絕路徑的測試改以 `force_write_unapproved` 把旗標
+   monkeypatch 回 **False**（⛔ 只准設 False）—— 閘門拒絕邏輯照樣被覆蓋。
 5. 突變自驗（in-test）：拔掉 wif job 的 id-token、改 SA 字串、拔掉型別檢查 ⇒ 對應守衛必須轉紅。
 不連網：所有 Google／HTTP 依賴以假物件注入。
 ⛔ 不依賴 PyYAML（PR Check 不裝）：workflow 以本檔內只用標準函式庫的受限 YAML 子集解析器讀（稽核修正第 1 輪 M1）。
@@ -35,6 +38,16 @@ from tests.test_p01_macro_refresh import _mutated_module
 REPO = Path(__file__).resolve().parents[1]
 WORKFLOW_REL = ".github/workflows/risk_cap_history_poc.yml"
 SCRIPT_REL = "scripts/risk_cap_wif_auth_check.py"
+
+
+def force_write_unapproved(monkeypatch, *mods):
+    """DEC-066 A（2026-10-21，Step 4 子步驟 1）：L0 `PRODUCTION_WRITE_APPROVED` 已一次性改 True。
+
+    守「未核准 ⇒ 拒絕」的測試改用本函式把旗標 monkeypatch 回 **False**（L0、L1 `history` 的模組層名稱，
+    以及呼叫端傳入的突變模組），閘門拒絕邏輯照樣被覆蓋。⛔ 只准設 False（`test_no_code_sets_approved_true` 守衛）。
+    """
+    for mod in (P, L1H, *mods):
+        monkeypatch.setattr(mod, "PRODUCTION_WRITE_APPROVED", False)
 
 #: 客戶設定的固定值（DEC-064 G1；BACKLOG `VN1-STORE` 2026-10-19 客戶回報）—— ⛔ 不是 secret，也不得改。
 WIF_PROVIDER = ("projects/847745640234/locations/global/workloadIdentityPools/"
@@ -380,7 +393,10 @@ class TestRetiredWriterKeyName:
 
 
 class TestWriteGateStillRefuses:
-    def test_gate_refuses_with_everything_set(self):
+    # 📌 2026-10-21（DEC-066 A；有意識的變更）：L0 旗標已一次性改 True ⇒ 本類各測試先 monkeypatch 回 False，
+    #   守的仍是「未核准 ⇒ 一律拒絕」（意圖不變）。
+    def test_gate_refuses_with_everything_set(self, monkeypatch):
+        force_write_unapproved(monkeypatch)
         with pytest.raises(L1H.ProductionWriteNotApproved):
             L1H.load_writer_credentials_or_refuse({P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: "x",
                                                    "GOOGLE_APPLICATION_CREDENTIALS": "/x.json"})
@@ -392,14 +408,16 @@ class TestWriteGateStillRefuses:
     #   （連 monkeypatch 都不行）。舊測試的意圖（就算其他條件全齊也不得放行）改由下面這條守住：
     #   連合格的 WIF 憑證檔都備齊了，第一道核准旗標照樣擋下。核准後各步驟的檢查改直接測
     #   `check_writer_credentials_file`（`tests/test_vn1_production_wiring.py`），不經過旗標。
-    def test_gate_refuses_even_with_valid_wif_file(self, tmp_path):
+    def test_gate_refuses_even_with_valid_wif_file(self, tmp_path, monkeypatch):
+        force_write_unapproved(monkeypatch)
         path = _ext_file(tmp_path)
         with pytest.raises(L1H.ProductionWriteNotApproved, match="尚未核准"):
             L1H.load_writer_credentials_or_refuse({P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: "x",
                                                    P.GAC_ENV_VAR: path})
         assert P.PRODUCTION_WRITE_APPROVED is False
 
-    def test_gate_refuses_with_nothing_set(self):
+    def test_gate_refuses_with_nothing_set(self, monkeypatch):
+        force_write_unapproved(monkeypatch)
         with pytest.raises(L1H.ProductionWriteNotApproved, match="尚未核准"):
             L1H.load_writer_credentials_or_refuse({})
 
@@ -819,10 +837,11 @@ class TestMutations:
     # ~~`test_gate_final_raise_to_return_is_caught`（突變體與真模組都把核准旗標改 True）~~ —— 📌 2026-10-20
     #   （Production Wiring 批；有意識的變更，不是漏刪）：「未實作」raise 已不存在，且本批禁止把旗標改 True。
     #   改守「拔掉第一道核准檢查」這個突變：突變體（旗標仍為 False）會一路放行到回傳憑證檔路徑；真模組照樣拒絕。
-    def test_gate_without_approval_check_is_caught(self, tmp_path):
+    def test_gate_without_approval_check_is_caught(self, tmp_path, monkeypatch):
         mut = _mutated_module("src/data/risk_cap/history.py", (
             "    env = os.environ if environ is None else environ\n    assert_production_write_approved()\n",
             "    env = os.environ if environ is None else environ\n"))
+        force_write_unapproved(monkeypatch, mut)      # DEC-066 A：L0 已改 True ⇒ 旗標 monkeypatch 回 False
         assert mut.PRODUCTION_WRITE_APPROVED is False
         path = _ext_file(tmp_path)
         env = {P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: "x", P.GAC_ENV_VAR: path}

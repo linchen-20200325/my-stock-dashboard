@@ -9,6 +9,9 @@
 4. 突變自驗：拔掉殘留檢查、同鍵檢查、多列相符檢查、逐欄比對 ⇒ 轉紅。
 ⛔ 本檔**不**修改、也不繞過 `PRODUCTION_WRITE_APPROVED`（連 monkeypatch 都沒有；閘門函式本身也不替換）——
    閘門之後的函式一律直接呼叫測試（同 `tests/test_vn1_production_wiring.py` 慣例）。不連網。
+   📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；有意識的變更，不是漏刪）：L0 旗標已一次性改 True ⇒ 上句
+   「連 monkeypatch 都沒有」不再成立：`TestScriptGate.test_gate_refuses` 以 `force_write_unapproved` 把旗標
+   monkeypatch 回 **False**（⛔ 只准設 False），守的仍是「未核准 ⇒ 閘門第一、exit 2」。閘門函式本身照樣不替換。
 """
 from __future__ import annotations
 
@@ -25,7 +28,7 @@ from shared import risk_cap_history_policy as P
 from src.data.risk_cap import history as L1H
 from tests.test_p01_macro_refresh import _mutated_module
 from tests.test_vn1_store_poc import _invalid, _row
-from tests.test_vn1_wif_auth_only import _parse
+from tests.test_vn1_wif_auth_only import _parse, force_write_unapproved
 
 REPO = Path(__file__).resolve().parents[1]
 L1_REL = "src/data/risk_cap/history.py"
@@ -232,6 +235,7 @@ class TestScriptGate:
         rec.write_text(json.dumps({"record": _row()}), encoding="utf-8")
         monkeypatch.setattr(mod, "_open_target", lambda *a, **k: pytest.fail("閘門未過不得開 Sheet"))
         monkeypatch.setattr(L1H, "build_writer_client", lambda *a, **k: pytest.fail("閘門未過不得建 client"))
+        force_write_unapproved(monkeypatch)           # DEC-066 A：L0 已改 True ⇒ 旗標 monkeypatch 回 False
         monkeypatch.setenv(P.WRITE_ENABLE_ENV_VAR, "1")
         monkeypatch.setenv(P.HISTORY_SHEET_ID_ENV_VAR, SID)
         assert mod.main([*flags, "--record", str(rec)]) == 2
