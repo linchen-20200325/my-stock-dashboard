@@ -558,9 +558,11 @@ risk_cap_history_sheet_id = "<步驟 6 的 Sheet ID>"
 | 1 | 客戶 | 依 8.11.2 建立 Environment `production-risk-cap` | 客戶回報已建好（含各設定實際值） | `VN1-PG-ENV` —— ✅ 2026-10-21 完成（實際值見 8.11.2 末段） |
 | 2 | 開發批（PR） | `production_write` job 加 `environment: production-risk-cap`＋同步測試守衛 | PR CI 綠、合併 | `VN1-PG-WIRE` —— ~~✅ 本 PR~~ PR #894（合併後完成；依本表完成判準「PR CI 綠、合併」）（2026-10-21 更新，有意識的變更，不是漏刪）（只有 `production_write`） |
 | 3 | 客戶（＋我們比對） | 客戶提供 WIF provider **完整 describe 原文**（唯讀；⚠️ 5.3 C5 指令以 `--format` 只印 `attributeCondition`，**不足**，須去掉 `--format` 取完整輸出；pool／provider 名稱以 8.2／8.7 所用實際名稱為準）→ 確認原始 condition → 才修改 provider，新增 `environment == production-risk-cap`、`event_name == workflow_dispatch` | 新 condition 生效；實測無 environment 的 job 被 STS 拒（8.7） | `VN1-PG-WIF` —— ~~⏳ 未做（下一 Gate）~~ ✅ 2026-10-21 完成（反向驗證 run 39589906182；見 8.7；有意識的變更，不是漏刪） |
-| 4 | 開發批＋客戶 | （Step 4 為撰寫組依 DEC-066 A／B 整理，非客戶另立的步驟）首次寫入：開旗標 PR → 當天 dry-run → production-write → readback → 立即改回 `False` 的 PR | 見 8.11.4 | `VN1-PG-FIRST` —— ⏳ 未做（**下一 Gate**，尚未開始） |
+| 4 | 開發批＋客戶 | （Step 4 為撰寫組依 DEC-066 A／B 整理，非客戶另立的步驟）首次寫入：開旗標 PR → 當天 dry-run → production-write → readback → 立即改回 `False` 的 PR | 見 8.11.4 | `VN1-PG-FIRST` —— ~~⏳ 未做（**下一 Gate**，尚未開始）~~ ◐ 子步驟 1 開旗標 PR（flag=`True`；2026-10-21 客戶核准；合併後完成）；production-write **尚未執行**；下一個 PR 必須改回 `False`（2026-10-21 更新，有意識的變更，不是漏刪） |
 
 #### 8.11.4 首次寫入 Runbook（DEC-066 A／B／E；**未執行**）
+
+> 📌 狀態（2026-10-21，append-only）：Step 4 **子步驟 1＝開旗標 PR**（`PRODUCTION_WRITE_APPROVED` → `True`＋政策測試同步；客戶 2026-10-21 核准）。⚠️ **production-write 尚未執行**（本 Runbook 其餘步驟皆未跑）；⛔ 無 `schedule:`；首次寫入嘗試後不論結果，**下一個 PR 必須改回 `False`**（「寫入後核對」第 6 點）。
 
 **寫入前核對（任一不符 ⇒ 當天不寫）**
 1. Step 1～3 已完成；開旗標 PR（`PRODUCTION_WRITE_APPROVED` → `True`＋政策測試同步）**已合併到 main**、main CI 綠。

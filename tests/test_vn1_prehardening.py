@@ -511,9 +511,11 @@ class TestEnvironmentWiring:
         sources[PRODUCTION_PATH_FILES[0]] += snippet
         _plain_red(assert_no_auto_recovery, _wf(), sources)
 
-    def test_approval_flag_still_false(self):
+    # ~~`test_approval_flag_still_false`~~ —— 📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；有意識的變更，不是漏刪）：
+    #   客戶核准一次性旗標 PR ⇒ 改斷言 True；首次寫入嘗試後下一個 PR 改回 False，本測試同步改回。
+    def test_approval_flag_approved_for_first_write(self):
         from shared import risk_cap_history_policy as P
-        assert P.PRODUCTION_WRITE_APPROVED is False
+        assert P.PRODUCTION_WRITE_APPROVED is True
 
 
 # ══════════════════════════════════════════════════════════════════════════

@@ -988,7 +988,9 @@ class TestPermissionScriptStatic:
         assert S.WRITER_SCOPES == P.WRITER_SCOPES and S.READER_SCOPES == P.READER_SCOPES
         assert S.HISTORY_WORKSHEET_NAME == P.HISTORY_WORKSHEET_NAME == "risk_cap_daily"
         assert S.HISTORY_SHEET_ID_ENV_VAR == P.HISTORY_SHEET_ID_ENV_VAR
-        assert P.PRODUCTION_WRITE_APPROVED is False
+        # ~~`assert P.PRODUCTION_WRITE_APPROVED is False`~~ —— 📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；
+        #   有意識的變更，不是漏刪）：一次性旗標 PR 改 True；首次寫入嘗試後下一個 PR 改回 False，本行同步改回。
+        assert P.PRODUCTION_WRITE_APPROVED is True
 
     def test_main_refuses_without_env(self, monkeypatch, capsys):
         for k in (P.HISTORY_SHEET_ID_ENV_VAR, "PORTFOLIO_SHEET_ID", "STOCK_PORTFOLIO_SHEET_ID"):

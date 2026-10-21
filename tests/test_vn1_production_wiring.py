@@ -9,14 +9,18 @@
 3. L1 writer：`check_writer_credentials_file` 只收 WIF `external_account`（拒 JSON key／任何 key 檔／缺 GAC／
    impersonation 目標不符）；`build_writer_client` 第一步就是閘門 ⇒ 旗標 False 時連 `google.auth.default` 都不會呼叫。
    reader 與 writer 憑證不可互換。
-4. 閘門：`PRODUCTION_WRITE_APPROVED` 仍為 False、是 `load_writer_credentials_or_refuse` 的第一個檢查；
+4. 閘門：~~`PRODUCTION_WRITE_APPROVED` 仍為 False~~、是 `load_writer_credentials_or_refuse` 的第一個檢查；
    ⛔ 全 repo 沒有任何地方（含測試）把它設成 True。
+   📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；有意識的變更，不是漏刪）：L0 宣告本身改 True（一次性旗標 PR，
+   首次寫入嘗試後下一個 PR 立刻改回 False）；「L0 宣告之外沒有任何地方設 True」照守。
 5. workflow `production-write`：只 workflow_dispatch、寫入 job 只限 main、needs compute、第一個 Python 步驟就是閘門
    （index < auth）、id-token 只在寫入 job、寫入 job env 只有 System Risk Cap Sheet ID（＋寫入總開關），
    ⛔ 持股 Sheet ID／GCP_SERVICE_ACCOUNT_JSON／FinMind／proxy secrets／credentials_json；全部 action 以 SHA 釘版。
 6. 突變自驗（in-test）：auth 移到閘門前、拔掉閘門、寫入 env 多一個持股 Sheet ID、compute job 拿 id-token… ⇒ 轉紅。
 ⛔ 不依賴 PyYAML（沿用 `tests/test_vn1_wif_auth_only.py` 的標準函式庫受限解析器）。不連網：Google 依賴全以假物件替換。
 ⛔ 本檔**不**修改 `PRODUCTION_WRITE_APPROVED`（連 monkeypatch 都沒有）—— 核准後的檢查一律直接測各檢查函式。
+   📌 2026-10-21（DEC-066 A；有意識的變更）：上句「連 monkeypatch 都沒有」不再成立 —— 守「未核准 ⇒ 拒絕」的測試
+   以 `force_write_unapproved` 把旗標 monkeypatch 回 **False**（⛔ 只准設 False）；設 True 仍全面禁止。
 """
 from __future__ import annotations
 
@@ -45,6 +49,7 @@ from tests.test_vn1_wif_auth_only import (
     _job_text,
     _parse,
     _yaml_lines,
+    force_write_unapproved,
 )
 
 REPO = Path(__file__).resolve().parents[1]
@@ -563,11 +568,18 @@ class TestWriterCredentials:
 
 
 class TestWriteGate:
-    def test_flag_still_false(self):
-        assert P.PRODUCTION_WRITE_APPROVED is False
-        assert L1H.PRODUCTION_WRITE_APPROVED is False
+    # ~~`test_flag_still_false`（斷言 L0／L1 旗標為 False）~~ —— 📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；
+    #   有意識的變更，不是漏刪）：客戶核准一次性旗標 PR ⇒ 改斷言核准狀態；且核准後其餘閘門照樣拒絕
+    #   （寫入總開關未設 ⇒ 拒絕；⛔ 旗標只開第一道）。首次寫入嘗試後下一個 PR 立刻改回 False，本測試同步改回。
+    def test_flag_approved_for_first_write(self):
+        assert P.PRODUCTION_WRITE_APPROVED is True
+        assert L1H.PRODUCTION_WRITE_APPROVED is True
+        L1H.assert_production_write_approved()                       # 第一道放行
+        with pytest.raises(L1H.ProductionWriteNotApproved, match=P.WRITE_ENABLE_ENV_VAR):
+            L1H.load_writer_credentials_or_refuse({})                 # 第二道照樣擋
 
-    def test_gate_raises_even_fully_configured(self, tmp_path):
+    def test_gate_raises_even_fully_configured(self, tmp_path, monkeypatch):
+        force_write_unapproved(monkeypatch)
         env = {P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: SID, P.GAC_ENV_VAR: _wif_file(tmp_path)}
         with pytest.raises(L1H.ProductionWriteNotApproved, match="尚未核准"):
             L1H.load_writer_credentials_or_refuse(env)
@@ -582,6 +594,7 @@ class TestWriteGate:
             raise AssertionError("閘門未過不得呼叫 Google")
         monkeypatch.setattr(google.auth, "default", _boom)
         monkeypatch.setattr(gspread, "authorize", _boom)
+        force_write_unapproved(monkeypatch)
         path = _wif_file(tmp_path)
         monkeypatch.setenv(P.GAC_ENV_VAR, path)
         env = {P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: SID, P.GAC_ENV_VAR: path}
@@ -628,7 +641,13 @@ class TestWriteGate:
         assert not gate.args.args and not gate.args.kwonlyargs
 
     def test_no_code_sets_approved_true(self):
-        """全 repo（含測試）沒有任何地方把核准旗標設成 True（賦值、monkeypatch.setattr、setattr 皆算）。"""
+        """全 repo（含測試）沒有任何地方把核准旗標設成 True（賦值、monkeypatch.setattr、setattr 皆算）。
+
+        📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；有意識的變更，不是漏刪）：唯一例外是 L0 宣告本身
+        （一次性旗標 PR，客戶 2026-10-21 核准）—— L0 檔排除在掃描外，改逐字釘死「恰好一行 `= True` 宣告」；
+        其餘檔案（含測試）設 True 照樣紅燈。首次寫入嘗試後下一個 PR 改回 False，本測試同步改回。
+        """
+        policy_rel = "shared/risk_cap_history_policy.py"
         name = "PRODUCTION_WRITE" + "_APPROVED"
         pats = [re.compile(name + r"\s*(?::\s*bool\s*)?=\s*True"),
                 re.compile(r"setattr\([^)]*['\"]" + name + r"['\"]\s*,\s*True"),
@@ -638,20 +657,21 @@ class TestWriteGate:
         hits = {}
         for f in files:
             t = f.read_text(encoding="utf-8")
-            if name not in t:
+            if name not in t or f.relative_to(REPO).as_posix() == policy_rel:
                 continue
             found = [p.pattern for p in pats if p.search(t)]
             if found:
                 hits[f.relative_to(REPO).as_posix()] = found
         assert not hits, hits
-        assert re.search(r"^PRODUCTION_WRITE_APPROVED: bool = False$",
-                         (REPO / "shared/risk_cap_history_policy.py").read_text(encoding="utf-8"), re.MULTILINE)
+        policy = (REPO / policy_rel).read_text(encoding="utf-8")
+        assert re.findall("^" + name + r"\b.*$", policy, re.MULTILINE) == [name + ": bool = True"]
 
-    def test_gate_without_first_check_mutation_turns_red(self, tmp_path):
+    def test_gate_without_first_check_mutation_turns_red(self, tmp_path, monkeypatch):
         """突變：拔掉第一道核准檢查（旗標仍 False）⇒ 合格 WIF 檔就一路放行；真模組照樣拒絕。"""
         mut = _mutated_module(L1_REL, ("    env = os.environ if environ is None else environ\n"
                                        "    assert_production_write_approved()\n",
                                        "    env = os.environ if environ is None else environ\n"))
+        force_write_unapproved(monkeypatch, mut)      # DEC-066 A：L0 已改 True ⇒ 旗標 monkeypatch 回 False
         path = _wif_file(tmp_path)
         env = {P.WRITE_ENABLE_ENV_VAR: "1", P.HISTORY_SHEET_ID_ENV_VAR: SID, P.GAC_ENV_VAR: path}
         assert mut.load_writer_credentials_or_refuse(env) == path
@@ -709,7 +729,8 @@ def _load_poc():
 
 
 class TestScript:
-    def test_check_write_gate_red(self, capsys):
+    def test_check_write_gate_red(self, capsys, monkeypatch):
+        force_write_unapproved(monkeypatch)           # DEC-066 A：L0 已改 True ⇒ 守「未核准 ⇒ 紅燈」需 monkeypatch 回 False
         assert _load_poc().main(["--check-write-gate"]) == 2
         assert "::error::production write is not approved" in capsys.readouterr().out
 
@@ -732,6 +753,7 @@ class TestScript:
         rec.write_text(json.dumps({"record": _row()}), encoding="utf-8")
         monkeypatch.setattr(L1H, "build_writer_client", lambda *a, **k: pytest.fail("閘門未過不得建 writer client"))
         monkeypatch.setattr(L1H, "upsert_record", lambda *a, **k: pytest.fail("閘門未過不得寫"))
+        force_write_unapproved(monkeypatch)           # DEC-066 A：L0 已改 True ⇒ 旗標 monkeypatch 回 False
         monkeypatch.setenv(P.WRITE_ENABLE_ENV_VAR, "1")
         monkeypatch.setenv(P.HISTORY_SHEET_ID_ENV_VAR, SID)
         monkeypatch.setenv(P.GAC_ENV_VAR, _wif_file(tmp_path))

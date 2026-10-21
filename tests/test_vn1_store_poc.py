@@ -605,8 +605,10 @@ def _load_script():
 
 class TestScript:
     def test_write_hard_fails_without_fetch(self, monkeypatch, capsys):
+        from tests.test_vn1_wif_auth_only import force_write_unapproved
         mod = _load_script()
         monkeypatch.setattr(H, "run_headless_refresh", lambda d: pytest.fail("--write 不得跑取數"))
+        force_write_unapproved(monkeypatch)           # DEC-066 A（2026-10-21）：L0 已改 True ⇒ 旗標 monkeypatch 回 False
         monkeypatch.setenv(P.WRITE_ENABLE_ENV_VAR, "1")
         # VN1-STORE WIF auth-only（2026-10-19，有意識的放寬）：原本還設了 writer JSON key 環境變數 ——
         # 該常數已依 DEC-064 G1 退役（writer 只走 WIF，沒有 key），閘門不再檢查它；其餘條件照舊、照樣拒絕。
@@ -614,7 +616,9 @@ class TestScript:
         assert mod.main(["--write"]) == 2
         assert "尚未核准" in capsys.readouterr().out
 
-    def test_credentials_gate_refuses_even_if_configured(self):
+    def test_credentials_gate_refuses_even_if_configured(self, monkeypatch):
+        from tests.test_vn1_wif_auth_only import force_write_unapproved
+        force_write_unapproved(monkeypatch)           # DEC-066 A（2026-10-21）：L0 已改 True ⇒ 旗標 monkeypatch 回 False
         with pytest.raises(L1H.ProductionWriteNotApproved):
             # VN1-STORE WIF auth-only（2026-10-19，有意識的放寬）：拿掉已退役的 writer JSON key 環境變數
             # （DEC-064 G1）；「所有可設的條件都設了仍拒絕」這個守衛意圖不變。

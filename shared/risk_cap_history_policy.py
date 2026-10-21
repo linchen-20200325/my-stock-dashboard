@@ -203,7 +203,12 @@ WRITE_ENABLE_ENV_VAR: str = "RISK_CAP_HISTORY_WRITE_ENABLED"
 #: （`RequestException` 子類）⇒ L1 歸類為 API 錯誤（⛔ 不重試、⛔ 不吞）。未設定時 gspread 預設不逾時（會卡住）。
 SHEETS_HTTP_TIMEOUT_S: tuple[float, float] = (5.0, 10.0)
 #: production 寫入是否已獲客戶核准。⚠️ 改成 True 需要客戶另一次裁示（DEC-009），⛔ 不得自行改。
-PRODUCTION_WRITE_APPROVED: bool = False
+#: 📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；客戶 2026-10-21 核准）：本值改 True 是**一次性旗標 PR** ——
+#:   只為讓**首次** production 寫入（人工 `workflow_dispatch`，⛔ 無排程）能通過第一道閘門。
+#:   ⛔ **不論首次寫入嘗試結果如何（成功／失敗／未跑完），下一個 PR 必須立刻改回 False**；
+#:   在改回之前不得有第二次寫入嘗試。本旗標只開第一道；其餘閘門一律不變（寫入總開關、Sheet ID、WIF `external_account`
+#:   憑證檔＝⛔ 無 JSON key；workflow 端的 main 限定、Environment 人工核准、record artifact sha256 比對等）。
+PRODUCTION_WRITE_APPROVED: bool = True
 
 # ══════════════════════════════════════════════════════════════════════
 # 身分與憑證來源（VN1-STORE Production Wiring 批，2026-10-20；規格 `docs/vnext/VN1_STORE_CREDENTIAL_SPEC.md`）
