@@ -11,8 +11,17 @@ A. 寫入依賴
    4. 寫入路徑（`--write`／`--precheck`／`--verify-written` 走到閘門 exit 2）在子行程內 ⛔ 不載入 pandas／numpy／streamlit。
 C. 併發：拿得到 writer 身分（auth action）或跑權限驗證腳本／`--write` 的 job，一律掛**同一個字面** job 層 group
    `risk-cap-history-sheet-write`（cancel-in-progress: false）；workflow 層 group 是另一個字面名稱且不變；
-   ⛔ 任何 job 都沒有 `environment:`（引用不存在的 environment 會自動建一個沒有保護的 —— 那是客戶 Gate）。
-突變自驗（in-test）：缺 hash、寫入 job 改裝 requirements.txt、拿掉某個 job 的 group、group 改名、workflow group 撞名 ⇒ 轉紅。
+   ~~⛔ 任何 job 都沒有 `environment:`（引用不存在的 environment 會自動建一個沒有保護的 —— 那是客戶 Gate）。~~
+   📌 2026-10-21（DEC-066 C Step 2；有意識的變更，不是漏刪）：客戶已在 GitHub UI 建立 Environment `production-risk-cap`
+   （DEC-066 C Step 1 完成）⇒ 改為「**只有** `production_write` 掛 `environment: production-risk-cap`（job 層純字串）；
+   其他 job、R5 檔、`.github/workflows/` 其他所有 workflow 一律沒有 `environment` 鍵、也不得出現該名稱（註解除外）」。
+   舊句的理由（⛔ 先引用不存在的 environment）仍成立；被取代的只是「尚未建立」這個前提。完整守衛見 E 節。
+E. DEC-066 C Step 2（2026-10-21）：environment 只在 `production_write`；該 job 鍵集合＝原集合＋`environment`、
+   步驟名稱序列與 main `8995729d` 逐項相同；production 路徑（寫入腳本、L1、寫入 job steps）⛔ 沒有
+   delete／clear／rollback／retry／continue-on-error（DEC-066 E FAIL-STOP）。
+突變自驗（in-test）：缺 hash、寫入 job 改裝 requirements.txt、拿掉某個 job 的 group、group 改名、workflow group 撞名 ⇒ 轉紅；
+（E 節）environment 加到其他 job／R5／其他 workflow、移除、改名、改 mapping／expression、步驟順序變動、
+加入 continue-on-error／rollback ⇒ 轉紅。
 ⛔ 不連網、⛔ 不碰 `PRODUCTION_WRITE_APPROVED`。
 """
 from __future__ import annotations
@@ -28,7 +37,7 @@ from pathlib import Path
 import pytest
 
 from tests._git_tracked import REPO_MIN_TRACKED, only_tracked
-from tests.test_vn1_wif_auth_only import _job_text, _parse
+from tests.test_vn1_wif_auth_only import _job_text, _parse, _yaml_lines
 
 REPO = Path(__file__).resolve().parents[1]
 WORKFLOW_REL = ".github/workflows/risk_cap_history_poc.yml"
@@ -263,8 +272,12 @@ def assert_concurrency_guards(text: str) -> None:
     for name, j in d["jobs"].items():
         if "concurrency" in j:
             assert j["concurrency"]["group"] == SHEET_GROUP and "${{" not in j["concurrency"]["group"], name
-        assert "environment" not in j, f"{name}：⛔ 不得加 environment（客戶 Gate）"
-    assert not re.search(r"^\s+environment:", text, flags=re.MULTILINE)
+    # 📌 2026-10-21（DEC-066 C Step 2；有意識的變更，不是漏刪）：
+    #   ~~assert "environment" not in j（任何 job 都不得加 environment；客戶 Gate）~~ 與
+    #   ~~assert not re.search(r"^\s+environment:", text, flags=re.MULTILINE)~~
+    #   —— 客戶已建立 Environment（Step 1）⇒ 改為「只有 production_write 掛 `production-risk-cap`」。
+    #   完整守衛在 E 節 `assert_environment_guards`；此處照舊呼叫，讓本節的併發突變測試同時守住 environment。
+    assert_environment_guards(text)
 
 
 class TestConcurrency:
@@ -290,13 +303,217 @@ class TestConcurrency:
         with pytest.raises(AssertionError):
             assert_concurrency_guards(text.replace(old, f"concurrency:\n  group: {SHEET_GROUP}\n"))
 
-    def test_environment_added_turns_red(self):
-        text = _wf()
-        block = _job_text(text, "production_write")
-        old = "    needs: production_write_compute\n"
+    # 📌 2026-10-21（DEC-066 C Step 2；有意識的變更，不是漏刪）：原 `test_environment_added_turns_red`
+    #   （把 environment 加到 production_write ⇒ 紅）語意反轉 —— production_write 現在**必須**有。
+    #   改為：加到別的 job ⇒ 紅、從 production_write 拿掉 ⇒ 紅（經由本節守衛；細項突變見 E 節）。
+    @pytest.mark.parametrize("job", ["wif_auth_only", "permission_test_writer", "production_write_compute"])
+    def test_environment_added_elsewhere_turns_red(self, job):
         with pytest.raises(AssertionError):
-            assert_concurrency_guards(text.replace(block, block.replace(
-                old, old + "    environment: production-risk-cap\n")))
+            assert_concurrency_guards(_add_env_to_job(_wf(), job))
+
+    def test_environment_removed_turns_red(self):
+        with pytest.raises(AssertionError):
+            assert_concurrency_guards(_remove_env(_wf()))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# E. DEC-066 C Step 2（2026-10-21）：Environment wiring —— 只有 production_write 掛 environment
+# ══════════════════════════════════════════════════════════════════════════
+# 有意識地更新守衛（理由＝DEC-066 C Step 2）：客戶已在 GitHub UI 建立 Environment `production-risk-cap`
+# （Step 1；總管轉述客戶畫面：Required reviewers＝客戶本人、Prevent self-review＝OFF、Wait timer＝OFF、
+# Admin bypass＝OFF、Selected branches → main、tags 0、secrets 0、variables 0）。DEC-066 C ~~只准**真正有寫入能力**
+# 的 job~~ 只准**正式寫入 job**（`production_write`：needs compute、有 id-token、執行 `--write`）引用；
+# `permission_test_writer` 雖能以 writer 身分 append／刪測試列（P1），依 DEC-066 C 範圍不掛（回修第 1 輪 2026-10-21，
+# 有意識的變更，不是漏刪）；compute／dry-run／wif_auth_only／其他權限驗證／R4 job 與 R5 檔一律不得掛
+# （掛上會改變它們的 OIDC `sub`，且不在本批授權範圍）。⚠️ Step 3 前，Environment 只擋 production_write。
+# ⛔ 本節不碰 WIF condition（Step 3）、不碰 `PRODUCTION_WRITE_APPROVED`（Step 4）。
+ENV_NAME = "production-risk-cap"
+ENV_JOB = "production_write"
+ENV_LINE = f"    environment: {ENV_NAME}"
+R5_NAME = "risk_cap_wif_negative_r5.yml"
+_ENV_KEY_RE = re.compile(r"^[ \t]*(?:-[ \t]+)?environment[ \t]*:", flags=re.MULTILINE)
+
+#: production_write 在本批之前（main `8995729d`）的 job 鍵集合；本批只多 `environment`。
+PRODUCTION_WRITE_KEYS_BEFORE = {"if", "needs", "runs-on", "timeout-minutes", "permissions", "concurrency", "steps"}
+#: production_write 的步驟名稱序列（main `8995729d` 逐字；本批 ⛔ 不得變動任何一步）。
+PRODUCTION_WRITE_STEP_NAMES = [
+    "Checkout Repository",
+    "Production write gate (must pass before any auth)",
+    "Set up Python",
+    "Install writer deps (hash-locked)",
+    "Download record JSON",
+    "Verify record artifact sha256 (must match compute job)",
+    "Authenticate to Google Cloud (WIF, no key)",
+    "Write record (gate first, WIF writer only)",
+]
+#: DEC-066 E（FAIL-STOP）：production 路徑不得出現的自動補救字樣（小寫比對）。
+#: ⛔ 只掃 production 路徑；權限驗證腳本 `scripts/risk_cap_permission_test.py` 的 P1 測試列刪除（deleteDimension）
+#: 是既有、經 DEC-065／規格第 5 節核准的權限驗證清理，**刻意排除**、不在本守衛範圍。
+PRODUCTION_PATH_FILES = ("scripts/risk_cap_history_poc.py", NEW_L1_REL)
+FORBIDDEN_AUTO_RECOVERY = ("delete", "clear", "rollback", "retry", "continue-on-error")
+
+
+def _full_line_code(text: str) -> str:
+    """只去掉整行註解（行尾註解仍算 code —— 比 `_yaml_lines` 更嚴，寧可誤紅）。"""
+    return "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
+
+
+def _other_workflows() -> dict[str, str]:
+    files = sorted((REPO / ".github/workflows").glob("*.y*ml"))
+    out = {f.name: f.read_text(encoding="utf-8") for f in files if f.name != Path(WORKFLOW_REL).name}
+    assert R5_NAME in out and len(out) >= 10, sorted(out)
+    return out
+
+
+def _add_env_to_job(text: str, job: str, line: str = ENV_LINE) -> str:
+    block = _job_text(text, job)
+    old = "    runs-on: ubuntu-latest\n"
+    assert block.count(old) == 1, job
+    return text.replace(block, block.replace(old, f"{line}\n{old}"))
+
+
+def _remove_env(text: str) -> str:
+    assert text.count(ENV_LINE + "\n") == 1
+    return text.replace(ENV_LINE + "\n", "")
+
+
+def assert_environment_guards(text: str, others: dict[str, str] | None = None) -> None:
+    d = _parse(text)
+    assert "environment" not in d
+    jobs = d["jobs"]
+    env = jobs[ENV_JOB].get("environment")
+    assert isinstance(env, str) and env == ENV_NAME, env          # 純字串；⛔ mapping／expression／別的名字
+    for name, j in jobs.items():
+        if name != ENV_JOB:
+            assert "environment" not in j, f"{name}：⛔ 只有 {ENV_JOB} 可以掛 environment（DEC-066 C Step 2）"
+        for s in j["steps"]:
+            assert "environment" not in s, name
+    code = _full_line_code(text)
+    assert len(_ENV_KEY_RE.findall(code)) == 1, _ENV_KEY_RE.findall(code)
+    wt = _job_text(text, ENV_JOB)
+    assert [ln for ln in wt.splitlines() if ln == ENV_LINE] == [ENV_LINE]    # job 層（4 格縮排）恰好一行
+    assert code.count(ENV_NAME) == 1 and _full_line_code(wt).count(ENV_NAME) == 1
+    others = _other_workflows() if others is None else others
+    for fname, t in others.items():
+        c = _full_line_code(t)
+        assert not _ENV_KEY_RE.search(c), f"{fname}：⛔ 不得有 environment（DEC-066 C Step 2 只准 {ENV_JOB}）"
+        assert ENV_NAME not in c, fname
+
+
+def assert_production_write_shape(text: str) -> None:
+    w = _parse(text)["jobs"][ENV_JOB]
+    assert set(w) == PRODUCTION_WRITE_KEYS_BEFORE | {"environment"}, set(w)
+    assert [s.get("name") for s in w["steps"]] == PRODUCTION_WRITE_STEP_NAMES
+
+
+def assert_no_auto_recovery(text: str, sources: dict[str, str] | None = None) -> None:
+    sources = {rel: (REPO / rel).read_text(encoding="utf-8") for rel in PRODUCTION_PATH_FILES} \
+        if sources is None else sources
+    for rel, src in sources.items():
+        low = src.lower()
+        for bad in FORBIDDEN_AUTO_RECOVERY:
+            assert bad not in low, (rel, bad)
+    wcode = "\n".join(c for _, _, c in _yaml_lines(_job_text(text, ENV_JOB))).lower()
+    for bad in FORBIDDEN_AUTO_RECOVERY:
+        assert bad not in wcode, (ENV_JOB, bad)
+
+
+def _plain_red(fn, *args) -> None:
+    """突變必須被**守衛本身**擋下（純 AssertionError），不是被解析器的不支援語法擋下。"""
+    with pytest.raises(AssertionError) as ei:
+        fn(*args)
+    assert type(ei.value) is AssertionError, repr(ei.value)
+
+
+class TestEnvironmentWiring:
+    def test_guards(self):
+        assert_environment_guards(_wf())
+
+    def test_shape_unchanged(self):
+        assert_production_write_shape(_wf())
+
+    def test_no_auto_recovery(self):
+        assert_no_auto_recovery(_wf())
+
+    def test_r5_and_others_scanned(self):
+        others = _other_workflows()
+        assert "risk_cap_wif_negative_r5.yml" in others and "pr-check.yml" in others
+
+    @pytest.mark.parametrize("job", ["poc-dry-run", "wif_auth_only", "permission_test_branch_guard",
+                                     "permission_test_writer", "permission_test_reader", "wif_negative_r4",
+                                     "production_write_compute"])
+    def test_env_on_other_job_turns_red(self, job):
+        _plain_red(assert_environment_guards, _add_env_to_job(_wf(), job))
+
+    def test_env_removed_turns_red(self):
+        _plain_red(assert_environment_guards, _remove_env(_wf()))
+        _plain_red(assert_production_write_shape, _remove_env(_wf()))
+
+    @pytest.mark.parametrize("new", [
+        "    environment: production-risk-cap-x",
+        "    environment: production",
+        "    environment: ${{ 'production-risk-cap' }}",
+        "    environment:\n      name: production-risk-cap",
+        "    environment:\n      name: production-risk-cap\n      url: https://example.invalid",
+    ])
+    def test_env_renamed_or_reshaped_turns_red(self, new):
+        text = _wf()
+        assert text.count(ENV_LINE + "\n") == 1
+        _plain_red(assert_environment_guards, text.replace(ENV_LINE + "\n", new + "\n"))
+
+    def test_env_on_r5_turns_red(self):
+        others = _other_workflows()
+        r5 = others[R5_NAME]
+        old = "    runs-on: ubuntu-latest\n"
+        assert r5.count(old) == 1
+        others[R5_NAME] = r5.replace(old, ENV_LINE + "\n" + old)
+        _plain_red(assert_environment_guards, _wf(), others)
+
+    @pytest.mark.parametrize("extra", [
+        "\n  other:\n    environment: production-risk-cap\n",
+        "\n  other:\n    environment: staging\n",
+        "\n# ok comment production-risk-cap\nenv:\n  X: production-risk-cap\n",
+    ])
+    def test_env_in_other_workflow_turns_red(self, extra):
+        others = _other_workflows()
+        others["update_macro_history.yml"] = others["update_macro_history.yml"] + extra
+        _plain_red(assert_environment_guards, _wf(), others)
+
+    def test_comment_mention_in_other_workflow_is_allowed(self):
+        """對照組：註解提到名稱不算（只掃 code）。"""
+        others = _other_workflows()
+        others["update_macro_history.yml"] = others["update_macro_history.yml"] + "\n# production-risk-cap\n"
+        assert_environment_guards(_wf(), others)
+
+    def test_step_order_change_turns_red(self):
+        text = _wf()
+        a = "      - name: Set up Python\n"
+        block = _job_text(text, ENV_JOB)
+        assert block.count(a) == 1
+        moved = block.replace(a, "      - name: Set up Python (moved)\n")
+        _plain_red(assert_production_write_shape, text.replace(block, moved))
+
+    def test_extra_job_key_turns_red(self):
+        text = _wf()
+        old = ENV_LINE + "\n"
+        _plain_red(assert_production_write_shape, text.replace(old, old + "    continue-on-error: true\n"))
+
+    def test_continue_on_error_in_write_step_turns_red(self):
+        text = _wf()
+        name = "      - name: Write record (gate first, WIF writer only)\n"
+        assert text.count(name) == 1
+        _plain_red(assert_no_auto_recovery, text.replace(name, name + "        continue-on-error: true\n"))
+
+    @pytest.mark.parametrize("snippet", ["\ndef _rollback():\n    pass\n", "\nfor _retry in range(3):\n    pass\n",
+                                         "\nws.batch_clear(['A2:T2'])\n", "\nws.delete_rows(2)\n"])
+    def test_auto_recovery_in_sources_turns_red(self, snippet):
+        sources = {rel: (REPO / rel).read_text(encoding="utf-8") for rel in PRODUCTION_PATH_FILES}
+        sources[PRODUCTION_PATH_FILES[0]] += snippet
+        _plain_red(assert_no_auto_recovery, _wf(), sources)
+
+    def test_approval_flag_still_false(self):
+        from shared import risk_cap_history_policy as P
+        assert P.PRODUCTION_WRITE_APPROVED is False
 
 
 # ══════════════════════════════════════════════════════════════════════════

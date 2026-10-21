@@ -50,7 +50,13 @@ name: VN1-STORE 風險上限歷史 PoC（手動；dry-run／WIF auth-only／權�
 #     寫入 job 只裝 hash 鎖定的 `requirements-risk-cap-writer.txt`；下載紀錄後比對 compute job 的 sha256；
 #     寫入步驟（腳本內）依序：寫前檢查（唯讀）→ 寫入 → 寫後讀回驗證（唯讀）；任何失敗紅燈、⛔ 不自動刪除。
 #     兩個權限驗證 job、wif_auth_only 與寫入 job 共用字面 job 層 group `risk-cap-history-sheet-write`。
-#     ⛔ 本檔沒有 `environment:`（GitHub Environment 由客戶先建立，屬客戶人工 Gate；見規格 8.6、8.11）。
+#     ~~⛔ 本檔沒有 `environment:`（GitHub Environment 由客戶先建立，屬客戶人工 Gate；見規格 8.6、8.11）。~~
+#   📌 2026-10-21（DEC-066 C Step 2；有意識的變更，不是漏刪）：客戶已在 GitHub UI 建立 Environment `production-risk-cap`
+#     （DEC-066 C Step 1 已完成；實際設定見規格 8.11.2）⇒ 現在**只有** job `production_write` 引用它（job 層純字串）；
+#     其他 job（compute、dry-run、wif_auth_only、三個權限驗證 job、R4）與 R5 檔一律沒有 `environment:`。
+#     舊句的理由（⛔ 先引用不存在的 environment 會自動建一個沒有保護的）仍成立；被取代的只是「尚未建立」這個前提。
+#     ⚠️ 掛上後本 job 的 OIDC `sub` 變為 `repo:<owner>/<repo>:environment:production-risk-cap`；WIF condition 尚未改
+#     （DEC-066 C Step 3，待客戶提供 provider describe 原文）；核准旗標仍 False ⇒ 閘門照舊在任何 auth 之前紅燈。
 #   ⚠️ WIF attribute condition 釘了本檔 workflow_ref ⇒ 寫入 job 只能放在本檔（⛔ 不新增 workflow 檔）。
 
 on:
@@ -338,6 +344,9 @@ jobs:
     # ⚠️ 第一個 Python 步驟就是核准旗標檢查（任何 auth 之前）；PRODUCTION_WRITE_APPROVED = False ⇒ 在此紅燈停止。
     if: ${{ inputs.mode == 'production-write' && github.ref == 'refs/heads/main' }}
     needs: production_write_compute
+    # DEC-066 C Step 2（2026-10-21）：Environment 由客戶先建立（Step 1 已完成）；required reviewer 核准後本 job 才開始跑。
+    # ⛔ 全 repo 只有本 job 引用；純字串、不用 expression、不加 url。
+    environment: production-risk-cap
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

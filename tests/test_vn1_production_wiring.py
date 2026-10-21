@@ -882,7 +882,13 @@ def assert_production_write_guards(text: str) -> None:
     # 📌 2026-10-20（Pre-Hardening 批；有意識的變更，不是漏刪）：~~group: risk-cap-history-production-write~~
     #   改為碰 Sheet 的 job 共用的字面 group（跨 job 序列化；守衛另見 `tests/test_vn1_prehardening.py`）。
     assert w.get("concurrency") == {"group": SHEET_WRITE_GROUP, "cancel-in-progress": False}
-    assert set(w) == {"if", "needs", "runs-on", "timeout-minutes", "permissions", "concurrency", "steps"}, set(w)
+    # 📌 2026-10-21（DEC-066 C Step 2；有意識的變更，不是漏刪）：
+    #   ~~set(w) == {"if", "needs", "runs-on", "timeout-minutes", "permissions", "concurrency", "steps"}~~
+    #   多 `environment`（客戶已建立 Environment `production-risk-cap`＝Step 1；只准本 job 引用、job 層純字串）；
+    #   「其他 job／其他 workflow 不得有」與步驟序列不變的守衛在 `tests/test_vn1_prehardening.py` E 節。
+    assert set(w) == {"if", "needs", "environment", "runs-on", "timeout-minutes", "permissions", "concurrency",
+                      "steps"}, set(w)
+    assert w["environment"] == "production-risk-cap"
     _pinned(w, wt)
     steps = w["steps"]
     assert steps[0]["uses"].startswith("actions/checkout@") and steps[0]["with"] == {"persist-credentials": False}
@@ -967,6 +973,9 @@ class TestWorkflowMutations:
          "          RISK_CAP_HISTORY_WRITE_ENABLED: '1'\n          PORTFOLIO_SHEET_ID: ${{ secrets.PORTFOLIO_SHEET_ID }}\n"),
         ("production_write", " && github.ref == 'refs/heads/main' }}", " }}"),
         ("production_write", "    needs: production_write_compute\n", ""),
+        # 2026-10-21（DEC-066 C Step 2）：拿掉／改名 environment ⇒ 紅
+        ("production_write", "    environment: production-risk-cap\n", ""),
+        ("production_write", "    environment: production-risk-cap\n", "    environment: production\n"),
         ("production_write", "      cancel-in-progress: false\n", "      cancel-in-progress: true\n"),
         ("production_write", "google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0",
          "google-github-actions/auth@v3"),
