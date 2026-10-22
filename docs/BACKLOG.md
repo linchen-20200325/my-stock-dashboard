@@ -489,7 +489,7 @@
 
 ### 5.1.5 Decision Gate 候選（2026-10-22 Handoff Save Check 盤點；append-only）
 
-> ⚠️ 下列項目在 `docs/BACKLOG.md`／`docs/DECISIONS.md`／`docs/HANDOFF.md`／`docs/vnext/*.md` **查無客戶裁示或規格**，只能是 **C（candidate／Decision Gate）**；⛔ 不是已核准規格、⛔ 不構成動工授權（`CLAUDE.md` §-1）。盤點為單組 grep，未經第二組驗證（§-2 規則 6）。
+> ⚠️ 下列項目在 `docs/BACKLOG.md`／`docs/DECISIONS.md`／`docs/HANDOFF.md`／`docs/vnext/*.md` **查無客戶裁示或規格**，只能是 **C（candidate／Decision Gate）**；⛔ 不是已核准規格、⛔ 不構成動工授權（`CLAUDE.md` §-1）。盤點為單組 grep，未經第二組驗證（§-2 規則 6）。候選列採精簡格式，Effort 等欄位待升格時補。
 
 | ID | 標題 | 分類 | 相鄰既有項（非同一件事） | next action |
 |---|---|---|---|---|
