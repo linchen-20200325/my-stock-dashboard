@@ -1,18 +1,35 @@
 # HANDOFF — 現行交接（my-stock-dashboard）
 
-> **用途**：只寫「現在在哪、最近完成、blocker／Decision Required、下一安全接手點」，並指向其他三檔。**不是完成證明**（`PROJECT_RULES.md` 第 1.3 節）；接手時先依第 5 節重查 GitHub。
+> **用途**：~~只寫「現在在哪、最近完成、blocker／Decision Required、下一安全接手點」，並指向其他三檔。~~ 短版交接：只寫 current active work、blocker、next safe point、必要的 main／PR／CI 狀態，並指向其他四檔（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068）。**不是完成證明**（`PROJECT_RULES.md` 第 1.3 節）；接手時先依第 5 節重查 GitHub。
 > 本檔由 Constitution v1.0 治理 PR #864 建立（DEC-016）；~~本版隨 DEC-054（`CV1-DR-01` 裁示）治理 PR 一起合併（分支 `claude/stock-cv1-dr01`）。~~ ~~本版隨 `CV1-FU-01`（S1-6 合規指南對齊 DEC-054）PR 一起合併（分支 `claude/stock-cv1-fu01`；2026-10-16 更新）。~~ ~~**本版由對話收尾同步 PR 更新**（分支 `claude/stock-close-sync`；2026-10-17，客戶 2026-10-17T01:31Z「對話結束完整性檢查」；純文件同步）。最後一個功能／治理合併為 #866；本同步 PR 合併後 main 會前進，cron 亦會推進 tip —— **main tip 以 GitHub 為準**。~~ ~~**本版隨 #868（VN-00 Blueprint 批）合併**（分支 `claude/investment-inbox-product-design-m1lu7v`；2026-10-17，DEC-057；文件批，無產品 code）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~ ~~**本版隨 `BP-ERR-01` 第 4 輪文件修正 PR 合併**（同分支名，已重置到 main `f7c60cae` 後重做；2026-10-17，客戶授權，DEC-058；文件批，無產品 code）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~ ~~**本版隨 vNext 0.9 第一安全修復批（`SEC-1`）＋治理同步（DEC-060、`BP-ERR-01` 結案）PR 合併**（同分支名，已重置到 main `15bc173e` 後重做；2026-10-17，客戶授權）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~ ~~**本版隨 #870 後的收尾同步 PR 合併**（同分支名，基於 main `7b803b4f`；2026-10-18；docs-only：`SEC-1` 結案登記、DEC-059／DEC-060 狀態補證據）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#871 已合併，`d3425a91`；2026-10-18 更新）~~**本版隨 vNext 0.9 第二批地基修復 PR 合併**（同分支名 `claude/investment-inbox-product-design-m1lu7v`，基於 main `d3425a91`；2026-10-18，客戶指派；產品 code commit `98118b3f`、`a6e500b2` ＋本文件同步）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#872 已合併，`c41ee3fb`；2026-10-18 更新）~~**本版隨 #872 後的收尾同步 PR 合併**（同分支名，基於 main `c41ee3fb`；2026-10-18；docs-only：`UIA-01`／`UIA-02`／`UIA-07` 結案登記）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#873 已合併，`6e71ec60`；其後 #874 `5cec364e` 合併 DEC-061）~~**本版隨 vNext 1.0 Decision Gate 收斂批 PR 合併**（同分支名，基於 main `5cec364e`；2026-10-18，客戶指派；docs-only，研究整理、不施工）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#875 已合併，其後 #876～#878；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版隨 `1.0-B2` 登入持續性 PR 合併**（同分支名 `claude/investment-inbox-product-design-m1lu7v`，基於 main `4a576b19`；2026-10-19；產品 code commits `23596359`、`1d169927`、`e7c2cba7`、`efd3d369` ＋本文件同步）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#879 已合併；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版隨 `1.0-B2` 收尾同步 docs PR 合併**（同分支名，基於 main `cef52c2e`；2026-10-19；docs-only）；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#880 已合併，`4ce2930b`；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版隨 `1.0-B3` `VN1-STORE` 研究 docs 批**（同分支名，基於 main `4ce2930b`；2026-10-19；docs-only，只研究、不實作）；PR 未開；合併後 main SHA 以 GitHub 為準。~~（#881 已合併，`8c4722f4`；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版隨 `VN1-STORE` 最小 PoC PR 合併**（同分支名 `claude/investment-inbox-product-design-m1lu7v`，基於 main `8c4722f4`；2026-10-19，DEC-063 授權；PoC code commits `f236507f`、`3edc0872` ＋文件 `402220d8` ＋本複稽核文件修正）；PR 待開；合併後 main SHA 以 GitHub 為準，cron 亦會推進 tip。~~（#882 已合併，`a45c7405`；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版為 `VN1-STORE` PoC 收尾同步**（同分支名，基於 main `a45c7405`；2026-10-19；docs-only；未開 PR）。~~（#883 已合併，`72a970a6`；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版為 `VN1-STORE` 憑證規格 docs 批**（同分支名，基於 main `72a970a6`；2026-10-19；docs-only，DEC-064）；合併後 main SHA 以 GitHub 為準。~~（#884 已合併，`a6eaf72c`；2026-10-19 更新，有意識的變更，不是漏刪）~~**本版為 `VN1-STORE` 客戶 GCP 手動設定回報＋驗證結果＋G3 調查結果的事實同步 docs 批**（分支 `claude/jolly-mccarthy-sonbl8`，基於 main `a6a2819c`；2026-10-19；docs-only，無 code／workflow／政策變更）；合併後 main SHA 以 GitHub 為準。~~（其後 #886～#889 已合併；2026-10-20 更新，有意識的變更，不是漏刪）~~**本版隨 `VN1-STORE` Production Wiring 批一起合併**（分支 `claude/jolly-mccarthy-sonbl8`，基於 main `3f4bfbc7`；2026-10-20；code commits `67701562`、`ef905cf0`＋本文件同步）；合併後 main SHA 以 GitHub 為準。~~（#890 已合併，`56904662`；2026-10-20 更新，有意識的變更，不是漏刪）~~**本版隨 `VN1-STORE` Pre-Hardening 批**（分支 `claude/jolly-mccarthy-sonbl8`，重置到 main `56904662` 後重做；2026-10-20；code＋本文件同步；未開 PR）；合併後 main SHA 以 GitHub 為準。~~（#891 已合併，`49009687`；2026-10-20 更新，有意識的變更，不是漏刪）~~**本版隨 `VN1-STORE` 空白分頁讀取修正**（分支 `claude/jolly-mccarthy-sonbl8`，重置到 main `49009687` 後重做；2026-10-20；code＋本文件同步；未開 PR）；合併後 main SHA 以 GitHub 為準。~~（#892 已合併，`35f67c0c`；2026-10-20 更新，有意識的變更，不是漏刪）~~**本版為 `VN1-STORE` Production Gate 盤點與客戶裁示固化（DEC-066）＋#892／reader smoke 同步**（分支 `claude/jolly-mccarthy-sonbl8`，重置到 main `574ac784` 後重做；2026-10-20；docs-only＋workflow 一行註解，零行為變更；未開 PR）；合併後 main SHA 以 GitHub 為準。~~（#893 已合併，`8995729d`；2026-10-21 更新，有意識的變更，不是漏刪）**本版隨 `VN1-STORE` Environment wiring 批**（DEC-066 C Step 2；分支 `claude/jolly-mccarthy-sonbl8`，重置到 main `8995729d` 後重做；2026-10-21；workflow 一行 `environment:`＋註解、測試守衛、本文件同步；~~未開 PR~~ PR #894（2026-10-21 更新，有意識的變更，不是漏刪））；合併後 main SHA 以 GitHub 為準。
 > **完整歷史**：分支 `claude/stock-dashboard-handoff-g9dtm0` 的 `HANDOFF.md`（`1510f3f0`，約 5150 行；**未刪除**；其 current-state 行寫 main＝`fa26914b`，已過期、不含 #863）。本檔不搬歷史。
 
-## 1. 現況（量測：2026-10-22，`origin/main`＝`e7e580cc`（cron tip；最後功能合併 #896 `3be26f9b`；實作組 `git log` 實查）；~~量測：2026-10-21，`origin/main`＝`6c2fd324`（#895；實作組 `git log` 實查）~~）
+## 0. 短版交接（現行，2026-10-22）
+
+> 依客戶 2026-10-22 裁示（DEC-068），本檔改為**短版交接**：只保存 current active work、blocker、next safe point、必要的 main／PR／CI 狀態。完整專案知識見 `docs/PROJECT_STATE.md`；未完成工作見 `docs/BACKLOG.md`；新對話啟動程序見 `PROJECT_RULES.md` 第 15 節。**現況以本節與 GitHub 為準。**
+
+| 項目 | 現況 |
+|---|---|
+| current active work | 無功能工作進行中。唯一進行中＝本治理文件 PR（分支 `claude/jolly-mccarthy-sonbl8`；新增 `docs/PROJECT_STATE.md`、`PROJECT_RULES.md` 第 0.3／15 節 Context Loss Check、DEC-068／069、BACKLOG／HANDOFF 補漏；純文件） |
+| blocker | 無。production-write 被 `VN1-PG-VIX-ASOF`／`VN1-PG-VETO-TRACE`／`VN1-PG-PIT-CONSISTENCY` 阻擋；`PRODUCTION_WRITE_APPROVED`＝`False`；Daily Schedule NOT APPROVED（DEC-066 F） |
+| next safe point | 新對話依 `PROJECT_RULES.md` 第 15 節啟動 → **只研究並提方案** `VN1-PG-VIX-ASOF` → `VN1-PG-VETO-TRACE` → `VN1-PG-PIT-CONSISTENCY`（開始前依 Minimum Sufficient Effort 判斷 Effort）。⛔ 不實作、不開旗標、不 production-write、不開 schedule；⛔ 不開始 Sheet Picker、Market Direction v2 或下一 Batch |
+| main | 量測 2026-10-22T15:00Z：`origin/main`＝`d3a3e676`（cron tip）；最後非 cron 合併＝#898 `1d9e6c1c`。⚠️ cron 會推進 tip，引用前重查 |
+| open／draft PR | 量測時 0（本治理 PR 開立前）。#900（HANDOFF 過期補正）已**關閉、未合併**，其內容已併入本 PR |
+| CI | #898 main push PR Check run 39795464289 success；#899 run 39786386895 success；#897 run 39766338814 success（撰寫組 GitHub REST 實查） |
+
+## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
+
+> 2026-10-22 起，第 1～6 節保留為歷史與細節（DEC-068；舊文字一律不刪）。第 1 節表格是 2026-10-22 早先的快照，下列幾格已就地以刪除線更正。
+
+## 1. 現況（~~量測：2026-10-22，`origin/main`＝`e7e580cc`（cron tip；最後功能合併 #896 `3be26f9b`；實作組 `git log` 實查）~~ 量測：2026-10-22T15:00Z，`origin/main`＝`d3a3e676`（cron tip；最後非 cron 合併＝#898 `1d9e6c1c`；撰寫組 `git fetch` 實查）（2026-10-22 更新，有意識的變更，不是漏刪，決策者 AI 總管（事實更正））；~~量測：2026-10-21，`origin/main`＝`6c2fd324`（#895；實作組 `git log` 實查）~~）
 
 > 本節為現況快照，每版整表替換（不逐格加刪除線；沿用 #867 作法），歷史見第 2 節與 git history。
 
 | 項目 | 現況 |
 |---|---|
 | 目前階段 | 目前階段：vNext 1.0（路線 0.9→1.0→2.0→3.0，見 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md` §20）；已完成批次不得重做。 |
-| 最後一個功能／治理合併（非 cron、不含本版） | `f50d4ee0`（#899；pandas 3.1.0 測試修正，只改測試） ~~`3be26f9b`（#896；Step 4 子步驟 1 開旗標 PR）；其前 `6c2fd324`（#895）~~ ~~`6c2fd324`（#895；DEC-066 C Step 3 完成登記，docs only）；其前 `17e8ee44`（#894）~~ |
-| main tip | 量測時 tip＝`f50d4ee0`（#899）（~~`e7e580cc`~~、~~`6c2fd324`~~）；cron 會持續推進 tip，引用前重查 |
+| 最後一個功能／治理合併（非 cron、不含本版） | ~~`f50d4ee0`（#899；pandas 3.1.0 測試修正，只改測試）~~ `1d9e6c1c`（#898；docs：Handoff Save Check、DEC-067／`PROJECT_RULES.md` 第 15 節、BACKLOG 盤點）；其前 `f50d4ee0`（#899）（2026-10-22 更新，有意識的變更，不是漏刪，決策者 AI 總管（事實更正）） ~~`3be26f9b`（#896；Step 4 子步驟 1 開旗標 PR）；其前 `6c2fd324`（#895）~~ ~~`6c2fd324`（#895；DEC-066 C Step 3 完成登記，docs only）；其前 `17e8ee44`（#894）~~ |
+| main tip | ~~量測時 tip＝`f50d4ee0`（#899）~~ 量測時 tip＝`d3a3e676`（cron；最後非 cron＝#898 `1d9e6c1c`）（2026-10-22 更新，有意識的變更，不是漏刪，決策者 AI 總管（事實更正））（~~`e7e580cc`~~、~~`6c2fd324`~~）；cron 會持續推進 tip，引用前重查 |
 | active work | 📌 2026-10-22 #897 已合併（`c2824c8f`，關窗完成、旗標 `False`）；現無進行中工作，接手點見第 4 節 3x。~~📌 2026-10-22 **本批**：DEC-066 Step 4 **Fail-Stop 關窗 PR**（客戶裁示 B；分支 `claude/jolly-mccarthy-sonbl8`，base `origin/main`＝`e7e580cc`）：`PRODUCTION_WRITE_APPROVED` → `False`＋政策測試改回＋文件同步；⛔ `.github/`／`scripts/`／`src/` 零 diff。~~ ~~**本批**：DEC-066 Step 4 **子步驟 1＝開旗標 PR**（分支 `claude/jolly-mccarthy-sonbl8`；客戶 2026-10-21 核准）：`PRODUCTION_WRITE_APPROVED` → `True`＋政策測試同步（拒絕路徑測試改 monkeypatch 回 `False`）＋文件同步。⛔ 未改 workflow（`.github/` 零 diff）／WIF／IAM／Environment；⛔ 無 `schedule:`；⚠️ production-write **尚未執行**~~（以上兩段舊文字皆為有意識的變更，不是漏刪） |
 | GitHub Environment | 客戶已建立 `production-risk-cap`（Step 1 ✅；設定見規格 8.11.2 末段） |
 | workflow environment wiring | Step 2 ✅（#894 已合併）：只有 `production_write` 引用 Environment |
@@ -20,13 +37,15 @@
 | 正向驗證 | ⚠️ **未實測**：`production_write` 能否在新 condition 下換到 token，首次正向驗證將發生在首次人工 production write（Step 4） |
 | 權限測試 job | `wif_auth_only`、`permission_test_writer`（P1／R1）在新 condition 下取不到 writer token（P1 實質退役；10-20 PASS 證據仍有效）；R4／R5 預期仍被拒，但已無法隔離 ref／workflow_ref 變因 |
 | `VN1-STORE` reader | 後端 production readiness 完成（空表 PASS，規格 8.10）；⛔ 有資料狀態未驗（`VN1-PG-READBACK`）；⛔ 無 UI 呼叫端 |
-| Production Gate | DEC-066：Step 1～3 ✅；Step 4 **Fail-Stop**（2026-10-22，run 39755679219）：一次性窗口關閉、本 PR 合併後旗標回 `False`；⛔ production-write **從未執行**、System Risk Cap Sheet 無首筆正式紀錄 ~~DEC-066：首次人工 production-write 有條件核准；Step 1～3 ✅；Step 4 子步驟 1（開旗標 PR，flag=`True`）進行中 —— 本 PR 合併後 main 旗標為 `True`；⛔ first production write **未執行**~~ |
+| Production Gate | DEC-066：Step 1～3 ✅；Step 4 **Fail-Stop**（2026-10-22，run 39755679219）：一次性窗口關閉、~~本 PR 合併後旗標回 `False`~~ #897（`c2824c8f`）已合併，旗標 `False`（2026-10-22 更新，有意識的變更，不是漏刪，決策者 AI 總管（事實更正））；⛔ production-write **從未執行**、System Risk Cap Sheet 無首筆正式紀錄 ~~DEC-066：首次人工 production-write 有條件核准；Step 1～3 ✅；Step 4 子步驟 1（開旗標 PR，flag=`True`）進行中 —— 本 PR 合併後 main 旗標為 `True`；⛔ first production write **未執行**~~ |
 | 下一 Gate | **下一完整工作階段先處理 VIX／Point-in-Time 資料時點問題**（`VN1-PG-VIX-ASOF`、`VN1-PG-VETO-TRACE`、`VN1-PG-PIT-CONSISTENCY`；只登記、未實作；開始前依 Minimum Sufficient Effort 規則重新判斷 Effort）→ 修正並驗證後才走**新的**旗標 Gate（新 PR 開旗標＋同日 dry-run 等） ~~開旗標 PR 合併＋main CI 綠 → **當天** dry-run `VALID` → production-write（Environment 人工核准）→ readback → ⛔ **不論結果，下一個 PR 立即改回 `False`**（規格 8.11.4 Runbook；`VN1-PG-FIRST`）~~ |
 | Daily Schedule | **NOT APPROVED**（DEC-066 F；`VN1-PG-SCHED`）；⚠️ 新 condition 的 `event_name=='workflow_dispatch'` 會擋 `schedule`，排程設計須一併改 WIF |
 | 並行待辦 | `B1-FU-2`／`B2-FU-1` 正式網站登入驗收仍待客戶；G3 遷移另案（`VN1-G3-FU-1`）；workflow／scripts／tests 過期註解同步（`VN1-PG-L-STALE-COMMENTS`，候選） |
 | ⚠️ 過期值 | 上一版「下一 Gate＝客戶提供 WIF describe 原文」「Step 3 前 Environment 只擋 `production_write`」已不成立；~~「`PRODUCTION_WRITE_APPROVED` 仍 `False`」自本 PR 合併起不成立（程式內同義過期註解列 `VN1-PG-L-STALE-COMMENTS`，本 PR 未改）~~（2026-10-22：關窗 PR 合併後旗標又為 `False`，該句重新成立）；「下一 Gate＝當天 dry-run → production-write」已不成立（Fail-Stop） |
 
 ## 2. 最近完成（皆已合併、main CI success）
+
+> #893～#899 未逐列補入下表，見第 4 節 3t～3x；#898（`1d9e6c1c`，Handoff Save Check＋DEC-067）見第 0 節（2026-10-22 補註）。
 
 | PR | merge sha | 內容 |
 |---|---|---|
@@ -78,7 +97,7 @@
 - ~~（2026-10-18 新增）**vNext 0.9 第二批地基修復進行中**：`UIA-01`／`UIA-02`／`UIA-07` → `in-progress`（本批 PR，未合併）；`UIA-14` 仍 open（不在本批）。本批後續：`UIA-FU-1`（失敗被說成未載入，另批）、`UIA-FU-2`（待 `BP-DR-16`，新增徽章屬視覺規格）、`UIA-FU-3`（取數監控殘留；「哪些來源回空＝失敗」屬資料語意，待裁示）、`UIA-FU-4`（待 `BP-DR-19`）—— 見 `docs/BACKLOG.md` 第 5.1.1 節。`UIA-01` (b) 燈色語意仍待 `BP-DR-19`，本批未改燈色。~~（2026-10-18 更新：#872 已合併，`UIA-01`／`02`／`07` 已結案；有意識的變更，不是漏刪）**仍 open／待裁示的指標**：`SEC-2`（待 `BP-DR-18`）、`SEC-3`（待 `BP-DR-06`）、`SEC-1-FU`（已知限制）、`UIA-14` 及其他 UIA 項（`UIA-P1P2`）、`UIA-FU-1`（另批）、`UIA-FU-2`（待 `BP-DR-16`）、`UIA-FU-3`（資料語意部分待裁示）、`UIA-FU-4`（待 `BP-DR-19`）、`BP-DR-01`～`BP-DR-21` —— 見 `docs/BACKLOG.md` 第 5.1.1～5.1.3 節。
 - ~~（2026-10-18）**`1.0-B1` 進行中**（`SEC-2`／`SEC-3` → `in-progress`，本批 PR 未合併）。~~ （2026-10-18 更新）**`1.0-B1` 完成**（#877、`a9ba83c1`、run 39132620519；`SEC-2`／`SEC-3` 已結案）。後續（只列指標，見 `docs/BACKLOG.md` 5.1.1）：`B1-FU-1`（未登入時舊 UI 誤導文案；舊 UI 凍結 DEC-019）、`B1-FU-2`（`SEC-2` Streamlit Cloud 實測：需客戶登入一次、查 log reason codes；屬 `1.0-B2`）、`B1-FU-3`（cookie 綁定殘留風險；建議客戶自 Streamlit secrets 移除 `[gcp_service_account]`）；`SEC-1-FU` 仍 open。
 - ~~（2026-10-19）**`1.0-B2` 進行中**~~（2026-10-19 更新，有意識的變更，不是漏刪）**`1.0-B2` 程式已合併**（#879、`cef52c2e`、main CI run 39203796408 success（Fast＋Slow；總管轉述））；**待客戶正式網站驗收（`B2-FU-1`）**，驗不過退回 A（secrets `oauth_silent_reauth=false` 可先關閉）；`B2-FU-1`～`5` 仍 open。原文：（2026-10-19）**`1.0-B2` 進行中**（`VN1-Q2`；本批 PR 待開／未合併；第 3 輪依 DR-2026-10-19-1；⛔ 不得自行進入第四輪，再需修改同一批檔案須停下請客戶裁示）。後續（只列指標，見 `docs/BACKLOG.md` 5.1.1）：`B2-FU-1`（Streamlit Cloud＋真瀏覽器實測：客戶動作，非裁示；與 `B1-FU-2` 相關）、`B2-FU-2`（📁 組合管理／就地綁定換第二本 Sheet 不生效；既有問題、舊 UI 凍結 DEC-019）、`B2-FU-3`（`?sheet=` 網址信任模型：登入前未消毒寫入 session；既有問題）、`B2-FU-4`（安全閥下 MAC 不符分支 `_ok` 閘門無測試）、`B2-FU-5`（NIT 合集）。
-- （2026-10-20）**`VN1-STORE` Production Gate 已裁示 DEC-066**（DR-2026-10-20-3）：首次人工寫入有條件核准；~~**下一 Gate＝客戶手動建立 Environment `production-risk-cap`**（DEC-066 C Step 1）~~（2026-10-21：Step 1 客戶已完成、Step 2 workflow wiring ~~本 PR~~ PR #894（合併後完成）；**下一 Gate＝客戶提供 WIF provider 現行完整 describe 原文**（Step 3）；有意識的變更，不是漏刪）；Daily Schedule NOT APPROVED —— 見 `docs/BACKLOG.md` 1.1 `VN1-STORE-PROD`、5.1.4 `VN1-PG-*`。
+- （2026-10-20）**`VN1-STORE` Production Gate 已裁示 DEC-066**（DR-2026-10-20-3）：首次人工寫入有條件核准；~~**下一 Gate＝客戶手動建立 Environment `production-risk-cap`**（DEC-066 C Step 1）~~（2026-10-21：Step 1 客戶已完成、Step 2 workflow wiring ~~本 PR~~ PR #894（合併後完成）；~~**下一 Gate＝客戶提供 WIF provider 現行完整 describe 原文**（Step 3）~~；有意識的變更，不是漏刪）〔2026-10-22 更新，有意識的變更，不是漏刪，決策者 AI 總管（事實更正）：Step 3 已於 2026-10-21 完成（客戶提供 describe 並收緊 condition、反向驗證 run 39589906182）；Step 4 於 2026-10-22 Fail-Stop、旗標已回 `False`；現行下一步見第 0 節〕；Daily Schedule NOT APPROVED —— 見 `docs/BACKLOG.md` 1.1 `VN1-STORE-PROD`、5.1.4 `VN1-PG-*`。
 - 供客戶知悉：`AUD-C28`（「必要與選用訊號皆已評估」與薩姆從未評估並存）。
 
 ## 4. 下一安全接手點
@@ -116,7 +135,7 @@
 
 1. `git fetch origin`；`git log -1 --format='%H %P' origin/main` 與本檔第 1 節比對；不一致 → 以 GitHub 為準，先更新本檔。
 2. 查 open PR 與 main 最新非 cron commit 的 check-run `conclusion`。
-3. 依序讀：`CLAUDE.md` → `PROJECT_RULES.md` → 本檔 → `docs/BACKLOG.md` → `docs/DECISIONS.md`；做新 UI／產品方向相關工作時另讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（DEC-056 第 4 點、DEC-057）；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。
+3. ~~依序讀：`CLAUDE.md` → `PROJECT_RULES.md` → 本檔 → `docs/BACKLOG.md` → `docs/DECISIONS.md`；~~ 啟動程序與讀檔清單以 `PROJECT_RULES.md` 第 15 節為準（含 `docs/PROJECT_STATE.md`；2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068）；做新 UI／產品方向相關工作時另讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（DEC-056 第 4 點、DEC-057）；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。
 4. 確認 working tree 乾淨；⛔ 不還原舊 UI 壓測 `stash@{0}`（DEC-019）。
 5. 不要求客戶重講已落盤資訊（`PROJECT_RULES.md` 第 11 節）。
 6. 推理強度（Minimum Sufficient Effort、雙向提醒）與靜默自主巡航為永久規則：見 `PROJECT_RULES.md` 第 9 節、第 3 節（DEC-059；回報格式 DEC-060）；本檔不複製規則。

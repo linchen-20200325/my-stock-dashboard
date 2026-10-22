@@ -20,16 +20,19 @@
 - **不管**：畫面、文案、公式、門檻、資料契約的本文 —— 那些以 `CLAUDE.md` §1～§8、正式規格與客戶裁示為準。第 13 節只是**索引**。
 - **登記不構成動工授權**（`CLAUDE.md` §-1；DEC-002）：本檔任何一句都不得被讀成「可以主動找事做」。
 
-### 0.3 四檔分工（Governance Truth）
+### 0.3 ~~四檔分工（Governance Truth）~~ 五檔分工（Governance Truth＋共用專案知識）（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068）
 
 | 文件 | 管什麼 | 不管什麼 |
 |---|---|---|
 | `PROJECT_RULES.md`（本檔） | AI 工作規則入口；股票領域硬規則索引 | 規格本文；既有條文本文 |
 | `docs/DECISIONS.md` | 客戶裁示與正式決策（DEC-NNN，附可追溯來源與取代鏈） | AI 推論（不得寫成客戶裁示） |
 | `docs/BACKLOG.md` | 所有未完成工作、待裁示題、Research Candidate | 動工授權 |
-| `docs/HANDOFF.md` | 短、可接手的現況：在哪、最近完成、blocker、下一安全接手點 | 完成或正確的證明；完整歷史 |
+| `docs/HANDOFF.md` | ~~短、可接手的現況：在哪、最近完成、blocker、下一安全接手點~~ **短版交接**：只保存 current active work、blocker、next safe point、必要的 main／PR／CI 狀態（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068） | 完成或正確的證明；完整歷史；~~（無）~~ 完整專案記憶（→ `docs/PROJECT_STATE.md`） |
+| `docs/PROJECT_STATE.md`（2026-10-22 新增，DEC-068） | ChatGPT 與 Claude 共用、「目前仍有效」的專案知識：架構關係、現況摘要、重要背景與限制、已核准 vs Candidate 的界線；「保存專案知識，不保存聊天紀錄」 | 未完成工作（→ BACKLOG）；current／blocker（→ HANDOFF）；正式裁示（→ DECISIONS，不取代）；聊天紀錄；secret／credential；把 Candidate 寫成 Approved；把推測寫成事實 |
 
-**Blueprint 指標**（2026-10-17 新增，DEC-057）：`docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md` ＝ DEC-056 第 4 點「Blueprint：最終產品方向」的承載者（附 `docs/vnext/UI_AUDIT_2026-10-17.md`）。⚠️ 它**不是實作授權**、不帶 Decision 效力；其中線框與 `BP-DR-*` 未經客戶裁示前不得施工（DEC-003、DEC-057）；與本表四檔或 `CLAUDE.md` 牴觸時以後者為準。上表標題「四檔」不因本指標改變。
+📌 **五檔讀法（2026-10-22 新增，DEC-068）**：⛔ **不新增 `PROJECT_CONTEXT.md`**（客戶原文「不要再新增 PROJECT_CONTEXT.md，避免與 PROJECT_STATE 重疊」）。`docs/PROJECT_STATE.md` 是知識摘要，**不是規範或裁示來源**：本檔他處既有的「四檔」字樣不逐一改寫，涉及 Governance Truth（第 1.2 節）時仍指本檔／DECISIONS／BACKLOG／HANDOFF；涉及跨對話保存與讀取時依第 15 節讀作五檔。
+
+**Blueprint 指標**（2026-10-17 新增，DEC-057）：`docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md` ＝ DEC-056 第 4 點「Blueprint：最終產品方向」的承載者（附 `docs/vnext/UI_AUDIT_2026-10-17.md`）。⚠️ 它**不是實作授權**、不帶 Decision 效力；其中線框與 `BP-DR-*` 未經客戶裁示前不得施工（DEC-003、DEC-057）；與本表四檔或 `CLAUDE.md` 牴觸時以後者為準。上表標題「四檔」不因本指標改變。（2026-10-22 補註：上表已改為五檔，Blueprint 仍不列入；有意識的變更，不是漏刪）
 
 **上位與既有文件（本批不改）**：`CLAUDE.md`、`PROCESS.md`、`ARCHITECTURE.md`、`SPEC.md`、`STATE.md`、`docs/v2/spec/*`。
 **歷史全文**：分支 `claude/stock-dashboard-handoff-g9dtm0` 的 `HANDOFF.md`（約 5150 行，含舊待辦、等你答、逐字收錄的客戶裁示）—— **未刪除、未凍結宣告**；其中尚未遷入的待辦見 `docs/BACKLOG.md` `BL-MIGRATE-1` 📌 註。
@@ -71,6 +74,8 @@
 - ~~**規則**：沒有需要客戶決定的事時不輸出過程訊息，但持續執行已授權工作；只在 **A. 完整有意義階段完成** 或 **B. 真正需要客戶裁示** 時回報；不報「已派工／正在實作／PR 已開／等 CI／某條 CI 綠／等稽核／沒有新資訊」。每批最多約 3 個高度相關安全項目。（DEC-007、DEC-006）~~（2026-10-17 由客戶治理裁示 DEC-059 強化為下列現行版；有意識的整合，不是漏刪 —— 舊句四項要點（不報過程、A／B 兩種回報、不報中間狀態、每批約 3 項）全數保留在現行版，另加第三種可打斷情況與完整禁止清單）
 - **規則（現行；DEC-059 強化 DEC-007／DEC-006）**：預設採**靜默自主巡航**。在既有授權範圍內，可自行完成：研究 → 實作 → tests → independent audit／review → 修正 → push → PR → CI → 修 CI → merge → main verification → `docs/BACKLOG.md`／`docs/HANDOFF.md`／`docs/DECISIONS.md` 必要同步。安全工作以**最多 3 個緊密相關項目**為一批，避免 scope creep。
 - **禁止為了「報進度」而輸出**（客戶 2026-10-17 原文清單，逐項）：已開始／已派工／正在研究／正在修改／已 commit／已 push／PR 已開／等 CI／某一個 CI 已綠／等另一個 CI／正在 audit／audit 尚未完成／稍後再看／subscribed／monitoring／沒有新資訊／重複上一則狀態／workflow 還在跑。這些狀態由專案 AI 自己處理。
+- 📌 **2026-10-20 客戶補充禁回報清單**（append-only；客戶訊息 2026-10-20T07:23Z 原文逐項；與上一條重疊者照列、取聯集）：「agent 已派出／正在跑／等待 agent」「CI 正在跑／等待 CI」「QA 正在複驗／等待 QA」「notification／subscription 狀態」「commit 已 push」「draft PR 已開」「第幾輪回修正在進行」「0 MUST-FIX / NIT 等尚未形成 Decision Gate 的中間結果」「「接下來我會……」」「任何單純狀態更新」。客戶同訊息：「這些全部在背景自行處理。」「如果只是 NIT、文件補漏、既有規格內的小修，請自行處理後繼續，直到整個 Batch 完成再一次回報。」（本條只補禁回報項目；可打斷情況仍以下一條為準）
+- **客戶回報語言（DEC-069）**：客戶原文「所有客戶回報一律使用繁體中文；除程式碼、正式欄位名稱、log 原文外，不得改用英文。」—— 繁體中文（台灣）；適用所有對客戶的回報（含完成回報與裁示題）。
 - **只有三種情況可以主動打斷客戶**：
   1. **完整階段完成**：implementation＋tests＋audit＋CI＋merge＋main verification 已達該階段完成條件（第 7 節）；精簡回報，原則 ≤5 行（完整證據在 PR，DEC-060）。
   2. **真正需要客戶裁示**：即第 4 節「必須停下問客戶」表（客戶 2026-10-17 清單的逐項對映見該表下方註）；已經有正式 DEC 的問題不得重新詢問（DEC-013）。可超過 5 行，但只保留完成裁示所需資訊（DEC-060）。
@@ -232,8 +237,8 @@ Effort：Low / Medium / High
 
 （機制依客戶 2026-10-16 列舉之共通治理機制建立，DEC-016。）
 
-- 完整階段（milestone）結束時是建議換對話的時點；換對話前先達到 Safe Checkpoint（第 6 節）並更新四檔。
-- 新對話依序讀：`CLAUDE.md` → 本檔 → `docs/HANDOFF.md` → `docs/BACKLOG.md` → `docs/DECISIONS.md`；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。做新 UI／產品方向相關工作時另讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（2026-10-17 新增；依據 DEC-056 第 4 點、DEC-057）。
+- 完整階段（milestone）結束時是建議換對話的時點；換對話前先達到 Safe Checkpoint（第 6 節）並更新~~四檔~~ 五檔（第 15 節 Handoff Save Check；2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068）。
+- ~~新對話依序讀：`CLAUDE.md` → 本檔 → `docs/HANDOFF.md` → `docs/BACKLOG.md` → `docs/DECISIONS.md`；~~ **新對話的啟動程序、讀檔清單與優先序以第 15 節為準**（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068：舊讀序未含 `docs/PROJECT_STATE.md`，且與第 15 節不同）；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。做新 UI／產品方向相關工作時另讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（2026-10-17 新增；依據 DEC-056 第 4 點、DEC-057）。
 - 本檔（含第 3 節靜默巡航、第 9 節 Effort 自主管理）是**永久規則**：新對話讀完本檔即自動繼承，不需客戶再次提醒；不得只寫在 HANDOFF、對話或單次 prompt（DEC-059）。
 - **不得要求客戶重講已落盤資訊**（`PROCESS.md` §1「嚴禁要求使用者重複解釋」；DEC-014「不重新摘要；不重問；不重做」）。
 - AI 自動產生的對話壓縮摘要**不是客戶原文**，不得當 Decision 來源（DEC 來源類別規則，`docs/DECISIONS.md` 0.1）。
@@ -246,6 +251,7 @@ Effort：Low / Medium / High
 | 客戶裁示 | `docs/DECISIONS.md`（新 DEC，標來源類別）＋ BACKLOG 受影響列 customer decision 欄 | 收到當輪 |
 | 現況、最近完成、blocker、下一步 | `docs/HANDOFF.md` | merge 後、milestone、換對話前 |
 | evidence | commit、PR 說明、或 repo 內可追溯位置 | 產生當輪 |
+| 會影響未來架構判斷的重要背景、研究結論、限制、模組關係（2026-10-22 新增列，DEC-068） | `docs/PROJECT_STATE.md`（只寫摘要＋出處；Candidate 不得寫成 Approved） | 產生當輪；最遲在第 15 節 Handoff Save Check |
 
 來源：客戶 MSG 2 第 9 點「所有本輪發現但不在修復 scope 的事項，寫入正式 Backlog，不得只留在聊天紀錄。」；DEC-011。
 
@@ -284,11 +290,31 @@ Effort：Low / Medium / High
 
 不在本檔裁定。全部登記於 `docs/BACKLOG.md` 第 4 節（`CV1-DR-*` Decision Required、`CV1-RC-*` Research Candidate），並由 `docs/DECISIONS.md` 第 6 節索引。暫行讀法：**任一套規則要求停下就停下**。
 
-## 第 15 節｜Handoff Save Check 與跨對話 SSOT（客戶 2026-10-22 頒布）
+## 第 15 節｜Handoff Save Check 與跨對話 SSOT（客戶 2026-10-22 頒布；同日 DEC-068 修訂：五檔、PROJECT_STATE、Context Loss Check）
 
-> 客戶 2026-10-22 頒布（經總管轉交；要點逐條收錄）。裁示紀錄見 `docs/DECISIONS.md` DEC-067。
+> 客戶 2026-10-22 頒布（經總管轉交；要點逐條收錄）。裁示紀錄見 `docs/DECISIONS.md` DEC-067；同日修訂見 DEC-068（客戶原文：「把以下規則正式納入 PROJECT_RULES，並與現有 §15 / DEC-067 整合，不建立競爭規則」）。本節是跨對話啟動與交接的**唯一**程序；第 11 節讀序以本節為準。
 
 1. GitHub 是跨 ChatGPT、Claude Code 與新舊對話之間的專案共同 SSOT。
-2. 任何完整工作階段／對話準備結束前，執行 **Handoff Save Check**：永久治理變更 → `PROJECT_RULES.md`；客戶正式裁示 → `docs/DECISIONS.md`；未完成工作 → `docs/BACKLOG.md`；current state／blockers／next safe point → `docs/HANDOFF.md`。
-3. 任何新 ChatGPT／Claude Code 對話開始時：(1) 先重新取得 GitHub 最新實況；(2) 讀 `PROJECT_RULES.md`／`docs/DECISIONS.md`／`docs/BACKLOG.md`／`docs/HANDOFF.md`；(3) 驗證 main SHA、open／draft PR、CI／QA 與相關 branch；(4) GitHub 實況優先於 HANDOFF、AI memory、舊聊天摘要；(5) 發現不一致時不得自行猜測，依正式證據校正。
+2. ~~任何完整工作階段／對話準備結束前，執行 **Handoff Save Check**：永久治理變更 → `PROJECT_RULES.md`；客戶正式裁示 → `docs/DECISIONS.md`；未完成工作 → `docs/BACKLOG.md`；current state／blockers／next safe point → `docs/HANDOFF.md`。~~（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068：加第五項）
+   **現行**：任何完整工作階段／對話準備結束前，執行 **Handoff Save Check**：
+   1. 新永久規則 → `PROJECT_RULES.md`；
+   2. 客戶正式裁示 → `docs/DECISIONS.md`；
+   3. 所有未完成事項 → `docs/BACKLOG.md`；
+   4. current／blocker／next safe point → `docs/HANDOFF.md`（短版）；
+   5. 仍有效的完整專案狀態、架構關係、重要背景與限制 → `docs/PROJECT_STATE.md`。
+3. ~~任何新 ChatGPT／Claude Code 對話開始時：(1) 先重新取得 GitHub 最新實況；(2) 讀 `PROJECT_RULES.md`／`docs/DECISIONS.md`／`docs/BACKLOG.md`／`docs/HANDOFF.md`；(3) 驗證 main SHA、open／draft PR、CI／QA 與相關 branch；(4) GitHub 實況優先於 HANDOFF、AI memory、舊聊天摘要；(5) 發現不一致時不得自行猜測，依正式證據校正。~~（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068：讀檔加 PROJECT_STATE、驗證加 relevant commits／diffs、優先序加 PROJECT_STATE 一層、不一致時必要修正文件）
+   **現行**：任何新的 Claude Code 或 ChatGPT 完整專案對話開始時：
+   1. `git fetch` 最新 GitHub。
+   2. 讀：`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、`docs/HANDOFF.md`、`docs/PROJECT_STATE.md`。⚠️ 撰寫組讀法（非客戶原文）：`CLAUDE.md` 依第 0.1 節是上位憲法，客戶清單未列**不代表免讀**；做新 UI／產品方向工作時另讀 Blueprint（第 11 節）。
+   3. 驗證：main SHA、open／draft PR、relevant commits／diffs、CI／QA、relevant branches。
+   4. 優先序：**GitHub factual reality > `docs/HANDOFF.md` > `docs/PROJECT_STATE.md` 中的狀態快照 > AI memory／conversation summary**（與第 1.1 節 Fact Truth 同向；這是判斷「現在實際是什麼」的順序，不是規範效力順序）。
+   5. 文件與 GitHub 實況不一致時：以 GitHub evidence 為準；不得猜測；必要時修正正式文件。
 4. 不得把完整聊天紀錄、腦暴或未裁示想法大量寫入 GitHub；只保存會影響未來工作的正式專案狀態。
+5. **Context Loss Check**（2026-10-22 新增，DEC-068）：Claude 或 ChatGPT 的完整專案對話結束前，必須問：「如果下一個 AI 完全看不到目前聊天內容，只讀 GitHub，它能否正確理解目前專案並安全接手？」至少檢查：
+   - **A.** 有沒有正式裁示只存在聊天裡？→ 有則分類進 `docs/DECISIONS.md`。
+   - **B.** 有沒有未完成工作只存在聊天裡？→ 有則分類進 `docs/BACKLOG.md`。
+   - **C.** 有沒有永久治理規則只存在聊天裡？→ 有則分類進 `PROJECT_RULES.md`。
+   - **D.** 有沒有目前 blocker／next safe point 只存在聊天裡？→ 有則分類進 `docs/HANDOFF.md`。
+   - **E.** 有沒有會影響未來架構判斷的重要背景、研究結論、限制或模組關係，只存在聊天裡？→ 有則分類進 `docs/PROJECT_STATE.md`。
+   - ⛔ **任何答案為「有」且尚未保存時：不得宣告交接完成。**
+   - 分類時：尚未核准的構想一律進 BACKLOG 的 Candidate／Decision Gate，⛔ 禁止升格成 Approved；已正式存在者不重複登記。
