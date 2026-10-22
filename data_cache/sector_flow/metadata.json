@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-21T14:35:15.228006+00:00",
-  "last_updated": "2026-10-21",
-  "row_count": 1208,
-  "n_days": 26,
+  "updated_at": "2026-10-22T14:36:45.205927+00:00",
+  "last_updated": "2026-10-22",
+  "row_count": 1254,
+  "n_days": 27,
   "fetch_diag": {
     "days_fetched": 1,
     "days_holiday_or_empty": 0,
@@ -11,8 +11,8 @@
     "unresolved_expired": []
   },
   "coverage": {
-    "n_stock_days_with_net": 21255,
-    "n_dropped_missing_price": 19018,
+    "n_stock_days_with_net": 20056,
+    "n_dropped_missing_price": 17815,
     "n_unclassified_stock_days": 0,
     "n_sectors": 46,
     "n_days": 1,
@@ -24,11 +24,11 @@
   "last_error": null,
   "warnings": [],
   "per_day": {
-    "20261021": {
-      "twse_inst": 20356,
-      "twse_close": 1370,
-      "tpex_inst": 903,
-      "tpex_close": 991,
+    "20261022": {
+      "twse_inst": 19151,
+      "twse_close": 1368,
+      "tpex_inst": 909,
+      "tpex_close": 990,
       "tpex_inst_status": "ok",
       "tpex_close_status": "ok",
       "twse_ok": true,
@@ -42,7 +42,7 @@
       "ok_days": 1,
       "fail_days": 0,
       "ok_dates": [
-        "20261021"
+        "20261022"
       ],
       "fail_dates": [],
       "not_written_dates": []
@@ -51,7 +51,7 @@
       "ok_days": 1,
       "fail_days": 0,
       "ok_dates": [
-        "20261021"
+        "20261022"
       ],
       "fail_dates": [],
       "not_written_dates": []
@@ -94,10 +94,10 @@
   "industry": {
     "scheme": "z43-official-code-v1",
     "raw_available": true,
-    "fetched_at": "2026-10-21T14:35:07.079714+00:00",
+    "fetched_at": "2026-10-22T14:36:37.129429+00:00",
     "rules": {
-      "finmind_no_official": 1183,
-      "official_match_finmind": 1971,
+      "finmind_no_official": 1182,
+      "official_match_finmind": 1972,
       "official_name": 9
     },
     "n_from_prev": 0,
@@ -110,14 +110,14 @@
       },
       "上櫃": {
         "ok": true,
-        "n": 893,
+        "n": 894,
         "reason": null,
         "endpoint": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O"
       }
     },
     "finmind_status": {
       "ok": true,
-      "n_rows": 4346
+      "n_rows": 4347
     },
     "unavailable_markets": [],
     "alias_consistency": {
