@@ -454,6 +454,7 @@
 - 📌 2026-10-21 狀態補註（append-only；撰寫組依總管轉述＋GitHub API 實查）：C **Step 1**（Environment）、**Step 2**（#894 wiring，`17e8ee44`）、**Step 3**（WIF hardening＋反向驗證）完成。Step 3：客戶以 `update-oidc` 只改 `--attribute-condition`（四條保留＋`environment=='production-risk-cap'`、`event_name=='workflow_dispatch'`；mapping 不變、ACTIVE）；反向驗證 run 39589906182 預期失敗。總管撤回「暫時讓 `wif_auth_only` 掛 environment 做正向驗證」建議、改採靜態比對＋反向驗證，客戶依此執行 —— **不是新 DEC**。⚠️ 正向換 token 未實測（首次正向驗證＝Step 4）。下一 Gate＝Step 4（尚未開始）；`PRODUCTION_WRITE_APPROVED` 仍 `False`；F 不變。本條原文不改
 - 📌 2026-10-21 狀態補註二（append-only；Step 4 子步驟 1；**不是新 DEC**）：客戶 2026-10-21 核准開立 DEC-066 A 的**一次性旗標 PR** —— `shared/risk_cap_history_policy.py::PRODUCTION_WRITE_APPROVED` 由 `False` 改 `True`＋政策測試同步（拒絕路徑測試改以 monkeypatch 回 `False` 繼續覆蓋閘門）。⚠️ 本 PR 只翻旗標：**production-write 尚未執行**、⛔ 未加 `schedule:`、未改 workflow job 邏輯／WIF／IAM／Environment。⛔ 依 A：首次寫入嘗試後**不論結果**，下一個 PR 必須立即把旗標改回 `False`；改回前不得有第二次寫入嘗試。F 不變。本條原文不改
 - 📌 2026-10-22 狀態補註三（append-only；Step 4 首次寫入 **Fail-Stop**；客戶裁示 B；**不是新 DEC**）：DEC-066 A 的一次性寫入窗口**關閉**。Fail-Stop 證據（run 39755679219，job 119746957010，main `e7e580c`，2026-10-22 17:28 台北 dry-run；總管轉述 Actions log）：`record_date`＝2026-10-22、`status`＝VALID、`exposure_limit_pct`＝30、`required_core_ok`＝TRUE、`missing_core`／`not_evaluated`／`refresh_failed` 空、`refresh_ok`＝TRUE、`git_sha`＝`e7e580c`；^TWII／MA5／Futures_Net_Short 皆用 2026-10-22（證據欄位＝record `input_asof`：Index_Below_MA5、BIAS240_pct、Futures_Net_Short＝2026-10-22；MA5 數值本身 log 未印）；30% 經正式 `calculate_system_state` 重算＝紅線三（外資期貨淨空 < −35,000 口 AND 加權指數跌破 MA5）；MA5 46,631.01、10-22 指數 46,041（低約 1.27%）——**重算值（非 log 直證）**：由獨立核對組以正式函式 `market_strategy.get_market_assessment` 重算，視窗收盤 10-16 47111.26／10-19 46822.08／10-20 46292.93／10-21 46887.77（取自 `data_cache/twii_ohlcv.parquet`）＋10-22 46041（取自 log `[Bias] price=46041`，該行為 2y yfinance 抓取，非 mkt_info 那次抓取）。前兩次 dry-run：39608164307（10-21，80%）；39695843255（10-22 07:50，30%，^TWII 少 10-21 一根、MA5@10-20 配期貨@10-21 跨日配對，客戶不接受）。**未通過原因**：(1) VIX 18.4 標 2026-10-22，但 17:28 台北美股尚未開盤 ⇒ 為盤前／未收盤暫定日線，現行 freshness 無法區分；(2) log 未留 Futures_Net_Short 實際口數、MA5 判定、veto_flags，只能由正式函式＋區間反推確認。 ⛔ production-write **從未執行**；System Risk Cap Sheet **沒有首筆正式紀錄**。依 A，關窗 PR 將 `PRODUCTION_WRITE_APPROVED` 改回 `False`（政策測試同步改回）；⛔ 未改 `.github/`／`scripts/`／`src/`、公式、門檻、VALID 定義、資料來源、freshness、WIF／IAM／Environment。下次重開：須先修正並驗證資料時點問題（BACKLOG `VN1-PG-VIX-ASOF`／`VN1-PG-VETO-TRACE`／`VN1-PG-PIT-CONSISTENCY`），再走**新的**旗標 Gate（新 PR 開旗標＋同日 dry-run 等）；本補註不構成重開授權。F（Daily Schedule NOT APPROVED）不變。前兩條補註原文不改
+- 📌 2026-10-22 狀態補註四（append-only；**不是新的重開授權**）：補註三所列三項 MUST 的**資料語意**已由 **DEC-070** 裁示（盤後版、同一錨定交易日 D、VIX 只用已完成收盤資料、^TWII 缺棒 Fail-Stop）；三項仍**未實作**。重開條件不變：實作＋驗證 → 新的旗標 Gate。前三條補註原文不改
 
 
 ### DEC-067｜Handoff Save Check 與跨對話 SSOT（客戶 2026-10-22 頒布）
@@ -480,6 +481,67 @@
 - **範圍**：治理（回報格式）｜**日期**：2026-10-22｜**決策者**：客戶｜**狀態**：生效
 - **來源**：D 客戶訊息 2026-10-22T00:18Z（本 session；本檔首次入庫）。
 - **與其他 DEC 的關係**：與 DEC-060（回報格式）併用、不取代；只規範對客戶的回報語言，不規範產品畫面文案。
+
+### DEC-070｜Risk Cap 每日代表時點採「盤後版」語意；Yahoo 缺 ^TWII 必要 K 棒 → Fail-Stop；授權 docs-only Context Loss Check 落盤（客戶 2026-10-22）
+> 2026-10-22 追加（第 8 節「收到當輪追加」；ID 照序取下一個未用號，撰寫組 `git grep -oh "DEC-0[0-9]*" -- docs/DECISIONS.md | sort -u` 實測最大為 DEC-069）。BACKLOG 登記：DR-2026-10-22-3。
+- **背景**（裁示前總管送出的題目；**非客戶原文**，撰寫組依總管轉交整理）：DEC-066 Step 4 dry-run Fail-Stop（DEC-066 狀態補註三）後，總管研究 `VN1-PG-VIX-ASOF`／`VN1-PG-VETO-TRACE`／`VN1-PG-PIT-CONSISTENCY` 並送兩題：
+  - **Q1**｜每日風險上限代表哪個時點：A 盤後版（錨定台股交易日 D 收盤後；台股輸入取 D；VIX 取美東日期早於 D 的最後一根＝前一個已收盤美股交易日；PMI 資料月規則不變；總管原推薦截止台北 16:00）vs B 盤前版。
+  - **Q2**｜Yahoo 缺 ^TWII K 棒：A 先 Fail-Stop 明示 vs B 評估證交所官方加權指數（新來源）。
+- **內容**（客戶原文逐字；經總管轉交，撰寫組逐字照錄轉交文字、未見客戶訊息原件、未經第二組比對）：
+
+```
+裁示如下：
+
+1. Q1 採 A「盤後版」方向。
+   
+   - 台股輸入以同一錨定交易日 D 為原則。
+   - 外資期貨與 MA5 必須屬於同一個台股交易日。
+   - VIX 只能使用在該判斷時點已完成收盤、且不造成 look-ahead 的資料。
+   - PMI 維持既有資料月規則。
+   - 但「台北 16:00」目前不要直接升格為永久正式規則：你目前對期交所資料發布時間只有二手證據。先將「盤後且 D 日必要台股資料均已正式可得」定為正式語意；16:00 可列保守執行時間／Candidate，待官方來源驗證後再決定是否固化。
+
+2. Q2 採 A：
+   Yahoo 缺 ^TWII 必要 K 棒時 Fail-Stop／無法評估並明示；不得以前一交易日偷偷頂替，也暫不新增或替換正式資料來源。先累積缺棒頻率與證據，再決定是否研究證交所官方來源。
+
+3. 授權開一個 docs-only PR 做 Context Loss Check 落盤。
+   請依 PROJECT_RULES §15 分類，而不是只更新 PROJECT_STATE＋BACKLOG：
+   
+   - DECISIONS：記錄本次正式裁示；
+   - BACKLOG：保留未完成驗證／研究／實作項；
+   - PROJECT_STATE：保存仍有效的技術研究結論，並更正舊「互鎖」描述；
+   - HANDOFF：若 current/blocker/next safe point 因本裁示改變則同步；
+   - PROJECT_RULES：除非治理規則本身真的需要變更，否則不要修改。
+
+本批仍只允許文件落盤，不授權 Risk Cap 核心語意實作、不開 production-write、不開 schedule、不新增資料來源。
+
+外部證據不足的部分必須明確標示 Candidate／未驗證，不得寫成已證實事實。
+```
+
+- **裁示要點**（撰寫組整理；與上方原文不一致時以原文為準）：
+  1. **Q1＝A「盤後版」方向**：(a) 台股輸入以同一錨定交易日 D 為原則；(b) 外資期貨與 MA5 必須屬於同一個台股交易日；(c) VIX 只能使用在該判斷時點已完成收盤、且不造成 look-ahead 的資料；(d) PMI 維持既有資料月規則；(e) **正式語意**＝「盤後且 D 日必要台股資料均已正式可得」。
+  2. **「台北 16:00」不升格為永久正式規則** —— 只列「保守執行時間／Candidate」，待官方來源驗證後再決定是否固化（客戶理由原文：「你目前對期交所資料發布時間只有二手證據」）。
+  3. **Q2＝A**：Yahoo 缺 ^TWII 必要 K 棒 → Fail-Stop／無法評估並明示；⛔ 不得以前一交易日偷偷頂替；暫不新增或替換正式資料來源；先累積缺棒頻率與證據，再決定是否研究證交所官方來源。
+  4. **Q3**：授權**一個** docs-only PR 做 Context Loss Check 落盤，依 `PROJECT_RULES.md` §15 五類分類。撰寫組判定（單組）：本裁示**不涉治理規則本身的變更** ⇒ `PROJECT_RULES.md` 本批**未改**。
+- **總管推薦 vs 客戶裁示的界線（必讀；撰寫組讀法，單組）**：
+  - **VIX 選值方式**：Q1 背景裡的「取美東日期早於 D 的最後一根」是**總管推薦的候選實作方式**，客戶**沒有逐字核准**這條具體規則。客戶核准的是語意（要點 1(c)）。該實作屬「符合該語意的一種實作」，由實作批定案（技術實作面屬內部拍板，`CLAUDE.md` §-1.5.A-4），且仍須驗證；⛔ 後人不得把它引用為客戶裁示。
+  - **16:00**：只能寫「保守執行時間／Candidate」（要點 2），⛔ 不得寫成正式 cutoff。
+- **不是什麼**（⛔）：
+  - 不是實作授權（客戶原文「不授權 Risk Cap 核心語意實作」）；三項實作仍須客戶指派實作批（DEC-006、DEC-015）。
+  - 未固化台北 16:00；未定任何 cutoff 時刻。
+  - 未核准新資料來源（含證交所官方加權指數；新增／替換 production 來源屬 Decision Gate，`PROJECT_RULES.md` §4 #3）。
+  - 未開 production-write、未開 schedule；`PRODUCTION_WRITE_APPROVED` 仍為 `False`；Daily Schedule 仍 NOT APPROVED（DEC-066 F）。
+  - 未改 Risk Cap 公式、門檻、VALID 定義；未改 Required Core（DEC-048）。
+  - 未定 `published_at`／`available_at` 欄位契約（本條只定語意）。
+  - 不是重開旗標的授權：重開仍須三項**實作＋驗證**，再走**新的**旗標 Gate（DEC-066 狀態補註三）。
+- **範圍**：資料語意（`PROJECT_RULES.md` §4 #2）；治理（docs-only 落盤授權）｜**日期**：2026-10-22｜**決策者**：客戶｜**狀態**：生效（語意已裁示；⛔ 未實作）
+- **來源**：D 客戶訊息 2026-10-22（本 session；本檔首次入庫；經總管轉交；確切 UTC 時戳未記錄，只保留日期）。
+- **與其他 DEC 的關係**（撰寫組讀法，單組，⚠️ 待第二組 evidence audit）：
+  - **DEC-028**（觀測日＝真正所屬交易日）：同向；本條把它推進到跨輸入（同一錨定交易日 D）。
+  - **DEC-029**（日頻落後 >3 交易日＝未評估）：**不變、不取代**；本條另加「跨輸入日期一致性」與「VIX 須已完成收盤」兩項要求，兩者併用（通過 freshness ≠ 通過本條）。
+  - **DEC-039**（No look-ahead）：本條是其在每日 Risk Cap 時點上的具體化。
+  - **DEC-048**（Required Core 無法評估 → 不產生新上限、可沿用 7 天內有效快照）：Q2 的 Fail-Stop 落在這條既有路徑上（^TWII 缺棒 ⇒ MA5 無法評估 ⇒ Required Core 不完整），本條**不新增**沿用規則。
+  - **DEC-066**（狀態補註三列的三項 MUST）：本條裁示其中的**語意部分**；重開旗標仍須實作＋驗證＋新的旗標 Gate。
+  - **`CV1-RC-01`**（Conservative Safe Effective Cutoff 原為候選）：本條把「盤後且 D 日必要台股資料均已正式可得」定為**正式語意**；**具體 cutoff 時刻仍是 Candidate**（BACKLOG `VN1-PG-CUTOFF-VERIFY`）。`CV1-RC-01` 其餘候選內容不受影響。
 
 ## 3. 資料語意（data semantics）
 
@@ -543,6 +605,7 @@
 ### DEC-039｜No Look-ahead（P0）：歷史決策不能看到當時尚未公開的資料
 - **內容**：FRED 用 release_date、禁止用 observation_date 回填；季報用公告日；校準歷史驗算禁止 lookahead；不建 Perfect PIT Database。
 - **範圍**：資料語意｜**日期**：`CLAUDE.md` §2.3 既有；2026-10-15｜**決策者**：客戶（通則，MSG 1 §9）；⚠️ FRED release_date、季報公告日等**細則**出自 `CLAUDE.md` §0 Bootstrap 由 AI 依 code 證據填寫的 §2.3（**AI 總管內部**，非客戶逐條裁示）｜**狀態**：生效（Live／Historical 分離與 Conservative Safe Effective Cutoff 僅為候選，不升格 → `CV1-RC-01`）
+- 📌 2026-10-22 狀態補註（append-only；本條原文不改）：每日 Risk Cap 的時點語意已由 **DEC-070** 裁示（「盤後且 D 日必要台股資料均已正式可得」；VIX 只用判斷時點已完成收盤的資料）；上句「Conservative Safe Effective Cutoff 僅為候選」中的**具體 cutoff 時刻**仍是候選（台北 16:00＝Candidate，BACKLOG `VN1-PG-CUTOFF-VERIFY`）。
 - **來源**：A `CLAUDE.md@f0a6c474:1194` 起〈§2.3 Point-in-Time — 防 Lookahead〉。D 客戶訊息 2026-10-15T13:40Z（本 session；本檔首次入庫）§9「«歷史決策不能看到當時尚未公開的資料。»」。B #854 `8ed6d6ac`（M1B 校準 look-ahead 修正）。A `docs/BACKLOG.md@f0a6c474:55`（DR-2026-10-15-3 含「historical no-look-ahead」）。
 
 ### DEC-040｜硬性資料／UI 規則（MSG 1 §19）
