@@ -13,6 +13,8 @@
    ⛔ 全 repo 沒有任何地方（含測試）把它設成 True。
    📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；有意識的變更，不是漏刪）：L0 宣告本身改 True（一次性旗標 PR，
    首次寫入嘗試後下一個 PR 立刻改回 False）；「L0 宣告之外沒有任何地方設 True」照守。
+   📌 2026-10-22（DEC-066 狀態補註三，客戶裁示 B；有意識的變更，不是漏刪）：窗口因 dry-run Fail-Stop 關閉，
+   旗標已回 False；`test_no_code_sets_approved_true` 掃描已重新包含 L0 policy 檔（全 repo 任何 `= True` 都紅燈）。
 5. workflow `production-write`：只 workflow_dispatch、寫入 job 只限 main、needs compute、第一個 Python 步驟就是閘門
    （index < auth）、id-token 只在寫入 job、寫入 job env 只有 System Risk Cap Sheet ID（＋寫入總開關），
    ⛔ 持股 Sheet ID／GCP_SERVICE_ACCOUNT_JSON／FinMind／proxy secrets／credentials_json；全部 action 以 SHA 釘版。

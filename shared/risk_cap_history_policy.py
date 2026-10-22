@@ -210,7 +210,8 @@ SHEETS_HTTP_TIMEOUT_S: tuple[float, float] = (5.0, 10.0)
 #:   憑證檔＝⛔ 無 JSON key；workflow 端的 main 限定、Environment 人工核准、record artifact sha256 比對等）。
 #: 📌 2026-10-22（DEC-066 狀態補註三；客戶裁示 B；有意識的變更，不是漏刪）：DEC-066 A 一次性窗口**已關閉** ——
 #:   Step 4 首次寫入前的同日 dry-run（run 39755679219，main e7e580c）判定 **Fail-Stop**（VIX 盤前暫定日線無法與
-#:   收盤值區分、veto 判定未留痕），⛔ production-write **從未執行**，System Risk Cap Sheet 沒有首筆正式紀錄。
+#:   收盤值區分、veto 判定未留痕）⇒ 窗口因 dry-run Fail-Stop 關閉，**未發生寫入嘗試**（production-write 從未執行），
+#:   System Risk Cap Sheet 沒有首筆正式紀錄。
 #:   依上方「下一個 PR 必須立刻改回 False」改回 False。再開須先修正並驗證資料時點問題，再走新的旗標 Gate（新 PR＋同日 dry-run）。
 PRODUCTION_WRITE_APPROVED: bool = False
 
