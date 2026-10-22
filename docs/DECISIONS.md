@@ -455,6 +455,11 @@
 - 📌 2026-10-21 狀態補註二（append-only；Step 4 子步驟 1；**不是新 DEC**）：客戶 2026-10-21 核准開立 DEC-066 A 的**一次性旗標 PR** —— `shared/risk_cap_history_policy.py::PRODUCTION_WRITE_APPROVED` 由 `False` 改 `True`＋政策測試同步（拒絕路徑測試改以 monkeypatch 回 `False` 繼續覆蓋閘門）。⚠️ 本 PR 只翻旗標：**production-write 尚未執行**、⛔ 未加 `schedule:`、未改 workflow job 邏輯／WIF／IAM／Environment。⛔ 依 A：首次寫入嘗試後**不論結果**，下一個 PR 必須立即把旗標改回 `False`；改回前不得有第二次寫入嘗試。F 不變。本條原文不改
 - 📌 2026-10-22 狀態補註三（append-only；Step 4 首次寫入 **Fail-Stop**；客戶裁示 B；**不是新 DEC**）：DEC-066 A 的一次性寫入窗口**關閉**。Fail-Stop 證據（run 39755679219，job 119746957010，main `e7e580c`，2026-10-22 17:28 台北 dry-run；總管轉述 Actions log）：`record_date`＝2026-10-22、`status`＝VALID、`exposure_limit_pct`＝30、`required_core_ok`＝TRUE、`missing_core`／`not_evaluated`／`refresh_failed` 空、`refresh_ok`＝TRUE、`git_sha`＝`e7e580c`；^TWII／MA5／Futures_Net_Short 皆用 2026-10-22（證據欄位＝record `input_asof`：Index_Below_MA5、BIAS240_pct、Futures_Net_Short＝2026-10-22；MA5 數值本身 log 未印）；30% 經正式 `calculate_system_state` 重算＝紅線三（外資期貨淨空 < −35,000 口 AND 加權指數跌破 MA5）；MA5 46,631.01、10-22 指數 46,041（低約 1.27%）——**重算值（非 log 直證）**：由獨立核對組以正式函式 `market_strategy.get_market_assessment` 重算，視窗收盤 10-16 47111.26／10-19 46822.08／10-20 46292.93／10-21 46887.77（取自 `data_cache/twii_ohlcv.parquet`）＋10-22 46041（取自 log `[Bias] price=46041`，該行為 2y yfinance 抓取，非 mkt_info 那次抓取）。前兩次 dry-run：39608164307（10-21，80%）；39695843255（10-22 07:50，30%，^TWII 少 10-21 一根、MA5@10-20 配期貨@10-21 跨日配對，客戶不接受）。**未通過原因**：(1) VIX 18.4 標 2026-10-22，但 17:28 台北美股尚未開盤 ⇒ 為盤前／未收盤暫定日線，現行 freshness 無法區分；(2) log 未留 Futures_Net_Short 實際口數、MA5 判定、veto_flags，只能由正式函式＋區間反推確認。 ⛔ production-write **從未執行**；System Risk Cap Sheet **沒有首筆正式紀錄**。依 A，關窗 PR 將 `PRODUCTION_WRITE_APPROVED` 改回 `False`（政策測試同步改回）；⛔ 未改 `.github/`／`scripts/`／`src/`、公式、門檻、VALID 定義、資料來源、freshness、WIF／IAM／Environment。下次重開：須先修正並驗證資料時點問題（BACKLOG `VN1-PG-VIX-ASOF`／`VN1-PG-VETO-TRACE`／`VN1-PG-PIT-CONSISTENCY`），再走**新的**旗標 Gate（新 PR 開旗標＋同日 dry-run 等）；本補註不構成重開授權。F（Daily Schedule NOT APPROVED）不變。前兩條補註原文不改
 
+
+### DEC-067｜Handoff Save Check 與跨對話 SSOT（客戶 2026-10-22 頒布）
+- **來源**：客戶 2026-10-22 新增正式治理規則（經總管轉交，撰寫組未見原件）。
+- **內容**：GitHub 為跨 ChatGPT／Claude Code／新舊對話的共同 SSOT；對話結束前執行 Handoff Save Check、新對話開始先校正 GitHub 實況；不大量保存聊天紀錄或未裁示想法。全文見 `PROJECT_RULES.md` 第 15 節（本條不複製規則）。
+
 ## 3. 資料語意（data semantics）
 
 ### DEC-026｜Missing ≠ 0：未觀測→缺值、真實 0→0、有效值→原值；不得 fillna(0) 或自估合理值

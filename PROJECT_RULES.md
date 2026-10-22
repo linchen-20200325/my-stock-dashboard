@@ -283,3 +283,12 @@ Effort：Low / Medium / High
 ## 第 14 節｜未調和的衝突
 
 不在本檔裁定。全部登記於 `docs/BACKLOG.md` 第 4 節（`CV1-DR-*` Decision Required、`CV1-RC-*` Research Candidate），並由 `docs/DECISIONS.md` 第 6 節索引。暫行讀法：**任一套規則要求停下就停下**。
+
+## 第 15 節｜Handoff Save Check 與跨對話 SSOT（客戶 2026-10-22 頒布）
+
+> 客戶 2026-10-22 頒布（經總管轉交；要點逐條收錄）。裁示紀錄見 `docs/DECISIONS.md` DEC-067。
+
+1. GitHub 是跨 ChatGPT、Claude Code 與新舊對話之間的專案共同 SSOT。
+2. 任何完整工作階段／對話準備結束前，執行 **Handoff Save Check**：永久治理變更 → `PROJECT_RULES.md`；客戶正式裁示 → `docs/DECISIONS.md`；未完成工作 → `docs/BACKLOG.md`；current state／blockers／next safe point → `docs/HANDOFF.md`。
+3. 任何新 ChatGPT／Claude Code 對話開始時：(1) 先重新取得 GitHub 最新實況；(2) 讀 `PROJECT_RULES.md`／`docs/DECISIONS.md`／`docs/BACKLOG.md`／`docs/HANDOFF.md`；(3) 驗證 main SHA、open／draft PR、CI／QA 與相關 branch；(4) GitHub 實況優先於 HANDOFF、AI memory、舊聊天摘要；(5) 發現不一致時不得自行猜測，依正式證據校正。
+4. 不得把完整聊天紀錄、腦暴或未裁示想法大量寫入 GitHub；只保存會影響未來工作的正式專案狀態。
