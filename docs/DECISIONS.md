@@ -459,6 +459,27 @@
 ### DEC-067｜Handoff Save Check 與跨對話 SSOT（客戶 2026-10-22 頒布）
 - **來源**：客戶 2026-10-22 新增正式治理規則（經總管轉交，撰寫組未見原件）。
 - **內容**：GitHub 為跨 ChatGPT／Claude Code／新舊對話的共同 SSOT；對話結束前執行 Handoff Save Check、新對話開始先校正 GitHub 實況；不大量保存聊天紀錄或未裁示想法。全文見 `PROJECT_RULES.md` 第 15 節（本條不複製規則）。
+- 📌 2026-10-22 狀態補註（append-only）：本條由 **DEC-068** 擴充（五檔分工、`docs/PROJECT_STATE.md`、Handoff Save Check 第五項、Context Loss Check、啟動優先序加 PROJECT_STATE 一層）；本條原文不改、不被取代，兩條併讀。
+
+### DEC-068｜GitHub＝跨 AI 長期專案記憶 SSOT；五檔分工；新增 `docs/PROJECT_STATE.md`；Context Loss Check（客戶 2026-10-22）
+> 2026-10-22 追加（第 8 節「收到當輪追加」；ID 照序取下一個未用號，撰寫組 `git grep -oh "DEC-0[0-9]*" | sort -u` 實測最大為 DEC-067）。BACKLOG 登記：DR-2026-10-22-1。
+- **內容**（引號內為客戶原文逐字；規則全文見 `PROJECT_RULES.md` 第 0.3 節、第 15 節，本條不複製規則）：
+  1. 「客戶已正式裁示：採用「GitHub = 跨 AI 長期專案記憶 SSOT」架構。」
+  2. 五檔分工：`PROJECT_RULES.md`＝永久治理規則、AI 工作方式、禁止事項、驗證規則；`docs/DECISIONS.md`＝客戶已正式裁示的決策與必要 rationale；`docs/BACKLOG.md`＝所有未完成工作的唯一 SSOT；`docs/HANDOFF.md`＝短版交接（只保存 current active work、blocker、next safe point、必要的 main／PR／CI 狀態），「不再把它當完整專案記憶」；新增 `docs/PROJECT_STATE.md`＝「ChatGPT + Claude 共用的「目前仍然有效」完整專案狀態」。「不要再新增 PROJECT_CONTEXT.md，避免與 PROJECT_STATE 重疊。」
+  3. PROJECT_STATE 原則：「保存專案知識，不保存聊天紀錄。」不得成為第二份 BACKLOG／HANDOFF、複製完整聊天紀錄、保存 secret／credential／private key、把 Candidate 寫成 Approved、把推測寫成 GitHub factual truth、取代 DECISIONS、保存已失效的流水帳。
+  4. 跨 AI 啟動：fetch → 讀五檔 → 驗證 main SHA／open／draft PR／relevant commits／diffs／CI／QA／relevant branches；「GitHub factual reality > HANDOFF > PROJECT_STATE 中的狀態快照 > AI memory / conversation summary。」不一致時以 GitHub evidence 為準、不得猜測、必要時修正正式文件。「與現有 §15 / DEC-067 整合，不建立競爭規則」。
+  5. Handoff Save Check 加第五項：「仍有效的完整專案狀態、架構關係、重要背景與限制 → PROJECT_STATE」。
+  6. Context Loss Check A～E；「任何答案為「有」且尚未保存時：不得宣告交接完成。」
+- **範圍**：治理（交接、跨對話 SSOT）｜**日期**：2026-10-22｜**決策者**：客戶｜**狀態**：生效
+- **來源**：D 客戶訊息 2026-10-22T14:43Z（本 session；本檔首次入庫）。
+- **與其他 DEC 的關係**：擴充 DEC-067（不取代）；DEC-056 第 4 點的四檔責任（Blueprint／BACKLOG／DECISIONS／HANDOFF）不受影響，PROJECT_STATE 不承載 Blueprint 的方向本文。⛔ 本條不是任何功能工作的動工授權（`CLAUDE.md` §-1）。
+
+### DEC-069｜客戶回報語言：一律繁體中文（客戶 2026-10-22）
+> 2026-10-22 追加（第 8 節；本條原為聊天裁示，於 DEC-068 Context Loss Check 盤點時補入庫）。BACKLOG 登記：DR-2026-10-22-2。
+- **內容**（客戶原文逐字）：「從現在起所有客戶回報一律使用繁體中文；除程式碼、正式欄位名稱、log 原文外，不得改用英文。」規則落點：`PROJECT_RULES.md` 第 3 節。
+- **範圍**：治理（回報格式）｜**日期**：2026-10-22｜**決策者**：客戶｜**狀態**：生效
+- **來源**：D 客戶訊息 2026-10-22T00:18Z（本 session；本檔首次入庫）。
+- **與其他 DEC 的關係**：與 DEC-060（回報格式）併用、不取代；只規範對客戶的回報語言，不規範產品畫面文案。
 
 ## 3. 資料語意（data semantics）
 
