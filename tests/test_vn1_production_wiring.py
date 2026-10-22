@@ -571,12 +571,14 @@ class TestWriteGate:
     # ~~`test_flag_still_false`（斷言 L0／L1 旗標為 False）~~ —— 📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；
     #   有意識的變更，不是漏刪）：客戶核准一次性旗標 PR ⇒ 改斷言核准狀態；且核准後其餘閘門照樣拒絕
     #   （寫入總開關未設 ⇒ 拒絕；⛔ 旗標只開第一道）。首次寫入嘗試後下一個 PR 立刻改回 False，本測試同步改回。
-    def test_flag_approved_for_first_write(self):
-        assert P.PRODUCTION_WRITE_APPROVED is True
-        assert L1H.PRODUCTION_WRITE_APPROVED is True
-        L1H.assert_production_write_approved()                       # 第一道放行
-        with pytest.raises(L1H.ProductionWriteNotApproved, match=P.WRITE_ENABLE_ENV_VAR):
-            L1H.load_writer_credentials_or_refuse({})                 # 第二道照樣擋
+    # ~~`test_flag_approved_for_first_write`（斷言 True、第一道放行）~~ —— 📌 2026-10-22（DEC-066 狀態補註三，
+    #   客戶裁示 B；有意識的變更，不是漏刪）：首次寫入 Fail-Stop、一次性窗口關閉 ⇒ 改回原名、改回斷言 False，
+    #   並守「第一道就擋」（旗標 False ⇒ 連寫入總開關都還沒檢查就拒絕）。
+    def test_flag_still_false(self):
+        assert P.PRODUCTION_WRITE_APPROVED is False
+        assert L1H.PRODUCTION_WRITE_APPROVED is False
+        with pytest.raises(L1H.ProductionWriteNotApproved, match="尚未核准"):
+            L1H.assert_production_write_approved()
 
     def test_gate_raises_even_fully_configured(self, tmp_path, monkeypatch):
         force_write_unapproved(monkeypatch)
@@ -643,11 +645,13 @@ class TestWriteGate:
     def test_no_code_sets_approved_true(self):
         """全 repo（含測試）沒有任何地方把核准旗標設成 True（賦值、monkeypatch.setattr、setattr 皆算）。
 
-        📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；有意識的變更，不是漏刪）：唯一例外是 L0 宣告本身
+        ~~📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；有意識的變更，不是漏刪）：唯一例外是 L0 宣告本身
         （一次性旗標 PR，客戶 2026-10-21 核准）—— L0 檔排除在掃描外，改逐字釘死「恰好一行 `= True` 宣告」；
-        其餘檔案（含測試）設 True 照樣紅燈。首次寫入嘗試後下一個 PR 改回 False，本測試同步改回。
+        其餘檔案（含測試）設 True 照樣紅燈。首次寫入嘗試後下一個 PR 改回 False，本測試同步改回。~~
+        📌 2026-10-22（DEC-066 狀態補註三，客戶裁示 B；有意識的變更，不是漏刪）：一次性窗口關閉、旗標改回 False
+        ⇒ 恢復 base 行為：**全掃（含 L0 policy 檔）**，任何 `= True` 都紅燈；L0 宣告逐字釘死為 `= False`。
+        （順帶補上 QA 指出的漏洞：上一版把 policy 檔整檔排除，檔內其他位置的 `= True` 掃不到。）
         """
-        policy_rel = "shared/risk_cap_history_policy.py"
         name = "PRODUCTION_WRITE" + "_APPROVED"
         pats = [re.compile(name + r"\s*(?::\s*bool\s*)?=\s*True"),
                 re.compile(r"setattr\([^)]*['\"]" + name + r"['\"]\s*,\s*True"),
@@ -657,14 +661,14 @@ class TestWriteGate:
         hits = {}
         for f in files:
             t = f.read_text(encoding="utf-8")
-            if name not in t or f.relative_to(REPO).as_posix() == policy_rel:
+            if name not in t:
                 continue
             found = [p.pattern for p in pats if p.search(t)]
             if found:
                 hits[f.relative_to(REPO).as_posix()] = found
         assert not hits, hits
-        policy = (REPO / policy_rel).read_text(encoding="utf-8")
-        assert re.findall("^" + name + r"\b.*$", policy, re.MULTILINE) == [name + ": bool = True"]
+        assert re.search(r"^PRODUCTION_WRITE_APPROVED: bool = False$",
+                         (REPO / "shared/risk_cap_history_policy.py").read_text(encoding="utf-8"), re.MULTILINE)
 
     def test_gate_without_first_check_mutation_turns_red(self, tmp_path, monkeypatch):
         """突變：拔掉第一道核准檢查（旗標仍 False）⇒ 合格 WIF 檔就一路放行；真模組照樣拒絕。"""

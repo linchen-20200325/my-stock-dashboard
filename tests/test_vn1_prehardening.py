@@ -513,9 +513,11 @@ class TestEnvironmentWiring:
 
     # ~~`test_approval_flag_still_false`~~ —— 📌 2026-10-21（DEC-066 A，Step 4 子步驟 1；有意識的變更，不是漏刪）：
     #   客戶核准一次性旗標 PR ⇒ 改斷言 True；首次寫入嘗試後下一個 PR 改回 False，本測試同步改回。
-    def test_approval_flag_approved_for_first_write(self):
+    # ~~`test_approval_flag_approved_for_first_write`（斷言 True）~~ —— 📌 2026-10-22（DEC-066 狀態補註三，
+    #   客戶裁示 B；有意識的變更，不是漏刪）：首次寫入 Fail-Stop、一次性窗口關閉 ⇒ 改回原名、改回斷言 False。
+    def test_approval_flag_still_false(self):
         from shared import risk_cap_history_policy as P
-        assert P.PRODUCTION_WRITE_APPROVED is True
+        assert P.PRODUCTION_WRITE_APPROVED is False
 
 
 # ══════════════════════════════════════════════════════════════════════════
