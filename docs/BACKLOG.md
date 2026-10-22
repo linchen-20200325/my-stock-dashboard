@@ -79,6 +79,7 @@
 | **DR-2026-10-22-1**（GitHub＝跨 AI 長期專案記憶 SSOT） | 2026-10-22 | 換 Claude／ChatGPT 對話時，專案知識如何不遺失？ | 客戶正式裁示（客戶原文，本 session）：採用「GitHub = 跨 AI 長期專案記憶 SSOT」架構；五檔分工（HANDOFF 改短版、新增 `docs/PROJECT_STATE.md`、不新增 `PROJECT_CONTEXT.md`）；啟動優先序 GitHub > HANDOFF > PROJECT_STATE 狀態快照 > AI memory；Handoff Save Check 第五項；Context Loss Check A～E。全文要點見 DEC-068 | `PROJECT_RULES.md` 第 0.3、15 節；`docs/PROJECT_STATE.md`；`docs/DECISIONS.md` DEC-068 |
 | **DR-2026-10-22-2**（客戶回報語言） | 2026-10-22 | 客戶回報可否使用英文？ | 客戶原文：「從現在起所有客戶回報一律使用繁體中文；除程式碼、正式欄位名稱、log 原文外，不得改用英文。」 | `PROJECT_RULES.md` 第 3 節；`docs/DECISIONS.md` DEC-069 |
 | **DR-2026-10-22-3**（Risk Cap 每日代表時點；^TWII 缺棒） | 2026-10-22 | Q1：每日風險上限代表哪個時點（盤後版 vs 盤前版）？Q2：Yahoo 缺 ^TWII K 棒怎麼辦？（題目為總管所提，非客戶原文） | 客戶原文摘錄（逐字全文見 DEC-070）：「1. Q1 採 A「盤後版」方向。」「台股輸入以同一錨定交易日 D 為原則。」「外資期貨與 MA5 必須屬於同一個台股交易日。」「VIX 只能使用在該判斷時點已完成收盤、且不造成 look-ahead 的資料。」「PMI 維持既有資料月規則。」「先將「盤後且 D 日必要台股資料均已正式可得」定為正式語意；16:00 可列保守執行時間／Candidate，待官方來源驗證後再決定是否固化。」「2. Q2 採 A：」「Yahoo 缺 ^TWII 必要 K 棒時 Fail-Stop／無法評估並明示；不得以前一交易日偷偷頂替，也暫不新增或替換正式資料來源。」；第 3 點授權一個 docs-only PR 做 Context Loss Check 落盤；「本批仍只允許文件落盤，不授權 Risk Cap 核心語意實作、不開 production-write、不開 schedule、不新增資料來源。」⚠️ 「VIX 取美東日期早於 D 的最後一根」是總管推薦的**候選實作**，**非客戶裁示**；台北 16:00＝Candidate | 5.1.4 `VN1-PG-VIX-ASOF`／`VN1-PG-VETO-TRACE`／`VN1-PG-PIT-CONSISTENCY`／`VN1-PG-FIRST`／`VN1-PG-L-TWII-DROPNA-LOG`／`VN1-PG-CUTOFF-VERIFY`／`VN1-PG-TWII-MISS-FREQ`／`VN1-PG-YAHOO-PROBE`／`VN1-PG-L-PIT-GAPS`；`docs/DECISIONS.md` DEC-070 |
+| **DR-2026-10-22-4**（新 UI 方向：大盤／市場趨勢） | 2026-10-22 | 新 UI 視覺、主頁核心、導航名稱、市場趨勢研究主軸怎麼走？（客戶主動提出，非總管送題） | 客戶【客戶已確認】六點（原文逐字見 DEC-071）：「1. 新 UI 的視覺設計方向維持。」「2. 舊 UI 的既有功能與判讀邏輯是新版的重要參考，不應因新版簡化而大量刪除。」「3. 第一個主頁不要再以「今天」為核心，應以「大盤／市場趨勢」為核心。」「4. 原「今天／找標的／我的持股／我的」導航名稱後續重新命名；目前候選名稱不是 final。」「5. 市場趨勢研究只保留兩個主軸：台股趨勢、國際趨勢」「6. 「大盤」必須明確保留，不能只留下「趨勢」兩字。」；同輪研究框架（蕭碧燕老師資料）屬 Research Framework、非 Approved（`docs/PROJECT_STATE.md` §22）。⛔ 不是動工授權、不取代 DEC-003 線框 gate、不授權改刪舊 UI；與 DEC-057／DEC-062 Q1 的張力待 `VN1-MT-HOME` | 5.1.6 `VN1-MT-*`；`BP-DR-01`；`docs/DECISIONS.md` DEC-071 |
 
 ### 1.1 待裁示（已整理、尚未送題或尚未裁示）
 
@@ -418,7 +419,7 @@
 
 | ID | 問題（一句話） | Gate | 對應 VN | 總管推薦（摘要） |
 |---|---|---|---|---|
-| **BP-DR-01** | 主頁改為「今天／機會／持股／我的」（2.0 加「動態」），取代 DEC-017 五頁？ | DEC-003 ① | VN-02、VN-36 | 核准；「查一檔」改為詳情頁、「憑什麼」改為每個結論上的「為什麼？」<br>📌 2026-10-18（DEC-062，append-only）：Q1-B：納入 1.0 送審範圍；未施工 |
+| **BP-DR-01** | 主頁改為「今天／機會／持股／我的」（2.0 加「動態」），取代 DEC-017 五頁？ | DEC-003 ① | VN-02、VN-36 | 核准；「查一檔」改為詳情頁、「憑什麼」改為每個結論上的「為什麼？」<br>📌 2026-10-18（DEC-062，append-only）：Q1-B：納入 1.0 送審範圍；未施工<br>📌 2026-10-22（DEC-071，append-only）：客戶確認主頁核心改「大盤／市場趨勢」、導航後續改名（候選非 final）→ 見 5.1.6 `VN1-MT-HOME`／`VN1-MT-NAV`；本列原文不改 |
 | **BP-DR-02** | handoff 分支「UI 目標架構（V3）」永久排除條款在 DEC-054／056 後是否仍有效？ | — | VN-09 | 與 DEC-054 衝突的「買賣建議不落地」視為被取代；保留「AI 自生目標價不落地」與 DEC-022 再平衡限制 |
 | **BP-DR-03** | 首屏放一行 Google 登入晶片、「我的」頁放完整登入卡？ | DEC-003 ① | VN-01 | 核准；重用既有元件、不改 scope；前提 SEC-1 先修（📌 2026-10-18：`SEC-1` 已隨 #870 `7b803b4f` 結案；本題仍待客戶裁示）<br>📌 2026-10-18（DEC-062，append-only）：Q1-B：納入 1.0 送審範圍；未施工 |
 | **BP-DR-04** | 重新整理後保持登入、個人設定與已讀狀態是否持久化？ | DEC-009-cred | VN-01 | 1.0 暫不做，畫面誠實揭露<br>📌 2026-10-18（DEC-062，append-only）：Q2-B：保持登入為目標（先 SEC-2＋可行性驗證，不過退回 A）；設定／已讀延 2.0；未施工 |
@@ -461,7 +462,7 @@
 
 | ID | 類別 | 內容 | 指標 | status | 驗證組數 |
 |---|---|---|---|---|---|
-| **BP-RC-01～BP-RC-12** | Research Candidate | 雙軌最小 metrics、Context factor 分群、Evidence 去重、Regime as Context、真實曝險、替代標的、Scenario、產業雷達、週報／晨報、Streamlit Mobile 導覽 PoC、Decision Log 儲存方案、「尚未公布」預計發布日來源（逐題見 BP 第 24 節，各題對應 VN-ID） | BP 第 24 節 | open | 1（Blueprint 撰寫組；經 A／B review 審閱，修訂後經 R2 複驗（第 3 輪 PASS-WITH-FIXES，殘留 `BP-ERR-01`；2026-10-17 第 4 輪本 PR（＝#869，已合併；`BP-ERR-01` 已結案）修正、合併後生效，DEC-058）；`BP-RC-12` 為 review 後新增，僅經 R2 複驗） |
+| **BP-RC-01～BP-RC-12** | Research Candidate | 雙軌最小 metrics、Context factor 分群、Evidence 去重、Regime as Context、真實曝險、替代標的、Scenario、產業雷達、週報／晨報、Streamlit Mobile 導覽 PoC、Decision Log 儲存方案、「尚未公布」預計發布日來源（逐題見 BP 第 24 節，各題對應 VN-ID） | BP 第 24 節<br>📌 2026-10-22（append-only）：`BP-RC-07`／`BP-RC-08` 與客戶研究框架的 AI／CSP CAPEX 傳導相關 → 關聯 5.1.6 `VN1-MT-CAPEX-EPS`（不重複登記） | open | 1（Blueprint 撰寫組；經 A／B review 審閱，修訂後經 R2 複驗（第 3 輪 PASS-WITH-FIXES，殘留 `BP-ERR-01`；2026-10-17 第 4 輪本 PR（＝#869，已合併；`BP-ERR-01` 已結案）修正、合併後生效，DEC-058）；`BP-RC-12` 為 review 後新增，僅經 R2 複驗） |
 | **UIA-P1P2** | UX-Mobile | 新 UI 實機 Audit 其餘項（P1 10／P2 13／P3 1，量測日 2026-10-17；含入口藏在收合側欄、工程術語外露、卡片過高、出口指向新 UI 模式下不顯示的舊分頁、手機表格截斷、Streamlit 頂列約佔 120px 等）＋工程術語 P0／P1／Dev 分級 | UIA 報告；BP 第 21 節 Gap 表、第 26 節 `BP-B1`～`BP-B7` | open（版面類須先出線框，DEC-003 ①；純文案修正屬內部自決） | 1（U 組；工程術語分級為 C 組單組 AST 掃描） |
 
 #### 5.1.4 `VN1-STORE` Production Gate 後續（DEC-066／DR-2026-10-20-3；2026-10-20 新增）
@@ -503,7 +504,7 @@
 | **VN1-C-MD-V2-AUDIT** | Market Direction v2 後續 Audit | C | 查無任何文件提及 "Market Direction"；📌 2026-10-22：**定義來源待客戶提供（GitHub 無）**，不得推測 | 客戶確認範圍與指涉後再登記 |
 | **VN1-C-CALENDAR** | Calendar／settlement／holiday context（交易日曆、結算日、休市） | C | `AUD-C13` (2)（平日國定假日異常 K 棒只擋週末）；`CLAUDE.md` §4.5／§4.6 | 可併 `VN1-PG-PIT-CONSISTENCY` 研究評估<br>📌 2026-10-22（append-only）：PIT 研究〔repo 事實〕台股交易日曆已存在（`src/data/stock/twse_holiday_fetcher.py`、`shared/trading_days.py`、`src/services/trading_calendar_service.py`；不含颱風臨時休市、只拿當年表）；無美股交易日曆。期貨結算日規則仍無定義來源 |
 | **VN1-C-HYSTERESIS** | 市場狀態 hysteresis／persistence／cooldown | C | `AUD-L7`（僅推播 cooldown） | 送 Decision Gate |
-| **VN1-C-REGIME-RESOLVER** | Regime／Market State／Conflict Resolver | C | `VN-23`（Regime as Context）、`AUD-C10`（方向相反無仲裁） | 送 Decision Gate |
+| **VN1-C-REGIME-RESOLVER** | Regime／Market State／Conflict Resolver | C | `VN-23`（Regime as Context）、`AUD-C10`（方向相反無仲裁） | 送 Decision Gate<br>📌 2026-10-22（append-only）：「台股趨勢」定義與四概念不合併見 5.1.6 `VN1-MT-TREND-DEF`（關聯，不是同一件事） |
 | **VN1-C-DECISION-SNAPSHOT** | Market Decision Snapshot | C | `VN-27` Decision Log、`BP-DR-13`（上次有效快照） | 送 Decision Gate |
 | **VN1-C-COUNTERFACTUAL** | Counterfactual evaluation | C | `VN-29` Decision Review、`CLAUDE.md` §2.3 forward-test | 送 Decision Gate |
 | **VN1-C-DQ-SLO** | Data Quality SLO | C | DEC-008（治理原則，非 SLO）、`VN-04`、`VN-17` | 送 Decision Gate |
@@ -512,3 +513,18 @@
 | **VN1-STORE-FU-DESIGN** | `VN1-STORE` 正式化前的 12 項待決設計／待驗證項（預期日期、寫入 concurrency、殘留執行緒、cache 退路 provenance、Actions 實跑、`has_prior_valid` 類訊號、長間隔 COMPARABLE、A→B→A 去重、`refresh_failed` 少報、provenance 未 scrub、Actions 上殘留執行緒時長等）—— 逐項本文見 `docs/vnext/VN1_STORE_RESEARCH.md` §8.4，本列只做指標（2026-10-22 新增） | C（Candidate／Decision Gate）；open | `VN1-STORE`、`VN1-PG-READBACK`、`VN1-PG-SCHED` | 逐項判斷是技術自決或送 Decision Gate；⛔ 不構成動工授權 |
 | **VN1-C-PANDAS31-AUDIT** | pandas 3.1 production 相容性稽核（2026-10-22 新增；**AI 提案**，非客戶指派）：pandas 3.1.0 改變 object 欄 `.mean()` 行為，#899 只修測試；`requirements.txt` 宣告 `pandas>=2.0.0,<4.0.0`，未排除 3.x；production 程式在 3.1 下是否受影響**未稽核** | C（Candidate）；open | #899（`f50d4ee0`）；`tests/test_batch_z2_nonfinite.py` | 送客戶決定是否指派唯讀稽核；⛔ 未經指派不改 code／requirements |
 | **VN1-C-APP-READY-AUDIT** | App-ready architecture audit（2026-10-22 新增；**客戶方向**：客戶 2026-10-19 接手提示 §16「未來安全點應做：App-ready architecture audit」「只 audit / research，不代表已核准 refactor」「不得拿此方向中斷目前 1.0 工作」） | C（研究；非核准 refactor）；open | `docs/PROJECT_STATE.md` 第 18 節 | 安全點時由客戶指派；⛔ 不替換 Streamlit、不 refactor |
+
+### 5.1.6 大盤／市場趨勢研究與新 UI 資訊架構（DEC-071／DR-2026-10-22-4；2026-10-22 新增；append-only）
+
+> 依 DEC-071（客戶 UI 方向六點）與客戶同輪提供的研究框架（`docs/PROJECT_STATE.md` §22，**Research Framework，非 Approved**）登記。全部為 **C（Research Candidate）或 Decision Gate**；⛔ 不是已核准規格、⛔ **不構成動工授權**（`CLAUDE.md` §-1）；任何版面／導航／欄位變動須先出文字線框（DEC-003 ①）；⛔ 不修改、不刪除舊 UI（DEC-019／020）；⛔ 不建立新的綜合分數；⛔ 研究案例數字不得成為門檻。evidence 為兩組唯讀盤點＋總管抽查（總管轉述），撰寫組彙整、抽查部分符號；「不存在」類為 grep 結果、未經第三組驗證（§-2 規則 6）。採 5.1.5 精簡格式，ID 前綴 `VN1-MT-` 永不重用。
+
+| ID | 標題 | 分類 | 相鄰／關聯既有項（非同一件事） | next action |
+|---|---|---|---|---|
+| **VN1-MT-IA** | 大盤頁資訊架構：兩主軸「台股趨勢」「國際趨勢」、明確保留「大盤」字樣（不能只留「趨勢」）；參考舊 UI 既有功能與判讀邏輯 | C（UI；**線框草稿先行**，DEC-003 ①）；blocked-on-customer | DEC-071 第 3／5／6 點；`BP-DR-16`（線框送審）；`1.0-B4`；`VN1-MT-HOME`、`VN1-MT-TREND-DEF`（前置） | 前置 Gate 裁示後出文字線框＋總管推薦送客戶；⛔ 線框拍板前不寫 UI code |
+| **VN1-MT-HOME** | 主頁核心改「大盤／市場趨勢」與 DEC-057「首頁不是 Dashboard。」「不要為了讓首頁有內容而製造 Action。」、DEC-062 Q1「今天頁」送審範圍的關係 | **Decision Gate**；blocked-on-customer | DEC-071 第 3 點；DEC-057；DEC-062 Q1；`BP-DR-01`、`VN1-Q1` | **客戶需裁示**：大盤／市場趨勢主頁是取代、併入還是與 DEC-062 Q1 的今天頁並存，以及它如何與「首頁不是 Dashboard」並存（送題須附總管推薦方案） |
+| **VN1-MT-NAV** | 導航重新命名（候選非 final）。repo 現存兩套：DEC-017 現行五頁 🚦今天／🔍找標的／🔬查一檔／💼我的持股／📖憑什麼（`shared/ia_nav.py::PAGE_LABELS`）；DEC-062 Q1 四格「今天／機會／持股／我的」（**線框送審範圍**，線框未送審）。客戶本輪用詞「今天／找標的／我的持股／我的」與兩套都不完全相同；撰寫組不判定指哪套 | **Decision Gate**；blocked-on-customer | DEC-071 第 4 點；`BP-DR-01`；DEC-017；DEC-062 Q1 | 線框送審時一併確認現行基準與新名稱候選；⛔ 名稱拍板前不改 `PAGE_LABELS` |
+| **VN1-MT-TREND-DEF** | 「台股趨勢」「國際趨勢」定義（本輪寫入前全 repo 0 命中）；⛔ 不得與市場位階（`allocation_service.get_macro_regime`）／指標危險度（16 燈、`overall_verdict`）／Risk Cap（`calculate_system_state`）合併、⛔ 不得成綜合分數；含「短期修正 vs 長期趨勢」切法 | **Decision Gate**；blocked-on-customer | `VN1-C-REGIME-RESOLVER`、`VN-23`、SPEC.md §16.5（位階與危險度並列不合成）；可能原料 `market_strategy.get_market_assessment`、`macro_helpers.classify_long_term_regime` | 研究後附推薦方案送客戶定義；⛔ 未定義前不得在畫面或程式宣稱「台股趨勢」結論 |
+| **VN1-MT-LEGACY-GAP** | 舊 UI 大盤／總經功能新版未接清單（登記用，非窮舉）：NDC 景氣領先指標（`tw_macro.fetch_ndc_leading_index`）、外資連買（`tw_macro.fetch_foreign_consecutive_days`）、hot_money、PCR 數值、v4 `check_macro_veto` 數值、`risk_radar`、中國 OECD CLI（`FRED_CHN_OECD_CLI`）、`classify_long_term_regime` | C（只登記）；open | DEC-071 第 2 點；DEC-019／020；V-RADAR-1（`CLAUDE.md` §8.2.A.2） | 只登記；接回新版任一項須先出線框（DEC-003）且須客戶指派；⛔ 舊 UI 不刪不改 |
+| **VN1-MT-VALUATION** | 大盤 EPS×PE 情境估值矩陣（客戶研究框架：估值方法之一，不代表完整趨勢判斷） | Research Candidate＋缺資料；open | 大盤 EPS／PE／forward EPS 不存在（EPS、本益比只在個股層）；`risk_radar.synthesize_dual_verdict` 的 `valuation_level` 無人產生 | 研究大盤 EPS／PE 可用來源；新資料源＝Decision Gate（`PROJECT_RULES.md` §4 #3）；⛔ 不自估 EPS／PE |
+| **VN1-MT-YIELD-CLI** | 長天期公債殖利率＋景氣領先指標的水位與方向（含兩者方向組合、歷史泡沫案例比較） | Research Candidate；open | `us10y` 燈（FRED DGS10 單點）；方向列刻意 mode none（`shared/lamp_direction_thresholds.py`，理由：不混源 ^TNX）；30Y 不存在；美國／全球 CLI 不存在；NDC 領先指標已有但新版未接（見 `VN1-MT-LEGACY-GAP`）；`leading_indicators.py` 是籌碼先行指標、非景氣領先指標 | 研究資料源與方向算法；改方向規則／新增取數源＝Decision Gate；⛔ 歷史泡沫案例只作研究比較、不得成門檻 |
+| **VN1-MT-CAPEX-EPS** | AI／CSP CAPEX 與國際景氣／利率 → 企業投資 → 台灣企業獲利／EPS 傳導（含 capex 過高、現金流下降的反面風險） | Research Candidate；open | `BP-RC-07`（AI CapEx 下修情境）、`BP-RC-08`（產業雷達 CapEx）；`capex_intensity` 只在個股層；`VN1-MT-VALUATION` | 併 `BP-RC-07`／`08` 研究評估；⛔ 不得假精確分數 |

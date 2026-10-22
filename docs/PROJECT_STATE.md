@@ -21,6 +21,7 @@
 - 1.0 已裁示範圍：DEC-062 Q1～Q5（全文見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md`）。
 - 1.0 建議批次現況（`VNEXT_1_0_DECISION_GATES.md` §6；建議不是授權）：`1.0-B1` 安全地基完成（#877）；`1.0-B2` 靜默恢復登入程式已合併（#879），待客戶正式網站驗收（`B2-FU-1`）；`1.0-B3` 保存方式研究完成（#881）→ 延伸為 `VN1-STORE` 主線（DEC-063～066）；`1.0-B4` 線框送審**未開始**。
 - Roadmap 每一批都要客戶指派（DEC-015、DEC-006）；已完成批次不得重做。
+- 📌 2026-10-22（DEC-071，append-only）：客戶確認第一個主頁改以「大盤／市場趨勢」為核心、導航後續改名（候選非 final）；與 DEC-062 Q1「今天頁」送審範圍及 DEC-057「首頁不是 Dashboard」的關係**待 Decision Gate**（BACKLOG `VN1-MT-HOME`／`VN1-MT-NAV`）；`1.0-B4` 線框仍未開始。見 §22。
 
 ## 3. Data ≠ AI reasoning（Approved）
 
@@ -126,6 +127,7 @@
 - 現行 `market_regime`（多頭／震盪／空頭）是 Risk Cap 引擎依上限分級的**輸出**（§4），不是獨立模型；`macro_state_locker.normalize_regime` 做中→英正規化。
 - Regime 作為 Context（非 Core）：`VN-23`，Research Candidate；Context 升 Core／hard veto 須客戶裁示（DEC-009；D18）。
 - 「Market State」：**GitHub 無定義來源**；Regime／State／Conflict Resolver 的統整為候選 `VN1-C-REGIME-RESOLVER`。
+- 📌 2026-10-22（append-only）：市場位階／指標危險度／Risk Cap／台股趨勢四概念分開、同名不同義 regime 的對照見 §22.3（客戶要求不合併、不建綜合分數；DEC-071）。
 
 ## 12. 決策層候選構想（**一律 Candidate／Decision Gate，未核准**）
 
@@ -192,9 +194,72 @@
 - multi-Sheet 細節（UI 流程、資料模型、權限模型）。
 - 期貨結算日規則。
 - 「自動來源 vs Proxy」更廣原則；「Market State」定義；參數（門檻）版本化規則。
+- 「台股趨勢」「國際趨勢」定義（2026-10-22 新增，append-only；DEC-071 第 5 點只定兩主軸名稱；本輪寫入前全 repo grep 0 命中；⛔ 不得與市場位階／指標危險度／Risk Cap 合併、不得成綜合分數；`VN1-MT-TREND-DEF`；見 §22）。
 
 ## 21. 治理入口（只列指標）
 
 - 新對話啟動、優先序、Handoff Save Check、Context Loss Check：`PROJECT_RULES.md` §15（DEC-067、DEC-068）。
 - 靜默自主巡航與回報格式：`PROJECT_RULES.md` §3（DEC-059、DEC-060）；客戶回報語言：DEC-069。
 - Minimum Sufficient Effort 與階段邊界 Effort Check：`PROJECT_RULES.md` §9（DEC-059、DEC-061）。
+
+## 22. 大盤／市場趨勢研究框架與 repo 對照（Research Framework，非 Approved）
+
+> 2026-10-22 新增（客戶同日訊息；DEC-071）。量測：`origin/main`＝`08272e5`（#902；撰寫組 `git log` 實查），cron 會推進 tip，引用前重查。剩餘待辦只在 BACKLOG 5.1.6（`VN1-MT-*`）。
+
+### 22.1 客戶 UI 方向（已確認；出處 DEC-071，本節只摘要）
+
+- 新 UI 視覺方向維持；舊 UI 既有功能與判讀邏輯是新版重要參考、不因簡化而大量刪除；第一個主頁改以「大盤／市場趨勢」為核心（不再以「今天」）；導航後續重新命名（候選非 final）；市場趨勢研究只保留兩主軸：台股趨勢、國際趨勢；「大盤」字樣必須明確保留。
+- ⛔ 不是動工授權、不取代 DEC-003 線框 gate、不授權修改或刪除舊 UI（DEC-019／020）。與 DEC-057「首頁不是 Dashboard」、DEC-062 Q1 今天頁的張力**未解決**（`VN1-MT-HOME`）；客戶用詞「今天／找標的／我的持股／我的」與 repo 現存兩套名稱（DEC-017 五頁、DEC-062 四格送審範圍）都不完全相同（`VN1-MT-NAV`）。
+
+### 22.2 研究框架（**Research Framework，非 Approved、非 production rule**）
+
+> ⚠️ **以下是客戶提供的蕭碧燕老師資料，只保存研究框架**。repo 查無任何相關 Decision ⇒ 一律**不是** Approved production rule。客戶原文逐字：「以上屬 Research Framework；除非 repo 已有正式 Decision，否則不得寫成 Approved production rule。」
+> ⛔ 客戶原文逐字：「不要建立新的綜合分數。」「尤其不要把：「市場位階」「指標危險度」「Risk Cap」「台股趨勢」四者合併成同一概念。」（見 22.3）。⛔ 歷史泡沫案例的數字**不得**成為門檻或 production threshold（客戶原文：「歷史泡沫案例只作研究比較，不直接變成永久 production threshold。」）。任何一項要變成正式判斷依據，須經 Decision Gate（DEC-009；`PROJECT_RULES.md` §4）。
+
+**台股**（客戶原文逐條）
+- 短期修正與長期趨勢應分開閱讀。
+- 使用「EPS × PE」建立台股加權指數的情境估值矩陣。
+- EPS × PE 是大盤估值方法之一，不代表完整的市場趨勢判斷。
+- 外資籌碼是台股趨勢的重要觀察面向。
+- AI／CSP 資本支出可透過台灣供應鏈企業獲利與 EPS 預期影響台股；同時也要保留資本支出過高、現金流下降的反面風險。
+
+**國際**（客戶原文逐條）
+- 研究框架會同時觀察長天期公債殖利率與景氣領先指標。
+- 重點不只是絕對數值，也包括兩者的方向。
+- 歷史泡沫案例只作研究比較，不直接變成永久 production threshold。
+- 國際景氣／利率環境可透過企業投資、AI/CSP CAPEX、台灣企業獲利與 EPS 影響台股。
+
+### 22.3 四個概念分開（客戶原文「尤其不要把：「市場位階」「指標危險度」「Risk Cap」「台股趨勢」四者合併成同一概念。」；現況以程式為準）
+
+| 概念 | repo 現況（`檔案::符號`） | 問的是什麼 |
+|---|---|---|
+| **市場位階** | `src/services/allocation_service.py::get_macro_regime`（包 `macro_state_locker.get_macro_state`；仲裁 `shared/regime_arbiter.py::arbitrate_regime`；標籤 `shared/allocation_decision.py::REGIME_LABEL`） | 多空（SPEC.md §16.5） |
+| **指標危險度** | 16 盞燈 `shared/macro_buckets.py::BUCKET_DANGER_SPECS`；`src/ui/tabs/tab_macro_v2.py::overall_verdict`（worst-of、不含多空） | 指標有多危險（不含方向）；與位階**並列**，SPEC §16.5「不平均、不取 worst、不合成第三顆燈」 |
+| **Risk Cap** | `src/services/macro_state_locker.py::calculate_system_state`（risk_cap.v2；§4） | 建議持股上限 |
+| **台股趨勢** | **無定義**（本輪寫入前全 repo 0 命中；`VN1-MT-TREND-DEF`）；可能原料＝`src/services/market_strategy.py::get_market_assessment`（MA5/60/120/200、MA120 斜率 → `mkt_info`） | 待客戶定義 |
+
+- **同名不同義的 regime（易混淆）**：`src/compute/macro/macro_helpers.py::classify_long_term_regime`（12M 長期位階，舊 UI）；`calculate_system_state` 輸出的 `market_regime`（Risk Cap 上限分級，§11）；另 `src/ui/views/page_today.py` 註解自陳舊版 `section_cross_ai.py` 有自判的「目前總經位階」（撰寫組只讀註解、未讀該檔原碼，單組）。皆**不是**「市場位階」SSOT。
+- ⚠️ `src/data/macro/leading_indicators.py` 是**籌碼先行指標**（期貨／PCR 等），**不是景氣領先指標**。
+
+### 22.4 研究框架 → repo 對照（簡表）
+
+| 研究框架 | repo 現有資料／規則 | 舊 UI | 新 UI | 缺口／分類（BACKLOG） |
+|---|---|---|---|---|
+| 短期修正 vs 長期趨勢 | `get_market_assessment`（均線、MA120 斜率）；`classify_long_term_regime`（12M） | 兩者皆有 | 經 `macro_refresh_service` STEP_MARKET 間接用 `mkt_info`；長期位階未接 | 部分存在／已存在但新版漏接／需要 Decision Gate（切法未定義）→ `VN1-MT-TREND-DEF`、`VN1-MT-LEGACY-GAP` |
+| EPS×PE 大盤情境估值 | 大盤層級不存在；EPS、本益比只在個股層；`risk_radar.synthesize_dual_verdict` 的 `valuation_level` 參數無人產生 | 無 | 無 | 缺資料／Research Candidate（大盤 EPS／PE 來源未定；新資料源＝Decision Gate）→ `VN1-MT-VALUATION` |
+| 外資籌碼 | 現貨 `foreign_net` 燈、期貨 `fut_net` 燈（`leading_indicators.finmind_fut_oi`；也是 Risk Cap 紅線三輸入）、`tw_macro.fetch_foreign_consecutive_days`、hot_money | 有 | 只經燈與 Risk Cap 間接；連買／hot_money／明細未接 | 已存在可重用（燈）／已存在但新版漏接 → `VN1-MT-LEGACY-GAP`、`VN1-MT-IA` |
+| AI／CSP capex 傳導（含 capex 過高、現金流下降的反面風險） | 大盤層級不存在；`capex_intensity` 只在個股層；Blueprint `BP-RC-07`（AI CapEx 下修情境）、`BP-RC-08`（產業雷達 CapEx） | 無（大盤層） | 無 | Research Candidate／缺資料 → `VN1-MT-CAPEX-EPS` |
+| 長天期公債殖利率：水位 | 16 燈 `us10y`（FRED DGS10 單點）；30Y 不存在 | 有（另 `risk_radar._signal_yield_10y_shock` 單日 bp 衝擊） | 有（16 燈） | 已存在可重用／缺資料（30Y）→ `VN1-MT-YIELD-CLI` |
+| 長天期公債殖利率：方向 | 方向列刻意 mode none（`shared/lamp_direction_thresholds.py`；不混源 ^TNX）；中長期方向計算不存在 | 只有單日 bp 衝擊 | 無 | Research Candidate／需要 Decision Gate（改方向規則或取數源）→ `VN1-MT-YIELD-CLI` |
+| 景氣領先指標：水位與方向 | `tw_macro.py::fetch_ndc_leading_index`（mom／smooth6m／inflection／trend）；`shared/fred_series.py::FRED_CHN_OECD_CLI`（只中國、只水位）；美國／全球 CLI 不存在 | NDC（`section_state`）、中國 CLI 有 | 未接 | 已存在但新版漏接（NDC）／缺資料（美國／全球 CLI）→ `VN1-MT-YIELD-CLI`、`VN1-MT-LEGACY-GAP` |
+| 殖利率×領先指標方向組合；歷史泡沫比較 | 不存在 | 無 | 無 | Research Candidate（案例只作研究比較，⛔ 不成門檻）→ `VN1-MT-YIELD-CLI` |
+| 國際景氣／利率 → 企業投資 → 台股 EPS | 不存在（大盤 EPS 不存在） | 無 | 無 | Research Candidate／缺資料 → `VN1-MT-CAPEX-EPS`、`VN1-MT-VALUATION` |
+| 定位：市場位階 | 22.3 | 有 | 有（位階卡） | 已存在可重用；⛔ 不與其他三者合併 → `VN1-MT-TREND-DEF` |
+| 定位：指標危險度 | 22.3 | 有 | 有（危險度卡） | 已存在可重用；⛔ 不與其他三者合併 → `VN1-MT-TREND-DEF` |
+| 定位：Risk Cap | 22.3、§4 | 有 | 有（建議持股卡） | 已存在可重用；⛔ 不與其他三者合併 → `VN1-MT-TREND-DEF` |
+| 定位：台股趨勢／國際趨勢 | 無定義 | — | — | 需要 Decision Gate → `VN1-MT-TREND-DEF`；版面 → `VN1-MT-IA`（DEC-003） |
+
+### 22.5 揭露（`CLAUDE.md` §-2 規則 6）
+
+- 本節 mapping 由**兩組唯讀盤點＋總管抽查**（總管轉述）、撰寫組彙整並抽查部分符號（`PAGE_LABELS`、`fetch_ndc_leading_index`、`FRED_CHN_OECD_CLI`、`us10y` 方向列、「台股趨勢」0 命中、新 UI `src/ui/views/page_today.py` 只在註解提到 `classify_long_term_regime`）。
+- 「不存在」「0 命中」「未接」類全稱句為 **grep 結果**，**未經第三組驗證**；只能當待驗事項，⛔ 不得作為實作批的前提（實作前須重查）。
