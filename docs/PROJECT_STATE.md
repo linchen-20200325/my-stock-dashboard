@@ -4,7 +4,7 @@
 > **原則**：本檔「**保存專案知識，不保存聊天紀錄**」。
 > **不是什麼**：不是 BACKLOG（未完成工作只在 `docs/BACKLOG.md`）、不是 HANDOFF（current／blocker／next safe point 只在 `docs/HANDOFF.md`）、**不取代 DECISIONS**（正式裁示只在 `docs/DECISIONS.md`）。本檔只做摘要＋出處；與出處不一致時**以出處為準**。
 > **優先序**：本檔的狀態快照**低於** GitHub 實況與 `docs/HANDOFF.md`（`PROJECT_RULES.md` §15）。
-> **量測**：~~2026-10-22；量測時 `origin/main`＝`d3a3e676`（cron tip；最後非 cron 合併＝#898 `1d9e6c1c`）~~ 2026-10-22T18:57Z；量測時 `origin/main`＝`7f58a25a`（#901，最後非 cron 合併；撰寫組 `git fetch` 實查）（2026-10-22 更新，有意識的變更，不是漏刪，決策者 AI 總管（事實更正））。cron 會推進 tip，引用前重查。
+> **量測**：~~2026-10-22；量測時 `origin/main`＝`d3a3e676`（cron tip；最後非 cron 合併＝#898 `1d9e6c1c`）~~ ~~2026-10-22T18:57Z；量測時 `origin/main`＝`7f58a25a`（#901，最後非 cron 合併；撰寫組 `git fetch` 實查）（2026-10-22 更新，有意識的變更，不是漏刪，決策者 AI 總管（事實更正））~~ 2026-10-22T20:30Z；量測時 `origin/main`＝`08272e56`（#902，最後非 cron 合併；main push PR Check run 39843563872 success；撰寫組 `git fetch`＋GitHub REST 實查）（2026-10-22 更新，有意識的變更，不是漏刪，決策者 AI 總管（事實更正））。cron 會推進 tip，引用前重查。
 > **標示**：「Approved」＝有 DEC 或硬規則出處；「Candidate／Decision Gate」＝未核准；「GitHub 無定義來源」＝不得推測，待客戶提供或研究後經 Decision Gate。
 > ⚠️ 本檔由單一撰寫組撰寫（`CLAUDE.md` §-2 規則 6）；各段結論以所附出處為準。⛔ 本檔不含任何 secret、credential、private key。
 
@@ -123,7 +123,8 @@
 
 ## 11. Market Regime／Market State 的定位
 
-- 現行 `market_regime`（多頭／震盪／空頭）是 Risk Cap 引擎依上限分級的**輸出**（§4），不是獨立模型；`macro_state_locker.normalize_regime` 做中→英正規化。
+- ~~現行 `market_regime`（多頭／震盪／空頭）是 Risk Cap 引擎依上限分級的**輸出**（§4），不是獨立模型；`macro_state_locker.normalize_regime` 做中→英正規化。~~
+  **現行**（2026-10-22 更正，有意識的變更，不是漏刪，決策者 AI 總管（事實更正）；〔repo 事實，HEAD `08272e56`，三組唯讀盤點＋總管抽查原碼，單組結論〕）：上句只對 `macro_state.json` 的 `market_regime` **欄位**成立。新 UI 顯示的**市場位階**主要來自 `shared/regime_arbiter.py::arbitrate_regime`（決策樹；輸入＝趨勢面、大盤評分、健康分、外資期貨淨口；經 L3 `get_macro_state`、UI 入口 `allocation_service.get_macro_regime`）；`macro_state.json` 的 `market_regime`（Risk Cap 依上限分級）只是 arbiter 不可用時的**退路**，再不行才是 unknown。`macro_state_locker.normalize_regime` 做中→英正規化（不變）。⚠️ `market_regime` **同名三義**：Risk Cap 檔欄位、`src/services/market_strategy.py::market_regime()` 趨勢函式、`get_macro_state()['regime']`（arbiter）。詳見 `docs/vnext/MARKET_TREND_RESEARCH.md` §2.1～§2.2；缺口登記 BACKLOG `MT-GAP-01` (c)(i)。
 - Regime 作為 Context（非 Core）：`VN-23`，Research Candidate；Context 升 Core／hard veto 須客戶裁示（DEC-009；D18）。
 - 「Market State」：**GitHub 無定義來源**；Regime／State／Conflict Resolver 的統整為候選 `VN1-C-REGIME-RESOLVER`。
 
@@ -181,6 +182,7 @@
 
 - **Approved**：`docs/DECISIONS.md` 狀態「生效」的 DEC；`PROJECT_RULES.md` §13 D1～D19；`CLAUDE.md`。
 - **Candidate／Decision Gate**：BACKLOG §4（`CV1-DR-*`／`CV1-RC-*`）、§5（`VN-*`）、5.1.5（`VN1-C-*`）、Blueprint 線框與 `BP-DR-*`。
+- 📌 2026-10-22（DEC-071，append-only）：`docs/vnext/MARKET_TREND_RESEARCH.md` §3 的外部研究框架（T1～T4、I1、傳導鏈）＝**Research Framework／Candidate**；BACKLOG 5.1.6 `MT-*` 一律 Candidate／Decision Gate。導航最終名稱（`MT-NAV-NAMING`）、第一頁定位與 DEC-057「首頁不是 Dashboard。」的關係（`MT-DG-HOMEPAGE`）＝**待客戶裁示**。
 - 登記不構成動工授權（`CLAUDE.md` §-1；DEC-002）；DEC-054／056／057 都不是實作授權。須停下問客戶的事項見 `PROJECT_RULES.md` §4。
 
 ## 20. GitHub 無定義來源（不得推測；待客戶提供或研究後經 Decision Gate）
@@ -192,9 +194,28 @@
 - multi-Sheet 細節（UI 流程、資料模型、權限模型）。
 - 期貨結算日規則。
 - 「自動來源 vs Proxy」更廣原則；「Market State」定義；參數（門檻）版本化規則。
+- 📌 2026-10-22（DEC-071，append-only）：大盤 EPS 預估與大盤本益比的資料來源、指數層級「短期修正」判讀門檻、殖利率×領先指標「方向」判讀規則 —— GitHub 無定義來源；外部研究案例值不得代用（`docs/vnext/MARKET_TREND_RESEARCH.md` §3、§4；BACKLOG `MT-RES-*`／`MT-DG-DATA`）。
 
 ## 21. 治理入口（只列指標）
 
 - 新對話啟動、優先序、Handoff Save Check、Context Loss Check：`PROJECT_RULES.md` §15（DEC-067、DEC-068）。
 - 靜默自主巡航與回報格式：`PROJECT_RULES.md` §3（DEC-059、DEC-060）；客戶回報語言：DEC-069。
 - Minimum Sufficient Effort 與階段邊界 Effort Check：`PROJECT_RULES.md` §9（DEC-059、DEC-061）。
+
+## 22. 大盤／市場趨勢頁（DEC-071；研究框架）
+
+> 2026-10-22 新增（Context Loss Check E 類；客戶原文要求保存的 durable knowledge 十項）。每項標層級：〔客戶裁示 DEC-071〕／〔repo 事實〕（HEAD `08272e56`，三組唯讀盤點＋總管抽查，**單組結論**）／〔Research Framework／Candidate〕（外部研究，⛔ 非 production rule、⛔ 不得標 Approved）。詳細盤點、mapping 與研究框架見 `docs/vnext/MARKET_TREND_RESEARCH.md`（研究文件，⛔ 不帶 Decision 效力）；未完成工作只在 BACKLOG 5.1.6（`MT-*`）。
+> ⛔ 本節不是實作授權、不是 layout change 授權（DEC-071「本輪只盤點與落盤，不授權 layout change」）。
+
+1. **大盤／市場趨勢頁的目的**〔客戶裁示 DEC-071〕：第一頁核心是「大盤＋市場趨勢」（「第一頁尤其不要再叫「今天」。」）。問題鏈：**大盤**狀態 → **台股趨勢** → **國際趨勢** → 風險 → 曝險／操作環境 —— **「大盤」「台股趨勢」「國際趨勢」三者都在第一頁問題鏈內**（客戶原文「不要只寫「台股趨勢／國際趨勢」而把「大盤」漏掉。」）。⛔ 不新增總分，優先重用既有大盤評分、市場位階、趨勢、危險度與 Risk Cap。導航最終名稱未定案（`MT-NAV-NAMING`）；與 DEC-057「首頁不是 Dashboard。」、Blueprint §8「今天＝Inbox」的關係**待客戶裁示**（`MT-DG-HOMEPAGE`）。
+2. **台股趨勢與國際趨勢兩大主軸**〔客戶裁示 DEC-071〕：外部研究資料（蕭碧燕老師）只保留這兩部分；基金配置、個別商品不收。
+3. **短期修正與長期趨勢分離**〔Research Framework／Candidate〕：短期下跌不得直接把長期趨勢翻成空頭。研究中的 17%、週 K／D 約 50、4 萬／4.5 萬／4.8 萬是當時案例值，⛔ 不得作為門檻。〔repo 事實〕長期均線位階已存在（bias_240、MA60／120）；指數層級回檔與週 KD 只部分存在。
+4. **EPS × PE 大盤估值框架**〔客戶裁示 DEC-071：「EPS × PE 是大盤分析的重要方法之一，但不是整個趨勢判斷。」〕＋〔Research Framework／Candidate：情境矩陣方法〕：案例值 EPS 成長 35%、PE 15～21 倍、39,856～56,862 ⛔ 不得寫死。〔repo 事實〕無指數 EPS 預估、無大盤本益比歷史 ⇒ 缺資料（`MT-RES-EPSPE`、`MT-DG-DATA`）。
+5. **外資籌碼**〔Research Framework／Candidate〕：「外資資金方向是台股趨勢的重要觀察面向」；⛔ 不得把「外資是阻力」永久寫死。〔repo 事實〕外資現貨水位、外資期貨已存在（燈、Risk Cap Required Core＋veto 3）；外資方向／連續日數新版漏接；外資期貨門檻 6 處並存，須做責任邊界盤點、避免重複計分（`MT-GAP-01` (d)）。
+6. **CSP／AI 資本支出 → 台股企業獲利**〔Research Framework／Candidate〕：正面傳導（CAPEX 上修 → 供應鏈需求 → 盈餘預期上修）與**反面風險**（CAPEX 過高 → 自由現金流下降 → 投資無法轉成營收／獲利）都要保存。〔repo 事實〕只有價格代理（^SOX 等），CAPEX 與自由現金流缺資料（`MT-RES-CSP`）。
+7. **國際趨勢「殖利率＋領先指標」雙變數方向判讀**〔Research Framework／Candidate〕：美國網路泡沫、日本泡沫的共同觀察是長天期殖利率＋景氣領先指標；看**方向**，不是看到殖利率高就判泡沫；來源當時的判讀（殖利率由高點下降＋領先指標由谷底回升）偏向軟著陸 —— 是當時情境，⛔ 不是規則。〔repo 事實〕美國 LEI／OECD CLI、日本長債缺資料；us10y 只看水位、方向刻意不混源；NDC 領先指標 6M 新版漏接（`MT-RES-YIELD-LEI`）。
+8. **國際 → 台股 → EPS → 估值的傳導關係**〔Research Framework／Candidate〕：國際利率／景氣 → 全球企業投資與風險偏好 → AI／CSP CAPEX → 台灣供應鏈營收與獲利 → 台股 EPS 預估 → EPS × PE 大盤估值 → 再與台股技術／籌碼／市場位階／Risk Cap 一起閱讀。⛔ 這是資訊架構與研究關係，**不授權建立單一總分公式**（DEC-071）。
+9. **與市場位階／指標危險度／Risk Cap 的責任分離**〔客戶裁示 DEC-071〕＋〔repo 事實〕：市場位階＝多空／趨勢（`shared/regime_arbiter.py::arbitrate_regime`）；指標危險度＝16 燈是否踩到危險門檻、**不含方向**（`shared/macro_buckets.py`）；Risk Cap＝曝險上限，**不等於台股趨勢**（§4）；建議持股＝`min(姿態, 天花板)`（`shared/allocation_decision.py::build_allocation_decision`）。⛔ 不得把市場位階與指標危險度硬合成一個分數或一顆燈。
+10. **舊 UI 是新版的重要邏輯來源**〔客戶裁示 DEC-071〕：「保留 → 整合 → 重新編排 → 必要時收進次層／展開區。」只有確認過時、重複或客戶明確裁示後才可刪除（DEC-019／DEC-020 不變）。〔repo 事實〕舊 UI 有 15 項大盤判讀邏輯新版第一頁未承接或部分承接（研究文件 §2.7；未實機），處置提案見 `MT-MAP-OLDUI`。
+
+- ⛔ Data ≠ AI（§3；DEC-027）：EPS、PE、殖利率、領先指標、外資、CSP CAPEX 若未取得，不得由 AI 猜值、不得以研究案例值代填；missing ≠ 0、unavailable ≠ neutral、not evaluated ≠ safe。
