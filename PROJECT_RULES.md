@@ -46,7 +46,7 @@
 1. **GitHub**：main SHA、PR 狀態、check-run conclusion、遠端分支；
 2. **code 與 tests 的實際輸出**；
 3. 正式文件（`CLAUDE.md`、`PROCESS.md`、`docs/v2/spec/*`）—— ⚠️ 本層為撰寫組讀法插入，客戶原文只有三層（見下）；
-4. 本四檔；
+4. 本四檔；（2026-10-22 補註，DEC-068：`docs/PROJECT_STATE.md` 的狀態快照排在 `docs/HANDOFF.md` 之後、AI memory 之前，與第 15 節一致）
 5. 聊天內容與舊回報。
 
 來源：客戶 2026-10-15「真實性優先順序：/ GitHub / code / tests > HANDOFF > 舊回報」（`docs/DECISIONS.md` 來源類別 D，MSG 1 §0）；第 3 層與第 4 層的細分為撰寫組讀法，可被客戶推翻。⚠️ 這是**判斷事實**的順序，不是規範效力的順序。
@@ -130,7 +130,7 @@
 （機制依客戶 2026-10-16 列舉之共通治理機制建立，DEC-016。）
 
 - **何時**：換對話、換模式、大型階段切換、不可逆動作前、長工作結束、context 過長之前。
-- **確認清單**：working tree 是否乾淨、main SHA（附時間）、open PR、main CI、未提交內容與殘留 worktree／stash、四檔是否同步、下一步。
+- **確認清單**：working tree 是否乾淨、main SHA（附時間）、open PR、main CI、未提交內容與殘留 worktree／stash、~~四檔是否同步~~ 五檔是否同步（第 15 節 Handoff Save Check；2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068）、下一步。
 - ⚠️ 已知「現存未處理物件」：舊 UI 壓測 `stash@{0}` **不恢復、不提交、不推送**（DEC-019）；只在原容器本機，接手者不得嘗試還原。
 
 ## 第 7 節｜Definition of Done

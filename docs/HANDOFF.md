@@ -10,11 +10,11 @@
 
 | 項目 | 現況 |
 |---|---|
-| current active work | 無功能工作進行中。唯一進行中＝本治理文件 PR（分支 `claude/jolly-mccarthy-sonbl8`；新增 `docs/PROJECT_STATE.md`、`PROJECT_RULES.md` 第 0.3／15 節 Context Loss Check、DEC-068／069、BACKLOG／HANDOFF 補漏；純文件） |
-| blocker | 無。production-write 被 `VN1-PG-VIX-ASOF`／`VN1-PG-VETO-TRACE`／`VN1-PG-PIT-CONSISTENCY` 阻擋；`PRODUCTION_WRITE_APPROVED`＝`False`；Daily Schedule NOT APPROVED（DEC-066 F） |
+| current active work | #901（本治理 PR：新增 `docs/PROJECT_STATE.md`、`PROJECT_RULES.md` 第 0.3／15 節 Context Loss Check、DEC-068／069、BACKLOG／HANDOFF 補漏；純文件）合併後：無進行中功能／治理工作；是否有新工作以 GitHub 實查為準 |
+| blocker | 無待客戶裁示的 blocker；production-write 受 `VN1-PG-VIX-ASOF`／`VN1-PG-VETO-TRACE`／`VN1-PG-PIT-CONSISTENCY` 阻擋（`PRODUCTION_WRITE_APPROVED`＝`False`）；Daily Schedule NOT APPROVED（DEC-066 F） |
 | next safe point | 新對話依 `PROJECT_RULES.md` 第 15 節啟動 → **只研究並提方案** `VN1-PG-VIX-ASOF` → `VN1-PG-VETO-TRACE` → `VN1-PG-PIT-CONSISTENCY`（開始前依 Minimum Sufficient Effort 判斷 Effort）。⛔ 不實作、不開旗標、不 production-write、不開 schedule；⛔ 不開始 Sheet Picker、Market Direction v2 或下一 Batch |
 | main | 量測 2026-10-22T15:00Z：`origin/main`＝`d3a3e676`（cron tip）；最後非 cron 合併＝#898 `1d9e6c1c`。⚠️ cron 會推進 tip，引用前重查 |
-| open／draft PR | 量測時 0（本治理 PR 開立前）。#900（HANDOFF 過期補正）已**關閉、未合併**，其內容已併入本 PR |
+| open／draft PR | 以 GitHub 實查為準。#900（HANDOFF 過期補正）已**關閉、未合併**，其內容已併入 #901 |
 | CI | #898 main push PR Check run 39795464289 success；#899 run 39786386895 success；#897 run 39766338814 success（撰寫組 GitHub REST 實查） |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
