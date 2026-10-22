@@ -152,7 +152,8 @@ class TestTwiiBiasEachValueChecked:
         mas = {k: (_TINY_MA if w == win else _SAFE_MA) for k, w in _MA_WINDOWS.items()}
         closes = [100.0] * 239 + [sign * 1e308]
         twii = _fixed_ma_twii(closes, mas)
-        # 前提自證 1：同一算法（dropna → tail(min(w, n)).mean()）讀回的均線就是指定值且全有限
+        # 前提自證 1（只驗 helper，不驗被測函式）：`_fixed_ma_twii` 經 dropna → tail(min(w, n)).mean()
+        #   讀回的均線確實是指定值且全有限 —— 被測函式是否真的用到這些值，由下方正向對照證明。
         cs = twii['Close'].dropna()
         got = {k: float(cs.tail(min(w, len(cs))).mean()) for k, w in _MA_WINDOWS.items()}
         assert got == mas and all(math.isfinite(v) for v in got.values()), got
@@ -163,7 +164,8 @@ class TestTwiiBiasEachValueChecked:
         # 前提自證 2（正向對照）：同一份序列只把目標均線換成有限安全值 → 被測函式照常回 dict，
         #   且均線／乖離正是指定值算出來的 —— 證明下一行回 None 的唯一原因是該乖離非有限。
         ctrl = macro_snapshot.compute_twii_bias(_fixed_ma_twii(closes, dict.fromkeys(mas, _SAFE_MA)))
-        assert ctrl is not None and ctrl['ma20'] == _SAFE_MA, ctrl
+        assert ctrl is not None, ctrl
+        assert all(ctrl[k] == _SAFE_MA for k in _MA_WINDOWS), ctrl
         assert ctrl[target] == calc_bias_pct(lp, _SAFE_MA, decimals=1), ctrl
         assert macro_snapshot.compute_twii_bias(twii) is None
 
@@ -177,6 +179,9 @@ def _fixed_ma_twii(closes, ma_by_key):
 
     只覆寫 mean —— dropna / tail / iloc / index 都是 pandas 原生行為。窗長不在表內
     （被測函式改了取窗方式）→ KeyError 大聲失敗，不會悄悄算出別的值。
+
+    ⚠️ 這 4 組案例綁定被測函式以 `.tail(w).mean()` 取窗；若被測改用 rolling／np.mean／
+    sum/len 等方式而轉紅屬預期，請改此 helper，不得放寬斷言。
     """
     by_len = {_MA_WINDOWS[k]: v for k, v in ma_by_key.items()}
 
