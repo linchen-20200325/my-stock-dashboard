@@ -134,23 +134,75 @@ class TestTwiiBiasEachValueChecked:
         _assert_only_non_finite(_mas_like_code(closes), target)
         assert macro_snapshot.compute_twii_bias(_twii(closes)) is None
 
-    # 乖離溢位、均線全有限：object 欄的 Python int 精確相消（確定性，與 numpy 版本無關）
-    #   → 均線很小、末筆價很大（末筆為負時乖離 = -inf，守「結果檢查不能只查 +inf」）。
-    @pytest.mark.parametrize('target, sign, closes', [
-        ('bias_20', 1, _put(240, [(-1, 17 * 10**307), (-5, -17 * 10**307), (-30, 10**307)], base=50)),
-        ('bias_60', 1, _put(240, [(-1, 17 * 10**307), (-30, -17 * 10**307), (-100, 10**307)], base=50)),
-        ('bias_240', 1, _put(240, [(-1, 17 * 10**307), (50, -17 * 10**307)], base=50)),
-        ('bias_20', -1, _put(240, [(-1, -17 * 10**307), (-5, 17 * 10**307), (-30, 10**307)], base=50)),
+    # 乖離溢位、均線全有限：以「均線為明確值」的 Close 序列餵進被測函式（與 pandas 版本無關）。
+    #   📌 2026-10-22 改寫（有意識的變更，⛔ 不是漏刪；斷言意圖一條未減）：原輸入靠 object 欄
+    #   Python int 在 `tail(w).mean()` 精確相消做出「極小均線」；pandas 3.1 起 object 欄 mean
+    #   先轉 float 再加總 → 相消失效（均線變 0 → 乖離 None），前提自證轉紅。float 序列無法
+    #   以與加總演算法無關的方式做出「價/均線 > 1.8e306」（必須 1e307 級正負相消），故改用
+    #   `_fixed_ma_twii`：收盤值照常是真 float 序列，只有 `.mean()` 依窗長回傳指定均線；
+    #   被測函式的 dropna / tail / 末筆檢查 / 均線檢查 / calc_bias_pct / 結果檢查全走真實路徑。
+    #   目標均線極小 → 該乖離溢位成 ±inf；其餘均線 1e306 → 乖離 ±9900／-10100（有限）。
+    #   末筆為負時乖離 = -inf，守「結果檢查不能只查 +inf」。
+    @pytest.mark.parametrize('target, sign', [
+        ('bias_20', 1), ('bias_60', 1), ('bias_240', 1), ('bias_20', -1),
     ])
-    def test_single_bias_non_finite_is_failure(self, target, sign, closes, _no_2y):
+    def test_single_bias_non_finite_is_failure(self, target, sign, _no_2y):
         from shared.calc_helpers import calc_bias_pct
-        mas = _mas_like_code(closes, object)
-        assert all(math.isfinite(v) for v in mas.values()), mas
+        win = int(target.split('_')[1])
+        mas = {k: (_TINY_MA if w == win else _SAFE_MA) for k, w in _MA_WINDOWS.items()}
+        closes = [100.0] * 239 + [sign * 1e308]
+        twii = _fixed_ma_twii(closes, mas)
+        # 前提自證 1：同一算法（dropna → tail(min(w, n)).mean()）讀回的均線就是指定值且全有限
+        cs = twii['Close'].dropna()
+        got = {k: float(cs.tail(min(w, len(cs))).mean()) for k, w in _MA_WINDOWS.items()}
+        assert got == mas and all(math.isfinite(v) for v in got.values()), got
         lp = float(closes[-1])
         biases = {f'bias_{w}': calc_bias_pct(lp, mas[f'ma{w}'], decimals=1) for w in (20, 60, 240)}
         _assert_only_non_finite(biases, target)
         assert biases[target] == sign * math.inf, biases
-        assert macro_snapshot.compute_twii_bias(_twii(closes, dtype=object)) is None
+        # 前提自證 2（正向對照）：同一份序列只把目標均線換成有限安全值 → 被測函式照常回 dict，
+        #   且均線／乖離正是指定值算出來的 —— 證明下一行回 None 的唯一原因是該乖離非有限。
+        ctrl = macro_snapshot.compute_twii_bias(_fixed_ma_twii(closes, dict.fromkeys(mas, _SAFE_MA)))
+        assert ctrl is not None and ctrl['ma20'] == _SAFE_MA, ctrl
+        assert ctrl[target] == calc_bias_pct(lp, _SAFE_MA, decimals=1), ctrl
+        assert macro_snapshot.compute_twii_bias(twii) is None
+
+
+_TINY_MA = 1e-10   # 正、有限；1e308 / 1e-10 溢位 → 乖離 ±inf
+_SAFE_MA = 1e306   # 正、有限；(±1e308 - 1e306) / 1e306 × 100 有限
+
+
+def _fixed_ma_twii(closes, ma_by_key):
+    """真 float 收盤序列；`.mean()` 依窗長（20/60/120/240）回傳 ma_by_key 指定的均線。
+
+    只覆寫 mean —— dropna / tail / iloc / index 都是 pandas 原生行為。窗長不在表內
+    （被測函式改了取窗方式）→ KeyError 大聲失敗，不會悄悄算出別的值。
+    """
+    by_len = {_MA_WINDOWS[k]: v for k, v in ma_by_key.items()}
+
+    class _S(pd.Series):
+        @property
+        def _constructor(self):
+            return _S
+
+        @property
+        def _constructor_expanddim(self):
+            return _F
+
+        def mean(self, *a, **k):
+            return by_len[len(self)]
+
+    class _F(pd.DataFrame):
+        @property
+        def _constructor(self):
+            return _F
+
+        @property
+        def _constructor_sliced(self):
+            return _S
+
+    idx = pd.date_range('2025-01-01', periods=len(closes), freq='D')
+    return _F({'Close': pd.Series(closes, index=idx, dtype=float)}, index=idx)
 
 
 # ── Y2-n9：fetch_vix_block 的 ma20 溢位 ─────────────────────────────────────────
