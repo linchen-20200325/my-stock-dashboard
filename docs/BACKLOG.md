@@ -484,3 +484,21 @@
 | **VN1-PG-VIX-ASOF** | VIX 未收盤／盤中暫定日線的正式 freshness／as-of 規則（2026-10-22 新增，Step 4 Fail-Stop 原因 (1)） | MUST（重開旗標 Gate 前） | open（**只登記、未實作**） | run 39755679219：VIX 18.4 標 2026-10-22，但 17:28 台北美股尚未開盤 ⇒ 為盤前／未收盤暫定日線；現行 freshness 只看日期標籤，無法區分。規則須處理 observation date 與真正 available／published／market-close 時點，⛔ 不得僅依日期標籤判定該日已完成 | 待定（規則內容涉資料語意；動工前依 `CLAUDE.md` §7 分層對齊） | 下一完整工作階段先處理；開始前依 Minimum Sufficient Effort 規則重新判斷 Effort | 1 |
 | **VN1-PG-VETO-TRACE** | Risk Cap veto traceability（2026-10-22 新增，Step 4 Fail-Stop 原因 (2)） | MUST（重開旗標 Gate 前） | open（**只登記、未實作**） | run 39755679219 log 未留 Futures_Net_Short 實際口數、MA5 判定、veto_flags，30% 只能事後由正式 `calculate_system_state` 重算＋區間確認。正式紀錄／Evidence 須可追溯 veto rule、veto_flags、實際輸入值、`input_asof`，⛔ 不得只能事後反推；⛔ 不改公式／門檻 | 待定（若需改 schema 欄位，依 `HISTORY_SCHEMA_VERSION` 只增不改慣例） | 同上 | 1 |
 | **VN1-PG-PIT-CONSISTENCY** | 跨日資料一致性正式規則（2026-10-22 新增；源自 run 39695843255 的 MA5@10-20 配期貨@10-21 跨日配對，客戶不接受） | MUST（重開旗標 Gate 前） | open（**只登記、未實作**） | 處理不同市場、交易時區、發布時間的 Point-in-Time 一致性（對照 `CLAUDE.md` §2.3／§4.5）；⛔ 不得以「所有輸入日期必須完全相同」這種未核准簡化規則取代 | 待定（規則屬業務語意，須客戶確認） | 同上 | 1 |
+| **VN1-PG-L-TEST-NITS** | 首寫旗標相關測試的兩個 NIT（2026-10-22 Handoff Save Check 新增，append-only）：(1) #896／#897 動過的測試檔（`tests/test_vn1_production_wiring.py`／`test_vn1_permission_gate.py`／`test_vn1_prehardening.py`）部分 docstring 仍描述旗標開啟期狀態；(2) `tests/test_vn1_production_wiring.py::test_no_code_sets_approved_true` 的三條 regex 抓不到 `PRODUCTION_WRITE_APPROVED: bool = not False` 這類寫法（第三條 `name\s*=` 不容許中間的 `: bool`） | LATER（NIT） | open（候選） | (2) 盤點組讀 regex 原文確認；(1) 總管轉述、盤點組未逐條複驗 | 不需要（技術處置，須客戶指派批次） | 可與 `VN1-PG-L-STALE-COMMENTS` 同批；零行為變更 | 1 |
+| **VN1-PG-L-TWII-DROPNA-LOG** | ^TWII yfinance 偶發少一根 K 棒的可追溯缺口（2026-10-22 新增，append-only）：`src/data/daily/daily_data_fetchers.py` 的 `_fetch_single_cached` 與 ^TWII ADL 段皆 `dropna(subset=['Close'])` 但不 log 被丟筆數（違 `CLAUDE.md` §3.3「dropna 須 log 受影響筆數」）；未併入 PIT／VETO 項，故另列 | SHOULD（建議併入 `VN1-PG-PIT-CONSISTENCY`／`VN1-PG-VETO-TRACE` 研究時一併處理） | open（只登記、未實作） | run 39695843255（^TWII 少 10-21 一根，見 `VN1-PG-FIRST`）；盤點組讀碼確認 dropna 無筆數 log | 不需要（技術處置） | PIT 研究批一併評估 | 1 |
+
+### 5.1.5 Decision Gate 候選（2026-10-22 Handoff Save Check 盤點；append-only）
+
+> ⚠️ 下列項目在 `docs/BACKLOG.md`／`docs/DECISIONS.md`／`docs/HANDOFF.md`／`docs/vnext/*.md` **查無客戶裁示或規格**，只能是 **C（candidate／Decision Gate）**；⛔ 不是已核准規格、⛔ 不構成動工授權（`CLAUDE.md` §-1）。盤點為單組 grep，未經第二組驗證（§-2 規則 6）。
+
+| ID | 標題 | 分類 | 相鄰既有項（非同一件事） | next action |
+|---|---|---|---|---|
+| **VN1-C-MD-V2-AUDIT** | Market Direction v2 後續 Audit | C | 查無任何文件提及 "Market Direction" | 客戶確認範圍與指涉後再登記 |
+| **VN1-C-CALENDAR** | Calendar／settlement／holiday context（交易日曆、結算日、休市） | C | `AUD-C13` (2)（平日國定假日異常 K 棒只擋週末）；`CLAUDE.md` §4.5／§4.6 | 可併 `VN1-PG-PIT-CONSISTENCY` 研究評估 |
+| **VN1-C-HYSTERESIS** | 市場狀態 hysteresis／persistence／cooldown | C | `AUD-L7`（僅推播 cooldown） | 送 Decision Gate |
+| **VN1-C-REGIME-RESOLVER** | Regime／Market State／Conflict Resolver | C | `VN-23`（Regime as Context）、`AUD-C10`（方向相反無仲裁） | 送 Decision Gate |
+| **VN1-C-DECISION-SNAPSHOT** | Market Decision Snapshot | C | `VN-27` Decision Log、`BP-DR-13`（上次有效快照） | 送 Decision Gate |
+| **VN1-C-COUNTERFACTUAL** | Counterfactual evaluation | C | `VN-29` Decision Review、`CLAUDE.md` §2.3 forward-test | 送 Decision Gate |
+| **VN1-C-DQ-SLO** | Data Quality SLO | C | DEC-008（治理原則，非 SLO）、`VN-04`、`VN-17` | 送 Decision Gate |
+| **VN1-C-NO-ACTION** | No-Action Zone／Action Engine UI | C | `VN-09`／`VN-10`、`BP-DR-08`（Action 規格批）；No-Action Zone 查無 | 併 Action 規格批評估 |
+| **VN1-C-DERIVED-INVENTORY** | computed／derived datasets 持久化 inventory | C | `CLAUDE.md` §-1.5.F 判定 3(5)（可重建 vs 不可重建界線） | 送 Decision Gate |
