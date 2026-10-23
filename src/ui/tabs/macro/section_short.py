@@ -416,9 +416,14 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
                 # 依 §1「不可靜默頂替」：口徑差異寫進 `source`，由下游顯示
                 # （section_overview KPI tip、macro_stock_link banner 已改為
                 #  `source != 'ADL'` 時標「⚠️ 代理值」）。
-                # 刻意**不新增** is_proxy 鍵：jingqi_info 的 7 鍵契約由
+                # ~~刻意**不新增** is_proxy 鍵：jingqi_info 的 7 鍵契約由
                 # tests/test_review_fixes_v19_84.py:19 釘住，provenance 用既有
-                # `source` 字串承載即可，不必為單一寫入站擴充契約（§8.1 step 6）。
+                # `source` 字串承載即可，不必為單一寫入站擴充契約（§8.1 step 6）。~~
+                # 📌 DEC-074 B（客戶 2026-10-23，有意識的修改，⛔ 不是漏刪）：契約自本批起 8 鍵
+                #   （L3 `jingqi_calc` 加 `is_proxy`）。本站寫的是**單日**上漲佔比、非正式口徑（5 日均）
+                #   ⇒ D-2（內部拍板）：同樣標 `is_proxy=True`、不計分。舊理由（不為單一寫入站擴充契約）
+                #   在契約已因 L3 擴充後不再成立；改這一行是因為它寫進**共用層**計分會讀的 `jingqi_info`
+                #   （DEC-019：新 UI 依賴的根因修正，非舊 UI 功能改動）。
                 if not st.session_state.get('jingqi_info'):
                     st.session_state['jingqi_info'] = {
                         'avg': _ratio_v,
@@ -432,6 +437,7 @@ def render_section_short(_load_heavy: bool, tw: dict, tw_s: dict) -> None:
                         # ⚠️ 口徑寫死在 source 裡，讓「這不是 5 日均」看得見
                         'source': 'TWSE即時(單日上漲佔比,非5日均)',
                         'total': 0,
+                        'is_proxy': True,   # DEC-074 B／D-2：非正式口徑 ⇒ 不計分
                     }
                     st.caption(
                         f'⚠️ {BREADTH_JINGQI.canonical}目前以「今日{BREADTH_UP_RATIO.canonical}」'

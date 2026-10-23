@@ -219,6 +219,10 @@ def z40_revert_for(file_path, code: str) -> str:
     """
     p = pathlib.Path(file_path)
     rel = (p.resolve().relative_to(_ROOT) if p.is_absolute() else p).as_posix()
+    # DEC-074/075 批 1'（2026-10-23，有意識的接鏈，⛔ 不是漏改）：`_ORCH` 拿掉 FinMind 補救的 fillna(0)
+    #   （DH-FOREIGN-FILL0）⇒ 最新的那一批先換回（只套一次；⛔ 不動本表）。
+    from tests.test_dec074_revert_chain import dec074_revert_for
+    code = dec074_revert_for(rel, code)
     # 批 Z63（freshness F3）在 `_MCR` 新增 `load_tw_pmi_history` ⇒ 先換回 Z63 之前寫法（⛔ 不動本表）。
     from tests.test_batch_z63 import z63_revert_for
     code = z63_revert_for(rel, code)

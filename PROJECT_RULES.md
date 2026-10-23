@@ -175,6 +175,7 @@ implementation → relevant tests（含真實引擎路徑 regression）→ indep
 - **正式例外**：本 Gate 是第 3 節 Silent Autonomous Cruise 的正式例外（客戶原文「即使其他工作應靜默自主執行，遇到 Model / Effort 不足仍必須停下通知客戶。」）。
 - 不得在 9.2 所列「不得要求切換」的時機中途打斷；遇到時先到最近安全停點（第 6 節）再停手回報。⚠️ 但「不足」時**不得**在停點前繼續推進下一完整階段（撰寫組讀法）。
 - 客戶回「改好了」後：直接繼續；不重新摘要；不重問；不重做（DEC-014 續有效）。Gate 不改變派工、獨立稽核、揭露義務（`CLAUDE.md` §-2）；切換本身**不是**產品 Decision Gate。
+- 📌 2026-10-23（append-only；客戶 2026-10-23 Freeze 指示）：「中途風險升高亦同」與「不得默認固定 Opus／High 或 Sonnet／Medium」見**第 16.2 節**（DEC-076）。
 
 
 ~~每個下一完整階段開始前自行判斷目前模型／模式／Effort 是否合適；**只有切換有明顯品質或額度效益時才中斷**。~~（2026-10-17 整合進下方 9.1～9.3，決策者客戶，DEC-059；有意識的整合，不是漏刪 —— 「階段開始前自判」保留於 9.1，「有明顯效益才中斷」保留於 9.3（模型／模式），Effort 改依 9.2「明顯應使用不同 Effort 即主動提醒」）
@@ -316,6 +317,8 @@ Effort：Low / Medium / High
 
 **產品方向原則（Research Candidate，不是硬規則）**：客戶 2026-10-15 MSG 1 §1～§17 的 Core Decision＋Context Overlay、雙軌 Track A／B、Per-decision Core、Structured Thesis、Decision Log 瘦身、Live／Historical 分離、Safe Effective Cutoff、Event 來源分級、產業雷達不得假精確分數、Mobile 讀最新有效快照等，客戶自陳為方向與候選策略、尚無規格落地 → `docs/BACKLOG.md` `CV1-RC-01`（MSG 1 §18 推播「未來研究方向」與 §26 最終產品原則 → `CV1-RC-07`，2026-10-17 補指標）。施工前須依第 4 節走 Decision Gate。（2026-10-16 加註：MSG 1 §7 的 Action Layer **方向**已由 DEC-054 採用（D19）；DEC-054 稱為「既有風險護欄」的 Thesis、Core Decision／Context Overlay 在本 repo 仍無正式規格 → `CV1-FU-04`；本段其餘不變。）
 
+📌 **2026-10-23 指標（append-only；客戶 2026-10-23 Freeze 指示）**：missing ≠ normal／HOLD、proxy ≠ real data、不得為了讓產品「有答案」而製造結論三條全站通則，見**第 16.1 節**（DEC-076）；上表 D1～D19 不變。
+
 📌 **2026-10-17 指標（append-only）**：新 UI 產品方向「投資決策 OS／Investment Inbox」由客戶核准**方向**（不是實作授權）→ `docs/DECISIONS.md` **DEC-056**；方向項目 → `docs/BACKLOG.md` **第 5 節（`VN-*`）**。
 
 ## 第 14 節｜未調和的衝突
@@ -352,3 +355,74 @@ Effort：Low / Medium / High
    - ⛔ **任何答案為「有」且尚未保存時：不得宣告交接完成。**
    - 分類時：尚未核准的構想一律進 BACKLOG 的 Candidate／Decision Gate，⛔ 禁止升格成 Approved；已正式存在者不重複登記。
 6. **Model／Effort Gate 納入啟動與交接**（2026-10-23 新增，DEC-073；客戶原文「並納入 Context Loss Check／交接規則，確保新 Claude 對話也會自動讀到，不再依賴客戶每次提醒。」）：(1) 新對話完成第 3 點啟動程序後、以及每個下一完整階段／Batch 開始前，**必須執行第 9.0 節強制 Model／Effort Gate**；(2) `docs/HANDOFF.md` 第 0 節須記錄**下一階段建議模型／能力等級與建議 Effort**（Context Loss Check F 項）；(3) HANDOFF 記錄的建議只是參考，新對話仍須依實際工作重新判斷，不得當成已切換的證明（客戶原文第 3 步「不得自行假設模型或 Effort 已切換」）。
+
+## 第 16 節｜交接 Freeze 永久規則（客戶 2026-10-23 Freeze 指示）
+
+> 出處：**客戶 2026-10-23 Freeze 指示**（2026-10-23 約 23:05 台北訊息，經總管轉交，撰寫組依轉交全文逐字比對；客戶第 9、13、14、15、16、21、22 節）。裁示紀錄與產品語意部分見 `docs/DECISIONS.md` **DEC-076**。
+> 本節**不重寫**既有條文：已存在者只列引用；只有「既有條文未涵蓋」的部分才在此新增（標 🆕）。與既有條文衝突時依第 0.1 節，並登記 `docs/BACKLOG.md` 第 4 節；撰寫組比對未發現硬衝突（單組，⚠️ 待第二組驗，`CLAUDE.md` §-2 規則 6）。
+
+### 16.1 Data ≠ AI Reasoning（客戶第 9 節）
+
+客戶原文：「Data Layer 只負責：acquire、clean、normalize、validate、provenance。AI Layer 只能：讀取已取得、可追溯、已驗證狀態清楚的資料做分析／解釋。」
+
+| 客戶永久規則 | 既有位置 | 狀態 |
+|---|---|---|
+| Data Layer／AI Layer 分工 | 第 13 節 D3、D4（DEC-027） | 已存在；客戶第 9 節分工清單為本則補充措辭 |
+| missing ≠ 0 | D5（DEC-026、`CLAUDE.md` §1） | 已存在 |
+| missing ≠ neutral | D6（DEC-040、DEC-041） | 已存在 |
+| 🆕 missing ≠ normal | DEC-074 客戶原文「不得把缺少真實 breadth 當成 0、中性或正常」（限 breadth） | **本節擴為全站通則** |
+| 🆕 missing ≠ HOLD | 無既有條文 | **本節新增**：缺資料不得被呈現為「維持／續抱／不動作」這類看似已判斷的 Action；應顯示「無法判定／資料不足」（後半句為撰寫組讀法；D10、D13 同向） |
+| 🆕 proxy ≠ real data | DEC-037（M1B 代理只顯示不計分）、DEC-062 Q5、DEC-074（代理廣度不得計分） | **本節擴為全站通則**：代理值不得以正式資料的身分顯示或計分；顯示時須標明是代理 |
+| 缺資料與真 0 必須區分 | D5 | 已存在 |
+| 顏色不得是唯一資訊載體 | D12（DEC-040、DEC-051） | 已存在 |
+| 🆕 不得為了讓產品「有答案」而製造結論 | DEC-074「不得因為產品希望「有結論」而補出投資結論」、DEC-075「缺資料不得為了維持畫面結論而補結論」 | **本節擴為全站通則**（不限 breadth／位階） |
+
+### 16.2 Model／Effort Escalation Gate（客戶第 13 節）
+
+- **已存在**：第 9.0 節（DEC-073）＋第 15 節第 6 點；Low／Medium／High 清單見 9.1，與客戶第 13 節清單同向。
+- 🆕 客戶第 13 節補充（原文）：「不得：默認固定 Opus / High；默認固定 Sonnet / Medium；靜默用不足能力繼續；假設客戶已切換模型。」
+- 🆕 **中途風險升高亦同**（客戶原文「中途風險升高亦同。」）：工作進行中發現風險／複雜度升高到超出目前模型或 Effort 時，同樣適用 9.0 停手規則 —— 先到最近安全停點（第 6 節）再停手回報，⛔ 不得以「已經開始了」為由用不足能力繼續推進。
+- 客戶原文：「這是 Silent Autonomous Cruise 的正式例外。」（與 9.0 同向）
+
+### 16.3 Silent Autonomous Cruise（客戶第 14 節）
+
+**已存在**：第 3 節（DEC-007、DEC-059）。客戶第 14 節原文：「已授權、安全、可逆工作：靜默自主執行。不要：每一步回報、每個 agent 回報、每個 CI 狀態都通知、重複「沒有新資訊」。只在：1. 需要客戶裁示；2. 觸發停手條件；3. 完整工作階段真正完成；才回報。」—— 與第 3 節三種可打斷情況同向（「觸發停手條件」含第 4 節表、16.4、9.0 不足停手）；本節不另立規則。
+
+### 16.4 停手條件（客戶第 15 節）
+
+客戶原文：「遇到停手條件：STOP → 說明 → 等客戶裁示。」逐項對照：
+
+| 客戶列舉 | 既有位置 | 狀態 |
+|---|---|---|
+| layout／information architecture change requiring decision | 第 4 節 #7（DEC-003） | 已存在 |
+| irreversible action | 第 4 節 #8 | 已存在 |
+| investment semantics | 第 4 節 #1、#2 | 已存在 |
+| 🆕 L3 data layer | 第 9.1 節 High 清單（DEC-073）只作 Effort 判斷 | **本節新增為停手條件**：涉及 L3／資料層語意的變更（不含已授權批內的修正）→ 停手請示 |
+| new external source | 第 4 節 #3、#4 | 已存在 |
+| 🆕 new wording／spec gap requiring customer decision | 無明文 | **本節新增**：規格沒寫、且需要客戶決定的新文案／語意空白 → 停手請示（純技術空白仍內部自決，`CLAUDE.md` §-1.5.A-4 判準） |
+| threshold／formula／weight change | 第 4 節 #1 | 已存在 |
+| customer decision required | 第 4 節 #10 | 已存在 |
+| same-file retry limit | 第 4 節「客觀停手門檻」（DEC-005、DEC-010） | 已存在 |
+| 🆕 CI／QA real failure and next fix not already authorized | 無明文 | **本節新增**：CI／QA 出現真實失敗，且下一個修法不在既有授權範圍 → 停手請示；修法單一且在授權內者仍依第 4 節反向禁令自行修 |
+
+### 16.5 舊 UI 不得提前刪除（客戶第 16 節）
+
+- **已存在**：第 13 節 D2（DEC-019、DEC-020）、第 4 節 #8。
+- 🆕 客戶第 16 節原文：「新 UI 成立以前，舊 UI 是重要 capability / logic reference。只有完成：capability inventory、new UI mapping、implementation、coverage validation、regression、customer approval 後，才進入舊 UI removal Decision Gate。不得把「新版已經比較漂亮」當作刪除舊 UI 的理由。」
+- 讀法（撰寫組）：與 DEC-020 路線**取聯集**，兩邊的前置步驟都要做；DEC-020「不得追求 100% parity 無限延後」不變（客戶第 5 節所稱是「重要能力」承接，不是 100% parity）。追蹤項見 `docs/BACKLOG.md`（Old UI Capability → New UI Coverage Matrix，由 BACKLOG 撰寫組登記）。
+
+### 16.6 Branch 刪除（客戶第 21 節）
+
+- **已存在**：第 10 節、第 4 節 #8（DEC-012）。
+- 🆕 客戶第 21 節原文：「客戶既有方向：最後再一次清。本次交接不要為了乾淨而刪歷史 branch。只需記錄：relevant branch、哪些可能是 cleanup candidate、是否存在 unique commit。未來刪除前重新查 GitHub。branch deletion 視為不可逆治理動作。」
+- 落點：branch 清單與 cleanup candidate 屬狀態，記在 `docs/HANDOFF.md`／`docs/PROJECT_STATE.md`，⛔ 不是刪除授權。
+
+### 16.7 Production 安全狀態（客戶第 22 節）
+
+- 🆕 客戶第 22 節原文：「重新核實並保存：PRODUCTION_WRITE_APPROVED、Daily Schedule、production write、external side effects。如果仍是：PRODUCTION_WRITE_APPROVED=False 就明確保存。不要因交接而自行開啟。」
+- 規則：`shared/risk_cap_history_policy.py::PRODUCTION_WRITE_APPROVED` 的開啟只能走 DEC-066 A 的獨立 PR 流程並經客戶核准；⛔ 交接、Freeze、文件同步、CI 修復**一律不得**改動此旗標；Daily Schedule 仍 NOT APPROVED（DEC-066 F）。現值以程式為準（2026-10-23 Freeze 實查為 `False`，~~見 `docs/HANDOFF.md`~~ 見 `docs/HANDOFF.md` §0 Freeze 版「Production」列與 `docs/PROJECT_STATE.md` §29.5（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實修正）））。
+
+### 16.8 交接優先順序與新 AI 接手（客戶第 1、2、13 節）
+
+- **交接優先順序**：**GitHub 實況 > `docs/HANDOFF.md` > `docs/PROJECT_STATE.md` > AI 記憶／聊天摘要**（客戶第 1 節原文「GitHub 實況 > HANDOFF > PROJECT_STATE > AI 記憶／聊天摘要。若文件與 GitHub 不一致：先修正文件。」）。已存在於第 15 節第 3 點第 4 款、第 1.1 節，同向；本款只重申。
+- **新 AI 接手時**：(1) `git fetch` 並實查 GitHub；(2) 必讀五個 SSOT：`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、`docs/HANDOFF.md`、`docs/PROJECT_STATE.md`（上位 `CLAUDE.md` 依第 0.1 節同樣須讀）；(3) **動工前先跑第 9.0 節 Model／Effort Gate**。已存在於第 15 節第 3、6 點；本款只重申。

@@ -518,9 +518,12 @@ class TestThresholdTokensMatchSsot:
 class TestEduCardCountHonesty:
 
     #: 已知「寫了但掛不上 registry identifier」的 EDU key（= 永遠不會顯示）
-    #: 'NAPM'        → registry 的台灣 PMI 那筆 identifier 是 'cier-pmi'
+    #: ~~'NAPM'        → registry 的台灣 PMI 那筆 identifier 是 'cier-pmi'~~
+    #: 'TW_PMI'      → ⚠️ DEC-074/075 行為變更（批 1'「修正 ISM 教學對映」，2026-10-23）：原 'NAPM' 條目改名
+    #:                  （內容改為台灣 PMI）；仍刻意不掛 registry identifier 'cier-pmi'（掛上會讓舊 UI 教學頁
+    #:                  多一張卡＝畫面結構變更，須線框，DEC-003）⇒ 孤兒張數仍為 2，舊 UI 教學頁輸出不變。
     #: 'NDC_signal'  → registry 用 'TaiwanBusinessIndicator' / 'NDC_signal_v2(_fallback)'
-    KNOWN_ORPHAN_EDU_KEYS = frozenset({'NAPM', 'NDC_signal'})
+    KNOWN_ORPHAN_EDU_KEYS = frozenset({'TW_PMI', 'NDC_signal'})
 
     def test_orphan_edu_keys_are_the_known_set(self):
         """EDU 文稿掛不上 registry identifier → 永遠不會顯示在教學頁。

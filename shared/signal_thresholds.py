@@ -274,6 +274,40 @@ sanity gate(`m1b > 0` 且 `|gap| < 30`);(2) 用修正後的資料重跑 AUC,顯�
 0.55;(3) 線上路徑能回報 as-of 與是否走代理。三條都達成再把本旗標翻 True,
 **並同批重跑門檻校準**(見 `macro_thresholds.json`)。"""
 
+BREADTH_PROXY_SCORING_ENABLED: bool = False
+"""代理（估算）市場廣度是否可以**計分**。**DEC-074 B（客戶 2026-10-23）：False。**
+
+鏡像同檔 `M1B_M2_LEG_ENABLED` 的處置（DEC-037 M1B 代理不計分先例，不發明第二種機制）。
+客戶原文（DEC-074）：「推估的漲跌家數／proxy breadth 不得計分」「不得把缺少真實 breadth
+當成 0、中性或正常」「不得自行創造新權重重新正規化」「不得因為產品希望『有結論』而補出投資結論」。
+
+現況（2026-10-23 實讀）：`src/data/daily/daily_data_fetchers.fetch_adl` 每一列都是由
+`^TWII` 日內漲跌幅反推的估算家數（`is_proxy=True`），**沒有**真實漲跌家數來源接進計分路徑。
+⇒ 旌旗（ad_ratio 5 日均）與 `market_regime` 的市場廣度腿在本旗標為 False 時：
+  - **可以顯示**（DEC-062 Q5「代理值只顯示、不計分」），數字後綴
+    `shared.macro_provenance.BREADTH_PROXY_VALUE_NOTE`；
+  - **不得**進健康分、大盤評分分子／分母、五桶燈級；
+  - 健康分因此算不出來時 →「⬜ 未評估／資料不足」（`shared.regime_arbiter.SOURCE_UNEVALUATED_BREADTH`），
+    **不**以只剩大盤分重新歸一頂替（`HEALTH_WEIGHT_JQ`／`HEALTH_WEIGHT_SCORE` 一字未動）；
+  - DEC-075 D-1(a)：位階一併未評估，**不**退 `macro_state.json` 規則引擎位階。
+
+判定入口一律走 `shared.macro_provenance.jingqi_for_scoring` / `is_breadth_proxy`，
+本旗標由 `src/compute/macro/macro_forward_test.compute_ruleset_hash` 納入 payload（帳本分得出本批前後）。
+
+**復活條件**（缺一不可，與 DEC-074 原文對齊）：(1) 正式（真實）漲跌家數資料來源接上並帶
+`is_proxy=False` 的 provenance，**或**另一套經客戶核准的計算方式；(2) 客戶裁示可計分。
+⛔ 不得為了讓健康分「有數字」而把本旗標翻 True。"""
+
+MA200_WINDOW_DAYS: int = 200
+"""`market_strategy.get_market_assessment` 的 `ma200`（`market_score` 年線項）所用的 rolling 視窗（交易日根數），
+同時是「算得出 ma200 所需的最少 K 棒數」。DEC-075 批 A（`DH-TWII-MA200`）把原 inline `rolling(200)`／
+`len(df_index) >= 200` 具名化；QA2 S-2 回修自 L3 下沉至此。**行為一位未動**（仍是 200）。
+
+⚠️ **與 `src/config/config.py` 的 `ANNUAL_MA = 240`（CLAUDE.md §3.3「年線」SSOT）是兩個不同口徑**：
+本常數是 `market_score` 歷史沿用的 200 日線（美股慣用的「200DMA 年線」說法），`ANNUAL_MA` 是 240 交易日的台股年線。
+⛔ 不得直接改成 `ANNUAL_MA`（那是行為變更，需另案校準）。`src/compute/etf/etf_calc.py`、
+`src/ui/render/etf_render.py` 兩處 inline `rolling(200)` 為 ETF 另一條路徑，本批不動（另案收斂）。"""
+
 CONFIDENCE_SOURCE_COUNT: int = 5
 """信心度計算的來源**項數**（分母）。`calc_traffic_light` 的 `_conf_sources` 長度。
 

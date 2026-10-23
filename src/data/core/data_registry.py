@@ -58,7 +58,8 @@ from shared.edu_tokens import (
     resolve_edu_rules as _resolve_edu_rules,
     resolve_edu_tokens as _resolve_edu_tokens,
 )
-from shared.fred_series import FRED_NAPM
+# ~~from shared.fred_series import FRED_NAPM~~ —— DEC-075 批 1'（2026-10-23）：EDU_GUIDE 的 NAPM 條目改名
+#   'TW_PMI'（見該處註解）後本檔已無讀者，依 pyflakes 一併拿掉（有意識的刪除，⛔ 不是漏刪）。
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -613,13 +614,32 @@ EDU_GUIDE: dict[str, dict[str, Any]] = {
             ('> §§CPI_YELLOW§§%', '🟠 外資提款風險（五桶危險門檻黃線）'),
             ('> §§CPI_RED§§%', '🔴 通膨嚴峻，升息壓力大、股債雙殺風險（五桶紅線）'),
         ],
-        'pair_with': ['ISM PMI（NAPM）', '美債 10Y（^TNX）', '美元指數（DXY）'],
+        # 回修 NIT-4（2026-10-23）：~~'ISM PMI（NAPM）'~~ —— 'NAPM' 教學條目已改名 'TW_PMI'（台灣 PMI），
+        #   本系統沒有美國 ISM 的教學卡；改列真的存在的那一張（只改字）。
+        'pair_with': ['台灣製造業 PMI（CIER）', '美債 10Y（^TNX）', '美元指數（DXY）'],
         'historical_anchor': '2022 通膨高峰 6.6%（40 年新高）｜2008 雷曼 2.5%｜Fed 目標 2.0%',
         'upstream': '油價、薪資成長、住房成本（OER）、供應鏈成本',
         'downstream': '影響 Fed 利率決策 → 美元 → 美債殖利率 → 美股估值（殖利率上 1%，PE 下調約 10–15%）',
     },
-    FRED_NAPM: {
-        'meaning': 'ISM 製造業採購經理人指數，採購主管問卷彙總，領先 GDP 約 3–6 個月。',
+    # ── ISM 教學對映修正（DEC-075 批 1'，客戶 2026-10-23「修正 ISM 教學對映」；修正錯誤，有意識的更正，
+    #    ⛔ 不是漏刪）────────────────────────────────────────────────────────────────────
+    # ~~FRED_NAPM: {'meaning': 'ISM 製造業採購經理人指數…', 'pair_with': [...], 'historical_anchor': '2008 雷曼跌至
+    #   33.1｜2020 疫情 41.5｜2021 復甦高點 63.7', 'upstream': …, 'downstream': …}~~
+    # 這一篇唯一的顯示點是新 UI 總經 v2「台灣 PMI」燈（`macro_v2_service._EDU_KEY['ism_pmi']`）——
+    # 燈的值是**台灣 CIER PMI**（`VN1-MT-SSOT-ISM`），教學卻講美國 ISM 與其歷史數字；`how_to_read` 早在
+    # 批 Z27 就已改吃台灣 PMI 門檻 token，只剩 meaning／pair_with／historical_anchor／upstream／downstream
+    # 是 ISM 文案。舊 UI 教學頁從未顯示它（key 'NAPM' 掛不上 registry ⇒ 孤兒，見
+    # `tests/test_b6a_edu_doc_parity.py::TestEduCardCountHonesty`）。
+    # ⇒ 改名為 'TW_PMI' 並把那五欄換成台灣 PMI 的事實（只用 repo 內已有出處的敘述：`DATA_REGISTRY`
+    #   'cier-pmi' 列的 usage 原文）；`how_to_read` 一行未動（同一組 PMI token，⛔ 不改門檻）。
+    #   ⛔ 不自擬台灣 PMI 歷史高低點數字（沒有可回溯出處，§1／§3.3）。
+    #   改名後美國 ISM 那一篇已無任何讀者（v3 §01-2：因本次改動才變成孤兒 ⇒ 本次收掉，不留第二份）。
+    #   ⚠️ key 刻意**不用** registry identifier 'cier-pmi'：用了會讓舊 UI 教學頁多出一張卡（畫面結構變更，
+    #   須線框，DEC-003）；孤兒張數維持 2（'NAPM' → 'TW_PMI'），舊 UI 教學頁輸出逐字不變。
+    'TW_PMI': {
+        'meaning': '台灣製造業採購經理人指數（PMI），由中華經濟研究院（CIER）每月第一個工作日公布，'
+                   '是採購主管問卷彙總的台灣製造業景氣領先指標（>50 擴張、<50 收縮）。'
+                   '⚠️ 這不是美國 ISM 製造業指數。',
         # F1 v19.184 §3.3：原本這 4 條是手打的 `50 / 50 / 50 / 45`。
         # 前三條的 50 與 SSOT 相同（巧合，不是引用）；第 4 條的 **45 是錯的** ——
         # 五桶危險門檻 `ism_pmi` 的紅線是 **46**（`MACRO_THRESHOLDS.PMI.red_below`），
@@ -634,10 +654,16 @@ EDU_GUIDE: dict[str, dict[str, Any]] = {
             ('≤ §§PMI_RED§§', '🔴 嚴重收縮'),
             ('≤ §§PMI_RED§§ 持續 3 月', '🚨 衰退強烈訊號（五桶「中期」紅線）'),
         ],
-        'pair_with': ['美國核心 CPI（CPILFESL）', '台灣出口 YoY', '費半 SOX'],
-        'historical_anchor': '2008 雷曼跌至 33.1｜2020 疫情 41.5｜2021 復甦高點 63.7',
-        'upstream': '訂單能見度、企業 CapEx、全球需求',
-        'downstream': '台灣出口（領先 1–2 季）→ 台股科技股獲利 → ^SOX & ^TWII',
+        'pair_with': ['台灣出口金額 YoY（海關）', '國發會景氣燈號', '費半 SOX'],
+        # 回修 NIT（2026-10-23）：~~「歷史高低點本系統尚未整理出可回溯的數字」~~ —— 與教學頁 PMI 章節的
+        #   台灣 PMI 歷史表說法不一；改列 repo 內實際存在、可回溯的官方序列數字：
+        #   `data_cache/tw_pmi.parquet`（source 欄 = data.gov.tw:dataset:6100，2012-07～2026-09，171 列；
+        #   量測日 2026-10-23）實算：最高 2021-04 68.7、最低 2023-01 40.4；2020-04 47.6、2022-12 43.7
+        #   （後兩者與 `tab_edu` PMI 章節歷史表一致）。
+        'historical_anchor': '2021/4 高點 68.7｜2023/1 低點 40.4｜2020/4 疫情 47.6｜2022/12 43.7'
+                             '（官方序列 data.gov.tw 6100，2012/7 才創編；榮枯線 50 為定義值）',
+        'upstream': '全球終端需求、電子與半導體供應鏈訂單、原物料價格',
+        'downstream': '台灣出口與製造業營收 → 台股電子權值股獲利 → ^TWII',
     },
     # ── 國際金融 ──────────────────────────────────────────────────
     '^VIX': {
@@ -850,10 +876,15 @@ EDU_GUIDE: dict[str, dict[str, Any]] = {
     },
     'XTEXVA01TWM664S': {
         # 技術備忘:v18.142 由 IMF IFS(VALEXPTWM052N)改採 OECD MEI,月延遲短 10 個月。
+        # 📌 DEC-075 批 1' 回修（QA1 S-4，2026-10-23，有意識的修改，⛔ 不是漏刪）：
+        #   ~~'本系統採用 OECD 的統計版本，比另一個常見的 IMF 版本早約 10 個月拿到最新月份資料。'~~
+        #   —— 與燈名「台灣出口金額 YoY（海關）」矛盾，且不符實際取數鏈：`macro_snapshot.fetch_export_block`
+        #   首源是主計總處統計資訊網（stat.gov.tw），其次 FRED API（OECD MEI 系列）、海關進出口統計
+        #   （data.gov.tw／opendata.customs.gov.tw dataset 6053）、FRED CSV、財政部 CKAN；OECD 只是備援之一。
         'meaning': '台灣每月出口金額年增率，全球景氣與台廠訂單能見度的核心指標'
                    '（台灣 GDP 約 60% 來自出口）。'
-                   '本系統採用 OECD 的統計版本，比另一個常見的 IMF 版本'
-                   '早約 10 個月拿到最新月份資料。',
+                   '本系統依序取主計總處統計資訊網、OECD（經 FRED）、海關進出口統計等來源，'
+                   '取第一個有值的那一源（畫面「命中來源」會標明本輪用的是哪一個）。',
         'how_to_read': [
             ('YoY > §§TW_EXPORT_YELLOW§§%', '🟢 出口擴張，基本面有撐'),
             ('YoY §§TW_EXPORT_RED§§ ~ §§TW_EXPORT_YELLOW§§%',

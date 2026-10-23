@@ -353,7 +353,7 @@
 - **統計**（該檔第 3 節表格列數，腳本計數）：🟢 HEALTHY 7／🟡 LIMITED 25／🔴 BROKEN／MISLEADING 27／⬜ UNAVAILABLE 5（合計 64 列；一列可能合併數個相近資料）。依客戶原文「禁止把 missing 當 0、neutral、false 或正常。」，補 0、回中性、ffill 當現價、代理／估算值計分一律判 🔴。
 - **重大問題**（會讓目前投資結論不可信）：
   1. 市場位階與建議持股姿態帶受代理廣度主導（近似常數、落後一日）；代理值計分本身已不符 DEC-062 Q5「代理值只顯示、不計分」（BIAS240、PCR 估算同類：`DH-BIAS240-EST`、`DH-PCR-PROXY`）。待裁示的是移除代理廣度後健康分怎麼辦 → Decision Gate `DH-GATE-BREADTH`：(A) 重新歸一為只含大盤評分並揭露「廣度未評估」（總管推薦；需另批重新校準或揭露未校準）／(B) 健康分判「未評估」、位階與姿態帶不給結論。
-     📌 2026-10-23（append-only，上句一字未改）：**已裁示 B（DEC-074）**：代理廣度不得計分；受 breadth 影響且無法依既有正式規則可靠計算的健康分 →「⬜ 未評估／資料不足」；不重新設計 0.6／0.4、不重新正規化、不為「有結論」補結論；總管推薦 A ⛔ 不採用。⛔ 實作待客戶指派。
+     📌 2026-10-23（append-only，上句一字未改）：**已裁示 B（DEC-074）**：代理廣度不得計分；受 breadth 影響且無法依既有正式規則可靠計算的健康分 →「⬜ 未評估／資料不足」；不重新設計 0.6／0.4、不重新正規化、不為「有結論」補結論；總管推薦 A ⛔ 不採用。~~⛔ 實作待客戶指派。~~ **實作完成、待 PR #910 合併**（DEC-075 指派批 A；見 §28）（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新：DEC-075 已指派，批 A＋1' 已於分支實作））。
   2. Risk Cap 核心輸入 VIX、MA5 的 PIT 未實作，新 UI 的 `risk_cap_state.json` 仍判 VALID（正式 Sheet 寫入已關）→ `VN1-PG-VIX-ASOF`、`VN1-PG-PIT-CONSISTENCY`。
   3. 刷新失敗沿用舊值而無揭露 → `DH-REFRESH-STALE`。
   4. 個股／ETF：357 配息欄位、財報體檢現金流未年化、法人與融資融券補 0、未還原價無旗標、月營收記 0 分、評分例外回中性 50、ETF 尾端 ffill 當現價 → `DH-357-DIV-FIELD`、`DH-FIN-HEALTH-CF`、`DH-INST-FILL0`、`DH-KLINE-ADJ`、`DH-REVENUE-ZERO`、`DH-SCORE-NEUTRAL50`、`DH-ETF-FFILL`。
@@ -383,3 +383,91 @@
 - **`ruleset_hash` 二次切換風險**（QA D 表）：批 A 加旗標翻一次，`DH-MACRO-FWD-ASOF` 的 schema bump（payload 含 `'schema'`）再翻一次 ⇒ 三段不可混比。建議批 A 一併 bump schema 並納入 per-leg as_of 加欄（前提：`fetch_adl` off-by-one 同批定案）；否則 PR 明寫三段區間。
 - ⚠️ 揭露：撰寫組未實跑任何測試、只 grep 抽查關鍵符號存在；計畫內「0 讀者／唯一」皆 grep；預期紅測試清單未實跑；實作批開工前須重查（該檔第 0.3 節）。
 - 📌 **2026-10-23 客戶裁示結果（DEC-075；append-only，上文一字未改）**：(1) **D-1＝(a)** —— 健康分因缺少正式 breadth 而未評估時，受此資料契約影響、無法可靠成立的市場位階也顯示「⬜ 未評估／資料不足」；不允許靜默 fallback 到另一套規則引擎產生位階結論；缺資料不得為了維持畫面結論而補結論（(b) 不採用）。(2) **指派批 A**（#908 合併後為下一批；含 DEC-074 B 落地＋`DH-TWII-MA200`）。(3) **同意加掛批 1'**（外資缺值不得補 0／台灣出口燈依實際資料內容修正名稱／修正 ISM 教學對映；⛔ 不得藉此新增資料來源或改變投資公式）。(4) **批 2 暫不與 VN1-PG 一起指派**：等批 A＋1' 完成、獨立 QA、CI、main verification 後重評邊界。⇒ 本節開頭「⛔ 非 Approved、⛔ 非動工授權」**對批 A＋1' 自本日起不再成立**（有意識的變更，不是漏刪，決策者 客戶）；批 2～4、`DH-LAMP-STALE` 仍為提案。批 A High，開工前依 DEC-073 Gate 自判（總管判目前模型足夠；總管自判，撰寫組無法查證）。⛔ 畫面結構異動仍受 DEC-003 線框 gate（計畫 1.6）；⛔ DEC-019 舊 UI 凍結不豁免。(a) 技術落點：`macro_state_locker.get_macro_state` 於 health None 時不退檔案位階、位階→未評估、`is_loaded=False`（`_wr_ok` 守衛語意改；相關測試斷言更新）—— 詳 DEC-075。
+- 📌 **2026-10-23 第二則（append-only，上文一字未改）**：批 A＋1' **已於分支 `ccr-310717b7-37xwl6` 實作完成、待 PR #910 合併**；實作內容、客戶可見行為變更與已知殘留見 **§28**。
+
+## 28. Data Health 批 A＋1' 實作完成（2026-10-23；待 PR 合併）
+
+> 2026-10-23 新增。裁示全文只在 `docs/DECISIONS.md` DEC-074／DEC-075；殘留與延後項只在 BACKLOG 5.1.8；現況與唯一下一步只在 `docs/HANDOFF.md` §0。本節只摘要。量測：分支 `ccr-310717b7-37xwl6`，HEAD `04a9bc2e`（commits `1f4f5b19`、`7ef52869`、`ee4bde01`、`04a9bc2e`；base＝main `b9ed892d`）。~~**PR 尚未開、尚未合併**~~ **PR 已開、尚未合併**（PR #910）；~~QA 第四輪複驗中~~ QA-1～QA-5 獨立複驗，QA-5 判定可合併（見 PR #910）（QA-5 後補的 SHOULD-1 測試 commit 為實作組自跑、未經第二組驗證）；CI：合併條件：PR #910 CI 綠（結果見 PR checks）（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管）。
+
+- **狀態**：**實作完成、待 PR #910 合併**。⛔ 合併＋main CI＋main verification 完成前不得寫成「已上線」；⛔ 總管確認前不得寫「QA 通過」。
+- **批 A（DEC-074 B 落地＋DEC-075 D-1(a)＋`DH-TWII-MA200`）**：
+  - L0 旗標 `BREADTH_PROXY_SCORING_ENABLED=False`（`shared/signal_thresholds`）：代理廣度（`fetch_adl` 由 ^TWII 估算、`jingqi_calc` 大盤估算）**只顯示、不計分**；健康分算不出 ⇒「⬜ 未評估」；**無新權重、無重新歸一化**（DEC-074）。
+  - 健康分因缺正式 breadth 未評估時，市場位階 ⬜、`is_loaded=False`、**不退** `macro_state.json` 規則引擎位階 ~~；含 ^TWII 全滅情境（`04a9bc2e` 補）~~；~~**限 warroom 存在的路徑**（含該路徑下的 ^TWII 全滅情境，`04a9bc2e` 補）；**冷啟動／warroom 不存在路徑未完成（見 `DH-REGIME-NOWARROOM`）**~~ **代理廣度不計分時涵蓋 warroom 存在（含 ^TWII 全滅，`04a9bc2e`）與不存在（冷啟動未載入、warroom 被移除；PR #910 `DH-REGIME-NOWARROOM`）兩條路徑**（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（依兩組獨立調查裁定冷啟動屬 DEC-075 D-1(a) 射程；客戶 2026-10-23 指示不得只登 BACKLOG 延後））（⚠️ 實作組自述、待 QA 複驗（`CLAUDE.md` §-2 規則 6））（DEC-075 D-1(a)）（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（QA-4 M-1：D-1(a) 只完成 warroom 存在的路徑））。
+  - `DH-TWII-MA200`：MA200 不足 200 根時回 None＋`ma200_status`，不再以現價頂替；`MA200_WINDOW_DAYS=200` 移入 L0（與 `config.ANNUAL_MA=240` 是不同量測，不合併）。
+  - 總經前進式驗證：`ruleset_hash` 納入旗標、schema 2→3；**v2 列與 v3 列不可混比**（健康分口徑不同）。
+- **批 1'**：外資（大盤）FinMind 備援缺值不再 `fillna(0)`；台灣出口燈改名「台灣出口金額 YoY（海關）」（不換源）；台灣 PMI 教學對映改 TW_PMI（歷史數字來自 `data_cache/tw_pmi.parquet`）；`XTEXVA01TWM664S` 教學文字依實際來源鏈 DGBAS → OECD via FRED → 海關 6053 更正；`SPEC.md`／`DATASTATION.md` 以刪除線＋DEC-075 註記同步。⛔ 未新增資料來源、未改投資公式（DEC-075 第 3 點）。
+- **客戶可見行為變更**（在正式 breadth 來源出現前持續有效）：
+  1. 📊 大盤／🛡️ 持股等處的**健康分、市場位階、建議持股姿態帶通常顯示「⬜ 未評估／資料不足」**（DEC-072「首屏先給結論」在資料不足時以 DEC-074／075 為準，客戶送題時已知情）。~~「通常」而非「一律」：warroom 不存在的路徑仍有殘留（見下）。~~ 「通常」而非「一律」：旗標開啟（代理計分）或日後接上正式廣度來源時不成立；warroom 不存在路徑的殘留已併入本 PR 修正（見下第 6 項）（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（依兩組獨立調查裁定冷啟動屬 DEC-075 D-1(a) 射程；客戶 2026-10-23 指示不得只登 BACKLOG 延後））。
+  2. 🎯 找標的頁（`page_find`）**空頭濾網通常不套用**（位階未評估 ⇒ 不套用）；⚠️ 目前畫面**沒有**註記告知使用者（`DH-FIND-UNEVAL-NOTE`）。
+  3. 總經前進式驗證帳本：**健康欄為 None**；`ruleset_hash` 與 schema（2→3）變更，前後列不可混比。
+  4. 台灣出口燈名改為「台灣出口金額 YoY（海關）」（待客戶驗收，`DH-EXPORT-LABEL-READING`）；台灣 PMI 燈的教學與歷史數字改為台灣 PMI（不再是美國 ISM）。
+  5. 外資備援缺值時顯示為缺值、不再顯示假的 0 淨額（主要在舊 UI；新 UI 畫面不變）。
+  6. 📌 **冷啟動（`DH-REGIME-NOWARROOM`，PR #910；2026-10-23 新增，有意識的更新，決策者 AI 總管）**：開新 session、尚未按「🚀 更新今日戰情」時（或更新時紅綠燈三源全空、warroom 被移除時），**不再顯示**由規則引擎快照 `macro_state.json` 推出的多空位階 —— 改為灰色「總經尚未載入」，並同句說明「正式廣度來源接上前，載入後位階仍為未評估」。具體：🚦 今天頁卡①③、狀態列「總經」、三欄摘要「位階」為灰色未載入（不是紅色錯誤）；~~🛡️ 持股頁卡④ **不再印 `bull`／`bear`**（灰）；~~ 🛡️ 持股頁卡④ 不再印 `bull`／`bear`，顯示灰色「總經本輪未評估」（⚠️ **QA-6 發現**：`c8e30d84` 時這張卡在 v2 卡面實際畫成**紅卡**「這一格畫不出來」—— 短句表 `V2_SHORT_ROWS` 的摘錄對不上新原文 ⇒ KeyError；卡⑤「建議持股水位」缺真實廣度那一支同型（`f3dd098c` 起即有）。修正 commit 後 AppTest 實測（旗標關、有效空頭檔、按「🚀 跑存股戰情室」）卡④ 為灰（#7），實作組自述、待 QA-7）（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（QA-6 MUST-1／S-2））；換股建議攻守 stance 冷啟動為「未評估」（只做汰弱、不套攻守）；🎯 找標的頁冷啟動不套空頭濾網；AI 多因子評分冷啟動拒評、AI 問答「市場狀態」回未評估。**系統風險上限（Risk Cap）不受影響**（7 天有效快照照舊）。**舊 UI 連帶**（共用契約，舊 UI 程式碼未改；DEC-019 揭露）：`app.py` 選股網濾網、`section_batch_fetcher`／`section_portfolio_summary` 評分、`section_op_recommendation`、`section_psy_checklist`、`macro_stock_link`、`tab_macro_v2` 等在冷啟動同樣變 unknown／未評估（走各自既有的未評估處理）。旗標開啟時行為同修前。⚠️ 實作組自述、待 QA 複驗（`CLAUDE.md` §-2 規則 6）
+  7. 📌 **QA-6 補揭露（S-4；2026-10-23 新增，有意識的更新，決策者 AI 總管；數字為 QA-6 量測轉述，實作組未重跑）**：冷啟動自 #910 起還有兩處**方向變化**（都走各自既有的未評估路徑，屬實，但修前沒寫出）：(a) 舊 UI `section_op_recommendation`（凍結，DEC-019）冷啟動＋有效**空頭**檔：修前印「大盤空頭格局…先控制風險」，修後「大盤」項不計分（附既有 caption），結論可能變成「2個訊號共振，中性偏多，可小倉試水溫」—— **建議方向由保守轉為偏積極**；(b) 換股建議：修前空頭檔冷啟動攻守 stance＝defensive、換入候選 **3 檔**；修後 stance＝unknown（只做汰弱、不套攻守）、換入候選 **5 檔**（既有 `_in_n = 3 if _defense else 5`）。另：AI 個股評分冷啟動被擋時的字串（`ai_qa_service._regime_blocked_error`）不再附「按一鍵更新…再問一次」，改為屬實句「可以按更新載入，但正式廣度來源接上前載入後位階仍為未評估」（QA-6 MUST-2 修正；旗標開時舊句照舊）。⚠️ 實作組自述、待 QA-7 複驗（`CLAUDE.md` §-2 規則 6）
+- **附帶行為變更（QA-4 S-2 揭露；2026-10-23 補，有意識的更新，決策者 AI 總管；`04a9bc2e` commit 訊息只寫了第 3 項）**：
+  1. 🛡️ 持股頁 ④ 總經位階／⑤ 建議持股水位：warroom **存在**、健康分缺、舊 `macro_state.json` 讀壞時，由紅（讀不出來）轉灰（缺真實廣度 ⇒ 未評估）。這兩卡在 warroom 存在時本不讀舊檔（位階不靠舊檔、上限只讀 `risk_cap_state.json`），原本的紅屬假警報（v3 §02）；warroom **不存在**時讀壞**仍紅**（未改）。
+  2. 🚦 今天頁卡① 能不能出手、卡③ 市場位階：F1（三源全滅、warroom 仍存在）／F3（^TWII 全滅）由「按更新會原地重抓」（灰）改為「更新資料不會改變、等正式廣度來源」（灰）；兩卡過去就不是紅，沒有紅色被拿掉；本輪取數失敗仍在更新報告逐條列出。
+  3. strict 模式：warroom 有、但健康分缺＋舊檔損毀時**不再 raise**（rvrc 關時改帶 `file_error`、rvrc 開時不帶）；warroom 不存在＋損毀**仍 raise**。
+  4. 本 PR（QA-4 S-1 回修）：新 UI 廣度未評估說明（今天頁卡①③／狀態列「總經」／三欄摘要「位階」、持股頁④⑤、AI 問答「市場狀態」工具）依「本輪紅綠燈輸入有沒有被擋下的代理值」給「目前只有代理值」或「這一輪連代理值也沒有」；拿不到區分訊號處（`allocation_decision` drivers、訊號讀不出來）改用兩種情境都屬實的中性句；今天頁／持股頁的出口句改為兩態皆屬實。更新報告「整理紅綠燈結論」步驟說明：旗標關時 warroom 在而健康分缺，一律寫缺真實廣度句（不再寫「位階若有可用的 macro_state.json 會改讀它」）。只改文案與選擇邏輯：⛔ 未增刪 st 元件、未改版面／公式／權重／門檻／Risk Cap、未動凍結舊 UI。
+- **已知殘留**（登記於 BACKLOG 5.1.8，⛔ 不在此重複細節）：~~`DH-REGIME-NOWARROOM`（D-1(a) 殘留：warroom 不存在路徑仍回規則引擎位階、`is_loaded=True`；**下一安全段落第一個動作**）~~ `DH-REGIME-NOWARROOM` 本 PR #910 修正（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（依兩組獨立調查裁定冷啟動屬 DEC-075 D-1(a) 射程；客戶 2026-10-23 指示不得只登 BACKLOG 延後））、`DH-STATUSBAR-AI-SNAPSHOT-WORDING`、`DH-NOWR-COPY-RESIDUAL`（2026-10-23 新增登記）、`DH-CALIB-CRON`（季度校準在新旗標下健康恆 None、自動 PR 本文「無需調整」有誤導；**期限 2027-01-01 前**）、~~`DH-BREADTH-COPY-NOPROXY`~~ `DH-BREADTH-COPY-NOPROXY`（新 UI 本 PR 修正；殘留僅凍結舊 UI 的 F3 擋燈文案，只登記不改）（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（QA-4 S-1））、`DH-FIND-UNEVAL-NOTE`、`DH-OLDUI-PROXY-LABELS`、`DH-NONE-TO-ZERO-RENDER`、`DH-FT-SCHEMA-ASOF`、`DH-MKTSCORE-DENOM`、`DH-EXPORT-LABEL-READING`、`DH-M1B-COVERAGE`、`DH-RISKCAP-OLDFILE-NONRVRC`、`DH-TEST-Z8-ALLOC-NARROW`（2026-10-23 QA-4 新增登記）、`DH-JINGQI-STALE-SESSION`、`DH-REFRESH-HEALTH-NAN`（2026-10-23 QA-5 新增登記）。批 2／VN1-PG：依 DEC-075 第 4 點待重評邊界，**未開始**。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節實作內容與殘留為**總管轉述**；撰寫組只以 `git grep` 抽查 `BREADTH_PROXY_SCORING_ENABLED`、`MA200_WINDOW_DAYS`、`ma200_status`、新燈名、`shared/macro_forward_test_schema` 的「v2 列與 v3 列不可混比」註記存在，**未重跑任何測試**。本機測試 Python 3.13、CI Python 3.11，以 CI 結果為準。
+- 📌 **2026-10-23 Freeze 補註（append-only，上文一字未改；有意識的更新，不是漏刪，決策者 AI 總管（事實更新））**：本節開頭量測行「HEAD `04a9bc2e`」已過時 —— PR #910 其後又有 `0122eec1`（治理文件）、`3003bb3c`（QA-4 S-1 文案）、`f3dd098c`（QA-5 SHOULD-1 測試＋佔位）、**`c8e30d84`（冷啟動修正 `DH-REGIME-NOWARROOM`，最後一個產品碼 commit）**，以及 Freeze 文件 commit（以 PR #910 最新 commit 為準）。**客戶可見**：冷啟動（未按「🚀 更新今日戰情」／三源全空／warroom 被移除）**不再顯示規則引擎（`macro_state.json`）推出的多空位階**，改灰色「總經尚未載入」；Risk Cap `exposure_limit_pct` 不變（見上第 6 項）。QA-6 對 `c8e30d84` 的獨立複驗於 Freeze 撰寫時**進行中、結果未知**。耐久狀態總覽見 **§29**。
+
+## 29. 2026-10-23 GitHub 交接 Freeze 耐久狀態
+
+> 2026-10-23 新增（客戶同日 Freeze 指示：專案 AI 額度預計 2026-10-24 00:00 台北取消，下一個 AI 只讀 GitHub 也要能無損接手）。本節只放**耐久狀態**；現況與唯一下一步只在 `docs/HANDOFF.md` §0「Freeze 版」；裁示全文只在 `docs/DECISIONS.md`；待辦只在 `docs/BACKLOG.md`；規則本文只在 `PROJECT_RULES.md`。量測：Freeze 撰寫時 `origin/main`＝`397398a2`（cron tip；`b9ed892d` 之後只多 2 個 cron 資料 commit，無程式變更），PR #910 未合併（總管 `git fetch`／GitHub API 實查轉述，撰寫組未重查）。⚠️ cron 會推進 tip，引用前重查（`CLAUDE.md` §8.2.A.0 規則 4）。
+
+### 29.1 產品階段與新 UI 方向
+
+> 出處：客戶 2026-10-23 Freeze 指示；正式裁示見 `docs/DECISIONS.md` ~~新 DEC（另組撰寫中，**號碼以 DECISIONS 為準**）~~ **DEC-076**（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實修正））；先前方向見 DEC-071、DEC-072（§24）。⛔ 本節是摘要，不是規範來源；⛔ 非線框核准、非動工授權（畫面結構異動仍須先出文字線框，DEC-003）。
+
+- **階段**：vNext 新 UI 尚在成形；Data Health 修復批進行中（§25、§27、§28、本節 29.4）。**現行實作依據仍是 DEC-017 五頁**（`shared/ia_nav.py::PAGE_LABELS`），直到新線框經客戶拍板。
+- **核心原則（客戶原文）**：「**底層能力完整保留，前台流程極簡。**」新 UI 不是把舊 UI 原封不動搬過去，也不能因新版簡化就把舊 UI 的投資能力刪掉。正確順序：舊 UI 有價值的功能／判讀邏輯 → 重整資訊架構 → 決定新 UI 位置 → 重新設計顯示方式 → 驗證能力覆蓋 → 最後才考慮刪除舊 UI。
+- **主要投資流程（各頁回答一個問題）**：
+  - 📊 **大盤／市場趨勢** —「現在市場環境適不適合投資？目前可以承擔多少風險？」含大盤、市場位階、台股趨勢、國際趨勢、指標危險度、Risk Cap、重要總經／籌碼／技術資訊；**底層語意分開**（29.2）。
+  - 🎯 **標的** — 整合找標的、查一檔、個股健檢、ETF、財報、籌碼、技術、估值等既有標的分析能力；體驗＝標的清單 → 點一檔 → 同頁／淺層 route 完整健檢。
+  - ⚡ **行動** — 承接既有 deterministic action logic（exit signal、take profit、swap、汰弱換強、watch、action required）；⛔ 不得為 UI 自行發明新的加減碼比例或投資語意。
+  - 🛡️ **持股** — 個股／ETF 健檢、配息、stress、VaR、risk contribution、concentration、portfolio limits 等既有組合風險能力。
+- **輔助入口**：🩺 **資料中心**＝系統／資料維護入口，**不是**第五個投資決策頁（追蹤資料、狀態、最新資料日、來源、問題、影響功能、處理方式：可自行修復／需研究替代來源／API／MCP／需客戶裁示／暫不處理；規格草案 `DH-DATA-CENTER`，未實作）；👤 **我的**＝account／settings／connection／utility，不塞回投資流程。
+- **「憑什麼」**：改為**每頁 contextual explainability**（為什麼這樣判斷、指標、日期、資料來源、規則），不是主要導航頁。
+- **Progressive disclosure 三層**：第一層＝結論／狀態；第二層＝主要原因；第三層（需要時展開）＝原始指標、日期、source、rule、technical detail、confidence／completeness。⛔ 不把舊 UI 全部燈號、數字一次攤在首頁。
+- **舊 UI 的地位**：新 UI 成立以前，舊 UI 是**重要 capability／logic reference**（含既有個股健檢：財報健檢、KD／技術輸入、replacement／rotation、stock trend input、個股燈號、持股戰情整合；盤點見 §23）。**刪除前提**：capability inventory → new UI mapping → implementation → coverage validation（Old UI Capability → New UI Coverage Matrix）→ regression → 客戶核准，之後才進舊 UI removal Decision Gate；⛔「新版比較漂亮」不是刪除理由；舊 UI 仍凍結（DEC-019／020）。待辦見 BACKLOG（UI 搬遷相關項）。
+
+### 29.2 投資語意界線（不得合成單一分數）
+
+- **市場位階**：市場 bull／bear／trend 狀態。
+- **指標危險度**：目前多少危險條件／門檻被觸發；**≠ 市場多空**。
+- **Risk Cap**：允許承擔的最大曝險／風險控制；**≠ 市場趨勢**。
+- **台股趨勢**、**國際趨勢**：新的 research／market trend concept，**仍無正式定義**（`VN1-MT-TREND-DEF`，§20、§22）。
+- 因此完全可能出現「**趨勢偏多，但風險升高、Risk Cap 降低**」。⛔ 不得為 UI 簡化把上述概念偷偷合成單一 score／light（另見 §22.3、§24）。
+
+### 29.3 Data ≠ AI 與 missing 規則
+
+- **Data Layer** 只負責 acquire、clean、normalize、validate、provenance；**AI Layer** 只能讀已取得、可追溯、驗證狀態清楚的資料做分析／解釋，⛔ 不得補造客觀資料。
+- missing ≠ 0；missing ≠ neutral；missing ≠ normal；missing ≠ HOLD；proxy ≠ real data；缺資料與真 0 必須區分；顏色不得是唯一資訊載體；⛔ 不得為了讓產品「有答案」而製造結論。
+- 規則本文只在 `PROJECT_RULES.md`（資料規則 D 系列，例 D5「missing ≠ 0」）與 `docs/DECISIONS.md`（DEC-026、DEC-040、DEC-054、DEC-062 Q5「代理值只顯示、不計分」）；`CLAUDE.md` §1 Fail Loud。本節只摘要。
+
+### 29.4 Data Health 現況
+
+- **Audit**：§25（全表 `docs/vnext/DATA_HEALTH_AUDIT_2026-10-23.md`）。
+- **DEC-074（裁示 B）**：代理廣度不得計分；受 breadth 影響且無法依既有正式規則可靠計算的健康分 →「⬜ 未評估／資料不足」；不重新設計權重、不重新正規化。
+- **DEC-075 D-1(a) 完整語意**：正式 breadth 不存在／無法可靠計算相關 health 時 —— ⛔ 代理 breadth 不得參與 scoring；⛔ 不得偷偷 fallback（含退 `macro_state.json` 規則引擎）產生看似正式的市場位階；受影響結果 →「⬜ 未評估／資料不足」；⛔ 不得因產品想保持有答案而補結論。**同時不過度擴張**：⛔ 不得把它擴張成「所有市場／Risk Cap 概念都失效」—— **只有真正依賴失效資料的 component 不可判定**；**Risk Cap 保持自己的既有語意**（PR #910 未改 `exposure_limit_pct`）。
+- **批 A＋批 1'**：實作在 **PR #910**（§28；含冷啟動 `DH-REGIME-NOWARROOM` 修正 `c8e30d84`），**未合併**；QA-1～QA-5 完成，~~QA-6 對 `c8e30d84` 複驗中、CI 進行中（Freeze 撰寫時）~~ QA-6 對 `c8e30d84` 判不可合併（2 MUST），已於後續修正 commit 處理、待獨立 QA-7＋CI（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（QA-6 結果））；殘留／deferred 項登記於 BACKLOG 5.1.8（清單見 §28「已知殘留」）。
+- **批 2／3／4 與新來源研究：皆未開始**（定義以 BACKLOG 與 `docs/vnext/DATA_HEALTH_REPAIR_PLAN_2026-10-23.md` 為準；撰寫組 grep 該檔第 2.2～2.4 節）：
+  - 批 2（PIT／代理不計分，High，原提案併 `VN1-PG-*`）＝`DH-BIAS240-EST`／`DH-PCR-PROXY`／`DH-MACRO-FWD-ASOF`／`DH-REFRESH-STALE`；DEC-075 第 4 點：等批 A＋1' 合併＋QA＋CI＋main verification 後**重評邊界並送客戶裁示**，未指派。
+  - 批 3（L1 契約，High，需能連 FinMind／Yahoo 的環境）＝`DH-357-DIV-FIELD`／`DH-KLINE-ADJ`／`DH-INST-FILL0`／`DH-ETF-FFILL`／`DH-REVENUE-ZERO`／`DH-FIN-HEALTH-CF`(a)；未指派。
+  - 批 4（延後）＝`DH-SCORE-NEUTRAL50`／`DH-FWD-RECON`／`DH-FIN-HEALTH-CF`(b)／`DH-WHY-FRED-LAMP`；未指派。
+  - 新資料來源研究（real market breadth、Sahm、US 2Y、利差、30Y、TIPS、OECD CLI、借券、TDCC、ETF 配息／成分、市場 EPS／PE／forward EPS、CSP／AI capex 等）＝**research candidates，⛔ 非已授權接入 production**；⛔ 不得看到 BACKLOG 就自行換源。
+- **客戶可見常態**：正式 breadth 來源出現前，健康分／市場位階／建議持股姿態帶**通常顯示 ⬜ 未評估**（旗標 `BREADTH_PROXY_SCORING_ENABLED=False`）。
+- **硬期限**：`DH-CALIB-CRON` 須在 **2027-01-01**（下次季度校準排程）前修正或暫停。
+
+### 29.5 Production 安全
+
+- `PRODUCTION_WRITE_APPROVED = False`（`shared/risk_cap_history_policy.py`，撰寫組 grep 實查）；Daily Schedule NOT APPROVED（DEC-066 F）。⛔ 不得因交接自行開啟。
+- `.github/workflows/` 內含 `schedule:` 的 workflow（撰寫組 grep 列舉，Freeze 撰寫時）：`calibrate_health_weights.yml`（季）、`export_db.yml`（每日）、`push_holdings_daily.yml`（平日）、`push_weekly_report.yml`（週）、`recalibrate_macro.yml`（季）、`update_etf_managers.yml`（週）、`update_forward_test.yml`（月）、`update_fundamentals.yml`（季，財報公布後）、`update_macro_forward_test.yml`（平日）、`update_macro_history.yml`（每日）、`update_sector_flow.yml`（每日）；`update_health_history.yml` 的 schedule **已註解停用**。其餘（`pr-check`、`probe_tw_sources`、`push_daily_signals`、`push_watchlist_signals`、`risk_cap_history_poc`、`risk_cap_wif_negative_r5`）無 schedule。**是否有外部寫入／推播副作用以各 workflow 檔為準**（撰寫組未逐檔判讀）；**本 Freeze 未改任何排程或 workflow**。
+
+### 29.6 Branch
+
+- 遠端 branch ~~共 **8 條**~~ **8 條（量測日 2026-10-23）**（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實修正））（Freeze 撰寫時 `git branch -r`：`auto/recalibrate-20261001`、`ccr-310717b7-37xwl6`（#910 head）、`ccr-8d5a141e-3fdtwt`、`claude/investment-inbox-product-design-m1lu7v`、`claude/stock-dashboard-handoff-g9dtm0`、`data`、`main`、`v2`）。⚠️ `data` 為 `export_db.yml` 的輸出分支（依其 workflow name）；~~其餘是否含 unique commit **未查**。~~ 各條 unique commit 數已於 `docs/BACKLOG.md` `BR-CLEANUP` 實測（2026-10-23），以該列為準（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實修正））。
+- 客戶方向：**最後再一次清**；**刪 branch 視為不可逆治理動作**，⛔ 本次交接不刪；未來刪除前須重查 GitHub（unique commit、是否被 workflow 使用）並經客戶核准。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節 GitHub 實況（main SHA、open PR、#910 commits、QA／CI 狀態）為**總管實查轉述**；workflow 列舉、`PRODUCTION_WRITE_APPROVED`、branch 名、批 2～4 定義為撰寫組 grep；均**未經第二組驗證**，接手時依 `PROJECT_RULES.md` 第 15 節重查。

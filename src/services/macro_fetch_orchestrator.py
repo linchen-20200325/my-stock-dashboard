@@ -312,7 +312,7 @@ def fetch_macro_bundle(
                     _df_i = _pd.DataFrame(_ji['data'])
                     _ld_i = _df_i['date'].max()
                     _df_i = _df_i[_df_i['date'] == _ld_i]
-                    # 2026-09-27(加性,⛔ 不改下兩行的 fillna(0)):buy / sell 欄缺席或
+                    # 2026-09-27(加性,⛔ 不改下兩行的 fillna(0))[📌 DEC-075 批 1' 起 fillna(0) 已拿掉,見下方 DH-FOREIGN-FILL0]:buy / sell 欄缺席或
                     #   外資列不可解析時,下面會算出「假淨額」(缺 buy → 淨額=−sell;兩欄都缺 → 0)。
                     #   既有消費點照舊拿那個值;只把外資格標成「未觀測」給 foreign_net 燈
                     #   (→ 灰燈,⛔ 不畫假數字)。見 shared/inst_net.py。
@@ -351,28 +351,48 @@ def fetch_macro_bundle(
                         _fm_foreign_unobserved = bool(_fm_foreign_rows.any())
                         _fm_trust_unobserved = bool(_fm_trust_rows.any())
                         _fm_dealer_unobserved = bool(_fm_dealer_rows.any())
-                    _df_i['buy'] = _pd.to_numeric(_df_i.get('buy', 0), errors='coerce').fillna(0)
-                    _df_i['sell'] = _pd.to_numeric(_df_i.get('sell', 0), errors='coerce').fillna(0)
-                    _df_i['_net'] = ((_df_i['buy'] - _df_i['sell']) / TWD_PER_YI).round(2)  # 元 → 億(§4.1)
+                    # ── DH-FOREIGN-FILL0（DEC-075 批 1'，客戶 2026-10-23「外資缺值不得補 0」；行為變更，
+                    #    有意識的修改，⛔ 不是漏刪）──────────────────────────────────────────────
+                    # ~~_df_i['buy'] = _pd.to_numeric(_df_i.get('buy', 0), errors='coerce').fillna(0)~~
+                    # ~~_df_i['sell'] = _pd.to_numeric(_df_i.get('sell', 0), errors='coerce').fillna(0)~~
+                    # 舊寫法把缺值補 0 再相減 ⇒ 缺 buy 時淨額＝−sell（可達 ±數百億的假觀測）；上方旗標
+                    # 只讓讀旗標的消費點避開，沒讀旗標的消費點照樣拿到假數字（§1）。
+                    # 現行：buy／sell 缺欄或不可解析 ⇒ 該列淨額 NaN；某類別任一列 NaN ⇒ 該類別 net=None
+                    # （顯式缺值，旗標照舊 —— `unobserved_net` 判斷式與上方完全相同）。觀測值逐位不變。
+                    # 整欄缺席（回應形狀不對）⇒ 補救放棄、inst 維持空（與修前同一個結果 —— 修前是
+                    #   `_df_i.get('buy', 0)` 回純量 0 → `.fillna` AttributeError 意外落入 except；
+                    #   現在明講原因，不靠意外）。
+                    if 'buy' not in _df_i.columns or 'sell' not in _df_i.columns:
+                        raise ValueError('FinMind 回應缺 buy／sell 欄 → 補救放棄（不推淨額）')
+                    _df_i['buy'] = _pd.to_numeric(_df_i['buy'], errors='coerce')
+                    _df_i['sell'] = _pd.to_numeric(_df_i['sell'], errors='coerce')
+                    _df_i['_net'] = ((_df_i['buy'] - _df_i['sell']) / TWD_PER_YI).round(2)  # 元 → 億(§4.1)；缺值 → NaN
+
+                    def _fm_add(_prev, _v):
+                        """類別加總：任一列缺值（NaN／None）⇒ 整類 None（⛔ 不以 0 頂替、不跳過該列）。"""
+                        if _prev is None or _v is None or _v != _v:
+                            return None
+                        return round(_prev + _v, 2)
                     # FinMind name 欄為英文 key(Foreign_Investor / Investment_Trust / Dealer_*)
                     # 與 tw_macro.py:151 / hot_money.py:157 一致採英文匹配,中文為向下相容
                     inst = {}
                     for _cat, _net in zip(_fm_cats, _df_i['_net']):
                         if _cat == '外資':
                             inst.setdefault('_f', 0)
-                            inst['_f'] = round(inst['_f'] + _net, 2)
+                            inst['_f'] = _fm_add(inst['_f'], _net)
                         elif _cat == '投信':
-                            inst['投信'] = {'net': _net}
+                            inst['投信'] = {'net': (None if _net != _net else _net)}
                         elif _cat == '自營':
                             inst.setdefault('_d', 0)
-                            inst['_d'] = round(inst['_d'] + _net, 2)
+                            inst['_d'] = _fm_add(inst['_d'], _net)
                     if '_f' in inst:
                         inst['外資及陸資'] = {'net': inst.pop('_f')}
                     if '_d' in inst:
                         inst['自營商'] = {'net': inst.pop('_d')}
                     if _fm_foreign_unobserved and '外資及陸資' in inst:
-                        print('[FinMind-Inst] ⚠️ 外資列 buy/sell 缺值 → 淨額為 fillna(0) 推出的'
-                              '假值;foreign_net 燈視為缺值(既有消費點照舊)')
+                        # DH-FOREIGN-FILL0：~~淨額為 fillna(0) 推出的假值~~ → 淨額為缺值（None）
+                        print('[FinMind-Inst] ⚠️ 外資列 buy/sell 缺值 → 外資淨額為缺值（None，'
+                              '不補 0）;foreign_net 燈與讀旗標的消費點走缺值路徑')
                     inst = InstNetDict(
                         inst, unobserved_net=(('外資及陸資',)
                                               if (_fm_foreign_unobserved and '外資及陸資' in inst)

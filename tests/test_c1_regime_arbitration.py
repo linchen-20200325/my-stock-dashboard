@@ -27,6 +27,9 @@ P1 的分支 1/2（外資期貨大額淨空 / 健康分跌破門檻）**直接�
 的字面，所以 arbiter 判定若被改壞它會變紅。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import ast
 import itertools
@@ -293,13 +296,13 @@ class TestCalcTrafficLightSelfConsistency:
 
     _CASES = [
         # (mkt, jq, li)
-        ({'score': 4, 'regime': 'bull', 'max_score': 4}, {'avg': 75}, None),
-        ({'score': 3, 'regime': 'bull', 'max_score': 4}, {'avg': 75}, None),
-        ({'score': 3, 'regime': 'neutral', 'max_score': 4}, {'avg': 60}, None),
-        ({'score': 3, 'regime': 'bear', 'max_score': 4}, {'avg': 80}, None),
-        ({'score': 3, 'regime': 'caution', 'max_score': 4}, {'avg': 80}, None),
-        ({'score': 0, 'regime': 'bull', 'max_score': 4}, {'avg': 10}, None),
-        ({'score': 1, 'regime': 'bull', 'max_score': 4}, {'avg': 60}, _li(-35000)),
+        ({'score': 4, 'regime': 'bull', 'max_score': 4}, {'is_proxy': False, 'avg': 75}, None),
+        ({'score': 3, 'regime': 'bull', 'max_score': 4}, {'is_proxy': False, 'avg': 75}, None),
+        ({'score': 3, 'regime': 'neutral', 'max_score': 4}, {'is_proxy': False, 'avg': 60}, None),
+        ({'score': 3, 'regime': 'bear', 'max_score': 4}, {'is_proxy': False, 'avg': 80}, None),
+        ({'score': 3, 'regime': 'caution', 'max_score': 4}, {'is_proxy': False, 'avg': 80}, None),
+        ({'score': 0, 'regime': 'bull', 'max_score': 4}, {'is_proxy': False, 'avg': 10}, None),
+        ({'score': 1, 'regime': 'bull', 'max_score': 4}, {'is_proxy': False, 'avg': 60}, _li(-35000)),
     ]
 
     @pytest.mark.parametrize('mkt,jq,li', _CASES)
@@ -321,7 +324,7 @@ class TestCalcTrafficLightSelfConsistency:
 
     def test_defense_case_reports_source(self):
         tl = calc_traffic_light({'score': 1, 'regime': 'bull', 'max_score': 4},
-                                {'avg': 60}, {'inst': {}}, _li(-35000))
+                                {'is_proxy': False, 'avg': 60}, {'inst': {}}, _li(-35000))
         assert tl['regime_source'] == SOURCE_DEFENSE_FUTURES
         assert tl['effective_regime'] == 'bear'
         assert tl['regime'] == 'bull'      # 趨勢面輸入仍看得見（矛盾要被揭露）
@@ -340,7 +343,7 @@ class TestCalcTrafficLightSelfConsistency:
 #   - 個股組合 🚦 卡（P4，中文 substring）→ 灰色（比對恆不命中）
 # ══════════════════════════════════════════════════════════════════════════
 _CONFLICT_MKT = {'score': 1, 'regime': 'bull', 'max_score': 4}
-_CONFLICT_JQ = {'avg': 60}                 # health = 60*0.6 + 25*0.4 = 46 ≥ 35
+_CONFLICT_JQ = {'is_proxy': False, 'avg': 60}                 # health = 60*0.6 + 25*0.4 = 46 ≥ 35
 _CONFLICT_FUT = -35000.0
 
 
@@ -349,7 +352,7 @@ class TestConflictScenarioAllConsumersAgree:
     @pytest.fixture()
     def tl(self):
         _tl = calc_traffic_light(_CONFLICT_MKT, _CONFLICT_JQ,
-                                 {'inst': {'外資': {'net': -500}}, 'adl': 1},
+                                 {'inst': {'外資': {'net': -500}}, 'adl': pd.DataFrame({'ad_ratio': [50.0], 'is_proxy': [False]})},
                                  _li(_CONFLICT_FUT))
         assert _tl is not None
         # 前提成立才算真回歸：health 必須**高於**防禦門檻，
@@ -542,11 +545,11 @@ class TestOldSubstringMatchWasDead:
     """
 
     _SCENARIOS = [
-        ({'score': 4, 'regime': 'bull', 'max_score': 4}, {'avg': 75}, None),
-        ({'score': 3, 'regime': 'neutral', 'max_score': 4}, {'avg': 60}, None),
-        ({'score': 3, 'regime': 'bear', 'max_score': 4}, {'avg': 80}, None),
-        ({'score': 0, 'regime': 'bull', 'max_score': 4}, {'avg': 10}, None),
-        ({'score': 1, 'regime': 'bull', 'max_score': 4}, {'avg': 60}, _li(-35000)),
+        ({'score': 4, 'regime': 'bull', 'max_score': 4}, {'is_proxy': False, 'avg': 75}, None),
+        ({'score': 3, 'regime': 'neutral', 'max_score': 4}, {'is_proxy': False, 'avg': 60}, None),
+        ({'score': 3, 'regime': 'bear', 'max_score': 4}, {'is_proxy': False, 'avg': 80}, None),
+        ({'score': 0, 'regime': 'bull', 'max_score': 4}, {'is_proxy': False, 'avg': 10}, None),
+        ({'score': 1, 'regime': 'bull', 'max_score': 4}, {'is_proxy': False, 'avg': 60}, _li(-35000)),
     ]
 
     def test_no_label_contains_colour_characters(self):

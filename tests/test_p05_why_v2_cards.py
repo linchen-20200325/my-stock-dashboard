@@ -18,6 +18,9 @@ readout 組合，收集實際吐出來的 `(card.key, note.now)`），⛔ 不是
 `page_why.V2_SHORT_ROWS` 的註解）。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import ast
 import dataclasses
@@ -138,7 +141,7 @@ def _enumerate():
     for rr in (P.ReconcileReadout(requested=True, report=compute_reconcile({}),           # 全缺 → 灰
                                   session_reads=RECONCILE_SESSION_KEYS),
                P.ReconcileReadout(requested=True, report=compute_reconcile(
-                   {"mkt_info": {"score": 3, "max_score": 4}, "jingqi_info": {"avg": 60.0},
+                   {"mkt_info": {"score": 3, "max_score": 4}, "jingqi_info": {"is_proxy": False, "avg": 60.0},
                     "cl_data": {"inst": {"外資": {"net": 1.0}}}})),                     # 有可比對列 → 綠
                P.ReconcileReadout(requested=True, error=_E)):                          # 讀不出來 → 紅
         add(P.build_reconcile_card(rr))

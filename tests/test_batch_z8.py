@@ -58,7 +58,11 @@ slow lane（真 Streamlit AppTest）
    修前這兩件在全敗時看不到（整頁紅框）；修後才露出。修法要決定「未評估時規則表怎麼標」，屬規格未定，停手回報。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
+import copy
 import datetime as _dt
 import hashlib
 import importlib.util
@@ -182,7 +186,7 @@ def _li(fut, leek=(-12.0, -8.0, -5.0, -3.0)) -> pd.DataFrame:
 
 
 _INST = {"外資": {"net": 15.2}, "投信": {"net": 3.1}, "自營商": {"net": -1.0}}
-_ADL = pd.DataFrame({"ad_ratio": [55.0, 58.0, 60.0]})
+_ADL = pd.DataFrame({"ad_ratio": [55.0, 58.0, 60.0], "is_proxy": [False] * 3})  # DEC-074/075：真值須明示 is_proxy=False（缺欄＝代理）
 
 
 def _scenario(name: str) -> dict:
@@ -201,29 +205,29 @@ def _scenario(name: str) -> dict:
         s["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
         s["mkt_info"] = {"score": 4, "max_score": 4, "regime": "bull",
                          "signals": ["站上MA120"], "index_price": 21500.0}
-        s["jingqi_info"] = {"avg": 70.0}
+        s["jingqi_info"] = {"is_proxy": False, "avg": 70.0}
         s["li_latest"] = _li((5000.0, 6000.0, 7000.0, 8000.0))
     elif name == "N2_trend_bear":        # 生效 regime=bear（分支 4）→ 油門被 regime 否決壓到防禦帶
         s["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
         s["mkt_info"] = {"score": 2, "max_score": 4, "regime": "bear",
                          "signals": [], "index_price": 19800.0}
-        s["jingqi_info"] = {"avg": 55.0}
+        s["jingqi_info"] = {"is_proxy": False, "avg": 55.0}
         s["li_latest"] = _li((1000.0, -2000.0, 1500.0, -500.0))
     elif name == "N3_futures_defense":   # 外資期貨防禦（defense=True）
         s["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
         s["mkt_info"] = {"score": 1, "max_score": 4, "regime": "neutral",
                          "signals": [], "index_price": 20100.0}
-        s["jingqi_info"] = {"avg": 60.0}
+        s["jingqi_info"] = {"is_proxy": False, "avg": 60.0}
         s["li_latest"] = _li((-38000.0, -39000.0, -41000.0, -40000.0))
     elif name == "N4_score_missing":     # 只缺大盤評分那條腿（health 仍算得出）
         s["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
-        s["jingqi_info"] = {"avg": 62.5}
+        s["jingqi_info"] = {"is_proxy": False, "avg": 62.5}
         s["li_latest"] = _li((5000.0, 6000.0, 7000.0, 8000.0))
     elif name == "N5_health_zero":       # health 恰為 0.0（合法值，⛔ 當成缺值）
         s["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
         s["mkt_info"] = {"score": 0, "max_score": 4, "regime": "neutral",
                          "signals": [], "index_price": 18000.0}
-        s["jingqi_info"] = {"avg": 0.0}
+        s["jingqi_info"] = {"is_proxy": False, "avg": 0.0}
         s["li_latest"] = _li((5000.0, 6000.0, 7000.0, 8000.0))
     else:  # pragma: no cover
         raise KeyError(name)
@@ -456,7 +460,17 @@ class TestTopAllFailedNoLongerRaises:
     @pytest.mark.parametrize("name", _FAIL)
     def test_whole_output_golden(self, _pinned, name):
         ret, fake = _run_top(_pinned, _scenario(name))
-        assert _sha(_top_digest(ret, fake)) == _FIXED_TOP_SHA[name]
+        # ~~assert _sha(_top_digest(ret, fake)) == _FIXED_TOP_SHA[name]~~
+        # 📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，行為變更，有意識的修改，⛔ 不是漏刪）：代理廣度不計分
+        #   （`BREADTH_PROXY_SCORING_ENABLED=False`）時，warroom 在而健康分缺 ⇒ L3 `get_macro_state` 一律標
+        #   「缺真實廣度未評估」，`macro_state['source']` 由 'unloaded' 改為 SOURCE_UNEVALUATED_BREADTH。
+        #   這是整份輸出中**唯一**預期改變的欄位（畫面輸出、warroom、回傳值逐位不變；regime／light／is_loaded
+        #   本來就是 unknown／⬜／False）⇒ 斷言它換了、換回舊值後仍須逐位等於原 golden（舊 sha 一字未改）。
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH, SOURCE_UNLOADED
+        dg = copy.deepcopy(_top_digest(ret, fake))
+        assert dg["macro_state"]["source"] == SOURCE_UNEVALUATED_BREADTH, dg["macro_state"]
+        dg["macro_state"]["source"] = SOURCE_UNLOADED
+        assert _sha(dg) == _FIXED_TOP_SHA[name]
 
     def test_rerun_within_fresh_window_stays_rendered(self, _pinned):
         """快取新鮮的 30 分鐘內每次 rerun 修前都再炸一次。第二輪讀第一輪寫的 warroom
@@ -481,8 +495,17 @@ class TestTopAllFailedNoLongerRaises:
         fake.session_state.pop("warroom_summary")
         for _k in (AS._ALLOC_CACHE_KEY, AS._ALLOC_SIG_KEY):
             fake.session_state.pop(_k, None)
-        assert AS.get_allocation() == alloc
-        assert AS.get_macro_regime() == reg
+        # ~~assert AS.get_allocation() == alloc~~
+        # ~~assert AS.get_macro_regime() == reg~~
+        # 📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：warroom 在（health 缺）時未評估的
+        #   **原因**改標「缺真實廣度」（`source`／`unevaluated_reason`），warroom 拿掉時仍是既有 'unloaded'；
+        #   未評估這個**決策**（is_loaded／regime／light／range_text）兩態仍逐欄相同。
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH, SOURCE_UNLOADED
+        assert reg["source"] == SOURCE_UNEVALUATED_BREADTH and alloc.unevaluated_reason == "breadth"
+        alloc0, reg0 = AS.get_allocation(), AS.get_macro_regime()
+        assert reg0["source"] == SOURCE_UNLOADED and alloc0.unevaluated_reason == ""
+        assert {k: v for k, v in reg0.items() if k != "source"} == {k: v for k, v in reg.items() if k != "source"}
+        assert (alloc0.is_loaded, alloc0.range_text, alloc0.posture) == (alloc.is_loaded, alloc.range_text, alloc.posture)
 
 
 class TestTopWithValuesUnchanged:

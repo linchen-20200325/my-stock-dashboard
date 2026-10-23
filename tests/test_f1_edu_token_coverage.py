@@ -39,7 +39,6 @@ import types
 
 import pytest
 
-from shared.fred_series import FRED_NAPM as _FRED_NAPM
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -527,7 +526,8 @@ class TestEduThresholdLines:
         #       'NDC_signal'（判讀表用的是國發會**官方**燈號分帶，屬外部事實 C 類，
         #                     與本系統的 band spec 刻意不同源）、
         #       '^SOX'（本系統無判定式，卡片明講「不亮燈」）。
-        '^VIX', '^TNX', 'DX-Y.NYB', 'CPILFESL', _FRED_NAPM,
+        # ⚠️ DEC-074/075 行為變更（批 1'，2026-10-23）：PMI 教學卡 key 由 `FRED_NAPM`（'NAPM'）改名 'TW_PMI'。
+        '^VIX', '^TNX', 'DX-Y.NYB', 'CPILFESL', 'TW_PMI',
         'XTEXVA01TWM664S', 'ms1.json', 'BFI82U',
     ])
     def test_chart_lines_also_appear_in_the_same_cards_rules(

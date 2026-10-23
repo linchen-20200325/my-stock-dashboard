@@ -209,6 +209,9 @@ def _run_edu(mod, inst, mp):
     fake = _FakeST({'cl_data': {'inst': inst}})
     mp.setattr(mod, 'st', fake)
     mp.setattr(mod, '_fetch_fred_series_edu', lambda *a, **k: None)
+    # DEC-075 回修（2026-10-23，有意識的接鏈）：兩欄教學文字換回修前原文再比 golden（見 helper docstring）。
+    from tests.test_dec074_revert_chain import dec074_restore_edu_text
+    dec074_restore_edu_text(mp)
     mod.render_tab_edu()
     return list(fake.out)
 
@@ -356,6 +359,11 @@ def _now_mod(ek: str, case: str = ''):
 
 
 def _revert(ek: str, code: str, pairs=None) -> str:
+    if pairs is None:
+        # DEC-074/075 批 1'（2026-10-23，有意識的接鏈，⛔ 不是漏改）：`tab_edu` 的 PMI 教學卡 key 改名 ⇒
+        #   最新的那一批先換回（只套一次；⛔ 不動 `_REVERT` 本身）。
+        from tests.test_dec074_revert_chain import dec074_revert_for
+        code = dec074_revert_for(_mods()[ek].__file__, code)
     for old, new in (pairs if pairs is not None else _REVERT[ek]):
         assert code.count(old) == 1, f'{ek} 替換點不唯一或已不存在：{old!r}'
         code = code.replace(old, new)

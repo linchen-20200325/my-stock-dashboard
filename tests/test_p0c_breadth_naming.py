@@ -56,7 +56,9 @@ _FABRICATED_BREADTH_PHRASES = (
 )
 
 # jingqi_info 的鍵契約（與 tests/test_review_fixes_v19_84.py:19 同步）
-_JQ_CONTRACT_KEYS = {"avg", "pos", "regime", "color", "label", "total", "source"}
+# ⚠️ DEC-074/075 行為變更（客戶 2026-10-23）：契約 7 → 8 鍵，新增 `is_proxy`（代理廣度不計分的旗標，
+#    `shared.macro_provenance.jingqi_for_scoring` 據此擋下計分）。有意識的契約擴充，不是漏改。
+_JQ_CONTRACT_KEYS = {"avg", "pos", "regime", "color", "label", "total", "source", "is_proxy"}
 
 
 def _src(rel: str) -> str:
@@ -332,7 +334,11 @@ class TestJingqiWritebackNotPolluted:
                 f"source 必須標明口徑差異（非 5 日均），實際: {source!r}")
 
     def test_fallback_keeps_key_contract(self):
-        """fallback 寫入的鍵集合須與 jingqi_calc 契約一致（避免下游 KeyError）。"""
+        """fallback 寫入的鍵集合須與 jingqi_calc 契約一致（避免下游 KeyError）。
+
+        ⚠️ DEC-074/075 行為變更：契約含 `is_proxy`（8 鍵），此 fallback（TWSE 單日、非 5 日均）
+        依 D-2 同樣寫 `is_proxy=True`（不計分）。
+        """
         for d in _jingqi_write_dicts(self.REL):
             keys = {k.value for k in d.keys
                     if isinstance(k, ast.Constant) and isinstance(k.value, str)}

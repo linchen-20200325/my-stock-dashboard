@@ -14,6 +14,9 @@
 本檔守：單位換算（含反例）、門檻邊界、缺值 / 失敗不當 0、其餘 15 盞逐位不變。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import copy
 import inspect
@@ -190,9 +193,9 @@ def _full_fixture():
         bias_info={"bias_240": 12.4},
         warroom_summary={"health_score": 58.0},
         cl_data={"intl": {"美元指數 DXY": pd.DataFrame({"close": [104.2]})},
-                 "adl": pd.DataFrame({"ad_ratio": [53.1]}), "margin": 2480.0},
+                 "adl": pd.DataFrame({"ad_ratio": [53.1], "is_proxy": [False]}), "margin": 2480.0},
         li_latest=pd.DataFrame({"外資大小": [-12000]}),
-        jingqi_info={"avg": 51.3},
+        jingqi_info={"is_proxy": False, "avg": 51.3},
         news_items=[],
     )
 
@@ -383,7 +386,7 @@ class TestOtherInstConsumersByteIdentical:
         calc_traffic_light = z35_pre_module('tl').calc_traffic_light
         plain, flagged = self._pair()
         mkt = {"score": 4, "max_score": 6}
-        jq = {"avg": 55.0}
+        jq = {"is_proxy": False, "avg": 55.0}
         a = calc_traffic_light(mkt, jq, {"inst": plain}, None)
         b = calc_traffic_light(mkt, jq, {"inst": flagged}, None)
         assert repr(a) == repr(b)

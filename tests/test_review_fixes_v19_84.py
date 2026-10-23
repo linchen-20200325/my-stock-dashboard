@@ -16,7 +16,9 @@ import pandas as pd
 
 REPO = Path(__file__).resolve().parent.parent
 
-_JQ_EXPECTED_KEYS = {"avg", "pos", "regime", "color", "label", "total", "source"}
+# ⚠️ DEC-074/075 行為變更（客戶 2026-10-23）：7 → 8 鍵，新增 `is_proxy`（代理廣度不計分旗標）。
+#    精確集合比對照舊（防捏造鍵復活）；只把契約常數更新為新規格。
+_JQ_EXPECTED_KEYS = {"avg", "pos", "regime", "color", "label", "total", "source", "is_proxy"}
 
 
 class TestJingqiNoFabricatedKeys:
@@ -37,6 +39,8 @@ class TestJingqiNoFabricatedKeys:
             f"jingqi_info 不可再含捏造 pct 鍵,實際: {sorted(info)}"
         assert info["source"] == "ADL"
         assert abs(info["avg"] - 59.2) < 1e-9
+        # DEC-074/075 行為變更：fixture 沒有 `is_proxy` 欄 ⇒ fail-safe 視同代理（不計分）。
+        assert info["is_proxy"] is True
 
     def test_fallback_path_no_pct_keys_and_flagged(self, monkeypatch):
         twii = pd.DataFrame({"close": [100.0, 101.0, 102.0, 101.5, 103.0, 104.0]})
@@ -44,6 +48,7 @@ class TestJingqiNoFabricatedKeys:
         assert info is not None
         assert set(info) == _JQ_EXPECTED_KEYS
         assert info["source"] == "大盤估算"   # §1:代理估算必須帶旗標
+        assert info["is_proxy"] is True       # DEC-074/075 行為變更：大盤估算恆為代理
 
     def test_all_fail_writes_nothing(self, monkeypatch):
         info = self._run(monkeypatch, None, cl_data={"tw": {}})

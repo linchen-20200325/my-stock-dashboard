@@ -202,6 +202,9 @@ class AllocationDecision:
     drivers: tuple[str, ...] = ()
     conflicts: tuple[str, ...] = ()
     risk_cap_disclosure: Any = None
+    #: DEC-075 回修（MUST-2，2026-10-23）：未評估的**原因**。'breadth' ＝ 缺真實市場廣度（契約
+    #: `source == SOURCE_UNEVALUATED_BREADTH`）；'' ＝ 其他原因或已評估。最後一欄、有預設 ⇒ 既有建構不用改。
+    unevaluated_reason: str = ''
 
     # ── 顯示用 helper(集中在此，避免各頁各自 f-string 出不同格式)──────
     @property
@@ -236,6 +239,9 @@ class AllocationDecision:
 
     def headline(self) -> str:
         """一句話結論：'🟠 轉守 → 建議持股 30–50%'。"""
+        if not self.is_loaded and self.unevaluated_reason == 'breadth':
+            # DEC-075 回修：缺真實廣度 ⇒ 更新不會改變（⛔ 不叫人重抓；I-4）。其餘原因照舊。
+            return '⬜ 總經未評估 — 缺真實市場廣度（DEC-074），更新資料不會改變'
         if not self.is_loaded:
             return '⬜ 總經未評估 — 請先按「🚀 一鍵更新全部數據」'
         return f'{self.icon} {self.posture} → 建議持股 {self.range_text}'
@@ -273,12 +279,23 @@ def build_allocation_decision(
 
     # ── 未評估：誠實回未知，不捏造 ────────────────────────────────
     if not _is_loaded or _health is None:
+        # DEC-075 回修（QA1 MUST-2）：原因是缺真實廣度時，~~「warroom_summary / macro_state.json 皆無有效值」~~
+        #   不屬實（warroom 在、檔案也可能有效，只是 DEC-075 (a) 不採用）⇒ 換成屬實的那句；其餘原因逐字照舊。
+        # 📌 DH-REGIME-NOWARROOM（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動＋代理廣度不計分時，
+        #   ~~「warroom_summary / macro_state.json 皆無有效值」~~ 不屬實（檔案可能有效，只是依 DEC-075 不採用）⇒
+        #   換成屬實的 `NOT_LOADED_PENDING_BREADTH_EXPLAIN`；旗標為 True 時舊句逐字照舊。`unevaluated_reason` 不變（''）。
+        from shared.regime_arbiter import (NOT_LOADED_PENDING_BREADTH_EXPLAIN, UNEVALUATED_BREADTH_EXPLAIN,
+                                           is_breadth_unevaluated, is_not_loaded_pending_breadth)
+        _breadth = is_breadth_unevaluated(_ms)
         return AllocationDecision(
             is_loaded=False, regime=_regime, health=None,
             posture_lo=None, posture_hi=None, posture='未評估', icon='⬜',
             cap_pct=None, cap_name='', caps=tuple(caps),
-            drivers=('總經尚未評估（warroom_summary / macro_state.json 皆無有效值）',),
+            drivers=((UNEVALUATED_BREADTH_EXPLAIN,) if _breadth else
+                     (NOT_LOADED_PENDING_BREADTH_EXPLAIN,) if is_not_loaded_pending_breadth(_ms) else
+                     ('總經尚未評估（warroom_summary / macro_state.json 皆無有效值）',)),
             conflicts=tuple(conflicts),
+            unevaluated_reason=('breadth' if _breadth else ''),
         )
 
     # ── 姿態油門(未帶則現算)────────────────────────────────────────

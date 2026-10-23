@@ -636,11 +636,23 @@ class TestDegradedRegimeIsNotCalledUnevaluated:
         assert _ssot.where is CONTRACT_NO_EXIT_WHERE, "前提變了：對面 degraded 的出口被改過"
         assert "快照" in _mine.now, "前提變了：對面的 degraded 文案被改過"
 
-    def test_cold_start_still_says_unevaluated(self):
-        """反向釘子：**真的**沒值那一態的文案沒有被這次改動弄丟。"""
+    def test_cold_start_still_says_unevaluated(self, monkeypatch):
+        """反向釘子：**真的**沒值那一態的文案沒有被這次改動弄丟。
+
+        📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動在代理廣度不計分（現行）時改說屬實句（載入後位階仍未評估）⇒ 舊斷言改在旗標 True 下守（一字未改）；旗標 False 見下一支。"""
+        import shared.signal_thresholds as STH
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         _t = _tiles(regime=COLD_REGIME)["verdict.regime"]
         assert "尚未評估" in _t.card.note.now
         assert "皆無值" in _t.card.note.why
+        assert _t.signal_text == "", "灰態不給燈（未評估 ≠ 有位階）"
+
+    def test_cold_start_flag_off_says_not_loaded(self):
+        """旗標 False（現行）：冷啟動 ⇒ 「尚未評估」＋「總經尚未載入…載入後位階仍為未評估」，⛔ 不寫「皆無值」。"""
+        from src.ui.views import page_today as P
+        _t = _tiles(regime=COLD_REGIME)["verdict.regime"]
+        assert "尚未評估" in _t.card.note.now
+        assert _t.card.note.why == P.not_loaded_pending_breadth_why() and "皆無值" not in _t.card.note.why
         assert _t.signal_text == "", "灰態不給燈（未評估 ≠ 有位階）"
 
     def test_a_drifted_contract_neither_crashes_nor_invents_a_level(self):

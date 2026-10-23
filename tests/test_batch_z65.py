@@ -675,7 +675,11 @@ class TestDownstream:
         assert dict(t.facts).get("硬否決天花板") == alloc.cap_text
         assert alloc.cap_pct is not None and alloc.cap_pct <= cap
 
-    def test_card1_idle_exit_is_retry(self, monkeypatch, tmp_path):
+    @pytest.mark.parametrize("flag_on", [True, False])
+    def test_card1_idle_exit_is_retry(self, monkeypatch, tmp_path, flag_on):
+        """📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動在代理廣度不計分（現行）時改說屬實句（載入後位階仍未評估）⇒ 舊斷言改在旗標 True 下守（一字未改）；旗標 False 見 flag_on=False 參數。"""
+        import shared.signal_thresholds as STH
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", flag_on)
         monkeypatch.chdir(tmp_path)
         from src.services import allocation_service as AS
         from src.ui.views import page_today as P
@@ -684,7 +688,10 @@ class TestDownstream:
         tiles = {t.card.key: t for t in P.build_verdict_tiles(
             alloc=AS.get_allocation(), alloc_error="", danger=None, danger_error="",
             danger_requested=False, regime=AS.get_macro_regime(), regime_error="")}
-        assert tiles["verdict.exposure"].card.note.where is P.EXIT_RETRY_HERE
+        if flag_on:
+            assert tiles["verdict.exposure"].card.note.where is P.EXIT_RETRY_HERE
+        else:
+            assert tiles["verdict.exposure"].card.note.where is P.EXIT_LOAD_PENDING_BREADTH
 
     def test_page_today_wording(self):
         from src.ui.views import page_today as P
@@ -871,9 +878,19 @@ _WR_NO_HEALTH = dict(_WR_LIVE, health_score=None)
 
 
 class TestB1SnapshotWhy:
-    """先寫檔、warroom 健康分缺 ⇒ 位階走規則引擎快照（degraded）：why 屬實、無「不是這一輪算的」「AI 鎖定」。"""
+    """先寫檔、warroom 健康分缺 ⇒ 位階走規則引擎快照（degraded）：why 屬實、無「不是這一輪算的」「AI 鎖定」。
+
+    📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：「warroom 健康分缺 ⇒ 退規則引擎快照」
+    正是 DEC-075 不採用的 (b)；代理廣度不計分（`BREADTH_PROXY_SCORING_ENABLED=False`，現行）時 L3 一律改標
+    「缺真實廣度未評估」、⛔ 不退快照（守衛見 `tests/test_dec074_breadth_gate.py::TestMustR1TwiiDeadNoFileFallback`、
+    `tests/test_batch_z60.py::TestDegradedRegimeExitIsRetry::test_health_none_warroom_with_snapshot_not_degraded`）。
+    本類守的是「快照路徑**可達時**文案屬實」，故一律在旗標 True（快照路徑在新規則下仍可達的那一態）下跑；
+    斷言一字未改。
+    """
 
     def _setup(self, l1, tmp_path, monkeypatch):
+        import shared.signal_thresholds as STH
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         monkeypatch.chdir(tmp_path)
         kw = _inputs()
         l1(kw["pmi_history"])
@@ -918,7 +935,9 @@ class TestB1SnapshotWhy:
         assert notes["card1"].where is P.EXIT_RETRY_HERE
 
     def test_card1_unloaded_why_when_nothing(self, monkeypatch, tmp_path):
+        import shared.signal_thresholds as STH
         from src.ui.views import page_today as P
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)   # 理由見類別 docstring 📌
         monkeypatch.chdir(tmp_path)
         AS = _as_session(monkeypatch, {"warroom_summary": dict(_WR_NO_HEALTH)})
         tiles, _, _ = _today_tiles(AS, P)

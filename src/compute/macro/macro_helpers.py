@@ -68,6 +68,23 @@ _FUT_NET_COL = "外資大小"
 # 斷言與 SSOT 的 canonical / formula 一致,擋兩邊漂移。
 _CONF_LABEL_JINGQI = '旌旗指數 (上漲佔比的 5 日均)'
 
+# DEC-074 B（客戶 2026-10-23）：代理廣度計分入口（L2 → L0，合法下行依賴）。
+from shared.macro_provenance import jingqi_for_scoring as _jingqi_for_scoring  # noqa: E402
+from shared.macro_provenance import adl_df_is_proxy as _adl_df_is_proxy  # noqa: E402
+from shared.signal_thresholds import (  # noqa: E402
+    BREADTH_PROXY_SCORING_ENABLED as _BREADTH_PROXY_SCORING_ENABLED,
+)
+
+#: ADL 只有代理（估算）家數時，`missing_sources` 那一項的說法（取代 'ADL 騰落指標'）。
+_ADL_PROXY_MISSING_TEXT = 'ADL 騰落指標：由加權指數推估的代理家數，不算有效廣度來源（DEC-074）'
+
+#: `SOURCE_UNEVALUATED_BREADTH` 但本輪**沒有**任何廣度值（旌旗整包缺席）時的 action（取代文案表那一句）。
+_TL_ACTION_BREADTH_ABSENT = '⬜ 缺真實市場廣度（漲跌家數）—— 本輪也沒有取得任何廣度資料，健康分依 DEC-074 不以其餘分項補出'
+
+#: 旌旗只有代理值、依 DEC-074 不計分時，`missing_sources` 那一項的說法（取代 `_CONF_LABEL_JINGQI`）。
+_BREADTH_PROXY_MISSING_TEXT = (
+    f'{_CONF_LABEL_JINGQI}：市場廣度無真實漲跌家數來源，代理估算值不計分（DEC-074）')
+
 
 # ── v19.175 P0:`cl_data['inst']` 型別收斂 SSOT ────────────────────────────────
 # 全站有 4 個消費點對 `cl_data['inst']` 做 `next((k for k in inst if '外資' in k))`,
@@ -191,6 +208,14 @@ _TL_COPY_BY_SOURCE: dict = {
         '總經未評估｜資料不足',
         '⬜ 健康評分無法計算（上游輸入缺失或非數值）',
         '請按「🚀 一鍵更新全部數據」重新抓取；在此之前不做多空判斷'),
+    # DEC-074 B（客戶 2026-10-23）：健康分的廣度腿只有代理（估算）家數 → 不計分 → 健康分未評估。
+    # ⛔ 不得寫「重新抓取」「重新載入」之類的指引（計畫 I-4；`CLAUDE.md` §-2 實證第 3 條：
+    #    原因不是一次抓取失敗，重跑一百次也一樣）—— `tests/test_dec074_breadth_gate.py` 守衛。
+    _RA.SOURCE_UNEVALUATED_BREADTH: (
+        TRAFFIC_NEUTRAL,
+        '總經未評估｜資料不足',
+        '⬜ 缺真實市場廣度（漲跌家數），代理估算值依 DEC-074 不計分',
+        '在正式廣度資料接上前不做多空判斷；更新資料不會改變此狀態'),
 }
 
 
@@ -271,7 +296,12 @@ def calc_traffic_light(
     # `{'avg': None}`(section_inputs.py:97)—— key 在、值為 None ⇒ 舊碼拿到的是
     # None 而不是 50,下方乘法直接 TypeError。改成顯式 None + 權重重新歸一化後,
     # 「沒有 jingqi_info」與「有 dict 但 avg 是 None」兩種缺法行為一致。
-    _jqavg = _safe_float(_jq.get('avg'))
+    # ── DEC-074 B（客戶 2026-10-23）：代理廣度不計分 ─────────────────────────
+    # 計分端一律經 L0 `jingqi_for_scoring`（鏡像 M1B `m1b_m2_for_scoring`）：代理 ⇒ None ⇒
+    # 走「旌旗缺席」路徑；顯示用原值仍在呼叫端的 `jingqi_info`（I-5，DEC-062 Q5）。
+    _jq_scoring = _jingqi_for_scoring(jingqi_info) or {}
+    _jq_proxy_dropped = bool(_jq) and not _jq_scoring and _safe_float(_jq.get('avg')) is not None
+    _jqavg = _safe_float(_jq_scoring.get('avg'))
     # ── v19.175 P0(實機 2/2 重現):`cl_data['inst']` 可能是 **None** ──────────
     # 型別收斂 + log 已抽至同檔 `coerce_inst_dict`(4 個消費點共用,詳見該 docstring)。
     #
@@ -403,7 +433,15 @@ def calc_traffic_light(
     # 兩條腿都缺 ⇒ 沒有任何依據可言 ⇒ health=None,由 arbiter 回
     # `UNLOADED_VERDICT`(⬜ 總經未評估)。§1:誠實說「算不出來」,
     # **不是** 0 分(0 分會被判成最強利空),也不是 🟡(🟡 是一個市場判斷)。
-    if _w_sum <= 0:
+    # ── DEC-074 B（客戶 2026-10-23，行為變更，有意識的修改，⛔ 不是漏刪）──────────
+    # ~~旌旗缺席 ⇒ 只剩大盤分重新歸一~~ —— 客戶原文「不得自行創造新權重重新正規化」
+    # 「受 breadth 影響且無法依既有正式規則可靠計算的健康分 →『⬜ 未評估／資料不足』」。
+    # ⇒ 旌旗（廣度腿）缺席（含代理被 `jingqi_for_scoring` 擋下）一律 health=None。
+    #   舊做法的理由（v19.177：缺項不捏 50）仍成立；被權衡掉的只是「歸一出一個分數」。
+    #   大盤評分缺席而旌旗真值在（D-3）不屬「受 breadth 影響」→ 既有歸一不動（現況不可達：
+    #   正式 breadth 到位前 jqavg 恆 None）。
+    _breadth_unavailable = _jqavg is None
+    if _w_sum <= 0 or _breadth_unavailable:
         _health = None
     else:
         _health = round(
@@ -445,8 +483,10 @@ def calc_traffic_light(
             except Exception:
                 pass
     else:
-        print('[health_reconcile] skip:jqavg / 大盤評分 / health 任一未取得,'
-              'Method A 已權重歸一化而 Method B 仍用固定預設,兩者不可比 → '
+        # 回修 NIT-2：~~Method A 已權重歸一化~~ —— DEC-074 B 起旌旗缺席 Method A 回 None（不歸一）；
+        #   只有大盤分缺席（D-3）才歸一。log 據實說。
+        print('[health_reconcile] skip:jqavg / 大盤評分 / health 任一未取得'
+              '(Method A 此時為 None 或僅大盤分缺席的歸一值,Method B 仍用固定預設),兩者不可比 → '
               '本輪不對帳(§4.3)', file=sys.stderr)
 
     # 校準腳本可注入測試門檻；正式呼叫不傳 → 用模組常數
@@ -463,15 +503,31 @@ def calc_traffic_light(
     # 結構上不可能再分歧,而且 `source` 明講是哪條分支生效。
     # 判定邏輯逐分支等價,**行為零位移**(見 tests/test_c1_regime_arbitration.py
     # 的 legacy 決策樹對拍測試)。
+    # DEC-074 B：health 算不出來「只因為缺廣度」（大盤評分本身在）⇒ 原因標 breadth
+    # （文案不再叫人重抓）。兩條腿都缺 ⇒ 既有 `SOURCE_UNLOADED`（其餘輸入也缺，重抓仍可能補上大盤分）。
+    # 📌 DEC-075 回修（QA1 MUST-1，2026-10-23，有意識的修改，⛔ 不是漏刪）：
+    #   ~~只在「大盤評分在」時才標 breadth~~ —— 舊理由「重抓仍可能補上大盤分」不成立：補上大盤分後健康分
+    #   仍是 None（廣度腿恆為代理）。若大盤分同時缺就標 UNLOADED，`get_macro_state` 會退回 macro_state.json
+    #   規則引擎位階（＝DEC-075 不採用的 (b)），出現「資料越少、結論越多」。
+    #   ⇒ 只要本輪**有代理廣度被擋下**（`_jq_proxy_dropped`）一律標 breadth（不看大盤分）；
+    #     旌旗整包缺席時維持舊規則（大盤分在 ⇒ breadth；兩條腿都缺、也沒有任何廣度輸入 ＝ F1 三源全空 ⇒ UNLOADED）。
+    _health_unavailable_reason = (
+        _RA.UNAVAILABLE_REASON_BREADTH
+        if (_health is None and _breadth_unavailable
+            and (_jq_proxy_dropped or _score_pct is not None)) else None)
     _verdict = _RA.arbitrate_regime(
         trend_regime=_regime, market_score=_score, health=_health,
         futures_net_lots=_fut_net,
         health_defense_threshold=_h_thr, bull_min_score=_s_thr,
+        unavailable_reason=_health_unavailable_reason,
     )
     _defense = _verdict.defense
     # 文案表以 `source`(哪條分支生效)為 key —— 舊碼兩條 🔴 分支的 label 不同
     # (空頭防禦 vs 保守防禦),不能只看顏色/icon 決定文字。
     _color, _label, _action, _sub = _TL_COPY_BY_SOURCE[_verdict.source]
+    if _verdict.source == _RA.SOURCE_UNEVALUATED_BREADTH and not _jq_proxy_dropped:
+        # 回修 NIT-1：本輪連代理值都沒有（旌旗整包缺席）⇒ 不說「代理估算值不計分」（那一輪沒有代理值）。
+        _action = _TL_ACTION_BREADTH_ABSENT
     _icon = _verdict.light
 
     _conf_sources = [
@@ -497,7 +553,11 @@ def calc_traffic_light(
         # 互相矛盾的訊息且無告警。改判「真的拿到數字」,與 jqavg 那條一致。
         ('外資買賣超 (三大法人)',         _fnet is not None, 'fnet'),
         ('先行指標 (期貨/PCR/韭菜)',      bool(li_latest is not None and not li_latest.empty), 'li'),
-        ('ADL 騰落指標',                  bool(_cd.get('adl') is not None), 'adl'),
+        # 回修 QA2 S-5（2026-10-23，有意識的修改，⛔ 不是漏刪）：~~`bool(_cd.get('adl') is not None)`~~ ——
+        #   與上面旌旗同口徑：代理（估算）家數＝沒有有效的廣度來源（DEC-074 B），⛔ 不因「df 在」就算有來源。
+        ('ADL 騰落指標',
+         bool(_cd.get('adl') is not None
+              and (_BREADTH_PROXY_SCORING_ENABLED or not _adl_df_is_proxy(_cd.get('adl')))), 'adl'),
     ]
     # v18.241 E2: confidence 分子分母從 SSOT 引入
     # ⚠️ `conf` 是**畫面顯示用的項數比**,刻意維持 n/5 不動(改分母會讓歷史截圖
@@ -513,6 +573,14 @@ def calc_traffic_light(
     #    確實回了東西（只是值卡住）。把凍結算進 conf 分母會讓同一個百分比同時
     #    代表兩種不同的失效，反而讓 70% 那道 gate 的語意變模糊。
     #    凍結走**列名**這條路（畫面本來就會逐項印出 `missing_sources`）。
+    # DEC-074 B：旌旗**有代理值、被擋下不計分**時，缺失那一項據實寫原因（不是「沒抓到」）。
+    #   同一項替換、不另加一項 ⇒ 項數與 `conf` 一致。
+    if _jq_proxy_dropped:
+        _missing = [(_BREADTH_PROXY_MISSING_TEXT if _m == _CONF_LABEL_JINGQI else _m)
+                    for _m in _missing]
+    if _cd.get('adl') is not None and 'ADL 騰落指標' in _missing:
+        # 回修 S-5：ADL 有 df、只是代理 ⇒ 據實寫原因（同一項替換，項數與 conf 一致）。
+        _missing = [(_ADL_PROXY_MISSING_TEXT if _m == 'ADL 騰落指標' else _m) for _m in _missing]
     if _fut_frozen:
         _missing.append(
             f"外資期貨（{_FUT_NET_COL} 連續 {FROZEN_STALE_PERIODS_LEADING} 期"
@@ -529,9 +597,14 @@ def calc_traffic_light(
     return {
         'color': _color, 'icon': _icon, 'label': _label,
         'action': _action, 'sub': _sub, 'health': _health,
-        # v19.177:True = 健康評分少了旌旗(廣度)那條腿,僅由大盤評分推算。
+        # ~~v19.177:True = 健康評分少了旌旗(廣度)那條腿,僅由大盤評分推算。~~
+        # 📌 DEC-074 B（2026-10-23，有意識的更正，⛔ 不是漏刪）：旌旗缺席自本批起 health=None
+        #   （不再「僅由大盤評分推算」）；True 仍表示「至少一條腿缺席」，鍵與 bool 語意不變（D-4）。
         # 畫面須據此標示(handlers._render_traffic_light),不可靜默(§1)。
         'health_partial': _health_partial,
+        # DEC-074 B schema-additive（D-4）：health 為 None 的**原因**；'breadth' ＝ 缺真實市場廣度
+        # （代理不計分），None ＝ 有健康分、或其餘原因（沿用 `regime_source` 判）。
+        'health_unavailable_reason': _health_unavailable_reason,
         'defense': _defense, 'score': _score, 'jqavg': _jqavg,
         'leek': _leek, 'fnet': _fnet, 'fk': _fk, 'fut_net': _fut_net,
         # ── 2026-08-27 schema-additive:值凍結（既有 caller 無感）────────────
@@ -1932,6 +2005,27 @@ def compute_five_bucket_summary(
             and _rd["m1b_m2_gap"].get("state") == "ok"):   # 無值時不貼（同 bias「—（估算）」的理由）
         _rd["m1b_m2_gap"]["is_proxy"] = True
 
+    # DEC-074 B（客戶 2026-10-23）：市場廣度兩盞（jingqi／adl）只有代理（估算）家數時，比照上面
+    # M1B（DL-f1-s17）：**值照顯示＋後綴代理註記、燈走既有 gray（不判燈級、不進桶 worst-of）**，
+    # 側車同步帶 `is_proxy=True`（只在代理且有值時加；非代理時側車逐鍵不變）——
+    # v2 今天頁與 `tab_macro_v2.build_rows` 讀同一個側車判定，不另開取數路徑。
+    # 判定：jingqi 看 `jingqi_info` 的明確旗標（L0 `is_breadth_proxy`）；adl 看 `cl_data['adl']`
+    # 末列 `is_proxy`（L0 `adl_df_is_proxy`，缺欄 fail-safe 視同代理）。計分開關在 L0。
+    from shared.macro_provenance import (
+        BREADTH_PROXY_VALUE_NOTE, adl_df_is_proxy, is_breadth_proxy,
+    )
+    from shared.signal_thresholds import BREADTH_PROXY_SCORING_ENABLED
+    _breadth_proxy_keys: set = set()
+    if not BREADTH_PROXY_SCORING_ENABLED:
+        if is_breadth_proxy(jingqi_info):
+            _breadth_proxy_keys.add("jingqi")
+        _adl_df_bp = _g(cl_data, "adl")
+        if _adl_df_bp is not None and adl_df_is_proxy(_adl_df_bp):
+            _breadth_proxy_keys.add("adl")
+    for _bk in _breadth_proxy_keys:
+        if isinstance(_rd.get(_bk), dict) and _rd[_bk].get("state") == "ok":
+            _rd[_bk]["is_proxy"] = True
+
     out: dict = {}
     for bucket in BUCKET_ORDER:
         details = []
@@ -1944,13 +2038,17 @@ def compute_five_bucket_summary(
                 _value_str = f"{_value_str}{_bias_badge}"
             if s.key == "m1b_m2_gap" and v is not None and _m1b_badge:
                 _value_str = f"{_value_str}{_m1b_badge}"
+            _is_breadth_proxy_lamp = s.key in _breadth_proxy_keys
+            if _is_breadth_proxy_lamp and v is not None:
+                _value_str = f"{_value_str}{BREADTH_PROXY_VALUE_NOTE}"
             details.append({
                 "key": s.key, "label": s.label,
                 "value_str": _value_str,
                 # DL-f1-s17（客戶 2026-10-02 頁 1 ③「M1B 代理值：只顯示不計分」）：代理值照樣
                 # 顯示（上面 value_str 帶註記），但燈號走既有未載入 gray —— 不進桶等級 / headline。
+                # DEC-074 B：市場廣度兩盞代理時同一處置。
                 "danger": (classify_danger(None, s)
-                           if s.key == "m1b_m2_gap" and _m1b_badge
+                           if (s.key == "m1b_m2_gap" and _m1b_badge) or _is_breadth_proxy_lamp
                            else classify_danger(v, s)),
                 "note": s.note,
             })

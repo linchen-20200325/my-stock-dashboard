@@ -83,6 +83,9 @@ def vn1store_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回 VN1-STORE PoC 之前的寫法（無 pair 則原樣）。"""
     p = Path(file_path)
     rel = (p.resolve().relative_to(REPO) if p.is_absolute() else p).as_posix()
+    # DEC-074/075 批 A＋1'（2026-10-23，有意識的接鏈，⛔ 不是漏改）：更新的那一批先換回（還原鏈頭往前接一節；只套一次）。
+    from tests.test_dec074_revert_chain import dec074_revert_for
+    code = dec074_revert_for(file_path, code)
     for new, old in VN1STORE_REVERT_PAIRS.get(rel, ()):
         assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)

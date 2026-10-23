@@ -109,6 +109,13 @@ class ScoringRegimeDecision:
 
     regime: Optional[str]
     reason: str = ""
+    #: DEC-075 回修（MUST-2，2026-10-23）：拒絕評分的原因是「缺真實市場廣度」（契約 `source` 旗標）。
+    #: 預設 False ⇒ 既有建構與輸出逐字不變。
+    breadth_unevaluated: bool = False
+    #: DH-REGIME-NOWARROOM（2026-10-23，PR #910）：拒絕評分的原因是「總經尚未載入」**且**代理廣度不計分
+    #: （`shared.regime_arbiter.is_not_loaded_pending_breadth`）⇒ 更新後位階仍未評估，⛔ 不給「更新後重跑」救法。
+    #: 預設 False ⇒ 既有建構與輸出逐字不變。
+    not_loaded_pending_breadth: bool = False
 
     @property
     def usable(self) -> bool:
@@ -128,6 +135,32 @@ class ScoringRegimeDecision:
         """
         if self.usable:
             return ""
+        if self.breadth_unevaluated:
+            # DEC-075 回修：缺真實廣度 ⇒ ⛔ 不給「一鍵更新／重跑」救法（I-4）；其餘原因逐字照舊。
+            return (
+                f"⬜ 本批**不計算多因子總分**：{self.reason}。"
+                "多因子的 6 因子加權表（config.WEIGHT_TABLES）分 bull / neutral / bear "
+                "三態，總經沒有結論時任選一組都等於替你做一個大盤判斷（§1 寧可不給，"
+                "不給假的）。因此「多因子」欄一律標「⚪ 無法評分」、"
+                "「多因子評分排行」為空 —— **這不是 K 線抓取失敗**。"
+                "健康度／趨勢／357／出場訊號／型態目標價不吃 regime，全部照常顯示。"
+                "更新資料不會改變這個狀態：要等正式的市場廣度（漲跌家數）資料來源接上。"
+            )
+        if self.not_loaded_pending_breadth:
+            # 📌 DH-REGIME-NOWARROOM（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：
+            #   代理廣度不計分時，下方舊句的救法「按一鍵更新…再重跑一次批次分析」不屬實（載入後位階仍未評估、
+            #   照樣拒絕評分）⇒ 改說屬實的那句；旗標為 True 時下方舊句逐字照舊。
+            return (
+                f"⬜ 本批**不計算多因子總分**：{self.reason}。"
+                "多因子的 6 因子加權表（config.WEIGHT_TABLES）分 bull / neutral / bear "
+                "三態，總經沒有結論時任選一組都等於替你做一個大盤判斷（§1 寧可不給，"
+                "不給假的）。因此「多因子」欄一律標「⚪ 無法評分」、"
+                "「多因子評分排行」為空 —— **這不是 K 線抓取失敗**。"
+                "健康度／趨勢／357／出場訊號／型態目標價不吃 regime，全部照常顯示。"
+                "更新可以載入今日總經資料，但在正式的市場廣度（漲跌家數）資料來源接上前，"
+                "載入後市場位階仍為未評估、多因子總分也仍不計算"
+                "（代理估算值依 DEC-074 不計分；位階依 DEC-075 不改用另一套規則引擎補出）。"
+            )
         return (
             f"⬜ 本批**不計算多因子總分**：{self.reason}。"
             "多因子的 6 因子加權表（config.WEIGHT_TABLES）分 bull / neutral / bear "
@@ -187,7 +220,14 @@ def resolve_scoring_regime(macro_state: Any) -> ScoringRegimeDecision:
         )
 
     if not macro_state.get("is_loaded"):
-        return ScoringRegimeDecision(None, "總經未評估（🌍 總經紅綠燈尚未算出結論）")
+        from shared.regime_arbiter import is_breadth_unevaluated, is_not_loaded_pending_breadth
+        if is_breadth_unevaluated(macro_state):
+            # DEC-075 回修（MUST-2）：缺真實廣度 ⇒ 據實說原因（⛔ 不是「尚未算出」）。
+            return ScoringRegimeDecision(
+                None, "總經未評估（缺真實市場廣度，代理估算值依 DEC-074 不計分；位階依 DEC-075 一併未評估）",
+                breadth_unevaluated=True)
+        return ScoringRegimeDecision(None, "總經未評估（🌍 總經紅綠燈尚未算出結論）",
+                                     not_loaded_pending_breadth=is_not_loaded_pending_breadth(macro_state))
 
     _regime = str(macro_state.get("regime") or "").strip().lower()
     if not _regime or _regime == UNKNOWN_REGIME:

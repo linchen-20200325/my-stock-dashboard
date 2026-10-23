@@ -253,6 +253,7 @@ from shared import ui_state as _ui_state
 # 本檔直接讀源頭**不是**第二把尺（見檔頭陷阱 3 的 2026-09-07 修註）。
 from shared.allocation_decision import REGIME_LABEL
 from shared.macro_provenance import M1B_PROXY_VALUE_NOTE
+from shared.macro_provenance import BREADTH_LAMP_KEYS, BREADTH_PROXY_VALUE_NOTE  # DEC-074 B
 # 燈卡「變化方向」列（2026-09-24）：哪幾盞燈有這一列 ＋ 列標籤。純常數 L0。
 from shared.lamp_direction_thresholds import (
     LAMP_DIRECTION_ERROR_TEMPLATE,
@@ -626,6 +627,89 @@ EXIT_OUT_OF_REACH: str = (
     f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}不會讓它離開現在的狀態"
     "（更新報告的「這一輪沒有更新到」會逐條列出它與它的寫入點）")
 
+#: (d) **重抓不會改變**：缺的是正式資料來源本身（DEC-074 B，客戶 2026-10-23）。
+#: 市場位階／建議持股契約因「缺真實市場廣度（漲跌家數）」而未評估時專用 —— 本頁按鈕會重抓
+#: 代理（估算）家數，但代理值依 DEC-074 **不計分**，所以按幾次都一樣（計畫 I-4：不得暗示重跑就會有）。
+#: ⛔ 不得寫「重新抓取」「重新載入」之類的指引（`tests/test_dec074_breadth_gate.py` 守衛）。
+#: 📌 QA-4 S-1（2026-10-23，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：~~「不是這一輪沒抓到；目前只有由加權指數推估的
+#:   代理值」~~ —— DEC-075 D-1(a) 回修起本出口也用在 ^TWII 全滅（這一輪確實沒抓到、連代理值也沒有）那一態，
+#:   兩句在那一態不屬實。出口講的是「該怎麼辦」（兩態相同：等正式廣度來源），故改為兩態都屬實的一句；
+#:   「這一輪有沒有代理值」那件事實改由 why（`breadth_unevaluated_why()`）依資料二選一。物件身分照舊（`V2_EXIT_PHRASES`）。
+EXIT_WAIT_BREADTH_SOURCE: str = (
+    f"{NO_EXIT_MARKER} —— **這一格更新資料不會改變**：缺的是正式的市場廣度（漲跌家數）資料來源；"
+    "由加權指數推估的代理值依客戶裁示（DEC-074）只顯示、不計分，抓得到也不會讓這一格成立。"
+    "正式廣度資料接上之前，這一格會一直是未評估")
+
+_BREADTH_UNEVALUATED_WHY_TAIL: str = (
+    "依 DEC-074 不計分 ⇒ 健康分未評估；依 DEC-075 市場位階也一併未評估，"
+    "**不改用另一套規則引擎補出位階**，本站也不以缺值推導一個安全水位")
+
+#: 「缺真實市場廣度 ⇒ 未評估」的 why（卡① / 卡③ / 狀態列「總經」／三欄摘要「位階」共用一句）。
+#: 📌 QA-4 S-1（2026-10-23，有意識的修改，⛔ 不是漏刪）：~~「目前只有加權指數推估的代理值」~~ 在 ^TWII 全滅時不屬實 ⇒
+#:   本常數改為兩態都屬實的**中性句**（拿不到區分訊號時用）；有訊號時走 `breadth_unevaluated_why()` 二選一。
+BREADTH_UNEVALUATED_WHY: str = (
+    "總經健康分需要真實市場廣度（漲跌家數），本站目前沒有正式的廣度資料來源；"
+    "由加權指數推估的代理值即使取得，也" + _BREADTH_UNEVALUATED_WHY_TAIL)
+#: 本輪**有**代理值、被擋下不計分（L3 `allocation_service.get_breadth_proxy_presence()` 為 True）。
+BREADTH_UNEVALUATED_WHY_PROXY_HELD: str = (
+    "總經健康分需要真實市場廣度（漲跌家數），目前只有加權指數推估的代理值，" + _BREADTH_UNEVALUATED_WHY_TAIL)
+#: 本輪**連代理值也沒有**（`get_breadth_proxy_presence()` 為 False；例：^TWII 全滅）。
+BREADTH_UNEVALUATED_WHY_NO_PROXY: str = (
+    "總經健康分需要真實市場廣度（漲跌家數），這一輪紅綠燈的輸入裡也沒有任何廣度資料"
+    "（連加權指數推估的代理值也沒有）；即使取得代理值，也" + _BREADTH_UNEVALUATED_WHY_TAIL)
+
+
+def breadth_unevaluated_why(breadth_proxy: bool | None = None) -> str:
+    """缺真實廣度 ⇒ 未評估的 why：True（有代理值被擋下）／False（連代理值也沒有）／None（拿不準 ⇒ 中性句）。"""
+    if breadth_proxy is True:
+        return BREADTH_UNEVALUATED_WHY_PROXY_HELD
+    if breadth_proxy is False:
+        return BREADTH_UNEVALUATED_WHY_NO_PROXY
+    return BREADTH_UNEVALUATED_WHY
+
+
+def regime_breadth_unevaluated(regime: Mapping[str, Any] | None) -> bool:
+    """L3 總經契約是不是「因缺真實市場廣度而未評估」（`source == SOURCE_UNEVALUATED_BREADTH`）。
+
+    讀的是契約自己的 `source` 旗標（上游帶下來的），本頁不拿資料反推（`shared/ui_state.py` 鐵律）。
+    """
+    if not isinstance(regime, Mapping):
+        return False
+    from shared import regime_arbiter as _RA_b
+    return regime.get("source") == _RA_b.SOURCE_UNEVALUATED_BREADTH
+
+
+#: (e) DH-REGIME-NOWARROOM（2026-10-23，PR #910）：總經**尚未載入**、且代理廣度不計分（`BREADTH_PROXY_SCORING_ENABLED`
+#: 為 False）時，卡① / 卡③ / 狀態列「總經」／三欄摘要「位階」的出口。冷啟動時 `get_macro_state` 依 DEC-075 D-1(a)
+#: 不再退 `macro_state.json` 規則引擎位階（總管裁定屬 D-1(a) 射程）。`CLAUDE.md` §1.A 第 4 點：灰色、不是錯誤。
+#: 可以指引按更新（這一格確實還沒載入），但 ⛔ 不得暗示按了就會有位階（`EXIT_RETRY_HERE` 的「連按幾次都一樣灰
+#: 就是上游給不出來」在這一態不屬實：載入後的灰是「缺正式廣度來源」，不是上游壞了）。
+EXIT_LOAD_PENDING_BREADTH: str = (
+    f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}會載入今日資料；"
+    "**但載入後這一格仍是未評估**：在正式的市場廣度（漲跌家數）資料來源接上前，"
+    "由加權指數推估的代理值依客戶裁示（DEC-074）不計分，市場位階依 DEC-075 也不改用規則引擎快照補出")
+
+def not_loaded_pending_breadth_why() -> str:
+    """同一態的 why（卡① idle／卡③／狀態列「總經」／三欄摘要「位階」共用）。
+
+    句子出自 L0 SSOT `shared.regime_arbiter.NOT_LOADED_PENDING_BREADTH_EXPLAIN`（⛔ 本頁不另寫一份）；
+    late import 同 `regime_breadth_unevaluated()`。
+    """
+    from shared import regime_arbiter as _RA_nl
+    return _RA_nl.NOT_LOADED_PENDING_BREADTH_EXPLAIN
+
+
+def regime_not_loaded_pending_breadth(regime: Mapping[str, Any] | None) -> bool:
+    """L3 總經契約是不是「尚未載入且代理廣度不計分」那一態（DH-REGIME-NOWARROOM）。
+
+    讀的是契約自己的 `is_loaded`／`source` 旗標 ＋ 呼叫當下的 L0 旗標（`shared.regime_arbiter.is_not_loaded_pending_breadth`）。
+    """
+    if not isinstance(regime, Mapping):
+        return False
+    from shared import regime_arbiter as _RA_nl
+    return _RA_nl.is_not_loaded_pending_breadth(dict(regime))
+
+
 #: (a)+(c) **複合**：一半可以在本頁重抓、一半摸不到。今日關鍵橫幅專用。
 #:
 #: 為什麼不硬塞進上面三種其中一種：這張卡的兩半各有各的答案 ——
@@ -720,7 +804,8 @@ def bucket_exit(bucket: str) -> str:
             else EXIT_RETRY_HERE)
 
 
-def contract_exit_retargeted(card: Card) -> Card:
+def contract_exit_retargeted(card: Card, regime: Mapping[str, Any] | None = None,
+                             breadth_proxy: bool | None = None) -> Card:
     """對面 `tab_today` 總經契約那幾格的出口，換成本頁現在真的成立的那一句。
 
     📌 **批 Z60 複驗（有意識的與舊頁不同，⛔ 不是漏改對面）。**
@@ -743,10 +828,26 @@ def contract_exit_retargeted(card: Card) -> Card:
     `STEP_RISK_CAP` 在同一輪就可能寫這個檔，而且檔案是**規則引擎**產生的，不是 AI ——
     在本頁那句話已經不屬實。只換**逐字等於**對面那一句的 `why`（見 `snapshot_why_retargeted`），
     `now` 不動；`tab_today.py` 照舊一個字都不動。
+
+    📌 **DEC-074 B／DEC-075 D-1(a)（2026-10-23）：`regime=`（選填，預設 None ⇒ 與修前逐一相同）。**
+    契約 `source == SOURCE_UNEVALUATED_BREADTH`（缺真實市場廣度 ⇒ 未評估）時，換成
+    `EXIT_WAIT_BREADTH_SOURCE` ＋ `BREADTH_UNEVALUATED_WHY` —— 對面的「四條來源本輪皆無值」與
+    本頁的「按一次就會重抓」在這一態**都不屬實**（重抓不會讓代理值變成可計分）。
+    `breadth_proxy=`（QA-4 S-1，選填，預設 None ⇒ 中性句）：`get_breadth_proxy_presence()` 的回傳，只選 why 的那一句。
     """
     if card.note is None:
         return card
     _note = card.note
+    if _note.where is CONTRACT_NO_EXIT_WHERE and regime_breadth_unevaluated(regime):
+        _note = dc_replace(_note, where=EXIT_WAIT_BREADTH_SOURCE, why=breadth_unevaluated_why(breadth_proxy))
+        return dc_replace(card, note=_note)
+    if (_note.where is CONTRACT_NO_EXIT_WHERE and card.state in (UI_IDLE, UI_EMPTY)
+            and regime_not_loaded_pending_breadth(regime)):
+        # 📌 DH-REGIME-NOWARROOM（2026-10-23，PR #910，有意識的與對面不同，⛔ 不是漏改 `tab_today.py`）：
+        #   對面灰態的 why「四條來源本輪皆無值」在冷啟動＋代理廣度不計分時不屬實（`macro_state.json` 可能有效，
+        #   只是依 DEC-075 不採用）；`EXIT_RETRY_HERE` 也會暗示按了就有位階 ⇒ 換成屬實的 why ＋ 出口。紅態不碰。
+        _note = dc_replace(_note, where=EXIT_LOAD_PENDING_BREADTH, why=not_loaded_pending_breadth_why())
+        return dc_replace(card, note=_note)
     if _note.where is CONTRACT_NO_EXIT_WHERE:
         _note = dc_replace(_note, where=EXIT_RETRY_HERE)
     _why = snapshot_why_retargeted(_note.why)
@@ -1342,6 +1443,10 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
     # 燈號頻道走既有 gray（不判燈）；下方現值＋代理註記照樣顯示。
     if key == "m1b_m2_gap" and rec.get("is_proxy") is True:
         _band = classify_danger(None, _spec)
+    # DEC-074 B（客戶 2026-10-23）：市場廣度兩盞（jingqi／adl）同一處置 —— 側車 `is_proxy`
+    # （L2 以 L0 判）→ 燈號走既有 gray（不判燈級）；現值＋代理註記照樣顯示。
+    if key in BREADTH_LAMP_KEYS and rec.get("is_proxy") is True:
+        _band = classify_danger(None, _spec)
 
     # ── 中繼資料列：任何狀態都該看得見「這盞燈本來長什麼樣」──────────
     _facts: list[tuple[str, str]] = []
@@ -1371,6 +1476,8 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
     # 只動顯示字串，⛔ 不碰 `_band` / `_state`（沿用 v1：只揭露、不改燈）。
     if key == "m1b_m2_gap" and _shown and rec.get("is_proxy") is True:
         _shown = f"{_shown}{M1B_PROXY_VALUE_NOTE}"
+    if key in BREADTH_LAMP_KEYS and _shown and rec.get("is_proxy") is True:   # DEC-074 B
+        _shown = f"{_shown}{BREADTH_PROXY_VALUE_NOTE}"
 
     # ── 「變化方向」列（2026-09-24）：只加一列 fact，⛔ 不碰 `_band` / `_state` ──
     _dir_fact: tuple[str, str] | None = None
@@ -1836,7 +1943,8 @@ def _danger_tile(*, key: str, label: str,
                          else EXIT_RETRY_HERE))))
 
 
-def _alloc_unloaded_why(regime: Mapping[str, Any] | None) -> str:
+def _alloc_unloaded_why(regime: Mapping[str, Any] | None,
+                        breadth_proxy: bool | None = None) -> str:
     """卡①「L3 建議持股契約回報未評估」的 why —— 依**實際缺的來源**組句（批 Z65 QA）。
 
     `build_allocation_decision` 在 `health is None` 時一律回未評估；姿態帶要靠健康分才算得出來。
@@ -1846,6 +1954,9 @@ def _alloc_unloaded_why(regime: Mapping[str, Any] | None) -> str:
     _tail = "；**本站不以缺值推導一個安全水位**"
     if not isinstance(regime, Mapping):
         return _head + "建議持股需要總經健康分算出姿態帶，本輪沒有取得" + _tail
+    if regime_breadth_unevaluated(regime):
+        # DEC-074 B：原因是缺真實市場廣度（代理不計分），⛔ 不寫成「本輪沒有值」（那暗示重抓會有）。
+        return _head + breadth_unevaluated_why(breadth_proxy)
     _parts: list[str] = []
     if regime.get("health") is None:
         _parts.append("總經健康分本輪沒有值（紅綠燈沒有算出健康分），姿態帶算不出來")
@@ -1869,7 +1980,8 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                         regime_error: str,
                         band_zh_color: Mapping[str, tuple[str, str]] | None = None,
                         l4_error: str = "",
-                        macro_attempt: tuple[str, str] | None = None) -> tuple[Tile, ...]:
+                        macro_attempt: tuple[str, str] | None = None,
+                        breadth_proxy: bool | None = None) -> tuple[Tile, ...]:
     """葉1 ① 今日結論 —— **三張並排的卡，沒有第四張「合成結論」**。
 
     Args:
@@ -1885,6 +1997,9 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
         l4_error: L4 載入失敗時的 `repr(e)`。
         macro_attempt: UIA-07（2026-10-18）`warroom_attempt()` 的輸出（本頁按鈕上一次更新的
             紅綠燈步驟）。只影響「契約仍未評估」時卡① / 卡③ 的判態與文案；預設 None ⇒ 與修前逐一相同。
+        breadth_proxy: QA-4 S-1（2026-10-23）L3 `get_breadth_proxy_presence()` 的回傳。只在契約「缺真實廣度
+            ⇒ 未評估」時選卡① / 卡③ why 的那一句（True 有代理值被擋下／False 連代理值也沒有／None 中性句）；
+            判態、出口一律不讀。
 
     ⚠️ **【1】2026-09-07 修：三張卡的取數與失敗完全獨立。**
     修前 `_load_parallel()` 開頭是 `if regime is None: return None, ""` ——
@@ -1962,6 +2077,11 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
         elif _att_fail is not None:
             # UIA-07：失敗路徑的 why ＝ 那一步的原因（⛔ 不是「還沒有人叫過」）。
             _why = macro_attempt_failed_why(_att_fail)
+        elif _alloc_state == UI_IDLE and regime_not_loaded_pending_breadth(regime):
+            # 📌 DH-REGIME-NOWARROOM（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪）：下一段舊句的
+            #   「四條來源一條都沒寫進來」在冷啟動＋代理廣度不計分時不屬實（`macro_state.json` 可能有效，只是依
+            #   DEC-075 不採用）⇒ 改說屬實的那句；旗標為 True 時下一段舊句逐字照舊。
+            _why = not_loaded_pending_breadth_why()
         elif _alloc_state == UI_IDLE:
             _why = ("L3 總經契約這一輪**還沒有人叫過**（`source` 仍是 "
                     "`unloaded`：四條來源一條都沒寫進來）—— "
@@ -1969,7 +2089,7 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
         else:
             # ~~"總經健康分與規則引擎快照兩條來源本輪都沒有值"~~ —— 📌 批 Z65 QA（有意識的修改，
             #    不是漏刪）：全稱句。規則引擎快照有值、只是健康分缺時，這句不屬實 ⇒ 依實際缺的來源組句。
-            _why = _alloc_unloaded_why(regime)
+            _why = _alloc_unloaded_why(regime, breadth_proxy)
             if _att_applies:
                 # UIA-07：按過更新、沒有失敗、但契約仍未評估 ⇒ 把那一步的原因放在最前面。
                 #   （`_att_applies` 為真 ⇒ `macro_attempt` 必不為 None。）
@@ -1990,8 +2110,14 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             key="verdict.exposure", label="能不能出手 · 出手到幾成",
             state=_alloc_state,
             note=Note(now="**今天能不能出手：尚未評估**", why=_why,
+                      # DEC-074 B（SHOULD-A2）：以**原因**判出口 —— 缺真實廣度 ⇒ 重抓不會改變；
+                      #   其餘未評估（含 F1 三源全敗）照舊 `EXIT_RETRY_HERE`。
                       where=(EXIT_FIX_CODE if alloc_error
-                             else EXIT_RETRY_HERE)))))
+                             else (EXIT_WAIT_BREADTH_SOURCE
+                                   if (_att_fail is None and regime_breadth_unevaluated(regime))
+                                   else EXIT_LOAD_PENDING_BREADTH   # DH-REGIME-NOWARROOM
+                                   if (_att_fail is None and regime_not_loaded_pending_breadth(regime))
+                                   else EXIT_RETRY_HERE))))))
 
     # ② 指標危險度（16 盞燈的 worst-of，**不含多空方向**）。
     #    ⚠️ 這一張**完全不看 regime**；regime 掛掉時它照樣要算得出來。
@@ -2081,13 +2207,21 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                 why=(upstream_error_why(scrub_secrets(regime_error)) if regime_error else
                      # UIA-07：紅的是上一次更新的紅綠燈步驟（⛔ 不是讀契約拋例外）。
                      macro_attempt_failed_why(_att_fail) if _att_fail is not None else
+                     # DEC-075 D-1(a)：缺真實廣度 ⇒ 位階一併未評估（⛔ 不是「四條來源皆無值」）。
+                     breadth_unevaluated_why(breadth_proxy) if regime_breadth_unevaluated(regime) else
+                     # DH-REGIME-NOWARROOM：冷啟動＋代理廣度不計分 ⇒ 檔案可能有效、只是不採用（⛔ 不是「四條來源皆無值」）。
+                     not_loaded_pending_breadth_why() if regime_not_loaded_pending_breadth(regime) else
                      "L3 canonical 契約四條來源本輪皆無值 → 回 `unknown`，"
                      "**不是** `neutral`；本站不以缺值推導「中性」"),
                 # 📌 批 Z60 QA（有意識的修改，不是漏刪）：非錯誤分支原為 `EXIT_OUT_OF_REACH`；
                 #    Z60 起 `STEP_WARROOM` 寫得到 `warroom_summary`，按本頁按鈕就有機會讓這張卡
                 #    離開未評估 ⇒ 改走 `EXIT_RETRY_HERE`（理由同卡①）。錯誤分支未動。
-                where=(EXIT_RETRY_HERE if not regime_error
-                       else EXIT_FIX_CODE))),
+                where=(EXIT_FIX_CODE if regime_error
+                       else (EXIT_WAIT_BREADTH_SOURCE
+                             if (_att_fail is None and regime_breadth_unevaluated(regime))
+                             else EXIT_LOAD_PENDING_BREADTH   # DH-REGIME-NOWARROOM（⛔ 不暗示按了就有位階）
+                             if (_att_fail is None and regime_not_loaded_pending_breadth(regime))
+                             else EXIT_RETRY_HERE)))),
             facts=((REGIME_SCOPE_FACT_KEY, REGIME_SCOPE_NOTE),)))
     return tuple(_tiles)
 
@@ -2453,6 +2587,16 @@ def _load_regime() -> tuple[Mapping[str, Any] | None, str]:
         return None, repr(_e)
 
 
+def _load_breadth_proxy() -> bool | None:
+    """QA-4 S-1：L3 `get_breadth_proxy_presence()`（本輪有沒有被擋下的代理廣度值）。讀不出來 ⇒ None（中性句）。"""
+    try:
+        from src.services.allocation_service import get_breadth_proxy_presence
+        return get_breadth_proxy_presence()
+    except Exception as _e:  # noqa: BLE001 — 拿不準就用中性句，log 出聲（⛔ 不猜任何一邊）
+        print(f"[views/page_today] get_breadth_proxy_presence 失敗：{_e!r} —— 改用中性句")
+        return None
+
+
 def _load_danger(readout: MacroReadout
                  ) -> tuple[tuple[str, str, tuple[int, int]] | None, str, str]:
     """**指標危險度那一半**（16 盞燈 worst-of）。回 `((band, detail, (N, M)), err, 出處)`。
@@ -2729,6 +2873,8 @@ V2_EXIT_PHRASES: tuple[tuple[str, str], ...] = (
     (EXIT_RETRY_HERE,             "按上方 🚀 更新"),
     (EXIT_OUT_OF_REACH,           "不在本頁射程內"),
     (EXIT_FIX_CODE,               "需修程式"),
+    (EXIT_WAIT_BREADTH_SOURCE,    "等正式廣度資料來源"),   # DEC-074 B
+    (EXIT_LOAD_PENDING_BREADTH,   "可更新，但位階仍未評估"),   # DH-REGIME-NOWARROOM
     (EXIT_ALERTS_PARTIAL,         "只更新得到一半"),
     (EXIT_DEGRADED_READ_DIRECTION, "改看方向，別照門檻讀"),
     (CONTRACT_NO_EXIT_WHERE,      NO_EXIT_MARKER),
@@ -3476,7 +3622,9 @@ def build_summary_tiles(cards: Sequence[Card], *,
                         danger_requested: bool,
                         danger_source: str = SRC_DANGER,
                         band_zh_color: Mapping[str, tuple[str, str]] | None = None,
-                        l4_error: str = "") -> tuple[Tile, ...]:
+                        l4_error: str = "",
+                        regime: Mapping[str, Any] | None = None,
+                        breadth_proxy: bool | None = None) -> tuple[Tile, ...]:
     """葉1 ③ 三欄摘要 → `Tile`。**只換「風險」那一格，其餘照 `_tiles_of_cards()`。**
 
     · 「風險」格 ＝ `_danger_tile()`：與卡② `verdict.danger` **同一份讀數、同一支判態、
@@ -3497,7 +3645,7 @@ def build_summary_tiles(cards: Sequence[Card], *,
                       danger_requested=danger_requested,
                       danger_source=danger_source,
                       band_zh_color=band_zh_color, l4_error=l4_error)
-         if _c.key == SUMMARY_RISK_KEY else Tile(contract_exit_retargeted(_c)))
+         if _c.key == SUMMARY_RISK_KEY else Tile(contract_exit_retargeted(_c, regime, breadth_proxy)))
         for _c in cards)
 
 
@@ -3801,6 +3949,8 @@ def render_page_today() -> None:
     _band_label, _thr_text, _band_zh, _l4_err = _load_l4_labels()
     _alloc, _alloc_err = _load_allocation()
     _regime, _regime_err = _load_regime()
+    # QA-4 S-1：「缺真實廣度 ⇒ 未評估」文案二選一的訊號（純顯示；判態／出口不讀）。
+    _breadth_proxy = _load_breadth_proxy()
     # ⚠️【1】兩顆燈**各自一支 loader**：危險度不吃 regime、位階不吃 16 盞燈。
     #    誰失敗只影響誰那一張卡（修前是 regime 掛掉就連坐危險度）。
     _danger, _danger_err, _danger_src = _load_danger(_readout)
@@ -3872,7 +4022,7 @@ def render_page_today() -> None:
                                         attempt=_attempt)
     _render_tiles(status_bar_tiles_with_trading_day(
         _tiles_of_cards(status_bar_cards_with_sheet(
-            tuple(contract_exit_retargeted(_c) for _c in _bar_cards),
+            tuple(contract_exit_retargeted(_c, _regime, _breadth_proxy) for _c in _bar_cards),
             build_sheet_binding_card(_sheet_state, error=_sheet_err))),
         build_trading_day_tile(_trading_status, error=_trading_err)))
 
@@ -3890,7 +4040,7 @@ def render_page_today() -> None:
             danger_requested=_readout.requested, danger_source=_danger_src,
             regime=_regime, regime_error=_regime_err,
             band_zh_color=_band_zh, l4_error=_l4_err,
-            macro_attempt=_attempt))
+            macro_attempt=_attempt, breadth_proxy=_breadth_proxy))
 
         section_header("② 操作列")
         _render_update_form(_session)
@@ -3908,7 +4058,8 @@ def render_page_today() -> None:
             _summary.cards,
             danger=_danger, danger_error=_danger_err,
             danger_requested=_readout.requested, danger_source=_danger_src,
-            band_zh_color=_band_zh, l4_error=_l4_err))
+            band_zh_color=_band_zh, l4_error=_l4_err, regime=_regime,
+            breadth_proxy=_breadth_proxy))
 
         section_header("④ 今日關鍵橫幅")
         _render_tiles((build_key_alert_tile(

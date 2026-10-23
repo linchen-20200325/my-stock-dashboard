@@ -24,14 +24,19 @@ def _fake_tw_raw():
 
 
 def test_ad_ratio_extracted_from_df_adl_last_row(monkeypatch):
-    """df_adl 有效 → 取最後一列 ad_ratio,轉發給 get_market_assessment。"""
+    """df_adl 有效（**真值**，末列 `is_proxy=False`）→ 取最後一列 ad_ratio,轉發給 get_market_assessment。
+
+    ⚠️ DEC-074/075 行為變更（客戶 2026-10-23）：fixture 補 `is_proxy` 欄 —— 缺欄自本批起
+    fail-safe 視同代理（不計分，見 `test_dec074_breadth_gate.py`）；本測試守的「取最後一列」語意不變。
+    """
     captured = {}
 
     def _fake_gma(**kw):
         captured.update(kw)
         return {'signals': [], 'label': 'x', 'score': 1}
     monkeypatch.setattr('src.services.get_market_assessment', _fake_gma)
-    df_adl = pd.DataFrame({'ad_ratio': [40.0, 55.5, 67.7]})
+    df_adl = pd.DataFrame({'ad_ratio': [40.0, 55.5, 67.7],
+                           'is_proxy': [True, True, False]})
     maa.compute_and_apply_market_assessment(
         inst=_fake_inst(), tw_raw=_fake_tw_raw(), margin=None, df_adl=df_adl)
     assert captured.get('ad_ratio') == pytest.approx(67.7), \

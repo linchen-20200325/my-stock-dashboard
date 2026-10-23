@@ -1,5 +1,8 @@
 """src/compute/macro/macro_helpers.py 純函式 unit test — Phase 7A-Ext / 7E。"""
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import pandas as pd
 import pytest
@@ -35,7 +38,7 @@ class TestCalibrationConstants:
         # health 剛好 ≥ 常數 → 不 defense；驗證 calc_traffic_light 真的讀這個常數
         mkt = {'score': 1, 'regime': 'neutral'}
         target_jqavg = (HEALTH_DEFENSE_THRESHOLD - 1 / 5 * 100 * 0.4) / 0.4
-        tl_at = calc_traffic_light(mkt, {'avg': target_jqavg}, {'inst': {}}, None)
+        tl_at = calc_traffic_light(mkt, {'is_proxy': False, 'avg': target_jqavg}, {'inst': {}}, None)
         assert tl_at['health'] >= HEALTH_DEFENSE_THRESHOLD
         assert tl_at['defense'] is False
 
@@ -47,8 +50,8 @@ class TestCalcTrafficLight:
 
     def test_bull_regime_green(self):
         mkt = {'score': 4, 'regime': 'bull'}
-        jq  = {'avg': 75}
-        cl  = {'inst': {'外資自營': {'net': 1000}}, 'adl': 1}
+        jq  = {'is_proxy': False, 'avg': 75}
+        cl  = {'inst': {'外資自營': {'net': 1000}}, 'adl': pd.DataFrame({'ad_ratio': [50.0], 'is_proxy': [False]})}
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl is not None
         assert tl['icon'] == '🟢'
@@ -59,7 +62,7 @@ class TestCalcTrafficLight:
     def test_caution_regime_red(self):
         # avg=80, score=3 → health = 32+24 = 56 ≥ 40，不觸發 defense，regime=caution
         mkt = {'score': 3, 'regime': 'caution'}
-        jq  = {'avg': 80}
+        jq  = {'is_proxy': False, 'avg': 80}
         cl  = {'inst': {'外資自營': {'net': -500}}}
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl['icon'] == '🔴'
@@ -69,7 +72,7 @@ class TestCalcTrafficLight:
     def test_bear_regime_red(self):
         # avg=80, score=3, fnet=0 → health=56 ≥ 40，regime=bear
         tl = calc_traffic_light(
-            {'score': 3, 'regime': 'bear'}, {'avg': 80}, {}, None,
+            {'score': 3, 'regime': 'bear'}, {'is_proxy': False, 'avg': 80}, {}, None,
         )
         assert tl['icon'] == '🔴'
         assert '保守' in tl['label']
@@ -77,7 +80,7 @@ class TestCalcTrafficLight:
 
     def test_neutral_regime_yellow(self):
         mkt = {'score': 3, 'regime': 'neutral'}
-        jq  = {'avg': 60}
+        jq  = {'is_proxy': False, 'avg': 60}
         cl  = {'inst': {'外資自營': {'net': 100}}}
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl['icon'] == '🟡'
@@ -86,7 +89,7 @@ class TestCalcTrafficLight:
     def test_defense_override_red(self):
         # score<2 + 期貨大空單 → 強制空頭防禦（即使 regime=bull）
         mkt = {'score': 1, 'regime': 'bull'}
-        jq  = {'avg': 50}
+        jq  = {'is_proxy': False, 'avg': 50}
         cl  = {'inst': {'外資自營': {'net': -1000}}}
         li  = pd.DataFrame({'外資大小': [-40000], '韭菜指數': [80]})
         tl = calc_traffic_light(mkt, jq, cl, li)
@@ -97,7 +100,7 @@ class TestCalcTrafficLight:
     def test_health_below_35_forces_defense(self):
         # jqavg=10 + score=0 + fnet=0 → health=10*0.4+0+0=4 < 35 → defense override
         mkt = {'score': 0, 'regime': 'bull'}
-        jq  = {'avg': 10}
+        jq  = {'is_proxy': False, 'avg': 10}
         cl  = {'inst': {}}
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl['icon'] == '🔴'
@@ -109,7 +112,7 @@ class TestCalcTrafficLight:
         # jqavg=55 + score=1(max 預設 4)+ fnet=0
         # → health = 55*0.6 + (1/4*100)*0.4 + 0 = 33 + 10 = 43 ≥ 35 → 不防禦
         mkt = {'score': 1, 'regime': 'neutral'}
-        jq  = {'avg': 55}
+        jq  = {'is_proxy': False, 'avg': 55}
         cl  = {'inst': {}}
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl['health'] == pytest.approx(43.0)
@@ -119,8 +122,8 @@ class TestCalcTrafficLight:
     def test_bull_low_score_falls_to_neutral_v18_140(self):
         # v18.140 校準收斂：regime=bull 但 score<4 → 不升綠燈，退回 🟡 中性
         mkt = {'score': 3, 'regime': 'bull'}
-        jq  = {'avg': 75}
-        cl  = {'inst': {'外資自營': {'net': 1000}}, 'adl': 1}
+        jq  = {'is_proxy': False, 'avg': 75}
+        cl  = {'inst': {'外資自營': {'net': 1000}}, 'adl': pd.DataFrame({'ad_ratio': [50.0], 'is_proxy': [False]})}
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl['icon'] == '🟡'
         assert '震盪' in tl['label']
@@ -128,22 +131,22 @@ class TestCalcTrafficLight:
 
     def test_foreign_net_extraction(self):
         cl = {'inst': {'外資 (自營+投信)': {'net': 12345}}}
-        tl = calc_traffic_light({'score': 3, 'regime': 'neutral'}, {'avg': 60}, cl, None)
+        tl = calc_traffic_light({'score': 3, 'regime': 'neutral'}, {'is_proxy': False, 'avg': 60}, cl, None)
         assert tl['fk'] == '外資 (自營+投信)'
         assert tl['fnet'] == 12345
 
     def test_confidence_score(self):
         # 5 來源齊全 → conf=100
         mkt = {'score': 3, 'regime': 'neutral'}
-        jq  = {'avg': 60}
-        cl  = {'inst': {'外資': {'net': 100}}, 'adl': 1}
+        jq  = {'is_proxy': False, 'avg': 60}
+        cl  = {'inst': {'外資': {'net': 100}}, 'adl': pd.DataFrame({'ad_ratio': [50.0], 'is_proxy': [False]})}
         li  = pd.DataFrame({'外資大小': [100], '韭菜指數': [50]})
         tl = calc_traffic_light(mkt, jq, cl, li)
         assert tl['conf'] == 100
 
     def test_confidence_partial(self):
         # 只有 mkt + jq → 2/5 = 40
-        tl = calc_traffic_light({'score': 3, 'regime': 'neutral'}, {'avg': 60}, {}, None)
+        tl = calc_traffic_light({'score': 3, 'regime': 'neutral'}, {'is_proxy': False, 'avg': 60}, {}, None)
         assert tl['conf'] == pytest.approx(40)
 
     def test_li_latest_safe_parsing(self):
@@ -156,7 +159,7 @@ class TestCalcTrafficLight:
         # 現在兩者缺值一律 None；缺失由 conf 下降 + missing_sources 顯示（見
         # tests/test_p1b_fabricated_defaults.py）。
         li = pd.DataFrame({'其他欄': [1]})
-        tl = calc_traffic_light({'score': 3, 'regime': 'neutral'}, {'avg': 60}, {}, li)
+        tl = calc_traffic_light({'score': 3, 'regime': 'neutral'}, {'is_proxy': False, 'avg': 60}, {}, li)
         assert tl['fut_net'] is None
         assert tl['leek'] is None
 
@@ -165,7 +168,7 @@ class TestCalcTrafficLight:
         # + (0 if fnet>0)。avg=50, score=5, max_score=5, fnet=100
         # → 30 + min(100,100)*0.4 + 0 = 30 + 40 = 70(fnet bonus 歸零)
         mkt = {'score': 5, 'max_score': 5, 'regime': 'bull'}
-        jq  = {'avg': 50}
+        jq  = {'is_proxy': False, 'avg': 50}
         cl  = {'inst': {'外資': {'net': 100}}}
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl['health'] == pytest.approx(70.0)
@@ -173,7 +176,7 @@ class TestCalcTrafficLight:
     def test_health_score_norm_uses_true_max_score(self):
         # v19.102 修除5錯配:score=4/max=4 → score 分項滿分 100(舊 /5 只有 80)
         mkt = {'score': 4, 'max_score': 4, 'regime': 'neutral'}
-        jq  = {'avg': 0}
+        jq  = {'is_proxy': False, 'avg': 0}
         cl  = {'inst': {}}
         tl = calc_traffic_light(mkt, jq, cl, None)
         assert tl['health'] == pytest.approx(40.0)   # 0*0.6 + 100*0.4
@@ -181,7 +184,7 @@ class TestCalcTrafficLight:
     def test_health_fnet_no_longer_bonus(self):
         # v19.102:fnet>0 不再 +20(校準:fnet 對 20 日回撤零預測力)
         mkt = {'score': 0, 'regime': 'neutral'}
-        jq  = {'avg': 50}
+        jq  = {'is_proxy': False, 'avg': 50}
         base = calc_traffic_light(mkt, jq, {'inst': {}}, None)
         with_fnet = calc_traffic_light(mkt, jq, {'inst': {'外資': {'net': 999}}}, None)
         assert base['health'] == pytest.approx(with_fnet['health'])  # 同分
@@ -718,7 +721,7 @@ class TestFrozenLeadingColumnsAreNotJudged:
     @staticmethod
     def _tl(li):
         return calc_traffic_light({'score': 3, 'regime': 'neutral'},
-                                  {'avg': 60}, {'inst': {}}, li)
+                                  {'is_proxy': False, 'avg': 60}, {'inst': {}}, li)
 
     def test_moving_futures_is_judged_normally(self):
         """前提：值天天在動 → 照常進判燈（否則下一條證明不了什麼）。"""

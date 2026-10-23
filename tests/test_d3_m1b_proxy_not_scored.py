@@ -68,12 +68,23 @@ class TestVerdictExpiry:
         from src.services.macro_state_locker import macro_state_is_expired
         assert macro_state_is_expired(state, now=_NOW) is True
 
-    def test_fresh_file_drives_cap(self, tmp_path):
+    def test_fresh_file_drives_cap(self, tmp_path, monkeypatch):
+        """📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：本支舊斷言「warroom 不存在 ＋ 有效檔 ⇒ 退檔案規則引擎位階、`is_loaded=True`」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立；旗標關（現行）時冷啟動依 DEC-075 D-1(a) 位階未評估。本支改在旗標 True 下守舊語意（原斷言／原數值一字未改），旗標 False 的新行為見下一支。"""
+        import shared.signal_thresholds as STH
         from src.services.macro_state_locker import get_macro_state
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         f = tmp_path / "macro_state.json"
         _write_state(f, timestamp=_ts(_NOW - _dt.timedelta(days=1)))
         ms = get_macro_state(None, state_file_path=str(f), now=_NOW)
         assert ms["is_loaded"] is True and ms["exposure_limit_pct"] == 30
+
+    def test_fresh_file_drives_cap_flag_off(self, tmp_path):
+        """旗標 False（現行）：有效期內的檔照樣給上限（Risk Cap 不受影響），但位階未評估（DH-REGIME-NOWARROOM）。"""
+        from src.services.macro_state_locker import get_macro_state
+        f = tmp_path / "macro_state.json"
+        _write_state(f, timestamp=_ts(_NOW - _dt.timedelta(days=1)))
+        ms = get_macro_state(None, state_file_path=str(f), now=_NOW)
+        assert ms["is_loaded"] is False and ms["exposure_limit_pct"] == 30 and ms["regime"] == "unknown"
 
     def test_expired_file_is_like_no_file(self, tmp_path):
         from src.services.macro_state_locker import get_macro_state

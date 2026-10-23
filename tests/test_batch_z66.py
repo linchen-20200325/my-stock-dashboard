@@ -455,7 +455,10 @@ class TestOldUiLivePath:
 
     def test_ai_qa_market_state_live(self, monkeypatch, tmp_path):
         """舊 UI 寫的檔（引擎輸出原樣落檔）→ AI 問答市場狀態：無「資金緊縮」、使用者可見欄位無原始鍵名。"""
+        # 📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：本支舊斷言「warroom 不存在 ＋ 有效檔 ⇒ 退檔案規則引擎位階、`is_loaded=True`」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立；旗標關（現行）時冷啟動依 DEC-075 D-1(a) 位階未評估。本支改在旗標 True 下守舊語意（原斷言／原數值一字未改），旗標 False 的新行為見下一支。
+        import shared.signal_thresholds as STH
         from src.services import ai_qa_service as Q
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         monkeypatch.chdir(tmp_path)
         st_ = calculate_system_state({"VIX_Index": 18.0, "ISM_PMI_or_OECD_CLI": 51.0, "PMI_Prev_Month": 51.0,
                                       "BIAS240_pct": 0.0, "PCR": 1.0, "Futures_Net_Short": 0.0,
@@ -467,3 +470,16 @@ class TestOldUiLivePath:
         assert "資金緊縮" not in txt
         extra = out["data"]["鎖定快照額外欄位_macro_state_json"]
         assert not any(k in json.dumps(extra, ensure_ascii=False) for k in _RAW_KEYS), extra
+
+    def test_ai_qa_market_state_cold_start_flag_off(self, monkeypatch, tmp_path):
+        """旗標 False（現行）：同一份舊 UI 檔、冷啟動 ⇒ AI 問答市場狀態回未評估（DH-REGIME-NOWARROOM），不帶「資金緊縮」。"""
+        from shared.regime_arbiter import NOT_LOADED_PENDING_BREADTH_EXPLAIN
+        from src.services import ai_qa_service as Q
+        monkeypatch.chdir(tmp_path)
+        st_ = calculate_system_state({"VIX_Index": 18.0, "ISM_PMI_or_OECD_CLI": 51.0, "PMI_Prev_Month": 51.0,
+                                      "BIAS240_pct": 0.0, "PCR": 1.0, "Futures_Net_Short": 0.0,
+                                      "M1B_YoY_pct": 1.0, "M2_YoY_pct": 5.0})
+        MSL.MacroStateLocker(state_file_path="macro_state.json").lock_system_state_only(st_)
+        out = Q._tool_get_market_state()
+        assert out["ok"] is False and NOT_LOADED_PENDING_BREADTH_EXPLAIN in out["error"]
+        assert "資金緊縮" not in json.dumps(out, ensure_ascii=False)

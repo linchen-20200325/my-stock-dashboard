@@ -41,6 +41,9 @@ session 的 `mkt_info`／`jingqi_info`／`cl_data` 三個都是假值、但留�
 新路徑判為「整理不出結論」並刪掉舊的 —— 與舊頁「按一鍵更新」（先 pop 再算）相同。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import copy
 import itertools
@@ -148,7 +151,7 @@ def _extra(name: str) -> dict:
     if name == "X_prior_wr_stale_throttle":   # 上一份 warroom 帶過期 throttle ＋ 多餘鍵
         return _n1(warroom_summary=copy.deepcopy(_STALE_WR))
     if name == "X_jq_nan_leek_nan":           # 旌旗 NaN、韭菜 NaN（_canon 要能序列化）
-        return _n1(jingqi_info={"avg": float("nan")},
+        return _n1(jingqi_info={"is_proxy": False, "avg": float("nan")},
                    li_latest=_li((5000.0, 6000.0, 7000.0, 8000.0),
                                  leek=(-12.0, -8.0, -5.0, float("nan"))))
     if name == "X_prior_wr_not_dict":         # 上一份 warroom 壞成字串：SS 的 isinstance 守衛那一支
@@ -583,7 +586,7 @@ def _run_refresh(monkeypatch, *, initial=None, market_ok=True, write_inputs=True
     monkeypatch.setattr(_ORCH, "fetch_macro_bundle", _bundle)
     monkeypatch.setattr(_APPLY, "apply_macro_bundle", _apply)
     monkeypatch.setattr(_JQ, "compute_and_store_jingqi",
-                        lambda df: fake.session_state.__setitem__("jingqi_info", {"avg": 70.0})
+                        lambda df: fake.session_state.__setitem__("jingqi_info", {"is_proxy": False, "avg": 70.0})
                         if write_inputs else None)
     monkeypatch.setattr(_TRIO, "run_macro_trio_and_persist", lambda **k: None)
     monkeypatch.setattr(_MKT, "compute_and_apply_market_assessment", _market)
@@ -772,7 +775,23 @@ class TestOldFilesUntouched:
     #   （回修第 1 輪更正：原寫「兩行註解」，實為三行）＋一行空行。
     #   其餘 90 檔一個字都沒動。指紋依本 docstring 的指示同步更新；掛鉤的形狀由
     #   `tests/test_vn1_store_poc.py::assert_app_only_smoke_hook` 另守。
-    _BASE_DIGEST = "1b47c591741190e6c9598d01129182a53e7a31ac13b649b9bbe81fc50e7614cc"
+    # ~~"1b47c591741190e6c9598d01129182a53e7a31ac13b649b9bbe81fc50e7614cc"~~（VN1-STORE Pre-Hardening 後，至 b9ed892d 仍成立）
+    # 📌 DEC-074/075 批 A（2026-10-23，客戶指派，⛔ 不是漏改；DEC-019 揭露）：只動 3 檔，全是**共用層契約改變的
+    #   連帶**或新 UI 共用純函式 ——
+    #   `src/ui/tabs/tab_macro_v2.py`（新舊共用 `build_rows`：代理廣度兩盞走灰燈＋註記，同 M1B 先例）、
+    #   `src/ui/tabs/macro/handlers.py`（健康分因缺廣度 None 時刪掉不再屬實的「權重已重新歸一化」，只改字）、
+    #   `src/ui/tabs/macro/section_short.py`（TWSE 單日頂替寫進共用 `jingqi_info` 時標 `is_proxy=True`，D-2）。
+    #   版面零改動；其餘 88 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
+    # ~~"1c911a3154e11020d0faf5180759eaaf781df186b92757607867c0f607d36a28"~~（DEC-074/075 批 A 後）
+    # 📌 DEC-075 批 1'（2026-10-23，客戶指派「修正 ISM 教學對映」，⛔ 不是漏改；DEC-019 揭露）：只動
+    #   `src/ui/tabs/tab_edu.py` —— PMI 教學卡 key 'NAPM'→'TW_PMI' 的兩個對映鍵同步（該卡在舊教學頁本就不顯示，
+    #   孤兒張數仍為 2，畫面輸出零改動）。其餘 90 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
+    # ~~"933d5e3c6d04846f56de617d2e2d9cae781838a89098b44848162eb2f52a2296"~~（DEC-075 批 1' 後）
+    # 📌 DEC-074/075 回修（QA1／QA2，2026-10-23，總管指派，⛔ 不是漏改；DEC-019 揭露）：只改字／共用欄位 ——
+    #   `macro/handlers.py`（breadth 原因的擋燈理由與說明改為屬實、不叫人更新）、
+    #   `tab_macro_v2.py`＋`render/macro_v2_cards.py`（代理廣度列不算進 N／M 的「有資料」，Row 加選填欄）、
+    #   `pages/reconcile_panel.py`（健康分對帳經 `jingqi_for_scoring`，代理不計分）。版面零改動。
+    _BASE_DIGEST = "faba6d21a902663688e94d71765c8107a1e8fbce4d7d154a436047fc0aa7dad8"
 
     def test_no_diff_against_base(self):
         import hashlib
@@ -830,21 +849,57 @@ class TestVerdictIdleExitIsRetry:
             assert card.note.where is not P.EXIT_OUT_OF_REACH, key
 
     def test_no_warroom(self, _pinned):
+        """📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：「冷啟動／無 warroom ⇒ 可重抓（`EXIT_RETRY_HERE`）」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立 —— 旗標關（現行）時按了載入後位階仍為未評估，出口改為 `EXIT_LOAD_PENDING_BREADTH`（見 `_flag_off` 那一支）。本支改在旗標 True 下守舊語意（斷言一字未改）。"""
+        import shared.signal_thresholds as STH
+        _pinned.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         P, tiles = self._tiles(_pinned, {})
         assert tiles["verdict.exposure"].card.state == P.UI_IDLE
         assert tiles["verdict.regime"].card.state == P.UI_IDLE
         self._assert_retry(P, tiles)
 
     def test_no_warroom_but_inputs_present(self, _pinned):
-        """有本輪輸入、還沒組 warroom（按鈕前的典型 session）—— 同樣是可重抓。"""
+        """有本輪輸入、還沒組 warroom（按鈕前的典型 session）—— 同樣是可重抓。
+
+        📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：「冷啟動／無 warroom ⇒ 可重抓（`EXIT_RETRY_HERE`）」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立 —— 旗標關（現行）時按了載入後位階仍為未評估，出口改為 `EXIT_LOAD_PENDING_BREADTH`（見 `_flag_off` 那一支）。本支改在旗標 True 下守舊語意（斷言一字未改）。"""
+        import shared.signal_thresholds as STH
+        _pinned.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         s = _state("N1_bull")
         s.pop("warroom_summary", None)
         P, tiles = self._tiles(_pinned, s)
         self._assert_retry(P, tiles)
 
+    @pytest.mark.parametrize("with_inputs", [False, True])
+    def test_no_warroom_flag_off(self, _pinned, with_inputs):
+        """旗標 False（現行）：無 warroom ⇒ 卡①③ 灰（idle）、出口＝「可更新，但載入後仍未評估」（DH-REGIME-NOWARROOM）。"""
+        s = {}
+        if with_inputs:
+            s = _state("N1_bull")
+            s.pop("warroom_summary", None)
+        P, tiles = self._tiles(_pinned, s)
+        for key in ("verdict.exposure", "verdict.regime"):
+            card = tiles[key].card
+            assert card.state == P.UI_IDLE, (key, card.state)
+            assert card.note.where is P.EXIT_LOAD_PENDING_BREADTH, key
+            assert card.note.why == P.not_loaded_pending_breadth_why(), key
+
     def test_warroom_health_none(self, _pinned):
-        P, tiles = self._tiles(_pinned, self._health_none_session(_pinned))
+        """📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：本支舊斷言「warroom 健康分缺 ⇒
+        可重抓」只在**代理廣度計分開啟**（`BREADTH_PROXY_SCORING_ENABLED=True`）時仍成立 —— 旗標關時 repo 沒有
+        任何真實廣度，健康分缺必然受缺廣度所限，L3 改標「缺真實廣度未評估」、出口改為「等正式廣度來源」
+        （見下一支 `test_warroom_health_none_breadth_gate`）。本支改在旗標 True 下守舊語意。"""
+        import shared.signal_thresholds as STH
+        s = self._health_none_session(_pinned)
+        _pinned.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
+        P, tiles = self._tiles(_pinned, s)
         self._assert_retry(P, tiles)
+
+    def test_warroom_health_none_breadth_gate(self, _pinned):
+        """旗標 False（現行）：F1 寫出的 health-None warroom ⇒ 卡①／卡③ 非 live、出口＝等正式廣度來源（DEC-075 D-1(a)）。"""
+        P, tiles = self._tiles(_pinned, self._health_none_session(_pinned))
+        for key in ("verdict.exposure", "verdict.regime"):
+            card = tiles[key].card
+            assert card.state not in (P.UI_LIVE, P.UI_DEGRADED), (key, card.state)
+            assert card.note.where is P.EXIT_WAIT_BREADTH_SOURCE, key
 
     def test_exposure_requested_but_unloaded(self):
         """卡①第三支（契約叫過了、建議持股仍未評估）同樣是可重抓 —— 健康分補上就會 live。"""
@@ -889,7 +944,10 @@ class TestDegradedRegimeExitIsRetry:
     """
 
     def test_degraded_card3_and_empty_card1(self, _pinned, tmp_path):
+        """📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：「無 warroom ＋ 有效快照 ⇒ 卡③ degraded（退規則引擎快照）」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立 —— 旗標關（現行）時按了載入後位階仍為未評估，出口改為 `EXIT_LOAD_PENDING_BREADTH`（見 `_flag_off` 那一支）。本支改在旗標 True 下守舊語意（斷言一字未改）。"""
+        import shared.signal_thresholds as STH
         from shared.ui_state import UI_DEGRADED, UI_EMPTY
+        _pinned.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         _write_fresh_macro_state(tmp_path)
         P, tiles = TestVerdictIdleExitIsRetry._tiles(_pinned, {})
         reg, exp = tiles["verdict.regime"].card, tiles["verdict.exposure"].card
@@ -900,14 +958,42 @@ class TestDegradedRegimeExitIsRetry:
         assert exp.state == UI_EMPTY, exp.state
         assert exp.note.where is P.EXIT_RETRY_HERE
 
+    def test_fresh_snapshot_no_warroom_flag_off(self, _pinned, tmp_path):
+        """旗標 False（現行）：無 warroom ＋ 有效快照 ⇒ 卡③ ⛔ 不 degraded（不印規則引擎位階）、卡①③ 灰（idle）。"""
+        from shared.ui_state import UI_IDLE
+        _write_fresh_macro_state(tmp_path)
+        P, tiles = TestVerdictIdleExitIsRetry._tiles(_pinned, {})
+        for key in ("verdict.regime", "verdict.exposure"):
+            c = tiles[key].card
+            assert c.state == UI_IDLE, (key, c.state)
+            assert c.note.where is P.EXIT_LOAD_PENDING_BREADTH, key
+        assert "快照" not in tiles["verdict.regime"].card.note.now
+
     def test_degraded_with_health_none_warroom(self, _pinned, tmp_path):
-        """warroom 在但健康分缺（視同未載入）＋ 快照 ⇒ 同樣 degraded、同樣可重抓。"""
+        """warroom 在但健康分缺（視同未載入）＋ 快照 ⇒ 同樣 degraded、同樣可重抓。
+
+        📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：「健康分缺 ⇒ 退快照 degraded」
+        正是 DEC-075 不採用的 (b)；自本批起只在代理廣度計分開啟（旗標 True）時仍可達 ⇒ 本支改在旗標 True 下守舊語意，
+        旗標 False（現行）由下一支守「⛔ 不退快照」。"""
+        import shared.signal_thresholds as STH
         from shared.ui_state import UI_DEGRADED
         s = TestVerdictIdleExitIsRetry._health_none_session(_pinned)
         _write_fresh_macro_state(tmp_path)
+        _pinned.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         P, tiles = TestVerdictIdleExitIsRetry._tiles(_pinned, s)
         assert tiles["verdict.regime"].card.state == UI_DEGRADED
         assert tiles["verdict.regime"].card.note.where is P.EXIT_RETRY_HERE
+
+    def test_health_none_warroom_with_snapshot_not_degraded(self, _pinned, tmp_path):
+        """旗標 False（現行）：warroom 健康分缺 ＋ 有效快照 ⇒ ⛔ 不退快照（卡③ 非 degraded、出口＝等正式廣度來源）。"""
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
+        s = TestVerdictIdleExitIsRetry._health_none_session(_pinned)
+        _write_fresh_macro_state(tmp_path)
+        P, tiles = TestVerdictIdleExitIsRetry._tiles(_pinned, s)
+        card = tiles["verdict.regime"].card
+        assert card.state not in (P.UI_LIVE, P.UI_DEGRADED), card.state
+        assert card.note.where is P.EXIT_WAIT_BREADTH_SOURCE
+        assert AS.get_macro_regime()["source"] == SOURCE_UNEVALUATED_BREADTH
 
     def test_retarget_only_touches_the_contract_exit(self):
         """`contract_exit_retargeted` 只換 `CONTRACT_NO_EXIT_WHERE`；未接線 / 失敗的出口原樣。"""
@@ -960,8 +1046,11 @@ class TestNoContractNoExitOnThePage:
 
     _COLD = {"regime": "unknown", "light": "⬜", "source": "unloaded", "is_loaded": False}  # 下方以 SOURCE_UNLOADED 自證
 
+    @pytest.mark.parametrize("flag_on", [False, True])
     @pytest.mark.parametrize("which", ["cold", "degraded"])
-    def test_the_three_contract_cells(self, monkeypatch, which):
+    def test_the_three_contract_cells(self, monkeypatch, which, flag_on):
+        import shared.signal_thresholds as _STH
+        monkeypatch.setattr(_STH, "BREADTH_PROXY_SCORING_ENABLED", flag_on)   # DH-REGIME-NOWARROOM：兩態都守
         from shared.ui_state import UI_DEGRADED, UI_IDLE
         from shared.regime_arbiter import SOURCE_FILE_RULE_ENGINE, SOURCE_UNLOADED
         assert self._COLD["source"] == SOURCE_UNLOADED
@@ -973,10 +1062,16 @@ class TestNoContractNoExitOnThePage:
         for t in drawn:
             by_key.setdefault(t.card.key, []).append(t)
         want = UI_IDLE if which == "cold" else UI_DEGRADED
+        # 📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動＋代理廣度不計分
+        #   （現行）時三格出口改為 `EXIT_LOAD_PENDING_BREADTH`（按了載入後位階仍未評估，⛔ 不再寫「可重抓」）；
+        #   degraded 與旗標 True 的冷啟動照舊 `EXIT_RETRY_HERE`。「全頁沒有 `CONTRACT_NO_EXIT_WHERE`」一字未改。
+        import shared.signal_thresholds as STH
+        want_where = (T.EXIT_LOAD_PENDING_BREADTH
+                      if (which == "cold" and not STH.BREADTH_PROXY_SCORING_ENABLED) else T.EXIT_RETRY_HERE)
         for key in ("statusbar.macro", "summary.regime", "verdict.regime"):
             (t,) = by_key[key]
             assert t.card.state == want, (key, t.card.state)
-            assert t.card.note.where is T.EXIT_RETRY_HERE, key
+            assert t.card.note.where is want_where, key
         assert not [t.card.key for t in drawn if t.card.note is not None
                     and t.card.note.where is T.CONTRACT_NO_EXIT_WHERE]
 

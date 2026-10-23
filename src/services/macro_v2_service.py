@@ -35,7 +35,12 @@ except ImportError:                                   # pragma: no cover
 _EDU_KEY: dict[str, str] = {
     "vix": "^VIX",
     "us_core_cpi": "CPILFESL",
-    "ism_pmi": "NAPM",
+    # ISM 教學對映（DEC-075 批 1'，客戶 2026-10-23「修正 ISM 教學對映」；修正錯誤，有意識的更正，
+    #   ⛔ 不是漏刪）：~~"ism_pmi": "NAPM"~~ —— 這盞燈的值是**台灣製造業 PMI（CIER）**（session
+    #   `ism_pmi` 的實際來源，`VN1-MT-SSOT-ISM`），卻導到美國 ISM 的教學（meaning／歷史數字皆為美國）。
+    #   改導台灣 PMI 條目（`EDU_GUIDE['TW_PMI']`，原 NAPM 條目改名並換掉 ISM 文案）；⛔ 不換來源、
+    #   不改門檻（`how_to_read` 一行未動，同一組 PMI token）。
+    "ism_pmi": "TW_PMI",
     "dxy": "DX-Y.NYB",
     "us10y": "^TNX",
     "margin": "MI_MARGN",

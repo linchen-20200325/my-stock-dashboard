@@ -188,6 +188,18 @@ def _enumerate():
             P.MacroReadout(requested=rq, error=er, loaded=ld, regime="bull"))
         add(P.build_position_cap_card,
             P.AllocationReadout(requested=rq, error=er, is_loaded=ld, range_text="30-50%"))
+    # QA-6 MUST-1（2026-10-23，PR #910，有意識的新增，⛔ 不是漏列）：④⑤ 在「未評估」底下另有兩支分支
+    #   （缺真實廣度 × `breadth_proxy` 三態；④ 尚未載入＋代理廣度不計分）—— 修前窮舉沒走到 ⇒ v2 短句 KeyError 沒被抓到。
+    for bp in (True, False, None):
+        add(P.build_macro_stage_card, P.MacroReadout(
+            requested=True, loaded=False, regime="unknown", light="⬜",
+            breadth_unevaluated=True, breadth_proxy=bp))
+        add(P.build_position_cap_card, P.AllocationReadout(
+            requested=True, is_loaded=False, range_text="--", posture="未評估",
+            breadth_unevaluated=True, breadth_proxy=bp))
+    add(P.build_macro_stage_card, P.MacroReadout(
+        requested=True, loaded=False, regime="unknown", light="⬜",
+        not_loaded_pending_breadth=True))
     for rq, sb, er, sbd, cr, pc, mr in itertools.product(
             (False, True), (False, True), ("", _E), (False, True), (False, True),
             (None, 0, 2), ("", P.MISS_FETCH_FAILED, P.MISS_NO_INPUT)):
@@ -512,6 +524,100 @@ def test_a_non_excerpt_short_row_raises_and_renders_red(monkeypatch):
     out = "\n".join(md)
     assert "這一格畫不出來" in out, "摘錄對不上原文 → 必須是看得見的紅卡"
     assert '<div class="blk blk-' not in out, "新造白話不得以 v2 卡面的短句畫出來"
+
+
+# ── QA-6 MUST-1（2026-10-23，PR #910）：④⑤「未評估」另兩支分支經 v2 渲染 —— 灰，⛔ 不是紅卡 ──────────
+#: 修前 `V2_SHORT_ROWS` 那兩格只有一個候選（既有分支的摘錄）⇒ 這幾支分支的原文對不上 ⇒ `KeyError` ⇒
+#: `_render_one_v2()` 轉成「這一格畫不出來」紅卡（QA-6 以 AppTest 實測重現）。
+_QA6_BRANCHES = (
+    [("macro.breadth", bp, lambda bp=bp: P.build_macro_stage_card(P.MacroReadout(
+        requested=True, loaded=False, regime="unknown", light="⬜",
+        breadth_unevaluated=True, breadth_proxy=bp))) for bp in (True, False, None)]
+    + [("cap.breadth", bp, lambda bp=bp: P.build_position_cap_card(P.AllocationReadout(
+        requested=True, is_loaded=False, range_text="--", posture="未評估",
+        breadth_unevaluated=True, breadth_proxy=bp))) for bp in (True, False, None)]
+    + [("macro.not_loaded_pending_breadth", None, lambda: P.build_macro_stage_card(P.MacroReadout(
+        requested=True, loaded=False, regime="unknown", light="⬜",
+        not_loaded_pending_breadth=True)))])
+
+
+def _render_capture(monkeypatch, built) -> str:
+    md: list[str] = []
+    ns = type("NS", (), {})()
+    ns.markdown = lambda s, **_k: md.append(str(s))
+    ns.caption = lambda s, **_k: md.append(str(s))
+    monkeypatch.setattr(P, "st", ns)
+    from src.ui.views import _ui_kit as K
+    monkeypatch.setattr(K, "st", ns)
+    P._render_one(built)
+    return "\n".join(md)
+
+
+@pytest.mark.parametrize("name,bp,make", _QA6_BRANCHES,
+                         ids=[f"{n}:{bp}" for n, bp, _m in _QA6_BRANCHES])
+def test_qa6_unevaluated_branches_render_grey_through_v2(monkeypatch, name, bp, make):
+    built = make()
+    card = built[0]
+    assert card.state == UI_EMPTY and card.note is not None, (name, card.state)
+    short, _full = P.v2_short_rows(card)          # 修前：KeyError（K1 摘錄對不上原文）
+    out_html = P.v2_card_html(*built)
+    v2_state, reason = P.V2_STATE_VOCAB[card.state]
+    assert _badge_of(out_html) == V2.resolve_badge(state=v2_state, miss_reason=reason)
+    fs, fr = P.V2_STATE_VOCAB[UI_FAILED]
+    assert _badge_of(out_html) != V2.resolve_badge(state=fs, miss_reason=fr), "不得是紅（failed）徽章"
+    out = _render_capture(monkeypatch, built)
+    assert "這一格畫不出來" not in out, f"{name}: v2 渲染失敗 → 紅卡"
+    assert f'<div class="blk blk-{_EXPECTED_TIER[card.key]}"' in out
+    # 這兩支分支 ⛔ 不叫人「更新總經之後回到本頁」（更新後位階仍未評估；I-4／DH-REGIME-NOWARROOM）
+    assert all("更新總經之後" not in s for _lab, s in short), short
+
+
+def test_qa6_existing_unevaluated_excerpt_unchanged():
+    """既有「未評估」分支的短句一字未改（新候選只排在後面）。"""
+    for built in (P.build_macro_stage_card(P.MacroReadout(requested=True, loaded=False, regime="bull")),):
+        short, _f = P.v2_short_rows(built[0])
+        assert short[1][1] == "本站不以「中性」代替未評估：多空是一個結論，缺值不是"
+        assert short[2][1] == "到「🚦 今天」更新總經之後，回到本頁" + P._V2_PRESS_RUN
+    short, _f = P.v2_short_rows(P.build_position_cap_card(P.AllocationReadout(
+        requested=True, is_loaded=False, range_text="--"))[0])
+    assert short[1][1] == "填一個看起來合理的區間，等於替你做了一個沒有依據的決定"
+
+
+@pytest.mark.slow
+def test_qa6_hold_page_card4_after_run_is_grey_not_red(tmp_path, monkeypatch):
+    """QA-6 重現情境：旗標 False、cwd 有效空頭檔、按「🚀 跑存股戰情室」—— 卡④ ⛔ 不是「這一格畫不出來」紅卡。"""
+    from datetime import date
+    from streamlit.testing.v1 import AppTest
+    from src.services import trading_calendar_service as _tcs
+    from tests.test_dh_regime_nowarroom import _write_files
+    _write_files(tmp_path, "空頭")
+    monkeypatch.chdir(tmp_path)
+    _fixed = _tcs.TradingDayStatus(today=date(2026, 9, 4), is_trading_day=True,
+                                   next_trading_day=date(2026, 9, 7))
+    monkeypatch.setattr(_tcs, "get_today_trading_status", lambda now=None: _fixed)
+    from src.services import dividend_station_service as _dss
+    monkeypatch.setattr(_dss, "fetch_vix", lambda strict=False: 17.5)   # ⛔ 不打外網（VIX 卡不是本測試對象）
+    script = tmp_path / "_qa6_hold.py"
+    script.write_text(textwrap.dedent("""
+        from shared import signal_thresholds as _ST
+        _ST.BREADTH_PROXY_SCORING_ENABLED = False
+        from src.ui.views.page_hold import render_page_hold
+        render_page_hold()
+    """), encoding="utf-8")
+    at = AppTest.from_file(str(script), default_timeout=240)
+    at.run()
+    _btn = [b for b in at.button if "跑存股戰情室" in (b.label or "")]
+    assert _btn, [b.label for b in at.button]
+    _btn[0].click()
+    at.run()
+    assert not at.exception, at.exception
+    md = [m.value for m in at.markdown]
+    blob = "\n".join(md)
+    assert "這一格畫不出來" not in blob, "有卡 v2 渲染失敗 → 紅卡"
+    c4 = [m for m in md if "總經位階（換股的攻守閘門）" in m and 'class="blk blk-' in m]
+    assert len(c4) == 1, len(c4)
+    assert "總經這一次使用中還沒有紅綠燈結果" in c4[0], "卡④ 應走「尚未載入＋代理廣度不計分」那一支"
+    assert "空頭" not in c4[0] and "bear" not in c4[0]
 
 
 def test_an_unregistered_note_raises(monkeypatch):

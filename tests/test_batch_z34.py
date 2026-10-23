@@ -507,8 +507,14 @@ class TestQz14AllMissingFailSafe:
         assert ms['is_loaded'] is False and ms['exposure_limit_pct'] is None
         assert ms['regime'] == 'unknown' and ms['light'] == '⬜'
         # 修前基底落檔（震盪／60）⇒ 同一支讀取會當「已載入、曝險上限 60%」
+        # 📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：「有效檔 ＋ 無 warroom ⇒ 已載入」自 #910 起只在代理廣度計分開啟
+        #   （旗標 True）時成立 ⇒ 這一段對照改在旗標 True 下量（斷言一字未改）；旗標 False 時上限仍 60、位階未評估（下一行）。
+        import shared.signal_thresholds as STH
         (d / 'base.json').write_text(json.dumps({**_ENGINE_ALL_MISSING_BASE, 'timestamp': _TS},
                                                 ensure_ascii=False), encoding='utf-8')
+        mb0 = MSL.get_macro_state(None, state_file_path=str(d / 'base.json'), now=now)
+        assert mb0['is_loaded'] is False and mb0['exposure_limit_pct'] == 60
+        monkeypatch.setattr(STH, 'BREADTH_PROXY_SCORING_ENABLED', True)
         mb = MSL.get_macro_state(None, state_file_path=str(d / 'base.json'), now=now)
         assert mb['is_loaded'] is True and mb['exposure_limit_pct'] == 60
 
@@ -519,6 +525,13 @@ class TestQz14AllMissingFailSafe:
         monkeypatch.chdir(d)
         monkeypatch.setattr(AS, 'st', types.SimpleNamespace(session_state={}))
         monkeypatch.setattr(MSL, 'macro_state_is_expired', lambda *a, **k: False)
+        # 📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動＋代理廣度不計分（現行）時改說屬實的「總經尚未載入…載入後位階仍為未評估」；
+        #   舊句「總經尚未評估」改在旗標 True 下守（斷言一字未改）。
+        from shared.regime_arbiter import NOT_LOADED_PENDING_BREADTH_EXPLAIN
+        import shared.signal_thresholds as STH
+        r0 = QA._tool_get_market_state()
+        assert r0['ok'] is False and NOT_LOADED_PENDING_BREADTH_EXPLAIN in r0['error']
+        monkeypatch.setattr(STH, 'BREADTH_PROXY_SCORING_ENABLED', True)
         r = QA._tool_get_market_state()
         assert r['ok'] is False and '總經尚未評估' in r['error']
 

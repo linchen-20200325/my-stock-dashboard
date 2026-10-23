@@ -94,6 +94,82 @@ SOURCE_UNLOADED: str = 'unloaded'
 SOURCE_FILE_RULE_ENGINE: str = 'macro_state.json:rule_engine'
 """warroom 未載入、退到 macro_state.json 的 `calculate_system_state` 曝險分級。"""
 
+SOURCE_UNEVALUATED_BREADTH: str = 'unevaluated:breadth_unavailable'
+"""總經未評估 —— **原因是缺真實市場廣度**（DEC-074 B，客戶 2026-10-23）。**不是**一種市場判斷。
+
+與 `SOURCE_UNLOADED` 的差別（兩者 regime／燈號／`is_loaded` 完全相同，只差原因）：
+`unloaded` ＝ 上游輸入缺失（重新抓取**可能**有用）；本值 ＝ 健康分的廣度腿只有代理（估算）
+家數、依 DEC-074 不計分，**重新抓取不會改變**（`calc_traffic_light` 文案與新 UI 出口據此分流）。
+DEC-075 D-1(a)：`macro_state_locker.get_macro_state` 見到 warroom 帶本值時，位階一併未評估，
+⛔ 不退 `macro_state.json` 規則引擎位階（`SOURCE_FILE_RULE_ENGINE`）。"""
+
+#: `arbitrate_regime(unavailable_reason=...)` 的合法值：健康分因缺真實市場廣度而算不出來。
+UNAVAILABLE_REASON_BREADTH: str = 'breadth'
+
+#: 「缺真實市場廣度 ⇒ 總經未評估」的對外說明（持股頁、AI 問答、姿態帶 drivers 共用一句；DEC-075 回修 MUST-2）。
+#: ⛔ 不得寫「重新抓取」「重新載入」「一鍵更新」之類的指引（I-4：重跑不會讓代理值變成可計分）；
+#: ⛔ 不得寫「macro_state.json 無快照」（breadth 情境下檔案可能有效，只是 DEC-075 (a) 不採用它）。
+#: 📌 QA-4 S-1（2026-10-23，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：~~「目前只有由加權指數推估的代理值」~~ ——
+#:   DEC-075 D-1(a) 回修（QA3 MUST-R1）起本句也用在 ^TWII 全滅（連代理值也沒有）那一態，該半句在那一態不屬實。
+#:   本常數改為**兩種情境都屬實的中性句**（拿不到區分訊號的讀點用，例：`allocation_decision` 的 drivers）；
+#:   拿得到訊號的讀點改走 `unevaluated_breadth_explain(proxy_held_back)` 二選一。結論句（更新資料不會改變）不變。
+_UNEVALUATED_BREADTH_TAIL: str = (
+    '健康分因此算不出來；'
+    '市場位階依 DEC-075 一併未評估，不改用另一套規則引擎補出位階。'
+    '更新資料不會改變這個狀態，要等正式的廣度資料來源接上')
+UNEVALUATED_BREADTH_EXPLAIN: str = (
+    '總經未評估：缺真實市場廣度（漲跌家數）—— 由加權指數推估的代理值即使取得，'
+    '依客戶裁示（DEC-074）也只顯示、不計分，' + _UNEVALUATED_BREADTH_TAIL)
+#: 本輪**有**代理（估算）廣度值、被擋下不計分時（`shared.macro_provenance.breadth_proxy_held_back` 為 True）。
+UNEVALUATED_BREADTH_EXPLAIN_PROXY_HELD: str = (
+    '總經未評估：缺真實市場廣度（漲跌家數）—— 目前只有由加權指數推估的代理值，'
+    '依客戶裁示（DEC-074）只顯示、不計分，' + _UNEVALUATED_BREADTH_TAIL)
+#: 本輪連代理值也沒有時（`breadth_proxy_held_back` 為 False；例：^TWII 全滅）。
+UNEVALUATED_BREADTH_EXPLAIN_NO_PROXY: str = (
+    '總經未評估：缺真實市場廣度（漲跌家數）—— 這一輪紅綠燈的輸入裡也沒有任何廣度資料'
+    '（連由加權指數推估的代理值也沒有）；即使取得代理值，依客戶裁示（DEC-074）也只顯示、不計分，'
+    + _UNEVALUATED_BREADTH_TAIL)
+
+
+def unevaluated_breadth_explain(proxy_held_back: Optional[bool] = None) -> str:
+    """缺真實廣度 ⇒ 未評估的對外說明，依「本輪有沒有被擋下的代理值」二選一；None（拿不準）⇒ 中性句。"""
+    if proxy_held_back is True:
+        return UNEVALUATED_BREADTH_EXPLAIN_PROXY_HELD
+    if proxy_held_back is False:
+        return UNEVALUATED_BREADTH_EXPLAIN_NO_PROXY
+    return UNEVALUATED_BREADTH_EXPLAIN
+
+
+def is_breadth_unevaluated(state: Any) -> bool:
+    """總經契約（`get_macro_state()` 的 dict）是不是「因缺真實市場廣度而未評估」。只看契約自己的 `source` 旗標。"""
+    return isinstance(state, dict) and state.get('source') == SOURCE_UNEVALUATED_BREADTH
+
+
+#: DH-REGIME-NOWARROOM（2026-10-23，PR #910）：「總經**尚未載入**（本 session 紅綠燈還沒算過）＋代理廣度不計分」的對外說明。
+#: 冷啟動時 `get_macro_state` 不再退 `macro_state.json` 規則引擎位階（DEC-075 D-1(a) 射程，總管裁定）⇒ 契約
+#: `source == SOURCE_UNLOADED`、`is_loaded=False`。這一態的說明須同時屬實地講兩件事（`CLAUDE.md` §1.A 第 4 點：灰色、
+#: 不是錯誤）：可以按更新載入資料；**但**正式廣度來源接上前，載入後位階仍為未評估。
+#: ⛔ 不得寫「macro_state.json 無快照」（檔案可能有效，只是不採用）；⛔ 不得暗示更新後就會有位階。
+NOT_LOADED_PENDING_BREADTH_EXPLAIN: str = (
+    '總經尚未載入：這一次使用中還沒有紅綠燈結果。可以按更新載入今日資料，'
+    '但在正式的市場廣度（漲跌家數）資料來源接上前，載入後市場位階仍為未評估 —— '
+    '由加權指數推估的代理值依客戶裁示（DEC-074）不計分，'
+    '市場位階依 DEC-075 也不改用另一套規則引擎（`macro_state.json`）補出')
+
+
+def is_not_loaded_pending_breadth(state: Any) -> bool:
+    """總經契約是不是「尚未載入（`source == SOURCE_UNLOADED`）且代理廣度不計分」那一態（DH-REGIME-NOWARROOM）。
+
+    只看契約自己的 `is_loaded`／`source` 旗標 ＋ **呼叫當下**的 L0 `BREADTH_PROXY_SCORING_ENABLED`（⛔ 不在 import 時綁死）。
+    旗標為 True（代理計分）⇒ 恆 False ⇒ 各讀點既有文案逐字照舊。非 dict（讀契約失敗）／沒有 `source` 鍵 ⇒ False（⛔ 不推定）。
+    """
+    if not isinstance(state, dict) or state.get('is_loaded'):
+        return False
+    if state.get('source') != SOURCE_UNLOADED:   # 只認契約自己標的 `unloaded`（⛔ 缺鍵不推定）
+        return False
+    from shared import signal_thresholds as _ST
+    return not _ST.BREADTH_PROXY_SCORING_ENABLED
+
 # ── 門檻 ────────────────────────────────────────────────────────────────
 DEFENSE_MAX_MARKET_SCORE: int = 2
 """外資期貨防禦訊號要求的「大盤評分上限」（評分 < 本值才可能觸發）。
@@ -143,6 +219,13 @@ UNLOADED_VERDICT: RegimeVerdict = RegimeVerdict(
 )
 
 
+#: 「缺真實市場廣度 ⇒ 未評估」的唯一表示（DEC-074 B）。燈號／regime／is_loaded 同 `UNLOADED_VERDICT`。
+UNEVALUATED_BREADTH_VERDICT: RegimeVerdict = RegimeVerdict(
+    regime='unknown', light=LIGHT_UNKNOWN, source=SOURCE_UNEVALUATED_BREADTH,
+    defense=False, is_loaded=False,
+)
+
+
 def light_for_regime(regime: Any) -> str:
     """regime → 燈號 emoji；未知 regime 一律 ⬜（不猜）。"""
     return REGIME_LIGHT.get(str(regime or '').strip().lower(), LIGHT_UNKNOWN)
@@ -187,6 +270,7 @@ def arbitrate_regime(
     health_defense_threshold: Optional[float] = None,
     bull_min_score: Optional[float] = None,
     is_loaded: bool = True,
+    unavailable_reason: Optional[str] = None,
 ) -> RegimeVerdict:
     """**唯一**的大盤 regime 決策樹。全站任何 regime 判定都必須走這裡。
 
@@ -211,6 +295,10 @@ def arbitrate_regime(
         health_defense_threshold: 覆寫 `HEALTH_DEFENSE_THRESHOLD`（校準腳本用）。
         bull_min_score:           覆寫 `BULL_MIN_SCORE`（校準腳本用）。
         is_loaded:     caller 已知「總經根本沒評估」時傳 False。
+        unavailable_reason: health 算不出來的**原因**（DEC-074 B，2026-10-23 新增；預設 None
+            ⇒ 行為逐位同修前）。只在 `health` 未知時才看：等於 `UNAVAILABLE_REASON_BREADTH`
+            ⇒ 回 `UNEVALUATED_BREADTH_VERDICT`；其餘一律 `UNLOADED_VERDICT`。
+            health 有值時本參數不影響任何分支（不會因為「有原因」就不判）。
 
     Returns:
         RegimeVerdict（frozen）。
@@ -227,6 +315,9 @@ def arbitrate_regime(
     if _health is None:
         # health 是分支 2 的唯一依據，也是 position_throttle 的唯一輸入。
         # 拿不到就沒有結論可言 —— 誠實回 unknown，不用 trend_regime 頂替（§1）。
+        # DEC-074 B：原因是「缺真實廣度」時只換 `source`（文案／出口分流用），結論同為 unknown。
+        if unavailable_reason == UNAVAILABLE_REASON_BREADTH:
+            return UNEVALUATED_BREADTH_VERDICT
         return UNLOADED_VERDICT
 
     # 兩個門檻都由 caller 指定時**不讀檔**（`calc_traffic_light` 一律傳 ——

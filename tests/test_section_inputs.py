@@ -11,6 +11,9 @@ C1-C v18.289 升級:
 - 新增 cl_ts(str)+ futures_net(int)欄位,匹配 evaluate_market_status_v4_final 介面
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import pytest
 
@@ -78,7 +81,7 @@ class TestLoadSectionInputsEquivalence:
         assert len(out.news_items) == 2
         assert out.last_inst['外資']['net'] == 99
         # 無 session_state['jingqi_info'] → 合成 {'avg': warroom['jingqi_avg']}
-        assert out.jingqi_info == {'avg': 28}
+        assert out.jingqi_info == {'is_proxy': False, 'avg': 28}
         # C1-C
         assert out.cl_ts == '2026-06-26 17:00:00'
         # 📌 批 Z28（Z6-n1，客戶 Q-z6＝A 刪除未使用欄位，有意識的更正，⛔ 不是漏改）:原斷言 `out.futures_net == -5`；欄位已刪，session 帶 `futures_net` 也不再被讀入。
@@ -128,7 +131,7 @@ class TestOverviewSectionIntegration:
     def test_overview_kpis_equivalence(self):
         state = {
             'mkt_info': {'regime': 'bull', 'exposure_pct': 75},
-            'jingqi_info': {'avg': 62.3, 'pos': '50~70%'},
+            'jingqi_info': {'is_proxy': False, 'avg': 62.3, 'pos': '50~70%'},
             'cl_data': {
                 'inst': {'外資及陸資(不含外資自營商)': {'net': 45.7}},
                 'margin': 1200,
@@ -188,7 +191,7 @@ class TestRegistrySectionIntegration:
             '_last_inst_date': '2026-06-25',
             '_last_margin': 1300,
             'cl_ts': '2026-06-26 17:00:00',
-            'jingqi_info': {'avg': 60},
+            'jingqi_info': {'is_proxy': False, 'avg': 60},
             'bias_info': {'bias_240': 5.2, 'bias_20': 1.1},
             'm1b_m2_info': {'m1b_yoy': 7.5, 'm2_yoy': 5.0},
             'macro_info': {'vix': {'date': '2026-06-26', 'value': 18}},
@@ -201,7 +204,7 @@ class TestRegistrySectionIntegration:
         assert out.last_inst_date == '2026-06-25'
         assert out.last_margin == 1300
         assert out.cl_ts == '2026-06-26 17:00:00'
-        assert out.jingqi_info == {'avg': 60}
+        assert out.jingqi_info == {'is_proxy': False, 'avg': 60}
         assert out.bias_info['bias_240'] == 5.2
         assert out.m1b_m2_info['m1b_yoy'] == 7.5
         assert out.macro_info['vix']['value'] == 18
@@ -254,7 +257,7 @@ class TestTrafficLightSectionIntegration:
         """session_state['jingqi_info'] 真實 dict → calc 直接用 'avg' key。"""
         state = {
             'mkt_info': {'regime': 'bull'},
-            'jingqi_info': {'avg': 65.0, 'regime': 'bull'},
+            'jingqi_info': {'is_proxy': False, 'avg': 65.0, 'regime': 'bull'},
             'cl_data': {'inst': {}},
             'li_latest': {'date': '2026-06-26'},
         }

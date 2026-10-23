@@ -75,7 +75,13 @@ MACRO_FWD_TEST_HEADERS: tuple[str, ...] = (
 #: ⚠️ `ruleset_hash`:`compute_ruleset_hash` 的 payload 含本常數(`'schema'`),故 v1 列的
 #: `532c3a57698f` 與 v2 列的 `5fb5e04ba2b8` 是**同一套燈號規則** —— 差異只來自 schema 欄
 #: (1→2),不是規則改版(2026-10-15 總管裁定:hash 演算法不改,在此註明)。
-MACRO_FWD_TEST_SCHEMA_VERSION: int = 2
+#: 📌 v3（2026-10-23，DEC-074 B／DEC-075 批 A，有意識的 bump）：未改欄位，但 `health`／`jqavg`／
+#: `regime_source` 三欄的**語意**改變 —— 市場廣度只有代理（估算）家數時 `jqavg=None`、`health=None`、
+#: `regime_source='unevaluated:breadth_unavailable'`（原為「只剩大盤分重新歸一」的分數）。屬「改語意」
+#: ⇒ +1；`compute_ruleset_hash` 同時加入 `breadth_proxy_scoring` 旗標，hash 必變。
+#: ⚠️ v2 列與 v3 列**不可混比**（健康分口徑不同）；歷史列的 `schema_version` 維持寫入當時的值。
+#: ⚠️ 預告（未授權、另批）：計畫第 4 節 `DH-MACRO-FWD-ASOF`（per-leg as_of 加欄）若日後實作會再 bump 一次。
+MACRO_FWD_TEST_SCHEMA_VERSION: int = 3
 
 #: 去重鍵。一個交易日只該有一列;同一 date 已存在 → **保留既有那筆、不覆寫**
 #: (凍結帳本不可被後寫蓋掉;與 `forward_test_store.append_picks_local` 保留最早一筆同慣例)。

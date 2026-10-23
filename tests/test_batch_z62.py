@@ -52,6 +52,10 @@ def z62_revert_for(file_path, code: str) -> str:
     """舊批次還原鏈串接用：給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批之前的寫法（無 pair 則原樣）。"""
     p = _pl.Path(file_path)
     rel = (p.resolve().relative_to(_ROOT_Z62) if p.is_absolute() else p).as_posix()
+    # DEC-074/075 批 A＋1'（2026-10-23，有意識的接鏈，⛔ 不是漏改）：更新的那一批先換回（只套一次；
+    #   本檔同時被 z35／z36 經此鏈與 z65→…→vn1store 鏈管，`dec074_revert_for` 第二次為 no-op）。
+    from tests.test_dec074_revert_chain import dec074_revert_for
+    code = dec074_revert_for(file_path, code)
     for new, old in Z62_REVERT_PAIRS.get(rel, ()):
         assert code.count(new) == 1, f"{rel} 替換點不唯一或已不存在：{new!r}"
         code = code.replace(new, old)
@@ -59,7 +63,14 @@ def z62_revert_for(file_path, code: str) -> str:
 
 
 def z62_strip_new_keys(x):
-    """舊批次 golden（整份 mkt_info 的 sha256）比對用：拿掉本批新增的鍵，其餘原樣。非 dict 原樣回傳。"""
+    """舊批次 golden（整份 mkt_info 的 sha256）比對用：拿掉本批新增的鍵，其餘原樣。非 dict 原樣回傳。
+
+    📌 DEC-074/075 批 A（2026-10-23，有意識的接鏈，⛔ 不是漏改）：更新的批次（`DH-TWII-MA200`）又加了
+    schema-additive 鍵 `ma200_status` ⇒ 先拿掉它（`tests/test_dec074_revert_chain.dec074_strip_new_keys`），
+    再拿本批的；golden 值不改。
+    """
+    from tests.test_dec074_revert_chain import dec074_strip_new_keys
+    x = dec074_strip_new_keys(x)
     if isinstance(x, dict) and any(k in x for k in Z62_NEW_MKT_KEYS):
         return {k: v for k, v in x.items() if k not in Z62_NEW_MKT_KEYS}
     return x
@@ -767,15 +778,28 @@ class TestOldUiUnchanged:
 
     @pytest.mark.parametrize("foreign_net", [1.5e9, -2.0e9])
     def test_etf_ai_prompt_identical_before_after_z62(self, foreign_net):
-        """舊 ETF AI prompt 的 mkt_info 逐值段：Z62 前（還原體）後（現行）逐字相同。"""
+        """舊 ETF AI prompt 的 mkt_info 逐值段：Z62 前（還原體）後（現行）逐字相同。
+
+        ⚠️ **DEC-074/075 行為變更（批 A `DH-TWII-MA200`，客戶 2026-10-23）**：還原體（`z62_revert_for` 已接
+        DEC-074 還原鏈）同時換回了「K 棒 <200 根時以現價頂替年線」的舊寫法；本 harness 只有 130 根 ⇒
+        現行 `ma200`／`status`／`confidence` 為 None（舊：現價／由假年線推出的結論），並多一個 `ma200_status`。
+        ⇒ 比對時把這四個鍵排除，其餘仍逐字相同；另斷言 prompt 不再列出那個以現價冒充的年線
+        （None 不是 int／float，舊 UI 的逐值掃描本來就不列 —— 共用層修正的連帶效果，舊 UI 檔零改動）。
+        """
         from src.services import market_strategy as MS
+        _dh_ma200 = {"index_as_of", "ma200", "ma200_status", "status", "confidence"}
         df = self._df()
         new = MS.get_market_assessment(df_index=df.copy(), foreign_net=foreign_net)
         old = _z62_pre_market_strategy().get_market_assessment(df_index=df.copy(), foreign_net=foreign_net)
         assert new is not None and old is not None
         assert "index_as_of" in new and "index_as_of" not in old
-        assert {k: v for k, v in new.items() if k != "index_as_of"} == old
-        assert _etf_macro_str(new) == _etf_macro_str(old)
+        assert {k: v for k, v in new.items() if k not in _dh_ma200} == {
+            k: v for k, v in old.items() if k not in _dh_ma200}
+        assert new["ma200"] is None and old["ma200"] == old["index_price"]   # 舊：現價頂替；新：未評估
+        _strip = lambda txt: "\n".join(l for l in txt.splitlines()  # noqa: E731
+                                       if not l.startswith(("• ma200:", "• confidence:")))
+        assert _strip(_etf_macro_str(new)) == _strip(_etf_macro_str(old))
+        assert "• ma200:" not in _etf_macro_str(new)
         assert "index_as_of" not in _etf_macro_str(new)
         assert "index_below_ma5: True" in _etf_macro_str(new)    # 證明掃描段真的有在列 bool
 

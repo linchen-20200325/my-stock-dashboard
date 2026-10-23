@@ -147,6 +147,16 @@ def _scoring_regime() -> ScoringRegimeDecision:
     return resolve_scoring_regime(_macro_state())
 
 
+def _not_loaded_pending_breadth_tail() -> str:
+    """QA-6 MUST-2：「總經尚未載入＋代理廣度不計分」時 `_regime_blocked_error` 的結尾句（⛔ 不給更新後重問的救法）。
+
+    說明句讀 L0 SSOT（late import 同 `resolve_scoring_regime` 的作法；本檔 ⛔ 不另寫一份事實）。
+    """
+    from shared.regime_arbiter import NOT_LOADED_PENDING_BREADTH_EXPLAIN
+    return (f"{NOT_LOADED_PENDING_BREADTH_EXPLAIN}。因此更新後本工具也仍不輸出多因子評分,"
+            "**不得**建議使用者靠更新資料取得評分。")
+
+
 def _regime_blocked_error(dec: ScoringRegimeDecision) -> str:
     """regime 不可用時 `get_stock_score` 回的 error 字串(**會原樣進 Gemini payload**)。
 
@@ -173,8 +183,18 @@ def _regime_blocked_error(dec: ScoringRegimeDecision) -> str:
         "因此本工具**完全不輸出分數與等級**(§1 寧可不給,不給假的)。"
         "**這不是個股資料抓取失敗,也不代表這檔股票不好** —— 是大盤狀態未知。"
         "請如實說明這一點,**不得**用其他工具的數字或自己的判斷推估總分/等級/名次。"
-        "救法:先開 🌍 總經頁按「🚀 一鍵更新全部數據」讓紅綠燈算出結論,再問一次。"
-        "不受影響、仍可正常使用:財務體質(get_financial_health)、"
+        # DEC-075 回修（MUST-2）：缺真實廣度 ⇒ ⛔ 不給「一鍵更新」救法（I-4）；其餘原因逐字照舊。
+        + ("更新資料不會改變這個狀態:要等正式的市場廣度(漲跌家數)資料來源接上,"
+           "**不得**建議使用者靠更新資料解決。"
+           if getattr(dec, "breadth_unevaluated", False) else
+           # 📌 QA-6 MUST-2（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：總經尚未載入＋代理廣度
+           #   不計分時，下一行舊救法「按一鍵更新…再問一次」不屬實（載入後位階仍未評估、本工具照樣拒評）⇒ 改說屬實的
+           #   那句（L0 SSOT `shared.regime_arbiter.NOT_LOADED_PENDING_BREADTH_EXPLAIN`，同 `_tool_get_market_state`）；
+           #   旗標為 True（代理計分）時 `not_loaded_pending_breadth` 恆 False ⇒ 下一行舊句逐字照舊。
+           _not_loaded_pending_breadth_tail()
+           if getattr(dec, "not_loaded_pending_breadth", False) else
+           "救法:先開 🌍 總經頁按「🚀 一鍵更新全部數據」讓紅綠燈算出結論,再問一次。")
+        + "不受影響、仍可正常使用:財務體質(get_financial_health)、"
         "停損與倉位(get_risk_plan)、大盤籌碼(get_market_leading)、ETF 品質(get_etf_quality)。"
     )
 
@@ -189,6 +209,33 @@ def _tool_get_market_state(*, require_valid_risk_cap: bool = False) -> dict:
     # 批 Z66（Q1）：`require_valid_risk_cap=True`（新 UI 問答頁經 `run_agent` 傳入）⇒ 曝險上限只認有效快照，
     #   且非有效快照的「鎖定快照額外欄位」（風險等級／Macro_Phase）也不附 —— 那是同一份上限的說明。
     _ms = _macro_state(require_valid_risk_cap=True) if require_valid_risk_cap else _macro_state()
+    from shared.regime_arbiter import is_breadth_unevaluated, unevaluated_breadth_explain
+    if is_breadth_unevaluated(_ms):
+        # 📌 QA-4 S-1（2026-10-23，有意識的修改，⛔ 不是漏刪）：~~`UNEVALUATED_BREADTH_EXPLAIN`（「目前只有…代理值」）~~
+        #   在 ^TWII 全滅（連代理值也沒有）時不屬實 ⇒ 依本輪有沒有被擋下的代理值二選一；拿不準 ⇒ 中性句。
+        try:
+            from src.services.allocation_service import get_breadth_proxy_presence
+            _proxy = get_breadth_proxy_presence()
+        except Exception as _e:  # noqa: BLE001 — 拿不準 ⇒ 中性句（⛔ 不猜任何一邊）
+            print(f"[ai_qa] get_breadth_proxy_presence 失敗：{_e!r} —— 改用中性句")
+            _proxy = None
+        # DEC-075 回修（MUST-2）：缺真實廣度 ⇒ ⛔ 不說「macro_state.json 無快照」（檔案可能有效，只是 (a) 不採用）、
+        #   ⛔ 不叫人一鍵更新（I-4）。其餘未評估原因的既有文案逐字照舊（下一段）。
+        return {"ok": False,
+                "error": (unevaluated_breadth_explain(_proxy) + "。"
+                          "(§1:未評估就是未評估,**不退回「中性/震盪」當預設**;"
+                          "請勿把「未評估」講成「市場中性」,也**不得**建議使用者靠更新資料解決。)")}
+    from shared.regime_arbiter import (NOT_LOADED_PENDING_BREADTH_EXPLAIN,
+                                       is_not_loaded_pending_breadth)
+    if is_not_loaded_pending_breadth(_ms):
+        # 📌 DH-REGIME-NOWARROOM（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動＋代理廣度不計分時，
+        #   下一段舊句的「macro_state.json 無可用的鎖定快照」不屬實（檔案可能有效，只是依 DEC-075 不採用），
+        #   「按一鍵更新」也不會讓位階成立 ⇒ 改說屬實的那句；旗標為 True 時下一段舊句逐字照舊。
+        return {"ok": False,
+                "error": (NOT_LOADED_PENDING_BREADTH_EXPLAIN + "。"
+                          "(§1:未評估就是未評估,**不退回「中性/震盪」當預設**;"
+                          "請勿把「未評估」講成「市場中性」;可以提醒使用者更新載入資料,"
+                          "但**不得**說更新之後就會有多空位階。)")}
     if not isinstance(_ms, dict) or not _ms.get("is_loaded"):
         return {"ok": False,
                 "error": ("總經尚未評估:🌍 總經紅綠燈本次 session 未算出結論,"

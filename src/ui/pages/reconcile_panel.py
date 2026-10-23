@@ -92,7 +92,11 @@ def _get_health_params() -> tuple[float | None, float | None, float | None]:
 
     _jqavg = _wr.get('jingqi_avg')
     if _jqavg is None:
-        _jingqi = _ss('jingqi_info', {}) or {}
+        # DEC-075 回修（QA1 S-1，2026-10-23，有意識的修改，⛔ 不是漏刪）：~~`_jingqi = _ss('jingqi_info', {}) or {}`~~
+        #   —— 健康分對帳是計分路徑：代理（估算）廣度依 DEC-074 不計分 ⇒ 經 L0 `jingqi_for_scoring`
+        #   （與 L3 `reconcile_service.health_inputs` 同口徑）。warroom `jingqi_avg` 是計分值、代理時本來就是 None。
+        from shared.macro_provenance import jingqi_for_scoring
+        _jingqi = jingqi_for_scoring(_ss('jingqi_info', {}) or {}) or {}
         _jqavg = _jingqi.get('avg')
 
     # ── v19.181 D3:score 折換 0-100 的分母改吃 `mkt_info['max_score']` ─────────

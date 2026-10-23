@@ -52,6 +52,7 @@ def compute_ruleset_hash() -> str:
         THROTTLE_VETO_REGIMES,
     )
     from shared.signal_thresholds import (
+        BREADTH_PROXY_SCORING_ENABLED,
         CONFIDENCE_SOURCE_COUNT, CONFIDENCE_SOURCE_GROUPS,
         HEALTH_FNET_BONUS, HEALTH_WEIGHT_JQ, HEALTH_WEIGHT_SCORE,
         M1B_M2_LEG_ENABLED, MARKET_BREADTH_NEUTRAL_PCT,
@@ -64,6 +65,9 @@ def compute_ruleset_hash() -> str:
         'w_score': HEALTH_WEIGHT_SCORE,
         'fnet_bonus': HEALTH_FNET_BONUS,
         'm1b_leg': M1B_M2_LEG_ENABLED,
+        # DEC-074 B（2026-10-23）：代理廣度是否計分 —— 本批起 health 對代理廣度一律未評估，
+        # hash 必須分得出本批前後（計分腿 jq／score／m1b／breadth 才在 hash 射程內；五桶燈級不在）。
+        'breadth_proxy_scoring': BREADTH_PROXY_SCORING_ENABLED,
         'breadth_neutral': MARKET_BREADTH_NEUTRAL_PCT,
         'conf_count': CONFIDENCE_SOURCE_COUNT,
         'conf_groups': {k: list(v) for k, v in sorted(CONFIDENCE_SOURCE_GROUPS.items())},
