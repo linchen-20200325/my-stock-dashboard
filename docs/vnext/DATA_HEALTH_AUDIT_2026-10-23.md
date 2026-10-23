@@ -46,11 +46,11 @@
 | 真實漲跌家數（TWSE MI_INDEX）（新版沒接） | 🟡 | — | TWSE MI_INDEX | `tw_macro.fetch_twse_breadth` 只舊 UI 用；`fetch_adl` 註解稱 MI_INDEX 永久停用，但 sector_flow cron 10-22 仍讀到 MI_INDEX，矛盾待查 | 舊 UI 廣度；新版廣度替代候選 | 需研究替代來源/API/MCP（先驗可達性） | 關聯 `DH-GATE-BREADTH` |
 | 旌旗／總經健康分 | 🔴 | — | 代理 ADL 5 日均＋大盤評分 | 旌旗繼承代理＋D−1（`source='ADL'` 被當非代理）；健康分＝0.6×旌旗＋0.4×大盤分 → `arbitrate_regime` 位階、`compute_position_throttle` 建議持股；重建全期 jqavg 平均 49.6、標準差 3.3，≥60 僅 0.45% 天數 ⇒ 60% 權重近似常數；權重在收盤對收盤版本校準，線上為日內＋落後一日，未驗證；大盤分缺時重新歸一成只剩旌旗、趨勢補 neutral；`health_partial` 新 UI 0 讀取 | 市場位階、建議持股姿態帶 | 需客戶裁示 | `DH-JINGQI-HEALTH`；`DH-GATE-BREADTH` |
 | 更新今日戰情沿用舊 session 值 | 🔴 | — | （流程） | `refresh_macro_now` 不 reset；ADL 失敗時舊 `jingqi_info`（無時間戳）留存；`li_latest` 沿用，`li_retain_meta`／`_is_stale` 新 UI 不讀；外資期貨防禦與三環天花板吃到舊值；只有當次刷新報告列 `not_written_keys` | 新 UI 大盤／今天頁全部燈、Risk Cap | 可自行修復 | `DH-REFRESH-STALE` |
-| 外資現貨 | 🟡 | 2026-10-22 | BFI82U → FinMind | 主路徑未觀測不補 0、帶日期；但 `macro_fetch_orchestrator` FinMind 備援路徑 buy/sell 缺值 fillna(0) 算假淨額；只有 foreign_net 燈讀未觀測旗標；新 UI 不顯示資料日 | 外資燈 | 可自行修復 | `DH-FOREIGN-FILL0` |
-| 外資期貨淨口（Required Core） | 🟡 | — | TAIFEX／FinMind | 缺腿記 None、帶 `_date`；PIT 與 MA5 同日未檢查；`int(... or 0)` 遇 NaN 拋例外 | Risk Cap 紅線三 | 需客戶裁示（PIT 實作） | 關聯 `VN1-PG-PIT-CONSISTENCY` |
-| 投信／自營（大盤）（新版沒接） | 🟡 | — | TWSE → FinMind | `macro_fetch_orchestrator` FinMind 備援路徑 buy/sell 缺值 fillna(0) 算假淨額；只有 foreign_net 燈讀未觀測旗標 | 舊 UI | 可自行修復 | `DH-FOREIGN-FILL0` |
+| 外資現貨 | 🔴 | 2026-10-22 | BFI82U → FinMind | 主路徑 BFI82U 正確（未觀測不補 0、帶日期），僅 FinMind 備援 buy/sell 缺值時發生：`macro_fetch_orchestrator` 備援路徑 fillna(0) 算假淨額；只有 foreign_net 燈讀未觀測旗標；新 UI 不顯示資料日 | 外資燈 | 可自行修復 | `DH-FOREIGN-FILL0` |
+| 外資期貨淨口（Required Core） | 🟡 | — | TAIFEX／FinMind | 缺腿記 None、帶 `_date`；PIT 與 MA5 同日未檢查 | Risk Cap 紅線三 | 需客戶裁示（PIT 實作） | 關聯 `VN1-PG-PIT-CONSISTENCY` |
+| 投信／自營（大盤）（新版沒接） | 🔴 | — | TWSE → FinMind | 主路徑 BFI82U 正確，僅 FinMind 備援 buy/sell 缺值時發生：`macro_fetch_orchestrator` 備援路徑 fillna(0) 算假淨額；只有 foreign_net 燈讀未觀測旗標 | 舊 UI | 可自行修復 | `DH-FOREIGN-FILL0` |
 | 融資餘額 | 🟡 | 2026-10-22 | TWSE → HiStock → Wearn | 只回 float、無資料日；3400 億門檻 356 天超過、近 196 天連續，燈恆紅（discriminative=False）；舊 UI 據此每日產「🔴 融資極度危險」與「今日禁止操作」 | 融資燈、舊 UI 警示 | 可自行修復（帶日期）＋需客戶裁示（門檻） | — |
-| 融券（新版沒接） | 🔴 | — | TWSE | `_to_yi_mg` 依數值大小猜單位（違 `CLAUDE.md` §1.A 第 2 點） | 舊 UI | 暫不處理（舊 UI 凍結） | — |
+| 融券（新版沒接） | 🔴 | — | TWSE | `_to_yi_mg` 依數值大小猜單位（違 `CLAUDE.md` §1.A 第 2 點） | 舊 UI | 暫不處理（舊 UI 凍結） | `DH-SHORT-UNIT` |
 | PCR（Optional） | 🔴 | — | TAIFEX；不可達時 FinMind TXO 法人 OI 估算 | 估算值無來源欄，仍以全市場刻度門檻計分；違反 DEC-062 Q5「代理值只顯示、不計分」 | Risk Cap（Optional） | 可自行修復（會改 Risk Cap 分數，實作需客戶指派） | `DH-PCR-PROXY` |
 | NDC 景氣燈號 | 🟡 | — | FinMind `TaiwanBusinessIndicator` → StockFeel → MacroMicro | StockFeel 備援正則可能錯配年月 | NDC 燈 | 暫不處理 | — |
 | NDC 領先指標（新版沒接） | 🟡 | — | `tw_macro.fetch_ndc_leading_index` | — | 舊 UI | 暫不處理 | 關聯 `VN1-MT-LEGACY-GAP` |
@@ -80,7 +80,7 @@
 | 教學頁資料來源地圖 | 🔴 | — | （文件） | 宣稱 FRED NAPM／DGS2／DGS3MO／M2SL／WALCL／UNRATE／PPIACO 與 CBOE CDN，production 無資料流；「logistic 衰退機率」0 caller | 舊 UI 教學頁 | 可自行修復 | 關聯 `VN1-MT-SSOT-EDU-CLAIM` |
 | 新 UI「憑什麼」FRED 健康燈（假綠燈） | 🔴 | — | （健康監測） | `page_why::NAMED_SOURCES` 監測 `fetch_fred`，但 16 燈的 CPI／DGS10／FEDFUNDS 走 fredgraph.csv | 新 UI 資料體檢 | 可自行修復 | `DH-WHY-FRED-LAMP` |
 | 總經前進式驗證 | 🔴 | 2026-10-22（41 列） | cron 寫入 | 只寫不讀（`load_signals`／`evaluate_rows`／`summarise` 0 production caller；接讀屬新功能）；`inputs_as_of` 標 ^TWII 當日，但 jqavg／ad_ratio 是前一日（日期標示不實） | 總經訊號驗證 | 可自行修復（日期） | `DH-MACRO-FWD-ASOF`；關聯 `VN1-MT-SSOT-MACRO-FWD` |
-| 指標危險度 16 燈日期語意 | 🟡 | — | （彙整） | 不看 `is_stale`（PMI／出口 90 天 stale cache 照判燈）；不顯示 as-of | 指標危險度 | 暫不處理 | — |
+| 指標危險度 16 燈日期語意 | 🔴 | — | （彙整） | 不看 `is_stale`（PMI／出口 90 天 stale cache 照判燈）；不顯示 as-of | 指標危險度 | 可自行修復 | `DH-LAMP-STALE` |
 
 ### 3.3 個股／ETF／持股
 
@@ -172,7 +172,7 @@
 - 名實不符 ⇒ 🔴。
 - 無來源 ⇒ ⬜。
 
-📌 草案規則「缺 as-of 不得 🟢」指資料中心顯示，不是判資料本身（總管裁定）。外資現貨／投信自營資料本身帶日期，但 FinMind 備援路徑缺值補 0，已改判 🟡（`DH-FOREIGN-FILL0`）。總表「最新資料日」欄留「—」的列，是本次沙箱未量到該日期，不代表資料本身沒有日期。
+📌 草案規則「缺 as-of 不得 🟢」指資料中心顯示，不是判資料本身（總管裁定）。外資現貨／投信自營資料本身帶日期；主路徑 BFI82U 正確，但 FinMind 備援路徑 buy/sell 缺值補 0，依「補 0 一律判 🔴」改判 🔴（`DH-FOREIGN-FILL0`）。總表「最新資料日」欄留「—」的列，是本次沙箱未量到該日期，不代表資料本身沒有日期。
 
 ## 7. 全站狀態列規格草案（⛔ 草案，本批不實作）
 
@@ -197,8 +197,8 @@
 | 狀態 | 列數 |
 |---|---|
 | 🟢 HEALTHY | 7 |
-| 🟡 LIMITED | 29 |
-| 🔴 BROKEN／MISLEADING | 23 |
+| 🟡 LIMITED | 26 |
+| 🔴 BROKEN／MISLEADING | 26 |
 | ⬜ UNAVAILABLE | 5 |
 | 合計 | 64 |
 
