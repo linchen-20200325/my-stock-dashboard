@@ -1,58 +1,44 @@
 {
-  "updated_at": "2026-10-22T14:36:45.205927+00:00",
+  "updated_at": "2026-10-23T14:20:40.459658+00:00",
   "last_updated": "2026-10-22",
   "row_count": 1254,
   "n_days": 27,
   "fetch_diag": {
-    "days_fetched": 1,
-    "days_holiday_or_empty": 0,
+    "days_fetched": 0,
+    "days_holiday_or_empty": 1,
     "days_missing_price": 0,
     "unresolved_retried": [],
     "unresolved_expired": []
   },
-  "coverage": {
-    "n_stock_days_with_net": 20056,
-    "n_dropped_missing_price": 17815,
-    "n_unclassified_stock_days": 0,
-    "n_sectors": 46,
-    "n_days": 1,
-    "n_missing_foreign_stock_days": 0,
-    "n_missing_trust_stock_days": 0,
-    "n_missing_dealer_stock_days": 0,
-    "n_excluded_foreign_ccy_stock_days": 4
-  },
-  "last_error": null,
+  "coverage": {},
+  "last_error": "所有候選交易日皆無三大法人資料(假日/來源全敗)",
   "warnings": [],
   "per_day": {
-    "20261022": {
-      "twse_inst": 19151,
-      "twse_close": 1368,
-      "tpex_inst": 909,
-      "tpex_close": 990,
-      "tpex_inst_status": "ok",
-      "tpex_close_status": "ok",
-      "twse_ok": true,
-      "tpex_ok": true,
-      "holiday": false,
-      "written": true
+    "20261023": {
+      "twse_inst": 0,
+      "twse_close": 0,
+      "tpex_inst": 0,
+      "tpex_close": 0,
+      "tpex_inst_status": "empty",
+      "tpex_close_status": null,
+      "twse_ok": false,
+      "tpex_ok": false,
+      "holiday": true,
+      "written": false
     }
   },
   "markets_summary": {
     "TWSE": {
-      "ok_days": 1,
+      "ok_days": 0,
       "fail_days": 0,
-      "ok_dates": [
-        "20261022"
-      ],
+      "ok_dates": [],
       "fail_dates": [],
       "not_written_dates": []
     },
     "TPEx": {
-      "ok_days": 1,
+      "ok_days": 0,
       "fail_days": 0,
-      "ok_dates": [
-        "20261022"
-      ],
+      "ok_dates": [],
       "fail_dates": [],
       "not_written_dates": []
     }
@@ -94,9 +80,9 @@
   "industry": {
     "scheme": "z43-official-code-v1",
     "raw_available": true,
-    "fetched_at": "2026-10-22T14:36:37.129429+00:00",
+    "fetched_at": "2026-10-23T14:20:37.875164+00:00",
     "rules": {
-      "finmind_no_official": 1182,
+      "finmind_no_official": 1185,
       "official_match_finmind": 1972,
       "official_name": 9
     },
@@ -117,7 +103,7 @@
     },
     "finmind_status": {
       "ok": true,
-      "n_rows": 4347
+      "n_rows": 4350
     },
     "unavailable_markets": [],
     "alias_consistency": {
