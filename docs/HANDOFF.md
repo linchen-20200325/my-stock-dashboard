@@ -44,7 +44,7 @@
 | 下一階段 Model／Effort | **High（高能力模型，Effort high）**。理由：觸及位階 SSOT（`get_macro_state`）與多個消費端（AI 評分、🎯 找標的頁濾網、持股頁位階／姿態帶）、需突變測試與多組獨立 QA。DEC-073：模型／Effort 不足 → 立即停手、回報客戶，不得硬做 |
 | 禁止事項 | 同上一段（續有效）：⛔ 批 2～4、`DH-LAMP-STALE`、VN1-PG 三項實作批未授權；⛔ 畫面結構異動先出文字線框（DEC-003）；⛔ 不新增資料來源、不改投資公式／權重、不重新歸一化（DEC-074／DEC-075）；⛔ 不改刪舊 UI（DEC-019）；⛔ 不 production-write、不開旗標、不開 schedule（DEC-066） |
 
-### 📌 2026-10-23 GitHub 交接 Freeze 版（append-only；**本段為現行短版，與上表及上兩段衝突處以本段為準**）
+### 📌 2026-10-23 GitHub 交接 Freeze 版（append-only；~~**本段為現行短版，與上表及上兩段衝突處以本段為準**~~ 已過時，見下方「#910 合併後」段；本段「禁止事項」兩列與「Production」列**效力不變**，由新段沿用（2026-10-24 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））
 
 > 客戶 2026-10-23 Freeze 指示：AI 額度預計 2026-10-24 00:00（台北）取消；下一個 AI 只讀 GitHub 接手。本段**只放實況與唯一接手點**；耐久狀態見 `docs/PROJECT_STATE.md` §29，待辦見 `docs/BACKLOG.md`，裁示見 `docs/DECISIONS.md`，規則見 `PROJECT_RULES.md`。⚠️ 下表 GitHub 實況為總管 2026-10-23 23:08（台北）`git fetch`／GitHub API 實查轉述，撰寫組未重查；**GitHub 實況 > 本檔**，接手先重查。
 
@@ -62,7 +62,26 @@
 | QA-6 報告缺席時（2026-10-23 補列；append-only） | PR #910 上（描述／留言）**找不到 QA-6 對 `c8e30d84` 的判定** ⇒ **視為未通過**。處置：派**獨立** QA 組，對接手當時 PR #910 HEAD 相對 `f3dd098c` 的**產品碼差異**重做複驗（實作者不得自驗，`CLAUDE.md` §-2 規則 4）；⛔ 不得自行合併、不得以「CI 綠」代替 QA 判定 |
 | 禁止事項（自 2026-10-23 Freeze 起持續有效，直到客戶新指派）（2026-10-23 補列；append-only） | ⛔ 新 Batch／⛔ VN1-PG／⛔ 大型研究／⛔ 改投資公式、權重、門檻／⛔ 刪舊 UI／⛔ 刪 branch／⛔ 開 `PRODUCTION_WRITE_APPROVED`／⛔ 開 Daily Schedule／⛔ 不可逆清理／⛔ 新資料來源。⚠️ 客戶原文「23:00 後」指 Freeze **生效起點**，**不是只限 2026-10-23 當晚**：隔日、換對話、換 AI 一律持續有效，直到客戶新指派解除。依據：`docs/DECISIONS.md` DEC-076、`PROJECT_RULES.md` 第 16 節。 |
 | Production（2026-10-23 補列；append-only） | `PRODUCTION_WRITE_APPROVED=False`（`shared/risk_cap_history_policy.py`）；Daily Schedule **NOT APPROVED**（DEC-066 F）；細節（含 `schedule:` workflow 列舉）見 `docs/PROJECT_STATE.md` §29.5。⛔ 交接／Freeze／文件同步／CI 修復一律不得改動 |
-| 若只看 main（2026-10-23 補列；append-only） | main 版本檔 §0 停在 #908 時期（寫「批 A 已指派（DEC-075）、未開工」）＝**已過期**。#910 未合併前，以 PR #910 分支（`ccr-310717b7-37xwl6`）上的五個 SSOT（`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、本檔、`docs/PROJECT_STATE.md`）為準；**批 A＋1' 已在 #910 實作**，⛔ 不得重新施工 |
+| 若只看 main（2026-10-23 補列；append-only） | ~~main 版本檔 §0 停在 #908 時期（寫「批 A 已指派（DEC-075）、未開工」）＝**已過期**。#910 未合併前，以 PR #910 分支（`ccr-310717b7-37xwl6`）上的五個 SSOT（`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、本檔、`docs/PROJECT_STATE.md`）為準；**批 A＋1' 已在 #910 實作**，⛔ 不得重新施工~~ #910 已合併（merge `066f461e`），**main 即為現行**；批 A＋1'＋冷啟動修正已在 main，⛔ 不得重新施工（2026-10-24 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+
+### 📌 2026-10-24 #910 合併後（append-only；**本段為現行短版，與上表及上三段衝突處以本段為準**）
+
+> PR #910 已於 2026-10-24 squash 合併進 main。下表 GitHub 實況為總管實查轉述，撰寫組只以 `git fetch origin main` 確認 main tip 為 `066f461e`；**GitHub 實況 > 本檔**，接手先重查。耐久狀態見 `docs/PROJECT_STATE.md` §28／§29，待辦見 `docs/BACKLOG.md`（§F 為索引），裁示見 `docs/DECISIONS.md`，規則見 `PROJECT_RULES.md`。
+
+| 項目 | 現況（#910 合併後） |
+|---|---|
+| main | `066f461e`（完整 `066f461ec716abbc40a3830baf2c686415cd4ecf`；含 #910）。cron 會推進 tip，**以 GitHub 為準** |
+| #910 | 已 squash 合併（merge `066f461e`）；PR 最後 head＝**最後產品碼 commit `9714d0b3`**（不是 `c8e30d84`；`9714d0b3` 修 QA-6 MUST-1 持股頁卡④⑤ v2 紅卡、MUST-2 AI 評分冷啟動不實救法）。QA：QA-6 對 `c8e30d84` 判不可合併（2 MUST）→ QA-7 對 `9714d0b3` 判**可合併**（0 MUST）；`9714d0b3` CI Fast＋Slow success；mergeable clean。完整 QA-6／QA-7 判定見 PR #910 留言 |
+| open PR | 無（#910 已合併）。總管將另開本文件同步 PR —— **本文件 PR 見 GitHub** |
+| main 驗證 | merge 後 main CI **以 GitHub Actions 為準**（撰寫組未查） |
+| Current Task | **無進行中實作** |
+| **唯一 Next Safe Action** | **開新對話**，先依 `PROJECT_RULES.md` 第 9.0 節跑 Model／Effort Gate，再重評 Data Health 批 2／VN1-PG 邊界並送客戶裁示（DEC-075 第 4 點；附總管推薦方案）—— **送題，不施工** |
+| 硬期限 | `DH-CALIB-CRON` 須在 **2027-01-01** 前修正或暫停（BACKLOG 5.1.8） |
+| 待客戶裁示 | `DEC076-CONFIRM` 兩項（①指標危險度口徑；②⚡ 行動例示射程）、批 2／VN1-PG 邊界（重評後送題）、`DH-BADGE-RERUN-SEMANTICS`（QA-7 S-1 徽章語意，視覺規格）、`DH-EXPORT-LABEL-READING`（出口燈名業務驗收）等 —— 完整清單見 `docs/BACKLOG.md` §F「Decision Gates」列 |
+| 禁止事項 | 沿用上方 Freeze 版「禁止事項（自 2026-10-23 Freeze 起持續有效，直到客戶新指派）」列，**效力不變**：⛔ 新 Batch／VN1-PG／大型研究／改投資公式、權重、門檻／刪舊 UI／刪 branch／開 `PRODUCTION_WRITE_APPROVED`／開 Daily Schedule／不可逆清理／新資料來源 |
+| Production | 沿用上方 Freeze 版「Production」列：`PRODUCTION_WRITE_APPROVED=False`；Daily Schedule **NOT APPROVED**（DEC-066 F）；細節見 `docs/PROJECT_STATE.md` §29.5 |
+| 若只看 main | #910 已合併，**main 即為現行** |
+| 接手必讀 | 同 Freeze 版：先跑 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate（重評送題＝High），再讀五個 SSOT |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 
