@@ -361,7 +361,14 @@ class TestRegimeMatrix:
     @pytest.mark.parametrize("wr_name", list(_WR_CASES))
     @pytest.mark.parametrize("files", _FILE_CASES)
     @pytest.mark.parametrize("strict", [False, True])
-    def test_non_cap_keys_identical_to_base(self, tmp_path, wr_name, files, strict):
+    def test_non_cap_keys_identical_to_base(self, tmp_path, wr_name, files, strict, monkeypatch):
+        # 📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：`no_health`（warroom 在、健康分缺）
+        #   在代理廣度不計分（`BREADTH_PROXY_SCORING_ENABLED=False`，現行）時改由 warroom 撐住位階（＝缺真實廣度
+        #   未評估），⛔ 不再「位階真的落到舊檔」⇒ 與修前逐鍵相同的前提只在旗標 True 時仍成立 ⇒ 本矩陣的 no_health
+        #   一律在旗標 True 下比對（斷言一字未改）；旗標 False 的新行為由 `test_no_health_breadth_gate` 守。
+        if wr_name == "no_health":
+            import shared.signal_thresholds as STH
+            monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         base = _base(_MSL_REL)
         old, new = tmp_path / _OLD, tmp_path / _NEW
         if files in ("old_only", "both"):
@@ -400,6 +407,30 @@ class TestRegimeMatrix:
             if wr_name != "live":
                 assert c.get("file_error") == r.get("file_error")
             assert (c["risk_cap_disclosure"] is None) is (files not in ("new_only", "both"))
+
+
+    @pytest.mark.parametrize("files", _FILE_CASES)
+    @pytest.mark.parametrize("strict", [False, True])
+    def test_no_health_breadth_gate(self, tmp_path, files, strict):
+        """旗標 False（現行）：warroom 健康分缺 ⇒ 不論舊檔有效／讀壞／不存在，位階一律未評估、⛔ 不退舊檔、⛔ 不拋
+        （DEC-075 D-1(a)）；上限仍只看新檔。"""
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
+        old, new = tmp_path / _OLD, tmp_path / _NEW
+        if files in ("old_only", "both"):
+            _put(old, _snapshot(regime="空頭", cap=30))
+        if files in ("new_only", "both"):
+            _put(new, _snapshot(regime="多頭", cap=50))
+        if files == "old_ai_failsafe":
+            _put(old, dict(_AI_FAILSAFE, timestamp=_snapshot()["timestamp"]))
+        if files == "old_corrupt":
+            _put(old, "{bad json")
+        for flag in (False, True):
+            c = MSL.get_macro_state(copy.deepcopy(_WR_NO_HEALTH), state_file_path=str(old), strict=strict,
+                                    now=NOW, require_valid_risk_cap=flag)
+            assert (c["regime"], c["is_loaded"], c["source"]) == ("unknown", False, SOURCE_UNEVALUATED_BREADTH), c
+            if flag:
+                assert c["exposure_limit_pct"] == (50 if files in ("new_only", "both") else None)
+                assert "file_error" not in c                       # 位階不靠舊檔（同既有 breadth 分支）
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -853,6 +884,11 @@ class TestB1OldFileErrorNotSurfaced:
         else:
             _put(tmp_path / _OLD, "{bad json")
         base = _base(_MSL_REL)
+        # 📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：`_WR_NO_HEALTH` 與修前逐鍵相同的前提
+        #   只在代理廣度計分開啟（旗標 True）時仍成立（旗標 False 時位階由 warroom 撐住＝未評估，見
+        #   `TestRegimeMatrix::test_no_health_breadth_gate`）⇒ 本迴圈在旗標 True 下比對；下方 `_as_session({})`（warroom 不存在）不受旗標影響。
+        import shared.signal_thresholds as STH
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         for wr in (None, dict(_WR_NO_HEALTH)):
             for strict in (False, True):
                 kw = dict(strict=strict, require_valid_risk_cap=True)

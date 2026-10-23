@@ -862,8 +862,23 @@ class TestVerdictIdleExitIsRetry:
         self._assert_retry(P, tiles)
 
     def test_warroom_health_none(self, _pinned):
-        P, tiles = self._tiles(_pinned, self._health_none_session(_pinned))
+        """📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：本支舊斷言「warroom 健康分缺 ⇒
+        可重抓」只在**代理廣度計分開啟**（`BREADTH_PROXY_SCORING_ENABLED=True`）時仍成立 —— 旗標關時 repo 沒有
+        任何真實廣度，健康分缺必然受缺廣度所限，L3 改標「缺真實廣度未評估」、出口改為「等正式廣度來源」
+        （見下一支 `test_warroom_health_none_breadth_gate`）。本支改在旗標 True 下守舊語意。"""
+        import shared.signal_thresholds as STH
+        s = self._health_none_session(_pinned)
+        _pinned.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
+        P, tiles = self._tiles(_pinned, s)
         self._assert_retry(P, tiles)
+
+    def test_warroom_health_none_breadth_gate(self, _pinned):
+        """旗標 False（現行）：F1 寫出的 health-None warroom ⇒ 卡①／卡③ 非 live、出口＝等正式廣度來源（DEC-075 D-1(a)）。"""
+        P, tiles = self._tiles(_pinned, self._health_none_session(_pinned))
+        for key in ("verdict.exposure", "verdict.regime"):
+            card = tiles[key].card
+            assert card.state not in (P.UI_LIVE, P.UI_DEGRADED), (key, card.state)
+            assert card.note.where is P.EXIT_WAIT_BREADTH_SOURCE, key
 
     def test_exposure_requested_but_unloaded(self):
         """卡①第三支（契約叫過了、建議持股仍未評估）同樣是可重抓 —— 健康分補上就會 live。"""
@@ -920,13 +935,30 @@ class TestDegradedRegimeExitIsRetry:
         assert exp.note.where is P.EXIT_RETRY_HERE
 
     def test_degraded_with_health_none_warroom(self, _pinned, tmp_path):
-        """warroom 在但健康分缺（視同未載入）＋ 快照 ⇒ 同樣 degraded、同樣可重抓。"""
+        """warroom 在但健康分缺（視同未載入）＋ 快照 ⇒ 同樣 degraded、同樣可重抓。
+
+        📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：「健康分缺 ⇒ 退快照 degraded」
+        正是 DEC-075 不採用的 (b)；自本批起只在代理廣度計分開啟（旗標 True）時仍可達 ⇒ 本支改在旗標 True 下守舊語意，
+        旗標 False（現行）由下一支守「⛔ 不退快照」。"""
+        import shared.signal_thresholds as STH
         from shared.ui_state import UI_DEGRADED
         s = TestVerdictIdleExitIsRetry._health_none_session(_pinned)
         _write_fresh_macro_state(tmp_path)
+        _pinned.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         P, tiles = TestVerdictIdleExitIsRetry._tiles(_pinned, s)
         assert tiles["verdict.regime"].card.state == UI_DEGRADED
         assert tiles["verdict.regime"].card.note.where is P.EXIT_RETRY_HERE
+
+    def test_health_none_warroom_with_snapshot_not_degraded(self, _pinned, tmp_path):
+        """旗標 False（現行）：warroom 健康分缺 ＋ 有效快照 ⇒ ⛔ 不退快照（卡③ 非 degraded、出口＝等正式廣度來源）。"""
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
+        s = TestVerdictIdleExitIsRetry._health_none_session(_pinned)
+        _write_fresh_macro_state(tmp_path)
+        P, tiles = TestVerdictIdleExitIsRetry._tiles(_pinned, s)
+        card = tiles["verdict.regime"].card
+        assert card.state not in (P.UI_LIVE, P.UI_DEGRADED), card.state
+        assert card.note.where is P.EXIT_WAIT_BREADTH_SOURCE
+        assert AS.get_macro_regime()["source"] == SOURCE_UNEVALUATED_BREADTH
 
     def test_retarget_only_touches_the_contract_exit(self):
         """`contract_exit_retargeted` 只換 `CONTRACT_NO_EXIT_WHERE`；未接線 / 失敗的出口原樣。"""

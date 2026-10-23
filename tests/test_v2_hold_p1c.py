@@ -219,6 +219,13 @@ class TestB6r4PositionCap:
 
     @pytest.mark.parametrize("wr", [None, {"health_score": None, "effective_regime": "bull"}])
     def test_e_warroom_absent_cannot_discriminate(self, cap_dir, monkeypatch, wr):
+        # 📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：wr1（warroom 在、健康分缺）在
+        #   代理廣度不計分（`BREADTH_PROXY_SCORING_ENABLED=False`，現行）時改由 warroom 撐住位階（＝缺真實廣度未評估），
+        #   ⛔ 不再落到讀壞的舊檔而拋 ⇒ 不再是「未載入路徑」。本支守的「未載入路徑分不出突變」只在旗標 True 時仍可達，
+        #   故 wr1 改在旗標 True 下跑（斷言一字未改）；旗標 False 的新行為由下一支守。
+        if wr is not None:
+            import shared.signal_thresholds as STH
+            monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         AL.st.session_state.clear()
         if wr is not None:
             AL.st.session_state["warroom_summary"] = dict(wr)
@@ -232,6 +239,16 @@ class TestB6r4PositionCap:
             with monkeypatch.context() as _mp:
                 _mp.setattr(_mod, _attr, getattr(_m, _attr))
                 assert _cap()[0].state == UI_FAILED                                    # 突變體：也紅 ⇒ 分不出
+
+    def test_e_health_none_warroom_breadth_gate_not_file_failed(self, cap_dir):
+        """旗標 False（現行）：warroom 健康分缺 ＋ 舊檔讀壞 ⇒ 位階不靠舊檔（DEC-075 D-1(a)）⇒ 卡不因舊檔轉紅、
+        改為未評估（廣度原因）。"""
+        AL.st.session_state.clear()
+        AL.st.session_state["warroom_summary"] = {"health_score": None, "effective_regime": "bull"}
+        _write(cap_dir / "macro_state.json", "{bad json")
+        _c = _cap()[0]
+        assert _c.state != UI_FAILED and _c.state != UI_LIVE, _c.state
+        assert "macro_state.json" not in (_c.note.why or "")
 
 
 # ══════════════════════════════════════════════════════════════════

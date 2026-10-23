@@ -871,9 +871,19 @@ _WR_NO_HEALTH = dict(_WR_LIVE, health_score=None)
 
 
 class TestB1SnapshotWhy:
-    """先寫檔、warroom 健康分缺 ⇒ 位階走規則引擎快照（degraded）：why 屬實、無「不是這一輪算的」「AI 鎖定」。"""
+    """先寫檔、warroom 健康分缺 ⇒ 位階走規則引擎快照（degraded）：why 屬實、無「不是這一輪算的」「AI 鎖定」。
+
+    📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：「warroom 健康分缺 ⇒ 退規則引擎快照」
+    正是 DEC-075 不採用的 (b)；代理廣度不計分（`BREADTH_PROXY_SCORING_ENABLED=False`，現行）時 L3 一律改標
+    「缺真實廣度未評估」、⛔ 不退快照（守衛見 `tests/test_dec074_breadth_gate.py::TestMustR1TwiiDeadNoFileFallback`、
+    `tests/test_batch_z60.py::TestDegradedRegimeExitIsRetry::test_health_none_warroom_with_snapshot_not_degraded`）。
+    本類守的是「快照路徑**可達時**文案屬實」，故一律在旗標 True（快照路徑在新規則下仍可達的那一態）下跑；
+    斷言一字未改。
+    """
 
     def _setup(self, l1, tmp_path, monkeypatch):
+        import shared.signal_thresholds as STH
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         monkeypatch.chdir(tmp_path)
         kw = _inputs()
         l1(kw["pmi_history"])
@@ -918,7 +928,9 @@ class TestB1SnapshotWhy:
         assert notes["card1"].where is P.EXIT_RETRY_HERE
 
     def test_card1_unloaded_why_when_nothing(self, monkeypatch, tmp_path):
+        import shared.signal_thresholds as STH
         from src.ui.views import page_today as P
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)   # 理由見類別 docstring 📌
         monkeypatch.chdir(tmp_path)
         AS = _as_session(monkeypatch, {"warroom_summary": dict(_WR_NO_HEALTH)})
         tiles, _, _ = _today_tiles(AS, P)

@@ -68,17 +68,27 @@ class TestCalcTrafficLightBreadthGate:
         tl = _tl(None)
         assert tl["health"] is None
 
-    def test_no_breadth_input_and_no_score_stays_unloaded(self):
-        """F1（三源全空、連代理都沒有）⇒ 既有 SOURCE_UNLOADED（SHOULD-A2 那組照舊）。
+    def test_jingqi_and_score_absent_l2_keeps_unloaded_but_l3_unevaluated(self, _fresh_file):
+        """旌旗整包缺席＋大盤分缺、`cl_data` 非空（只有非廣度來源）⇒ L2 照舊標 SOURCE_UNLOADED；
+        L3 `get_macro_state` 依 DEC-075 D-1(a) 仍回未評估、⛔ 不退 `macro_state.json`。
 
-        ⚠️ 回修 QA1 MUST-1（2026-10-23）：舊版本測試寫「代理旌旗＋大盤分缺 ⇒ UNLOADED」—— 那正是破口，
-        改為下一支 `test_proxy_with_score_missing_is_breadth`；本支只守「真的什麼廣度輸入都沒有」那一態。
+        ⚠️ 2026-10-23 QA3 MUST-R1 更正（有意識的修改，⛔ 不是漏刪）：本支舊名
+        `test_no_breadth_input_and_no_score_stays_unloaded`、舊 docstring 寫「F1（三源全空、連代理都沒有）」——
+        **不實**：輸入 `cl_data={"x": 1}` 不是三源全空（真正的 F1 三源全空會讓 `calc_traffic_light` 直接回 None，
+        不會產生 warroom）。本態實際是 ^TWII 全滅那一族（旌旗缺、大盤分缺、其他來源還在）。
+        舊斷言（L2 原因＝UNLOADED）照留：L2 原因標記本批刻意不改（QA3 實測放寬 L2 會讓失敗態 golden 變紅）；
+        新增 L3 斷言：這一態舊碼會退檔案規則引擎位階（＝DEC-075 不採用的 (b)），自 MUST-R1 起改為未評估。
         """
-        from shared.regime_arbiter import SOURCE_UNLOADED
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH, SOURCE_UNLOADED
         from src.compute.macro.macro_helpers import calc_traffic_light
+        from src.compute.macro.warroom_summary import build_warroom_summary
+        from src.services.macro_state_locker import get_macro_state
         tl = calc_traffic_light({}, None, {"x": 1}, None)
         assert tl["health"] is None
         assert tl["regime_source"] == SOURCE_UNLOADED
+        st = get_macro_state(build_warroom_summary(tl, {}), state_file_path=_fresh_file)
+        assert st["regime"] == "unknown" and st["is_loaded"] is False, st
+        assert st["source"] == SOURCE_UNEVALUATED_BREADTH
 
     def test_proxy_with_score_missing_is_breadth(self):
         """QA1 MUST-1：代理廣度被擋下 ⇒ 一律標 breadth（不看大盤分在不在）。"""
@@ -296,14 +306,39 @@ class TestGetMacroStateD1a:
                              state_file_path=_fresh_file, strict=True)
         assert st["regime"] == "unknown" and st["is_loaded"] is False
 
-    def test_other_reason_still_falls_back_to_file(self, _fresh_file):
-        """非 breadth 原因（F1 三源全敗 = SOURCE_UNLOADED）⇒ 照舊退檔案位階（C1 v19.182 其餘語意）。"""
-        from shared.regime_arbiter import SOURCE_FILE_RULE_ENGINE, SOURCE_UNLOADED
+    def test_other_reason_unevaluated_when_proxy_scoring_off(self, _fresh_file):
+        """warroom 在、health 非有限、原因標 SOURCE_UNLOADED ⇒ 代理不計分（旗標 False）時也未評估、⛔ 不退檔。
+
+        ⚠️ 2026-10-23 QA3 MUST-R1（DEC-075 D-1(a)，行為變更，有意識的修改，⛔ 不是漏刪）：本支舊名
+        `test_other_reason_still_falls_back_to_file`，舊斷言「非 breadth 原因 ⇒ 照舊退檔案位階（C1 v19.182 其餘語意）」。
+        舊理由在**旗標開（代理計分）**時仍成立 —— 改由下一支 `..._when_proxy_scoring_on` 守；
+        旗標關時 repo 沒有任何真實廣度，health 非有限必然受缺廣度所限 ⇒ 退檔＝DEC-075 不採用的 (b)。
+        """
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH, SOURCE_UNLOADED
         from src.services.macro_state_locker import get_macro_state
+        for health in (None, float("nan"), float("inf")):
+            st = get_macro_state({"health_score": health, "regime_source": SOURCE_UNLOADED},
+                                 state_file_path=_fresh_file)
+            assert st["regime"] == "unknown" and st["is_loaded"] is False, (health, st)
+            assert st["source"] == SOURCE_UNEVALUATED_BREADTH and st["health"] is None
+
+    def test_other_reason_falls_back_to_file_when_proxy_scoring_on(self, _fresh_file, monkeypatch):
+        """旗標 True（未來真的有可計分廣度）⇒ MUST-R1 新分支不觸發 ⇒ 非 breadth 原因照舊退檔案位階。
+
+        防的是把未來「真實廣度到位、health None 屬其他來源故障」的情境一起鎖死成未評估。
+        """
+        import shared.signal_thresholds as STH
+        from shared.regime_arbiter import SOURCE_FILE_RULE_ENGINE, SOURCE_UNEVALUATED_BREADTH, SOURCE_UNLOADED
+        from src.services.macro_state_locker import get_macro_state
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         st = get_macro_state({"health_score": None, "regime_source": SOURCE_UNLOADED},
                              state_file_path=_fresh_file)
         assert st["source"] == SOURCE_FILE_RULE_ENGINE and st["is_loaded"] is True
         assert st["regime"] == "bull"
+        # 既有 breadth 原因分支與旗標無關（照舊未評估）
+        st2 = get_macro_state({"health_score": None, "regime_source": SOURCE_UNEVALUATED_BREADTH},
+                              state_file_path=_fresh_file)
+        assert st2["regime"] == "unknown" and st2["is_loaded"] is False
 
     def test_allocation_unevaluated(self, _fresh_file):
         """I-3：位階未評估 ⇒ 姿態帶不給結論（既有路徑）。"""
@@ -316,10 +351,17 @@ class TestGetMacroStateD1a:
         assert d.is_loaded is False and d.icon == "⬜"
 
     def test_mutant_remove_reason_guard_turns_red(self, _fresh_file, monkeypatch):
-        """突變：移除原因判斷（常數對不上 ⇒ 守衛失效）⇒ 退回檔案位階 ⇒ 必紅。"""
+        """突變：移除原因判斷（常數對不上 ⇒ 守衛失效）⇒ 退回檔案位階 ⇒ 必紅。
+
+        📌 2026-10-23 QA3 MUST-R1：L3 另加了「代理不計分 ⇒ health 非有限一律未評估」的分支（`_wr_no_real_breadth`），
+        旗標關時它會把本突變也接住（縱深防禦）。為了只量「原因判斷」這一條守衛，本突變同時把旗標翻 True
+        讓新分支不觸發；新分支自己的突變見 `TestMustR1TwiiDeadNoFileFallback`。
+        """
         import shared.regime_arbiter as RA
+        import shared.signal_thresholds as STH
         _orig = RA.SOURCE_UNEVALUATED_BREADTH
         monkeypatch.setattr(RA, "SOURCE_UNEVALUATED_BREADTH", "__mutant__")
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         from src.services.macro_state_locker import get_macro_state
         st = get_macro_state({"health_score": None, "regime_source": _orig},
                              state_file_path=_fresh_file)
@@ -675,8 +717,19 @@ class TestMust1ProxyAndScoreMissingNoFileFallback:
         exec(compile(mut, MH.__file__, "exec"), m.__dict__)
         from src.compute.macro.warroom_summary import build_warroom_summary
         tl = m.calc_traffic_light({"regime": "bull"}, {"avg": 55.0, "is_proxy": True}, {"x": 1}, None)
-        st = get_macro_state(build_warroom_summary(tl, {"regime": "bull"}), state_file_path=_fresh_file)
-        assert st["regime"] == "bull" and st["is_loaded"] is True   # 突變下確實退檔 ⇒ 上方守衛有效
+        # 📌 2026-10-23 QA3 MUST-R1（有意識的修改，⛔ 不是漏刪）：舊斷言「突變下 get_macro_state 退檔（bull）」
+        #   已不成立 —— L3 新增「代理不計分 ⇒ health 非有限一律未評估」分支，旗標關時把本突變也接住（縱深防禦）。
+        #   改量兩件事：(1) L2 原因確實被突變打回 UNLOADED（L2 守衛有效；`test_proxy_with_score_missing_is_breadth` 會紅）；
+        #   (2) L3 仍未評估；只有旗標 True（新分支不觸發）時才退檔 ⇒ L2 守衛在旗標開時仍是唯一防線。
+        from shared.regime_arbiter import SOURCE_UNLOADED
+        import shared.signal_thresholds as STH
+        assert tl["regime_source"] == SOURCE_UNLOADED
+        wr = build_warroom_summary(tl, {"regime": "bull"})
+        st = get_macro_state(wr, state_file_path=_fresh_file)
+        assert st["regime"] == "unknown" and st["is_loaded"] is False
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
+        st_on = get_macro_state(wr, state_file_path=_fresh_file)
+        assert st_on["regime"] == "bull" and st_on["is_loaded"] is True   # 新分支不在時確實退檔
 
 
 def _no_retry(txt):
@@ -839,3 +892,113 @@ class TestShouldFixes:
         assert is_breadth_proxy({"is_proxy": np.bool_(True)}) is True
         tl = _tl({"avg": 55.0, "is_proxy": np.bool_(True)})
         assert tl["health"] is None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 回修（QA3 MUST-R1，2026-10-23）：^TWII 全滅 ⇒ 位階仍未評估、⛔ 不退 macro_state.json
+# ══════════════════════════════════════════════════════════════════
+#: ^TWII 全滅（`F3_twii_dead_others_alive` 那一族）：ADL 與旌旗備援兩個代理廣度都源自 ^TWII ⇒ 旌旗整包缺、
+#: 大盤分缺；法人與期貨還在。L2 沒有「被擋下的代理值」⇒ 原因標 SOURCE_UNLOADED（L2 本批刻意不改）。
+_TWII_DEAD_CL = {"inst": {"外資及陸資": {"net": 50.0}}}
+
+
+def _wr_twii_dead(mkt):
+    from src.compute.macro.macro_helpers import calc_traffic_light
+    from src.compute.macro.warroom_summary import build_warroom_summary
+    li = pd.DataFrame({"外資期貨淨額": [5000.0, 6000.0, 7000.0, 8000.0]})
+    tl = calc_traffic_light(dict(mkt), None, dict(_TWII_DEAD_CL), li)
+    assert tl is not None and tl["health"] is None
+    return tl, build_warroom_summary(tl, dict(mkt))
+
+
+def _check_twii_dead_unevaluated(path: str, get_macro_state=None, **kw) -> None:
+    from shared.regime_arbiter import SOURCE_FILE_RULE_ENGINE, SOURCE_UNEVALUATED_BREADTH
+    if get_macro_state is None:
+        from src.services.macro_state_locker import get_macro_state
+    for mkt in ({}, {"regime": "bull"}):
+        _tl0, wr = _wr_twii_dead(mkt)
+        st = get_macro_state(wr, state_file_path=path, **kw)
+        assert st["source"] != SOURCE_FILE_RULE_ENGINE, (mkt, st)
+        assert st["regime"] == "unknown" and st["is_loaded"] is False, (mkt, st)
+        assert st["source"] == SOURCE_UNEVALUATED_BREADTH and st["health"] is None, (mkt, st)
+
+
+class TestMustR1TwiiDeadNoFileFallback:
+    """QA3 MUST-R1：^TWII 全滅 ⇒ `get_macro_state` 回 unknown、`is_loaded=False`、非 rule_engine（DEC-075 D-1(a)）。"""
+
+    def test_premise_l2_reason_is_unloaded(self):
+        """前提自證：此態 L2 原因確實是 UNLOADED（不是 breadth）—— 正是舊碼退檔的入口。"""
+        from shared.regime_arbiter import SOURCE_UNLOADED
+        for mkt in ({}, {"regime": "bull"}):
+            tl, _wr = _wr_twii_dead(mkt)
+            assert tl["regime_source"] == SOURCE_UNLOADED
+            assert tl["health_unavailable_reason"] is None
+
+    @pytest.mark.parametrize("kw", [{}, {"strict": True}, {"require_valid_risk_cap": True},
+                                    {"strict": True, "require_valid_risk_cap": True}])
+    def test_no_file_fallback(self, _fresh_file, kw):
+        _check_twii_dead_unevaluated(_fresh_file, **kw)
+
+    def test_downstream_scoring_and_find_filter_not_bear(self, tmp_path, monkeypatch):
+        """下游：AI 多因子評分不拿到可用位階（不走空頭權重）；🎯 找標的頁不套空頭濾網。
+
+        真實鏈：session `warroom_summary` ＋ cwd 下有效的 `macro_state.json`（寫空頭）→
+        `allocation_service.get_macro_regime` → `ai_qa_service._scoring_regime` ／ `page_find._load_regime`。
+        """
+        import streamlit as st
+        from src.services.macro_state_locker import _now_str
+        (tmp_path / "macro_state.json").write_text(json.dumps(
+            {"market_regime": "空頭", "exposure_limit_pct": 30, "timestamp": _now_str()},
+            ensure_ascii=False), encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        _tl0, wr = _wr_twii_dead({})
+        _had = "warroom_summary" in st.session_state
+        _old = st.session_state.get("warroom_summary")
+        st.session_state["warroom_summary"] = wr
+        try:
+            import src.services.ai_qa_service as Q
+            from src.ui.views import page_find as F
+            dec = Q._scoring_regime()
+            assert dec.usable is False and dec.regime != "bear", dec
+            assert Q._tool_get_market_state(require_valid_risk_cap=True).get("ok") is False
+            assert F._load_regime() == (None, "")
+            # ⚠️ 刻意**不**對「warroom 不存在」路徑下斷言：該路徑仍退 `macro_state.json`（本批不動），
+            #   是否落入 D-1(a) 禁區待總管裁定 —— 不在這裡把現況鎖成合規。
+        finally:
+            if _had:
+                st.session_state["warroom_summary"] = _old
+            else:
+                st.session_state.pop("warroom_summary", None)
+
+    def test_mutant_remove_l3_branch_turns_red(self, _fresh_file):
+        """突變：把 L3 新分支（`or _wr_no_real_breadth`）拔掉 ⇒ 退回檔案位階 ⇒ 檢查必紅。"""
+        import types
+        import src.services.macro_state_locker as MSL
+        src = (REPO / "src/services/macro_state_locker.py").read_text(encoding="utf-8")
+        anchor = "\n                        or _wr_no_real_breadth))"
+        assert src.count(anchor) == 1
+        m = types.ModuleType("_msl_mut")
+        m.__file__ = MSL.__file__
+        exec(compile(src.replace(anchor, "))"), MSL.__file__, "exec"), m.__dict__)
+        _check_twii_dead_unevaluated(_fresh_file)                       # 原碼：綠
+        _tl0, wr = _wr_twii_dead({})
+        assert m.get_macro_state(wr, state_file_path=_fresh_file)["regime"] == "bull"   # 突變下確實退檔
+        with pytest.raises(AssertionError):
+            _check_twii_dead_unevaluated(_fresh_file, get_macro_state=m.get_macro_state)
+
+    def test_flag_on_does_not_trigger_new_branch(self, _fresh_file, monkeypatch):
+        """旗標 True ⇒ 新分支不觸發（同一份 ^TWII 全滅 warroom 照舊退檔），不把未來真實廣度情境鎖死。"""
+        import shared.signal_thresholds as STH
+        from shared.regime_arbiter import SOURCE_FILE_RULE_ENGINE
+        from src.services.macro_state_locker import get_macro_state
+        _tl0, wr = _wr_twii_dead({"regime": "bull"})        # 旗標 False 下組出的 warroom（只量 L3）
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
+        st = get_macro_state(wr, state_file_path=_fresh_file)
+        assert st["source"] == SOURCE_FILE_RULE_ENGINE and st["is_loaded"] is True
+        with pytest.raises(AssertionError):
+            _check_twii_dead_unevaluated(_fresh_file)
+
+    def test_flag_read_from_l0_not_hardcoded(self):
+        """旗標從 `shared.signal_thresholds` 讀，不寫死。"""
+        src = (REPO / "src/services/macro_state_locker.py").read_text(encoding="utf-8")
+        assert "_ST.BREADTH_PROXY_SCORING_ENABLED" in src

@@ -361,6 +361,11 @@ def get_macro_state(warroom_summary: dict | None = None, *,
         3. macro_state.json['market_regime']      ← AI 鎖定快照（規則引擎曝險分級）
         4. 皆無 → 'unknown'（**不是** 'neutral'）
 
+    📌 DEC-075 D-1(a)（2026-10-23，含 QA3 MUST-R1 回修）：warroom **存在**而健康分非有限時，第 3 條**不生效** ——
+    原因標「缺真實廣度」（`SOURCE_UNEVALUATED_BREADTH`）、或代理廣度不計分
+    （`shared.signal_thresholds.BREADTH_PROXY_SCORING_ENABLED` 為 False）⇒ 位階 'unknown'、`is_loaded=False`。
+    旗標為 True 且原因不是廣度時照舊退第 3 條。warroom **不存在**時第 3 條照舊生效（本批未改）。
+
     Returns:
         dict::
 
@@ -449,8 +454,24 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     # ⚠️ 只限 breadth 原因：其他原因的 health 非有限（F1 三源全敗＝`SOURCE_UNLOADED`、上游 NaN…）
     # 照舊視同 warroom 不存在、退檔案位階（C1 v19.182／AUD-C22 其餘語意不動）。
     # 舊理由（「NaN 不是一個健康分」）仍成立；被權衡掉的只是「health 缺席 ⇒ 一律退檔」。
+    # ── DEC-075 D-1(a) 回修（QA3 MUST-R1，2026-10-23，行為變更，有意識的修改，⛔ 不是漏刪）────────────
+    # 舊讀法（上段第 3 句）：「⚠️ 只限 breadth 原因：其他原因的 health 非有限 … 照舊視同 warroom 不存在、退檔案位階」。
+    # 破口：^TWII 全滅時（ADL 與旌旗備援兩個代理廣度都源自 ^TWII ⇒ 旌旗整包缺、大盤分也缺、法人／期貨還在），
+    #   L2 `calc_traffic_light` 沒有「被擋下的代理值」可觸發 breadth 原因 ⇒ 標 `SOURCE_UNLOADED`
+    #   ⇒ 舊讀法退回 `macro_state.json` 規則引擎位階、`is_loaded=True` ⇒ AI 評分用該位階權重、找標的頁套濾網
+    #   ＝ DEC-075 不採用的 (b)（「資料越少、結論越多」）。
+    # 新讀法：代理廣度不計分（`shared.signal_thresholds.BREADTH_PROXY_SCORING_ENABLED` 為 False）時，
+    #   repo 內沒有任何能讓健康分成立的真實廣度 ⇒ warroom 存在而 health 非有限，**不論 L2 標的原因為何**，
+    #   健康分都必然受「缺真實廣度」所限 ⇒ 位階一併未評估（與上方 breadth 原因分支**同一輸出**），⛔ 不退檔。
+    #   L2 的原因標記／擋燈文案／油門／explainer 一律不動（QA3 實測放寬 L2 會讓失敗態 golden 變紅）。
+    # 舊理由（「非 breadth 原因的未評估，檔案位階是合法的第 3 順位來源」）在旗標開啟（代理計分）時仍成立 ——
+    #   旗標開 ⇒ 本條不觸發、行為同上段舊讀法；被權衡掉的只是「旗標關時仍容許退檔」。
+    # warroom 不存在（`not _wr`）的路徑**本條不碰**（總管裁定事項，見回報）。
+    _wr_no_real_breadth = (bool(_wr) and not _wr_ok
+                           and not _ST.BREADTH_PROXY_SCORING_ENABLED)
     _wr_breadth = (bool(_wr) and not _wr_ok
-                   and _wr.get("regime_source") == _RA.SOURCE_UNEVALUATED_BREADTH)
+                   and (_wr.get("regime_source") == _RA.SOURCE_UNEVALUATED_BREADTH
+                        or _wr_no_real_breadth))
     _file_ok = bool(_file) and _file.get("market_regime") not in (None, "系統異常")
     # DL-f1-s65（客戶 2026-10-02 頁 1 ③「裁決設有效期限」）：過期裁決**視同不存在**——
     # 不進位階、不給曝險上限（＝建議持股上限）、strict 也不當「讀壞了」拋（過期 ≠ 讀壞）。

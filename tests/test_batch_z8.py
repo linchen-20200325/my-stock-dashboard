@@ -62,6 +62,7 @@ from __future__ import annotations
 #   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
 #   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
+import copy
 import datetime as _dt
 import hashlib
 import importlib.util
@@ -459,7 +460,17 @@ class TestTopAllFailedNoLongerRaises:
     @pytest.mark.parametrize("name", _FAIL)
     def test_whole_output_golden(self, _pinned, name):
         ret, fake = _run_top(_pinned, _scenario(name))
-        assert _sha(_top_digest(ret, fake)) == _FIXED_TOP_SHA[name]
+        # ~~assert _sha(_top_digest(ret, fake)) == _FIXED_TOP_SHA[name]~~
+        # 📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，行為變更，有意識的修改，⛔ 不是漏刪）：代理廣度不計分
+        #   （`BREADTH_PROXY_SCORING_ENABLED=False`）時，warroom 在而健康分缺 ⇒ L3 `get_macro_state` 一律標
+        #   「缺真實廣度未評估」，`macro_state['source']` 由 'unloaded' 改為 SOURCE_UNEVALUATED_BREADTH。
+        #   這是整份輸出中**唯一**預期改變的欄位（畫面輸出、warroom、回傳值逐位不變；regime／light／is_loaded
+        #   本來就是 unknown／⬜／False）⇒ 斷言它換了、換回舊值後仍須逐位等於原 golden（舊 sha 一字未改）。
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH, SOURCE_UNLOADED
+        dg = copy.deepcopy(_top_digest(ret, fake))
+        assert dg["macro_state"]["source"] == SOURCE_UNEVALUATED_BREADTH, dg["macro_state"]
+        dg["macro_state"]["source"] = SOURCE_UNLOADED
+        assert _sha(dg) == _FIXED_TOP_SHA[name]
 
     def test_rerun_within_fresh_window_stays_rendered(self, _pinned):
         """快取新鮮的 30 分鐘內每次 rerun 修前都再炸一次。第二輪讀第一輪寫的 warroom
@@ -484,8 +495,17 @@ class TestTopAllFailedNoLongerRaises:
         fake.session_state.pop("warroom_summary")
         for _k in (AS._ALLOC_CACHE_KEY, AS._ALLOC_SIG_KEY):
             fake.session_state.pop(_k, None)
-        assert AS.get_allocation() == alloc
-        assert AS.get_macro_regime() == reg
+        # ~~assert AS.get_allocation() == alloc~~
+        # ~~assert AS.get_macro_regime() == reg~~
+        # 📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：warroom 在（health 缺）時未評估的
+        #   **原因**改標「缺真實廣度」（`source`／`unevaluated_reason`），warroom 拿掉時仍是既有 'unloaded'；
+        #   未評估這個**決策**（is_loaded／regime／light／range_text）兩態仍逐欄相同。
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH, SOURCE_UNLOADED
+        assert reg["source"] == SOURCE_UNEVALUATED_BREADTH and alloc.unevaluated_reason == "breadth"
+        alloc0, reg0 = AS.get_allocation(), AS.get_macro_regime()
+        assert reg0["source"] == SOURCE_UNLOADED and alloc0.unevaluated_reason == ""
+        assert {k: v for k, v in reg0.items() if k != "source"} == {k: v for k, v in reg.items() if k != "source"}
+        assert (alloc0.is_loaded, alloc0.range_text, alloc0.posture) == (alloc.is_loaded, alloc.range_text, alloc.posture)
 
 
 class TestTopWithValuesUnchanged:
