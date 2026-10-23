@@ -115,3 +115,19 @@ def load_section_inputs(state: dict) -> SectionInputs:
         last_inst_date=state.get('_last_inst_date'),
         last_margin=state.get('_last_margin'),
     )
+
+
+def breadth_proxy_presence(state: Optional[dict]) -> Optional[bool]:
+    """紅綠燈當輪的輸入裡有沒有「被擋下的代理（估算）廣度值」（QA-4 S-1，2026-10-23；純顯示用）。
+
+    取 `load_section_inputs(state)` 的 `jingqi_info` 與 `cl_data['adl']` —— **與 `calc_traffic_light`
+    吃的是同一份**（含 warroom 合成的旌旗退路）—— 交給 L0 `shared.macro_provenance.breadth_proxy_held_back`。
+    回 True（有代理值被擋下）／False（連代理值也沒有）／None（拿不準 ⇒ 呼叫端用中性句）。
+    ⛔ 判燈、計分、位階一律不讀本函式。
+    """
+    from shared.macro_provenance import breadth_proxy_held_back
+    if state is None:
+        return None
+    _inp = load_section_inputs(state)
+    _cd = _inp.cl_data if isinstance(_inp.cl_data, dict) else {}
+    return breadth_proxy_held_back(_inp.jingqi_info, _cd.get('adl'))

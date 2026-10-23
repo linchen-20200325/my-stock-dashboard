@@ -721,9 +721,15 @@ def warroom_written_detail(health_missing: bool, regime_source: Any) -> str:
     DEC-074 B／DEC-075 D-1(a)（2026-10-23）：健康分未評估的**原因**是「缺真實市場廣度」時，
     既有那句（「兩條腿都缺」「位階會改讀 macro_state.json」）兩半都不屬實 ⇒ 換成屬實的那句；
     其餘情形逐字照舊。⛔ 不寫「重新抓取」之類的指引（重跑不會讓代理值變成可計分）。
+    📌 QA-4 S-1 連帶（2026-10-23，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：~~只在 `regime_source` 是 breadth 時才換~~ ——
+    DEC-075 D-1(a) 回修（QA3 MUST-R1）起，代理廣度不計分（L0 `BREADTH_PROXY_SCORING_ENABLED` 為 False）時
+    warroom 在而健康分缺 ⇒ `get_macro_state()` **不論 L2 標的原因**都判位階未評估、⛔ 不改讀 macro_state.json ⇒
+    ^TWII 全滅（L2 標 `unloaded`）時舊句「位階若有可用的 macro_state.json 會改讀它」不屬實。選擇條件改與
+    `get_macro_state` 的 `_wr_breadth` 同口徑；旗標開時逐字照舊。
     """
     from shared import regime_arbiter as _RA_wr
-    if health_missing and regime_source == _RA_wr.SOURCE_UNEVALUATED_BREADTH:
+    from shared.signal_thresholds import BREADTH_PROXY_SCORING_ENABLED as _BPSE_wr
+    if health_missing and (regime_source == _RA_wr.SOURCE_UNEVALUATED_BREADTH or not _BPSE_wr):
         return ("寫入 warroom_summary"
                 "（⚠️ 健康分因缺真實市場廣度（漲跌家數）未評估 —— 代理估算值依 DEC-074 不計分："
                 "建議持股的姿態帶與市場位階一併未評估（DEC-075，不改讀 macro_state.json）；"

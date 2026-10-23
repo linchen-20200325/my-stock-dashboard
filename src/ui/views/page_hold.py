@@ -82,6 +82,7 @@
     VIX（單獨）   L3 `services.dividend_station_service.fetch_vix`
     總經位階      L3 `services.dividend_station_service.get_station_macro`
     建議持股水位  L3 `services.allocation_service.get_allocation`
+    廣度文案訊號  L3 `services.allocation_service.get_breadth_proxy_presence`  ← QA-4 S-1（只讀 session、零 I/O；只選 ④⑤ 廣度未評估的說明句）
     N/M 盞可信度  L4 `ui.render.station_cards.aggregate_judged` / `tally_states` /
                   `is_fully_judged` / `cruise_or_gap`（**與既有戰情室同一把尺**）
     燈格牆渲染    L4 `ui.render.station_cards.render_light_wall` / `render_legend`
@@ -840,6 +841,19 @@ class MacroReadout:
     error: str = ""
     #: DEC-075 回修（MUST-2）：未評估原因是「缺真實市場廣度」（L3 `get_station_macro` 原樣透傳）。
     breadth_unevaluated: bool = False
+    #: QA-4 S-1（2026-10-23）：`breadth_unevaluated` 時，本輪有沒有被擋下的代理廣度值
+    #: （L3 `allocation_service.get_breadth_proxy_presence()`；True／False／None ＝ 拿不準）。只選文案，判態不讀。
+    breadth_proxy: bool | None = None
+
+
+def _breadth_proxy_presence() -> bool | None:
+    """QA-4 S-1：L3 `get_breadth_proxy_presence()`；讀不出來 ⇒ None（中性句）。⛔ 判態不讀。"""
+    try:
+        from src.services.allocation_service import get_breadth_proxy_presence
+        return get_breadth_proxy_presence()
+    except Exception as _e:  # noqa: BLE001 — 拿不準就用中性句，log 出聲（⛔ 不猜任何一邊）
+        print(f"[views/page_hold] get_breadth_proxy_presence 失敗：{_e!r} —— 改用中性句")
+        return None
 
 
 def load_macro(req: HoldRequest) -> MacroReadout:
@@ -871,7 +885,8 @@ def load_macro(req: HoldRequest) -> MacroReadout:
         defense=bool(_defense) if isinstance(_defense, bool) else None,
         posture_label=_clean_signal(_m.get("posture_label")),
         posture_range=str(_m.get("posture_range") or ""),
-        breadth_unevaluated=bool(_m.get("breadth_unevaluated")))
+        breadth_unevaluated=bool(_m.get("breadth_unevaluated")),
+        breadth_proxy=(_breadth_proxy_presence() if _m.get("breadth_unevaluated") else None))
 
 
 @dataclass(frozen=True)
@@ -930,6 +945,8 @@ class AllocationReadout:
     risk_cap_disclosure: Any = None
     #: DEC-075 回修（MUST-2）：L3 `AllocationDecision.unevaluated_reason == 'breadth'`（缺真實市場廣度）。
     breadth_unevaluated: bool = False
+    #: QA-4 S-1（2026-10-23）：同 `MacroReadout.breadth_proxy`（只選文案，判態不讀）。
+    breadth_proxy: bool | None = None
 
 
 def load_allocation(req: HoldRequest) -> AllocationReadout:
@@ -961,7 +978,9 @@ def load_allocation(req: HoldRequest) -> AllocationReadout:
         conflicts=tuple(str(_c) for _c in (getattr(_a, "conflicts", ()) or ())),
         has_risk_cap=has_system_risk_cap(getattr(_a, "caps", ())),
         risk_cap_disclosure=getattr(_a, "risk_cap_disclosure", None),
-        breadth_unevaluated=(getattr(_a, "unevaluated_reason", "") == "breadth"))
+        breadth_unevaluated=(getattr(_a, "unevaluated_reason", "") == "breadth"),
+        breadth_proxy=(_breadth_proxy_presence()
+                       if getattr(_a, "unevaluated_reason", "") == "breadth" else None))
 
 
 @dataclass(frozen=True)
@@ -2423,16 +2442,22 @@ def build_switch_card(switch: SwitchReadout, station: StationReadout) -> _Built:
 
 #: DEC-075 回修（QA1 MUST-2，2026-10-23）：④ 總經位階／⑤ 建議持股水位在「缺真實市場廣度 ⇒ 未評估」時的 why／where。
 #: ⛔ 不叫人「到今天頁更新總經」（I-4：重跑不會讓代理值變成可計分）。其餘未評估原因的既有文案逐字不變。
-def _breadth_empty_why() -> str:
-    from shared.regime_arbiter import UNEVALUATED_BREADTH_EXPLAIN
-    return ("**這是一個有效的結果**（已經去讀過，不是還沒讀）—— " + UNEVALUATED_BREADTH_EXPLAIN
+#: 📌 QA-4 S-1（2026-10-23，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：DEC-075 D-1(a) 回修起這兩格也用在
+#:   ^TWII 全滅（這一輪確實沒抓到、連代理值也沒有）那一態 ⇒ ~~why 開頭「已經去讀過，不是還沒讀」~~、
+#:   ~~where 的「不是這一輪沒抓到」~~、以及 L0 說明句的「目前只有由加權指數推估的代理值」在那一態不屬實。
+#:   現行：why 開頭只講本頁單點可驗的事（讀到的契約回報了這個原因）；說明句依 `breadth_proxy` 二選一
+#:   （L0 `regime_arbiter.unevaluated_breadth_explain`；None ⇒ 中性句）；where 改為兩態都屬實的一句。
+def _breadth_empty_why(breadth_proxy: bool | None = None) -> str:
+    from shared.regime_arbiter import unevaluated_breadth_explain
+    return ("**這不是本頁讀取失敗**：本頁讀到的總經契約明確回報「因缺真實市場廣度而未評估」—— "
+            + unevaluated_breadth_explain(breadth_proxy)
             + "；本站**不以「中性」代替未評估**，也不填一個看起來合理的區間")
 
 
 _BREADTH_EMPTY_WHY: str = _breadth_empty_why()
 _BREADTH_EMPTY_WHERE: str = (
-    f"{NO_EXIT_MARKER} —— **這一格更新資料不會改變**：缺的是正式的市場廣度（漲跌家數）資料來源，"
-    "不是這一輪沒抓到；正式廣度資料接上之前，這一格會一直是未評估")
+    f"{NO_EXIT_MARKER} —— **這一格更新資料不會改變**：缺的是正式的市場廣度（漲跌家數）資料來源；"
+    "正式廣度資料接上之前，這一格會一直是未評估")
 
 
 def build_macro_stage_card(macro: MacroReadout) -> _Built:
@@ -2486,7 +2511,8 @@ def build_macro_stage_card(macro: MacroReadout) -> _Built:
                             f"總經本身的狀態在"
                             f"{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}"))
     elif macro.breadth_unevaluated:   # UI_EMPTY，原因＝缺真實廣度（DEC-075 回修 MUST-2；⛔ 不叫人重抓）
-        _note = Note(now=MACRO_EMPTY_NOW, why=_BREADTH_EMPTY_WHY, where=_BREADTH_EMPTY_WHERE)
+        _note = Note(now=MACRO_EMPTY_NOW, why=_breadth_empty_why(macro.breadth_proxy),
+                     where=_BREADTH_EMPTY_WHERE)
     else:   # UI_EMPTY
         _note = Note(
             now=MACRO_EMPTY_NOW,
@@ -2810,7 +2836,8 @@ def build_position_cap_card(alloc: AllocationReadout) -> _Built:
                      why=_error_why(SRC_ALLOC, alloc.error),
                      where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))
     elif alloc.breadth_unevaluated:   # UI_EMPTY，原因＝缺真實廣度（DEC-075 回修 MUST-2；⛔ 不叫人重抓）
-        _note = Note(now=CAP_EMPTY_NOW, why=_BREADTH_EMPTY_WHY, where=_BREADTH_EMPTY_WHERE)
+        _note = Note(now=CAP_EMPTY_NOW, why=_breadth_empty_why(alloc.breadth_proxy),
+                     where=_BREADTH_EMPTY_WHERE)
     else:   # UI_EMPTY
         _note = Note(
             now=CAP_EMPTY_NOW,

@@ -249,6 +249,13 @@ class TestB6r4PositionCap:
         _c = _cap()[0]
         assert _c.state != UI_FAILED and _c.state != UI_LIVE, _c.state
         assert "macro_state.json" not in (_c.note.why or "")
+        # QA-4 NIT-2（2026-10-23）：灰卡的原因必須是「缺真實市場廣度」那一支（⛔ 換成別的原因也照樣通過）。
+        #   本 session 沒有 jingqi_info／cl_data ⇒ 本輪連代理值也沒有 ⇒ 走「連代理值也沒有」那一句（QA-4 S-1）。
+        assert _c.state == UI_EMPTY, _c.state
+        assert _c.note.where == PH._BREADTH_EMPTY_WHERE
+        assert "缺真實市場廣度" in _c.note.why and "連由加權指數推估的代理值也沒有" in _c.note.why
+        assert "目前只有由加權指數推估的代理值" not in _c.note.why
+        assert "已經去讀過" not in _c.note.why and "不是這一輪沒抓到" not in _c.note.where
 
 
 # ══════════════════════════════════════════════════════════════════

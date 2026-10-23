@@ -201,3 +201,39 @@ def adl_rows_any_proxy(df, n: int) -> bool:
         return True
     # `tolist()` 已把 numpy bool 轉成 Python bool；NaN／None／字串都不是 `False` ⇒ 代理。
     return not all(_is_explicit_false(_v) for _v in _tail)
+
+
+def breadth_proxy_held_back(jingqi_info: Optional[dict], adl_df) -> Optional[bool]:
+    """「缺真實市場廣度 ⇒ 未評估」那一態裡，本輪紅綠燈的輸入**有沒有一個被擋下的代理（估算）廣度值**？
+
+    QA-4 S-1（2026-10-23）：新 UI 的廣度未評估文案原本一律寫「目前只有由加權指數推估的代理值」——
+    ^TWII 全滅（ADL 與旌旗備援兩個代理都源自 ^TWII）時連代理值也沒有，那句不屬實。
+    本函式只回答「有沒有」，供文案二選一；**判燈／計分一律不讀**（純顯示用的訊號）。
+
+    輸入 ＝ 紅綠燈當輪吃的那兩份（`section_inputs.load_section_inputs(...)` 的 `jingqi_info` 與
+    `cl_data['adl']`），判定與 `calc_traffic_light` 的 `_jq_proxy_dropped` 同口徑（旌旗有有限數值、
+    但經 `jingqi_for_scoring` 被擋下），另加 ADL：有列、且末列為代理、且計分開關關閉。
+
+    Returns:
+        True  ⇒ 至少一個代理值在、被擋下不計分（「目前只有代理值」屬實）；
+        False ⇒ 旌旗沒有數值、ADL 也沒有任何列（「這一輪連代理值也沒有」屬實）；
+        None  ⇒ 拿不準（例：ADL 有列但末列不是代理）—— 呼叫端用兩種情境都屬實的中性句（⛔ 不猜）。
+    """
+    import math as _m
+    from shared.signal_thresholds import BREADTH_PROXY_SCORING_ENABLED
+    _avg = jingqi_info.get('avg') if isinstance(jingqi_info, dict) else None
+    try:
+        _jq_has = (_avg is not None and not isinstance(_avg, bool) and _m.isfinite(float(_avg)))
+    except (TypeError, ValueError):
+        _jq_has = False
+    if _jq_has and jingqi_for_scoring(jingqi_info) is None:
+        return True
+    try:
+        _adl_rows = 0 if adl_df is None else len(adl_df)
+    except Exception:  # noqa: BLE001 — 量不出列數 = 拿不準（⛔ 不猜成「沒有」）
+        return None
+    if _adl_rows > 0 and adl_df_is_proxy(adl_df) and not BREADTH_PROXY_SCORING_ENABLED:
+        return True
+    if not _jq_has and _adl_rows == 0:
+        return False
+    return None

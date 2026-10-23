@@ -833,16 +833,26 @@ class TestS1RefreshStepDetail:
         d = warroom_written_detail(True, SOURCE_UNEVALUATED_BREADTH)
         assert "兩條腿都缺" not in d and "會改讀它" not in d and "廣度" in d and _no_retry(d)
 
-    def test_breadth_detail(self):
+    def test_breadth_detail(self, monkeypatch):
         self._check()
         from src.services.macro_refresh_service import warroom_written_detail
-        assert "兩條腿都缺" in warroom_written_detail(True, "unloaded")   # 其餘原因逐字照舊
+        # 📌 QA-4 S-1 連帶（2026-10-23，有意識的修改，⛔ 不是漏刪）：~~`"unloaded"` ⇒ 舊句逐字照舊（無條件）~~ ——
+        #   DEC-075 D-1(a) 回修（QA3 MUST-R1）起，旗標關時 warroom 在而健康分缺 ⇒ 位階一律未評估、不改讀檔，
+        #   舊句「會改讀它」在旗標關時不屬實。舊句只在代理計分開啟時仍成立 ⇒ 該斷言改在旗標開時做；旗標關另斷言據實句。
+        import shared.signal_thresholds as STH
+        _d_off = warroom_written_detail(True, "unloaded")
+        assert "兩條腿都缺" not in _d_off and "會改讀它" not in _d_off and "廣度" in _d_off and _no_retry(_d_off)
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
+        assert "兩條腿都缺" in warroom_written_detail(True, "unloaded")   # 旗標開：其餘原因逐字照舊
         assert warroom_written_detail(False, None) == "寫入 warroom_summary"
 
     def test_mutant_turns_red(self, monkeypatch):
         import shared.regime_arbiter as RA
+        import shared.signal_thresholds as STH
         _orig = RA.SOURCE_UNEVALUATED_BREADTH
         monkeypatch.setattr(RA, "SOURCE_UNEVALUATED_BREADTH", "__mutant__")
+        # QA-4 S-1 連帶：旗標關時本函式另以旗標判 breadth ⇒ 本突變要在旗標開時才看得出差別。
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         from src.services.macro_refresh_service import warroom_written_detail
         assert "兩條腿都缺" in warroom_written_detail(True, _orig)
 

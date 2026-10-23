@@ -391,6 +391,21 @@ def get_macro_regime(*, strict: bool = False, require_valid_risk_cap: bool = Fal
         }
 
 
+def get_breadth_proxy_presence() -> bool | None:
+    """新 UI「缺真實市場廣度 ⇒ 未評估」文案二選一用的訊號（QA-4 S-1，2026-10-23；**純顯示**）。
+
+    讀 session 交給 L3 `section_inputs.breadth_proxy_presence`：True ＝ 本輪有代理（估算）廣度值被擋下、
+    False ＝ 連代理值也沒有、None ＝ 拿不準（含讀不出來）⇒ 呼叫端用兩種情境都屬實的中性句。
+    ⛔ 判燈、計分、位階、建議持股一律不讀本函式。
+    """
+    try:
+        from src.services.section_inputs import breadth_proxy_presence
+        return breadth_proxy_presence(st.session_state)
+    except Exception as _e:  # noqa: BLE001 — 讀不出來 ⇒ 拿不準 ⇒ 中性句（⛔ 不猜任何一邊）
+        print(f'[allocation] get_breadth_proxy_presence failed: {type(_e).__name__}: {_e} —— 改用中性句')
+        return None
+
+
 def get_allocation_sleeves() -> dict[str, int] | None:
     """ETF 三桶配置(股/債/現金)，由 `get_allocation()` 的中值推導。
 

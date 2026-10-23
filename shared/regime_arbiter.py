@@ -109,11 +109,35 @@ UNAVAILABLE_REASON_BREADTH: str = 'breadth'
 #: 「缺真實市場廣度 ⇒ 總經未評估」的對外說明（持股頁、AI 問答、姿態帶 drivers 共用一句；DEC-075 回修 MUST-2）。
 #: ⛔ 不得寫「重新抓取」「重新載入」「一鍵更新」之類的指引（I-4：重跑不會讓代理值變成可計分）；
 #: ⛔ 不得寫「macro_state.json 無快照」（breadth 情境下檔案可能有效，只是 DEC-075 (a) 不採用它）。
-UNEVALUATED_BREADTH_EXPLAIN: str = (
-    '總經未評估：缺真實市場廣度（漲跌家數）—— 目前只有由加權指數推估的代理值，'
-    '依客戶裁示（DEC-074）只顯示、不計分，健康分因此算不出來；'
+#: 📌 QA-4 S-1（2026-10-23，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：~~「目前只有由加權指數推估的代理值」~~ ——
+#:   DEC-075 D-1(a) 回修（QA3 MUST-R1）起本句也用在 ^TWII 全滅（連代理值也沒有）那一態，該半句在那一態不屬實。
+#:   本常數改為**兩種情境都屬實的中性句**（拿不到區分訊號的讀點用，例：`allocation_decision` 的 drivers）；
+#:   拿得到訊號的讀點改走 `unevaluated_breadth_explain(proxy_held_back)` 二選一。結論句（更新資料不會改變）不變。
+_UNEVALUATED_BREADTH_TAIL: str = (
+    '健康分因此算不出來；'
     '市場位階依 DEC-075 一併未評估，不改用另一套規則引擎補出位階。'
     '更新資料不會改變這個狀態，要等正式的廣度資料來源接上')
+UNEVALUATED_BREADTH_EXPLAIN: str = (
+    '總經未評估：缺真實市場廣度（漲跌家數）—— 由加權指數推估的代理值即使取得，'
+    '依客戶裁示（DEC-074）也只顯示、不計分，' + _UNEVALUATED_BREADTH_TAIL)
+#: 本輪**有**代理（估算）廣度值、被擋下不計分時（`shared.macro_provenance.breadth_proxy_held_back` 為 True）。
+UNEVALUATED_BREADTH_EXPLAIN_PROXY_HELD: str = (
+    '總經未評估：缺真實市場廣度（漲跌家數）—— 目前只有由加權指數推估的代理值，'
+    '依客戶裁示（DEC-074）只顯示、不計分，' + _UNEVALUATED_BREADTH_TAIL)
+#: 本輪連代理值也沒有時（`breadth_proxy_held_back` 為 False；例：^TWII 全滅）。
+UNEVALUATED_BREADTH_EXPLAIN_NO_PROXY: str = (
+    '總經未評估：缺真實市場廣度（漲跌家數）—— 這一輪紅綠燈的輸入裡也沒有任何廣度資料'
+    '（連由加權指數推估的代理值也沒有）；即使取得代理值，依客戶裁示（DEC-074）也只顯示、不計分，'
+    + _UNEVALUATED_BREADTH_TAIL)
+
+
+def unevaluated_breadth_explain(proxy_held_back: Optional[bool] = None) -> str:
+    """缺真實廣度 ⇒ 未評估的對外說明，依「本輪有沒有被擋下的代理值」二選一；None（拿不準）⇒ 中性句。"""
+    if proxy_held_back is True:
+        return UNEVALUATED_BREADTH_EXPLAIN_PROXY_HELD
+    if proxy_held_back is False:
+        return UNEVALUATED_BREADTH_EXPLAIN_NO_PROXY
+    return UNEVALUATED_BREADTH_EXPLAIN
 
 
 def is_breadth_unevaluated(state: Any) -> bool:

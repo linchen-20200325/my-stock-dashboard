@@ -193,12 +193,20 @@ def _tool_get_market_state(*, require_valid_risk_cap: bool = False) -> dict:
     # 批 Z66（Q1）：`require_valid_risk_cap=True`（新 UI 問答頁經 `run_agent` 傳入）⇒ 曝險上限只認有效快照，
     #   且非有效快照的「鎖定快照額外欄位」（風險等級／Macro_Phase）也不附 —— 那是同一份上限的說明。
     _ms = _macro_state(require_valid_risk_cap=True) if require_valid_risk_cap else _macro_state()
-    from shared.regime_arbiter import UNEVALUATED_BREADTH_EXPLAIN, is_breadth_unevaluated
+    from shared.regime_arbiter import is_breadth_unevaluated, unevaluated_breadth_explain
     if is_breadth_unevaluated(_ms):
+        # 📌 QA-4 S-1（2026-10-23，有意識的修改，⛔ 不是漏刪）：~~`UNEVALUATED_BREADTH_EXPLAIN`（「目前只有…代理值」）~~
+        #   在 ^TWII 全滅（連代理值也沒有）時不屬實 ⇒ 依本輪有沒有被擋下的代理值二選一；拿不準 ⇒ 中性句。
+        try:
+            from src.services.allocation_service import get_breadth_proxy_presence
+            _proxy = get_breadth_proxy_presence()
+        except Exception as _e:  # noqa: BLE001 — 拿不準 ⇒ 中性句（⛔ 不猜任何一邊）
+            print(f"[ai_qa] get_breadth_proxy_presence 失敗：{_e!r} —— 改用中性句")
+            _proxy = None
         # DEC-075 回修（MUST-2）：缺真實廣度 ⇒ ⛔ 不說「macro_state.json 無快照」（檔案可能有效，只是 (a) 不採用）、
         #   ⛔ 不叫人一鍵更新（I-4）。其餘未評估原因的既有文案逐字照舊（下一段）。
         return {"ok": False,
-                "error": (UNEVALUATED_BREADTH_EXPLAIN + "。"
+                "error": (unevaluated_breadth_explain(_proxy) + "。"
                           "(§1:未評估就是未評估,**不退回「中性/震盪」當預設**;"
                           "請勿把「未評估」講成「市場中性」,也**不得**建議使用者靠更新資料解決。)")}
     if not isinstance(_ms, dict) or not _ms.get("is_loaded"):
