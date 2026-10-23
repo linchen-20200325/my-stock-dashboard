@@ -264,3 +264,66 @@
 
 - 本節 mapping 由**兩組唯讀盤點＋總管抽查**（總管轉述）、撰寫組彙整並抽查部分符號（`PAGE_LABELS`、`fetch_ndc_leading_index`、`FRED_CHN_OECD_CLI`、`us10y` 方向列、「台股趨勢」0 命中、新 UI `src/ui/views/page_today.py` 只在註解提到 `classify_long_term_regime`）。
 - 「不存在」「0 命中」「未接」類全稱句為 **grep 結果**，**未經第三組驗證**；只能當待驗事項，⛔ 不得作為實作批的前提（實作前須重查）。
+
+## 23. 舊 UI＋既有引擎能力盤點（2026-10-23，對照新 UI）
+
+> 2026-10-23 新增（總管指派「盤點結果接受、先落盤」；非客戶新裁示、⛔ 不是動工授權）。量測 2026-10-23：`origin/main`＝`d07bcfe9`（#904），cron 會推進 tip，引用前重查。剩餘待辦只在 BACKLOG 5.1.6（`VN1-MT-LEGACY-GAP`、`VN1-MT-SSOT-*`）。⚠️ 未窮舉、未經第三組驗證（見 23.5）。
+
+### 23.1 能力總表
+
+| 領域 | 已有能力與真正計算來源 | 新 UI 狀態 |
+|---|---|---|
+| 大盤綜合判讀 | 位階 `shared/regime_arbiter.arbitrate_regime` → `allocation_service.get_macro_regime`；16 燈 `shared/macro_buckets.BUCKET_DANGER_SPECS`；五桶 `macro_helpers.compute_five_bucket_summary`；總經健康分 `calc_traffic_light`（旌旗 0.6＋大盤評分 0.4） | 已接 |
+| 指數技術趨勢 | `services/market_strategy.get_market_assessment`（MA5/60/120/200、連 3 日確認、MA120 斜率、量比、market_score）；指數 K 線 `macro_v2_service.get_twii_ohlc`；BIAS240 | `get_market_assessment` 只經 `mkt_info` 當輸入、畫面未呈現；K 線未接；BIAS240 已接 |
+| 廣度 | `daily_data_fetchers.fetch_adl`（^TWII 推估，`is_proxy=True`）；真實家數 `tw_macro.fetch_twse_breadth`；旌旗 | ADL 推估已接；真實家數只舊 UI；旌旗已接 |
+| 外資 | 現貨燈 `foreign_net`、期貨燈 `fut_net`；連續天數 `tw_macro.fetch_foreign_consecutive_days`；熱錢（計算在 L5 `src/ui/tabs/hot_money.py`） | 兩燈已接；連續天數、熱錢未接 |
+| 融資融券／散戶／PCR | 融資燈；融券、韭菜、投信／自營、PCR 數值 | 融資燈已接；其餘未接（PCR 僅 Risk Cap Optional） |
+| 總經單燈 | VIX、台灣 PMI、美國核心 CPI、10Y、DXY、出口、NDC 燈號；M1B/M2 | 已接；M1B/M2 顯示不計分（腿停用） |
+| 景氣領先 | NDC 領先 `tw_macro.fetch_ndc_leading_index`；中國 CLI 與中國 regime（`tw_macro.fetch_china_macro`、`classify_china_regime`） | 未接 |
+| 國際 | 總經指南針 `macro_core.fetch_macro_compass`；全球風險雷達 `risk_radar.detect_risk_radar`（9 燈）；跨資產資金流 `compute/macro/flow_engine`；國際指數 `daily_checklist.INTL_MAP/TECH_MAP`（資料經 refresh 抓進） | 表格未呈現 |
+| Risk Cap | `calculate_system_state`＋三條 Hard Veto；`get_allocation` | 已接 |
+| 個股選股（page_find） | `fundamental_screener_service.get_ranked_picks/build_trend_map`、shortage、rs_leader、pe_low、空頭濾網、sector_flow、sector_heatmap | 已接 |
+| 個股判讀（page_inspect） | 財報體檢、357、20 日籌碼＋異常值、ETF 折溢價／配息／同儕／品質 | 已接；⚠️「健康度」卡是財報體檢分，與舊 UI 技術健康 6 因子 `scoring_helpers.calc_health_score` **同名不同義** |
+| 個股技術與策略 | 6 因子技術健康、RSI、KD（`fetch_metrics` 已算 `kd_state`；持股評估 `assess_stock` 有讀，`page_inspect` 畫面未呈現）、MACD、量比、VPOC、VCP、布林／squeeze、軋空、RS 分數、多因子評級 `score_single_stock`、統一判決、乖離過熱、型態目標價、15 項深篩（L5 `tab_stock_picker._check_*`，舊 UI 多檔比較仍用）、出場訊號、風報比／部位 | 未接（page_why AI 問答工具可間接呼叫 `get_stock_score`／`get_risk_plan`／`get_financial_health`） |
+| 個股籌碼明細 | 集保大戶、個股融資融券、V4 相對籌碼 | 未接 |
+| ETF | 配息站、壓測、VaR、配息現金流；7 維評分、留／觀察／換、智慧選 ETF、效率前緣、重疊度、股債一致性、ETF 明細七段 | 前四項已接；其餘未接 |
+| 持股風控 | 燈牆、80/20、停利、換股；風險貢獻、產業集中度、組合限額／停損；觀察清單 | 燈牆／80/20／停利／換股已接；風險貢獻、集中度、組合限額／停損未接；觀察清單讀取已接、寫入未接 |
+| 訊號推播（不在 UI） | 持股每日推播、週報；每日選股、觀察清單推播 | 前兩者有排程；後兩者排程已停（只看 yml） |
+| 歷史快照 | macro_history、sector_flow、`risk_cap_state.json`、校準；前進式驗證 `picks.parquet`；總經前進式驗證；Risk Cap History Sheet | 前四者已接；`picks.parquet` 未接；總經前進式驗證只寫不讀；History Sheet 只 PoC |
+
+- **名詞**：`src/ui_v2/` 是新 UI 引用的版面契約／卡面函式庫（`app_today.py`、`render.py` 為獨立預覽原型），**不是另一套 UI**。「v2」有三種指涉：`tab_macro_v2.py`（舊 UI 總經分頁）／`src/ui_v2/`（卡面函式庫）／IA v2 `src/ui/views/`（新 UI View 層）。
+
+### 23.2 舊能力 → 新四頁候選 mapping
+
+> ⚠️ 新四頁「📊 大盤趨勢／🎯 標的雷達／⚡ 交易行動／🛡️ 持股防護」是**客戶候選、非最終導航裁示**；DEC-017 五頁仍生效（`VN1-MT-NAV`）。⛔ 不是動工授權；版面變動須先出線框（DEC-003）。
+
+| 候選頁 | 舊能力 |
+|---|---|
+| 📊 大盤趨勢 | 位階、危險度、Risk Cap（三張並列不合併）、指數技術趨勢、K 線、廣度、外資、融資融券、韭菜、PCR、NDC 領先、國際指數、指南針、風險雷達、資金流、板塊潮汐 |
+| 🎯 標的雷達 | 選股網、熱力圖、個股技術／籌碼／估值／財報、ETF 7 維與智慧選、深篩 |
+| ⚡ 交易行動 | 出場訊號、風報比／部位、型態目標價、換股、停利、80/20 |
+| 🛡️ 持股防護 | 燈牆、壓測、VaR、配息現金流、風險貢獻、集中度、組合限額；Risk Cap 天花板僅 presentation |
+| 無位置 | 憑什麼（教學、資料體檢、AI 問答）、「我的」頁 |
+
+- **原則**：同一能力多頁引用時只有**一處 SSOT 計算**，其餘頁只做 presentation，⛔ 不得複製第二套。
+
+### 23.3 真正缺口三類
+
+1. **已有未接**：見 BACKLOG `VN1-MT-LEGACY-GAP`（23.1「未接」各列）。
+2. **部分存在需整理**：見 BACKLOG 5.1.6 `VN1-MT-SSOT-*` 各條（ATR 停損、fakeout、時間停損、MA5/MA100、持股水位、ADL 標示、ISM PMI 錯置、總經前進式驗證、文件／教學無資料流）。
+3. **真正沒有**：大盤 EPS×PE、大盤 forward EPS、大盤本益比、AI／CSP CAPEX、TIPS（`calc_real_rate` 是政策利率−CPI、非 TIPS，且無 production caller）、美 2Y／10Y−2Y／10Y−3M、30Y、台灣／美國／全球 OECD CLI、借券、Sahm 資料 → 一律 **Research Candidate／缺資料**，⛔ 不得升格 Approved。
+
+### 23.4 台股趨勢／國際趨勢現有原料
+
+| 主軸 | 已有資料 | 已有規則 | 缺資料 | 缺定義 |
+|---|---|---|---|---|
+| 台股 | ^TWII 多年日線、BIAS240、廣度（推估＋真實）、旌旗、外資現貨／期貨、融資融券、PCR、USDTWD、NDC 燈號／領先、台灣 PMI、出口、板塊潮汐 | `market_strategy`、位階仲裁、16 燈門檻 | 大盤 EPS×PE、forward EPS、CAPEX | 台股趨勢本身（`VN1-MT-TREND-DEF`） |
+| 國際 | ^GSPC／^DJI／^IXIC／^SOX、科技權值股、VIX／VIX3M、FRED DGS10 與 ^TNX（⛔ 不同源不得混源）、DXY、美核心 CPI、Fed Funds、HY OAS、MOVE、區域／跨資產 ETF、中國 CLI | 風險雷達、`flow_engine` z-score、10Y／DXY 燈 | 2Y／利差、30Y、TIPS、美／全球 CLI、美 ISM（`macro_core.fetch_ism_pmi` 有 fetcher 無 caller） | 國際趨勢本身、殖利率×領先方向規則 |
+
+- ⛔ 四概念（市場位階／指標危險度／Risk Cap／台股趨勢）**分離、不得合併、不建綜合分數**（§22.3；DEC-071）。
+
+### 23.5 揭露（`CLAUDE.md` §-2 規則 6）
+
+- 方法：四組唯讀盤點＋兩組獨立稽核讀原碼抽驗後修正（總管轉述）；撰寫組只彙整，**未逐項重查**。
+- **未窮舉**：「已接／未接」以 grep `src/ui/views` 為準，**未追動態 import**；「0 讀取」「無 caller」「無 fetcher」類全稱句為 grep 結果。
+- 第二輪修正**未經第三組驗證** ⇒ 本節只能當待驗事項，⛔ 不得作為實作批的前提（實作前須重查）。
