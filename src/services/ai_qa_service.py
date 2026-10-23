@@ -147,6 +147,16 @@ def _scoring_regime() -> ScoringRegimeDecision:
     return resolve_scoring_regime(_macro_state())
 
 
+def _not_loaded_pending_breadth_tail() -> str:
+    """QA-6 MUST-2：「總經尚未載入＋代理廣度不計分」時 `_regime_blocked_error` 的結尾句（⛔ 不給更新後重問的救法）。
+
+    說明句讀 L0 SSOT（late import 同 `resolve_scoring_regime` 的作法；本檔 ⛔ 不另寫一份事實）。
+    """
+    from shared.regime_arbiter import NOT_LOADED_PENDING_BREADTH_EXPLAIN
+    return (f"{NOT_LOADED_PENDING_BREADTH_EXPLAIN}。因此更新後本工具也仍不輸出多因子評分,"
+            "**不得**建議使用者靠更新資料取得評分。")
+
+
 def _regime_blocked_error(dec: ScoringRegimeDecision) -> str:
     """regime 不可用時 `get_stock_score` 回的 error 字串(**會原樣進 Gemini payload**)。
 
@@ -177,6 +187,12 @@ def _regime_blocked_error(dec: ScoringRegimeDecision) -> str:
         + ("更新資料不會改變這個狀態:要等正式的市場廣度(漲跌家數)資料來源接上,"
            "**不得**建議使用者靠更新資料解決。"
            if getattr(dec, "breadth_unevaluated", False) else
+           # 📌 QA-6 MUST-2（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：總經尚未載入＋代理廣度
+           #   不計分時，下一行舊救法「按一鍵更新…再問一次」不屬實（載入後位階仍未評估、本工具照樣拒評）⇒ 改說屬實的
+           #   那句（L0 SSOT `shared.regime_arbiter.NOT_LOADED_PENDING_BREADTH_EXPLAIN`，同 `_tool_get_market_state`）；
+           #   旗標為 True（代理計分）時 `not_loaded_pending_breadth` 恆 False ⇒ 下一行舊句逐字照舊。
+           _not_loaded_pending_breadth_tail()
+           if getattr(dec, "not_loaded_pending_breadth", False) else
            "救法:先開 🌍 總經頁按「🚀 一鍵更新全部數據」讓紅綠燈算出結論,再問一次。")
         + "不受影響、仍可正常使用:財務體質(get_financial_health)、"
         "停損與倉位(get_risk_plan)、大盤籌碼(get_market_leading)、ETF 品質(get_etf_quality)。"

@@ -4481,6 +4481,20 @@ _V2_DEGRADED_WHERE: tuple[str, ...] = (
     "到既有的 📁 組合管理分頁確認上面那幾檔的代號與張數")
 
 
+#: QA-6 MUST-1（2026-10-23，PR #910）：④ 總經位階／⑤ 建議持股水位「未評估」那一個 `now` 底下另外兩支分支的摘錄。
+#: 每一段都逐字取自 `_breadth_empty_why()`（三種 `breadth_proxy` 共有的開頭與結尾）／`_BREADTH_EMPTY_WHERE`／
+#: `NOT_LOADED_PENDING_BREADTH_*_HOLD` 的原文（K1；`tests/test_p04_hold_v2_cards.py` 窮舉逐格驗）。
+#: ⛔ 不叫人「更新總經之後回到本頁」—— 那句在這兩支不屬實（I-4／DH-REGIME-NOWARROOM）。
+_V2_BREADTH_EMPTY_WHY: str = (
+    "因缺真實市場廣度而未評估" + V2_EXCERPT_GAP + "本站不以「中性」代替未評估，也不填一個看起來合理的區間")
+_V2_BREADTH_EMPTY_WHERE: str = (
+    NO_EXIT_MARKER + " —— 這一格更新資料不會改變" + V2_EXCERPT_GAP + "這一格會一直是未評估")
+_V2_NOT_LOADED_PENDING_BREADTH_WHY: str = "總經這一次使用中還沒有紅綠燈結果；本站不以「中性」代替未評估"
+_V2_NOT_LOADED_PENDING_BREADTH_WHERE: str = (
+    v2_plain(f"到{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}"
+             "可以載入今日資料") + V2_EXCERPT_GAP + "載入後位階仍為未評估")
+
+
 def _v2_rows_for(key: str, now: str, rows: tuple[object, object, object]
                  ) -> tuple[tuple[str, str], tuple[object, object, object]]:
     """`now` 摘錄為 `None` ⇒ 取 `now` 原文全句（`now` 本身都很短）。"""
@@ -4541,9 +4555,15 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.macro_stage", MACRO_FAILED_NOW, (
            None, _v2_raised(SRC_MACRO),
            _V2_NO_EXIT_REPORT + V2_EXCERPT_GAP + "總經本身的狀態在「🚦 今天」")),
+       # 📌 QA-6 MUST-1（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：同一個 `MACRO_EMPTY_NOW`
+       #   還有兩支分支（缺真實廣度 `_breadth_empty_why()`／`_BREADTH_EMPTY_WHERE`、尚未載入＋代理廣度不計分
+       #   `NOT_LOADED_PENDING_BREADTH_*_HOLD`），原文與下面第一個候選不同 ⇒ 修前只有一個候選 ⇒ `KeyError` ⇒ 紅卡。
+       #   現行：第一個候選（既有那句）一字未改；其後補那兩支各自的摘錄（逐字取自各自原文，K1）。
        _v2_rows_for("hold.macro_stage", MACRO_EMPTY_NOW, (
-           None, "本站不以「中性」代替未評估：多空是一個結論，缺值不是",
-           "到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN))]
+           None, ("本站不以「中性」代替未評估：多空是一個結論，缺值不是",
+                  _V2_BREADTH_EMPTY_WHY, _V2_NOT_LOADED_PENDING_BREADTH_WHY),
+           ("到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN,
+            _V2_BREADTH_EMPTY_WHERE, _V2_NOT_LOADED_PENDING_BREADTH_WHERE)))]
     # ── ⑤ 80/20 偏離 ＋ 衛星停利 ＋ 建議持股水位（核心／衛星與 80/20 同一則 Note）──
     # 📌 Q2-r3（2026-09-27，有意識的刪除，⛔ 不是漏刪）：`NO_PRICE_WHY` 改為客戶逐字句（45 字）後，
     #    「兩者同時」那個候選（整批失敗句 ＋ GAP ＋ 現價句）放不下卡面上限 → **刪掉、⛔ 不縮寫客戶原文**；
@@ -4578,9 +4598,10 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "若你預期應該要有：到 📁 組合管理確認那幾檔個股的均價有填")),
        _v2_rows_for("hold.position_cap", CAP_FAILED_NOW, (
            None, _v2_raised(SRC_ALLOC), _V2_NO_EXIT_REPORT)),
+       # 📌 QA-6 MUST-1（同上，有意識的修改，⛔ 不是漏刪）：缺真實廣度那一支原文不同 ⇒ 補一組候選；既有候選一字未改。
        _v2_rows_for("hold.position_cap", CAP_EMPTY_NOW, (
-           None, "填一個看起來合理的區間，等於替你做了一個沒有依據的決定",
-           "到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN)),
+           None, ("填一個看起來合理的區間，等於替你做了一個沒有依據的決定", _V2_BREADTH_EMPTY_WHY),
+           ("到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN, _V2_BREADTH_EMPTY_WHERE))),
        # 批 Z65 QA：取不到有效系統風險上限（客戶 Q-z34～36 規則）。摘錄自原文（K1）。
        _v2_rows_for("hold.position_cap", RISK_CAP_UNAVAILABLE_NOW, (
            None, "目前沒有可用的系統風險上限" + V2_EXCERPT_GAP + "系統不會在缺上限的情況下給持股數字",

@@ -792,7 +792,16 @@ class TestMust2DownstreamCopy:
         dec = resolve_scoring_regime(_contract(SOURCE_UNEVALUATED_BREADTH))
         assert dec.breadth_unevaluated and _no_retry(Q._regime_blocked_error(dec)) and _no_retry(dec.notice())
         dec0 = resolve_scoring_regime(_contract("unloaded"))
-        assert "一鍵更新" in Q._regime_blocked_error(dec0)                     # 其餘原因照舊
+        # ~~assert "一鍵更新" in Q._regime_blocked_error(dec0)                     # 其餘原因照舊~~
+        # 📌 QA-6 MUST-2（2026-10-23，PR #910，有意識的修改，⛔ 不是放寬；決策者 AI 總管）：上一行斷言寫於
+        #   DH-REGIME-NOWARROOM 之前，把「尚未載入（unloaded）＋代理廣度不計分（旗標關）」也當成「其餘原因」——
+        #   那一態更新後位階仍未評估，「一鍵更新…再問一次」不屬實（QA-6 MUST-2）。現行：旗標關 ⇒ 不給該救法；
+        #   「其餘原因照舊」改在旗標開（代理計分、`not_loaded_pending_breadth` 恆 False）下斷言，原斷言字串不變。
+        assert dec0.not_loaded_pending_breadth and _no_retry(Q._regime_blocked_error(dec0))
+        import shared.signal_thresholds as _STH
+        monkeypatch.setattr(_STH, "BREADTH_PROXY_SCORING_ENABLED", True)
+        dec0_on = resolve_scoring_regime(_contract("unloaded"))
+        assert "一鍵更新" in Q._regime_blocked_error(dec0_on)                  # 其餘原因照舊
 
     def test_old_ui_handler_breadth_only_no_retry(self):
         """QA2 S-4：舊 UI 燈號卡在「只缺廣度」時不再前句叫人更新、後句說更新沒用。"""

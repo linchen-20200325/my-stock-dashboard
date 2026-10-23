@@ -28,6 +28,7 @@ _OLD_QA_ERR = "macro_state.json 無可用的鎖定快照"
 _OLD_DRIVER = "總經尚未評估（warroom_summary / macro_state.json 皆無有效值）"
 _OLD_FOUR_SOURCES = "四條來源本輪皆無值"
 _OLD_GATE_RETRY = "再重跑一次批次分析"
+_OLD_AI_RETRY = "救法:先開 🌍 總經頁按「🚀 一鍵更新全部數據」讓紅綠燈算出結論,再問一次。"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -194,6 +195,28 @@ class TestDownstreamColdStart:
         assert dec.not_loaded_pending_breadth is True and dec.breadth_unevaluated is False
         n = dec.notice()
         assert _OLD_GATE_RETRY not in n and "載入後市場位階仍為未評估" in n
+
+    def test_ai_stock_score_blocked_error_has_no_false_retry(self, files, monkeypatch):
+        """QA-6 MUST-2：`get_stock_score` 被擋的字串（原樣進 Gemini payload）⛔ 不附「按一鍵更新…再問一次」。"""
+        import src.services.ai_qa_service as Q
+        from shared.regime_arbiter import NOT_LOADED_PENDING_BREADTH_EXPLAIN
+        _fake_session(monkeypatch)
+        r = Q._tool_get_stock_score("2330")
+        assert r["ok"] is False and "data" not in r
+        assert _OLD_AI_RETRY not in r["error"] and "一鍵更新全部數據" not in r["error"], r["error"]
+        assert NOT_LOADED_PENDING_BREADTH_EXPLAIN in r["error"]
+        assert "不得**建議使用者靠更新資料取得評分" in r["error"]
+        assert "get_financial_health" in r["error"], "沒講什麼還能用，模型會宣告整體失敗"
+
+    def test_ai_stock_score_blocked_error_flag_on_old_retry(self, tmp_path, monkeypatch):
+        """旗標 True（代理計分）⇒ `not_loaded_pending_breadth` 恆 False ⇒ 舊救法逐字照舊。
+        （沒有檔 ⇒ 旗標 True 下也未評估、評分閘照擋 —— ⛔ 不打外網。）"""
+        import src.services.ai_qa_service as Q
+        monkeypatch.chdir(tmp_path)
+        _flag(monkeypatch, True)
+        _fake_session(monkeypatch)
+        r = Q._tool_get_stock_score("2330")
+        assert r["ok"] is False and _OLD_AI_RETRY in r["error"], r
 
     @pytest.mark.parametrize("rvrc", [False, True])
     def test_ai_market_state_not_ok(self, files, monkeypatch, rvrc):
@@ -374,6 +397,16 @@ class TestMutation:
         assert st["source"] == SOURCE_FILE_RULE_ENGINE and st["regime"] == en and st["is_loaded"] is True
         with pytest.raises(AssertionError):
             _assert_unloaded(st)
+
+    def test_ai_blocked_error_branch_removed_turns_red(self, files, monkeypatch):
+        """QA-6 MUST-2 突變：拔掉 `_regime_blocked_error` 的 `not_loaded_pending_breadth` 分支 ⇒ 行為測試紅。"""
+        import dataclasses
+        import src.services.ai_qa_service as Q
+        _orig = Q._regime_blocked_error
+        monkeypatch.setattr(Q, "_regime_blocked_error", lambda dec: _orig(
+            dataclasses.replace(dec, not_loaded_pending_breadth=False)))
+        with pytest.raises(AssertionError):
+            TestDownstreamColdStart().test_ai_stock_score_blocked_error_has_no_false_retry(files, monkeypatch)
 
     def test_remove_new_condition_downstream_turns_red(self, files, monkeypatch):
         """突變體接進全站 regime 橋樑 ⇒ AI 評分閘重新放行（＝行為測試會紅）。"""
