@@ -15,6 +15,9 @@
 每項都附 revert-pair（修後 → 修前）變體，證明「拿掉修正 → 測試轉紅」。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import functools
 import pathlib
@@ -557,7 +560,7 @@ def test_reconcile_any_falsy_jingqi_info_reads_warroom(falsy):
     """程式條件 `if _jq_info:` → 任何假值都改讀 warroom（措辭「假值」才屬實）。"""
     s = {"jingqi_info": falsy, "warroom_summary": {"jingqi_avg": 50.0}}
     assert RS.health_inputs(s)["jq"] == 50.0
-    assert RS.health_inputs({"jingqi_info": {"avg": 33.0},
+    assert RS.health_inputs({"jingqi_info": {"is_proxy": False, "avg": 33.0},
                              "warroom_summary": {"jingqi_avg": 50.0}})["jq"] == 33.0
 
 

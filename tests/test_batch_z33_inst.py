@@ -209,6 +209,9 @@ def _run_edu(mod, inst, mp):
     fake = _FakeST({'cl_data': {'inst': inst}})
     mp.setattr(mod, 'st', fake)
     mp.setattr(mod, '_fetch_fred_series_edu', lambda *a, **k: None)
+    # DEC-075 回修（2026-10-23，有意識的接鏈）：兩欄教學文字換回修前原文再比 golden（見 helper docstring）。
+    from tests.test_dec074_revert_chain import dec074_restore_edu_text
+    dec074_restore_edu_text(mp)
     mod.render_tab_edu()
     return list(fake.out)
 

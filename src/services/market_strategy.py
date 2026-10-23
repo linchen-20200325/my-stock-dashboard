@@ -18,11 +18,9 @@ except ImportError:
 # v18.449:市場廣度中性門檻 SSOT(原 inline `1.0`，尺度語意錯誤，見下方 market_regime docstring）
 from shared.signal_thresholds import (
     BREADTH_PROXY_SCORING_ENABLED, M1B_M2_LEG_ENABLED, MARKET_BREADTH_NEUTRAL_PCT,
+    MA200_WINDOW_DAYS,  # 回修 QA2 S-2：常數下沉 L0（原定義在本檔）
 )
 from shared.macro_provenance import M1B_PROXY_VALUE_NOTE  # DL-f1-s23：代理註記（L0 SSOT，K1）
-
-#: `get_market_assessment` 算 MA200（年線）所需的最少 K 棒數（與 rolling 視窗同一個數）。
-MA200_WINDOW_DAYS: int = 200
 from shared.dated_value import iso_date_or_none  # 批 Z62：index_as_of 收斂（L0）
 
 # P0-2 v18.369 深層拔毒:portfolio_exposure SSOT 收攏至 L2 risk_control(原本兩處同名異實作)

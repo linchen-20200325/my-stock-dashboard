@@ -15,6 +15,9 @@ golden：修前輸出於基底 `26a43064` 以本檔同一支 harness 實跑後�
 突變：`Z35_REVERT_PAIRS` 為「修後逐字 → 修前逐字」（恰一處替換）；還原體重現修前行為 ⇒ 對應斷言轉紅（本檔自證）。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import functools
 import hashlib
@@ -153,9 +156,9 @@ def _li_df():
 
 #: (mkt_info, jingqi_info, 有先行指標, 有 ADL)
 _CTX = {
-    'full': ({'score': 4, 'max_score': 6, 'regime': 'bull'}, {'avg': 55.0}, True, True),
-    'weak': ({'score': 1, 'max_score': 6, 'regime': 'neutral'}, {'avg': 30.0}, True, True),
-    'no_li_no_adl': ({'score': 3, 'max_score': 6, 'regime': 'neutral'}, {'avg': 50.0}, False, False),
+    'full': ({'score': 4, 'max_score': 6, 'regime': 'bull'}, {'is_proxy': False, 'avg': 55.0}, True, True),
+    'weak': ({'score': 1, 'max_score': 6, 'regime': 'neutral'}, {'is_proxy': False, 'avg': 30.0}, True, True),
+    'no_li_no_adl': ({'score': 3, 'max_score': 6, 'regime': 'neutral'}, {'is_proxy': False, 'avg': 50.0}, False, False),
 }
 
 
@@ -163,7 +166,7 @@ def _tl(inst, ctx, mod=MH):
     mkt, jq, li, adl = _CTX[ctx]
     cd = {'inst': inst}
     if adl:
-        cd['adl'] = pd.DataFrame({'ad_ratio': [50.0]})
+        cd['adl'] = pd.DataFrame({'ad_ratio': [50.0], 'is_proxy': [False]})
     return mod.calc_traffic_light(dict(mkt), dict(jq), cd, _li_df() if li else None)
 
 

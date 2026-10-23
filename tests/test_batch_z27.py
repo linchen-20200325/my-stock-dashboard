@@ -25,6 +25,30 @@ import tests.test_batch_z7 as Z7
 #:   原掛在 `EDU_GUIDE[FRED_NAPM]`（key 'NAPM'），已改名 'TW_PMI'（`how_to_read` 一行未動；ISM 文案五欄換成
 #:   台灣 PMI 事實）。本檔斷言改讀新 key；`test_other_cards_unchanged` 的 golden 照舊（見該測試）。
 _PMI_EDU_KEY = "TW_PMI"
+#: 修前 CPI 卡 pair_with、出口卡 meaning 原文（逐字取自 `git show b9ed892d:src/data/core/data_registry.py`）。
+_CPI_PAIR_PRE_DEC075 = ['ISM PMI（NAPM）', '美債 10Y（^TNX）', '美元指數（DXY）']
+_EXPORT_MEANING_PRE_DEC075 = ('台灣每月出口金額年增率，全球景氣與台廠訂單能見度的核心指標'
+                              '（台灣 GDP 約 60% 來自出口）。'
+                              '本系統採用 OECD 的統計版本，比另一個常見的 IMF 版本'
+                              '早約 10 個月拿到最新月份資料。')
+#: QA2 S-3：DEC-075 批 1' 新 PMI 卡整張 golden（how_to_read 為 token 原文；改任何一字都須同步本表＋說明）。
+_TW_PMI_CARD_GOLDEN = {
+    'meaning': '台灣製造業採購經理人指數（PMI），由中華經濟研究院（CIER）每月第一個工作日公布，'
+               '是採購主管問卷彙總的台灣製造業景氣領先指標（>50 擴張、<50 收縮）。'
+               '⚠️ 這不是美國 ISM 製造業指數。',
+    'how_to_read': [
+        ('> §§PMI_YELLOW§§', '🟢 製造業擴張'),
+        ('= §§PMI_YELLOW§§', '🟡 中性線（榮枯分水嶺）'),
+        ('< §§PMI_YELLOW§§', '🟡 製造業萎縮（通常伴隨股市修正）'),
+        ('≤ §§PMI_RED§§', '🔴 嚴重收縮'),
+        ('≤ §§PMI_RED§§ 持續 3 月', '🚨 衰退強烈訊號（五桶「中期」紅線）'),
+    ],
+    'pair_with': ['台灣出口金額 YoY（海關）', '國發會景氣燈號', '費半 SOX'],
+    'historical_anchor': '2021/4 高點 68.7｜2023/1 低點 40.4｜2020/4 疫情 47.6｜2022/12 43.7'
+                         '（官方序列 data.gov.tw 6100，2012/7 才創編；榮枯線 50 為定義值）',
+    'upstream': '全球終端需求、電子與半導體供應鏈訂單、原物料價格',
+    'downstream': '台灣出口與製造業營收 → 台股電子權值股獲利 → ^TWII',
+}
 #: 修前（`b9ed892d`）NAPM 卡除 `how_to_read` 外的原文（逐字取自 `git show b9ed892d:src/data/core/data_registry.py`）。
 #:   只供 `test_other_cards_unchanged` 還原 golden 的雜湊輸入用（⛔ 不是現行內容）。
 _NAPM_CARD_PRE_DEC075 = {
@@ -288,6 +312,10 @@ class TestQz2aEduPmi:
         rest = []
         _guide = {k: v for k, v in EDU_GUIDE.items() if k != _PMI_EDU_KEY}
         _guide["NAPM"] = _NAPM_CARD_PRE_DEC075
+        # DEC-075 批 1' 回修（QA1 S-4、NIT-4）另改了兩張卡各一欄 ⇒ 同法放回修前原文再雜湊（golden 不改）；
+        #   兩欄的現行內容由 `test_changed_cards_pinned` 整欄釘住。
+        _guide["CPILFESL"] = dict(EDU_GUIDE["CPILFESL"], pair_with=_CPI_PAIR_PRE_DEC075)
+        _guide["XTEXVA01TWM664S"] = dict(EDU_GUIDE["XTEXVA01TWM664S"], meaning=_EXPORT_MEANING_PRE_DEC075)
         for key in sorted(_guide, key=str):
             card = _guide[key]
             rest.append((key, repr(card)))
@@ -295,6 +323,30 @@ class TestQz2aEduPmi:
                 rest.append((key, list(resolve_edu_rules(card["how_to_read"], tk))))
             rest.append((key, resolve_edu_tokens(card.get("meaning", ""))))
         assert _sha(rest) == self._OTHERS_SHA
+
+    def test_changed_cards_pinned(self):
+        """QA2 S-3：DEC-075 批 1' 改寫的內容整欄釘住（新 PMI 卡整張；CPI 卡 pair_with；出口卡 meaning）。"""
+        from src.data.core.data_registry import EDU_GUIDE
+        assert EDU_GUIDE[_PMI_EDU_KEY] == _TW_PMI_CARD_GOLDEN
+        assert EDU_GUIDE["CPILFESL"]["pair_with"] == ['台灣製造業 PMI（CIER）', '美債 10Y（^TNX）', '美元指數（DXY）']
+        assert EDU_GUIDE["XTEXVA01TWM664S"]["meaning"] == (
+            '台灣每月出口金額年增率，全球景氣與台廠訂單能見度的核心指標（台灣 GDP 約 60% 來自出口）。'
+            '本系統依序取主計總處統計資訊網、OECD（經 FRED）、海關進出口統計等來源，'
+            '取第一個有值的那一源（畫面「命中來源」會標明本輪用的是哪一個）。')
+
+    def test_pmi_anchor_numbers_match_repo_series(self):
+        """新 PMI 卡的歷史數字必須對得上 repo 內的官方序列（`data_cache/tw_pmi.parquet`，data.gov.tw 6100）。"""
+        import pathlib
+        import pandas as pd
+        p = pathlib.Path(__file__).resolve().parents[1] / "data_cache" / "tw_pmi.parquet"
+        if not p.exists():   # 快取檔不在（例：精簡 checkout）⇒ 只能驗格式，⛔ 不 skip：數字仍須在卡上
+            assert "68.7" in _TW_PMI_CARD_GOLDEN["historical_anchor"]
+            return
+        d = pd.read_parquet(p)
+        s = d.assign(date=pd.to_datetime(d["date"])).set_index("date")["pmi"]
+        assert (s.idxmax().strftime("%Y-%m"), s.max()) == ("2021-04", 68.7)
+        assert (s.idxmin().strftime("%Y-%m"), s.min()) == ("2023-01", 40.4)
+        assert s[pd.Timestamp("2020-04-01")] == 47.6 and s[pd.Timestamp("2022-12-01")] == 43.7
 
     def test_pmi_card_is_taiwan_not_ism(self):
         """DEC-075 批 1'：PMI 卡講台灣 CIER PMI，不再沿用美國 ISM 的說明與歷史數字。"""

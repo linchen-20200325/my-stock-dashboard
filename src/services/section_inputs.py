@@ -93,7 +93,11 @@ def load_section_inputs(state: dict) -> SectionInputs:
     if _jq_real:
         jq = _jq_real
     elif wr5:
-        jq = {'avg': wr5.get('jingqi_avg')}
+        # 📌 DEC-075 回修（QA1 S-6 連帶，2026-10-23）：`is_breadth_proxy` 改 fail-safe（缺旗標＝代理）。
+        #   warroom 的 `jingqi_avg` 是 `calc_traffic_light` 的**計分值** `jqavg` —— 代理時本來就是 None，
+        #   非 None 只可能是真值 ⇒ 合成時帶 `is_proxy=False`（None 時照舊無值，旗標不影響）。
+        _wr_jq = wr5.get('jingqi_avg')
+        jq = {'avg': _wr_jq, 'is_proxy': False} if _wr_jq is not None else {'avg': _wr_jq}
     else:
         jq = None
     return SectionInputs(

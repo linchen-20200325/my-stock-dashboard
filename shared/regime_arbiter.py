@@ -106,6 +106,20 @@ DEC-075 D-1(a)：`macro_state_locker.get_macro_state` 見到 warroom 帶本值�
 #: `arbitrate_regime(unavailable_reason=...)` 的合法值：健康分因缺真實市場廣度而算不出來。
 UNAVAILABLE_REASON_BREADTH: str = 'breadth'
 
+#: 「缺真實市場廣度 ⇒ 總經未評估」的對外說明（持股頁、AI 問答、姿態帶 drivers 共用一句；DEC-075 回修 MUST-2）。
+#: ⛔ 不得寫「重新抓取」「重新載入」「一鍵更新」之類的指引（I-4：重跑不會讓代理值變成可計分）；
+#: ⛔ 不得寫「macro_state.json 無快照」（breadth 情境下檔案可能有效，只是 DEC-075 (a) 不採用它）。
+UNEVALUATED_BREADTH_EXPLAIN: str = (
+    '總經未評估：缺真實市場廣度（漲跌家數）—— 目前只有由加權指數推估的代理值，'
+    '依客戶裁示（DEC-074）只顯示、不計分，健康分因此算不出來；'
+    '市場位階依 DEC-075 一併未評估，不改用另一套規則引擎補出位階。'
+    '更新資料不會改變這個狀態，要等正式的廣度資料來源接上')
+
+
+def is_breadth_unevaluated(state: Any) -> bool:
+    """總經契約（`get_macro_state()` 的 dict）是不是「因缺真實市場廣度而未評估」。只看契約自己的 `source` 旗標。"""
+    return isinstance(state, dict) and state.get('source') == SOURCE_UNEVALUATED_BREADTH
+
 # ── 門檻 ────────────────────────────────────────────────────────────────
 DEFENSE_MAX_MARKET_SCORE: int = 2
 """外資期貨防禦訊號要求的「大盤評分上限」（評分 < 本值才可能觸發）。

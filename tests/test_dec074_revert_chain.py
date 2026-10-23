@@ -25,14 +25,18 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 
-DEC074_BASE_SHA = {'shared/macro_buckets.py': 'cd9fc1d07b7195fe0b58ce528f97490b6364bebd9ba2dccab86c063bea818b10',
+DEC074_BASE_SHA = {'shared/allocation_decision.py': '8945f0074f64d59f84f7e9bde268baada44a770a79698642ae66e2c7b7977284',
+ 'shared/macro_buckets.py': 'cd9fc1d07b7195fe0b58ce528f97490b6364bebd9ba2dccab86c063bea818b10',
  'shared/macro_forward_test_schema.py': '2c50db57f68367b2d4580e8c6e292d377f5ef99c59fd958082c755ed55b0c93c',
  'shared/macro_provenance.py': 'b780bb3cd655ce0c7d9ccbfb6ebcbc1051ca1f35bff133f486f720d895329c83',
  'shared/regime_arbiter.py': 'a5a7a81386c4e5a36efac69483eba665edbabbd611f0475b6fa398ad9cc3b4fb',
+ 'shared/scoring_regime_gate.py': '1e928beb081d2dc8f5a7e77f509dd4d3b26e31b423802230dd8225d0b1c916b1',
  'shared/signal_thresholds.py': '9f629902b72a584cefe6956ca72b50e389d7d695c97c825c0d415831275c3656',
  'src/compute/macro/macro_forward_test.py': 'befdcd0b35f680cd2f863bb1f47273208e1e9213273cf2c0f7421f417b3410de',
  'src/compute/macro/macro_helpers.py': '10e42e7d4773a3944aaf1484ae87e456c5b305f0fe36fc7f773e0dc7ee139767',
  'src/data/core/data_registry.py': 'b1dd53605cc447b80e11249d39603ddc9950c5806da5b3528c5adb70d713eb59',
+ 'src/services/ai_qa_service.py': 'a0cbf6a099a602026a017060cd734c3f871004984af37bfa5cbfc6480a03ec2d',
+ 'src/services/dividend_station_service.py': 'f9f8464d7906310830c2c80f15d9c942530b8451347981d2b2197582e98bb798',
  'src/services/jingqi_calc.py': '9443980c4b15de033d8645e2d77d3990c7782913c1881a145f218b6212a1bca9',
  'src/services/macro_fetch_orchestrator.py': '9171a8a4fe9312e4e7680a7b8c5dce308433ee297692098125a5b8e5b9871838',
  'src/services/macro_refresh_service.py': 'f1606dec90304bf3895caa14e5bd4b73387042c962d6418b96a0a8b50474b955',
@@ -41,13 +45,55 @@ DEC074_BASE_SHA = {'shared/macro_buckets.py': 'cd9fc1d07b7195fe0b58ce528f97490b6
  'src/services/market_assessment_apply.py': 'b9ed911a03531dc9a6dddb33f405d79bac92f9cefe8f3fab53cd4b5d64128ed7',
  'src/services/market_strategy.py': 'ade4b3a9b729aba1589669dd0e85f9c10b4ee0a8d1bcbbe6820ba25265e97c89',
  'src/services/reconcile_service.py': 'd4390625de6c44a1eef7b14654faf4df9cd13dd526dd07908b8aaa52e3a4a3c1',
+ 'src/services/section_inputs.py': '7c0c9b1abdbccd570e01bab93fbe18111790873b96b58f6c422db4d02cdbcede',
+ 'src/ui/pages/reconcile_panel.py': '64d79b74318a1db7aefd3427fd173d3d4998f0cb2e6145bd8a2e4e1667c5b8a8',
+ 'src/ui/render/macro_v2_cards.py': 'ef9fda3152fd1547358f9c38bddfd7aadb73e392d5d4a63b441803ac1c7e7436',
  'src/ui/tabs/macro/handlers.py': 'e23c5556742986c0b6ac5c7fe3e50c5d6ab3ad0514daa0258c4996024be4d9c1',
  'src/ui/tabs/macro/section_short.py': '1cb052c72acc6650b0bcff60ebbe65e8be4395950712e5c6d39ddf891c2a79d1',
  'src/ui/tabs/tab_edu.py': 'eb46d59e4273ea3f20073dcbb30009432bd9835e1dfb35e3d02593f8fb1db020',
  'src/ui/tabs/tab_macro_v2.py': 'cb34f1720781f5f7d55e484becebcedfd65adafc4eec0454773cafa0bf9f1617',
+ 'src/ui/views/page_hold.py': 'bc85ebb41b2c392199c32a95f2a7a0f21d5ea0569024d9546ad0e547eeb69b53',
  'src/ui/views/page_today.py': '672697ff9437a9c624840d35e6098a6d8484417ed6a9be462f7d89fcc4be37ac'}
 
-DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buckets.py': (('               note="≥3.5% 外資提款風險 / ≥4% 通膨嚴峻", source=f"黃線 '
+DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/allocation_decision.py': (('    risk_cap_disclosure: Any = None\n'
+                                    "    #: DEC-075 回修（MUST-2，2026-10-23）：未評估的**原因**。'breadth' ＝ 缺真實市場廣度（契約\n"
+                                    "    #: `source == SOURCE_UNEVALUATED_BREADTH`）；'' ＝ 其他原因或已評估。最後一欄、有預設 ⇒ "
+                                    '既有建構不用改。\n'
+                                    "    unevaluated_reason: str = ''\n"
+                                    '\n',
+                                    '    risk_cap_disclosure: Any = None\n\n'),
+                                   ('        """一句話結論：\'🟠 轉守 → 建議持股 30–50%\'。"""\n'
+                                    '        if not self.is_loaded and self.unevaluated_reason == '
+                                    "'breadth':\n"
+                                    '            # DEC-075 回修：缺真實廣度 ⇒ 更新不會改變（⛔ 不叫人重抓；I-4）。其餘原因照舊。\n'
+                                    "            return '⬜ 總經未評估 — 缺真實市場廣度（DEC-074），更新資料不會改變'\n"
+                                    '        if not self.is_loaded:\n',
+                                    '        """一句話結論：\'🟠 轉守 → 建議持股 30–50%\'。"""\n'
+                                    '        if not self.is_loaded:\n'),
+                                   ('    if not _is_loaded or _health is None:\n'
+                                    '        # DEC-075 回修（QA1 MUST-2）：原因是缺真實廣度時，~~「warroom_summary / '
+                                    'macro_state.json 皆無有效值」~~\n'
+                                    '        #   不屬實（warroom 在、檔案也可能有效，只是 DEC-075 (a) 不採用）⇒ '
+                                    '換成屬實的那句；其餘原因逐字照舊。\n'
+                                    '        from shared.regime_arbiter import UNEVALUATED_BREADTH_EXPLAIN, '
+                                    'is_breadth_unevaluated\n'
+                                    '        _breadth = is_breadth_unevaluated(_ms)\n'
+                                    '        return AllocationDecision(\n',
+                                    '    if not _is_loaded or _health is None:\n'
+                                    '        return AllocationDecision(\n'),
+                                   ("            cap_pct=None, cap_name='', caps=tuple(caps),\n"
+                                    '            drivers=((UNEVALUATED_BREADTH_EXPLAIN,) if _breadth else\n'
+                                    "                     ('總經尚未評估（warroom_summary / macro_state.json "
+                                    "皆無有效值）',)),\n"
+                                    '            conflicts=tuple(conflicts),\n'
+                                    "            unevaluated_reason=('breadth' if _breadth else ''),\n"
+                                    '        )\n',
+                                    "            cap_pct=None, cap_name='', caps=tuple(caps),\n"
+                                    "            drivers=('總經尚未評估（warroom_summary / macro_state.json "
+                                    "皆無有效值）',),\n"
+                                    '            conflicts=tuple(conflicts),\n'
+                                    '        )\n')),
+ 'shared/macro_buckets.py': (('               note="≥3.5% 外資提款風險 / ≥4% 通膨嚴峻", source=f"黃線 '
                               '{_CPI_YELLOW:g}%／紅線 {_CPI_RED:g}%：有既有常數背書（統一閾值表）"),\n'
                               "    # DH-EXPORT-LABEL（DEC-075 批 1'，客戶 2026-10-23「台灣出口燈依實際資料內容修正名稱」；修正錯誤，\n"
                               '    #   有意識的更正，⛔ 不是漏刪）：~~"台灣出口訂單 YoY"~~ —— 實際取值是**財政部海關出口金額年增率**\n'
@@ -94,14 +140,20 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                  '# 不發明第二種機制（DEC-037 先例）。計分開關在 L0\n'
                                  '# `shared.signal_thresholds.BREADTH_PROXY_SCORING_ENABLED`（現為 False）。\n'
                                  '#\n'
-                                 '# 為什麼 `jingqi_info` 只認**明確布林旗標**、不做 source 字串比對：\n'
-                                 '# producer（`src/services/jingqi_calc.compute_and_store_jingqi`、舊 UI '
-                                 '`section_short` 的\n'
-                                 '# TWSE 單日頂替）自本批起一律寫 `is_proxy`；沒有旗標的 dict（測試 fixture、`section_inputs`\n'
-                                 "# 由 warroom 合成的 `{'avg': ...}`）沿用既有語意 = 真值（M1B 同一個分寸：拿不到旗標時\n"
-                                 '# 「不宣稱它是代理值」）。⚠️ 上游 **DataFrame**（`fetch_adl` 的回傳）則相反 —— 缺 `is_proxy`\n'
-                                 '# 欄**一律視同代理**（fail-safe）：那是原始序列、本 repo 所有已知產出都帶此欄，缺欄＝\n'
-                                 '# 契約漂移，不得因此把估算家數當真值計分（見 `adl_df_is_proxy`）。\n'
+                                 '# ~~為什麼 `jingqi_info` 只認**明確布林旗標**、不做 source 字串比對：…沒有旗標的 dict … 沿用既有語意 = '
+                                 '真值~~\n'
+                                 '# 📌 DEC-075 批 A 回修（QA1 S-6，2026-10-23，有意識的修改，⛔ 不是漏刪）：失敗方向改為與 DataFrame '
+                                 '路徑一致的\n'
+                                 '#   **fail-safe** —— `jingqi_info`（或 readiness 側車一筆 record）**只有** '
+                                 '`is_proxy` 是明確的布林 False\n'
+                                 '#   （Python `False` 或 '
+                                 '`numpy.bool_(False)`）才算真值；`True`、`np.bool_(True)`、字串、None、**缺旗標**一律視同代理。\n'
+                                 '#   舊理由（「拿不到旗標時不宣稱它是代理值」，M1B 同一分寸）在廣度上被權衡掉：本 repo 目前**沒有任何**\n'
+                                 '#   真實漲跌家數來源，沒標旗標的數字只可能來自估算；漏標時當真值計分＝DEC-074 明禁的那件事。\n'
+                                 '#   producer（`jingqi_calc`、舊 UI `section_short`、`section_inputs` 由 warroom '
+                                 '合成的 fallback）一律寫旗標。\n'
+                                 '# ⚠️ 上游 **DataFrame**（`fetch_adl` 的回傳）同樣：缺 `is_proxy` 欄一律視同代理（見 '
+                                 '`adl_df_is_proxy`）。\n'
                                  '\n'
                                  '#: 代理廣度值貼在數字後面的短註記（顯示用；判燈／計分一律不讀）。\n'
                                  "BREADTH_PROXY_VALUE_NOTE: str = '（代理估算值，不計分）'\n"
@@ -110,15 +162,25 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                  "BREADTH_LAMP_KEYS: frozenset = frozenset({'jingqi', 'adl'})\n"
                                  '\n'
                                  '\n'
-                                 'def is_breadth_proxy(info: Optional[dict]) -> bool:\n'
-                                 '    """`jingqi_info`（或五桶 readiness 側車的一筆 record）是不是代理（估算）廣度？\n'
+                                 'def _is_explicit_false(v) -> bool:\n'
+                                 '    """明確的布林 False（Python `False` 或 `numpy.bool_(False)`）；其餘（含 '
+                                 '0、\'False\'、None）一律否。L0 不 import numpy。"""\n'
+                                 '    if v is False:\n'
+                                 '        return True\n'
+                                 "    return type(v).__name__ in ('bool_', 'bool') and type(v).__module__ == "
+                                 "'numpy' and not bool(v)\n"
                                  '\n'
-                                 '    只認明確布林旗標 `is_proxy` / `is_proxy_tier` 為 True（見上方說明）。\n'
-                                 '    `info` 為 None / 非 dict / 沒有旗標 → False。\n'
+                                 '\n'
+                                 'def is_breadth_proxy(info: Optional[dict]) -> bool:\n'
+                                 '    """`jingqi_info`（或五桶 readiness 側車的一筆 '
+                                 'record）是不是代理（估算）廣度？**fail-safe**。\n'
+                                 '\n'
+                                 '    只有 `is_proxy` 為明確布林 False 才回 False（＝真值）；其餘一律 True（見上方說明）。\n'
+                                 '    `info` 為 None / 非 dict → True（沒有可宣稱為真值的東西；呼叫端本來就走缺值路徑）。\n'
                                  '    """\n'
                                  '    if not isinstance(info, dict):\n'
-                                 '        return False\n'
-                                 '    return any(info.get(_k) is True for _k in _PROXY_FLAG_KEYS)\n'
+                                 '        return True\n'
+                                 "    return not _is_explicit_false(info.get('is_proxy'))\n"
                                  '\n'
                                  '\n'
                                  'def breadth_proxy_badge(info: Optional[dict]) -> str:\n'
@@ -168,7 +230,7 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                  '        return True\n'
                                  '    # `tolist()` 已把 numpy bool 轉成 Python bool；NaN／None／字串都不是 `False` ⇒ '
                                  '代理。\n'
-                                 '    return not all(_v is False for _v in _tail)\n',
+                                 '    return not all(_is_explicit_false(_v) for _v in _tail)\n',
                                  '    return info\n')),
  'shared/regime_arbiter.py': (('\n'
                                "SOURCE_UNEVALUATED_BREADTH: str = 'unevaluated:breadth_unavailable'\n"
@@ -183,6 +245,22 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                '\n'
                                '#: `arbitrate_regime(unavailable_reason=...)` 的合法值：健康分因缺真實市場廣度而算不出來。\n'
                                "UNAVAILABLE_REASON_BREADTH: str = 'breadth'\n"
+                               '\n'
+                               '#: 「缺真實市場廣度 ⇒ 總經未評估」的對外說明（持股頁、AI 問答、姿態帶 drivers 共用一句；DEC-075 回修 MUST-2）。\n'
+                               '#: ⛔ 不得寫「重新抓取」「重新載入」「一鍵更新」之類的指引（I-4：重跑不會讓代理值變成可計分）；\n'
+                               '#: ⛔ 不得寫「macro_state.json 無快照」（breadth 情境下檔案可能有效，只是 DEC-075 (a) 不採用它）。\n'
+                               'UNEVALUATED_BREADTH_EXPLAIN: str = (\n'
+                               "    '總經未評估：缺真實市場廣度（漲跌家數）—— 目前只有由加權指數推估的代理值，'\n"
+                               "    '依客戶裁示（DEC-074）只顯示、不計分，健康分因此算不出來；'\n"
+                               "    '市場位階依 DEC-075 一併未評估，不改用另一套規則引擎補出位階。'\n"
+                               "    '更新資料不會改變這個狀態，要等正式的廣度資料來源接上')\n"
+                               '\n'
+                               '\n'
+                               'def is_breadth_unevaluated(state: Any) -> bool:\n'
+                               '    """總經契約（`get_macro_state()` 的 dict）是不是「因缺真實市場廣度而未評估」。只看契約自己的 `source` '
+                               '旗標。"""\n'
+                               "    return isinstance(state, dict) and state.get('source') == "
+                               'SOURCE_UNEVALUATED_BREADTH\n'
                                '\n'
                                '# ── 門檻 ────────────────────────────────────────────────────────────────\n',
                                '\n'
@@ -218,6 +296,39 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                '        return UNLOADED_VERDICT\n',
                                '        # 拿不到就沒有結論可言 —— 誠實回 unknown，不用 trend_regime 頂替（§1）。\n'
                                '        return UNLOADED_VERDICT\n')),
+ 'shared/scoring_regime_gate.py': (('    reason: str = ""\n'
+                                    '    #: DEC-075 回修（MUST-2，2026-10-23）：拒絕評分的原因是「缺真實市場廣度」（契約 `source` '
+                                    '旗標）。\n'
+                                    '    #: 預設 False ⇒ 既有建構與輸出逐字不變。\n'
+                                    '    breadth_unevaluated: bool = False\n'
+                                    '\n',
+                                    '    reason: str = ""\n\n'),
+                                   ('            return ""\n'
+                                    '        if self.breadth_unevaluated:\n'
+                                    '            # DEC-075 回修：缺真實廣度 ⇒ ⛔ 不給「一鍵更新／重跑」救法（I-4）；其餘原因逐字照舊。\n'
+                                    '            return (\n'
+                                    '                f"⬜ 本批**不計算多因子總分**：{self.reason}。"\n'
+                                    '                "多因子的 6 因子加權表（config.WEIGHT_TABLES）分 bull / neutral / '
+                                    'bear "\n'
+                                    '                "三態，總經沒有結論時任選一組都等於替你做一個大盤判斷（§1 寧可不給，"\n'
+                                    '                "不給假的）。因此「多因子」欄一律標「⚪ 無法評分」、"\n'
+                                    '                "「多因子評分排行」為空 —— **這不是 K 線抓取失敗**。"\n'
+                                    '                "健康度／趨勢／357／出場訊號／型態目標價不吃 regime，全部照常顯示。"\n'
+                                    '                "更新資料不會改變這個狀態：要等正式的市場廣度（漲跌家數）資料來源接上。"\n'
+                                    '            )\n'
+                                    '        return (\n',
+                                    '            return ""\n        return (\n'),
+                                   ('    if not macro_state.get("is_loaded"):\n'
+                                    '        from shared.regime_arbiter import is_breadth_unevaluated\n'
+                                    '        if is_breadth_unevaluated(macro_state):\n'
+                                    '            # DEC-075 回修（MUST-2）：缺真實廣度 ⇒ 據實說原因（⛔ 不是「尚未算出」）。\n'
+                                    '            return ScoringRegimeDecision(\n'
+                                    '                None, "總經未評估（缺真實市場廣度，代理估算值依 DEC-074 不計分；位階依 DEC-075 '
+                                    '一併未評估）",\n'
+                                    '                breadth_unevaluated=True)\n'
+                                    '        return ScoringRegimeDecision(None, "總經未評估（🌍 總經紅綠燈尚未算出結論）")\n',
+                                    '    if not macro_state.get("is_loaded"):\n'
+                                    '        return ScoringRegimeDecision(None, "總經未評估（🌍 總經紅綠燈尚未算出結論）")\n')),
  'shared/signal_thresholds.py': (('**並同批重跑門檻校準**(見 `macro_thresholds.json`)。"""\n'
                                   '\n'
                                   'BREADTH_PROXY_SCORING_ENABLED: bool = False\n'
@@ -246,6 +357,21 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                   '**復活條件**（缺一不可，與 DEC-074 原文對齊）：(1) 正式（真實）漲跌家數資料來源接上並帶\n'
                                   '`is_proxy=False` 的 provenance，**或**另一套經客戶核准的計算方式；(2) 客戶裁示可計分。\n'
                                   '⛔ 不得為了讓健康分「有數字」而把本旗標翻 True。"""\n'
+                                  '\n'
+                                  'MA200_WINDOW_DAYS: int = 200\n'
+                                  '"""`market_strategy.get_market_assessment` 的 `ma200`（`market_score` '
+                                  '年線項）所用的 rolling 視窗（交易日根數），\n'
+                                  '同時是「算得出 ma200 所需的最少 K 棒數」。DEC-075 批 A（`DH-TWII-MA200`）把原 inline '
+                                  '`rolling(200)`／\n'
+                                  '`len(df_index) >= 200` 具名化；QA2 S-2 回修自 L3 下沉至此。**行為一位未動**（仍是 200）。\n'
+                                  '\n'
+                                  '⚠️ **與 `src/config/config.py` 的 `ANNUAL_MA = 240`（CLAUDE.md '
+                                  '§3.3「年線」SSOT）是兩個不同口徑**：\n'
+                                  '本常數是 `market_score` 歷史沿用的 200 日線（美股慣用的「200DMA 年線」說法），`ANNUAL_MA` 是 240 '
+                                  '交易日的台股年線。\n'
+                                  '⛔ 不得直接改成 `ANNUAL_MA`（那是行為變更，需另案校準）。`src/compute/etf/etf_calc.py`、\n'
+                                  '`src/ui/render/etf_render.py` 兩處 inline `rolling(200)` 為 ETF '
+                                  '另一條路徑，本批不動（另案收斂）。"""\n'
                                   '\n',
                                   '**並同批重跑門檻校準**(見 `macro_thresholds.json`)。"""\n\n'),),
  'src/compute/macro/macro_forward_test.py': (('    from shared.signal_thresholds import (\n'
@@ -268,6 +394,21 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                          '# DEC-074 B（客戶 2026-10-23）：代理廣度計分入口（L2 → L0，合法下行依賴）。\n'
                                          'from shared.macro_provenance import jingqi_for_scoring as '
                                          '_jingqi_for_scoring  # noqa: E402\n'
+                                         'from shared.macro_provenance import adl_df_is_proxy as '
+                                         '_adl_df_is_proxy  # noqa: E402\n'
+                                         'from shared.signal_thresholds import (  # noqa: E402\n'
+                                         '    BREADTH_PROXY_SCORING_ENABLED as '
+                                         '_BREADTH_PROXY_SCORING_ENABLED,\n'
+                                         ')\n'
+                                         '\n'
+                                         "#: ADL 只有代理（估算）家數時，`missing_sources` 那一項的說法（取代 'ADL 騰落指標'）。\n"
+                                         "_ADL_PROXY_MISSING_TEXT = 'ADL "
+                                         "騰落指標：由加權指數推估的代理家數，不算有效廣度來源（DEC-074）'\n"
+                                         '\n'
+                                         '#: `SOURCE_UNEVALUATED_BREADTH` 但本輪**沒有**任何廣度值（旌旗整包缺席）時的 '
+                                         'action（取代文案表那一句）。\n'
+                                         "_TL_ACTION_BREADTH_ABSENT = '⬜ 缺真實市場廣度（漲跌家數）—— 本輪也沒有取得任何廣度資料，健康分依 "
+                                         "DEC-074 不以其餘分項補出'\n"
                                          '\n'
                                          '#: 旌旗只有代理值、依 DEC-074 不計分時，`missing_sources` 那一項的說法（取代 '
                                          '`_CONF_LABEL_JINGQI`）。\n'
@@ -317,13 +458,37 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                          '    # **不是** 0 分(0 分會被判成最強利空),也不是 🟡(🟡 是一個市場判斷)。\n'
                                          '    if _w_sum <= 0:\n'
                                          '        _health = None\n'),
+                                        ('    else:\n'
+                                         '        # 回修 NIT-2：~~Method A 已權重歸一化~~ —— DEC-074 B 起旌旗缺席 Method A '
+                                         '回 None（不歸一）；\n'
+                                         '        #   只有大盤分缺席（D-3）才歸一。log 據實說。\n'
+                                         "        print('[health_reconcile] skip:jqavg / 大盤評分 / health "
+                                         "任一未取得'\n"
+                                         "              '(Method A 此時為 None 或僅大盤分缺席的歸一值,Method B "
+                                         "仍用固定預設),兩者不可比 → '\n"
+                                         "              '本輪不對帳(§4.3)', file=sys.stderr)\n",
+                                         '    else:\n'
+                                         "        print('[health_reconcile] skip:jqavg / 大盤評分 / health "
+                                         "任一未取得,'\n"
+                                         "              'Method A 已權重歸一化而 Method B 仍用固定預設,兩者不可比 → '\n"
+                                         "              '本輪不對帳(§4.3)', file=sys.stderr)\n"),
                                         ('    # 的 legacy 決策樹對拍測試)。\n'
                                          '    # DEC-074 B：health 算不出來「只因為缺廣度」（大盤評分本身在）⇒ 原因標 breadth\n'
                                          '    # （文案不再叫人重抓）。兩條腿都缺 ⇒ 既有 `SOURCE_UNLOADED`（其餘輸入也缺，重抓仍可能補上大盤分）。\n'
+                                         '    # 📌 DEC-075 回修（QA1 MUST-1，2026-10-23，有意識的修改，⛔ 不是漏刪）：\n'
+                                         '    #   ~~只在「大盤評分在」時才標 breadth~~ —— 舊理由「重抓仍可能補上大盤分」不成立：補上大盤分後健康分\n'
+                                         '    #   仍是 None（廣度腿恆為代理）。若大盤分同時缺就標 UNLOADED，`get_macro_state` 會退回 '
+                                         'macro_state.json\n'
+                                         '    #   規則引擎位階（＝DEC-075 不採用的 (b)），出現「資料越少、結論越多」。\n'
+                                         '    #   ⇒ 只要本輪**有代理廣度被擋下**（`_jq_proxy_dropped`）一律標 '
+                                         'breadth（不看大盤分）；\n'
+                                         '    #     旌旗整包缺席時維持舊規則（大盤分在 ⇒ breadth；兩條腿都缺、也沒有任何廣度輸入 ＝ F1 三源全空 ⇒ '
+                                         'UNLOADED）。\n'
                                          '    _health_unavailable_reason = (\n'
                                          '        _RA.UNAVAILABLE_REASON_BREADTH\n'
-                                         '        if (_health is None and _breadth_unavailable and '
-                                         '_score_pct is not None) else None)\n'
+                                         '        if (_health is None and _breadth_unavailable\n'
+                                         '            and (_jq_proxy_dropped or _score_pct is not None)) '
+                                         'else None)\n'
                                          '    _verdict = _RA.arbitrate_regime(\n',
                                          '    # 的 legacy 決策樹對拍測試)。\n    _verdict = _RA.arbitrate_regime(\n'),
                                         ('        health_defense_threshold=_h_thr, bull_min_score=_s_thr,\n'
@@ -331,6 +496,32 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                          '    )\n',
                                          '        health_defense_threshold=_h_thr, bull_min_score=_s_thr,\n'
                                          '    )\n'),
+                                        ('    _color, _label, _action, _sub = '
+                                         '_TL_COPY_BY_SOURCE[_verdict.source]\n'
+                                         '    if _verdict.source == _RA.SOURCE_UNEVALUATED_BREADTH and not '
+                                         '_jq_proxy_dropped:\n'
+                                         '        # 回修 NIT-1：本輪連代理值都沒有（旌旗整包缺席）⇒ 不說「代理估算值不計分」（那一輪沒有代理值）。\n'
+                                         '        _action = _TL_ACTION_BREADTH_ABSENT\n'
+                                         '    _icon = _verdict.light\n',
+                                         '    _color, _label, _action, _sub = '
+                                         '_TL_COPY_BY_SOURCE[_verdict.source]\n'
+                                         '    _icon = _verdict.light\n'),
+                                        ("        ('先行指標 (期貨/PCR/韭菜)',      bool(li_latest is not None and "
+                                         "not li_latest.empty), 'li'),\n"
+                                         '        # 回修 QA2 S-5（2026-10-23，有意識的修改，⛔ '
+                                         "不是漏刪）：~~`bool(_cd.get('adl') is not None)`~~ ——\n"
+                                         '        #   與上面旌旗同口徑：代理（估算）家數＝沒有有效的廣度來源（DEC-074 B），⛔ 不因「df '
+                                         '在」就算有來源。\n'
+                                         "        ('ADL 騰落指標',\n"
+                                         "         bool(_cd.get('adl') is not None\n"
+                                         '              and (_BREADTH_PROXY_SCORING_ENABLED or not '
+                                         "_adl_df_is_proxy(_cd.get('adl')))), 'adl'),\n"
+                                         '    ]\n',
+                                         "        ('先行指標 (期貨/PCR/韭菜)',      bool(li_latest is not None and "
+                                         "not li_latest.empty), 'li'),\n"
+                                         "        ('ADL 騰落指標',                  bool(_cd.get('adl') is not "
+                                         "None), 'adl'),\n"
+                                         '    ]\n'),
                                         ('    #    凍結走**列名**這條路（畫面本來就會逐項印出 `missing_sources`）。\n'
                                          '    # DEC-074 B：旌旗**有代理值、被擋下不計分**時，缺失那一項據實寫原因（不是「沒抓到」）。\n'
                                          '    #   同一項替換、不另加一項 ⇒ 項數與 `conf` 一致。\n'
@@ -338,6 +529,10 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                          '        _missing = [(_BREADTH_PROXY_MISSING_TEXT if _m == '
                                          '_CONF_LABEL_JINGQI else _m)\n'
                                          '                    for _m in _missing]\n'
+                                         "    if _cd.get('adl') is not None and 'ADL 騰落指標' in _missing:\n"
+                                         '        # 回修 S-5：ADL 有 df、只是代理 ⇒ 據實寫原因（同一項替換，項數與 conf 一致）。\n'
+                                         "        _missing = [(_ADL_PROXY_MISSING_TEXT if _m == 'ADL 騰落指標' "
+                                         'else _m) for _m in _missing]\n'
                                          '    if _fut_frozen:\n',
                                          '    #    凍結走**列名**這條路（畫面本來就會逐項印出 `missing_sources`）。\n'
                                          '    if _fut_frozen:\n'),
@@ -416,6 +611,18 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                      "#   'TW_PMI'（見該處註解）後本檔已無讀者，依 pyflakes 一併拿掉（有意識的刪除，⛔ 不是漏刪）。\n"
                                      '\n',
                                      ')\nfrom shared.fred_series import FRED_NAPM\n\n'),
+                                    ('        ],\n'
+                                     "        # 回修 NIT-4（2026-10-23）：~~'ISM PMI（NAPM）'~~ —— 'NAPM' 教學條目已改名 "
+                                     "'TW_PMI'（台灣 PMI），\n"
+                                     '        #   本系統沒有美國 ISM 的教學卡；改列真的存在的那一張（只改字）。\n'
+                                     "        'pair_with': ['台灣製造業 PMI（CIER）', '美債 10Y（^TNX）', "
+                                     "'美元指數（DXY）'],\n"
+                                     "        'historical_anchor': '2022 通膨高峰 6.6%（40 年新高）｜2008 雷曼 2.5%｜Fed "
+                                     "目標 2.0%',\n",
+                                     '        ],\n'
+                                     "        'pair_with': ['ISM PMI（NAPM）', '美債 10Y（^TNX）', '美元指數（DXY）'],\n"
+                                     "        'historical_anchor': '2022 通膨高峰 6.6%（40 年新高）｜2008 雷曼 2.5%｜Fed "
+                                     "目標 2.0%',\n"),
                                     ('    },\n'
                                      "    # ── ISM 教學對映修正（DEC-075 批 1'，客戶 2026-10-23「修正 ISM "
                                      '教學對映」；修正錯誤，有意識的更正，\n'
@@ -453,9 +660,18 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                      '        # F1 v19.184 §3.3：原本這 4 條是手打的 `50 / 50 / 50 / 45`。\n'),
                                     ('        ],\n'
                                      "        'pair_with': ['台灣出口金額 YoY（海關）', '國發會景氣燈號', '費半 SOX'],\n"
-                                     "        'historical_anchor': '榮枯線 50 為定義值（>50 擴張、<50 收縮）；'\n"
-                                     "                             '台灣 PMI 的歷史高低點本系統尚未整理出可回溯的數字，'\n"
-                                     "                             '因此這裡不列（也不沿用美國 ISM 的歷史數字）。',\n"
+                                     '        # 回修 NIT（2026-10-23）：~~「歷史高低點本系統尚未整理出可回溯的數字」~~ —— 與教學頁 PMI '
+                                     '章節的\n'
+                                     '        #   台灣 PMI 歷史表說法不一；改列 repo 內實際存在、可回溯的官方序列數字：\n'
+                                     '        #   `data_cache/tw_pmi.parquet`（source 欄 = '
+                                     'data.gov.tw:dataset:6100，2012-07～2026-09，171 列；\n'
+                                     '        #   量測日 2026-10-23）實算：最高 2021-04 68.7、最低 2023-01 40.4；2020-04 '
+                                     '47.6、2022-12 43.7\n'
+                                     '        #   （後兩者與 `tab_edu` PMI 章節歷史表一致）。\n'
+                                     "        'historical_anchor': '2021/4 高點 68.7｜2023/1 低點 40.4｜2020/4 疫情 "
+                                     "47.6｜2022/12 43.7'\n"
+                                     "                             '（官方序列 data.gov.tw 6100，2012/7 才創編；榮枯線 50 "
+                                     "為定義值）',\n"
                                      "        'upstream': '全球終端需求、電子與半導體供應鏈訂單、原物料價格',\n"
                                      "        'downstream': '台灣出口與製造業營收 → 台股電子權值股獲利 → ^TWII',\n"
                                      '    },\n',
@@ -465,7 +681,75 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                      "63.7',\n"
                                      "        'upstream': '訂單能見度、企業 CapEx、全球需求',\n"
                                      "        'downstream': '台灣出口（領先 1–2 季）→ 台股科技股獲利 → ^SOX & ^TWII',\n"
-                                     '    },\n')),
+                                     '    },\n'),
+                                    ('        # 技術備忘:v18.142 由 IMF IFS(VALEXPTWM052N)改採 OECD MEI,月延遲短 10 '
+                                     '個月。\n'
+                                     "        # 📌 DEC-075 批 1' 回修（QA1 S-4，2026-10-23，有意識的修改，⛔ 不是漏刪）：\n"
+                                     "        #   ~~'本系統採用 OECD 的統計版本，比另一個常見的 IMF 版本早約 10 個月拿到最新月份資料。'~~\n"
+                                     '        #   —— 與燈名「台灣出口金額 '
+                                     'YoY（海關）」矛盾，且不符實際取數鏈：`macro_snapshot.fetch_export_block`\n'
+                                     '        #   首源是主計總處統計資訊網（stat.gov.tw），其次 FRED API（OECD MEI '
+                                     '系列）、海關進出口統計\n'
+                                     '        #   （data.gov.tw／opendata.customs.gov.tw dataset 6053）、FRED '
+                                     'CSV、財政部 CKAN；OECD 只是備援之一。\n'
+                                     "        'meaning': '台灣每月出口金額年增率，全球景氣與台廠訂單能見度的核心指標'\n"
+                                     "                   '（台灣 GDP 約 60% 來自出口）。'\n"
+                                     "                   '本系統依序取主計總處統計資訊網、OECD（經 FRED）、海關進出口統計等來源，'\n"
+                                     "                   '取第一個有值的那一源（畫面「命中來源」會標明本輪用的是哪一個）。',\n"
+                                     "        'how_to_read': [\n",
+                                     '        # 技術備忘:v18.142 由 IMF IFS(VALEXPTWM052N)改採 OECD MEI,月延遲短 10 '
+                                     '個月。\n'
+                                     "        'meaning': '台灣每月出口金額年增率，全球景氣與台廠訂單能見度的核心指標'\n"
+                                     "                   '（台灣 GDP 約 60% 來自出口）。'\n"
+                                     "                   '本系統採用 OECD 的統計版本，比另一個常見的 IMF 版本'\n"
+                                     "                   '早約 10 個月拿到最新月份資料。',\n"
+                                     "        'how_to_read': [\n")),
+ 'src/services/ai_qa_service.py': (('        "請如實說明這一點,**不得**用其他工具的數字或自己的判斷推估總分/等級/名次。"\n'
+                                    '        # DEC-075 回修（MUST-2）：缺真實廣度 ⇒ ⛔ 不給「一鍵更新」救法（I-4）；其餘原因逐字照舊。\n'
+                                    '        + ("更新資料不會改變這個狀態:要等正式的市場廣度(漲跌家數)資料來源接上,"\n'
+                                    '           "**不得**建議使用者靠更新資料解決。"\n'
+                                    '           if getattr(dec, "breadth_unevaluated", False) else\n'
+                                    '           "救法:先開 🌍 總經頁按「🚀 一鍵更新全部數據」讓紅綠燈算出結論,再問一次。")\n'
+                                    '        + "不受影響、仍可正常使用:財務體質(get_financial_health)、"\n'
+                                    '        "停損與倉位(get_risk_plan)、大盤籌碼(get_market_leading)、ETF '
+                                    '品質(get_etf_quality)。"\n',
+                                    '        "請如實說明這一點,**不得**用其他工具的數字或自己的判斷推估總分/等級/名次。"\n'
+                                    '        "救法:先開 🌍 總經頁按「🚀 一鍵更新全部數據」讓紅綠燈算出結論,再問一次。"\n'
+                                    '        "不受影響、仍可正常使用:財務體質(get_financial_health)、"\n'
+                                    '        "停損與倉位(get_risk_plan)、大盤籌碼(get_market_leading)、ETF '
+                                    '品質(get_etf_quality)。"\n'),
+                                   ('    _ms = _macro_state(require_valid_risk_cap=True) if '
+                                    'require_valid_risk_cap else _macro_state()\n'
+                                    '    from shared.regime_arbiter import UNEVALUATED_BREADTH_EXPLAIN, '
+                                    'is_breadth_unevaluated\n'
+                                    '    if is_breadth_unevaluated(_ms):\n'
+                                    '        # DEC-075 回修（MUST-2）：缺真實廣度 ⇒ ⛔ 不說「macro_state.json '
+                                    '無快照」（檔案可能有效，只是 (a) 不採用）、\n'
+                                    '        #   ⛔ 不叫人一鍵更新（I-4）。其餘未評估原因的既有文案逐字照舊（下一段）。\n'
+                                    '        return {"ok": False,\n'
+                                    '                "error": (UNEVALUATED_BREADTH_EXPLAIN + "。"\n'
+                                    '                          "(§1:未評估就是未評估,**不退回「中性/震盪」當預設**;"\n'
+                                    '                          "請勿把「未評估」講成「市場中性」,也**不得**建議使用者靠更新資料解決。)")}\n'
+                                    '    if not isinstance(_ms, dict) or not _ms.get("is_loaded"):\n',
+                                    '    _ms = _macro_state(require_valid_risk_cap=True) if '
+                                    'require_valid_risk_cap else _macro_state()\n'
+                                    '    if not isinstance(_ms, dict) or not _ms.get("is_loaded"):\n')),
+ 'src/services/dividend_station_service.py': (('\n'
+                                               '    from shared.regime_arbiter import '
+                                               'SOURCE_UNEVALUATED_BREADTH as '
+                                               '_RA_SOURCE_UNEVALUATED_BREADTH\n'
+                                               '    _regime = str(_state.get("regime", "unknown") or '
+                                               '"unknown")\n',
+                                               '\n'
+                                               '    _regime = str(_state.get("regime", "unknown") or '
+                                               '"unknown")\n'),
+                                              ('        "posture_range": _posture_range,\n'
+                                               '        # DEC-075 '
+                                               '回修（MUST-2，schema-additive）：未評估原因是「缺真實市場廣度」（契約 source 旗標）。\n'
+                                               '        "breadth_unevaluated": _state.get("source") == '
+                                               '_RA_SOURCE_UNEVALUATED_BREADTH,\n'
+                                               '    }\n',
+                                               '        "posture_range": _posture_range,\n    }\n')),
  'src/services/jingqi_calc.py': (('- 三段燈號(BULL/NEUTRAL/BEAR SSOT from shared.signal_thresholds)\n'
                                   "- 寫 session_state['jingqi_info'] ~~7~~ 8 keys(DEC-074 B 加 "
                                   '`is_proxy`;供戰情概覽/作戰室/section_inputs 讀;\n'
@@ -628,38 +912,55 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                                "                              '假值;foreign_net "
                                                "燈視為缺值(既有消費點照舊)')\n"
                                                '                    inst = InstNetDict(\n')),
- 'src/services/macro_refresh_service.py': (('        if _wr_res.written:\n'
+ 'src/services/macro_refresh_service.py': (('\n'
+                                            'def warroom_written_detail(health_missing: bool, regime_source: '
+                                            'Any) -> str:\n'
+                                            '    """STEP_WARROOM 寫入成功時的步驟說明（純函式；QA2 S-1 回修抽出以便行為測試）。\n'
+                                            '\n'
+                                            '    DEC-074 B／DEC-075 '
+                                            'D-1(a)（2026-10-23）：健康分未評估的**原因**是「缺真實市場廣度」時，\n'
+                                            '    既有那句（「兩條腿都缺」「位階會改讀 macro_state.json」）兩半都不屬實 ⇒ 換成屬實的那句；\n'
+                                            '    其餘情形逐字照舊。⛔ 不寫「重新抓取」之類的指引（重跑不會讓代理值變成可計分）。\n'
+                                            '    """\n'
+                                            '    from shared import regime_arbiter as _RA_wr\n'
+                                            '    if health_missing and regime_source == '
+                                            '_RA_wr.SOURCE_UNEVALUATED_BREADTH:\n'
+                                            '        return ("寫入 warroom_summary"\n'
+                                            '                "（⚠️ 健康分因缺真實市場廣度（漲跌家數）未評估 —— 代理估算值依 DEC-074 '
+                                            '不計分："\n'
+                                            '                "建議持股的姿態帶與市場位階一併未評估（DEC-075，不改讀 '
+                                            'macro_state.json）；"\n'
+                                            '                "更新資料不會改變此狀態）")\n'
+                                            '    return ("寫入 warroom_summary"\n'
+                                            '            + ("（⚠️ 健康分兩條腿都缺 → `get_macro_state()` 把這份 warroom '
+                                            '視同**未載入**："\n'
+                                            '               "建議持股的姿態帶算不出來；市場位階若有可用的 macro_state.json 會改讀它）"\n'
+                                            '               if health_missing else ""))\n'
+                                            '\n'
+                                            '\n'
+                                            'def refresh_macro_now(*, mode: str = MODE_WARM,\n',
+                                            '\ndef refresh_macro_now(*, mode: str = MODE_WARM,\n'),
+                                           ('        if _wr_res.written:\n'
                                             '            # DEC-074 B／DEC-075 '
                                             'D-1(a)（2026-10-23）：健康分未評估的**原因**是「缺真實市場廣度」時，\n'
                                             '            #   下面那句既有說明（「兩條腿都缺」「位階會改讀 macro_state.json」）兩半都不屬實 '
                                             '⇒ 換成屬實的那句；\n'
                                             '            #   其餘情形逐字照舊。⛔ 不寫「重新抓取」之類的指引（重跑不會讓代理值變成可計分）。\n'
-                                            '            from shared import regime_arbiter as _RA_wr\n'
-                                            '            _wr_breadth = (_wr_res.health_missing\n'
-                                            '                           and '
-                                            '(st.session_state.get("warroom_summary") or '
-                                            '{}).get("regime_source")\n'
-                                            '                           == '
-                                            '_RA_wr.SOURCE_UNEVALUATED_BREADTH)\n'
                                             '            _step(STEP_WARROOM, True,\n'
-                                            '                  "寫入 warroom_summary"\n'
-                                            '                  + ("（⚠️ 健康分因缺真實市場廣度（漲跌家數）未評估 —— 代理估算值依 '
-                                            'DEC-074 不計分："\n'
-                                            '                     "建議持股的姿態帶與市場位階一併未評估（DEC-075，不改讀 '
-                                            'macro_state.json）；"\n'
-                                            '                     "更新資料不會改變此狀態）"\n'
-                                            '                     if _wr_breadth else\n'
-                                            '                     "（⚠️ 健康分兩條腿都缺 → `get_macro_state()` 把這份 '
-                                            'warroom 視同**未載入**："\n'
-                                            '                     "建議持股的姿態帶算不出來；市場位階若有可用的 macro_state.json '
-                                            '會改讀它）"\n',
+                                            '                  warroom_written_detail(\n'
+                                            '                      _wr_res.health_missing,\n'
+                                            '                      (st.session_state.get("warroom_summary") '
+                                            'or {}).get("regime_source"))\n'
+                                            '                  + _stale_inputs_note)\n',
                                             '        if _wr_res.written:\n'
                                             '            _step(STEP_WARROOM, True,\n'
                                             '                  "寫入 warroom_summary"\n'
                                             '                  + ("（⚠️ 健康分兩條腿都缺 → `get_macro_state()` 把這份 '
                                             'warroom 視同**未載入**："\n'
                                             '                     "建議持股的姿態帶算不出來；市場位階若有可用的 macro_state.json '
-                                            '會改讀它）"\n'),),
+                                            '會改讀它）"\n'
+                                            '                     if _wr_res.health_missing else "")\n'
+                                            '                  + _stale_inputs_note)\n')),
  'src/services/macro_state_locker.py': (('    _wr_ok = bool(_wr) and '
                                          '_is_finite_number(_wr.get("health_score"))\n'
                                          '    # ── DEC-075 D-1(a)（客戶 2026-10-23，行為變更，有意識的修改，⛔ '
@@ -808,22 +1109,16 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                       'from shared.signal_thresholds import (\n'
                                       '    BREADTH_PROXY_SCORING_ENABLED, M1B_M2_LEG_ENABLED, '
                                       'MARKET_BREADTH_NEUTRAL_PCT,\n'
+                                      '    MA200_WINDOW_DAYS,  # 回修 QA2 S-2：常數下沉 L0（原定義在本檔）\n'
                                       ')\n'
                                       'from shared.macro_provenance import M1B_PROXY_VALUE_NOTE  # '
-                                      'DL-f1-s23：代理註記（L0 SSOT，K1）\n'
-                                      '\n'
-                                      '#: `get_market_assessment` 算 MA200（年線）所需的最少 K 棒數（與 rolling 視窗同一個數）。\n'
-                                      'MA200_WINDOW_DAYS: int = 200\n'
-                                      'from shared.dated_value import iso_date_or_none  # 批 Z62：index_as_of '
-                                      '收斂（L0）\n',
+                                      'DL-f1-s23：代理註記（L0 SSOT，K1）\n',
                                       '# v18.449:市場廣度中性門檻 SSOT(原 inline `1.0`，尺度語意錯誤，見下方 market_regime '
                                       'docstring）\n'
                                       'from shared.signal_thresholds import M1B_M2_LEG_ENABLED, '
                                       'MARKET_BREADTH_NEUTRAL_PCT\n'
                                       'from shared.macro_provenance import M1B_PROXY_VALUE_NOTE  # '
-                                      'DL-f1-s23：代理註記（L0 SSOT，K1）\n'
-                                      'from shared.dated_value import iso_date_or_none  # 批 Z62：index_as_of '
-                                      '收斂（L0）\n'),
+                                      'DL-f1-s23：代理註記（L0 SSOT，K1）\n'),
                                      ('                  ma120_rising=False, ma120_falling=False,\n'
                                       '                  m1b_m2_is_proxy=False, '
                                       'foreign_net_unobserved=False,\n'
@@ -963,21 +1258,84 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                         'from shared.inst_net import is_net_observed  # 批 Z33：外資淨額未觀測（L1 '
                                         '預填／L3 補零推出）不當真值\n'
                                         'from shared.station_specs import is_invalid_number\n'),
-                                       ('        _jq = _get(_jq_info, "avg")      # 沒有 avg ⇒ None（缺值），⛔ 不退回 '
-                                        'warroom（可能是舊頁籤殘留）\n'
+                                       ('    if _jq_info:\n'
                                         '        # DEC-074 B（客戶 2026-10-23）：代理（估算）廣度不得計分 —— '
                                         '本列是健康分對帳（兩種演算法各算一次），\n'
-                                        '        #   一樣是計分路徑 ⇒ 經 L0 `jingqi_for_scoring`：代理 ⇒ 缺值（⛔ 不退回 '
-                                        'warroom，理由同上一行）。\n'
-                                        '        if not jingqi_for_scoring(_jq_info):\n'
+                                        '        #   一樣是計分路徑 ⇒ 經 L0 `jingqi_for_scoring`：有值但為代理 ⇒ 缺值（⛔ 不退回 '
+                                        'warroom）。\n'
+                                        '        #   ⚠️ 只在「有值且代理」時才擋：沒有 avg 的既有缺值路徑（含「不退回 warroom」）一位未動。\n'
+                                        '        _jq_proxy_drop = (_get(_jq_info, "avg") is not None) and '
+                                        'not jingqi_for_scoring(_jq_info)\n'
+                                        '        _jq = _get(_jq_info, "avg")      # 沒有 avg ⇒ None（缺值），⛔ 不退回 '
+                                        'warroom（可能是舊頁籤殘留）\n'
+                                        '        if _jq_proxy_drop:\n'
                                         '            _jq = None\n'
                                         '        # 📌 批 Z62（Z60 更正，上行註解保留）：Z60 起新 UI 也會寫 warroom，但其 '
                                         '`jingqi_avg` 是由\n',
+                                        '    if _jq_info:\n'
                                         '        _jq = _get(_jq_info, "avg")      # 沒有 avg ⇒ None（缺值），⛔ 不退回 '
                                         'warroom（可能是舊頁籤殘留）\n'
                                         '        # 📌 批 Z62（Z60 更正，上行註解保留）：Z60 起新 UI 也會寫 warroom，但其 '
                                         '`jingqi_avg` 是由\n')),
- 'src/ui/tabs/macro/handlers.py': (('            # 所以永遠不會「缺席」,只會靜默變成最強利空)。改為據實列出缺哪條腿。\n'
+ 'src/services/section_inputs.py': (('    elif wr5:\n'
+                                     '        # 📌 DEC-075 回修（QA1 S-6 連帶，2026-10-23）：`is_breadth_proxy` 改 '
+                                     'fail-safe（缺旗標＝代理）。\n'
+                                     '        #   warroom 的 `jingqi_avg` 是 `calc_traffic_light` 的**計分值** '
+                                     '`jqavg` —— 代理時本來就是 None，\n'
+                                     '        #   非 None 只可能是真值 ⇒ 合成時帶 `is_proxy=False`（None 時照舊無值，旗標不影響）。\n'
+                                     "        _wr_jq = wr5.get('jingqi_avg')\n"
+                                     "        jq = {'avg': _wr_jq, 'is_proxy': False} if _wr_jq is not None "
+                                     "else {'avg': _wr_jq}\n"
+                                     '    else:\n',
+                                     '    elif wr5:\n'
+                                     "        jq = {'avg': wr5.get('jingqi_avg')}\n"
+                                     '    else:\n'),),
+ 'src/ui/pages/reconcile_panel.py': (('    if _jqavg is None:\n'
+                                      '        # DEC-075 回修（QA1 S-1，2026-10-23，有意識的修改，⛔ 不是漏刪）：~~`_jingqi = '
+                                      "_ss('jingqi_info', {}) or {}`~~\n"
+                                      '        #   —— 健康分對帳是計分路徑：代理（估算）廣度依 DEC-074 不計分 ⇒ 經 L0 '
+                                      '`jingqi_for_scoring`\n'
+                                      '        #   （與 L3 `reconcile_service.health_inputs` 同口徑）。warroom '
+                                      '`jingqi_avg` 是計分值、代理時本來就是 None。\n'
+                                      '        from shared.macro_provenance import jingqi_for_scoring\n'
+                                      "        _jingqi = jingqi_for_scoring(_ss('jingqi_info', {}) or {}) or "
+                                      '{}\n'
+                                      "        _jqavg = _jingqi.get('avg')\n",
+                                      '    if _jqavg is None:\n'
+                                      "        _jingqi = _ss('jingqi_info', {}) or {}\n"
+                                      "        _jqavg = _jingqi.get('avg')\n"),),
+ 'src/ui/render/macro_v2_cards.py': (('    value_note: str = ""\n'
+                                      '    # DEC-074 B 回修（QA1 S-2，2026-10-23）：True ＝ 這一列只有代理（估算）廣度值，依 '
+                                      'DEC-074 **不計分** ——\n'
+                                      '    # 畫面照樣顯示值，但「N／M 項有資料」的 N 不算它（`tab_macro_v2.bucket_summary` 的 '
+                                      '`n_no_value`）。\n'
+                                      '    # 預設 False → 既有呼叫端與畫面逐字不變。\n'
+                                      '    proxy_not_scored: bool = False\n'
+                                      '\n',
+                                      '    value_note: str = ""\n\n'),),
+ 'src/ui/tabs/macro/handlers.py': (("            _gate_reason = '兩個獨立來源(三大法人 / 期貨籌碼)同時失效 — 只剩 ^TWII 自我印證'\n"
+                                    "        elif tl.get('health_unavailable_reason') == 'breadth':\n"
+                                    '            # DEC-075 回修（QA1 MUST-2／QA2 '
+                                    'S-4，2026-10-23）：健康分是因**缺真實市場廣度**而未評估 ——\n'
+                                    '            #   下一支「兩條腿都缺」不屬實（大盤分可能在），只改字。\n'
+                                    "            _gate_reason = '缺真實市場廣度（漲跌家數），代理估算值依 DEC-074 不計分 — 算不出健康度'\n"
+                                    '        else:\n',
+                                    "            _gate_reason = '兩個獨立來源(三大法人 / 期貨籌碼)同時失效 — 只剩 ^TWII 自我印證'\n"
+                                    '        else:\n'),
+                                   ('        )\n'
+                                    '        if _tl_state == UI_FAILED and '
+                                    "tl.get('health_unavailable_reason') == 'breadth':\n"
+                                    '            # DEC-075 回修：這不是「來源取得失敗」，是缺正式資料來源 ⇒ 灰色說明、⛔ 不提更新按鈕（I-4）。\n'
+                                    "            _cta_color = '#8b949e'\n"
+                                    "            _cta_text = ('⬜ 市場廣度缺的是正式資料來源，更新資料不會改變；'\n"
+                                    "                         '正式廣度資料接上之前，燈號維持未評估（依 DEC-074／DEC-075 "
+                                    "不以其餘分項或另一套規則補出結論）。')\n"
+                                    '        elif _tl_state == UI_FAILED:\n'
+                                    '            _cta_color = TRAFFIC_RED\n',
+                                    '        )\n'
+                                    '        if _tl_state == UI_FAILED:\n'
+                                    '            _cta_color = TRAFFIC_RED\n'),
+                                   ('            # 所以永遠不會「缺席」,只會靜默變成最強利空)。改為據實列出缺哪條腿。\n'
                                     '            # 📌 DEC-074 B（客戶 2026-10-23，有意識的修改，⛔ 不是漏刪）：旌旗（廣度）缺席自本批起\n'
                                     '            #   健康分 = None（⬜ 未評估），**不再**重新歸一 ⇒ 舊句「權重已重新歸一化」在該情形不屬實。\n'
                                     '            #   只改字（共用層 L2 契約改變的連帶文案；DEC-019 揭露），版面不動。\n'
@@ -989,16 +1347,32 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                     "            if tl.get('health_partial'):\n"),
                                    ("                _leg_txt = '、'.join(_legs) if _legs else '部分分項'\n"
                                     "                if tl.get('health') is None:\n"
+                                    '                    # 回修 QA2 S-4：「代理估算的廣度值不計分」只在本輪真的有代理值被擋下時才講（沒抓到 ≠ '
+                                    '代理）。\n'
+                                    "                    _proxy_seen = any('代理' in str(_m) for _m in "
+                                    '_missing_now)\n'
                                     "                    _msg += (f'\u3000🩺 **綜合健康度未評估：缺 {_leg_txt}**'\n"
-                                    "                             '（依 DEC-074 不以其餘分項改權重補出分數，代理估算的廣度值不計分）。')\n"
+                                    "                             '（依 DEC-074 不以其餘分項改權重補出分數'\n"
+                                    "                             + ('，代理估算的廣度值不計分' if _proxy_seen else '') "
+                                    "+ '）。')\n"
                                     '                else:\n'
                                     "                    _msg += (f'\u3000🩺 **綜合健康度未含 "
                                     "{_leg_txt}**，本次僅由其餘分項'\n"
                                     "                             '推算（權重已重新歸一化，非補中性值/非補 0），'\n"
                                     "                             '請降低對該分數的信賴。')\n"
-                                    "            _msg += '\u3000建議按「🚀 一鍵更新全部數據」後再操作。'\n"
                                     '            if _breadth_reason:\n'
-                                    "                _msg += '（市場廣度那一項缺的是正式資料來源，更新資料不會改變。）'\n"
+                                    '                # 回修 QA2 S-4（2026-10-23，有意識的修改，⛔ '
+                                    '不是漏刪）：~~先叫人一鍵更新、再說更新不會改變~~（自相矛盾）。\n'
+                                    '                #   breadth 原因時：只有**其餘**缺項才給更新指引；市場廣度那一項明講更新不會改變（I-4）。\n'
+                                    '                _other_missing = [_m for _m in _missing_now\n'
+                                    "                                  if '旌旗指數' not in str(_m) and 'ADL "
+                                    "騰落指標' not in str(_m)]\n"
+                                    '                if _other_missing:\n'
+                                    "                    _msg += ('\u3000其餘缺項（' + '、'.join(_other_missing) + "
+                                    "'）可按「🚀 一鍵更新全部數據」補上；')\n"
+                                    "                _msg += '\u3000市場廣度缺的是正式資料來源，更新資料不會改變。'\n"
+                                    '            else:\n'
+                                    "                _msg += '\u3000建議按「🚀 一鍵更新全部數據」後再操作。'\n"
                                     '            st.warning(_msg)\n',
                                     "                _leg_txt = '、'.join(_legs) if _legs else '部分分項'\n"
                                     "                _msg += (f'\u3000🩺 **綜合健康度未含 {_leg_txt}**，本次僅由其餘分項'\n"
@@ -1067,7 +1441,7 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
  'src/ui/tabs/tab_macro_v2.py': (('from shared.macro_provenance import is_m1b_m2_proxy  # '
                                   'DL-f1-s17：代理值不計分（L0 SSOT）\n'
                                   'from shared.macro_provenance import (  # DEC-074 B：代理廣度只顯示不計分（L0 SSOT）\n'
-                                  '    BREADTH_LAMP_KEYS, breadth_proxy_badge, is_breadth_proxy,\n'
+                                  '    BREADTH_LAMP_KEYS, BREADTH_PROXY_VALUE_NOTE,\n'
                                   ')\n'
                                   'from src.compute.macro.macro_helpers import compute_five_bucket_summary\n',
                                   'from shared.macro_provenance import is_m1b_m2_proxy  # '
@@ -1078,21 +1452,97 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buc
                                   '        # DEC-074 B（客戶 2026-10-23）：市場廣度兩盞（jingqi／adl）側車 `is_proxy`（L2 以 '
                                   'L0 判）\n'
                                   '        # → 同上：燈號走既有 gray，不進桶摘要／指標危險度；值與註記照樣顯示。\n'
+                                  '        # ⚠️ 側車契約：L2 只在代理時才寫 `is_proxy=True`（非代理時逐鍵不變）⇒ 這裡讀**側車**只認明確 '
+                                  'True，\n'
+                                  '        #   ⛔ 不套 L0 `is_breadth_proxy` 的 fail-safe（那是給 `jingqi_info` 原始 '
+                                  'dict 用的；套在側車上會把真值列也打灰）。\n'
                                   '        _breadth_proxy = spec.key in BREADTH_LAMP_KEYS and '
-                                  'is_breadth_proxy(rec)\n'
+                                  'rec.get("is_proxy") is True\n'
                                   '        if _breadth_proxy:\n'
                                   '            band = classify_danger(None, spec)\n'
                                   '\n',
                                   '            band = classify_danger(None, spec)\n\n'),
                                  ('            value_note=(m1b_m2_proxy_badge(rec)\n'
                                   '                        if spec.key == "m1b_m2_gap" and has_value\n'
-                                  '                        else (breadth_proxy_badge(rec) if _breadth_proxy '
+                                  '                        else (BREADTH_PROXY_VALUE_NOTE if _breadth_proxy '
                                   'and has_value else "")),\n'
+                                  '            proxy_not_scored=bool(_breadth_proxy and has_value),\n'
                                   '        ))\n',
                                   '            value_note=(m1b_m2_proxy_badge(rec)\n'
                                   '                        if spec.key == "m1b_m2_gap" and has_value else '
                                   '""),\n'
-                                  '        ))\n')),
+                                  '        ))\n'),
+                                 ('            "n_bad": sum(1 for r in members if r.state != "live"),\n'
+                                  '            # 回修 QA1 S-2（DEC-074 B）：代理廣度列（只顯示、不計分）＝沒有可下判斷的值 ⇒ 一併算進 '
+                                  'n_no_value。\n'
+                                  '            "n_no_value": sum(1 for r in members\n'
+                                  '                              if r.state in NO_VALUE_ROW_STATES or '
+                                  'getattr(r, "proxy_not_scored", False)),\n'
+                                  '        })\n',
+                                  '            "n_bad": sum(1 for r in members if r.state != "live"),\n'
+                                  '            "n_no_value": sum(1 for r in members if r.state in '
+                                  'NO_VALUE_ROW_STATES),\n'
+                                  '        })\n')),
+ 'src/ui/views/page_hold.py': (('    error: str = ""\n'
+                                '    #: DEC-075 回修（MUST-2）：未評估原因是「缺真實市場廣度」（L3 `get_station_macro` 原樣透傳）。\n'
+                                '    breadth_unevaluated: bool = False\n'
+                                '\n',
+                                '    error: str = ""\n\n'),
+                               ('        posture_label=_clean_signal(_m.get("posture_label")),\n'
+                                '        posture_range=str(_m.get("posture_range") or ""),\n'
+                                '        breadth_unevaluated=bool(_m.get("breadth_unevaluated")))\n'
+                                '\n',
+                                '        posture_label=_clean_signal(_m.get("posture_label")),\n'
+                                '        posture_range=str(_m.get("posture_range") or ""))\n'
+                                '\n'),
+                               ('    risk_cap_disclosure: Any = None\n'
+                                '    #: DEC-075 回修（MUST-2）：L3 `AllocationDecision.unevaluated_reason == '
+                                "'breadth'`（缺真實市場廣度）。\n"
+                                '    breadth_unevaluated: bool = False\n'
+                                '\n',
+                                '    risk_cap_disclosure: Any = None\n\n'),
+                               ('        has_risk_cap=has_system_risk_cap(getattr(_a, "caps", ())),\n'
+                                '        risk_cap_disclosure=getattr(_a, "risk_cap_disclosure", None),\n'
+                                '        breadth_unevaluated=(getattr(_a, "unevaluated_reason", "") == '
+                                '"breadth"))\n'
+                                '\n',
+                                '        has_risk_cap=has_system_risk_cap(getattr(_a, "caps", ())),\n'
+                                '        risk_cap_disclosure=getattr(_a, "risk_cap_disclosure", None))\n'
+                                '\n'),
+                               ('\n'
+                                '#: DEC-075 回修（QA1 MUST-2，2026-10-23）：④ 總經位階／⑤ 建議持股水位在「缺真實市場廣度 ⇒ 未評估」時的 '
+                                'why／where。\n'
+                                '#: ⛔ 不叫人「到今天頁更新總經」（I-4：重跑不會讓代理值變成可計分）。其餘未評估原因的既有文案逐字不變。\n'
+                                'def _breadth_empty_why() -> str:\n'
+                                '    from shared.regime_arbiter import UNEVALUATED_BREADTH_EXPLAIN\n'
+                                '    return ("**這是一個有效的結果**（已經去讀過，不是還沒讀）—— " + UNEVALUATED_BREADTH_EXPLAIN\n'
+                                '            + "；本站**不以「中性」代替未評估**，也不填一個看起來合理的區間")\n'
+                                '\n'
+                                '\n'
+                                '_BREADTH_EMPTY_WHY: str = _breadth_empty_why()\n'
+                                '_BREADTH_EMPTY_WHERE: str = (\n'
+                                '    f"{NO_EXIT_MARKER} —— **這一格更新資料不會改變**：缺的是正式的市場廣度（漲跌家數）資料來源，"\n'
+                                '    "不是這一輪沒抓到；正式廣度資料接上之前，這一格會一直是未評估")\n'
+                                '\n'
+                                '\n'
+                                'def build_macro_stage_card(macro: MacroReadout) -> _Built:\n',
+                                '\ndef build_macro_stage_card(macro: MacroReadout) -> _Built:\n'),
+                               ('                            f"{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}"))\n'
+                                '    elif macro.breadth_unevaluated:   # UI_EMPTY，原因＝缺真實廣度（DEC-075 回修 '
+                                'MUST-2；⛔ 不叫人重抓）\n'
+                                '        _note = Note(now=MACRO_EMPTY_NOW, why=_BREADTH_EMPTY_WHY, '
+                                'where=_BREADTH_EMPTY_WHERE)\n'
+                                '    else:   # UI_EMPTY\n',
+                                '                            f"{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}"))\n'
+                                '    else:   # UI_EMPTY\n'),
+                               ('                     where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))\n'
+                                '    elif alloc.breadth_unevaluated:   # UI_EMPTY，原因＝缺真實廣度（DEC-075 回修 '
+                                'MUST-2；⛔ 不叫人重抓）\n'
+                                '        _note = Note(now=CAP_EMPTY_NOW, why=_BREADTH_EMPTY_WHY, '
+                                'where=_BREADTH_EMPTY_WHERE)\n'
+                                '    else:   # UI_EMPTY\n',
+                                '                     where=(f"{NO_EXIT_MARKER} —— 請把上面那行訊息回報給維護者"))\n'
+                                '    else:   # UI_EMPTY\n')),
  'src/ui/views/page_today.py': (('from shared.macro_provenance import M1B_PROXY_VALUE_NOTE\n'
                                  'from shared.macro_provenance import BREADTH_LAMP_KEYS, '
                                  'BREADTH_PROXY_VALUE_NOTE  # DEC-074 B\n'
@@ -1262,6 +1712,20 @@ def dec074_strip_new_keys(x):
     if isinstance(x, dict) and any(k in x and x[k] is None for k in DEC074_NEW_KEYS):
         return {k: v for k, v in x.items() if not (k in DEC074_NEW_KEYS and v is None)}
     return x
+
+
+def dec074_restore_edu_text(mp) -> None:
+    """舊批次「舊 UI 教學頁整頁 golden」比對用：把 DEC-075 回修改過的兩欄教學文字暫時換回修前原文（monkeypatch）。
+
+    改的是 `EDU_GUIDE['CPILFESL']['pair_with']`（NIT-4）與 `EDU_GUIDE['XTEXVA01TWM664S']['meaning']`（QA1 S-4）——
+    兩欄的現行內容由 `tests/test_batch_z27.py::test_changed_cards_pinned` 整欄釘住；這裡只為了讓守「別的事」的
+    舊 golden（三大法人、VIX 門檻用字…）照舊逐字比對，⛔ 不是洗掉本批的改動。
+    """
+    from src.data.core import data_registry as DR
+    from tests.test_batch_z27 import _CPI_PAIR_PRE_DEC075, _EXPORT_MEANING_PRE_DEC075
+    mp.setitem(DR.EDU_GUIDE, "CPILFESL", dict(DR.EDU_GUIDE["CPILFESL"], pair_with=list(_CPI_PAIR_PRE_DEC075)))
+    mp.setitem(DR.EDU_GUIDE, "XTEXVA01TWM664S",
+               dict(DR.EDU_GUIDE["XTEXVA01TWM664S"], meaning=_EXPORT_MEANING_PRE_DEC075))
 
 
 def _rel(file_path) -> str:

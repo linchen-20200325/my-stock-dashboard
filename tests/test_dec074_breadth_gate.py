@@ -58,7 +58,7 @@ class TestCalcTrafficLightBreadthGate:
     def test_real_jingqi_still_scores(self):
         """無旗標（＝真值）照舊計分，逐位同修前公式（零回歸）。"""
         from shared.signal_thresholds import HEALTH_WEIGHT_JQ, HEALTH_WEIGHT_SCORE
-        tl = _tl({"avg": 55.0})
+        tl = _tl({"avg": 55.0, "is_proxy": False})
         assert tl["health"] == pytest.approx(
             round(55.0 * HEALTH_WEIGHT_JQ + 75.0 * HEALTH_WEIGHT_SCORE, 1))
         assert tl["health_unavailable_reason"] is None
@@ -68,18 +68,39 @@ class TestCalcTrafficLightBreadthGate:
         tl = _tl(None)
         assert tl["health"] is None
 
-    def test_both_legs_missing_stays_unloaded(self):
-        """大盤評分也缺 ⇒ 既有 SOURCE_UNLOADED（其餘輸入也缺，重抓仍可能補上），不冒充 breadth 原因。"""
+    def test_no_breadth_input_and_no_score_stays_unloaded(self):
+        """F1（三源全空、連代理都沒有）⇒ 既有 SOURCE_UNLOADED（SHOULD-A2 那組照舊）。
+
+        ⚠️ 回修 QA1 MUST-1（2026-10-23）：舊版本測試寫「代理旌旗＋大盤分缺 ⇒ UNLOADED」—— 那正是破口，
+        改為下一支 `test_proxy_with_score_missing_is_breadth`；本支只守「真的什麼廣度輸入都沒有」那一態。
+        """
         from shared.regime_arbiter import SOURCE_UNLOADED
         from src.compute.macro.macro_helpers import calc_traffic_light
-        tl = calc_traffic_light({}, {"avg": 55.0, "is_proxy": True}, {"x": 1}, None)
+        tl = calc_traffic_light({}, None, {"x": 1}, None)
         assert tl["health"] is None
         assert tl["regime_source"] == SOURCE_UNLOADED
+
+    def test_proxy_with_score_missing_is_breadth(self):
+        """QA1 MUST-1：代理廣度被擋下 ⇒ 一律標 breadth（不看大盤分在不在）。"""
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
+        from src.compute.macro.macro_helpers import calc_traffic_light
+        for mkt in ({}, {"regime": "bull"}):
+            tl = calc_traffic_light(mkt, {"avg": 55.0, "is_proxy": True}, {"x": 1}, None)
+            assert tl["health"] is None
+            assert tl["regime_source"] == SOURCE_UNEVALUATED_BREADTH, mkt
+
+    def test_absent_jingqi_copy_does_not_claim_proxy(self):
+        """NIT-1：旌旗整包缺席（沒有代理值）時，文案不說「代理估算值不計分」。"""
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
+        tl = _tl(None)
+        assert tl["regime_source"] == SOURCE_UNEVALUATED_BREADTH
+        assert "代理" not in tl["action"] and "廣度" in tl["action"]
+        assert "代理" in _tl({"avg": 55.0, "is_proxy": True})["action"]
 
     def test_score_missing_real_jingqi_keeps_d3_renormalisation(self):
         """D-3（內部拍板）：大盤評分缺席而旌旗真值在 ⇒ 既有歸一不動（非受 breadth 影響）。"""
         from src.compute.macro.macro_helpers import calc_traffic_light
-        tl = calc_traffic_light({"regime": "neutral"}, {"avg": 55.0}, {"x": 1}, None)
+        tl = calc_traffic_light({"regime": "neutral"}, {"avg": 55.0, "is_proxy": False}, {"x": 1}, None)
         assert tl["health"] == pytest.approx(55.0)
 
     def test_mutant_remove_jingqi_for_scoring_turns_red(self, monkeypatch):
@@ -335,7 +356,7 @@ class TestFiveBucketBreadthGate:
         _check_five_bucket_proxy()
 
     def test_real_values_still_graded(self):
-        _out, det, rd = _five({"avg": 35.0}, pd.DataFrame({"ad_ratio": [35.0], "is_proxy": [False]}))
+        _out, det, rd = _five({"avg": 35.0, "is_proxy": False}, pd.DataFrame({"ad_ratio": [35.0], "is_proxy": [False]}))
         assert det["jingqi"]["danger"] == "red" and det["adl"]["danger"] == "red"
         assert "is_proxy" not in rd["jingqi"] and "is_proxy" not in rd["adl"]
 
@@ -407,7 +428,7 @@ def test_scoring_reads_go_through_jingqi_for_scoring():
     mh = (REPO / "src/compute/macro/macro_helpers.py").read_text(encoding="utf-8")
     assert "_jingqi_for_scoring(jingqi_info)" in mh
     rs = (REPO / "src/services/reconcile_service.py").read_text(encoding="utf-8")
-    assert "if not jingqi_for_scoring(_jq_info):" in rs
+    assert "and not jingqi_for_scoring(_jq_info)" in rs
 
 
 def test_reconcile_health_inputs_drop_proxy():
@@ -415,7 +436,8 @@ def test_reconcile_health_inputs_drop_proxy():
     from src.services.reconcile_service import health_inputs
     s = {"jingqi_info": {"avg": 55.0, "is_proxy": True}, "warroom_summary": {"jingqi_avg": 55.0}}
     assert health_inputs(s)["jq"] is None
-    assert health_inputs({"jingqi_info": {"avg": 55.0}})["jq"] == 55.0
+    assert health_inputs({"jingqi_info": {"avg": 55.0, "is_proxy": False}})["jq"] == 55.0
+    assert health_inputs({"jingqi_info": {"avg": 55.0}})["jq"] is None      # 缺旗標＝代理（S-6 fail-safe）
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -501,10 +523,37 @@ class TestMa200NotFabricated:
         assert any("年線" in s and "未評估" in s for s in r["signals"])
 
     def test_source_guard_no_current_price_fallback(self):
-        """突變守衛（原始碼）：恢復 `else current_price` 頂替年線 ⇒ 紅。"""
-        src = (REPO / "src/services/market_strategy.py").read_text(encoding="utf-8")
-        code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
-        assert not re.search(r"ma200\s*=.*else\s+current_price", code)
+        """突變守衛（原始碼，AST）：`get_market_assessment` 內任何對 `ma200` 的賦值用到 `current_price` ⇒ 紅。
+
+        回修 QA2 N-1：舊版正規式只擋 `ma200 = … else current_price`；`else:` 區塊內 `ma200 = current_price` 繞得過。
+        """
+        tree = ast.parse((REPO / "src/services/market_strategy.py").read_text(encoding="utf-8"))
+        fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "get_market_assessment")
+        bad = []
+        for n in ast.walk(fn):
+            if isinstance(n, (ast.Assign, ast.AnnAssign)):
+                tgts = n.targets if isinstance(n, ast.Assign) else [n.target]
+                if any(isinstance(t, ast.Name) and t.id == "ma200" for t in tgts) and n.value is not None:
+                    if any(isinstance(x, ast.Name) and x.id == "current_price" for x in ast.walk(n.value)):
+                        bad.append(n.lineno)
+        assert not bad, f"ma200 又以現價頂替：行 {bad}"
+
+    def test_ma200_window_with_nan_is_unevaluated(self):
+        """QA2 N-2：≥200 根但視窗內含 NaN ⇒ ma200 None＋原因，status／confidence None。"""
+        from src.services.market_strategy import get_market_assessment
+        df = _df_index(260)
+        df.iloc[-50, df.columns.get_loc("Close")] = float("nan")
+        r = get_market_assessment(df_index=df, foreign_net=1e9)
+        if r is None:   # MA120 閘也吃到 NaN ⇒ 整包 None（既有行為），⛔ 不得出現現價頂替的年線
+            return
+        assert r["ma200"] is None and r["ma200_status"] and "缺值" in r["ma200_status"]
+        assert r["status"] is None and r["confidence"] is None
+
+    def test_ma200_constant_lives_in_l0(self):
+        """QA2 S-2：常數在 L0、值 200 未變。"""
+        import shared.signal_thresholds as STH
+        import src.services.market_strategy as MS
+        assert STH.MA200_WINDOW_DAYS == 200 and MS.MA200_WINDOW_DAYS is STH.MA200_WINDOW_DAYS
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -535,10 +584,19 @@ class TestForeignFill0:
         assert inst["外資及陸資"]["net"] == 200.0
 
     def test_source_guard_no_fillna0(self):
-        """突變守衛（原始碼）：恢復 buy／sell 的 `.fillna(0)` ⇒ 紅。"""
-        src = (REPO / "src/services/macro_fetch_orchestrator.py").read_text(encoding="utf-8")
-        code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
-        assert not re.search(r"_df_i\['(buy|sell)'\].*fillna\(0\)", code)
+        """突變守衛（原始碼，AST）：`fetch_macro_bundle` 內任何 `.fillna(...)` 以 0 填值 ⇒ 紅。
+
+        回修 QA2 N-1：舊版是正規式，`.fillna(value=0)` 繞得過；改 AST，位置參數與 `value=` 都看。
+        """
+        tree = ast.parse((REPO / "src/services/macro_fetch_orchestrator.py").read_text(encoding="utf-8"))
+        fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "fetch_macro_bundle")
+        bad = []
+        for n in ast.walk(fn):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "fillna":
+                vals = list(n.args) + [k.value for k in n.keywords if k.arg in (None, "value")]
+                if any(isinstance(v, ast.Constant) and v.value == 0 for v in vals):
+                    bad.append(n.lineno)
+        assert not bad, f"fetch_macro_bundle 又出現以 0 填值的 fillna：行 {bad}"
 
 
 class TestExportLabel:
@@ -568,3 +626,216 @@ class TestIsmEduMapping:
             "> §§PMI_YELLOW§§", "= §§PMI_YELLOW§§", "< §§PMI_YELLOW§§",
             "≤ §§PMI_RED§§", "≤ §§PMI_RED§§ 持續 3 月"]
         assert "NAPM" not in EDU_GUIDE      # 美國 ISM 那一篇已無讀者，不留第二份
+
+
+# ══════════════════════════════════════════════════════════════════
+# 回修（QA1／QA2，2026-10-23）
+# ══════════════════════════════════════════════════════════════════
+def _wr_from(mkt, jq, cl=None):
+    """真的 L2 → warroom（同 `warroom_apply` 的組法），給 get_macro_state 用。"""
+    from src.compute.macro.macro_helpers import calc_traffic_light
+    from src.compute.macro.warroom_summary import build_warroom_summary
+    tl = calc_traffic_light(mkt, jq, cl if cl is not None else {"x": 1}, None)
+    return build_warroom_summary(tl, mkt)
+
+
+class TestMust1ProxyAndScoreMissingNoFileFallback:
+    """QA1 MUST-1：代理旌旗＋大盤分缺（^TWII 掛）⇒ 位階仍未評估、⛔ 不退 macro_state.json。"""
+
+    @pytest.mark.parametrize("mkt", [{}, {"regime": "bull"}])
+    @pytest.mark.parametrize("kw", [{}, {"strict": True}, {"require_valid_risk_cap": True},
+                                    {"strict": True, "require_valid_risk_cap": True}])
+    def test_no_file_fallback(self, _fresh_file, mkt, kw):
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
+        from src.services.macro_state_locker import get_macro_state
+        wr = _wr_from(mkt, {"avg": 55.0, "is_proxy": True})
+        st = get_macro_state(wr, state_file_path=_fresh_file, **kw)
+        assert st["regime"] == "unknown" and st["is_loaded"] is False, st
+        assert st["source"] == SOURCE_UNEVALUATED_BREADTH
+
+    def test_card3_not_degraded(self, _fresh_file):
+        from src.services.macro_state_locker import get_macro_state
+        wr = _wr_from({"regime": "bull"}, {"avg": 55.0, "is_proxy": True})
+        reg = get_macro_state(wr, state_file_path=_fresh_file)
+        P, cards = _verdict_tiles(reg)
+        assert cards["verdict.regime"].state not in (P.UI_LIVE, P.UI_DEGRADED)
+        assert cards["verdict.regime"].note.where is P.EXIT_WAIT_BREADTH_SOURCE
+
+    def test_mutant_old_score_condition_turns_red(self, _fresh_file, monkeypatch):
+        """突變：把原因判定改回「只在大盤分在時才標 breadth」⇒ 退檔 ⇒ 必紅。"""
+        import src.compute.macro.macro_helpers as MH
+        from src.services.macro_state_locker import get_macro_state
+        src = (REPO / "src/compute/macro/macro_helpers.py").read_text(encoding="utf-8")
+        anchor = "and (_jq_proxy_dropped or _score_pct is not None)) else None)"
+        assert src.count(anchor) == 1
+        mut = src.replace(anchor, "and (_score_pct is not None)) else None)")
+        import types
+        m = types.ModuleType("_mh_mut")
+        m.__file__ = MH.__file__
+        exec(compile(mut, MH.__file__, "exec"), m.__dict__)
+        from src.compute.macro.warroom_summary import build_warroom_summary
+        tl = m.calc_traffic_light({"regime": "bull"}, {"avg": 55.0, "is_proxy": True}, {"x": 1}, None)
+        st = get_macro_state(build_warroom_summary(tl, {"regime": "bull"}), state_file_path=_fresh_file)
+        assert st["regime"] == "bull" and st["is_loaded"] is True   # 突變下確實退檔 ⇒ 上方守衛有效
+
+
+def _no_retry(txt):
+    return not any(p in txt for p in _RETRY_PHRASES)
+
+
+class TestMust2DownstreamCopy:
+    """QA1 MUST-2：持股頁④⑤、AI 問答、姿態帶 drivers 在 breadth 原因時不得叫人重抓、不得說檔案無快照。"""
+
+    def test_allocation_driver_and_headline(self):
+        from shared.allocation_decision import build_allocation_decision
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
+        d = build_allocation_decision(_contract(SOURCE_UNEVALUATED_BREADTH))
+        assert d.unevaluated_reason == "breadth"
+        assert "皆無有效值" not in "".join(d.drivers) and "廣度" in "".join(d.drivers)
+        assert _no_retry(d.headline()) and _no_retry("".join(d.drivers))
+        d2 = build_allocation_decision(_contract("unloaded"))
+        assert d2.unevaluated_reason == "" and "一鍵更新" in d2.headline()      # 其餘原因照舊
+
+    def test_page_hold_cards(self):
+        from src.ui.views import page_hold as PH
+        mac = PH.build_macro_stage_card(PH.MacroReadout(requested=True, loaded=False, breadth_unevaluated=True))[0]
+        cap = PH.build_position_cap_card(PH.AllocationReadout(requested=True, is_loaded=False,
+                                                              breadth_unevaluated=True))[0]
+        for c in (mac, cap):
+            assert _no_retry(c.note.why + c.note.where) and "更新總經" not in c.note.where
+            assert "廣度" in c.note.why
+        mac0 = PH.build_macro_stage_card(PH.MacroReadout(requested=True, loaded=False))[0]
+        assert "更新總經" in mac0.note.where                                    # 其餘原因照舊
+
+    def test_page_hold_loaders_carry_flag(self, monkeypatch):
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
+        import src.services.allocation_service as AS
+        import src.services.dividend_station_service as DS
+        from src.ui.views import page_hold as PH
+        monkeypatch.setattr(AS, "get_macro_regime", lambda **k: _contract(SOURCE_UNEVALUATED_BREADTH))
+        assert DS.get_station_macro(strict=True)["breadth_unevaluated"] is True
+        assert PH.load_macro(PH.HoldRequest(submitted=True)).breadth_unevaluated is True
+
+    def test_ai_qa_market_state_and_score(self, monkeypatch):
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
+        from shared.scoring_regime_gate import resolve_scoring_regime
+        import src.services.ai_qa_service as Q
+        monkeypatch.setattr(Q, "_macro_state", lambda **k: _contract(SOURCE_UNEVALUATED_BREADTH))
+        r = Q._tool_get_market_state(require_valid_risk_cap=True)
+        assert r["ok"] is False and _no_retry(r["error"]) and "macro_state.json 無" not in r["error"]
+        dec = resolve_scoring_regime(_contract(SOURCE_UNEVALUATED_BREADTH))
+        assert dec.breadth_unevaluated and _no_retry(Q._regime_blocked_error(dec)) and _no_retry(dec.notice())
+        dec0 = resolve_scoring_regime(_contract("unloaded"))
+        assert "一鍵更新" in Q._regime_blocked_error(dec0)                     # 其餘原因照舊
+
+    def test_old_ui_handler_breadth_only_no_retry(self):
+        """QA2 S-4：舊 UI 燈號卡在「只缺廣度」時不再前句叫人更新、後句說更新沒用。"""
+        from tests.test_batch_z35 import _render_gate
+        li = pd.DataFrame({"外資大小": [1.0], "韭菜指數": [1.0]})
+        from src.compute.macro.macro_helpers import calc_traffic_light
+        tl = calc_traffic_light({"score": 3, "max_score": 4, "regime": "bull"},
+                                {"avg": 55.0, "is_proxy": True},
+                                {"inst": {"外資": {"net": 1.0}},
+                                 "adl": pd.DataFrame({"ad_ratio": [55.0], "is_proxy": [True]})}, li)
+        txt = _render_gate(tl)
+        assert "更新資料不會改變" in txt and "一鍵更新" not in txt and "權重已重新歸一化" not in txt
+        assert "兩條腿" not in txt and "取得失敗" not in txt
+
+
+class TestM1TodayTileProxyGray:
+    """QA2 M-1：新 UI 今天頁燈卡（`build_indicator_tile`）代理廣度 ⇒ 灰＋註記；真值照舊判燈。"""
+
+    @staticmethod
+    def _tile(key, rec):
+        from src.ui.views import page_today as P
+        bands = {"green": ("綠", "#0"), "yellow": ("黃", "#1"), "red": ("紅", "#2"), "gray": ("無資料", "#3")}
+        return P.build_indicator_tile(key, rec, requested=True, error="",
+                                      band_label=lambda b, _s: bands[b], thr_text=None)
+
+    def _check(self):
+        from shared.macro_provenance import BREADTH_PROXY_VALUE_NOTE
+        for key in ("jingqi", "adl"):
+            t = self._tile(key, {"state": "ok", "value": 30.0, "is_proxy": True})
+            assert t.signal_text == "無資料", (key, t.signal_text)
+            assert t.card.value.endswith(BREADTH_PROXY_VALUE_NOTE)
+            r = self._tile(key, {"state": "ok", "value": 30.0})
+            assert r.signal_text == "紅" and BREADTH_PROXY_VALUE_NOTE not in r.card.value
+
+    def test_proxy_gray_with_note(self):
+        self._check()
+
+    def test_mutant_remove_branch_turns_red(self, monkeypatch):
+        from src.ui.views import page_today as P
+        monkeypatch.setattr(P, "BREADTH_LAMP_KEYS", frozenset())
+        with pytest.raises(AssertionError):
+            self._check()
+
+
+class TestS1RefreshStepDetail:
+    """QA2 S-1：更新報告 STEP_WARROOM 的說明在 breadth 原因時據實。"""
+
+    def _check(self):
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
+        from src.services.macro_refresh_service import warroom_written_detail
+        d = warroom_written_detail(True, SOURCE_UNEVALUATED_BREADTH)
+        assert "兩條腿都缺" not in d and "會改讀它" not in d and "廣度" in d and _no_retry(d)
+
+    def test_breadth_detail(self):
+        self._check()
+        from src.services.macro_refresh_service import warroom_written_detail
+        assert "兩條腿都缺" in warroom_written_detail(True, "unloaded")   # 其餘原因逐字照舊
+        assert warroom_written_detail(False, None) == "寫入 warroom_summary"
+
+    def test_mutant_turns_red(self, monkeypatch):
+        import shared.regime_arbiter as RA
+        _orig = RA.SOURCE_UNEVALUATED_BREADTH
+        monkeypatch.setattr(RA, "SOURCE_UNEVALUATED_BREADTH", "__mutant__")
+        from src.services.macro_refresh_service import warroom_written_detail
+        assert "兩條腿都缺" in warroom_written_detail(True, _orig)
+
+
+class TestShouldFixes:
+    def test_s1_reconcile_panel_drops_proxy(self, monkeypatch):
+        import src.ui.pages.reconcile_panel as RP
+        sess = {"warroom_summary": {"jingqi_avg": None}, "mkt_info": {"score": 3, "max_score": 4},
+                "jingqi_info": {"avg": 55.0, "is_proxy": True}, "cl_data": {}}
+        monkeypatch.setattr(RP, "_ss", lambda k, d=None: sess.get(k, d))
+        assert RP._get_health_params()[0] is None
+        sess["jingqi_info"] = {"avg": 55.0, "is_proxy": False}
+        assert RP._get_health_params()[0] == 55.0
+
+    def test_s2_coverage_does_not_count_proxy(self):
+        from src.ui.tabs.tab_macro_v2 import bucket_summary, build_rows, summary_coverage
+        _o, _d, rd = _five({"avg": 35.0, "is_proxy": True},
+                           pd.DataFrame({"ad_ratio": [35.0], "is_proxy": [True]}))
+        n_proxy, m = summary_coverage(bucket_summary(build_rows(rd)))
+        _o, _d, rd2 = _five({"avg": 35.0, "is_proxy": False},
+                            pd.DataFrame({"ad_ratio": [35.0], "is_proxy": [False]}))
+        n_real, m2 = summary_coverage(bucket_summary(build_rows(rd2)))
+        assert m == m2 and n_real - n_proxy == 2
+
+    def test_s5_conf_adl_proxy_same_as_jingqi(self):
+        from src.compute.macro.macro_helpers import calc_traffic_light
+        li = pd.DataFrame({"外資大小": [1.0], "韭菜指數": [1.0]})
+        base = ({"score": 3, "max_score": 4, "regime": "bull"}, {"avg": 55.0, "is_proxy": False})
+        real = calc_traffic_light(*base, {"inst": {"外資": {"net": 1.0}},
+                                         "adl": pd.DataFrame({"ad_ratio": [55.0], "is_proxy": [False]})}, li)
+        prox = calc_traffic_light(*base, {"inst": {"外資": {"net": 1.0}},
+                                         "adl": pd.DataFrame({"ad_ratio": [55.0], "is_proxy": [True]})}, li)
+        assert real["conf"] == 100 and prox["conf"] == 80
+        assert any("ADL" in m and "代理" in m for m in prox["missing_sources"])
+
+    @pytest.mark.parametrize("flag, proxy", [
+        (False, False), (True, True), ("False", True), (0, True), (None, True), ("<missing>", True)])
+    def test_s6_is_breadth_proxy_fail_safe(self, flag, proxy):
+        from shared.macro_provenance import is_breadth_proxy
+        info = {"avg": 55.0} if flag == "<missing>" else {"avg": 55.0, "is_proxy": flag}
+        assert is_breadth_proxy(info) is proxy
+
+    def test_s6_numpy_bools(self):
+        import numpy as np
+        from shared.macro_provenance import is_breadth_proxy
+        assert is_breadth_proxy({"is_proxy": np.bool_(False)}) is False
+        assert is_breadth_proxy({"is_proxy": np.bool_(True)}) is True
+        tl = _tl({"avg": 55.0, "is_proxy": np.bool_(True)})
+        assert tl["health"] is None

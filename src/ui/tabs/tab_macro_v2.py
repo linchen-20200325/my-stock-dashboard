@@ -68,7 +68,7 @@ from shared.macro_buckets import (
 from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
 from shared.macro_provenance import is_m1b_m2_proxy  # DL-f1-s17：代理值不計分（L0 SSOT）
 from shared.macro_provenance import (  # DEC-074 B：代理廣度只顯示不計分（L0 SSOT）
-    BREADTH_LAMP_KEYS, breadth_proxy_badge, is_breadth_proxy,
+    BREADTH_LAMP_KEYS, BREADTH_PROXY_VALUE_NOTE,
 )
 from src.compute.macro.macro_helpers import compute_five_bucket_summary
 from src.services.macro_v2_service import get_chart_series, get_edu, get_twii_ohlc
@@ -396,7 +396,9 @@ def build_rows(readiness: dict) -> list[Row]:
             band = classify_danger(None, spec)
         # DEC-074 B（客戶 2026-10-23）：市場廣度兩盞（jingqi／adl）側車 `is_proxy`（L2 以 L0 判）
         # → 同上：燈號走既有 gray，不進桶摘要／指標危險度；值與註記照樣顯示。
-        _breadth_proxy = spec.key in BREADTH_LAMP_KEYS and is_breadth_proxy(rec)
+        # ⚠️ 側車契約：L2 只在代理時才寫 `is_proxy=True`（非代理時逐鍵不變）⇒ 這裡讀**側車**只認明確 True，
+        #   ⛔ 不套 L0 `is_breadth_proxy` 的 fail-safe（那是給 `jingqi_info` 原始 dict 用的；套在側車上會把真值列也打灰）。
+        _breadth_proxy = spec.key in BREADTH_LAMP_KEYS and rec.get("is_proxy") is True
         if _breadth_proxy:
             band = classify_danger(None, spec)
 
@@ -450,7 +452,8 @@ def build_rows(readiness: dict) -> list[Row]:
             # 只揭露：`band` / `state` 一位未動；無值不貼；非代理時為空字串。
             value_note=(m1b_m2_proxy_badge(rec)
                         if spec.key == "m1b_m2_gap" and has_value
-                        else (breadth_proxy_badge(rec) if _breadth_proxy and has_value else "")),
+                        else (BREADTH_PROXY_VALUE_NOTE if _breadth_proxy and has_value else "")),
+            proxy_not_scored=bool(_breadth_proxy and has_value),
         ))
     order = {b: i for i, b in enumerate(_BUCKET_ORDER)}
     out.sort(key=lambda r: (order.get(r.bucket, 99), r.label))
@@ -561,7 +564,9 @@ def bucket_summary(rows: list[Row]) -> list[dict]:
                             f"{worst.value_note}" if worst else "—"),
             "n": len(members),
             "n_bad": sum(1 for r in members if r.state != "live"),
-            "n_no_value": sum(1 for r in members if r.state in NO_VALUE_ROW_STATES),
+            # 回修 QA1 S-2（DEC-074 B）：代理廣度列（只顯示、不計分）＝沒有可下判斷的值 ⇒ 一併算進 n_no_value。
+            "n_no_value": sum(1 for r in members
+                              if r.state in NO_VALUE_ROW_STATES or getattr(r, "proxy_not_scored", False)),
         })
     return out
 

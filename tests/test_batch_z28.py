@@ -17,6 +17,9 @@ golden：修前輸出於基底 `d88fe462` 以本檔同一支 `_chips`／`_veto` 
 （test_batch_z20／z21／z22／z23）中剛好落在 −20,000 的 golden 改用 `use_pre_z28_v4` 保留原 digest。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import dataclasses
 import functools
@@ -382,7 +385,7 @@ _STATE = {'macro_info': {'a': 1}, 'warroom_summary': {'jingqi_avg': 52.0, 'futur
 #: 基底 d88fe462 實跑 `load_section_inputs(_STATE)` 除 futures_net 外各欄
 _STATE_BASE = {'macro_info': {'a': 1}, 'mkt_info': {'k': 1}, 'warroom_summary': {'jingqi_avg': 52.0, 'futures_net': -3},
                'm1b_m2_info': {'m': 1}, 'bias_info': {'b': 1}, 'cl_data': {'c': 1}, 'li_latest': 'L',
-               'jingqi_info': {'avg': 52.0}, 'news_items': [1], 'last_inst': {'x': 1}, 'cl_ts': '2026-10-09 10:00',
+               'jingqi_info': {'is_proxy': False, 'avg': 52.0}, 'news_items': [1], 'last_inst': {'x': 1}, 'cl_ts': '2026-10-09 10:00',
                'last_inst_date': 'd', 'last_margin': 2000.0}
 
 
@@ -505,6 +508,9 @@ def _edu_out(mp):
     fake = _FakeST({})
     mp.setattr(M, 'st', fake)
     mp.setattr(M, '_fetch_fred_series_edu', lambda *a, **k: None)
+    # DEC-075 回修（2026-10-23，有意識的接鏈）：兩欄教學文字換回修前原文再比 golden（見 helper docstring）。
+    from tests.test_dec074_revert_chain import dec074_restore_edu_text
+    dec074_restore_edu_text(mp)
     M.render_tab_edu()
     return list(fake.out)
 

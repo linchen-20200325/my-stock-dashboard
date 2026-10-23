@@ -41,6 +41,9 @@ session 的 `mkt_info`／`jingqi_info`／`cl_data` 三個都是假值、但留�
 新路徑判為「整理不出結論」並刪掉舊的 —— 與舊頁「按一鍵更新」（先 pop 再算）相同。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import copy
 import itertools
@@ -148,7 +151,7 @@ def _extra(name: str) -> dict:
     if name == "X_prior_wr_stale_throttle":   # 上一份 warroom 帶過期 throttle ＋ 多餘鍵
         return _n1(warroom_summary=copy.deepcopy(_STALE_WR))
     if name == "X_jq_nan_leek_nan":           # 旌旗 NaN、韭菜 NaN（_canon 要能序列化）
-        return _n1(jingqi_info={"avg": float("nan")},
+        return _n1(jingqi_info={"is_proxy": False, "avg": float("nan")},
                    li_latest=_li((5000.0, 6000.0, 7000.0, 8000.0),
                                  leek=(-12.0, -8.0, -5.0, float("nan"))))
     if name == "X_prior_wr_not_dict":         # 上一份 warroom 壞成字串：SS 的 isinstance 守衛那一支
@@ -583,7 +586,7 @@ def _run_refresh(monkeypatch, *, initial=None, market_ok=True, write_inputs=True
     monkeypatch.setattr(_ORCH, "fetch_macro_bundle", _bundle)
     monkeypatch.setattr(_APPLY, "apply_macro_bundle", _apply)
     monkeypatch.setattr(_JQ, "compute_and_store_jingqi",
-                        lambda df: fake.session_state.__setitem__("jingqi_info", {"avg": 70.0})
+                        lambda df: fake.session_state.__setitem__("jingqi_info", {"is_proxy": False, "avg": 70.0})
                         if write_inputs else None)
     monkeypatch.setattr(_TRIO, "run_macro_trio_and_persist", lambda **k: None)
     monkeypatch.setattr(_MKT, "compute_and_apply_market_assessment", _market)
@@ -783,7 +786,12 @@ class TestOldFilesUntouched:
     # 📌 DEC-075 批 1'（2026-10-23，客戶指派「修正 ISM 教學對映」，⛔ 不是漏改；DEC-019 揭露）：只動
     #   `src/ui/tabs/tab_edu.py` —— PMI 教學卡 key 'NAPM'→'TW_PMI' 的兩個對映鍵同步（該卡在舊教學頁本就不顯示，
     #   孤兒張數仍為 2，畫面輸出零改動）。其餘 90 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
-    _BASE_DIGEST = "933d5e3c6d04846f56de617d2e2d9cae781838a89098b44848162eb2f52a2296"
+    # ~~"933d5e3c6d04846f56de617d2e2d9cae781838a89098b44848162eb2f52a2296"~~（DEC-075 批 1' 後）
+    # 📌 DEC-074/075 回修（QA1／QA2，2026-10-23，總管指派，⛔ 不是漏改；DEC-019 揭露）：只改字／共用欄位 ——
+    #   `macro/handlers.py`（breadth 原因的擋燈理由與說明改為屬實、不叫人更新）、
+    #   `tab_macro_v2.py`＋`render/macro_v2_cards.py`（代理廣度列不算進 N／M 的「有資料」，Row 加選填欄）、
+    #   `pages/reconcile_panel.py`（健康分對帳經 `jingqi_for_scoring`，代理不計分）。版面零改動。
+    _BASE_DIGEST = "faba6d21a902663688e94d71765c8107a1e8fbce4d7d154a436047fc0aa7dad8"
 
     def test_no_diff_against_base(self):
         import hashlib

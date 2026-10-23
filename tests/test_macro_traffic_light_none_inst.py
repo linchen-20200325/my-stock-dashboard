@@ -54,6 +54,9 @@ production bug(user 實機 2/2 重現,線上站台 `?chips=1`):
   各自的「未知 / 不列出」降級路徑本來就存在,故**零畫面行為變更**,只是不再炸頁。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import pathlib
 import re
@@ -75,7 +78,7 @@ def _prod_cl_data(inst_value):
 
 
 _MKT = {'score': 3, 'regime': 'neutral', 'max_score': 4.0}
-_JQ = {'avg': 60}
+_JQ = {'is_proxy': False, 'avg': 60}
 
 _FOREIGN_SOURCE_LABEL = '外資買賣超 (三大法人)'
 

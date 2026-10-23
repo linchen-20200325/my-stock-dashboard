@@ -58,6 +58,9 @@ slow lane（真 Streamlit AppTest）
    修前這兩件在全敗時看不到（整頁紅框）；修後才露出。修法要決定「未評估時規則表怎麼標」，屬規格未定，停手回報。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import datetime as _dt
 import hashlib
@@ -182,7 +185,7 @@ def _li(fut, leek=(-12.0, -8.0, -5.0, -3.0)) -> pd.DataFrame:
 
 
 _INST = {"外資": {"net": 15.2}, "投信": {"net": 3.1}, "自營商": {"net": -1.0}}
-_ADL = pd.DataFrame({"ad_ratio": [55.0, 58.0, 60.0]})
+_ADL = pd.DataFrame({"ad_ratio": [55.0, 58.0, 60.0], "is_proxy": [False] * 3})  # DEC-074/075：真值須明示 is_proxy=False（缺欄＝代理）
 
 
 def _scenario(name: str) -> dict:
@@ -201,29 +204,29 @@ def _scenario(name: str) -> dict:
         s["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
         s["mkt_info"] = {"score": 4, "max_score": 4, "regime": "bull",
                          "signals": ["站上MA120"], "index_price": 21500.0}
-        s["jingqi_info"] = {"avg": 70.0}
+        s["jingqi_info"] = {"is_proxy": False, "avg": 70.0}
         s["li_latest"] = _li((5000.0, 6000.0, 7000.0, 8000.0))
     elif name == "N2_trend_bear":        # 生效 regime=bear（分支 4）→ 油門被 regime 否決壓到防禦帶
         s["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
         s["mkt_info"] = {"score": 2, "max_score": 4, "regime": "bear",
                          "signals": [], "index_price": 19800.0}
-        s["jingqi_info"] = {"avg": 55.0}
+        s["jingqi_info"] = {"is_proxy": False, "avg": 55.0}
         s["li_latest"] = _li((1000.0, -2000.0, 1500.0, -500.0))
     elif name == "N3_futures_defense":   # 外資期貨防禦（defense=True）
         s["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
         s["mkt_info"] = {"score": 1, "max_score": 4, "regime": "neutral",
                          "signals": [], "index_price": 20100.0}
-        s["jingqi_info"] = {"avg": 60.0}
+        s["jingqi_info"] = {"is_proxy": False, "avg": 60.0}
         s["li_latest"] = _li((-38000.0, -39000.0, -41000.0, -40000.0))
     elif name == "N4_score_missing":     # 只缺大盤評分那條腿（health 仍算得出）
         s["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
-        s["jingqi_info"] = {"avg": 62.5}
+        s["jingqi_info"] = {"is_proxy": False, "avg": 62.5}
         s["li_latest"] = _li((5000.0, 6000.0, 7000.0, 8000.0))
     elif name == "N5_health_zero":       # health 恰為 0.0（合法值，⛔ 當成缺值）
         s["cl_data"] = _cl_data(inst=_INST, adl=_ADL)
         s["mkt_info"] = {"score": 0, "max_score": 4, "regime": "neutral",
                          "signals": [], "index_price": 18000.0}
-        s["jingqi_info"] = {"avg": 0.0}
+        s["jingqi_info"] = {"is_proxy": False, "avg": 0.0}
         s["li_latest"] = _li((5000.0, 6000.0, 7000.0, 8000.0))
     else:  # pragma: no cover
         raise KeyError(name)

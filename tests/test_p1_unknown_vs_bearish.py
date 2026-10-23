@@ -21,6 +21,9 @@
 ----------------
 **缺資料絕不可以讓結論比「有資料且數值中性」更悲觀。**
 """
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 import pathlib
 
 import pandas as pd
@@ -31,7 +34,7 @@ from src.services.market_strategy import market_regime, market_score
 from shared import regime_arbiter as RA
 
 
-_JQ = {'avg': 49.28}          # 實測 2026-08-12~18 的 ad_ratio 五日均
+_JQ = {'is_proxy': False, 'avg': 49.28}          # 實測 2026-08-12~18 的 ad_ratio 五日均
 _MKT_OK = {'score': 3.0, 'max_score': 4.0, 'regime': 'bull'}
 _INST_OK = {'外資': {'net': -119.86}}
 

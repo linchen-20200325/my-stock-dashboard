@@ -173,8 +173,12 @@ def _regime_blocked_error(dec: ScoringRegimeDecision) -> str:
         "因此本工具**完全不輸出分數與等級**(§1 寧可不給,不給假的)。"
         "**這不是個股資料抓取失敗,也不代表這檔股票不好** —— 是大盤狀態未知。"
         "請如實說明這一點,**不得**用其他工具的數字或自己的判斷推估總分/等級/名次。"
-        "救法:先開 🌍 總經頁按「🚀 一鍵更新全部數據」讓紅綠燈算出結論,再問一次。"
-        "不受影響、仍可正常使用:財務體質(get_financial_health)、"
+        # DEC-075 回修（MUST-2）：缺真實廣度 ⇒ ⛔ 不給「一鍵更新」救法（I-4）；其餘原因逐字照舊。
+        + ("更新資料不會改變這個狀態:要等正式的市場廣度(漲跌家數)資料來源接上,"
+           "**不得**建議使用者靠更新資料解決。"
+           if getattr(dec, "breadth_unevaluated", False) else
+           "救法:先開 🌍 總經頁按「🚀 一鍵更新全部數據」讓紅綠燈算出結論,再問一次。")
+        + "不受影響、仍可正常使用:財務體質(get_financial_health)、"
         "停損與倉位(get_risk_plan)、大盤籌碼(get_market_leading)、ETF 品質(get_etf_quality)。"
     )
 
@@ -189,6 +193,14 @@ def _tool_get_market_state(*, require_valid_risk_cap: bool = False) -> dict:
     # 批 Z66（Q1）：`require_valid_risk_cap=True`（新 UI 問答頁經 `run_agent` 傳入）⇒ 曝險上限只認有效快照，
     #   且非有效快照的「鎖定快照額外欄位」（風險等級／Macro_Phase）也不附 —— 那是同一份上限的說明。
     _ms = _macro_state(require_valid_risk_cap=True) if require_valid_risk_cap else _macro_state()
+    from shared.regime_arbiter import UNEVALUATED_BREADTH_EXPLAIN, is_breadth_unevaluated
+    if is_breadth_unevaluated(_ms):
+        # DEC-075 回修（MUST-2）：缺真實廣度 ⇒ ⛔ 不說「macro_state.json 無快照」（檔案可能有效，只是 (a) 不採用）、
+        #   ⛔ 不叫人一鍵更新（I-4）。其餘未評估原因的既有文案逐字照舊（下一段）。
+        return {"ok": False,
+                "error": (UNEVALUATED_BREADTH_EXPLAIN + "。"
+                          "(§1:未評估就是未評估,**不退回「中性/震盪」當預設**;"
+                          "請勿把「未評估」講成「市場中性」,也**不得**建議使用者靠更新資料解決。)")}
     if not isinstance(_ms, dict) or not _ms.get("is_loaded"):
         return {"ok": False,
                 "error": ("總經尚未評估:🌍 總經紅綠燈本次 session 未算出結論,"

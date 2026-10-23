@@ -90,7 +90,7 @@ class TestNormalValues:
                 "margin": 2480.0,
             },
             li_latest=pd.DataFrame({"外資大小": [-12000]}),
-            jingqi_info={"avg": 51.3},
+            jingqi_info={"is_proxy": False, "avg": 51.3},  # DEC-074/075 回修 S-6：真值須明示旗標
             news_items=[],
         )
 

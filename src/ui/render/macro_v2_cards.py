@@ -259,6 +259,10 @@ class Row:
     # 代理時的 L0 既有註記（L5 `build_rows` 自 readiness 側車 `is_proxy` 組出）。
     # 判燈 / 篩選 / 排序一律不讀它；預設空字串 → 既有呼叫端與畫面逐字不變。
     value_note: str = ""
+    # DEC-074 B 回修（QA1 S-2，2026-10-23）：True ＝ 這一列只有代理（估算）廣度值，依 DEC-074 **不計分** ——
+    # 畫面照樣顯示值，但「N／M 項有資料」的 N 不算它（`tab_macro_v2.bucket_summary` 的 `n_no_value`）。
+    # 預設 False → 既有呼叫端與畫面逐字不變。
+    proxy_not_scored: bool = False
 
 
 def fmt_value(value: float | None, unit: str, decimals: int) -> str:

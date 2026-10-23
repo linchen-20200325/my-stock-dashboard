@@ -7,6 +7,9 @@ B｜雙演算法對帳卡（Z53B-a5）：新 L3 `services/reconcile_service.py` 
    與舊面板 `compute_reconcile_rows` 同輸入逐列對帳；旌旗指數改 `jingqi_info` 優先。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import ast
 import json
@@ -351,7 +354,7 @@ def _full_session(**over):
     s = {"macro_info": {"us10y": {"value": 4.25}},
          "cl_data": {"intl": {"10Y公債殖利率": _tnx(4.27)},
                      "inst": {"外資及陸資": {"net": 35.2}}},
-         "jingqi_info": {"avg": 62.0},
+         "jingqi_info": {"is_proxy": False, "avg": 62.0},
          "mkt_info": {"score": 3, "max_score": 5}}
     s.update(over)
     return s
@@ -398,7 +401,7 @@ class TestInvalidInputs:
         elif where == "tnx":
             s["cl_data"]["intl"] = {"10Y公債殖利率": _tnx(value)}
         elif where == "jq":
-            s["jingqi_info"] = {"avg": value}
+            s["jingqi_info"] = {"is_proxy": False, "avg": value}
         elif where == "score":
             s["mkt_info"] = {"score": value, "max_score": 5}
         elif where == "max_score":
@@ -419,12 +422,12 @@ class TestInvalidInputs:
         called = []
         monkeypatch.setattr(RS, "reconcile_health_score", lambda *a, **k: called.append(a))
         monkeypatch.setattr(RS, "reconcile_us10y_yield", lambda *a, **k: called.append(a))
-        s = _full_session(jingqi_info={"avg": NAN}, macro_info={"us10y": {"value": INF}})
+        s = _full_session(jingqi_info={"is_proxy": False, "avg": NAN}, macro_info={"us10y": {"value": INF}})
         rows = _rows(s)
         assert called == [] and rows[RS.ROW_HEALTH].invalid_items == ("旌旗指數",)
 
     def test_several_items_in_one_row_are_listed_in_input_order(self):
-        s = _full_session(jingqi_info={"avg": NAN}, mkt_info={"score": INF})
+        s = _full_session(jingqi_info={"is_proxy": False, "avg": NAN}, mkt_info={"score": INF})
         s["cl_data"]["inst"] = {"外資及陸資": {"net": -INF}}
         assert _rows(s)[RS.ROW_HEALTH].invalid_items == ("旌旗指數", "大盤評分", "外資")
 
@@ -482,7 +485,7 @@ class TestMaxScoreAndSources:
         assert RS.score_pct_from(5.5, 4) == 100.0
 
     def test_jingqi_info_wins_over_stale_warroom(self):
-        s = _full_session(jingqi_info={"avg": 30.0}, warroom_summary={"jingqi_avg": 90.0})
+        s = _full_session(jingqi_info={"is_proxy": False, "avg": 30.0}, warroom_summary={"jingqi_avg": 90.0})
         assert RS.health_inputs(s)["jq"] == 30.0
 
     def test_warroom_used_only_without_jingqi_info(self):
@@ -526,7 +529,7 @@ _EQUIV_SESSIONS = [
     _full_session(cl_data={"intl": {"10Y公債殖利率": _tnx(42.7)}, "inst": {"外資": {"net": -5.0}}}),
     _full_session(cl_data={"intl": {"10Y公債殖利率": _tnx(250.0)}}),
     _full_session(macro_info={"us10y": {"value": 3.1}}),               # disagree
-    _full_session(jingqi_info={"avg": 20.0}),                         # health disagree
+    _full_session(jingqi_info={"is_proxy": False, "avg": 20.0}),                         # health disagree
     {"mkt_info": {"score": 2}},
     {"t2_data": {"rev_yoy_self": 5.0, "rev_yoy_finmind": 5.05}},
     {"cl_data": {"intl": {"10Y公債殖利率": pd.DataFrame({"Close": [4.2]})}},
@@ -554,7 +557,7 @@ def test_rows_match_the_old_panel(monkeypatch, session):
 
 
 def test_old_panel_diverges_on_stale_warroom_and_new_one_follows_jingqi(monkeypatch):
-    s = _full_session(jingqi_info={"avg": 30.0}, warroom_summary={"jingqi_avg": 90.0})
+    s = _full_session(jingqi_info={"is_proxy": False, "avg": 30.0}, warroom_summary={"jingqi_avg": 90.0})
     old = {o["name"]: o for o in _old_rows(monkeypatch, s)}
     new = _rows(s)
     want = RS.reconcile_health_score(30.0, RS.score_pct_from(3, 5), 35.2)
@@ -597,7 +600,7 @@ class TestReconcileCard:
 
     def test_only_invalid_inputs_show_the_invalid_sentence_not_grey(self):
         """QA B21：只有無效輸入 ⇒ live、該列顯示資料異常句（⛔ 不落成灰卡把異常藏起來）。"""
-        built = P.build_reconcile_card(P.load_reconcile(_REQ, {"jingqi_info": {"avg": NAN}}))
+        built = P.build_reconcile_card(P.load_reconcile(_REQ, {"jingqi_info": {"is_proxy": False, "avg": NAN}}))
         assert built[0].state == UI_LIVE
         assert dict(built[1])[RS.ROW_HEALTH] == "旌旗指數資料異常，無法計算，不下結論。"
 
@@ -664,7 +667,7 @@ class TestReconcileCard:
         assert f[RS.ROW_REV_YOY] == P.RECONCILE_REV_YOY_NO_WRITER
 
     def test_live_card_with_invalid_rows_shows_no_number_for_them(self):
-        s = _full_session(macro_info={"us10y": {"value": NAN}}, jingqi_info={"avg": INF})
+        s = _full_session(macro_info={"us10y": {"value": NAN}}, jingqi_info={"is_proxy": False, "avg": INF})
         built = P.build_reconcile_card(P.load_reconcile(_REQ, s))
         f = dict(built[1])
         assert f[RS.ROW_US10Y] == "10Y公債殖利率資料異常，無法計算，不下結論。"
@@ -705,7 +708,7 @@ import streamlit as st
 st.session_state.setdefault("macro_info", {"us10y": {"value": 4.25}})
 st.session_state.setdefault("cl_data", {"intl": {"10Y公債殖利率": pd.DataFrame({"close": [4.27]})},
                                         "inst": {"外資及陸資": {"net": float("nan")}}})
-st.session_state.setdefault("jingqi_info", {"avg": 62.0})
+st.session_state.setdefault("jingqi_info", {"is_proxy": False, "avg": 62.0})
 st.session_state.setdefault("mkt_info", {"score": 3, "max_score": 5})
 from src.ui.views import page_why as P
 P.render_page_why()

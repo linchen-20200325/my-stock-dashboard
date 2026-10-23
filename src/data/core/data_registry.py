@@ -614,7 +614,9 @@ EDU_GUIDE: dict[str, dict[str, Any]] = {
             ('> §§CPI_YELLOW§§%', '🟠 外資提款風險（五桶危險門檻黃線）'),
             ('> §§CPI_RED§§%', '🔴 通膨嚴峻，升息壓力大、股債雙殺風險（五桶紅線）'),
         ],
-        'pair_with': ['ISM PMI（NAPM）', '美債 10Y（^TNX）', '美元指數（DXY）'],
+        # 回修 NIT-4（2026-10-23）：~~'ISM PMI（NAPM）'~~ —— 'NAPM' 教學條目已改名 'TW_PMI'（台灣 PMI），
+        #   本系統沒有美國 ISM 的教學卡；改列真的存在的那一張（只改字）。
+        'pair_with': ['台灣製造業 PMI（CIER）', '美債 10Y（^TNX）', '美元指數（DXY）'],
         'historical_anchor': '2022 通膨高峰 6.6%（40 年新高）｜2008 雷曼 2.5%｜Fed 目標 2.0%',
         'upstream': '油價、薪資成長、住房成本（OER）、供應鏈成本',
         'downstream': '影響 Fed 利率決策 → 美元 → 美債殖利率 → 美股估值（殖利率上 1%，PE 下調約 10–15%）',
@@ -653,9 +655,13 @@ EDU_GUIDE: dict[str, dict[str, Any]] = {
             ('≤ §§PMI_RED§§ 持續 3 月', '🚨 衰退強烈訊號（五桶「中期」紅線）'),
         ],
         'pair_with': ['台灣出口金額 YoY（海關）', '國發會景氣燈號', '費半 SOX'],
-        'historical_anchor': '榮枯線 50 為定義值（>50 擴張、<50 收縮）；'
-                             '台灣 PMI 的歷史高低點本系統尚未整理出可回溯的數字，'
-                             '因此這裡不列（也不沿用美國 ISM 的歷史數字）。',
+        # 回修 NIT（2026-10-23）：~~「歷史高低點本系統尚未整理出可回溯的數字」~~ —— 與教學頁 PMI 章節的
+        #   台灣 PMI 歷史表說法不一；改列 repo 內實際存在、可回溯的官方序列數字：
+        #   `data_cache/tw_pmi.parquet`（source 欄 = data.gov.tw:dataset:6100，2012-07～2026-09，171 列；
+        #   量測日 2026-10-23）實算：最高 2021-04 68.7、最低 2023-01 40.4；2020-04 47.6、2022-12 43.7
+        #   （後兩者與 `tab_edu` PMI 章節歷史表一致）。
+        'historical_anchor': '2021/4 高點 68.7｜2023/1 低點 40.4｜2020/4 疫情 47.6｜2022/12 43.7'
+                             '（官方序列 data.gov.tw 6100，2012/7 才創編；榮枯線 50 為定義值）',
         'upstream': '全球終端需求、電子與半導體供應鏈訂單、原物料價格',
         'downstream': '台灣出口與製造業營收 → 台股電子權值股獲利 → ^TWII',
     },
@@ -870,10 +876,15 @@ EDU_GUIDE: dict[str, dict[str, Any]] = {
     },
     'XTEXVA01TWM664S': {
         # 技術備忘:v18.142 由 IMF IFS(VALEXPTWM052N)改採 OECD MEI,月延遲短 10 個月。
+        # 📌 DEC-075 批 1' 回修（QA1 S-4，2026-10-23，有意識的修改，⛔ 不是漏刪）：
+        #   ~~'本系統採用 OECD 的統計版本，比另一個常見的 IMF 版本早約 10 個月拿到最新月份資料。'~~
+        #   —— 與燈名「台灣出口金額 YoY（海關）」矛盾，且不符實際取數鏈：`macro_snapshot.fetch_export_block`
+        #   首源是主計總處統計資訊網（stat.gov.tw），其次 FRED API（OECD MEI 系列）、海關進出口統計
+        #   （data.gov.tw／opendata.customs.gov.tw dataset 6053）、FRED CSV、財政部 CKAN；OECD 只是備援之一。
         'meaning': '台灣每月出口金額年增率，全球景氣與台廠訂單能見度的核心指標'
                    '（台灣 GDP 約 60% 來自出口）。'
-                   '本系統採用 OECD 的統計版本，比另一個常見的 IMF 版本'
-                   '早約 10 個月拿到最新月份資料。',
+                   '本系統依序取主計總處統計資訊網、OECD（經 FRED）、海關進出口統計等來源，'
+                   '取第一個有值的那一源（畫面「命中來源」會標明本輪用的是哪一個）。',
         'how_to_read': [
             ('YoY > §§TW_EXPORT_YELLOW§§%', '🟢 出口擴張，基本面有撐'),
             ('YoY §§TW_EXPORT_RED§§ ~ §§TW_EXPORT_YELLOW§§%',

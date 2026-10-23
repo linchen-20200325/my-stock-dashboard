@@ -442,7 +442,10 @@ PR #5 既有 5 個 API（`is_configured` / `list_portfolios` / `load_portfolio` 
 |---|---|---|---|---|---|---|
 | 台灣 PMI | — | >50 | 46–50（=50 中性／榮枯線；<50 收縮） | ≤46 嚴重收縮 | low_bad | 🔵MACRO_THRESHOLDS.PMI |
 | 美國核心 CPI YoY | % | <3.5 | 3.5–4.0 | ≥4.0 通膨嚴峻 | high_bad | 🔵MACRO_THRESHOLDS.CPI |
-| 台灣出口訂單 YoY | % | >0 | −5–0 | ≤−5 連續衰退 | low_bad | 🔵出口否決權 −5% |
+| ~~台灣出口訂單 YoY~~ 台灣出口金額 YoY（海關） | % | >0 | −5–0 | ≤−5 連續衰退 | low_bad | 🔵出口否決權 −5% |
+
+> 📌 2026-10-23（DEC-075 批 1' `DH-EXPORT-LABEL`；有意識的修改，不是漏刪）：上列燈名由「台灣出口訂單 YoY」更正為「台灣出口金額 YoY（海關）」—— 實際取值是海關出口金額年增率（`macro_snapshot.fetch_export_block`），不是經濟部外銷訂單；門檻、方向、來源皆未改。
+
 | 年線乖離 BIAS240 | % | <10 | 10–20 | ≥20 正乖離過熱 | high_bad | 🔵±20+⚪10（負乖離=超賣機會非危險）|
 
 ### ⚡ 短線急殺（即時 risk-off）

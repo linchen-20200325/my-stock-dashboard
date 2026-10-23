@@ -31,6 +31,9 @@
   且它比對的是**跨兩個檔案的兩份數字**是否一致 —— 不是「實作是否等於它自己」。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import ast
 import contextlib
@@ -375,7 +378,7 @@ class TestReconcilePanelScorePct:
         """
         from src.ui.pages.reconcile_panel import _get_health_params
 
-        with fake_session_state({'mkt_info': mkt, 'jingqi_info': {'avg': 60}}):
+        with fake_session_state({'mkt_info': mkt, 'jingqi_info': {'is_proxy': False, 'avg': 60}}):
             _jq, _pct, _fnet = _get_health_params()
         assert _pct == pytest.approx(expected), (
             f'mkt_info={mkt} → score_pct 應為 {expected}，實際 {_pct}')
@@ -419,7 +422,7 @@ class TestReconcilePanelScorePct:
         from shared.signal_thresholds import HEALTH_WEIGHT_SCORE
         from src.compute.macro.macro_helpers import calc_traffic_light
 
-        _jq = {'avg': 60.0}
+        _jq = {'is_proxy': False, 'avg': 60.0}
         try:
             _r4 = calc_traffic_light({'score': 3, 'max_score': 4, 'regime': 'neutral'},
                                      _jq, {}, None)

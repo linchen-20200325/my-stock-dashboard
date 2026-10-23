@@ -434,7 +434,7 @@ print(report)
 | 名稱 | 來源 | 識別 | 端點 | 頻率 | API Key | 狀態連動 | 用途 |
 |---|---|---|---|---|---|---|---|
 | 美國核心 CPI 年增率 (✓可測試) | FRED | `CPILFESL` | `fred.stlouisfed.org/graph/fredgraph.csv` | monthly | FRED_API_KEY | `macro_info.us_core_cpi.date` | 通膨判讀、Fed 升降息預測 |
-| ISM 製造業 PMI | FRED | `NAPM` | `fred.stlouisfed.org/graph/fredgraph.csv` | monthly | FRED_API_KEY | `macro_info.ism_pmi.date` | 美國製造業景氣領先指標 (>50 擴張) |
+| ~~ISM 製造業 PMI~~ 台灣製造業 PMI（CIER；session key 沿用 `ism_pmi`） | ~~FRED~~ CIER／data.gov.tw 6100 等 8 源 | ~~`NAPM`~~ `cier-pmi` | ~~`fred.stlouisfed.org/graph/fredgraph.csv`~~ `macro_core.fetch_tw_pmi`（`PMI_SOURCE_REGISTRY` 順序賽跑） | monthly | — | `macro_info.ism_pmi.date` | ~~美國製造業景氣領先指標~~ 台灣製造業景氣領先指標 (>50 擴張) |
 | BLS CPI 備援 | BLS | `CUUR0000SA0` | `api.bls.gov/publicAPI/v2/timeseries/data` | monthly | — | `—` | FRED CPI 失敗時的備援來源 |
 
 #### 🌐 國際金融
@@ -460,8 +460,10 @@ print(report)
 | 個股本益比/殖利率/PBR (✓可測試) | TWSE OpenAPI | `BWIBBU_d` | `/v1/exchangeReport/BWIBBU_d` | daily | — | `—` | 💎 高息網漏斗篩選資料源 |
 | 個股日均價 | TWSE OpenAPI | `STOCK_DAY_AVG_ALL` | `/v1/exchangeReport/STOCK_DAY_AVG_ALL` | daily | — | `—` | 全市場個股日均價 |
 | 上市公司基本資料 | TWSE OpenAPI | `t187ap03_L` | `/v1/opendata/t187ap03_L` | event | — | `—` | 公司名稱、產業類別查詢 |
-| 漲跌家數 ADL | TWSE | `MI_INDEX` | `/rwd/zh/afterTrading/MI_INDEX` | daily | — | `cl_data.adl` | 市場廣度（旌旗指數計算用） |
+| 漲跌家數 ADL | ~~TWSE~~ Yahoo `^TWII`（估算） | ~~`MI_INDEX`~~ `fetch_adl` | ~~`/rwd/zh/afterTrading/MI_INDEX`~~ 由加權指數日內漲跌幅反推上漲家數（每列 `is_proxy=True`；TWSE MI_INDEX 已移除） | daily | — | `cl_data.adl` | ~~市場廣度（旌旗指數計算用）~~ 代理（估算）廣度：只顯示、不計分（DEC-074 B） |
 | 除權息預告 | TWSE | `TWT49U` | `/rwd/zh/exRight/TWT49U` | event | — | `—` | 除權息日期查詢 |
+
+> 📌 2026-10-23（DEC-075；有意識的修改，不是漏刪）：上方 `ism_pmi` 與 ADL 兩列畫刪除線處原文不符事實 —— `macro_info.ism_pmi` 實為台灣 CIER PMI（`VN1-MT-SSOT-ISM`），ADL 實為 `^TWII` 估算代理家數（`fetch_adl` 每列 `is_proxy=True`），依 DEC-074 B 只顯示、不計分。
 
 #### 💰 籌碼
 

@@ -217,10 +217,12 @@ def health_inputs(session: Mapping[str, Any]) -> dict[str, Any]:
     _wr = session.get("warroom_summary", {}) or {}
     _jq_info = session.get("jingqi_info")
     if _jq_info:
-        _jq = _get(_jq_info, "avg")      # 沒有 avg ⇒ None（缺值），⛔ 不退回 warroom（可能是舊頁籤殘留）
         # DEC-074 B（客戶 2026-10-23）：代理（估算）廣度不得計分 —— 本列是健康分對帳（兩種演算法各算一次），
-        #   一樣是計分路徑 ⇒ 經 L0 `jingqi_for_scoring`：代理 ⇒ 缺值（⛔ 不退回 warroom，理由同上一行）。
-        if not jingqi_for_scoring(_jq_info):
+        #   一樣是計分路徑 ⇒ 經 L0 `jingqi_for_scoring`：有值但為代理 ⇒ 缺值（⛔ 不退回 warroom）。
+        #   ⚠️ 只在「有值且代理」時才擋：沒有 avg 的既有缺值路徑（含「不退回 warroom」）一位未動。
+        _jq_proxy_drop = (_get(_jq_info, "avg") is not None) and not jingqi_for_scoring(_jq_info)
+        _jq = _get(_jq_info, "avg")      # 沒有 avg ⇒ None（缺值），⛔ 不退回 warroom（可能是舊頁籤殘留）
+        if _jq_proxy_drop:
             _jq = None
         # 📌 批 Z62（Z60 更正，上行註解保留）：Z60 起新 UI 也會寫 warroom，但其 `jingqi_avg` 是由
         #   `jingqi_info`（或上一份 warroom）推導的結論 ⇒ 來源在時仍以 `jingqi_info` 為準（行為未動）。

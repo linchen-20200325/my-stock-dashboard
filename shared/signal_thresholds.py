@@ -298,6 +298,16 @@ BREADTH_PROXY_SCORING_ENABLED: bool = False
 `is_proxy=False` 的 provenance，**或**另一套經客戶核准的計算方式；(2) 客戶裁示可計分。
 ⛔ 不得為了讓健康分「有數字」而把本旗標翻 True。"""
 
+MA200_WINDOW_DAYS: int = 200
+"""`market_strategy.get_market_assessment` 的 `ma200`（`market_score` 年線項）所用的 rolling 視窗（交易日根數），
+同時是「算得出 ma200 所需的最少 K 棒數」。DEC-075 批 A（`DH-TWII-MA200`）把原 inline `rolling(200)`／
+`len(df_index) >= 200` 具名化；QA2 S-2 回修自 L3 下沉至此。**行為一位未動**（仍是 200）。
+
+⚠️ **與 `src/config/config.py` 的 `ANNUAL_MA = 240`（CLAUDE.md §3.3「年線」SSOT）是兩個不同口徑**：
+本常數是 `market_score` 歷史沿用的 200 日線（美股慣用的「200DMA 年線」說法），`ANNUAL_MA` 是 240 交易日的台股年線。
+⛔ 不得直接改成 `ANNUAL_MA`（那是行為變更，需另案校準）。`src/compute/etf/etf_calc.py`、
+`src/ui/render/etf_render.py` 兩處 inline `rolling(200)` 為 ETF 另一條路徑，本批不動（另案收斂）。"""
+
 CONFIDENCE_SOURCE_COUNT: int = 5
 """信心度計算的來源**項數**（分母）。`calc_traffic_light` 的 `_conf_sources` 長度。
 

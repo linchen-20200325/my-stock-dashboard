@@ -138,6 +138,10 @@ def _render_traffic_light(placeholder, tl, mkt_info=None, *, requested=None):
             _gate_reason = '大盤價格來源(^TWII)全滅 — 沒有價格骨幹就判不出趨勢'
         elif not (_groups.get('twse_bfi82u') or _groups.get('finmind_taifex')):
             _gate_reason = '兩個獨立來源(三大法人 / 期貨籌碼)同時失效 — 只剩 ^TWII 自我印證'
+        elif tl.get('health_unavailable_reason') == 'breadth':
+            # DEC-075 回修（QA1 MUST-2／QA2 S-4，2026-10-23）：健康分是因**缺真實市場廣度**而未評估 ——
+            #   下一支「兩條腿都缺」不屬實（大盤分可能在），只改字。
+            _gate_reason = '缺真實市場廣度（漲跌家數），代理估算值依 DEC-074 不計分 — 算不出健康度'
         else:
             _gate_reason = '健康評分的兩條腿(大盤趨勢評分 / 旌旗指數)都缺 — 算不出健康度'
         _missing = tl.get('missing_sources', []) or []
@@ -170,7 +174,12 @@ def _render_traffic_light(placeholder, tl, mkt_info=None, *, requested=None):
             error='blocked:' + _gate_reason if _requested else None,
             has_value=False,
         )
-        if _tl_state == UI_FAILED:
+        if _tl_state == UI_FAILED and tl.get('health_unavailable_reason') == 'breadth':
+            # DEC-075 回修：這不是「來源取得失敗」，是缺正式資料來源 ⇒ 灰色說明、⛔ 不提更新按鈕（I-4）。
+            _cta_color = '#8b949e'
+            _cta_text = ('⬜ 市場廣度缺的是正式資料來源，更新資料不會改變；'
+                         '正式廣度資料接上之前，燈號維持未評估（依 DEC-074／DEC-075 不以其餘分項或另一套規則補出結論）。')
+        elif _tl_state == UI_FAILED:
             _cta_color = TRAFFIC_RED
             _cta_text = (
                 '🔴 上列來源取得失敗，燈號無法計算。'
@@ -302,15 +311,25 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
                     _legs.append('大盤趨勢評分（權重 40%）')
                 _leg_txt = '、'.join(_legs) if _legs else '部分分項'
                 if tl.get('health') is None:
+                    # 回修 QA2 S-4：「代理估算的廣度值不計分」只在本輪真的有代理值被擋下時才講（沒抓到 ≠ 代理）。
+                    _proxy_seen = any('代理' in str(_m) for _m in _missing_now)
                     _msg += (f'　🩺 **綜合健康度未評估：缺 {_leg_txt}**'
-                             '（依 DEC-074 不以其餘分項改權重補出分數，代理估算的廣度值不計分）。')
+                             '（依 DEC-074 不以其餘分項改權重補出分數'
+                             + ('，代理估算的廣度值不計分' if _proxy_seen else '') + '）。')
                 else:
                     _msg += (f'　🩺 **綜合健康度未含 {_leg_txt}**，本次僅由其餘分項'
                              '推算（權重已重新歸一化，非補中性值/非補 0），'
                              '請降低對該分數的信賴。')
-            _msg += '　建議按「🚀 一鍵更新全部數據」後再操作。'
             if _breadth_reason:
-                _msg += '（市場廣度那一項缺的是正式資料來源，更新資料不會改變。）'
+                # 回修 QA2 S-4（2026-10-23，有意識的修改，⛔ 不是漏刪）：~~先叫人一鍵更新、再說更新不會改變~~（自相矛盾）。
+                #   breadth 原因時：只有**其餘**缺項才給更新指引；市場廣度那一項明講更新不會改變（I-4）。
+                _other_missing = [_m for _m in _missing_now
+                                  if '旌旗指數' not in str(_m) and 'ADL 騰落指標' not in str(_m)]
+                if _other_missing:
+                    _msg += ('　其餘缺項（' + '、'.join(_other_missing) + '）可按「🚀 一鍵更新全部數據」補上；')
+                _msg += '　市場廣度缺的是正式資料來源，更新資料不會改變。'
+            else:
+                _msg += '　建議按「🚀 一鍵更新全部數據」後再操作。'
             st.warning(_msg)
 
 

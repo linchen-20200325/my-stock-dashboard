@@ -33,6 +33,9 @@
 - 失敗訊息一律印出 `檔名:行號` + **該行原始碼原文**，讓紅燈可以直接定位。
 """
 from __future__ import annotations
+# ⚠️ DEC-074/075 行為變更（回修 QA1 S-6，2026-10-23）：`shared.macro_provenance.is_breadth_proxy` 改 fail-safe
+#   （缺 `is_proxy` 旗標＝代理、不計分；ADL DataFrame 缺欄同）。本檔代表**真值**的旌旗／ADL fixture 因此
+#   一律明示 `is_proxy: False`（production 寫入點恆帶旗標）；斷言與 golden 未因此放寬。
 
 import ast
 import math
@@ -267,7 +270,7 @@ class TestNoFabricatedDefaultsInSource:
 # ① 捏造預設值 —— 行為
 # ══════════════════════════════════════════════════════════════════
 _MKT_OK = {"score": 3, "max_score": 4, "regime": "neutral"}
-_CL_OK = {"inst": {"外資自營": {"net": 100}}, "adl": 1}
+_CL_OK = {"inst": {"外資自營": {"net": 100}}, "adl": pd.DataFrame({"ad_ratio": [50.0], "is_proxy": [False]})}
 
 
 def _tl(mkt=None, jq=None, cl=None, li=None):
@@ -298,13 +301,13 @@ class TestMissingInputsStayNone:
             f"合成的 {{'avg': None}} 未被列入缺失來源：{tl['missing_sources']}")
 
     def test_leek_and_fut_net_none_without_li(self):
-        tl = _tl(jq={"avg": 60}, li=None)
+        tl = _tl(jq={"is_proxy": False, "avg": 60}, li=None)
         assert tl["leek"] is None
         assert tl["fut_net"] is None
 
     def test_leek_and_fut_net_none_when_columns_missing(self):
         li = pd.DataFrame({"其他欄": [1]})
-        tl = _tl(jq={"avg": 60}, li=li)
+        tl = _tl(jq={"is_proxy": False, "avg": 60}, li=li)
         assert tl["leek"] is None
         assert tl["fut_net"] is None
 
@@ -316,19 +319,19 @@ class TestMissingInputsStayNone:
         退回捏造值。兩條路都不誠實。
         """
         li = pd.DataFrame({"外資大小": [float("nan")], "韭菜指數": [float("nan")]})
-        tl = _tl(jq={"avg": 60}, li=li)
+        tl = _tl(jq={"is_proxy": False, "avg": 60}, li=li)
         assert tl["fut_net"] is None, "NaN 應視為缺值，不可流進判定"
         assert tl["leek"] is None
 
     def test_none_cell_is_treated_as_missing(self):
         li = pd.DataFrame({"外資大小": [None], "韭菜指數": [None]})
-        tl = _tl(jq={"avg": 60}, li=li)
+        tl = _tl(jq={"is_proxy": False, "avg": 60}, li=li)
         assert tl["fut_net"] is None
         assert tl["leek"] is None
 
     def test_real_values_still_pass_through(self):
         li = pd.DataFrame({"外資大小": [-87455], "韭菜指數": [34.7]})
-        tl = _tl(jq={"avg": 53}, li=li)
+        tl = _tl(jq={"is_proxy": False, "avg": 53}, li=li)
         assert tl["fut_net"] == pytest.approx(-87455.0)
         assert tl["leek"] == pytest.approx(34.7)
         assert tl["jqavg"] == pytest.approx(53.0)
@@ -338,7 +341,7 @@ class TestDefenseNotTriggeredByMissingData:
     def test_missing_fut_net_does_not_trigger_defense(self):
         """缺資料**不觸發**防禦（也不該假裝安全）。"""
         tl = _tl(mkt={"score": 0, "max_score": 4, "regime": "bull"},
-                 jq={"avg": 60}, li=None)
+                 jq={"is_proxy": False, "avg": 60}, li=None)
         assert tl["defense"] is False
         assert tl["fut_net"] is None
 
@@ -346,7 +349,7 @@ class TestDefenseNotTriggeredByMissingData:
         """回歸：真的有大空單時防禦照常觸發（門檻 SSOT 30000 口）。"""
         li = pd.DataFrame({"外資大小": [-87455], "韭菜指數": [34.7]})
         tl = _tl(mkt={"score": 1, "max_score": 4, "regime": "bull"},
-                 jq={"avg": 60}, li=li)
+                 jq={"is_proxy": False, "avg": 60}, li=li)
         assert tl["defense"] is True
 
 
@@ -355,12 +358,13 @@ class TestHealthRenormalisesInsteadOfFabricating:
         """零回歸：兩項都在時 Σw = 1.0，歸一化後與舊公式逐位相同。"""
         from shared.signal_thresholds import HEALTH_WEIGHT_JQ, HEALTH_WEIGHT_SCORE
         tl = _tl(mkt={"score": 3, "max_score": 4, "regime": "neutral"},
-                 jq={"avg": 53})
+                 jq={"is_proxy": False, "avg": 53})
         legacy = round(53 * HEALTH_WEIGHT_JQ + (3 / 4 * 100) * HEALTH_WEIGHT_SCORE, 1)
         assert tl["health"] == pytest.approx(legacy)
         assert tl["health_partial"] is False
 
-    def test_missing_jqavg_uses_renormalised_weight_not_neutral_50(self):
+    def test_missing_jqavg_is_unevaluated_not_renormalised_nor_neutral_50(self):
+        # 回修 QA2 N-3（2026-10-23）：~~test_missing_jqavg_uses_renormalised_weight_not_neutral_50~~ —— 舊名與新規格不符，改名。
         """缺旌旗 → health **未評估（None）**，**不是**「塞 50」、也不是只剩大盤分重新歸一。
 
         ⚠️ **DEC-074/075 行為變更（客戶 2026-10-23）**：舊斷言 `health ≈ 75`（只剩大盤分
@@ -395,7 +399,7 @@ class TestConfidenceRealSourceDetection:
         assert len(tl["missing_sources"]) == 1
 
     def test_conf_full_when_everything_present(self):
-        tl = _tl(jq={"avg": 60},
+        tl = _tl(jq={"is_proxy": False, "avg": 60},
                  li=pd.DataFrame({"外資大小": [1], "韭菜指數": [1]}))
         assert tl["conf"] == 100
         assert tl["missing_sources"] == []

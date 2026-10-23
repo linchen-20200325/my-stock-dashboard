@@ -122,13 +122,14 @@ def m1b_m2_for_scoring(info: Optional[dict]) -> Optional[dict]:
 # 不發明第二種機制（DEC-037 先例）。計分開關在 L0
 # `shared.signal_thresholds.BREADTH_PROXY_SCORING_ENABLED`（現為 False）。
 #
-# 為什麼 `jingqi_info` 只認**明確布林旗標**、不做 source 字串比對：
-# producer（`src/services/jingqi_calc.compute_and_store_jingqi`、舊 UI `section_short` 的
-# TWSE 單日頂替）自本批起一律寫 `is_proxy`；沒有旗標的 dict（測試 fixture、`section_inputs`
-# 由 warroom 合成的 `{'avg': ...}`）沿用既有語意 = 真值（M1B 同一個分寸：拿不到旗標時
-# 「不宣稱它是代理值」）。⚠️ 上游 **DataFrame**（`fetch_adl` 的回傳）則相反 —— 缺 `is_proxy`
-# 欄**一律視同代理**（fail-safe）：那是原始序列、本 repo 所有已知產出都帶此欄，缺欄＝
-# 契約漂移，不得因此把估算家數當真值計分（見 `adl_df_is_proxy`）。
+# ~~為什麼 `jingqi_info` 只認**明確布林旗標**、不做 source 字串比對：…沒有旗標的 dict … 沿用既有語意 = 真值~~
+# 📌 DEC-075 批 A 回修（QA1 S-6，2026-10-23，有意識的修改，⛔ 不是漏刪）：失敗方向改為與 DataFrame 路徑一致的
+#   **fail-safe** —— `jingqi_info`（或 readiness 側車一筆 record）**只有** `is_proxy` 是明確的布林 False
+#   （Python `False` 或 `numpy.bool_(False)`）才算真值；`True`、`np.bool_(True)`、字串、None、**缺旗標**一律視同代理。
+#   舊理由（「拿不到旗標時不宣稱它是代理值」，M1B 同一分寸）在廣度上被權衡掉：本 repo 目前**沒有任何**
+#   真實漲跌家數來源，沒標旗標的數字只可能來自估算；漏標時當真值計分＝DEC-074 明禁的那件事。
+#   producer（`jingqi_calc`、舊 UI `section_short`、`section_inputs` 由 warroom 合成的 fallback）一律寫旗標。
+# ⚠️ 上游 **DataFrame**（`fetch_adl` 的回傳）同樣：缺 `is_proxy` 欄一律視同代理（見 `adl_df_is_proxy`）。
 
 #: 代理廣度值貼在數字後面的短註記（顯示用；判燈／計分一律不讀）。
 BREADTH_PROXY_VALUE_NOTE: str = '（代理估算值，不計分）'
@@ -137,15 +138,22 @@ BREADTH_PROXY_VALUE_NOTE: str = '（代理估算值，不計分）'
 BREADTH_LAMP_KEYS: frozenset = frozenset({'jingqi', 'adl'})
 
 
-def is_breadth_proxy(info: Optional[dict]) -> bool:
-    """`jingqi_info`（或五桶 readiness 側車的一筆 record）是不是代理（估算）廣度？
+def _is_explicit_false(v) -> bool:
+    """明確的布林 False（Python `False` 或 `numpy.bool_(False)`）；其餘（含 0、'False'、None）一律否。L0 不 import numpy。"""
+    if v is False:
+        return True
+    return type(v).__name__ in ('bool_', 'bool') and type(v).__module__ == 'numpy' and not bool(v)
 
-    只認明確布林旗標 `is_proxy` / `is_proxy_tier` 為 True（見上方說明）。
-    `info` 為 None / 非 dict / 沒有旗標 → False。
+
+def is_breadth_proxy(info: Optional[dict]) -> bool:
+    """`jingqi_info`（或五桶 readiness 側車的一筆 record）是不是代理（估算）廣度？**fail-safe**。
+
+    只有 `is_proxy` 為明確布林 False 才回 False（＝真值）；其餘一律 True（見上方說明）。
+    `info` 為 None / 非 dict → True（沒有可宣稱為真值的東西；呼叫端本來就走缺值路徑）。
     """
     if not isinstance(info, dict):
-        return False
-    return any(info.get(_k) is True for _k in _PROXY_FLAG_KEYS)
+        return True
+    return not _is_explicit_false(info.get('is_proxy'))
 
 
 def breadth_proxy_badge(info: Optional[dict]) -> str:
@@ -192,4 +200,4 @@ def adl_rows_any_proxy(df, n: int) -> bool:
     except Exception:  # noqa: BLE001 — 讀不出旗標 = 拿不準 = 代理（fail-safe，不吞成「真值」）
         return True
     # `tolist()` 已把 numpy bool 轉成 Python bool；NaN／None／字串都不是 `False` ⇒ 代理。
-    return not all(_v is False for _v in _tail)
+    return not all(_is_explicit_false(_v) for _v in _tail)

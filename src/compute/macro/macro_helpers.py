@@ -70,6 +70,16 @@ _CONF_LABEL_JINGQI = '旌旗指數 (上漲佔比的 5 日均)'
 
 # DEC-074 B（客戶 2026-10-23）：代理廣度計分入口（L2 → L0，合法下行依賴）。
 from shared.macro_provenance import jingqi_for_scoring as _jingqi_for_scoring  # noqa: E402
+from shared.macro_provenance import adl_df_is_proxy as _adl_df_is_proxy  # noqa: E402
+from shared.signal_thresholds import (  # noqa: E402
+    BREADTH_PROXY_SCORING_ENABLED as _BREADTH_PROXY_SCORING_ENABLED,
+)
+
+#: ADL 只有代理（估算）家數時，`missing_sources` 那一項的說法（取代 'ADL 騰落指標'）。
+_ADL_PROXY_MISSING_TEXT = 'ADL 騰落指標：由加權指數推估的代理家數，不算有效廣度來源（DEC-074）'
+
+#: `SOURCE_UNEVALUATED_BREADTH` 但本輪**沒有**任何廣度值（旌旗整包缺席）時的 action（取代文案表那一句）。
+_TL_ACTION_BREADTH_ABSENT = '⬜ 缺真實市場廣度（漲跌家數）—— 本輪也沒有取得任何廣度資料，健康分依 DEC-074 不以其餘分項補出'
 
 #: 旌旗只有代理值、依 DEC-074 不計分時，`missing_sources` 那一項的說法（取代 `_CONF_LABEL_JINGQI`）。
 _BREADTH_PROXY_MISSING_TEXT = (
@@ -473,8 +483,10 @@ def calc_traffic_light(
             except Exception:
                 pass
     else:
-        print('[health_reconcile] skip:jqavg / 大盤評分 / health 任一未取得,'
-              'Method A 已權重歸一化而 Method B 仍用固定預設,兩者不可比 → '
+        # 回修 NIT-2：~~Method A 已權重歸一化~~ —— DEC-074 B 起旌旗缺席 Method A 回 None（不歸一）；
+        #   只有大盤分缺席（D-3）才歸一。log 據實說。
+        print('[health_reconcile] skip:jqavg / 大盤評分 / health 任一未取得'
+              '(Method A 此時為 None 或僅大盤分缺席的歸一值,Method B 仍用固定預設),兩者不可比 → '
               '本輪不對帳(§4.3)', file=sys.stderr)
 
     # 校準腳本可注入測試門檻；正式呼叫不傳 → 用模組常數
@@ -493,9 +505,16 @@ def calc_traffic_light(
     # 的 legacy 決策樹對拍測試)。
     # DEC-074 B：health 算不出來「只因為缺廣度」（大盤評分本身在）⇒ 原因標 breadth
     # （文案不再叫人重抓）。兩條腿都缺 ⇒ 既有 `SOURCE_UNLOADED`（其餘輸入也缺，重抓仍可能補上大盤分）。
+    # 📌 DEC-075 回修（QA1 MUST-1，2026-10-23，有意識的修改，⛔ 不是漏刪）：
+    #   ~~只在「大盤評分在」時才標 breadth~~ —— 舊理由「重抓仍可能補上大盤分」不成立：補上大盤分後健康分
+    #   仍是 None（廣度腿恆為代理）。若大盤分同時缺就標 UNLOADED，`get_macro_state` 會退回 macro_state.json
+    #   規則引擎位階（＝DEC-075 不採用的 (b)），出現「資料越少、結論越多」。
+    #   ⇒ 只要本輪**有代理廣度被擋下**（`_jq_proxy_dropped`）一律標 breadth（不看大盤分）；
+    #     旌旗整包缺席時維持舊規則（大盤分在 ⇒ breadth；兩條腿都缺、也沒有任何廣度輸入 ＝ F1 三源全空 ⇒ UNLOADED）。
     _health_unavailable_reason = (
         _RA.UNAVAILABLE_REASON_BREADTH
-        if (_health is None and _breadth_unavailable and _score_pct is not None) else None)
+        if (_health is None and _breadth_unavailable
+            and (_jq_proxy_dropped or _score_pct is not None)) else None)
     _verdict = _RA.arbitrate_regime(
         trend_regime=_regime, market_score=_score, health=_health,
         futures_net_lots=_fut_net,
@@ -506,6 +525,9 @@ def calc_traffic_light(
     # 文案表以 `source`(哪條分支生效)為 key —— 舊碼兩條 🔴 分支的 label 不同
     # (空頭防禦 vs 保守防禦),不能只看顏色/icon 決定文字。
     _color, _label, _action, _sub = _TL_COPY_BY_SOURCE[_verdict.source]
+    if _verdict.source == _RA.SOURCE_UNEVALUATED_BREADTH and not _jq_proxy_dropped:
+        # 回修 NIT-1：本輪連代理值都沒有（旌旗整包缺席）⇒ 不說「代理估算值不計分」（那一輪沒有代理值）。
+        _action = _TL_ACTION_BREADTH_ABSENT
     _icon = _verdict.light
 
     _conf_sources = [
@@ -531,7 +553,11 @@ def calc_traffic_light(
         # 互相矛盾的訊息且無告警。改判「真的拿到數字」,與 jqavg 那條一致。
         ('外資買賣超 (三大法人)',         _fnet is not None, 'fnet'),
         ('先行指標 (期貨/PCR/韭菜)',      bool(li_latest is not None and not li_latest.empty), 'li'),
-        ('ADL 騰落指標',                  bool(_cd.get('adl') is not None), 'adl'),
+        # 回修 QA2 S-5（2026-10-23，有意識的修改，⛔ 不是漏刪）：~~`bool(_cd.get('adl') is not None)`~~ ——
+        #   與上面旌旗同口徑：代理（估算）家數＝沒有有效的廣度來源（DEC-074 B），⛔ 不因「df 在」就算有來源。
+        ('ADL 騰落指標',
+         bool(_cd.get('adl') is not None
+              and (_BREADTH_PROXY_SCORING_ENABLED or not _adl_df_is_proxy(_cd.get('adl')))), 'adl'),
     ]
     # v18.241 E2: confidence 分子分母從 SSOT 引入
     # ⚠️ `conf` 是**畫面顯示用的項數比**,刻意維持 n/5 不動(改分母會讓歷史截圖
@@ -552,6 +578,9 @@ def calc_traffic_light(
     if _jq_proxy_dropped:
         _missing = [(_BREADTH_PROXY_MISSING_TEXT if _m == _CONF_LABEL_JINGQI else _m)
                     for _m in _missing]
+    if _cd.get('adl') is not None and 'ADL 騰落指標' in _missing:
+        # 回修 S-5：ADL 有 df、只是代理 ⇒ 據實寫原因（同一項替換，項數與 conf 一致）。
+        _missing = [(_ADL_PROXY_MISSING_TEXT if _m == 'ADL 騰落指標' else _m) for _m in _missing]
     if _fut_frozen:
         _missing.append(
             f"外資期貨（{_FUT_NET_COL} 連續 {FROZEN_STALE_PERIODS_LEADING} 期"

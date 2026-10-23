@@ -857,6 +857,7 @@ def get_station_macro(*, strict: bool = False) -> dict:
     if not isinstance(_state, dict):
         _state = {}
 
+    from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH as _RA_SOURCE_UNEVALUATED_BREADTH
     _regime = str(_state.get("regime", "unknown") or "unknown")
     _loaded = bool(_state.get("is_loaded", False)) and _regime != "unknown"
     _health = _state.get("health")
@@ -878,6 +879,8 @@ def get_station_macro(*, strict: bool = False) -> dict:
         "defense": bool(_defense) if _loaded else None,
         "posture_label": _posture_label or ("總經未評估" if not _loaded else None),
         "posture_range": _posture_range,
+        # DEC-075 回修（MUST-2，schema-additive）：未評估原因是「缺真實市場廣度」（契約 source 旗標）。
+        "breadth_unevaluated": _state.get("source") == _RA_SOURCE_UNEVALUATED_BREADTH,
     }
 
 
