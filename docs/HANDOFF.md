@@ -30,7 +30,7 @@
 | 下一階段 Model／Effort | ~~**高能力模型＋High（批 A）**；**Medium（批 1'；與批 A 同批時以 High 為準）**。DEC-073：模型／Effort 不足 → 立即停手、回報客戶，不得硬做~~ （已過時，見下一段） |
 | 禁止事項 | ⛔ 批 2～4、`DH-LAMP-STALE`、VN1-PG 三項實作批未授權；⛔ 計畫 1.6「需線框」項先出線框（DEC-003）；⛔ 不新增資料來源、不改投資公式／權重（DEC-074／DEC-075）；⛔ 不改刪舊 UI（DEC-019）；⛔ 不 production-write、不開旗標、不開 schedule（DEC-066） |
 
-### 📌 2026-10-23 批 A＋1' 安全段落收尾（append-only；**本段為現行短版，與上表及上一段衝突處以本段為準**）
+### 📌 2026-10-23 批 A＋1' 安全段落收尾（append-only；~~**本段為現行短版，與上表及上一段衝突處以本段為準**~~ 已過時，見下方「GitHub 交接 Freeze 版」（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新：#910 新增 `c8e30d84` 等 commit、進入 Freeze）））
 
 | 項目 | 現況（2026-10-23，批 A＋1' 實作後） |
 |---|---|
@@ -43,6 +43,22 @@
 | **唯一 Next Safe Action** | ~~**處理 `DH-REGIME-NOWARROOM`**（D-1(a) 殘留：warroom 不存在路徑——冷啟動未載入、或 `calc_traffic_light` 三源全空回 None——位階也須 ⬜、`is_loaded=False`，不得回規則引擎位階）。**其後順序**：完成並經獨立 QA／CI 後 → 重評批 2／VN1-PG 邊界並送客戶裁示（DEC-075 第 4 點）。另有硬期限：`DH-CALIB-CRON` 須在 **2027-01-01**（下次季度校準排程）前修正或暫停~~ **重評批 2／VN1-PG 邊界並送客戶裁示**（DEC-075 第 4 點；前提：PR #910 合併＋獨立 QA＋main CI＋main verification）。**硬期限**：`DH-CALIB-CRON` 須在 **2027-01-01** 前修正或暫停（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（依兩組獨立調查裁定冷啟動屬 DEC-075 D-1(a) 射程；客戶 2026-10-23 指示不得只登 BACKLOG 延後）） |
 | 下一階段 Model／Effort | **High（高能力模型，Effort high）**。理由：觸及位階 SSOT（`get_macro_state`）與多個消費端（AI 評分、🎯 找標的頁濾網、持股頁位階／姿態帶）、需突變測試與多組獨立 QA。DEC-073：模型／Effort 不足 → 立即停手、回報客戶，不得硬做 |
 | 禁止事項 | 同上一段（續有效）：⛔ 批 2～4、`DH-LAMP-STALE`、VN1-PG 三項實作批未授權；⛔ 畫面結構異動先出文字線框（DEC-003）；⛔ 不新增資料來源、不改投資公式／權重、不重新歸一化（DEC-074／DEC-075）；⛔ 不改刪舊 UI（DEC-019）；⛔ 不 production-write、不開旗標、不開 schedule（DEC-066） |
+
+### 📌 2026-10-23 GitHub 交接 Freeze 版（append-only；**本段為現行短版，與上表及上兩段衝突處以本段為準**）
+
+> 客戶 2026-10-23 Freeze 指示：AI 額度預計 2026-10-24 00:00（台北）取消；下一個 AI 只讀 GitHub 接手。本段**只放實況與唯一接手點**；耐久狀態見 `docs/PROJECT_STATE.md` §29，待辦見 `docs/BACKLOG.md`，裁示見 `docs/DECISIONS.md`，規則見 `PROJECT_RULES.md`。⚠️ 下表 GitHub 實況為總管 2026-10-23 23:08（台北）`git fetch`／GitHub API 實查轉述，撰寫組未重查；**GitHub 實況 > 本檔**，接手先重查。
+
+| 項目 | 現況（Freeze 撰寫時） |
+|---|---|
+| GitHub 實況 | `origin/main`＝`397398a2`（cron tip；`b9ed892d` 後只多 2 個 cron 資料 commit，無程式變更；cron 會推進）。**Open PR 只有 #910**（非 draft；無其他 open／draft PR）。#910 head 分支 `ccr-310717b7-37xwl6`，**HEAD＝見 PR #910 最新 commit**（Freeze 文件 commit 推上後會前進）；**`c8e30d84` 為最後一個產品碼 commit**（冷啟動 `DH-REGIME-NOWARROOM`）。#910 與 main 試合併無衝突（`git merge-tree`）。⚠️ #910 PR 描述若仍寫「限 warroom 存在路徑」「冷啟動未完成」＝**已過期**，以 commits 與本段為準 |
+| Current Task | **#910 收尾**（批 A＋1'＋冷啟動修正）：QA-1～QA-5 完成（QA-5 對 `3003bb3c` 判可合併）；**QA-6 對 `c8e30d84` 獨立複驗進行中（結果未知）**；`c8e30d84` CI 進行中 |
+| 阻塞 | **無需客戶裁示的阻塞**。若 QA-6 判出 MUST ⇒ 該 MUST 即為阻塞（在 #910 修） |
+| 合併條件 | QA-6 判可合併 ＋ CI 綠 ＋ 無衝突。⛔ **不得為交接強行合併**；條件不成立就保持 Open PR |
+| QA-6 報告位置 | PR #910 描述／留言（總管會補）。⛔ scratchpad 不在 GitHub，**不得引用 scratchpad 路徑作為接手依據** |
+| **唯一 Next Safe Action** | 讀 PR #910 最新 QA-6 報告與 CI → 若可合併且 CI 綠 → squash merge（`expectedHeadSha` 用**完整 SHA**）→ 驗證 main CI → 回填 HANDOFF／BACKLOG 的 merge SHA；若 QA-6 有 MUST → 在 #910 修、重跑獨立 QA 與 CI |
+| 之後順序（依序，不並列） | 1. 重評批 2／VN1-PG 邊界並送客戶裁示（DEC-075 第 4 點；送題附總管推薦）。2. 硬期限：`DH-CALIB-CRON` 須在 **2027-01-01** 前修正或暫停。其餘待辦見 BACKLOG，⛔ 未指派不動工 |
+| **接手必讀** | ① 先跑 `PROJECT_RULES.md` 的 Model／Effort Gate（第 9.0 節，DEC-073）：#910 收尾＝**Medium 以上**；若需改 L3 語意＝**High**；不足 ⇒ STOP、告知客戶建議 Model／Effort 與理由、等確認切換。② 再讀五個 SSOT：`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、本檔、`docs/PROJECT_STATE.md`（§29 為 Freeze 總覽） |
+| 禁止事項 | ⛔ 客戶 23:00 後清單：新 Batch、VN1-PG、新的大型研究、改投資公式／權重／門檻、刪舊 UI、刪 branch、不可逆清理；⛔ 新增資料來源；⛔ 開 production write（`PRODUCTION_WRITE_APPROVED=False`，`shared/risk_cap_history_policy.py`）、開旗標、開 schedule（DEC-066）。⛔ 刪舊 UI（DEC-019／020；刪除前提見 PROJECT_STATE §29.1）。⛔ 刪 branch（遠端 8 條；最後再一次清，不可逆） |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 
