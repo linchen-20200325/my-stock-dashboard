@@ -370,3 +370,15 @@
 - 目前設定**低於**所需 → 立即停手、不硬做、不假設已切換、不降低問題複雜度繞過；回報建議模型／Effort、不足原因、切換後工作，等客戶確認已切換。這是 Silent Autonomous Cruise 的正式例外。
 - 目前設定**高於**所需 → 不需為形式要求降級（修訂 DEC-059／DEC-061 的降級主動提醒）。
 - 新對話啟動與每階段前都執行 Gate；`docs/HANDOFF.md` 第 0 節記錄下一階段建議模型／Effort（僅供參考，須重新判斷）。
+
+## 27. Data Health 修復計畫提案（2026-10-23；DEC-074 B 落地＋其餘 🔴 分批）
+
+> 2026-10-23 新增。全文只在 `docs/vnext/DATA_HEALTH_REPAIR_PLAN_2026-10-23.md`（**提案**，⛔ 非 Approved、⛔ 非動工授權、範圍待客戶裁示 DR-2026-10-23-3）；待辦與 Decision Gate 只在 BACKLOG 5.1.7（`DH-*`、`DH-GATE-REGIME-FALLBACK`）。本節不複製全表。量測：分支 `ccr-310717b7-37xwl6`，工作樹 HEAD `1196bb7f`（merge of main `50411d33`）。
+
+- **來源**：三組唯讀（A 組 DEC-074 B 落地踩點、B 組其餘 🔴 分批、QA 獨立稽核）；**QA 的 REFUTED／MUST 凌駕前兩組**，已全部套用（MUST-A1 `_wr_ok`／#11 可達性、MUST-B1 `MISSING_STALE` 缺值原因對映、MUST-B2 `DH-FIN-HEALTH-CF`(a) 是公式變更、MUST-B3 `DH-TWII-MA200` 無新 UI 讀者、MUST-D1 五桶側車撞批 A）。三組皆單組，未經第三組驗證（`CLAUDE.md` §-2 規則 6）。
+- **批 A（DEC-074 B 落地；Effort High，QA CONFIRMED）**：L0 旗標 `BREADTH_PROXY_SCORING_ENABLED=False`＋`shared/macro_provenance` 三支純函式（鏡像 M1B 先例 DEC-037）；L3 `jingqi_calc`／`market_assessment_apply` 入口剝離（`is_proxy` 第 8 鍵、`ad_ratio_is_proxy`）；L2 `calc_traffic_light` 缺旌旗 ⇒ health None（⛔ 不歸一；QA A2 CONFIRMED 現況即重新歸一＝DEC-074 排除路徑）；新 source `SOURCE_UNEVALUATED_BREADTH`＋不指引重抓的文案；五桶 jingqi／adl 兩盞灰不進桶；`compute_ruleset_hash` 加旗標；`DH-TWII-MA200` 併入（同函式 `get_market_assessment`）。不需線框（修正錯誤）；⚠️ 若出現新增卡／列、移除區塊、拿掉五桶盞 → 須先線框。
+- **D-1 Decision Gate `DH-GATE-REGIME-FALLBACK`（送題中）**：健康分因缺真實廣度而 ⬜ 時，市場位階是否也一併 ⬜（總管推薦 (a)）、還是退 `macro_state.json` 規則引擎位階 (b)。QA MUST-A1：現況 health None 時 `get_macro_state._wr_ok` 不讀 warroom `regime_source`，(a) 需改該守衛語意（C1 v19.182）；(b) 下計畫 #11 不可達。⛔ 裁示前不得實作。D-2～D-4 內部拍板。
+- **其餘 🔴 分批**：批 1'（Medium，可選加掛）＝`DH-FOREIGN-FILL0`（⚠️ 新 UI 畫面不變）／`DH-EXPORT-LABEL`（一句業務確認：訂單 vs 金額，推薦改名不換源）／ISM 教學 key（Low）；`DH-LAMP-STALE`(a) 排批 A 之後；批 2（High，併 `VN1-PG-*`）＝`DH-BIAS240-EST`／`DH-PCR-PROXY`／`DH-MACRO-FWD-ASOF`／`DH-REFRESH-STALE`；批 3（High，L1 契約）＝`DH-357-DIV-FIELD`／`DH-KLINE-ADJ`／`DH-INST-FILL0`（QA：`calc_chip_score` 遇 NaN 靜默回 40／0 分，非 NaN 傳播）／`DH-ETF-FFILL`（`page_hold` 只經 L3 間接用）／`DH-REVENUE-ZERO`／`DH-FIN-HEALTH-CF`(a)；批 4 延後＝`DH-SCORE-NEUTRAL50`（總分函式是 `stock_score`，repo 無 `calc_total_score`）／`DH-FWD-RECON`／`DH-FIN-HEALTH-CF`(b)／`DH-WHY-FRED-LAMP`；不排批＝舊 UI 凍結類、研究候選、`DH-DOC-VIX-CBOE` 文件批、`DH-HEALTH-HISTORY` 送題（推薦不啟用）、`DH-DATA-CENTER` 線框。
+- **總管推薦範圍**：只做批 A（D-1 裁示後）；批 1' 可選加掛；其餘依序。客戶只需答：D-1 (a)/(b)、是否指派批 A、要不要加掛批 1'、批 2 是否併 `VN1-PG` 實作批。
+- **`ruleset_hash` 二次切換風險**（QA D 表）：批 A 加旗標翻一次，`DH-MACRO-FWD-ASOF` 的 schema bump（payload 含 `'schema'`）再翻一次 ⇒ 三段不可混比。建議批 A 一併 bump schema 並納入 per-leg as_of 加欄（前提：`fetch_adl` off-by-one 同批定案）；否則 PR 明寫三段區間。
+- ⚠️ 揭露：撰寫組未實跑任何測試、只 grep 抽查關鍵符號存在；計畫內「0 讀者／唯一」皆 grep；預期紅測試清單未實跑；實作批開工前須重查（該檔第 0.3 節）。
