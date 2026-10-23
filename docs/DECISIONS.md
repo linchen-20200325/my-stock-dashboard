@@ -877,6 +877,72 @@ High
   - **殘留與射程判讀（總管判讀，非客戶原文）**：warroom **不存在**的路徑（冷啟動未載入；或 `calc_traffic_light` 三源全空回 None 時 warroom 被移除）仍回 `macro_state.json` 規則引擎位階且 `is_loaded=True`，AI 評分與 🎯 找標的頁濾網會套用。總管判讀此路徑**屬本條 D-1(a) 射程**（客戶原文「不允許在使用者無法清楚辨識的情況下，靜默 fallback 到另一套規則引擎產生位階結論」）；主要理由：**同一畫面載入前後位階結論不一致**（載入前顯示規則引擎位階、載入後顯示 ⬜），使用者無法辨識結論來源已換。技術落點屬內部自決（DEC-003），~~待下一安全段落處理~~ 已於 PR #910 修正（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（依兩組獨立調查裁定冷啟動屬 DEC-075 D-1(a) 射程；客戶 2026-10-23 指示不得只登 BACKLOG 延後））；登記為 `docs/BACKLOG.md` 5.1.8 `DH-REGIME-NOWARROOM`。
   - 📌 **2026-10-23 再補一行（append-only）**：總管依兩組獨立調查裁定冷啟動屬 D-1(a) 射程並於 #910 修正（客戶 2026-10-23 指示「不得只登 BACKLOG 延後」）。⚠️ 實作組自述、待 QA 複驗（`CLAUDE.md` §-2 規則 6）
   - ⚠️ 若客戶認為 D-1(a) 只涵蓋「健康分已計算但未評估」的情境、不涵蓋「尚未載入」，以客戶為準，本判讀即撤銷，`DH-REGIME-NOWARROOM` 改為送題。撰寫組只記錄總管判讀，未獨立驗證其殘留路徑（`CLAUDE.md` §-2 規則 6）。
+  - 📌 **2026-10-23 Freeze 附註（append-only；本條上文一字未改；不是新 DEC）**：PR #910 HEAD `c8e30d84`（`DH-REGIME-NOWARROOM`）已在代理廣度不計分（旗標關）時補上**冷啟動路徑**（warroom 不存在＋有效 `macro_state.json` ⇒ 位階 `unknown`／⬜、`is_loaded=False`；Risk Cap `exposure_limit_pct` 不變）—— 依客戶 2026-10-23 指示（總管轉述：「CI 綠也先不要合併；冷啟動若違反 D-1(a) 須本 PR 修完」，即不得只登 BACKLOG 延後）。⚠️ **狀態（2026-10-23 23:08 台北量測，會過期）**：QA-6 對 `c8e30d84` 獨立複驗**進行中、結果未知**；CI 進行中；#910 **未合併**。⛔ **#910 合併前不得宣稱 D-1(a) 冷啟動修正已落地 main**；實況以 GitHub（PR #910、main SHA）為準。實作內容為實作組自述，撰寫組未獨立驗證（`CLAUDE.md` §-2 規則 6）。
+
+### DEC-076｜客戶 2026-10-23 Freeze 指示確認之產品方向與語意界線
+> 2026-10-23 追加（第 8 節「收到當輪追加」；ID 照序取下一個未用號，撰寫組寫入前 `git grep -n "DEC-076"` 實測 0 命中、最大為 DEC-075）。永久治理部分（Data ≠ AI、Model／Effort、停手條件、舊 UI、branch、production）落點 `PROJECT_RULES.md` **第 16 節**；未完成工作（舊 UI → 新 UI Coverage Matrix、Investment Logic Validity Audit、研究候選等）由 BACKLOG 撰寫組登記於 `docs/BACKLOG.md`（本批 W1 不改該檔）。
+- **內容**（客戶 2026-10-23 約 23:05 台北訊息第 4.1、6、7、8、10、12、16、17、20 節，**原文逐字**；經總管轉交、總管逐字轉錄，撰寫組未見原件）：
+
+```
+## 4.1 核心產品原則：正式保存：> **底層能力完整保留，前台流程極簡。** 新 UI 不是把舊 UI 原封不動搬過去。也不是因為新版簡化，就可以把舊 UI 的投資能力刪掉。正確方向：舊 UI 有價值的功能／投資判讀邏輯 → 重新整理資訊架構 → 決定新 UI 放置位置 → 重新設計顯示方式 → 驗證能力覆蓋 → 最後才考慮刪除舊 UI。
+
+# 6. 新 UI 已確認方向（請保存／核對）。主要投資流程：
+### 📊 大盤／市場趨勢 回答：「現在市場環境適不適合投資？目前可以承擔多少風險？」包含：大盤、市場位階、台股趨勢、國際趨勢、指標危險度、Risk Cap、重要總經／籌碼／技術資訊。但底層語意必須分開。
+### 🎯 標的 整合：找標的、查一檔、個股健檢、ETF、財報、籌碼、技術、估值、其他既有標的分析能力。基本體驗：> 標的清單 → 點一檔 → 同頁／淺層 route 完整健檢。
+### ⚡ 行動 承接既有 deterministic action logic，例如：exit signal、take profit、swap、汰弱換強、watch、action required。不得因為 UI 需要而自行發明新的加減碼比例或投資語意。
+### 🛡️ 持股 承接：個股／ETF 健檢、配息、stress、VaR、risk contribution、concentration、portfolio limits、其他既有組合風險能力。
+### 🩺 資料中心 不是第五個主要投資決策頁。它是：系統／資料維護入口。至少能追蹤：資料、狀態、最新資料日、來源、問題、影響功能、下一步／處理方式。處理類型：可自行修復／需研究替代來源／API／MCP／需客戶裁示／暫不處理。
+### 👤 我的 作為：account、settings、connection、utility。不要塞回主要投資流程。
+### 「憑什麼」 改成每頁 contextual explainability：為什麼這樣判斷、指標、日期、資料來源、規則。不是主要 navigation investment page。
+
+# 7. Progressive Disclosure：第一層 直接給使用者需要的結論／狀態。第二層 告訴使用者主要原因。第三層 需要時才展開：原始指標、日期、source、rule、technical detail、confidence / completeness。不要把舊 UI 的所有燈號、數字、技術細節一次攤在首頁。
+
+# 8. 必須保存的投資語意定義（不得混為單一分數）：市場位階：市場 bull / bear / trend 狀態。指標危險度：目前多少危險條件／門檻被觸發。它不等於市場多空。Risk Cap：允許承擔的最大曝險／風險控制。它不等於市場趨勢。台股趨勢：新的 research / market trend concept。國際趨勢：新的 international research / market trend concept。因此完全可能：> 趨勢偏多 但風險升高 Risk Cap 降低。不得為了 UI 簡化，把以上概念偷偷合成單一 score/light。
+
+# 10. Data Health 現況完整保存：Data Health Audit、DEC-074、DEC-075、Batch A、Batch 1'、Batch 2、Batch 3、Batch 4、new-source research。明確記錄 Batch A / 1'：哪些已完成；哪些在 #910；哪些仍待 QA／CI；哪些 deferred。D-1(a) 完整語意：正式 breadth 不存在／無法可靠計算相關 health 時：不得讓代理 breadth 參與 scoring；不得偷偷 fallback 產生看似正式的 market regime；affected result → ⬜ 未評估／資料不足；不得因產品想保持有答案而補結論。同時：**不要過度擴張成所有市場／Risk Cap 概念都失效。** 只有真正依賴失效資料的 component 才不可判定。Risk Cap 保持自己的既有語意。
+
+# 12. Investment Logic Validity Audit：BACKLOG 必須加入／確認有一個獨立階段。它和 Data Health 是不同工作。Data Health 問：資料正不正確？Investment Logic Audit 問：在資料正確的前提下，投資規則本身是否仍合理？未來獨立檢查：市場判斷、Risk Cap、個股健檢、選股、技術、籌碼、財報、ETF、持股、exit、take profit、swap、position sizing、其他 deterministic investment rules。重要：**第一階段只 Audit，不直接改公式。** 如果證據顯示需要改 threshold、weight、formula、scoring、investment semantics：必須開 Decision Gate 給客戶裁示。不得把「資料錯誤」和「投資模型錯誤」混在一起。
+
+# 16. 舊 UI 不得提前刪除。正式保存：> 新 UI 成立以前，舊 UI 是重要 capability / logic reference。只有完成：capability inventory、new UI mapping、implementation、coverage validation、regression、customer approval 後，才進入舊 UI removal Decision Gate。不得把「新版已經比較漂亮」當作刪除舊 UI 的理由。
+
+# 17. 個股健檢不能遺失。確認舊 UI 已存在的 individual-stock health-check / replacement logic 被登記為新版必須盤點能力。包括 repo 目前已有的：財報健檢、KD / technical inputs、replacement / rotation、stock trend input、individual stock lights、holdings battle-room integration。若「MJ老師」這個來源／名稱沒有 GitHub 證據：不要自行寫成正式來源。只能保存「既有個股健檢邏輯」。
+
+# 20. 新資料來源研究 保留／整理研究候選，例如：real market breadth、Sahm、US 2Y、yield spreads、30Y、TIPS、OECD CLI、securities lending、TDCC、ETF distribution/components、market EPS / PE / forward EPS、CSP / AI capex。這些是 research candidates。**不是已授權接入 production。** 下一個 AI 不得看到 BACKLOG 就自行換資料源。
+```
+
+- **範圍**：產品方向／UI 資訊架構／資料與投資語意界線／治理｜**日期**：2026-10-23｜**決策者**：客戶｜**狀態**：生效（方向與語意界線確認）；⛔ **不是動工授權**（`CLAUDE.md` §-1；DEC-002、DEC-015；客戶同訊息第 0 節「23:00 後：禁止開始新的 Batch…禁止改投資公式／權重／門檻／禁止刪舊 UI／禁止刪 branch」）；⛔ 不是線框核准（DEC-003 ①）。
+- **來源**：D 客戶訊息 2026-10-23（約 23:05 台北；本 session；本檔首次入庫；經總管轉交）。客戶同訊息第 4 節原文：「已存在就引用／補完整；不存在且屬於客戶已確認方向，就正式落盤；若與既有正式裁示衝突，停止並列出衝突，不得自行覆寫。」
+
+- **逐點比對既有 DEC**（撰寫組讀法，單組，⚠️ 待第二組 evidence audit，`CLAUDE.md` §-2 規則 6；舊 DEC 一字不改）：
+
+| 客戶節 | 要點 | 比對結果 |
+|---|---|---|
+| 4.1 | 「底層能力完整保留，前台流程極簡」 | **已存在於 DEC-072**（原文「底層能力完整，前台流程極簡」；本則多「保留」二字，同義） |
+| 4.1 | 新 UI 不是把舊 UI 原封不動搬過去；也不得因簡化刪舊 UI 投資能力 | 後半**已存在於 DEC-071 第 2 點**（「不應因新版簡化而大量刪除」）；前半「不原封不動搬」**本則新增** |
+| 4.1 | 正確方向六步（舊能力 → 重整資訊架構 → 決定放置 → 重新設計顯示 → 驗證覆蓋 → 最後才考慮刪舊 UI） | **本則新增**（步驟序列）；「最後才刪」與 **DEC-020** 刪除前置路線同向 |
+| 6 | 📊 大盤 回答「現在市場環境適不適合投資？目前可以承擔多少風險？」 | 後半**已存在於 DEC-072 第 1 點**；前半問句**本則新增** |
+| 6 | 📊 大盤包含：大盤、市場位階、台股趨勢、國際趨勢、指標危險度、Risk Cap、重要總經／籌碼／技術資訊；「底層語意必須分開」 | 台股趨勢／國際趨勢／Risk Cap **已存在於 DEC-072 第 1 點**；「大盤」字樣**已存在於 DEC-071 第 6 點**；市場位階、指標危險度、重要總經／籌碼／技術資訊列入大盤頁**本則新增**；語意分開**已存在於 DEC-071 同輪客戶原文**（四者不合併） |
+| 6 | 🎯 標的：標的清單 → 點一檔 → 同頁／淺層 route 完整健檢 | **已存在於 DEC-072 第 2 點**（同一流程、不另設查一檔導航）；「同頁／淺層 route」措辭**本則新增** |
+| 6 | ⚡ 行動：承接既有 deterministic action logic（exit signal、take profit、swap、汰弱換強、watch、action required）；不得為 UI 自行發明加減碼比例或投資語意 | **已存在於 DEC-072 第 3 點**、DEC-053；例示清單**本則新增**。⚠️ 例示中 swap／汰弱換強是否屬 DEC-054 七種 Action、與 DEC-022 再平衡硬禁令的界線，**仍未裁示**（`CV1-FU-03`、`CV1-FU-02`）—— 本則**不解決**，例示不構成擴大 Action 範圍 |
+| 6 | 🛡️ 持股：個股／ETF 健檢、配息、stress、VaR、risk contribution、concentration、portfolio limits | **已存在於 DEC-072 第 4 點**（健檢、曝險、集中度、風險、壓測）；配息、VaR、risk contribution、portfolio limits 例示**本則新增** |
+| 6 | 🩺 資料中心：不是第五個主要投資決策頁；追蹤資料／狀態／最新資料日／來源／問題／影響功能／下一步；處理類型五類 | 定位**已存在於 DEC-072**（輔助入口、不屬主要投資流程）；欄位清單與處理類型五類（可自行修復／需研究替代來源／API／MCP／需客戶裁示／暫不處理）**本則新增**。⚠️「需研究替代來源／API／MCP」只是分類，**不是**接入授權（第 4 節 #3、#4） |
+| 6 | 👤 我的：account、settings、connection、utility | **已存在於 DEC-072**；connection 例示**本則新增** |
+| 6 | 「憑什麼」改每頁 contextual explainability（為什麼這樣判斷、指標、日期、資料來源、規則） | **已存在於 DEC-072**；五項內容清單**本則新增** |
+| 7 | Progressive Disclosure 三層（結論／狀態 → 主要原因 → 需要時才展開原始指標、日期、source、rule、technical detail、confidence／completeness） | DEC-072 只對 📊 大盤首屏提「progressive disclosure」；**三層定義與全站適用本則新增** |
+| 8 | 市場位階／指標危險度／Risk Cap／台股趨勢／國際趨勢五概念各自定義；不得合成單一 score／light；「趨勢偏多但風險升高 Risk Cap 降低」完全可能 | 不合併**已存在於 DEC-071 同輪客戶原文**（四者）與 DEC-072；**國際趨勢納入不合併清單、五項一句定義、反例本則新增**。⚠️ 見下方「待客戶確認」第 1 點 |
+| 10 | D-1(a) 完整語意（代理 breadth 不得參與 scoring；不得偷偷 fallback 產生看似正式的 market regime；affected result → ⬜ 未評估／資料不足；不得為有答案補結論） | **已存在於 DEC-074、DEC-075**（同向，本則逐字重申） |
+| 10 | 「不要過度擴張成所有市場／Risk Cap 概念都失效。只有真正依賴失效資料的 component 才不可判定。Risk Cap 保持自己的既有語意。」 | Risk Cap 不變**已存在於 DEC-075 效力邊界**（「本條不改 Risk Cap」）；**「不過度擴張、只有真正依賴失效資料的 component 才不可判定」本則新增**，作為 DEC-074 第 5 點留白範圍的上限 |
+| 12 | Investment Logic Validity Audit 為獨立階段；與 Data Health 不同；**第一階段只 Audit，不直接改公式**；需改 threshold／weight／formula／scoring／semantics → Decision Gate；不得把資料錯誤與投資模型錯誤混在一起 | **本則新增**（階段定義）；「只 Audit 不施工」與 **DEC-015** 同向；「改公式須 Decision Gate」與 **DEC-009**（第 4 節 #1）同向。⛔ 本則**不是**啟動該 Audit 的指派 |
+| 16 | 新 UI 成立以前舊 UI 是 capability／logic reference；六項完成後才進舊 UI removal Decision Gate；「新版比較漂亮」不是刪除理由 | 凍結與刪除前置**已存在於 DEC-019、DEC-020**；**六項前置清單（capability inventory、new UI mapping、implementation、coverage validation、regression、customer approval）與「漂亮不是理由」本則新增**；與 DEC-020 路線取聯集（`PROJECT_RULES.md` 16.5） |
+| 17 | 既有個股健檢／替換邏輯須登記為新版必須盤點能力（財報健檢、KD／technical inputs、replacement／rotation、stock trend input、individual stock lights、holdings battle-room integration） | **本則新增**（在 DECISIONS 首次登記）；盤點本體見 `docs/PROJECT_STATE.md` §23（既有能力總表，撰寫組未逐項比對是否涵蓋這六項） |
+| 17 | 客戶原文所提「MJ老師」若無 GitHub 證據，不寫成正式來源 | **撰寫組實查**：全 repo `git grep "MJ老師"` 0 命中；repo 只有已去識別化的舊常數前綴 `MJ_*`（`CLAUDE.md` §3.3：v19.174 改名 `FH_*`、舊名保留 alias），**無法證明**與該名稱同一來源 ⇒ 依客戶指示**不寫成正式來源**，只保存「既有個股健檢邏輯」 |
+| 20 | 新資料來源研究候選（real market breadth、Sahm、US 2Y、yield spreads、30Y、TIPS、OECD CLI、securities lending、TDCC、ETF distribution／components、market EPS／PE／forward EPS、CSP／AI capex）**不是已授權接入 production**；下一個 AI 不得看到 BACKLOG 就自行換資料源 | 「新／替換 production 來源須 Decision Gate」**已存在於 DEC-009**（`PROJECT_RULES.md` 第 4 節 #3）；候選清單**本則新增為正式「研究候選、非授權」標記**；部分候選已見於 `docs/BACKLOG.md`／`docs/PROJECT_STATE.md`（例：Sahm、OECD、capex），TDCC 撰寫組 grep 0 命中 |
+
+- **⚠️ 衝突待客戶裁示**：撰寫組逐點比對**未發現**與既有正式 DEC 的硬衝突（單組結論，未經第二組驗證，不得當作「已確認無衝突」引用）。
+- **⚠️ 待客戶確認（不是 DEC 衝突，是與現行程式／狀態文件的用語差異；本則不解決、不改程式）**：
+  1. **指標危險度的定義**：客戶第 8 節原文「指標危險度：目前多少危險條件／門檻被觸發。」；`docs/PROJECT_STATE.md` §22.3 記錄的**現行程式**為 16 盞燈 `shared/macro_buckets.py::BUCKET_DANGER_SPECS` 經 `src/ui/tabs/tab_macro_v2.py::overall_verdict` 取 **worst-of**。「多少條件被觸發」若讀成「觸發計數」即與 worst-of 不同口徑；若只是描述性說法則無差異。屬資料／投資語意（`PROJECT_RULES.md` 第 4 節 #2），⛔ 不得自行改口徑，待客戶確認讀法。
+  2. **⚡ 行動例示的射程**：見上表第 6 節 ⚡ 列（`CV1-FU-02`／`CV1-FU-03` 未裁示）。
+- **不是什麼**（⛔）：不是動工授權；不是線框核准（DEC-017 五頁仍為現行實作依據，直到新線框經 DEC-003 拍板，同 DEC-072）；不定義台股趨勢／國際趨勢的公式（`VN1-MT-TREND-DEF` 不變）；不核准任何新資料源、公式、門檻、權重或綜合分數；不改 Risk Cap；不授權改或刪舊 UI（DEC-019、DEC-020）；不授權刪 branch（DEC-012）。
 
 ---
 
