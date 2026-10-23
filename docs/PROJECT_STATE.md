@@ -196,7 +196,7 @@
 - 「自動來源 vs Proxy」更廣原則；「Market State」定義；參數（門檻）版本化規則。
 - 「台股趨勢」「國際趨勢」定義（2026-10-22 新增，append-only；DEC-071 第 5 點只定兩主軸名稱；本輪寫入前全 repo grep 0 命中；⛔ 不得與市場位階／指標危險度／Risk Cap 合併、不得成綜合分數；`VN1-MT-TREND-DEF`；見 §22）。
 - 真實市場廣度（漲跌家數）的正式來源與可達性（2026-10-23 新增，append-only）：`daily_data_fetchers.fetch_adl` 註解稱 TWSE MI_INDEX 永久停用，但 sector_flow cron 2026-10-22 仍讀到 MI_INDEX，矛盾未查清；代理 ADL／旌旗是否續計分屬 Decision Gate `DH-GATE-BREADTH`（見 §25）。
-- 資料健康狀態的判定規則與全站狀態列「N 項需處理」的計數口徑（2026-10-23 新增，append-only）：`docs/vnext/DATA_HEALTH_AUDIT_2026-10-23.md` 第 6、7 節只是**草案**；~~四類狀態的客戶原文定義未入庫（該檔第 2 節）~~ 四類狀態的客戶原文定義已入庫（該檔第 2 節；2026-10-23 更新，有意識的變更，不是漏刪，決策者 客戶）；`DH-DATA-CENTER`。
+- 資料健康狀態的判定規則與全站狀態列「N 項需處理」的計數口徑（2026-10-23 新增，append-only）：`docs/vnext/DATA_HEALTH_AUDIT_2026-10-23.md` 第 6、7 節只是**草案**；四類狀態的客戶原文定義見該檔第 2 節；`DH-DATA-CENTER`。
 
 ## 21. 治理入口（只列指標）
 
@@ -350,12 +350,12 @@
 > 2026-10-23 新增。全表、方法、未驗證事項只在 `docs/vnext/DATA_HEALTH_AUDIT_2026-10-23.md`；待辦只在 BACKLOG 5.1.7（`DH-*`）。本節不複製全表。量測：`origin/main`＝`1bfca551`（#905），cron 會推進 tip，引用前重查。
 
 - **方法與限制**：四組領域／橫向唯讀稽核＋兩組獨立複驗讀原碼並重現（總管轉述）；沙箱無網路，「最新資料日」只量本地 `data_cache/`，⛔ 非 production 值；FinMind API 403、未實測。
-- **統計**（該檔第 3 節表格列數，腳本計數）：🟢 HEALTHY 9／🟡 LIMITED 34／🔴 BROKEN／MISLEADING 16／⬜ UNAVAILABLE 5（合計 64 列；一列可能合併數個相近資料）。
+- **統計**（該檔第 3 節表格列數，腳本計數）：🟢 HEALTHY 7／🟡 LIMITED 29／🔴 BROKEN／MISLEADING 23／⬜ UNAVAILABLE 5（合計 64 列；一列可能合併數個相近資料）。依客戶原文「禁止把 missing 當 0、neutral、false 或正常。」，補 0、回中性、ffill 當現價、代理／估算值計分一律判 🔴。
 - **重大問題**（會讓目前投資結論不可信）：
-  1. 市場位階與建議持股姿態帶受代理廣度主導（近似常數、落後一日）→ Decision Gate `DH-GATE-BREADTH`。
+  1. 市場位階與建議持股姿態帶受代理廣度主導（近似常數、落後一日）；代理值計分本身已不符 DEC-062 Q5「代理值只顯示、不計分」（BIAS240、PCR 估算同類：`DH-BIAS240-EST`、`DH-PCR-PROXY`）。待裁示的是移除代理廣度後健康分怎麼辦 → Decision Gate `DH-GATE-BREADTH`：(A) 重新歸一為只含大盤評分並揭露「廣度未評估」（總管推薦；需另批重新校準或揭露未校準）／(B) 健康分判「未評估」、位階與姿態帶不給結論。
   2. Risk Cap 核心輸入 VIX、MA5 的 PIT 未實作，新 UI 的 `risk_cap_state.json` 仍判 VALID（正式 Sheet 寫入已關）→ `VN1-PG-VIX-ASOF`、`VN1-PG-PIT-CONSISTENCY`。
   3. 刷新失敗沿用舊值而無揭露 → `DH-REFRESH-STALE`。
-  4. 個股：357 配息欄位、財報體檢現金流未年化、法人補 0、未還原價無旗標 → `DH-357-DIV-FIELD`、`DH-FIN-HEALTH-CF`、`DH-INST-FILL0`、`DH-KLINE-ADJ`。
+  4. 個股／ETF：357 配息欄位、財報體檢現金流未年化、法人與融資融券補 0、未還原價無旗標、月營收記 0 分、評分例外回中性 50、ETF 尾端 ffill 當現價 → `DH-357-DIV-FIELD`、`DH-FIN-HEALTH-CF`、`DH-INST-FILL0`、`DH-KLINE-ADJ`、`DH-REVENUE-ZERO`、`DH-SCORE-NEUTRAL50`、`DH-ETF-FFILL`。
   5. 前進式驗證對帳口徑不一（影響「選股是否贏 0050」）→ `DH-FWD-RECON`。
 - 「真正沒有資料來源」與「repo 有、新版沒接」分列於該檔第 4 節（後者完整清單見 §23）；⛔ 研究候選不得升格、四概念不合併、缺資料不得補值或當中性。
 - 資料中心 schema 與全站狀態列只是**規格草案**（該檔第 6、7 節；`DH-DATA-CENTER`），⛔ 未實作，畫面須先出線框（DEC-003）。

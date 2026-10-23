@@ -547,28 +547,36 @@
 
 ### 5.1.7 Data Health（2026-10-23 audit；append-only）
 
-> 依 `docs/vnext/DATA_HEALTH_AUDIT_2026-10-23.md`（四組領域／橫向唯讀稽核＋兩組獨立複驗讀原碼重現；總管轉述，撰寫組只抽查部分符號）登記：每個 🔴 與需處理的 ⬜ 各一條，另加資料中心與一條 Decision Gate。**已有 BACKLOG ID 者只寫「關聯」、不另立 ID**。⛔ **全部不構成動工授權**（`CLAUDE.md` §-1）：「可自行修復」只表示屬內部自決範圍（`CLAUDE.md` §-1.5.D §03-1），仍須客戶指派；UI 變動須先出文字線框（DEC-003 ①）；⛔ 研究候選不得升格；⛔ 四概念（市場位階／指標危險度／Risk Cap／台股趨勢）不合併；⛔ 缺資料不得補值或當中性。限制：沙箱無網路、最新資料日只量本地 `data_cache/`、FinMind API 403 未實測；「0 caller」類為 grep 結果、未經第三組驗證（§-2 規則 6）。ID 前綴 `DH-` 永不重用。
+> 依 `docs/vnext/DATA_HEALTH_AUDIT_2026-10-23.md`（四組領域／橫向唯讀稽核＋兩組獨立複驗讀原碼重現；總管轉述，撰寫組只抽查部分符號）登記：每個 🔴 與需處理的 ⬜ 各一條，另加資料中心、一條 🟡 備援補 0、一條文件不實登記與一條 Decision Gate。**已有 BACKLOG ID 者只寫「關聯」、不另立 ID**。⛔ **全部不構成動工授權**（`CLAUDE.md` §-1）：「可自行修復」只表示屬內部自決範圍（`CLAUDE.md` §-1.5.D §03-1），仍須客戶指派；UI 變動須先出文字線框（DEC-003 ①）；⛔ 研究候選不得升格；⛔ 四概念（市場位階／指標危險度／Risk Cap／台股趨勢）不合併；⛔ 缺資料不得補值或當中性。限制：沙箱無網路、最新資料日只量本地 `data_cache/`、FinMind API 403 未實測；「0 caller」類為 grep 結果、未經第三組驗證（§-2 規則 6）。ID 前綴 `DH-` 永不重用。
 
 | ID | 標題 | 狀態／處理方式 | 相鄰／關聯既有項 | next action |
 |---|---|---|---|---|
 | （關聯 `VN1-PG-PIT-CONSISTENCY`，不另立） | 指數跌破 MA5（Required Core）🔴：無收盤判定、缺棒跨日配對、落後 3 交易日仍 FRESH、未與外資期貨同日檢查 | 需客戶裁示（實作指派） | DEC-070 | 併入該列實作批 |
-| **DH-ADL-PROXY** | 市場廣度 ADL 🔴：`daily_data_fetchers.fetch_adl` 100% 由 ^TWII 推估（`is_proxy` 恆 True、docstring「精確值覆蓋」不實）；`end=today` 不含當日 ⇒ 落後 1 交易日；`market_assessment_apply` 註解稱「市場廣度真值」並計分；燈名「漲跌家數比」 | open；可自行修復（off-by-one、標示）＋需研究替代來源/API/MCP（真實家數）＋需客戶裁示（是否續用於計分 → `DH-GATE-BREADTH`） | 關聯 `VN1-MT-SSOT-ADL-LABEL`（標示部分）、`DH-GATE-BREADTH` | 等客戶指派；計分去留先待 `DH-GATE-BREADTH` |
-| **DH-JINGQI-HEALTH** | 旌旗／總經健康分 🔴：旌旗＝代理 ADL 5 日均（繼承代理＋D−1）；健康分 0.6×旌旗＋0.4×大盤分 → 位階與建議持股；旌旗近似常數（重建全期平均 49.6、標準差 3.3）；權重校準口徑與線上不同、未驗證；大盤分缺時只剩旌旗；`health_partial` 新 UI 0 讀取 | blocked-on-customer；需客戶裁示 | `DH-GATE-BREADTH`；`VN1-MT-SSOT-POSITION` | 隨 `DH-GATE-BREADTH` 裁示 |
+| **DH-ADL-PROXY** | 市場廣度 ADL 🔴：`daily_data_fetchers.fetch_adl` 100% 由 ^TWII 推估（`is_proxy` 恆 True、docstring「精確值覆蓋」不實）；`end=today` 不含當日 ⇒ 落後 1 交易日；`market_assessment_apply` 註解稱「市場廣度真值」並計分（代理值計分不符 DEC-062 Q5「代理值只顯示、不計分」）；燈名「漲跌家數比」 | open；可自行修復（off-by-one、標示）＋需研究替代來源/API/MCP（真實家數）＋需客戶裁示（移除計分後健康分怎麼處置 → `DH-GATE-BREADTH`） | 關聯 `VN1-MT-SSOT-ADL-LABEL`（標示部分）、`DH-GATE-BREADTH` | 等客戶指派；計分移除的實作待 `DH-GATE-BREADTH` 裁示後同批 |
+| **DH-JINGQI-HEALTH** | 旌旗／總經健康分 🔴：旌旗＝代理 ADL 5 日均（繼承代理＋D−1）；健康分 0.6×旌旗＋0.4×大盤分 → 位階與建議持股；代理值計分不符 DEC-062 Q5；旌旗近似常數（重建全期平均 49.6、標準差 3.3）；權重校準口徑與線上不同、未驗證；大盤分缺時只剩旌旗；`health_partial` 新 UI 0 讀取 | blocked-on-customer；需客戶裁示（處置方式） | `DH-GATE-BREADTH`；`VN1-MT-SSOT-POSITION` | 隨 `DH-GATE-BREADTH` 裁示 |
 | **DH-REFRESH-STALE** | 更新今日戰情沿用舊 session 值 🔴：`refresh_macro_now` 不 reset；ADL 失敗時舊 `jingqi_info` 留存；`li_latest` 沿用、`li_retain_meta`／`_is_stale` 新 UI 不讀；只有當次刷新報告列 `not_written_keys` | open；可自行修復 | DEC-041、DEC-043（缺資料揭露） | 等客戶指派 |
-| **DH-EXPORT-LABEL** | 台灣出口 🔴（名實不符）：燈名「台灣出口訂單 YoY」實為海關出口金額 YoY；FRED OECD 備援已停更 | open；可自行修復（UI 文字是否需線框依 `CLAUDE.md` §-1.5.A-8 判） | — | 等客戶指派 |
+| **DH-EXPORT-LABEL** | 台灣出口 🔴（名實不符）：燈名「台灣出口訂單 YoY」實為海關出口金額 YoY（來源 stat.gov.tw 第一順位 → MOF 海關）；FRED OECD 備援已停更 | open；可自行修復（UI 文字是否需線框依 `CLAUDE.md` §-1.5.A-8 判） | — | 等客戶指派 |
 | **DH-SAHM** | Sahm ⬜：無來源，紅線一永不觸發（已揭露） | open（Research Candidate）；需研究替代來源/API/MCP | `VN1-MT-YIELD-CLI`（相鄰：美國總經缺資料） | 研究候選；⛔ 新資料源屬 Decision Gate |
-| （關聯 `VN1-PG-VIX-ASOF`，不另立） | VIX（Required Core）🔴：取最後一根，台北傍晚為美股未收盤暫定值；`fetched_at` 被丟、FRESH；文件稱 CBOE CDN 備援不存在 | 需客戶裁示（實作指派） | DEC-070 | 併入該列實作批 |
+| （關聯 `VN1-PG-VIX-ASOF`，不另立） | VIX（Required Core）🔴：取最後一根，台北傍晚為美股未收盤暫定值；`fetched_at` 被丟、FRESH；VIX 燈路徑無 CBOE 備援（`risk_radar` 另抓 CBOE VIX3M） | 需客戶裁示（實作指派） | DEC-070；`DH-DOC-VIX-CBOE` | 併入該列實作批 |
+| **DH-DOC-VIX-CBOE** | 文件敘述不實（只登記）：`CLAUDE.md` §2.1「VIX：Yahoo `^VIX` 主、CBOE CDN 備」，但 VIX 燈路徑無 CBOE 備援（`risk_radar` 另抓的是 CBOE VIX3M） | open；只登記（⛔ 本批不改 `CLAUDE.md`） | `VN1-PG-VIX-ASOF`；`VN1-MT-SSOT-EDU-CLAIM`（相鄰：文件宣稱無資料流） | 等客戶指派文件同步批 |
 | （關聯 `VN1-MT-SSOT-ISM`，不另立） | 台灣 PMI 教學對映 `_EDU_KEY["ism_pmi"]="NAPM"` 🔴：台灣 PMI 燈套美國 ISM 教學與歷史數字 | 可自行修復 | — | 等客戶指派 |
-| **DH-CHINA-DRAG** | 中國 CLI／China Drag 🔴：`_render_china_drag_panel` 把 subscore 傳給 `classify_china_regime` ⇒ regime 恆「資料不足」、fx_alert 與 color 丟失；BCI zone 用舊 key `CHN_PMI` 恆中性（已重現）；舊 UI 唯讀面板 | open；可自行修復 | DEC-019（舊 UI 凍結：修正屬 bug fix 或否，實作批依 DEC-019 判） | 等客戶指派 |
+| **DH-CHINA-DRAG** | 中國 CLI／China Drag 🔴：`_render_china_drag_panel` 把 subscore 傳給 `classify_china_regime` ⇒ regime 恆「資料不足」、fx_alert 丟失；BCI zone 用舊 key `CHN_PMI` 恆中性（已重現）；舊 UI 唯讀面板 | open；可自行修復 | DEC-019（舊 UI 凍結：修正屬 bug fix 或否，實作批依 DEC-019 判） | 等客戶指派 |
 | （關聯 `VN1-MT-SSOT-EDU-CLAIM`，不另立） | 教學頁資料來源地圖 🔴：宣稱 FRED NAPM／DGS2／DGS3MO／M2SL／WALCL／UNRATE／PPIACO 與 CBOE CDN，production 無資料流；「logistic 衰退機率」0 caller | 可自行修復 | — | 等客戶指派 |
 | **DH-WHY-FRED-LAMP** | 新 UI「憑什麼」FRED 健康燈 🔴（假綠燈）：`page_why::NAMED_SOURCES` 監測 `fetch_fred`，但 16 燈 CPI／DGS10／FEDFUNDS 走 fredgraph.csv | open；可自行修復 | `DH-DATA-CENTER` | 等客戶指派 |
-| **DH-MACRO-FWD-ASOF** | 總經前進式驗證 🔴：`inputs_as_of` 標 ^TWII 當日，但 jqavg／ad_ratio 是前一日（日期標示不實） | open；可自行修復（日期）；接讀屬新功能 | 關聯 `VN1-MT-SSOT-MACRO-FWD`（只寫不讀部分，不重複） | 等客戶指派 |
+| **DH-MACRO-FWD-ASOF** | 總經前進式驗證 🔴：`inputs_as_of` 標 ^TWII 當日，但 jqavg／ad_ratio 是前一日（日期標示不實）；接讀屬新功能 | open；可自行修復（日期） | 關聯 `VN1-MT-SSOT-MACRO-FWD`（只寫不讀部分，不重複） | 等客戶指派 |
 | **DH-FIN-HEALTH-CF** | 個股財報體檢 🔴：現金流量表累計、A／C 項比率未年化對年度門檻；Q1/Q2 股利 0 使 C 偏高；盈餘含金量累計 OCF÷單季 NI；查無科目回 0；Q1 假惡化進 `trend_verdict`（推論）；B 項 insufficient_data 判 Fail（舊 UI 路徑） | open；可自行修復（FinMind 口徑未實測） | DEC-047（季財報累計值須先拆單季） | 等客戶指派；實作前實測 FinMind 口徑 |
 | **DH-KLINE-ADJ** | 個股 K 線／還原價 🔴：yfinance 1.7 `auto_adjust=True` 無 Adj Close ⇒ FinMind 備援未還原、無旗標；新頁固定寫「K 線一律用還原價」；`picker_fetcher` 同類混用；無停牌偵測 | open；可自行修復 | `CLAUDE.md` §4.6（停牌、除權息） | 等客戶指派 |
-| **DH-INST-FILL0** | 個股三大法人 🔴：備援約 10 交易日、其餘 `fillna(0)` 無 `is_imputed` ⇒ 連續性上限 50%、「大戶吸籌」結構上不可能；`data_loader` 對 open/high/low 與融資融券也 fillna(0) | open；可自行修復 | DEC-026（Missing ≠ 0）、DEC-038 | 等客戶指派 |
+| **DH-INST-FILL0** | `data_loader` fillna(0) 🔴（個股三大法人＋融資融券＋OHLC 同一根因）：法人備援約 10 交易日、其餘 `fillna(0)` 無 `is_imputed` ⇒ 連續性上限 50%、「大戶吸籌」結構上不可能；open/high/low 與個股融資融券（舊 UI，缺值畫成 0）也 fillna(0) | open；可自行修復 | DEC-026（Missing ≠ 0）、DEC-038 | 等客戶指派 |
+| **DH-FOREIGN-FILL0** | 外資現貨／投信自營（大盤）🟡：`macro_fetch_orchestrator` FinMind 備援路徑 buy/sell 缺值 fillna(0) 算假淨額；只有 foreign_net 燈讀未觀測旗標 | open；可自行修復 | DEC-026、DEC-035；`DH-INST-FILL0`（相鄰，不同程式路徑） | 等客戶指派 |
 | **DH-SBL** | 借券 ⬜：repo 0 來源 | open（Research Candidate）；需研究替代來源/API/MCP | — | 研究候選；⛔ 新資料源屬 Decision Gate |
 | **DH-357-DIV-FIELD** | 357 殖利率配息 🔴：`_fetch_dividend_data_body` 現金股利候選欄不含 FinMind 正式的 `CashEarningsDistribution`（＋`CashStatutorySurplus`）⇒ 實際讀到股票股利；上櫃只配現金者顯示「近 5 年沒配息」；tests fixture 捏造 `CashDividend` 遮住 bug；持股健檢／換股不受影響（複驗更正） | open；可自行修復（FinMind 欄名未實測） | — | 等客戶指派；實作前實測 FinMind 欄名 |
 | **DH-FWD-RECON** | 前進式驗證對帳 🔴：選股純價格報酬 vs 0050 含息（偏向 0050）；未處理減資分割；FinMind 備援未還原；基準只一年（2027-07 起最舊批次無基準） | open；可自行修復 | DEC-025；`DH-KLINE-ADJ` | 等客戶指派 |
 | **DH-HEALTH-HISTORY** | 健康度歷史 ⬜：機制存在、追蹤清單空、排程停用 | blocked-on-customer；需客戶裁示（是否啟用） | — | 送題時附總管推薦方案 |
+| **DH-BIAS240-EST** | BIAS240 🔴：`is_estimated` 不被 `dated_inputs.extract_bias240` 讀取，估算值照樣計分；違反 DEC-062 Q5「代理值只顯示、不計分」（同樣適用總經彙總燈） | open；可自行修復（⚠️ 會改 Risk Cap 分數，實作需客戶指派） | DEC-062 Q5；DEC-048（BIAS240 為 Optional） | 等客戶指派 |
+| **DH-PCR-PROXY** | PCR 🔴：TAIFEX 不可達時以 FinMind TXO 法人 OI 估算、無來源欄，仍以全市場刻度門檻計分；違反 DEC-062 Q5 | open；可自行修復（⚠️ 會改 Risk Cap 分數，實作需客戶指派） | DEC-062 Q5；DEC-048（PCR 為 Optional） | 等客戶指派 |
+| （只登記，不另立 ID） | 融券 🔴：`_to_yi_mg` 依數值大小猜單位（違 `CLAUDE.md` §1.A 第 2 點） | 暫不處理（舊 UI 凍結） | DEC-019 | — |
+| **DH-REVENUE-ZERO** | 月營收 🔴：OpenAPI 備援只一個月、算不出 YoY 時缺貨因子記 0 分（把 missing 當 0）；未分三態 | open；可自行修復（記 0 分）＋需研究替代來源/API/MCP（三態公告日來源） | DEC-026；`CLAUDE.md` §4.6（月營收三態） | 等客戶指派 |
+| **DH-SCORE-NEUTRAL50** | scoring 例外回中性 50 🔴（把 missing 當 neutral） | open；可自行修復 | DEC-026、DEC-041 | 等客戶指派 |
+| **DH-ETF-FFILL** | ETF 價／報酬 🔴：`_fetch_etf_price_max_cached` 整張 `ffill()`，尾端 NaN 以前日收盤當現價；`close_ffilled_days` 只 VaR 讀；as_of 用今天 | open；可自行修復 | DEC-028（觀測日）；`CLAUDE.md` §1 | 等客戶指派 |
 | **DH-DATA-CENTER** | 🩺 資料中心＋全站資料健康狀態列（規格草案：schema、狀態判定規則、「🩺 資料健康：<最差燈>｜N 項需處理」，N＝🔴＋⬜ 中影響主流程的項數） | C（UI）；blocked-on-customer（線框） | DEC-072；DEC-062 Q5；稽核檔第 6、7 節 | 出文字線框＋總管推薦送客戶（DEC-003 ①）；⛔ 本批只是規格草案、不實作 |
-| **DH-GATE-BREADTH** | **Decision Gate**：真實廣度來源到位前，代理 ADL／旌旗是否繼續計入健康分、市場位階與建議持股？ | **Decision Gate**；blocked-on-customer | `DH-ADL-PROXY`、`DH-JINGQI-HEALTH`、`VN1-MT-SSOT-ADL-LABEL`；DEC-062 Q5（代理值不計分）、DEC-037（代理值只顯示不計分之前例） | **總管推薦**：改為揭露「未評估」並不計入，需另批實作與重校準；這會改變市場位階與建議持股的結論，故需客戶裁示。⛔ 裁示前不改計分 |
+| **DH-GATE-BREADTH** | **Decision Gate**：DEC-062 Q5 已裁示「代理值只顯示、不計分」且同樣適用於總經彙總燈 ⇒ 代理 ADL／旌旗計入健康分**本身已不符既有裁示**（不是新規則問題）。真正需客戶裁示的是：移除代理廣度後，健康分（→ 市場位階、建議持股姿態帶）怎麼辦？**(A)** 重新歸一為只含大盤評分，並明示「健康分僅含大盤評分，廣度未評估」（沿用既有 `health_partial` 重新歸一路徑）；**(B)** 健康分判「未評估」，位階／姿態帶不給結論，直到真實廣度到位 | **Decision Gate**；blocked-on-customer | `DH-ADL-PROXY`、`DH-JINGQI-HEALTH`、`VN1-MT-SSOT-ADL-LABEL`；DEC-062 Q5、DEC-037（代理值只顯示不計分之前例） | **總管推薦 A**：沿用既有程式路徑、不讓位階整片消失、符合 DEC-062 Q5 的 N/M 揭露；B 會讓主流程 📊 大盤頁失去結論。註：權重 0.6/0.4 原在含廣度版本校準，A 需另批重新校準或揭露「未校準」。⛔ 裁示前不改計分 |
