@@ -5,6 +5,8 @@
 → 橋 `allocation_service.get_breadth_proxy_presence`）：
 
   · A ＝ 有被擋下的代理值（旌旗只有加權指數推估的代理值，依 DEC-074 不計分）；
+  · A2 ＝ 只有 ADL 代理列、session 沒有旌旗（例：旌旗那一步拋例外沒寫入，本輪 ADL 照樣進 `cl_data`）——
+         守的是 L3 有把 `cl_data['adl']` 交給 L0（QA-5 SHOULD-1：A 情境旌旗先回 True、ADL 那支走不到）；
   · B ＝ 本輪沒有任何代理值（^TWII 全滅：旌旗與 ADL 都沒有；法人還在 ⇒ warroom 仍存在）。
 
 每個讀點兩態各一：斷言出現對的那一句，且**不出現對方情境的不實句**；
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 import types
 
+import pandas as pd
 import pytest
 
 import src.services.allocation_service as AL
@@ -22,7 +25,7 @@ from shared.macro_provenance import breadth_proxy_held_back
 from shared.ui_state import UI_EMPTY
 from src.compute.macro.macro_helpers import calc_traffic_light
 from src.compute.macro.warroom_summary import build_warroom_summary
-from src.services.section_inputs import breadth_proxy_presence
+from src.services.section_inputs import breadth_proxy_presence, load_section_inputs
 from src.ui.views import page_hold as PH
 from src.ui.views import page_today as P
 
@@ -36,6 +39,12 @@ _NEVER = ("不是這一輪沒抓到", "已經去讀過")
 _MKT_A = {"regime": "bull", "score": 4}
 _JQ_A = {"avg": 55.0, "is_proxy": True}
 _CD_B = {"inst": {"外資及陸資": {"net": 12.3}}}
+#: A2 用：ADL 每一列都是 ^TWII 估算的代理列（`is_proxy=True`）。
+_ADL_PROXY = pd.DataFrame({"date": pd.to_datetime(["2026-10-20", "2026-10-21"]),
+                           "up": [900, 950], "down": [900, 850], "ad_ratio": [50.0, 52.8],
+                           "is_proxy": [True, True]})
+#: 讀點文案應與 A 相同的情境（有被擋下的代理值）。
+_PROXY_SCENARIOS = ("A", "A2")
 
 
 def _session(scenario: str) -> dict:
@@ -44,6 +53,11 @@ def _session(scenario: str) -> dict:
         _tl = calc_traffic_light(_MKT_A, dict(_JQ_A), {}, None)
         return {"warroom_summary": build_warroom_summary(_tl, _MKT_A),
                 "mkt_info": dict(_MKT_A), "jingqi_info": dict(_JQ_A), "cl_data": {}}
+    if scenario == "A2":
+        _cd = {**_CD_B, "adl": _ADL_PROXY.copy()}
+        _tl = calc_traffic_light(_MKT_A, {}, dict(_cd), None)
+        return {"warroom_summary": build_warroom_summary(_tl, _MKT_A),
+                "mkt_info": dict(_MKT_A), "cl_data": _cd}
     _tl = calc_traffic_light({}, {}, dict(_CD_B), None)
     return {"warroom_summary": build_warroom_summary(_tl, {}), "cl_data": dict(_CD_B)}
 
@@ -63,7 +77,7 @@ def ss(tmp_path, monkeypatch):
 def _assert_scenario(text: str, scenario: str) -> None:
     for _bad in _NEVER:
         assert _bad not in text, (_bad, text)
-    if scenario == "A":
+    if scenario in _PROXY_SCENARIOS:
         assert any(_ok in text for _ok in _A_ONLY), text
         for _bad in _B_ONLY:
             assert _bad not in text, (_bad, text)
@@ -95,14 +109,27 @@ class TestSignal:
         assert breadth_proxy_presence(ss("B")) is False
         assert breadth_proxy_presence(None) is None
 
+    def test_l3_passes_adl_when_no_jingqi(self, ss):
+        """A2（QA-5 SHOULD-1）：只有 ADL 代理列、session 無旌旗 ⇒ True。
+
+        L3 若沒把 `cl_data['adl']` 交給 L0（突變 M21：傳 `adl=None`），這裡會變成 False、
+        讀點會寫「連代理值也沒有」—— 不屬實。
+        """
+        _s = ss("A2")
+        assert "jingqi_info" not in _s
+        assert not (load_section_inputs(_s).jingqi_info or {}).get("avg")   # 旌旗退路也沒有數值
+        assert breadth_proxy_presence(_s) is True
+
     def test_contract_is_breadth_in_both(self, ss):
         """兩種情境都是「缺真實廣度 ⇒ 未評估」（前提成立，下面的文案測試才有意義）。"""
-        for _sc in ("A", "B"):
+        for _sc in ("A", "A2", "B"):
             ss(_sc)
             assert RA.is_breadth_unevaluated(AL.get_macro_regime(require_valid_risk_cap=True)), _sc
 
     def test_bridge_reads_session(self, ss):
         ss("A")
+        assert AL.get_breadth_proxy_presence() is True
+        ss("A2")
         assert AL.get_breadth_proxy_presence() is True
         ss("B")
         assert AL.get_breadth_proxy_presence() is False
@@ -119,7 +146,7 @@ def _verdict(scenario: str):
 
 
 class TestPageToday:
-    @pytest.mark.parametrize("scenario", ["A", "B"])
+    @pytest.mark.parametrize("scenario", ["A", "A2", "B"])
     def test_cards_1_and_3(self, ss, scenario):
         ss(scenario)
         _cards = _verdict(scenario)
@@ -130,7 +157,7 @@ class TestPageToday:
             for _bad in _NEVER + _A_ONLY + _B_ONLY:   # 出口兩態共用 ⇒ 兩邊的情境句都不得出現
                 assert _bad not in _n.where, (_key, _bad)
 
-    @pytest.mark.parametrize("scenario", ["A", "B"])
+    @pytest.mark.parametrize("scenario", ["A", "A2", "B"])
     def test_status_bar_and_summary_retarget(self, ss, scenario):
         ss(scenario)
         _reg = AL.get_macro_regime(require_valid_risk_cap=True)
@@ -163,7 +190,7 @@ _SUBMITTED = PH.HoldRequest(submitted=True)
 
 
 class TestPageHold:
-    @pytest.mark.parametrize("scenario", ["A", "B"])
+    @pytest.mark.parametrize("scenario", ["A", "A2", "B"])
     def test_macro_stage_and_position_cap(self, ss, scenario):
         ss(scenario)
         _stage = PH.build_macro_stage_card(PH.load_macro(_SUBMITTED))[0]
@@ -187,7 +214,7 @@ class TestPageHold:
 
 # ── AI 問答 ────────────────────────────────────────────────────────
 class TestAiQa:
-    @pytest.mark.parametrize("scenario", ["A", "B"])
+    @pytest.mark.parametrize("scenario", ["A", "A2", "B"])
     def test_market_state_error(self, ss, scenario):
         from src.services import ai_qa_service as AQ
         ss(scenario)
