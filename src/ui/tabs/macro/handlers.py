@@ -289,6 +289,11 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
             # P1 v19.470:原文寫死「未含旌旗指數」—— health_partial 現在也可能是
             # **大盤評分**那條腿缺席(v19.470 前它被 `get('score', 0)` 捏成 0 分,
             # 所以永遠不會「缺席」,只會靜默變成最強利空)。改為據實列出缺哪條腿。
+            # 📌 DEC-074 B（客戶 2026-10-23，有意識的修改，⛔ 不是漏刪）：旌旗（廣度）缺席自本批起
+            #   健康分 = None（⬜ 未評估），**不再**重新歸一 ⇒ 舊句「權重已重新歸一化」在該情形不屬實。
+            #   只改字（共用層 L2 契約改變的連帶文案；DEC-019 揭露），版面不動。
+            #   大盤評分缺席而旌旗真值在（D-3）仍是既有歸一 ⇒ 該情形維持原句。
+            _breadth_reason = tl.get('health_unavailable_reason') == 'breadth'
             if tl.get('health_partial'):
                 _legs = []
                 if tl.get('jqavg') is None:
@@ -296,10 +301,16 @@ border:3px solid {tl["color"]};border-radius:16px;padding:20px 24px;margin-botto
                 if tl.get('score') is None:
                     _legs.append('大盤趨勢評分（權重 40%）')
                 _leg_txt = '、'.join(_legs) if _legs else '部分分項'
-                _msg += (f'　🩺 **綜合健康度未含 {_leg_txt}**，本次僅由其餘分項'
-                         '推算（權重已重新歸一化，非補中性值/非補 0），'
-                         '請降低對該分數的信賴。')
+                if tl.get('health') is None:
+                    _msg += (f'　🩺 **綜合健康度未評估：缺 {_leg_txt}**'
+                             '（依 DEC-074 不以其餘分項改權重補出分數，代理估算的廣度值不計分）。')
+                else:
+                    _msg += (f'　🩺 **綜合健康度未含 {_leg_txt}**，本次僅由其餘分項'
+                             '推算（權重已重新歸一化，非補中性值/非補 0），'
+                             '請降低對該分數的信賴。')
             _msg += '　建議按「🚀 一鍵更新全部數據」後再操作。'
+            if _breadth_reason:
+                _msg += '（市場廣度那一項缺的是正式資料來源，更新資料不會改變。）'
             st.warning(_msg)
 
 

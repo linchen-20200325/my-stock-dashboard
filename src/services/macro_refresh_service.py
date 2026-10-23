@@ -976,9 +976,20 @@ def refresh_macro_now(*, mode: str = MODE_WARM,
         with _writes_recorded(_writes.setdefault(STEP_WARROOM, [])):
             _wr_res = compute_and_store_warroom_summary()
         if _wr_res.written:
+            # DEC-074 B／DEC-075 D-1(a)（2026-10-23）：健康分未評估的**原因**是「缺真實市場廣度」時，
+            #   下面那句既有說明（「兩條腿都缺」「位階會改讀 macro_state.json」）兩半都不屬實 ⇒ 換成屬實的那句；
+            #   其餘情形逐字照舊。⛔ 不寫「重新抓取」之類的指引（重跑不會讓代理值變成可計分）。
+            from shared import regime_arbiter as _RA_wr
+            _wr_breadth = (_wr_res.health_missing
+                           and (st.session_state.get("warroom_summary") or {}).get("regime_source")
+                           == _RA_wr.SOURCE_UNEVALUATED_BREADTH)
             _step(STEP_WARROOM, True,
                   "寫入 warroom_summary"
-                  + ("（⚠️ 健康分兩條腿都缺 → `get_macro_state()` 把這份 warroom 視同**未載入**："
+                  + ("（⚠️ 健康分因缺真實市場廣度（漲跌家數）未評估 —— 代理估算值依 DEC-074 不計分："
+                     "建議持股的姿態帶與市場位階一併未評估（DEC-075，不改讀 macro_state.json）；"
+                     "更新資料不會改變此狀態）"
+                     if _wr_breadth else
+                     "（⚠️ 健康分兩條腿都缺 → `get_macro_state()` 把這份 warroom 視同**未載入**："
                      "建議持股的姿態帶算不出來；市場位階若有可用的 macro_state.json 會改讀它）"
                      if _wr_res.health_missing else "")
                   + _stale_inputs_note)

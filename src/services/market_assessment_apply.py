@@ -17,6 +17,7 @@ import traceback
 import streamlit as st
 
 from shared.macro_provenance import is_m1b_m2_proxy  # DL-f1-s17／s23：代理值不計分（L0 SSOT）
+from shared.macro_provenance import adl_df_is_proxy  # DEC-074 B：代理廣度不計分（L0 SSOT，fail-safe）
 from shared.inst_net import is_net_observed  # 批 Z35（Q-z16）：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
 from shared.signal_thresholds import (
     MARGIN_BALANCE_OVERHEAT_THRESHOLD_YI,
@@ -95,13 +96,24 @@ def compute_and_apply_market_assessment(
         # 市場廣度真值(v18.449):df_adl 最後一列的 ad_ratio(0-100% 上漲家數佔比)。
         # 無資料/空值 → None(不納入評分,§1 寧缺勿假,不塞假中性值)。
         _ad_ratio_loaded = None
+        # DEC-074 B（客戶 2026-10-23）：末列為代理（估算）家數、或缺 `is_proxy` 欄（fail-safe）
+        # ⇒ 值交給 L3 只顯示（`ad_ratio_display`）、**不計分**（`ad_ratio=None`、不進分母、不列缺失）。
+        _ad_ratio_is_proxy = False
+        _ad_ratio_display = None
         try:
             if df_adl is not None and not df_adl.empty and 'ad_ratio' in df_adl.columns:
                 _v_adr = df_adl['ad_ratio'].iloc[-1]
                 if _v_adr == _v_adr:  # NaN 自身不等於自身
-                    _ad_ratio_loaded = float(_v_adr)
+                    if adl_df_is_proxy(df_adl):
+                        _ad_ratio_is_proxy = True
+                        _ad_ratio_display = float(_v_adr)
+                    else:
+                        _ad_ratio_loaded = float(_v_adr)
         except Exception as _e_adr:
             print(f'[市場評估] ad_ratio 解析失敗(不納入評分):{type(_e_adr).__name__}: {_e_adr}')
+        # 只在代理時才多帶兩個 kwarg（非代理時呼叫形狀逐字同修前；同 M1B 側車「只在代理時才加」的慣例）。
+        _adr_proxy_kw = ({'ad_ratio_is_proxy': True, 'ad_ratio_display': _ad_ratio_display}
+                         if _ad_ratio_is_proxy else {})
         _mkt_loaded = get_market_assessment(
             df_index=_twii_df_loaded,
             foreign_net=_foreign_net_loaded,
@@ -110,6 +122,7 @@ def compute_and_apply_market_assessment(
             ad_ratio=_ad_ratio_loaded,
             m1b_m2_is_proxy=_m1b2_is_proxy,
             foreign_net_unobserved=_foreign_unobserved,
+            **_adr_proxy_kw,
         )
         if _mkt_loaded:
             _append_margin_signals(_mkt_loaded, margin)
@@ -129,7 +142,8 @@ def compute_and_apply_market_assessment(
                                             m1b_m2_gap=_m1b2_gap, m1b_m2_prev=_m1b2_prev,
                                             ad_ratio=_ad_ratio_loaded,
                                             m1b_m2_is_proxy=_m1b2_is_proxy,
-                                            foreign_net_unobserved=_foreign_unobserved)
+                                            foreign_net_unobserved=_foreign_unobserved,
+                                            **_adr_proxy_kw)
             if _mkt_fb:
                 _append_margin_signals(_mkt_fb, margin)
                 st.session_state['mkt_info'] = _mkt_fb

@@ -253,6 +253,7 @@ from shared import ui_state as _ui_state
 # 本檔直接讀源頭**不是**第二把尺（見檔頭陷阱 3 的 2026-09-07 修註）。
 from shared.allocation_decision import REGIME_LABEL
 from shared.macro_provenance import M1B_PROXY_VALUE_NOTE
+from shared.macro_provenance import BREADTH_LAMP_KEYS, BREADTH_PROXY_VALUE_NOTE  # DEC-074 B
 # 燈卡「變化方向」列（2026-09-24）：哪幾盞燈有這一列 ＋ 列標籤。純常數 L0。
 from shared.lamp_direction_thresholds import (
     LAMP_DIRECTION_ERROR_TEMPLATE,
@@ -626,6 +627,33 @@ EXIT_OUT_OF_REACH: str = (
     f"{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}不會讓它離開現在的狀態"
     "（更新報告的「這一輪沒有更新到」會逐條列出它與它的寫入點）")
 
+#: (d) **重抓不會改變**：缺的是正式資料來源本身（DEC-074 B，客戶 2026-10-23）。
+#: 市場位階／建議持股契約因「缺真實市場廣度（漲跌家數）」而未評估時專用 —— 本頁按鈕會重抓
+#: 代理（估算）家數，但代理值依 DEC-074 **不計分**，所以按幾次都一樣（計畫 I-4：不得暗示重跑就會有）。
+#: ⛔ 不得寫「重新抓取」「重新載入」之類的指引（`tests/test_dec074_breadth_gate.py` 守衛）。
+EXIT_WAIT_BREADTH_SOURCE: str = (
+    f"{NO_EXIT_MARKER} —— **這一格更新資料不會改變**：缺的是正式的市場廣度（漲跌家數）資料來源，"
+    "不是這一輪沒抓到；目前只有由加權指數推估的代理值，依客戶裁示（DEC-074）只顯示、不計分。"
+    "正式廣度資料接上之前，這一格會一直是未評估")
+
+#: 「缺真實市場廣度 ⇒ 未評估」的 why（卡① / 卡③ / 狀態列「總經」／三欄摘要「位階」共用一句）。
+BREADTH_UNEVALUATED_WHY: str = (
+    "總經健康分需要真實市場廣度（漲跌家數），目前只有加權指數推估的代理值，"
+    "依 DEC-074 不計分 ⇒ 健康分未評估；依 DEC-075 市場位階也一併未評估，"
+    "**不改用另一套規則引擎補出位階**，本站也不以缺值推導一個安全水位")
+
+
+def regime_breadth_unevaluated(regime: Mapping[str, Any] | None) -> bool:
+    """L3 總經契約是不是「因缺真實市場廣度而未評估」（`source == SOURCE_UNEVALUATED_BREADTH`）。
+
+    讀的是契約自己的 `source` 旗標（上游帶下來的），本頁不拿資料反推（`shared/ui_state.py` 鐵律）。
+    """
+    if not isinstance(regime, Mapping):
+        return False
+    from shared import regime_arbiter as _RA_b
+    return regime.get("source") == _RA_b.SOURCE_UNEVALUATED_BREADTH
+
+
 #: (a)+(c) **複合**：一半可以在本頁重抓、一半摸不到。今日關鍵橫幅專用。
 #:
 #: 為什麼不硬塞進上面三種其中一種：這張卡的兩半各有各的答案 ——
@@ -720,7 +748,7 @@ def bucket_exit(bucket: str) -> str:
             else EXIT_RETRY_HERE)
 
 
-def contract_exit_retargeted(card: Card) -> Card:
+def contract_exit_retargeted(card: Card, regime: Mapping[str, Any] | None = None) -> Card:
     """對面 `tab_today` 總經契約那幾格的出口，換成本頁現在真的成立的那一句。
 
     📌 **批 Z60 複驗（有意識的與舊頁不同，⛔ 不是漏改對面）。**
@@ -743,10 +771,18 @@ def contract_exit_retargeted(card: Card) -> Card:
     `STEP_RISK_CAP` 在同一輪就可能寫這個檔，而且檔案是**規則引擎**產生的，不是 AI ——
     在本頁那句話已經不屬實。只換**逐字等於**對面那一句的 `why`（見 `snapshot_why_retargeted`），
     `now` 不動；`tab_today.py` 照舊一個字都不動。
+
+    📌 **DEC-074 B／DEC-075 D-1(a)（2026-10-23）：`regime=`（選填，預設 None ⇒ 與修前逐一相同）。**
+    契約 `source == SOURCE_UNEVALUATED_BREADTH`（缺真實市場廣度 ⇒ 未評估）時，換成
+    `EXIT_WAIT_BREADTH_SOURCE` ＋ `BREADTH_UNEVALUATED_WHY` —— 對面的「四條來源本輪皆無值」與
+    本頁的「按一次就會重抓」在這一態**都不屬實**（重抓不會讓代理值變成可計分）。
     """
     if card.note is None:
         return card
     _note = card.note
+    if _note.where is CONTRACT_NO_EXIT_WHERE and regime_breadth_unevaluated(regime):
+        _note = dc_replace(_note, where=EXIT_WAIT_BREADTH_SOURCE, why=BREADTH_UNEVALUATED_WHY)
+        return dc_replace(card, note=_note)
     if _note.where is CONTRACT_NO_EXIT_WHERE:
         _note = dc_replace(_note, where=EXIT_RETRY_HERE)
     _why = snapshot_why_retargeted(_note.why)
@@ -1342,6 +1378,10 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
     # 燈號頻道走既有 gray（不判燈）；下方現值＋代理註記照樣顯示。
     if key == "m1b_m2_gap" and rec.get("is_proxy") is True:
         _band = classify_danger(None, _spec)
+    # DEC-074 B（客戶 2026-10-23）：市場廣度兩盞（jingqi／adl）同一處置 —— 側車 `is_proxy`
+    # （L2 以 L0 判）→ 燈號走既有 gray（不判燈級）；現值＋代理註記照樣顯示。
+    if key in BREADTH_LAMP_KEYS and rec.get("is_proxy") is True:
+        _band = classify_danger(None, _spec)
 
     # ── 中繼資料列：任何狀態都該看得見「這盞燈本來長什麼樣」──────────
     _facts: list[tuple[str, str]] = []
@@ -1371,6 +1411,8 @@ def build_indicator_tile(key: str, rec: Mapping[str, Any], *,
     # 只動顯示字串，⛔ 不碰 `_band` / `_state`（沿用 v1：只揭露、不改燈）。
     if key == "m1b_m2_gap" and _shown and rec.get("is_proxy") is True:
         _shown = f"{_shown}{M1B_PROXY_VALUE_NOTE}"
+    if key in BREADTH_LAMP_KEYS and _shown and rec.get("is_proxy") is True:   # DEC-074 B
+        _shown = f"{_shown}{BREADTH_PROXY_VALUE_NOTE}"
 
     # ── 「變化方向」列（2026-09-24）：只加一列 fact，⛔ 不碰 `_band` / `_state` ──
     _dir_fact: tuple[str, str] | None = None
@@ -1846,6 +1888,9 @@ def _alloc_unloaded_why(regime: Mapping[str, Any] | None) -> str:
     _tail = "；**本站不以缺值推導一個安全水位**"
     if not isinstance(regime, Mapping):
         return _head + "建議持股需要總經健康分算出姿態帶，本輪沒有取得" + _tail
+    if regime_breadth_unevaluated(regime):
+        # DEC-074 B：原因是缺真實市場廣度（代理不計分），⛔ 不寫成「本輪沒有值」（那暗示重抓會有）。
+        return _head + BREADTH_UNEVALUATED_WHY
     _parts: list[str] = []
     if regime.get("health") is None:
         _parts.append("總經健康分本輪沒有值（紅綠燈沒有算出健康分），姿態帶算不出來")
@@ -1990,8 +2035,12 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
             key="verdict.exposure", label="能不能出手 · 出手到幾成",
             state=_alloc_state,
             note=Note(now="**今天能不能出手：尚未評估**", why=_why,
+                      # DEC-074 B（SHOULD-A2）：以**原因**判出口 —— 缺真實廣度 ⇒ 重抓不會改變；
+                      #   其餘未評估（含 F1 三源全敗）照舊 `EXIT_RETRY_HERE`。
                       where=(EXIT_FIX_CODE if alloc_error
-                             else EXIT_RETRY_HERE)))))
+                             else (EXIT_WAIT_BREADTH_SOURCE
+                                   if (_att_fail is None and regime_breadth_unevaluated(regime))
+                                   else EXIT_RETRY_HERE))))))
 
     # ② 指標危險度（16 盞燈的 worst-of，**不含多空方向**）。
     #    ⚠️ 這一張**完全不看 regime**；regime 掛掉時它照樣要算得出來。
@@ -2081,13 +2130,17 @@ def build_verdict_tiles(*, alloc: Any, alloc_error: str,
                 why=(upstream_error_why(scrub_secrets(regime_error)) if regime_error else
                      # UIA-07：紅的是上一次更新的紅綠燈步驟（⛔ 不是讀契約拋例外）。
                      macro_attempt_failed_why(_att_fail) if _att_fail is not None else
+                     # DEC-075 D-1(a)：缺真實廣度 ⇒ 位階一併未評估（⛔ 不是「四條來源皆無值」）。
+                     BREADTH_UNEVALUATED_WHY if regime_breadth_unevaluated(regime) else
                      "L3 canonical 契約四條來源本輪皆無值 → 回 `unknown`，"
                      "**不是** `neutral`；本站不以缺值推導「中性」"),
                 # 📌 批 Z60 QA（有意識的修改，不是漏刪）：非錯誤分支原為 `EXIT_OUT_OF_REACH`；
                 #    Z60 起 `STEP_WARROOM` 寫得到 `warroom_summary`，按本頁按鈕就有機會讓這張卡
                 #    離開未評估 ⇒ 改走 `EXIT_RETRY_HERE`（理由同卡①）。錯誤分支未動。
-                where=(EXIT_RETRY_HERE if not regime_error
-                       else EXIT_FIX_CODE))),
+                where=(EXIT_FIX_CODE if regime_error
+                       else (EXIT_WAIT_BREADTH_SOURCE
+                             if (_att_fail is None and regime_breadth_unevaluated(regime))
+                             else EXIT_RETRY_HERE)))),
             facts=((REGIME_SCOPE_FACT_KEY, REGIME_SCOPE_NOTE),)))
     return tuple(_tiles)
 
@@ -2729,6 +2782,7 @@ V2_EXIT_PHRASES: tuple[tuple[str, str], ...] = (
     (EXIT_RETRY_HERE,             "按上方 🚀 更新"),
     (EXIT_OUT_OF_REACH,           "不在本頁射程內"),
     (EXIT_FIX_CODE,               "需修程式"),
+    (EXIT_WAIT_BREADTH_SOURCE,    "等正式廣度資料來源"),   # DEC-074 B
     (EXIT_ALERTS_PARTIAL,         "只更新得到一半"),
     (EXIT_DEGRADED_READ_DIRECTION, "改看方向，別照門檻讀"),
     (CONTRACT_NO_EXIT_WHERE,      NO_EXIT_MARKER),
@@ -3476,7 +3530,8 @@ def build_summary_tiles(cards: Sequence[Card], *,
                         danger_requested: bool,
                         danger_source: str = SRC_DANGER,
                         band_zh_color: Mapping[str, tuple[str, str]] | None = None,
-                        l4_error: str = "") -> tuple[Tile, ...]:
+                        l4_error: str = "",
+                        regime: Mapping[str, Any] | None = None) -> tuple[Tile, ...]:
     """葉1 ③ 三欄摘要 → `Tile`。**只換「風險」那一格，其餘照 `_tiles_of_cards()`。**
 
     · 「風險」格 ＝ `_danger_tile()`：與卡② `verdict.danger` **同一份讀數、同一支判態、
@@ -3497,7 +3552,7 @@ def build_summary_tiles(cards: Sequence[Card], *,
                       danger_requested=danger_requested,
                       danger_source=danger_source,
                       band_zh_color=band_zh_color, l4_error=l4_error)
-         if _c.key == SUMMARY_RISK_KEY else Tile(contract_exit_retargeted(_c)))
+         if _c.key == SUMMARY_RISK_KEY else Tile(contract_exit_retargeted(_c, regime)))
         for _c in cards)
 
 
@@ -3872,7 +3927,7 @@ def render_page_today() -> None:
                                         attempt=_attempt)
     _render_tiles(status_bar_tiles_with_trading_day(
         _tiles_of_cards(status_bar_cards_with_sheet(
-            tuple(contract_exit_retargeted(_c) for _c in _bar_cards),
+            tuple(contract_exit_retargeted(_c, _regime) for _c in _bar_cards),
             build_sheet_binding_card(_sheet_state, error=_sheet_err))),
         build_trading_day_tile(_trading_status, error=_trading_err)))
 
@@ -3908,7 +3963,7 @@ def render_page_today() -> None:
             _summary.cards,
             danger=_danger, danger_error=_danger_err,
             danger_requested=_readout.requested, danger_source=_danger_src,
-            band_zh_color=_band_zh, l4_error=_l4_err))
+            band_zh_color=_band_zh, l4_error=_l4_err, regime=_regime))
 
         section_header("④ 今日關鍵橫幅")
         _render_tiles((build_key_alert_tile(

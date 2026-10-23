@@ -67,6 +67,9 @@ from shared.macro_buckets import (
 )
 from shared.macro_provenance import m1b_m2_proxy_badge  # DL-f1-s5：M1B/M2 代理註記（L0 SSOT）
 from shared.macro_provenance import is_m1b_m2_proxy  # DL-f1-s17：代理值不計分（L0 SSOT）
+from shared.macro_provenance import (  # DEC-074 B：代理廣度只顯示不計分（L0 SSOT）
+    BREADTH_LAMP_KEYS, breadth_proxy_badge, is_breadth_proxy,
+)
 from src.compute.macro.macro_helpers import compute_five_bucket_summary
 from src.services.macro_v2_service import get_chart_series, get_edu, get_twii_ohlc
 from src.services.section_inputs import load_section_inputs
@@ -391,6 +394,11 @@ def build_rows(readiness: dict) -> list[Row]:
         # （L2 以 L0 判）→ 燈號走既有 gray，不進桶摘要／指標危險度；值與註記照樣顯示。
         if spec.key == "m1b_m2_gap" and is_m1b_m2_proxy(rec):
             band = classify_danger(None, spec)
+        # DEC-074 B（客戶 2026-10-23）：市場廣度兩盞（jingqi／adl）側車 `is_proxy`（L2 以 L0 判）
+        # → 同上：燈號走既有 gray，不進桶摘要／指標危險度；值與註記照樣顯示。
+        _breadth_proxy = spec.key in BREADTH_LAMP_KEYS and is_breadth_proxy(rec)
+        if _breadth_proxy:
+            band = classify_danger(None, spec)
 
         # 四態的判定順序 = L0 SSOT `shared.station_specs.classify_state()`:
         #   1. wired=False → unwired   2. 沒值 → missing
@@ -441,7 +449,8 @@ def build_rows(readiness: dict) -> list[Row]:
             # 交給顯示端（表格「目前值」、桶摘要「最差項」、右側明細）。
             # 只揭露：`band` / `state` 一位未動；無值不貼；非代理時為空字串。
             value_note=(m1b_m2_proxy_badge(rec)
-                        if spec.key == "m1b_m2_gap" and has_value else ""),
+                        if spec.key == "m1b_m2_gap" and has_value
+                        else (breadth_proxy_badge(rec) if _breadth_proxy and has_value else "")),
         ))
     order = {b: i for i, b in enumerate(_BUCKET_ORDER)}
     out.sort(key=lambda r: (order.get(r.bucket, 99), r.label))

@@ -772,7 +772,14 @@ class TestOldFilesUntouched:
     #   （回修第 1 輪更正：原寫「兩行註解」，實為三行）＋一行空行。
     #   其餘 90 檔一個字都沒動。指紋依本 docstring 的指示同步更新；掛鉤的形狀由
     #   `tests/test_vn1_store_poc.py::assert_app_only_smoke_hook` 另守。
-    _BASE_DIGEST = "1b47c591741190e6c9598d01129182a53e7a31ac13b649b9bbe81fc50e7614cc"
+    # ~~"1b47c591741190e6c9598d01129182a53e7a31ac13b649b9bbe81fc50e7614cc"~~（VN1-STORE Pre-Hardening 後，至 b9ed892d 仍成立）
+    # 📌 DEC-074/075 批 A（2026-10-23，客戶指派，⛔ 不是漏改；DEC-019 揭露）：只動 3 檔，全是**共用層契約改變的
+    #   連帶**或新 UI 共用純函式 ——
+    #   `src/ui/tabs/tab_macro_v2.py`（新舊共用 `build_rows`：代理廣度兩盞走灰燈＋註記，同 M1B 先例）、
+    #   `src/ui/tabs/macro/handlers.py`（健康分因缺廣度 None 時刪掉不再屬實的「權重已重新歸一化」，只改字）、
+    #   `src/ui/tabs/macro/section_short.py`（TWSE 單日頂替寫進共用 `jingqi_info` 時標 `is_proxy=True`，D-2）。
+    #   版面零改動；其餘 88 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
+    _BASE_DIGEST = "1c911a3154e11020d0faf5180759eaaf781df186b92757607867c0f607d36a28"
 
     def test_no_diff_against_base(self):
         import hashlib

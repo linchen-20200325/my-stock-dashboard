@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, NamedTuple, Optional
 
 from shared.inst_net import is_net_observed  # 批 Z33：外資淨額未觀測（L1 預填／L3 補零推出）不當真值
+from shared.macro_provenance import jingqi_for_scoring  # DEC-074 B：代理廣度不計分（L0）
 from shared.station_specs import is_invalid_number
 from src.compute.risk.reconcile import (
     reconcile_health_score,
@@ -217,6 +218,10 @@ def health_inputs(session: Mapping[str, Any]) -> dict[str, Any]:
     _jq_info = session.get("jingqi_info")
     if _jq_info:
         _jq = _get(_jq_info, "avg")      # 沒有 avg ⇒ None（缺值），⛔ 不退回 warroom（可能是舊頁籤殘留）
+        # DEC-074 B（客戶 2026-10-23）：代理（估算）廣度不得計分 —— 本列是健康分對帳（兩種演算法各算一次），
+        #   一樣是計分路徑 ⇒ 經 L0 `jingqi_for_scoring`：代理 ⇒ 缺值（⛔ 不退回 warroom，理由同上一行）。
+        if not jingqi_for_scoring(_jq_info):
+            _jq = None
         # 📌 批 Z62（Z60 更正，上行註解保留）：Z60 起新 UI 也會寫 warroom，但其 `jingqi_avg` 是由
         #   `jingqi_info`（或上一份 warroom）推導的結論 ⇒ 來源在時仍以 `jingqi_info` 為準（行為未動）。
     else:

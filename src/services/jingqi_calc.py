@@ -17,7 +17,7 @@
 - ADL ad_ratio 是主源(tail(5).mean)
 - 大盤漲跌備援(正日 +5%,4 漲日 = 60%, 5 跌日 = 40%)
 - 三段燈號(BULL/NEUTRAL/BEAR SSOT from shared.signal_thresholds)
-- 寫 session_state['jingqi_info'] 7 keys(供戰情概覽/作戰室/section_inputs 讀;
+- 寫 session_state['jingqi_info'] ~~7~~ 8 keys(DEC-074 B 加 `is_proxy`;供戰情概覽/作戰室/section_inputs 讀;
   v19.84 刪 pct20/60/120/240 — 該 4 鍵為 ratio×0.9/0.8/0.7 捏造值且全 repo 0 讀者,
   §1「寧缺勿假」;真站上季線/年線比例待有真源再加)
 
@@ -30,6 +30,7 @@ from typing import Any
 import streamlit as st
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
+from shared.macro_provenance import adl_rows_any_proxy  # DEC-074 B：代理旗標判定（L0，fail-safe）
 from shared.signal_thresholds import (
     BREADTH_BEAR_PCT,
     BREADTH_BULL_PCT,
@@ -44,18 +45,23 @@ def compute_and_store_jingqi(df_adl_raw: Any) -> None:
                 None / 空 / 缺欄 → fallback 用 cl_data.tw['台股加權指數'] 估算。
 
     成功時寫 `st.session_state['jingqi_info']` = {avg/pos/regime/color/label/
-    total/source} 共 7 鍵。
+    total/source/is_proxy} 共 8 鍵（DEC-074 B 2026-10-23 加 `is_proxy`；原為 7 鍵）。
     ⚠️ v19.177 更正:此處原本還列著 `pct20/pct60/pct120/pct240` —— 那 4 鍵早在
     v19.84 就因「ratio×0.9/0.8/0.7 是捏造值 + 全 repo 0 讀者」被刪(見檔頭),
     docstring 卻沒跟著改,與實際寫入的鍵集合矛盾(鍵契約由
-    tests/test_p0c_breadth_naming.py::_JQ_CONTRACT_KEYS 釘住 7 鍵)。
+    tests/test_p0c_breadth_naming.py::_JQ_CONTRACT_KEYS 釘住;DEC-074 B 起 8 鍵)。
     全敗(無 ADL + 無大盤資料)→ 不寫(誠實顯示未載入,§1)。
     """
     _jq_ratio_src = None
     _jq_ratio = None
+    # DEC-074 B（客戶 2026-10-23）：代理旗標。主源被平均的那 N 列任一為估算（或缺 `is_proxy` 欄，
+    # fail-safe）⇒ True；「大盤估算」備援恆 True。`avg` 照算供顯示（DEC-062 Q5 只顯示不計分）。
+    _jq_is_proxy = True
     if df_adl_raw is not None and not df_adl_raw.empty and 'ad_ratio' in df_adl_raw.columns:
         _jq_ratio_src = 'ADL'
         _jq_ratio = float(df_adl_raw['ad_ratio'].tail(5).mean())
+        # 看的就是上一行被平均的那 5 列（口徑 SSOT 是上一行字面，`tests/test_p1b_*` 釘住）。
+        _jq_is_proxy = adl_rows_any_proxy(df_adl_raw, 5)
     else:
         # 備援:用大盤漲跌估算(正日=60%上漲,負日=40%)
         _tw_d = st.session_state.get('cl_data', {}).get('tw', {})
@@ -67,6 +73,7 @@ def compute_and_store_jingqi(df_adl_raw: Any) -> None:
                 _up_days = (_ret5 > 0).sum()
                 _jq_ratio = 40 + _up_days * 5  # 全漲=65%, 全跌=40%
                 _jq_ratio_src = '大盤估算'
+                _jq_is_proxy = True   # 由大盤上漲天數推估，非家數 ⇒ 恆為代理
 
     if _jq_ratio_src and _jq_ratio_src != '預設值':
         _jq_ratio = float(_jq_ratio)
@@ -86,4 +93,7 @@ def compute_and_store_jingqi(df_adl_raw: Any) -> None:
             'avg': _jq_ratio, 'pos': _jq_pos, 'regime': _jq_reg,
             'color': _jq_col, 'label': _jq_lbl, 'total': 0,
             'source': _jq_ratio_src,
+            # DEC-074 B schema-additive 第 8 鍵（`tests/test_p0c_breadth_naming.py::_JQ_CONTRACT_KEYS`）：
+            # True ⇒ 計分端經 `shared.macro_provenance.jingqi_for_scoring` 拿到 None（不計分）。
+            'is_proxy': bool(_jq_is_proxy),
         }

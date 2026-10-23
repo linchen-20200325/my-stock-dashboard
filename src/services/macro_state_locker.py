@@ -440,6 +440,17 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     # `round(nan, 1)` 仍是 nan，`is not None` 為 True）→ 舊碼會判 is_loaded=True
     # 再一路把 nan 傳進姿態油門。NaN 不是一個健康分，視同未載入（§1）。
     _wr_ok = bool(_wr) and _is_finite_number(_wr.get("health_score"))
+    # ── DEC-075 D-1(a)（客戶 2026-10-23，行為變更，有意識的修改，⛔ 不是漏刪）──────────────
+    # 上一行 `_wr_ok`（C1 v19.182「NaN 視同未載入」）**本身一字未改**；新增的是它的一個例外讀法：
+    # warroom 健康分非有限數、**且** warroom 自己標明原因是「缺真實市場廣度」
+    # （`regime_source == SOURCE_UNEVALUATED_BREADTH`，DEC-074 B）⇒ warroom **仍是權威來源**：
+    # 位階一併未評估（`regime='unknown'`、`is_loaded=False`），⛔ 不退 `macro_state.json`
+    # 規則引擎位階（客戶原文「不允許…靜默 fallback 到另一套規則引擎產生位階結論」）。
+    # ⚠️ 只限 breadth 原因：其他原因的 health 非有限（F1 三源全敗＝`SOURCE_UNLOADED`、上游 NaN…）
+    # 照舊視同 warroom 不存在、退檔案位階（C1 v19.182／AUD-C22 其餘語意不動）。
+    # 舊理由（「NaN 不是一個健康分」）仍成立；被權衡掉的只是「health 缺席 ⇒ 一律退檔」。
+    _wr_breadth = (bool(_wr) and not _wr_ok
+                   and _wr.get("regime_source") == _RA.SOURCE_UNEVALUATED_BREADTH)
     _file_ok = bool(_file) and _file.get("market_regime") not in (None, "系統異常")
     # DL-f1-s65（客戶 2026-10-02 頁 1 ③「裁決設有效期限」）：過期裁決**視同不存在**——
     # 不進位階、不給曝險上限（＝建議持股上限）、strict 也不當「讀壞了」拋（過期 ≠ 讀壞）。
@@ -447,7 +458,9 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     _file_expired = _file_ok and macro_state_is_expired(_file, now=now)
     if _file_expired:
         _file_ok = False
-    _is_loaded = _wr_ok or _file_ok
+    # DEC-075 D-1(a)：`_wr_breadth` 時 warroom 仍是權威來源（位階＝未評估）⇒ 下方 strict 拋錯／`file_error`
+    #   判斷視同「有來源撐住」；回傳的 `is_loaded` 在組 `_out` 前另行改回 False（見下）。
+    _is_loaded = _wr_ok or _file_ok or _wr_breadth
     # 批 Z36（Q-z19，客戶 2026-10-10 核准 A）：規則引擎 ~~8 項~~數值輸入**全缺**時落檔的 fail-safe（「系統異常」＋
     #   [📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏刪）：「全缺」自 Z66 起＝**所有啟用中的**數值輸入全缺（停用的 M1B／M2 不算）]
     #   `missing_inputs`，批 Z34；判斷式同 §十一 `section_news_ai`／`ai_qa_service`）是「缺資料、尚未形成有效評估」，
@@ -472,6 +485,10 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     if (strict and _wr_ok and not _file_ok and os.path.exists(state_file_path)
             and not _file_expired and not _file_no_data):
         _file_error = _strict_detail
+    # DEC-075 D-1(a)：breadth 未評估時 warroom 同樣撐得住位階（＝未評估）⇒ 檔讀壞不拋、改帶 `file_error`（同上）。
+    if (strict and _wr_breadth and not _file_ok and os.path.exists(state_file_path)
+            and not _file_expired and not _file_no_data):
+        _file_error = _strict_detail
     # 📌 AUD-C21 B1（2026-10-16，AI 總管決策，有意識的變更，⛔ 不是漏改）：旗標開（新 UI）＋ warroom 可用時，
     #   上面那條 B6-r4 `file_error` 守的「曝險上限那條輸入讀壞了」已不成立 —— 新 UI 的上限自本批起不讀
     #   `macro_state.json`（只讀新檔）；位階又由 warroom 撐住、不靠舊檔。若照舊帶出，舊 UI 一次 AI 裁決失敗
@@ -479,6 +496,8 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     #   ⇒ 旗標開且 warroom 可用：⛔ 不帶舊檔的 `file_error`。warroom 不可用時（位階真的落到舊檔，AUD-C22）
     #   上方 strict 拋錯與本段一律照舊；旗標關（舊 UI）逐位元組同修前。
     if require_valid_risk_cap and _wr_ok:
+        _file_error = ""
+    if require_valid_risk_cap and _wr_breadth:   # DEC-075 D-1(a)：位階同樣不靠舊檔（同上）
         _file_error = ""
 
     _health = _wr.get("health_score") if _wr_ok else None
@@ -526,6 +545,11 @@ def get_macro_state(warroom_summary: dict | None = None, *,
                 futures_net_lots=_wr.get("futures_net"),
             )
             _regime, _light, _source = _v.regime, _v.light, _v.source
+    elif _wr_breadth:
+        # DEC-075 D-1(a)：缺真實廣度 ⇒ 位階未評估（⛔ 不退檔案位階）。
+        _regime = _RA.UNEVALUATED_BREADTH_VERDICT.regime
+        _light = _RA.UNEVALUATED_BREADTH_VERDICT.light
+        _source = _RA.UNEVALUATED_BREADTH_VERDICT.source
     elif _file_ok:
         _regime = normalize_regime(_file.get("market_regime"))
         _light = _RA.light_for_regime(_regime)
@@ -542,6 +566,10 @@ def get_macro_state(warroom_summary: dict | None = None, *,
         _HD = 35.0
     _defense = (_regime in ("bear", "caution")) or (
         _health is not None and float(_health) < float(_HD))
+
+    if _wr_breadth:
+        # DEC-075 D-1(a)：缺真實廣度 ⇒ 位階未評估 ⇒ 對外 `is_loaded=False`（姿態帶／濾網走既有未評估路徑）。
+        _is_loaded = False
 
     _out = {
         "regime": _regime,

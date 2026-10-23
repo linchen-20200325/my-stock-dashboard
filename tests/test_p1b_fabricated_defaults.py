@@ -361,11 +361,20 @@ class TestHealthRenormalisesInsteadOfFabricating:
         assert tl["health_partial"] is False
 
     def test_missing_jqavg_uses_renormalised_weight_not_neutral_50(self):
-        """缺旌旗 → health = 大盤評分分項本身（權重歸一化），**不是**「塞 50」。"""
+        """缺旌旗 → health **未評估（None）**，**不是**「塞 50」、也不是只剩大盤分重新歸一。
+
+        ⚠️ **DEC-074/075 行為變更（客戶 2026-10-23）**：舊斷言 `health ≈ 75`（只剩大盤分
+        權重歸一化）改為 `health is None` ＋ `SOURCE_UNEVALUATED_BREADTH` —— 客戶原文「不得自行
+        創造新權重重新正規化」「受 breadth 影響且無法依既有正式規則可靠計算的健康分 →『⬜ 未評估
+        ／資料不足』」。保留原測試的另一半：**不是 60（＝塞 50 的舊捏造值）**。
+        """
+        from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH
         tl = _tl(mkt={"score": 3, "max_score": 4, "regime": "neutral"}, jq=None)
-        assert tl["health"] == pytest.approx(75.0)      # (3/4*100) 權重歸一化後
-        # 舊行為（捏 50）會是 50*0.6 + 75*0.4 = 60.0 —— 明確釘住兩者不同
-        assert not math.isclose(tl["health"], 60.0, abs_tol=1e-9)
+        assert tl["health"] is None
+        assert tl["regime_source"] == SOURCE_UNEVALUATED_BREADTH
+        assert tl["light"] == "⬜"
+        # 舊行為（捏 50）會是 50*0.6 + 75*0.4 = 60.0；舊歸一會是 75.0 —— 兩者都不得出現
+        assert tl["health"] not in (60.0, 75.0)
         assert tl["health_partial"] is True
 
     def test_weights_sum_to_one_so_no_silent_rescale(self):

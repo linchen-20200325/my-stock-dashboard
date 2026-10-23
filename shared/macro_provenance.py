@@ -31,6 +31,7 @@ v19.183 D2 建立。起因是一個**幽靈 key**（CLAUDE.md §3.3 反捏造 / 
 producer 換 label 時測試會紅（而不是靜默退回「非代理」）。
 
 §8.2 分層：L0 Infra，零 import（含 stdlib 亦不需要），可被任何層引用。
+（DEC-074 B 起 `jingqi_for_scoring` 函式內 lazy import 同層 L0 `shared.signal_thresholds` 的計分開關 —— L0→L0，非上行。）
 """
 from __future__ import annotations
 
@@ -112,3 +113,83 @@ def m1b_m2_for_scoring(info: Optional[dict]) -> Optional[dict]:
     if is_m1b_m2_proxy(info):
         return None
     return info
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 市場廣度（漲跌家數／旌旗）代理判定 —— DEC-074 B（客戶 2026-10-23）
+# ══════════════════════════════════════════════════════════════════════
+# 鏡像上方 M1B 三支（`is_m1b_m2_proxy` / `m1b_m2_proxy_badge` / `m1b_m2_for_scoring`），
+# 不發明第二種機制（DEC-037 先例）。計分開關在 L0
+# `shared.signal_thresholds.BREADTH_PROXY_SCORING_ENABLED`（現為 False）。
+#
+# 為什麼 `jingqi_info` 只認**明確布林旗標**、不做 source 字串比對：
+# producer（`src/services/jingqi_calc.compute_and_store_jingqi`、舊 UI `section_short` 的
+# TWSE 單日頂替）自本批起一律寫 `is_proxy`；沒有旗標的 dict（測試 fixture、`section_inputs`
+# 由 warroom 合成的 `{'avg': ...}`）沿用既有語意 = 真值（M1B 同一個分寸：拿不到旗標時
+# 「不宣稱它是代理值」）。⚠️ 上游 **DataFrame**（`fetch_adl` 的回傳）則相反 —— 缺 `is_proxy`
+# 欄**一律視同代理**（fail-safe）：那是原始序列、本 repo 所有已知產出都帶此欄，缺欄＝
+# 契約漂移，不得因此把估算家數當真值計分（見 `adl_df_is_proxy`）。
+
+#: 代理廣度值貼在數字後面的短註記（顯示用；判燈／計分一律不讀）。
+BREADTH_PROXY_VALUE_NOTE: str = '（代理估算值，不計分）'
+
+#: 受本判定管轄的五桶燈 key（`shared.macro_buckets.BUCKET_DANGER_SPECS` 的 key）。
+BREADTH_LAMP_KEYS: frozenset = frozenset({'jingqi', 'adl'})
+
+
+def is_breadth_proxy(info: Optional[dict]) -> bool:
+    """`jingqi_info`（或五桶 readiness 側車的一筆 record）是不是代理（估算）廣度？
+
+    只認明確布林旗標 `is_proxy` / `is_proxy_tier` 為 True（見上方說明）。
+    `info` 為 None / 非 dict / 沒有旗標 → False。
+    """
+    if not isinstance(info, dict):
+        return False
+    return any(info.get(_k) is True for _k in _PROXY_FLAG_KEYS)
+
+
+def breadth_proxy_badge(info: Optional[dict]) -> str:
+    """代理廣度 → `BREADTH_PROXY_VALUE_NOTE`；否則 `''`（非代理時串接後逐字元不變）。"""
+    return BREADTH_PROXY_VALUE_NOTE if is_breadth_proxy(info) else ''
+
+
+def jingqi_for_scoring(info: Optional[dict]) -> Optional[dict]:
+    """計分端取 `jingqi_info` 的唯一入口：代理廣度（且 L0 計分開關關閉）→ ``None``；否則原物件。
+
+    DEC-074 B：代理廣度**可以顯示**、**不得計分**。呼叫端把回傳當 `jingqi_info` 用 ——
+    代理時拿到 ``None``，走各自既有的「旌旗缺席」路徑；**但** `calc_traffic_light` 自本批起
+    「旌旗缺席 ⇒ 健康分 None（⬜ 未評估）」，不再只剩大盤分重新歸一（DEC-074「不得自行創造
+    新權重重新正規化」）。非代理時回**同一個物件**（不複製）⇒ 既有計分輸入逐位不變。
+    顯示端請照舊讀原始 `jingqi_info`（才看得到代理值與註記）。
+    """
+    from shared.signal_thresholds import BREADTH_PROXY_SCORING_ENABLED
+    if is_breadth_proxy(info) and not BREADTH_PROXY_SCORING_ENABLED:
+        return None
+    return info
+
+
+def adl_df_is_proxy(df) -> bool:
+    """`fetch_adl` 回傳的 DataFrame 末列是不是代理（估算）家數？**fail-safe：拿不準一律 True。**
+
+    - None / 空 → True（沒有可宣稱為真值的列；呼叫端本來就會走缺值路徑）
+    - 缺 `is_proxy` 欄 → True（契約漂移，不得把估算當真值計分）
+    - 末列 `is_proxy` 不是明確的 False（含 NaN / None / True）→ True
+
+    只看**末列**：`market_regime` 吃的是末列 `ad_ratio`；旌旗吃 `tail(5)` 的另見
+    `adl_rows_any_proxy`。純 duck typing，L0 不 import pandas。
+    """
+    return adl_rows_any_proxy(df, 1)
+
+
+def adl_rows_any_proxy(df, n: int) -> bool:
+    """`df` 的最後 `n` 列只要有一列不是明確 `is_proxy is False` → True（fail-safe，同上）。"""
+    try:
+        if df is None or len(df) == 0:
+            return True
+        if 'is_proxy' not in getattr(df, 'columns', ()):
+            return True
+        _tail = df['is_proxy'].tail(max(int(n), 1)).tolist()
+    except Exception:  # noqa: BLE001 — 讀不出旗標 = 拿不準 = 代理（fail-safe，不吞成「真值」）
+        return True
+    # `tolist()` 已把 numpy bool 轉成 Python bool；NaN／None／字串都不是 `False` ⇒ 代理。
+    return not all(_v is False for _v in _tail)

@@ -240,7 +240,10 @@ def _ma(inst, mp, *, backup=None, ms=MS):
     mp.setattr('src.services.get_market_assessment', ms.get_market_assessment)
     import pandas as pd
     MAA.compute_and_apply_market_assessment(inst=inst, tw_raw=Z35._tw_raw(), margin=2000.0,
-                                            df_adl=pd.DataFrame({'ad_ratio': [60.0]}))
+                                            # ⚠️ DEC-074/075 行為變更（2026-10-23）：缺 `is_proxy` 欄自本批起 fail-safe 視同代理
+                                            #   （不計分）；本 harness 守的是外資，不是廣度 ⇒ 明示這是真值（production
+                                            #   `fetch_adl` 恆帶此欄），golden 不改。
+                                            df_adl=pd.DataFrame({'ad_ratio': [60.0], 'is_proxy': [False]}))
     return ss['mkt_info'], len(calls)
 
 

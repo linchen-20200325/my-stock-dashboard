@@ -16,8 +16,13 @@ except ImportError:
     BULLRUN_VOL_THRESHOLD = 1.3; BULLRUN_VOL_MIN_VALID_DAYS = 15
 
 # v18.449:市場廣度中性門檻 SSOT(原 inline `1.0`，尺度語意錯誤，見下方 market_regime docstring）
-from shared.signal_thresholds import M1B_M2_LEG_ENABLED, MARKET_BREADTH_NEUTRAL_PCT
+from shared.signal_thresholds import (
+    BREADTH_PROXY_SCORING_ENABLED, M1B_M2_LEG_ENABLED, MARKET_BREADTH_NEUTRAL_PCT,
+)
 from shared.macro_provenance import M1B_PROXY_VALUE_NOTE  # DL-f1-s23：代理註記（L0 SSOT，K1）
+
+#: `get_market_assessment` 算 MA200（年線）所需的最少 K 棒數（與 rolling 視窗同一個數）。
+MA200_WINDOW_DAYS: int = 200
 from shared.dated_value import iso_date_or_none  # 批 Z62：index_as_of 收斂（L0）
 
 # P0-2 v18.369 深層拔毒:portfolio_exposure SSOT 收攏至 L2 risk_control(原本兩處同名異實作)
@@ -55,7 +60,8 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
                   ma60_above_3d=False, ma60_below_3d=False,
                   ma120_above_3d=False, ma120_below_3d=False,
                   ma120_rising=False, ma120_falling=False,
-                  m1b_m2_is_proxy=False, foreign_net_unobserved=False):
+                  m1b_m2_is_proxy=False, foreign_net_unobserved=False,
+                  ad_ratio_is_proxy=False, ad_ratio_display=None):
     """
     市場狀態判斷引擎 v4.1
     新增：MA60 連三日遲滯區間（Hysteresis）+ MA斜率過濾 + M1B-M2
@@ -72,7 +78,17 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     m1b_m2_is_proxy: bool — gap 來自 `^TWII` 動能代理（L0 `is_m1b_m2_proxy` 由呼叫端判）。
                  DL-f1-s17／s23（客戶 2026-10-02 頁 1 ③「只顯示不計分」）：代理值**一律不計分**；
                  腿停用時 chip 照舊顯示數字並後綴 L0 既有註記，腿啟用時走既有缺值路徑（不出、不計分母）。
+    ad_ratio_is_proxy: bool — 市場廣度只有代理（估算）家數（呼叫端以 L0 `adl_df_is_proxy` 判）。
+                 DEC-074 B（客戶 2026-10-23）：代理廣度**不計分** —— `ad_ratio` 一律視為 None
+                 （不進分子／分母），**不**列入 `missing_factors`（「代理不計分」≠「缺失」，同 M1B 停用腿），
+                 改出一行「⬜ 市場廣度 …（^TWII 估算代理）— 不計分」signal。
+    ad_ratio_display: float | None — 代理時要顯示的數值（只進 signal 文字，不計分）。
     """
+    _breadth_proxy_dropped = bool(ad_ratio_is_proxy) and not BREADTH_PROXY_SCORING_ENABLED
+    if _breadth_proxy_dropped:
+        if ad_ratio_display is None:
+            ad_ratio_display = ad_ratio
+        ad_ratio = None        # DEC-074 B：代理值不得進分數 / 分母
     if m1b_m2_is_proxy and M1B_M2_LEG_ENABLED:
         m1b_m2_gap = None      # DL-f1-s17：代理值不得進分數 / 分母 → 既有「未傳」路徑
     score = 0
@@ -139,7 +155,11 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
         signals.append(f'❌ 外資賣超 {abs(foreign_buy)/1e8:.1f}億')
 
     # ④ 市場廣度（選填，不傳則略過，同 m1b_m2_gap 慣例 — 未接真值前不假裝中性）
-    if ad_ratio is not None:
+    if _breadth_proxy_dropped:
+        # DEC-074 B：停用 ≠ 缺資料 —— 上游給了一個估算值，只是不准計分；要說出來（§1）。
+        _adr_txt = (f'{float(ad_ratio_display):.1f}%' if ad_ratio_display is not None else '—')
+        signals.append(f'⬜ 市場廣度 {_adr_txt}（^TWII 估算代理）— 不計分')
+    elif ad_ratio is not None:
         if ad_ratio > MARKET_BREADTH_NEUTRAL_PCT:
             score += 1
             signals.append(f'✅ 市場廣度正向 ({ad_ratio:.1f}%)')
@@ -230,7 +250,8 @@ def market_regime(index_close, ma60, ma120, foreign_buy, ad_ratio=None,
     # 這裡補的是**可見性**:schema-additive 兩個欄位 + stderr log,不改任何計分。
     # 消費端可據 `missing_factors` 標示「本次評分少了哪幾條腿」。
     _missing_factors = []
-    if ad_ratio is None:
+    # DEC-074 B：代理不計分 ≠ 缺失（同下方 M1B 停用腿的處理）⇒ 不列。
+    if ad_ratio is None and not _breadth_proxy_dropped:
         _missing_factors.append('市場廣度')
     # 「停用」不算「缺失」——腿停用時分子分母同時不算它，數學上不存在
     # 上面警告的那種偏移；把它列進 missing 會每天噴一次假警報。
@@ -297,7 +318,13 @@ def market_score(index_price, ma200, foreign_buy, volume, avg_volume=1000):
     退場條件見上方註解 —— 這不是「保留相容性」的死碼。
     """
     score = 0; signals = []
-    if index_price > ma200:
+    # DH-TWII-MA200（DEC-075 批 A）：`ma200=None`（K 棒不足／含缺值）⇒ 年線項未評估，
+    # 且 `status`／`confidence` 為 None —— 年線是三因子裡權重最大的一項（+2／滿分 5），
+    # 拿掉它再用 4／2 分切點判多空，等於用剩下兩項補出一個結論（DEC-074「不得補結論」同精神）。
+    _ma200_known = ma200 is not None
+    if not _ma200_known:
+        signals.append('⬜ 年線資料不足（未評估）')
+    elif index_price > ma200:
         score += 2; signals.append('✅ 站上年線 (+2)')
     else:
         signals.append('❌ 跌破年線 (0)')
@@ -321,6 +348,8 @@ def market_score(index_price, ma200, foreign_buy, volume, avg_volume=1000):
         signals.append(f'⚠️ 量能萎縮 {_vol_ratio:.1f}x (0)')
     status = '多頭' if score >= 4 else ('盤整' if score >= 2 else '空頭')
     confidence = min(100, score * 20) if score >= 4 else (score * 15 if score >= 2 else max(0, 30 - score*10))
+    if not _ma200_known:
+        status, confidence = None, None
     return {'score': score, 'max_score': 5, 'status': status,
             'confidence': confidence, 'signals': signals}
 
@@ -389,13 +418,15 @@ def volume_window_stats(df, window=VOL_WINDOW_DAYS,
 
 def get_market_assessment(df_index=None, foreign_net=None,
                           m1b_m2_gap=None, m1b_m2_prev=None, ad_ratio=None,
-                          m1b_m2_is_proxy=False, foreign_net_unobserved=False):
+                          m1b_m2_is_proxy=False, foreign_net_unobserved=False,
+                          ad_ratio_is_proxy=False, ad_ratio_display=None):
     """
     整合版市場評估（v4.0 升級版）
     同時輸出 regime (bull/neutral/bear) 與舊版 score
     m1b_m2_gap:  M1B年增率 - M2年增率（百分點）；None = 不納入評分
     m1b_m2_prev: 上月 gap，用於判斷趨勢方向
     ad_ratio:    市場廣度(0-100% 上漲家數佔比)；None = 不納入評分(v18.449 新增)
+    ad_ratio_is_proxy / ad_ratio_display: DEC-074 B 代理廣度（見 `market_regime`）；原樣透傳。
     """
     import pandas as pd
     if df_index is None:
@@ -434,7 +465,23 @@ def get_market_assessment(df_index=None, foreign_net=None,
     _close = df_index['Close']
 
     ma60  = float(_close.rolling(60).mean().iloc[-1])  if len(df_index) >= 60  else current_price
-    ma200 = float(_close.rolling(200).mean().iloc[-1]) if len(df_index) >= 200 else current_price
+    # ── DH-TWII-MA200（DEC-075 批 A，2026-10-23，行為變更，有意識的修改，⛔ 不是漏刪）────────
+    # ~~ma200 = ... if len(df_index) >= 200 else current_price~~
+    # 舊寫法在 K 棒不足 200 根時拿**現價頂替年線**（§1「自行估一個合理值」）：預設抓取窗
+    # `range_='9mo'` 的台股交易日恆不足 200 根 ⇒ `market_score` 的 `index_price > ma200` 恆 False
+    # ⇒ 年線項恆「❌ 跌破年線」，`status`／`confidence` 跟著被拉成空頭側 —— 一個沒算過的結論。
+    # 現行：不足 ⇒ `ma200=None`＋`ma200_status` 帶原因；年線項「⬜ 未評估」，`status`／`confidence`
+    # 為 None（不以剩下兩項補出多空結論）。⛔ 不改抓取窗（與 `VN1-PG-L-PIT-GAPS`(a) 重疊，另批）。
+    _ma200_status = None
+    if len(df_index) >= MA200_WINDOW_DAYS:
+        _ma200_raw = _close.rolling(MA200_WINDOW_DAYS).mean().iloc[-1]
+        ma200 = None if pd.isna(_ma200_raw) else float(_ma200_raw)
+        if ma200 is None:
+            _ma200_status = f'年線無法計算（近 {MA200_WINDOW_DAYS} 根收盤含缺值）'
+    else:
+        ma200 = None
+        _ma200_status = (f'年線未評估：大盤 K 棒僅 {len(df_index)} 根，'
+                         f'不足 {MA200_WINDOW_DAYS} 根（不以現價頂替）')
     # P1 2026-08-27:原本是
     #   avg_vol   = ...rolling(20).mean()... if 'Volume' in cols else 1000
     #   vol_today = ...Volume.iloc[-1]...   if 'Volume' in cols else avg_vol
@@ -490,6 +537,7 @@ def get_market_assessment(df_index=None, foreign_net=None,
         vol_today=vol_today, avg_vol_20=avg_vol,
         m1b_m2_gap=m1b_m2_gap, m1b_m2_prev=m1b_m2_prev,
         m1b_m2_is_proxy=m1b_m2_is_proxy, foreign_net_unobserved=foreign_net_unobserved,
+        ad_ratio_is_proxy=ad_ratio_is_proxy, ad_ratio_display=ad_ratio_display,
         ma60_above_3d=ma60_above_3d, ma60_below_3d=ma60_below_3d,
         ma120_above_3d=ma120_above_3d, ma120_below_3d=ma120_below_3d,
         ma120_rising=ma120_rising, ma120_falling=ma120_falling,
@@ -506,7 +554,9 @@ def get_market_assessment(df_index=None, foreign_net=None,
     result['ma5']            = round(ma5, 2)
     result['ma60']           = round(ma60, 2)
     result['ma120']          = round(ma120, 2)
-    result['ma200']          = round(ma200, 2)
+    result['ma200']          = (round(ma200, 2) if ma200 is not None else None)
+    # DH-TWII-MA200 schema-additive：年線為 None 的原因（有值時 None）。
+    result['ma200_status']   = _ma200_status
     result['index_below_ma5'] = current_price < ma5
     # 批 Z62(freshness F2,schema-additive;既有鍵與值一律不變):
     #   · `index_as_of`:df_index 最後一筆的日期,ISO 字串 'YYYY-MM-DD'(即上面 current_price／ma5

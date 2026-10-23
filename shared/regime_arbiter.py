@@ -94,6 +94,18 @@ SOURCE_UNLOADED: str = 'unloaded'
 SOURCE_FILE_RULE_ENGINE: str = 'macro_state.json:rule_engine'
 """warroom 未載入、退到 macro_state.json 的 `calculate_system_state` 曝險分級。"""
 
+SOURCE_UNEVALUATED_BREADTH: str = 'unevaluated:breadth_unavailable'
+"""總經未評估 —— **原因是缺真實市場廣度**（DEC-074 B，客戶 2026-10-23）。**不是**一種市場判斷。
+
+與 `SOURCE_UNLOADED` 的差別（兩者 regime／燈號／`is_loaded` 完全相同，只差原因）：
+`unloaded` ＝ 上游輸入缺失（重新抓取**可能**有用）；本值 ＝ 健康分的廣度腿只有代理（估算）
+家數、依 DEC-074 不計分，**重新抓取不會改變**（`calc_traffic_light` 文案與新 UI 出口據此分流）。
+DEC-075 D-1(a)：`macro_state_locker.get_macro_state` 見到 warroom 帶本值時，位階一併未評估，
+⛔ 不退 `macro_state.json` 規則引擎位階（`SOURCE_FILE_RULE_ENGINE`）。"""
+
+#: `arbitrate_regime(unavailable_reason=...)` 的合法值：健康分因缺真實市場廣度而算不出來。
+UNAVAILABLE_REASON_BREADTH: str = 'breadth'
+
 # ── 門檻 ────────────────────────────────────────────────────────────────
 DEFENSE_MAX_MARKET_SCORE: int = 2
 """外資期貨防禦訊號要求的「大盤評分上限」（評分 < 本值才可能觸發）。
@@ -143,6 +155,13 @@ UNLOADED_VERDICT: RegimeVerdict = RegimeVerdict(
 )
 
 
+#: 「缺真實市場廣度 ⇒ 未評估」的唯一表示（DEC-074 B）。燈號／regime／is_loaded 同 `UNLOADED_VERDICT`。
+UNEVALUATED_BREADTH_VERDICT: RegimeVerdict = RegimeVerdict(
+    regime='unknown', light=LIGHT_UNKNOWN, source=SOURCE_UNEVALUATED_BREADTH,
+    defense=False, is_loaded=False,
+)
+
+
 def light_for_regime(regime: Any) -> str:
     """regime → 燈號 emoji；未知 regime 一律 ⬜（不猜）。"""
     return REGIME_LIGHT.get(str(regime or '').strip().lower(), LIGHT_UNKNOWN)
@@ -187,6 +206,7 @@ def arbitrate_regime(
     health_defense_threshold: Optional[float] = None,
     bull_min_score: Optional[float] = None,
     is_loaded: bool = True,
+    unavailable_reason: Optional[str] = None,
 ) -> RegimeVerdict:
     """**唯一**的大盤 regime 決策樹。全站任何 regime 判定都必須走這裡。
 
@@ -211,6 +231,10 @@ def arbitrate_regime(
         health_defense_threshold: 覆寫 `HEALTH_DEFENSE_THRESHOLD`（校準腳本用）。
         bull_min_score:           覆寫 `BULL_MIN_SCORE`（校準腳本用）。
         is_loaded:     caller 已知「總經根本沒評估」時傳 False。
+        unavailable_reason: health 算不出來的**原因**（DEC-074 B，2026-10-23 新增；預設 None
+            ⇒ 行為逐位同修前）。只在 `health` 未知時才看：等於 `UNAVAILABLE_REASON_BREADTH`
+            ⇒ 回 `UNEVALUATED_BREADTH_VERDICT`；其餘一律 `UNLOADED_VERDICT`。
+            health 有值時本參數不影響任何分支（不會因為「有原因」就不判）。
 
     Returns:
         RegimeVerdict（frozen）。
@@ -227,6 +251,9 @@ def arbitrate_regime(
     if _health is None:
         # health 是分支 2 的唯一依據，也是 position_throttle 的唯一輸入。
         # 拿不到就沒有結論可言 —— 誠實回 unknown，不用 trend_regime 頂替（§1）。
+        # DEC-074 B：原因是「缺真實廣度」時只換 `source`（文案／出口分流用），結論同為 unknown。
+        if unavailable_reason == UNAVAILABLE_REASON_BREADTH:
+            return UNEVALUATED_BREADTH_VERDICT
         return UNLOADED_VERDICT
 
     # 兩個門檻都由 caller 指定時**不讀檔**（`calc_traffic_light` 一律傳 ——

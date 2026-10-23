@@ -84,7 +84,9 @@ class TestNormalValues:
             warroom_summary={"health_score": 58.0},
             cl_data={
                 "intl": {"美元指數 DXY": pd.DataFrame({"close": [104.2]})},
-                "adl":  pd.DataFrame({"ad_ratio": [53.1]}),
+                # ⚠️ DEC-074/075 行為變更（2026-10-23）：缺 `is_proxy` 欄自本批起 fail-safe 視同代理 ⇒ 灰燈；
+                #   本 golden 守「正常值」⇒ 明示為真值（production `fetch_adl` 恆帶此欄），golden 不改。
+                "adl":  pd.DataFrame({"ad_ratio": [53.1], "is_proxy": [False]}),
                 "margin": 2480.0,
             },
             li_latest=pd.DataFrame({"外資大小": [-12000]}),
