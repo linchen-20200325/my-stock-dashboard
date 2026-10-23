@@ -420,7 +420,7 @@ Effort：Low / Medium / High
 ### 16.7 Production 安全狀態（客戶第 22 節）
 
 - 🆕 客戶第 22 節原文：「重新核實並保存：PRODUCTION_WRITE_APPROVED、Daily Schedule、production write、external side effects。如果仍是：PRODUCTION_WRITE_APPROVED=False 就明確保存。不要因交接而自行開啟。」
-- 規則：`shared/risk_cap_history_policy.py::PRODUCTION_WRITE_APPROVED` 的開啟只能走 DEC-066 A 的獨立 PR 流程並經客戶核准；⛔ 交接、Freeze、文件同步、CI 修復**一律不得**改動此旗標；Daily Schedule 仍 NOT APPROVED（DEC-066 F）。現值以程式為準（2026-10-23 Freeze 實查為 `False`，見 `docs/HANDOFF.md`）。
+- 規則：`shared/risk_cap_history_policy.py::PRODUCTION_WRITE_APPROVED` 的開啟只能走 DEC-066 A 的獨立 PR 流程並經客戶核准；⛔ 交接、Freeze、文件同步、CI 修復**一律不得**改動此旗標；Daily Schedule 仍 NOT APPROVED（DEC-066 F）。現值以程式為準（2026-10-23 Freeze 實查為 `False`，~~見 `docs/HANDOFF.md`~~ 見 `docs/HANDOFF.md` §0 Freeze 版「Production」列與 `docs/PROJECT_STATE.md` §29.5（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實修正）））。
 
 ### 16.8 交接優先順序與新 AI 接手（客戶第 1、2、13 節）
 

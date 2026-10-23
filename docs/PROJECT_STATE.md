@@ -418,7 +418,7 @@
 
 ### 29.1 產品階段與新 UI 方向
 
-> 出處：客戶 2026-10-23 Freeze 指示；正式裁示見 `docs/DECISIONS.md` 新 DEC（另組撰寫中，**號碼以 DECISIONS 為準**）；先前方向見 DEC-071、DEC-072（§24）。⛔ 本節是摘要，不是規範來源；⛔ 非線框核准、非動工授權（畫面結構異動仍須先出文字線框，DEC-003）。
+> 出處：客戶 2026-10-23 Freeze 指示；正式裁示見 `docs/DECISIONS.md` ~~新 DEC（另組撰寫中，**號碼以 DECISIONS 為準**）~~ **DEC-076**（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實修正））；先前方向見 DEC-071、DEC-072（§24）。⛔ 本節是摘要，不是規範來源；⛔ 非線框核准、非動工授權（畫面結構異動仍須先出文字線框，DEC-003）。
 
 - **階段**：vNext 新 UI 尚在成形；Data Health 修復批進行中（§25、§27、§28、本節 29.4）。**現行實作依據仍是 DEC-017 五頁**（`shared/ia_nav.py::PAGE_LABELS`），直到新線框經客戶拍板。
 - **核心原則（客戶原文）**：「**底層能力完整保留，前台流程極簡。**」新 UI 不是把舊 UI 原封不動搬過去，也不能因新版簡化就把舊 UI 的投資能力刪掉。正確順序：舊 UI 有價值的功能／判讀邏輯 → 重整資訊架構 → 決定新 UI 位置 → 重新設計顯示方式 → 驗證能力覆蓋 → 最後才考慮刪除舊 UI。
@@ -467,6 +467,6 @@
 
 ### 29.6 Branch
 
-- 遠端 branch 共 **8 條**（Freeze 撰寫時 `git branch -r`：`auto/recalibrate-20261001`、`ccr-310717b7-37xwl6`（#910 head）、`ccr-8d5a141e-3fdtwt`、`claude/investment-inbox-product-design-m1lu7v`、`claude/stock-dashboard-handoff-g9dtm0`、`data`、`main`、`v2`）。⚠️ `data` 為 `export_db.yml` 的輸出分支（依其 workflow name）；其餘是否含 unique commit **未查**。
+- 遠端 branch ~~共 **8 條**~~ **8 條（量測日 2026-10-23）**（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實修正））（Freeze 撰寫時 `git branch -r`：`auto/recalibrate-20261001`、`ccr-310717b7-37xwl6`（#910 head）、`ccr-8d5a141e-3fdtwt`、`claude/investment-inbox-product-design-m1lu7v`、`claude/stock-dashboard-handoff-g9dtm0`、`data`、`main`、`v2`）。⚠️ `data` 為 `export_db.yml` 的輸出分支（依其 workflow name）；~~其餘是否含 unique commit **未查**。~~ 各條 unique commit 數已於 `docs/BACKLOG.md` `BR-CLEANUP` 實測（2026-10-23），以該列為準（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實修正））。
 - 客戶方向：**最後再一次清**；**刪 branch 視為不可逆治理動作**，⛔ 本次交接不刪；未來刪除前須重查 GitHub（unique commit、是否被 workflow 使用）並經客戶核准。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節 GitHub 實況（main SHA、open PR、#910 commits、QA／CI 狀態）為**總管實查轉述**；workflow 列舉、`PRODUCTION_WRITE_APPROVED`、branch 名、批 2～4 定義為撰寫組 grep；均**未經第二組驗證**，接手時依 `PROJECT_RULES.md` 第 15 節重查。
