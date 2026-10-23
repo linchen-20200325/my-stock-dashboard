@@ -353,7 +353,7 @@
 - **統計**（該檔第 3 節表格列數，腳本計數）：🟢 HEALTHY 7／🟡 LIMITED 25／🔴 BROKEN／MISLEADING 27／⬜ UNAVAILABLE 5（合計 64 列；一列可能合併數個相近資料）。依客戶原文「禁止把 missing 當 0、neutral、false 或正常。」，補 0、回中性、ffill 當現價、代理／估算值計分一律判 🔴。
 - **重大問題**（會讓目前投資結論不可信）：
   1. 市場位階與建議持股姿態帶受代理廣度主導（近似常數、落後一日）；代理值計分本身已不符 DEC-062 Q5「代理值只顯示、不計分」（BIAS240、PCR 估算同類：`DH-BIAS240-EST`、`DH-PCR-PROXY`）。待裁示的是移除代理廣度後健康分怎麼辦 → Decision Gate `DH-GATE-BREADTH`：(A) 重新歸一為只含大盤評分並揭露「廣度未評估」（總管推薦；需另批重新校準或揭露未校準）／(B) 健康分判「未評估」、位階與姿態帶不給結論。
-     📌 2026-10-23（append-only，上句一字未改）：**已裁示 B（DEC-074）**：代理廣度不得計分；受 breadth 影響且無法依既有正式規則可靠計算的健康分 →「⬜ 未評估／資料不足」；不重新設計 0.6／0.4、不重新正規化、不為「有結論」補結論；總管推薦 A ⛔ 不採用。⛔ 實作待客戶指派。
+     📌 2026-10-23（append-only，上句一字未改）：**已裁示 B（DEC-074）**：代理廣度不得計分；受 breadth 影響且無法依既有正式規則可靠計算的健康分 →「⬜ 未評估／資料不足」；不重新設計 0.6／0.4、不重新正規化、不為「有結論」補結論；總管推薦 A ⛔ 不採用。~~⛔ 實作待客戶指派。~~ **實作完成、待 PR #TBD 合併**（DEC-075 指派批 A；見 §28）（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新：DEC-075 已指派，批 A＋1' 已於分支實作））。
   2. Risk Cap 核心輸入 VIX、MA5 的 PIT 未實作，新 UI 的 `risk_cap_state.json` 仍判 VALID（正式 Sheet 寫入已關）→ `VN1-PG-VIX-ASOF`、`VN1-PG-PIT-CONSISTENCY`。
   3. 刷新失敗沿用舊值而無揭露 → `DH-REFRESH-STALE`。
   4. 個股／ETF：357 配息欄位、財報體檢現金流未年化、法人與融資融券補 0、未還原價無旗標、月營收記 0 分、評分例外回中性 50、ETF 尾端 ffill 當現價 → `DH-357-DIV-FIELD`、`DH-FIN-HEALTH-CF`、`DH-INST-FILL0`、`DH-KLINE-ADJ`、`DH-REVENUE-ZERO`、`DH-SCORE-NEUTRAL50`、`DH-ETF-FFILL`。
@@ -383,3 +383,24 @@
 - **`ruleset_hash` 二次切換風險**（QA D 表）：批 A 加旗標翻一次，`DH-MACRO-FWD-ASOF` 的 schema bump（payload 含 `'schema'`）再翻一次 ⇒ 三段不可混比。建議批 A 一併 bump schema 並納入 per-leg as_of 加欄（前提：`fetch_adl` off-by-one 同批定案）；否則 PR 明寫三段區間。
 - ⚠️ 揭露：撰寫組未實跑任何測試、只 grep 抽查關鍵符號存在；計畫內「0 讀者／唯一」皆 grep；預期紅測試清單未實跑；實作批開工前須重查（該檔第 0.3 節）。
 - 📌 **2026-10-23 客戶裁示結果（DEC-075；append-only，上文一字未改）**：(1) **D-1＝(a)** —— 健康分因缺少正式 breadth 而未評估時，受此資料契約影響、無法可靠成立的市場位階也顯示「⬜ 未評估／資料不足」；不允許靜默 fallback 到另一套規則引擎產生位階結論；缺資料不得為了維持畫面結論而補結論（(b) 不採用）。(2) **指派批 A**（#908 合併後為下一批；含 DEC-074 B 落地＋`DH-TWII-MA200`）。(3) **同意加掛批 1'**（外資缺值不得補 0／台灣出口燈依實際資料內容修正名稱／修正 ISM 教學對映；⛔ 不得藉此新增資料來源或改變投資公式）。(4) **批 2 暫不與 VN1-PG 一起指派**：等批 A＋1' 完成、獨立 QA、CI、main verification 後重評邊界。⇒ 本節開頭「⛔ 非 Approved、⛔ 非動工授權」**對批 A＋1' 自本日起不再成立**（有意識的變更，不是漏刪，決策者 客戶）；批 2～4、`DH-LAMP-STALE` 仍為提案。批 A High，開工前依 DEC-073 Gate 自判（總管判目前模型足夠；總管自判，撰寫組無法查證）。⛔ 畫面結構異動仍受 DEC-003 線框 gate（計畫 1.6）；⛔ DEC-019 舊 UI 凍結不豁免。(a) 技術落點：`macro_state_locker.get_macro_state` 於 health None 時不退檔案位階、位階→未評估、`is_loaded=False`（`_wr_ok` 守衛語意改；相關測試斷言更新）—— 詳 DEC-075。
+- 📌 **2026-10-23 第二則（append-only，上文一字未改）**：批 A＋1' **已於分支 `ccr-310717b7-37xwl6` 實作完成、待 PR #TBD 合併**；實作內容、客戶可見行為變更與已知殘留見 **§28**。
+
+## 28. Data Health 批 A＋1' 實作完成（2026-10-23；待 PR 合併）
+
+> 2026-10-23 新增。裁示全文只在 `docs/DECISIONS.md` DEC-074／DEC-075；殘留與延後項只在 BACKLOG 5.1.8；現況與唯一下一步只在 `docs/HANDOFF.md` §0。本節只摘要。量測：分支 `ccr-310717b7-37xwl6`，HEAD `04a9bc2e`（commits `1f4f5b19`、`7ef52869`、`ee4bde01`、`04a9bc2e`；base＝main `b9ed892d`）。**PR 尚未開、尚未合併**（PR #TBD）；QA 第四輪複驗中（`QA:TBD`）；CI `CI:TBD`。
+
+- **狀態**：**實作完成、待 PR #TBD 合併**。⛔ 合併＋main CI＋main verification 完成前不得寫成「已上線」；⛔ 總管確認前不得寫「QA 通過」。
+- **批 A（DEC-074 B 落地＋DEC-075 D-1(a)＋`DH-TWII-MA200`）**：
+  - L0 旗標 `BREADTH_PROXY_SCORING_ENABLED=False`（`shared/signal_thresholds`）：代理廣度（`fetch_adl` 由 ^TWII 估算、`jingqi_calc` 大盤估算）**只顯示、不計分**；健康分算不出 ⇒「⬜ 未評估」；**無新權重、無重新歸一化**（DEC-074）。
+  - 健康分因缺正式 breadth 未評估時，市場位階 ⬜、`is_loaded=False`、**不退** `macro_state.json` 規則引擎位階；含 ^TWII 全滅情境（`04a9bc2e` 補）（DEC-075 D-1(a)）。
+  - `DH-TWII-MA200`：MA200 不足 200 根時回 None＋`ma200_status`，不再以現價頂替；`MA200_WINDOW_DAYS=200` 移入 L0（與 `config.ANNUAL_MA=240` 是不同量測，不合併）。
+  - 總經前進式驗證：`ruleset_hash` 納入旗標、schema 2→3；**v2 列與 v3 列不可混比**（健康分口徑不同）。
+- **批 1'**：外資（大盤）FinMind 備援缺值不再 `fillna(0)`；台灣出口燈改名「台灣出口金額 YoY（海關）」（不換源）；台灣 PMI 教學對映改 TW_PMI（歷史數字來自 `data_cache/tw_pmi.parquet`）；`XTEXVA01TWM664S` 教學文字依實際來源鏈 DGBAS → OECD via FRED → 海關 6053 更正；`SPEC.md`／`DATASTATION.md` 以刪除線＋DEC-075 註記同步。⛔ 未新增資料來源、未改投資公式（DEC-075 第 3 點）。
+- **客戶可見行為變更**（在正式 breadth 來源出現前持續有效）：
+  1. 📊 大盤／🛡️ 持股等處的**健康分、市場位階、建議持股姿態帶通常顯示「⬜ 未評估／資料不足」**（DEC-072「首屏先給結論」在資料不足時以 DEC-074／075 為準，客戶送題時已知情）。「通常」而非「一律」：warroom 不存在的路徑仍有殘留（見下）。
+  2. 🎯 找標的頁（`page_find`）**空頭濾網通常不套用**（位階未評估 ⇒ 不套用）；⚠️ 目前畫面**沒有**註記告知使用者（`DH-FIND-UNEVAL-NOTE`）。
+  3. 總經前進式驗證帳本：**健康欄為 None**；`ruleset_hash` 與 schema（2→3）變更，前後列不可混比。
+  4. 台灣出口燈名改為「台灣出口金額 YoY（海關）」（待客戶驗收，`DH-EXPORT-LABEL-READING`）；台灣 PMI 燈的教學與歷史數字改為台灣 PMI（不再是美國 ISM）。
+  5. 外資備援缺值時顯示為缺值、不再顯示假的 0 淨額（主要在舊 UI；新 UI 畫面不變）。
+- **已知殘留**（登記於 BACKLOG 5.1.8，⛔ 不在此重複細節）：`DH-REGIME-NOWARROOM`（D-1(a) 殘留：warroom 不存在路徑仍回規則引擎位階、`is_loaded=True`；**下一安全段落第一個動作**）、`DH-CALIB-CRON`（季度校準在新旗標下健康恆 None、自動 PR 本文「無需調整」有誤導；**期限 2027-01-01 前**）、`DH-BREADTH-COPY-NOPROXY`、`DH-FIND-UNEVAL-NOTE`、`DH-OLDUI-PROXY-LABELS`、`DH-NONE-TO-ZERO-RENDER`、`DH-FT-SCHEMA-ASOF`、`DH-MKTSCORE-DENOM`、`DH-EXPORT-LABEL-READING`、`DH-M1B-COVERAGE`。批 2／VN1-PG：依 DEC-075 第 4 點待重評邊界，**未開始**。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節實作內容與殘留為**總管轉述**；撰寫組只以 `git grep` 抽查 `BREADTH_PROXY_SCORING_ENABLED`、`MA200_WINDOW_DAYS`、`ma200_status`、新燈名、`shared/macro_forward_test_schema` 的「v2 列與 v3 列不可混比」註記存在，**未重跑任何測試**。本機測試 Python 3.13、CI Python 3.11，以 CI 結果為準。
