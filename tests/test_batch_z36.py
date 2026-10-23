@@ -765,11 +765,30 @@ class TestQz20FinMind:
 
     @pytest.mark.parametrize('name', sorted(FM_CASES))
     def test_values_identical_to_pre_fix(self, name, monkeypatch):
-        """fillna(0) 未動：inst 內容（repr）逐字同修前 golden；旗標只在投信／自營未觀測時多出。"""
-        inst = _fm_inst(monkeypatch, name)
+        """~~fillna(0) 未動：inst 內容（repr）逐字同修前 golden~~；旗標只在投信／自營未觀測時多出。
+
+        ⚠️ **DEC-074/075 行為變更（批 1' `DH-FOREIGN-FILL0`，客戶 2026-10-23「外資缺值不得補 0」）**：
+        FinMind 補救的 buy／sell 不再 `fillna(0)` ⇒ **未觀測**那幾類的 net 由假淨額改為 `None`（顯式缺值）。
+        新規格分兩半驗：
+          (a) 修前模組（`z36_pre_module(_ORCH)`，還原鏈含本批 dec074 還原）仍逐字等於修前 golden
+              —— golden 照舊釘住真修前行為，⛔ 不由現行碼反推；
+          (b) 現行輸出：**觀測**的類別逐字等於修前；**未觀測**的類別 net 為 None（⛔ 不是 0、不是假淨額）。
+        沒有未觀測類別的案例 ⇒ (b) 等於「整份逐字等於修前 golden」，與舊斷言相同。
+        """
         g_repr, g_flags = _QZ20_FM_GOLDEN[name]
-        assert _h(repr(inst)) == g_repr
+        pre = _fm_inst(monkeypatch, name, orch=z36_pre_module(_ORCH))
+        assert _h(repr(pre)) == g_repr
+        monkeypatch.undo()
+        inst = _fm_inst(monkeypatch, name)
         assert sorted(inst.unobserved_net - {_TK, _DK}) == g_flags
+        assert list(inst) == list(pre)
+        for k in inst:
+            if k in inst.unobserved_net:
+                assert inst[k]['net'] is None, (name, k, inst[k])
+            else:
+                assert inst[k] == pre[k], (name, k)
+        if not inst.unobserved_net:
+            assert _h(repr(inst)) == g_repr
 
     def test_real_zero_values(self, monkeypatch):
         inst = _fm_inst(monkeypatch, 'fm_real_zero')

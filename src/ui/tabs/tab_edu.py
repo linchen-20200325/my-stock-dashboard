@@ -38,7 +38,8 @@ from shared.financial_health_thresholds import (  # 策略2 章節門檻 SSOT（
     FH_ROE_LEVERAGE_CHECK_PCT,
     FH_ROE_TOP_PCT,
 )
-from shared.fred_series import FRED_NAPM
+# ~~from shared.fred_series import FRED_NAPM~~ —— DEC-075 批 1'（2026-10-23）：PMI 教學卡 key 改名 'TW_PMI' 後
+#   本檔已無讀者（下方註解中的 `FRED_NAPM` 為歷史紀錄），依 pyflakes 拿掉（有意識的刪除，⛔ 不是漏刪）。
 from shared.macro_buckets import (  # F1 v19.184：cl_data['intl'] key 鏡像（有 drift 守衛）
     CL_INTL_KEY_DXY as _CL_INTL_KEY_DXY,
     CL_INTL_KEY_US10Y as _CL_INTL_KEY_US10Y,
@@ -117,7 +118,9 @@ _EDU_SPEC_KEY_BY_IDENTIFIER: dict[str, str | None] = {
     'DX-Y.NYB':         'dxy',
     '^SOX':             None,      # 只抓 OHLCV 供人工看走勢，無判定式
     'CPILFESL':         'us_core_cpi',
-    FRED_NAPM:          'ism_pmi',
+    # DEC-075 批 1'（2026-10-23，有意識的更正，⛔ 不是漏刪）：PMI 教學卡 key `FRED_NAPM`（'NAPM'，美國 ISM
+    #   序列代號）已改名 'TW_PMI'（`data_registry.EDU_GUIDE` 該處註解）—— 只換 key，對映的 spec 不變。
+    'TW_PMI':           'ism_pmi',
     'XTEXVA01TWM664S':  'tw_export',
     'NDC_signal':       'ndc_signal',
     'ms1.json':         'm1b_m2_gap',
@@ -499,7 +502,7 @@ def render_tab_edu():
                 # 只放「怎麼從 session_state 取值」；閾值一律走 `_tw/_tc/_hib`。
                 _single = {
                     'CPILFESL':       (_macro.get('us_core_cpi') or {}).get('yoy'),
-                    FRED_NAPM:        ((_macro.get('ism_pmi') or {}).get('value') or
+                    'TW_PMI':         ((_macro.get('ism_pmi') or {}).get('value') or   # DEC-075 批 1'：原 key FRED_NAPM
                                        (_macro.get('ism_pmi') or {}).get('current')),
                     'XTEXVA01TWM664S': (_macro.get('tw_export') or {}).get('yoy'),
                     'NDC_signal':     ((_macro.get('ndc_signal') or {}).get('score') or

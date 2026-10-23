@@ -20,7 +20,20 @@ import math
 import pytest
 
 import tests.test_batch_z7 as Z7
-from shared.fred_series import FRED_NAPM
+
+#: ⚠️ DEC-074/075 行為變更（批 1'「修正 ISM 教學對映」，2026-10-23）：本批守的那一篇 PMI 教學卡
+#:   原掛在 `EDU_GUIDE[FRED_NAPM]`（key 'NAPM'），已改名 'TW_PMI'（`how_to_read` 一行未動；ISM 文案五欄換成
+#:   台灣 PMI 事實）。本檔斷言改讀新 key；`test_other_cards_unchanged` 的 golden 照舊（見該測試）。
+_PMI_EDU_KEY = "TW_PMI"
+#: 修前（`b9ed892d`）NAPM 卡除 `how_to_read` 外的原文（逐字取自 `git show b9ed892d:src/data/core/data_registry.py`）。
+#:   只供 `test_other_cards_unchanged` 還原 golden 的雜湊輸入用（⛔ 不是現行內容）。
+_NAPM_CARD_PRE_DEC075 = {
+    'meaning': 'ISM 製造業採購經理人指數，採購主管問卷彙總，領先 GDP 約 3–6 個月。',
+    'pair_with': ['美國核心 CPI（CPILFESL）', '台灣出口 YoY', '費半 SOX'],
+    'historical_anchor': '2008 雷曼跌至 33.1｜2020 疫情 41.5｜2021 復甦高點 63.7',
+    'upstream': '訂單能見度、企業 CapEx、全球需求',
+    'downstream': '台灣出口（領先 1–2 季）→ 台股科技股獲利 → ^SOX & ^TWII',
+}
 from tests.test_m2n2_no_zero_fill import _apply
 from tests.test_batch_z33_inst import Z33_INST_REVERT_PAIRS as _Z33_INST_REVERT_PAIRS
 from tests.test_batch_z34 import Z34_REVERT_PAIRS as _Z34_REVERT_PAIRS
@@ -241,11 +254,11 @@ class TestQz2aEduPmi:
     def test_resolved_rows_exact(self):
         from shared.edu_tokens import edu_tokens, resolve_edu_rules
         from src.data.core.data_registry import EDU_GUIDE
-        assert list(resolve_edu_rules(EDU_GUIDE[FRED_NAPM]["how_to_read"], edu_tokens())) == self._ROWS
+        assert list(resolve_edu_rules(EDU_GUIDE[_PMI_EDU_KEY]["how_to_read"], edu_tokens())) == self._ROWS
 
     def test_numbers_come_from_tokens(self):
         from src.data.core.data_registry import EDU_GUIDE
-        raw = EDU_GUIDE[FRED_NAPM]["how_to_read"]
+        raw = EDU_GUIDE[_PMI_EDU_KEY]["how_to_read"]
         assert [c for c, _ in raw] == ["> §§PMI_YELLOW§§", "= §§PMI_YELLOW§§", "< §§PMI_YELLOW§§",
                                        "≤ §§PMI_RED§§", "≤ §§PMI_RED§§ 持續 3 月"]
 
@@ -255,7 +268,7 @@ class TestQz2aEduPmi:
 
     def test_old_rows_gone(self):
         from src.data.core.data_registry import EDU_GUIDE
-        raw = EDU_GUIDE[FRED_NAPM]["how_to_read"]
+        raw = EDU_GUIDE[_PMI_EDU_KEY]["how_to_read"]
         assert ("< §§PMI_YELLOW§§", "🔴 製造業萎縮（通常伴隨股市修正）") not in raw
         assert not any(c == "< §§PMI_RED§§ 持續 3 月" for c, _ in raw)
 
@@ -263,19 +276,32 @@ class TestQz2aEduPmi:
     _OTHERS_SHA = "9b0e473495ba5884a14417aef78ae31223161d562f601705fc1968bb912ffaea"
 
     def test_other_cards_unchanged(self):
+        """PMI 以外整份 EDU_GUIDE 逐字同修前 golden。
+
+        ⚠️ DEC-074/075 行為變更（批 1'）：PMI 卡改名 'TW_PMI' 且非 `how_to_read` 五欄改寫 ⇒ 計算雜湊時以
+        `_NAPM_CARD_PRE_DEC075`（修前原文）放回 'NAPM' 的位置，golden 照舊（⛔ 不由現行碼反推）；
+        其餘卡仍逐字比對。PMI 卡現行內容另見 `test_pmi_card_is_taiwan_not_ism`。
+        """
         from shared.edu_tokens import edu_tokens, resolve_edu_rules, resolve_edu_tokens
         from src.data.core.data_registry import EDU_GUIDE
         tk = edu_tokens()
         rest = []
-        for key in sorted(EDU_GUIDE, key=str):
-            card = EDU_GUIDE[key]
-            if key == FRED_NAPM:
-                card = {k: v for k, v in card.items() if k != "how_to_read"}
+        _guide = {k: v for k, v in EDU_GUIDE.items() if k != _PMI_EDU_KEY}
+        _guide["NAPM"] = _NAPM_CARD_PRE_DEC075
+        for key in sorted(_guide, key=str):
+            card = _guide[key]
             rest.append((key, repr(card)))
-            if key != FRED_NAPM and card.get("how_to_read"):
+            if key != "NAPM" and card.get("how_to_read"):
                 rest.append((key, list(resolve_edu_rules(card["how_to_read"], tk))))
             rest.append((key, resolve_edu_tokens(card.get("meaning", ""))))
         assert _sha(rest) == self._OTHERS_SHA
+
+    def test_pmi_card_is_taiwan_not_ism(self):
+        """DEC-075 批 1'：PMI 卡講台灣 CIER PMI，不再沿用美國 ISM 的說明與歷史數字。"""
+        from src.data.core.data_registry import EDU_GUIDE
+        card = EDU_GUIDE[_PMI_EDU_KEY]
+        assert "CIER" in card["meaning"] and "ISM 製造業採購經理人指數" not in card["meaning"]
+        assert "33.1" not in card["historical_anchor"] and "NAPM" not in EDU_GUIDE
 
 
 # ══════════════════════════════════════════════════════════════════════════

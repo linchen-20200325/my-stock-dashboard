@@ -58,7 +58,8 @@ from shared.edu_tokens import (
     resolve_edu_rules as _resolve_edu_rules,
     resolve_edu_tokens as _resolve_edu_tokens,
 )
-from shared.fred_series import FRED_NAPM
+# ~~from shared.fred_series import FRED_NAPM~~ —— DEC-075 批 1'（2026-10-23）：EDU_GUIDE 的 NAPM 條目改名
+#   'TW_PMI'（見該處註解）後本檔已無讀者，依 pyflakes 一併拿掉（有意識的刪除，⛔ 不是漏刪）。
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -618,8 +619,25 @@ EDU_GUIDE: dict[str, dict[str, Any]] = {
         'upstream': '油價、薪資成長、住房成本（OER）、供應鏈成本',
         'downstream': '影響 Fed 利率決策 → 美元 → 美債殖利率 → 美股估值（殖利率上 1%，PE 下調約 10–15%）',
     },
-    FRED_NAPM: {
-        'meaning': 'ISM 製造業採購經理人指數，採購主管問卷彙總，領先 GDP 約 3–6 個月。',
+    # ── ISM 教學對映修正（DEC-075 批 1'，客戶 2026-10-23「修正 ISM 教學對映」；修正錯誤，有意識的更正，
+    #    ⛔ 不是漏刪）────────────────────────────────────────────────────────────────────
+    # ~~FRED_NAPM: {'meaning': 'ISM 製造業採購經理人指數…', 'pair_with': [...], 'historical_anchor': '2008 雷曼跌至
+    #   33.1｜2020 疫情 41.5｜2021 復甦高點 63.7', 'upstream': …, 'downstream': …}~~
+    # 這一篇唯一的顯示點是新 UI 總經 v2「台灣 PMI」燈（`macro_v2_service._EDU_KEY['ism_pmi']`）——
+    # 燈的值是**台灣 CIER PMI**（`VN1-MT-SSOT-ISM`），教學卻講美國 ISM 與其歷史數字；`how_to_read` 早在
+    # 批 Z27 就已改吃台灣 PMI 門檻 token，只剩 meaning／pair_with／historical_anchor／upstream／downstream
+    # 是 ISM 文案。舊 UI 教學頁從未顯示它（key 'NAPM' 掛不上 registry ⇒ 孤兒，見
+    # `tests/test_b6a_edu_doc_parity.py::TestEduCardCountHonesty`）。
+    # ⇒ 改名為 'TW_PMI' 並把那五欄換成台灣 PMI 的事實（只用 repo 內已有出處的敘述：`DATA_REGISTRY`
+    #   'cier-pmi' 列的 usage 原文）；`how_to_read` 一行未動（同一組 PMI token，⛔ 不改門檻）。
+    #   ⛔ 不自擬台灣 PMI 歷史高低點數字（沒有可回溯出處，§1／§3.3）。
+    #   改名後美國 ISM 那一篇已無任何讀者（v3 §01-2：因本次改動才變成孤兒 ⇒ 本次收掉，不留第二份）。
+    #   ⚠️ key 刻意**不用** registry identifier 'cier-pmi'：用了會讓舊 UI 教學頁多出一張卡（畫面結構變更，
+    #   須線框，DEC-003）；孤兒張數維持 2（'NAPM' → 'TW_PMI'），舊 UI 教學頁輸出逐字不變。
+    'TW_PMI': {
+        'meaning': '台灣製造業採購經理人指數（PMI），由中華經濟研究院（CIER）每月第一個工作日公布，'
+                   '是採購主管問卷彙總的台灣製造業景氣領先指標（>50 擴張、<50 收縮）。'
+                   '⚠️ 這不是美國 ISM 製造業指數。',
         # F1 v19.184 §3.3：原本這 4 條是手打的 `50 / 50 / 50 / 45`。
         # 前三條的 50 與 SSOT 相同（巧合，不是引用）；第 4 條的 **45 是錯的** ——
         # 五桶危險門檻 `ism_pmi` 的紅線是 **46**（`MACRO_THRESHOLDS.PMI.red_below`），
@@ -634,10 +652,12 @@ EDU_GUIDE: dict[str, dict[str, Any]] = {
             ('≤ §§PMI_RED§§', '🔴 嚴重收縮'),
             ('≤ §§PMI_RED§§ 持續 3 月', '🚨 衰退強烈訊號（五桶「中期」紅線）'),
         ],
-        'pair_with': ['美國核心 CPI（CPILFESL）', '台灣出口 YoY', '費半 SOX'],
-        'historical_anchor': '2008 雷曼跌至 33.1｜2020 疫情 41.5｜2021 復甦高點 63.7',
-        'upstream': '訂單能見度、企業 CapEx、全球需求',
-        'downstream': '台灣出口（領先 1–2 季）→ 台股科技股獲利 → ^SOX & ^TWII',
+        'pair_with': ['台灣出口金額 YoY（海關）', '國發會景氣燈號', '費半 SOX'],
+        'historical_anchor': '榮枯線 50 為定義值（>50 擴張、<50 收縮）；'
+                             '台灣 PMI 的歷史高低點本系統尚未整理出可回溯的數字，'
+                             '因此這裡不列（也不沿用美國 ISM 的歷史數字）。',
+        'upstream': '全球終端需求、電子與半導體供應鏈訂單、原物料價格',
+        'downstream': '台灣出口與製造業營收 → 台股電子權值股獲利 → ^TWII',
     },
     # ── 國際金融 ──────────────────────────────────────────────────
     '^VIX': {

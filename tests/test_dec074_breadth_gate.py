@@ -506,3 +506,65 @@ class TestMa200NotFabricated:
         code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
         assert not re.search(r"ma200\s*=.*else\s+current_price", code)
 
+
+# ══════════════════════════════════════════════════════════════════
+# 批 1'（DEC-075）：DH-FOREIGN-FILL0／DH-EXPORT-LABEL／ISM 教學對映
+# ══════════════════════════════════════════════════════════════════
+class TestForeignFill0:
+    def _inst(self, monkeypatch, rows):
+        """跑真的 `fetch_macro_bundle`（TWSE inst 回空 ⇒ FinMind 補救段），離線 stub（同 lamp 測試的 runner）。"""
+        from tests.test_lamp_foreign_net_wiring import _finmind_bundle
+        return _finmind_bundle(monkeypatch, rows)["inst"]
+
+    def test_foreign_missing_buy_is_none_not_minus_sell(self, monkeypatch):
+        """外資 buy 缺值 ⇒ net 為 None（⛔ 不是 fillna(0) 推出的 −sell）＋未觀測旗標照舊。"""
+        from shared.inst_net import is_net_observed
+        inst = self._inst(monkeypatch, [
+            {"date": "2026-10-22", "name": "Foreign_Investor", "buy": None, "sell": 30_000_000_000},
+            {"date": "2026-10-22", "name": "Investment_Trust", "buy": 2_000_000_000, "sell": 1_000_000_000},
+        ])
+        assert inst["外資及陸資"]["net"] is None
+        assert inst["外資及陸資"]["net"] != 0
+        assert not is_net_observed(inst, "外資及陸資")
+        assert inst["投信"]["net"] == 10.0               # 觀測值逐位不變
+
+    def test_observed_values_unchanged(self, monkeypatch):
+        inst = self._inst(monkeypatch, [
+            {"date": "2026-10-22", "name": "Foreign_Investor", "buy": 50_000_000_000, "sell": 30_000_000_000},
+        ])
+        assert inst["外資及陸資"]["net"] == 200.0
+
+    def test_source_guard_no_fillna0(self):
+        """突變守衛（原始碼）：恢復 buy／sell 的 `.fillna(0)` ⇒ 紅。"""
+        src = (REPO / "src/services/macro_fetch_orchestrator.py").read_text(encoding="utf-8")
+        code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
+        assert not re.search(r"_df_i\['(buy|sell)'\].*fillna\(0\)", code)
+
+
+class TestExportLabel:
+    def test_label_is_customs_export_value(self):
+        from shared.macro_buckets import SPECS_BY_KEY
+        lbl = SPECS_BY_KEY["tw_export"].label
+        assert "出口金額" in lbl and "海關" in lbl
+        assert "訂單" not in lbl
+
+    def test_thresholds_unchanged(self):
+        """只改名稱：門檻／方向一字未動（⛔ 不改計算）。"""
+        from shared.macro_buckets import SPECS_BY_KEY
+        s = SPECS_BY_KEY["tw_export"]
+        assert (s.direction, s.yellow, s.red) == ("low_bad", 0.0, -5.0)
+
+
+class TestIsmEduMapping:
+    def test_tw_pmi_lamp_gets_tw_pmi_edu(self):
+        from src.services.macro_v2_service import _EDU_KEY, get_edu
+        assert _EDU_KEY["ism_pmi"] != "NAPM"
+        e = get_edu("ism_pmi")
+        assert "台灣" in e["meaning"] and "CIER" in e["meaning"]
+        assert "33.1" not in e["historical_anchor"]          # 美國 ISM 2008 低點不得再出現
+        # how_to_read 一行未動（⛔ 不改門檻）：仍是同一組 PMI token
+        from src.data.core.data_registry import EDU_GUIDE
+        assert [c for c, _ in EDU_GUIDE["TW_PMI"]["how_to_read"]] == [
+            "> §§PMI_YELLOW§§", "= §§PMI_YELLOW§§", "< §§PMI_YELLOW§§",
+            "≤ §§PMI_RED§§", "≤ §§PMI_RED§§ 持續 3 月"]
+        assert "NAPM" not in EDU_GUIDE      # 美國 ISM 那一篇已無讀者，不留第二份

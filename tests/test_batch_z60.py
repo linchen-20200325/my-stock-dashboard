@@ -779,7 +779,11 @@ class TestOldFilesUntouched:
     #   `src/ui/tabs/macro/handlers.py`（健康分因缺廣度 None 時刪掉不再屬實的「權重已重新歸一化」，只改字）、
     #   `src/ui/tabs/macro/section_short.py`（TWSE 單日頂替寫進共用 `jingqi_info` 時標 `is_proxy=True`，D-2）。
     #   版面零改動；其餘 88 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
-    _BASE_DIGEST = "1c911a3154e11020d0faf5180759eaaf781df186b92757607867c0f607d36a28"
+    # ~~"1c911a3154e11020d0faf5180759eaaf781df186b92757607867c0f607d36a28"~~（DEC-074/075 批 A 後）
+    # 📌 DEC-075 批 1'（2026-10-23，客戶指派「修正 ISM 教學對映」，⛔ 不是漏改；DEC-019 揭露）：只動
+    #   `src/ui/tabs/tab_edu.py` —— PMI 教學卡 key 'NAPM'→'TW_PMI' 的兩個對映鍵同步（該卡在舊教學頁本就不顯示，
+    #   孤兒張數仍為 2，畫面輸出零改動）。其餘 90 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
+    _BASE_DIGEST = "933d5e3c6d04846f56de617d2e2d9cae781838a89098b44848162eb2f52a2296"
 
     def test_no_diff_against_base(self):
         import hashlib

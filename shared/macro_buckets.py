@@ -369,7 +369,11 @@ BUCKET_DANGER_SPECS: list[DangerSpec] = [
     DangerSpec("us_core_cpi", "美國核心 CPI YoY", "mid", "%", "high_bad",
                yellow=_CPI_YELLOW, red=_CPI_RED, decimals=1,
                note="≥3.5% 外資提款風險 / ≥4% 通膨嚴峻", source=f"黃線 {_CPI_YELLOW:g}%／紅線 {_CPI_RED:g}%：有既有常數背書（統一閾值表）"),
-    DangerSpec("tw_export", "台灣出口訂單 YoY", "mid", "%", "low_bad",
+    # DH-EXPORT-LABEL（DEC-075 批 1'，客戶 2026-10-23「台灣出口燈依實際資料內容修正名稱」；修正錯誤，
+    #   有意識的更正，⛔ 不是漏刪）：~~"台灣出口訂單 YoY"~~ —— 實際取值是**財政部海關出口金額年增率**
+    #   （`macro_snapshot.fetch_export_block`；五桶 `_traced("tw_export", "財政部海關出口金額年增率…")`），
+    #   不是經濟部外銷訂單。只改名稱，⛔ 不換來源、⛔ 不改門檻與計算（v19.85／v19.183 他處已同樣正名）。
+    DangerSpec("tw_export", "台灣出口金額 YoY（海關）", "mid", "%", "low_bad",
                yellow=0.0, red=-5.0, decimals=1,
                note="≤0% 衰退邊界 / ≤-5% 連續衰退", source="紅線 -5%：沿用總經基本面否決檢查的出口門檻（台灣出口 YoY -5%）；"
                       "黃線 0%：系統設計之警示線（衰退邊界）"),

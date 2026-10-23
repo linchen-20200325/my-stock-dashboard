@@ -25,24 +25,42 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 
-DEC074_BASE_SHA = {'shared/macro_forward_test_schema.py': '2c50db57f68367b2d4580e8c6e292d377f5ef99c59fd958082c755ed55b0c93c',
+DEC074_BASE_SHA = {'shared/macro_buckets.py': 'cd9fc1d07b7195fe0b58ce528f97490b6364bebd9ba2dccab86c063bea818b10',
+ 'shared/macro_forward_test_schema.py': '2c50db57f68367b2d4580e8c6e292d377f5ef99c59fd958082c755ed55b0c93c',
  'shared/macro_provenance.py': 'b780bb3cd655ce0c7d9ccbfb6ebcbc1051ca1f35bff133f486f720d895329c83',
  'shared/regime_arbiter.py': 'a5a7a81386c4e5a36efac69483eba665edbabbd611f0475b6fa398ad9cc3b4fb',
  'shared/signal_thresholds.py': '9f629902b72a584cefe6956ca72b50e389d7d695c97c825c0d415831275c3656',
  'src/compute/macro/macro_forward_test.py': 'befdcd0b35f680cd2f863bb1f47273208e1e9213273cf2c0f7421f417b3410de',
  'src/compute/macro/macro_helpers.py': '10e42e7d4773a3944aaf1484ae87e456c5b305f0fe36fc7f773e0dc7ee139767',
+ 'src/data/core/data_registry.py': 'b1dd53605cc447b80e11249d39603ddc9950c5806da5b3528c5adb70d713eb59',
  'src/services/jingqi_calc.py': '9443980c4b15de033d8645e2d77d3990c7782913c1881a145f218b6212a1bca9',
+ 'src/services/macro_fetch_orchestrator.py': '9171a8a4fe9312e4e7680a7b8c5dce308433ee297692098125a5b8e5b9871838',
  'src/services/macro_refresh_service.py': 'f1606dec90304bf3895caa14e5bd4b73387042c962d6418b96a0a8b50474b955',
  'src/services/macro_state_locker.py': 'f43e7c20b9c03f1c03a3452308728309d350f4015b948ab40c1df7caf02dc1a3',
+ 'src/services/macro_v2_service.py': '154968adfad5763837719eb97e2cf3cf2f3342f4fc58b0de152dc71647b446b3',
  'src/services/market_assessment_apply.py': 'b9ed911a03531dc9a6dddb33f405d79bac92f9cefe8f3fab53cd4b5d64128ed7',
  'src/services/market_strategy.py': 'ade4b3a9b729aba1589669dd0e85f9c10b4ee0a8d1bcbbe6820ba25265e97c89',
  'src/services/reconcile_service.py': 'd4390625de6c44a1eef7b14654faf4df9cd13dd526dd07908b8aaa52e3a4a3c1',
  'src/ui/tabs/macro/handlers.py': 'e23c5556742986c0b6ac5c7fe3e50c5d6ab3ad0514daa0258c4996024be4d9c1',
  'src/ui/tabs/macro/section_short.py': '1cb052c72acc6650b0bcff60ebbe65e8be4395950712e5c6d39ddf891c2a79d1',
+ 'src/ui/tabs/tab_edu.py': 'eb46d59e4273ea3f20073dcbb30009432bd9835e1dfb35e3d02593f8fb1db020',
  'src/ui/tabs/tab_macro_v2.py': 'cb34f1720781f5f7d55e484becebcedfd65adafc4eec0454773cafa0bf9f1617',
  'src/ui/views/page_today.py': '672697ff9437a9c624840d35e6098a6d8484417ed6a9be462f7d89fcc4be37ac'}
 
-DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_forward_test_schema.py': (('#: (1→2),不是規則改版(2026-10-15 總管裁定:hash 演算法不改,在此註明)。\n'
+DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_buckets.py': (('               note="≥3.5% 外資提款風險 / ≥4% 通膨嚴峻", source=f"黃線 '
+                              '{_CPI_YELLOW:g}%／紅線 {_CPI_RED:g}%：有既有常數背書（統一閾值表）"),\n'
+                              "    # DH-EXPORT-LABEL（DEC-075 批 1'，客戶 2026-10-23「台灣出口燈依實際資料內容修正名稱」；修正錯誤，\n"
+                              '    #   有意識的更正，⛔ 不是漏刪）：~~"台灣出口訂單 YoY"~~ —— 實際取值是**財政部海關出口金額年增率**\n'
+                              '    #   （`macro_snapshot.fetch_export_block`；五桶 `_traced("tw_export", '
+                              '"財政部海關出口金額年增率…")`），\n'
+                              '    #   不是經濟部外銷訂單。只改名稱，⛔ 不換來源、⛔ 不改門檻與計算（v19.85／v19.183 他處已同樣正名）。\n'
+                              '    DangerSpec("tw_export", "台灣出口金額 YoY（海關）", "mid", "%", "low_bad",\n'
+                              '               yellow=0.0, red=-5.0, decimals=1,\n',
+                              '               note="≥3.5% 外資提款風險 / ≥4% 通膨嚴峻", source=f"黃線 '
+                              '{_CPI_YELLOW:g}%／紅線 {_CPI_RED:g}%：有既有常數背書（統一閾值表）"),\n'
+                              '    DangerSpec("tw_export", "台灣出口訂單 YoY", "mid", "%", "low_bad",\n'
+                              '               yellow=0.0, red=-5.0, decimals=1,\n'),),
+ 'shared/macro_forward_test_schema.py': (('#: (1→2),不是規則改版(2026-10-15 總管裁定:hash 演算法不改,在此註明)。\n'
                                           '#: 📌 v3（2026-10-23，DEC-074 B／DEC-075 批 A，有意識的 bump）：未改欄位，但 '
                                           '`health`／`jqavg`／\n'
                                           '#: `regime_source` 三欄的**語意**改變 —— 市場廣度只有代理（估算）家數時 '
@@ -392,6 +410,62 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_for
                                          '                           if s.key == "m1b_m2_gap" and '
                                          '_m1b_badge\n'
                                          '                           else classify_danger(v, s)),\n')),
+ 'src/data/core/data_registry.py': ((')\n'
+                                     '# ~~from shared.fred_series import FRED_NAPM~~ —— DEC-075 批 '
+                                     "1'（2026-10-23）：EDU_GUIDE 的 NAPM 條目改名\n"
+                                     "#   'TW_PMI'（見該處註解）後本檔已無讀者，依 pyflakes 一併拿掉（有意識的刪除，⛔ 不是漏刪）。\n"
+                                     '\n',
+                                     ')\nfrom shared.fred_series import FRED_NAPM\n\n'),
+                                    ('    },\n'
+                                     "    # ── ISM 教學對映修正（DEC-075 批 1'，客戶 2026-10-23「修正 ISM "
+                                     '教學對映」；修正錯誤，有意識的更正，\n'
+                                     '    #    ⛔ '
+                                     '不是漏刪）────────────────────────────────────────────────────────────────────\n'
+                                     "    # ~~FRED_NAPM: {'meaning': 'ISM 製造業採購經理人指數…', 'pair_with': [...], "
+                                     "'historical_anchor': '2008 雷曼跌至\n"
+                                     "    #   33.1｜2020 疫情 41.5｜2021 復甦高點 63.7', 'upstream': …, "
+                                     "'downstream': …}~~\n"
+                                     '    # 這一篇唯一的顯示點是新 UI 總經 v2「台灣 '
+                                     "PMI」燈（`macro_v2_service._EDU_KEY['ism_pmi']`）——\n"
+                                     '    # 燈的值是**台灣 CIER PMI**（`VN1-MT-SSOT-ISM`），教學卻講美國 ISM '
+                                     '與其歷史數字；`how_to_read` 早在\n'
+                                     '    # 批 Z27 就已改吃台灣 PMI 門檻 token，只剩 '
+                                     'meaning／pair_with／historical_anchor／upstream／downstream\n'
+                                     "    # 是 ISM 文案。舊 UI 教學頁從未顯示它（key 'NAPM' 掛不上 registry ⇒ 孤兒，見\n"
+                                     '    # `tests/test_b6a_edu_doc_parity.py::TestEduCardCountHonesty`）。\n'
+                                     "    # ⇒ 改名為 'TW_PMI' 並把那五欄換成台灣 PMI 的事實（只用 repo "
+                                     '內已有出處的敘述：`DATA_REGISTRY`\n'
+                                     "    #   'cier-pmi' 列的 usage 原文）；`how_to_read` 一行未動（同一組 PMI token，⛔ "
+                                     '不改門檻）。\n'
+                                     '    #   ⛔ 不自擬台灣 PMI 歷史高低點數字（沒有可回溯出處，§1／§3.3）。\n'
+                                     '    #   改名後美國 ISM 那一篇已無任何讀者（v3 §01-2：因本次改動才變成孤兒 ⇒ 本次收掉，不留第二份）。\n'
+                                     "    #   ⚠️ key 刻意**不用** registry identifier 'cier-pmi'：用了會讓舊 UI "
+                                     '教學頁多出一張卡（畫面結構變更，\n'
+                                     "    #   須線框，DEC-003）；孤兒張數維持 2（'NAPM' → 'TW_PMI'），舊 UI 教學頁輸出逐字不變。\n"
+                                     "    'TW_PMI': {\n"
+                                     "        'meaning': '台灣製造業採購經理人指數（PMI），由中華經濟研究院（CIER）每月第一個工作日公布，'\n"
+                                     "                   '是採購主管問卷彙總的台灣製造業景氣領先指標（>50 擴張、<50 收縮）。'\n"
+                                     "                   '⚠️ 這不是美國 ISM 製造業指數。',\n"
+                                     '        # F1 v19.184 §3.3：原本這 4 條是手打的 `50 / 50 / 50 / 45`。\n',
+                                     '    },\n'
+                                     '    FRED_NAPM: {\n'
+                                     "        'meaning': 'ISM 製造業採購經理人指數，採購主管問卷彙總，領先 GDP 約 3–6 個月。',\n"
+                                     '        # F1 v19.184 §3.3：原本這 4 條是手打的 `50 / 50 / 50 / 45`。\n'),
+                                    ('        ],\n'
+                                     "        'pair_with': ['台灣出口金額 YoY（海關）', '國發會景氣燈號', '費半 SOX'],\n"
+                                     "        'historical_anchor': '榮枯線 50 為定義值（>50 擴張、<50 收縮）；'\n"
+                                     "                             '台灣 PMI 的歷史高低點本系統尚未整理出可回溯的數字，'\n"
+                                     "                             '因此這裡不列（也不沿用美國 ISM 的歷史數字）。',\n"
+                                     "        'upstream': '全球終端需求、電子與半導體供應鏈訂單、原物料價格',\n"
+                                     "        'downstream': '台灣出口與製造業營收 → 台股電子權值股獲利 → ^TWII',\n"
+                                     '    },\n',
+                                     '        ],\n'
+                                     "        'pair_with': ['美國核心 CPI（CPILFESL）', '台灣出口 YoY', '費半 SOX'],\n"
+                                     "        'historical_anchor': '2008 雷曼跌至 33.1｜2020 疫情 41.5｜2021 復甦高點 "
+                                     "63.7',\n"
+                                     "        'upstream': '訂單能見度、企業 CapEx、全球需求',\n"
+                                     "        'downstream': '台灣出口（領先 1–2 季）→ 台股科技股獲利 → ^SOX & ^TWII',\n"
+                                     '    },\n')),
  'src/services/jingqi_calc.py': (('- 三段燈號(BULL/NEUTRAL/BEAR SSOT from shared.signal_thresholds)\n'
                                   "- 寫 session_state['jingqi_info'] ~~7~~ 8 keys(DEC-074 B 加 "
                                   '`is_proxy`;供戰情概覽/作戰室/section_inputs 讀;\n'
@@ -449,6 +523,111 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_for
                                   "            'is_proxy': bool(_jq_is_proxy),\n"
                                   '        }\n',
                                   "            'source': _jq_ratio_src,\n        }\n")),
+ 'src/services/macro_fetch_orchestrator.py': (("                    _df_i = _df_i[_df_i['date'] == _ld_i]\n"
+                                               '                    # 2026-09-27(加性,⛔ 不改下兩行的 fillna(0))[📌 '
+                                               "DEC-075 批 1' 起 fillna(0) 已拿掉,見下方 DH-FOREIGN-FILL0]:buy / "
+                                               'sell 欄缺席或\n'
+                                               '                    #   外資列不可解析時,下面會算出「假淨額」(缺 buy → '
+                                               '淨額=−sell;兩欄都缺 → 0)。\n',
+                                               "                    _df_i = _df_i[_df_i['date'] == _ld_i]\n"
+                                               '                    # 2026-09-27(加性,⛔ 不改下兩行的 fillna(0)):buy '
+                                               '/ sell 欄缺席或\n'
+                                               '                    #   外資列不可解析時,下面會算出「假淨額」(缺 buy → '
+                                               '淨額=−sell;兩欄都缺 → 0)。\n'),
+                                              ('                        _fm_dealer_unobserved = '
+                                               'bool(_fm_dealer_rows.any())\n'
+                                               "                    # ── DH-FOREIGN-FILL0（DEC-075 批 1'，客戶 "
+                                               '2026-10-23「外資缺值不得補 0」；行為變更，\n'
+                                               '                    #    有意識的修改，⛔ '
+                                               '不是漏刪）──────────────────────────────────────────────\n'
+                                               "                    # ~~_df_i['buy'] = "
+                                               "_pd.to_numeric(_df_i.get('buy', 0), "
+                                               "errors='coerce').fillna(0)~~\n"
+                                               "                    # ~~_df_i['sell'] = "
+                                               "_pd.to_numeric(_df_i.get('sell', 0), "
+                                               "errors='coerce').fillna(0)~~\n"
+                                               '                    # 舊寫法把缺值補 0 再相減 ⇒ 缺 buy 時淨額＝−sell（可達 '
+                                               '±數百億的假觀測）；上方旗標\n'
+                                               '                    # 只讓讀旗標的消費點避開，沒讀旗標的消費點照樣拿到假數字（§1）。\n'
+                                               '                    # 現行：buy／sell 缺欄或不可解析 ⇒ 該列淨額 NaN；某類別任一列 '
+                                               'NaN ⇒ 該類別 net=None\n'
+                                               '                    # （顯式缺值，旗標照舊 —— `unobserved_net` '
+                                               '判斷式與上方完全相同）。觀測值逐位不變。\n'
+                                               '                    # 整欄缺席（回應形狀不對）⇒ 補救放棄、inst 維持空（與修前同一個結果 '
+                                               '—— 修前是\n'
+                                               "                    #   `_df_i.get('buy', 0)` 回純量 0 → "
+                                               '`.fillna` AttributeError 意外落入 except；\n'
+                                               '                    #   現在明講原因，不靠意外）。\n'
+                                               "                    if 'buy' not in _df_i.columns or 'sell' "
+                                               'not in _df_i.columns:\n'
+                                               "                        raise ValueError('FinMind 回應缺 "
+                                               "buy／sell 欄 → 補救放棄（不推淨額）')\n"
+                                               "                    _df_i['buy'] = "
+                                               "_pd.to_numeric(_df_i['buy'], errors='coerce')\n"
+                                               "                    _df_i['sell'] = "
+                                               "_pd.to_numeric(_df_i['sell'], errors='coerce')\n"
+                                               "                    _df_i['_net'] = ((_df_i['buy'] - "
+                                               "_df_i['sell']) / TWD_PER_YI).round(2)  # 元 → 億(§4.1)；缺值 → "
+                                               'NaN\n'
+                                               '\n'
+                                               '                    def _fm_add(_prev, _v):\n'
+                                               '                        """類別加總：任一列缺值（NaN／None）⇒ 整類 None（⛔ '
+                                               '不以 0 頂替、不跳過該列）。"""\n'
+                                               '                        if _prev is None or _v is None or _v '
+                                               '!= _v:\n'
+                                               '                            return None\n'
+                                               '                        return round(_prev + _v, 2)\n'
+                                               '                    # FinMind name 欄為英文 key(Foreign_Investor '
+                                               '/ Investment_Trust / Dealer_*)\n',
+                                               '                        _fm_dealer_unobserved = '
+                                               'bool(_fm_dealer_rows.any())\n'
+                                               "                    _df_i['buy'] = "
+                                               "_pd.to_numeric(_df_i.get('buy', 0), "
+                                               "errors='coerce').fillna(0)\n"
+                                               "                    _df_i['sell'] = "
+                                               "_pd.to_numeric(_df_i.get('sell', 0), "
+                                               "errors='coerce').fillna(0)\n"
+                                               "                    _df_i['_net'] = ((_df_i['buy'] - "
+                                               "_df_i['sell']) / TWD_PER_YI).round(2)  # 元 → 億(§4.1)\n"
+                                               '                    # FinMind name 欄為英文 key(Foreign_Investor '
+                                               '/ Investment_Trust / Dealer_*)\n'),
+                                              ("                            inst.setdefault('_f', 0)\n"
+                                               "                            inst['_f'] = _fm_add(inst['_f'], "
+                                               '_net)\n'
+                                               "                        elif _cat == '投信':\n"
+                                               "                            inst['投信'] = {'net': (None if "
+                                               '_net != _net else _net)}\n'
+                                               "                        elif _cat == '自營':\n"
+                                               "                            inst.setdefault('_d', 0)\n"
+                                               "                            inst['_d'] = _fm_add(inst['_d'], "
+                                               '_net)\n'
+                                               "                    if '_f' in inst:\n",
+                                               "                            inst.setdefault('_f', 0)\n"
+                                               "                            inst['_f'] = round(inst['_f'] + "
+                                               '_net, 2)\n'
+                                               "                        elif _cat == '投信':\n"
+                                               "                            inst['投信'] = {'net': _net}\n"
+                                               "                        elif _cat == '自營':\n"
+                                               "                            inst.setdefault('_d', 0)\n"
+                                               "                            inst['_d'] = round(inst['_d'] + "
+                                               '_net, 2)\n'
+                                               "                    if '_f' in inst:\n"),
+                                              ("                    if _fm_foreign_unobserved and '外資及陸資' in "
+                                               'inst:\n'
+                                               '                        # DH-FOREIGN-FILL0：~~淨額為 fillna(0) '
+                                               '推出的假值~~ → 淨額為缺值（None）\n'
+                                               "                        print('[FinMind-Inst] ⚠️ 外資列 "
+                                               "buy/sell 缺值 → 外資淨額為缺值（None，'\n"
+                                               "                              '不補 0）;foreign_net "
+                                               "燈與讀旗標的消費點走缺值路徑')\n"
+                                               '                    inst = InstNetDict(\n',
+                                               "                    if _fm_foreign_unobserved and '外資及陸資' in "
+                                               'inst:\n'
+                                               "                        print('[FinMind-Inst] ⚠️ 外資列 "
+                                               "buy/sell 缺值 → 淨額為 fillna(0) 推出的'\n"
+                                               "                              '假值;foreign_net "
+                                               "燈視為缺值(既有消費點照舊)')\n"
+                                               '                    inst = InstNetDict(\n')),
  'src/services/macro_refresh_service.py': (('        if _wr_res.written:\n'
                                             '            # DEC-074 B／DEC-075 '
                                             'D-1(a)（2026-10-23）：健康分未評估的**原因**是「缺真實市場廣度」時，\n'
@@ -554,6 +733,20 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_for
                                          '        _is_loaded = False\n'
                                          '\n',
                                          '        _health is not None and float(_health) < float(_HD))\n\n')),
+ 'src/services/macro_v2_service.py': (('    "us_core_cpi": "CPILFESL",\n'
+                                       "    # ISM 教學對映（DEC-075 批 1'，客戶 2026-10-23「修正 ISM 教學對映」；修正錯誤，有意識的更正，\n"
+                                       '    #   ⛔ 不是漏刪）：~~"ism_pmi": "NAPM"~~ —— 這盞燈的值是**台灣製造業 '
+                                       'PMI（CIER）**（session\n'
+                                       '    #   `ism_pmi` 的實際來源，`VN1-MT-SSOT-ISM`），卻導到美國 ISM '
+                                       '的教學（meaning／歷史數字皆為美國）。\n'
+                                       "    #   改導台灣 PMI 條目（`EDU_GUIDE['TW_PMI']`，原 NAPM 條目改名並換掉 ISM 文案）；⛔ "
+                                       '不換來源、\n'
+                                       '    #   不改門檻（`how_to_read` 一行未動，同一組 PMI token）。\n'
+                                       '    "ism_pmi": "TW_PMI",\n'
+                                       '    "dxy": "DX-Y.NYB",\n',
+                                       '    "us_core_cpi": "CPILFESL",\n'
+                                       '    "ism_pmi": "NAPM",\n'
+                                       '    "dxy": "DX-Y.NYB",\n'),),
  'src/services/market_assessment_apply.py': (('from shared.macro_provenance import is_m1b_m2_proxy  # '
                                               'DL-f1-s17／s23：代理值不計分（L0 SSOT）\n'
                                               'from shared.macro_provenance import adl_df_is_proxy  # '
@@ -839,6 +1032,38 @@ DEC074_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/macro_for
                                          '⇒ 不計分\n'
                                          '                    }\n',
                                          "                        'total': 0,\n                    }\n")),
+ 'src/ui/tabs/tab_edu.py': ((')\n'
+                             "# ~~from shared.fred_series import FRED_NAPM~~ —— DEC-075 批 1'（2026-10-23）：PMI "
+                             "教學卡 key 改名 'TW_PMI' 後\n"
+                             '#   本檔已無讀者（下方註解中的 `FRED_NAPM` 為歷史紀錄），依 pyflakes 拿掉（有意識的刪除，⛔ 不是漏刪）。\n'
+                             "from shared.macro_buckets import (  # F1 v19.184：cl_data['intl'] key 鏡像（有 "
+                             'drift 守衛）\n',
+                             ')\n'
+                             'from shared.fred_series import FRED_NAPM\n'
+                             "from shared.macro_buckets import (  # F1 v19.184：cl_data['intl'] key 鏡像（有 "
+                             'drift 守衛）\n'),
+                            ("    'CPILFESL':         'us_core_cpi',\n"
+                             "    # DEC-075 批 1'（2026-10-23，有意識的更正，⛔ 不是漏刪）：PMI 教學卡 key `FRED_NAPM`（'NAPM'，美國 "
+                             'ISM\n'
+                             "    #   序列代號）已改名 'TW_PMI'（`data_registry.EDU_GUIDE` 該處註解）—— 只換 key，對映的 spec "
+                             '不變。\n'
+                             "    'TW_PMI':           'ism_pmi',\n"
+                             "    'XTEXVA01TWM664S':  'tw_export',\n",
+                             "    'CPILFESL':         'us_core_cpi',\n"
+                             "    FRED_NAPM:          'ism_pmi',\n"
+                             "    'XTEXVA01TWM664S':  'tw_export',\n"),
+                            ("                    'CPILFESL':       (_macro.get('us_core_cpi') or "
+                             "{}).get('yoy'),\n"
+                             "                    'TW_PMI':         ((_macro.get('ism_pmi') or "
+                             "{}).get('value') or   # DEC-075 批 1'：原 key FRED_NAPM\n"
+                             "                                       (_macro.get('ism_pmi') or "
+                             "{}).get('current')),\n",
+                             "                    'CPILFESL':       (_macro.get('us_core_cpi') or "
+                             "{}).get('yoy'),\n"
+                             "                    FRED_NAPM:        ((_macro.get('ism_pmi') or "
+                             "{}).get('value') or\n"
+                             "                                       (_macro.get('ism_pmi') or "
+                             "{}).get('current')),\n")),
  'src/ui/tabs/tab_macro_v2.py': (('from shared.macro_provenance import is_m1b_m2_proxy  # '
                                   'DL-f1-s17：代理值不計分（L0 SSOT）\n'
                                   'from shared.macro_provenance import (  # DEC-074 B：代理廣度只顯示不計分（L0 SSOT）\n'
