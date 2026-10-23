@@ -428,6 +428,18 @@ class TestQz19RealErrorsStayRed:
     def test_unchanged_vs_pre_fix_golden(self, hold_dir, name):
         """(2)(3) AI 裁決失敗檔／讀壞的檔／檔不存在 ⇒ 兩張卡逐字同修前 golden。"""
         d, ss = hold_dir
+        # 📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：`no_file_no_wr`（冷啟動、無檔）在代理廣度不計分（現行）時卡④ 出口改為屬實句（載入後位階仍未評估，⛔ 不再寫「更新總經之後回到本頁…」）⇒ 該情境的修前 golden 只在旗標 True 下仍成立 ⇒ 改在旗標 True 下比對（golden 一字未改）；旗標 False 見 `test_no_file_no_wr_flag_off`。
+        if name == 'no_file_no_wr':
+            import shared.signal_thresholds as STH
+            import pytest as _pt0
+            _mp0 = _pt0.MonkeyPatch()
+            _mp0.setattr(STH, 'BREADTH_PROXY_SCORING_ENABLED', True)
+            try:
+                _qz19_case(name, d, ss)
+                assert _h(_cards()) == _QZ19_GOLDEN[name]
+            finally:
+                _mp0.undo()
+            return
         _qz19_case(name, d, ss)
         if name == 'ai_failed_wr':
             # ~~assert _h(_cards()) == _QZ19_GOLDEN[name]~~（本情境）
@@ -444,6 +456,12 @@ class TestQz19RealErrorsStayRed:
             assert c.state == UI_EMPTY and c.note.now == PH.RISK_CAP_UNAVAILABLE_NOW
             return
         assert _h(_cards()) == _QZ19_GOLDEN[name]
+
+    def test_no_file_no_wr_flag_off(self, hold_dir):
+        """旗標 False（現行）：無檔、無 warroom ⇒ 卡④ 灰、出口＝「可載入，但載入後位階仍未評估」（DH-REGIME-NOWARROOM）。"""
+        m, c = _cards()
+        assert m.state == UI_EMPTY and m.note.where == PH.NOT_LOADED_PENDING_BREADTH_WHERE_HOLD
+        assert c.state == UI_EMPTY
 
     def test_ai_failed_is_red(self, hold_dir):
         """(2) 真正 AI 裁決失敗（無 missing_inputs）⇒ 照舊紅錯（兩張卡；無 warroom）。"""
@@ -505,6 +523,9 @@ class TestQz19Mutation:
     @pytest.mark.parametrize('name', sorted(_QZ19_GOLDEN))
     def test_pre_fix_module_reproduces_golden(self, hold_dir, monkeypatch, name):
         d, ss = hold_dir
+        if name == 'no_file_no_wr':   # 📌 DH-REGIME-NOWARROOM（PR #910）：同上一支，修前 golden 在旗標 True 下比對
+            import shared.signal_thresholds as STH
+            monkeypatch.setattr(STH, 'BREADTH_PROXY_SCORING_ENABLED', True)
         _qz19_case(name, d, ss)
         _with_msl(monkeypatch, z36_pre_module(_MSL))
         assert _h(_cards()) == _QZ19_GOLDEN[name]

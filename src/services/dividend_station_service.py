@@ -858,6 +858,7 @@ def get_station_macro(*, strict: bool = False) -> dict:
         _state = {}
 
     from shared.regime_arbiter import SOURCE_UNEVALUATED_BREADTH as _RA_SOURCE_UNEVALUATED_BREADTH
+    from shared.regime_arbiter import is_not_loaded_pending_breadth as _is_not_loaded_pending_breadth
     _regime = str(_state.get("regime", "unknown") or "unknown")
     _loaded = bool(_state.get("is_loaded", False)) and _regime != "unknown"
     _health = _state.get("health")
@@ -881,6 +882,9 @@ def get_station_macro(*, strict: bool = False) -> dict:
         "posture_range": _posture_range,
         # DEC-075 回修（MUST-2，schema-additive）：未評估原因是「缺真實市場廣度」（契約 source 旗標）。
         "breadth_unevaluated": _state.get("source") == _RA_SOURCE_UNEVALUATED_BREADTH,
+        # DH-REGIME-NOWARROOM（2026-10-23，PR #910，schema-additive）：總經尚未載入且代理廣度不計分
+        #   （`shared.regime_arbiter.is_not_loaded_pending_breadth`，契約旗標 ＋ 呼叫當下的 L0 旗標）—— 只選文案。
+        "not_loaded_pending_breadth": _is_not_loaded_pending_breadth(_state),
     }
 
 

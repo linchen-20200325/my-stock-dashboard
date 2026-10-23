@@ -209,6 +209,17 @@ def _tool_get_market_state(*, require_valid_risk_cap: bool = False) -> dict:
                 "error": (unevaluated_breadth_explain(_proxy) + "。"
                           "(§1:未評估就是未評估,**不退回「中性/震盪」當預設**;"
                           "請勿把「未評估」講成「市場中性」,也**不得**建議使用者靠更新資料解決。)")}
+    from shared.regime_arbiter import (NOT_LOADED_PENDING_BREADTH_EXPLAIN,
+                                       is_not_loaded_pending_breadth)
+    if is_not_loaded_pending_breadth(_ms):
+        # 📌 DH-REGIME-NOWARROOM（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動＋代理廣度不計分時，
+        #   下一段舊句的「macro_state.json 無可用的鎖定快照」不屬實（檔案可能有效，只是依 DEC-075 不採用），
+        #   「按一鍵更新」也不會讓位階成立 ⇒ 改說屬實的那句；旗標為 True 時下一段舊句逐字照舊。
+        return {"ok": False,
+                "error": (NOT_LOADED_PENDING_BREADTH_EXPLAIN + "。"
+                          "(§1:未評估就是未評估,**不退回「中性/震盪」當預設**;"
+                          "請勿把「未評估」講成「市場中性」;可以提醒使用者更新載入資料,"
+                          "但**不得**說更新之後就會有多空位階。)")}
     if not isinstance(_ms, dict) or not _ms.get("is_loaded"):
         return {"ok": False,
                 "error": ("總經尚未評估:🌍 總經紅綠燈本次 session 未算出結論,"

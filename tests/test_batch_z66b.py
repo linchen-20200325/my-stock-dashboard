@@ -423,12 +423,24 @@ class TestReadSide:
         assert {k: v for k, v in got.items() if k not in ("exposure_limit_pct", "risk_cap_disclosure")} == \
                {k: v for k, v in legacy.items() if k != "exposure_limit_pct"}
 
-    def test_strict_unaffected(self, tmp_path):
+    def test_strict_unaffected(self, tmp_path, monkeypatch):
+        """📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：本支舊斷言「warroom 不存在 ＋ 有效檔 ⇒ 退檔案規則引擎位階、`is_loaded=True`」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立；旗標關（現行）時冷啟動依 DEC-075 D-1(a) 位階未評估。本支改在旗標 True 下守舊語意（原斷言／原數值一字未改），旗標 False 的新行為見下一支。"""
+        import shared.signal_thresholds as STH
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         f = tmp_path / "macro_state.json"
         _file(f, days_ago=1.0, stamp=False)
         a = get_macro_state(None, state_file_path=str(f), now=NOW, strict=True,
                             require_valid_risk_cap=True)
         assert a["exposure_limit_pct"] is None and a["is_loaded"] and "file_error" not in a
+
+    def test_strict_unaffected_flag_off(self, tmp_path):
+        """旗標 False（現行）：strict 仍不拋、不帶 `file_error`；對外 `is_loaded=False`（冷啟動位階未評估）。"""
+        f = tmp_path / "macro_state.json"
+        _file(f, days_ago=1.0, stamp=False)
+        a = get_macro_state(None, state_file_path=str(f), now=NOW, strict=True,
+                            require_valid_risk_cap=True)
+        assert a["exposure_limit_pct"] is None and a["is_loaded"] is False and "file_error" not in a
+        assert a["regime"] == "unknown"
 
     @pytest.fixture
     def fresh(self, monkeypatch, tmp_path):

@@ -366,7 +366,10 @@ class TestRegimeMatrix:
         #   在代理廣度不計分（`BREADTH_PROXY_SCORING_ENABLED=False`，現行）時改由 warroom 撐住位階（＝缺真實廣度
         #   未評估），⛔ 不再「位階真的落到舊檔」⇒ 與修前逐鍵相同的前提只在旗標 True 時仍成立 ⇒ 本矩陣的 no_health
         #   一律在旗標 True 下比對（斷言一字未改）；旗標 False 的新行為由 `test_no_health_breadth_gate` 守。
-        if wr_name == "no_health":
+        # 📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：`absent`（warroom 不存在）
+        #   ＋舊檔有效在旗標 False 時同樣不再「位階落到舊檔」（冷啟動依 DEC-075 D-1(a) 位階未評估）⇒ `absent` 也一律在
+        #   旗標 True 下比對（斷言一字未改）；旗標 False 的新行為由 `test_absent_cold_start_gate` 守。
+        if wr_name in ("no_health", "absent"):
             import shared.signal_thresholds as STH
             monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         base = _base(_MSL_REL)
@@ -431,6 +434,46 @@ class TestRegimeMatrix:
             if flag:
                 assert c["exposure_limit_pct"] == (50 if files in ("new_only", "both") else None)
                 assert "file_error" not in c                       # 位階不靠舊檔（同既有 breadth 分支）
+
+
+    @pytest.mark.parametrize("files", _FILE_CASES)
+    @pytest.mark.parametrize("strict", [False, True])
+    def test_absent_cold_start_gate(self, tmp_path, files, strict):
+        """旗標 False（現行）：warroom 不存在 ⇒ 舊檔**有效**時位階未評估（`SOURCE_UNLOADED`）、⛔ 不退舊檔、⛔ 不拋、
+        不帶 `file_error`（DH-REGIME-NOWARROOM）；舊檔無效／不存在時與修前（base）逐鍵相同；上限照舊只看新檔。"""
+        from shared.regime_arbiter import SOURCE_UNLOADED
+        base = _base(_MSL_REL)
+        old, new = tmp_path / _OLD, tmp_path / _NEW
+        if files in ("old_only", "both"):
+            _put(old, _snapshot(regime="空頭", cap=30))
+        if files in ("new_only", "both"):
+            _put(new, _snapshot(regime="多頭", cap=50))
+        if files == "old_ai_failsafe":
+            _put(old, dict(_AI_FAILSAFE, timestamp=_snapshot()["timestamp"]))
+        if files == "old_corrupt":
+            _put(old, "{bad json")
+        for flag in (False, True):
+            kw = dict(state_file_path=str(old), strict=strict, now=NOW, require_valid_risk_cap=flag)
+            cur = _run(lambda: MSL.get_macro_state({}, **kw))
+            ref = _run(lambda: base.get_macro_state({}, **kw))
+            assert cur[0] == ref[0], (flag, cur, ref)
+            if cur[0] == "raise":
+                assert cur == ref, flag
+                continue
+            c, r = cur[1], ref[1]
+            # base（`_base`）是本批（C21）之前的模組：旗標開時上限來源不同（C21 本身的變更）⇒ 只比上限以外的鍵。
+            skip = _CAP_KEYS if flag else ()
+            if files not in ("old_only", "both"):
+                assert {k: v for k, v in c.items() if k not in skip} == \
+                       {k: v for k, v in r.items() if k not in skip}, (flag, c, r)
+            else:
+                assert (c["regime"], c["is_loaded"], c["source"]) == ("unknown", False, SOURCE_UNLOADED), c
+                assert r["is_loaded"] is True and r["regime"] == "bear"      # 修前：退舊檔規則引擎位階
+                assert "file_error" not in c
+            # 上限：旗標關照舊讀舊檔、旗標開只看新檔（Risk Cap 不受本修法影響）
+            assert c["exposure_limit_pct"] == (
+                (50 if files in ("new_only", "both") else None) if flag
+                else (30 if files in ("old_only", "both") else r["exposure_limit_pct"]))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -563,8 +606,14 @@ class TestDualWrite:
         assert not (tmp_path / (_NEW + ".tmp")).exists()
 
     def test_new_ui_only_regime_has_rule_engine_source(self, l1, tmp_path, monkeypatch):
-        """只用新 UI（從沒開過舊分頁）、warroom 缺席 ⇒ 位階仍有第 3 順位來源 —— 靠的就是雙寫的 macro_state.json。"""
+        """只用新 UI（從沒開過舊分頁）、warroom 缺席 ⇒ 位階仍有第 3 順位來源 —— 靠的就是雙寫的 macro_state.json。
+
+        📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：「warroom 缺席 ⇒ 位階
+        退第 3 順位來源」自 #910 起只在代理廣度計分開啟（旗標 True）時成立 ⇒ 本支改在旗標 True 下守舊語意（斷言一字
+        未改）；旗標 False（現行）由下一支守「雙寫照舊、位階未評估」。"""
+        import shared.signal_thresholds as STH
         from shared import regime_arbiter as RA
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         monkeypatch.chdir(tmp_path)
         kw = _inputs()
         l1(kw["pmi_history"])
@@ -574,6 +623,19 @@ class TestDualWrite:
         state = json.loads((tmp_path / _OLD).read_text(encoding="utf-8"))
         assert reg["is_loaded"] and reg["source"] == RA.SOURCE_FILE_RULE_ENGINE
         assert reg["regime"] == MSL.normalize_regime(state["market_regime"])
+        assert reg["exposure_limit_pct"] == state["exposure_limit_pct"]
+
+    def test_new_ui_only_cold_start_flag_off(self, l1, tmp_path, monkeypatch):
+        """旗標 False（現行）：雙寫照舊（上限仍有）、warroom 缺席 ⇒ 位階未評估、⛔ 不退規則引擎（DH-REGIME-NOWARROOM）。"""
+        from shared import regime_arbiter as RA
+        monkeypatch.chdir(tmp_path)
+        kw = _inputs()
+        l1(kw["pmi_history"])
+        assert RC.compute_and_lock_risk_cap(_session_from(kw), now=NOW).written
+        AS = _as_session(monkeypatch, {})
+        reg = AS.get_macro_regime(require_valid_risk_cap=True)
+        state = json.loads((tmp_path / _OLD).read_text(encoding="utf-8"))
+        assert reg["is_loaded"] is False and reg["source"] == RA.SOURCE_UNLOADED and reg["regime"] == "unknown"
         assert reg["exposure_limit_pct"] == state["exposure_limit_pct"]
 
 

@@ -849,17 +849,38 @@ class TestVerdictIdleExitIsRetry:
             assert card.note.where is not P.EXIT_OUT_OF_REACH, key
 
     def test_no_warroom(self, _pinned):
+        """📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：「冷啟動／無 warroom ⇒ 可重抓（`EXIT_RETRY_HERE`）」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立 —— 旗標關（現行）時按了載入後位階仍為未評估，出口改為 `EXIT_LOAD_PENDING_BREADTH`（見 `_flag_off` 那一支）。本支改在旗標 True 下守舊語意（斷言一字未改）。"""
+        import shared.signal_thresholds as STH
+        _pinned.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         P, tiles = self._tiles(_pinned, {})
         assert tiles["verdict.exposure"].card.state == P.UI_IDLE
         assert tiles["verdict.regime"].card.state == P.UI_IDLE
         self._assert_retry(P, tiles)
 
     def test_no_warroom_but_inputs_present(self, _pinned):
-        """有本輪輸入、還沒組 warroom（按鈕前的典型 session）—— 同樣是可重抓。"""
+        """有本輪輸入、還沒組 warroom（按鈕前的典型 session）—— 同樣是可重抓。
+
+        📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：「冷啟動／無 warroom ⇒ 可重抓（`EXIT_RETRY_HERE`）」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立 —— 旗標關（現行）時按了載入後位階仍為未評估，出口改為 `EXIT_LOAD_PENDING_BREADTH`（見 `_flag_off` 那一支）。本支改在旗標 True 下守舊語意（斷言一字未改）。"""
+        import shared.signal_thresholds as STH
+        _pinned.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         s = _state("N1_bull")
         s.pop("warroom_summary", None)
         P, tiles = self._tiles(_pinned, s)
         self._assert_retry(P, tiles)
+
+    @pytest.mark.parametrize("with_inputs", [False, True])
+    def test_no_warroom_flag_off(self, _pinned, with_inputs):
+        """旗標 False（現行）：無 warroom ⇒ 卡①③ 灰（idle）、出口＝「可更新，但載入後仍未評估」（DH-REGIME-NOWARROOM）。"""
+        s = {}
+        if with_inputs:
+            s = _state("N1_bull")
+            s.pop("warroom_summary", None)
+        P, tiles = self._tiles(_pinned, s)
+        for key in ("verdict.exposure", "verdict.regime"):
+            card = tiles[key].card
+            assert card.state == P.UI_IDLE, (key, card.state)
+            assert card.note.where is P.EXIT_LOAD_PENDING_BREADTH, key
+            assert card.note.why == P.not_loaded_pending_breadth_why(), key
 
     def test_warroom_health_none(self, _pinned):
         """📌 2026-10-23 DEC-075 D-1(a)（QA3 MUST-R1，有意識的修改，⛔ 不是漏刪）：本支舊斷言「warroom 健康分缺 ⇒
@@ -923,7 +944,10 @@ class TestDegradedRegimeExitIsRetry:
     """
 
     def test_degraded_card3_and_empty_card1(self, _pinned, tmp_path):
+        """📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：「無 warroom ＋ 有效快照 ⇒ 卡③ degraded（退規則引擎快照）」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立 —— 旗標關（現行）時按了載入後位階仍為未評估，出口改為 `EXIT_LOAD_PENDING_BREADTH`（見 `_flag_off` 那一支）。本支改在旗標 True 下守舊語意（斷言一字未改）。"""
+        import shared.signal_thresholds as STH
         from shared.ui_state import UI_DEGRADED, UI_EMPTY
+        _pinned.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         _write_fresh_macro_state(tmp_path)
         P, tiles = TestVerdictIdleExitIsRetry._tiles(_pinned, {})
         reg, exp = tiles["verdict.regime"].card, tiles["verdict.exposure"].card
@@ -933,6 +957,17 @@ class TestDegradedRegimeExitIsRetry:
         assert "快照" in reg.note.now                          # now/why 照舊沿用對面
         assert exp.state == UI_EMPTY, exp.state
         assert exp.note.where is P.EXIT_RETRY_HERE
+
+    def test_fresh_snapshot_no_warroom_flag_off(self, _pinned, tmp_path):
+        """旗標 False（現行）：無 warroom ＋ 有效快照 ⇒ 卡③ ⛔ 不 degraded（不印規則引擎位階）、卡①③ 灰（idle）。"""
+        from shared.ui_state import UI_IDLE
+        _write_fresh_macro_state(tmp_path)
+        P, tiles = TestVerdictIdleExitIsRetry._tiles(_pinned, {})
+        for key in ("verdict.regime", "verdict.exposure"):
+            c = tiles[key].card
+            assert c.state == UI_IDLE, (key, c.state)
+            assert c.note.where is P.EXIT_LOAD_PENDING_BREADTH, key
+        assert "快照" not in tiles["verdict.regime"].card.note.now
 
     def test_degraded_with_health_none_warroom(self, _pinned, tmp_path):
         """warroom 在但健康分缺（視同未載入）＋ 快照 ⇒ 同樣 degraded、同樣可重抓。
@@ -1011,8 +1046,11 @@ class TestNoContractNoExitOnThePage:
 
     _COLD = {"regime": "unknown", "light": "⬜", "source": "unloaded", "is_loaded": False}  # 下方以 SOURCE_UNLOADED 自證
 
+    @pytest.mark.parametrize("flag_on", [False, True])
     @pytest.mark.parametrize("which", ["cold", "degraded"])
-    def test_the_three_contract_cells(self, monkeypatch, which):
+    def test_the_three_contract_cells(self, monkeypatch, which, flag_on):
+        import shared.signal_thresholds as _STH
+        monkeypatch.setattr(_STH, "BREADTH_PROXY_SCORING_ENABLED", flag_on)   # DH-REGIME-NOWARROOM：兩態都守
         from shared.ui_state import UI_DEGRADED, UI_IDLE
         from shared.regime_arbiter import SOURCE_FILE_RULE_ENGINE, SOURCE_UNLOADED
         assert self._COLD["source"] == SOURCE_UNLOADED
@@ -1024,10 +1062,16 @@ class TestNoContractNoExitOnThePage:
         for t in drawn:
             by_key.setdefault(t.card.key, []).append(t)
         want = UI_IDLE if which == "cold" else UI_DEGRADED
+        # 📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動＋代理廣度不計分
+        #   （現行）時三格出口改為 `EXIT_LOAD_PENDING_BREADTH`（按了載入後位階仍未評估，⛔ 不再寫「可重抓」）；
+        #   degraded 與旗標 True 的冷啟動照舊 `EXIT_RETRY_HERE`。「全頁沒有 `CONTRACT_NO_EXIT_WHERE`」一字未改。
+        import shared.signal_thresholds as STH
+        want_where = (T.EXIT_LOAD_PENDING_BREADTH
+                      if (which == "cold" and not STH.BREADTH_PROXY_SCORING_ENABLED) else T.EXIT_RETRY_HERE)
         for key in ("statusbar.macro", "summary.regime", "verdict.regime"):
             (t,) = by_key[key]
             assert t.card.state == want, (key, t.card.state)
-            assert t.card.note.where is T.EXIT_RETRY_HERE, key
+            assert t.card.note.where is want_where, key
         assert not [t.card.key for t in drawn if t.card.note is not None
                     and t.card.note.where is T.CONTRACT_NO_EXIT_WHERE]
 

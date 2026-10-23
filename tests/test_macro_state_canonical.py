@@ -66,7 +66,10 @@ def test_defense_when_bear(tmp_path):
     assert ms["defense"] is True                       # bear → 防守（不論健康）
 
 
-def test_file_source_chinese_to_english(tmp_path):
+def test_file_source_chinese_to_english(tmp_path, monkeypatch):
+    """📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：本支舊斷言「warroom 不存在 ＋ 有效檔 ⇒ 退檔案規則引擎位階、`is_loaded=True`」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立；旗標關（現行）時冷啟動依 DEC-075 D-1(a) 位階未評估。本支改在旗標 True 下守舊語意（原斷言／原數值一字未改），旗標 False 的新行為見下一支。"""
+    import shared.signal_thresholds as STH
+    monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
     _f = tmp_path / "macro_state.json"
     # D3（DL-f1-s65）：裁決有有效期限 → 測資帶一個當下的 timestamp（過期另由 test_d3 驗）
     from src.services.macro_state_locker import _now_str
@@ -77,6 +80,19 @@ def test_file_source_chinese_to_english(tmp_path):
     assert ms["regime"] == "bear"                      # 中文 → 英文
     assert ms["exposure_limit_pct"] == 30
     assert ms["is_loaded"] is True
+
+
+def test_file_source_cold_start_flag_off_unevaluated(tmp_path):
+    """旗標 False（現行）：同一份有效檔、warroom 不存在 ⇒ 位階未評估（DH-REGIME-NOWARROOM），上限照舊從檔讀。"""
+    from shared.regime_arbiter import SOURCE_UNLOADED
+    _f = tmp_path / "macro_state.json"
+    from src.services.macro_state_locker import _now_str
+    _f.write_text(json.dumps({"market_regime": "空頭防禦", "exposure_limit_pct": 30,
+                              "timestamp": _now_str()}), encoding="utf-8")
+    ms = get_macro_state(None, state_file_path=str(_f))
+    assert ms["regime"] == "unknown" and ms["source"] == SOURCE_UNLOADED
+    assert ms["is_loaded"] is False
+    assert ms["exposure_limit_pct"] == 30                # Risk Cap 不受影響
 
 
 def test_not_loaded_is_honest(tmp_path):

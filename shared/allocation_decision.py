@@ -281,13 +281,18 @@ def build_allocation_decision(
     if not _is_loaded or _health is None:
         # DEC-075 回修（QA1 MUST-2）：原因是缺真實廣度時，~~「warroom_summary / macro_state.json 皆無有效值」~~
         #   不屬實（warroom 在、檔案也可能有效，只是 DEC-075 (a) 不採用）⇒ 換成屬實的那句；其餘原因逐字照舊。
-        from shared.regime_arbiter import UNEVALUATED_BREADTH_EXPLAIN, is_breadth_unevaluated
+        # 📌 DH-REGIME-NOWARROOM（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動＋代理廣度不計分時，
+        #   ~~「warroom_summary / macro_state.json 皆無有效值」~~ 不屬實（檔案可能有效，只是依 DEC-075 不採用）⇒
+        #   換成屬實的 `NOT_LOADED_PENDING_BREADTH_EXPLAIN`；旗標為 True 時舊句逐字照舊。`unevaluated_reason` 不變（''）。
+        from shared.regime_arbiter import (NOT_LOADED_PENDING_BREADTH_EXPLAIN, UNEVALUATED_BREADTH_EXPLAIN,
+                                           is_breadth_unevaluated, is_not_loaded_pending_breadth)
         _breadth = is_breadth_unevaluated(_ms)
         return AllocationDecision(
             is_loaded=False, regime=_regime, health=None,
             posture_lo=None, posture_hi=None, posture='未評估', icon='⬜',
             cap_pct=None, cap_name='', caps=tuple(caps),
             drivers=((UNEVALUATED_BREADTH_EXPLAIN,) if _breadth else
+                     (NOT_LOADED_PENDING_BREADTH_EXPLAIN,) if is_not_loaded_pending_breadth(_ms) else
                      ('總經尚未評估（warroom_summary / macro_state.json 皆無有效值）',)),
             conflicts=tuple(conflicts),
             unevaluated_reason=('breadth' if _breadth else ''),

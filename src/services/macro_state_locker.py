@@ -364,7 +364,12 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     📌 DEC-075 D-1(a)（2026-10-23，含 QA3 MUST-R1 回修）：warroom **存在**而健康分非有限時，第 3 條**不生效** ——
     原因標「缺真實廣度」（`SOURCE_UNEVALUATED_BREADTH`）、或代理廣度不計分
     （`shared.signal_thresholds.BREADTH_PROXY_SCORING_ENABLED` 為 False）⇒ 位階 'unknown'、`is_loaded=False`。
-    旗標為 True 且原因不是廣度時照舊退第 3 條。warroom **不存在**時第 3 條照舊生效（本批未改）。
+    旗標為 True 且原因不是廣度時照舊退第 3 條。~~warroom **不存在**時第 3 條照舊生效（本批未改）。~~
+    📌 DH-REGIME-NOWARROOM（2026-10-23，PR #910，有意識的更新，⛔ 不是漏刪；決策者 AI 總管，依兩組獨立調查裁定冷啟動
+    屬 DEC-075 D-1(a) 射程）：warroom **不存在**（冷啟動未載入；或 `calc_traffic_light` 三源全空、warroom 被移除）
+    且代理廣度不計分（同一旗標為 False）時，第 3 條**同樣不生效** ⇒ `UNLOADED_VERDICT`（'unknown'／⬜／
+    `SOURCE_UNLOADED`）、對外 `is_loaded=False`。內部 strict 拋錯／`file_error` 判斷照舊（有效檔不拋）；
+    `exposure_limit_pct`（Risk Cap，DEC-044／048）照舊讀檔、不受影響。旗標為 True 時第 3 條照舊生效（舊語意）。
 
     Returns:
         dict::
@@ -466,7 +471,8 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     #   L2 的原因標記／擋燈文案／油門／explainer 一律不動（QA3 實測放寬 L2 會讓失敗態 golden 變紅）。
     # 舊理由（「非 breadth 原因的未評估，檔案位階是合法的第 3 順位來源」）在旗標開啟（代理計分）時仍成立 ——
     #   旗標開 ⇒ 本條不觸發、行為同上段舊讀法；被權衡掉的只是「旗標關時仍容許退檔」。
-    # warroom 不存在（`not _wr`）的路徑**本條不碰**（總管裁定事項，見回報）。
+    # ~~warroom 不存在（`not _wr`）的路徑**本條不碰**（總管裁定事項，見回報）。~~
+    # 📌 2026-10-23 更新（有意識的更新，⛔ 不是漏刪；決策者 AI 總管）：warroom 不存在路徑改由下方 `_nowr_no_real_breadth` 處理。
     _wr_no_real_breadth = (bool(_wr) and not _wr_ok
                            and not _ST.BREADTH_PROXY_SCORING_ENABLED)
     _wr_breadth = (bool(_wr) and not _wr_ok
@@ -482,6 +488,19 @@ def get_macro_state(warroom_summary: dict | None = None, *,
     # DEC-075 D-1(a)：`_wr_breadth` 時 warroom 仍是權威來源（位階＝未評估）⇒ 下方 strict 拋錯／`file_error`
     #   判斷視同「有來源撐住」；回傳的 `is_loaded` 在組 `_out` 前另行改回 False（見下）。
     _is_loaded = _wr_ok or _file_ok or _wr_breadth
+    # ── DH-REGIME-NOWARROOM（2026-10-23，PR #910，行為變更，有意識的修改，⛔ 不是漏刪）────────────────────────
+    # 舊讀法（上方 DEC-075 D-1(a) 回修段末句）：「warroom 不存在（`not _wr`）的路徑**本條不碰**」⇒ 冷啟動／warroom 被 pop
+    #   時仍退 `macro_state.json` 規則引擎位階（`SOURCE_FILE_RULE_ENGINE`）、`is_loaded=True`。
+    # 破口：同一畫面**載入前**顯示規則引擎多空、**載入後**顯示 ⬜ —— 使用者無法辨識結論來源已換，
+    #   正是客戶 DEC-075 D-1(a) 原文「不允許在使用者無法清楚辨識的情況下，靜默 fallback 到另一套規則引擎產生位階結論」。
+    #   總管依兩組獨立調查裁定冷啟動屬 D-1(a) 射程（客戶 2026-10-23 指示不得只登 BACKLOG 延後）。
+    # 新讀法：warroom 不可用、不是上方 breadth 分支、檔案有效、且代理廣度不計分（**呼叫當下**讀 L0 旗標）⇒
+    #   位階 `UNLOADED_VERDICT`、對外 `is_loaded=False`。⚠️ 內部 `_is_loaded` **保留原值**（只在組 `_out` 前改，
+    #   比照 `_wr_breadth`）⇒ 有效檔在 strict 下不拋、不讓持股頁轉紅；檔案無效／損毀時既有 strict 拋錯／`file_error` 不變。
+    #   ⛔ 不動 Risk Cap：`exposure_limit_pct` 照舊從檔讀（DEC-044／048 授權的 7 天有效上限）。
+    # 舊理由（「檔案位階是合法的第 3 順位來源」）在旗標為 True（代理計分）時仍成立 ⇒ 旗標 True 本條不觸發、行為同修前。
+    _nowr_no_real_breadth = (not _wr_ok and not _wr_breadth and _file_ok
+                             and not _ST.BREADTH_PROXY_SCORING_ENABLED)
     # 批 Z36（Q-z19，客戶 2026-10-10 核准 A）：規則引擎 ~~8 項~~數值輸入**全缺**時落檔的 fail-safe（「系統異常」＋
     #   [📌 批 Z66（客戶 2026-10-16 Q2，有意識的變更，⛔ 不是漏刪）：「全缺」自 Z66 起＝**所有啟用中的**數值輸入全缺（停用的 M1B／M2 不算）]
     #   `missing_inputs`，批 Z34；判斷式同 §十一 `section_news_ai`／`ai_qa_service`）是「缺資料、尚未形成有效評估」，
@@ -571,7 +590,7 @@ def get_macro_state(warroom_summary: dict | None = None, *,
         _regime = _RA.UNEVALUATED_BREADTH_VERDICT.regime
         _light = _RA.UNEVALUATED_BREADTH_VERDICT.light
         _source = _RA.UNEVALUATED_BREADTH_VERDICT.source
-    elif _file_ok:
+    elif _file_ok and not _nowr_no_real_breadth:   # DH-REGIME-NOWARROOM：代理廣度不計分時不退檔案位階
         _regime = normalize_regime(_file.get("market_regime"))
         _light = _RA.light_for_regime(_regime)
         _source = _RA.SOURCE_FILE_RULE_ENGINE
@@ -590,6 +609,9 @@ def get_macro_state(warroom_summary: dict | None = None, *,
 
     if _wr_breadth:
         # DEC-075 D-1(a)：缺真實廣度 ⇒ 位階未評估 ⇒ 對外 `is_loaded=False`（姿態帶／濾網走既有未評估路徑）。
+        _is_loaded = False
+    if _nowr_no_real_breadth:
+        # DH-REGIME-NOWARROOM：位階未評估（`UNLOADED_VERDICT`）⇒ 對外 `is_loaded=False`（同上）。
         _is_loaded = False
 
     _out = {

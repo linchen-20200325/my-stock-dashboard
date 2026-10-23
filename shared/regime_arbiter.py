@@ -144,6 +144,32 @@ def is_breadth_unevaluated(state: Any) -> bool:
     """總經契約（`get_macro_state()` 的 dict）是不是「因缺真實市場廣度而未評估」。只看契約自己的 `source` 旗標。"""
     return isinstance(state, dict) and state.get('source') == SOURCE_UNEVALUATED_BREADTH
 
+
+#: DH-REGIME-NOWARROOM（2026-10-23，PR #910）：「總經**尚未載入**（本 session 紅綠燈還沒算過）＋代理廣度不計分」的對外說明。
+#: 冷啟動時 `get_macro_state` 不再退 `macro_state.json` 規則引擎位階（DEC-075 D-1(a) 射程，總管裁定）⇒ 契約
+#: `source == SOURCE_UNLOADED`、`is_loaded=False`。這一態的說明須同時屬實地講兩件事（`CLAUDE.md` §1.A 第 4 點：灰色、
+#: 不是錯誤）：可以按更新載入資料；**但**正式廣度來源接上前，載入後位階仍為未評估。
+#: ⛔ 不得寫「macro_state.json 無快照」（檔案可能有效，只是不採用）；⛔ 不得暗示更新後就會有位階。
+NOT_LOADED_PENDING_BREADTH_EXPLAIN: str = (
+    '總經尚未載入：這一次使用中還沒有紅綠燈結果。可以按更新載入今日資料，'
+    '但在正式的市場廣度（漲跌家數）資料來源接上前，載入後市場位階仍為未評估 —— '
+    '由加權指數推估的代理值依客戶裁示（DEC-074）不計分，'
+    '市場位階依 DEC-075 也不改用另一套規則引擎（`macro_state.json`）補出')
+
+
+def is_not_loaded_pending_breadth(state: Any) -> bool:
+    """總經契約是不是「尚未載入（`source == SOURCE_UNLOADED`）且代理廣度不計分」那一態（DH-REGIME-NOWARROOM）。
+
+    只看契約自己的 `is_loaded`／`source` 旗標 ＋ **呼叫當下**的 L0 `BREADTH_PROXY_SCORING_ENABLED`（⛔ 不在 import 時綁死）。
+    旗標為 True（代理計分）⇒ 恆 False ⇒ 各讀點既有文案逐字照舊。非 dict（讀契約失敗）／沒有 `source` 鍵 ⇒ False（⛔ 不推定）。
+    """
+    if not isinstance(state, dict) or state.get('is_loaded'):
+        return False
+    if state.get('source') != SOURCE_UNLOADED:   # 只認契約自己標的 `unloaded`（⛔ 缺鍵不推定）
+        return False
+    from shared import signal_thresholds as _ST
+    return not _ST.BREADTH_PROXY_SCORING_ENABLED
+
 # ── 門檻 ────────────────────────────────────────────────────────────────
 DEFENSE_MAX_MARKET_SCORE: int = 2
 """外資期貨防禦訊號要求的「大盤評分上限」（評分 < 本值才可能觸發）。

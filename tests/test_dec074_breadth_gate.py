@@ -523,12 +523,25 @@ class TestPageTodayBreadthExit:
         # 不帶 regime（舊呼叫法）⇒ 與修前逐一相同
         assert P.contract_exit_retargeted(bar).note.where is P.EXIT_RETRY_HERE
 
-    def test_non_breadth_unevaluated_still_retry(self):
-        """SHOULD-A2：以**原因**分流 —— 非 breadth 的未評估照舊 `EXIT_RETRY_HERE`。"""
+    def test_non_breadth_unevaluated_still_retry(self, monkeypatch):
+        """SHOULD-A2：以**原因**分流 —— 非 breadth 的未評估照舊 `EXIT_RETRY_HERE`。
+
+        📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：`SOURCE_UNLOADED`（尚未載入）
+        在代理廣度不計分（現行）時出口改為 `EXIT_LOAD_PENDING_BREADTH`（載入後位階仍未評估，⛔ 不寫「可重抓」）⇒ 本支改在
+        旗標 True 下守舊語意（斷言一字未改）；旗標 False 見下一支。"""
+        import shared.signal_thresholds as STH
         from shared.regime_arbiter import SOURCE_UNLOADED
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         P, cards = _verdict_tiles({**_contract(SOURCE_UNLOADED), "source": SOURCE_UNLOADED})
         for key in ("verdict.exposure", "verdict.regime"):
             assert cards[key].note.where is P.EXIT_RETRY_HERE, key
+
+    def test_non_breadth_unloaded_flag_off_pending(self):
+        """旗標 False（現行）：尚未載入 ⇒ 出口＝「可更新，但載入後位階仍未評估」；⛔ 不是等廣度來源、⛔ 不是可重抓。"""
+        from shared.regime_arbiter import SOURCE_UNLOADED
+        P, cards = _verdict_tiles({**_contract(SOURCE_UNLOADED), "source": SOURCE_UNLOADED})
+        for key in ("verdict.exposure", "verdict.regime"):
+            assert cards[key].note.where is P.EXIT_LOAD_PENDING_BREADTH, key
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -972,8 +985,10 @@ class TestMustR1TwiiDeadNoFileFallback:
             assert dec.usable is False and dec.regime != "bear", dec
             assert Q._tool_get_market_state(require_valid_risk_cap=True).get("ok") is False
             assert F._load_regime() == (None, "")
-            # ⚠️ 刻意**不**對「warroom 不存在」路徑下斷言：該路徑仍退 `macro_state.json`（本批不動），
-            #   是否落入 D-1(a) 禁區待總管裁定 —— 不在這裡把現況鎖成合規。
+            # ~~⚠️ 刻意**不**對「warroom 不存在」路徑下斷言：該路徑仍退 `macro_state.json`（本批不動），~~
+            # ~~  是否落入 D-1(a) 禁區待總管裁定 —— 不在這裡把現況鎖成合規。~~
+            # 📌 2026-10-23 更新（有意識的更新，⛔ 不是漏刪；決策者 AI 總管）：總管已裁定該路徑屬 D-1(a) 射程，
+            #   PR #910 修正；斷言見 `tests/test_dh_regime_nowarroom.py`（本支仍只守 warroom 存在的路徑）。
         finally:
             if _had:
                 st.session_state["warroom_summary"] = _old
@@ -981,15 +996,31 @@ class TestMustR1TwiiDeadNoFileFallback:
                 st.session_state.pop("warroom_summary", None)
 
     def test_mutant_remove_l3_branch_turns_red(self, _fresh_file):
-        """突變：把 L3 新分支（`or _wr_no_real_breadth`）拔掉 ⇒ 退回檔案位階 ⇒ 檢查必紅。"""
+        """突變：把 L3 新分支（`or _wr_no_real_breadth`）拔掉 ⇒ 退回檔案位階 ⇒ 檢查必紅。
+
+        📌 DH-REGIME-NOWARROOM（2026-10-23，PR #910，有意識的修改，⛔ 不是放寬）：自 #910 起 `get_macro_state` 另有
+        `_nowr_no_real_breadth`（warroom 不可用＋檔有效＋代理不計分 ⇒ `UNLOADED_VERDICT`）—— 它的條件是「非 `_wr_ok`」，
+        所以只拔 `or _wr_no_real_breadth` 時，這一支會接住 ^TWII 全滅 warroom、仍回 unknown（只是 source 變 `unloaded`），
+        下面「突變下確實退檔」的前提不成立。⇒ 本突變**兩支一起拔**，量的仍是「沒有任何一支 L3 守衛時會退檔、檢查必紅」；
+        `_check_twii_dead_unevaluated` 另釘 `source == SOURCE_UNEVALUATED_BREADTH`，只拔 breadth 分支同樣會紅（見下方最後一段）。
+        """
         import types
         import src.services.macro_state_locker as MSL
         src = (REPO / "src/services/macro_state_locker.py").read_text(encoding="utf-8")
         anchor = "\n                        or _wr_no_real_breadth))"
         assert src.count(anchor) == 1
+        anchor2 = "    _nowr_no_real_breadth = (not _wr_ok"
+        assert src.count(anchor2) == 1
         m = types.ModuleType("_msl_mut")
         m.__file__ = MSL.__file__
-        exec(compile(src.replace(anchor, "))"), MSL.__file__, "exec"), m.__dict__)
+        exec(compile(src.replace(anchor, "))").replace(anchor2, "    _nowr_no_real_breadth = False and (not _wr_ok"),
+                     MSL.__file__, "exec"), m.__dict__)
+        # 只拔 breadth 分支（新條件留著）：位階仍 unknown，但原因標記不再是「缺真實廣度」⇒ 檢查同樣紅。
+        m1 = types.ModuleType("_msl_mut1")
+        m1.__file__ = MSL.__file__
+        exec(compile(src.replace(anchor, "))"), MSL.__file__, "exec"), m1.__dict__)
+        with pytest.raises(AssertionError):
+            _check_twii_dead_unevaluated(_fresh_file, get_macro_state=m1.get_macro_state)
         _check_twii_dead_unevaluated(_fresh_file)                       # 原碼：綠
         _tl0, wr = _wr_twii_dead({})
         assert m.get_macro_state(wr, state_file_path=_fresh_file)["regime"] == "bull"   # 突變下確實退檔

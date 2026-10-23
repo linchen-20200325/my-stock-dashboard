@@ -675,7 +675,11 @@ class TestDownstream:
         assert dict(t.facts).get("硬否決天花板") == alloc.cap_text
         assert alloc.cap_pct is not None and alloc.cap_pct <= cap
 
-    def test_card1_idle_exit_is_retry(self, monkeypatch, tmp_path):
+    @pytest.mark.parametrize("flag_on", [True, False])
+    def test_card1_idle_exit_is_retry(self, monkeypatch, tmp_path, flag_on):
+        """📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動在代理廣度不計分（現行）時改說屬實句（載入後位階仍未評估）⇒ 舊斷言改在旗標 True 下守（一字未改）；旗標 False 見 flag_on=False 參數。"""
+        import shared.signal_thresholds as STH
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", flag_on)
         monkeypatch.chdir(tmp_path)
         from src.services import allocation_service as AS
         from src.ui.views import page_today as P
@@ -684,7 +688,10 @@ class TestDownstream:
         tiles = {t.card.key: t for t in P.build_verdict_tiles(
             alloc=AS.get_allocation(), alloc_error="", danger=None, danger_error="",
             danger_requested=False, regime=AS.get_macro_regime(), regime_error="")}
-        assert tiles["verdict.exposure"].card.note.where is P.EXIT_RETRY_HERE
+        if flag_on:
+            assert tiles["verdict.exposure"].card.note.where is P.EXIT_RETRY_HERE
+        else:
+            assert tiles["verdict.exposure"].card.note.where is P.EXIT_LOAD_PENDING_BREADTH
 
     def test_page_today_wording(self):
         from src.ui.views import page_today as P

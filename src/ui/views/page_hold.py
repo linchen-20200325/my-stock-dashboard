@@ -844,6 +844,8 @@ class MacroReadout:
     #: QA-4 S-1（2026-10-23）：`breadth_unevaluated` 時，本輪有沒有被擋下的代理廣度值
     #: （L3 `allocation_service.get_breadth_proxy_presence()`；True／False／None ＝ 拿不準）。只選文案，判態不讀。
     breadth_proxy: bool | None = None
+    #: DH-REGIME-NOWARROOM（2026-10-23，PR #910）：總經尚未載入且代理廣度不計分（L3 `get_station_macro` 原樣透傳）。只選文案。
+    not_loaded_pending_breadth: bool = False
 
 
 def _breadth_proxy_presence() -> bool | None:
@@ -886,7 +888,8 @@ def load_macro(req: HoldRequest) -> MacroReadout:
         posture_label=_clean_signal(_m.get("posture_label")),
         posture_range=str(_m.get("posture_range") or ""),
         breadth_unevaluated=bool(_m.get("breadth_unevaluated")),
-        breadth_proxy=(_breadth_proxy_presence() if _m.get("breadth_unevaluated") else None))
+        breadth_proxy=(_breadth_proxy_presence() if _m.get("breadth_unevaluated") else None),
+        not_loaded_pending_breadth=bool(_m.get("not_loaded_pending_breadth")))
 
 
 @dataclass(frozen=True)
@@ -2460,6 +2463,19 @@ _BREADTH_EMPTY_WHERE: str = (
     "正式廣度資料接上之前，這一格會一直是未評估")
 
 
+#: DH-REGIME-NOWARROOM（2026-10-23，PR #910）：④ 在「總經尚未載入＋代理廣度不計分」時的 why／where。
+#: why 前半出自 L0 SSOT `shared.regime_arbiter.NOT_LOADED_PENDING_BREADTH_EXPLAIN` 的同一組事實（本頁不另判）；
+#: ⛔ 不暗示更新後就會有位階（`CLAUDE.md` §1.A 第 4 點：灰色說明，不是紅色錯誤）。
+NOT_LOADED_PENDING_BREADTH_WHY_HOLD: str = (
+    "總經這一次使用中還沒有紅綠燈結果；本站**不以「中性」代替未評估**，"
+    "也不改用另一套規則引擎（`macro_state.json`）補出位階（DEC-075）。"
+    "接線後的換股建議在這種情況下只做汰弱，不套攻守")
+NOT_LOADED_PENDING_BREADTH_WHERE_HOLD: str = (
+    f"到{ia_nav.where_to_find(ia_nav.PAGE_TODAY)}{ia_nav.where_to_press(ia_nav.ACTION_UPDATE_TODAY)}"
+    "可以載入今日資料；**但在正式的市場廣度（漲跌家數）資料來源接上前，載入後位階仍為未評估**"
+    "（代理估算值依客戶裁示 DEC-074 不計分）")
+
+
 def build_macro_stage_card(macro: MacroReadout) -> _Built:
     """線框葉1 ④ 的「搭配總經位階」那一半 —— **已接線**。
 
@@ -2513,6 +2529,12 @@ def build_macro_stage_card(macro: MacroReadout) -> _Built:
     elif macro.breadth_unevaluated:   # UI_EMPTY，原因＝缺真實廣度（DEC-075 回修 MUST-2；⛔ 不叫人重抓）
         _note = Note(now=MACRO_EMPTY_NOW, why=_breadth_empty_why(macro.breadth_proxy),
                      where=_BREADTH_EMPTY_WHERE)
+    elif macro.not_loaded_pending_breadth:
+        # 📌 DH-REGIME-NOWARROOM（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：冷啟動時位階依
+        #   DEC-075 D-1(a) 不再退規則引擎快照 ⇒ 本格由 live 變灰。下一段舊句的出口「更新總經之後回到本頁…」在代理廣度
+        #   不計分時會暗示更新後就有位階（不屬實）⇒ 改說屬實的那句；旗標為 True 時下一段舊句逐字照舊。
+        _note = Note(now=MACRO_EMPTY_NOW, why=NOT_LOADED_PENDING_BREADTH_WHY_HOLD,
+                     where=NOT_LOADED_PENDING_BREADTH_WHERE_HOLD)
     else:   # UI_EMPTY
         _note = Note(
             now=MACRO_EMPTY_NOW,

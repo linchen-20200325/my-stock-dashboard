@@ -203,11 +203,23 @@ class TestMacroStageAndCap:
         assert repr(_m) == repr(_macro_card(_pre))
         assert repr(_c) == repr(_cap_card(_pre))
 
-    def test_c_valid_file_same_between_strict_and_default(self, macro_dir):
+    def test_c_valid_file_same_between_strict_and_default(self, macro_dir, monkeypatch):
+        """📌 2026-10-23 DH-REGIME-NOWARROOM（PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：本支舊斷言「warroom 不存在 ＋ 有效檔 ⇒ 退檔案規則引擎位階、`is_loaded=True`」自 #910 起只在代理廣度計分開啟（`BREADTH_PROXY_SCORING_ENABLED=True`）時成立；旗標關（現行）時冷啟動依 DEC-075 D-1(a) 位階未評估。本支改在旗標 True 下守舊語意（原斷言／原數值一字未改），旗標 False 的新行為見下一支。"""
+        import shared.signal_thresholds as STH
+        monkeypatch.setattr(STH, "BREADTH_PROXY_SCORING_ENABLED", True)
         _write(macro_dir / "macro_state.json", _GOOD_STATE)
         assert MSL.get_macro_state({}, strict=True) == MSL.get_macro_state({})
         assert DS.get_station_macro(strict=True) == DS.get_station_macro()
         assert _macro_card().state == UI_LIVE
+
+    def test_c_valid_file_same_between_strict_and_default_flag_off(self, macro_dir):
+        """旗標 False（現行）：有效檔 strict 與預設仍相同（strict 不拋）；卡④ 冷啟動為灰（非 live、非紅）。"""
+        from shared.ui_state import UI_EMPTY
+        _write(macro_dir / "macro_state.json", _GOOD_STATE)
+        assert MSL.get_macro_state({}, strict=True) == MSL.get_macro_state({})
+        assert MSL.get_macro_state({})["is_loaded"] is False
+        assert DS.get_station_macro(strict=True) == DS.get_station_macro()
+        assert _macro_card().state == UI_EMPTY
 
     def test_d_default_callers_unchanged(self, macro_dir):
         _write(macro_dir / "macro_state.json", _FAILSAFE)
