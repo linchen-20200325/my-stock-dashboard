@@ -551,6 +551,7 @@
 
 | ID | 標題 | 狀態／處理方式 | 相鄰／關聯既有項 | next action |
 |---|---|---|---|---|
+| **DH-TWII-MA200** | ^TWII 日線 🔴：9mo 約 179 根 <200 ⇒ `ma200` 退回現價（假值替代）、`market_score` 恆「跌破年線」；殘留 status／confidence／ma200，`etf_tab_ai` 把假 ma200 餵 AI prompt | open；可自行修復（不足 200 根時標未評估）；DEC-070 盤後版實作仍需客戶指派 | 關聯 `VN1-PG-PIT-CONSISTENCY`、`VN1-PG-L-TWII-DROPNA-LOG`；DEC-026、DEC-031 | 等客戶指派 |
 | （關聯 `VN1-PG-PIT-CONSISTENCY`，不另立） | 指數跌破 MA5（Required Core）🔴：無收盤判定、缺棒跨日配對、落後 3 交易日仍 FRESH、未與外資期貨同日檢查 | 需客戶裁示（實作指派） | DEC-070 | 併入該列實作批 |
 | **DH-ADL-PROXY** | 市場廣度 ADL 🔴：`daily_data_fetchers.fetch_adl` 100% 由 ^TWII 推估（`is_proxy` 恆 True、docstring「精確值覆蓋」不實）；`end=today` 不含當日 ⇒ 落後 1 交易日；`market_assessment_apply` 註解稱「市場廣度真值」並計分（代理值計分不符 DEC-062 Q5「代理值只顯示、不計分」）；燈名「漲跌家數比」 | open；可自行修復（off-by-one、標示）＋需研究替代來源/API/MCP（真實家數）＋需客戶裁示（移除計分後健康分怎麼處置 → `DH-GATE-BREADTH`） | 關聯 `VN1-MT-SSOT-ADL-LABEL`（標示部分）、`DH-GATE-BREADTH` | 等客戶指派；計分移除的實作待 `DH-GATE-BREADTH` 裁示後同批 |
 | **DH-JINGQI-HEALTH** | 旌旗／總經健康分 🔴：旌旗＝代理 ADL 5 日均（繼承代理＋D−1）；健康分 0.6×旌旗＋0.4×大盤分 → 位階與建議持股；代理值計分不符 DEC-062 Q5；旌旗近似常數（重建全期平均 49.6、標準差 3.3）；權重校準口徑與線上不同、未驗證；大盤分缺時只剩旌旗；`health_partial` 新 UI 0 讀取 | blocked-on-customer；需客戶裁示（處置方式） | `DH-GATE-BREADTH`；`VN1-MT-SSOT-POSITION` | 隨 `DH-GATE-BREADTH` 裁示 |

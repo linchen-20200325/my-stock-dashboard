@@ -39,7 +39,7 @@
 
 | 資料名稱 | 狀態 | 最新資料日 | 來源 | 問題 | 影響功能 | 處理方式 | BACKLOG ID |
 |---|---|---|---|---|---|---|---|
-| ^TWII 日線 | 🟡 | 2026-10-22（cron parquet） | Yahoo（單源） | 盤中可能取到未收盤值；近 18 列 volume NaN（9/24 起）；9mo 約 179 根 <200 ⇒ `ma200` 退回現價、`market_score` 恆「跌破年線」（score 被 `market_regime` 蓋掉，但殘留 status／confidence／ma200，`etf_tab_ai` 把假 ma200 餵 AI prompt） | 指數技術趨勢、Risk Cap、ETF AI 分析 | 可自行修復（ma200 不足標未評估）＋需客戶裁示（DEC-070 實作指派） | 關聯 `VN1-PG-L-TWII-DROPNA-LOG`、`VN1-PG-PIT-CONSISTENCY` |
+| ^TWII 日線 | 🔴 | 2026-10-22（cron parquet） | Yahoo（單源） | 9mo 約 179 根 <200 ⇒ `ma200` 退回現價（假值替代）、`market_score` 恆「跌破年線」（score 被 `market_regime` 蓋掉，但殘留 status／confidence／ma200，`etf_tab_ai` 把假 ma200 餵 AI prompt）；盤中可能取到未收盤值；近 18 列 volume NaN（9/24 起） | 指數技術趨勢、Risk Cap、ETF AI 分析 | 可自行修復（ma200 不足時標未評估）＋需客戶裁示（DEC-070 盤後版實作指派） | `DH-TWII-MA200`；關聯 `VN1-PG-PIT-CONSISTENCY`、`VN1-PG-L-TWII-DROPNA-LOG` |
 | 指數跌破 MA5（Required Core） | 🔴 | — | ^TWII 推算 | 無收盤判定；缺棒時跨日配對；落後 3 交易日仍判 FRESH；未與外資期貨同日檢查 | Risk Cap 紅線三 | 需客戶裁示（實作指派） | 關聯 `VN1-PG-PIT-CONSISTENCY` |
 | BIAS240 | 🔴 | — | ^TWII 推算（估算值） | `is_estimated` 不被 `dated_inputs.extract_bias240` 讀取，估算值照樣計分；違反 DEC-062 Q5「代理值只顯示、不計分」（同樣適用於總經彙總燈） | Risk Cap（Optional） | 可自行修復（會改 Risk Cap 分數，實作需客戶指派） | `DH-BIAS240-EST` |
 | 市場廣度 ADL | 🔴 | — | ^TWII 日內漲跌線性推估（代理） | `daily_data_fetchers.fetch_adl` 100% 推估（`is_proxy` 恆 True；docstring「精確值覆蓋」不實）；`end=today` 不含當日 ⇒ 落後 1 交易日（複驗以 parquet 重建：live 4/4、backfill 8/11 等於前一日）；`market_assessment_apply` 註解稱「市場廣度真值」並在 `market_regime` 計分；燈名「漲跌家數比」 | 市場位階、總經健康分、廣度燈 | 可自行修復（off-by-one、標示）＋需研究替代來源/API/MCP（真實家數）＋需客戶裁示（移除代理廣度計分後健康分怎麼處置 → `DH-GATE-BREADTH`） | `DH-ADL-PROXY`；關聯 `VN1-MT-SSOT-ADL-LABEL`、`DH-GATE-BREADTH` |
@@ -197,8 +197,8 @@
 | 狀態 | 列數 |
 |---|---|
 | 🟢 HEALTHY | 7 |
-| 🟡 LIMITED | 26 |
-| 🔴 BROKEN／MISLEADING | 26 |
+| 🟡 LIMITED | 25 |
+| 🔴 BROKEN／MISLEADING | 27 |
 | ⬜ UNAVAILABLE | 5 |
 | 合計 | 64 |
 
