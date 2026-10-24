@@ -542,7 +542,7 @@
 - **階段狀態**：C1 完成後**停下等客戶裁示**；下一步**不是**自動做 C2（DEC-077 第 5 點）。C2 前仍需裁示：`DEC076-CONFIRM` ①②、`PROXY-SEMANTICS`（BIAS240／PCR／台灣 PMI 一起）、`CV1-DR-11`、C2 Decision Gate、`RC-VISIBILITY`（C2 後）。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：CI、QA、零輸出驗證結論為**總管查證後轉述**；撰寫組只以 `git show --stat 37cf87e6`、`gh api repos/:owner/:repo/pulls/913` 與 `git grep` 核對 merge／head SHA 與關鍵符號，**未重跑測試、未重做 before／after**。
 
-## 31. `PROXY-SEMANTICS`／C2 Decision Gate 研究摘要（2026-10-24，待裁示）
+## 31. `PROXY-SEMANTICS`／C2 Decision Gate 研究摘要（2026-10-24，~~待裁示~~ **已裁示 DEC-080**（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080））
 
 > 2026-10-24 新增（append-only）。⚠️ **AI 研究結論，不是客戶裁示**；三組獨立唯讀研究（A 程式路徑、B 治理文件、C 紅隊行為實證；基準 main `f48b30bf`）。**方案全文、Q1～Q6、三套方案比較、六題待裁示只在 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` §7**；新登記只在 `docs/BACKLOG.md` 5.1.11；本節只放現行契約摘要＋pointer。各事實的「兩組交叉／單組」標記見 Gate §7.1。
 
@@ -552,5 +552,6 @@
 - **freshness／PIT**：各 input 各自判新鮮、無跨 input 同日比對；16 燈無新鮮度閘門、無 as_of（VIX 燈可用過期值判燈，Risk Cap 同時判過期不計分）；盤中未收 K 棒排除不涵蓋 VIX／BIAS／MA5；快照有 `input_asof` 但 UI 不揭露混日；forward ledger 不含 Risk Cap。
 - **新 UI 看不到 Risk Cap 的根因**（單組實測，C）：`BREADTH_PROXY_SCORING_ENABLED=False` → 健康分恆 None → allocation 未評估 →「系統風險上限」不進 `caps` ⇒ 快照有效上限 40% 但卡①／卡⑤ 顯示「尚未評估」（`RC-VISIBILITY`）。
 - **§30.3 補正（append-only；§30.3 原文未改）**：「位階／16 燈／健康分與 Risk Cap 互相獨立」需加限定 —— 健康分是 16 燈第一盞（單組，C）；位階第 3 順位來源＝Risk Cap 引擎 `market_regime`，目前被同一旗標封住（兩組交叉，A、C）。
-- **待客戶裁示**（6 題，Gate §7.4；推薦一律「總管推薦，待客戶裁示」，⛔ 非 Approved）：資料身分規則選方案（推薦方案 2 分層兩軸）；BIAS240 估算是否退出 Risk Cap 計分；PCR 法人估算是否退出；PMI 第三方轉載／沿用快照可否滿足必要核心；7 天沿用是否加揭露（不改計算）；C2 是否先做 shadow（C2a）再改計分（C2b）。`DEC076-CONFIRM` ①② 仍未裁示且與 16 燈處置相關。
-- **仍禁止施工**：C1′、C2 實作（含 C2a）、VN1-PG production write（`PRODUCTION_WRITE_APPROVED=False`）、Risk Cap 公式／門檻／權重、`is_proxy` 語意修正、新增或替換 production source、`RC-VISIBILITY` UI 改動（需線框）。
+- ~~**待客戶裁示**~~ **已裁示（見本節末條 DEC-080）**（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080）（6 題，Gate §7.4；推薦一律「總管推薦，待客戶裁示」，⛔ 非 Approved）：資料身分規則選方案（推薦方案 2 分層兩軸）；BIAS240 估算是否退出 Risk Cap 計分；PCR 法人估算是否退出；PMI 第三方轉載／沿用快照可否滿足必要核心；7 天沿用是否加揭露（不改計算）；C2 是否先做 shadow（C2a）再改計分（C2b）。`DEC076-CONFIRM` ①② 仍未裁示且與 16 燈處置相關。
+- **仍禁止施工**（裁示前狀態；現行範圍見本節末條）：C1′、C2 實作（~~含 C2a~~ C2a 已由 DEC-080 指派（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080））、VN1-PG production write（`PRODUCTION_WRITE_APPROVED=False`）、Risk Cap 公式／門檻／權重、`is_proxy` 語意修正、新增或替換 production source、`RC-VISIBILITY` UI 改動（需線框）。
+- **已裁示（DEC-080，客戶 2026-10-24；append-only）**（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080）：裁示逐字全文只在 `docs/DECISIONS.md` **DEC-080**；Gate 各題標記見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` §7.4／7.7；施工列見 `docs/BACKLOG.md` 5.1.10 **C2a**／**C2b**。摘要：(1) 資料身分／計分契約＝**方案 2**（provenance 與 freshness 分開；as_of、source_id；exists／fresh／displayable／scoring eligible／Risk Cap eligible 不得壓成同一 boolean）；(2) BIAS240 估算＝不參與 Risk Cap 計分、可顯示＋標示、Optional 未評估、不阻斷；(3) PCR 法人估算＝不參與 Risk Cap 計分、可顯示＋標示 `proxy_estimate`、只有正式 PCR 契約資料可用原門檻；(4) 台灣 PMI＝不套 blanket rule，正式來源修正為正確 provenance，同一正式序列 secondary 可滿足 Core（揭露來源），carried_forward 只在**正式定義**的發布期內並顯示「沿用」，超過 → unavailable → 不產生新 cap；⛔ 不自定發布期天數（總管判定現有規則不構成正式定義；C2a 記為 `undetermined_pending_spec`、不自定數字；規格提案於 C2a 觀測後隨 C2b Gate 送客戶：`docs/BACKLOG.md` `DH-PMI-PUBLICATION-WINDOW-SPEC`）；(5) 7 天沿用要揭露，屬 `RC-VISIBILITY`、先線框；(6) **先 C2a 再 C2b**：C2a＝observability／contract implementation（零投資輸出變更，高能力模型／Effort High／完整 QA），C2b＝C2a 觀測結果後另送 Decision Gate、未另行裁示不得改計分。`DEC076-CONFIRM` ①② 維持 pending、與 C2 分開。⛔ 現行仍禁止：C2b、C1′、DEC-076 ①②、Risk Cap 公式／門檻／權重／Required Core 數量、production write（`PRODUCTION_WRITE_APPROVED=False`）、Daily Schedule、`RC-VISIBILITY` 正式 UI、新增或替換 production source。
