@@ -132,6 +132,7 @@
 - **何時**：換對話、換模式、大型階段切換、不可逆動作前、長工作結束、context 過長之前。
 - **確認清單**：working tree 是否乾淨、main SHA（附時間）、open PR、main CI、未提交內容與殘留 worktree／stash、~~四檔是否同步~~ 五檔是否同步（第 15 節 Handoff Save Check；2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068）、下一步。
 - ⚠️ 已知「現存未處理物件」：舊 UI 壓測 `stash@{0}` **不恢復、不提交、不推送**（DEC-019）；只在原容器本機，接手者不得嘗試還原。
+- 📌 **預判性觸發**（2026-10-24 新增，DEC-079）：額度／context／session 壽命預判不足時須主動走本節 Safe Checkpoint，不等歸零；見第 11 節「預判性觸發」。
 
 ## 第 7 節｜Definition of Done
 
@@ -275,6 +276,13 @@ Effort：Low / Medium / High
 - 本檔（含第 3 節靜默巡航、第 9 節 Effort 自主管理）是**永久規則**：新對話讀完本檔即自動繼承，不需客戶再次提醒；不得只寫在 HANDOFF、對話或單次 prompt（DEC-059）。
 - **不得要求客戶重講已落盤資訊**（`PROCESS.md` §1「嚴禁要求使用者重複解釋」；DEC-014「不重新摘要；不重問；不重做」）。
 - AI 自動產生的對話壓縮摘要**不是客戶原文**，不得當 Decision 來源（DEC 來源類別規則，`docs/DECISIONS.md` 0.1）。
+- **預判性觸發（Quota／Context Loss Safe Checkpoint）**（2026-10-24 新增，客戶正式裁示，DEC-079；本條為追加，不取代上列各條）：
+  - **觸發條件**：AI 判斷剩餘額度、context、session 壽命或對話容量**可能不足以安全完成「下一個完整工作階段」**時即觸發；⛔ 不得等到額度歸零、context 被截斷或 session 強制結束才處理交接。
+  - **動作**：先到最近的 Safe Checkpoint（第 6 節），執行第 15 節 Handoff Save Check 與 Context Loss Check（引用，不複製清單），把已形成的重要資訊落盤到 GitHub。與第 15 節現有清單的**差額**只有：(1) 範圍擴及「已形成但尚未落盤」的新客戶裁示、已確認研究結論、新發現、風險（新發現依第 12 節）；(2) 同步記錄 main SHA、Open PR、CI 狀態、working tree／未提交內容／worktree／stash、current active work、blocker、下一個唯一 safe point（第 6 節與 HANDOFF 已有欄位，未提交內容無法落盤時須在 HANDOFF 明記其位置與風險）。下一階段建議模型／Effort 已在第 15 節 F 項與第 6 點，不另寫。
+  - **順序**：GitHub 紀錄完成**之後**才換對話／換額度。
+  - **導引不是事實來源**：聊天摘要、AI 記憶、handoff prompt 只能作導引，不得成為唯一事實來源（與第 15 節第 3 點優先序同向）。
+  - **目標**：即使原對話突然不可用，新 AI 只靠 GitHub 即可重建正確狀態並繼續。
+  - ⚠️ 「預判」為 AI 自判，無法客觀查證；邊界不清時取嚴（寧可提早落盤）。
 
 ## 第 12 節｜新發現落盤
 
@@ -355,6 +363,8 @@ Effort：Low / Medium / High
    - ⛔ **任何答案為「有」且尚未保存時：不得宣告交接完成。**
    - 分類時：尚未核准的構想一律進 BACKLOG 的 Candidate／Decision Gate，⛔ 禁止升格成 Approved；已正式存在者不重複登記。
 6. **Model／Effort Gate 納入啟動與交接**（2026-10-23 新增，DEC-073；客戶原文「並納入 Context Loss Check／交接規則，確保新 Claude 對話也會自動讀到，不再依賴客戶每次提醒。」）：(1) 新對話完成第 3 點啟動程序後、以及每個下一完整階段／Batch 開始前，**必須執行第 9.0 節強制 Model／Effort Gate**；(2) `docs/HANDOFF.md` 第 0 節須記錄**下一階段建議模型／能力等級與建議 Effort**（Context Loss Check F 項）；(3) HANDOFF 記錄的建議只是參考，新對話仍須依實際工作重新判斷，不得當成已切換的證明（客戶原文第 3 步「不得自行假設模型或 Effort 已切換」）。
+7. **預判性觸發**（2026-10-24 新增，DEC-079）：額度／context 預判不足時不等歸零，提前執行本節 Handoff Save Check 與 Context Loss Check；規則見第 11 節「預判性觸發」。
+
 
 ## 第 16 節｜交接 Freeze 永久規則（客戶 2026-10-23 Freeze 指示）
 
