@@ -203,10 +203,10 @@
 | Open PR | 0（`gh api pulls?state=open` 空） |
 | main CI | `ea176b8d` Fast checks（job 120898574713）success、Slow tests（job 120898574513）success |
 | 完成到哪 | **C2a-2 done**（#920；觀測欄 `input_provenance_shadow`，零投資輸出變更）。**C2b 暫停**：等真實寫檔輪次的觀測結果後再備 C2b Decision Gate（⛔ 不得開始 C2b） |
-| current task | **📊 大盤頁 Decision Gate 已備妥**：`docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`（v2；舊→新覆蓋矩陣、文字線框、可施工 W1～W13、卡住 G*、裁示題 Q1～Q4）。⛔ **未核准**；矩陣「沒有遺漏」**未證明**（三次皆單組），v2 修訂未經第二輪複驗（該檔附錄 C） |
-| working tree／stash／worktree | 2026-10-25 00:04 台北：branch `claude/determined-euler-32xqjn`＠`1f4540a1`（＝main `ea176b8d`＋2 個 commit：`6da53f5e`、`1f4540a1`，新增上列 Gate 檔，尚未開 PR）；`git status`（00:06 台北）未提交：本批三份 docs＋Gate 檔本身（另一 agent 編輯中）；`git stash list` 空；`git worktree list` 只有主 worktree。⚠️ 另一 agent 仍在編輯 Gate 檔，以 `git status` 實查為準 |
+| current task | **📊 大盤頁 Decision Gate 已備妥**：`docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`（~~v2~~ v3（commit `ab8b8342`；另一 agent 正在做 v3.1 措辭修正）；已完成**三輪獨立複驗**（第三輪結論：剩餘項皆為措辭，修正中）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；舊→新覆蓋矩陣、文字線框、可施工 W1～W13、卡住 G*、裁示題 Q1～Q4）。⛔ **未核准**；矩陣「沒有遺漏」**仍未證明**~~（三次皆單組），v2 修訂未經第二輪複驗（該檔附錄 C）~~（每輪皆單組；見該檔附錄 C）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| working tree／stash／worktree | ~~2026-10-25 00:04 台北：branch `claude/determined-euler-32xqjn`＠`1f4540a1`（＝main `ea176b8d`＋2 個 commit：`6da53f5e`、`1f4540a1`，新增上列 Gate 檔，尚未開 PR）；`git status`（00:06 台北）未提交：本批三份 docs＋Gate 檔本身（另一 agent 編輯中）；~~ **2026-10-25 00:11 台北**：branch `claude/determined-euler-32xqjn`＠`ab8b8342`（＝main `ea176b8d`＋4 個 docs commit：`6da53f5e`、`1f4540a1`、`c3b3fd7e`、`ab8b8342`）；總管將以 PR 合併此 branch（00:11 實查尚無 open PR）；`git status` 在本批 docs 編修前乾淨（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；`git stash list` 空；`git worktree list` 只有主 worktree。⚠️ 另一 agent 仍在編輯 Gate 檔，以 `git status` 實查為準 |
 | blocker／Decision Required | **客戶裁示 Q1～Q4**（Gate 檔 §6）；C2b Decision Gate（待觀測）；`DH-PMI-PUBLICATION-WINDOW-SPEC`；`DEC076-CONFIRM` ①②；`RC-VISIBILITY`（線框）；`UIM-MKTGATE-DOC-DRIFT`（只登記） |
-| **唯一 Next Safe Action** | 等客戶裁示 Q1～Q4 → 裁示後開 **大盤頁實作批**（Gate 檔 §4 的 W* 清單；先過 9.0 Gate） |
+| **唯一 Next Safe Action** | ~~等客戶裁示 Q1～Q4 → 裁示後開 **大盤頁實作批**（Gate 檔 §4 的 W* 清單；先過 9.0 Gate）~~ Gate 已送客戶（2026-10-25）→ 等客戶裁示 Q1～Q4 → 大盤頁實作批（Gate 檔 §4 的 W* 清單；先過 9.0 Gate）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 | 下一階段 Model／Effort | 實作批：**高能力模型／Medium～High**（UI 接線 Medium；凡碰 Risk Cap 顯示的部分 High）；建議只是參考，須依第 9.0 節重新判斷，不得假設已切換 |
 | 禁止事項 | 線框核准前寫 UI code；恢復 Risk Cap 顯示（`RC-VISIBILITY`）；C2b；改公式／門檻／權重；新增或替換資料來源；刪舊 UI；其餘沿用「C2a-2 後」「C2 裁示後」段 |
 | Production | `PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-25 grep `shared/risk_cap_history_policy.py:216` 實查，未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
