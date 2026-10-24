@@ -950,10 +950,17 @@ High
 
 ### DEC-077｜Data Health 批 2 × VN1-PG 邊界裁示：採方案 C（拆批）；C1 指派（只做資料可觀測性／provenance metadata、零投資輸出變更）；C1′ 等 DEC-076 ①；C2／VN1-PG 另開 Decision Gate；Freeze「新 Batch」只對 C1 解除（客戶 2026-10-24）
 > 2026-10-24 追加（第 8 節「收到當輪追加」；ID 照序取下一個未用號，撰寫組寫入前 `git grep -oh "DEC-0[0-9]*" -- docs/DECISIONS.md | sort -u` 實測最大為 DEC-076）。BACKLOG 登記：§1 `DR-2026-10-24-1`；新節 **5.1.10**（`DH-C1-*`、C1′、C2、`RC-VISIBILITY`、`PROXY-SEMANTICS`、研究發現各列）；受影響既有列 `DH-BIAS240-EST`／`DH-PCR-PROXY`／`DH-MACRO-FWD-ASOF`／`DH-REFRESH-STALE`（5.1.7）、`DH-FT-SCHEMA-ASOF`／`DH-JINGQI-STALE-SESSION`（5.1.8）、`DH-LAMP-STALE`／`DH-ADL-PROXY`（5.1.7）、`VN1-PG-L-TWII-DROPNA-LOG`（5.1.4）。研究摘要：`docs/PROJECT_STATE.md` §30。
-- **背景**（⚠️ **總管 2026-10-24 Decision Gate 送題摘要，非客戶原文**；撰寫組依總管提供之研究結論檔與送題草稿整理，**未見送題全文**）：
+- **背景**（⚠️ **總管送題摘要、非客戶原文**：總管 2026-10-24 撰寫並送出的 Decision Gate 摘要，經總管轉交撰寫組；以下依該摘要整理，非逐字）：
   - **觸發**：DEC-075 第 4 點的重評條件（批 A＋1' 合併、獨立 QA、CI、main verification）全部成立（main verification 見 DEC-075 2026-10-24 附註）。總管派 A（治理文件）、B（程式碼重疊）、D（資料血緣）、E（VN1-PG 失效傳播，沙箱實跑純函式）四組獨立唯讀調查 → 總管交叉比對 → F 組獨立紅隊否證（14 條承重宣稱：9 成立、4 部分成立已修正、1 條由總管以 GitHub Actions API 自查成立）。基準 main `649f7393`。
-  - **題 1（邊界方案）**：方案 A／B／C 三案；**總管推薦方案 C＝拆分批 2**：C1（DH-only、零投資輸出變更）先做；C1′（指標危險度子批）等 DEC-076 ①；C2（VN1-PG「Risk Cap 輸入有效性批」，吸收 BIAS240／PCR 計分准入與 `DH-REFRESH-STALE` Risk Cap 側）另開 Decision Gate。⚠️ 方案 A、B 的具體內容撰寫組**未取得送題原文，不轉述**；以客戶原文「採方案 C」「同意總管推薦的拆分方式」為準。
-  - **題 2（C1 範圍）**：C1 包含哪些項目。⚠️「題 1／題 2」的編號為撰寫組依客戶回覆第 1、2 點反推，非送題原文。
+  - **方案比較**（總管送題摘要）：
+    - **A：批 2 先獨立完成** —— 語意風險高（BIAS240／PCR 代理定義未裁示，且牽動台灣 PMI）；Risk Cap 輸入核心程式（`dated_inputs`／`macro_engine_inputs`）至少改兩輪、PCR「往回找」邏輯可能重寫、兩套日期判斷、規則版本可能升兩次；QA 高；rollback 中；不阻塞新 UI。
+    - **B：批 2 與 VN1-PG 合併** —— 無重工，但單一大 PR（引用測試檔約 81 個，grep 計數）、QA 最難、rollback 粗（一退全退）；所有資料修復須等 VN1-PG 語意裁示 ⇒ 阻塞。
+    - **C：拆分批 2** —— C1 DH-only（零投資輸出變更、Medium、不需線框）現在做；C1′ 指標危險度子批（16 燈新鮮度＋`bias_240` 燈估算值＋`fut_net` 凍結一致性）等 DEC-076 ①；C2＝VN1-PG「Risk Cap 輸入有效性批」（三項 MUST＋PIT 技術缺口＋凍結值＋代理計分規則 BIAS240／PCR／PMI 一次定、規則版本只升一次），C1 後另行指派。語意風險低、重工很小、QA 低、rollback 乾淨、不阻塞新 UI。
+    - **總管推薦：C。**
+  - **題 1**（總管送題摘要）：是否採方案 C，並只指派 C1（只解除 Freeze「新 Batch」、範圍限 C1；VN1-PG、C1′、C2 仍凍結）？總管推薦：是。
+  - **題 2**（總管送題摘要）：Risk Cap 在位階未評估時看不到數字，要不要另開一題？總管推薦：登記為獨立題，排在 C2 之後再出線框（先修 PIT 漏洞再讓數字回主卡）。
+  - **送題時標明「現在不必答」**：C1′ 燈號語意（等 DEC-076 ①）；C2 代理計分規則與實作指派（C1 完成後）。
+  - 對映（撰寫組讀法）：客戶第 1 點答題 1（採 C、只解除 C1 的「新 Batch」）；客戶第 3 點 A 項答題 2（Risk Cap visibility 列為獨立待決、PIT／C2 後再做 UI Decision Gate、目前不恢復顯示，與總管推薦同向）；客戶第 2 點（C1 三類範圍）、第 3 點 B 項（Proxy semantics）、第 4、5 點為客戶**主動補充**的範圍與程序要求，非送題題目。
 - **內容**（客戶原文；經總管轉交，撰寫組未見原件，依總管轉交文字逐字收錄，第 1～5 點全文）：
 
 ```
