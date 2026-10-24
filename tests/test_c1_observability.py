@@ -1029,6 +1029,68 @@ def test_ascii_stdout_caller_return_unchanged(site, monkeypatch, tmp_path):
         _assert_same(mut_ret, pre_ret)
 
 
+class _BrokenPipeOut:
+    """write／flush 一律 BrokenPipeError 的 stdout（管線下游已關閉）。"""
+    encoding = "utf-8"
+
+    def write(self, *_a):
+        raise BrokenPipeError(32, "Broken pipe")
+
+    def flush(self):
+        raise BrokenPipeError(32, "Broken pipe")
+
+
+def _bad_stdout(kind):
+    import io
+    if kind == "closed":
+        s = io.StringIO()
+        s.close()
+        return s
+    return _BrokenPipeOut()
+
+
+@pytest.mark.parametrize("kind", ["closed", "broken-pipe"])
+def test_safe_print_falls_back_to_stderr(kind, monkeypatch):
+    """C1 第三輪第 1 點：stdout 已關閉／broken pipe ⇒ 改寫 `sys.__stderr__`（ASCII 跳脫版），不拋例外。"""
+    import io
+    from shared.na_drop_log import log_na_drop
+    err = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", _bad_stdout(kind))
+    monkeypatch.setattr(sys, "__stderr__", err)
+    s = pd.Series([np.nan, 1.0], index=pd.date_range("2026-10-01", periods=2))
+    log_na_drop(s, s.dropna(), tag="t/f", series="^X")
+    assert err.getvalue().startswith("[t/f] \\u26a0") and "2026-10-01" in err.getvalue(), err.getvalue()
+
+
+@pytest.mark.parametrize("err_kind", ["closed", "broken-pipe", "none"])
+def test_safe_print_gives_up_only_when_no_channel(err_kind, monkeypatch):
+    """stdout 與 stderr 都寫不出去（或沒有 stderr）⇒ 放棄這一行 log，⛔ 不拋例外（唯一放棄點）。"""
+    from shared.na_drop_log import log_na_drop
+    monkeypatch.setattr(sys, "stdout", _bad_stdout("closed"))
+    monkeypatch.setattr(sys, "__stderr__", None if err_kind == "none" else _bad_stdout(err_kind))
+    s = pd.Series([np.nan, 1.0], index=pd.date_range("2026-10-01", periods=2))
+    log_na_drop(s, s.dropna(), tag="t/f", series="^X")       # 不拋
+
+
+@pytest.mark.parametrize("kind", ["closed", "broken-pipe"])
+@pytest.mark.parametrize("site", ["mcr_twii", "cboe_vix3m", "yf_close"])
+def test_bad_stdout_caller_return_unchanged(site, kind, monkeypatch, tmp_path):
+    """C1 第三輪第 1 點：stdout 已關閉／broken pipe 時，有缺值被清的呼叫端回傳與 C1 前相同（不因 log 改拋例外）；
+    log 改出現在 stderr。"""
+    import io
+    rel, fn, tag = _SITES[site]
+    extra = (tmp_path,) if site in _SITES_WITH_TMP else ()
+    new_mod, pre_mod = _current_module(rel), c1_pre_module(rel)
+    err = io.StringIO()
+    monkeypatch.setattr(sys, "__stderr__", err)
+    monkeypatch.setattr(sys, "stdout", _bad_stdout(kind))
+    tk = f"C1B{next(_uid)}"
+    new_ret = fn(new_mod, monkeypatch, (2, 5), tk, *extra)
+    pre_ret = fn(pre_mod, monkeypatch, (2, 5), tk, *extra)
+    _assert_same(new_ret, pre_ret)
+    assert f"[{tag}] \\u26a0" in err.getvalue(), err.getvalue()
+
+
 def test_fetch_single_dead_close_branch_untouched():
     """`_fetch_single_cached` 的 `elif 'Close'` 分支（欄名已先小寫化 ⇒ 死碼）規格明訂不動。"""
     src = (REPO / _DDF).read_text(encoding="utf-8")
@@ -1434,6 +1496,36 @@ class TestLegAsOfFromInputs:
         pd.testing.assert_frame_equal(args["li_latest"], snap["li_latest"])
 
 
+_WEIRD = [None, float("nan"), np.nan, pd.NaT, pd.NA, "", "2026-10-1", "abc", 20261022, 3.5,
+          pd.Timestamp("2026-10-22 23:30", tz="Asia/Taipei"), pd.Timestamp("2026-10-22", tz="UTC"),
+          [1], {"a": 1}, ("2026-10-22",), b"20261022", object()]
+
+
+@pytest.mark.parametrize("x", _WEIRD, ids=lambda v: type(v).__name__ + ":" + repr(v)[:20])
+def test_leg_as_of_output_never_breaks_build_signal_row(x):
+    """契約（C1 第三輪）：`leg_as_of_from_inputs` 的輸出直接餵 `build_signal_row`，對任何怪輸入都不得 raise
+    ⇒ 「C1 不會讓帳本不寫列」。四欄只會是 None 或 'YYYY-MM-DD'。"""
+    from src.compute.macro.macro_forward_test import build_signal_row, leg_as_of_from_inputs
+
+    def _df(col):
+        try:
+            return pd.DataFrame({col: [x]})
+        except Exception:   # noqa: BLE001 — 建不出 DataFrame 的怪值直接當整個物件傳
+            return x
+    variants = [
+        dict(mkt_info={"index_as_of": x}, inst={"外資": {"net": 1.0}}, inst_date=x,
+             df_adl=_df("date"), li_latest=_df("_date")),
+        dict(mkt_info=x, inst=x, inst_date=x, df_adl=x, li_latest=x),
+        dict(mkt_info={"index_as_of": x}, inst=[x], inst_date=x, df_adl=pd.DataFrame(), li_latest=None),
+    ]
+    for kw in variants:
+        leg = leg_as_of_from_inputs(**kw)
+        assert set(leg) == set(_LEG)
+        assert all(v is None or re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) for v in leg.values()), leg
+        row = build_signal_row(_tl(), date="2026-10-22", captured_at="c", leg_as_of=leg)
+        assert {k: row[k] for k in _LEG} == leg
+
+
 # ── cron main()：隔離所有真實 I/O（同 tests/test_macro_fwd_test_c12.py::_isolate）────
 def _cron_isolate(monkeypatch, tmp_path, *, mkt_info):
     import streamlit as st
@@ -1606,6 +1698,89 @@ def _leg_usage_problems(mft_src: str, cron_src: str) -> list[str]:
         if (isinstance(node, ast.Name) and node.id == "_leg_as_of" and isinstance(node.ctx, ast.Load)
                 and id(node) not in ok_ids):
             probs.append(f"cron:{node.lineno} `_leg_as_of` 被讀於 build_signal_row 以外")
+    probs += _build_signal_row_leg_problems(tree)
+    probs += _cron_leg_call_problems(_cron_tree)
+    return probs
+
+
+#: build_signal_row 內與各腿日期有關的名稱（參數＋區域變數）。
+_BSR_LEG_VARS = {"leg_as_of", "_leg", "_raw", "_v"}
+#: 准許讀寫這些名稱的**整條敘述**（AST 結構比對，不看行號）：dict 建構／未知鍵檢查／取值／iso 收斂／寫入。
+_BSR_ALLOWED_STMTS = (
+    "_leg = dict(leg_as_of or {})",
+    "_leg_unknown = set(_leg) - set(MACRO_FWD_TEST_LEG_AS_OF_COLUMNS)",
+    "_raw = _leg.get(_k)",
+    "_v = iso_date_or_none(_raw)",
+    "row[_k] = _v",
+)
+#: 唯一准許的判斷：有值卻轉不出日期 ⇒ raise（第二輪第 3 點的 fail loud）。
+_BSR_ALLOWED_IF_TEST = "_v is None and not _is_missing_scalar(_raw)"
+
+
+def _build_signal_row_leg_problems(tree) -> list[str]:
+    """build_signal_row 中 `leg_as_of`／`_leg`／`_raw`／`_v` 只准出現在白名單敘述；其餘 If／Compare／Return／BoolOp… 一律紅。"""
+    import ast
+    allowed = {ast.dump(ast.parse(src).body[0]) for src in _BSR_ALLOWED_STMTS}
+    allowed_test = ast.dump(ast.parse(_BSR_ALLOWED_IF_TEST, mode="eval").body)
+    fn = next((n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "build_signal_row"), None)
+    if fn is None:
+        return ["mft: 找不到 build_signal_row"]
+    probs: list[str] = []
+
+    def _own_exprs(st):
+        """敘述「自己」的運算式（不含巢狀敘述）。"""
+        out = []
+        for field, val in ast.iter_fields(st):
+            if field in ("body", "orelse", "finalbody", "handlers"):
+                continue
+            for v in (val if isinstance(val, list) else [val]):
+                if isinstance(v, ast.AST) and not isinstance(v, ast.stmt):
+                    out.append(v)
+        return out
+
+    def _uses_leg(nodes) -> bool:
+        return any(isinstance(x, ast.Name) and x.id in _BSR_LEG_VARS for n in nodes for x in ast.walk(n))
+
+    def _visit(stmts, in_allowed_if=False):
+        for st in stmts:
+            if _uses_leg(_own_exprs(st)):
+                ok = False
+                if ast.dump(st) in allowed:
+                    ok = True
+                elif (isinstance(st, ast.If) and ast.dump(st.test) == allowed_test and not st.orelse
+                      and len(st.body) == 1 and isinstance(st.body[0], ast.Raise)
+                      and isinstance(st.body[0].exc, ast.Call)
+                      and getattr(st.body[0].exc.func, "id", None) == "ValueError"):
+                    ok = True
+                elif isinstance(st, ast.Raise) and in_allowed_if:
+                    ok = True
+                if not ok:
+                    probs.append(f"mft:{st.lineno} build_signal_row 在白名單外讀寫各腿日期"
+                                 f"（{type(st).__name__}）")
+            _ok_if = (isinstance(st, ast.If) and ast.dump(st.test) == allowed_test)
+            for field in ("body", "orelse", "finalbody"):
+                _visit(getattr(st, field, []) or [], in_allowed_if=_ok_if and field == "body")
+            for h in getattr(st, "handlers", []) or []:
+                _visit(h.body)
+
+    _visit(fn.body)
+    return probs
+
+
+def _cron_leg_call_problems(cron_tree) -> list[str]:
+    """cron：`leg_as_of_from_inputs(...)` 的結果只准**直接**指派給 `_leg_as_of`；名稱本身不得另作他用。"""
+    import ast
+    probs: list[str] = []
+    ok_calls = set()
+    for node in ast.walk(cron_tree):
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name) and node.targets[0].id == "_leg_as_of"
+                and isinstance(node.value, ast.Call)
+                and getattr(node.value.func, "id", None) == "leg_as_of_from_inputs"):
+            ok_calls.add(id(node.value.func))
+    for node in ast.walk(cron_tree):
+        if isinstance(node, ast.Name) and node.id == "leg_as_of_from_inputs" and id(node) not in ok_calls:
+            probs.append(f"cron:{node.lineno} leg_as_of_from_inputs 的結果未直接指派給 _leg_as_of")
     return probs
 
 
@@ -1621,7 +1796,20 @@ def test_no_judgement_reads_leg_dates():
     ("mft", "        row[_k] = _v\n", "        row[_k] = _v\n        if row['li_as_of'] is None:\n            pass\n"),
     ("cron", "    if args.dry_run:\n", "    if _leg_as_of and args.dry_run:\n"),
     ("cron", "    if args.dry_run:\n", "    _x = _leg_as_of\n    if args.dry_run:\n"),
-], ids=["const-in-other-func", "judge-on-column", "cron-judge", "cron-extra-read"])
+    # ── C1 第三輪：QA 實測守衛漏抓的三種寫法 ──
+    ("mft", "    _leg = dict(leg_as_of or {})\n",
+     "    _leg = dict(leg_as_of or {})\n    if not leg_as_of:\n        raise ValueError('x')\n"),
+    ("mft", "        row[_k] = _v\n", "        if _v is None:\n            return None\n        row[_k] = _v\n"),
+    ("cron", "    row = build_signal_row(\n",
+     "    if not all(leg_as_of_from_inputs(mkt_info={}, inst=inst, inst_date=None,\n"
+     "                                     df_adl=df_adl, li_latest=df_li).values()):\n"
+     "        return 1\n    row = build_signal_row(\n"),
+    # 其他白名單外寫法（Return／BoolOp／Compare）
+    ("mft", "    return row\n", "    return row if _v else row\n"),
+    ("mft", "        row[_k] = _v\n", "        row[_k] = _v or _raw\n"),
+], ids=["const-in-other-func", "judge-on-column", "cron-judge", "cron-extra-read",
+        "qa-if-not-leg-raise", "qa-if-v-none-return", "qa-cron-all-values-return",
+        "return-uses-v", "boolop-write"])
 def test_leg_guard_mutations_turn_red(target, old, new):
     """突變：在非產生者函式用常數／在判斷式讀欄名／cron 讀 `_leg_as_of` ⇒ 守衛抓得到。"""
     mft = (REPO / _MFT).read_text(encoding="utf-8")
