@@ -45,12 +45,12 @@ jobs:
   # Slow lane — AppTest(單測約 1-30s)
   # 非阻擋(continue-on-error),作為 informational signal
   # 對齊 Fund pr-check.yml 結構 + v18.283 引入
+  # 2026-10-24 客戶裁示 DEC-078：與 Fast 平行開始(不再 needs: fast-checks);Fast 仍 blocking、Slow 仍 informational
   # ════════════════════════════════════════════════════════════
   slow-tests:
     name: "Slow tests (AppTest, informational)"
     runs-on: ubuntu-latest
     continue-on-error: true
-    needs: fast-checks
     steps:
       - uses: actions/checkout@v4
 

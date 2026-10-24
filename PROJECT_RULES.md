@@ -426,3 +426,14 @@ Effort：Low / Medium / High
 
 - **交接優先順序**：**GitHub 實況 > `docs/HANDOFF.md` > `docs/PROJECT_STATE.md` > AI 記憶／聊天摘要**（客戶第 1 節原文「GitHub 實況 > HANDOFF > PROJECT_STATE > AI 記憶／聊天摘要。若文件與 GitHub 不一致：先修正文件。」）。已存在於第 15 節第 3 點第 4 款、第 1.1 節，同向；本款只重申。
 - **新 AI 接手時**：(1) `git fetch` 並實查 GitHub；(2) 必讀五個 SSOT：`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、`docs/HANDOFF.md`、`docs/PROJECT_STATE.md`（上位 `CLAUDE.md` 依第 0.1 節同樣須讀）；(3) **動工前先跑第 9.0 節 Model／Effort Gate**。已存在於第 15 節第 3、6 點；本款只重申。
+
+## 第 17 節｜Minimum Sufficient Effort／Test Scope（客戶 2026-10-24，DEC-078）
+
+> 裁示全文見 `docs/DECISIONS.md` **DEC-078**。本節是永久規則，與 9.1（Minimum Sufficient Effort）同向並補測試範圍。
+
+- **原則**：安全小批次、純文件、metadata／provenance、純 UI、小型低風險修正，採 Minimum Sufficient Effort，可用 Low／Medium，**優先 targeted tests**；⛔ 不得因形式上的嚴謹一律升為 High＋全庫重跑。
+- **仍須 High＋完整 QA**：Risk Cap、投資語意、資料有效性、proxy／estimated eligibility、freshness／PIT、投資公式／門檻／權重、L3／跨模組高風險改動。邊界不清時取嚴（歸 High）。
+- **與第 7 節 DoD 的關係**：DoD 寫的是「relevant tests」，本節說明何謂 relevant：targeted tests 足以證明低風險修改正確時，不機械性要求全庫重跑。DoD 其餘步驟（independent audit、PR、CI、main verification、SSOT 更新）**不變**。
+- **GitHub required checks 不得取消**：PR 上的 Fast（blocking）照跑；本節只放寬**本地與 QA 的深度**，不放寬 CI gate。
+- **CI 結構**（DEC-078 B）：Fast 與 Slow 平行開始；Fast 仍 blocking、Slow 仍 informational。
+- ⚠️ Effort 與測試範圍只決定深度，**不改變**派工、獨立稽核與揭露義務（`CLAUDE.md` §-2）。

@@ -1155,6 +1155,49 @@ C1 完成後停下。
   - **DEC-066**（production Gate）、**DEC-048**（Required Core）、**DEC-044**（沿用 7 天）：不變。
   - **DEC-002／DEC-015**（沒指派不動工／Audit 不得順手施工）：對 C1 三類已由本條指派；對研究發現各列（本條第 3 點 C 項「本輪不要順手修」）**續有效**。
   - **DEC-003**（線框 gate）：不變；C1 不涉畫面結構。
+- **執行紀錄**（2026-10-24 追加，append-only；本條上文一字未改；**不是新 DEC** —— C1 屬 DEC-077 的執行，不是新裁示；事實部分決策者＝AI 總管（事實更新），「偏離規格」部分＝AI 總管內部技術拍板（`CLAUDE.md` §-1.5.D v3 §03-1），**非客戶裁示**）：
+  - 📌 **2026-10-24 C1 已完成並合併**（DEC-077 第 2 點三類，全部 done）：PR #913（https://github.com/linchen-20200325/my-stock-dashboard/pull/913），squash merge `37cf87e6`（完整 `37cf87e6103a72cac45d812fc633ab641f9a6b7b`），PR head `29cd7f3e`。⇒ DEC-077「動工授權：僅 C1」**已執行完畢**；C1′／C2／VN1-PG 仍未授權（DEC-077 第 1 點不變）。
+  - **完成內容**（明細見 `docs/BACKLOG.md` 5.1.10 三列）：
+    - `DH-C1-NA-DROP-LOG`：11 處 production ^TWII／VIX `dropna` 開始記錄清理筆數，清掉 >0 筆時印一行（筆數算不出來時也會印一行說明；stdout 寫不出去時改寫 stderr）；共用 helper 為新 L0 檔 `shared/na_drop_log.py`。8 處＝`daily_data_fetchers._fetch_single_cached`／`fetch_adl`、`macro_core.fetch_yf_ohlcv`／`_fetch_yf_close_base`、`macro_snapshot.compute_twii_bias`／`fetch_vix_block`、`scripts/update_macro_forward_test._twii_close_and_asof`、`scripts/update_macro_history.fetch_twii_ohlcv`；另 3 處＝`macro_cache_reader.load_twii_close`、`weekly_review_service._macro_lite_lines`、`risk_radar._fetch_cboe_csv`。⚠️「11 處即全部 production 的 ^TWII／VIX `dropna`」的驗證方式＝**兩組盤點交叉（實作組＋QA-A），非形式化窮舉**。
+    - `DH-C1-PCR-SRC`：先行指標 df 新增 `_pcr_src` 欄（TAIFEX＝`official`、FinMind-TXO-inst-est＝`proxy_estimate`）；只描述來源、**不是計分資格**，下游不讀。
+    - `DH-C1-FWD-LEG-ASOF`：帳本附加四欄 `score_index_as_of`／`inst_as_of`／`adl_as_of`／`li_as_of`；schema 維持 3、`ruleset_hash` 不變（`6c716f5411fb`）；`shared/macro_forward_test_schema.py` 內「per-leg as_of 會再 bump」的預告已加刪除線並註明理由。`date`／`inputs_as_of` 語意不變。
+  - **CI**：PR CI＝PR head 29cd7f3e：Fast checks（job 120785311814）success、Slow tests AppTest（job 120788338331）success；run 40064619133。main CI＝main push run 40066433398（PR Check）conclusion=success；Fast job 120790571734 success（05:29:19→05:41:31Z）、Slow job 120792951874 success（05:41:34→05:59:31Z）。⚠️ 依 `PROJECT_RULES.md` 第 7 節，~~**main verification（main SHA＋main CI conclusion）在 main CI 結論回填前不成立**~~ main verification **已成立**（main SHA `37cf87e6`＋main CI success）（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管，事實回填）。
+  - **零投資輸出驗證摘要**：before／after 測試（還原鏈到 `1c8c1415`）＋四輪、共五組獨立 QA（A／B／C／D／E）驗證（最終 head 29cd7f3e（只改測試與 docstring）由總管讀 diff＋PR CI 驗證，未再派獨立 QA）：下游 `extract_leading`／`build_engine_inputs`→`calculate_system_state`／`calc_traffic_light`／`compute_five_bucket_summary`／`render_leading_table`／CSV **全部相同**。已知、接受的唯一差異：`src/ui/tabs/tab_macro.py` 約 :463 的 stdout log「有效欄=N」會多 1，**只影響 log**（登記 `docs/BACKLOG.md` `DH-TAB-MACRO-LOG-COUNT`）。
+  - **Production**：既有帳本 cron 合併後預期會（程式路徑讀碼成立；GH Actions cron 未實機驗證）把四欄寫進 `signals.parquet` —— 這是**既有寫入多了四欄，不是新的 production write**；`PRODUCTION_WRITE_APPROVED=False` 未動；未新增排程。
+  - **限制（未實測）**：Streamlit Cloud、GitHub Actions cron、Windows cp950 都沒有實機跑；外部 API 用 mock。
+  - **偏離規格紀錄（AI 總管內部技術拍板，v3 §03-1，非客戶裁示）**：
+    - (a) PCR 來源欄名用 `_pcr_src`，不是修復計畫寫的 `選PCR_src` —— 底線開頭會被既有 CSV 匯出排除規則擋掉，避免使用者 CSV 多一欄。
+    - (b) 新增 L0 helper `shared/na_drop_log.py` —— 11 處共用一份（SSOT），不在各檔各寫一份。
+    - (c) cron（`scripts/update_macro_forward_test.py`）計算四欄處外層再包一層 try：失敗時四欄寫 None、照常寫列 —— 觀測欄不得擋下帳本寫列。
+    - (d) 缺值清理位置由 BACKLOG 盤點結果的 8 處補為 11 處（QA-A 盤點補上 `macro_cache_reader.load_twii_close`、`weekly_review_service._macro_lite_lines`、`risk_radar._fetch_cboe_csv`）—— 依客戶原文「先完整盤點實際位置，不要只照原 BACKLOG 寫的兩處」；納入範圍為總管判斷。
+  - **新發現（只登記、未施工）**：`docs/BACKLOG.md` 5.1.10 新增 `DH-RS-PREP-DROPNA`、`DH-NONUTF8-PRINT`、`DH-LI-ASOF-SEMANTICS`、`DH-TAB-MACRO-LOG-COUNT`；`src/compute/macro/macro_forward_test.py::leg_as_of_from_inputs`／`scripts/update_macro_forward_test.py::main` 另有 C1 新增的一般中文 print 未走安全列印，見 BACKLOG `DH-NONUTF8-PRINT`（文件 QA 2026-10-24 讀碼發現，總管確認；未實測）。
+  - **C1 完成後停下**（DEC-077 第 5 點）：下一步**不是**自動做 C2。C2 前仍需客戶裁示：`DEC076-CONFIRM` ①（指標危險度口徑；C1′ 等它）②（⚡ 行動例示射程）、`PROXY-SEMANTICS`（BIAS240／PCR／台灣 PMI 一起）、`CV1-DR-11`、C2 Decision Gate、`RC-VISIBILITY`（C2 後）—— 見 `docs/BACKLOG.md` §1.1、第 4 節、5.1.10。
+  - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：C1 內容、CI、QA 結論為**總管查證後轉述**；撰寫組只以 `git show --stat 37cf87e6`、`gh api repos/:owner/:repo/pulls/913`（`merged=true`、`merge_commit_sha`、`head.sha`）與 `git grep`（`shared/na_drop_log.py`、`PCR_SRC_COL = "_pcr_src"`、四欄常數）確認，**未重跑測試、未重做 before／after**。
+
+---
+
+### DEC-078｜Minimum Sufficient Effort／Test Scope 規則化；CI Fast／Slow 平行化（客戶 2026-10-24）
+> 2026-10-24 追加（第 8 節「收到當輪追加」；ID 取下一個未用號，DEC-077 為前一號）。
+- **背景**（總管轉交客戶裁示，兩項）：(A) 小批次常被形式上的嚴謹一律升為 High＋全庫重跑，成本高於風險；(B) CI 的 `slow-tests` 原 `needs: fast-checks`，Fast 跑完才啟動 Slow，整體等待時間被串長。
+- **要點**：
+  - **A. Minimum Sufficient Effort／Test Scope**：
+    1. 安全小批次、純文件、metadata／provenance、純 UI、小型低風險修正，原則上採 Minimum Sufficient Effort，可用 Low／Medium，**優先 targeted tests**，不得因形式上的嚴謹一律升為 High＋全庫重跑。
+    2. 下列工作**仍須 High＋完整 QA**：Risk Cap、投資語意、資料有效性、proxy／estimated eligibility、freshness／PIT、投資公式／門檻／權重、L3／跨模組高風險改動。
+    3. targeted tests 足以證明低風險修改正確時，不應機械性要求每個小批次都跑最重流程；**但既有 GitHub required checks 不得取消**。
+  - **B. CI 平行化**：Fast 與 Slow **同時開始**（`.github/workflows/pr-check.yml` 的 `slow-tests` 移除 `needs: fast-checks`）；Fast 仍 blocking、Slow 仍 informational（`continue-on-error: true` 不變）；目的＝降低不必要的等待；代價＝Fast 早早失敗時 Slow 可能白跑一次 Actions minutes，**客戶接受此 trade-off**。
+- **不是什麼**（⛔）：
+  - ⛔ 不是「小批次可以不跑 CI」：required checks（Fast）照跑、照 blocking；A 只放寬**本地與 QA 的深度**。
+  - ⛔ 不是降低 High 清單的門檻：A 第 2 點所列工作不得援引本條降級。
+  - ⛔ 不是把 Slow 改成 blocking，也不是新增／刪除任何 job、改 schedule、改 pytest 指令或 env。
+  - ⛔ 不免除 `CLAUDE.md` §-2 派工、獨立稽核與揭露義務（Effort／測試範圍只決定深度，不決定要不要驗）。
+  - ⛔ 不改 `PRODUCTION_WRITE_APPROVED`（仍 `False`）。
+- **範圍**：治理（工作流程）＋CI 結構｜**日期**：2026-10-24｜**決策者**：客戶｜**狀態**：生效。
+- **來源**：客戶訊息 2026-10-24（經總管轉交；撰寫組未見原件，依轉交文字整理，非逐字；確切 UTC 時戳未記錄）。
+- **與其他 DEC／條文的關係**（撰寫組讀法，單組，⚠️ 待第二組驗，`CLAUDE.md` §-2 規則 6）：
+  - **DEC-059（Minimum Sufficient Effort）／`PROJECT_RULES.md` 9.1**：同向，本條把「小批次不得一律 High」與「targeted tests 優先」明文化；9.1 的 Low／Medium／High 清單**不變**。
+  - **DEC-073（Model／Effort Gate）**：不變；本條只補充測試範圍，Gate 照跑。
+  - **張力點**：(1) `PROJECT_RULES.md` 第 7 節 DoD 寫「relevant tests」，**未**規定全庫重跑，與本條不衝突；(2) DEC-077 第 6 點 C1 施工程序「完整 CI／QA」是**針對 C1（涉 provenance、需證零投資輸出變更）的個案要求**，不因本條改變；(3) 實務上「小批次」與「第 2 點 High 清單」的邊界須逐批判斷，判斷錯誤方向取嚴（歸 High）。未發現需登記第 14 節的硬衝突。
+  - **測試釘住**：`tests/test_batch_z59.py` 以 `wf.split("slow-tests:")[0]` 取 Fast 區段，不依賴 `needs`，不受影響；`tests/test_vn1_prehardening.py` 的 `needs` 僅針對 production_write 類 job（另一份 workflow），無關。
 
 ---
 
