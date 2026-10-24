@@ -38,7 +38,7 @@
 | PR | `#910`（批 A＋1'；分支 `ccr-310717b7-37xwl6`，commits `1f4f5b19`、`7ef52869`、`ee4bde01`、`04a9bc2e`，base＝main `b9ed892d`）；撰寫時**尚未開 PR、尚未合併**；📌 2026-10-23 更新（append-only，上句一字未改）：PR #910 已開、尚未合併 |
 | CI／QA | CI：合併條件：PR #910 CI 綠（結果見 PR checks）（本機測試為 Python 3.13、CI 為 Python 3.11，以 CI 結果為準）。QA：三輪獨立 QA（QA-1／QA-2／QA-3）＋回修已完成；~~第四輪複驗進行中~~ QA-1～QA-5 獨立複驗，QA-5 判定可合併（見 PR #910）；QA-5 後補的 SHOULD-1 測試 commit 為實作組自跑、未經第二組驗證（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管）（⛔ 總管確認前不得寫「QA 通過」） |
 | 目前任務 | **批 A＋1' 安全段落收尾**（DEC-074 B 落地＋DEC-075 D-1(a)＋`DH-TWII-MA200`＋批 1' 三項） |
-| 已達安全段落 | **實作完成、待 PR #910 合併**：代理廣度只顯示不計分（`BREADTH_PROXY_SCORING_ENABLED=False`）；健康分因缺正式 breadth 未評估時健康分／位階 ⬜、`is_loaded=False`、不退 `macro_state.json`~~（含 ^TWII 全滅）~~ ~~（**限 warroom 存在的路徑**，含該路徑下的 ^TWII 全滅；**冷啟動／warroom 不存在路徑未完成（見 `DH-REGIME-NOWARROOM`）**）~~（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（QA-4 M-1：D-1(a) 只完成 warroom 存在的路徑））（**代理廣度不計分時涵蓋 warroom 存在與不存在兩條路徑**：含 ^TWII 全滅、冷啟動未載入、warroom 被移除；`DH-REGIME-NOWARROOM` 併入本 PR）（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（依兩組獨立調查裁定冷啟動屬 DEC-075 D-1(a) 射程；客戶 2026-10-23 指示不得只登 BACKLOG 延後））（⚠️ 實作組自述、待 QA 複驗（`CLAUDE.md` §-2 規則 6））；新 UI 廣度未評估文案依本輪有無代理值給屬實的句子（QA-4 S-1，本 PR）；MA200 不足回 None＋`ma200_status`；外資缺值不補 0；出口燈正名；ISM 教學對映改台灣 PMI；總經前進式驗證 `ruleset_hash` 納入旗標、schema 2→3。尚缺＝PR 合併＋main CI＋main verification。客戶可見行為變更見 `docs/PROJECT_STATE.md` §28 |
+| 已達安全段落 | **實作完成、待 PR #910 合併**：代理廣度只顯示不計分（`BREADTH_PROXY_SCORING_ENABLED=False`）；健康分因缺正式 breadth 未評估時健康分／位階 ⬜、`is_loaded=False`、不退 `macro_state.json`~~（含 ^TWII 全滅）~~ ~~（**限 warroom 存在的路徑**，含該路徑下的 ^TWII 全滅；**冷啟動／warroom 不存在路徑未完成（見 `DH-REGIME-NOWARROOM`）**）~~（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（QA-4 M-1：D-1(a) 只完成 warroom 存在的路徑））（**代理廣度不計分時涵蓋 warroom 存在與不存在兩條路徑**：含 ^TWII 全滅、冷啟動未載入、warroom 被移除；`DH-REGIME-NOWARROOM` 併入本 PR）（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（依兩組獨立調查裁定冷啟動屬 DEC-075 D-1(a) 射程；客戶 2026-10-23 指示不得只登 BACKLOG 延後））（⚠️ 實作組自述、待 QA 複驗（`CLAUDE.md` §-2 規則 6））；新 UI 廣度未評估文案依本輪有無代理值給屬實的句子（QA-4 S-1，本 PR）；MA200 不足回 None＋`ma200_status`；外資缺值不補 0；出口燈正名；ISM 教學對映改台灣 PMI；總經前進式驗證 `ruleset_hash` 納入旗標、schema 2→3。尚缺＝PR 合併＋main CI＋main verification（2026-10-24 註：已成立，見下方 DEC-077 段；有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。客戶可見行為變更見 `docs/PROJECT_STATE.md` §28 |
 | 未完成項 | 見 `docs/BACKLOG.md` 5.1.8：~~`DH-REGIME-NOWARROOM`~~（本 PR #910 修正（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（依兩組獨立調查裁定冷啟動屬 DEC-075 D-1(a) 射程；客戶 2026-10-23 指示不得只登 BACKLOG 延後）））、`DH-STATUSBAR-AI-SNAPSHOT-WORDING`、`DH-NOWR-COPY-RESIDUAL`（2026-10-23 新增登記）、`DH-CALIB-CRON`（**期限 2027-01-01 前**）、~~`DH-BREADTH-COPY-NOPROXY`~~ `DH-BREADTH-COPY-NOPROXY`（新 UI 本 PR 修正；殘留僅凍結舊 UI 的 F3 擋燈「可一鍵更新」文案，只登記不改）（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（QA-4 S-1））、`DH-RISKCAP-OLDFILE-NONRVRC`、`DH-TEST-Z8-ALLOC-NARROW`（2026-10-23 QA-4 新增登記）、`DH-JINGQI-STALE-SESSION`、`DH-REFRESH-HEALTH-NAN`（2026-10-23 QA-5 新增登記）、`DH-FIND-UNEVAL-NOTE`、`DH-OLDUI-PROXY-LABELS`、`DH-NONE-TO-ZERO-RENDER`、`DH-FT-SCHEMA-ASOF`、`DH-MKTSCORE-DENOM`、`DH-EXPORT-LABEL-READING`、`DH-M1B-COVERAGE`；批 2／VN1-PG 未開始 |
 | **唯一 Next Safe Action** | ~~**處理 `DH-REGIME-NOWARROOM`**（D-1(a) 殘留：warroom 不存在路徑——冷啟動未載入、或 `calc_traffic_light` 三源全空回 None——位階也須 ⬜、`is_loaded=False`，不得回規則引擎位階）。**其後順序**：完成並經獨立 QA／CI 後 → 重評批 2／VN1-PG 邊界並送客戶裁示（DEC-075 第 4 點）。另有硬期限：`DH-CALIB-CRON` 須在 **2027-01-01**（下次季度校準排程）前修正或暫停~~ **重評批 2／VN1-PG 邊界並送客戶裁示**（DEC-075 第 4 點；前提：PR #910 合併＋獨立 QA＋main CI＋main verification）。**硬期限**：`DH-CALIB-CRON` 須在 **2027-01-01** 前修正或暫停（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（依兩組獨立調查裁定冷啟動屬 DEC-075 D-1(a) 射程；客戶 2026-10-23 指示不得只登 BACKLOG 延後）） |
 | 下一階段 Model／Effort | **High（高能力模型，Effort high）**。理由：觸及位階 SSOT（`get_macro_state`）與多個消費端（AI 評分、🎯 找標的頁濾網、持股頁位階／姿態帶）、需突變測試與多組獨立 QA。DEC-073：模型／Effort 不足 → 立即停手、回報客戶，不得硬做 |
@@ -64,7 +64,7 @@
 | Production（2026-10-23 補列；append-only） | `PRODUCTION_WRITE_APPROVED=False`（`shared/risk_cap_history_policy.py`）；Daily Schedule **NOT APPROVED**（DEC-066 F）；細節（含 `schedule:` workflow 列舉）見 `docs/PROJECT_STATE.md` §29.5。⛔ 交接／Freeze／文件同步／CI 修復一律不得改動 |
 | 若只看 main（2026-10-23 補列；append-only） | ~~main 版本檔 §0 停在 #908 時期（寫「批 A 已指派（DEC-075）、未開工」）＝**已過期**。#910 未合併前，以 PR #910 分支（`ccr-310717b7-37xwl6`）上的五個 SSOT（`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、本檔、`docs/PROJECT_STATE.md`）為準；**批 A＋1' 已在 #910 實作**，⛔ 不得重新施工~~ #910 已合併（merge `066f461e`），**main 即為現行**；批 A＋1'＋冷啟動修正已在 main，⛔ 不得重新施工（2026-10-24 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 
-### 📌 2026-10-24 #910 合併後（append-only；**本段為現行短版，與上表及上三段衝突處以本段為準**）
+### 📌 2026-10-24 #910 合併後（append-only；~~**本段為現行短版，與上表及上三段衝突處以本段為準**~~ 已過時，見下方「DEC-077 裁示後」段；本段「禁止事項」「Production」兩列**效力不變**，由新段沿用（2026-10-24 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新：客戶 2026-10-24 裁示 DEC-077）））
 
 > PR #910 已於 2026-10-24 squash 合併進 main。下表 GitHub 實況為總管實查轉述，撰寫組只以 `git fetch origin main` 確認 main tip 為 `066f461e`；**GitHub 實況 > 本檔**，接手先重查。耐久狀態見 `docs/PROJECT_STATE.md` §28／§29，待辦見 `docs/BACKLOG.md`（§F 為索引），裁示見 `docs/DECISIONS.md`，規則見 `PROJECT_RULES.md`。
 
@@ -73,15 +73,34 @@
 | main | `066f461e`（完整 `066f461ec716abbc40a3830baf2c686415cd4ecf`；含 #910）。cron 會推進 tip，**以 GitHub 為準** |
 | #910 | 已 squash 合併（merge `066f461e`）；PR 最後 head＝**最後產品碼 commit `9714d0b3`**（不是 `c8e30d84`；`9714d0b3` 修 QA-6 MUST-1 持股頁卡④⑤ v2 紅卡、MUST-2 AI 評分冷啟動不實救法）。QA：QA-6 對 `c8e30d84` 判不可合併（2 MUST）→ QA-7 對 `9714d0b3` 判**可合併**（0 MUST）；`9714d0b3` CI Fast＋Slow success；mergeable clean。完整 QA-6／QA-7 判定見 PR #910 留言 |
 | open PR | 無（#910 已合併）。總管將另開本文件同步 PR —— **本文件 PR 見 GitHub** |
-| main 驗證 | merge 後 main CI **以 GitHub Actions 為準**（撰寫組未查） |
+| main 驗證 | ~~merge 後 main CI **以 GitHub Actions 為準**（撰寫組未查）~~ **已成立**：main `066f461e` PR Check run 39995254045 success；`649f739` run 39999485112 success（依 `PROJECT_RULES.md` 第 7 節；總管 GitHub Actions API 實查＋撰寫組 `gh api` 獨立複查）（2026-10-24 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 | Current Task | **無進行中實作** |
 | **唯一 Next Safe Action** | **開新對話**，先依 `PROJECT_RULES.md` 第 9.0 節跑 Model／Effort Gate，再重評 Data Health 批 2／VN1-PG 邊界並送客戶裁示（DEC-075 第 4 點；附總管推薦方案）—— **送題，不施工** |
 | 硬期限 | `DH-CALIB-CRON` 須在 **2027-01-01** 前修正或暫停（BACKLOG 5.1.8） |
 | 待客戶裁示 | `DEC076-CONFIRM` 兩項（①指標危險度口徑；②⚡ 行動例示射程）、批 2／VN1-PG 邊界（重評後送題）、`DH-BADGE-RERUN-SEMANTICS`（QA-7 S-1 徽章語意，視覺規格）、`DH-EXPORT-LABEL-READING`（出口燈名業務驗收）等 —— 完整清單見 `docs/BACKLOG.md` §F「Decision Gates」列 |
-| 禁止事項 | 沿用上方 Freeze 版「禁止事項（自 2026-10-23 Freeze 起持續有效，直到客戶新指派）」列，**效力不變**：⛔ 新 Batch／VN1-PG／大型研究／改投資公式、權重、門檻／刪舊 UI／刪 branch／開 `PRODUCTION_WRITE_APPROVED`／開 Daily Schedule／不可逆清理／新資料來源 |
+| 禁止事項 | 沿用上方 Freeze 版「禁止事項（自 2026-10-23 Freeze 起持續有效，直到客戶新指派）」列，**效力不變**（唯「新 Batch」對 C1 解除，見下段 DEC-077；2026-10-24 補註，有意識的更新，不是漏刪，決策者 客戶）：⛔ 新 Batch／VN1-PG／大型研究／改投資公式、權重、門檻／刪舊 UI／刪 branch／開 `PRODUCTION_WRITE_APPROVED`／開 Daily Schedule／不可逆清理／新資料來源 |
 | Production | 沿用上方 Freeze 版「Production」列：`PRODUCTION_WRITE_APPROVED=False`；Daily Schedule **NOT APPROVED**（DEC-066 F）；細節見 `docs/PROJECT_STATE.md` §29.5 |
 | 若只看 main | #910 已合併，**main 即為現行** |
 | 接手必讀 | 同 Freeze 版：先跑 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate（重評送題＝High），再讀五個 SSOT |
+
+### 📌 2026-10-24 DEC-077 裁示後（append-only；**本段為現行短版，與上表及上四段衝突處以本段為準**）
+
+> 客戶 2026-10-24 裁示 **DEC-077**（批 2 × VN1-PG 邊界：採方案 C）。下表 GitHub 實況：撰寫組 `git log` 確認分支基於 main `649f7393`（#911），並以 `gh api` 複查下列兩個 main CI run；**GitHub 實況 > 本檔**，接手先重查（cron 會推進 main tip）。研究摘要見 `docs/PROJECT_STATE.md` §30（AI 研究結論、非客戶裁示）；拆分明細見 `docs/BACKLOG.md` **5.1.10**；裁示全文見 `docs/DECISIONS.md` DEC-077。
+
+| 項目 | 現況（DEC-077 裁示後） |
+|---|---|
+| main | `649f7393`（#911，五 SSOT 事實同步；其前 `066f461e`＝#910）。cron 會推進 tip，**以 GitHub 為準** |
+| main 驗證 | **已成立**：`066f461e` PR Check run 39995254045 success；`649f739` run 39999485112 success（`PROJECT_RULES.md` 第 7 節）。⚠️ 未驗：squash 後 main 樹是否等同 `9714d0b3` |
+| open PR | 撰寫時 0 筆（總管實查）；本 SSOT 落盤 PR 由總管開立 —— **以 GitHub 為準** |
+| Current Task | **① SSOT 落盤 PR**（DEC-077＋研究結論＋main verification 文件更正；docs-only）→ **② C1 實作批**（DEC-077 已指派、**未開工**）：`DH-C1-NA-DROP-LOG`、`DH-C1-PCR-SRC`、`DH-C1-FWD-LEG-ASOF`（BACKLOG 5.1.10） |
+| **唯一 Next Safe Action** | SSOT 落盤 PR 合併後開始 **C1**：先過 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate（**建議 Opus 5.5／Medium**；客戶建議，仍須依實際工作判斷；跨入 PIT／Risk Cap／投資語意 ⇒ 升級並停下詢問）→ 唯讀盤點已完成（BACKLOG `DH-C1-NA-DROP-LOG` 盤點結果）；實作時再複核 → 實作 → 針對性測試 → 完整 CI → **before／after 零投資輸出變更驗證**（Risk Cap 數字、市場位階、指標危險度、16 燈、健康分、scoring、threshold、weight、freshness／fallback／proxy eligibility、PIT 判斷、投資語意皆不變；任一做不到 ⇒ **立即停下送 Decision Gate**）→ 獨立 QA → PR 合併 → main 驗證 → 五 SSOT 同步 → **停下回報，⛔ 不自動進 C2**（回報：C1 實際完成內容、PR／main SHA、CI／QA、是否確認零投資輸出變更、新發現、C2 前仍需裁示事項） |
+| 下一階段 Model／Effort | **C1：Opus 5.5／Medium**（DEC-077 客戶建議；`PROJECT_RULES.md` 第 15 節第 6 點：建議只是參考，新對話須重新判斷，不得假設已切換） |
+| 待客戶裁示 | `DEC076-CONFIRM` ①（指標危險度口徑；**C1′ 等它**）②（⚡ 行動例示射程）；**C2 Decision Gate**（VN1-PG「Risk Cap 輸入有效性批」）；**`PROXY-SEMANTICS`**（BIAS240／PCR／台灣 PMI proxy／estimated 資料契約與計分資格；C2 開工前一次裁示；⛔ 不得先立通則）；**`RC-VISIBILITY`**（PIT／C2 後的 UI Decision Gate；目前不恢復顯示）；**`CV1-DR-11`**（`PROJECT_RULES.md` 16.1／DEC-062 Q5 與 DEC-077 3B 的未調和衝突，C2 前併 `PROXY-SEMANTICS` 裁示）；`DH-BADGE-RERUN-SEMANTICS`；`DH-EXPORT-LABEL-READING` 等 —— 完整清單見 `docs/BACKLOG.md` §F「Decision Gates」列 |
+| 禁止事項 | 沿用 Freeze 版「禁止事項（自 2026-10-23 Freeze 起持續有效，直到客戶新指派）」列，**唯「新 Batch」對 C1 解除**（DEC-077）：⛔ C1′／C2／VN1-PG 仍禁止；⛔ 大型研究／改投資公式、權重、門檻／刪舊 UI／刪 branch／不可逆清理／新資料來源；⛔ C1′ 或 C2 不得混入 C1 PR；⛔ 研究發現各列（`DH-FUT-FROZEN-MISMATCH`、`DH-EXPORT-FRESHNESS`、schema 文件衝突等）本輪不順手修 |
+| Production | `PRODUCTION_WRITE_APPROVED=False`（`shared/risk_cap_history_policy.py`，撰寫組 2026-10-24 grep 實查）；Daily Schedule **NOT APPROVED**（DEC-066 F）；⛔ 不開排程、不做任何 production write；細節見 `docs/PROJECT_STATE.md` §29.5 |
+| 硬期限 | `DH-CALIB-CRON` 須在 **2027-01-01** 前修正或暫停（BACKLOG 5.1.8） |
+| 回報模式 | 維持 Silent Autonomous Cruise：中間安全工作不逐步回報；只在命中停手條件、需要客戶裁示、或 C1 整批完成時回報（DEC-077 第 5 點） |
+| 接手必讀 | 先跑 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate，再讀五個 SSOT（`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、本檔、`docs/PROJECT_STATE.md`）；上位 `CLAUDE.md` 同樣須讀 |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 
