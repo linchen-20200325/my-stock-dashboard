@@ -720,7 +720,13 @@ class TestConsumers:
                  not_evaluated=["PMI_Prev_Month"], red_lines={"sahm": {"status": "no_source"}},
                  veto_flags={"sahm": False, "pmi_contraction": False, "futures_ma5": False,
                              "fail_safe": False},
-                 input_detail={"VIX_Index": {"value": 26.0}}, m1b_m2_data_month="2026-08")
+                 input_detail={"VIX_Index": {"value": 26.0}}, m1b_m2_data_month="2026-08",
+                 # 📌 C2a-2（DEC-080，2026-10-24；有意識的追加，⛔ 不是放寬）：寫端新增純觀測欄 ⇒ 消費端盤點
+                 #   同步多帶一鍵（成功形與錯誤標記形各一份的讀端比對見
+                 #   tests/test_c2a_risk_cap_shadow.py::test_reader_outputs_identical，`get_macro_state` 各模式）。
+                 input_provenance_shadow={"shadow_policy_version": "c2a-shadow-1",
+                                          "inputs": {"PCR": {"provenance": "proxy",
+                                                             "riskcap_eligible": False}}})
         fa, fb = tmp_path / "a.json", tmp_path / "b.json"
         fa.write_text(json.dumps(a, ensure_ascii=False), encoding="utf-8")
         fb.write_text(json.dumps(b, ensure_ascii=False), encoding="utf-8")

@@ -10,6 +10,9 @@
 4. Robustness：None、非 dict、NaN、NaT、numpy bool 不 raise、不改輸入（deepcopy 比對）；單項失敗隔離。
 5. 讀者守衛：新模組／`PENDING_SPEC`／`infer_input_provenance` 只准出現在兩個新檔（C2a-1 階段）；
    兩個新檔不得出現 PMI 代理旗標字樣。
+   📌 C2a-2（DEC-080，2026-10-24；有意識的放寬，⛔ 不是漏改）：接線點 `src/services/risk_cap_apply.py`
+   （寫檔分支附加觀測欄）加入白名單；其餘明列檔與全掃描規則不變。觀測欄本身的零讀者守衛見
+   `tests/test_c2a_risk_cap_shadow.py`。
 """
 from __future__ import annotations
 
@@ -760,7 +763,9 @@ class TestRobustness:
 # ══════════════════════════════════════════════════════════════════════════
 _GUARD_NAMES = ("input_provenance_policy", "input_provenance", "PENDING_SPEC",
                 "infer_input_provenance", "undetermined_pending_spec")
-_GUARD_ALLOWED = {L0_REL, L2_REL}
+#: ~~`_GUARD_ALLOWED = {L0_REL, L2_REL}`~~ 📌 C2a-2（有意識的放寬，⛔ 不是漏改）：加接線點（只此一檔）。
+_RC_WIRE_REL = "src/services/risk_cap_apply.py"
+_GUARD_ALLOWED = {L0_REL, L2_REL, _RC_WIRE_REL}
 #: C2a-1 階段明列不得出現上述名稱的檔（亦被下方全掃描涵蓋；明列是為了讓意圖可讀）。
 _GUARD_FORBIDDEN_EXPLICIT = (
     "shared/risk_cap_policy.py", "src/services/macro_state_locker.py",
@@ -768,7 +773,7 @@ _GUARD_FORBIDDEN_EXPLICIT = (
     "src/services/ai_qa_service.py", "shared/risk_cap_history_policy.py",
     "src/services/risk_cap_history_service.py", "src/services/risk_cap_history_reader_service.py",
     "src/services/macro_engine_inputs.py", "src/compute/macro/dated_inputs.py",
-    "src/services/risk_cap_apply.py",
+    # ~~"src/services/risk_cap_apply.py",~~ 📌 C2a-2：接線點，移入 `_GUARD_ALLOWED`（有意識的變更，⛔ 不是漏刪）
 )
 _GUARD_PAT = re.compile(r"(?<![A-Za-z0-9_])(" + "|".join(map(re.escape, _GUARD_NAMES)) + r")(?![A-Za-z0-9_])")
 
@@ -805,6 +810,7 @@ class TestReaderGuard:
                 hits[rel] = h
         assert set(hits) <= _GUARD_ALLOWED, {k: v for k, v in hits.items() if k not in _GUARD_ALLOWED}
         assert L2_REL in hits
+        assert _RC_WIRE_REL in hits     # C2a-2：接線點真的引用了（白名單不是空放）
 
     @pytest.mark.parametrize("rel", [L0_REL, L2_REL])
     def test_no_pmi_proxy_flag_in_new_files(self, rel):

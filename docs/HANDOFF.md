@@ -159,7 +159,7 @@
 | 仍待客戶 | `DEC076-CONFIRM` ①②（**維持 pending、與 C2 分開**；C1′ 等 ①）；`RC-VISIBILITY` 揭露線框（DEC-080 第 5 點，先線框／文字草稿）；C2b（C2a 後送）；完整清單見 `docs/BACKLOG.md` §F「Decision Gates」列 |
 | Production | 沿用上段：`PRODUCTION_WRITE_APPROVED=False`（未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
 
-### 📌 current handoff（2026-10-24 Safe Checkpoint）（append-only；**本段為現行短版，與上表及上各段衝突處以本段為準**）
+### 📌 current handoff（2026-10-24 Safe Checkpoint）（append-only；~~**本段為現行短版，與上表及上各段衝突處以本段為準**~~ 已過時，見下方「2026-10-24 C2a-2 後」段；本段「禁止事項／Production」列**效力不變**，由新段沿用（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管））
 
 > 依 DEC-079 預判性 Safe Checkpoint（`PROJECT_RULES.md` 第 6、11、15 節）落盤；客戶指示「不得開始 C2a-2」並進入交接。⛔ **新對話必須重新做 GitHub Verification Gate（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點），不得因本段內容假定 GitHub 狀態**；本段只是導引，不是事實來源。待辦細節只在 `docs/BACKLOG.md`（§F 索引＋5.1.10 C2a-1／C2a-2／C2b 列）；接手操作規則見 `docs/PROJECT_STATE.md` §32。
 
@@ -174,6 +174,24 @@
 | **唯一 Next Safe Action** | 新對話先做 GitHub Verification Gate（確認 main／Open PR／CI）→ 依 DEC-080 **重新實作 C2a-2**，帶入 BACKLOG 5.1.10 C2a-2 列的六點稽核發現；High Effort |
 | 下一階段 Model／Effort | **高能力模型／Effort High**（C2a-2 屬 Risk Cap 資料有效性／freshness，第 17 節仍 High＋完整 QA）；建議只是參考，新對話須依第 9.0 節重新判斷，不得假設已切換 |
 | 禁止事項／Production | 沿用「C2 裁示後」段，效力不變；`PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-24 grep 實查）、Daily Schedule NOT APPROVED（DEC-066 F） |
+
+### 📌 current handoff（2026-10-24 C2a-2 後）（append-only；**本段為現行短版，與上表及上各段衝突處以本段為準**）
+
+> C2a-2 已依 DEC-080 實作（PR #920）；客戶 2026-10-24 指示「完成 C2a-2 後停手，不自動進 C2b。」⛔ **接手必須重新做 GitHub Verification Gate**（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點）；本段只是導引、不是事實來源。待辦細節只在 `docs/BACKLOG.md`（§F 索引＋5.1.10 C2a-2 列＋5.1.12）；狀態摘要 `docs/PROJECT_STATE.md` §33。
+
+| 項目 | 現況（量測 2026-10-24 21:47 台北，撰寫組 `git fetch`＋`gh api` 實查，會過期） |
+|---|---|
+| main | tip `03a75994`（cron：板塊資金泡泡圖每日增量）；最後非 cron commit＝`0a78f308`（#919 Safe Checkpoint）。cron 會推進 tip，**以 GitHub 為準** |
+| Open PR | #920（C2a-2；base main；撰寫時 open、未合併、mergeable clean） |
+| CI | PR #920 `981e2f69`：Fast checks（job 120883293627）success、Slow tests（job 120883293857）success；~~QA 修正 commit 的 CI 撰寫時未查（見 PR #920）~~ QA 修正 commit `dc2fa365`（PR head）：Fast checks（job 120893028983）、Slow tests（job 120893029189）於 22:11 台北 `gh api` 實查為 **in_progress**（結果未知；PR mergeable_state＝unstable，CI 未完成所致）—— 以 GitHub 為準（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| 完成到哪 | **C2a-2 實作完成**：寫檔分支附加觀測欄 `input_provenance_shadow`（`c2a-shadow-1`），零投資輸出變更；獨立 QA 兩組判可合併（總管轉述）；**合併待總管執行並於合併後驗證 main CI**（本段撰寫時未合併）。C2a-1（#918）已完成。**C2b 未開始** |
+| working tree／stash／worktree | ~~**撰寫時（21:47 台北）**：branch `claude/determined-euler-32xqjn`＠`981e2f69`；未提交修改：`shared/na_drop_log.py`、`src/services/risk_cap_apply.py`、`tests/test_batch_z65.py`、`tests/test_c2a_risk_cap_shadow.py`（另一實作 agent 的 QA 修正，進行中、尚未提交）＋本批四份 docs；~~ **現況（22:11 台北，撰寫組 `git status` 實查）**：上列 QA 修正已提交為 `dc2fa365`（`shared/na_drop_log.py` 僅新增公開別名 `safe_print`，純別名）、docs 已提交為 `2d31f9fc`；branch＠`dc2fa365`，`git status` 乾淨（本修正輪 docs 提交前）（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；`git stash list` 空；`git worktree list` 只有主 worktree。⚠️ 另一 agent 可能仍在提交，以 GitHub／`git status` 實查為準。（舊 UI 壓測 `stash@{0}` 只在原容器，本容器不存在，DEC-019） |
+| current active work | C2a-2 QA 修正提交＋合併（總管負責）；合併後停手 |
+| blocker／Decision Required | C2b Decision Gate（待真實寫檔輪次觀測結果）；`DH-PMI-PUBLICATION-WINDOW-SPEC`（規格待提，隨 C2b）；`DEC076-CONFIRM` ①②（pending；C1′ 等 ①）；`RC-VISIBILITY`（待線框）；5.1.12 三項治理缺口（只登記）—— 清單見 BACKLOG §F |
+| **唯一 Next Safe Action** | 確認 #920 合併＋main CI 綠 → 取得**真實寫檔輪次**的 `input_provenance_shadow` 觀測結果 → 準備 C2b Decision Gate 送客戶（附推薦方案）；⛔ 不得開始 C2b |
+| 下一階段 Model／Effort | **高能力模型／Effort High**（C2b Gate 屬 Risk Cap 計分資格／freshness，第 17 節 High）；建議只是參考，須依第 9.0 節重新判斷，不得假設已切換 |
+| 禁止事項 | C2b（計分行為修改）、C1′、DEC-076 ①②、Risk Cap 公式／門檻／權重／Required Core 數量、`RISK_CAP_RULESET_VERSION` 升版、`is_proxy` 翻轉、production write、Daily Schedule、`RC-VISIBILITY` 正式 UI、新增或替換 production source；其餘沿用「C2 裁示後」段 |
+| Production | `PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-24 grep `shared/risk_cap_history_policy.py` 實查，未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 

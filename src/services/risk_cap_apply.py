@@ -57,8 +57,28 @@
 全有或全無（盡力）：新檔寫成、`macro_state.json` 寫失敗 ⇒ 新檔還原成寫入前的內容（原本不存在就刪掉），
 再把原例外往上拋（⛔ 不留下「新檔是本輪、舊檔是上一輪」的半套狀態）。逐檔結果見 `files_written`。
 
+═══ C2a-2：資料身分 × 新鮮度觀測欄（客戶裁示 DEC-080；⛔ 純觀測、零投資輸出變更）═══════════
+寫檔分支（三道閘門 fail-safe／非有限上限／Required Core 都過之後）在快照多附一個鍵
+`input_provenance_shadow`（`INPUT_PROVENANCE_SHADOW_KEY`），兩個檔同一份內容：
+  成功 ⇒ `{"shadow_policy_version": <L0 SHADOW_POLICY_VERSION>, "inputs": {引擎輸入名: 紀錄}}`
+         （紀錄＝L2 `src/compute/macro/input_provenance.infer_input_provenance` 的逐項輸出，字串截長）；
+  失敗 ⇒ `{"_error": <例外型別名>, "_stage": <階段>}`（＋log 也寫不出去時 `_log_error`）。
+- 沒寫檔的輪次（三道閘門任一擋下）**什麼都不記**（觀測欄只活在檔案裡，不另寫任何地方）。
+- ⛔ 不改：上限值、計分資格、Required Core、門檻／公式／權重、位階／燈號、哪些輪次寫檔、reason 字串；
+  觀測欄**任何**失敗（import、PMI 歷史重讀、分類、非 JSON 型別、NaN／inf、lone surrogate 編碼…）
+  只把觀測欄換成錯誤標記＋印一行安全 log，⛔ 不讓原本會寫成功的一輪變失敗（也不留 `.tmp` 孤兒）。
+- 自驗與 `_write_state_lock` 的實際編碼逐條對齊：`json.dumps(..., ensure_ascii=False, allow_nan=False)`
+  再 `.encode("utf-8")`（落檔是 `json.dump(ensure_ascii=False)` 寫進 utf-8 文字檔 ⇒ lone surrogate
+  只在寫檔當下才炸；舊的 `json.dumps` 前檢查不 encode、抓不到）。
+- PMI 歷史：bundle 沒保存它 ⇒ 以引擎同一支 L1 `macro_cache_reader.load_tw_pmi_history()` **再讀一次本地檔**
+  （⛔ 不新增來源、不連網）。⚠️ 已知限制（據實揭露）：兩次讀之間 cron 若換掉 parquet，觀測欄看到的可能
+  與引擎用的不是同一版 —— 只影響觀測欄的 PMI 前月紀錄，⛔ 不影響上限。
+- 讀者：產品碼零讀者（`tests/test_c2a_risk_cap_shadow.py` 守）；不上 UI（`RC-VISIBILITY`）。
+
 分層（CLAUDE.md §8.2）：L3 —— 依賴 L3（`macro_engine_inputs` / `macro_state_locker`），
 零 L4 / L5 import、不 import streamlit、**不寫 session**（session 由呼叫端傳入，唯讀）。
+C2a-2 觀測欄另在函式內延遲 import L0 `shared.input_provenance_policy`／`shared.na_drop_log`、
+L2 `src.compute.macro.input_provenance`、L1 `src.data.macro.macro_cache_reader`（皆為下行依賴）。
 """
 from __future__ import annotations
 
@@ -87,9 +107,28 @@ from src.services.macro_state_locker import MacroStateLocker, risk_cap_state_pat
 #: 檔案多帶規則版本 ⇒ 升 v2。v1 字樣只出現在批 Z65～Z66 之間寫的舊檔裡（不改寫歷史檔）。
 ENGINE_SOURCE: str = "new_ui_risk_cap_v2"
 
+#: C2a-2（DEC-080）：寫檔分支附加的觀測欄鍵名。⛔ 純觀測：產品碼零讀者、不上 UI。
+INPUT_PROVENANCE_SHADOW_KEY: str = "input_provenance_shadow"
+
 #: 附帶欄位（引擎原有鍵以外、本檔加進檔案的鍵）。⛔ 不得與引擎輸出重名。
+#: C2a-2：加入觀測欄鍵（同一道重名守衛；引擎從不輸出此鍵 ⇒ 不改變任何一輪的結果）。
 ATTACHED_KEYS: tuple[str, ...] = ("engine_source", "input_detail", "m1b_m2_data_month",
-                                  RISK_CAP_RULESET_VERSION_KEY, REQUIRED_CORE_OK_KEY)
+                                  RISK_CAP_RULESET_VERSION_KEY, REQUIRED_CORE_OK_KEY,
+                                  INPUT_PROVENANCE_SHADOW_KEY)
+
+#: C2a-2：觀測欄內每個字串（含 dict 鍵）的長度上限（字元數）。
+#: **技術常數，不是投資參數**：只防上游異常字串把快照檔撐大／log 洪水；不影響任何計分、門檻、上限、
+#: 寫不寫檔。測試情境網格實測正常紀錄最長字串 185 字（2026-10-24），512 只截異常值；截斷時附註原長度（⛔ 不靜默截）。
+SHADOW_STR_MAX_LEN: int = 512
+_SHADOW_TRUNCATED_NOTE: str = "…[truncated:{n}]"
+
+#: C2a-2 QA 回修：錯誤標記連例外型別名都取不出來時（病態例外類別，例：metaclass 的 `__name__` 一取就拋）
+#: 的固定 ASCII 字樣 —— 標記本身 ⛔ 不得再拋，否則原本寫得成的一輪會變失敗。
+SHADOW_UNREPRESENTABLE_ERROR: str = "<unrepresentable>"
+
+#: C2a-2：觀測欄讀的 session 鍵（＝ `macro_engine_inputs.load_engine_inputs_from_session` 讀的同 5 個；
+#: 也是 L2 `infer_input_provenance` 的同名參數）。只讀。
+_SHADOW_SESSION_KEYS: tuple[str, ...] = ("macro_info", "bias_info", "m1b_m2_info", "li_latest", "mkt_info")
 
 #: 無法計算的兩種原因（步驟報告與回傳值共用，⛔ 不在呼叫端另寫一份）。
 #: 📌 批 Z66：「8 項」→「啟用中的」（M1B／M2 停用後，fail-safe 只看啟用中的輸入；有意識的措辭更正）。
@@ -119,6 +158,8 @@ class RiskCapApplyResult:
             disabled_inputs（批 Z66：停用、不計分；≠ 未評估）/ input_asof / red_lines（名稱 → status）。
         engine_result: 引擎輸出（含 `veto_flags` 與 Z64 附加鍵）；寫檔時就是落檔前的那份
             （不含 `analysis_summary` / `timestamp`，那兩個由 `lock_system_state_only` 補）。
+            C2a-2：寫檔時多帶 `input_provenance_shadow`（純觀測；呼叫端 `refresh_macro_now` 只讀
+            `exposure_limit_pct`，⛔ 不得讀觀測欄）。
         missing_core: 批 Z66（Q1）：無法評估的 Required Core 鍵名（依 `REQUIRED_CORE_INPUTS` 順序；
             核心齊全 ⇒ `()`）。不論有沒有寫檔都照實帶（fail-safe 時通常也是全缺）。
         files_written: AUD-C21：這一輪**實際寫成**的檔（檔名、依寫入順序：新 UI 檔在前、`macro_state.json` 在後）。
@@ -234,6 +275,121 @@ def _restore_file(path: str, previous: bytes | None) -> None:
     os.replace(_tmp, path)
 
 
+# ══════════════════════════════════════════════════════════════════════
+# C2a-2：資料身分 × 新鮮度觀測欄（純觀測；⛔ 任何失敗都不得改變本輪寫不寫檔）
+# ══════════════════════════════════════════════════════════════════════
+
+
+def _ascii_name(text: str) -> str:
+    """錯誤標記用：轉成 ASCII 跳脫版並截長（例外型別名理論上也可含 lone surrogate；⛔ 不讓標記本身寫不出去）。"""
+    return str(text).encode("ascii", "backslashreplace").decode("ascii")[:SHADOW_STR_MAX_LEN]
+
+
+def _shadow_copy(v: Any) -> Any:
+    """觀測欄 → 新的純 JSON 結構（深拷貝，不與上游共用可變物件）；字串截長。
+
+    只收 None／bool／int／float／str 與 str 鍵的 dict、list／tuple；其他型別（含 numpy 純量）→ TypeError
+    （⛔ 不猜怎麼轉，交給呼叫端換成錯誤標記）。NaN／±inf 不在這裡擋，交給之後的 `allow_nan=False` 自驗。
+    """
+    if v is None or isinstance(v, (bool, int, float)):
+        return v
+    if isinstance(v, str):
+        return v if len(v) <= SHADOW_STR_MAX_LEN else (
+            v[:SHADOW_STR_MAX_LEN] + _SHADOW_TRUNCATED_NOTE.format(n=len(v)))
+    if isinstance(v, dict):
+        out: dict[str, Any] = {}
+        for k, x in v.items():
+            if not isinstance(k, str):
+                raise TypeError(f"觀測欄 dict 鍵不是字串：{type(k).__name__}")
+            out[_shadow_copy(k)] = _shadow_copy(x)
+        return out
+    if isinstance(v, (list, tuple)):
+        return [_shadow_copy(x) for x in v]
+    raise TypeError(f"觀測欄含非 JSON 型別：{type(v).__name__}")
+
+
+def _exc_type_name(exc: BaseException) -> str:
+    """例外型別名（ASCII、截長）；取名本身拋 `Exception` ⇒ 固定字樣 `SHADOW_UNREPRESENTABLE_ERROR`（⛔ 不往外拋）。"""
+    try:
+        return _ascii_name(type(exc).__name__)
+    except Exception:  # noqa: BLE001 — 病態例外類別：改記固定字樣（有留痕，不是吞例外）
+        return SHADOW_UNREPRESENTABLE_ERROR
+
+
+def _shadow_error(stage: str, exc: BaseException) -> dict:
+    """失敗標記：只記例外型別名與階段（⛔ 不放例外訊息 —— 可能夾帶上游原文／編碼炸彈）。
+
+    C2a-2 QA 回修：型別名取不出來 ⇒ `{"_error": "<unrepresentable>", "_stage": stage}`（`_exc_type_name`）。
+    """
+    return {"_error": _exc_type_name(exc), "_stage": stage}
+
+
+def _log_shadow_failure(marker: dict) -> None:
+    """印一行觀測欄失敗 log；stdout／stderr 寫不出去 ⇒ 改把 log 失敗記進標記 `_log_error`（⛔ 不往外拋）。
+
+    沿用 L0 `shared.na_drop_log.safe_print`（＝`_safe_print` 的公開別名，C2a-2 QA 回修）
+    （stdout 非 UTF-8 ⇒ ASCII 跳脫版；None／已關閉／broken pipe
+    ⇒ 改寫 `sys.__stderr__`；行為逐條見該檔 docstring），⛔ 不在這裡另寫一套。它唯二會往外拋的情形
+    （stderr 拋 OSError／ValueError 以外的例外、或它自己 import 失敗）由下方 except 收成 `_log_error`
+    —— 有留痕（寫進檔案的觀測欄），不是吞例外。
+    """
+    msg = (f"[risk_cap_apply] ⚠️ {INPUT_PROVENANCE_SHADOW_KEY} 觀測失敗"
+           f"（階段 {marker.get('_stage')}：{marker.get('_error')}）→ 觀測欄只記錯誤標記；"
+           "本輪是否寫檔不受觀測欄影響")
+    try:
+        # ~~from shared.na_drop_log import _safe_print~~ 📌 C2a-2 QA 回修（有意識的變更，⛔ 不是漏改）：
+        #   改用公開別名，不再跨模組 import 底線私有名稱（同一個函式物件，行為零變更）。
+        from shared.na_drop_log import safe_print
+        safe_print(msg)
+    except Exception as _e:  # noqa: BLE001 — log 是純觀測；失敗改留痕在標記裡（見上）
+        marker["_log_error"] = _exc_type_name(_e)
+
+
+def _input_provenance_shadow(session: Any, bundle: EngineInputBundle) -> dict:
+    """C2a-2 觀測欄：本輪引擎輸入逐項的 provenance／freshness／五欄資格（⛔ 不 raise `Exception`）。
+
+    唯讀：`session`、`bundle`（及引擎輸出）一個都不改；L2 分類是純函式，回傳值另做深拷貝。
+    `scored_keys` 依 L2 docstring 公式：`macro_numbers` 值非 None 的鍵，扣掉停用（M1B／M2）。
+    ⚠️ 只攔 `Exception`：**不是** `Exception` 子類的 `BaseException`（KeyboardInterrupt、SystemExit、
+    GeneratorExit、自訂的 `BaseException` 子類）一律照常往外拋 ⇒ 本輪照舊失敗（此時尚未碰任何檔案，
+    ⇒ 不寫檔、不留 `.tmp`），與本檔其餘路徑相同（⛔ 不攔中斷）。這是刻意的行為，不是遺漏。
+    """
+    stage = "import"
+    try:
+        # 延遲 import（稽核第 3 點）：新模組 import 失敗只影響觀測欄，⛔ 不讓整個 risk_cap_apply 載不起來。
+        from shared.input_provenance_policy import SHADOW_POLICY_VERSION
+        from src.compute.macro.input_provenance import infer_input_provenance
+        from src.data.macro import macro_cache_reader as _mcr_shadow
+
+        stage = "pmi_history"
+        # 與引擎（`load_engine_inputs_from_session`）同一支 L1、同一個本地檔再讀一次（bundle 沒保存歷史表）。
+        # ⚠️ 已知限制：兩次讀之間 cron 若換掉 parquet，這裡看到的可能是另一版 —— 只影響觀測欄（據實揭露）。
+        pmi_history = _mcr_shadow.load_tw_pmi_history()
+
+        stage = "session"
+        _get = session.get
+        raw = {k: _get(k) for k in _SHADOW_SESSION_KEYS}
+
+        stage = "infer"
+        scored = ({k for k, v in bundle.macro_numbers.items() if v is not None}
+                  - set(bundle.disabled_inputs))
+        records = infer_input_provenance(**raw, pmi_history=pmi_history,
+                                         assessed=bundle.assessed, scored_keys=scored)
+
+        stage = "sanitize"
+        shadow = _shadow_copy({"shadow_policy_version": SHADOW_POLICY_VERSION, "inputs": records})
+
+        stage = "validate"
+        # 稽核第 1 點（必修）：與 `_write_state_lock` 落檔同一種編碼路徑自驗 —— 只過 `json.dumps` 不夠，
+        #   lone surrogate（例 "\ud800"）要到 utf-8 encode 才炸；炸在寫檔當下會讓整輪失敗並留 `.tmp` 孤兒。
+        json.dumps(shadow, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        return shadow
+    except Exception as exc:  # noqa: BLE001 — 觀測欄失敗：換成錯誤標記＋安全 log（有留痕，不是吞例外）
+        marker = _shadow_error(stage, exc)
+        _log_shadow_failure(marker)
+        return marker
+
+
 def compute_and_lock_risk_cap(session: Any, *, now: datetime,
                               state_file_path: str = "macro_state.json",
                               risk_cap_state_file_path: str | None = None) -> RiskCapApplyResult:
@@ -289,6 +445,9 @@ def compute_and_lock_risk_cap(session: Any, *, now: datetime,
     payload["m1b_m2_data_month"] = _m1b_m2_data_month(bundle)
     payload[RISK_CAP_RULESET_VERSION_KEY] = RISK_CAP_RULESET_VERSION   # 批 Z66：規則版本（L0 SSOT）
     payload[REQUIRED_CORE_OK_KEY] = True     # 批 Z66（Q1）：走到這裡 ⇔ Required Core 全部可評估
+    # C2a-2（DEC-080）：三道閘門之後才建觀測欄（沒寫檔的輪次不記錄）；排在下一行前檢查之前 ⇒ 前檢查照舊
+    #   涵蓋整份 payload。觀測欄自己已做完 utf-8 自驗、失敗只回錯誤標記 ⇒ ⛔ 不會讓本來寫得成的一輪變失敗。
+    payload[INPUT_PROVENANCE_SHADOW_KEY] = _input_provenance_shadow(session, bundle)
     # 寫檔前先驗：任何 NaN／±inf 數值 → ValueError（此時尚未碰檔案）。
     json.dumps(payload, ensure_ascii=False, allow_nan=False)
 

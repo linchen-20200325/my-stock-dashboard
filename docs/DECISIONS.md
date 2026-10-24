@@ -1317,7 +1317,8 @@ C2a 屬高風險資料契約批：建議高能力模型；Effort：High；完整
 - **執行紀錄**（2026-10-24 Safe Checkpoint 追加，append-only；本條上文一字未改；**不是新 DEC**；事實部分決策者＝AI 總管（事實更新））：
   - 本條裁示已落盤合併：PR #917（squash `f9c76087`）。
   - **C2a-1 已完成**：PR #918（squash `74dc891d`；main CI run 40085401541 success；撰寫組 `git fetch`＋`gh api` 實查）—— 兩軸契約層（`shared/input_provenance_policy.py`、`src/compute/macro/input_provenance.py`），只新增、**未接線**、零投資輸出變更。C2a-1／C2a-2 切分出自 PR #918 描述，屬總管技術切分（`CLAUDE.md` §-1.5.D v3 §03-1），**非客戶裁示**。
-  - **C2a-2 未開始**（接線觀測：`src/services/risk_cap_apply.py` 寫檔分支附加觀測欄）；前一對話本機草稿未提交、已遺失，須重新實作；要求與稽核發現見 `docs/BACKLOG.md` 5.1.10 C2a-2 列。C2b 仍待 C2a-2 觀測後送題；`PRODUCTION_WRITE_APPROVED=False` 未動。
+  - ~~**C2a-2 未開始**~~（Safe Checkpoint 時點事實；已過時，見下一點（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））（接線觀測：`src/services/risk_cap_apply.py` 寫檔分支附加觀測欄）；前一對話本機草稿未提交、已遺失，須重新實作；要求與稽核發現見 `docs/BACKLOG.md` 5.1.10 C2a-2 列。C2b 仍待 C2a-2 觀測後送題；`PRODUCTION_WRITE_APPROVED=False` 未動。
+  - **C2a-2 實作完成、待合併**（2026-10-24 追加，append-only；事實部分決策者＝AI 總管（事實更新））：客戶 2026-10-24 指示（經總管轉交）：「同意，請切換到 Effort High 後開始 C2a-2…完成 C2a-2 後停手，不自動進 C2b。」—— 屬本條 C2a 授權的執行指示，**不是新裁示**。PR #920（branch `claude/determined-euler-32xqjn`；首個 commit `981e2f69`，另有 QA 修正 commit~~，SHA 見 PR #920~~ `dc2fa365`（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））：`src/services/risk_cap_apply.py::compute_and_lock_risk_cap` 只在**三道閘門後的寫檔分支**，於本機 `risk_cap_state.json` 與 `macro_state.json` 附加純觀測欄 `input_provenance_shadow`（`shadow_policy_version`＝`c2a-shadow-1`）；未寫檔輪次不記錄；失敗只記 `{"_error", "_stage"}`、不改寫檔成敗。狀態（撰寫組 2026-10-24 21:47 台北 `gh api` 實查）：獨立 QA 兩組判可合併（總管轉述）、`981e2f69` CI Fast＋Slow success、PR open／未合併；**合併與 main CI 以 GitHub 為準，由總管合併後另行驗證**（撰寫時未合併）。⛔ 未變：Risk Cap 數值、計分資格、Required Core、門檻／公式／權重、`RISK_CAP_RULESET_VERSION`、`ENGINE_SOURCE`、`is_proxy`、`PRODUCTION_WRITE_APPROVED=False`、Google Sheet 寫入、UI。**C2b 未開始**（客戶：C2a-2 後停手）；細節與新發現見 `docs/BACKLOG.md` 5.1.10 C2a-2 列、5.1.12。
 
 ---
 
