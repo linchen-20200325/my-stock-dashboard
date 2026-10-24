@@ -1906,7 +1906,14 @@ _LEG_VARIANTS = {
     "all-none": dict.fromkeys(_LEG),
     "all-valid": dict(zip(_LEG, ("2026-10-22", "2026-10-22", "2026-10-21", "2026-10-22"))),
     "mixed": dict(zip(_LEG, ("2026-10-22", None, float("nan"), pd.Timestamp("2026-10-22")))),
+    # C1 第五輪：ISO 字串與 None 混合（每次只缺一欄／只有一欄有值）
+    "inst-missing": dict(zip(_LEG, ("2026-10-22", None, "2026-10-21", "2026-10-22"))),
+    "li-missing": dict(zip(_LEG, ("2026-10-22", "2026-10-22", "2026-10-21", None))),
+    "only-score": dict(zip(_LEG, ("2026-10-22", None, None, None))),
+    "only-li": dict(zip(_LEG, (None, None, None, "2026-10-22"))),
 }
+#: cron 行為守衛跑的組合：全 None／全有效＋上面 4 組 ISO／None 混合。
+_CRON_LEG_VARIANTS = ("all-none", "all-valid", "inst-missing", "li-missing", "only-score", "only-li")
 
 
 def _bsr_behavior_problems(bsr) -> list[str]:
@@ -1950,12 +1957,12 @@ class TestLegBehaviourGuard:
 
 
 def _cron_leg_behavior_problems(S, monkeypatch, tmp_path) -> list[str]:
-    """(b) cron main：leg_as_of_from_inputs 回「四欄全 None」與「四欄全有效」⇒ 都恰好 append 一列、
-    exit code 相同、該列四欄以外欄位相同。"""
+    """(b) cron main：leg_as_of_from_inputs 回「四欄全 None」「四欄全有效」與 4 組 ISO／None 混合
+    （`_CRON_LEG_VARIANTS`）⇒ 每組都恰好 append 一列、exit code 相同、該列四欄以外欄位相同。"""
     import src.compute.macro.macro_forward_test as MFT
     probs: list[str] = []
     out = {}
-    for name in ("all-none", "all-valid"):
+    for name in _CRON_LEG_VARIANTS:
         d = tmp_path / f"cron_{name}_{next(_uid)}"
         d.mkdir()
         S_, store = _cron_isolate(monkeypatch, d, mkt_info={"index_as_of": "2026-08-18"}, S=S)
@@ -1967,8 +1974,10 @@ def _cron_leg_behavior_problems(S, monkeypatch, tmp_path) -> list[str]:
             probs.append(f"{name}: append {len(rows)} 列（應恰好 1）")
             continue
         out[name] = (rc, {k: v for k, v in rows[0].items() if k not in _LEG})
-    if len(out) == 2 and out["all-none"] != out["all-valid"]:
-        probs.append("兩種 leg 下 exit code 或四欄以外欄位不同")
+    base = out.get("all-none")
+    for name, got in out.items():
+        if got != base:
+            probs.append(f"{name}: exit code 或四欄以外欄位與 all-none 不同")
     return probs
 
 
@@ -1983,3 +1992,13 @@ class TestCronLegBehaviour:
                                         "    n = _store.append_signals([row]*bool(row['inst_as_of']))\n")],
                                f"cron_m5_{next(_uid)}")
         assert _cron_leg_behavior_problems(mut, monkeypatch, tmp_path) != []
+
+    def test_qa_e_m3_gate_on_partial_none_caught_by_behaviour(self, monkeypatch, tmp_path, _clean_session):
+        """QA-E M3：只在四欄「全有」或「全無」時才寫列 ⇒ 全 None／全有效兩組照常，ISO／None 混合組不寫列；
+        (c) 的靜態守衛抓不到（沒有欄名字面值），由 (b) 的混合變體抓。"""
+        swap = ("    n = _store.append_signals([row])\n",
+                "    n = _store.append_signals([row] * (list(row.values())[-4:].count(None) in (0, 4)))\n")
+        mut = c1_mutant_module(_CRON, [swap], f"cron_qae_m3_{next(_uid)}")
+        probs = _cron_leg_behavior_problems(mut, monkeypatch, tmp_path)
+        assert probs and all("append 0 列" in p for p in probs), probs
+        assert not any(p.startswith(("all-none", "all-valid")) for p in probs), probs

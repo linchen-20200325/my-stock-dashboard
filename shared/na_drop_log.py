@@ -22,7 +22,8 @@ CLAUDE.md §3.3「`fillna` / `ffill` / `dropna` 必須顯式呼叫 + log 受影�
    - stderr 也寫不出去（`sys.__stderr__` 為 None，或寫入拋 OSError／ValueError）⇒ 放棄這一行（唯一放棄點）。
    ⚠️ 據實揭露兩個**不**攔的情形：(a) `sys.__stderr__` 寫入拋 OSError／ValueError **以外**的例外會往外拋
    （總管規格：stderr 端不擴大成 `except Exception`）；(b) `BaseException`（KeyboardInterrupt／SystemExit）
-   一律不攔。除此之外本模組不拋例外。
+   一律不攔。在 `tag`／`series` 為 str（型別標註即如此；11 處 production 呼叫點皆傳字串 ——
+   tag 為字面值，series 為字面值／f-string／`str()`）的前提下，除此之外本模組不拋例外。
 
 ⛔ 不寫 `ADL_LOG_PATH`（`_alog`）—— UI 會讀那個檔顯示；本 log 走 stdout（寫不出去時才走 `sys.__stderr__`）。
 §8.2：L0，零 import（純 duck typing，不 import pandas）。
