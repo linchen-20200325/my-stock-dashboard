@@ -175,14 +175,14 @@
 | 下一階段 Model／Effort | **高能力模型／Effort High**（C2a-2 屬 Risk Cap 資料有效性／freshness，第 17 節仍 High＋完整 QA）；建議只是參考，新對話須依第 9.0 節重新判斷，不得假設已切換 |
 | 禁止事項／Production | 沿用「C2 裁示後」段，效力不變；`PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-24 grep 實查）、Daily Schedule NOT APPROVED（DEC-066 F） |
 
-### 📌 current handoff（2026-10-24 C2a-2 後）（append-only；**本段為現行短版，與上表及上各段衝突處以本段為準**）
+### 📌 current handoff（2026-10-24 C2a-2 後）（append-only；~~**本段為現行短版，與上表及上各段衝突處以本段為準**~~ 已過時，見下方「2026-10-24 大盤 Gate 後」段；本段「Production」列**效力不變**，由新段沿用（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））
 
 > C2a-2 已依 DEC-080 實作（PR #920）；客戶 2026-10-24 指示「完成 C2a-2 後停手，不自動進 C2b。」⛔ **接手必須重新做 GitHub Verification Gate**（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點）；本段只是導引、不是事實來源。待辦細節只在 `docs/BACKLOG.md`（§F 索引＋5.1.10 C2a-2 列＋5.1.12）；狀態摘要 `docs/PROJECT_STATE.md` §33。
 
 | 項目 | 現況（量測 2026-10-24 21:47 台北，撰寫組 `git fetch`＋`gh api` 實查，會過期） |
 |---|---|
 | main | tip `03a75994`（cron：板塊資金泡泡圖每日增量）；最後非 cron commit＝`0a78f308`（#919 Safe Checkpoint）。cron 會推進 tip，**以 GitHub 為準** |
-| Open PR | #920（C2a-2；base main；撰寫時 open、未合併、mergeable clean） |
+| Open PR | ~~#920（C2a-2；base main；撰寫時 open、未合併、mergeable clean）~~ #920 **已合併**（merge `ea176b8d`，2026-10-24T14:31:57Z；`gh api` 實查）（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 | CI | PR #920 `981e2f69`：Fast checks（job 120883293627）success、Slow tests（job 120883293857）success；~~QA 修正 commit 的 CI 撰寫時未查（見 PR #920）~~ QA 修正 commit `dc2fa365`（PR head）：Fast checks（job 120893028983）、Slow tests（job 120893029189）於 22:11 台北 `gh api` 實查為 **in_progress**（結果未知；PR mergeable_state＝unstable，CI 未完成所致）—— 以 GitHub 為準（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 | 完成到哪 | **C2a-2 實作完成**：寫檔分支附加觀測欄 `input_provenance_shadow`（`c2a-shadow-1`），零投資輸出變更；獨立 QA 兩組判可合併（總管轉述）；**合併待總管執行並於合併後驗證 main CI**（本段撰寫時未合併）。C2a-1（#918）已完成。**C2b 未開始** |
 | working tree／stash／worktree | ~~**撰寫時（21:47 台北）**：branch `claude/determined-euler-32xqjn`＠`981e2f69`；未提交修改：`shared/na_drop_log.py`、`src/services/risk_cap_apply.py`、`tests/test_batch_z65.py`、`tests/test_c2a_risk_cap_shadow.py`（另一實作 agent 的 QA 修正，進行中、尚未提交）＋本批四份 docs；~~ **現況（22:11 台北，撰寫組 `git status` 實查）**：上列 QA 修正已提交為 `dc2fa365`（`shared/na_drop_log.py` 僅新增公開別名 `safe_print`，純別名）、docs 已提交為 `2d31f9fc`；branch＠`dc2fa365`，`git status` 乾淨（本修正輪 docs 提交前）（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；`git stash list` 空；`git worktree list` 只有主 worktree。⚠️ 另一 agent 可能仍在提交，以 GitHub／`git status` 實查為準。（舊 UI 壓測 `stash@{0}` 只在原容器，本容器不存在，DEC-019） |
@@ -192,6 +192,24 @@
 | 下一階段 Model／Effort | **高能力模型／Effort High**（C2b Gate 屬 Risk Cap 計分資格／freshness，第 17 節 High）；建議只是參考，須依第 9.0 節重新判斷，不得假設已切換 |
 | 禁止事項 | C2b（計分行為修改）、C1′、DEC-076 ①②、Risk Cap 公式／門檻／權重／Required Core 數量、`RISK_CAP_RULESET_VERSION` 升版、`is_proxy` 翻轉、production write、Daily Schedule、`RC-VISIBILITY` 正式 UI、新增或替換 production source；其餘沿用「C2 裁示後」段 |
 | Production | `PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-24 grep `shared/risk_cap_history_policy.py` 實查，未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
+
+### 📌 current handoff（2026-10-24 大盤 Gate 後）（append-only；**本段為現行短版，與上表及上各段衝突處以本段為準**）
+
+> C2a-2 已合併；客戶指示 C2a-2 後停手、不自動進 C2b。目前在 📊 大盤頁 Decision Gate：草稿已備妥、**未核准**。⛔ 接手必須重新做 GitHub Verification Gate（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點）；本段只是導引。待辦細節在 `docs/BACKLOG.md`（`VN1-MT-IA`／`VN1-MT-HOME`／`UIM-*`／`UIM-MKTGATE-DOC-DRIFT`）；狀態摘要 `docs/PROJECT_STATE.md` §34。
+
+| 項目 | 現況（量測 2026-10-25 00:05 台北，撰寫組 `git fetch`＋`gh api` 實查，會過期） |
+|---|---|
+| main | `ea176b8d`（#920 C2a-2 squash merge，2026-10-24T14:31:57Z）；cron 會推進 tip，**以 GitHub 為準** |
+| Open PR | 0（`gh api pulls?state=open` 空） |
+| main CI | `ea176b8d` Fast checks（job 120898574713）success、Slow tests（job 120898574513）success |
+| 完成到哪 | **C2a-2 done**（#920；觀測欄 `input_provenance_shadow`，零投資輸出變更）。**C2b 暫停**：等真實寫檔輪次的觀測結果後再備 C2b Decision Gate（⛔ 不得開始 C2b） |
+| current task | **📊 大盤頁 Decision Gate 已備妥**：`docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`（~~v2~~ v3（commit `ab8b8342`；另一 agent 正在做 v3.1 措辭修正）；已完成**三輪獨立複驗**（第三輪結論：剩餘項皆為措辭，修正中）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；舊→新覆蓋矩陣、文字線框、可施工 W1～W13、卡住 G*、裁示題 Q1～Q4）。⛔ **未核准**；矩陣「沒有遺漏」**仍未證明**~~（三次皆單組），v2 修訂未經第二輪複驗（該檔附錄 C）~~（每輪皆單組；見該檔附錄 C）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| working tree／stash／worktree | ~~2026-10-25 00:04 台北：branch `claude/determined-euler-32xqjn`＠`1f4540a1`（＝main `ea176b8d`＋2 個 commit：`6da53f5e`、`1f4540a1`，新增上列 Gate 檔，尚未開 PR）；`git status`（00:06 台北）未提交：本批三份 docs＋Gate 檔本身（另一 agent 編輯中）；~~ **2026-10-25 00:11 台北**：branch `claude/determined-euler-32xqjn`＠`ab8b8342`（＝main `ea176b8d`＋4 個 docs commit：`6da53f5e`、`1f4540a1`、`c3b3fd7e`、`ab8b8342`）；總管將以 PR 合併此 branch（00:11 實查尚無 open PR）；`git status` 在本批 docs 編修前乾淨（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；`git stash list` 空；`git worktree list` 只有主 worktree。⚠️ 另一 agent 仍在編輯 Gate 檔，以 `git status` 實查為準 |
+| blocker／Decision Required | **客戶裁示 Q1～Q4**（Gate 檔 §6）；C2b Decision Gate（待觀測）；`DH-PMI-PUBLICATION-WINDOW-SPEC`；`DEC076-CONFIRM` ①②；`RC-VISIBILITY`（線框）；`UIM-MKTGATE-DOC-DRIFT`（只登記） |
+| **唯一 Next Safe Action** | ~~等客戶裁示 Q1～Q4 → 裁示後開 **大盤頁實作批**（Gate 檔 §4 的 W* 清單；先過 9.0 Gate）~~ Gate 已送客戶（2026-10-25）→ 等客戶裁示 Q1～Q4 → 大盤頁實作批（Gate 檔 §4 的 W* 清單；先過 9.0 Gate）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| 下一階段 Model／Effort | 實作批：**高能力模型／Medium～High**（UI 接線 Medium；凡碰 Risk Cap 顯示的部分 High）；建議只是參考，須依第 9.0 節重新判斷，不得假設已切換 |
+| 禁止事項 | 線框核准前寫 UI code；恢復 Risk Cap 顯示（`RC-VISIBILITY`）；C2b；改公式／門檻／權重；新增或替換資料來源；刪舊 UI；其餘沿用「C2a-2 後」「C2 裁示後」段 |
+| Production | `PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-25 grep `shared/risk_cap_history_policy.py:216` 實查，未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 

@@ -606,3 +606,13 @@
 | QA 修正（📌 2026-10-24 追加（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更正））） | `dc2fa365`：`shared/na_drop_log.py` 新增公開別名 `safe_print`（純別名）；錯誤標記讀端比對；BaseException 往外拋／非 str dict 鍵／list・tuple 分支補測；`_exc_type_name` 失敗時記 `<unrepresentable>`；`tests/test_c2a_risk_cap_shadow.py`（新檔，相對 main）70 tests（實作組自測，含參數化；撰寫組 grep `def test_` 35 個） | 事實（commit 實查）＋測試數總管轉述 |
 
 ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組撰寫；測試數字、QA 結論、讀者判斷為總管轉述，撰寫組只實查 PR 狀態、CI、旗標與 working tree，未重跑測試、未見 QA 原始報告。
+
+## 34. 📊 大盤頁 Decision Gate 草稿（2026-10-24；append-only；**非 Approved**）
+
+> 2026-10-24 新增（決策者 AI 總管（事實更新））。本節**只放 pointer**，不是新 SSOT、不是裁示。全文：`docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`（~~v2~~ v3，commit `ab8b8342`，v3.1 措辭修正進行中（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；基準 main `ea176b8d`）。
+
+- **內容**：大盤相關舊→新能力覆蓋矩陣（§3，含 §3.15 舊 UI 結論句「首批一律不以結論承接」）、首屏文字線框與規則（§1）、可施工清單 W1～W13（§4，零語意變更）、被卡住清單 G*（§5~~，含 Risk Cap 卡位契約：卡面不顯示數字~~）；**Risk Cap 卡位**自 v3 起不再是 §5 預設契約，改為「刻意未接」併入 **Q2**、等客戶核准（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））、客戶裁示題 Q1～Q4（§6）、文件矛盾（附錄 B）、獨立複驗（附錄 C）。
+- **狀態**：⛔ **未核准**；等客戶裁示 Q1～Q4 後才可開大盤頁實作批（DEC-003 ① 線框 gate）。未裁示前，該檔的推薦與「新版層級」欄只是 RECOMMENDATION。
+- **限制**（`CLAUDE.md` §-2 規則 6）：矩陣「沒有遺漏」**未證明**（撰寫組兩份單組盤點＋一組獨立複驗，皆單組）~~；v2 修訂未經第二輪複驗~~；已完成三輪獨立複驗（第三輪：剩餘項皆為措辭、修正中），每輪皆單組，完整性仍未證明（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。
+- **待辦落點**：`docs/BACKLOG.md` `VN1-MT-IA`、`VN1-MT-HOME`、`UIM-INVENTORY`、`UIM-MAPPING`、`UIM-COVERAGE-MATRIX`（各列 2026-10-24 補註）、`UIM-MKTGATE-DOC-DRIFT`（附錄 B 未登記矛盾）。
+
