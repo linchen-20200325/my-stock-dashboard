@@ -1694,7 +1694,11 @@ class TestCommittedLedgerAppend:
 # ══════════════════════════════════════════════════════════════════════════
 _NEW_NAMES = ("_pcr_src", "PCR_SRC_COL", "PCR_SRC_KIND", "PCR_SRC_TAIFEX", "PCR_SRC_FINMIND_EST",
               "MACRO_FWD_TEST_LEG_AS_OF_COLUMNS", "leg_as_of_from_inputs") + _LEG
-_ALLOWED = {_LI, _SCHEMA, _MFT, _CRON}
+#: DEC-080 授權 C2a 契約層：`shared/input_provenance_policy.py`（L0）以字面持有 PCR 逐日來源欄名
+#: `"_pcr_src"`（`PCR_SOURCE_COLUMN`；L0 不得 import L1，一致性由 tests/test_c2a_input_provenance.py 守住）。
+#: C2a-1 不接線 —— 該檔只描述欄名，沒有任何產品程式讀它（同檔讀者守衛）；其他下游照舊不得讀。
+_C2A_L0 = "shared/input_provenance_policy.py"
+_ALLOWED = {_LI, _SCHEMA, _MFT, _CRON, _C2A_L0}
 #: cron 腳本只准**呼叫** `leg_as_of_from_inputs` 並把結果交給 build_signal_row（不准碰欄名／常數）。
 _CRON_ALLOWED_NAMES = {"leg_as_of_from_inputs"}
 
