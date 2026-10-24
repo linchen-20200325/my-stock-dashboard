@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-23T14:20:40.459658+00:00",
+  "updated_at": "2026-10-24T13:29:09.291433+00:00",
   "last_updated": "2026-10-22",
   "row_count": 1254,
   "n_days": 27,
@@ -80,9 +80,9 @@
   "industry": {
     "scheme": "z43-official-code-v1",
     "raw_available": true,
-    "fetched_at": "2026-10-23T14:20:37.875164+00:00",
+    "fetched_at": "2026-10-24T13:29:07.506086+00:00",
     "rules": {
-      "finmind_no_official": 1185,
+      "finmind_no_official": 1186,
       "official_match_finmind": 1972,
       "official_name": 9
     },
@@ -103,7 +103,7 @@
     },
     "finmind_status": {
       "ok": true,
-      "n_rows": 4350
+      "n_rows": 4367
     },
     "unavailable_markets": [],
     "alias_consistency": {
