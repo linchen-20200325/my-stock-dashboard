@@ -143,7 +143,7 @@
 | 禁止事項 | 見 Gate §7.5：C1′、C2 實作（含 C2a）、VN1-PG production write、Risk Cap 公式／門檻／權重、`is_proxy` 語意修正、新增或替換 production source、`RC-VISIBILITY` UI 改動（需線框）；其餘沿用「C1 合併後」段禁止事項 |
 | Production | `PRODUCTION_WRITE_APPROVED=False`（未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
 
-### 📌 2026-10-24 C2 裁示後（append-only；**本段為現行短版，與上表及上各段衝突處以本段為準**）
+### 📌 2026-10-24 C2 裁示後（append-only；~~**本段為現行短版，與上表及上各段衝突處以本段為準**~~ 已過時，見下方「2026-10-24 Safe Checkpoint」段；本段「禁止事項」「Production」兩列**效力不變**，由新段沿用（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管））
 
 > 客戶 2026-10-24 已裁示 C2 Decision Gate（**DEC-080**，逐字全文在 `docs/DECISIONS.md`）。本段只放 pointer：Gate 標記 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` §7.4／7.7；施工列 `docs/BACKLOG.md` 5.1.10 **C2a**／**C2b**；耐久摘要 `docs/PROJECT_STATE.md` §31 末條。**GitHub 實況 > 本檔**，接手先重查。
 
@@ -158,6 +158,22 @@
 | 禁止事項 | C2a ⛔ 清單見 `docs/BACKLOG.md` 5.1.10 **C2a** 列（改 Risk Cap scoring／threshold／weight／公式／Required Core 數量、production write、Daily Schedule、`RC-VISIBILITY` 正式 UI、開始 C2b、開始 C1′、順手處理 DEC-076 ①②）；Gate §7.5 現行範圍註；其餘沿用「C1 合併後」段禁止事項 |
 | 仍待客戶 | `DEC076-CONFIRM` ①②（**維持 pending、與 C2 分開**；C1′ 等 ①）；`RC-VISIBILITY` 揭露線框（DEC-080 第 5 點，先線框／文字草稿）；C2b（C2a 後送）；完整清單見 `docs/BACKLOG.md` §F「Decision Gates」列 |
 | Production | 沿用上段：`PRODUCTION_WRITE_APPROVED=False`（未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
+
+### 📌 current handoff（2026-10-24 Safe Checkpoint）（append-only；**本段為現行短版，與上表及上各段衝突處以本段為準**）
+
+> 依 DEC-079 預判性 Safe Checkpoint（`PROJECT_RULES.md` 第 6、11、15 節）落盤；客戶指示「不得開始 C2a-2」並進入交接。⛔ **新對話必須重新做 GitHub Verification Gate（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點），不得因本段內容假定 GitHub 狀態**；本段只是導引，不是事實來源。待辦細節只在 `docs/BACKLOG.md`（§F 索引＋5.1.10 C2a-1／C2a-2／C2b 列）；接手操作規則見 `docs/PROJECT_STATE.md` §32。
+
+| 項目 | 現況（量測 2026-10-24，撰寫組 `git fetch`＋`gh api` 實查，會過期） |
+|---|---|
+| main | `74dc891d`（#918 C2a-1）；其前 `f9c76087`（#917 DEC-080 落盤）、`e813c5f0`（#916 C2 Gate 研究）、`f48b30bf`（#915）、`92d86f72`（#914）、`37cf87e6`（#913 C1）。cron 會推進 tip，**以 GitHub 為準** |
+| Open PR | 0 |
+| main CI | main push run 40085401541（PR Check，for `74dc891d`）success |
+| 完成到哪 | **C2a-1 已完成、未接線**（#918：新增 `shared/input_provenance_policy.py`、`src/compute/macro/input_provenance.py`、`tests/test_c2a_input_provenance.py`，另改 `tests/test_c1_observability.py` 白名單；產品碼零引用、零投資輸出變更；兩組獨立稽核＋修正輪）。**C2a-2 尚未開始** —— 草稿曾在前一對話容器本機實作並經兩組稽核，但**從未提交 GitHub、已遺失**，⛔ 不得假定存在 |
+| current active work | **無**（停在 checkpoint） |
+| blocker／Decision Required | 無客戶 blocker。仍待：C2b Decision Gate（待 C2a-2 觀測）；`DH-PMI-PUBLICATION-WINDOW-SPEC`（規格待提，隨 C2b）；`DEC076-CONFIRM` ①②（pending；C1′ 等 ①）；`RC-VISIBILITY`（待線框）—— 清單見 BACKLOG §F |
+| **唯一 Next Safe Action** | 新對話先做 GitHub Verification Gate（確認 main／Open PR／CI）→ 依 DEC-080 **重新實作 C2a-2**，帶入 BACKLOG 5.1.10 C2a-2 列的六點稽核發現；High Effort |
+| 下一階段 Model／Effort | **高能力模型／Effort High**（C2a-2 屬 Risk Cap 資料有效性／freshness，第 17 節仍 High＋完整 QA）；建議只是參考，新對話須依第 9.0 節重新判斷，不得假設已切換 |
+| 禁止事項／Production | 沿用「C2 裁示後」段，效力不變；`PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-24 grep 實查）、Daily Schedule NOT APPROVED（DEC-066 F） |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 

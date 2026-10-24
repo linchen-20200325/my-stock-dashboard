@@ -555,3 +555,35 @@
 - ~~**待客戶裁示**~~ **已裁示（見本節末條 DEC-080）**（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080）（6 題，Gate §7.4；推薦一律「總管推薦，待客戶裁示」，⛔ 非 Approved）：資料身分規則選方案（推薦方案 2 分層兩軸）；BIAS240 估算是否退出 Risk Cap 計分；PCR 法人估算是否退出；PMI 第三方轉載／沿用快照可否滿足必要核心；7 天沿用是否加揭露（不改計算）；C2 是否先做 shadow（C2a）再改計分（C2b）。`DEC076-CONFIRM` ①② 仍未裁示且與 16 燈處置相關。
 - **仍禁止施工**（裁示前狀態；現行範圍見本節末條）：C1′、C2 實作（~~含 C2a~~ C2a 已由 DEC-080 指派（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080））、VN1-PG production write（`PRODUCTION_WRITE_APPROVED=False`）、Risk Cap 公式／門檻／權重、`is_proxy` 語意修正、新增或替換 production source、`RC-VISIBILITY` UI 改動（需線框）。
 - **已裁示（DEC-080，客戶 2026-10-24；append-only）**（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080）：裁示逐字全文只在 `docs/DECISIONS.md` **DEC-080**；Gate 各題標記見 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` §7.4／7.7；施工列見 `docs/BACKLOG.md` 5.1.10 **C2a**／**C2b**。摘要：(1) 資料身分／計分契約＝**方案 2**（provenance 與 freshness 分開；as_of、source_id；exists／fresh／displayable／scoring eligible／Risk Cap eligible 不得壓成同一 boolean）；(2) BIAS240 估算＝不參與 Risk Cap 計分、可顯示＋標示、Optional 未評估、不阻斷；(3) PCR 法人估算＝不參與 Risk Cap 計分、可顯示＋標示 `proxy_estimate`、只有正式 PCR 契約資料可用原門檻；(4) 台灣 PMI＝不套 blanket rule，正式來源修正為正確 provenance，同一正式序列 secondary 可滿足 Core（揭露來源），carried_forward 只在**正式定義**的發布期內並顯示「沿用」，超過 → unavailable → 不產生新 cap；⛔ 不自定發布期天數（總管判定現有規則不構成正式定義；C2a 記為 `undetermined_pending_spec`、不自定數字；規格提案於 C2a 觀測後隨 C2b Gate 送客戶：`docs/BACKLOG.md` `DH-PMI-PUBLICATION-WINDOW-SPEC`）；(5) 7 天沿用要揭露，屬 `RC-VISIBILITY`、先線框；(6) **先 C2a 再 C2b**：C2a＝observability／contract implementation（零投資輸出變更，高能力模型／Effort High／完整 QA），C2b＝C2a 觀測結果後另送 Decision Gate、未另行裁示不得改計分。`DEC076-CONFIRM` ①② 維持 pending、與 C2 分開。⛔ 現行仍禁止：C2b、C1′、DEC-076 ①②、Risk Cap 公式／門檻／權重／Required Core 數量、production write（`PRODUCTION_WRITE_APPROVED=False`）、Daily Schedule、`RC-VISIBILITY` 正式 UI、新增或替換 production source。
+
+## 32. 2026-10-24 Safe Checkpoint：current-valid knowledge 核對與 AI 總管接手須知（append-only）
+
+> 2026-10-24 新增（DEC-079 預判性 Safe Checkpoint；決策者 AI 總管（事實更新））。本節**不是新 SSOT**：只放 pointer 與狀態更新；規則本文只在 `PROJECT_RULES.md`，裁示只在 `docs/DECISIONS.md`，待辦只在 `docs/BACKLOG.md`，current／next 只在 `docs/HANDOFF.md`。量測：撰寫組 `git fetch`＋`gh api` 實查 main＝`74dc891d`（#918）、Open PR＝0、main CI run 40085401541 success（會過期，引用前重查）。
+
+### 32.1 current-valid knowledge 核對（撰寫組 grep，已存在者只給 pointer）
+
+| 主題 | 狀態 | 出處 |
+|---|---|---|
+| 新 UI 核心方向（📊 大盤、🎯 標的、⚡ 行動、🛡️ 持股；👤 我的＝輔助；🩺 資料中心＝維護頁；「憑什麼」改 contextual explainability） | 已存在 | §29.1；DEC-072、DEC-076 |
+| 舊 UI＝能力／邏輯參考；舊→新 capability coverage 驗證後才可進移除 Gate | 已存在 | §29.1；`PROJECT_RULES.md` 16.5；BACKLOG 5.1.9 `UIM-*` |
+| 台股趨勢與國際趨勢必須保留（兩主軸，仍無正式定義） | 已存在 | §22.1、§29.2；DEC-071；BACKLOG `VN1-MT-TREND-DEF` |
+| 蕭碧燕 EPS 預估大盤研究方向（Research Framework，非 Approved）與未完成點（大盤 EPS／PE、CAPEX→EPS、殖利率×領先指標皆未落地） | 已存在 | §22.2、§22.4；BACKLOG 5.1.6 `VN1-MT-VALUATION`／`VN1-MT-CAPEX-EPS`／`VN1-MT-YIELD-CLI` |
+| Risk Cap、台股趨勢、國際趨勢、市場位階、指標危險度彼此分離，不得合成單一分數 | 已存在 | §22.3、§29.2 |
+| C1 已完成內容 | 已存在 | §30.9（#913） |
+| DEC-080／C2a 正式語意 | 已存在 | §31 末條；DEC-080 |
+| **C2a-1 已完成、未接線** | **本節新增（事實）** | PR #918（squash `74dc891d`）：新增 `shared/input_provenance_policy.py`（L0 兩軸政策表）、`src/compute/macro/input_provenance.py`（L2 純函式）、`tests/test_c2a_input_provenance.py`；產品碼零引用、零投資輸出變更；`is_proxy` 未翻轉、`RISK_CAP_RULESET_VERSION` 未動；PMI carried_forward 記 `undetermined_pending_spec`。C2a-1／C2a-2 切分為總管技術切分（出自 PR #918 描述），非客戶裁示 |
+| **C2a-2 尚未開始** | **本節新增（事實）** | 前一對話本機草稿從未提交 GitHub、已遺失 ⇒ 須重新實作；六點稽核發現見 BACKLOG 5.1.10 C2a-2 列 |
+| 下一步 | 指標 | 新對話須先做 GitHub Verification Gate，才進 C2a-2（`docs/HANDOFF.md` current handoff 段） |
+
+### 32.2 AI 總管接手須知（接手操作規則與 current context；來源：客戶 2026-10-24 交接指示，經總管轉交；已有正式規則者以 pointer 引用）
+
+1. 每次判斷前，AI 總管也須**獨立查 GitHub**（main／PR／CI），不得只信 subagent 回報或交接文件 —— `PROJECT_RULES.md` 第 2 節、第 15 節第 3 點；`CLAUDE.md` §-2 規則 3。
+2. `docs/HANDOFF.md` **只作參考、不是事實來源** —— `PROJECT_RULES.md` 第 1.3 節、第 15 節第 3 點第 4 款。
+3. 使用者偏好：繁體中文（DEC-069，第 3 節）；極簡回報（DEC-060，原則 ≤5 行）；**表格優先**（本則僅出自客戶 2026-10-24 交接指示，repo 無既有 DEC）；Claude 靜默自主巡航（第 3 節、16.3）。
+4. 給 Claude 的提示語須附**建議模型與建議 Effort**（客戶 2026-10-24 交接指示；相鄰規則：第 9.0 節、第 15 節第 6 點）。
+5. 額度／context 預判偏高時，提前到 Safe Checkpoint、文件落盤後再結束對話換新對話 —— 第 11 節「預判性觸發」（DEC-079）。
+6. **資料 ≠ AI 推理**為永久原則 —— 第 13 節 D3／D4、16.1。
+7. 不可因 context loss 重開已完成工作（例：C1、C2a-1 已合併，不重做）—— DEC-014「不重新摘要；不重問；不重做」、第 11 節。
+8. 下一對話從 GitHub SSOT 接手，**不要求客戶重講** —— 第 11 節、第 15 節。
+
+⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組撰寫；「已存在」為 grep＋讀檔結果，未經第二組驗證；C2a-2 稽核發現與 C2b 推算觀察為總管轉述，撰寫組未見稽核報告。

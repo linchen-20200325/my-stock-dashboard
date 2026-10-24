@@ -1314,6 +1314,10 @@ C2a 屬高風險資料契約批：建議高能力模型；Effort：High；完整
   - **DEC-066／DEC-070**：不變；C2a ⛔ production write、Daily Schedule。
   - **DEC-073／DEC-078 A-2**：C2a 屬「資料有效性、proxy／estimated eligibility、freshness／PIT」→ High＋完整 QA，與客戶建議一致；新對話仍須依 `PROJECT_RULES.md` 第 9.0 節重新判斷。
   - 未發現需登記 `PROJECT_RULES.md` 第 14 節的新衝突。
+- **執行紀錄**（2026-10-24 Safe Checkpoint 追加，append-only；本條上文一字未改；**不是新 DEC**；事實部分決策者＝AI 總管（事實更新））：
+  - 本條裁示已落盤合併：PR #917（squash `f9c76087`）。
+  - **C2a-1 已完成**：PR #918（squash `74dc891d`；main CI run 40085401541 success；撰寫組 `git fetch`＋`gh api` 實查）—— 兩軸契約層（`shared/input_provenance_policy.py`、`src/compute/macro/input_provenance.py`），只新增、**未接線**、零投資輸出變更。C2a-1／C2a-2 切分出自 PR #918 描述，屬總管技術切分（`CLAUDE.md` §-1.5.D v3 §03-1），**非客戶裁示**。
+  - **C2a-2 未開始**（接線觀測：`src/services/risk_cap_apply.py` 寫檔分支附加觀測欄）；前一對話本機草稿未提交、已遺失，須重新實作；要求與稽核發現見 `docs/BACKLOG.md` 5.1.10 C2a-2 列。C2b 仍待 C2a-2 觀測後送題；`PRODUCTION_WRITE_APPROVED=False` 未動。
 
 ---
 
