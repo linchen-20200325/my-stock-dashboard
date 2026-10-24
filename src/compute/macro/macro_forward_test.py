@@ -106,7 +106,8 @@ def build_signal_row(
         inputs_as_of: 輸入腿的資料日(外資 T+1 / Yahoo EOD 可能 ≠ date)。
         git_sha / ruleset_hash: caller 注入(git 查詢是 I/O,不屬 L2)。
         leg_as_of: C1 `DH-C1-FWD-LEG-ASOF` —— 各輸入腿資料日(`leg_as_of_from_inputs` 的回傳);
-            鍵只能是 `MACRO_FWD_TEST_LEG_AS_OF_COLUMNS`,缺的鍵 / None ⇒ 該欄 None。
+            鍵只能是 `MACRO_FWD_TEST_LEG_AS_OF_COLUMNS`;每個值經 `iso_date_or_none` 收成 'YYYY-MM-DD';
+            缺的鍵 / None / NaN / NaT ⇒ 該欄 None;**有值卻轉不出日期 ⇒ ValueError**(不寫壞字串)。
             **純觀測**:只原樣寫進四欄,⛔ 不參與任何判斷(其餘欄位與檢查一字不改)。
 
     Raises:
@@ -156,11 +157,26 @@ def build_signal_row(
     if _leg_unknown:
         raise ValueError(f'build_signal_row: leg_as_of 含不認得的鍵:{sorted(map(str, _leg_unknown))}')
     for _k in MACRO_FWD_TEST_LEG_AS_OF_COLUMNS:
-        row[_k] = (str(_leg[_k]) if _leg.get(_k) else None)
+        _raw = _leg.get(_k)
+        _v = iso_date_or_none(_raw)
+        if _v is None and not _is_missing_scalar(_raw):
+            # §1 fail loud:有值卻轉不出日期 ⇒ 不寫 'NaT'／'nan'／'2026-10-22 00:00:00' 這類字串進帳本。
+            raise ValueError(f'build_signal_row: leg_as_of[{_k!r}] 不是可解析的日期:{_raw!r}')
+        row[_k] = _v
     _unknown = set(row) - set(MACRO_FWD_TEST_HEADERS)
     if _unknown:
         raise ValueError(f'build_signal_row 產出 schema 外的欄位:{sorted(_unknown)}')
     return row
+
+
+def _is_missing_scalar(v: Any) -> bool:
+    """None／NaN／NaT／pd.NA ⇒ True；其餘（含字串、Timestamp、無法判斷的容器）⇒ False。"""
+    if v is None:
+        return True
+    try:
+        return bool(pd.isna(v))
+    except (TypeError, ValueError):   # 容器等 `pd.isna` 回陣列 ⇒ 不是缺值純量
+        return False
 
 
 def leg_as_of_from_inputs(*, mkt_info: Any, inst: Any, inst_date: Any,

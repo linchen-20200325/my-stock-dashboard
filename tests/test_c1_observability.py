@@ -29,10 +29,13 @@ C1_BASE_SHA = {'scripts/update_macro_forward_test.py': '0c20f5fcb469610658abb78f
  'scripts/update_macro_history.py': '90d46cec4e55d65512de0e934181d2c3f4bcae1c2de4eee0a3a994f820d0c1aa',
  'shared/macro_forward_test_schema.py': '968c48412d6e80a8d5405a3e91674455ac692419179e131bbefb5501c80d4586',
  'src/compute/macro/macro_forward_test.py': '17494d086310eadc0165de4e1255b654e44cebe2d7a505886d6f954ceecf8b64',
+ 'src/compute/risk/risk_radar.py': '9cd2ac9f084668dccceb65fb9543faa34b7ae96706b80a1645826ddf13c635f8',
  'src/data/daily/daily_data_fetchers.py': 'c69d749d17fa0bb66e9185fb2545253d3c9226c556166b3b4e45d848c7419fff',
  'src/data/macro/leading_indicators.py': 'abe529802db6e91fd382462b162d0954a4cbc97030f7bdc28dbea8ef4d5e792d',
+ 'src/data/macro/macro_cache_reader.py': 'c83532429c53f469ce60841d18ed8243b4714dbc78537a05f195c013f2bdb513',
  'src/data/macro/macro_core.py': '2f48071f15b00d5330c33c023089514395c53470edc265fa5f10bf5261a0bc7f',
- 'src/data/macro/macro_snapshot.py': '639e527e2f90de3a82a96df56eeaee6c1f2b43e8c2d9b2830a2a92278dc2cf32'}
+ 'src/data/macro/macro_snapshot.py': '639e527e2f90de3a82a96df56eeaee6c1f2b43e8c2d9b2830a2a92278dc2cf32',
+ 'src/services/weekly_review_service.py': 'be0164aa16361ffc87dbde045f014f2fd7365f6b95e464e266aa1d42605196cb'}
 
 C1_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'scripts/update_macro_forward_test.py': (('        s.index = pd.DatetimeIndex(pd.to_datetime(df.index))\n'
                                            '        _s_pre_na = s\n'
@@ -153,8 +156,10 @@ C1_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'scripts/update_macro
                                               'L2)。\n'
                                               '        leg_as_of: C1 `DH-C1-FWD-LEG-ASOF` —— '
                                               '各輸入腿資料日(`leg_as_of_from_inputs` 的回傳);\n'
-                                              '            鍵只能是 `MACRO_FWD_TEST_LEG_AS_OF_COLUMNS`,缺的鍵 / '
-                                              'None ⇒ 該欄 None。\n'
+                                              '            鍵只能是 `MACRO_FWD_TEST_LEG_AS_OF_COLUMNS`;每個值經 '
+                                              "`iso_date_or_none` 收成 'YYYY-MM-DD';\n"
+                                              '            缺的鍵 / None / NaN / NaT ⇒ 該欄 None;**有值卻轉不出日期 ⇒ '
+                                              'ValueError**(不寫壞字串)。\n'
                                               '            **純觀測**:只原樣寫進四欄,⛔ 不參與任何判斷(其餘欄位與檢查一字不改)。\n'
                                               '\n',
                                               '        git_sha / ruleset_hash: caller 注入(git 查詢是 I/O,不屬 '
@@ -169,11 +174,30 @@ C1_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'scripts/update_macro
                                               "        raise ValueError(f'build_signal_row: leg_as_of "
                                               "含不認得的鍵:{sorted(map(str, _leg_unknown))}')\n"
                                               '    for _k in MACRO_FWD_TEST_LEG_AS_OF_COLUMNS:\n'
-                                              '        row[_k] = (str(_leg[_k]) if _leg.get(_k) else None)\n'
+                                              '        _raw = _leg.get(_k)\n'
+                                              '        _v = iso_date_or_none(_raw)\n'
+                                              '        if _v is None and not _is_missing_scalar(_raw):\n'
+                                              '            # §1 fail loud:有值卻轉不出日期 ⇒ 不寫 '
+                                              "'NaT'／'nan'／'2026-10-22 00:00:00' 這類字串進帳本。\n"
+                                              "            raise ValueError(f'build_signal_row: "
+                                              "leg_as_of[{_k!r}] 不是可解析的日期:{_raw!r}')\n"
+                                              '        row[_k] = _v\n'
                                               '    _unknown = set(row) - set(MACRO_FWD_TEST_HEADERS)\n',
                                               '    }\n'
                                               '    _unknown = set(row) - set(MACRO_FWD_TEST_HEADERS)\n'),
                                              ('    return row\n'
+                                              '\n'
+                                              '\n'
+                                              'def _is_missing_scalar(v: Any) -> bool:\n'
+                                              '    """None／NaN／NaT／pd.NA ⇒ True；其餘（含字串、Timestamp、無法判斷的容器）⇒ '
+                                              'False。"""\n'
+                                              '    if v is None:\n'
+                                              '        return True\n'
+                                              '    try:\n'
+                                              '        return bool(pd.isna(v))\n'
+                                              '    except (TypeError, ValueError):   # 容器等 `pd.isna` 回陣列 ⇒ '
+                                              '不是缺值純量\n'
+                                              '        return False\n'
                                               '\n'
                                               '\n'
                                               'def leg_as_of_from_inputs(*, mkt_info: Any, inst: Any, '
@@ -227,6 +251,21 @@ C1_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'scripts/update_macro
                                               '    return out\n'
                                               '\n',
                                               '    return row\n\n')),
+ 'src/compute/risk/risk_radar.py': (('from src.data.macro import fetch_fred, fetch_yf_close\n'
+                                     'from shared.na_drop_log import log_na_drop  # C1 '
+                                     'DH-C1-NA-DROP-LOG:dropna 清理筆數 log(L0,純觀測)\n'
+                                     '\n',
+                                     'from src.data.macro import fetch_fred, fetch_yf_close\n\n'),
+                                    ('        vals = pd.to_numeric(df[close_col], errors="coerce")\n'
+                                     '        _s_pre_na = pd.Series(vals.values, index=idx)\n'
+                                     '        s = _s_pre_na.dropna().sort_index()\n'
+                                     '        # C1(DEC-077 第 2 點):coerce 後缺值清理筆數 log(清 0 筆不印);回傳不變。\n'
+                                     '        log_na_drop(_s_pre_na, s, tag="risk_radar/_fetch_cboe_csv", '
+                                     'series=f"CBOE:{short_name}")\n'
+                                     '        _result = s.tail(180)  # 對齊 6mo\n',
+                                     '        vals = pd.to_numeric(df[close_col], errors="coerce")\n'
+                                     '        s = pd.Series(vals.values, index=idx).dropna().sort_index()\n'
+                                     '        _result = s.tail(180)  # 對齊 6mo\n')),
  'src/data/daily/daily_data_fetchers.py': (('from shared.inst_labels import is_foreign_dealer_label  # 批 Z40 '
                                             '法人身分別判定 SSOT(L0)\n'
                                             'from shared.na_drop_log import log_na_drop  # C1 '
@@ -332,6 +371,27 @@ C1_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'scripts/update_macro
                                            '        })\n',
                                            '            "融券餘額":   margin_dict.get(d, {}).get(\'融券餘額\'),\n'
                                            '        })\n')),
+ 'src/data/macro/macro_cache_reader.py': (('import pandas as pd\n'
+                                           '\n'
+                                           'from shared.na_drop_log import log_na_drop  # C1 '
+                                           'DH-C1-NA-DROP-LOG:dropna 清理筆數 log(L0,純觀測)\n'
+                                           '\n',
+                                           'import pandas as pd\n\n'),
+                                          ('        s.name = "twii_close"\n'
+                                           '        _s_pre_na = s\n'
+                                           '        s = s.dropna()\n',
+                                           '        s.name = "twii_close"\n        s = s.dropna()\n'),
+                                          ('        s = s.dropna()\n'
+                                           '        # C1(DEC-077 第 2 點,bias_240 路徑):只記清掉幾筆／哪幾天(清 0 '
+                                           '筆不印);回傳不變。\n'
+                                           '        log_na_drop(_s_pre_na, s, '
+                                           'tag="macro_cache_reader/load_twii_close", '
+                                           'series="twii_ohlcv.parquet:close")\n'
+                                           '        # 2026-08-27:回傳前掛上「這份 cache 多舊」。`.attrs` 是 '
+                                           'schema-additive,\n',
+                                           '        s = s.dropna()\n'
+                                           '        # 2026-08-27:回傳前掛上「這份 cache 多舊」。`.attrs` 是 '
+                                           'schema-additive,\n')),
  'src/data/macro/macro_core.py': (('from shared.fail_cooldown import FAIL_COOLDOWN_SEC as '
                                    '_FAIL_COOLDOWN_SEC  # Q2-r2 2026-09-27\n'
                                    'from shared.na_drop_log import log_na_drop  # C1 '
@@ -394,7 +454,24 @@ C1_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'scripts/update_macro
                                        '    _n = len(_cs)\n',
                                        '            return None\n'
                                        '    _cs = _twii[_cc_b].dropna()\n'
-                                       '    _n = len(_cs)\n'))}
+                                       '    _n = len(_cs)\n')),
+ 'src/services/weekly_review_service.py': (('from src.config.config import MA_ANNUAL\n'
+                                            'from shared.na_drop_log import log_na_drop  # C1 '
+                                            'DH-C1-NA-DROP-LOG:dropna 清理筆數 log(L0,純觀測)\n'
+                                            '#: 近期報酬回看窗(交易日)。語意=「近 N 交易日報酬」,與 MA 移動平均窗不同義 → 獨立具名\n',
+                                            'from src.config.config import MA_ANNUAL\n'
+                                            '#: 近期報酬回看窗(交易日)。語意=「近 N 交易日報酬」,與 MA 移動平均窗不同義 → 獨立具名\n'),
+                                           ('            return ["加權指數：資料暫時無法取得"]\n'
+                                            '        _close_pre_na = _df["Close"]\n'
+                                            '        _close = _close_pre_na.dropna()\n'
+                                            '        # C1(DEC-077 第 2 點):只記清掉幾筆／哪幾天(清 0 筆不印);週報文字不變。\n'
+                                            '        log_na_drop(_close_pre_na, _close, '
+                                            'tag="weekly_review_service/_macro_lite_lines", '
+                                            'series="^TWII:Close")\n'
+                                            '        if _close.empty:\n',
+                                            '            return ["加權指數：資料暫時無法取得"]\n'
+                                            '        _close = _df["Close"].dropna()\n'
+                                            '        if _close.empty:\n'))}
 
 
 
@@ -500,6 +577,9 @@ _MC = "src/data/macro/macro_core.py"
 _MSN = "src/data/macro/macro_snapshot.py"
 _CRON = "scripts/update_macro_forward_test.py"
 _UMH = "scripts/update_macro_history.py"
+_MCR = "src/data/macro/macro_cache_reader.py"
+_WRS = "src/services/weekly_review_service.py"
+_RR = "src/compute/risk/risk_radar.py"
 _TW = timezone(timedelta(hours=8))
 _uid = itertools.count()
 
@@ -598,6 +678,62 @@ class TestNaDropHelper:
         s = pd.Series([np.nan, 1.0], index=pd.date_range("2026-10-01", periods=2))
         assert "剔除中段" not in na_drop_note(s, s.dropna(), tag="a", series="b")
 
+    # ── QA 第二輪 ──────────────────────────────────────────────────────────
+    def test_latest_ignores_nat_index(self):
+        """第 4 點：index `[NaT, 10-01, 10-02]`、10-02 被清 ⇒「是」（max 只對非缺值日期取）。"""
+        from shared.na_drop_log import na_drop_note
+        df = pd.DataFrame({"close": [1.0, 2.0, np.nan]},
+                          index=pd.DatetimeIndex([pd.NaT, "2026-10-01", "2026-10-02"]))
+        msg = na_drop_note(df, df.dropna(subset=["close"]), tag="a", series="b", subset=["close"])
+        assert "含最新一根：是" in msg, msg
+
+    def test_latest_with_none_in_date_column_never_says_no(self):
+        """第 4 點：dates `['10-02', None, '10-01']`、10-02 被清 ⇒ 不得印「否」。"""
+        from shared.na_drop_log import na_drop_note
+        df = pd.DataFrame({"date": ["2026-10-02", None, "2026-10-01"], "close": [np.nan, 1.0, 2.0]})
+        msg = na_drop_note(df, df.dropna(subset=["close"]), tag="a", series="b",
+                           subset=["close"], date_col="date")
+        assert "含最新一根：否" not in msg and "含最新一根：是" in msg, msg
+
+    @pytest.mark.parametrize("dates", [
+        [None, None], [pd.NaT, pd.NaT], ["2026-10-01", 3],
+    ], ids=["all-none", "all-nat", "uncomparable"])
+    def test_latest_unknown_when_not_determinable(self, dates):
+        """第 4 點：取不到最新日期 ⇒「未知」，⛔ 不退回看實體末列。"""
+        from shared.na_drop_log import na_drop_note
+        df = pd.DataFrame({"date": dates, "close": [1.0, np.nan]})
+        msg = na_drop_note(df, df.dropna(subset=["close"]), tag="a", series="b",
+                           subset=["close"], date_col="date")
+        assert "含最新一根：未知" in msg, msg
+
+    def test_count_mismatch_reports_instead_of_sampling(self):
+        """第 5 點：重算的被清列數 ≠ 實際筆數（例：subset 傳錯）⇒ 樣本改印「不一致（重算 X 筆）」，筆數照印。"""
+        from shared.na_drop_log import na_drop_note
+        df = pd.DataFrame({"close": [1.0, np.nan, 3.0], "open": [np.nan, 1.0, np.nan]},
+                          index=pd.date_range("2026-10-01", periods=3))
+        msg = na_drop_note(df, df.dropna(subset=["close"]), tag="a", series="b")   # 漏給 subset
+        assert "清掉 1 筆" in msg and "日期樣本與筆數不一致（重算 3 筆）" in msg, msg
+        assert "日期樣本：" not in msg
+
+    def test_count_failure_is_logged_not_silent(self, capsys):
+        """第 7 點：筆數算不出來 ⇒ 印一行「[tag] 缺值清理筆數取不到（型別名）」再回 None。"""
+        from shared.na_drop_log import na_drop_note
+        assert na_drop_note(None, None, tag="m/f", series="x") is None
+        assert capsys.readouterr().out == "[m/f] 缺值清理筆數取不到（TypeError）\n"
+
+    def test_ascii_stdout_does_not_raise(self, monkeypatch):
+        """第 1 點：stdout 不是 UTF-8 時改印 ASCII 跳脫版（不拋 UnicodeEncodeError、不沉默）。"""
+        import io
+        from shared.na_drop_log import log_na_drop
+        buf = io.BytesIO()
+        out = io.TextIOWrapper(buf, encoding="ascii", errors="strict")
+        monkeypatch.setattr(sys, "stdout", out)
+        s = pd.Series([np.nan, 1.0], index=pd.date_range("2026-10-01", periods=2))
+        log_na_drop(s, s.dropna(), tag="t/f", series="^X")
+        out.flush()
+        text = buf.getvalue().decode("ascii")
+        assert text.startswith("[t/f] \\u26a0") and "2026-10-01" in text, text
+
 
 def _weekdays(n: int, end: dt.date | None = None) -> list[dt.date]:
     out, d = [], (end or dt.date.today())
@@ -628,11 +764,16 @@ class _Resp:
         return self._p
 
 
+#: 非收盤欄也帶缺值的列（不在任何 nan_at 情境裡）⇒ subset 若傳錯（例：全欄 any），重算的被清列數會對不上，
+#: log 改印「日期樣本與筆數不一致」⇒ 逐處測試轉紅（QA 第二輪第 5 點）。
+_OPEN_NAN_AT = 1
+
+
 def _chart_payload(days, closes):
     ts = [int(datetime(d.year, d.month, d.day, 1, 30, tzinfo=timezone.utc).timestamp()) for d in days]
     n = len(days)
     return {"chart": {"result": [{"timestamp": ts, "indicators": {"quote": [{
-        "open": [99.0] * n, "high": [120.0] * n, "low": [90.0] * n,
+        "open": [None if i == _OPEN_NAN_AT else 99.0 for i in range(n)], "high": [120.0] * n, "low": [90.0] * n,
         "close": list(closes), "volume": [1000] * n}]}}]}}
 
 
@@ -645,7 +786,7 @@ def _strip_keys(x, keys=("fetched_at",)):
 # ── 各處 harness：(module) → 回傳值；呼叫端負責 capsys ─────────────────────────
 def _site_fetch_single(mod, mp, nan_at, tk):
     days = _weekdays(8)
-    raw = pd.DataFrame({"Open": _closes(8), "High": _closes(8), "Low": _closes(8),
+    raw = pd.DataFrame({"Open": _closes(8, (_OPEN_NAN_AT,)), "High": _closes(8), "Low": _closes(8),
                         "Close": _closes(8, nan_at), "Volume": [1] * 8},
                        index=pd.DatetimeIndex([pd.Timestamp(d) for d in days]))
     mp.setattr(mod, "_history_with_status", lambda hist, sym, period: (raw.copy(), False))
@@ -718,6 +859,42 @@ def _site_umh_twii(mod, mp, nan_at, tk):
     return mod.fetch_twii_ohlcv(days[0], days[-1]).drop(columns=["fetched_at"], errors="ignore")
 
 
+def _site_mcr_twii(mod, mp, nan_at, tk, tmp_path):
+    pytest.importorskip("pyarrow")
+    d = tmp_path / f"mcr{next(_uid)}"
+    d.mkdir()
+    days = _weekdays(8, end=dt.date(2026, 10, 24))
+    pd.DataFrame({"date": [x.isoformat() for x in days], "close": _closes(8, nan_at)}).to_parquet(
+        d / "twii_ohlcv.parquet", index=False)
+    s = mod.load_twii_close(d, today=dt.date(2026, 10, 24))
+    return s, dict(s.attrs)
+
+
+def _site_weekly(mod, mp, nan_at, tk):
+    days = _weekdays(30, end=dt.date(2026, 10, 24))
+    raw = pd.DataFrame({"Close": [20000.0 + 10 * i for i in range(30)]},
+                       index=pd.DatetimeIndex([pd.Timestamp(x) for x in days]))
+    for i in _nan_idx(30, nan_at):
+        raw.iloc[i, 0] = np.nan
+    mp.setattr(mod, "fetch_etf_price", lambda *a, **k: raw.copy())
+    return mod._macro_lite_lines()
+
+
+def _site_cboe(mod, mp, nan_at, tk):
+    import src.data.proxy.proxy_helper as PH   # 打實作模組（`src.data.proxy` 是 PEP 562 轉發 package）
+    days = _weekdays(8, end=dt.date(2026, 10, 24))
+    vals = ["" if i in _nan_idx(8, nan_at) else f"{20 + i}.5" for i in range(8)]
+    csv = "DATE,OPEN,HIGH,LOW,CLOSE\n" + "".join(
+        f"{x.strftime('%m/%d/%Y')},1,2,0.5,{v}\n" for x, v in zip(days, vals))
+
+    class _R:
+        status_code = 200
+        text = csv
+    mp.setattr(PH, "fetch_url", lambda *a, **k: _R())
+    s = mod._fetch_cboe_csv("VIX3M")
+    return s, s.attrs.get("source")
+
+
 _SITES = {
     "fetch_single": (_DDF, _site_fetch_single, "daily_data_fetchers/_fetch_single_cached"),
     "fetch_adl": (_DDF, _site_fetch_adl, "daily_data_fetchers/fetch_adl"),
@@ -727,7 +904,11 @@ _SITES = {
     "vix": (_MSN, _site_vix, "macro_snapshot/fetch_vix_block"),
     "cron_twii": (_CRON, _site_cron_twii, "macro_fwd/_twii_close_and_asof"),
     "umh_twii": (_UMH, _site_umh_twii, "update_macro_history/fetch_twii_ohlcv"),
+    "mcr_twii": (_MCR, _site_mcr_twii, "macro_cache_reader/load_twii_close"),
+    "weekly_twii": (_WRS, _site_weekly, "weekly_review_service/_macro_lite_lines"),
+    "cboe_vix3m": (_RR, _site_cboe, "risk_radar/_fetch_cboe_csv"),
 }
+_SITES_WITH_TMP = {"fetch_adl", "mcr_twii"}
 
 
 def _current_module(rel):
@@ -757,7 +938,7 @@ def test_na_drop_log_per_site(site, nan_at, monkeypatch, tmp_path, capsys):
     「C1 前」＝ `c1_revert_for` 還原體實跑 ⇒ 同時是本項的突變測試（拔掉新增 log 時第一個斷言轉紅）。
     """
     rel, fn, tag = _SITES[site]
-    extra = (tmp_path,) if site == "fetch_adl" else ()
+    extra = (tmp_path,) if site in _SITES_WITH_TMP else ()
     new_mod, pre_mod = _current_module(rel), c1_pre_module(rel)
     capsys.readouterr()
     tk = f"C1T{next(_uid)}"                       # 新舊兩邊同一個代號（各自模組的快取互不相干）
@@ -774,11 +955,78 @@ def test_na_drop_log_per_site(site, nan_at, monkeypatch, tmp_path, capsys):
         assert lines[0].startswith(f"[{tag}] {_C1_MARK}"), lines[0]
         assert f"清掉 {len(nan_at)} 筆" in lines[0]
         assert ("含最新一根：是" in lines[0]) == (-1 in nan_at)
+        assert "含最新一根：未知" not in lines[0]
+        # 樣本與筆數一致（subset 傳錯 ⇒ 重算筆數對不上 ⇒ 改印「不一致」⇒ 此處轉紅）
+        assert "日期樣本：" in lines[0] and "不一致" not in lines[0], lines[0]
+        _sample = lines[0].split("日期樣本：", 1)[1].split("；", 1)[0]
+        assert len(_sample.split("、")) == len(nan_at), lines[0]
         assert _c1_lines(pre_out) == []                 # 突變（拔掉 log）⇒ 上面 len==1 轉紅
     else:
         assert lines == []
     assert _strip_c1(new_out) == pre_out                 # 其餘 stdout 逐字不變（清 0 筆時＝整份相同）
     _assert_same(new_ret, pre_ret)
+
+
+@pytest.mark.parametrize("site", ["fetch_single", "yf_ohlcv", "umh_twii"])
+def test_wrong_subset_mutation_turns_red(site, monkeypatch, tmp_path, capsys):
+    """第 5 點突變：這三處的假資料讓**非收盤欄**也帶缺值；log 若 subset 傳錯（拿掉 subset ⇒ 全欄 any），
+    重算列數與實際筆數對不上 ⇒ 句子改成「不一致」⇒ 逐處測試的「日期樣本：…且無不一致」斷言轉紅。"""
+    import importlib
+    rel, fn, tag = _SITES[site]
+    mod = _current_module(rel)
+    ndl = importlib.import_module("shared.na_drop_log")
+    real = ndl.log_na_drop
+
+    def _no_subset(before, after, **kw):
+        kw.pop("subset", None)
+        return real(before, after, **kw)
+    # 模組頂端 import 的打模組屬性；函式內 lazy import 的（scripts）打 shared 本尊
+    monkeypatch.setattr(mod if hasattr(mod, "log_na_drop") else ndl, "log_na_drop", _no_subset)
+    capsys.readouterr()
+    fn(mod, monkeypatch, (2, 5), f"C1S{next(_uid)}")
+    (line,) = _c1_lines(capsys.readouterr().out)
+    assert "日期樣本與筆數不一致（重算 3 筆）" in line, line
+
+
+def _ascii_stdout(mp):
+    import io
+    buf = io.BytesIO()
+    out = io.TextIOWrapper(buf, encoding="ascii", errors="strict")
+    mp.setattr(sys, "stdout", out)
+    return buf, out
+
+
+@pytest.mark.parametrize("site", ["yf_close", "yf_ohlcv"])
+def test_ascii_stdout_caller_return_unchanged(site, monkeypatch, tmp_path):
+    """第 1 點：stdout 為 ASCII（`PYTHONIOENCODING=ascii` 情境）時，有缺值被清的呼叫端不拋例外、回傳與 C1 前相同；
+    log 以 ASCII 跳脫版印出。另以「直接 print」的突變重現 QA 實測的回傳改變（證明本測試守得到）。"""
+    rel, fn, tag = _SITES[site]
+    new_mod, pre_mod = _current_module(rel), c1_pre_module(rel)
+    nan_at = (2, 5)
+    tk = f"C1A{next(_uid)}"
+    buf, out = _ascii_stdout(monkeypatch)
+    new_ret = fn(new_mod, monkeypatch, nan_at, tk)
+    pre_ret = fn(pre_mod, monkeypatch, nan_at, tk)
+    out.flush()
+    _assert_same(new_ret, pre_ret)
+    assert f"[{tag}] \\u26a0" in buf.getvalue().decode("ascii")
+
+    # 突變：log 直接 print（修前寫法）⇒ UnicodeEncodeError 被取數函式的 except 吃掉 ⇒ 回傳改變
+    from shared.na_drop_log import na_drop_note
+
+    def _plain(before, after, **kw):
+        _m = na_drop_note(before, after, **kw)
+        if _m:
+            print(_m)
+    monkeypatch.setattr(new_mod, "log_na_drop", _plain)
+    for _c in ("_YF_CLOSE_CACHE", "_YF_CLOSE_EMPTY_FAIL_CACHE", "_YF_OHLCV_FAIL_CACHE"):
+        monkeypatch.setattr(new_mod, _c, {})     # 同一代號重跑（不吃快取），差異只來自 print
+    try:
+        mut_ret = fn(new_mod, monkeypatch, nan_at, tk)
+    except UnicodeEncodeError:
+        return                                   # 直接炸出來也算「行為改變」
+    with pytest.raises(AssertionError):
+        _assert_same(mut_ret, pre_ret)
 
 
 def test_fetch_single_dead_close_branch_untouched():
@@ -1102,6 +1350,24 @@ class TestBuildSignalRow:
         row = build_signal_row(copy.deepcopy(tl), **kw, **extra)
         assert _row_problems(row, pre_row, leg) == []
 
+    @pytest.mark.parametrize("raw, want", [
+        (pd.NaT, None), (float("nan"), None), (np.nan, None), (None, None),
+        (pd.Timestamp("2026-10-22"), "2026-10-22"), (pd.Timestamp("2026-10-22 13:45"), "2026-10-22"),
+        ("20261022", "2026-10-22"), ("2026-10-22", "2026-10-22"), (dt.date(2026, 10, 22), "2026-10-22"),
+    ], ids=["NaT", "nan", "np.nan", "None", "Timestamp", "Timestamp-time", "ymd", "iso", "date"])
+    def test_leg_values_normalised(self, raw, want):
+        """第 3 點：一律經 `iso_date_or_none` 收成 'YYYY-MM-DD'；缺值 ⇒ None（⛔ 不寫 'NaT'／'nan'）。"""
+        from src.compute.macro.macro_forward_test import build_signal_row
+        row = build_signal_row(_tl(), date="2026-10-22", captured_at="c", leg_as_of={"li_as_of": raw})
+        assert row["li_as_of"] == want
+
+    @pytest.mark.parametrize("raw", ["abc", "2026-10-1", "", 20261022, [1]])
+    def test_leg_unparseable_value_fails_loud(self, raw):
+        """第 3 點：有值卻轉不出日期 ⇒ ValueError（fail loud，不寫壞字串）。"""
+        from src.compute.macro.macro_forward_test import build_signal_row
+        with pytest.raises(ValueError, match="li_as_of"):
+            build_signal_row(_tl(), date="2026-10-22", captured_at="c", leg_as_of={"li_as_of": raw})
+
     def test_unknown_leg_key_rejected(self):
         from src.compute.macro.macro_forward_test import build_signal_row
         with pytest.raises(ValueError, match="leg_as_of"):
@@ -1117,8 +1383,7 @@ class TestBuildSignalRow:
     def test_mutation_dropping_four_columns_turns_red(self):
         """突變：拔掉 build_signal_row 的四欄迴圈 ⇒ `_row_problems` 抓得到。"""
         mut = c1_mutant_module(_MFT, [(
-            "    for _k in MACRO_FWD_TEST_LEG_AS_OF_COLUMNS:\n"
-            "        row[_k] = (str(_leg[_k]) if _leg.get(_k) else None)\n", "")], f"mft_{next(_uid)}")
+            "        row[_k] = _v\n", "")], f"mft_{next(_uid)}")
         leg = dict(zip(_LEG, ("2026-10-22",) * 4))
         kw = _ROW_KW[0]
         pre_row = c1_pre_module(_MFT).build_signal_row(_tl(), **kw)
@@ -1271,8 +1536,11 @@ class TestCommittedLedgerAppend:
 # ══════════════════════════════════════════════════════════════════════════
 # 5. 零讀者守衛：新欄名／常數只出現在生產者模組、schema 檔與 tests
 # ══════════════════════════════════════════════════════════════════════════
-_NEW_NAMES = ("_pcr_src", "PCR_SRC_COL", "PCR_SRC_KIND", "PCR_SRC_TAIFEX", "PCR_SRC_FINMIND_EST") + _LEG
-_ALLOWED = {_LI, _SCHEMA, _MFT}
+_NEW_NAMES = ("_pcr_src", "PCR_SRC_COL", "PCR_SRC_KIND", "PCR_SRC_TAIFEX", "PCR_SRC_FINMIND_EST",
+              "MACRO_FWD_TEST_LEG_AS_OF_COLUMNS", "leg_as_of_from_inputs") + _LEG
+_ALLOWED = {_LI, _SCHEMA, _MFT, _CRON}
+#: cron 腳本只准**呼叫** `leg_as_of_from_inputs` 並把結果交給 build_signal_row（不准碰欄名／常數）。
+_CRON_ALLOWED_NAMES = {"leg_as_of_from_inputs"}
 
 
 def test_new_fields_have_no_readers():
@@ -1287,15 +1555,81 @@ def test_new_fields_have_no_readers():
         if found:
             hits[rel] = found
     assert set(hits) <= _ALLOWED, {k: v for k, v in hits.items() if k not in _ALLOWED}
+    assert hits.get(_CRON, set()) <= _CRON_ALLOWED_NAMES, hits.get(_CRON)
     assert "_pcr_src" in hits.get(_LI, set())
     assert set(_LEG) <= hits.get(_SCHEMA, set())
 
 
-def test_no_judgement_reads_leg_dates_in_mft():
-    """macro_forward_test 內四欄名只出現在 schema 常數的引用（取值／寫入），不出現在 if／比較式裡。"""
+_LEG_CONST = "MACRO_FWD_TEST_LEG_AS_OF_COLUMNS"
+#: macro_forward_test 裡准用四欄常數的函式（產生者）；其餘函式（evaluate_rows／summarise…）一律不准。
+_MFT_LEG_FUNCS = {"build_signal_row", "leg_as_of_from_inputs"}
+
+
+def _leg_usage_problems(mft_src: str, cron_src: str) -> list[str]:
+    """四欄常數／欄名的使用位置與「不做判斷」檢查（AST）。回問題清單（空＝合規）。"""
     import ast
-    tree = ast.parse((REPO / _MFT).read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.If, ast.Compare, ast.IfExp, ast.While)):
-            seg = ast.dump(node.test if hasattr(node, "test") else node)
-            assert not any(f"'{k}'" in seg for k in _LEG), seg[:200]
+    probs: list[str] = []
+    tree = ast.parse(mft_src)
+
+    def _walk(node, func):
+        for ch in ast.iter_child_nodes(node):
+            f = ch.name if isinstance(ch, (ast.FunctionDef, ast.AsyncFunctionDef)) else func
+            yield ch, f
+            yield from _walk(ch, f)
+
+    for node, func in _walk(tree, None):
+        if isinstance(node, ast.Name) and node.id == _LEG_CONST and func not in _MFT_LEG_FUNCS:
+            probs.append(f"mft:{node.lineno} 常數用在 {func}")
+        if isinstance(node, ast.Constant) and node.value in _LEG:
+            probs.append(f"mft:{node.lineno} 欄名字面值 {node.value!r}（應經常數）")
+    for label, src in (("mft", mft_src), ("cron", cron_src)):
+        for node in ast.walk(ast.parse(src)):
+            tests = []
+            if isinstance(node, (ast.If, ast.IfExp, ast.While, ast.Assert)):
+                tests.append(node.test)
+            if isinstance(node, ast.Compare):
+                tests.append(node)
+            for t in tests:
+                for sub in ast.walk(t):
+                    if isinstance(sub, ast.Name) and sub.id in (_LEG_CONST, "_leg_as_of"):
+                        probs.append(f"{label}:{sub.lineno} 判斷式讀 {sub.id}")
+                    if isinstance(sub, ast.Constant) and sub.value in _LEG:
+                        probs.append(f"{label}:{sub.lineno} 判斷式讀欄名 {sub.value!r}")
+    # cron：`_leg_as_of` 讀取只准出現在 build_signal_row(..., leg_as_of=_leg_as_of)
+    _cron_tree = ast.parse(cron_src)
+    ok_ids = set()
+    for node in ast.walk(_cron_tree):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "build_signal_row":
+            ok_ids |= {id(kw.value) for kw in node.keywords
+                       if kw.arg == "leg_as_of" and isinstance(kw.value, ast.Name)}
+    for node in ast.walk(_cron_tree):
+        if (isinstance(node, ast.Name) and node.id == "_leg_as_of" and isinstance(node.ctx, ast.Load)
+                and id(node) not in ok_ids):
+            probs.append(f"cron:{node.lineno} `_leg_as_of` 被讀於 build_signal_row 以外")
+    return probs
+
+
+def test_no_judgement_reads_leg_dates():
+    """第 6 點：四欄常數只在產生者函式；mft／cron 的 if／比較／assert 一律不讀四欄（常數、欄名、`_leg_as_of`）。"""
+    mft = (REPO / _MFT).read_text(encoding="utf-8")
+    cron = (REPO / _CRON).read_text(encoding="utf-8")
+    assert _leg_usage_problems(mft, cron) == []
+
+
+@pytest.mark.parametrize("target, old, new", [
+    ("mft", "def summarise(", "def _c1_mut():\n    return MACRO_FWD_TEST_LEG_AS_OF_COLUMNS\n\n\ndef summarise("),
+    ("mft", "        row[_k] = _v\n", "        row[_k] = _v\n        if row['li_as_of'] is None:\n            pass\n"),
+    ("cron", "    if args.dry_run:\n", "    if _leg_as_of and args.dry_run:\n"),
+    ("cron", "    if args.dry_run:\n", "    _x = _leg_as_of\n    if args.dry_run:\n"),
+], ids=["const-in-other-func", "judge-on-column", "cron-judge", "cron-extra-read"])
+def test_leg_guard_mutations_turn_red(target, old, new):
+    """突變：在非產生者函式用常數／在判斷式讀欄名／cron 讀 `_leg_as_of` ⇒ 守衛抓得到。"""
+    mft = (REPO / _MFT).read_text(encoding="utf-8")
+    cron = (REPO / _CRON).read_text(encoding="utf-8")
+    if target == "mft":
+        assert mft.count(old) == 1
+        mft = mft.replace(old, new)
+    else:
+        assert cron.count(old) == 1
+        cron = cron.replace(old, new)
+    assert _leg_usage_problems(mft, cron) != []

@@ -30,6 +30,7 @@ from src.compute.notify.weekly_review_prompt import (
 
 #: 年線窗(240 交易日)直接引 L0 SSOT(§3.3:禁 inline,原 _ANNUAL_MA_DAYS=240 為明知的複本)。
 from src.config.config import MA_ANNUAL
+from shared.na_drop_log import log_na_drop  # C1 DH-C1-NA-DROP-LOG:dropna 清理筆數 log(L0,純觀測)
 #: 近期報酬回看窗(交易日)。語意=「近 N 交易日報酬」,與 MA 移動平均窗不同義 → 獨立具名
 #: (§3.3 避免同數字不同義耦合;不硬借 config.MA_SHORT)。
 _RECENT_WINDOW_DAYS = 20
@@ -44,7 +45,10 @@ def _macro_lite_lines() -> list[str]:
         _df = fetch_etf_price("^TWII", period="2y")
         if _df is None or _df.empty or "Close" not in _df:
             return ["加權指數：資料暫時無法取得"]
-        _close = _df["Close"].dropna()
+        _close_pre_na = _df["Close"]
+        _close = _close_pre_na.dropna()
+        # C1(DEC-077 第 2 點):只記清掉幾筆／哪幾天(清 0 筆不印);週報文字不變。
+        log_na_drop(_close_pre_na, _close, tag="weekly_review_service/_macro_lite_lines", series="^TWII:Close")
         if _close.empty:
             return ["加權指數：資料暫時無法取得"]
         _last = float(_close.iloc[-1])

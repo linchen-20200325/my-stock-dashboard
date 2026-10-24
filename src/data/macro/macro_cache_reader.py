@@ -44,6 +44,8 @@ from typing import Optional
 
 import pandas as pd
 
+from shared.na_drop_log import log_na_drop  # C1 DH-C1-NA-DROP-LOG:dropna 清理筆數 log(L0,純觀測)
+
 DEFAULT_PARQUET_CACHE_DIR = Path("data_cache")
 
 
@@ -287,7 +289,10 @@ def load_twii_close(
                .astype(float)
                .sort_index())
         s.name = "twii_close"
+        _s_pre_na = s
         s = s.dropna()
+        # C1(DEC-077 第 2 點,bias_240 路徑):只記清掉幾筆／哪幾天(清 0 筆不印);回傳不變。
+        log_na_drop(_s_pre_na, s, tag="macro_cache_reader/load_twii_close", series="twii_ohlcv.parquet:close")
         # 2026-08-27:回傳前掛上「這份 cache 多舊」。`.attrs` 是 schema-additive,
         # 既有 caller(取值 / 算 MA)完全不受影響;過期時另有一行 log(§1 出聲不吞)。
         return _attach_staleness(s, "twii_ohlcv", cache_dir=cache_dir,
