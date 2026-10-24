@@ -1176,6 +1176,31 @@ C1 完成後停下。
 
 ---
 
+### DEC-078｜Minimum Sufficient Effort／Test Scope 規則化；CI Fast／Slow 平行化（客戶 2026-10-24）
+> 2026-10-24 追加（第 8 節「收到當輪追加」；ID 取下一個未用號，DEC-077 為前一號）。
+- **背景**（總管轉交客戶裁示，兩項）：(A) 小批次常被形式上的嚴謹一律升為 High＋全庫重跑，成本高於風險；(B) CI 的 `slow-tests` 原 `needs: fast-checks`，Fast 跑完才啟動 Slow，整體等待時間被串長。
+- **要點**：
+  - **A. Minimum Sufficient Effort／Test Scope**：
+    1. 安全小批次、純文件、metadata／provenance、純 UI、小型低風險修正，原則上採 Minimum Sufficient Effort，可用 Low／Medium，**優先 targeted tests**，不得因形式上的嚴謹一律升為 High＋全庫重跑。
+    2. 下列工作**仍須 High＋完整 QA**：Risk Cap、投資語意、資料有效性、proxy／estimated eligibility、freshness／PIT、投資公式／門檻／權重、L3／跨模組高風險改動。
+    3. targeted tests 足以證明低風險修改正確時，不應機械性要求每個小批次都跑最重流程；**但既有 GitHub required checks 不得取消**。
+  - **B. CI 平行化**：Fast 與 Slow **同時開始**（`.github/workflows/pr-check.yml` 的 `slow-tests` 移除 `needs: fast-checks`）；Fast 仍 blocking、Slow 仍 informational（`continue-on-error: true` 不變）；目的＝降低不必要的等待；代價＝Fast 早早失敗時 Slow 可能白跑一次 Actions minutes，**客戶接受此 trade-off**。
+- **不是什麼**（⛔）：
+  - ⛔ 不是「小批次可以不跑 CI」：required checks（Fast）照跑、照 blocking；A 只放寬**本地與 QA 的深度**。
+  - ⛔ 不是降低 High 清單的門檻：A 第 2 點所列工作不得援引本條降級。
+  - ⛔ 不是把 Slow 改成 blocking，也不是新增／刪除任何 job、改 schedule、改 pytest 指令或 env。
+  - ⛔ 不免除 `CLAUDE.md` §-2 派工、獨立稽核與揭露義務（Effort／測試範圍只決定深度，不決定要不要驗）。
+  - ⛔ 不改 `PRODUCTION_WRITE_APPROVED`（仍 `False`）。
+- **範圍**：治理（工作流程）＋CI 結構｜**日期**：2026-10-24｜**決策者**：客戶｜**狀態**：生效。
+- **來源**：客戶訊息 2026-10-24（經總管轉交；撰寫組未見原件，依轉交文字整理，非逐字；確切 UTC 時戳未記錄）。
+- **與其他 DEC／條文的關係**（撰寫組讀法，單組，⚠️ 待第二組驗，`CLAUDE.md` §-2 規則 6）：
+  - **DEC-059（Minimum Sufficient Effort）／`PROJECT_RULES.md` 9.1**：同向，本條把「小批次不得一律 High」與「targeted tests 優先」明文化；9.1 的 Low／Medium／High 清單**不變**。
+  - **DEC-073（Model／Effort Gate）**：不變；本條只補充測試範圍，Gate 照跑。
+  - **張力點**：(1) `PROJECT_RULES.md` 第 7 節 DoD 寫「relevant tests」，**未**規定全庫重跑，與本條不衝突；(2) DEC-077 第 6 點 C1 施工程序「完整 CI／QA」是**針對 C1（涉 provenance、需證零投資輸出變更）的個案要求**，不因本條改變；(3) 實務上「小批次」與「第 2 點 High 清單」的邊界須逐批判斷，判斷錯誤方向取嚴（歸 High）。未發現需登記第 14 節的硬衝突。
+  - **測試釘住**：`tests/test_batch_z59.py` 以 `wf.split("slow-tests:")[0]` 取 Fast 區段，不依賴 `needs`，不受影響；`tests/test_vn1_prehardening.py` 的 `needs` 僅針對 production_write 類 job（另一份 workflow），無關。
+
+---
+
 ## 5. 取代鏈總表
 
 | 舊 | 新 | 關係 | 判讀者 |

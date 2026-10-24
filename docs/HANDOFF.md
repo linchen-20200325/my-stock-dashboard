@@ -124,6 +124,8 @@
 | 回報模式 | 維持 Silent Autonomous Cruise；C1 整批完成＝DEC-077 第 5 點的回報時點 |
 | 接手必讀 | 先跑 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate，再讀五個 SSOT（`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、本檔、`docs/PROJECT_STATE.md`）；上位 `CLAUDE.md` 同樣須讀 |
 
+> 📌 2026-10-24 **DEC-078**（客戶裁示，append-only）：(A) 小批次採 Minimum Sufficient Effort／targeted tests 優先（Risk Cap／投資語意／資料有效性／proxy／PIT／投資公式／L3 仍 High＋完整 QA；required checks 不取消，見 `PROJECT_RULES.md` 第 17 節）；(B) CI Fast／Slow 平行開始（`pr-check.yml` 移除 `slow-tests` 的 `needs`；Fast 仍 blocking、Slow 仍 informational）。本 PR：`claude/gracious-hypatia-1cjuh8`（docs＋workflow，PR 號待開立回填）。
+
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 
 > 2026-10-22 起，第 1～6 節保留為歷史與細節（DEC-068；舊文字一律不刪）。第 1 節表格是 2026-10-22 早先的快照，下列幾格已就地以刪除線更正。
