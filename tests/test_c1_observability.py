@@ -1693,8 +1693,18 @@ class TestCommittedLedgerAppend:
 # 5. 零讀者守衛：新欄名／常數只出現在生產者模組、schema 檔與 tests
 # ══════════════════════════════════════════════════════════════════════════
 _NEW_NAMES = ("_pcr_src", "PCR_SRC_COL", "PCR_SRC_KIND", "PCR_SRC_TAIFEX", "PCR_SRC_FINMIND_EST",
-              "MACRO_FWD_TEST_LEG_AS_OF_COLUMNS", "leg_as_of_from_inputs") + _LEG
-_ALLOWED = {_LI, _SCHEMA, _MFT, _CRON}
+              "MACRO_FWD_TEST_LEG_AS_OF_COLUMNS", "leg_as_of_from_inputs",
+              "PCR_SOURCE_COLUMN") + _LEG
+#: DEC-080 授權 C2a 契約層**讀取並記錄** PCR 逐日來源（provenance），兩檔明列：
+#: - `shared/input_provenance_policy.py`（L0）：以字面持有欄名 `"_pcr_src"`（常數 `PCR_SOURCE_COLUMN`；
+#:   L0 不得 import L1，與 L1 的一致性由 tests/test_c2a_input_provenance.py 守住）；
+#: - `src/compute/macro/input_provenance.py`（L2）：經 L0 `PCR_SOURCE_COLUMN` **讀**該欄，只寫進 shadow
+#:   provenance 紀錄。它**是**讀者 —— 故明列於此、受本守衛可見，不靠改寫字樣躲避。
+#: C2b 之前沒有任何**計分**讀者：Risk Cap／燈號／UI 照舊不得讀（C2a 檔的讀者守衛同時把 L2 函式
+#: 限制在兩個新檔與 tests）。其他下游照舊不得讀。
+_C2A_L0 = "shared/input_provenance_policy.py"
+_C2A_L2 = "src/compute/macro/input_provenance.py"
+_ALLOWED = {_LI, _SCHEMA, _MFT, _CRON, _C2A_L0, _C2A_L2}
 #: cron 腳本只准**呼叫** `leg_as_of_from_inputs` 並把結果交給 build_signal_row（不准碰欄名／常數）。
 _CRON_ALLOWED_NAMES = {"leg_as_of_from_inputs"}
 
@@ -1714,6 +1724,9 @@ def test_new_fields_have_no_readers():
     assert hits.get(_CRON, set()) <= _CRON_ALLOWED_NAMES, hits.get(_CRON)
     assert "_pcr_src" in hits.get(_LI, set())
     assert set(_LEG) <= hits.get(_SCHEMA, set())
+    # C2a（DEC-080）：L0 持有欄名字面、L2 經 L0 常數讀 —— 兩者都必須被本守衛看見
+    assert {"_pcr_src", "PCR_SOURCE_COLUMN"} <= hits.get(_C2A_L0, set())
+    assert hits.get(_C2A_L2, set()) == {"PCR_SOURCE_COLUMN"}
 
 
 _LEG_CONST = "MACRO_FWD_TEST_LEG_AS_OF_COLUMNS"
