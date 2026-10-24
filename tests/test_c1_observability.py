@@ -1091,6 +1091,69 @@ def test_bad_stdout_caller_return_unchanged(site, kind, monkeypatch, tmp_path):
     assert f"[{tag}] \\u26a0" in err.getvalue(), err.getvalue()
 
 
+class _RaisingOut:
+    """write 一律拋指定例外的 stdout（RuntimeError reentrant call、TypeError…）。"""
+    encoding = "utf-8"
+
+    def __init__(self, exc):
+        self._exc = exc
+
+    def write(self, *_a):
+        raise self._exc
+
+    def flush(self):
+        return None
+
+
+class _AsciiThenBrokenPipe:
+    """非 ASCII ⇒ UnicodeEncodeError；ASCII ⇒ BrokenPipeError（`PYTHONIOENCODING=ascii` ＋ `| head` 情境）。"""
+    encoding = "ascii"
+
+    def write(self, s):
+        if any(ord(c) > 127 for c in s):
+            raise UnicodeEncodeError("ascii", s, 0, 1, "ordinal not in range(128)")
+        raise BrokenPipeError(32, "Broken pipe")
+
+    def flush(self):
+        return None
+
+
+def _stdout_variant(kind):
+    if kind == "runtime":
+        return _RaisingOut(RuntimeError("reentrant call"))
+    if kind == "type":
+        return _RaisingOut(TypeError("write() argument must be str"))
+    if kind == "none":
+        return None
+    if kind == "ascii-then-pipe":
+        return _AsciiThenBrokenPipe()
+    raise AssertionError(kind)
+
+
+@pytest.mark.parametrize("kind, suffix", [
+    ("runtime", " (stdout RuntimeError)"), ("type", " (stdout TypeError)"),
+    ("none", ""), ("ascii-then-pipe", ""),
+])
+@pytest.mark.parametrize("site", ["mcr_twii", "cboe_vix3m"])
+def test_odd_stdout_caller_return_unchanged(site, kind, suffix, monkeypatch, tmp_path):
+    """C1 第四輪 Y1／Y2／Y4：stdout write 拋 RuntimeError／TypeError、`sys.stdout is None`、
+    先 UnicodeEncodeError 再 BrokenPipe —— 呼叫端回傳與 C1 前相同，且 log 寫到 `sys.__stderr__`。"""
+    import io
+    rel, fn, tag = _SITES[site]
+    extra = (tmp_path,) if site in _SITES_WITH_TMP else ()
+    new_mod, pre_mod = _current_module(rel), c1_pre_module(rel)
+    err = io.StringIO()
+    monkeypatch.setattr(sys, "__stderr__", err)
+    monkeypatch.setattr(sys, "stdout", _stdout_variant(kind))
+    tk = f"C1Y{next(_uid)}"
+    new_ret = fn(new_mod, monkeypatch, (2, 5), tk, *extra)
+    pre_ret = fn(pre_mod, monkeypatch, (2, 5), tk, *extra)
+    _assert_same(new_ret, pre_ret)
+    lines = [ln for ln in err.getvalue().splitlines() if ln.startswith(f"[{tag}] \\u26a0")]
+    assert len(lines) == 1, err.getvalue()
+    assert lines[0].endswith("\\uff09" + suffix), lines[0]     # 句尾全形右括號（跳脫）＋例外型別註記
+
+
 def test_fetch_single_dead_close_branch_untouched():
     """`_fetch_single_cached` 的 `elif 'Close'` 分支（欄名已先小寫化 ⇒ 死碼）規格明訂不動。"""
     src = (REPO / _DDF).read_text(encoding="utf-8")
@@ -1527,9 +1590,10 @@ def test_leg_as_of_output_never_breaks_build_signal_row(x):
 
 
 # ── cron main()：隔離所有真實 I/O（同 tests/test_macro_fwd_test_c12.py::_isolate）────
-def _cron_isolate(monkeypatch, tmp_path, *, mkt_info):
+def _cron_isolate(monkeypatch, tmp_path, *, mkt_info, S=None):
     import streamlit as st
-    import scripts.update_macro_forward_test as S
+    if S is None:
+        import scripts.update_macro_forward_test as S
     import src.compute.macro as CM
     import src.data.macro.macro_fwd_test_store as store
     import src.services.jingqi_calc as JQ
@@ -1700,6 +1764,14 @@ def _leg_usage_problems(mft_src: str, cron_src: str) -> list[str]:
             probs.append(f"cron:{node.lineno} `_leg_as_of` 被讀於 build_signal_row 以外")
     probs += _build_signal_row_leg_problems(tree)
     probs += _cron_leg_call_problems(_cron_tree)
+    # C1 第四輪 Y3(c)：cron 檔內**任何位置**（不限判斷式）出現四欄欄名字面值或四欄常數 ⇒ 紅。
+    for node in ast.walk(_cron_tree):
+        if isinstance(node, ast.Constant) and node.value in _LEG:
+            probs.append(f"cron:{node.lineno} 出現欄名字面值 {node.value!r}")
+        if (isinstance(node, ast.Name) and node.id == _LEG_CONST) or \
+                (isinstance(node, ast.Attribute) and node.attr == _LEG_CONST) or \
+                (isinstance(node, ast.alias) and node.name == _LEG_CONST):
+            probs.append(f"cron:{getattr(node, 'lineno', '?')} 出現 {_LEG_CONST}")
     return probs
 
 
@@ -1807,9 +1879,12 @@ def test_no_judgement_reads_leg_dates():
     # 其他白名單外寫法（Return／BoolOp／Compare）
     ("mft", "    return row\n", "    return row if _v else row\n"),
     ("mft", "        row[_k] = _v\n", "        row[_k] = _v or _raw\n"),
+    # ── C1 第四輪：QA-D 的 M4／M5（cron 任何位置出現欄名字面值）──
+    ("cron", "    if args.dry_run:\n", "    _lad = row['adl_as_of']\n    if args.dry_run:\n"),
+    ("cron", "    n = _store.append_signals([row])\n", "    n = _store.append_signals([row]*bool(row['inst_as_of']))\n"),
 ], ids=["const-in-other-func", "judge-on-column", "cron-judge", "cron-extra-read",
         "qa-if-not-leg-raise", "qa-if-v-none-return", "qa-cron-all-values-return",
-        "return-uses-v", "boolop-write"])
+        "return-uses-v", "boolop-write", "qa-d-m4-cron-read-column", "qa-d-m5-cron-gate-append"])
 def test_leg_guard_mutations_turn_red(target, old, new):
     """突變：在非產生者函式用常數／在判斷式讀欄名／cron 讀 `_leg_as_of` ⇒ 守衛抓得到。"""
     mft = (REPO / _MFT).read_text(encoding="utf-8")
@@ -1821,3 +1896,90 @@ def test_leg_guard_mutations_turn_red(target, old, new):
         assert cron.count(old) == 1
         cron = cron.replace(old, new)
     assert _leg_usage_problems(mft, cron) != []
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6. C1 第四輪 Y3：行為式守衛（不再擴充 AST 污點追蹤）
+# ══════════════════════════════════════════════════════════════════════════
+_LEG_VARIANTS = {
+    "none": None,
+    "all-none": dict.fromkeys(_LEG),
+    "all-valid": dict(zip(_LEG, ("2026-10-22", "2026-10-22", "2026-10-21", "2026-10-22"))),
+    "mixed": dict(zip(_LEG, ("2026-10-22", None, float("nan"), pd.Timestamp("2026-10-22")))),
+}
+
+
+def _bsr_behavior_problems(bsr) -> list[str]:
+    """(a) 同一 tl＋同一組參數，leg_as_of 四種給法 ⇒ 都回 dict，且四欄以外的鍵值完全相同。"""
+    probs: list[str] = []
+    for kw in _ROW_KW:
+        for tl in (_tl(), _tl(health=None, jqavg=None, missing_sources=[], conf=0)):
+            rows = {}
+            for name, leg in _LEG_VARIANTS.items():
+                try:
+                    r = bsr(copy.deepcopy(tl), **kw, leg_as_of=copy.deepcopy(leg))
+                except Exception as e:   # noqa: BLE001 — 拋例外本身就是違規（四欄不得擋下寫列）
+                    probs.append(f"{name}: 拋 {type(e).__name__}: {e}")
+                    continue
+                if not isinstance(r, dict):
+                    probs.append(f"{name}: 回傳 {type(r).__name__}")
+                    continue
+                rows[name] = {k: v for k, v in r.items() if k not in _LEG}
+            base = rows.get("none")
+            for name, other in rows.items():
+                if other != base:
+                    probs.append(f"{name}: 四欄以外的鍵值與 leg_as_of=None 不同")
+    return probs
+
+
+class TestLegBehaviourGuard:
+    def test_build_signal_row_other_keys_independent_of_leg(self):
+        from src.compute.macro.macro_forward_test import build_signal_row
+        assert _bsr_behavior_problems(build_signal_row) == []
+
+    @pytest.mark.parametrize("old, new", [
+        ("    _leg = dict(leg_as_of or {})\n",
+         "    _leg = dict(leg_as_of or {})\n    if not leg_as_of:\n        raise ValueError('x')\n"),
+        ("        row[_k] = _v\n", "        if _v is None:\n            return None\n        row[_k] = _v\n"),
+        ("        row[_k] = _v\n", "        row[_k] = _v\n        if _v is None:\n            row['icon'] = '⬜'\n"),
+    ], ids=["m1-raise-on-empty-leg", "m2-return-none-on-missing", "m3-change-other-key"])
+    def test_mft_mutations_caught_by_behaviour(self, old, new):
+        """mft 端 M1～M3：(a) 的行為測試抓得到（不靠 AST）。"""
+        mut = c1_mutant_module(_MFT, [(old, new)], f"mft_beh_{next(_uid)}")
+        assert _bsr_behavior_problems(mut.build_signal_row) != []
+
+
+def _cron_leg_behavior_problems(S, monkeypatch, tmp_path) -> list[str]:
+    """(b) cron main：leg_as_of_from_inputs 回「四欄全 None」與「四欄全有效」⇒ 都恰好 append 一列、
+    exit code 相同、該列四欄以外欄位相同。"""
+    import src.compute.macro.macro_forward_test as MFT
+    probs: list[str] = []
+    out = {}
+    for name in ("all-none", "all-valid"):
+        d = tmp_path / f"cron_{name}_{next(_uid)}"
+        d.mkdir()
+        S_, store = _cron_isolate(monkeypatch, d, mkt_info={"index_as_of": "2026-08-18"}, S=S)
+        _leg = dict(_LEG_VARIANTS[name])
+        monkeypatch.setattr(MFT, "leg_as_of_from_inputs", lambda **k: dict(_leg))
+        rc = S_.main([])
+        rows = store.load_signals()
+        if len(rows) != 1:
+            probs.append(f"{name}: append {len(rows)} 列（應恰好 1）")
+            continue
+        out[name] = (rc, {k: v for k, v in rows[0].items() if k not in _LEG})
+    if len(out) == 2 and out["all-none"] != out["all-valid"]:
+        probs.append("兩種 leg 下 exit code 或四欄以外欄位不同")
+    return probs
+
+
+class TestCronLegBehaviour:
+    def test_cron_row_independent_of_leg(self, monkeypatch, tmp_path, _clean_session):
+        import scripts.update_macro_forward_test as S
+        assert _cron_leg_behavior_problems(S, monkeypatch, tmp_path) == []
+
+    def test_qa_d_m5_gate_append_caught_by_behaviour(self, monkeypatch, tmp_path, _clean_session):
+        """QA-D M5（`append_signals([row]*bool(row['inst_as_of']))`）：(b) 抓得到（(c) 的靜態守衛也抓，見上方突變表）。"""
+        mut = c1_mutant_module(_CRON, [("    n = _store.append_signals([row])\n",
+                                        "    n = _store.append_signals([row]*bool(row['inst_as_of']))\n")],
+                               f"cron_m5_{next(_uid)}")
+        assert _cron_leg_behavior_problems(mut, monkeypatch, tmp_path) != []
