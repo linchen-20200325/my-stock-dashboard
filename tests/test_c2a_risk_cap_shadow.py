@@ -107,6 +107,10 @@ C2A_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/services/risk_c
                                      'SHADOW_STR_MAX_LEN: int = 512\n'
                                      '_SHADOW_TRUNCATED_NOTE: str = "…[truncated:{n}]"\n'
                                      '\n'
+                                     '#: C2a-2 QA 回修：錯誤標記連例外型別名都取不出來時（病態例外類別，例：metaclass 的 `__name__` 一取就拋）\n'
+                                     '#: 的固定 ASCII 字樣 —— 標記本身 ⛔ 不得再拋，否則原本寫得成的一輪會變失敗。\n'
+                                     'SHADOW_UNREPRESENTABLE_ERROR: str = "<unrepresentable>"\n'
+                                     '\n'
                                      '#: C2a-2：觀測欄讀的 session 鍵（＝ '
                                      '`macro_engine_inputs.load_engine_inputs_from_session` 讀的同 5 個；\n'
                                      '#: 也是 L2 `infer_input_provenance` 的同名參數）。只讀。\n'
@@ -169,18 +173,31 @@ C2A_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/services/risk_c
                                      '    raise TypeError(f"觀測欄含非 JSON 型別：{type(v).__name__}")\n'
                                      '\n'
                                      '\n'
+                                     'def _exc_type_name(exc: BaseException) -> str:\n'
+                                     '    """例外型別名（ASCII、截長）；取名本身拋 `Exception` ⇒ 固定字樣 '
+                                     '`SHADOW_UNREPRESENTABLE_ERROR`（⛔ 不往外拋）。"""\n'
+                                     '    try:\n'
+                                     '        return _ascii_name(type(exc).__name__)\n'
+                                     '    except Exception:  # noqa: BLE001 — 病態例外類別：改記固定字樣（有留痕，不是吞例外）\n'
+                                     '        return SHADOW_UNREPRESENTABLE_ERROR\n'
+                                     '\n'
+                                     '\n'
                                      'def _shadow_error(stage: str, exc: BaseException) -> dict:\n'
-                                     '    """失敗標記：只記例外型別名與階段（⛔ 不放例外訊息 —— 可能夾帶上游原文／編碼炸彈）。"""\n'
-                                     '    return {"_error": _ascii_name(type(exc).__name__), "_stage": '
-                                     'stage}\n'
+                                     '    """失敗標記：只記例外型別名與階段（⛔ 不放例外訊息 —— 可能夾帶上游原文／編碼炸彈）。\n'
+                                     '\n'
+                                     '    C2a-2 QA 回修：型別名取不出來 ⇒ `{"_error": "<unrepresentable>", "_stage": '
+                                     'stage}`（`_exc_type_name`）。\n'
+                                     '    """\n'
+                                     '    return {"_error": _exc_type_name(exc), "_stage": stage}\n'
                                      '\n'
                                      '\n'
                                      'def _log_shadow_failure(marker: dict) -> None:\n'
                                      '    """印一行觀測欄失敗 log；stdout／stderr 寫不出去 ⇒ 改把 log 失敗記進標記 `_log_error`（⛔ '
                                      '不往外拋）。\n'
                                      '\n'
-                                     '    沿用 L0 `shared.na_drop_log._safe_print`（stdout 非 UTF-8 ⇒ ASCII '
-                                     '跳脫版；None／已關閉／broken pipe\n'
+                                     '    沿用 L0 `shared.na_drop_log.safe_print`（＝`_safe_print` 的公開別名，C2a-2 '
+                                     'QA 回修）\n'
+                                     '    （stdout 非 UTF-8 ⇒ ASCII 跳脫版；None／已關閉／broken pipe\n'
                                      '    ⇒ 改寫 `sys.__stderr__`；行為逐條見該檔 docstring），⛔ 不在這裡另寫一套。它唯二會往外拋的情形\n'
                                      '    （stderr 拋 OSError／ValueError 以外的例外、或它自己 import 失敗）由下方 except 收成 '
                                      '`_log_error`\n'
@@ -191,10 +208,13 @@ C2A_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/services/risk_c
                                      '觀測欄只記錯誤標記；"\n'
                                      '           "本輪是否寫檔不受觀測欄影響")\n'
                                      '    try:\n'
-                                     '        from shared.na_drop_log import _safe_print\n'
-                                     '        _safe_print(msg)\n'
+                                     '        # ~~from shared.na_drop_log import _safe_print~~ 📌 C2a-2 QA '
+                                     '回修（有意識的變更，⛔ 不是漏改）：\n'
+                                     '        #   改用公開別名，不再跨模組 import 底線私有名稱（同一個函式物件，行為零變更）。\n'
+                                     '        from shared.na_drop_log import safe_print\n'
+                                     '        safe_print(msg)\n'
                                      '    except Exception as _e:  # noqa: BLE001 — log 是純觀測；失敗改留痕在標記裡（見上）\n'
-                                     '        marker["_log_error"] = _ascii_name(type(_e).__name__)\n'
+                                     '        marker["_log_error"] = _exc_type_name(_e)\n'
                                      '\n'
                                      '\n'
                                      'def _input_provenance_shadow(session: Any, bundle: EngineInputBundle) '
@@ -205,8 +225,10 @@ C2A_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/services/risk_c
                                      '    唯讀：`session`、`bundle`（及引擎輸出）一個都不改；L2 分類是純函式，回傳值另做深拷貝。\n'
                                      '    `scored_keys` 依 L2 docstring 公式：`macro_numbers` 值非 None '
                                      '的鍵，扣掉停用（M1B／M2）。\n'
-                                     '    ⚠️ 只攔 `Exception`：KeyboardInterrupt／SystemExit 照常往外（與本檔其餘路徑相同，⛔ '
-                                     '不攔中斷）。\n'
+                                     '    ⚠️ 只攔 `Exception`：**不是** `Exception` 子類的 '
+                                     '`BaseException`（KeyboardInterrupt、SystemExit、\n'
+                                     '    GeneratorExit、自訂的 `BaseException` 子類）一律照常往外拋 ⇒ 本輪照舊失敗（此時尚未碰任何檔案，\n'
+                                     '    ⇒ 不寫檔、不留 `.tmp`），與本檔其餘路徑相同（⛔ 不攔中斷）。這是刻意的行為，不是遺漏。\n'
                                      '    """\n'
                                      '    stage = "import"\n'
                                      '    try:\n'
@@ -531,10 +553,18 @@ def test_before_after_random_grid(env, tmp_path):
     assert 20 <= written < 120, written                # 網格同時涵蓋寫檔與不寫檔
 
 
-def test_reader_outputs_identical(env, tmp_path):
-    """讀端（`get_macro_state` 各模式）對「有觀測欄」與「沒有觀測欄」的檔輸出相同。"""
+@pytest.mark.parametrize("shape", ["success", "error_marker"])
+def test_reader_outputs_identical(shape, env, tmp_path, monkeypatch):
+    """讀端（`get_macro_state` 各模式）對「有觀測欄」與「沒有觀測欄」的檔輸出相同 —— 成功形與錯誤標記形各一次
+    （QA 回修：`tests/test_batch_z65.py` 消費端盤點註解所稱的兩種形狀都在這裡比對）。"""
+    if shape == "error_marker":
+        def boom(**_k):
+            raise RuntimeError("x")
+        monkeypatch.setattr(IP, "infer_input_provenance", boom)
     pre, cur, d_pre, d_cur, _, _ = _pair(env, tmp_path, _inputs(pcr_src="FinMind-TXO-inst-est"))
     assert cur.written
+    _sh = json.loads((d_cur / "macro_state.json").read_text(encoding="utf-8"))[KEY]
+    assert ("_error" in _sh) is (shape == "error_marker"), _sh
     now = datetime(2026, 10, 14, 3, 0, tzinfo=UTC)
     for strict in (False, True):
         for rv in (False, True):
@@ -598,9 +628,19 @@ class TestShadowContent:
             _run(RC, kw, tmp_path)
         assert not (tmp_path / "macro_state.json").exists()
 
-    def test_safe_print_dependency_exists(self):
+    def test_safe_print_dependency_exists(self, capsys):
+        """寫端依賴的公開名稱 `shared.na_drop_log.safe_print`：存在、可呼叫、收一個 str、印到 stdout、回 None。"""
+        import inspect
         from shared import na_drop_log
-        assert callable(na_drop_log._safe_print)
+        assert callable(na_drop_log.safe_print)
+        assert na_drop_log.safe_print is na_drop_log._safe_print       # 純別名：行為零變更
+        params = list(inspect.signature(na_drop_log.safe_print).parameters.values())
+        assert len(params) == 1 and params[0].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+        assert na_drop_log.safe_print("c2a 契約 ⚠️") is None
+        assert capsys.readouterr().out == "c2a 契約 ⚠️\n"
+        text = (REPO / _RC_REL).read_text(encoding="utf-8")
+        assert "from shared.na_drop_log import safe_print\n" in text
+        assert not re.search(r"^\s*from shared\.na_drop_log import _safe_print", text, re.M)   # 不再 import 私有名稱
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -806,6 +846,100 @@ class TestShadowLogUnsafeStdout:
         monkeypatch.undo()
         shadow = _assert_same_core(pre, cur, d_pre, d_cur)
         assert shadow["_log_error"] in ("ImportError", "ModuleNotFoundError")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 4b. QA 回修：存活突變補測
+# ══════════════════════════════════════════════════════════════════════════
+class _Interrupt(BaseException):
+    """自訂、非 `Exception` 的 BaseException（同 GeneratorExit 類）。"""
+
+
+@pytest.mark.parametrize("exc", [KeyboardInterrupt, SystemExit, GeneratorExit, _Interrupt])
+def test_base_exception_propagates_and_writes_nothing(exc, env, tmp_path, monkeypatch):
+    """（文件化行為）非 `Exception` 的 BaseException 照常往外拋：本輪照舊失敗、一個檔都沒碰、無 `.tmp`。"""
+    def boom(**_k):
+        raise exc()
+    monkeypatch.setattr(IP, "infer_input_provenance", boom)
+    env(_inputs()["pmi_history"])
+    d = tmp_path / "m"
+    with pytest.raises(exc):
+        _run(RC, _inputs(), d)
+    assert not list(d.iterdir())
+
+
+def _no_dup_keys(raw: bytes):
+    def hook(pairs):
+        keys = [k for k, _ in pairs]
+        assert len(keys) == len(set(keys)), keys
+        return dict(pairs)
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=hook)
+
+
+@pytest.mark.parametrize("bad_key", [1, None, ("t",), b"x"])
+def test_non_str_dict_key_is_sanitize_marker(bad_key, env, tmp_path, monkeypatch):
+    # `str` 鍵與它的 json 字串化撞名（1 ↔ "1"、None ↔ "null"）時，若讓 json 自動轉鍵會寫出重複 JSON 鍵 ⇒ 必須擋下
+    collide = {1: "1", None: "null"}.get(bad_key, "x")
+    monkeypatch.setattr(IP, "infer_input_provenance",
+                        lambda **_k: {"VIX_Index": {bad_key: 1, collide: 2}})
+    shadow, _ = _inject(env, tmp_path, _inputs(), "k")
+    _assert_marker(shadow, "sanitize", "TypeError")
+    for f in FILES:
+        _no_dup_keys((tmp_path / "cur_k" / f).read_bytes())
+
+
+def test_list_and_tuple_values_are_deep_copied_and_truncated(env, tmp_path, monkeypatch):
+    big = "y" * (RC.SHADOW_STR_MAX_LEN + 10)
+    src_list = ["a", big, {"z": big}]
+    src_tuple = ("b", big)
+    monkeypatch.setattr(IP, "infer_input_provenance",
+                        lambda **_k: {"VIX_Index": {"lst": src_list, "tpl": src_tuple}})
+    kw = _inputs()
+    env(kw["pmi_history"])
+    res = _run(RC, kw, tmp_path / "m")
+    rec = res.engine_result[KEY]["inputs"]["VIX_Index"]
+    cut = "y" * RC.SHADOW_STR_MAX_LEN + f"…[truncated:{len(big)}]"
+    assert rec == {"lst": ["a", cut, {"z": cut}], "tpl": ["b", cut]}
+    assert rec["lst"] is not src_list and rec["lst"][2] is not src_list[2]
+    assert src_list == ["a", big, {"z": big}] and src_tuple == ("b", big)      # 上游未被改
+    st = json.loads((tmp_path / "m" / "macro_state.json").read_text(encoding="utf-8"))
+    assert st[KEY]["inputs"]["VIX_Index"] == rec
+
+
+class _NamelessMeta(type):
+    @property
+    def __name__(cls):
+        raise RuntimeError("名字也取不到")
+
+
+class _NamelessError(Exception, metaclass=_NamelessMeta):
+    pass
+
+
+def test_marker_falls_back_when_exception_name_unrepresentable(env, tmp_path, monkeypatch, capsys):
+    with pytest.raises(RuntimeError):
+        type(_NamelessError()).__name__                    # 前提：病態類別真的取不到名字
+    def boom(**_k):
+        raise _NamelessError()
+    monkeypatch.setattr(IP, "infer_input_provenance", boom)
+    shadow, out = _inject(env, tmp_path, _inputs(), "nm", capsys)
+    assert shadow == {"_error": RC.SHADOW_UNREPRESENTABLE_ERROR, "_stage": "infer"}
+    assert RC.SHADOW_UNREPRESENTABLE_ERROR == "<unrepresentable>"
+    assert "階段 infer：<unrepresentable>" in out
+
+
+def test_log_error_falls_back_when_log_exception_name_unrepresentable(env, tmp_path, monkeypatch):
+    def boom(**_k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(IP, "infer_input_provenance", boom)
+    from shared import na_drop_log
+
+    def bad_print(_msg):
+        raise _NamelessError()
+    monkeypatch.setattr(na_drop_log, "safe_print", bad_print)
+    shadow, _ = _inject(env, tmp_path, _inputs(), "nl")
+    assert shadow == {"_error": "RuntimeError", "_stage": "infer",
+                      "_log_error": RC.SHADOW_UNREPRESENTABLE_ERROR}
 
 
 # ══════════════════════════════════════════════════════════════════════════

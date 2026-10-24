@@ -722,7 +722,8 @@ class TestConsumers:
                              "fail_safe": False},
                  input_detail={"VIX_Index": {"value": 26.0}}, m1b_m2_data_month="2026-08",
                  # 📌 C2a-2（DEC-080，2026-10-24；有意識的追加，⛔ 不是放寬）：寫端新增純觀測欄 ⇒ 消費端盤點
-                 #   同步多帶一鍵（成功形與錯誤標記形各一份見 tests/test_c2a_risk_cap_shadow.py 的讀端比對）。
+                 #   同步多帶一鍵（成功形與錯誤標記形各一份的讀端比對見
+                 #   tests/test_c2a_risk_cap_shadow.py::test_reader_outputs_identical，`get_macro_state` 各模式）。
                  input_provenance_shadow={"shadow_policy_version": "c2a-shadow-1",
                                           "inputs": {"PCR": {"provenance": "proxy",
                                                              "riskcap_eligible": False}}})

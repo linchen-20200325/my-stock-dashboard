@@ -122,6 +122,10 @@ ATTACHED_KEYS: tuple[str, ...] = ("engine_source", "input_detail", "m1b_m2_data_
 SHADOW_STR_MAX_LEN: int = 512
 _SHADOW_TRUNCATED_NOTE: str = "…[truncated:{n}]"
 
+#: C2a-2 QA 回修：錯誤標記連例外型別名都取不出來時（病態例外類別，例：metaclass 的 `__name__` 一取就拋）
+#: 的固定 ASCII 字樣 —— 標記本身 ⛔ 不得再拋，否則原本寫得成的一輪會變失敗。
+SHADOW_UNREPRESENTABLE_ERROR: str = "<unrepresentable>"
+
 #: C2a-2：觀測欄讀的 session 鍵（＝ `macro_engine_inputs.load_engine_inputs_from_session` 讀的同 5 個；
 #: 也是 L2 `infer_input_provenance` 的同名參數）。只讀。
 _SHADOW_SESSION_KEYS: tuple[str, ...] = ("macro_info", "bias_info", "m1b_m2_info", "li_latest", "mkt_info")
@@ -304,15 +308,27 @@ def _shadow_copy(v: Any) -> Any:
     raise TypeError(f"觀測欄含非 JSON 型別：{type(v).__name__}")
 
 
+def _exc_type_name(exc: BaseException) -> str:
+    """例外型別名（ASCII、截長）；取名本身拋 `Exception` ⇒ 固定字樣 `SHADOW_UNREPRESENTABLE_ERROR`（⛔ 不往外拋）。"""
+    try:
+        return _ascii_name(type(exc).__name__)
+    except Exception:  # noqa: BLE001 — 病態例外類別：改記固定字樣（有留痕，不是吞例外）
+        return SHADOW_UNREPRESENTABLE_ERROR
+
+
 def _shadow_error(stage: str, exc: BaseException) -> dict:
-    """失敗標記：只記例外型別名與階段（⛔ 不放例外訊息 —— 可能夾帶上游原文／編碼炸彈）。"""
-    return {"_error": _ascii_name(type(exc).__name__), "_stage": stage}
+    """失敗標記：只記例外型別名與階段（⛔ 不放例外訊息 —— 可能夾帶上游原文／編碼炸彈）。
+
+    C2a-2 QA 回修：型別名取不出來 ⇒ `{"_error": "<unrepresentable>", "_stage": stage}`（`_exc_type_name`）。
+    """
+    return {"_error": _exc_type_name(exc), "_stage": stage}
 
 
 def _log_shadow_failure(marker: dict) -> None:
     """印一行觀測欄失敗 log；stdout／stderr 寫不出去 ⇒ 改把 log 失敗記進標記 `_log_error`（⛔ 不往外拋）。
 
-    沿用 L0 `shared.na_drop_log._safe_print`（stdout 非 UTF-8 ⇒ ASCII 跳脫版；None／已關閉／broken pipe
+    沿用 L0 `shared.na_drop_log.safe_print`（＝`_safe_print` 的公開別名，C2a-2 QA 回修）
+    （stdout 非 UTF-8 ⇒ ASCII 跳脫版；None／已關閉／broken pipe
     ⇒ 改寫 `sys.__stderr__`；行為逐條見該檔 docstring），⛔ 不在這裡另寫一套。它唯二會往外拋的情形
     （stderr 拋 OSError／ValueError 以外的例外、或它自己 import 失敗）由下方 except 收成 `_log_error`
     —— 有留痕（寫進檔案的觀測欄），不是吞例外。
@@ -321,10 +337,12 @@ def _log_shadow_failure(marker: dict) -> None:
            f"（階段 {marker.get('_stage')}：{marker.get('_error')}）→ 觀測欄只記錯誤標記；"
            "本輪是否寫檔不受觀測欄影響")
     try:
-        from shared.na_drop_log import _safe_print
-        _safe_print(msg)
+        # ~~from shared.na_drop_log import _safe_print~~ 📌 C2a-2 QA 回修（有意識的變更，⛔ 不是漏改）：
+        #   改用公開別名，不再跨模組 import 底線私有名稱（同一個函式物件，行為零變更）。
+        from shared.na_drop_log import safe_print
+        safe_print(msg)
     except Exception as _e:  # noqa: BLE001 — log 是純觀測；失敗改留痕在標記裡（見上）
-        marker["_log_error"] = _ascii_name(type(_e).__name__)
+        marker["_log_error"] = _exc_type_name(_e)
 
 
 def _input_provenance_shadow(session: Any, bundle: EngineInputBundle) -> dict:
@@ -332,7 +350,9 @@ def _input_provenance_shadow(session: Any, bundle: EngineInputBundle) -> dict:
 
     唯讀：`session`、`bundle`（及引擎輸出）一個都不改；L2 分類是純函式，回傳值另做深拷貝。
     `scored_keys` 依 L2 docstring 公式：`macro_numbers` 值非 None 的鍵，扣掉停用（M1B／M2）。
-    ⚠️ 只攔 `Exception`：KeyboardInterrupt／SystemExit 照常往外（與本檔其餘路徑相同，⛔ 不攔中斷）。
+    ⚠️ 只攔 `Exception`：**不是** `Exception` 子類的 `BaseException`（KeyboardInterrupt、SystemExit、
+    GeneratorExit、自訂的 `BaseException` 子類）一律照常往外拋 ⇒ 本輪照舊失敗（此時尚未碰任何檔案，
+    ⇒ 不寫檔、不留 `.tmp`），與本檔其餘路徑相同（⛔ 不攔中斷）。這是刻意的行為，不是遺漏。
     """
     stage = "import"
     try:

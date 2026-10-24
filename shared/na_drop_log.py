@@ -144,6 +144,12 @@ def _safe_print(msg: str) -> None:
         _to_stderr(_ascii + f" (stdout {type(_e).__name__})")
 
 
+#: C2a-2（DEC-080，2026-10-24；純新增別名，⛔ 行為零變更）：`_safe_print` 的公開名稱，給本檔以外的觀測 log 使用
+#: （例：`src/services/risk_cap_apply.py` 觀測欄失敗 log），避免跨模組 import 底線私有名稱。
+#: 同一個函式物件（`safe_print is _safe_print`）；契約見 `_safe_print` docstring（str 參數、不回傳）。
+safe_print = _safe_print
+
+
 def na_drop_note(before: Any, after: Any, *, tag: str, series: str,
                  subset: Optional[Sequence[str]] = None,
                  date_col: Optional[str] = None) -> Optional[str]:
