@@ -1199,6 +1199,28 @@ C1 完成後停下。
   - **張力點**：(1) `PROJECT_RULES.md` 第 7 節 DoD 寫「relevant tests」，**未**規定全庫重跑，與本條不衝突；(2) DEC-077 第 6 點 C1 施工程序「完整 CI／QA」是**針對 C1（涉 provenance、需證零投資輸出變更）的個案要求**，不因本條改變；(3) 實務上「小批次」與「第 2 點 High 清單」的邊界須逐批判斷，判斷錯誤方向取嚴（歸 High）。未發現需登記第 14 節的硬衝突。
   - **測試釘住**：`tests/test_batch_z59.py` 以 `wf.split("slow-tests:")[0]` 取 Fast 區段，不依賴 `needs`，不受影響；`tests/test_vn1_prehardening.py` 的 `needs` 僅針對 production_write 類 job（另一份 workflow），無關。
 
+### DEC-079｜預判性 Quota／Context Loss Safe Checkpoint：額度或 context 預判不足時，先落盤 GitHub 再換對話（客戶 2026-10-24）
+> 2026-10-24 追加（第 8 節「收到當輪追加」；ID 取下一個未用號，DEC-078 為前一號；落盤前 `grep DEC-079` 全 repo 0 命中）。
+- **背景**：既有第 6 節 Safe Checkpoint、第 11 節 Context Lifecycle、第 15 節 Handoff Save Check／Context Loss Check 都以「對話準備結束」為時點；客戶要求把時點前移到「預判不足」，不等額度歸零或 context 被截斷。
+- **要點**：
+  1. 觸發＝AI 判斷剩餘額度、context、session 壽命或對話容量可能不足以安全完成「下一個完整工作階段」；不得等到歸零／截斷／強制結束。
+  2. 動作＝先到最近 Safe Checkpoint，優先把已形成的重要資訊落盤 GitHub：新客戶裁示、已確認研究結論、新發現、風險、未完成事項、main SHA、Open PR、CI 狀態、working tree、未提交內容、worktree、stash、current active work、blocker、下一個唯一 safe point、下一階段建議模型與 Effort。
+  3. GitHub 紀錄完成後才換對話／換額度。
+  4. 聊天摘要、AI 記憶、handoff prompt 只能作導引，不得成為唯一事實來源。
+  5. 目標＝原對話突然不可用時，新 AI 仍可只靠 GitHub 重建正確狀態並繼續。
+  6. 客戶另指示：與第 6／11／15 節整合，不另造重複章節；不新增總結檔或 `PROJECT_CONTEXT.md`；不重做 DEC-078／第 17 節。
+- **不是什麼**（⛔）：
+  - ⛔ 不是新的章節或平行清單：落點為 `PROJECT_RULES.md` 第 11 節一條，第 6、15 節各一行 pointer，清單沿用既有。
+  - ⛔ 不是授權把完整聊天紀錄或未裁示想法大量寫入 GitHub（第 15 節第 4 點仍有效）；也不是授權新增總結檔。
+  - ⛔ 不改 DEC-078／第 17 節，不改 code／tests／workflow／data。
+- **範圍**：治理（交接流程）｜**日期**：2026-10-24｜**決策者**：客戶｜**狀態**：生效。
+- **來源**：客戶 2026-10-24 正式裁示（逐字）：「當專案 AI 判斷目前剩餘額度、context、session 壽命或對話容量可能不足以安全完成『下一個完整工作階段』時，不得等到額度歸零、context 被截斷或 session 強制結束才處理交接。應先到最近的 Safe Checkpoint，優先把目前已形成的重要資訊落盤到 GitHub，包括：新的客戶裁示／已確認研究結論／新發現／風險／未完成事項／main SHA／Open PR／CI 狀態／working tree／未提交內容／worktree／stash／current active work／blocker／下一個唯一 safe point／下一階段建議模型／Effort。GitHub 紀錄完成後才換對話／換額度。聊天摘要、AI 記憶、handoff prompt 只能作導引，不得成為唯一事實來源。目標：即使原對話突然不可用，新 AI 仍可只靠 GitHub 重新建立正確狀態並繼續。」
+- **與其他 DEC／條文的關係**（撰寫組讀法，單組，⚠️ 待第二組驗，`CLAUDE.md` §-2 規則 6）：
+  - **DEC-016（Safe Checkpoint／Context Lifecycle）、DEC-067／DEC-068（第 15 節）**：同向，本條只把觸發時點前移並補差額；清單不變。
+  - **DEC-073**：下一階段建議模型／Effort 仍依第 15 節 F 項與第 6 點，建議只是參考。
+  - **DEC-078／第 17 節**：不受影響。
+  - 未發現需登記第 14 節的衝突。唯一實務張力：「預判」為 AI 自判、無法客觀查證，故規則寫明邊界不清取嚴。
+
 ---
 
 ## 5. 取代鏈總表

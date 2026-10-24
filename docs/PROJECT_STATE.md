@@ -203,6 +203,7 @@
 - 新對話啟動、優先序、Handoff Save Check、Context Loss Check：`PROJECT_RULES.md` §15（DEC-067、DEC-068）。
 - 靜默自主巡航與回報格式：`PROJECT_RULES.md` §3（DEC-059、DEC-060）；客戶回報語言：DEC-069。
 - Minimum Sufficient Effort 與階段邊界 Effort Check：`PROJECT_RULES.md` §9（DEC-059、DEC-061）。
+- 額度／context 預判不足時的提前落盤（預判性 Safe Checkpoint）：`PROJECT_RULES.md` §11（DEC-079）。
 
 ## 22. 大盤／市場趨勢研究框架與 repo 對照（Research Framework，非 Approved）
 
