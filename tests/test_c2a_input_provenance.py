@@ -99,7 +99,9 @@ def _infer(kw, *, assessed=None, scored_keys="auto"):
         b = M.build_engine_inputs(**kw, now=NOW, calendar=CAL)
         assessed = b.assessed
         if scored_keys == "auto":
-            scored_keys = {k for k, v in b.macro_numbers.items() if v is not None}
+            # 停用的 M1B／M2 引擎收到值但不計分 ⇒ ⛔ 不得記已計分
+            scored_keys = ({k for k, v in b.macro_numbers.items() if v is not None}
+                           - set(b.disabled_inputs))
     if scored_keys == "auto":
         scored_keys = None
     return IP.infer_input_provenance(assessed=assessed, scored_keys=scored_keys, **kw)
@@ -316,8 +318,10 @@ class TestInferBaseline:
         assert r["PMI_Prev_Month"]["source_id"] == "data.gov.tw:dataset:6100"
         assert r["PCR"]["source_id"] == "TAIFEX"
         assert r["VIX_Index"]["source_id"] == "yfinance:^VIX:3mo:1d"
-        # actual_scored：M1B／M2 停用 ⇒ 引擎送值（計分與否在引擎），其餘鍵皆有值
-        assert all(v["actual_scored"] is True for v in r.values())
+        # actual_scored：M1B／M2 停用 ⇒ 不記已計分；其餘鍵皆計分
+        disabled = set(RULESET_DISABLED_INPUTS[RISK_CAP_RULESET_VERSION])
+        for k, v in r.items():
+            assert v["actual_scored"] is (k not in disabled), k
         json.dumps(r, allow_nan=False)
 
     def test_actual_scored_none_when_not_given(self):
@@ -433,6 +437,31 @@ class TestPmi:
         assert r["source_id"] == "stale-cache(StockFeel)"
         assert r["actual_scored"] is True   # C2a 不改計分
 
+    @pytest.mark.parametrize("src", ["stale-cache(CIER-EN)", "stale-cache(StockFeel)"])
+    def test_stale_beats_carried_forward(self, src):
+        # 資料月 2026-07 於 10/14 已落後 ≥ 1 個發布期 ⇒ STALE；舊快照標記不得把它翻成「沿用」
+        # DEC-080「超過允許期間」：provenance 保留、freshness＝stale、不可用
+        kw = _inputs(pmi_month="2026-07-01", pmi_src=src, pmi_extra={"is_stale": True},
+                     prev_rows=[(date(2026, 6, 1), 49.0, "data.gov.tw:dataset:6100")])
+        r = _infer(kw)
+        cur = r["ISM_PMI_or_OECD_CLI"]
+        assert cur["freshness"] == "stale"
+        assert cur["provenance"] in {"official", "secondary"}
+        assert cur["scoring_eligible"] is False and cur["riskcap_eligible"] is False
+        assert cur["fresh"] is False and cur["exists"] is True
+        assert "依附當期" not in r["PMI_Prev_Month"]["provenance_basis"]
+
+    def test_prev_basis_notes_carried_anchor(self):
+        r = _infer(_inputs(pmi_src="stale-cache(CIER-EN)"))
+        assert r["ISM_PMI_or_OECD_CLI"]["freshness"] == "carried_forward"
+        prev = r["PMI_Prev_Month"]
+        assert prev["provenance_basis"].endswith(
+            "；前月有效性依附當期（assess_previous_month），當期為 carried_forward")
+        # 前月自身 freshness 判定不變（assess_previous_month 跟著當期 FRESH ⇒ FRESH）
+        assert prev["freshness"] == "fresh" and prev["provenance"] == "official"
+        r2 = _infer(_inputs())
+        assert "依附當期" not in r2["PMI_Prev_Month"]["provenance_basis"]
+
     def test_stale_cache_label_alone_is_carried(self):
         r = _infer(_inputs(pmi_src="stale-cache(CIER-EN)"))["ISM_PMI_or_OECD_CLI"]
         assert r["provenance"] == "official" and r["freshness"] == "carried_forward"
@@ -511,6 +540,42 @@ class TestOthers:
             assert r[k]["provenance"] == "proxy" and r[k]["provenance_detail"] == P.DETAIL_M1B_TWII_PROXY
             assert r[k]["exists"] is True and r[k]["scoring_eligible"] is False
             assert r[k]["source_id"] == "TWII-proxy"
+
+    @pytest.mark.parametrize("src,want", [
+        ("CBC-tier1", "official"), ("CBC-tier2", "official"), ("CBC:EF15M01:tier2", "official"),
+        ("CBC:ms1.json:tier1", "official"), ("FRED", None), ("IMF(2026-08)", None),
+        ("CBC-tier3", None), ("cbc-tier1", None), ("xCBC:", None), (None, None)])
+    def test_m1b_only_cbc_official(self, src, want):
+        info = {"m1b_yoy": 3.2, "m2_yoy": 5.1, "data_month": "2026-08", "source": src}
+        r = _infer(_inputs(m1b_info=info))
+        for k in ("M1B_YoY_pct", "M2_YoY_pct"):
+            assert r[k]["provenance"] == want, (src, r[k])
+            assert r[k]["riskcap_eligible"] is False
+            if want is None:
+                assert "不是央行來源" in r[k]["provenance_basis"]
+
+    def test_m1b_cbc_labels_match_l1(self):
+        # macro_snapshot：f'CBC-tier{tier_used}'；tw_macro：'CBC:...' 原生字樣
+        tree = _ast("src/data/macro/macro_snapshot.py")
+        fstr = [n for n in ast.walk(tree) if isinstance(n, ast.JoinedStr)
+                and isinstance(n.values[0], ast.Constant) and n.values[0].value == "CBC-tier"]
+        assert len(fstr) == 1
+        assert {"CBC-tier" + t for t in ("1", "2")} == P.M1B_CBC_SOURCE_LABELS
+        from shared.macro_provenance import M1B_PROXY_SOURCE_LABELS
+        fn = [n for n in _ast("src/data/macro/tw_macro.py").body
+              if isinstance(n, ast.FunctionDef) and n.name == "fetch_cbc_m1b_m2"]
+        assert len(fn) == 1
+        lits = set()
+        for n in ast.walk(fn[0]):
+            if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Subscript) \
+                    and getattr(n.targets[0].slice, "value", None) == "source":
+                lits.add(n.value.value)
+            if isinstance(n, ast.Dict):
+                lits |= {v.value for k, v in zip(n.keys, n.values)
+                         if isinstance(k, ast.Constant) and k.value == "source"}
+        non_proxy = lits - M1B_PROXY_SOURCE_LABELS
+        assert lits & M1B_PROXY_SOURCE_LABELS and non_proxy
+        assert all(x.startswith(P.M1B_CBC_SOURCE_PREFIX) for x in non_proxy), non_proxy
 
     def test_m1b_proxy_raw_nan_is_unavailable(self):
         info = {"m1b_yoy": float("nan"), "m2_yoy": 5.0, "source": "TWII-proxy"}
@@ -745,8 +810,20 @@ class TestReaderGuard:
     def test_no_pmi_proxy_flag_in_new_files(self, rel):
         assert "is_proxy" not in (REPO / rel).read_text(encoding="utf-8")
 
-    def test_l2_does_not_spell_l1_pcr_names(self):
-        # 欄名只准取自 L0 常數；L2 檔內不得出現 L1 的欄名字面／常數名（C1 零讀者守衛的白名單只加 L0）
+    def test_l2_reads_pcr_source_via_l0_and_is_visible_to_c1_guard(self):
+        # L2 是 PCR 逐日來源的**讀者**（DEC-080 授權 C2a 記 provenance）：欄名一律經 L0 常數取
+        # （單一真相源），且必須被 C1 零讀者守衛看見 —— 明列於其白名單，不靠改寫字樣躲避。
+        import tests.test_c1_observability as C1
         text = (REPO / L2_REL).read_text(encoding="utf-8")
-        for name in ("_pcr_src", "PCR_SRC_COL", "PCR_SRC_KIND", "PCR_SRC_TAIFEX", "PCR_SRC_FINMIND_EST"):
-            assert not re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", text), name
+        assert re.search(r"(?<![A-Za-z0-9_])PCR_SOURCE_COLUMN(?![A-Za-z0-9_])", text)
+        assert '"_pcr_src"' not in text and "'_pcr_src'" not in text   # 不另寫一份字面
+        assert "PCR_SOURCE_COLUMN" in C1._NEW_NAMES
+        assert {L0_REL, L2_REL} <= C1._ALLOWED
+
+    def test_dated_inputs_private_helpers_exist(self):
+        # L2 共用同層 dated_inputs 的私有解析函式（確保「同一列」判定逐字一致）；改名時在此明確轉紅
+        for name in ("_parse_pcr_cell", "_parse_futures_cell", "_prev_month_start"):
+            assert hasattr(DI, name) and callable(getattr(DI, name)), name
+        assert DI._parse_pcr_cell("126.8") == 126.8 and DI._parse_pcr_cell("-") is None
+        assert DI._parse_futures_cell("-21000") == -21000.0 and DI._parse_futures_cell(None) is None
+        assert DI._prev_month_start(date(2026, 1, 1)) == date(2025, 12, 1)

@@ -14,7 +14,8 @@ Risk Cap 計分、門檻、權重、Required Core、寫檔、UI 一律不變。�
 - `source_id`：上游原始來源字樣（PMI／PCR／VIX／M1B 的來源標籤）；上游沒有時用抽取器的來源說明；無 → None。
 - `exists`～`riskcap_eligible`：L0 `classify_eligibility` 的五欄（⛔ 不壓成單一 boolean）。
 - `actual_scored`：該鍵是否在呼叫端給的 `scored_keys` 內（本輪引擎實際計分的鍵）；`scored_keys`
-  不是字串集合 → None。⚠️ 與 `scoring_eligible` 是兩回事：C2a 不改計分，故兩者可以不一致 —— 那正是
+  不是字串集合 → None。呼叫端應傳 `macro_numbers` 中值不是 None、**且不在 `bundle.disabled_inputs`**
+  的鍵 —— 停用的 M1B／M2 引擎雖收到值但不計分，⛔ 不得記成已計分。⚠️ 與 `scoring_eligible` 是兩回事：C2a 不改計分，故兩者可以不一致 —— 那正是
   shadow 要觀察的差異。
 
 規則（C2a-1 規格）
@@ -23,6 +24,9 @@ Risk Cap 計分、門檻、權重、Required Core、寫檔、UI 一律不變。�
   抽取器會把值丟掉（只顯示不計分），本檔仍記 **proxy**、exists 依原始年增率是否為有限數值（原始值也不是有限數值 → unavailable）。
 - BIAS240：`is_estimated` 是 Python `True` → estimated；Python `False` → secondary；
   缺或型別不符（含 numpy bool、0／1）→ None ＋ basis。
+- M1B／M2：^TWII 動能代理 → proxy（`shared.macro_provenance` 判定，照舊）；非代理時只有央行來源標籤
+  （L0 `M1B_CBC_SOURCE_LABELS` 精確比對，或 `M1B_CBC_SOURCE_PREFIX` 前綴）記 official；FRED／IMF 等
+  其他來源 → None ＋ basis（IMF 為 USD 計價，§4.1）。
 - PCR：以新鮮度評估用的 as_of，在先行指標表找**恰好一列**有效「選PCR」（解析規則與 L2 `dated_inputs`
   同一支函式），讀該列的逐日來源欄（欄名取自 L0 `PCR_SOURCE_COLUMN`）查表；0 列／多列／缺欄／未知標籤
   → None ＋ basis。該列 `_is_stale` 為 True → carried_forward。
@@ -31,9 +35,11 @@ Risk Cap 計分、門檻、權重、Required Core、寫檔、UI 一律不變。�
   freshness＝carried_forward；`is_stale` 為 True 也記 carried_forward。⛔ 不讀 PMI 的代理旗標
   （該旗標語意倒置且無讀者，修正屬另案資料語意變更）。
 - PMI 前月：在 PMI 歷史裡取目標資料月（當期資料月的前一月）所有列的來源；不一致或缺 → None。
+  當期為 carried_forward 時，前月 basis 另註「前月有效性依附當期」（前月自身 freshness 判定不變）。
 - VIX、MA5：secondary（L0 `INPUT_POLICY` 總管判定）。
 - freshness 軸：既有 status STALE → stale；FRESH 且上游舊快照標記 → carried_forward；FRESH → fresh；
-  MISSING／UNDETERMINED → None。
+  MISSING／UNDETERMINED → None。⚠️ STALE **優先**：舊快照標記不得把已過期的值翻成「沿用」
+  （DEC-080「超過允許期間」→ provenance 保留、freshness＝stale、不可用，見 L0 檔頭）。
 - 每項獨立 `try/except Exception`：任何一項分類失敗只影響該項，記全 None ＋
   `provenance_basis="classification_failed:<例外型別名>"`（⛔ 不含例外訊息，避免把上游內容寫進紀錄）。
 - 不改任何輸入、不讀時鐘、不 I/O。
@@ -52,6 +58,8 @@ from shared.input_provenance_policy import (
     DETAIL_M1B_TWII_PROXY,
     DETAIL_PMI_STALE_CACHE,
     INPUT_POLICY,
+    M1B_CBC_SOURCE_LABELS,
+    M1B_CBC_SOURCE_PREFIX,
     PCR_LABEL_PROVENANCE,
     PCR_SOURCE_COLUMN,
     PMI_LABEL_PROVENANCE,
@@ -60,6 +68,7 @@ from shared.input_provenance_policy import (
     FreshnessAxis,
     Provenance,
     classify_eligibility,
+    is_strict_true,  # 「上游舊快照標記」：Python／numpy True 才算（寧可多判沿用，不可假新鮮）
 )
 from shared.macro_provenance import is_m1b_m2_proxy
 from src.compute.macro import dated_inputs as _di
@@ -84,14 +93,6 @@ CLASSIFICATION_FAILED_PREFIX = "classification_failed:"
 
 def _as_map(d: Any) -> Mapping[str, Any]:
     return d if isinstance(d, Mapping) else {}
-
-
-def _is_true(v: Any) -> bool:
-    """Python `True` 或 numpy `bool_(True)`（「上游舊快照標記」用：寧可多判沿用，不可假新鮮）。"""
-    if v is True:
-        return True
-    return (type(v).__module__ == "numpy" and type(v).__name__ in ("bool", "bool_")
-            and bool(v) is True)
 
 
 def _assessed_parts(assessed: Any, key: str) -> tuple[Any, Any]:
@@ -169,7 +170,7 @@ def _li_row_carried(li: Any, pos: int | None) -> bool | None:
         return False
     if pos is None:
         return None
-    return _is_true(li[LI_STALE_COL].iloc[pos])
+    return is_strict_true(li[LI_STALE_COL].iloc[pos])
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -197,6 +198,8 @@ def _cls_bias(dv: Any, *, bias_info: Any, **_: Any) -> _Cls:
         return (Provenance.ESTIMATED, DETAIL_BIAS_SHORT_WINDOW,
                 f"bias_info 標 is_estimated=True（可得 {bi.get('data_days')!r} 日 < 240），"
                 "以短窗均線頂替 MA240（DEC-080：不參與 Risk Cap）", False, None)
+    # ⚠️ 只收 Python bool：production（`macro_snapshot.compute_twii_bias` 的 `_n < 240`，`_n` 為 int）
+    #   一律產生 Python bool；numpy bool 代表上游型別變了，保守拒收（記 None＋basis，不猜成估算或非估算）。
     if flag is False:
         return (INPUT_POLICY[_di.KEY_BIAS240].normal_provenance, None,
                 INPUT_POLICY[_di.KEY_BIAS240].provenance_basis, False, None)
@@ -253,7 +256,7 @@ def _cls_pmi(dv: Any, *, macro_info: Any, **_: Any) -> _Cls:
     pmi_d = _as_map(_as_map(macro_info).get("ism_pmi"))
     label = pmi_d.get("source")
     prov, stale_cache, basis = _pmi_label_lookup(label)
-    carried = stale_cache or _is_true(pmi_d.get("is_stale"))
+    carried = stale_cache or is_strict_true(pmi_d.get("is_stale"))
     detail = DETAIL_PMI_STALE_CACHE if carried else None
     return prov, detail, basis, carried, _str_or_none(label)
 
@@ -292,7 +295,11 @@ def _cls_m1b_m2(key: str) -> Callable[..., _Cls]:
             return (Provenance.PROXY, DETAIL_M1B_TWII_PROXY,
                     "M1B／M2 為 ^TWII 動能代理（shared.macro_provenance 判定）；" + pol.provenance_basis,
                     False, src)
-        return pol.normal_provenance, None, pol.provenance_basis, False, src
+        if src is not None and (src in M1B_CBC_SOURCE_LABELS or src.startswith(M1B_CBC_SOURCE_PREFIX)):
+            return (Provenance.OFFICIAL, None, f"M1B／M2 來源標籤「{src}」為央行（CBC）；" + pol.provenance_basis,
+                    False, src)
+        return (None, None, f"M1B／M2 來源標籤（{src!r}）不是央行來源（FRED／IMF 等；IMF 為 USD 計價，"
+                "§4.1 禁止跨幣別混用），不猜身分", False, src)
     return _cls
 
 
@@ -378,7 +385,9 @@ def infer_input_provenance(*, macro_info: Any, bias_info: Any, li_latest: Any, m
             L3 `build_engine_inputs` 收的同一份）。
         pmi_history: L1 `load_tw_pmi_history()` 原樣回傳的 PMI 歷史表。
         assessed: `EngineInputBundle.assessed`（引擎輸入名 → `AssessedValue`）。
-        scored_keys: 本輪引擎實際計分的鍵（例：`macro_numbers` 中值不是 None 的鍵）。
+        scored_keys: 本輪引擎實際計分的鍵，例：
+            `{k for k, v in bundle.macro_numbers.items() if v is not None} - set(bundle.disabled_inputs)`
+            （⛔ 停用的 M1B／M2 不得記已計分）。
 
     Returns:
         `{引擎輸入名: 紀錄}`，鍵集合與順序＝L0 `INPUT_POLICY`；紀錄欄位見 `RECORD_FIELDS`。
@@ -393,4 +402,15 @@ def infer_input_provenance(*, macro_info: Any, bias_info: Any, li_latest: Any, m
                 assessed=assessed, scored=scored)
         except Exception as exc:  # 每項獨立：一項壞不拖垮其他項；只記型別名（§1：失敗留痕、不吞）
             out[key] = _failed_record(exc)
+    # PMI 前月的有效性依附當期（L0 `assess_previous_month`）：當期是沿用舊快照時，前月紀錄要看得出來。
+    # ⛔ 只補 basis，不改前月自身的 freshness／資格判定。
+    try:
+        cur, prev = out[_di.KEY_PMI], out[_di.KEY_PMI_PREV]
+        if (cur.get("freshness") == FreshnessAxis.CARRIED_FORWARD.value
+                and isinstance(prev.get("provenance_basis"), str)
+                and not prev["provenance_basis"].startswith(CLASSIFICATION_FAILED_PREFIX)):
+            prev["provenance_basis"] += ("；前月有效性依附當期（assess_previous_month），"
+                                         "當期為 carried_forward")
+    except Exception as exc:
+        out[_di.KEY_PMI_PREV] = _failed_record(exc)
     return out

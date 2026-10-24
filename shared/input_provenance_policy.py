@@ -26,6 +26,12 @@ Risk Cap 分數、門檻、權重、公式、Required Core、`RISK_CAP_RULESET_V
   fresh／stale／missing／undetermined）**並存、不取代**；後者照舊是計分新鮮度的 SSOT。
   對映（L2 `src/compute/macro/input_provenance.py` 負責）：STALE→stale；FRESH 且上游帶舊快照標記
   →carried_forward；FRESH→fresh；MISSING／UNDETERMINED→None（缺值由 provenance 的 unavailable 表達）。
+- DEC-080 第 4 點「超過允許期間 → `unavailable`」在兩軸下的對映（總管規格）：**provenance 保留**原身分
+  （例：stale-cache(CIER) 仍記 official，不改寫成 unavailable —— 身分是「這個數字從哪來」，與「還能不能用」
+  分屬兩軸），**freshness＝stale**，**eligibility＝False**（Required Core 無效 → 不產生新的 Risk Cap，
+  與 DEC-048 同向）。「是否超過允許期間」目前一律由既有 `FreshnessStatus`（月頻依資料月＋發布期）判定；
+  STALE **優先於** carried_forward（舊快照標記不得把已過期的值翻成「沿用」）。provenance＝unavailable
+  只用於「沒有值」。
 - `SHADOW_POLICY_VERSION` 只是本契約的版本，與 `RISK_CAP_RULESET_VERSION` 無關（⛔ 不升 Risk Cap 版本）。
 
 `scoring_eligible` 與 `riskcap_eligible`
@@ -145,6 +151,18 @@ DETAIL_M1B_TWII_PROXY: str = "twii_momentum_proxy"         # M1B／M2 以 ^TWII 
 
 
 # ══════════════════════════════════════════════════════════════════════
+# M1B／M2：只有央行（CBC）來源記 official
+# ══════════════════════════════════════════════════════════════════════
+#: L1 `macro_snapshot.fetch_m1b_m2_block` 走 CBC（tw_macro Tier 1／2）時寫進 `m1b_m2_info['source']`
+#: 的字面值（`f'CBC-tier{tier_used}'`，tier_used ∈ {1, 2}；Tier 3 是 ^TWII 代理，另由
+#: `shared.macro_provenance` 判定）。精確比對。
+M1B_CBC_SOURCE_LABELS: frozenset = frozenset({"CBC-tier1", "CBC-tier2"})
+#: L1 `tw_macro.fetch_cbc_m1b_m2` 的原生來源字樣前綴（例：`CBC:ms1.json:tier1`、`CBC:EF15M01:tier2`；
+#: 若日後呼叫端改為直接透傳）。
+M1B_CBC_SOURCE_PREFIX: str = "CBC:"
+
+
+# ══════════════════════════════════════════════════════════════════════
 # 每個引擎輸入一列
 # ══════════════════════════════════════════════════════════════════════
 ROLE_REQUIRED_CORE: str = "required_core"
@@ -213,12 +231,14 @@ INPUT_POLICY: Mapping[str, InputPolicy] = MappingProxyType({
         RISKCAP_ALLOWED_PROVENANCE, None),
     "M1B_YoY_pct": InputPolicy(
         ROLE_DISABLED, Provenance.OFFICIAL,
-        "央行 M1B 年增率（CBC）＝official；^TWII 動能代理＝proxy；"
+        "央行 M1B 年增率（CBC 來源標籤）＝official；^TWII 動能代理＝proxy；FRED／IMF 等非央行來源 → None"
+        "（IMF 為 USD 計價，§4.1 禁止跨幣別混用；不猜）；"
         "risk_cap.v2 依定義停用 M1B-M2 腿（不計分、不算未評估）",
         RISKCAP_ALLOWED_PROVENANCE, None),
     "M2_YoY_pct": InputPolicy(
         ROLE_DISABLED, Provenance.OFFICIAL,
-        "央行 M2 年增率（CBC）＝official；^TWII 動能代理＝proxy；"
+        "央行 M2 年增率（CBC 來源標籤）＝official；^TWII 動能代理＝proxy；FRED／IMF 等非央行來源 → None"
+        "（IMF 為 USD 計價，§4.1 禁止跨幣別混用；不猜）；"
         "risk_cap.v2 依定義停用 M1B-M2 腿（不計分、不算未評估）",
         RISKCAP_ALLOWED_PROVENANCE, None),
 })
@@ -234,8 +254,11 @@ ELIGIBILITY_FIELDS: tuple[str, ...] = (
 )
 
 
-def _is_true(v: Any) -> bool:
-    """Python `True` 或 numpy `bool_(True)` 才算 True（1、"true" 不算）。"""
+def is_strict_true(v: Any) -> bool:
+    """Python `True` 或 numpy `bool_(True)` 才算 True（1、"true" 不算）。
+
+    L0 與 L2 `input_provenance`（上游舊快照標記）共用同一份判定（⛔ 不各寫一份）。
+    """
     if v is True:
         return True
     return (type(v).__module__ == "numpy" and type(v).__name__ in ("bool", "bool_")
@@ -293,7 +316,7 @@ def classify_eligibility(*, input_key: Any, provenance: Any, freshness: Any,
     policy = INPUT_POLICY.get(input_key) if isinstance(input_key, str) else None
     prov = _coerce_enum(Provenance, provenance)
     fresh_axis = _coerce_enum(FreshnessAxis, freshness)
-    ex = _is_true(exists)
+    ex = is_strict_true(exists)
     verdict = _eligibility(policy, prov, fresh_axis, ex)
     return {
         "exists": ex,
