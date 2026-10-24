@@ -294,7 +294,15 @@ def tw_calendar():
 
 class TestRepairedLedger:
     def test_columns_are_schema(self, ledger):
-        assert list(ledger.columns) == list(MACRO_FWD_TEST_HEADERS)
+        # ~~assert list(ledger.columns) == list(MACRO_FWD_TEST_HEADERS)~~
+        # 📌 C1 DH-C1-FWD-LEG-ASOF（DEC-077 第 2 點，2026-10-24；有意識的修改，⛔ 不是漏改）：schema 最末純新增
+        #   四欄 `MACRO_FWD_TEST_LEG_AS_OF_COLUMNS`；已提交的帳本**不改寫、不回填**（DEC-028），第一筆新列寫入前
+        #   仍是舊欄序 ⇒ 接受「完整 HEADERS」或「去掉 C1 四欄的前綴」兩種（其餘欄名與順序仍逐一比對）。
+        from shared.macro_forward_test_schema import MACRO_FWD_TEST_LEG_AS_OF_COLUMNS
+        _full = list(MACRO_FWD_TEST_HEADERS)
+        _pre_c1 = [c for c in _full if c not in MACRO_FWD_TEST_LEG_AS_OF_COLUMNS]
+        assert _full[len(_pre_c1):] == list(MACRO_FWD_TEST_LEG_AS_OF_COLUMNS)   # 四欄確實附在最末
+        assert list(ledger.columns) in (_full, _pre_c1)
 
     def test_date_unique(self, ledger):
         assert ledger['date'].is_unique, ledger['date'][ledger['date'].duplicated()].tolist()

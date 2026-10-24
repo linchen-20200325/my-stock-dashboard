@@ -43,6 +43,7 @@ from shared.ttls import TTL_1HOUR
 from shared.staleness import monthly_periods_behind  # DL-f1-s12／s13：資料月過期閘（L0 SSOT）
 from shared.roc_calendar import roc_to_gregorian_year  # B3 SSOT-H2:民國→西元
 from shared.vix_validity import VIX_FETCH_MAX, vix_value_or_none  # 批 Z13(Q-r8b ②)
+from shared.na_drop_log import log_na_drop  # C1 DH-C1-NA-DROP-LOG:dropna 清理筆數 log(L0,純觀測)
 import math
 
 
@@ -184,7 +185,11 @@ def fetch_vix_block() -> dict:
             return {'_err_vix': 'yfinance empty'}
         if hasattr(_df_v.columns, 'nlevels') and _df_v.columns.nlevels > 1:
             _df_v.columns = _df_v.columns.get_level_values(0)
+        _df_v_pre_na = _df_v
         _df_v = _df_v.dropna(subset=['Close'])
+        # C1(DEC-077 第 2 點):NaN 清理筆數 log(清 0 筆不印);下方非有限值剔除的既有計數不動。
+        log_na_drop(_df_v_pre_na, _df_v, tag='macro_snapshot/fetch_vix_block',
+                    series='^VIX', subset=['Close'])
         # 批 V2(V1-n3 根源,三類 (c)):末筆 ±inf 不放行 → 落到下方既有失敗出口
         # (比照 fetch_us10y_block 批 D2 QA);中段 ±inf 比照 NaN 剔除。
         # 批 Z13(Q-r8b ②,客戶 2026-10-06):VIX ≤ 0／> VIX_FETCH_MAX 比照非有限值 —— 末筆走同一個
@@ -435,7 +440,10 @@ def compute_twii_bias(twii_local) -> dict | None:
         if _cc_b is None:
             print(f'[Bias] 找不到 Close 欄,現有欄位={list(_twii.columns)[:6]}')
             return None
-    _cs = _twii[_cc_b].dropna()
+    _cs_pre_na = _twii[_cc_b]
+    _cs = _cs_pre_na.dropna()
+    # C1(DEC-077 第 2 點):只記清掉幾筆／哪幾天(清 0 筆不印);乖離、as_of 不變。
+    log_na_drop(_cs_pre_na, _cs, tag='macro_snapshot/compute_twii_bias', series=f'^TWII:{_cc_b}')
     _n = len(_cs)
     if _n == 0:
         return None

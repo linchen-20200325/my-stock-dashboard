@@ -130,7 +130,11 @@ def _twii_close_and_asof(tw_raw: dict):
             return None, None
         s = pd.to_numeric(df[_col], errors='coerce')
         s.index = pd.DatetimeIndex(pd.to_datetime(df.index))
+        _s_pre_na = s
         s = s.dropna().sort_index()
+        # C1(DEC-077 第 2 點):只記清掉幾筆／哪幾天(清 0 筆不印);收盤與觀測日不變。
+        from shared.na_drop_log import log_na_drop
+        log_na_drop(_s_pre_na, s, tag='macro_fwd/_twii_close_and_asof', series=f'^TWII:{_col}')
         if s.empty:
             print('[macro_fwd] ^TWII 收盤欄全為 NaN')
             return None, None
@@ -154,7 +158,7 @@ def main(argv=None) -> int:
     from src.compute.macro import calc_traffic_light
     from shared.macro_forward_test_schema import DATE_SOURCE_LIVE
     from src.compute.macro.macro_forward_test import (
-        build_signal_row, compute_ruleset_hash, session_has_closed,
+        build_signal_row, compute_ruleset_hash, leg_as_of_from_inputs, session_has_closed,
     )
     import src.data.macro.macro_fwd_test_store as _store
     from src.services.jingqi_calc import compute_and_store_jingqi
@@ -221,11 +225,23 @@ def main(argv=None) -> int:
               f'「本輪實抓到的那一天」,不能回填別天 → 不寫列(exit 1)')
         return 1
     _date = _asof
+    # C1 DH-C1-FWD-LEG-ASOF(DEC-077 第 2 點):各輸入腿資料日 —— 純觀測,只寫進帳本四欄,
+    #   ⛔ 不參與任何判斷(上方所有提早結束檢查都已跑完)。函式本身每腿各自 try、不拋例外;
+    #   這裡再包一層:萬一整支失敗,四欄給 None、照樣寫列(觀測欄不得擋下帳本)。
+    try:
+        _leg_as_of = leg_as_of_from_inputs(
+            mkt_info=st.session_state.get('mkt_info') or {},
+            inst=inst, inst_date=bundle.get('inst_date'),
+            df_adl=df_adl, li_latest=df_li)
+    except Exception as _e_leg:  # noqa: BLE001 — 說出來;四欄 None,不影響其餘欄位與是否寫列
+        print(f'[macro_fwd] ⚠️ 各腿資料日取不到({type(_e_leg).__name__}: {_e_leg})→ 四欄記 None,照常寫列')
+        _leg_as_of = None
     row = build_signal_row(
         tl, date=_date, captured_at=_now.isoformat(timespec='seconds'),
         twii_close=_close, inputs_as_of=_asof,
         git_sha=_git_sha(), ruleset_hash=compute_ruleset_hash(),
         date_source=DATE_SOURCE_LIVE,
+        leg_as_of=_leg_as_of,
     )
     print(f"[macro_fwd] {_date} {row['icon']} {row['label']} | "
           f"health={row['health']} score={row['score']}/{row['max_score']} "

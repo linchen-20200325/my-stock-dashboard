@@ -274,6 +274,24 @@ _FGN_ALIASES = ("外資", "外資及陸資")
 # 原本 0.25 在 finmind_fut_oi / build_leading_fast 兩處 inline,抽此常數統一。
 _MTX_TO_TX_FACTOR = 0.25
 
+# ════════════════════════════════════════════════════════
+# C1 DH-C1-PCR-SRC(DEC-077 第 2 點,客戶 2026-10-24):每日「選PCR」的來源標記(純觀測)
+# ════════════════════════════════════════════════════════
+# 「選PCR」同一欄混著兩種來源:TAIFEX 官方 pcRatio(全市場)與 FinMind TXO 三大法人 OI 估算
+# (只算法人部位,是代理估算)。修前整表只有一個 `source` 字串,分不出**某一天**是哪一種。
+# 本欄只描述來源,⛔ **不是計分資格**:值、覆蓋順序、門檻、燈號、快取鍵、LI_VERSION、整表
+# `source` 字串、`dated_inputs.SRC_PCR` 全部不變;⛔ **任何下游不得讀 `_pcr_src`**
+# (守衛:tests/test_c1_observability.py 零讀者測試)。欄名底線開頭 ⇒ section_chips CSV 匯出
+# 規則(底線 = 內部 marker)自動排除,使用者下載的 CSV 不會多一欄。
+# 不變式:`_pcr_src` 為 None ⟺ `選PCR` 為 None。舊 pickle 快取沒有這一欄(不回填)。
+PCR_SRC_COL = "_pcr_src"
+PCR_SRC_TAIFEX = "TAIFEX"                       # TAIFEX pcRatio 官方值(全市場)
+PCR_SRC_FINMIND_EST = "FinMind-TXO-inst-est"    # FinMind TXO 三大法人 OI 估算(代理)
+from types import MappingProxyType as _MappingProxyType  # noqa: E402
+#: 來源種類(只描述來源,⛔ 不是計分資格)。
+PCR_SRC_KIND = _MappingProxyType({PCR_SRC_TAIFEX: "official",
+                                  PCR_SRC_FINMIND_EST: "proxy_estimate"})
+
 
 def _fgn_mask(df, tag=""):
     """回傳「外資」列的 boolean mask(白名單 isin + 多重身分別偵測)。
@@ -1148,6 +1166,8 @@ def build_leading_indicators(start, end, token="", progress_cb=None):
             "前五大留倉":lt.get("前五大"), "前十大留倉":lt.get("前十大"),
             "選PCR":pcr_dict.get(d), "外(選)":opt_data.get(d),
             "未平倉口數":lt.get("未平倉"), "韭菜指數":mtx_data.get(d),
+            # C1 DH-C1-PCR-SRC:本路徑 PCR 只有 TAIFEX 一種來源(純觀測,下游不讀)。
+            PCR_SRC_COL: (PCR_SRC_TAIFEX if pcr_dict.get(d) is not None else None),
         })
     df = pd.DataFrame(rows)
     # S-PROV-1 phase 18 v18.264 — provenance(多源 aggregator,記錄完整鏈)
@@ -1363,6 +1383,7 @@ def build_leading_fast(days=7, token=""):
 
     # ═══ 3. PCR + 外(選) 從 TXO 計算（FinMind 法人估算，無需 TAIFEX）
     pcr_dict = {}
+    pcr_src = {}   # C1 DH-C1-PCR-SRC:{ymd: PCR_SRC_*} —— 只描述來源,不進 known/target、不影響任何值
     opt_dict = {}
     if not df_txo.empty:
         agg = {}
@@ -1387,6 +1408,7 @@ def build_leading_fast(days=7, token=""):
         for dk, b in agg.items():
             if b["callV"] > 0:
                 pcr_dict[dk] = round(b["putV"] / b["callV"] * 100, 1)
+                pcr_src[dk] = PCR_SRC_FINMIND_EST
             opt_dict[dk] = round((b["extBC"] - b["extSC"] - b["extBP"] + b["extSP"]) / 10)
         print(f"[LI-v8] PCR(FinMind估算)={len(pcr_dict)} 天  外(選)={len(opt_dict)} 天")
 
@@ -1569,6 +1591,7 @@ def build_leading_fast(days=7, token=""):
         try:
             pcr_taifex = taifex_pcr(s_ymd, e_ymd)
             pcr_dict.update(pcr_taifex)
+            pcr_src.update(dict.fromkeys(pcr_taifex, PCR_SRC_TAIFEX))   # C1:同一批鍵改標 TAIFEX
             print(f"[LI-v8] PCR(TAIFEX精確) {len(pcr_taifex)} 天 → 覆蓋 FinMind 估算")
         except Exception as _pe:
             print(f"[LI-v8] PCR(TAIFEX)略過: {_pe}")
@@ -1703,6 +1726,8 @@ def build_leading_fast(days=7, token=""):
             "韭菜指數":   taifex_leek.get(d) if taifex_leek.get(d) is not None else _leek,
             "融資餘額":   margin_dict.get(d, {}).get('融資餘額'),
             "融券餘額":   margin_dict.get(d, {}).get('融券餘額'),
+            # C1 DH-C1-PCR-SRC(純觀測,⛔ 下游不讀):選PCR 為 None ⇒ 一律 None(不變式)。
+            PCR_SRC_COL:  (pcr_src.get(d) if pcr_dict.get(d) is not None else None),
         })
     # ── v19.172 P0a-③:OI 同當量 / 一致性 匯總 log(§1 不靜默,但不刷屏)──────
     if _oi_partial_days:

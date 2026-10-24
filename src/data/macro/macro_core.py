@@ -56,6 +56,7 @@ from shared.signal_thresholds import (  # v18.242 W3b SSOT consume
 from shared.data_categories import CAT_US_MACRO  # FE-20:@monitored category SSOT
 from shared.fetch_monitor import monitored  # v19.96 批次4 Item1:fetcher 自我登錄
 from shared.fail_cooldown import FAIL_COOLDOWN_SEC as _FAIL_COOLDOWN_SEC  # Q2-r2 2026-09-27
+from shared.na_drop_log import log_na_drop  # C1 DH-C1-NA-DROP-LOG:dropna 清理筆數 log(L0,純觀測)
 
 __version__ = "1.0.0"
 
@@ -541,7 +542,10 @@ def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
         result = d["chart"]["result"][0]
         ts = result["timestamp"]
         close = result["indicators"]["quote"][0]["close"]
-        s = pd.Series(close, index=pd.to_datetime(ts, unit="s"), dtype=float).dropna()
+        _s_pre_na = pd.Series(close, index=pd.to_datetime(ts, unit="s"), dtype=float)
+        s = _s_pre_na.dropna()
+        # C1(DEC-077 第 2 點):只記清掉幾筆／哪幾天(清 0 筆不印);回傳、快取、退避不變。
+        log_na_drop(_s_pre_na, s, tag='macro_core/_fetch_yf_close_base', series=str(ticker))
         s.name = ticker
         if s.empty:
             # Q2-r2(2026-09-27,§1.A-3(a)):HTTP 200 但收盤全 null → 等同抓取失敗,
@@ -687,7 +691,11 @@ def fetch_yf_ohlcv(ticker: str, range_: str = "9mo", interval: str = "1d") -> pd
             "Close":  q.get("close"),
             "Volume": q.get("volume"),
         }, index=ts)
+        _df_pre_na = df
         df = df.dropna(subset=["Close"])
+        # C1(DEC-077 第 2 點):只記清掉幾筆／哪幾天(清 0 筆不印);回傳、退避不變。
+        log_na_drop(_df_pre_na, df, tag='macro_core/fetch_yf_ohlcv',
+                    series=f'{ticker}:{range_}:{interval}', subset=["Close"])
         # S-PROV-1 phase 16 v18.262 — provenance(schema-additive)
         if not df.empty:
             df["source"] = f"Yahoo:chart:{ticker}:{range_}:{interval}"
