@@ -109,17 +109,17 @@
 | 項目 | 現況（C1 合併後） |
 |---|---|
 | main | `37cf87e6`（完整 `37cf87e6103a72cac45d812fc633ab641f9a6b7b`；#913 C1 squash merge；其前 `1c8c1415`＝#912）。cron 會推進 tip，**以 GitHub 為準** |
-| #913（C1） | 已 squash 合併（https://github.com/linchen-20200325/my-stock-dashboard/pull/913）；PR head `29cd7f3e`。PR CI：PR head 29cd7f3e：Fast checks（job 120785311814）success、Slow tests AppTest（job 120788338331）success；run 40064619133。QA：四輪、共五組獨立 QA（A／B／C／D／E） |
+| #913（C1） | 已 squash 合併（https://github.com/linchen-20200325/my-stock-dashboard/pull/913）；PR head `29cd7f3e`。PR CI：PR head 29cd7f3e：Fast checks（job 120785311814）success、Slow tests AppTest（job 120788338331）success；run 40064619133。QA：四輪、共五組獨立 QA（A／B／C／D／E）；最終 head 29cd7f3e（只改測試與 docstring）由總管讀 diff＋PR CI 驗證，未再派獨立 QA |
 | main 驗證 | main CI：main push run 40066433398（PR Check），撰寫時進行中，待總管回填結論。⚠️ 依 `PROJECT_RULES.md` 第 7 節，**main verification（main SHA＋main CI conclusion）在結論回填前不成立** |
 | open PR | 本 C1 後五 SSOT 同步 PR（docs-only）由總管開立 —— **以 GitHub 為準** |
 | Current Task | **無進行中實作**。C1 三項（`DH-C1-NA-DROP-LOG`、`DH-C1-PCR-SRC`、`DH-C1-FWD-LEG-ASOF`）全部 done（BACKLOG 5.1.10） |
 | C1 結果摘要 | 零投資輸出變更：before／after（還原鏈到 `1c8c1415`）＋四輪五組獨立 QA 驗證下游全部相同；已知、接受的唯一差異＝`src/ui/tabs/tab_macro.py` 約 :463 stdout log「有效欄=N」多 1（只影響 log，`DH-TAB-MACRO-LOG-COUNT`）。⚠️「11 處即全部 production ^TWII／VIX `dropna`」＝兩組盤點交叉，非形式化窮舉。限制（未實測）：Streamlit Cloud、GH Actions cron、Windows cp950 未實機跑；外部 API 用 mock |
-| **唯一 Next Safe Action** | **停下等客戶裁示**：依 DEC-077 第 5 點向客戶回報 C1 結果（實際完成內容、PR／main SHA、CI／QA、是否確認零投資輸出變更、新發現、C2 前仍需裁示事項）。⛔ **不自動進 C2**；⛔ C1′ 仍等 DEC-076 ①；任何送題須附總管推薦方案 —— **送題，不施工** |
+| **唯一 Next Safe Action** | 依序：**(i)** 確認並回填 main CI run 40066433398 結論（五 SSOT 佔位句）；**(ii)** 合併本 SSOT PR。⚠️ main CI 若失敗 ⇒ 依 `PROJECT_RULES.md` 16.4 **停手**（CI／QA 真實失敗且下一修法未授權 → 停手請示），C1 各列 done 不成立。**(iii)** 之後才是 **停下等客戶裁示**：依 DEC-077 第 5 點向客戶回報 C1 結果（實際完成內容、PR／main SHA、CI／QA、是否確認零投資輸出變更、新發現、C2 前仍需裁示事項）。⛔ **不自動進 C2**；⛔ C1′ 仍等 DEC-076 ①；任何送題須附總管推薦方案 —— **送題，不施工** |
 | 待客戶裁示 | `DEC076-CONFIRM` ①（指標危險度口徑；**C1′ 等它**）②（⚡ 行動例示射程）；**`PROXY-SEMANTICS`**（BIAS240／PCR／台灣 PMI 一起研究、一起裁示；⛔ 不得先立通則）；**`CV1-DR-11`**（`PROJECT_RULES.md` 16.1／DEC-062 Q5 vs DEC-077 3B，C2 前併 `PROXY-SEMANTICS`）；**C2 Decision Gate**（VN1-PG「Risk Cap 輸入有效性批」）；**`RC-VISIBILITY`**（C2 後的 UI Decision Gate；目前不恢復顯示）；另 `DH-BADGE-RERUN-SEMANTICS`、`DH-EXPORT-LABEL-READING` 等 —— 完整清單見 `docs/BACKLOG.md` §F「Decision Gates」列 |
 | 新發現（只登記、未施工） | `DH-RS-PREP-DROPNA`、`DH-NONUTF8-PRINT`、`DH-LI-ASOF-SEMANTICS`、`DH-TAB-MACRO-LOG-COUNT`（BACKLOG 5.1.10） |
-| 下一階段 Model／Effort | 下一階段＝客戶裁示後的送題研究（`PROXY-SEMANTICS`／C2 Gate），**不施工**：建議 **High**（⚠️ AI 總管建議、**非客戶建議**；理由：涉 PIT／Risk Cap／投資語意，`PROJECT_RULES.md` 9.1 High 清單；與「#910 合併後」段「重評送題＝High」同型）。依 `PROJECT_RULES.md` 第 15 節第 6 點：建議只是參考，新對話須依第 9.0 節重新判斷，不得假設已切換 |
+| 下一階段 Model／Effort | 下一階段＝客戶裁示後的送題研究（`PROXY-SEMANTICS`／C2 Gate），**不施工**：建議 **High**（⚠️ 撰寫組依 Context Loss Check F 項補列、AI 總管確認（理由：C2 Decision Gate 涉 proxy／estimated 資料契約與計分資格等投資語意）；**非客戶建議**）。依 `PROJECT_RULES.md` 第 15 節第 6 點：建議只是參考，新對話須依第 9.0 節重新判斷，不得假設已切換 |
 | 禁止事項 | 沿用「DEC-077 裁示後」段「禁止事項」列，**效力不變**：C1 已完成；⛔ C1′／C2／VN1-PG 仍禁止；⛔ 大型研究／改投資公式、權重、門檻／刪舊 UI／刪 branch／不可逆清理／新資料來源；⛔ 研究發現各列與本次新登記各列本輪不順手修 |
-| Production | `PRODUCTION_WRITE_APPROVED=False`（`shared/risk_cap_history_policy.py`，撰寫組 2026-10-24 grep 實查）**未動**；Daily Schedule **NOT APPROVED**（DEC-066 F）。既有帳本 cron 合併後會自然把四欄 `*_as_of` 寫進 `data_cache/macro_forward_test/signals.parquet` —— **既有寫入多了四欄，不是新的 production write**；細節見 `docs/PROJECT_STATE.md` §29.5 |
+| Production | `PRODUCTION_WRITE_APPROVED=False`（`shared/risk_cap_history_policy.py`，撰寫組 2026-10-24 grep 實查）**未動**；Daily Schedule **NOT APPROVED**（DEC-066 F）。既有帳本 cron 合併後預期會（程式路徑讀碼成立；GH Actions cron 未實機驗證）把四欄 `*_as_of` 寫進 `data_cache/macro_forward_test/signals.parquet` —— **既有寫入多了四欄，不是新的 production write**；細節見 `docs/PROJECT_STATE.md` §29.5 |
 | 硬期限 | `DH-CALIB-CRON` 須在 **2027-01-01** 前修正或暫停（BACKLOG 5.1.8） |
 | 回報模式 | 維持 Silent Autonomous Cruise；C1 整批完成＝DEC-077 第 5 點的回報時點 |
 | 接手必讀 | 先跑 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate，再讀五個 SSOT（`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、本檔、`docs/PROJECT_STATE.md`）；上位 `CLAUDE.md` 同樣須讀 |
