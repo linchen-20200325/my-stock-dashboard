@@ -5,7 +5,7 @@
 > **請示格式**：依 `PROJECT_RULES.md` 第 4 節 —— 商業與功能語言＋總管推薦方案＋具體原因，可一鍵決策；已確認 bug、只有一個安全修法者**不包裝成裁示題**（反向禁令）。
 > 📌 **2026-10-18 裁示（append-only；上下文一字未改）**：五題已由客戶裁示，見 **DEC-062**／DR-2026-10-18-3；各題下方加註，第 6 節為裁示後的建議小批次（建議，不是授權）。
 > ⛔ **本檔不是實作授權**。各題裁示後，施工仍須客戶指派批次（`CLAUDE.md` §-1；DEC-057「不要開始 vNext 1.0 implementation。」）。
-> 📌 **2026-10-24 追加（append-only；上文與第 1～6 節一字未改）**：第 7 節收錄 **`PROXY-SEMANTICS`／C2 Decision Gate**（BIAS240／PCR／台灣 PMI 的 proxy／estimated 資料契約與計分資格；DEC-077 第 3 點 B、第 5 點）—— 研究整理、**待客戶裁示**，⛔ 非授權；所有推薦皆為「總管推薦，待客戶裁示」。
+> 📌 **2026-10-24 追加（append-only；上文與第 1～6 節一字未改）**：第 7 節收錄 **`PROXY-SEMANTICS`／C2 Decision Gate**（BIAS240／PCR／台灣 PMI 的 proxy／estimated 資料契約與計分資格；DEC-077 第 3 點 B、第 5 點）—— 研究整理、~~**待客戶裁示**，⛔ 非授權~~ **已裁示 DEC-080**（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080）；所有推薦皆為「總管推薦，待客戶裁示」（送題時狀態）。C2a 已指派；C2b 為新的待裁示 Gate（§7.7）。
 
 ## 1. 摘要
 
@@ -181,13 +181,16 @@
 | **1.0-B4** 線框送審 | 依 Q1-B 範圍出文字線框送客戶拍板（DEC-003） | **Medium** | 拍板前不寫 1.0 UI code |
 | 後續批 | 線框核准後的 UI 實作（今天頁先採「從今天開始記錄」、彙總燈依 Q5-A 等），逐批送 | 依批而定 | 線框核准後；每批 Effort Check |
 
-## 7. `PROXY-SEMANTICS`／C2 Decision Gate（2026-10-24；研究整理，**待客戶裁示**，⛔ 非授權）
+## 7. `PROXY-SEMANTICS`／C2 Decision Gate（2026-10-24；研究整理，~~**待客戶裁示**，⛔ 非授權~~ **已裁示 DEC-080**）
+
+> ✅ **狀態：已裁示 2026-10-24，DEC-080**（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080）。客戶裁示逐字全文見 `docs/DECISIONS.md` **DEC-080**；本節 7.1～7.3、7.6 的研究證據**原文不動**，7.4 各題加「✅ 已裁示（DEC-080）」摘要，7.5 加現行禁止範圍，新增 **7.7 C2b Decision Gate**（新的待裁示 Gate，C2a 取得實際觀測結果後送）。⚠️ 下方各處「總管推薦，待客戶裁示」字樣是**送題當時**的狀態紀錄，自 DEC-080 起以裁示為準。
 
 > **日期**：2026-10-24｜**性質**：DEC-077 第 3 點 B／第 5 點要求的 C2 前置研究，**只研究、只整理題目，不實作** —— 不改產品 code、tests、workflow、data、公式、門檻、權重、資料來源。
 > **承載處**：`docs/BACKLOG.md` `PROXY-SEMANTICS`／C2 列（5.1.10）原本沒有獨立的 Decision Gate 檔；本節沿用本檔（vNext 1.0 Decision Gate 承載檔）收錄 C2 Gate 全文。**本檔第 1～6 節一字未改**；本節與 vNext 1.0 的 VN1-Q1～Q5 是不同題組。新發現登記在 `docs/BACKLOG.md` 5.1.11；耐久摘要在 `docs/PROJECT_STATE.md` §31；現況在 `docs/HANDOFF.md` §0。
 > **研究方法**（`CLAUDE.md` §-2 規則 4／6）：三組獨立唯讀研究，基準 main `f48b30bf`、量測日 2026-10-24 —— **A 組**：程式路徑盤點（讀碼＋grep）；**B 組**：治理文件盤點（DECISIONS／BACKLOG／HANDOFF／PROJECT_STATE／PROJECT_RULES／Data Health 稽核與計畫檔）；**C 組**：紅隊行為實證（mock session 實際呼叫 production 函式 `build_engine_inputs` → `run_rule_engine` → `compute_and_lock_risk_cap` → `get_macro_state` → `build_allocation_decision`，檔案只寫進 scratch；既有 pytest 子集 z64／z65／z66／z66b／i2_bias／c1_observability **571 passed**）。三份原始報告留在總管 scratchpad、**不入庫**；本節只收錄事實與出處。
 > **標記**：「**兩組交叉**」＝至少兩組獨立得到同一事實；「**單組**」＝只有一組看到（只能當待驗事項，`CLAUDE.md` §-2 規則 6）。行號為 2026-10-24 `f48b30bf` 實測，會過期。
 > ⛔ **本節任何方案都不是 Approved／已裁示**；所有推薦一律是「**總管推薦，待客戶裁示**」。客戶裁示前，DEC-077 第 3 點 B「不得先建立『proxy 一律不能計分』或『proxy 一律可以計分』的通則」與 `CV1-DR-11` 的暫行讀法照舊有效。
+> 📌 上一行為送題時狀態；自 2026-10-24 起**已裁示（DEC-080）**：資料身分／計分契約採方案 2；`CV1-DR-11` 由 DEC-080 裁示、暫行讀法退場；DEC-077 3B 仍有效（DEC-080 為逐指標裁示，未立通則）（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080）。
 
 ### 7.1 現行真實契約（研究結論，非裁示）
 
@@ -297,21 +300,29 @@
 
 ### 7.4 需客戶裁示的題目
 
-本次共 6 個待裁示問題。（商業語言；推薦一律「總管推薦，待客戶裁示」）
+~~本次共 6 個待裁示問題。~~ **6 題已於 2026-10-24 裁示（DEC-080）**（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080）。（商業語言；推薦一律「總管推薦，待客戶裁示」—— 送題時原文，保留）
 
 1. **每筆資料要怎麼標示「官方、轉載、估算、代理、沿用」，以及哪些可以算分？（資料身分規則：方案 1／2／3，見 7.3）** —— 總管推薦：**方案 2（分層兩軸）**。理由：能分清「同一個量的近似值」和「另一個量的替代品」，必要指標不會因此常態性失效，也能先觀察再改分數。
+   - ✅ **已裁示（DEC-080 第 1 點）**：**採方案 2**。provenance 與 freshness 分開表示；provenance 至少區分 official／secondary／estimated／proxy／unavailable；freshness 至少區分 fresh／stale／carried_forward；同時保留 `as_of` 與 `source_id`；⛔ 不得把 data exists、fresh、displayable、scoring eligible、Risk Cap eligible 壓成同一 boolean。`CV1-DR-11` 隨本題裁示。
 2. **年線乖離（BIAS240）在歷史不足、用較短均線估算時，要不要退出系統風險上限的計分？** —— 總管推薦：**退出**（列「未評估：歷史不足、估算」；16 燈照樣顯示並標「估算」）。理由：它是選用指標，退出不會讓上限算不出來；而估算值已實證能讓上限從 40% 掉到 20%，反過來也可能讓上限被放寬。
+   - ✅ **已裁示（DEC-080 第 2 點）**：**不參與 Risk Cap 計分**；可顯示、明確標示 estimated／歷史不足；對 Risk Cap 視為 Optional 未評估；⛔ 不得因此阻斷整個 Risk Cap。⚠️ 計分實際改變屬 **C2b**（未經另行裁示不得開始）；16 燈是否同步仍等 DEC-076 ①（客戶明令不併入本批）。
 3. **PCR 在期交所抓不到、改用「三大法人未平倉」估算時，要不要退出計分？** —— 總管推薦：**退出**（只顯示、標「估算」）。理由：那是另一個量，原門檻是照期交所全市場 PCR 訂的。
+   - ✅ **已裁示（DEC-080 第 3 點）**：**不參與 Risk Cap 計分**；可顯示、明確標示 `proxy_estimate`；只有符合正式 PCR 契約的資料才可用原 PCR 門檻計分；⛔ 不得把不同量直接套用官方 PCR 的既有 threshold。⚠️ 計分實際改變屬 **C2b**。
 4. **台灣 PMI 來自第三方轉載網站、或八個來源都失敗時用的「沿用快照」，可以算數嗎？** —— 總管推薦：**可以，但畫面要寫出來源與「沿用」**；超出發布期就算「無法評估」（不產生新上限）。理由：PMI 是必要指標，一律排除會讓上限常常算不出來。
+   - ✅ **已裁示（DEC-080 第 4 點）**：⛔ 不可套用 blanket「proxy 不計分」規則；data.gov.tw／國發會等正式來源修正為正確 provenance；**同一正式序列**的 secondary／republished value 可在契約允許下滿足 Required Core、須揭露來源；`carried_forward` 只允許在**正式定義**的發布期／freshness window 內暫時滿足 Core 並顯示「沿用」，超過 → unavailable → Core 無效 → 不產生新 Risk Cap。⛔ 不得自行發明發布期長度；repo 若無正式定義，先提具證據規格／Decision Gate（`docs/BACKLOG.md` `DH-PMI-PUBLICATION-WINDOW-SPEC`）。
 5. **上限沿用前一份（最多 7 天）時，要不要在畫面寫明「沿用 N 天前的上限＋最舊資料日期」？（不改計算）** —— 總管推薦：**要**。理由：現在沿用時的實際資料可能已超過 10 天，畫面看不出來。⚠️ 上卡屬欄位增減，須先出線框（與 `RC-VISIBILITY` 一起送）。
+   - ✅ **已裁示（DEC-080 第 5 點）**：**要揭露**（沿用的是 N 天前的 Risk Cap、本次判斷中最舊一筆有效資料日期、必要的 freshness／carried-forward 狀態）。屬 `RC-VISIBILITY` UI 規格：先出線框／文字草稿，⛔ 未經客戶確認不得直接改正式畫面。
 6. **要不要先做一版「只記錄資料來源與是否可算分、不改任何分數」的觀察版，看過實際結果再決定改分數？（C2a shadow → C2b）** —— 總管推薦：**要**。理由：先看估算／轉載實際出現的頻率與影響，再決定改分數，風險最小、可隨時回退。
+   - ✅ **已裁示（DEC-080 第 6 點）**：**先 C2a，再 C2b**。C2a＝observability／contract implementation（記 provenance、freshness、as_of、eligibility；建立 policy table／schema；⛔ 不得改任何 Risk Cap 分數、門檻、權重或投資輸出）；C2a 完成並取得實際觀測結果後，再送 **C2b Decision Gate**（見 7.7）；C2b 未經客戶另行裁示不得開始 scoring 行為修改。
 
-> 📌 相關但**不在本題組**：`DEC076-CONFIRM` ①（指標危險度口徑）②（⚡ 行動例示射程）**仍未裁示**；第 2 題「16 燈是否同步不計分」與 ① 直接相關，C1′ 仍等 ①。`CV1-DR-11`（`PROJECT_RULES.md` 16.1／DEC-062 Q5 vs DEC-077 3B）隨第 1 題一併裁示。
+> 📌 相關但**不在本題組**：`DEC076-CONFIRM` ①（指標危險度口徑）②（⚡ 行動例示射程）**仍未裁示**（DEC-080 額外邊界：維持 pending、分開處理，不與 C2 混批（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080））；第 2 題「16 燈是否同步不計分」與 ① 直接相關，C1′ 仍等 ①。`CV1-DR-11`（`PROJECT_RULES.md` 16.1／DEC-062 Q5 vs DEC-077 3B）隨第 1 題一併裁示。
 
 ### 7.5 仍禁止施工（裁示前，⛔）
 
-- C1′；C2 實作（**含 C2a**）；VN1-PG production write（`PRODUCTION_WRITE_APPROVED=False` 不變）；
-- Risk Cap 公式／門檻／權重；`is_proxy` 語意修正；新增或替換 production 資料來源；
+> 📌 **2026-10-24 DEC-080 後現行範圍**（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080）（下列原文保留為裁示前紀錄）：**C2a 已指派**（observability／contract implementation；零投資輸出變更）。仍禁止：C2b（scoring 行為修改，須另行裁示）、C1′、DEC-076 ①②、VN1-PG production write（`PRODUCTION_WRITE_APPROVED=False`）、Daily Schedule、Risk Cap 公式／門檻／權重、Required Core 數量、新增或替換 production 資料來源、`RC-VISIBILITY` 正式 UI 改動（須線框／文字草稿先經客戶確認）。PMI provenance 修正（DEC-080 第 4 點）屬 C2a 的資料契約層記錄、計分行為不得改變；若修正會改變任何計分 → 延到 C2b。完整 ⛔ 清單見 `docs/BACKLOG.md` 5.1.10 C2a 列。
+
+- C1′；C2 實作（~~**含 C2a**~~ C2a 已由 DEC-080 指派；C2b 仍禁止（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080））；VN1-PG production write（`PRODUCTION_WRITE_APPROVED=False` 不變）；
+- Risk Cap 公式／門檻／權重；~~`is_proxy` 語意修正~~（DEC-080 第 4 點：正式來源修正為正確 provenance，屬 C2a 資料契約層、不得改計分（2026-10-24 有意識的更新，不是漏刪，決策者 客戶；DEC-080））；新增或替換 production 資料來源；
 - `RC-VISIBILITY` 的任何 UI 改動（須線框草稿先行，`PROJECT_RULES.md` 第 4 節 #7）。
 
 ### 7.6 證據與限制（`CLAUDE.md` §-2 規則 6）
@@ -320,3 +331,12 @@
 - 標「單組」者（7.1 #3、#6a、#6c、#7b、#8a、#8c、#9a、#9c、#10、#11、#12 前半、#13）只能當待驗事項，不得當施工前提。
 - 「無讀者」「只有這些路徑」類全稱句來自 grep，屬單組或兩組窮舉宣稱，非形式化證明。
 - 本節文字由單一撰寫組依總管規格整理，未經第二組逐字複驗；方案比較與推薦是總管判斷，**不是客戶裁示**。
+
+### 7.7 C2b Decision Gate（新的待裁示 Gate；2026-10-24 新增，append-only）
+
+> 依 DEC-080 第 6 點新增。**狀態：未送題（blocked：等 C2a 完成並取得實際觀測結果）**；⛔ 非授權。
+
+- **送題時點**：C2a 合併＋main CI 綠＋取得實際觀測結果（例：BIAS240 估算、PCR `proxy_estimate`、PMI secondary／carried_forward 在 production 的實際出現頻率與對 Risk Cap 的影響）之後。
+- **題目範圍（預定，待送題時定稿）**：依 DEC-080 已定方向（第 2、3、4 點）實際套用 eligibility、改變 Risk Cap 計分的時點與方式；`RISK_CAP_RULESET_VERSION` 升版與既有 v2 快照 7 天沿用空窗（7.3 末段推論，未實測）；揭露文字。
+- ⛔ C2b 未經客戶另行裁示不得開始 scoring 行為修改；⛔ 不得與 production write、`RC-VISIBILITY` UI 改動同一 PR（7.2 Q6）。
+- PMI 發布期／freshness window 的正式定義若仍未確認，須先依 `docs/BACKLOG.md` `DH-PMI-PUBLICATION-WINDOW-SPEC` 送具證據規格／Decision Gate，⛔ 不得在 C2b 自定數字。
