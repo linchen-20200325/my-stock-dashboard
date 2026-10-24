@@ -483,6 +483,10 @@ def _rel(file_path) -> str:
 def c1_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回 C1 之前的寫法（無 pair 則原樣；只套一次）。"""
     rel = _rel(file_path)
+    # 📌 C2a-2（DEC-080，2026-10-24；有意識的接鏈，⛔ 不是漏改）：C2a-2 改了 `risk_cap_apply.py`（被 dec074／vn1store／
+    #   c21／z66b…等舊批次鏈管）⇒ 最新的那一批先換回（鏈頭往前接一節；`c2a_revert_for` 只套一次；⛔ 不動本表與 C1_BASE_SHA）。
+    from tests.test_c2a_risk_cap_shadow import c2a_revert_for
+    code = c2a_revert_for(rel, code)
     pairs = C1_REVERT_PAIRS.get(rel, ())
     if not pairs:
         return code
