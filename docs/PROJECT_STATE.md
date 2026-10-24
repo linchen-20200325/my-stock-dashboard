@@ -484,7 +484,7 @@
 | 子批 | 內容（摘要） | 為何這樣切 | 狀態 |
 |---|---|---|---|
 | **C1**（DH-only） | ① 既有缺值清理路徑（`dropna` 類）記錄筆數（`DH-C1-NA-DROP-LOG`；承接 `VN1-PG-L-TWII-DROPNA-LOG`）；② PCR 每日來源／來源類型欄（`DH-C1-PCR-SRC`；`DH-PCR-PROXY` 前置）；③ 前進式驗證帳本 per-leg as_of 欄（`DH-C1-FWD-LEG-ASOF`；既有 `date`／`inputs_as_of` 語意不變） | 只加「從哪來、哪一天、清掉多少」的可觀測性 metadata，**可做到零投資輸出變更**；帳本無 production reader（`macro_fwd_test_store.load_signals` 只被 `append_signals` 去重） | 已指派（DEC-077）、未開工 |
-| **C1′**（指標危險度子批） | 16 燈依 `shared/freshness_policy.py` 套日期閘（僅限有可追溯日期且有核准規則之燈）、`bias_240` 燈估算值、五桶 `fut_net` 燈凍結一致性、`DH-REFRESH-STALE` 燈號側、`DH-JINGQI-STALE-SESSION` 文案、出口燈 freshness | **灰掉燈號會改變「最差燈／N/M」**＝改指標危險度輸出 ⇒ 不屬 C1；且口徑（worst-of vs 觸發計數）待 DEC-076 ① | 等 DEC-076 ① |
+| **C1′**（指標危險度子批） | 16 燈依 `shared/freshness_policy.py` 套日期閘（僅限有可追溯日期且有核准規則之燈）、`bias_240` 燈估算值、五桶 `fut_net` 燈凍結一致性、`DH-REFRESH-STALE` 燈號側、`DH-JINGQI-STALE-SESSION` 文案、出口燈 freshness（撰寫組歸類，研究檔未明列於 C1′） | **灰掉燈號會改變「最差燈／N/M」**＝改指標危險度輸出 ⇒ 不屬 C1；且口徑（worst-of vs 觸發計數）待 DEC-076 ① | 等 DEC-076 ① |
 | **C2**（VN1-PG「Risk Cap 輸入有效性批」） | `VN1-PG-VIX-ASOF`、`VN1-PG-PIT-CONSISTENCY`（吸收 `DH-REFRESH-STALE` Risk Cap 側；DEC-070 Q1／Q2）、`VN1-PG-VETO-TRACE`（Sheet 表頭變更宜在首寫前）、`VN1-PG-L-PIT-GAPS` (a)(b)(c)、外資期貨凍結值 Risk Cap 側、`DH-BIAS240-EST`／`DH-PCR-PROXY` 計分准入＋台灣 PMI proxy 語意 | 會改 Risk Cap 計分准入／PIT 判斷；BIAS240／PCR／PMI 合併研究、一次裁示，`RISK_CAP_RULESET_VERSION` 至多升一次 | 另開 Decision Gate |
 | 獨立 | `DH-LAMP-STALE`(b)（需線框，併資料中心）、margin 無 as_of（L1 資料契約，批 3 性質）、`DH-CALIB-CRON`（2027-01-01 期限） | 與批 2 邊界無耦合 | 見 BACKLOG |
 
@@ -498,7 +498,7 @@
 
 ### 30.3 位階／16 燈／健康分與 Risk Cap 相互獨立
 
-- 市場位階、指標危險度 16 燈、健康分與 Risk Cap 的程式路徑**互相獨立**；Risk Cap 缺失不會讓位階／16 燈失效，反之亦然（與 DEC-076 第 8、10 節「不得合成單一分數」「Risk Cap 保持自己的既有語意」同向）。
+- 市場位階、指標危險度 16 燈、健康分與 Risk Cap 的程式路徑**互相獨立**；Risk Cap 缺失不會讓位階／16 燈失效；**計算路徑互相獨立；顯示層例外見 30.4**（健康分未評估時新 UI 看不到 Risk Cap）（與 DEC-076 第 8、10 節「不得合成單一分數」「Risk Cap 保持自己的既有語意」同向）。
 
 ### 30.4 Risk Cap visibility 為 #910 副作用（`RC-VISIBILITY`）
 
@@ -517,4 +517,7 @@
 ### 30.7 其他研究發現（只登記、未施工；明細見 BACKLOG 5.1.10）
 
 - 外資期貨凍結值處理不一致（`DH-FUT-FROZEN-MISMATCH`）；出口燈無資料月新鮮度閘（`DH-EXPORT-FRESHNESS`）且「出口 90 天 stale cache」文件不實（`DH-AUDIT-EXPORT-CACHE-DOC`）；schema version 規則 vs 預告註解衝突（併 `DH-FT-SCHEMA-ASOF`：C1 只加欄 ⇒ 依規則不 bump；本檔 §27「`ruleset_hash` 二次切換風險」一句據此在 C1 範圍內不成立，若日後改 `inputs_as_of` 語意才會發生）；修復計畫 §2.2 與程式不符（`DH-PLAN-22-DRIFT`）；16 燈中 margin／news_systemic／health 無可用 as_of（`DH-LAMP-NO-ASOF`）；`fetch_adl` docstring 不實（併 `DH-ADL-PROXY`）；`DH-MACRO-FWD-ASOF` 原動機變弱（#910 後 jqavg／health 恆 None）。
-- **GitHub 實況（總管實查；撰寫組 `gh api` 複查 CI run）**：main `649f7393`（#911）；Open／Draft PR 0；main CI 兩個 run success（見 DEC-075 2026-10-24 附註）⇒ **DEC-075 第 4 點前置之 main verification 已成立**。遠端分支含 main 共 8 條（#910 head `ccr-310717b7-37xwl6` 已不在，多了本對話分支 `claude/gracious-hypatia-1cjuh8`；量測日 2026-10-24，會過期）。`PRODUCTION_WRITE_APPROVED: bool = False`（`shared/risk_cap_history_policy.py`）。⚠️ 未驗：squash 後 main 樹是否等同 `9714d0b3`。
+
+### 30.8 GitHub 實況（總管實查；撰寫組 `gh api` 複查 CI run；量測日 2026-10-24，會過期）
+
+- main `649f7393`（#911）；Open／Draft PR 0；main CI 兩個 run success（見 DEC-075 2026-10-24 附註）⇒ **DEC-075 第 4 點前置之 main verification 已成立**。遠端分支含 main 共 8 條（#910 head `ccr-310717b7-37xwl6` 已不在，多了本對話分支 `claude/gracious-hypatia-1cjuh8`；量測日 2026-10-24，會過期）。`PRODUCTION_WRITE_APPROVED: bool = False`（`shared/risk_cap_history_policy.py`）。⚠️ 未驗：squash 後 main 樹是否等同 `9714d0b3`。

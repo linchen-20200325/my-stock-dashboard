@@ -946,12 +946,12 @@ High
   1. **指標危險度的定義**：客戶第 8 節原文「指標危險度：目前多少危險條件／門檻被觸發。」；`docs/PROJECT_STATE.md` §22.3 記錄的**現行程式**為 16 盞燈 `shared/macro_buckets.py::BUCKET_DANGER_SPECS` 經 `src/ui/tabs/tab_macro_v2.py::overall_verdict` 取 **worst-of**。「多少條件被觸發」若讀成「觸發計數」即與 worst-of 不同口徑；若只是描述性說法則無差異。屬資料／投資語意（`PROJECT_RULES.md` 第 4 節 #2），⛔ 不得自行改口徑，待客戶確認讀法。
   2. **⚡ 行動例示的射程**：見上表第 6 節 ⚡ 列（`CV1-FU-02`／`CV1-FU-03` 未裁示）。
 - **不是什麼**（⛔）：不是動工授權；不是線框核准（DEC-017 五頁仍為現行實作依據，直到新線框經 DEC-003 拍板，同 DEC-072）；不定義台股趨勢／國際趨勢的公式（`VN1-MT-TREND-DEF` 不變）；不核准任何新資料源、公式、門檻、權重或綜合分數；不改 Risk Cap；不授權改或刪舊 UI（DEC-019、DEC-020）；不授權刪 branch（DEC-012）。
-- 📌 **2026-10-24 附註（append-only；本條上文一字未改；不是新 DEC；有意識的更新，不是漏刪，決策者 客戶）**：客戶同日 Freeze 禁止清單中的「新 Batch」，**僅對 Data Health C1 解除**（DEC-077 第 1 點）；其餘禁止項（VN1-PG、大型研究、改投資公式／權重／門檻、刪舊 UI、刪 branch、不可逆清理、新資料來源、開 production write／Daily Schedule）**不變**。上方「待客戶確認」第 1 點（指標危險度口徑）仍未裁示，DEC-077 的 C1′ 子批**等待其結果**。
+- 📌 **2026-10-24 附註（append-only；本條上文一字未改；不是新 DEC；有意識的更新，不是漏刪，決策者 客戶）**：客戶 2026-10-23 Freeze 禁止清單中的「新 Batch」，**僅對 Data Health C1 解除**（DEC-077 第 1 點）；其餘禁止項（VN1-PG、大型研究、改投資公式／權重／門檻、刪舊 UI、刪 branch、不可逆清理、新資料來源、開 production write／Daily Schedule）**不變**。上方「待客戶確認」第 1 點（指標危險度口徑）仍未裁示，DEC-077 的 C1′ 子批**等待其結果**。
 
 ### DEC-077｜Data Health 批 2 × VN1-PG 邊界裁示：採方案 C（拆批）；C1 指派（只做資料可觀測性／provenance metadata、零投資輸出變更）；C1′ 等 DEC-076 ①；C2／VN1-PG 另開 Decision Gate；Freeze「新 Batch」只對 C1 解除（客戶 2026-10-24）
 > 2026-10-24 追加（第 8 節「收到當輪追加」；ID 照序取下一個未用號，撰寫組寫入前 `git grep -oh "DEC-0[0-9]*" -- docs/DECISIONS.md | sort -u` 實測最大為 DEC-076）。BACKLOG 登記：§1 `DR-2026-10-24-1`；新節 **5.1.10**（`DH-C1-*`、C1′、C2、`RC-VISIBILITY`、`PROXY-SEMANTICS`、研究發現各列）；受影響既有列 `DH-BIAS240-EST`／`DH-PCR-PROXY`／`DH-MACRO-FWD-ASOF`／`DH-REFRESH-STALE`（5.1.7）、`DH-FT-SCHEMA-ASOF`／`DH-JINGQI-STALE-SESSION`（5.1.8）、`DH-LAMP-STALE`／`DH-ADL-PROXY`（5.1.7）、`VN1-PG-L-TWII-DROPNA-LOG`（5.1.4）。研究摘要：`docs/PROJECT_STATE.md` §30。
 - **背景**（⚠️ **總管送題摘要、非客戶原文**：總管 2026-10-24 撰寫並送出的 Decision Gate 摘要，經總管轉交撰寫組；以下依該摘要整理，非逐字）：
-  - **觸發**：DEC-075 第 4 點的重評條件（批 A＋1' 合併、獨立 QA、CI、main verification）全部成立（main verification 見 DEC-075 2026-10-24 附註）。總管派 A（治理文件）、B（程式碼重疊）、D（資料血緣）、E（VN1-PG 失效傳播，沙箱實跑純函式）四組獨立唯讀調查 → 總管交叉比對 → F 組獨立紅隊否證（14 條承重宣稱：9 成立、4 部分成立已修正、1 條由總管以 GitHub Actions API 自查成立）。基準 main `649f7393`。
+  - **觸發**：DEC-075 第 4 點的重評條件（批 A＋1' 合併、獨立 QA、CI、main verification）全部成立（main verification 見 DEC-075 2026-10-24 附註）。〔以下研究方法出處：研究結論檔（摘要見 `docs/PROJECT_STATE.md` §30），**不是**送題摘要〕總管派 A（治理文件）、B（程式碼重疊）、D（資料血緣）、E（VN1-PG 失效傳播，沙箱實跑純函式）四組獨立唯讀調查 → 總管交叉比對 → F 組獨立紅隊否證（14 條承重宣稱：9 成立、4 部分成立已修正、1 條由總管以 GitHub Actions API 自查成立）。基準 main `649f7393`。
   - **方案比較**（總管送題摘要）：
     - **A：批 2 先獨立完成** —— 語意風險高（BIAS240／PCR 代理定義未裁示，且牽動台灣 PMI）；Risk Cap 輸入核心程式（`dated_inputs`／`macro_engine_inputs`）至少改兩輪、PCR「往回找」邏輯可能重寫、兩套日期判斷、規則版本可能升兩次；QA 高；rollback 中；不阻塞新 UI。
     - **B：批 2 與 VN1-PG 合併** —— 無重工，但單一大 PR（引用測試檔約 81 個，grep 計數）、QA 最難、rollback 粗（一退全退）；所有資料修復須等 VN1-PG 語意裁示 ⇒ 阻塞。
@@ -1148,6 +1148,7 @@ C1 完成後停下。
   - **DEC-075 第 4 點**（批 2 暫不與 VN1-PG 一起指派、重評後另送裁示）：**本條即其重評結果**。DEC-075 範圍邊界「批 2（`DH-BIAS240-EST`／`DH-PCR-PROXY`／`DH-MACRO-FWD-ASOF`／`DH-REFRESH-STALE`）…皆未授權」對 **C1 三類自本條起不再成立**；對 C1′、C2 及其餘批 2 內容**續有效**。取代關係登第 5 節。
   - **DEC-076**（Freeze 指示）：(1) Freeze「新 Batch」禁止**部分解除**（僅 C1）；(2) **C1′ 等待其「待客戶確認」第 1 點（①指標危險度口徑 worst-of vs 觸發計數）**；(3) DEC-076 第 10 節「Risk Cap 保持自己的既有語意、不過度擴張」與 `RC-VISIBILITY`（#910 後新 UI 看不到 Risk Cap）有張力 —— 本條**不解決**，登記待決。
   - **DEC-062 Q5**（代理值只顯示、不計分；同樣適用總經彙總燈）：**不改、不擴張**。台灣 PMI 的 `is_proxy=True` 旗標若照字面套 Q5 會剔除 Required Core（研究發現 2）—— 本條明令**不得先建立通則**，Q5 對 BIAS240／PCR／台灣 PMI 的射程留給 `PROXY-SEMANTICS` 裁示（撰寫組讀法；Q5 原文不變）。
+  - **`PROJECT_RULES.md` 16.1／DEC-062 Q5 與本條第 3 點 B 的張力（未調和衝突，依 `PROJECT_RULES.md` 第 14 節登記；`docs/BACKLOG.md` 第 4 節 `CV1-DR-11`）**：16.1「代理值不得以正式資料的身分顯示或計分」、Q5「代理值只顯示、不計分」vs 本條 3B「不得先建立『proxy 一律不能計分』或『proxy 一律可以計分』的通則」。**裁示前 16.1／Q5 原文照舊有效**。本條 3B 的讀法（⚠️ 撰寫組／總管讀法，待客戶確認）＝對 BIAS240 估算、PCR 法人估算、台灣 PMI 標記值，在「它們算不算代理值」本身未裁示前，不得以 16.1 直接套用、也不得反向排除；此題列入 C2 前 `PROXY-SEMANTICS` 一併請客戶裁示。
   - **DEC-070**（盤後版、Q1 同一錨定交易日、Q2 ^TWII 缺棒 Fail-Stop）：**不變**。研究實跑顯示跨日配對（MA5 10-23 配外資期貨 10-21）現判 FRESH 並記 VALID，與 DEC-070 Q1 不符 —— 屬 `VN1-PG-PIT-CONSISTENCY`，歸 C2，本條不施工。C1 的 dropna 筆數 log 是 DEC-070 Q2 證據累積（`VN1-PG-TWII-MISS-FREQ`）的前置，⛔ 不得因此改 Fail-Stop 行為。
   - **DEC-074**（代理廣度不得計分）：不變。
   - **DEC-073**（Model／Effort Gate）：**適用**。C1 開工前須重做 Gate；客戶建議 Opus 5.5／Medium 只是建議，仍須依實際工作判斷；跨入 PIT／Risk Cap／投資語意 → 升級並停手。
@@ -1155,6 +1156,9 @@ C1 完成後停下。
   - **DEC-002／DEC-015**（沒指派不動工／Audit 不得順手施工）：對 C1 三類已由本條指派；對研究發現各列（本條第 3 點 C 項「本輪不要順手修」）**續有效**。
   - **DEC-003**（線框 gate）：不變；C1 不涉畫面結構。
 
+---
+
+## 5. 取代鏈總表
 
 | 舊 | 新 | 關係 | 判讀者 |
 |---|---|---|---|
@@ -1191,6 +1195,7 @@ C1 完成後停下。
 | `CV1-FU-05` | AI 層／通用免責「不給任何買賣動作」未區分「模型自己說」與「轉述正式 Action」（S1-6 §3.3、§3.4；舊 UI 通用免責） | 今日無正式 Action，不構成衝突；Action Layer 設計批檢視（2026-10-16 新增） |
 | `CV1-FU-06` | `src/config/persona.py` 人設仍要求模型「請給出明確的動作」（既有，產品 code） | 與 DEC-054 第 2、6 點衝突；本批依 DEC-055 第 9 點不改產品 code（2026-10-16 新增） |
 | `CV1-DR-02` | QA C 級自驗 vs 獨立稽核 | MSG 10 只覆寫本批 |
+| `CV1-DR-11`（2026-10-24 新增，append-only） | `PROJECT_RULES.md` 16.1「代理值不得以正式資料的身分顯示或計分」／DEC-062 Q5「代理值只顯示、不計分」vs DEC-077 第 3 點 B「不得先建立『proxy 一律不能計分』或『proxy 一律可以計分』的通則」 | 未調和衝突（`PROJECT_RULES.md` 第 14 節）；裁示前 16.1／Q5 原文照舊有效；BIAS240 估算、PCR 法人估算、台灣 PMI 標記值「算不算代理值」未裁示，列入 C2 前 `PROXY-SEMANTICS` 一併請客戶裁示 |
 | `CV1-DR-03` | 2026-10-01 舊 UI 退場三關是否被 DEC-020 取代 | 未明示 |
 | `CV1-DR-04` | PR-f1：`PROCESS.md` §4「存檔 STATE.md」vs 登記本 | 從未裁示 |
 | `CV1-DR-05` | handoff 分支在 `docs/HANDOFF.md` 建立後是否算「已安全遷移」 | 未裁示；分支刪除不得自主 |
