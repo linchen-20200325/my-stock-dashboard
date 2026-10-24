@@ -183,9 +183,9 @@
 |---|---|
 | main | tip `03a75994`（cron：板塊資金泡泡圖每日增量）；最後非 cron commit＝`0a78f308`（#919 Safe Checkpoint）。cron 會推進 tip，**以 GitHub 為準** |
 | Open PR | #920（C2a-2；base main；撰寫時 open、未合併、mergeable clean） |
-| CI | PR #920 `981e2f69`：Fast checks（job 120883293627）success、Slow tests（job 120883293857）success；QA 修正 commit 的 CI 撰寫時未查（見 PR #920） |
+| CI | PR #920 `981e2f69`：Fast checks（job 120883293627）success、Slow tests（job 120883293857）success；~~QA 修正 commit 的 CI 撰寫時未查（見 PR #920）~~ QA 修正 commit `dc2fa365`（PR head）：Fast checks（job 120893028983）、Slow tests（job 120893029189）於 22:11 台北 `gh api` 實查為 **in_progress**（結果未知；PR mergeable_state＝unstable，CI 未完成所致）—— 以 GitHub 為準（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 | 完成到哪 | **C2a-2 實作完成**：寫檔分支附加觀測欄 `input_provenance_shadow`（`c2a-shadow-1`），零投資輸出變更；獨立 QA 兩組判可合併（總管轉述）；**合併待總管執行並於合併後驗證 main CI**（本段撰寫時未合併）。C2a-1（#918）已完成。**C2b 未開始** |
-| working tree／stash／worktree | **撰寫時（21:47 台北）**：branch `claude/determined-euler-32xqjn`＠`981e2f69`；未提交修改：`shared/na_drop_log.py`、`src/services/risk_cap_apply.py`、`tests/test_batch_z65.py`、`tests/test_c2a_risk_cap_shadow.py`（另一實作 agent 的 QA 修正，進行中、尚未提交）＋本批四份 docs；`git stash list` 空；`git worktree list` 只有主 worktree。⚠️ 另一 agent 可能仍在提交，以 GitHub／`git status` 實查為準。（舊 UI 壓測 `stash@{0}` 只在原容器，本容器不存在，DEC-019） |
+| working tree／stash／worktree | ~~**撰寫時（21:47 台北）**：branch `claude/determined-euler-32xqjn`＠`981e2f69`；未提交修改：`shared/na_drop_log.py`、`src/services/risk_cap_apply.py`、`tests/test_batch_z65.py`、`tests/test_c2a_risk_cap_shadow.py`（另一實作 agent 的 QA 修正，進行中、尚未提交）＋本批四份 docs；~~ **現況（22:11 台北，撰寫組 `git status` 實查）**：上列 QA 修正已提交為 `dc2fa365`（`shared/na_drop_log.py` 僅新增公開別名 `safe_print`，純別名）、docs 已提交為 `2d31f9fc`；branch＠`dc2fa365`，`git status` 乾淨（本修正輪 docs 提交前）（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；`git stash list` 空；`git worktree list` 只有主 worktree。⚠️ 另一 agent 可能仍在提交，以 GitHub／`git status` 實查為準。（舊 UI 壓測 `stash@{0}` 只在原容器，本容器不存在，DEC-019） |
 | current active work | C2a-2 QA 修正提交＋合併（總管負責）；合併後停手 |
 | blocker／Decision Required | C2b Decision Gate（待真實寫檔輪次觀測結果）；`DH-PMI-PUBLICATION-WINDOW-SPEC`（規格待提，隨 C2b）；`DEC076-CONFIRM` ①②（pending；C1′ 等 ①）；`RC-VISIBILITY`（待線框）；5.1.12 三項治理缺口（只登記）—— 清單見 BACKLOG §F |
 | **唯一 Next Safe Action** | 確認 #920 合併＋main CI 綠 → 取得**真實寫檔輪次**的 `input_provenance_shadow` 觀測結果 → 準備 C2b Decision Gate 送客戶（附推薦方案）；⛔ 不得開始 C2b |

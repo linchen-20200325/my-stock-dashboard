@@ -596,12 +596,13 @@
 |---|---|---|
 | 授權與停點 | DEC-080 C2a；客戶 2026-10-24：「同意，請切換到 Effort High 後開始 C2a-2…完成 C2a-2 後停手，不自動進 C2b。」 | 客戶指示（經總管轉交） |
 | PR | #920（branch `claude/determined-euler-32xqjn`；首個 commit `981e2f69`＋QA 修正 commit，SHA 見 PR #920）；撰寫時 open、mergeable clean、`981e2f69` CI Fast＋Slow success；**合併狀態以 GitHub 為準** | 事實（撰寫組實查） |
-| 做了什麼 | `src/services/risk_cap_apply.py::compute_and_lock_risk_cap` 只在三道閘門後的寫檔分支，於本機 `risk_cap_state.json`、`macro_state.json` 附加觀測欄 `input_provenance_shadow`（L2 `infer_input_provenance` 輸出，`shadow_policy_version`＝`c2a-shadow-1`）；未寫檔輪次不記錄。失敗 → `{"_error": <型別名>, "_stage": import／pmi_history／session／infer／sanitize／validate}`＋安全 log（`shared/na_drop_log` 公開別名 `safe_print`；log 失敗走 `_log_error`），⛔ 不改寫檔成敗 | 事實（PR #920 規格；總管轉述） |
+| 做了什麼 | `src/services/risk_cap_apply.py::compute_and_lock_risk_cap` 只在三道閘門後的寫檔分支，於本機 `risk_cap_state.json`、`macro_state.json` 附加觀測欄 `input_provenance_shadow`（L2 `infer_input_provenance` 輸出，`shadow_policy_version`＝`c2a-shadow-1`）；未寫檔輪次不記錄。失敗 → `{"_error": <型別名>, "_stage": import／pmi_history／session／infer／sanitize／validate}`＋安全 log（`shared/na_drop_log` 公開別名 `safe_print` —— ⚠️ 該別名自 QA 修正 commit `dc2fa365` 起才存在，`981e2f69` 時為跨模組取 `_safe_print`（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更正））；log 失敗走 `_log_error`），⛔ 不改寫檔成敗 | 事實（PR #920 規格；總管轉述） |
 | 六點稽核發現落實 | utf-8 encode 自驗；字串上限 `SHADOW_STR_MAX_LEN=512`（技術常數，非投資參數）；延遲 import；安全 log；呼叫點在閘門後；C2a 還原鏈頭在 `c1_revert_for` 前＋before／after 網格＋讀者守衛＋失敗注入 | 事實（總管轉述） |
 | PMI 歷史 | 自同一本地 L1（`macro_cache_reader.load_tw_pmi_history`）再讀一次，無新來源。已知限制：cron 可能在兩次讀取之間替換 parquet（只影響觀測欄） | 事實＋已知限制 |
-| 零投資輸出變更證據 | 實作組網格（22 具名＋120 隨機）；QA-A 獨立 harness 1937 情境（1183 寫檔／740 不寫檔／14 同例外）對 base `0a78f308` 0 差異（含落盤 bytes 扣除新欄、`get_macro_state` 三模式）；QA-B 對抗注入（怪型別、遞迴、surrogate、壞 stdout、cp950）皆照常寫檔且核心一致；突變測試。fast 30027 passed／28 skipped（base 29969）；slow 120 passed／5 skipped | 總管轉述（撰寫組未重跑） |
+| 零投資輸出變更證據 | 實作組網格（22 具名＋120 隨機）；QA-A 獨立 harness 1937 情境（1183 寫檔／740 不寫檔／14 同例外）對 base `0a78f308` 0 差異（含落盤 bytes 扣除新欄、`get_macro_state` 三模式）；QA-B 對抗注入（怪型別、遞迴、surrogate、壞 stdout、cp950）皆照常寫檔且核心一致；突變測試。fast 30027 passed／28 skipped（base 29969）（`981e2f69` 時點；`dc2fa365` 後 30039 passed／28 skipped，實作組自測（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更正）））；slow 120 passed／5 skipped | 總管轉述（撰寫組未重跑） |
 | 讀者 | production 無任何讀者讀新欄（grep＋讀碼；QA 單組結論） | ⚠️ 單組，未經第二組驗證 |
 | 未變 | Risk Cap 數值、計分資格、Required Core、門檻／公式／權重、regime／燈號、`RISK_CAP_RULESET_VERSION`、`ENGINE_SOURCE`、`is_proxy`、`PRODUCTION_WRITE_APPROVED=False`（撰寫組 grep `shared/risk_cap_history_policy.py` 實查）、Google Sheet 寫入、UI | 事實（旗標實查；其餘總管轉述） |
 | 下一步 | 合併後：取得真實寫檔輪次的觀測結果 → 準備 C2b Decision Gate（客戶裁示；⛔ 不得開始 C2b）；建議高能力模型／Effort High | 指標（`docs/HANDOFF.md`） |
+| QA 修正（📌 2026-10-24 追加（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更正））） | `dc2fa365`：`shared/na_drop_log.py` 新增公開別名 `safe_print`（純別名）；錯誤標記讀端比對；BaseException 往外拋／非 str dict 鍵／list・tuple 分支補測；`_exc_type_name` 失敗時記 `<unrepresentable>`；`tests/test_c2a_risk_cap_shadow.py`（新檔，相對 main）70 tests（實作組自測，含參數化；撰寫組 grep `def test_` 35 個） | 事實（commit 實查）＋測試數總管轉述 |
 
 ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組撰寫；測試數字、QA 結論、讀者判斷為總管轉述，撰寫組只實查 PR 狀態、CI、旗標與 working tree，未重跑測試、未見 QA 原始報告。
