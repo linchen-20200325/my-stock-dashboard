@@ -879,7 +879,8 @@ High
   - ⚠️ 若客戶認為 D-1(a) 只涵蓋「健康分已計算但未評估」的情境、不涵蓋「尚未載入」，以客戶為準，本判讀即撤銷，`DH-REGIME-NOWARROOM` 改為送題。撰寫組只記錄總管判讀，未獨立驗證其殘留路徑（`CLAUDE.md` §-2 規則 6）。
   - 📌 **2026-10-23 Freeze 附註（append-only；本條上文一字未改；不是新 DEC）**：PR #910 ~~HEAD `c8e30d84`~~ 最後產品碼 commit `c8e30d84`（HEAD 以 PR #910 為準（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實修正）））（`DH-REGIME-NOWARROOM`）已在代理廣度不計分（旗標關）時補上**冷啟動路徑**（warroom 不存在＋有效 `macro_state.json` ⇒ 位階 `unknown`／⬜、`is_loaded=False`；Risk Cap `exposure_limit_pct` 不變）—— 依客戶 2026-10-23 指示（總管轉述：「CI 綠也先不要合併；冷啟動若違反 D-1(a) 須本 PR 修完」，即不得只登 BACKLOG 延後）。⚠️ **狀態（2026-10-23 23:08 台北量測，會過期）**：QA-6 對 `c8e30d84` 獨立複驗**進行中、結果未知**；CI 進行中；#910 **未合併**。⛔ **#910 合併前不得宣稱 D-1(a) 冷啟動修正已落地 main**；實況以 GitHub（PR #910、main SHA）為準。實作內容為實作組自述，撰寫組未獨立驗證（`CLAUDE.md` §-2 規則 6）。
   - 📌 **2026-10-23 QA-6 結果附註（append-only；上文一字未改；不是新 DEC）**：QA-6 對 `c8e30d84` 判**不可合併（2 MUST）**：契約層（D-1(a) 本體）、Risk Cap、測試守護、突變均成立；但 🛡️ 持股頁卡④（冷啟動、缺真實廣度）／卡⑤（缺真實廣度）在 v2 卡面畫成紅卡（短句表 KeyError），且 AI 評分被擋字串在冷啟動附不實救法。兩項已於 #910 後續修正 commit 處理，**待獨立 QA-7＋CI**；#910 仍**未合併**（有意識的更新，不是漏刪，決策者 AI 總管）。⚠️ 修正內容為實作組自述（`CLAUDE.md` §-2 規則 6）。
-  - 📌 **2026-10-24 合併附註（append-only；上文一字未改；不是新 DEC；有意識的更新，不是漏刪，決策者 AI 總管（事實更新））**：PR #910 已於 2026-10-24 squash 合併進 main（merge `066f461e`，完整 `066f461ec716abbc40a3830baf2c686415cd4ecf`）；最後產品碼 commit＝`9714d0b3`（修 QA-6 兩項 MUST）。**QA-7 對 `9714d0b3` 判可合併（0 MUST）**；`9714d0b3` CI Fast＋Slow success；完整判定見 PR #910 留言。⇒ D-1(a) 在旗標關（`BREADTH_PROXY_SCORING_ENABLED=False`）時**含冷啟動路徑已落地 main**；上文「待 PR #910 合併」「待獨立 QA-7＋CI」「待 QA 複驗」自此讀作已合併、QA-7 已判可合併。本條裁示內容不變；DEC-075 第 4 點（批 2／VN1-PG 邊界重評後送題）觸發條件中「批 A＋1' 合併」已成立，main CI／main verification 以 GitHub Actions 為準（撰寫組未查）。QA-7 SHOULD S-1 徽章語意另登 BACKLOG `DH-BADGE-RERUN-SEMANTICS`（視覺規格，待客戶裁示）。
+  - 📌 **2026-10-24 合併附註（append-only；上文一字未改；不是新 DEC；有意識的更新，不是漏刪，決策者 AI 總管（事實更新））**：PR #910 已於 2026-10-24 squash 合併進 main（merge `066f461e`，完整 `066f461ec716abbc40a3830baf2c686415cd4ecf`）；最後產品碼 commit＝`9714d0b3`（修 QA-6 兩項 MUST）。**QA-7 對 `9714d0b3` 判可合併（0 MUST）**；`9714d0b3` CI Fast＋Slow success；完整判定見 PR #910 留言。⇒ D-1(a) 在旗標關（`BREADTH_PROXY_SCORING_ENABLED=False`）時**含冷啟動路徑已落地 main**；上文「待 PR #910 合併」「待獨立 QA-7＋CI」「待 QA 複驗」自此讀作已合併、QA-7 已判可合併。本條裁示內容不變；DEC-075 第 4 點（批 2／VN1-PG 邊界重評後送題）觸發條件中「批 A＋1' 合併」已成立，~~main CI／main verification 以 GitHub Actions 為準（撰寫組未查）~~ main CI／main verification **已成立**（見下一則附註）（2026-10-24 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。QA-7 SHOULD S-1 徽章語意另登 BACKLOG `DH-BADGE-RERUN-SEMANTICS`（視覺規格，待客戶裁示）。
+  - 📌 **2026-10-24 main verification 附註（append-only；上文一字未改（僅上一則「撰寫組未查」一句以刪除線更正）；不是新 DEC；有意識的更新，不是漏刪，決策者 AI 總管（事實更新））**：第 4 點前置條件之 **main verification 已成立** —— 依 `PROJECT_RULES.md` 第 7 節定義（main SHA＋main CI conclusion）：main `066f461e`（#910 merge）的「PR Check（pytest fast + AppTest slow）」push run **39995254045 success**；main `649f739`（#911，五 SSOT 事實同步）同 workflow push run **39999485112 success**。總管以 GitHub Actions API 實查，撰寫組另以 `gh api repos/:owner/:repo/actions/runs/<id>` 獨立複查兩個 run 的 `head_sha`／`event=push`／`head_branch=main`／`conclusion=success`，結果一致（2 組）。⚠️ 未驗：squash 後 main 樹是否等同 `9714d0b3`（沙箱取不到該 object）。⇒ 第 4 點「批 A＋1' 完成、獨立 QA、CI、main verification」**全部成立**，重評已完成、送題已裁示：**重評結果見 DEC-077**（採方案 C）。
 
 ### DEC-076｜客戶 2026-10-23 Freeze 指示確認之產品方向與語意界線
 > 2026-10-23 追加（第 8 節「收到當輪追加」；ID 照序取下一個未用號，撰寫組寫入前 `git grep -n "DEC-076"` 實測 0 命中、最大為 DEC-075）。永久治理部分（Data ≠ AI、Model／Effort、停手條件、舊 UI、branch、production）落點 `PROJECT_RULES.md` **第 16 節**；未完成工作（舊 UI → 新 UI Coverage Matrix、Investment Logic Validity Audit、研究候選等）由 BACKLOG 撰寫組登記於 `docs/BACKLOG.md`（本批 W1 不改該檔）。
@@ -945,10 +946,208 @@ High
   1. **指標危險度的定義**：客戶第 8 節原文「指標危險度：目前多少危險條件／門檻被觸發。」；`docs/PROJECT_STATE.md` §22.3 記錄的**現行程式**為 16 盞燈 `shared/macro_buckets.py::BUCKET_DANGER_SPECS` 經 `src/ui/tabs/tab_macro_v2.py::overall_verdict` 取 **worst-of**。「多少條件被觸發」若讀成「觸發計數」即與 worst-of 不同口徑；若只是描述性說法則無差異。屬資料／投資語意（`PROJECT_RULES.md` 第 4 節 #2），⛔ 不得自行改口徑，待客戶確認讀法。
   2. **⚡ 行動例示的射程**：見上表第 6 節 ⚡ 列（`CV1-FU-02`／`CV1-FU-03` 未裁示）。
 - **不是什麼**（⛔）：不是動工授權；不是線框核准（DEC-017 五頁仍為現行實作依據，直到新線框經 DEC-003 拍板，同 DEC-072）；不定義台股趨勢／國際趨勢的公式（`VN1-MT-TREND-DEF` 不變）；不核准任何新資料源、公式、門檻、權重或綜合分數；不改 Risk Cap；不授權改或刪舊 UI（DEC-019、DEC-020）；不授權刪 branch（DEC-012）。
+- 📌 **2026-10-24 附註（append-only；本條上文一字未改；不是新 DEC；有意識的更新，不是漏刪，決策者 客戶）**：客戶同日 Freeze 禁止清單中的「新 Batch」，**僅對 Data Health C1 解除**（DEC-077 第 1 點）；其餘禁止項（VN1-PG、大型研究、改投資公式／權重／門檻、刪舊 UI、刪 branch、不可逆清理、新資料來源、開 production write／Daily Schedule）**不變**。上方「待客戶確認」第 1 點（指標危險度口徑）仍未裁示，DEC-077 的 C1′ 子批**等待其結果**。
+
+### DEC-077｜Data Health 批 2 × VN1-PG 邊界裁示：採方案 C（拆批）；C1 指派（只做資料可觀測性／provenance metadata、零投資輸出變更）；C1′ 等 DEC-076 ①；C2／VN1-PG 另開 Decision Gate；Freeze「新 Batch」只對 C1 解除（客戶 2026-10-24）
+> 2026-10-24 追加（第 8 節「收到當輪追加」；ID 照序取下一個未用號，撰寫組寫入前 `git grep -oh "DEC-0[0-9]*" -- docs/DECISIONS.md | sort -u` 實測最大為 DEC-076）。BACKLOG 登記：§1 `DR-2026-10-24-1`；新節 **5.1.10**（`DH-C1-*`、C1′、C2、`RC-VISIBILITY`、`PROXY-SEMANTICS`、研究發現各列）；受影響既有列 `DH-BIAS240-EST`／`DH-PCR-PROXY`／`DH-MACRO-FWD-ASOF`／`DH-REFRESH-STALE`（5.1.7）、`DH-FT-SCHEMA-ASOF`／`DH-JINGQI-STALE-SESSION`（5.1.8）、`DH-LAMP-STALE`／`DH-ADL-PROXY`（5.1.7）、`VN1-PG-L-TWII-DROPNA-LOG`（5.1.4）。研究摘要：`docs/PROJECT_STATE.md` §30。
+- **背景**（⚠️ **總管 2026-10-24 Decision Gate 送題摘要，非客戶原文**；撰寫組依總管提供之研究結論檔與送題草稿整理，**未見送題全文**）：
+  - **觸發**：DEC-075 第 4 點的重評條件（批 A＋1' 合併、獨立 QA、CI、main verification）全部成立（main verification 見 DEC-075 2026-10-24 附註）。總管派 A（治理文件）、B（程式碼重疊）、D（資料血緣）、E（VN1-PG 失效傳播，沙箱實跑純函式）四組獨立唯讀調查 → 總管交叉比對 → F 組獨立紅隊否證（14 條承重宣稱：9 成立、4 部分成立已修正、1 條由總管以 GitHub Actions API 自查成立）。基準 main `649f7393`。
+  - **題 1（邊界方案）**：方案 A／B／C 三案；**總管推薦方案 C＝拆分批 2**：C1（DH-only、零投資輸出變更）先做；C1′（指標危險度子批）等 DEC-076 ①；C2（VN1-PG「Risk Cap 輸入有效性批」，吸收 BIAS240／PCR 計分准入與 `DH-REFRESH-STALE` Risk Cap 側）另開 Decision Gate。⚠️ 方案 A、B 的具體內容撰寫組**未取得送題原文，不轉述**；以客戶原文「採方案 C」「同意總管推薦的拆分方式」為準。
+  - **題 2（C1 範圍）**：C1 包含哪些項目。⚠️「題 1／題 2」的編號為撰寫組依客戶回覆第 1、2 點反推，非送題原文。
+- **內容**（客戶原文；經總管轉交，撰寫組未見原件，依總管轉交文字逐字收錄，第 1～5 點全文）：
+
+```
+我裁示：
+
+1. 採方案 C
+
+同意總管推薦的拆分方式。
+
+目前只解除 Freeze 中「新 Batch」對 C1 的限制。
+
+C1′
+
+暫不施工，等待 DEC-076「指標危險度」正式裁示。
+
+C2／VN1-PG
+
+暫不施工，後續另開 Decision Gate。
+
+Production write
+
+繼續維持：
+
+"PRODUCTION_WRITE_APPROVED=False"
+
+不得開啟排程或任何 production write。
 
 ---
 
-## 5. 取代鏈總表
+2. C1 核准範圍
+
+本輪只允許三類「資料可觀測性／provenance metadata」工作：
+
+1. ^TWII／VIX 等既有缺值清理路徑：
+   
+   - 記錄被清掉的缺值筆數；
+   - 先完整盤點實際位置，不要只照原 BACKLOG 寫的兩處；
+   - 不因此改變資料取得、fallback、燈號或 Risk Cap 行為。
+
+2. PCR：
+   
+   - 增加每日來源／來源類型標記；
+   - 必須能區分正式來源與目前 fallback／proxy 來源；
+   - 只記錄，不改計分資格。
+
+3. Macro forward-validation ledger：
+   
+   - 增加各 input 自己的資料日期／as-of metadata；
+   - 保留既有日期欄原本語意；
+   - 本輪不得利用新增日期欄改變任何判斷結果。
+
+核心原則：
+
+«C1 只增加「我們知道資料從哪裡來、是哪一天、清掉多少缺值」的能力。»
+
+不得讓 C1 改變：
+
+- Risk Cap 數字
+- 市場位階
+- 指標危險度
+- 16 燈結果
+- 健康分
+- scoring
+- threshold
+- weight
+- freshness eligibility
+- fallback eligibility
+- proxy eligibility
+- PIT 判斷
+- 投資語意
+
+如果實作時發現任何一項無法做到「零投資輸出變更」，立即停下送 Decision Gate，不要硬塞進 C1。
+
+---
+
+3. C1 開工前先修正 SSOT
+
+把本次研究與我的裁示正式寫入 GitHub，不能只存在本對話。
+
+至少同步：
+
+- DECISIONS
+- BACKLOG
+- HANDOFF
+- PROJECT_STATE
+
+並修正你已發現的文件落差：
+
+- DEC-075 的 main verification 已成立；
+- BACKLOG／HANDOFF 不得繼續寫「未做」。
+
+另外登記但不要施工：
+
+A. Risk Cap visibility
+
+#910 後 Risk Cap 本身仍有計算，但新 UI 主卡因健康分未評估而看不到。
+
+列為獨立待決問題。
+
+目前不要恢復顯示，等 PIT／C2 處理後再做 UI Decision Gate。
+
+B. Proxy semantics
+
+新增正式待決項：
+
+BIAS240、PCR、台灣 PMI 的 proxy／estimated 語意必須在 C2 開工前一起研究與裁示。
+
+不得先建立「proxy 一律不能計分」或「proxy 一律可以計分」的通則。
+
+C. 其他研究發現
+
+外資期貨凍結值不一致、出口燈 freshness、schema version 文件衝突等，全部登記到正確 backlog，但本輪不要順手修。
+
+---
+
+4. C1 實作方式
+
+先重新做 Model／Effort Gate。
+
+本批建議：
+
+Model：Opus 5.5
+Effort：Medium
+
+若你判斷實際施工會跨入 PIT／Risk Cap／投資語意，必須先升級並停下詢問，不得自行擴 scope。
+
+實作後：
+
+1. 跑針對性測試；
+2. 跑完整既有 CI／QA；
+3. 確認投資輸出 before／after 沒有因 C1 改變；
+4. 做獨立 QA；
+5. 若全部通過，依既有治理處理 PR；
+6. 合併後重新驗證 main；
+7. 同步五 SSOT。
+
+不要把 C1′ 或 C2 混入同一 PR。
+
+---
+
+5. 下一階段先不要自動開始
+
+C1 完成後停下。
+
+下一步不是直接做 C2。
+
+請先回報：
+
+- C1 實際完成內容
+- PR／main SHA
+- CI／QA
+- 是否確認零投資輸出變更
+- 新發現
+- C2 前仍需裁示的事項
+
+尤其 C2 必須正式處理：
+
+«proxy／estimated 的資料契約與計分資格。»
+
+至少一起研究 BIAS240、PCR、台灣 PMI，不得各自零碎決定。
+
+維持 Silent Autonomous Cruise。
+
+中間安全工作不要逐步回報；只有命中停手條件、需要我裁示，或 C1 整批完成時再回覆。
+```
+
+- **裁示要點**（撰寫組摘要；以上方原文為準）：
+  1. **採方案 C（拆批）**：C1 **已指派＝動工授權**（限下列三類）；C1′ **暫不施工**，等 DEC-076 ①「指標危險度」口徑正式裁示；C2／VN1-PG **暫不施工**，另開 Decision Gate。
+  2. **C1 範圍＝三類「資料可觀測性／provenance metadata」**：(i) ^TWII／VIX 等既有缺值清理路徑記錄被清掉筆數（**先完整盤點實際位置**，不只 BACKLOG 原列兩處）；(ii) PCR 每日來源／來源類型標記（能區分正式來源 vs fallback／proxy；只記錄、不改計分資格）；(iii) 總經前進式驗證帳本各 input 自己的資料日期／as-of metadata（保留既有日期欄原語意；不得用新欄改變任何判斷）。
+  3. **零投資輸出變更**：C1 不得改變 Risk Cap 數字、市場位階、指標危險度、16 燈結果、健康分、scoring、threshold、weight、freshness／fallback／proxy eligibility、PIT 判斷、投資語意；**任一項做不到 → 立即停下送 Decision Gate**。
+  4. **開工前先落盤 SSOT**（DECISIONS／BACKLOG／HANDOFF／PROJECT_STATE），並更正 main verification 文件落差。
+  5. **登記不施工**：A. Risk Cap visibility（`RC-VISIBILITY`；PIT／C2 後再做 UI Decision Gate、目前不恢復顯示）；B. Proxy semantics（`PROXY-SEMANTICS`；BIAS240、PCR、台灣 PMI 在 C2 開工前一起研究與裁示；⛔ 不得先建立「一律不計分」或「一律可計分」通則）；C. 其他研究發現登記到正確 backlog、本輪不順手修。
+  6. **C1 施工程序**：先重做 Model／Effort Gate（客戶建議 Opus 5.5／Medium；跨入 PIT／Risk Cap／投資語意 → 升級並停下詢問）→ 針對性測試 → 完整 CI／QA → before／after 零投資輸出變更驗證 → 獨立 QA → 依既有治理處理 PR → 合併後驗證 main → 同步五 SSOT；⛔ C1′／C2 不得混入同一 PR。
+  7. **C1 完成後停下回報**（實際完成內容、PR／main SHA、CI／QA、是否確認零投資輸出變更、新發現、C2 前仍需裁示事項）；⛔ 不自動進 C2。維持 Silent Autonomous Cruise。
+- **不是什麼**（⛔）：
+  - ⛔ **不是 C1′／C2／VN1-PG 施工授權**（三者皆暫不施工；C1′ 等 DEC-076 ①、C2／VN1-PG 另開 Gate）。
+  - ⛔ **不改 `PRODUCTION_WRITE_APPROVED`**：仍為 `False`（`shared/risk_cap_history_policy.py`，撰寫組 2026-10-24 grep 實查）；⛔ 不開排程、不做任何 production write（DEC-066 F 不變）。
+  - ⛔ **不建立 proxy 通則**：本條**沒有**裁示 proxy／estimated 能否計分；BIAS240、PCR、台灣 PMI 留待 `PROXY-SEMANTICS` 一次研究、一次裁示。
+  - ⛔ **不恢復 Risk Cap 顯示**：新 UI 主卡看不到 Risk Cap 的現況**維持**，等 PIT／C2 後的 UI Decision Gate（`RC-VISIBILITY`）。
+  - ⛔ **Freeze 只對 C1 解除「新 Batch」**：其餘 Freeze 禁止項（VN1-PG、大型研究、改投資公式／權重／門檻、刪舊 UI、刪 branch、不可逆清理、新資料來源、開 production write／Daily Schedule）**不變**。
+  - ⛔ **不是「改 `inputs_as_of` 語意」或修 `fetch_adl` 差一日的授權**：C1 只**加欄**；`DH-MACRO-FWD-ASOF` 的「改既有日期語意」半維持未授權。
+- **範圍**：治理（指派／Freeze 部分解除）＋資料語意（C1 邊界）｜**日期**：2026-10-24｜**決策者**：客戶｜**狀態**：生效（裁示登記＋**動工授權：僅 C1**）。
+- **來源**：D 客戶訊息 2026-10-24（本 session；本檔首次入庫；經總管轉交；確切 UTC 時戳未記錄，只保留日期）。
+- **與其他 DEC 的關係**（append-only；撰寫組讀法，單組，⚠️ 待第二組 evidence audit，`CLAUDE.md` §-2 規則 6；舊 DEC 一字不改）：
+  - **DEC-075 第 4 點**（批 2 暫不與 VN1-PG 一起指派、重評後另送裁示）：**本條即其重評結果**。DEC-075 範圍邊界「批 2（`DH-BIAS240-EST`／`DH-PCR-PROXY`／`DH-MACRO-FWD-ASOF`／`DH-REFRESH-STALE`）…皆未授權」對 **C1 三類自本條起不再成立**；對 C1′、C2 及其餘批 2 內容**續有效**。取代關係登第 5 節。
+  - **DEC-076**（Freeze 指示）：(1) Freeze「新 Batch」禁止**部分解除**（僅 C1）；(2) **C1′ 等待其「待客戶確認」第 1 點（①指標危險度口徑 worst-of vs 觸發計數）**；(3) DEC-076 第 10 節「Risk Cap 保持自己的既有語意、不過度擴張」與 `RC-VISIBILITY`（#910 後新 UI 看不到 Risk Cap）有張力 —— 本條**不解決**，登記待決。
+  - **DEC-062 Q5**（代理值只顯示、不計分；同樣適用總經彙總燈）：**不改、不擴張**。台灣 PMI 的 `is_proxy=True` 旗標若照字面套 Q5 會剔除 Required Core（研究發現 2）—— 本條明令**不得先建立通則**，Q5 對 BIAS240／PCR／台灣 PMI 的射程留給 `PROXY-SEMANTICS` 裁示（撰寫組讀法；Q5 原文不變）。
+  - **DEC-070**（盤後版、Q1 同一錨定交易日、Q2 ^TWII 缺棒 Fail-Stop）：**不變**。研究實跑顯示跨日配對（MA5 10-23 配外資期貨 10-21）現判 FRESH 並記 VALID，與 DEC-070 Q1 不符 —— 屬 `VN1-PG-PIT-CONSISTENCY`，歸 C2，本條不施工。C1 的 dropna 筆數 log 是 DEC-070 Q2 證據累積（`VN1-PG-TWII-MISS-FREQ`）的前置，⛔ 不得因此改 Fail-Stop 行為。
+  - **DEC-074**（代理廣度不得計分）：不變。
+  - **DEC-073**（Model／Effort Gate）：**適用**。C1 開工前須重做 Gate；客戶建議 Opus 5.5／Medium 只是建議，仍須依實際工作判斷；跨入 PIT／Risk Cap／投資語意 → 升級並停手。
+  - **DEC-066**（production Gate）、**DEC-048**（Required Core）、**DEC-044**（沿用 7 天）：不變。
+  - **DEC-002／DEC-015**（沒指派不動工／Audit 不得順手施工）：對 C1 三類已由本條指派；對研究發現各列（本條第 3 點 C 項「本輪不要順手修」）**續有效**。
+  - **DEC-003**（線框 gate）：不變；C1 不涉畫面結構。
+
 
 | 舊 | 新 | 關係 | 判讀者 |
 |---|---|---|---|
@@ -968,6 +1167,10 @@ High
 | DEC-074「⛔ 本裁示不是實作授權…仍待客戶指派」 | DEC-075 | 部分取代（批 A＋批 1' 已指派＝動工授權；DEC-074 原文不改；其餘 `DH-*` 仍待指派） | 客戶 2026-10-23 原文明示（「指派批 A」「同意加掛批 1'」） |
 | `docs/vnext/DATA_HEALTH_REPAIR_PLAN_2026-10-23.md` 第 3 節總管推薦「批 2 併 `VN1-PG-*` 實作批」 | DEC-075 | 暫不採用（延後重評，邊界待定） | 客戶 2026-10-23 原文明示（「批 2 暫時不要與 VN1-PG 一起指派」） |
 | AUD-C22「位階第 3 順位來源本批不動」 | DEC-075 (a) 技術落點 | 語意改寫（health 缺席不再退檔案位階） | 撰寫組，單組；AUD-C22 原文未對照 |
+| DEC-075 第 4 點「批 2 暫時不要與 VN1-PG 一起指派…再重新評估批 2／VN1-PG 的最佳邊界」（2026-10-24 新增列） | DEC-077 | 重評結果（採方案 C：C1 指派；C1′ 等 DEC-076 ①；C2 併 VN1-PG 另開 Decision Gate；DEC-075 原文不改） | 客戶 2026-10-24 原文明示（「採方案 C」「同意總管推薦的拆分方式」） |
+| DEC-075 效力邊界「批 2…皆未授權」（2026-10-24 新增列） | DEC-077 | 部分取代（僅 C1 三類已指派＝動工授權；C1′／C2／其餘批 2 內容仍未授權） | 客戶 2026-10-24 原文明示（「本輪只允許三類…」） |
+| DEC-076／客戶 2026-10-23 Freeze 禁止清單「新 Batch」（2026-10-24 新增列） | DEC-077 | 部分解除（僅對 C1；其餘禁止項不變） | 客戶 2026-10-24 原文明示（「目前只解除 Freeze 中「新 Batch」對 C1 的限制。」） |
+| `docs/vnext/DATA_HEALTH_REPAIR_PLAN_2026-10-23.md` 第 3 節總管推薦「批 2 併 `VN1-PG-*` 實作批」（2026-10-24 新增列） | DEC-077 | 改為拆分（批 2 拆 C1／C1′／C2，僅 C2 併 VN1-PG）；計畫檔原文不改 | 客戶 2026-10-24 原文明示＋撰寫組判讀，單組 |
 
 ## 6. 未升格項目（證據不足或題意不明 → 見 `docs/BACKLOG.md` 第 4 節）
 
