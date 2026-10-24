@@ -152,7 +152,7 @@
 | main | `e813c5f0`（#916 C2 Gate 研究落盤）；其前 `f48b30bf`（#915）（撰寫組 `git fetch`＋`git log` 實查，量測日 2026-10-24）；cron 會推進 tip，**以 GitHub 為準** |
 | 本批 | 分支 `claude/gracious-hypatia-1cjuh8` 上的 docs-only commit（DEC-080 落盤；未開 PR，是否開 PR 由總管決定）；⛔ 未改 code／tests／workflow／data |
 | **current active work** | **C2a**（資料契約 observability／contract implementation：記 provenance、freshness、as_of、eligibility；建立 policy table／schema）—— **已指派、尚未開工**；⛔ **零投資輸出變更**（不得改任何 Risk Cap 分數、門檻、權重或投資輸出），須以 before／after 證明 |
-| **current blocker** | **無**（C2a 依客戶「完成 GitHub Verification Gate 後，再開始 C2a」指派；總管確認 Freeze「新 Batch」對 C2a 解除（讀法，非客戶逐字））。`DH-PMI-PUBLICATION-WINDOW-SPEC`：總管判定現有規則不構成正式定義；C2a 記為 `undetermined_pending_spec`、不自定數字；規格提案於 C2a 觀測後隨 C2b Gate 送客戶 —— **不是 C2a blocker** |
+| **current blocker** | **無**（C2a 依客戶「完成 GitHub Verification Gate 後，再開始 C2a」指派；總管確認 Freeze「新 Batch」對 C2a 解除（客戶原文見 DEC-080 來源欄；『Freeze 解除』為總管讀法））。`DH-PMI-PUBLICATION-WINDOW-SPEC`：總管判定現有規則不構成正式定義；C2a 記為 `undetermined_pending_spec`、不自定數字；規格提案於 C2a 觀測後隨 C2b Gate 送客戶 —— **不是 C2a blocker** |
 | **next safe point** | C2a 合併 ＋ main CI 綠 ＋ 取得實際觀測結果 → 總管送 **C2b Decision Gate**（附推薦方案）。⛔ C2b 未經客戶另行裁示不得開始 scoring 行為修改 |
 | 下一階段 Model／Effort | **高能力模型／Effort High**（客戶建議；C2a 屬資料有效性／proxy·estimated eligibility／freshness，`PROJECT_RULES.md` 第 17 節／DEC-078 A-2 仍 High＋完整相關 QA；建議只是參考，新對話須依第 9.0 節重新判斷，不得假設已切換） |
 | 禁止事項 | C2a ⛔ 清單見 `docs/BACKLOG.md` 5.1.10 **C2a** 列（改 Risk Cap scoring／threshold／weight／公式／Required Core 數量、production write、Daily Schedule、`RC-VISIBILITY` 正式 UI、開始 C2b、開始 C1′、順手處理 DEC-076 ①②）；Gate §7.5 現行範圍註；其餘沿用「C1 合併後」段禁止事項 |
