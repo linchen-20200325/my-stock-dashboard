@@ -521,14 +521,14 @@
 
 ### 30.8 GitHub 實況（總管實查；撰寫組 `gh api` 複查 CI run；量測日 2026-10-24，會過期）
 
-- ~~main `649f7393`（#911）；Open／Draft PR 0；~~ main `37cf87e6`（#913 C1 squash merge；其前 `1c8c1415`＝#912、`649f7393`＝#911）；open PR 以 GitHub 為準（C1 後 SSOT 同步 PR 由總管開立）；main `37cf87e6` CI：main push run 40066433398（PR Check），撰寫時進行中，待總管回填結論（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：C1 #913 已合併））；（以下為 `649f7393` 時點事實）main CI 兩個 run success（見 DEC-075 2026-10-24 附註）⇒ **DEC-075 第 4 點前置之 main verification 已成立**。遠端分支含 main 共 8 條（#910 head `ccr-310717b7-37xwl6` 已不在，多了本對話分支 `claude/gracious-hypatia-1cjuh8`；量測日 2026-10-24，會過期）。`PRODUCTION_WRITE_APPROVED: bool = False`（`shared/risk_cap_history_policy.py`）。⚠️ 未驗：squash 後 main 樹是否等同 `9714d0b3`。
+- ~~main `649f7393`（#911）；Open／Draft PR 0；~~ main `37cf87e6`（#913 C1 squash merge；其前 `1c8c1415`＝#912、`649f7393`＝#911）；open PR 以 GitHub 為準（C1 後 SSOT 同步 PR 由總管開立）；main `37cf87e6` CI：main push run 40066433398（PR Check）conclusion=success；Fast job 120790571734 success（05:29:19→05:41:31Z）、Slow job 120792951874 success（05:41:34→05:59:31Z）（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：C1 #913 已合併））；（以下為 `649f7393` 時點事實）main CI 兩個 run success（見 DEC-075 2026-10-24 附註）⇒ **DEC-075 第 4 點前置之 main verification 已成立**。遠端分支含 main 共 8 條（#910 head `ccr-310717b7-37xwl6` 已不在，多了本對話分支 `claude/gracious-hypatia-1cjuh8`；量測日 2026-10-24，會過期）。`PRODUCTION_WRITE_APPROVED: bool = False`（`shared/risk_cap_history_policy.py`）。⚠️ 未驗：squash 後 main 樹是否等同 `9714d0b3`。
 
 ### 30.9 C1 完成狀態（2026-10-24；append-only；決策者 AI 總管（事實更新））
 
 > 2026-10-24 新增。C1＝DEC-077 第 2 點指派的三類「資料可觀測性／provenance metadata」。執行紀錄（含偏離規格，屬總管內部技術拍板、非客戶裁示）只在 `docs/DECISIONS.md` DEC-077「執行紀錄」；結案與新登記只在 `docs/BACKLOG.md` 5.1.10；現況與下一步只在 `docs/HANDOFF.md` §0「C1 合併後」段。本節只摘要＋出處。
 
 - **PR／SHA**：PR #913（https://github.com/linchen-20200325/my-stock-dashboard/pull/913）；squash merge `37cf87e6`（完整 `37cf87e6103a72cac45d812fc633ab641f9a6b7b`）；PR head `29cd7f3e`。
-- **CI**：PR CI＝PR head 29cd7f3e：Fast checks（job 120785311814）success、Slow tests AppTest（job 120788338331）success；run 40064619133。main CI＝main push run 40066433398（PR Check），撰寫時進行中，待總管回填結論。⚠️ main verification（`PROJECT_RULES.md` 第 7 節）在 main CI 結論回填前**不成立**。
+- **CI**：PR CI＝PR head 29cd7f3e：Fast checks（job 120785311814）success、Slow tests AppTest（job 120788338331）success；run 40064619133。main CI＝main push run 40066433398（PR Check）conclusion=success；Fast job 120790571734 success（05:29:19→05:41:31Z）、Slow job 120792951874 success（05:41:34→05:59:31Z）。⚠️ main verification（`PROJECT_RULES.md` 第 7 節）~~在 main CI 結論回填前**不成立**~~ **已成立**（main SHA `37cf87e6`＋main CI success）（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管，事實回填）。
 - **完成內容**（三項全部 done）：
   - `DH-C1-NA-DROP-LOG`：11 處 production ^TWII／VIX `dropna` 開始記錄清理筆數，清掉 >0 筆時印一行（筆數算不出來時也會印一行說明；stdout 寫不出去時改寫 stderr）；共用 helper＝新 L0 檔 `shared/na_drop_log.py`。8 處＝`daily_data_fetchers._fetch_single_cached`／`fetch_adl`、`macro_core.fetch_yf_ohlcv`／`_fetch_yf_close_base`、`macro_snapshot.compute_twii_bias`／`fetch_vix_block`、`scripts/update_macro_forward_test._twii_close_and_asof`、`scripts/update_macro_history.fetch_twii_ohlcv`；另 3 處＝`macro_cache_reader.load_twii_close`、`weekly_review_service._macro_lite_lines`、`risk_radar._fetch_cboe_csv`。⚠️ 驗證方式：兩組盤點交叉（實作組＋QA-A），**非形式化窮舉**。
   - `DH-C1-PCR-SRC`：先行指標 df 新增 `_pcr_src` 欄（TAIFEX＝`official`、FinMind-TXO-inst-est＝`proxy_estimate`）；只描述來源、**不是計分資格**，下游不讀；欄名與計畫的 `選PCR_src` 不同，因底線開頭會被 CSV 匯出排除。

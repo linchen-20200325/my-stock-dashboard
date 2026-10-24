@@ -110,11 +110,11 @@
 |---|---|
 | main | `37cf87e6`（完整 `37cf87e6103a72cac45d812fc633ab641f9a6b7b`；#913 C1 squash merge；其前 `1c8c1415`＝#912）。cron 會推進 tip，**以 GitHub 為準** |
 | #913（C1） | 已 squash 合併（https://github.com/linchen-20200325/my-stock-dashboard/pull/913）；PR head `29cd7f3e`。PR CI：PR head 29cd7f3e：Fast checks（job 120785311814）success、Slow tests AppTest（job 120788338331）success；run 40064619133。QA：四輪、共五組獨立 QA（A／B／C／D／E）；最終 head 29cd7f3e（只改測試與 docstring）由總管讀 diff＋PR CI 驗證，未再派獨立 QA |
-| main 驗證 | main CI：main push run 40066433398（PR Check），撰寫時進行中，待總管回填結論。⚠️ 依 `PROJECT_RULES.md` 第 7 節，**main verification（main SHA＋main CI conclusion）在結論回填前不成立** |
+| main 驗證 | main CI：main push run 40066433398（PR Check）conclusion=success；Fast job 120790571734 success（05:29:19→05:41:31Z）、Slow job 120792951874 success（05:41:34→05:59:31Z）。⚠️ 依 `PROJECT_RULES.md` 第 7 節，~~**main verification（main SHA＋main CI conclusion）在結論回填前不成立**~~ main verification **已成立**（main SHA `37cf87e6`＋main CI success）（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管，事實回填） |
 | open PR | 本 C1 後五 SSOT 同步 PR（docs-only）由總管開立 —— **以 GitHub 為準** |
 | Current Task | **無進行中實作**。C1 三項（`DH-C1-NA-DROP-LOG`、`DH-C1-PCR-SRC`、`DH-C1-FWD-LEG-ASOF`）全部 done（BACKLOG 5.1.10） |
 | C1 結果摘要 | 零投資輸出變更：before／after（還原鏈到 `1c8c1415`）＋四輪五組獨立 QA 驗證下游全部相同；已知、接受的唯一差異＝`src/ui/tabs/tab_macro.py` 約 :463 stdout log「有效欄=N」多 1（只影響 log，`DH-TAB-MACRO-LOG-COUNT`）。⚠️「11 處即全部 production ^TWII／VIX `dropna`」＝兩組盤點交叉，非形式化窮舉。限制（未實測）：Streamlit Cloud、GH Actions cron、Windows cp950 未實機跑；外部 API 用 mock |
-| **唯一 Next Safe Action** | 依序：**(i)** 確認並回填 main CI run 40066433398 結論（五 SSOT 佔位句）；**(ii)** 合併本 SSOT PR。⚠️ main CI 若失敗 ⇒ 依 `PROJECT_RULES.md` 16.4 **停手**（CI／QA 真實失敗且下一修法未授權 → 停手請示），C1 各列 done 不成立。**(iii)** 之後才是 **停下等客戶裁示**：依 DEC-077 第 5 點向客戶回報 C1 結果（實際完成內容、PR／main SHA、CI／QA、是否確認零投資輸出變更、新發現、C2 前仍需裁示事項）。⛔ **不自動進 C2**；⛔ C1′ 仍等 DEC-076 ①；任何送題須附總管推薦方案 —— **送題，不施工** |
+| **唯一 Next Safe Action** | 依序：**(i)** ✅ **已完成**：確認並回填 main CI run 40066433398 結論（success）（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管，事實回填）；原文：確認並回填 main CI run 40066433398 結論（五 SSOT 佔位句）；**(ii)** 合併本 SSOT PR。⚠️ main CI 若失敗 ⇒ 依 `PROJECT_RULES.md` 16.4 **停手**（CI／QA 真實失敗且下一修法未授權 → 停手請示），C1 各列 done 不成立。**(iii)** 之後才是 **停下等客戶裁示**：依 DEC-077 第 5 點向客戶回報 C1 結果（實際完成內容、PR／main SHA、CI／QA、是否確認零投資輸出變更、新發現、C2 前仍需裁示事項）。⛔ **不自動進 C2**；⛔ C1′ 仍等 DEC-076 ①；任何送題須附總管推薦方案 —— **送題，不施工** |
 | 待客戶裁示 | `DEC076-CONFIRM` ①（指標危險度口徑；**C1′ 等它**）②（⚡ 行動例示射程）；**`PROXY-SEMANTICS`**（BIAS240／PCR／台灣 PMI 一起研究、一起裁示；⛔ 不得先立通則）；**`CV1-DR-11`**（`PROJECT_RULES.md` 16.1／DEC-062 Q5 vs DEC-077 3B，C2 前併 `PROXY-SEMANTICS`）；**C2 Decision Gate**（VN1-PG「Risk Cap 輸入有效性批」）；**`RC-VISIBILITY`**（C2 後的 UI Decision Gate；目前不恢復顯示）；另 `DH-BADGE-RERUN-SEMANTICS`、`DH-EXPORT-LABEL-READING` 等 —— 完整清單見 `docs/BACKLOG.md` §F「Decision Gates」列 |
 | 新發現（只登記、未施工） | `DH-RS-PREP-DROPNA`、`DH-NONUTF8-PRINT`、`DH-LI-ASOF-SEMANTICS`、`DH-TAB-MACRO-LOG-COUNT`（BACKLOG 5.1.10） |
 | 下一階段 Model／Effort | 下一階段＝客戶裁示後的送題研究（`PROXY-SEMANTICS`／C2 Gate），**不施工**：建議 **High**（⚠️ 撰寫組依 Context Loss Check F 項補列、AI 總管確認（理由：C2 Decision Gate 涉 proxy／estimated 資料契約與計分資格等投資語意）；**非客戶建議**）。依 `PROJECT_RULES.md` 第 15 節第 6 點：建議只是參考，新對話須依第 9.0 節重新判斷，不得假設已切換 |
@@ -124,7 +124,7 @@
 | 回報模式 | 維持 Silent Autonomous Cruise；C1 整批完成＝DEC-077 第 5 點的回報時點 |
 | 接手必讀 | 先跑 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate，再讀五個 SSOT（`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、本檔、`docs/PROJECT_STATE.md`）；上位 `CLAUDE.md` 同樣須讀 |
 
-> 📌 2026-10-24 **DEC-078**（客戶裁示，append-only）：(A) 小批次採 Minimum Sufficient Effort／targeted tests 優先（Risk Cap／投資語意／資料有效性／proxy／PIT／投資公式／L3 仍 High＋完整 QA；required checks 不取消，見 `PROJECT_RULES.md` 第 17 節）；(B) CI Fast／Slow 平行開始（`pr-check.yml` 移除 `slow-tests` 的 `needs`；Fast 仍 blocking、Slow 仍 informational）。本 PR：`claude/gracious-hypatia-1cjuh8`（docs＋workflow，PR 號待開立回填）。
+> 📌 2026-10-24 **DEC-078**（客戶裁示，append-only）：(A) 小批次採 Minimum Sufficient Effort／targeted tests 優先（Risk Cap／投資語意／資料有效性／proxy／PIT／投資公式／L3 仍 High＋完整 QA；required checks 不取消，見 `PROJECT_RULES.md` 第 17 節）；(B) CI Fast／Slow 平行開始（`pr-check.yml` 移除 `slow-tests` 的 `needs`；Fast 仍 blocking、Slow 仍 informational）。本 PR：`claude/gracious-hypatia-1cjuh8`（docs＋workflow，~~PR 號待開立回填~~ PR #914（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管，事實回填））。
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 
