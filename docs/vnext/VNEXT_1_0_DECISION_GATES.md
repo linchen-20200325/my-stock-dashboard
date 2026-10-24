@@ -339,4 +339,4 @@
 - **送題時點**：C2a 合併＋main CI 綠＋取得實際觀測結果（例：BIAS240 估算、PCR `proxy_estimate`、PMI secondary／carried_forward 在 production 的實際出現頻率與對 Risk Cap 的影響）之後。
 - **題目範圍（預定，待送題時定稿）**：依 DEC-080 已定方向（第 2、3、4 點）實際套用 eligibility、改變 Risk Cap 計分的時點與方式；`RISK_CAP_RULESET_VERSION` 升版與既有 v2 快照 7 天沿用空窗（7.3 末段推論，未實測）；揭露文字。
 - ⛔ C2b 未經客戶另行裁示不得開始 scoring 行為修改；⛔ 不得與 production write、`RC-VISIBILITY` UI 改動同一 PR（7.2 Q6）。
-- PMI 發布期／freshness window 的正式定義若仍未確認，須先依 `docs/BACKLOG.md` `DH-PMI-PUBLICATION-WINDOW-SPEC` 送具證據規格／Decision Gate，⛔ 不得在 C2b 自定數字。
+- PMI 發布期／freshness window：總管判定（2026-10-24）repo 現有規則**不構成**正式定義（DEC-029 明文不得自創天數；lag 1 天／緩衝 7 天皆 AI 依程式填寫）⇒ C2a 對 PMI carried_forward 的 Risk Cap eligibility 記為 `undetermined_pending_spec`；具證據規格提案（`docs/BACKLOG.md` `DH-PMI-PUBLICATION-WINDOW-SPEC`）**與本 Gate 一併送客戶**，⛔ 不得在 C2b 自定數字。

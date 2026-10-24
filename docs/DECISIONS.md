@@ -1237,7 +1237,7 @@ C1 完成後停下。
   8. **C2a 屬高風險資料契約批**：建議高能力模型；Effort High；完整相關 QA；必須證明零投資輸出變更。C2a ⛔：改 Risk Cap scoring；改 threshold／weight；改公式；改 Required Core 數量；啟用 production write；開 Daily Schedule；改 `RC-VISIBILITY` 正式 UI；開始 C2b；開始 C1′；順手處理 DEC-076 ①②。
 - **不是什麼**（⛔）：
   - ⛔ **不是計分變更授權**：第 2、3 點定的是**目標 policy**（C2a 的 policy table 依此記錄 eligibility）；Risk Cap 計分實際改變屬 **C2b**，未經客戶另行裁示不得開始。C2a 期間 Risk Cap 計分行為**維持現行**（含 BIAS240 估算值、PCR 法人估算值仍照現行程式計分）（撰寫組讀法，依第 6 點「不得改任何 Risk Cap 分數…或投資輸出」＋「C2b 未經我另行裁示，不得開始 scoring 行為修改」）。
-  - ⛔ **不是 PMI 發布期長度的裁示**：第 4 點明令不得自行發明；repo 現有的月頻新鮮度規則是否足以作為「正式定義」**仍待確認**（現有規則的出處與性質見 BACKLOG `DH-PMI-PUBLICATION-WINDOW-SPEC`）。
+  - ⛔ **不是 PMI 發布期長度的裁示**：第 4 點明令不得自行發明；repo 現有的月頻新鮮度規則**總管判定（2026-10-24）：現有規則不構成 DEC-080 第 4 點所稱的「正式定義」**（DEC-029 明文不得自創天數；lag 1 天／緩衝 7 天皆 AI 依程式填寫，非客戶核定）；C2a 對 PMI carried_forward 的 Risk Cap eligibility 記為 `undetermined_pending_spec`、不自定數字；規格提案於 C2a 觀測後與 C2b Gate 一併送客戶（見 BACKLOG `DH-PMI-PUBLICATION-WINDOW-SPEC`）。
   - ⛔ **不是 16 燈／指標危險度的裁示**：第 2 點「不參與 Risk Cap 計分」只管 Risk Cap；16 燈 `bias_240` 燈估算值怎麼處理仍屬 C1′、等 DEC-076 ①。
   - ⛔ **不是 UI 改動授權**：第 5 點只確認揭露需求，正式畫面須先出線框／文字草稿並經客戶確認（DEC-003 ①；`PROJECT_RULES.md` 第 4 節 #7）。
   - ⛔ **不是 production write／Daily Schedule 授權**：`PRODUCTION_WRITE_APPROVED=False` 不變；DEC-066 F 不變；VN1-PG production write 仍禁止。
@@ -1297,9 +1297,9 @@ C2a 屬高風險資料契約批：建議高能力模型；Effort：High；完整
   - **DEC-048（Required Core）**：Core 成員與數量**不變**（C2a ⛔ 改 Required Core 數量）。第 4 點「超過允許期間 → unavailable → Required Core 無效 → 不產生新的 Risk Cap」與 DEC-048 既有「Core 任一無效 → 不產生新 cap、讀端沿用 7 天」同向；本條新增的是「PMI 的 secondary／carried_forward 在什麼條件下仍算有效」。
   - **DEC-046／DEC-051（Optional 不阻斷＋卡面揭露）**：第 2、3 點「視為 Optional 未評估」「不得因此阻斷整個 Risk Cap」與兩條同向；BIAS240 估算／PCR 法人估算將來（C2b 後）落入 DEC-051 的「未評估」揭露，且須寫明 estimated／歷史不足、`proxy_estimate` 的原因（BACKLOG `DH-PLAN-22-DRIFT` (c) 指出現行揭露只會寫「未取得」，屬 C2a／C2b 設計須處理的缺口）。
   - **DEC-062 Q5（代理值只顯示、不計分；同樣適用總經彙總燈）**：原文**不改**。本條逐指標裁定其射程：PCR 法人估算（不同量）＝不計分、可顯示，與 Q5 同向；BIAS240 估算（同量近似）另立 `estimated` 類，對 Risk Cap 同樣不計分；台灣 PMI 正式來源與同一正式序列的 secondary **不是**代理值，Q5 不據以剔除其計分（第 4 點）。Q5 對**總經彙總燈**（16 燈）的套用仍依 DEC-076 ①／C1′，本條不涉。
-  - **DEC-077**：本條即 DEC-077 方案 C 之下「C2／VN1-PG 另開 Decision Gate」與第 5 點「C2 必須正式處理 proxy／estimated 的資料契約與計分資格」的裁示結果。**3B「不得先建立通則」被遵守**：本條逐指標裁示（BIAS240、PCR、PMI 各自結論），且第 4 點明令 PMI 不得套 blanket rule。DEC-077 第 1 點「C2 暫不施工」自本條起對 **C2a** 不再成立（C2a 已指派）；對 C2b 與 VN1-PG production write **續有效**。Freeze「新 Batch」：DEC-077 只對 C1 解除；本條指派 C2a 時客戶原文**未逐字提 Freeze** —— 撰寫組讀法＝指派 C2a 即對 C2a 解除「新 Batch」限制（⚠️ 讀法，待總管確認）；其餘 Freeze 禁止項不變。取代關係登第 5 節。
+  - **DEC-077**：本條即 DEC-077 方案 C 之下「C2／VN1-PG 另開 Decision Gate」與第 5 點「C2 必須正式處理 proxy／estimated 的資料契約與計分資格」的裁示結果。**3B「不得先建立通則」被遵守**：本條逐指標裁示（BIAS240、PCR、PMI 各自結論），且第 4 點明令 PMI 不得套 blanket rule。DEC-077 第 1 點「C2 暫不施工」自本條起對 **C2a** 不再成立（C2a 已指派）；對 C2b 與 VN1-PG production write **續有效**。Freeze「新 Batch」：DEC-077 只對 C1 解除；本條依客戶「完成 GitHub Verification Gate 後，再開始 C2a」指派；總管確認 Freeze「新 Batch」對 C2a 解除（讀法，非客戶逐字）；其餘 Freeze 禁止項不變。取代關係登第 5 節。
   - **`CV1-DR-11`（`PROJECT_RULES.md` 16.1／DEC-062 Q5 vs DEC-077 3B）**：**由本條裁示**。暫行讀法（「在算不算代理值未裁示前，不得以 16.1 直接套用、也不得反向排除」）自本條起退場；裁示內容＝BIAS240 估算、PCR 法人估算不參與 Risk Cap 計分但可顯示並標示（與 16.1「不得以正式資料的身分顯示或計分」同向）；台灣 PMI 依正式 provenance 處理、不套 blanket rule。16.1 與 Q5 原文不改。
-  - **DEC-029（freshness：月頻最多落後一個正常發布期、不得自創 freshness 天數）／DEC-030（PMI 前月用官方值）**：與第 4 點同向；第 4 點「正式定義的發布期」是否即 DEC-029＋現行 `shared/freshness_policy.py`／`shared/staleness.py` 規則，**未裁示、待確認**（`DH-PMI-PUBLICATION-WINDOW-SPEC`）。
+  - **DEC-029（freshness：月頻最多落後一個正常發布期、不得自創 freshness 天數）／DEC-030（PMI 前月用官方值）**：與第 4 點同向；第 4 點「正式定義的發布期」：**總管判定（2026-10-24）：現有規則不構成 DEC-080 第 4 點所稱的「正式定義」**（DEC-029 明文不得自創天數；lag 1 天／緩衝 7 天皆 AI 依程式填寫，非客戶核定）；規格待 C2a 觀測後隨 C2b Gate 送客戶（`DH-PMI-PUBLICATION-WINDOW-SPEC`）。
   - **DEC-044（沿用 7 天）**：天數不變；第 5 點只要求揭露。改以輸入 as-of 起算仍屬另題（Gate §7.2 Q4），本條未裁示。
   - **DEC-076 ①②**：**維持 pending**、分開處理（客戶額外邊界）；C1′ 仍等 ①。
   - **DEC-003（線框 gate）**：第 5 點適用（`RC-VISIBILITY` 先線框）。
@@ -1335,7 +1335,7 @@ C2a 屬高風險資料契約批：建議高能力模型；Effort：High；完整
 | `docs/vnext/DATA_HEALTH_REPAIR_PLAN_2026-10-23.md` 第 3 節總管推薦「批 2 併 `VN1-PG-*` 實作批」（2026-10-24 新增列） | DEC-077 | 改為拆分（批 2 拆 C1／C1′／C2，僅 C2 併 VN1-PG）；計畫檔原文不改 | 客戶 2026-10-24 原文明示＋撰寫組判讀，單組 |
 | `CV1-DR-11` 暫行讀法「在 BIAS240 估算／PCR 法人估算／台灣 PMI 標記值算不算代理值未裁示前，不得以 `PROJECT_RULES.md` 16.1 直接套用、也不得反向排除」（2026-10-24 新增列） | DEC-080 | 裁示（暫行讀法退場；16.1／DEC-062 Q5 原文不改；BIAS240 估算、PCR 法人估算不參與 Risk Cap 計分、可顯示＋標示；台灣 PMI 不套 blanket rule） | 客戶 2026-10-24 原文明示（第 1～4 點）；對映 `CV1-DR-11` 為撰寫組判讀，單組 |
 | DEC-077 第 1 點「C2／VN1-PG 暫不施工，後續另開 Decision Gate」（2026-10-24 新增列） | DEC-080 | 部分取代（**C2a 已指派＝動工授權**；C2b 未經另行裁示不得開始；VN1-PG production write、Daily Schedule 仍禁止；DEC-077 原文不改） | 客戶 2026-10-24 原文明示（「先 C2a，再 C2b」「C2b 未經我另行裁示，不得開始 scoring 行為修改」） |
-| DEC-077／DEC-076 Freeze「新 Batch」只對 C1 解除（2026-10-24 新增列） | DEC-080 | 延伸至 C2a（其餘 Freeze 禁止項不變） | ⚠️ 撰寫組讀法、待總管確認：客戶原文未逐字提 Freeze，依「先 C2a」＋C2a ⛔ 清單推得 |
+| DEC-077／DEC-076 Freeze「新 Batch」只對 C1 解除（2026-10-24 新增列） | DEC-080 | 延伸至 C2a（其餘 Freeze 禁止項不變） | 依客戶「完成 GitHub Verification Gate 後，再開始 C2a」指派；總管確認 Freeze「新 Batch」對 C2a 解除（讀法，非客戶逐字） |
 | Gate §7.2 Q5 總管推薦「需客戶確認『第三方轉載可否滿足 Required Core』」（2026-10-24 新增列） | DEC-080 第 4 點 | 裁示（同一正式序列的 secondary／republished value 可在契約允許下滿足 Required Core，須揭露來源） | 客戶 2026-10-24 原文明示 |
 
 ## 6. 未升格項目（證據不足或題意不明 → 見 `docs/BACKLOG.md` 第 4 節）
