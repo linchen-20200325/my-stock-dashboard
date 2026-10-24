@@ -5,6 +5,7 @@
 > **請示格式**：依 `PROJECT_RULES.md` 第 4 節 —— 商業與功能語言＋總管推薦方案＋具體原因，可一鍵決策；已確認 bug、只有一個安全修法者**不包裝成裁示題**（反向禁令）。
 > 📌 **2026-10-18 裁示（append-only；上下文一字未改）**：五題已由客戶裁示，見 **DEC-062**／DR-2026-10-18-3；各題下方加註，第 6 節為裁示後的建議小批次（建議，不是授權）。
 > ⛔ **本檔不是實作授權**。各題裁示後，施工仍須客戶指派批次（`CLAUDE.md` §-1；DEC-057「不要開始 vNext 1.0 implementation。」）。
+> 📌 **2026-10-24 追加（append-only；上文與第 1～6 節一字未改）**：第 7 節收錄 **`PROXY-SEMANTICS`／C2 Decision Gate**（BIAS240／PCR／台灣 PMI 的 proxy／estimated 資料契約與計分資格；DEC-077 第 3 點 B、第 5 點）—— 研究整理、**待客戶裁示**，⛔ 非授權；所有推薦皆為「總管推薦，待客戶裁示」。
 
 ## 1. 摘要
 
@@ -179,3 +180,143 @@
 | **1.0-B3** `VN1-STORE` 保存方式研究 | 研究並驗證（不實作）：Streamlit Cloud persistence、restart/deployment、concurrency、寫入可靠性、資料責任；不把 Git repo 當 production datastore | **Medium** | 結果送客戶裁示（附推薦方案）<br>📌 2026-10-19 狀態（append-only）：研究完成（`docs/vnext/VN1_STORE_RESEARCH.md`；只研究、未實作）；總管推薦系統專用 Google Sheet（GitHub Actions cron 單一寫入、app 以新唯讀 SA 讀取），次選 GCS；**待客戶裁示保存位置（DEC-009）**；無頭寫入 PoC 未驗證<br>📌 2026-10-19（append-only）：DEC-063 已裁示方向 A；最小 PoC 已合併（#882、`a45c7405`、main CI run 39234825821 success）；待客戶手動觸發 `risk_cap_history_poc` workflow 並建立 Sheet／帳號／secrets；production 寫入未核准。上一則「待客戶裁示保存位置」「無頭寫入 PoC 未驗證」自本日起不再成立（有意識的變更，不是漏刪） |
 | **1.0-B4** 線框送審 | 依 Q1-B 範圍出文字線框送客戶拍板（DEC-003） | **Medium** | 拍板前不寫 1.0 UI code |
 | 後續批 | 線框核准後的 UI 實作（今天頁先採「從今天開始記錄」、彙總燈依 Q5-A 等），逐批送 | 依批而定 | 線框核准後；每批 Effort Check |
+
+## 7. `PROXY-SEMANTICS`／C2 Decision Gate（2026-10-24；研究整理，**待客戶裁示**，⛔ 非授權）
+
+> **日期**：2026-10-24｜**性質**：DEC-077 第 3 點 B／第 5 點要求的 C2 前置研究，**只研究、只整理題目，不實作** —— 不改產品 code、tests、workflow、data、公式、門檻、權重、資料來源。
+> **承載處**：`docs/BACKLOG.md` `PROXY-SEMANTICS`／C2 列（5.1.10）原本沒有獨立的 Decision Gate 檔；本節沿用本檔（vNext 1.0 Decision Gate 承載檔）收錄 C2 Gate 全文。**本檔第 1～6 節一字未改**；本節與 vNext 1.0 的 VN1-Q1～Q5 是不同題組。新發現登記在 `docs/BACKLOG.md` 5.1.11；耐久摘要在 `docs/PROJECT_STATE.md` §31；現況在 `docs/HANDOFF.md` §0。
+> **研究方法**（`CLAUDE.md` §-2 規則 4／6）：三組獨立唯讀研究，基準 main `f48b30bf`、量測日 2026-10-24 —— **A 組**：程式路徑盤點（讀碼＋grep）；**B 組**：治理文件盤點（DECISIONS／BACKLOG／HANDOFF／PROJECT_STATE／PROJECT_RULES／Data Health 稽核與計畫檔）；**C 組**：紅隊行為實證（mock session 實際呼叫 production 函式 `build_engine_inputs` → `run_rule_engine` → `compute_and_lock_risk_cap` → `get_macro_state` → `build_allocation_decision`，檔案只寫進 scratch；既有 pytest 子集 z64／z65／z66／z66b／i2_bias／c1_observability **571 passed**）。三份原始報告留在總管 scratchpad、**不入庫**；本節只收錄事實與出處。
+> **標記**：「**兩組交叉**」＝至少兩組獨立得到同一事實；「**單組**」＝只有一組看到（只能當待驗事項，`CLAUDE.md` §-2 規則 6）。行號為 2026-10-24 `f48b30bf` 實測，會過期。
+> ⛔ **本節任何方案都不是 Approved／已裁示**；所有推薦一律是「**總管推薦，待客戶裁示**」。客戶裁示前，DEC-077 第 3 點 B「不得先建立『proxy 一律不能計分』或『proxy 一律可以計分』的通則」與 `CV1-DR-11` 的暫行讀法照舊有效。
+
+### 7.1 現行真實契約（研究結論，非裁示）
+
+| # | 項目 | 現況 | 出處 | 驗證 |
+|---|---|---|---|---|
+| 1 | Required Core | VIX、台灣 PMI 當期＋前月、外資期貨淨空單＋加權指數跌破 MA5 | DEC-048 客戶原文「{VIX、PMI 當期、PMI 前月、外資期貨＋MA5}」；`shared/risk_cap_policy.py:56-62` `REQUIRED_CORE_INPUTS` | 兩組交叉（A、B；C 實跑一致） |
+| 2 | Core 任一無效 | 不產生新 cap、`risk_cap_state.json`／`macro_state.json` 兩檔一位元組不動；讀端沿用 7 天內有效快照，超過 →「無法判定」 | DEC-048／DEC-044／DEC-040；`src/services/risk_cap_apply.py:262-278`；`src/services/macro_state_locker.py:662-697,962-990`；`shared/staleness.py:135,163`（`MACRO_VERDICT_MAX_AGE_DAYS = STALE_DAYS_DAILY = 7`）。C 組實測：VIX／PMI 當期／PMI 前月／外資期貨／MA5 缺、VIX 過期 6 種情境皆 `written=False`；快照 6.9 天 → 沿用 40%、7.1 天 → None | 兩組交叉（A 讀碼、C 實測；B 治理一致） |
+| 3 | 7 天的起算點 | 以**快照寫入時間** `timestamp` 計，不看輸入 as-of ⇒ 沿用期末的實際資料年齡可 >10 天（日頻） | `macro_state_locker.py:962-985` | 單組推論（A）＋C 讀碼／實測 6.9／7.1 天；「>10 天」為推論、未實測 |
+| 4 | Optional（BIAS240、PCR）缺 | 照算、寫檔，卡面揭露「未評估：PCR、BIAS240；部分訊號未納入，本次上限資訊不完整」 | DEC-046／DEC-051；`macro_engine_inputs.py:364-367`；`src/ui/views/risk_cap_gate.py:85-95`；C 組實測 `written=True`、`not_evaluated=['BIAS240_pct','PCR']` | 兩組交叉（A、C；B 治理一致） |
+| 5 | proxy／estimated 對 Risk Cap 的正式契約 | **不存在**；程式對 proxy／estimated／stale-cache 完全無處置 | B：DEC-062 Q5、DEC-037、DEC-074 皆非針對這三項；DEC-077 3B 列為待裁示。A：`dated_inputs.py`／`macro_engine_inputs.py`／`risk_cap_apply.py` 不讀 `is_estimated`／`is_proxy`／`is_stale`／`_pcr_src` | 兩組交叉（A、B、C） |
+| 6 | BIAS240 <240 日 | `macro_snapshot.compute_twii_bias` 以可得天數均線頂替（`_cs.tail(min(240,_n)).mean()`，`is_estimated = _n < 240`）；估算值與正式值同欄 `bias_240`、旗標另欄；`extract_bias240` 不讀旗標 → 估算值進 Risk Cap 計分 | `src/data/macro/macro_snapshot.py:461,491`；`src/compute/macro/dated_inputs.py:160-167`；`macro_state_locker.py:870-876` | 兩組交叉（A、C） |
+| 6a | BIAS240 估算的實際影響 | +20% 估算值使上限 40% → 20%；`not_evaluated` 為空 ⇒ 卡面「必要與選用訊號皆已評估」 | C 組 probe | 單組實測（C） |
+| 6b | BIAS240 在 16 燈 | 原樣用值判燈，只在顯示字串加「（估算）」徽章 | `src/compute/macro/macro_helpers.py:1949,1989,2035-2038,2049`；I2 註解「只揭露，不改判定」 | 兩組交叉（A、C） |
+| 6c | BIAS240 新 UI 圖表 | 另一條路徑：`macro_cache_reader.load_v2_chart_series` 足 240 才算、不足不畫（不估算） | `src/data/macro/macro_cache_reader.py:544-566` | 單組（A） |
+| 7 | PCR 混源 | 先以 FinMind TXO 三大法人 OI 估算填 `選PCR`，TAIFEX 探測通過才逐日覆蓋 ⇒ 同欄逐日混源；估算值進 Risk Cap（>1.5 −10、<0.7 +5） | `src/data/macro/leading_indicators.py:1384-1412,1580-1596`；`dated_inputs.py:248-260`；`macro_state_locker.py:878-881`；C 組實測估算值與 TAIFEX 值結果完全相同 | 兩組交叉（A、C） |
+| 7a | `_pcr_src` | 零讀者，且由測試強制：`tests/test_c1_observability.py::test_new_fields_have_no_readers`（約 :1693-1716）⇒ 任何接線都須同批改該測試（＝政策變更） | `leading_indicators.py:283-293`；同上測試 | 兩組交叉（A、C） |
+| 7b | 新 UI 的 PCR | 無 PCR 燈、無來源顯示；16 燈不含 PCR | `src/ui/views/*.py` grep 只命中 `risk_cap_gate.py:86` docstring | 單組（A） |
+| 8 | 台灣 PMI 當期 | 8 源賽跑取第一命中；data.gov.tw/6100 標 `is_proxy=True`、NDC 標 `True`，第三方 StockFeel／Cnyes／MoneyDJ 反標 `False`（語意倒置）；`is_proxy`／`is_stale` 無讀者 | `src/data/macro/macro_core.py:1424,1494,1572,1612,1693`（`PMI_SOURCE_REGISTRY` `:1707-1716`）；同檔 `:1213-1225` 註解稱 data.gov.tw 是「同一份官方數字」 | 兩組交叉（A、C；B 亦記） |
+| 8a | 台灣 PMI 前月 | 恆取 cron parquet `data_cache/tw_pmi.parquet`，來源 data.gov.tw dataset 6100 —— 即當期路徑被標 proxy 的同一資料集 | `dated_inputs.py:391-458`；`scripts/update_macro_history.py:783-`（約 `:871` `source="data.gov.tw:dataset:6100"`） | 單組（A） |
+| 8b | 台灣 PMI stale-cache | 8 源全敗 → 90 天 stale-cache，保留原資料月；資料月仍在發布期內即判 FRESH、可滿足 Core；`stale-cache(…)` 字樣不進快照、不上 UI | `macro_core.py:1174-1188`；`shared/freshness_policy.py:37-45,185`；`risk_cap_apply.py:178-181`；C 組實測 `stale-cache(StockFeel)` → FRESH、`core_gaps=[]`、cap 40 | 兩組交叉（A 讀碼、C 實測） |
+| 8c | 台灣 PMI 的治理身分 | 無任何 DEC 指定 PMI 正式來源，也沒有核准它是 proxy 例外；`CLAUDE.md` §2.1 列 data.gov.tw 為 T1 官方，但屬 §0 Bootstrap 依程式證據填寫、非客戶裁示；DEC-030 要求前月用「官方值」 | B：DECISIONS grep「PMI」只見 DEC-030／048／070／077 | 單組（B） |
+| 9 | 跨輸入同日比對 | 各 input 各自判新鮮、無跨 input 同日比對 | `macro_engine_inputs.py:351-357`；`dated_inputs.py:251-252` | 兩組交叉（A、C） |
+| 9a | VIX 燈 vs Risk Cap | 同一 session：VIX 10/14 的 36.0 在 16 燈 `state=ok`，Risk Cap 判 stale 不計分 | C 組 probe2 | 單組實測（C） |
+| 9b | 外資期貨燈 vs Risk Cap | 16 燈／交通燈取末列（`_df_last`／`iloc[-1]`），Risk Cap 逐欄往回取 ⇒ 同輪可取不同列（實測燈 missing、Risk Cap 10/22 fresh） | `macro_helpers.py:374,1742-1750`；`dated_inputs.py:207-260` | 兩組交叉（A、C） |
+| 9c | 盤中未收 K 棒 | `drop_in_progress_bar` 只用在領先市場；VIX／BIAS240／MA5 取數未排除 | `macro_cache_reader.py:399,467` | 單組（A） |
+| 9d | 16 燈新鮮度 | 無新鮮度閘門、無逐燈 as_of；readiness 側車無 as_of／stale 欄 | `macro_helpers.py` 五桶段 grep 0 命中；`page_today.py:89-93,960-966` `AS_OF_NOT_IN_CONTRACT` | 兩組交叉（A、C） |
+| 9e | 混日揭露 | 快照有 `input_asof`／`input_detail`，UI 不揭露；實測 VIX 10/20、PCR 10/20、期貨 10/23、PMI 2026-09 同一快照，UI 只寫「必要與選用訊號皆已評估」 | `risk_cap_apply.py:283-291`；`shared/risk_cap_policy.py:153-190`；`risk_cap_gate.py:56,93-94` | 兩組交叉（A、C） |
+| 10 | forward ledger | `macro_forward_test` 驗的是交通燈，不含 Risk Cap；若要驗 Risk Cap 還缺 VIX 日期、PMI 當期／前月資料月與來源、BIAS240 估算旗標、PCR 逐日來源、MA5 日期、`veto_flags` | `shared/macro_forward_test_schema.py:39-81`；`src/compute/macro/macro_forward_test.py:182-218` | 單組（A） |
+| 11 | 新 UI 看不到 Risk Cap 的根因 | `BREADTH_PROXY_SCORING_ENABLED=False` → 健康分恆 None → `build_allocation_decision` 回未評估 →「系統風險上限」不進 `caps` ⇒ 快照有效上限 40%，卡①／卡⑤ 仍顯示「尚未評估」 | `shared/signal_thresholds.py:277`；`macro_helpers.py:437-447`；`shared/allocation_decision.py:281-298,316-333`；C 組實測 `exposure_limit_pct=40`、`has_system_risk_cap=False` | 單組實測（C；A 組未提此機制；BACKLOG `RC-VISIBILITY` 既有記載同一判斷式） |
+| 12 | 系統間共用 | 健康分是 16 燈第一盞（`BUCKET_DANGER_SPECS` 首鍵 `health`）；位階第 3 順位來源＝Risk Cap 引擎輸出的 `market_regime`，目前被 `BREADTH_PROXY_SCORING_ENABLED=False` 封住 | `macro_helpers.py:1932`；`macro_state_locker.py:348-372` | 健康分＝16 燈：單組（C）；位階第 3 順位：兩組交叉（A、C） |
+| 13 | 已過期（行為正確） | Optional 無效不會讓整體失效；Core 無效不產生新 cap | C 組實測（見 #2、#4） | 單組實測（C）＋B 治理一致 |
+
+### 7.2 Decision Gate 題目（Q1～Q6；推薦一律「總管推薦，待客戶裁示」）
+
+#### Q1｜資料身分怎麼分級？
+
+| 選項 | 內容 | 缺點 |
+|---|---|---|
+| A | 單軸四類：`official`／`real`／`proxy_estimate`／`unavailable` | `official` 與 `real` 的界線不清 |
+| B | 單軸三類：`real`／`estimated`／`unavailable` | 失去「proxy＝不同量的替代」與「estimated＝同一個量的近似」的區別 |
+| **C（總管推薦，待客戶裁示）** | **兩軸正交**：provenance ∈ {`observed_official`, `observed_secondary`（同一序列、非主要發布者，例：第三方轉載的 CIER PMI）, `estimated`（同量近似算法，例：BIAS240 短窗均線）, `proxy`（不同量替代，例：TXO 法人 OI 比）, `unavailable`} × freshness ∈ {`fresh`, `stale`, `carried_forward`}；另帶 `as_of`、`source_id`；計分資格由**逐指標 policy table** 推導，不壓成單一 boolean；UI 以文字標籤揭露（不只靠顏色）；欄位 additive、schema 可演進 | policy table 多一層維護 |
+
+#### Q2｜逐指標計分資格
+
+> 選項代碼：**1** 可計分／**2** 可計分＋降 confidence＋揭露／**3** 不計分、只顯示／**4** unavailable。
+
+| 指標／情境 | 總管推薦（待客戶裁示） | 理由 | 影響 |
+|---|---|---|---|
+| BIAS240 `estimated` | **3**：Risk Cap 不計分 → 列入未評估並寫明「歷史不足、估算」；16 燈顯示保留估算標籤 | Optional，不計分不阻斷 cap；估算值已實證可移動上限 20 點（7.1 #6a） | Risk Cap 輸出在估算情境改變（＝投資輸出變更）；16 燈是否同步，由 DEC-076 ① 一併決定 |
+| PCR `proxy`（FinMind TXO 法人估算） | **3**：只有 TAIFEX 官方值計分；法人估算顯示為 proxy | 不同量；門檻 1.5／0.7 依官方 PCR 語意設定 | TAIFEX 失敗日 PCR 列未評估；須同批改 `test_new_fields_have_no_readers`（零讀者守衛） |
+| 台灣 PMI | **1**：`observed_official` 與 `observed_secondary` 皆可計分並揭露來源；`carried_forward`（stale-cache）在發布期內可計分但須揭露「沿用」，超出即 `unavailable`（Core 無效 → 不產生新 cap） | Required Core；若一律剔除會讓 Risk Cap 不產生新上限（`PROXY-SEMANTICS` (1)） | 前提：先修正 `is_proxy` 倒置語意（見 Q5）；⛔ 不得以 blanket rule 把 PMI 拿掉計分（DEC-077 3B） |
+| 選項 2（降權計分） | **列出但不推薦** | 需要新的權重／confidence 規則，違反「不得自行創造權重」（`PROJECT_RULES.md` 第 4 節 #1） | — |
+
+#### Q3｜freshness × eligibility 矩陣
+
+> 分開判斷五件事：`exists`（有值）／`fresh`（新鮮）／`score_eligible`（可計分）／`displayable`（可顯示）／`riskcap_usable`（可用於 Risk Cap）。
+
+| provenance × freshness | 計分 | 顯示 | 總管推薦（待客戶裁示） |
+|---|---|---|---|
+| observed（official／secondary）＋fresh | ✅ | ✅ | eligible |
+| observed＋stale | ❌ | ✅ 標 stale | 不計分、可顯示 |
+| observed＋carried_forward | 僅 PMI 在發布期內 ✅ | ✅ 標「沿用」 | 只有 PMI 例外，須揭露 |
+| estimated／proxy＋fresh | Risk Cap ❌ | ✅ 標籤 | 不計分、可顯示並標籤 |
+| estimated／proxy＋stale | ❌ | 可選 | 不計分 |
+| unavailable | ❌ | — | ineligible |
+
+#### Q4｜Core vs Optional
+
+- **總管推薦（待客戶裁示）**：Core 只接受 observed（official 或 secondary）且 fresh（PMI `carried_forward` 例外如 Q2）；proxy／estimated **不得**滿足 Core → 不產生新 cap、依 DEC-048 沿用 7 天。Optional 的 proxy／estimated 不計分、只揭露、不阻斷。
+- **7 天規則維持**；改以「輸入 as-of」起算屬公式／門檻變更（`PROJECT_RULES.md` 第 4 節 #1），**另列題、本次不提**；先做「沿用 N 天前的上限＋最舊輸入日期」揭露（揭露上卡屬欄位增減，須線框草稿先行，與 `RC-VISIBILITY` 一起處理）。
+
+#### Q5｜台灣 PMI 的身分
+
+- **研究判定**：「**目前語意不一致，需新的 Decision Gate**」—— 既不是已核准的正式例外，也不是一般 proxy：程式 `is_proxy` 標記與 `CLAUDE.md` §2.1、DEC-030 衝突，且無讀者，也無 DEC 指定正式來源（7.1 #8、#8a、#8c）。
+- **總管推薦（待客戶裁示）**：確認 data.gov.tw／NDC／CIER 為 `observed_official`、第三方轉載（StockFeel／Cnyes／MoneyDJ）為 `observed_secondary`、stale-cache 為 `carried_forward`；**需客戶確認「第三方轉載可否滿足 Required Core」**。
+- ⛔ 不得以 blanket rule 把 PMI 拿掉計分（DEC-077 3B）。⛔ 修正 `is_proxy` 語意屬資料語意變更（`PROJECT_RULES.md` 第 4 節 #2），裁示前不動。
+
+#### Q6｜C2 與 VN1-PG 的邊界（DEC-077 方案 C）
+
+- **C2**＝資料契約＋eligibility policy＋Risk Cap 依 policy 篩選（投資輸出變更，High＋完整 QA，DEC-078 A-2）＋揭露。
+- **總管推薦（待客戶裁示）**：C2 拆兩段 ——
+  - **C2a shadow**：只計算並記錄 provenance／eligibility／as_of，**不改計分**；可接 ledger 補欄（7.1 #10）。
+  - **C2b**：實際套用 eligibility、改變計分。
+- **VN1-PG**＝Risk Cap history production write，必須在 C2 契約裁示之後（寫入紀錄須帶 provenance 欄，schema 先定）。
+- ⛔ **不得同一 PR**：(1) eligibility 計分變更＋production write；(2) 任何 UI 版面變更（`RC-VISIBILITY` 須線框草稿先行）＋計分變更；(3) 改 `is_proxy` 語意＋改計分。
+
+### 7.3 三套方案比較（推薦＝總管推薦，待客戶裁示）
+
+| 面向 | 方案 1｜嚴格 | **方案 2｜分層兩軸（總管推薦，待客戶裁示）** | 方案 3｜降權計分（不推薦，僅供比較） |
+|---|---|---|---|
+| data contract | Q1-A 單軸四類 | Q1-C 兩軸（provenance × freshness）＋`as_of`＋`source_id` | 兩軸＋每項 confidence 係數 |
+| scoring eligibility | 只有 official 計分 | 逐指標 policy table（Q2：BIAS240 估算 3、PCR 法人估算 3、PMI 1） | proxy／estimated 乘 confidence 係數計分 |
+| freshness eligibility | 只有 fresh 計分；不承認 carried_forward | Q3 矩陣；PMI carried_forward 在發布期內可計分＋揭露 | 依 freshness 再降權 |
+| Core policy | 只接受 official（第三方轉載 PMI 不行）＋fresh | observed（official／secondary）＋fresh；PMI carried_forward 例外 | 降權後仍可滿足 Core |
+| Optional policy | proxy／estimated 一律不計分 | proxy／estimated 不計分、只揭露、不阻斷 | 降權計分 |
+| UI disclosure | 未評估清單變長；文字標籤 | 文字標籤（官方／轉載／估算／代理／沿用）＋未評估原因；上卡須線框 | 須顯示權重／信心，畫面最複雜 |
+| provenance／as-of | 逐輸入記錄 | 逐輸入 `provenance`／`freshness`／`as_of`／`source_id`（additive） | 同方案 2＋係數 |
+| Risk Cap 影響 | PMI 官方源失敗日 → Core 無效 → 「無法判定」天數增加；BIAS／PCR 估算日不計分 | BIAS／PCR 估算日不計分（上限可能改變）；PMI 可用性大致維持 | 每個估算日的上限都變，且數值取決於新係數 |
+| migration | 先修 `is_proxy` → 改計分；`RISK_CAP_RULESET_VERSION` 升一次 | C2a shadow（不改計分）→ 客戶看 shadow 結果 → C2b 改計分；`RISK_CAP_RULESET_VERSION` 至多升一次（BACKLOG C2 列既有約束） | 須先另行裁示權重 → 改計分 |
+| test impact | z66b `TestWriteGate`（第三方 PMI → Core 缺）、z63 `TestCacheVsFreshness`（stale-cache 不再滿足 Core）、z64 PCR 往回找、z62／z65 抽取與寫檔、c1_observability 零讀者守衛須改（政策變更）、i2_bias `TestFiveBucketZeroBehaviourChange`（若 16 燈同步，依 DEC-076 ①） | C2a：新增 additive 欄位測試；若 shadow 讀 `_pcr_src`，零讀者守衛須同批改；C2b：同方案 1 但 z63／z66b 的 PMI secondary／carried_forward 案例維持可計分；i2_bias 視 DEC-076 ① | 所有計分 golden 值改變；z64／z65／z66b 大改；新增權重測試 |
+| backward compatibility | schema additive；歷史 parquet／快照不回填 | schema additive；歷史 parquet／快照不回填；舊快照缺欄讀為「未記錄」（不推定為 official） | 同左，但新舊上限不可比 |
+| 風險 | 「無法判定」變多；第三方轉載 PMI 被排除可能讓 Core 常態性不足 | secondary 是否可滿足 Core 判錯；policy table 維護成本 | 違反「不得自行創造權重」；結果難稽核 |
+| 優點 | 最保守、最易稽核 | 區分同量近似與不同量替代；Core 可用性與真實性平衡；additive schema；可先 shadow 再改計分 | 資料利用率最高 |
+| 缺點 | 「無法判定」天數增加；仍需修 `is_proxy` | 多一層 policy table；secondary 能否滿足 Core 須客戶拍板 | 需新權重／門檻，違反治理（`PROJECT_RULES.md` 第 4 節 #1） |
+
+> ⚠️ 推論（總管，未實測）：`is_valid_risk_cap_snapshot` 要求 `risk_cap_ruleset_version == "risk_cap.v2"`（`shared/risk_cap_policy.py:30,88-99`），所以 C2b 升版本號時，既有 v2 快照會立即失去「7 天沿用」資格，直到第一份新版有效快照寫入。C2b 設計時要明示這段空窗。
+
+### 7.4 需客戶裁示的題目
+
+本次共 6 個待裁示問題。（商業語言；推薦一律「總管推薦，待客戶裁示」）
+
+1. **資料身分規則選哪一套？** —— 總管推薦：**方案 2（分層兩軸）**。理由：能分清「同一個量的近似值」和「另一個量的替代品」，必要指標不會因此常態性失效，也能先觀察再改分數。
+2. **年線乖離（BIAS240）在歷史不足、用較短均線估算時，要不要退出系統風險上限的計分？** —— 總管推薦：**退出**（列「未評估：歷史不足、估算」；16 燈照樣顯示並標「估算」）。理由：它是選用指標，退出不會讓上限算不出來；而估算值已實證能讓上限從 40% 掉到 20%。
+3. **PCR 在期交所抓不到、改用「三大法人未平倉」估算時，要不要退出計分？** —— 總管推薦：**退出**（只顯示、標「估算」）。理由：那是另一個量，原門檻是照期交所全市場 PCR 訂的。
+4. **台灣 PMI 來自第三方轉載網站、或八個來源都失敗時用的「沿用快照」，可以算數嗎？** —— 總管推薦：**可以，但畫面要寫出來源與「沿用」**；超出發布期就算「無法評估」（不產生新上限）。理由：PMI 是必要指標，一律排除會讓上限常常算不出來。
+5. **上限沿用前一份（最多 7 天）時，要不要在畫面寫明「沿用 N 天前的上限＋最舊資料日期」？（不改計算）** —— 總管推薦：**要**。理由：現在沿用時的實際資料可能已超過 10 天，畫面看不出來。⚠️ 上卡屬欄位增減，須先出線框（與 `RC-VISIBILITY` 一起送）。
+6. **C2 要不要先做「只記錄、不改分數」的觀察版（C2a），看過結果再改分數（C2b）？** —— 總管推薦：**要**。理由：先看估算／轉載實際出現的頻率與影響，再決定改分數，風險最小、可隨時回退。
+
+> 📌 相關但**不在本題組**：`DEC076-CONFIRM` ①（指標危險度口徑）②（⚡ 行動例示射程）**仍未裁示**；第 2 題「16 燈是否同步不計分」與 ① 直接相關，C1′ 仍等 ①。`CV1-DR-11`（`PROJECT_RULES.md` 16.1／DEC-062 Q5 vs DEC-077 3B）隨第 1 題一併裁示。
+
+### 7.5 仍禁止施工（裁示前，⛔）
+
+- C1′；C2 實作（**含 C2a**）；VN1-PG production write（`PRODUCTION_WRITE_APPROVED=False` 不變）；
+- Risk Cap 公式／門檻／權重；`is_proxy` 語意修正；新增或替換 production 資料來源；
+- `RC-VISIBILITY` 的任何 UI 改動（須線框草稿先行，`PROJECT_RULES.md` 第 4 節 #7）。
+
+### 7.6 證據與限制（`CLAUDE.md` §-2 規則 6）
+
+- 三組研究全部唯讀；C 組實跑用 mock session、外部 API 未打；未在 Streamlit Cloud／GitHub Actions 實測。
+- 標「單組」者（7.1 #3、#6a、#6c、#7b、#8a、#8c、#9a、#9c、#10、#11、#12 前半、#13）只能當待驗事項，不得當施工前提。
+- 「無讀者」「只有這些路徑」類全稱句來自 grep，屬單組或兩組窮舉宣稱，非形式化證明。
+- 本節文字由單一撰寫組依總管規格整理，未經第二組逐字複驗；方案比較與推薦是總管判斷，**不是客戶裁示**。

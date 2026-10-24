@@ -159,7 +159,8 @@
 ## 15. 自動資料來源 vs Proxy（代理值）
 
 - **已有出處的部分**：代理值只顯示、不計分；停用項明示停用；沒有資料來源不得宣稱通過（DEC-062 Q5）。M1B 代理值只顯示不計分、裁決設有效期限（DEC-037；期限值未查）。官方只缺外資時不跨來源拼 FinMind（DEC-035；D16）。多源依權威分級與 fallback 順序取第一命中、禁止平均（`CLAUDE.md` §2.1）。新增或替換 production 來源屬 Decision Gate（`PROJECT_RULES.md` §4 #3）。
-- 更廣的「自動來源 vs Proxy」原則：**GitHub 無定義來源；不得推測。**（注意：此處 Proxy 指代理值，不是 NAS 網路 proxy。）
+- ~~更廣的「自動來源 vs Proxy」原則：**GitHub 無定義來源；不得推測。**~~（注意：此處 Proxy 指代理值，不是 NAS 網路 proxy。）（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更正：B 組治理文件盤點指出本句已過時））
+  **現行**：GitHub **已有**出處 —— `PROJECT_RULES.md` 16.1「proxy ≠ real data」（客戶 2026-10-23 Freeze §9 首句；後半句「代理值不得以正式資料的身分顯示或計分」屬撰寫組整理，Freeze §9 全文未入庫）、本檔 §29.3；客戶 2026-10-10〈資料品質、資料來源與公式正確性治理規則〉§六禁止「把 fallback 資料偽裝成主來源」（C 類，handoff 分支 `HANDOFF.md@1510f3f0:563-580`；main 落點 DEC-008 為摘要）。⚠️ 但 BIAS240 估算、PCR 法人估算、台灣 PMI 標記值「算不算代理值」及能否計分，**仍待** `PROXY-SEMANTICS` 裁示（DEC-077 3B；`docs/BACKLOG.md` `CV1-DR-11`；本檔 §31）。
 
 ## 16. cleanup／dead code／old UI 治理
 
@@ -540,3 +541,16 @@
 - **新發現（只登記、未施工）**：`DH-RS-PREP-DROPNA`、`DH-NONUTF8-PRINT`、`DH-LI-ASOF-SEMANTICS`、`DH-TAB-MACRO-LOG-COUNT`（BACKLOG 5.1.10）；`src/compute/macro/macro_forward_test.py::leg_as_of_from_inputs`／`scripts/update_macro_forward_test.py::main` 另有 C1 新增的一般中文 print 未走安全列印，見 BACKLOG `DH-NONUTF8-PRINT`（文件 QA 2026-10-24 讀碼發現，總管確認；未實測）。
 - **階段狀態**：C1 完成後**停下等客戶裁示**；下一步**不是**自動做 C2（DEC-077 第 5 點）。C2 前仍需裁示：`DEC076-CONFIRM` ①②、`PROXY-SEMANTICS`（BIAS240／PCR／台灣 PMI 一起）、`CV1-DR-11`、C2 Decision Gate、`RC-VISIBILITY`（C2 後）。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：CI、QA、零輸出驗證結論為**總管查證後轉述**；撰寫組只以 `git show --stat 37cf87e6`、`gh api repos/:owner/:repo/pulls/913` 與 `git grep` 核對 merge／head SHA 與關鍵符號，**未重跑測試、未重做 before／after**。
+
+## 31. `PROXY-SEMANTICS`／C2 Decision Gate 研究摘要（2026-10-24，待裁示）
+
+> 2026-10-24 新增（append-only）。⚠️ **AI 研究結論，不是客戶裁示**；三組獨立唯讀研究（A 程式路徑、B 治理文件、C 紅隊行為實證；基準 main `f48b30bf`）。**方案全文、Q1～Q6、三套方案比較、六題待裁示只在 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` §7**；新登記只在 `docs/BACKLOG.md` 5.1.11；本節只放現行契約摘要＋pointer。各事實的「兩組交叉／單組」標記見 Gate §7.1。
+
+- **Required Core**＝VIX、台灣 PMI 當期＋前月、外資期貨淨空單＋加權指數跌破 MA5（DEC-048 客戶原文）；任一無效 → 不產生新 cap、兩檔不寫；讀端沿用 7 天內快照，超過 →「無法判定」（DEC-048／044／040；C 組實測 6 種缺值情境 `written=False`、6.9 天沿用、7.1 天 None）。7 天以**快照寫入時間**計、不看輸入 as-of ⇒ 沿用期末實際資料年齡可 >10 天（推論＋實測邊界）。
+- **Optional**（BIAS240、PCR）缺 → 照算並揭露「未評估」（DEC-046／051；實測正確）。
+- **proxy／estimated 對 Risk Cap 的正式契約不存在**；程式對 proxy／estimated／stale-cache 完全無處置：BIAS240 <240 日的估算值（`is_estimated` 另欄、`extract_bias240` 不讀）進 Risk Cap 計分（實測 +20% 估算值使上限 40% → 20%、卡面仍「皆已評估」）；PCR 同欄逐日混源（FinMind TXO 法人估算／TAIFEX），`_pcr_src` 零讀者且由 `test_c1_observability::test_new_fields_have_no_readers` 強制；台灣 PMI `is_proxy` 語意倒置（官方鏡像標 True、第三方標 False）且無讀者、前月恆取 data.gov.tw 6100、8 源全敗時 stale-cache 在發布期內判 FRESH 可滿足 Core、字樣不上 UI；無任何 DEC 指定 PMI 正式來源。
+- **freshness／PIT**：各 input 各自判新鮮、無跨 input 同日比對；16 燈無新鮮度閘門、無 as_of（VIX 燈可用過期值判燈，Risk Cap 同時判過期不計分）；盤中未收 K 棒排除不涵蓋 VIX／BIAS／MA5；快照有 `input_asof` 但 UI 不揭露混日；forward ledger 不含 Risk Cap。
+- **新 UI 看不到 Risk Cap 的根因**（單組實測，C）：`BREADTH_PROXY_SCORING_ENABLED=False` → 健康分恆 None → allocation 未評估 →「系統風險上限」不進 `caps` ⇒ 快照有效上限 40% 但卡①／卡⑤ 顯示「尚未評估」（`RC-VISIBILITY`）。
+- **§30.3 補正（append-only；§30.3 原文未改）**：「位階／16 燈／健康分與 Risk Cap 互相獨立」需加限定 —— 健康分是 16 燈第一盞（單組，C）；位階第 3 順位來源＝Risk Cap 引擎 `market_regime`，目前被同一旗標封住（兩組交叉，A、C）。
+- **待客戶裁示**（6 題，Gate §7.4；推薦一律「總管推薦，待客戶裁示」，⛔ 非 Approved）：資料身分規則選方案（推薦方案 2 分層兩軸）；BIAS240 估算是否退出 Risk Cap 計分；PCR 法人估算是否退出；PMI 第三方轉載／沿用快照可否滿足必要核心；7 天沿用是否加揭露（不改計算）；C2 是否先做 shadow（C2a）再改計分（C2b）。`DEC076-CONFIRM` ①② 仍未裁示且與 16 燈處置相關。
+- **仍禁止施工**：C1′、C2 實作（含 C2a）、VN1-PG production write（`PRODUCTION_WRITE_APPROVED=False`）、Risk Cap 公式／門檻／權重、`is_proxy` 語意修正、新增或替換 production source、`RC-VISIBILITY` UI 改動（需線框）。
