@@ -45,6 +45,10 @@ def z40b_revert_for(file_path, code: str) -> str:
     """舊批次還原鏈串接用：給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批之前的寫法（無 pair 則原樣）。"""
     p = pathlib.Path(file_path)
     rel = (p.resolve().relative_to(_ROOT) if p.is_absolute() else p).as_posix()
+    # 📌 C1（DEC-077 第 2 點，2026-10-24；有意識的接鏈，⛔ 不是漏改）：`_LI` 新增 `_pcr_src` 來源標記 ⇒
+    #   最新的那一批先換回（`c1_revert_for` 只套一次；⛔ 不動本表與 Z40B_BASE_SHA）。
+    from tests.test_c1_observability import c1_revert_for
+    code = c1_revert_for(rel, code)
     for new, old in Z40B_REVERT_PAIRS.get(rel, ()):
         assert code.count(new) == 1, f'{rel} 替換點不唯一或已不存在：{new!r}'
         code = code.replace(new, old)

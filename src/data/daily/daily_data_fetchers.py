@@ -54,6 +54,7 @@ from shared.ttls import TTL_30MIN, TTL_1HOUR
 from shared.fail_cooldown import CachedFailure as _CachedFailure  # D2-f15 2026-09-28
 from shared.inst_net import InstNetDict  # 2026-09-27 三大法人「未觀測」旗標(加性,L0)
 from shared.inst_labels import is_foreign_dealer_label  # 批 Z40 法人身分別判定 SSOT(L0)
+from shared.na_drop_log import log_na_drop  # C1 DH-C1-NA-DROP-LOG:dropna 清理筆數 log(L0,純觀測)
 from src.config import TTL_CONFIG as _TTL_CFG
 
 
@@ -164,7 +165,11 @@ def _fetch_single_cached(symbol, period: str = "60d"):
         h.index = pd.DatetimeIndex(h.index).tz_localize(None)
         h.columns = [c.lower().replace(' ', '_') for c in h.columns]
         if 'close' in h.columns:
+            _h_pre_na = h
             h = h.dropna(subset=['close'])
+            # C1(DEC-077 第 2 點):只記清掉幾筆／哪幾天,dropna 與回傳不變;清 0 筆不印。
+            log_na_drop(_h_pre_na, h, tag='daily_data_fetchers/_fetch_single_cached',
+                        series=str(symbol), subset=['close'])
         elif 'Close' in h.columns:
             h = h.dropna(subset=['Close'])
         if h.empty:
@@ -531,7 +536,11 @@ def fetch_adl(days: int = 60, token=None):
             # [Fix] yfinance 新版可能回傳 MultiIndex columns,需先攤平
             if isinstance(_twii.columns, pd.MultiIndex):
                 _twii.columns = _twii.columns.get_level_values(0)
+            _twii_pre_na = _twii
             _twii = _twii.dropna(subset=['Close'])
+            # C1(DEC-077 第 2 點):清理筆數只走 stdout(⛔ 不寫 ADL_LOG_PATH,UI 會讀);清 0 筆不印。
+            log_na_drop(_twii_pre_na, _twii, tag='daily_data_fetchers/fetch_adl',
+                        series='^TWII', subset=['Close'])
             for _ix in _twii.index:
                 _dk = str(_ix)[:10].replace('-', '')
                 _cl = float(_twii.loc[_ix, 'Close'])

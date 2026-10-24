@@ -16,10 +16,11 @@ import hashlib
 import json
 from datetime import date as _date_t
 from datetime import datetime, time, timedelta, timezone
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Iterable, Mapping, Optional, Union
 
 import pandas as pd
 
+from shared.dated_value import iso_date_or_none  # C1 DH-C1-FWD-LEG-ASOF:日期收斂 SSOT(L0)
 from shared.macro_forward_test_schema import (
     DATE_SOURCE_LIVE,
     FWD_EVAL_HORIZON_DAYS,
@@ -27,6 +28,7 @@ from shared.macro_forward_test_schema import (
     FWD_EVAL_RET_MAX_PCT,
     MACRO_FWD_TEST_DATE_SOURCES,
     MACRO_FWD_TEST_HEADERS,
+    MACRO_FWD_TEST_LEG_AS_OF_COLUMNS,
     MACRO_FWD_TEST_SCHEMA_VERSION,
     MISSING_SEP,
     TW_CASH_CLOSE_HHMM,
@@ -89,6 +91,7 @@ def build_signal_row(
     git_sha: str = '',
     ruleset_hash: str = '',
     date_source: Optional[str] = None,
+    leg_as_of: Optional[Mapping] = None,
 ) -> dict[str, Any]:
     """把一次 `calc_traffic_light` 輸出轉成一列快照。
 
@@ -102,6 +105,10 @@ def build_signal_row(
         twii_close: 當日 ^TWII 收盤。**None 是允許的**,但該列日後無法對帳。
         inputs_as_of: 輸入腿的資料日(外資 T+1 / Yahoo EOD 可能 ≠ date)。
         git_sha / ruleset_hash: caller 注入(git 查詢是 I/O,不屬 L2)。
+        leg_as_of: C1 `DH-C1-FWD-LEG-ASOF` —— 各輸入腿資料日(`leg_as_of_from_inputs` 的回傳);
+            鍵只能是 `MACRO_FWD_TEST_LEG_AS_OF_COLUMNS`;每個值經 `iso_date_or_none` 收成 'YYYY-MM-DD';
+            缺的鍵 / None / NaN / NaT ⇒ 該欄 None;**有值卻轉不出日期 ⇒ ValueError**(不寫壞字串)。
+            **純觀測**:只原樣寫進四欄,⛔ 不參與任何判斷(其餘欄位與檢查一字不改)。
 
     Raises:
         ValueError: `tl` 為空 —— §1 寧可炸掉也不落一列空殼。落了空殼,
@@ -144,10 +151,71 @@ def build_signal_row(
         'ruleset_hash': str(ruleset_hash or ''),
         'schema_version': MACRO_FWD_TEST_SCHEMA_VERSION,
     }
+    # C1 DH-C1-FWD-LEG-ASOF:各腿資料日四欄(純新增,附在最末;⛔ 不參與任何判斷)。
+    _leg = dict(leg_as_of or {})
+    _leg_unknown = set(_leg) - set(MACRO_FWD_TEST_LEG_AS_OF_COLUMNS)
+    if _leg_unknown:
+        raise ValueError(f'build_signal_row: leg_as_of 含不認得的鍵:{sorted(map(str, _leg_unknown))}')
+    for _k in MACRO_FWD_TEST_LEG_AS_OF_COLUMNS:
+        _raw = _leg.get(_k)
+        _v = iso_date_or_none(_raw)
+        if _v is None and not _is_missing_scalar(_raw):
+            # §1 fail loud:有值卻轉不出日期 ⇒ 不寫 'NaT'／'nan'／'2026-10-22 00:00:00' 這類字串進帳本。
+            raise ValueError(f'build_signal_row: leg_as_of[{_k!r}] 不是可解析的日期:{_raw!r}')
+        row[_k] = _v
     _unknown = set(row) - set(MACRO_FWD_TEST_HEADERS)
     if _unknown:
         raise ValueError(f'build_signal_row 產出 schema 外的欄位:{sorted(_unknown)}')
     return row
+
+
+def _is_missing_scalar(v: Any) -> bool:
+    """None／NaN／NaT／pd.NA ⇒ True；其餘（含字串、Timestamp、無法判斷的容器）⇒ False。"""
+    if v is None:
+        return True
+    try:
+        return bool(pd.isna(v))
+    except (TypeError, ValueError):   # 容器等 `pd.isna` 回陣列 ⇒ 不是缺值純量
+        return False
+
+
+def leg_as_of_from_inputs(*, mkt_info: Any, inst: Any, inst_date: Any,
+                          df_adl: Any, li_latest: Any) -> dict[str, Optional[str]]:
+    """C1 `DH-C1-FWD-LEG-ASOF`(DEC-077 第 2 點):各輸入腿的資料日 → `{四欄: 'YYYY-MM-DD'|None}`。
+
+    - `score_index_as_of` ← `mkt_info['index_as_of']`(大盤分用的 ^TWII 最後一根);
+    - `inst_as_of` ← `inst_date`,**只在 `inst` 非空時**(`fetch_institutional` 失敗回的是請求日、
+      不是資料日 ⇒ inst 空時一律 None);
+    - `adl_as_of` ← `df_adl['date'].iloc[-1]`(實際被用的那列);
+    - `li_as_of` ← `li_latest.iloc[-1]['_date']`。
+
+    一律經 `shared.dated_value.iso_date_or_none` 收斂(解析不了 ⇒ None,⛔ 不猜、不拿今天頂替)。
+    每腿各自 try:失敗 print 原因並給 None。**絕不拋例外、不改傳入物件**;純觀測,⛔ 不得用於任何判斷。
+    """
+    def _score():
+        return mkt_info.get('index_as_of') if isinstance(mkt_info, Mapping) else None
+
+    def _inst():
+        return inst_date if (inst is not None and len(inst) > 0) else None
+
+    def _adl():
+        if df_adl is None or len(df_adl) == 0:
+            return None
+        return df_adl['date'].iloc[-1]
+
+    def _li():
+        if li_latest is None or len(li_latest) == 0:
+            return None
+        return li_latest.iloc[-1]['_date']
+
+    out: dict[str, Optional[str]] = {}
+    for _col, _fn in zip(MACRO_FWD_TEST_LEG_AS_OF_COLUMNS, (_score, _inst, _adl, _li)):
+        try:
+            out[_col] = iso_date_or_none(_fn())
+        except Exception as _e:  # noqa: BLE001 — 單腿失敗只影響該欄(None),說出來,不中斷落地
+            print(f'[macro_forward_test/leg_as_of] {_col} 取不到({type(_e).__name__}: {_e})→ None')
+            out[_col] = None
+    return out
 
 
 def _to_tw_datetime(captured_at: Union[str, datetime]) -> datetime:

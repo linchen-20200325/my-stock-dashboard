@@ -201,7 +201,12 @@ def fetch_twii_ohlcv(start: _dt.date, end: _dt.date) -> pd.DataFrame:
             "close": ind.get("close", [None] * len(ts)),
             "volume": ind.get("volume", [None] * len(ts)),
         })
-        df = df.dropna(subset=["close"]).reset_index(drop=True)
+        _df_nn = df.dropna(subset=["close"])
+        # C1(DEC-077 第 2 點):只記清掉幾筆／哪幾天(清 0 筆不印);寫入 twii_ohlcv.parquet 的內容不變。
+        from shared.na_drop_log import log_na_drop
+        log_na_drop(df, _df_nn, tag='update_macro_history/fetch_twii_ohlcv', series='^TWII',
+                    subset=["close"], date_col="date")
+        df = _df_nn.reset_index(drop=True)
 
         # ── §1/§3.2 sanity:「價格有波動但 volume == 0」= 物理上不可能的觀測 ──
         # 上游(Yahoo Chart API)對 ^TWII 會間歇回 volume=0。實測

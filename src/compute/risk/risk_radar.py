@@ -36,6 +36,7 @@ from typing import Optional
 import pandas as pd
 
 from src.data.macro import fetch_fred, fetch_yf_close
+from shared.na_drop_log import log_na_drop  # C1 DH-C1-NA-DROP-LOG:dropna 清理筆數 log(L0,純觀測)
 
 GREEN = "#22c55e"
 YELLOW = "#eab308"
@@ -160,7 +161,10 @@ def _fetch_cboe_csv(short_name: str) -> pd.Series:
             return pd.Series(dtype=float)
         idx = pd.to_datetime(df[date_col], errors="coerce")
         vals = pd.to_numeric(df[close_col], errors="coerce")
-        s = pd.Series(vals.values, index=idx).dropna().sort_index()
+        _s_pre_na = pd.Series(vals.values, index=idx)
+        s = _s_pre_na.dropna().sort_index()
+        # C1(DEC-077 第 2 點):coerce 後缺值清理筆數 log(清 0 筆不印);回傳不變。
+        log_na_drop(_s_pre_na, s, tag="risk_radar/_fetch_cboe_csv", series=f"CBOE:{short_name}")
         _result = s.tail(180)  # 對齊 6mo
         # v18.357 PR-Q5c S-PROV-1 phase 19:Series attrs
         try:

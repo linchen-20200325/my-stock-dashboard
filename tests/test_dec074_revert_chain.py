@@ -2323,6 +2323,11 @@ def _rel(file_path) -> str:
 def dec074_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批（DEC-074/075）之前的寫法（無 pair 則原樣；只套一次）。"""
     rel = _rel(file_path)
+    # 📌 C1（DEC-077 第 2 點，2026-10-24；有意識的接鏈，⛔ 不是漏改）：C1 改了本表管的 schema／macro_forward_test
+    #   （以及經本函式串接的 daily_data_fetchers／macro_snapshot／update_macro_history）⇒ 最新的那一批先換回
+    #   （`c1_revert_for` 只套一次；⛔ 不動本表與 DEC074_BASE_SHA）。
+    from tests.test_c1_observability import c1_revert_for
+    code = c1_revert_for(rel, code)
     pairs = DEC074_REVERT_PAIRS.get(rel, ())
     if not pairs:
         return code

@@ -65,6 +65,19 @@ MACRO_FWD_TEST_HEADERS: tuple[str, ...] = (
     "git_sha",          # str 跑批當下的 commit(短 sha)
     "ruleset_hash",     # str 決定燈號的那組常數的 hash(見 compute_ruleset_hash)
     "schema_version",   # int 本 schema 版本,破壞性改欄時 +1
+    # ── 各輸入腿的資料日(C1 DH-C1-FWD-LEG-ASOF,純新增;見下方 MACRO_FWD_TEST_LEG_AS_OF_COLUMNS)──
+    "score_index_as_of",  # str|None 'YYYY-MM-DD' 大盤分(mkt_info)用的 ^TWII 最後一根日期
+    "inst_as_of",         # str|None 外資現貨(inst)資料日;inst 空時 None(失敗時回的是請求日,不是資料日)
+    "adl_as_of",          # str|None 廣度(df_adl)實際被用的那列(末列)日期
+    "li_as_of",           # str|None 先行指標(li_latest)末列 `_date`
+)
+
+#: C1 DH-C1-FWD-LEG-ASOF(DEC-077 第 2 點,客戶 2026-10-24):各輸入腿的資料日,附在
+#: `MACRO_FWD_TEST_HEADERS` 最末。型別 str|None('YYYY-MM-DD',經 `shared.dated_value.iso_date_or_none`)。
+#: **純觀測**:⛔ 不得用這四欄做任何判斷(寫不寫列、改判 ⬜、新鮮度…皆禁止);`date`／`inputs_as_of`
+#: 語意與產生方式不變;不回填舊列(DEC-028)。純新增欄 ⇒ 依下方規則 schema 版本**不** bump。
+MACRO_FWD_TEST_LEG_AS_OF_COLUMNS: tuple[str, ...] = (
+    "score_index_as_of", "inst_as_of", "adl_as_of", "li_as_of",
 )
 
 #: 破壞性改欄(刪欄 / 改語意)時 +1;純新增欄不必動。
@@ -80,7 +93,12 @@ MACRO_FWD_TEST_HEADERS: tuple[str, ...] = (
 #: `regime_source='unevaluated:breadth_unavailable'`（原為「只剩大盤分重新歸一」的分數）。屬「改語意」
 #: ⇒ +1；`compute_ruleset_hash` 同時加入 `breadth_proxy_scoring` 旗標，hash 必變。
 #: ⚠️ v2 列與 v3 列**不可混比**（健康分口徑不同）；歷史列的 `schema_version` 維持寫入當時的值。
-#: ⚠️ 預告（未授權、另批）：計畫第 4 節 `DH-MACRO-FWD-ASOF`（per-leg as_of 加欄）若日後實作會再 bump 一次。
+#: ~~⚠️ 預告（未授權、另批）：計畫第 4 節 `DH-MACRO-FWD-ASOF`（per-leg as_of 加欄）若日後實作會再 bump 一次。~~
+#: 📌 2026-10-24 更正（C1 `DH-C1-FWD-LEG-ASOF`，DEC-077 第 2 點；有意識的修改，⛔ 不是漏刪；決策者 客戶裁示／
+#:   AI 總管定規格）：per-leg as_of 以**純新增欄**落地（`MACRO_FWD_TEST_LEG_AS_OF_COLUMNS`），既有欄語意不變
+#:   ⇒ 依本常數上方規則「純新增欄不必動」**不 bump**（維持 3；`compute_ruleset_hash` 不變）。
+#:   舊預告的理由（加欄可能伴隨改 `inputs_as_of` 語意）仍成立，只是那一半**本次未做、仍未授權**：
+#:   若日後改 `inputs_as_of` 語意，屬「改語意」⇒ 屆時仍須 +1。
 MACRO_FWD_TEST_SCHEMA_VERSION: int = 3
 
 #: 去重鍵。一個交易日只該有一列;同一 date 已存在 → **保留既有那筆、不覆寫**
