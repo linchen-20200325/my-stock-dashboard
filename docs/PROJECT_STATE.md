@@ -455,7 +455,7 @@
 - **DEC-075 D-1(a) 完整語意**：正式 breadth 不存在／無法可靠計算相關 health 時 —— ⛔ 代理 breadth 不得參與 scoring；⛔ 不得偷偷 fallback（含退 `macro_state.json` 規則引擎）產生看似正式的市場位階；受影響結果 →「⬜ 未評估／資料不足」；⛔ 不得因產品想保持有答案而補結論。**同時不過度擴張**：⛔ 不得把它擴張成「所有市場／Risk Cap 概念都失效」—— **只有真正依賴失效資料的 component 不可判定**；**Risk Cap 保持自己的既有語意**（PR #910 未改 `exposure_limit_pct`）。
 - **批 A＋批 1'**：實作在 **PR #910**（§28；含冷啟動 `DH-REGIME-NOWARROOM` 修正 `c8e30d84`），**未合併**；QA-1～QA-5 完成，~~QA-6 對 `c8e30d84` 複驗中、CI 進行中（Freeze 撰寫時）~~ QA-6 對 `c8e30d84` 判不可合併（2 MUST），已於後續修正 commit 處理、待獨立 QA-7＋CI（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（QA-6 結果））；📌 ~~**未合併**~~（同列前句）→ `9714d0b3` 修正、QA-7 判可合併、**已合併 #910（merge `066f461e`）**（2026-10-24 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；殘留／deferred 項登記於 BACKLOG 5.1.8（清單見 §28「已知殘留」）。
 - **批 2／3／4 與新來源研究：皆未開始**（定義以 BACKLOG 與 `docs/vnext/DATA_HEALTH_REPAIR_PLAN_2026-10-23.md` 為準；撰寫組 grep 該檔第 2.2～2.4 節）：
-  - 批 2（PIT／代理不計分，High，原提案併 `VN1-PG-*`）＝`DH-BIAS240-EST`／`DH-PCR-PROXY`／`DH-MACRO-FWD-ASOF`／`DH-REFRESH-STALE`；DEC-075 第 4 點：等批 A＋1' 合併＋QA＋CI＋main verification 後**重評邊界並送客戶裁示**，未指派（📌 「批 A＋1' 合併」已成立：#910 merge `066f461e`（2026-10-24 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））。📌 2026-10-24 再更新：main verification 已成立 ⇒ 重評完成、**已裁示 DEC-077**（採方案 C：批 2 拆 **C1**（已指派、未開工）／**C1′**（等 DEC-076 ①）／**C2**（併 VN1-PG，另開 Decision Gate））；研究摘要見 **§30**（2026-10-24 更新，有意識的更新，不是漏刪，決策者 客戶（DEC-077））。
+  - 批 2（PIT／代理不計分，High，原提案併 `VN1-PG-*`）＝`DH-BIAS240-EST`／`DH-PCR-PROXY`／`DH-MACRO-FWD-ASOF`／`DH-REFRESH-STALE`；DEC-075 第 4 點：等批 A＋1' 合併＋QA＋CI＋main verification 後**重評邊界並送客戶裁示**，未指派（📌 「批 A＋1' 合併」已成立：#910 merge `066f461e`（2026-10-24 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））。📌 2026-10-24 再更新：main verification 已成立 ⇒ 重評完成、**已裁示 DEC-077**（採方案 C：批 2 拆 **C1**（已指派、~~未開工~~ **已完成並合併 #913（merge `37cf87e6`）**（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：C1 #913 已合併）））／**C1′**（等 DEC-076 ①）／**C2**（併 VN1-PG，另開 Decision Gate））；研究摘要見 **§30**（2026-10-24 更新，有意識的更新，不是漏刪，決策者 客戶（DEC-077））。
   - 批 3（L1 契約，High，需能連 FinMind／Yahoo 的環境）＝`DH-357-DIV-FIELD`／`DH-KLINE-ADJ`／`DH-INST-FILL0`／`DH-ETF-FFILL`／`DH-REVENUE-ZERO`／`DH-FIN-HEALTH-CF`(a)；未指派。
   - 批 4（延後）＝`DH-SCORE-NEUTRAL50`／`DH-FWD-RECON`／`DH-FIN-HEALTH-CF`(b)／`DH-WHY-FRED-LAMP`；未指派。
   - 新資料來源研究（real market breadth、Sahm、US 2Y、利差、30Y、TIPS、OECD CLI、借券、TDCC、ETF 配息／成分、市場 EPS／PE／forward EPS、CSP／AI capex 等）＝**research candidates，⛔ 非已授權接入 production**；⛔ 不得看到 BACKLOG 就自行換源。
@@ -483,7 +483,7 @@
 
 | 子批 | 內容（摘要） | 為何這樣切 | 狀態 |
 |---|---|---|---|
-| **C1**（DH-only） | ① 既有缺值清理路徑（`dropna` 類）記錄筆數（`DH-C1-NA-DROP-LOG`；承接 `VN1-PG-L-TWII-DROPNA-LOG`）；② PCR 每日來源／來源類型欄（`DH-C1-PCR-SRC`；`DH-PCR-PROXY` 前置）；③ 前進式驗證帳本 per-leg as_of 欄（`DH-C1-FWD-LEG-ASOF`；既有 `date`／`inputs_as_of` 語意不變） | 只加「從哪來、哪一天、清掉多少」的可觀測性 metadata，**可做到零投資輸出變更**；帳本無 production reader（`macro_fwd_test_store.load_signals` 只被 `append_signals` 去重） | 已指派（DEC-077）、未開工 |
+| **C1**（DH-only） | ① 既有缺值清理路徑（`dropna` 類）記錄筆數（`DH-C1-NA-DROP-LOG`；承接 `VN1-PG-L-TWII-DROPNA-LOG`）；② PCR 每日來源／來源類型欄（`DH-C1-PCR-SRC`；`DH-PCR-PROXY` 前置）；③ 前進式驗證帳本 per-leg as_of 欄（`DH-C1-FWD-LEG-ASOF`；既有 `date`／`inputs_as_of` 語意不變） | 只加「從哪來、哪一天、清掉多少」的可觀測性 metadata，**可做到零投資輸出變更**；帳本無 production reader（`macro_fwd_test_store.load_signals` 只被 `append_signals` 去重） | 已指派（DEC-077）、~~未開工~~ **已完成（#913，merge `37cf87e6`；見 30.9）**（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：C1 #913 已合併）） |
 | **C1′**（指標危險度子批） | 16 燈依 `shared/freshness_policy.py` 套日期閘（僅限有可追溯日期且有核准規則之燈）、`bias_240` 燈估算值、五桶 `fut_net` 燈凍結一致性、`DH-REFRESH-STALE` 燈號側、`DH-JINGQI-STALE-SESSION` 文案、出口燈 freshness（撰寫組歸類，研究檔未明列於 C1′） | **灰掉燈號會改變「最差燈／N/M」**＝改指標危險度輸出 ⇒ 不屬 C1；且口徑（worst-of vs 觸發計數）待 DEC-076 ① | 等 DEC-076 ① |
 | **C2**（VN1-PG「Risk Cap 輸入有效性批」） | `VN1-PG-VIX-ASOF`、`VN1-PG-PIT-CONSISTENCY`（吸收 `DH-REFRESH-STALE` Risk Cap 側；DEC-070 Q1／Q2）、`VN1-PG-VETO-TRACE`（Sheet 表頭變更宜在首寫前）、`VN1-PG-L-PIT-GAPS` (a)(b)(c)、外資期貨凍結值 Risk Cap 側、`DH-BIAS240-EST`／`DH-PCR-PROXY` 計分准入＋台灣 PMI proxy 語意 | 會改 Risk Cap 計分准入／PIT 判斷；BIAS240／PCR／PMI 合併研究、一次裁示，`RISK_CAP_RULESET_VERSION` 至多升一次 | 另開 Decision Gate |
 | 獨立 | `DH-LAMP-STALE`(b)（需線框，併資料中心）、margin 無 as_of（L1 資料契約，批 3 性質）、`DH-CALIB-CRON`（2027-01-01 期限） | 與批 2 邊界無耦合 | 見 BACKLOG |
@@ -520,4 +520,21 @@
 
 ### 30.8 GitHub 實況（總管實查；撰寫組 `gh api` 複查 CI run；量測日 2026-10-24，會過期）
 
-- main `649f7393`（#911）；Open／Draft PR 0；main CI 兩個 run success（見 DEC-075 2026-10-24 附註）⇒ **DEC-075 第 4 點前置之 main verification 已成立**。遠端分支含 main 共 8 條（#910 head `ccr-310717b7-37xwl6` 已不在，多了本對話分支 `claude/gracious-hypatia-1cjuh8`；量測日 2026-10-24，會過期）。`PRODUCTION_WRITE_APPROVED: bool = False`（`shared/risk_cap_history_policy.py`）。⚠️ 未驗：squash 後 main 樹是否等同 `9714d0b3`。
+- ~~main `649f7393`（#911）；Open／Draft PR 0；~~ main `37cf87e6`（#913 C1 squash merge；其前 `1c8c1415`＝#912、`649f7393`＝#911）；open PR 以 GitHub 為準（C1 後 SSOT 同步 PR 由總管開立）；main `37cf87e6` CI：main push run 40066433398（PR Check），撰寫時進行中，待總管回填結論（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：C1 #913 已合併））；（以下為 `649f7393` 時點事實）main CI 兩個 run success（見 DEC-075 2026-10-24 附註）⇒ **DEC-075 第 4 點前置之 main verification 已成立**。遠端分支含 main 共 8 條（#910 head `ccr-310717b7-37xwl6` 已不在，多了本對話分支 `claude/gracious-hypatia-1cjuh8`；量測日 2026-10-24，會過期）。`PRODUCTION_WRITE_APPROVED: bool = False`（`shared/risk_cap_history_policy.py`）。⚠️ 未驗：squash 後 main 樹是否等同 `9714d0b3`。
+
+### 30.9 C1 完成狀態（2026-10-24；append-only；決策者 AI 總管（事實更新））
+
+> 2026-10-24 新增。C1＝DEC-077 第 2 點指派的三類「資料可觀測性／provenance metadata」。執行紀錄（含偏離規格，屬總管內部技術拍板、非客戶裁示）只在 `docs/DECISIONS.md` DEC-077「執行紀錄」；結案與新登記只在 `docs/BACKLOG.md` 5.1.10；現況與下一步只在 `docs/HANDOFF.md` §0「C1 合併後」段。本節只摘要＋出處。
+
+- **PR／SHA**：PR #913（https://github.com/linchen-20200325/my-stock-dashboard/pull/913）；squash merge `37cf87e6`（完整 `37cf87e6103a72cac45d812fc633ab641f9a6b7b`）；PR head `29cd7f3e`。
+- **CI**：PR CI＝PR head 29cd7f3e：Fast checks（job 120785311814）success、Slow tests AppTest（job 120788338331）success；run 40064619133。main CI＝main push run 40066433398（PR Check），撰寫時進行中，待總管回填結論。⚠️ main verification（`PROJECT_RULES.md` 第 7 節）在 main CI 結論回填前**不成立**。
+- **完成內容**（三項全部 done）：
+  - `DH-C1-NA-DROP-LOG`：11 處 production ^TWII／VIX `dropna` 開始記錄清理筆數，只在清掉超過 0 筆時印 stdout；共用 helper＝新 L0 檔 `shared/na_drop_log.py`。8 處＝`daily_data_fetchers._fetch_single_cached`／`fetch_adl`、`macro_core.fetch_yf_ohlcv`／`_fetch_yf_close_base`、`macro_snapshot.compute_twii_bias`／`fetch_vix_block`、`scripts/update_macro_forward_test._twii_close_and_asof`、`scripts/update_macro_history.fetch_twii_ohlcv`；另 3 處＝`macro_cache_reader.load_twii_close`、`weekly_review_service._macro_lite_lines`、`risk_radar._fetch_cboe_csv`。⚠️ 驗證方式：兩組盤點交叉（實作組＋QA-A），**非形式化窮舉**。
+  - `DH-C1-PCR-SRC`：先行指標 df 新增 `_pcr_src` 欄（TAIFEX＝`official`、FinMind-TXO-inst-est＝`proxy_estimate`）；只描述來源、**不是計分資格**，下游不讀；欄名與計畫的 `選PCR_src` 不同，因底線開頭會被 CSV 匯出排除。
+  - `DH-C1-FWD-LEG-ASOF`：帳本附加四欄 `score_index_as_of`／`inst_as_of`／`adl_as_of`／`li_as_of`；schema 維持 3、`ruleset_hash` 不變（`6c716f5411fb`）；schema 檔「per-leg as_of 會再 bump」預告已加刪除線並註明理由 ⇒ §27「`ruleset_hash` 二次切換風險」在 C1 **未發生**（若日後改 `inputs_as_of` 語意才會發生，見 §30.7）。
+- **QA 摘要（零投資輸出變更）**：before／after 測試（還原鏈到 `1c8c1415`）＋四輪、共五組獨立 QA（A／B／C／D／E）：下游 `extract_leading`／`build_engine_inputs`→`calculate_system_state`／`calc_traffic_light`／`compute_five_bucket_summary`／`render_leading_table`／CSV **全部相同**。已知、接受的唯一差異：`src/ui/tabs/tab_macro.py` 約 :463 stdout log「有效欄=N」多 1（只影響 log）。
+- **Production**：既有帳本 cron 合併後會自然把四欄寫進 `data_cache/macro_forward_test/signals.parquet` —— 既有寫入多了四欄，**不是新的 production write**；`PRODUCTION_WRITE_APPROVED=False` 未動（撰寫組 grep 實查）；Daily Schedule 仍 NOT APPROVED（DEC-066 F）。
+- **限制（未實測）**：Streamlit Cloud、GitHub Actions cron、Windows cp950 都沒有實機跑；外部 API 用 mock。四欄語意限制（`li_as_of` 可能是補位平日列、`inst_as_of` 淨額全 None 仍記日期、`adl_as_of` 照實反映 `fetch_adl` 可能差一日）登記 BACKLOG `DH-LI-ASOF-SEMANTICS`。
+- **新發現（只登記、未施工）**：`DH-RS-PREP-DROPNA`、`DH-NONUTF8-PRINT`、`DH-LI-ASOF-SEMANTICS`、`DH-TAB-MACRO-LOG-COUNT`（BACKLOG 5.1.10）。
+- **階段狀態**：C1 完成後**停下等客戶裁示**；下一步**不是**自動做 C2（DEC-077 第 5 點）。C2 前仍需裁示：`DEC076-CONFIRM` ①②、`PROXY-SEMANTICS`（BIAS240／PCR／台灣 PMI 一起）、`CV1-DR-11`、C2 Decision Gate、`RC-VISIBILITY`（C2 後）。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：CI、QA、零輸出驗證結論為**總管查證後轉述**；撰寫組只以 `git show --stat 37cf87e6`、`gh api repos/:owner/:repo/pulls/913` 與 `git grep` 核對 merge／head SHA 與關鍵符號，**未重跑測試、未重做 before／after**。

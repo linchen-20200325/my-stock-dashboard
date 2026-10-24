@@ -1155,6 +1155,24 @@ C1 完成後停下。
   - **DEC-066**（production Gate）、**DEC-048**（Required Core）、**DEC-044**（沿用 7 天）：不變。
   - **DEC-002／DEC-015**（沒指派不動工／Audit 不得順手施工）：對 C1 三類已由本條指派；對研究發現各列（本條第 3 點 C 項「本輪不要順手修」）**續有效**。
   - **DEC-003**（線框 gate）：不變；C1 不涉畫面結構。
+- **執行紀錄**（2026-10-24 追加，append-only；本條上文一字未改；**不是新 DEC** —— C1 屬 DEC-077 的執行，不是新裁示；事實部分決策者＝AI 總管（事實更新），「偏離規格」部分＝AI 總管內部技術拍板（`CLAUDE.md` §-1.5.D v3 §03-1），**非客戶裁示**）：
+  - 📌 **2026-10-24 C1 已完成並合併**（DEC-077 第 2 點三類，全部 done）：PR #913（https://github.com/linchen-20200325/my-stock-dashboard/pull/913），squash merge `37cf87e6`（完整 `37cf87e6103a72cac45d812fc633ab641f9a6b7b`），PR head `29cd7f3e`。⇒ DEC-077「動工授權：僅 C1」**已執行完畢**；C1′／C2／VN1-PG 仍未授權（DEC-077 第 1 點不變）。
+  - **完成內容**（明細見 `docs/BACKLOG.md` 5.1.10 三列）：
+    - `DH-C1-NA-DROP-LOG`：11 處 production ^TWII／VIX `dropna` 開始記錄清理筆數，只在清掉超過 0 筆時印 stdout；共用 helper 為新 L0 檔 `shared/na_drop_log.py`。8 處＝`daily_data_fetchers._fetch_single_cached`／`fetch_adl`、`macro_core.fetch_yf_ohlcv`／`_fetch_yf_close_base`、`macro_snapshot.compute_twii_bias`／`fetch_vix_block`、`scripts/update_macro_forward_test._twii_close_and_asof`、`scripts/update_macro_history.fetch_twii_ohlcv`；另 3 處＝`macro_cache_reader.load_twii_close`、`weekly_review_service._macro_lite_lines`、`risk_radar._fetch_cboe_csv`。⚠️「11 處即全部 production 的 ^TWII／VIX `dropna`」的驗證方式＝**兩組盤點交叉（實作組＋QA-A），非形式化窮舉**。
+    - `DH-C1-PCR-SRC`：先行指標 df 新增 `_pcr_src` 欄（TAIFEX＝`official`、FinMind-TXO-inst-est＝`proxy_estimate`）；只描述來源、**不是計分資格**，下游不讀。
+    - `DH-C1-FWD-LEG-ASOF`：帳本附加四欄 `score_index_as_of`／`inst_as_of`／`adl_as_of`／`li_as_of`；schema 維持 3、`ruleset_hash` 不變（`6c716f5411fb`）；`shared/macro_forward_test_schema.py` 內「per-leg as_of 會再 bump」的預告已加刪除線並註明理由。`date`／`inputs_as_of` 語意不變。
+  - **CI**：PR CI＝PR head 29cd7f3e：Fast checks（job 120785311814）success、Slow tests AppTest（job 120788338331）success；run 40064619133。main CI＝main push run 40066433398（PR Check），撰寫時進行中，待總管回填結論。⚠️ 依 `PROJECT_RULES.md` 第 7 節，**main verification（main SHA＋main CI conclusion）在 main CI 結論回填前不成立**。
+  - **零投資輸出驗證摘要**：before／after 測試（還原鏈到 `1c8c1415`）＋四輪、共五組獨立 QA（A／B／C／D／E）驗證：下游 `extract_leading`／`build_engine_inputs`→`calculate_system_state`／`calc_traffic_light`／`compute_five_bucket_summary`／`render_leading_table`／CSV **全部相同**。已知、接受的唯一差異：`src/ui/tabs/tab_macro.py` 約 :463 的 stdout log「有效欄=N」會多 1，**只影響 log**（登記 `docs/BACKLOG.md` `DH-TAB-MACRO-LOG-COUNT`）。
+  - **Production**：既有帳本 cron 合併後會自然把四欄寫進 `signals.parquet` —— 這是**既有寫入多了四欄，不是新的 production write**；`PRODUCTION_WRITE_APPROVED=False` 未動；未新增排程。
+  - **限制（未實測）**：Streamlit Cloud、GitHub Actions cron、Windows cp950 都沒有實機跑；外部 API 用 mock。
+  - **偏離規格紀錄（AI 總管內部技術拍板，v3 §03-1，非客戶裁示）**：
+    - (a) PCR 來源欄名用 `_pcr_src`，不是修復計畫寫的 `選PCR_src` —— 底線開頭會被既有 CSV 匯出排除規則擋掉，避免使用者 CSV 多一欄。
+    - (b) 新增 L0 helper `shared/na_drop_log.py` —— 11 處共用一份（SSOT），不在各檔各寫一份。
+    - (c) cron（`scripts/update_macro_forward_test.py`）計算四欄處外層再包一層 try：失敗時四欄寫 None、照常寫列 —— 觀測欄不得擋下帳本寫列。
+    - (d) 缺值清理位置由 BACKLOG 盤點結果的 8 處補為 11 處（QA-A 盤點補上 `macro_cache_reader.load_twii_close`、`weekly_review_service._macro_lite_lines`、`risk_radar._fetch_cboe_csv`）—— 依客戶原文「先完整盤點實際位置，不要只照原 BACKLOG 寫的兩處」；納入範圍為總管判斷。
+  - **新發現（只登記、未施工）**：`docs/BACKLOG.md` 5.1.10 新增 `DH-RS-PREP-DROPNA`、`DH-NONUTF8-PRINT`、`DH-LI-ASOF-SEMANTICS`、`DH-TAB-MACRO-LOG-COUNT`。
+  - **C1 完成後停下**（DEC-077 第 5 點）：下一步**不是**自動做 C2。C2 前仍需客戶裁示：`DEC076-CONFIRM` ①（指標危險度口徑；C1′ 等它）②（⚡ 行動例示射程）、`PROXY-SEMANTICS`（BIAS240／PCR／台灣 PMI 一起）、`CV1-DR-11`、C2 Decision Gate、`RC-VISIBILITY`（C2 後）—— 見 `docs/BACKLOG.md` §1.1、第 4 節、5.1.10。
+  - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：C1 內容、CI、QA 結論為**總管查證後轉述**；撰寫組只以 `git show --stat 37cf87e6`、`gh api repos/:owner/:repo/pulls/913`（`merged=true`、`merge_commit_sha`、`head.sha`）與 `git grep`（`shared/na_drop_log.py`、`PCR_SRC_COL = "_pcr_src"`、四欄常數）確認，**未重跑測試、未重做 before／after**。
 
 ---
 

@@ -83,7 +83,7 @@
 | 若只看 main | #910 已合併，**main 即為現行** |
 | 接手必讀 | 同 Freeze 版：先跑 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate（重評送題＝High），再讀五個 SSOT |
 
-### 📌 2026-10-24 DEC-077 裁示後（append-only；**本段為現行短版，與上表及上四段衝突處以本段為準**）
+### 📌 2026-10-24 DEC-077 裁示後（append-only；~~**本段為現行短版，與上表及上四段衝突處以本段為準**~~ 已過時，見下方「C1 合併後」段；本段「禁止事項」「Production」「硬期限」三列**效力不變**，由新段沿用（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：C1 #913 已合併）））
 
 > 客戶 2026-10-24 裁示 **DEC-077**（批 2 × VN1-PG 邊界：採方案 C）。下表 GitHub 實況：撰寫組 `git log` 確認分支基於 main `649f7393`（#911），並以 `gh api` 複查下列兩個 main CI run；**GitHub 實況 > 本檔**，接手先重查（cron 會推進 main tip）。研究摘要見 `docs/PROJECT_STATE.md` §30（AI 研究結論、非客戶裁示）；拆分明細見 `docs/BACKLOG.md` **5.1.10**；裁示全文見 `docs/DECISIONS.md` DEC-077。
 
@@ -92,14 +92,36 @@
 | main | `649f7393`（#911，五 SSOT 事實同步；其前 `066f461e`＝#910）。cron 會推進 tip，**以 GitHub 為準** |
 | main 驗證 | **已成立**：`066f461e` PR Check run 39995254045 success；`649f739` run 39999485112 success（`PROJECT_RULES.md` 第 7 節）。⚠️ 未驗：squash 後 main 樹是否等同 `9714d0b3` |
 | open PR | 撰寫時 0 筆（總管實查）；本 SSOT 落盤 PR 由總管開立 —— **以 GitHub 為準** |
-| Current Task | **① SSOT 落盤 PR**（DEC-077＋研究結論＋main verification 文件更正；docs-only）→ **② C1 實作批**（DEC-077 已指派、**未開工**）：`DH-C1-NA-DROP-LOG`、`DH-C1-PCR-SRC`、`DH-C1-FWD-LEG-ASOF`（BACKLOG 5.1.10） |
-| **唯一 Next Safe Action** | SSOT 落盤 PR 合併後開始 **C1**：先過 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate（**建議 Opus 5.5／Medium**；客戶建議，仍須依實際工作判斷；跨入 PIT／Risk Cap／投資語意 ⇒ 升級並停下詢問）→ 唯讀盤點已完成（BACKLOG `DH-C1-NA-DROP-LOG` 盤點結果）；實作時再複核 → 實作 → 針對性測試 → 完整 CI → **before／after 零投資輸出變更驗證**（Risk Cap 數字、市場位階、指標危險度、16 燈、健康分、scoring、threshold、weight、freshness／fallback／proxy eligibility、PIT 判斷、投資語意皆不變；任一做不到 ⇒ **立即停下送 Decision Gate**）→ 獨立 QA → PR 合併 → main 驗證 → 五 SSOT 同步 → **停下回報，⛔ 不自動進 C2**（回報：C1 實際完成內容、PR／main SHA、CI／QA、是否確認零投資輸出變更、新發現、C2 前仍需裁示事項） |
+| Current Task | **① SSOT 落盤 PR**（DEC-077＋研究結論＋main verification 文件更正；docs-only）→ **② C1 實作批**（DEC-077 已指派、~~**未開工**~~ **已完成並合併 #913（merge `37cf87e6`）**（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：C1 #913 已合併）））：`DH-C1-NA-DROP-LOG`、`DH-C1-PCR-SRC`、`DH-C1-FWD-LEG-ASOF`（BACKLOG 5.1.10） |
+| **唯一 Next Safe Action** | ~~SSOT 落盤 PR 合併後開始 **C1**~~（已過時：①② 皆已完成，見下方「C1 合併後」段（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：C1 #913 已合併）））：先過 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate（**建議 Opus 5.5／Medium**；客戶建議，仍須依實際工作判斷；跨入 PIT／Risk Cap／投資語意 ⇒ 升級並停下詢問）→ 唯讀盤點已完成（BACKLOG `DH-C1-NA-DROP-LOG` 盤點結果）；實作時再複核 → 實作 → 針對性測試 → 完整 CI → **before／after 零投資輸出變更驗證**（Risk Cap 數字、市場位階、指標危險度、16 燈、健康分、scoring、threshold、weight、freshness／fallback／proxy eligibility、PIT 判斷、投資語意皆不變；任一做不到 ⇒ **立即停下送 Decision Gate**）→ 獨立 QA → PR 合併 → main 驗證 → 五 SSOT 同步 → **停下回報，⛔ 不自動進 C2**（回報：C1 實際完成內容、PR／main SHA、CI／QA、是否確認零投資輸出變更、新發現、C2 前仍需裁示事項） |
 | 下一階段 Model／Effort | **C1：Opus 5.5／Medium**（DEC-077 客戶建議；`PROJECT_RULES.md` 第 15 節第 6 點：建議只是參考，新對話須重新判斷，不得假設已切換） |
 | 待客戶裁示 | `DEC076-CONFIRM` ①（指標危險度口徑；**C1′ 等它**）②（⚡ 行動例示射程）；**C2 Decision Gate**（VN1-PG「Risk Cap 輸入有效性批」）；**`PROXY-SEMANTICS`**（BIAS240／PCR／台灣 PMI proxy／estimated 資料契約與計分資格；C2 開工前一次裁示；⛔ 不得先立通則）；**`RC-VISIBILITY`**（PIT／C2 後的 UI Decision Gate；目前不恢復顯示）；**`CV1-DR-11`**（`PROJECT_RULES.md` 16.1／DEC-062 Q5 與 DEC-077 3B 的未調和衝突，C2 前併 `PROXY-SEMANTICS` 裁示）；`DH-BADGE-RERUN-SEMANTICS`；`DH-EXPORT-LABEL-READING` 等 —— 完整清單見 `docs/BACKLOG.md` §F「Decision Gates」列 |
 | 禁止事項 | 沿用 Freeze 版「禁止事項（自 2026-10-23 Freeze 起持續有效，直到客戶新指派）」列，**唯「新 Batch」對 C1 解除**（DEC-077）：⛔ C1′／C2／VN1-PG 仍禁止；⛔ 大型研究／改投資公式、權重、門檻／刪舊 UI／刪 branch／不可逆清理／新資料來源；⛔ C1′ 或 C2 不得混入 C1 PR；⛔ 研究發現各列（`DH-FUT-FROZEN-MISMATCH`、`DH-EXPORT-FRESHNESS`、schema 文件衝突等）本輪不順手修 |
 | Production | `PRODUCTION_WRITE_APPROVED=False`（`shared/risk_cap_history_policy.py`，撰寫組 2026-10-24 grep 實查）；Daily Schedule **NOT APPROVED**（DEC-066 F）；⛔ 不開排程、不做任何 production write；細節見 `docs/PROJECT_STATE.md` §29.5 |
 | 硬期限 | `DH-CALIB-CRON` 須在 **2027-01-01** 前修正或暫停（BACKLOG 5.1.8） |
 | 回報模式 | 維持 Silent Autonomous Cruise：中間安全工作不逐步回報；只在命中停手條件、需要客戶裁示、或 C1 整批完成時回報（DEC-077 第 5 點） |
+| 接手必讀 | 先跑 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate，再讀五個 SSOT（`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、本檔、`docs/PROJECT_STATE.md`）；上位 `CLAUDE.md` 同樣須讀 |
+
+### 📌 2026-10-24 C1 合併後（append-only；**本段為現行短版，與上表及上五段衝突處以本段為準**）
+
+> DEC-077 的 **C1 已合併**（PR #913，squash merge `37cf87e6`）。**停下等客戶裁示 —— 下一步不是自動做 C2**（DEC-077 第 5 點）。下表 GitHub 實況：撰寫組以 `git log`（分支已重置到 main `37cf87e6`）與 `gh api repos/:owner/:repo/pulls/913`（`merged=true`、`merge_commit_sha`、`head.sha`）確認；CI／QA 為總管查證後轉述；**GitHub 實況 > 本檔**，接手先重查（cron 會推進 main tip）。執行紀錄見 `docs/DECISIONS.md` DEC-077「執行紀錄」；結案與新登記見 `docs/BACKLOG.md` 5.1.10；耐久狀態見 `docs/PROJECT_STATE.md` §30.9。
+
+| 項目 | 現況（C1 合併後） |
+|---|---|
+| main | `37cf87e6`（完整 `37cf87e6103a72cac45d812fc633ab641f9a6b7b`；#913 C1 squash merge；其前 `1c8c1415`＝#912）。cron 會推進 tip，**以 GitHub 為準** |
+| #913（C1） | 已 squash 合併（https://github.com/linchen-20200325/my-stock-dashboard/pull/913）；PR head `29cd7f3e`。PR CI：PR head 29cd7f3e：Fast checks（job 120785311814）success、Slow tests AppTest（job 120788338331）success；run 40064619133。QA：四輪、共五組獨立 QA（A／B／C／D／E） |
+| main 驗證 | main CI：main push run 40066433398（PR Check），撰寫時進行中，待總管回填結論。⚠️ 依 `PROJECT_RULES.md` 第 7 節，**main verification（main SHA＋main CI conclusion）在結論回填前不成立** |
+| open PR | 本 C1 後五 SSOT 同步 PR（docs-only）由總管開立 —— **以 GitHub 為準** |
+| Current Task | **無進行中實作**。C1 三項（`DH-C1-NA-DROP-LOG`、`DH-C1-PCR-SRC`、`DH-C1-FWD-LEG-ASOF`）全部 done（BACKLOG 5.1.10） |
+| C1 結果摘要 | 零投資輸出變更：before／after（還原鏈到 `1c8c1415`）＋四輪五組獨立 QA 驗證下游全部相同；已知、接受的唯一差異＝`src/ui/tabs/tab_macro.py` 約 :463 stdout log「有效欄=N」多 1（只影響 log，`DH-TAB-MACRO-LOG-COUNT`）。⚠️「11 處即全部 production ^TWII／VIX `dropna`」＝兩組盤點交叉，非形式化窮舉。限制（未實測）：Streamlit Cloud、GH Actions cron、Windows cp950 未實機跑；外部 API 用 mock |
+| **唯一 Next Safe Action** | **停下等客戶裁示**：依 DEC-077 第 5 點向客戶回報 C1 結果（實際完成內容、PR／main SHA、CI／QA、是否確認零投資輸出變更、新發現、C2 前仍需裁示事項）。⛔ **不自動進 C2**；⛔ C1′ 仍等 DEC-076 ①；任何送題須附總管推薦方案 —— **送題，不施工** |
+| 待客戶裁示 | `DEC076-CONFIRM` ①（指標危險度口徑；**C1′ 等它**）②（⚡ 行動例示射程）；**`PROXY-SEMANTICS`**（BIAS240／PCR／台灣 PMI 一起研究、一起裁示；⛔ 不得先立通則）；**`CV1-DR-11`**（`PROJECT_RULES.md` 16.1／DEC-062 Q5 vs DEC-077 3B，C2 前併 `PROXY-SEMANTICS`）；**C2 Decision Gate**（VN1-PG「Risk Cap 輸入有效性批」）；**`RC-VISIBILITY`**（C2 後的 UI Decision Gate；目前不恢復顯示）；另 `DH-BADGE-RERUN-SEMANTICS`、`DH-EXPORT-LABEL-READING` 等 —— 完整清單見 `docs/BACKLOG.md` §F「Decision Gates」列 |
+| 新發現（只登記、未施工） | `DH-RS-PREP-DROPNA`、`DH-NONUTF8-PRINT`、`DH-LI-ASOF-SEMANTICS`、`DH-TAB-MACRO-LOG-COUNT`（BACKLOG 5.1.10） |
+| 下一階段 Model／Effort | 下一階段＝客戶裁示後的送題研究（`PROXY-SEMANTICS`／C2 Gate），**不施工**：建議 **High**（⚠️ AI 總管建議、**非客戶建議**；理由：涉 PIT／Risk Cap／投資語意，`PROJECT_RULES.md` 9.1 High 清單；與「#910 合併後」段「重評送題＝High」同型）。依 `PROJECT_RULES.md` 第 15 節第 6 點：建議只是參考，新對話須依第 9.0 節重新判斷，不得假設已切換 |
+| 禁止事項 | 沿用「DEC-077 裁示後」段「禁止事項」列，**效力不變**：C1 已完成；⛔ C1′／C2／VN1-PG 仍禁止；⛔ 大型研究／改投資公式、權重、門檻／刪舊 UI／刪 branch／不可逆清理／新資料來源；⛔ 研究發現各列與本次新登記各列本輪不順手修 |
+| Production | `PRODUCTION_WRITE_APPROVED=False`（`shared/risk_cap_history_policy.py`，撰寫組 2026-10-24 grep 實查）**未動**；Daily Schedule **NOT APPROVED**（DEC-066 F）。既有帳本 cron 合併後會自然把四欄 `*_as_of` 寫進 `data_cache/macro_forward_test/signals.parquet` —— **既有寫入多了四欄，不是新的 production write**；細節見 `docs/PROJECT_STATE.md` §29.5 |
+| 硬期限 | `DH-CALIB-CRON` 須在 **2027-01-01** 前修正或暫停（BACKLOG 5.1.8） |
+| 回報模式 | 維持 Silent Autonomous Cruise；C1 整批完成＝DEC-077 第 5 點的回報時點 |
 | 接手必讀 | 先跑 `PROJECT_RULES.md` 第 9.0 節 Model／Effort Gate，再讀五個 SSOT（`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、本檔、`docs/PROJECT_STATE.md`）；上位 `CLAUDE.md` 同樣須讀 |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
