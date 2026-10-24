@@ -194,12 +194,12 @@
 | # | 項目 | 現況 | 出處 | 驗證 |
 |---|---|---|---|---|
 | 1 | Required Core | VIX、台灣 PMI 當期＋前月、外資期貨淨空單＋加權指數跌破 MA5 | DEC-048 客戶原文「{VIX、PMI 當期、PMI 前月、外資期貨＋MA5}」；`shared/risk_cap_policy.py:56-62` `REQUIRED_CORE_INPUTS` | 兩組交叉（A、B；C 實跑一致） |
-| 2 | Core 任一無效 | 不產生新 cap、`risk_cap_state.json`／`macro_state.json` 兩檔一位元組不動；讀端沿用 7 天內有效快照，超過 →「無法判定」 | DEC-048／DEC-044／DEC-040；`src/services/risk_cap_apply.py:262-278`；`src/services/macro_state_locker.py:662-697,962-990`；`shared/staleness.py:135,163`（`MACRO_VERDICT_MAX_AGE_DAYS = STALE_DAYS_DAILY = 7`）。C 組實測：VIX／PMI 當期／PMI 前月／外資期貨／MA5 缺、VIX 過期 6 種情境皆 `written=False`；快照 6.9 天 → 沿用 40%、7.1 天 → None | 兩組交叉（A 讀碼、C 實測；B 治理一致） |
+| 2 | 不寫檔條件 | 依序三道閘門，任一成立即不產生新 cap：(a) fail-safe（啟用中數值輸入全缺）、(b) cap 為非有限數、(c) Required Core 任一無效（`REASON_CORE_MISSING`）；`risk_cap_state.json`／`macro_state.json` 兩檔一位元組不動；讀端沿用 7 天內有效快照，超過 →「無法判定」 | DEC-048／DEC-044／DEC-040；`src/services/risk_cap_apply.py:262-278`（三道閘門）；`src/services/macro_state_locker.py:662-697,962-990`；`shared/staleness.py:135,163`（`MACRO_VERDICT_MAX_AGE_DAYS = STALE_DAYS_DAILY = 7`）。C 組實測：VIX／PMI 當期／PMI 前月／外資期貨／MA5 缺、VIX 過期 6 種情境皆 `written=False`；快照 6.9 天 → 沿用 40%、7.1 天 → None | 兩組交叉（A 讀碼、C 實測；B 治理一致） |
 | 3 | 7 天的起算點 | 以**快照寫入時間** `timestamp` 計，不看輸入 as-of ⇒ 沿用期末的實際資料年齡可 >10 天（日頻） | `macro_state_locker.py:962-985` | 單組推論（A）＋C 讀碼／實測 6.9／7.1 天；「>10 天」為推論、未實測 |
 | 4 | Optional（BIAS240、PCR）缺 | 照算、寫檔，卡面揭露「未評估：PCR、BIAS240；部分訊號未納入，本次上限資訊不完整」 | DEC-046／DEC-051；`macro_engine_inputs.py:364-367`；`src/ui/views/risk_cap_gate.py:85-95`；C 組實測 `written=True`、`not_evaluated=['BIAS240_pct','PCR']` | 兩組交叉（A、C；B 治理一致） |
 | 5 | proxy／estimated 對 Risk Cap 的正式契約 | **不存在**；程式對 proxy／estimated／stale-cache 完全無處置 | B：DEC-062 Q5、DEC-037、DEC-074 皆非針對這三項；DEC-077 3B 列為待裁示。A：`dated_inputs.py`／`macro_engine_inputs.py`／`risk_cap_apply.py` 不讀 `is_estimated`／`is_proxy`／`is_stale`／`_pcr_src` | 兩組交叉（A、B、C） |
 | 6 | BIAS240 <240 日 | `macro_snapshot.compute_twii_bias` 以可得天數均線頂替（`_cs.tail(min(240,_n)).mean()`，`is_estimated = _n < 240`）；估算值與正式值同欄 `bias_240`、旗標另欄；`extract_bias240` 不讀旗標 → 估算值進 Risk Cap 計分 | `src/data/macro/macro_snapshot.py:461,491`；`src/compute/macro/dated_inputs.py:160-167`；`macro_state_locker.py:870-876` | 兩組交叉（A、C） |
-| 6a | BIAS240 估算的實際影響 | +20% 估算值使上限 40% → 20%；`not_evaluated` 為空 ⇒ 卡面「必要與選用訊號皆已評估」 | C 組 probe | 單組實測（C） |
+| 6a | BIAS240 估算的實際影響 | +20% 估算值使上限 40% → 20%（扣 15 分須共振條件 VIX≥22 或 PMI<50，`macro_state_locker.py:870-876`；probe 用 VIX 25／PMI 47）；`not_evaluated` 為空 ⇒ 卡面「必要與選用訊號皆已評估」。反方向：估算值 <−10 也會觸發加 10 分而**放寬**上限（讀碼，未實測） | C 組 probe；`macro_state_locker.py:870-876` | 單組實測（C） |
 | 6b | BIAS240 在 16 燈 | 原樣用值判燈，只在顯示字串加「（估算）」徽章 | `src/compute/macro/macro_helpers.py:1949,1989,2035-2038,2049`；I2 註解「只揭露，不改判定」 | 兩組交叉（A、C） |
 | 6c | BIAS240 新 UI 圖表 | 另一條路徑：`macro_cache_reader.load_v2_chart_series` 足 240 才算、不足不畫（不估算） | `src/data/macro/macro_cache_reader.py:544-566` | 單組（A） |
 | 7 | PCR 混源 | 先以 FinMind TXO 三大法人 OI 估算填 `選PCR`，TAIFEX 探測通過才逐日覆蓋 ⇒ 同欄逐日混源；估算值進 Risk Cap（>1.5 −10、<0.7 +5） | `src/data/macro/leading_indicators.py:1384-1412,1580-1596`；`dated_inputs.py:248-260`；`macro_state_locker.py:878-881`；C 組實測估算值與 TAIFEX 值結果完全相同 | 兩組交叉（A、C） |
@@ -218,7 +218,7 @@
 | 10 | forward ledger | `macro_forward_test` 驗的是交通燈，不含 Risk Cap；若要驗 Risk Cap 還缺 VIX 日期、PMI 當期／前月資料月與來源、BIAS240 估算旗標、PCR 逐日來源、MA5 日期、`veto_flags` | `shared/macro_forward_test_schema.py:39-81`；`src/compute/macro/macro_forward_test.py:182-218` | 單組（A） |
 | 11 | 新 UI 看不到 Risk Cap 的根因 | `BREADTH_PROXY_SCORING_ENABLED=False` → 健康分恆 None → `build_allocation_decision` 回未評估 →「系統風險上限」不進 `caps` ⇒ 快照有效上限 40%，卡①／卡⑤ 仍顯示「尚未評估」 | `shared/signal_thresholds.py:277`；`macro_helpers.py:437-447`；`shared/allocation_decision.py:281-298,316-333`；C 組實測 `exposure_limit_pct=40`、`has_system_risk_cap=False` | 單組實測（C；A 組未提此機制；BACKLOG `RC-VISIBILITY` 既有記載同一判斷式） |
 | 12 | 系統間共用 | 健康分是 16 燈第一盞（`BUCKET_DANGER_SPECS` 首鍵 `health`）；位階第 3 順位來源＝Risk Cap 引擎輸出的 `market_regime`，目前被 `BREADTH_PROXY_SCORING_ENABLED=False` 封住 | `macro_helpers.py:1932`；`macro_state_locker.py:348-372` | 健康分＝16 燈：單組（C）；位階第 3 順位：兩組交叉（A、C） |
-| 13 | 已過期（行為正確） | Optional 無效不會讓整體失效；Core 無效不產生新 cap | C 組實測（見 #2、#4） | 單組實測（C）＋B 治理一致 |
+| 13 | 已驗證行為正確（原風險不成立） | Optional 無效不會讓整體失效；Core 無效不產生新 cap | C 組實測（見 #2、#4） | 單組實測（C）＋B 治理一致 |
 
 ### 7.2 Decision Gate 題目（Q1～Q6；推薦一律「總管推薦，待客戶裁示」）
 
@@ -236,10 +236,10 @@
 
 | 指標／情境 | 總管推薦（待客戶裁示） | 理由 | 影響 |
 |---|---|---|---|
-| BIAS240 `estimated` | **3**：Risk Cap 不計分 → 列入未評估並寫明「歷史不足、估算」；16 燈顯示保留估算標籤 | Optional，不計分不阻斷 cap；估算值已實證可移動上限 20 點（7.1 #6a） | Risk Cap 輸出在估算情境改變（＝投資輸出變更）；16 燈是否同步，由 DEC-076 ① 一併決定 |
+| BIAS240 `estimated` | **3**：Risk Cap 不計分 → 列入未評估並寫明「歷史不足、估算」；16 燈顯示保留估算標籤 | Optional，不計分不阻斷 cap；估算值在共振條件（VIX≥22 或 PMI<50）下已實證可讓上限下修 20 點，且 <−10 時會加 10 分而**放寬**上限（7.1 #6a） | Risk Cap 輸出在估算情境改變（＝投資輸出變更）；16 燈是否同步，由 DEC-076 ① 一併決定 |
 | PCR `proxy`（FinMind TXO 法人估算） | **3**：只有 TAIFEX 官方值計分；法人估算顯示為 proxy | 不同量；門檻 1.5／0.7 依官方 PCR 語意設定 | TAIFEX 失敗日 PCR 列未評估；須同批改 `test_new_fields_have_no_readers`（零讀者守衛） |
 | 台灣 PMI | **1**：`observed_official` 與 `observed_secondary` 皆可計分並揭露來源；`carried_forward`（stale-cache）在發布期內可計分但須揭露「沿用」，超出即 `unavailable`（Core 無效 → 不產生新 cap） | Required Core；若一律剔除會讓 Risk Cap 不產生新上限（`PROXY-SEMANTICS` (1)） | 前提：先修正 `is_proxy` 倒置語意（見 Q5）；⛔ 不得以 blanket rule 把 PMI 拿掉計分（DEC-077 3B） |
-| 選項 2（降權計分） | **列出但不推薦** | 需要新的權重／confidence 規則，違反「不得自行創造權重」（`PROJECT_RULES.md` 第 4 節 #1） | — |
+| 選項 2（降權計分） | **列出但不推薦** | 需要新的權重／confidence 規則；與 DEC-074 B 客戶原文「不得自行創造新權重重新正規化」同向衝突，且新權重屬須送客戶裁示的正式 scoring／weight 變更（`PROJECT_RULES.md` 第 4 節 #1） | — |
 
 #### Q3｜freshness × eligibility 矩陣
 
@@ -299,12 +299,12 @@
 
 本次共 6 個待裁示問題。（商業語言；推薦一律「總管推薦，待客戶裁示」）
 
-1. **資料身分規則選哪一套？** —— 總管推薦：**方案 2（分層兩軸）**。理由：能分清「同一個量的近似值」和「另一個量的替代品」，必要指標不會因此常態性失效，也能先觀察再改分數。
-2. **年線乖離（BIAS240）在歷史不足、用較短均線估算時，要不要退出系統風險上限的計分？** —— 總管推薦：**退出**（列「未評估：歷史不足、估算」；16 燈照樣顯示並標「估算」）。理由：它是選用指標，退出不會讓上限算不出來；而估算值已實證能讓上限從 40% 掉到 20%。
+1. **每筆資料要怎麼標示「官方、轉載、估算、代理、沿用」，以及哪些可以算分？（資料身分規則：方案 1／2／3，見 7.3）** —— 總管推薦：**方案 2（分層兩軸）**。理由：能分清「同一個量的近似值」和「另一個量的替代品」，必要指標不會因此常態性失效，也能先觀察再改分數。
+2. **年線乖離（BIAS240）在歷史不足、用較短均線估算時，要不要退出系統風險上限的計分？** —— 總管推薦：**退出**（列「未評估：歷史不足、估算」；16 燈照樣顯示並標「估算」）。理由：它是選用指標，退出不會讓上限算不出來；而估算值已實證能讓上限從 40% 掉到 20%，反過來也可能讓上限被放寬。
 3. **PCR 在期交所抓不到、改用「三大法人未平倉」估算時，要不要退出計分？** —— 總管推薦：**退出**（只顯示、標「估算」）。理由：那是另一個量，原門檻是照期交所全市場 PCR 訂的。
 4. **台灣 PMI 來自第三方轉載網站、或八個來源都失敗時用的「沿用快照」，可以算數嗎？** —— 總管推薦：**可以，但畫面要寫出來源與「沿用」**；超出發布期就算「無法評估」（不產生新上限）。理由：PMI 是必要指標，一律排除會讓上限常常算不出來。
 5. **上限沿用前一份（最多 7 天）時，要不要在畫面寫明「沿用 N 天前的上限＋最舊資料日期」？（不改計算）** —— 總管推薦：**要**。理由：現在沿用時的實際資料可能已超過 10 天，畫面看不出來。⚠️ 上卡屬欄位增減，須先出線框（與 `RC-VISIBILITY` 一起送）。
-6. **C2 要不要先做「只記錄、不改分數」的觀察版（C2a），看過結果再改分數（C2b）？** —— 總管推薦：**要**。理由：先看估算／轉載實際出現的頻率與影響，再決定改分數，風險最小、可隨時回退。
+6. **要不要先做一版「只記錄資料來源與是否可算分、不改任何分數」的觀察版，看過實際結果再決定改分數？（C2a shadow → C2b）** —— 總管推薦：**要**。理由：先看估算／轉載實際出現的頻率與影響，再決定改分數，風險最小、可隨時回退。
 
 > 📌 相關但**不在本題組**：`DEC076-CONFIRM` ①（指標危險度口徑）②（⚡ 行動例示射程）**仍未裁示**；第 2 題「16 燈是否同步不計分」與 ① 直接相關，C1′ 仍等 ①。`CV1-DR-11`（`PROJECT_RULES.md` 16.1／DEC-062 Q5 vs DEC-077 3B）隨第 1 題一併裁示。
 

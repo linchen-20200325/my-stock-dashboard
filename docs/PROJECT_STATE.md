@@ -546,9 +546,9 @@
 
 > 2026-10-24 新增（append-only）。⚠️ **AI 研究結論，不是客戶裁示**；三組獨立唯讀研究（A 程式路徑、B 治理文件、C 紅隊行為實證；基準 main `f48b30bf`）。**方案全文、Q1～Q6、三套方案比較、六題待裁示只在 `docs/vnext/VNEXT_1_0_DECISION_GATES.md` §7**；新登記只在 `docs/BACKLOG.md` 5.1.11；本節只放現行契約摘要＋pointer。各事實的「兩組交叉／單組」標記見 Gate §7.1。
 
-- **Required Core**＝VIX、台灣 PMI 當期＋前月、外資期貨淨空單＋加權指數跌破 MA5（DEC-048 客戶原文）；任一無效 → 不產生新 cap、兩檔不寫；讀端沿用 7 天內快照，超過 →「無法判定」（DEC-048／044／040；C 組實測 6 種缺值情境 `written=False`、6.9 天沿用、7.1 天 None）。7 天以**快照寫入時間**計、不看輸入 as-of ⇒ 沿用期末實際資料年齡可 >10 天（推論＋實測邊界）。
+- **Required Core**：DEC-048 客戶原文「{VIX、PMI 當期、PMI 前月、外資期貨＋MA5}」；依 DEC-048 展開＝VIX、台灣 PMI 當期＋前月、外資期貨淨空單＋加權指數跌破 MA5（`shared/risk_cap_policy.py:56-62`）；任一無效 → 不產生新 cap、兩檔不寫；讀端沿用 7 天內快照，超過 →「無法判定」（DEC-048／044／040；C 組實測 6 種缺值情境 `written=False`、6.9 天沿用、7.1 天 None）。7 天以**快照寫入時間**計、不看輸入 as-of ⇒ 沿用期末實際資料年齡可 >10 天（推論＋實測邊界）。
 - **Optional**（BIAS240、PCR）缺 → 照算並揭露「未評估」（DEC-046／051；實測正確）。
-- **proxy／estimated 對 Risk Cap 的正式契約不存在**；程式對 proxy／estimated／stale-cache 完全無處置：BIAS240 <240 日的估算值（`is_estimated` 另欄、`extract_bias240` 不讀）進 Risk Cap 計分（實測 +20% 估算值使上限 40% → 20%、卡面仍「皆已評估」）；PCR 同欄逐日混源（FinMind TXO 法人估算／TAIFEX），`_pcr_src` 零讀者且由 `test_c1_observability::test_new_fields_have_no_readers` 強制；台灣 PMI `is_proxy` 語意倒置（官方鏡像標 True、第三方標 False）且無讀者、前月恆取 data.gov.tw 6100、8 源全敗時 stale-cache 在發布期內判 FRESH 可滿足 Core、字樣不上 UI；無任何 DEC 指定 PMI 正式來源。
+- **proxy／estimated 對 Risk Cap 的正式契約不存在**；程式對 proxy／estimated／stale-cache 完全無處置：BIAS240 <240 日的估算值（`is_estimated` 另欄、`extract_bias240` 不讀）進 Risk Cap 計分（實測 +20% 估算值在共振條件 VIX≥22 或 PMI<50 下使上限 40% → 20%、卡面仍「皆已評估」；<−10 時反而加 10 分放寬上限）；PCR 同欄逐日混源（FinMind TXO 法人估算／TAIFEX），`_pcr_src` 零讀者且由 `test_c1_observability::test_new_fields_have_no_readers` 強制；台灣 PMI `is_proxy` 語意倒置（官方鏡像標 True、第三方標 False）且無讀者、前月恆取 data.gov.tw 6100、8 源全敗時 stale-cache 在發布期內判 FRESH 可滿足 Core、字樣不上 UI；無任何 DEC 指定 PMI 正式來源。
 - **freshness／PIT**：各 input 各自判新鮮、無跨 input 同日比對；16 燈無新鮮度閘門、無 as_of（VIX 燈可用過期值判燈，Risk Cap 同時判過期不計分）；盤中未收 K 棒排除不涵蓋 VIX／BIAS／MA5；快照有 `input_asof` 但 UI 不揭露混日；forward ledger 不含 Risk Cap。
 - **新 UI 看不到 Risk Cap 的根因**（單組實測，C）：`BREADTH_PROXY_SCORING_ENABLED=False` → 健康分恆 None → allocation 未評估 →「系統風險上限」不進 `caps` ⇒ 快照有效上限 40% 但卡①／卡⑤ 顯示「尚未評估」（`RC-VISIBILITY`）。
 - **§30.3 補正（append-only；§30.3 原文未改）**：「位階／16 燈／健康分與 Risk Cap 互相獨立」需加限定 —— 健康分是 16 燈第一盞（單組，C）；位階第 3 順位來源＝Risk Cap 引擎 `market_regime`，目前被同一旗標封住（兩組交叉，A、C）。
