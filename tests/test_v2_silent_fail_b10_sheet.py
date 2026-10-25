@@ -353,7 +353,11 @@ class TestExistingCallersUnchanged:
         assert set(HS.HoldingsResult.__dataclass_fields__) == {
             "holdings", "bound", "logged_in", "portfolio_name", "watchlist_name",
             "more_portfolios", "more_watchlists", "watchlist_error",
-            "login_expired"}, "L3 回傳型別多了欄位"
+            "login_expired",
+            # 📌 Sheet Safety 批 B1（2026-10-25,有意識的新增,⛔ 不是漏改）:兩個**加性**欄位
+            #   (預設空字串):沒有 `portfolios` / `stock_watchlist` 分頁時記 `worksheet_missing`
+            #   (讀取不再替使用者建分頁)。本條守的「預設路徑對 L1 的 load_portfolio 呼叫一字不變」不受影響。
+            "portfolio_issue", "watchlist_issue"}, "L3 回傳型別多了欄位"
 
     def test_c_no_other_caller_passes_the_new_param(self):
         """只有本頁這一條鏈會開 `keep_blank`；📁 組合管理、ETF 存股戰情室、cron SA reader 都沒動。"""

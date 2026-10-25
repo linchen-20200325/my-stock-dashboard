@@ -435,17 +435,23 @@ def test_number_like_name_with_spaces_replaced_by_trimmed_save(sheet_nm, nm):
     assert len(vals) == 4
 
 def test_duplicate_header_means_nothing_loaded_all_rows_kept():
-    """本分頁的欄重複（批 Z12 D1-n6 起,僅此情形）→ 讀取 raise、編輯器一列都載不進來 ⇒
-    存檔保留全部舊列。（使用者自加欄重名已可讀,見 tests/test_batch_z12.py。）"""
+    """本分頁的欄重複（批 Z12 D1-n6 起,僅此情形）→ 讀取 raise、編輯器一列都載不進來。
+    （使用者自加欄重名已可讀,見 tests/test_batch_z12.py。）
+
+    ~~存檔保留全部舊列、照寫(並把第一列覆寫成標準表頭)~~ —— Sheet Safety 批 B1（DEC-083,
+    有意識的翻轉,⛔ 不是放寬）:表頭不明時寫入會改寫使用者的第一列 ＝「因 schema mismatch 自動修資料」。
+    現行:存檔在**任何寫入之前** `SheetSchemaMismatchError`,Sheet 一格不動、零寫入呼叫。
+    """
     sheet = [gsp._HEADERS + ['name', 'x'], ['A', '2330', '1', '100', 't0', '', '']]
     ws = _FakeWorksheet([list(r) for r in sheet])
+    before = ws.get_all_values()
     with patch.object(gsp, '_ws', return_value=ws):
-        with pytest.raises(Exception):
+        with pytest.raises(gsp.SheetSchemaMismatchError):
             gsp.load_portfolio('A')
-        gsp.save_portfolio('A', [{'ticker': 'NEW', 'lots': 1, 'avg_price': 1}])
-        vals = ws.get_all_values()
-    assert vals[1][:5] == ['A', '2330', '1', '100', 't0']
-    assert vals[2][:2] == ['A', 'NEW']
+        with pytest.raises(gsp.SheetSchemaMismatchError):
+            gsp.save_portfolio('A', [{'ticker': 'NEW', 'lots': 1, 'avg_price': 1}])
+    assert ws.get_all_values() == before
+    assert ws.calls == []
 
 def test_save_portfolio_preserves_unloaded_rows_byte_for_byte():
     before = _mixed_sheet()
@@ -817,7 +823,7 @@ def test_sheet_key_constants_distinct():
 
 # ══ Option B: 個股純代碼觀察清單（stock_watchlist 分頁,§1 無價格/哨兵）══════════
 class _CapturingWorksheet:
-    """只記錄 update(range, values) 呼叫,用來驗證 header 更新範圍是否動態。"""
+    """只記錄 update(range, values) 呼叫(B1 起用來驗證讀取**不會**呼叫 update)。"""
     def __init__(self, first_row):
         self._first_row = list(first_row)
         self.update_calls: list[tuple] = []
@@ -827,16 +833,6 @@ class _CapturingWorksheet:
 
     def update(self, range_name, values):
         self.update_calls.append((range_name, [list(v) for v in values]))
-
-
-def _mount_capturing_ws(first_row):
-    """建一個 _build_client stub,open_by_key → spreadsheet → 回傳 capturing ws。"""
-    ws = _CapturingWorksheet(first_row)
-    sh = MagicMock()
-    sh.worksheet.return_value = ws
-    client = MagicMock()
-    client.open_by_key.return_value = sh
-    return ws, client
 
 
 @pytest.fixture
@@ -959,36 +955,32 @@ def test_stock_watchlist_explicit_sheet_id_routes():
     _mock_legacy.assert_not_called()               # 明確 sheet_id 短路 legacy accessor
 
 
-# ── 動態 header-range 修正（3 欄 → A1:C1,不是死寫的 A1:E1）──
-def test_dynamic_header_range_3col_watchlist():
-    """§ bug fix:3 欄 watchlist 分頁的 header 更新範圍應為 A1:C1(非死寫 A1:E1)。"""
-    ws, client = _mount_capturing_ws(first_row=[])   # header mismatch → 觸發 update
+# ── ~~動態 header-range 修正（讀取時表頭不符 → 以 A1:C1 / A1:E1 覆寫第一列）~~ ──────────────
+# Sheet Safety 批 B1（DEC-083,有意識的翻轉,⛔ 不是放寬）:原兩支測試釘的是「讀取時表頭不符就覆寫
+# 第一列」—— 那正是客戶禁止的「read → header/schema 不符 → rewrite 第一列」。`_get_worksheet` /
+# `_col_letter` 已移除。現行釘相反的事:讀取遇到表頭不符 → 拋 `SheetSchemaMismatchError`、零寫入。
+class _HeaderOnlyWorksheet(_CapturingWorksheet):
+    """`_CapturingWorksheet` + `get_all_values`(讀取路徑會呼叫);任何 update 都被記下來。"""
+
+    def get_all_values(self):
+        return [list(self._first_row)] if self._first_row else []
+
+
+@pytest.mark.parametrize('ws_name, headers, first_row', [
+    (gsp._STOCK_WATCHLIST_WORKSHEET, gsp._STOCK_WATCHLIST_HEADERS, ['x', 'y', 'z']),
+    (gsp._WORKSHEET_NAME, gsp._HEADERS, ['ticker', 'name']),
+])
+def test_read_with_mismatched_header_never_rewrites_first_row(ws_name, headers, first_row):
+    ws = _HeaderOnlyWorksheet(first_row)
+    sh = MagicMock()
+    sh.worksheet.return_value = ws
+    client = MagicMock()
+    client.open_by_key.return_value = sh
     with patch.object(gsp, '_build_client', return_value=client):
-        gsp._get_worksheet(sheet_id='SID',
-                           worksheet_name=gsp._STOCK_WATCHLIST_WORKSHEET,
-                           headers=gsp._STOCK_WATCHLIST_HEADERS)
-    assert ws.update_calls, 'header 不符應觸發 update'
-    _rng, _vals = ws.update_calls[0]
-    assert _rng == 'A1:C1'                            # 3 欄 → C,不是 E
-    assert _vals == [gsp._STOCK_WATCHLIST_HEADERS]
-
-
-def test_dynamic_header_range_5col_portfolios():
-    """對照組:預設 portfolios(5 欄)仍為 A1:E1(既有行為不變)。"""
-    ws, client = _mount_capturing_ws(first_row=[])
-    with patch.object(gsp, '_build_client', return_value=client):
-        gsp._get_worksheet(sheet_id='SID')           # 預設 portfolios + 5 headers
-    _rng, _ = ws.update_calls[0]
-    assert _rng == 'A1:E1'
-
-
-def test_col_letter_helper():
-    assert gsp._col_letter(3) == 'C'
-    assert gsp._col_letter(5) == 'E'
-    assert gsp._col_letter(1) == 'A'
-    assert gsp._col_letter(26) == 'Z'
-    with pytest.raises(ValueError):
-        gsp._col_letter(27)
+        with pytest.raises(gsp.SheetSchemaMismatchError):
+            gsp._all_records(sheet_id='SID', worksheet_name=ws_name, headers=headers)
+    assert ws.update_calls == []                      # ⛔ 不覆寫第一列
+    sh.add_worksheet.assert_not_called()
 
 
 # ══ Phase 2: 個股 新建 Sheet 放進專屬 Drive 資料夾（drive.file scope only）══════

@@ -35,6 +35,12 @@ class BindingState:
     #: 重新登入。只在 `logged_in=False` 時可能為 True。頁面據此把「未登入」那張**灰**卡寫成
     #: 「登入已逾時，請重新整理」(⛔ 不是紅色錯誤,稽核 SA2 MUST-1)。既有 caller 不讀本欄,一字不變。
     login_expired: bool = False
+    #: Sheet Safety 批 B1(只加不改,2026-10-25):讀組合清單那一步**為什麼**沒拿到本數。空字串 = 讀到了。
+    #: · `worksheet_missing`:這本 Sheet 沒有 `portfolios` 分頁(讀取不再替你建)→ status=bound_empty、
+    #:   `portfolio_count=None`(⛔ 不寫 0 —— 沒有分頁 ≠ 讀到 0 本);
+    #: · 其他(L1 `classify_read_error` 代碼,例 `schema_mismatch` / `permission_denied` / `error:<型別>`)→
+    #:   維持既有降級 status=bound + `portfolio_count=None`。既有 caller 不讀本欄,一字不變。
+    sheet_issue: str = ""
 
 
 def is_login_required_error(exc: BaseException) -> bool:
@@ -48,6 +54,29 @@ def is_login_required_error(exc: BaseException) -> bool:
     except Exception:  # noqa: BLE001
         return False
     return isinstance(exc, LoginRequiredError)
+
+
+#: Sheet Safety 批 QA 回修(N-2):`sheet_read_issue()` 的「表頭不符」代碼(值同 L1 `READ_SCHEMA_MISMATCH`)。
+SHEET_ISSUE_SCHEMA_MISMATCH = "schema_mismatch"
+
+
+def sheet_read_issue(exc: BaseException) -> str:
+    """讀取例外 → 分類代碼(L1 `classify_read_error`;例 `schema_mismatch` / `permission_denied`)。
+
+    給 L5 頁面用(L5 不得直接 import L1,§8.2):拿來挑「怎麼辦」那一句 —— 表頭不符時叫人去改第一列,
+    ⛔ 不叫人重新登入 / 查網路(那是錯的指引)。L1 載不進來 → `error:<型別>`。
+    """
+    try:
+        from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1
+    except Exception:  # noqa: BLE001
+        return f"error:{type(exc).__name__}"
+    return _classify_read_error(_gsp, exc)
+
+
+def portfolio_worksheet_headers() -> tuple[str, ...]:
+    """`portfolios` 分頁應有的第一列(L1 `_HEADERS`;給 L5「把第一列改成…」那一句用)。純讀常數。"""
+    from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1
+    return tuple(_gsp._HEADERS)
 
 
 def _login_expired(_gsp) -> bool:
@@ -97,7 +126,8 @@ def get_binding_state() -> BindingState:
     # 換 Sheet 後 15 分鐘內拿到**上一本的本數**(張冠李戴,§ P3a 稽核 #3)。顯式傳 _sid 讓讀哪一本
     # 由本檔說清楚,不依賴 L1 的解析細節。
     try:
-        _count = len(_gsp.list_portfolios(sheet_id=_sid))
+        # B1:raise_if_missing=True ⇒「沒有 portfolios 分頁」不再被讀成「0 本」(也不再被讀取順手建出來)。
+        _count = len(_gsp.list_portfolios(sheet_id=_sid, raise_if_missing=True))
     except Exception as _e:  # noqa: BLE001 — 讀組合清單失敗 → 中性「已綁定」,不炸狀態列、不腦補
         if is_login_required_error(_e):
             # 1.0-B2(稽核 SA2 MUST-1):這一次讀取期間登入被清掉了(token 過期且無 refresh_token,
@@ -107,13 +137,27 @@ def get_binding_state() -> BindingState:
             return _with_login_expired(BindingState(
                 logged_in=_logged, sheet_id=_sid, portfolio_count=None,
                 status=STATUS_UNBOUND, read_error=_read_err), _gsp)
+        _issue = _classify_read_error(_gsp, _e)
+        if _issue == getattr(_gsp, "READ_WORKSHEET_MISSING", None):
+            # 綁定讀到了、那本 Sheet 也在,只是還沒有 `portfolios` 分頁 ＝「綁了但空」(灰,有效結果);
+            # 本數**未知**(None),⛔ 不寫 0。
+            return BindingState(logged_in=_logged, sheet_id=_sid, portfolio_count=None,
+                                status=STATUS_BOUND_EMPTY, sheet_issue=_issue)
         return BindingState(logged_in=_logged, sheet_id=_sid,
-                            portfolio_count=None, status=STATUS_BOUND)
+                            portfolio_count=None, status=STATUS_BOUND, sheet_issue=_issue)
     if _count == 0:
         return BindingState(logged_in=_logged, sheet_id=_sid,
                             portfolio_count=0, status=STATUS_BOUND_EMPTY)
     return BindingState(logged_in=_logged, sheet_id=_sid,
                         portfolio_count=_count, status=STATUS_BOUND)
+
+
+def _classify_read_error(_gsp, exc: BaseException) -> str:
+    """L1 `classify_read_error`(B1);L1 版本太舊 / 分類本身出錯 → `error:<型別>`(⛔ 不吞成空字串)。"""
+    try:
+        return str(_gsp.classify_read_error(exc))
+    except Exception:  # noqa: BLE001
+        return f"error:{type(exc).__name__}"
 
 
 def _read_login_and_sheet(_gsp) -> "tuple[bool, str, str]":
@@ -178,3 +222,15 @@ def get_binding_presence() -> BindingPresence:
     _logged, _sid, _read_err = _read_login_and_sheet(_gsp)
     return BindingPresence(logged_in=_logged, sheet_bound=bool(_logged and _sid),
                            read_error=_read_err)
+
+
+def reload_my_sheet_reads(*sheet_ids: str) -> int:
+    """「重新讀取」(Sheet Safety 批 B5,DEC-083):只失效**目前這位使用者 × 這幾本 Sheet** 的讀取快取。
+
+    沒給 sheet_ids → 目前綁定的那本(ETF / 個股兩通道)。別的使用者、本人的其他 Sheet 一律不動;
+    ⛔ 不呼叫任何全域 `.clear()`。未登入 → 0(那時讀取本來就不經快取)。回失效的 (身分, Sheet) 筆數。
+    **純快取操作,不連 Google、不寫 Sheet。**
+    """
+    from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1(正常方向)
+
+    return int(_gsp.invalidate_my_read_cache(*sheet_ids))

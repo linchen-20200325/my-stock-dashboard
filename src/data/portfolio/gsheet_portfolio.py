@@ -41,6 +41,12 @@ Schema
 ====
 - 純函式 API：is_configured / list_portfolios / load_portfolio / save_portfolio / delete_portfolio
 - 例外不吞，往上拋給 caller（UI 層用 try/except 顯示 st.error）
+- **讀取真正唯讀**（Sheet Safety 批 B1，客戶 2026-10-25 DEC-083）：list_* / load_* **零寫入** ——
+  分頁不存在 ⇒ `SheetWorksheetMissingError`（或 `raise_if_missing=False` 時回 []，⛔ 不建分頁）；
+  第一列欄名不符 ⇒ `SheetSchemaMismatchError`（⛔ 不改寫第一列）；空表 ⇒ []；權限 / 網路錯誤原樣上拋。
+  修前讀取經 `_get_worksheet()`：分頁不存在就 `add_worksheet` + 寫表頭、表頭不符就覆寫第一列。
+  建分頁只剩**明確寫入動作**（save_*）經 `_ws_for_write(create_if_missing=True)` 才會發生；
+  delete_* 分頁不存在 → 回 0、不建。表頭不符時寫入一律在**任何寫入之前**拋錯（⛔ 不修表頭）。
 - OAuth client 由 src.data.portfolio.oauth_state._get_oauth_client() 提供
   (v18.400 D4:原 oauth_state 誤放 src/ui/pages/,已歸位 src/data/portfolio/ 同層)
 """
@@ -48,7 +54,10 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
+import itertools
 import math
+import threading
+import time
 from collections.abc import Mapping
 from typing import Any
 
@@ -79,6 +88,8 @@ def clear_read_cache() -> None:
     §5 可觀測性 + §1:寫入(save/delete)一律清 → 使用者自己的編輯即時可見,不服務髒資料;
     外部直接改 Sheet 者靠 TTL_15MIN 過期,或 UI 的「🔄 重新載入」手動呼叫本函式。
     SEC-1:快取住在 `_*_cached` 內部函式(鍵含身分),public 四支本身不再帶快取。
+    ⚠️ B5(DEC-083):本函式清的是**所有使用者、所有 Sheet**。既有 caller(寫入後、側欄 🔄、舊戰情室 🔄)
+    本批未改;新的「重新讀取」一律改用 `invalidate_my_read_cache()`(只失效本人 × 那本 Sheet)。
     """
     for _fn in (_list_portfolios_cached, _load_portfolio_cached,
                 _list_stock_watchlists_cached, _load_stock_watchlist_cached):
@@ -411,66 +422,217 @@ def _run_as_identity(identity: str, raw_fn, **kwargs):
 
 
 def _identity_scoped_read(cached_fn, raw_fn, **kwargs):
-    """有身分 → `cached_fn(identity, **kwargs)`(鍵含身分);無身分 → `raw_fn(**kwargs)`(不碰快取)。"""
+    """有身分 → `cached_fn(identity, **kwargs, read_gen=…)`(鍵含身分 ＋ 本人×本 Sheet 的失效世代);
+    無身分 → `raw_fn(**kwargs)`(不碰快取)。"""
     _identity = _cache_identity()
     if not _identity:
         return raw_fn(**kwargs)
-    return cached_fn(_identity, **kwargs)
+    return cached_fn(_identity, **kwargs,
+                     read_gen=_read_generation(_identity, str(kwargs.get('sheet_id') or '')))
 
 
-def _col_letter(n_cols: int) -> str:
-    """1-based 欄數 → A1 欄字母(headers ≤ 26 欄,單字母 A..Z)。
+# ── Sheet Safety 批 B5（DEC-083）:只失效「本人 × 這本 Sheet」的讀取快取 ─────────────────
+# 客戶原文:「重新讀取不得默認清除所有使用者的全域 cache。……只失效目前使用者／active Sheet／
+# 相關 read cache。……不得用全域 `.clear()` 假裝完成。」
+# 做法:`st.cache_data` 沒有「只清某些鍵」的 API(`.clear()` 只能清整支函式的**所有**項目),
+# 所以不清 —— 改把一個「失效世代」放進快取鍵:四支 `_*_cached` 多收一個**不加底線**的參數
+# `read_gen`(底線參數不進快取鍵),值由下表決定。「重新讀取」＝ 把 (本人指紋, 那本 Sheet) 的世代
+# 換成全域遞增計數器的新值 ⇒ 本人讀那本 Sheet 時鍵變了 ⇒ 重抓;別人、本人的別本 Sheet 鍵不變 ⇒ 照舊命中。
+# 舊世代的快取項不會再被讀到,15 分鐘(TTL)後由 Streamlit 自然淘汰。
+# 表的鍵:(身分指紋, sheet_id) ＝ 本人那本;(`_READ_GEN_ANY_IDENTITY`, sheet_id) ＝ 那本 Sheet 的所有人。
+# ⚠️ 已知限制(據實):表在**本 process 記憶體**;多 replica 部署時各 replica 的 `st.cache_data` 本來也各自
+# 獨立,失效只作用於收到這次請求的那一台(與全域 `clear_read_cache()` 同一個範圍)。process 重啟 ⇒
+# 表與快取一起歸零。
+_READ_GEN_ANY_IDENTITY = '*'
+_READ_GEN_LOCK = threading.Lock()
+_READ_GEN_COUNTER = itertools.count(1)
+#: (身分指紋 / '*', sheet_id) → (世代, 換代時刻 time.monotonic())。
+_READ_GEN: dict[tuple[str, str], tuple[int, float]] = {}
 
-    e.g. 3 欄 → 'C'、5 欄 → 'E'。用於動態算 header 更新範圍,取代死寫 'A1:E1'。
+
+def _read_generation(identity: str, sheet_id: str) -> str:
+    """本人 × 這本 Sheet 目前的快取世代字串(`<本人世代>.<全體世代>`;沒換過代 → `0.0`)。"""
+    with _READ_GEN_LOCK:
+        _mine = _READ_GEN.get((identity, sheet_id))
+        _all = _READ_GEN.get((_READ_GEN_ANY_IDENTITY, sheet_id))
+    return f'{_mine[0] if _mine else 0}.{_all[0] if _all else 0}'
+
+
+def _bump_read_generation(identity: str, sheet_ids) -> int:
+    """把 (identity, sid) 換新世代;順手清掉換代超過 TTL_15MIN 的舊表項。回換代的筆數。
+
+    清舊表項是安全的:某鍵換代時刻 t0 超過 TTL ⇒ 世代 0 的快取項全都建於 t0 之前、早已過期
+    ⇒ 該鍵退回 0 不會讀到任何舊資料;計數器全域遞增、不重用 ⇒ 之後再換代必是沒見過的新值。
     """
-    if not 1 <= n_cols <= 26:
-        raise ValueError(f'_col_letter 僅支援 1..26 欄,收到 {n_cols}')
-    return chr(ord('A') + n_cols - 1)
+    _now = time.monotonic()
+    _n = 0
+    with _READ_GEN_LOCK:
+        for _k in [k for k, (_g, _t) in _READ_GEN.items() if _now - _t > TTL_15MIN]:
+            del _READ_GEN[_k]
+        for _sid in sheet_ids:
+            _READ_GEN[(identity, _sid)] = (next(_READ_GEN_COUNTER), _now)
+            _n += 1
+    return _n
 
 
-def _get_worksheet(*, sheet_id: str | None = None,
-                   worksheet_name: str = _WORKSHEET_NAME,
-                   headers: list[str] = _HEADERS):
-    """取得 (或建立) `worksheet_name` 這個 worksheet，並確保 header 列存在。
+def _target_sheet_ids(sheet_ids) -> list[str]:
+    """明確給的 sheet_ids;沒給 → 目前 session 綁的兩通道(去空白、去重、保序)。"""
+    _raw = list(sheet_ids) or [_get_active_sheet_id(), _get_active_stock_sheet_id()]
+    _out: list[str] = []
+    for _s in _raw:
+        _s = str(_s or '').strip()
+        if _s and _s not in _out:
+            _out.append(_s)
+    return _out
 
-    sheet_id=None(或空)→ 走 legacy `_get_active_sheet_id()`(ETF / forward-test
-    行為 byte-for-byte 不變);非空 sheet_id → 開 **那本** sheet(個股組合分家用)。
 
-    worksheet_name / headers 預設為 `portfolios` 分頁(既有 caller 無感);個股純代碼
-    清單傳 `stock_watchlist` + 3 欄 header。header 更新範圍依 `len(headers)` **動態**
-    計算(3 欄 → A1:C1、5 欄 → A1:E1),修原本死寫 'A1:E1' 在 3 欄分頁會誤蓋 D/E 欄的 bug。
+def invalidate_my_read_cache(*sheet_ids: str) -> int:
+    """「重新讀取」:只讓**目前這位使用者**讀這幾本 Sheet(沒給 → 目前綁定的那本 / 兩通道)時重抓。
+
+    別的使用者、本人的其他 Sheet、forward-test 以外的快取一律不動;⛔ 不呼叫任何 `.clear()`。
+    沒有身分(未登入 / 登入已逾時)→ no-op 回 0(那時讀取本來就不經快取)。回換代筆數。
+    """
+    _identity = _cache_identity()
+    if not _identity:
+        return 0
+    return _bump_read_generation(_identity, _target_sheet_ids(sheet_ids))
+
+
+def invalidate_sheet_read_cache(*sheet_ids: str) -> int:
+    """讓**所有使用者**讀這幾本 Sheet 時重抓(例:寫入那本之後)。只動指定的 Sheet;⛔ 不 `.clear()`。
+
+    本批尚無 caller 改用(寫入路徑仍呼叫既有的全域 `clear_read_cache()`,B5 指派「不動既有全域清除」),
+    提供給後續把寫入後的全域清除收斂成「只清那本」時使用(見交付報告殘留項)。
+    """
+    _ids = _target_sheet_ids(sheet_ids)
+    return _bump_read_generation(_READ_GEN_ANY_IDENTITY, _ids) if _ids else 0
+
+
+# ── Sheet Safety 批 B1（DEC-083）:讀取真正唯讀 ───────────────────────────────────
+# 客戶原文:「禁止:read → worksheet 不存在 → create worksheet;禁止:read → header/schema 不符 →
+# rewrite 第一列。……任何初始化／migration／repair:必須拆成明確 write action,不得藏在 read helper。」
+# ~~`_get_worksheet()`(取得或建立分頁並確保表頭)＋ `_col_letter()`~~(有意識的移除,⛔ 不是漏刪:
+# 前者正是被禁的「讀取時建分頁 / 覆寫第一列」;後者只服務它的表頭覆寫範圍,移除後 0 caller)。
+#: 讀取狀態(§3.3;快取存 `(狀態, 內容)` ⇒ 「分頁不存在」也進快取,不會每輪 rerun 重打 Google)。
+READ_OK = 'ok'
+READ_EMPTY = 'empty'                          # 分頁在、但整張表是空的(連表頭都沒有)
+READ_WORKSHEET_MISSING = 'worksheet_missing'  # 這本 Sheet 沒有該分頁(⛔ 讀取不建)
+READ_SCHEMA_MISMATCH = 'schema_mismatch'      # 第一列欄名與預期不符(⛔ 讀取不修)
+
+#: 表頭狀態(`_header_state` 回傳)。
+_HEADER_EMPTY = 'empty'
+_HEADER_OK = 'ok'
+_HEADER_MISMATCH = 'mismatch'
+
+
+class SheetWorksheetMissingError(RuntimeError):
+    """這本 Sheet 沒有指定分頁。讀取時**不**建立(B1);繼承 RuntimeError ⇒ 既有 `except` 行為不變。"""
+
+    def __init__(self, worksheet_name: str):
+        self.worksheet_name = worksheet_name
+        super().__init__(
+            f'這本 Sheet 裡沒有「{worksheet_name}」分頁。讀取時系統不會自動建立分頁，'
+            f'也不會改動你的 Sheet；之後用「儲存」寫入時才會建立。')
+
+
+class SheetSchemaMismatchError(RuntimeError):
+    """分頁第一列欄名與預期不符。讀取 / 寫入都**不**修表頭(B1);訊息⛔ 不回顯使用者的表頭內容。"""
+
+    def __init__(self, worksheet_name: str, expected_headers, *, writing: bool = False):
+        self.worksheet_name = worksheet_name
+        self.expected_headers = tuple(expected_headers)
+        _tail = '這次沒有寫入任何東西，Sheet 維持原狀。' if writing else '系統不會自動修改你的資料。'
+        super().__init__(
+            f'這本 Sheet 的「{worksheet_name}」分頁第一列欄名和系統預期的不一樣，{_tail}'
+            f'請把第一列從 A 欄起依序改成：{"、".join(self.expected_headers)}'
+            f'（右邊可以自己加欄）。')
+
+
+class SheetNotConfiguredError(RuntimeError):
+    """還沒選 Sheet(session 與 secrets 都沒有 Sheet ID)。訊息與修前的 RuntimeError 逐字相同。"""
+
+
+def _open_spreadsheet(sheet_id: str | None):
+    """開 Spreadsheet(唯讀動作)。sheet_id=None / 空 → legacy `_get_active_sheet_id()`。"""
+    _sid = sheet_id or _get_active_sheet_id()
+    if not _sid:
+        raise SheetNotConfiguredError('尚未設定 Sheet ID（OAuth 模式請在雲端儲存區塊輸入）')
+    return _build_client().open_by_key(_sid)
+
+
+def _ws(*, sheet_id: str | None = None, worksheet_name: str = _WORKSHEET_NAME):
+    """**只開不建**:取得 worksheet handle;分頁不存在 → `SheetWorksheetMissingError`。⛔ 零寫入。
+
+    每次重新建立（OAuth token 可能 refresh）。sheet_id=None(或空)→ legacy active sheet
+    (ETF / forward-test);非空 → 開 **那本** sheet(個股組合分家用)。表頭**不**在這裡檢查
+    (讀取端 `_read_records`、寫入端各 save/delete 自己以 `_header_state` 判)。
     """
     import gspread
 
-    _sid = sheet_id or _get_active_sheet_id()
-    if not _sid:
-        raise RuntimeError('尚未設定 Sheet ID（OAuth 模式請在雲端儲存區塊輸入）')
-    client = _build_client()
-    sh = client.open_by_key(_sid)
-
+    sh = _open_spreadsheet(sheet_id)
     try:
-        ws = sh.worksheet(worksheet_name)
+        return sh.worksheet(worksheet_name)
     except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title=worksheet_name, rows=200, cols=10)
-        ws.append_row(headers)
-        return ws
-
-    first_row = ws.row_values(1)
-    if first_row != headers:
-        ws.update(f'A1:{_col_letter(len(headers))}1', [headers])
-    return ws
+        raise SheetWorksheetMissingError(worksheet_name) from None
 
 
-def _ws(*, sheet_id: str | None = None,
-        worksheet_name: str = _WORKSHEET_NAME,
-        headers: list[str] = _HEADERS):
-    """取得 worksheet handle。每次重新建立（OAuth token 可能 refresh）。
+def _ws_for_write(*, sheet_id: str | None = None, worksheet_name: str = _WORKSHEET_NAME,
+                  create_if_missing: bool):
+    """寫入用 worksheet:先 `_ws`(只開);分頁不存在時 `create_if_missing=True` 才建(明確寫入動作),
+    否則回 None(caller 自己決定「沒東西可刪」)。
 
-    sheet_id / worksheet_name / headers 透傳給 `_get_worksheet`
-    (預設 portfolios 分頁 → 既有 caller 無感)。
+    建出來的是**空**分頁:表頭由 caller 的整表寫入(`_write_whole_sheet`)一次寫上,不另寫一次。
     """
-    return _get_worksheet(sheet_id=sheet_id, worksheet_name=worksheet_name,
-                          headers=headers)
+    try:
+        return _ws(sheet_id=sheet_id, worksheet_name=worksheet_name)
+    except SheetWorksheetMissingError:
+        if not create_if_missing:
+            return None
+    print(f'[gsheet_portfolio] B1 寫入建立分頁 worksheet={worksheet_name}')
+    return _open_spreadsheet(sheet_id).add_worksheet(title=worksheet_name, rows=200, cols=10)
+
+
+def _header_state(values: list[list[Any]], headers: list[str]) -> str:
+    """整張表的原字串 → `_HEADER_EMPTY` / `_HEADER_OK` / `_HEADER_MISMATCH`(純函式)。
+
+    - 整張表沒有任何非空白格 → EMPTY。
+    - 第一列整列空白、下面卻有資料 → MISMATCH(不知道哪一列才是表頭,⛔ 不猜)。
+    - 本分頁的欄(`headers`)在第一列重複 → MISMATCH(不知道該讀哪一欄,同批 Z12 D1-n6)。
+    - 第一列從 A 欄起 ＝ `headers` → OK(右邊使用者自加欄不影響)。
+    - 第一列只是 `headers` 的**前段**(例:只有 name/ticker/lots,批 M12 窄表)且沒有任何資料
+      落在表頭寬度之外 → OK(缺的欄讀成缺值;寫入時補齊表頭 —— 那是明確寫入動作)。
+    - 其他 → MISMATCH。
+    """
+    rows = [list(r) for r in (values or [])]
+    if not any(not _is_blank_cell(c) for r in rows for c in r):
+        return _HEADER_EMPTY
+    first = rows[0]
+    _filled = [i for i, c in enumerate(first) if not _is_blank_cell(c)]
+    if not _filled:
+        return _HEADER_MISMATCH
+    if _header_has_duplicates(first, headers):
+        return _HEADER_MISMATCH
+    n = len(headers)
+    if list(first[:n]) == list(headers):
+        return _HEADER_OK
+    width = _filled[-1] + 1
+    if (width < n and list(first[:width]) == list(headers[:width])
+            and not any(not _is_blank_cell(c) for r in rows[1:] for c in r[width:])):
+        return _HEADER_OK
+    return _HEADER_MISMATCH
+
+
+def _require_writable_header(existing: list[list[Any]], headers: list[str],
+                             worksheet_name: str) -> None:
+    """寫入前的表頭關卡:MISMATCH → **任何寫入之前** `SheetSchemaMismatchError`(⛔ 不修表頭)。"""
+    if _header_state(existing, headers) == _HEADER_MISMATCH:
+        raise SheetSchemaMismatchError(worksheet_name, headers, writing=True)
+
+
+def _write_header(old_header: list[Any], headers: list[str]) -> list[Any]:
+    """寫入時的表頭:前段釘 `headers`(表頭狀態已過關 ⇒ 與原表頭相同,或原表頭是它的前段),
+    使用者在右邊自加的表頭格原樣保留。"""
+    return list(headers) + list(old_header[len(headers):])
 
 
 #: 讀取時保留原字串、**不**轉數字的欄（批 Z12 D1-n1:名稱／代號是字串,`0050` 不可讀成 50）。
@@ -480,20 +642,97 @@ _TEXT_COLS = ('name', 'ticker')
 def _all_records(*, sheet_id: str | None = None,
                  worksheet_name: str = _WORKSHEET_NAME,
                  headers: list[str] = _HEADERS) -> list[dict[str, Any]]:
-    """回傳全表（含 header 後的所有列）為 dict list（預設 portfolios 分頁）。
+    """回傳全表（含 header 後的所有列）為 dict list（預設 portfolios 分頁）。**零寫入。**
 
     逐列轉換同 `_sheet_record`（即 gspread `get_all_records()`,但名稱／代號保留原字串）。
+    空表（連表頭都沒有）→ []。分頁不存在 → `SheetWorksheetMissingError`;第一列欄名不符 →
+    `SheetSchemaMismatchError`(兩者都⛔ 不修;由 `_read_status` 轉成可快取的狀態)。
     批 Z12（D1-n6）:只有**本分頁的欄**（`headers`）重複才算錯 —— 使用者自加欄或多欄空白
-    表頭重名不再讓整張表讀不進來;本分頁的欄重複 ＝ 不知該讀哪一欄,交 gspread 原樣拋
-    它既有的錯誤（§1:不讀錯欄）。
+    表頭重名不影響;本分頁的欄重複 ＝ 不知該讀哪一欄 → 表頭不符（§1:不讀錯欄）。
+    （修前那一種交 gspread `get_all_records()` 拋它自己的錯;現改為具名例外,同樣讀不到任何列。）
+    權限 / 網路 / 找不到 Sheet 等例外原樣上拋(不進快取)。
     """
-    ws = _ws(sheet_id=sheet_id, worksheet_name=worksheet_name, headers=headers)
+    ws = _ws(sheet_id=sheet_id, worksheet_name=worksheet_name)
     values = ws.get_all_values()
-    if not values:
+    _state = _header_state(values, headers)
+    if _state == _HEADER_EMPTY:
         return []
-    if _header_has_duplicates(values[0], headers):
-        return ws.get_all_records()
+    if _state == _HEADER_MISMATCH:
+        raise SheetSchemaMismatchError(worksheet_name, headers)
     return [_sheet_record(values[0], r) for r in values[1:]]
+
+
+def _read_status(fn, **kwargs) -> tuple[str, list]:
+    """`fn(**kwargs)` → `(讀取狀態, 內容)`:分頁不存在 / 表頭不符轉成狀態(可進快取,不每輪重打);
+    其餘例外原樣上拋(st.cache_data 不快取例外)。"""
+    try:
+        return READ_OK, fn(**kwargs)
+    except SheetWorksheetMissingError:
+        return READ_WORKSHEET_MISSING, []
+    except SheetSchemaMismatchError:
+        return READ_SCHEMA_MISMATCH, []
+
+
+def _unwrap_read(result, *, raise_if_missing: bool, worksheet_name: str,
+                 headers: list[str]) -> list:
+    """`(狀態, 內容)` → public 回傳值。表頭不符一律拋;分頁不存在 → 依 `raise_if_missing`。"""
+    _status, _payload = result
+    if _status == READ_SCHEMA_MISMATCH:
+        raise SheetSchemaMismatchError(worksheet_name, headers)
+    if _status == READ_WORKSHEET_MISSING:
+        if raise_if_missing:
+            raise SheetWorksheetMissingError(worksheet_name)
+        return []
+    return list(_payload)
+
+
+#: `classify_read_error` 的分類代碼(§3.3)。
+READ_ERROR_LOGIN_REQUIRED = 'login_required'
+READ_ERROR_PERMISSION_DENIED = 'permission_denied'
+READ_ERROR_SHEET_NOT_FOUND = 'sheet_not_found'
+READ_ERROR_QUOTA_EXCEEDED = 'quota_exceeded'
+READ_ERROR_NETWORK = 'network'
+#: 分不出來 → `error:<例外型別名>`(只交型別名,⛔ 不交訊息 —— 訊息可能含識別碼)。
+READ_ERROR_OTHER_PREFIX = 'error:'
+
+
+def classify_read_error(exc: BaseException) -> str:
+    """讀取例外 → 分類代碼(純函式;給 L3 回報「為什麼讀不到」,⛔ 不吞、不改例外本身)。
+
+    只看例外**型別**與 gspread `APIError.code`,⛔ 不比對訊息字串。
+    """
+    if isinstance(exc, SheetWorksheetMissingError):
+        return READ_WORKSHEET_MISSING
+    if isinstance(exc, SheetSchemaMismatchError):
+        return READ_SCHEMA_MISMATCH
+    if isinstance(exc, LoginRequiredError):
+        return READ_ERROR_LOGIN_REQUIRED
+    _code = None
+    try:
+        from gspread.exceptions import APIError, SpreadsheetNotFound
+    except Exception:  # noqa: BLE001 — 沒有 gspread ⇒ 只能看內建型別
+        APIError = SpreadsheetNotFound = ()   # type: ignore[assignment]
+    if SpreadsheetNotFound and isinstance(exc, SpreadsheetNotFound):
+        return READ_ERROR_SHEET_NOT_FOUND
+    if APIError and isinstance(exc, APIError):
+        _code = getattr(exc, 'code', None)
+    if isinstance(exc, PermissionError) or _code == 403:
+        return READ_ERROR_PERMISSION_DENIED
+    if _code == 404:
+        return READ_ERROR_SHEET_NOT_FOUND
+    if _code == 429:
+        return READ_ERROR_QUOTA_EXCEEDED
+    if isinstance(exc, (ConnectionError, TimeoutError)) or _is_requests_network_error(exc):
+        return READ_ERROR_NETWORK
+    return f'{READ_ERROR_OTHER_PREFIX}{type(exc).__name__}'
+
+
+def _is_requests_network_error(exc: BaseException) -> bool:
+    try:
+        from requests.exceptions import ConnectionError as _RCE, Timeout as _RTO
+    except Exception:  # noqa: BLE001
+        return False
+    return isinstance(exc, (_RCE, _RTO))
 
 
 # ── 純解析器（§2.1 SSOT + §4 無 I/O 離線可測）───────────────────────────
@@ -577,24 +816,36 @@ def parse_watchlist_records(records: list[dict[str, Any]]) -> list[str]:
     return out
 
 
-def list_portfolios(*, sheet_id: str | None = None) -> list[str]:
-    """列出所有不重複的組合名稱（按字母排序）。
+def list_portfolios(*, sheet_id: str | None = None,
+                    raise_if_missing: bool = False) -> list[str]:
+    """列出所有不重複的組合名稱（按字母排序）。**純讀,零寫入**(B1)。
 
     sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
-    ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
+    raise_if_missing:加性參數(B1)。False(預設,既有 UI 相容)→ 分頁不存在回 [](⛔ 不再建分頁);
+        True → 拋 `SheetWorksheetMissingError`(讓 L3 把「沒有分頁」與「有分頁但沒資料」分開說)。
+    第一列欄名不符 → 一律 `SheetSchemaMismatchError`;權限 / 網路錯誤原樣上拋。
+    ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效;快取存 `(狀態, 內容)`。
     SEC-1:快取鍵含 (身分指紋, 實際 sheet_id);無身分不用快取(見 `_identity_scoped_read`)。
     """
-    return _identity_scoped_read(_list_portfolios_cached, _list_portfolios_raw,
-                                 sheet_id=sheet_id or _get_active_sheet_id())
+    return _unwrap_read(
+        _identity_scoped_read(_list_portfolios_cached, _list_portfolios_raw,
+                              sheet_id=sheet_id or _get_active_sheet_id()),
+        raise_if_missing=raise_if_missing, worksheet_name=_WORKSHEET_NAME, headers=_HEADERS)
 
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
-def _list_portfolios_cached(identity: str, *, sheet_id: str) -> list[str]:
+def _list_portfolios_cached(identity: str, *, sheet_id: str,
+                            read_gen: str = '') -> tuple[str, list[str]]:
     # ⚠️ 參數名**不可**加底線前綴:st.cache_data 會把 `_` 開頭的參數排除在快取鍵外。
+    # read_gen(B5 失效世代)只為進快取鍵,函式本體不用它。
     return _run_as_identity(identity, _list_portfolios_raw, sheet_id=sheet_id)
 
 
-def _list_portfolios_raw(*, sheet_id: str) -> list[str]:
+def _list_portfolios_raw(*, sheet_id: str) -> tuple[str, list[str]]:
+    return _read_status(_list_portfolios_names, sheet_id=sheet_id)
+
+
+def _list_portfolios_names(*, sheet_id: str) -> list[str]:
     names: set[str] = set()
     for rec in _all_records(sheet_id=sheet_id):
         n = str(rec.get('name', '')).strip()
@@ -604,33 +855,42 @@ def _list_portfolios_raw(*, sheet_id: str) -> list[str]:
 
 
 def load_portfolio(name: str, *, sheet_id: str | None = None,
-                   keep_blank: bool = False) -> list[dict[str, Any]]:
-    """讀取指定名稱的組合，回傳 `[{ticker, lots, avg_price}, ...]`。
+                   keep_blank: bool = False,
+                   raise_if_missing: bool = False) -> list[dict[str, Any]]:
+    """讀取指定名稱的組合，回傳 `[{ticker, lots, avg_price}, ...]`。**純讀,零寫入**(B1)。
 
     sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
     keep_blank:透傳 `parse_portfolio_records`（預設 False ＝ 既有行為;True → 張數／均價
         空白的列保留、該欄 `None`）。它是參數 ⇒ 屬快取鍵,兩種模式不共用快取項。
+    raise_if_missing / 表頭不符 / 例外:同 `list_portfolios`。
     ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
     SEC-1:快取鍵含 (身分指紋, 實際 sheet_id);無身分不用快取(見 `_identity_scoped_read`)。
     """
     name = (name or '').strip()
     if not name:
         return []
-    return _identity_scoped_read(_load_portfolio_cached, _load_portfolio_raw,
-                                 name=name, sheet_id=sheet_id or _get_active_sheet_id(),
-                                 keep_blank=keep_blank)
+    return _unwrap_read(
+        _identity_scoped_read(_load_portfolio_cached, _load_portfolio_raw,
+                              name=name, sheet_id=sheet_id or _get_active_sheet_id(),
+                              keep_blank=keep_blank),
+        raise_if_missing=raise_if_missing, worksheet_name=_WORKSHEET_NAME, headers=_HEADERS)
 
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def _load_portfolio_cached(identity: str, *, name: str, sheet_id: str,
-                           keep_blank: bool) -> list[dict[str, Any]]:
-    # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+                           keep_blank: bool, read_gen: str = '') -> tuple[str, list[dict[str, Any]]]:
+    # identity / read_gen 不加底線:底線參數不進 st.cache_data 快取鍵(B5 失效世代必須在鍵裡)
     return _run_as_identity(identity, _load_portfolio_raw,
                             name=name, sheet_id=sheet_id, keep_blank=keep_blank)
 
 
 def _load_portfolio_raw(*, name: str, sheet_id: str,
-                        keep_blank: bool) -> list[dict[str, Any]]:
+                        keep_blank: bool) -> tuple[str, list[dict[str, Any]]]:
+    return _read_status(_load_portfolio_rows, name=name, sheet_id=sheet_id, keep_blank=keep_blank)
+
+
+def _load_portfolio_rows(*, name: str, sheet_id: str,
+                         keep_blank: bool) -> list[dict[str, Any]]:
     recs = [r for r in _all_records(sheet_id=sheet_id)
             if str(r.get('name', '')).strip() == name]
     if keep_blank:
@@ -669,7 +929,7 @@ def _editor_loaded_row(header: list[str], row: list[Any], name: str) -> bool:
 
 
 def _header_has_duplicates(header: list[Any], headers: list[str] = _HEADERS) -> bool:
-    """本分頁的欄（`headers`）在表頭出現不只一次 ⇒ `_all_records` 拋錯、編輯器一列都載不進來。"""
+    """本分頁的欄（`headers`）在表頭出現不只一次 ⇒ 表頭狀態 MISMATCH（讀取 / 寫入都拒絕）。"""
     return any(list(header).count(h) > 1 for h in headers)
 
 
@@ -688,22 +948,16 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
         以**單一** `ws.update` 一次寫完,取代原本 `clear()` → `append_*` 三步 ——
         原寫法若在 clear 之後斷線,整張 Sheet 會被清空。現寫法失敗時 Sheet 維持原狀,
         例外照常往上拋（§1）。值以 RAW 寫入（與原 `append_rows` 預設相同）。
+    分頁 / 表頭(Sheet Safety 批 B1):分頁不存在 → 本次**明確寫入**才建立(`_ws_for_write`);
+        第一列欄名不符 → 在任何寫入之前 `SheetSchemaMismatchError`,⛔ 不覆寫第一列。
+        ~~本分頁的欄重複 → 每列都當「沒載入」全保留、照寫~~(有意識的修改:那是在表頭不明時
+        仍改寫第一列;現與讀取同判 MISMATCH → 拒寫,Sheet 一格不動)。
     """
     name = (name or '').strip()
     if not name:
         raise ValueError('組合名稱不可為空')
     if not rows:
         raise ValueError('組合內容不可為空')
-
-    ws = _ws(sheet_id=sheet_id)
-    existing = ws.get_all_values()
-    _old_header = list(existing[0]) if existing else []
-    # 表頭:前 5 欄釘 _HEADERS（同原寫法）;使用者在第 6 欄以後自加的表頭格原樣保留。
-    header = list(_HEADERS) + _old_header[len(_HEADERS):]
-    # 本分頁的欄重複 → `_all_records` 拋錯、編輯器什麼都沒載入 ⇒ 每列都屬「沒載入」,全保留。
-    _none_loaded = _header_has_duplicates(_old_header)
-    keep_rows = [list(r) for r in existing[1:]
-                 if _none_loaded or not _editor_loaded_row(_old_header, r, name)]
 
     ts = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     new_rows = []
@@ -731,6 +985,16 @@ def save_portfolio(name: str, rows: list[dict[str, Any]], *,
 
     if not new_rows:
         raise ValueError('無有效持股可儲存（檢查代號、張數、均價）')
+
+    # 輸入驗證全過才開分頁(B1:無效輸入⛔ 不因此建出空分頁)。
+    ws = _ws_for_write(sheet_id=sheet_id, create_if_missing=True)
+    existing = ws.get_all_values()
+    _require_writable_header(existing, _HEADERS, _WORKSHEET_NAME)
+    _old_header = list(existing[0]) if existing else []
+    # 表頭:前 5 欄釘 _HEADERS（表頭已過關 ⇒ 與原表頭相同或是其前段）;右邊自加的表頭格原樣保留。
+    header = _write_header(_old_header, _HEADERS)
+    keep_rows = [list(r) for r in existing[1:]
+                 if not _editor_loaded_row(_old_header, r, name)]
 
     _write_whole_sheet(ws, existing, [header] + keep_rows + new_rows)
     clear_read_cache()          # 寫入即清:使用者自己的編輯即時可見(§1)
@@ -772,6 +1036,9 @@ def save_stock_watchlist(name: str, tickers: list[str], *,
     捏造價格。tickers 去空 + 去重(保序,大寫正規化)。同名覆蓋(保留其它 name,
     與 `save_portfolio` 的 keep_rows 同 pattern)。name/代碼皆空 → raise ValueError。
     sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合分家用)。
+    分頁 / 表頭(B1):同 `save_portfolio` —— 分頁不存在 → 本次寫入才建;第一列欄名不符 →
+    任何寫入之前 `SheetSchemaMismatchError`。表頭右邊使用者自加的表頭格原樣保留
+    (~~修前整列寫成 3 欄表頭、右邊自加的表頭格被補空字串清掉~~,有意識的修改:寫入不改使用者自加欄)。
     """
     name = (name or '').strip()
     if not name:
@@ -789,15 +1056,18 @@ def save_stock_watchlist(name: str, tickers: list[str], *,
     if not clean:
         raise ValueError('無有效代碼可儲存')
 
-    ws = _ws(sheet_id=sheet_id, worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
-             headers=_STOCK_WATCHLIST_HEADERS)
+    ws = _ws_for_write(sheet_id=sheet_id, worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
+                       create_if_missing=True)
     existing = ws.get_all_values()
+    _require_writable_header(existing, _STOCK_WATCHLIST_HEADERS, _STOCK_WATCHLIST_WORKSHEET)
+    _old_header = list(existing[0]) if existing else []
     keep_rows = [r for r in existing[1:] if (r and r[0].strip() != name)]
 
     ts = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     new_rows = [[name, tk, ts] for tk in clean]  # ← 無價格欄,§1 反捏造
 
-    _write_whole_sheet(ws, existing, [list(_STOCK_WATCHLIST_HEADERS)] + keep_rows + new_rows)
+    _write_whole_sheet(ws, existing, [_write_header(_old_header, _STOCK_WATCHLIST_HEADERS)]
+                       + keep_rows + new_rows)
     clear_read_cache()          # 寫入即清:使用者自己的編輯即時可見(§1)
     return len(new_rows)
 
@@ -809,6 +1079,10 @@ def add_to_stock_watchlist(name: str, tickers: list[str], *,
     與 `save_stock_watchlist`(覆蓋)不同:此為「加入」語意 —— 選股網勾選後不覆蓋你既有的
     清單。§1:name/代碼皆空 → raise;既有清單不存在 → 視同從空開始(等同新建)。
     大寫正規化 + 去重(同 save_stock_watchlist)。內部呼 save → clear_read_cache 已含。
+    合併前的讀取(B1 / B5):直接讀 Sheet 最新內容、**不經**讀取快取 ——
+    ~~先呼 `clear_read_cache()` 再讀~~(有意識的修改:那會清掉**所有使用者**的讀取快取,
+    只為了自己讀一次最新值;B5「不得默認清除所有使用者的全域 cache」)。
+    分頁不存在 → 從空開始(save 時才建);第一列欄名不符 → `SheetSchemaMismatchError`、不寫。
     """
     name = (name or '').strip()
     if not name:
@@ -816,8 +1090,12 @@ def add_to_stock_watchlist(name: str, tickers: list[str], *,
     _add = [str(_t or '').strip().upper() for _t in (tickers or []) if str(_t or '').strip()]
     if not _add:
         raise ValueError('沒有可加入的代碼')
-    clear_read_cache()   # 合併前讀「最新」既有清單(繞過 15 分快取,避免漏併他處剛加的;稽核 low-sev)
-    _existing = load_stock_watchlist(name, sheet_id=sheet_id)   # 現有(可能空)
+    # 合併前讀「最新」既有清單(不經 15 分快取,避免漏併他處剛加的;稽核 low-sev)。
+    _status, _existing = _load_stock_watchlist_raw(name=name,
+                                                   sheet_id=sheet_id or _get_active_sheet_id())
+    if _status == READ_SCHEMA_MISMATCH:
+        raise SheetSchemaMismatchError(_STOCK_WATCHLIST_WORKSHEET, _STOCK_WATCHLIST_HEADERS,
+                                       writing=True)
     _merged = list(_existing)
     _seen = set(_existing)
     for _t in _add:
@@ -827,24 +1105,34 @@ def add_to_stock_watchlist(name: str, tickers: list[str], *,
     return save_stock_watchlist(name, _merged, sheet_id=sheet_id)
 
 
-def list_stock_watchlists(*, sheet_id: str | None = None) -> list[str]:
-    """列出 `stock_watchlist` 分頁內所有不重複的清單名稱(字母排序)。
+def list_stock_watchlists(*, sheet_id: str | None = None,
+                          raise_if_missing: bool = False) -> list[str]:
+    """列出 `stock_watchlist` 分頁內所有不重複的清單名稱(字母排序)。**純讀,零寫入**(B1)。
 
     sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合)。
+    raise_if_missing / 表頭不符 / 例外:同 `list_portfolios`。
     ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
     SEC-1:快取鍵含 (身分指紋, 實際 sheet_id);無身分不用快取(見 `_identity_scoped_read`)。
     """
-    return _identity_scoped_read(_list_stock_watchlists_cached, _list_stock_watchlists_raw,
-                                 sheet_id=sheet_id or _get_active_sheet_id())
+    return _unwrap_read(
+        _identity_scoped_read(_list_stock_watchlists_cached, _list_stock_watchlists_raw,
+                              sheet_id=sheet_id or _get_active_sheet_id()),
+        raise_if_missing=raise_if_missing, worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
+        headers=_STOCK_WATCHLIST_HEADERS)
 
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
-def _list_stock_watchlists_cached(identity: str, *, sheet_id: str) -> list[str]:
-    # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+def _list_stock_watchlists_cached(identity: str, *, sheet_id: str,
+                                  read_gen: str = '') -> tuple[str, list[str]]:
+    # identity / read_gen 不加底線:底線參數不進 st.cache_data 快取鍵(B5 失效世代必須在鍵裡)
     return _run_as_identity(identity, _list_stock_watchlists_raw, sheet_id=sheet_id)
 
 
-def _list_stock_watchlists_raw(*, sheet_id: str) -> list[str]:
+def _list_stock_watchlists_raw(*, sheet_id: str) -> tuple[str, list[str]]:
+    return _read_status(_list_stock_watchlist_names, sheet_id=sheet_id)
+
+
+def _list_stock_watchlist_names(*, sheet_id: str) -> list[str]:
     names: set[str] = set()
     for rec in _all_records(sheet_id=sheet_id,
                             worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
@@ -855,27 +1143,37 @@ def _list_stock_watchlists_raw(*, sheet_id: str) -> list[str]:
     return sorted(names)
 
 
-def load_stock_watchlist(name: str, *, sheet_id: str | None = None) -> list[str]:
-    """讀取指定名稱的**純代碼**清單(保序、去重),回傳 `list[str]`,**無**價格欄位。
+def load_stock_watchlist(name: str, *, sheet_id: str | None = None,
+                         raise_if_missing: bool = False) -> list[str]:
+    """讀取指定名稱的**純代碼**清單(保序、去重),回傳 `list[str]`,**無**價格欄位。**純讀**(B1)。
 
     sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合)。
+    raise_if_missing / 表頭不符 / 例外:同 `list_portfolios`。
     ⚠️ 讀取快取 TTL_15MIN(§3.3 SSOT):寫入後由 clear_read_cache() 失效。
     SEC-1:快取鍵含 (身分指紋, 實際 sheet_id);無身分不用快取(見 `_identity_scoped_read`)。
     """
     name = (name or '').strip()
     if not name:
         return []
-    return _identity_scoped_read(_load_stock_watchlist_cached, _load_stock_watchlist_raw,
-                                 name=name, sheet_id=sheet_id or _get_active_sheet_id())
+    return _unwrap_read(
+        _identity_scoped_read(_load_stock_watchlist_cached, _load_stock_watchlist_raw,
+                              name=name, sheet_id=sheet_id or _get_active_sheet_id()),
+        raise_if_missing=raise_if_missing, worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
+        headers=_STOCK_WATCHLIST_HEADERS)
 
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
-def _load_stock_watchlist_cached(identity: str, *, name: str, sheet_id: str) -> list[str]:
-    # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+def _load_stock_watchlist_cached(identity: str, *, name: str, sheet_id: str,
+                                 read_gen: str = '') -> tuple[str, list[str]]:
+    # identity / read_gen 不加底線:底線參數不進 st.cache_data 快取鍵(B5 失效世代必須在鍵裡)
     return _run_as_identity(identity, _load_stock_watchlist_raw, name=name, sheet_id=sheet_id)
 
 
-def _load_stock_watchlist_raw(*, name: str, sheet_id: str) -> list[str]:
+def _load_stock_watchlist_raw(*, name: str, sheet_id: str) -> tuple[str, list[str]]:
+    return _read_status(_load_stock_watchlist_codes, name=name, sheet_id=sheet_id)
+
+
+def _load_stock_watchlist_codes(*, name: str, sheet_id: str) -> list[str]:
     recs = [r for r in _all_records(sheet_id=sheet_id,
                                     worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
                                     headers=_STOCK_WATCHLIST_HEADERS)
@@ -888,54 +1186,103 @@ _FT_WORKSHEET_NAME = 'forward_test_picks'
 _FT_HEADERS = ['cohort', 'stock_id', 'name', 'entry_price', 'factors', 'frozen_at']
 
 
-def _ft_worksheet():
-    """取得 (或建立) `forward_test_picks` worksheet,並確保 header 列存在。"""
-    import gspread
+#: B2:讀取狀態另一種 ——「還沒選 Sheet / 還沒登入」(前進式驗證只用本地紀錄,不是故障)。
+READ_NOT_CONFIGURED = 'not_configured'
 
-    sheet_id = _get_active_sheet_id()
-    if not sheet_id:
-        raise RuntimeError('尚未設定 Sheet ID(OAuth 模式請在雲端儲存區塊輸入)')
-    sh = _build_client().open_by_key(sheet_id)
+
+def _ft_header_state(values: list[list[Any]]) -> str:
+    """forward_test_picks 表頭(比 `_header_state` **更嚴**):必須從 A 欄起完整等於 `_FT_HEADERS`
+    (右邊自加欄可以);只有前段(窄表)也算 MISMATCH —— 不可重建歷史,⛔ 不替它補表頭。"""
+    _state = _header_state(values, _FT_HEADERS)
+    if _state == _HEADER_OK and list(values[0][:len(_FT_HEADERS)]) != _FT_HEADERS:
+        return _HEADER_MISMATCH
+    return _state
+
+
+def _ft_worksheet():
+    """**只開不建**:`forward_test_picks` worksheet(legacy active sheet)。⛔ 零寫入(B2)。
+
+    ~~取得 (或建立) worksheet,並確保 header 列存在~~(Sheet Safety 批 B2,DEC-083,有意識的修改:
+    修前讀取 / 對帳也走這裡 ⇒ 分頁不存在就建、表頭不符就覆寫 A1:F1 —— 對**不可重建的歷史**
+    改表頭會讓既有每一列的欄意義錯位)。分頁不存在 → `SheetWorksheetMissingError`。
+    """
+    return _ws(worksheet_name=_FT_WORKSHEET_NAME)
+
+
+def _ft_worksheet_for_write():
+    """寫入用(只給 `append_forward_test_picks`,即使用者按 🧊 凍結的**明確寫入動作**):
+      · 分頁不存在 → 建立 + 寫表頭;
+      · 分頁在但整張表空白 → 寫表頭(沒有任何歷史可被影響);
+      · 表頭不符(含只有前段)→ 在任何寫入之前 `SheetSchemaMismatchError`,⛔ 不重建表頭、⛔ 不 append。
+    """
     try:
-        ws = sh.worksheet(_FT_WORKSHEET_NAME)
-    except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title=_FT_WORKSHEET_NAME, rows=1000, cols=8)
+        ws = _ft_worksheet()
+    except SheetWorksheetMissingError:
+        print(f'[gsheet_portfolio] B2 凍結寫入建立分頁 worksheet={_FT_WORKSHEET_NAME}')
+        ws = _open_spreadsheet(None).add_worksheet(title=_FT_WORKSHEET_NAME, rows=1000, cols=8)
         ws.append_row(_FT_HEADERS)
         return ws
-    if ws.row_values(1) != _FT_HEADERS:
-        ws.update('A1:F1', [_FT_HEADERS])
+    _state = _ft_header_state(ws.get_all_values())
+    if _state == _HEADER_MISMATCH:
+        raise SheetSchemaMismatchError(_FT_WORKSHEET_NAME, _FT_HEADERS, writing=True)
+    if _state == _HEADER_EMPTY:
+        ws.append_row(_FT_HEADERS)
     return ws
 
 
 def append_forward_test_picks(rows: list[dict[str, Any]]) -> int:
     """把選股凍結列 append 到 forward_test_picks worksheet;回寫入列數。
 
-    rows 每筆須含 _FT_HEADERS 各欄(由 L2 build_pick_snapshot_rows 產出)。空 → 0。
+    rows 每筆須含 _FT_HEADERS 各欄(由 L2 build_pick_snapshot_rows 產出)。空 → 0(不開 Sheet)。
+    分頁 / 表頭規則見 `_ft_worksheet_for_write`(B2:表頭不符 → 拋錯、一列都不寫)。
     """
     if not rows:
         return 0
-    ws = _ft_worksheet()
+    ws = _ft_worksheet_for_write()
     ws.append_rows([[r.get(h, '') for h in _FT_HEADERS] for r in rows])
     return len(rows)
 
 
-def load_forward_test_picks() -> list[dict[str, Any]]:
-    """讀回全部凍結紀錄(dict list;含 cohort/stock_id/entry_price/factors…)。
+def read_forward_test_picks() -> tuple[str, list[dict[str, Any]]]:
+    """讀回全部凍結紀錄 → `(讀取狀態, records)`。**零寫入**(B2:不建分頁、不重建表頭、不修)。
 
-    worksheet 不存在 / 未設定 Sheet / 讀取失敗 → 回 [](不炸對帳面板;§1 由 caller 判空)。
+    狀態:`READ_OK`(含只有表頭 → [])/ `READ_EMPTY` / `READ_WORKSHEET_MISSING` /
+    `READ_SCHEMA_MISMATCH` / `READ_NOT_CONFIGURED`(還沒選 Sheet 或還沒登入)/
+    `error:<例外型別名>`(其他讀取失敗;⛔ 不交訊息)。狀態非 OK 時 records 一律 []。
     批 Z33（Z12-n2）:`stock_id`／`name` 保留 Sheet 原字串（`0050` 不可讀成 50,否則與本地
     '0050' 去重失效、對帳抓不到現價）;其餘欄轉換同 `get_all_records()` 預設。
-    gspread `numericise_ignore` 只認 **1-based 欄序**（欄名不生效）⇒ 依實際表頭找欄位;
-    表頭缺其中一欄 → 只保留另一欄字串,其餘欄行為同修前。
+    gspread `numericise_ignore` 只認 **1-based 欄序**（欄名不生效）⇒ 依實際表頭找欄位。
     """
     try:
         ws = _ft_worksheet()
-        header = ws.row_values(1)
-        return ws.get_all_records(numericise_ignore=[
+        values = ws.get_all_values()
+        _state = _ft_header_state(values)
+        if _state == _HEADER_EMPTY:
+            return READ_EMPTY, []
+        if _state == _HEADER_MISMATCH:
+            return READ_SCHEMA_MISMATCH, []
+        header = list(values[0])
+        return READ_OK, ws.get_all_records(numericise_ignore=[
             i + 1 for i, h in enumerate(header) if h in ('stock_id', 'name')])
-    except Exception as _e:  # noqa: BLE001 — gsheet 不可用不炸前進式驗證面板
-        print(f'[gsheet] forward_test_picks 讀取失敗: {type(_e).__name__}: {_e}')
-        return []
+    except SheetWorksheetMissingError:
+        return READ_WORKSHEET_MISSING, []
+    except (SheetNotConfiguredError, LoginRequiredError):
+        return READ_NOT_CONFIGURED, []
+    except Exception as _e:  # noqa: BLE001 — 交回狀態給 L3 揭露,不炸前進式驗證面板
+        print(f'[gsheet] forward_test_picks 讀取失敗: {type(_e).__name__}')
+        return f'{READ_ERROR_OTHER_PREFIX}{type(_e).__name__}', []
+
+
+def load_forward_test_picks() -> list[dict[str, Any]]:
+    """`read_forward_test_picks()` 的 list 相容包裝(既有 caller / 測試);非 OK 狀態記 log、回 []。
+
+    worksheet 不存在 / 未設定 Sheet / 表頭不符 / 讀取失敗 → 回 [](不炸對帳面板;§1 由 caller 判空)。
+    要分辨「為什麼是空的」請改用 `read_forward_test_picks()`(L3 `load_frozen_picks_df` 已改用)。
+    """
+    _status, _recs = read_forward_test_picks()
+    if _status != READ_OK:
+        print(f'[gsheet] forward_test_picks status={_status}')
+    return _recs
 
 
 def list_user_sheets(folder_id: str = '') -> list[dict]:
@@ -1167,19 +1514,24 @@ def delete_portfolio(name: str, *, sheet_id: str | None = None) -> int:
     """刪除指定名稱的組合（所有持股列），回傳刪除的列數。
 
     sheet_id=None → legacy active sheet(ETF);非空 → 指定 sheet(個股組合)。
+    分頁 / 表頭(B1):分頁不存在 → 回 0(⛔ 不為了刪除而建分頁);第一列欄名不符 →
+    任何寫入之前 `SheetSchemaMismatchError`(第 1 欄不一定是 name ⇒ 不能據以刪列)。
     """
     name = (name or '').strip()
     if not name:
         return 0
-    ws = _ws(sheet_id=sheet_id)
+    ws = _ws_for_write(sheet_id=sheet_id, create_if_missing=False)
+    if ws is None:
+        return 0
     existing = ws.get_all_values()
+    _require_writable_header(existing, _HEADERS, _WORKSHEET_NAME)
     if len(existing) <= 1:
         return 0
     keep_rows = [r for r in existing[1:] if (r and r[0].strip() != name)]
     deleted = (len(existing) - 1) - len(keep_rows)
     if deleted == 0:
         return 0
-    _write_whole_sheet(ws, existing, [list(_HEADERS)] + keep_rows)
+    _write_whole_sheet(ws, existing, [_write_header(existing[0], _HEADERS)] + keep_rows)
     clear_read_cache()          # 刪除即清(§1)
     return deleted
 
@@ -1190,19 +1542,24 @@ def delete_stock_watchlist(name: str, *, sheet_id: str | None = None) -> int:
     語意鏡像 delete_portfolio,但操作 `stock_watchlist` 分頁(純代碼、無價格)。
     補齊個股端原缺的刪除能力(ETF 早有 delete_portfolio,個股一直只能同名覆蓋)。
     sheet_id=None → legacy active sheet;非空 → 指定 sheet(個股組合分家用)。
+    分頁 / 表頭(B1):同 `delete_portfolio`。
     """
     name = (name or '').strip()
     if not name:
         return 0
-    ws = _ws(sheet_id=sheet_id, worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
-             headers=_STOCK_WATCHLIST_HEADERS)
+    ws = _ws_for_write(sheet_id=sheet_id, worksheet_name=_STOCK_WATCHLIST_WORKSHEET,
+                       create_if_missing=False)
+    if ws is None:
+        return 0
     existing = ws.get_all_values()
+    _require_writable_header(existing, _STOCK_WATCHLIST_HEADERS, _STOCK_WATCHLIST_WORKSHEET)
     if len(existing) <= 1:
         return 0
     keep_rows = [r for r in existing[1:] if (r and r[0].strip() != name)]
     deleted = (len(existing) - 1) - len(keep_rows)
     if deleted == 0:
         return 0
-    _write_whole_sheet(ws, existing, [list(_STOCK_WATCHLIST_HEADERS)] + keep_rows)
+    _write_whole_sheet(ws, existing,
+                       [_write_header(existing[0], _STOCK_WATCHLIST_HEADERS)] + keep_rows)
     clear_read_cache()          # 刪除即清(§1)
     return deleted

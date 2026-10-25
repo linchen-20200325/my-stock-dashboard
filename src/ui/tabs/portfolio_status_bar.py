@@ -54,6 +54,11 @@ def render_portfolio_status_bar() -> None:
 
 def _label_for(_bs) -> "tuple[str, str]":
     """三態 → (晶片文字, tooltip)。純函式,易測。"""
+    if _bs.status == STATUS_BOUND and _bs.portfolio_count is None and getattr(_bs, "sheet_issue", ""):
+        # Sheet Safety 批 QA 回修 N-2:本數讀不到是因為**讀取出了問題**(L3 `sheet_issue`:表頭不符 / 權限 /
+        # 網路…)→ ⛔ 不再顯示綠色「已綁定（數量未知）」(把一次讀取失敗畫成正常);顏色 ＋ 文字一起講。
+        return ("🔴 我的組合：讀取有問題",
+                f"Sheet：{_bs.sheet_id[:16]}…　組合清單這一輪讀不到（到 📁 組合管理看錯誤說明）")
     if _bs.status == STATUS_BOUND:
         # count is None = 已綁但本數讀取失敗(降級)→ 誠實顯「數量未知」,**不印字面 None、不腦補**(§1)。
         _cnt = f" · {_bs.portfolio_count} 本" if _bs.portfolio_count is not None else "（數量未知）"

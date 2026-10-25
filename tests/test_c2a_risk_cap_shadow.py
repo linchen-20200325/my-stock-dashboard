@@ -304,6 +304,10 @@ def c2a_revert_for(file_path, code: str) -> str:
     判定同 dec074／c1（整檔一起看）：各組 `新寫法` 全 1 次 ⇒ 換回；全 0 次 ⇒ 已換回、原樣返回；其餘 ⇒ AssertionError。
     """
     rel = _rel(file_path)
+    # 📌 Sheet Safety 批 QA 回修（2026-10-25；有意識的接鏈，⛔ 不是漏改）：N-2 改了 `src/ui/views/page_hold.py`
+    #   （被 c21／z66b／uia／vn1b2／dec074…等舊鏈管）⇒ 最新的那一批先換回（鏈頭往前接一節；只套一次；⛔ 不動本表與基底 sha）。
+    from tests.test_sheet_safety_revert_chain import sheet_safety_revert_for
+    code = sheet_safety_revert_for(rel, code)
     pairs = C2A_REVERT_PAIRS.get(rel, ())
     if not pairs:
         return code

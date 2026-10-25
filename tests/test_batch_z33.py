@@ -63,6 +63,9 @@ class _FakeWS:
         return list(self.values[i - 1]) if len(self.values) >= i else []
 
     get_all_records = Worksheet.get_all_records
+    def get_all_values(self):
+        """Sheet Safety 批 B2:讀取先以 get_all_values 檢查表頭。同真 gspread(`get(pad_values=True)`)。"""
+        return self.get(pad_values=True)
 
 
 def _same(a, b) -> bool:
@@ -108,10 +111,16 @@ def test_pre_fix_golden_matches_gspread_default():
 
 
 def test_column_position_found_from_actual_header(monkeypatch):
-    """欄序不同時仍依實際表頭找 stock_id／name。"""
+    """~~欄序不同時仍依實際表頭找 stock_id／name~~ —— Sheet Safety 批 B2（DEC-083,有意識的翻轉）。
+
+    修前這種表頭在 production 根本讀不到:讀取前 `_ft_worksheet()` 會先把第一列**覆寫**成標準表頭
+    (欄序錯位的歷史從此被讀錯),本測試當時是把 `_ft_worksheet` 換掉才測得到。B2 起讀取不改表頭,
+    表頭與 `_FT_HEADERS` 不符 ＝ `schema_mismatch`(不讀、不修),由 L3 揭露「只用本地紀錄」。
+    """
     hdr = ['name', 'cohort', 'entry_price', 'stock_id']
-    recs = _load(monkeypatch, [hdr, ['0056', '2026-09-30', '1,050', '0050']])
-    assert recs == [{'name': '0056', 'cohort': '2026-09-30', 'entry_price': 1050, 'stock_id': '0050'}]
+    monkeypatch.setattr(gp, '_ft_worksheet', lambda: _FakeWS([hdr, ['0056', '2026-09-30', '1,050', '0050']]))
+    assert gp.read_forward_test_picks() == (gp.READ_SCHEMA_MISMATCH, [])
+    assert gp.load_forward_test_picks() == []
 
 
 # ── 去重:本地 '0050' ∪ Sheet "0050" → 1 列 ──────────────────────────────
@@ -141,20 +150,17 @@ def test_header_only(monkeypatch):
     assert _load(monkeypatch, [list(gp._FT_HEADERS)]) == []
 
 
-def test_missing_stock_id_column_behaves_as_before(monkeypatch):
-    """表頭缺 stock_id:其他欄（含佔了第 2 欄的 code）照舊轉換;name 仍保留字串。"""
-    hdr = ['cohort', 'code', 'name', 'entry_price']
-    rows = [['2026-09-30', '0050', '0056', '1,050']]
-    recs = _load(monkeypatch, [hdr] + rows)
-    assert recs == [{'cohort': '2026-09-30', 'code': 50, 'name': '0056', 'entry_price': 1050}]
-
-
-def test_missing_both_text_columns_identical_to_default(monkeypatch):
-    hdr = ['cohort', 'code', 'entry_price']
-    rows = [['20260930', '0050', '1,050'], ['', '', '']]
-    recs = _load(monkeypatch, [hdr] + rows)
-    assert recs == _FakeWS([hdr] + rows).get_all_records()
-    assert recs[0] == {'cohort': 20260930, 'code': 50, 'entry_price': 1050}
+@pytest.mark.parametrize('hdr, rows', [
+    (['cohort', 'code', 'name', 'entry_price'], [['2026-09-30', '0050', '0056', '1,050']]),
+    (['cohort', 'code', 'entry_price'], [['20260930', '0050', '1,050'], ['', '', '']]),
+    (['cohort', 'stock_id', 'name'], [['2026-09-30', '0050', '0056']]),        # 只有前段(窄表)
+])
+def test_missing_columns_are_schema_mismatch_not_read(monkeypatch, hdr, rows):
+    """~~表頭缺 stock_id／兩個文字欄都缺 → 其餘欄照舊轉換~~ —— Sheet Safety 批 B2（DEC-083,
+    有意識的翻轉;同 `test_column_position_found_from_actual_header` 的理由):表頭不是完整的
+    `_FT_HEADERS` → `schema_mismatch`,⛔ 不讀、⛔ 不補表頭(不可重建歷史)。"""
+    monkeypatch.setattr(gp, '_ft_worksheet', lambda: _FakeWS([hdr] + rows))
+    assert gp.read_forward_test_picks() == (gp.READ_SCHEMA_MISMATCH, [])
 
 
 def test_blank_and_none_cells(monkeypatch):

@@ -74,30 +74,73 @@ def freeze_current_picks_local(codes, *, factors, cohort: str, names: dict | Non
 
 _FROZEN_COLS = ["cohort", "stock_id", "name", "entry_price", "factors", "frozen_at"]
 
+#: Sheet Safety 批 B2(DEC-083):雲端凍結紀錄讀不進來時給使用者看的白話說明(§3.3)。
+#: 「還沒選 Sheet / 分頁還沒建 / 空表」是正常狀態 ⇒ 不出聲(與修前相同);只有下面兩種要講。
+_SHEET_NOTE_SCHEMA_MISMATCH = (
+    "雲端凍結紀錄（Google Sheet 的 forward_test_picks 分頁）第一列欄名和系統預期的不一樣，"
+    "這次只用本地紀錄對帳；系統不會自動修改你的 Sheet。")
+#: ~~"雲端凍結紀錄這次讀不到（{status}）…"~~(QA N-3,有意識的修改:畫面上出現內部代碼 `error:APIError`)
+#: → 白話;代碼只留在 log(`_sheet_note` 印出)。
+_SHEET_NOTE_READ_ERROR = (
+    "雲端凍結紀錄（Google Sheet）這次讀不到（可能是連線、權限或 Google 暫時性錯誤），"
+    "這次只用本地紀錄對帳；可稍後再按一次「📊 對帳」。")
+
+
+def _sheet_note(status: str) -> str:
+    """讀取狀態 → 白話說明(正常狀態回空字串)。⛔ 不把內部代碼放上畫面(只記 log)。"""
+    from src.data.portfolio import gsheet_portfolio as _gsp
+    if not sheet_status_is_problem(status):
+        return ""
+    print(f"[forward_test_service] 雲端凍結紀錄讀取狀態 status={status}")
+    if status == _gsp.READ_SCHEMA_MISMATCH:
+        return _SHEET_NOTE_SCHEMA_MISMATCH
+    return _SHEET_NOTE_READ_ERROR
+
+
+def sheet_status_is_problem(status: str) -> bool:
+    """這個讀取狀態要不要用**警告**(黃)顯示:表頭不符 / 讀取失敗 → True;正常 / 還沒設定 → False。
+
+    給 L6 對帳面板挑 `st.warning` vs `st.info`(QA N-3:真的讀不到不該只是一行灰字)。
+    """
+    from src.data.portfolio import gsheet_portfolio as _gsp
+    return str(status or "") not in ("", _gsp.READ_OK, _gsp.READ_EMPTY,
+                                     _gsp.READ_WORKSHEET_MISSING, _gsp.READ_NOT_CONFIGURED)
+
 
 def load_frozen_picks_df() -> pd.DataFrame:
     """讀回全部凍結紀錄為 DataFrame（欄:cohort/stock_id/name/entry_price/factors/frozen_at）。
 
     v19.147:合併 **本地 git 追蹤 parquet（cron + 手動）∪ Google Sheet**，同 (cohort, stock_id)
     去重（本地在前 → keep='first' 保留本地）。兩邊皆空 / gsheet 未設定 → 空 DataFrame（對帳判空不炸）。
+
+    Sheet Safety 批 B2(加性):改走 L1 `read_forward_test_picks()`(**零寫入**:不建分頁、不重建表頭);
+    讀取狀態放進回傳 DataFrame 的 `attrs`:`attrs['sheet_status']`(L1 `READ_*` / `error:<型別>`)與
+    `attrs['sheet_note']`(白話說明;正常狀態為空字串)。欄位與列內容與修前相同。
     """
     from src.data.portfolio.forward_test_store import load_picks_local
 
     _recs = list(load_picks_local())               # 本地(cron 自動 + 手動)優先
     try:
-        from src.data.portfolio.gsheet_portfolio import load_forward_test_picks
-        _recs += list(load_forward_test_picks() or [])
-    except Exception as _e:  # noqa: BLE001 — gsheet 未設定 / 讀取失敗 → 只用本地,不炸
+        from src.data.portfolio.gsheet_portfolio import read_forward_test_picks
+        _status, _sheet_recs = read_forward_test_picks()
+        _recs += list(_sheet_recs or [])
+    except Exception as _e:  # noqa: BLE001 — L1 載不進來 → 只用本地,不炸(狀態照實記)
         print(f"[forward_test_service] gsheet 凍結讀取略過:{type(_e).__name__}: {_e}")
+        _status = f"error:{type(_e).__name__}"
+    _note = _sheet_note(_status)
 
     if not _recs:
-        return pd.DataFrame(columns=_FROZEN_COLS)
-    _df = pd.DataFrame(_recs)
-    if "cohort" not in _df.columns or "stock_id" not in _df.columns:
-        return _df
-    _df["cohort"] = _df["cohort"].astype(str)
-    _df["stock_id"] = _df["stock_id"].astype(str).str.strip()
-    return _df.drop_duplicates(subset=["cohort", "stock_id"], keep="first").reset_index(drop=True)
+        _df = pd.DataFrame(columns=_FROZEN_COLS)
+    else:
+        _df = pd.DataFrame(_recs)
+        if "cohort" in _df.columns and "stock_id" in _df.columns:
+            _df["cohort"] = _df["cohort"].astype(str)
+            _df["stock_id"] = _df["stock_id"].astype(str).str.strip()
+            _df = _df.drop_duplicates(subset=["cohort", "stock_id"],
+                                      keep="first").reset_index(drop=True)
+    _df.attrs["sheet_status"] = _status
+    _df.attrs["sheet_note"] = _note
+    return _df
 
 
 def reconcile_all() -> tuple[pd.DataFrame, dict]:
@@ -114,9 +157,15 @@ def reconcile_all() -> tuple[pd.DataFrame, dict]:
     from shared.forward_test_thresholds import FORWARD_TEST_BENCHMARK
 
     picks = load_frozen_picks_df()
+    # B2(加性):雲端凍結紀錄的讀取狀態 → overall['sheet_status'];有說明就併進 overall['note']
+    # (對帳面板本來就會顯示 note ⇒ 不改 UI 也看得到)。⛔ 不改 L2 對帳公式。
+    _sheet_status = str(picks.attrs.get("sheet_status", ""))
+    _sheet_note = str(picks.attrs.get("sheet_note", ""))
     if picks.empty:
+        _note = "尚無凍結選股紀錄(先在上方按「🧊 凍結」)。"
         return pd.DataFrame(), {"n_cohorts": 0, "n_picks_total": 0,
-                                "note": "尚無凍結選股紀錄(先在上方按「🧊 凍結」)。"}
+                                "note": f"{_note}{_sheet_note}" if _sheet_note else _note,
+                                "sheet_status": _sheet_status}
 
     # 各持股現價(每個不重複股號抓最後收盤)
     _codes = sorted({str(c).strip() for c in picks["stock_id"] if str(c).strip()})
@@ -132,4 +181,9 @@ def reconcile_all() -> tuple[pd.DataFrame, dict]:
     if _bdf is not None and not _bdf.empty and "Close" in _bdf.columns:
         _bench = benchmark_returns_from_close(_bdf["Close"], list(picks["cohort"].unique()))
 
-    return reconcile_forward_test(picks, _cur, benchmark_returns=_bench)
+    _per, _overall = reconcile_forward_test(picks, _cur, benchmark_returns=_bench)
+    _overall = dict(_overall or {})
+    _overall["sheet_status"] = _sheet_status
+    if _sheet_note:
+        _overall["note"] = f"{_overall.get('note') or ''}{_sheet_note}"
+    return _per, _overall

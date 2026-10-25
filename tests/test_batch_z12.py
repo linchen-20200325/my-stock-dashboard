@@ -160,13 +160,20 @@ def test_d1n6_duplicate_extra_headers_watchlist_loads():
 
 
 def test_d1n6_duplicate_core_header_still_fails_loud_and_save_keeps_all():
-    """核心欄重複（第 6 欄又叫 ticker）＝不知道該讀哪一欄 → 照舊拋錯、存檔保留全部舊列。"""
-    from gspread.exceptions import GSpreadException
+    """核心欄重複（第 6 欄又叫 ticker）＝不知道該讀哪一欄 → 照舊拋錯。
+
+    Sheet Safety 批 B1（DEC-083,有意識的翻轉,⛔ 不是放寬）:
+    ~~讀取拋 gspread `GSpreadException`、存檔保留全部舊列並照寫~~ → 讀取拋具名的
+    `SheetSchemaMismatchError`(fail loud 不變);存檔在任何寫入之前同樣拋錯 —— 表頭不明時照寫會把
+    第一列改成標準表頭,即「因 schema mismatch 自動修資料」。舊列「全部保留」仍成立(一格都沒動)。
+    """
     ws = _FakeWorksheet([gsp._HEADERS + ['ticker'], ['A', '2330', '1', '100', 't0', '']])
+    before = ws.get_all_values()
     with patch.object(gsp, '_ws', return_value=ws):
-        with pytest.raises(GSpreadException):
+        with pytest.raises(gsp.SheetSchemaMismatchError):
             gsp.load_portfolio('A')
-        gsp.save_portfolio('A', [{'ticker': 'NEW', 'lots': 1, 'avg_price': 1}])
+        with pytest.raises(gsp.SheetSchemaMismatchError):
+            gsp.save_portfolio('A', [{'ticker': 'NEW', 'lots': 1, 'avg_price': 1}])
         vals = ws.get_all_values()
-    assert vals[1][:5] == ['A', '2330', '1', '100', 't0']
-    assert vals[2][:2] == ['A', 'NEW']
+    assert vals == before
+    assert ws.calls == []

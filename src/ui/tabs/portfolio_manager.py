@@ -85,13 +85,14 @@ def parse_sheet_id(raw) -> str:
       管理頁需要「編輯用」網址或 Sheet ID。回空讓 caller 提示使用者改貼正確連結,避免舊行為
       抓到 `/d/` 後單字元 `e` → `open_by_key("e")` 拋錯的誤導(稽核 A 低度缺失修正)。
     - 空 / None → ""
+
+    Sheet Safety 批 B3(DEC-083):本體委派 L0 單一 parser `shared.sheet_id.parse_sheet_input`
+    (全 repo 只准一份解析規則)。上列行為不變;另外 ~~非網址的字串一律原樣回傳~~(有意識的收緊)→
+    看不懂的輸入(含空白、怪字元、drive.google.com 檔案網址、超長)回 ""。目前 production 0 caller,
+    保留為舊介面。
     """
-    import re
-    _s = str(raw or "").strip()
-    if re.search(r"/spreadsheets/d/e/", _s):          # 發布連結(pubhtml/pub)→ 非可用 key
-        return ""
-    _m = re.search(r"/spreadsheets/d/([a-zA-Z0-9_-]+)", _s)
-    return _m.group(1) if _m else _s
+    from shared.sheet_id import parse_sheet_input   # L5 → L0
+    return parse_sheet_input(raw).sheet_id
 
 
 # ── UI ──────────────────────────────────────────────────────────────────

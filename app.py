@@ -1,7 +1,6 @@
 import streamlit as st
 from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 import os
-import re
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
@@ -149,13 +148,11 @@ if '_app_boot_done' not in st.session_state:
         # 安全:Sheet ID 非憑證(存取仍需 OAuth + Sheet ACL),且屬「設定」非抓回來的資料 →
         # 跨 session 還原不會製造假「已載入」態(同上方 sid 的理由;§1)。setdefault:本 session
         # 已手動選過則不覆寫(當次選擇優先)。
-        _qp_sheet = _qp.get('sheet')
-        if _qp_sheet and isinstance(_qp_sheet, str) and _qp_sheet.strip():
-            # §8.2 R4:app.py(L6)不得 import L1 gsheet_portfolio 取常數 → 用其 session key
-            # 字面值(與本檔側欄既有 'portfolio_sheet_id' / 'stock_portfolio_sheet_id' 一致;
-            # gsheet_portfolio 的 PORTFOLIO_SHEET_KEY/STOCK_PORTFOLIO_SHEET_KEY 即這兩個值)。
-            st.session_state.setdefault('portfolio_sheet_id', _qp_sheet.strip())
-            st.session_state.setdefault('stock_portfolio_sheet_id', _qp_sheet.strip())
+        # Sheet Safety 批 B4(DEC-083):~~本檔自己讀網址 sheet 參數 → `.strip()` → setdefault 兩格~~
+        # (有意識的修改,⛔ 不是漏刪:未消毒、且是第五套綁定寫入)→ 委派 L1 唯一寫入契約
+        # `oauth_state.restore_sheet_binding_from_query()`(消毒後 setdefault 兩格,語意同上)。
+        from src.data.portfolio.oauth_state import restore_sheet_binding_from_query
+        restore_sheet_binding_from_query()
     except Exception as _qpe:
         print(f'[query_params restore] {_qpe}')
 
@@ -345,9 +342,13 @@ with st.sidebar:
             get_oauth_cfg as _sb_get_cfg,
             login_state_with_sheet as _sb_login_state_with_sheet,
             forget_silent_reauth as _sb_forget_silent,
-            sync_silent_marker as _sb_sync_silent,
+            clear_sheet_binding as _sb_clear_binding,
+            on_sheet_input_change as _sb_on_sheet_input,
+            pop_sheet_input_result as _sb_pop_sheet_input,
+            prepare_sheet_input as _sb_prepare_sheet_input,
         )
         from infra.oauth import build_authorize_url as _sb_buildurl
+        from shared.sheet_id import SHEET_INPUT_EMPTY as _SB_SHEET_INPUT_EMPTY
         # 每次 rerun 動態解析，避免 module-level cache 過期
         _sb_cfg = _sb_get_cfg()
         _sb_oc = _sb_cfg is not None
@@ -363,27 +364,31 @@ with st.sidebar:
                 for _k in ('gsheet_tokens', 'gsheet_email', '_oauth_state'):
                     st.session_state.pop(_k, None)
                 _sb_forget_silent()   # 1.0-B2:拿掉 ?gs= 記號,否則重新整理又靜默登回去(登不出去)
+                # DEC-083 Q5:登出同步清 Sheet 綁定(兩格 session + ?sheet= + 記號)⇒ 登出後不自動恢復上一本;
+                # 登入鈕的 state 由 session 的 portfolio_sheet_id 組成 ⇒ 清掉後不再夾帶舊 Sheet ID。
+                # 側欄貼 ID 文字框的 widget 狀態一併拿掉(否則重新登入那一輪它會帶著舊 ID 又綁回去)。
+                _sb_clear_binding()
+                st.session_state.pop('sb_portfolio_sheet_id_input', None)
                 st.rerun()
             # ── Google Sheet ID（集中於帳號區；亦可於「📁 組合管理」頁設定）──
             _sb_sid_cur = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
-            _sb_sid_raw = st.text_input(
+            # Sheet Safety 批 B3/B4(DEC-083):~~本檔自帶 `/spreadsheets/d/(...)` 正則 + 自己寫兩格 /
+            # `?sheet=` / 重算記號~~(有意識的移除:發布連結會被解析成 `e` 綁上去)→ 唯一寫入契約
+            # (兩通道 + ?sheet= + 就地重算 ?gs= 記號,同修前;解析不過什麼都不寫)。
+            # QA BLK-2(有意識的修改):~~每輪 rerun 拿文字框的值呼叫契約~~ —— 有 key 的文字框保留舊值,
+            # 使用者剛在 📁 組合管理用 Drive 選了別本,下一輪這裡的舊 ID 又把綁定改回去。現行:只有使用者
+            # **真的改了文字**(on_change)才呼叫契約;綁定一變(`prepare`),框重新顯示現值。
+            _sb_prepare_sheet_input('sb_portfolio_sheet_id_input')
+            st.text_input(
                 'Google Sheet ID 或完整 URL（系統會自動解析 ID）',
                 value=_sb_sid_cur, key='sb_portfolio_sheet_id_input',
+                on_change=_sb_on_sheet_input, args=('sb_portfolio_sheet_id_input',),
                 placeholder='貼上 https://docs.google.com/spreadsheets/d/...',
-                help='貼 URL/ID 設定投組資料庫（或在「📁 組合管理」頁設定）')
-            _sb_m = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', _sb_sid_raw)
-            _sb_sid_new = _sb_m.group(1) if _sb_m else _sb_sid_raw.strip()
-            if _sb_sid_new and _sb_sid_new != _sb_sid_cur:
-                # A(v19.204 順暢化):側欄設 Sheet 也走「ETF+個股兩通道 + ?sheet= 持久化」,
-                # 與 📁 組合管理 的 _apply_active_sheet 一致 —— 否則從側欄設的 Sheet 不持久
-                # (重整就沒了)、也漏設個股通道(個股組合讀不到)。稽核抓到的不對稱,補齊。
-                st.session_state['portfolio_sheet_id'] = _sb_sid_new
-                st.session_state['stock_portfolio_sheet_id'] = _sb_sid_new
-                try:
-                    st.query_params['sheet'] = _sb_sid_new
-                except Exception:  # noqa: BLE001 — query param 寫入失敗不擋設定
-                    pass
-                _sb_sync_silent()   # 1.0-B2:側欄換 Sheet 後**這一輪**沒有再 rerun → 就地重算 ?gs= 記號
+                help='貼 URL/ID 後按 Enter 設定投組資料庫（或在「📁 組合管理」頁設定）')
+            _sb_bind = _sb_pop_sheet_input('sb_portfolio_sheet_id_input')
+            if _sb_bind is not None and _sb_bind.error and _sb_bind.error != _SB_SHEET_INPUT_EMPTY:
+                st.error(_sb_bind.message)
+            _sb_sid_new = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
             if _sb_sid_new:
                 st.caption(f'✅ Sheet ID：`{_sb_sid_new}`')
             else:
@@ -974,7 +979,13 @@ with tab_stocks:
                     if _ft_r is None:
                         st.info('👆 點「📊 對帳」讀取凍結紀錄並計算績效。')
                     elif _ft_r[0] is None or _ft_r[0].empty:
-                        st.info(f'⚪ {_ft_r[1].get("note", "尚無資料")}')
+                        # Sheet Safety 批 QA 回修 N-3:雲端凍結紀錄真的讀不到(表頭不符 / 讀取失敗)→ 黃色警告,
+                        # 其餘(尚無紀錄 / 還沒設定)照舊灰底提示。
+                        from src.services.forward_test_service import sheet_status_is_problem
+                        if sheet_status_is_problem(_ft_r[1].get('sheet_status', '')):
+                            st.warning(f'⚠️ {_ft_r[1].get("note", "尚無資料")}')
+                        else:
+                            st.info(f'⚪ {_ft_r[1].get("note", "尚無資料")}')
                     else:
                         _ft_df, _ft_ov = _ft_r
                         _ae = _ft_ov.get('avg_excess_pct')
@@ -986,7 +997,11 @@ with tab_stocks:
                             f"{_ft_ov.get('n_valid_total', 0)} 檔**"
                             f"｜平均超額 vs 0050：{_ae_s}｜整體勝率：{_hr_s}")
                         if _ft_ov.get('note'):
-                            st.caption(f'ℹ️ {_ft_ov["note"]}')
+                            from src.services.forward_test_service import sheet_status_is_problem
+                            if sheet_status_is_problem(_ft_ov.get('sheet_status', '')):
+                                st.warning(f'⚠️ {_ft_ov["note"]}')   # QA N-3:讀取問題 → 黃色警告
+                            else:
+                                st.caption(f'ℹ️ {_ft_ov["note"]}')
                         _ft_disp = _ft_df.rename(columns={
                             'cohort': '凍結批次', 'n_valid': '檔數', 'avg_return_pct': '平均報酬%',
                             'benchmark_return_pct': '0050報酬%', 'excess_pct': '超額%',
