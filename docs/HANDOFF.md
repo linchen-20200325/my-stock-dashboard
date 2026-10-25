@@ -268,7 +268,7 @@
 | 下一階段 Model／Effort | 客戶指定：高能力模型／**High**（H 段）；新對話仍須依 `PROJECT_RULES.md` 第 9.0 節重新判斷，不得假設已切換 |
 | ⚠️ 揭露 | 本段與 DEC-083 摘要由單一撰寫組產出，**沒有第二組驗過**（`CLAUDE.md` §-2 規則 6）；`BUG-SHEET-TITLE-SWALLOW` 排入 P1 前置為撰寫組讀法（客戶原文未逐字點名） |
 
-📌 **2026-10-25 👤 我的 P1 待合併（PR #927）**（append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；**本段為現行短版，與上表及上各段衝突處以本段為準**：
+📌 **2026-10-25 👤 我的 P1 待合併（PR #927）**（append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；~~**本段為現行短版，與上表及上各段衝突處以本段為準**~~ 已由下方「📌 2026-10-25 👤 我的 P1 已合併（PR #927）—— 停手等客戶」段取代（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））：
 
 > ⛔ 接手必須重新做 GitHub Verification Gate（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點）。狀態摘要 `docs/PROJECT_STATE.md` §38；待辦 `docs/BACKLOG.md` 5.1.13 `ME-P1` 與 `NAV-PERSIST` 起 11 列。
 
@@ -280,6 +280,19 @@
 | 待客戶 | ① **📊 大盤頁 UI 驗收**（DEC-083 F 段）；② `SHEET-LOGOUT-SECRETS-DEFAULT`（舊 UI 登出後仍讀部署預設 Sheet 是否可接受）；③ `ME-UI-STRINGS-REVIEW`（👤 我的與 dead-end 改寫句措辭）；④ 覆核 AI 總管的 P1 實作選擇（列於 `docs/DECISIONS.md` DEC-083 下方 PR #927 註：👤 我的排最後、沒選定就不分析、選定只活在 session、部署預設不當 active、🚦 只有部署預設時顯示「尚未綁定」、🔍 持股標示改讀選定、新版側欄只顯示末 6 碼＋空白貼 ID 框）—— **這些是 AI 總管選擇，不是客戶裁示** |
 | 沿用 | 上一段「明確未變」「禁止事項（DEC-083 G 段）」「P2」三列照舊有效 |
 | ⚠️ 揭露 | 本段由單一撰寫組產出，**沒有第二組驗過**（`CLAUDE.md` §-2 規則 6）；👤 我的未在 Streamlit 實機看過（撰寫組） |
+
+📌 **2026-10-25 👤 我的 P1 已合併（PR #927）—— 停手等客戶**（append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；**本段為現行短版，與上表及上各段衝突處以本段為準**：
+
+> ⛔ 接手必須重新做 GitHub Verification Gate（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點）。狀態摘要 `docs/PROJECT_STATE.md` §38；待辦 `docs/BACKLOG.md` 5.1.13。
+
+| 項目 | 現況（2026-10-25 撰寫組 `git fetch` 實查，會過期） |
+|---|---|
+| main | `ab705fbf`（PR #927 squash merge）；cron 會推進 tip，**以 GitHub 為準** |
+| **Current Task** | **👤 我的 P1 已完成並合併**（DEC-083 H 段步驟 5～7）。**已停手**（步驟 8），等客戶審閱回報並裁示 |
+| **Next Safe Point** | **等客戶**。⛔ **不開始 P2**（`ME-P2`，DEC-083 H.9）；⛔ **不刪舊 UI**（DEC-083 E 段） |
+| 待客戶 | ① **📊 大盤頁 UI 驗收**（F 段）；② `SHEET-LOGOUT-SECRETS-DEFAULT`；③ `ME-UI-STRINGS-REVIEW`；④ 覆核 AI 總管 P1 實作選擇（`docs/DECISIONS.md` DEC-083 下方 PR #927 註，**不是客戶裁示**）；⑤ 是否指派 **P2**（須另開 Stage A／B／C，DEC-082） |
+| 沿用 | 上兩段「明確未變」「禁止事項（DEC-083 G 段）」「P2」三列照舊有效 |
+| ⚠️ 揭露 | 本段由單一撰寫組產出，**沒有第二組驗過**（`CLAUDE.md` §-2 規則 6） |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 

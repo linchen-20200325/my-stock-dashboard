@@ -1695,7 +1695,7 @@ Effort：High
   - **DEC-003 ①（線框 gate）**：P1 首屏「維持核准草稿方向」＝草稿 §3 線框在 P1 範圍內通過；P1 實作若偏離線框結構，仍須先出線框。
   - **DEC-066 F／`PRODUCTION_WRITE_APPROVED=False`**：G 段同向，不變。
   - 未發現需登記 `PROJECT_RULES.md` 第 14 節的新衝突（撰寫組單組 grep，未經第二組驗證）。
-- 📌 **實作指標：PR #927（👤 我的 P1，待合併）**（append-only；**不是新 Decision**；上文一字未改（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））：本條 P1 範圍（Q1、Q2、Q4～Q7、C、D 段）的實作在 PR #927（分支 `claude/determined-euler-32xqjn`，撰寫組讀碼基準 `4e8c0876`）；Sheet Safety 批（B1～B5）為 #926，已合併 main `55601f42`。狀態摘要 `docs/PROJECT_STATE.md` §38；殘留 `docs/BACKLOG.md` 5.1.13。
+- 📌 **實作指標：PR #927（👤 我的 P1，~~待合併~~ 已合併 `ab705fbf`（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））**（append-only；**不是新 Decision**；上文一字未改（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））：本條 P1 範圍（Q1、Q2、Q4～Q7、C、D 段）的實作在 PR #927（分支 `claude/determined-euler-32xqjn`，撰寫組讀碼基準 `4e8c0876`）；Sheet Safety 批（B1～B5）為 #926，已合併 main `55601f42`。狀態摘要 `docs/PROJECT_STATE.md` §38；殘留 `docs/BACKLOG.md` 5.1.13。
   - **AI 總管實作選擇（依 `CLAUDE.md` §-1.5 內部自決授權所做；⚠️ 是 AI 總管選擇、可由客戶覆核或推翻，⛔ 不是客戶裁示）**（FACT 出處為 `4e8c0876` 程式碼與其註解）：
     1. 「👤 我的」排在導覽**最後**（第 7 頁；`shared/ia_nav.PAGE_LABELS`）—— Q1 只說「側欄新增獨立」，沒說位置。
     2. **沒選定就不分析**，即使這本 Sheet 只有一本組合也一樣（`holdings_service._pick`）—— C 段「只有一本也要明確按『使用這本』」原文講的是 Sheet，延伸到組合／觀察清單是 AI 總管讀法。

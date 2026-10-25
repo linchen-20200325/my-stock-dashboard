@@ -436,6 +436,6 @@
 
 📌 **2026-10-25**（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））：
 - **Stage C 已裁示**：`docs/DECISIONS.md` **DEC-083**（Q1～Q7 全採 A＋A～H 段）。
-- **Stage D P1 已實作，在 PR #927（待合併）**：分支 `claude/determined-euler-32xqjn`（撰寫組讀碼基準 `4e8c0876`）；新頁 `src/ui/views/page_me.py`。實作狀態摘要見 `docs/PROJECT_STATE.md` §38；與本草稿線框的已知落差（例：§3.5「最後讀取時間」未實作）與其他殘留登記於 `docs/BACKLOG.md` 5.1.13（`NAV-PERSIST` 起 11 列）。
+- **Stage D P1 已實作，在 ~~PR #927（待合併）~~ PR #927 已合併（squash `ab705fbf` on main）**（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））：分支 `claude/determined-euler-32xqjn`（撰寫組讀碼基準 `4e8c0876`）；新頁 `src/ui/views/page_me.py`。實作狀態摘要見 `docs/PROJECT_STATE.md` §38；與本草稿線框的已知落差（例：§3.5「最後讀取時間」未實作）與其他殘留登記於 `docs/BACKLOG.md` 5.1.13（`NAV-PERSIST` 起 11 列）。
 - P2（建立／rename／刪 Sheet、各類 CRUD）**未開始、未授權**（DEC-083 H.9）；舊 UI 照留（E 段）。
 - ⚠️ 本補註由單一撰寫組產出，**沒有第二組驗過**（`CLAUDE.md` §-2 規則 6）。
