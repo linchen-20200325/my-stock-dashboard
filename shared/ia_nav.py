@@ -38,6 +38,10 @@ from __future__ import annotations
 # ══════════════════════════════════════════════════════════════════
 # 頁 id —— 直接沿用線框 `PAGES[*].id`，不另取名
 # ══════════════════════════════════════════════════════════════════
+#: 📊 大盤（2026-10-25 客戶裁示 Q1=C 新增）。⚠️ 不在原線框 `PAGES` 裡 —— 出處是
+#: `docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`（v4）＋客戶 2026-10-25 裁示。
+#: 它承接「🚦 今天」的大盤能力；**「🚦 今天」在驗收前原樣保留**（不刪、不改名）。
+PAGE_MARKET: str = "market"
 PAGE_TODAY: str = "today"
 PAGE_FIND: str = "find"
 PAGE_INSPECT: str = "inspect"
@@ -45,7 +49,9 @@ PAGE_HOLD: str = "hold"
 PAGE_WHY: str = "why"
 
 #: 頁 id → 顯示名（線框 `PAGES[*].name`）。
+#: ⚠️ 順序就是側欄 radio 的順序（`app.py` 照這份展開）：大盤排第一個頁。
 PAGE_LABELS: dict[str, str] = {
+    PAGE_MARKET: "📊 大盤",
     PAGE_TODAY: "🚦 今天",
     PAGE_FIND: "🔍 找標的",
     PAGE_INSPECT: "🔬 查一檔",
@@ -62,6 +68,9 @@ LEAF_TODAY_DETAIL: str = "today.detail"
 SECTION_WHY_DATA_HEALTH: str = "why.data_health"
 #: 💼 我的持股 的組合設定分區 —— 綁 Google Sheet 的入口。
 SECTION_HOLD_PORTFOLIO_SETUP: str = "hold.portfolio_setup"
+#: 📖 憑什麼 的 AI 問答分區 —— 「📊 大盤」頁「問 AI／查看依據」的去處。
+#: 顯示名須與 `src/ui/views/page_why.py::LEAF_QA_TITLE` 相同（`tests/test_page_market.py` 釘住）。
+SECTION_WHY_QA: str = "why.qa"
 
 #: 分區 id → 該分區在**母頁之內**的顯示名（不含母頁名，由 `where_to_find` 串）。
 SECTION_LABELS: dict[str, str] = {
@@ -69,6 +78,7 @@ SECTION_LABELS: dict[str, str] = {
     LEAF_TODAY_DETAIL: "指標明細（五桶逐段）",
     SECTION_WHY_DATA_HEALTH: "資料體檢",
     SECTION_HOLD_PORTFOLIO_SETUP: "組合設定",
+    SECTION_WHY_QA: "AI 問答",
 }
 
 # ══════════════════════════════════════════════════════════════════

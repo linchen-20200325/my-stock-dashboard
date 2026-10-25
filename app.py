@@ -289,6 +289,7 @@ from src.ui.render import traffic_light  # noqa: E402
 #    `shared/ia_nav.py` 檔頭明文寫它「不收舊 IA 的分頁名」。
 from shared.ia_nav import (  # noqa: E402
     PAGE_LABELS as _IA_PAGE_LABELS,
+    PAGE_MARKET as _IA_MARKET,
     PAGE_TODAY as _IA_TODAY, PAGE_FIND as _IA_FIND, PAGE_INSPECT as _IA_INSPECT,
     PAGE_HOLD as _IA_HOLD, PAGE_WHY as _IA_WHY,
 )
@@ -553,6 +554,13 @@ def _render_footer() -> None:
 #    `p04` / `p05v_`），本區塊只做掛載,不改變任何一頁的內部保證
 #    （含 `page_hold` 對使用者持股帳本的**唯讀**保證,由
 #     `tests/test_p04_hold_view.py::TestReadOnly` 釘死）。
+def _ia_view_market() -> None:
+    # 📊 大盤（2026-10-25 客戶裁示 Q1=C）：承接「🚦 今天」的大盤能力。
+    # ⚠️ 「🚦 今天」**在驗收前原樣保留**（下面那支 wrapper 一字未動）—— 兩頁並存。
+    from src.ui.views.page_market import render_page_market
+    render_page_market()
+
+
 def _ia_view_today() -> None:
     from src.ui.views.page_today import render_page_today
     render_page_today()
@@ -583,6 +591,7 @@ def _ia_view_why() -> None:
 # ⚠️ key 一律用 L0 的頁 id 常數,**不寫字面字串**(§3.3 反捏造:id 的 SSOT 在
 #    `shared/ia_nav.py`,這裡手打 'today' 就是第二份)。
 _IA_VIEWS = {
+    _IA_MARKET: _ia_view_market,   # 2026-10-25 Q1=C；「🚦 今天」照留到驗收
     _IA_TODAY: _ia_view_today,
     _IA_FIND: _ia_view_find,
     _IA_INSPECT: _ia_view_inspect,

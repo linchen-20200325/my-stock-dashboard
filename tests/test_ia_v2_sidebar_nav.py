@@ -72,6 +72,7 @@ _NAV_OFF = "不使用（用下方原功能）"
 
 #: 五頁的 view 模組（**顯示名 SSOT 在 L0 `shared/ia_nav.PAGE_LABELS`**，不在這裡抄）。
 _VIEW_MODULES = (
+    "src.ui.views.page_market",   # 2026-10-25 客戶 Q1=C 新增（「🚦 今天」照留到驗收）
     "src.ui.views.page_today",
     "src.ui.views.page_find",
     "src.ui.views.page_inspect",
