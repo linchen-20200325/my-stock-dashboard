@@ -430,7 +430,7 @@ Effort：Low / Medium / High
 ### 16.7 Production 安全狀態（客戶第 22 節）
 
 - 🆕 客戶第 22 節原文：「重新核實並保存：PRODUCTION_WRITE_APPROVED、Daily Schedule、production write、external side effects。如果仍是：PRODUCTION_WRITE_APPROVED=False 就明確保存。不要因交接而自行開啟。」
-- 規則：`shared/risk_cap_history_policy.py::PRODUCTION_WRITE_APPROVED` 的開啟只能走 DEC-066 A 的獨立 PR 流程並經客戶核准；⛔ 交接、Freeze、文件同步、CI 修復**一律不得**改動此旗標；Daily Schedule 仍 NOT APPROVED（DEC-066 F）。現值以程式為準（2026-10-23 Freeze 實查為 `False`，~~見 `docs/HANDOFF.md`~~ 見 `docs/HANDOFF.md` §0 Freeze 版「Production」列與 `docs/PROJECT_STATE.md` §29.5（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實修正）））。
+- 規則：`shared/risk_cap_history_policy.py::PRODUCTION_WRITE_APPROVED` 的開啟只能走 DEC-066 A 的獨立 PR 流程並經客戶核准；⛔ 交接、Freeze、文件同步、CI 修復**一律不得**改動此旗標；Daily Schedule 仍 NOT APPROVED（DEC-066 F）。現值以程式為準（2026-10-23 Freeze 實查為 `False`，~~見 `docs/HANDOFF.md`~~ 見 `docs/HANDOFF.md` §0 Freeze 版「Production」列與 `docs/PROJECT_STATE.md` §29.5（2026-10-23 更新，有意識的變更，不是漏刪，決策者 AI 總管（事實修正）））。
 
 ### 16.8 交接優先順序與新 AI 接手（客戶第 1、2、13 節）
 
@@ -447,3 +447,47 @@ Effort：Low / Medium / High
 - **GitHub required checks 不得取消**：PR 上的 Fast（blocking）照跑；本節只放寬**本地與 QA 的深度**，不放寬 CI gate。
 - **CI 結構**（DEC-078 B）：Fast 與 Slow 平行開始；Fast 仍 blocking、Slow 仍 informational。
 - ⚠️ Effort 與測試範圍只決定深度，**不改變**派工、獨立稽核與揭露義務（`CLAUDE.md` §-2）。
+
+## 第 18 節｜Model／Effort 雙向切換「停手等待」Gate（客戶 2026-10-25，DEC-084）
+
+> **本節是較新的永久治理規則。** 若與第 3 節、第 9.0／9.2 節或 DEC-073 中「高於所需時不需停手、不需提醒降級」的文字衝突，**以本節／DEC-084 為準**；舊文字保留作歷史，不竄改。
+
+### 18.1 核心規則
+
+- 每個**完整工作階段結束／下一完整階段開始前**，以及工作風險／複雜度明顯轉換且已到**安全停點**時，必須重新判斷：
+  1. 下一階段最低足夠的模型／能力等級；
+  2. 下一階段 Minimum Sufficient Effort（Low／Medium／High）；
+  3. 與客戶目前設定是否一致。
+- **一致** → 維持 Silent Autonomous Cruise，直接繼續，不回報檢查結果。
+- **不一致（無論升級或降級）** → **必須停手**，通知客戶建議切到哪個模型／Effort，然後**等待客戶手動修改並回覆「改好了」後才能繼續下一階段**。
+- 這個雙向停手規則涵蓋：Low → Medium／High、Medium → High、High → Medium／Low、Medium → Low，以及需要切換模型／模式的情況。
+- 目的：落實 Minimum Sufficient Effort，避免不必要的 High／較高能力模型 token／額度消耗；不得因「目前設定也做得動」而繼續用明顯高於下一階段所需的設定。
+
+### 18.2 安全停點與禁止頻繁切換
+
+- **不得**為了切換而中斷一個已開始且不可安全中斷的原子工作單元。先到最近 Safe Checkpoint（第 6 節）再停手。
+- CI 等待、QA／audit 等待、commit／push、PR 開啟、workflow 正在跑等**短暫狀態不算新完整階段**，不因此觸發切換。
+- 一旦完整子批／原子工作單元完成、風險性質改變、或進入下一完整階段，就重新做雙向 Check。
+- 目前正在進行的工作若已用核准的較高 Effort 開始，不需做到一半停下來降級；在下一個安全 checkpoint 才套用本節。
+
+### 18.3 固定回報格式
+
+```
+⏸️ 建議切換模型／Effort，已停手
+下一階段：___
+建議模型／能力等級：___（若模型不需變更，寫「維持目前」）
+建議 Effort：Low / Medium / High
+原因：___
+請切換後回覆「改好了」。
+```
+
+- 通知後**不得自行假設已切換**、不得繼續下一階段、不得把問題縮小來繞過 Gate。
+- 客戶回覆「改好了」後：直接繼續；不重新摘要、不重問、不重做、不再解釋（DEC-014 續有效）。
+- Model／Effort 切換本身**不是產品 Decision Gate**。
+
+### 18.4 與既有規則的關係
+
+- **部分取代 DEC-073**：只取代其「高於所需時不需為形式要求降級、保持靜默直接工作」這一方向；DEC-073 的不足時強制停手、每階段必判模型／Effort、不得假設已切換等規則繼續有效。
+- **恢復並加嚴 DEC-059／DEC-061 的雙向提醒方向**：不只是「提醒可以降」，而是**升級／降級都必須在安全停點停手，等客戶完成切換後再繼續**。
+- **第 9.1 Effort 分級表與第 17 節 Minimum Sufficient Effort／Test Scope 不變**；本節只改「何時停、誰切換、切換後何時能繼續」。
+- **Silent Autonomous Cruise 正式例外**：本節的切換通知可以主動打斷；除這個安全停點通知外，其他中間狀態仍維持靜默。
