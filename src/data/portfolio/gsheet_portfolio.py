@@ -54,7 +54,10 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
+import itertools
 import math
+import threading
+import time
 from collections.abc import Mapping
 from typing import Any
 
@@ -85,6 +88,8 @@ def clear_read_cache() -> None:
     §5 可觀測性 + §1:寫入(save/delete)一律清 → 使用者自己的編輯即時可見,不服務髒資料;
     外部直接改 Sheet 者靠 TTL_15MIN 過期,或 UI 的「🔄 重新載入」手動呼叫本函式。
     SEC-1:快取住在 `_*_cached` 內部函式(鍵含身分),public 四支本身不再帶快取。
+    ⚠️ B5(DEC-083):本函式清的是**所有使用者、所有 Sheet**。既有 caller(寫入後、側欄 🔄、舊戰情室 🔄)
+    本批未改;新的「重新讀取」一律改用 `invalidate_my_read_cache()`(只失效本人 × 那本 Sheet)。
     """
     for _fn in (_list_portfolios_cached, _load_portfolio_cached,
                 _list_stock_watchlists_cached, _load_stock_watchlist_cached):
@@ -417,11 +422,90 @@ def _run_as_identity(identity: str, raw_fn, **kwargs):
 
 
 def _identity_scoped_read(cached_fn, raw_fn, **kwargs):
-    """有身分 → `cached_fn(identity, **kwargs)`(鍵含身分);無身分 → `raw_fn(**kwargs)`(不碰快取)。"""
+    """有身分 → `cached_fn(identity, **kwargs, read_gen=…)`(鍵含身分 ＋ 本人×本 Sheet 的失效世代);
+    無身分 → `raw_fn(**kwargs)`(不碰快取)。"""
     _identity = _cache_identity()
     if not _identity:
         return raw_fn(**kwargs)
-    return cached_fn(_identity, **kwargs)
+    return cached_fn(_identity, **kwargs,
+                     read_gen=_read_generation(_identity, str(kwargs.get('sheet_id') or '')))
+
+
+# ── Sheet Safety 批 B5（DEC-083）:只失效「本人 × 這本 Sheet」的讀取快取 ─────────────────
+# 客戶原文:「重新讀取不得默認清除所有使用者的全域 cache。……只失效目前使用者／active Sheet／
+# 相關 read cache。……不得用全域 `.clear()` 假裝完成。」
+# 做法:`st.cache_data` 沒有「只清某些鍵」的 API(`.clear()` 只能清整支函式的**所有**項目),
+# 所以不清 —— 改把一個「失效世代」放進快取鍵:四支 `_*_cached` 多收一個**不加底線**的參數
+# `read_gen`(底線參數不進快取鍵),值由下表決定。「重新讀取」＝ 把 (本人指紋, 那本 Sheet) 的世代
+# 換成全域遞增計數器的新值 ⇒ 本人讀那本 Sheet 時鍵變了 ⇒ 重抓;別人、本人的別本 Sheet 鍵不變 ⇒ 照舊命中。
+# 舊世代的快取項不會再被讀到,15 分鐘(TTL)後由 Streamlit 自然淘汰。
+# 表的鍵:(身分指紋, sheet_id) ＝ 本人那本;(`_READ_GEN_ANY_IDENTITY`, sheet_id) ＝ 那本 Sheet 的所有人。
+# ⚠️ 已知限制(據實):表在**本 process 記憶體**;多 replica 部署時各 replica 的 `st.cache_data` 本來也各自
+# 獨立,失效只作用於收到這次請求的那一台(與全域 `clear_read_cache()` 同一個範圍)。process 重啟 ⇒
+# 表與快取一起歸零。
+_READ_GEN_ANY_IDENTITY = '*'
+_READ_GEN_LOCK = threading.Lock()
+_READ_GEN_COUNTER = itertools.count(1)
+#: (身分指紋 / '*', sheet_id) → (世代, 換代時刻 time.monotonic())。
+_READ_GEN: dict[tuple[str, str], tuple[int, float]] = {}
+
+
+def _read_generation(identity: str, sheet_id: str) -> str:
+    """本人 × 這本 Sheet 目前的快取世代字串(`<本人世代>.<全體世代>`;沒換過代 → `0.0`)。"""
+    with _READ_GEN_LOCK:
+        _mine = _READ_GEN.get((identity, sheet_id))
+        _all = _READ_GEN.get((_READ_GEN_ANY_IDENTITY, sheet_id))
+    return f'{_mine[0] if _mine else 0}.{_all[0] if _all else 0}'
+
+
+def _bump_read_generation(identity: str, sheet_ids) -> int:
+    """把 (identity, sid) 換新世代;順手清掉換代超過 TTL_15MIN 的舊表項。回換代的筆數。
+
+    清舊表項是安全的:某鍵換代時刻 t0 超過 TTL ⇒ 世代 0 的快取項全都建於 t0 之前、早已過期
+    ⇒ 該鍵退回 0 不會讀到任何舊資料;計數器全域遞增、不重用 ⇒ 之後再換代必是沒見過的新值。
+    """
+    _now = time.monotonic()
+    _n = 0
+    with _READ_GEN_LOCK:
+        for _k in [k for k, (_g, _t) in _READ_GEN.items() if _now - _t > TTL_15MIN]:
+            del _READ_GEN[_k]
+        for _sid in sheet_ids:
+            _READ_GEN[(identity, _sid)] = (next(_READ_GEN_COUNTER), _now)
+            _n += 1
+    return _n
+
+
+def _target_sheet_ids(sheet_ids) -> list[str]:
+    """明確給的 sheet_ids;沒給 → 目前 session 綁的兩通道(去空白、去重、保序)。"""
+    _raw = list(sheet_ids) or [_get_active_sheet_id(), _get_active_stock_sheet_id()]
+    _out: list[str] = []
+    for _s in _raw:
+        _s = str(_s or '').strip()
+        if _s and _s not in _out:
+            _out.append(_s)
+    return _out
+
+
+def invalidate_my_read_cache(*sheet_ids: str) -> int:
+    """「重新讀取」:只讓**目前這位使用者**讀這幾本 Sheet(沒給 → 目前綁定的那本 / 兩通道)時重抓。
+
+    別的使用者、本人的其他 Sheet、forward-test 以外的快取一律不動;⛔ 不呼叫任何 `.clear()`。
+    沒有身分(未登入 / 登入已逾時)→ no-op 回 0(那時讀取本來就不經快取)。回換代筆數。
+    """
+    _identity = _cache_identity()
+    if not _identity:
+        return 0
+    return _bump_read_generation(_identity, _target_sheet_ids(sheet_ids))
+
+
+def invalidate_sheet_read_cache(*sheet_ids: str) -> int:
+    """讓**所有使用者**讀這幾本 Sheet 時重抓(例:寫入那本之後)。只動指定的 Sheet;⛔ 不 `.clear()`。
+
+    本批尚無 caller 改用(寫入路徑仍呼叫既有的全域 `clear_read_cache()`,B5 指派「不動既有全域清除」),
+    提供給後續把寫入後的全域清除收斂成「只清那本」時使用(見交付報告殘留項)。
+    """
+    _ids = _target_sheet_ids(sheet_ids)
+    return _bump_read_generation(_READ_GEN_ANY_IDENTITY, _ids) if _ids else 0
 
 
 # ── Sheet Safety 批 B1（DEC-083）:讀取真正唯讀 ───────────────────────────────────
@@ -750,8 +834,10 @@ def list_portfolios(*, sheet_id: str | None = None,
 
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
-def _list_portfolios_cached(identity: str, *, sheet_id: str) -> tuple[str, list[str]]:
+def _list_portfolios_cached(identity: str, *, sheet_id: str,
+                            read_gen: str = '') -> tuple[str, list[str]]:
     # ⚠️ 參數名**不可**加底線前綴:st.cache_data 會把 `_` 開頭的參數排除在快取鍵外。
+    # read_gen(B5 失效世代)只為進快取鍵,函式本體不用它。
     return _run_as_identity(identity, _list_portfolios_raw, sheet_id=sheet_id)
 
 
@@ -792,8 +878,8 @@ def load_portfolio(name: str, *, sheet_id: str | None = None,
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
 def _load_portfolio_cached(identity: str, *, name: str, sheet_id: str,
-                           keep_blank: bool) -> tuple[str, list[dict[str, Any]]]:
-    # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+                           keep_blank: bool, read_gen: str = '') -> tuple[str, list[dict[str, Any]]]:
+    # identity / read_gen 不加底線:底線參數不進 st.cache_data 快取鍵(B5 失效世代必須在鍵裡)
     return _run_as_identity(identity, _load_portfolio_raw,
                             name=name, sheet_id=sheet_id, keep_blank=keep_blank)
 
@@ -1036,8 +1122,9 @@ def list_stock_watchlists(*, sheet_id: str | None = None,
 
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
-def _list_stock_watchlists_cached(identity: str, *, sheet_id: str) -> tuple[str, list[str]]:
-    # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+def _list_stock_watchlists_cached(identity: str, *, sheet_id: str,
+                                  read_gen: str = '') -> tuple[str, list[str]]:
+    # identity / read_gen 不加底線:底線參數不進 st.cache_data 快取鍵(B5 失效世代必須在鍵裡)
     return _run_as_identity(identity, _list_stock_watchlists_raw, sheet_id=sheet_id)
 
 
@@ -1076,9 +1163,9 @@ def load_stock_watchlist(name: str, *, sheet_id: str | None = None,
 
 
 @_cache_data(ttl=TTL_15MIN, show_spinner=False)
-def _load_stock_watchlist_cached(identity: str, *, name: str,
-                                 sheet_id: str) -> tuple[str, list[str]]:
-    # identity 不加底線:底線參數不進 st.cache_data 快取鍵
+def _load_stock_watchlist_cached(identity: str, *, name: str, sheet_id: str,
+                                 read_gen: str = '') -> tuple[str, list[str]]:
+    # identity / read_gen 不加底線:底線參數不進 st.cache_data 快取鍵(B5 失效世代必須在鍵裡)
     return _run_as_identity(identity, _load_stock_watchlist_raw, name=name, sheet_id=sheet_id)
 
 

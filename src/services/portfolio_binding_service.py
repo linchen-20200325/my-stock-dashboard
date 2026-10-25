@@ -199,3 +199,15 @@ def get_binding_presence() -> BindingPresence:
     _logged, _sid, _read_err = _read_login_and_sheet(_gsp)
     return BindingPresence(logged_in=_logged, sheet_bound=bool(_logged and _sid),
                            read_error=_read_err)
+
+
+def reload_my_sheet_reads(*sheet_ids: str) -> int:
+    """「重新讀取」(Sheet Safety 批 B5,DEC-083):只失效**目前這位使用者 × 這幾本 Sheet** 的讀取快取。
+
+    沒給 sheet_ids → 目前綁定的那本(ETF / 個股兩通道)。別的使用者、本人的其他 Sheet 一律不動;
+    ⛔ 不呼叫任何全域 `.clear()`。未登入 → 0(那時讀取本來就不經快取)。回失效的 (身分, Sheet) 筆數。
+    **純快取操作,不連 Google、不寫 Sheet。**
+    """
+    from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1(正常方向)
+
+    return int(_gsp.invalidate_my_read_cache(*sheet_ids))
