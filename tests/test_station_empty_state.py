@@ -54,7 +54,14 @@ class _FakeSt:
 
     def text_input(self, *a, **k):
         self.calls.append(('text_input', a))
+        self.last_text_kwargs = k
         return self._text_return
+
+    def user_types(self, raw):
+        """模擬使用者在剛畫好的文字框改了文字:寫 widget 值 → 觸發 on_change(同真 Streamlit 的順序)。"""
+        _k = self.last_text_kwargs
+        self.session_state[_k['key']] = raw
+        _k['on_change'](*_k.get('args', ()))
 
     def link_button(self, label, url, *, use_container_width=False, help=None,
                     type='secondary', icon=None, disabled=False):
@@ -155,45 +162,70 @@ def test_login_cta_degrades_when_oauth_unconfigured(monkeypatch):
 
 
 # ── 端到端:貼 URL → 解析 ID → 寫兩通道 + ?sheet=(SSOT 寫入契約)───────────
+# QA BLK-2(2026-10-25,有意識的修改):貼網址框改成「使用者真的改了文字(on_change)才呼叫寫入契約」——
+# ~~每輪 rerun 拿 widget 回傳值呼叫契約~~ 會把剛用 Drive 選的新 Sheet 默默綁回框裡的舊值。
+# 以下三支改以 `user_types()` 模擬改文字;只「畫一次」(沒改文字)的情形見 test_paste_id_binder_render_alone_writes_nothing。
+_PREFIX = '_station_'
+
+
+def _paste_flow(fst, raw, *, active=''):
+    gsp = _FakeGsp(logged=True, active_sid=active)
+    pb.render_paste_id_binder(gsp, key_prefix=_PREFIX)        # 第一輪:畫框
+    fst.user_types(raw)                                        # 使用者改文字 → on_change
+    pb.render_paste_id_binder(gsp, key_prefix=_PREFIX)        # 下一輪:顯示結果
+
+
+def _bind(fst):
+    return {k: v for k, v in fst.session_state.items()
+            if k in ('portfolio_sheet_id', 'stock_portfolio_sheet_id')}
+
+
 def test_paste_id_binder_parses_url_and_applies(monkeypatch):
     _url = 'https://docs.google.com/spreadsheets/d/ABC123xyz_-/edit#gid=0'
-    fst = _FakeSt(text_return=_url)
+    fst = _FakeSt()
     monkeypatch.setattr(pb, 'st', fst)
     # Sheet Safety 批 B4:寫入改由 L1 `oauth_state.apply_sheet_binding`(唯一寫入契約)執行 ⇒ 它的 st 也換成同一個假物件。
     monkeypatch.setattr(_ost, 'st', fst)
-
-    with pytest.raises(_RerunSignal):          # apply 後應 st.rerun
-        pb.render_paste_id_binder(_FakeGsp(logged=True, active_sid=''), key_prefix='_station_')
-
+    _paste_flow(fst, _url)
     assert fst.session_state['portfolio_sheet_id'] == 'ABC123xyz_-'
     assert fst.session_state['stock_portfolio_sheet_id'] == 'ABC123xyz_-'
     assert fst.query_params['sheet'] == 'ABC123xyz_-'
+    assert [c[0] for c in fst.calls].count('success') == 1
+    assert f'{_PREFIX}paste_sid' not in fst.session_state, '綁定一變,框的舊 widget 狀態要被丟掉(顯示現值)'
+
+
+def test_paste_id_binder_render_alone_writes_nothing(monkeypatch):
+    """沒改文字(只是 rerun 又畫一次)→ 一行都不寫(QA BLK-2 的根)。"""
+    fst = _FakeSt(text_return='OLDSHEET1234')
+    monkeypatch.setattr(pb, 'st', fst)
+    monkeypatch.setattr(_ost, 'st', fst)
+    for _ in range(3):
+        pb.render_paste_id_binder(_FakeGsp(logged=True, active_sid='NEWSHEET5678'), key_prefix=_PREFIX)
+    assert _bind(fst) == {} and fst.query_params == {}
 
 
 def test_paste_id_binder_noop_when_unchanged(monkeypatch):
-    """貼的 ID 與現值相同 → 不重設、不 rerun(避免無謂 rerun 迴圈)。
-
-    Sheet Safety 批 B4:「現值」改由唯一寫入契約自己讀 session(⛔ 不再信注入的 `_gsp` 替身),
-    故替身與 session 都設成同一本(production 兩者本來就同源)。"""
-    fst = _FakeSt(text_return='SAME')
+    """貼的 ID 與現值(兩格 + 網址)全同 → 不重設、不換代,顯示「已是目前使用的 Sheet」。"""
+    fst = _FakeSt()
     fst.session_state = {'portfolio_sheet_id': 'SAME', 'stock_portfolio_sheet_id': 'SAME'}
+    fst.query_params = {'sheet': 'SAME'}
     monkeypatch.setattr(pb, 'st', fst)
     monkeypatch.setattr(_ost, 'st', fst)
-    # 不應 raise _RerunSignal
-    pb.render_paste_id_binder(_FakeGsp(logged=True, active_sid='SAME'), key_prefix='_station_')
-    assert fst.session_state == {'portfolio_sheet_id': 'SAME', 'stock_portfolio_sheet_id': 'SAME'}
-    assert fst.query_params == {}
+    _paste_flow(fst, 'SAME', active='SAME')
+    assert _bind(fst) == {'portfolio_sheet_id': 'SAME', 'stock_portfolio_sheet_id': 'SAME'}
+    assert fst.query_params == {'sheet': 'SAME'}
+    assert ('info', (pb.ALREADY_CURRENT_MSG,)) in fst.calls
 
 
 @pytest.mark.parametrize('raw', [
     'https://docs.google.com/spreadsheets/d/e/2PACX-1vQabc/pubhtml', '<script>x</script>'])
 def test_paste_id_binder_rejects_publish_link_and_garbage(monkeypatch, raw):
-    """B3:發布連結 / 看不懂的輸入 → 白話紅字拒絕,什麼都不寫、不 rerun(修前發布連結會綁成 `e`)。"""
-    fst = _FakeSt(text_return=raw)
+    """B3:發布連結 / 看不懂的輸入 → 白話紅字拒絕,什麼都不寫(修前發布連結會綁成 `e`)。"""
+    fst = _FakeSt()
     monkeypatch.setattr(pb, 'st', fst)
     monkeypatch.setattr(_ost, 'st', fst)
-    pb.render_paste_id_binder(_FakeGsp(logged=True, active_sid=''), key_prefix='_station_')
-    assert fst.session_state == {} and fst.query_params == {}
+    _paste_flow(fst, raw)
+    assert _bind(fst) == {} and fst.query_params == {}
     assert [c[0] for c in fst.calls].count('error') == 1
 
 

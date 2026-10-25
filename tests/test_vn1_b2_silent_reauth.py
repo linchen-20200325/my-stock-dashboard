@@ -297,7 +297,8 @@ def test_app_py_wires_hook_and_logout():
     assert i_si < i_sync and '\n' not in src[src.index('\n', i_si) + 1:i_sync].strip()
     # Sheet Safety 批 B4(DEC-083,有意識的修改):側欄換 Sheet 改經 L1 唯一寫入契約
     # `apply_sheet_binding`,記號重算(`sync_silent_marker`)移進契約內部 ⇒ 改驗契約有呼叫它、側欄有用契約。
-    assert '_sb_apply_binding(_sb_sid_raw)' in src and "st.query_params['sheet']" not in src
+    # QA BLK-2:側欄文字框只在使用者改了文字時(on_change)經契約寫入。
+    assert 'on_change=_sb_on_sheet_input' in src and "st.query_params['sheet']" not in src
     _ctr = inspect.getsource(ost.apply_sheet_binding)
     assert _ctr.index('st.query_params[SHEET_QUERY_PARAM] = _sid') < _ctr.index('sync_silent_marker()')
     i_logout = src.index("key='btn_oauth_logout_sb'")

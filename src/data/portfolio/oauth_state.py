@@ -98,6 +98,7 @@ from shared.oauth_session_policy import (
 from shared.sheet_id import (
     PORTFOLIO_SHEET_SESSION_KEY,
     SHEET_BINDING_SESSION_KEYS,
+    SHEET_BINDING_VERSION_SESSION_KEY,
     SHEET_ID_RE,
     SHEET_INPUT_ERROR_MESSAGES,
     SHEET_QUERY_PARAM,
@@ -296,32 +297,49 @@ class SheetBindResult:
         """白話錯誤(L0 `SHEET_INPUT_ERROR_MESSAGES`);沒錯 → 空字串。⛔ 不回顯使用者輸入。"""
         return SHEET_INPUT_ERROR_MESSAGES.get(self.error, "")
 
+    @property
+    def already_current(self) -> bool:
+        """沒寫,因為兩格 session 與 `?sheet=` **全都已經是**這一本(畫面該說「已是目前使用的 Sheet」)。"""
+        return bool(self.sheet_id) and not self.changed and not self.error
+
+
+def _bump_binding_version() -> None:
+    """綁定世代 +1(被動文字框據此丟掉舊 widget 狀態、重新顯示現值;QA BLK-2)。"""
+    st.session_state[SHEET_BINDING_VERSION_SESSION_KEY] = (
+        int(st.session_state.get(SHEET_BINDING_VERSION_SESSION_KEY) or 0) + 1)
+
 
 def _write_binding_session(sheet_id: str) -> None:
     """legacy 兩格同時寫同一個 Sheet ID(呼叫端已消毒)。契約內部用;⛔ 別處不得直接寫這兩格。"""
     for _k in SHEET_BINDING_SESSION_KEYS:
         st.session_state[_k] = sheet_id
+    _bump_binding_version()
 
 
-def _current_bound_sheet() -> str:
-    """目前生效的那本(同 L1 `gsheet_portfolio._get_active_sheet_id`:session 優先,否則 secrets 預設)。"""
-    _sid = sanitize_sheet_id(st.session_state.get(PORTFOLIO_SHEET_SESSION_KEY))
-    return _sid or sanitize_sheet_id(_safe_secret(PORTFOLIO_SHEET_SESSION_KEY, ""))
+def _binding_fully_equal(sheet_id: str) -> bool:
+    """兩格 session **與**網址 `?sheet=` 是否全都已是 `sheet_id`。⛔ 不看 secrets 預設(那不是綁定)。"""
+    return (all(sanitize_sheet_id(st.session_state.get(_k)) == sheet_id
+                for _k in SHEET_BINDING_SESSION_KEYS)
+            and _url_sheet() == sheet_id)
 
 
 def apply_sheet_binding(raw) -> SheetBindResult:
     """使用者**明確**選定 / 貼上一本 Sheet → 綁定(唯一寫入契約)。
 
     - 經 L0 `parse_sheet_input` 解析(發布連結 / 怪字元 → `error`,**什麼都不寫**,⛔ 不猜);
-    - 與目前生效的那本相同 → `changed=False`,**不寫**(文字框每輪 rerun 都會回傳現值,避免無謂重寫);
-    - 否則:兩格 session 同時寫、`?sheet=` 寫網址(失敗不擋主線,但記 log)、重算靜默恢復記號。
-    ⚠️ 只給「使用者按了 / 貼了」的路徑呼叫 —— 契約本身不判斷那是不是使用者的意思。
+    - 兩格 session 與 `?sheet=` **全都已是**這一本 → `changed=False`(`already_current`),不寫;
+    - 否則(任一格不同 —— 含 legacy 兩通道不一致、`?sheet=` 缺、只有 secrets 預設是它):
+      兩格 session 同時寫、`?sheet=` 寫網址(失敗不擋主線,但記 log)、重算靜默恢復記號。
+    ~~與「目前生效的那本」(ETF 通道,沒有就 secrets 預設)相同就不寫~~(QA B-1,有意識的修改:那會讓
+    明確按 ✅ 的人什麼都沒寫卻看到成功,也讓使用者無法以重選修好 ETF≠個股 的不一致)。
+    ⚠️ 只給「使用者按了 / 真的改了文字」的路徑呼叫 —— 被動文字框請經 `on_sheet_input_change`(on_change),
+    ⛔ 不得每輪 rerun 拿 widget 值呼叫(QA BLK-2:舊值會把剛選的新 Sheet 默默綁回去)。
     """
     _p = parse_sheet_input(raw)
     if not _p.ok:
         return SheetBindResult(error=_p.error)
     _sid = _p.sheet_id
-    if _sid == _current_bound_sheet():
+    if _binding_fully_equal(_sid):
         return SheetBindResult(sheet_id=_sid, changed=False)
     _write_binding_session(_sid)
     # Sheet ID 非憑證（存取仍需 OAuth + Sheet ACL）,僅「上次用哪本」的設定持久化。
@@ -333,6 +351,40 @@ def apply_sheet_binding(raw) -> SheetBindResult:
     return SheetBindResult(sheet_id=_sid, changed=True)
 
 
+# ── 被動文字框(側欄貼 ID、就地貼網址框)的接法(QA BLK-2)─────────────────────────────
+# Streamlit 有 key 的 text_input 會**保留使用者上次的值**、忽略之後 `value=` 的改變 ⇒ 修前每輪 rerun
+# 拿 widget 值呼叫契約,使用者剛用 Drive 選了 B,下一輪框裡的舊值 A 又把綁定改回 A(之後存檔寫進 A)。
+# 現行:①畫框之前呼叫 `prepare_sheet_input(key)` —— 綁定世代變了就丟掉舊 widget 狀態(框重新顯示現值);
+# ②框以 `on_change=on_sheet_input_change, args=(key,)` 接 —— **只有使用者真的改了文字**才呼叫契約;
+# ③畫完框後 `pop_sheet_input_result(key)` 取這次的結果顯示(錯誤 / 成功)。
+_INPUT_VERSION_SUFFIX = "__bind_ver"
+_INPUT_RESULT_SUFFIX = "__bind_result"
+
+
+def prepare_sheet_input(widget_key: str) -> None:
+    """畫被動文字框**之前**呼叫:綁定世代與上次畫框時不同 → 丟掉該框的舊 widget 狀態。"""
+    _ver = int(st.session_state.get(SHEET_BINDING_VERSION_SESSION_KEY) or 0)
+    if st.session_state.get(widget_key + _INPUT_VERSION_SUFFIX) != _ver:
+        st.session_state.pop(widget_key, None)
+        st.session_state[widget_key + _INPUT_VERSION_SUFFIX] = _ver
+
+
+def on_sheet_input_change(widget_key: str) -> None:
+    """被動文字框的 `on_change`:使用者改了文字(按 Enter / 離開欄位)才走到這裡 → 呼叫契約,結果暫存。
+
+    寫成功時契約已換代 ⇒ 這一輪畫框前 `prepare_sheet_input` 丟掉框裡使用者貼的原文(例:整串網址),
+    框改顯示解析後的 Sheet ID;解析失敗不換代 ⇒ 原文留在框裡、旁邊顯示白話錯誤。
+    """
+    st.session_state[widget_key + _INPUT_RESULT_SUFFIX] = apply_sheet_binding(
+        st.session_state.get(widget_key, ""))
+
+
+def pop_sheet_input_result(widget_key: str) -> "SheetBindResult | None":
+    """取出(並移除)這個框本輪 `on_change` 的結果;本輪沒改文字 → None。"""
+    _r = st.session_state.pop(widget_key + _INPUT_RESULT_SUFFIX, None)
+    return _r if isinstance(_r, SheetBindResult) else None
+
+
 def clear_sheet_binding() -> None:
     """解除綁定(登出時呼叫;DEC-083 Q5):清兩格 session、網址 `?sheet=`、靜默恢復記號 `?gs=`
     與「可重算記號」旗標 ⇒ 之後重新整理 / 重新登入**不會自動綁回**這一本。
@@ -342,6 +394,7 @@ def clear_sheet_binding() -> None:
     """
     for _k in SHEET_BINDING_SESSION_KEYS:
         st.session_state.pop(_k, None)
+    _bump_binding_version()   # 被動文字框下一次畫時丟掉舊值(QA BLK-2)
     for _q in (SHEET_QUERY_PARAM, OAUTH_SILENT_MARKER_PARAM):
         try:
             st.query_params.pop(_q, None)
@@ -357,8 +410,13 @@ def restore_sheet_binding_from_query() -> str:
     """
     _sid = _url_sheet()
     if _sid:
+        _wrote = False
         for _k in SHEET_BINDING_SESSION_KEYS:
+            if _k not in st.session_state:
+                _wrote = True
             st.session_state.setdefault(_k, _sid)
+        if _wrote:
+            _bump_binding_version()
     return _sid
 
 

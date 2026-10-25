@@ -30,6 +30,9 @@ import streamlit as st
 from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 from shared.sheet_id import SHEET_INPUT_EMPTY
 
+#: 明確選的那本早就是目前綁定(兩通道與網址都已是它)時的說法(QA B-1:⛔ 不得顯示成「已設定」)。
+ALREADY_CURRENT_MSG = '已是目前使用的 Sheet（ETF + 個股共用此本），不用再設定。'
+
 
 def apply_active_sheet(_gsp, sid: str):
     """使用者明確選定的 sheet_id → 綁定(委派 L1 `oauth_state.apply_sheet_binding`,**唯一寫入契約**)。
@@ -67,19 +70,34 @@ def render_login_cta(*, key_suffix: str = '', sheet_id: str = '') -> bool:
 
 
 def render_paste_id_binder(_gsp, *, key_prefix: str) -> None:
-    """貼 Sheet 網址／ID → 消毒解析 → apply（未登入也可用,如 SA 部署或手動情境）。"""
-    _cur = _gsp._get_active_sheet_id()
-    _raw = st.text_input(
+    """貼 Sheet 網址／ID → 消毒解析 → apply（未登入也可用,如 SA 部署或手動情境）。
+
+    QA BLK-2(2026-10-25,有意識的修改):~~每輪 rerun 都拿框裡的值呼叫寫入契約~~ —— 有 key 的
+    text_input 會保留舊值,使用者剛用 Drive 選了別本,下一輪框裡的舊 ID 又把綁定改回去。
+    現行:只有使用者**真的改了文字**(on_change)才呼叫契約;綁定一變,框重新顯示現值。
+    """
+    from src.data.portfolio.oauth_state import (   # EX-PASSTHRU-1(同 render_login_cta)
+        on_sheet_input_change,
+        pop_sheet_input_result,
+        prepare_sheet_input,
+    )
+    _key = f'{key_prefix}paste_sid'
+    prepare_sheet_input(_key)
+    st.text_input(
         'Google Sheet 網址或 ID',
-        value=_cur, key=f'{key_prefix}paste_sid',
+        value=_gsp._get_active_sheet_id(), key=_key,
+        on_change=on_sheet_input_change, args=(_key,),
         placeholder='貼上 https://docs.google.com/spreadsheets/d/...',
-        help='貼 URL/ID 設為投組資料庫（ETF + 個股共用）')
-    _r = apply_active_sheet(_gsp, _raw)
+        help='貼 URL/ID 後按 Enter，設為投組資料庫（ETF + 個股共用）')
+    _r = pop_sheet_input_result(_key)
+    if _r is None:
+        return
     if _r.error and _r.error != SHEET_INPUT_EMPTY:
         st.error(_r.message)   # B3:發布連結 / 看不懂的輸入 → 白話拒絕,⛔ 不猜、不綁
     elif _r.changed:
         st.success(f'已設投組資料庫：`{_r.sheet_id}`')
-        st.rerun()
+    elif _r.already_current:
+        st.info(ALREADY_CURRENT_MSG)
 
 
 def render_drive_picker(_gsp, *, key_prefix: str) -> None:
@@ -109,9 +127,12 @@ def render_drive_picker(_gsp, *, key_prefix: str) -> None:
     if _nc.button('🆕 建立新投組 Sheet', key=f'{key_prefix}new', use_container_width=True):
         try:
             _sid, _url = _gsp.create_new_sheet()
-            apply_active_sheet(_gsp, _sid)
-            st.success('已建立新 Sheet 並設為投組資料庫（ETF + 個股共用）。')
-            st.rerun()
+            _r = apply_active_sheet(_gsp, _sid)
+            if _r.error:   # 建出來的 ID 解析不過(實務上不會)→ 照實講,⛔ 不顯示成功
+                st.error(f'已建立新 Sheet，但無法設為投組資料庫：{_r.message}')
+            else:
+                st.success('已建立新 Sheet 並設為投組資料庫（ETF + 個股共用）。')
+                st.rerun()
         except Exception as _e:  # noqa: BLE001 — 建立失敗誠實報
             st.error(f'建立新 Sheet 失敗：{scrub_md(_e)}')
 
@@ -131,9 +152,15 @@ def render_drive_picker(_gsp, *, key_prefix: str) -> None:
                  type='primary', use_container_width=True):
         _sid = _smap.get(_pick, '')
         if _sid:
-            apply_active_sheet(_gsp, _sid)
-            st.success(f'已設定投組資料庫為「{_pick}」（ETF + 個股共用此本）。')
-            st.rerun()
+            # QA B-1:成功訊息只在**真的寫了**時顯示;早就是這本 → 照實說,⛔ 不假裝設定成功。
+            _r = apply_active_sheet(_gsp, _sid)
+            if _r.changed:
+                st.success(f'已設定投組資料庫為「{_pick}」（ETF + 個股共用此本）。')
+                st.rerun()
+            elif _r.already_current:
+                st.info(ALREADY_CURRENT_MSG)
+            else:
+                st.error(_r.message)
 
 
 def render_holdings_binder(_gsp, *, key_prefix: str) -> None:

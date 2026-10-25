@@ -802,7 +802,11 @@ class TestOldFilesUntouched:
     #   取消唯一本自動綁）、`app.py`（開機 `?sheet=` 還原／側欄貼 ID 改經契約、登出多清 Sheet 綁定、刪 `import re`）、
     #   `src/ui/tabs/portfolio_manager.py`（`parse_sheet_id` 本體委派 L0 單一 parser，0 production caller）。
     #   版面零改動（側欄解析失敗時多一行 st.error 白話拒絕）；其餘 88 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
-    _BASE_DIGEST = "e05aea0489726d0de9568a737b96481ef4720f8432adfa98700d7c3950f75d01"
+    # ~~"e05aea0489726d0de9568a737b96481ef4720f8432adfa98700d7c3950f75d01"~~
+    # 📌 Sheet Safety 批 QA 回修 B-1／BLK-2（2026-10-25，PR #926 兩組 QA，總管指派，⛔ 不是漏改；DEC-019 揭露）：
+    #   `portfolio_binder.py`（貼網址框改 on_change、Drive ✅ 成功訊息只在真的寫入時顯示／已是目前那本改說
+    #   「已是目前使用的 Sheet」）、`app.py`（側欄貼 ID 框改 on_change）。版面零改動；其餘 89 檔一個字都沒動。
+    _BASE_DIGEST = "ce6e2b9253bb5a539f85d84231f734de668f96eb3a103e842dd731324c10230f"
 
     def test_no_diff_against_base(self):
         import hashlib

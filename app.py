@@ -342,10 +342,13 @@ with st.sidebar:
             get_oauth_cfg as _sb_get_cfg,
             login_state_with_sheet as _sb_login_state_with_sheet,
             forget_silent_reauth as _sb_forget_silent,
-            apply_sheet_binding as _sb_apply_binding,
             clear_sheet_binding as _sb_clear_binding,
+            on_sheet_input_change as _sb_on_sheet_input,
+            pop_sheet_input_result as _sb_pop_sheet_input,
+            prepare_sheet_input as _sb_prepare_sheet_input,
         )
         from infra.oauth import build_authorize_url as _sb_buildurl
+        from shared.sheet_id import SHEET_INPUT_EMPTY as _SB_SHEET_INPUT_EMPTY
         # 每次 rerun 動態解析，避免 module-level cache 過期
         _sb_cfg = _sb_get_cfg()
         _sb_oc = _sb_cfg is not None
@@ -369,18 +372,23 @@ with st.sidebar:
                 st.rerun()
             # ── Google Sheet ID（集中於帳號區；亦可於「📁 組合管理」頁設定）──
             _sb_sid_cur = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
-            _sb_sid_raw = st.text_input(
-                'Google Sheet ID 或完整 URL（系統會自動解析 ID）',
-                value=_sb_sid_cur, key='sb_portfolio_sheet_id_input',
-                placeholder='貼上 https://docs.google.com/spreadsheets/d/...',
-                help='貼 URL/ID 設定投組資料庫（或在「📁 組合管理」頁設定）')
             # Sheet Safety 批 B3/B4(DEC-083):~~本檔自帶 `/spreadsheets/d/(...)` 正則 + 自己寫兩格 /
             # `?sheet=` / 重算記號~~(有意識的移除:發布連結會被解析成 `e` 綁上去)→ 唯一寫入契約
-            # `apply_sheet_binding`(兩通道 + ?sheet= + 就地重算 ?gs= 記號,同修前;解析不過什麼都不寫)。
-            _sb_bind = _sb_apply_binding(_sb_sid_raw)
-            if _sb_bind.error and _sb_sid_raw.strip():
+            # (兩通道 + ?sheet= + 就地重算 ?gs= 記號,同修前;解析不過什麼都不寫)。
+            # QA BLK-2(有意識的修改):~~每輪 rerun 拿文字框的值呼叫契約~~ —— 有 key 的文字框保留舊值,
+            # 使用者剛在 📁 組合管理用 Drive 選了別本,下一輪這裡的舊 ID 又把綁定改回去。現行:只有使用者
+            # **真的改了文字**(on_change)才呼叫契約;綁定一變(`prepare`),框重新顯示現值。
+            _sb_prepare_sheet_input('sb_portfolio_sheet_id_input')
+            st.text_input(
+                'Google Sheet ID 或完整 URL（系統會自動解析 ID）',
+                value=_sb_sid_cur, key='sb_portfolio_sheet_id_input',
+                on_change=_sb_on_sheet_input, args=('sb_portfolio_sheet_id_input',),
+                placeholder='貼上 https://docs.google.com/spreadsheets/d/...',
+                help='貼 URL/ID 後按 Enter 設定投組資料庫（或在「📁 組合管理」頁設定）')
+            _sb_bind = _sb_pop_sheet_input('sb_portfolio_sheet_id_input')
+            if _sb_bind is not None and _sb_bind.error and _sb_bind.error != _SB_SHEET_INPUT_EMPTY:
                 st.error(_sb_bind.message)
-            _sb_sid_new = _sb_bind.sheet_id or str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
+            _sb_sid_new = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
             if _sb_sid_new:
                 st.caption(f'✅ Sheet ID：`{_sb_sid_new}`')
             else:

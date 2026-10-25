@@ -26,6 +26,10 @@
 
 消毒（`sanitize_sheet_id`）＝ 只放行 `SHEET_ID_RE`（`[A-Za-z0-9_-]{1,120}`）完整比對；其餘回空字串。
 自 `oauth_state._SHEET_ID_RE` 原樣搬來（字母集、長度界一字未改）。
+**唯一的例外**：單一字元 `e`（`LEGACY_PUBLISH_LINK_ARTEFACT`）一律拒絕 —— 那正是修前 bug 把發布連結
+`/spreadsheets/d/e/…` 解析出來的值，已被綁定、寫進 `?sheet=e` 書籤的人，重新整理時不得再被還原成
+Sheet ID（QA N-5，2026-10-25）。⚠️ 只擋這一個字面值，⛔ 不是「太短就拒絕」的長度規則（不發明規則；
+其他短字串照舊放行，見交付報告 NB-6）。
 """
 from __future__ import annotations
 
@@ -42,11 +46,16 @@ SHEET_BINDING_SESSION_KEYS: tuple[str, str] = (
     PORTFOLIO_SHEET_SESSION_KEY, STOCK_PORTFOLIO_SHEET_SESSION_KEY)
 #: 網址上「上次用哪本」的參數名（非憑證）。
 SHEET_QUERY_PARAM: str = "sheet"
+#: 綁定「世代」:唯一寫入契約每寫一次 / 清一次就 +1。被動文字框(側欄貼 ID、就地貼網址框)據此在綁定
+#: 變了之後丟掉自己的舊 widget 狀態,重新顯示現值(QA BLK-2:舊值不得在下一輪又被綁回去)。
+SHEET_BINDING_VERSION_SESSION_KEY: str = "_sheet_binding_version"
 
 # ── 字母集 / 長度 ──────────────────────────────────────────────────────────
 #: Google Drive fileId 實測 44 字元；上限 120 留餘裕又擋濫用（防超長字串灌爆 URL / session）。
 SHEET_ID_MAX_LEN: int = 120
 SHEET_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,%d}" % SHEET_ID_MAX_LEN)
+#: 修前發布連結 bug 的產物(`/spreadsheets/d/e/…` 被解析成 `e`)—— 不是任何人的 Sheet ID,一律拒絕。
+LEGACY_PUBLISH_LINK_ARTEFACT: str = "e"
 
 #: 發布連結（「檔案 → 共用 → 發布到網路」）：`/spreadsheets/d/e/<發布 token>/pubhtml`。
 _PUBLISHED_LINK_RE = re.compile(r"/spreadsheets/(?:u/\d+/)?d/e(?=[/?#]|$)")
@@ -92,6 +101,8 @@ def sanitize_sheet_id(raw) -> str:
     不可信輸入（state 便車帶回的乘客、網址上的 `?sheet=`、使用者貼上的字）專用。
     """
     s = str(raw or "").strip()
+    if s == LEGACY_PUBLISH_LINK_ARTEFACT:
+        return ""
     return s if s and SHEET_ID_RE.fullmatch(s) else ""
 
 

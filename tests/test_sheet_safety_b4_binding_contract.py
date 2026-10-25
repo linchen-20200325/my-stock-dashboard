@@ -25,6 +25,15 @@ class _St:
         self.secrets = dict(secrets or {})
 
 
+def _bind(f):
+    """兩格綁定 key(session 另有契約的「綁定世代」計數器 `SHEET_BINDING_VERSION_SESSION_KEY`,QA 回修新增)。"""
+    return {k: v for k, v in f.session_state.items() if k in S.SHEET_BINDING_SESSION_KEYS}
+
+
+def _no_ver(d):
+    return {k: v for k, v in d.items() if k != S.SHEET_BINDING_VERSION_SESSION_KEY}
+
+
 @pytest.fixture
 def fst(monkeypatch):
     def _make(**kw):
@@ -41,7 +50,8 @@ def test_apply_url_writes_both_channels_query_and_resyncs_marker(fst, monkeypatc
     monkeypatch.setattr(ost, "sync_silent_marker", lambda: synced.append(1) or False)
     r = ost.apply_sheet_binding(_URL)
     assert (r.sheet_id, r.changed, r.error) == (_ID, True, "")
-    assert f.session_state == {"portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": _ID}
+    assert _no_ver(f.session_state) == {"portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": _ID}
+    assert f.session_state[S.SHEET_BINDING_VERSION_SESSION_KEY] == 1
     assert f.query_params == {"sheet": _ID}
     assert synced == [1]
 
@@ -69,21 +79,35 @@ def test_publish_link_never_binds_e(fst):
     assert f.session_state == {} and f.query_params == {}
 
 
-def test_apply_same_as_current_is_noop(fst, monkeypatch):
+def test_apply_explicit_repick_fixes_inconsistent_channels(fst, monkeypatch):
+    """~~只看 ETF 通道:相同就 no-op、不覆寫個股通道~~ —— QA B-1(2026-10-25,有意識的翻轉):
+    那讓**明確**按 ✅ 的人什麼都沒寫卻看到成功,Q6 的「使用者明確重新選定」也修不好不一致。
+    現行:契約只給明確動作呼叫(被動文字框改經 on_change,見 tests/test_sheet_safety_qa_fixes.py),
+    任一格與選定值不同就兩格一起寫。"""
     f = fst(session={"portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": "OTHER"})
+    synced = []
+    monkeypatch.setattr(ost, "sync_silent_marker", lambda: synced.append(1) or False)
+    r = ost.apply_sheet_binding(_URL)
+    assert (r.sheet_id, r.changed, r.error) == (_ID, True, "")
+    assert _bind(f) == {"portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": _ID}
+    assert f.query_params == {"sheet": _ID} and synced == [1]
+
+
+def test_apply_noop_only_when_both_channels_and_query_equal(fst, monkeypatch):
+    f = fst(session={"portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": _ID},
+            query={"sheet": _ID})
     monkeypatch.setattr(ost, "sync_silent_marker", lambda: pytest.fail("不該重算"))
     r = ost.apply_sheet_binding(_URL)
-    assert (r.sheet_id, r.changed, r.error) == (_ID, False, "")
-    # Q6:兩通道不一致時,⛔ 不因為「文字框回傳現值」就偷偷覆寫另一格
-    assert f.session_state["stock_portfolio_sheet_id"] == "OTHER"
-    assert f.query_params == {}
+    assert (r.sheet_id, r.changed, r.error) == (_ID, False, "") and r.already_current
+    assert S.SHEET_BINDING_VERSION_SESSION_KEY not in f.session_state
 
 
-def test_apply_same_as_secrets_default_is_noop(fst):
-    """現值來自 secrets 預設(同 L1 `_get_active_sheet_id`)→ 文字框回傳它時不寫進 session。"""
+def test_apply_equal_to_secrets_default_still_binds(fst):
+    """~~現值來自 secrets 預設 → 不寫進 session~~ —— QA B-1(有意識的翻轉):secrets 預設是部署設定、
+    不是使用者的綁定;使用者明確選它 → 照實寫兩格 + `?sheet=`(否則個股通道永遠空著)。"""
     f = fst(secrets={"portfolio_sheet_id": _ID})
-    assert ost.apply_sheet_binding(_ID).changed is False
-    assert f.session_state == {}
+    assert ost.apply_sheet_binding(_ID).changed is True
+    assert _bind(f) == {"portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": _ID}
 
 
 def test_apply_query_param_failure_not_fatal(fst, monkeypatch):
@@ -103,7 +127,7 @@ def test_clear_removes_binding_query_and_silent_marker(fst):
                      OAUTH_SILENT_ELIGIBLE_SESSION_KEY: True, "other": 1},
             query={"sheet": _ID, OAUTH_SILENT_MARKER_PARAM: "a" * 16, "sid": "2330"})
     ost.clear_sheet_binding()
-    assert f.session_state == {"other": 1}
+    assert _no_ver(f.session_state) == {"other": 1}
     assert f.query_params == {"sid": "2330"}
 
 
@@ -126,7 +150,7 @@ def test_after_clear_restore_has_nothing_to_restore(fst):
 def test_restore_setdefault_both_channels(fst):
     f = fst(query={"sheet": f"  {_ID} "})
     assert ost.restore_sheet_binding_from_query() == _ID
-    assert f.session_state == {"portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": _ID}
+    assert _bind(f) == {"portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": _ID}
 
 
 def test_restore_does_not_override_this_sessions_choice(fst):
@@ -147,7 +171,7 @@ def test_restore_sanitises_untrusted_url(fst, bad):
 def test_write_binding_session_writes_both_legacy_keys(fst):
     f = fst()
     ost._write_binding_session(_ID)
-    assert f.session_state == {"portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": _ID}
+    assert _bind(f) == {"portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": _ID}
 
 
 def test_legacy_aliases_point_to_l0():

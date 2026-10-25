@@ -83,7 +83,8 @@ def test_messages_do_not_echo_user_input(raw):
 
 
 @pytest.mark.parametrize("raw, expected", [
-    (_ID, _ID), (f" {_ID} ", _ID), ("", ""), (None, ""), ("e", "e"),
+    # ~~("e", "e")~~ —— QA N-5(有意識的翻轉):`e` 是修前發布連結 bug 的產物,一律拒絕(只此一個字面值)。
+    (_ID, _ID), (f" {_ID} ", _ID), ("", ""), (None, ""), ("e", ""), ("E", "E"), ("ee", "ee"),
     ("a/b", ""), ("a" * 121, ""), ("ab.cd", ""), (123, "123"),
 ])
 def test_sanitize(raw, expected):
