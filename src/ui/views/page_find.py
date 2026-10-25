@@ -1870,6 +1870,13 @@ HOLDING_SOURCE_WL_MISSING: str = "觀察清單：你選定的那份已不在這�
 HOLDING_SOURCE_PF_NO_TAB: str = "組合：這本 Sheet 還沒有組合分頁"
 HOLDING_SOURCE_WL_NO_TAB: str = "觀察清單：這本 Sheet 還沒有觀察清單分頁"
 HOLDING_SOURCE_RECHECK: str = " → 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_CONTENT) + "重新選定"
+# PR #927 QA-2 複驗：組合 / 觀察清單**兩半各自**照實說（~~某一半有狀態、另一半「尚未選定」時只講有狀態那一半~~，
+#   例：組合沒選 ＋ 觀察清單沒有分頁 ⇒ 只印「觀察清單：…沒有分頁」，組合那半整個不見；有意識的修改，⛔ 不是漏改）。
+HOLDING_SOURCE_PF_NOT_SELECTED: str = "組合：尚未選定"
+HOLDING_SOURCE_WL_NOT_SELECTED: str = "觀察清單：尚未選定"
+HOLDING_SOURCE_PF_EMPTY: str = "組合：這本 Sheet 裡還沒有任何一本組合"
+HOLDING_SOURCE_WL_SKIPPED: str = "觀察清單：你選了不使用"
+HOLDING_SOURCE_PICK: str = " → 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_CONTENT) + "選定"
 #: 讀取失敗分類 → 白話（代碼 SSOT 在 L1，經 L3 `me_account_service.read_status_codes()` 取）。
 HOLDING_ISSUE_QUOTA: str = "Google 讀取額度暫時用完，稍後再試"
 HOLDING_ISSUE_NETWORK: str = "網路連線失敗，稍後再試"
@@ -1906,25 +1913,41 @@ def _holding_source_text(src: Mapping[str, Any]) -> str:
         if "logged_in" in src and not src.get("logged_in"):
             return HOLDING_SOURCE_LOGIN_EXPIRED if src.get("login_expired") else HOLDING_SOURCE_NOT_LOGGED_IN
         return HOLDING_SOURCE_NO_SHEET
+    from src.services.holdings_service import SELECTION_NOT_SELECTED, SELECTION_SKIPPED
     _ws_missing = "worksheet_missing"
-    _parts, _gone = [], False
+    _pf_n = src.get("portfolio_names_n")
+    # 每一半回 (句子, 種類)；種類：name / gone（選定的不見了）/ pick（還沒選）/ fact（其餘事實）/ ""（不知道 ⇒ ⛔ 不猜）。
     if src.get("portfolio_name"):
-        _parts.append(f"組合「{src.get('portfolio_name')}」")
+        _pf = (f"組合「{src.get('portfolio_name')}」", "name")
     elif src.get("portfolio_selection") == SELECTION_MISSING:
-        _parts.append(HOLDING_SOURCE_PF_MISSING)
-        _gone = True
+        _pf = (HOLDING_SOURCE_PF_MISSING, "gone")
     elif src.get("portfolio_issue") == _ws_missing:
-        _parts.append(HOLDING_SOURCE_PF_NO_TAB)
+        _pf = (HOLDING_SOURCE_PF_NO_TAB, "fact")
+    elif isinstance(_pf_n, int) and not isinstance(_pf_n, bool) and _pf_n == 0:
+        _pf = (HOLDING_SOURCE_PF_EMPTY, "fact")
+    elif src.get("portfolio_selection") == SELECTION_NOT_SELECTED:
+        _pf = (HOLDING_SOURCE_PF_NOT_SELECTED, "pick")
+    else:
+        _pf = ("", "")
     if src.get("watchlist_name"):
-        _parts.append(f"觀察清單「{src.get('watchlist_name')}」")
+        _wl = (f"觀察清單「{src.get('watchlist_name')}」", "name")
     elif src.get("watchlist_selection") == SELECTION_MISSING:
-        _parts.append(HOLDING_SOURCE_WL_MISSING)
-        _gone = True
+        _wl = (HOLDING_SOURCE_WL_MISSING, "gone")
     elif src.get("watchlist_issue") == _ws_missing:
-        _parts.append(HOLDING_SOURCE_WL_NO_TAB)
-    if not _parts:
-        return HOLDING_SOURCE_NOT_SELECTED
-    return "＋".join(_parts) + (HOLDING_SOURCE_RECHECK if _gone else "")
+        _wl = (HOLDING_SOURCE_WL_NO_TAB, "fact")
+    elif src.get("watchlist_selection") == SELECTION_SKIPPED:
+        _wl = (HOLDING_SOURCE_WL_SKIPPED, "fact")
+    elif src.get("watchlist_selection") == SELECTION_NOT_SELECTED:
+        _wl = (HOLDING_SOURCE_WL_NOT_SELECTED, "pick")
+    else:
+        _wl = ("", "")
+    _kinds = {_pf[1], _wl[1]} - {""}
+    if not _kinds or _kinds == {"pick"}:
+        return HOLDING_SOURCE_NOT_SELECTED   # 兩半都還沒選（或都不知道）⇒ 同一句（原文照舊）
+    _parts = [_t for _t, _k in (_pf, _wl) if _t]
+    _tail = (HOLDING_SOURCE_RECHECK if "gone" in _kinds
+             else HOLDING_SOURCE_PICK if "pick" in _kinds else "")
+    return "＋".join(_parts) + _tail
 
 
 def build_sector_flow_card(flow: SectorFlowReadout

@@ -65,7 +65,7 @@ def _active_selection_tickers() -> "tuple[list[str], dict]":
             "watchlist_selection": "", "bound": False, "active_state": "", "error": "",
             # PR #927 QA-2（第 3／4 點）：讓頁面照實分辨原因、⛔ 不把例外原文搬上畫面。
             "logged_in": False, "login_expired": False, "portfolio_issue": "", "watchlist_issue": "",
-            "error_issue": ""}
+            "error_issue": "", "portfolio_names_n": None}
     try:
         from src.services.holdings_service import get_holdings
         _h = get_holdings(resolve_names=False)
@@ -80,7 +80,8 @@ def _active_selection_tickers() -> "tuple[list[str], dict]":
                 bound=bool(_h.bound), active_state=_h.active_state, error=_h.watchlist_error,
                 logged_in=bool(_h.logged_in), login_expired=bool(_h.login_expired),
                 portfolio_issue=_h.portfolio_issue, watchlist_issue=_h.watchlist_issue,
-                error_issue=(_h.watchlist_issue if _h.watchlist_error else ""))
+                error_issue=(_h.watchlist_issue if _h.watchlist_error else ""),
+                portfolio_names_n=_h.portfolio_names_n)
     return [str(_r.get("ticker") or "") for _r in _h.holdings], _src
 
 

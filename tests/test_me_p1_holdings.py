@@ -232,3 +232,4 @@ class TestSectorFlowSourceDetail:
         env(session=_bound())
         _src = SF.get_sector_flow_view(use_active_selection=True)["holding_source"]
         assert _src["logged_in"] is True and _src["login_expired"] is False and _src["error_issue"] == ""
+        assert _src["portfolio_names_n"] is not None, "組合本數要帶給頁面（分辨「沒有任何一本」與「不知道」）"

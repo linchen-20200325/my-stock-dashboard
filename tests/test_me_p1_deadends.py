@@ -233,3 +233,51 @@ def test_hold_diverged_cards_say_two_sheets(monkeypatch):
     # 不是兩本不同 ⇒ 照舊
     h2 = _holdings(monkeypatch, holdings=(), bound=False, active_state="none")
     assert H.build_holdings_preview_card(h2)[0].note.now == H.NOT_BOUND_NOW
+
+
+# ══ PR #927 QA-2 複驗：🔍 持股來源 —— 組合 × 觀察清單**每一種組合**兩半都要講到（⛔ 不丟掉其中一半）══════════
+import itertools as _it
+
+_PF_STATES = {
+    "name": ({"portfolio_name": "長期", "portfolio_selection": HS.SELECTION_OK}, "組合「長期」", ""),
+    "missing": ({"portfolio_selection": HS.SELECTION_MISSING}, F.HOLDING_SOURCE_PF_MISSING, "gone"),
+    "no_tab": ({"portfolio_issue": "worksheet_missing"}, F.HOLDING_SOURCE_PF_NO_TAB, ""),
+    "empty": ({"portfolio_names_n": 0}, F.HOLDING_SOURCE_PF_EMPTY, ""),
+    "not_selected": ({"portfolio_selection": HS.SELECTION_NOT_SELECTED, "portfolio_names_n": 2},
+                     F.HOLDING_SOURCE_PF_NOT_SELECTED, "pick"),
+}
+_WL_STATES = {
+    "name": ({"watchlist_name": "AI 鏈", "watchlist_selection": HS.SELECTION_OK}, "觀察清單「AI 鏈」", ""),
+    "missing": ({"watchlist_selection": HS.SELECTION_MISSING}, F.HOLDING_SOURCE_WL_MISSING, "gone"),
+    "no_tab": ({"watchlist_issue": "worksheet_missing"}, F.HOLDING_SOURCE_WL_NO_TAB, ""),
+    "skipped": ({"watchlist_selection": HS.SELECTION_SKIPPED}, F.HOLDING_SOURCE_WL_SKIPPED, ""),
+    "not_selected": ({"watchlist_selection": HS.SELECTION_NOT_SELECTED}, F.HOLDING_SOURCE_WL_NOT_SELECTED, "pick"),
+}
+
+
+@pytest.mark.parametrize("pf, wl", list(_it.product(_PF_STATES, _WL_STATES)))
+def test_find_holding_source_every_combination_mentions_both_halves(pf, wl):
+    _pv, _pt, _pk = _PF_STATES[pf]
+    _wv, _wt, _wk = _WL_STATES[wl]
+    src = {"bound": True, "logged_in": True, **_pv, **_wv}
+    out = F._holding_source_text(src)
+    if {_pk, _wk} == {"pick"}:
+        assert out == F.HOLDING_SOURCE_NOT_SELECTED   # 兩半都還沒選 ⇒ 原本那一句
+        return
+    assert _pt in out and _wt in out, out
+    assert out.index(_pt) < out.index(_wt), "組合在前、觀察清單在後"
+    _content = ia_nav.where_to_find(ia_nav.SECTION_ME_CONTENT)
+    if "gone" in (_pk, _wk):
+        assert out.endswith(F.HOLDING_SOURCE_RECHECK)
+    elif "pick" in (_pk, _wk):
+        assert out.endswith(F.HOLDING_SOURCE_PICK) and _content in out
+    else:
+        assert _content not in out, "沒有要選的東西就不叫人去選"
+
+
+def test_find_holding_source_reported_case_pf_not_selected_wl_no_tab():
+    """QA-2 複驗回報的那一種：組合沒選 ＋ 觀察清單沒有分頁 ⇒ ~~只講觀察清單~~，組合那半也要講並指路。"""
+    out = F._holding_source_text({"bound": True, "portfolio_selection": HS.SELECTION_NOT_SELECTED,
+                                  "watchlist_issue": "worksheet_missing"})
+    assert out == (F.HOLDING_SOURCE_PF_NOT_SELECTED + "＋" + F.HOLDING_SOURCE_WL_NO_TAB + F.HOLDING_SOURCE_PICK)
+    assert ia_nav.where_to_find(ia_nav.SECTION_ME_CONTENT) in out
