@@ -121,6 +121,13 @@ class HoldingsResult:
     #: 1.0-B2(只加不改):登入已逾時(見 `BindingState.login_expired`)。為 True 時 `bound=False`
     #: ＋ 空清單,呼叫端畫灰色「登入已逾時」卡(⛔ 不是紅色讀取失敗)。
     login_expired: bool = False
+    #: Sheet Safety 批 B1(只加不改,2026-10-25):投資組合那半「沒讀到」的原因。空字串 = 讀到了。
+    #: `worksheet_missing`:這本 Sheet 沒有 `portfolios` 分頁(讀取不再替你建)—— 是**有效的空**
+    #: (灰),⛔ 不是讀取失敗;表頭不符 / 權限 / 網路等照舊往上拋(§1,見 `get_holdings` Raises)。
+    portfolio_issue: str = ""
+    #: 同上,觀察清單那半:`worksheet_missing`(灰,有效的空)或 L1 `classify_read_error` 代碼
+    #: (此時 `watchlist_error` 亦非空 —— 那半讀取失敗照舊記錄、不靜默)。
+    watchlist_issue: str = ""
 
     @property
     def held(self) -> tuple[dict, ...]:
@@ -206,11 +213,17 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
     _out: list[dict] = []
     _pf_name = ""
     _more_pf = False
+    _pf_issue = ""
     if _bound:
         # ⚠️ 這一段**不包 try/except**：投資組合讀取失敗要往上拋（§1，見 docstring）。
         # 1.0-B2：「登入在 binding 與這裡之間被清掉」（L1 `LoginRequiredError`）同樣往上拋 ——
         # 那不是讀取失敗，由呼叫端（`page_hold.load_holdings`）經 `is_login_required_error()` 轉成灰卡。
-        _names = _gsp.list_portfolios(sheet_id=_sid) or []
+        # B1:raise_if_missing=True ⇒ 沒有 `portfolios` 分頁時記在 `portfolio_issue`(有效的空),
+        # 不讀成「0 本」、也不再被讀取順手建出來;表頭不符 / 其他例外照舊往上拋。
+        try:
+            _names = _gsp.list_portfolios(sheet_id=_sid, raise_if_missing=True) or []
+        except _gsp.SheetWorksheetMissingError:
+            _names, _pf_issue = [], _gsp.READ_WORKSHEET_MISSING
         if _names:
             _pf_name, _more_pf = _names[0], len(_names) > 1
             # keep_blank 為 False 時**連參數都不帶**：L1 呼叫與改前逐字相同（同一個快取鍵）。
@@ -230,6 +243,7 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
     _wl_name = ""
     _more_wl = False
     _wl_err = ""
+    _wl_issue = ""
     try:
         # L3 → L1 私有 accessor：**不是** V-PICKER-PRIV-1（那條管 L5→L1），
         # 沿用 `watchlist_service` / `portfolio_binding_service` 既成範式。見檔頭。
@@ -238,8 +252,12 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
         # 一定拋 LoginRequiredError,會把「還沒登入」畫成紅色的觀察清單錯誤(§1.A 第 4 點:
         # 捏造故障)。未登入 → 不讀,`watchlist_error` 留空,由頁面畫灰色登入卡。
         _stk_sid = str(_gsp._get_active_stock_sheet_id() or "") if _logged else ""
+        _wnames: list = []
         if _stk_sid:
-            _wnames = _gsp.list_stock_watchlists(sheet_id=_stk_sid) or []
+            try:
+                _wnames = _gsp.list_stock_watchlists(sheet_id=_stk_sid, raise_if_missing=True) or []
+            except _gsp.SheetWorksheetMissingError:
+                _wl_issue = _gsp.READ_WORKSHEET_MISSING   # 沒有分頁 ＝ 有效的空,⛔ 不記成錯誤
             if _wnames:
                 _wl_name, _more_wl = _wnames[0], len(_wnames) > 1
                 _seen = {_norm(_h["ticker"]) for _h in _out}
@@ -255,6 +273,10 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
                     _out.append(_row(_tk, held=False, lots=None, avg_price=None))
     except Exception as _e:  # noqa: BLE001 — 觀察清單失敗不擋持股，但要回報（§1）
         _wl_err = repr(_e)
+        try:
+            _wl_issue = str(_gsp.classify_read_error(_e))
+        except Exception:  # noqa: BLE001
+            _wl_issue = f"error:{type(_e).__name__}"
         print(f"[holdings_service] 觀察清單讀取失敗（持股本身不受影響）：{_wl_err}")
 
     # 中文名 best-effort（§1 抓不到留空不捏造）。失敗不擋整份清單。
@@ -268,7 +290,7 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
         holdings=tuple(_out), bound=_bound, logged_in=_logged, login_expired=_expired,
         portfolio_name=_pf_name, watchlist_name=_wl_name,
         more_portfolios=_more_pf, more_watchlists=_more_wl,
-        watchlist_error=_wl_err)
+        watchlist_error=_wl_err, portfolio_issue=_pf_issue, watchlist_issue=_wl_issue)
 
 
 def _norm(ticker: str) -> str:

@@ -1709,9 +1709,12 @@ class TestHoldingsServiceIsReadOnly:
 
     def test_only_reader_functions_of_the_gsheet_layer_are_called(self):
         """**白名單**：它只准碰 gsheet 的這幾支讀取函式。"""
+        # 📌 Sheet Safety 批 B1（2026-10-25,有意識的新增,⛔ 不是放寬寫入面）:`classify_read_error`
+        #   是 L1 的**純函式**(只看例外型別 / APIError.code,不碰 Sheet、不碰網路),用來把觀察清單那半
+        #   的讀取失敗分類成 `watchlist_issue`。讀取 / 寫入面的白名單本身一支都沒加。
         _allowed = {"list_portfolios", "load_portfolio",
                     "list_stock_watchlists", "load_stock_watchlist",
-                    "_get_active_stock_sheet_id"}
+                    "_get_active_stock_sheet_id", "classify_read_error"}
         _called = {_n.func.attr for _n in ast.walk(self._tree())
                    if isinstance(_n, ast.Call)
                    and isinstance(_n.func, ast.Attribute)
@@ -1749,8 +1752,22 @@ class TestHoldingsServiceIsReadOnly:
         _src = inspect.getsource(H.get_holdings)
         _head, _sep, _tail = _src.partition("# ── 觀察清單")
         assert _sep, "get_holdings 的兩半結構變了 —— 本條的定位假設要重寫"
-        assert "try:" not in _head.split("_state = get_binding_state()")[-1], (
-            "投資組合那半被包進 try/except 了 —— 它必須 fail loud")
+        # 📌 Sheet Safety 批 B1（2026-10-25,有意識的修改,⛔ 不是放寬）:~~投資組合那半不得有任何 try~~
+        #   → 只准**一種** except:`_gsp.SheetWorksheetMissingError`(那本 Sheet 沒有 `portfolios`
+        #   分頁 ＝ 有效的空,修前讀取會順手建出空分頁再回 [],結果相同;現在不建、改記
+        #   `portfolio_issue`)。表頭不符 / 權限 / 網路 / 其他例外仍一律往上拋 —— 下面逐一驗。
+        import textwrap
+
+        _fn = ast.parse(textwrap.dedent(_src)).body[0]
+        _bind_line = next(i for i, ln in enumerate(_src.splitlines(), 1)
+                          if "_state = get_binding_state()" in ln)
+        _wl_line = next(i for i, ln in enumerate(_src.splitlines(), 1) if "# ── 觀察清單" in ln)
+        _exc_types = [ast.unparse(_h.type) if _h.type is not None else "<bare>"
+                      for _n in ast.walk(_fn)
+                      if isinstance(_n, ast.Try) and _bind_line < _n.lineno < _wl_line
+                      for _h in _n.handlers]
+        assert _exc_types == ["_gsp.SheetWorksheetMissingError"], (
+            f"投資組合那半出現了 SheetWorksheetMissingError 以外的 except：{_exc_types} —— 它必須 fail loud")
         assert "except Exception" in _tail, (
             "觀察清單那半不再 best-effort 了 —— 它失敗不該擋住整個戰情室")
 

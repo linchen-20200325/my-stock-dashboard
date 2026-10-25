@@ -35,6 +35,12 @@ class BindingState:
     #: 重新登入。只在 `logged_in=False` 時可能為 True。頁面據此把「未登入」那張**灰**卡寫成
     #: 「登入已逾時，請重新整理」(⛔ 不是紅色錯誤,稽核 SA2 MUST-1)。既有 caller 不讀本欄,一字不變。
     login_expired: bool = False
+    #: Sheet Safety 批 B1(只加不改,2026-10-25):讀組合清單那一步**為什麼**沒拿到本數。空字串 = 讀到了。
+    #: · `worksheet_missing`:這本 Sheet 沒有 `portfolios` 分頁(讀取不再替你建)→ status=bound_empty、
+    #:   `portfolio_count=None`(⛔ 不寫 0 —— 沒有分頁 ≠ 讀到 0 本);
+    #: · 其他(L1 `classify_read_error` 代碼,例 `schema_mismatch` / `permission_denied` / `error:<型別>`)→
+    #:   維持既有降級 status=bound + `portfolio_count=None`。既有 caller 不讀本欄,一字不變。
+    sheet_issue: str = ""
 
 
 def is_login_required_error(exc: BaseException) -> bool:
@@ -97,7 +103,8 @@ def get_binding_state() -> BindingState:
     # 換 Sheet 後 15 分鐘內拿到**上一本的本數**(張冠李戴,§ P3a 稽核 #3)。顯式傳 _sid 讓讀哪一本
     # 由本檔說清楚,不依賴 L1 的解析細節。
     try:
-        _count = len(_gsp.list_portfolios(sheet_id=_sid))
+        # B1:raise_if_missing=True ⇒「沒有 portfolios 分頁」不再被讀成「0 本」(也不再被讀取順手建出來)。
+        _count = len(_gsp.list_portfolios(sheet_id=_sid, raise_if_missing=True))
     except Exception as _e:  # noqa: BLE001 — 讀組合清單失敗 → 中性「已綁定」,不炸狀態列、不腦補
         if is_login_required_error(_e):
             # 1.0-B2(稽核 SA2 MUST-1):這一次讀取期間登入被清掉了(token 過期且無 refresh_token,
@@ -107,13 +114,27 @@ def get_binding_state() -> BindingState:
             return _with_login_expired(BindingState(
                 logged_in=_logged, sheet_id=_sid, portfolio_count=None,
                 status=STATUS_UNBOUND, read_error=_read_err), _gsp)
+        _issue = _classify_read_error(_gsp, _e)
+        if _issue == getattr(_gsp, "READ_WORKSHEET_MISSING", None):
+            # 綁定讀到了、那本 Sheet 也在,只是還沒有 `portfolios` 分頁 ＝「綁了但空」(灰,有效結果);
+            # 本數**未知**(None),⛔ 不寫 0。
+            return BindingState(logged_in=_logged, sheet_id=_sid, portfolio_count=None,
+                                status=STATUS_BOUND_EMPTY, sheet_issue=_issue)
         return BindingState(logged_in=_logged, sheet_id=_sid,
-                            portfolio_count=None, status=STATUS_BOUND)
+                            portfolio_count=None, status=STATUS_BOUND, sheet_issue=_issue)
     if _count == 0:
         return BindingState(logged_in=_logged, sheet_id=_sid,
                             portfolio_count=0, status=STATUS_BOUND_EMPTY)
     return BindingState(logged_in=_logged, sheet_id=_sid,
                         portfolio_count=_count, status=STATUS_BOUND)
+
+
+def _classify_read_error(_gsp, exc: BaseException) -> str:
+    """L1 `classify_read_error`(B1);L1 版本太舊 / 分類本身出錯 → `error:<型別>`(⛔ 不吞成空字串)。"""
+    try:
+        return str(_gsp.classify_read_error(exc))
+    except Exception:  # noqa: BLE001
+        return f"error:{type(exc).__name__}"
 
 
 def _read_login_and_sheet(_gsp) -> "tuple[bool, str, str]":
