@@ -225,10 +225,20 @@
 | ⚠️ 揭露 | 大盤頁直接呼叫 `page_today` 的底線函式（`_load_allocation`、`_render_one`、`_render_update_form` 等），因為 `page_today.py` 被還原鏈守衛釘住、今天頁驗收前不改；今天頁退場前要先把這些函式搬到共用位置（`UIX-MKT-TODAY-COUPLING`）。本批的 docs 與矩陣由單一撰寫組產出，**沒有第二組驗過**；大盤頁沒有在 Streamlit 實機看過（撰寫組） |
 | working tree／stash／worktree | 撰寫組編修前（10:00 台北）`git status` 乾淨；本批 docs 編修後未提交：`docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md`（新）、`docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`、`docs/BACKLOG.md`、`docs/HANDOFF.md`、`docs/PROJECT_STATE.md`；`git stash list` 空；`git worktree list` 只有主 worktree |
 | blocker／Decision Required | **客戶驗收 📊 大盤頁**；C2b Decision Gate（待觀測）；`DEC076-CONFIRM` ①②；`RC-VISIBILITY`；`VN1-MT-TREND-DEF`；`DH-PMI-PUBLICATION-WINDOW-SPEC` |
-| **唯一 Next Safe Action** | 總管：提交本批 docs → 開 PR → 等 CI 綠 → 派**獨立 QA** 驗大盤頁與互動矩陣 → 交**客戶驗收 📊 大盤頁**（互動清單見矩陣 §4.1）→ 客戶指派下一頁。總管推薦下一頁：**👤 我的（Sheet SSOT，`UIX-ME-SHEET-SSOT`）**，起點是矩陣 §7.4 提案；⚠️ 屬 **High**（Sheet 寫入、Google OAuth、權限模型），且須先出線框 |
+| **唯一 Next Safe Action** | ~~總管：提交本批 docs → 開 PR → 等 CI 綠 → 派**獨立 QA** 驗大盤頁與互動矩陣 → 交**客戶驗收 📊 大盤頁**（互動清單見矩陣 §4.1）→ 客戶指派下一頁。總管推薦下一頁：**👤 我的（Sheet SSOT，`UIX-ME-SHEET-SSOT`）**，起點是矩陣 §7.4 提案；⚠️ 屬 **High**（Sheet 寫入、Google OAuth、權限模型），且須先出線框~~ 見下方「📌 QA 回修後」（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管） |
 | 下一階段 Model／Effort | 👤 我的：**高能力模型／High**（含 OAuth 與 Sheet 寫入）；只做唯讀綁定的部分可評估 Medium。建議只是參考，須依第 9.0 節重新判斷，不得假設已切換 |
 | 禁止事項 | 未經客戶驗收就刪「🚦 今天」頁或任何舊 UI；刪舊 Sheet CRUD；未經核准接任何 Sheet 寫入（`create_new_sheet`／`save_*`／`delete_*`／`add_to_stock_watchlist`／`freeze_current_picks`／`rename_sheet`）；未出線框就新增控制項（含「帶入我的持股」）；開始 C2b；顯示 Risk Cap 獨立數字；改公式／門檻／權重／scoring eligibility；自行定義趨勢；新增或替換資料來源；為了承接而改 `page_today.py`；其餘沿用前段 |
 | Production | `PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-25 grep `shared/risk_cap_history_policy.py:216` 實查，未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
+
+📌 **2026-10-25 QA 回修後**（append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）；本段「唯一 Next Safe Action」以此為準，上表其餘列除下列更新外照舊：
+
+| 項目 | 現況（量測 2026-10-25，撰寫組 `git`＋`gh api` REST 實查，會過期） |
+|---|---|
+| 狀態 | 📊 大盤頁**實作＋QA 回修完成**：分支 `claude/determined-euler-32xqjn`，QA 回修 commit `ad09a04d`（內容見 Gate 檔附錄 D.5）；PR #922 open（draft），head `ad09a04d` 時 Fast checks／Slow tests 皆 in_progress（本 docs commit 推上後 head 會再前進） |
+| 測試 | 實作組自跑：全 fast 30119 passed／28 skipped／0 failed；全 slow 122 passed／5 skipped／0 failed ——**實作組數字**，獨立複驗進行中 |
+| 新登記（QA 非阻擋項） | BACKLOG 5.1.13 `UIX-MKT-REPORT-PUSHDOWN`、`UIX-MKT-TWO-LIGHTS`、`UIX-MKT-ENTRY-BUTTONS`、`UIX-MKT-BADGE-RERUN`、`UIX-MKT-X1-WORDING`（既有 `UIX-MKT-UPDATE-LABEL`、`UIX-MKT-STATUSBAR`、`UIX-HOLD-DEADEND` 涵蓋其餘） |
+| **唯一 Next Safe Action** | 最終 head 的 CI 綠 → merge PR #922 → **客戶驗收 📊 大盤頁**（互動清單見矩陣 §4.1）→ 客戶指派下一頁。總管推薦下一頁：**👤 我的**（Sheet SSOT，`UIX-ME-SHEET-SSOT`，起點矩陣 §7.4 提案），**High** effort（Sheet SSOT／Google OAuth），且須先出線框 |
+| 明確未變 | **舊 UI 未刪**（「🚦 今天」頁與舊分頁仍在）；**C2b 未開始**；`PRODUCTION_WRITE_APPROVED=False` **未變**（`shared/risk_cap_history_policy.py:216` 實查）；禁止事項列照舊 |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 

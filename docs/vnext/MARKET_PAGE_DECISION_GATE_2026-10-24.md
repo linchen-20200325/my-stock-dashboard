@@ -666,3 +666,19 @@ Risk Cap **怎麼獨立顯示**（數字、7 天沿用、必要／選配清單�
 1. **大盤頁直接呼叫 `page_today` 的底線函式**（`_load_allocation`、`_render_one`、`_render_update_form`、`_render_refresh_report`、`_load_regime` 等，經模組屬性 `today._xxx` 取用）。原因（檔頭自述）：`page_today.py` 被多條「還原鏈／基底指紋」守衛釘住，改它等於改「🚦 今天」頁；兩檔同在 L5，不算跨層。**代價**：今天頁改這些函式名時，大盤頁會 AttributeError（紅框，不靜默）。今天頁將來移除前，這些函式要先搬到共用位置。
 2. 「同一輸入 ⇒ 同一張卡」由 `tests/test_page_market.py` 守住，屬實作組自述；撰寫組沒有跑測試、沒有在 Streamlit 實機看過。
 3. 本附錄與 §3 的〔施〕標記由單一撰寫組讀碼產出，**沒有第二組驗過**；施工結果的獨立 QA 與客戶驗收都尚未進行。
+
+### D.5 QA 回修（`ad09a04d`）
+
+> 2026-10-25 新增（append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）。依據：`git show ad09a04d`（commit 訊息＋`shared/market_conclusion.py`、`src/ui/views/page_market.py` 差異，撰寫組讀碼）。D.1～D.4 原文不動；與下列衝突處以本節為準。
+
+| 項目 | 回修內容（FACT） |
+|---|---|
+| 結論句的風險上限子句 | 改為客戶逐字「風險上限：獨立顯示待 C2b＋RC-VISIBILITY Gate」，拿掉原本附加的「（上限有效時，數字見『能不能出手』卡）」（舊值以刪除線保留在 `shared/market_conclusion.py`） |
+| 位階／危險度子句 | 依卡面字樣組：卡上那句＋卡上 v2 徽章字（與今天頁同一支解析）；缺真實廣度那一態改用卡上原因句，**不帶**徽章 #7 的「可重跑」（落差見 BACKLOG `UIX-MKT-BADGE-RERUN`） |
+| 指路 | X10 依「這一輪有沒有更新報告」照實指路；X3 改指「頁首更新鈕下方」；舊分頁指路寫明側欄「🆕 新版戰情室（試用中）」選「不使用（用下方原功能）」→「🌍 市場環境」（字串 SSOT 在 `app.py`，測試對帳） |
+| X1 位階來源 | 來源代碼改成人話（`REGIME_SOURCE_TEXT`，對應 `shared.regime_arbiter.SOURCE_*`；字樣未經客戶核定，見 `UIX-MKT-X1-WORDING`） |
+| X8 籌碼 | 三大法人列出資料日（含沿用 `_last_inst_date`）；先行指標表遇沿用舊資料時揭露「最近 N 輪抓取都失敗、沿用 … 那份舊資料」 |
+| BIAS240／MA240 | 估算標示改用 L2 `bias_is_estimated`／`bias_data_days`（0 天或取不到 ⇒ 「天數不明」），X5 下方顯示 `bias_estimated_note` |
+| 未動 | 更新報告位置、更新鈕字樣、跨頁狀態列（依總管指示進 BACKLOG：`UIX-MKT-REPORT-PUSHDOWN`、`UIX-MKT-UPDATE-LABEL`、`UIX-MKT-STATUSBAR`） |
+
+⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：測試數字（`tests/test_page_market.py` 77 fast＋2 slow；全 fast 30119 passed／28 skipped；全 slow 122 passed／5 skipped）為**實作組自跑**，撰寫組沒有重跑；獨立複驗進行中。客戶驗收尚未進行。
