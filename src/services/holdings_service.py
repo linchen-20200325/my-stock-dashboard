@@ -20,6 +20,17 @@
 ／沒有 bug 觸發就不動）與 §8.4 step 4 的範圍閘門，**不在本批**。
 （誠實揭露，不是漏做：見本檔「已知差異」。）
 
+═══ 👤 我的 P1（DEC-083 Q6／Q7）：讀哪一本、分析哪一本 ═══════════════════════
+客戶原文 Q7：「🛡️ 持股／🎯 標的／⚡ 行動等頁只能讀這個共同選擇。不得再以『名稱排序第一本』作為不可見的業務決策。」
+- 讀哪一本 Sheet：`get_binding_state(ssot=True)` ⇒ 只有 active Sheet（兩格綁定同一本）才算綁；
+  ~~觀察清單那半讀個股通道 `_get_active_stock_sheet_id()`~~（有意識的修改，⛔ 不是漏刪：Q6「組合與觀察清單
+  使用同一本 active Sheet」）⇒ 觀察清單讀**同一本** `_sid`。
+- 分析哪一本：~~`list_portfolios()` 回 `sorted()` ⇒ 取 `_names[0]`／`_wnames[0]`~~（有意識的移除，⛔ 不是漏刪：
+  那正是客戶點名禁止的「名稱排序第一本」）⇒ 讀 L3 `portfolio_binding_service.get_active_selection()`：
+  選定在清單裡 → 只讀那一本；選定名稱不在清單 → `SELECTION_MISSING`、不讀；沒選定 → `SELECTION_NOT_SELECTED`、
+  **不讀任何一本**（只有一本也要使用者明確選）。觀察清單同理，另有「明確不使用」`SELECTION_SKIPPED`；
+  觀察清單沒選定時持股照常。守衛（AST 禁 `_names[0]`／`_wnames[0]`）：`tests/test_me_p1_holdings.py`。
+
 ═══ 這個檔**一律唯讀** ═════════════════════════════════════════════
 本檔只呼叫 L1 `gsheet_portfolio` 的**讀取面**：
 `list_portfolios` / `load_portfolio` / `list_stock_watchlists` / `load_stock_watchlist`。
@@ -30,7 +41,9 @@ Google，卻是對別人可見的副作用）。
 
 ═══ 分層 ═══════════════════════════════════════════════════════════
 L3 → L1（`gsheet_portfolio`）是 §8.2 的正常方向。
-⚠️ 本檔取「個股清單 Sheet id」時呼叫 L1 的**私有** accessor
+📌 👤 我的 P1（DEC-083 Q6，有意識的修改）：觀察清單改讀與投資組合同一本 active Sheet ⇒ 本檔**已不再**呼叫下面
+那支私有 accessor（下面這段保留為當時的判定紀錄）。
+⚠️ ~~本檔取「個股清單 Sheet id」時呼叫 L1 的**私有** accessor~~（同上，已不呼叫）
 `_get_active_stock_sheet_id()`。這**不是** V-PICKER-PRIV-1：
   · V-PICKER-PRIV-1 登記的違憲是 **L5 → L1 私有**（實例 `tab_stock_picker.py`），
     它同時踩到「L5 不得直呼 L1」與「EX-PASSTHRU-1 不涵蓋 private symbol」兩條；
@@ -102,8 +115,9 @@ class HoldingsResult:
         logged_in: Google 有沒有登入（由 L3 `get_binding_state()` 帶下來）。
         portfolio_name: 實際讀的那一本組合名。空 = 沒讀到任何一本。
         watchlist_name: 實際讀的那一份觀察清單名。
-        more_portfolios: 那本 Sheet 裡還有**別本**組合沒有被讀（本檔只取第一本，
-            與既有 L5 版本同行為）。呼叫端必須講出來，否則使用者會以為
+        more_portfolios: 那本 Sheet 裡還有**別本**組合沒有被讀。
+            ~~（本檔只取第一本，與既有 L5 版本同行為）~~（👤 我的 P1，有意識的修改：
+            現行只讀使用者在「👤 我的」選定的那一本）。呼叫端必須講出來，否則使用者會以為
             畫面上就是他的全部部位。
         more_watchlists: 同上，觀察清單那一側。
         watchlist_error: 觀察清單那半讀取失敗的 `repr(e)`；空字串 = 沒有失敗。
@@ -128,6 +142,18 @@ class HoldingsResult:
     #: 同上,觀察清單那半:`worksheet_missing`(灰,有效的空)或 L1 `classify_read_error` 代碼
     #: (此時 `watchlist_error` 亦非空 —— 那半讀取失敗照舊記錄、不靜默)。
     watchlist_issue: str = ""
+    #: 👤 我的 P1(只加不改,DEC-083 Q7):投資組合那半的選定狀態(`SELECTION_*`)。空字串 = 不適用
+    #: (沒綁 / 沒有分頁 / 這本 Sheet 一本組合都沒有)。
+    portfolio_selection: str = ""
+    #: 同上,觀察清單那半(另有 `SELECTION_SKIPPED`:使用者明確選了「不使用觀察清單」)。
+    watchlist_selection: str = ""
+    #: 這本 Sheet 裡有幾本組合(`None` = 沒讀到 / 不適用;⛔ 不寫 0)。
+    portfolio_names_n: "int | None" = None
+    #: `get_binding_state(ssot=True).active_state`(`ACTIVE_*`;給呼叫端分辨「沒綁」與「兩本不同」)。
+    active_state: str = ""
+    #: 使用者選定、但這本 Sheet 裡找不到的名稱(`SELECTION_MISSING` 時才有;給呼叫端照實說)。
+    portfolio_selected_missing: str = ""
+    watchlist_selected_missing: str = ""
 
     @property
     def held(self) -> tuple[dict, ...]:
@@ -144,6 +170,22 @@ class HoldingsResult:
         在這裡先去一次後綴，等於把同一個規則寫成兩份（§2.1 SSOT）。
         """
         return tuple(str(_h.get("ticker") or "") for _h in self.held)
+
+
+#: 👤 我的 P1(DEC-083 Q7):選定狀態代碼(`HoldingsResult.portfolio_selection` / `watchlist_selection`)。
+SELECTION_OK = "selected"               # 選定的那一本在清單裡 ⇒ 只讀那一本
+SELECTION_NOT_SELECTED = "not_selected"  # 清單有名字、但使用者還沒選 ⇒ ⛔ 不讀任何一本(不替你挑)
+SELECTION_MISSING = "selection_missing"  # 選定的名稱不在清單裡(例:Sheet 上被改名 / 刪掉)⇒ 不讀
+SELECTION_SKIPPED = "skipped"            # 只用於觀察清單:使用者明確選「不使用觀察清單」
+
+
+def _pick(names, selected: str) -> "tuple[str, str]":
+    """清單 ＋ 使用者選定 → `(要讀的名稱, 選定狀態)`。⛔ 沒選定不退回任何一本(Q7)。純函式。"""
+    if not selected:
+        return "", SELECTION_NOT_SELECTED
+    if selected not in names:
+        return "", SELECTION_MISSING
+    return selected, SELECTION_OK
 
 
 def _row(ticker: str, *, held: bool, lots=None, avg_price=None) -> dict:
@@ -168,8 +210,11 @@ def _row(ticker: str, *, held: bool, lots=None, avg_price=None) -> dict:
     }
 
 
-def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
+def get_holdings(*, keep_blank: bool = False, resolve_names: bool = True) -> HoldingsResult:
     """讀出目前的持股清單（投資組合 ＋ 觀察清單）。**純讀不寫。**
+
+    👤 我的 P1：只讀 active Sheet 裡使用者**選定**的那一本組合 / 那一份觀察清單（見檔頭專段）。
+    resolve_names（加性參數，預設 True ＝ 既有行為）：False ⇒ 不補中文名（只要代號的呼叫端用，例：板塊資金持股標示）。
 
     Args:
         keep_blank: 加性參數（Q4 2026-09-26），預設 False ＝ 既有行為一字不變
@@ -197,10 +242,12 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
     from src.data.portfolio import gsheet_portfolio as _gsp    # L3 → L1（正常方向）
     from src.services.portfolio_binding_service import (       # L3 → L3
         STATUS_UNBOUND,
+        get_active_selection,
         get_binding_state,
     )
 
-    _state = get_binding_state()
+    # 👤 我的 P1(DEC-083):~~`get_binding_state()`(legacy 通道 ＋ secrets 預設)~~ → 新版 SSOT。
+    _state = get_binding_state(ssot=True)
     # 讀失敗 ≠ 沒綁：綁定那一步就讀不到，持股清單無從談起 → 往上拋（同投資組合那半）。
     _bind_err = str(getattr(_state, "read_error", "") or "")
     if _bind_err:
@@ -209,11 +256,16 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
     _bound = bool(_sid) and str(getattr(_state, "status", "")) != STATUS_UNBOUND
     _logged = bool(getattr(_state, "logged_in", False))
     _expired = bool(getattr(_state, "login_expired", False))
+    _active_state = str(getattr(_state, "active_state", "") or "")
+    _sel = get_active_selection(_sid) if _bound else None
 
     _out: list[dict] = []
     _pf_name = ""
     _more_pf = False
     _pf_issue = ""
+    _pf_sel = ""
+    _pf_n = None
+    _pf_missing = ""
     if _bound:
         # ⚠️ 這一段**不包 try/except**：投資組合讀取失敗要往上拋（§1，見 docstring）。
         # 1.0-B2：「登入在 binding 與這裡之間被清掉」（L1 `LoginRequiredError`）同樣往上拋 ——
@@ -224,8 +276,15 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
             _names = _gsp.list_portfolios(sheet_id=_sid, raise_if_missing=True) or []
         except _gsp.SheetWorksheetMissingError:
             _names, _pf_issue = [], _gsp.READ_WORKSHEET_MISSING
+        if not _pf_issue:
+            _pf_n = len(_names)
         if _names:
-            _pf_name, _more_pf = _names[0], len(_names) > 1
+            # 👤 我的 P1(Q7):~~`_pf_name, _more_pf = <名稱排序第一本>, len(_names) > 1`~~ → 只讀選定的那一本。
+            _want = str(getattr(_sel, "portfolio", "") or "")
+            _pf_name, _pf_sel = _pick(_names, _want)
+            _more_pf = bool(_pf_name) and len(_names) > 1
+            _pf_missing = _want if _pf_sel == SELECTION_MISSING else ""
+        if _pf_name:
             # keep_blank 為 False 時**連參數都不帶**：L1 呼叫與改前逐字相同（同一個快取鍵）。
             _recs = (_gsp.load_portfolio(_pf_name, sheet_id=_sid, keep_blank=True)
                      if keep_blank else _gsp.load_portfolio(_pf_name, sheet_id=_sid))
@@ -244,22 +303,31 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
     _more_wl = False
     _wl_err = ""
     _wl_issue = ""
+    _wl_sel = ""
+    _wl_missing = ""
     try:
-        # L3 → L1 私有 accessor：**不是** V-PICKER-PRIV-1（那條管 L5→L1），
-        # 沿用 `watchlist_service` / `portfolio_binding_service` 既成範式。見檔頭。
         # SEC-3:觀察清單那半也要先登入(與投資組合那半的 `_bound` 同一個前提)。
         # 修前未登入仍會照 `?sheet=` 還原的個股 Sheet 去讀 —— SA fallback 拔掉後那條路
         # 一定拋 LoginRequiredError,會把「還沒登入」畫成紅色的觀察清單錯誤(§1.A 第 4 點:
         # 捏造故障)。未登入 → 不讀,`watchlist_error` 留空,由頁面畫灰色登入卡。
-        _stk_sid = str(_gsp._get_active_stock_sheet_id() or "") if _logged else ""
+        # 👤 我的 P1(DEC-083 Q6,有意識的修改,⛔ 不是漏刪):~~`_stk_sid = _gsp._get_active_stock_sheet_id()`
+        # (個股通道;L3 → L1 私有 accessor)~~ → 與投資組合**同一本** active Sheet(`_bound` 已含「已登入」)。
+        _stk_sid = _sid if _bound else ""
         _wnames: list = []
-        if _stk_sid:
+        if _stk_sid and getattr(_sel, "watchlist_skip", False):
+            _wl_sel = SELECTION_SKIPPED            # 使用者明確選「不使用觀察清單」⇒ 不讀
+        elif _stk_sid:
             try:
                 _wnames = _gsp.list_stock_watchlists(sheet_id=_stk_sid, raise_if_missing=True) or []
             except _gsp.SheetWorksheetMissingError:
                 _wl_issue = _gsp.READ_WORKSHEET_MISSING   # 沒有分頁 ＝ 有效的空,⛔ 不記成錯誤
             if _wnames:
-                _wl_name, _more_wl = _wnames[0], len(_wnames) > 1
+                # 👤 我的 P1(Q7):~~`_wl_name, _more_wl = <名稱排序第一份>, len(_wnames) > 1`~~ → 只讀選定的那一份。
+                _want_wl = str(getattr(_sel, "watchlist", "") or "")
+                _wl_name, _wl_sel = _pick(_wnames, _want_wl)
+                _more_wl = bool(_wl_name) and len(_wnames) > 1
+                _wl_missing = _want_wl if _wl_sel == SELECTION_MISSING else ""
+            if _wl_name:
                 _seen = {_norm(_h["ticker"]) for _h in _out}
                 for _tk in (_gsp.load_stock_watchlist(_wl_name,
                                                       sheet_id=_stk_sid) or []):
@@ -281,8 +349,9 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
 
     # 中文名 best-effort（§1 抓不到留空不捏造）。失敗不擋整份清單。
     try:
-        from src.services.dividend_station_service import resolve_holding_names
-        resolve_holding_names(_out)
+        if resolve_names:
+            from src.services.dividend_station_service import resolve_holding_names
+            resolve_holding_names(_out)
     except Exception as _e:  # noqa: BLE001 — 名稱只是顯示用，抓不到留空
         print(f"[holdings_service] 名稱解析略過：{type(_e).__name__}: {_e}")
 
@@ -290,7 +359,10 @@ def get_holdings(*, keep_blank: bool = False) -> HoldingsResult:
         holdings=tuple(_out), bound=_bound, logged_in=_logged, login_expired=_expired,
         portfolio_name=_pf_name, watchlist_name=_wl_name,
         more_portfolios=_more_pf, more_watchlists=_more_wl,
-        watchlist_error=_wl_err, portfolio_issue=_pf_issue, watchlist_issue=_wl_issue)
+        watchlist_error=_wl_err, portfolio_issue=_pf_issue, watchlist_issue=_wl_issue,
+        portfolio_selection=_pf_sel, watchlist_selection=_wl_sel, portfolio_names_n=_pf_n,
+        active_state=_active_state, portfolio_selected_missing=_pf_missing,
+        watchlist_selected_missing=_wl_missing)
 
 
 def _norm(ticker: str) -> str:

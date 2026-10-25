@@ -177,6 +177,10 @@ def sheet(monkeypatch):
         monkeypatch.setattr(GSP, "_get_active_sheet_id", lambda: sid)
         monkeypatch.setattr(GSP, "_get_active_stock_sheet_id", lambda: "")
         monkeypatch.setattr(GSP, "_oauth_import_error", lambda: "")
+        # 📌 👤 我的 P1（DEC-083 Q6／Q7，有意識的修改，⛔ 不是漏改）：新版頁面讀 active Sheet ＋ 使用者**選定**的組合
+        #   （修前取名稱排序第一本 —— 本批移除）⇒ 明確表達「SID 是 active、使用者選了『核心』」。
+        from tests.me_p1_fakes import bind_ssot
+        bind_ssot(monkeypatch, sid, portfolio="核心")
     return _use
 
 
@@ -357,7 +361,11 @@ class TestExistingCallersUnchanged:
             # 📌 Sheet Safety 批 B1（2026-10-25,有意識的新增,⛔ 不是漏改）:兩個**加性**欄位
             #   (預設空字串):沒有 `portfolios` / `stock_watchlist` 分頁時記 `worksheet_missing`
             #   (讀取不再替使用者建分頁)。本條守的「預設路徑對 L1 的 load_portfolio 呼叫一字不變」不受影響。
-            "portfolio_issue", "watchlist_issue"}, "L3 回傳型別多了欄位"
+            "portfolio_issue", "watchlist_issue",
+            # 📌 👤 我的 P1（DEC-083 Q7，2026-10-25,有意識的新增,⛔ 不是漏改）:六個**加性**欄位(選定狀態 /
+            #   組合本數 / active_state / 找不到的選定名稱)。本條守的「預設路徑對 L1 的呼叫一字不變」不受影響。
+            "portfolio_selection", "watchlist_selection", "portfolio_names_n", "active_state",
+            "portfolio_selected_missing", "watchlist_selected_missing"}, "L3 回傳型別多了欄位"
 
     def test_c_no_other_caller_passes_the_new_param(self):
         """只有本頁這一條鏈會開 `keep_blank`；📁 組合管理、ETF 存股戰情室、cron SA reader 都沒動。"""

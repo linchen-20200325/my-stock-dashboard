@@ -908,8 +908,12 @@ def test_holdings_service_race_login_cleared_between_calls_reaches_page_as_gray(
     from src.ui.views import page_hold as P
 
     wire(qp={})
-    monkeypatch.setattr(PBS, 'get_binding_state', lambda: PBS.BindingState(
+    # 📌 👤 我的 P1（DEC-083，有意識的修改，⛔ 不是漏改）：`get_holdings` 改以 `get_binding_state(ssot=True)` 呼叫 ⇒
+    #   替身收 `**_k`（~~`lambda: …`~~）；組合要有使用者選定才會讀（修前取名稱排序第一本）。
+    monkeypatch.setattr(PBS, 'get_binding_state', lambda **_k: PBS.BindingState(
         logged_in=True, sheet_id='SID_A', portfolio_count=1, status=PBS.STATUS_BOUND))
+    monkeypatch.setattr(PBS, 'get_active_selection', lambda sid=None: PBS.ActiveSelection(
+        sheet_id='SID_A', portfolio='P'))
 
     def _raise(**_k):
         gsp.st.session_state[OAUTH_LOGIN_EXPIRED_SESSION_KEY] = True

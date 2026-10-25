@@ -1765,8 +1765,9 @@ class TestHoldingsServiceIsReadOnly:
         import textwrap
 
         _fn = ast.parse(textwrap.dedent(_src)).body[0]
+        # 📌 👤 我的 P1（DEC-083，有意識的修改，⛔ 不是漏改）：~~`"_state = get_binding_state()"`~~ → 新版 SSOT 呼叫。
         _bind_line = next(i for i, ln in enumerate(_src.splitlines(), 1)
-                          if "_state = get_binding_state()" in ln)
+                          if "_state = get_binding_state(ssot=True)" in ln)
         _wl_line = next(i for i, ln in enumerate(_src.splitlines(), 1) if "# ── 觀察清單" in ln)
         _exc_types = [ast.unparse(_h.type) if _h.type is not None else "<bare>"
                       for _n in ast.walk(_fn)

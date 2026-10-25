@@ -198,6 +198,9 @@ def mismatch_sheet(monkeypatch):
     monkeypatch.setattr(gsp, '_get_active_sheet_id', lambda: 'SID')
     monkeypatch.setattr(gsp, '_get_active_stock_sheet_id', lambda: '')
     monkeypatch.setattr('src.services.dividend_station_service.resolve_holding_names', lambda h: h)
+    # 📌 👤 我的 P1（DEC-083 Q6，有意識的修改，⛔ 不是漏改）：新版頁面改讀 active Sheet（兩格同一本）⇒ 明確表達 SID 是 active。
+    from tests.me_p1_fakes import bind_ssot
+    bind_ssot(monkeypatch, 'SID')
     yield cli
     assert cli.writes == []
     gsp.clear_read_cache()

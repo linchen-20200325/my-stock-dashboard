@@ -756,6 +756,9 @@ def q4_sheet(monkeypatch, world):
         monkeypatch.setattr(GSP, "_get_active_sheet_id", lambda: "SHEET1")
         monkeypatch.setattr(GSP, "_get_active_stock_sheet_id", lambda: "")
         monkeypatch.setattr(GSP, "_oauth_import_error", lambda: "")
+        # 📌 👤 我的 P1（DEC-083 Q6／Q7，有意識的修改，⛔ 不是漏改）：active Sheet ＋ 使用者明確選定「核心」。
+        from tests.me_p1_fakes import bind_ssot
+        bind_ssot(monkeypatch, "SHEET1", portfolio="核心")
         GSP.clear_read_cache()
         st_ = PH.load_station(PH.load_holdings(PH.HoldRequest(
             submitted=True, mode=PH.SCOPE_WITH_BINDING)))

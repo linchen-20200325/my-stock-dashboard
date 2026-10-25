@@ -36,6 +36,10 @@ def mount(monkeypatch):
     monkeypatch.setattr(gsp, '_get_active_stock_sheet_id', lambda: 'SID')
     monkeypatch.setattr(gsp, 'login_expired', lambda: False)
     monkeypatch.setattr('src.services.dividend_station_service.resolve_holding_names', lambda h: h)
+    # 📌 👤 我的 P1（DEC-083 Q6／Q7，有意識的修改，⛔ 不是漏改）：`get_holdings` 改讀新版 SSOT 且只讀**選定**的那一本 ⇒
+    #   明確表達「active Sheet＝SID、使用者選了『核心』組合與『觀察』清單」（修前靠名稱排序第一本 —— 本批移除）。
+    from tests.me_p1_fakes import bind_ssot
+    bind_ssot(monkeypatch, 'SID', portfolio='核心', watchlist='觀察')
 
     def _set(worksheets):
         cli = TripwireClient({'SID': worksheets})
