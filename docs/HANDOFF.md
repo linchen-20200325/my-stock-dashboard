@@ -275,7 +275,7 @@
 | 項目 | 現況（2026-10-25 撰寫組 `git fetch`＋`gh api` REST 實查，會過期） |
 |---|---|
 | main | `22c1b1e1`（cron tip；最後非 cron 合併＝#926 Sheet Safety 批 `55601f42`）；**以 GitHub 為準** |
-| **Current Task** | **PR #927「👤 我的 P1」待合併**：分支 `claude/determined-euler-32xqjn` @ `4e8c0876`（本 docs commit 推上後 head 會前進），draft；撰寫組查時 head CI in_progress。合併後 → main verification → **停手回報客戶**（DEC-083 H 段步驟 7～8） |
+| **Current Task** | **PR #927「👤 我的 P1」待合併**：分支 `claude/determined-euler-32xqjn` ~~@ `4e8c0876`~~ head 已前進（撰寫組再查時 `075e8da7`；仍會前進，**以 GitHub 為準**）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））（本 docs commit 推上後 head 會前進），draft；撰寫組查時 head CI in_progress。合併後 → main verification → **停手回報客戶**（DEC-083 H 段步驟 7～8） |
 | **Next Safe Point** | **等客戶裁示**。⛔ **不開始 P2**（`ME-P2`，DEC-083 H.9：不自行進 P2，須另開 Stage A／B／C）；⛔ **不刪舊 UI**（DEC-083 E 段：🚦 今天、📁 組合管理、側欄 Google、Sheet CRUD、legacy controls 全部保留） |
 | 待客戶 | ① **📊 大盤頁 UI 驗收**（DEC-083 F 段）；② `SHEET-LOGOUT-SECRETS-DEFAULT`（舊 UI 登出後仍讀部署預設 Sheet 是否可接受）；③ `ME-UI-STRINGS-REVIEW`（👤 我的與 dead-end 改寫句措辭）；④ 覆核 AI 總管的 P1 實作選擇（列於 `docs/DECISIONS.md` DEC-083 下方 PR #927 註：👤 我的排最後、沒選定就不分析、選定只活在 session、部署預設不當 active、🚦 只有部署預設時顯示「尚未綁定」、🔍 持股標示改讀選定、新版側欄只顯示末 6 碼＋空白貼 ID 框）—— **這些是 AI 總管選擇，不是客戶裁示** |
 | 沿用 | 上一段「明確未變」「禁止事項（DEC-083 G 段）」「P2」三列照舊有效 |

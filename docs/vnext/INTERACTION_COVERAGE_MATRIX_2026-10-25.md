@@ -296,7 +296,7 @@ FACT：沒有 view。候選舊控制項（INFERENCE；⚡ 行動的範圍尚未�
 | 重新登入（逾時） | 👤 我的卡①「🔐 重新登入」 | 同登入 | 已接（PR #927） | |
 | 登入狀態顯示 | 👤 我的卡①（email 遮罩） | L3 `me_account_service.get_account` | 已接（PR #927） | |
 | Sheet 連線狀態 | 👤 我的卡②（Sheet 名稱＋ID 末 6 碼；兩本不同／只有部署預設各有說法） | L3 `portfolio_binding_service.get_active_sheet`＋L1 `read_sheet_title`（fail loud） | 已接（PR #927） | 🔗 狀態列新版模式仍看不到（未動） |
-| Sheet URL／ID 輸入＋URL 自動解析 | 👤 我的卡②「🔄 切換 Sheet」方法一（`p07me_paste_sheet`） | L0 `shared/sheet_id` 單一 parser＋L1 唯一寫入契約（#926） | 已接（PR #927） | 側欄貼 ID 框照留；新版模式不預填、只露末 6 碼 |
+| Sheet URL／ID 輸入＋URL 自動解析 | 👤 我的卡②「🔄 切換 Sheet」方法一（`p07me_paste_sheet`） | L0 `shared/sheet_id` 單一 parser＋L1 唯一寫入契約（#926） | 已接（PR #927） | ~~側欄貼 ID 框照留；新版模式不預填、只露末 6 碼~~ 側欄貼 ID 框照留；新版模式下**框本身是空的**（不預填、也留不住完整 ID；`075e8da7` 起以 Session State API 指定為空字串），末 6 碼只出現在框下方的「✅ Sheet ID」caption（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 | 📂 從 Drive 列出可用 Sheet（＋資料夾） | 👤 我的卡②「🔄 切換 Sheet」方法二 | L1 既有 `list_user_folders`／`list_user_sheets`（經 L3） | ~~待接~~ 已接（PR #927）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） | 清單只有一本也不自動綁（DEC-083 C 段） |
 | 選擇／切換 Sheet（明確「✅ 使用這本」） | 👤 我的卡②（Drive 選一本後按；部署預設、兩本不同時各有明確按鈕） | L1 `apply_sheet_binding` | ~~待接~~ 已接（PR #927）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） | |
 | 🔄 重新讀取 | 👤 我的卡②「🔄 重新讀取」（只在 active Sheet 成立時出現） | L3 `reload_my_sheet_reads`（只本人×active Sheet，⛔ 不 `.clear()`） | ~~待接~~ 已接（PR #927）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） | 💼 本頁沒有重新讀取鈕；舊 UI 的全域清除照留（`SHEET-GLOBAL-CLEARS`） |
