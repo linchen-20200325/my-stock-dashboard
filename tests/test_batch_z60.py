@@ -798,10 +798,11 @@ class TestOldFilesUntouched:
     #   指紋依本 docstring 的指示同步更新。
     # ~~"780ce3256a158b3773c5e335210a7521123347a0fae7d28f6093f5641f11464a"~~（📊 大盤頁後，至 abbc200d 仍成立）
     # 📌 Sheet Safety 修復批（2026-10-25，客戶裁示 DEC-083 B3／B4／C／Q5，總管指派，⛔ 不是漏改；DEC-019 揭露）：
-    #   只動 2 檔 —— `src/ui/tabs/portfolio_binder.py`（寫入委派 L1 唯一寫入契約、刪自帶 Sheet URL 正則、
-    #   取消唯一本自動綁）、`app.py`（開機 `?sheet=` 還原／側欄貼 ID 改經契約、登出多清 Sheet 綁定、刪 `import re`）。
-    #   版面零改動（側欄解析失敗時多一行 st.error 白話拒絕）；其餘 89 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
-    _BASE_DIGEST = "9dac11cccd809bf4eee85f69c686e1c4f7252019a50f34d1bd1ca5b678535943"
+    #   只動 3 檔 —— `src/ui/tabs/portfolio_binder.py`（寫入委派 L1 唯一寫入契約、刪自帶 Sheet URL 正則、
+    #   取消唯一本自動綁）、`app.py`（開機 `?sheet=` 還原／側欄貼 ID 改經契約、登出多清 Sheet 綁定、刪 `import re`）、
+    #   `src/ui/tabs/portfolio_manager.py`（`parse_sheet_id` 本體委派 L0 單一 parser，0 production caller）。
+    #   版面零改動（側欄解析失敗時多一行 st.error 白話拒絕）；其餘 88 檔一個字都沒動。指紋依本 docstring 的指示同步更新。
+    _BASE_DIGEST = "e05aea0489726d0de9568a737b96481ef4720f8432adfa98700d7c3950f75d01"
 
     def test_no_diff_against_base(self):
         import hashlib

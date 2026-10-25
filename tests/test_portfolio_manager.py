@@ -47,6 +47,9 @@ def test_parse_sheet_id():
     assert parse_sheet_id(
         "https://docs.google.com/spreadsheets/d/eABCdef123/edit") == "eABCdef123"
     assert parse_sheet_id("") == "" and parse_sheet_id(None) == ""
+    # Sheet Safety 批 B3:委派 L0 單一 parser —— 看不懂的輸入回 ""(修前原樣回傳,會被當 Sheet ID 用)
+    assert parse_sheet_id("abc def") == "" and parse_sheet_id("<script>") == ""
+    assert parse_sheet_id("https://drive.google.com/file/d/1lFhwvD-ISZ0kf/view") == ""
 
 
 def test_etf_rows_records_roundtrip():
