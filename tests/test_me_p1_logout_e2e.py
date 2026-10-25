@@ -189,3 +189,15 @@ def test_sidebar_box_bad_paste_stays_with_error_in_new_mode(client):
     assert not a.exception, a.exception
     assert _box(a) == _bad and a.sidebar.error
     assert a.session_state["portfolio_sheet_id"] == A
+
+
+def test_sidebar_box_reset_is_pushed_to_the_browser_not_just_popped():
+    """⚠️ 上面三支 AppTest 讀的是 server 端狀態 —— 33605619 的「pop ＋ value=''」在 AppTest 過、在瀏覽器**不成立**
+    （PR #927 QA-2 Playwright 實測：有 key 的文字框 pop 後前端照舊顯示舊字）。瀏覽器只會在**以 Session State API
+    指定值**時收到新值 ⇒ 用原始碼釘住「新版 / 切回舊版兩條路都是明確指定，⛔ 不是 pop」。
+    瀏覽器實測腳本：scratchpad `pwfix/pw_box.py`（不在 CI；見 PR 描述）。"""
+    src = _APP.read_text(encoding="utf-8")
+    blk = src[src.index("_sb_mode_key = 'sb_portfolio_sheet_id_input'"):src.index("st.text_input(\n                'Google Sheet ID")]
+    assert "st.session_state['sb_portfolio_sheet_id_input'] = ''" in blk
+    assert "st.session_state['sb_portfolio_sheet_id_input'] = _sb_sid_cur" in blk
+    assert "session_state.pop('sb_portfolio_sheet_id_input'" not in blk

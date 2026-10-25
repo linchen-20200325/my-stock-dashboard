@@ -382,21 +382,28 @@ with st.sidebar:
             # **真的改了文字**(on_change)才呼叫契約;綁定一變(`prepare`),框重新顯示現值。
             _sb_prepare_sheet_input('sb_portfolio_sheet_id_input')
             # PR #927 QA-1 複驗（DEC-083 Q4）：新版模式這一格**不預填、也留不住**完整 Sheet ID（目前那一本只在下面
-            #   caption 露末 6 碼）。有 key 的文字框會沿用 session 裡的舊值（`value=` 失效）⇒ 畫框前：
-            #   · 新版模式：框裡的字含目前綁定的任一本 ID（從「不使用」模式切過來、或貼了「已是目前這本」）→ 丟掉；
-            #   · 「不使用」模式：上一輪是在新版模式畫的（框是空的）→ 丟掉，讓 `value=` 照舊預填現值。
-            #   只有使用者自己貼、而且解析失敗的原文會留在框裡（同 BLK-2）。「不使用」模式一路都是舊行為。
+            #   caption 露末 6 碼）。
+            #   ~~畫框前 `st.session_state.pop(key)` ＋ `value=""`~~（33605619；有意識的修改，⛔ 不是漏改）—— AppTest 讀的是
+            #   server 端狀態所以過了，**瀏覽器裡不成立**（PR #927 QA-2 Playwright 實測）：有 key 的文字框，pop 之後
+            #   server 不會把新值推給前端，前端照舊顯示舊字。現行：要換掉框裡的字一律**明確指定**
+            #   `st.session_state[key] = <值>`（Session State API 指定 ⇒ 這一輪會把值推到前端），且在畫框之前做。
+            #   · 新版模式：從「不使用」切過來（標記不在）、綁定剛換過（`prepare` 丟掉了框值）、或框裡的字含目前綁定的
+            #     任一本 ID（例：貼了「已是目前這本」的網址）→ 指定為 ""。只有使用者自己貼、而且解析失敗的原文會留在框裡
+            #     讓他改（同 BLK-2；那段字若含完整 ID，是使用者自己打的）。
+            #   · 「不使用」模式：上一輪是在新版模式畫的 → 指定為目前綁定的 ID（舊模式照舊顯示現值）；
+            #     沒進過新版模式 ⇒ 一路都是舊行為（一行都沒多跑）。
             _sb_mode_key = 'sb_portfolio_sheet_id_input' + '__ia_mode'
             _sb_new_mode = _IA_PAGE is not None
             if _sb_new_mode:
-                st.session_state[_sb_mode_key] = True
-                _sb_box = str(st.session_state.get('sb_portfolio_sheet_id_input', '') or '')
+                _sb_box = st.session_state.get('sb_portfolio_sheet_id_input')
                 _sb_ids = {str(st.session_state.get(_k, '') or '').strip()
                            for _k in ('portfolio_sheet_id', 'stock_portfolio_sheet_id')} - {''}
-                if any(_i in _sb_box for _i in _sb_ids):
-                    st.session_state.pop('sb_portfolio_sheet_id_input', None)
+                if (not st.session_state.get(_sb_mode_key) or _sb_box is None
+                        or any(_i in str(_sb_box) for _i in _sb_ids)):
+                    st.session_state['sb_portfolio_sheet_id_input'] = ''
+                st.session_state[_sb_mode_key] = True
             elif st.session_state.pop(_sb_mode_key, False):
-                st.session_state.pop('sb_portfolio_sheet_id_input', None)
+                st.session_state['sb_portfolio_sheet_id_input'] = _sb_sid_cur
             st.text_input(
                 'Google Sheet ID 或完整 URL（系統會自動解析 ID）',
                 value=('' if _sb_new_mode else _sb_sid_cur), key='sb_portfolio_sheet_id_input',

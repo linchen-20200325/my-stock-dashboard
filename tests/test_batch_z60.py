@@ -830,7 +830,11 @@ class TestOldFilesUntouched:
     #   （同批修正：分支改用 `_sb_new_mode` 變數，避免在側欄多出一處 `if _IA_PAGE is not None:` 字面 ——
     #   `test_batch_z54` 以該字面的第一個位置定位新版分支 `st.stop()`。）
     # ~~"75cc2114cd4ef8c5d70a892eea5b8256d471d1dfcc52eb7968c9eec1795dfadc"~~（33605619，改用 `_sb_new_mode` 之前）
-    _BASE_DIGEST = "1d1d6b0328d68945b03811143e895c02bee628aff025d397ec4358a1c770e39f"
+    # ~~"1d1d6b0328d68945b03811143e895c02bee628aff025d397ec4358a1c770e39f"~~（4e8c0876）
+    # 📌 PR #927 QA-2 Playwright 複驗（2026-10-25，DEC-083 Q4，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄貼 ID 框
+    #   —— 33605619 的「pop ＋ value=''」在瀏覽器不成立（前端照舊顯示完整 ID），改為以 Session State API 明確指定
+    #   （新版模式指定 ""、切回「不使用」指定目前綁定的 ID）。「不使用」模式沒進過新版時一行都沒多跑；其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "45985febc58ed26d3c6437a7ac252f37dab6bc0afef4a04e7cf08f33f0488469"
 
     def test_no_diff_against_base(self):
         import hashlib
