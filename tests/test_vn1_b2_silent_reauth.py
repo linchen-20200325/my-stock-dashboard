@@ -896,7 +896,9 @@ def test_expiry_chain_l1_l3_l5_renders_gray_with_expiry_text(wire):
                  P.build_lightwall_card(P.load_station(h))[0]):
         assert card.state == UI_EMPTY != UI_FAILED, card.key
         assert card.note.now == P.LOGIN_EXPIRED_NOW, card.key
-        assert gsp.LOGIN_EXPIRED_MSG in card.note.where
+        # 📌 👤 我的 P1（DEC-083 D 段，有意識的修改，⛔ 不是漏改）：~~`gsp.LOGIN_EXPIRED_MSG in where`~~（L0 那句叫人按
+        #   側欄）→ 本頁自有一句（開頭「請重新整理頁面以自動恢復登入」與 L0 逐字相同，重新登入改指「👤 我的」）。
+        assert card.note.where == P.LOGIN_EXPIRED_WHERE and '請重新整理頁面以自動恢復登入' in card.note.where
         assert 'LoginRequiredError' not in (card.note.why + card.note.where)
     # 不轉跳(session 中途)
     _run_app(fst)

@@ -1048,7 +1048,14 @@ SRC_RENDER: str = "本頁的渲染層（`views/_ui_kit.render_card`）"
 SHEET_BOUND_VALUE: str = "🔗 已綁 Sheet"
 SHEET_UNBOUND_NOW: str = "尚未綁定 Sheet"
 SHEET_UNBOUND_WHY: str = "**這是一個有效的結果**（已經去讀過，不是還沒讀、也不是故障）"
-SHEET_UNBOUND_WHERE: str = "用 Google 登入後選一本持股 Sheet —— **現行入口在側欄「🔐 Google 帳號」的「Google Sheet ID 或完整 URL（系統會自動解析 ID）」**"
+#: 📌 👤 我的 P1（DEC-083 D 段「Sheet／登入／切換相關提示 → 統一導向『👤 我的』」；有意識的改指，⛔ 不是漏刪）：
+#:    ~~「用 Google 登入後選一本持股 Sheet —— **現行入口在側欄「🔐 Google 帳號」的「Google Sheet ID 或完整 URL
+#:    （系統會自動解析 ID）」**」~~（側欄那一格照留、仍可用；新版的唯一設定入口改為「👤 我的」）。
+#:    分區名 / 按鈕名一律走 `ia_nav`（⛔ 不手抄）。
+SHEET_UNBOUND_WHERE: str = (
+    "用 Google 登入後選一本持股 Sheet —— **到"
+    + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) + "選一本，"
+    + ia_nav.where_to_press(ia_nav.ACTION_ME_USE_SHEET) + "**")
 SHEET_FAILED_NOW: str = "**綁定狀態讀不出來**"
 SHEET_FAILED_WHERE: str = "先確認網路與 Google 授權是否仍有效"
 SRC_BINDING: str = (
@@ -2880,7 +2887,8 @@ V2_EXIT_PHRASES: tuple[tuple[str, str], ...] = (
     (CONTRACT_NO_EXIT_WHERE,      NO_EXIT_MARKER),
     (STAGED_ROLLOUT_WHERE,        NO_EXIT_MARKER),
     # 批 Z54：狀態列「Sheet 綁定」接線後的兩句指路（皆為頁4 既有原文，短語＝原文的一段）。
-    (SHEET_UNBOUND_WHERE,         "現行入口在側欄「🔐 Google 帳號」"),
+    # 👤 我的 P1：~~"現行入口在側欄「🔐 Google 帳號」"~~ → 改指「👤 我的」（原文的一段，ia_nav 組字）。
+    (SHEET_UNBOUND_WHERE,         "到" + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) + "選一本"),
     (SHEET_FAILED_WHERE,          SHEET_FAILED_WHERE),
     # 批 Z59：狀態列「交易日」接線後的紅態指路（實作組內部擬稿）。
     #    ⚠️ 短語「以證交所公告為準」是原文首句「今天開不開市請以臺灣證券交易所公告為準」的

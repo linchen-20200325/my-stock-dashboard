@@ -232,7 +232,10 @@ def _assert_unchanged_valid_empty(card):
     assert card.note.now == PH.TP_EMPTY_NOW
     assert card.note.why.startswith("**這是一個有效的結果**（已經逐檔判過，不是還沒判）")
     assert "沒有均價因此**判不了**" in card.note.why
-    assert card.note.where.startswith("若你預期應該要有：到 📁 組合管理確認")
+    # 📌 👤 我的 P1（DEC-083 D 段，有意識的修改，⛔ 不是漏改）：~~startswith("若你預期應該要有：到 📁 組合管理確認")~~
+    #   → 新版模式看不到那個分頁 ⇒ 誠實指路（客戶句）；「若你預期應該要有：」那個限定詞照留。
+    assert card.note.where.startswith("若你預期應該要有：確認那幾檔**個股**的均價有填")
+    assert "目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。" in card.note.where
 
 
 class TestGenuineEmptyUnchanged:

@@ -149,6 +149,10 @@ def _rel(file_path) -> str:
 def sheet_safety_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批之前的寫法（無 pair 則原樣；只套一次）。"""
     rel = _rel(file_path)
+    # 📌 👤 我的 P1（DEC-083，2026-10-25；有意識的接鏈，⛔ 不是漏改）：P1 第 8 個 commit 改了 `src/ui/views/page_hold.py`／
+    #   `page_today.py`／`page_find.py`（被本鏈及更舊的鏈管）⇒ 最新的那一批先換回（鏈頭往前接一節；只套一次；⛔ 不動本表與基底 sha）。
+    from tests.test_me_p1_revert_chain import me_p1_revert_for
+    code = me_p1_revert_for(rel, code)
     pairs = SHEET_SAFETY_REVERT_PAIRS.get(rel, ())
     if not pairs:
         return code

@@ -93,8 +93,9 @@ ACC_READ_FAILED_WHERE: str = "可重新整理頁面後再試；一直如此請�
 ACC_LOGGED_OUT: str = "⬜ 尚未登入 —— 登入後才能讀你的 Sheet"
 ACC_EXPIRED: str = "⬜ 登入已逾時（自動恢復的登入約 1 小時後逾時，不是故障）"
 ACC_LOGGED_IN: str = "🟢 已登入"
-ACC_SCOPE_NOTE: str = ("權限：沿用既有的 Google 授權（可讀寫你帳號內的試算表、列出雲端硬碟的檔名）；"
-                       "本頁只讀你選的那一本，⛔ 不改它的任何內容。")
+#: 逐項對照 `infra/oauth.py::GOOGLE_OAUTH_SCOPES`（本批 ⛔ 不新增 scope）。
+ACC_SCOPE_NOTE: str = ("權限：沿用既有的 Google 授權（可讀寫你帳號內的試算表、列出雲端硬碟的檔名、"
+                       "管理本站建立的檔案、讀取登入的 email）；本頁不會改你任何一本 Sheet 的內容。")
 #: 已知限制（據實）：Google 轉跳回來是新的一次使用 ⇒ 側欄導覽回到「不使用」。
 ACC_AFTER_LOGIN_NOTE: str = "登入後會回到首頁：請在側欄再選一次「" + ia_nav.page_label(ia_nav.PAGE_ME) + "」。"
 

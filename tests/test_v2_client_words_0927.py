@@ -15,13 +15,18 @@ B9_11 = "先放寬條件（少勾幾個因子）再按「🎯 開始選股」；
 Q2_R3 = "這檔查不到報價 —— 可能是已下市，也可能是上游這輪抓取失敗。本站分不出這兩種，不替你猜。"
 SA_R3 = "先確認代號是否正確；確認後重新載入，仍抓不到就是上游沒給這檔的日線。"
 E3_R1 = "到「💼 我的持股 › 組合設定」，在你的持股表新增至少一列持股（要有代號、張數、均價）。"
+#: 📌 👤 我的 P1（客戶 2026-10-25 DEC-083 D 段，有意識的修改，⛔ 不是漏改）：E3-r1 那一句「指回自己的唯讀頁」被客戶點名
+#:    禁止，改為 D 段客戶原句（逐字）＋ E3-r1 原句後半（逐字）。兩段都是客戶原文，⛔ 不從常數反推。
+DEC083_D = "目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。"
+E3_R1_P1 = DEC083_D + "在你的持股表新增至少一列持股（要有代號、張數、均價）。"
 
 
 def test_constants_are_the_client_strings_verbatim():
     assert PF.SCREEN_FACTOR_RELAX_WHERE == B9_11
     assert PH.NO_PRICE_WHY == Q2_R3
     assert PI.VALUATION_NO_PRICE_WHERE == SA_R3
-    assert PH.CASH_WATCHLIST_ONLY_WHERE == E3_R1
+    # 👤 我的 P1：~~`== E3_R1`~~ → D 段客戶句 ＋ E3-r1 後半。
+    assert PH.CASH_WATCHLIST_ONLY_WHERE == E3_R1_P1
 
 
 # ── B9 ⑪：找股頁 估值／RS／跨季轉強 因子失敗紅卡 ─────────────────────
@@ -142,11 +147,14 @@ def test_e3_r1_watchlist_only_shows_no_holdings_now_and_client_where():
     assert card.state == UI_EMPTY
     assert card.note.now == PH.CASH_NO_HOLDINGS_NOW
     assert card.note.now != PH.NO_ROWS_NOW and "戰情表一列都沒有回來" not in card.note.why
-    assert card.note.where == E3_R1
-    assert dict(PH.v2_short_rows(card)[0])[PH.V2_GUIDE_FACT_KEY] == E3_R1
-    assert E3_R1 in PH.v2_card_html(*built)
+    # 👤 我的 P1：~~where／卡面短句／HTML 都＝ E3_R1~~ → where ＝ E3_R1_P1（64 字超過卡面上限 ⇒ 卡面是它的摘錄、
+    #   全文在「▸ 詳細」）。
+    assert card.note.where == E3_R1_P1
+    assert dict(PH.v2_short_rows(card)[0])[PH.V2_GUIDE_FACT_KEY] == (
+        "目前請切回舊版 → 📁 組合管理" + PH.V2_EXCERPT_GAP + "新增至少一列持股")
+    assert E3_R1_P1 in PH.v2_card_html(*built)
 
 
 def test_e3_r1_held_rows_without_lots_keep_the_existing_empty_note():
     card = _cash_card(held_n=2)[0]
-    assert card.note.now == PH.CASH_EMPTY_NOW and card.note.where != E3_R1
+    assert card.note.now == PH.CASH_EMPTY_NOW and card.note.where != E3_R1 and card.note.where != E3_R1_P1

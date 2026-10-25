@@ -41,6 +41,11 @@ from src.ui.views import page_hold as PH
 
 _SUBMITTED = PH.HoldRequest(submitted=True)
 
+#: L5 傳 `strict=True` 的那一處（突變點）。📌 👤 我的 P1（DEC-083 Q7，有意識的修改，⛔ 不是漏改）：`page_find` 改以
+#: `get_sector_flow_view(strict=True, use_active_selection=True)` 一行呼叫 ⇒ ~~`("            strict=True,\n", "")`~~。
+_PF_STRICT = ("get_sector_flow_view(strict=True, use_active_selection=True)",
+              "get_sector_flow_view(use_active_selection=True)")
+
 
 def _mutant(mod: types.ModuleType, *pairs: tuple[str, str]) -> types.ModuleType:
     """把 `mod` 原始碼裡每一組 `old` **恰好一處**換成 `new`，載成獨立新模組。"""
@@ -104,7 +109,7 @@ class TestSectorFlow:
         _base = PF.build_sector_flow_card(PF.SectorFlowReadout(
             requested=True, ok=False, reason=RD.read_sector_flow_cache()["reason"]))[0]
         assert _c == _base
-        _pre = _mutant(PF, ("            strict=True,\n", ""))
+        _pre = _mutant(PF, _PF_STRICT)
         assert repr(_c) == repr(_flow_card(mod=_pre))
         assert _c.state == UI_EMPTY and _c.note.now == PF.FLOW_EMPTY_NOW
 
@@ -125,7 +130,7 @@ class TestSectorFlow:
 
     def test_e_mutant_l5_without_strict_goes_gray(self, flow_dir):
         (flow_dir / "bubble_latest.json").write_text("{not json", encoding="utf-8")
-        _m = _mutant(PF, ("            strict=True,\n", ""))
+        _m = _mutant(PF, _PF_STRICT)
         assert _flow_card(mod=_m).state == UI_EMPTY
 
     def test_e_mutant_reader_without_strict_branch(self, flow_dir, monkeypatch):

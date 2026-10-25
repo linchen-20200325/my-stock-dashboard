@@ -390,6 +390,7 @@ from src.ui.views._ui_kit import (
 # 📌 import 半徑：多帶進 `src.ui.views.page_today` ＋ `src.ui_v2.*`（同找標的頁），
 #    ⛔ 不多 import 任何 `src.services.*` / `src.compute.*` / `src.data.*`（唯讀白名單不變）。
 from src.ui.views.page_today import (
+    SHEET_UNBOUND_WHERE,
     V2_CSS_MODE,
     V2_GUIDE_FACT_KEY,
     V2_NOW_FACT_KEY,
@@ -460,6 +461,20 @@ def press(label: str) -> str:
 
 #: 表單所在的分區（指路句用）。走 `ia_nav`，**不手抄頁名**。
 SETUP_WHERE: str = ia_nav.where_to_find(ia_nav.SECTION_HOLD_PORTFOLIO_SETUP)
+
+# ── 👤 我的 P1（DEC-083 D 段）：兩類指路 ─────────────────────────────────
+# 客戶原文：「Sheet／登入／切換相關提示 → 統一導向『👤 我的』。需要修改持股／組合／觀察清單內容：P1 尚未提供 CRUD，
+# 因此必須誠實指路：『目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。』不得再出現：新版模式看不到的頁面
+# 卻叫使用者直接去點、指回自己的唯讀頁、寫著有控制項但實際沒有。」
+#: 甲類（Sheet／登入／切換）的去處（ia_nav 組字，⛔ 不手抄）。
+ME_SHEET_WHERE: str = ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET)
+ME_CONTENT_WHERE: str = ia_nav.where_to_find(ia_nav.SECTION_ME_CONTENT)
+ME_ACCOUNT_WHERE: str = ia_nav.where_to_find(ia_nav.SECTION_ME_ACCOUNT)
+
+
+def _edit_where(task: str, tail: str = "") -> str:
+    """乙類（要改 Sheet 裡的內容）的「去哪補」：`{要做什麼}：{客戶原句}{之後}`。客戶句原封不動（`ia_nav`）。"""
+    return f"{task}：{ia_nav.CONTENT_EDIT_OLD_UI_WHERE}{tail}"
 
 # ══════════════════════════════════════════════════════════════════
 # 表單選項（**版面／取數範圍參數，不是門檻** —— 故不進 `shared/*_thresholds.py`）
@@ -564,11 +579,16 @@ READONLY_WHY: str = (
     "這一項本質上是**寫入**（會改到你 Google Sheet 裡的內容），"
     "而本頁對你的持股帳本**一律唯讀** —— 本批不實作任何寫入路徑，"
     "也不在畫面上放一顆按了會改資料的鈕")
-READONLY_WHERE: str = (
-    f"{NO_EXIT_MARKER}（本頁刻意沒有這個出口）—— "
-    "現行入口仍在既有的 📁 組合管理分頁；"
-    "要在本頁做，必須先由客戶拍板「這一頁可以寫入」，"
-    "再補一支寫入型 L3 並補上二次確認與失敗回報")
+#: 📌 👤 我的 P1（DEC-083 D 段，有意識的改指，⛔ 不是漏刪）：~~「{NO_EXIT_MARKER}（本頁刻意沒有這個出口）——
+#:    現行入口仍在既有的 📁 組合管理分頁；要在本頁做，必須先由客戶拍板「這一頁可以寫入」，再補一支寫入型 L3
+#:    並補上二次確認與失敗回報」~~（新版模式看不到那個分頁；客戶已指定這一句）→ 客戶原句原封不動。
+READONLY_WHERE: str = ia_nav.CONTENT_EDIT_OLD_UI_WHERE
+#: 「Sheet 選擇」那張卡（甲類）：選 Sheet / 選組合是全站共用的選擇，集中在「👤 我的」。
+PICK_SHEET_WHY: str = (
+    "選哪一本 Sheet、分析哪一本組合是**全站共用**的選擇，集中在"
+    + ia_nav.where_to_find(ia_nav.PAGE_ME) + "（本頁不另放一份，兩份會各說各話）；"
+    "本頁對你的持股帳本仍**一律唯讀**")
+PICK_SHEET_WHERE: str = f"到{ME_SHEET_WHERE}選一本 Sheet，再到{ME_CONTENT_WHERE}選定要分析的組合"
 
 #: 表單下方常駐的接線揭露（**不隨狀態消失**）。
 WIRING_DISCLOSURE: str = (
@@ -1096,7 +1116,8 @@ def load_binding(req: HoldRequest) -> BindingReadout:
             STATUS_UNBOUND,
             get_binding_state,
         )
-        _s = get_binding_state()
+        # 👤 我的 P1（DEC-083）：~~`get_binding_state()`（legacy 通道 ＋ secrets 預設）~~ → 新版 SSOT（與持股清單同一本）。
+        _s = get_binding_state(ssot=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         # SEC-r4①：log 也先洗（L0 `scrub_secrets`）—— 例外原文可含 secrets 檔內容。
         print(f"[views/page_hold] 綁定狀態讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
@@ -1172,6 +1193,10 @@ class HoldingsReadout:
     sheet_issue: str = ""
     #: 1.0-B2:登入已逾時 → `bound=False` ＋ 空清單,卡片畫灰色「登入已逾時」(⛔ 不是紅色讀取失敗)。
     login_expired: bool = False
+    #: 👤 我的 P1(只加不改,DEC-083 Q7):L3 `HoldingsResult.portfolio_selection` 原樣搬運(`SELECTION_*`)。
+    portfolio_selection: str = ""
+    #: 👤 我的 P1:觀察清單那半的選定狀態(只用於事實列,不參與狀態判定)。
+    watchlist_selection: str = ""
 
     @property
     def has_holdings(self) -> bool:
@@ -1240,16 +1265,25 @@ def load_holdings(req: HoldRequest) -> HoldingsReadout:
         from src.services.portfolio_binding_service import sheet_read_issue
         return HoldingsReadout(requested=True, submitted=req.submitted,
                                error=repr(_e), sheet_issue=sheet_read_issue(_e))
+    # 👤 我的 P1（DEC-083 Q7）：組合沒選定 / 選定名稱不在了 → 本頁**不分析**（AI 總管裁示：沒選定 → 不分析）。
+    # L3 那一側仍會照觀察清單自己的選定讀觀察清單（給別頁用）；本頁把它一併收起來，否則戰情室會只拿觀察清單
+    # 跑出一整排「沒有持股」的說法（例：配息卡叫你「新增至少一列持股」—— 你明明有，只是還沒選）。
+    from src.services.holdings_service import SELECTION_MISSING, SELECTION_NOT_SELECTED
+    _pf_sel = str(getattr(_h, "portfolio_selection", "") or "")
+    _rows = (() if _pf_sel in (SELECTION_NOT_SELECTED, SELECTION_MISSING)
+             else tuple(dict(_r) for _r in (getattr(_h, "holdings", ()) or ())))
     return HoldingsReadout(
         requested=True, submitted=req.submitted,
-        holdings=tuple(dict(_r) for _r in (getattr(_h, "holdings", ()) or ())),
+        holdings=_rows,
         bound=bool(getattr(_h, "bound", False)),
         portfolio_name=str(getattr(_h, "portfolio_name", "") or ""),
         watchlist_name=str(getattr(_h, "watchlist_name", "") or ""),
         more_portfolios=bool(getattr(_h, "more_portfolios", False)),
         more_watchlists=bool(getattr(_h, "more_watchlists", False)),
         watchlist_error=str(getattr(_h, "watchlist_error", "") or ""),
-        login_expired=bool(getattr(_h, "login_expired", False)))
+        login_expired=bool(getattr(_h, "login_expired", False)),
+        portfolio_selection=_pf_sel,
+        watchlist_selection=str(getattr(_h, "watchlist_selection", "") or ""))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1305,6 +1339,8 @@ class StationReadout:
     holdings_n: int = 0
     #: 1.0-B2:由 `HoldingsReadout.login_expired` 帶下來 —— 「還沒綁」那幾張灰卡改說「登入已逾時」。
     login_expired: bool = False
+    #: 👤 我的 P1:由 `HoldingsReadout.portfolio_selection` 帶下來 —— 「綁了但沒選定」的灰卡（⛔ 不是「Sheet 是空的」）。
+    portfolio_selection: str = ""
     rows: tuple[dict, ...] = ()
     digest: Mapping[str, Any] | None = None
     totals: Mapping[str, Any] | None = None
@@ -1355,7 +1391,8 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
                               error_src=SRC_HOLDINGS)
     if not holdings.has_holdings:
         return StationReadout(requested=True, submitted=holdings.submitted,
-                              bound=holdings.bound, login_expired=holdings.login_expired)
+                              bound=holdings.bound, login_expired=holdings.login_expired,
+                              portfolio_selection=holdings.portfolio_selection)
     try:
         from src.services.dividend_station_service import (
             build_station_digest,
@@ -1695,9 +1732,12 @@ NOT_BOUND_WHY: str = (
 #:    使用者在這一頁看不到那個分頁 ⇒ 舊指路是假的。改指**同一畫面上看得到的**側欄入口，
 #:    字面逐字取自 `app.py` 側欄的區塊標題「🔐 Google 帳號」與欄位標籤（`tests/test_batch_z54.py` 對 app.py 原始碼核對）。
 #:    舊句在「不使用」模式下仍是真的，只是本頁不在那個模式裡。
+#: 📌 👤 我的 P1（DEC-083 D 段，有意識的改指，⛔ 不是漏刪）：~~「…**現行入口在側欄「🔐 Google 帳號」的「Google Sheet ID
+#:    或完整 URL（系統會自動解析 ID）」**…」~~ → 開頭改用「🚦 今天」頁同一句（`page_today.SHEET_UNBOUND_WHERE`，
+#:    指「👤 我的」）；後半一字未改。
 NOT_BOUND_WHERE: str = (
-    "用 Google 登入後選一本持股 Sheet —— **現行入口在側欄「🔐 Google 帳號」的「Google Sheet ID 或完整 URL（系統會自動解析 ID）」**"
-    "（本頁只讀不寫，所以不在這裡放選 Sheet 的控制項）；"
+    SHEET_UNBOUND_WHERE
+    + "（本頁只讀不寫，所以不在這裡放選 Sheet 的控制項）；"
     "綁定狀態在下面的**葉2 組合設定**看得到")
 
 #: 1.0-B2(稽核 SA2 MUST-1):**登入已逾時**時取代上面那組「還沒綁」(同一批卡、同一個灰色)。
@@ -1707,7 +1747,10 @@ LOGIN_EXPIRED_NOW: str = "**Google 登入已逾時**"
 LOGIN_EXPIRED_WHY: str = (
     "本站**不保存任何 Google 憑證**，登入只活在這個分頁的這一段連線裡；"
     "自動恢復的登入大約 1 小時後就會逾時。**這不是故障**，你的 Sheet 也沒有出問題")
-LOGIN_EXPIRED_WHERE: str = OAUTH_LOGIN_EXPIRED_MSG
+#: 📌 👤 我的 P1（DEC-083 D 段，有意識的改指，⛔ 不是漏刪）：~~`LOGIN_EXPIRED_WHERE = OAUTH_LOGIN_EXPIRED_MSG`~~
+#:    （L0 那一句叫人「按側欄「🔐 用 Google 登入」」；L0 句**不改** —— L1 拋例外、側欄仍用它）→ 本頁自有一句，
+#:    重新登入改指「👤 我的 › Google 帳號」。開頭「請重新整理頁面以自動恢復登入」與 L0 原句逐字相同。
+LOGIN_EXPIRED_WHERE: str = f"請重新整理頁面以自動恢復登入，或到{ME_ACCOUNT_WHERE}重新登入。"
 
 
 def _not_bound_note(login_expired: bool) -> Note:
@@ -1722,9 +1765,35 @@ EMPTY_SHEET_WHY: str = (
     "**這是一個有效的結果**（已經讀完，不是還沒讀、也不是故障）—— "
     "空的組合就是空的，本站不把它畫成紅色錯誤。"
     "⚠️ 這與上一種**不是同一件事**：你已經綁好了，缺的是內容")
-EMPTY_SHEET_WHERE: str = (
-    "到既有的 📁 組合管理分頁新增一本組合並填入持股列（代號／張數／均價），"
+#: 📌 👤 我的 P1（D 段，有意識的改指）：~~「到既有的 📁 組合管理分頁新增一本組合並填入持股列（代號／張數／均價），
+#:    填完回本頁…」~~ → 乙類客戶原句（`_edit_where`）。
+EMPTY_SHEET_WHERE: str = _edit_where(
+    "新增一本組合並填入持股列（代號／張數／均價）",
     f"填完回本頁{press(ACTION_RUN_WARROOM_LABEL)}")
+
+#: 👤 我的 P1（DEC-083 Q7）：讀到了組合清單、但使用者還沒選定（或選定的名稱不在了）—— **灰**，有效結果。
+#: 客戶原文：「不得再以『名稱排序第一本』作為不可見的業務決策。」AI 總管裁示：沒選定 → 不分析（只有一本也一樣）。
+NOT_SELECTED_NOW: str = "**你還沒有選定要分析哪一本組合**"
+NOT_SELECTED_WHY: str = (
+    "**這是一個有效的結果**（已經讀到這本 Sheet 的組合清單）—— "
+    "本站**不替你挑**，不以名稱排序第一本代替你決定")
+SELECTION_MISSING_NOW: str = "**你選定的組合在這本 Sheet 裡找不到**"
+SELECTION_MISSING_WHY: str = (
+    "可能在 Sheet 上被改名或刪掉了 —— 本站不改讀別本頂替")
+SELECT_PORTFOLIO_WHERE: str = f"到{ME_CONTENT_WHERE}選定要分析的組合，回本頁{press(ACTION_RUN_WARROOM_LABEL)}"
+#: 葉2 開頭的指路（甲類）。
+SETUP_ME_POINTER: str = (f"要換 Sheet、選定要分析的組合／觀察清單：到{ia_nav.where_to_find(ia_nav.PAGE_ME)}"
+                         "（本葉只顯示狀態，不能改）。")
+
+
+def _selection_note(selection: str) -> "Note | None":
+    """`HoldingsResult.portfolio_selection` → 灰卡三要素；不是「沒選 / 名稱不在」→ None（走原本的分支）。"""
+    from src.services.holdings_service import SELECTION_MISSING, SELECTION_NOT_SELECTED
+    if selection == SELECTION_NOT_SELECTED:
+        return Note(now=NOT_SELECTED_NOW, why=NOT_SELECTED_WHY, where=SELECT_PORTFOLIO_WHERE)
+    if selection == SELECTION_MISSING:
+        return Note(now=SELECTION_MISSING_NOW, why=SELECTION_MISSING_WHY, where=SELECT_PORTFOLIO_WHERE)
+    return None
 
 NO_ROWS_NOW: str = "**讀到了持股，但戰情表一列都沒有回來**"
 NO_ROWS_WHY: str = (
@@ -1789,7 +1858,11 @@ CASH_NO_HOLDINGS_NOW: str = "**還沒有可以算配息的持股**"
 #: 「把持股的**張數**補齊」—— 兩句都在替一份沒有持股的清單宣稱「有持股」。
 #: ⚠️ ⛔ 不走 `_deep_note(now=CASH_NO_HOLDINGS_NOW)`：它在有持股檔數時回 `NO_ROWS_NOW`
 #:    「戰情表一列都沒有回來」—— 而這一種戰情表是有列的（觀察列），那句是假的。
-CASH_WATCHLIST_ONLY_WHERE: str = "到「💼 我的持股 › 組合設定」，在你的持股表新增至少一列持股（要有代號、張數、均價）。"
+#: 📌 👤 我的 P1（DEC-083 D 段，客戶裁示取代 E3-r1 那一句；有意識的改指，⛔ 不是漏刪）：
+#:    ~~"到「💼 我的持股 › 組合設定」，在你的持股表新增至少一列持股（要有代號、張數、均價）。"~~
+#:    （那是**指回自己的唯讀頁** —— 客戶 D 段點名禁止）→ 客戶原句 ＋ E3-r1 原句後半（「在你的持股表…」一字未改）。
+CASH_WATCHLIST_ONLY_WHERE: str = (
+    ia_nav.CONTENT_EDIT_OLD_UI_WHERE + "在你的持股表新增至少一列持股（要有代號、張數、均價）。")
 CASH_NO_PAYOUT_NOW: str = "**近一年查不到任何一筆配息**"
 CASH_EMPTY_NOW: str = "**有持股，但配息現金流算不出來**"
 AI_UPSTREAM_NOW: str = "**沒有生成 —— 上游的戰情表這一輪就壞了**"
@@ -1880,7 +1953,10 @@ VIX_RETRY_WHERE: str = (
 #: ⚠️ 為什麼 `_totals_facts()` 要用**條件**子句：L3 `compute_portfolio_totals()` 張數／均價／現價
 #:    缺一就不納入 ⇒ 沒納入的列可能**只缺現價**，那一種在 📁 組合管理補不了 ——
 #:    修前那句「到 📁 組合管理補齊即可」對它是錯的指引（§1）。
-IF_LOTS_AVG_MISSING_WHERE: str = "若是缺張數／均價，到既有的 📁 組合管理分頁補齊"
+#: 📌 👤 我的 P1（D 段，有意識的改指）：~~"若是缺張數／均價，到既有的 📁 組合管理分頁補齊"~~ → 乙類客戶原句。
+#: 條件子句的前半（短句表摘錄同一個常數，⛔ 不另抄一份）。
+IF_LOTS_AVG_MISSING_TASK: str = "若是缺張數／均價"
+IF_LOTS_AVG_MISSING_WHERE: str = _edit_where(IF_LOTS_AVG_MISSING_TASK)
 
 
 def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
@@ -1898,7 +1974,8 @@ def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
     if station.holdings_n:
         return Note(now=NO_ROWS_NOW, why=NO_ROWS_WHY, where=NO_ROWS_WHERE)
     if station.bound:
-        return Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY, where=EMPTY_SHEET_WHERE)
+        return (_selection_note(station.portfolio_selection)
+                or Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY, where=EMPTY_SHEET_WHERE))
     return _not_bound_note(station.login_expired)
 
 
@@ -1941,7 +2018,8 @@ def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
             # （⛔ 不新寫；接「；沒有納入：」的標點照修前，⛔ 不另加）。
             f"上面兩個數字只涵蓋其餘 {_valued_n} 檔。{IF_LOTS_AVG_MISSING_WHERE}"
             # P1a-f2：檔數核對用**去重前**的原清單（L3 按列數）；顯示時同代號只列一次。
-            + ("；沒有納入：" + "、".join(dict.fromkeys(_codes))
+            # 👤 我的 P1：條件子句改為客戶原句（句號結尾）⇒ 後綴 ~~「；沒有納入：」~~ → 「沒有納入：」。
+            + ("沒有納入：" + "、".join(dict.fromkeys(_codes))
                if _codes and len(_codes) == _held_n - _valued_n else "")))
     return _out
 
@@ -2696,8 +2774,9 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
                  "你的持有列裡沒有任何一列同時有張數與現價，"
                  "沒有市值就沒有比例。本站**不用檔數當比例頂替** —— "
                  "三檔各一張與三檔各一百張，配置完全不同"),
-            where=("到既有的 📁 組合管理分頁把持股的**張數**與**均價**補齊，"
-                   f"回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+            # 👤 我的 P1（D 段）：~~「到既有的 📁 組合管理分頁把持股的**張數**與**均價**補齊，回本頁…」~~
+            where=_edit_where("把持股的**張數**與**均價**補齊",
+                              f"補齊後回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
     return Card(key="hold.alloc_split", label="80/20 配置偏離（該減）",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -2801,8 +2880,9 @@ def build_take_profit_card(station: StationReadout) -> _Built:
                  "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此**判不了**。"
                  "本站不把「判不了」講成「沒達標」：兩者在這張卡上都是灰的，"
                  "但下面那一列會告訴你缺的是什麼"),
-            where=("若你預期應該要有：到 📁 組合管理確認那幾檔**個股**的均價有填；"
-                   f"補齊後回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+            # 👤 我的 P1（D 段）：~~「若你預期應該要有：到 📁 組合管理確認那幾檔**個股**的均價有填；補齊後…」~~
+            where=_edit_where("若你預期應該要有：確認那幾檔**個股**的均價有填",
+                              f"補齊後回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
     return Card(key="hold.take_profit", label="衛星停利",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -2982,6 +3062,8 @@ class DeepReadout:
     holdings_n: int = 0
     #: 1.0-B2:由戰情表帶下來(同 `StationReadout.login_expired`)。
     login_expired: bool = False
+    #: 👤 我的 P1(只加不改):由戰情表帶下來(同 `StationReadout.portfolio_selection`)。
+    portfolio_selection: str = ""
     has_station_rows: bool = False
     stress: Any = None
     var: Any = None
@@ -3016,7 +3098,8 @@ def load_deep(station: StationReadout) -> DeepReadout:
     L3 `portfolio_deep_service`（§4.1：同一個乘法不得散在 UI 各處）。
     """
     _shared = {"submitted": station.submitted, "bound": station.bound,
-               "holdings_n": station.holdings_n, "login_expired": station.login_expired}
+               "holdings_n": station.holdings_n, "login_expired": station.login_expired,
+               "portfolio_selection": station.portfolio_selection}
     if not station.requested:
         return DeepReadout(requested=False, submitted=station.submitted)
     if station.error:
@@ -3095,8 +3178,9 @@ def _deep_note(deep: DeepReadout, *, now: str, source: str,
     if deep.holdings_n:
         return Note(now=NO_ROWS_NOW, why=NO_ROWS_WHY, where=NO_ROWS_WHERE)
     if deep.bound:
-        return Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY,
-                    where=EMPTY_SHEET_WHERE)
+        return (_selection_note(deep.portfolio_selection)
+                or Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY,
+                        where=EMPTY_SHEET_WHERE))
     return _not_bound_note(deep.login_expired)
 
 
@@ -3208,9 +3292,9 @@ def _degraded_bits(result: Any) -> list[tuple[str, str]]:
             + "。兩邊的納入條件是各寫各的（這正是對帳的意義），"
               "對不上就代表其中一邊漏了列或多算了列，"
               "**本頁不替任何一邊背書**",
-            "到既有的 📁 組合管理分頁把持股的**張數／均價**補齊"
-            "（兩套算法差的多半就是那幾列），"
-            f"再回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+            # 👤 我的 P1（D 段）：~~「到既有的 📁 組合管理分頁把持股的**張數／均價**補齊（…），再回本頁…」~~
+            _edit_where("把持股的**張數／均價**補齊（兩套算法差的多半就是那幾列）",
+                        f"再回本頁{press(ACTION_RUN_WARROOM_LABEL)}")))
     _no_price = tuple(getattr(result, "no_price", ()) or ())
     if _no_price:
         _held = getattr(result, "held_n", None)
@@ -3318,9 +3402,10 @@ def _cash_degraded_bits(result: Any) -> list[tuple[str, str]]:
                  + " 則是上游整筆略過的（L3 舉的例：四捨五入後股數為 0）")
     _why += ("。沒算到的那幾檔只會表現成**總額偏小**，"
              "而偏小的總額看起來跟正確的總額一模一樣")
-    _where = ("到既有的 📁 組合管理分頁確認上面那幾檔的**代號與張數**"
-              "（張數太小、四捨五入後股數為 0 的會被上游整筆略過），"
-              f"再回本頁{press(ACTION_RUN_WARROOM_LABEL)}")
+    # 👤 我的 P1（D 段）：~~「到既有的 📁 組合管理分頁確認上面那幾檔的**代號與張數**（…），再回本頁…」~~
+    _where = _edit_where("確認上面那幾檔的**代號與張數**"
+                         "（張數太小、四捨五入後股數為 0 的會被上游整筆略過）",
+                         f"再回本頁{press(ACTION_RUN_WARROOM_LABEL)}")
     if _os_hit:
         _where += ("；海外那幾檔請另按最低稅負制自行計算 —— "
                    "本頁不混算，**補資料也不會把它們加進這個金額**")
@@ -3420,8 +3505,9 @@ def build_stress_card(deep: DeepReadout) -> _Built:
                  + _deep_reason(_res)
                  + "。本站不用檔數當權重頂替：三檔各一張與三檔各一百張，"
                    "承受同一個跌幅的損失完全不同"),
-            where=("到既有的 📁 組合管理分頁把持股的**張數**與**均價**補齊，"
-                   f"回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+            # 👤 我的 P1（D 段）：~~「到既有的 📁 組合管理分頁把持股的**張數**與**均價**補齊，回本頁…」~~
+            where=_edit_where("把持股的**張數**與**均價**補齊",
+                              f"補齊後回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
     return Card(key="hold.deep.stress", label="壓力測試",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -3751,8 +3837,9 @@ def build_dividend_cash_card(deep: DeepReadout) -> _Built:
             now=CASH_EMPTY_NOW,
             why=("**這是一個有效的結果**（已經算過，不是還沒算）—— "
                  + _deep_reason(_res)),
-            where=("到既有的 📁 組合管理分頁把持股的**張數**補齊，"
-                   f"回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+            # 👤 我的 P1（D 段）：~~「到既有的 📁 組合管理分頁把持股的**張數**補齊，回本頁…」~~
+            where=_edit_where("把持股的**張數**補齊",
+                              f"補齊後回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
     return Card(key="hold.deep.dividend_cash", label="配息現金流",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -4305,9 +4392,9 @@ def build_portfolio_count_card(binding: BindingReadout) -> _Built:
             why=("**這是一個有效的結果**（已經讀完，不是還沒讀、也不是故障）—— "
                  "空的組合就是空的，本站不把它畫成紅色錯誤。"
                  "剛建好 Sheet 還沒填內容時，這裡本來就該是灰的"),
-            where=("到既有的 📁 組合管理分頁新增一本組合並填入持股列；"
-                   "填完回本頁"
-                   f"{press(ACTION_RUN_WARROOM_LABEL)}"))
+            # 👤 我的 P1（D 段）：~~「到既有的 📁 組合管理分頁新增一本組合並填入持股列；填完回本頁…」~~
+            where=_edit_where("新增一本組合並填入持股列",
+                              f"填完回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
     return Card(key="hold.portfolio_count", label="這本 Sheet 裡的組合",
                 state=_state, note=_note), _facts, ""
 
@@ -4319,16 +4406,18 @@ SETUP_UNWIRED_SPECS: tuple[UnwiredSpec, ...] = (
     UnwiredSpec(
         key="hold.setup.pick_sheet", label="Sheet 選擇",
         now=PICK_SHEET_UNWIRED_NOW,
-        why=READONLY_WHY, where=READONLY_WHERE,
-        # 批 Z54：「現行入口」同 `NOT_BOUND_WHERE` 的更正（新版模式看不到 📁 組合管理分頁）。
+        # 👤 我的 P1（D 段，有意識的改指，⛔ 不是漏刪）：~~why=READONLY_WHY, where=READONLY_WHERE~~（選 Sheet 不是改
+        #   Sheet 內容；那句「本質上是寫入」對它不成立）＋ ~~「現行入口」＝側欄「🔐 Google 帳號」~~ → 「👤 我的」。
+        why=PICK_SHEET_WHY, where=PICK_SHEET_WHERE,
         facts=(("為什麼", "選 Sheet 會改寫你的綁定設定 —— 那是寫入"),
-               ("現行入口", "側欄「🔐 Google 帳號」的「Google Sheet ID 或完整 URL（系統會自動解析 ID）」"))),
+               ("現行入口", ME_SHEET_WHERE))),
     UnwiredSpec(
         key="hold.setup.watchlist", label="觀察清單管理",
         now=WATCHLIST_UNWIRED_NOW,
         why=READONLY_WHY, where=READONLY_WHERE,
         facts=(("為什麼", "新增或移除觀察清單會寫回你的 Sheet —— 那是寫入"),
-               ("現行入口", "既有的 📁 組合管理分頁 ／ 選股網的「加入觀察清單」"))),
+               # 👤 我的 P1（D 段）：~~「既有的 📁 組合管理分頁 ／ 選股網的「加入觀察清單」」~~ → 客戶原句。
+               ("現行入口", ia_nav.CONTENT_EDIT_OLD_UI_WHERE + "選股網的「加入觀察清單」同在舊版"))),
 )
 
 
@@ -4357,10 +4446,18 @@ def build_holdings_preview_card(holdings: HoldingsReadout) -> _Built:
     if holdings.watchlist_name:
         _facts.append(("讀到的觀察清單", holdings.watchlist_name))
     if holdings.more_portfolios or holdings.more_watchlists:
+        # 👤 我的 P1（DEC-083 Q7，有意識的修改，⛔ 不是漏刪）：~~「本頁只取**第一本**組合／**第一份**觀察清單
+        #   （沿用既有行為）」~~（那正是客戶點名禁止的「名稱排序第一本」）→ 只分析使用者選定的那一本。
         _facts.append((
             "⚠️ 這本 Sheet 裡還有別的沒讀",
-            "本頁只取**第一本**組合／**第一份**觀察清單（沿用既有行為）—— "
+            f"本頁只分析你在{ME_CONTENT_WHERE}選定的那一本組合／那一份觀察清單 —— "
             "畫面上這幾檔**不是你的全部**"))
+    if holdings.watchlist_selection:
+        from src.services.holdings_service import SELECTION_NOT_SELECTED, SELECTION_SKIPPED
+        if holdings.watchlist_selection == SELECTION_NOT_SELECTED:
+            _facts.append(("觀察清單", f"還沒選定（不影響持股分析）；要選：到{ME_CONTENT_WHERE}"))
+        elif holdings.watchlist_selection == SELECTION_SKIPPED:
+            _facts.append(("觀察清單", "你選了不使用觀察清單"))
     if holdings.watchlist_error:
         # §1：觀察清單那半失敗**不得靜默** —— 它會影響換股建議的「換入」來源。
         _facts.append((
@@ -4388,8 +4485,9 @@ def build_holdings_preview_card(holdings: HoldingsReadout) -> _Built:
                    "**本站不顯示半份清單** —— 少一半算出來的配置比例與損益"
                    "看起來完全正常、實際上是錯的，所以整份都不給"))
     elif holdings.bound:
-        _note = Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY,
-                     where=EMPTY_SHEET_WHERE)
+        _note = (_selection_note(holdings.portfolio_selection)
+                 or Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY,
+                         where=EMPTY_SHEET_WHERE))
     else:
         _note = _not_bound_note(holdings.login_expired)
     return Card(key="hold.setup.preview", label="持股列預覽",
@@ -4435,7 +4533,10 @@ _V2_CHECK_NET: str = "先確認網路與 Google 授權是否仍有效"
 #: （QA 2026-09-25：只剩標記會把原文的下一步吞掉）。
 _V2_NO_EXIT_REPORT: str = NO_EXIT_MARKER + V2_EXCERPT_GAP + "請把上面那行訊息回報給維護者"
 _V2_NO_EXIT_UNWIRED: str = NO_EXIT_MARKER + " —— 這是待接線項，不是你操作的問題"
-_V2_FILL_LOTS: str = "到既有的 📁 組合管理分頁把持股的張數與均價補齊，回本頁" + _V2_PRESS_RUN
+#: 👤 我的 P1：~~"到既有的 📁 組合管理分頁把持股的張數與均價補齊，回本頁" + _V2_PRESS_RUN~~ → 新原文的摘錄。
+_V2_OLD_UI: str = "目前請切回舊版 → 📁 組合管理"   # 客戶原句的開頭一段（K1：原文摘錄）
+_V2_FILL_LOTS: str = ("把持股的張數與均價補齊" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP
+                      + "回本頁" + _V2_PRESS_RUN)
 #: 批 Z49：持有列資料異常那一句（客戶核准句；整句就是摘錄，代號清單在摺疊區原文）。
 _V2_INVALID_WHY: tuple[str, ...] = tuple(
     invalid_data_text(_i) for _i in (ITEM_LOTS, ITEM_AVG_PRICE, ITEM_PRICE))
@@ -4473,14 +4574,21 @@ _V2_SHARED_SHORT: dict[str, tuple[object, object, object]] = {
         "到" + SETUP_WHERE + "把選項改成「加讀 Google Sheet" + V2_EXCERPT_GAP + "」"),
     NOT_BOUND_NOW: ("你還沒有綁定持股 Sheet",
                     "這是一個有效的結果" + V2_EXCERPT_GAP + "沒有綁定就沒有清單可讀",
-                    "用 Google 登入後選一本持股 Sheet" + V2_EXCERPT_GAP + "現行入口在側欄「🔐 Google 帳號」"),
+                    # 👤 我的 P1：~~… + "現行入口在側欄「🔐 Google 帳號」"~~
+                    "用 Google 登入後選一本持股 Sheet" + V2_EXCERPT_GAP + "到" + ME_SHEET_WHERE + "選一本"),
     LOGIN_EXPIRED_NOW: ("Google 登入已逾時",
                         "自動恢復的登入大約 1 小時後就會逾時",
                         "請重新整理頁面以自動恢復登入"),
     EMPTY_SHEET_NOW: ("Sheet 綁好了，但裡面還沒有任何一列持股",
                       "這是一個有效的結果" + V2_EXCERPT_GAP + "你已經綁好了，缺的是內容",
-                      "到既有的 📁 組合管理分頁新增一本組合並填入持股列"
-                      + V2_EXCERPT_GAP + "填完回本頁" + _V2_PRESS_RUN),
+                      # 👤 我的 P1：~~"到既有的 📁 組合管理分頁新增一本組合並填入持股列" + … + 填完回本頁…~~
+                      "新增一本組合並填入持股列" + V2_EXCERPT_GAP + _V2_OLD_UI),
+    NOT_SELECTED_NOW: ("你還沒有選定要分析哪一本組合",
+                       "本站不替你挑，不以名稱排序第一本代替你決定",
+                       v2_plain(SELECT_PORTFOLIO_WHERE)),
+    SELECTION_MISSING_NOW: ("你選定的組合在這本 Sheet 裡找不到",
+                            v2_plain(SELECTION_MISSING_WHY),
+                            v2_plain(SELECT_PORTFOLIO_WHERE)),
     NO_ROWS_NOW: ("讀到了持股，但戰情表一列都沒有回來",
                   "持股清單讀到了，但 L3 戰情表對它回了空的一批 —— 這不該發生",
                   NO_EXIT_MARKER + V2_EXCERPT_GAP + "請把這一句連同你的持股檔數回報給維護者"),
@@ -4512,12 +4620,13 @@ _V2_EMPTY_SHEET_KEYS: tuple[str, ...] = _V2_STATION_EMPTY_KEYS + ("hold.setup.pr
 _V2_DEGRADED_WHY: tuple[str, ...] = (
     "兩套算法對不起來" + V2_EXCERPT_GAP + "抓不到價格序列",
     "兩套算法對不起來", "抓不到價格序列", "這個總額只涵蓋一部分持股")
+#: 👤 我的 P1：「到既有的 📁 組合管理分頁…」那幾個候選換成新原文的摘錄（舊候選見 git 歷史 / 還原鏈）。
 _V2_DEGRADED_WHERE: tuple[str, ...] = (
-    "到既有的 📁 組合管理分頁把持股的張數／均價補齊" + V2_EXCERPT_GAP + "先確認這幾檔的代號是否正確",
-    "到既有的 📁 組合管理分頁把持股的張數／均價補齊",
+    "把持股的張數／均價補齊" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP + "先確認這幾檔的代號是否正確",
+    "把持股的張數／均價補齊" + V2_EXCERPT_GAP + _V2_OLD_UI,
     "先確認這幾檔的代號是否正確",
-    "到既有的 📁 組合管理分頁確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + "海外那幾檔請另按最低稅負制自行計算",
-    "到既有的 📁 組合管理分頁確認上面那幾檔的代號與張數")
+    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP + "海外那幾檔請另按最低稅負制",
+    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI)
 
 
 #: QA-6 MUST-1（2026-10-23，PR #910）：④ 總經位階／⑤ 建議持股水位「未評估」那一個 `now` 底下另外兩支分支的摘錄。
@@ -4552,6 +4661,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        for _k in _V2_NOT_BOUND_KEYS]
     + [_v2_rows_for(_k, EMPTY_SHEET_NOW, _V2_SHARED_SHORT[EMPTY_SHEET_NOW])
        for _k in _V2_EMPTY_SHEET_KEYS]
+    # 👤 我的 P1（Q7）：「綁了但沒選定／選定的名稱不在了」出現在與「綁了但空」**同一批卡**（同一個分支點）。
+    + [_v2_rows_for(_k, _now, _V2_SHARED_SHORT[_now])
+       for _now in (NOT_SELECTED_NOW, SELECTION_MISSING_NOW) for _k in _V2_EMPTY_SHEET_KEYS]
     + [_v2_rows_for(_k, NO_ROWS_NOW, _V2_SHARED_SHORT[NO_ROWS_NOW])
        for _k in _V2_STATION_EMPTY_KEYS]
     # ── ① 結論三張 ──────────────────────────────────────────────
@@ -4634,7 +4746,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
        _v2_rows_for("hold.take_profit", TP_EMPTY_NOW, (
            None, "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此判不了",
-           "若你預期應該要有：到 📁 組合管理確認那幾檔個股的均價有填")),
+           "若你預期應該要有：確認那幾檔個股的均價有填" + V2_EXCERPT_GAP + _V2_OLD_UI)),
        _v2_rows_for("hold.position_cap", CAP_FAILED_NOW, (
            None, _v2_raised(SRC_ALLOC), _V2_NO_EXIT_REPORT)),
        # 📌 QA-6 MUST-1（同上，有意識的修改，⛔ 不是漏刪）：缺真實廣度那一支原文不同 ⇒ 補一組候選；既有候選一字未改。
@@ -4679,7 +4791,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            None, "這是一個有效的結果" + V2_EXCERPT_GAP
            + "本站寧可不給，也不給一個用補值撐出來的尾部估計",
            "若是新上市／剛買進的標的，等歷史累積" + V2_EXCERPT_GAP
-           + IF_LOTS_AVG_MISSING_WHERE)),
+           + IF_LOTS_AVG_MISSING_TASK + "：" + _V2_OLD_UI)),
        # 批 Z48：歷史收盤價異常（why 摘開頭與結尾；代號清單在 fact 列與「▸ 詳細」摺疊區）。
        _v2_rows_for("hold.deep.var", VAR_INVALID_CLOSE_NOW, (
            None, "歷史收盤價含 0、負值或無效值" + V2_EXCERPT_GAP + VAR_INVALID_CLOSE_WHY_TAIL,
@@ -4695,10 +4807,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "若你確定收過息：先確認代號是否正確")),
        # E3-r1：只有觀察清單 → `CASH_NO_HOLDINGS_NOW` ＋ 客戶逐字 where（44 字，整句就是摘錄，⛔ 不縮寫）。
        _v2_rows_for("hold.deep.dividend_cash", CASH_NO_HOLDINGS_NOW, (
-           None, "這是一個有效的結果（已經算過，不是還沒算）", CASH_WATCHLIST_ONLY_WHERE)),
+           # 👤 我的 P1：where 改為客戶原句 ＋ 後半（64 字）⇒ 卡面改摘錄（⛔ 不縮寫原文；全文在「▸ 詳細」）。
+           None, "這是一個有效的結果（已經算過，不是還沒算）",
+           _V2_OLD_UI + V2_EXCERPT_GAP + "新增至少一列持股")),
        _v2_rows_for("hold.deep.dividend_cash", CASH_EMPTY_NOW, (
            None, "這是一個有效的結果（已經算過，不是還沒算）",
-           "到既有的 📁 組合管理分頁把持股的張數補齊，回本頁" + _V2_PRESS_RUN))]
+           "把持股的張數補齊" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP + "回本頁" + _V2_PRESS_RUN))]
     + [_v2_rows_for(_k, DEGRADED_NOW_TEMPLATE.format(label=_label), (
            None, _V2_DEGRADED_WHY, _V2_DEGRADED_WHERE))
        for _k, _label in (("hold.deep.stress", "壓力測試"),
@@ -4740,7 +4854,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            None, _v2_raised(SRC_BINDING), _V2_CHECK_NET)),
        _v2_rows_for("hold.portfolio_count", COUNT_EMPTY_NOW, (
            None, "空的組合就是空的，本站不把它畫成紅色錯誤",
-           "到既有的 📁 組合管理分頁新增一本組合並填入持股列" + V2_EXCERPT_GAP
+           "新增一本組合並填入持股列" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP
            + "填完回本頁" + _V2_PRESS_RUN)),
        _v2_rows_for("hold.setup.preview", PREVIEW_FAILED_NOW, (
            None, _v2_raised(SRC_HOLDINGS), _V2_CHECK_NET)),
@@ -4751,11 +4865,14 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.setup.preview", PREVIEW_SCHEMA_MISMATCH_NOW, (
            None, _v2_raised(SRC_HOLDINGS),
            "「portfolios」分頁，把第一列從 A 欄起依序改成" + V2_EXCERPT_GAP + "改好後回本頁"))]
-    + [_v2_rows_for(_k, _now, (
+    # 👤 我的 P1（D 段）：~~兩張共用 why「這一項本質上是寫入…」＋ where「{NO_EXIT_MARKER}…現行入口仍在既有的
+    #   📁 組合管理分頁」~~ → 選 Sheet 那張改指「👤 我的」；觀察清單管理那張的 where 改為客戶原句。
+    + [_v2_rows_for("hold.setup.pick_sheet", PICK_SHEET_UNWIRED_NOW, (
+           None, "選哪一本 Sheet、分析哪一本組合是全站共用的選擇",
+           "到" + ME_SHEET_WHERE + "選一本 Sheet")),
+       _v2_rows_for("hold.setup.watchlist", WATCHLIST_UNWIRED_NOW, (
            None, "這一項本質上是寫入" + V2_EXCERPT_GAP + "本頁對你的持股帳本一律唯讀",
-           NO_EXIT_MARKER + V2_EXCERPT_GAP + "現行入口仍在既有的 📁 組合管理分頁"))
-       for _k, _now in (("hold.setup.pick_sheet", PICK_SHEET_UNWIRED_NOW),
-                        ("hold.setup.watchlist", WATCHLIST_UNWIRED_NOW))]
+           _V2_OLD_UI))]
 )
 
 
@@ -5208,6 +5325,7 @@ def _render_setup_form_block() -> bool:
                    "線框：**就地完成，不必去別頁** —— "
                    "但本頁對你的持股帳本**一律唯讀**，"
                    "需要寫入才做得到的部分會標「未接線」並說明原因。")
+    st.caption(SETUP_ME_POINTER)   # 👤 我的 P1（D 段）：選 Sheet / 選組合的入口在「👤 我的」
     _submitted = _render_holdings_form()
     st.caption(WIRING_DISCLOSURE)
     st.caption(READONLY_DISCLOSURE)
@@ -5245,7 +5363,9 @@ def _render_holdings_preview(holdings: HoldingsReadout) -> None:
     """
     if not holdings.has_holdings:
         return
-    st.caption("**唯讀** —— 要新增／修改／刪除請到既有的 📁 組合管理分頁。")
+    # 👤 我的 P1（D 段）：~~「**唯讀** —— 要新增／修改／刪除請到既有的 📁 組合管理分頁。」~~
+    st.caption("**唯讀** —— " + _edit_where("要新增／修改／刪除持股")
+               + f"要換 Sheet、選組合：到{ia_nav.where_to_find(ia_nav.PAGE_ME)}。")
     st.dataframe(
         [{"代號": str(_h.get("ticker", "") or ""),
           "名稱": str(_h.get("name", "") or "—"),

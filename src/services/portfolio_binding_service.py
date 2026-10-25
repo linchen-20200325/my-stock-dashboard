@@ -181,7 +181,8 @@ def _ssot_sheet(read_err: str) -> "tuple[str, str, str]":
     只有 `ACTIVE_OK` 才回 sheet_id;快照讀不出來 → 併入 read_error(⛔ 不吞成「沒綁」,同 `read_error` 既有語意)。
     """
     _a = get_active_sheet()
-    _err = "; ".join(_x for _x in (read_err, _a.read_error) if _x)
+    # 同一個讀取例外（例:session 本身讀不出來)兩邊都會記到 ⇒ 去重,⛔ 不重複列同一句。
+    _err = "; ".join(dict.fromkeys(_x for _x in (read_err, _a.read_error) if _x))
     return (_a.sheet_id if _a.state == ACTIVE_OK else ""), _a.state, _err
 
 
