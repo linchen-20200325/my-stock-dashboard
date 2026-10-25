@@ -827,7 +827,10 @@ class TestOldFilesUntouched:
     # 📌 PR #927 QA-1 複驗（2026-10-25，DEC-083 Q4，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄貼 ID 框 ——
     #   新版模式不預填（`value=""`），且畫框前丟掉含目前綁定 ID 的沿用值（舊模式切過來 / 貼了「已是目前這本」）；
     #   從新版切回「不使用」時丟掉新版留下的空值，讓舊模式照舊預填。「不使用」模式行為不變；其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "75cc2114cd4ef8c5d70a892eea5b8256d471d1dfcc52eb7968c9eec1795dfadc"
+    #   （同批修正：分支改用 `_sb_new_mode` 變數，避免在側欄多出一處 `if _IA_PAGE is not None:` 字面 ——
+    #   `test_batch_z54` 以該字面的第一個位置定位新版分支 `st.stop()`。）
+    # ~~"75cc2114cd4ef8c5d70a892eea5b8256d471d1dfcc52eb7968c9eec1795dfadc"~~（33605619，改用 `_sb_new_mode` 之前）
+    _BASE_DIGEST = "1d1d6b0328d68945b03811143e895c02bee628aff025d397ec4358a1c770e39f"
 
     def test_no_diff_against_base(self):
         import hashlib

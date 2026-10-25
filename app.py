@@ -387,7 +387,8 @@ with st.sidebar:
             #   · 「不使用」模式：上一輪是在新版模式畫的（框是空的）→ 丟掉，讓 `value=` 照舊預填現值。
             #   只有使用者自己貼、而且解析失敗的原文會留在框裡（同 BLK-2）。「不使用」模式一路都是舊行為。
             _sb_mode_key = 'sb_portfolio_sheet_id_input' + '__ia_mode'
-            if _IA_PAGE is not None:
+            _sb_new_mode = _IA_PAGE is not None
+            if _sb_new_mode:
                 st.session_state[_sb_mode_key] = True
                 _sb_box = str(st.session_state.get('sb_portfolio_sheet_id_input', '') or '')
                 _sb_ids = {str(st.session_state.get(_k, '') or '').strip()
@@ -398,7 +399,7 @@ with st.sidebar:
                 st.session_state.pop('sb_portfolio_sheet_id_input', None)
             st.text_input(
                 'Google Sheet ID 或完整 URL（系統會自動解析 ID）',
-                value=('' if _IA_PAGE is not None else _sb_sid_cur), key='sb_portfolio_sheet_id_input',
+                value=('' if _sb_new_mode else _sb_sid_cur), key='sb_portfolio_sheet_id_input',
                 on_change=_sb_on_sheet_input, args=('sb_portfolio_sheet_id_input',),
                 placeholder='貼上 https://docs.google.com/spreadsheets/d/...',
                 help=(_SB_ME_HINT if _IA_PAGE is not None
