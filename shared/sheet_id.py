@@ -5,6 +5,8 @@
 - L1 `src/data/portfolio/oauth_state.py`（綁定寫入契約 `apply_sheet_binding`、state 便車消毒）
 - L1 `src/data/portfolio/gsheet_portfolio.py`（session key 常數）
 - L5 `src/ui/tabs/portfolio_manager.parse_sheet_id`（舊介面薄殼，委派本檔）
+- 👤 我的 P1（DEC-083）另放：ID 末 6 碼顯示（Q4）、active portfolio／watchlist 選定的 session key（Q7）、
+  共用登出另清的 session key（Q5）—— 見檔尾專段
 
 為什麼要有這一份（客戶 2026-10-25 DEC-083 B3，原文）
 ====================================================
@@ -118,3 +120,48 @@ def parse_sheet_input(raw) -> SheetIdParse:
     if not sid:
         return SheetIdParse(error=SHEET_INPUT_INVALID)
     return SheetIdParse(sheet_id=sid)
+
+
+# ══ 👤 我的 P1（DEC-083 Q4／Q5／Q7）════════════════════════════════════════════
+# 客戶原文 Q4：「一般 UI 顯示：『Sheet 名稱＋ID 末 6 碼』。」
+#: 一般畫面上 Sheet ID 只露出末幾碼（Q4）。⛔ 新版畫面永不印完整 ID。
+SHEET_ID_TAIL_LEN: int = 6
+#: 末幾碼前面的省略記號（線框原文「…f3K9aQ」）。
+SHEET_ID_TAIL_PREFIX: str = "…"
+
+
+def sheet_id_tail(raw) -> str:
+    """Sheet ID → 畫面用的「…末 6 碼」（消毒後）；空 / 不合格 → 空字串。純函式。
+
+    ⚠️ 只截字串，⛔ 不猜也不補：ID 本身不足 6 碼（不是真的 Google ID）時照樣只回它的末段。
+    """
+    _sid = sanitize_sheet_id(raw)
+    return f"{SHEET_ID_TAIL_PREFIX}{_sid[-SHEET_ID_TAIL_LEN:]}" if _sid else ""
+
+
+# 客戶原文 Q7：「👤 我的提供新版全站共用：active portfolio／active watchlist。🛡️ 持股／🎯 標的／⚡ 行動等頁
+# 只能讀這個共同選擇。不得再以『名稱排序第一本』作為不可見的業務決策。」
+# 值的形狀：`{"sheet_id": <選的時候那本 Sheet>, "name": <組合／清單名>, "skip": <僅觀察清單：明確不使用>}`。
+# ⚠️ **綁住 Sheet**：讀取端只在 `sheet_id` 與目前 active Sheet 相同時才認（換了 Sheet 不會把舊名字套到新那本）。
+# ⚠️ **只活在 session**（AI 總管裁示：不持久化到 Sheet 或網址）；寫入一律經 L1 `oauth_state` 的
+#    `set_active_selection` / `clear_active_selection`（守衛：`tests/test_me_p1_state.py`）。
+SELECTION_KIND_PORTFOLIO: str = "portfolio"
+SELECTION_KIND_WATCHLIST: str = "watchlist"
+ACTIVE_PORTFOLIO_SESSION_KEY: str = "_me_active_portfolio"
+ACTIVE_WATCHLIST_SESSION_KEY: str = "_me_active_watchlist"
+#: kind → session key（讀寫一律查這張表，⛔ 不手抄 key）。
+ACTIVE_SELECTION_SESSION_KEYS: dict[str, str] = {
+    SELECTION_KIND_PORTFOLIO: ACTIVE_PORTFOLIO_SESSION_KEY,
+    SELECTION_KIND_WATCHLIST: ACTIVE_WATCHLIST_SESSION_KEY,
+}
+
+# 客戶原文 Q5：「登出時同步清除：Google 登入 session、active Sheet binding、URL 上 "sheet" 參數、OAuth state／
+# 登入流程攜帶的舊 Sheet ID、會造成登出後重新自動綁回舊 Sheet 的 silent marker。不得登出後自動恢復上一個 Sheet。」
+#: 「👤 我的」頁存放 Drive 清單（資料夾 / Sheets）的 session key —— 帶著上一個帳號的雲端硬碟檔名，登出時一併清。
+ME_DRIVE_FOLDERS_SESSION_KEY: str = "p07me_drive_folders"
+ME_DRIVE_SHEETS_SESSION_KEY: str = "p07me_drive_sheets"
+#: 「👤 我的」頁貼網址 / ID 的文字框 widget key（登出時一併拿掉舊值，理由同側欄貼 ID 框）。
+ME_PASTE_INPUT_KEY: str = "p07me_paste_sheet"
+#: 共用登出（L1 `oauth_state.logout_google_session`）在登入 / 綁定 / 選定之外**另外**清掉的 session key。
+LOGOUT_EXTRA_SESSION_KEYS: tuple[str, ...] = (
+    ME_DRIVE_FOLDERS_SESSION_KEY, ME_DRIVE_SHEETS_SESSION_KEY, ME_PASTE_INPUT_KEY)
