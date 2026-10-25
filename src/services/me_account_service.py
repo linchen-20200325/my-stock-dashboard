@@ -36,6 +36,13 @@ ACCOUNT_READ_FAILED = "read_failed"         # 讀登入狀態本身拋例外 / O
 #: 標題讀取「因為沒登入」而沒讀（灰，不是故障）。其餘狀態沿用 L1 `READ_*` 代碼。
 TITLE_LOGIN_REQUIRED = "login_required"
 
+#: 卡③ 原因代碼（值同 L1 `READ_WORKSHEET_MISSING` / `READ_SCHEMA_MISMATCH`；L5 不 import L1，經本檔取）。
+ISSUE_WORKSHEET_MISSING = "worksheet_missing"
+ISSUE_SCHEMA_MISMATCH = "schema_mismatch"
+#: 兩個分頁名（值同 L1 `_WORKSHEET_NAME` / `_STOCK_WATCHLIST_WORKSHEET`；一致性由 `tests/test_page_me.py` 釘住）。
+PORTFOLIO_WORKSHEET = "portfolios"
+WATCHLIST_WORKSHEET = "stock_watchlist"
+
 #: 選定結果代碼。
 SELECT_OK = "ok"
 SELECT_NAME_MISSING = "name_missing"        # 名稱不在這本 Sheet 的清單裡 ⇒ ⛔ 不寫
@@ -229,6 +236,13 @@ def get_sheet_contents(sheet_id: str) -> SheetContents:
     return SheetContents(sheet_id=sheet_id, portfolios=_pf, portfolio_issue=_pf_issue,
                          portfolio_error=_pf_err, watchlists=_wl, watchlist_issue=_wl_issue,
                          watchlist_error=_wl_err, selection=get_active_selection(sheet_id))
+
+
+def read_status_codes() -> "tuple[str, str, str, str, str]":
+    """`(READ_OK, 找不到, 沒權限, 配額, 網路)` 代碼（SSOT 在 L1；給 L5 挑白話句用）。純讀常數。"""
+    from src.data.portfolio import gsheet_portfolio as _gsp
+    return (_gsp.READ_OK, _gsp.READ_ERROR_SHEET_NOT_FOUND, _gsp.READ_ERROR_PERMISSION_DENIED,
+            _gsp.READ_ERROR_QUOTA_EXCEEDED, _gsp.READ_ERROR_NETWORK)
 
 
 def worksheet_headers() -> "dict[str, tuple[str, ...]]":

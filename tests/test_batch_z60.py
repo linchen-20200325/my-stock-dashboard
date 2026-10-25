@@ -814,7 +814,12 @@ class TestOldFilesUntouched:
     # 📌 👤 我的 P1-6（2026-10-25，客戶裁示 DEC-083 Q5，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄
     #   「🚪 登出」—— inline 四步改呼叫 L1 共用 `logout_google_session`（四步順序一字不變，另清 active 組合／觀察清單
     #   選定與「👤 我的」頁的 key），import 換成那一支。舊模式畫面零改動；其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "dfbde3935a2da0ce73b6c27529cc73938da96fa6d614d52500a4eddc25b5cda7"
+    # ~~"dfbde3935a2da0ce73b6c27529cc73938da96fa6d614d52500a4eddc25b5cda7"~~（👤 我的 P1-6 後）
+    # 📌 👤 我的 P1-7（2026-10-25，客戶裁示 DEC-083 Q1=A／D 段，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` ——
+    #   新增 late-import wrapper `_ia_view_me()`、`_IA_VIEWS` 多登記一頁、`shared.ia_nav` import 多三個名字；
+    #   側欄三句指向舊「📁 組合管理」的說明**只在新版模式**（`_IA_PAGE is not None`）改指「👤 我的」，
+    #   「不使用」模式一字不變；一段註解更正。舊 7 個頁籤一字未動；其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "2845049326bcbfc16066dd3a480f545d9a4434b74139b3f6277c8dfabb786aa0"
 
     def test_no_diff_against_base(self):
         import hashlib

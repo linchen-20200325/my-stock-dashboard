@@ -488,7 +488,10 @@ class TestCallSites:
             "src/ui/tabs/portfolio_status_bar.py",
             # 批 Z54（2026-10-13）：「🚦 今天」頂部狀態列「Sheet 綁定」卡接線 —— 同頁4 的 (e)，
             #   把 L3 吞成 unbound 的讀失敗還原成紅卡（有意識的新增讀者，`tests/test_batch_z54.py` 守）
-            "src/ui/views/page_today.py"}
+            "src/ui/views/page_today.py",
+            # 👤 我的 P1（2026-10-25 DEC-083，有意識的新增讀者）：卡②讀 `ActiveSheet.read_error`（綁定快照讀不出來
+            #   ⇒ 紅，⛔ 不畫成「尚未選 Sheet」；同 (e) 的精神，`tests/test_page_me.py` 守）
+            "src/ui/views/page_me.py"}
 
     def test_only_l3_binding_calls_the_new_l1_probe(self):
         assert self._refs("_oauth_import_error") == {

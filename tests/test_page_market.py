@@ -451,7 +451,10 @@ class TestNavigation:
         assert _ids[0] == ia_nav.PAGE_MARKET
         assert ia_nav.PAGE_LABELS[ia_nav.PAGE_MARKET] == "📊 大盤"
         assert ia_nav.PAGE_LABELS[ia_nav.PAGE_TODAY] == "🚦 今天"
-        assert set(_ids) == {"market", "today", "find", "inspect", "hold", "why"}
+        # 📌 👤 我的 P1（2026-10-25 DEC-083 Q1=A，有意識的修改，⛔ 不是漏改）：
+        #   ~~{"market", "today", "find", "inspect", "hold", "why"}~~ → 多第 7 頁「me」（排最後；大盤仍是第一頁）。
+        assert set(_ids) == {"market", "today", "find", "inspect", "hold", "why", "me"}
+        assert _ids[-1] == ia_nav.PAGE_ME
 
     def test_app_routes_market(self):
         _app = (_ROOT / "app.py").read_text(encoding="utf-8")

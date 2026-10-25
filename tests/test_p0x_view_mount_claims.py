@@ -68,6 +68,8 @@ PAGES: tuple[tuple[str, str, str], ...] = (
     ("page_inspect.py", "_ia_view_inspect", "render_page_inspect"),
     ("page_hold.py", "_ia_view_hold", "render_page_hold"),
     ("page_why.py", "_ia_view_why", "render_page_why"),
+    # 2026-10-25 DEC-083 Q1=A 新增「👤 我的」（第 7 頁）；側欄 Google 區塊與 📁 組合管理照留。
+    ("page_me.py", "_ia_view_me", "render_page_me"),
 )
 
 #: FE-7~FE-16 期間五頁掛成頂層頁籤時用過的變數名。`b5bdb36` 之後**一個都不該在**。

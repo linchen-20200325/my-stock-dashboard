@@ -47,6 +47,9 @@ PAGE_FIND: str = "find"
 PAGE_INSPECT: str = "inspect"
 PAGE_HOLD: str = "hold"
 PAGE_WHY: str = "why"
+#: 👤 我的（2026-10-25 客戶裁示 DEC-083 Q1=A 新增；AI 總管裁示排第 7、最後一頁）。⚠️ 不在原線框 `PAGES` 裡 ——
+#: 出處是 `docs/vnext/ME_PAGE_DRAFT_2026-10-25.md`＋DEC-083。Google 帳號、Sheet 綁定與新版 Sheet SSOT 的唯一設定入口。
+PAGE_ME: str = "me"
 
 #: 頁 id → 顯示名（線框 `PAGES[*].name`）。
 #: ⚠️ 順序就是側欄 radio 的順序（`app.py` 照這份展開）：大盤排第一個頁。
@@ -57,6 +60,7 @@ PAGE_LABELS: dict[str, str] = {
     PAGE_INSPECT: "🔬 查一檔",
     PAGE_HOLD: "💼 我的持股",
     PAGE_WHY: "📖 憑什麼",
+    PAGE_ME: "👤 我的",
 }
 
 # ══════════════════════════════════════════════════════════════════
@@ -66,11 +70,17 @@ LEAF_TODAY_CONCLUSION: str = "today.conclusion"
 LEAF_TODAY_DETAIL: str = "today.detail"
 #: 📖 憑什麼 的資料體檢分區 —— 「這一源現在怎樣」的唯一去處。
 SECTION_WHY_DATA_HEALTH: str = "why.data_health"
-#: 💼 我的持股 的組合設定分區 —— 綁 Google Sheet 的入口。
+#: 💼 我的持股 的組合設定分區 —— ~~綁 Google Sheet 的入口~~（👤 我的 P1，DEC-083 Q1，有意識的更正，⛔ 不是漏刪：
+#: 那一葉一直是**唯讀**的綁定狀態 / 持股預覽，沒有選 Sheet 的控制項）。現行：綁 Sheet 的入口是 `SECTION_ME_SHEET`。
 SECTION_HOLD_PORTFOLIO_SETUP: str = "hold.portfolio_setup"
 #: 📖 憑什麼 的 AI 問答分區 —— 「📊 大盤」頁「問 AI／查看依據」的去處。
 #: 顯示名須與 `src/ui/views/page_why.py::LEAF_QA_TITLE` 相同（`tests/test_page_market.py` 釘住）。
 SECTION_WHY_QA: str = "why.qa"
+#: 👤 我的 的三張卡（DEC-083 C 段「首屏 1. Google 帳號 2. 目前 Sheet 3. 這本 Sheet 內目前分析的組合／觀察清單」）。
+#: 顯示名須與 `src/ui/views/page_me.py` 的卡名相同（`tests/test_page_me.py` 釘住）。
+SECTION_ME_ACCOUNT: str = "me.account"
+SECTION_ME_SHEET: str = "me.sheet"
+SECTION_ME_CONTENT: str = "me.content"
 
 #: 分區 id → 該分區在**母頁之內**的顯示名（不含母頁名，由 `where_to_find` 串）。
 SECTION_LABELS: dict[str, str] = {
@@ -79,6 +89,9 @@ SECTION_LABELS: dict[str, str] = {
     SECTION_WHY_DATA_HEALTH: "資料體檢",
     SECTION_HOLD_PORTFOLIO_SETUP: "組合設定",
     SECTION_WHY_QA: "AI 問答",
+    SECTION_ME_ACCOUNT: "Google 帳號",
+    SECTION_ME_SHEET: "目前 Sheet",
+    SECTION_ME_CONTENT: "這本 Sheet 內容",
 }
 
 # ══════════════════════════════════════════════════════════════════
@@ -88,10 +101,27 @@ SECTION_LABELS: dict[str, str] = {
 #: （實跑即拋 `StreamlitAPIException`），故「正常更新／強制重抓」收斂成
 #: 一顆 submit + 一組 radio。
 ACTION_UPDATE_TODAY: str = "update_today"
+#: 👤 我的 P1（DEC-083 C 段：「明確『使用這本』」「重新讀取」「登入」）。
+ACTION_ME_USE_SHEET: str = "me_use_sheet"
+ACTION_ME_RELOAD: str = "me_reload"
+ACTION_GOOGLE_LOGIN: str = "google_login"
 
 ACTION_LABELS: dict[str, str] = {
     ACTION_UPDATE_TODAY: "🚀 更新今日戰情",
+    ACTION_ME_USE_SHEET: "✅ 使用這本",
+    ACTION_ME_RELOAD: "🔄 重新讀取",
+    ACTION_GOOGLE_LOGIN: "🔐 用 Google 登入",
 }
+
+# ══════════════════════════════════════════════════════════════════
+# 「要改持股 / 組合 / 觀察清單內容」的唯一指路句（👤 我的 P1，DEC-083 D 段）
+# ══════════════════════════════════════════════════════════════════
+#: 客戶 2026-10-25 逐字（⛔ 一字不改）：「需要修改持股／組合／觀察清單內容：P1 尚未提供 CRUD，因此必須誠實指路：
+#: 『目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。』」
+#: ⚠️ **本檔頭寫「不收舊 IA 的分頁名」—— 這是有意識的例外，⛔ 不是漏改**：這一句是客戶逐字句，舊頁籤名
+#:    「📁 組合管理」是句子的一部分（不是本檔另抄一份分頁名 SSOT）。舊頁籤名的 SSOT 仍在 `app.py`；
+#:    兩邊字面一致由 `tests/test_me_p1_deadends.py` 對 `app.py` 原始碼核對（舊頁籤改名 ⇒ 測試轉紅）。
+CONTENT_EDIT_OLD_UI_WHERE: str = "目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。"
 
 #: 指路句一律用這對引號包住目標，讓使用者一眼看出「這是畫面上的一個東西」。
 _OPEN, _CLOSE = "「", "」"

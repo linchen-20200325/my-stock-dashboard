@@ -289,6 +289,8 @@ from shared.ia_nav import (  # noqa: E402
     PAGE_MARKET as _IA_MARKET,
     PAGE_TODAY as _IA_TODAY, PAGE_FIND as _IA_FIND, PAGE_INSPECT as _IA_INSPECT,
     PAGE_HOLD as _IA_HOLD, PAGE_WHY as _IA_WHY,
+    PAGE_ME as _IA_ME,
+    SECTION_ME_SHEET as _IA_SECTION_ME_SHEET, where_to_find as _ia_where_to_find,
 )
 
 #: 側欄 radio 的 session / widget key。`_sb_` 前綴照本檔既有慣例
@@ -354,6 +356,9 @@ with st.sidebar:
     except Exception:
         _sb_oc, _sb_cfg, _sb_buildurl = False, None, None
     _sb_logged = bool(st.session_state.get('gsheet_tokens'))
+    # 👤 我的 P1（DEC-083 D 段，有意識的修改，⛔ 不是漏改）：新版戰情室模式下舊「📁 組合管理」頁籤看不到
+    # （`st.stop()` 之前不畫）⇒ 下面三處指向它的說明**只在新版模式**改指「👤 我的」；「不使用」模式一字不變。
+    _SB_ME_HINT = f'要選 Sheet、組合與觀察清單：到{_ia_where_to_find(_IA_SECTION_ME_SHEET)}'
     if _sb_oc:
         if _sb_logged:
             _sb_email = st.session_state.get('gsheet_email', '')
@@ -381,7 +386,8 @@ with st.sidebar:
                 value=_sb_sid_cur, key='sb_portfolio_sheet_id_input',
                 on_change=_sb_on_sheet_input, args=('sb_portfolio_sheet_id_input',),
                 placeholder='貼上 https://docs.google.com/spreadsheets/d/...',
-                help='貼 URL/ID 後按 Enter 設定投組資料庫（或在「📁 組合管理」頁設定）')
+                help=(_SB_ME_HINT if _IA_PAGE is not None
+                      else '貼 URL/ID 後按 Enter 設定投組資料庫（或在「📁 組合管理」頁設定）'))
             _sb_bind = _sb_pop_sheet_input('sb_portfolio_sheet_id_input')
             if _sb_bind is not None and _sb_bind.error and _sb_bind.error != _SB_SHEET_INPUT_EMPTY:
                 st.error(_sb_bind.message)
@@ -389,7 +395,8 @@ with st.sidebar:
             if _sb_sid_new:
                 st.caption(f'✅ Sheet ID：`{_sb_sid_new}`')
             else:
-                st.caption('💡 未設定 — 貼上 URL/ID（或在「📁 組合管理」頁設定）')
+                st.caption(_SB_ME_HINT if _IA_PAGE is not None
+                           else '💡 未設定 — 貼上 URL/ID（或在「📁 組合管理」頁設定）')
         elif _sb_buildurl and _sb_cfg:
             # P2(v19.206):把目前(若曾綁過 / 由書籤 ?sheet= 還原的)Sheet ID 夾帶進登入 state
             # → Google 轉跳回來自動回綁,不必再繞 📁 組合管理。Sheet ID 非憑證(§ P2 安全前提)。
@@ -397,7 +404,7 @@ with st.sidebar:
             _sb_url = _sb_buildurl(_sb_cfg['client_id'], _sb_cfg['redirect_uri'],
                                    state=_sb_login_state_with_sheet(_sb_cur_sid))
             st.link_button('🔐 用 Google 登入', _sb_url, use_container_width=True)
-            st.caption('登入後可在「📁 組合管理」頁雲端存取')
+            st.caption(_SB_ME_HINT if _IA_PAGE is not None else '登入後可在「📁 組合管理」頁雲端存取')
     else:
         # SEC-3:網頁端已不再以 Service Account 讀寫 Sheet(gsheet_portfolio 無 SA fallback)→
         # 原「使用 Service Account（舊版部署）」分支與「或改用 Service Account」不實,分支刪除;
@@ -588,6 +595,13 @@ def _ia_view_why() -> None:
     render_page_why()
 
 
+def _ia_view_me() -> None:
+    # 👤 我的（2026-10-25 客戶裁示 DEC-083 Q1=A；AI 總管裁示排第 7）：Google 帳號、Sheet 綁定、
+    # active 組合／觀察清單的唯一設定入口。⚠️ 側欄「🔐 Google 帳號」與舊「📁 組合管理」**照留**（E 段）。
+    from src.ui.views.page_me import render_page_me
+    render_page_me()
+
+
 #: 頁 id → 該頁的 late-import renderer。**只有被選到的那一支會被呼叫** ⇒
 #: 沒選就連 import 都不做(五頁的 module import 本身就會跑掉一堆東西)。
 # ⚠️ key 一律用 L0 的頁 id 常數,**不寫字面字串**(§3.3 反捏造:id 的 SSOT 在
@@ -599,6 +613,7 @@ _IA_VIEWS = {
     _IA_INSPECT: _ia_view_inspect,
     _IA_HOLD: _ia_view_hold,
     _IA_WHY: _ia_view_why,
+    _IA_ME: _ia_view_me,           # 2026-10-25 DEC-083 Q1=A；舊側欄 Google 區塊與 📁 組合管理照留
 }
 # 對帳:少接一頁 / 多打一個 id 一律當場炸(§1 Fail Loud),不留「靜默少一頁」的洞。
 # **用 raise 不用 assert** —— assert 在 `python -O` 下會被整條拿掉,那等於這道對帳
@@ -621,7 +636,9 @@ if _IA_PAGE is not None:
     #      (2026-09-08 grep `_gl_slot` = app.py 4 處 + tab_macro.py 註解 1 處)。
     #   ③ 「🔗 我的組合」全域狀態列與「🧭 總經指南針」—— 同屬舊 IA 的全域區塊,
     #      客戶核定的線框寫的是「主畫面**整片**換成那一頁」。兩者在「不使用」
-    #      路徑上一字未動,綁 Sheet 的入口另有側欄的 Sheet ID 欄與本頁的組合設定葉。
+    #      路徑上一字未動,~~綁 Sheet 的入口另有側欄的 Sheet ID 欄與本頁的組合設定葉。~~
+    #      (👤 我的 P1,DEC-083 Q1,有意識的更正,⛔ 不是漏刪:組合設定葉一直是唯讀、沒有選 Sheet 的控制項。)
+    #      現行:新版模式綁 Sheet 的入口是「👤 我的」頁(側欄的 Sheet ID 欄照留)。
     # ⚠️ 免責聲明**照樣出**(法遵文字,不分頁面),故 `st.stop()` 前先呼叫 footer。
     # ⚠️ §1 Fail Loud:import 或 render 失敗一律走既有的 `_render_tab_isolated`
     #    (紅色 st.error 印出例外型別+訊息、stderr 印完整 traceback),
