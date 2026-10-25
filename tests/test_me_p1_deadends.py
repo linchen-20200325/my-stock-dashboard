@@ -74,7 +74,14 @@ def test_inline_hold_wheres_use_edit_helper():
 
 def test_cash_watchlist_only_no_longer_points_to_own_readonly_leaf():
     assert "💼 我的持股 › 組合設定" not in H.CASH_WATCHLIST_ONLY_WHERE
-    assert H.CASH_WATCHLIST_ONLY_WHERE == _CUSTOMER + "在你的持股表新增至少一列持股（要有代號、張數、均價）。"
+    # PR #927 QA-2 第 6 點：~~`_CUSTOMER + "在你的持股表…。"`~~ → 動作在前、客戶句在後（客戶句一字不改）。
+    assert H.CASH_WATCHLIST_ONLY_WHERE == "在你的持股表新增至少一列持股（要有代號、張數、均價）：" + _CUSTOMER
+
+
+def test_watchlist_manage_entry_is_action_first():
+    """PR #927 QA-2 第 6 點：觀察清單管理的「現行入口」也是動作在前、客戶句在後。"""
+    _spec = [u for u in H.SETUP_UNWIRED_SPECS if u.key == "hold.setup.watchlist"][0]
+    assert dict(_spec.facts)["現行入口"] == "要管理觀察清單（含選股網的「加入觀察清單」）：" + _CUSTOMER
 
 
 def test_sheet_pointers_go_to_me_page():
@@ -143,7 +150,19 @@ def test_hold_binding_card_reads_ssot():
     ({"bound": False}, F.HOLDING_SOURCE_NO_SHEET),
     ({"bound": True}, F.HOLDING_SOURCE_NOT_SELECTED),
     ({"bound": True, "portfolio_name": "長期", "watchlist_name": "AI 鏈"}, "組合「長期」＋觀察清單「AI 鏈」"),
-    ({"bound": True, "error": "ConnectionError('x')"}, F.HOLDING_SOURCE_FAILED)])
+    ({"bound": True, "error": "ConnectionError('x')"}, F.HOLDING_SOURCE_FAILED),
+    # PR #927 QA-2 第 3／4 點：照實分辨原因
+    ({"bound": False, "active_state": "diverged", "logged_in": True}, F.HOLDING_SOURCE_DIVERGED),
+    ({"bound": False, "logged_in": False}, F.HOLDING_SOURCE_NOT_LOGGED_IN),
+    ({"bound": False, "logged_in": False, "login_expired": True}, F.HOLDING_SOURCE_LOGIN_EXPIRED),
+    ({"bound": True, "error": "LoginRequiredError()", "error_issue": "login_required"},
+     F.HOLDING_SOURCE_LOGIN_EXPIRED),
+    ({"bound": True, "error": "x", "error_issue": "permission_denied"}, F.HOLDING_ISSUE_DENIED),
+    ({"bound": True, "error": "x", "error_issue": "network"}, F.HOLDING_ISSUE_NETWORK),
+    ({"bound": True, "portfolio_selection": "selection_missing"}, F.HOLDING_SOURCE_PF_MISSING),
+    ({"bound": True, "portfolio_issue": "worksheet_missing"}, F.HOLDING_SOURCE_PF_NO_TAB),
+    ({"bound": True, "portfolio_name": "長期", "watchlist_selection": "selection_missing"},
+     "組合「長期」＋" + F.HOLDING_SOURCE_WL_MISSING)])
 def test_find_holding_source_fact(src, needle):
     flow = F.SectorFlowReadout(requested=True, ok=True, sectors=({"sector": "半導體"},), holding_source=src)
     facts = dict(F.build_sector_flow_card(flow)[1])
@@ -162,3 +181,55 @@ def test_find_calls_l3_with_active_selection(monkeypatch):
                            requested=True)
     assert seen == {"strict": True, "use_active_selection": True}
     assert r.holding_source == {"bound": True}
+
+
+def test_find_holding_source_failure_never_echoes_raw_error():
+    """PR #927 QA-2 第 3 點：⛔ 例外原文（可能含完整 Sheet ID）不上畫面，只講分類白話。"""
+    _sid = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcdEF"
+    src = {"bound": True, "error": f"APIError('https://sheets.googleapis.com/v4/spreadsheets/{_sid}')",
+           "error_issue": "error:APIError"}
+    flow = F.SectorFlowReadout(requested=True, ok=True, sectors=({"sector": "半導體"},), holding_source=src)
+    _t = dict(F.build_sector_flow_card(flow)[1])["持股標示來源"]
+    assert _sid not in _t and "googleapis" not in _t and "APIError" in _t
+
+
+# ══ PR #927 QA-2 第 4 點：🚦 狀態列 —— 兩本不同 ≠ 尚未綁定 ═══════════════════════════════════
+def test_today_sheet_card_diverged_is_not_called_unbound():
+    from shared.sheet_id import ACTIVE_DIVERGED
+    from src.services.portfolio_binding_service import BindingPresence
+    from src.ui.views import page_today as T
+    _b = BindingPresence(logged_in=True, sheet_bound=False, read_error="", active_state=ACTIVE_DIVERGED)
+    card = T.build_sheet_binding_card(_b)
+    assert card.note.now == T.SHEET_DIVERGED_NOW and card.note.where == T.SHEET_DIVERGED_WHERE
+    assert "有效的結果" not in card.note.why and T.SHEET_UNBOUND_NOW not in card.note.now
+    assert ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) in card.note.where
+    assert any(w is T.SHEET_DIVERGED_WHERE and p in w for w, p in T.V2_EXIT_PHRASES)
+    _plain = BindingPresence(logged_in=True, sheet_bound=False, read_error="", active_state="none")
+    assert T.build_sheet_binding_card(_plain).note.where == T.SHEET_UNBOUND_WHERE
+
+
+# ══ PR #927 QA-2 第 4 點：💼 兩本不同 ≠「你還沒有綁定 / 新使用者灰色正常」══════════════════════════════
+def test_hold_diverged_cards_say_two_sheets(monkeypatch):
+    from shared.sheet_id import ACTIVE_DIVERGED
+    from src.services import portfolio_binding_service as PB
+    h = _holdings(monkeypatch, holdings=(), bound=False, active_state=ACTIVE_DIVERGED)
+    assert h.diverged
+    _bs = PB.BindingState(logged_in=True, sheet_id="", status=PB.STATUS_UNBOUND, portfolio_count=None,
+                          active_state=ACTIVE_DIVERGED)
+    monkeypatch.setattr(PB, "get_binding_state", lambda **_k: _bs)
+    b = H.load_binding(_REQ)
+    assert b.diverged
+    st = H.load_station(h)
+    dq = H.load_deep(st)
+    for card in (H.build_binding_card(b)[0], H.build_holdings_preview_card(h)[0], H.build_action_card(st)[0],
+                 H.build_stress_card(dq)[0]):
+        assert card.note.now == H.DIVERGED_NOW, (card.key, card.note.now)
+        assert "有效的結果" not in card.note.why and "新使用者" not in card.note.why
+        assert card.note.where == T.SHEET_DIVERGED_WHERE
+        H.v2_short_rows(card)
+    _cnt = H.build_portfolio_count_card(b)[0]
+    assert "還沒有綁定" not in _cnt.note.why and _cnt.note.where == H.COUNT_DIVERGED_WHERE
+    H.v2_short_rows(_cnt)
+    # 不是兩本不同 ⇒ 照舊
+    h2 = _holdings(monkeypatch, holdings=(), bound=False, active_state="none")
+    assert H.build_holdings_preview_card(h2)[0].note.now == H.NOT_BOUND_NOW

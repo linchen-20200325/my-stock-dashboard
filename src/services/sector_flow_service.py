@@ -62,17 +62,25 @@ def _active_selection_tickers() -> "tuple[list[str], dict]":
     只是少了持股標示)—— 但記在來源說明的 `error`(⛔ 不靜默,呼叫端要講出來)。
     """
     _src = {"portfolio_name": "", "watchlist_name": "", "portfolio_selection": "",
-            "watchlist_selection": "", "bound": False, "active_state": "", "error": ""}
+            "watchlist_selection": "", "bound": False, "active_state": "", "error": "",
+            # PR #927 QA-2（第 3／4 點）：讓頁面照實分辨原因、⛔ 不把例外原文搬上畫面。
+            "logged_in": False, "login_expired": False, "portfolio_issue": "", "watchlist_issue": "",
+            "error_issue": ""}
     try:
         from src.services.holdings_service import get_holdings
         _h = get_holdings(resolve_names=False)
     except Exception as _e:  # noqa: BLE001 — 持股標示是附加資訊,失敗不擋板塊圖,但要回報(§1)
         print(f"[sector_flow_service] 讀選定組合／觀察清單失敗(持股標示略過): {type(_e).__name__}: {_e}")
         _src["error"] = repr(_e)
+        from src.services.portfolio_binding_service import is_login_required_error, sheet_read_issue
+        _src["error_issue"] = "login_required" if is_login_required_error(_e) else sheet_read_issue(_e)
         return [], _src
     _src.update(portfolio_name=_h.portfolio_name, watchlist_name=_h.watchlist_name,
                 portfolio_selection=_h.portfolio_selection, watchlist_selection=_h.watchlist_selection,
-                bound=bool(_h.bound), active_state=_h.active_state, error=_h.watchlist_error)
+                bound=bool(_h.bound), active_state=_h.active_state, error=_h.watchlist_error,
+                logged_in=bool(_h.logged_in), login_expired=bool(_h.login_expired),
+                portfolio_issue=_h.portfolio_issue, watchlist_issue=_h.watchlist_issue,
+                error_issue=(_h.watchlist_issue if _h.watchlist_error else ""))
     return [str(_r.get("ticker") or "") for _r in _h.holdings], _src
 
 

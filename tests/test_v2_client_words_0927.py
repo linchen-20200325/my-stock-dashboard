@@ -18,7 +18,9 @@ E3_R1 = "到「💼 我的持股 › 組合設定」，在你的持股表新增�
 #: 📌 👤 我的 P1（客戶 2026-10-25 DEC-083 D 段，有意識的修改，⛔ 不是漏改）：E3-r1 那一句「指回自己的唯讀頁」被客戶點名
 #:    禁止，改為 D 段客戶原句（逐字）＋ E3-r1 原句後半（逐字）。兩段都是客戶原文，⛔ 不從常數反推。
 DEC083_D = "目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。"
-E3_R1_P1 = DEC083_D + "在你的持股表新增至少一列持股（要有代號、張數、均價）。"
+#: 📌 PR #927 QA-2 第 6 點（有意識的修改，⛔ 不是漏改）：~~`DEC083_D + "在你的持股表新增至少一列持股（要有代號、張數、均價）。"`~~
+#:    → 動作在前、客戶句在後（兩段仍逐字）。
+E3_R1_P1 = "在你的持股表新增至少一列持股（要有代號、張數、均價）：" + DEC083_D
 
 
 def test_constants_are_the_client_strings_verbatim():
@@ -150,8 +152,9 @@ def test_e3_r1_watchlist_only_shows_no_holdings_now_and_client_where():
     # 👤 我的 P1：~~where／卡面短句／HTML 都＝ E3_R1~~ → where ＝ E3_R1_P1（64 字超過卡面上限 ⇒ 卡面是它的摘錄、
     #   全文在「▸ 詳細」）。
     assert card.note.where == E3_R1_P1
+    # PR #927 QA-2 第 6 點：原文改「動作在前」⇒ 摘錄順序跟著換（~~舊版 … 新增至少一列持股~~）。
     assert dict(PH.v2_short_rows(card)[0])[PH.V2_GUIDE_FACT_KEY] == (
-        "目前請切回舊版 → 📁 組合管理" + PH.V2_EXCERPT_GAP + "新增至少一列持股")
+        "在你的持股表新增至少一列持股" + PH.V2_EXCERPT_GAP + "目前請切回舊版 → 📁 組合管理")
     assert E3_R1_P1 in PH.v2_card_html(*built)
 
 

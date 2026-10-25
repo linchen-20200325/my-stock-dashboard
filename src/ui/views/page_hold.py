@@ -389,7 +389,9 @@ from src.ui.views._ui_kit import (
 # （⛔ 不在本檔抄第二份 —— 三頁的卡面要是同一種卡面）。
 # 📌 import 半徑：多帶進 `src.ui.views.page_today` ＋ `src.ui_v2.*`（同找標的頁），
 #    ⛔ 不多 import 任何 `src.services.*` / `src.compute.*` / `src.data.*`（唯讀白名單不變）。
+from shared.sheet_id import ACTIVE_DIVERGED
 from src.ui.views.page_today import (
+    SHEET_DIVERGED_WHERE,
     SHEET_UNBOUND_WHERE,
     V2_CSS_MODE,
     V2_GUIDE_FACT_KEY,
@@ -1048,6 +1050,9 @@ class BindingReadout:
     #: Sheet Safety 批 QA 回修 N-2(只加不改):L3 `BindingState.sheet_issue` 原樣透傳 —— 讀組合清單那一步
     #: 為什麼沒拿到本數(例 `schema_mismatch`)。只用來挑「怎麼辦」那一句,不參與狀態判定。
     sheet_issue: str = ""
+    #: PR #927 QA-2 第 4 點(只加不改):組合 / 觀察清單兩條通道是兩本不同的 Sheet(L3 `active_state == ACTIVE_DIVERGED`)
+    #: → 「未綁」灰卡改說「兩本不同，請選定一本」(⛔ 不說「你還沒有綁定」「新使用者灰色正常」—— 對綁過兩本的人是假的)。
+    diverged: bool = False
 
     @property
     def count_gate(self) -> bool:
@@ -1152,7 +1157,8 @@ def load_binding(req: HoldRequest) -> BindingReadout:
         count_requested=bool(req.wants_binding and _bound),
         portfolio_count=_count,
         count_missing_reason=_reason,
-        sheet_issue=str(getattr(_s, "sheet_issue", "") or ""))
+        sheet_issue=str(getattr(_s, "sheet_issue", "") or ""),
+        diverged=str(getattr(_s, "active_state", "") or "") == ACTIVE_DIVERGED)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1197,6 +1203,8 @@ class HoldingsReadout:
     portfolio_selection: str = ""
     #: 👤 我的 P1:觀察清單那半的選定狀態(只用於事實列,不參與狀態判定)。
     watchlist_selection: str = ""
+    #: PR #927 QA-2 第 4 點(只加不改):兩條通道是兩本不同的 Sheet(同 `BindingReadout.diverged`)。
+    diverged: bool = False
 
     @property
     def has_holdings(self) -> bool:
@@ -1283,7 +1291,8 @@ def load_holdings(req: HoldRequest) -> HoldingsReadout:
         watchlist_error=str(getattr(_h, "watchlist_error", "") or ""),
         login_expired=bool(getattr(_h, "login_expired", False)),
         portfolio_selection=_pf_sel,
-        watchlist_selection=str(getattr(_h, "watchlist_selection", "") or ""))
+        watchlist_selection=str(getattr(_h, "watchlist_selection", "") or ""),
+        diverged=str(getattr(_h, "active_state", "") or "") == ACTIVE_DIVERGED)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1341,6 +1350,8 @@ class StationReadout:
     login_expired: bool = False
     #: 👤 我的 P1:由 `HoldingsReadout.portfolio_selection` 帶下來 —— 「綁了但沒選定」的灰卡（⛔ 不是「Sheet 是空的」）。
     portfolio_selection: str = ""
+    #: PR #927 QA-2 第 4 點:由 `HoldingsReadout.diverged` 帶下來 —— 「還沒綁」那幾張灰卡改說「兩本不同」。
+    diverged: bool = False
     rows: tuple[dict, ...] = ()
     digest: Mapping[str, Any] | None = None
     totals: Mapping[str, Any] | None = None
@@ -1392,7 +1403,8 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
     if not holdings.has_holdings:
         return StationReadout(requested=True, submitted=holdings.submitted,
                               bound=holdings.bound, login_expired=holdings.login_expired,
-                              portfolio_selection=holdings.portfolio_selection)
+                              portfolio_selection=holdings.portfolio_selection,
+                              diverged=holdings.diverged)
     try:
         from src.services.dividend_station_service import (
             build_station_digest,
@@ -1753,8 +1765,20 @@ LOGIN_EXPIRED_WHY: str = (
 LOGIN_EXPIRED_WHERE: str = f"請重新整理頁面以自動恢復登入，或到{ME_ACCOUNT_WHERE}重新登入。"
 
 
-def _not_bound_note(login_expired: bool) -> Note:
-    """「還沒綁 / 沒登入」那一句 —— 登入已逾時時換成逾時那一組(兩者都是灰色有效態)。"""
+#: PR #927 QA-2 第 4 點：組合 / 觀察清單兩條通道是兩本不同的 Sheet（`ACTIVE_DIVERGED`）時取代「還沒綁」那一組
+#: （同一批卡、同一個灰色）。~~這一態原本落進 `NOT_BOUND_*`「你還沒有綁定持股 Sheet／新使用者灰色正常」~~ ——
+#: 對已經綁過兩本的人是假的（有意識的修改，⛔ 不是漏改）。where 與「🚦 今天」狀態列同一句（⛔ 不寫第二份）。
+DIVERGED_NOW: str = "**你的組合和觀察清單目前讀的是兩本不同的 Sheet**"
+DIVERGED_WHY: str = (
+    "**這不是故障**：兩邊各記著一本 Sheet，本站不替你挑一本，所以這一輪不讀持股 —— "
+    "本站不拿其中一本頂替（那會讓你以為畫面上是你選的那一本）")
+DIVERGED_WHERE: str = SHEET_DIVERGED_WHERE
+
+
+def _not_bound_note(login_expired: bool, diverged: bool = False) -> Note:
+    """「還沒綁 / 沒登入」那一句 —— 登入已逾時時換成逾時那一組；兩本不同時換成「請選定一本」(都是灰色有效態)。"""
+    if diverged and not login_expired:
+        return Note(now=DIVERGED_NOW, why=DIVERGED_WHY, where=DIVERGED_WHERE)
     if login_expired:
         return Note(now=LOGIN_EXPIRED_NOW, why=LOGIN_EXPIRED_WHY, where=LOGIN_EXPIRED_WHERE)
     return Note(now=NOT_BOUND_NOW, why=NOT_BOUND_WHY, where=NOT_BOUND_WHERE)
@@ -1861,8 +1885,9 @@ CASH_NO_HOLDINGS_NOW: str = "**還沒有可以算配息的持股**"
 #: 📌 👤 我的 P1（DEC-083 D 段，客戶裁示取代 E3-r1 那一句；有意識的改指，⛔ 不是漏刪）：
 #:    ~~"到「💼 我的持股 › 組合設定」，在你的持股表新增至少一列持股（要有代號、張數、均價）。"~~
 #:    （那是**指回自己的唯讀頁** —— 客戶 D 段點名禁止）→ 客戶原句 ＋ E3-r1 原句後半（「在你的持股表…」一字未改）。
-CASH_WATCHLIST_ONLY_WHERE: str = (
-    ia_nav.CONTENT_EDIT_OLD_UI_WHERE + "在你的持股表新增至少一列持股（要有代號、張數、均價）。")
+#: 📌 PR #927 QA-2 第 6 點（有意識的修改，⛔ 不是漏改）：~~客戶原句 ＋「在你的持股表新增…」~~（先講去哪、後講要做什麼，
+#:    讀起來像是「切回舊版」本身就能新增）→ 動作在前、客戶原句在後（同 `_edit_where` 的順序）；客戶原句一字未改。
+CASH_WATCHLIST_ONLY_WHERE: str = _edit_where("在你的持股表新增至少一列持股（要有代號、張數、均價）")
 CASH_NO_PAYOUT_NOW: str = "**近一年查不到任何一筆配息**"
 CASH_EMPTY_NOW: str = "**有持股，但配息現金流算不出來**"
 AI_UPSTREAM_NOW: str = "**沒有生成 —— 上游的戰情表這一輪就壞了**"
@@ -1873,6 +1898,10 @@ AI_FAILED_NOW: str = "**AI 總結生成失敗**"
 AI_NO_STATION_NOW: str = "**沒有可以當輸入的戰情表**"
 BINDING_FAILED_NOW: str = "**綁定狀態讀不出來**"
 COUNT_NOT_BOUND_NOW: str = "**還沒有可以數的 Sheet**"
+#: PR #927 QA-2 第 4 點：兩本不同（`BindingReadout.diverged`）時這一格的 why / where。
+COUNT_DIVERGED_WHY: str = ("上一張卡顯示你的組合和觀察清單讀的是**兩本不同的 Sheet** —— "
+                           "還沒選定一本，就沒有人問過「那一本裡有幾本組合」。**這不是失敗，是這個問題還沒有成立**")
+COUNT_DIVERGED_WHERE: str = "先照上一張卡說的選定一本，這一格會自己有東西"
 COUNT_DRIFT_NOW: str = "**綁定看起來正常，但讀不到組合清單**"
 COUNT_FAILED_NOW: str = "**組合本數讀不出來**"
 COUNT_EMPTY_NOW: str = "**Sheet 綁好了，但裡面還沒有任何一本組合**"
@@ -1976,7 +2005,7 @@ def _station_note(station: StationReadout, *, now: str, source: str) -> Note:
     if station.bound:
         return (_selection_note(station.portfolio_selection)
                 or Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY, where=EMPTY_SHEET_WHERE))
-    return _not_bound_note(station.login_expired)
+    return _not_bound_note(station.login_expired, station.diverged)
 
 
 def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
@@ -3064,6 +3093,8 @@ class DeepReadout:
     login_expired: bool = False
     #: 👤 我的 P1(只加不改):由戰情表帶下來(同 `StationReadout.portfolio_selection`)。
     portfolio_selection: str = ""
+    #: PR #927 QA-2 第 4 點(只加不改):由戰情表帶下來(同 `StationReadout.diverged`)。
+    diverged: bool = False
     has_station_rows: bool = False
     stress: Any = None
     var: Any = None
@@ -3099,7 +3130,7 @@ def load_deep(station: StationReadout) -> DeepReadout:
     """
     _shared = {"submitted": station.submitted, "bound": station.bound,
                "holdings_n": station.holdings_n, "login_expired": station.login_expired,
-               "portfolio_selection": station.portfolio_selection}
+               "portfolio_selection": station.portfolio_selection, "diverged": station.diverged}
     if not station.requested:
         return DeepReadout(requested=False, submitted=station.submitted)
     if station.error:
@@ -3181,7 +3212,7 @@ def _deep_note(deep: DeepReadout, *, now: str, source: str,
         return (_selection_note(deep.portfolio_selection)
                 or Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY,
                         where=EMPTY_SHEET_WHERE))
-    return _not_bound_note(deep.login_expired)
+    return _not_bound_note(deep.login_expired, deep.diverged)
 
 
 def _deep_uncounted_why(failed: Sequence[str], unpriced: Sequence[str],
@@ -4285,7 +4316,7 @@ def build_binding_card(binding: BindingReadout) -> _Built:
     else:   # UI_EMPTY —— **還沒綁。這是有效結果，不是故障。**
         # ⚠️ 與戰情室那幾張空卡**共用同一組常數**：同一件事在同一頁上寫兩份，
         #    改的時候一定會漏改一份，於是兩張卡對同一個狀況給出兩種說法。
-        _note = _not_bound_note(binding.login_expired)
+        _note = _not_bound_note(binding.login_expired, binding.diverged)
     return Card(key="hold.binding", label="Google Sheet 綁定",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -4359,6 +4390,9 @@ def build_portfolio_count_card(binding: BindingReadout) -> _Built:
                      where=GOOGLE_NOT_ASKED_WHERE)
     elif _state == UI_IDLE and not binding.submitted:
         _note = Note(now=IDLE_NOW, why=IDLE_WHY, where=IDLE_WHERE)
+    elif _state == UI_IDLE and binding.diverged:
+        # PR #927 QA-2 第 4 點：兩本不同時上一張卡**沒有**說「還沒有綁定」⇒ ⛔ 不沿用下一支那句假敘述。
+        _note = Note(now=COUNT_NOT_BOUND_NOW, why=COUNT_DIVERGED_WHY, where=COUNT_DIVERGED_WHERE)
     elif _state == UI_IDLE:
         _note = Note(
             now=COUNT_NOT_BOUND_NOW,
@@ -4417,7 +4451,8 @@ SETUP_UNWIRED_SPECS: tuple[UnwiredSpec, ...] = (
         why=READONLY_WHY, where=READONLY_WHERE,
         facts=(("為什麼", "新增或移除觀察清單會寫回你的 Sheet —— 那是寫入"),
                # 👤 我的 P1（D 段）：~~「既有的 📁 組合管理分頁 ／ 選股網的「加入觀察清單」」~~ → 客戶原句。
-               ("現行入口", ia_nav.CONTENT_EDIT_OLD_UI_WHERE + "選股網的「加入觀察清單」同在舊版"))),
+               # PR #927 QA-2 第 6 點：~~客戶原句 ＋「選股網的「加入觀察清單」同在舊版」~~ → 動作在前（`_edit_where`）。
+               ("現行入口", _edit_where("要管理觀察清單（含選股網的「加入觀察清單」）")))),
 )
 
 
@@ -4489,7 +4524,7 @@ def build_holdings_preview_card(holdings: HoldingsReadout) -> _Built:
                  or Note(now=EMPTY_SHEET_NOW, why=EMPTY_SHEET_WHY,
                          where=EMPTY_SHEET_WHERE))
     else:
-        _note = _not_bound_note(holdings.login_expired)
+        _note = _not_bound_note(holdings.login_expired, holdings.diverged)
     return Card(key="hold.setup.preview", label="持股列預覽",
                 state=_state, note=_note), tuple(_facts), ""
 
@@ -4576,6 +4611,9 @@ _V2_SHARED_SHORT: dict[str, tuple[object, object, object]] = {
                     "這是一個有效的結果" + V2_EXCERPT_GAP + "沒有綁定就沒有清單可讀",
                     # 👤 我的 P1：~~… + "現行入口在側欄「🔐 Google 帳號」"~~
                     "用 Google 登入後選一本持股 Sheet" + V2_EXCERPT_GAP + "到" + ME_SHEET_WHERE + "選一本"),
+    DIVERGED_NOW: (None,
+                   "這不是故障" + V2_EXCERPT_GAP + "本站不替你挑一本",
+                   "到" + ME_SHEET_WHERE + "選定一本"),
     LOGIN_EXPIRED_NOW: ("Google 登入已逾時",
                         "自動恢復的登入大約 1 小時後就會逾時",
                         "請重新整理頁面以自動恢復登入"),
@@ -4658,6 +4696,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        for _k in _V2_NOT_BOUND_KEYS]
     # 1.0-B2:「登入已逾時」與「還沒綁」出現在**同一批卡**(同一個 `_not_bound_note()`)。
     + [_v2_rows_for(_k, LOGIN_EXPIRED_NOW, _V2_SHARED_SHORT[LOGIN_EXPIRED_NOW])
+       for _k in _V2_NOT_BOUND_KEYS]
+    # PR #927 QA-2 第 4 點：「兩本不同」同樣出現在這一批卡(同一個 `_not_bound_note()`)。
+    + [_v2_rows_for(_k, DIVERGED_NOW, _V2_SHARED_SHORT[DIVERGED_NOW])
        for _k in _V2_NOT_BOUND_KEYS]
     + [_v2_rows_for(_k, EMPTY_SHEET_NOW, _V2_SHARED_SHORT[EMPTY_SHEET_NOW])
        for _k in _V2_EMPTY_SHEET_KEYS]
@@ -4808,8 +4849,9 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        # E3-r1：只有觀察清單 → `CASH_NO_HOLDINGS_NOW` ＋ 客戶逐字 where（44 字，整句就是摘錄，⛔ 不縮寫）。
        _v2_rows_for("hold.deep.dividend_cash", CASH_NO_HOLDINGS_NOW, (
            # 👤 我的 P1：where 改為客戶原句 ＋ 後半（64 字）⇒ 卡面改摘錄（⛔ 不縮寫原文；全文在「▸ 詳細」）。
+           # PR #927 QA-2 第 6 點：原文改「動作在前」⇒ 摘錄順序跟著換（~~舊版 → 新增~~）。
            None, "這是一個有效的結果（已經算過，不是還沒算）",
-           _V2_OLD_UI + V2_EXCERPT_GAP + "新增至少一列持股")),
+           "在你的持股表新增至少一列持股" + V2_EXCERPT_GAP + _V2_OLD_UI)),
        _v2_rows_for("hold.deep.dividend_cash", CASH_EMPTY_NOW, (
            None, "這是一個有效的結果（已經算過，不是還沒算）",
            "把持股的張數補齊" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP + "回本頁" + _V2_PRESS_RUN))]
@@ -4844,8 +4886,10 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     # ── 葉2 組合設定 ────────────────────────────────────────────
     + [_v2_rows_for("hold.binding", BINDING_FAILED_NOW, (
            None, _v2_raised(SRC_BINDING), _V2_CHECK_NET)),
+       # PR #927 QA-2 第 4 點：兩本不同 ⇒ 同一個 now、不同的 where ⇒ 第二個候選（~~單一候選~~，有意識的修改）。
        _v2_rows_for("hold.portfolio_count", COUNT_NOT_BOUND_NOW, (
-           None, "這不是失敗，是這個問題還沒有成立", "先完成上一張卡說的綁定，這一格會自己有東西")),
+           None, "這不是失敗，是這個問題還沒有成立",
+           ("先完成上一張卡說的綁定，這一格會自己有東西", COUNT_DIVERGED_WHERE))),
        _v2_rows_for("hold.portfolio_count", COUNT_DRIFT_NOW, (
            None, "已經綁到一本 Sheet，但向它要組合清單時失敗了",
            "重新用 Google 登入授權一次，或確認那本 Sheet 仍然分享給你")),

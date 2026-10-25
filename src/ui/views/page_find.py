@@ -1857,22 +1857,74 @@ HOLDING_SOURCE_NO_SHEET: str = "尚未選 Sheet → 到" + ia_nav.where_to_find(
 HOLDING_SOURCE_NOT_SELECTED: str = ("尚未選定組合／觀察清單 → 到"
                                     + ia_nav.where_to_find(ia_nav.SECTION_ME_CONTENT))
 HOLDING_SOURCE_FAILED: str = "讀不到你選定的組合／觀察清單（板塊圖照常）："
+# PR #927 QA-2 第 3／4 點：照實分辨「沒登入 / 登入失效 / 兩本不同 / 選定的不見了 / 沒有分頁」，
+#   失敗只講分類白話（~~`HOLDING_SOURCE_FAILED + scrub_secrets(error)`~~：例外原文可能含完整 Sheet ID；
+#   有意識的修改，⛔ 不是漏改）。
+HOLDING_SOURCE_NOT_LOGGED_IN: str = ("尚未登入 Google → 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_ACCOUNT)
+                                     + "登入後再選 Sheet")
+HOLDING_SOURCE_LOGIN_EXPIRED: str = "Google 登入已失效 → 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_ACCOUNT) + "重新登入"
+HOLDING_SOURCE_DIVERGED: str = ("你的組合和觀察清單目前讀的是兩本不同的 Sheet → 到"
+                                + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) + "選定一本")
+HOLDING_SOURCE_PF_MISSING: str = "組合：你選定的那本已不在這本 Sheet 裡"
+HOLDING_SOURCE_WL_MISSING: str = "觀察清單：你選定的那份已不在這本 Sheet 裡"
+HOLDING_SOURCE_PF_NO_TAB: str = "組合：這本 Sheet 還沒有組合分頁"
+HOLDING_SOURCE_WL_NO_TAB: str = "觀察清單：這本 Sheet 還沒有觀察清單分頁"
+HOLDING_SOURCE_RECHECK: str = " → 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_CONTENT) + "重新選定"
+#: 讀取失敗分類 → 白話（代碼 SSOT 在 L1，經 L3 `me_account_service.read_status_codes()` 取）。
+HOLDING_ISSUE_QUOTA: str = "Google 讀取額度暫時用完，稍後再試"
+HOLDING_ISSUE_NETWORK: str = "網路連線失敗，稍後再試"
+HOLDING_ISSUE_DENIED: str = "你的 Google 帳號沒有這本 Sheet 的權限 → 確認分享設定，或到" + ia_nav.where_to_find(
+    ia_nav.SECTION_ME_SHEET) + "重新選一本"
+HOLDING_ISSUE_NOT_FOUND: str = "找不到這本 Sheet（可能已刪除）→ 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) + "重新選一本"
+HOLDING_ISSUE_OTHER: str = "未預期的錯誤（{kind}）"
+
+
+def _holding_issue_text(issue: str) -> str:
+    from src.services import me_account_service as _ME
+    _ok, _nf, _pd, _quota, _net = _ME.read_status_codes()
+    _known = {_quota: HOLDING_ISSUE_QUOTA, _net: HOLDING_ISSUE_NETWORK, _pd: HOLDING_ISSUE_DENIED,
+              _nf: HOLDING_ISSUE_NOT_FOUND}
+    if issue in _known:
+        return _known[issue]
+    return HOLDING_ISSUE_OTHER.format(kind=(str(issue or "").split(":", 1)[-1] or "不明"))
 
 
 def _holding_source_text(src: Mapping[str, Any]) -> str:
-    """L3 `holding_source` → 一句事實（⛔ 不猜：沒給 ⇒「未提供」）。"""
+    """L3 `holding_source` → 一句事實（⛔ 不猜：沒給 ⇒「未提供」；⛔ 不露例外原文）。"""
     if not src:
         return "未提供"
+    from shared.sheet_id import ACTIVE_DIVERGED
+    from src.services.holdings_service import SELECTION_MISSING
+    _issue = str(src.get("error_issue") or "")
     if src.get("error"):
-        return HOLDING_SOURCE_FAILED + scrub_secrets(str(src.get("error")))
+        if _issue == "login_required" or src.get("login_expired"):
+            return HOLDING_SOURCE_LOGIN_EXPIRED
+        return HOLDING_SOURCE_FAILED + _holding_issue_text(_issue)
     if not src.get("bound"):
+        if src.get("active_state") == ACTIVE_DIVERGED:
+            return HOLDING_SOURCE_DIVERGED
+        if "logged_in" in src and not src.get("logged_in"):
+            return HOLDING_SOURCE_LOGIN_EXPIRED if src.get("login_expired") else HOLDING_SOURCE_NOT_LOGGED_IN
         return HOLDING_SOURCE_NO_SHEET
-    _parts = []
+    _ws_missing = "worksheet_missing"
+    _parts, _gone = [], False
     if src.get("portfolio_name"):
         _parts.append(f"組合「{src.get('portfolio_name')}」")
+    elif src.get("portfolio_selection") == SELECTION_MISSING:
+        _parts.append(HOLDING_SOURCE_PF_MISSING)
+        _gone = True
+    elif src.get("portfolio_issue") == _ws_missing:
+        _parts.append(HOLDING_SOURCE_PF_NO_TAB)
     if src.get("watchlist_name"):
         _parts.append(f"觀察清單「{src.get('watchlist_name')}」")
-    return "＋".join(_parts) if _parts else HOLDING_SOURCE_NOT_SELECTED
+    elif src.get("watchlist_selection") == SELECTION_MISSING:
+        _parts.append(HOLDING_SOURCE_WL_MISSING)
+        _gone = True
+    elif src.get("watchlist_issue") == _ws_missing:
+        _parts.append(HOLDING_SOURCE_WL_NO_TAB)
+    if not _parts:
+        return HOLDING_SOURCE_NOT_SELECTED
+    return "＋".join(_parts) + (HOLDING_SOURCE_RECHECK if _gone else "")
 
 
 def build_sector_flow_card(flow: SectorFlowReadout

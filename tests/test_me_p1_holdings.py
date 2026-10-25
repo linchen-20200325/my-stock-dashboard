@@ -213,3 +213,22 @@ class TestSectorFlow:
         v = SF.get_sector_flow_view(use_active_selection=True)
         assert v["ok"] and v["highlight_sectors"] == set()
         assert "google down" in v["holding_source"]["error"]
+
+
+class TestSectorFlowSourceDetail:
+    """PR #927 QA-2 第 3／4 點：holding_source 帶分類代碼與登入狀態，讓 🔍 照實說（⛔ 不露例外原文）。"""
+
+    def test_read_error_is_classified(self, env, cache_ok, monkeypatch):
+        env(session=_bound())
+        _select(pf="B波段")
+
+        def _boom(**_k):
+            raise ConnectionError("google down")
+        monkeypatch.setattr(gsp, "list_portfolios", _boom)
+        _src = SF.get_sector_flow_view(use_active_selection=True)["holding_source"]
+        assert _src["error_issue"] == str(gsp.classify_read_error(ConnectionError("google down")))
+
+    def test_bound_source_carries_login_flags(self, env, cache_ok):
+        env(session=_bound())
+        _src = SF.get_sector_flow_view(use_active_selection=True)["holding_source"]
+        assert _src["logged_in"] is True and _src["login_expired"] is False and _src["error_issue"] == ""
