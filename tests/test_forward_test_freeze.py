@@ -92,8 +92,9 @@ def test_load_frozen_union_dedupe(monkeypatch):
            _row("2026-07-02", "2317", 50.0)]    # 只在 gsheet → 併入
     monkeypatch.setattr("src.data.portfolio.forward_test_store.load_picks_local",
                         lambda: list(_local))
-    monkeypatch.setattr("src.data.portfolio.gsheet_portfolio.load_forward_test_picks",
-                        lambda: list(_gs))
+    # Sheet Safety 批 B2:L3 改走 L1 `read_forward_test_picks()`(回 (狀態, records));替身同步換點。
+    monkeypatch.setattr("src.data.portfolio.gsheet_portfolio.read_forward_test_picks",
+                        lambda: ("ok", list(_gs)))
     df = svc.load_frozen_picks_df()
     assert len(df) == 2                                        # 2330 去重 + 2317
     _r2330 = df[df["stock_id"] == "2330"].iloc[0]
@@ -103,7 +104,8 @@ def test_load_frozen_union_dedupe(monkeypatch):
 def test_load_frozen_empty_both(monkeypatch):
     from src.services import forward_test_service as svc
     monkeypatch.setattr("src.data.portfolio.forward_test_store.load_picks_local", lambda: [])
-    monkeypatch.setattr("src.data.portfolio.gsheet_portfolio.load_forward_test_picks", lambda: [])
+    monkeypatch.setattr("src.data.portfolio.gsheet_portfolio.read_forward_test_picks",
+                        lambda: ("not_configured", []))
     df = svc.load_frozen_picks_df()
     assert df.empty
     assert list(df.columns) == ["cohort", "stock_id", "name", "entry_price", "factors", "frozen_at"]

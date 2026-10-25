@@ -464,11 +464,15 @@ class SheetSchemaMismatchError(RuntimeError):
             f'（右邊可以自己加欄）。')
 
 
+class SheetNotConfiguredError(RuntimeError):
+    """還沒選 Sheet(session 與 secrets 都沒有 Sheet ID)。訊息與修前的 RuntimeError 逐字相同。"""
+
+
 def _open_spreadsheet(sheet_id: str | None):
     """開 Spreadsheet(唯讀動作)。sheet_id=None / 空 → legacy `_get_active_sheet_id()`。"""
     _sid = sheet_id or _get_active_sheet_id()
     if not _sid:
-        raise RuntimeError('尚未設定 Sheet ID（OAuth 模式請在雲端儲存區塊輸入）')
+        raise SheetNotConfiguredError('尚未設定 Sheet ID（OAuth 模式請在雲端儲存區塊輸入）')
     return _build_client().open_by_key(_sid)
 
 
@@ -1095,54 +1099,103 @@ _FT_WORKSHEET_NAME = 'forward_test_picks'
 _FT_HEADERS = ['cohort', 'stock_id', 'name', 'entry_price', 'factors', 'frozen_at']
 
 
-def _ft_worksheet():
-    """取得 (或建立) `forward_test_picks` worksheet,並確保 header 列存在。"""
-    import gspread
+#: B2:讀取狀態另一種 ——「還沒選 Sheet / 還沒登入」(前進式驗證只用本地紀錄,不是故障)。
+READ_NOT_CONFIGURED = 'not_configured'
 
-    sheet_id = _get_active_sheet_id()
-    if not sheet_id:
-        raise RuntimeError('尚未設定 Sheet ID(OAuth 模式請在雲端儲存區塊輸入)')
-    sh = _build_client().open_by_key(sheet_id)
+
+def _ft_header_state(values: list[list[Any]]) -> str:
+    """forward_test_picks 表頭(比 `_header_state` **更嚴**):必須從 A 欄起完整等於 `_FT_HEADERS`
+    (右邊自加欄可以);只有前段(窄表)也算 MISMATCH —— 不可重建歷史,⛔ 不替它補表頭。"""
+    _state = _header_state(values, _FT_HEADERS)
+    if _state == _HEADER_OK and list(values[0][:len(_FT_HEADERS)]) != _FT_HEADERS:
+        return _HEADER_MISMATCH
+    return _state
+
+
+def _ft_worksheet():
+    """**只開不建**:`forward_test_picks` worksheet(legacy active sheet)。⛔ 零寫入(B2)。
+
+    ~~取得 (或建立) worksheet,並確保 header 列存在~~(Sheet Safety 批 B2,DEC-083,有意識的修改:
+    修前讀取 / 對帳也走這裡 ⇒ 分頁不存在就建、表頭不符就覆寫 A1:F1 —— 對**不可重建的歷史**
+    改表頭會讓既有每一列的欄意義錯位)。分頁不存在 → `SheetWorksheetMissingError`。
+    """
+    return _ws(worksheet_name=_FT_WORKSHEET_NAME)
+
+
+def _ft_worksheet_for_write():
+    """寫入用(只給 `append_forward_test_picks`,即使用者按 🧊 凍結的**明確寫入動作**):
+      · 分頁不存在 → 建立 + 寫表頭;
+      · 分頁在但整張表空白 → 寫表頭(沒有任何歷史可被影響);
+      · 表頭不符(含只有前段)→ 在任何寫入之前 `SheetSchemaMismatchError`,⛔ 不重建表頭、⛔ 不 append。
+    """
     try:
-        ws = sh.worksheet(_FT_WORKSHEET_NAME)
-    except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title=_FT_WORKSHEET_NAME, rows=1000, cols=8)
+        ws = _ft_worksheet()
+    except SheetWorksheetMissingError:
+        print(f'[gsheet_portfolio] B2 凍結寫入建立分頁 worksheet={_FT_WORKSHEET_NAME}')
+        ws = _open_spreadsheet(None).add_worksheet(title=_FT_WORKSHEET_NAME, rows=1000, cols=8)
         ws.append_row(_FT_HEADERS)
         return ws
-    if ws.row_values(1) != _FT_HEADERS:
-        ws.update('A1:F1', [_FT_HEADERS])
+    _state = _ft_header_state(ws.get_all_values())
+    if _state == _HEADER_MISMATCH:
+        raise SheetSchemaMismatchError(_FT_WORKSHEET_NAME, _FT_HEADERS, writing=True)
+    if _state == _HEADER_EMPTY:
+        ws.append_row(_FT_HEADERS)
     return ws
 
 
 def append_forward_test_picks(rows: list[dict[str, Any]]) -> int:
     """把選股凍結列 append 到 forward_test_picks worksheet;回寫入列數。
 
-    rows 每筆須含 _FT_HEADERS 各欄(由 L2 build_pick_snapshot_rows 產出)。空 → 0。
+    rows 每筆須含 _FT_HEADERS 各欄(由 L2 build_pick_snapshot_rows 產出)。空 → 0(不開 Sheet)。
+    分頁 / 表頭規則見 `_ft_worksheet_for_write`(B2:表頭不符 → 拋錯、一列都不寫)。
     """
     if not rows:
         return 0
-    ws = _ft_worksheet()
+    ws = _ft_worksheet_for_write()
     ws.append_rows([[r.get(h, '') for h in _FT_HEADERS] for r in rows])
     return len(rows)
 
 
-def load_forward_test_picks() -> list[dict[str, Any]]:
-    """讀回全部凍結紀錄(dict list;含 cohort/stock_id/entry_price/factors…)。
+def read_forward_test_picks() -> tuple[str, list[dict[str, Any]]]:
+    """讀回全部凍結紀錄 → `(讀取狀態, records)`。**零寫入**(B2:不建分頁、不重建表頭、不修)。
 
-    worksheet 不存在 / 未設定 Sheet / 讀取失敗 → 回 [](不炸對帳面板;§1 由 caller 判空)。
+    狀態:`READ_OK`(含只有表頭 → [])/ `READ_EMPTY` / `READ_WORKSHEET_MISSING` /
+    `READ_SCHEMA_MISMATCH` / `READ_NOT_CONFIGURED`(還沒選 Sheet 或還沒登入)/
+    `error:<例外型別名>`(其他讀取失敗;⛔ 不交訊息)。狀態非 OK 時 records 一律 []。
     批 Z33（Z12-n2）:`stock_id`／`name` 保留 Sheet 原字串（`0050` 不可讀成 50,否則與本地
     '0050' 去重失效、對帳抓不到現價）;其餘欄轉換同 `get_all_records()` 預設。
-    gspread `numericise_ignore` 只認 **1-based 欄序**（欄名不生效）⇒ 依實際表頭找欄位;
-    表頭缺其中一欄 → 只保留另一欄字串,其餘欄行為同修前。
+    gspread `numericise_ignore` 只認 **1-based 欄序**（欄名不生效）⇒ 依實際表頭找欄位。
     """
     try:
         ws = _ft_worksheet()
-        header = ws.row_values(1)
-        return ws.get_all_records(numericise_ignore=[
+        values = ws.get_all_values()
+        _state = _ft_header_state(values)
+        if _state == _HEADER_EMPTY:
+            return READ_EMPTY, []
+        if _state == _HEADER_MISMATCH:
+            return READ_SCHEMA_MISMATCH, []
+        header = list(values[0])
+        return READ_OK, ws.get_all_records(numericise_ignore=[
             i + 1 for i, h in enumerate(header) if h in ('stock_id', 'name')])
-    except Exception as _e:  # noqa: BLE001 — gsheet 不可用不炸前進式驗證面板
-        print(f'[gsheet] forward_test_picks 讀取失敗: {type(_e).__name__}: {_e}')
-        return []
+    except SheetWorksheetMissingError:
+        return READ_WORKSHEET_MISSING, []
+    except (SheetNotConfiguredError, LoginRequiredError):
+        return READ_NOT_CONFIGURED, []
+    except Exception as _e:  # noqa: BLE001 — 交回狀態給 L3 揭露,不炸前進式驗證面板
+        print(f'[gsheet] forward_test_picks 讀取失敗: {type(_e).__name__}')
+        return f'{READ_ERROR_OTHER_PREFIX}{type(_e).__name__}', []
+
+
+def load_forward_test_picks() -> list[dict[str, Any]]:
+    """`read_forward_test_picks()` 的 list 相容包裝(既有 caller / 測試);非 OK 狀態記 log、回 []。
+
+    worksheet 不存在 / 未設定 Sheet / 表頭不符 / 讀取失敗 → 回 [](不炸對帳面板;§1 由 caller 判空)。
+    要分辨「為什麼是空的」請改用 `read_forward_test_picks()`(L3 `load_frozen_picks_df` 已改用)。
+    """
+    _status, _recs = read_forward_test_picks()
+    if _status != READ_OK:
+        print(f'[gsheet] forward_test_picks status={_status}')
+    return _recs
 
 
 def list_user_sheets(folder_id: str = '') -> list[dict]:
