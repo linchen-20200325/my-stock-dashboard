@@ -26,6 +26,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import inspect
 import os
 import re
 import urllib.parse as up
@@ -268,13 +269,16 @@ def test_marker_must_have_exact_value(wire, val):
 def test_logout_removes_marker_and_refresh_does_not_log_back_in(wire):
     fst = wire(qp={MK: MV, 'sheet': 'S'},
                session={'gsheet_tokens': {'access_token': 'AT'}, 'gsheet_email': 'e'})
-    # app.py 側欄登出:pop token → forget_silent_reauth()
+    # app.py 側欄登出:pop token → forget_silent_reauth() → clear_sheet_binding()(DEC-083 Q5)
     for _k in ('gsheet_tokens', 'gsheet_email', '_oauth_state'):
         fst.session_state.pop(_k, None)
     ost.forget_silent_reauth()
+    ost.clear_sheet_binding()
     _run_app(fst)
     assert fst.htmls == [] and MK not in fst.query_params
-    assert fst.query_params.get('sheet') == 'S'
+    # ~~登出後網址上的 `?sheet=` 保留~~ —— DEC-083 Q5(客戶 2026-10-25,有意識的翻轉):
+    # 「登出時同步清除……URL 上 "sheet" 參數……不得登出後自動恢復上一個 Sheet。」
+    assert 'sheet' not in fst.query_params
     # 重新整理(新 session,網址就是登出後的網址)→ 不得登回去
     fst2 = wire(qp=dict(fst.query_params))
     _run_app(fst2)
@@ -291,11 +295,15 @@ def test_app_py_wires_hook_and_logout():
     assert i_cb < i_si and '\n' not in src[i_cb + len('    _oauth_cb()\n'):i_si].strip()
     i_sync = src.index('    _oauth_sync()')
     assert i_si < i_sync and '\n' not in src[src.index('\n', i_si) + 1:i_sync].strip()
-    i_sb_write = src.index("st.query_params['sheet'] = _sb_sid_new")
-    assert src.index('_sb_sync_silent()', i_sb_write) < src.index('if _sb_sid_new:', i_sb_write)
+    # Sheet Safety 批 B4(DEC-083,有意識的修改):側欄換 Sheet 改經 L1 唯一寫入契約
+    # `apply_sheet_binding`,記號重算(`sync_silent_marker`)移進契約內部 ⇒ 改驗契約有呼叫它、側欄有用契約。
+    assert '_sb_apply_binding(_sb_sid_raw)' in src and "st.query_params['sheet']" not in src
+    _ctr = inspect.getsource(ost.apply_sheet_binding)
+    assert _ctr.index('st.query_params[SHEET_QUERY_PARAM] = _sid') < _ctr.index('sync_silent_marker()')
     i_logout = src.index("key='btn_oauth_logout_sb'")
     i_forget = src.index('_sb_forget_silent()', i_logout)
-    assert i_forget < src.index('st.rerun()', i_logout)
+    i_clear = src.index('_sb_clear_binding()', i_logout)
+    assert i_forget < i_clear < src.index('st.rerun()', i_logout)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -1041,11 +1049,13 @@ def _login_strict(wire, *, sheet='', sub='SUB_ME', secrets=None):
 
 
 def _bind_sheet_like_sidebar(fst, sid):
-    """app.py 側欄:寫兩通道 + `?sheet=` → 就地 `sync_silent_marker()`(這一輪不會再 rerun)。"""
-    fst.session_state['portfolio_sheet_id'] = sid
-    fst.session_state['stock_portfolio_sheet_id'] = sid
-    fst.query_params['sheet'] = sid
-    return ost.sync_silent_marker()
+    """app.py 側欄:經唯一寫入契約 `apply_sheet_binding`(寫兩通道 + `?sheet=` → 就地 `sync_silent_marker()`,
+    這一輪不會再 rerun)。Sheet Safety 批 B4 起側欄不再自己寫,本替身改呼叫真契約;
+    回「記號 `gs` 有沒有被改寫」(＝ 修前 `sync_silent_marker()` 的回傳值語意)。"""
+    assert ost.st is fst
+    _before = fst.query_params.get(MK)
+    ost.apply_sheet_binding(sid)
+    return fst.query_params.get(MK) != _before
 
 
 def test_login_then_bind_sheet_remints_marker_and_refresh_restores_with_sheet(wire):
@@ -1076,8 +1086,10 @@ def test_binder_path_resyncs_on_the_hook_after_its_rerun(wire, monkeypatch):
     monkeypatch.setattr(PB, 'st', s1)
     PB.apply_active_sheet(gsp, 'SID2')
     assert s1.session_state['portfolio_sheet_id'] == 'SID2' and s1.query_params['sheet'] == 'SID2'
-    assert MK in s1.query_params and s1.query_params[MK] == _tag(sheet=''), 'apply_active_sheet 不碰 gs'
-    _run_app(s1)                               # st.rerun 之後的那一輪
+    # ~~`apply_active_sheet` 不碰 gs(等下一輪 hook 才重算)~~ —— Sheet Safety 批 B4(有意識的修改):
+    # 它改委派唯一寫入契約,契約寫完就地 `sync_silent_marker()`(與側欄同一條路)⇒ 這一輪就已重算。
+    assert s1.query_params[MK] == _tag(sheet='SID2')
+    _run_app(s1)                               # st.rerun 之後的那一輪(hook 再算一次 ⇒ 值不變)
     assert s1.query_params[MK] == _tag(sheet='SID2')
     # 重新整理 → 靜默恢復帶 SID2 成功
     s2 = wire(qp=dict(s1.query_params))

@@ -1,7 +1,6 @@
 import streamlit as st
 from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 import os
-import re
 
 from shared.colors import TRAFFIC_GREEN, TRAFFIC_RED, TRAFFIC_YELLOW
 
@@ -149,13 +148,11 @@ if '_app_boot_done' not in st.session_state:
         # 安全:Sheet ID 非憑證(存取仍需 OAuth + Sheet ACL),且屬「設定」非抓回來的資料 →
         # 跨 session 還原不會製造假「已載入」態(同上方 sid 的理由;§1)。setdefault:本 session
         # 已手動選過則不覆寫(當次選擇優先)。
-        _qp_sheet = _qp.get('sheet')
-        if _qp_sheet and isinstance(_qp_sheet, str) and _qp_sheet.strip():
-            # §8.2 R4:app.py(L6)不得 import L1 gsheet_portfolio 取常數 → 用其 session key
-            # 字面值(與本檔側欄既有 'portfolio_sheet_id' / 'stock_portfolio_sheet_id' 一致;
-            # gsheet_portfolio 的 PORTFOLIO_SHEET_KEY/STOCK_PORTFOLIO_SHEET_KEY 即這兩個值)。
-            st.session_state.setdefault('portfolio_sheet_id', _qp_sheet.strip())
-            st.session_state.setdefault('stock_portfolio_sheet_id', _qp_sheet.strip())
+        # Sheet Safety 批 B4(DEC-083):~~本檔自己讀網址 sheet 參數 → `.strip()` → setdefault 兩格~~
+        # (有意識的修改,⛔ 不是漏刪:未消毒、且是第五套綁定寫入)→ 委派 L1 唯一寫入契約
+        # `oauth_state.restore_sheet_binding_from_query()`(消毒後 setdefault 兩格,語意同上)。
+        from src.data.portfolio.oauth_state import restore_sheet_binding_from_query
+        restore_sheet_binding_from_query()
     except Exception as _qpe:
         print(f'[query_params restore] {_qpe}')
 
@@ -345,7 +342,8 @@ with st.sidebar:
             get_oauth_cfg as _sb_get_cfg,
             login_state_with_sheet as _sb_login_state_with_sheet,
             forget_silent_reauth as _sb_forget_silent,
-            sync_silent_marker as _sb_sync_silent,
+            apply_sheet_binding as _sb_apply_binding,
+            clear_sheet_binding as _sb_clear_binding,
         )
         from infra.oauth import build_authorize_url as _sb_buildurl
         # 每次 rerun 動態解析，避免 module-level cache 過期
@@ -363,6 +361,11 @@ with st.sidebar:
                 for _k in ('gsheet_tokens', 'gsheet_email', '_oauth_state'):
                     st.session_state.pop(_k, None)
                 _sb_forget_silent()   # 1.0-B2:拿掉 ?gs= 記號,否則重新整理又靜默登回去(登不出去)
+                # DEC-083 Q5:登出同步清 Sheet 綁定(兩格 session + ?sheet= + 記號)⇒ 登出後不自動恢復上一本;
+                # 登入鈕的 state 由 session 的 portfolio_sheet_id 組成 ⇒ 清掉後不再夾帶舊 Sheet ID。
+                # 側欄貼 ID 文字框的 widget 狀態一併拿掉(否則重新登入那一輪它會帶著舊 ID 又綁回去)。
+                _sb_clear_binding()
+                st.session_state.pop('sb_portfolio_sheet_id_input', None)
                 st.rerun()
             # ── Google Sheet ID（集中於帳號區；亦可於「📁 組合管理」頁設定）──
             _sb_sid_cur = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
@@ -371,19 +374,13 @@ with st.sidebar:
                 value=_sb_sid_cur, key='sb_portfolio_sheet_id_input',
                 placeholder='貼上 https://docs.google.com/spreadsheets/d/...',
                 help='貼 URL/ID 設定投組資料庫（或在「📁 組合管理」頁設定）')
-            _sb_m = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', _sb_sid_raw)
-            _sb_sid_new = _sb_m.group(1) if _sb_m else _sb_sid_raw.strip()
-            if _sb_sid_new and _sb_sid_new != _sb_sid_cur:
-                # A(v19.204 順暢化):側欄設 Sheet 也走「ETF+個股兩通道 + ?sheet= 持久化」,
-                # 與 📁 組合管理 的 _apply_active_sheet 一致 —— 否則從側欄設的 Sheet 不持久
-                # (重整就沒了)、也漏設個股通道(個股組合讀不到)。稽核抓到的不對稱,補齊。
-                st.session_state['portfolio_sheet_id'] = _sb_sid_new
-                st.session_state['stock_portfolio_sheet_id'] = _sb_sid_new
-                try:
-                    st.query_params['sheet'] = _sb_sid_new
-                except Exception:  # noqa: BLE001 — query param 寫入失敗不擋設定
-                    pass
-                _sb_sync_silent()   # 1.0-B2:側欄換 Sheet 後**這一輪**沒有再 rerun → 就地重算 ?gs= 記號
+            # Sheet Safety 批 B3/B4(DEC-083):~~本檔自帶 `/spreadsheets/d/(...)` 正則 + 自己寫兩格 /
+            # `?sheet=` / 重算記號~~(有意識的移除:發布連結會被解析成 `e` 綁上去)→ 唯一寫入契約
+            # `apply_sheet_binding`(兩通道 + ?sheet= + 就地重算 ?gs= 記號,同修前;解析不過什麼都不寫)。
+            _sb_bind = _sb_apply_binding(_sb_sid_raw)
+            if _sb_bind.error and _sb_sid_raw.strip():
+                st.error(_sb_bind.message)
+            _sb_sid_new = _sb_bind.sheet_id or str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
             if _sb_sid_new:
                 st.caption(f'✅ Sheet ID：`{_sb_sid_new}`')
             else:

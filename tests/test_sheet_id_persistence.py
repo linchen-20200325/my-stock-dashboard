@@ -86,10 +86,12 @@ def test_drive_picker_never_auto_selects_single_sheet():
 
 # ── A/C:app.py 開機 gate 還原 ?sheet= 到兩通道(源碼守衛)────────────
 def test_app_boot_restores_sheet_id_to_both_channels():
+    """Sheet Safety 批 B4(DEC-083,有意識的修改):還原邏輯自 app.py 搬到 L1 唯一寫入契約
+    `oauth_state.restore_sheet_binding_from_query`(消毒後 setdefault 兩格);app.py 只呼叫它。
+    行為(兩通道、setdefault)由 tests/test_sheet_safety_b4_binding_contract.py 實跑驗證。"""
     src = (_REPO / 'app.py').read_text(encoding='utf-8')
-    assert "_qp.get('sheet')" in src, 'app.py 開機應還原 ?sheet='
-    # §8.2 R4:app.py(L6)不得 import L1 gsheet_portfolio 取常數 → 用其 session key 字面值。
-    # PORTFOLIO_SHEET_KEY/STOCK_PORTFOLIO_SHEET_KEY 的值即這兩個字串,還原到 ETF+個股兩通道。
-    assert 'portfolio_sheet_id' in src and 'stock_portfolio_sheet_id' in src, \
-        '應還原到 ETF+個股兩通道'
-    assert 'setdefault' in src, '應以 setdefault 還原(本 session 已選則不覆寫)'
+    assert 'restore_sheet_binding_from_query()' in src, 'app.py 開機應還原 ?sheet='
+    assert "_qp.get('sheet')" not in src, 'app.py 不得再自己讀 ?sheet= 寫綁定(第五套綁定邏輯)'
+    ctr = (_REPO / 'src' / 'data' / 'portfolio' / 'oauth_state.py').read_text(encoding='utf-8')
+    assert 'def restore_sheet_binding_from_query' in ctr and 'setdefault' in ctr, \
+        '應以 setdefault 還原(本 session 已選則不覆寫)'
