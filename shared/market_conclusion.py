@@ -31,8 +31,10 @@ CONCEPT_ORDER: tuple[str, ...] = (
 TREND_UNDEFINED_TEXT: str = "尚未定義"
 #: 風險上限獨立卡位的狀態字樣（客戶 2026-10-25 Q2-2，**逐字**）。
 RISK_CAP_PENDING_TEXT: str = "獨立顯示待 C2b＋RC-VISIBILITY Gate"
-#: 風險上限在結論句裡的子句內容（不讀、不寫任何上限數字）。
-RISK_CAP_CLAUSE_TEXT: str = f"{RISK_CAP_PENDING_TEXT}（上限有效時，數字見「能不能出手」卡）"
+#: 風險上限在結論句裡的子句內容 ＝ 客戶逐字（2026-10-25 QA-A B1：⛔ 不附「數字見哪裡」之類的指路）。
+#: ~~f"{RISK_CAP_PENDING_TEXT}（上限有效時，數字見「能不能出手」卡）"~~（有意識的修改，⛔ 不是漏刪：
+#:   客戶裁示的子句是「風險上限：獨立顯示待 C2b＋RC-VISIBILITY Gate」，多出來的指路句不在裁示內）
+RISK_CAP_CLAUSE_TEXT: str = RISK_CAP_PENDING_TEXT
 #: 子句內容缺席時的字樣（R1：照實寫出來，⛔ 不寫成中性）。
 MISSING_TEXT: str = "無資料（未評估）"
 

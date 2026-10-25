@@ -52,6 +52,7 @@ from typing import Any
 import streamlit as st
 
 from shared import ia_nav
+from shared import regime_arbiter as RA
 from shared.inst_net import is_net_observed
 from shared.market_conclusion import (
     CONCEPT_INTL_TREND,
@@ -62,8 +63,9 @@ from shared.market_conclusion import (
     build_market_conclusion,
 )
 from shared.secret_scrub import scrub_secrets
-from shared.ui_state import UI_DEGRADED, UI_FAILED, UI_IDLE, UI_LIVE, UI_PARTIAL
+from shared.ui_state import UI_DEGRADED, UI_LIVE, UI_PARTIAL
 from src.ui.views import page_today as today
+from src.ui_v2 import components as v2_components
 from src.ui.views._ui_kit import section_header
 
 # ══════════════════════════════════════════════════════════════════
@@ -100,7 +102,8 @@ X3_TEXT: str = (
     "- 上限有效時，數字會出現在「能不能出手 · 出手到幾成」卡的「硬否決天花板」列（與「🚦 今天」頁同一段程式）。\n"
     "- 那張卡顯示「無法判定」時，常見原因之一是健康分因缺正式漲跌家數而未評估；"
     "但本頁**分不出**是尚未計算、本輪算不出、檔案過期還是讀不出。\n"
-    "- 系統仍照常計算並寫檔；每次更新的報告（下方「資料來源與完整度」）會列出本次寫入的值。")
+    "- 系統仍照常計算並寫檔；按過更新之後，頁首更新鈕下方的「上一次更新的結果」"
+    "會列出本次寫入的值（本次使用中還沒按過更新時，那一段不會出現）。")
 X9_TITLE: str = "研究中（Candidate／Research，不是判斷規則）"
 X9_TEXT: str = (
     "- 「大盤 EPS×PE 情境估值」\n"
@@ -188,6 +191,37 @@ FRAME_SOURCE_NOTE: dict[str, str] = {
     "tech": "Yahoo Finance（`cl_data['tech']`）",
 }
 
+#: 舊 UI 的去處。⚠️ 這三個字串的 SSOT 在 `app.py`（側欄 radio 標題 / 「不使用」選項 / 舊頁籤名），
+#: `shared/ia_nav.py` 檔頭明文不收舊 IA 的名字、`app.py` 也不能被 import ⇒ 這裡照抄並由
+#: `tests/test_page_market.py::TestCrossReferences::test_old_ui_pointer_strings_exist_in_app` 對帳。
+OLD_UI_NAV_RADIO: str = "🆕 新版戰情室（試用中）"
+OLD_UI_NAV_OFF: str = "不使用（用下方原功能）"
+OLD_UI_MARKET_TAB: str = "🌍 市場環境"
+OLD_UI_POINTER: str = (f"要看請在側欄「{OLD_UI_NAV_RADIO}」選「{OLD_UI_NAV_OFF}」，"
+                       f"再到「{OLD_UI_MARKET_TAB}」分頁")
+
+#: 位階契約 `source`（分支識別碼，SSOT `shared.regime_arbiter.SOURCE_*`）→ 人話。
+#: ⚠️ 只描述「哪一條分支生效」，⛔ 不帶舊紅綠燈的 label／action 操作字句（R12；那份對照在
+#:    `compute.macro.macro_helpers` 的文案表裡，含操作建議，故不沿用）。字樣取自 `regime_arbiter` 各常數的 docstring。
+REGIME_SOURCE_TEXT: dict[str, str] = {
+    RA.SOURCE_DEFENSE_FUTURES: "防禦分支：大盤評分偏低且外資期貨大額淨空",
+    RA.SOURCE_DEFENSE_HEALTH: "防禦分支：總經健康分跌破防禦門檻",
+    RA.SOURCE_BULL_SCORE: "多頭分支：趨勢為多頭且大盤評分達門檻",
+    RA.SOURCE_BEAR_TREND: "轉守分支：趨勢面為轉守或空頭",
+    RA.SOURCE_NEUTRAL_FALLTHROUGH: "震盪分支：以上條件皆不成立",
+    RA.SOURCE_UNLOADED: "尚未評估：總經尚未載入（或健康分算不出來）",
+    RA.SOURCE_FILE_RULE_ENGINE: "規則引擎快照（紅綠燈結果未載入時的退路）",
+    RA.SOURCE_UNEVALUATED_BREADTH: "尚未評估：缺真實市場廣度（漲跌家數），代理估算值不計分",
+}
+
+
+def regime_source_text(source: Any) -> str:
+    """契約 `source` → 人話。缺 → 「無資料」；未登錄的代碼照實講（⛔ 不猜一個說法）。"""
+    if source is None or not str(source).strip():
+        return MISSING
+    return REGIME_SOURCE_TEXT.get(str(source), f"未登錄的分支（代碼 {source}）")
+
+
 #: ADL 區的必要註記（Gate 文件 X5）。
 ADL_NOTE: str = ("此數字目前沒有接進位階與健康分的計算；能不能當正式廣度來源，屬 G4 待研究。")
 
@@ -229,10 +263,12 @@ def raw_rows(session: Mapping[str, Any], specs: Sequence[RawSpec]) -> list[tuple
         _src = session.get(_key) if isinstance(session, Mapping) else None
         _v = dig(_src, _path)
         _n = _note
-        if _key == "bias_info" and _path == ("bias_240",) and _v is not None:
-            if dig(_src, ("is_estimated",)) is True:
-                _days = dig(_src, ("data_days",))
-                _n = f"估算・{fmt_value(_days)} 天資料"
+        if _key == "bias_info" and _path in (("bias_240",), ("ma240",)) and _v is not None:
+            # 估算判定與天數一律走 L2 既有 helper（0 天／取不到 ⇒ 天數不明，⛔ 不印「0 天」）。
+            from src.compute.macro.macro_helpers import bias_data_days, bias_is_estimated
+            if bias_is_estimated(_src):
+                _days = bias_data_days(_src)
+                _n = (f"估算・{_days} 天資料" if _days is not None else "估算・天數不明")
         if _key == "jingqi_info" and dig(_src, ("is_proxy",)) is True:
             _n = (_n + "；" if _n else "") + "代理（估算）值，只顯示不計分"
         _rows.append((_label, fmt_value(_v, _unit), _n))
@@ -272,10 +308,13 @@ def inst_rows(session: Mapping[str, Any]) -> list[tuple[str, str, str]]:
     """三大法人淨買賣超（億元）。未觀測的列寫「無資料（未觀測）」，⛔ 不印預填的 0。"""
     _cl = session.get("cl_data") if isinstance(session, Mapping) else None
     _inst = dig(_cl, ("inst",))
+    _date = dig(_cl, ("inst_date",))
     _src = "本輪"
     if not _inst:
         _inst = session.get("_last_inst") if isinstance(session, Mapping) else None
+        _date = session.get("_last_inst_date") if isinstance(session, Mapping) else None
         _src = "上一次有效值（本輪沒有）"
+    _src = f"{_src}；資料日 {fmt_value(_date)}"
     if not isinstance(_inst, Mapping) or not _inst:
         return []
     _rows: list[tuple[str, str, str]] = []
@@ -287,37 +326,67 @@ def inst_rows(session: Mapping[str, Any]) -> list[tuple[str, str, str]]:
     return _rows
 
 
-def regime_clause(tile: Any) -> str | None:
-    """市場位階卡 → 結論句子句內容。None ＝ 缺（由 L0 照實寫「無資料（未評估）」）。"""
+def card_badge_text(tile: Any) -> str:
+    """這張卡畫面上那顆徽章的字（與 v2 卡面同一支解析：`page_today.v2_card_badge_n` → 徽章目錄）。"""
+    _n = today.v2_card_badge_n(tile.card, coverage=tile.badge_coverage)
+    _text = str(v2_components.badge(_n)["text"])
+    if tile.badge_coverage is not None and "N／M" in _text:
+        _text = _text.replace("N／M", f"{tile.badge_coverage[0]}／{tile.badge_coverage[1]}")
+    return _text
+
+
+def _card_now(tile: Any, prefix: str) -> str:
+    """卡面 `now` 那一句去掉粗體與「〈概念〉：」前綴（例：「**市場位階：尚未評估**」→「尚未評估」）。"""
+    _now = str(getattr(tile.card.note, "now", "") or "").replace("**", "").strip()
+    return _now[len(prefix):].strip() if _now.startswith(prefix) else _now
+
+
+def _non_live_clause(tile: Any, prefix: str, extra: Sequence[str] = (), *,
+                     with_badge: bool = True) -> str:
+    """非正常態：卡面那句＋徽章字（＋原因），⛔ 不寫成中性。"""
+    _head = _card_now(tile, prefix) or MISSING
+    _bits = [card_badge_text(tile) if with_badge else "", *extra]
+    _bits = [_b for _b in dict.fromkeys(_bits) if _b and _b != _head]
+    return f"{_head}（{'，'.join(_bits)}）" if _bits else _head
+
+
+def regime_clause(tile: Any, regime: Mapping[str, Any] | None = None) -> str:
+    """市場位階卡 → 結論句子句內容。每一種卡態都用卡面上看得到的字。"""
     _state = tile.card.state
     if _state == UI_LIVE:
         return str(tile.card.value)
     if _state == UI_DEGRADED:
-        return f"{tile.signal_text}（門檻已失準）"
-    if _state == UI_FAILED:
-        return "讀取失敗（未評估）"
-    if _state == UI_IDLE:
-        return "尚未載入（未評估）"
-    return None
+        return f"{tile.signal_text}（{card_badge_text(tile)}）"
+    if today.regime_breadth_unevaluated(regime):
+        # ⚠️ 這一態卡上的徽章（v2 #7「缺漏 · 可重跑」）與卡上的原因句（重抓不會改變）互相矛盾 ——
+        #    那是徽章層既有的已登記落差（見 `page_today.V2_STATE_VOCAB` 下方註解），⛔ 不把「可重跑」
+        #    帶進結論句；子句改用卡上原因句的意思（DEC-074：缺真實廣度，代理值不計分）。
+        return _non_live_clause(tile, "市場位階：", ("缺真實市場廣度，代理估算值不計分",),
+                                with_badge=False)
+    _extra = (("正式廣度來源接上前，載入後仍為未評估",)
+              if today.regime_not_loaded_pending_breadth(regime) else ())
+    return _non_live_clause(tile, "市場位階：", _extra)
 
 
-def danger_clause(tile: Any) -> str | None:
-    """指標危險度卡 → 子句內容（沿用卡面字樣：燈號＋`overall_verdict` 的說明）。"""
+def danger_clause(tile: Any) -> str:
+    """指標危險度卡 → 子句內容（沿用卡面字樣：燈號＋`overall_verdict` 的說明；非正常態＝卡面那句＋徽章字）。"""
     _state = tile.card.state
-    if _state == UI_LIVE:
-        _detail = str(tile.card.value)
-    elif _state == UI_PARTIAL:
-        _detail = dict(tile.facts).get(today.DANGER_DETAIL_FACT_KEY, "")
-    elif _state == UI_FAILED:
-        return "讀取失敗（未評估）"
-    elif _state == UI_IDLE:
-        return "尚未載入（未評估）"
-    else:
-        return None
-    _zh = str(tile.signal_text or "").strip()
-    if not _detail:
-        return _zh or None
-    return f"{_zh}（{_detail}）" if _zh else _detail
+    if _state in (UI_LIVE, UI_PARTIAL):
+        _detail = (str(tile.card.value) if _state == UI_LIVE
+                   else dict(tile.facts).get(today.DANGER_DETAIL_FACT_KEY, ""))
+        _zh = str(tile.signal_text or "").strip()
+        if not _detail:
+            return _zh or card_badge_text(tile)
+        return f"{_zh}（{_detail}）" if _zh else _detail
+    return _non_live_clause(tile, "指標危險度：")
+
+
+def report_pointer(report: Any) -> str:
+    """X10 指向更新報告的那一句 —— 依「這一輪有沒有報告」照實講（⛔ 不指向一段不存在的畫面）。"""
+    if report is None:
+        return ("本次使用中還沒按過更新，所以還沒有更新報告；"
+                "按頁首的更新鈕後，報告會出現在更新鈕下方（與「🚦 今天」頁同一份）。")
+    return "本次更新的逐來源結果見頁首更新鈕下方「上一次更新的結果」（與「🚦 今天」頁同一份報告）。"
 
 
 def status_line(report: Any, danger: Any) -> str:
@@ -378,7 +447,7 @@ def _render_x1(session: Mapping[str, Any], regime: Mapping[str, Any] | None,
         _health_text = "未評估（本輪沒有算出健康分）"
     _wr = session.get("warroom_summary") if isinstance(session, Mapping) else None
     _rows: list[tuple[str, str, str]] = [
-        ("位階生效來源", fmt_value(_reg.get("source")), "契約自己的分支標記"),
+        ("位階生效來源", regime_source_text(_reg.get("source")), "契約自己標的生效分支"),
         ("總經健康分", _health_text, ""),
         ("信心度", fmt_value(dig(_wr, ("confidence_pct",)), "%"), "紅綠燈資料來源的齊備程度"),
     ]
@@ -426,6 +495,10 @@ def _render_x5(session: Mapping[str, Any]) -> None:
                          chart_label="顯示加權指數／新台幣走勢圖")
     _render_raw_table(raw_rows(session, X5_FIELDS),
                       empty_text=f"{MISSING}：本次使用中還沒有市場評估輸入。")
+    from src.compute.macro.macro_helpers import bias_estimated_note
+    _bias_note = bias_estimated_note(session.get("bias_info"))
+    if _bias_note:
+        st.caption(_bias_note)
     st.markdown("**市場廣度（ADL）**")
     st.caption(ADL_NOTE)
     if st.checkbox("顯示 ADL 逐日原始資料", key=SS_GATE_ADL):
@@ -447,7 +520,7 @@ def _render_x6(session: Mapping[str, Any]) -> None:
     else:
         st.caption(f"{MISSING}：本次使用中還沒有這一組資料。")
     _render_raw_table(raw_rows(session, X6_FIELDS), empty_text="")
-    st.caption("全球資金流向、全球風險雷達本批未接到本頁（見「🌍 市場環境」舊分頁）；"
+    st.caption(f"全球資金流向、全球風險雷達本批未接到本頁（{OLD_UI_POINTER}）；"
                "雙速合議、Risk-on／off 標籤、中國拖累不在本頁。")
 
 
@@ -471,10 +544,15 @@ def _render_x8(session: Mapping[str, Any]) -> None:
         if _cols is None or getattr(_li, "empty", True):
             st.caption(f"{MISSING}：本次使用中沒有先行指標資料。")
         else:
+            _retain = session.get("li_retain_meta")
+            if isinstance(_retain, Mapping) and _retain.get("rounds"):
+                # 字樣同 `src/ui/pages/data_coverage.py` 的降級句（同一個 session 標記）。
+                st.warning(f"先行指標最近 {_retain.get('rounds')} 輪抓取都失敗，"
+                           f"下表沿用 {str(_retain.get('since', ''))[:16]} 那份舊資料", icon="♻️")
             _keep = [_c for _c, _ in LEADING_COLUMNS if _c in _cols]
             st.dataframe(_li[_keep])
             st.caption("　·　".join(f"{_c}：{_n}" for _c, _n in LEADING_COLUMNS if _n and _c in _keep))
-    st.caption("外資連續買賣超天數、熱錢三角、融券本批未接到本頁。")
+    st.caption(f"外資連續買賣超天數、熱錢三角、融券本批未接到本頁；{OLD_UI_POINTER}。")
 
 
 def _render_report_guarded(report: Any) -> None:
@@ -532,7 +610,7 @@ def render_page_market() -> None:
 
     section_header(CONCLUSION_HEADING)
     try:
-        st.markdown(build_market_conclusion(regime_text=regime_clause(_regime_tile),
+        st.markdown(build_market_conclusion(regime_text=regime_clause(_regime_tile, _regime),
                                             danger_text=danger_clause(_danger_tile)))
     except ValueError as _e:  # §1：字樣不合規 ⇒ 講出來，⛔ 不自己改寫
         st.error(f"結論句組不出來：{_e}", icon="❌")
@@ -586,14 +664,14 @@ def render_page_market() -> None:
     with st.expander("總經／景氣（原始資料）", expanded=False):
         _render_raw_table(raw_rows(_session, X7_FIELDS),
                           empty_text=f"{MISSING}：本次使用中還沒有總經資料。")
-        st.caption("景氣拐點六大面向本批未接到本頁。")
+        st.caption(f"景氣拐點六大面向本批未接到本頁；{OLD_UI_POINTER}。")
     with st.expander("籌碼（原始資料）", expanded=False):
         _render_x8(_session)
     with st.expander(X9_TITLE, expanded=False):
         st.markdown(X9_TEXT)
     with st.expander("資料來源與完整度", expanded=False):
         st.markdown(
-            "- 本次更新的逐來源結果見上方「上一次更新的結果」（與「🚦 今天」頁同一份報告）。\n"
+            f"- {report_pointer(_report)}\n"
             f"- 各來源的健康狀態與根因：{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}。\n"
             "- ⚠️ 揭露：更新報告的「系統風險上限」步驟說明會列出本次寫檔的數值（現行行為，本批不改）。")
     with st.expander("問 AI／查看依據", expanded=False):

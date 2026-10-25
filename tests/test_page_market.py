@@ -62,6 +62,13 @@ class TestConclusionSentence:
         assert f"{MC.CONCEPT_INTL_TREND}：尚未定義" in _s
         assert MC.RISK_CAP_PENDING_TEXT in _s
 
+    def test_risk_cap_clause_is_exactly_the_customer_wording(self):
+        """QA-A B1：子句逐字「風險上限：獨立顯示待 C2b＋RC-VISIBILITY Gate」，⛔ 不附任何指路／數字。"""
+        assert MC.RISK_CAP_CLAUSE_TEXT == "獨立顯示待 C2b＋RC-VISIBILITY Gate"
+        _s = MC.build_market_conclusion(regime_text="多頭", danger_text="紅")
+        assert _s.endswith("；風險上限：獨立顯示待 C2b＋RC-VISIBILITY Gate。")
+        assert "能不能出手" not in _s and "數字" not in _s
+
     @pytest.mark.parametrize("bad", ("多頭但轉弱", "黃，因此保守", "紅所以減碼", "a；b"))
     def test_forbidden_input_fails_loud(self, bad):
         with pytest.raises(ValueError):
@@ -193,8 +200,24 @@ class TestClausesComeFromTheCards:
     def test_cold_session_says_not_loaded(self):
         from src.ui.views import page_market as M
         _e, _d, _r = self._tiles()
-        assert M.regime_clause(_r) == "尚未載入（未評估）"
-        assert M.danger_clause(_d) == "尚未載入（未評估）"
+        assert M.regime_clause(_r) == "尚未評估（尚未載入）"
+        assert M.danger_clause(_d) == "尚未載入"
+
+    def test_breadth_unevaluated_regime_says_why(self):
+        from shared import regime_arbiter as RA
+        from src.ui.views import page_market as M
+        _reg = {"source": RA.SOURCE_UNEVALUATED_BREADTH, "is_loaded": False, "regime": "unknown",
+                "light": "⬜", "health": None, "exposure_limit_pct": None}
+        _e, _d, _r = self._tiles(regime=_reg)
+        _c = M.regime_clause(_r, _reg)
+        assert _c == "尚未評估（缺真實市場廣度，代理估算值不計分）"
+        assert "可重跑" not in _c   # 卡上 #7 徽章與原因句矛盾，⛔ 不帶進結論句
+
+    def test_gray_danger_uses_card_badge(self):
+        from src.ui.views import page_market as M
+        _e, _d, _r = self._tiles(danger=("gray", "尚未載入資料", (0, 16)), danger_requested=True)
+        assert M.danger_clause(_d) == f"尚未載入（{M.card_badge_text(_d)}）"
+        assert M.card_badge_text(_d) in M.danger_clause(_d)
 
     def test_live_danger_uses_card_words(self):
         from src.ui.views import page_market as M
@@ -214,8 +237,49 @@ class TestClausesComeFromTheCards:
     def test_failed_states_say_failed(self):
         from src.ui.views import page_market as M
         _e, _d, _r = self._tiles(danger_error="RuntimeError('x')", regime_error="RuntimeError('y')")
-        assert M.danger_clause(_d) == "讀取失敗（未評估）"
-        assert M.regime_clause(_r) == "讀取失敗（未評估）"
+        assert M.danger_clause(_d) == "尚未載入（取得失敗）"
+        assert M.regime_clause(_r) == "尚未評估（取得失敗）"
+
+
+def _all_states():
+    from shared import ui_state as U
+    return [U.UI_IDLE, U.UI_LOADING, U.UI_FAILED, U.UI_EMPTY, U.UI_MISSING_RETRYABLE,
+            U.UI_NOT_APPLICABLE, U.UI_PARTIAL, U.UI_DEGRADED, U.UI_UNWIRED, U.UI_LIVE]
+
+
+def test_state_enumeration_is_complete():
+    """列舉表涵蓋 L0 全部卡態 —— L0 多一態，本檔就要回來補。"""
+    from shared import ui_state as U
+    assert set(_all_states()) == set(U.UI_STATE_META)
+
+
+@pytest.mark.parametrize("state", _all_states())
+@pytest.mark.parametrize("which", ("regime", "danger"))
+def test_every_card_state_maps_to_card_wording(state, which):
+    """QA-B #1：每一種卡態都對到卡上看得到的字（徽章字／卡面那句），⛔ 沒有一態掉成「無資料」或中性字。"""
+    from shared import ui_state as U
+    from src.ui.tabs.tab_today import Card, Note
+    from src.ui.views import page_market as M
+    from src.ui.views.page_today import Tile
+    _prefix = "市場位階：" if which == "regime" else "指標危險度："
+    _cov = (13, 16) if state == U.UI_PARTIAL else None
+    if state == U.UI_LIVE:
+        _card = Card(key=f"verdict.{which}", label="x", state=state, value="多頭" if which == "regime" else "1 桶黃")
+    else:
+        _card = Card(key=f"verdict.{which}", label="x", state=state,
+                     note=Note(now=f"**{_prefix}尚未評估**", why="測試用原因", where="測試用出口"))
+    _tile = Tile(_card, signal_text=("黃" if state in (U.UI_DEGRADED, U.UI_LIVE, U.UI_PARTIAL) else ""),
+                 badge_coverage=_cov,
+                 facts=((M.today.DANGER_DETAIL_FACT_KEY, "1 桶黃"),) if state == U.UI_PARTIAL else ())
+    _c = M.regime_clause(_tile, None) if which == "regime" else M.danger_clause(_tile)
+    assert _c and _c.strip()
+    assert _c != MC.MISSING_TEXT
+    for _w in ("中性", "正常", "震盪"):
+        assert _w not in _c
+    if state != U.UI_LIVE and not (which == "danger" and state == U.UI_PARTIAL):
+        assert M.card_badge_text(_tile) in _c, f"{state}: {_c}"
+    # 放進結論句也組得起來（不含禁用連接詞）
+    MC.build_market_conclusion(regime_text=_c, danger_text=_c)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -249,6 +313,24 @@ class TestRawData:
         _row = next(r for r in M.raw_rows(_s, M.X5_FIELDS) if "BIAS240" in r[0])
         assert _row[1] == "3.20%" and _row[2] == "估算・180 天資料"
 
+    @pytest.mark.parametrize("days, want", ((0, "估算・天數不明"), (None, "估算・天數不明"),
+                                            ("x", "估算・天數不明"), (90, "估算・90 天資料")))
+    def test_bias240_estimated_days_via_l2_helper(self, days, want):
+        from src.ui.views import page_market as M
+        _bi = {"bias_240": 1.0, "ma240": 20000.0, "is_estimated": True}
+        if days is not None:
+            _bi["data_days"] = days
+        _rows = {r[0]: r for r in M.raw_rows({"bias_info": _bi}, M.X5_FIELDS)}
+        assert _rows["年線乖離（BIAS240）"][2] == want
+        assert _rows["MA240"][2] == want      # MA240 本身也是估算均線，一併標
+        assert "無資料 天" not in "".join(r[2] for r in _rows.values())
+
+    def test_bias_not_estimated_has_no_mark(self):
+        from src.ui.views import page_market as M
+        _rows = {r[0]: r for r in M.raw_rows({"bias_info": {"bias_240": 1.0, "ma240": 1.0,
+                                                            "is_estimated": False}}, M.X5_FIELDS)}
+        assert _rows["MA240"][2] == "" and _rows["年線乖離（BIAS240）"][2] == ""
+
     def test_proxy_breadth_is_marked(self):
         from src.ui.views import page_market as M
         _s = {"jingqi_info": {"avg": 55.0, "is_proxy": True, "label": "🟢 多頭積極"}}
@@ -269,6 +351,14 @@ class TestRawData:
         assert _rows["外資及陸資"] == "無資料（未觀測）"
         assert _rows["投信"] == "12.50 億"
 
+    def test_inst_rows_show_data_date_including_fallback(self):
+        from src.ui.views import page_market as M
+        _now = M.inst_rows({"cl_data": {"inst": {"投信": {"net": 1.0}}, "inst_date": "20261024"}})
+        assert "資料日 20261024" in _now[0][2] and _now[0][2].startswith("本輪")
+        _fb = M.inst_rows({"cl_data": {"inst": {}}, "_last_inst": {"投信": {"net": 2.0}},
+                           "_last_inst_date": "20261023"})
+        assert "上一次有效值" in _fb[0][2] and "資料日 20261023" in _fb[0][2]
+
     def test_frame_last_close(self):
         import pandas as pd
         from src.ui.views import page_market as M
@@ -281,6 +371,38 @@ class TestRawData:
         from src.ui.views import page_market as M
         assert "融券餘額" not in {c for c, _ in M.LEADING_COLUMNS}
         assert dict(M.LEADING_COLUMNS)["選PCR"] == "法人估算"
+
+
+class TestCrossReferences:
+    def test_report_pointer_follows_state(self):
+        from src.ui.views import page_market as M
+        assert "還沒按過更新" in M.report_pointer(None)
+        assert "上一次更新的結果" in M.report_pointer(SimpleNamespace(started_at="10/25 09:00"))
+        assert "上方" not in M.report_pointer(None)
+
+    def test_x3_points_at_the_real_place(self):
+        from src.ui.views import page_market as M
+        assert "下方「資料來源與完整度」" not in M.X3_TEXT
+        assert "更新鈕下方" in M.X3_TEXT
+
+    def test_old_ui_pointer_strings_exist_in_app(self):
+        from src.ui.views import page_market as M
+        _app = (_ROOT / "app.py").read_text(encoding="utf-8")
+        for _s in (M.OLD_UI_NAV_RADIO, M.OLD_UI_NAV_OFF, M.OLD_UI_MARKET_TAB):
+            assert _s in _app, _s
+        assert _SRC.count("OLD_UI_POINTER}") >= 3
+        assert "見「🌍 市場環境」舊分頁" not in _SRC
+
+    def test_x1_source_is_human_wording(self):
+        from shared import regime_arbiter as RA
+        from src.ui.views import page_market as M
+        for _code in (RA.SOURCE_UNLOADED, RA.SOURCE_UNEVALUATED_BREADTH, RA.SOURCE_BULL_SCORE,
+                      RA.SOURCE_DEFENSE_HEALTH, RA.SOURCE_DEFENSE_FUTURES, RA.SOURCE_BEAR_TREND,
+                      RA.SOURCE_NEUTRAL_FALLTHROUGH, RA.SOURCE_FILE_RULE_ENGINE):
+            _t = M.regime_source_text(_code)
+            assert _code not in _t and _t.strip()
+        assert M.regime_source_text(None) == "無資料"
+        assert "zzz" in M.regime_source_text("zzz")   # 未登錄 ⇒ 照實講代碼，⛔ 不猜
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -400,6 +522,9 @@ def test_page_renders_with_populated_session(tmp_path):
                                                      "source": "yfinance:^VIX"}})
         st.session_state.setdefault("bias_info", {"bias_240": 5.5, "is_estimated": True,
                                                     "data_days": 190})
+        st.session_state.setdefault("li_latest", pd.DataFrame(
+            {"日期": ["10/22"], "外資": [1.0], "選PCR": [0.9], "融券餘額": [123.0]}))
+        st.session_state.setdefault("li_retain_meta", {"rounds": 2, "since": "2026-10-24 09:00:00"})
         render_page_market()
     """), encoding="utf-8")
     _at = AppTest.from_file(str(_script), default_timeout=120)
@@ -410,3 +535,11 @@ def test_page_renders_with_populated_session(tmp_path):
     assert "22,100.00" in _joined and "17.30" in _joined and "估算・190 天資料" in _joined
     _i = _md.index("**風險上限**")
     assert _md[_i + 1] == "獨立顯示待 C2b＋RC-VISIBILITY Gate"
+    assert "還沒按過更新" in _joined                 # X10 指路照實（沒有報告）
+    assert "unloaded" not in _joined                  # X1 不出機器碼
+    from src.ui.views.page_market import SS_GATE_LEADING
+    _at.checkbox(key=SS_GATE_LEADING).check().run()
+    assert not _at.exception
+    _warn = "\n".join(_w.value for _w in _at.warning)
+    assert "最近 2 輪抓取都失敗" in _warn and "2026-10-24 09:00" in _warn
+    assert all("融券餘額" not in list(_d.value.columns) for _d in _at.dataframe)
