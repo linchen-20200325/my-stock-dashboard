@@ -251,7 +251,7 @@
 | 目前規劃中的工作 | ~~**👤 我的：只做草稿（Stage A／B），不實作**~~ **👤 我的 Stage A 盤點＋Stage B 草稿已完成**（`docs/vnext/ME_PAGE_DRAFT_2026-10-25.md`），~~**停在 Stage C 等客戶裁示**~~ Stage C 已裁示（DEC-083，見下方新段）（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）；⛔ 客戶核准草稿前不得寫正式頁面、改 navigation、刪舊 UI、替換既有操作流程、開始 OAuth／Sheet write wiring、新增新的正式投資判斷 |
 | 明確未變 | **舊 UI 未刪**（「🚦 今天」頁與舊分頁仍在）；**C2b 未開始**；`PRODUCTION_WRITE_APPROVED=False`；**`RC-VISIBILITY` 未完成**；禁止事項列照舊 |
 
-📌 **2026-10-25 👤 我的 Stage C 已裁示（DEC-083）**（append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）；**本段為現行短版，與上表及上各段衝突處以本段為準**：
+📌 **2026-10-25 👤 我的 Stage C 已裁示（DEC-083）**（append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）；~~**本段為現行短版，與上表及上各段衝突處以本段為準**~~ 已由下方「📌 2026-10-25 👤 我的 P1 待合併（PR #927）」段取代；本段「明確未變」「禁止事項（DEC-083 G 段）」「P2」三列**效力不變**，由新段沿用（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））：
 
 > 客戶 2026-10-25 對 👤 我的 Stage C 完整裁示：**Q1～Q7 全採 A**，另含 Sheet Safety 修復批（B1～B5）、P1 Stage D 條件、dead-end 修正、舊 UI Removal Gate、大盤頁、禁止事項、施工順序（A～H 段）。全文逐字見 `docs/DECISIONS.md` **DEC-083**；待辦見 `docs/BACKLOG.md` 5.1.13（`BUG-SHEET-READWRITE`、`BUG-SHEET-PUBLINK`、`SHEET-SAFETY-B4-SINGLE-WRITER`、`SHEET-SAFETY-B5-CACHE`、`ME-P1`、`ME-P2` 等）；摘要 `docs/PROJECT_STATE.md` §37。⛔ 接手必須重新做 GitHub Verification Gate（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點）。
 
@@ -267,6 +267,19 @@
 | 禁止事項（DEC-083 G 段） | 不開始 C2b；不改 Risk Cap；不顯示 Risk Cap 正式數字；不翻 `PRODUCTION_WRITE_APPROVED`；不新增 production source；不修改投資公式／門檻／權重；不動不可重建歷史；不因 read 自動 write；不因 missing 自動建立資料；不因 schema mismatch 自動修資料；其餘沿用前段 |
 | 下一階段 Model／Effort | 客戶指定：高能力模型／**High**（H 段）；新對話仍須依 `PROJECT_RULES.md` 第 9.0 節重新判斷，不得假設已切換 |
 | ⚠️ 揭露 | 本段與 DEC-083 摘要由單一撰寫組產出，**沒有第二組驗過**（`CLAUDE.md` §-2 規則 6）；`BUG-SHEET-TITLE-SWALLOW` 排入 P1 前置為撰寫組讀法（客戶原文未逐字點名） |
+
+📌 **2026-10-25 👤 我的 P1 待合併（PR #927）**（append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；**本段為現行短版，與上表及上各段衝突處以本段為準**：
+
+> ⛔ 接手必須重新做 GitHub Verification Gate（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點）。狀態摘要 `docs/PROJECT_STATE.md` §38；待辦 `docs/BACKLOG.md` 5.1.13 `ME-P1` 與 `NAV-PERSIST` 起 11 列。
+
+| 項目 | 現況（2026-10-25 撰寫組 `git fetch`＋`gh api` REST 實查，會過期） |
+|---|---|
+| main | `22c1b1e1`（cron tip；最後非 cron 合併＝#926 Sheet Safety 批 `55601f42`）；**以 GitHub 為準** |
+| **Current Task** | **PR #927「👤 我的 P1」待合併**：分支 `claude/determined-euler-32xqjn` @ `4e8c0876`（本 docs commit 推上後 head 會前進），draft；撰寫組查時 head CI in_progress。合併後 → main verification → **停手回報客戶**（DEC-083 H 段步驟 7～8） |
+| **Next Safe Point** | **等客戶裁示**。⛔ **不開始 P2**（`ME-P2`，DEC-083 H.9：不自行進 P2，須另開 Stage A／B／C）；⛔ **不刪舊 UI**（DEC-083 E 段：🚦 今天、📁 組合管理、側欄 Google、Sheet CRUD、legacy controls 全部保留） |
+| 待客戶 | ① **📊 大盤頁 UI 驗收**（DEC-083 F 段）；② `SHEET-LOGOUT-SECRETS-DEFAULT`（舊 UI 登出後仍讀部署預設 Sheet 是否可接受）；③ `ME-UI-STRINGS-REVIEW`（👤 我的與 dead-end 改寫句措辭）；④ 覆核 AI 總管的 P1 實作選擇（列於 `docs/DECISIONS.md` DEC-083 下方 PR #927 註：👤 我的排最後、沒選定就不分析、選定只活在 session、部署預設不當 active、🚦 只有部署預設時顯示「尚未綁定」、🔍 持股標示改讀選定、新版側欄只顯示末 6 碼＋空白貼 ID 框）—— **這些是 AI 總管選擇，不是客戶裁示** |
+| 沿用 | 上一段「明確未變」「禁止事項（DEC-083 G 段）」「P2」三列照舊有效 |
+| ⚠️ 揭露 | 本段由單一撰寫組產出，**沒有第二組驗過**（`CLAUDE.md` §-2 規則 6）；👤 我的未在 Streamlit 實機看過（撰寫組） |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 
