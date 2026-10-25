@@ -1320,6 +1320,89 @@ C2a 屬高風險資料契約批：建議高能力模型；Effort：High；完整
   - ~~**C2a-2 未開始**~~（Safe Checkpoint 時點事實；已過時，見下一點（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））（接線觀測：`src/services/risk_cap_apply.py` 寫檔分支附加觀測欄）；前一對話本機草稿未提交、已遺失，須重新實作；要求與稽核發現見 `docs/BACKLOG.md` 5.1.10 C2a-2 列。C2b 仍待 C2a-2 觀測後送題；`PRODUCTION_WRITE_APPROVED=False` 未動。
   - **C2a-2 實作完成、待合併**（2026-10-24 追加，append-only；事實部分決策者＝AI 總管（事實更新））：客戶 2026-10-24 指示（經總管轉交）：「同意，請切換到 Effort High 後開始 C2a-2…完成 C2a-2 後停手，不自動進 C2b。」—— 屬本條 C2a 授權的執行指示，**不是新裁示**。PR #920（branch `claude/determined-euler-32xqjn`；首個 commit `981e2f69`，另有 QA 修正 commit~~，SHA 見 PR #920~~ `dc2fa365`（2026-10-24 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））：`src/services/risk_cap_apply.py::compute_and_lock_risk_cap` 只在**三道閘門後的寫檔分支**，於本機 `risk_cap_state.json` 與 `macro_state.json` 附加純觀測欄 `input_provenance_shadow`（`shadow_policy_version`＝`c2a-shadow-1`）；未寫檔輪次不記錄；失敗只記 `{"_error", "_stage"}`、不改寫檔成敗。狀態（撰寫組 2026-10-24 21:47 台北 `gh api` 實查）：獨立 QA 兩組判可合併（總管轉述）、`981e2f69` CI Fast＋Slow success、PR open／未合併；**合併與 main CI 以 GitHub 為準，由總管合併後另行驗證**（撰寫時未合併）。⛔ 未變：Risk Cap 數值、計分資格、Required Core、門檻／公式／權重、`RISK_CAP_RULESET_VERSION`、`ENGINE_SOURCE`、`is_proxy`、`PRODUCTION_WRITE_APPROVED=False`、Google Sheet 寫入、UI。**C2b 未開始**（客戶：C2a-2 後停手）；細節與新發現見 `docs/BACKLOG.md` 5.1.10 C2a-2 列、5.1.12。
 
+### DEC-081｜📊 大盤頁 Decision Gate 裁示（Q1＝C 接替今天頁、Q2-1 放／Q2-2 放（卡面措辭客戶自訂）／Q2-3 移除、Q3＝A、Q4＝C 分流）＋新增正式產品要求「互動控制完整性」（新版不能只「看」，必須能「操作」）（客戶 2026-10-25）
+> 2026-10-25 追加（第 8 節「收到當輪追加」；ID 取下一個未用號，DEC-080 為前一號；落盤前撰寫組 `git grep -n "DEC-081"` 全 repo 0 命中）。BACKLOG 登記：§1 `DR-2026-10-25-1`；5.1.6 `VN1-MT-HOME`／`VN1-MT-IA`／`VN1-MT-TREND-DEF` 補註；新增 5.1.13（`UIX-INTERACTION-COVERAGE`、`UIX-ME-SHEET-SSOT`、`UIX-HOLD-DEADEND`、`UIX-FIND-INPUTS`、`UIX-DATACENTER-CONTROLS`、`UIX-ACTION-PAGE`；寫入前 `git grep` 0 命中）。PROJECT_STATE：§35。Gate 全文：`docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`（只改狀態頭，研究／線框原文未改）。
+- **背景**：總管以 `docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`（v4）§6 送 Q1～Q4（Q2 含三個可組合小題），總管推薦 Q1＝C、2-1 放、2-2 放、2-3 移除、Q3＝A、Q4＝C。客戶同輪另提一條**總管未送題**的正式產品要求（互動控制完整性）。
+  - 對映（撰寫組讀法）：Q1～Q4 結論與總管推薦**同向**，但客戶補了推薦沒有的約束 —— (a) Q1「在新版大盤頁正式驗收完成前，舊今天頁不得刪除」；(b) Q2-1 明寫「missing／unavailable／未評估必須明寫；不得把 missing 當中性」；(c) **Q2-2 卡面措辭由客戶自訂**（「風險上限／獨立顯示待 C2b＋RC-VISIBILITY Gate」），**取代** Gate 檔 §5.1／Q2-2 的卡面措辭（「獨立顯示待 RC-VISIBILITY；上限有效時，數字會出現在『能不能出手』卡；每次更新的報告也會列出本次寫入值」）；(d) Q2-3「移除的是新版 UI 元件，不代表刪除其底層舊能力或歷史程式」；(e) Q4 分流清單由客戶逐頁列出（與 Gate Q4 方案 C 文字不完全相同，**以客戶清單為準**）；(f) 互動控制完整性為新增要求（非送題）。
+- **內容**：見下方「來源」逐字原文（摘錄）。
+- **要點**（撰寫組摘要；以「來源」原文為準）：
+  1. **Q1＝C**：新版「📊 大盤」接替目前主頁的大盤功能；今天頁現有的大盤相關能力搬入新版大盤；「作戰室／今天要做什麼」移往未來的 ⚡ 行動。📊 大盤回答「現在市場環境如何？目前適合承擔多少風險？」；⚡ 行動回答「今天有哪些事情值得我採取行動？」。⛔ 新版大盤頁正式驗收完成前，舊今天頁不得刪除。
+  2. **Q2-1 結論句＝放**：維持首屏先給結論；每個判斷保持獨立語意；⛔ 不得用「但／因此」硬做因果；可用「；」並列；missing／unavailable／未評估必須明寫；⛔ 不得把 missing 當中性。
+  3. **Q2-2 Risk Cap 卡位＝放（先保留位置）**：⛔ 不顯示尚未核准的 Risk Cap 獨立數字；卡片顯示「風險上限／獨立顯示待 C2b＋RC-VISIBILITY Gate」；⛔ 不要為了填滿卡片而自行推導值；未來通過後再接正式值，不需重改整頁 layout。
+  4. **Q2-3 三欄摘要＝移除**（理由：位階重複、風險與危險度／Risk Cap 語意重複、動能未接線）。「移除的是新版 UI 元件，不代表刪除其底層舊能力或歷史程式。」
+  5. **Q3＝A**：台股／國際趨勢卡只顯示「尚未定義」；⛔ 不要自行挑年線／均線／漲跌幅／外資／國際指數代替趨勢結論（「因為『挑哪些指標』本身就是趨勢模型的一部分」）；原始客觀資料可放第 3 層；正式定義另走 `VN1-MT-TREND-DEF`。
+  6. **Q4＝C 分流**：📊 大盤（市場位階、指標危險度、台股原始市場資訊、國際市場、總經／景氣、籌碼、Risk Cap 未來入口、判斷依據／來源）；🩺 資料中心（資料健康、freshness、provenance、更新狀態、API／來源狀態、缺值與抓取異常、資料維護工具）；⚡ 行動（作戰室、今天值得處理的事項、可行動訊號）；🎯 標的（選股、個股搜尋、板塊、候選標的、個股健康檢查）；🛡️ 持股（我的持股、曝險、集中度、組合健康、資產配置／壓力測試）；舊 UI 歷史綜合結論句**暫不搬、也不刪**。
+  7. **新增正式產品要求「新版不能只『看』，必須能『操作』」**：新版 UI 完工條件**必須包含「互動控制完整性」**——不能缺按鈕、輸入框、搜尋、Sheet 選擇、持股綁定、更新操作。各頁互動承接：
+     - **👤 我的**：Google 登入／登出、登入狀態、Sheet 連線狀態、Sheet URL/ID 輸入＋貼完整 URL 自動解析 ID、可用 Sheet 清單、選擇／綁定／切換 Sheet、重新讀取；優先沿用既有 backend／service。
+     - **🛡️ 持股**：顯示目前綁定 Sheet、明確入口去「我的」設定、重新載入、資料狀態、缺 Sheet 引導；⛔ 禁止 dead-end（「請選 Sheet 但此頁無處可選」）。
+     - **🎯 標的**：名稱／代號搜尋、執行按鈕、帶入我的持股、批次分析入口、舊 UI 未映射的輸入。
+     - **📊 大盤**：更新／重新整理、資料中心入口、展開理由、問 AI／查看依據；⛔ 不得塞 Sheet CRUD。
+     - **🩺 資料中心**：資料更新、來源／健康、必要資料維護；Sheet 建立／刪除若屬資料維護可評估放此，但不與日常「選哪個持股 Sheet」混在一起。
+  8. **Sheet CRUD 不可照搬三套**：先確認既有 backend／service 能否共用、設計單一 SSOT 流程；⛔「本批不得因整理 UI 而刪除舊 Sheet CRUD」；須 Old capability → New coverage → regression → customer verification → removal Decision Gate 後才可刪舊 UI。
+  9. **Effort**：本批 Opus 5.5／Medium；遇 Risk Cap 正式顯示、投資語意、eligibility、formula／threshold／weight、Google OAuth security、credential、Sheet 寫入、權限模型、L3、新外部來源、不可逆刪除 → 停在安全點、告知升 High。
+  10. **本批禁止（⛔）**：開始 C2b；顯示未核准 Risk Cap 獨立數字；改 Risk Cap 計算／scoring eligibility／Required Core／公式／權重／門檻；自行定義趨勢；新增 EPS 來源；刪舊 UI；大規模刪 code；改 production write／`PRODUCTION_WRITE_APPROVED=False`。
+- **不是什麼**（⛔）：
+  - ⛔ **不是 Risk Cap 顯示授權**：Q2-2 只核准「先保留卡位」與卡面措辭；獨立數字、7 天沿用揭露等仍屬 C2b＋`RC-VISIBILITY` Gate（DEC-077 3A、DEC-080 第 5、6 點不變）。
+  - ⛔ **不是趨勢定義**：Q3 只定「尚未定義」的顯示；`VN1-MT-TREND-DEF` 仍 blocked-on-customer。
+  - ⛔ **不是舊 UI 刪除授權**：舊今天頁、舊 Sheet CRUD、舊 UI 歷史綜合結論句一律不刪（DEC-019／020、`UIM-REMOVAL-GATE` 前提不變）。
+  - ⛔ **不是 DEC-076 ①② 的裁示**（16 燈危險度口徑、⚡ 行動例示射程維持 pending）；⚡ 行動頁承接作戰室屬方向，實作仍待指派（`UIX-ACTION-PAGE`）。
+  - ⛔ **不是 Sheet 寫入／OAuth／權限模型變更授權**：第 7、8 點的互動承接屬「完工條件」；涉及 Sheet 寫入、Google OAuth security、credential、權限模型者依第 9 點升 High、停在安全點（撰寫組讀法）。
+  - ⛔ **不是 production write／Daily Schedule 授權**：`PRODUCTION_WRITE_APPROVED=False` 不變；DEC-066 F 不變。
+- **範圍**：UI／IA（大盤頁線框裁示、頁面分流）＋產品完工條件（互動控制完整性）＋治理（本批 Effort 與禁止清單）｜**日期**：2026-10-25｜**決策者**：客戶｜**狀態**：生效（Q1～Q4 裁示登記＝大盤頁線框 DEC-003 ① gate 對 Q1～Q4 所及範圍通過；**大盤頁實作批進行中**（總管轉述，撰寫組未查 PR）；互動控制完整性自本條起為每個新 UI 頁的完工條件）。
+- **來源**：客戶 2026-10-25 正式裁示（經總管轉交；撰寫組未見原件，**只收到總管轉交的關鍵句**，依轉交文字**逐字收錄，未改寫**；非全文；確切 UTC 時戳未記錄，只保留日期）：
+
+```
+Q1 裁示 C：
+「新版『📊 大盤』接替目前主頁的大盤功能。今天頁現有的大盤相關能力搬入新版大盤；『作戰室／今天要做什麼』移往未來的 ⚡ 行動」
+大盤頁回答「現在市場環境如何？目前適合承擔多少風險？」
+⚡ 行動回答「今天有哪些事情值得我採取行動？」
+「在新版大盤頁正式驗收完成前，舊今天頁不得刪除。」
+
+Q2-1 放：維持首屏先給結論；每個判斷保持獨立語意；不得用「但／因此」硬做因果；可用「；」並列；missing／unavailable／未評估必須明寫；不得把 missing 當中性。
+
+Q2-2 放：先保留位置，不顯示尚未核准的 Risk Cap 獨立數字；卡片顯示「風險上限／獨立顯示待 C2b＋RC-VISIBILITY Gate」；不要為了填滿卡片而自行推導值；未來通過後再接正式值，不需重改整頁 layout。
+
+Q2-3 移除三欄摘要（位階重複、風險與危險度／Risk Cap 語意重複、動能未接線）；「移除的是新版 UI 元件，不代表刪除其底層舊能力或歷史程式。」
+
+Q3 A：卡片只顯示「尚未定義」；不要自行挑年線／均線／漲跌幅／外資／國際指數代替趨勢結論，「因為『挑哪些指標』本身就是趨勢模型的一部分」；原始客觀資料可放第 3 層；正式定義另走 VN1-MT-TREND-DEF。
+
+Q4 C 分流：
+📊 大盤（市場位階、指標危險度、台股原始市場資訊、國際市場、總經／景氣、籌碼、Risk Cap 未來入口、判斷依據／來源）
+🩺 資料中心（資料健康、freshness、provenance、更新狀態、API／來源狀態、缺值與抓取異常、資料維護工具）
+⚡ 行動（作戰室、今天值得處理的事項、可行動訊號）
+🎯 標的（選股、個股搜尋、板塊、候選標的、個股健康檢查）
+🛡️ 持股（我的持股、曝險、集中度、組合健康、資產配置／壓力測試）
+舊 UI 歷史綜合結論句暫不搬、也不刪。
+
+新增正式產品要求「新版不能只『看』，必須能『操作』」：
+新版 UI 完工條件必須包含「互動控制完整性」——不能缺按鈕、輸入框、搜尋、Sheet 選擇、持股綁定、更新操作。
+👤 我的：Google 登入／登出、登入狀態、Sheet 連線狀態、Sheet URL/ID 輸入＋貼完整 URL 自動解析 ID、可用 Sheet 清單、選擇／綁定／切換 Sheet、重新讀取；優先沿用既有 backend/service。
+🛡️ 持股：顯示目前綁定 Sheet、明確入口去「我的」設定、重新載入、資料狀態、缺 Sheet 引導；禁止 dead-end「請選 Sheet 但此頁無處可選」。
+🎯 標的：名稱／代號搜尋、執行按鈕、帶入我的持股、批次分析入口、舊 UI 未映射的輸入。
+📊 大盤：更新／重新整理、資料中心入口、展開理由、問 AI／查看依據；不得塞 Sheet CRUD。
+🩺 資料中心：資料更新、來源／健康、必要資料維護；Sheet 建立／刪除若屬資料維護可評估放此，但不與日常「選哪個持股 Sheet」混在一起。
+
+Sheet CRUD 不可照搬三套：先確認既有 backend/service 能否共用、設計單一 SSOT 流程；「本批不得因整理 UI 而刪除舊 Sheet CRUD」；須 Old capability → New coverage → regression → customer verification → removal Decision Gate 後才可刪舊 UI。
+
+Effort：本批 Opus 5.5／Medium；遇 Risk Cap 正式顯示、投資語意、eligibility、formula/threshold/weight、Google OAuth security、credential、Sheet 寫入、權限模型、L3、新外部來源、不可逆刪除 → 停在安全點、告知升 High。
+
+本批禁止：開始 C2b、顯示未核准 Risk Cap 獨立數字、改 Risk Cap 計算／scoring eligibility／Required Core／公式／權重／門檻、自行定義趨勢、新增 EPS 來源、刪舊 UI、大規模刪 code、改 production write／PRODUCTION_WRITE_APPROVED=False。
+```
+（⚠️ 上方為總管轉交的關鍵句，部分條目由總管以條列轉述；若日後取得客戶原件，以原件為準、本段以刪除線更正。）
+
+- **與其他 DEC／條文的關係**（append-only；撰寫組讀法，單組，⚠️ 待第二組 evidence audit，`CLAUDE.md` §-2 規則 6；舊 DEC 一字不改）：
+  - **DEC-003 ①（線框 gate）／`CLAUDE.md` §-1.5.D v3 §03-2 ①**：本條為大盤頁文字線框（Gate 檔 §1）在 Q1～Q4 所及範圍的客戶拍板；Gate 檔未經裁示的部分（§5 被卡住清單 G*）仍各自另開 Gate。
+  - **DEC-057（首頁不是 Dashboard）／DEC-062 Q1（今天頁）／DEC-072（📊 大盤首屏先給結論）**：Q1＝C 裁定「接替」：今天頁的大盤能力併入 📊 大盤、作戰室移 ⚡ 行動；撰寫組讀為與 DEC-057 同向（作戰室不留在大盤首屏）。`VN1-MT-HOME` 的 Gate 題由本條裁示。
+  - **DEC-020（先並存、驗收後才切換）／DEC-019（舊 UI 凍結）**：Q1「舊今天頁不得刪除」與第 8 點「不得刪除舊 Sheet CRUD」同向；`UIM-REMOVAL-GATE` 前提不變。
+  - **DEC-074 B／DEC-075 (a)（不得補結論、不得靜默 fallback）**：Q2-1「missing／unavailable／未評估必須明寫；不得把 missing 當中性」同向；結論句不因保持「先給結論」而補位階結論（撰寫組讀法；Gate 附錄 B2 的讀法維持）。
+  - **DEC-077 3A／DEC-080 第 5、6 點（RC-VISIBILITY、C2b）**：Q2-2 只保留卡位、不顯示數字，同向；卡面措辭點名「C2b＋RC-VISIBILITY Gate」。
+  - **2026-09-05 客戶核准今天頁線框的三欄摘要「位階／動能／風險」**：由 Q2-3 移除（新版 UI 元件）；底層能力與歷史程式不刪。見第 5 節取代鏈新增列。
+  - **`VN1-MT-TREND-DEF`**：維持 blocked-on-customer；Q3 與其 next action「未定義前不得在畫面或程式宣稱『台股趨勢』結論」同向。
+  - **DEC-076 ①②**：維持 pending（本條未裁）。
+  - **DEC-073／DEC-078（Minimum Sufficient Effort）**：第 9 點為本批具體 Effort 指定與升級觸發；新對話仍須依 `PROJECT_RULES.md` 第 9.0 節重新判斷。
+  - **EX-OAUTH-1（`CLAUDE.md` §8.2.A.1；`src/data/portfolio/oauth_state.py`、`gsheet_portfolio.py`）**：第 7、8 點「優先沿用既有 backend／service」「單一 SSOT 流程」與既有 L1 OAuth／Sheet 模組相關；是否可共用屬 `UIX-ME-SHEET-SSOT` 盤點，撰寫組未查證。
+  - 未發現需登記 `PROJECT_RULES.md` 第 14 節的新衝突（撰寫組單組 grep，未經第二組驗證）。
+
 ---
 
 ## 5. 取代鏈總表
@@ -1350,6 +1433,9 @@ C2a 屬高風險資料契約批：建議高能力模型；Effort：High；完整
 | DEC-077 第 1 點「C2／VN1-PG 暫不施工，後續另開 Decision Gate」（2026-10-24 新增列） | DEC-080 | 部分取代（**C2a 已指派＝動工授權**；C2b 未經另行裁示不得開始；VN1-PG production write、Daily Schedule 仍禁止；DEC-077 原文不改） | 客戶 2026-10-24 原文明示（「先 C2a，再 C2b」「C2b 未經我另行裁示，不得開始 scoring 行為修改」） |
 | DEC-077／DEC-076 Freeze「新 Batch」只對 C1 解除（2026-10-24 新增列） | DEC-080 | 延伸至 C2a（其餘 Freeze 禁止項不變） | 依客戶「完成 GitHub Verification Gate 後，再開始 C2a」指派；總管確認 Freeze「新 Batch」對 C2a 解除（客戶原文見 DEC-080 來源欄；『Freeze 解除』為總管讀法） |
 | Gate §7.2 Q5 總管推薦「需客戶確認『第三方轉載可否滿足 Required Core』」（2026-10-24 新增列） | DEC-080 第 4 點 | 裁示（同一正式序列的 secondary／republished value 可在契約允許下滿足 Required Core，須揭露來源） | 客戶 2026-10-24 原文明示 |
+| 今天頁三欄摘要「位階／動能／風險」（客戶 2026-09-05 核准線框；「風險←危險度」為後續裁示）（2026-10-25 新增列） | DEC-081 Q2-3 | 取代（新版 UI 元件移除；底層舊能力與歷史程式不刪） | 客戶 2026-10-25 原文明示（「移除的是新版 UI 元件，不代表刪除其底層舊能力或歷史程式。」） |
+| DEC-062 Q1「今天頁」作為主頁（2026-10-25 新增列） | DEC-081 Q1 | 部分取代（主頁大盤功能由新版 📊 大盤接替；作戰室移 ⚡ 行動；新版大盤頁正式驗收完成前舊今天頁不得刪除；DEC-062 原文不改） | 客戶 2026-10-25 原文明示；「部分取代」範圍為撰寫組判讀，單組 |
+| `docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md` §5.1／Q2-2 Risk Cap 卡位卡面措辭「獨立顯示待 RC-VISIBILITY；上限有效時，數字會出現在『能不能出手』卡；每次更新的報告也會列出本次寫入值」（2026-10-25 新增列） | DEC-081 Q2-2 | 取代（卡面改為客戶措辭「風險上限／獨立顯示待 C2b＋RC-VISIBILITY Gate」；Gate 檔原文不改，只改狀態頭） | 客戶 2026-10-25 原文明示 |
 
 ## 6. 未升格項目（證據不足或題意不明 → 見 `docs/BACKLOG.md` 第 4 節）
 

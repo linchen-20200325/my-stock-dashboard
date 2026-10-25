@@ -607,12 +607,25 @@
 
 ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組撰寫；測試數字、QA 結論、讀者判斷為總管轉述，撰寫組只實查 PR 狀態、CI、旗標與 working tree，未重跑測試、未見 QA 原始報告。
 
-## 34. 📊 大盤頁 Decision Gate 草稿（2026-10-24；append-only；**非 Approved**）
+## 34. 📊 大盤頁 Decision Gate 草稿（2026-10-24；append-only；~~**非 Approved**~~ **Q1～Q4 已裁示 DEC-081**（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-081））
 
 > 2026-10-24 新增（決策者 AI 總管（事實更新））。本節**只放 pointer**，不是新 SSOT、不是裁示。全文：`docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`（~~v2~~ v3，commit `ab8b8342`，v3.1 措辭修正進行中（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；基準 main `ea176b8d`）。
 
 - **內容**：大盤相關舊→新能力覆蓋矩陣（§3，含 §3.15 舊 UI 結論句「首批一律不以結論承接」）、首屏文字線框與規則（§1）、可施工清單 W1～W13（§4，零語意變更）、被卡住清單 G*（§5~~，含 Risk Cap 卡位契約：卡面不顯示數字~~）；**Risk Cap 卡位**自 v3 起不再是 §5 預設契約，改為「刻意未接」併入 **Q2**、等客戶核准（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））、客戶裁示題 Q1～Q4（§6）、文件矛盾（附錄 B）、獨立複驗（附錄 C）。
-- **狀態**：⛔ **未核准**；等客戶裁示 Q1～Q4 後才可開大盤頁實作批（DEC-003 ① 線框 gate）。未裁示前，該檔的推薦與「新版層級」欄只是 RECOMMENDATION。
+- **狀態**：~~⛔ **未核准**；等客戶裁示 Q1～Q4 後才可開大盤頁實作批（DEC-003 ① 線框 gate）。未裁示前，該檔的推薦與「新版層級」欄只是 RECOMMENDATION。~~ **Q1～Q4 已裁示（DEC-081，客戶 2026-10-25）**；大盤頁實作批進行中（總管轉述）；Risk Cap 卡面措辭以客戶原文為準（見 §35）（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-081）。
 - **限制**（`CLAUDE.md` §-2 規則 6）：矩陣「沒有遺漏」**未證明**（撰寫組兩份單組盤點＋一組獨立複驗，皆單組）~~；v2 修訂未經第二輪複驗~~；已完成三輪獨立複驗（第三輪：剩餘項皆為措辭、修正中），每輪皆單組，完整性仍未證明（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。
 - **待辦落點**：`docs/BACKLOG.md` `VN1-MT-IA`、`VN1-MT-HOME`、`UIM-INVENTORY`、`UIM-MAPPING`、`UIM-COVERAGE-MATRIX`（各列 2026-10-24 補註）、`UIM-MKTGATE-DOC-DRIFT`（附錄 B 未登記矛盾）。
 
+## 35. 📊 大盤頁裁示與「互動控制完整性」完工條件（DEC-081，客戶 2026-10-25；append-only；**Approved**）
+
+> 2026-10-25 新增。裁示逐字（摘錄）只在 `docs/DECISIONS.md` **DEC-081**；待辦只在 `docs/BACKLOG.md` 5.1.6（`VN1-MT-HOME`／`VN1-MT-IA` 補註）與 **5.1.13**（`UIX-*`）。本節只放摘要＋pointer，與 DEC-081 不一致時以 DEC-081 為準。
+
+- **⭐ 互動控制完整性＝每一個新 UI 頁的完工條件**（客戶原文：「新版不能只『看』，必須能『操作』」；「新版 UI 完工條件必須包含『互動控制完整性』——不能缺按鈕、輸入框、搜尋、Sheet 選擇、持股綁定、更新操作」）。任何新 UI 頁（📊／🎯／⚡／🛡️／👤／🩺）只有畫面、缺舊 UI 既有的操作入口時，**不算完工**；驗收依 `UIX-INTERACTION-COVERAGE`（Old→New Interaction Coverage Matrix）。各頁應承接的互動清單見 DEC-081 第 7 點。
+- **⛔ 禁止 dead-end**：頁面要求使用者做某事（例：選 Sheet）時，必須在該頁提供操作或明確入口（🛡️ 持股 → 👤 我的）。
+- **Sheet CRUD 單一 SSOT 流程**：不可照搬三套；先查既有 backend／service 能否共用；舊 Sheet CRUD 依 Old capability → New coverage → regression → customer verification → removal Decision Gate 才可刪（`UIX-ME-SHEET-SSOT`；Sheet 寫入／OAuth／權限模型屬 High）。
+- **頁面分工**（DEC-081 Q1、Q4）：📊 大盤回答「現在市場環境如何？目前適合承擔多少風險？」；⚡ 行動回答「今天有哪些事情值得我採取行動？」（承接作戰室，`UIX-ACTION-PAGE`）；🩺 資料中心＝資料健康／freshness／provenance／更新／來源狀態／缺值與抓取異常／資料維護；🎯 標的＝選股／個股搜尋／板塊／候選標的／個股健康檢查；🛡️ 持股＝持股／曝險／集中度／組合健康／資產配置・壓力測試。舊 UI 歷史綜合結論句暫不搬、也不刪。
+- **大盤首屏**：結論句放（「；」並列、不硬做因果、missing／unavailable／未評估明寫、missing 不當中性）；Risk Cap 卡位放，卡面「風險上限／獨立顯示待 C2b＋RC-VISIBILITY Gate」、⛔ 不顯示未核准獨立數字、不自行推導值；三欄摘要移除（只移除新版 UI 元件，不刪底層能力或歷史程式）；台股／國際趨勢卡只顯示「尚未定義」（定義走 `VN1-MT-TREND-DEF`）。
+- **舊 UI**：新版大盤頁正式驗收完成前，舊今天頁不得刪除；本批不刪舊 UI、不刪舊 Sheet CRUD（DEC-019／020、`UIM-REMOVAL-GATE`）。
+- **仍禁止**（DEC-081 第 10 點）：開始 C2b；顯示未核准 Risk Cap 獨立數字；改 Risk Cap 計算／scoring eligibility／Required Core／公式／權重／門檻；自行定義趨勢；新增 EPS 來源；大規模刪 code；`PRODUCTION_WRITE_APPROVED=False` 不變。本批 Effort＝Medium，遇 DEC-081 第 9 點所列事項 → 停在安全點、告知升 High。
+
+⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組撰寫；客戶原文為總管轉交的關鍵句、非全文；「實作批進行中」為總管轉述，撰寫組未查 PR。
