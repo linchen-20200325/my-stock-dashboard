@@ -642,3 +642,14 @@
 - 📌 **#922 已合併**（2026-10-25；append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）：獨立 QA-A 於 `ad09a04d` 複驗判可合併（fast 30119 passed／28 skipped／0 failed）；PR head `88ccb364` 與 main `286e0075` CI 皆綠；Open PR＝0。下一步：**客戶驗收 📊 大盤頁**；👤 我的只做草稿（Stage A／B），不實作。
 - 📌 **客戶指示（2026-10-25，永久規則；DEC-082）**：所有下一頁先草稿、後施工 —— 新主要頁面／重大互動流程（🎯 標的、⚡ 行動、🛡️ 持股、👤 我的、🩺 資料中心、contextual explainability、Sheet 管理／綁定、Google 登入／連線、跨頁互動控制）一律 Stage A 唯讀盤點（⛔ 不寫正式 UI code）→ Stage B 新版設計草稿 → Stage C 客戶裁示 Gate（草稿完成必須停手）→ 核准後才 Stage D 實作。全文見 `docs/DECISIONS.md` DEC-082。
 - 📌 **👤 我的 Stage A／B 草稿 done**（2026-10-25；append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）：`docs/vnext/ME_PAGE_DRAFT_2026-10-25.md`（盤點＋文字線框＋7 題裁示）；PR #923 已合併（main `c9d8419a`）；**等客戶 Stage C 裁示 Q1～Q7**，核准前不進 Stage D。
+
+## 37. 👤 我的 Stage C 裁示（DEC-083，客戶 2026-10-25；append-only；**Approved**）
+
+> 2026-10-25 新增（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）。本節只放摘要＋pointer，不是新 SSOT。裁示全文（逐字）見 `docs/DECISIONS.md` DEC-083；待辦見 `docs/BACKLOG.md` 5.1.13；交接見 `docs/HANDOFF.md`「📌 2026-10-25 👤 我的 Stage C 已裁示（DEC-083）」；草稿 `docs/vnext/ME_PAGE_DRAFT_2026-10-25.md` 狀態改「已裁示」。
+
+- **Q1～Q7 全採 A**：側欄獨立「👤 我的」為帳號／Sheet 綁定／Sheet SSOT 唯一入口；P1 只做登入／登出／重新登入、Sheet URL／ID、Drive 清單、明確選擇／切換、重新讀取、active Sheet／portfolio／watchlist（建立／rename／刪 Sheet 與各類 CRUD 留 P2，另開 Stage A/B/C）；先做 Sheet Safety 批；顯示「Sheet 名稱＋ID 末 6 碼」；登出全清（含 OAuth state 攜帶的舊 Sheet ID、silent marker），不得自動恢復；組合與觀察清單同一本，legacy 不一致時白話警示、使用者明確重選；全站共用 active portfolio／watchlist，不再用「名稱排序第一本」。
+- **Sheet Safety 修復批（High，先於 👤 我的 P1）**：B1 read 真正唯讀（明確 `UNAVAILABLE／NOT_CONFIGURED`／`SCHEMA_MISMATCH`／`EMPTY`／error）；B2 `forward_test_picks` 讀取零寫入（無法安全分離 → 停手送 Decision Gate）；B3 單一 Sheet ID parser（`/d/e/` 不得解析成 `e`，不能安全轉換 → 明確拒絕）；B4 單一綁定寫入契約；B5 重新讀取只失效本人（做不到 → 研究送 Gate）。
+- **P1 開工條件**：Sheet Safety 批 QA／CI／merge／main verification 全部完成；**唯一本自動綁取消**（即使只有一本也要按「使用這本」）；P1 完成後 Sheet／登入／切換提示統一導向 👤 我的，CRUD 照客戶字樣指回舊版 📁 組合管理。
+- **未變**：📊 大盤頁仍待客戶 UI 驗收，驗收前不得刪 🚦 今天；舊 UI（🚦 今天、📁 組合管理、側欄 Google、Sheet CRUD、legacy controls）全部保留，刪除須走 Removal Gate 七步；C2b 未開始；`PRODUCTION_WRITE_APPROVED=False`；不改投資公式／門檻／權重、不動不可重建歷史。
+- **施工順序**：落盤 → Sheet Safety 批 → 獨立 QA → CI／merge／main → 👤 我的 P1 → 獨立 QA → CI／merge／main → 停手回報 → 不自行進 P2。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組產出，**沒有第二組驗過**。

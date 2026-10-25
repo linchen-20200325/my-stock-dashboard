@@ -1,6 +1,7 @@
 # 👤 我的 —— Stage B 新版設計草稿（文字線框＋舊→新能力對照＋7 題裁示）
 
 - 日期：2026-10-25｜基準：`286e0075`（#922）；本檔撰寫時工作分支 `claude/determined-euler-32xqjn` @ `cebb19e6`，與 `286e0075` 之間只差 4 份文件（`git diff --stat 286e0075 cebb19e6`：`docs/BACKLOG.md`／`DECISIONS.md`／`HANDOFF.md`／`PROJECT_STATE.md`），**程式碼相同，下文行號兩邊通用**｜撰寫：產品／IA 撰寫組（AI 總管派工）
+- 📌 **狀態：已裁示（`docs/DECISIONS.md` DEC-083）**（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）：Stage C 客戶裁示 Q1～Q7 全採 A。下一步依 DEC-083 H 段：Sheet Safety 修復批（B1～B5，High）→ 獨立 QA → CI／merge／main verification → 👤 我的 P1（Stage D）。本檔盤點／線框／對照原文**不改**，只改本狀態行、§0「是否已核准」、§2 F8、§4 M08、§6 S5 與 §7 逐題加註。
 - 治理依據：`docs/DECISIONS.md` **DEC-082**（Stage A 唯讀盤點 → **Stage B 草稿（本檔）** → Stage C 客戶裁示 → Stage D 實作）；DEC-081 第 7 點（互動控制完整性）、第 8 點（Sheet CRUD 單一 SSOT、⛔ 不刪舊 CRUD）、第 9 點（OAuth／credential／Sheet 寫入／權限模型／L3 → High）
 - 對應待辦：`UIX-ME-SHEET-SSOT`、`UIX-HOLD-DEADEND`、`UIX-INTERACTION-COVERAGE`（`docs/BACKLOG.md` 5.1.13）
 - 沿用：`docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md`（下稱「互動矩陣」）§1（👤 我的）、§2（🛡️ 持股）、§7（Sheet CRUD 專題）、§8（dead-end）；格式比照 `docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`
@@ -13,7 +14,7 @@
 | 項目 | 狀態 |
 |---|---|
 | 本文件是什麼 | DEC-082 **Stage B** 草稿：👤 我的頁的文字線框、舊→新能力對照、Sheet SSOT 技術提案、7 題請客戶裁示 |
-| 是否已核准 | ⛔ **未核准**。§3 線框、§4 對照表的「去向」欄、§7 的推薦都等客戶在 Stage C 拍板 |
+| 是否已核准 | ~~⛔ **未核准**。§3 線框、§4 對照表的「去向」欄、§7 的推薦都等客戶在 Stage C 拍板~~ **已裁示（DEC-083）**：Q1～Q7 全採 A；§3 線框在 P1 範圍內「維持核准草稿方向」；另含 Sheet Safety 修復批（先於 P1）、取消唯一本自動綁、dead-end 導向規則、舊 UI Removal Gate、禁止事項，全文見 `docs/DECISIONS.md` DEC-083（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083） |
 | 本批**沒有做**的事 | 沒寫任何 code、沒改導航（`shared/ia_nav.py::PAGE_LABELS` 未動，現無 👤 我的）、沒動 OAuth／Sheet 綁定／Sheet 寫入、沒刪舊 UI（側欄、📁 組合管理、🔗 我的組合狀態列、Sheet CRUD 全部原樣）。只有本檔。 |
 | 頁名讀法 | 目標 IA 的 🛡️ 持股／🎯 標的／🩺 資料中心，在現行程式分別是 💼 我的持股（`page_hold`）／🔍 找標的＋🔬 查一檔（`page_find`／`page_inspect`）／📖 憑什麼 › 資料體檢（`page_why`）（`shared/ia_nav.py:53-60`；對照依互動矩陣 §0.2） |
 | Effort | 👤 我的**第一期就碰 Google 登入／登出與 Sheet 綁定（權限模型、L3）** ⇒ 依 DEC-081 第 9 點，Stage D 一律 **High**；第二期（Sheet 內容寫入）另開 High Gate |
@@ -121,7 +122,7 @@
 | F5 | 貼了**發布連結**（`/spreadsheets/d/e/…`） | 拒絕並說明「這是『發布到網路』的連結，不能用來讀寫；請改貼瀏覽器網址列的編輯網址（含 `/spreadsheets/d/<ID>/edit`）或 Sheet ID」；⛔ 不得當成 ID `e` |
 | F6 | 貼了亂碼／非法字元 | 拒絕：「看不出 Sheet ID（只接受英數、`_`、`-`）」；⛔ 不寫 session、不寫網址 |
 | F7 | 網址帶 `?sheet=`（書籤） | 卡② 標「綁定來源：網址書籤還原」；經同一消毒器（§6）才採用 |
-| F8 | 清單只有 1 本 | **不自動綁**：列出那一本，仍需按 [✅ 使用]（技術提案見 §6 S5、對照表 M08） |
+| F8 | 清單只有 1 本 | **不自動綁**：列出那一本，仍需按 [✅ 使用]（技術提案見 §6 S5、對照表 M08）<br>📌 客戶已裁示**取消唯一本自動綁**：就算 Drive 只有一本，仍要使用者明確按「使用這本」（DEC-083 C 段）（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083） |
 | F9 | Sheet 裡有好幾本組合／清單 | 卡③ 照實寫「🛡️ 目前只分析名稱排序第一本『X』」；要不要能選哪一本，見 **Q7** |
 
 ---
@@ -251,7 +252,7 @@
 | M05 | OAuth 未設定說明 | 側欄 `app.py:399-404` | **P1** 卡① | 改正假指路（§5 D10） |
 | M06 | 貼 URL／ID | 側欄 `app.py:368-392`；binder `:70-83` | **P1** 切換區方法一 | 改走單一解析器（§6）；修 `/d/e/` |
 | M07 | Drive 列資料夾／列 Sheets／選一本／✅ 使用 | `render_drive_picker` `:86-141` | **P1** 切換區方法二 | 重用元件，不寫第 5 份 |
-| M08 | 只有 1 本時自動綁 | `portfolio_binder.py:126-130` | **P1 改為不自動**（仍要按 ✅） | §6 第 5 點；屬權限模型 → High |
+| M08 | 只有 1 本時自動綁 | `portfolio_binder.py:126-130` | **P1 改為不自動**（仍要按 ✅） | §6 第 5 點；屬權限模型 → High<br>📌 唯一本自動綁**已由客戶裁示取消**（DEC-083 C 段）（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083） |
 | M09 | `?sheet=` 書籤還原 | `app.py:152-158` | **P1** 保留，改經消毒器＋卡② 標來源 | High（H3） |
 | M10 | OAuth 回呼自動回綁 | `oauth_state.py:645-647`、`:724-730` | **P1** 保留（已消毒），卡② 標來源 | 不改行為；但**依 Q5：登出後不再回綁**（Q5=A 時登入 state 不夾帶舊 Sheet ID，回呼就沒有東西可回綁） |
 | M11 | 🔄 重新讀取（`clear_read_cache`） | 舊戰情室 `etf_tab_dividend_station.py:142-145` | **P1** 卡② [重新讀取（只清我的）] | 須先有「只清本人」能力（H8、Q5）；High |
@@ -305,7 +306,7 @@
 | S2 | **單一寫入者** | `portfolio_binder.apply_active_sheet` 為唯一寫入契約，**併入** `sync_silent_marker()`（側欄現行多做的那一步，`app.py:386`），避免靜默重登退化 |
 | S3 | 側欄與 `?sheet=` 都走 S1＋S2 | 側欄 inline（`app.py:375-386`）改呼叫 S2；`?sheet=` 還原（`app.py:152-158`）先過 S1 消毒（保留 `setdefault`「當次選擇優先」語意） |
 | S4 | **一個選擇器元件** | 👤 我的重用 `render_drive_picker`／`render_paste_id_binder`（調整後），不寫第 5 份 |
-| S5 | 單本不自動綁 | 移除 `portfolio_binder.py:126-130` 的自動綁（或改為「預選但要按 ✅」）—— 綁定是權限決定，應由使用者明確按下 |
+| S5 | 單本不自動綁 | 移除 `portfolio_binder.py:126-130` 的自動綁（或改為「預選但要按 ✅」）—— 綁定是權限決定，應由使用者明確按下<br>📌 客戶裁示：唯一本自動綁**取消**，「不要替使用者做綁定決策」；不論是否預選，綁定都必須由使用者明確按「使用這本」（後半句為撰寫組讀法）（DEC-083 C 段）（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083） |
 | S6 | 消費者經一支 L3 讀取 | 新增 L3 accessor（例：`portfolio_binding_service` 擴充 `get_active_sheet()` 回傳 `{sheet_id, title, source, channels_consistent}`）；`holdings_service`／`page_today`／`page_find`／`watchlist_service`／`forward_test` 逐步改讀它，⛔ 不再各自讀兩個 session key |
 | S7 | Sheet 標題 | 啟用既有 `get_sheet_title`（`gsheet_portfolio.py:1154-1163`），經 L3 帶快取。⚠️ 現行它 `except Exception: return ''`，**吞掉所有例外**（違 `CLAUDE.md` §1）⇒ 必須改成 fail loud（或新增一支會 raise 的版本），讓 404（找不到）／403（沒權限）／逾時分得開，卡② 才能照 §3.1 顯示正確原因 |
 | S8 | 死殼清理 | `portfolio_manager._apply_active_sheet`（0 caller）等，依 v3 §01-2 只清「因本次改動才變孤兒」者，逐檔列在交付報告 |
@@ -326,6 +327,8 @@
 
 **AI 總管推薦：A。** 理由：帳號與 Sheet 是**全站**設定，不屬於任何一頁；放 🛡️ 會破壞它的唯讀保證。施工期間側欄的登入／貼 ID 照舊保留（比照 DEC-020「先並存、驗收後才切換」）。
 
+**客戶裁示：A（DEC-083）**（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）：側欄新增獨立「👤 我的」，為 Google 帳號、Sheet 綁定與新版 Sheet SSOT 的唯一設定入口。
+
 ### Q2｜第一期做多少？（A 碰 OAuth＋綁定 → High；B 另含 Sheet 寫入 → High）
 
 | 方案 | 優點 | 缺點 | 風險 |
@@ -335,6 +338,8 @@
 | C 第一期只顯示狀態（不能切換） | 最安全 | 還是要去側欄或舊版才能綁 | 中：dead-end 不減 |
 
 **AI 總管推薦：A。** ⚠️ 前提：A 的「不寫 Sheet 內容」**要先修好讀取路徑才真的成立**（Q3）—— 現行連「列出組合」都可能寫入你的 Sheet，**前進式驗證的對帳讀取（`load_forward_test_picks` → `_ft_worksheet`）也一樣**（A.6 H1）；兩處都要修。
+
+**客戶裁示：A（DEC-083）**（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）：P1 只做登入／登出／重新登入、Sheet URL／ID、Drive 清單、明確選擇／切換、重新讀取、active Sheet／portfolio／watchlist；建立／rename／刪 Sheet 與組合／觀察清單／持股列 CRUD 留 P2（另開 Stage A/B/C Gate）；P2 完成前保留舊「📁 組合管理」。
 
 ### Q3｜「讀取時會改你的 Sheet」這個修正排在哪一批？（Sheet 資料層寫入行為 → High）
 
@@ -349,6 +354,8 @@
 
 **AI 總管推薦：A。**
 
+**客戶裁示：A（DEC-083）**（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）：👤 我的正式實作前，先獨立完成 Sheet Safety 修復批（DEC-083 B1～B5，High；含 forward-test 歷史零寫入、單一 parser、單一綁定寫入契約、per-user cache 失效）。
+
 ### Q4｜Sheet 身分怎麼顯示？（識別碼外露；不碰寫入）
 
 | 方案 | 優點 | 缺點 | 風險 |
@@ -358,6 +365,8 @@
 | C 只顯示標題 | 最乾淨 | 同名 Sheet 分不出來 | 中：綁錯本不自知 |
 
 **AI 總管推薦：A。** 完整 ID 放在「詳細」裡用 [複製] 取得、不直接印出；email 依同一原則遮罩。⚠️ Sheet ID 非憑證（存取仍需登入＋Google 權限），本題是**降低外露**，不是修安全漏洞。
+
+**客戶裁示：A（DEC-083）**（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）：一般 UI 顯示「Sheet 名稱＋ID 末 6 碼」。
 
 ### Q5｜登出代表什麼？（OAuth security → High）
 
@@ -372,6 +381,8 @@
 
 **AI 總管推薦：A。**
 
+**客戶裁示：A（DEC-083）**（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）：另明列須一併清除「OAuth state／登入流程攜帶的舊 Sheet ID」與「會造成登出後重新自動綁回舊 Sheet 的 silent marker」；不得登出後自動恢復上一個 Sheet。
+
 ### Q6｜組合和觀察清單要不要能放在不同本 Sheet？（綁定模型 → High）
 
 | 方案 | 優點 | 缺點 | 風險 |
@@ -380,6 +391,8 @@
 | B 允許組合與觀察清單各選一本 | 可分開管理 | 多一個選擇器；容易選錯，🛡️ 的組合與清單可能來自不同本 | 中 |
 
 **AI 總管推薦：A。**
+
+**客戶裁示：A（DEC-083）**（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）：legacy 兩者不一致時顯示白話警示；不偷偷選 ETF 通道或個股通道、不自動覆寫其中一個，讓使用者在 👤 我的明確重新選定。
 
 ### Q7｜要不要能選 🛡️／🎯 分析「哪一本組合／哪一份觀察清單」？（綁定模型 → High；不寫 Sheet）
 
@@ -392,6 +405,8 @@
 | C 把所有組合合併成一份分析 | 一次看全部 | 同一檔在兩本組合會重複計算張數／均價，合併規則本身要另定義 | 高：數字語意改變 |
 
 **AI 總管推薦：A。** 理由：「分析哪一本」是你的業務選擇，系統不該用名稱排序替你決定；A 只改「讀哪一本」，不寫你的 Sheet。
+
+**客戶裁示：A（DEC-083）**（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）：👤 我的提供全站共用 active portfolio／active watchlist；🛡️／🎯／⚡ 等頁只能讀這個共同選擇；不得再以「名稱排序第一本」作為不可見的業務決策。
 
 ---
 
