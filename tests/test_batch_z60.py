@@ -791,7 +791,12 @@ class TestOldFilesUntouched:
     #   `macro/handlers.py`（breadth 原因的擋燈理由與說明改為屬實、不叫人更新）、
     #   `tab_macro_v2.py`＋`render/macro_v2_cards.py`（代理廣度列不算進 N／M 的「有資料」，Row 加選填欄）、
     #   `pages/reconcile_panel.py`（健康分對帳經 `jingqi_for_scoring`，代理不計分）。版面零改動。
-    _BASE_DIGEST = "faba6d21a902663688e94d71765c8107a1e8fbce4d7d154a436047fc0aa7dad8"
+    # ~~"faba6d21a902663688e94d71765c8107a1e8fbce4d7d154a436047fc0aa7dad8"~~（DEC-074/075 回修後，至 5e2e6e23 仍成立）
+    # 📌 📊 大盤頁（2026-10-25，客戶裁示 Q1=C，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` ——
+    #   新增 late-import wrapper `_ia_view_market()`、`_IA_VIEWS` 多登記一頁、`shared.ia_nav` import 多一個
+    #   `PAGE_MARKET`（共 9 行，含註解）。「🚦 今天」的 wrapper 與舊 7 個頁籤一字未動；其餘 90 檔一個字都沒動。
+    #   指紋依本 docstring 的指示同步更新。
+    _BASE_DIGEST = "780ce3256a158b3773c5e335210a7521123347a0fae7d28f6093f5641f11464a"
 
     def test_no_diff_against_base(self):
         import hashlib

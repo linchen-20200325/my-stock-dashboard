@@ -61,6 +61,8 @@ _VIEWS_REL = "src/ui/views"
 # ══════════════════════════════════════════════════════════════════════
 #: (view 檔名, `app.py` 端的 late-import wrapper, 該頁的 render 函式)
 PAGES: tuple[tuple[str, str, str], ...] = (
+    # 2026-10-25 客戶 Q1=C 新增「📊 大盤」；「🚦 今天」照留到驗收。
+    ("page_market.py", "_ia_view_market", "render_page_market"),
     ("page_today.py", "_ia_view_today", "render_page_today"),
     ("page_find.py", "_ia_view_find", "render_page_find"),
     ("page_inspect.py", "_ia_view_inspect", "render_page_inspect"),
