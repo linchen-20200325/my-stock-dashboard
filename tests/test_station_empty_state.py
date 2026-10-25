@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+import src.data.portfolio.oauth_state as _ost
 import src.ui.tabs.portfolio_binder as pb
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -44,6 +45,9 @@ class _FakeSt:
 
     def success(self, *a, **k):
         self.calls.append(('success', a))
+
+    def error(self, *a, **k):
+        self.calls.append(('error', a))
 
     def info(self, *a, **k):
         self.calls.append(('info', a))
@@ -155,6 +159,8 @@ def test_paste_id_binder_parses_url_and_applies(monkeypatch):
     _url = 'https://docs.google.com/spreadsheets/d/ABC123xyz_-/edit#gid=0'
     fst = _FakeSt(text_return=_url)
     monkeypatch.setattr(pb, 'st', fst)
+    # Sheet Safety 批 B4:寫入改由 L1 `oauth_state.apply_sheet_binding`(唯一寫入契約)執行 ⇒ 它的 st 也換成同一個假物件。
+    monkeypatch.setattr(_ost, 'st', fst)
 
     with pytest.raises(_RerunSignal):          # apply 後應 st.rerun
         pb.render_paste_id_binder(_FakeGsp(logged=True, active_sid=''), key_prefix='_station_')
@@ -165,12 +171,30 @@ def test_paste_id_binder_parses_url_and_applies(monkeypatch):
 
 
 def test_paste_id_binder_noop_when_unchanged(monkeypatch):
-    """貼的 ID 與現值相同 → 不重設、不 rerun(避免無謂 rerun 迴圈)。"""
+    """貼的 ID 與現值相同 → 不重設、不 rerun(避免無謂 rerun 迴圈)。
+
+    Sheet Safety 批 B4:「現值」改由唯一寫入契約自己讀 session(⛔ 不再信注入的 `_gsp` 替身),
+    故替身與 session 都設成同一本(production 兩者本來就同源)。"""
     fst = _FakeSt(text_return='SAME')
+    fst.session_state = {'portfolio_sheet_id': 'SAME', 'stock_portfolio_sheet_id': 'SAME'}
     monkeypatch.setattr(pb, 'st', fst)
+    monkeypatch.setattr(_ost, 'st', fst)
     # 不應 raise _RerunSignal
     pb.render_paste_id_binder(_FakeGsp(logged=True, active_sid='SAME'), key_prefix='_station_')
-    assert 'portfolio_sheet_id' not in fst.session_state
+    assert fst.session_state == {'portfolio_sheet_id': 'SAME', 'stock_portfolio_sheet_id': 'SAME'}
+    assert fst.query_params == {}
+
+
+@pytest.mark.parametrize('raw', [
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQabc/pubhtml', '<script>x</script>'])
+def test_paste_id_binder_rejects_publish_link_and_garbage(monkeypatch, raw):
+    """B3:發布連結 / 看不懂的輸入 → 白話紅字拒絕,什麼都不寫、不 rerun(修前發布連結會綁成 `e`)。"""
+    fst = _FakeSt(text_return=raw)
+    monkeypatch.setattr(pb, 'st', fst)
+    monkeypatch.setattr(_ost, 'st', fst)
+    pb.render_paste_id_binder(_FakeGsp(logged=True, active_sid=''), key_prefix='_station_')
+    assert fst.session_state == {} and fst.query_params == {}
+    assert [c[0] for c in fst.calls].count('error') == 1
 
 
 # ── 源碼守衛:戰情室空狀態已改就地三態,不再是「只指路去組合管理」的死路 ──────

@@ -25,6 +25,9 @@ def test_apply_active_sheet_sets_both_channels_and_query_param(monkeypatch):
             self.query_params = {}
     _fst = _FakeSt()
     monkeypatch.setattr(pb, 'st', _fst)
+    # Sheet Safety 批 B4:寫入委派 L1 `oauth_state.apply_sheet_binding`(唯一寫入契約)⇒ 同一個假 st。
+    import src.data.portfolio.oauth_state as _ost
+    monkeypatch.setattr(_ost, 'st', _fst)
 
     class _FakeGsp:
         PORTFOLIO_SHEET_KEY = 'portfolio_sheet_id'
@@ -52,6 +55,8 @@ def test_apply_active_sheet_query_param_failure_not_fatal(monkeypatch):
             self.query_params = _QPRaises()
     _fst = _FakeSt()
     monkeypatch.setattr(pb, 'st', _fst)
+    import src.data.portfolio.oauth_state as _ost   # B4:寫入在唯一寫入契約(同上)
+    monkeypatch.setattr(_ost, 'st', _fst)
 
     class _FakeGsp:
         PORTFOLIO_SHEET_KEY = 'portfolio_sheet_id'
@@ -68,11 +73,14 @@ def test_portfolio_manager_apply_delegates_to_binder():
         '_apply_active_sheet 應委派 portfolio_binder.apply_active_sheet(SSOT)'
 
 
-# ── C:單一 Sheet 自動選 wiring 存在(源碼守衛;主體已在 portfolio_binder)──────
-def test_drive_picker_auto_selects_single_sheet():
+# ── ~~C:單一 Sheet 自動選 wiring 存在~~ → DEC-083 C 段:唯一本自動綁**取消**(有意識的翻轉)──
+# 客戶 2026-10-25 原文:「唯一本 Sheet 自動綁 取消。就算 Drive 只有一本：仍要使用者明確按
+# 『使用這本』。不要替使用者做綁定決策。」—— 舊測試釘的正是被取消的行為,改釘相反的事。
+def test_drive_picker_never_auto_selects_single_sheet():
+    import ast
     src = (_REPO / 'src' / 'ui' / 'tabs' / 'portfolio_binder.py').read_text(encoding='utf-8')
-    assert 'len(_sheets) == 1' in src and '_get_active_sheet_id()' in src, \
-        '清單只有 1 本應自動選用(省一次點擊)'
+    _code = ast.unparse(ast.parse(src))          # 去掉註解 / docstring 以外的說明文字干擾
+    assert 'len(_sheets) == 1' not in _code, '唯一本自動綁已取消(DEC-083 C)'
     assert 'apply_active_sheet' in src
 
 
