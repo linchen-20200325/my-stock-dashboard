@@ -1424,6 +1424,278 @@ Effort：本批 Opus 5.5／Medium；遇 Risk Cap 正式顯示、投資語意、e
 
 - **與其他 DEC／條文的關係**（撰寫組讀法，單組，⚠️ 未經第二組驗證，`CLAUDE.md` §-2 規則 6）：與 DEC-003 ①／`CLAUDE.md` §-1.5.D v3 §03-2 ①（UI 草稿先行）同向且加嚴（明定四階段與 Stage A 禁寫 UI code）；與 DEC-081 第 7、8 點（互動控制完整性、Sheet CRUD 單一 SSOT）同向，👤 我的等頁的承接須先過本條 Stage C。
 
+### DEC-083｜👤 我的 Stage C 裁示：Q1～Q7 全採 A；Sheet Safety 修復批（B1～B5，High）先於 👤 我的 P1；P1 範圍／P2 排除項；取消唯一本自動綁；dead-end 導向規則；舊 UI Removal Gate；禁止事項（客戶 2026-10-25）
+> 2026-10-25 追加（第 8 節「收到當輪追加」；ID 取下一個未用號，DEC-082 為前一號；落盤前撰寫組 `git grep -n "DEC-083"` 全 repo 0 命中）。BACKLOG：5.1.13 `BUG-SHEET-PUBLINK`／`BUG-SHEET-READWRITE`／`UIX-ME-DEADENDS`／`BUG-SHEET-TITLE-SWALLOW`／`UIX-ME-SHEET-SSOT` 狀態補註；新增 `SHEET-SAFETY-B4-SINGLE-WRITER`、`SHEET-SAFETY-B5-CACHE`、`ME-P1`、`ME-P2`（寫入前 `git grep` 0 命中）。PROJECT_STATE：§37。交接：`docs/HANDOFF.md`「📌 2026-10-25 👤 我的 Stage C 已裁示（DEC-083）」。草稿：`docs/vnext/ME_PAGE_DRAFT_2026-10-25.md`（只改狀態行、§0「是否已核准」、§2 F8／§4 M08／§6 S5 加註、§7 逐題加註；盤點／線框原文未改）。
+- **背景**：總管依 DEC-082 以 `docs/vnext/ME_PAGE_DRAFT_2026-10-25.md`（Stage A 盤點＋Stage B 草稿）§7 送 Q1～Q7，總管推薦**全部 A**。客戶 Stage C **Q1～Q7 全採 A**，並同輪另給 B～H 段技術與流程指示（**非送題**）。
+  - 對映（撰寫組讀法，單組）：Q1～Q7 結論與總管推薦**同向**；客戶另補了推薦沒有、或比推薦更精確的約束 —— (a) Q3 之外，客戶把 Sheet Safety 修復批的範圍**明定為 B1～B5**：草稿 §6 原列為「技術實作，屬內部拍板」的 S1（單一 parser）、S2（單一寫入者）與「只清本人」快取（H8），自本條起是**客戶指定的修復批範圍**；(b) B2 明定 `forward_test_picks` 等不可重建歷史讀取路徑零寫入，「若現有設計無法安全分離：停手送 Decision Gate」；(c) B5 明定「如果 Streamlit 目前架構做不到安全 per-user invalidation：先研究並送 Gate，不得用全域 `.clear()` 假裝完成」；(d) Q5 清除範圍比草稿 A 多明列「會造成登出後重新自動綁回舊 Sheet 的 silent marker」；(e) Q6 legacy 不一致時「不偷偷選 ETF 通道／個股通道、不自動覆寫其中一個、讓使用者在 👤 我的明確重新選定」；(f) C 段**取消唯一本 Sheet 自動綁**（草稿 §6 S5 原寫「移除（或改為『預選但要按 ✅』）」）：「就算 Drive 只有一本：仍要使用者明確按『使用這本』」；(g) D 段 dead-end 指路字樣由客戶自訂；(h) E～H 段（舊 UI Removal Gate、大盤頁、禁止事項、施工順序）為新增流程約束。
+- **內容**：見下方「來源」逐字全文（A～H 段）。
+- **要點**（撰寫組摘要；以「來源」原文為準）：
+  1. **Q1＝A**：側欄新增獨立「👤 我的」，作為 Google 帳號、Sheet 綁定與新版 Sheet SSOT 的**唯一**設定入口。
+  2. **Q2＝A（P1 範圍）**：P1 只做 Google 登入／登出／重新登入、Sheet URL／ID、Drive Sheet 清單、明確選擇／切換、重新讀取、active Sheet、active portfolio、active watchlist。**P1 不搬（留 P2，另開 Stage A/B/C Gate）**：建立 Sheet、rename Sheet、刪 Sheet、組合 CRUD、觀察清單 CRUD、持股列 CRUD。P2 完成前保留舊「📁 組合管理」。
+  3. **Q3＝A**：正式實作 👤 我的前，先獨立完成 **Sheet Safety 修復批**。
+  4. **Q4＝A**：一般 UI 顯示「Sheet 名稱＋ID 末 6 碼」。
+  5. **Q5＝A**：登出時同步清除 Google 登入 session、active Sheet binding、URL 上 `sheet` 參數、OAuth state／登入流程攜帶的舊 Sheet ID、會造成登出後自動綁回舊 Sheet 的 silent marker；⛔ 不得登出後自動恢復上一個 Sheet。
+  6. **Q6＝A**：組合與觀察清單使用**同一本** active Sheet；legacy 兩者不一致時顯示白話警示、⛔ 不偷偷選 ETF／個股通道、⛔ 不自動覆寫其中一個，讓使用者在 👤 我的明確重新選定。
+  7. **Q7＝A**：👤 我的提供新版全站共用 active portfolio／active watchlist；🛡️ 持股／🎯 標的／⚡ 行動等頁只能讀這個共同選擇；⛔ 不得再以「名稱排序第一本」作為不可見的業務決策。
+  8. **Sheet Safety 修復批（B 段；優先於 👤 我的 UI；Effort High）**：
+     - **B1 Read 真正唯讀**：⛔ read → worksheet 不存在 → create；⛔ read → header／schema 不符 → rewrite 第一列。正確行為：worksheet missing → 明確 `UNAVAILABLE／NOT_CONFIGURED`；schema mismatch → `SCHEMA_MISMATCH`；permission error → 明確 error；empty sheet → `EMPTY`；真正空值維持空值。任何初始化／migration／repair 必須拆成明確 write action，不得藏在 read helper。
+     - **B2 Forward-test 歷史**：`forward_test_picks` 等不可重建歷史 read path 零寫入；reconcile／read 不得 create、不得重建 header、不得 rewrite、不得因 schema 不符自行修復；**若現有設計無法安全分離 → 停手送 Decision Gate**。
+     - **B3 `/d/e/` 發布連結 BUG（必修）**：建立**單一** Sheet ID parser，不得再保留多份互相不同的 parser 行為；正常編輯網址解析真正 spreadsheet ID；`/spreadsheets/d/e/...` 不得解析成 `e`；若發布網址不能安全轉成可操作 ID → 明確拒絕＋白話錯誤，不得猜測。
+     - **B4 Sheet 綁定單一寫入契約**：不得新增第五套綁定邏輯；收斂為一套 parse／sanitize／apply active sheet／clear binding／OAuth restore；legacy key 可暫作 compatibility adapter，新版 consumer 逐步只讀同一 SSOT。
+     - **B5 Cache**：重新讀取不得默認清除所有使用者的全域 cache；P1「重新讀取」只失效目前使用者／active Sheet／相關 read cache；**若 Streamlit 架構做不到安全 per-user invalidation → 先研究並送 Gate**，⛔ 不得用全域 `.clear()` 假裝完成。
+  9. **👤 我的 P1 Stage D 開工條件（C 段）**：Sheet Safety 批 QA、CI、merge、main verification **全部完成後**才可開始。首屏維持核准草稿方向（① Google 帳號 ② 目前 Sheet ③ 這本 Sheet 內目前分析的組合／觀察清單與哪些頁正在使用）；控制項：登入、登出、重新登入、貼 Sheet URL／ID、Drive 清單、選擇 Sheet、明確「使用這本」、重新讀取、active portfolio selector、active watchlist selector。**唯一本 Sheet 自動綁：取消**（就算 Drive 只有一本，仍要使用者明確按「使用這本」；不要替使用者做綁定決策）。
+  10. **Dead-end 修正（D 段；P1 完成後）**：Sheet／登入／切換相關提示 → 統一導向「👤 我的」；需要修改持股／組合／觀察清單內容時（P1 無 CRUD）必須誠實指路：「目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。」⛔ 不得再出現：新版模式看不到的頁面卻叫使用者直接去點、指回自己的唯讀頁、寫著有控制項但實際沒有。
+  11. **舊 UI Removal Gate（E 段）**：🚦 今天、📁 組合管理、Google 側欄、Sheet CRUD、legacy controls **全部暫時保留**；刪除條件：capability inventory → Old→New mapping → implementation → interaction coverage → regression → customer verification → Removal Decision Gate，未全部成立不得刪。
+  12. **大盤頁（F 段）**：📊 大盤頁仍等待客戶實際 UI 驗收；不阻止本次落盤與 Sheet Safety 批；大盤頁驗收前 ⛔ 不得刪 🚦 今天頁。
+  13. **禁止事項（G 段）**：不開始 C2b；不改 Risk Cap；不顯示 Risk Cap 正式數字；不翻 `PRODUCTION_WRITE_APPROVED`；不新增 production source；不修改投資公式／門檻／權重；不動不可重建歷史；不因 read 自動 write；不因 missing 自動建立資料；不因 schema mismatch 自動修資料。
+  14. **執行（H 段）**：高能力模型；Silent Autonomous Cruise；Effort High；施工順序：① 落盤本次完整 Stage C 裁示 → ② Sheet Safety 修復批 → ③ 獨立 QA → ④ CI／merge／main verification → ⑤ 👤 我的 P1 → ⑥ P1 獨立 QA → ⑦ CI／merge／main verification → ⑧ 停手回報 → ⑨ 不自行進 P2。
+- **不是什麼**（⛔）：
+  - ⛔ **不是 P2 授權**：建立／rename／刪 Sheet、組合／觀察清單／持股列 CRUD 須另開 Stage A/B/C Gate（DEC-082）。
+  - ⛔ **不是舊 UI 刪除授權**：E 段 Removal Gate 七步未全部成立前一律不刪（DEC-019／020、DEC-081 第 8 點不變）；大盤頁驗收前不刪 🚦 今天（DEC-081 Q1、F 段）。
+  - ⛔ **不是新的 Sheet 內容寫入授權**（撰寫組讀法，單組）：B1 要求把初始化／migration／repair「拆成明確 write action」，是把既有藏在 read helper 裡的寫入**移出讀取路徑**；P1 不寫 Sheet 內容，新版 UI 不因此新增寫入控制項（屬 P2）。拆出的 write action 掛在哪個既有寫入路徑，屬 Sheet Safety 批內部技術拍板，須在交付報告揭露。
+  - ⛔ **不是不可重建歷史的修復授權**：B2 只要求讀取零寫入；若無法安全分離 → 停手送 Decision Gate，不得自行修資料。
+  - ⛔ **不是大盤頁驗收**（F 段）；**不是 C2b／Risk Cap／`RC-VISIBILITY` 授權**；**不是 production write／Daily Schedule 授權**（`PRODUCTION_WRITE_APPROVED=False`、DEC-066 F 不變）；**不是投資公式／門檻／權重變更授權**。
+- **範圍**：UI／IA（👤 我的 Stage C 裁示）＋資料層安全修復（Sheet Safety 批 B1～B5）＋治理（施工順序、Removal Gate、禁止事項）｜**日期**：2026-10-25｜**決策者**：客戶｜**狀態**：生效（Q1～Q7 裁示登記＝👤 我的草稿 DEC-082 Stage C 對 P1 範圍通過；**Sheet Safety 批已指派、未開工**；**👤 我的 P1 待 Sheet Safety 批 QA／CI／merge／main verification 完成後才可開始**；P2 未授權）。
+- **來源**：客戶 2026-10-25 👤 我的 Stage C 完整裁示（類別 D；經總管轉交為完整文字檔，撰寫組讀取該檔**全文**，**逐字收錄，未改寫、未刪節**；確切 UTC 時戳未記錄，只保留日期）：
+
+```text
+客戶 2026-10-25 👤 我的 Stage C 完整裁示（逐字）
+
+A. Q1～Q7 正式裁示
+
+Q1 = A
+側欄新增獨立「👤 我的」，作為 Google 帳號、Sheet 綁定與新版 Sheet SSOT 的唯一設定入口。
+
+Q2 = A
+P1 只做：
+- Google 登入／登出／重新登入
+- Sheet URL／ID
+- Drive Sheet 清單
+- 明確選擇／切換
+- 重新讀取
+- active Sheet
+- active portfolio
+- active watchlist
+P1 不搬：
+- 建立 Sheet
+- rename Sheet
+- 刪 Sheet
+- 組合 CRUD
+- 觀察清單 CRUD
+- 持股列 CRUD
+以上留 P2，另開 Stage A/B/C Gate。P2 完成前保留舊「📁 組合管理」。
+
+Q3 = A
+正式實作 👤 我的前，先獨立完成 Sheet Safety 修復批。
+
+Q4 = A
+一般 UI 顯示：
+「Sheet 名稱＋ID 末 6 碼」。
+
+Q5 = A
+登出時同步清除：
+- Google 登入 session
+- active Sheet binding
+- URL 上 "sheet" 參數
+- OAuth state／登入流程攜帶的舊 Sheet ID
+- 會造成登出後重新自動綁回舊 Sheet 的 silent marker
+不得登出後自動恢復上一個 Sheet。
+
+Q6 = A
+組合與觀察清單使用同一本 active Sheet。
+若 legacy 狀態兩者不一致：
+- 顯示白話警示
+- 不偷偷選 ETF 通道
+- 不偷偷選個股通道
+- 不自動覆寫其中一個
+- 讓使用者在 👤 我的明確重新選定
+
+Q7 = A
+👤 我的提供新版全站共用：
+- active portfolio
+- active watchlist
+🛡️ 持股／🎯 標的／⚡ 行動等頁只能讀這個共同選擇。
+不得再以「名稱排序第一本」作為不可見的業務決策。
+
+---
+
+B. Sheet Safety 修復批
+此批優先於 👤 我的 UI。
+Effort：High。
+
+B1. Read 必須真正唯讀
+禁止：
+read → worksheet 不存在 → create worksheet
+禁止：
+read → header/schema 不符 → rewrite 第一列
+正確行為：
+- worksheet missing → 明確 "UNAVAILABLE / NOT_CONFIGURED"
+- schema mismatch → 明確 "SCHEMA_MISMATCH"
+- permission error → 明確 error
+- empty sheet → EMPTY
+- 真正空值維持空值
+不得為了「讓讀取成功」自動修改使用者資料。
+任何初始化／migration／repair：
+必須拆成明確 write action，不得藏在 read helper。
+
+B2. Forward-test 歷史
+"forward_test_picks" 等不可重建歷史：
+- read path 零寫入
+- reconcile/read 不得 create
+- 不得重建 header
+- 不得 rewrite
+- 不得因 schema 不符自行修復
+若現有設計無法安全分離：
+停手送 Decision Gate。
+
+B3. "/d/e/" 發布連結 BUG
+目前發布連結可能解析成 "e"。
+正式裁示：
+必修。
+建立單一 Sheet ID parser。
+不得再保留多份互相不同的 parser 行為。
+Google Sheets 正常編輯網址：
+解析真正 spreadsheet ID。
+"/spreadsheets/d/e/..." 發布網址：
+不得解析成 "e"。
+若發布網址不能安全轉成可操作 spreadsheet ID：
+明確拒絕並顯示白話錯誤。
+不得猜測。
+
+B4. Sheet 綁定單一寫入契約
+新版不得再新增第五套綁定邏輯。
+收斂為一套：
+- parse
+- sanitize
+- apply active sheet
+- clear binding
+- OAuth restore
+legacy key 可暫時作 compatibility adapter，但新版 consumer 應逐步只讀同一 SSOT。
+
+B5. Cache
+重新讀取不得默認清除所有使用者的全域 cache。
+P1 的「重新讀取」目標：
+只失效目前使用者／active Sheet／相關 read cache。
+如果 Streamlit 目前架構做不到安全 per-user invalidation：
+先研究並送 Gate，不得用全域 ".clear()" 假裝完成。
+
+---
+
+C. 👤 我的 P1 Stage D
+只有 Sheet Safety 批：
+- QA
+- CI
+- merge
+- main verification
+全部完成後才可開始。
+首屏維持核准草稿方向：
+1. Google 帳號
+2. 目前 Sheet
+3. 這本 Sheet 內目前分析的組合／觀察清單與哪些頁正在使用
+控制項包括：
+- 登入
+- 登出
+- 重新登入
+- 貼 Sheet URL／ID
+- Drive 清單
+- 選擇 Sheet
+- 明確「使用這本」
+- 重新讀取
+- active portfolio selector
+- active watchlist selector
+唯一本 Sheet 自動綁
+取消。
+就算 Drive 只有一本：
+仍要使用者明確按「使用這本」。
+不要替使用者做綁定決策。
+
+---
+
+D. Dead-end 修正
+P1 完成後：
+Sheet／登入／切換相關提示：
+→ 統一導向「👤 我的」。
+需要修改持股／組合／觀察清單內容：
+P1 尚未提供 CRUD，因此必須誠實指路：
+「目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。」
+不得再出現：
+- 新版模式看不到的頁面卻叫使用者直接去點
+- 指回自己的唯讀頁
+- 寫著有控制項但實際沒有
+
+---
+
+E. 舊 UI Removal Gate
+舊：
+- 🚦 今天
+- 📁 組合管理
+- Google 側欄
+- Sheet CRUD
+- legacy controls
+全部暫時保留。
+刪除條件仍是：
+capability inventory
+→ Old→New mapping
+→ implementation
+→ interaction coverage
+→ regression
+→ customer verification
+→ Removal Decision Gate
+未全部成立不得刪。
+
+---
+
+F. 大盤頁
+📊 大盤頁仍等待客戶實際 UI 驗收。
+但這不阻止：
+- 本次 Q1～Q7 裁示落盤
+- Sheet Safety 修復批
+在大盤頁尚未驗收前：
+不得刪 🚦 今天頁。
+
+---
+
+G. 禁止事項
+- 不開始 C2b
+- 不改 Risk Cap
+- 不顯示 Risk Cap 正式數字
+- 不翻 "PRODUCTION_WRITE_APPROVED"
+- 不新增 production source
+- 不修改投資公式／門檻／權重
+- 不動不可重建歷史
+- 不因 read 自動 write
+- 不因 missing 自動建立資料
+- 不因 schema mismatch 自動修資料
+
+---
+
+H. 執行與回報
+Model：高能力模型
+Mode：Silent Autonomous Cruise
+Effort：High
+施工順序：
+1. 落盤本次完整 Stage C 裁示
+2. Sheet Safety 修復批
+3. 獨立 QA
+4. CI / merge / main verification
+5. 再做 👤 我的 P1
+6. P1 獨立 QA
+7. CI / merge / main verification
+8. 停手回報
+9. 不自行進 P2
+```
+
+- **與其他 DEC／條文的關係**（append-only；撰寫組讀法，單組，⚠️ 待第二組 evidence audit，`CLAUDE.md` §-2 規則 6；舊 DEC 一字不改）：
+  - **DEC-082（先草稿、後施工）**：本條為 👤 我的草稿的 Stage C 客戶裁示；P1 範圍內的 Stage D 自本條起有授權，但**開工條件**另受 C 段（Sheet Safety 批先完成）拘束；P2 須重走 Stage A/B/C。
+  - **DEC-081 第 7、8、9 點**：Q1／Q2 為 👤 我的互動承接的具體範圍；「Sheet CRUD 不可照搬三套」由 B4（單一寫入契約）與 B3（單一 parser）落實；Effort 依 H 段為 High（與第 9 點升 High 觸發同向）。
+  - **DEC-081 Q1／DEC-019／DEC-020**：F 段「大盤頁驗收前不得刪 🚦 今天」與 E 段 Removal Gate 同向且加嚴（明列七步）。
+  - **`CLAUDE.md` §1（Fail Loud）／v3 §02**：B1 的明確狀態碼（`UNAVAILABLE／NOT_CONFIGURED`、`SCHEMA_MISMATCH`、`EMPTY`）與「真正空值維持空值」同向；`BUG-SHEET-TITLE-SWALLOW`（`get_sheet_title` 吞例外）客戶未逐字點名，撰寫組依 Q4（要顯示 Sheet 名稱）讀為 P1 前置，排程見 BACKLOG 該列。
+  - **`CLAUDE.md` §-1.5.F 判定 3(5)**：`forward_test_picks` 屬不可重建歷史；B2 與「刪生產資料須請示」同向，且把「讀取時改寫」也納入禁止。
+  - **EX-OAUTH-1（`CLAUDE.md` §8.2.A.1）**：B4 的 OAuth restore、Q5 的 OAuth state／silent marker 清除會觸及 `src/data/portfolio/oauth_state.py`；是否需調整例外登記屬 Sheet Safety 批內部判斷，撰寫組未查證。
+  - **DEC-003 ①（線框 gate）**：P1 首屏「維持核准草稿方向」＝草稿 §3 線框在 P1 範圍內通過；P1 實作若偏離線框結構，仍須先出線框。
+  - **DEC-066 F／`PRODUCTION_WRITE_APPROVED=False`**：G 段同向，不變。
+  - 未發現需登記 `PROJECT_RULES.md` 第 14 節的新衝突（撰寫組單組 grep，未經第二組驗證）。
+
 ---
 
 ## 5. 取代鏈總表
@@ -1457,6 +1729,10 @@ Effort：本批 Opus 5.5／Medium；遇 Risk Cap 正式顯示、投資語意、e
 | 今天頁三欄摘要「位階／動能／風險」（客戶 2026-09-05 核准線框；「風險←危險度」為後續裁示）（2026-10-25 新增列） | DEC-081 Q2-3 | 取代（新版 UI 元件移除；底層舊能力與歷史程式不刪） | 客戶 2026-10-25 原文明示（「移除的是新版 UI 元件，不代表刪除其底層舊能力或歷史程式。」） |
 | DEC-062 Q1「今天頁」作為主頁（2026-10-25 新增列） | DEC-081 Q1 | 部分取代（主頁大盤功能由新版 📊 大盤接替；作戰室移 ⚡ 行動；新版大盤頁正式驗收完成前舊今天頁不得刪除；DEC-062 原文不改） | 客戶 2026-10-25 原文明示；「部分取代」範圍為撰寫組判讀，單組 |
 | `docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md` §5.1／Q2-2 Risk Cap 卡位卡面措辭「獨立顯示待 RC-VISIBILITY；上限有效時，數字會出現在『能不能出手』卡；每次更新的報告也會列出本次寫入值」（2026-10-25 新增列） | DEC-081 Q2-2 | 取代（卡面改為客戶措辭「風險上限／獨立顯示待 C2b＋RC-VISIBILITY Gate」；Gate 檔原文不改，只改狀態頭） | 客戶 2026-10-25 原文明示 |
+| `docs/vnext/ME_PAGE_DRAFT_2026-10-25.md` §7 Q1～Q7 總管推薦（全部 A）＋§0「⛔ 未核准」（2026-10-25 新增列） | DEC-083 | 裁示確認（Q1～Q7 全採 A；草稿狀態改「已裁示 DEC-083」；草稿原文不改，只改狀態頭與 §7 逐題加註） | 客戶 2026-10-25 原文明示（「Q1 = A」～「Q7 = A」） |
+| 草稿 §6 S5「單本不自動綁：移除自動綁（或改為『預選但要按 ✅』）」與 §2 F8／§4 M08（2026-10-25 新增列） | DEC-083 C 段 | 裁示（**取消唯一本自動綁**；不論是否預選，綁定都必須由使用者明確按「使用這本」） | 客戶 2026-10-25 原文明示（「唯一本 Sheet 自動綁 取消。就算 Drive 只有一本：仍要使用者明確按「使用這本」。」）；「不論是否預選」為撰寫組讀法，單組 |
+| 草稿 §6「Sheet SSOT 提案（技術實作，屬內部拍板）」S1 單一解析器、S2 單一寫入者，及 H8「只清本人」快取（2026-10-25 新增列） | DEC-083 B3／B4／B5 | 升格（內部技術提案 → 客戶指定的 Sheet Safety 修復批範圍，先於 👤 我的 P1；B5 做不到安全 per-user invalidation 須送 Gate） | 客戶 2026-10-25 原文明示（B 段）；對映 S1／S2／H8 為撰寫組判讀，單組 |
+| 草稿 Q5 A（登出清三件）與 Q6 A（不一致時「白話警示＋一鍵統一」）（2026-10-25 新增列） | DEC-083 Q5／Q6 | 同向精確化（Q5 另明列 silent marker、⛔ 登出後不得自動恢復；Q6 ⛔ 不偷偷選 ETF／個股通道、⛔ 不自動覆寫，使用者在 👤 我的明確重新選定） | 客戶 2026-10-25 原文明示 |
 
 ## 6. 未升格項目（證據不足或題意不明 → 見 `docs/BACKLOG.md` 第 4 節）
 
