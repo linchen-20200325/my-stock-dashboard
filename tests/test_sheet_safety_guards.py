@@ -27,6 +27,8 @@ _READ_ENTRIES = (
     'list_portfolios', 'load_portfolio', 'list_stock_watchlists', 'load_stock_watchlist',
     'read_forward_test_picks', 'load_forward_test_picks', 'get_sheet_title',
     'list_user_sheets', 'list_user_folders', 'is_configured', 'login_expired',
+    # 👤 我的 P1（DEC-083，有意識的新增，⛔ 不是漏列）：fail-loud 標題讀取＋ session 綁定快照（純讀）。
+    'read_sheet_title', 'session_binding_snapshot',
 )
 #: 只為寫入而存在的 helper（讀取路徑不得傳遞呼叫到它們）。
 _WRITE_HELPERS = {
@@ -272,6 +274,7 @@ def test_every_read_path_makes_zero_writes(tripwire):
                lambda: gsp.load_stock_watchlist('觀察', sheet_id='SID'),
                gsp.read_forward_test_picks, gsp.load_forward_test_picks,
                lambda: gsp.get_sheet_title('SID'),
+               lambda: gsp.read_sheet_title('SID'),     # 👤 我的 P1（DEC-083）
                B.get_binding_state, B.get_binding_presence, HS.get_holdings,
                lambda: SF._collect_stock_watchlist_tickers('SID'),
                FT.load_frozen_picks_df, FT.reconcile_all):
