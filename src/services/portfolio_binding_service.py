@@ -281,10 +281,13 @@ def reload_my_sheet_reads(*sheet_ids: str) -> int:
 # 客戶原文 Q6:「組合與觀察清單使用同一本 active Sheet。若 legacy 狀態兩者不一致:顯示白話警示、不偷偷選 ETF 通道、
 # 不偷偷選個股通道、不自動覆寫其中一個、讓使用者在 👤 我的明確重新選定。」
 # AI 總管裁示:secrets 部署預設在新版 UI **不當 active**(要使用者明確按「使用這本」)。
-ACTIVE_OK = "ok"                                   # 兩格綁定同一本 ⇒ 這本就是 active Sheet
-ACTIVE_NONE = "none"                               # 兩格都沒綁、也沒有部署預設
-ACTIVE_DIVERGED = "diverged"                       # 兩格不同(含其中一格是空的)⇒ ⛔ 不偷選
-ACTIVE_DEPLOY_DEFAULT_ONLY = "deploy_default_only"  # 兩格都沒綁,只有 secrets 部署預設 ⇒ ⛔ 不當 active
+# 值的 SSOT 在 L0 `shared/sheet_id.py`(PR #927 QA-2:「🚦 今天」也要分辨;本檔同名 re-export,值一字未改)。
+from shared.sheet_id import (  # noqa: E402
+    ACTIVE_DEPLOY_DEFAULT_ONLY,   # 兩格都沒綁,只有 secrets 部署預設 ⇒ ⛔ 不當 active
+    ACTIVE_DIVERGED,              # 兩格不同(含其中一格是空的)⇒ ⛔ 不偷選
+    ACTIVE_NONE,                  # 兩格都沒綁、也沒有部署預設
+    ACTIVE_OK,                    # 兩格綁定同一本 ⇒ 這本就是 active Sheet
+)
 
 
 @dataclass(frozen=True)

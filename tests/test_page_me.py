@@ -419,6 +419,69 @@ def test_apptest_select_portfolio_and_logout(tmp_path, stub_l1):
         assert k not in at.session_state
 
 
+# ══ PR #927 QA-2 BLOCKING：貼網址 / ID 的結果**同一輪**就地出現，展開區不收起 ════════════════════════════════════
+def _switch_expander(at):
+    return [e for e in at.expander if e.label == P.SWITCH_SHEET_TITLE][0]
+
+
+def test_apptest_paste_error_and_success_show_in_the_same_run(tmp_path, stub_l1):
+    """⛔ 326fb3b0 會紅：結果經 `_flash()` 存起來，頁首訊息區這一輪早畫完 ⇒ 錯誤 / 成功晚一輪才出現。"""
+    at = _run(tmp_path, {"gsheet_tokens": dict(_TOK), "portfolio_sheet_id": _ID,
+                         "stock_portfolio_sheet_id": _ID})
+    at.text_input(key=S.ME_PASTE_INPUT_KEY).input(
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQabc/pubhtml").run()
+    assert not at.exception, at.exception
+    _errs = [e.value for e in _switch_expander(at).error]
+    assert _errs, "貼了發布連結：錯誤必須在同一輪、就地出現在框下面"
+    assert at.session_state["portfolio_sheet_id"] == _ID, "⛔ 錯誤輸入不得改綁定"
+    at.text_input(key=S.ME_PASTE_INPUT_KEY).input(f"https://docs.google.com/spreadsheets/d/{_ID2}/edit#gid=0").run()
+    _box = _switch_expander(at)
+    _ok = [m.value for m in _box.success]
+    assert _ok == [P.BIND_CHANGED.format(tail=S.sheet_id_tail(_ID2))], _ok
+    assert not _box.error, "上一輪的錯誤不得殘留"
+    assert at.session_state["portfolio_sheet_id"] == _ID2
+    assert _ID2 not in _visible(at) + "".join(_ok)
+    at.run()   # 再跑一輪：訊息只講一次（⛔ 不在頁首晚一輪再冒出來）
+    assert not [m for m in at.success if m.value == P.BIND_CHANGED.format(tail=S.sheet_id_tail(_ID2))]
+
+
+def test_switch_expander_stays_open_while_it_has_a_result():
+    """有貼上結果 / Drive 清單 / Drive 失敗時展開區要開著（AppTest 讀不到 expanded 旗標 ⇒ 用原始碼對帳）。"""
+    _body = _SRC.split("def _render_switch_sheet", 1)[1].split("\ndef ", 1)[0]
+    assert "expanded=_open" in _body and "expanded=False" not in _body
+    assert _body.index("pop_paste_result") < _body.index("st.expander("), "結果要在畫展開區之前取出"
+    _code = "\n".join(ln.split("#", 1)[0] for ln in _body.splitlines())
+    assert "_report_bind(" not in _code, "⛔ 貼上結果不經頁首訊息區（晚一輪）"
+
+
+def test_apptest_drive_failure_is_plain_language(tmp_path, stub_l1, monkeypatch):
+    """PR #927 QA-2 第 3 點：Drive 清單失敗只說分類白話，⛔ 不露例外原文 / 完整 Sheet ID。"""
+    def _boom(folder=""):
+        raise RuntimeError(f"HttpError 500 https://www.googleapis.com/drive/v3/files/{_ID}?x=1")
+    monkeypatch.setattr(gsp, "list_user_sheets", _boom)
+    at = _run(tmp_path, {"gsheet_tokens": dict(_TOK), "portfolio_sheet_id": _ID,
+                         "stock_portfolio_sheet_id": _ID})
+    at.button(key="p07me_list_sheets").click().run()
+    out = _visible(at)
+    assert "讀取雲端硬碟清單失敗" in out
+    assert _ID not in out and "googleapis" not in out and "HttpError" not in out
+    assert at.session_state[S.ME_DRIVE_ERROR_KEY] and "｜" not in at.session_state[S.ME_DRIVE_ERROR_KEY]
+
+
+def test_content_card_403_404_point_to_sharing_not_reload():
+    """PR #927 QA-2 第 2 點：403 / 404 重新讀取不會好 ⇒ 指去分享設定 / 卡②；429 / 網路才留重新讀取。"""
+    assert P.RELOAD_LABEL not in P.LIST_READ_DENIED and "分享設定" in P.LIST_READ_DENIED
+    assert P.RELOAD_LABEL not in P.LIST_READ_NOT_FOUND and "重新選一本" in P.LIST_READ_NOT_FOUND
+    assert P.RELOAD_LABEL in P.LIST_READ_FAILED
+
+
+def test_issue_text_never_echoes_raw_message():
+    assert P.issue_text("error:HttpError") == P.ISSUE_TEXT_OTHER.format(kind="HttpError")
+    _raw = f"HttpError('https://x/{_ID}'); OSError('boom')"
+    _t = P.error_kinds(_raw)
+    assert _ID not in _t and "boom" not in _t and "HttpError" in _t and "OSError" in _t
+
+
 # ══ 導航 ＋ 側欄說明（app.py；DEC-083 Q1=A／D 段）═══════════════════════════════════
 def _app_string_constants() -> list[str]:
     tree = ast.parse((_ROOT / "app.py").read_text(encoding="utf-8"))

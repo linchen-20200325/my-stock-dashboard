@@ -44,9 +44,14 @@ import streamlit as st
 from shared import ia_nav
 from shared.secret_scrub import scrub_secrets
 from shared.sheet_id import (
+    ME_DRIVE_ERROR_KEY,
     ME_DRIVE_FOLDERS_SESSION_KEY,
     ME_DRIVE_SHEETS_SESSION_KEY,
+    ME_FOLDER_PICK_KEY,
     ME_PASTE_INPUT_KEY,
+    ME_PORTFOLIO_PICK_KEY,
+    ME_SHEET_PICK_KEY,
+    ME_WATCHLIST_PICK_KEY,
     sheet_id_tail,
 )
 
@@ -55,12 +60,13 @@ from shared.sheet_id import (
 # ══════════════════════════════════════════════════════════════════
 #: 本頁上一個動作的結果訊息（`[(kind, text), …]`；畫完就清）。kind ∈ success / info / error。
 SS_FLASH: str = "p07me_flash"
-SS_FOLDER_PICK: str = "p07me_folder_pick"
-SS_SHEET_PICK: str = "p07me_sheet_pick"
-SS_PF_PICK: str = "p07me_portfolio_pick"
-SS_WL_PICK: str = "p07me_watchlist_pick"
-#: Drive 清單讀取失敗的說明（按了「列出」才會有；登出時由本頁 `_on_logout` 清）。
-SS_DRIVE_ERROR: str = "p07me_drive_error"
+# PR #927 QA-2 第 5 點：選擇器 / Drive 失敗的 key 值 SSOT 搬到 L0（列進共用登出的清單 ⇒ 側欄登出也清得到）。
+SS_FOLDER_PICK: str = ME_FOLDER_PICK_KEY
+SS_SHEET_PICK: str = ME_SHEET_PICK_KEY
+SS_PF_PICK: str = ME_PORTFOLIO_PICK_KEY
+SS_WL_PICK: str = ME_WATCHLIST_PICK_KEY
+#: Drive 清單讀取失敗的**分類代碼**（按了「列出」才會有；⛔ 不存例外原文）。
+SS_DRIVE_ERROR: str = ME_DRIVE_ERROR_KEY
 
 # ══════════════════════════════════════════════════════════════════
 # 首屏字樣（卡名 ＝ `ia_nav.SECTION_LABELS`，指路句與卡名同一個 SSOT）
@@ -120,6 +126,13 @@ SHEET_FORBIDDEN: str = "🔴 這本 Sheet 打不開：你的 Google 帳號沒有
 SHEET_TITLE_QUOTA: str = "🔴 讀取 Sheet 失敗：Google 讀取額度暫時用完，可稍後按「" + RELOAD_LABEL + "」（{tail}）"
 SHEET_TITLE_NETWORK: str = "🔴 讀取 Sheet 失敗：網路連線失敗，可稍後按「" + RELOAD_LABEL + "」（{tail}）"
 SHEET_TITLE_FAILED: str = "🔴 讀取 Sheet 失敗：{err}，可稍後按「" + RELOAD_LABEL + "」（{tail}）"
+#: 例外分類代碼 → 白話（PR #927 QA-2 第 3 點：⛔ 不把例外原文搬上畫面；原文只進 log）。
+ISSUE_TEXT_LOGIN: str = "Google 登入已失效（請到卡①重新登入）"
+ISSUE_TEXT_QUOTA: str = "Google 讀取額度暫時用完"
+ISSUE_TEXT_NETWORK: str = "網路連線失敗"
+ISSUE_TEXT_DENIED: str = "你的 Google 帳號沒有權限"
+ISSUE_TEXT_NOT_FOUND: str = "找不到（可能已刪除，或網址打錯）"
+ISSUE_TEXT_OTHER: str = "未預期的錯誤（{kind}）"
 SHEET_READ_FAILED: str = "🔴 綁定狀態讀取失敗：{err}"
 SHEET_SOURCE_NOTE: str = "這本是你明確選定的（本頁、側欄、網址書籤或登入時帶回的同一本）。"
 SHEET_SAFE_NOTE: str = "ⓘ 切換只改「這個 App 讀哪一本」，不會改你 Sheet 裡的任何內容。"
@@ -130,6 +143,7 @@ DRIVE_FOLDER_LABEL: str = "限定資料夾"
 DRIVE_PICK_LABEL: str = "清單共 {n} 本 —— 選一本"
 DRIVE_EMPTY: str = "⬜ 這個範圍找不到任何 Sheet（有效結果，不是故障）"
 DRIVE_FAILED: str = "🔴 讀取雲端硬碟清單失敗：{err}，可稍後再按一次"
+DRIVE_FAILED_LOGIN: str = "🔴 讀取雲端硬碟清單失敗：" + ISSUE_TEXT_LOGIN
 DRIVE_PICK_FIRST: str = "先在上面選一本，再按「" + USE_SHEET_LABEL + "」。"
 #: 建立新 Sheet 不在 P1（Q2）：只放指路（D 段客戶原句原封不動）。
 CREATE_SHEET_WHERE: str = "要建立新 Sheet：" + ia_nav.CONTENT_EDIT_OLD_UI_WHERE
@@ -146,6 +160,9 @@ CONTENT_NOT_READ_WHY_SHEET: str = "先在卡②選定一本 Sheet。"
 PF_WORKSHEET_MISSING: str = "⬜ 這本 Sheet 沒有「{ws}」分頁（本頁不會替你建立）"
 SCHEMA_MISMATCH: str = "⚠️ 資料疑義：「{ws}」分頁第一列應為 {headers}，本頁未讀取也未修改"
 LIST_READ_FAILED: str = "🔴 {what}讀取失敗：{err}，可稍後按「" + RELOAD_LABEL + "」"
+#: 403 / 404：重新讀取不會好（PR #927 QA-2 第 2 點）⇒ 與卡②同一個去處：確認分享設定，或重新選一本。
+LIST_READ_DENIED: str = "🔴 {what}讀取失敗：你的 Google 帳號沒有這本 Sheet 的權限 —— 請確認分享設定，或在卡②重新選一本"
+LIST_READ_NOT_FOUND: str = "🔴 {what}讀取失敗：找不到這本 Sheet（可能已刪除）—— 請在卡②重新選一本"
 PF_EMPTY: str = "⬜ 還沒有任何組合（有效結果，不是故障）"
 WL_EMPTY: str = "⬜ 還沒有任何觀察清單（有效結果，不是故障）"
 PF_COUNT: str = "組合 {n} 本：{names}"
@@ -209,6 +226,25 @@ def _md(text: object) -> str:
     return _s
 
 
+def issue_text(code: object) -> str:
+    """L3 分類代碼（`classify_read_error`）→ 一句白話。分不出來（`error:<型別>`）→ 只露型別名。"""
+    _ok, _nf, _pd, _quota, _net = _read_codes()
+    _c = str(code or "")
+    _known = {"login_required": ISSUE_TEXT_LOGIN, _quota: ISSUE_TEXT_QUOTA, _net: ISSUE_TEXT_NETWORK,
+              _pd: ISSUE_TEXT_DENIED, _nf: ISSUE_TEXT_NOT_FOUND}
+    if _c in _known:
+        return _known[_c]
+    return ISSUE_TEXT_OTHER.format(kind=_md(_c.split(":", 1)[-1] or "不明"))
+
+
+def error_kinds(text: object) -> str:
+    """例外 repr（可能以「; 」串多個）→ 只留型別名的白話（⛔ 不露訊息 —— 訊息可能含 Sheet ID／路徑）。"""
+    import re
+    _kinds = [m.group(1) for part in str(text or "").split("; ")
+              if (m := re.match(r"\s*([A-Za-z_][\w.]*)\(", part))]
+    return ISSUE_TEXT_OTHER.format(kind=_md("、".join(dict.fromkeys(_kinds)) or "不明"))
+
+
 def _err(text: object) -> str:
     """上游例外 → 可以上畫面的一句（先洗金鑰／Sheet ID／路徑，再跳脫）。"""
     return _md(scrub_secrets(str(text or "（上游沒有給訊息）")))
@@ -223,7 +259,7 @@ def build_account_card(acct) -> CardView:
         return CardView(CARD_ACCOUNT_TITLE, ACC_NOT_CONFIGURED, captions=(ACC_NOT_CONFIGURED_WHY,))
     if _st == ME.ACCOUNT_READ_FAILED:
         return CardView(CARD_ACCOUNT_TITLE, ACC_READ_FAILED,
-                        lines=(_err(getattr(acct, "error", "")),), captions=(ACC_READ_FAILED_WHERE,))
+                        lines=(error_kinds(getattr(acct, "error", "")),), captions=(ACC_READ_FAILED_WHERE,))
     if _st == ME.ACCOUNT_LOGGED_IN:
         _email = getattr(acct, "email_masked", "")
         return CardView(CARD_ACCOUNT_TITLE, ACC_LOGGED_IN + (f" {_md(_email)}" if _email else ""),
@@ -248,7 +284,7 @@ def build_sheet_card(view, *, logged_in: bool) -> CardView:
     _state = getattr(_a, "state", "")
     _read_err = str(getattr(_a, "read_error", "") or "")
     if _read_err:
-        return CardView(CARD_SHEET_TITLE, SHEET_READ_FAILED.format(err=_err(_read_err)),
+        return CardView(CARD_SHEET_TITLE, SHEET_READ_FAILED.format(err=error_kinds(_read_err)),
                         captions=(ACC_READ_FAILED_WHERE,))
     if not logged_in:
         return CardView(CARD_SHEET_TITLE, SHEET_NEED_LOGIN)
@@ -281,7 +317,7 @@ def build_sheet_card(view, *, logged_in: bool) -> CardView:
     if _ts == _net:
         return CardView(CARD_SHEET_TITLE, SHEET_TITLE_NETWORK.format(tail=_tail))
     return CardView(CARD_SHEET_TITLE, SHEET_TITLE_FAILED.format(
-        err=_err(getattr(view, "title_error", "") or _ts), tail=_tail))
+        err=issue_text(_ts), tail=_tail))
 
 
 def _read_codes() -> tuple[str, str, str, str, str]:
@@ -305,9 +341,11 @@ def _list_status(names, issue: str, err: str, *, what: str, ws: str, headers: Se
         return SCHEMA_MISMATCH.format(ws=ws, headers="、".join(headers))
     if issue == ME.TITLE_LOGIN_REQUIRED:
         return CONTENT_NOT_READ + " —— " + CONTENT_NOT_READ_WHY_LOGIN
-    _why = {_quota: "Google 讀取額度暫時用完", _net: "網路連線失敗", _pd: "沒有這本 Sheet 的權限",
-            _nf: "找不到這本 Sheet"}.get(issue, _err(err or issue))
-    return LIST_READ_FAILED.format(what=what, err=_why)
+    if issue == _pd:
+        return LIST_READ_DENIED.format(what=what)
+    if issue == _nf:
+        return LIST_READ_NOT_FOUND.format(what=what)
+    return LIST_READ_FAILED.format(what=what, err=issue_text(issue))
 
 
 def build_content_card(contents, *, logged_in: bool, active_ok: bool) -> CardView:
@@ -365,17 +403,31 @@ def _on_logout() -> None:
 
 def _report_bind(result) -> None:
     """契約 `SheetBindResult` → 一句結果。成功只在**真的寫了**時說（QA B-1 同一原則）。"""
+    _m = bind_result_message(result)
+    if _m:
+        _flash(*_m)
+
+
+def bind_result_message(result) -> "tuple[str, str] | None":
+    """契約 `SheetBindResult` → `(kind, text)`；空輸入 / 沒有結果 → None。成功只在**真的寫了**時說。"""
     if result is None:
-        return
+        return None
     _tail = sheet_id_tail(getattr(result, "sheet_id", ""))
     if getattr(result, "error", ""):
         from shared.sheet_id import SHEET_INPUT_EMPTY
-        if result.error != SHEET_INPUT_EMPTY:
-            _flash("error", result.message)
-    elif getattr(result, "changed", False):
-        _flash("success", BIND_CHANGED.format(tail=_tail))
-    elif getattr(result, "already_current", False):
-        _flash("info", BIND_ALREADY.format(tail=_tail))
+        return None if result.error == SHEET_INPUT_EMPTY else ("error", result.message)
+    if getattr(result, "changed", False):
+        return "success", BIND_CHANGED.format(tail=_tail)
+    if getattr(result, "already_current", False):
+        return "info", BIND_ALREADY.format(tail=_tail)
+    return None
+
+
+def _render_bind_inline(result) -> None:
+    """貼網址 / ID 的結果**就地**畫在框下面（同一輪；⛔ 不經頁首訊息區）。"""
+    _m = bind_result_message(result)
+    if _m:
+        {"success": st.success, "error": st.error}.get(_m[0], st.info)(_m[1])
 
 
 def _on_use_sheet(sheet_id: str) -> None:
@@ -418,7 +470,7 @@ def _load_drive(kind: str) -> None:
             st.session_state.pop(SS_SHEET_PICK, None)
     except Exception as _e:  # noqa: BLE001 — 列檔失敗誠實報（⛔ 不捏造清單）
         print(f"[views/page_me] Drive 清單讀取失敗：{scrub_secrets(repr(_e))}")
-        st.session_state[SS_DRIVE_ERROR] = ME.drive_issue(_e) + "｜" + repr(_e)
+        st.session_state[SS_DRIVE_ERROR] = ME.drive_issue(_e)   # 只存分類代碼（⛔ 不存原文）
         if kind != "folders":
             st.session_state.pop(ME_DRIVE_SHEETS_SESSION_KEY, None)
 
@@ -522,13 +574,20 @@ def _render_sheet(view, *, logged_in: bool) -> None:
 def _render_switch_sheet() -> None:
     """「🔄 切換 Sheet」展開區：貼網址／ID、Drive 清單 —— 兩種方法都要使用者明確動作才綁（⛔ 一本也不自動綁）。"""
     from src.services import me_account_service as ME
-    with st.expander(SWITCH_SHEET_TITLE, expanded=False):
+    # PR #927 QA-2 BLOCKING：~~畫完框後 `_report_bind(pop_paste_result(...))` 經 `_flash()`~~（頁首的訊息區在這一輪
+    #   早就畫完 ⇒ 結果晚一輪才出現：貼了發布連結當下看不到錯誤、成功訊息在使用者已經選完組合後才冒出來）。
+    #   現行：on_change 的結果在畫展開區**之前**取出，**同一輪**就地畫在框的正下方；有結果 / Drive 清單 / Drive 失敗時
+    #   展開區保持打開（⛔ 不因為這一輪的訊息把它收起來）。
+    _paste_result = ME.pop_paste_result(ME_PASTE_INPUT_KEY)
+    _open = bool(_paste_result is not None or st.session_state.get(ME_DRIVE_SHEETS_SESSION_KEY) is not None
+                 or st.session_state.get(ME_DRIVE_FOLDERS_SESSION_KEY) or st.session_state.get(SS_DRIVE_ERROR))
+    with st.expander(SWITCH_SHEET_TITLE, expanded=_open):
         st.caption(SHEET_SAFE_NOTE)
         # 方法一：被動文字框三步（L1 QA BLK-2 接法）。⚠️ `value=""`：⛔ 不把目前的完整 ID 放回框裡（Q4）。
         ME.prepare_paste_input(ME_PASTE_INPUT_KEY)
         st.text_input(PASTE_LABEL, value="", key=ME_PASTE_INPUT_KEY, on_change=_on_paste,
                       placeholder=PASTE_PLACEHOLDER)
-        _report_bind(ME.pop_paste_result(ME_PASTE_INPUT_KEY))
+        _render_bind_inline(_paste_result)
         st.markdown(f"**{DRIVE_HEADING}**")
         st.button(LIST_FOLDERS_LABEL, key="p07me_list_folders", on_click=_load_drive, args=("folders",))
         _folders = st.session_state.get(ME_DRIVE_FOLDERS_SESSION_KEY)
@@ -539,7 +598,8 @@ def _render_switch_sheet() -> None:
         st.button(LIST_SHEETS_LABEL, key="p07me_list_sheets", on_click=_load_drive, args=("sheets",))
         _derr = str(st.session_state.get(SS_DRIVE_ERROR) or "")
         if _derr:
-            st.markdown(DRIVE_FAILED.format(err=_err(_derr.split("｜", 1)[-1])))
+            st.markdown(DRIVE_FAILED_LOGIN if _derr == "login_required"
+                        else DRIVE_FAILED.format(err=issue_text(_derr)))
         _sheets = st.session_state.get(ME_DRIVE_SHEETS_SESSION_KEY)
         if _sheets is not None and not _sheets:
             st.markdown(DRIVE_EMPTY)

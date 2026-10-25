@@ -42,9 +42,12 @@ class TestSelectionKeys:
         assert not set(S.ACTIVE_SELECTION_SESSION_KEYS.values()) & set(S.SHEET_BINDING_SESSION_KEYS)
 
     def test_logout_extra_keys_are_the_me_page_keys(self):
+        # PR #927 QA-2 第 5 點：選擇器 4 個 + Drive 失敗代碼也列入（~~原本只有 Drive 清單 2 個 + 貼上框 + 側欄框~~
+        #   ⇒ 側欄登出後 👤 我的頁的選擇器 / 失敗訊息會殘留；有意識的修改，⛔ 不是漏改）。
         assert set(S.LOGOUT_EXTRA_SESSION_KEYS) == {
             S.ME_DRIVE_FOLDERS_SESSION_KEY, S.ME_DRIVE_SHEETS_SESSION_KEY, S.ME_PASTE_INPUT_KEY,
-            S.SIDEBAR_SHEET_INPUT_KEY}
+            S.ME_FOLDER_PICK_KEY, S.ME_SHEET_PICK_KEY, S.ME_PORTFOLIO_PICK_KEY, S.ME_WATCHLIST_PICK_KEY,
+            S.ME_DRIVE_ERROR_KEY, S.SIDEBAR_SHEET_INPUT_KEY}
         assert all(_k.startswith("p07me_") for _k in S.LOGOUT_EXTRA_SESSION_KEYS
                    if _k != S.SIDEBAR_SHEET_INPUT_KEY)
 

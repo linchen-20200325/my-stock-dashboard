@@ -24,6 +24,11 @@ pytestmark = [pytest.mark.slow, pytest.mark.usefixtures("stub_trading_day_status
 #: 比對的 session key（登入、綁定、選定、側欄框、「👤 我的」頁的 Drive 清單）。
 _KEYS = ("gsheet_tokens", "gsheet_email", "portfolio_sheet_id", "stock_portfolio_sheet_id",
          S.ACTIVE_PORTFOLIO_SESSION_KEY, S.ACTIVE_WATCHLIST_SESSION_KEY, S.SIDEBAR_SHEET_INPUT_KEY,
+         # PR #927 QA-2 第 5 點：👤 我的頁的 key **逐一點名**（⛔ 不只靠 `*LOGOUT_EXTRA_SESSION_KEYS` —— 清單漏列時
+         #   比對範圍會跟著縮小，測不到漏清）。
+         S.ME_DRIVE_FOLDERS_SESSION_KEY, S.ME_DRIVE_SHEETS_SESSION_KEY, S.ME_PASTE_INPUT_KEY,
+         S.ME_FOLDER_PICK_KEY, S.ME_SHEET_PICK_KEY, S.ME_PORTFOLIO_PICK_KEY, S.ME_WATCHLIST_PICK_KEY,
+         S.ME_DRIVE_ERROR_KEY,
          *S.LOGOUT_EXTRA_SESSION_KEYS)
 
 
@@ -49,6 +54,13 @@ def _start() -> AppTest:
     at.session_state["portfolio_sheet_id"] = A
     at.session_state["stock_portfolio_sheet_id"] = A
     at.session_state[S.ACTIVE_PORTFOLIO_SESSION_KEY] = {"sheet_id": A, "name": "核心", "skip": False}
+    # PR #927 QA-2 第 5 點：👤 我的頁殘留（Drive 清單 / 選擇器 / Drive 失敗代碼）也預先放進去 ⇒ 兩條登出都必須清掉，
+    #   比對才有意義（~~原本只放綁定 key ⇒ 這幾個 key 兩邊都是 None，比對恆等、測不到側欄登出漏清~~）。
+    at.session_state[S.ME_DRIVE_FOLDERS_SESSION_KEY] = [{"id": "fold1", "name": "投資"}]
+    at.session_state[S.ME_DRIVE_SHEETS_SESSION_KEY] = [{"id": A, "name": "核心表"}]
+    at.session_state[S.ME_DRIVE_ERROR_KEY] = "error:RuntimeError"
+    at.session_state[S.ME_FOLDER_PICK_KEY] = "fold1"
+    at.session_state[S.ME_SHEET_PICK_KEY] = A
     at.query_params["sheet"] = A
     at.run()
     assert not at.exception, at.exception

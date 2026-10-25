@@ -165,7 +165,22 @@ ME_PASTE_INPUT_KEY: str = "p07me_paste_sheet"
 #: 舊側欄「🔐 Google 帳號」貼 ID 文字框的 widget key（字面 SSOT 在 `app.py`；值與它逐字相同）。
 #: 列在這裡是為了讓「👤 我的」頁的登出與側欄登出**結束狀態完全相同**（`tests/test_me_p1_logout_e2e.py`）。
 SIDEBAR_SHEET_INPUT_KEY: str = "sb_portfolio_sheet_id_input"
+#: 「👤 我的」頁的選擇器 widget key 與 Drive 讀取失敗說明（PR #927 QA-2 第 5 點：側欄登出與頁面登出要清同一組，
+#: 否則從側欄登出後，下一位登入者會看到上一位在頁面上選的資料夾 / Sheet / 組合名）。
+ME_FOLDER_PICK_KEY: str = "p07me_folder_pick"
+ME_SHEET_PICK_KEY: str = "p07me_sheet_pick"
+ME_PORTFOLIO_PICK_KEY: str = "p07me_portfolio_pick"
+ME_WATCHLIST_PICK_KEY: str = "p07me_watchlist_pick"
+ME_DRIVE_ERROR_KEY: str = "p07me_drive_error"
 #: 共用登出（L1 `oauth_state.logout_google_session`）在登入 / 綁定 / 選定之外**另外**清掉的 session key。
 LOGOUT_EXTRA_SESSION_KEYS: tuple[str, ...] = (
     ME_DRIVE_FOLDERS_SESSION_KEY, ME_DRIVE_SHEETS_SESSION_KEY, ME_PASTE_INPUT_KEY,
-    SIDEBAR_SHEET_INPUT_KEY)
+    ME_FOLDER_PICK_KEY, ME_SHEET_PICK_KEY, ME_PORTFOLIO_PICK_KEY, ME_WATCHLIST_PICK_KEY,
+    ME_DRIVE_ERROR_KEY, SIDEBAR_SHEET_INPUT_KEY)
+
+# 新版 UI 的 active Sheet 判定代碼（值域 SSOT；L3 `portfolio_binding_service` 以同名 re-export）。放 L0 是為了讓
+# 只准 import `get_binding_presence` 的「🚦 今天」頁也能分辨「兩本不同」（PR #927 QA-2 第 4 點），⛔ 不必多 import L3。
+ACTIVE_OK: str = "ok"
+ACTIVE_NONE: str = "none"
+ACTIVE_DIVERGED: str = "diverged"
+ACTIVE_DEPLOY_DEFAULT_ONLY: str = "deploy_default_only"
