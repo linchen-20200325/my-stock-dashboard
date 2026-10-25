@@ -810,7 +810,11 @@ class TestOldFilesUntouched:
     # 📌 Sheet Safety 批 QA 回修 N-2／N-3（2026-10-25，PR #926 QA，總管指派，⛔ 不是漏改；DEC-019 揭露）：
     #   `src/ui/tabs/portfolio_status_bar.py`（本數因讀取問題未知時改顯「🔴 我的組合：讀取有問題」）、
     #   `app.py`（前進式驗證對帳的雲端讀取問題改用 st.warning）。版面零改動；其餘 89 檔一個字都沒動。
-    _BASE_DIGEST = "c66a804e4f7f70a9c3af190f4dda779c409b97573a9491ab0aaea08a96579cc7"
+    # ~~"c66a804e4f7f70a9c3af190f4dda779c409b97573a9491ab0aaea08a96579cc7"~~（Sheet Safety 批 QA 回修後，至 55601f42 仍成立）
+    # 📌 👤 我的 P1-6（2026-10-25，客戶裁示 DEC-083 Q5，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄
+    #   「🚪 登出」—— inline 四步改呼叫 L1 共用 `logout_google_session`（四步順序一字不變，另清 active 組合／觀察清單
+    #   選定與「👤 我的」頁的 key），import 換成那一支。舊模式畫面零改動；其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "dfbde3935a2da0ce73b6c27529cc73938da96fa6d614d52500a4eddc25b5cda7"
 
     def test_no_diff_against_base(self):
         import hashlib

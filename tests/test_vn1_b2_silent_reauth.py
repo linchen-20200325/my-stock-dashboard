@@ -301,10 +301,13 @@ def test_app_py_wires_hook_and_logout():
     assert 'on_change=_sb_on_sheet_input' in src and "st.query_params['sheet']" not in src
     _ctr = inspect.getsource(ost.apply_sheet_binding)
     assert _ctr.index('st.query_params[SHEET_QUERY_PARAM] = _sid') < _ctr.index('sync_silent_marker()')
+    # 📌 👤 我的 P1(DEC-083 Q5,有意識的修改,⛔ 不是漏改):~~側欄 inline `_sb_forget_silent()` → `_sb_clear_binding()`~~
+    #   → 側欄改呼叫 L1 共用 `logout_google_session`(與「👤 我的」頁同一支);兩步的先後改驗在共用函式裡。
     i_logout = src.index("key='btn_oauth_logout_sb'")
-    i_forget = src.index('_sb_forget_silent()', i_logout)
-    i_clear = src.index('_sb_clear_binding()', i_logout)
-    assert i_forget < i_clear < src.index('st.rerun()', i_logout)
+    i_shared = src.index('_sb_logout(', i_logout)
+    assert i_shared < src.index('st.rerun()', i_logout)
+    _lo = inspect.getsource(ost.logout_google_session)
+    assert _lo.index('forget_silent_reauth()') < _lo.index('clear_sheet_binding()')
 
 
 # ══════════════════════════════════════════════════════════════════════════

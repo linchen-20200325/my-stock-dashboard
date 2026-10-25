@@ -341,8 +341,7 @@ with st.sidebar:
         from src.data.portfolio.oauth_state import (
             get_oauth_cfg as _sb_get_cfg,
             login_state_with_sheet as _sb_login_state_with_sheet,
-            forget_silent_reauth as _sb_forget_silent,
-            clear_sheet_binding as _sb_clear_binding,
+            logout_google_session as _sb_logout,
             on_sheet_input_change as _sb_on_sheet_input,
             pop_sheet_input_result as _sb_pop_sheet_input,
             prepare_sheet_input as _sb_prepare_sheet_input,
@@ -361,14 +360,12 @@ with st.sidebar:
             st.success(f'🟢 已登入{("：" + _sb_email) if _sb_email else ""}')
             if st.button('🚪 登出', key='btn_oauth_logout_sb',
                           use_container_width=True):
-                for _k in ('gsheet_tokens', 'gsheet_email', '_oauth_state'):
-                    st.session_state.pop(_k, None)
-                _sb_forget_silent()   # 1.0-B2:拿掉 ?gs= 記號,否則重新整理又靜默登回去(登不出去)
-                # DEC-083 Q5:登出同步清 Sheet 綁定(兩格 session + ?sheet= + 記號)⇒ 登出後不自動恢復上一本;
-                # 登入鈕的 state 由 session 的 portfolio_sheet_id 組成 ⇒ 清掉後不再夾帶舊 Sheet ID。
-                # 側欄貼 ID 文字框的 widget 狀態一併拿掉(否則重新登入那一輪它會帶著舊 ID 又綁回去)。
-                _sb_clear_binding()
-                st.session_state.pop('sb_portfolio_sheet_id_input', None)
+                # 👤 我的 P1(DEC-083 Q5,有意識的修改,⛔ 不是漏刪):~~本檔 inline 四步 —— pop
+                # gsheet_tokens / gsheet_email / _oauth_state → `forget_silent_reauth()` → `clear_sheet_binding()`
+                # → pop 側欄貼 ID 文字框~~ → 與「👤 我的」頁同一支 L1 共用登出(四步順序一字不變,另清 active
+                # 組合 / 觀察清單選定與「👤 我的」頁的 Drive 清單)。登入鈕的 state 由 session 的
+                # portfolio_sheet_id 組成 ⇒ 清掉後不再夾帶舊 Sheet ID;側欄框不清的話重新登入那一輪會帶舊 ID 綁回去。
+                _sb_logout(extra_session_keys=('sb_portfolio_sheet_id_input',))
                 st.rerun()
             # ── Google Sheet ID（集中於帳號區；亦可於「📁 組合管理」頁設定）──
             _sb_sid_cur = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()

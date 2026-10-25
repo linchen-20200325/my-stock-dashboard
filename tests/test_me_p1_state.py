@@ -43,8 +43,14 @@ class TestSelectionKeys:
 
     def test_logout_extra_keys_are_the_me_page_keys(self):
         assert set(S.LOGOUT_EXTRA_SESSION_KEYS) == {
-            S.ME_DRIVE_FOLDERS_SESSION_KEY, S.ME_DRIVE_SHEETS_SESSION_KEY, S.ME_PASTE_INPUT_KEY}
-        assert all(_k.startswith("p07me_") for _k in S.LOGOUT_EXTRA_SESSION_KEYS)
+            S.ME_DRIVE_FOLDERS_SESSION_KEY, S.ME_DRIVE_SHEETS_SESSION_KEY, S.ME_PASTE_INPUT_KEY,
+            S.SIDEBAR_SHEET_INPUT_KEY}
+        assert all(_k.startswith("p07me_") for _k in S.LOGOUT_EXTRA_SESSION_KEYS
+                   if _k != S.SIDEBAR_SHEET_INPUT_KEY)
+
+    def test_sidebar_input_key_matches_app_literal(self):
+        app = (pathlib.Path(__file__).resolve().parents[1] / "app.py").read_text(encoding="utf-8")
+        assert f"key='{S.SIDEBAR_SHEET_INPUT_KEY}'" in app
 
 
 # ══ L1 oauth_state：選定（Q7）＋ 共用登出（Q5）════════════════════════════════
@@ -291,3 +297,30 @@ def test_selection_guard_is_not_vacuous():
     assert "st.session_state[_key] =" in fns["set_active_selection"]
     assert "st.session_state.pop(_selection_key(_k), None)" in fns["clear_active_selection"]
     assert "ACTIVE_SELECTION_SESSION_KEYS[kind]" in fns["_selection_key"]
+
+
+# ── 共用登出：側欄與「👤 我的」頁結束狀態完全相同（DEC-083 Q5）──────────────────────────
+def test_sidebar_and_me_page_logout_end_states_are_identical(fst):
+    """側欄：`logout_google_session(extra_session_keys=('sb_portfolio_sheet_id_input',))`；
+    「👤 我的」頁：L3 `me_account_service.logout()`（不帶 extra）。兩者跑完 session 與網址必須一模一樣。"""
+    from src.services import me_account_service as ME
+
+    def _start():
+        f = fst(session={"gsheet_tokens": {"access_token": "x"}, "gsheet_email": "ab@x.com",
+                         "_oauth_state": "nonce", "portfolio_sheet_id": _ID, "stock_portfolio_sheet_id": _ID,
+                         OAUTH_SILENT_ELIGIBLE_SESSION_KEY: True, S.SIDEBAR_SHEET_INPUT_KEY: _ID,
+                         S.ME_DRIVE_SHEETS_SESSION_KEY: [{"id": _ID, "name": "n"}], "keep": 1},
+                query={"sheet": _ID, OAUTH_SILENT_MARKER_PARAM: "a" * 16})
+        ost.set_active_selection(_PF, "A", _ID)
+        return f
+
+    a = _start()
+    ost.logout_google_session(extra_session_keys=(S.SIDEBAR_SHEET_INPUT_KEY,))
+    end_a = (dict(a.session_state), dict(a.query_params))
+    b = _start()
+    ME.logout()
+    end_b = (dict(b.session_state), dict(b.query_params))
+    assert end_a == end_b
+    assert end_a[0] == {OAUTH_SILENT_ATTEMPTED_SESSION_KEY: True, S.SHEET_BINDING_VERSION_SESSION_KEY: 1,
+                        "keep": 1}
+    assert end_a[1] == {}

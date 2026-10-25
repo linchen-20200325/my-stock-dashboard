@@ -162,6 +162,10 @@ ME_DRIVE_FOLDERS_SESSION_KEY: str = "p07me_drive_folders"
 ME_DRIVE_SHEETS_SESSION_KEY: str = "p07me_drive_sheets"
 #: 「👤 我的」頁貼網址 / ID 的文字框 widget key（登出時一併拿掉舊值，理由同側欄貼 ID 框）。
 ME_PASTE_INPUT_KEY: str = "p07me_paste_sheet"
+#: 舊側欄「🔐 Google 帳號」貼 ID 文字框的 widget key（字面 SSOT 在 `app.py`；值與它逐字相同）。
+#: 列在這裡是為了讓「👤 我的」頁的登出與側欄登出**結束狀態完全相同**（`tests/test_me_p1_logout_e2e.py`）。
+SIDEBAR_SHEET_INPUT_KEY: str = "sb_portfolio_sheet_id_input"
 #: 共用登出（L1 `oauth_state.logout_google_session`）在登入 / 綁定 / 選定之外**另外**清掉的 session key。
 LOGOUT_EXTRA_SESSION_KEYS: tuple[str, ...] = (
-    ME_DRIVE_FOLDERS_SESSION_KEY, ME_DRIVE_SHEETS_SESSION_KEY, ME_PASTE_INPUT_KEY)
+    ME_DRIVE_FOLDERS_SESSION_KEY, ME_DRIVE_SHEETS_SESSION_KEY, ME_PASTE_INPUT_KEY,
+    SIDEBAR_SHEET_INPUT_KEY)
