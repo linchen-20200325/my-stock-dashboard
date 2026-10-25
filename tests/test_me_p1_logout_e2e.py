@@ -105,3 +105,17 @@ def test_page_logout_does_not_rebind_on_next_run(client):
     b.run()
     assert not b.exception, b.exception
     assert "portfolio_sheet_id" not in b.session_state and "stock_portfolio_sheet_id" not in b.session_state
+
+
+def test_sidebar_sheet_caption_shows_tail_only_in_new_mode(client):
+    """PR #927 QA-2 第 7 點：側欄「✅ Sheet ID」新版模式只露末 6 碼；「不使用」模式照舊（完整 ID）。
+    ⚠️ 側欄貼 ID 框的預填值仍是完整 ID（舊行為，本批未動，列為殘留）⇒ 本測試只看 caption。"""
+    a = _start()
+    _old = [c.value for c in a.sidebar.caption if "Sheet ID" in c.value]
+    assert _old == [f"✅ Sheet ID：`{A}`"], _old
+    a.sidebar.radio(key="_sb_ia_page").set_value(ia_nav.page_label(ia_nav.PAGE_ME))
+    a.run()
+    assert not a.exception, a.exception
+    _new = [c.value for c in a.sidebar.caption if "Sheet ID" in c.value]
+    assert _new == [f"✅ Sheet ID：`{S.sheet_id_tail(A)}`"], _new
+    assert all(A not in c.value for c in a.sidebar.caption)

@@ -819,7 +819,11 @@ class TestOldFilesUntouched:
     #   新增 late-import wrapper `_ia_view_me()`、`_IA_VIEWS` 多登記一頁、`shared.ia_nav` import 多三個名字；
     #   側欄三句指向舊「📁 組合管理」的說明**只在新版模式**（`_IA_PAGE is not None`）改指「👤 我的」，
     #   「不使用」模式一字不變；一段註解更正。舊 7 個頁籤一字未動；其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "2845049326bcbfc16066dd3a480f545d9a4434b74139b3f6277c8dfabb786aa0"
+    # ~~"2845049326bcbfc16066dd3a480f545d9a4434b74139b3f6277c8dfabb786aa0"~~（👤 我的 P1-7 後）
+    # 📌 PR #927 QA-2 第 7 點（2026-10-25，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄
+    #   「✅ Sheet ID」那一行 —— 新版模式（`_IA_PAGE is not None`）改顯末 6 碼（`shared.sheet_id.sheet_id_tail`），
+    #   「不使用」模式一字不變（仍顯完整 ID）。側欄貼 ID 框的預填值未動（舊行為，列為殘留）。其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "118450bfd13ad4aa86fc74394fd5d64304288300a68f9009b0a84a45dc0e8270"
 
     def test_no_diff_against_base(self):
         import hashlib

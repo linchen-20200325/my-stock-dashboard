@@ -392,7 +392,11 @@ with st.sidebar:
             if _sb_bind is not None and _sb_bind.error and _sb_bind.error != _SB_SHEET_INPUT_EMPTY:
                 st.error(_sb_bind.message)
             _sb_sid_new = str(st.session_state.get('portfolio_sheet_id', '') or '').strip()
-            if _sb_sid_new:
+            if _sb_sid_new and _IA_PAGE is not None:
+                # PR #927 QA-2 第 7 點：新版模式只露末 6 碼（同「👤 我的」；⛔ 完整 ID 不上畫面）。舊版模式照舊。
+                from shared.sheet_id import sheet_id_tail as _sb_sid_tail
+                st.caption(f'✅ Sheet ID：`{_sb_sid_tail(_sb_sid_new)}`')
+            elif _sb_sid_new:
                 st.caption(f'✅ Sheet ID：`{_sb_sid_new}`')
             else:
                 st.caption(_SB_ME_HINT if _IA_PAGE is not None
