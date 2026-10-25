@@ -823,7 +823,11 @@ class TestOldFilesUntouched:
     # 📌 PR #927 QA-2 第 7 點（2026-10-25，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄
     #   「✅ Sheet ID」那一行 —— 新版模式（`_IA_PAGE is not None`）改顯末 6 碼（`shared.sheet_id.sheet_id_tail`），
     #   「不使用」模式一字不變（仍顯完整 ID）。側欄貼 ID 框的預填值未動（舊行為，列為殘留）。其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "118450bfd13ad4aa86fc74394fd5d64304288300a68f9009b0a84a45dc0e8270"
+    # ~~"118450bfd13ad4aa86fc74394fd5d64304288300a68f9009b0a84a45dc0e8270"~~（PR #927 QA-2 第 7 點後）
+    # 📌 PR #927 QA-1 複驗（2026-10-25，DEC-083 Q4，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄貼 ID 框 ——
+    #   新版模式不預填（`value=""`），且畫框前丟掉含目前綁定 ID 的沿用值（舊模式切過來 / 貼了「已是目前這本」）；
+    #   從新版切回「不使用」時丟掉新版留下的空值，讓舊模式照舊預填。「不使用」模式行為不變；其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "75cc2114cd4ef8c5d70a892eea5b8256d471d1dfcc52eb7968c9eec1795dfadc"
 
     def test_no_diff_against_base(self):
         import hashlib

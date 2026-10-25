@@ -119,3 +119,73 @@ def test_sidebar_sheet_caption_shows_tail_only_in_new_mode(client):
     _new = [c.value for c in a.sidebar.caption if "Sheet ID" in c.value]
     assert _new == [f"✅ Sheet ID：`{S.sheet_id_tail(A)}`"], _new
     assert all(A not in c.value for c in a.sidebar.caption)
+
+
+# ══ PR #927 QA-1 複驗（DEC-083 Q4）：新版模式側欄貼 ID 框**任何路徑**都不得出現完整 Sheet ID ══════════════════
+B = "BBBBBOOK1234567890abcdef"
+_BOX = S.SIDEBAR_SHEET_INPUT_KEY
+
+
+def _box(at) -> str:
+    return str(at.sidebar.text_input(key=_BOX).value or "")
+
+
+def _to(at, page):
+    at.sidebar.radio(key="_sb_ia_page").set_value(page)
+    at.run()
+    assert not at.exception, at.exception
+
+
+def _assert_no_full_id(at):
+    _v = _box(at)
+    for _sid in (A, B):
+        assert _sid not in _v, f"新版模式側欄框露出完整 Sheet ID：{_v!r}"
+
+
+def test_sidebar_box_old_mode_keeps_prefill(client):
+    a = _start()   # 預設「不使用」⇒ 舊模式
+    assert _box(a) == A, "「不使用」模式照舊預填目前的 Sheet ID"
+
+
+def test_sidebar_box_never_holds_full_id_in_new_mode(client):
+    _me = ia_nav.page_label(ia_nav.PAGE_ME)
+    a = _start()
+    assert _box(a) == A
+    # 舊 → 新：框裡沿用的舊值（完整 ID）必須被丟掉
+    _to(a, _me)
+    _assert_no_full_id(a)
+    a.run()
+    _assert_no_full_id(a)
+    # 新版模式其他頁也一樣
+    _to(a, ia_nav.page_label(ia_nav.PAGE_TODAY))
+    _assert_no_full_id(a)
+    _to(a, _me)
+    # 貼「已是目前這本」的完整網址 ⇒ 不換代，框也不得留著它
+    a.sidebar.text_input(key=_BOX).input(f"https://docs.google.com/spreadsheets/d/{A}/edit#gid=0").run()
+    assert not a.exception, a.exception
+    _assert_no_full_id(a)
+    # 貼另一本 ⇒ 綁到 B，框不得顯示 B
+    a.sidebar.text_input(key=_BOX).input(B).run()
+    assert not a.exception, a.exception
+    assert a.session_state["portfolio_sheet_id"] == B
+    _assert_no_full_id(a)
+    a.run()
+    _assert_no_full_id(a)
+    # 新 → 舊：舊模式照舊預填現值（B）
+    _to(a, a.sidebar.radio(key="_sb_ia_page").options[0])   # app.py `_IA_NAV_OPTIONS[0]` ＝「不使用」
+    assert a.sidebar.radio(key="_sb_ia_page").value == a.sidebar.radio(key="_sb_ia_page").options[0]
+    assert _box(a) == B
+    # 再回新版：又不得出現
+    _to(a, _me)
+    _assert_no_full_id(a)
+
+
+def test_sidebar_box_bad_paste_stays_with_error_in_new_mode(client):
+    """BLK-2 不退步：解析失敗的原文留在框裡、旁邊顯示白話錯誤，綁定不變。"""
+    a = _start()
+    _to(a, ia_nav.page_label(ia_nav.PAGE_ME))
+    _bad = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQabc/pubhtml"
+    a.sidebar.text_input(key=_BOX).input(_bad).run()
+    assert not a.exception, a.exception
+    assert _box(a) == _bad and a.sidebar.error
+    assert a.session_state["portfolio_sheet_id"] == A
