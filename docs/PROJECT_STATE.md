@@ -652,7 +652,7 @@
 - **P1 開工條件**：Sheet Safety 批 QA／CI／merge／main verification 全部完成；**唯一本自動綁取消**（即使只有一本也要按「使用這本」）；P1 完成後 Sheet／登入／切換提示統一導向 👤 我的，CRUD 照客戶字樣指回舊版 📁 組合管理。
 - **未變**：📊 大盤頁仍待客戶 UI 驗收，驗收前不得刪 🚦 今天；舊 UI（🚦 今天、📁 組合管理、側欄 Google、Sheet CRUD、legacy controls）全部保留，刪除須走 Removal Gate 七步；C2b 未開始；`PRODUCTION_WRITE_APPROVED=False`；不改投資公式／門檻／權重、不動不可重建歷史。
 - **施工順序**：落盤 → Sheet Safety 批 → 獨立 QA → CI／merge／main → 👤 我的 P1 → 獨立 QA → CI／merge／main → 停手回報 → 不自行進 P2。
-- **Sheet Safety 修復批（B1～B5）done in PR #926（待 CI／合併）**（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）：讀取真正唯讀、`forward_test_picks` 讀取／對帳零寫入、單一 Sheet ID parser（發布連結明確拒絕）、`oauth_state` 唯一綁定寫入契約（登出同步清綁定、取消唯一本自動綁）、重新讀取只失效本人×本 Sheet（helper 尚無 UI caller，留 P1）；兩組獨立 QA 各一輪回修後皆判「可合併」；殘留 11 項登記於 `docs/BACKLOG.md` 5.1.13（`SHEET-GLOBAL-CLEARS` 起）。下一步：merge → main verification → 👤 我的 P1 Stage D。
+- **Sheet Safety 修復批（B1～B5）~~done in PR #926（待 CI／合併）~~ done（PR #926 已合併，squash `55601f42` on main）**（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）：讀取真正唯讀、`forward_test_picks` 讀取／對帳零寫入、單一 Sheet ID parser（發布連結明確拒絕）、`oauth_state` 唯一綁定寫入契約（登出同步清綁定、取消唯一本自動綁）、重新讀取只失效本人×本 Sheet（helper 尚無 UI caller，留 P1）；兩組獨立 QA 各一輪回修後皆判「可合併」；殘留 11 項登記於 `docs/BACKLOG.md` 5.1.13（`SHEET-GLOBAL-CLEARS` 起）。~~下一步：merge → main verification → 👤 我的 P1 Stage D。~~ 已合併；👤 我的 P1 在 PR #927（待合併），見 §38（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組產出，**沒有第二組驗過**。
 
 ## 38. 👤 我的 P1（Stage D）實作狀態（PR #927，**待合併**；2026-10-25；append-only）
