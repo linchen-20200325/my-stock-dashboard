@@ -629,3 +629,12 @@
 - **仍禁止**（DEC-081 第 10 點）：開始 C2b；顯示未核准 Risk Cap 獨立數字；改 Risk Cap 計算／scoring eligibility／Required Core／公式／權重／門檻；自行定義趨勢；新增 EPS 來源；大規模刪 code；`PRODUCTION_WRITE_APPROVED=False` 不變。本批 Effort＝Medium，遇 DEC-081 第 9 點所列事項 → 停在安全點、告知升 High。
 
 ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組撰寫；客戶原文為總管轉交的關鍵句、非全文；「實作批進行中」為總管轉述，撰寫組未查 PR。
+
+## 36. 📊 大盤頁實作批與互動覆蓋矩陣初稿（2026-10-25；append-only；**實作完成、未驗收**）
+
+> 2026-10-25 新增（決策者 AI 總管（事實更新））。本節只放摘要＋pointer，不是新 SSOT。裁示見 `docs/DECISIONS.md` DEC-081；待辦見 `docs/BACKLOG.md` 5.1.13；交接見 `docs/HANDOFF.md`「2026-10-25 大盤頁實作批」段。
+
+- **實作**：分支 `claude/determined-euler-32xqjn` @ `6dad38cb`（main `5e2e6e23`＋2 commit；**尚未開 PR、未合併、CI 未驗**，撰寫組 2026-10-25 10:00 台北 `gh api` 實查）。新增 `src/ui/views/page_market.py`（L5）、`shared/market_conclusion.py`（L0）；「📊 大盤」排在導覽第一；「🚦 今天」頁零改動、兩頁並存（DEC-081 Q1＝C）。Gate 檔 W1～W9、X1～X11 已做；全球資金流向、全球風險雷達、外資連續天數、熱錢三角、櫃買、跨頁狀態列未接（`UIX-MKT-*`）。施工結果全文：`docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md` 附錄 D。
+- **互動覆蓋矩陣初稿**：`docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md`（179 個舊 widget 呼叫點 → 六個目標頁；Sheet CRUD 單一 SSOT **提案**；🛡️ dead-end 清單）。重點發現：Sheet URL→ID 解析有 4 份、行為不一致；側欄綁定是獨立 inline 複本；🛡️ 持股有多處指向新版模式下不存在的 📁 組合管理分頁。
+- **下一步**：獨立 QA → 客戶驗收 📊 大盤頁 → 客戶指派下一頁（總管推薦 👤 我的／Sheet SSOT，屬 High）。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：矩陣與本節由單一組產出，**沒有第二組驗過**；矩陣「沒有遺漏」未證明，dead-end 清單已知不完整；大盤頁未經 Streamlit 實機驗收。大盤頁直接呼叫 `page_today` 的底線函式，屬已知耦合（`UIX-MKT-TODAY-COUPLING`）。

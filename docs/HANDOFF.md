@@ -193,7 +193,7 @@
 | 禁止事項 | C2b（計分行為修改）、C1′、DEC-076 ①②、Risk Cap 公式／門檻／權重／Required Core 數量、`RISK_CAP_RULESET_VERSION` 升版、`is_proxy` 翻轉、production write、Daily Schedule、`RC-VISIBILITY` 正式 UI、新增或替換 production source；其餘沿用「C2 裁示後」段 |
 | Production | `PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-24 grep `shared/risk_cap_history_policy.py` 實查，未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
 
-### 📌 current handoff（2026-10-24 大盤 Gate 後）（append-only；**本段為現行短版，與上表及上各段衝突處以本段為準**）
+### 📌 current handoff（2026-10-24 大盤 Gate 後）（append-only；~~**本段為現行短版，與上表及上各段衝突處以本段為準**~~ 已過時，見下方「2026-10-25 大盤頁實作批」段；本段「Production」列**效力不變**，由新段沿用（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）））
 
 > C2a-2 已合併；客戶指示 C2a-2 後停手、不自動進 C2b。目前在 📊 大盤頁 Decision Gate：草稿已備妥、**未核准**。⛔ 接手必須重新做 GitHub Verification Gate（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點）；本段只是導引。待辦細節在 `docs/BACKLOG.md`（`VN1-MT-IA`／`VN1-MT-HOME`／`UIM-*`／`UIM-MKTGATE-DOC-DRIFT`）；狀態摘要 `docs/PROJECT_STATE.md` §34。
 
@@ -209,6 +209,25 @@
 | **唯一 Next Safe Action** | ~~等客戶裁示 Q1～Q4 → 裁示後開 **大盤頁實作批**（Gate 檔 §4 的 W* 清單；先過 9.0 Gate）~~ Gate 已送客戶（2026-10-25）→ 等客戶裁示 Q1～Q4 → 大盤頁實作批（Gate 檔 §4 的 W* 清單；先過 9.0 Gate）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 | 下一階段 Model／Effort | 實作批：**高能力模型／Medium～High**（UI 接線 Medium；凡碰 Risk Cap 顯示的部分 High）；建議只是參考，須依第 9.0 節重新判斷，不得假設已切換 |
 | 禁止事項 | 線框核准前寫 UI code；恢復 Risk Cap 顯示（`RC-VISIBILITY`）；C2b；改公式／門檻／權重；新增或替換資料來源；刪舊 UI；其餘沿用「C2a-2 後」「C2 裁示後」段 |
+| Production | `PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-25 grep `shared/risk_cap_history_policy.py:216` 實查，未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
+
+### 📌 current handoff（2026-10-25 大盤頁實作批）（append-only；**本段為現行短版，與上表及上各段衝突處以本段為準**）
+
+> 客戶已裁示大盤 Gate（DEC-081，2026-10-25）；📊 大盤頁已在分支實作完成，**等獨立 QA 與客戶驗收**。⛔ 接手必須重新做 GitHub Verification Gate（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點）；本段只是導引。待辦在 `docs/BACKLOG.md` 5.1.13（`UIX-*`，含新增 `UIX-MKT-*`）；狀態摘要 `docs/PROJECT_STATE.md` §36。
+
+| 項目 | 現況（量測 2026-10-25 10:00 台北，撰寫組 `git`＋`gh api` 實查，會過期） |
+|---|---|
+| main | `5e2e6e23`（#921 大盤 Gate 文件，squash merge）；Fast checks／Slow tests／export 皆 success；cron 會推進 tip，**以 GitHub 為準** |
+| 本分支 | `claude/determined-euler-32xqjn` @ `6dad38cb`＝main `5e2e6e23`＋2 個 commit：`500028a0`（DEC-081 落盤，docs）、`6dad38cb`（大盤頁實作）；origin 同名分支也在 `6dad38cb`。**尚未開 PR**（`gh api pulls?state=open` 為 0）；`6dad38cb` 在 GitHub 上**查不到 check run** ⇒ CI 尚未驗證 |
+| 本批完成 | 📊 大盤頁 `src/ui/views/page_market.py`（L5）＋`shared/market_conclusion.py`（L0 結論句組字）＋`tests/test_page_market.py`（commit 訊息自述 43 fast＋2 slow）；導覽「📊 大盤」排第一；「🚦 今天」頁零改動、兩頁並存。Gate 檔 W1～W9、X1～X11 已做（X11 只放指路到 📖 憑什麼 › AI 問答）。全站互動覆蓋矩陣初稿 `docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md`；Gate 檔 §3「新UI」欄已依實作更新＋附錄 D 施工結果 |
+| 本批沒做 | 全球資金流向、全球風險雷達 9 項（V-RADAR-1）、外資連續天數、熱錢三角（計算住舊 UI）、櫃買（總管轉述：無 fetcher）、跨頁狀態列；更新鈕字樣仍是「🚀 更新今日戰情」（與線框「🚀 更新大盤資料」不同）。均已登記 `UIX-MKT-*` |
+| 刻意不做（規格擋住） | 中國拖累、融券、拐點、Risk-on／off、雙速合議、新聞／門檻類接線、舊結論句 S01～S14、三欄摘要、Risk Cap 獨立數字 |
+| ⚠️ 揭露 | 大盤頁直接呼叫 `page_today` 的底線函式（`_load_allocation`、`_render_one`、`_render_update_form` 等），因為 `page_today.py` 被還原鏈守衛釘住、今天頁驗收前不改；今天頁退場前要先把這些函式搬到共用位置（`UIX-MKT-TODAY-COUPLING`）。本批的 docs 與矩陣由單一撰寫組產出，**沒有第二組驗過**；大盤頁沒有在 Streamlit 實機看過（撰寫組） |
+| working tree／stash／worktree | 撰寫組編修前（10:00 台北）`git status` 乾淨；本批 docs 編修後未提交：`docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md`（新）、`docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md`、`docs/BACKLOG.md`、`docs/HANDOFF.md`、`docs/PROJECT_STATE.md`；`git stash list` 空；`git worktree list` 只有主 worktree |
+| blocker／Decision Required | **客戶驗收 📊 大盤頁**；C2b Decision Gate（待觀測）；`DEC076-CONFIRM` ①②；`RC-VISIBILITY`；`VN1-MT-TREND-DEF`；`DH-PMI-PUBLICATION-WINDOW-SPEC` |
+| **唯一 Next Safe Action** | 總管：提交本批 docs → 開 PR → 等 CI 綠 → 派**獨立 QA** 驗大盤頁與互動矩陣 → 交**客戶驗收 📊 大盤頁**（互動清單見矩陣 §4.1）→ 客戶指派下一頁。總管推薦下一頁：**👤 我的（Sheet SSOT，`UIX-ME-SHEET-SSOT`）**，起點是矩陣 §7.4 提案；⚠️ 屬 **High**（Sheet 寫入、Google OAuth、權限模型），且須先出線框 |
+| 下一階段 Model／Effort | 👤 我的：**高能力模型／High**（含 OAuth 與 Sheet 寫入）；只做唯讀綁定的部分可評估 Medium。建議只是參考，須依第 9.0 節重新判斷，不得假設已切換 |
+| 禁止事項 | 未經客戶驗收就刪「🚦 今天」頁或任何舊 UI；刪舊 Sheet CRUD；未經核准接任何 Sheet 寫入（`create_new_sheet`／`save_*`／`delete_*`／`add_to_stock_watchlist`／`freeze_current_picks`／`rename_sheet`）；未出線框就新增控制項（含「帶入我的持股」）；開始 C2b；顯示 Risk Cap 獨立數字；改公式／門檻／權重／scoring eligibility；自行定義趨勢；新增或替換資料來源；為了承接而改 `page_today.py`；其餘沿用前段 |
 | Production | `PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-25 grep `shared/risk_cap_history_policy.py:216` 實查，未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
