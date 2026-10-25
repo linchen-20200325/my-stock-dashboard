@@ -56,6 +56,29 @@ def is_login_required_error(exc: BaseException) -> bool:
     return isinstance(exc, LoginRequiredError)
 
 
+#: Sheet Safety 批 QA 回修(N-2):`sheet_read_issue()` 的「表頭不符」代碼(值同 L1 `READ_SCHEMA_MISMATCH`)。
+SHEET_ISSUE_SCHEMA_MISMATCH = "schema_mismatch"
+
+
+def sheet_read_issue(exc: BaseException) -> str:
+    """讀取例外 → 分類代碼(L1 `classify_read_error`;例 `schema_mismatch` / `permission_denied`)。
+
+    給 L5 頁面用(L5 不得直接 import L1,§8.2):拿來挑「怎麼辦」那一句 —— 表頭不符時叫人去改第一列,
+    ⛔ 不叫人重新登入 / 查網路(那是錯的指引)。L1 載不進來 → `error:<型別>`。
+    """
+    try:
+        from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1
+    except Exception:  # noqa: BLE001
+        return f"error:{type(exc).__name__}"
+    return _classify_read_error(_gsp, exc)
+
+
+def portfolio_worksheet_headers() -> tuple[str, ...]:
+    """`portfolios` 分頁應有的第一列(L1 `_HEADERS`;給 L5「把第一列改成…」那一句用)。純讀常數。"""
+    from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1
+    return tuple(_gsp._HEADERS)
+
+
 def _login_expired(_gsp) -> bool:
     try:
         return bool(_gsp.login_expired())

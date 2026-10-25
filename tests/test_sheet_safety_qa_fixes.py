@@ -181,3 +181,93 @@ def test_drive_use_on_already_current_sheet_says_so_not_false_success():
     assert not at.exception, at.exception
     assert not any("已設定投組資料庫" in s.value for s in at.success)
     assert any("已是目前使用的 Sheet" in i.value for i in at.info)
+
+
+# ── N-2：表頭不符的「怎麼辦」是改第一列，⛔ 不是重新登入 / 查網路 ─────────────────────────
+@pytest.fixture
+def mismatch_sheet(monkeypatch):
+    """已登入 + 綁 'SID',`portfolios` 分頁第一列欄名不對(tripwire:任何寫入都紅)。"""
+    from src.data.portfolio import gsheet_portfolio as gsp
+    from tests.sheet_safety_fakes import TripwireClient
+    gsp.clear_read_cache()
+    cli = TripwireClient({'SID': {gsp._WORKSHEET_NAME: [['secret_header_xyz', 'b'], ['A', '1']]}})
+    monkeypatch.setattr(gsp, '_build_client', lambda: cli)
+    monkeypatch.setattr(gsp, '_has_oauth_tokens', lambda: True)
+    monkeypatch.setattr(gsp, '_oauth_import_error', lambda: '')
+    monkeypatch.setattr(gsp, 'login_expired', lambda: False)
+    monkeypatch.setattr(gsp, '_get_active_sheet_id', lambda: 'SID')
+    monkeypatch.setattr(gsp, '_get_active_stock_sheet_id', lambda: '')
+    monkeypatch.setattr('src.services.dividend_station_service.resolve_holding_names', lambda h: h)
+    yield cli
+    assert cli.writes == []
+    gsp.clear_read_cache()
+
+
+def _assert_fix_header_guidance(card):
+    from shared.ui_state import UI_FAILED
+    from src.ui.views import page_hold as P
+    assert card.state == UI_FAILED
+    _where = card.note.where
+    assert '把第一列從 A 欄起依序改成' in _where
+    assert 'name、ticker、lots、avg_price、updated_at' in _where
+    assert '重新用 Google 登入' not in _where and '網路' not in _where
+    assert 'secret_header_xyz' not in _where
+    P.v2_short_rows(card)            # 短句表有登記、摘錄對得上原文(否則 KeyError)
+
+
+def test_count_card_schema_mismatch_says_fix_first_row(mismatch_sheet):
+    from src.ui.views import page_hold as P
+    b = P.load_binding(P.HoldRequest(submitted=True, mode=P.SCOPE_WITH_BINDING))
+    assert b.sheet_issue == 'schema_mismatch'
+    card, _f, _ = P.build_portfolio_count_card(b)
+    assert card.note.now == P.COUNT_SCHEMA_MISMATCH_NOW
+    _assert_fix_header_guidance(card)
+
+
+def test_preview_card_schema_mismatch_says_fix_first_row(mismatch_sheet):
+    from src.ui.views import page_hold as P
+    h = P.load_holdings(P.HoldRequest(submitted=True, mode=P.SCOPE_WITH_BINDING))
+    assert h.error and h.sheet_issue == 'schema_mismatch'
+    card, _f, _ = P.build_holdings_preview_card(h)
+    assert card.note.now == P.PREVIEW_SCHEMA_MISMATCH_NOW
+    _assert_fix_header_guidance(card)
+
+
+def test_other_read_failures_keep_the_existing_guidance():
+    """對照:表頭不符以外的讀取失敗,文案與修前相同(本批只加一個分支)。"""
+    from src.ui.views import page_hold as P
+    from src.services import portfolio_binding_service as B
+    b = P.BindingReadout(requested=True, submitted=True, logged_in=True, sheet_bound=True,
+                         status=B.STATUS_BOUND, count_requested=True, portfolio_count=None,
+                         count_missing_reason='fetch_failed', sheet_issue='permission_denied')
+    card, _f, _ = P.build_portfolio_count_card(b)
+    assert card.note.now == P.COUNT_DRIFT_NOW
+    assert '重新用 Google 登入授權一次' in card.note.where
+
+
+def test_old_status_bar_shows_red_text_label_on_read_problem():
+    from src.services import portfolio_binding_service as B
+    from src.ui.tabs.portfolio_status_bar import _label_for
+    lbl = _label_for(B.BindingState(True, 'SHEETID', None, B.STATUS_BOUND,
+                                    sheet_issue='schema_mismatch'))[0]
+    assert lbl == '🔴 我的組合：讀取有問題'
+    # 沒有讀取問題的降級(舊行為)照舊
+    assert '數量未知' in _label_for(B.BindingState(True, 'SHEETID', None, B.STATUS_BOUND))[0]
+
+
+# ── N-3：前進式驗證對帳的雲端說明不露內部代碼 ────────────────────────────────────────
+@pytest.mark.parametrize('status, problem', [
+    ('ok', False), ('empty', False), ('worksheet_missing', False), ('not_configured', False),
+    ('', False), ('schema_mismatch', True), ('error:APIError', True), ('error:PermissionError', True)])
+def test_forward_test_sheet_status_is_problem(status, problem):
+    from src.services import forward_test_service as FT
+    assert FT.sheet_status_is_problem(status) is problem
+    _note = FT._sheet_note(status)
+    assert bool(_note) is problem
+    assert 'error:' not in _note and 'APIError' not in _note
+
+
+def test_app_uses_warning_for_forward_test_sheet_problems():
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parents[1] / 'app.py').read_text(encoding='utf-8')
+    assert src.count('sheet_status_is_problem(') == 2 and "st.warning(f'⚠️ {_ft_ov[\"note\"]}')" in src

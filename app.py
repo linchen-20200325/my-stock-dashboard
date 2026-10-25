@@ -979,7 +979,13 @@ with tab_stocks:
                     if _ft_r is None:
                         st.info('👆 點「📊 對帳」讀取凍結紀錄並計算績效。')
                     elif _ft_r[0] is None or _ft_r[0].empty:
-                        st.info(f'⚪ {_ft_r[1].get("note", "尚無資料")}')
+                        # Sheet Safety 批 QA 回修 N-3:雲端凍結紀錄真的讀不到(表頭不符 / 讀取失敗)→ 黃色警告,
+                        # 其餘(尚無紀錄 / 還沒設定)照舊灰底提示。
+                        from src.services.forward_test_service import sheet_status_is_problem
+                        if sheet_status_is_problem(_ft_r[1].get('sheet_status', '')):
+                            st.warning(f'⚠️ {_ft_r[1].get("note", "尚無資料")}')
+                        else:
+                            st.info(f'⚪ {_ft_r[1].get("note", "尚無資料")}')
                     else:
                         _ft_df, _ft_ov = _ft_r
                         _ae = _ft_ov.get('avg_excess_pct')
@@ -991,7 +997,11 @@ with tab_stocks:
                             f"{_ft_ov.get('n_valid_total', 0)} 檔**"
                             f"｜平均超額 vs 0050：{_ae_s}｜整體勝率：{_hr_s}")
                         if _ft_ov.get('note'):
-                            st.caption(f'ℹ️ {_ft_ov["note"]}')
+                            from src.services.forward_test_service import sheet_status_is_problem
+                            if sheet_status_is_problem(_ft_ov.get('sheet_status', '')):
+                                st.warning(f'⚠️ {_ft_ov["note"]}')   # QA N-3:讀取問題 → 黃色警告
+                            else:
+                                st.caption(f'ℹ️ {_ft_ov["note"]}')
                         _ft_disp = _ft_df.rename(columns={
                             'cohort': '凍結批次', 'n_valid': '檔數', 'avg_return_pct': '平均報酬%',
                             'benchmark_return_pct': '0050報酬%', 'excess_pct': '超額%',

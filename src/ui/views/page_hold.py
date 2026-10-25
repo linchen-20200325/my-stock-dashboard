@@ -79,6 +79,7 @@
     換入異常列    L3 `services.dividend_station_service.switch_in_invalid_rows`  ← 批 Z58（純函式，唯讀）
     綁定狀態      L3 `services.portfolio_binding_service.get_binding_state`
     沒登入判斷    L3 `services.portfolio_binding_service.is_login_required_error`  ← 1.0-B2（純判斷式，唯讀）
+    表頭不符判斷  L3 `services.portfolio_binding_service.sheet_read_issue` / `portfolio_worksheet_headers`  ← Sheet Safety QA N-2（純判斷式 / 常數，唯讀）
     VIX（單獨）   L3 `services.dividend_station_service.fetch_vix`
     總經位階      L3 `services.dividend_station_service.get_station_macro`
     建議持股水位  L3 `services.allocation_service.get_allocation`
@@ -1024,6 +1025,9 @@ class BindingReadout:
     error: str = ""
     #: 1.0-B2:登入已逾時(L3 `BindingState.login_expired`)→ 「未綁」灰卡改寫成「登入已逾時」(仍是灰)。
     login_expired: bool = False
+    #: Sheet Safety 批 QA 回修 N-2(只加不改):L3 `BindingState.sheet_issue` 原樣透傳 —— 讀組合清單那一步
+    #: 為什麼沒拿到本數(例 `schema_mismatch`)。只用來挑「怎麼辦」那一句,不參與狀態判定。
+    sheet_issue: str = ""
 
     @property
     def count_gate(self) -> bool:
@@ -1126,7 +1130,8 @@ def load_binding(req: HoldRequest) -> BindingReadout:
         status=_status,
         count_requested=bool(req.wants_binding and _bound),
         portfolio_count=_count,
-        count_missing_reason=_reason)
+        count_missing_reason=_reason,
+        sheet_issue=str(getattr(_s, "sheet_issue", "") or ""))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1162,6 +1167,9 @@ class HoldingsReadout:
     more_watchlists: bool = False
     watchlist_error: str = ""
     error: str = ""
+    #: Sheet Safety 批 QA 回修 N-2(只加不改):`error` 的分類(L3 `sheet_read_issue`,例 `schema_mismatch`)。
+    #: 只用來挑「怎麼辦」那一句,不參與狀態判定。
+    sheet_issue: str = ""
     #: 1.0-B2:登入已逾時 → `bound=False` ＋ 空清單,卡片畫灰色「登入已逾時」(⛔ 不是紅色讀取失敗)。
     login_expired: bool = False
 
@@ -1229,8 +1237,9 @@ def load_holdings(req: HoldRequest) -> HoldingsReadout:
                 requested=True, submitted=req.submitted, bound=False,
                 login_expired=str(_e) == OAUTH_LOGIN_EXPIRED_MSG)
         print(f"[views/page_hold] 持股清單讀取失敗 → 轉紅態：{scrub_secrets(repr(_e))}")
+        from src.services.portfolio_binding_service import sheet_read_issue
         return HoldingsReadout(requested=True, submitted=req.submitted,
-                               error=repr(_e))
+                               error=repr(_e), sheet_issue=sheet_read_issue(_e))
     return HoldingsReadout(
         requested=True, submitted=req.submitted,
         holdings=tuple(dict(_r) for _r in (getattr(_h, "holdings", ()) or ())),
@@ -1797,6 +1806,13 @@ COUNT_EMPTY_NOW: str = "**Sheet 綁好了，但裡面還沒有任何一本組合
 PICK_SHEET_UNWIRED_NOW: str = "**本頁不提供選 Sheet 的控制項**"
 WATCHLIST_UNWIRED_NOW: str = "**本頁不提供觀察清單的新增／刪除**"
 PREVIEW_FAILED_NOW: str = "**持股清單讀不出來**"
+#: Sheet Safety 批 QA 回修 N-2:「組合分頁第一列欄名不對」的兩則 `now`(紅;去哪補 ＝ 改第一列,
+#: ⛔ 不叫人重新登入 / 查網路 —— 登入一百次也一樣)。
+COUNT_SCHEMA_MISMATCH_NOW: str = "**讀得到這本 Sheet，但組合分頁的第一列欄名不對**"
+PREVIEW_SCHEMA_MISMATCH_NOW: str = "**持股清單讀不出來：組合分頁的第一列欄名不對**"
+SCHEMA_MISMATCH_WHY: str = (
+    "「portfolios」分頁第一列（欄名）和系統預期的不一樣 —— 為了不改動你的資料，"
+    "系統**不會自動修正**，這一輪也不讀任何一列")
 #: ⑥ 三格「有值但失準」的 `now`。**原本是 `_degraded_note()` 裡的 f-string，字一字未改**；
 #: `{label}` 由呼叫端帶（`壓力測試` / `VaR（風險值）` / `配息現金流`）。
 DEGRADED_NOW_TEMPLATE: str = "{label}　**算得出來，但這個數字已經失準** —— 現值見上方「現值」列"
@@ -4202,6 +4218,20 @@ def binding_scope_idle(binding: BindingReadout) -> bool:
     return bool(binding.submitted and not binding.requested)
 
 
+def _is_schema_mismatch(issue: str) -> bool:
+    """L3 分類代碼是不是「表頭不符」(代碼 SSOT 在 L3 / L1,本頁不手抄字面值)。"""
+    from src.services.portfolio_binding_service import SHEET_ISSUE_SCHEMA_MISMATCH
+    return bool(issue) and issue == SHEET_ISSUE_SCHEMA_MISMATCH
+
+
+def _schema_mismatch_where() -> str:
+    """表頭不符時的「去哪補」:列出 `portfolios` 分頁應有的第一列(取自 L3 → L1 SSOT,⛔ 不手抄)。"""
+    from src.services.portfolio_binding_service import portfolio_worksheet_headers
+    return ("打開那本 Sheet 的「portfolios」分頁，把第一列從 A 欄起依序改成："
+            + "、".join(portfolio_worksheet_headers())
+            + "（右邊可以自己加欄）；系統不會替你改。改好後回本頁" + press(ACTION_RUN_WARROOM_LABEL))
+
+
 def build_portfolio_count_card(binding: BindingReadout) -> _Built:
     """葉2 第二張卡：**那本 Sheet 裡有幾本組合** —— 已接線、唯讀。
 
@@ -4249,6 +4279,10 @@ def build_portfolio_count_card(binding: BindingReadout) -> _Built:
                  "沒有那一本，就沒有人問過「那一本裡有幾本組合」。"
                  "**這不是失敗，是這個問題還沒有成立**"),
             where="先完成上一張卡說的綁定，這一格會自己有東西")
+    elif _state == UI_FAILED and not binding.error and _is_schema_mismatch(binding.sheet_issue):
+        # QA N-2:表頭不符 ⇒ 去哪補是「改第一列」,⛔ 不是重新登入 / 確認分享(那是錯的指引)。
+        _note = Note(now=COUNT_SCHEMA_MISMATCH_NOW, why=SCHEMA_MISMATCH_WHY,
+                     where=_schema_mismatch_where())
     elif _state == UI_FAILED:
         _note = Note(
             now=(COUNT_DRIFT_NOW
@@ -4341,6 +4375,11 @@ def build_holdings_preview_card(holdings: HoldingsReadout) -> _Built:
                 tuple(_facts), "唯讀")
     if _state == UI_IDLE:
         _note = _idle_note(holdings.scope_idle)
+    elif _state == UI_FAILED and _is_schema_mismatch(holdings.sheet_issue):
+        # QA N-2:表頭不符 ⇒ 去哪補是「改第一列」,⛔ 不是查網路 / 授權(那是錯的指引)。
+        _note = Note(now=PREVIEW_SCHEMA_MISMATCH_NOW,
+                     why=_error_why(SRC_HOLDINGS, holdings.error),
+                     where=_schema_mismatch_where())
     elif _state == UI_FAILED:
         _note = Note(
             now=PREVIEW_FAILED_NOW,
@@ -4704,7 +4743,14 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "到既有的 📁 組合管理分頁新增一本組合並填入持股列" + V2_EXCERPT_GAP
            + "填完回本頁" + _V2_PRESS_RUN)),
        _v2_rows_for("hold.setup.preview", PREVIEW_FAILED_NOW, (
-           None, _v2_raised(SRC_HOLDINGS), _V2_CHECK_NET))]
+           None, _v2_raised(SRC_HOLDINGS), _V2_CHECK_NET)),
+       # Sheet Safety 批 QA 回修 N-2:表頭不符的兩則(去哪補 ＝ 改第一列)。
+       _v2_rows_for("hold.portfolio_count", COUNT_SCHEMA_MISMATCH_NOW, (
+           None, "第一列（欄名）和系統預期的不一樣",
+           "「portfolios」分頁，把第一列從 A 欄起依序改成" + V2_EXCERPT_GAP + "改好後回本頁")),
+       _v2_rows_for("hold.setup.preview", PREVIEW_SCHEMA_MISMATCH_NOW, (
+           None, _v2_raised(SRC_HOLDINGS),
+           "「portfolios」分頁，把第一列從 A 欄起依序改成" + V2_EXCERPT_GAP + "改好後回本頁"))]
     + [_v2_rows_for(_k, _now, (
            None, "這一項本質上是寫入" + V2_EXCERPT_GAP + "本頁對你的持股帳本一律唯讀",
            NO_EXIT_MARKER + V2_EXCERPT_GAP + "現行入口仍在既有的 📁 組合管理分頁"))

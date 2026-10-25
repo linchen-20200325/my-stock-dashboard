@@ -79,18 +79,32 @@ _FROZEN_COLS = ["cohort", "stock_id", "name", "entry_price", "factors", "frozen_
 _SHEET_NOTE_SCHEMA_MISMATCH = (
     "雲端凍結紀錄（Google Sheet 的 forward_test_picks 分頁）第一列欄名和系統預期的不一樣，"
     "這次只用本地紀錄對帳；系統不會自動修改你的 Sheet。")
-_SHEET_NOTE_READ_ERROR = "雲端凍結紀錄這次讀不到（{status}），這次只用本地紀錄對帳。"
+#: ~~"雲端凍結紀錄這次讀不到（{status}）…"~~(QA N-3,有意識的修改:畫面上出現內部代碼 `error:APIError`)
+#: → 白話;代碼只留在 log(`_sheet_note` 印出)。
+_SHEET_NOTE_READ_ERROR = (
+    "雲端凍結紀錄（Google Sheet）這次讀不到（可能是連線、權限或 Google 暫時性錯誤），"
+    "這次只用本地紀錄對帳；可稍後再按一次「📊 對帳」。")
 
 
 def _sheet_note(status: str) -> str:
-    """讀取狀態 → 白話說明(正常狀態回空字串)。"""
+    """讀取狀態 → 白話說明(正常狀態回空字串)。⛔ 不把內部代碼放上畫面(只記 log)。"""
     from src.data.portfolio import gsheet_portfolio as _gsp
-    if status in (_gsp.READ_OK, _gsp.READ_EMPTY, _gsp.READ_WORKSHEET_MISSING,
-                  _gsp.READ_NOT_CONFIGURED):
+    if not sheet_status_is_problem(status):
         return ""
+    print(f"[forward_test_service] 雲端凍結紀錄讀取狀態 status={status}")
     if status == _gsp.READ_SCHEMA_MISMATCH:
         return _SHEET_NOTE_SCHEMA_MISMATCH
-    return _SHEET_NOTE_READ_ERROR.format(status=status)
+    return _SHEET_NOTE_READ_ERROR
+
+
+def sheet_status_is_problem(status: str) -> bool:
+    """這個讀取狀態要不要用**警告**(黃)顯示:表頭不符 / 讀取失敗 → True;正常 / 還沒設定 → False。
+
+    給 L6 對帳面板挑 `st.warning` vs `st.info`(QA N-3:真的讀不到不該只是一行灰字)。
+    """
+    from src.data.portfolio import gsheet_portfolio as _gsp
+    return str(status or "") not in ("", _gsp.READ_OK, _gsp.READ_EMPTY,
+                                     _gsp.READ_WORKSHEET_MISSING, _gsp.READ_NOT_CONFIGURED)
 
 
 def load_frozen_picks_df() -> pd.DataFrame:

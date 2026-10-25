@@ -806,7 +806,11 @@ class TestOldFilesUntouched:
     # 📌 Sheet Safety 批 QA 回修 B-1／BLK-2（2026-10-25，PR #926 兩組 QA，總管指派，⛔ 不是漏改；DEC-019 揭露）：
     #   `portfolio_binder.py`（貼網址框改 on_change、Drive ✅ 成功訊息只在真的寫入時顯示／已是目前那本改說
     #   「已是目前使用的 Sheet」）、`app.py`（側欄貼 ID 框改 on_change）。版面零改動；其餘 89 檔一個字都沒動。
-    _BASE_DIGEST = "ce6e2b9253bb5a539f85d84231f734de668f96eb3a103e842dd731324c10230f"
+    # ~~"ce6e2b9253bb5a539f85d84231f734de668f96eb3a103e842dd731324c10230f"~~
+    # 📌 Sheet Safety 批 QA 回修 N-2／N-3（2026-10-25，PR #926 QA，總管指派，⛔ 不是漏改；DEC-019 揭露）：
+    #   `src/ui/tabs/portfolio_status_bar.py`（本數因讀取問題未知時改顯「🔴 我的組合：讀取有問題」）、
+    #   `app.py`（前進式驗證對帳的雲端讀取問題改用 st.warning）。版面零改動；其餘 89 檔一個字都沒動。
+    _BASE_DIGEST = "c66a804e4f7f70a9c3af190f4dda779c409b97573a9491ab0aaea08a96579cc7"
 
     def test_no_diff_against_base(self):
         import hashlib

@@ -318,6 +318,15 @@ def _enumerate():
         P.BindingReadout(requested=True, submitted=True, login_expired=True))
     add(P.build_holdings_preview_card,
         P.HoldingsReadout(requested=True, submitted=True, login_expired=True))
+    # Sheet Safety 批 QA 回修 N-2（2026-10-25，有意識的新增，⛔ 不是漏列）：`portfolios` 分頁第一列欄名不符 →
+    # 兩張卡的「去哪補」改成「改第一列」。readout 多一個 `sheet_issue`，窮舉要走到它，短句表才不會被判死列。
+    add(P.build_portfolio_count_card, P.BindingReadout(
+        requested=True, submitted=True, logged_in=True, sheet_bound=True, status="bound",
+        count_requested=True, portfolio_count=None, count_missing_reason=P.MISS_FETCH_FAILED,
+        sheet_issue="schema_mismatch"))
+    add(P.build_holdings_preview_card, P.HoldingsReadout(
+        requested=True, submitted=True, error="SheetSchemaMismatchError('x')",
+        sheet_issue="schema_mismatch"))
     return notes, builts
 
 

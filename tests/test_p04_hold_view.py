@@ -240,6 +240,12 @@ _ALLOWED_L3: frozenset[tuple[str, str]] = frozenset({
     ("src.services.portfolio_binding_service", "get_binding_state"),
     ("src.services.portfolio_binding_service", "STATUS_BOUND"),
     ("src.services.portfolio_binding_service", "STATUS_UNBOUND"),
+    # Sheet Safety 批 QA 回修 N-2（2026-10-25，有意識的新增，⛔ 不是漏列）：三支都**零 I/O、不寫任何東西** ——
+    # 讀取例外 → 分類代碼的純判斷式、「表頭不符」代碼常數、`portfolios` 分頁應有表頭的常數讀取；
+    # 只用來把「表頭不符」的去哪補寫成「改第一列」（⛔ 不叫人重新登入），又不必 L5 直接 import L1（§8.2）。
+    ("src.services.portfolio_binding_service", "sheet_read_issue"),
+    ("src.services.portfolio_binding_service", "SHEET_ISSUE_SCHEMA_MISMATCH"),
+    ("src.services.portfolio_binding_service", "portfolio_worksheet_headers"),
 })
 
 #: gsheet / 選股凍結 / 觀察清單的**寫入面**，以及會清掉別人快取的副作用函式。
