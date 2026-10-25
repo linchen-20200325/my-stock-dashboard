@@ -23,6 +23,8 @@
 - maybe_silent_reauth()            (1.0-B2:重新整理後靜默恢復登入 —— 網址有記號才整頁轉去 Google prompt=none)
 - forget_silent_reauth()           (1.0-B2:登出時拿掉網址記號,否則重新整理又登回去)
 - sync_silent_marker()             (1.0-B2 稽核第二輪:登入後換了 Sheet → 以本 session 自己的 sub 重算記號)
+- apply_sheet_binding() / clear_sheet_binding() / restore_sheet_binding_from_query()
+                                   (Sheet Safety 批 B4,DEC-083:Sheet 綁定**唯一寫入契約**,見下方專段)
 
 SEC-2(login CSRF)
 ==================
@@ -71,6 +73,7 @@ import hashlib
 import hmac
 import json
 import re
+from dataclasses import dataclass
 
 import streamlit as st
 
@@ -91,6 +94,15 @@ from shared.oauth_session_policy import (
     OAUTH_SILENT_REAUTH_SECRET_KEY,
     OAUTH_SILENT_TAG_HEX_LEN,
     SECRET_FLAG_OFF_STRINGS,
+)
+from shared.sheet_id import (
+    PORTFOLIO_SHEET_SESSION_KEY,
+    SHEET_BINDING_SESSION_KEYS,
+    SHEET_ID_RE,
+    SHEET_INPUT_ERROR_MESSAGES,
+    SHEET_QUERY_PARAM,
+    parse_sheet_input,
+    sanitize_sheet_id,
 )
 from src.data.portfolio import oauth_nonce_store as _nonce_store
 
@@ -256,17 +268,98 @@ def get_login_state() -> str:
 # 分隔符用 '.':nonce 是 token_urlsafe(base64url,無 '.'),Sheet ID 是 [A-Za-z0-9_-](無 '.')
 # → partition('.') 零歧義。§3.3:分隔符 + 字母集/長度界抽成具名常數,不散 inline。
 _STATE_SEP = "."
-# Google Drive fileId 實測 44 字元;{1,120} 留餘裕又擋濫用(F2:防超長字串灌爆 URL/session)。
-_SHEET_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,120}")
+# Sheet Safety 批 B3(DEC-083):字母集 / 長度界(`[A-Za-z0-9_-]{1,120}`)與消毒函式搬到 L0
+# `shared/sheet_id.py`(單一 parser SSOT),一字未改;此處兩個舊名保留為別名(既有 caller / 測試相容)。
+_SHEET_ID_RE = SHEET_ID_RE
+_sanitize_sheet_id = sanitize_sheet_id
 
 
-def _sanitize_sheet_id(raw) -> str:
-    """Sheet ID 消毒:只放行純 [A-Za-z0-9_-](Google Sheet ID 字母集);其餘一律回空字串。
+# ══ Sheet Safety 批 B4(DEC-083):Sheet 綁定**唯一寫入契約** ═════════════════════════════
+# 客戶原文:「新版不得再新增第五套綁定邏輯。收斂為一套:parse / sanitize / apply active sheet /
+# clear binding / OAuth restore。legacy key 可暫時作 compatibility adapter。」
+# 修前寫 `portfolio_sheet_id` / `stock_portfolio_sheet_id` / `?sheet=` 的地方有四處各自實作:
+# app.py 開機還原、app.py 側欄貼 ID(自帶 regex)、`portfolio_binder.apply_active_sheet`(+ 自帶 regex)、
+# 本檔兩條 OAuth 回呼回綁。現在一律經下面四支(回呼經 `_write_binding_session`)。
+# legacy 兩格(ETF / 個股)＝ compatibility adapter:契約**永遠同時寫兩格同一個值**。
+# 為什麼放在本檔(L1,EX-OAUTH-1):綁定寫完要接著重算靜默恢復記號(`sync_silent_marker`),
+# 清除時要拿掉記號 —— 兩者都在本檔;放 L3 會變成 L3 反呼 L1 的 session 細節,放 L5 則 L1 回呼用不到。
+@dataclass(frozen=True)
+class SheetBindResult:
+    """`apply_sheet_binding` 的結果。`error` 非空 ⇒ **什麼都沒寫**。"""
 
-    純函式,易測。**不可信輸入**專用(state 便車帶回的乘客),擋任何注入怪字元。
+    sheet_id: str = ""
+    changed: bool = False
+    error: str = ""
+
+    @property
+    def message(self) -> str:
+        """白話錯誤(L0 `SHEET_INPUT_ERROR_MESSAGES`);沒錯 → 空字串。⛔ 不回顯使用者輸入。"""
+        return SHEET_INPUT_ERROR_MESSAGES.get(self.error, "")
+
+
+def _write_binding_session(sheet_id: str) -> None:
+    """legacy 兩格同時寫同一個 Sheet ID(呼叫端已消毒)。契約內部用;⛔ 別處不得直接寫這兩格。"""
+    for _k in SHEET_BINDING_SESSION_KEYS:
+        st.session_state[_k] = sheet_id
+
+
+def _current_bound_sheet() -> str:
+    """目前生效的那本(同 L1 `gsheet_portfolio._get_active_sheet_id`:session 優先,否則 secrets 預設)。"""
+    _sid = sanitize_sheet_id(st.session_state.get(PORTFOLIO_SHEET_SESSION_KEY))
+    return _sid or sanitize_sheet_id(_safe_secret(PORTFOLIO_SHEET_SESSION_KEY, ""))
+
+
+def apply_sheet_binding(raw) -> SheetBindResult:
+    """使用者**明確**選定 / 貼上一本 Sheet → 綁定(唯一寫入契約)。
+
+    - 經 L0 `parse_sheet_input` 解析(發布連結 / 怪字元 → `error`,**什麼都不寫**,⛔ 不猜);
+    - 與目前生效的那本相同 → `changed=False`,**不寫**(文字框每輪 rerun 都會回傳現值,避免無謂重寫);
+    - 否則:兩格 session 同時寫、`?sheet=` 寫網址(失敗不擋主線,但記 log)、重算靜默恢復記號。
+    ⚠️ 只給「使用者按了 / 貼了」的路徑呼叫 —— 契約本身不判斷那是不是使用者的意思。
     """
-    s = str(raw or "").strip()
-    return s if s and _SHEET_ID_RE.fullmatch(s) else ""
+    _p = parse_sheet_input(raw)
+    if not _p.ok:
+        return SheetBindResult(error=_p.error)
+    _sid = _p.sheet_id
+    if _sid == _current_bound_sheet():
+        return SheetBindResult(sheet_id=_sid, changed=False)
+    _write_binding_session(_sid)
+    # Sheet ID 非憑證（存取仍需 OAuth + Sheet ACL）,僅「上次用哪本」的設定持久化。
+    try:
+        st.query_params[SHEET_QUERY_PARAM] = _sid
+    except Exception as _e:  # noqa: BLE001 — query param 寫入失敗不擋設定主線,但要講出來(§1)
+        print(f"[oauth_state] B4 sheet query param 寫入失敗 ({type(_e).__name__})")
+    sync_silent_marker()   # 1.0-B2:換 Sheet 後這一輪就重算 ?gs= 記號(只對強驗登入 session 生效)
+    return SheetBindResult(sheet_id=_sid, changed=True)
+
+
+def clear_sheet_binding() -> None:
+    """解除綁定(登出時呼叫;DEC-083 Q5):清兩格 session、網址 `?sheet=`、靜默恢復記號 `?gs=`
+    與「可重算記號」旗標 ⇒ 之後重新整理 / 重新登入**不會自動綁回**這一本。
+
+    ⚠️ 已知限制(據實,同 `forget_silent_reauth`):只管得到**這個分頁現在的網址與本 session**;
+    其他分頁、或「上一頁」回到帶 `?sheet=` 的舊網址,仍會在那邊還原那本(網址層級還原)。
+    """
+    for _k in SHEET_BINDING_SESSION_KEYS:
+        st.session_state.pop(_k, None)
+    for _q in (SHEET_QUERY_PARAM, OAUTH_SILENT_MARKER_PARAM):
+        try:
+            st.query_params.pop(_q, None)
+        except Exception as _e:  # noqa: BLE001 — 拿不掉要講出來(§1),但不擋登出主線
+            print(f"[oauth_state] B4 clear_sheet_binding 拿不掉網址參數 ({type(_e).__name__})")
+    st.session_state.pop(OAUTH_SILENT_ELIGIBLE_SESSION_KEY, None)
+
+
+def restore_sheet_binding_from_query() -> str:
+    """開機還原:網址 `?sheet=`(消毒後)→ 兩格 session 的 **setdefault**(本 session 已選過則不覆寫)。
+
+    回還原用的值(沒有 / 不合格 → 空字串,什麼都不寫)。修前 app.py 只 `.strip()`、不消毒。
+    """
+    _sid = _url_sheet()
+    if _sid:
+        for _k in SHEET_BINDING_SESSION_KEYS:
+            st.session_state.setdefault(_k, _sid)
+    return _sid
 
 
 #: 1.0-B2 靜默恢復記號(＝ MAC 截斷)的字母集與長度(§3.3;長度 SSOT 在 L0)。
@@ -425,7 +518,7 @@ def forget_silent_reauth() -> None:
 def _url_sheet() -> str:
     """網址上的 `?sheet=`(消毒後)。記號一律跟「網址上的 sheet」一起算(那是重新整理後唯一留下來的)。"""
     try:
-        return _sanitize_sheet_id(st.query_params.get("sheet"))
+        return _sanitize_sheet_id(st.query_params.get(SHEET_QUERY_PARAM))
     except Exception:  # noqa: BLE001 — 讀不到 query params ⇒ 當作沒有
         return ""
 
@@ -458,7 +551,7 @@ def sync_silent_marker() -> bool:
         _cur = st.query_params.get(OAUTH_SILENT_MARKER_PARAM)
     except Exception:  # noqa: BLE001
         return False
-    _trusted = _sanitize_sheet_id(st.session_state.get("portfolio_sheet_id"))
+    _trusted = _sanitize_sheet_id(st.session_state.get(PORTFOLIO_SHEET_SESSION_KEY))
     if _url_sheet() != _trusted:
         if not st.session_state.get(_RESYNC_SKIP_LOGGED_KEY):
             print(f"[oauth_state] 1.0-B2 silent_reauth=resync_skip reason={SILENT_RESYNC_SKIP_UNTRUSTED}")
@@ -489,7 +582,7 @@ def _clear_query_keep_sheet(fallback_sheet: str = "") -> None:
     st.query_params.clear()
     if _keep:
         try:
-            st.query_params["sheet"] = _keep
+            st.query_params[SHEET_QUERY_PARAM] = _keep
         except Exception:  # noqa: BLE001 — query param 寫入失敗不擋主線(§1:同成功路徑)
             pass
 
@@ -643,8 +736,7 @@ def _handle_oauth_error_callback(qp) -> None:
     # 回綁 session 只在「靜默 state 強驗通過」(與成功路徑同一個「只有 consume ok 才信 state 載荷」規則,
     # P2 F1);網址則保留 `?sheet=`:原本有就留,否則用靜默 state 帶回的那本(網址層級,見上)。
     if _ok and _got_sheet:
-        st.session_state["portfolio_sheet_id"] = _got_sheet
-        st.session_state["stock_portfolio_sheet_id"] = _got_sheet
+        _write_binding_session(_got_sheet)   # B4:經唯一寫入契約(兩格同值)
     _clear_query_keep_sheet("" if _logged_in else _got_sheet)
     if _code in OAUTH_SILENT_FAILURE_ERROR_CODES:
         st.info(OAUTH_SILENT_REAUTH_FAILED_MSG)
@@ -722,10 +814,9 @@ def handle_oauth_callback() -> None:
             # sheetid 已於 _split_silent_state 消毒;非憑證,回綁只是「還原上次用哪本」。
             st.query_params.clear()
             if _got_sheet and _strong_state:
-                st.session_state["portfolio_sheet_id"] = _got_sheet
-                st.session_state["stock_portfolio_sheet_id"] = _got_sheet
+                _write_binding_session(_got_sheet)   # B4:經唯一寫入契約(兩格同值)
                 try:
-                    st.query_params["sheet"] = _got_sheet
+                    st.query_params[SHEET_QUERY_PARAM] = _got_sheet
                 except Exception:  # noqa: BLE001 — query param 寫入失敗不擋登入主線(§1)
                     pass
             # 1.0-B2:只有 consume ok(強驗)的登入才掛靜默恢復記號;安全閥放行的不掛(退回 A 行為)。
