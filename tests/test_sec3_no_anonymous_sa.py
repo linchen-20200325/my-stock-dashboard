@@ -202,8 +202,16 @@ def test_holdings_service_logged_in_still_reads_watchlist(env):
     env.session_state[gsp.PORTFOLIO_SHEET_KEY] = 'SID_ME'
     env.session_state[gsp.STOCK_PORTFOLIO_SHEET_KEY] = 'SID_ME'
     from src.services import holdings_service as hs
-    with patch('src.services.dividend_station_service.resolve_holding_names', lambda _x: None):
-        r = hs.get_holdings()
+    # 📌 👤 我的 P1（DEC-083 Q7，有意識的修改，⛔ 不是漏改）：只讀使用者**選定**的那一本 ⇒ 明確選定（L1 唯一寫入者）。
+    from shared.sheet_id import SELECTION_KIND_PORTFOLIO, SELECTION_KIND_WATCHLIST
+    from src.data.portfolio import oauth_state as _ost
+    _names = gsp.list_portfolios(sheet_id='SID_ME')
+    _wnames = gsp.list_stock_watchlists(sheet_id='SID_ME')
+    with patch.object(_ost, 'st', gsp.st):
+        _ost.set_active_selection(SELECTION_KIND_PORTFOLIO, _names[0], 'SID_ME')
+        _ost.set_active_selection(SELECTION_KIND_WATCHLIST, _wnames[0], 'SID_ME')
+        with patch('src.services.dividend_station_service.resolve_holding_names', lambda _x: None):
+            r = hs.get_holdings()
     assert r.logged_in is True and r.bound is True
     assert [h['ticker'] for h in r.holdings] == ['2330', '2454']
     assert r.watchlist_error == ''

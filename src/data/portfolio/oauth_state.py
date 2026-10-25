@@ -25,6 +25,10 @@
 - sync_silent_marker()             (1.0-B2 稽核第二輪:登入後換了 Sheet → 以本 session 自己的 sub 重算記號)
 - apply_sheet_binding() / clear_sheet_binding() / restore_sheet_binding_from_query()
                                    (Sheet Safety 批 B4,DEC-083:Sheet 綁定**唯一寫入契約**,見下方專段)
+- set_active_selection() / get_active_selection() / clear_active_selection()
+                                   (👤 我的 P1,DEC-083 Q7:active portfolio / watchlist 的**唯一寫入者**,只活在 session)
+- build_login_url() / logout_google_session() / get_login_email()
+                                   (👤 我的 P1,DEC-083 Q5:登入網址與**共用登出** —— 側欄與「👤 我的」頁同一支)
 
 SEC-2(login CSRF)
 ==================
@@ -96,7 +100,10 @@ from shared.oauth_session_policy import (
     SECRET_FLAG_OFF_STRINGS,
 )
 from shared.sheet_id import (
+    ACTIVE_SELECTION_SESSION_KEYS,
+    LOGOUT_EXTRA_SESSION_KEYS,
     PORTFOLIO_SHEET_SESSION_KEY,
+    SELECTION_KIND_WATCHLIST,
     SHEET_BINDING_SESSION_KEYS,
     SHEET_BINDING_VERSION_SESSION_KEY,
     SHEET_ID_RE,
@@ -310,7 +317,15 @@ def _bump_binding_version() -> None:
 
 
 def _write_binding_session(sheet_id: str) -> None:
-    """legacy 兩格同時寫同一個 Sheet ID(呼叫端已消毒)。契約內部用;⛔ 別處不得直接寫這兩格。"""
+    """legacy 兩格同時寫同一個 Sheet ID(呼叫端已消毒)。契約內部用;⛔ 別處不得直接寫這兩格。
+
+    👤 我的 P1(DEC-083 Q7):Sheet ID **真的變了**(任一格原值 ≠ 新值)才清 active 組合 / 觀察清單選定
+    —— 舊名字不得套到另一本 Sheet;同一本重綁(例:修好 ETF≠個股 的不一致)不清。
+    (選定本身也綁著 sheet_id、讀取端只認同一本,這裡清是第二道,讓 session 裡不留過期的選定。)
+    """
+    if any(sanitize_sheet_id(st.session_state.get(_k)) != sheet_id
+           for _k in SHEET_BINDING_SESSION_KEYS):
+        clear_active_selection()
     for _k in SHEET_BINDING_SESSION_KEYS:
         st.session_state[_k] = sheet_id
     _bump_binding_version()
@@ -388,12 +403,14 @@ def pop_sheet_input_result(widget_key: str) -> "SheetBindResult | None":
 def clear_sheet_binding() -> None:
     """解除綁定(登出時呼叫;DEC-083 Q5):清兩格 session、網址 `?sheet=`、靜默恢復記號 `?gs=`
     與「可重算記號」旗標 ⇒ 之後重新整理 / 重新登入**不會自動綁回**這一本。
+    👤 我的 P1(Q7):active 組合 / 觀察清單選定一併清掉。
 
     ⚠️ 已知限制(據實,同 `forget_silent_reauth`):只管得到**這個分頁現在的網址與本 session**;
     其他分頁、或「上一頁」回到帶 `?sheet=` 的舊網址,仍會在那邊還原那本(網址層級還原)。
     """
     for _k in SHEET_BINDING_SESSION_KEYS:
         st.session_state.pop(_k, None)
+    clear_active_selection()   # 👤 我的 P1(Q7):沒有 active Sheet 就沒有 active 組合 / 觀察清單
     _bump_binding_version()   # 被動文字框下一次畫時丟掉舊值(QA BLK-2)
     for _q in (SHEET_QUERY_PARAM, OAUTH_SILENT_MARKER_PARAM):
         try:
@@ -401,6 +418,61 @@ def clear_sheet_binding() -> None:
         except Exception as _e:  # noqa: BLE001 — 拿不掉要講出來(§1),但不擋登出主線
             print(f"[oauth_state] B4 clear_sheet_binding 拿不掉網址參數 ({type(_e).__name__})")
     st.session_state.pop(OAUTH_SILENT_ELIGIBLE_SESSION_KEY, None)
+
+
+# ══ 👤 我的 P1(DEC-083 Q7):active portfolio / watchlist 的**唯一寫入者** ═════════════════════
+# 客戶原文:「👤 我的提供新版全站共用:active portfolio / active watchlist。🛡️ 持股／🎯 標的／⚡ 行動等頁只能讀
+# 這個共同選擇。不得再以『名稱排序第一本』作為不可見的業務決策。」
+# 值 `{"sheet_id", "name", "skip"}`(key 與形狀 SSOT 在 L0 `shared/sheet_id.py`)。**只活在 session**(AI 總管
+# 裁示:不持久化到 Sheet 或網址)⇒ 重新整理 / 重新登入後要重選。⛔ 本段不碰 Google、不寫 Sheet。
+# 為什麼放在本檔:選定綁著 active Sheet,而 Sheet 換了 / 解除綁定時要跟著清 —— 那兩件事只在唯一寫入契約裡發生。
+def _selection_key(kind: str) -> str:
+    if kind not in ACTIVE_SELECTION_SESSION_KEYS:
+        raise ValueError(f"未知的選定種類 {kind!r};合法值:{sorted(ACTIVE_SELECTION_SESSION_KEYS)}")
+    return ACTIVE_SELECTION_SESSION_KEYS[kind]
+
+
+def set_active_selection(kind: str, name: str, sheet_id: str, *, skip: bool = False) -> None:
+    """使用者**明確**選定一本組合 / 一份觀察清單(或觀察清單選「不使用」:`skip=True`、`name=""`)。
+
+    `sheet_id` 消毒不過 → `ValueError`(⛔ 不寫);`skip` 只准用在觀察清單;非 skip 時名稱不得為空。
+    名稱是否真的存在於那本 Sheet 由呼叫端(L3)先讀清單核對 —— 本函式只寫 session。
+    """
+    _key = _selection_key(kind)
+    _sid = sanitize_sheet_id(sheet_id)
+    if not _sid:
+        raise ValueError("set_active_selection: sheet_id 不合格")
+    _name = str(name or "").strip()
+    if skip:
+        if kind != SELECTION_KIND_WATCHLIST:
+            raise ValueError("set_active_selection: 只有觀察清單可以選「不使用」")
+        _name = ""
+    elif not _name:
+        raise ValueError("set_active_selection: 名稱不可為空")
+    st.session_state[_key] = {"sheet_id": _sid, "name": _name, "skip": bool(skip)}
+
+
+def get_active_selection(kind: str, sheet_id: str) -> "dict | None":
+    """目前的選定;**存的 sheet_id 與 `sheet_id` 相同才回**(換了 Sheet ⇒ None)。純讀。
+
+    回 `{"name": str, "skip": bool}`;沒選 / 形狀不對 / 不是同一本 → None(⛔ 不猜、不退回第一本)。
+    """
+    _v = st.session_state.get(_selection_key(kind))
+    _sid = sanitize_sheet_id(sheet_id)
+    if not _sid or not isinstance(_v, dict) or _v.get("sheet_id") != _sid:
+        return None
+    _skip = bool(_v.get("skip"))
+    _name = str(_v.get("name") or "")
+    if not _skip and not _name:
+        return None
+    return {"name": _name, "skip": _skip}
+
+
+def clear_active_selection(kind: "str | None" = None) -> None:
+    """清掉選定(`kind=None` → 組合與觀察清單都清)。"""
+    _kinds = ACTIVE_SELECTION_SESSION_KEYS if kind is None else (kind,)
+    for _k in _kinds:
+        st.session_state.pop(_selection_key(_k), None)
 
 
 def restore_sheet_binding_from_query() -> str:
@@ -571,6 +643,52 @@ def forget_silent_reauth() -> None:
     st.session_state.pop(OAUTH_LOGIN_EXPIRED_SESSION_KEY, None)
     st.session_state.pop(OAUTH_SILENT_ELIGIBLE_SESSION_KEY, None)
     st.session_state[OAUTH_SILENT_ATTEMPTED_SESSION_KEY] = True
+
+
+def build_login_url() -> str:
+    """「🔐 用 Google 登入」按鈕的網址(👤 我的 P1);OAuth 未設定 → 空字串(呼叫端畫「尚未設定」說明)。
+
+    組法與側欄登入鈕相同:`get_oauth_cfg` ＋ `infra.oauth.build_authorize_url` ＋ `login_state_with_sheet`。
+    state 夾帶的是**本 session 目前綁定**的 Sheet(⛔ 不是 secrets 部署預設)—— 登出時 `clear_sheet_binding`
+    已清掉 ⇒ 登出後再登入不會夾帶舊 Sheet(Q5)。⚠️ 側欄 / `portfolio_binder.render_login_cta` 的組法
+    本批未改(仍是各自組;殘留見交付報告 LOGIN-URL-SSOT)。
+    """
+    _cfg = get_oauth_cfg()
+    if not _cfg:
+        return ""
+    _sid = _sanitize_sheet_id(st.session_state.get(PORTFOLIO_SHEET_SESSION_KEY))
+    return build_authorize_url(_cfg["client_id"], _cfg["redirect_uri"],
+                               state=login_state_with_sheet(_sid))
+
+
+def get_login_email() -> str:
+    """本 session 登入的 Google 帳號 email(回呼時由 id_token 解出);沒登入 → 空字串。純讀。
+
+    👤 我的 P1:給 L3 `me_account_service` 遮罩後顯示(⛔ 畫面不印完整 email)。
+    """
+    return str(st.session_state.get("gsheet_email") or "") if st.session_state.get("gsheet_tokens") else ""
+
+
+#: 共用登出要清的登入 session key(token / email / 本 session 的 CSRF nonce)。
+_LOGIN_SESSION_KEYS: tuple[str, ...] = ("gsheet_tokens", "gsheet_email", "_oauth_state")
+
+
+def logout_google_session(*, extra_session_keys=()) -> None:
+    """**共用登出**(👤 我的 P1,DEC-083 Q5):側欄「🚪 登出」與「👤 我的」頁「🚪 登出」同一支。
+
+    依序:清登入(token / email / OAuth nonce)→ `forget_silent_reauth()`(網址 `?gs=` 記號、逾時旗標)→
+    `clear_sheet_binding()`(兩格 session、`?sheet=`、記號、active 組合 / 觀察清單選定)→ 清 L0
+    `LOGOUT_EXTRA_SESSION_KEYS`(「👤 我的」頁的 Drive 清單 / 貼 ID 框)＋ 呼叫端給的 `extra_session_keys`
+    (側欄傳它的貼 ID 文字框)。⛔ 不 rerun(由呼叫端決定)。
+    步驟與修前側欄 inline 那段逐項相同(差別只在多清選定與「👤 我的」頁的 key),⇒ 舊模式畫面行為不變。
+    ⚠️ 已知限制同 `forget_silent_reauth` / `clear_sheet_binding`:只管得到這個分頁現在的網址與本 session。
+    """
+    for _k in _LOGIN_SESSION_KEYS:
+        st.session_state.pop(_k, None)
+    forget_silent_reauth()   # 1.0-B2:拿掉 ?gs= 記號,否則重新整理又靜默登回去(登不出去)
+    clear_sheet_binding()    # DEC-083 Q5:登出同步清 Sheet 綁定 ⇒ 登出後不自動恢復上一本
+    for _k in (*LOGOUT_EXTRA_SESSION_KEYS, *tuple(extra_session_keys or ())):
+        st.session_state.pop(_k, None)
 
 
 def _url_sheet() -> str:

@@ -810,7 +810,31 @@ class TestOldFilesUntouched:
     # 📌 Sheet Safety 批 QA 回修 N-2／N-3（2026-10-25，PR #926 QA，總管指派，⛔ 不是漏改；DEC-019 揭露）：
     #   `src/ui/tabs/portfolio_status_bar.py`（本數因讀取問題未知時改顯「🔴 我的組合：讀取有問題」）、
     #   `app.py`（前進式驗證對帳的雲端讀取問題改用 st.warning）。版面零改動；其餘 89 檔一個字都沒動。
-    _BASE_DIGEST = "c66a804e4f7f70a9c3af190f4dda779c409b97573a9491ab0aaea08a96579cc7"
+    # ~~"c66a804e4f7f70a9c3af190f4dda779c409b97573a9491ab0aaea08a96579cc7"~~（Sheet Safety 批 QA 回修後，至 55601f42 仍成立）
+    # 📌 👤 我的 P1-6（2026-10-25，客戶裁示 DEC-083 Q5，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄
+    #   「🚪 登出」—— inline 四步改呼叫 L1 共用 `logout_google_session`（四步順序一字不變，另清 active 組合／觀察清單
+    #   選定與「👤 我的」頁的 key），import 換成那一支。舊模式畫面零改動；其餘 90 檔一個字都沒動。
+    # ~~"dfbde3935a2da0ce73b6c27529cc73938da96fa6d614d52500a4eddc25b5cda7"~~（👤 我的 P1-6 後）
+    # 📌 👤 我的 P1-7（2026-10-25，客戶裁示 DEC-083 Q1=A／D 段，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` ——
+    #   新增 late-import wrapper `_ia_view_me()`、`_IA_VIEWS` 多登記一頁、`shared.ia_nav` import 多三個名字；
+    #   側欄三句指向舊「📁 組合管理」的說明**只在新版模式**（`_IA_PAGE is not None`）改指「👤 我的」，
+    #   「不使用」模式一字不變；一段註解更正。舊 7 個頁籤一字未動；其餘 90 檔一個字都沒動。
+    # ~~"2845049326bcbfc16066dd3a480f545d9a4434b74139b3f6277c8dfabb786aa0"~~（👤 我的 P1-7 後）
+    # 📌 PR #927 QA-2 第 7 點（2026-10-25，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄
+    #   「✅ Sheet ID」那一行 —— 新版模式（`_IA_PAGE is not None`）改顯末 6 碼（`shared.sheet_id.sheet_id_tail`），
+    #   「不使用」模式一字不變（仍顯完整 ID）。側欄貼 ID 框的預填值未動（舊行為，列為殘留）。其餘 90 檔一個字都沒動。
+    # ~~"118450bfd13ad4aa86fc74394fd5d64304288300a68f9009b0a84a45dc0e8270"~~（PR #927 QA-2 第 7 點後）
+    # 📌 PR #927 QA-1 複驗（2026-10-25，DEC-083 Q4，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄貼 ID 框 ——
+    #   新版模式不預填（`value=""`），且畫框前丟掉含目前綁定 ID 的沿用值（舊模式切過來 / 貼了「已是目前這本」）；
+    #   從新版切回「不使用」時丟掉新版留下的空值，讓舊模式照舊預填。「不使用」模式行為不變；其餘 90 檔一個字都沒動。
+    #   （同批修正：分支改用 `_sb_new_mode` 變數，避免在側欄多出一處 `if _IA_PAGE is not None:` 字面 ——
+    #   `test_batch_z54` 以該字面的第一個位置定位新版分支 `st.stop()`。）
+    # ~~"75cc2114cd4ef8c5d70a892eea5b8256d471d1dfcc52eb7968c9eec1795dfadc"~~（33605619，改用 `_sb_new_mode` 之前）
+    # ~~"1d1d6b0328d68945b03811143e895c02bee628aff025d397ec4358a1c770e39f"~~（4e8c0876）
+    # 📌 PR #927 QA-2 Playwright 複驗（2026-10-25，DEC-083 Q4，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄貼 ID 框
+    #   —— 33605619 的「pop ＋ value=''」在瀏覽器不成立（前端照舊顯示完整 ID），改為以 Session State API 明確指定
+    #   （新版模式指定 ""、切回「不使用」指定目前綁定的 ID）。「不使用」模式沒進過新版時一行都沒多跑；其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "45985febc58ed26d3c6437a7ac252f37dab6bc0afef4a04e7cf08f33f0488469"
 
     def test_no_diff_against_base(self):
         import hashlib

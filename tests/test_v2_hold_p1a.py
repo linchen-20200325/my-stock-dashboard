@@ -118,7 +118,8 @@ class TestQ4r2ListUncountedCodes:
                 self._row("00878", 2, None, 20.0), self._row("2317", None, None, None, held=False)]
         facts = dict(P._totals_facts(self._station(rows, 3, 1)))
         v = facts["⚠️ 上面兩個金額只涵蓋一部分"]
-        assert v.endswith("；沒有納入：2330、00878"), v
+        # 👤 我的 P1（DEC-083 D 段，有意識的修改）：條件子句改為客戶句（句號結尾）⇒ ~~「；沒有納入：」~~ → 「沒有納入：」。
+        assert v.endswith("。沒有納入：2330、00878"), v
 
     def test_count_mismatch_lists_nothing(self):
         # 列上反推出的檔數與 L3 的 `held_n - valued_n` 對不上 ⇒ 不列（⛔ 不給矛盾清單）。

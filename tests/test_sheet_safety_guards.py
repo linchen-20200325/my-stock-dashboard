@@ -27,6 +27,8 @@ _READ_ENTRIES = (
     'list_portfolios', 'load_portfolio', 'list_stock_watchlists', 'load_stock_watchlist',
     'read_forward_test_picks', 'load_forward_test_picks', 'get_sheet_title',
     'list_user_sheets', 'list_user_folders', 'is_configured', 'login_expired',
+    # 👤 我的 P1（DEC-083，有意識的新增，⛔ 不是漏列）：fail-loud 標題讀取＋ session 綁定快照（純讀）。
+    'read_sheet_title', 'session_binding_snapshot',
 )
 #: 只為寫入而存在的 helper（讀取路徑不得傳遞呼叫到它們）。
 _WRITE_HELPERS = {
@@ -212,12 +214,18 @@ def test_binding_guard_is_not_vacuous():
 
 
 def test_app_logout_clears_binding_and_sidebar_widget():
+    """📌 👤 我的 P1（DEC-083 Q5，有意識的修改，⛔ 不是漏改）：~~側欄 inline 呼叫 `_sb_forget_silent()`、
+    `_sb_clear_binding()`、pop 側欄框~~ → 側欄改呼叫 L1 共用登出；那四步改驗在共用函式裡（順序不變）。"""
+    import inspect
+
+    from src.data.portfolio import oauth_state as _ost
     src = (_ROOT / 'app.py').read_text(encoding='utf-8')
     i = src.index("key='btn_oauth_logout_sb'")
     j = src.index('st.rerun()', i)
     blk = src[i:j]
-    assert '_sb_forget_silent()' in blk and '_sb_clear_binding()' in blk
-    assert "st.session_state.pop('sb_portfolio_sheet_id_input', None)" in blk
+    assert "_sb_logout(extra_session_keys=('sb_portfolio_sheet_id_input',))" in blk
+    fn = inspect.getsource(_ost.logout_google_session)
+    assert fn.index('forget_silent_reauth()') < fn.index('clear_sheet_binding()')
 
 
 # ── 4. 執行：所有讀取路徑零寫入 ─────────────────────────────────────────────
@@ -272,6 +280,7 @@ def test_every_read_path_makes_zero_writes(tripwire):
                lambda: gsp.load_stock_watchlist('觀察', sheet_id='SID'),
                gsp.read_forward_test_picks, gsp.load_forward_test_picks,
                lambda: gsp.get_sheet_title('SID'),
+               lambda: gsp.read_sheet_title('SID'),     # 👤 我的 P1（DEC-083）
                B.get_binding_state, B.get_binding_presence, HS.get_holdings,
                lambda: SF._collect_stock_watchlist_tickers('SID'),
                FT.load_frozen_picks_df, FT.reconcile_all):

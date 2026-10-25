@@ -119,12 +119,17 @@ class TestSheetBindingCard:
         assert "get_binding_presence" in T.SRC_BINDING and "get_binding_state" in H.SRC_BINDING
 
     def test_unbound_pointer_is_the_sidebar_entry_not_the_hidden_tab(self):
-        """新版模式 `app.py` 畫完側欄就 `st.stop()`，📁 組合管理分頁看不到 ⇒ 指路改指側欄（兩頁一起）。"""
+        """新版模式 `app.py` 畫完側欄就 `st.stop()`，📁 組合管理分頁看不到 ⇒ 指路⛔ 不得指那個分頁（兩頁一起）。
+
+        📌 👤 我的 P1（DEC-083 D 段「Sheet／登入／切換相關提示 → 統一導向『👤 我的』」，有意識的修改，⛔ 不是漏改）：
+        ~~指路改指側欄（`_SIDEBAR_SECTION` / `_SIDEBAR_FIELD` 必須在句子裡）~~ → 改指「👤 我的 › 目前 Sheet」
+        （側欄那一格照留、仍可用；新版的唯一設定入口是「👤 我的」）。「不得指 📁 組合管理」那一半不變。"""
         from src.ui.views import page_hold as H
         pick = dict(next(s.facts for s in H.SETUP_UNWIRED_SPECS
                          if s.key == "hold.setup.pick_sheet"))["現行入口"]
+        _me = ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET)
         for where in (T.SHEET_UNBOUND_WHERE, H.NOT_BOUND_WHERE, pick):
-            assert _SIDEBAR_SECTION in where and _SIDEBAR_FIELD in where, where
+            assert _me in where, where
             assert "組合管理" not in where, where
 
     def test_sidebar_entry_literals_exist_in_app(self):
@@ -150,6 +155,10 @@ class TestSheetBindingCard:
         from src.data.portfolio import gsheet_portfolio as G
         monkeypatch.setattr(G, "_has_oauth_tokens", lambda: True)
         monkeypatch.setattr(G, "_get_active_sheet_id", lambda: "SHEET1")
+        # 📌 👤 我的 P1（DEC-083，有意識的修改，⛔ 不是漏改）：presence 改讀新版 SSOT（兩格綁定同一本才算綁）
+        #   ⇒ 「已設 Sheet」改以 L1 綁定快照表達（`_get_active_sheet_id` 那行照留給 `get_binding_state()` 預設呼叫）。
+        monkeypatch.setattr(G, "session_binding_snapshot", lambda: G.SessionBindingSnapshot(
+            portfolio_channel="SHEET1", stock_channel="SHEET1"))
         calls: list = []
         monkeypatch.setattr(G, "list_portfolios", lambda *a, **k: calls.append((a, k)) or [])
         return calls
@@ -182,13 +191,18 @@ class TestSheetBindingCard:
         assert len(calls) >= 1
 
     def test_presence_agrees_with_binding_state_on_bound_or_not(self, monkeypatch):
-        """兩支共用同一份判定（`_read_login_and_sheet`）：有沒有綁、read_error 必須一致。"""
+        """兩支共用同一份判定（`_read_login_and_sheet`）：有沒有綁、read_error 必須一致。
+
+        📌 👤 我的 P1（DEC-083，有意識的修改，⛔ 不是漏改）：~~與 `get_binding_state()` 比~~ → presence 改讀新版
+        SSOT，故改與 `get_binding_state(ssot=True)` 比；「已設 Sheet」以 L1 綁定快照表達（兩格同一本）。"""
         from src.data.portfolio import gsheet_portfolio as G
         monkeypatch.setattr(G, "list_portfolios", lambda **_k: [])
         for logged, sid in ((True, "S"), (True, ""), (False, "S"), (False, "")):
             monkeypatch.setattr(G, "_has_oauth_tokens", lambda v=logged: v)
             monkeypatch.setattr(G, "_get_active_sheet_id", lambda v=sid: v)
-            a, b = PB.get_binding_presence(), PB.get_binding_state()
+            monkeypatch.setattr(G, "session_binding_snapshot", lambda v=sid: G.SessionBindingSnapshot(
+                portfolio_channel=v, stock_channel=v))
+            a, b = PB.get_binding_presence(), PB.get_binding_state(ssot=True)
             assert a.sheet_bound == (b.status != PB.STATUS_UNBOUND), (logged, sid)
             assert a.read_error == b.read_error
 

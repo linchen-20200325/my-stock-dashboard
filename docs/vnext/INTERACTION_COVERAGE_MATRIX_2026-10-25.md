@@ -48,7 +48,7 @@
 
 ---
 
-## 1. 👤 我的（帳戶／連線／Sheet 設定）— 新 UI 尚無此頁
+## 1. 👤 我的（帳戶／連線／Sheet 設定）— ~~新 UI 尚無此頁~~ 👤 我的 P1 在 PR #927（待合併），覆蓋更新見 §11（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））
 
 | 控制項 | 舊位置 | backend | 新 UI 位置 | 狀態 | 備註 |
 |---|---|---|---|---|---|
@@ -282,3 +282,31 @@ FACT：沒有 view。候選舊控制項（INFERENCE；⚡ 行動的範圍尚未�
   1. 由獨立一組複驗本檔（`UIX-INTERACTION-COVERAGE`）；複驗前本檔只能當待驗事項。
   2. 客戶驗收 📊 大盤頁時，§4.1 是互動完整性的檢查清單。
   3. 其他頁（👤／🛡️／🎯／🩺／⚡）依客戶指派各自出線框；本檔的「待接」列是線框的輸入，**不是**動工授權（`CLAUDE.md` §-1）。
+
+---
+
+## 11. 👤 我的 P1 覆蓋更新（PR #927，**待合併**；append-only；上文 §0～§10 除 §1 標題外一字未改）
+
+> 2026-10-25 新增（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。基準：分支 `claude/determined-euler-32xqjn` @ `4e8c0876`（撰寫組讀 `git log 55601f42..HEAD`＋diff＋檔案，單組）。「新 UI 位置」只寫**新版模式**；舊 UI 全部照留（DEC-083 E 段：⛔ 不刪舊 UI，刪除須走 Removal Gate）。狀態欄「已接」＝讀碼可見入口，**沒有在 Streamlit 實機操作過**。
+
+| 控制項（§1／§2 原列） | 新 UI 位置（PR #927） | backend | 狀態 | 備註 |
+|---|---|---|---|---|
+| 🔐 用 Google 登入 | 👤 我的卡①「🔐 用 Google 登入」 | L1 `oauth_state.build_login_url`（state 夾帶本 session 綁定，不夾帶 secrets 預設） | 已接（PR #927） | 側欄、`render_login_cta` 仍各自組網址（`BACKLOG` `LOGIN-URL-SSOT`） |
+| 🚪 登出 | 👤 我的卡①「🚪 登出」；側欄「🚪 登出」 | L1 `oauth_state.logout_google_session`（兩處同一支） | 已接（PR #927） | ~~登出邏輯寫在 L6 inline，沒有 service~~ 已收斂為 L1 共用一支（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；舊 UI binder 的 Drive 清單未清（`SHEET-LOGOUT-DRIVE-LIST`） |
+| 重新登入（逾時） | 👤 我的卡①「🔐 重新登入」 | 同登入 | 已接（PR #927） | |
+| 登入狀態顯示 | 👤 我的卡①（email 遮罩） | L3 `me_account_service.get_account` | 已接（PR #927） | |
+| Sheet 連線狀態 | 👤 我的卡②（Sheet 名稱＋ID 末 6 碼；兩本不同／只有部署預設各有說法） | L3 `portfolio_binding_service.get_active_sheet`＋L1 `read_sheet_title`（fail loud） | 已接（PR #927） | 🔗 狀態列新版模式仍看不到（未動） |
+| Sheet URL／ID 輸入＋URL 自動解析 | 👤 我的卡②「🔄 切換 Sheet」方法一（`p07me_paste_sheet`） | L0 `shared/sheet_id` 單一 parser＋L1 唯一寫入契約（#926） | 已接（PR #927） | ~~側欄貼 ID 框照留；新版模式不預填、只露末 6 碼~~ 側欄貼 ID 框照留；新版模式下**框本身是空的**（不預填、也留不住完整 ID；`075e8da7` 起以 Session State API 指定為空字串），末 6 碼只出現在框下方的「✅ Sheet ID」caption（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| 📂 從 Drive 列出可用 Sheet（＋資料夾） | 👤 我的卡②「🔄 切換 Sheet」方法二 | L1 既有 `list_user_folders`／`list_user_sheets`（經 L3） | ~~待接~~ 已接（PR #927）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） | 清單只有一本也不自動綁（DEC-083 C 段） |
+| 選擇／切換 Sheet（明確「✅ 使用這本」） | 👤 我的卡②（Drive 選一本後按；部署預設、兩本不同時各有明確按鈕） | L1 `apply_sheet_binding` | ~~待接~~ 已接（PR #927）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） | |
+| 🔄 重新讀取 | 👤 我的卡②「🔄 重新讀取」（只在 active Sheet 成立時出現） | L3 `reload_my_sheet_reads`（只本人×active Sheet，⛔ 不 `.clear()`） | ~~待接~~ 已接（PR #927）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） | 💼 本頁沒有重新讀取鈕；舊 UI 的全域清除照留（`SHEET-GLOBAL-CLEARS`） |
+| active 組合／觀察清單（新能力，§1／§2 原無此列） | 👤 我的卡③ 兩個選擇器＋「取消選定」；觀察清單另有「（不使用觀察清單）」 | L1 `oauth_state.set_active_selection`（只寫 session）；L3 `holdings_service`／`sector_flow_service` 讀 | 已接（PR #927） | 只活在 session（`NAV-PERSIST`）；沒選定 → 💼／🔍 不讀任何一本 |
+| 🛡️ 往「我的」設定的入口 | 💼／🔍／🚦 指路句改指「👤 我的 › …」 | `ia_nav.where_to_find` | 部分（只有文字） | 仍沒有可點的跳頁按鈕 |
+| 🛡️ 缺 Sheet 時就地綁定 | 無（💼 刻意不放）；指路到 👤 我的 | — | 指路（不是 dead-end） | |
+| 🛡️ 重新載入持股 | 經 👤 我的「🔄 重新讀取」 | 同上 | 部分 | 💼 本頁無按鈕 |
+| 🆕 建立新投組 Sheet | 無；👤 我的只放客戶 D 段指路句 | — | **只在舊 UI**（`ME-P2`，未授權） | |
+| 組合／觀察清單管理（載入／儲存／刪除）、持股列 CRUD、➕ 加入觀察清單 | 無；指路句「目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。」 | — | **只在舊 UI**（`ME-P2`，未授權） | 依草稿 §5 仍是半 dead-end，直到 P2 |
+| 🔍 測試連線 | 側欄（未動） | — | 不在 P1 範圍 | |
+
+- ⛔ **舊 UI 不得因本表而刪**（DEC-083 E 段）：舊側欄 🔐 Google 帳號、📁 組合管理、`portfolio_binder`、🔗 我的組合狀態列、Sheet CRUD 全部照留。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組產出，**沒有第二組驗過**；未在 Streamlit 實機操作。

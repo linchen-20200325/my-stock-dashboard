@@ -288,6 +288,7 @@ from shared.station_specs import (
 from shared import staleness as _staleness
 from shared.secret_scrub import MASK as SECRET_MASK
 from shared.secret_scrub import scrub_secrets
+from shared.sheet_id import ACTIVE_DIVERGED
 from shared.ui_state import (
     UI_DEGRADED,
     UI_EMPTY,
@@ -1048,7 +1049,22 @@ SRC_RENDER: str = "本頁的渲染層（`views/_ui_kit.render_card`）"
 SHEET_BOUND_VALUE: str = "🔗 已綁 Sheet"
 SHEET_UNBOUND_NOW: str = "尚未綁定 Sheet"
 SHEET_UNBOUND_WHY: str = "**這是一個有效的結果**（已經去讀過，不是還沒讀、也不是故障）"
-SHEET_UNBOUND_WHERE: str = "用 Google 登入後選一本持股 Sheet —— **現行入口在側欄「🔐 Google 帳號」的「Google Sheet ID 或完整 URL（系統會自動解析 ID）」**"
+#: 📌 👤 我的 P1（DEC-083 D 段「Sheet／登入／切換相關提示 → 統一導向『👤 我的』」；有意識的改指，⛔ 不是漏刪）：
+#:    ~~「用 Google 登入後選一本持股 Sheet —— **現行入口在側欄「🔐 Google 帳號」的「Google Sheet ID 或完整 URL
+#:    （系統會自動解析 ID）」**」~~（側欄那一格照留、仍可用；新版的唯一設定入口改為「👤 我的」）。
+#:    分區名 / 按鈕名一律走 `ia_nav`（⛔ 不手抄）。
+SHEET_UNBOUND_WHERE: str = (
+    "用 Google 登入後選一本持股 Sheet —— **到"
+    + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) + "選一本，"
+    + ia_nav.where_to_press(ia_nav.ACTION_ME_USE_SHEET) + "**")
+#: PR #927 QA-2 第 4 點：組合 / 觀察清單兩條通道各記一本、不是同一本（`ACTIVE_DIVERGED`）⇒ 新版不替你挑。
+#:    ~~這種情形原本落進「尚未綁定 Sheet／這是一個有效的結果」~~ —— 對已經綁過兩本的人是錯的說法
+#:    （有意識的修改，⛔ 不是漏改）。分區名走 `ia_nav`（⛔ 不手抄）。
+SHEET_DIVERGED_NOW: str = "組合和觀察清單讀的是兩本不同的 Sheet"
+SHEET_DIVERGED_WHY: str = "**這不是故障**：兩邊各記著一本 Sheet，新版不替你挑一本，所以先不讀"
+SHEET_DIVERGED_WHERE: str = (
+    "你的組合和觀察清單目前讀的是兩本不同的 Sheet，請到"
+    + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) + "選定一本")
 SHEET_FAILED_NOW: str = "**綁定狀態讀不出來**"
 SHEET_FAILED_WHERE: str = "先確認網路與 Google 授權是否仍有效"
 SRC_BINDING: str = (
@@ -2471,6 +2487,8 @@ def build_sheet_binding_card(binding: Any, *, error: str = "") -> Card:
     if _state == UI_FAILED:
         _note = Note(now=SHEET_FAILED_NOW, why=_error_why(SRC_BINDING, error),
                      where=SHEET_FAILED_WHERE)
+    elif str(getattr(binding, "active_state", "") or "") == ACTIVE_DIVERGED:   # PR #927 QA-2 第 4 點
+        _note = Note(now=SHEET_DIVERGED_NOW, why=SHEET_DIVERGED_WHY, where=SHEET_DIVERGED_WHERE)
     else:   # UI_EMPTY —— 還沒綁。有效結果。
         _note = Note(now=SHEET_UNBOUND_NOW, why=SHEET_UNBOUND_WHY,
                      where=SHEET_UNBOUND_WHERE)
@@ -2880,8 +2898,11 @@ V2_EXIT_PHRASES: tuple[tuple[str, str], ...] = (
     (CONTRACT_NO_EXIT_WHERE,      NO_EXIT_MARKER),
     (STAGED_ROLLOUT_WHERE,        NO_EXIT_MARKER),
     # 批 Z54：狀態列「Sheet 綁定」接線後的兩句指路（皆為頁4 既有原文，短語＝原文的一段）。
-    (SHEET_UNBOUND_WHERE,         "現行入口在側欄「🔐 Google 帳號」"),
+    # 👤 我的 P1：~~"現行入口在側欄「🔐 Google 帳號」"~~ → 改指「👤 我的」（原文的一段，ia_nav 組字）。
+    (SHEET_UNBOUND_WHERE,         "到" + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) + "選一本"),
     (SHEET_FAILED_WHERE,          SHEET_FAILED_WHERE),
+    # PR #927 QA-2 第 4 點：兩本不同（原文的一段，ia_nav 組字）。
+    (SHEET_DIVERGED_WHERE,        "到" + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) + "選定一本"),
     # 批 Z59：狀態列「交易日」接線後的紅態指路（實作組內部擬稿）。
     #    ⚠️ 短語「以證交所公告為準」是原文首句「今天開不開市請以臺灣證券交易所公告為準」的
     #    **縮寫改寫**（「臺灣證券交易所」→「證交所」、去掉「今天開不開市請」），⛔ 不是原文子字串；

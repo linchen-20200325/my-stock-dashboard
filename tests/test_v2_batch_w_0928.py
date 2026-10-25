@@ -49,6 +49,10 @@ _E = "RuntimeError('boom')"
 #: 被上提成 `IF_LOTS_AVG_MISSING_WHERE` 的那一段（修前在 `page_hold` 裡逐字寫了兩次）。
 #: ⚠️ 刻意在測試裡**寫死**：常數被改了一個位元組，下面「逐字不變」那幾條就會紅。
 _CLAUSE = "若是缺張數／均價，到既有的 📁 組合管理分頁補齊"
+#: 📌 👤 我的 P1（DEC-083 D 段，有意識的修改，⛔ 不是漏改）：新版「💼 我的持股」那一份 ~~＝ `_CLAUSE`~~ → 客戶句
+#:    （新版模式看不到 📁 組合管理分頁 ⇒ 誠實指路「切回舊版」）。舊 UI（v1 `etf_tab_dividend_station`）那一份**未動**，
+#:    仍是 `_CLAUSE`（下方 `TestH1f4V1PartialNote` 守）。句尾改句號 ⇒ 後面接「沒有納入：」（⛔ 不再接「；」）。
+_CLAUSE_P1 = "若是缺張數／均價：目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。"
 _PARTIAL_KEY = "⚠️ 上面兩個金額只涵蓋一部分"
 
 
@@ -97,13 +101,13 @@ class TestH1f1TotalsGuide:
         v = _partial_fact(_ONLY_PRICE)
         assert "補齊即可" not in v, v
         assert P.IF_LOTS_AVG_MISSING_WHERE in v, v
-        # 標點照修前的接法：句號後接子句，子句後直接接「；沒有納入：」（⛔ 不另加標點）。
-        assert v.endswith("其餘 1 檔。" + _CLAUSE + "；沒有納入：2330"), v
+        # 標點：句號後接子句，子句（👤 我的 P1 起以句號結尾）後直接接「沒有納入：」（⛔ 不另加標點）。
+        assert v.endswith("其餘 1 檔。" + _CLAUSE_P1 + "沒有納入：2330"), v
 
     @pytest.mark.parametrize("rows", [_ONLY_LOTS, _ONLY_AVG], ids=["lots", "avg"])
     def test_lots_or_avg_missing_row_gets_the_clause(self, rows):
         v = _partial_fact(rows)
-        assert _CLAUSE in v and "補齊即可" not in v, v
+        assert _CLAUSE_P1 in v and "補齊即可" not in v, v
 
     def test_without_codes_the_sentence_ends_on_the_clause(self):
         # 列上反推的檔數與 L3 對不上 ⇒ 不列代號（既有行為）；句尾就是子句本身，⛔ 不補句號。
@@ -111,7 +115,7 @@ class TestH1f1TotalsGuide:
             "pnl_twd": 1.0, "pnl_pct": 1.0, "value_twd": 10.0,
             "held_n": 3, "valued_n": 1, "partial": True})
         assert "沒有納入：" not in v
-        assert v.endswith("其餘 1 檔。" + _CLAUSE), v
+        assert v.endswith("其餘 1 檔。" + _CLAUSE_P1), v
 
 
 class TestH1f1ExistingUsesUnchanged:
@@ -125,7 +129,7 @@ class TestH1f1ExistingUsesUnchanged:
         return P.build_var_card(deep)
 
     def test_constant_is_the_old_literal_byte_for_byte(self):
-        assert P.IF_LOTS_AVG_MISSING_WHERE.encode("utf-8") == _CLAUSE.encode("utf-8")
+        assert P.IF_LOTS_AVG_MISSING_WHERE.encode("utf-8") == _CLAUSE_P1.encode("utf-8")
 
     def test_var_card_where_is_unchanged(self):
         """修後不變守衛（修前也綠；有效性靠突變驗證）：VaR 灰卡 where 逐字不變。"""
@@ -133,7 +137,7 @@ class TestH1f1ExistingUsesUnchanged:
         assert card.state == UI_EMPTY and card.note.now == P.VAR_EMPTY_NOW
         assert card.note.where == (
             "若是新上市／剛買進的標的，等歷史累積到至少一個月的共同交易日"
-            "再回本頁" + P.press(P.ACTION_RUN_WARROOM_LABEL) + "；" + _CLAUSE)
+            "再回本頁" + P.press(P.ACTION_RUN_WARROOM_LABEL) + "；" + _CLAUSE_P1)
 
     def test_var_short_row_is_unchanged(self):
         """修後不變守衛（修前也綠；有效性靠突變驗證）：VaR 灰卡的卡面短句逐字不變。"""
@@ -142,7 +146,9 @@ class TestH1f1ExistingUsesUnchanged:
             "有持股，但 VaR 算不出來",
             "這是一個有效的結果" + P.V2_EXCERPT_GAP
             + "本站寧可不給，也不給一個用補值撐出來的尾部估計",
-            "若是新上市／剛買進的標的，等歷史累積" + P.V2_EXCERPT_GAP + _CLAUSE)
+            # 👤 我的 P1：~~… + _CLAUSE~~（新原文 64 字放不下卡面上限）→ 新原文的摘錄。
+            "若是新上市／剛買進的標的，等歷史累積" + P.V2_EXCERPT_GAP
+            + "若是缺張數／均價：目前請切回舊版 → 📁 組合管理")
         short, _full = P.v2_short_rows(self._var_empty()[0])   # 摘錄對不上原文會 KeyError
         assert dict(short)[P.V2_GUIDE_FACT_KEY] == spec[2]
 
@@ -152,7 +158,8 @@ class TestH1f1ExistingUsesUnchanged:
         只數程式碼裡的字串常值（`_code_str_literals()`）：註解引用這句子句、docstring 裡舉例
         ⛔ 不算（2026-09-28 QA 建議：修前的全文字面計數會把註解也數進去 ⇒ 誤報）。
         """
-        n = sum(_s.count(_CLAUSE) for _s in _code_str_literals(pathlib.Path(P.__file__)))
+        # 👤 我的 P1：~~數 `_CLAUSE`~~ → 子句改由 `_edit_where(IF_LOTS_AVG_MISSING_TASK)` 組出 ⇒ 改數前半那一段。
+        n = sum(_s.count("若是缺張數／均價") for _s in _code_str_literals(pathlib.Path(P.__file__)))
         assert n == 1, "條件子句又被逐字抄了一份（應共用 `IF_LOTS_AVG_MISSING_WHERE`）"
 
 
@@ -270,9 +277,12 @@ class TestH1f4V1PartialNote:
         assert "缺張數或均價" not in note and "補齊即可" not in note
 
     def test_v1_copy_is_byte_identical_to_page_hold(self):
-        """v1 刻意不 import `page_hold`（理由見 v1 該常數的註解）⇒ 兩份字由這一條釘成逐字相同。"""
-        assert V1._IF_LOTS_AVG_MISSING_WHERE.encode("utf-8") \
-            == P.IF_LOTS_AVG_MISSING_WHERE.encode("utf-8")
+        """v1 刻意不 import `page_hold`（理由見 v1 該常數的註解）⇒ ~~兩份字由這一條釘成逐字相同~~。
+
+        📌 👤 我的 P1（DEC-083 D／E 段，有意識的修改，⛔ 不是漏改）：新版那一份改為客戶句（新版模式看不到 📁 組合管理）；
+        舊 UI 那一份⛔ 不動（E 段：舊 UI 原樣保留）⇒ 改釘「舊 UI 仍是修前原字、新版是客戶句」。"""
+        assert V1._IF_LOTS_AVG_MISSING_WHERE.encode("utf-8") == _CLAUSE.encode("utf-8")
+        assert P.IF_LOTS_AVG_MISSING_WHERE.encode("utf-8") == _CLAUSE_P1.encode("utf-8")
         # 「缺張數／均價／現價」逐字取自 `page_hold._totals_facts()` 既有的那一句。
         assert "持股缺張數／均價／現價，**沒有**納入" in _partial_fact(_ONLY_PRICE)
 

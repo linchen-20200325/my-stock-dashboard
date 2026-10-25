@@ -85,6 +85,8 @@ import sys
 
 import pytest
 
+from shared import ia_nav
+
 from shared.station_specs import KEY_STOCK_TREND, SPECS_BY_KEY
 from shared.ui_state import (
     UI_DEGRADED,
@@ -208,6 +210,11 @@ def _live_deep() -> P.DeepReadout:
 _ALLOWED_L3: frozenset[tuple[str, str]] = frozenset({
     # 持股清單（本批新增）—— 它自己也受 `TestHoldingsServiceIsReadOnly` 管。
     ("src.services.holdings_service", "get_holdings"),
+    # 👤 我的 P1（DEC-083 Q7，2026-10-25，有意識的新增，⛔ 不是漏列）：三個**字串常數**（選定狀態代碼），零 I/O、
+    # 不寫任何東西 —— 只用來把「綁了但還沒選定組合」畫成灰卡（⛔ 不說成「Sheet 是空的」）。
+    ("src.services.holdings_service", "SELECTION_NOT_SELECTED"),
+    ("src.services.holdings_service", "SELECTION_MISSING"),
+    ("src.services.holdings_service", "SELECTION_SKIPPED"),
     # 戰情表與它的純函式彙總（**全部唯讀**，逐支讀過 docstring）。
     ("src.services.dividend_station_service", "get_station_rows"),
     ("src.services.dividend_station_service", "build_station_digest"),
@@ -962,9 +969,19 @@ class TestUnwiredStaysUnwired:
             assert _now.strip() and _why.strip() and _where.strip(), _card.key
 
     def test_each_says_there_is_no_user_action(self):
+        """📌 👤 我的 P1（DEC-083 D 段，有意識的修改，⛔ 不是放寬）：葉2 兩張（Sheet 選擇／觀察清單管理）
+        ~~也必須寫「沒有出口」~~ —— 客戶 D 段要求誠實指路：選 Sheet 去「👤 我的」（真的按得到）、改觀察清單
+        「目前請切回舊版 → 📁 組合管理」（真的按得到）⇒ 那兩張改驗「有出口、而且是那兩個」；其餘仍必須「沒有出口」。"""
+        _setup = {"hold.setup.pick_sheet", "hold.setup.watchlist"}
         for _card, _facts, _signal in _all_unwired_builts(False):
+            if _card.key in _setup:
+                assert P.NO_EXIT_MARKER not in _card.note.where, _card.key
+                continue
             assert P.NO_EXIT_MARKER in _card.note.where, (
                 f"{_card.key} 的「去哪補」給了一個使用者其實按不到的出口")
+        _by_key = {_c.key: _c for _c, _f, _s in P.build_setup_unwired_cards(False)}
+        assert ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) in _by_key["hold.setup.pick_sheet"].note.where
+        assert _by_key["hold.setup.watchlist"].note.where == ia_nav.CONTENT_EDIT_OLD_UI_WHERE
 
     def test_the_wheres_are_not_copy_pasted(self):
         """剩下的卡卡在**不同的層**，共用一句話會讓「補哪一層才會好」消失。
@@ -982,11 +999,12 @@ class TestUnwiredStaysUnwired:
             f"未接線卡出現重複的「去哪補」：{len(_wheres)} 張只有 "
             f"{len(set(_wheres))} 種說法 —— 它們卡住的位置不同"
             "（缺 L3 wrapper／缺一個要先拍板的畫面元件／L5 widget key）")
-        _ro_wheres = {_c.note.where for _c, _f, _s in _builts
+        # 📌 👤 我的 P1（DEC-083 D 段，有意識的修改，⛔ 不是漏改）：~~兩張共用 `READONLY_WHERE`~~ —— 兩件事的去處
+        #   現在不同（選 Sheet → 「👤 我的」；改觀察清單 → 客戶句「切回舊版」），各用自己的常數。
+        _ro_wheres = {_c.key: _c.note.where for _c, _f, _s in _builts
                       if _c.key in _readonly}
-        assert _ro_wheres == {P.READONLY_WHERE}, (
-            "唯讀那兩張卡的「去哪補」不再是同一句 —— 它們是同一個理由，"
-            "分頭寫只會漂移")
+        assert _ro_wheres == {"hold.setup.pick_sheet": P.PICK_SHEET_WHERE,
+                              "hold.setup.watchlist": P.READONLY_WHERE}, _ro_wheres
 
     def test_write_blocked_cards_do_not_blame_the_missing_l3(self):
         """Sheet 選擇／觀察清單管理**不是缺 L3，是缺授權** —— 不可寫成同一句。
@@ -997,10 +1015,14 @@ class TestUnwiredStaysUnwired:
         assert set(_by_key) == {"hold.setup.pick_sheet", "hold.setup.watchlist"}, (
             "葉2 的未接線卡名單變了 —— 持股列預覽本批已接線，"
             "它不該再回到這一批")
+        # 📌 👤 我的 P1（DEC-083，有意識的修改，⛔ 不是漏改）：Sheet 選擇那張 ~~why＝`READONLY_WHY`~~
+        #   （「本質上是寫入、會改到你 Google Sheet 裡的內容」對「選哪一本」不成立）→ `PICK_SHEET_WHY`（全站共用的選擇
+        #   集中在「👤 我的」）。觀察清單管理那張照舊。兩張仍⛔ 不得怪 L3。
+        _expect = {"hold.setup.pick_sheet": P.PICK_SHEET_WHY, "hold.setup.watchlist": P.READONLY_WHY}
         for _k, _card in _by_key.items():
             _why = _card.note.why
-            assert _why == P.READONLY_WHY, f"{_k} 的理由寫成了缺 L3"
-            assert "寫入" in _why
+            assert _why == _expect[_k], f"{_k} 的理由寫成了缺 L3"
+            assert "唯讀" in _why
             assert "L3" not in _why, f"{_k} 把「不准寫」講成了「缺 L3」"
 
     def test_the_rebalance_card_names_the_real_blocker(self):
@@ -1765,8 +1787,9 @@ class TestHoldingsServiceIsReadOnly:
         import textwrap
 
         _fn = ast.parse(textwrap.dedent(_src)).body[0]
+        # 📌 👤 我的 P1（DEC-083，有意識的修改，⛔ 不是漏改）：~~`"_state = get_binding_state()"`~~ → 新版 SSOT 呼叫。
         _bind_line = next(i for i, ln in enumerate(_src.splitlines(), 1)
-                          if "_state = get_binding_state()" in ln)
+                          if "_state = get_binding_state(ssot=True)" in ln)
         _wl_line = next(i for i, ln in enumerate(_src.splitlines(), 1) if "# ── 觀察清單" in ln)
         _exc_types = [ast.unparse(_h.type) if _h.type is not None else "<bare>"
                       for _n in ast.walk(_fn)

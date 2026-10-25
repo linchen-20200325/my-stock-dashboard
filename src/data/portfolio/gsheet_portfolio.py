@@ -59,6 +59,7 @@ import math
 import threading
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 try:
@@ -92,7 +93,8 @@ def clear_read_cache() -> None:
     本批未改;新的「重新讀取」一律改用 `invalidate_my_read_cache()`(只失效本人 × 那本 Sheet)。
     """
     for _fn in (_list_portfolios_cached, _load_portfolio_cached,
-                _list_stock_watchlists_cached, _load_stock_watchlist_cached):
+                _list_stock_watchlists_cached, _load_stock_watchlist_cached,
+                _read_sheet_title_cached):          # 👤 我的 P1:Sheet 標題(read_sheet_title)
         _clear = getattr(_fn, 'clear', None)
         if callable(_clear):
             _clear()
@@ -189,6 +191,40 @@ def _get_active_stock_sheet_id() -> str:
     if st is None:
         return ''
     return str(st.session_state.get(STOCK_PORTFOLIO_SHEET_KEY, '') or '').strip()
+
+
+@dataclass(frozen=True)
+class SessionBindingSnapshot:
+    """本 session 的綁定原始值(👤 我的 P1;消毒後)。**純讀**,⛔ 不判定哪一本是 active(那是 L3 的事)。
+
+    Attributes:
+        portfolio_channel: ETF / legacy 那一格(`PORTFOLIO_SHEET_KEY`)。
+        stock_channel: 個股那一格(`STOCK_PORTFOLIO_SHEET_KEY`)。
+        deploy_default: secrets `portfolio_sheet_id`(部署預設;⛔ 不是使用者的選擇,新版 UI 不當 active)。
+    """
+
+    portfolio_channel: str = ''
+    stock_channel: str = ''
+    deploy_default: str = ''
+
+
+def session_binding_snapshot() -> SessionBindingSnapshot:
+    """讀本 session 兩格綁定與 secrets 部署預設(都經 L0 `sanitize_sheet_id`)。**純讀,不碰網路 / Google。**
+
+    secrets 讀不到的處理與 `_get_active_sheet_id()` 相同(沒有檔 / 沒有 key ＝ 沒設定);格式錯誤等由
+    呼叫端另以 `_secrets_read_error()` 分辨(同 L3 `get_binding_state`)。
+    唯一 caller:L3 `portfolio_binding_service.get_active_sheet()`。
+    """
+    if st is None:
+        return SessionBindingSnapshot()
+    from shared.sheet_id import sanitize_sheet_id
+    _etf = sanitize_sheet_id(st.session_state.get(PORTFOLIO_SHEET_KEY))
+    _stk = sanitize_sheet_id(st.session_state.get(STOCK_PORTFOLIO_SHEET_KEY))
+    try:
+        _dflt = sanitize_sheet_id(st.secrets.get(PORTFOLIO_SHEET_KEY, ''))
+    except (KeyError, FileNotFoundError, AttributeError):
+        _dflt = ''
+    return SessionBindingSnapshot(portfolio_channel=_etf, stock_channel=_stk, deploy_default=_dflt)
 
 
 def _has_oauth_tokens() -> bool:
@@ -1508,6 +1544,49 @@ def get_sheet_title(sheet_id: str = '') -> str:
         return getattr(sh, 'title', '') or ''
     except Exception:
         return ''
+
+
+def read_sheet_title(sheet_id: str) -> tuple[str, str]:
+    """指定 Sheet 的標題(👤 我的 P1)。**純讀,零寫入**;與 `get_sheet_title` 不同:**⛔ 不吞例外**(§1)。
+
+    回 `(狀態, 標題)`:
+      · `READ_OK` ＋ 標題(標題本身可以是空字串 —— 那是 Google 回的,照實);
+      · `READ_ERROR_SHEET_NOT_FOUND`(404)/ `READ_ERROR_PERMISSION_DENIED`(403)＋ ''(**可進快取**:
+        同一人、同一本,15 分鐘內不會自己變好;要立刻重試請用 `invalidate_my_read_cache`)。
+    其他(未登入 `LoginRequiredError`、429、網路、不明)→ **原樣上拋**、⛔ 不進快取。
+    sheet_id 消毒不過 / 空 → `SheetNotConfiguredError`(⛔ 不退回 session 綁定那本 —— 讀哪本由呼叫端說清楚)。
+    快取同四支讀取:鍵含 (身分指紋, sheet_id, B5 失效世代);無身分不用快取(`_identity_scoped_read`)。
+    ⚠️ `get_sheet_title`(失敗回空字串)本批**不動**(`tests/test_sec3_no_anonymous_sa.py` 釘住其既有行為)。
+    """
+    from shared.sheet_id import sanitize_sheet_id
+    _sid = sanitize_sheet_id(sheet_id)
+    if not _sid:
+        raise SheetNotConfiguredError('read_sheet_title: 沒有可讀的 Sheet ID')
+    _status, _title = _identity_scoped_read(_read_sheet_title_cached, _read_sheet_title_raw,
+                                            sheet_id=_sid)
+    return str(_status), str(_title or '')
+
+
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
+def _read_sheet_title_cached(identity: str, *, sheet_id: str,
+                             read_gen: str = '') -> tuple[str, str]:
+    # identity / read_gen 不加底線:底線參數不進 st.cache_data 快取鍵(B5 失效世代必須在鍵裡)
+    return _run_as_identity(identity, _read_sheet_title_raw, sheet_id=sheet_id)
+
+
+#: 標題讀取時「可以進快取」的失敗(同一人同一本短時間內不會自己變好)。其餘例外上拋、不快取。
+_TITLE_CACHEABLE_ERRORS = frozenset({READ_ERROR_SHEET_NOT_FOUND, READ_ERROR_PERMISSION_DENIED})
+
+
+def _read_sheet_title_raw(*, sheet_id: str) -> tuple[str, str]:
+    try:
+        sh = _build_client().open_by_key(sheet_id)
+    except Exception as _e:  # noqa: BLE001 — 只把 403 / 404 轉成可快取的狀態,其餘原樣上拋(§1)
+        _code = classify_read_error(_e)
+        if _code in _TITLE_CACHEABLE_ERRORS:
+            return _code, ''
+        raise
+    return READ_OK, str(getattr(sh, 'title', '') or '')
 
 
 def delete_portfolio(name: str, *, sheet_id: str | None = None) -> int:

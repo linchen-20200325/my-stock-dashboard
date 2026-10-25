@@ -54,9 +54,41 @@ def _collect_stock_watchlist_tickers(stock_sheet_id) -> list[str]:
         return []
 
 
+def _active_selection_tickers() -> "tuple[list[str], dict]":
+    """👤 我的 P1(DEC-083 Q7):持股標示來源 ＝ 使用者在「👤 我的」選定的組合 ＋ 觀察清單的代號。
+
+    走 L3 `holdings_service.get_holdings()`(與 💼 我的持股 同一份選定;⛔ 不再讀整本全部觀察清單、
+    也⛔ 不讀 L5 session 的 ETF 組合列)。回 `(代號, 來源說明)`;讀取例外**不上拋**(板塊圖本身照畫,
+    只是少了持股標示)—— 但記在來源說明的 `error`(⛔ 不靜默,呼叫端要講出來)。
+    """
+    _src = {"portfolio_name": "", "watchlist_name": "", "portfolio_selection": "",
+            "watchlist_selection": "", "bound": False, "active_state": "", "error": "",
+            # PR #927 QA-2（第 3／4 點）：讓頁面照實分辨原因、⛔ 不把例外原文搬上畫面。
+            "logged_in": False, "login_expired": False, "portfolio_issue": "", "watchlist_issue": "",
+            "error_issue": "", "portfolio_names_n": None}
+    try:
+        from src.services.holdings_service import get_holdings
+        _h = get_holdings(resolve_names=False)
+    except Exception as _e:  # noqa: BLE001 — 持股標示是附加資訊,失敗不擋板塊圖,但要回報(§1)
+        print(f"[sector_flow_service] 讀選定組合／觀察清單失敗(持股標示略過): {type(_e).__name__}: {_e}")
+        _src["error"] = repr(_e)
+        from src.services.portfolio_binding_service import is_login_required_error, sheet_read_issue
+        _src["error_issue"] = "login_required" if is_login_required_error(_e) else sheet_read_issue(_e)
+        return [], _src
+    _src.update(portfolio_name=_h.portfolio_name, watchlist_name=_h.watchlist_name,
+                portfolio_selection=_h.portfolio_selection, watchlist_selection=_h.watchlist_selection,
+                bound=bool(_h.bound), active_state=_h.active_state, error=_h.watchlist_error,
+                logged_in=bool(_h.logged_in), login_expired=bool(_h.login_expired),
+                portfolio_issue=_h.portfolio_issue, watchlist_issue=_h.watchlist_issue,
+                error_issue=(_h.watchlist_issue if _h.watchlist_error else ""),
+                portfolio_names_n=_h.portfolio_names_n)
+    return [str(_r.get("ticker") or "") for _r in _h.holdings], _src
+
+
 def get_sector_flow_view(*, etf_tickers=None, stock_sheet_id=None,
                          include_stock_watchlists: bool = True,
-                         strict: bool = False) -> dict:
+                         strict: bool = False,
+                         use_active_selection: bool = False) -> dict:
     """讀快取 + 疊加持股 → 板塊 highlight,回 UI-ready view。
 
     Args:
@@ -66,6 +98,10 @@ def get_sector_flow_view(*, etf_tickers=None, stock_sheet_id=None,
         include_stock_watchlists: 是否額外抓個股 gsheet watchlist(預設 True)。
         strict: 透傳 reader 的 `strict`(預設 False = 既有行為一字不變)。True →
                 快取檔**存在但壞掉**時例外往上拋,不回「尚未產生」的 ok=False。
+        use_active_selection: 👤 我的 P1(加性參數,預設 False ＝ 既有行為一字不變;舊 `tab_sector_flow` 照舊)。
+                True(新版「🔍 找標的」)→ 忽略 `etf_tickers` / `stock_sheet_id` / `include_stock_watchlists`,
+                持股標示改用「👤 我的」選定的組合 ＋ 觀察清單(見 `_active_selection_tickers`);
+                view 另加 `'holding_source'`(來源說明 dict,含讀取錯誤)。
 
     Returns:
         reader.read_sector_flow_cache() 的 dict 疊加兩欄:
@@ -83,9 +119,12 @@ def get_sector_flow_view(*, etf_tickers=None, stock_sheet_id=None,
         view.setdefault("holding_sectors", {})
         return view
 
-    _tickers = list(etf_tickers or [])
-    if include_stock_watchlists:
-        _tickers += _collect_stock_watchlist_tickers(stock_sheet_id)
+    if use_active_selection:
+        _tickers, view["holding_source"] = _active_selection_tickers()
+    else:
+        _tickers = list(etf_tickers or [])
+        if include_stock_watchlists:
+            _tickers += _collect_stock_watchlist_tickers(stock_sheet_id)
     _codes = [c for c in (_normalize_code(t) for t in _tickers) if c]
 
     _ticker_sector = view.get("ticker_sector") or {}

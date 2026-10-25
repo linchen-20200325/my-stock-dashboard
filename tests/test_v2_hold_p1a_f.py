@@ -85,7 +85,8 @@ class TestP1af2DuplicateCodesListedOnce:
         rows = [_row("0050", 1, 100.0, 110.0), _row("2330", None, 500.0, 600.0),
                 _row("2330", 1, None, 600.0)]
         v = _partial_value(rows, 3, 1)
-        assert v.endswith("；沒有納入：2330"), v
+        # 👤 我的 P1（DEC-083 D 段，有意識的修改）：~~「；沒有納入：」~~ → 「沒有納入：」（條件子句改以句號結尾）。
+        assert v.endswith("。沒有納入：2330"), v
 
     def test_count_guard_uses_raw_list(self):
         # 原清單 2 列（去重後 1 個代號）；L3 說缺 1 檔 ⇒ 對不上 ⇒ 不列（⛔ 拿去重後的長度核對）。

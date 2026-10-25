@@ -327,6 +327,37 @@ def _enumerate():
     add(P.build_holdings_preview_card, P.HoldingsReadout(
         requested=True, submitted=True, error="SheetSchemaMismatchError('x')",
         sheet_issue="schema_mismatch"))
+    # 👤 我的 P1（DEC-083 Q7，2026-10-25，有意識的新增，⛔ 不是漏列）：綁了 Sheet、但組合還沒選定／選定的名稱不在了 →
+    # 「綁了但空」那一批卡換成 `NOT_SELECTED_NOW`／`SELECTION_MISSING_NOW`（灰）。readout 多一個 `portfolio_selection`。
+    from src.services.holdings_service import SELECTION_MISSING, SELECTION_NOT_SELECTED
+    for _sel in (SELECTION_NOT_SELECTED, SELECTION_MISSING):
+        _sel_st = P.StationReadout(requested=True, submitted=True, bound=True, portfolio_selection=_sel)
+        for fn in (P.build_action_card, P.build_confidence_card, P.build_todo_card,
+                   P.build_lightwall_card, P.build_allocation_split_card,
+                   P.build_take_profit_card, P.build_core_satellite_card):
+            add(fn, _sel_st)
+        add(P.build_switch_card, P.SwitchReadout(requested=True, submitted=True), _sel_st)
+        add(P.build_ai_summary_card, P.AiSummaryReadout(requested=True), _sel_st)
+        _sel_dq = P.DeepReadout(requested=True, submitted=True, bound=True, portfolio_selection=_sel)
+        for fn in (P.build_stress_card, P.build_var_card, P.build_dividend_cash_card):
+            add(fn, _sel_dq)
+        add(P.build_holdings_preview_card,
+            P.HoldingsReadout(requested=True, submitted=True, bound=True, portfolio_selection=_sel))
+    # PR #927 QA-2 第 4 點（2026-10-25，有意識的新增，⛔ 不是漏列）：組合 / 觀察清單兩本不同 →
+    # 「還沒綁」那一批卡換成 `DIVERGED_NOW`（灰）。readout 多一個 `diverged`，窮舉要走到它，短句表才不會被判死列。
+    _dv_st = P.StationReadout(requested=True, submitted=True, diverged=True)
+    for fn in (P.build_action_card, P.build_confidence_card, P.build_todo_card,
+               P.build_lightwall_card, P.build_allocation_split_card,
+               P.build_take_profit_card, P.build_core_satellite_card):
+        add(fn, _dv_st)
+    add(P.build_switch_card, P.SwitchReadout(requested=True, submitted=True), _dv_st)
+    add(P.build_ai_summary_card, P.AiSummaryReadout(requested=True), _dv_st)
+    _dv_dq = P.DeepReadout(requested=True, submitted=True, diverged=True)
+    for fn in (P.build_stress_card, P.build_var_card, P.build_dividend_cash_card):
+        add(fn, _dv_dq)
+    add(P.build_binding_card, P.BindingReadout(requested=True, submitted=True, diverged=True))
+    add(P.build_portfolio_count_card, P.BindingReadout(requested=True, submitted=True, diverged=True))
+    add(P.build_holdings_preview_card, P.HoldingsReadout(requested=True, submitted=True, diverged=True))
     return notes, builts
 
 
@@ -650,9 +681,10 @@ def test_qa_flagged_qualifiers_are_kept():
     rows = P.V2_SHORT_ROWS
     assert rows[("hold.switch", P.SWITCH_EMPTY_NOW)][2].startswith("若你預期應該要有：")
     assert rows[("hold.take_profit", P.TP_EMPTY_NOW)][2].startswith("若你預期應該要有：")
-    for k, n in (("hold.setup.pick_sheet", P.PICK_SHEET_UNWIRED_NOW),
-                 ("hold.setup.watchlist", P.WATCHLIST_UNWIRED_NOW)):
-        assert "📁 組合管理" in rows[(k, n)][2]
+    # 📌 👤 我的 P1（DEC-083 D 段，有意識的修改，⛔ 不是漏改）：~~兩張的短句都要有「📁 組合管理」~~ ——
+    #   選 Sheet 那張改指「👤 我的」；觀察清單管理那張仍是「目前請切回舊版 → 📁 組合管理」。
+    assert "👤 我的" in rows[("hold.setup.pick_sheet", P.PICK_SHEET_UNWIRED_NOW)][2]
+    assert "📁 組合管理" in rows[("hold.setup.watchlist", P.WATCHLIST_UNWIRED_NOW)][2]
     assert rows[("hold.scales", P.SCALE_DEGRADED_NOW)][1][0].startswith("其中一側")
 
 

@@ -41,6 +41,9 @@ class BindingState:
     #: · 其他(L1 `classify_read_error` 代碼,例 `schema_mismatch` / `permission_denied` / `error:<型別>`)→
     #:   維持既有降級 status=bound + `portfolio_count=None`。既有 caller 不讀本欄,一字不變。
     sheet_issue: str = ""
+    #: 👤 我的 P1(只加不改,DEC-083 Q6):`get_binding_state(ssot=True)` 時 = `get_active_sheet().state`
+    #: (`ACTIVE_*` 之一);預設呼叫(舊狀態列等)恆為空字串、一字不變。
+    active_state: str = ""
 
 
 def is_login_required_error(exc: BaseException) -> bool:
@@ -94,8 +97,15 @@ def _with_login_expired(state: BindingState, _gsp) -> BindingState:
     return replace(state, login_expired=True)
 
 
-def get_binding_state() -> BindingState:
+def get_binding_state(*, ssot: bool = False) -> BindingState:
     """讀目前投組 Sheet 綁定狀態,回三態。**純讀不寫**。
+
+    ssot(👤 我的 P1,DEC-083 Q6/B4,只加不改):
+      · False(預設)→ 既有行為**一字不變**(舊「🔗 我的組合」狀態列等仍讀 legacy 通道 ＋ secrets 預設)。
+      · True(新版 UI)→ 「綁到哪本」改讀 `get_active_sheet()`:只有兩格綁定**同一本**(`ACTIVE_OK`)才算綁;
+        組合 / 觀察清單指向不同本(`ACTIVE_DIVERGED`)、只有 secrets 部署預設(`ACTIVE_DEPLOY_DEFAULT_ONLY`)
+        一律當**未綁**(⛔ 不偷選其中一本、⛔ 不把部署預設當成使用者的選擇)。`active_state` 帶出是哪一種。
+        登入判定與 read_error 與預設呼叫**同一份**(`_read_login_and_sheet`,⛔ 不抄第二份)。
 
     未登入 / 未綁 → unbound(登入才是使用綁定的前提,故未登入一律 unbound,即使 ?sheet= 已還原)。
     已登入 + 已綁 → 讀 list_portfolios(active sheet,cached TTL_15MIN,SEC-1 起鍵含身分)判空/有;失敗回中性 bound。
@@ -114,11 +124,14 @@ def get_binding_state() -> BindingState:
     from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1(正常方向)
 
     _logged, _sid, _read_err = _read_login_and_sheet(_gsp)
+    _active_state = ""
+    if ssot:
+        _sid, _active_state, _read_err = _ssot_sheet(_read_err)
 
     if not _logged or not _sid:
-        return _with_login_expired(BindingState(logged_in=_logged, sheet_id=_sid,
+        return _with_login_expired(_with_active_state(BindingState(logged_in=_logged, sheet_id=_sid,
                             portfolio_count=None, status=STATUS_UNBOUND,
-                            read_error=_read_err), _gsp)
+                            read_error=_read_err), _active_state), _gsp)
 
     # 已登入 + 已綁 → 看有沒有組合資料(區分 🟡 空 vs 🟢 有)。
     # ⚠️ 明確傳 sheet_id=_sid(而非預設 None)。SEC-1 起 L1 快取鍵＝(身分指紋, 實際 sheet_id),
@@ -134,22 +147,43 @@ def get_binding_state() -> BindingState:
             # L1 已清 session)→ **不是**讀取失敗,也⛔ 不得回舊的 logged_in=True(那會讓下游再打一次、
             # 拿到「請先登入」並畫成紅卡)。重讀一次登入狀態 → 照實回「未登入 / 未綁」。
             _logged, _sid, _read_err = _read_login_and_sheet(_gsp)
-            return _with_login_expired(BindingState(
+            if ssot:
+                _sid, _active_state, _read_err = _ssot_sheet(_read_err)
+            return _with_login_expired(_with_active_state(BindingState(
                 logged_in=_logged, sheet_id=_sid, portfolio_count=None,
-                status=STATUS_UNBOUND, read_error=_read_err), _gsp)
+                status=STATUS_UNBOUND, read_error=_read_err), _active_state), _gsp)
         _issue = _classify_read_error(_gsp, _e)
         if _issue == getattr(_gsp, "READ_WORKSHEET_MISSING", None):
             # 綁定讀到了、那本 Sheet 也在,只是還沒有 `portfolios` 分頁 ＝「綁了但空」(灰,有效結果);
             # 本數**未知**(None),⛔ 不寫 0。
-            return BindingState(logged_in=_logged, sheet_id=_sid, portfolio_count=None,
-                                status=STATUS_BOUND_EMPTY, sheet_issue=_issue)
-        return BindingState(logged_in=_logged, sheet_id=_sid,
-                            portfolio_count=None, status=STATUS_BOUND, sheet_issue=_issue)
+            return _with_active_state(BindingState(logged_in=_logged, sheet_id=_sid, portfolio_count=None,
+                                status=STATUS_BOUND_EMPTY, sheet_issue=_issue), _active_state)
+        return _with_active_state(BindingState(logged_in=_logged, sheet_id=_sid,
+                            portfolio_count=None, status=STATUS_BOUND, sheet_issue=_issue), _active_state)
     if _count == 0:
-        return BindingState(logged_in=_logged, sheet_id=_sid,
-                            portfolio_count=0, status=STATUS_BOUND_EMPTY)
-    return BindingState(logged_in=_logged, sheet_id=_sid,
-                        portfolio_count=_count, status=STATUS_BOUND)
+        return _with_active_state(BindingState(logged_in=_logged, sheet_id=_sid,
+                            portfolio_count=0, status=STATUS_BOUND_EMPTY), _active_state)
+    return _with_active_state(BindingState(logged_in=_logged, sheet_id=_sid,
+                        portfolio_count=_count, status=STATUS_BOUND), _active_state)
+
+
+def _with_active_state(state: BindingState, active_state: str) -> BindingState:
+    """ssot 呼叫時補上 `active_state`;預設呼叫(空字串)→ 原物件照回(既有 caller 一字不變)。"""
+    if not active_state:
+        return state
+    from dataclasses import replace
+    return replace(state, active_state=active_state)
+
+
+def _ssot_sheet(read_err: str) -> "tuple[str, str, str]":
+    """ssot 用:`(active sheet_id 或 "", active_state, read_error)`。
+
+    只有 `ACTIVE_OK` 才回 sheet_id;快照讀不出來 → 併入 read_error(⛔ 不吞成「沒綁」,同 `read_error` 既有語意)。
+    """
+    _a = get_active_sheet()
+    # 同一個讀取例外（例:session 本身讀不出來)兩邊都會記到 ⇒ 去重,⛔ 不重複列同一句。
+    _err = "; ".join(dict.fromkeys(_x for _x in (read_err, _a.read_error) if _x))
+    return (_a.sheet_id if _a.state == ACTIVE_OK else ""), _a.state, _err
 
 
 def _classify_read_error(_gsp, exc: BaseException) -> str:
@@ -200,13 +234,18 @@ class BindingPresence:
 
     Attributes:
         logged_in: Google 有沒有登入。
-        sheet_bound: 已登入 **且** 已設 Sheet 識別碼(同 `get_binding_state()` 的非 unbound 判定)。
+        sheet_bound: ~~已登入 **且** 已設 Sheet 識別碼(同 `get_binding_state()` 的非 unbound 判定)。~~
+            (👤 我的 P1,DEC-083,有意識的修改,⛔ 不是漏刪:唯一 consumer「🚦 今天」是新版 UI,改讀新版 SSOT。)
+            現行:已登入 **且** active Sheet 成立(`ACTIVE_OK`;同 `get_binding_state(ssot=True)` 的非 unbound 判定)。
+            只有 secrets 部署預設 / 組合與觀察清單指向不同本 ⇒ False。
         read_error: 同 `BindingState.read_error`(讀 token / Sheet 識別碼拋例外時的 repr)。
+        active_state: `get_active_sheet().state`(👤 我的 P1,只加不改)。
     """
 
     logged_in: bool
     sheet_bound: bool
     read_error: str = ""
+    active_state: str = ""
 
 
 def get_binding_presence() -> BindingPresence:
@@ -220,8 +259,10 @@ def get_binding_presence() -> BindingPresence:
     from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1(正常方向)
 
     _logged, _sid, _read_err = _read_login_and_sheet(_gsp)
+    # 👤 我的 P1(DEC-083):~~`sheet_bound=bool(_logged and _sid)`(legacy 通道 ＋ secrets 預設)~~ → 新版 SSOT。
+    _sid, _active_state, _read_err = _ssot_sheet(_read_err)
     return BindingPresence(logged_in=_logged, sheet_bound=bool(_logged and _sid),
-                           read_error=_read_err)
+                           read_error=_read_err, active_state=_active_state)
 
 
 def reload_my_sheet_reads(*sheet_ids: str) -> int:
@@ -234,3 +275,97 @@ def reload_my_sheet_reads(*sheet_ids: str) -> int:
     from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1(正常方向)
 
     return int(_gsp.invalidate_my_read_cache(*sheet_ids))
+
+
+# ══ 👤 我的 P1(DEC-083 Q6/Q7/B4):新版 UI 的 Sheet SSOT ═════════════════════════════════════
+# 客戶原文 Q6:「組合與觀察清單使用同一本 active Sheet。若 legacy 狀態兩者不一致:顯示白話警示、不偷偷選 ETF 通道、
+# 不偷偷選個股通道、不自動覆寫其中一個、讓使用者在 👤 我的明確重新選定。」
+# AI 總管裁示:secrets 部署預設在新版 UI **不當 active**(要使用者明確按「使用這本」)。
+# 值的 SSOT 在 L0 `shared/sheet_id.py`(PR #927 QA-2:「🚦 今天」也要分辨;本檔同名 re-export,值一字未改)。
+from shared.sheet_id import (  # noqa: E402
+    ACTIVE_DEPLOY_DEFAULT_ONLY,   # 兩格都沒綁,只有 secrets 部署預設 ⇒ ⛔ 不當 active
+    ACTIVE_DIVERGED,              # 兩格不同(含其中一格是空的)⇒ ⛔ 不偷選
+    ACTIVE_NONE,                  # 兩格都沒綁、也沒有部署預設
+    ACTIVE_OK,                    # 兩格綁定同一本 ⇒ 這本就是 active Sheet
+)
+
+
+@dataclass(frozen=True)
+class ActiveSheet:
+    """新版 UI 的 active Sheet 判定。⚠️ 只有 `state == ACTIVE_OK` 時 `sheet_id` 非空。
+
+    `portfolio_channel` / `stock_channel` / `deploy_default`:原始值(消毒後),給「👤 我的」畫警示與按鈕用 ——
+    ⚠️ 畫面只准顯示它們的末 6 碼(L0 `sheet_id_tail`,Q4)。
+    `read_error`:快照本身讀不出來(或 secrets 檔格式錯誤)的說明;非空時 state 為 `ACTIVE_NONE`。
+    """
+
+    state: str
+    sheet_id: str = ""
+    portfolio_channel: str = ""
+    stock_channel: str = ""
+    deploy_default: str = ""
+    read_error: str = ""
+
+
+def get_active_sheet() -> ActiveSheet:
+    """新版 UI 的 active Sheet(純讀,不連 Google、不寫任何東西)。判定順序固定,⛔ 不猜:
+
+    1. 兩格(組合 / 觀察清單)都綁同一本 → `ACTIVE_OK`;
+    2. 兩格不同(含其中一格空)→ `ACTIVE_DIVERGED`(⛔ 不偷選、⛔ 不覆寫,由使用者在「👤 我的」重選);
+    3. 兩格都空、有 secrets 部署預設 → `ACTIVE_DEPLOY_DEFAULT_ONLY`(⛔ 不當 active);
+    4. 都沒有 → `ACTIVE_NONE`。
+    """
+    from src.data.portfolio import gsheet_portfolio as _gsp   # L3→L1(正常方向)
+
+    try:
+        _snap = _gsp.session_binding_snapshot()
+    except Exception as _e:  # noqa: BLE001 — 讀不出來 ≠ 沒綁:帶 read_error 交給呼叫端畫紅(§1)
+        return ActiveSheet(state=ACTIVE_NONE, read_error=repr(_e))
+    _pf, _stk, _dflt = _snap.portfolio_channel, _snap.stock_channel, _snap.deploy_default
+    _common = {"portfolio_channel": _pf, "stock_channel": _stk, "deploy_default": _dflt}
+    if _pf and _pf == _stk:
+        return ActiveSheet(state=ACTIVE_OK, sheet_id=_pf, **_common)
+    if _pf or _stk:
+        return ActiveSheet(state=ACTIVE_DIVERGED, **_common)
+    if _dflt:
+        return ActiveSheet(state=ACTIVE_DEPLOY_DEFAULT_ONLY, **_common)
+    try:
+        _sec = str(_gsp._secrets_read_error() or "")
+    except Exception as _e:  # noqa: BLE001
+        _sec = repr(_e)
+    return ActiveSheet(state=ACTIVE_NONE, read_error=_sec, **_common)
+
+
+@dataclass(frozen=True)
+class ActiveSelection:
+    """active Sheet 裡使用者選定分析的那一本組合 / 那一份觀察清單(Q7)。只活在 session。
+
+    `portfolio` / `watchlist`:名稱;空字串 = 還沒選(⛔ 不代表「選了第一本」)。
+    `watchlist_skip`:使用者明確選了「不使用觀察清單」。
+    ⚠️ 名稱存不存在於那本 Sheet 這裡**不查**(不連 Google);由讀取端(`holdings_service`)對清單核對。
+    """
+
+    sheet_id: str = ""
+    portfolio: str = ""
+    watchlist: str = ""
+    watchlist_skip: bool = False
+
+
+def get_active_selection(sheet_id: "str | None" = None) -> ActiveSelection:
+    """`sheet_id` 那本(沒給 → `get_active_sheet()`,只有 `ACTIVE_OK` 才有)的選定。純讀。
+
+    選定綁著選的時候那本 Sheet(L1 `oauth_state.get_active_selection`)⇒ 換了 Sheet 就讀不到舊名字。
+    """
+    from shared.sheet_id import SELECTION_KIND_PORTFOLIO, SELECTION_KIND_WATCHLIST
+    from src.data.portfolio import oauth_state as _ost   # L3→L1(正常方向)
+
+    if sheet_id is None:
+        _a = get_active_sheet()
+        sheet_id = _a.sheet_id if _a.state == ACTIVE_OK else ""
+    if not sheet_id:
+        return ActiveSelection()
+    _pf = _ost.get_active_selection(SELECTION_KIND_PORTFOLIO, sheet_id) or {}
+    _wl = _ost.get_active_selection(SELECTION_KIND_WATCHLIST, sheet_id) or {}
+    return ActiveSelection(sheet_id=sheet_id, portfolio=str(_pf.get("name") or ""),
+                           watchlist=str(_wl.get("name") or ""),
+                           watchlist_skip=bool(_wl.get("skip")))

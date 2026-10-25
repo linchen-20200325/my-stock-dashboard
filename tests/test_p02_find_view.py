@@ -767,7 +767,9 @@ class TestHeatmapKeysNeverCollideWithTheOldTab:
         ⚠️ 兩個上游 session key（ETF 組合持股 / 個股 sheet_id）是**讀別人寫的**，
         不是本頁自有的 widget，故排除。
         """
-        _upstream = {P.SS_ETF_PORTFOLIO_ROWS, P.SS_STOCK_SHEET_ID, P.FORM_KEY}
+        # 📌 👤 我的 P1（DEC-083 Q7，有意識的修改，⛔ 不是漏改）：~~`P.SS_ETF_PORTFOLIO_ROWS, P.SS_STOCK_SHEET_ID`~~
+        #   本頁已不再讀那兩個上游 key（持股標示改走 L3 的「👤 我的」選定），兩個常數一併移除。
+        _upstream = {P.FORM_KEY}
         _bad = sorted(_k for _k in self._keys_actually_used() - _upstream
                       if not _k.startswith(("p02v_", "_p02_")))
         assert not _bad, f"這些 key 沒有本頁前綴：{_bad}"

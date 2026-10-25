@@ -301,10 +301,13 @@ def test_app_py_wires_hook_and_logout():
     assert 'on_change=_sb_on_sheet_input' in src and "st.query_params['sheet']" not in src
     _ctr = inspect.getsource(ost.apply_sheet_binding)
     assert _ctr.index('st.query_params[SHEET_QUERY_PARAM] = _sid') < _ctr.index('sync_silent_marker()')
+    # 📌 👤 我的 P1(DEC-083 Q5,有意識的修改,⛔ 不是漏改):~~側欄 inline `_sb_forget_silent()` → `_sb_clear_binding()`~~
+    #   → 側欄改呼叫 L1 共用 `logout_google_session`(與「👤 我的」頁同一支);兩步的先後改驗在共用函式裡。
     i_logout = src.index("key='btn_oauth_logout_sb'")
-    i_forget = src.index('_sb_forget_silent()', i_logout)
-    i_clear = src.index('_sb_clear_binding()', i_logout)
-    assert i_forget < i_clear < src.index('st.rerun()', i_logout)
+    i_shared = src.index('_sb_logout(', i_logout)
+    assert i_shared < src.index('st.rerun()', i_logout)
+    _lo = inspect.getsource(ost.logout_google_session)
+    assert _lo.index('forget_silent_reauth()') < _lo.index('clear_sheet_binding()')
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -893,7 +896,9 @@ def test_expiry_chain_l1_l3_l5_renders_gray_with_expiry_text(wire):
                  P.build_lightwall_card(P.load_station(h))[0]):
         assert card.state == UI_EMPTY != UI_FAILED, card.key
         assert card.note.now == P.LOGIN_EXPIRED_NOW, card.key
-        assert gsp.LOGIN_EXPIRED_MSG in card.note.where
+        # 📌 👤 我的 P1（DEC-083 D 段，有意識的修改，⛔ 不是漏改）：~~`gsp.LOGIN_EXPIRED_MSG in where`~~（L0 那句叫人按
+        #   側欄）→ 本頁自有一句（開頭「請重新整理頁面以自動恢復登入」與 L0 逐字相同，重新登入改指「👤 我的」）。
+        assert card.note.where == P.LOGIN_EXPIRED_WHERE and '請重新整理頁面以自動恢復登入' in card.note.where
         assert 'LoginRequiredError' not in (card.note.why + card.note.where)
     # 不轉跳(session 中途)
     _run_app(fst)
@@ -908,8 +913,12 @@ def test_holdings_service_race_login_cleared_between_calls_reaches_page_as_gray(
     from src.ui.views import page_hold as P
 
     wire(qp={})
-    monkeypatch.setattr(PBS, 'get_binding_state', lambda: PBS.BindingState(
+    # 📌 👤 我的 P1（DEC-083，有意識的修改，⛔ 不是漏改）：`get_holdings` 改以 `get_binding_state(ssot=True)` 呼叫 ⇒
+    #   替身收 `**_k`（~~`lambda: …`~~）；組合要有使用者選定才會讀（修前取名稱排序第一本）。
+    monkeypatch.setattr(PBS, 'get_binding_state', lambda **_k: PBS.BindingState(
         logged_in=True, sheet_id='SID_A', portfolio_count=1, status=PBS.STATUS_BOUND))
+    monkeypatch.setattr(PBS, 'get_active_selection', lambda sid=None: PBS.ActiveSelection(
+        sheet_id='SID_A', portfolio='P'))
 
     def _raise(**_k):
         gsp.st.session_state[OAUTH_LOGIN_EXPIRED_SESSION_KEY] = True

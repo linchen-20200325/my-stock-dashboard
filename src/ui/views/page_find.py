@@ -298,7 +298,7 @@ fail-soft 本身沒變（兩份 map 照舊），變的只有本頁拿不拿得�
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
 import streamlit as st
@@ -445,14 +445,11 @@ LEGACY_HEATMAP_KEYS: tuple[str, ...] = (
 )
 
 # ── 上游（既有分頁）寫進 session 的 UI 狀態 key ─────────────────────
-#: ETF 組合按「計算組合」後寫入的持股列。
-#: L3 `sector_flow_service` 的 docstring 明文：「**L5 只負責從 session_state 取
-#: ETF 組合的 ticker + 個股 sheet_id 傳入**（session_state 是 UI 專屬，
-#: 只能在 L5 讀）」—— 也就是讀這兩個 key 是 L3 契約**指派給 L5** 的工作，
-#: 不是本檔自己多開的取數路徑。字面與 `src/ui/tabs/tab_sector_flow.py` 一致。
-SS_ETF_PORTFOLIO_ROWS: str = "etf_portfolio_rows"
-#: 個股組合 Google Sheet 的 sheet_id（同上）。
-SS_STOCK_SHEET_ID: str = "stock_portfolio_sheet_id"
+# 📌 👤 我的 P1（DEC-083 Q7，有意識的移除，⛔ 不是漏刪）：~~`SS_ETF_PORTFOLIO_ROWS = "etf_portfolio_rows"`／
+#   `SS_STOCK_SHEET_ID = "stock_portfolio_sheet_id"` ＋ `_etf_tickers(session)`~~ —— 持股標示改讀 L3
+#   `sector_flow_service.get_sector_flow_view(use_active_selection=True)`（「👤 我的」選定的組合＋觀察清單），
+#   本檔因此不再讀這兩個上游 key；三者因本次改動變成 0 production caller ⇒ 本次清掉（v3 §01-2 收尾義務）。
+#   舊分頁 `src/ui/tabs/tab_sector_flow.py` 照舊讀它們（未動）。
 
 # ══════════════════════════════════════════════════════════════════
 # 按鈕與葉的顯示名
@@ -1400,26 +1397,15 @@ class SectorFlowReadout:
     unavailable: tuple[str, ...] = ()
     #: 批 Z39（Q-z28=A）：窗口內 TPEx 全數成功 → True；舊快照缺鍵 → None（⇒ 顯示僅含上市提示）。
     tpex_complete: bool | None = None
+    #: 👤 我的 P1（DEC-083 Q7，只加不改）：持股標示的來源（L3 `holding_source`：選定的組合／觀察清單名、
+    #: 選定狀態、讀取錯誤）。空 ⇒ L3 沒給（舊路徑）。
+    holding_source: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def n_plottable(self) -> int:
         """可畫板塊數 ＝ 全部 − 未取得（批 Z39：卡面板塊數 / has_value 以此計，
         避免全部未取得時仍寫「43 個板塊」）。"""
         return max(len(self.sectors) - len(self.unavailable), 0)
-
-
-def _etf_tickers(session: Mapping[str, Any]) -> list[str]:
-    """ETF 組合持股的 ticker（讀 **UI 狀態**，不是抓資料）。
-
-    L3 `sector_flow_service` 的 docstring 指派給 L5 的工作就是這一件；
-    ticker 常帶 `.TW` / `.TWO` 後綴，正規化由 L3 負責（本檔不去尾碼，
-    那會變成第二處正規化規則）。
-    """
-    _rows = session.get(SS_ETF_PORTFOLIO_ROWS) or []
-    if not isinstance(_rows, list):
-        return []
-    return [str(_r.get("ticker")).strip() for _r in _rows
-            if isinstance(_r, Mapping) and _r.get("ticker")]
 
 
 def _quadrant_counts(sectors: Iterable[Mapping[str, Any]]
@@ -1459,12 +1445,10 @@ def load_sector_flow(session: Mapping[str, Any], *,
         return SectorFlowReadout(requested=False)
     try:
         from src.services.sector_flow_service import get_sector_flow_view
-        _view = get_sector_flow_view(
-            etf_tickers=_etf_tickers(session),
-            stock_sheet_id=(str(session.get(SS_STOCK_SHEET_ID) or "").strip()
-                            or None),
-            strict=True,
-        )
+        # 👤 我的 P1（DEC-083 Q7，有意識的修改，⛔ 不是漏刪）：~~持股標示讀本 session 的 ETF 組合列
+        #   （`_etf_tickers(session)`）＋個股通道整本**全部**觀察清單（`stock_sheet_id=session[SS_STOCK_SHEET_ID]`）~~
+        #   → 改讀「👤 我的」選定的組合＋觀察清單（與 💼 我的持股 同一份選定；客戶：「只能讀這個共同選擇」）。
+        _view = get_sector_flow_view(strict=True, use_active_selection=True)
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_find] 板塊資金取數失敗 → 轉紅態：{_e!r}")
         return SectorFlowReadout(requested=True, error=repr(_e))
@@ -1495,6 +1479,7 @@ def load_sector_flow(session: Mapping[str, Any], *,
         n_days=str(_view.get("n_trading_days_used") or ""),
         unavailable=_unav,
         tpex_complete=_tpc if isinstance(_tpc, bool) else None,
+        holding_source=dict(_view.get("holding_source") or {}),
     )
 
 
@@ -1867,6 +1852,104 @@ def build_heatmap_card(hm: HeatmapReadout
                 state=_state, note=_note), tuple(_facts)
 
 
+#: 持股標示來源的說法（👤 我的 P1）。分區名一律走 `ia_nav`（⛔ 不手抄）。
+HOLDING_SOURCE_NO_SHEET: str = "尚未選 Sheet → 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET)
+HOLDING_SOURCE_NOT_SELECTED: str = ("尚未選定組合／觀察清單 → 到"
+                                    + ia_nav.where_to_find(ia_nav.SECTION_ME_CONTENT))
+HOLDING_SOURCE_FAILED: str = "讀不到你選定的組合／觀察清單（板塊圖照常）："
+# PR #927 QA-2 第 3／4 點：照實分辨「沒登入 / 登入失效 / 兩本不同 / 選定的不見了 / 沒有分頁」，
+#   失敗只講分類白話（~~`HOLDING_SOURCE_FAILED + scrub_secrets(error)`~~：例外原文可能含完整 Sheet ID；
+#   有意識的修改，⛔ 不是漏改）。
+HOLDING_SOURCE_NOT_LOGGED_IN: str = ("尚未登入 Google → 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_ACCOUNT)
+                                     + "登入後再選 Sheet")
+HOLDING_SOURCE_LOGIN_EXPIRED: str = "Google 登入已失效 → 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_ACCOUNT) + "重新登入"
+HOLDING_SOURCE_DIVERGED: str = ("你的組合和觀察清單目前讀的是兩本不同的 Sheet → 到"
+                                + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) + "選定一本")
+HOLDING_SOURCE_PF_MISSING: str = "組合：你選定的那本已不在這本 Sheet 裡"
+HOLDING_SOURCE_WL_MISSING: str = "觀察清單：你選定的那份已不在這本 Sheet 裡"
+HOLDING_SOURCE_PF_NO_TAB: str = "組合：這本 Sheet 還沒有組合分頁"
+HOLDING_SOURCE_WL_NO_TAB: str = "觀察清單：這本 Sheet 還沒有觀察清單分頁"
+HOLDING_SOURCE_RECHECK: str = " → 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_CONTENT) + "重新選定"
+# PR #927 QA-2 複驗：組合 / 觀察清單**兩半各自**照實說（~~某一半有狀態、另一半「尚未選定」時只講有狀態那一半~~，
+#   例：組合沒選 ＋ 觀察清單沒有分頁 ⇒ 只印「觀察清單：…沒有分頁」，組合那半整個不見；有意識的修改，⛔ 不是漏改）。
+HOLDING_SOURCE_PF_NOT_SELECTED: str = "組合：尚未選定"
+HOLDING_SOURCE_WL_NOT_SELECTED: str = "觀察清單：尚未選定"
+HOLDING_SOURCE_PF_EMPTY: str = "組合：這本 Sheet 裡還沒有任何一本組合"
+HOLDING_SOURCE_WL_SKIPPED: str = "觀察清單：你選了不使用"
+HOLDING_SOURCE_PICK: str = " → 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_CONTENT) + "選定"
+#: 讀取失敗分類 → 白話（代碼 SSOT 在 L1，經 L3 `me_account_service.read_status_codes()` 取）。
+HOLDING_ISSUE_QUOTA: str = "Google 讀取額度暫時用完，稍後再試"
+HOLDING_ISSUE_NETWORK: str = "網路連線失敗，稍後再試"
+HOLDING_ISSUE_DENIED: str = "你的 Google 帳號沒有這本 Sheet 的權限 → 確認分享設定，或到" + ia_nav.where_to_find(
+    ia_nav.SECTION_ME_SHEET) + "重新選一本"
+HOLDING_ISSUE_NOT_FOUND: str = "找不到這本 Sheet（可能已刪除）→ 到" + ia_nav.where_to_find(ia_nav.SECTION_ME_SHEET) + "重新選一本"
+HOLDING_ISSUE_OTHER: str = "未預期的錯誤（{kind}）"
+
+
+def _holding_issue_text(issue: str) -> str:
+    from src.services import me_account_service as _ME
+    _ok, _nf, _pd, _quota, _net = _ME.read_status_codes()
+    _known = {_quota: HOLDING_ISSUE_QUOTA, _net: HOLDING_ISSUE_NETWORK, _pd: HOLDING_ISSUE_DENIED,
+              _nf: HOLDING_ISSUE_NOT_FOUND}
+    if issue in _known:
+        return _known[issue]
+    return HOLDING_ISSUE_OTHER.format(kind=(str(issue or "").split(":", 1)[-1] or "不明"))
+
+
+def _holding_source_text(src: Mapping[str, Any]) -> str:
+    """L3 `holding_source` → 一句事實（⛔ 不猜：沒給 ⇒「未提供」；⛔ 不露例外原文）。"""
+    if not src:
+        return "未提供"
+    from shared.sheet_id import ACTIVE_DIVERGED
+    from src.services.holdings_service import SELECTION_MISSING
+    _issue = str(src.get("error_issue") or "")
+    if src.get("error"):
+        if _issue == "login_required" or src.get("login_expired"):
+            return HOLDING_SOURCE_LOGIN_EXPIRED
+        return HOLDING_SOURCE_FAILED + _holding_issue_text(_issue)
+    if not src.get("bound"):
+        if src.get("active_state") == ACTIVE_DIVERGED:
+            return HOLDING_SOURCE_DIVERGED
+        if "logged_in" in src and not src.get("logged_in"):
+            return HOLDING_SOURCE_LOGIN_EXPIRED if src.get("login_expired") else HOLDING_SOURCE_NOT_LOGGED_IN
+        return HOLDING_SOURCE_NO_SHEET
+    from src.services.holdings_service import SELECTION_NOT_SELECTED, SELECTION_SKIPPED
+    _ws_missing = "worksheet_missing"
+    _pf_n = src.get("portfolio_names_n")
+    # 每一半回 (句子, 種類)；種類：name / gone（選定的不見了）/ pick（還沒選）/ fact（其餘事實）/ ""（不知道 ⇒ ⛔ 不猜）。
+    if src.get("portfolio_name"):
+        _pf = (f"組合「{src.get('portfolio_name')}」", "name")
+    elif src.get("portfolio_selection") == SELECTION_MISSING:
+        _pf = (HOLDING_SOURCE_PF_MISSING, "gone")
+    elif src.get("portfolio_issue") == _ws_missing:
+        _pf = (HOLDING_SOURCE_PF_NO_TAB, "fact")
+    elif isinstance(_pf_n, int) and not isinstance(_pf_n, bool) and _pf_n == 0:
+        _pf = (HOLDING_SOURCE_PF_EMPTY, "fact")
+    elif src.get("portfolio_selection") == SELECTION_NOT_SELECTED:
+        _pf = (HOLDING_SOURCE_PF_NOT_SELECTED, "pick")
+    else:
+        _pf = ("", "")
+    if src.get("watchlist_name"):
+        _wl = (f"觀察清單「{src.get('watchlist_name')}」", "name")
+    elif src.get("watchlist_selection") == SELECTION_MISSING:
+        _wl = (HOLDING_SOURCE_WL_MISSING, "gone")
+    elif src.get("watchlist_issue") == _ws_missing:
+        _wl = (HOLDING_SOURCE_WL_NO_TAB, "fact")
+    elif src.get("watchlist_selection") == SELECTION_SKIPPED:
+        _wl = (HOLDING_SOURCE_WL_SKIPPED, "fact")
+    elif src.get("watchlist_selection") == SELECTION_NOT_SELECTED:
+        _wl = (HOLDING_SOURCE_WL_NOT_SELECTED, "pick")
+    else:
+        _wl = ("", "")
+    _kinds = {_pf[1], _wl[1]} - {""}
+    if not _kinds or _kinds == {"pick"}:
+        return HOLDING_SOURCE_NOT_SELECTED   # 兩半都還沒選（或都不知道）⇒ 同一句（原文照舊）
+    _parts = [_t for _t, _k in (_pf, _wl) if _t]
+    _tail = (HOLDING_SOURCE_RECHECK if "gone" in _kinds
+             else HOLDING_SOURCE_PICK if "pick" in _kinds else "")
+    return "＋".join(_parts) + _tail
+
+
 def build_sector_flow_card(flow: SectorFlowReadout
                            ) -> tuple[Card, tuple[tuple[str, str], ...]]:
     """線框葉2 右半「三大法人資金流向泡泡圖」的狀態卡。
@@ -1889,10 +1972,12 @@ def build_sector_flow_card(flow: SectorFlowReadout
     if flow.insufficient:
         _facts.append((f"交易日不足 {WINDOW_Y_MIN_DAYS} 天（未列入象限）",
                        "、".join(flow.insufficient)))
+    # 👤 我的 P1（DEC-083 D／Q7，有意識的改指，⛔ 不是漏刪）：~~「未偵測到 —— 到 ETF 組合按「計算組合」，或設定
+    #   個股組合雲端清單後才會標出」~~（新版模式看不到那兩個舊頁籤）→ 照實列出持股標示讀的是哪一份選定。
+    _facts.append(("持股標示來源", _holding_source_text(flow.holding_source)))
     _facts.append((
         "你的持股板塊",
-        "、".join(flow.highlight) if flow.highlight else
-        "未偵測到 —— 到 ETF 組合按「計算組合」，或設定個股組合雲端清單後才會標出"))
+        "、".join(flow.highlight) if flow.highlight else "未偵測到（見上一列的持股標示來源）"))
 
     if _state == UI_LIVE:
         _value = f"{flow.n_plottable} 個板塊"
