@@ -61,7 +61,7 @@ SHEET_INPUT_INVALID: str = "invalid"
 SHEET_INPUT_ERROR_MESSAGES: dict[str, str] = {
     SHEET_INPUT_EMPTY: "請貼上 Google Sheet 網址或 ID。",
     SHEET_INPUT_PUBLISHED_LINK: (
-        "這是「發布到網路」的連結（網址裡有 /d/e/），不能用來讀取或寫入你的 Sheet。"
+        "這是「發布到網路」的連結，不能用來讀取或寫入你的 Sheet。"
         "請改貼瀏覽器網址列上的編輯網址（…/spreadsheets/d/<ID>/edit），或直接貼 Sheet ID。"),
     SHEET_INPUT_INVALID: (
         "看不懂這個網址或 ID。請貼 Google Sheet 的編輯網址（…/spreadsheets/d/<ID>/edit），"

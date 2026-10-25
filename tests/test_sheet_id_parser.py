@@ -46,7 +46,7 @@ def test_parse_ok(raw, expected):
 def test_published_link_rejected_never_e(raw):
     r = S.parse_sheet_input(raw)
     assert r.sheet_id == "" and r.error == S.SHEET_INPUT_PUBLISHED_LINK and not r.ok
-    assert "/d/e/" in r.message and "edit" in r.message
+    assert "發布到網路" in r.message and "edit" in r.message
 
 
 @pytest.mark.parametrize("raw", [
