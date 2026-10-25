@@ -1403,6 +1403,27 @@ Effort：本批 Opus 5.5／Medium；遇 Risk Cap 正式顯示、投資語意、e
   - **EX-OAUTH-1（`CLAUDE.md` §8.2.A.1；`src/data/portfolio/oauth_state.py`、`gsheet_portfolio.py`）**：第 7、8 點「優先沿用既有 backend／service」「單一 SSOT 流程」與既有 L1 OAuth／Sheet 模組相關；是否可共用屬 `UIX-ME-SHEET-SSOT` 盤點，撰寫組未查證。
   - 未發現需登記 `PROJECT_RULES.md` 第 14 節的新衝突（撰寫組單組 grep，未經第二組驗證）。
 
+### DEC-082｜所有下一頁先草稿、後施工：新主要頁面／重大互動流程一律 Stage A 唯讀盤點 → Stage B 新版設計草稿 → Stage C 客戶裁示 Gate → 核准後才 Stage D 正式實作（客戶 2026-10-25）
+> 2026-10-25 追加（第 8 節「收到當輪追加」；ID 取下一個未用號，DEC-081 為前一號；落盤前撰寫組 `git grep -n "DEC-082"` 全 repo 0 命中）。摘要見 `docs/PROJECT_STATE.md` §36 末段；交接見 `docs/HANDOFF.md`「📌 2026-10-25 #922 合併後」。
+- **背景**：#922（📊 大盤頁實作，DEC-081）合併後，客戶對**之後所有**新主要頁面與重大互動流程立下永久流程規則。
+- **要點**（撰寫組摘要；以「來源」原文為準）：
+  1. 適用範圍：任何新的主要頁面或重大互動流程 —— 🎯 標的、⚡ 行動、🛡️ 持股、👤 我的、🩺 資料中心、contextual explainability、Sheet 管理／綁定流程、Google 登入／連線流程、跨頁互動控制。
+  2. **Stage A｜唯讀盤點**：⛔ Stage A 不得寫正式 UI code。
+  3. **Stage B｜提出新版設計草稿**。
+  4. **Stage C｜客戶裁示 Gate**：草稿完成後必須停手，等客戶裁示。
+  5. **Stage D｜正式實作**：客戶核准草稿後才開始。
+  6. 客戶核准草稿前 ⛔ 不得：寫正式頁面、改 navigation、刪舊 UI、替換既有操作流程、開始 OAuth／Sheet write wiring、新增新的正式投資判斷。
+- **不是什麼**（⛔）：不是任何一頁的實作授權；不是舊 UI 刪除授權（DEC-019／020、DEC-081 不變）；不是 Sheet 寫入／OAuth／production write 授權（`PRODUCTION_WRITE_APPROVED=False`、DEC-066 F 不變）。
+- **範圍**：治理／UI 流程（永久規則）｜**日期**：2026-10-25｜**決策者**：客戶｜**狀態**：生效
+- **來源**：客戶 2026-10-25 指示（經總管轉交；撰寫組未見原件，只收到總管轉交的關鍵句，**逐字收錄，未改寫**；「…」為轉交時的省略）：
+
+```
+從現在開始：對任何新的主要頁面或重大互動流程…必須遵守：Stage A｜唯讀盤點…⛔ Stage A 不得寫正式 UI code。Stage B｜提出新版設計草稿…Stage C｜客戶裁示 Gate 草稿完成後必須停手…客戶核准草稿後，才進 Stage D 正式實作。
+```
+（適用範圍與核准前禁止清單為總管轉述：🎯 標的、⚡ 行動、🛡️ 持股、👤 我的、🩺 資料中心、contextual explainability、Sheet 管理／綁定流程、Google 登入／連線流程、跨頁互動控制；核准前不得寫正式頁面、改 navigation、刪舊 UI、替換既有操作流程、開始 OAuth／Sheet write wiring、新增新的正式投資判斷。若日後取得客戶原件，以原件為準、本段以刪除線更正。）
+
+- **與其他 DEC／條文的關係**（撰寫組讀法，單組，⚠️ 未經第二組驗證，`CLAUDE.md` §-2 規則 6）：與 DEC-003 ①／`CLAUDE.md` §-1.5.D v3 §03-2 ①（UI 草稿先行）同向且加嚴（明定四階段與 Stage A 禁寫 UI code）；與 DEC-081 第 7、8 點（互動控制完整性、Sheet CRUD 單一 SSOT）同向，👤 我的等頁的承接須先過本條 Stage C。
+
 ---
 
 ## 5. 取代鏈總表

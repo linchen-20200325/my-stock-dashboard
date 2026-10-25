@@ -630,7 +630,7 @@
 
 ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組撰寫；客戶原文為總管轉交的關鍵句、非全文；「實作批進行中」為總管轉述，撰寫組未查 PR。
 
-## 36. 📊 大盤頁實作批與互動覆蓋矩陣初稿（2026-10-25；append-only；**實作完成、未驗收**）
+## 36. 📊 大盤頁實作批與互動覆蓋矩陣初稿（2026-10-25；append-only；**實作完成、~~未驗收~~ 已合併 #922、待客戶驗收**（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管））
 
 > 2026-10-25 新增（決策者 AI 總管（事實更新））。本節只放摘要＋pointer，不是新 SSOT。裁示見 `docs/DECISIONS.md` DEC-081；待辦見 `docs/BACKLOG.md` 5.1.13；交接見 `docs/HANDOFF.md`「2026-10-25 大盤頁實作批」段。
 
@@ -638,4 +638,6 @@
 - **互動覆蓋矩陣初稿**：`docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md`（179 個舊 widget 呼叫點 → 六個目標頁；Sheet CRUD 單一 SSOT **提案**；🛡️ dead-end 清單）。重點發現：Sheet URL→ID 解析有 4 份、行為不一致；側欄綁定是獨立 inline 複本；🛡️ 持股有多處指向新版模式下不存在的 📁 組合管理分頁。
 - **下一步**：獨立 QA → 客戶驗收 📊 大盤頁 → 客戶指派下一頁（總管推薦 👤 我的／Sheet SSOT，屬 High）。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：矩陣與本節由單一組產出，**沒有第二組驗過**；矩陣「沒有遺漏」未證明，dead-end 清單已知不完整；大盤頁未經 Streamlit 實機驗收。大盤頁直接呼叫 `page_today` 的底線函式，屬已知耦合（`UIX-MKT-TODAY-COUPLING`）。
-- 📌 **QA 回修 done**（2026-10-25；append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）：commit `ad09a04d`——結論句風險上限子句改客戶逐字、位階／危險度子句對齊卡面字樣與徽章、指路修正、X1 來源代碼改人話、X8 三大法人資料日與先行指標沿用揭露、BIAS240 改用 L2 helper（全文見 Gate 檔附錄 D.5）。測試（**實作組自跑**，獨立複驗進行中）：fast 30119 passed／28 skipped／0 failed；slow 122 passed／5 skipped／0 failed。QA 非阻擋項已登記 BACKLOG 5.1.13 `UIX-MKT-*`。下一步：最終 head CI → merge → 客戶驗收 📊 大盤頁 → 客戶指派下一頁（推薦 👤 我的，High）。舊 UI 未刪、C2b 未開始、`PRODUCTION_WRITE_APPROVED=False` 未變。
+- 📌 **QA 回修 done**（2026-10-25；append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）：commit `ad09a04d`——結論句風險上限子句改客戶逐字、位階／危險度子句對齊卡面字樣與徽章、指路修正、X1 來源代碼改人話、X8 三大法人資料日與先行指標沿用揭露、BIAS240 改用 L2 helper（全文見 Gate 檔附錄 D.5）。測試（**實作組自跑**，~~獨立複驗進行中~~ 獨立 QA-A 已複驗，見下一點（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管））：fast 30119 passed／28 skipped／0 failed；slow 122 passed／5 skipped／0 failed。QA 非阻擋項已登記 BACKLOG 5.1.13 `UIX-MKT-*`。下一步：~~最終 head CI → merge → 客戶驗收 📊 大盤頁 → 客戶指派下一頁（推薦 👤 我的，High）~~ 見下一點（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）。舊 UI 未刪、C2b 未開始、`PRODUCTION_WRITE_APPROVED=False` 未變。
+- 📌 **#922 已合併**（2026-10-25；append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）：獨立 QA-A 於 `ad09a04d` 複驗判可合併（fast 30119 passed／28 skipped／0 failed）；PR head `88ccb364` 與 main `286e0075` CI 皆綠；Open PR＝0。下一步：**客戶驗收 📊 大盤頁**；👤 我的只做草稿（Stage A／B），不實作。
+- 📌 **客戶指示（2026-10-25，永久規則；DEC-082）**：所有下一頁先草稿、後施工 —— 新主要頁面／重大互動流程（🎯 標的、⚡ 行動、🛡️ 持股、👤 我的、🩺 資料中心、contextual explainability、Sheet 管理／綁定、Google 登入／連線、跨頁互動控制）一律 Stage A 唯讀盤點（⛔ 不寫正式 UI code）→ Stage B 新版設計草稿 → Stage C 客戶裁示 Gate（草稿完成必須停手）→ 核准後才 Stage D 實作。全文見 `docs/DECISIONS.md` DEC-082。
