@@ -211,7 +211,7 @@
 | 禁止事項 | 線框核准前寫 UI code；恢復 Risk Cap 顯示（`RC-VISIBILITY`）；C2b；改公式／門檻／權重；新增或替換資料來源；刪舊 UI；其餘沿用「C2a-2 後」「C2 裁示後」段 |
 | Production | `PRODUCTION_WRITE_APPROVED=False`（撰寫組 2026-10-25 grep `shared/risk_cap_history_policy.py:216` 實查，未動）；Daily Schedule NOT APPROVED（DEC-066 F） |
 
-### 📌 current handoff（2026-10-25 大盤頁實作批）（append-only；**本段為現行短版，與上表及上各段衝突處以本段為準**）
+### 📌 current handoff（2026-10-25 大盤頁實作批）（append-only；~~**本段為現行短版，與上表及上各段衝突處以本段為準**~~ 現行以本段末「📌 2026-10-25 #922 合併後」為準（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管））
 
 > 客戶已裁示大盤 Gate（DEC-081，2026-10-25）；📊 大盤頁已在分支實作完成，**等獨立 QA 與客戶驗收**。⛔ 接手必須重新做 GitHub Verification Gate（`PROJECT_RULES.md` 第 2 節、第 15 節第 3 點）；本段只是導引。待辦在 `docs/BACKLOG.md` 5.1.13（`UIX-*`，含新增 `UIX-MKT-*`）；狀態摘要 `docs/PROJECT_STATE.md` §36。
 
@@ -234,11 +234,21 @@
 
 | 項目 | 現況（量測 2026-10-25，撰寫組 `git`＋`gh api` REST 實查，會過期） |
 |---|---|
-| 狀態 | 📊 大盤頁**實作＋QA 回修完成**：分支 `claude/determined-euler-32xqjn`，QA 回修 commit `ad09a04d`（內容見 Gate 檔附錄 D.5）；PR #922 open（draft），head `ad09a04d` 時 Fast checks／Slow tests 皆 in_progress（本 docs commit 推上後 head 會再前進） |
-| 測試 | 實作組自跑：全 fast 30119 passed／28 skipped／0 failed；全 slow 122 passed／5 skipped／0 failed ——**實作組數字**，獨立複驗進行中 |
+| 狀態 | ~~📊 大盤頁**實作＋QA 回修完成**：分支 `claude/determined-euler-32xqjn`，QA 回修 commit `ad09a04d`（內容見 Gate 檔附錄 D.5）；PR #922 open（draft），head `ad09a04d` 時 Fast checks／Slow tests 皆 in_progress（本 docs commit 推上後 head 會再前進）~~ #922 已合併，見下方「📌 2026-10-25 #922 合併後」（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管） |
+| 測試 | 實作組自跑：全 fast 30119 passed／28 skipped／0 failed；全 slow 122 passed／5 skipped／0 failed ——**實作組數字**，~~獨立複驗進行中~~ 獨立 QA-A 已於 `ad09a04d` 複驗（見下段）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管） |
 | 新登記（QA 非阻擋項） | BACKLOG 5.1.13 `UIX-MKT-REPORT-PUSHDOWN`、`UIX-MKT-TWO-LIGHTS`、`UIX-MKT-ENTRY-BUTTONS`、`UIX-MKT-BADGE-RERUN`、`UIX-MKT-X1-WORDING`（既有 `UIX-MKT-UPDATE-LABEL`、`UIX-MKT-STATUSBAR`、`UIX-HOLD-DEADEND` 涵蓋其餘） |
-| **唯一 Next Safe Action** | 最終 head 的 CI 綠 → merge PR #922 → **客戶驗收 📊 大盤頁**（互動清單見矩陣 §4.1）→ 客戶指派下一頁。總管推薦下一頁：**👤 我的**（Sheet SSOT，`UIX-ME-SHEET-SSOT`，起點矩陣 §7.4 提案），**High** effort（Sheet SSOT／Google OAuth），且須先出線框 |
+| **唯一 Next Safe Action** | ~~最終 head 的 CI 綠 → merge PR #922 → **客戶驗收 📊 大盤頁**（互動清單見矩陣 §4.1）→ 客戶指派下一頁。總管推薦下一頁：**👤 我的**（Sheet SSOT，`UIX-ME-SHEET-SSOT`，起點矩陣 §7.4 提案），**High** effort（Sheet SSOT／Google OAuth），且須先出線框~~ 見下方「📌 2026-10-25 #922 合併後」（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管） |
 | 明確未變 | **舊 UI 未刪**（「🚦 今天」頁與舊分頁仍在）；**C2b 未開始**；`PRODUCTION_WRITE_APPROVED=False` **未變**（`shared/risk_cap_history_policy.py:216` 實查）；禁止事項列照舊 |
+
+📌 **2026-10-25 #922 合併後**（append-only）（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管）；**本段為現行短版，與上表及上各段衝突處以本段為準**：
+
+| 項目 | 現況（2026-10-25 AI 總管 GitHub 實查、撰寫組 `git log origin/main` 複查，會過期） |
+|---|---|
+| 狀態 | **📊 大盤頁正式實作已完成**：PR #922 已合併（squash），main＝`286e007548fe8aee9d09e0d594063d4f77110884`；Open PR＝0；main CI「PR Check（pytest fast＋AppTest slow）」在 `286e0075` completed success |
+| QA | 獨立 QA-A 於 `ad09a04d` 複驗判**可合併**（fast 30119 passed／28 skipped／0 failed）；PR head `88ccb364` 與 main `286e0075` CI 皆綠 |
+| **唯一 Next Safe Action** | **客戶驗收 📊 大盤頁**（互動清單見矩陣 §4.1）。之後下一頁一律依 **DEC-082「先草稿、後施工」**：Stage A 唯讀盤點 → Stage B 新版設計草稿 → Stage C 客戶裁示 Gate（草稿完成必須停手）→ 客戶核准後才 Stage D 實作 |
+| 目前規劃中的工作 | **👤 我的：只做草稿（Stage A／B），不實作**；⛔ 客戶核准草稿前不得寫正式頁面、改 navigation、刪舊 UI、替換既有操作流程、開始 OAuth／Sheet write wiring、新增新的正式投資判斷 |
+| 明確未變 | **舊 UI 未刪**（「🚦 今天」頁與舊分頁仍在）；**C2b 未開始**；`PRODUCTION_WRITE_APPROVED=False`；**`RC-VISIBILITY` 未完成**；禁止事項列照舊 |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 
