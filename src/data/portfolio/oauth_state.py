@@ -27,7 +27,7 @@
                                    (Sheet Safety 批 B4,DEC-083:Sheet 綁定**唯一寫入契約**,見下方專段)
 - set_active_selection() / get_active_selection() / clear_active_selection()
                                    (👤 我的 P1,DEC-083 Q7:active portfolio / watchlist 的**唯一寫入者**,只活在 session)
-- build_login_url() / logout_google_session()
+- build_login_url() / logout_google_session() / get_login_email()
                                    (👤 我的 P1,DEC-083 Q5:登入網址與**共用登出** —— 側欄與「👤 我的」頁同一支)
 
 SEC-2(login CSRF)
@@ -659,6 +659,14 @@ def build_login_url() -> str:
     _sid = _sanitize_sheet_id(st.session_state.get(PORTFOLIO_SHEET_SESSION_KEY))
     return build_authorize_url(_cfg["client_id"], _cfg["redirect_uri"],
                                state=login_state_with_sheet(_sid))
+
+
+def get_login_email() -> str:
+    """本 session 登入的 Google 帳號 email(回呼時由 id_token 解出);沒登入 → 空字串。純讀。
+
+    👤 我的 P1:給 L3 `me_account_service` 遮罩後顯示(⛔ 畫面不印完整 email)。
+    """
+    return str(st.session_state.get("gsheet_email") or "") if st.session_state.get("gsheet_tokens") else ""
 
 
 #: 共用登出要清的登入 session key(token / email / 本 session 的 CSRF nonce)。

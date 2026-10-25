@@ -150,6 +150,10 @@ class TestSheetBindingCard:
         from src.data.portfolio import gsheet_portfolio as G
         monkeypatch.setattr(G, "_has_oauth_tokens", lambda: True)
         monkeypatch.setattr(G, "_get_active_sheet_id", lambda: "SHEET1")
+        # 📌 👤 我的 P1（DEC-083，有意識的修改，⛔ 不是漏改）：presence 改讀新版 SSOT（兩格綁定同一本才算綁）
+        #   ⇒ 「已設 Sheet」改以 L1 綁定快照表達（`_get_active_sheet_id` 那行照留給 `get_binding_state()` 預設呼叫）。
+        monkeypatch.setattr(G, "session_binding_snapshot", lambda: G.SessionBindingSnapshot(
+            portfolio_channel="SHEET1", stock_channel="SHEET1"))
         calls: list = []
         monkeypatch.setattr(G, "list_portfolios", lambda *a, **k: calls.append((a, k)) or [])
         return calls
@@ -182,13 +186,18 @@ class TestSheetBindingCard:
         assert len(calls) >= 1
 
     def test_presence_agrees_with_binding_state_on_bound_or_not(self, monkeypatch):
-        """兩支共用同一份判定（`_read_login_and_sheet`）：有沒有綁、read_error 必須一致。"""
+        """兩支共用同一份判定（`_read_login_and_sheet`）：有沒有綁、read_error 必須一致。
+
+        📌 👤 我的 P1（DEC-083，有意識的修改，⛔ 不是漏改）：~~與 `get_binding_state()` 比~~ → presence 改讀新版
+        SSOT，故改與 `get_binding_state(ssot=True)` 比；「已設 Sheet」以 L1 綁定快照表達（兩格同一本）。"""
         from src.data.portfolio import gsheet_portfolio as G
         monkeypatch.setattr(G, "list_portfolios", lambda **_k: [])
         for logged, sid in ((True, "S"), (True, ""), (False, "S"), (False, "")):
             monkeypatch.setattr(G, "_has_oauth_tokens", lambda v=logged: v)
             monkeypatch.setattr(G, "_get_active_sheet_id", lambda v=sid: v)
-            a, b = PB.get_binding_presence(), PB.get_binding_state()
+            monkeypatch.setattr(G, "session_binding_snapshot", lambda v=sid: G.SessionBindingSnapshot(
+                portfolio_channel=v, stock_channel=v))
+            a, b = PB.get_binding_presence(), PB.get_binding_state(ssot=True)
             assert a.sheet_bound == (b.status != PB.STATUS_UNBOUND), (logged, sid)
             assert a.read_error == b.read_error
 
