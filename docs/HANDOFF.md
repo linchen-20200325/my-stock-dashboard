@@ -22,7 +22,7 @@
 | tests／CI 已完成 | #932 於 815dadc5 全綠；#933 全綠並已合併；兩組獨立 QA（Stage A 合規／code 抽驗；DEC-086 docs QA） |
 | tests／CI 尚未完成 | #932 最新 head 的 CI；main `6cc7379f` 的 CI |
 | unresolved true Stop Gates | 無（Stage B 前停手為本輪工作安全停點／總管流程，非 DEC-082 條文）。客戶待決事項不屬 Stop Gate：大盤 UI 驗收、SHEET-LOGOUT-SECRETS-DEFAULT、ME-UI-STRINGS-REVIEW、P1 實作選擇覆核、P2 是否指派 |
-| uncommitted／unpushed work | 本次修改 commit 前尚未推送（commit 後以 GitHub 為準）；暫存檔在 scratchpad（不入 repo，遺失可由 GitHub 重建） |
+| uncommitted／unpushed work | 無（branch 已 push，head 以 GitHub 為準；working tree 乾淨） |
 | relevant evidence location | PR #932、#933（已合併）；矩陣 `docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md` §12；舊候選分支 `docs/newui-stage-a-inventory`（`6666a26c`，未動，勿刪）；客戶 DEC-086 原文見 `docs/DECISIONS.md` DEC-086 |
 | recommended Model | Sonnet（docs QA、合併與同步足夠；Stage B 草稿亦可，涉及 IA 責任對映或投資語意再依 DEC-084 重判） |
 | recommended Effort | Medium |
@@ -326,13 +326,13 @@ DEC-086 規則已於 main，本表已落地。
 | 對進行中工作的影響 | 本條不改變進行中工作的 Gate：~~Stage B／C／D 仍須客戶 Gate（DEC-082）~~（已更正：DEC-082 的正式客戶 Gate 在 Stage C；2026-10-26 有意識的更正，不是漏刪，決策者 AI 總管）；⛔ 不開 P2、⛔ 不刪舊 UI、⛔ 不改 nav（本段不記載任何 Stage 的進度） |
 | 沿用 | 上一段「待客戶」「Next Safe Point」「禁止事項」照舊有效 |
 
-📌 **2026-10-26 新 UI Stage A 事實盤點（v2 重做）狀態**（append-only）；**本段與上方「2026-10-26 DEC-085 長期 UI 治理已生效」段並列、共同構成現行短版（上方 DEC-085 段仍是現行短版，本段不取代它、不降級它）**；兩段衝突處，DEC-085 治理規則優先：
+📌 **2026-10-26 新 UI Stage A 事實盤點（v2 重做）狀態**（append-only）；**本段為與上方「2026-10-26 DEC-085 長期 UI 治理已生效」段並列的 Stage A v2 狀態段（非第二個現行短版標記；DEC-085 段為唯一現行短版標記，本段不取代它、不降級它）**；兩段衝突處，DEC-085 治理規則優先：
 
 | 項目 | 現況（2026-10-26，docs-only；**以 GitHub 為準**） |
 |---|---|
 | 舊 Stage A PR #931 | ~~待 PR 合併~~ **已合併**（main `15cd8fff`）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。注意：PR #931 是 DEC-085 長期 UI 治理落盤批（`PROJECT_RULES.md` 第 19 節），不是 Stage A 盤點本身 |
 | 舊分支 `docs/newui-stage-a-inventory`（`6666a26c`，基於 `4e6bf8ee`） | **未動的候選材料**：不合併、不修改；其盤點內容由 v2 重新套用並修正稽核發現 |
-| 新分支 `docs/newui-stage-a-v2`（main `15cd8fff` 起） | **Stage A 事實盤點重做中**，Draft PR 待開（PR 號未知）。只改 `docs/**`，0 行程式、0 測試變更；盤點採 DEC-085 §19.6 四種 Coverage 狀態，責任名（📊／🎯／⚡／🛡️／👤／🩺）只當盤點範圍標籤，不等於現行 nav 或既有 view |
+| 新分支 `docs/newui-stage-a-v2`（main `15cd8fff` 起） | **Stage A 事實盤點重做中**，Draft PR #932（~~Draft PR 待開（PR 號未知）~~ 2026-10-26 事實更新）。只改 `docs/**`，0 行程式、0 測試變更；盤點採 DEC-085 §19.6 四種 Coverage 狀態，責任名（📊／🎯／⚡／🛡️／👤／🩺）只當盤點範圍標籤，不等於現行 nav 或既有 view |
 | **Next Safe Point（本輪工作安全停點）** | Stage A v2 完成並由總管複驗後，**在進入 Stage B 前停手**。⚠️ 這是**本輪工作安全停點／總管流程（非 DEC-082 條文）**；~~Stage B 須先過客戶裁示（DEC-082）~~ 已更正：DEC-082 的正式客戶 Gate 在 **Stage C**（Stage B 草稿完成後停手等裁示）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更正）） |
 | 下一階段 Model／Effort | Stage B 草稿＝Medium＋Sonnet 等級可行；若涉及 IA 責任對映或投資語意，再依 DEC-084 重判（新對話仍須依 `PROJECT_RULES.md` 第 9.0 節重跑 Gate，建議只是參考） |
 | 禁止事項 | ⛔ 仍不進 Stage B（本輪）、⛔ 不做 P2（`ME-P2`）、⛔ 不刪舊 UI、⛔ 不開 Stage D／不改 nav、⛔ 不新增或改定義任何投資語意；待辦見 `docs/BACKLOG.md` `NEWUI-STAGE-A-GAPS`（Stage B 前置 decision-notes，不構成動工授權） |

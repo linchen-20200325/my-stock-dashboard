@@ -1241,7 +1241,7 @@ Dead-end：是＝新 UI 叫使用者去一個新版模式下去不了的地方�
 | D6 | **AI 摘要重複**：作戰室 ⑥ AI 摘要（今天頁 stub）、持股 ⑦AI 戰情總結、持股舊 ✍️、個股組合 AI 報告、📖 憑什麼 AI 問答 | FACT：Gate 檔 :106 寫「AI 摘要以 X11『問 AI』代替」 | ⚡ 是否需要自己的 AI 區塊＝G8 |
 | D7 | **`etf_portfolio_rows` 隱藏耦合**：只由舊 UI 寫（`etf_tab_portfolio.py:451`、`etf_tab_dividend_station.py:164`），下游有 `grape_ladder`、`tab_sector_flow`、`portfolio_linkage`；新 UI 從不寫（`page_hold` 只在註解提到） | FACT（`grep -rn etf_portfolio_rows --include=*.py src app.py`，複驗實測 **20 行**（樣式不同，原組寫 13 行；寫入點仍只有 `etf_tab_portfolio.py` 約 451 與 `etf_tab_dividend_station.py` 約 164）） | 任何要把葡萄串／組合計算搬進新 UI 的人，必須先決定輸入從 `holdings_service` 取，而不是繼續靠舊頁副作用 |
 | D8 | 推播邏輯與畫面邏輯共用 `build_station_digest` 與 `suggest_action`（DEC-045 要求一致）；`market_alert_banner` 另有一套目標持股水位常數 | FACT（`etf_tab_dividend_station.py:_render_layer1` 註解、Gate 檔 E12） | 若 ⚡ 要顯示「今天推了什麼」，必須用同一個 digest，不得重算 |
-| D9 | `etf_tab_ai.render_etf_ai` 無 caller，卻仍被 `etf_dashboard.py:57` re-export | FACT | 死碼；依 §-1 不主動動工，只登記 |
+| D9 | `etf_tab_ai.render_etf_ai` 無 caller（靜態 grep，未排除 getattr／字串動態引用；INFERENCE），卻仍被 `etf_dashboard.py:57` re-export（符號存在；FACT） | FACT（符號存在）＋INFERENCE（無 caller） | 死碼；依 §-1 不主動動工，只登記 |
 
 #### 12.3.10 高風險投資語意（項目 10；Stage B 不得自行改定義）
 
@@ -1596,7 +1596,7 @@ Dead-end：是＝新 UI 叫使用者去一個新版模式下去不了的地方�
 
 #### 12.6.2 §3 🎯 標的（盤點範圍標籤，依現行 nav 暫代：🔍 找標的、🔬 查一檔）
 
-15. **三階段篩選（多選／額外代碼／go／AI）→ `tab_stock_picker.py` 的四個 widget 在 production 全不可達（複驗更正調查組原結論）**：唯一 caller 是 `tab_stock_grp.py::_render_stage_picker_section`（內部呼叫 `render_tab_stock_picker(source_label='個股組合輸入', auto_run=…)`，外層以 `auto_run=True` 呼叫；重驗 @15cd8fff：`render_tab_stock_picker(` 全 repo 僅此一處呼叫）→ `_t3_mode=True` → multiselect 與額外代碼 text_input 不畫；go 按鈕因 `auto_run=True` 不畫；`auto_run` 時直接自動生成 AI 報告，`elif st.button(…)`（AI 三型建議按鈕）也不會畫。**三階段整段是「批次分析後自動串跑、零控制項」**（調查組原寫「可達的只有 AI 按鈕 572」為誤）。選股網（`app.py`）已在 v19.111 移除 picker。
+15. **三階段篩選（多選／額外代碼／go／AI）→ `tab_stock_picker.py` 的四個 widget 在 production 全不可達（複驗更正調查組原結論）**：唯一 caller 是 `tab_stock_grp.py::_render_stage_picker_section`（內部呼叫 `render_tab_stock_picker(source_label='個股組合輸入', auto_run=…)`，外層以 `auto_run=True` 呼叫；重驗 @15cd8fff：`render_tab_stock_picker(` 全 repo 僅此一處呼叫（靜態 grep，未排除動態引用；故「production 全不可達」亦為靜態推論））→ `_t3_mode=True` → multiselect 與額外代碼 text_input 不畫；go 按鈕因 `auto_run=True` 不畫；`auto_run` 時直接自動生成 AI 報告，`elif st.button(…)`（AI 三型建議按鈕）也不會畫。**三階段整段是「批次分析後自動串跑、零控制項」**（調查組原寫「可達的只有 AI 按鈕 572」為誤）。選股網（`app.py`）已在 v19.111 移除 picker。
 16. **「預篩『顯示全市場』→ `tab_stock_picker.py:187`」**位置正確，但屬選股網的 `render_prescreen_panel`；§3 沒列同面板的**涵蓋率警示**（`describe_snapshot_coverage`，重驗 @15cd8fff 位於該面板「顯示全市場」checkbox 之前）與**逐檔數值表**（INFERENCE：逐檔數值表的有無本輪未再逐行比對）。
 17. **「板塊資金潮汐：已接？（未驗）」→ 已驗（複驗確認）**：`page_find.py::load_sector_flow`／`build_sector_flow_card` 全套對應（泡泡圖、象限圖例、TPEx 提示、缺值列名、資料不足列名、時戳），持股標示改讀 👤 我的（現行 nav：👤 我的 選定的組合／觀察清單）；`strict=True`（壞檔轉紅，舊版轉灰 info）。
 18. **矩陣漏列**：型態目標價在個股頁有整合入口（`pattern_targets_ui.py` 行已列），但**新頁 `STOCK_DETAIL_SECTIONS` 七段清單沒有型態目標價**，所以 `DETAIL_WHERE` 指路覆蓋不到它；同樣漏列：個股↔總經聯動 banner、個股↔持倉聯動 banner、集保大戶雷達、新聞、統一判決、一眼判讀、策略 1 結論／財報趨勢分數、D2 基本面先行、統一 TOC（§3 只列 widget，沒列非 widget 區塊）；選股網 AI 總結（S11）與 expander 內 📊 對帳說明；舊 ETF 單檔的同儕排名／近 5 年走勢／成分股明細／PROXY 缺席警示（複驗補）。
@@ -1652,7 +1652,7 @@ Dead-end：是＝新 UI 叫使用者去一個新版模式下去不了的地方�
 
 1. 卡名「AI 戰情總結（唯一推播出口）」無任何推播動作（真推播是 cron）；舊鈕「讓 AI 潤成推播文字」也不推送。
 2. `LEAF_SETUP_TITLE`「組合設定（＝組合管理＋Sheet 綁定）」在唯讀後會被誤讀（`BACKLOG` `ME-LEAF-SETUP-TITLE` 已登）。
-3. 葡萄串卡寫「現行入口：既有的 🏦 ETF 分頁」：新版模式看不到，且實際不在 🏦 ETF 頁籤（唯一掛載是戰情室 expander 5️⃣；重驗 @15cd8fff：`render_grape_ladder` 全 repo 僅 `etf_tab_dividend_station.py` 一處呼叫）；v2 卡面短句不含此錯誤指路，**同一張卡在兩種卡面說法不一致**，使用者預設看到哪版（複驗：無法確認）。
+3. 葡萄串卡寫「現行入口：既有的 🏦 ETF 分頁」：新版模式看不到，且實際不在 🏦 ETF 頁籤（唯一掛載是戰情室 expander 5️⃣；重驗 @15cd8fff：`render_grape_ladder` 全 repo 僅 `etf_tab_dividend_station.py` 一處呼叫（靜態 grep，未排除動態引用））；v2 卡面短句不含此錯誤指路，**同一張卡在兩種卡面說法不一致**，使用者預設看到哪版（複驗：無法確認）。
 4. 登入逾時指路「請重新整理頁面以自動恢復登入」（`LOGIN_EXPIRED_WHERE`）與 NAV-PERSIST 衝突：重新整理會使選定組合／觀察清單消失、側欄回到「不使用」（`page_me.KNOWN_LIMITS`）⇒ 照指路做後 💼 落到「還沒選定」灰卡。[F：兩段文字；I：實機是否必然發生，未驗]
 5. `ME-OLD-TAB-POINTERS`、`ME-HOLD-CARDFACE-PHRASE`、`ME-HOLD-COUNT-DIVERGED`、`ME-UI-STRINGS-REVIEW` 等 BACKLOG 既有列與上述現象相關，本批不動。
 
