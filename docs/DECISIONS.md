@@ -387,7 +387,8 @@ UI change 與 investment-rule change 必須是不同類型的變更與不同 Gat
   - **DEC-081**（互動控制完整性）／**DEC-082**（先草稿後施工 Stage A～D）／**DEC-083**（舊 UI Removal Gate 等）：**同向、不放寬**。第 6 點的 Old→New Interaction Coverage 與 DEC-081 的互動覆蓋、DEC-083 E 段的刪除閘門一致；第 2 點「重大 IA／頁面責任變更屬客戶 Decision Gate」與 DEC-082 流程相容。
   - **DEC-084**（Model×Effort）：**正交**，本條不涉及模型／Effort 規則。
   - **PROJECT_RULES 第 6 節（Safe Checkpoint）／第 13 節（Investment Domain Constitution）**：第 13 節為索引、不重新定義；第 8 點 Missing 語意、第 4 點規則模組化與其既有條目**同向**，衝突時取較嚴者。
-  - ⚠️ 本條**不授權施工**：不開 P2、不刪舊 UI、不改 nav、不開任何 implementation；新 UI Stage B/C/D 仍須客戶 Gate（DEC-082）。
+  - ⚠️ 本條**不授權施工**：不開 P2、不刪舊 UI、不改 nav、不開任何 implementation；~~新 UI Stage B/C/D 仍須客戶 Gate（DEC-082）。~~
+  - 📌 **更正註記（append-only；2026-10-26 有意識的更正，不是漏刪；決策者＝客戶，依客戶 2026-10-26 裁示；本註記為撰寫組／AI 判讀的更正，不是客戶原文，上方「來源」逐字區塊一字未動，也不是新 DEC）**：上方被劃掉的「新 UI Stage B/C/D 仍須客戶 Gate（DEC-082）」是 AI 誤讀 DEC-082。正確語意：**Stage A＝唯讀盤點；Stage B＝可產出 wireframe／IA／互動草稿與方案（不須先過客戶 Gate）；Stage C＝正式客戶 Decision Gate（草稿完成後停手等裁示）；Stage D＝只有 Stage C 客戶核准後才可施工**。本條「不授權施工」的其餘部分（不開 P2、不刪舊 UI、不改 nav、不開 implementation）不變。
   - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：上述關係判讀由單一撰寫組產出，**沒有第二組驗過**。
 
 ### DEC-086｜Quota-safe Resume Checkpoint／中斷續接規則（客戶 2026-10-26）
