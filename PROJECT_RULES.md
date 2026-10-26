@@ -588,6 +588,9 @@ HANDOFF 維持一個極短 Resume Checkpoint，至少含 15 欄：
 
 要求：只記目前狀態；不寫長篇流水帳；不複製完整 BACKLOG／DECISIONS；不把 inference 寫成 FACT；不把未完成寫成完成；必須讓完全沒有聊天 context 的 Claude 直接理解下一步。
 
+- **（撰寫組註記／讀法，非客戶原文）過渡條款**：Resume Checkpoint 尚未落地於 `docs/HANDOFF.md` 前，以 HANDOFF 第 0 節現行短版為唯一接手點；缺 Checkpoint 不視為違規，但須在下一個 safe checkpoint 補上。
+- **（撰寫組註記／讀法，非客戶原文）欄位同源**：第 13、14 欄（recommended Model／Effort）與 HANDOFF 第 0 節的「下一階段建議模型／Effort」（第 15 節 F 項）為同一份資料，只留 Resume Checkpoint 一處為準，另一處指向它，不得兩處各寫。
+
 ### 20.3 觸發時機
 
 除第 15 節 Handoff Save Check／Context Loss Check 外，在 meaningful safe checkpoint 更新：實作小批完成、commit 完成、PR 建立、稽核／review 完成、PR 合併、Model／Effort 切換前、下一完整工作階段開始前、長工作即將跨 session／conversation。避免為極小操作製造文件 commit；優先跟著目前合法 feature／docs branch 一起保存。
@@ -629,11 +632,14 @@ HANDOFF 維持一個極短 Resume Checkpoint，至少含 15 欄：
 
 Resume Checkpoint 更新屬例行安全治理：不需每次向客戶回報、不逐步回報 checkpoint、不當作 customer gate。**只有**下列情況才回報：GitHub 與 HANDOFF 真正不一致；保存失敗；branch／PR／CI 狀態異常；出現真正 Stop Gate；Model × Effort 需要切換；整批工作完成。
 
+- **（撰寫組註記／讀法，非客戶原文）**：回報情況中「GitHub 與 HANDOFF 不一致／保存失敗／branch・PR・CI 異常」是客戶 DEC-086 原文新增的異常回報，擴充第 3 節「只有三種情況可打斷」；其餘三種（真正 Stop Gate、Model／Effort 需切換、整批完成）即第 3 節既有情況。「異常」不等於第 3 節禁止的進度回報。
+
 ### 20.9 與既有治理的關係
 
 - 強化 DEC-067（Handoff Save Check）、DEC-068（GitHub SSOT／五檔分工／Context Loss Check）、DEC-079（額度／context 預判不足時提前落盤；第 11 節、第 15 節第 7 點）。
 - 不取代 DEC-084（第 18 節）與 Silent Autonomous Cruise；不降低任何 Security／Investment／Data／CI／Audit Gate；不建立第二套 SSOT。
 - 與第 6、11、15、18 節並行；衝突取較嚴者。
+- **（撰寫組註記／讀法，非客戶原文）** 另與第 3 節 Silent Autonomous Cruise 並行、不取代；20.8 為其異常回報之補充。
 
 ### 20.10 驗收標準
 

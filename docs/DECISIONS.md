@@ -676,6 +676,8 @@ Resume Checkpoint 更新屬例行安全治理：
   - **DEC-084**（Model×Effort）：**不取代、不改**；Model／Effort Change Gate 續有效，checkpoint 不得繞過。
   - **Silent Autonomous Cruise**：**不取代**；Resume Checkpoint 更新屬例行安全治理，僅在原文第 8 點所列情況回報。
   - 不降低任何 Security／Investment／Data／CI／Audit Gate；不改 Auto-Ship；不建立第二套 SSOT（不得另建 `SESSION_STATE`／`RESUME_STATE`／第二份 handoff）。若與既有治理文字衝突，**取較嚴者**。
+  - （撰寫組註記，非客戶原文）過渡：Resume Checkpoint 尚未落地於 `docs/HANDOFF.md` 前，以 HANDOFF 第 0 節現行短版為唯一接手點；缺 Checkpoint 不視為違規，但須在下一個 safe checkpoint 補上。
+  - （撰寫組註記，非客戶原文）第 20 節為新增章節，因本規則含 15 欄清單與 8 步流程，無法併入第 11 節一條；DEC-079 要點「不另造重複章節」限於該條自身。
   - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：上述關係判讀由單一撰寫組產出，**沒有第二組驗過**。
 
 ## 2. 產品／UI
