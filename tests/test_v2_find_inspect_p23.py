@@ -140,16 +140,17 @@ def test_e3r3_mutation_restoring_repr_in_log_is_caught(monkeypatch, lbl, fn_name
 # ③ SA-r2
 # ══════════════════════════════════════════════════════════════════
 #: 修前（baseline `1894b50`）字面（渲染後），逐字抄 —— ⛔ 不由現行常數組出來。
+# D2（DEC-090 ⑦，有意識的修改，⛔ 不是漏改）：本檔「修前原句」內的指路句多帶方向名「🩺 資料中心 › 」（句子其餘一字未動）。
 _OLD_VAL_WHERE = (
     "若這一檔近 5 年真的沒有配息，357 這套殖利率法則**本來就不適用它**，重按幾次都一樣 —— "
     "那不是故障，改看健康度與獲利能力那幾格。"
-    "配息資料持續抓不到時，到「📖 憑什麼 › 資料體檢」看 FinMind／yfinance／TWSE 三段備援鏈是否可用")
+    "配息資料持續抓不到時，到「🩺 資料中心 › 📖 憑什麼 › 資料體檢」看 FinMind／yfinance／TWSE 三段備援鏈是否可用")
 _OLD_CHIPS_WHERE = (
     "按「🔍 載入完整分析」重跑一次；三大法人那一腿常態性地比日線晚到（TWSE 盤後 ~14:30、"
     "完整要等 17:00 後），新上市或長期停牌的標的也可能整段沒有法人資料。"
-    "持續如此請到「📖 憑什麼 › 資料體檢」看 TWSE／TPEX／FinMind 的法人備援鏈是否可用")
-_VAL_TAIL = "配息資料持續抓不到時，到「📖 憑什麼 › 資料體檢」看 FinMind／yfinance／TWSE 三段備援鏈是否可用"
-_CHIPS_TAIL = "持續如此請到「📖 憑什麼 › 資料體檢」看 TWSE／TPEX／FinMind 的法人備援鏈是否可用"
+    "持續如此請到「🩺 資料中心 › 📖 憑什麼 › 資料體檢」看 TWSE／TPEX／FinMind 的法人備援鏈是否可用")
+_VAL_TAIL = "配息資料持續抓不到時，到「🩺 資料中心 › 📖 憑什麼 › 資料體檢」看 FinMind／yfinance／TWSE 三段備援鏈是否可用"
+_CHIPS_TAIL = "持續如此請到「🩺 資料中心 › 📖 憑什麼 › 資料體檢」看 TWSE／TPEX／FinMind 的法人備援鏈是否可用"
 
 
 def _monitored_fetchers() -> set[str]:

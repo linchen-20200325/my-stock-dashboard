@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+from tests._d2_nav_compat import strip_direction as _d2_strip  # D2（DEC-090 ⑦）：golden 雜湊前還原方向前綴
 import importlib.util
 import pathlib
 import sys
@@ -412,7 +413,7 @@ def _other_card_fingerprints(P) -> list[tuple[str, str]]:
         _k = repr((card, tuple(facts), sig))
         if _k not in seen:
             seen[_k] = P.v2_card_html(card, facts, sig)
-        out.append((card.key, hashlib.sha256((_k + seen[_k]).encode()).hexdigest()))
+        out.append((card.key, hashlib.sha256(_d2_strip(_k + seen[_k]).encode()).hexdigest()))
     return out
 
 

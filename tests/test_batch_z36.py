@@ -205,7 +205,8 @@ def _h(x) -> str:
     # 📌 批 Z62（有意識的變更，⛔ 不是漏改）：mkt_info 新增 `index_as_of`（schema-additive）——
     #   golden 是修前整份 dict 的雜湊，比對前拿掉這個鍵（其餘逐字比對不變；golden 值不改）。
     from tests.test_batch_z62 import z62_strip_new_keys
-    return hashlib.sha256(repr(z62_strip_new_keys(x)).encode('utf-8')).hexdigest()
+    from tests._d2_nav_compat import strip_direction   # D2（DEC-090 ⑦）：指路句多帶方向名 ⇒ 雜湊前還原前綴，golden 不改
+    return hashlib.sha256(strip_direction(repr(z62_strip_new_keys(x))).encode('utf-8')).hexdigest()
 
 
 @pytest.mark.parametrize('rel', sorted(Z36_REVERT_PAIRS))

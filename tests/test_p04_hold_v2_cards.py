@@ -617,7 +617,8 @@ def test_qa6_existing_unevaluated_excerpt_unchanged():
     for built in (P.build_macro_stage_card(P.MacroReadout(requested=True, loaded=False, regime="bull")),):
         short, _f = P.v2_short_rows(built[0])
         assert short[1][1] == "本站不以「中性」代替未評估：多空是一個結論，缺值不是"
-        assert short[2][1] == "到「🚦 今天」更新總經之後，回到本頁" + P._V2_PRESS_RUN
+        # D2（DEC-090 ⑦）：指路句多帶方向名；摘錄仍是同一句（~~"到「🚦 今天」更新總經之後…"~~）。
+        assert short[2][1] == "到「📊 大盤 › 🚦 今天」更新總經之後，回到本頁" + P._V2_PRESS_RUN
     short, _f = P.v2_short_rows(P.build_position_cap_card(P.AllocationReadout(
         requested=True, is_loaded=False, range_text="--"))[0])
     assert short[1][1] == "填一個看起來合理的區間，等於替你做了一個沒有依據的決定"

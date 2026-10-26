@@ -465,7 +465,7 @@ class TestNavigation:
     def test_qa_section_label_matches_page_why(self):
         from src.ui.views import page_why
         assert ia_nav.SECTION_LABELS[ia_nav.SECTION_WHY_QA] == page_why.LEAF_QA_TITLE
-        assert ia_nav.where_to_find(ia_nav.SECTION_WHY_QA) == "「📖 憑什麼 › AI 問答」"
+        assert ia_nav.where_to_find(ia_nav.SECTION_WHY_QA) == "「🩺 資料中心 › 📖 憑什麼 › AI 問答」"   # D2（DEC-090 ⑦）：指路句多帶方向名
 
     def test_data_center_pointer_uses_ssot(self):
         assert "ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)" in _SRC

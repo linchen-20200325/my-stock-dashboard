@@ -706,7 +706,7 @@ class TestMutations:
 #: 修前那一整句（`build_screen_result_card` 裡的 `_aborted_where`）—— **逐字**釘住：
 #: 上提成 `SCREEN_ABORTED_WHERE` 之後，它對原本那三種中止必須一字未變。
 _OLD_ABORTED_WHERE = ("本站不以殘缺資料湊出名單。若是 FinMind 額度用罄，額度每日 00:00 重置；"
-                      "其餘請到「📖 憑什麼 › 資料體檢」看 MOPS／Goodinfo 備援鏈是否可用")
+                      "其餘請到「🩺 資料中心 › 📖 憑什麼 › 資料體檢」看 MOPS／Goodinfo 備援鏈是否可用")
 _OLD_ABORTED_FACE = "FinMind 額度每日 00:00 重置；其餘看資料體檢"
 #: B9 ⑩（2026-09-26）起的現行句：修前那一整句**只刪**句尾「；其餘請到…資料體檢…看 MOPS／Goodinfo
 #: 備援鏈是否可用」（對缺貨／排名例外／存活池讀取例外三張卡都不成立，見 `SCREEN_ABORTED_WHERE`）。
