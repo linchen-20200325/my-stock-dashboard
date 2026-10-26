@@ -678,3 +678,11 @@
 - 規則落點 `PROJECT_RULES.md` 第 19 節；逐字原文與關係見 `docs/DECISIONS.md` DEC-085。
 - 不新增功能需求、不改投資公式／門檻／權重／Risk Cap、不改資料來源、**不授權任何 implementation**；與 DEC-019／020／081／082／083 同向、不放寬。
 - ⚠️ 單一撰寫組產出，無第二組驗過。
+
+## 40. Quota-safe Resume Checkpoint（DEC-086，客戶 2026-10-26；append-only；Approved）
+
+- 規則：額度／對話／連線／session／context 中斷後，新 session 只靠 GitHub 即可接續；`docs/HANDOFF.md` 為熱狀態，維持極短 Resume Checkpoint（15 欄），不建立 `SESSION_STATE`／`RESUME_STATE`／第二份 handoff。
+- `docs/PROJECT_STATE.md`（DEC-068）必須保留；GitHub 操作事實優先於 HANDOFF／聊天記憶；80%／90% 額度門檻是操作門檻、不是產品邏輯。
+- 規則落點 `PROJECT_RULES.md` 第 20 節；逐字原文與關係見 `docs/DECISIONS.md` DEC-086。
+- 強化 DEC-067／068／079；不取代 DEC-084 與 Silent Autonomous Cruise；不降低任何 Gate；不改產品 code／投資語意。
+- ⚠️ 單一撰寫組產出，無第二組驗過。
