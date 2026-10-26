@@ -178,6 +178,30 @@ High
   - **DEC-067／DEC-068**（Handoff Save Check、Context Loss Check）：**擴充**。依客戶原文「納入 Context Loss Check／交接規則」，`PROJECT_RULES.md` 第 15 節新增：新對話啟動與每個下一完整階段前須執行第 9 節 Gate，且 `docs/HANDOFF.md` 須記錄下一階段建議模型／Effort（落點與措辭為撰寫組依客戶原文所寫）。
   - ⚠️ Gate 不改變派工、獨立稽核、揭露義務（`CLAUDE.md` §-2）；Model／Effort 切換本身**不是**產品 Decision Gate（DEC-014 續有效）。
 
+### DEC-084｜Minimum Sufficient Model × Effort 可直接執行規則＋雙向停手 Gate（客戶 2026-10-25）
+> 2026-10-25 補登（ID 取下一個未用號；落盤前實測 `grep -n "DEC-084" docs/DECISIONS.md` 0 命中、最大為 DEC-083）。**本條為補登紀錄，不新增治理規則**：規則本文以 `PROJECT_RULES.md` 第 18 節與 `docs/governance/MODEL_EFFORT_POLICY_2026-10-25.md` 第 1 節為準，PR #928 合併於 main `361c7890`。
+- **內容**（現行規則摘要，忠實記錄 main 已生效之裁示）：
+  - 每個完整工作階段開始前，依 Minimum Sufficient Model × Effort 判斷；**Model 與 Effort 分開判斷**，不得因模型較強就拉高 Effort。
+  - **Haiku**：GitHub 狀態、讀規則與 SSOT、治理／文件機械同步、改字、commit／PR 收尾等機械性低風險工作；**預設 Haiku + Low**。
+  - **Sonnet**：一般 UI／UX、一般 coding、單模組 bug、tests、一般 wiring；**OAuth／Google Sheet／一般跨模組工作先以 Sonnet + Medium 評估**，不得因關鍵字（OAuth、Sheet、API、跨模組、architecture）直接升 Opus。
+  - **Opus**：只用於真正高風險推理，如資安決策（scope／callback／credential／token）、新資料契約、多模組重大架構取捨、高風險 migration、投資核心語意、Risk Cap、PIT／look-ahead、不可逆操作；可逆且範圍受控者 Medium，影響重大者 High。
+  - **Fable**：原則不作日常模型，只有 Opus 明顯不足的極端複雜工作才考慮；不得作為一般開發、OAuth、文件、GitHub、UI 或一般架構工作的預設。
+  - **模型版本不得寫死**：治理文件只寫家族名，以客戶當下介面實際可選的最新對應版本為準。
+  - **Effort** 一律採最低足夠值（Low → Medium → High 逐級，且需要時才往上）。
+  - **雙向停手（Change Gate）**：只要任一建議配置（Model 或 Effort）與目前不同，無論升級或降級，都必須在 Safe Checkpoint 停手，告知客戶建議配置與原因，**等客戶手動切換並回覆「改好了」後才可繼續**；不得自行假設已切換。
+  - **不得為省 token 把同一完整 Batch 人為切碎**；CI 等待、QA／audit 等待、commit、push、開 PR 不算新的完整工作階段；只有工作性質改變（如文件同步變實作、一般 wiring 變資安決策、局部 bug 變跨模組架構、一般資料處理變資料契約或投資核心語意）或原模型已證實不足時才重判。
+  - **Silent Autonomous Cruise 續有效**；Model／Effort Change Gate 是其正式例外。
+  - **正確性是底線**：省 token 不得造成錯誤投資語意、錯誤資料契約、資安風險、Missing 被當成 0／False／safe，或未驗證資訊被當成已確認。
+- **範圍**：治理｜**日期**：2026-10-25｜**決策者**：客戶｜**狀態**：生效（`PROJECT_RULES.md` 第 18 節＋政策文件第 1 節已在 main `361c7890`；PR #928 squash 合併，main CI success）
+- **來源**：客戶 2026-10-25 最新正式裁示（本 session；Model × Effort 治理 PR #928；客戶確認「維持模型家族名、不寫死版本號」並要求依 Rule 1～12 收斂）。
+- **與其他 DEC 的關係**（append-only；舊 DEC 條文一字不改）：
+  - **DEC-073**（Minimum Sufficient Model／Effort Gate）：**部分取代**。DEC-073 中「反過來，如果現有能力高於工作所需，不需要為了形式要求客戶降級」這一方向，由本條收斂為「**只要建議配置不同，升級或降級都必須停手**」。DEC-073 「不足時強制停手、每階段必判、不得假設已切換」等其餘規則**續有效**。`PROJECT_RULES.md` 第 18.4 節已記載此取代關係。
+  - **DEC-059／DEC-061**（雙向主動提醒）：**加嚴**為「雙向停手＋等待客戶改好」。
+  - **DEC-014**（Model／Mode／Effort 自主管理）：**續有效**。客戶回覆「改好了」後直接繼續，不重新摘要、不重問、不重做。
+  - **DEC-007／Silent Autonomous Cruise**：**續有效**；Model／Effort 切換通知為正式例外。
+  - **PROJECT_RULES.md 第 9.1 Effort 分級表、第 17 節 Minimum Sufficient Effort／Test Scope**：**不變**；本條只改「何時停、誰切換、切換後何時能繼續」。
+  - ⚠️ 本條不改變派工、獨立稽核、揭露義務（`CLAUDE.md` §-2），不降低高風險工作（Risk Cap、投資語意、PIT、資料有效性）的 QA 要求。
+
 ## 2. 產品／UI
 
 ### DEC-017｜IA v2 五頁線框為台股前端實作依據
