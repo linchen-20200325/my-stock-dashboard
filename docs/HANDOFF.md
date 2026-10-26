@@ -10,23 +10,23 @@
 
 ### 📌 Resume Checkpoint（DEC-086）
 
-| 欄位 | 內容（2026-10-26T13:18:33Z；DEC-089 Stage C 核准落盤後 checkpoint 更新，執行組自檢，未獨立重驗） |
+| 欄位 | ~~內容（2026-10-26T13:18:33Z；DEC-089 Stage C 核准落盤後 checkpoint 更新，執行組自檢，未獨立重驗）~~ 內容（2026-10-26T14:09:33Z；#940 合併後、D0 實證報告 docs-only PR 撰寫中 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 |---|---|
-| latest verified main SHA | `334fcbe3`（`git fetch origin main` 後 `git rev-parse --short origin/main` 實查，**以 GitHub 實查為準**） |
-| current working branch | `docs/dec-089-stage-c-approval` |
-| current PR | 待開 Draft PR（docs-only） |
-| current task／batch | 落盤 DEC-089（New UI Stage C 核准）與 Stage D 批次規劃（`docs/BACKLOG.md` `NEWUI-STAGE-D-*`，docs-only） |
-| completed in this batch | DEC-089 落盤（DECISIONS／PROJECT_STATE §44／BACKLOG／HANDOFF／Stage B 草稿檔頭狀態）；前批：Stage B 設計草稿＋DEC-088（#938 已合併） |
-| exact current stopping point | Stage C 已核准並落盤；**waiting_for_customer＝false**；尚未開始 Stage D（D0 實證檢查未開工）；PR 待開 |
-| next single action | PR CI 綠燈→Auto-Ship→開新對話（依 DEC-088，context 已長）→新 session 先做 GitHub Verification Gate→從 D0（`NEWUI-STAGE-D0-EVIDENCE`）實證檢查開始（Model×Effort Check：Sonnet 5.5／Medium 為建議起點，依 DEC-084 重判） |
-| tests／CI 已完成 | #938 Fast checks／Slow tests 綠燈 |
-| tests／CI 尚未完成 | 本 docs-only PR 的 CI（PR 尚未開） |
+| latest verified main SHA | ~~`334fcbe3`~~ `96206a96`（#940 已合併；`git rev-parse --short origin/main` 於 2026-10-26 實查，**以 GitHub 實查為準**；cron 可能再推進 tip）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| current working branch | ~~`docs/dec-089-stage-c-approval`~~ `ccr-fa5b6ded-9rhvoj`（已對齊 origin/main `96206a96`）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| current PR | ~~待開 Draft PR（docs-only）~~ Open PR 0（2026-10-26 實查）；D0 實證報告 docs-only PR 待開（Draft）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| current task／batch | ~~落盤 DEC-089（New UI Stage C 核准）與 Stage D 批次規劃（`docs/BACKLOG.md` `NEWUI-STAGE-D-*`，docs-only）~~ `NEWUI-STAGE-D0-EVIDENCE`：D0 實證報告 docs-only PR（`docs/vnext/NEWUI_STAGE_D0_EVIDENCE_2026-10-26.md`；同步 BACKLOG／HANDOFF／PROJECT_STATE；⛔ 0 code／0 測試）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| completed in this batch | ~~DEC-089 落盤（DECISIONS／PROJECT_STATE §44／BACKLOG／HANDOFF／Stage B 草稿檔頭狀態）；前批：Stage B 設計草稿＋DEC-088（#938 已合併）~~ DEC-089 落盤已合併為 #940（`96206a96`）；本批：D0 實證報告已撰寫（四組唯讀 agent 產出＋總管抽驗，**尚未經獨立 QA**）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| exact current stopping point | ~~Stage C 已核准並落盤；**waiting_for_customer＝false**；尚未開始 Stage D（D0 實證檢查未開工）；PR 待開~~ Stage C 已核准並合併；**waiting_for_customer＝false**；D0 實證報告已撰寫、待獨立 QA 與開 PR；Stage D 其餘批未開工（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| next single action | ~~PR CI 綠燈→Auto-Ship→開新對話（依 DEC-088，context 已長）→新 session 先做 GitHub Verification Gate→從 D0（`NEWUI-STAGE-D0-EVIDENCE`）實證檢查開始（Model×Effort Check：Sonnet 5.5／Medium 為建議起點，依 DEC-084 重判）~~ 獨立 QA 複驗 D0 報告→開 Draft PR→CI 綠燈→Auto-Ship；之後進 D1（導覽殼線框，**需客戶核准線框後**才可寫殼 UI code）；D3／D4／D5 可獨立於殼，但各自須先做 DEC-084 Model×Effort Check 並依報告第 9 節處理前置條件（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| tests／CI 已完成 | #938 Fast checks／Slow tests 綠燈；#940 已合併；D0 期間沙箱實跑 `test_p04_hold_view`＋`test_p04_hold_v2_cards`＝1435 passed、`test_ia_v2_sidebar_nav`＋`test_c3_layering_guard`＝41 passed（均未改 code）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| tests／CI 尚未完成 | ~~本 docs-only PR 的 CI（PR 尚未開）~~ D0 docs-only PR 的 CI（PR 尚未開）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 | unresolved true Stop Gates | 無現行 Stop Gate（Stage C 已核准）；下一個客戶 Gate＝D1 導覽殼線框（G1＝C）完成後需客戶核准線框；HI-1～HI-6 另走 High Gate；輕量確認 Q1～Q4 未回覆＝維持現況／暫行 |
-| uncommitted／unpushed work | 無 |
-| relevant evidence location | `docs/DECISIONS.md` DEC-089（逐字裁示）、`docs/BACKLOG.md` `NEWUI-STAGE-D-*`、`docs/vnext/NEWUI_STAGE_B_DRAFT_2026-10-26.md`（B9.4／B9.8）、PR #938 |
+| uncommitted／unpushed work | ~~無~~ 本批 docs 變更尚未 commit／push（待獨立 QA 後由總管處理）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
+| relevant evidence location | `docs/DECISIONS.md` DEC-089（逐字裁示）、`docs/BACKLOG.md` `NEWUI-STAGE-D-*`、`docs/vnext/NEWUI_STAGE_B_DRAFT_2026-10-26.md`（B9.4／B9.8）、PR #938／#940；**新增 `docs/vnext/NEWUI_STAGE_D0_EVIDENCE_2026-10-26.md`（D0 實證報告，含 Stage B 草稿更正清單 E1～E10）** |
 | recommended Model | Sonnet 5.5 |
 | recommended Effort | Medium |
-| last checkpoint timestamp | 2026-10-26T13:18:33Z |
+| last checkpoint timestamp | ~~2026-10-26T13:18:33Z~~ 2026-10-26T14:09:33Z（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
 
 ~~🟡／🔴 停手時另須同步填寫（DEC-087）：stop reason＝Stage C 正式客戶 Gate；waiting_for_customer＝true；exact customer action＝回覆 G1～G7 選項字母＋線框套件「核准／退回／指定修改處」＋結構性確認表「全同意」或「推翻 D-xx」（Q1～Q4 可選）；exact resume condition＝客戶回覆；未回覆＝維持現況／暫行，不視為核准。~~ 已由 DEC-089 取代：Stage C 已核准，waiting_for_customer＝false；Stage D 的 D1 導覽殼線框完成後才再需客戶核准（stop reason 屆時為「線框核准 Gate」）（2026-10-26 有意識的更新，不是漏刪，決策者 客戶（DEC-089 Stage C 核准））
 
