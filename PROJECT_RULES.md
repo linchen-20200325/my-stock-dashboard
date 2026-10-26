@@ -491,3 +491,64 @@ Effort：Low / Medium / High
 - **恢復並加嚴 DEC-059／DEC-061 的雙向提醒方向**：不只是「提醒可以降」，而是**升級／降級都必須在安全停點停手，等客戶完成切換後再繼續**。
 - **第 9.1 Effort 分級表與第 17 節 Minimum Sufficient Effort／Test Scope 不變**；本節只改「何時停、誰切換、切換後何時能繼續」。
 - **Silent Autonomous Cruise 正式例外**：本節的切換通知可以主動打斷；除這個安全停點通知外，其他中間狀態仍維持靜默。
+
+## 第 19 節｜Long-lived UI × Sustainable Logic（客戶 2026-10-26，DEC-085）
+
+> **永久治理規則；與第 3、6、13、17、18 節並行，若與舊文字衝突以較嚴者為準；舊文字不改。** 客戶逐字原文見 `docs/DECISIONS.md` DEC-085；本節為忠實濃縮，與原文有出入時以原文為準。**本節不新增功能需求、不改任何投資公式／門檻／權重／Risk Cap、不改資料來源、不授權任何 implementation。**
+
+### 19.1 核心原則
+
+- 新 UI 目標是「可長期使用、持續演進、不需反覆推倒重做」。
+- UI 不得直接綁死單一 API、資料供應商或單一抓取方式；provider／API／MCP／資料來源更換時，優先由資料／adapter／service 層吸收，不得因此迫使主要頁面資訊架構重新設計。
+- UI 依賴穩定的 domain contract，不依賴 provider-specific schema。
+
+### 19.2 頁面責任方向
+
+客戶列的責任方向（**不等於現行程式 nav 命名**；命名與導航落地屬後續 IA Decision Gate，本節不決定對映、不改 nav）：
+
+- 📊 大盤：市場狀態、大盤、台股趨勢、國際趨勢與必要風險脈絡。
+- 🎯 標的：尋找、篩選、探索值得進一步研究的標的。
+- ⚡ 行動：把既有資料與規則轉成「目前需要注意／處理什麼」。
+- 🛡️ 持股：持股、組合、觀察清單、風險與持續追蹤。
+- 👤 我的：登入、Sheet 綁定、個人設定、目前使用中的組合／觀察清單。
+- 🩺 資料中心：資料來源、資料健康、freshness、缺值與可用性。
+
+可以優化畫面與元件，但不得因小功能增加就反覆改變主要頁面責任與導航定位。重大 IA／頁面責任變更仍屬客戶 Decision Gate。
+
+### 19.3 SSOT 清單
+
+同一份 domain state 或規則不得在不同頁面各自維護第二套實作。下列必須有清楚的 Single Source of Truth：Sheet binding、portfolio、watchlist、authentication、market state、investment rule output、data-health state。UI 只消費既有狀態，不各頁自行重算或偷偷建立另一套來源。
+
+### 19.4 規則模組化
+
+下列概念必須保持可獨立理解、測試與版本化：市場位階、指標危險度、Risk Cap、台股趨勢、國際趨勢、估值、個股／持股判讀，及其他未來新增投資規則。不得只為 UI 簡化把不同語意硬合併成單一不可追溯分數；需要 aggregate view 時，底層 constituent signals 與 provenance 仍必須保存。
+
+### 19.5 AI 可替換
+
+AI 是分析／解釋層，不得成為資料真相或核心 deterministic rule 的唯一來源。更換 AI model、provider、prompt architecture、inference implementation，不應迫使資料層、核心規則或 UI 資訊架構重做。AI 只能讀取既有、可追溯資料與規則輸出。
+
+### 19.6 能力守恆與 Old→New Coverage
+
+任何新 UI 改版必須先做 Old UI → New UI Interaction Coverage。舊 UI 是功能、邏輯、互動、資料來源的參考，**不是視覺模板**。新版可合併、重新編排、收進次層、簡化前台，但不得無意識刪除既有重要能力。每個舊功能須標示：已覆蓋／部分覆蓋／未覆蓋／明確不再需要或不應搬入。未完成替代前，不得因新 UI 上線就直接刪舊 UI（與 DEC-019／020／081／083 同向，不放寬）。
+
+### 19.7 Data Contract 優先
+
+優先建立穩定 domain schema／contract（例如 UI 依賴「價格、日期、freshness、source、status」），而非依賴「Yahoo 回傳第幾欄」「MoneyDJ HTML selector」「某 API 特定 JSON 路徑」。provider-specific parsing 限制在 adapter／ingestion layer。
+
+### 19.8 Missing 語意
+
+長期演進不得破壞既有資料語意：missing ≠ 0；missing ≠ 中性；missing ≠ 正常；missing ≠ HOLD；proxy／estimated ≠ real；stale ≠ current；error ≠ missing。UI 必須能表達這些不同狀態，不得只靠顏色。
+
+### 19.9 Presentation／Decision Logic 分離
+
+UI layout、component、copy 調整不得偷偷改變 threshold、weights、eligibility、investment semantics、Risk Cap、trend definition、valuation definition。UI change 與 investment-rule change 是不同類型的變更、不同 Gate。
+
+### 19.10 可演進
+
+「長久 UI」不是禁止改版：允許更好的元件、responsive layout、accessibility、新資料呈現方式與新功能，但遵循「stable responsibilities + replaceable internals」。重大重構必須能說明為什麼現有 contract 已不足，不得因開發方便就推倒重做。
+
+### 19.11 與既有規則的關係；不授權施工
+
+- 與第 3、6、13、17、18 節、DEC-017／018／019／020／022／081／082／083 並行或同向；衝突時以較嚴者為準，舊文字不改。
+- DEC-084（Model×Effort，第 18 節）正交。
+- ⛔ 本節不授權任何施工：不開 P2、不刪舊 UI、不改 nav、不改投資規則；新 UI 之 Stage B／C／D 仍依 DEC-082 須客戶 Gate。
