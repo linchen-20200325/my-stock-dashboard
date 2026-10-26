@@ -299,7 +299,7 @@
 | 項目 | 現況 |
 |---|---|
 | 規則落點 | `PROJECT_RULES.md` 第 19 節；原文與關係 `docs/DECISIONS.md` DEC-085；摘要 `docs/PROJECT_STATE.md` §39 |
-| 對進行中工作的影響 | 新 UI Stage A 盤點仍待收尾並開 PR；Stage B／C／D 仍須客戶 Gate（DEC-082）；⛔ 不開 P2、⛔ 不刪舊 UI、⛔ 不改 nav |
+| 對進行中工作的影響 | 本條不改變進行中工作的 Gate：Stage B／C／D 仍須客戶 Gate（DEC-082）；⛔ 不開 P2、⛔ 不刪舊 UI、⛔ 不改 nav（本段不記載任何 Stage 的進度） |
 | 沿用 | 上一段「待客戶」「Next Safe Point」「禁止事項」照舊有效 |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）

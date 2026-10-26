@@ -382,8 +382,8 @@ UI change 與 investment-rule change 必須是不同類型的變更與不同 Gat
 ```
 
 - **與其他 DEC 的關係**（append-only；舊 DEC 條文一字不改；撰寫組讀 `docs/DECISIONS.md`、`shared/ia_nav.py`、`src/ui/views/` 後的判讀，單組）：
-  - **DEC-017／DEC-018／DEC-019／DEC-020**（IA v2、雙軌入口、新 UI 唯一主線、舊 UI 刪除前置）：**同向、不取代**。第 6 點「未完成替代前不得刪舊 UI」與 DEC-019／020 的刪除前置一致；本條不放寬任何一項。
-  - **DEC-022**（合規母法：不產生直接買賣建議）：**續有效、不變**。第 9 點只加「UI 調整不得偷改投資語意」，不碰合規護欄。
+  - **DEC-017／DEC-018／DEC-019／DEC-020**（IA v2、雙軌入口、新 UI 唯一主線、舊 UI 刪除前置）：**同向、不取代**。第 6 點「未完成替代前不得刪舊 UI」與 DEC-019／020 的刪除前置一致；本條不放寬任何一項。另 DEC-017 為「五頁」，本條列六頁責任方向；五頁→六頁責任方向的落差由後續 IA Decision Gate 處理，本條不決定。
+  - **DEC-022**（合規母法）：其狀態欄為「部分取代 → DEC-054」（全面禁止方向性 Action 部分已由 DEC-054 取代；其餘護欄的承接見 DEC-054「DEC-022 護欄承接表」）。**護欄承接依 DEC-054，本條不變**；第 9 點只加「UI 調整不得偷改投資語意」，不碰合規護欄。
   - **DEC-081**（互動控制完整性）／**DEC-082**（先草稿後施工 Stage A～D）／**DEC-083**（舊 UI Removal Gate 等）：**同向、不放寬**。第 6 點的 Old→New Interaction Coverage 與 DEC-081 的互動覆蓋、DEC-083 E 段的刪除閘門一致；第 2 點「重大 IA／頁面責任變更屬客戶 Decision Gate」與 DEC-082 流程相容。
   - **DEC-084**（Model×Effort）：**正交**，本條不涉及模型／Effort 規則。
   - **PROJECT_RULES 第 6 節（Safe Checkpoint）／第 13 節（Investment Domain Constitution）**：第 13 節為索引、不重新定義；第 8 點 Missing 語意、第 4 點規則模組化與其既有條目**同向**，衝突時取較嚴者。
