@@ -22,11 +22,13 @@
 | tests／CI 已完成 | 無（docs-only；本批未跑 CI） |
 | tests／CI 尚未完成 | PR CI、獨立複驗、Auto-Ship 全未執行 |
 | unresolved true Stop Gates | 無 |
-| uncommitted／unpushed work | commit＋push 後以 git 實查為準（寫入時尚未 commit） |
+| uncommitted／unpushed work | 已 commit `63aef778`（DEC-087 落盤）；push 狀態以 git 實查為準；本批未驗收、未開 PR |
 | relevant evidence location | `docs/DECISIONS.md` DEC-087；`PROJECT_RULES.md` 第 21 節；`docs/PROJECT_STATE.md` 第 41 節；分支 `docs/no-silent-stop-dec-087` |
 | recommended Model | Haiku |
 | recommended Effort | Low |
 | last checkpoint timestamp | 2026-10-26T09:35:53Z |
+
+🟡／🔴 停手時另須同步填寫（DEC-087）：stop reason／waiting_for_customer（true/false）／exact customer action／exact resume condition；本批為 🟢：waiting_for_customer＝false，其餘 N/A。
 
 此為 DEC-086 Resume Checkpoint：**GitHub 操作事實優先於本表；不一致時修正本表**。
 只記目前狀態，不複製 BACKLOG／DECISIONS；本表不取代下方「現行短版」段（DEC-085 段仍是唯一現行短版標記）。

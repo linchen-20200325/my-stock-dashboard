@@ -684,7 +684,7 @@ Resume Checkpoint 更新屬例行安全治理：
 ### DEC-087｜No Silent Stop／禁止無提示停手（客戶 2026-10-26）
 > 2026-10-26 補登（ID 取下一個未用號；落盤前實測 `git grep -n "DEC-087"` 0 命中、最大為 DEC-086）。**本條不改任何產品 code／投資語意；規則落點 `PROJECT_RULES.md` 第 21 節。** 不新增功能需求、不改投資公式／門檻／權重／Risk Cap、不改資料來源、不授權任何 implementation。
 - **背景**：Silent Autonomous Cruise 的「靜默」只代表減少中途碎片回報；客戶要求即使不回報進度，每次真正停手都必須讓客戶一眼看懂「要不要回」與「要回什麼」，禁止在客戶不知道是否需要回覆時停工。
-- **內容**：見下方「來源」逐字原文（首行三種狀態、🟢／🟡／🔴 定義、禁止無提示停手、等待外部系統屬 🟢、Resume Checkpoint 七項）。濃縮可執行版見 `PROJECT_RULES.md` 第 21 節；若濃縮與原文有出入，以原文為準。
+- **內容**：見下方「來源」逐字原文（首行三種狀態、🟢／🟡／🔴 定義、禁止無提示停手、等待外部系統屬 🟢、客戶原文第 1～7 點）。濃縮可執行版見 `PROJECT_RULES.md` 第 21 節；若濃縮與原文有出入，以原文為準。
 - **範圍**：治理（永久規則）｜**日期**：2026-10-26｜**決策者**：客戶｜**狀態**：生效（`PROJECT_RULES.md` 第 21 節；待 PR 合併）
 - **與其他 DEC 的關係**（append-only；舊 DEC 條文一字不改；撰寫組判讀，單組）：
   - **DEC-067／DEC-068／DEC-079／DEC-086**（Handoff／GitHub SSOT／額度落盤／Resume Checkpoint）：**強化**，不取代；Resume Checkpoint 於 🟡／🔴 停手時同步記 waiting_for_customer 等欄（原文第 7 點）。不建立第二套狀態 SSOT。
