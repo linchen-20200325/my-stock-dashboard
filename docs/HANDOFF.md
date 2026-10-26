@@ -337,7 +337,7 @@ DEC-086 規則已於 main，本表已落地。
 | 新分支 `docs/newui-stage-a-v2`（main `15cd8fff` 起） | ~~**Stage A 事實盤點重做中**，Draft PR #932~~ **已完成並合併**（PR #932 squash，main `c6cba930`）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：#932 已合併 c6cba930））。只改 `docs/**`，0 行程式、0 測試變更；盤點採 DEC-085 §19.6 四種 Coverage 狀態，責任名（📊／🎯／⚡／🛡️／👤／🩺）只當盤點範圍標籤，不等於現行 nav 或既有 view |
 | **Next Safe Point（本輪工作安全停點）** | ~~Stage A v2 完成並由總管複驗後，**在進入 Stage B 前停手**。~~ **Stage A v2 已完成（#932 已合併）；本批已停手，等待客戶指派 Stage B**（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：#932 已合併 c6cba930））。⚠️ 這是**本輪工作安全停點／總管流程（非 DEC-082 條文）**；~~Stage B 須先過客戶裁示（DEC-082）~~ 已更正：DEC-082 的正式客戶 Gate 在 **Stage C**（Stage B 草稿完成後停手等裁示）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更正）） |
 | 下一階段 Model／Effort | Stage B 草稿＝Medium＋Sonnet 等級可行；若涉及 IA 責任對映或投資語意，再依 DEC-084 重判（新對話仍須依 `PROJECT_RULES.md` 第 9.0 節重跑 Gate，建議只是參考） |
-| 禁止事項 | ~~⛔ 仍不進 Stage B（本輪）~~（2026-10-26 有意識的更新，不是漏刪：該句僅指當時那一輪；Stage B 草稿已完成，見下方 Stage B 狀態段；決策者＝客戶〔指派 Stage B〕）、⛔ 不做 P2（`ME-P2`）、⛔ 不刪舊 UI、⛔ 不開 Stage D／不改 nav、⛔ 不新增或改定義任何投資語意；待辦見 `docs/BACKLOG.md` `NEWUI-STAGE-A-GAPS`（Stage B 前置 decision-notes，不構成動工授權） |
+| 禁止事項 | ~~⛔ 仍不進 Stage B（本輪）~~（2026-10-26 有意識的更新，不是漏刪：該句僅指當時那一輪；Stage B 草稿已完成，見下方 Stage B 狀態段；決策者＝客戶〔指派 Stage B〕）、⛔ 不做 P2（`ME-P2`）、⛔ 不刪舊 UI、~~⛔ 不開 Stage D~~（2026-10-26 有意識的更新，不是漏刪：Stage C 已核准〔DEC-089〕；Stage D 尚未開始，開始前須先做 D0 實證檢查與 DEC-084 Model×Effort Check；導覽殼須先出線框並經客戶核准；HI-1～HI-6 不在範圍）／⛔ 不改 nav、⛔ 不新增或改定義任何投資語意；待辦見 `docs/BACKLOG.md` `NEWUI-STAGE-A-GAPS`（Stage B 前置 decision-notes，不構成動工授權） |
 | ⚠️ 揭露 | 本段由單一撰寫組產出，**沒有第二組驗過**（`CLAUDE.md` §-2 規則 6）；PR 狀態為撰寫當下已知事實，會過期 |
 
 📌 **2026-10-26 New UI Stage B 草稿狀態**（append-only）；**本段是與上方 DEC-085 段、Stage A v2 段並列的狀態段，不是第二個現行短版標記（DEC-085 段仍是唯一現行短版標記，本段不取代它、不降級它）**；衝突處，DEC-085 治理規則優先：
