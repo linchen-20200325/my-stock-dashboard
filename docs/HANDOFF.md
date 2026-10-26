@@ -10,27 +10,27 @@
 
 ### 📌 Resume Checkpoint（DEC-086）
 
-| 欄位 | 內容（2026-10-26T05:50Z；撰寫組據總管提供事實，未獨立重驗） |
+| 欄位 | 內容（2026-10-26T06:10Z；撰寫組據總管提供事實，未獨立重驗） |
 |---|---|
-| latest verified main SHA | `15cd8fff`（PR #931 DEC-085 已合併；main CI run 40270553655 success，量測 2026-10-26T05:00Z） |
-| current working branch | `docs/newui-stage-a-v2`（head `71bf60de`，已 push）；治理分支 `docs/dec-086-resume-checkpoint`（head `00265c21`） |
-| current PR | #932 Draft（Stage A 事實盤點 v2）；#933 Draft（DEC-086 規則本身） |
-| current task／batch | Stage A v2（只讀事實盤點，docs only）＋DEC-086 治理落盤 |
-| completed in this batch | 矩陣 §12 v2 重做（客戶 5 點修正）、七組分塊重做＋兩組獨立 QA、15 項 QA 修正已套用；DEC-086 已寫並 push、PR #933 已開 |
-| exact current stopping point | #932、#933 皆 Draft；CI 與獨立複驗尚未完成；#933 的獨立 docs QA 進行中 |
-| next single action | 等 #933 獨立複驗與 CI 全綠後依 Auto-Ship 合併 #933；再把 #932 與最新 main 同步（HANDOFF 可能需 merge），完成 Stage A v2 docs QA／獨立複驗後標 ready 並合併；**合併後停手回報，不進 Stage B** |
-| tests／CI 已完成 | #932 矩陣已通過兩組獨立 QA（合規／完整性；code 宣稱抽驗 66 條 62 成立，錯誤已修）；main CI 綠 |
-| tests／CI 尚未完成 | #932、#933 的 GitHub CI；#933 獨立 QA；#932 修正後的最後一輪複驗 |
+| latest verified main SHA | `6cc7379f`（PR #933 DEC-086 已合併，squash；`6cc7379f` 的 main CI 尚未確認）；前一個 main 為 `15cd8fff`（其 CI run 40270553655 success，量測 2026-10-26T05:00Z） |
+| current working branch | `docs/newui-stage-a-v2`（已 merge main `6cc7379f`，無衝突；head 以 GitHub 為準）；治理分支 `docs/dec-086-resume-checkpoint` 已隨 #933 合併 |
+| current PR | #932 Draft（Stage A 事實盤點 v2；head 於 push 後變動，以 GitHub 為準）；#933 已合併（不再是工作中）。DEC-086 規則已在 main：PROJECT_RULES 第 20 節、DEC-086、PROJECT_STATE §40 |
+| current task／batch | Stage A v2（只讀事實盤點，docs only）收尾合併 |
+| completed in this batch | 矩陣 §12 v2 重做（客戶 5 點修正）、七組分塊重做＋兩組獨立 QA、15 項 QA 修正已套用；DEC-086 已寫、PR #933 已合併；#932 已 merge main（無衝突），head 815dadc5 的 CI 全綠；Resume Checkpoint 已落地於本表 |
+| exact current stopping point | #932 待最新 head 的 CI 全綠後標 ready 並依 Auto-Ship 合併；合併後停手回報，不進 Stage B |
+| next single action | #932 CI 綠 → 標 ready → squash merge（expectedHeadSha＝當時 head）→ 驗證 main SHA 與 main CI → 回報；Stage B 須客戶指派後再重判 Model×Effort |
+| tests／CI 已完成 | #932 於 815dadc5 全綠；#933 全綠並已合併；兩組獨立 QA（Stage A 合規／code 抽驗；DEC-086 docs QA） |
+| tests／CI 尚未完成 | #932 最新 head 的 CI；main `6cc7379f` 的 CI |
 | unresolved true Stop Gates | 無（Stage B 前停手為本輪工作安全停點／總管流程，非 DEC-082 條文）。客戶待決事項不屬 Stop Gate：大盤 UI 驗收、SHEET-LOGOUT-SECRETS-DEFAULT、ME-UI-STRINGS-REVIEW、P1 實作選擇覆核、P2 是否指派 |
-| uncommitted／unpushed work | #932、#933 均已 push；本表修改本身在 working tree 尚未 commit（commit 後以 GitHub 為準）；暫存檔在 scratchpad（不入 repo，遺失可由 GitHub 重建） |
-| relevant evidence location | PR #932、#933；矩陣 `docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md` §12；舊候選分支 `docs/newui-stage-a-inventory`（`6666a26c`，未動，勿刪）；客戶 DEC-086 原文見 `docs/DECISIONS.md` DEC-086 |
+| uncommitted／unpushed work | 本次修改 commit 前尚未推送（commit 後以 GitHub 為準）；暫存檔在 scratchpad（不入 repo，遺失可由 GitHub 重建） |
+| relevant evidence location | PR #932、#933（已合併）；矩陣 `docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md` §12；舊候選分支 `docs/newui-stage-a-inventory`（`6666a26c`，未動，勿刪）；客戶 DEC-086 原文見 `docs/DECISIONS.md` DEC-086 |
 | recommended Model | Sonnet（docs QA、合併與同步足夠；Stage B 草稿亦可，涉及 IA 責任對映或投資語意再依 DEC-084 重判） |
 | recommended Effort | Medium |
-| last checkpoint timestamp | 2026-10-26T05:50Z |
+| last checkpoint timestamp | 2026-10-26T06:10Z |
 
 此為 DEC-086 Resume Checkpoint：**GitHub 操作事實優先於本表；不一致時修正本表**。
 只記目前狀態，不複製 BACKLOG／DECISIONS；本表不取代下方「現行短版」段（DEC-085 段仍是唯一現行短版標記）。
-DEC-086 規則本身在 PR #933（未合併前以 GitHub 為準）。
+DEC-086 規則已於 main，本表已落地。
 
 | 項目 | 現況 |
 |---|---|
