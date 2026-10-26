@@ -3,28 +3,32 @@
 > 日期：2026-10-25
 > 性質：`PROJECT_RULES.md` 第 18 節／DEC-084 的規範性補充。
 > 原則：**選擇能可靠完成「下一完整工作階段」的最低足夠模型＋最低足夠投入程度；不得固定預設某一模型或某一投入程度。**
+> 模型版本：**不得在治理規則寫死版本號**；以客戶當下介面實際可選的 Haiku／Sonnet／Opus／Fable 對應最新版本為準。
 
 ## 1. Model × Effort 節省矩陣
 
 | 下一完整工作階段 | 建議模型 | 建議投入程度 |
 |---|---|---|
-| GitHub 狀態確認、讀 HANDOFF、機械性文件同步、改字、簡單 commit | Haiku 5.5 | 低 |
-| 一般文件整理、BACKLOG／DECISIONS 同步、簡單 bug | Haiku 5.5 或 Sonnet 5.5 | 低～中 |
-| 一般 UI、單模組 bug、tests、wiring | Sonnet 5.5 | 中 |
-| Wireframe／UX、跨 2～3 模組且規格清楚 | Sonnet 5.5 | 中 |
-| OAuth／Sheet 架構、跨模組 correctness、較難資料流 | Opus 5.5 | 中 |
-| 投資語意、Risk Cap、PIT／look-ahead、資料契約、重大架構 | Opus 5.5 | 高 |
-| 多方案高度衝突、非常大型 migration、重大紅隊／極難 correctness | Fable 5.1 或 Opus 5.5（依工作特性擇最低足夠者） | 高～超高 |
+| GitHub 狀態確認、讀 PROJECT_RULES／HANDOFF、機械性文件同步、改字、簡單 commit／merge／PR 收尾 | Haiku | 低 |
+| 明確規格的小文件修改、單純 wireframe 落盤、低風險測試調整 | Haiku | 低～中 |
+| 一般 UI、一般 coding、單模組 bug、tests、普通 wiring | Sonnet | 中 |
+| Wireframe／UX、跨 2～3 模組且規格清楚 | Sonnet | 中 |
+| OAuth／Google Sheet 接線、一般跨模組整合、規格清楚的架構判斷 | **先 Sonnet** | 中 |
+| 複雜資安、資料契約、投資核心語意、Risk Cap、PIT／look-ahead、重大架構衝突 | Opus | 中～高 |
+| 極端複雜、多方案高度衝突、非常大型 migration、重大紅隊；且 Opus 明顯不足 | Fable | 高～更高 |
 | Ultracode | **不得預設** | 只有確認該工作確實需要時才建議 |
 
 ### 判斷原則
 
 1. **模型與投入程度是兩個獨立軸**，都要判斷。
-2. 不得固定「Opus 5.5＋Medium／High」作日常預設。
-3. 也不得把「Sonnet 5.5＋中」寫成硬性日常預設；GitHub Gate、文件同步等工作若 Haiku 5.5＋低已可靠足夠，就用更低配置。
-4. 若兩個模型都能可靠完成，優先採用較低能力／較省額度者；但不得為省額度犧牲 correctness。
-5. 客戶介面當下實際可選的模型／投入程度為事實來源。若介面另有「超高／最高／Ultracode」等選項，只在 High 明顯不足、且工作確實需要時才提出；**不得因為選項存在就預設使用**。
-6. Fable 5.1／超高以上只用於真正極難、重大衝突或高風險工作，不得拿來做日常 GitHub／文件／一般 UI。
+2. **Haiku 是機械／低風險工作的優先起點；Sonnet 是一般開發主力；Opus 只用在真正高風險／高推理工作；Fable 原則上不用，除非 Opus 明顯不足。**
+3. 不得固定 Opus 作日常預設，也不得把 Sonnet＋中寫成所有工作的硬性預設；GitHub Gate、文件同步、PR 收尾等若 Haiku＋低已可靠足夠，就採 Haiku＋低。
+4. OAuth／Google Sheet／一般跨模組工作**不得因「跨模組」三字就自動升 Opus**。若規格明確、資料契約未變、沒有高風險資安／不可逆寫入／核心投資語意，先以 Sonnet＋中完成。
+5. 若工作途中證明 Sonnet 推理不足，或進入複雜資安、資料契約、重大架構衝突、投資核心語意，再於最近安全停點依第 2 節停手，請客戶切至 Opus。
+6. 若兩個模型都能可靠完成，優先採用較低能力／較省額度者；但不得為省額度犧牲 correctness。
+7. 客戶介面當下實際可選的模型／投入程度為事實來源。不得因治理文件中的舊版本名稱而要求不存在的版本。
+8. 若介面另有「超高／最高／Ultracode」等投入選項，只在 High 明顯不足、且工作確實需要時才提出；**不得因為選項存在就預設使用**。
+9. Fable／超高以上不得拿來做日常 GitHub／文件／一般 UI／一般 coding。
 
 ## 2. 雙向切換：任何變更都必須停手等待
 
@@ -105,8 +109,8 @@
 
 > 「可以都停下來等我改完再繼續嗎？ 我不想浪費token」
 
-其後客戶提供基金專案的省量配置作參考，並同意股票專案採同一核心策略：
+其後客戶以 Anthropic 官方定價資料再次收斂省量策略，確認：
 
-> Haiku 做機械工作、Sonnet 做日常開發、Opus 做高風險推理、Fable 只做極難任務；Effort 一律採最低足夠值。
+> Haiku 當機械／低風險工作的優先起點；Sonnet 當主要開發模型；OAuth／Google Sheet／一般跨模組先 Sonnet＋中；Opus 只處理真正高風險／高推理工作；Fable 原則上不用，除非 Opus 明顯不足；Effort 一律採最低足夠值。
 
 本檔只把該策略正式化為本 repo 的治理規範；不構成任何產品功能、投資語意或資料層修改授權。
