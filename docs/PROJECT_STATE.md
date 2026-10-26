@@ -694,3 +694,11 @@
 - 規則落點 `PROJECT_RULES.md` 第 21 節；逐字原文與關係見 `docs/DECISIONS.md` DEC-087。
 - 強化 DEC-067／068／079／086；同向 DEC-084；不取代 Silent Autonomous Cruise；不降低任何 Gate；不改產品 code／投資語意。
 - ⚠️ 單一撰寫組產出，無第二組驗過。
+
+## 42. Proactive Conversation Handoff／主動建議換新對話（DEC-088，客戶 2026-10-26；append-only；Approved）
+
+- 規則：當 context／token／quota／session 狀態不適合安全繼續下一完整工作階段時，依序完成 Safe Checkpoint → 更新 HANDOFF／Resume Checkpoint → 確認 branch／PR／CI／next single action 可恢復 → 主動回覆「🟡 需要你回覆：建議換新對話。」＋簡短原因＋可直接貼上的接手提示語。
+- 禁止 checkpoint 後默默停住、禁止要求客戶重新解釋做到哪裡；接手提示語只做入口，新 session 仍以 GitHub Verification Gate 與 GitHub SSOT 為準；context 仍健康時不得為形式頻繁要求換對話。
+- 規則落點 `PROJECT_RULES.md` 第 22 節；逐字原文與關係見 `docs/DECISIONS.md` DEC-088。
+- 強化 DEC-086／087／067／068／079；不取代 DEC-084；不建立第二套狀態 SSOT；不降低任何 Gate；不改產品 code／投資語意。
+- ⚠️ 單一撰寫組產出，無第二組驗過。
