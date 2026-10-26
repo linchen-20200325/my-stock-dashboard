@@ -711,3 +711,13 @@
 - ⛔ **Stage C 核准前不得施工**：0 程式碼、0 測試、0 navigation 變更、不刪舊 UI、不開 P2、不改投資公式／門檻／Risk Cap／趨勢或估值定義、不新增資料來源或 Action 語彙。
 - 規則落點／依據：DEC-082（Stage A→B→C→D）、DEC-085／`PROJECT_RULES.md` 第 19 節（責任方向≠現行 nav 命名、SSOT、Coverage 四狀態、Missing 語意）；DEC-088 已記於第 42 節。
 - ⚠️ 草稿內的程式碼層級宣稱，除各處標 `FACT` 並附 `file::symbol` 者外，均為 `INFERENCE`／未複驗；總管推薦（RECOMMENDATION）不是已選。
+
+## 44. New UI Stage C 核准（DEC-089，客戶 2026-10-26；append-only；Approved）
+
+- 裁示：**G1 C｜G2 X｜G3 B｜G4 B｜G5 B｜G6 A｜G7 B｜線框套件（B3～B7）核准｜「⚑／結構性自決項確認表」（24 項）全同意**，另有 7 項補充執行條件；逐字原文見 `docs/DECISIONS.md` DEC-089。
+- 核准範圍：Stage C 的 IA／UX／線框**設計方向**；**不涵蓋** HI-1～HI-6（G7＝B：High 項目分批處理，須另走 High Gate，不得視為已核准施工）；**不**把 INFERENCE 升格為 FACT；不新增或修改投資語意、Risk Cap、threshold、weights、趨勢／估值定義、資料來源。
+- G1＝C：Stage D 須**先出「導覽殼」文字線框並經客戶核准**後才可寫殼的 UI code（Stage B 草稿沒有殼的畫面；`CLAUDE.md` §-1.5.D v3 §03-2 ①）。
+- Stage D 前置：以最新 main 實證所有未複驗項（資料契約、欄位可用性、L3 彙總讀法、動態引用），驗不到維持 missing／未確認；依 DEC-084 重做 Model × Effort Check；舊 UI 維持 Removal Gate（不刪）。
+- 狀態：Stage C **已核准**；Stage D **尚未開始**（批次規劃見 `docs/BACKLOG.md` `NEWUI-STAGE-D-*`，各列 `not started`）；0 程式碼、0 測試、0 navigation 變更。
+- 規則落點／依據：DEC-082、DEC-085、DEC-084、DEC-086／087／088、DEC-019／020；Stage B 草稿 `docs/vnext/NEWUI_STAGE_B_DRAFT_2026-10-26.md`（檔頭已追加核准狀態）。
+- ⚠️ 核准範圍與關係為單一撰寫組讀法，無第二組驗過（`CLAUDE.md` §-2 規則 6）。
