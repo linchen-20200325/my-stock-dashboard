@@ -1,11 +1,11 @@
 {
-  "updated_at": "2026-10-25T13:50:59.026366+00:00",
+  "updated_at": "2026-10-26T16:15:40.888378+00:00",
   "last_updated": "2026-10-22",
   "row_count": 1254,
   "n_days": 27,
   "fetch_diag": {
     "days_fetched": 0,
-    "days_holiday_or_empty": 1,
+    "days_holiday_or_empty": 2,
     "days_missing_price": 0,
     "unresolved_retried": [],
     "unresolved_expired": []
@@ -15,6 +15,18 @@
   "warnings": [],
   "per_day": {
     "20261023": {
+      "twse_inst": 0,
+      "twse_close": 0,
+      "tpex_inst": 0,
+      "tpex_close": 0,
+      "tpex_inst_status": "empty",
+      "tpex_close_status": null,
+      "twse_ok": false,
+      "tpex_ok": false,
+      "holiday": true,
+      "written": false
+    },
+    "20261026": {
       "twse_inst": 0,
       "twse_close": 0,
       "tpex_inst": 0,
@@ -80,7 +92,7 @@
   "industry": {
     "scheme": "z43-official-code-v1",
     "raw_available": true,
-    "fetched_at": "2026-10-25T13:50:57.634820+00:00",
+    "fetched_at": "2026-10-26T16:15:38.753087+00:00",
     "rules": {
       "finmind_no_official": 1186,
       "official_match_finmind": 1972,
