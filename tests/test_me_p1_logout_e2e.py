@@ -157,7 +157,11 @@ def test_sidebar_box_never_holds_full_id_in_new_mode(client):
     a.run()
     _assert_no_full_id(a)
     # 新版模式其他頁也一樣
-    _to(a, ia_nav.page_label(ia_nav.PAGE_TODAY))
+    # D2 兩層導覽：🚦 今天在 📊 大盤 方向底下的第二層（第一層選方向、第二層選葉）。
+    _to(a, ia_nav.direction_options()[list(ia_nav.NAV_TREE).index(ia_nav.DIR_MARKET)])
+    a.sidebar.radio(key=f"_sb_ia_leaf_{ia_nav.DIR_MARKET}").set_value(ia_nav.leaf_options(ia_nav.DIR_MARKET)[1])
+    a.run()
+    assert not a.exception, a.exception
     _assert_no_full_id(a)
     _to(a, _me)
     # 貼「已是目前這本」的完整網址 ⇒ 不換代，框也不得留著它

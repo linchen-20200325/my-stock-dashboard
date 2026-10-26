@@ -834,7 +834,12 @@ class TestOldFilesUntouched:
     # 📌 PR #927 QA-2 Playwright 複驗（2026-10-25，DEC-083 Q4，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄貼 ID 框
     #   —— 33605619 的「pop ＋ value=''」在瀏覽器不成立（前端照舊顯示完整 ID），改為以 Session State API 明確指定
     #   （新版模式指定 ""、切回「不使用」指定目前綁定的 ID）。「不使用」模式沒進過新版時一行都沒多跑；其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "45985febc58ed26d3c6437a7ac252f37dab6bc0afef4a04e7cf08f33f0488469"
+    # ~~"45985febc58ed26d3c6437a7ac252f37dab6bc0afef4a04e7cf08f33f0488469"~~（PR #927 QA-2 Playwright 複驗後）
+    # 📌 D2 導覽殼（2026-10-26，客戶裁示 DEC-089 G1＝C／DEC-090 形式 (b)，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` ——
+    #   側欄「🆕 新版戰情室（試用中）」radio 由「不使用＋7 頁」改為「不使用＋六個方向」，多方向底下的第二層 radio、
+    #   「⬜ ＝ 尚未建置」圖例；新增 late-import wrapper `_ia_view_shell()`；分派處多畫位置列／佔位頁；
+    #   `_IA_VIEWS` 對帳旁多一行 `reconcile_nav`。「不使用」模式（舊 7 個頁籤）一個字沒動；其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "2e1a6b2ed58bf29fc44e258119fd26cdff8053e603c7745be54dff792919a67b"
 
     def test_no_diff_against_base(self):
         import hashlib

@@ -648,7 +648,7 @@ class TestReconcileCard:
         card, facts, _ = P.build_reconcile_card(P.load_reconcile(_REQ, {}))
         assert card.state == UI_MISSING_RETRYABLE
         assert card.note.now == P.RECONCILE_NOT_TRIGGERED_NOW
-        assert card.note.where == P.REGISTRY_NOT_WRITTEN_WHERE == "到「🚦 今天」更新"
+        assert card.note.where == P.REGISTRY_NOT_WRITTEN_WHERE == "到「📊 大盤 › 🚦 今天」更新"   # D2（DEC-090 ⑦）：指路句多帶方向名
 
     def test_exception_is_red(self, monkeypatch):
         def _boom(_s):

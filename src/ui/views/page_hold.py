@@ -4606,7 +4606,11 @@ _V2_SHARED_SHORT: dict[str, tuple[object, object, object]] = {
     GOOGLE_NOT_ASKED_NOW: (
         "這一輪沒有讀 Google Sheet",
         "本頁因此真的沒有發那一次網路呼叫，不是發了失敗",
-        "到" + SETUP_WHERE + "把選項改成「加讀 Google Sheet" + V2_EXCERPT_GAP + "」"),
+        # 📌 D2 導覽殼（DEC-090 ⑦，有意識的修改，⛔ 不是漏改）：`SETUP_WHERE` 多帶方向名「🛡️ 持股 › 」後這句 47 字，
+        #   超過卡面短句上限 `FACT_VALUE_MAX_CHARS`（46）會被契約層截斷 ⇒ 摘錄只拿掉開頭那個「到」字
+        #   （摘錄本來就是全文的子字串，起點可從句中開始；全文 `SCOPE_NOT_ASKED_WHERE` 與語意一字不動）。
+        #   原：~~"到" + SETUP_WHERE + …~~
+        SETUP_WHERE + "把選項改成「加讀 Google Sheet" + V2_EXCERPT_GAP + "」"),
     NOT_BOUND_NOW: ("你還沒有綁定持股 Sheet",
                     "這是一個有效的結果" + V2_EXCERPT_GAP + "沒有綁定就沒有清單可讀",
                     # 👤 我的 P1：~~… + "現行入口在側欄「🔐 Google 帳號」"~~
@@ -4746,7 +4750,10 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "若你預期應該要有：先看上面 ① 的「訊號可信度」")),
        _v2_rows_for("hold.macro_stage", MACRO_FAILED_NOW, (
            None, _v2_raised(SRC_MACRO),
-           _V2_NO_EXIT_REPORT + V2_EXCERPT_GAP + "總經本身的狀態在「🚦 今天」")),
+           _V2_NO_EXIT_REPORT + V2_EXCERPT_GAP + "本身的狀態在" + ia_nav.where_to_find(ia_nav.PAGE_TODAY))),
+       # ↑ D2（DEC-090 ⑦，有意識的修改，⛔ 不是漏改）：指路句改走 SSOT（多帶方向名「📊 大盤 › 」）後原摘錄
+       #   「…總經本身的狀態在「📊 大盤 › 🚦 今天」」47 字 > `FACT_VALUE_MAX_CHARS`（46）會被截斷 ⇒ 摘錄起點後移
+       #   兩個字（「總經」）；摘錄是全文的子字串，全文與語意一字不動。原：~~"總經本身的狀態在「🚦 今天」"~~
        # 📌 QA-6 MUST-1（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：同一個 `MACRO_EMPTY_NOW`
        #   還有兩支分支（缺真實廣度 `_breadth_empty_why()`／`_BREADTH_EMPTY_WHERE`、尚未載入＋代理廣度不計分
        #   `NOT_LOADED_PENDING_BREADTH_*_HOLD`），原文與下面第一個候選不同 ⇒ 修前只有一個候選 ⇒ `KeyError` ⇒ 紅卡。
@@ -4754,7 +4761,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        _v2_rows_for("hold.macro_stage", MACRO_EMPTY_NOW, (
            None, ("本站不以「中性」代替未評估：多空是一個結論，缺值不是",
                   _V2_BREADTH_EMPTY_WHY, _V2_NOT_LOADED_PENDING_BREADTH_WHY),
-           ("到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN,
+           ("到" + ia_nav.where_to_find(ia_nav.PAGE_TODAY) + "更新總經之後，回到本頁" + _V2_PRESS_RUN,
             _V2_BREADTH_EMPTY_WHERE, _V2_NOT_LOADED_PENDING_BREADTH_WHERE)))]
     # ── ⑤ 80/20 偏離 ＋ 衛星停利 ＋ 建議持股水位（核心／衛星與 80/20 同一則 Note）──
     # 📌 Q2-r3（2026-09-27，有意識的刪除，⛔ 不是漏刪）：`NO_PRICE_WHY` 改為客戶逐字句（45 字）後，
@@ -4793,7 +4800,7 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        # 📌 QA-6 MUST-1（同上，有意識的修改，⛔ 不是漏刪）：缺真實廣度那一支原文不同 ⇒ 補一組候選；既有候選一字未改。
        _v2_rows_for("hold.position_cap", CAP_EMPTY_NOW, (
            None, ("填一個看起來合理的區間，等於替你做了一個沒有依據的決定", _V2_BREADTH_EMPTY_WHY),
-           ("到「🚦 今天」更新總經之後，回到本頁" + _V2_PRESS_RUN, _V2_BREADTH_EMPTY_WHERE))),
+           ("到" + ia_nav.where_to_find(ia_nav.PAGE_TODAY) + "更新總經之後，回到本頁" + _V2_PRESS_RUN, _V2_BREADTH_EMPTY_WHERE))),
        # 批 Z65 QA：取不到有效系統風險上限（客戶 Q-z34～36 規則）。摘錄自原文（K1）。
        _v2_rows_for("hold.position_cap", RISK_CAP_UNAVAILABLE_NOW, (
            None, "目前沒有可用的系統風險上限" + V2_EXCERPT_GAP + "系統不會在缺上限的情況下給持股數字",

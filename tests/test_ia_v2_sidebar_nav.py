@@ -41,6 +41,7 @@ import sys
 
 import pytest
 
+from shared import ia_nav
 from shared.ia_nav import PAGE_LABELS
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -79,6 +80,8 @@ _VIEW_MODULES = (
     "src.ui.views.page_inspect",
     "src.ui.views.page_hold",
     "src.ui.views.page_why",
+    # D2（DEC-090）導覽殼的主畫面部分（位置列 / 🚦 說明句 / 佔位頁）：同樣「選到之前不載入」。
+    "src.ui.views.shell_nav",
 )
 
 
@@ -199,6 +202,11 @@ class TestTheSidebarNav:
                  for p in _files if _NAV_KEY in p.read_text(encoding="utf-8")]
         assert _hits == [("app.py", 1)], (
             f"{_NAV_KEY!r} 在 production 樹出現的位置不只常數定義一處：{_hits}")
+        # D2：第二層 radio 的 key 前綴 / 記憶鍵同樣只准在 app.py 定義一次，且不得撞到別的 widget。
+        for _k in ("_sb_ia_leaf_", "_sb_ia_leaf_last"):
+            _h2 = [(str(p.relative_to(_ROOT))) for p in _files if _k in p.read_text(encoding="utf-8")]
+            assert _h2 == ["app.py"], f"{_k!r} 出現在 app.py 以外：{_h2}"
+        assert f"_IA_LEAF_KEY_PREFIX = '_sb_ia_leaf_'" in _SRC and "_IA_LEAF_LAST_KEY = '_sb_ia_leaf_last'" in _SRC
 
     def test_the_default_is_the_off_option(self):
         """預設必須是「不使用」—— 預設選到新頁 = 客戶一開 app 就找不到原本的功能。"""
@@ -207,9 +215,11 @@ class TestTheSidebarNav:
         _idx = [k for k in self._radio_call().keywords if k.arg == "index"]
         assert len(_idx) == 1 and isinstance(_idx[0].value, ast.Constant), "radio 未釘 index"
         assert _idx[0].value.value == 0, "radio 預設不是第 0 個（＝「不使用」）"
-        assert "_IA_NAV_OPTIONS = (_IA_NAV_OFF, *_IA_PAGE_LABELS.values())" in _SRC, (
-            "選項組成變了：必須是「不使用」+ L0 `shared/ia_nav.PAGE_LABELS`（SSOT），"
-            "不得在 app.py 手抄五頁名稱")
+        # D2（DEC-090 形式 (b)）：第一層 ＝「不使用」＋ 六個方向（L0 `ia_nav.direction_options()`），
+        # 原本的「＋ 7 頁名」改為方向層；7 頁成為第二層的葉（見 `TestTheTwoLayerShell`）。
+        assert "_IA_NAV_OPTIONS = (_IA_NAV_OFF, *_ia_nav.direction_options())" in _SRC, (
+            "選項組成變了：必須是「不使用」+ L0 `ia_nav.direction_options()`（SSOT），"
+            "不得在 app.py 手抄方向 / 頁名稱")
 
     def test_the_page_names_come_from_the_l0_ssot_not_a_hand_copy(self):
         """五頁顯示名只准有一份（§2.1）—— `app.py` 手抄第二份就會與 L0 漂移。"""
@@ -369,7 +379,11 @@ def _run_app(page: str | None = None, seed: bool = False):
         for _k, _v in _SEED.items():
             _at.session_state[_k] = _v
     if page is not None:
-        _at.session_state[_NAV_KEY] = page
+        # D2：`page` 是頁 id；兩層導覽 ⇒ 第一層設方向、第二層（多頁方向才有）設葉。
+        _d = ia_nav.page_direction(page)
+        _at.session_state[_NAV_KEY] = ia_nav.direction_options()[list(ia_nav.NAV_TREE).index(_d)]
+        if len(ia_nav.NAV_TREE[_d]) > 1:
+            _at.session_state[f"_sb_ia_leaf_{_d}"] = ia_nav.leaf_options(_d)[ia_nav.NAV_TREE[_d].index(page)]
     _at.run()
     return _at
 
@@ -415,7 +429,7 @@ class TestNothingRunsUntilYouPick:
         · §1：那個失敗**是紅色的**（`st.error`），而且**沒有**靜默退回
           「不使用」—— 退回去的話使用者會以為自己沒選到，而畫面又長得像沒事。
         """
-        _at = _run_app(page=PAGE_LABELS["today"])
+        _at = _run_app(page=ia_nav.PAGE_TODAY)
         _errs = " ".join(e.value for e in _at.error)
         assert "src.ui.views.page_today" in _errs, (
             f"選了「{PAGE_LABELS['today']}」卻沒走到該頁的 import，"
@@ -433,7 +447,7 @@ class TestPickingAPageReplacesTheWholeMainArea:
     """選新頁 → 頁籤列與置底條都不出現；免責聲明照出。"""
 
     def test_no_tab_bar_and_no_bottom_bar(self):
-        _at = _run_app(page=PAGE_LABELS["today"], seed=True)
+        _at = _run_app(page=ia_nav.PAGE_TODAY, seed=True)
         assert not _at.exception, f"新頁 mount 有 uncaught exception：{_at.exception}"
         _labels = [getattr(t, "label", None) for t in _at.tabs]
         for _l in _CLIENT_TABS:
@@ -443,7 +457,7 @@ class TestPickingAPageReplacesTheWholeMainArea:
             "必然顯示「⬜ 總經未評估」＝ §1 假訊息（v19.171 🔴-1 的事故形態）")
 
     def test_the_footer_disclaimer_survives(self):
-        _at = _run_app(page=PAGE_LABELS["today"], seed=True)
+        _at = _run_app(page=ia_nav.PAGE_TODAY, seed=True)
         assert "僅供學術研究" in _markdown(_at), "新頁少了頁尾免責聲明"
 
     def test_the_bottom_bar_still_shows_on_the_default_path(self):

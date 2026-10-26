@@ -474,6 +474,7 @@ class TestRenderLive:
         # 10f385c 原字串**只把 title 屬性內的 "\n" 換成 "&#10;"** 後的 sha256
         # （原始 10f385c 雜湊 0bc5bb1f…b7a678；卡片本體一個字元都不變）。
         import hashlib
+        from tests._d2_nav_compat import strip_direction as _d2_strip  # D2（DEC-090 ⑦）：雜湊前還原方向前綴，golden 不改
 
         from src.ui.views import page_today as P
 
@@ -531,7 +532,7 @@ class TestRenderLive:
             raw = P.v2_card_html(full[f"detail.{key}"])
             assert "aria-labelledby" in raw, key       # a11y 屬性確實在（不是剝了個空）
             html = _a11y.sub("", raw)
-            assert hashlib.sha256(html.encode()).hexdigest() == _GOLDEN_10F385C[key], key
+            assert hashlib.sha256(_d2_strip(html).encode()).hexdigest() == _GOLDEN_10F385C[key], key
             assert dict(full[f"detail.{key}"].facts)[LAMP_DIRECTION_FACT_KEY] == _GOLDEN_ROW[key]
 
     def test_band_level_state_unchanged(self):

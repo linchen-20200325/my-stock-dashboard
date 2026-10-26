@@ -442,7 +442,7 @@ class TestWhereGoesThroughSsot:
 
     def test_where_to_find_composes_parent_page_name(self):
         assert ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH) == (
-            "「📖 憑什麼 › 資料體檢」")
+            "「🩺 資料中心 › 📖 憑什麼 › 資料體檢」")   # D2（DEC-090 ⑦）：多帶方向名
 
 
 # ══════════════════════════════════════════════════════════════════

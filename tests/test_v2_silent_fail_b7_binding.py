@@ -38,6 +38,7 @@ from __future__ import annotations
 import ast
 import contextlib
 import hashlib
+from tests._d2_nav_compat import strip_direction as _d2_strip  # D2（DEC-090 ⑦）：golden 雜湊前還原方向前綴
 import importlib.util
 import pathlib
 import sys
@@ -464,7 +465,7 @@ class TestOtherHoldCardsByteIdentical:
                 _notes, builts = E._enumerate()
             finally:
                 E.P = _orig
-            return [(b[0].key, hashlib.sha256(_fp(P, b).encode()).hexdigest()) for b in builts]
+            return [(b[0].key, hashlib.sha256(_d2_strip(_fp(P, b)).encode()).hexdigest()) for b in builts]
 
         before = _hashes(_old_world()[2])
         after = _hashes(PH)

@@ -913,7 +913,7 @@ def test_every_now_constant_in_the_module_is_pinned():
 # ── 10. QA F4：卡面短句的**忠實度** —— 原文拿來限定的條件／原因／去處／升級路徑，
 #    卡面上⛔ 不得只剩一句沒被限定的話。每一格手寫「必須留在卡面」的片語（第二把尺）。──────
 _WHY, _WHERE = P.V2_WHY_FACT_KEY, P.V2_GUIDE_FACT_KEY
-_DH = "「📖 憑什麼 › 資料體檢」"
+_DH = "「🩺 資料中心 › 📖 憑什麼 › 資料體檢」"   # D2（DEC-090 ⑦）：指路句多帶方向名
 _SCALES = ("要看某一檔的實際數字", "到「🔬 查一檔」或「💼 我的持股」各看各的，不要把兩邊的數字放在一起比")
 _UNWIRED = (NO_EXIT_MARKER, "這是待接線項，不是你操作的問題")
 _SPEC_WHERE = (NO_EXIT_MARKER, "規格層面的已知限制", "重按幾次都一樣")
@@ -954,14 +954,14 @@ _MUST_KEEP: dict[str, dict[str, tuple[str, ...]]] = {
                                      _REPORT)},
     # 批 Z56：灰 —— 為什麼（輸入一個都沒有）與去處（到「🚦 今天」更新）；紅 —— 出處與升級路徑。
     "RECONCILE_NOT_TRIGGERED_NOW": {_WHY: ("三列對帳都是「未觸發」", "每一列都至少缺一邊的值"),
-                                    _WHERE: ("到「🚦 今天」更新",)},
+                                    _WHERE: ("到「📊 大盤 › 🚦 今天」更新",)},
     "RECONCILE_FAILED_NOW": {_WHY: ("L3 雙演算法對帳", "拋出例外"), _WHERE: (NO_EXIT_MARKER, _REPORT)},
     "ENGINEER_API_ROOT_NOW": {_WHY: ("會當場對外送出請求", "L5 直接打外部 API", "明文禁止"),
                               _WHERE: _UNWIRED},
     "ENGINEER_RAW_NOW": {_WHY: ("去翻別頁的 session key", "對方改一個 key，這裡就會靜默變空"),
                          _WHERE: _UNWIRED},
     "REGISTRY_NOT_WRITTEN_NOW": {_WHY: ("還不存在", "這是「還沒叫」，不是「叫了沒回」"),
-                                 _WHERE: ("到「🚦 今天」更新",)},
+                                 _WHERE: ("到「📊 大盤 › 🚦 今天」更新",)},
     "REGISTRY_FAILED_NOW": {_WHY: ("拋出例外",), _WHERE: (NO_EXIT_MARKER, _REPORT)},
     # 兩種紅共用同一則 now（讀不出來／檔內值≠生效值）⇒ 只要求出處留在卡面；各自的原因見 test_batch_z54。
     "CALIBRATION_FAILED_NOW": {_WHY: ("L3 門檻校準",), _WHERE: (NO_EXIT_MARKER, _REPORT)},

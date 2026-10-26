@@ -151,6 +151,10 @@ def sheet_safety_revert_for(file_path, code: str) -> str:
     rel = _rel(file_path)
     # 📌 👤 我的 P1（DEC-083，2026-10-25；有意識的接鏈，⛔ 不是漏改）：P1 第 8 個 commit 改了 `src/ui/views/page_hold.py`／
     #   `page_today.py`／`page_find.py`（被本鏈及更舊的鏈管）⇒ 最新的那一批先換回（鏈頭往前接一節；只套一次；⛔ 不動本表與基底 sha）。
+    # 📌 D2 導覽殼（DEC-090，2026-10-26；有意識的接鏈，⛔ 不是漏改）：D2 動了 `src/ui/views/page_hold.py` 的三句卡面短句摘錄
+    #   （被本鏈及更舊的鏈管）⇒ 最新的那一批先換回（鏈頭再往前接一節；只套一次；⛔ 不動本表與基底 sha）。
+    from tests.test_d2_shell_revert_chain import d2_revert_for
+    code = d2_revert_for(rel, code)
     from tests.test_me_p1_revert_chain import me_p1_revert_for
     code = me_p1_revert_for(rel, code)
     pairs = SHEET_SAFETY_REVERT_PAIRS.get(rel, ())

@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 import hashlib
+from tests._d2_nav_compat import strip_direction as _d2_strip  # D2（DEC-090 ⑦）：golden 雜湊前還原方向前綴
 import importlib.util
 import inspect
 import pathlib
@@ -375,7 +376,7 @@ class TestExistingCallersUnchanged:
                 _new = (card.key in _SPLIT_KEYS and card.state == UI_FAILED
                         and card.note.where == P.STATION_ERROR_WHERE)
                 out.append((card.key, card.state, _new,
-                            hashlib.sha256(_k.encode()).hexdigest()))
+                            hashlib.sha256(_d2_strip(_k).encode()).hexdigest()))
             return out
 
         before = _prints(_mutant(PH, *_REVERT))

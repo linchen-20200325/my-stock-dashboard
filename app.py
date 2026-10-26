@@ -292,6 +292,8 @@ from shared.ia_nav import (  # noqa: E402
     PAGE_ME as _IA_ME,
     SECTION_ME_SHEET as _IA_SECTION_ME_SHEET, where_to_find as _ia_where_to_find,
 )
+# D2 導覽殼（DEC-089 G1＝C／DEC-090 形式 (b)）：六個方向 × 葉的名稱 / 對映 / 文案全在 L0，這裡只掛 widget。
+from shared import ia_nav as _ia_nav  # noqa: E402
 
 #: 側欄 radio 的 session / widget key。`_sb_` 前綴照本檔既有慣例
 #: (`_sb_force_refresh` / `_sb_conn_results` / `sb_conn_test`);
@@ -299,9 +301,13 @@ from shared.ia_nav import (  # noqa: E402
 _IA_NAV_KEY = '_sb_ia_page'
 #: 第一個選項 ＝ 預設 ＝「不使用」。它**不是**一個頁 id,故不進 `PAGE_LABELS`。
 _IA_NAV_OFF = '不使用（用下方原功能）'
-_IA_NAV_OPTIONS = (_IA_NAV_OFF, *_IA_PAGE_LABELS.values())
-#: 顯示名 → 頁 id 反查表(值域 = `PAGE_LABELS` 的 key)。查不到 ⇒ 就是「不使用」。
-_IA_LABEL_TO_PAGE = {_v: _k for _k, _v in _IA_PAGE_LABELS.items()}
+#: 第一層 ＝「不使用」＋ 六個方向(顯示字串由 L0 `ia_nav.direction_options()` 組;未建的方向尾端帶 ⬜)。
+_IA_NAV_OPTIONS = (_IA_NAV_OFF, *_ia_nav.direction_options())
+#: 第二層 radio 的 key 前綴(每個方向一個 key,方向切換時不沿用別的方向的選值)。
+#: 2026-10-26 全 repo grep `_sb_ia_leaf` 0 命中 ⇒ 不與任何既有 key 相撞。
+_IA_LEAF_KEY_PREFIX = '_sb_ia_leaf_'
+#: 「回到曾看過的方向會落在上次看的頁」的記憶(非 widget key,僅本次使用;重新整理即消失,殼不宣稱會保留)。
+_IA_LEAF_LAST_KEY = '_sb_ia_leaf_last'
 #: 本輪選到的頁 id;`None` ＝ 不使用(走下方原本的 7 個頁籤)。側欄區塊內賦值。
 _IA_PAGE = None
 
@@ -325,8 +331,32 @@ with st.sidebar:
     #    (五頁模組全換成毒藥,預設態跑完整頁 app.py 也不得碰到任何一支)。
     _IA_NAV_CHOICE = st.radio(
         '🆕 新版戰情室（試用中）', _IA_NAV_OPTIONS, index=0, key=_IA_NAV_KEY,
-        help='選任一頁 → 主畫面整片換成新版那一頁；選「不使用」→ 回到原本的 7 個頁籤')
-    _IA_PAGE = _IA_LABEL_TO_PAGE.get(_IA_NAV_CHOICE)
+        help='選任一方向 → 主畫面整片換成新版那一頁；選「不使用」→ 回到原本的 7 個頁籤')
+    _IA_DIR = _ia_nav.direction_from_option(_IA_NAV_CHOICE)
+    if _IA_DIR is not None:
+        _ia_leaves = _ia_nav.NAV_TREE[_IA_DIR]
+        if len(_ia_leaves) == 1:
+            # 單頁方向(🛡️／👤／⚡)沒有第二層。
+            _IA_PAGE = _ia_leaves[0]
+        else:
+            st.caption(_ia_nav.leaf_subtitle(_IA_DIR))
+            _ia_leaf_opts = _ia_nav.leaf_options(_IA_DIR)
+            _ia_last = st.session_state.get(_IA_LEAF_LAST_KEY, {})
+            _ia_first = _ia_nav.first_built_page(_IA_DIR)
+            _ia_start = _ia_last.get(_IA_DIR, _ia_first)
+            _ia_idx = _ia_leaves.index(_ia_start) if _ia_start in _ia_leaves else _ia_leaves.index(_ia_first)
+            _ia_leaf_choice = st.radio(
+                _ia_nav.leaf_subtitle(_IA_DIR), _ia_leaf_opts, index=_ia_idx,
+                key=f'{_IA_LEAF_KEY_PREFIX}{_IA_DIR}', label_visibility='collapsed')
+            _IA_PAGE = _ia_nav.page_from_leaf_option(_IA_DIR, _ia_leaf_choice)
+            if _IA_PAGE is None:
+                # §1 Fail Loud:第二層選值對不到任何頁 ⇒ 不靜默退回預設頁。
+                raise RuntimeError(
+                    f'第二層選值 {_ia_leaf_choice!r} 不在 {_IA_DIR!r} 底下:{_ia_leaf_opts}')
+            _ia_last = dict(_ia_last)
+            _ia_last[_IA_DIR] = _IA_PAGE
+            st.session_state[_IA_LEAF_LAST_KEY] = _ia_last
+    st.caption(_ia_nav.NAV_LEGEND)   # ⬜ ＝ 尚未建置(DEC-090 ③)
     st.caption('ⓘ 驗收完成後，這區會取代上方頁籤')
     # FIX(誠實性): 移除兩段與實際狀態無關的側欄顯示 ——
     #   (1)「### 🤖 AI 分析 / 頁面底部有 AI 整合報告面板」:該面板已不存在。
@@ -622,6 +652,13 @@ def _ia_view_why() -> None:
     render_page_why()
 
 
+def _ia_view_shell(page: str) -> None:
+    # D2 導覽殼(DEC-090):位置列 + 🚦 今天說明句 + 佔位頁本體。只在選了方向之後才 late import;
+    # 已建頁的內容由下方派發表另行渲染,殼不碰頁內部。
+    from src.ui.views.shell_nav import render_shell
+    render_shell(page)
+
+
 def _ia_view_me() -> None:
     # 👤 我的（2026-10-25 客戶裁示 DEC-083 Q1=A；AI 總管裁示排第 7）：Google 帳號、Sheet 綁定、
     # active 組合／觀察清單的唯一設定入口。⚠️ 側欄「🔐 Google 帳號」與舊「📁 組合管理」**照留**（E 段）。
@@ -649,6 +686,8 @@ if set(_IA_VIEWS) != set(_IA_PAGE_LABELS):
     raise RuntimeError(
         f'_IA_VIEWS 與 shared/ia_nav.PAGE_LABELS 對不起來:'
         f'{sorted(_IA_VIEWS)} vs {sorted(_IA_PAGE_LABELS)}')
+# D2:導覽樹(六方向 × 葉)↔ 頁表 ↔ 派發表三方對帳,對不起來同樣當場炸(raise,不用 assert)。
+_ia_nav.reconcile_nav(_IA_VIEWS)
 
 if _IA_PAGE is not None:
     # 主畫面整片換成這一頁。以下三件**刻意不渲染**：
@@ -670,7 +709,10 @@ if _IA_PAGE is not None:
     # ⚠️ §1 Fail Loud:import 或 render 失敗一律走既有的 `_render_tab_isolated`
     #    (紅色 st.error 印出例外型別+訊息、stderr 印完整 traceback),
     #    **不靜默退回「不使用」** —— 那會讓使用者以為自己沒選到。
-    _render_tab_isolated(_IA_VIEWS[_IA_PAGE], _IA_PAGE_LABELS[_IA_PAGE])
+    # D2 導覽殼:位置列(+ 🚦 說明 / 佔位頁本體)獨立隔離,殼出錯不拖垮頁、頁出錯不吞掉殼。
+    _render_tab_isolated(lambda: _ia_view_shell(_IA_PAGE), '導覽殼')
+    if _IA_PAGE in _IA_VIEWS:   # 佔位頁(⚡／🩺 本體)不是 view,本體已由殼畫完
+        _render_tab_isolated(_IA_VIEWS[_IA_PAGE], _IA_PAGE_LABELS[_IA_PAGE])
     _render_footer()
     st.stop()
 
