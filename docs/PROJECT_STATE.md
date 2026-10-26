@@ -686,3 +686,11 @@
 - 規則落點 `PROJECT_RULES.md` 第 20 節；逐字原文與關係見 `docs/DECISIONS.md` DEC-086。
 - 強化 DEC-067／068／079；不取代 DEC-084 與 Silent Autonomous Cruise；不降低任何 Gate；不改產品 code／投資語意。
 - ⚠️ 單一撰寫組產出，無第二組驗過。
+
+## 41. No Silent Stop／禁止無提示停手（DEC-087，客戶 2026-10-26；append-only；Approved）
+
+- 規則：任何 user-visible 回覆首行標 🟢／🟡／🔴；🟡 必須說明為何停、要做什麼、精確回覆什麼；🔴 必須列問題、選項、總管推薦與客戶只需回覆的內容；禁止無提示停手；可自動恢復的外部等待（CI／audit／check_suite）屬 🟢。
+- 因 🟡／🔴 停手時，Resume Checkpoint 同步記 stop reason／waiting_for_customer／exact customer action／exact resume condition／next single action（第 21 節）。
+- 規則落點 `PROJECT_RULES.md` 第 21 節；逐字原文與關係見 `docs/DECISIONS.md` DEC-087。
+- 強化 DEC-067／068／079／086；同向 DEC-084；不取代 Silent Autonomous Cruise；不降低任何 Gate；不改產品 code／投資語意。
+- ⚠️ 單一撰寫組產出，無第二組驗過。

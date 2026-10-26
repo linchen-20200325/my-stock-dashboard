@@ -10,23 +10,25 @@
 
 ### 📌 Resume Checkpoint（DEC-086）
 
-| 欄位 | 內容（2026-10-26T09:11Z；撰寫組據總管提供事實，未獨立重驗） |
+| 欄位 | 內容（2026-10-26T09:35:53Z；DEC-087 落盤批，撰寫組自檢，未獨立重驗） |
 |---|---|
-| latest verified main SHA | `c6cba930`（PR #932 Stage A v2 已合併，squash；其 main CI run 40280536475 於寫入時 queued，尚未確認）；前一個 `6cc7379f`（PR #933 DEC-086；main CI success） |
-| current working branch | `docs/dec-085-dec-082-correction`（docs-only；基底 main `a8cfcc76`）；舊候選分支 `docs/newui-stage-a-inventory` `6666a26c` 仍保留未動，勿刪 |
-| current PR | 待開 Draft PR |
-| current task／batch | DEC-085 的 DEC-082 誤讀更正（docs-only；客戶 2026-10-26 裁示：Stage C 才是正式客戶 Gate，Stage B 可做草稿） |
-| completed in this batch | 更正註記已寫入工作樹（`docs/DECISIONS.md` DEC-085、`PROJECT_RULES.md` §19.11、本表）；尚未 commit／PR／CI／獨立複驗。前批：Stage A v2（#932）與 DEC-086（#933）已合併 |
-| exact current stopping point | 更正 PR 尚未開；不進 Stage B 草稿、不做 P2、不刪舊 UI、不開 Stage D |
-| next single action | 開 Draft PR 並完成 docs QA／獨立複驗／CI；PR 合併後以 Stage A 完成為基準進入 Stage B 草稿（先做 DEC-084 Model×Effort Gate）；S1～S28 不逐題問客戶，先收斂為少量 Decision Gates，再於 Stage C 一次呈現給客戶 |
-| tests／CI 已完成 | #932 head `cb396bd2`、#933 head `7cf040ec` 全綠；main `6cc7379f` 全綠 |
-| tests／CI 尚未完成 | 本更正 PR 的 docs QA、獨立複驗與 CI 全未執行（PR 尚未開）；main `c6cba930` 的 CI 狀態以 GitHub 為準 |
-| unresolved true Stop Gates | 無。客戶待決事項不屬 Stop Gate：大盤 UI 驗收、SHEET-LOGOUT-SECRETS-DEFAULT、ME-UI-STRINGS-REVIEW、P1 實作選擇覆核、P2 是否指派、Stage B 是否指派、Stage A 殘留 decision-notes（S1～S28，不要求逐題裁示，Stage B 再收斂） |
-| uncommitted／unpushed work | 無（WIP commit `43990d52` 已推至 `docs/dec-085-dec-082-correction`；未驗收、未開 PR；以 GitHub 為準） |
-| relevant evidence location | PR #932、#933；矩陣 `docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md` §12；`docs/DECISIONS.md` DEC-085／DEC-086；`PROJECT_RULES.md` 第 19、20 節；舊候選分支 `docs/newui-stage-a-inventory`（`6666a26c`，未動，勿刪） |
-| recommended Model | Sonnet（下一階段 Stage B 草稿可行；涉及 IA 責任對映、投資語意則依 DEC-084 重判） |
-| recommended Effort | Medium |
-| last checkpoint timestamp | 2026-10-26T09:11:38Z |
+| latest verified main SHA | `06726f09`（origin/main 實測，2026-10-26；PR #935 DEC-085 更正之後） |
+| current working branch | `docs/no-silent-stop-dec-087`（docs-only；基底 origin/main `06726f09`） |
+| current PR | 待開 Draft PR（由總管開立；執行 AI 不開 PR） |
+| current task／batch | DEC-087 No Silent Stop／禁止無提示停手 文件落盤（DECISIONS／PROJECT_RULES 第 21 節／PROJECT_STATE 第 41 節／本表） |
+| completed in this batch | 四檔文件落盤已寫入分支（撰寫組自檢；未獨立複驗）；尚未開 PR、未跑 CI |
+| exact current stopping point | commit＋push 後停在 Draft PR 開立前；waiting_for_customer＝false |
+| next single action | 由總管開 Draft PR → CI 綠燈後 Auto-Ship |
+| tests／CI 已完成 | 無（docs-only；本批未跑 CI） |
+| tests／CI 尚未完成 | PR CI、獨立複驗、Auto-Ship 全未執行 |
+| unresolved true Stop Gates | 無 |
+| uncommitted／unpushed work | 已 commit `63aef778`（DEC-087 落盤）；push 狀態以 git 實查為準；本批未驗收、未開 PR |
+| relevant evidence location | `docs/DECISIONS.md` DEC-087；`PROJECT_RULES.md` 第 21 節；`docs/PROJECT_STATE.md` 第 41 節；分支 `docs/no-silent-stop-dec-087` |
+| recommended Model | Haiku |
+| recommended Effort | Low |
+| last checkpoint timestamp | 2026-10-26T09:35:53Z |
+
+🟡／🔴 停手時另須同步填寫（DEC-087）：stop reason／waiting_for_customer（true/false）／exact customer action／exact resume condition；本批為 🟢：waiting_for_customer＝false，其餘 N/A。
 
 此為 DEC-086 Resume Checkpoint：**GitHub 操作事實優先於本表；不一致時修正本表**。
 只記目前狀態，不複製 BACKLOG／DECISIONS；本表不取代下方「現行短版」段（DEC-085 段仍是唯一現行短版標記）。
