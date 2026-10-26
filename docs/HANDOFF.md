@@ -22,7 +22,7 @@
 | tests／CI 已完成 | #932 head `cb396bd2`、#933 head `7cf040ec` 全綠；main `6cc7379f` 全綠 |
 | tests／CI 尚未完成 | 本更正 PR 的 docs QA、獨立複驗與 CI 全未執行（PR 尚未開）；main `c6cba930` 的 CI 狀態以 GitHub 為準 |
 | unresolved true Stop Gates | 無。客戶待決事項不屬 Stop Gate：大盤 UI 驗收、SHEET-LOGOUT-SECRETS-DEFAULT、ME-UI-STRINGS-REVIEW、P1 實作選擇覆核、P2 是否指派、Stage B 是否指派、Stage A 殘留 decision-notes（S1～S28，不要求逐題裁示，Stage B 再收斂） |
-| uncommitted／unpushed work | 無（本同步 commit 前除外，以 GitHub 為準） |
+| uncommitted／unpushed work | 無（WIP commit `43990d52` 已推至 `docs/dec-085-dec-082-correction`；未驗收、未開 PR；以 GitHub 為準） |
 | relevant evidence location | PR #932、#933；矩陣 `docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md` §12；`docs/DECISIONS.md` DEC-085／DEC-086；`PROJECT_RULES.md` 第 19、20 節；舊候選分支 `docs/newui-stage-a-inventory`（`6666a26c`，未動，勿刪） |
 | recommended Model | Sonnet（下一階段 Stage B 草稿可行；涉及 IA 責任對映、投資語意則依 DEC-084 重判） |
 | recommended Effort | Medium |
