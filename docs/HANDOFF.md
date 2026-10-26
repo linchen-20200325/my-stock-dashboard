@@ -8,6 +8,30 @@
 
 > 依客戶 2026-10-22 裁示（DEC-068），本檔改為**短版交接**：只保存 current active work、blocker、next safe point、必要的 main／PR／CI 狀態。完整專案知識見 `docs/PROJECT_STATE.md`；未完成工作見 `docs/BACKLOG.md`；新對話啟動程序見 `PROJECT_RULES.md` 第 15 節。**現況以本節與 GitHub 為準。**
 
+### 📌 Resume Checkpoint（DEC-086）
+
+| 欄位 | 內容（2026-10-26T06:10Z；撰寫組據總管提供事實，未獨立重驗） |
+|---|---|
+| latest verified main SHA | `6cc7379f`（PR #933 DEC-086 已合併，squash；`6cc7379f` 的 main CI 尚未確認）；前一個 main 為 `15cd8fff`（其 CI run 40270553655 success，量測 2026-10-26T05:00Z） |
+| current working branch | `docs/newui-stage-a-v2`（已 merge main `6cc7379f`，無衝突；head 以 GitHub 為準）；治理分支 `docs/dec-086-resume-checkpoint` 已隨 #933 合併 |
+| current PR | #932 Draft（Stage A 事實盤點 v2；head 於 push 後變動，以 GitHub 為準）；#933 已合併（不再是工作中）。DEC-086 規則已在 main：PROJECT_RULES 第 20 節、DEC-086、PROJECT_STATE §40 |
+| current task／batch | Stage A v2（只讀事實盤點，docs only）收尾合併 |
+| completed in this batch | 矩陣 §12 v2 重做（客戶 5 點修正）、七組分塊重做＋兩組獨立 QA、15 項 QA 修正已套用；DEC-086 已寫、PR #933 已合併；#932 已 merge main（無衝突），head 815dadc5 的 CI 全綠；Resume Checkpoint 已落地於本表 |
+| exact current stopping point | #932 待最新 head 的 CI 全綠後標 ready 並依 Auto-Ship 合併；合併後停手回報，不進 Stage B |
+| next single action | #932 CI 綠 → 標 ready → squash merge（expectedHeadSha＝當時 head）→ 驗證 main SHA 與 main CI → 回報；Stage B 須客戶指派後再重判 Model×Effort |
+| tests／CI 已完成 | #932 於 815dadc5 全綠；#933 全綠並已合併；兩組獨立 QA（Stage A 合規／code 抽驗；DEC-086 docs QA） |
+| tests／CI 尚未完成 | #932 最新 head 的 CI；main `6cc7379f` 的 CI |
+| unresolved true Stop Gates | 無（Stage B 前停手為本輪工作安全停點／總管流程，非 DEC-082 條文）。客戶待決事項不屬 Stop Gate：大盤 UI 驗收、SHEET-LOGOUT-SECRETS-DEFAULT、ME-UI-STRINGS-REVIEW、P1 實作選擇覆核、P2 是否指派 |
+| uncommitted／unpushed work | 無（branch 已 push，head 以 GitHub 為準；working tree 乾淨） |
+| relevant evidence location | PR #932、#933（已合併）；矩陣 `docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md` §12；舊候選分支 `docs/newui-stage-a-inventory`（`6666a26c`，未動，勿刪）；客戶 DEC-086 原文見 `docs/DECISIONS.md` DEC-086 |
+| recommended Model | Sonnet（docs QA、合併與同步足夠；Stage B 草稿亦可，涉及 IA 責任對映或投資語意再依 DEC-084 重判） |
+| recommended Effort | Medium |
+| last checkpoint timestamp | 2026-10-26T06:10Z |
+
+此為 DEC-086 Resume Checkpoint：**GitHub 操作事實優先於本表；不一致時修正本表**。
+只記目前狀態，不複製 BACKLOG／DECISIONS；本表不取代下方「現行短版」段（DEC-085 段仍是唯一現行短版標記）。
+DEC-086 規則已於 main，本表已落地。
+
 | 項目 | 現況 |
 |---|---|
 | current active work | ~~#901（本治理 PR：新增 `docs/PROJECT_STATE.md`、`PROJECT_RULES.md` 第 0.3／15 節 Context Loss Check、DEC-068／069、BACKLOG／HANDOFF 補漏；純文件）合併後：無進行中功能／治理工作；是否有新工作以 GitHub 實查為準~~ #901 已合併（`7f58a25a`）。**本 docs-only PR**（分支 `ccr-8d5a141e-3fdtwt`；DEC-070 落盤：DECISIONS／BACKLOG／PROJECT_STATE／HANDOFF，客戶 2026-10-22 授權；⛔ 未改 code／workflow／`PROJECT_RULES.md`）合併後：無進行中工作；是否有新工作以 GitHub 實查為準（2026-10-22 更新，有意識的變更，不是漏刪，決策者 AI 總管（事實更正））<br>📌 2026-10-22（append-only）：上句 DEC-070 docs-only PR 已合併為 #902（`08272e5`；撰寫組 `git log` 實查）。**本輪 docs-only PR**（分支 `ccr-310717b7-37xwl6`；DEC-071 新 UI 方向＋大盤／市場趨勢研究框架落盤：DECISIONS／PROJECT_STATE §22／BACKLOG 5.1.6／本檔；⛔ 未改 code／`PROJECT_RULES.md`）合併後：無進行中工作<br>📌 2026-10-23（append-only）：上句 DEC-071 docs-only PR 已合併為 #904（`d07bcfe9`），其後盤點落盤 #905（`1bfca551`）。**本輪 docs-only 工作**（分支 `ccr-310717b7-37xwl6`；DEC-072 產品方向＋Data Health Audit 落盤：DECISIONS／PROJECT_STATE §24／§25／BACKLOG 5.1.7／`docs/vnext/DATA_HEALTH_AUDIT_2026-10-23.md`／本檔；⛔ 未改 code／UI／threshold／`PROJECT_RULES.md`／`CLAUDE.md`）；是否已開 PR／合併以 GitHub 實查為準<br>📌 2026-10-23（DEC-073／DEC-074，append-only）：**本輪 docs-only 工作**（分支 `ccr-310717b7-37xwl6`）：DEC-073（Model／Effort Gate）落盤 `PROJECT_RULES.md` 第 3／9／15 節；DEC-074（Breadth Gate 裁 B）落盤 DECISIONS／BACKLOG 5.1.7／PROJECT_STATE §25／§26／本檔；⛔ 未改 code／UI／threshold／`CLAUDE.md`；是否已開 PR／合併以 GitHub 實查為準<br>📌 2026-10-23（DEC-075，append-only）：客戶裁示 D-1＝(a)、**指派批 A＋加掛批 1'**（`docs/DECISIONS.md` DEC-075；DR-2026-10-23-3）。current active work 自此改為：**Data Health 批 A（DEC-074 B 落地＋`DH-TWII-MA200`；High）＋批 1'（`DH-FOREIGN-FILL0`／`DH-EXPORT-LABEL`／ISM 教學 key）已指派、未開始實作**（本對話僅完成規劃與裁示落盤：0 行程式、0 實作 commit；#908 合併後為下一批；開工前已依 DEC-073 Gate 自判，總管判目前模型足夠 —— 總管自判，撰寫組無法查證）。本 docs-only 登記（分支 `ccr-310717b7-37xwl6`）⛔ 未改 code<br>📌 2026-10-23 第四則（批 A＋1'，append-only）：上一則「批 A＋批 1' 已指派、未開始實作」自本日起不成立 —— **批 A＋1' 已於分支 `ccr-310717b7-37xwl6` 實作完成、待 PR #910 合併**（2026-10-23 更新，有意識的更新，不是漏刪，決策者 AI 總管（事實更新：批 A＋1' 已於分支實作））。現行見下方「📌 2026-10-23 批 A＋1' 安全段落收尾」段 |
@@ -294,13 +318,25 @@
 | 沿用 | 上兩段「明確未變」「禁止事項（DEC-083 G 段）」「P2」三列照舊有效 |
 | ⚠️ 揭露 | 本段由單一撰寫組產出，**沒有第二組驗過**（`CLAUDE.md` §-2 規則 6） |
 
-📌 **2026-10-26 DEC-085 長期 UI 治理已生效（待 PR 合併）**（append-only）；**本段為現行短版，與上表及上各段衝突處以本段為準**：
+📌 **2026-10-26 DEC-085 長期 UI 治理已生效（~~待 PR 合併~~ #931 已合併，main `15cd8fff`）**（append-only）；**本段為現行短版，與上表及上各段衝突處以本段為準**：
 
 | 項目 | 現況 |
 |---|---|
 | 規則落點 | `PROJECT_RULES.md` 第 19 節；原文與關係 `docs/DECISIONS.md` DEC-085；摘要 `docs/PROJECT_STATE.md` §39 |
-| 對進行中工作的影響 | 本條不改變進行中工作的 Gate：Stage B／C／D 仍須客戶 Gate（DEC-082）；⛔ 不開 P2、⛔ 不刪舊 UI、⛔ 不改 nav（本段不記載任何 Stage 的進度） |
+| 對進行中工作的影響 | 本條不改變進行中工作的 Gate：~~Stage B／C／D 仍須客戶 Gate（DEC-082）~~（已更正：DEC-082 的正式客戶 Gate 在 Stage C；2026-10-26 有意識的更正，不是漏刪，決策者 AI 總管）；⛔ 不開 P2、⛔ 不刪舊 UI、⛔ 不改 nav（本段不記載任何 Stage 的進度） |
 | 沿用 | 上一段「待客戶」「Next Safe Point」「禁止事項」照舊有效 |
+
+📌 **2026-10-26 新 UI Stage A 事實盤點（v2 重做）狀態**（append-only）；**本段為與上方「2026-10-26 DEC-085 長期 UI 治理已生效」段並列的 Stage A v2 狀態段（非第二個現行短版標記；DEC-085 段為唯一現行短版標記，本段不取代它、不降級它）**；兩段衝突處，DEC-085 治理規則優先：
+
+| 項目 | 現況（2026-10-26，docs-only；**以 GitHub 為準**） |
+|---|---|
+| 舊 Stage A PR #931 | ~~待 PR 合併~~ **已合併**（main `15cd8fff`）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。注意：PR #931 是 DEC-085 長期 UI 治理落盤批（`PROJECT_RULES.md` 第 19 節），不是 Stage A 盤點本身 |
+| 舊分支 `docs/newui-stage-a-inventory`（`6666a26c`，基於 `4e6bf8ee`） | **未動的候選材料**：不合併、不修改；其盤點內容由 v2 重新套用並修正稽核發現 |
+| 新分支 `docs/newui-stage-a-v2`（main `15cd8fff` 起） | **Stage A 事實盤點重做中**，Draft PR #932（~~Draft PR 待開（PR 號未知）~~ 2026-10-26 事實更新）。只改 `docs/**`，0 行程式、0 測試變更；盤點採 DEC-085 §19.6 四種 Coverage 狀態，責任名（📊／🎯／⚡／🛡️／👤／🩺）只當盤點範圍標籤，不等於現行 nav 或既有 view |
+| **Next Safe Point（本輪工作安全停點）** | Stage A v2 完成並由總管複驗後，**在進入 Stage B 前停手**。⚠️ 這是**本輪工作安全停點／總管流程（非 DEC-082 條文）**；~~Stage B 須先過客戶裁示（DEC-082）~~ 已更正：DEC-082 的正式客戶 Gate 在 **Stage C**（Stage B 草稿完成後停手等裁示）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更正）） |
+| 下一階段 Model／Effort | Stage B 草稿＝Medium＋Sonnet 等級可行；若涉及 IA 責任對映或投資語意，再依 DEC-084 重判（新對話仍須依 `PROJECT_RULES.md` 第 9.0 節重跑 Gate，建議只是參考） |
+| 禁止事項 | ⛔ 仍不進 Stage B（本輪）、⛔ 不做 P2（`ME-P2`）、⛔ 不刪舊 UI、⛔ 不開 Stage D／不改 nav、⛔ 不新增或改定義任何投資語意；待辦見 `docs/BACKLOG.md` `NEWUI-STAGE-A-GAPS`（Stage B 前置 decision-notes，不構成動工授權） |
+| ⚠️ 揭露 | 本段由單一撰寫組產出，**沒有第二組驗過**（`CLAUDE.md` §-2 規則 6）；PR 狀態為撰寫當下已知事實，會過期 |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
 
