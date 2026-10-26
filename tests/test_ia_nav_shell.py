@@ -121,7 +121,12 @@ class TestReconcileGuard:
 
     def test_app_calls_the_reconcile_and_keeps_the_old_one(self):
         _src = (_ROOT / "app.py").read_text(encoding="utf-8")
-        assert "_ia_nav.reconcile_nav(_IA_VIEWS)" in _src
+        _tree = ast.parse(_src)
+        _calls = [n for n in _tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)
+                  and isinstance(n.value.func, ast.Attribute) and n.value.func.attr == "reconcile_nav"
+                  and isinstance(n.value.func.value, ast.Name) and n.value.func.value.id == "_ia_nav"
+                  and [getattr(a, "id", None) for a in n.value.args] == ["_IA_VIEWS"]]
+        assert len(_calls) == 1, "app.py module 層沒有（或不只一個）`_ia_nav.reconcile_nav(_IA_VIEWS)` 呼叫節點（註解掉不算）"
         assert "if set(_IA_VIEWS) != set(_IA_PAGE_LABELS):" in _src and "raise RuntimeError(" in _src
 
     def test_unknown_ids_still_fail_loud(self):

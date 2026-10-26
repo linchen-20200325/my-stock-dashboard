@@ -4750,10 +4750,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            "若你預期應該要有：先看上面 ① 的「訊號可信度」")),
        _v2_rows_for("hold.macro_stage", MACRO_FAILED_NOW, (
            None, _v2_raised(SRC_MACRO),
-           _V2_NO_EXIT_REPORT + V2_EXCERPT_GAP + "本身的狀態在" + ia_nav.where_to_find(ia_nav.PAGE_TODAY))),
+           NO_EXIT_MARKER + V2_EXCERPT_GAP + "回報給維護者" + V2_EXCERPT_GAP
+           + "總經本身的狀態在" + ia_nav.where_to_find(ia_nav.PAGE_TODAY))),
        # ↑ D2（DEC-090 ⑦，有意識的修改，⛔ 不是漏改）：指路句改走 SSOT（多帶方向名「📊 大盤 › 」）後原摘錄
-       #   「…總經本身的狀態在「📊 大盤 › 🚦 今天」」47 字 > `FACT_VALUE_MAX_CHARS`（46）會被截斷 ⇒ 摘錄起點後移
-       #   兩個字（「總經」）；摘錄是全文的子字串，全文與語意一字不動。原：~~"總經本身的狀態在「🚦 今天」"~~
+       #   「…總經本身的狀態在「📊 大盤 › 🚦 今天」」47 字 > `FACT_VALUE_MAX_CHARS`（46）會被截斷 ⇒
+       #   摘錄改為「出口標記…回報給維護者…總經本身的狀態在「📊 大盤 › 🚦 今天」」（38 字；保留主詞「總經」，
+       #   「請把上面那行訊息」從摘錄省略）；摘錄是全文的子字串，全文與語意一字不動。原：~~"總經本身的狀態在「🚦 今天」"~~
        # 📌 QA-6 MUST-1（2026-10-23，PR #910，有意識的修改，⛔ 不是漏刪；決策者 AI 總管）：同一個 `MACRO_EMPTY_NOW`
        #   還有兩支分支（缺真實廣度 `_breadth_empty_why()`／`_BREADTH_EMPTY_WHERE`、尚未載入＋代理廣度不計分
        #   `NOT_LOADED_PENDING_BREADTH_*_HOLD`），原文與下面第一個候選不同 ⇒ 修前只有一個候選 ⇒ `KeyError` ⇒ 紅卡。
