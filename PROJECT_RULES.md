@@ -553,7 +553,8 @@ UI layout、component、copy 調整不得偷偷改變 threshold、weights、elig
 
 - 與第 3、6、13、17、18 節、DEC-017／018／019／020／022／081／082／083 並行或同向；衝突時以較嚴者為準，舊文字不改。
 - DEC-084（Model×Effort，第 18 節）正交。
-- ⛔ 本節不授權任何施工：不開 P2、不刪舊 UI、不改 nav、不改投資規則；新 UI 之 Stage B／C／D 仍依 DEC-082 須客戶 Gate。
+- ⛔ 本節不授權任何施工：不開 P2、不刪舊 UI、不改 nav、不改投資規則；~~新 UI 之 Stage B／C／D 仍依 DEC-082 須客戶 Gate。~~
+- 📌 更正（2026-10-26，客戶裁示；本節為濃縮文，此為撰寫組／AI 判讀的更正，非客戶逐字；原因：上列被劃掉句是 AI 誤讀 DEC-082；有意識的更正，不是漏刪）：依 DEC-082，**Stage A＝唯讀盤點；Stage B＝可產出 wireframe／IA／互動草稿與方案；Stage C＝正式客戶 Decision Gate；Stage D＝須 Stage C 客戶核准後才可施工**。詳見 `docs/DECISIONS.md` DEC-085 更正註記。
 
 ## 第 20 節｜Quota-safe Resume Checkpoint（客戶 2026-10-26，DEC-086）
 
