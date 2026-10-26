@@ -390,6 +390,296 @@ UI change 與 investment-rule change 必須是不同類型的變更與不同 Gat
   - ⚠️ 本條**不授權施工**：不開 P2、不刪舊 UI、不改 nav、不開任何 implementation；新 UI Stage B/C/D 仍須客戶 Gate（DEC-082）。
   - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：上述關係判讀由單一撰寫組產出，**沒有第二組驗過**。
 
+### DEC-086｜Quota-safe Resume Checkpoint／中斷續接規則（客戶 2026-10-26）
+> 2026-10-26 補登（ID 取下一個未用號；落盤前實測 `git grep -n "DEC-086"` 0 命中、最大為 DEC-085）。**本條不改任何產品 code／投資語意；規則落點 `PROJECT_RULES.md` 第 20 節。** 不新增功能需求、不改投資公式／門檻／權重／Risk Cap、不改資料來源、不授權任何 implementation。
+- **背景**：客戶模型額度已接近上限，要求即使因額度、對話、連線、session、context 中斷，下一個全新 session 只讀 GitHub 就能接續，不依賴聊天記憶、不需客戶重新解釋。本規則立即生效。
+- **內容**：見下方「來源」逐字原文（10 點＋本輪執行方式）。濃縮可執行版見 `PROJECT_RULES.md` 第 20 節；若濃縮與原文有出入，以原文為準。
+- **範圍**：治理（永久規則）｜**日期**：2026-10-26｜**決策者**：客戶｜**狀態**：生效（`PROJECT_RULES.md` 第 20 節；待 PR 合併）
+- **來源**：客戶 2026-10-26 指示（本 session；經總管轉交），**逐字收錄，未改寫**：
+
+```
+新增永久治理要求：Quota-safe Resume Checkpoint / 中斷續接規則。
+
+目的：
+
+即使 Claude 因模型額度、對話、連線、session、context 或其他中斷而停止，下一次恢復後只讀 GitHub 就能準確接續，不依賴聊天記憶，也不需要客戶重新解釋「做到哪裡」。
+
+本規則應視為既有 DEC-067／DEC-068／DEC-079 的強化與具體化，不建立平行治理體系。
+
+目前客戶模型額度已接近上限，因此本規則立即生效。
+
+---
+
+1. 不建立第二套狀態 SSOT
+
+沿用既有 GitHub 長期記憶架構：
+
+- "PROJECT_RULES.md"：正式永久規則
+- "docs/DECISIONS.md"：正式裁示
+- "docs/PROJECT_STATE.md"：durable project state／重要背景、限制、研究結論摘要
+- "docs/BACKLOG.md"：真正尚未完成工作
+- "docs/HANDOFF.md"：目前熱狀態與唯一接手點
+- GitHub branch／PR／commit／CI：操作事實
+
+不得另建平行的 "SESSION_STATE"、"RESUME_STATE"、第二份 handoff 或其他第二套狀態真相。
+
+"docs/PROJECT_STATE.md" 已由 DEC-068 正式授權，必須保留，不得因本規則移除。
+
+GitHub 操作事實永遠優先於 HANDOFF／聊天記憶。
+
+---
+
+2. Resume Checkpoint
+
+"docs/HANDOFF.md" 應維持一個極短 Resume Checkpoint，讓新 session 可以直接接手。
+
+至少包含：
+
+- latest verified main SHA
+- current working branch
+- current PR（若有）
+- current task / batch
+- completed in this batch
+- exact current stopping point
+- next single action
+- tests / CI 已完成
+- tests / CI 尚未完成
+- unresolved true Stop Gates
+- 是否存在 uncommitted / unpushed work
+- relevant evidence location
+- recommended Model
+- recommended Effort
+- last checkpoint timestamp
+
+要求：
+
+- 只記目前狀態
+- 不寫長篇流水帳
+- 不複製完整 BACKLOG／DECISIONS
+- 不把 inference 寫成 FACT
+- 不把未完成工作寫成完成
+- 必須能讓另一個完全沒有聊天 context 的 Claude 直接理解下一步
+
+---
+
+3. Checkpoint 觸發時機
+
+除既有 Handoff Save Check／Context Loss Check 外，再加入以下安全節點。
+
+一般狀態
+
+在 meaningful safe checkpoint 更新：
+
+- 一個實作小批完成
+- commit 完成
+- PR 建立
+- 稽核／review 完成
+- PR 合併
+- Model／Effort 切換前
+- 下一完整工作階段開始前
+- 長工作即將跨 session／conversation
+
+但避免為每個極小操作製造文件 commit。
+
+優先跟著目前合法 feature branch／docs branch 一起保存。
+
+---
+
+4. 額度風險模式
+
+約 80% 或其他明顯額度壓力
+
+若客戶告知模型額度約達 80%，或 UI／系統顯示明顯接近限制：
+
+- 每一個 meaningful safe checkpoint 都確認 Resume Checkpoint 是否足夠恢復
+- 優先採小批次
+- 避免開始過大的新工作
+- 避免累積大量只存在本機、未保存的修改
+
+約 90% 以上或即將歸零
+
+- 每完成一個可驗證安全步驟就保存
+- 優先 push 已安全完成的 commit／branch
+- 不把大量未保存工作留在 local working tree
+- 若新批次無法在合理 safe checkpoint 前保存，延後開始
+- 優先完成 Handoff Save Check，而不是追求把整個下一階段做完
+
+80%／90% 是操作門檻，不是產品邏輯；未來額度 UI 若改變，可依「明顯額度風險」等價判斷。
+
+---
+
+5. Git 保存原則
+
+可以保存：
+
+- 已完成且自驗通過的安全修改
+- feature branch commit
+- docs branch commit
+- Draft PR
+- HANDOFF Resume Checkpoint
+- PROJECT_STATE durable facts
+
+不得因 checkpoint：
+
+- 直接把未驗證程式推進 main
+- 繞過 CI／audit／review
+- 降低 security gate
+- 降低 investment semantics gate
+- 寫入 secret／token／credential
+- 把 checkpoint 當完成或驗收證據
+- 改變 Auto-Ship 規則
+- 改變 DEC-084 Model × Effort Gate
+
+若工作尚未完成但需要保存：
+
+- 留在 feature branch
+- 若 repo 現行規則允許，使用清楚的 WIP／checkpoint commit
+- PR 保持 Draft
+- HANDOFF 明確標示「未完成／不可視為驗收」
+- 最終仍走正常 review／CI／Auto-Ship
+
+若 repo 既有規則禁止 WIP commit，必須遵守既有更嚴規則，只保存到合法的最小 safe unit。
+
+---
+
+6. Resume 流程
+
+任何：
+
+- 新 Claude session
+- 額度恢復
+- 對話中斷後重開
+- context loss
+- 換模型後重新接手
+
+都不得先問客戶「做到哪裡」。
+
+先自行：
+
+1. 執行 GitHub Verification Gate
+2. 讀 "PROJECT_RULES.md"
+3. 讀 "docs/HANDOFF.md" Resume Checkpoint
+4. 讀相關 "docs/PROJECT_STATE.md"
+5. 讀相關 "docs/BACKLOG.md"
+6. 讀相關 "docs/DECISIONS.md"
+7. 查 current branch／PR／commit／CI
+8. 比對 HANDOFF 與 GitHub 操作事實
+
+若一致：
+
+直接從 "next single action" 繼續。
+
+若不一致：
+
+- GitHub 操作事實優先
+- 修正 HANDOFF
+- 再繼續
+
+只有真正 Stop Gate／客戶偏好／不可逆決策才詢問客戶。
+
+---
+
+7. 中斷後不得因失憶重做
+
+恢復時不得因 session context 消失而：
+
+- 重跑已有可信 CI 證據的完整批次
+- 重問已有正式 DEC 的問題
+- 重建已存在 PR
+- 重寫已完成文件
+- 重新研究已有可追溯 evidence 的結論
+- 重做已合併且 main CI 已驗證的工作
+
+必須先讀 GitHub 證據，再判斷是否真的需要重跑。
+
+若 evidence 已失效、環境改變、main 已漂移或規格改變，才允許重驗，並說明原因。
+
+---
+
+8. Silent Autonomous Cruise
+
+Resume Checkpoint 更新屬例行安全治理：
+
+- 不需每次向客戶回報
+- 不因此增加碎碎唸
+- 不逐步回報 checkpoint
+- 不把保存動作當作 customer gate
+
+只有以下情況才回報：
+
+- GitHub 與 HANDOFF 真正不一致
+- 保存失敗
+- branch／PR／CI 狀態異常
+- 出現真正 Stop Gate
+- Model × Effort 需要切換
+- 整批工作完成
+
+---
+
+9. 與現有治理關係
+
+本規則：
+
+- 強化 DEC-067：Handoff Save Check
+- 強化 DEC-068：GitHub＝跨 AI 長期專案記憶 SSOT／五檔分工／Context Loss Check
+- 強化 DEC-079：額度／context 預判不足時提前落盤
+- 不取代 DEC-084 Model × Effort
+- 不取代 Silent Autonomous Cruise
+- 不降低任何 Security／Investment／Data／CI／Audit Gate
+- 不建立第二套 SSOT
+
+若與既有治理文字有衝突，以較嚴者為準。
+
+---
+
+10. 驗收標準
+
+本規則是否成功，只看一個核心結果：
+
+「額度突然歸零時，換一個全新的 Claude session，只靠 GitHub，就必須知道做到哪裡、證據在哪、下一步做什麼，而且不需要客戶重新解釋。」
+
+若新 session 無法做到這件事，表示 Resume Checkpoint 不合格，必須修正治理流程。
+
+---
+
+本輪執行方式
+
+不要為本規則打亂目前已核准的 Stage A 工作邊界。
+
+請在下一個合法 safe checkpoint：
+
+1. 保存目前實際進度。
+2. 更新 "docs/HANDOFF.md" 的極短 Resume Checkpoint。
+3. 依既有五檔分工，把本規則正式落到正確治理文件。
+4. 不建立新的狀態檔。
+5. 不改產品 code。
+6. 不進 Stage B。
+7. 不改投資語意。
+8. 不因治理落盤重做已完成 evidence。
+9. 若需要新 DEC 編號，先確認最新未用編號後再使用。
+10. 走正常 docs QA／獨立複驗／CI／Auto-Ship。
+
+目前 Model × Effort：
+
+- Model：Sonnet
+- Effort：Medium
+
+若仍是 Sonnet + Medium，不需切換，直接依 Silent Autonomous Cruise 執行。
+
+完成後只在整批完成或真正 Gate 時回報。
+```
+
+- **與其他 DEC 的關係**（append-only；舊 DEC 條文一字不改；撰寫組判讀，單組）：
+  - **DEC-067**（Handoff Save Check）：**強化**，不取代。
+  - **DEC-068**（GitHub＝跨 AI 長期專案記憶 SSOT／五檔分工／Context Loss Check）：**強化**，不取代；不建立第二套 SSOT，`docs/PROJECT_STATE.md` 必須保留。
+  - **DEC-079**（額度／context 預判不足時提前落盤）：**強化並具體化**（Resume Checkpoint 欄位、80%／90% 操作門檻）。
+  - **DEC-084**（Model×Effort）：**不取代、不改**；Model／Effort Change Gate 續有效，checkpoint 不得繞過。
+  - **Silent Autonomous Cruise**：**不取代**；Resume Checkpoint 更新屬例行安全治理，僅在原文第 8 點所列情況回報。
+  - 不降低任何 Security／Investment／Data／CI／Audit Gate；不改 Auto-Ship；不建立第二套 SSOT（不得另建 `SESSION_STATE`／`RESUME_STATE`／第二份 handoff）。若與既有治理文字衝突，**取較嚴者**。
+  - （撰寫組註記，非客戶原文）過渡：Resume Checkpoint 尚未落地於 `docs/HANDOFF.md` 前，以 HANDOFF 第 0 節現行短版為唯一接手點；缺 Checkpoint 不視為違規，但須在下一個 safe checkpoint 補上。
+  - （撰寫組註記，非客戶原文）第 20 節為新增章節，因本規則含 15 欄清單與 8 步流程，無法併入第 11 節一條；DEC-079 要點「不另造重複章節」限於該條自身。
+  - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：上述關係判讀由單一撰寫組產出，**沒有第二組驗過**。
+
 ## 2. 產品／UI
 
 ### DEC-017｜IA v2 五頁線框為台股前端實作依據
