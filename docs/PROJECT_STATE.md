@@ -670,3 +670,11 @@
 - 📌 **head 前進**：本節讀碼基準 `4e8c0876`；撰寫組再查時 head 為 `075e8da7`，該 commit 只改 `app.py` 側欄貼 ID 框（改以 `st.session_state[key] = 值` 明確指定：新版模式指定為空字串、從新版切回「不使用」時指定為目前綁定 ID）＋2 個測試檔（`git diff --stat 6fd083e4..075e8da7`），本節其餘 FACT 不受影響（2026-10-25 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。
 - **INFERENCE／未驗**：撰寫組沒有在 Streamlit 實機看過 👤 我的；「最多 3 次 Google 讀取／rerun、失敗不退避」為讀碼推論（`ME-READ-BACKOFF`）。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節由單一撰寫組產出，**沒有第二組驗過**；「舊 UI 全部保留」「入口都是文字」等全稱句為撰寫組 diff／grep 所得，未經第二組驗證。
+
+## 39. Long-lived UI × Sustainable Logic（DEC-085，客戶 2026-10-26；append-only；Approved）
+
+- 客戶 2026-10-26 立永久治理規則 10 條：UI 穩定／資料來源可替換、頁面責任長期穩定、SSOT、規則模組化、AI 可替換、能力守恆（Old→New Coverage）、Data Contract 優先、Missing 語意永久一致、Presentation 與 Decision Logic 分離、可演進不凍結。
+- 六頁（📊 大盤／🎯 標的／⚡ 行動／🛡️ 持股／👤 我的／🩺 資料中心）是**責任方向，不等於現行 nav 命名**；命名與導航落地屬後續 IA Decision Gate。
+- 規則落點 `PROJECT_RULES.md` 第 19 節；逐字原文與關係見 `docs/DECISIONS.md` DEC-085。
+- 不新增功能需求、不改投資公式／門檻／權重／Risk Cap、不改資料來源、**不授權任何 implementation**；與 DEC-019／020／081／082／083 同向、不放寬。
+- ⚠️ 單一撰寫組產出，無第二組驗過。

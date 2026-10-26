@@ -202,6 +202,194 @@ High
   - **PROJECT_RULES.md 第 9.1 Effort 分級表、第 17 節 Minimum Sufficient Effort／Test Scope**：**不變**；本條只改「何時停、誰切換、切換後何時能繼續」。
   - ⚠️ 本條不改變派工、獨立稽核、揭露義務（`CLAUDE.md` §-2），不降低高風險工作（Risk Cap、投資語意、PIT、資料有效性）的 QA 要求。
 
+### DEC-085｜Long-lived UI × Sustainable Logic（客戶 2026-10-26）
+> 2026-10-26 補登（ID 取下一個未用號；落盤前實測 `git grep -n "DEC-085"` 0 命中、最大為 DEC-084）。**本條不新增任何功能需求、不改任何投資公式／門檻／權重／Risk Cap、不改資料來源、不授權任何 implementation**；它是永久治理規則，規則落點 `PROJECT_RULES.md` 第 19 節。
+- **背景**：客戶要求新 UI 以「可長期使用、持續演進、不需反覆推倒重做」為目標，並給出 10 條核心治理原則。
+- **內容**：見下方「來源」逐字原文（10 條）。濃縮可執行版見 `PROJECT_RULES.md` 第 19 節；若濃縮與原文有出入，以原文為準。
+- **頁面責任（第 2 條）的讀法**：客戶列的六頁（📊 大盤／🎯 標的／⚡ 行動／🛡️ 持股／👤 我的／🩺 資料中心）是**責任方向**，**不等於現行程式 nav 命名**。讀碼事實：`shared/ia_nav.py` 現行頁名為 📊 大盤／🚦 今天／🔍 找標的／🔬 查一檔／💼 我的持股／📖 憑什麼／👤 我的，且 `docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md` §0.2 記載 ⚡ 行動、🩺 資料中心尚無 view。命名與導航落地屬後續 IA Decision Gate（本條不決定對映、不改 nav）。
+- **範圍**：治理（永久規則）｜**日期**：2026-10-26｜**決策者**：客戶｜**狀態**：生效（`PROJECT_RULES.md` 第 19 節；待 PR 合併）
+- **來源**：客戶 2026-10-26 指示（本 session；經總管轉交），**逐字收錄，未改寫**：
+
+```
+這個專案的新 UI 不只是短期改版，而要以「可以長期使用、持續演進、不需要反覆推倒重做」為目標。
+
+核心治理原則如下。
+
+1. UI 穩定、資料來源可替換
+
+UI 不得直接綁死單一 API、資料供應商或單一資料抓取方式。
+
+未來外部 API、MCP、資料來源或 provider 更換時：
+
+- 優先由資料／adapter／service 層吸收變化。
+- 不應因此迫使主要頁面資訊架構重新設計。
+- UI 依賴的是穩定的 domain contract，不直接依賴 provider-specific schema。
+
+2. 頁面責任長期穩定
+
+目前主要產品資訊架構的責任方向：
+
+- 📊 大盤：市場狀態、大盤、台股趨勢、國際趨勢與必要風險脈絡。
+- 🎯 標的：尋找、篩選、探索值得進一步研究的標的。
+- ⚡ 行動：把既有資料與規則轉成「目前需要注意／處理什麼」。
+- 🛡️ 持股：持股、組合、觀察清單、風險與持續追蹤。
+- 👤 我的：登入、Sheet 綁定、個人設定、目前使用中的組合／觀察清單。
+- 🩺 資料中心：資料來源、資料健康、freshness、缺值與可用性。
+
+未來可以優化畫面與元件，但不得因小功能增加就反覆改變主要頁面責任與導航定位。
+
+重大 IA／頁面責任變更仍屬客戶 Decision Gate。
+
+3. SSOT
+
+同一份 domain state 或規則不得在不同頁面各自維護第二套實作。
+
+尤其：
+
+- Sheet binding
+- portfolio
+- watchlist
+- authentication
+- market state
+- investment rule output
+- data-health state
+
+必須有清楚的 Single Source of Truth。
+
+UI 只是消費既有狀態，不各頁自行重算或偷偷建立另一套來源。
+
+4. 規則模組化、不可揉成黑盒
+
+以下概念必須保持可獨立理解、測試與版本化：
+
+- 市場位階
+- 指標危險度
+- Risk Cap
+- 台股趨勢
+- 國際趨勢
+- 估值
+- 個股／持股判讀
+- 其他未來新增投資規則
+
+不得只為 UI 簡化而把多個不同語意硬合併成單一不可追溯分數。
+
+若需要 aggregate view，底層 constituent signals 與 provenance 仍必須保存。
+
+5. AI 必須可替換
+
+AI 是分析／解釋層，不得成為資料真相或核心 deterministic rule 的唯一來源。
+
+未來更換：
+
+- AI model
+- AI provider
+- prompt architecture
+- inference implementation
+
+不應迫使資料層、核心規則或 UI 資訊架構推倒重做。
+
+AI 只能讀取既有、可追溯資料與規則輸出。
+
+6. 向後相容與能力守恆
+
+任何新 UI 改版都必須先做：
+
+Old UI → New UI Interaction Coverage
+
+舊 UI 是：
+
+- 功能參考
+- 邏輯參考
+- 互動參考
+- 資料來源參考
+
+不是視覺模板。
+
+新版可以：
+
+- 合併
+- 重新編排
+- 收進次層
+- 簡化前台
+
+但不得無意識刪除既有重要能力。
+
+任何舊功能必須標示：
+
+- 已覆蓋
+- 部分覆蓋
+- 未覆蓋
+- 明確不再需要／不應搬入
+
+未完成替代前不得因新 UI 上線就直接刪舊 UI。
+
+7. Data Contract 優先於 Provider Contract
+
+長期演進時應優先建立穩定 domain schema／contract。
+
+例如 UI 應依賴：
+「價格、日期、freshness、source、status」
+
+而不是依賴：
+「Yahoo 回傳第幾欄」「MoneyDJ HTML selector」「某 API 特定 JSON 路徑」。
+
+provider-specific parsing 應被限制在 adapter／ingestion layer。
+
+8. Missing semantics 永久一致
+
+長期 UI 與邏輯演進不得破壞既有資料語意：
+
+- missing ≠ 0
+- missing ≠ 中性
+- missing ≠ 正常
+- missing ≠ HOLD
+- proxy／estimated ≠ real
+- stale ≠ current
+- error ≠ missing
+
+UI 必須能表達這些不同狀態，不得只靠顏色。
+
+9. Presentation 與 Decision Logic 分離
+
+UI layout、component、copy 調整不得偷偷改變：
+
+- threshold
+- weights
+- eligibility
+- investment semantics
+- Risk Cap
+- trend definition
+- valuation definition
+
+UI change 與 investment-rule change 必須是不同類型的變更與不同 Gate。
+
+10. 可演進，不追求永久凍結
+
+「長久 UI」不是禁止未來改版。
+
+允許：
+
+- 更好的元件
+- 更好的 responsive layout
+- 更好的 accessibility
+- 新資料呈現方式
+- 新功能
+
+但應遵循：
+「stable responsibilities + replaceable internals」。
+
+重大重構必須能說明為什麼現有 contract 已不足，而不能因開發方便就推倒重做。
+```
+
+- **與其他 DEC 的關係**（append-only；舊 DEC 條文一字不改；撰寫組讀 `docs/DECISIONS.md`、`shared/ia_nav.py`、`src/ui/views/` 後的判讀，單組）：
+  - **DEC-017／DEC-018／DEC-019／DEC-020**（IA v2、雙軌入口、新 UI 唯一主線、舊 UI 刪除前置）：**同向、不取代**。第 6 點「未完成替代前不得刪舊 UI」與 DEC-019／020 的刪除前置一致；本條不放寬任何一項。另 DEC-017 為「五頁」，本條列六頁責任方向；五頁→六頁責任方向的落差由後續 IA Decision Gate 處理，本條不決定。
+  - **DEC-022**（合規母法）：其狀態欄為「部分取代 → DEC-054」（全面禁止方向性 Action 部分已由 DEC-054 取代；其餘護欄的承接見 DEC-054「DEC-022 護欄承接表」）。**護欄承接依 DEC-054，本條不變**；第 9 點只加「UI 調整不得偷改投資語意」，不碰合規護欄。
+  - **DEC-081**（互動控制完整性）／**DEC-082**（先草稿後施工 Stage A～D）／**DEC-083**（舊 UI Removal Gate 等）：**同向、不放寬**。第 6 點的 Old→New Interaction Coverage 與 DEC-081 的互動覆蓋、DEC-083 E 段的刪除閘門一致；第 2 點「重大 IA／頁面責任變更屬客戶 Decision Gate」與 DEC-082 流程相容。
+  - **DEC-084**（Model×Effort）：**正交**，本條不涉及模型／Effort 規則。
+  - **PROJECT_RULES 第 6 節（Safe Checkpoint）／第 13 節（Investment Domain Constitution）**：第 13 節為索引、不重新定義；第 8 點 Missing 語意、第 4 點規則模組化與其既有條目**同向**，衝突時取較嚴者。
+  - ⚠️ 本條**不授權施工**：不開 P2、不刪舊 UI、不改 nav、不開任何 implementation；新 UI Stage B/C/D 仍須客戶 Gate（DEC-082）。
+  - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：上述關係判讀由單一撰寫組產出，**沒有第二組驗過**。
+
 ## 2. 產品／UI
 
 ### DEC-017｜IA v2 五頁線框為台股前端實作依據
