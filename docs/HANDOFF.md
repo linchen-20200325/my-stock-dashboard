@@ -10,23 +10,23 @@
 
 ### 📌 Resume Checkpoint（DEC-086）
 
-| 欄位 | 內容（2026-10-26T09:35:53Z；DEC-087 落盤批，撰寫組自檢，未獨立重驗） |
+| 欄位 | 內容（2026-10-26T09:56:38Z；#936 合併後 checkpoint 更新，執行組自檢，未獨立重驗） |
 |---|---|
-| latest verified main SHA | `06726f09`（origin/main 實測，2026-10-26；PR #935 DEC-085 更正之後） |
-| current working branch | `docs/no-silent-stop-dec-087`（docs-only；基底 origin/main `06726f09`） |
-| current PR | 待開 Draft PR（由總管開立；執行 AI 不開 PR） |
-| current task／batch | DEC-087 No Silent Stop／禁止無提示停手 文件落盤（DECISIONS／PROJECT_RULES 第 21 節／PROJECT_STATE 第 41 節／本表） |
-| completed in this batch | 四檔文件落盤已寫入分支（撰寫組自檢；未獨立複驗）；尚未開 PR、未跑 CI |
-| exact current stopping point | commit＋push 後停在 Draft PR 開立前；waiting_for_customer＝false |
-| next single action | 由總管開 Draft PR → CI 綠燈後 Auto-Ship |
-| tests／CI 已完成 | 無（docs-only；本批未跑 CI） |
-| tests／CI 尚未完成 | PR CI、獨立複驗、Auto-Ship 全未執行 |
-| unresolved true Stop Gates | 無 |
-| uncommitted／unpushed work | 已 commit `63aef778`（DEC-087 落盤）；push 狀態以 git 實查為準；本批未驗收、未開 PR |
-| relevant evidence location | `docs/DECISIONS.md` DEC-087；`PROJECT_RULES.md` 第 21 節；`docs/PROJECT_STATE.md` 第 41 節；分支 `docs/no-silent-stop-dec-087` |
+| latest verified main SHA | `baa6d8d2`（#936 squash 合併；DEC-087 已生效；撰寫組 `git log -1 origin/main` 實查一致，2026-10-26T09:56:38Z） |
+| current working branch | 無（#936 已合併；分支 docs/no-silent-stop-dec-087 已完成，不再使用） |
+| current PR | 無（#936 已合併） |
+| current task／batch | 無進行中批次 |
+| completed in this batch | DEC-082 誤讀更正（#935，main `06726f09`）；DEC-087 No Silent Stop 落盤（#936，main `baa6d8d2`） |
+| exact current stopping point | 本批已停手；waiting_for_customer＝false；無 🟡／🔴 Gate |
+| next single action | 等待客戶指派下一個任務（Stage B 尚未指派，不得自行進入） |
+| tests／CI 已完成 | #935 Fast checks／Slow tests 綠燈（docs-only）；#936 Fast checks／Slow tests 綠燈（68afc379） |
+| tests／CI 尚未完成 | 無 |
+| unresolved true Stop Gates | 無 🔴 |
+| uncommitted／unpushed work | 無 |
+| relevant evidence location | `docs/DECISIONS.md` DEC-082 更正註記、DEC-087；`PROJECT_RULES.md` 第 21 節；PR #935、#936 |
 | recommended Model | Haiku |
-| recommended Effort | Low |
-| last checkpoint timestamp | 2026-10-26T09:35:53Z |
+| recommended Effort | Low（本批由客戶指定） |
+| last checkpoint timestamp | 2026-10-26T09:56:38Z |
 
 🟡／🔴 停手時另須同步填寫（DEC-087）：stop reason／waiting_for_customer（true/false）／exact customer action／exact resume condition；本批為 🟢：waiting_for_customer＝false，其餘 N/A。
 
