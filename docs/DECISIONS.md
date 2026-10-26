@@ -866,6 +866,45 @@ Proactive Conversation Handoff
 若目前 context 仍健康，不得為形式頻繁要求換對話。
 ```
 
+### DEC-089｜New UI Stage C 裁示：G1 C／G2 X／G3 B／G4 B／G5 B／G6 A／G7 B＋線框套件核准＋確認表全同意＋7 項補充執行條件（客戶 2026-10-26）
+> 2026-10-26 補登（ID 取下一個未用號；落盤前實測 `git grep -n "DEC-089"` 0 命中、最大為 DEC-088）。**本條只落盤客戶的 Stage C 裁示，不改任何產品 code／測試／navigation，不進 Stage D 實作。**
+- **背景**：DEC-082 規定新 UI 流程為 Stage A（事實盤點）→ Stage B（設計草稿）→ Stage C（正式客戶 Decision Gate）→ Stage D（施工）。Stage B 草稿 `docs/vnext/NEWUI_STAGE_B_DRAFT_2026-10-26.md` 已於 #938 合併並呈現為 Stage C；客戶於 2026-10-26 回覆本裁示。
+- **內容**（撰寫組摘要，**非客戶原文**；以下「來源」fence 為準，若摘要與原文有出入，以原文為準）：
+  - **G1＝C**（先固定六向導覽殼，內容分步補；現行頁成為各方向底下的葉；未建方向誠實顯示「⬜ 尚未建置」）；**G2＝X**（🎯 找＋查同頁兩區）；**G3＝B**（⚡ 建最小版本：彙總＋連回 🛡️）；**G4＝B**（🩺 唯讀＋篩選＋「重新檢查」鈕＋全站一行狀態）；**G5＝B**（高頻動線加可點跳轉＋預填識別）；**G6＝A**（🛡️ 補逐檔戰情表＋展開明細，欄位僅限已存在事實）；**G7＝B**（High 項目分批處理）。各選項的完整定義以 Stage B 草稿 B9.4 為準。
+  - **線框套件（B3～B7）整體核准**；**「⚑／結構性自決項確認表」（24 項）全同意**（撰寫組讀法：D-1～D-41 的總管自決在此範圍內維持原提案；輕量確認 Q1～Q4 客戶未逐項回覆，**撰寫組不替客戶解讀，維持「未回覆＝維持現況／暫行」**）。
+  - **7 項補充執行條件**見來源逐字原文：核准的是設計方向，不把 INFERENCE 升格為 FACT；Stage D 實作前／時須以最新 main 實證所有未複驗項，驗不到維持 missing／未確認；不新增或修改任何投資語意與資料來源；G7＝B 不等於 HI-1～HI-6 已核准施工；舊 UI 維持 Removal Gate；Stage D 前依 DEC-084 做 Model × Effort Check；維持 Silent Autonomous Cruise 與 Resume Checkpoint。
+- **範圍**：產品／UI（New UI Stage C）｜**日期**：2026-10-26｜**決策者**：客戶｜**狀態**：生效（待 PR 合併）
+- **核准範圍（撰寫組讀法，單組）**：
+  - 核准的是**被選定的方案與線框的設計方向**；**不涵蓋** HI-1～HI-6（High Gate 待開清單；客戶原文第 4 點明示不視為已核准施工，需另走 High Gate）。
+  - **G1＝C 時 Stage D 仍須先出「導覽殼」線框**：Stage B 草稿只有歸屬圖、沒有殼的畫面（草稿 B9.4 G1 條件）；依 `CLAUDE.md` §-1.5.D（v3）§03-2 ①，導覽列／分頁動線屬 UI 草稿審批情境，**殼線框經客戶核准後才可寫殼的 UI code**。本裁示的「線框套件核准」指 B3～B7，不含殼。
+  - **不新增投資語意**：Risk Cap、threshold、weights、趨勢／估值定義、資料來源、Action 語彙一律不動（原文第 3 點）。
+  - **舊 UI 全留**：Removal Gate（DEC-019／020／083 E）不變；新版 Old→New 對等驗收完成前不得刪除。
+  - **Stage D 前置**：須先以最新 main 實證所有 INFERENCE／未複驗項（原文第 2 點），並依 DEC-084 重做 Model × Effort Check（原文第 6 點）。
+- **與其他 DEC 的關係**（append-only；舊 DEC 條文一字不改；以下為撰寫組讀法，非客戶原文；單組）：
+  - **DEC-082**（Stage A→B→C→D）：**履行**；本條是 Stage C 的客戶裁示，Stage D 的 gate 由此開啟，但受上列條件與 G1＝C 的殼線框 gate 約束。
+  - **DEC-085**（Long-lived UI × Sustainable Logic）：**同向**；責任方向≠現行 nav 命名、SSOT、Coverage 四狀態、Missing 語意照舊。
+  - **DEC-081／DEC-083**（📊 大盤／👤 我的 Stage C）：**不變**；已核准內容不因本條改動，舊 🚦 今天維持至 📊 驗收。
+  - **DEC-084**（Model×Effort）：**呼叫**；Stage D 開始前必須重做一次。
+  - **DEC-086／087／088**（Resume Checkpoint／No Silent Stop／主動換新對話）：**呼叫**；原文第 7 點要求維持；本條落盤後 `waiting_for_customer` 為 false，Stage D 的 D1 殼線框完成後才再需客戶核准。
+  - **DEC-019／DEC-020**（New UI 唯一主線／舊 UI 刪除前置）：**不變**；Removal Gate 照舊。
+  - 不降低任何 Security／Investment／Data／CI／Audit Gate。若與既有文字衝突，取較嚴者。
+  - ⚠️ 揭露（CLAUDE.md §-2 規則 6）：「核准範圍」與上述關係判讀、對「全同意」涵蓋範圍的讀法，皆由單一撰寫組產出，**沒有第二組驗過**；摘要中的選項敘述轉述自 Stage B 草稿，亦非客戶原文。
+- **來源**：客戶 2026-10-26 Stage C 裁示（本 session；經總管轉交），**逐字收錄，未改寫**：
+
+```
+G1 C｜G2 X｜G3 B｜G4 B｜G5 B｜G6 A｜G7 B｜線框套件 核准｜確認表 全同意
+
+補充執行條件：
+
+1. 本次核准的是 Stage C 的 IA／UX／線框設計方向，不代表把文件中的 INFERENCE 自動升格為 FACT。
+2. Stage D 實作前／實作時，所有已標示未複驗的資料契約、欄位可用性、L3 彙總讀法、動態引用等，必須以最新 main 實證確認；驗不到就維持 missing／未確認，不得補猜。
+3. 不因本次核准新增或修改投資語意、Risk Cap、threshold、weights、台股／國際趨勢定義、估值公式或資料來源。
+4. G7 採 B：High 項目分批處理；不得因 Stage C 核准而視為 HI-1～HI-6 已核准施工。
+5. 舊 UI 維持 Removal Gate，未完成新版對等驗收前不得刪除。
+6. Stage D 開始前依 DEC-084 再做一次 Model × Effort Check；若目前配置已是最低足夠配置，可直接靜默繼續。
+7. 維持 Silent Autonomous Cruise 與 Resume Checkpoint；若 context／quota 已不適合安全繼續，依既有治理主動通知我換新對話。
+```
+
 
 ## 2. 產品／UI
 
