@@ -699,3 +699,43 @@ CI、GitHub Actions、audit agent、check_suite 等若可自動恢復：標 🟢
 - **強化**第 20 節（Resume Checkpoint）與 DEC-067／068／079；**不取代**第 3 節 Silent Autonomous Cruise、第 4 節 Stop／Decision Gate、第 9／18 節 Model／Effort Gate。
 - **不降低任何 Gate**（Security／Investment／Data／CI／Audit）；不改產品 code、不改投資語意。
 - 若與既有文字衝突，取較嚴者。
+
+📌 第 22 節（Proactive Conversation Handoff，DEC-088）為第 21 節的延伸情境：context 不適合安全續跑時的「建議換新對話」屬 🟡。本行為追加指引，不改上列既有原文。
+
+---
+
+## 第 22 節｜Proactive Conversation Handoff／主動建議換新對話（客戶 2026-10-26，DEC-088）
+
+> **永久治理規則；與第 20、21 節並行，若與舊文字衝突以較嚴者為準；舊文字不改。** 客戶逐字原文見 `docs/DECISIONS.md` DEC-088；本節為忠實濃縮，若有出入以原文為準。
+
+### 22.1 觸發條件
+
+- 專案 AI 判斷目前 conversation 的 context／token／quota／session 狀態，**已不適合安全繼續下一完整工作階段**時觸發。
+- **若目前 context 仍健康，不得為形式頻繁要求換對話。**
+
+### 22.2 四步順序（不得調換、不得省略）
+
+1. 先完成最近合法 Safe Checkpoint。
+2. 更新 HANDOFF／Resume Checkpoint（第 20 節）。
+3. 確認 branch／PR／CI／next single action 可由新 session 恢復。
+4. 主動回覆，首句固定：「🟡 需要你回覆：建議換新對話。」並簡短說明原因，同時提供一段可直接貼到新 Claude Code 對話的接手提示語。
+
+### 22.3 禁止事項
+
+- 不得 checkpoint 後默默停住（第 21 節 No Silent Stop；此情境屬 🟡）。
+- 不得要求客戶重新解釋做到哪裡。
+
+### 22.4 接手提示語的定位與建議骨架
+
+- 接手提示語**只做入口**；新 session 仍以 GitHub Verification Gate 與 GitHub SSOT 為準，不以提示語內容或記憶為事實依據。
+- 建議骨架（要點，非客戶原文；撰寫組建議）：
+  1. 先做 GitHub Verification Gate（fetch、main SHA、open PR、check-run）。
+  2. 讀 `PROJECT_RULES.md`、`docs/HANDOFF.md` 的 Resume Checkpoint、`docs/PROJECT_STATE.md`、`docs/BACKLOG.md`、`docs/DECISIONS.md`。
+  3. 以 GitHub 事實優先，與文件衝突時以 GitHub 為準。
+  4. 下一個唯一動作（next single action）。
+
+### 22.5 與既有治理的關係
+
+- **強化**第 20 節（Resume Checkpoint）與第 21 節；**不建立第二套狀態 SSOT**；不取代第 18 節 Model／Effort Gate（DEC-084）。
+- **不降低任何 Gate**（Security／Investment／Data／CI／Audit）；不改產品 code、不改投資語意。
+- 若與既有文字衝突，取較嚴者。

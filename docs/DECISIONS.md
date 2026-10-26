@@ -829,6 +829,43 @@ Effort：Low
 不得直接無提示停手。
 ```
 
+### DEC-088｜Proactive Conversation Handoff／主動建議換新對話（客戶 2026-10-26）
+> 2026-10-26 補登（ID 取下一個未用號；落盤前實測 `git grep -n "DEC-088"` 0 命中、最大為 DEC-087）。**本條不改任何產品 code／投資語意；規則落點 `PROJECT_RULES.md` 第 22 節。** 不新增功能需求、不改投資公式／門檻／權重／Risk Cap、不改資料來源、不授權任何 implementation。
+- **背景**：長對話的 context／token／quota／session 狀態可能已不適合安全繼續下一完整工作階段；客戶要求此時 AI 先把現場落盤，再主動建議換新對話並附接手提示語，避免 checkpoint 後默默停住、也避免客戶需要重新解釋做到哪裡。
+- **內容**：見下方「來源」逐字原文（觸發條件、四步順序、固定首句、接手提示語、禁止事項、context 健康時不得頻繁要求）。濃縮可執行版見 `PROJECT_RULES.md` 第 22 節；若濃縮與原文有出入，以原文為準。
+- **範圍**：治理（永久規則）｜**日期**：2026-10-26｜**決策者**：客戶｜**狀態**：生效（`PROJECT_RULES.md` 第 22 節；待 PR 合併）
+- **與其他 DEC 的關係**（append-only；舊 DEC 條文一字不改；以下為撰寫組讀法，非客戶原文；單組）：
+  - **DEC-086**（Resume Checkpoint）：**強化**；原文要求換對話前先更新 HANDOFF／Resume Checkpoint，不建立第二套狀態 SSOT。
+  - **DEC-087**（No Silent Stop）：**同向**；「建議換新對話」屬需要客戶回覆的停手，首行標 🟡（原文固定首句即為 🟡）。
+  - **DEC-079／DEC-067／DEC-068**（額度落盤／Handoff／GitHub SSOT）：**強化**，不取代；新 session 仍以 GitHub Verification Gate 與 GitHub SSOT 為準。
+  - **DEC-084**（Model×Effort）：**不取代**；兩者各自獨立觸發。
+  - 不建立第二套狀態 SSOT；不降低任何 Security／Investment／Data／CI／Audit Gate。若與既有文字衝突，取較嚴者。
+  - ⚠️ 揭露（CLAUDE.md §-2 規則 6）：上述關係判讀由單一撰寫組產出，**沒有第二組驗過**。
+- **來源**：客戶 2026-10-26 指示（本 session；經總管轉交），**逐字收錄，未改寫**：
+
+```
+Proactive Conversation Handoff
+
+當專案 AI 判斷目前 conversation 的 context／token／quota／session 狀態已不適合安全繼續下一完整工作階段時：
+
+- 先完成最近合法 Safe Checkpoint
+- 更新 HANDOFF／Resume Checkpoint
+- 確認 branch／PR／CI／next single action 可由新 session 恢復
+- 然後必須主動回覆：
+
+「🟡 需要你回覆：建議換新對話。」
+
+並簡短說明原因。
+
+同時提供一段可直接貼到新 Claude Code 對話的接手提示語。
+
+不得 checkpoint 後默默停住；不得要求客戶重新解釋做到哪裡。
+
+新 session 仍以 GitHub Verification Gate 與 GitHub SSOT 為準，接手提示語只做入口。
+
+若目前 context 仍健康，不得為形式頻繁要求換對話。
+```
+
 
 ## 2. 產品／UI
 

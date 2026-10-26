@@ -694,3 +694,20 @@
 - 規則落點 `PROJECT_RULES.md` 第 21 節；逐字原文與關係見 `docs/DECISIONS.md` DEC-087。
 - 強化 DEC-067／068／079／086；同向 DEC-084；不取代 Silent Autonomous Cruise；不降低任何 Gate；不改產品 code／投資語意。
 - ⚠️ 單一撰寫組產出，無第二組驗過。
+
+## 42. Proactive Conversation Handoff／主動建議換新對話（DEC-088，客戶 2026-10-26；append-only；Approved）
+
+- 規則：當 context／token／quota／session 狀態不適合安全繼續下一完整工作階段時，依序完成 Safe Checkpoint → 更新 HANDOFF／Resume Checkpoint → 確認 branch／PR／CI／next single action 可恢復 → 主動回覆「🟡 需要你回覆：建議換新對話。」＋簡短原因＋可直接貼上的接手提示語。
+- 禁止 checkpoint 後默默停住、禁止要求客戶重新解釋做到哪裡；接手提示語只做入口，新 session 仍以 GitHub Verification Gate 與 GitHub SSOT 為準；context 仍健康時不得為形式頻繁要求換對話。
+- 規則落點 `PROJECT_RULES.md` 第 22 節；逐字原文與關係見 `docs/DECISIONS.md` DEC-088。
+- 強化 DEC-086／087／067／068／079；不取代 DEC-084；不建立第二套狀態 SSOT；不降低任何 Gate；不改產品 code／投資語意。
+- ⚠️ 單一撰寫組產出，無第二組驗過。
+
+## 43. 新 UI Stage B 設計草稿（DEC-082 Stage B；2026-10-26；append-only；**草稿，待 Stage C 客戶 Gate**）
+
+- 交付物：`docs/vnext/NEWUI_STAGE_B_DRAFT_2026-10-26.md`（基準 main `0ad07fd7`）：IA 草稿（責任方向↔現行 nav 三個候選）、六個責任方向頁面責任卡、🛡️／🎯／⚡／🩺 文字線框與互動對映、跨頁互動、Old→New Interaction Coverage 202 列收斂、S1～S28 收斂（B9）、獨立 QA 修正紀錄（B10）。
+- 狀態：Stage B **草稿已交付（待 PR）**；單組撰寫＋三組獨立 QA 複驗後已逐項修正（B10），**修正後尚未再經獨立複驗**；Stage C 正式客戶 Gate **尚未呈現**。
+- 待客戶：**G1**（導覽架構：A 沿用／B 六向重組／C 六向殼）、**G2**（🎯 找＋查同頁 X／兩頁 Y）、**G3**（⚡ 是否建、最小版本）、**G4**（🩺 第一版範圍與全站一行狀態）、**G5**（可點跨頁跳轉）、**G6**（🛡️ 逐檔表）、**G7**（High 待開事項是否另開）；另需明確回覆「線框套件（B3～B7）整體核准／退回／指定修改處」與「⚑／結構性自決項確認表」逐項同意／推翻。**沉默不得視為同意**，未回覆＝維持現況／暫行。總管自決 D-1～D-41、輕量確認 Q1～Q4、High 待開清單 HI-1～HI-6（未決，不擬答案）。
+- ⛔ **Stage C 核准前不得施工**：0 程式碼、0 測試、0 navigation 變更、不刪舊 UI、不開 P2、不改投資公式／門檻／Risk Cap／趨勢或估值定義、不新增資料來源或 Action 語彙。
+- 規則落點／依據：DEC-082（Stage A→B→C→D）、DEC-085／`PROJECT_RULES.md` 第 19 節（責任方向≠現行 nav 命名、SSOT、Coverage 四狀態、Missing 語意）；DEC-088 已記於第 42 節。
+- ⚠️ 草稿內的程式碼層級宣稱，除各處標 `FACT` 並附 `file::symbol` 者外，均為 `INFERENCE`／未複驗；總管推薦（RECOMMENDATION）不是已選。
