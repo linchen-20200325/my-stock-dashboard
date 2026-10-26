@@ -10,25 +10,25 @@
 
 ### 📌 Resume Checkpoint（DEC-086）
 
-| 欄位 | 內容（2026-10-26T11:57:45Z；Stage B 草稿 B10 修正後 checkpoint 更新，執行組自檢，未獨立重驗） |
+| 欄位 | 內容（2026-10-26T12:28:46Z；#938 已合併、Stage C 已呈現後 checkpoint 更新，執行組自檢，未獨立重驗） |
 |---|---|
-| latest verified main SHA | `0ad07fd7`（#937 合併；本 worktree 基準，`git log` 實查；本輪未重新 fetch，**以 GitHub 實查為準**） |
-| current working branch | `docs/newui-stage-b-draft`（含 DEC-088 治理 commit `d4bbb9ed`；尚未 push） |
-| current PR | 待開 Draft PR |
-| current task／batch | New UI Stage B 設計草稿＋DEC-088 治理 |
-| completed in this batch | Stage B 草稿 B0～B9 與三組獨立 QA 修正（草稿 B10 逐項紀錄）；DEC-088 治理落盤（commit `d4bbb9ed`）；BACKLOG `NEWUI-STAGE-B-DRAFT`、PROJECT_STATE §43、本表更新 |
-| exact current stopping point | PR 開立前（waiting_for_customer＝false；Stage C 客戶 Gate 在 PR 合併後才呈現，尚未呈現） |
-| next single action | push 分支並開 Draft PR → PR CI 綠燈 → Auto-Ship 合併 → 向客戶呈現 Stage C（G1～G7＋線框套件核准＋⚑ 確認表）；沉默不視為同意 |
-| tests／CI 已完成 | 無（docs-only；本地僅做文件自檢：表格欄數、code fence、ID 集合、`git diff --check`） |
-| tests／CI 尚未完成 | PR CI（Fast checks／Slow tests）尚未跑；B10 修正後尚未再經獨立複驗 |
-| unresolved true Stop Gates | Stage C 為正式客戶 Gate（尚未呈現）；🔴 無 |
-| uncommitted／unpushed work | 以 git 實查為準（本輪執行組不 commit；Stage B 草稿檔為未追蹤新檔，BACKLOG／HANDOFF／PROJECT_STATE 為已修改） |
-| relevant evidence location | `docs/vnext/NEWUI_STAGE_B_DRAFT_2026-10-26.md`；`docs/DECISIONS.md` DEC-088；`docs/BACKLOG.md` `NEWUI-STAGE-B-DRAFT`；`docs/PROJECT_STATE.md` §43 |
+| latest verified main SHA | `0ee86551`（#938 squash 合併；`git fetch` 後 `git rev-parse --short origin/main` 實查，**以 GitHub 實查為準**） |
+| current working branch | 無（本 checkpoint 由 `docs/handoff-checkpoint-938` 另開小 PR 同步） |
+| current PR | 無（#938 已合併；本 checkpoint 同步由 `docs/handoff-checkpoint-938` 另開小 PR） |
+| current task／batch | New UI Stage B 已完成並合併；Stage C（正式客戶 Decision Gate）已呈現，等待客戶裁示 |
+| completed in this batch | Stage B 設計草稿＋DEC-088（#938） |
+| exact current stopping point | 已向客戶呈現 Stage C，**waiting_for_customer＝true**（stop reason：Stage C 為 DEC-082 正式客戶 Gate；🔴 需要客戶裁示） |
+| next single action | 客戶回覆後，先把裁示以新 DEC（取下一個未用號，落盤前實測）append-only 記入 `docs/DECISIONS.md`，再依被核准範圍規劃 Stage D（G1＝C 時須先出「導覽殼」線框）；客戶未回覆前不得進 Stage D、不得施工 |
+| tests／CI 已完成 | #938 Fast checks／Slow tests 綠燈 |
+| tests／CI 尚未完成 | 無（本 checkpoint 小 PR 的 CI 除外） |
+| unresolved true Stop Gates | 🔴 Stage C（G1～G7＋線框套件核准＋結構性確認表 24 項＋輕量確認 Q1～Q4） |
+| uncommitted／unpushed work | 無 |
+| relevant evidence location | `docs/vnext/NEWUI_STAGE_B_DRAFT_2026-10-26.md`（B9.8 一頁式摘要）、DEC-088、PR #938 |
 | recommended Model | Sonnet 5.5 |
 | recommended Effort | Medium |
-| last checkpoint timestamp | 2026-10-26T11:57:45Z |
+| last checkpoint timestamp | 2026-10-26T12:28:46Z |
 
-🟡／🔴 停手時另須同步填寫（DEC-087）：stop reason／waiting_for_customer（true/false）／exact customer action／exact resume condition；本批為 🟢：waiting_for_customer＝false，其餘 N/A。
+🟡／🔴 停手時另須同步填寫（DEC-087）：stop reason＝Stage C 正式客戶 Gate；waiting_for_customer＝true；exact customer action＝回覆 G1～G7 選項字母＋線框套件「核准／退回／指定修改處」＋結構性確認表「全同意」或「推翻 D-xx」（Q1～Q4 可選）；exact resume condition＝客戶回覆；未回覆＝維持現況／暫行，不視為核准。
 
 此為 DEC-086 Resume Checkpoint：**GitHub 操作事實優先於本表；不一致時修正本表**。
 只記目前狀態，不複製 BACKLOG／DECISIONS；本表不取代下方「現行短版」段（DEC-085 段仍是唯一現行短版標記）。
@@ -344,10 +344,10 @@ DEC-086 規則已於 main，本表已落地。
 
 | 項目 | 現況（2026-10-26，docs-only；**以 GitHub 為準**） |
 |---|---|
-| Stage B 狀態 | **已完成草稿**：`docs/vnext/NEWUI_STAGE_B_DRAFT_2026-10-26.md`（B0～B9，另 B10 為三組獨立 QA 修正紀錄）；分支 `docs/newui-stage-b-draft`，PR 待開（Draft）。B10 修正後**尚未再經獨立複驗** |
-| Stage C | **待客戶**：Stage C 才是 DEC-082 的**正式客戶 Gate**，尚未呈現。客戶需回覆 **G1～G7**（G1 導覽架構／G2 🎯 找＋查同頁或兩頁／G3 ⚡ 行動／G4 🩺 資料中心／G5 可點跨頁跳轉／G6 🛡️ 逐檔表／G7 High 待開事項是否另開）＋**線框套件整體核准／退回**＋「⚑／結構性自決項確認表」逐項同意／推翻；輕量確認 Q1～Q4；**沉默不視為同意**，未回覆＝維持現況／暫行 |
+| Stage B 狀態 | **已完成草稿**：`docs/vnext/NEWUI_STAGE_B_DRAFT_2026-10-26.md`（B0～B9，另 B10 為三組獨立 QA 修正紀錄）；~~分支 `docs/newui-stage-b-draft`，PR 待開（Draft）。~~ **#938 已合併（main `0ee86551`）；Stage C 已呈現**（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新：#938 已合併））。B10 修正後**尚未再經獨立複驗** |
+| Stage C | **待客戶**：Stage C 才是 DEC-082 的**正式客戶 Gate**，~~尚未呈現~~ 已呈現（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。客戶需回覆 **G1～G7**（G1 導覽架構／G2 🎯 找＋查同頁或兩頁／G3 ⚡ 行動／G4 🩺 資料中心／G5 可點跨頁跳轉／G6 🛡️ 逐檔表／G7 High 待開事項是否另開）＋**線框套件整體核准／退回**＋「⚑／結構性自決項確認表」逐項同意／推翻；輕量確認 Q1～Q4；**沉默不視為同意**，未回覆＝維持現況／暫行 |
 | 不授權施工 | ⛔ 本草稿**不授權任何施工**：0 程式碼、0 測試、0 nav 變更、不刪舊 UI、不開 P2、不開 Stage D、不改投資公式／門檻／Risk Cap／趨勢或估值定義、不新增資料來源或 Action 語彙；High 待開清單 HI-1～HI-6 **未決** |
-| Next Safe Point | PR CI 綠燈 → Auto-Ship → 向客戶呈現 Stage C；待辦見 `docs/BACKLOG.md` `NEWUI-STAGE-B-DRAFT`，摘要見 `docs/PROJECT_STATE.md` §43 |
+| Next Safe Point | ~~PR CI 綠燈 → Auto-Ship → 向客戶呈現 Stage C~~ 已完成（#938 已合併、Stage C 已呈現）；現在等客戶回覆（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；待辦見 `docs/BACKLOG.md` `NEWUI-STAGE-B-DRAFT`，摘要見 `docs/PROJECT_STATE.md` §43 |
 | ⚠️ 揭露 | 草稿由單組撰寫、整併一組、QA 三組複驗後逐項修正；程式碼層級宣稱除標 `FACT` 者外為 `INFERENCE`；本段與 PR 狀態為撰寫當下已知事實，會過期 |
 
 ## 以下為歷史紀錄與細節（非現況快照；現況以第 0 節與 GitHub 為準）
