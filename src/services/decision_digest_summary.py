@@ -32,12 +32,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.decision_digest import AiParticipation, Availability, DataStatus, DecisionDigest, Fact
+from shared.decision_digest import AiParticipation, Availability, DataStatus, DecisionDigest, Fact, StrategyType
 from shared.decision_digest_grounding import (
     SHAPES, Lit, Ref, SummaryDraft, SummaryResult, SummarySection, SummarySentence, build_ref_index, holding_ref,
     oldest_stale_evidence, section_ref,
 )
-from shared.decision_digest_terms import SEC_ACTIONS, SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN, SEC_INDUSTRY, SEC_MARKET
+from shared.decision_digest_terms import INSUFFICIENT_FAMILY_REASONS, SEC_ACTIONS, SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN, SEC_INDUSTRY, SEC_MARKET
 from shared.decision_digest_validator import SummaryState, assess_digest, strategy_entries
 
 def _expand_shape(sid: str, *ref_ids: str) -> SummarySentence:
@@ -56,7 +56,8 @@ def _fact_sentence(f: Fact) -> SummarySentence:
         return _expand_shape(f"fact_{kind}_{st.value}", f.fact_id)
     if st is DataStatus.INVALID:
         return _expand_shape("fact_invalid", f.fact_id)
-    return _expand_shape("fact_missing", f.fact_id)          # MISSING／FAILED
+    reason = f.missing_reason.value                                  # MISSING／FAILED：依缺值原因選忠實的句型
+    return _expand_shape("fact_missing" if reason in INSUFFICIENT_FAMILY_REASONS else f"fact_{reason}", f.fact_id)
 
 
 def _market_section(digest: DecisionDigest) -> SummarySection:
@@ -84,7 +85,8 @@ def _strategy_section(digest: DecisionDigest, key: str) -> SummarySection:
         for h in mine:
             sents.append(_expand_shape("strategy_entry", holding_ref(h.key.portfolio_id, h.key.symbol)))
         if not mine:
-            sents.append(_expand_shape(f"strategy_unset:{key}", rid))
+            classified = any(h.strategy is not StrategyType.UNCLASSIFIED for h in hs.entries)
+            sents.append(_expand_shape(f"strategy_{'none' if classified else 'unset'}:{key}", rid))
     return SummarySection(key, tuple(sents))
 
 

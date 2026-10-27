@@ -61,22 +61,24 @@ from decimal import Decimal
 from typing import Any, Callable, Optional
 
 from shared.decision_digest import (
-    AiParticipation, Availability, DataStatus, DecisionDigest, Fact, MissingReason,
+    AiParticipation, Availability, DataStatus, DecisionDigest, Fact, MissingReason, StrategyType,
 )
 from shared.decision_digest_terms import (
     FIELD_AS_OF, FIELD_BIND, FIELD_COUNT, FIELD_LABEL, FIELD_MARKER, FIELD_REASON, FIELD_STRATEGY, FIELD_SYMBOL,
     DIGEST_SECTIONS, FIELD_TEXT, FIELD_VALUE, FIELD_WORDING, FACT_LABEL_FALLBACK, FACT_LABELS, FORBIDDEN_CHAR_CATEGORIES,
     GATE_DIGEST, GATE_G1, GATE_G2, GATE_G3, GATE_G4, GATE_G5, GATE_G6, GATE_STRUCT, GROUNDING_GATES,
     LABEL_ALL_SECTIONS, MARK_NOT_DEFINED, MARK_NOT_WIRED, MARK_RESEARCH_ONLY, MISSING_REASON_LABEL_UNKNOWN,
-    MISSING_REASON_LABELS, REF_HOLDING_PREFIX, REF_SECTION_PREFIX, RISK_CAP_HIDDEN_WORDING, SEC_ACTIONS,
+    MISSING_REASON_LABELS, REF_SECTION_PREFIX, RISK_CAP_HIDDEN_WORDING, SEC_ACTIONS,
     SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN, SEC_INDUSTRY, SEC_MARKET, SECTION_KEYS, SECTION_LABELS,
     SECTION_REF_LABELS, TEMPLATES, TPL_ACT_NONE, TPL_ACT_STALE_OPEN, TPL_ACT_UNAVAILABLE_OPEN,
     TPL_CLOSE, TPL_COLON, TPL_DATE_OPEN, TPL_ENTRY_TAIL, TPL_GLYPH, TPL_HOLDINGS_UNAVAILABLE_MID,
     TPL_INVALID_TAIL, TPL_MISSING_OPEN, TPL_PCT, TPL_PROXY_TAIL, TPL_SECTION_LABEL, TPL_STALE_DATE_OPEN,
     TPL_STRATEGY_IS, TPL_STRATEGY_UNSET_TAIL, TPL_UNDETERMINED_TAIL, TPL_UNKEYED_OPEN, TPL_UNKEYED_TAIL,
+    INSUFFICIENT_FAMILY_REASONS, TPL_CONTRACT_DRIFT_TAIL, TPL_NO_VARIATION_TAIL, TPL_NOT_APPLICABLE_TAIL,
+    TPL_NOT_DEFINED_TAIL, TPL_NOT_WIRED_TAIL, TPL_STRATEGY_NONE_TAIL,
 )
 from shared.decision_digest_validator import (
-    SECTION_ALL, DigestAssessment, SummaryState, assess_digest, strategy_entries,
+    SECTION_ALL, DigestAssessment, SummaryState, assess_digest, holding_ref, strategy_entries,
 )
 
 
@@ -188,10 +190,6 @@ class RefInfo:
     obj: Any = None              # Fact／ActionRef／HoldingEntry／None（section）
     group: str = ""              # fact 的來源群：market／holding／restricted（Risk Cap 與趨勢觀測值）
     name: str = ""               # section 的 Digest 段名
-
-
-def holding_ref(portfolio_id: str, symbol: str) -> str:
-    return f"{REF_HOLDING_PREFIX}{portfolio_id}:{symbol}"
 
 
 def section_ref(name: str) -> str:
@@ -364,6 +362,11 @@ def _section_pre(sec_key: str, name: str, cond: Callable) -> Callable:
     return pre
 
 
+def _any_classified(digest: DecisionDigest) -> bool:
+    """持股中是否有任何一檔已被分類為存股或資本利得（全未分類 → False）。"""
+    return any(h.strategy is not StrategyType.UNCLASSIFIED for h in digest.holdings.entries)
+
+
 def _entry_pre(c: Ctx):
     if c.digest.holdings.availability is Availability.UNAVAILABLE:
         return (GATE_G3, "precondition_failed", "持股讀不到時不得列出個別持股")
@@ -413,17 +416,31 @@ def _build_shapes() -> tuple:
             skel = (_R(0, KIND_FACT, FIELD_LABEL), _L(TPL_COLON), *body, *tails)
             pre = _status_pre(GROUP_MARKET, status, unit=unit, check_unit=hk != "text")
             out.append(Shape(f"fact_{hk}_{status.value}", S_MKT, skel, pre))
-    # 缺值／失敗：兩種 status 共用一個句型
-    miss_pre = _status_pre(GROUP_MARKET, DataStatus.MISSING)
-
-    def missing_pre(c: Ctx):
-        f: Fact = c.slots[0].obj
-        if f.status is DataStatus.FAILED and c.slots[0].group == GROUP_MARKET:
+    # 缺值／失敗（status ∈ {missing, failed}）：依缺值原因分句型 —— 只有「資料不足」家族才說資料不足，
+    # 其餘原因（不適用／期間無變異／契約不一致／尚未定義／尚未接線）各有忠實對應的固定句型，不得包成「資料不足」。
+    def missing_pre(family: str):
+        def pre(c: Ctx):
+            info = c.slots[0]
+            f: Fact = info.obj
+            if info.group != GROUP_MARKET:
+                return (GATE_G4, "wrong_group", "此句型只能用在市場事實上")
+            if f.status not in (DataStatus.MISSING, DataStatus.FAILED):
+                return (GATE_G3, "status_mismatch",
+                        f"項目 status={f.status.value}，句型要求 missing／failed（狀態不得升級／降級）")
+            reason = getattr(f.missing_reason, "value", None)
+            if (reason in INSUFFICIENT_FAMILY_REASONS) != (family == "insufficient") or (
+                    family != "insufficient" and reason != family):
+                return (GATE_G3, "reason_mismatch", f"缺值原因 {reason!r} 不屬於此句型（{family}）：措辭必須忠實對應原因")
             return None
-        return miss_pre(c)
+        return pre
     out.append(Shape("fact_missing", S_MKT,
                      (_L(TPL_GLYPH), _R(0, KIND_FACT, FIELD_LABEL), _L(TPL_MISSING_OPEN),
-                      _R(0, KIND_FACT, FIELD_REASON), _L(TPL_CLOSE)), missing_pre))
+                      _R(0, KIND_FACT, FIELD_REASON), _L(TPL_CLOSE)), missing_pre("insufficient")))
+    for fam, tpl in (("not_applicable", TPL_NOT_APPLICABLE_TAIL), ("no_variation", TPL_NO_VARIATION_TAIL),
+                     ("contract_drift", TPL_CONTRACT_DRIFT_TAIL), ("not_defined", TPL_NOT_DEFINED_TAIL),
+                     ("not_wired", TPL_NOT_WIRED_TAIL)):
+        out.append(Shape(f"fact_{fam}", S_MKT, (_L(TPL_GLYPH), _R(0, KIND_FACT, FIELD_LABEL), _L(tpl)),
+                         missing_pre(fam)))
     out.append(Shape("fact_invalid", S_MKT,
                      (_L(TPL_GLYPH), _R(0, KIND_FACT, FIELD_LABEL), _L(TPL_INVALID_TAIL)),
                      _status_pre(GROUP_MARKET, DataStatus.INVALID)))
@@ -448,7 +465,12 @@ def _build_shapes() -> tuple:
                          (_L(TPL_GLYPH), _L(lab), _L(TPL_STRATEGY_UNSET_TAIL), _R(0, KIND_SECTION, FIELD_BIND)),
                          _section_pre(sk, "holdings", lambda d, sk=sk: (
                              d.holdings.availability is not Availability.UNAVAILABLE
-                             and not strategy_entries(d, sk)))))
+                             and not strategy_entries(d, sk) and not _any_classified(d)))))
+        out.append(Shape(f"strategy_none:{sk}", sset,
+                         (_L(TPL_GLYPH), _L(lab), _L(TPL_STRATEGY_NONE_TAIL), _R(0, KIND_SECTION, FIELD_BIND)),
+                         _section_pre(sk, "holdings", lambda d, sk=sk: (
+                             d.holdings.availability is not Availability.UNAVAILABLE
+                             and not strategy_entries(d, sk) and _any_classified(d)))))
     out.append(Shape("strategy_entry", frozenset({SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN}),
                      (_R(0, KIND_HOLDING, FIELD_SYMBOL), _L(TPL_STRATEGY_IS), _R(0, KIND_HOLDING, FIELD_STRATEGY),
                       _L(TPL_ENTRY_TAIL)), _entry_pre))
@@ -597,28 +619,28 @@ def _check_sentence(sent: SummarySentence, section: str, i: int, digest: Decisio
 # ══════════════════════════════════════════════════════════════════════
 # G5 的「必須明示」清單
 # ══════════════════════════════════════════════════════════════════════
-def _fact_shape_ids(status: DataStatus) -> tuple:
-    if status is DataStatus.STALE:
-        return tuple(f"fact_{k}_stale" for k in ("text", "value", "value_pct"))
-    if status is DataStatus.PROXY:
-        return tuple(f"fact_{k}_proxy" for k in ("text", "value", "value_pct"))
-    if status is DataStatus.INVALID:
+def _fact_shape_ids(f: Fact) -> tuple:
+    """該事實「可以用來揭露它」的句型 id（依 status 與缺值原因）。"""
+    st = f.status
+    if st in (DataStatus.OK, DataStatus.STALE, DataStatus.PROXY):
+        return tuple(f"fact_{k}_{st.value}" for k in ("text", "value", "value_pct"))
+    if st is DataStatus.INVALID:
         return ("fact_invalid",)
-    return ("fact_missing",)
+    reason = getattr(f.missing_reason, "value", None)
+    return ("fact_missing",) if reason in INSUFFICIENT_FAMILY_REASONS else (f"fact_{reason}",)
 
 
 def section_basis(digest: DecisionDigest, key: str) -> tuple:
     """G5 的「必須明示」清單：((引用 id, 可接受的句型 id tuple), ...)。
 
-    只列「Digest 中非 ok 的依據」：缺資料／過期／代理的市場事實、未定義的趨勢／產業／合理區間、Risk Cap 卡面措辭、
-    持股讀不到／未帶鍵持股／尚未設定策略分類／已分類持股（判定未接線）、行動不可得／規則層未產出行動。全部由 Digest 推導。
+    **涵蓋**（G5）：每個市場事實（ok 也要）、未定義的趨勢／產業／合理區間、Risk Cap 卡面措辭、
+    持股讀不到／未帶鍵持股／該策略的每一檔持股（或此策略下無歸類持股／尚未設定策略分類）都必須被引用。全部由 Digest 推導。
     行動段不列在此（見下方註解）：各項行動由 `action_list_mismatch`（一對一）檢查。
     """
     out: list = []
     if key == SEC_MARKET:
-        for f in digest.market.facts:
-            if f.status is not DataStatus.OK:
-                out.append((f.fact_id, _fact_shape_ids(f.status)))
+        for f in digest.market.facts:                      # 涵蓋：每個市場事實（含 ok）都必須被引用
+            out.append((f.fact_id, _fact_shape_ids(f)))
         for name in ("tw_trend", "intl_trend", "valuation"):
             out.append((section_ref(name), ("section_undefined",)))
         out.append((section_ref("risk_cap"), ("risk_wording",)))
@@ -636,7 +658,7 @@ def section_basis(digest: DecisionDigest, key: str) -> tuple:
             for h in mine:
                 out.append((holding_ref(h.key.portfolio_id, h.key.symbol), ("strategy_entry",)))
             if not mine:
-                out.append((rid, (f"strategy_unset:{key}",)))
+                out.append((rid, ((f"strategy_none:{key}",) if _any_classified(digest) else (f"strategy_unset:{key}",))))
     elif key == SEC_ACTIONS:
         pass       # 行動段：不可得／無行動由「句型前置條件＋非空段」涵蓋，各項行動由 `action_list_mismatch` 一對一檢查
     else:
@@ -651,6 +673,8 @@ def _report(violations: list, dropped: list, *, structural: bool, digest_invalid
             surviving: Optional[SummaryDraft]) -> GroundingReport:
     gates = tuple(g for g in GROUNDING_GATES if any(v.gate == g for v in violations))
     blocking = [v for v in violations if v.gate != GATE_G6]
+    if blocking:
+        surviving = None                       # 未通過者沒有可用內容（消費端只能用 accepted 報告的 surviving）
     return GroundingReport(accepted=not blocking, violations=tuple(violations), dropped=tuple(dropped),
                            failed_gates=gates, structural_failure=structural, digest_invalid=digest_invalid,
                            surviving=surviving)
@@ -748,7 +772,7 @@ class SummaryResult:
     invalid_sections、failed_gates、violations、retained_sections）**全部在建構時由 Digest 推導**
     （`init=False`），所以無法手造不一致的組合；`dataclasses.replace` 會重跑 `__post_init__`。
     建構時強制：
-    - `mode` 必須是 AB-0 既有的 `AiParticipation`（不新增列舉值）；
+    - `mode` 必須是 AB-0 既有的 `AiParticipation`（不新增列舉值），本批僅允許 `rule_only`，且須與 `digest.ai_participation` 一致；
     - Digest INVALID ⇒ `sections` 必須為空（不輸出任何投資結論）；
     - 否則 `sections` 必須通過 `check_summary` 且**乾淨**（無丟棄、`surviving == 原內容`）—— 摘要內容與 Digest 綁定。
     """
@@ -766,6 +790,10 @@ class SummaryResult:
     def __post_init__(self) -> None:
         if type(self.mode) is not AiParticipation:
             raise ValueError(f"SummaryResult.mode 必須是 AiParticipation：{self.mode!r}")
+        if self.mode is not AiParticipation.RULE_ONLY:
+            raise ValueError("AB-2a 只允許 mode=rule_only；ai_explained／ai_rejected 的建構留給 AB-2b（Decision Gate）")
+        if type(self.digest) is DecisionDigest and self.digest.ai_participation is not self.mode:
+            raise ValueError(f"mode 必須與 digest.ai_participation 一致：{self.mode!r} ≠ {self.digest.ai_participation!r}")
         a = assess_digest(self.digest)
         sset = object.__setattr__
         sset(self, "state", a.state)

@@ -34,6 +34,7 @@ Digest 的跨物件不變量（fact_id 唯一、evidence 指向可用事實、�
 """
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass
 from enum import Enum
@@ -41,14 +42,26 @@ from typing import Any
 
 from shared.decision_digest import (
     ActionRef, ActionsSection, Availability, DecisionDigest, DefinitionSection, Fact, FactSection,
-    HoldingEntry, HoldingsSection, RiskCapSection, StrategyType, validate,
+    HoldingEntry, HoldingKey, HoldingsSection, RiskCapSection, StrategyType, validate,
 )
 from shared.decision_digest_rules import validate_action_order, validate_rule_ids
 from shared.decision_digest_terms import (
-    ALLOWED_SPACE, COMBINING_CATEGORIES, DIGEST_GATES_ORDER, FORBIDDEN_CHAR_CATEGORIES, GATE_AB0_CONTRACT, GATE_AB1_ACTION_ORDER, GATE_AB1_RULE_ID, GATE_AB2A_REFS,
+    ALLOWED_SPACE, COMBINING_CATEGORIES, DIGEST_GATES_ORDER, FACT_LABELS, FORBIDDEN_CHAR_CATEGORIES, GATE_AB0_CONTRACT, GATE_AB1_ACTION_ORDER, GATE_AB1_RULE_ID, GATE_AB2A_REFS,
     GATE_AB2A_TEXT, REF_HOLDING_PREFIX, REF_SECTION_PREFIX, SEC_ACTIONS, SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN,
-    SEC_INDUSTRY, SEC_MARKET, SECTION_KEYS, SUPPORTED_UNITS,
+    SEC_INDUSTRY, SEC_MARKET, SECTION_KEYS, SUPPORTED_UNITS, INSUFFICIENT_FAMILY_REASONS, SYMBOL_PATTERN,
 )
+
+_SYMBOL_RE = re.compile(SYMBOL_PATTERN)
+
+
+def holding_ref(portfolio_id: str, symbol: str) -> str:
+    """持股的引用 id —— **無歧義編碼**：`holding:<portfolio_id 長度>:<portfolio_id>:<symbol>`。
+
+    portfolio_id 是不透明鍵、可含 `:`（AB-0 允許），所以不能用分隔符拼接（("a:b","c") 與 ("a","b:c") 會碰撞）；
+    以長度前綴後，任何 (portfolio_id, symbol) 都唯一對應一個字串，反之亦然（symbol 不含 `:`，見 `SYMBOL_PATTERN`）。
+    """
+    return f"{REF_HOLDING_PREFIX}{len(portfolio_id)}:{portfolio_id}:{symbol}"
+
 
 #: 診斷用：不屬於任一摘要段（整份 Digest 層級）的違規，標為此鍵。
 SECTION_ALL = "*"
@@ -140,6 +153,19 @@ def _own_checks(d: DecisionDigest) -> list:
                 if type(f) is Fact:
                     text_check(f"{path}[{i}].text", f.text, section)
 
+    def key_check(path: str, key: Any, sections: tuple) -> None:
+        if type(key) is not HoldingKey:
+            return
+        for sec in sections:
+            if has_forbidden_char(key.portfolio_id):
+                out.append(DigestViolation(GATE_AB2A_TEXT, sec, "bad_portfolio_id_chars", f"{path}.portfolio_id",
+                                           f"portfolio_id 含不可見／不規範字元：{key.portfolio_id!r}"))
+            if has_forbidden_char(key.symbol) or not _SYMBOL_RE.fullmatch(key.symbol):
+                out.append(DigestViolation(GATE_AB2A_TEXT, sec, "bad_symbol", f"{path}.symbol",
+                                           f"symbol 不在允許字元集 {SYMBOL_PATTERN!r}：{key.symbol!r}"))
+
+    hs = getattr(d, "holdings", None)
+    acts = getattr(d, "actions", None)
     fact_ids: list = []
     action_ids: list = []
     m = getattr(d, "market", None)
@@ -158,7 +184,6 @@ def _own_checks(d: DecisionDigest) -> list:
             # 定義狀態段的 observations 依 AB-0 不得帶 text，故不需文字檢查（只收集 id）
             if type(s.observations) is tuple:
                 fact_ids += [f.fact_id for f in s.observations if type(f) is Fact]
-    hs = getattr(d, "holdings", None)
     if type(hs) is HoldingsSection and type(hs.entries) is tuple:
         for i, h in enumerate(hs.entries):
             if type(h) is not HoldingEntry:
@@ -174,22 +199,44 @@ def _own_checks(d: DecisionDigest) -> list:
             f = getattr(rc, name, None)
             if type(f) is Fact:
                 fact_ids.append(f.fact_id)
-    acts = getattr(d, "actions", None)
     if type(acts) is ActionsSection and type(acts.items) is tuple:
         for i, a in enumerate(acts.items):
             if type(a) is ActionRef:
                 text_check(f"actions.items[{i}].text", a.text, SEC_ACTIONS)
                 action_ids.append(a.action_id)
 
+    holding_refs: list = []
+    if type(hs) is HoldingsSection and type(hs.entries) is tuple:
+        for i, h in enumerate(hs.entries):
+            if type(h) is HoldingEntry:
+                key_check(f"holdings.entries[{i}].key", h.key, (SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN))
+                holding_refs.append(holding_ref(h.key.portfolio_id, h.key.symbol))
+    if type(acts) is ActionsSection and type(acts.items) is tuple:
+        for i, a in enumerate(acts.items):
+            if type(a) is ActionRef and a.target is not None:
+                key_check(f"actions.items[{i}].target", a.target, (SEC_ACTIONS,))
+    for sec_name, sec_obj in (("holdings", hs), ("actions", acts)):
+        reason = getattr(sec_obj, "missing_reason", None)
+        if (getattr(sec_obj, "availability", None) is Availability.UNAVAILABLE and reason is not None
+                and getattr(reason, "value", None) not in INSUFFICIENT_FAMILY_REASONS):
+            for sec in ((SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN) if sec_name == "holdings" else (SEC_ACTIONS,)):
+                out.append(DigestViolation(GATE_AB2A_TEXT, sec, "unsupported_missing_reason", f"{sec_name}.missing_reason",
+                                           f"{sec_name} 的缺值原因必須屬於「資料不足」家族 {INSUFFICIENT_FAMILY_REASONS}"
+                                           f"（其餘原因摘要沒有對應句型）：{reason!r}"))
+    unlabeled = [f.fact_id for f in (m.facts if type(m) is FactSection and type(m.facts) is tuple else ())
+                 if type(f) is Fact and f.fact_id not in FACT_LABELS]
+    if len(unlabeled) > 1:
+        out.append(DigestViolation(GATE_AB2A_TEXT, SEC_MARKET, "ambiguous_fact_label", "market.facts",
+                                   f"多個市場事實沒有專屬標籤（會共用 fallback 標籤而無法區分）：{unlabeled!r}"))
     for kind, ids, path in (("fact_id", fact_ids, "facts"), ("action_id", action_ids, "actions.items")):
         for rid in ids:
             if type(rid) is str and rid.startswith((REF_SECTION_PREFIX, REF_HOLDING_PREFIX)):
                 out.append(DigestViolation(GATE_AB2A_REFS, SECTION_ALL, "ref_id_reserved", path,
                                            f"{kind} 不得以保留前綴開頭（evidence 命名空間）：{rid!r}"))
-    clash = {r for r in fact_ids if type(r) is str} & {r for r in action_ids if type(r) is str}
-    for rid in sorted(clash):
+    all_refs = [*fact_ids, *action_ids, *holding_refs]
+    for rid in sorted({r for r in all_refs if type(r) is str and all_refs.count(r) > 1}):
         out.append(DigestViolation(GATE_AB2A_REFS, SECTION_ALL, "ref_id_collision", "actions.items",
-                                   f"fact_id 與 action_id 相同，evidence 指向含糊：{rid!r}"))
+                                   f"引用 id 不唯一（fact／action／持股的 evidence 指向含糊）：{rid!r}"))
     return out
 
 
@@ -266,5 +313,5 @@ def assess_digest(digest: Any) -> DigestAssessment:
 
 __all__ = [
     "SECTION_ALL", "SummaryState", "DigestViolation", "DigestAssessment", "has_forbidden_char",
-    "strategy_entries", "section_availability", "derive_state", "assess_digest",
+    "strategy_entries", "section_availability", "derive_state", "assess_digest", "holding_ref",
 ]

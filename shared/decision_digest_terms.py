@@ -148,6 +148,13 @@ FORBIDDEN_CHAR_CATEGORIES: tuple = ("Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp")
 ALLOWED_SPACE = " "
 #: 組合記號類別（孤立判定用）：Mn／Mc／Me。
 COMBINING_CATEGORIES: tuple = ("Mn", "Mc", "Me")
+#: 持股／行動目標的 `symbol` 允許的字元集（fullmatch）：英數字開頭，之後英數字、`.`、`-`，總長 1～12。
+#: 與台股代號相容：個股 4 碼（2330、6488）、ETF 5～6 碼含字尾（00878、006208、00679B、00937B）、
+#: 含市場後綴的寫法（2330.TW）。不含 `:`、空白、全形字元（AB-0 另要求 NFKC 與無空白）。
+#: `portfolio_id` 是不透明鍵（來源屬 AB-4r），只套用字元類別檢查，不套用本字元集。
+SYMBOL_PATTERN = r"[0-9A-Za-z][0-9A-Za-z.\-]{0,11}"
+#: 摘要的「缺值原因」若屬「資料不足」家族才可包成「資料不足，無法判定（原因）」；其餘原因各有自己的固定句型。
+INSUFFICIENT_FAMILY_REASONS: tuple = ("no_input", "fetch_failed", "not_enough_history")
 #: 市場事實允許的單位（None 以外）。摘要的單位由「模板」決定，不展開 Digest 的 unit 字串。
 SUPPORTED_UNITS: tuple = ("%",)
 
@@ -196,6 +203,12 @@ TPL_ENTRY_TAIL = "tpl.entry_tail"
 TPL_ACT_UNAVAILABLE_OPEN = "tpl.act_unavailable_open"
 TPL_ACT_NONE = "tpl.act_none"
 TPL_ACT_STALE_OPEN = "tpl.act_stale_open"
+TPL_STRATEGY_NONE_TAIL = "tpl.strategy_none_tail"
+TPL_NOT_APPLICABLE_TAIL = "tpl.not_applicable_tail"
+TPL_NO_VARIATION_TAIL = "tpl.no_variation_tail"
+TPL_CONTRACT_DRIFT_TAIL = "tpl.contract_drift_tail"
+TPL_NOT_DEFINED_TAIL = "tpl.not_defined_tail"
+TPL_NOT_WIRED_TAIL = "tpl.not_wired_tail"
 
 #: 固定模板片段。⚠️ 摘要裡**所有**非 Digest 展開的文字都只能來自這張表；不得含阿拉伯數字（數字只能來自欄位展開）。
 TEMPLATES: dict = {
@@ -220,6 +233,12 @@ TEMPLATES: dict = {
     TPL_ACT_UNAVAILABLE_OPEN: f"{MISSING_GLYPH} 本期行動：{MARK_INSUFFICIENT}，{MARK_UNDETERMINED}（",
     TPL_ACT_NONE: f"本期行動：{MARK_NO_ACTION}",
     TPL_ACT_STALE_OPEN: f"（依據{MARK_STALE}，資料日 ",
+    TPL_STRATEGY_NONE_TAIL: "：此策略下無歸類持股",
+    TPL_NOT_APPLICABLE_TAIL: f"：不適用，{MARK_UNDETERMINED}",
+    TPL_NO_VARIATION_TAIL: f"：期間無變異，{MARK_UNDETERMINED}",
+    TPL_CONTRACT_DRIFT_TAIL: f"：資料契約不一致，{MARK_UNDETERMINED}",
+    TPL_NOT_DEFINED_TAIL: f"：{MARK_NOT_DEFINED}，{MARK_UNDETERMINED}",
+    TPL_NOT_WIRED_TAIL: f"：{MARK_NOT_WIRED}，{MARK_UNDETERMINED}",
 }
 #: 摘要段 → 該段「策略標籤」模板 id。
 TPL_SECTION_LABEL: dict = {SEC_BUY_AND_HOLD: TPL_LABEL_BUY_AND_HOLD, SEC_CAPITAL_GAIN: TPL_LABEL_CAPITAL_GAIN}

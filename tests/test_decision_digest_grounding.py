@@ -568,8 +568,8 @@ def test_g5_strategy_classified_entries_need_their_own_sentence():
                     items=[action("0050", "t", "add")])
     b = compose_rule_draft(d)
     assert check_summary(d, b).clean
-    assert section_basis(d, BH) == (("holding:pf-A:0050", ("strategy_entry",)),)
-    assert section_basis(d, CG) == ((section_ref("holdings"), ("strategy_unset:capital_gain",)),)
+    assert section_basis(d, BH) == (("holding:4:pf-A:0050", ("strategy_entry",)),)
+    assert section_basis(d, CG) == ((section_ref("holdings"), ("strategy_none:capital_gain",)),)
     assert dict(render_draft(d, b))[BH] == ("0050：策略分類為存股；基本面與配置判定尚未接線，無法判定",)
     # 把存股的 entry 句放到資本利得段 → 策略分類不屬於此段
     assert_rejected(check_summary(d, add(b, CG, sec_of(b, BH).sentences[0])), T.GATE_G4, "wrong_strategy")
@@ -750,7 +750,7 @@ def test_render_sentence_refuses_unchecked_content(dg):
 
 def test_ref_index_covers_namespaces_and_groups(dg):
     idx = build_ref_index(dg)
-    for rid in ("market.regime", ACT0, "action_fact:pf-A:0050", "holding:pf-A:0050", "risk_cap.cap_pct",
+    for rid in ("market.regime", ACT0, "action_fact:pf-A:0050", "holding:4:pf-A:0050", "risk_cap.cap_pct",
                 *[section_ref(n) for n in T.DIGEST_SECTIONS]):
         assert rid in idx
     assert idx["risk_cap.cap_pct"].group == "restricted" and idx["market.health"].group == "market"
@@ -761,7 +761,8 @@ def test_ref_index_covers_namespaces_and_groups(dg):
 
 def test_section_basis_for_baseline(dg):
     ids = [r for r, _ in section_basis(dg, MKT)]
-    assert ids == [section_ref("tw_trend"), section_ref("intl_trend"), section_ref("valuation"), section_ref("risk_cap")]
+    assert ids == [f.fact_id for f in dg.market.facts] + [section_ref("tw_trend"), section_ref("intl_trend"),
+                                                          section_ref("valuation"), section_ref("risk_cap")]
     assert section_basis(dg, ACT) == ()
     assert section_basis(dg, IND) == ((section_ref("industry"), ("section_undefined",)),)
     with pytest.raises(ValueError):
@@ -819,7 +820,8 @@ def test_template_set_is_pinned():
     assert set(T.TEMPLATES) == {
         "tpl.glyph", "tpl.colon", "tpl.pct", "tpl.close", "tpl.date_open", "tpl.stale_date_open", "tpl.proxy_tail",
         "tpl.missing_open", "tpl.invalid_tail", "tpl.undetermined_tail", "tpl.unkeyed_open", "tpl.unkeyed_tail",
-        "tpl.label_buy_and_hold", "tpl.label_capital_gain", "tpl.holdings_unavailable_mid", "tpl.strategy_unset_tail",
+        "tpl.not_applicable_tail", "tpl.contract_drift_tail", "tpl.strategy_none_tail", "tpl.not_wired_tail",
+        "tpl.not_defined_tail", "tpl.no_variation_tail", "tpl.label_buy_and_hold", "tpl.label_capital_gain", "tpl.holdings_unavailable_mid", "tpl.strategy_unset_tail",
         "tpl.strategy_is", "tpl.entry_tail", "tpl.act_unavailable_open", "tpl.act_none", "tpl.act_stale_open"}
     assert T.TEMPLATES[T.TPL_ACT_NONE] == "本期行動：規則層未產出行動"
     assert T.TEMPLATES[T.TPL_UNDETERMINED_TAIL] == "，無法判定"
@@ -842,7 +844,7 @@ def test_expand_field_matrix_is_pinned():
         "risk_cap.cap_pct": set(), "risk_cap.exposure_lo_pct": set(), "risk_cap.exposure_hi_pct": set(),
         "action_fact:pf-A:0050": {"as_of"},
         "action:pf-A:0050": {"text", "symbol"},
-        "holding:pf-A:0050": {"symbol", "strategy"},
+        "holding:4:pf-A:0050": {"symbol", "strategy"},
         "section:market": {"bind"}, "section:tw_trend": {"label", "marker", "bind"},
         "section:intl_trend": {"label", "marker", "bind"}, "section:valuation": {"label", "marker", "bind"},
         "section:industry": {"label", "marker", "bind"}, "section:holdings": {"bind", "count", "reason"},
@@ -857,7 +859,7 @@ def test_expand_field_matrix_is_pinned():
     assert expand(d, idx["section:holdings"], "count")[0] == "0"
     assert expand(d, idx["section:tw_trend"], "marker")[0] == "尚未定義"
     assert expand(d, idx["section:valuation"], "marker")[0] == "研究框架，未啟用"
-    assert expand(d, idx["holding:pf-A:0050"], "strategy")[0] == "存股"
+    assert expand(d, idx["holding:4:pf-A:0050"], "strategy")[0] == "存股"
     assert "SRC" not in "".join(expand(d, i, f)[0] or "" for i in idx.values() for f in F)
 
 

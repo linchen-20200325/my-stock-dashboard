@@ -190,7 +190,7 @@ def test_stale_proxy_failed_invalid_are_marked_not_upgraded():
     d2 = make_digest(market_facts=[invalid("market.health"), stale_text("market.regime", "bull"),
                                    missing("market.light", MissingReason.CONTRACT_DRIFT)])
     t2 = texts(build_rule_summary(d2), T.SEC_MARKET)
-    assert "已丟棄" in next(x for x in t2 if "健康度" in x) and "資料契約異常" in next(x for x in t2 if "燈號" in x)
+    assert "已丟棄" in next(x for x in t2 if "健康度" in x) and "資料契約不一致，無法判定" in next(x for x in t2 if "燈號" in x)
     assert "資料已過期" in next(x for x in t2 if "位階" in x)
 
 
@@ -202,7 +202,12 @@ def test_missing_reason_is_never_guessed():
             MissingReason.NOT_DEFINED, MissingReason.NOT_WIRED) else missing("market.regime"),
             ok_text("market.light", "🟢"), ok_val("market.health", 1.5)])
         line = texts(build_rule_summary(d), T.SEC_MARKET)[0]
-        assert T.MISSING_REASON_LABELS[reason.value] in line
+        if reason.value in T.INSUFFICIENT_FAMILY_REASONS:
+            assert T.MISSING_REASON_LABELS[reason.value] in line and "資料不足" in line
+        else:                                         # 非「資料不足」家族：忠實對應原因，不得包成資料不足
+            assert "資料不足" not in line and line.endswith("，無法判定")
+            assert {"not_applicable": "不適用", "contract_drift": "資料契約不一致", "no_variation": "期間無變異",
+                    "not_defined": "尚未定義", "not_wired": "尚未接線"}[reason.value] in line
 
 
 def test_action_sentence_stale_evidence_is_disclosed_and_out_of_scope_evidence_not_cited():
@@ -518,7 +523,11 @@ def test_property_random_digests_never_raise_and_never_launder_missing(seed):
         for f in d.market.facts:
             if f.status.value in ("missing", "failed", "invalid"):
                 line = next(s for s in texts(r, T.SEC_MARKET) if FACT_LABEL(f.fact_id) in s)
-                assert "資料不足" in line and "無法判定" in line
+                assert "無法判定" in line or "已丟棄" in line
+                if f.status.value != "invalid" and f.missing_reason.value in T.INSUFFICIENT_FAMILY_REASONS:
+                    assert "資料不足" in line
+                if f.status.value != "invalid" and f.missing_reason.value not in T.INSUFFICIENT_FAMILY_REASONS:
+                    assert "資料不足" not in line
         # 行動：筆數與順序與 Digest 完全一致
         assert [s.evidence_refs[0] for s in sec(r, T.SEC_ACTIONS).sentences if s.evidence_refs[0].startswith("action:")] \
             == [a_.action_id for a_ in d.actions.items]

@@ -43,9 +43,12 @@
 
 **AB-2a 新增的檢查（只收緊，不放寬任何 AB-0／AB-1 語意）**：
 1. `control_chars_in_text`（閘門 `AB2A_TEXT`）：`Fact.text`／`ActionRef.text`／`strategy_source` 含控制（Cc）／零寬／格式（Cf）／代理／私用區／未指派字元、行段分隔（Zl／Zp）、**非普通空格的空白**（NBSP、全形空白 U+3000…）、或**孤立組合記號**（在字串開頭或緊接空白）。AB-0 沒禁；摘要要逐字轉述這些文字，不可見／不規範字元會讓逐字比對失真。
-2. `ref_id_reserved`／`ref_id_collision`（閘門 `AB2A_REFS`）：fact_id／action_id 以保留前綴 `section:`／`holding:` 開頭，或 fact_id 與 action_id 相同 —— evidence 命名空間會含糊。
+2. `ref_id_reserved`／`ref_id_collision`（閘門 `AB2A_REFS`）：fact_id／action_id 以保留前綴 `section:`／`holding:` 開頭，或 fact／action／持股三類引用 id 在**同一個集合**內不唯一 —— evidence 命名空間會含糊。持股的引用 id 用**長度前綴編碼** `holding:<len(portfolio_id)>:<portfolio_id>:<symbol>`（`validator.holding_ref`）：portfolio_id 可含 `:`（AB-0 允許），拼接式編碼會讓 ("a:b","c") 與 ("a","b:c") 碰撞；長度前綴＋symbol 字元集不含 `:` 後，編碼唯一可還原。
 3. 輸入不是（恰好）`DecisionDigest` → INVALID，不 raise。
 4. `unsupported_unit`（閘門 `AB2A_TEXT`）：市場事實的 unit 不是 `%` 也不是 None（摘要的單位由模板決定，不展開 Digest 的 unit 字串）。
+5. `bad_portfolio_id_chars`／`bad_symbol`（閘門 `AB2A_TEXT`，歸屬存股／資本利得，行動 target 歸本期行動）：HoldingKey 的 `portfolio_id`、`symbol` 套用與 `Fact.text` **同一組字元類別檢查**（Cc／Cf／Cs／Co／Cn／Zl／Zp、非普通空白、孤立組合記號）；`symbol` 另須 fullmatch `terms.SYMBOL_PATTERN`＝`[0-9A-Za-z][0-9A-Za-z.\-]{0,11}`（相容台股／ETF 代號：2330、6488、00878、006208、00679B、2330.TW、BRK-B；不含 `:`、空白、全形字、中文）。`portfolio_id` 是不透明鍵（來源屬 AB-4r），只做字元類別檢查，不限字元集。AB-0 先擋的（空字串、空白、零寬）仍由 AB-0 擋；本檢查是第二道（AB-0 未擋的私用區／未指派／孤立組合記號／過長／非 ASCII）。assess 擋下的 Digest，`build_rule_summary` 回 INVALID 而不是 raise。
+6. `unsupported_missing_reason`（閘門 `AB2A_TEXT`）：持股／行動段 UNAVAILABLE 時，缺值原因須屬「資料不足」家族（`no_input`／`fetch_failed`／`not_enough_history`）—— 其餘原因摘要沒有忠實的對應句型，不以「資料不足」包裝。
+7. `ambiguous_fact_label`（閘門 `AB2A_TEXT`，市場段）：超過一個市場事實沒有專屬標籤（會共用 fallback 標籤「市場資料項」而無法區分）→ INVALID。
 
 ### 四態（`SummaryState`）
 
@@ -91,11 +94,13 @@ SummaryDraft(sections=(SummarySection(key, sentences=(SummarySentence(segments=(
 | 句型 | 段 | 前置條件（Digest 必須為真） |
 |---|---|---|
 | `fact_{text,value,value_pct}_{ok,stale,proxy}` | 市場 | 市場事實 status 吻合；`value_pct` 的 unit 必須是 `%`，`value`／`text` 必須無 unit（**單位由模板決定**，`unit_mismatch`）；ok／stale 標資料日，proxy 標「代理估算值，非正式資料」 |
-| `fact_missing` | 市場 | status ∈ {missing, failed}；顯示固定模板＋缺值原因標籤 |
+| `fact_missing` | 市場 | status ∈ {missing, failed} 且缺值原因屬「資料不足」家族（`reason_mismatch`）；顯示固定模板＋缺值原因標籤 |
+| `fact_{not_applicable,no_variation,contract_drift,not_defined,not_wired}` | 市場 | status ∈ {missing, failed} 且缺值原因**恰為**該原因；各有忠實固定措辭（不適用／期間無變異／資料契約不一致／尚未定義／尚未接線，皆以「無法判定」收尾），**不**包成「資料不足」，也不中性化 |
 | `fact_invalid` | 市場 | status＝invalid |
 | `risk_wording` | 市場 | 引用 `section:risk_cap`；展開為客戶核准卡面措辭（**不展開任何 Risk Cap 數值**） |
 | `section_undefined` | 市場／產業 | 引用 tw／intl／valuation（市場）或 industry（產業）；標示語（尚未定義／尚未接線／研究框架，未啟用）由 Digest 的定義狀態決定 |
-| `holdings_unavailable:<段>`／`strategy_unset:<段>` | 存股／資本利得 | 持股 UNAVAILABLE／非 UNAVAILABLE 且無該策略 entry |
+| `holdings_unavailable:<段>` | 存股／資本利得 | 持股 UNAVAILABLE |
+| `strategy_unset:<段>`／`strategy_none:<段>` | 存股／資本利得 | 持股非 UNAVAILABLE、此策略無 entry；**全部持股都未分類** → `strategy_unset`（尚未設定投資策略分類），**已有持股分類到另一策略** → `strategy_none`（此策略下無歸類持股）——避免在資本利得段對「已分類為存股」的客戶說「尚未設定」這種不實話 |
 | `holdings_unkeyed` | 存股／資本利得 | `unkeyed_count > 0`（N 取自 Digest） |
 | `strategy_entry` | 存股／資本利得 | 持股非 UNAVAILABLE，且該 entry 的策略屬於此段；只展開代號與策略名，**不展開來源** |
 | `actions_unavailable`／`actions_none` | 本期行動 | actions UNAVAILABLE／AVAILABLE 且 0 筆 |
@@ -118,10 +123,13 @@ G7（輸出過濾）**不在本批**。
 - `usable`＝`accepted` 且 `surviving` 非 None；`clean`＝`usable` 且無丟棄。
 - `SummaryResult` 只收 `clean` 的內容；`passed_gates`／`failed_gates` 為固定閘門順序。
 
+**G5 涵蓋（fail-closed）**：每段 `section_basis` 列出該段**必須被引用**的依據 —— 市場段的**每一個**市場事實（含 ok；省略 ok 事實＝被拒）、未定義段落、Risk Cap 措辭；存股／資本利得段的每一檔該策略 entry（或 `strategy_unset`／`strategy_none`）、未帶鍵、持股讀不到；行動段與 Digest `actions[]` 一對一。缺漏的 code：`missing_disclosure`（依據未被引用）、`empty_section`（整段為空）。
+⚠️ 已知例外（誠實揭露）：**未分類（UNCLASSIFIED）的持股不會被個別列出** —— 摘要只對「已分類到存股／資本利得」的 entry 逐檔說話，未分類者只以 `strategy_unset`／`strategy_none` 的整體句涵蓋（見 §9）。
+
 ### 4.5 `SummaryResult`（A8：不可手造、不可改裝）
 只接受 `digest`、`mode`、`sections` 三個欄位；`state`、`section_availability`、`notices`、`invalid_sections`、`failed_gates`、`violations`、
 `retained_sections` 全部在 `__post_init__` 由 Digest 推導（`init=False`，`dataclasses.replace` 會重跑檢查，指定這些欄位直接 TypeError）。
-建構時：`mode` 必須是 AB-0 既有 `AiParticipation`；Digest INVALID ⇒ `sections` 必須為空；否則 `sections` 必須 `clean` 通過 `check_summary`（與該 Digest 綁定）。
+建構時：`mode` 必須是 AB-0 既有 `AiParticipation`，**本批只允許 `rule_only`**（`ai_explained`／`ai_rejected` 的建構一律 ValueError，留給 AB-2b），且須與 `digest.ai_participation` 一致；Digest INVALID ⇒ `sections` 必須為空；否則 `sections` 必須 `clean` 通過 `check_summary`（與該 Digest 綁定）。
 `lines` 是唯一的文字來源（由 Digest＋模板展開）。
 
 ### 4.6 降級為「建置期 lint」的黑名單
@@ -144,6 +152,7 @@ AB-2a **提供**：`check_summary`（唯一的 G1～G6 檢查器）、`SummaryDr
 AB-2b **負責**（本批不碰，亦不預先決定）：prompt、輸出解析、傳輸／金鑰／退避／用量、何時呼叫（Decision Gate）、通過後 `mode=AI_EXPLAINED`／失敗後 `AI_REJECTED` 並退回 `build_rule_summary`。
 ⚠️ **AB-2b 要上線，AI 必須以「選句型＋填 slot（`Ref`）」的受限格式輸出（例如函式呼叫／結構化輸出）；自由文字的 AI 輸出不可能通過本檢查器。** 這是設計，不是缺陷 ——
 它意味著 AB-2b 的 AI 只能「挑選與排列」Digest 已有的句型，無法潤飾措辭；若客戶要的是自然語言潤飾，必須另走 Gate 重新決定（本批不替它決定）。
+📌 **「句型＋slot 受限格式」與「`mode` 何時才能是 `ai_explained`」都只是 AB-2a 對 AB-2b 的建議，待 AB-2b Decision Gate 拍板，不是既成事實**（本批已鎖死的只有：`SummaryResult` 目前只接受 `rule_only`）。
 ⚠️ `structural_failure` 沒有對應的 G id，而 AB-0 的 `ai_rejected` 要求 `ai_failed_checks` 非空，AB-2b 須自行決定映射。
 禁止的資料流：Data→LLM；AI 輸出寫回 Digest；AI 修 Digest。
 
@@ -186,12 +195,34 @@ QA 紅隊的 35 個突變（`mut2.py` N01～N35）逐一對映：守衛仍存在
 | **仍殘留** | A10 `ActionRef.text` 與 `rule`（分支碼）未綁定（AB-1 缺口，非本批引入） | **不改 AB-1**；測試 `test_known_gap_a10_…` 釘住現況；BACKLOG 備註 `AB1-ACTION-TEXT-RULE-BINDING`（總管登記） |
 | **仍殘留** | 規則層輸出本身（`Fact.text`／`ActionRef.text`）若有誤導性，摘要忠實轉述；句型選擇權（可省略 ok 事實）；受限證據的過期無法揭露 | 見 §9 |
 
+**第二輪（紅隊 qa2，60 個突變）對映**：Q03～Q06→`test_path_to_summary_section_mapping_is_pinned`／`test_q05_…`／`test_q06_…`；Q08→`test_q08_action_id_reserved_prefix`；Q12→`test_q12_…`；Q22→`test_q22_…`；Q26→`test_q26_…`；Q34→`test_q34_…`（兩個）；Q35→`test_q35_…`；Q41→`test_q41_…`；Q43→`test_missing_reason_labels_are_pinned_and_distinct`；Q49→`test_q49_…`；Q57→`test_q57_…`；Q58／Q59→`test_q58_q59_…`；Q11／Q14／Q38／Q42 為等價（見上）；Q15／Q16／Q27／Q37 由路徑映射／碰撞路徑／原因不明／空段 code 測試殺死；其餘由既有測試殺死。紅隊的 4 個紅隊發現與 3 個語意缺陷的處置如下表。
+
+| 類別 | 第二輪發現 | 處置 |
+|---|---|---|
+| **結構性消失** | 紅隊 1：`holding_ref` 因 `:` 碰撞 | 長度前綴編碼（`holding:<len>:<pid>:<symbol>`），symbol 字元集不含 `:`；測試含 ("a:b","c") vs ("a","b:c") |
+| **結構性消失＋測試擋** | 紅隊 1：assess 通過但 build raise；手造草稿省略持股句 | assess／build 一致性 fuzz（300 組含 `:` 鍵）；G5 涵蓋要求（省略＝`empty_section`／`missing_disclosure`） |
+| **靠測試擋** | 紅隊 2：鍵字元（Co／Cn／Cs／孤立組合記號）與 symbol 字元集 | `bad_portfolio_id_chars`／`bad_symbol`（§2 檢查 5）；常數 `SYMBOL_PATTERN`（`terms.py`）；assess 擋下者 build 回 INVALID |
+| **靠測試擋** | 紅隊 3：省略 ok 事實不會被發現 | `section_basis` 涵蓋每個市場事實（含 ok） |
+| **靠測試擋** | 紅隊 4：`mode` 與 digest 脫鉤、可造 `ai_explained` | `SummaryResult` 只收 `rule_only` 且須與 `digest.ai_participation` 一致；兩道檢查各自有獨立測試（含合法的 AI Digest） |
+| **仍殘留** | 紅隊 4：`copy`／`pickle`／`object.__setattr__` 繞過 | 同行程惡意碼不在威脅模型，不修；列入 §9（6） |
+| **結構性消失** | 語意缺陷 A：資本利得段對已分類為存股的客戶說「尚未設定投資策略分類」 | `strategy_unset`（全未分類）與 `strategy_none`（此策略下無歸類持股）分開，前置條件互斥 |
+| **結構性消失** | 語意缺陷 B：不適用／期間無變異／契約不一致被包成「資料不足」 | 五個原因專屬句型（§4.2），各自忠實措辭；`fact_missing` 只給資料不足家族 |
+| **結構性消失** | 語意缺陷 C：多個 fallback 標籤的市場事實無法區分 | `ambiguous_fact_label` → INVALID（§2 檢查 7） |
+
 N01～N35 對映：N01→W04；N02→W11；N03／N04／N05／N16／N17／N18／N21／N23／N24／N33／N34／N35→**結構性消失**（沒有字串比對／quote 豁免／代號與產業名偵測）；
 N06→G11；N07→W16、G32；N08→V16；N09→V35；N10→V34；N11→R05；N12→R10；N13→M03；N14→M07；N15→S12；N19→T21；N20→T20；N22→T01；
 N25→V33；N26→G03；N27→G18；N28→G19；N29→G13；N30→X01、X02；N31→V32；N32→V31、G23。
 
 ### 8.2 守衛→殺死它的測試（突變對照表）
-170 個突變（每個＝對一個守衛恰好一處的拔除／反轉）：**170 killed、0 倖存、0 等價**。
+**第二輪（收緊輪）後共 263 個突變**（每個＝對一個守衛恰好一處的拔除／反轉）：**257 killed、6 等價（逐一論證）、0 倖存**。組成：回修版 170 個（其中 6 個因第二輪改了守衛位置而改寫：V19／W22／G27／G33／G34／M09）＋紅隊 qa2 的 Q01～Q60（Q24／Q58／Q59 因程式結構改變而改寫、另拆 Q24b／Q58b）＋第二輪新增 Z01～Z31。
+**6 個等價突變的論證**（每個一句話）：
+- Q11 `derive_state` 空序列：`all([])` 為 True，與 `not avs or` 同結果（SECTION_KEYS 恆 5 段，空序列不可達）。
+- Q14 `has_forbidden_char` 用 isinstance 取代 `type is str`：只差 str 子類別，而 AB-0 對所有文字欄位強制 exact str，子類別到不了這裡。
+- Q38 最舊 stale 證據不檢查 `info.kind`：evidence 依 AB-0 `dangling_evidence_ref` 只能指向既有 fact_id，index 中該鍵的項目必為 fact。
+- Q42 `unkeyed_count + 0`：對 int 恆等。
+- Z06 symbol 的 `has_forbidden_char` 與 `SYMBOL_PATTERN` 重疊：pattern 是 ASCII 白名單，被前者判違規的字元都不在白名單內；保留是為了與 `Fact.text` 同一組檢查（縱深防禦）。
+- Z13 持股 ref 不進碰撞集合：長度前綴編碼＋symbol 不含 `:` ⇒ 不同鍵必不同 ref；同鍵重複由 AB-0 `duplicate_holding_key` 擋；與 fact／action id 的碰撞由保留前綴 `holding:` 擋。
+第二輪初跑倖存的處置：Q03～Q06／Q12／Q15／Q16／Q24b／Q26／Q27／Q28／Q37／Q57／Q58／Q58b／Q59／R01／Z02／Z14／Z15／Z18／Z24／Z25／G20／Q34 全部補測試（診斷歸屬、路徑→段映射、`wrong_group` 閘門與 code、`restricted_value` 與 `field_not_quotable` 的精確 code、mode 兩道檢查各自獨立可殺、順序與雜湊無關等），見 `tests/test_decision_digest_round2.py`。
 回修過程中第一輪曾有 22 個倖存，處置：補測試（欄位展開矩陣、前置條件各自的精確閘門、行動證據的順序與受限事實、未帶鍵＋持股讀不到、`lines` 對垃圾 Digest 不 raise、lint 清單成員釘死）；或**刪掉重複／死碼**而非保留等價突變（行動段的 basis 與前置條件＋非空段重疊→移除；`expand` 的未知欄位檢查與數值例外 fallback 是死碼→移除；骨架簽名唯一的 `assert` 改為測試鎖死；builder 內重複的『最舊 stale 證據』選法改為共用 `grounding.oldest_stale_evidence`）。
 
 | 突變 | 被拔掉／反轉的守衛 | 殺死它的測試（首個紅燈；`validator`／`grounding`／`summary` ＝ `tests/test_decision_digest_*.py`） |
@@ -376,6 +407,9 @@ N25→V33；N26→G03；N27→G18；N28→G19；N29→G13；N30→X01、X02；N3
   3. 句型選擇權仍在呼叫端：AI 可以省略 ok 的事實、調整同段內句子順序（行動段除外），也可以只挑對自己有利的 ok 事實 —— 但**不能**省略非 ok 的依據、不能改寫、不能加字。
   4. 行動證據若指向 Risk Cap／觀測值這類受限事實，其過期狀態無法揭露（資料日受限）；AB-1 現不產生這種證據。
   5. Digest 的 `generated_at`／時間一致性等仍只信 AB-0 的檢查。
+  6. **同行程惡意程式碼不在威脅模型內**：`copy.copy`／`pickle`／`object.__setattr__`（含對 frozen dataclass、`SummaryResult` 的繞過）在同一個 Python 行程內可直接竄改物件；本批**不防**（防了也無意義：能執行任意程式碼者可直接改檢查器本身）。測試以 `force_set`（`object.__setattr__`）模擬「被竄改的 Digest」只為驗證 assess／check 對它 fail-closed，不代表能防住同行程攻擊者。
+  7. **未分類持股不個別列出**（§4.4）：摘要只涵蓋已分類到存股／資本利得的 entry；未分類者僅以整體句涵蓋。這是「分類尚未設定」在現行 Digest 的如實反映，不是遺漏，但客戶若要「每一檔都出現」需另走 Gate。
+  8. `symbol` 字元集（`SYMBOL_PATTERN`）是依台股／ETF 現行代號形式訂的保守白名單，非交易所規格；若出現新格式（例：含底線），assess 會 INVALID（fail-closed），需改常數＋測試。
 - 本批**沒有 production caller、沒有 UI**；沙箱 Python 3.13，CI 3.11 未實跑；未做網路／AI／Sheet 相關的任何實測（本批本來就沒有）。
 - `AB1-ACTION-TEXT-AI-WORDING`（行動文字可能含 "AI" 字樣）與本批無交互：行動文字走逐字展開，不被檢查。
 - G2 對 AI 偏嚴是刻意 fail-closed；放寬須走 Gate。

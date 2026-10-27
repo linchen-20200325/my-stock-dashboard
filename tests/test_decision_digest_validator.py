@@ -307,7 +307,7 @@ def test_failed_gates_are_in_canonical_order_not_set_order():
     assert a.failed_gates == tuple(g for g in T.DIGEST_GATES_ORDER if g in a.failed_gates)
 
 
-@pytest.mark.parametrize("fid", ["section:market", "holding:pf-A:0050"])
+@pytest.mark.parametrize("fid", ["section:market", "holding:4:pf-A:0050"])
 def test_reserved_ref_prefix_fails(fid):
     d = make_digest(market_facts=[ok_text(fid, "bull"), ok_text("market.light", "🟢"), ok_val("market.health", 1.5)])
     a = assess_digest(d)
