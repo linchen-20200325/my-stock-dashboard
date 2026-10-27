@@ -1,6 +1,7 @@
 # D2.5 C 部｜One AI Brain 架構、Decision Digest、11 題可答性、產業趨勢資料盤點（2026-10-27）
 
-> 狀態：**規劃／草稿，非實作授權**。基準 main `a4ab3450`（量測日 2026-10-27）。本檔只做文件，不改 code、tests、治理檔。
+> 狀態：**規劃／草稿，非實作授權；Customer Design Gate 已裁示（DEC-092）**。基準 main `a4ab3450`（量測日 2026-10-27）。本檔只做文件，不改 code、tests、治理檔。
+> **【Customer Design Gate 已裁示（DEC-092，2026-10-27）】** 客戶已逐題裁示 Q1–Q6（原文逐字見 `docs/DECISIONS.md` DEC-092，具約束力）。**設計方向已核准（DEC-092）**：固定四主導航（📊市場／🎯標的／💼持股／👤我的）、🤖 One AI Brain 為全站共用而非第五主頁、圖表優先、每張圖上方有白話說明、Level 1 結論→Level 2 圖表／原因→Level 3 依據／原始資料、手機優先、💼持股分 🌱存股／📈資本利得／未分類、ETF／個股不得自動等同策略分類、AI 不創造數字／門檻／missing／趨勢／標的、EPS×PE 保留 Research Framework（正式公式仍需 High Gate）。**現有 wireframe（`docs/vnext/d25_wireframes/`）為後續 UI 的視覺基準，不重新發明 IA。**本檔其餘「待裁示／推薦／請回覆」字樣，一律依 DEC-092 改讀（已裁示者以裁示取代推薦）；「四態（續抱／注意／減碼／換股候選）」在本檔只指**客戶先前期望的、未啟用的判斷語意，定義待核准**，第一版不實作。裁示**不等於實作授權**：實作批次與 Gate 見 `NEWUI_D25_PLAN_2026-10-27.md` §5。
 > 約束來源：客戶指定版 D2.5 規格（2026-10-27）§三、§七、§九、§十；`PROJECT_RULES.md` §16.1（Data ≠ AI Reasoning）、§19（長久 UI 原則）；DEC-054、DEC-074／075、DEC-080、DEC-084。
 > 標記：**FACT[檔:符號]**＝讀碼／讀資料檔所見；**INFERENCE**＝由事實推得、未驗；**MISSING**＝repo 查無，不猜。
 > **誠實揭露（CLAUDE.md §-2 規則 6）**：本檔的 FACT 來自五組唯讀盤點（市場／標的產業／持股／AI 現況／治理衝突）的單組讀碼，**未跑 runtime、未連網、未開 App、未經第二組獨立複驗**。所有「沒有／查無／0 命中」都是單組 grep，只能當待驗事項，**不得當實作前提**。外部資料來源的可用性、授權、端點是否存在**一律未驗**。
@@ -14,10 +15,10 @@
 2. **One AI Brain 的核心是單向管線**：`Data → Rule/Calculation → 各頁 Structured Result → Decision Digest → One AI Brain → Investment Summary`。AI 只整合、比較、解釋、排序、生成摘要；**不抓資料、不生數字、不補 missing、不設門檻、不定義公式、不發明股票或產業趨勢**。
 3. **Decision Digest 是新的資料契約**（逐來源 `as_of／source／status`、`rule_id＋rule_version`、`evidence_refs[]`）。repo 已有可重用零件（canonical 總經契約、`FreshnessVerdict`、`input_provenance_policy` 兩軸、`MISS_*`／`UI_*` 缺值狀態、`build_station_digest`），但**沒有被串起來**，且全站沒有統一的 DataPoint／provenance 物件。
 4. **客戶 11 題現況**（§5）：「現在可做到」僅少數（總體市場位階、持股所在板塊、候選標的清單等有既有規則輸出）；**多數為「部分」或「資料不足」**；台股趨勢／國際趨勢**沒有正式定義**（DEC-081 Q3＝A）、建議持股水位的獨立數字未經核准顯示（DEC-081 Q2-2）、大盤 EPS×PE 資料全缺且屬 Research、**「本期 1–3 個行動」沒有選取／排序規則**（HI-1 未核准）。
-5. **產業趨勢是最大的缺口**（§6）：產業層營收／EPS／估值**全無聚合**；「技術世代／結構變化」**無任何資料**；真類股指數序列**無**。個股層原料大多有，**不需新外部來源即可聚合（INFERENCE）**，但聚合定義是方法決策，需客戶 Gate。**明文：不得用 LLM 常識宣告某產業已衰退或崛起。**
+5. **產業趨勢是最大的缺口**（§6）：產業層營收／EPS／估值**全無聚合**；「技術世代／結構變化」**無任何資料**；真類股指數序列**無**。個股層原料大多有，**不需新外部來源即可聚合（INFERENCE）**，但聚合定義是方法決策。**DEC-092 Q5：營收 YoY 中位數＋覆蓋率只是候選維度／baseline research，不得稱為正式產業趨勢；先研究、不導入 production（§6、RS-1）。明文：不得用 LLM 常識宣告某產業已衰退或崛起；AI 在正式產業規則完成前不得判定產業興衰。**
 6. **策略分類（存股／資本利得）沒有任何欄位**（§7）。現行「核心／衛星」是由代號規則推導的近似（ETF→core、個股→satellite），**與客戶要求的「依投資目的分類」直接衝突**。在客戶提供正式分類前，所有持股一律「未分類」。
-7. **實作順序**（§8）：先做不碰 UI 的契約與規則層（可獨立於導覽殼），UI 層（AI 總結卡、查看依據）等 D2 Cloud 啟動事故結案、導覽殼重畫後再做。新外部來源、策略分類寫入、EPS×PE、Risk Cap 顯示皆為 High／Customer Gate，**本檔不預設通過**。
-8. 客戶 Gate 統一為全套 **Q1–Q6**（§10，與 A／PLAN 一致，各附推薦與理由）；原按鈕觸發、persona 兩題降為內部拍板。
+7. **實作順序**（§8）：先做不碰 UI 的契約與規則層（可獨立於導覽殼），UI 層（AI 總結卡、查看依據）等四頁導覽殼替換後再做（Boot incident：實機已恢復、root cause 未確認，動導覽模組須先處理風險並過 boot smoke；DEC-092 Q6）。新外部來源、策略分類寫入、EPS×PE、Risk Cap 顯示皆為 High／Customer Gate，**本檔不預設通過**。
+8. 客戶 Gate 全套 **Q1–Q6 已裁示（DEC-092，§10）**；原按鈕觸發、persona 兩題為內部拍板。實作批次依 DEC-092 重排，以 PLAN §5 為準。
 
 ---
 
@@ -169,7 +170,7 @@
 | **④ 資本利得** | 哪些續抱／減碼／換股、候選產業／候選標的 | 前提：策略分類＝資本利得（§7）。換股：FACT[`build_switch_advice`、`get_switch_in_candidates`、`flag_take_profit`（衛星停利，門檻 `SATELLITE_TAKE_PROFIT_PCT`）]。候選標的：FACT[`fundamental_screener_service.get_ranked_picks`]。**統一「續抱／注意／減碼」分級＝MISSING**；**候選產業＝MISSING**（§6） | 同上；候選產業固定「資料不足」 |
 | **⑤ 本期行動（1–3 項）** | 只給最重要 1–3 項 | **MISSING 選取／排序規則**（無行動排序；VN-09 Action Layer 未實作；HI-1 未核准；DEC-054 允許方向性 Action 但須由既有可追溯規則支持，強 Action 不得只靠生成式 AI） | 資料或規則不足 → 顯示「本期無可判定的行動」，**不得為了有答案而湊數**（`PROJECT_RULES.md` §16.1） |
 
-> ⑤ 的設計原則（INFERENCE，待 §10 Q4 裁示）：`actions[]` 由**規則層**產生候選與來源，Brain 只可在候選內「排序與解釋」，不可新增。規則層目前只有既有的 deterministic 項目（如 `held_reds`、`adds`、`take_profit`、換股建議、Risk Cap 降水位）可被**引用**；把它們合成「最重要 1–3 項」的優先序規則屬投資語意，**必須客戶 Gate（HI-1）**。
+> ⑤ 的設計原則（**Q4 已裁示，DEC-092**：第一版沿用既有「建議動作」與既有優先序；One AI Brain 可整理／解釋／比較／排出最重要 1–3 項，但不得創造規則層沒有產出的買賣動作）：`actions[]` 由**規則層**產生候選與來源，Brain 只可在候選內「排序與解釋」，不可新增。規則層目前只有既有的 deterministic 項目（如 `held_reds`、`adds`、`take_profit`、換股建議、Risk Cap 降水位）可被**引用**；把它們合成「最重要 1–3 項」的優先序規則屬投資語意，**必須客戶 Gate（HI-1）**。
 
 ### 3.2 「查看依據」展開內容規格
 
@@ -190,7 +191,7 @@
 
 ## §4 Decision Digest schema 草案
 
-> 本節是**契約草案**，不是實作。欄位名稱為暫定；落地前需經 §8 AB-0 的契約審查與客戶對 §10 Q1–Q6 的裁示。
+> 本節是**契約草案**，不是實作。欄位名稱為暫定；落地前需經 §8 AB-0 的契約審查（客戶 Q1–Q6 已於 DEC-092 裁示，§10；`holdings[]` 已改用 `portfolio_id＋symbol`）。
 > **缺值語意（全表通用）**：任何欄位缺值＝`null`＋`status ∈ {missing, stale, proxy, failed}`＋`missing_reason`；**禁止**以 `0`、`"neutral"`、`"normal"`、`"HOLD"`、空字串代替（`PROJECT_RULES.md` §16.1／§19.8）。「未評估」≠「安全」。
 
 ### 4.1 欄位表
@@ -253,9 +254,9 @@
 | 欄位 | 型別 | 說明 | 缺值語意 |
 |---|---|---|---|
 | `industry_code`／`industry_name` | string | 沿用 TWSE／TPEx 官方產業別代碼與名稱（FACT[`shared/industry_codes.py`]）；不得由 AI 命名 | 必填；標籤不屬官方 35 類者標 `NOT_APPLICABLE` |
-| `dimensions` | map<dimension, DimensionValue> | 維度：`revenue_growth／earnings_growth／capex／relative_strength／institutional_flow／chips／valuation／cycle／events／tech_generation` | **每個維度獨立 `status`**；沒有正式資料的維度＝`missing`，**不得讓 AI 補** |
+| `dimensions` | map<dimension, DimensionValue> | 維度：`revenue_growth／earnings_growth／capex／relative_strength／institutional_flow／chips／valuation／cycle／events／tech_generation` | **每個維度獨立 `status`**；沒有正式資料的維度＝`missing`，**不得讓 AI 補**。⚠️ 營收 YoY 中位數＋覆蓋率只可標為「候選維度／baseline research」，**不得**作為 `industry_trend` 方向結論（DEC-092 Q5） |
 | `coverage` | object | 聚合覆蓋率（檔數／總檔數）與「存活者偏誤」標記 | 必填（聚合類維度） |
-| `rule_id`／`rule_version` | string | 聚合規則識別（現 MISSING；需客戶 Gate 核准聚合定義後才有） | 無規則 → 不產生產業方向結論 |
+| `rule_id`／`rule_version` | string | 聚合規則識別（現 MISSING；需正式產業趨勢規則（High Gate，RS-1 研究後）核准後才有） | 無規則 → 不產生產業方向結論 |
 
 **CandidateBlock（候選標的，允許名單）**
 
@@ -270,8 +271,8 @@
 
 | 欄位 | 型別 | 說明 | 缺值語意 |
 |---|---|---|---|
-| `ticker`／`name` | string | 來源＝`holdings_service`（只讀已選定的那一本組合） | 必填 |
-| `strategy_type` | enum | `存股／資本利得／未分類` | **預設且唯一合法預設＝`未分類`**；不得 AI 猜；不得由 ETF／個股推導（§7） |
+| `portfolio_id`／`symbol`／`name` | string | 來源＝`holdings_service`（只讀已選定的那一本組合）。**策略分類的鍵＝`portfolio_id + symbol`（DEC-092 Q1；不得以 symbol 作全站唯一鍵）**。`portfolio_id` 實際來源待定義（repo 現無此識別字，見 §7.2 (3)；本契約只定型別） | 必填；缺 `portfolio_id` 或 `symbol` → 該列策略一律 `未分類`＋`missing_reason=NO_INPUT` |
+| `strategy_type` | enum | `存股／資本利得／未分類`，鍵＝(`portfolio_id`, `symbol`)；同一 `symbol` 在不同 `portfolio_id` 可有不同值 | **預設且唯一合法預設＝`未分類`**；不得 AI 猜；不得由 ETF／個股推導（§7）；lot／sub-position 級**不在本契約**（另開 Gate） |
 | `strategy_type_source` | string \| null | 分類來源（客戶設定的位置／版本） | `未分類` 時為 `null` |
 | `asset_kind`／`legacy_asset_class` | string | 既有 `asset_kind`、代號推導的 `core／satellite`（**僅供對照，標示為近似，不得當策略分類**） | — |
 | `lots`／`avg_price`／`price`／`pnl_pct` | StatusValue | 張數、均價、現價、損益% | 缺 → `null`＋`missing`；NaN／inf → `invalid`（D11），不參與計算 |
@@ -294,9 +295,9 @@
 |---|---|---|---|
 | `action_id` | string | 規則層產生的行動識別 | 必填 |
 | `kind` | enum | 限既有 deterministic 項目類型（例：換股候選、衛星停利、降水位；**不新增行動語彙**，HI-1） | 必填 |
-| `target` | string | 標的或範圍（必須在 `holdings[]`／`candidates[]`） | 必填 |
+| `target` | string \| object | 標的或範圍（必須在 `holdings[]`／`candidates[]`）；持股標的以 `{portfolio_id, symbol}` 表示 | 必填 |
 | `source_rule`／`rule_version` | string | 產生此行動的既有規則 | 必填；無規則來源 → 不得成為 action |
-| `priority_rank` | int \| null | 排序（**現無正式排序規則 → 一律 `null`**，待 §10 Q4） | `null` |
+| `priority_rank` | int \| null | 排序。**Q4 已裁示：只能沿用既有優先序（汰弱＞停利＞趨勢暫停＞加碼）**；無既有優先序可對應者 `null`；**不得新增排序規則** | `null` 允許 |
 | `evidence_refs[]` | array | 依據 | 必填 |
 
 **Availability／AiParticipation**
@@ -388,7 +389,8 @@
   ],
   "holdings": [
     {
-      "ticker": "<TICKER_PLACEHOLDER>",
+      "portfolio_id": "<PORTFOLIO_ID_PLACEHOLDER>",
+      "symbol": "<SYMBOL_PLACEHOLDER>",
       "name": "<NAME_PLACEHOLDER>",
       "strategy_type": "未分類",
       "strategy_type_source": null,
@@ -415,7 +417,7 @@
     {
       "action_id": "<示意>",
       "kind": "<既有 deterministic 項目類型>",
-      "target": "<TICKER_PLACEHOLDER>",
+      "target": { "portfolio_id": "<PORTFOLIO_ID_PLACEHOLDER>", "symbol": "<SYMBOL_PLACEHOLDER>" },
       "source_rule": "<示意>",
       "rule_version": "<示意>",
       "priority_rank": null,
@@ -436,8 +438,8 @@
 | # | 題 | 需要的資料與規則輸出 | repo 現況 | 結論 |
 |---|---|---|---|---|
 | 1 | 總體市場 | 市場位階、指標危險度、今日關鍵風險、freshness | FACT[`get_macro_state`（regime＋`is_loaded`，unknown≠neutral）、`regime_arbiter`、`compute_five_bucket_summary`、`_load_key_alerts`]。缺口：FACT[契約無逐指標 `as_of`（`AS_OF_NOT_IN_CONTRACT`）]；缺真實廣度時位階常為「未評估」（DEC-074／075）；新版頁冷啟動 session 為空，需按「更新」 | **部分**（規則輸出齊；as_of 需擴契約；常見「未評估」須誠實呈現） |
-| 2 | 台股趨勢 | 「趨勢」的正式定義＋規則輸出＋指數序列 | FACT[`twii_ohlcv.parquet` 4903 列、2006-09-29→2026-10-22，可畫走勢]；**MISSING 趨勢定義**（`VN1-MT-TREND-DEF` blocked-on-customer；DEC-081 Q3＝A）。「長期上升／整理／轉弱」即是定義問題 | **需裁示**（資料足，定義缺；定義前只能標「走勢，不構成趨勢判斷」） |
-| 3 | 國際趨勢 | 同上＋國際序列 | FACT[`cl_data['intl']`（DJI／IXIC／SOX／^TNX／DXY）僅 session 內短窗；VIX／US10Y／DXY 無落地長歷史；^GSPC 不在 INTL_MAP]；**MISSING 趨勢定義** | **資料不足＋需裁示** |
+| 2 | 台股趨勢 | 「趨勢」的正式定義＋規則輸出＋指數序列 | FACT[`twii_ohlcv.parquet` 4903 列、2006-09-29→2026-10-22，可畫走勢]；**MISSING 趨勢定義**（`VN1-MT-TREND-DEF` blocked-on-customer；DEC-081 Q3＝A）。「長期上升／整理／轉弱」即是定義問題 | **定義未建立**（資料足，定義缺；DEC-092 Q2：台股趨勢＝⬜ 尚未定義，正式定義另列 High Gate；定義前只能標「均線為參考，不等於正式台股趨勢判斷」） |
+| 3 | 國際趨勢 | 同上＋國際序列 | FACT[`cl_data['intl']`（DJI／IXIC／SOX／^TNX／DXY）僅 session 內短窗；VIX／US10Y／DXY 無落地長歷史；^GSPC 不在 INTL_MAP]；**MISSING 趨勢定義** | **資料不足＋定義未建立**（國際趨勢＝⬜ 尚未定義，DEC-092 Q2；正式定義另列 High Gate） |
 | 4 | 總持股比 提高／維持／降低 | 現行建議水位、Risk Cap、**方向性判定規則** | FACT[`get_allocation()`、`exposure_limit_pct`，缺有效 Cap → None（D13）；DEC-081 Q2-2：Risk Cap 獨立數字未核准顯示]。**MISSING「提高／維持／降低」方向判定規則**（DEC-054／D17：正式加減碼比例未經驗證不得進 production；VN-09 Action Layer 未實作；HI-1 未核准）。「維持」尤須防 missing≠HOLD | **資料不足＋需裁示**（可顯示「現行建議區間」；方向性不可由 AI 產生） |
 | 5 | 哪些產業變強 | 產業相對強弱／基本面成長／法人／估值 | FACT[資金流泡泡圖 40 板塊象限；熱力圖 10 檔代表股（proxy，非類股指數，卡上已揭露）]；**產業營收／EPS／估值聚合 MISSING**；無真類股指數序列 | **部分**（僅資金流面向；「變強」沒有正式定義） |
 | 6 | 哪些產業轉弱或結構性衰退 | 同上＋景氣循環＋技術世代＋事件 | FACT[泡泡圖有「退潮」象限]；**產業別景氣、技術世代、事件＝MISSING**；總體層有 PMI／NDC（FACT）但非產業別 | **資料不足**（「結構性衰退」**無任何可機械取得的資料**；不得由 LLM 常識宣告） |
@@ -445,68 +447,39 @@
 | 8 | 存股是否仍適合長期持有 | 策略分類＝存股、基本面／配息品質趨勢、「適合長期持有」判定 | FACT[財報體檢、`trend_verdict`、235 燈（僅 ETF）、`get_dividend_cash_flow` 近 1 年；配息率只作健檢 A 輸入，**不在 rows 欄位**]。**MISSING 策略分類欄位；MISSING「適合長期持有」單一判定欄**；現「存股」實作＝ETF 定期定額，個股在站內是「衛星／汰換」 | **資料不足**（先需 §7 策略分類） |
 | 9 | 資本利得是否需換股／汰弱留強 | 策略分類＝資本利得、換股規則、停利、成長動能 | FACT[`build_switch_advice`、`flag_take_profit`（衛星≥門檻）、`get_switch_in_candidates`；個股汰弱依財報體檢＋趨勢＋KD]。**MISSING 策略分類；「續抱／注意／減碼」統一分級（現只有 `建議動作` 字串）；稅費／持有期完整模型未查證**（`dividend_tax_service` 未讀） | **部分**（換股／停利有既有規則輸出，但無分類與統一分級） |
 | 10 | 是否有更適合的新產業／候選標的 | 候選標的（有）＋「新產業」層級候選（無） | FACT[`get_ranked_picks`（5 因子、存活池四項全過、MOPS 季快照 115Q2）、`get_switch_in_candidates`]。**MISSING「新產業」層級候選**（無產業層聚合、無技術世代資料） | **部分**（候選標的可；「新產業」資料不足） |
-| 11 | 本期 1–3 個行動 | 行動候選＋排序規則 | **MISSING 選取／排序規則**；VN-09 未實作；HI-1 未核准；DEC-054 要求每個 Action 由可追溯規則支持、強 Action 不得只靠生成式 AI | **需裁示**（可列「規則層已存在的待處理項」引用；合成最重要 1–3 項屬 HI-1） |
+| 11 | 本期 1–3 個行動 | 行動候選＋排序規則 | **MISSING 選取／排序規則**；VN-09 未實作；HI-1 未核准；DEC-054 要求每個 Action 由可追溯規則支持、強 Action 不得只靠生成式 AI | **第一版沿用既有建議動作與優先序**（DEC-092 Q4；可列「規則層已存在的待處理項」並由 Brain 排出最重要 1–3 項，不得創造新買賣動作；新增合成規則屬 HI-1） |
 
 > 小結：11 題中**沒有任何一題**可在「不新增規則、不新增來源、不需客戶裁示」下完整回答；第 1 題最接近。這是本計畫必須誠實面對的前提——Brain 的第一版價值在**統一、可追溯、誠實說不知道**，而不是「題題有答案」（`PROJECT_RULES.md` §16.1：不得為了讓產品有答案而製造結論）。
 
 ---
 
-## §6 產業趨勢資料盤點
+## §6 產業趨勢研究計畫摘要（Q5 已裁示，DEC-092；完整計畫見 RS-1）
 
-### 6.1 產業分類體系與個股→產業對映
+> **完整的八項盤點、可追溯資料位置、分類、驗證方法、新來源候選與驗收標準已移至 `docs/vnext/NEWUI_D25_RS1_INDUSTRY_TREND_RESEARCH_PLAN_2026-10-27.md`（RS-1，docs-only 研究批）。本節只留摘要，以免兩處分叉（SSOT）。** 原 §6.1–§6.4 的事實（官方產業別代碼、`ticker_sector.json` 3167 筆／55 標籤、MOPS 6 季快照、資金流 27 交易日等）已併入 RS-1 並於 2026-10-27 重新抽查。
 
-- **分類體系**＝TWSE／TPEx 官方產業別代碼（兩位數，上市上櫃共用；約 35 類）。FACT[`shared/industry_codes.py:OFFICIAL_INDUSTRY_CODE_NAMES`]
-- **對映來源**：FACT[`market_close_fetcher.fetch_industry_map_bulk`]：官方 `t187ap03_L`（上市）／`mopsfin_t187ap03_O`（上櫃）為主，FinMind `TaiwanStockInfo.industry_category` 為輔；原始紀錄 `industry_raw.json`（scheme `z43-official-code-v1`）。
-- **對映檔**：FACT[`data_cache/sector_flow/ticker_sector.json`]：3167 筆、55 種標籤（含 ETF、ETN、存託憑證、`其他`、`所有證券`、`Index` 等非產業標籤）；泡泡圖再經別名表併為 40 板塊。
-- **覆蓋率**：FACT（實測）115Q2 快照 1974 檔與其他 3 個季別皆 100% 在對映檔內。
-- **缺口**：①非產業標籤（`其他` 133 檔等）；②同義雙名未併（例 `電子工業`／`其他電子類`／`其他電子業`、`居家生活`／`居家生活類`；別名表僅收有證據者，不因名稱相似就合併）；③**無次產業／供應鏈分類**（例如 AI 伺服器、先進封裝）＝MISSING；④**無 GICS 對映**（ETF 曝險檢查另用 `_ETF_SECTOR_MAP`，口徑不同，**勿統一**）；⑤存活者偏誤：快照只有現存公司。
+### 6.1 客戶要判斷什麼（DEC-092 Q5 逐字意旨）
+- 客戶要判斷的是**較長期**的：「產業是否正在變強／轉弱／發生世代結構變化？」
+- 「產業單季營收 YoY 中位數＋覆蓋率」可作為**第一個候選維度／baseline research**，**不得直接定義為正式「產業趨勢」**。
+- 先開研究、**不導入 production**；先盤點 repo 已有可追溯資料，再提出：**可直接使用／需要轉換／缺資料／新來源候選**。
+- 新外部來源目前**只研究**：不得接入 production、不得新增 API／MCP，正式導入前另開 Customer Gate。
+- **AI 在正式產業規則完成以前不得自行判定產業興衰**（Digest `industry_trend[]` 在正式規則前不得產生方向結論；Brain 對「哪些產業變強／轉弱／結構性變化」一律回「資料不足，無法判斷」並可列已存在的資金流象限事實＋口徑標示）。
 
-### 6.2 客戶列的十項逐項判定
-
-| # | 項目 | 判定 | 事實／位置 | 缺口 |
-|---|---|---|---|---|
-| 1 | 產業營收 | **個股層有；產業層無** | FACT[全市場 MOPS 季彙總快照 `data_cache/fundamentals/*.parquet`，114Q1–115Q2 共 6 季，`revenue` 為**年初至今累計**；單季化 `ytd_to_single_quarter`（L2）；月營收 `monthly_revenue_fetcher`（全市場 OpenAPI 只回最新單月；歷史靠 FinMind 18 月）]。INFERENCE：`ticker_sector.json` × 季快照 join 後 groupby 可得產業單季營收 YoY | 無任何產業層聚合函式；6 季偏短；存活者偏誤；聚合定義（加總 vs 中位數）屬方法決策 |
-| 2 | EPS／獲利成長 | **個股層有；產業層無** | FACT[快照 `eps／net_income／op_income／gross_profit`（累計）；跨季比率斜率 `compute_cross_quarter_trends`（個股層）]。EPS／net_income 未單季化 | 同上；產業層 EPS 聚合定義待客戶 |
-| 3 | 資本支出 | **個股層部分；產業層無** | FACT[單檔 `fetch_5_years_cash_flow`（FinMind CashFlows，5 年）；全市場快照**無** capex 欄] | 產業層需逐檔抓約 1900 檔現金流量表（配額／時間成本高）；MOPS 彙總有無現金流量表端點＝未驗 |
-| 4 | 產業相對強弱 | **部分** | FACT[①資金流泡泡圖 `bubble_latest.json`：40 板塊，20 交易日窗，`daily_net.parquet` 27 交易日（2026-09-11→2026-10-22）；②熱力圖 `TW_SECTORS` 10 檔「單一代表股」`TW_SECTOR_SINGLE_STOCK_PROXY=True`，**非類股指數**] | **無真類股指數價格序列**（yfinance 無；MI_INDEX 一次一日且 repo 標「已永久停用」；FinMind 無類股指數 dataset）。INFERENCE：可用 `TaiwanStockPrice`／收盤價 × 對映自算等權產業指數，屬新 L1／L2 |
-| 5 | 法人配置 | **部分（流量有，存量無）** | FACT[`daily_net.parquet` 的外資／投信／自營淨買超金額（億），NaN 不補 0，`tpex_complete` 標記] | 只有流量，**無持股比重／配置占比**；歷史僅 27 日 |
-| 6 | 籌碼 | **個股層有；產業層部分** | FACT[個股 20 日法人 `get_chips_readout`；融資 `finmind_margin.parquet`（大盤）；集保大戶爬第三方網站（T3）] | 產業層融資融券 MISSING；融資融券／大戶新 UI 標的頁未接（INFERENCE） |
-| 7 | 估值 | **個股當日值有；產業層無；歷史無** | FACT[全市場 PE／殖利率／PB（TWSE `BWIBBU_d`＋TPEx）當日值，TTL_1DAY；357 殖利率位階（個股）] | **無歷史序列落地**（INFERENCE：未見 PE 歷史 parquet）→ 無法畫產業估值分位；金融／虧損股 PE 缺值處理待定 |
-| 8 | 景氣循環 | **總體有；產業別無** | FACT[TW PMI（`tw_pmi.parquet` 171 列 2012-07→2026-09）、NDC 景氣燈號／領先指標（FinMind `TaiwanBusinessIndicator`）、M1B／M2] | 無工業生產指數、外銷訂單（grep 僅命中說明字串）、無產業別 PMI 細項（CIER 有，repo 只取總指數） |
-| 9 | 產業事件 | **無** | MISSING | 無資料、無分類；新聞（T4）僅文本，**不得由 LLM 從新聞歸納成「產業事件」入 Digest** |
-| 10 | 技術世代變化 | **無** | MISSING | 無正式資料源可機械取得；若要做需客戶先定義範圍；任何題材／供應鏈資料庫多為商用或第三方整理（授權／可信度未驗） |
-
-### 6.3 來源候選（僅列，不導入）
-
-> 判定欄「Gate」：**Y**＝新外部來源，需 Customer Gate（v3 §03-2 ②／CLAUDE.md §2.1 來源註冊）；**N**＝repo 既有來源重組，屬內部自決（但新增畫面元素仍須 UI 草稿 Gate）。可信度／授權／成本欄皆為撰寫者已知、**未驗證**，不得當事實。
-
-| 需求 | 候選 | 可信度／授權／成本 | Gate |
+### 6.2 八項盤點一覽（細節與驗證方法見 RS-1；分類為撰寫組判定，單組、未獨立複驗）
+| # | 項目 | repo 現況（一句） | 分類 |
 |---|---|---|---|
-| 產業營收／EPS 聚合 | **repo 既有**：MOPS 季彙總快照＋官方產業別對映（INFERENCE：不需新外部來源） | T1 官方；免費；已在跑；限制＝6 季、存活者偏誤 | N（聚合定義＝方法決策，建議列 §10 Q5） |
-| 更長歷史（>6 季） | 同一 MOPS 端點回補更早季別（`update_fundamentals_snapshot.py --roc-year --season` 已支援） | T1；免費；舊季端點是否仍可用＝未驗 | N（屬資料回補作業，建議知會客戶） |
-| 產業別資本支出 | FinMind `TaiwanStockCashFlowsStatement`（repo 已用於單檔）逐檔聚合 | T2；需 token＝配額壓力；全市場約 1900 檔×多季 | N（既有 dataset）／成本需評估 |
-| 真類股指數序列 | 自算等權產業指數（FinMind `TaiwanStockPrice`＋對映）；或 TWSE `MI_INDEX`（repo 標永久停用） | 自算＝新 L1／L2；MI_INDEX 穩定性不足（repo 自陳） | 自算 N（但屬新資料流，需 §8.1 架構規劃＋UI Gate）；MI_INDEX 重啟需 Gate（推翻既有停用決策） |
-| 產業景氣 | 經濟部統計處：工業生產指數、外銷訂單、製造業銷售量值；財政部海關進出口（repo §2.3 已列 MOF 進出口） | T1；免費；是否有穩定 API／是否含產業細分＝**未驗** | Y |
-| 產業 PMI 細項 | CIER（中經院）細分產業指標 | T3 第三方網站爬取；授權未查；穩定性差 | Y（且列風險） |
-| 產業估值歷史 | TWSE `BWIBBU_d` 每日抓＋自行落地累積（repo 已抓當日值、未落地） | T1；免費；無法回溯，只能從開始累積起算（PIT 友善） | N（新增落地檔＝新資料資產，建議知會） |
-| 法人持股比重（產業層） | TWSE 外資及陸資持股統計（日）、集保戶股權分散表（週） | T1；免費；端點是否已在 `data_registry.py` 登記＝未驗 | Y（新端點） |
-| 技術世代／結構變化 | 無機械化正式來源 | 不建議；AI 不得自創標籤 | Y（若要做，先由客戶定義） |
-| 大盤 EPS／PE（§4 `valuation`） | 老師資料原件不在 repo；`VN1-MT-VALUATION` 研究中 | DEC-081 第 10 點明禁「新增 EPS 來源」 | Y（High Gate） |
+| 1 | 產業營收 YoY／成長廣度 | 個股層季快照（6 季，累計欄）× 官方產業別對映；無產業層聚合；廣度（YoY>0 家數占比）為新計算 | 需要轉換 |
+| 2 | EPS／獲利趨勢 | 快照有 `eps／net_income／op_income／gross_profit`；EPS／net_income 未單季化（`ytd_to_single_quarter` 只涵蓋 revenue／gross_profit／op_income） | 需要轉換 |
+| 3 | 產業相對強弱 | 僅法人資金動能與 10 檔單一代表股 proxy；無真類股指數價格序列 | 缺資料（價格面）＋需要轉換（可自算，屬新資料流） |
+| 4 | 法人配置／籌碼 | 產業淨買超流量有（27 交易日）；持股比重／配置占比（存量）無 | 流量可直接使用；存量缺資料／新來源候選 |
+| 5 | 資本支出 | 單檔 FinMind 現金流量表可抓；全市場快照無 capex 欄 | 缺資料（產業層）／新來源候選 |
+| 6 | 景氣／終端需求 | 總體 PMI／NDC／M1B-M2 有；產業別景氣與終端需求無 | 缺資料／新來源候選 |
+| 7 | 估值 | 全市場當日 PE／PB／殖利率有；無歷史落地 | 需要轉換（當日）／缺資料（歷史分位） |
+| 8 | 結構性技術／產業世代 | 無任何機械可取資料 | 缺資料；新來源候選需客戶先定義範圍 |
 
-### 6.4 不需新外部來源的聚合做法（全部標 INFERENCE，未驗）
-
-- 產業單季營收 YoY：`季快照.revenue`（先單季化）× `ticker_sector.json` → groupby 產業。
-- 產業獲利趨勢：同上，用 `net_income`／`gross_profit`／`op_income`（先單季化）；EPS 的產業聚合定義（加總淨利 vs 中位數 EPS）**屬方法決策，需客戶 Gate**。
-- 產業估值（當日）：`BWIBBU_d` × 對映 → 中位數；**無歷史，不得宣稱分位**。
-- 產業資金流：沿用 `daily_net.parquet`（已為產業層）。
-- 這些聚合會是**新的規則模組**（`rule_id` 需新設、版本化、可獨立測試——`PROJECT_RULES.md` §19.4），**不是 UI 的簡化**。
-- 聚合結果必須帶：覆蓋率、存活者偏誤旗標、期別（公告季 ≠ 交易日 ≠ 當日 PE，三者 `as_of` 分開標示）。
-
-### 6.5 明文
-
-> **不得用 LLM 常識宣告某產業已衰退或崛起。** 任一產業的「變強／轉弱／結構性衰退／下一個成長產業」結論，只能來自 Digest 內由規則層產生、帶 `rule_id＋rule_version＋evidence_refs` 的 `industry_trend[]`。資料不足時，Brain 必須說「不知道」。客戶規格 §七、§九②同向。
-
----
+### 6.3 邊界（明文）
+- **不得用 LLM 常識宣告某產業已衰退或崛起**；任一產業的「變強／轉弱／結構性衰退／下一個成長產業」結論，只能來自 Digest 內由**正式產業規則**（尚未存在）產生、帶 `rule_id＋rule_version＋evidence_refs` 的 `industry_trend[]`。資料不足時 Brain 必須說「不知道」。
+- 營收 YoY 中位數＋覆蓋率若在 RS-1 之後被實作，也只標為候選維度／baseline（附覆蓋率與存活者偏誤旗標、期別 `as_of` 分開標示），**不得稱產業趨勢**。
+- 新外部來源研究不得接入 production、不得新增 API／MCP；導入前另開 Customer Gate。
 
 ## §7 策略分類（存股／資本利得）最小資料契約需求
 
@@ -519,42 +492,33 @@
 - FACT[`page_me.py` 檔頭] 👤我的 P1 唯讀，「不搬 CRUD、不寫 Sheet 內容」；組合／觀察清單／持股列 CRUD 仍在舊「📁 組合管理」。選定只活在 session，不持久化。
 - 衝突（INFERENCE）：現行「核心／衛星＝ETF／個股」與客戶「ETF 可以是資本利得、個股也可以是存股」**直接相反**；站內「存股」現實作＝ETF 定期定額。若 Digest 沿用 `legacy_asset_class` 當策略分類，會**系統性分錯類**——因此 §4 `HoldingBlock` 把它降為「僅供對照」。
 
-### 7.2 最小資料契約需求（只列需求，不設計寫入）
+### 7.2 最小資料契約需求（Q1 已裁示，DEC-092；只列需求，不設計寫入）
 
-1. 每個「持有列」可綁一個 `strategy_type ∈ {存股, 資本利得}`；**缺值讀成「未分類」**，不得預設成任一類，不得由 ETF／個股推導，不得 AI 猜（§1；客戶規格 §六）。
-2. **鍵與作用範圍待客戶定**（§10 Q1）：**推薦以 `ticker` 為鍵（每檔一個分類）；替代案＝以 `組合×代號` 為鍵**（同一檔需同時兩種目的時才升級）。
-3. 觀察清單是否需要「預定目的」＝待客戶。
-4. 若要算「自買進起」績效（含息總報酬／XIRR／CAGR），另需買進日期（目前無）；**此為績效需求，不屬策略分類最小契約**，單列為缺口。
-5. 現有 5 欄表頭不得被破壞：FACT[L1 對右側使用者自加欄「讀取不影響、寫入時原樣保留」；表頭不符 → `SheetSchemaMismatchError`，寫入前 raise]。
-6. **寫入面屬新授權**：把分類設定放進「👤我的」＝新增寫入 Google Sheet（HI-5：寫入類與 Sheet CRUD，未核准）；也超出 👤我的 P1「唯讀」授權。需 High Gate。
-7. **在客戶提供正式分類並核准寫入機制前**：Digest `holdings[].strategy_type` 一律 `未分類`；③存股、④資本利得兩段顯示「尚未設定投資策略分類，無法判定」。這是**誠實的第一版行為**，不是缺陷。
-
----
-
-## §8 實作批次建議
-
-> 本節為**建議**，不是排程授權。所有批次開工前須：①重新過 DEC-084 Model×Effort Gate（若建議配置與目前不同，須在 Safe Checkpoint 停手等客戶切換並回覆「改好了」）；②Old→New Coverage 對等驗收；③依 CLAUDE.md §-2 派工與獨立複驗；④不夾帶 HI-1～HI-6、不改 Risk Cap／門檻／權重／趨勢定義／估值公式。
-> **順序前提**：
-> - **D2 Cloud 啟動事故未結案**：FACT[BACKLOG `NEWUI-STAGE-D2-BOOT-INCIDENT`] 根因未確認、Cloud traceback 未提供、`waiting_for_customer`；D3～D5 凍結（客戶 2026-10-27 亦指示停止）。已補的 `tests/test_boot_import_smoke.py` 是守衛不是根因。候選假說（Cloud 殘留舊 `shared.ia_nav`、部署 commit 非 main、環境差異）皆未證實。
-> - 因此：**凡會動 `shared/ia_nav.py`、`app.py`、`src/ui/views/shell_nav.py` 的批次，一律排在事故結案之後**。純新增 L0／L3 模組、不接線的批次，可先行，但每批 PR 須過 boot import smoke。
-> - **High Gate 項目**（不預設通過）：EPS×PE 公式與資料來源、Risk Cap 核准顯示、策略分類寫入、新外部來源、行動排序規則（HI-1）。
-
-| 批次 | 範圍 | 前置 | Gate | UI 草稿先行 | DEC-084 建議（Model×Effort） | 獨立於導覽殼 |
-|---|---|---|---|---|---|---|
-| **AB-0 Digest 契約** | L0 schema（欄位、`status`／`missing_reason` 枚舉、`rule_id／rule_version／evidence_refs` 規範）＋契約測試；**純契約、不接任何 UI、不取數** | **客戶另行明示授權本批實作**（DEC-091 未授權任何實作）；§4 草案獨立審查 | 新資料契約（建議 Opus 領域）；不涉及投資語意改動；不需 UI Gate | 否 | **Opus + Medium**（DEC-084：新資料契約屬 Opus；可逆且範圍受控 Medium） | **是** |
-| **AB-1 Digest Builder（只聚合既有輸出）** | L3 builder：把 `get_macro_state`／`get_allocation`／`build_station_digest`／`compute_industry_concentration`／`get_ranked_picks` 等**既有輸出無損搬運**成 Digest；缺值以 `status` 表達；為既有輸出補 `as_of` 的**讀取側**映射（不改規則） | AB-0；§8.1 架構規劃（內部）；`as_of` 缺口（契約無逐指標 `as_of`）的處理方式需內部拍板並揭露 | 不新增來源；若需**擴充**既有契約（例如 `get_macro_state` 外露 `as_of`）→ 屬契約變更，須獨立 QA 並確認不改規則輸出 | 否 | **Sonnet + Medium**（一般跨模組 wiring）；若觸及 Risk Cap 讀端語意則停手重判 | **是** |
-| **AB-2 Grounding Validator＋降級＋統一出口** | 規則式驗證（G1～G6）、規則式摘要模板（無 AI 版）、統一「AI 不可用」型別、單一傳輸層（**新增，不改舊出口**）、金鑰與用量計量 | AB-0、AB-1；內部拍板（按鈕觸發、Brain 獨立 persona） | 內部拍板（改全站 persona 才需 Gate，`CV1-FU-06`），**本批不改 persona**，Brain 使用自己的 system prompt；新增 AI 出口依 `PROJECT_RULES.md` §4 第 6 項屬 substantive AI behavior → Decision Gate（BP-DR-20） | 否（無畫面） | **Sonnet + Medium**；驗證規則設計若涉及輸出格式契約可升 Opus（屆時停手） | **是** |
-| **AB-3 產業趨勢聚合（既有來源）** | 新 L2 規則模組：產業單季營收 YoY／獲利趨勢（用既有 MOPS 快照＋官方產業別對映）；產業資金流引用；覆蓋率與存活者偏誤旗標；`rule_id` 版本化 | **§10 Q5 聚合定義裁示**；§6.4；`ytd_to_single_quarter` 對 EPS 的單季化需先驗 | **High Gate**（新規則＝投資語意；聚合定義）；若需回補更長歷史（>6 季）→ 資料回補作業，知會客戶 | 否（本批無畫面；呈現在 AB-5 之後的標的頁） | **Opus + Medium/High**（DEC-084：投資核心語意；影響重大者 High） | **是** |
-| **AB-4 策略分類契約** | L1 讀取側：從客戶指定位置讀 `strategy_type`，缺值＝未分類；**不含寫入** | **§10 Q1 裁示**（位置、鍵、粒度） | 讀取＝契約；**寫入（含放進 👤我的）＝HI-5 High Gate**，另批 | 若放進「我的」頁＝是（欄位增減） | **Opus + Medium**（資料契約＋Sheet schema 相容） | 讀取側**是**；寫入面否 |
-| **AB-5 🤖 AI 投資總結卡（桌面＋手機）** | UI：全站唯一總結卡、五段、可展開；消費 AB-1 Digest 與 AB-2 輸出 | AB-0～AB-2；**導覽殼重畫（D2.5 4 頁 IA）已客戶核准**；**D2 Cloud 事故結案**；UI 線框（D2.5 A／B 部）客戶核准 | UI 草稿先行 Gate（v3 §03-2 ①，已含於 D2.5 線框；仍需客戶核准線框）；Customer Design Gate | **是（已隨 D2.5 提供，需核准）** | **Sonnet + Medium**（一般 UI） | **否**（依賴新殼） |
-| **AB-6 「查看依據」元件** | 通用折疊元件，直接渲染 Digest 的 `evidence_refs`／`as_of`／`rule_id`／`missing`／`availability`／`ai_participation` | AB-5 同；A4 裁示（D-29 改寫） | 不得涵蓋 HI-3 內容；依據文字須讀 L0 規格表，不新寫門檻（DEC-085 §9／D-17） | 是 | **Sonnet + Medium** | **否** |
-| **AB-7 新外部來源研究／導入** | 經濟部統計處、海關、集保股權分散、外資持股統計等候選的**研究清單**（端點、授權、穩定性）；導入另案 | §10 Q5 客戶是否開研究 | **Customer Gate（新外部來源）**＋CLAUDE.md §2.1 來源註冊 | 否 | 研究 **Sonnet + Medium**；導入視資料契約變更判定 | **是** |
-| **（暫緩）大盤 EPS×PE 圖C** | `VN1-MT-VALUATION` | 老師資料原件、EPS 來源、PE 情境、公式、更新頻率的 High Gate 核准 | **High Gate**；DEC-081 第 10 點禁新增 EPS 來源 | 是 | Opus（投資核心語意） | 否 |
-| **（暫緩）本期行動合成** | 行動選取／排序 | §10 Q4；HI-1 | **High Gate（HI-1）** | 視情況 | Opus | 否 |
-
-**建議順序**：（建議順序，皆**需客戶另行授權**才開工）AB-0 → AB-1 → AB-2（三批皆為 L0／L3、不接線、可在事故調查期間進行，每批 PR 須過 boot import smoke）→ 等事故結案與 4 頁導覽核准 → AB-5／AB-6。AB-3、AB-4 讀取側與 AB-7 研究可平行（寫入端仍序列化，一次一檔，PROCESS.md §3）。
+1. **鍵＝`portfolio_id + symbol → strategy`**，`strategy ∈ {存股, 資本利得, 未分類}`；**不得以 `symbol` 作為全站唯一鍵**（同一代號在不同投資組合可有不同投資目的）。**缺值讀成「未分類」**，不得預設成任一類，不得由 ETF／個股推導，不得 AI 猜（§1；客戶規格 §六）。
+2. **粒度**：止於「同一投資組合＋同一代號」一個策略。「同一投資組合、同一代號同時拆成兩種策略」（lot／sub-position 級）**本批不做、不過度設計**；確認需要時**另開 Gate** 研究。
+3. **`portfolio_id` 來源＝MISSING／待定義**：FACT（單組 grep，2026-10-27）`src/`、`shared/` 查無 `portfolio_id` 識別字；現行以 Sheet 內「組合名（`name` 欄）」識別組合（FACT[`gsheet_portfolio._HEADERS`]）。INFERENCE：可由「active `sheet_id` ＋ 組合名」構成，**組合改名時是否穩定未驗**。這是「資料身分規則」（DEC-084 Rule 5 → Opus 級），屬內部技術拍板，須在 AB-0／AB-4 規格內明定並於交付報告揭露；AB-0 只定型別（不透明字串），不決定來源。
+4. 觀察清單是否需要「預定目的」：DEC-092 未裁示，**第一版不做**（INFERENCE）。
+5. 若要算「自買進起」績效（含息總報酬／XIRR／CAGR），另需買進日期（目前無）；**此為績效需求，不屬策略分類最小契約**，單列為缺口。
+6. 現有 5 欄表頭不得被破壞：FACT[L1 對右側使用者自加欄「讀取不影響、寫入時原樣保留」；表頭不符 → `SheetSchemaMismatchError`，寫入前 raise]。
+7. **儲存與寫入（客戶裁示）**：「分類屬客戶設定，**存入既有 Google Sheet SSOT 路線可以接受**；但新增寫入能力必須遵守現有 writer／WIF／安全治理，**不得因此放寬其他 Sheet 寫入權限**。」→ 實作時屬 **HI-5 寫入面**（Sheet 寫入與 CRUD，未核准）；也超出 👤我的 P1「唯讀」授權，須 High Gate／獨立 QA。實際分頁／欄位版型為技術實作（內部拍板，受第 6 點約束）。
+8. **在寫入面核准並上線前**：Digest `holdings[].strategy_type` 一律 `未分類`；③存股、④資本利得兩段顯示「尚未設定投資策略分類，無法判定」。這是**誠實的第一版行為**，不是缺陷。讀取側（缺值＝未分類）可先於寫入面實作。
 
 ---
+
+## §8 實作批次建議（**依 DEC-092 重排；權威版本在 PLAN §5，本節只列與 C 內容相關的差異**）
+
+> 本節為**建議**，不是排程授權。**DEC-092 後的變化**：(1) Q1–Q6 已裁示，「等客戶回覆 Q」不再是前置；(2) 不需新 Customer Gate 的批次，可依既有 Auto-Ship／Silent Autonomous Cruise 規則執行（客戶 2026-10-27）；(3) 每批仍須：DEC-084 Model×Effort Gate（建議配置與目前不同須停手等「改好了」）、Old→New Coverage 對等驗收、CLAUDE.md §-2 派工與獨立複驗、不夾帶 HI-1～HI-6、不改 Risk Cap／門檻／權重／趨勢定義／估值公式；(4) Boot incident（實機已恢復、root cause 未確認、boot smoke guard 保留）：凡動 `shared/ia_nav.py`、`app.py`、`src/ui/views/shell_nav.py` 的批次須先處理該風險並過 boot import smoke；不動這三者的純 L0／L3 批次每批 PR 仍過 boot import smoke。
+
+| 批次（沿用 C 舊編號） | 範圍 | DEC-092 後的變化 |
+|---|---|---|
+| **AB-0 Digest 契約** | L0 schema＋契約測試，純契約、不接 UI、不取數 | 不再需「客戶另行明示授權」，若無新 Gate 可 Auto-Ship；`holdings[]` 改用 `portfolio_id＋symbol`（只定型別，不決定來源、不寫入）；Opus＋Medium（新資料契約／資料身分規則） |
+| **AB-1 Digest Builder** | L3 搬運既有輸出 | 同 PLAN；策略分類一律 `未分類`（AB-4 讀取側完成前） |
+| **AB-2 Validator＋降級＋統一出口** | G1～G6、規則式摘要、單一傳輸層 | 拆 AB-2a（驗證器＋規則式摘要，無 AI 呼叫）與 AB-2b（新增 AI 出口／傳輸層，屬 Decision Gate，BP-DR-20）——拆分為撰寫組建議（INFERENCE） |
+| **AB-3 產業趨勢聚合** | 新 L2 規則模組 | **暫緩**：Q5 要求先研究不導入；改由 RS-1（docs-only）取代，正式產業規則 High Gate 後才可能重啟 |
+| **AB-4 策略分類** | 讀取＋寫入 | 拆 AB-4r（唯讀契約，鍵＝`portfolio_id＋symbol`）與 AB-4w（寫入面＝HI-5 High Gate，遵守現有 writer／WIF／安全治理、不放寬他處寫入權限） |
+| **AB-5／AB-6 AI 總結卡／查看依據（UI）** | UI | 以現有 wireframe 為視覺基準；排在四頁導覽殼替換之後 |
+| **AB-7 新外部來源研究** | 研究 | 併入 RS-1（只研究，不接入、不新增 API／MCP；導入前另開 Customer Gate） |
+| **（暫緩）EPS×PE 圖C、本期行動合成、正式趨勢定義** | — | High Gate 項，不預設通過 |
 
 ## §9 風險與 HI-1～HI-6 邊界
 
@@ -565,12 +529,12 @@
 | R1 | **Digest 變成第二套真相** | 若 builder 重算或補值，會與規則層分叉（違 §19.3 SSOT） | Builder 只搬運；AB-0 契約測試：Digest 欄位值必須可追溯到單一上游輸出 |
 | R2 | **缺值被轉成確定語氣** | 既有路徑已有 `.get(…,0)`（R4）；Brain 若沿用同寫法會「賣超0張」 | Digest 一律 `status`＋`null`；Grounding G3 |
 | R3 | **「空答案壓力」** | 11 題多數資料不足，易誘發 AI 或模板「湊答案」 | §16.1「不得為有答案而製造結論」；G5 要求資料不足明示 |
-| R4 | **產業結論由 LLM 常識產生** | 最容易發生，且最難被使用者察覺 | G1／G4；§6.5 明文 |
-| R5 | **聚合偏誤** | 6 季、存活者偏誤、累計欄未單季化、公告季≠交易日 | `coverage`、偏誤旗標、期別 `as_of` 分開；方法裁示（§10 Q5） |
+| R4 | **產業結論由 LLM 常識產生** | 最容易發生，且最難被使用者察覺 | G1／G4；§6.3 明文 |
+| R5 | **聚合偏誤** | 6 季、存活者偏誤、累計欄未單季化、公告季≠交易日 | `coverage`、偏誤旗標、期別 `as_of` 分開；方法研究（§10 Q5、RS-1） |
 | R6 | **策略分類被推導** | 沿用 core／satellite 會系統性分錯類 | `strategy_type` 預設＝未分類；`legacy_asset_class` 僅對照 |
 | R7 | **AI 成本失控／額度共用** | 金鑰池共用、無用量計量、每次 rerun 重算 | 按鈕觸發；用量計量；失敗不快取 |
 | R8 | **persona 衝突** | 「給出明確動作」與 DEC-054 第 6 點張力（`CV1-FU-06` open） | Brain 不用該 persona；修改走 Gate |
-| R9 | **動到出事故的模組** | `shared/ia_nav.py` 是 D2 Cloud 事故現場 | AB-0～AB-2 不碰；UI 批次待事故結案 |
+| R9 | **動到出事故的模組** | `shared/ia_nav.py` 是 D2 Cloud 事故現場 | root cause 仍未確認（DEC-092 Q6）；AB-0～AB-2 不碰；動導覽模組之 UI 批次須先處理風險並過 boot smoke |
 | R10 | **大盤 as_of 缺口** | `get_macro_state` 契約無逐指標 `as_of` | AB-1 內部拍板處理並於報告揭露；不改規則輸出 |
 | R11 | **單組盤點偏差** | 本檔 FACT 皆單組讀碼，未複驗 | 各批開工前由獨立一組重驗承重 FACT（尤其「0 命中」類） |
 | R12 | **Level 3 洩漏到首屏** | 「查看依據」若預設展開會違反客戶資訊層級 | 預設收合；UI 守衛測試 |
@@ -588,20 +552,20 @@
 
 ---
 
-## §10 客戶 Gate（全套統一 Q1–Q6）與內部拍板
+## §10 客戶 Gate Q1–Q6：**已裁示（DEC-092）**與內部拍板
 
-> 2026-10-27 依獨立 QA 統一：客戶只被請示少量真正需決定的問題，全套文件（A／B／C／PLAN）同為 6 題。客戶可回「採推薦」。
+> 原文逐字見 `docs/DECISIONS.md` DEC-092（具約束力）。客戶 2026-10-27：**不是「全照推薦」**。下表以裁示取代原推薦；原推薦的衝突敘述（Q1「以 ticker 為鍵」、替代案「組合×代號」；Q5「以營收 YoY 中位數定義產業趨勢」）**已作廢**。
 
-| # | 題目 | 推薦 | 理由 |
-|---|---|---|---|
-| **Q1** | **投資策略分類（存股／資本利得）存在哪、怎麼寫入？** | **以 `ticker` 為鍵、每檔一個分類**，存於客戶 Google Sheet「獨立分頁（比照 `stock_watchlist`）或持股分頁右側新欄」，兩者皆可（以 A §8.2 為準）；**讀取側先做，寫入面另批（HI-5 High Gate）**。**替代案**：以 `組合×代號` 為鍵（同一檔在不同組合有不同目的時） | L1 已容忍右側自加欄、不破壞現有 5 欄表頭；單鍵最簡單；缺值＝「未分類」，不由 ETF／個股推導、不由 AI 猜。寫入屬新授權，不併入本批 |
-| **Q2** | **台股／國際趨勢怎麼定義？圖A／圖B 要畫哪些線？**（併入 `VN1-MT-TREND-DEF`，**High**） | 推薦 (b)：圖A 畫既有 MA5／60／120／200 當「參考線，不構成趨勢判斷」、圖B 沿用 INTL_MAP 五條（按海外／利率／美元分組）；**趨勢「定義」仍待客戶**，定義前結論位維持「⬜ 尚未定義」。備案：(a) 只畫收盤＋現值卡；(c) 客戶指定定義與線 | 資料足（twii 日線可畫），缺的是定義；AI 不得補。屬投資語意 |
-| **Q3** | **市場圖D 第一層 3–5 項怎麼挑？** | 推薦 R-A：五桶各取最差一項。備案：R-B 全 16 燈依危險度取前 N；R-C 客戶固定指定；R-D 只列最差等級上限 5 | 挑選即排序，屬業務語意；不由 AI 決定 |
-| **Q4** | **持股四態（續抱／注意／減碼／換股候選）與「本期 1–3 個行動」的排序規則**（HI-1 邊界） | **暫不合成**：僅引用規則層既有待處理項，`priority_rank=null`，四態先只顯示現有「建議動作」；另開研究提案一套規則供客戶核准 | 由 AI 自行排序違反 DEC-054 第 6 點與 D4；新增標籤與排序均為投資語意，需 High Gate。先讓 ⑤ 誠實可用 |
-| **Q5** | **產業趨勢口徑與排序；是否開啟新外部資料來源研究**（研究≠導入） | **口徑**：先做「產業單季營收 YoY（中位數）＋覆蓋率＋存活者偏誤旗標」，用既有 MOPS 6 季快照，不新增外部來源（聚合方式與排序仍由客戶核准）。**研究**：開研究清單（只研究端點／授權／穩定性，不導入） | 「結構性衰退」「新產業」沒有新來源只能「不知道」；先研究不導入，不增風險；導入另走 Customer Gate |
-| **Q6** | **D2 殼／佔位頁／DEC-090 處置與 D2 重新驗收**（含 Cloud 啟動事故） | 由 D2.5 治理文件（A／PLAN）承接；事故結案前凡動 `shared/ia_nav.py`、`app.py`、`src/ui/views/shell_nav.py` 的批次一律不開工 | 見 §8 順序前提 |
+| # | 題目 | 裁示（DEC-092） |
+|---|---|---|
+| **Q1** | 策略分類存放與寫入 | 修改推薦：鍵＝`portfolio_id + symbol → strategy`（存股／資本利得／未分類）；不得以 symbol 作全站唯一鍵；lot／sub-position 級另開 Gate；存既有 Google Sheet SSOT 路線可接受，新增寫入須遵守現有 writer／WIF／安全治理、不得放寬其他 Sheet 寫入權限（見 §7.2） |
+| **Q2** | 台股／國際趨勢 | 大致照推薦：圖A 既有指數／均線為視覺參考線並標「均線為參考，不等於正式台股趨勢判斷」；圖B 沿用已有可追溯國際系列展示；台股／國際趨勢＝⬜ 尚未定義；不得由 AI／均線／單一指標補多空結論；正式定義另列 High Gate（判斷資料、時間尺度、規則／公式、missing semantics、驗證／回測、AI 可使用範圍） |
+| **Q3** | 圖D 第一層風險 | 照推薦＋條件：五桶各取最需注意一項；資料不足桶顯示「⬜ 資料不足／無法判定」不得硬選最差；第一層最多 3–5 項 |
+| **Q4** | 持股動作／本期行動 | 照推薦：沿用既有「建議動作」與優先序；不新增續抱／注意／減碼／換股新判斷語意或四態規則（四態＝未啟用，定義待核准）；Brain 可整理／解釋／比較／排出最重要 1–3 項，不得創造規則層沒有的買賣動作 |
+| **Q5** | 產業趨勢 | 修改推薦：營收 YoY 中位數＋覆蓋率僅為候選維度／baseline research；先研究（八項盤點）不導入 production；新外部來源只研究；AI 在正式產業規則前不得判定產業興衰（§6、RS-1） |
+| **Q6** | D2 與 Boot Incident | D2 殼過渡保留至四頁替代；⚡／🩺 佔位設計 supersede；D2 驗收通過；Boot incident root cause 未確認、不得寫成已證實為 stale module、boot smoke guard 保留；舊 UI Removal Gate 仍有效 |
 
-**已知前置 Gate（非新題）**：大盤 EPS×PE 公式／資料來源／PE 情境（High；圖C 維持 Research、不顯示數字，`VN1-MT-VALUATION`）、正式 Risk Cap 核准顯示（DEC-081 Q2-2；待 C2b＋RC-VISIBILITY）。
+**仍待的前置 Gate（非新題）**：大盤 EPS×PE（High；Research Framework 保留）、正式 Risk Cap 核准顯示（DEC-081 Q2-2）、**正式台股／國際趨勢定義（High，新列）**、正式產業趨勢規則、策略分類寫入面（HI-5）。
 
 **內部拍板表（客戶不需回答；依 §-1.5 第二條，交付報告揭露）**
 
@@ -609,15 +573,16 @@
 |---|---|---|
 | AI 總結何時產生（原 §10-1） | **第一版按鈕觸發**：規則式摘要先出，AI 潤稿按了才呼叫；cron 預產另案（屬新自動 AI 行為，且牽涉 HI-6 推播） | 全站採按鈕 gate 控成本與 rerun 重算；保留日後升級空間 |
 | Brain 的 persona 與既有 persona 衝突，`CV1-FU-06`（原 §10-5） | Brain 用獨立 system prompt，不沿用舊 persona，舊出口暫不動 | 同步改全站 persona 會動所有舊 AI 出口行為、擴大範圍（§-1） |
+| `portfolio_id` 來源與穩定性 | 內部定義（AB-0 只定型別；AB-4 定來源）並於交付報告揭露 | 技術身分規則，客戶不能用業務語言回答 |
 
-**其餘既定處置**：四向正式頁名、D2 殼與佔位頁退場等治理細節見 R5 衝突盤點 A1～A19，由其他部文件承接（其中需客戶決定者已併入 Q6）。
+**其餘既定處置**：四向正式頁名、D2 殼退場等治理細節見 R5 衝突盤點 A1～A19，由其他部文件承接。
 
 ---
 
 ### 附：本檔未驗證事項（誠實揭露）
 
 1. 全部 FACT 為單組讀碼／讀本地資料檔，**未跑測試、未連網、未開 App**；所有「0 命中／沒有」皆為單組 grep，未窮舉。
-2. 外部來源（§6.3）可用性、授權、端點存在與否、成本**一律未驗**。
+2. 外部來源（RS-1 所列候選）可用性、授權、端點存在與否、成本**一律未驗**。
 3. 台股趨勢／國際趨勢是否已有獨立輸出契約（`PROJECT_RULES.md` §19.4 提及的模組）**未查**；`judge_news_sentiment` 的 `label='中性'` 是否被下游當真中性使用**未查 caller**；`dividend_tax_service` 稅費是否足以支撐換股判斷**未讀**。
 4. `data_cache/` 中 PE 無歷史序列、「個股風險 L3 不存在」「融資融券未接新 UI」為由 grep／檔頭推得的 INFERENCE。
 5. §4 Digest 欄位與 §2.4 Grounding 規則為**草案**，尚未經獨立 QA；承重前提（尤其「現有 AI 無輸出後驗證」）開工前須由第二組複驗。
