@@ -1262,6 +1262,26 @@ D2.5 以下大方向核准：
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條由單一撰寫組依程式碼與執行組回報撰寫；契約已過兩輪獨立 QA 並修正，**最終獨立複驗見 PR**，本條不宣稱已通過；第 1 點引用的差異清單為單組比對，未經第二組逐項驗證。
 
 
+### DEC-094｜AB-1 Decision Digest Builder／rule_id 允許名單的內部設計選擇（AI 總管內部，2026-10-27）
+> 2026-10-27 補登（ID 取下一個未用號；落盤前實測 `git grep -n "DEC-094"` 僅命中 BACKLOG／HANDOFF／PROJECT_STATE／AB-1 規格的「預告將寫 DEC-094」，`docs/DECISIONS.md` 無此條、最大為 DEC-093）。**本條不是客戶裁示**，只記錄 AB-1 實作時的技術選擇，供後續批次（AB-2a／AB-4r）與獨立 QA 對照；不改 `CLAUDE.md`／`PROJECT_RULES.md`。
+- **決策者**：**AI 總管內部（技術實作，依 `CLAUDE.md` §-1.5 v3 §03-1 內部自決）；非客戶裁示**。客戶 2026-10-27 給的邊界：在已合併 AB-0 契約上建純函式 Builder；不新增投資規則、不接 AI／UI、不碰 `app.py`／`shared/ia_nav.py`、不定義 `portfolio_id` 來源、不寫 Sheet。以下為該邊界內的實作選擇。
+- **內容**：
+  1. **落地檔案**：`shared/decision_digest_rules.py`（L0：`rule_id` 允許名單 `RULE_ID_ALLOWLIST`、Q4 優先序 `Q4_ACTION_PRIORITY`、`assert_strict`）、`src/services/decision_digest_builder.py`（L3 純函式 `build_decision_digest`，回傳前一律 `assert_strict`）；測試 `tests/test_decision_digest_rules.py`、`tests/test_decision_digest_builder.py`。**不改 AB-0**（`shared/decision_digest.py` 未動）；無新投資規則；不接 AI／UI。
+  2. **`ACTION_RULE_VERSION = "action_branch.v1"` 是內部命名**：行動規則原本無版本常數，此標籤是實作者命名，**不是客戶核准的規則版本**；日後 `action_branch` 條件或優先序變更必須升版並過審。允許名單成員只收程式已存在的識別字（`risk_cap`→`RISK_CAP_RULESET_VERSION`；`cut`／`take_profit_force`／`take_profit_partial`／`pause_add`／`add` 的字串複本，測試 pin 住與 `dividend_station.ACTION_*` 相等）；`premium`／`cruise` 刻意不收。
+  3. **`rule_wrong_location`（位置維度）＝超出規格 B.1 的實作者新增**：允許名單除了「id＋版本是否存在」也管「放在哪」（`risk_cap` 段只能引 `risk_cap`；持股事實與行動只能引行動分支碼；市場事實／定義狀態段維持 AB-0 的 rule 選填，有帶就必須在名單內）。**語意 QA 建議保留**；它只**收緊**（更多拒收），不放寬任何 AB-0 語意。
+  4. **資料異常列整列不搬行動（fail-safe）**：帶非空 `_invalid_lights`／`_invalid_inputs` 的站內列，其行動整列不進 Digest。方向＝只減不增；AB-0 契約沒有對應的揭露欄位，故**不揭露**（客戶看不到「有一列因資料異常被略過」——此為已知限制，若要揭露屬改契約，須升 `SCHEMA_VERSION`＋獨立 QA）。
+  5. **Fail loud**：`held`／`is_loaded` 非 `bool`／`None` → `TypeError`；輸入型別不對一律 `TypeError`；建議動作文字佔位字（如「—」類）降級為 `MISSING`，不當成可顯示的行動文字；可搬運的行動列 `建議動作` 非非空 str → `ValueError`；**重複持股列**、**同 ticker 重複行動列**皆 fail loud（不默默取其一）。
+  6. **v1 不攜帶**：個股路徑換股動作（`assess_stock`，無分支碼、無 Q4 rank）與 `flag_take_profit`（衛星 ≥15%）——排位須客戶裁示（BACKLOG `AB1-STOCK-PATH-AND-TAKE-PROFIT-RANK`）。其餘沿 `docs/vnext/NEWUI_D25_AB1_BUILDER_SPEC_2026-10-27.md`：無日期事實＝`MISSING`＋`NO_INPUT`（builder 不發明日期）、`SourceStamp` 由呼叫端傳入、行動截斷至 `MAX_ACTIONS`(3)、Risk Cap 取 `macro_state['exposure_limit_pct']`（非 `AllocationDecision.cap_pct`）。
+- **已知限制與不改項（誠實揭露）**：
+  - **AB-0 尚無「actions AVAILABLE 且 0 筆」的產生路徑**：「沒有要做的事」與「判不出來」在 v1 無法區分，0 筆行動＝UNAVAILABLE＋`NO_INPUT`。
+  - **production 在 AB-4r 前不可達**：`portfolio_id` 無來源（AB-4r 才定義），AB-1 產出的持股列都沒有鍵；無任何 production caller。
+  - 上游 L4 缺口（cap 與 `final_hi` 交叉、health 範圍、舊 `snapshot_ts` 不推 STALE）屬規格明言／上游責任，本批不補（L4 等已知不改項）。
+  - `snapshot_ts` 格式為 `macro_state_locker._TIMESTAMP_FMT` 的**複本**（L3 之間不互相 import）→ BACKLOG `AB1-SNAPSHOT-TS-FORMAT-SSOT`；百分比定義域 0..100 為 builder 內字面值 → `AB1-PERCENT-DOMAIN-CONSTANT`；`建議動作` 逐字攜帶而該文字可能含 "AI" 字樣，與 AB-0「AI 不得出口」精神的關係未判斷 → `AB1-ACTION-TEXT-AI-WORDING`（AB-4 前須判斷）。
+- **範圍**：資料搬運層（New UI D2.5 AB-1）｜**日期**：2026-10-27｜**狀態**：生效（隨 PR #951；**待 CI／merge，尚未合併**）
+- **來源**：分支 `ccr-fa5b6ded-9rhvoj` commits `3784a25`、`07cd93c`（`shared/decision_digest_rules.py`、`src/services/decision_digest_builder.py` 檔頭 docstring、兩個測試檔）；規格 `docs/vnext/NEWUI_D25_AB1_BUILDER_SPEC_2026-10-27.md`；客戶邊界見 2026-10-27 AB-1 指示（經總管轉交，非逐字收錄）。
+- **與其他 DEC 的關係**：不重新解釋 DEC-091／DEC-092／DEC-093；DEC-092 Q3／Q4（行動沿用既有建議動作與優先序、不得創造動作）、Q1（鍵＝`portfolio_id + symbol`）為上位約束，衝突以 DEC-092 為準。DEC-084（Model×Effort）、DEC-003（內部自決區）呼叫。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條由單一撰寫組依 diff／commit 與實作者回報撰寫。**突變 98/98 killed 為實作者自列**；兩組獨立 QA（對抗式＋語意）已跑並已回修（`07cd93c`），但**QA 回修後未重跑突變**；沙箱為 Python 3.13，**CI 的 Python 3.11 尚未實跑**；本條第 3 點「語意 QA 建議保留」為總管轉述，未逐字附 QA 報告。本條不宣稱 PR 已通過 CI 或已合併。
+
 ## 2. 產品／UI
 
 ### DEC-017｜IA v2 五頁線框為台股前端實作依據
