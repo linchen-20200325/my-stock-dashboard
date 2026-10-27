@@ -566,7 +566,6 @@ import itertools  # noqa: E402
 import os  # noqa: E402
 import pickle  # noqa: E402
 import re  # noqa: E402
-import shutil  # noqa: E402
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
 import numpy as np  # noqa: E402
@@ -1657,14 +1656,22 @@ class TestCronMain:
         assert "各腿資料日取不到" in capsys.readouterr().out
 
 
+# 已提交帳本是 cron 持續 append 的活資料：C1 之後的新列四個 as_of 欄「本來就有值」。
+# 本測試守衛的是「C1 之前的舊列」，故只取 date <= 此常數（2026-10-22 = C1 上線前最後一個已提交列，
+# 四欄皆 NaN；其後 2026-10-27 起 cron 寫入真實 as_of）的列當 pre-C1 基準，與日後成長的帳本脫鉤。
+_PRE_C1_LAST_DATE = "2026-10-22"
+
+
 class TestCommittedLedgerAppend:
     def test_old_rows_unchanged_after_append(self, tmp_path):
-        """已提交帳本複製到 tmp：C1 後 append 一列 vs C1 前 append 同一列（去掉四欄）⇒ 舊欄逐格相同；舊列四欄 None。"""
+        """已提交帳本（截至 _PRE_C1_LAST_DATE 的 pre-C1 列）複製到 tmp：C1 後 append 一列 vs C1 前 append 同一列（去掉四欄）⇒ 舊欄逐格相同；舊列四欄 None。"""
         pytest.importorskip("pyarrow")
         import src.data.macro.macro_fwd_test_store as store
         from src.compute.macro.macro_forward_test import build_signal_row
         src_pq = REPO / "data_cache" / "macro_forward_test" / "signals.parquet"
-        orig = pd.read_parquet(src_pq)
+        full = pd.read_parquet(src_pq)
+        orig = full[full["date"].astype(str) <= _PRE_C1_LAST_DATE].reset_index(drop=True)
+        assert len(orig) > 0 and orig[list(_LEG)].isna().all().all()   # 基準本身須是 pre-C1 列（四欄全 NaN）
         pre_schema = c1_pre_module(_SCHEMA)
         pre_store = _exec_as_module("src/data/macro/macro_fwd_test_store.py",
                                     (REPO / "src/data/macro/macro_fwd_test_store.py").read_text(encoding="utf-8"),
@@ -1677,8 +1684,8 @@ class TestCommittedLedgerAppend:
         row_new = build_signal_row(_tl(), **kw, leg_as_of=leg)
         row_old = c1_pre_module(_MFT).build_signal_row(_tl(), **kw)
         p_new, p_old = tmp_path / "new.parquet", tmp_path / "old.parquet"
-        shutil.copyfile(src_pq, p_new)
-        shutil.copyfile(src_pq, p_old)
+        orig.to_parquet(p_new, index=False)
+        orig.to_parquet(p_old, index=False)
         assert store.append_signals([row_new], path=p_new) == 1
         assert pre_store.append_signals([row_old], path=p_old) == 1
         a, b = pd.read_parquet(p_new), pd.read_parquet(p_old)
@@ -1690,7 +1697,7 @@ class TestCommittedLedgerAppend:
         assert [new_part[k] if new_part[k] is not None and not pd.isna(new_part[k]) else None
                 for k in _LEG] == [leg[k] for k in _LEG]
         # 已提交的檔案本身一個位元組都沒動
-        assert pd.read_parquet(src_pq).equals(orig)
+        assert pd.read_parquet(src_pq).equals(full)
 
 
 # ══════════════════════════════════════════════════════════════════════════
