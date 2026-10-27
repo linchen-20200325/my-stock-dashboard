@@ -156,7 +156,8 @@ SYMBOL_PATTERN = r"[0-9A-Za-z][0-9A-Za-z.\-]{0,11}"
 #: 摘要的「缺值原因」若屬「資料不足」家族才可包成「資料不足，無法判定（原因）」；其餘原因各有自己的固定句型。
 INSUFFICIENT_FAMILY_REASONS: tuple = ("no_input", "fetch_failed", "not_enough_history")
 #: 市場事實允許的單位（None 以外）。摘要的單位由「模板」決定，不展開 Digest 的 unit 字串。
-SUPPORTED_UNITS: tuple = ("%",)
+UNIT_PERCENT = "%"
+SUPPORTED_UNITS: tuple = (UNIT_PERCENT,)
 
 # ══════════════════════════════════════════════════════════════════════
 # 閘門識別碼
@@ -209,6 +210,10 @@ TPL_NO_VARIATION_TAIL = "tpl.no_variation_tail"
 TPL_CONTRACT_DRIFT_TAIL = "tpl.contract_drift_tail"
 TPL_NOT_DEFINED_TAIL = "tpl.not_defined_tail"
 TPL_NOT_WIRED_TAIL = "tpl.not_wired_tail"
+TPL_HOLDINGS_NO_BASIS_TAIL = "tpl.holdings_no_basis_tail"
+TPL_ACT_NO_BASIS = "tpl.act_no_basis"
+TPL_UNCLASSIFIED_OPEN = "tpl.unclassified_open"
+TPL_UNCLASSIFIED_TAIL = "tpl.unclassified_tail"
 
 #: 固定模板片段。⚠️ 摘要裡**所有**非 Digest 展開的文字都只能來自這張表；不得含阿拉伯數字（數字只能來自欄位展開）。
 TEMPLATES: dict = {
@@ -234,6 +239,11 @@ TEMPLATES: dict = {
     TPL_ACT_NONE: f"本期行動：{MARK_NO_ACTION}",
     TPL_ACT_STALE_OPEN: f"（依據{MARK_STALE}，資料日 ",
     TPL_STRATEGY_NONE_TAIL: "：此策略下無歸類持股",
+    # 持股已鍵入、但規則層沒有產出任何可引用的依據：不寫「尚無輸入」（有持股，不是沒輸入），也不暗示持有／正常
+    TPL_HOLDINGS_NO_BASIS_TAIL: f"：規則層未產出可引用依據，{MARK_UNDETERMINED}",
+    TPL_ACT_NO_BASIS: f"{MISSING_GLYPH} 本期行動：規則層未產出可引用依據，{MARK_UNDETERMINED}",
+    TPL_UNCLASSIFIED_OPEN: f"{MISSING_GLYPH} 另有 ",
+    TPL_UNCLASSIFIED_TAIL: f" 檔持股尚未分類策略，未納入判讀，{MARK_UNDETERMINED}",
     TPL_NOT_APPLICABLE_TAIL: f"：不適用，{MARK_UNDETERMINED}",
     TPL_NO_VARIATION_TAIL: f"：期間無變異，{MARK_UNDETERMINED}",
     TPL_CONTRACT_DRIFT_TAIL: f"：資料契約不一致，{MARK_UNDETERMINED}",
@@ -252,11 +262,12 @@ FIELD_REASON = "reason"
 FIELD_SYMBOL = "symbol"
 FIELD_STRATEGY = "strategy"
 FIELD_COUNT = "count"
+FIELD_UNCLASSIFIED_COUNT = "unclassified_count"
 FIELD_MARKER = "marker"
 FIELD_WORDING = "wording"
 FIELD_BIND = "bind"
 FIELDS: tuple = (FIELD_LABEL, FIELD_TEXT, FIELD_VALUE, FIELD_AS_OF, FIELD_REASON, FIELD_SYMBOL, FIELD_STRATEGY,
-                 FIELD_COUNT, FIELD_MARKER, FIELD_WORDING, FIELD_BIND)
+                 FIELD_COUNT, FIELD_UNCLASSIFIED_COUNT, FIELD_MARKER, FIELD_WORDING, FIELD_BIND)
 
 #: `section:<名>` 的顯示標籤（只有這四段有；其餘段名沒有 label 欄位）。
 SECTION_REF_LABELS: dict = {

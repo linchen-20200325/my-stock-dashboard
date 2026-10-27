@@ -59,7 +59,7 @@
 | **PARTIAL** | 合規，部分可用 | 只輸出可證明部分；缺的明示；**整體不標 AVAILABLE**。 |
 | **VALID** | 合規，五段依據皆 AVAILABLE | ⚠️ **現行契約下不可達**（INFERENCE→已測）：產業趨勢與策略分類的正式定義未核准，產業段恆 UNAVAILABLE、市場段恆含「尚未定義」的趨勢。這是誠實，不是 bug。 |
 
-availability **只由資料推導**（沿用各段已推導的 `availability`；市場段＝market／risk_cap／tw／intl／valuation 合併、定義狀態段恆 UNAVAILABLE ⇒ 市場段至多 PARTIAL；存股／資本利得＝持股讀不到→UNAVAILABLE、無該策略 entry→UNAVAILABLE、有→至多 PARTIAL（基本面判定未接線）；行動＝actions 段自己的）。
+availability **只由資料推導**（沿用各段已推導的 `availability`；市場段＝market／tw／intl／valuation 合併（**不含 risk_cap**：它的數字本就不顯示，不該讓它左右市場段可得性；測試 V29）、定義狀態段恆 UNAVAILABLE ⇒ 市場段至多 PARTIAL；存股／資本利得＝持股讀不到→UNAVAILABLE、無該策略 entry→UNAVAILABLE、有→至多 PARTIAL（基本面判定未接線）；行動＝actions 段自己的）。
 `SummaryResult` 的 `state` 等欄位**由 Digest 在建構時推導**，無法手造或升格（§4.5）。
 
 **INVALID 的保留政策（內部決定）**：違規一旦涉及跨物件不變量（fact_id 唯一、evidence 指向可用事實、行動 vs 持股），代表 builder 違反契約、影響範圍未知；AB-0 的 `evidence_refs` 本身就是跨段依賴，無法證明段落彼此獨立 → **整份不採信**，`retained_sections` 恆為空。替代方案「保留未受影響的段落」需要先證明段間無依賴，不採。（單組判斷，待覆核。）
@@ -103,7 +103,9 @@ SummaryDraft(sections=(SummarySection(key, sentences=(SummarySentence(segments=(
 | `strategy_unset:<段>`／`strategy_none:<段>` | 存股／資本利得 | 持股非 UNAVAILABLE、此策略無 entry；**全部持股都未分類** → `strategy_unset`（尚未設定投資策略分類），**已有持股分類到另一策略** → `strategy_none`（此策略下無歸類持股）——避免在資本利得段對「已分類為存股」的客戶說「尚未設定」這種不實話 |
 | `holdings_unkeyed` | 存股／資本利得 | `unkeyed_count > 0`（N 取自 Digest） |
 | `strategy_entry` | 存股／資本利得 | 持股非 UNAVAILABLE，且該 entry 的策略屬於此段；只展開代號與策略名，**不展開來源** |
-| `actions_unavailable`／`actions_none` | 本期行動 | actions UNAVAILABLE／AVAILABLE 且 0 筆 |
+| `actions_unavailable`／`actions_none` | 本期行動 | actions UNAVAILABLE（且非下列 no_basis）／AVAILABLE 且 0 筆 |
+| `holdings_no_basis:<段>`／`actions_no_basis` | 存股、資本利得／本期行動 | 持股**已鍵入**（entries 非空）卻因沒有任何事實被 AB-0 推為 UNAVAILABLE(NO_INPUT)（行動：actions 同為 NO_INPUT 且 entries 非空）：措辭為「規則層未產出可引用依據，無法判定」——**不**寫「尚無輸入」（有持股，與事實不符），也不暗示持有／正常。`holdings_unavailable`／`actions_unavailable` 的前置條件與之互斥；entries 為空或原因非 NO_INPUT（例 fetch_failed）時維持原句型（保留原因） |
+| `holdings_unclassified` | 存股／資本利得 | 持股非 UNAVAILABLE、**已有**分類到某策略、且仍有未分類（UNCLASSIFIED）持股：「另有 N 檔持股尚未分類策略，未納入判讀，無法判定」（只給計數，不列代號，不暗示屬某策略）；G5 要求此句（省略＝`missing_disclosure`）。全未分類時由 `strategy_unset` 涵蓋，不需要本句 |
 | `action_item[_nt][_stale]` | 本期行動 | 行動在 Digest `actions[]` 內；代號只取自 `ActionRef.target`（無 target 用 `_nt`）；證據有 stale 事實時**必須**用 `_stale`（第二個 slot＝最舊資料日的 stale 證據），反之不得用 |
 
 ### 4.3 G1～G6 如何落地
@@ -214,7 +216,9 @@ N06→G11；N07→W16、G32；N08→V16；N09→V35；N10→V34；N11→R05；N1
 N25→V33；N26→G03；N27→G18；N28→G19；N29→G13；N30→X01、X02；N31→V32；N32→V31、G23。
 
 ### 8.2 守衛→殺死它的測試（突變對照表）
-**第二輪（收緊輪）後共 263 個突變**（每個＝對一個守衛恰好一處的拔除／反轉）：**257 killed、6 等價（逐一論證）、0 倖存**。組成：回修版 170 個（其中 6 個因第二輪改了守衛位置而改寫：V19／W22／G27／G33／G34／M09）＋紅隊 qa2 的 Q01～Q60（Q24／Q58／Q59 因程式結構改變而改寫、另拆 Q24b／Q58b）＋第二輪新增 Z01～Z31。
+**第三輪（最後小修）後共 356 個突變**（每個＝對一個守衛恰好一處的拔除／反轉）：**348 killed、8 等價（逐一論證）、0 倖存**。第三輪新增：紅隊 qa3 的突變（Y 前綴；4 個針對修正前程式的已由 X12／Z15／T05／Q11 取代）＋小修自己的 N3_01～N3_15。第三輪的 8 個等價＝第二輪的 6 個（見下）＋ YV7（＝Z13 同一突變）＋ Y2V30（＝Q11 同一突變）。
+（以下為第二輪的組成與論證，仍然有效：）
+第二輪共 263 個突變：257 killed、6 等價、0 倖存。組成：回修版 170 個（其中 6 個因第二輪改了守衛位置而改寫：V19／W22／G27／G33／G34／M09）＋紅隊 qa2 的 Q01～Q60（Q24／Q58／Q59 因程式結構改變而改寫、另拆 Q24b／Q58b）＋第二輪新增 Z01～Z31。
 **6 個等價突變的論證**（每個一句話）：
 - Q11 `derive_state` 空序列：`all([])` 為 True，與 `not avs or` 同結果（SECTION_KEYS 恆 5 段，空序列不可達）。
 - Q14 `has_forbidden_char` 用 isinstance 取代 `type is str`：只差 str 子類別，而 AB-0 對所有文字欄位強制 exact str，子類別到不了這裡。
@@ -410,6 +414,11 @@ N25→V33；N26→G03；N27→G18；N28→G19；N29→G13；N30→X01、X02；N3
   6. **同行程惡意程式碼不在威脅模型內**：`copy.copy`／`pickle`／`object.__setattr__`（含對 frozen dataclass、`SummaryResult` 的繞過）在同一個 Python 行程內可直接竄改物件；本批**不防**（防了也無意義：能執行任意程式碼者可直接改檢查器本身）。測試以 `force_set`（`object.__setattr__`）模擬「被竄改的 Digest」只為驗證 assess／check 對它 fail-closed，不代表能防住同行程攻擊者。
   7. **未分類持股不個別列出**（§4.4）：摘要只涵蓋已分類到存股／資本利得的 entry；未分類者僅以整體句涵蓋。這是「分類尚未設定」在現行 Digest 的如實反映，不是遺漏，但客戶若要「每一檔都出現」需另走 Gate。
   8. `symbol` 字元集（`SYMBOL_PATTERN`）是依台股／ETF 現行代號形式訂的保守白名單，非交易所規格；若出現新格式（例：含底線），assess 會 INVALID（fail-closed），需改常數＋測試。
+  9. **`build_rule_summary` 只處理 `rule_only` 的 Digest**：合法但 `ai_participation≠rule_only` → 明確的 `ValueError`（那是 AB-2b 的事）；Digest 不合規（含 `ai_participation` 被竄成 None／非法值）→ 回 INVALID 的 `SummaryResult`，不 raise（`SummaryResult` 對 INVALID 不拿 `ai_participation` 擋，但 `mode` 仍固定 `rule_only`，限制未放寬）。
+  10. **數值顯示**：`number_literal` 對 numpy float32 等低精度來源會顯示長尾小數（例：float32 的 0.1 顯示為 0.10000000149…）。Digest 數值本就應為 Python float（builder 已是）；摘要層不替上游修，AB-0 若日後允許其他數值型別需另處理。
+  11. **Cn（未指派）判定依 Python 的 Unicode 資料庫版本**：沙箱 3.13 與 CI 3.11 版本不同，新版 Unicode 才收的 emoji 在較舊環境會被判 Cn → 該 Digest 整份 INVALID（fail-closed，不會漏擋，但可能在舊環境過度拒收）。
+  12. **指數代號被 `bad_symbol` 擋**：`^TWII` 等含 `^` 的指數代號不在 `SYMBOL_PATTERN` 內。持股／行動標的僅限個股／ETF，指數不是持股；若日後有指數持股需求，須改常數並走 Gate。
+  13. **單位的單一真相源**：`terms.SUPPORTED_UNITS` 與 grounding 句型單位（`SHAPE_UNITS`）在 import 時比對，不一致即 `RuntimeError`（assess 放行的單位必須有對應句型）；新增單位須同時加句型與測試。
 - 本批**沒有 production caller、沒有 UI**；沙箱 Python 3.13，CI 3.11 未實跑；未做網路／AI／Sheet 相關的任何實測（本批本來就沒有）。
 - `AB1-ACTION-TEXT-AI-WORDING`（行動文字可能含 "AI" 字樣）與本批無交互：行動文字走逐字展開，不被檢查。
 - G2 對 AI 偏嚴是刻意 fail-closed；放寬須走 Gate。

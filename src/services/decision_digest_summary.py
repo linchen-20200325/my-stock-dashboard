@@ -35,7 +35,7 @@ from typing import Any
 from shared.decision_digest import AiParticipation, Availability, DataStatus, DecisionDigest, Fact, StrategyType
 from shared.decision_digest_grounding import (
     SHAPES, Lit, Ref, SummaryDraft, SummaryResult, SummarySection, SummarySentence, build_ref_index, holding_ref,
-    oldest_stale_evidence, section_ref,
+    oldest_stale_evidence, section_ref, actions_have_no_basis, holdings_has_no_basis,
 )
 from shared.decision_digest_terms import INSUFFICIENT_FAMILY_REASONS, SEC_ACTIONS, SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN, SEC_INDUSTRY, SEC_MARKET
 from shared.decision_digest_validator import SummaryState, assess_digest, strategy_entries
@@ -77,7 +77,8 @@ def _strategy_section(digest: DecisionDigest, key: str) -> SummarySection:
     rid = section_ref("holdings")
     sents: list = []
     if hs.availability is Availability.UNAVAILABLE:
-        sents.append(_expand_shape(f"holdings_unavailable:{key}", rid))
+        sents.append(_expand_shape(f"holdings_no_basis:{key}" if holdings_has_no_basis(digest)
+                                   else f"holdings_unavailable:{key}", rid))
     if hs.unkeyed_count > 0:
         sents.append(_expand_shape("holdings_unkeyed", rid))
     if hs.availability is not Availability.UNAVAILABLE:
@@ -87,6 +88,9 @@ def _strategy_section(digest: DecisionDigest, key: str) -> SummarySection:
         if not mine:
             classified = any(h.strategy is not StrategyType.UNCLASSIFIED for h in hs.entries)
             sents.append(_expand_shape(f"strategy_{'none' if classified else 'unset'}:{key}", rid))
+        if any(h.strategy is not StrategyType.UNCLASSIFIED for h in hs.entries) and any(
+                h.strategy is StrategyType.UNCLASSIFIED for h in hs.entries):
+            sents.append(_expand_shape("holdings_unclassified", rid))     # 分類與未分類並存：未分類者以計數揭露
     return SummarySection(key, tuple(sents))
 
 
@@ -94,7 +98,8 @@ def _actions_section(digest: DecisionDigest, idx: dict) -> SummarySection:
     acts = digest.actions
     rid = section_ref("actions")
     if acts.availability is Availability.UNAVAILABLE:
-        return SummarySection(SEC_ACTIONS, (_expand_shape("actions_unavailable", rid),))
+        return SummarySection(SEC_ACTIONS, (_expand_shape(
+            "actions_no_basis" if actions_have_no_basis(digest) else "actions_unavailable", rid),))
     if not acts.items:
         return SummarySection(SEC_ACTIONS, (_expand_shape("actions_none", rid),))
     sents: list = []
@@ -123,11 +128,16 @@ def compose_rule_draft(digest: DecisionDigest) -> SummaryDraft:
 def build_rule_summary(digest: Any) -> SummaryResult:
     """純函式：Digest → 規則式摘要（`mode=RULE_ONLY`）。
 
+    **只處理 `ai_participation=rule_only` 的合法 Digest**：合法但非 rule_only → 明確的 `ValueError`（AB-2b 的事）；
+    Digest 不合規（含 ai_participation 被竄成 None／非法值）→ 一律回 INVALID 的 `SummaryResult`，不 raise。
     Digest 不合規 → INVALID（`SummaryResult` 不帶任何段落）；合規 → 五段，缺資料處以白名單句型明示。
     `SummaryResult` 建構時會重跑 `check_summary`（自檢）；未通過即 `ValueError`（摘要或驗證器有 bug，Fail Loud）。
     """
     if assess_digest(digest).state is SummaryState.INVALID:
         return SummaryResult(digest=digest, mode=AiParticipation.RULE_ONLY, sections=())
+    if digest.ai_participation is not AiParticipation.RULE_ONLY:
+        raise ValueError(f"build_rule_summary 只處理 rule_only 的 Digest（得到 {digest.ai_participation!r}）；"
+                         "ai_explained／ai_rejected 的摘要屬 AB-2b")
     return SummaryResult(digest=digest, mode=AiParticipation.RULE_ONLY, sections=compose_rule_draft(digest).sections)
 
 

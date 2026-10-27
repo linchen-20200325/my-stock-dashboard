@@ -259,7 +259,7 @@ def strategy_entries(digest: DecisionDigest, section: str) -> tuple:
 def section_availability(digest: DecisionDigest, section: str) -> Availability:
     """單一摘要段的可得性（假設 digest 已通過 `assess_digest`）。
 
-    - 市場：market／risk_cap／tw_trend／intl_trend／valuation 五個依據合併（定義狀態段恆 UNAVAILABLE，
+    - 市場：market／tw_trend／intl_trend／valuation 四個依據合併（Risk Cap 不顯示數字，不納入；定義狀態段恆 UNAVAILABLE，
       故市場段至多 PARTIAL）；
     - 產業：industry 段（恆 UNAVAILABLE）；
     - 存股／資本利得：持股讀不到 → UNAVAILABLE；沒有任何該策略的 entry → UNAVAILABLE（尚未設定投資策略分類）；
@@ -267,7 +267,8 @@ def section_availability(digest: DecisionDigest, section: str) -> Availability:
     - 本期行動：actions 段自己的可得性。
     """
     if section == SEC_MARKET:
-        return _combine([digest.market.availability, digest.risk_cap.availability,
+        # 不含 risk_cap：Risk Cap 的數字本就不顯示（摘要只放客戶核准的措辭），不該讓它左右市場段的可得性
+        return _combine([digest.market.availability,
                          digest.tw_trend.availability, digest.intl_trend.availability,
                          digest.valuation.availability])
     if section == SEC_INDUSTRY:

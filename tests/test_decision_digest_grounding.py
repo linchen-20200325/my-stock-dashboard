@@ -579,7 +579,7 @@ def test_g5_strategy_entry_shape_cannot_be_used_when_holdings_unavailable():
     d = make_digest(entries=[entry("0050", None, strategy=StrategyType.BUY_AND_HOLD, source="x")], items=[])
     assert d.holdings.availability is AB0.Availability.UNAVAILABLE
     b = compose_rule_draft(d)
-    assert check_summary(d, b).clean and "持股資料不足" in dict(render_draft(d, b))[BH][0]
+    assert check_summary(d, b).clean and "規則層未產出可引用依據" in dict(render_draft(d, b))[BH][0]
     ent = S(R(holding_ref("pf-A", "0050"), T.FIELD_SYMBOL), L(T.TPL_STRATEGY_IS), R(holding_ref("pf-A", "0050"), T.FIELD_STRATEGY),
             L(T.TPL_ENTRY_TAIL))
     assert_rejected(check_summary(d, add(b, BH, ent)), T.GATE_G3, "precondition_failed")
@@ -820,6 +820,7 @@ def test_template_set_is_pinned():
     assert set(T.TEMPLATES) == {
         "tpl.glyph", "tpl.colon", "tpl.pct", "tpl.close", "tpl.date_open", "tpl.stale_date_open", "tpl.proxy_tail",
         "tpl.missing_open", "tpl.invalid_tail", "tpl.undetermined_tail", "tpl.unkeyed_open", "tpl.unkeyed_tail",
+        "tpl.holdings_no_basis_tail", "tpl.act_no_basis", "tpl.unclassified_open", "tpl.unclassified_tail",
         "tpl.not_applicable_tail", "tpl.contract_drift_tail", "tpl.strategy_none_tail", "tpl.not_wired_tail",
         "tpl.not_defined_tail", "tpl.no_variation_tail", "tpl.label_buy_and_hold", "tpl.label_capital_gain", "tpl.holdings_unavailable_mid", "tpl.strategy_unset_tail",
         "tpl.strategy_is", "tpl.entry_tail", "tpl.act_unavailable_open", "tpl.act_none", "tpl.act_stale_open"}
@@ -847,7 +848,7 @@ def test_expand_field_matrix_is_pinned():
         "holding:4:pf-A:0050": {"symbol", "strategy"},
         "section:market": {"bind"}, "section:tw_trend": {"label", "marker", "bind"},
         "section:intl_trend": {"label", "marker", "bind"}, "section:valuation": {"label", "marker", "bind"},
-        "section:industry": {"label", "marker", "bind"}, "section:holdings": {"bind", "count", "reason"},
+        "section:industry": {"label", "marker", "bind"}, "section:holdings": {"bind", "count", "unclassified_count", "reason"},
         "section:risk_cap": {"bind", "wording"}, "section:actions": {"bind", "reason"},
     }
     assert set(expected) == set(idx)

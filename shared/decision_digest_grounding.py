@@ -64,7 +64,7 @@ from shared.decision_digest import (
     AiParticipation, Availability, DataStatus, DecisionDigest, Fact, MissingReason, StrategyType,
 )
 from shared.decision_digest_terms import (
-    FIELD_AS_OF, FIELD_BIND, FIELD_COUNT, FIELD_LABEL, FIELD_MARKER, FIELD_REASON, FIELD_STRATEGY, FIELD_SYMBOL,
+    FIELD_AS_OF, FIELD_BIND, FIELD_COUNT, FIELD_UNCLASSIFIED_COUNT, FIELD_LABEL, FIELD_MARKER, FIELD_REASON, FIELD_STRATEGY, FIELD_SYMBOL,
     DIGEST_SECTIONS, FIELD_TEXT, FIELD_VALUE, FIELD_WORDING, FACT_LABEL_FALLBACK, FACT_LABELS, FORBIDDEN_CHAR_CATEGORIES,
     GATE_DIGEST, GATE_G1, GATE_G2, GATE_G3, GATE_G4, GATE_G5, GATE_G6, GATE_STRUCT, GROUNDING_GATES,
     LABEL_ALL_SECTIONS, MARK_NOT_DEFINED, MARK_NOT_WIRED, MARK_RESEARCH_ONLY, MISSING_REASON_LABEL_UNKNOWN,
@@ -73,6 +73,8 @@ from shared.decision_digest_terms import (
     SECTION_REF_LABELS, TEMPLATES, TPL_ACT_NONE, TPL_ACT_STALE_OPEN, TPL_ACT_UNAVAILABLE_OPEN,
     TPL_CLOSE, TPL_COLON, TPL_DATE_OPEN, TPL_ENTRY_TAIL, TPL_GLYPH, TPL_HOLDINGS_UNAVAILABLE_MID,
     TPL_INVALID_TAIL, TPL_MISSING_OPEN, TPL_PCT, TPL_PROXY_TAIL, TPL_SECTION_LABEL, TPL_STALE_DATE_OPEN,
+    TPL_HOLDINGS_NO_BASIS_TAIL, TPL_ACT_NO_BASIS, TPL_UNCLASSIFIED_OPEN, TPL_UNCLASSIFIED_TAIL, UNIT_PERCENT,
+    SUPPORTED_UNITS,
     TPL_STRATEGY_IS, TPL_STRATEGY_UNSET_TAIL, TPL_UNDETERMINED_TAIL, TPL_UNKEYED_OPEN, TPL_UNKEYED_TAIL,
     INSUFFICIENT_FAMILY_REASONS, TPL_CONTRACT_DRIFT_TAIL, TPL_NO_VARIATION_TAIL, TPL_NOT_APPLICABLE_TAIL,
     TPL_NOT_DEFINED_TAIL, TPL_NOT_WIRED_TAIL, TPL_STRATEGY_NONE_TAIL,
@@ -290,6 +292,8 @@ def expand(digest: DecisionDigest, info: RefInfo, fld: str) -> tuple:
         return (RISK_CAP_HIDDEN_WORDING, None, None) if n == "risk_cap" else bad
     if fld == FIELD_COUNT:
         return (str(digest.holdings.unkeyed_count), None, None) if n == "holdings" else bad
+    if fld == FIELD_UNCLASSIFIED_COUNT:
+        return (str(_unclassified_count(digest)), None, None) if n == "holdings" else bad
     if fld == FIELD_REASON:
         if n == "holdings":
             return _reason_label(digest.holdings.missing_reason), None, None
@@ -362,6 +366,21 @@ def _section_pre(sec_key: str, name: str, cond: Callable) -> Callable:
     return pre
 
 
+def _unclassified_count(digest: DecisionDigest) -> int:
+    return sum(1 for h in digest.holdings.entries if h.strategy is StrategyType.UNCLASSIFIED)
+
+
+def holdings_has_no_basis(d: DecisionDigest) -> bool:
+    """持股已鍵入（entries 非空）、卻因沒有任何事實而被推為 UNAVAILABLE(NO_INPUT)：不能說「尚無輸入」。"""
+    return (d.holdings.availability is Availability.UNAVAILABLE and bool(d.holdings.entries)
+            and d.holdings.missing_reason is MissingReason.NO_INPUT)
+
+
+def actions_have_no_basis(d: DecisionDigest) -> bool:
+    return (d.actions.availability is Availability.UNAVAILABLE and bool(d.holdings.entries)
+            and d.actions.missing_reason is MissingReason.NO_INPUT)
+
+
 def _any_classified(digest: DecisionDigest) -> bool:
     """持股中是否有任何一檔已被分類為存股或資本利得（全未分類 → False）。"""
     return any(h.strategy is not StrategyType.UNCLASSIFIED for h in digest.holdings.entries)
@@ -403,12 +422,20 @@ def _action_pre(with_target: bool, stale: bool) -> Callable:
     return pre
 
 
+#: 市場事實句型頭 → 要求的 unit（None＝必須無 unit）。**單位的單一真相源在 terms**：句型用的單位
+#: 必須恰好等於 `SUPPORTED_UNITS`（validator 放行的單位），否則 assess 放行的 Digest 會在 build 時沒有可用句型。
+_HEAD_UNITS: dict = {"text": None, "value": None, "value_pct": UNIT_PERCENT}
+SHAPE_UNITS: frozenset = frozenset(u for u in _HEAD_UNITS.values() if u is not None)
+if SHAPE_UNITS != frozenset(SUPPORTED_UNITS):
+    raise RuntimeError(f"SUPPORTED_UNITS {SUPPORTED_UNITS!r} 與 grounding 句型單位 {sorted(SHAPE_UNITS)!r} 不一致：assess 放行的單位必須有對應句型")
+
+
 def _build_shapes() -> tuple:
     out: list = []
     S_MKT = frozenset({SEC_MARKET})
-    heads = {"text": [(_R(0, KIND_FACT, FIELD_TEXT),), None],
-             "value": [(_R(0, KIND_FACT, FIELD_VALUE),), None],
-             "value_pct": [(_R(0, KIND_FACT, FIELD_VALUE), _L(TPL_PCT)), "%"]}
+    heads = {"text": [(_R(0, KIND_FACT, FIELD_TEXT),), _HEAD_UNITS["text"]],
+             "value": [(_R(0, KIND_FACT, FIELD_VALUE),), _HEAD_UNITS["value"]],
+             "value_pct": [(_R(0, KIND_FACT, FIELD_VALUE), _L(TPL_PCT)), _HEAD_UNITS["value_pct"]]}
     for status, tails in ((DataStatus.OK, (_L(TPL_DATE_OPEN), _R(0, KIND_FACT, FIELD_AS_OF), _L(TPL_CLOSE))),
                           (DataStatus.STALE, (_L(TPL_STALE_DATE_OPEN), _R(0, KIND_FACT, FIELD_AS_OF), _L(TPL_CLOSE))),
                           (DataStatus.PROXY, (_L(TPL_PROXY_TAIL),))):
@@ -460,7 +487,11 @@ def _build_shapes() -> tuple:
         out.append(Shape(f"holdings_unavailable:{sk}", sset,
                          (_L(TPL_GLYPH), _L(lab), _L(TPL_HOLDINGS_UNAVAILABLE_MID),
                           _R(0, KIND_SECTION, FIELD_REASON), _L(TPL_CLOSE)),
-                         _section_pre(sk, "holdings", lambda d: d.holdings.availability is Availability.UNAVAILABLE)))
+                         _section_pre(sk, "holdings", lambda d: (
+                             d.holdings.availability is Availability.UNAVAILABLE and not holdings_has_no_basis(d)))))
+        out.append(Shape(f"holdings_no_basis:{sk}", sset,
+                         (_L(TPL_GLYPH), _L(lab), _L(TPL_HOLDINGS_NO_BASIS_TAIL), _R(0, KIND_SECTION, FIELD_BIND)),
+                         _section_pre(sk, "holdings", holdings_has_no_basis)))
         out.append(Shape(f"strategy_unset:{sk}", sset,
                          (_L(TPL_GLYPH), _L(lab), _L(TPL_STRATEGY_UNSET_TAIL), _R(0, KIND_SECTION, FIELD_BIND)),
                          _section_pre(sk, "holdings", lambda d, sk=sk: (
@@ -474,6 +505,12 @@ def _build_shapes() -> tuple:
     out.append(Shape("strategy_entry", frozenset({SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN}),
                      (_R(0, KIND_HOLDING, FIELD_SYMBOL), _L(TPL_STRATEGY_IS), _R(0, KIND_HOLDING, FIELD_STRATEGY),
                       _L(TPL_ENTRY_TAIL)), _entry_pre))
+    out.append(Shape("holdings_unclassified", frozenset({SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN}),
+                     (_L(TPL_UNCLASSIFIED_OPEN), _R(0, KIND_SECTION, FIELD_UNCLASSIFIED_COUNT),
+                      _L(TPL_UNCLASSIFIED_TAIL)),
+                     _section_pre("", "holdings", lambda d: (
+                         d.holdings.availability is not Availability.UNAVAILABLE and _any_classified(d)
+                         and _unclassified_count(d) > 0))))
     out.append(Shape("holdings_unkeyed", frozenset({SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN}),
                      (_L(TPL_UNKEYED_OPEN), _R(0, KIND_SECTION, FIELD_COUNT), _L(TPL_UNKEYED_TAIL)),
                      _section_pre("", "holdings", lambda d: d.holdings.unkeyed_count > 0)))
@@ -481,7 +518,10 @@ def _build_shapes() -> tuple:
     S_ACT = frozenset({SEC_ACTIONS})
     out.append(Shape("actions_unavailable", S_ACT,
                      (_L(TPL_ACT_UNAVAILABLE_OPEN), _R(0, KIND_SECTION, FIELD_REASON), _L(TPL_CLOSE)),
-                     _section_pre(SEC_ACTIONS, "actions", lambda d: d.actions.availability is Availability.UNAVAILABLE)))
+                     _section_pre(SEC_ACTIONS, "actions", lambda d: (
+                         d.actions.availability is Availability.UNAVAILABLE and not actions_have_no_basis(d)))))
+    out.append(Shape("actions_no_basis", S_ACT, (_L(TPL_ACT_NO_BASIS), _R(0, KIND_SECTION, FIELD_BIND)),
+                     _section_pre(SEC_ACTIONS, "actions", actions_have_no_basis)))
     out.append(Shape("actions_none", S_ACT, (_L(TPL_ACT_NONE), _R(0, KIND_SECTION, FIELD_BIND)),
                      _section_pre(SEC_ACTIONS, "actions", lambda d: (
                          d.actions.availability is Availability.AVAILABLE and not d.actions.items))))
@@ -650,7 +690,8 @@ def section_basis(digest: DecisionDigest, key: str) -> tuple:
         hs = digest.holdings
         rid = section_ref("holdings")
         if hs.availability is Availability.UNAVAILABLE:
-            out.append((rid, (f"holdings_unavailable:{key}",)))
+            out.append((rid, ((f"holdings_no_basis:{key}",) if holdings_has_no_basis(digest)
+                              else (f"holdings_unavailable:{key}",))))
         if hs.unkeyed_count > 0:
             out.append((rid, ("holdings_unkeyed",)))
         if hs.availability is not Availability.UNAVAILABLE:
@@ -659,6 +700,8 @@ def section_basis(digest: DecisionDigest, key: str) -> tuple:
                 out.append((holding_ref(h.key.portfolio_id, h.key.symbol), ("strategy_entry",)))
             if not mine:
                 out.append((rid, ((f"strategy_none:{key}",) if _any_classified(digest) else (f"strategy_unset:{key}",))))
+            if _any_classified(digest) and _unclassified_count(digest) > 0:
+                out.append((rid, ("holdings_unclassified",)))
     elif key == SEC_ACTIONS:
         pass       # 行動段：不可得／無行動由「句型前置條件＋非空段」涵蓋，各項行動由 `action_list_mismatch` 一對一檢查
     else:
@@ -792,9 +835,12 @@ class SummaryResult:
             raise ValueError(f"SummaryResult.mode 必須是 AiParticipation：{self.mode!r}")
         if self.mode is not AiParticipation.RULE_ONLY:
             raise ValueError("AB-2a 只允許 mode=rule_only；ai_explained／ai_rejected 的建構留給 AB-2b（Decision Gate）")
-        if type(self.digest) is DecisionDigest and self.digest.ai_participation is not self.mode:
-            raise ValueError(f"mode 必須與 digest.ai_participation 一致：{self.mode!r} ≠ {self.digest.ai_participation!r}")
         a = assess_digest(self.digest)
+        # mode 與 digest.ai_participation 必須一致 —— 但 INVALID 的 Digest 本來就整份不採信（sections 必為空），
+        # 其 ai_participation 可能是 None／非法值，不拿來擋（mode 本身仍固定為 rule_only，未放寬）。
+        if (a.state is not SummaryState.INVALID and type(self.digest) is DecisionDigest
+                and self.digest.ai_participation is not self.mode):
+            raise ValueError(f"mode 必須與 digest.ai_participation 一致：{self.mode!r} ≠ {self.digest.ai_participation!r}")
         sset = object.__setattr__
         sset(self, "state", a.state)
         sset(self, "section_availability", a.section_availability)

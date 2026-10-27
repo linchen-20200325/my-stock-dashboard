@@ -538,3 +538,212 @@ def test_q34_many_codes_are_listed_sorted_regardless_of_hash_order():
                       "unsupported_unit", "ref_id_reserved"}
     line = invalid_notices(assess_digest(d))[3]
     assert line == "違規代碼：" + "、".join(sorted(codes_))
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 第三輪小修（HEAD 8eb90c3 之上）
+# ══════════════════════════════════════════════════════════════════════
+from shared.decision_digest import ActionsSection, Availability                                        # noqa: E402
+from shared.decision_digest_grounding import SHAPE_UNITS, oldest_stale_evidence                       # noqa: E402
+
+
+def _hold_only_digest():
+    """持股已鍵入、規則層全無行動依據（entries 無 facts）→ AB-0 推 holdings UNAVAILABLE(NO_INPUT)。"""
+    return make_digest(entries=[entry("0050", None), entry("0056", None)], items=[])
+
+
+def test_r3_1_keyed_holdings_without_basis_never_say_no_input():
+    d = _hold_only_digest()
+    assert d.holdings.entries and d.holdings.availability is Availability.UNAVAILABLE
+    assert d.holdings.missing_reason is MissingReason.NO_INPUT
+    r = build_rule_summary(d)
+    for key in (BH, CG):
+        ln = lines(d, key)
+        assert ln == [f"⬜ {T.SECTION_LABELS[key]}：規則層未產出可引用依據，無法判定"]
+    act = lines(d, ACT)
+    assert act == ["⬜ 本期行動：規則層未產出可引用依據，無法判定"]
+    text = "".join(t for k in (BH, CG, ACT) for t in lines(d, k))
+    assert "尚無輸入" not in text and "資料不足" not in text
+    assert not any(w in text for w in ("持有", "正常", "無事", "續抱", "HOLD", "hold"))
+    assert r.state is not SummaryState.INVALID
+
+
+def test_r3_1_with_real_builder_hold_only_scenario():
+    from tests.test_decision_digest_builder import act_digest, fake_row
+    d = act_digest([fake_row("0050", "hold")])                      # 真 builder：持股已鍵入、規則層無行動
+    assert d.holdings.missing_reason is MissingReason.NO_INPUT and d.actions.missing_reason is MissingReason.NO_INPUT
+    assert d.holdings.entries
+    text = "".join(t for k in (BH, CG, ACT) for t in lines(d, k))
+    assert "尚無輸入" not in text and "規則層未產出可引用依據" in text
+
+
+def test_r3_1_empty_holdings_still_say_no_input_and_other_reasons_keep_their_reason():
+    d = make_digest(entries=[], items=[])
+    assert "尚無輸入" in lines(d, BH)[0] and "持股資料不足" in lines(d, BH)[0]
+    d2 = make_digest(entries=[entry("0050", None)], items=[], holdings_reason=MissingReason.FETCH_FAILED)
+    assert "抓取失敗" in lines(d2, BH)[0]
+
+
+@pytest.mark.parametrize("sid", ["holdings_no_basis:buy_and_hold", "actions_no_basis"])
+def test_r3_1_no_basis_shapes_are_rejected_when_there_is_a_real_basis_or_no_entries(sid):
+    ref = section_ref("actions" if sid == "actions_no_basis" else "holdings")
+    d = make_digest(entries=[], items=[])                # 沒有持股 → 該說「資料不足（尚無輸入）」
+    b = compose_rule_draft(d)
+    key = ACT if sid == "actions_no_basis" else BH
+    forged = SummaryDraft(tuple(SummarySection(key, (_shape_sentence(sid, ref),)) if s.key == key else s
+                                for s in b.sections))
+    assert (T.GATE_G3, "precondition_failed") in gcodes(check_summary(d, forged))
+
+
+# ── R3-2：build 對非 rule_only 的處置 ─────────────────────────────────────
+def test_r3_2_build_rejects_legit_non_rule_only_digest_with_explicit_value_error():
+    for mode in (AiParticipation.AI_EXPLAINED, AiParticipation.AI_REJECTED):
+        d = _ai_digest(mode)
+        assert assess_digest(d).state is not SummaryState.INVALID
+        with pytest.raises(ValueError, match="只處理 rule_only"):
+            build_rule_summary(d)
+
+
+@pytest.mark.parametrize("bad", [None, "rule_only", 7])
+def test_r3_2_invalid_digest_with_corrupted_participation_returns_invalid_result(bad):
+    d = make_digest()
+    force_set(d, ai_participation=bad)
+    assert assess_digest(d).state is SummaryState.INVALID
+    r = build_rule_summary(d)
+    assert r.state is SummaryState.INVALID and r.sections == () and r.mode is AiParticipation.RULE_ONLY
+
+
+def test_r3_2_summary_result_mode_still_only_rule_only_even_for_invalid_digest():
+    d = make_digest()
+    force_set(d, ai_participation=None)
+    with pytest.raises(ValueError, match="只允許 mode=rule_only"):
+        SummaryResult(d, AiParticipation.AI_EXPLAINED, ())
+    legit = _ai_digest(AiParticipation.AI_EXPLAINED)
+    with pytest.raises(ValueError, match="必須與 digest.ai_participation 一致"):
+        SummaryResult(legit, AiParticipation.RULE_ONLY, ())
+
+
+# ── R3-3：market 可得性不含 risk_cap（V29）─────────────────────────────────
+def test_r3_3_market_availability_ignores_risk_cap():
+    from shared.decision_digest_validator import section_availability
+    allmiss = [missing("market.regime"), missing("market.light"), missing("market.health")]
+    d = make_digest(market_facts=allmiss, risk_valid=True)        # Risk Cap 可得，但市場事實全缺
+    assert d.risk_cap.availability is Availability.AVAILABLE
+    assert section_availability(d, MKT) is Availability.UNAVAILABLE
+    d2 = make_digest(market_facts=allmiss, risk_valid=False)
+    assert section_availability(d2, MKT) is Availability.UNAVAILABLE
+    d3 = make_digest(risk_valid=False)                            # 市場事實齊全、Risk Cap 不可得 → 仍是 PARTIAL（定義段未定義）
+    d4 = make_digest(risk_valid=True)
+    assert section_availability(d3, MKT) is section_availability(d4, MKT) is Availability.PARTIAL
+
+
+# ── R3-4：分類與未分類並存要揭露未分類 ──────────────────────────────────────
+def test_r3_4_unclassified_holdings_are_disclosed_by_count_when_mixed():
+    es = [entry("0050", "t", "add", strategy=StrategyType.BUY_AND_HOLD, source="客戶設定"),
+          entry("0056", "t", "add"), entry("2330", "t", "add")]
+    d = make_digest(entries=es, items=[])
+    for key in (BH, CG):
+        ln = lines(d, key)
+        assert "⬜ 另有 2 檔持股尚未分類策略，未納入判讀，無法判定" in ln
+        assert not any(("0056" in x or "2330" in x) for x in ln)       # 不列代號、不暗示屬某策略
+    assert check_summary(d, compose_rule_draft(d)).clean
+
+
+def test_r3_4_omitting_the_unclassified_disclosure_is_rejected_and_not_required_otherwise():
+    es = [entry("0050", "t", "add", strategy=StrategyType.BUY_AND_HOLD, source="客戶設定"), entry("0056", "t", "add")]
+    d = make_digest(entries=es, items=[])
+    b = compose_rule_draft(d)
+    sec = next(s for s in b.sections if s.key == BH)
+    cut = SummaryDraft(tuple(SummarySection(BH, tuple(x for x in sec.sentences if "unclassified" not in repr(x)))
+                             if s.key == BH else s for s in b.sections))
+    assert (T.GATE_G5, "missing_disclosure") in gcodes(check_summary(d, cut))
+    d_all = make_digest(entries=[entry("0050", "t", "add"), entry("0056", "t", "add")], items=[])   # 全未分類：不需要計數句
+    assert not any("尚未分類策略" in x for x in lines(d_all, BH) + lines(d_all, CG))
+    d_one = make_digest(entries=[entry("0050", "t", "add", strategy=StrategyType.BUY_AND_HOLD, source="x")], items=[])
+    assert not any("尚未分類策略" in x for x in lines(d_one, BH))      # 全已分類：沒有未分類者
+    forged = SummaryDraft(tuple(SummarySection(BH, _plus(s.sentences, _shape_sentence("holdings_unclassified",
+                                                                                        section_ref("holdings"))))
+                                if s.key == BH else s for s in compose_rule_draft(d_one).sections))
+    assert (T.GATE_G3, "precondition_failed") in gcodes(check_summary(d_one, forged))
+
+
+def _plus(sentences, sent):
+    return tuple(sentences) + (sent,)
+
+
+# ── R3-5：單位單一真相源 ─────────────────────────────────────────────────
+def test_r3_5_supported_units_and_shape_units_are_the_same_set():
+    assert set(T.SUPPORTED_UNITS) == set(SHAPE_UNITS) == {"%"}
+    assert T.UNIT_PERCENT == "%"
+
+
+# ── R3-6：補測試 V14／V14b／G10／G42 ─────────────────────────────────────
+@pytest.mark.parametrize("reason", [MissingReason.NOT_APPLICABLE, MissingReason.NO_VARIATION,
+                                    MissingReason.CONTRACT_DRIFT, MissingReason.NOT_DEFINED, MissingReason.NOT_WIRED])
+def test_v14_holdings_unavailable_with_non_insufficient_reason_is_invalid(reason):
+    d = make_digest(entries=[], items=[], holdings_reason=reason)
+    got = {(g, s, c) for g, s, c in vcodes(d)}
+    assert got == {(T.GATE_AB2A_TEXT, BH, "unsupported_missing_reason"), (T.GATE_AB2A_TEXT, CG, "unsupported_missing_reason")}
+    assert build_rule_summary(d).state is SummaryState.INVALID
+
+
+@pytest.mark.parametrize("reason", [MissingReason.NOT_APPLICABLE, MissingReason.NO_VARIATION])
+def test_v14b_actions_unavailable_with_non_insufficient_reason_is_invalid(reason):
+    d = make_digest(entries=[], items=[])
+    d = dataclasses.replace(d, actions=ActionsSection(Availability.UNAVAILABLE, (), reason))
+    assert {(g, s, c) for g, s, c in vcodes(d)} == {(T.GATE_AB2A_TEXT, ACT, "unsupported_missing_reason")}
+    assert build_rule_summary(d).state is SummaryState.INVALID
+
+
+def test_g10_same_day_stale_evidence_tie_breaks_by_evidence_order():
+    e = entry("0050", "t", "cut")
+    fa = dataclasses.replace(e.facts[0], status=DataStatus.STALE)
+    fb = dataclasses.replace(fa, fact_id="action_fact:pf-A:0050:b")
+    e2 = dataclasses.replace(e, facts=(fa, fb))
+    for order in ((fa.fact_id, fb.fact_id), (fb.fact_id, fa.fact_id)):
+        a = action("0050", "t", "cut", 1, evidence=order)
+        d = make_digest(entries=[e2], items=[a])
+        assert oldest_stale_evidence(d, build_ref_index(d), a) == order[0]
+        assert check_summary(d, compose_rule_draft(d)).clean
+
+
+def test_g42_unlabeled_market_fact_gets_the_nonempty_fallback_label():
+    assert T.FACT_LABEL_FALLBACK.strip() != ""
+    d = make_digest(market_facts=[ok_text("market.regime", "x"), ok_text("market.zzz1", "a")])
+    assert any(x.startswith(T.FACT_LABEL_FALLBACK + "：a") for x in lines(d, MKT))
+
+
+def test_r3_x04_actions_unavailable_keeps_its_own_reason_when_not_no_input():
+    d = make_digest(entries=[entry("0050", None)], items=[])
+    d = dataclasses.replace(d, actions=ActionsSection(Availability.UNAVAILABLE, (), MissingReason.FETCH_FAILED))
+    assert lines(d, ACT) == ["⬜ 本期行動：資料不足，無法判定（抓取失敗）"]
+
+
+def test_r3_x13_x14_plain_unavailable_shapes_are_rejected_on_a_no_basis_digest():
+    d = _hold_only_digest()
+    b = compose_rule_draft(d)
+    for key, sid, ref in ((BH, f"holdings_unavailable:{BH}", section_ref("holdings")),
+                          (ACT, "actions_unavailable", section_ref("actions"))):
+        forged = SummaryDraft(tuple(SummarySection(key, (_shape_sentence(sid, ref),)) if s.key == key else s
+                                    for s in b.sections))
+        assert (T.GATE_G3, "precondition_failed") in gcodes(check_summary(d, forged)), sid
+
+
+def test_r3_x08_unclassified_sentence_is_rejected_when_nothing_is_classified():
+    d = make_digest(entries=[entry("0050", "t", "add"), entry("0056", "t", "add")], items=[])
+    b = compose_rule_draft(d)
+    forged = SummaryDraft(tuple(SummarySection(BH, _plus(s.sentences, _shape_sentence(
+        "holdings_unclassified", section_ref("holdings")))) if s.key == BH else s for s in b.sections))
+    assert (T.GATE_G3, "precondition_failed") in gcodes(check_summary(d, forged))
+
+
+def test_g37_usable_is_false_when_surviving_is_missing_even_if_accepted():
+    d = make_digest()
+    ok = check_summary(d, compose_rule_draft(d))
+    forged = dataclasses.replace(ok, surviving=None)
+    assert forged.accepted is True and forged.usable is False and forged.clean is False
+
+
+def test_v28_own_checks_do_not_run_when_ab0_ab1_already_reject():
+    d = with_key(make_digest(entries=[entry("0050", "t", "add")], items=[]), symbol="a b")
+    assert vcodes(d) == {(T.GATE_AB0_CONTRACT, BH, "bad_key"), (T.GATE_AB0_CONTRACT, CG, "bad_key")}
