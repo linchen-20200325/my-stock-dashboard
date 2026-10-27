@@ -684,8 +684,10 @@ def test_a8_derived_fields_cannot_be_passed_or_spoofed(dg, base):
                    {"notices": ("x",)}, {"failed_gates": ()}):
         with pytest.raises(TypeError):
             SummaryResult(dg, AB0.AiParticipation.RULE_ONLY, base.sections, **bad_kw)       # type: ignore[arg-type]
-        with pytest.raises(TypeError):
-            dataclasses.replace(r, **bad_kw)                   # init=False 欄位不能經由 replace 指定
+        # init=False 欄位不能經由 replace 指定：3.11 擲 ValueError（"field X is declared with init=False"），
+        # 3.13 擲 TypeError；兩者皆為「被拒絕」。未被拒絕（無例外）仍會使本測試失敗。
+        with pytest.raises((TypeError, ValueError)):
+            dataclasses.replace(r, **bad_kw)
     with pytest.raises(dataclasses.FrozenInstanceError):
         r.state = SummaryState.VALID                                                       # type: ignore[misc]
 
