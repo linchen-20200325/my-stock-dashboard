@@ -1246,6 +1246,21 @@ D2.5 以下大方向核准：
 - **與其他 DEC 的關係**（append-only，單組讀法）：DEC-091 **解除其待裁示狀態**；DEC-089／DEC-090 **部分 supersede**（見上）；DEC-081／083（📊 大盤／👤 我的）**不變**；DEC-019／020（舊 UI Removal Gate）**不變**；DEC-082／084／085／086／087／088 **呼叫**。不降低任何 Security／Investment／Data／CI／Audit Gate；衝突取較嚴者。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：上列摘要與「與 DEC-091 的關係」判讀由單一撰寫組產出，**沒有第二組驗過**；摘要非客戶原文。
 
+### DEC-093｜AB-0 Decision Digest 契約的內部設計選擇（形狀、拒收名單定位、INVALID、未帶鍵持股、AI 字樣語意、不做 from_dict）（AI 總管內部，2026-10-27）
+> 2026-10-27 補登（ID 取下一個未用號；落盤前實測 `git grep -n "DEC-093"` 0 命中、最大為 DEC-092）。**本條不是客戶裁示**，只記錄 AB-0 實作時的技術選擇，供後續批次（AB-1／AB-2a／AB-4r）與獨立 QA 對照；不改 `CLAUDE.md`／`PROJECT_RULES.md`。
+- **決策者**：**AI 總管內部（技術實作，依 `CLAUDE.md` §-1.5 v3 §03-1 內部自決）；非客戶裁示**。客戶 2026-10-27 只給了 AB-0 的邊界（純資料契約＋測試；不接 AI、不接 UI、不碰 `app.py`／`shared/ia_nav.py`；`portfolio_id + symbol -> strategy` 只定型別、不發明 `portfolio_id` 來源；missing／availability／AI 參與語意要明確可測；unavailable ≠ neutral、missing 不是 0；不新增投資判斷規則）；以下各點是在該邊界內的實作選擇。
+- **內容**：
+  1. **契約形狀＝AB-0 落地版**：`shared/decision_digest.py`（L0、stdlib-only、frozen dataclass；`SCHEMA_VERSION="decision_digest.v1"`）。與設計草案 C §4 的差異逐項列於 `docs/vnext/NEWUI_D25_C_AI_BRAIN_DATA_2026-10-27.md` §11（例：`sources[]`→每個 Fact 自帶 Provenance、頂層 availability→逐段推導、`candidates[]` 與 `ActionRef.kind` 未納入）。**後續讀端以程式碼與 §11 為準，不以 §4 草案為準**；補回欄位＝改契約，須升 `SCHEMA_VERSION` 並過獨立 QA。
+  2. **拒收名單是盡力而為，不是權威**：缺值佔位字、AI 字樣、方向字樣三份名單只擋明顯情形，換拼法即可繞過；**權威防線**＝AB-1 的 `rule_id` 允許名單（＋逐字比對 `text` 是否等於規則層輸出）與 AB-2a grounding。不得把「通過 AB-0 驗證」讀成「內容已確認無 AI／無方向判斷」。
+  3. **`INVALID` 不是 MISS 概念**：`DataStatus.INVALID`＝C §4.1 D11「上游有值但不是合法數值」；值丟棄為 None，**不附** `missing_reason`（不用 `contract_drift` 頂替）；給客戶的文案屬 UI 層。`MissingReason` 與 `shared/station_specs.MISS_*` 是**對映**（`MISS_CODE_TO_REASON`），字串值不同。
+  4. **缺鍵持股計數、不捏造**：上游缺 `portfolio_id` 或 `symbol` 的列不建 `HoldingEntry`，只計入 `HoldingsSection.unkeyed_count`；>0 時 holdings 不得為 available。取代 C §4「該列策略一律未分類＋NO_INPUT」的寫法——補一個鍵等於捏造身分。
+  5. **「ai」「llm」字樣語意**：`Provenance.source`／`RuleRef.rule_id`／`strategy_source` 依 `[:._/-]`／空白切 token 後，token 等於 `ai`／`llm`／`genai`／`gen_ai`，或以 `gemini`／`gpt`／`claude`／`openai` 等開頭，或含「模型」、或 `ai` 緊鄰中日韓字，即拒收（名單與比對細節以程式碼為準，本條不釘死）；目的＝AI 不得成為資料來源、規則或分類來源（DEC-092 設計方向「AI 不創造數字／門檻／missing／趨勢／標的」、Q4）。副作用：真實來源名稱若恰含此 token 也會被拒，屆時由 AB-1 允許名單處理，不在 AB-0 放寬。
+  6. **不做 `from_dict`**：目前沒有消費者需要反序列化；日後若需要，必須同樣嚴格（同型別檢查、同不變量），另案實作並過獨立 QA。
+- **範圍**：資料契約（New UI D2.5 AB-0）｜**日期**：2026-10-27｜**狀態**：生效（隨 AB-0 PR；**待 CI／merge**）
+- **來源**：分支 `ccr-fa5b6ded-9rhvoj` commits `8f85bee9`、`2184d015`、`e005e98c`（`shared/decision_digest.py` 檔頭 docstring、`tests/test_decision_digest_contract.py`）；客戶邊界見 2026-10-27 AB-0 開工指示（經總管轉交，非本條逐字收錄）。
+- **與其他 DEC 的關係**：本條**不重新解釋** DEC-091／DEC-092 任何一字；DEC-092 Q1（鍵＝`portfolio_id + symbol`）、Q2（趨勢＝尚未定義）、Q4（沿用既有建議動作與優先序、AI 不得創造動作）是本契約的**上位約束**，衝突時以 DEC-092 為準。DEC-084（Model×Effort）、DEC-003（內部自決區）**呼叫**。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條由單一撰寫組依程式碼與執行組回報撰寫；契約已過兩輪獨立 QA 並修正，**最終獨立複驗見 PR**，本條不宣稱已通過；第 1 點引用的差異清單為單組比對，未經第二組逐項驗證。
+
 
 ## 2. 產品／UI
 
