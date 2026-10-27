@@ -17,6 +17,7 @@ import pandas as pd
 import pytest
 
 from shared import dividend_station_thresholds as T
+from shared import station_specs as SS
 from shared.allocation_decision import build_allocation_decision
 from shared.decision_digest import (
     MAX_ACTIONS, Availability, DataStatus, DefinitionState, HoldingKey, MissingReason, StrategyType,
@@ -579,14 +580,55 @@ def test_non_mapping_rows_inside_lists_are_ignored_not_crashing():
     assert [a.rule.rule_id for a in d.actions.items] == ["cut"]
 
 
-@pytest.mark.parametrize("held", [1, "True", "yes", None, 1.0])
-def test_held_must_be_python_true(held):
-    rows = [{"ticker": "0050", "held": held}]
-    d = build(holdings_rows=rows, holding_keys=keys_for("0050"))
-    assert d.holdings.entries == () and d.holdings.unkeyed_count == 0
-    d = build(holdings_rows=holdings_for("0050"), holding_keys=keys_for("0050"),
+@pytest.mark.parametrize("held", [1, "True", "yes", 1.0, np.True_, np.False_, 0, ""])
+def test_held_non_bool_fails_loud_never_silently_not_held(held):
+    with pytest.raises(TypeError):
+        build(holdings_rows=[{"ticker": "0050", "held": held}], holding_keys=keys_for("0050"))
+    with pytest.raises(TypeError):
+        build(holdings_rows=holdings_for("0050"), holding_keys=keys_for("0050"),
               station_rows=[dict(fake_row("0050", "cut"), held=held)], station_stamp=STATION_STAMP)
-    assert d.actions.items == ()
+
+
+def test_held_none_missing_or_false_means_not_held():
+    for row in ({"ticker": "0050"}, {"ticker": "0050", "held": None}, {"ticker": "0050", "held": False}):
+        d = build(holdings_rows=[row], holding_keys=keys_for("0050"))
+        assert d.holdings.entries == () and d.holdings.unkeyed_count == 0
+
+
+@pytest.mark.parametrize("code", ["cut", "add"])
+@pytest.mark.parametrize("key, val", [
+    (SS.KEY_INVALID_LIGHTS, ("健檢A",)), (SS.KEY_INVALID_LIGHTS, ["235"]),
+    (SS.KEY_INVALID_INPUTS, (SS.ITEM_LOTS,)), (SS.KEY_INVALID_INPUTS, ("均價", "現價")),
+])
+def test_rows_with_invalid_data_marks_never_produce_actions(code, key, val):
+    bad = dict(fake_row("0050", code), **{key: val})
+    ok = fake_row("0056", "add")
+    d = act_digest([bad, ok])
+    assert [a.target.symbol for a in d.actions.items] == ["0056"]
+    assert all(not e.facts for e in d.holdings.entries if e.key.symbol == "0050")
+
+
+@pytest.mark.parametrize("key", [SS.KEY_INVALID_LIGHTS, SS.KEY_INVALID_INPUTS])
+@pytest.mark.parametrize("empty", [(), [], {}, None, set()])
+def test_empty_invalid_marks_mean_no_anomaly(key, empty):
+    d = act_digest([dict(fake_row("0050", "cut"), **{key: empty})])
+    assert [a.rule.rule_id for a in d.actions.items] == ["cut"]
+
+
+def test_invalid_mark_keys_are_the_station_specs_ssot():
+    assert SS.KEY_INVALID_LIGHTS == "_invalid_lights" and SS.KEY_INVALID_INPUTS == "_invalid_inputs"
+
+
+def test_invalid_row_with_unusable_text_is_skipped_before_text_check():
+    row = dict(fake_row("0050", "cut"), **{SS.KEY_INVALID_INPUTS: ("張數",)})
+    row["建議動作"] = None
+    assert act_digest([row]).actions.items == ()
+
+
+def test_two_qualifying_rows_same_ticker_fail_loud_duplicate_action_id():
+    with pytest.raises(ValueError, match="duplicate_action_id"):
+        build(holdings_rows=holdings_for("0050"), holding_keys=keys_for("0050"),
+              station_rows=[fake_row("0050", "cut"), fake_row("0050", "add")], station_stamp=STATION_STAMP)
 
 
 @pytest.mark.parametrize("text", [None, "", "   ", 7, "N/A", "—"])
@@ -640,13 +682,45 @@ def test_every_allowlisted_id_is_accepted_by_ab0_constructors():
     assert ACTION_RULE_VERSION == "action_branch.v1"
 
 
-@pytest.mark.parametrize("flag", ["yes", 1, 1.0, "True", None])
-def test_is_loaded_must_be_python_true_for_macro_and_allocation(flag):
-    d = build(macro_state=macro(is_loaded=flag), macro_stamp=MACRO_STAMP)
-    assert all(f.status is DataStatus.MISSING for f in d.market.facts)
+@pytest.mark.parametrize("flag", ["yes", 1, 1.0, "True", np.True_])
+def test_is_loaded_non_bool_fails_loud(flag):
+    with pytest.raises(TypeError):
+        build(macro_state=macro(is_loaded=flag), macro_stamp=MACRO_STAMP)
     alloc = dataclasses.replace(build_allocation_decision(macro()), is_loaded=flag)
-    d = build(macro_state=macro(), macro_stamp=MACRO_STAMP, allocation=alloc)
-    assert d.risk_cap.exposure_lo_pct.status is DataStatus.MISSING
+    with pytest.raises(TypeError):
+        build(macro_state=macro(), macro_stamp=MACRO_STAMP, allocation=alloc)
+
+
+def test_is_loaded_none_or_false_is_missing():
+    for flag in (None, False):
+        d = build(macro_state=macro(is_loaded=flag), macro_stamp=MACRO_STAMP)
+        assert all(f.status is DataStatus.MISSING for f in d.market.facts)
+        alloc = dataclasses.replace(build_allocation_decision(macro()), is_loaded=flag)
+        d = build(macro_state=macro(), macro_stamp=MACRO_STAMP, allocation=alloc)
+        assert d.risk_cap.exposure_lo_pct.status is DataStatus.MISSING
+
+
+@pytest.mark.parametrize("txt", ["N/A", " n/a ", "—", "-", "--", "未知", "None", "null", "nan", "無資料", "0", "0.0%",
+                                 "Ｎ／Ａ", "N\u200b/A"])
+def test_ab0_placeholder_texts_degrade_to_missing_not_crash(txt):
+    d = build(macro_state=macro(regime=txt, light=txt), macro_stamp=MACRO_STAMP)
+    fm = fact_map(d)
+    assert fm["market.regime"].status is DataStatus.MISSING and fm["market.light"].status is DataStatus.MISSING
+    assert fm["market.health"].status is DataStatus.OK
+
+
+def test_placeholder_mirror_agrees_with_ab0_fact_oracle():
+    """本檔的佔位字複本與 AB-0 `Fact` 的實際拒收一致：AB-0 拒收者都被降級；AB-0 接受者都被逐字搬運。"""
+    import src.services.decision_digest_builder as B
+    from shared.decision_digest import PLACEHOLDER_TEXTS, Fact, Provenance
+    cands = sorted(PLACEHOLDER_TEXTS) + ["0", "0.0", "0%", "bull", "🟢", "Bull", "neutral", "N/A "]
+    for c in cands:
+        try:
+            Fact("x", DataStatus.OK, Provenance("s", date(2026, 10, 26)), text=c)
+            rejected = False
+        except ValueError:
+            rejected = True
+        assert B._is_placeholder_text(c) == rejected, c
 
 
 @pytest.mark.parametrize("bad", [5, 1.5, ["bull"], b"bull", "", "   "])
@@ -655,6 +729,11 @@ def test_non_str_or_blank_regime_light_are_missing(bad):
     fm = fact_map(d)
     assert fm["market.regime"].status is DataStatus.MISSING and fm["market.light"].status is DataStatus.MISSING
     assert fm["market.health"].status is DataStatus.OK
+
+
+def test_blank_light_symbol_with_surrounding_whitespace_is_still_missing():
+    d = build(macro_state=macro(light=" ⬜ "), macro_stamp=MACRO_STAMP)
+    assert fact_map(d)["market.light"].status is DataStatus.MISSING
 
 
 def test_source_stamp_source_type():
@@ -708,7 +787,7 @@ def test_builder_imports_no_streamlit_ui_or_network():
     for m in mods:
         assert not any(m == b or m.startswith(b + ".") for b in banned), m
     assert {m.split(".")[0] for m in mods} <= {"__future__", "math", "numbers", "dataclasses",
-                                                "datetime", "typing", "shared"}
+                                                "datetime", "typing", "shared", "re", "unicodedata"}
 
 
 def test_builder_not_imported_directly_by_app_or_ia_nav():

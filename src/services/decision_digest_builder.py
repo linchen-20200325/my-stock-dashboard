@@ -53,6 +53,9 @@ ai_participation  一律 RULE_ONLY。
 輸入型別：`macro_state` 須為 Mapping 或 None；`allocation` 須為 None 或帶 `is_loaded`／`final_lo`／`final_hi`
 的物件；`*_rows` 須為 list／tuple 或 None；`holding_keys` 須為 Mapping 或 None；`*_stamp` 須為
 `SourceStamp` 或 None —— 型別不對 → `TypeError`（Fail Loud，不默默當成「沒給」）。
+帶 `_invalid_lights`／`_invalid_inputs`（非空）的站內列整列不搬行動（不揭露：AB-0 無對應欄位）。
+`held` 非 bool／None、`is_loaded` 非 bool／None → `TypeError`。上游 L4 缺口（cap 與 final_hi 交叉、health 範圍、
+舊 snapshot_ts 不推 STALE）屬規格明言／上游責任，本檔不補。
 可搬運的行動列若 `建議動作` 不是非空 str → `ValueError`（分支碼在、文字不在＝規則層契約漂移，
 不得默默丟掉一個可能是汰弱的行動）。
 
@@ -64,12 +67,14 @@ from __future__ import annotations
 
 import math
 import numbers
+import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Mapping, Sequence
 
 from shared.decision_digest import (
-    MAX_ACTIONS, ActionOrigin, ActionRef, ActionsSection, AiParticipation, Availability,
+    MAX_ACTIONS, PLACEHOLDER_TEXTS, ActionOrigin, ActionRef, ActionsSection, AiParticipation, Availability,
     DataStatus, DecisionDigest, DefinitionSection, DefinitionState, Fact, FactSection, HoldingEntry,
     HoldingKey, HoldingsSection, MissingReason, Provenance, RiskCapSection, RuleRef, StrategyType,
     derive_availability,
@@ -79,6 +84,7 @@ from shared.decision_digest_rules import (
 )
 from shared.regime_arbiter import UNLOADED_VERDICT
 from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION
+from shared.station_specs import KEY_INVALID_INPUTS, KEY_INVALID_LIGHTS
 
 #: Risk Cap 快照 `timestamp` 的格式（= `macro_state_locker._TIMESTAMP_FMT`；L3 之間不互相 import，故複本）。
 _SNAPSHOT_TS_FMT = "%Y-%m-%d %H:%M:%S"
@@ -88,9 +94,9 @@ _SRC_MACRO = "macro_state"
 _SRC_ALLOCATION = "allocation"
 _SRC_RISK_CAP = "risk_cap_snapshot"
 
-#: 上游「未評估」佔位值（SSOT：`shared.regime_arbiter.UNLOADED_VERDICT`）；比對時 casefold，見 `_text_or_none`。
-_UNEVALUATED_REGIME = frozenset({UNLOADED_VERDICT.regime.casefold()})
-_UNEVALUATED_LIGHT = frozenset({UNLOADED_VERDICT.light.casefold()})
+#: 上游「未評估」佔位值（SSOT：`shared.regime_arbiter.UNLOADED_VERDICT`）；見 `_text_or_none`（大小寫變體由 AB-0 佔位字判定接住）。
+_UNEVALUATED_REGIME = frozenset({UNLOADED_VERDICT.regime})
+_UNEVALUATED_LIGHT = frozenset({UNLOADED_VERDICT.light})
 
 _RISK_CAP_RULE = RuleRef("risk_cap", RISK_CAP_RULESET_VERSION)
 
@@ -150,15 +156,35 @@ def _get(mapping: Any, key: str) -> Any:
 
 
 # ── market ───────────────────────────────────────────────────────────────
+#: 與 AB-0 `_is_placeholder` 同形的「零值樣式」（0、0.0、0%…）；SSOT 是 AB-0，本複本由測試用 `Fact` 當 oracle 釘住。
+_ZERO_LIKE_RE = re.compile(r"[0.]+%?")
+
+
+def _is_placeholder_text(v: str) -> bool:
+    """AB-0 缺值佔位字（`PLACEHOLDER_TEXTS`＋零值樣式）；NFKC → 去 Cc/Cf → casefold → 去空白後比對。"""
+    n = "".join(ch for ch in unicodedata.normalize("NFKC", v)
+                if unicodedata.category(ch) not in ("Cc", "Cf")).casefold()
+    n = "".join(n.split())
+    return n in PLACEHOLDER_TEXTS or bool(_ZERO_LIKE_RE.fullmatch(n))
+
+
 def _text_or_none(v: Any, banned: frozenset) -> str | None:
-    """逐字回傳；blank／上游「未評估」佔位值（比對時去空白＋casefold）→ None（缺值，不映成值）。"""
-    if type(v) is not str or not v.strip() or v.strip().casefold() in banned:
+    """逐字回傳；blank／上游「未評估」佔位值／AB-0 缺值佔位字（比對時去空白＋casefold）→ None（降級為缺值，
+    不映成值、也不讓整份 Digest 因上游吐了 'N/A' 而崩潰）。"""
+    if type(v) is not str or not v.strip() or v.strip() in banned or _is_placeholder_text(v):
         return None
     return v
 
 
+def _flag(v: Any, name: str) -> bool:
+    """bool 旗標：Python `bool` 或 None（＝未給，視為 False）；其餘型別 → TypeError（不默默當 False）。"""
+    if v is None or type(v) is bool:
+        return v is True
+    raise TypeError(f"{name} 必須是 bool 或 None：{type(v).__name__} {v!r}")
+
+
 def _market_section(macro_state: Mapping | None, stamp: SourceStamp | None) -> FactSection:
-    loaded = _get(macro_state, "is_loaded") is True
+    loaded = _flag(_get(macro_state, "is_loaded"), "macro_state['is_loaded']")
     usable = loaded and stamp is not None
     src = stamp.source if stamp is not None else _SRC_MACRO
 
@@ -224,7 +250,7 @@ def _risk_cap_section(macro_state: Mapping | None, allocation: Any,
     cap = _pct_fact("risk_cap.cap_pct", raw_cap, as_of_prov=cap_prov, src=_SRC_RISK_CAP)
     cap_valid = cap.status is DataStatus.OK
 
-    alloc_loaded = getattr(allocation, "is_loaded", None) is True
+    alloc_loaded = _flag(getattr(allocation, "is_loaded", None), "allocation.is_loaded")
     lo_prov = _prov_from(macro_stamp) if (alloc_loaded and macro_stamp is not None) else None
     lo_raw = getattr(allocation, "final_lo", None) if alloc_loaded else None
     hi_raw = getattr(allocation, "final_hi", None) if alloc_loaded else None
@@ -238,8 +264,9 @@ def _risk_cap_section(macro_state: Mapping | None, allocation: Any,
 
 # ── holdings & actions ───────────────────────────────────────────────────
 def _is_held(row: Mapping) -> bool:
-    """只認 Python `True`（`holdings_service`／`build_station_rows` 皆產 `bool`）；其餘一律視為非持有。"""
-    return row.get("held") is True
+    """`held` 須是 Python `bool` 或缺／None（＝非持有）；其餘型別（np.bool_、'True'、1…）→ TypeError。
+    ⛔ 不默默當非持有 —— 那會吞掉一個可能是汰弱的行動。"""
+    return _flag(row.get("held"), "row['held']")
 
 
 def _ticker_of(row: Mapping) -> str | None:
@@ -270,6 +297,10 @@ def _action_candidates(station_rows: Sequence[Mapping] | None, station_stamp: So
     out: list = []
     for row in station_rows:
         if not isinstance(row, Mapping) or not _is_held(row):
+            continue
+        # 帶資料異常標記（非空）的列整列不搬：不用壞資料給建議（fail-safe）。契約沒有「列被排除」的欄位可揭露，
+        # 故不揭露；空 list／空 dict 視為無異常。
+        if row.get(KEY_INVALID_LIGHTS) or row.get(KEY_INVALID_INPUTS):
             continue
         detail = row.get("_detail")
         if isinstance(detail, Mapping) and detail.get("error"):
