@@ -94,13 +94,13 @@ _AI_PREFIX_TOKENS: tuple = ("gemini", "gpt", "chatgpt", "claude", "anthropic", "
                             "deepseek", "copilot", "llm", "mistral", "llama")
 _AI_TOKEN_SPLIT_RE = re.compile(r"[:._/\-\s]+")
 _CJK = r"㐀-䶿一-鿿豈-﫿"
-_AI_CJK_RE = re.compile(rf"(?:(?<=[{_CJK}])ai)|(?:ai(?=[{_CJK}]))")
+#: 「ai」緊鄰 CJK，且 ai 不是拉丁字詞的一部分（Shanghai上證／Thai泰國 不算）。
+_AI_CJK_RE = re.compile(rf"(?:(?<![a-z])ai(?=[{_CJK}]))|(?:(?<=[{_CJK}])ai(?![a-z]))")
 
 #: 方向字樣拒收名單（套用於趨勢／估值／產業段的識別欄位；盡力而為，不是完備判定）。
 #: 英文：依非英數字元切 token 後「等於」比對；中文：子字串比對。
 _DIRECTION_LATIN: frozenset = frozenset({
-    "bull", "bear", "bullish", "bearish", "long", "short", "up", "down", "uptrend", "downtrend",
-    "buy", "sell", "strong", "weak",
+    "bull", "bear", "bullish", "bearish", "uptrend", "downtrend", "buy", "sell", "strong", "weak",
 })
 _DIRECTION_CJK: tuple = ("偏多", "偏空", "多頭", "空頭", "看多", "看空", "轉強", "轉弱", "強", "弱")
 
@@ -305,10 +305,10 @@ def _is_placeholder(text: Any) -> bool:
 
 
 def _ai_reserved(s: Any) -> bool:
-    """盡力而為的 AI 字樣判定（NFKC → 去 Cf → casefold → 依 `[:._/\\-\\s]` 切 token）。"""
+    """盡力而為的 AI 字樣判定（NFKC → 去 Cc/Cf → casefold → 依 `[:._/\\-\\s]` 切 token）。"""
     if type(s) is not str:
         return False
-    n = "".join(ch for ch in unicodedata.normalize("NFKC", s) if unicodedata.category(ch) != "Cf").casefold()
+    n = _strip_controls(unicodedata.normalize("NFKC", s)).casefold()
     if "模型" in n or _AI_CJK_RE.search(n):
         return True
     if "gen_ai" in n:
@@ -320,10 +320,13 @@ def _ai_reserved(s: Any) -> bool:
 
 
 def _has_direction_token(s: Any) -> bool:
-    """盡力而為的方向字樣判定（NFKC → casefold；英文依非英數切 token 等於比對、中文子字串）。"""
+    """盡力而為的方向字樣判定（NFKC → 去 Cc/Cf → casefold；英文依非英數切 token 等於比對、中文子字串）。
+
+    刻意不列 long／short／up／down：repo 既有識別字（如 `ma_long`、`short_interest`）會誤殺。
+    """
     if type(s) is not str:
         return False
-    n = unicodedata.normalize("NFKC", s).casefold()
+    n = _strip_controls(unicodedata.normalize("NFKC", s)).casefold()
     if any(w in n for w in _DIRECTION_CJK):
         return True
     return any(tok in _DIRECTION_LATIN for tok in re.split(r"[^0-9a-z]+", n))
@@ -691,7 +694,7 @@ class DefinitionSection:
       `[A-Za-z0-9%._/\\-]*`。只有 tw_trend／intl_trend 可有 observations；
       valuation（research-only，不得有 EPS／PE 數字）與 industry 必須為 `()`（於 validate 檢查）。
     - 方向字樣拒收：series_ref 與 observations 的 fact_id／unit／rule_id／source 不得含
-      bull／bear／long／short／up／down／buy／sell／strong／weak／偏多／偏空／強／弱…
+      bull／bear／uptrend／downtrend／buy／sell／strong／weak／偏多／偏空／強／弱…
       ⚠️ **盡力而為的拒收名單，不是完備判定**（換個拼法就能繞過；真正的防線是 AB-2a grounding）。
     - availability 固定 unavailable；missing_reason 只能是 NOT_DEFINED 或 NOT_WIRED。
     """

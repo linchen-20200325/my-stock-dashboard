@@ -854,7 +854,7 @@ def test_definition_observation_unit_format(unit):
         DefinitionSection(DefinitionState.NOT_DEFINED, observations=(ok_fact("x", 1.0, unit=unit),))
 
 
-_DIR_LATIN_WORDS = ["bull", "BEARISH", "short", "up", "uptrend", "buy", "weak"]
+_DIR_LATIN_WORDS = ["bull", "BEARISH", "downtrend", "sell", "uptrend", "buy", "weak", "strong"]
 _DIR_CJK_WORDS = ["偏多", "空頭", "轉強", "強", "弱", "看多"]
 # 中文只測 rule_id／source：series_ref／unit 的格式本來就只收英數，fact_id 與 source 同一套判定
 _DIR_CASES = ([(w, x) for w in ("series_ref", "fact_id", "unit", "rule_id", "source") for x in _DIR_LATIN_WORDS]
@@ -1054,3 +1054,37 @@ def test_decimal_still_rejected_and_numpy_rank_ok():
         action(rank=np.bool_(True))
     with pytest.raises(ValueError, match="duplicate_rank"):
         ActionsSection(Availability.AVAILABLE, items=(action("a1", rank=np.int64(1)), action("a2", rank=1)))
+
+
+# ══ QA 第四輪（round 3：誤殺修正）════════════════════════════════════════
+@pytest.mark.parametrize("ident", ["ma_long_240", "ma_long", "short_interest", "up_limit", "down_count"])
+def test_existing_repo_idents_not_direction(ident):
+    DefinitionSection(DefinitionState.NOT_DEFINED, series_ref=ident,
+                      observations=(Fact(ident, DataStatus.OK, prov(source=f"SRC:{ident}"), value=1.0,
+                                         unit="pts", rule=RuleRef(ident, "v1")),))
+
+
+@pytest.mark.parametrize("ident", ["bu\u200bll", "be\x00ar", "bu\u200bllish_x", "s\u2060ell"])
+def test_direction_check_strips_cc_cf(ident):
+    with pytest.raises(ValueError, match="direction_token"):
+        DefinitionSection(DefinitionState.NOT_DEFINED,
+                          observations=(Fact("ma60", DataStatus.OK, prov(source=ident), value=1.0,
+                                             rule=RULE),))
+    with pytest.raises(ValueError, match="direction_token"):
+        DefinitionSection(DefinitionState.NOT_DEFINED,
+                          observations=(Fact("ma60", DataStatus.OK, prov(), value=1.0,
+                                             rule=RuleRef(ident, "v1")),))
+
+
+@pytest.mark.parametrize("name", ["Shanghai上證", "Mumbai孟買", "Thai泰國", "上證Shanghai", "台灣Taipei", "Dubai杜拜",
+                                  "台灣Airways", "空巴airbus"])
+def test_latin_words_ending_ai_next_to_cjk_ok(name):
+    Provenance(name)
+    RuleRef(name, "v1")
+    HoldingEntry(K1, StrategyType.CAPITAL_GAIN, strategy_source=name)
+
+
+@pytest.mark.parametrize("name", ["a\x00i:x", "a\x07i", "財經ai", "ai摘要", "上證ai", "x ai上證"])
+def test_ai_check_strips_cc_and_flags_standalone_ai_next_to_cjk(name):
+    with pytest.raises(ValueError, match="ai_reserved"):
+        Provenance(name)
