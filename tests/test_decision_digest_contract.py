@@ -113,7 +113,7 @@ def test_valid_digest_passes_and_serializes_to_json():
 
 # ── 列舉成員鎖死（unavailable ≠ neutral；無方向值；AI 不得產值） ─────────────
 def test_enum_member_sets_are_locked():
-    assert {m.value for m in DataStatus} == {"ok", "stale", "missing", "proxy", "failed"}
+    assert {m.value for m in DataStatus} == {"ok", "stale", "missing", "proxy", "failed", "invalid"}
     assert {m.value for m in MissingReason} == {"no_input", "fetch_failed", "not_enough_history",
                                                  "not_applicable", "contract_drift", "no_variation",
                                                  "not_defined", "not_wired"}
@@ -165,7 +165,7 @@ def test_none_value_rejects_present_status(status):
 def test_missing_requires_reason_and_ok_forbids_reason():
     with pytest.raises(ValueError, match="missing_reason_required"):
         Fact("f", DataStatus.MISSING, prov(as_of=None))
-    with pytest.raises(ValueError, match="missing_reason_on_value"):
+    with pytest.raises(ValueError, match="missing_reason_forbidden"):
         Fact("f", DataStatus.OK, prov(), value=1.0, missing_reason=MissingReason.NO_INPUT)
 
 
@@ -619,8 +619,9 @@ def test_placeholder_text_rejected(ph, status):
 
 
 def test_placeholder_set_locked_and_real_text_ok():
-    assert PLACEHOLDER_TEXTS == frozenset({"n/a", "na", "nan", "none", "null", "-", "--", "—",
-                                           "無資料", "未評估", "尚無資料", "0"})
+    assert PLACEHOLDER_TEXTS == frozenset({
+        "n/a", "na", "n.a.", "nan", "none", "null", "unknown", "?", "-", "--", "—", "–",
+        "無資料", "未評估", "尚無資料", "暫無資料", "未知", "無"})
     Fact("f", DataStatus.OK, prov(), text="0050 汰弱")  # 含 0 但不是佔位字
     with pytest.raises(ValueError, match="placeholder_text"):
         ActionRef("a9", "N/A", ActionOrigin.RULE_LAYER, RULE, ("cap",))
@@ -703,7 +704,7 @@ def test_evidence_on_missing_fact_rejected():
     d = digest(market=FactSection(Availability.PARTIAL, facts=(ok_fact("regime", value=None, text="x"),
                                                                missing_fact("gone"))),
                actions=ActionsSection(Availability.AVAILABLE, items=(action(refs=("gone",)),)))
-    assert "evidence_on_missing_fact" in codes(d)
+    assert "evidence_on_unusable_fact" in codes(d)
     d2 = digest(actions=ActionsSection(Availability.AVAILABLE, items=(action(refs=("regime",)),)))
     assert validate(d2) == ()
 
@@ -722,13 +723,14 @@ def test_valid_cap_requires_usable_value():
 @pytest.mark.parametrize("name", ["ai", "AI:summary", "ai.brain", "LLM_out", "gemini", "Gemini-1.5:x",
                                   "gpt4", "GPT:x", "claude", "Claude3.output", "openai:chat", " ai:x"])
 def test_ai_reserved_prefix_rejected(name):
-    with pytest.raises(ValueError, match="ai_reserved_prefix"):
-        Provenance(name.strip() or name)
-    with pytest.raises(ValueError, match="ai_reserved_prefix"):
+    with pytest.raises(ValueError, match="ai_reserved"):
+        Provenance(name)
+    with pytest.raises(ValueError, match="ai_reserved"):
         RuleRef(name, "v1")
 
 
-@pytest.mark.parametrize("name", ["air_quality", "FRED:DGS10", "allocation", "risk_cap", "llmc", "TWSE:ai"])
+@pytest.mark.parametrize("name", ["air_quality", "FRED:DGS10", "allocation", "risk_cap", "TWSE:MI_INDEX",
+                                  "rainfall", "chain_store"])
 def test_non_ai_names_accepted(name):
     Provenance(name)
     RuleRef(name, "v1")
@@ -747,11 +749,308 @@ def test_every_station_miss_code_maps():
     assert MISS_CODE_TO_REASON[ss.MISS_NOT_ENOUGH] is MissingReason.NOT_ENOUGH_HISTORY
 
 
-def test_d11_invalid_is_failed_contract_drift():
-    f = Fact("bad", DataStatus.FAILED, prov(as_of=None), missing_reason=MissingReason.CONTRACT_DRIFT)
-    assert f.value is None
+def test_d11_invalid_status():
+    f = Fact("bad", DataStatus.INVALID, prov(as_of=None))
+    assert f.value is None and f.missing_reason is None
+    with pytest.raises(ValueError, match="value_with_missing_status"):
+        Fact("bad", DataStatus.INVALID, prov(), value=1.0)
+    with pytest.raises(ValueError, match="value_with_missing_status"):
+        Fact("bad", DataStatus.INVALID, prov(), text="x")
+    with pytest.raises(ValueError, match="missing_reason_forbidden"):
+        Fact("bad", DataStatus.INVALID, prov(), missing_reason=MissingReason.CONTRACT_DRIFT)
+    assert derive_availability((Fact("bad", DataStatus.INVALID, prov()),)) is Availability.UNAVAILABLE
+    assert derive_availability((ok_fact("a"), Fact("bad", DataStatus.INVALID, prov()))) is Availability.PARTIAL
 
 
 # 12. docstring 不含同步標記字樣
 def test_module_has_no_sync_marker():
     assert "AUTO-SYNCED" not in MODULE_PATH.read_text(encoding="utf-8")
+
+
+# ══ QA 第三輪（round 2 A～O）══════════════════════════════════════════════
+
+
+# A. 精確型別
+@dataclasses.dataclass(frozen=True)
+class EvilFact(Fact):
+    ai_verdict: str = "偏多"
+
+
+def test_subclass_with_extra_field_rejected_and_never_serialized():
+    with pytest.raises(ValueError, match="子類別拒收"):
+        EvilFact("e", DataStatus.OK, prov(), value=1.0)
+    d = fresh_digest()
+    evil = EvilFact.__new__(EvilFact)
+    for f in dataclasses.fields(EvilFact):
+        object.__setattr__(evil, f.name, getattr(d.market.facts[0], f.name, "偏多"))
+    force(d.market, facts=(evil,))
+    assert "type" in codes(d)
+    with pytest.raises(ValueError):
+        d.to_dict()
+    # 即使繞過驗證直接序列化，也只輸出 Fact 宣告的欄位
+    from shared.decision_digest import _to_jsonable
+    out = _to_jsonable(evil)
+    assert "ai_verdict" not in out and set(out) == {f.name for f in dataclasses.fields(Fact)}
+
+
+class StrSub(str):
+    pass
+
+
+@pytest.mark.parametrize("make", [
+    lambda: Provenance(StrSub("SRC")),
+    lambda: Fact("f", DataStatus.OK, prov(), text=StrSub("x")),
+    lambda: RuleRef("r", StrSub("v1")),
+    lambda: HoldingKey(StrSub("pf"), "0050"),
+    lambda: Provenance("S", as_of=datetime(2026, 1, 1, tzinfo=TZ8).date().__class__.__new__(
+        type("MyDate", (date,), {}), 2026, 1, 1)),
+])
+def test_exact_str_and_date_types(make):
+    with pytest.raises(ValueError):
+        make()
+
+
+def test_exact_datetime_type():
+    class MyDT(datetime):
+        pass
+    with pytest.raises(ValueError, match="naive_datetime"):
+        Provenance("S", fetched_at=MyDT(2026, 1, 1, tzinfo=timezone.utc))
+    assert "naive_datetime" in codes(digest(generated_at=MyDT(2026, 10, 27, 9, tzinfo=timezone.utc)))
+
+
+def test_section_subclass_rejected():
+    @dataclasses.dataclass(frozen=True)
+    class EvilSection(DefinitionSection):
+        verdict: str = "bull"
+    with pytest.raises(ValueError, match="子類別拒收"):
+        EvilSection(DefinitionState.NOT_DEFINED)
+
+
+# B. DefinitionSection 綁定
+@pytest.mark.parametrize("name,bad", [("tw_trend", DefinitionState.RESEARCH_ONLY),
+                                      ("intl_trend", DefinitionState.RESEARCH_ONLY),
+                                      ("industry", DefinitionState.RESEARCH_ONLY),
+                                      ("valuation", DefinitionState.NOT_DEFINED)])
+def test_definition_binding(name, bad):
+    assert "definition_binding" in codes(digest(**{name: DefinitionSection(bad)}))
+
+
+@pytest.mark.parametrize("name,state", [("valuation", DefinitionState.RESEARCH_ONLY),
+                                        ("industry", DefinitionState.NOT_DEFINED)])
+def test_valuation_and_industry_have_no_observations(name, state):
+    sec = DefinitionSection(state, observations=(ok_fact("eps", 10.0),))
+    assert "observations_forbidden" in codes(digest(**{name: sec}))
+
+
+def test_trend_observations_allowed():
+    sec = DefinitionSection(DefinitionState.NOT_DEFINED, series_ref="twii_ohlcv",
+                            observations=(ok_fact("twii_ma60", 21000.0, unit="pts"),))
+    assert validate(digest(tw_trend=sec)) == ()
+
+
+@pytest.mark.parametrize("unit", ["點 數", "pts\n", "a b", "億"])
+def test_definition_observation_unit_format(unit):
+    with pytest.raises(ValueError, match="bad_unit"):
+        DefinitionSection(DefinitionState.NOT_DEFINED, observations=(ok_fact("x", 1.0, unit=unit),))
+
+
+_DIR_LATIN_WORDS = ["bull", "BEARISH", "short", "up", "uptrend", "buy", "weak"]
+_DIR_CJK_WORDS = ["偏多", "空頭", "轉強", "強", "弱", "看多"]
+# 中文只測 rule_id／source：series_ref／unit 的格式本來就只收英數，fact_id 與 source 同一套判定
+_DIR_CASES = ([(w, x) for w in ("series_ref", "fact_id", "unit", "rule_id", "source") for x in _DIR_LATIN_WORDS]
+              + [(w, x) for w in ("rule_id", "source") for x in _DIR_CJK_WORDS])
+
+
+@pytest.mark.parametrize("where,word", _DIR_CASES)
+def test_direction_tokens_rejected(where, word):
+    latin = word.isascii()
+    ident = f"twii_{word.lower()}" if latin else f"twii{word}"
+    kw = {}
+    if where == "series_ref":
+        kw["series_ref"] = ident
+    else:
+        f_id, unit, rid, src = "ma60", "pts", "rule_x", "SRC:x"
+        if where == "fact_id":
+            f_id = ident
+        elif where == "unit":
+            unit = ident
+        elif where == "rule_id":
+            rid = ident
+        else:
+            src = ident
+        obs = (Fact(f_id, DataStatus.OK, prov(source=src), value=1.0, unit=unit,
+                    rule=RuleRef(rid, "v1")),)
+        kw["observations"] = obs
+    with pytest.raises(ValueError, match="direction_token"):
+        DefinitionSection(DefinitionState.NOT_DEFINED, **kw)
+
+
+@pytest.mark.parametrize("ident", ["twii_ma60", "upload_ts", "longitude", "sp500", "dgs10"])
+def test_non_direction_idents_ok(ident):
+    DefinitionSection(DefinitionState.NOT_DEFINED, series_ref=ident,
+                      observations=(ok_fact(ident, 1.0, unit="pts"),))
+
+
+# C. 依據
+@pytest.mark.parametrize("status", [DataStatus.PROXY, DataStatus.INVALID, DataStatus.MISSING, DataStatus.FAILED])
+def test_evidence_must_be_ok_or_stale(status):
+    kw = {}
+    if status in (DataStatus.MISSING, DataStatus.FAILED):
+        kw["missing_reason"] = MissingReason.NO_INPUT
+    if status is DataStatus.PROXY:
+        kw["value"] = 1.0
+    ev = Fact("ev", status, prov(), **kw)
+    d = digest(market=FactSection(derive_availability((ok_fact("regime", value=None, text="x"), ev)),
+                                  facts=(ok_fact("regime", value=None, text="x"), ev)),
+               actions=ActionsSection(Availability.AVAILABLE, items=(action(refs=("ev",)),)))
+    assert "evidence_on_unusable_fact" in codes(d)
+
+
+def test_evidence_stale_ok():
+    ev = Fact("ev", DataStatus.STALE, prov(), value=1.0)
+    d = digest(market=FactSection(Availability.PARTIAL, facts=(ok_fact("regime", value=None, text="x"), ev)),
+               actions=ActionsSection(Availability.AVAILABLE, items=(action(refs=("ev",)),)))
+    assert validate(d) == ()
+
+
+def test_evidence_on_observation_rejected():
+    sec = DefinitionSection(DefinitionState.NOT_DEFINED, observations=(ok_fact("ma60", 1.0),))
+    d = digest(tw_trend=sec, actions=ActionsSection(Availability.AVAILABLE, items=(action(refs=("ma60",)),)))
+    assert "evidence_on_observation" in codes(d)
+
+
+def test_duplicate_evidence_refs_rejected():
+    with pytest.raises(ValueError, match="duplicate_evidence_ref"):
+        action(refs=("cap", "cap"))
+
+
+# D. 行動 vs 持股
+def test_actions_available_requires_holdings():
+    h = HoldingsSection(Availability.UNAVAILABLE, missing_reason=MissingReason.FETCH_FAILED)
+    d = digest(holdings=h, actions=ActionsSection(Availability.AVAILABLE))
+    assert "actions_available_without_holdings" in codes(d)
+    d2 = digest(holdings=h, actions=ActionsSection(Availability.UNAVAILABLE, missing_reason=MissingReason.NO_INPUT))
+    assert validate(d2) == ()
+
+
+# E. unkeyed_count
+def test_unkeyed_count_caps_availability():
+    entries = (HoldingEntry(K1, facts=(ok_fact("a"),)),)
+    with pytest.raises(ValueError, match="availability_mismatch"):
+        HoldingsSection(Availability.AVAILABLE, entries=entries, unkeyed_count=1)
+    HoldingsSection(Availability.PARTIAL, entries=entries, unkeyed_count=1)
+    HoldingsSection(Availability.AVAILABLE, entries=entries, unkeyed_count=0)
+    with pytest.raises(ValueError, match="availability_mismatch"):
+        HoldingsSection(Availability.PARTIAL, unkeyed_count=2, missing_reason=None)
+    HoldingsSection(Availability.UNAVAILABLE, unkeyed_count=2, missing_reason=MissingReason.NO_INPUT)
+
+
+@pytest.mark.parametrize("bad", [-1, True, 1.0, "1", None, np.int64(1)])
+def test_unkeyed_count_type(bad):
+    with pytest.raises(ValueError, match="bad_unkeyed_count"):
+        HoldingsSection(Availability.UNAVAILABLE, unkeyed_count=bad, missing_reason=MissingReason.NO_INPUT)
+
+
+# G. 佔位字正規化
+@pytest.mark.parametrize("ph", ["UNKNOWN", "未知", "無", "暫無資料", "N.A.", "?", "－", "–", "—",
+                                "0.0", "0%", "0.00%", "00", "n / a", "N​/A", "Ｎ／Ａ", "n\ta", "nUll\x07"])
+def test_placeholder_normalized(ph):
+    with pytest.raises(ValueError, match="placeholder_text"):
+        Fact("f", DataStatus.OK, prov(), text=ph)
+    with pytest.raises(ValueError, match="placeholder_text"):
+        ActionRef("a", ph, ActionOrigin.RULE_LAYER, RULE, ("cap",))
+    with pytest.raises(ValueError, match="placeholder_text"):
+        HoldingEntry(K1, StrategyType.BUY_AND_HOLD, strategy_source=ph)
+
+
+@pytest.mark.parametrize("txt", ["0.5%", "10", "無法判定", "無風險", "na+", "汰弱 0050"])
+def test_placeholder_does_not_overreach(txt):
+    Fact("f", DataStatus.OK, prov(), text=txt)
+
+
+# H. AI 字樣
+@pytest.mark.parametrize("name", ["genai:x", "gen_ai", "GenAI", "chatgpt-4o", "anthropic:x", "deepseek_v3",
+                                  "copilot", "llmc", "mistral7b", "llama3", "x/claude", "src gemini",
+                                  "ＡＩ:x", "a​i:x", "AI模型", "大模型", "財經ai", "ai摘要", "TWSE:ai"])
+def test_ai_denylist_extended(name):
+    with pytest.raises(ValueError, match="ai_reserved"):
+        Provenance(name)
+    with pytest.raises(ValueError, match="ai_reserved"):
+        RuleRef(name, "v1")
+    with pytest.raises(ValueError, match="ai_reserved"):
+        HoldingEntry(K1, StrategyType.CAPITAL_GAIN, strategy_source=name)
+
+
+# I. fullmatch
+def test_trailing_newline_rejected_by_regexes():
+    with pytest.raises(ValueError, match="bad_series_ref"):
+        DefinitionSection(DefinitionState.NOT_DEFINED, series_ref="twii\n")
+    assert codes(digest(ai_participation=AiParticipation.AI_EXPLAINED, ai_passed_checks=("G1\n",))) & {"bad_check_id"}
+    with pytest.raises(ValueError, match="bad_unit"):
+        DefinitionSection(DefinitionState.NOT_DEFINED, observations=(ok_fact("x", 1.0, unit="pts\n"),))
+
+
+# J. AI checks
+@pytest.mark.parametrize("ids", [("G7",), ("G10",), ("G0",)])
+def test_check_ids_bounded(ids):
+    assert "bad_check_id" in codes(digest(ai_participation=AiParticipation.AI_EXPLAINED, ai_passed_checks=ids))
+
+
+def test_check_ids_no_duplicates_and_disjoint():
+    assert "duplicate_check_id" in codes(digest(ai_participation=AiParticipation.AI_EXPLAINED,
+                                                ai_passed_checks=("G1", "G1")))
+    assert "check_in_both" in codes(digest(ai_participation=AiParticipation.AI_REJECTED,
+                                           ai_passed_checks=("G1",), ai_failed_checks=("G1",)))
+    assert validate(digest(ai_participation=AiParticipation.AI_REJECTED,
+                           ai_passed_checks=("G1",), ai_failed_checks=("G2",))) == ()
+
+
+# K. 鍵：控制字元與中間空白
+@pytest.mark.parametrize("bad", ["00 50", "00\t50", "00\x0750", "pf\nA", "a　b"])
+def test_key_internal_whitespace_and_cc(bad):
+    with pytest.raises(ValueError, match="bad_key"):
+        HoldingKey("pf", bad)
+    with pytest.raises(ValueError, match="bad_key"):
+        HoldingKey(bad, "0050")
+    with pytest.raises(ValueError, match="bad_key"):
+        Fact(bad, DataStatus.OK, prov(), value=1.0)
+    with pytest.raises(ValueError, match="bad_key"):
+        action(aid=bad)
+
+
+# L. repr 會炸的物件
+class Evil:
+    def __repr__(self):
+        raise RuntimeError("boom")
+
+    def __str__(self):
+        raise RuntimeError("boom")
+
+
+def test_evil_repr_does_not_raise():
+    d = fresh_digest()
+    force(d.market.facts[0], unit=Evil())
+    force(d.holdings.entries[0].key, symbol=Evil())
+    force(d.actions.items[0], priority_rank=Evil(), text=Evil())
+    res = validate(d)
+    assert res and all(type(v.message) is str for v in res)
+    assert any("unrepr-able Evil" in v.message for v in res)
+    assert "uninspectable" not in {v.code for v in res}
+
+
+# M. 改名
+def test_rule_only_member_name():
+    assert AiParticipation.RULE_ONLY.value == "rule_only"
+    assert not hasattr(AiParticipation, "NONE")
+
+
+# O. 不變項
+def test_decimal_still_rejected_and_numpy_rank_ok():
+    from decimal import Decimal
+    with pytest.raises(ValueError, match="bad_number"):
+        Fact("f", DataStatus.OK, prov(), value=Decimal("1.5"))
+    action(rank=np.int64(2))
+    with pytest.raises(ValueError, match="bad_rank"):
+        action(rank=np.bool_(True))
+    with pytest.raises(ValueError, match="duplicate_rank"):
+        ActionsSection(Availability.AVAILABLE, items=(action("a1", rank=np.int64(1)), action("a2", rank=1)))
