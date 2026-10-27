@@ -587,3 +587,49 @@
 4. `data_cache/` 中 PE 無歷史序列、「個股風險 L3 不存在」「融資融券未接新 UI」為由 grep／檔頭推得的 INFERENCE。
 5. §4 Digest 欄位與 §2.4 Grounding 規則為**草案**，尚未經獨立 QA；承重前提（尤其「現有 AI 無輸出後驗證」）開工前須由第二組複驗。
 6. 本檔未提出、亦不授權任何 Risk Cap、門檻、權重、趨勢定義、估值公式修改；HI-1～HI-6 一律未核准。
+
+---
+
+## §11 AB-0 落地差異（實作 vs 本文 §4）
+
+> 2026-10-27 新增（append-only；§4 草案原文一字未改）。AB-0 已以 `shared/decision_digest.py`（L0，只用標準函式庫，frozen dataclass）＋`tests/test_decision_digest_contract.py` 實作，分支 `ccr-fa5b6ded-9rhvoj` commits `8f85bee9` → `2184d015` → `e005e98c`；**狀態＝待 CI／merge**（PR 待開）。⚠️ 撰寫本節時工作樹另有未 commit 的拒收名單微調（方向字樣、AI 字樣比對），細節一律以最終合併的程式碼為準。本節列「實作與 §4 草案不同之處」，**以程式碼為準**；§4 仍是設計來歷，不是現行契約。
+> ⚠️ **單組比對，未經第二組逐項驗證**（`CLAUDE.md` §-2 規則 6）：底稿為一組獨立審查者在 `2184d015` 的比對，再由本撰寫組對照 `e005e98c` 更新；更新後的清單**沒有第二組逐項重驗**，只能當待驗事項，不得當成「差異只有這些」的窮舉宣稱。
+> 「由哪一批恢復」欄：PLAN（`NEWUI_D25_PLAN_2026-10-27.md` §5）**沒有明寫**任何一項被拿掉的欄位要在哪一批補回；下表凡 PLAN 未寫者一律寫「待 AB-1 規劃時決定」，括號內只列 PLAN §5 中**相關的既有輸出**（INFERENCE，不是排程）。補回任何欄位＝改契約，須升 `SCHEMA_VERSION` 並過獨立 QA。
+
+### 11.1 結構與命名
+
+| # | §4 草案 | AB-0 實作（`e005e98c`） | 由哪一批恢復 |
+|---|---|---|---|
+| 1 | `digest_version` | `schema_version`，固定 `"decision_digest.v1"`（不符即違規） | 不恢復（改名） |
+| 2 | 頂層 `sources[]`（SourceStatus：`source_id`／`provenance` enum／`freshness` enum） | **拿掉**；改為每個 `Fact` 自帶 `Provenance{source, as_of, fetched_at}`；**沒有** provenance／freshness 列舉（DEC-080 兩軸未進契約） | 待 AB-1 規劃時決定 |
+| 3 | 頂層 `availability{evaluated, expected, by_section}` | **拿掉**；改為**每段**自己的 `availability`，且必須等於由該段 facts 推導的值（`derive_availability`） | 待 AB-1 規劃時決定（資料健康 N/M 的 L3 彙總現不存在，PLAN §4） |
+| 4 | `candidates[]`（CandidateBlock） | **拿掉**（契約內沒有候選標的段） | 待 AB-1 規劃時決定（PLAN §5 AB-1 搬運清單含 `get_ranked_picks`） |
+| 5 | `industry_trend[]`（逐產業 IndustryBlock、dimensions、coverage） | 單一 `industry: DefinitionSection`，綁定 `尚未定義`，**不得有 observations** | 正式產業趨勢規則屬 High Gate（DEC-092 Q5；AB-3 暫緩、RS-1 研究中）；維度資料是否先以參考數值進契約，待 AB-1 規劃時決定 |
+| 6 | `ai_participation{mode, validation}`，mode＝`rule_only／ai_assisted／ai_rejected` | 平面列舉 `AiParticipation`＝`rule_only／ai_explained／ai_rejected`（`ai_assisted` 改名 `ai_explained`）＋`ai_passed_checks`／`ai_failed_checks`（tuple，限 `G1`～`G6`、不重複、兩者不交集）；`ai_explained` 必須有通過項且不得有失敗項；`ai_rejected` 必須有失敗項；`rule_only` 兩者皆空 | 不恢復（改形） |
+| 7 | `actions[]`（陣列 0..3） | `ActionsSection{availability, items, missing_reason}` 包一層；`MAX_ACTIONS=3`；availability **只允許** available／unavailable（不得 partial）；unavailable 必須 0 筆並附原因；**available＋0 筆＝「規則層未產出行動」，明文合法**；holdings 為 unavailable 時 actions 不得為 available（「無行動」≠「判不出來」） | 不恢復（改形） |
+| 8 | MarketBlock（`regime`／`light`／`danger_summary`／`top_risks[]`／`suggested_exposure`／`rule_id`／`evidence_refs[]`） | 通用 `market: FactSection`（facts tuple＋推導的 availability）；`regime`／`light`／`danger_summary`／`top_risks` **沒有專屬欄位**（Q3「五桶各取最需注意一項」未在契約層表達） | 待 AB-1 規劃時決定（PLAN §5 AB-1 搬運清單含 `get_macro_state`／`build_station_digest`） |
+| 9 | MarketBlock `suggested_exposure` | 移到 `RiskCapSection.exposure_lo_pct`／`exposure_hi_pct`（各為帶 rule 的數值 Fact，[0,100]、lo≤hi） | 不恢復（搬位置） |
+| 10 | TrendBlock／ValuationBlock（`defined`／`verdict`／`series_ref`／`framework_status`） | `DefinitionSection{definition, missing_reason, availability, series_ref, observations}`；`DefinitionState` 只有 `尚未定義`／`研究框架，未啟用`；**沒有 verdict、沒有 `approved`**；availability 固定 unavailable；missing_reason 限 `not_defined`／`not_wired`；tw_trend／intl_trend／industry 綁 `尚未定義`、valuation 綁 `研究框架，未啟用`（根驗證檢查綁定） | 正式趨勢定義、EPS×PE 皆屬 High Gate（DEC-092 Q2；PLAN §5「暫緩」列）；核准前不恢復 |
+| 11 | valuation 研究狀態「不得含 EPS／PE／區間數值」 | 強化為：valuation 與 industry 的 `observations` **必須為空**；tw_trend／intl_trend 的 observations 只可帶數值（不得帶 text）、必須帶 rule、unit 受格式限制 | — |
+| 12 | HoldingBlock（`portfolio_id`／`symbol`／`name`／`strategy_type`／`strategy_type_source`／`asset_kind`／`legacy_asset_class`／`lots`…／`industry_code`／`rule_id`…） | `HoldingEntry{key: HoldingKey(portfolio_id, symbol), strategy, strategy_source, facts}`；`name`／`asset_kind`／`legacy_asset_class`／`industry_code` **拿掉**；張數、均價等改以通用 `facts` 承載；`(portfolio_id, symbol)` 不得重複 | 待 AB-1 規劃時決定（`portfolio_id` 來源屬 AB-4r） |
+| 13 | §4 HoldingBlock「缺 `portfolio_id` 或 `symbol` → 該列策略一律 `未分類`＋`missing_reason=NO_INPUT`」 | **不建列**：以 `HoldingsSection.unkeyed_count`（int ≥0）計數；>0 時 holdings availability 不得為 available（有 entries → 至多 partial；無 entries → unavailable）。理由：補一個鍵＝捏造身分 | 不恢復（刻意改法；見 DEC-093） |
+| 14 | RiskCapRef（`value_pct`／`rule_id`／`disclosure`／`industry_exposure`） | `RiskCapSection{cap_valid, cap_pct, exposure_lo_pct, exposure_hi_pct, availability, missing_reason}`；`value_pct`→`cap_pct`；新增 `cap_valid`（搬運上游 `is_valid_risk_cap_snapshot` 結果）：false ⇒ cap_pct 無值且 status 非 ok，true ⇒ cap_pct 有值且 status ∈ {ok, stale}；`disclosure`、`industry_exposure` **拿掉** | 待 AB-1 規劃時決定（PLAN §5 AB-1 搬運清單含 `get_allocation`／`compute_industry_concentration`） |
+| 15 | ActionRef（`action_id`／`kind`／`target`／`source_rule`／`rule_version`／`priority_rank`／`evidence_refs[]`） | `ActionRef{action_id, text, origin, rule: RuleRef, evidence_refs, target, priority_rank}`；`kind` **拿掉**；`text` 為規則層輸出**原樣搬運**；`origin` 只有 `rule_layer`；`target` 可省略、有值時只能是 `HoldingKey` 且必須在 holdings 內（不能指向 candidates）；`evidence_refs` 改為指向 `fact_id`、不重複 | `kind`：待 AB-1 規劃時決定（受 HI-1「不新增行動語彙」約束） |
+| 16 | `priority_rank`：沿用 Q4 既有優先序（汰弱＞停利＞趨勢暫停＞加碼） | 只檢查 ≥1 的整數（非 bool）且不重複；**不檢查是否符合 Q4 順序** | AB-1（執行 Q4 優先序是 AB-1 的責任，程式 docstring 明文） |
+| 17 | `missing_reason` 全大寫（`NO_INPUT`…）「沿用 `MISS_*`」 | `MissingReason` 小寫值（`no_input`／`fetch_failed`／`not_enough_history`／`not_applicable`／`contract_drift`／`no_variation`／`not_defined`／`not_wired`）；與 `shared/station_specs.MISS_*` 是**對映**不是沿用（字串值不同，例 `not_enough`→`not_enough_history`、`n/a`→`not_applicable`），對映表 `MISS_CODE_TO_REASON`；新增 `no_variation` | 不恢復 |
+| 18 | `status ∈ {ok, stale, missing, proxy, failed}`；HoldingBlock 另提「NaN／inf → `invalid`（D11）」 | `DataStatus` 正式加入 `invalid`：值丟棄為 None、**不附** missing_reason（不是 MISS 概念，**不是** `contract_drift`）；`missing`／`failed` 必附原因；沒有 neutral | 不恢復 |
+
+### 11.2 比 §4 更嚴的不變量（§4 沒寫、實作新增）
+
+- **時間**：`generated_at` 必須 tz-aware **UTC**；`fetched_at` tz-aware 且 ≤ generated_at；`as_of`（台股業務日）≤ generated_at 的台北日期，兩者都有時亦 ≤ fetched_at 的台北日期（防 lookahead）；status 為 ok **或 stale** 時 as_of 必填（§4 只寫 null 時不得 ok）；proxy 可無 as_of。
+- **證據**：`evidence_refs` 只能指向本 Digest 內 status ∈ {ok, stale} 的 fact；**不得**指向 proxy／missing／failed／invalid 的 fact，也**不得**指向趨勢／估值／產業段的 observations；`fact_id` 全 Digest 唯一。
+- **鍵正規化**：`portfolio_id`／`symbol`／`fact_id`／`action_id`／`evidence_refs` 為非空 `str`、不含任何空白、不含 Cc／Cf 字元、必須已是 NFKC 正規形（全形數字拒收，不默默轉換）；大小寫敏感、不折疊（正規化責任在上游）。
+- **型別**：每個節點必須**恰好**是契約類別（子類別拒收）；文字恰好 `str`、`as_of` 恰好 `date`；數值為有限實數（bool／Decimal／NaN／inf 拒收）；`value` 與 `text` 二擇一。
+- **拒收名單（盡力而為，不是完備判定）**：有值狀態的文字不得是缺值佔位字（`n/a`、`無資料`、`0%`…）；`Provenance.source`／`RuleRef.rule_id`／`strategy_source` 不得含 AI 字樣（`ai`、`llm`、`gemini`、`gpt`、`模型`…）；定義狀態段的 `series_ref` 與 observations 的識別欄位不得含方向字樣（`bull`／`buy`／`偏多`／`強`…；名單內容以程式碼為準）。換個拼法就能繞過；權威的 rule_id 允許名單屬 AB-1，真正防線是 AB-2a grounding。
+- **驗證介面**：葉節點建構即檢查（`ValueError`）；`validate(digest)` 回傳全部違規且任何輸入都不 raise；`assert_valid` 有違規即 raise；`to_dict()` 先 `assert_valid` 再輸出（None→null、Enum→值字串、只輸出契約宣告欄位）。**沒有 `from_dict`**（無消費者，見 DEC-093）。
+- **行動數**：`MAX_ACTIONS=3`（筆數上限，非投資門檻）。
+
+### 11.3 驗證現況（截至 `e005e98c`，撰寫組轉述執行組回報，未重跑）
+
+- 契約測試 353 passed；fast lane 31,186 passed／62 skipped（1 項需 `markdown_it`、沙箱未安裝而 deselect）；突變檢查 77/77 killed（執行組自跑）。
+- QA：兩輪獨立 QA（對抗＋語意／治理）已修正；**最終獨立複驗見 PR**（本節不宣稱已通過）。CI 尚未跑：**待 CI／merge**。
