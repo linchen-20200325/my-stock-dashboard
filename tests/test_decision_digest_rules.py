@@ -195,6 +195,114 @@ def test_validate_action_order_rank_rules():
     assert "action_rank_not_increasing" in codes_of(R.validate_action_order(with_actions(d, (high, a1))))
 
 
+def test_rank_must_equal_position_even_when_increasing():
+    d = make_digest(["cut", "add"])
+    a0, a1 = d.actions.items
+    shifted = (dataclasses.replace(a0, priority_rank=2), dataclasses.replace(a1, priority_rank=3))
+    assert codes_of(R.validate_action_order(with_actions(d, shifted))) == {"action_rank_not_position"}
+    gap = (a0, dataclasses.replace(a1, priority_rank=3))
+    assert codes_of(R.validate_action_order(with_actions(d, gap))) == {"action_rank_not_position"}
+
+
+def test_rank_bool_and_float_are_rejected_by_order_check():
+    d = make_digest(["cut"])
+    a0 = d.actions.items[0]
+    for bad in (True, 1.0):
+        x = ActionsSection.__new__(ActionsSection)
+        object.__setattr__(x, "availability", d.actions.availability)
+        object.__setattr__(x, "missing_reason", None)
+        object.__setattr__(x, "items", (dataclasses.replace(a0, priority_rank=None),))
+        item = object.__new__(type(a0))
+        for f in dataclasses.fields(a0):
+            object.__setattr__(item, f.name, getattr(a0, f.name))
+        object.__setattr__(item, "priority_rank", bad)
+        object.__setattr__(x, "items", (item,))
+        d2 = dataclasses.replace(d, actions=x)
+        assert "action_rank_missing" in codes_of(R.validate_action_order(d2))
+
+
+def _force_items(d, items):
+    """繞過 ActionsSection 建構檢查（模擬被竄改／未經建構的物件），只測 `validate_action_order` 本身。"""
+    x = ActionsSection.__new__(ActionsSection)
+    object.__setattr__(x, "availability", d.actions.availability)
+    object.__setattr__(x, "missing_reason", None)
+    object.__setattr__(x, "items", tuple(items))
+    return dataclasses.replace(d, actions=x)
+
+
+def test_order_check_alone_flags_wrong_action_version_and_non_action_id():
+    d = make_digest(["cut"])
+    a = d.actions.items[0]
+    bad_ver = dataclasses.replace(a, rule=RuleRef("cut", "action_branch.v9"))
+    assert codes_of(R.validate_action_order(_force_items(d, [bad_ver]))) == {"action_rule_not_allowed"}
+
+
+def test_duplicate_rank_is_flagged_as_not_increasing_not_only_position():
+    d = make_digest(["cut", "add"])
+    a0, a1 = d.actions.items
+    dup = dataclasses.replace(a1, priority_rank=1)
+    cs = codes_of(R.validate_action_order(_force_items(d, [a0, dup])))
+    assert "action_rank_not_increasing" in cs
+
+
+def test_prev_sort_tracks_the_highest_seen_tier_not_just_the_last():
+    d = make_digest(["cut", "pause_add", "add"])
+    a_cut, a_pause, a_add = d.actions.items
+    # add(第 1) → cut(第 2) → pause_add(第 3)：cut、pause_add 都低於先前最高階 add，兩處都要報
+    seq = [dataclasses.replace(a_add, priority_rank=1), dataclasses.replace(a_cut, priority_rank=2),
+           dataclasses.replace(a_pause, priority_rank=3)]
+    vs = [v for v in R.validate_action_order(_force_items(d, seq)) if v.code == "action_order_violation"]
+    assert [v.path for v in vs] == ["actions.items[1].rule", "actions.items[2].rule"]
+
+
+def test_equal_tier_tie_keeps_valid_when_ranks_follow_position():
+    d = make_digest(["add", "add", "add"])
+    assert R.validate_action_order(d) == ()
+
+
+def test_unknown_branch_code_is_not_a_legal_action_rule():
+    d = make_digest(["add"])
+    a = dataclasses.replace(d.actions.items[0], rule=RuleRef("new_branch", "action_branch.v1"))
+    cs = codes_of(R.validate_strict(with_actions(d, (a,))))
+    assert {"rule_not_allowlisted", "action_rule_not_allowed"} <= cs
+
+
+def test_risk_cap_id_is_not_a_legal_action_rule_and_action_ids_not_legal_on_risk_cap():
+    d = make_digest(["add"])
+    a = dataclasses.replace(d.actions.items[0], rule=RuleRef("risk_cap", "risk_cap.v2"))
+    d2 = with_actions(d, (a,))
+    assert "action_rule_not_allowed" in codes_of(R.validate_action_order(d2))
+    assert "rule_wrong_location" in codes_of(R.validate_rule_ids(d2))
+    rc = d.risk_cap
+    wrong = dataclasses.replace(rc.cap_pct, rule=RuleRef("cut", "action_branch.v1"))
+    d3 = dataclasses.replace(d, risk_cap=dataclasses.replace(rc, cap_pct=wrong))
+    assert any(v.code == "rule_wrong_location" and v.path.startswith("risk_cap.cap_pct")
+               for v in R.validate_rule_ids(d3))
+
+
+def test_holdings_fact_with_risk_cap_rule_is_wrong_location():
+    d = make_digest(["add"])
+    f = dataclasses.replace(d.holdings.entries[0].facts[0], rule=RuleRef("risk_cap", "risk_cap.v2"))
+    entry = dataclasses.replace(d.holdings.entries[0], facts=(f,))
+    d2 = dataclasses.replace(d, holdings=dataclasses.replace(d.holdings, entries=(entry,)))
+    assert any(v.code == "rule_wrong_location" and v.path.startswith("holdings.entries[0].facts[0]")
+               for v in R.validate_rule_ids(d2))
+
+
+def test_allowlisted_id_with_wrong_version_is_not_reported_as_location_error():
+    d = make_digest(["add"])
+    a = dataclasses.replace(d.actions.items[0], rule=RuleRef("risk_cap", "risk_cap.v1"))
+    assert codes_of(R.validate_rule_ids(with_actions(d, (a,)))) == {"rule_version_not_allowed"}
+
+
+def test_market_and_definition_facts_may_have_no_rule_but_any_rule_must_be_allowlisted():
+    d = make_digest(["add"])
+    f = dataclasses.replace(d.market.facts[0], rule=RuleRef("rule_x", "v1"))
+    d2 = dataclasses.replace(d, market=dataclasses.replace(d.market, facts=(f,) + d.market.facts[1:]))
+    assert any(v.code == "rule_not_allowlisted" and v.path.startswith("market.facts[0]")
+               for v in R.validate_rule_ids(d2))
+
+
 def test_validate_action_order_too_many_actions_defence_in_depth():
     d = make_digest(["cut", "take_profit_force", "pause_add"])
     extra = dataclasses.replace(d.actions.items[0], action_id="extra", priority_rank=9)
@@ -218,6 +326,30 @@ def test_validate_strict_is_validate_plus_extras():
     assert codes_of(R.validate_strict(d2)) >= {"rule_not_allowlisted", "action_rule_not_allowed"}
     with pytest.raises(ValueError, match="rule_not_allowlisted"):
         R.assert_strict(d2)
+
+
+def test_uninspectable_digest_is_reported_not_raised():
+    d = make_digest(["cut"])
+    broken = object.__new__(DecisionDigest)               # 未初始化：沒有任何欄位
+    assert [v.code for v in R.validate_action_order(broken)] == ["uninspectable"]
+    assert R.validate_rule_ids(broken) == ()               # 走訪用 getattr 預設，沒東西可查
+    assert len(R.validate_strict(broken)) > 0              # AB-0 validate 會回報
+    with pytest.raises(ValueError):
+        R.assert_strict(broken)
+    # 行動項不是 tuple → 無從檢查（AB-0 會報 not_tuple），這裡不 raise
+    x = ActionsSection.__new__(ActionsSection)
+    object.__setattr__(x, "availability", d.actions.availability)
+    object.__setattr__(x, "missing_reason", None)
+    object.__setattr__(x, "items", [dataclasses.replace(d.actions.items[0], priority_rank=5)])  # 若被檢查會違規
+    d2 = dataclasses.replace(d, actions=x)
+    assert R.validate_action_order(d2) == ()
+    assert "not_tuple" in codes_of(R.validate_strict(d2))
+
+
+def test_q4_sort_index_positions():
+    assert [R.q4_sort_index(c) for c in R.ACTION_RULE_IDS] == [0, 1, 2, 3, 4]
+    assert R.q4_sort_index("premium") is None and R.q4_sort_index("cruise") is None
+    assert R.q4_sort_index("risk_cap") is None and R.q4_sort_index("") is None
 
 
 def test_validate_strict_on_non_digest_does_not_raise():
@@ -244,4 +376,4 @@ def test_rules_module_is_l0_pure():
         elif isinstance(n, ast.ImportFrom) and n.level == 0:
             mods.add((n.module or "").split(".")[0])
     assert "src" not in mods and "streamlit" not in mods
-    assert mods <= {"__future__", "types", "typing", "shared"}
+    assert mods <= {"__future__", "numbers", "types", "typing", "shared"}

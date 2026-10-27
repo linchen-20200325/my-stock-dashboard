@@ -34,10 +34,15 @@ AB-0 的 AI／方向字樣拒收名單（`_ai_reserved`、`_has_direction_token`
 同一階內：`take_profit_force` 在 `take_profit_partial` 之前（即 `action_branch` 的程式順序），
 其餘依輸入順序（stable）。
 
+位置維度（`rule_wrong_location`）：允許名單除了「id＋版本是否存在」，也管「放在哪」——
+`risk_cap` 段的三個 Fact 只能引 `risk_cap`；持股事實與行動只能引行動分支碼。
+市場事實與定義狀態段 observations 維持 AB-0 的「rule 選填」，有帶就必須在允許名單內。
+
 分層（CLAUDE.md §8.2）：L0 —— 只 import 標準函式庫與 `shared.*`；零 I/O、零 streamlit、零 `src.*`。
 """
 from __future__ import annotations
 
+import numbers
 from types import MappingProxyType
 from typing import Any, Mapping
 
@@ -75,14 +80,6 @@ RULE_ID_ALLOWLIST: Mapping = MappingProxyType({
 })
 
 
-def q4_tier_index(rule_id: str) -> int | None:
-    """rule_id 所在的 Q4 階序（0＝汰弱…）；不在行動序內回 None。"""
-    for i, (_, codes) in enumerate(Q4_ACTION_PRIORITY):
-        if rule_id in codes:
-            return i
-    return None
-
-
 def q4_sort_index(rule_id: str) -> int | None:
     """rule_id 在攤平 Q4 序中的位置（同階內 force 先於 partial）；不在行動序內回 None。"""
     try:
@@ -117,15 +114,21 @@ def _check_rule(rule: Any, path: str) -> list:
     return []
 
 
+#: 位置 → 該位置的 Fact／ActionRef 只能引用的 rule_id 範圍（允許名單的「放哪裡」維度）。
+#: 市場事實與定義狀態段 observations 不受此限（維持 AB-0「rule 選填」，只受允許名單約束）。
+_SCOPE_RISK_CAP: frozenset = frozenset({"risk_cap"})
+_SCOPE_ACTION: frozenset = frozenset(ACTION_RULE_IDS)
+
+
 def _walk_rules(d: DecisionDigest) -> list:
-    """(path, RuleRef|None) —— 每個 Fact.rule 與 ActionRef.rule。不 raise。"""
+    """(path, RuleRef|None, scope|None) —— 每個 Fact.rule 與 ActionRef.rule。不 raise。"""
     out: list = []
 
-    def facts(path: str, fs: Any) -> None:
+    def facts(path: str, fs: Any, scope: Any = None) -> None:
         if type(fs) is tuple:
             for i, f in enumerate(fs):
                 if type(f) is Fact:
-                    out.append((f"{path}[{i}].rule", f.rule))
+                    out.append((f"{path}[{i}].rule", f.rule, scope))
 
     facts("market.facts", getattr(getattr(d, "market", None), "facts", None))
     for name in ("tw_trend", "intl_trend", "valuation", "industry"):
@@ -134,33 +137,41 @@ def _walk_rules(d: DecisionDigest) -> list:
     if type(hs) is HoldingsSection and type(hs.entries) is tuple:
         for i, h in enumerate(hs.entries):
             if type(h) is HoldingEntry:
-                facts(f"holdings.entries[{i}].facts", h.facts)
+                facts(f"holdings.entries[{i}].facts", h.facts, _SCOPE_ACTION)
     rc = getattr(d, "risk_cap", None)
     for name in ("cap_pct", "exposure_lo_pct", "exposure_hi_pct"):
         f = getattr(rc, name, None)
         if type(f) is Fact:
-            out.append((f"risk_cap.{name}.rule", f.rule))
+            out.append((f"risk_cap.{name}.rule", f.rule, _SCOPE_RISK_CAP))
     acts = getattr(d, "actions", None)
     items = getattr(acts, "items", None)
     if type(items) is tuple:
         for i, a in enumerate(items):
             if type(a) is ActionRef:
-                out.append((f"actions.items[{i}].rule", a.rule))
+                out.append((f"actions.items[{i}].rule", a.rule, _SCOPE_ACTION))
     return out
 
 
 def validate_rule_ids(digest: Any) -> tuple:
     """走訪每個 `Fact.rule` 與 `ActionRef.rule`，回傳允許名單違規（不 raise）。
 
-    違規碼：`rule_not_allowlisted`、`rule_version_not_allowed`。`Fact.rule is None` 合法（AB-0 選填）。
+    違規碼：`rule_not_allowlisted`、`rule_version_not_allowed`、`rule_wrong_location`
+    （risk_cap 段只能引 `risk_cap`；持股事實與行動只能引行動分支碼）。`Fact.rule is None` 合法（AB-0 選填）。
     """
     if type(digest) is not DecisionDigest:
         return (_v("digest", "type", f"必須恰好是 DecisionDigest：{type(digest).__name__}"),)
     try:
         out: list = []
-        for path, rule in _walk_rules(digest):
-            if rule is not None:
-                out += _check_rule(rule, path[: -len(".rule")])
+        for path, rule, scope in _walk_rules(digest):
+            if rule is None:
+                continue
+            base = path[: -len(".rule")]
+            found = _check_rule(rule, base)
+            out += found
+            if (not found and scope is not None and type(rule) is RuleRef
+                    and rule.rule_id not in scope):
+                out.append(_v(f"{base}.rule_id", "rule_wrong_location",
+                              f"此位置只能引用 {sorted(scope)}：{_r(rule.rule_id)}"))
         return tuple(out)
     except Exception as exc:  # noqa: BLE001 —— 刻意：validate 不得 raise
         return (_v("digest", "uninspectable", f"無法檢查 rule_id（{type(exc).__name__}: {_r(exc)}）"),)
@@ -170,9 +181,9 @@ def validate_action_order(digest: Any) -> tuple:
     """行動必須依 Q4 排序（不 raise）。
 
     檢查：≤ MAX_ACTIONS 由 AB-0 負責，這裡**再**檢查（縱深）；每項 rule 在行動允許名單內；
-    Q4 序（攤平位置）不遞減；priority_rank 必填且嚴格遞增。
+    Q4 序（攤平位置）不遞減；priority_rank 必填、嚴格遞增，且等於位置（1..n）。
     違規碼：`action_rule_not_allowed`、`action_order_violation`、`action_rank_missing`、
-    `action_rank_not_increasing`、`too_many_actions`。
+    `action_rank_not_increasing`、`action_rank_not_position`、`too_many_actions`。
     """
     if type(digest) is not DecisionDigest:
         return (_v("digest", "type", f"必須恰好是 DecisionDigest：{type(digest).__name__}"),)
@@ -202,13 +213,16 @@ def validate_action_order(digest: Any) -> tuple:
                 if idx is not None:
                     prev_sort = idx if prev_sort is None else max(prev_sort, idx)
             r = a.priority_rank
-            if r is None or isinstance(r, bool) or not isinstance(r, int):
+            if r is None or isinstance(r, bool) or not isinstance(r, numbers.Integral):
                 out.append(_v(f"{p}.priority_rank", "action_rank_missing",
                               f"priority_rank 必須是整數（Q4 序位置）：{_r(r)}"))
             else:
                 if prev_rank is not None and r <= prev_rank:
                     out.append(_v(f"{p}.priority_rank", "action_rank_not_increasing",
                                   f"priority_rank 必須嚴格遞增：{r} ≤ 前一項 {prev_rank}"))
+                elif int(r) != i + 1:
+                    out.append(_v(f"{p}.priority_rank", "action_rank_not_position",
+                                  f"priority_rank 必須等於位置 {i + 1}：{r}"))
                 prev_rank = r
         return tuple(out)
     except Exception as exc:  # noqa: BLE001 —— 刻意：validate 不得 raise
@@ -234,6 +248,6 @@ def assert_strict(digest: Any) -> None:
 __all__ = [
     "ACTION_RULE_VERSION", "RULE_CUT", "RULE_TAKE_PROFIT_FORCE", "RULE_TAKE_PROFIT_PARTIAL",
     "RULE_PAUSE_ADD", "RULE_ADD", "Q4_ACTION_PRIORITY", "ACTION_RULE_IDS", "RULE_ID_ALLOWLIST",
-    "q4_tier_index", "q4_sort_index",
+    "q4_sort_index",
     "validate_rule_ids", "validate_action_order", "validate_strict", "assert_strict",
 ]

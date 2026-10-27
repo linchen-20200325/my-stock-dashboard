@@ -50,6 +50,12 @@ actions   只搬 `dividend_station_service` 持有列上 `_action` ∈ {cut, tak
           無法區分——見 AB-1 報告）。
 ai_participation  一律 RULE_ONLY。
 
+輸入型別：`macro_state` 須為 Mapping 或 None；`allocation` 須為 None 或帶 `is_loaded`／`final_lo`／`final_hi`
+的物件；`*_rows` 須為 list／tuple 或 None；`holding_keys` 須為 Mapping 或 None；`*_stamp` 須為
+`SourceStamp` 或 None —— 型別不對 → `TypeError`（Fail Loud，不默默當成「沒給」）。
+可搬運的行動列若 `建議動作` 不是非空 str → `ValueError`（分支碼在、文字不在＝規則層契約漂移，
+不得默默丟掉一個可能是汰弱的行動）。
+
 回傳前一律 `assert_strict`（AB-0 `validate` ＋ rule_id 允許名單 ＋ 行動排序）；違規即 `ValueError`。
 
 分層（CLAUDE.md §8.2）：L3 —— 只 import 標準函式庫與 L0（`shared.*`）。
@@ -63,7 +69,7 @@ from datetime import date, datetime
 from typing import Any, Mapping, Sequence
 
 from shared.decision_digest import (
-    MAX_ACTIONS, TW_TZ, ActionOrigin, ActionRef, ActionsSection, AiParticipation, Availability,
+    MAX_ACTIONS, ActionOrigin, ActionRef, ActionsSection, AiParticipation, Availability,
     DataStatus, DecisionDigest, DefinitionSection, DefinitionState, Fact, FactSection, HoldingEntry,
     HoldingKey, HoldingsSection, MissingReason, Provenance, RiskCapSection, RuleRef, StrategyType,
     derive_availability,
@@ -71,6 +77,7 @@ from shared.decision_digest import (
 from shared.decision_digest_rules import (
     ACTION_RULE_IDS, ACTION_RULE_VERSION, assert_strict, q4_sort_index,
 )
+from shared.regime_arbiter import UNLOADED_VERDICT
 from shared.risk_cap_policy import RISK_CAP_RULESET_VERSION
 
 #: Risk Cap 快照 `timestamp` 的格式（= `macro_state_locker._TIMESTAMP_FMT`；L3 之間不互相 import，故複本）。
@@ -80,6 +87,10 @@ _SNAPSHOT_TS_FMT = "%Y-%m-%d %H:%M:%S"
 _SRC_MACRO = "macro_state"
 _SRC_ALLOCATION = "allocation"
 _SRC_RISK_CAP = "risk_cap_snapshot"
+
+#: 上游「未評估」佔位值（SSOT：`shared.regime_arbiter.UNLOADED_VERDICT`）；比對時 casefold，見 `_text_or_none`。
+_UNEVALUATED_REGIME = frozenset({UNLOADED_VERDICT.regime.casefold()})
+_UNEVALUATED_LIGHT = frozenset({UNLOADED_VERDICT.light.casefold()})
 
 _RISK_CAP_RULE = RuleRef("risk_cap", RISK_CAP_RULESET_VERSION)
 
@@ -140,7 +151,8 @@ def _get(mapping: Any, key: str) -> Any:
 
 # ── market ───────────────────────────────────────────────────────────────
 def _text_or_none(v: Any, banned: frozenset) -> str | None:
-    if type(v) is not str or not v.strip() or v in banned:
+    """逐字回傳；blank／上游「未評估」佔位值（比對時去空白＋casefold）→ None（缺值，不映成值）。"""
+    if type(v) is not str or not v.strip() or v.strip().casefold() in banned:
         return None
     return v
 
@@ -156,8 +168,8 @@ def _market_section(macro_state: Mapping | None, stamp: SourceStamp | None) -> F
             return _missing(fid, src)
         return Fact(fact_id=fid, status=DataStatus.OK, provenance=_prov_from(stamp), text=t)
 
-    regime = text_fact("market.regime", _get(macro_state, "regime"), frozenset({"unknown"}))
-    light = text_fact("market.light", _get(macro_state, "light"), frozenset({"⬜"}))
+    regime = text_fact("market.regime", _get(macro_state, "regime"), _UNEVALUATED_REGIME)
+    light = text_fact("market.light", _get(macro_state, "light"), _UNEVALUATED_LIGHT)
 
     h = _get(macro_state, "health") if loaded else None
     if h is None:
@@ -184,10 +196,10 @@ def _snapshot_date(disclosure: Any) -> date | None:
     if type(ts) is not str or not ts.strip():
         return None
     try:
-        naive = datetime.strptime(ts.strip(), _SNAPSHOT_TS_FMT)
+        # 字串本身就是台北時間：取日期部分即可，⛔ 不做任何時區換算（換成 UTC 會在 00:00–08:00 差一天）。
+        return datetime.strptime(ts.strip(), _SNAPSHOT_TS_FMT).date()
     except ValueError:
         return None
-    return naive.replace(tzinfo=TW_TZ).date()
 
 
 def _pct_fact(fid: str, raw: Any, *, as_of_prov: Provenance | None, src: str) -> Fact:
@@ -204,9 +216,8 @@ def _pct_fact(fid: str, raw: Any, *, as_of_prov: Provenance | None, src: str) ->
 
 def _risk_cap_section(macro_state: Mapping | None, allocation: Any,
                       macro_stamp: SourceStamp | None) -> RiskCapSection:
+    # 只讀 macro_state 的揭露（A.3）；不退而讀 allocation.risk_cap_disclosure（那是另一條取數路徑）。
     disclosure = _get(macro_state, "risk_cap_disclosure")
-    if disclosure is None:
-        disclosure = getattr(allocation, "risk_cap_disclosure", None)
     snap_date = _snapshot_date(disclosure)
     cap_prov = (Provenance(source=_SRC_RISK_CAP, as_of=snap_date) if snap_date is not None else None)
     raw_cap = _get(macro_state, "exposure_limit_pct")
@@ -227,10 +238,8 @@ def _risk_cap_section(macro_state: Mapping | None, allocation: Any,
 
 # ── holdings & actions ───────────────────────────────────────────────────
 def _is_held(row: Mapping) -> bool:
-    v = row.get("held")
-    if v is True:
-        return True
-    return type(v).__name__ == "bool_" and bool(v)  # numpy.bool_
+    """只認 Python `True`（`holdings_service`／`build_station_rows` 皆產 `bool`）；其餘一律視為非持有。"""
+    return row.get("held") is True
 
 
 def _ticker_of(row: Mapping) -> str | None:
@@ -266,14 +275,15 @@ def _action_candidates(station_rows: Sequence[Mapping] | None, station_stamp: So
         if isinstance(detail, Mapping) and detail.get("error"):
             continue
         code = row.get("_action")
-        if type(code) is not str or code not in ACTION_RULE_IDS:
-            continue
-        text = row.get("建議動作")
-        if type(text) is not str or not text.strip():
+        if code not in ACTION_RULE_IDS:
             continue
         key = _key_for(_ticker_of(row), holding_keys)
         if key is None or key not in keyed:
             continue
+        text = row.get("建議動作")
+        if type(text) is not str or not text.strip():
+            raise ValueError(f"站內列 {key.symbol!r} 的 _action={code!r} 但 建議動作 不是非空 str：{text!r}"
+                             "（規則層契約漂移；不得默默丟掉行動）")
         out.append((key, code, text))
     return out
 
@@ -335,6 +345,31 @@ def _holdings_and_actions(holdings_rows: Sequence[Mapping] | None, holding_keys:
     return holdings, actions
 
 
+# ── 輸入型別驗證（型別不對 → TypeError，不默默當成「沒給」）──────────────────
+def _require(name: str, v: Any, ok: bool, expect: str) -> None:
+    if not ok:
+        raise TypeError(f"{name} 必須是 {expect}：{type(v).__name__}")
+
+
+def _validate_inputs(macro_state: Any, macro_stamp: Any, allocation: Any, station_rows: Any,
+                     station_stamp: Any, holdings_rows: Any, holding_keys: Any) -> None:
+    _require("macro_state", macro_state, macro_state is None or isinstance(macro_state, Mapping),
+             "Mapping 或 None")
+    _require("macro_stamp", macro_stamp, macro_stamp is None or type(macro_stamp) is SourceStamp,
+             "SourceStamp 或 None")
+    _require("station_stamp", station_stamp, station_stamp is None or type(station_stamp) is SourceStamp,
+             "SourceStamp 或 None")
+    _require("allocation", allocation,
+             allocation is None or all(hasattr(allocation, a) for a in ("is_loaded", "final_lo", "final_hi")),
+             "None 或帶 is_loaded／final_lo／final_hi 的物件")
+    _require("station_rows", station_rows, station_rows is None or type(station_rows) in (list, tuple),
+             "list／tuple 或 None")
+    _require("holdings_rows", holdings_rows, holdings_rows is None or type(holdings_rows) in (list, tuple),
+             "list／tuple 或 None")
+    _require("holding_keys", holding_keys, holding_keys is None or isinstance(holding_keys, Mapping),
+             "Mapping 或 None")
+
+
 # ── 入口 ─────────────────────────────────────────────────────────────────
 def build_decision_digest(*, generated_at: datetime,
                           macro_state: Mapping | None = None,
@@ -345,6 +380,8 @@ def build_decision_digest(*, generated_at: datetime,
                           holdings_rows: Sequence[Mapping] | None = None,
                           holding_keys: Mapping[str, HoldingKey] | None = None) -> DecisionDigest:
     """純函式：搬運既有輸出成 `DecisionDigest`（規則見模組 docstring）。違反契約 → `ValueError`。"""
+    _validate_inputs(macro_state, macro_stamp, allocation, station_rows, station_stamp, holdings_rows,
+                     holding_keys)
     holdings, actions = _holdings_and_actions(holdings_rows, holding_keys, station_rows, station_stamp)
     digest = DecisionDigest(
         generated_at=generated_at,

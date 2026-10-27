@@ -255,12 +255,32 @@ def test_snapshot_ts_in_future_fails_loud():
         build(macro_state=macro(risk_cap_disclosure=disclosure("2026-10-28 00:10:00")))
 
 
-def test_disclosure_falls_back_to_allocation_when_macro_state_lacks_it():
+def test_disclosure_is_read_only_from_macro_state_not_from_allocation():
+    """A.3：揭露只讀 macro_state；allocation 帶的揭露不得被當成第二條取數路徑（cap_valid 保守為 False）。"""
     ms = macro()
     alloc = build_allocation_decision(ms)
+    alloc = dataclasses.replace(alloc, risk_cap_disclosure=disclosure())
     ms2 = {k: v for k, v in ms.items() if k != "risk_cap_disclosure"}
     d = build(macro_state=ms2, macro_stamp=MACRO_STAMP, allocation=alloc)
-    assert d.risk_cap.cap_valid is True
+    assert d.risk_cap.cap_valid is False
+    assert d.risk_cap.cap_pct.status is DataStatus.MISSING and d.risk_cap.cap_pct.value is None
+
+
+def test_snapshot_ts_format_pinned_to_macro_state_locker():
+    import src.services.decision_digest_builder as B
+    from src.services import macro_state_locker as L
+    assert B._SNAPSHOT_TS_FMT == L._TIMESTAMP_FMT
+
+
+def test_unevaluated_placeholders_are_the_regime_arbiter_ssot_and_case_insensitive():
+    from shared.regime_arbiter import UNLOADED_VERDICT
+    assert (UNLOADED_VERDICT.regime, UNLOADED_VERDICT.light) == ("unknown", "⬜")
+    d = build(macro_state=macro(regime=" UNKNOWN ", light="⬜"), macro_stamp=MACRO_STAMP)
+    fm = fact_map(d)
+    assert fm["market.regime"].status is DataStatus.MISSING and fm["market.light"].status is DataStatus.MISSING
+    # 一般值仍逐字（含大小寫、前後空白不被「修飾」）
+    d = build(macro_state=macro(regime="Bull"), macro_stamp=MACRO_STAMP)
+    assert fact_map(d)["market.regime"].text == "Bull"
 
 
 def test_risk_cap_uses_exposure_limit_pct_not_allocation_min_cap():
@@ -529,6 +549,140 @@ def test_builder_raises_value_error_if_it_would_emit_a_violation(monkeypatch):
     monkeypatch.setattr(B, "ACTION_RULE_VERSION", "action_branch.v999")
     with pytest.raises(ValueError, match="rule_version_not_allowed"):
         act_digest([fake_row("0050", "cut")])
+
+
+# ── 型別異常：Fail Loud，不默默當成「沒給」 ────────────────────────────────
+@pytest.mark.parametrize("kw", [
+    dict(macro_state=["is_loaded"]), dict(macro_state="x"),
+    dict(macro_stamp=date(2026, 10, 26)), dict(macro_stamp=("m", date(2026, 10, 26))),
+    dict(station_stamp="s"), dict(allocation=object()), dict(allocation={"is_loaded": True}),
+    dict(station_rows="abc"), dict(station_rows={"a": 1}), dict(holdings_rows="abc"),
+    dict(holdings_rows={"ticker": "0050"}), dict(holding_keys=[HoldingKey("p", "0050")]),
+    dict(holding_keys="x"),
+])
+def test_wrong_input_types_raise_type_error(kw):
+    with pytest.raises(TypeError):
+        build(**kw)
+
+
+def test_generated_at_wrong_type_or_non_utc_fails_loud():
+    with pytest.raises(ValueError):
+        build_decision_digest(generated_at="2026-10-27")  # type: ignore[arg-type]
+    from datetime import timedelta
+    with pytest.raises(ValueError, match="generated_at_not_utc"):
+        build_decision_digest(generated_at=datetime(2026, 10, 27, 9, 0, tzinfo=timezone(timedelta(hours=8))))
+
+
+def test_non_mapping_rows_inside_lists_are_ignored_not_crashing():
+    d = build(holdings_rows=[None, 3, "x", holdings_for("0050")[0]], holding_keys=keys_for("0050"),
+              station_rows=[None, 7, fake_row("0050", "cut")], station_stamp=STATION_STAMP)
+    assert [a.rule.rule_id for a in d.actions.items] == ["cut"]
+
+
+@pytest.mark.parametrize("held", [1, "True", "yes", None, 1.0])
+def test_held_must_be_python_true(held):
+    rows = [{"ticker": "0050", "held": held}]
+    d = build(holdings_rows=rows, holding_keys=keys_for("0050"))
+    assert d.holdings.entries == () and d.holdings.unkeyed_count == 0
+    d = build(holdings_rows=holdings_for("0050"), holding_keys=keys_for("0050"),
+              station_rows=[dict(fake_row("0050", "cut"), held=held)], station_stamp=STATION_STAMP)
+    assert d.actions.items == ()
+
+
+@pytest.mark.parametrize("text", [None, "", "   ", 7, "N/A", "—"])
+def test_carryable_row_with_unusable_text_fails_loud_not_silently_dropped(text):
+    row = fake_row("0050", "cut")
+    row["建議動作"] = text
+    with pytest.raises(ValueError):
+        act_digest([row])
+
+
+def test_unusable_text_on_a_non_carryable_row_is_ignored():
+    # premium／無鍵／非持有／error 列的文字不在搬運範圍，不應炸
+    bad = [dict(fake_row("0050", "premium"), 建議動作=None),
+           dict(fake_row("0050", "cut", held=False), 建議動作=None),
+           dict(fake_row("0050", "cut", detail={"error": "x"}), 建議動作=None)]
+    d = act_digest(bad, tickers=["0050"])
+    assert d.actions.items == ()
+
+
+def test_row_without_action_key_like_stock_rows_is_skipped():
+    stock_row = {"代號": "2330", "held": True, "建議動作": "換股字串", "_detail": {}}   # 個股列：無 _action
+    d = act_digest([stock_row])
+    assert d.actions.items == () and all(not e.facts for e in d.holdings.entries)
+
+
+def test_ticker_falls_back_to_chinese_key_and_blank_ticker_is_unkeyed():
+    d = build(holdings_rows=[{"ticker": "  ", "held": True}, {"held": True}], holding_keys=keys_for("0050"))
+    assert d.holdings.unkeyed_count == 2 and d.holdings.entries == ()
+
+
+def test_action_ids_do_not_collide_across_portfolios():
+    keys = {"A": HoldingKey("p1", "A"), "B": HoldingKey("p2", "A")}
+    # 同 symbol 不同組合：各自可獨立有鍵（此處以不同 ticker 字串映到同 symbol 會被 symbol 不一致擋下）
+    with pytest.raises(ValueError, match="不一致"):
+        build(holdings_rows=holdings_for("B"), holding_keys={"B": keys["B"]})
+
+
+def test_upstream_branch_codes_are_exactly_allowlist_plus_the_two_excluded():
+    """上游若新增 `ACTION_*` 分支碼，這裡轉紅 —— 逼人決定它在 Q4 序的位置，而不是被默默忽略。"""
+    upstream = {getattr(ds, n) for n in dir(ds) if n.startswith("ACTION_") and isinstance(getattr(ds, n), str)}
+    assert upstream == set(ACTION_RULE_IDS) | {ds.ACTION_PREMIUM, ds.ACTION_CRUISE}
+
+
+def test_every_allowlisted_id_is_accepted_by_ab0_constructors():
+    """允許名單與 AB-0 拒收名單相容：名單成員不得被 AI／方向字樣拒收誤殺。"""
+    from shared.decision_digest import RuleRef
+    from shared.decision_digest_rules import ACTION_RULE_VERSION, RULE_ID_ALLOWLIST
+    for rid, vers in RULE_ID_ALLOWLIST.items():
+        for v in vers:
+            RuleRef(rid, v)
+    assert ACTION_RULE_VERSION == "action_branch.v1"
+
+
+@pytest.mark.parametrize("flag", ["yes", 1, 1.0, "True", None])
+def test_is_loaded_must_be_python_true_for_macro_and_allocation(flag):
+    d = build(macro_state=macro(is_loaded=flag), macro_stamp=MACRO_STAMP)
+    assert all(f.status is DataStatus.MISSING for f in d.market.facts)
+    alloc = dataclasses.replace(build_allocation_decision(macro()), is_loaded=flag)
+    d = build(macro_state=macro(), macro_stamp=MACRO_STAMP, allocation=alloc)
+    assert d.risk_cap.exposure_lo_pct.status is DataStatus.MISSING
+
+
+@pytest.mark.parametrize("bad", [5, 1.5, ["bull"], b"bull", "", "   "])
+def test_non_str_or_blank_regime_light_are_missing(bad):
+    d = build(macro_state=macro(regime=bad, light=bad), macro_stamp=MACRO_STAMP)
+    fm = fact_map(d)
+    assert fm["market.regime"].status is DataStatus.MISSING and fm["market.light"].status is DataStatus.MISSING
+    assert fm["market.health"].status is DataStatus.OK
+
+
+def test_source_stamp_source_type():
+    with pytest.raises(ValueError):
+        SourceStamp(5, date(2026, 10, 26))   # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        SourceStamp("   ", date(2026, 10, 26))
+
+
+def test_action_text_is_carried_byte_for_byte_including_edge_whitespace():
+    raw = "  🔴 汰弱：吃本金  \u3000"
+    d = act_digest([fake_row("0050", "cut", raw)])
+    assert d.actions.items[0].text == raw and d.holdings.entries[0].facts[0].text == raw
+    assert d.to_dict()["actions"]["items"][0]["text"] == raw
+
+
+def test_station_stamp_dates_propagate_to_fact_provenance():
+    st = SourceStamp("dividend_station_service", date(2026, 10, 24),
+                     datetime(2026, 10, 25, 1, 0, tzinfo=timezone.utc))
+    d = act_digest([fake_row("0050", "cut")], stamp=st)
+    pv = d.holdings.entries[0].facts[0].provenance
+    assert (pv.source, pv.as_of, pv.fetched_at) == ("dividend_station_service", date(2026, 10, 24), st.fetched_at)
+
+
+def test_market_stamp_fetched_at_after_generated_fails_loud():
+    st = SourceStamp("m", date(2026, 10, 26), datetime(2026, 10, 28, tzinfo=timezone.utc))
+    with pytest.raises(ValueError, match="fetched_after_generated"):
+        build(macro_state=macro(), macro_stamp=st)
 
 
 def test_naive_generated_at_fails_loud():
