@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>D2.5 Wireframe｜🤖 AI 投資總結（展開狀態）</title><style>
+:root{--bg:#0a0e16;--panel:#0f1521;--card:#151d2c;--card2:#1a2437;--line:#26334a;--tx:#e8edf7;--mu:#a9b5ca;--ac:#5aa9ff;--ok:#5fd18a;--wn:#f2b84b;--bd:#ff7a7a;--tagbg:#3b2f0e;--tagtx:#ffd98a}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;font-size:15px;line-height:1.5}
+a{color:var(--ac)}
+.banner{position:sticky;top:0;z-index:50;background:#3b2f0e;color:#ffd98a;border-bottom:1px solid #6b5518;padding:6px 16px;font-size:13px;text-align:center}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:12px 16px;max-width:1440px;margin:0 auto}
+.bar h1{font-size:18px;margin:0}
+.bar nav a{margin-right:10px;font-size:13px;text-decoration:none;padding:4px 8px;border:1px solid var(--line);border-radius:8px;color:var(--mu);display:inline-block;margin-bottom:4px}
+.bar nav a[aria-current]{color:var(--tx);border-color:var(--ac)}
+.vt button,.btn2{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer}
+.vt button[aria-pressed=true]{border-color:var(--ac);color:var(--ac)}
+.stage{display:flex;gap:28px;justify-content:center;align-items:flex-start;padding:8px 16px 40px;max-width:1440px;margin:0 auto}
+.stage .col{min-width:0}
+.cap{color:var(--mu);font-size:12px;margin:0 0 6px}
+.scroller{overflow-x:auto;max-width:100%}
+body[data-view=both] .deskwrap{width:940px;flex:0 0 940px}
+body[data-view=both] .phonewrap{flex:0 0 390px}.phonewrap{min-width:0;max-width:100%}
+body[data-view=desktop] .phonewrap{display:none}
+body[data-view=desktop] .deskwrap{width:100%;max-width:1360px}
+body[data-view=phone] .deskwrap{display:none}
+.desk{min-width:760px;background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;overflow:hidden}
+.side{width:150px;flex:0 0 150px;background:#0c121d;border-right:1px solid var(--line);padding:16px 10px}
+.side .brand{font-weight:700;margin:0 6px 16px;font-size:14px;color:var(--mu)}
+.side a{display:block;color:var(--mu);text-decoration:none;padding:10px;border-radius:10px;margin-bottom:6px;font-size:14px}
+.side a[aria-current]{background:var(--card2);color:var(--tx);box-shadow:inset 3px 0 0 var(--ac)}
+.main{flex:1;min-width:0;padding:20px 22px 28px}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px}
+.top h2{margin:0;font-size:22px}
+.top p{margin:2px 0 0;color:var(--mu);font-size:13px}
+.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.hero{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:14px;margin-bottom:14px}
+.hero.one{grid-template-columns:1fr}
+.cards4{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;position:relative;min-width:0}
+.card h3{margin:0 0 8px;font-size:13px;color:var(--mu);font-weight:600}
+.card h4{margin:0 0 6px;font-size:15px}
+.big{font-size:26px;font-weight:700;letter-spacing:.5px}
+.mid{font-size:18px;font-weight:700}
+.sub{color:var(--mu);font-size:12px}
+.tag{display:inline-block;background:var(--tagbg);color:var(--tagtx);border:1px dashed #8a6d1d;border-radius:6px;font-size:11px;padding:1px 6px;white-space:nowrap}
+.opt{display:inline-block;color:#8fb4ff;border:1px dotted #5a7bb5;border-radius:6px;font-size:10px;padding:0 5px;margin-left:4px;white-space:nowrap}
+.na{display:inline-block;background:#2a2f3a;color:#cdd5e4;border:1px solid #4a5468;border-radius:6px;padding:1px 7px;font-size:12px}
+.pill{display:inline-block;border-radius:999px;border:1px solid var(--line);padding:2px 10px;font-size:12px;color:var(--mu);margin:0 4px 4px 0}
+.cta{display:inline-block;background:#1f5fae;color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer}
+.ai{background:linear-gradient(160deg,#1b2a47,#151d2c);border-color:#35508a}
+.ai h3{color:#9cc4ff}
+.ai ul{margin:6px 0;padding-left:0;list-style:none}
+.ai li{font-size:13px;margin:5px 0;color:var(--tx)}
+.ai li b{color:#9cc4ff;font-weight:600}
+.health{position:relative}
+.health summary,.basis summary{cursor:pointer;list-style:none}
+.health summary::-webkit-details-marker,.basis summary::-webkit-details-marker{display:none}
+.health summary{display:inline-flex;gap:6px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px}
+.health .pop{position:absolute;right:0;top:36px;z-index:5;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;width:260px;font-size:12px;color:var(--mu)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--wn)}
+.sec{margin:20px 0 8px;font-size:16px;font-weight:700}
+.sec small{font-weight:400;color:var(--mu);font-size:12px;margin-left:6px}
+.say{font-size:13px;color:#cfd8ea;margin:0 0 8px;border-left:3px solid var(--ac);padding-left:8px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.chart{position:relative;background:#0d1320;border:1px dashed #3b4a68;border-radius:10px;overflow:hidden}
+.chart svg{display:block;width:100%;height:auto}
+.chart .tag{position:absolute;top:6px;right:6px}
+.todo{border-left:4px solid var(--wn);background:#1c1a12}
+.todo .row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #2d2a1c;font-size:13px}
+.todo .row:last-child{border:0}
+.basis{margin-top:10px;border:1px solid var(--line);border-radius:10px;background:#101828}
+.basis summary{padding:7px 10px;font-size:12px;color:var(--ac)}
+.basis[open] summary{border-bottom:1px solid var(--line)}
+.basis dl{margin:0;padding:8px 10px;display:grid;grid-template-columns:110px 1fr;gap:4px 10px;font-size:12px;color:var(--mu)}
+.basis dt{color:#c3cde0}
+.basis dd{margin:0}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th,.tbl td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+.tbl th{color:var(--mu);font-weight:600;font-size:12px}
+.tbl tr.sel td{background:#182641}
+.tblwrap{overflow-x:auto}.tblwrap .tbl{min-width:520px}.tbl td:first-child{white-space:nowrap}.stack>*,.grid2>*,.grid3>*{min-width:0}.stack{display:grid;grid-template-columns:1fr;gap:12px}
+.cell{white-space:nowrap;display:inline-block;min-width:64px;text-align:center;border-radius:6px;padding:2px 6px;font-size:12px;border:1px solid #3a4a68;background:#1b2740}
+.cell.na2{background:#262a33;color:#c9d1e0;border:1px dashed #5b6477}
+.lv3{border:1px solid var(--line);border-radius:12px;background:#0e1420;margin-top:18px}
+.lv3 summary{cursor:pointer;padding:12px 14px;font-weight:600;color:var(--mu)}
+.lv3 ul{margin:0;padding:4px 14px 14px 32px;color:var(--mu);font-size:13px}
+.zone{border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:16px;background:#111827}
+.zone>h3{margin:0 0 2px;font-size:17px}
+.zone>.q{color:var(--mu);font-size:13px;margin:0 0 10px}
+.kv{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:4px 0;border-bottom:1px solid #222d44}
+.fold{border-top:1px dashed #5a6b8a;color:#7f8fb0;font-size:11px;text-align:center;margin:14px 0 0}
+.note{font-size:12px;color:var(--mu)}
+/* phone */
+.phone{width:100%;max-width:390px;height:840px;background:var(--panel);border:8px solid #1d2635;border-radius:34px;display:flex;flex-direction:column;overflow:hidden}
+.phone .st{display:flex;justify-content:space-between;padding:8px 18px 4px;font-size:11px;color:var(--mu)}
+.phone .scr{flex:1;overflow-y:auto;padding:8px 12px 14px}
+.phone .scr .top h2{font-size:19px}
+.phone .bn{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:#0c121d}
+.phone .bn a{text-align:center;text-decoration:none;color:var(--mu);font-size:11px;padding:8px 2px 10px}
+.phone .bn a span{display:block;font-size:18px}
+.phone .bn a[aria-current]{color:var(--tx);box-shadow:inset 0 2px 0 var(--ac)}
+.phone .cards4{grid-template-columns:1fr 1fr;gap:8px}
+.phone .card{padding:10px}
+.phone .big{font-size:20px}
+.phone .grid2,.phone .grid3{grid-template-columns:1fr}
+.phone .hero{grid-template-columns:1fr}
+.phone .basis dl{grid-template-columns:90px 1fr}
+.phone .health .pop{width:230px;right:auto;left:0}
+.phone .tbl{font-size:12px}
+.sheet{background:#101828}
+@media(max-width:900px){.stage{padding:8px 8px 30px}.bar{padding:10px 8px}}
+.state{display:inline-block;background:#2a2f3a;color:#e6ebf5;border:2px solid #8fa0bd;border-radius:10px;padding:4px 14px;font-size:22px;font-weight:700}
+.legend{font-size:11px;color:var(--mu);margin-top:6px}
+.legend span{margin-right:8px;white-space:nowrap}
+.sm{font-size:11px;color:var(--mu)}
+.memo{margin-top:16px;border:1px dashed #4a5468;border-radius:10px;padding:8px 12px;background:#0e1420}
+.memo b{font-size:11px;color:#c3cde0}
+.memo p{margin:4px 0 0;font-size:11px;color:var(--mu)}
+.pgnote{max-width:1440px;margin:0 auto;padding:0 16px 24px;font-size:11px;color:var(--mu);text-align:center}
+@media(max-width:500px){
+ .bar,.cap,.deskwrap{display:none!important}
+ .banner{position:static;font-size:11px;padding:4px 8px;line-height:1.35}
+ .stage{padding:0;gap:0;display:block}
+ .phonewrap{display:block!important;width:100%;max-width:none}
+ .phone{max-width:none;width:100%;height:calc(100dvh - 58px);border-width:0;border-radius:0}
+ .pgnote{padding:6px 12px 14px}
+}
+</style></head><body data-view="both">
+<div class="banner">⚠ 本頁為示意稿（wireframe）：所有數字、圖形、百分比皆為版型佔位，非實際資料；不是 production，待客戶核准前不進實作。</div>
+<div class="bar"><div><h1>🤖 AI 投資總結（展開狀態）</h1><nav><a href="index.html">索引</a><a href="market.html">📊 市場</a><a href="target.html">🎯 標的</a><a href="holdings.html">💼 持股</a><a href="mine.html">👤 我的</a><a href="ai_summary.html" aria-current="page">🤖 AI 總結</a></nav></div>
+<div class="vt"><button data-v="both" aria-pressed="false">並排</button> <button data-v="desktop" aria-pressed="false">僅桌面</button> <button data-v="phone" aria-pressed="false">僅手機</button> <button id="toggleAll" class="btn2">展開全部依據（示範）</button></div></div>
+<div class="stage">
+<section class="col deskwrap"><p class="cap">桌面首屏（約 1440px 寬的縮排示意）｜左側導航仍為 4 個主頁，AI 不是第五頁</p><div class="scroller"><div class="desk"><aside class="side"><div class="brand">投資儀表板</div><a href="market.html" aria-current="page">📊 市場</a><a href="target.html">🎯 標的</a><a href="holdings.html">💼 持股</a><a href="mine.html">👤 我的</a><div class="note" style="margin:14px 6px">固定 4 個主導航</div></aside><main class="main"><div class="top"><div><h2>🤖 AI 投資總結（展開）</h2><p>全站唯一投資決策總管，不是第五個主導航；所有頁共用同一份整理結果</p></div><div class="ctl"><details class="health"><summary><span class="dot"></span>資料 8/9 正常 · 1 項待更新 <span class="tag">數字為示意</span></summary><div class="pop">點開才看明細（示意）：<br>・資料源 xx：正常<br>・資料源 yy：待更新（原因：—）<br>・「更新市場資料」可重試<br><span class="note">完整診斷收在進階層，不放主畫面。</span></div></details><a class="btn2" href="market.html" style="text-decoration:none">收合 ✕</a></div></div><div class="card" style="margin-bottom:12px"><h4>資料流向 <span class="opt">〔新增，可刪〕</span></h4><div class="note">資料 → 規則計算 → 各頁結果 → AI 整合成這份總結。AI 只負責整理與解釋，不自己找數字。</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>資料流向</dt><dd>資料層 → 規則／計算層 → 各頁結構化結果 → Decision Digest（全站同一份）→ AI 總管 → 投資總結</dd><dt>AI 會做</dt><dd>整合、比較、解釋、排序、生成摘要</dd><dt>AI 不做</dt><dd>生數字、補缺漏資料、設門檻、定義公式、發明股票或產業趨勢</dd></dl></details></div><div class="grid2"><div class="card"><h4>① 市場</h4><div class='sub'>台股趨勢・國際趨勢・總體風險・建議總持股水位（<span class='cell na2'>⬜ 尚未核准／無法判定</span>）<br>結論：—（一句話，示意）</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>使用的資料</dt><dd>—（資料源名稱，示意）</dd><dt>資料日期</dt><dd>—（YYYY-MM-DD，示意）</dd><dt>規則／計算結果</dt><dd>—（由規則層產出，示意）</dd><dt>missing</dt><dd>—（缺哪些，不補值，示意）</dd><dt>confidence／availability</dt><dd>—（示意）</dd><dt>AI 是否參與</dt><dd>—（是／否，只做整合與解釋，示意）</dd></dl></details></div><div class="card"><h4>② 產業</h4><div class='sub'>變強產業・轉弱產業・結構性變化<br>結論：—</div><div class="sub"><span class="cell na2">⬜ 資料不足</span> 資料不足時，AI 必須寫「目前不知道」，不依常識宣告產業興衰。</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>使用的資料</dt><dd>—（資料源名稱，示意）</dd><dt>資料日期</dt><dd>—（YYYY-MM-DD，示意）</dd><dt>規則／計算結果</dt><dd>—（由規則層產出，示意）</dd><dt>missing</dt><dd>—（缺哪些，不補值，示意）</dd><dt>confidence／availability</dt><dd>—（示意）</dd><dt>AI 是否參與</dt><dd>—（是／否，只做整合與解釋，示意）</dd></dl></details></div><div class="card"><h4>③ 存股</h4><div class='sub'>是否繼續持有・基本面／現金流是否惡化・是否需降低配置<br>結論：—</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>使用的資料</dt><dd>—（資料源名稱，示意）</dd><dt>資料日期</dt><dd>—（YYYY-MM-DD，示意）</dd><dt>規則／計算結果</dt><dd>—（由規則層產出，示意）</dd><dt>missing</dt><dd>—（缺哪些，不補值，示意）</dd><dt>confidence／availability</dt><dd>—（示意）</dd><dt>AI 是否參與</dt><dd>—（是／否，只做整合與解釋，示意）</dd></dl></details></div><div class="card"><h4>④ 資本利得</h4><div class='sub'>哪些續抱／減碼／換股・候選產業／候選標的<br>結論：—</div><div class='sm' style='margin-top:4px'>續抱／注意／減碼／換股候選：定義待客戶核准，現以既有建議動作示意</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>使用的資料</dt><dd>—（資料源名稱，示意）</dd><dt>資料日期</dt><dd>—（YYYY-MM-DD，示意）</dd><dt>規則／計算結果</dt><dd>—（由規則層產出，示意）</dd><dt>missing</dt><dd>—（缺哪些，不補值，示意）</dd><dt>confidence／availability</dt><dd>—（示意）</dd><dt>AI 是否參與</dt><dd>—（是／否，只做整合與解釋，示意）</dd></dl></details></div><div class="card"><h4>⑤ 本期行動（只給 1–3 項）</h4><div class='sub'>1. 行動 xx　2. 行動 yy　3.（可無）<br>以研究與調整建議為主，無下單按鈕。</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>使用的資料</dt><dd>—（資料源名稱，示意）</dd><dt>資料日期</dt><dd>—（YYYY-MM-DD，示意）</dd><dt>規則／計算結果</dt><dd>—（由規則層產出，示意）</dd><dt>missing</dt><dd>—（缺哪些，不補值，示意）</dd><dt>confidence／availability</dt><dd>—（示意）</dd><dt>AI 是否參與</dt><dd>—（是／否，只做整合與解釋，示意）</dd></dl></details></div></div></main></div></div></section>
+<section class="col phonewrap"><p class="cap">手機首屏（約 390px；框內可捲動，底部為固定導航）</p><div class="phone"><div class="st"><span>—:—</span><span>示意畫面</span></div><div class="scr"><div class="top"><div><h2>🤖 AI 投資總結</h2><p>展開狀態（全螢幕面板）</p></div><div class="ctl"><a class="btn2" href="market.html" style="text-decoration:none">收合 ✕</a></div></div><div class="card" style="margin-bottom:12px"><h4>資料流向 <span class="opt">〔新增，可刪〕</span></h4><div class="note">資料 → 規則計算 → 各頁結果 → AI 整合成這份總結。AI 只負責整理與解釋，不自己找數字。</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>資料流向</dt><dd>資料層 → 規則／計算層 → 各頁結構化結果 → Decision Digest（全站同一份）→ AI 總管 → 投資總結</dd><dt>AI 會做</dt><dd>整合、比較、解釋、排序、生成摘要</dd><dt>AI 不做</dt><dd>生數字、補缺漏資料、設門檻、定義公式、發明股票或產業趨勢</dd></dl></details></div><div style="display:grid;gap:10px"><div class="card"><h4>① 市場</h4><div class='sub'>台股趨勢・國際趨勢・總體風險・建議總持股水位（<span class='cell na2'>⬜ 尚未核准／無法判定</span>）<br>結論：—（一句話，示意）</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>使用的資料</dt><dd>—（資料源名稱，示意）</dd><dt>資料日期</dt><dd>—（YYYY-MM-DD，示意）</dd><dt>規則／計算結果</dt><dd>—（由規則層產出，示意）</dd><dt>missing</dt><dd>—（缺哪些，不補值，示意）</dd><dt>confidence／availability</dt><dd>—（示意）</dd><dt>AI 是否參與</dt><dd>—（是／否，只做整合與解釋，示意）</dd></dl></details></div><div class="card"><h4>② 產業</h4><div class='sub'>變強產業・轉弱產業・結構性變化<br>結論：—</div><div class="sub"><span class="cell na2">⬜ 資料不足</span> 資料不足時，AI 必須寫「目前不知道」，不依常識宣告產業興衰。</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>使用的資料</dt><dd>—（資料源名稱，示意）</dd><dt>資料日期</dt><dd>—（YYYY-MM-DD，示意）</dd><dt>規則／計算結果</dt><dd>—（由規則層產出，示意）</dd><dt>missing</dt><dd>—（缺哪些，不補值，示意）</dd><dt>confidence／availability</dt><dd>—（示意）</dd><dt>AI 是否參與</dt><dd>—（是／否，只做整合與解釋，示意）</dd></dl></details></div><div class="card"><h4>③ 存股</h4><div class='sub'>是否繼續持有・基本面／現金流是否惡化・是否需降低配置<br>結論：—</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>使用的資料</dt><dd>—（資料源名稱，示意）</dd><dt>資料日期</dt><dd>—（YYYY-MM-DD，示意）</dd><dt>規則／計算結果</dt><dd>—（由規則層產出，示意）</dd><dt>missing</dt><dd>—（缺哪些，不補值，示意）</dd><dt>confidence／availability</dt><dd>—（示意）</dd><dt>AI 是否參與</dt><dd>—（是／否，只做整合與解釋，示意）</dd></dl></details></div><div class="card"><h4>④ 資本利得</h4><div class='sub'>哪些續抱／減碼／換股・候選產業／候選標的<br>結論：—</div><div class='sm' style='margin-top:4px'>續抱／注意／減碼／換股候選：定義待客戶核准，現以既有建議動作示意</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>使用的資料</dt><dd>—（資料源名稱，示意）</dd><dt>資料日期</dt><dd>—（YYYY-MM-DD，示意）</dd><dt>規則／計算結果</dt><dd>—（由規則層產出，示意）</dd><dt>missing</dt><dd>—（缺哪些，不補值，示意）</dd><dt>confidence／availability</dt><dd>—（示意）</dd><dt>AI 是否參與</dt><dd>—（是／否，只做整合與解釋，示意）</dd></dl></details></div><div class="card"><h4>⑤ 本期行動（只給 1–3 項）</h4><div class='sub'>1. 行動 xx　2. 行動 yy　3.（可無）<br>以研究與調整建議為主，無下單按鈕。</div><details class="basis"><summary>🔍 查看依據（預設收合）</summary><dl><dt>使用的資料</dt><dd>—（資料源名稱，示意）</dd><dt>資料日期</dt><dd>—（YYYY-MM-DD，示意）</dd><dt>規則／計算結果</dt><dd>—（由規則層產出，示意）</dd><dt>missing</dt><dd>—（缺哪些，不補值，示意）</dd><dt>confidence／availability</dt><dd>—（示意）</dd><dt>AI 是否參與</dt><dd>—（是／否，只做整合與解釋，示意）</dd></dl></details></div></div></div><nav class="bn"><a href="market.html" aria-current="page"><span>📊</span>市場</a><a href="target.html"><span>🎯</span>標的</a><a href="holdings.html"><span>💼</span>持股</a><a href="mine.html"><span>👤</span>我的</a></nav></div></section>
+</div><p class="pgnote">🤖 AI 投資總結為全站共用，不是第五個導覽頁。</p><script>
+(function(){
+ var b=document.body;var w=window.innerWidth;
+ var v=w>=1400?'both':(w>=900?'desktop':'phone');
+ try{var s=sessionStorage.getItem('d25view');if(s&&['both','desktop','phone'].indexOf(s)>-1)v=s;}catch(e){}
+ function set(x){b.setAttribute('data-view',x);try{sessionStorage.setItem('d25view',x);}catch(e){}
+  document.querySelectorAll('.vt button[data-v]').forEach(function(k){k.setAttribute('aria-pressed',k.dataset.v===x?'true':'false');});}
+ set(v);
+ document.querySelectorAll('.vt button[data-v]').forEach(function(k){k.addEventListener('click',function(){set(k.dataset.v);});});
+ var all=document.getElementById('toggleAll');
+ if(all){var open=false;all.addEventListener('click',function(){open=!open;
+  document.querySelectorAll('details.basis').forEach(function(d){d.open=open;});
+  all.textContent=open?'收合全部依據':'展開全部依據（示範）';});}
+ document.querySelectorAll('[data-pick]').forEach(function(r){r.addEventListener('click',function(){
+  document.querySelectorAll('[data-pick]').forEach(function(x){x.classList.remove('sel');});r.classList.add('sel');});});
+})();
+</script></body></html>
