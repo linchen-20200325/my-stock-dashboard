@@ -1589,6 +1589,52 @@ def _read_sheet_title_raw(*, sheet_id: str) -> tuple[str, str]:
     return READ_OK, str(getattr(sh, 'title', '') or '')
 
 
+# ── AB-4r（D2.5 §5 序 5，2026-10-27）:指定分頁的原字串讀取(加法式,唯讀) ─────────────────
+# 給 L1 `strategy_class_reader` 讀 `strategy_class` 分頁。表頭 / 內容判讀**不在這裡**(L0
+# `shared/strategy_class_schema.parse_strategy_records`);本函式只負責「打開、讀原字串、零寫入」。
+# ⚠️ 既有函式一個都沒改。⚠️ 已知限制(據實):全域 `clear_read_cache()` **沒有**列入本快取
+# (改它＝改既有函式行為);本快取靠 B5 失效世代(`invalidate_my_read_cache` / `invalidate_sheet_read_cache`)
+# 或 TTL_15MIN 失效。AB-4r 沒有寫入面,寫入後失效由 AB-4w 處理。
+def read_worksheet_values(worksheet_name: str, *, sheet_id: str) -> list[list[Any]]:
+    """指定 Sheet 的指定分頁 → `get_all_values()` 原字串(list of list)。**純讀,零寫入。**
+
+    - sheet_id 必填、經 `sanitize_sheet_id`;消毒不過 / 空 → `SheetNotConfiguredError`
+      (⛔ 不退回 session 綁定那本 —— 讀哪本由呼叫端說清楚,同 `read_sheet_title`)。
+    - worksheet_name 非 str / 空白 → `ValueError`。
+    - 分頁不存在 → `SheetWorksheetMissingError`(⛔ 不建;「不存在」狀態可進快取,不每輪 rerun 重打)。
+    - 表頭**不**在這裡檢查(呼叫端依各自 schema 判);權限 / 網路 / 未登入例外原樣上拋(不進快取)。
+    快取同四支讀取:鍵含 (身分指紋, sheet_id, worksheet_name, B5 失效世代);無身分不用快取。
+    """
+    from shared.sheet_id import sanitize_sheet_id
+    _sid = sanitize_sheet_id(sheet_id)
+    if not _sid:
+        raise SheetNotConfiguredError('read_worksheet_values: 沒有可讀的 Sheet ID')
+    if type(worksheet_name) is not str or not worksheet_name.strip():
+        raise ValueError('read_worksheet_values: worksheet_name 必須是非空 str')
+    _status, _values = _identity_scoped_read(_read_worksheet_values_cached, _read_worksheet_values_raw,
+                                             worksheet_name=worksheet_name, sheet_id=_sid)
+    if _status == READ_WORKSHEET_MISSING:
+        raise SheetWorksheetMissingError(worksheet_name)
+    return [list(_r) for _r in _values]
+
+
+@_cache_data(ttl=TTL_15MIN, show_spinner=False)
+def _read_worksheet_values_cached(identity: str, *, worksheet_name: str, sheet_id: str,
+                                  read_gen: str = '') -> tuple[str, list]:
+    # identity / read_gen 不加底線:底線參數不進 st.cache_data 快取鍵(B5 失效世代必須在鍵裡)
+    return _run_as_identity(identity, _read_worksheet_values_raw,
+                            worksheet_name=worksheet_name, sheet_id=sheet_id)
+
+
+def _read_worksheet_values_raw(*, worksheet_name: str, sheet_id: str) -> tuple[str, list]:
+    return _read_status(_worksheet_values, worksheet_name=worksheet_name, sheet_id=sheet_id)
+
+
+def _worksheet_values(*, worksheet_name: str, sheet_id: str) -> list[list[Any]]:
+    """只開不建(`_ws`)→ `get_all_values()`。⛔ 零寫入。"""
+    return _ws(sheet_id=sheet_id, worksheet_name=worksheet_name).get_all_values()
+
+
 def delete_portfolio(name: str, *, sheet_id: str | None = None) -> int:
     """刪除指定名稱的組合（所有持股列），回傳刪除的列數。
 
