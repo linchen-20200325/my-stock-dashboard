@@ -24,8 +24,16 @@ import textwrap
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP = ROOT / "app.py"
-#: 舊版（D2 之前）ia_nav 的 commit；用來做偵測能力驗證，內容缺 D2 新增的名稱。
-_OLD_IA_NAV_COMMIT = "ad0a3c2"
+#: D2 之前的最小舊版 ia_nav stub（內嵌，不依賴 git 歷史）：含 app.py 287 行那 10 個 import 名稱，
+#: 但**不含** D2 新增屬性（direction_options / reconcile_nav / NAV_TREE ...），模擬行程內殘留舊模組。
+_STALE_IA_NAV_SRC = """
+PAGE_MARKET = "market"; PAGE_TODAY = "today"; PAGE_FIND = "find"; PAGE_INSPECT = "inspect"
+PAGE_HOLD = "hold"; PAGE_WHY = "why"; PAGE_ME = "me"
+PAGE_LABELS = {p: p for p in (PAGE_MARKET, PAGE_TODAY, PAGE_FIND, PAGE_INSPECT, PAGE_HOLD, PAGE_WHY, PAGE_ME)}
+SECTION_ME_SHEET = "sheet"
+def where_to_find(*a, **k):
+    return ""
+"""
 _COLD_BOOT_TIMEOUT_S = 180
 
 
@@ -115,13 +123,8 @@ def test_app_imports_resolve_in_clean_process():
 
 # ── (c) 偵測能力驗證（殘留舊模組模擬）— 不是產品行為，也不是根因結論 ──────────
 def test_detection_capability_stale_ia_nav_in_sys_modules_is_caught(tmp_path):
-    old = subprocess.run(["git", "show", f"{_OLD_IA_NAV_COMMIT}:shared/ia_nav.py"],
-                         cwd=str(ROOT), capture_output=True, text=True)
-    if old.returncode != 0:
-        import pytest
-        pytest.skip(f"git 歷史不含 {_OLD_IA_NAV_COMMIT}（shallow clone）：偵測能力驗證略過")
     stale = tmp_path / "stale_ia_nav.py"
-    stale.write_text(old.stdout, encoding="utf-8")
+    stale.write_text(_STALE_IA_NAV_SRC, encoding="utf-8")
     code = textwrap.dedent(f"""
         import ast, importlib.util, sys
         spec = importlib.util.spec_from_file_location("shared.ia_nav", {str(stale)!r})
