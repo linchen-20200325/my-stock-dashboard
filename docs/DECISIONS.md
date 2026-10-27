@@ -1277,7 +1277,7 @@ D2.5 以下大方向核准：
   - **production 在 AB-4r 前不可達**：`portfolio_id` 無來源（AB-4r 才定義），AB-1 產出的持股列都沒有鍵；無任何 production caller。
   - 上游 L4 缺口（cap 與 `final_hi` 交叉、health 範圍、舊 `snapshot_ts` 不推 STALE）屬規格明言／上游責任，本批不補（L4 等已知不改項）。
   - `snapshot_ts` 格式為 `macro_state_locker._TIMESTAMP_FMT` 的**複本**（L3 之間不互相 import）→ BACKLOG `AB1-SNAPSHOT-TS-FORMAT-SSOT`；百分比定義域 0..100 為 builder 內字面值 → `AB1-PERCENT-DOMAIN-CONSTANT`；`建議動作` 逐字攜帶而該文字可能含 "AI" 字樣，與 AB-0「AI 不得出口」精神的關係未判斷 → `AB1-ACTION-TEXT-AI-WORDING`（AB-4 前須判斷）。
-- **範圍**：資料搬運層（New UI D2.5 AB-1）｜**日期**：2026-10-27｜**狀態**：生效（隨 PR #951；**待 CI／merge，尚未合併**）
+- **範圍**：資料搬運層（New UI D2.5 AB-1）｜**日期**：2026-10-27｜**狀態**：生效（~~隨 PR #951；**待 CI／merge，尚未合併**~~ 已隨 PR #951 合併，squash main `6a4c0628`，CI 綠（run 1775）（2026-10-27 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；決策內容未改）
 - **來源**：分支 `ccr-fa5b6ded-9rhvoj` commits `3784a25`、`07cd93c`（`shared/decision_digest_rules.py`、`src/services/decision_digest_builder.py` 檔頭 docstring、兩個測試檔）；規格 `docs/vnext/NEWUI_D25_AB1_BUILDER_SPEC_2026-10-27.md`；客戶邊界見 2026-10-27 AB-1 指示（經總管轉交，非逐字收錄）。
 - **與其他 DEC 的關係**：不重新解釋 DEC-091／DEC-092／DEC-093；DEC-092 Q3／Q4（行動沿用既有建議動作與優先序、不得創造動作）、Q1（鍵＝`portfolio_id + symbol`）為上位約束，衝突以 DEC-092 為準。DEC-084（Model×Effort）、DEC-003（內部自決區）呼叫。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條由單一撰寫組依 diff／commit 與實作者回報撰寫。**突變 98/98 killed 為實作者自列**；兩組獨立 QA（對抗式＋語意）已跑並已回修（`07cd93c`），但**QA 回修後未重跑突變**；沙箱為 Python 3.13，**CI 的 Python 3.11 尚未實跑**；本條第 3 點「語意 QA 建議保留」為總管轉述，未逐字附 QA 報告。本條不宣稱 PR 已通過 CI 或已合併。
