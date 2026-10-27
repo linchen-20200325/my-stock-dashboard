@@ -2,50 +2,52 @@
 
 ═══ 這個檔是什麼 ═══════════════════════════════════════════════════════
 `docs/vnext/NEWUI_D25_C_AI_BRAIN_DATA_2026-10-27.md` §2.4 的 G1～G6，以規則式程式執行（不由 LLM 驗 LLM）。
-輸入：(1) 一份 `DecisionDigest`；(2) 一份**結構化摘要** `SummaryDraft`（句子＋引用 id 列表＋段落鍵）。
-輸出：`GroundingReport`。**規則式摘要**（本批）與**未來 AI 輸出**（AB-2b）走同一個檢查器 ——
-規則式摘要是基準對照：它自己必須通過全部 G 檢查，否則是 bug（`src/services/decision_digest_summary.py` 自檢）。
+輸入：(1) 一份 `DecisionDigest`；(2) 一份**結構化摘要** `SummaryDraft`。
+輸出：`GroundingReport`。規則式摘要（本批）與未來 AI 輸出（AB-2b）走同一個檢查器。
+
+═══ 主防線：句型白名單（fail-closed；取代「黑名單字眼＋quote 豁免」） ═══════════
+一句話 `SummarySentence` ＝ **segment 序列**，每個 segment 只能是：
+- `Lit(template_id)`：`terms.TEMPLATES` 的固定模板片段（以 id 引用；沒有任意字串的位置）；
+- `Ref(ref_id, field)`：對某個 Digest 項目的**欄位展開**（文字／數值字面／資料日／代號…由本檔從 Digest 取出；
+  呼叫端不能提供內容）。
+整句還必須吻合 `SHAPES` 中**唯一**一個句型的骨架（模板與欄位的排列、每個 slot 的項目種類），並通過該句型的
+**前置條件**（例如「缺資料」句型只能用在 status 真的是 missing 的事實上；行動句型只能用在 Digest `actions[]` 內的行動上）。
+同一個 slot 的所有 segment 必須指向同一個項目 —— 每個引用文字／數字都屬於它自己綁定的項目，**不池化**；
+也沒有「把任意 ref 掛在句上搭便車」的位置。
+結果：同形異字、簡體、同義詞、中文數字、否定／矛盾、夾帶結論、標示語子字串偽造、行動句加字／換代號／換順序／
+漏項／重複，在結構上沒有表達的位置（不是靠字眼清單擋）。
+⚠️ 字眼清單（`terms.WASHING_*` 等）降級為 **L0 模板與標籤的建置期 lint**（測試保證模板不含那些字眼），不再是執行期依據。
 
 ═══ 輸出格式契約（刻意最小；AB-2b 不得因它而被迫採用某種 prompt／傳輸） ═══════════
-    SummaryDraft(sections=(SummarySection(key, sentences=(SummarySentence(text, evidence_refs), ...)), ...))
-僅此而已。本檔**不**定義 AI prompt、傳輸、金鑰、用量、解析器。AB-2b 要把 AI 文字解析成 `SummaryDraft`；
-**無法解析的輸入（None、dict、字串、子類別…）一律視為驗證失敗**（`structural_failure=True`）。
+    SummaryDraft(sections=(SummarySection(key, sentences=(SummarySentence(segments=(Lit|Ref, ...)), ...)), ...))
+本檔**不**定義 AI prompt、傳輸、金鑰、用量、解析器。⚠️ **AB-2b 要上線，AI 必須以「選句型＋填 slot（Ref）」的受限格式輸出**；
+自由文字的 AI 輸出不可能通過本檢查器（這是設計，不是缺陷）。無法解析的輸入（None、dict、字串、子類別…）一律視為
+驗證失敗（`structural_failure=True`）。
 
-═══ 引用 id 空間（evidence_refs 只能指向這些；G1 引用封閉） ═══════════════════════
-- Digest 內任一 `Fact.fact_id`、`ActionRef.action_id`；
-- `section:<digest 段名>`（market／tw_trend／intl_trend／valuation／industry／holdings／risk_cap／actions）
-  —— 讓「這一段沒有資料」這種敘述也有可回溯的依據；
-- `holding:<portfolio_id>:<symbol>` —— 持股 entry 本身。
-每個引用項帶：狀態（決定要求的標示語）、逐字引用文字（quote）、可出現的數字字面、資料日、可出現的代號。
+═══ 引用 id 空間（Ref.ref_id 只能指向這些） ═══════════════════════════════════
+Digest 內的 `fact_id`、`action_id`；`section:<digest 段名>`；`holding:<portfolio_id>:<symbol>`。
+欄位展開的限制：Risk Cap 區段與「僅供參考」的趨勢觀測值**整個受限**（不能展開值、資料日或文字）；
+`strategy_source`（使用者自由文字）**沒有任何欄位可展開**（不得進摘要）。
 
-═══ G1～G6 在「無 AI」版本的落地方式 ═══════════════════════════════════════
-關鍵設計：**逐字引用（quote）豁免** —— 句子中與「所引項目」的 `Fact.text`／`ActionRef.text`／
-`strategy_source` 逐字相同的片段，視為 Digest 自己的文字，不做字眼檢查；**其餘部分**（殘餘文字）才檢查。
-因此 AI 要表達行動／狀態／數字，只能逐字搬運 Digest，不能改寫。
-G1 引用封閉   ① 每個 evidence ref 必須在 Digest 的引用 id 空間內；② 殘餘文字中的數字代號必須屬於 Digest
-              持股／行動目標的代號；英文大寫代號必須屬於 Digest 或 `LATIN_ALLOWED_TOKENS`；
-              ③ 產業名稱（官方 35 類）一律拒收 —— Digest 的 industry 段恆為「尚未定義」，沒有允許名單；
-              ④ 狀態詞（燈號符號、regime 英文）只能出現在逐字引用內。
-G2 數字一致   殘餘文字中每個數值 token 必須「字面」等於所引項目的值（`number_literal`：不補零、不四捨五入、
-              不換算）且單位吻合（有 unit → 緊接 unit；無 unit → 後面不得緊接 `%`／文字）；ISO 日期必須等於
-              所引項目的 as_of；Risk Cap 區段（未核准顯示）的數值**一律不得出現**；全形／非 ASCII 數字、
-              NaN／inf 字樣一律拒收。（⚠️ 只擋阿拉伯數字；「七十二點五」之類中文數字擋不住，見 docs/vnext/NEWUI_D25_AB2A_SPEC_2026-10-27.md §7 限制。）
-G3 狀態不可升  ① 洗白字眼（中性／正常／維持／續抱／HOLD…）不得出現在殘餘文字；② 缺值佔位字（沿用 AB-0
-              `PLACEHOLDER_TEXTS`）不得單獨成段；③ 所引項目為 missing／failed／invalid → 句中須有「資料不足」
-              或「無法判定」；stale → 須有「資料已過期」；proxy → 須有「代理估算」；未定義／未接線／研究框架
-              → 須有對應標示；④ 所引項目非 ok 時不得出現確定語氣字眼。
-G4 不新增結論 ① 行動字眼（買進／賣出／加碼／減碼／停利／換股／續抱…、buy／sell／hold）只能在逐字引用內；
-              ② 方向字眼（變強／轉弱／衰退／崛起／偏多／偏空…）只能在逐字引用內（Digest 沒有任何方向欄位）；
-              ③ 引用行動 id 的句子必須逐字包含該行動的 `ActionRef.text`。
-G5 段落完整   五段齊全、唯一、依固定順序；每段至少一句；每段對 Digest 中「非 ok 的依據」都有明示
-              （`section_basis`：缺資料的事實、未定義的趨勢／產業、Risk Cap 卡面措辭、未設定策略分類、
-              未帶鍵持股、無行動…）；句子只能引用屬於該段的項目（防止以無關事實填充）。
-G6 依據可回溯 evidence_refs 為空的句子**丟棄**（記為 G6 違規但不使整份失敗；丟棄後該段若因此缺依據，
-              由 G5 抓出）。
+═══ G1～G6 的對映 ═══════════════════════════════════════════════════════
+G1 引用封閉   ref 必須在 Digest 內；欄位必須是該項目允許展開的（`ref_not_in_digest`／`field_not_quotable`／`slot_ref_mismatch`）。
+G2 數字一致   數字只能來自 `value`（`number_literal`）、`as_of`、`count` 的展開；單位由**模板**決定（`%` 為獨立模板，
+              項目的 unit 必須吻合：`unit_mismatch`）；Risk Cap／觀測值數字受限（`restricted_value`）。
+G3 狀態不可升  句型前置條件綁定項目狀態：ok／stale／proxy／missing／failed／invalid 各有固定句型，用錯即
+              `status_mismatch`；標示語由模板產生，不做「子字串存在」判斷。
+G4 不新增結論  句型不在白名單（`shape_not_whitelisted`／`template_not_whitelisted`）；行動段必須與 Digest `actions[]`
+              **一對一、同順序、無重複、無遺漏**（`action_list_mismatch`）；行動句＝代號（取自 `ActionRef.target`）＋
+              `ActionRef.text` 逐字展開，不得加前後字。
+G5 段落完整   五段齊全、唯一、固定順序；每段至少一句；對 Digest 中非 ok 的依據都須有對應句型（`section_basis`）；
+              句型須屬於該段（`shape_out_of_section`）；段內不得有重複句。
+G6 依據可回溯 沒有任何 `Ref` segment 的句子**丟棄**（記為 G6 違規，不使整份失敗）。
 
-回傳的 `GroundingReport.accepted`＝沒有任何 G1～G5／STRUCT／DIGEST 違規（G6 丟棄不影響 accepted）。
-`failed_gates`＝出現過違規的 G 閘門（含 G6）；AB-2b 若要寫回 Digest 的 `ai_failed_checks`，
-結構失敗（`structural_failure`）沒有對應的 G id，需自行決定映射 —— 本檔不替它決定。
+═══ accepted／usable／surviving 的語意（寫死） ═══════════════════════════════
+- `accepted`：沒有任何 STRUCT／DIGEST／G1～G5 違規（G6 丟棄不算）。
+- `surviving`：丟棄 G6 句子之後的摘要（結構失敗或 Digest 不合規時為 None）。**消費端只能使用 `surviving`，
+  不得使用原始 draft** —— 有 G6 丟棄時原始 draft 含未綁定依據的句子。
+- `usable`＝`accepted` 且 `surviving` 非 None。`clean`＝`usable` 且沒有任何丟棄（`surviving == draft`）。
+- `SummaryResult` 只接受 `clean` 的內容（建構時重跑本檢查器並與 Digest 綁定）。
 
 分層（CLAUDE.md §8.2）：L0 —— 只 import 標準函式庫與 `shared.*`；零 I/O、零 streamlit、零 `src.*`。
 """
@@ -53,50 +55,70 @@ from __future__ import annotations
 
 import math
 import numbers
-import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from shared.decision_digest import (
     AiParticipation, Availability, DataStatus, DecisionDigest, Fact, MissingReason,
 )
 from shared.decision_digest_terms import (
-    ACTION_TERMS_CJK, ACTION_TERMS_LATIN, ASSERTIVE_TERMS_CJK, DATE_PATTERN, DIGEST_SECTIONS,
-    DIRECTION_TERMS_CJK, DIRECTION_TERMS_LATIN, FORBIDDEN_CHAR_CATEGORIES, GATE_DIGEST, GATE_G1, GATE_G2,
-    GATE_G3, GATE_G4, GATE_G5, GATE_G6, GATE_STRUCT, GROUNDING_GATES, INDUSTRY_GENERIC_CODES,
-    LATIN_ALLOWED_TOKENS, MARK_NO_ACTION, MARK_NOT_DEFINED, MARK_NOT_WIRED, MARK_PROXY,
-    MARK_RESEARCH_ONLY, MARK_STALE, MARK_STRATEGY_UNSET, MARK_UNKEYED,
-    MARKERS_SECTION_BROAD, MARKERS_UNDETERMINED, NONFINITE_PATTERN, NUMBER_PATTERN, PLACEHOLDER_SEGMENTS,
-    REF_HOLDING_PREFIX, REF_SECTION_PREFIX, RISK_CAP_HIDDEN_WORDING, SEC_ACTIONS, SEC_BUY_AND_HOLD,
-    SEC_CAPITAL_GAIN, SEC_INDUSTRY, SEC_MARKET, SECTION_KEYS, SEGMENT_SPLIT_CHARS, STATE_SYMBOLS,
-    STATE_WORDS_LATIN, SYMBOL_LATIN_PATTERN, SYMBOL_NUMERIC_PATTERN, UNIT_FORBIDDEN_AFTER_NONE,
-    WASHING_TERMS_CJK, WASHING_TERMS_LATIN,
+    FIELD_AS_OF, FIELD_BIND, FIELD_COUNT, FIELD_LABEL, FIELD_MARKER, FIELD_REASON, FIELD_STRATEGY, FIELD_SYMBOL,
+    DIGEST_SECTIONS, FIELD_TEXT, FIELD_VALUE, FIELD_WORDING, FACT_LABEL_FALLBACK, FACT_LABELS, FORBIDDEN_CHAR_CATEGORIES,
+    GATE_DIGEST, GATE_G1, GATE_G2, GATE_G3, GATE_G4, GATE_G5, GATE_G6, GATE_STRUCT, GROUNDING_GATES,
+    LABEL_ALL_SECTIONS, MARK_NOT_DEFINED, MARK_NOT_WIRED, MARK_RESEARCH_ONLY, MISSING_REASON_LABEL_UNKNOWN,
+    MISSING_REASON_LABELS, REF_HOLDING_PREFIX, REF_SECTION_PREFIX, RISK_CAP_HIDDEN_WORDING, SEC_ACTIONS,
+    SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN, SEC_INDUSTRY, SEC_MARKET, SECTION_KEYS, SECTION_LABELS,
+    SECTION_REF_LABELS, TEMPLATES, TPL_ACT_NONE, TPL_ACT_STALE_OPEN, TPL_ACT_UNAVAILABLE_OPEN,
+    TPL_CLOSE, TPL_COLON, TPL_DATE_OPEN, TPL_ENTRY_TAIL, TPL_GLYPH, TPL_HOLDINGS_UNAVAILABLE_MID,
+    TPL_INVALID_TAIL, TPL_MISSING_OPEN, TPL_PCT, TPL_PROXY_TAIL, TPL_SECTION_LABEL, TPL_STALE_DATE_OPEN,
+    TPL_STRATEGY_IS, TPL_STRATEGY_UNSET_TAIL, TPL_UNDETERMINED_TAIL, TPL_UNKEYED_OPEN, TPL_UNKEYED_TAIL,
 )
-from shared.decision_digest_validator import SummaryState, assess_digest, derive_state, strategy_entries
-from shared.industry_codes import OFFICIAL_INDUSTRY_CODE_NAMES, loose_industry_name
+from shared.decision_digest_validator import (
+    SECTION_ALL, DigestAssessment, SummaryState, assess_digest, strategy_entries,
+)
 
 
 # ══════════════════════════════════════════════════════════════════════
 # 結構化摘要型別（最小格式契約）
 # ══════════════════════════════════════════════════════════════════════
 @dataclass(frozen=True)
+class Lit:
+    """固定模板片段（`terms.TEMPLATES` 的 id）。沒有承載任意字串的欄位。"""
+    template_id: str
+
+
+@dataclass(frozen=True)
+class Ref:
+    """對某個 Digest 項目的欄位展開（`terms.FIELDS` 之一）。內容由 checker 從 Digest 取出。"""
+    ref_id: str
+    field: str
+
+
+@dataclass(frozen=True)
 class SummarySentence:
-    """一句話＋它引用的 evidence id（見模組 docstring 的引用 id 空間）。"""
-    text: str
-    evidence_refs: tuple = ()
+    segments: tuple = ()
+
+    @property
+    def evidence_refs(self) -> tuple:
+        """這句話綁定的項目（`Ref` segment 的 ref_id，去重、保序）。沒有任何 `Ref` → 空 tuple（G6 丟棄）。"""
+        seen: list = []
+        for g in self.segments if type(self.segments) is tuple else ():
+            if type(g) is Ref and type(g.ref_id) is str and g.ref_id not in seen:
+                seen.append(g.ref_id)
+        return tuple(seen)
 
 
 @dataclass(frozen=True)
 class SummarySection:
-    key: str                     # `SECTION_KEYS` 之一
-    sentences: tuple = ()        # tuple[SummarySentence]
+    key: str
+    sentences: tuple = ()
 
 
 @dataclass(frozen=True)
 class SummaryDraft:
-    sections: tuple = ()         # tuple[SummarySection]
+    sections: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -110,13 +132,23 @@ class GroundingViolation:
 
 @dataclass(frozen=True)
 class GroundingReport:
-    accepted: bool
-    violations: tuple            # tuple[GroundingViolation]
+    accepted: bool               # 無 STRUCT／DIGEST／G1～G5 違規（G6 丟棄不算）
+    violations: tuple
     dropped: tuple               # ((段鍵, 句序), ...) —— G6 丟棄
-    failed_gates: tuple          # 出現過違規的 G 閘門（排序、去重；含 G6）
+    failed_gates: tuple          # 出現過違規的 G 閘門（固定順序；含 G6）
     structural_failure: bool
     digest_invalid: bool
     surviving: Optional[SummaryDraft]   # 丟棄 G6 句子後的摘要；結構失敗或 Digest 不合規 → None
+
+    @property
+    def usable(self) -> bool:
+        """可用：`accepted` 且 `surviving` 非 None。消費端只能用 `surviving`，不得用原始 draft。"""
+        return self.accepted and self.surviving is not None
+
+    @property
+    def clean(self) -> bool:
+        """乾淨：可用且沒有任何丟棄（`surviving` 與原始 draft 完全相同）。"""
+        return self.usable and not self.dropped
 
     @property
     def passed_gates(self) -> tuple:
@@ -126,71 +158,12 @@ class GroundingReport:
         return tuple(g for g in GROUNDING_GATES if g not in self.failed_gates)
 
 
-@dataclass(frozen=True)
-class SummaryResult:
-    """統一的摘要結果型別（規則式摘要與未來 AI 摘要共用；本批只產生 `mode=RULE_ONLY`）。
-
-    不變量（建構即檢查）：
-    - `mode` 必須是 AB-0 既有的 `AiParticipation`（不新增列舉值）；
-    - `state` 必須等於由 `section_availability` 推導的狀態（INVALID 例外）—— 狀態不得被升格；
-    - INVALID ⇒ `sections==()`、`retained_sections==()`、`section_availability==()`（不輸出任何投資結論）；
-    - 非 INVALID ⇒ 五段齊全、依固定順序、`retained_sections==SECTION_KEYS`。
-    """
-    state: SummaryState
-    mode: AiParticipation
-    sections: tuple = ()
-    section_availability: tuple = ()
-    notices: tuple = ()
-    invalid_sections: tuple = ()
-    failed_gates: tuple = ()
-    violations: tuple = ()
-    retained_sections: tuple = ()
-
-    def __post_init__(self) -> None:
-        if type(self.mode) is not AiParticipation:
-            raise ValueError(f"SummaryResult.mode 必須是 AiParticipation：{self.mode!r}")
-        if type(self.state) is not SummaryState:
-            raise ValueError(f"SummaryResult.state 必須是 SummaryState：{self.state!r}")
-        if self.state is SummaryState.INVALID:
-            if self.sections or self.retained_sections or self.section_availability:
-                raise ValueError("INVALID 時不得輸出任何段落（sections／retained_sections／section_availability 必須為空）")
-            if not self.invalid_sections:
-                raise ValueError("INVALID 時必須指出哪一段 invalid（invalid_sections 不得為空）")
-            return
-        keys = tuple(s.key for s in self.sections if type(s) is SummarySection)
-        if keys != SECTION_KEYS or self.retained_sections != SECTION_KEYS:
-            raise ValueError(f"非 INVALID 時必須恰有五段且依固定順序：{keys!r}")
-        if tuple(k for k, _ in self.section_availability) != SECTION_KEYS:
-            raise ValueError("section_availability 必須涵蓋五段且依固定順序")
-        if derive_state(self.section_availability) is not self.state:
-            raise ValueError(f"state={self.state.value} 與各段可得性推導結果不符（不得升格／降格）")
-
-
 # ══════════════════════════════════════════════════════════════════════
-# 文字正規化與數字字面
+# 數字字面
 # ══════════════════════════════════════════════════════════════════════
-def _clean(s: str) -> str:
-    """NFKC 並移除控制／零寬／格式字元（保留大小寫與空白）。"""
-    return "".join(ch for ch in unicodedata.normalize("NFKC", s)
-                   if unicodedata.category(ch) not in FORBIDDEN_CHAR_CATEGORIES)
-
-
-def _norm(s: str) -> str:
-    return _clean(s).casefold()
-
-
-def _squash(s: str) -> str:
-    """去所有空白的正規形（比對中文字眼／標示語用）。"""
-    return "".join(_norm(s).split())
-
-
-def _tokens(n1: str) -> list:
-    return [t for t in re.split(r"[^0-9a-z]+", n1) if t]
-
-
 def number_literal(value: Any) -> str:
-    """數值 → 唯一的「字面」形式（G2 的基準）。整數 → `str(int)`；浮點 → 固定小數、不用科學記號、
-    不補零不截斷（`repr` 最短往返表示）。非有限／非實數 → ValueError。"""
+    """數值 → 唯一的「字面」形式。整數 → `str(int)`；浮點 → 最短往返固定小數（不用科學記號、不補零、不截斷）。
+    非有限／非實數／bool → ValueError。"""
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         raise ValueError(f"不是實數：{value!r}")
     if isinstance(value, numbers.Integral):
@@ -202,115 +175,19 @@ def number_literal(value: Any) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 引用項索引
+# 引用項索引與欄位展開
 # ══════════════════════════════════════════════════════════════════════
+KIND_FACT, KIND_ACTION, KIND_HOLDING, KIND_SECTION = "fact", "action", "holding", "section"
+GROUP_MARKET, GROUP_HOLDING, GROUP_RESTRICTED = "market", "holding", "restricted"
+
+
 @dataclass(frozen=True)
 class RefInfo:
     ref_id: str
-    kind: str                    # fact／action／section／holding
-    non_ok: bool                 # 所引項目是否「不是有值且新鮮的正式資料」（影響確定語氣禁用）
-    markers: tuple               # 句子必須含其一（空 tuple＝無要求）
-    scopes: frozenset            # 允許出現的摘要段
-    quotes: tuple = ()           # 逐字引用豁免的文字
-    literals: tuple = ()         # ((字面, 單位|None), ...) 允許出現的數字
-    restricted: bool = False     # 未核准顯示的項目（Risk Cap 區段、僅供參考的觀測值）：不貢獻任何允許的數字
-    restricted_literals: tuple = ()  # 未核准顯示的數字字面（出現即違規）
-    dates: tuple = ()            # 允許出現的 ISO 日期
-    symbols: tuple = ()          # 允許出現的代號
-    action_text: Optional[str] = None
-
-
-def _fact_markers(status: DataStatus) -> tuple:
-    if status is DataStatus.OK:
-        return ()
-    if status is DataStatus.STALE:
-        return (MARK_STALE,)
-    if status is DataStatus.PROXY:
-        return (MARK_PROXY,)
-    return MARKERS_UNDETERMINED
-
-
-def _avail_markers(av: Availability) -> tuple:
-    return () if av is Availability.AVAILABLE else MARKERS_SECTION_BROAD
-
-
-def _definition_marker(section_obj: Any, *, research: bool) -> tuple:
-    if research:
-        return (MARK_RESEARCH_ONLY,)
-    return (MARK_NOT_WIRED,) if section_obj.missing_reason is MissingReason.NOT_WIRED else (MARK_NOT_DEFINED,)
-
-
-def _fact_info(f: Fact, scopes: frozenset, *, restricted: bool, restricted_markers: tuple = ()) -> RefInfo:
-    lits: tuple = ()
-    if f.value is not None:
-        try:
-            lits = ((number_literal(f.value), f.unit),)
-        except ValueError:
-            lits = ()   # 非有限值由 assess_digest（AB-0）擋下；這裡不再 raise
-    dates = (f.provenance.as_of.isoformat(),) if f.provenance.as_of is not None else ()
-    return RefInfo(
-        ref_id=f.fact_id, kind="fact", non_ok=f.status is not DataStatus.OK,
-        markers=restricted_markers if restricted else _fact_markers(f.status), scopes=scopes,
-        quotes=(f.text,) if f.text is not None else (),
-        restricted=restricted, literals=() if restricted else lits,
-        restricted_literals=lits if restricted else (),
-        dates=() if restricted else dates)
-
-
-def build_ref_index(digest: DecisionDigest) -> dict:
-    """引用 id → `RefInfo`（假設 digest 已通過 `assess_digest`）。"""
-    idx: dict = {}
-    s_market = frozenset({SEC_MARKET})
-    s_hold = frozenset({SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN, SEC_ACTIONS})
-
-    for f in digest.market.facts:
-        idx[f.fact_id] = _fact_info(f, s_market, restricted=False)
-    for name in ("tw_trend", "intl_trend"):          # 均線等「僅供參考」的觀測值：不得被當成可引用的數字
-        for f in getattr(digest, name).observations:
-            idx[f.fact_id] = _fact_info(f, s_market, restricted=True,
-                                        restricted_markers=(MARK_NOT_DEFINED, MARK_NOT_WIRED))
-    rc = digest.risk_cap
-    for f in rc.facts:                                # Risk Cap 獨立數字未核准顯示（DEC-081 Q2-2）
-        idx[f.fact_id] = _fact_info(f, s_market, restricted=True, restricted_markers=(RISK_CAP_HIDDEN_WORDING,))
-    for h in digest.holdings.entries:
-        for f in h.facts:
-            idx[f.fact_id] = _fact_info(f, s_hold, restricted=False)
-    for a in digest.actions.items:
-        idx[a.action_id] = RefInfo(
-            ref_id=a.action_id, kind="action", non_ok=False, markers=(), scopes=frozenset({SEC_ACTIONS}),
-            quotes=(a.text, *((a.target.symbol,) if a.target is not None else ())),
-            symbols=(a.target.symbol,) if a.target is not None else (), action_text=a.text)
-
-    def sec(name: str, scopes: frozenset, markers: tuple, **kw: Any) -> None:
-        rid = REF_SECTION_PREFIX + name
-        idx[rid] = RefInfo(ref_id=rid, kind="section", non_ok=bool(markers), markers=markers, scopes=scopes, **kw)
-
-    sec("market", s_market, _avail_markers(digest.market.availability))
-    sec("tw_trend", s_market, _definition_marker(digest.tw_trend, research=False))
-    sec("intl_trend", s_market, _definition_marker(digest.intl_trend, research=False))
-    sec("valuation", s_market, _definition_marker(digest.valuation, research=True))
-    sec("industry", frozenset({SEC_INDUSTRY}), _definition_marker(digest.industry, research=False))
-    unkeyed = digest.holdings.unkeyed_count
-    sec("holdings", s_hold, _avail_markers(digest.holdings.availability),
-        literals=((str(unkeyed), None),) if unkeyed > 0 else ())
-    sec("risk_cap", s_market, (RISK_CAP_HIDDEN_WORDING,), quotes=(RISK_CAP_HIDDEN_WORDING,))
-    acts = digest.actions
-    if acts.availability is Availability.UNAVAILABLE:
-        am = MARKERS_UNDETERMINED
-    elif not acts.items:
-        am = (MARK_NO_ACTION,)
-    else:
-        am = ()
-    sec("actions", frozenset({SEC_ACTIONS}), am)
-
-    for h in digest.holdings.entries:
-        rid = holding_ref(h.key.portfolio_id, h.key.symbol)
-        idx[rid] = RefInfo(
-            ref_id=rid, kind="holding", non_ok=True, markers=(MARK_NOT_WIRED, *MARKERS_UNDETERMINED),
-            scopes=s_hold,
-            quotes=(*((h.strategy_source,) if h.strategy_source is not None else ()), h.key.symbol),
-            symbols=(h.key.symbol,))
-    return idx
+    kind: str
+    obj: Any = None              # Fact／ActionRef／HoldingEntry／None（section）
+    group: str = ""              # fact 的來源群：market／holding／restricted（Risk Cap 與趨勢觀測值）
+    name: str = ""               # section 的 Digest 段名
 
 
 def holding_ref(portfolio_id: str, symbol: str) -> str:
@@ -323,249 +200,326 @@ def section_ref(name: str) -> str:
     return REF_SECTION_PREFIX + name
 
 
-def symbol_allowlist(digest: DecisionDigest) -> frozenset:
-    out = {h.key.symbol for h in digest.holdings.entries}
-    out |= {a.target.symbol for a in digest.actions.items if a.target is not None}
-    return frozenset(out)
+def build_ref_index(digest: DecisionDigest) -> dict:
+    """引用 id → `RefInfo`（假設 digest 已通過 `assess_digest`）。"""
+    idx: dict = {}
+    for f in digest.market.facts:
+        idx[f.fact_id] = RefInfo(f.fact_id, KIND_FACT, f, GROUP_MARKET)
+    for name in ("tw_trend", "intl_trend"):          # 均線等「僅供參考」的觀測值：整個受限
+        for f in getattr(digest, name).observations:
+            idx[f.fact_id] = RefInfo(f.fact_id, KIND_FACT, f, GROUP_RESTRICTED)
+    for f in digest.risk_cap.facts:                  # Risk Cap 獨立數字未核准顯示（DEC-081 Q2-2）：整個受限
+        idx[f.fact_id] = RefInfo(f.fact_id, KIND_FACT, f, GROUP_RESTRICTED)
+    for h in digest.holdings.entries:
+        for f in h.facts:
+            idx[f.fact_id] = RefInfo(f.fact_id, KIND_FACT, f, GROUP_HOLDING)
+        rid = holding_ref(h.key.portfolio_id, h.key.symbol)
+        idx[rid] = RefInfo(rid, KIND_HOLDING, h)
+    for a in digest.actions.items:
+        idx[a.action_id] = RefInfo(a.action_id, KIND_ACTION, a)
+    for name in DIGEST_SECTIONS:
+        rid = REF_SECTION_PREFIX + name
+        idx[rid] = RefInfo(rid, KIND_SECTION, None, name=name)
+    return idx
 
 
-def section_basis(digest: DecisionDigest, key: str, index: Optional[dict] = None) -> tuple:
-    """G5 的「必須明示」清單：((引用 id, 可接受標示語 any-of), ...)。
+def _reason_label(reason: Any) -> str:
+    return MISSING_REASON_LABELS.get(getattr(reason, "value", None), MISSING_REASON_LABEL_UNKNOWN)
 
-    只列「Digest 中非 ok 的依據」：缺資料的事實、未定義的趨勢／產業、Risk Cap 卡面措辭、持股未讀到、
-    未帶鍵持股、尚未設定策略分類／策略分類但判定未接線、無行動。全部由 Digest 資料推導。
+
+def _section_marker(digest: DecisionDigest, name: str) -> Optional[str]:
+    if name == "valuation":
+        return MARK_RESEARCH_ONLY
+    if name in ("tw_trend", "intl_trend", "industry"):
+        sec = getattr(digest, name)
+        return MARK_NOT_WIRED if sec.missing_reason is MissingReason.NOT_WIRED else MARK_NOT_DEFINED
+    return None
+
+
+def expand(digest: DecisionDigest, info: RefInfo, fld: str) -> tuple:
+    """欄位展開。回傳 (字串 | None, 失敗閘門, 失敗代碼)。字串非 None ⇒ 展開成功。
+
+    展開成功的字串**只可能**來自 Digest 或 `terms` 的常數 —— 呼叫端無從提供內容。
     """
-    idx = index if index is not None else build_ref_index(digest)
+    bad = (None, GATE_G1, "field_not_quotable")
+    restricted = (None, GATE_G2, "restricted_value")
+    k = info.kind
+    if k == KIND_FACT:
+        f: Fact = info.obj
+        if info.group == GROUP_RESTRICTED:
+            return restricted if fld in (FIELD_VALUE, FIELD_TEXT, FIELD_AS_OF) else bad
+        if info.group == GROUP_HOLDING:                 # 持股事實：只開放資料日（行動句型的 stale 揭露用）；文字由 ActionRef 展開
+            if fld == FIELD_AS_OF and f.provenance.as_of is not None:
+                return f.provenance.as_of.isoformat(), None, None
+            return bad
+        if fld == FIELD_LABEL:
+            return FACT_LABELS.get(f.fact_id, FACT_LABEL_FALLBACK), None, None
+        if fld == FIELD_TEXT:
+            return (f.text, None, None) if f.text is not None else bad
+        if fld == FIELD_VALUE:
+            if f.value is None:
+                return bad
+            return number_literal(f.value), None, None      # 假設 Digest 已通過 assess（值必為有限實數）；否則 ValueError（Fail Loud）
+        if fld == FIELD_AS_OF:
+            return (f.provenance.as_of.isoformat(), None, None) if f.provenance.as_of is not None else bad
+        if fld == FIELD_REASON:
+            return (_reason_label(f.missing_reason), None, None) if f.missing_reason is not None else bad
+        return bad
+    if k == KIND_ACTION:
+        a = info.obj
+        if fld == FIELD_TEXT:
+            return a.text, None, None
+        if fld == FIELD_SYMBOL:
+            return (a.target.symbol, None, None) if a.target is not None else bad
+        return bad
+    if k == KIND_HOLDING:
+        h = info.obj
+        if fld == FIELD_SYMBOL:
+            return h.key.symbol, None, None
+        if fld == FIELD_STRATEGY:
+            return h.strategy.value, None, None
+        return bad                                      # ⛔ strategy_source 沒有任何欄位可展開（使用者自由文字）
+    # section
+    n = info.name
+    if fld == FIELD_BIND:
+        return "", None, None
+    if fld == FIELD_LABEL:
+        return (SECTION_REF_LABELS[n], None, None) if n in SECTION_REF_LABELS else bad
+    if fld == FIELD_MARKER:
+        m = _section_marker(digest, n)
+        return (m, None, None) if m is not None else bad
+    if fld == FIELD_WORDING:
+        return (RISK_CAP_HIDDEN_WORDING, None, None) if n == "risk_cap" else bad
+    if fld == FIELD_COUNT:
+        return (str(digest.holdings.unkeyed_count), None, None) if n == "holdings" else bad
+    if fld == FIELD_REASON:
+        if n == "holdings":
+            return _reason_label(digest.holdings.missing_reason), None, None
+        if n == "actions":
+            return _reason_label(digest.actions.missing_reason), None, None
+    return bad
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 句型白名單
+# ══════════════════════════════════════════════════════════════════════
+@dataclass(frozen=True)
+class Ctx:
+    digest: DecisionDigest
+    index: dict
+    section: str
+    slots: dict                  # slot 序號 → RefInfo
+
+
+@dataclass(frozen=True)
+class Shape:
+    sid: str
+    sections: frozenset
+    skeleton: tuple              # ("L", 模板id) | ("R", slot, 項目種類, 欄位)
+    pre: Callable                # (Ctx) -> None | (閘門, 代碼, 訊息)
+
+    @property
+    def signature(self) -> tuple:
+        return tuple(("L", e[1]) if e[0] == "L" else ("R", e[2], e[3]) for e in self.skeleton)
+
+
+def _L(tpl: str) -> tuple:
+    return ("L", tpl)
+
+
+def _R(slot: int, kind: str, fld: str) -> tuple:
+    return ("R", slot, kind, fld)
+
+
+def _status_pre(group: str, status: DataStatus, *, unit: Optional[str] = None, check_unit: bool = False) -> Callable:
+    def pre(c: Ctx):
+        info = c.slots[0]
+        f: Fact = info.obj
+        if info.group != group:
+            return (GATE_G4, "wrong_group", "此句型只能用在市場事實上")
+        if f.status is not status:
+            return (GATE_G3, "status_mismatch",
+                    f"項目 status={f.status.value}，句型要求 {status.value}（狀態不得升級／降級）")
+        if check_unit and f.unit != unit:
+            return (GATE_G2, "unit_mismatch", f"單位由模板決定：項目 unit={f.unit!r}，句型要求 {unit!r}")
+        return None
+    return pre
+
+
+def _section_name_pre(*names: str) -> Callable:
+    def pre(c: Ctx):
+        if c.slots[0].name not in names:
+            return (GATE_G4, "wrong_section_ref", f"此句型只能引用 {names}")
+        return None
+    return pre
+
+
+def _section_pre(sec_key: str, name: str, cond: Callable) -> Callable:
+    def pre(c: Ctx):
+        if c.slots[0].name != name:
+            return (GATE_G4, "wrong_section_ref", f"此句型只能引用 section:{name}")
+        if not cond(c.digest):
+            return (GATE_G3, "precondition_failed", "Digest 狀態不符此句型的前置條件（不得用於未缺資料的項目）")
+        return None
+    return pre
+
+
+def _entry_pre(c: Ctx):
+    if c.digest.holdings.availability is Availability.UNAVAILABLE:
+        return (GATE_G3, "precondition_failed", "持股讀不到時不得列出個別持股")
+    if c.slots[0].obj not in strategy_entries(c.digest, c.section):
+        return (GATE_G4, "wrong_strategy", "持股的策略分類不屬於此段")
+    return None
+
+
+def oldest_stale_evidence(digest: DecisionDigest, index: dict, a: Any) -> Optional[str]:
+    """行動證據中**最舊**的 stale 事實 id（確定性：as_of、再依 evidence 順序）；沒有 → None。"""
+    best = None
+    for pos, rid in enumerate(a.evidence_refs):
+        info = index.get(rid)
+        if (info is not None and info.kind == KIND_FACT and info.group != GROUP_RESTRICTED
+                and info.obj.status is DataStatus.STALE):
+            key = (info.obj.provenance.as_of, pos)
+            if best is None or key < best[0]:
+                best = (key, rid)
+    return best[1] if best else None
+
+
+def _action_pre(with_target: bool, stale: bool) -> Callable:
+    def pre(c: Ctx):
+        a = c.slots[0].obj
+        if (a.target is not None) is not with_target:
+            return (GATE_G4, "target_mismatch", "行動句型必須與 ActionRef.target 是否存在一致（代號只能取自 target）")
+        want = oldest_stale_evidence(c.digest, c.index, a)
+        if stale:
+            if want is None or c.slots[1].ref_id != want:
+                return (GATE_G3, "stale_evidence_mismatch", "stale 句型的第二個項目必須是該行動最舊的 stale 證據")
+        elif want is not None:
+            return (GATE_G3, "stale_evidence_mismatch", "行動有 stale 證據時必須使用 stale 句型（不得隱藏過期）")
+        return None
+    return pre
+
+
+def _build_shapes() -> tuple:
     out: list = []
-    if key == SEC_MARKET:
-        for f in digest.market.facts:
-            if idx[f.fact_id].markers:
-                out.append((f.fact_id, idx[f.fact_id].markers))
-        for name in ("tw_trend", "intl_trend", "valuation", "risk_cap"):
-            rid = section_ref(name)
-            out.append((rid, idx[rid].markers))
-    elif key == SEC_INDUSTRY:
-        rid = section_ref("industry")
-        out.append((rid, idx[rid].markers))
-    elif key in (SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN):
-        rid = section_ref("holdings")
-        hs = digest.holdings
-        if hs.availability is Availability.UNAVAILABLE:
-            out.append((rid, MARKERS_UNDETERMINED))
-        if hs.unkeyed_count > 0:
-            out.append((rid, (MARK_UNKEYED,)))
-        if hs.availability is not Availability.UNAVAILABLE:
-            mine = strategy_entries(digest, key)
-            if mine:
-                for h in mine:
-                    out.append((holding_ref(h.key.portfolio_id, h.key.symbol), (MARK_NOT_WIRED,)))
-            else:
-                out.append((rid, (MARK_STRATEGY_UNSET,)))
-    elif key == SEC_ACTIONS:
-        rid = section_ref("actions")
-        if idx[rid].markers:
-            out.append((rid, idx[rid].markers))
-    else:
-        raise ValueError(f"未知的摘要段：{key!r}")
+    S_MKT = frozenset({SEC_MARKET})
+    heads = {"text": [(_R(0, KIND_FACT, FIELD_TEXT),), None],
+             "value": [(_R(0, KIND_FACT, FIELD_VALUE),), None],
+             "value_pct": [(_R(0, KIND_FACT, FIELD_VALUE), _L(TPL_PCT)), "%"]}
+    for status, tails in ((DataStatus.OK, (_L(TPL_DATE_OPEN), _R(0, KIND_FACT, FIELD_AS_OF), _L(TPL_CLOSE))),
+                          (DataStatus.STALE, (_L(TPL_STALE_DATE_OPEN), _R(0, KIND_FACT, FIELD_AS_OF), _L(TPL_CLOSE))),
+                          (DataStatus.PROXY, (_L(TPL_PROXY_TAIL),))):
+        for hk, (body, unit) in heads.items():
+            skel = (_R(0, KIND_FACT, FIELD_LABEL), _L(TPL_COLON), *body, *tails)
+            pre = _status_pre(GROUP_MARKET, status, unit=unit, check_unit=hk != "text")
+            out.append(Shape(f"fact_{hk}_{status.value}", S_MKT, skel, pre))
+    # 缺值／失敗：兩種 status 共用一個句型
+    miss_pre = _status_pre(GROUP_MARKET, DataStatus.MISSING)
+
+    def missing_pre(c: Ctx):
+        f: Fact = c.slots[0].obj
+        if f.status is DataStatus.FAILED and c.slots[0].group == GROUP_MARKET:
+            return None
+        return miss_pre(c)
+    out.append(Shape("fact_missing", S_MKT,
+                     (_L(TPL_GLYPH), _R(0, KIND_FACT, FIELD_LABEL), _L(TPL_MISSING_OPEN),
+                      _R(0, KIND_FACT, FIELD_REASON), _L(TPL_CLOSE)), missing_pre))
+    out.append(Shape("fact_invalid", S_MKT,
+                     (_L(TPL_GLYPH), _R(0, KIND_FACT, FIELD_LABEL), _L(TPL_INVALID_TAIL)),
+                     _status_pre(GROUP_MARKET, DataStatus.INVALID)))
+    out.append(Shape("risk_wording", S_MKT, (_R(0, KIND_SECTION, FIELD_WORDING),), _section_name_pre("risk_cap")))
+    # 趨勢／合理區間／產業：未定義
+    und_skel = (_L(TPL_GLYPH), _R(0, KIND_SECTION, FIELD_LABEL), _L(TPL_COLON), _R(0, KIND_SECTION, FIELD_MARKER),
+                _L(TPL_UNDETERMINED_TAIL))
+
+    def undefined_pre(c: Ctx):
+        names = ("industry",) if c.section == SEC_INDUSTRY else ("tw_trend", "intl_trend", "valuation")
+        return _section_name_pre(*names)(c)
+    out.append(Shape("section_undefined", frozenset({SEC_MARKET, SEC_INDUSTRY}), und_skel, undefined_pre))
+    # 存股／資本利得
+    for sk in (SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN):
+        sset = frozenset({sk})
+        lab = TPL_SECTION_LABEL[sk]
+        out.append(Shape(f"holdings_unavailable:{sk}", sset,
+                         (_L(TPL_GLYPH), _L(lab), _L(TPL_HOLDINGS_UNAVAILABLE_MID),
+                          _R(0, KIND_SECTION, FIELD_REASON), _L(TPL_CLOSE)),
+                         _section_pre(sk, "holdings", lambda d: d.holdings.availability is Availability.UNAVAILABLE)))
+        out.append(Shape(f"strategy_unset:{sk}", sset,
+                         (_L(TPL_GLYPH), _L(lab), _L(TPL_STRATEGY_UNSET_TAIL), _R(0, KIND_SECTION, FIELD_BIND)),
+                         _section_pre(sk, "holdings", lambda d, sk=sk: (
+                             d.holdings.availability is not Availability.UNAVAILABLE
+                             and not strategy_entries(d, sk)))))
+    out.append(Shape("strategy_entry", frozenset({SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN}),
+                     (_R(0, KIND_HOLDING, FIELD_SYMBOL), _L(TPL_STRATEGY_IS), _R(0, KIND_HOLDING, FIELD_STRATEGY),
+                      _L(TPL_ENTRY_TAIL)), _entry_pre))
+    out.append(Shape("holdings_unkeyed", frozenset({SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN}),
+                     (_L(TPL_UNKEYED_OPEN), _R(0, KIND_SECTION, FIELD_COUNT), _L(TPL_UNKEYED_TAIL)),
+                     _section_pre("", "holdings", lambda d: d.holdings.unkeyed_count > 0)))
+    # 本期行動
+    S_ACT = frozenset({SEC_ACTIONS})
+    out.append(Shape("actions_unavailable", S_ACT,
+                     (_L(TPL_ACT_UNAVAILABLE_OPEN), _R(0, KIND_SECTION, FIELD_REASON), _L(TPL_CLOSE)),
+                     _section_pre(SEC_ACTIONS, "actions", lambda d: d.actions.availability is Availability.UNAVAILABLE)))
+    out.append(Shape("actions_none", S_ACT, (_L(TPL_ACT_NONE), _R(0, KIND_SECTION, FIELD_BIND)),
+                     _section_pre(SEC_ACTIONS, "actions", lambda d: (
+                         d.actions.availability is Availability.AVAILABLE and not d.actions.items))))
+    for with_target in (True, False):
+        head = ((_R(0, KIND_ACTION, FIELD_SYMBOL), _L(TPL_COLON)) if with_target else ()) + (_R(0, KIND_ACTION, FIELD_TEXT),)
+        out.append(Shape("action_item" if with_target else "action_item_nt", S_ACT, head, _action_pre(with_target, False)))
+        out.append(Shape("action_item_stale" if with_target else "action_item_nt_stale", S_ACT,
+                         head + (_L(TPL_ACT_STALE_OPEN), _R(1, KIND_FACT, FIELD_AS_OF), _L(TPL_CLOSE)),
+                         _action_pre(with_target, True)))
     return tuple(out)
 
 
-# ══════════════════════════════════════════════════════════════════════
-# 逐字引用豁免
-# ══════════════════════════════════════════════════════════════════════
-_RE_NUMERIC_ONLY = re.compile(r"[0-9.+\-%\s]*")
-
-
-def is_numeric_quote(q: str) -> bool:
-    """引用文字只由數字／小數點／正負號／百分號／空白組成（需在日期遮罩之後才能安全移除）。"""
-    return _RE_NUMERIC_ONLY.fullmatch(q) is not None
-
-
-def remove_quotes(text: str, quotes: tuple) -> str:
-    """把句中與 Digest 文字逐字相同的片段換成空白，回傳「殘餘文字」。
-
-    邊界規則：引用首／尾若是 ASCII 英數字，其前／後不得緊接英數字（尾端還不得緊接 `.數字`），
-    避免「引用 `7`」把 `72.5` 的一部分吃掉而洗白數字。長的引用優先。
-    """
-    out = text
-    for q in sorted({q for q in quotes if type(q) is str and q != ""}, key=len, reverse=True):
-        lead = r"(?<![0-9A-Za-z])" if (q[0].isascii() and q[0].isalnum()) else ""
-        tail = r"(?![0-9A-Za-z]|\.[0-9])" if (q[-1].isascii() and q[-1].isalnum()) else ""
-        out = re.sub(lead + re.escape(q) + tail, " ", out)
-    return out
+SHAPES: tuple = _build_shapes()
+#: 骨架簽名 → 句型（簽名必須唯一：`tests` 的 `test_every_shape_signature_is_unique...` 鎖死）。
+_SHAPE_BY_SIG: dict = {_s.signature: _s for _s in SHAPES}
+ACTION_SHAPE_IDS: frozenset = frozenset(s.sid for s in SHAPES if s.sid.startswith("action_item"))
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 單句檢查
+# 渲染（展開成文字；呼叫端只能拿到由 Digest／模板展開出來的字串）
 # ══════════════════════════════════════════════════════════════════════
-def _industry_terms() -> tuple:
-    terms: set = set()
-    for code, name in OFFICIAL_INDUSTRY_CODE_NAMES.items():
-        if name is None or code in INDUSTRY_GENERIC_CODES:
-            continue
-        terms.add(_squash(name))
-        loose = loose_industry_name(name)
-        if len(loose) >= 2:
-            terms.add(_squash(loose))
-    return tuple(sorted(t for t in terms if t))
+def render_sentence(digest: DecisionDigest, sentence: SummarySentence, index: Optional[dict] = None) -> str:
+    """把（已通過 `check_summary` 的）句子展開成文字。未通過者 → ValueError（不渲染不可信內容）。"""
+    idx = index if index is not None else build_ref_index(digest)
+    parts: list = []
+    for g in sentence.segments:
+        if type(g) is Lit:
+            parts.append(TEMPLATES[g.template_id])
+        else:
+            text, gate, code = expand(digest, idx[g.ref_id], g.field)
+            if text is None:
+                raise ValueError(f"無法展開 {g.ref_id!r}.{g.field}：[{gate}/{code}]")
+            parts.append(text)
+    return "".join(parts)
 
 
-_INDUSTRY_TERMS: tuple = _industry_terms()
-_RE_SYMBOL_NUM = re.compile(SYMBOL_NUMERIC_PATTERN)
-_RE_SYMBOL_LATIN = re.compile(SYMBOL_LATIN_PATTERN)
-_RE_DATE = re.compile(DATE_PATTERN)
-_RE_NUMBER = re.compile(NUMBER_PATTERN)
-_RE_NONFINITE = re.compile(NONFINITE_PATTERN)
-_RE_SEGMENT = re.compile("[" + re.escape(SEGMENT_SPLIT_CHARS) + r"\s]+")
-_PLACEHOLDER_SET: frozenset = frozenset(_squash(p) for p in PLACEHOLDER_SEGMENTS)
+def render_draft(digest: DecisionDigest, draft: SummaryDraft) -> tuple:
+    """((段鍵, (句子文字, ...)), ...)。只應對 `clean` 的 draft 使用。"""
+    idx = build_ref_index(digest)
+    return tuple((s.key, tuple(render_sentence(digest, x, idx) for x in s.sentences)) for s in draft.sections)
 
 
+# ══════════════════════════════════════════════════════════════════════
+# 結構檢查（無法解析＝驗證失敗）
+# ══════════════════════════════════════════════════════════════════════
 def _v(gate: str, section: str, idx: int, code: str, message: str) -> GroundingViolation:
     return GroundingViolation(gate=gate, section=section, sentence_index=idx, code=code, message=message)
 
 
-def _unit_ok(after: str, unit: Optional[str]) -> bool:
-    if unit is not None:
-        return after.startswith(_clean(unit))
-    if after == "" or after[0].isspace():
-        return True
-    return unicodedata.category(after[0]).startswith("P") and after[0] not in UNIT_FORBIDDEN_AFTER_NONE
-
-
-def _check_numbers(resid: str, refs: list, symbols: frozenset, sec: str, i: int, numeric_quotes: tuple) -> list:
-    """G2（含 G1 的「未知代號形狀的數字」）。resid 為殘餘文字（未 casefold）。"""
-    out: list = []
-    for ch in resid:
-        cat = unicodedata.category(ch)
-        if cat.startswith("N") and not (ch.isascii() and ch.isdigit()):
-            out.append(_v(GATE_G2, sec, i, "non_ascii_digit", f"不得使用非 ASCII 數字字元：{ch!r}"))
-            break
-    text = _clean(resid)
-    low = text.casefold()
-    if _RE_NONFINITE.search(low):
-        out.append(_v(GATE_G2, sec, i, "non_finite_token", "不得出現 NaN／inf 字樣"))
-
-    allowed_dates = {d for r in refs for d in r.dates}
-    for m in _RE_DATE.finditer(text):
-        if m.group(0) not in allowed_dates:
-            out.append(_v(GATE_G2, sec, i, "date_not_in_digest", f"日期不是所引項目的資料日：{m.group(0)!r}"))
-    text = _RE_DATE.sub(lambda m: " " * len(m.group(0)), text)
-    text = remove_quotes(text, numeric_quotes)   # 純數字的逐字引用：日期遮罩之後才移除，避免吃掉日期的一部分
-    # 已知代號 → 遮罩（不算數字）
-    text = _RE_SYMBOL_NUM.sub(lambda m: " " * len(m.group(0)) if m.group(0) in symbols else m.group(0), text)
-
-    allowed = [lit for r in refs for lit in r.literals]
-    restricted = {lit for r in refs for lit, _ in r.restricted_literals}
-    lit_set = {lit for lit, _ in allowed}
-    for m in _RE_NUMBER.finditer(text):
-        tok, after = m.group(0), text[m.end():]
-        if any(lit == tok and _unit_ok(after, unit) for lit, unit in allowed):
-            continue
-        if tok in restricted:
-            out.append(_v(GATE_G2, sec, i, "restricted_value", f"Risk Cap 區段數字未核准顯示：{tok!r}"))
-        else:
-            out.append(_v(GATE_G2, sec, i, "number_not_literal",
-                          f"數字 {tok!r} 不是所引項目的字面值（含單位與小數位）"))
-    # G1：看起來像代號、卻不在 Digest 的數字
-    for m in _RE_SYMBOL_NUM.finditer(text):
-        digits = re.match(r"\d+", m.group(0)).group(0)
-        if m.group(0) not in symbols and digits not in lit_set:
-            out.append(_v(GATE_G1, sec, i, "symbol_not_in_digest", f"代號 {m.group(0)!r} 不在 Digest 的持股／行動目標"))
-    return out
-
-
-def _check_sentence(sent: SummarySentence, section: str, i: int, index: dict, symbols: frozenset) -> list:
-    out: list = []
-    refs: list = []
-    for rid in sent.evidence_refs:
-        info = index.get(rid)
-        if info is None:
-            out.append(_v(GATE_G1, section, i, "ref_not_in_digest", f"evidence ref 不在 Digest 的引用 id 空間：{rid!r}"))
-            continue
-        refs.append(info)
-        if section not in info.scopes:
-            out.append(_v(GATE_G5, section, i, "ref_out_of_scope",
-                          f"{rid!r} 不屬於「{section}」段的依據（不得以無關項目填充）"))
-    all_quotes = tuple(q for r in refs for q in r.quotes)
-    rich_quotes = tuple(q for q in all_quotes if not is_numeric_quote(q))
-    numeric_quotes = tuple(q for q in all_quotes if is_numeric_quote(q))
-    resid = remove_quotes(sent.text, rich_quotes)
-    clean = _clean(resid)
-    n1 = clean.casefold()
-    n2 = "".join(n1.split())
-    toks = set(_tokens(n1))
-
-    # ── G1 引用封閉 ────────────────────────────────────────────────
-    for m in _RE_SYMBOL_LATIN.finditer(clean):
-        w = m.group(0)
-        if w not in symbols and w not in LATIN_ALLOWED_TOKENS:
-            out.append(_v(GATE_G1, section, i, "symbol_not_in_digest", f"英文代號 {w!r} 不在 Digest"))
-    for term in _INDUSTRY_TERMS:
-        if term in n2:
-            out.append(_v(GATE_G1, section, i, "industry_not_in_digest",
-                          f"出現產業名稱 {term!r}：Digest 的產業段沒有任何允許名單（尚未定義）"))
-            break
-    for sym in STATE_SYMBOLS:
-        if sym in clean:
-            out.append(_v(GATE_G1, section, i, "state_word_not_in_digest", f"燈號符號 {sym!r} 只能逐字引用 Digest"))
-    for w in sorted(toks & STATE_WORDS_LATIN):
-        out.append(_v(GATE_G1, section, i, "state_word_not_in_digest", f"狀態詞 {w!r} 只能逐字引用 Digest"))
-
-    # ── G2 數字字面一致 ───────────────────────────────────────────
-    out += _check_numbers(resid, refs, symbols, section, i, numeric_quotes)
-
-    # ── G3 狀態不可升級 ───────────────────────────────────────────
-    for term in WASHING_TERMS_CJK:
-        if _squash(term) in n2:
-            out.append(_v(GATE_G3, section, i, "washing_term", f"洗白字眼 {term!r}（missing ≠ neutral／normal／HOLD）"))
-    for w in sorted(toks & WASHING_TERMS_LATIN):
-        out.append(_v(GATE_G3, section, i, "washing_term", f"洗白字眼 {w!r}（missing ≠ neutral／normal／HOLD）"))
-    for seg in _RE_SEGMENT.split(n1):
-        if seg and seg in _PLACEHOLDER_SET:
-            out.append(_v(GATE_G3, section, i, "placeholder_segment", f"缺值佔位字單獨成段：{seg!r}"))
-            break
-    full = _squash(sent.text)
-    for r in refs:
-        if r.markers and not any(_squash(m) in full for m in r.markers):
-            out.append(_v(GATE_G3, section, i, "missing_marker",
-                          f"{r.ref_id!r} 非 ok／未定義：句中必須明示其一 {list(r.markers)}"))
-    if any(r.non_ok for r in refs):
-        for term in ASSERTIVE_TERMS_CJK:
-            if _squash(term) in n2:
-                out.append(_v(GATE_G3, section, i, "assertive_tone", f"所引項目非 ok，不得使用確定語氣 {term!r}"))
-                break
-
-    # ── G4 不得新增結論類別 ───────────────────────────────────────
-    bad_act = [t for t in ACTION_TERMS_CJK if _squash(t) in n2] + sorted(toks & ACTION_TERMS_LATIN)
-    if bad_act:
-        out.append(_v(GATE_G4, section, i, "new_action_term",
-                      f"行動字眼 {bad_act[0]!r} 只能逐字引用 Digest 的 actions[]／規則層文字"))
-    bad_dir = [t for t in DIRECTION_TERMS_CJK if _squash(t) in n2] + sorted(toks & DIRECTION_TERMS_LATIN)
-    if bad_dir:
-        out.append(_v(GATE_G4, section, i, "new_direction_term",
-                      f"方向字眼 {bad_dir[0]!r}：Digest 沒有對應欄位（趨勢／產業＝尚未定義）"))
-    for r in refs:
-        if r.kind == "action" and (r.action_text is None or r.action_text not in sent.text):
-            out.append(_v(GATE_G4, section, i, "action_text_not_verbatim",
-                          f"引用行動 {r.ref_id!r} 的句子必須逐字包含該行動文字"))
-    return out
-
-
-# ══════════════════════════════════════════════════════════════════════
-# 結構檢查
-# ══════════════════════════════════════════════════════════════════════
 def _ref_problem(r: Any) -> Optional[str]:
     if type(r) is not str or r == "":
-        return "evidence ref 必須是非空 str"
+        return "ref_id 必須是非空 str"
     if any(ch.isspace() for ch in r):
-        return "evidence ref 不得含空白"
+        return "ref_id 不得含空白"
     if any(unicodedata.category(ch) in FORBIDDEN_CHAR_CATEGORIES for ch in r):
-        return "evidence ref 不得含控制或零寬字元"
+        return "ref_id 不得含控制或零寬字元"
     return None
 
 
 def _structure(draft: Any) -> list:
-    """無法解析的輸入＝驗證失敗（STRUCT）。不 raise。"""
     if type(draft) is not SummaryDraft:
         return [_v(GATE_STRUCT, "", -1, "type", f"摘要必須恰好是 SummaryDraft：{type(draft).__name__}")]
     if type(draft.sections) is not tuple:
@@ -577,30 +531,122 @@ def _structure(draft: Any) -> list:
             continue
         if type(s.key) is not str:
             out.append(_v(GATE_STRUCT, "", -1, "section_key_type", f"sections[{si}].key 必須是 str"))
+        key = str(s.key)
         if type(s.sentences) is not tuple:
-            out.append(_v(GATE_STRUCT, str(s.key), -1, "sentences_not_tuple", "sentences 必須是 tuple"))
+            out.append(_v(GATE_STRUCT, key, -1, "sentences_not_tuple", "sentences 必須是 tuple"))
             continue
         for i, t in enumerate(s.sentences):
             if type(t) is not SummarySentence:
-                out.append(_v(GATE_STRUCT, str(s.key), i, "sentence_type", "句子必須恰好是 SummarySentence"))
+                out.append(_v(GATE_STRUCT, key, i, "sentence_type", "句子必須恰好是 SummarySentence"))
                 continue
-            if type(t.text) is not str or t.text.strip() == "":
-                out.append(_v(GATE_STRUCT, str(s.key), i, "text_blank", "text 必須是非空 str"))
-            elif any(unicodedata.category(ch) in FORBIDDEN_CHAR_CATEGORIES for ch in t.text):
-                out.append(_v(GATE_STRUCT, str(s.key), i, "control_chars_in_text", "句子不得含控制或零寬字元"))
-            if type(t.evidence_refs) is not tuple:
-                out.append(_v(GATE_STRUCT, str(s.key), i, "refs_not_tuple", "evidence_refs 必須是 tuple"))
+            if type(t.segments) is not tuple:
+                out.append(_v(GATE_STRUCT, key, i, "segments_not_tuple", "segments 必須是 tuple"))
                 continue
-            for r in t.evidence_refs:
-                p = _ref_problem(r)
-                if p:
-                    out.append(_v(GATE_STRUCT, str(s.key), i, "bad_ref", f"{p}：{r!r}"))
-            if len(set(r for r in t.evidence_refs if type(r) is str)) != len(
-                    [r for r in t.evidence_refs if type(r) is str]):
-                out.append(_v(GATE_STRUCT, str(s.key), i, "duplicate_ref", "evidence_refs 不得重複"))
+            for g in t.segments:
+                if type(g) is Lit:
+                    if type(g.template_id) is not str:
+                        out.append(_v(GATE_STRUCT, key, i, "template_id_type", "template_id 必須是 str"))
+                elif type(g) is Ref:
+                    p = _ref_problem(g.ref_id)
+                    if p:
+                        out.append(_v(GATE_STRUCT, key, i, "bad_ref", f"{p}：{g.ref_id!r}"))
+                    if type(g.field) is not str:
+                        out.append(_v(GATE_STRUCT, key, i, "field_type", "field 必須是 str"))
+                else:
+                    out.append(_v(GATE_STRUCT, key, i, "segment_type",
+                                  f"segment 必須恰好是 Lit 或 Ref（沒有任意字串的位置）：{type(g).__name__}"))
     return out
 
 
+# ══════════════════════════════════════════════════════════════════════
+# 單句檢查
+# ══════════════════════════════════════════════════════════════════════
+def _check_sentence(sent: SummarySentence, section: str, i: int, digest: DecisionDigest, index: dict) -> tuple:
+    """回傳 (違規 list, 吻合的 Shape | None, slots dict)。"""
+    out: list = []
+    for g in sent.segments:
+        if type(g) is Lit and g.template_id not in TEMPLATES:
+            out.append(_v(GATE_G4, section, i, "template_not_whitelisted", f"模板不在白名單：{g.template_id!r}"))
+        if type(g) is Ref and g.ref_id not in index:
+            out.append(_v(GATE_G1, section, i, "ref_not_in_digest", f"ref 不在 Digest 的引用 id 空間：{g.ref_id!r}"))
+    if out:
+        return out, None, {}
+    sig = tuple(("L", g.template_id) if type(g) is Lit else ("R", index[g.ref_id].kind, g.field) for g in sent.segments)
+    shape = _SHAPE_BY_SIG.get(sig)
+    if shape is None:
+        return [_v(GATE_G4, section, i, "shape_not_whitelisted", "句子的骨架不吻合任何白名單句型（fail-closed）")], None, {}
+    slots: dict = {}
+    for el, g in zip(shape.skeleton, sent.segments):
+        if el[0] != "R":
+            continue
+        info = index[g.ref_id]
+        if slots.setdefault(el[1], info).ref_id != info.ref_id:
+            out.append(_v(GATE_G1, section, i, "slot_ref_mismatch",
+                          f"同一個 slot 的 segment 必須指向同一個項目：{slots[el[1]].ref_id!r} ≠ {info.ref_id!r}"))
+        text, gate, code = expand(digest, info, g.field)
+        if text is None:
+            out.append(_v(gate, section, i, code, f"{g.ref_id!r} 不能展開欄位 {g.field!r}"))
+    if section not in shape.sections:
+        out.append(_v(GATE_G4, section, i, "shape_out_of_section", f"句型 {shape.sid!r} 不屬於「{section}」段"))
+    fail = shape.pre(Ctx(digest, index, section, slots))     # 前置條件一律檢查（與欄位展開失敗並列回報）
+    if fail is not None:
+        out.append(_v(fail[0], section, i, fail[1], fail[2]))
+    return out, shape, slots
+
+
+# ══════════════════════════════════════════════════════════════════════
+# G5 的「必須明示」清單
+# ══════════════════════════════════════════════════════════════════════
+def _fact_shape_ids(status: DataStatus) -> tuple:
+    if status is DataStatus.STALE:
+        return tuple(f"fact_{k}_stale" for k in ("text", "value", "value_pct"))
+    if status is DataStatus.PROXY:
+        return tuple(f"fact_{k}_proxy" for k in ("text", "value", "value_pct"))
+    if status is DataStatus.INVALID:
+        return ("fact_invalid",)
+    return ("fact_missing",)
+
+
+def section_basis(digest: DecisionDigest, key: str) -> tuple:
+    """G5 的「必須明示」清單：((引用 id, 可接受的句型 id tuple), ...)。
+
+    只列「Digest 中非 ok 的依據」：缺資料／過期／代理的市場事實、未定義的趨勢／產業／合理區間、Risk Cap 卡面措辭、
+    持股讀不到／未帶鍵持股／尚未設定策略分類／已分類持股（判定未接線）、行動不可得／規則層未產出行動。全部由 Digest 推導。
+    行動段不列在此（見下方註解）：各項行動由 `action_list_mismatch`（一對一）檢查。
+    """
+    out: list = []
+    if key == SEC_MARKET:
+        for f in digest.market.facts:
+            if f.status is not DataStatus.OK:
+                out.append((f.fact_id, _fact_shape_ids(f.status)))
+        for name in ("tw_trend", "intl_trend", "valuation"):
+            out.append((section_ref(name), ("section_undefined",)))
+        out.append((section_ref("risk_cap"), ("risk_wording",)))
+    elif key == SEC_INDUSTRY:
+        out.append((section_ref("industry"), ("section_undefined",)))
+    elif key in (SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN):
+        hs = digest.holdings
+        rid = section_ref("holdings")
+        if hs.availability is Availability.UNAVAILABLE:
+            out.append((rid, (f"holdings_unavailable:{key}",)))
+        if hs.unkeyed_count > 0:
+            out.append((rid, ("holdings_unkeyed",)))
+        if hs.availability is not Availability.UNAVAILABLE:
+            mine = strategy_entries(digest, key)
+            for h in mine:
+                out.append((holding_ref(h.key.portfolio_id, h.key.symbol), ("strategy_entry",)))
+            if not mine:
+                out.append((rid, (f"strategy_unset:{key}",)))
+    elif key == SEC_ACTIONS:
+        pass       # 行動段：不可得／無行動由「句型前置條件＋非空段」涵蓋，各項行動由 `action_list_mismatch` 一對一檢查
+    else:
+        raise ValueError(f"未知的摘要段：{key!r}")
+    return tuple(out)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 報告與入口
+# ══════════════════════════════════════════════════════════════════════
 def _report(violations: list, dropped: list, *, structural: bool, digest_invalid: bool,
             surviving: Optional[SummaryDraft]) -> GroundingReport:
     gates = tuple(g for g in GROUNDING_GATES if any(v.gate == g for v in violations))
@@ -622,12 +668,10 @@ def check_summary(digest: Any, draft: Any) -> GroundingReport:
         return _report(struct, [], structural=True, digest_invalid=False, surviving=None)
 
     index = build_ref_index(digest)
-    symbols = symbol_allowlist(digest)
     violations: list = []
     dropped: list = []
     kept_sections: list = []
 
-    # G5：段落鍵齊全、唯一、順序
     keys = [s.key for s in draft.sections]
     for k in keys:
         if k not in SECTION_KEYS:
@@ -646,29 +690,112 @@ def check_summary(digest: Any, draft: Any) -> GroundingReport:
         if s.key not in SECTION_KEYS:
             continue
         surviving: list = []
+        matched: list = []                     # [(Shape, slots)]，與 surviving 對齊
         for i, sent in enumerate(s.sentences):
-            if not sent.evidence_refs:                       # G6：無依據的句子丟棄
-                violations.append(_v(GATE_G6, s.key, i, "no_evidence_ref", "結論句沒有綁定任何 evidence_ref，丟棄"))
+            if not sent.evidence_refs:         # G6：沒有任何 Ref segment 的句子丟棄
+                violations.append(_v(GATE_G6, s.key, i, "no_evidence_ref", "結論句沒有綁定任何項目，丟棄"))
                 dropped.append((s.key, i))
                 continue
-            violations += _check_sentence(sent, s.key, i, index, symbols)
+            vs, shape, slots = _check_sentence(sent, s.key, i, digest, index)
+            violations += vs
             surviving.append(sent)
+            if not vs:
+                matched.append((shape, slots))
         kept_sections.append(SummarySection(key=s.key, sentences=tuple(surviving)))
         if not surviving:
             violations.append(_v(GATE_G5, s.key, -1, "empty_section", "該段沒有任何有依據的句子（不得省略，須明示資料不足）"))
-        else:
-            for rid, markers in section_basis(digest, s.key, index):
-                hit = any(rid in x.evidence_refs and any(_squash(m) in _squash(x.text) for m in markers)
-                          for x in surviving)
-                if not hit:
-                    violations.append(_v(GATE_G5, s.key, -1, "missing_disclosure",
-                                         f"「{s.key}」段未明示 {rid!r}（須含其一 {list(markers)}）"))
+            continue
+        if len(set(surviving)) != len(surviving):
+            violations.append(_v(GATE_G5, s.key, -1, "duplicate_sentence", "段內不得有重複的句子"))
+        for rid, sids in section_basis(digest, s.key):
+            if not any(sh.sid in sids and sl[0].ref_id == rid for sh, sl in matched):
+                violations.append(_v(GATE_G5, s.key, -1, "missing_disclosure",
+                                     f"「{s.key}」段未以白名單句型明示 {rid!r}（須為 {list(sids)}）"))
+        if s.key == SEC_ACTIONS:
+            got = [sl[0].ref_id for sh, sl in matched if sh.sid in ACTION_SHAPE_IDS]
+            want = [a.action_id for a in digest.actions.items]
+            if got != want:
+                violations.append(_v(GATE_G4, s.key, -1, "action_list_mismatch",
+                                     f"行動必須與 Digest actions[] 一對一、同順序、無重複、無遺漏：{got!r} ≠ {want!r}"))
     surv = SummaryDraft(sections=tuple(kept_sections))
     return _report(violations, dropped, structural=False, digest_invalid=False, surviving=surv)
 
 
+# ══════════════════════════════════════════════════════════════════════
+# INVALID 的診斷文字
+# ══════════════════════════════════════════════════════════════════════
+def invalid_notices(assessment: DigestAssessment) -> tuple:
+    secs = "、".join(LABEL_ALL_SECTIONS if k == SECTION_ALL else SECTION_LABELS[k]
+                    for k in assessment.invalid_sections)
+    codes = "、".join(sorted({v.code for v in assessment.violations}))
+    return (
+        "⛔ Decision Digest 契約不合規（contract drift）：不輸出任何投資結論。",
+        f"無效段落：{secs}",
+        f"失敗閘門：{'、'.join(assessment.failed_gates)}",
+        f"違規代碼：{codes}",
+        "其他段落：未保留（違規影響範圍未知，整份 Digest 不採信）。",
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 統一摘要結果（與 Digest 綁定；只暴露「通過檢查」的內容）
+# ══════════════════════════════════════════════════════════════════════
+@dataclass(frozen=True)
+class SummaryResult:
+    """統一的摘要結果型別（規則式摘要與未來 AI 摘要共用；本批只產生 `mode=RULE_ONLY`）。
+
+    只有三個可傳入欄位：`digest`、`mode`、`sections`。其餘（state、section_availability、notices、
+    invalid_sections、failed_gates、violations、retained_sections）**全部在建構時由 Digest 推導**
+    （`init=False`），所以無法手造不一致的組合；`dataclasses.replace` 會重跑 `__post_init__`。
+    建構時強制：
+    - `mode` 必須是 AB-0 既有的 `AiParticipation`（不新增列舉值）；
+    - Digest INVALID ⇒ `sections` 必須為空（不輸出任何投資結論）；
+    - 否則 `sections` 必須通過 `check_summary` 且**乾淨**（無丟棄、`surviving == 原內容`）—— 摘要內容與 Digest 綁定。
+    """
+    digest: Any
+    mode: AiParticipation
+    sections: tuple = ()
+    state: SummaryState = field(init=False)
+    section_availability: tuple = field(init=False)
+    notices: tuple = field(init=False)
+    invalid_sections: tuple = field(init=False)
+    failed_gates: tuple = field(init=False)
+    violations: tuple = field(init=False)
+    retained_sections: tuple = field(init=False)
+
+    def __post_init__(self) -> None:
+        if type(self.mode) is not AiParticipation:
+            raise ValueError(f"SummaryResult.mode 必須是 AiParticipation：{self.mode!r}")
+        a = assess_digest(self.digest)
+        sset = object.__setattr__
+        sset(self, "state", a.state)
+        sset(self, "section_availability", a.section_availability)
+        sset(self, "violations", a.violations)
+        sset(self, "invalid_sections", a.invalid_sections)
+        sset(self, "failed_gates", a.failed_gates)
+        if a.state is SummaryState.INVALID:
+            if self.sections != ():
+                raise ValueError("INVALID 時不得輸出任何段落（sections 必須為空）")
+            sset(self, "notices", invalid_notices(a))
+            sset(self, "retained_sections", ())
+            return
+        rep = check_summary(self.digest, SummaryDraft(self.sections))
+        if not rep.clean:
+            raise ValueError("摘要未通過自檢（grounding）：" + "；".join(
+                f"[{v.gate}/{v.code}] {v.section}#{v.sentence_index}: {v.message}" for v in rep.violations))
+        sset(self, "notices", ())
+        sset(self, "retained_sections", SECTION_KEYS)
+
+    @property
+    def lines(self) -> tuple:
+        """((段鍵, (句子文字, ...)), ...) —— 由 Digest＋模板展開的唯一文字來源。INVALID → ()。"""
+        if self.state is SummaryState.INVALID:
+            return ()
+        return render_draft(self.digest, SummaryDraft(self.sections))
+
+
 __all__ = [
-    "SummarySentence", "SummarySection", "SummaryDraft", "GroundingViolation", "GroundingReport",
-    "SummaryResult", "RefInfo", "number_literal", "build_ref_index", "holding_ref", "section_ref",
-    "symbol_allowlist", "section_basis", "remove_quotes", "is_numeric_quote", "check_summary",
+    "Lit", "Ref", "SummarySentence", "SummarySection", "SummaryDraft", "GroundingViolation", "GroundingReport",
+    "SummaryResult", "RefInfo", "Shape", "SHAPES", "number_literal", "build_ref_index", "holding_ref",
+    "section_ref", "expand", "oldest_stale_evidence", "render_sentence", "render_draft", "section_basis", "check_summary", "invalid_notices",
 ]

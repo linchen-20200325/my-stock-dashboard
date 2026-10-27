@@ -21,7 +21,7 @@ from shared.decision_digest import (
     ActionsSection, AiParticipation, Availability, DataStatus, HoldingKey, MissingReason, StrategyType,
 )
 from shared.decision_digest_grounding import (
-    SummaryDraft, SummarySection, SummarySentence, build_ref_index, check_summary,
+    Lit, Ref, expand, SummaryDraft, SummarySection, SummarySentence, build_ref_index, check_summary,
 )
 from shared.decision_digest_rules import Q4_ACTION_PRIORITY
 from shared.decision_digest_validator import SummaryState, assess_digest
@@ -31,7 +31,7 @@ from src.services import decision_digest_summary as SM
 from src.services.decision_digest_builder import SourceStamp, build_decision_digest
 from src.services.decision_digest_summary import build_rule_summary, compose_rule_draft
 from tests.decision_digest_factory import (
-    D, action, empty_digest, entry, failed, force_set, invalid, make_digest, missing, ok_text,
+    D, action, empty_digest, entry, failed, force_set, invalid, lint_hits, make_digest, missing, ok_text,
     ok_val, proxy_val, stale_text, stale_val,
 )
 
@@ -43,7 +43,7 @@ WASHING = (*T.WASHING_TERMS_CJK,)
 
 
 def texts(res, key=None):
-    return [s.text for sec in res.sections if key in (None, sec.key) for s in sec.sentences]
+    return [t for k, ls in res.lines if key in (None, k) for t in ls]
 
 
 def sec(res, key):
@@ -94,8 +94,9 @@ def test_actions_are_verbatim_in_digest_order_and_one_to_three():
         sents = sec(r, T.SEC_ACTIONS).sentences
         assert len(sents) == n
         for s, a in zip(sents, d.actions.items):
-            assert a.text in s.text and s.text == f"{a.target.symbol}：{a.text}"      # 逐字、不改寫
             assert s.evidence_refs[0] == a.action_id
+        for line, a in zip(texts(r, T.SEC_ACTIONS), d.actions.items):
+            assert line == f"{a.target.symbol}：{a.text}"                              # 逐字、不改寫
         # Q4 序：與 Digest 的順序完全一致（不重排）
         assert [s.evidence_refs[0] for s in sents] == [a.action_id for a in d.actions.items]
 
@@ -129,7 +130,7 @@ def test_missing_never_becomes_neutral_or_zero():
     assert not re.findall(r"(?<![\w.])0(?:\.0+)?%?(?![\w.])", txt)                      # 沒有任何被當成 0 的缺值
     for s in texts(r, T.SEC_MARKET)[:3]:
         assert s.startswith("⬜") and "資料不足" in s and "無法判定" in s
-    assert "資料不足" in sec(r, T.SEC_ACTIONS).sentences[0].text
+    assert "資料不足" in texts(r, T.SEC_ACTIONS)[0]
     assert len(sec(r, T.SEC_ACTIONS).sentences) == 1                                      # 沒有行動被編造
 
 
@@ -211,7 +212,7 @@ def test_action_sentence_stale_evidence_is_disclosed_and_out_of_scope_evidence_n
                                                evidence=(stale_fact.fact_id, "market.health"))])
     r = build_rule_summary(d)
     s = sec(r, T.SEC_ACTIONS).sentences[0]
-    assert "依據資料已過期" in s.text and "2026-10-26" in s.text
+    assert "依據資料已過期" in texts(r, T.SEC_ACTIONS)[0] and "2026-10-26" in texts(r, T.SEC_ACTIONS)[0]
     assert s.evidence_refs == (d.actions.items[0].action_id, stale_fact.fact_id)      # 市場事實不在本段引用
 
 
@@ -223,14 +224,15 @@ def test_actions_available_with_zero_items_says_rule_layer_produced_none():
     assert not any(w in all_text(r) for w in ("維持", "續抱", "不動作", "HOLD"))      # 沒有行動 ≠ 持有
 
 
-def test_strategy_classified_holdings_show_source_and_unwired_judgement():
+def test_strategy_classified_holdings_show_unwired_judgement_but_never_the_free_text_source():
     d = make_digest(entries=[entry("0050", "t", "add", strategy=StrategyType.BUY_AND_HOLD, source="客戶設定"),
                              entry("0056", "u", "cut", strategy=StrategyType.CAPITAL_GAIN, source="Sheet 設定")],
                     items=[action("0056", "u", "cut", 1)])
     r = build_rule_summary(d)
     bh, cg = texts(r, T.SEC_BUY_AND_HOLD), texts(r, T.SEC_CAPITAL_GAIN)
-    assert bh == ["0050：策略分類為存股（來源：客戶設定）；基本面與配置判定尚未接線，無法判定"]
-    assert cg == ["0056：策略分類為資本利得（來源：Sheet 設定）；基本面與配置判定尚未接線，無法判定"]
+    assert bh == ["0050：策略分類為存股；基本面與配置判定尚未接線，無法判定"]            # 來源（使用者自由文字）不進摘要
+    assert cg == ["0056：策略分類為資本利得；基本面與配置判定尚未接線，無法判定"]
+    assert "客戶設定" not in all_text(r) and "Sheet 設定" not in all_text(r)
     assert dict(r.section_availability)[T.SEC_BUY_AND_HOLD] is Availability.PARTIAL      # 不升格為 AVAILABLE
 
 
@@ -281,7 +283,7 @@ def test_end_to_end_with_real_engine_text_is_byte_identical():
     assert r.state is SummaryState.PARTIAL
     want = [row["建議動作"] for row in rows if row["_action"] in ("cut", "take_profit_force", "take_profit_partial",
                                                               "pause_add", "add")]
-    got = [x.text.split("：", 1)[1] for x in sec(r, T.SEC_ACTIONS).sentences]
+    got = [x.split("：", 1)[1] for x in texts(r, T.SEC_ACTIONS)]
     assert got == want and len(got) >= 1
 
 
@@ -340,33 +342,33 @@ def test_single_section_invalid_does_not_leave_other_sections_as_valid_output():
 # ══════════════════════════════════════════════════════════════════════
 # 自檢：摘要若通不過自己的 G 檢查 → Fail Loud
 # ══════════════════════════════════════════════════════════════════════
-@pytest.mark.parametrize("poison", [
-    "建議買進", "整體正常", "市場中性", "產業變強", "半導體", "成長 99.9", "🔴", "TSLA",
-])
-def test_self_check_fails_loud_when_summary_would_violate_grounding(monkeypatch, poison):
+def _poison_first_market_sentence(monkeypatch, sentence):
     real = compose_rule_draft
 
     def poisoned(digest):
         draft = real(digest)
         secs = list(draft.sections)
         first = secs[0]
-        bad = SummarySentence(f"市場位階：{poison}", ("market.regime",))
-        secs[0] = SummarySection(first.key, (bad, *first.sentences[1:]))
+        secs[0] = SummarySection(first.key, (sentence, *first.sentences[1:]))
         return SummaryDraft(tuple(secs))
     monkeypatch.setattr(SM, "compose_rule_draft", poisoned)
+
+
+@pytest.mark.parametrize("sentence", [
+    SummarySentence((Lit("買進"), Ref("market.regime", T.FIELD_LABEL))),                      # 模板不在白名單
+    SummarySentence((Ref("market.nope", T.FIELD_LABEL),)),                                   # 引用不存在
+    SummarySentence((Ref("market.regime", T.FIELD_LABEL), Lit(T.TPL_UNDETERMINED_TAIL))),    # 骨架不在白名單
+    SummarySentence((Ref("market.regime", T.FIELD_LABEL), Lit(T.TPL_COLON), Ref("market.regime", T.FIELD_VALUE),
+                     Lit(T.TPL_DATE_OPEN), Ref("market.regime", T.FIELD_AS_OF), Lit(T.TPL_CLOSE))),   # 欄位不可展開
+])
+def test_self_check_fails_loud_when_summary_would_violate_grounding(monkeypatch, sentence):
+    _poison_first_market_sentence(monkeypatch, sentence)
     with pytest.raises(ValueError, match="自檢"):
         build_rule_summary(make_digest())
 
 
 def test_self_check_fails_loud_on_dropped_sentence(monkeypatch):
-    real = compose_rule_draft
-
-    def with_unbound(digest):
-        draft = real(digest)
-        s0 = draft.sections[0]
-        secs = (SummarySection(s0.key, s0.sentences + (SummarySentence("沒有依據的結論", ()),)), *draft.sections[1:])
-        return SummaryDraft(secs)
-    monkeypatch.setattr(SM, "compose_rule_draft", with_unbound)
+    _poison_first_market_sentence(monkeypatch, SummarySentence((Lit(T.TPL_GLYPH),)))        # 無 Ref → 會被 G6 丟棄
     with pytest.raises(ValueError, match="自檢"):
         build_rule_summary(make_digest())
 
@@ -378,7 +380,8 @@ def test_rule_summary_sentences_all_cite_known_refs_and_pass_gates():
     for sec_ in r.sections:
         for s in sec_.sentences:
             assert s.evidence_refs and all(ref in idx for ref in s.evidence_refs)
-    assert check_summary(d, SummaryDraft(r.sections)).accepted
+            assert all(type(g) in (Lit, Ref) for g in s.segments)                      # 只有模板與欄位展開，沒有自由文字
+    assert check_summary(d, SummaryDraft(r.sections)).clean
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -412,7 +415,7 @@ def test_rule_summary_wording_survives_arbitrary_digest_numbers():
                                       ok_val("market.health", v)])
         r = build_rule_summary(d)
         assert r.state is SummaryState.PARTIAL
-        assert check_summary(d, SummaryDraft(r.sections)).accepted
+        assert check_summary(d, SummaryDraft(r.sections)).clean
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -498,15 +501,19 @@ def test_property_random_digests_never_raise_and_never_launder_missing(seed):
         n_valid += 1
         assert r.state in (SummaryState.PARTIAL, SummaryState.UNAVAILABLE)           # 現行契約下 VALID 不可達
         assert tuple(s.key for s in r.sections) == T.SECTION_KEYS
+        idx = build_ref_index(d)
         rep = check_summary(d, SummaryDraft(r.sections))
-        assert rep.accepted and not rep.dropped
-        # 洗白字眼不得出現在「摘要自己寫的」部分（Digest 逐字文字不在此限，故先移除）
-        quotes = sorted({q for info in build_ref_index(d).values() for q in info.quotes}, key=len, reverse=True)
-        authored = all_text(r)
-        for q in quotes:
-            authored = authored.replace(q, " ")
-        for w in WASHING:
-            assert w not in authored
+        assert rep.clean
+        # 摘要自己寫的部分（模板＋標籤；不含 Digest 逐字內容）不得含任何被禁字眼
+        for sec_ in r.sections:
+            for sent in sec_.sentences:
+                authored = "".join(
+                    T.TEMPLATES[g.template_id] if type(g) is Lit
+                    else ("" if g.field in (T.FIELD_TEXT, T.FIELD_SYMBOL, T.FIELD_VALUE, T.FIELD_AS_OF, T.FIELD_COUNT,
+                                           T.FIELD_STRATEGY)
+                          else expand(d, idx[g.ref_id], g.field)[0] or "")
+                    for g in sent.segments)
+                assert lint_hits(authored) == [], authored
         # 缺值句一定有明示
         for f in d.market.facts:
             if f.status.value in ("missing", "failed", "invalid"):
@@ -541,3 +548,43 @@ def test_property_corrupted_digests_always_degrade_to_invalid_without_raising(se
 
 def test_date_type_is_not_datetime_in_fixture():          # 夾具健全性：D 是 date，不是 datetime
     assert type(D) is date
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 行動段：順序／證據（回修版補測）
+# ══════════════════════════════════════════════════════════════════════
+def test_actions_keep_digest_order_even_when_ids_are_not_sorted():
+    d = make_digest(entries=[entry("0056", ACT_CUT, "cut"), entry("0050", ACT_ADD, "add")],
+                    items=[action("0056", ACT_CUT, "cut", 1), action("0050", ACT_ADD, "add", 2)])
+    r = build_rule_summary(d)
+    assert texts(r, T.SEC_ACTIONS) == [f"0056：{ACT_CUT}", f"0050：{ACT_ADD}"]
+    assert [a.action_id for a in d.actions.items] != sorted(a.action_id for a in d.actions.items)
+
+
+@pytest.mark.parametrize("order", [("old_first", "new_second"), ("new_second", "old_first")])
+def test_stale_evidence_discloses_the_oldest_date_regardless_of_evidence_order(order):
+    from datetime import date as _date
+    from shared.decision_digest import Fact, Provenance
+    f_old = Fact("ev.old", DataStatus.STALE, Provenance("svc", as_of=_date(2026, 10, 20)), text="舊證據")
+    f_new = Fact("ev.new", DataStatus.STALE, Provenance("svc", as_of=_date(2026, 10, 24)), text="新證據")
+    from tests.decision_digest_factory import action_fact
+    e = entry("0050", None, facts=(action_fact("0050", ACT_CUT, "cut"), f_old, f_new))
+    ev = tuple({"old_first": "ev.old", "new_second": "ev.new"}[k] for k in order)
+    d = make_digest(entries=[e], items=[action("0050", ACT_CUT, "cut", 1, evidence=ev)])
+    assert texts(build_rule_summary(d), T.SEC_ACTIONS) == [f"0050：{ACT_CUT}（依據資料已過期，資料日 2026-10-20）"]
+
+
+def test_restricted_stale_evidence_does_not_break_or_leak():
+    """行動證據指向 Risk Cap 區段的 stale 事實：該事實整個受限（連資料日都不能展開），摘要照常用一般句型、不外露。"""
+    from shared import decision_digest as AB0
+    from shared.decision_digest import RiskCapSection
+    from tests.decision_digest_factory import RISK_RULE, stale_val as _stale
+    cap = _stale("risk_cap.cap_pct", 60, "%")
+    force_set(cap, rule=RISK_RULE)
+    base_rc = make_digest().risk_cap
+    rc = RiskCapSection(True, cap, base_rc.exposure_lo_pct, base_rc.exposure_hi_pct, AB0.Availability.PARTIAL)
+    d = make_digest(risk_cap=rc, items=[action("0050", ACT_CUT, "cut", 1, evidence=("risk_cap.cap_pct",))],
+                    entries=[entry("0050", ACT_CUT, "cut")])
+    r = build_rule_summary(d)
+    assert texts(r, T.SEC_ACTIONS) == [f"0050：{ACT_CUT}"]
+    assert "60" not in all_text(r)

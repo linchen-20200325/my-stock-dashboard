@@ -1,21 +1,22 @@
 """shared/decision_digest_terms.py — AB-2a 摘要／grounding 共用的**具名常數**（L0；只放常數，零邏輯）。
 
 ═══ 這個檔是什麼 ═══════════════════════════════════════════════════════
-`docs/vnext/NEWUI_D25_C_AI_BRAIN_DATA_2026-10-27.md` §2.4 的 G1～G6 需要「字眼清單」與「標示語」。
-依 CLAUDE.md §3.3（禁止 inline magic）與 §8.2，這些清單集中在本檔，由
-`shared/decision_digest_grounding.py`（驗證）與 `src/services/decision_digest_summary.py`（規則式摘要）
-共用 —— 兩邊引用同一份，漂移即測試紅燈。
+`docs/vnext/NEWUI_D25_C_AI_BRAIN_DATA_2026-10-27.md` §2.4 的 G1～G6 需要「模板」與「標示語」。
+依 CLAUDE.md §3.3（禁止 inline magic）與 §8.2，這些常數集中在本檔，由
+`shared/decision_digest_grounding.py`（驗證）與 `src/services/decision_digest_summary.py`（規則式摘要）共用。
 
-⚠️ **全部字眼清單都是「盡力而為的拒收／要求名單」，不是完備判定**（換個拼法就能繞過；中文數字、
-同義詞、英文以外的語言都擋不住）。它們是縱深防禦的一層；結構性防線是
-「引用封閉＋逐字引用（quote）豁免＋數字字面一致」（見 grounding 模組）。
+═══ 主防線：句型白名單（fail-closed） ═══════════════════════════════════════
+摘要句子不是自由文字，而是 **segment 序列**：每個 segment 只能是 (a) 本檔 `TEMPLATES` 的**固定模板片段**
+（以 id 引用，不是任意字串），或 (b) 對某個 Digest 項目的**欄位展開**（`FIELD_*`，由 checker 從 Digest 取值）。
+不允許任何殘餘自由文字，因此同形異字、簡體、同義詞、中文數字、否定／矛盾、夾帶結論都沒有地方可以放。
 
-⚠️ 這些清單不是投資規則、門檻或權重：它們決定的是「這句話**能不能出現在摘要裡**」，不是「市場怎麼樣」。
-本檔不新增任何投資判斷，不重述任何規則層文字。
+⚠️ 下方的字眼清單（洗白／確定語氣／行動／方向／狀態詞）**不再是執行期的主防線**：它們是 **L0 模板與標籤的
+建置期 lint**（測試保證每個模板、標籤、標示語都不含這些字眼，避免日後有人在模板裡偷渡）。它們仍是盡力而為，不是完備判定。
+
+本檔不新增任何投資判斷規則、門檻或權重。
 """
 from __future__ import annotations
 
-from shared.decision_digest import PLACEHOLDER_TEXTS  # AB-0 缺值佔位字（G3 沿用其概念；只讀）
 
 # ══════════════════════════════════════════════════════════════════════
 # 五段結構（C §3.1；客戶規格 §九）
@@ -69,15 +70,6 @@ MISSING_GLYPH = "⬜"
 
 #: 「判不出來」類標示（缺值、失敗、不合法共用）：任一出現即滿足。
 MARKERS_UNDETERMINED: tuple = (MARK_INSUFFICIENT, MARK_UNDETERMINED)
-#: 段落層引用（unavailable／partial）可接受的標示語（較寬；具體要求由 G5 的 basis 逐項指定）。
-MARKERS_SECTION_BROAD: tuple = (
-    MARK_INSUFFICIENT, MARK_UNDETERMINED, MARK_NOT_DEFINED, MARK_NOT_WIRED, MARK_RESEARCH_ONLY,
-    MARK_STRATEGY_UNSET, MARK_UNKEYED, MARK_NO_ACTION, RISK_CAP_HIDDEN_WORDING,
-)
-
-# ══════════════════════════════════════════════════════════════════════
-# G3：洗白字眼（missing ≠ neutral／normal／HOLD；PROJECT_RULES.md §16.1）
-# ══════════════════════════════════════════════════════════════════════
 #: 中文洗白字眼：以「去空白、NFKC、casefold」後的**子字串**比對。
 WASHING_TERMS_CJK: tuple = (
     "中性", "正常", "維持", "續抱", "持有", "觀望", "不動作", "照舊", "如常", "不變", "無異常",
@@ -86,10 +78,6 @@ WASHING_TERMS_CJK: tuple = (
 WASHING_TERMS_LATIN: frozenset = frozenset({
     "neutral", "normal", "hold", "maintain", "steady", "unchanged",
 })
-#: 缺值佔位字（沿用 AB-0 `PLACEHOLDER_TEXTS`）：句中以標點／空白切開的**整段**等於其一者拒收。
-PLACEHOLDER_SEGMENTS: frozenset = PLACEHOLDER_TEXTS
-#: 句子切段用的分隔字元集合（標點與空白；比對 `PLACEHOLDER_SEGMENTS` 用）。
-SEGMENT_SPLIT_CHARS: str = "：:，,、；;。！!（）()「」『』｜|"
 #: 「確定語氣」字眼：引用 status ∈ {missing, stale, proxy, failed, invalid} 的項目時，句中不得出現。
 ASSERTIVE_TERMS_CJK: tuple = (
     "確定", "確認", "肯定", "必然", "一定", "明確", "顯然", "毫無疑問", "必定", "絕對", "已證實",
@@ -127,28 +115,6 @@ INDUSTRY_SUBJECT_TERMS: tuple = ("產業", "類股", "板塊", "族群")
 STATE_SYMBOLS: tuple = ("🟢", "🟡", "🔴", "🟠", "⚪", "🟣", "🔵")
 #: 狀態詞：regime 英文狀態（C §4 MarketBlock.regime 列舉）。
 STATE_WORDS_LATIN: frozenset = frozenset({"bull", "neutral", "caution", "bear", "unknown"})
-#: 代號形狀：4–6 位數字（可帶一個英文字尾，如 `00679B`）。
-SYMBOL_NUMERIC_PATTERN = r"(?<![0-9A-Za-z.])\d{4,6}[A-Za-z]?(?![0-9A-Za-z]|\.\d)"
-#: 英文代號形狀：2–5 個大寫字母（如 `TSLA`）。
-SYMBOL_LATIN_PATTERN = r"(?<![A-Za-z0-9])[A-Z]{2,5}(?![A-Za-z0-9])"
-#: 允許出現而不算「Digest 外的代號」的英文縮寫。
-LATIN_ALLOWED_TOKENS: frozenset = frozenset({"ETF", "EPS", "PE"})
-
-# ══════════════════════════════════════════════════════════════════════
-# G2：數字字面一致
-# ══════════════════════════════════════════════════════════════════════
-#: ISO 日期（資料日）：整段視為一個 token，必須字面等於引用項目的 as_of。
-DATE_PATTERN = r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)"
-#: 數值 token：可帶正負號與小數；前面不得緊接數字或小數點（避免切半）。
-NUMBER_PATTERN = r"(?<![0-9.])[+-]?\d+(?:\.\d+)?"
-#: 非有限數值字樣（NaN／inf／∞）。
-NONFINITE_PATTERN = r"(?<![a-z])(?:nan|inf|infinity)(?![a-z])|∞"
-#: 單位為 None 時，數字後面不得緊接的標點（避免「60」被當成「60%」）。
-UNIT_FORBIDDEN_AFTER_NONE: str = "%‰"
-
-# ══════════════════════════════════════════════════════════════════════
-# 規則式摘要的顯示字串（SSOT：摘要與驗證共用同一份）
-# ══════════════════════════════════════════════════════════════════════
 #: 市場事實 fact_id → 顯示標籤（builder 只產生這三個；其他 id → `FACT_LABEL_FALLBACK`）。
 FACT_LABELS: dict = {
     "market.regime": "市場位階",
@@ -174,8 +140,16 @@ MISSING_REASON_LABELS: dict = {
 }
 MISSING_REASON_LABEL_UNKNOWN = "原因不明"
 
-#: 單句不得含的字元類別（Unicode category）：控制字元與零寬／格式字元。
-FORBIDDEN_CHAR_CATEGORIES: tuple = ("Cc", "Cf")
+#: Digest 文字（Fact.text／ActionRef.text／strategy_source）與摘要不得含的字元類別：控制、零寬／格式、代理、
+#: 私用區、未指派、行／段分隔。另外 `Zs` 只允許普通空格 U+0020（NBSP、全形空白 U+3000 等一律拒收 ——
+#: 全形空白的決定：拒收，因為它能讓「看起來相同」的兩段文字逐字不相等）。
+FORBIDDEN_CHAR_CATEGORIES: tuple = ("Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp")
+#: 唯一允許的空白字元。
+ALLOWED_SPACE = " "
+#: 組合記號類別（孤立判定用）：Mn／Mc／Me。
+COMBINING_CATEGORIES: tuple = ("Mn", "Mc", "Me")
+#: 市場事實允許的單位（None 以外）。摘要的單位由「模板」決定，不展開 Digest 的 unit 字串。
+SUPPORTED_UNITS: tuple = ("%",)
 
 # ══════════════════════════════════════════════════════════════════════
 # 閘門識別碼
@@ -193,3 +167,82 @@ GATE_AB1_RULE_ID = "AB1_RULE_ID"
 GATE_AB1_ACTION_ORDER = "AB1_ACTION_ORDER"
 GATE_AB2A_TEXT = "AB2A_TEXT"
 GATE_AB2A_REFS = "AB2A_REFS"
+#: Digest 層閘門的固定順序（`failed_gates` 輸出順序；確定性，不依賴 set／hash）。
+DIGEST_GATES_ORDER: tuple = (GATE_AB0_CONTRACT, GATE_AB1_RULE_ID, GATE_AB1_ACTION_ORDER, GATE_AB2A_TEXT,
+                             GATE_AB2A_REFS)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 句型白名單：固定模板片段（id → 字串）與欄位展開名
+# ══════════════════════════════════════════════════════════════════════
+TPL_GLYPH = "tpl.glyph"
+TPL_COLON = "tpl.colon"
+TPL_PCT = "tpl.pct"
+TPL_CLOSE = "tpl.close"
+TPL_DATE_OPEN = "tpl.date_open"
+TPL_STALE_DATE_OPEN = "tpl.stale_date_open"
+TPL_PROXY_TAIL = "tpl.proxy_tail"
+TPL_MISSING_OPEN = "tpl.missing_open"
+TPL_INVALID_TAIL = "tpl.invalid_tail"
+TPL_UNDETERMINED_TAIL = "tpl.undetermined_tail"
+TPL_UNKEYED_OPEN = "tpl.unkeyed_open"
+TPL_UNKEYED_TAIL = "tpl.unkeyed_tail"
+TPL_LABEL_BUY_AND_HOLD = "tpl.label_buy_and_hold"
+TPL_LABEL_CAPITAL_GAIN = "tpl.label_capital_gain"
+TPL_HOLDINGS_UNAVAILABLE_MID = "tpl.holdings_unavailable_mid"
+TPL_STRATEGY_UNSET_TAIL = "tpl.strategy_unset_tail"
+TPL_STRATEGY_IS = "tpl.strategy_is"
+TPL_ENTRY_TAIL = "tpl.entry_tail"
+TPL_ACT_UNAVAILABLE_OPEN = "tpl.act_unavailable_open"
+TPL_ACT_NONE = "tpl.act_none"
+TPL_ACT_STALE_OPEN = "tpl.act_stale_open"
+
+#: 固定模板片段。⚠️ 摘要裡**所有**非 Digest 展開的文字都只能來自這張表；不得含阿拉伯數字（數字只能來自欄位展開）。
+TEMPLATES: dict = {
+    TPL_GLYPH: f"{MISSING_GLYPH} ",
+    TPL_COLON: "：",
+    TPL_PCT: "%",
+    TPL_CLOSE: "）",
+    TPL_DATE_OPEN: "（資料日 ",
+    TPL_STALE_DATE_OPEN: f"（{MARK_STALE}，資料日 ",
+    TPL_PROXY_TAIL: f"（{MARK_PROXY}值，非正式資料）",
+    TPL_MISSING_OPEN: f"：{MARK_INSUFFICIENT}，{MARK_UNDETERMINED}（",
+    TPL_INVALID_TAIL: f"：資料不合法，已丟棄，{MARK_INSUFFICIENT}，{MARK_UNDETERMINED}",
+    TPL_UNDETERMINED_TAIL: f"，{MARK_UNDETERMINED}",
+    TPL_UNKEYED_OPEN: f"{MISSING_GLYPH} 另有 ",
+    TPL_UNKEYED_TAIL: f" 檔持股{MARK_UNKEYED}，未納入判讀，{MARK_INSUFFICIENT}，{MARK_UNDETERMINED}",
+    TPL_LABEL_BUY_AND_HOLD: SECTION_LABELS[SEC_BUY_AND_HOLD],
+    TPL_LABEL_CAPITAL_GAIN: SECTION_LABELS[SEC_CAPITAL_GAIN],
+    TPL_HOLDINGS_UNAVAILABLE_MID: f"：持股資料不足，{MARK_UNDETERMINED}（",
+    TPL_STRATEGY_UNSET_TAIL: f"：{MARK_STRATEGY_UNSET}，{MARK_UNDETERMINED}",
+    TPL_STRATEGY_IS: "：策略分類為",
+    TPL_ENTRY_TAIL: f"；基本面與配置判定{MARK_NOT_WIRED}，{MARK_UNDETERMINED}",
+    TPL_ACT_UNAVAILABLE_OPEN: f"{MISSING_GLYPH} 本期行動：{MARK_INSUFFICIENT}，{MARK_UNDETERMINED}（",
+    TPL_ACT_NONE: f"本期行動：{MARK_NO_ACTION}",
+    TPL_ACT_STALE_OPEN: f"（依據{MARK_STALE}，資料日 ",
+}
+#: 摘要段 → 該段「策略標籤」模板 id。
+TPL_SECTION_LABEL: dict = {SEC_BUY_AND_HOLD: TPL_LABEL_BUY_AND_HOLD, SEC_CAPITAL_GAIN: TPL_LABEL_CAPITAL_GAIN}
+
+#: 欄位展開名（`Ref.field`）。⛔ 沒有任何欄位能展開 `strategy_source`（使用者自由文字）。
+FIELD_LABEL = "label"
+FIELD_TEXT = "text"
+FIELD_VALUE = "value"
+FIELD_AS_OF = "as_of"
+FIELD_REASON = "reason"
+FIELD_SYMBOL = "symbol"
+FIELD_STRATEGY = "strategy"
+FIELD_COUNT = "count"
+FIELD_MARKER = "marker"
+FIELD_WORDING = "wording"
+FIELD_BIND = "bind"
+FIELDS: tuple = (FIELD_LABEL, FIELD_TEXT, FIELD_VALUE, FIELD_AS_OF, FIELD_REASON, FIELD_SYMBOL, FIELD_STRATEGY,
+                 FIELD_COUNT, FIELD_MARKER, FIELD_WORDING, FIELD_BIND)
+
+#: `section:<名>` 的顯示標籤（只有這四段有；其餘段名沒有 label 欄位）。
+SECTION_REF_LABELS: dict = {
+    "tw_trend": LABEL_TW_TREND, "intl_trend": LABEL_INTL_TREND, "valuation": LABEL_VALUATION,
+    "industry": LABEL_INDUSTRY_TREND,
+}
+#: 診斷用：整份 Digest 層級（不屬任一摘要段）的顯示名。
+LABEL_ALL_SECTIONS = "整份 Digest（跨段／結構）"

@@ -17,10 +17,11 @@ from shared.decision_digest import (
 )
 from shared.decision_digest_rules import ACTION_RULE_VERSION, validate_strict
 from shared.decision_digest_validator import (
-    SECTION_ALL, SummaryState, assess_digest, derive_state, section_availability,
+    SECTION_ALL, SummaryState, assess_digest, derive_state, has_forbidden_char, section_availability,
 )
 from tests.decision_digest_factory import (
-    D, action, empty_digest, entry, force_set, make_digest, market_section, missing, ok_text, ok_val, stale_val,
+    D, action, empty_digest, entry, force_set, make_digest, market_section, missing, ok_text, ok_val, risk_cap_section,
+    stale_val,
 )
 
 REPO = Path(__file__).resolve().parents[1]
@@ -238,6 +239,74 @@ def test_control_or_zero_width_in_texts_fail(ch):
     assert "control_chars_in_text" in codes(assess_digest(d3))
 
 
+@pytest.mark.parametrize("ch", [
+    "\u2028", "\u2029",            # Zl／Zp
+    "\ue000",                       # Co 私用區
+    "\u0378",                       # Cn 未指派
+    "\u00a0", "\u3000", "\u2003", # 非普通空格的空白（NBSP、全形空白、em space）
+    "\ud800",                       # Cs 孤立代理
+])
+def test_exotic_whitespace_and_categories_in_texts_fail(ch):
+    assert has_forbidden_char(f"a{ch}b") is True
+    d = make_digest(market_facts=[ok_text("market.regime", f"bu{ch}ll"), ok_text("market.light", "🟢"),
+                                  ok_val("market.health", 72.5)])
+    assert "control_chars_in_text" in codes(assess_digest(d))
+
+
+@pytest.mark.parametrize("text", ["\u0301abc", " \u0301abc", "abc \u0308", "\ufe0f"])
+def test_isolated_combining_marks_fail(text):
+    assert has_forbidden_char(text) is True
+
+
+@pytest.mark.parametrize("text", ["e\u0301", "🟡\ufe0f 汰弱：吃本金", "普通 空格 only", "ＡＢＣ１２", "→（>+3σ）", ""])
+def test_attached_combining_marks_and_normal_text_pass(text):
+    assert has_forbidden_char(text) is False
+
+
+def test_has_forbidden_char_non_str_is_false():
+    assert has_forbidden_char(None) is False and has_forbidden_char(123) is False
+
+
+def test_unsupported_market_unit_is_contract_drift():
+    ok = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
+                                   ok_val("market.health", 72.5, "%")])
+    assert assess_digest(ok).state is SummaryState.PARTIAL                     # "%" 是模板支援的單位
+    for unit in ("pts", "點", "TWD"):
+        d = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
+                                      ok_val("market.health", 72.5, unit)])
+        a = assess_digest(d)
+        assert a.state is SummaryState.INVALID and "unsupported_unit" in codes(a)
+        assert T.GATE_AB2A_TEXT in gates(a) and T.SEC_MARKET in a.invalid_sections
+
+
+def test_risk_cap_fact_id_with_reserved_prefix_fails():
+    rc = risk_cap_section(True)
+    force_set(rc.cap_pct, fact_id="section:risk_cap")
+    a = assess_digest(make_digest(risk_cap=rc))
+    assert a.state is SummaryState.INVALID and "ref_id_reserved" in codes(a)
+
+
+def test_observation_fact_id_is_part_of_the_id_namespace():
+    from shared.decision_digest import DefinitionSection, DefinitionState
+    obs = ok_val("section:x", 1.0, rule=RuleRef("add", ACTION_RULE_VERSION))
+    d = make_digest(tw_trend=DefinitionSection(DefinitionState.NOT_DEFINED, observations=(obs,)))
+    assert "ref_id_reserved" in codes(assess_digest(d))
+    obs2 = ok_val("market.health", 1.0, rule=RuleRef("add", ACTION_RULE_VERSION))      # 與市場事實同 id
+    d2 = make_digest(tw_trend=DefinitionSection(DefinitionState.NOT_DEFINED, observations=(obs2,)))
+    assert "duplicate_fact_id" in codes(assess_digest(d2))
+
+
+def test_failed_gates_are_in_canonical_order_not_set_order():
+    d = make_digest(schema_version="x",
+                    items=[action("0056", "t", "take_profit_force", 1), action("0050", "u", "cut", 2)],
+                    entries=[entry("0050", "u", "cut"), entry("0056", "t", "take_profit_force")])
+    bad = dataclasses.replace(d.actions.items[0], rule=RuleRef("rule_x", ACTION_RULE_VERSION))
+    d = dataclasses.replace(d, actions=dataclasses.replace(d.actions, items=(bad, d.actions.items[1])))
+    a = assess_digest(d)
+    assert a.failed_gates == (T.GATE_AB0_CONTRACT, T.GATE_AB1_RULE_ID, T.GATE_AB1_ACTION_ORDER)
+    assert a.failed_gates == tuple(g for g in T.DIGEST_GATES_ORDER if g in a.failed_gates)
+
+
 @pytest.mark.parametrize("fid", ["section:market", "holding:pf-A:0050"])
 def test_reserved_ref_prefix_fails(fid):
     d = make_digest(market_facts=[ok_text(fid, "bull"), ok_text("market.light", "🟢"), ok_val("market.health", 1.5)])
@@ -308,3 +377,31 @@ def test_new_files_have_no_io_ai_or_ui_imports(rel):
 def test_app_and_nav_do_not_import_ab2a(rel):
     for mod in _imports(rel):
         assert "decision_digest" not in mod, f"{rel} 不得直接 import {mod}"
+
+
+# ── QA 紅隊回歸（Digest 層）──────────────────────────────────────────────────
+def test_garbage_inside_the_digest_never_raises_and_is_invalid():
+    def forced(fn):
+        d = make_digest()
+        fn(d)
+        return d
+    cases = [
+        forced(lambda d: force_set(d, market=None)),
+        forced(lambda d: force_set(d.holdings, entries=[1])),
+        forced(lambda d: force_set(d.market, facts=["x"])),
+        forced(lambda d: force_set(d.actions, items=None)),
+        forced(lambda d: force_set(d.industry, availability=Availability.AVAILABLE)),
+        forced(lambda d: force_set(d.market, availability=Availability.UNAVAILABLE)),
+    ]
+    for d in cases:
+        a = assess_digest(d)
+        assert a.state is SummaryState.INVALID and a.section_availability == ()
+
+
+def test_known_gap_a10_action_text_is_not_bound_to_its_rule_by_ab1():
+    """A10（已知缺口，非本批引入；**不改 AB-1**）：ActionRef.text 與其 rule／分支碼沒有綁定。
+    Digest 層放行「行動文字與事實文字不同」或「文字與規則不對應」的組合。BACKLOG：AB1-ACTION-TEXT-RULE-BINDING。
+    此測試釘住現況：若日後 AB-1 補上綁定，這裡會紅，請連同規格 §9 一起更新。"""
+    d = make_digest(entries=[entry("0050", "🔴 汰弱：吃本金", "cut")],
+                    items=[action("0050", "🟢 加碼 50%：看似加碼", "cut", 1)])
+    assert assess_digest(d).state is SummaryState.PARTIAL

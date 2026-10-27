@@ -1,32 +1,46 @@
-"""AB-2a grounding 驗證 G1～G6 測試（fast lane）。
+"""AB-2a grounding 驗證 G1～G6 測試（fast lane）：句型白名單版。
 
-守的是 `shared/decision_digest_grounding.py`。每個閘門都有正例（合規句子通過）與反例（違規句子被抓），
-反例同時斷言 `accepted is False`、該閘門在 `failed_gates`、並指出具體 code —— 不接受「反正有紅」。
+守的是 `shared/decision_digest_grounding.py`。摘要句是 segment 序列（`Lit` 模板 id／`Ref` 欄位展開），
+沒有任意文字的位置；每個反例都斷言 `accepted is False`、閘門與具體 code —— 不接受「反正有紅」。
+QA 紅隊探針（同形異字、簡體、同義詞、中文數字、否定／矛盾、標示語偽造、行動句加字／換代號／漏項、
+搭便車 ref、手造 SummaryResult…）的最小重現都在此，且全部必須被擋或「結構上無法表達」。
 """
 from __future__ import annotations
 
 import dataclasses
+import re
 
 import pytest
 
 from shared import decision_digest as AB0
 from shared import decision_digest_terms as T
-from shared.decision_digest import MissingReason, StrategyType
+from shared.decision_digest import DataStatus, DefinitionSection, DefinitionState, MissingReason, RuleRef, StrategyType
 from shared.decision_digest_grounding import (
-    SummaryDraft, SummaryResult, SummarySection, SummarySentence, build_ref_index, check_summary,
-    is_numeric_quote, number_literal, remove_quotes, section_basis, section_ref,
+    SHAPES, Lit, Ref, SummaryDraft, SummaryResult, SummarySection, SummarySentence, build_ref_index, check_summary,
+    expand, holding_ref, number_literal, render_draft, render_sentence, section_basis, section_ref,
 )
 from shared.decision_digest_validator import SummaryState
 from src.services.decision_digest_summary import compose_rule_draft
 from tests.decision_digest_factory import (
-    D, action, empty_digest, entry, failed, force_set, invalid, make_digest, market_section, missing, ok_text,
-    ok_val, proxy_val, stale_text, stale_val,
+    action, lint_hits, empty_digest, entry, failed, force_set, invalid, make_digest, missing, ok_text, ok_val, proxy_val,
+    stale_text, stale_val,
 )
 
-S = SummarySentence
 MKT, IND, BH, CG, ACT = T.SEC_MARKET, T.SEC_INDUSTRY, T.SEC_BUY_AND_HOLD, T.SEC_CAPITAL_GAIN, T.SEC_ACTIONS
 ACT_CUT_TEXT = "🔴 汰弱：吃本金"
 ACT_TP_TEXT = "💰 強制停利（>+3σ）：獲利轉回核心資產"
+
+
+def L(tpl):
+    return Lit(tpl)
+
+
+def R(ref, fld):
+    return Ref(ref, fld)
+
+
+def S(*segs):
+    return SummarySentence(tuple(segs))
 
 
 def sec_of(draft, key):
@@ -34,16 +48,16 @@ def sec_of(draft, key):
 
 
 def swap(draft, key, idx, sentence):
-    """換掉某段第 idx 句（sentence=None → 刪除該句）。"""
+    """換掉某段第 idx 句（sentence=None → 刪除）。"""
     out = []
     for s in draft.sections:
         if s.key == key:
-            sents = list(s.sentences)
+            ss = list(s.sentences)
             if sentence is None:
-                del sents[idx]
+                del ss[idx]
             else:
-                sents[idx] = sentence
-            s = SummarySection(s.key, tuple(sents))
+                ss[idx] = sentence
+            s = SummarySection(s.key, tuple(ss))
         out.append(s)
     return SummaryDraft(tuple(out))
 
@@ -51,6 +65,10 @@ def swap(draft, key, idx, sentence):
 def add(draft, key, sentence):
     return SummaryDraft(tuple(SummarySection(s.key, s.sentences + (sentence,)) if s.key == key else s
                               for s in draft.sections))
+
+
+def with_section(draft, key, sentences):
+    return SummaryDraft(tuple(SummarySection(s.key, tuple(sentences)) if s.key == key else s for s in draft.sections))
 
 
 def codes(rep):
@@ -74,187 +92,203 @@ def base(dg):
 
 
 # 市場段句序：0 regime／1 light／2 health／3 風險上限卡面／4 台股／5 國際／6 大盤合理區間
-HEALTH_REFS = ("market.health",)
-
-
-def health(text):
-    return S(text, HEALTH_REFS)
+HEALTH = "market.health"
+REGIME = "market.regime"
+ACT0, ACT1 = "action:pf-A:0050", "action:pf-A:0056"
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 基準：規則式摘要自己必須全過
+# 基準：規則式摘要自己必須全過；渲染出的文字固定
 # ══════════════════════════════════════════════════════════════════════
-def test_rule_summary_passes_all_gates(dg, base):
+def test_rule_draft_is_clean(dg, base):
     rep = check_summary(dg, base)
-    assert rep.accepted and rep.violations == () and rep.dropped == () and rep.failed_gates == ()
-    assert rep.passed_gates == T.GROUNDING_GATES and rep.surviving == base
+    assert rep.accepted and rep.usable and rep.clean and rep.violations == () and rep.dropped == ()
+    assert rep.failed_gates == () and rep.passed_gates == T.GROUNDING_GATES and rep.surviving == base
     assert not rep.structural_failure and not rep.digest_invalid
 
 
+def test_rendered_text_golden(dg, base):
+    got = dict(render_draft(dg, base))
+    assert got[MKT] == ("市場位階：bull（資料日 2026-10-26）", "市場燈號：🟢（資料日 2026-10-26）",
+                        "市場健康度：72.5（資料日 2026-10-26）", "風險上限／獨立顯示待 C2b＋RC-VISIBILITY Gate",
+                        "⬜ 台股趨勢：尚未定義，無法判定", "⬜ 國際趨勢：尚未定義，無法判定",
+                        "⬜ 大盤合理區間：研究框架，未啟用，無法判定")
+    assert got[IND] == ("⬜ 產業趨勢：尚未定義，無法判定",)
+    assert got[BH] == ("⬜ 存股：尚未設定投資策略分類，無法判定",)
+    assert got[CG] == ("⬜ 資本利得：尚未設定投資策略分類，無法判定",)
+    assert got[ACT] == (f"0050：{ACT_CUT_TEXT}", f"0056：{ACT_TP_TEXT}")
+
+
 @pytest.mark.parametrize("make", [
-    lambda: make_digest(), lambda: empty_digest(),
-    lambda: make_digest(risk_valid=False),
+    lambda: make_digest(), lambda: empty_digest(), lambda: make_digest(risk_valid=False),
     lambda: make_digest(market_facts=[stale_val("market.health", 72.5), proxy_val("market.light", 3.5),
                                       failed("market.regime")]),
     lambda: make_digest(market_facts=[invalid("market.health"), stale_text("market.regime", "bull"),
                                       missing("market.light", MissingReason.CONTRACT_DRIFT)]),
+    lambda: make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
+                                      ok_val("market.health", 60, "%")]),
     lambda: make_digest(entries=[], items=[], unkeyed=3),
     lambda: make_digest(entries=[entry("0050", "t", "add", strategy=StrategyType.BUY_AND_HOLD, source="客戶設定"),
                                  entry("0056", "u", "cut", strategy=StrategyType.CAPITAL_GAIN, source="客戶設定")],
                         items=[action("0056", "u", "cut", 1)], unkeyed=1),
 ])
-def test_rule_summary_passes_over_many_digests(make):
+def test_rule_draft_clean_over_many_digests(make):
     d = make()
     rep = check_summary(d, compose_rule_draft(d))
-    assert rep.accepted, [(v.gate, v.code, v.message) for v in rep.violations]
+    assert rep.clean, [(v.gate, v.code, v.message) for v in rep.violations]
 
 
 # ══════════════════════════════════════════════════════════════════════
-# STRUCT：無法解析＝驗證失敗
+# STRUCT：沒有任意文字的位置；無法解析＝驗證失敗
 # ══════════════════════════════════════════════════════════════════════
 @pytest.mark.parametrize("bad", [None, {}, "text", 42, [], ((),), object()])
 def test_unparseable_input_is_validation_failure(dg, bad):
     rep = check_summary(dg, bad)
     assert rep.accepted is False and rep.structural_failure is True and rep.surviving is None
-    assert rep.passed_gates == ()
+    assert rep.passed_gates == () and rep.usable is False and rep.clean is False
 
 
-def test_draft_subclass_and_wrong_container_types_rejected(dg, base):
-    class Sub(SummaryDraft):
+def test_old_text_based_sentence_cannot_even_be_constructed():
+    with pytest.raises(TypeError):
+        SummarySentence(text="市場健康度：72.5", evidence_refs=("market.health",))        # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("seg", ["自由文字", "買進", 1, None, ("a",), {"x": 1}, b"bytes"])
+def test_free_text_segment_is_structurally_impossible(dg, base, seg):
+    rep = check_summary(dg, swap(base, MKT, 2, SummarySentence((seg,))))
+    assert rep.structural_failure and rep.accepted is False and "segment_type" in codes(rep)
+
+
+def test_container_and_subclass_attacks_rejected(dg, base):
+    class SubDraft(SummaryDraft):
         pass
-    assert check_summary(dg, Sub(base.sections)).structural_failure
+
+    class SubLit(Lit):
+        pass
+    assert check_summary(dg, SubDraft(base.sections)).structural_failure
     assert check_summary(dg, SummaryDraft(list(base.sections))).structural_failure
     assert check_summary(dg, SummaryDraft((object(),))).structural_failure
-    bad_sec = SummarySection("market", [S("x", ("a",))])
-    assert check_summary(dg, SummaryDraft((bad_sec,))).structural_failure
+    assert check_summary(dg, SummaryDraft((SummarySection("market", [S(L(T.TPL_GLYPH))]),))).structural_failure
     assert check_summary(dg, SummaryDraft((SummarySection("market", (object(),)),))).structural_failure
+    assert check_summary(dg, swap(base, MKT, 0, SummarySentence([L(T.TPL_GLYPH)]))).structural_failure   # type: ignore[arg-type]
+    assert check_summary(dg, swap(base, MKT, 0, S(SubLit(T.TPL_GLYPH)))).structural_failure
 
 
-@pytest.mark.parametrize("text", ["", "   ", "含\n換行", "零寬​字", "bom﻿", None, 123])
-def test_bad_sentence_text_is_structural(dg, base, text):
-    rep = check_summary(dg, swap(base, MKT, 2, S(text, HEALTH_REFS)))
+@pytest.mark.parametrize("bad_ref", ["", "has space", "zero​width", 1, None, "a\nb"])
+def test_bad_ref_ids_are_structural(dg, base, bad_ref):
+    rep = check_summary(dg, swap(base, MKT, 2, S(R(bad_ref, T.FIELD_LABEL))))
     assert rep.structural_failure and rep.accepted is False
 
 
-@pytest.mark.parametrize("refs", [["market.health"], ("market.health", "market.health"), ("",), (1,),
-                                  ("has space",), ("zero​width",), None])
-def test_bad_refs_container_is_structural(dg, base, refs):
-    rep = check_summary(dg, swap(base, MKT, 2, S("市場健康度：72.5（資料日 2026-10-26）", refs)))
-    assert rep.structural_failure and rep.accepted is False
+def test_non_str_template_id_or_field_is_structural(dg, base):
+    assert check_summary(dg, swap(base, MKT, 0, S(Lit(1)))).structural_failure           # type: ignore[arg-type]
+    assert check_summary(dg, swap(base, MKT, 0, S(Ref(HEALTH, 3)))).structural_failure   # type: ignore[arg-type]
 
 
 def test_invalid_digest_means_no_grounding(base):
     rep = check_summary(make_digest(schema_version="x"), base)
     assert rep.digest_invalid and rep.accepted is False and rep.surviving is None and rep.passed_gates == ()
+    assert rep.usable is False
     assert check_summary(None, base).digest_invalid
 
 
 # ══════════════════════════════════════════════════════════════════════
 # G1 引用封閉
 # ══════════════════════════════════════════════════════════════════════
-def test_g1_unknown_evidence_ref(dg, base):
-    rep = check_summary(dg, swap(base, MKT, 2, S("市場健康度：72.5（資料日 2026-10-26）", ("market.nope",))))
+def test_g1_unknown_ref(dg, base):
+    rep = check_summary(dg, swap(base, MKT, 2, S(R("market.nope", T.FIELD_LABEL))))
     assert_rejected(rep, T.GATE_G1, "ref_not_in_digest")
 
 
-def test_g1_known_symbol_ok_unknown_symbol_rejected(dg, base):
-    ok = S("⬜ 存股：0050 尚未設定投資策略分類，無法判定", ("section:holdings",))
-    assert check_summary(dg, swap(base, BH, 0, ok)).accepted
-    for sym in ("2330", "00679B", "0051"):
-        bad = S(f"⬜ 存股：{sym} 尚未設定投資策略分類，無法判定", ("section:holdings",))
-        assert_rejected(check_summary(dg, swap(base, BH, 0, bad)), T.GATE_G1, "symbol_not_in_digest")
+def test_g1_unknown_template_id_is_not_a_loophole(dg, base):
+    for tid in ("買進", T.TEMPLATES[T.TPL_GLYPH], "tpl.nope", "TPL_GLYPH"):
+        rep = check_summary(dg, swap(base, MKT, 2, S(L(tid), R(HEALTH, T.FIELD_LABEL))))
+        assert_rejected(rep, T.GATE_G4, "template_not_whitelisted")
 
 
-def test_g1_latin_ticker(dg, base):
-    for w in ("TSLA", "NVDA", "AI"):
-        bad = S(f"⬜ 存股：{w} 尚未設定投資策略分類，無法判定", ("section:holdings",))
-        assert_rejected(check_summary(dg, swap(base, BH, 0, bad)), T.GATE_G1, "symbol_not_in_digest")
-    ok = S("⬜ 存股：ETF 尚未設定投資策略分類，無法判定", ("section:holdings",))
-    assert check_summary(dg, swap(base, BH, 0, ok)).accepted
+def test_g1_unknown_field_name(dg, base):
+    for fld in ("source", "strategy_source", "TEXT", "", "value "):
+        rep = check_summary(dg, swap(base, MKT, 0, S(R(REGIME, T.FIELD_LABEL), L(T.TPL_COLON), R(REGIME, fld),
+                                                   L(T.TPL_DATE_OPEN), R(REGIME, T.FIELD_AS_OF), L(T.TPL_CLOSE))))
+        assert not rep.accepted and (T.GATE_G4 in rep.failed_gates or T.GATE_G1 in rep.failed_gates)
 
 
-@pytest.mark.parametrize("name", ["半導體", "半導體業", "航運", "生技醫療業", "電子零組件", "金融保險"])
-def test_g1_industry_name_rejected_because_digest_has_no_industry_allowlist(dg, base, name):
-    bad = S(f"⬜ 產業趨勢：{name}，尚未定義，資料不足，無法判定", ("section:industry",))
-    assert_rejected(check_summary(dg, swap(base, IND, 0, bad)), T.GATE_G1, "industry_not_in_digest")
+def test_g1_slot_mismatch_blocks_pooling_across_refs(dg, base):
+    """同一個 slot 的 segment 必須指向同一個項目：不能「標籤取 A、文字取 B」。"""
+    mixed = S(R(HEALTH, T.FIELD_LABEL), L(T.TPL_COLON), R(HEALTH, T.FIELD_VALUE), L(T.TPL_DATE_OPEN),
+              R("market.light", T.FIELD_AS_OF), L(T.TPL_CLOSE))
+    assert_rejected(check_summary(dg, swap(base, MKT, 2, mixed)), T.GATE_G1, "slot_ref_mismatch")
+    sym_swap = S(R(ACT1, T.FIELD_SYMBOL), L(T.TPL_COLON), R(ACT0, T.FIELD_TEXT))        # 換代號
+    assert_rejected(check_summary(dg, swap(base, ACT, 0, sym_swap)), T.GATE_G1, "slot_ref_mismatch")
 
 
-@pytest.mark.parametrize("word", ["🔴", "🟡", "caution", "BULL"])
-def test_g1_state_words_only_via_verbatim_quote(dg, base, word):
-    bad = S(f"市場健康度：72.5（資料日 2026-10-26）{word}", HEALTH_REFS)
-    rep = check_summary(dg, swap(base, MKT, 2, bad))
-    assert T.GATE_G1 in rep.failed_gates or T.GATE_G4 in rep.failed_gates
-    assert rep.accepted is False
-    # 逐字引用（Digest 自己的文字）則放行：actions 句內的 🔴 來自 ActionRef.text
-    assert check_summary(dg, base).accepted
+def test_g1_every_field_is_bound_to_its_own_ref():
+    """每個展開字串都取自它自己綁定的項目（沒有跨項目池化）：兩個不同 ref 的同名欄位展開不同。"""
+    d = make_digest()
+    idx = build_ref_index(d)
+    assert expand(d, idx["market.regime"], T.FIELD_TEXT)[0] == "bull"
+    assert expand(d, idx["market.light"], T.FIELD_TEXT)[0] == "🟢"
 
 
-# ══════════════════════════════════════════════════════════════════════
-# G2 數字字面一致
-# ══════════════════════════════════════════════════════════════════════
-@pytest.mark.parametrize("text", [
-    "市場健康度：72.5（資料日 2026-10-26）",
-    "市場健康度：約72.5（資料日 2026-10-26）",
-    "市場健康度：72.5。",
-])
-def test_g2_literal_numbers_pass(dg, base, text):
-    assert check_summary(dg, swap(base, MKT, 2, health(text))).accepted
+@pytest.mark.parametrize("fld", T.FIELDS)
+def test_user_free_text_strategy_source_never_expands(fld):
+    """A1：strategy_source（使用者自由文字）沒有任何欄位、任何項目可以展開到摘要。"""
+    sentinel = "SENTINEL來源必定上漲建議立刻買進"
+    d = make_digest(entries=[entry("0050", ACT_CUT_TEXT, "cut", strategy=StrategyType.BUY_AND_HOLD, source=sentinel)],
+                    items=[action("0050", ACT_CUT_TEXT, "cut", 1)])
+    idx = build_ref_index(d)
+    for info in idx.values():
+        text, _, _ = expand(d, info, fld)
+        assert text is None or sentinel not in text
+    r = SummaryResult(d, AB0.AiParticipation.RULE_ONLY, compose_rule_draft(d).sections)
+    assert sentinel not in "\n".join(x for _, ls in r.lines for x in ls)
+    assert "客戶" not in "\n".join(x for _, ls in r.lines for x in ls)
 
 
-@pytest.mark.parametrize("text", [
-    "市場健康度：72.50（資料日 2026-10-26）",       # 補零 ≠ 字面
-    "市場健康度：73（資料日 2026-10-26）",           # 四捨五入
-    "市場健康度：72（資料日 2026-10-26）",           # 截斷
-    "市場健康度：7.25（資料日 2026-10-26）",         # 位移小數點
-    "市場健康度：72.5%（資料日 2026-10-26）",        # 憑空加單位
-    "市場健康度：72.5分（資料日 2026-10-26）",       # 憑空加單位（文字）
-    "市場健康度：+72.5（資料日 2026-10-26）",        # 憑空加正負號
-    "市場健康度：725（資料日 2026-10-26）",
-    "市場健康度：1,234（資料日 2026-10-26）",        # 千分位 → 拆成兩個 token
-    "市場健康度：72.5（資料日 2026-10-25）",         # 日期不是所引項目的資料日
-    "市場健康度：72.5（資料日 2026-10-26），較前期高 3.2",
-])
-def test_g2_non_literal_numbers_rejected(dg, base, text):
-    rep = check_summary(dg, swap(base, MKT, 2, health(text)))
-    assert rep.accepted is False and T.GATE_G2 in rep.failed_gates
-
-
-@pytest.mark.parametrize("text", ["市場健康度：72.5，nan", "市場健康度：72.5，inf", "市場健康度：72.5，∞",
-                                  "市場健康度：72.5，Infinity", "市場健康度：72.5，NaN"])
-def test_g2_non_finite_tokens_rejected(dg, base, text):
-    assert_rejected(check_summary(dg, swap(base, MKT, 2, health(text))), T.GATE_G2, "non_finite_token")
-
-
-@pytest.mark.parametrize("text", ["市場健康度：７２．５", "市場健康度：72.5①", "市場健康度：٧٢.5", "市場健康度：72.5²"])
-def test_g2_non_ascii_digits_rejected(dg, base, text):
-    assert_rejected(check_summary(dg, swap(base, MKT, 2, health(text))), T.GATE_G2, "non_ascii_digit")
-
-
-def test_g2_units_must_match_exactly():
-    d = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
-                                  ok_val("market.health", 60, "%")])
+def test_a1_holding_ref_cannot_quote_source_field(dg):
+    d = make_digest(entries=[entry("0050", ACT_CUT_TEXT, "cut", strategy=StrategyType.BUY_AND_HOLD, source="使用者設定")],
+                    items=[action("0050", ACT_CUT_TEXT, "cut", 1)])
     b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted                          # "60%"
-    for bad in ("60", "60.0%", "60 %", "60‰", "0.6", "60點"):
-        rep = check_summary(d, swap(b, MKT, 2, health(f"市場健康度：{bad}（資料日 2026-10-26）")))
-        assert rep.accepted is False and T.GATE_G2 in rep.failed_gates, bad
+    hr = holding_ref("pf-A", "0050")
+    bad = S(R(hr, T.FIELD_SYMBOL), L(T.TPL_STRATEGY_IS), R(hr, "source"), L(T.TPL_ENTRY_TAIL))
+    assert not check_summary(d, swap(b, BH, 0, bad)).accepted
+    bad2 = S(R(hr, T.FIELD_SYMBOL), L(T.TPL_STRATEGY_IS), R(hr, T.FIELD_TEXT), L(T.TPL_ENTRY_TAIL))
+    assert not check_summary(d, swap(b, BH, 0, bad2)).accepted
 
 
-def test_g2_int_vs_float_literals_are_distinct():
-    d_int = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
-                                      ok_val("market.health", 60)])
-    d_flt = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
-                                      ok_val("market.health", 60.0)])
-    for d, good, bad in ((d_int, "60", "60.0"), (d_flt, "60.0", "60")):
-        b = compose_rule_draft(d)
-        assert check_summary(d, b).accepted
-        assert good in sec_of(b, MKT).sentences[2].text
-        rep = check_summary(d, swap(b, MKT, 2, health(f"市場健康度：{bad}（資料日 2026-10-26）")))
-        assert rep.accepted is False and T.GATE_G2 in rep.failed_gates
+# ══════════════════════════════════════════════════════════════════════
+# G2 數字：只能來自欄位展開；單位由模板決定
+# ══════════════════════════════════════════════════════════════════════
+def test_g2_numbers_only_via_field_expansion_so_nothing_to_forge(dg):
+    """沒有任何 Lit 模板含阿拉伯數字或英文字母 —— 數字／英文只可能來自 Digest 的欄位展開。"""
+    for tid, text in T.TEMPLATES.items():
+        assert not re.search(r"[0-9A-Za-z]", text), (tid, text)
+
+
+def test_g2_unit_is_decided_by_template():
+    d_none = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
+                                       ok_val("market.health", 60)])
+    d_pct = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
+                                      ok_val("market.health", 60, "%")])
+    b_none, b_pct = compose_rule_draft(d_none), compose_rule_draft(d_pct)
+    assert render_draft(d_none, b_none)[0][1][2] == "市場健康度：60（資料日 2026-10-26）"
+    assert render_draft(d_pct, b_pct)[0][1][2] == "市場健康度：60%（資料日 2026-10-26）"
+    # 用錯單位的句型 → unit_mismatch
+    assert_rejected(check_summary(d_none, b_pct), T.GATE_G2, "unit_mismatch")
+    assert_rejected(check_summary(d_pct, b_none), T.GATE_G2, "unit_mismatch")
+
+
+def test_a5_unit_or_whitespace_suffix_cannot_be_appended(dg, base):
+    """A5：數字後面加空白／單位／文字 —— 只能用 Lit，而任何不在骨架內的 Lit 都不是白名單句型。"""
+    forged = S(R(HEALTH, T.FIELD_LABEL), L(T.TPL_COLON), R(HEALTH, T.FIELD_VALUE), L(T.TPL_PCT), L(T.TPL_DATE_OPEN),
+               R(HEALTH, T.FIELD_AS_OF), L(T.TPL_CLOSE))
+    assert_rejected(check_summary(dg, swap(base, MKT, 2, forged)), T.GATE_G2, "unit_mismatch")     # health 無單位
+    extra = SummarySentence(sec_of(base, MKT).sentences[2].segments + (L(T.TPL_PCT),))
+    assert_rejected(check_summary(dg, swap(base, MKT, 2, extra)), T.GATE_G4, "shape_not_whitelisted")
 
 
 @pytest.mark.parametrize("v,lit", [(-1.5, "-1.5"), (0.0, "0.0"), (1e-07, "0.0000001"), (1e22, "10000000000000000000000"),
-                                   (123456789.125, "123456789.125"), (-0.0, "-0.0"), (7, "7"), (0, "0")])
+                                   (123456789.125, "123456789.125"), (-0.0, "-0.0"), (7, "7"), (0, "0"), (60.0, "60.0")])
 def test_number_literal_is_fixed_point_shortest_roundtrip(v, lit):
     assert number_literal(v) == lit
 
@@ -265,177 +299,213 @@ def test_number_literal_rejects_non_finite_or_non_real(v):
         number_literal(v)
 
 
-def test_g2_negative_and_zero_values_and_exponent_forms():
-    d = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
-                                  ok_val("market.health", -1.5)])
+def test_g2_value_renders_literal_not_rounded():
+    for v, shown in ((72.5, "72.5"), (60, "60"), (60.0, "60.0"), (-1.5, "-1.5"), (1e-07, "0.0000001")):
+        d = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
+                                      ok_val("market.health", v)])
+        assert render_draft(d, compose_rule_draft(d))[0][1][2] == f"市場健康度：{shown}（資料日 2026-10-26）"
+
+
+def test_g2_risk_cap_values_and_dates_are_restricted(dg, base):
+    for rid in ("risk_cap.cap_pct", "risk_cap.exposure_lo_pct", "risk_cap.exposure_hi_pct"):
+        for fld in (T.FIELD_VALUE, T.FIELD_AS_OF, T.FIELD_TEXT):
+            forged = S(R(rid, T.FIELD_LABEL), L(T.TPL_COLON), R(rid, fld), L(T.TPL_DATE_OPEN), R(rid, T.FIELD_AS_OF),
+                       L(T.TPL_CLOSE))
+            rep = check_summary(dg, swap(base, MKT, 3, forged))
+            assert not rep.accepted
+    full = _fact_sentence("fact_value_ok", "risk_cap.cap_pct")           # 句型吻合，但項目受限
+    rep = check_summary(dg, swap(base, MKT, 3, full))
+    assert_rejected(rep, T.GATE_G2, "restricted_value")
+    assert_rejected(check_summary(dg, swap(base, MKT, 3, S(R("risk_cap.cap_pct", T.FIELD_VALUE)))),
+                    T.GATE_G4, "shape_not_whitelisted")
+
+
+def test_g2_trend_observations_are_restricted():
+    obs = ok_val("tw.twii_close", 20000.5, "pts", rule=RuleRef("add", "action_branch.v1"))
+    d = dataclasses.replace(make_digest(), tw_trend=DefinitionSection(DefinitionState.NOT_DEFINED, observations=(obs,)))
     b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted and "-1.5" in sec_of(b, MKT).sentences[2].text
-    for bad in ("1.5", "−1.5", "-1.50", "-1.5e0", "1.5e0"):
-        assert check_summary(d, swap(b, MKT, 2, health(f"市場健康度：{bad}（資料日 2026-10-26）"))).accepted is False
+    assert check_summary(d, b).clean
+    assert "20000.5" not in "".join(x for _, ls in render_draft(d, b) for x in ls)
+    forged = _fact_sentence("fact_value_ok", "tw.twii_close")
+    assert_rejected(check_summary(d, swap(b, MKT, 4, forged)), T.GATE_G2, "restricted_value")
+    assert build_ref_index(d)["tw.twii_close"].group == "restricted"
 
 
-def test_g2_true_zero_is_a_value_but_zero_text_is_not_a_literal():
-    d = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
-                                  ok_val("market.health", 0)])
-    b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted                              # 真的 0 是資料
-    d2 = empty_digest()
-    b2 = compose_rule_draft(d2)
-    rep = check_summary(d2, swap(b2, MKT, 2, health("⬜ 市場健康度：0，資料不足，無法判定")))
-    assert rep.accepted is False and T.GATE_G2 in rep.failed_gates     # missing 不能被寫成 0
-
-
-def test_g2_risk_cap_numbers_are_restricted(dg, base):
-    wording = T.RISK_CAP_HIDDEN_WORDING
-    rc_refs = (section_ref("risk_cap"), "risk_cap.cap_pct", "risk_cap.exposure_lo_pct", "risk_cap.exposure_hi_pct")
-    for num in ("60", "60%", "40%", "40"):
-        rep = check_summary(dg, swap(base, MKT, 3, S(f"{wording} {num}", rc_refs)))
-        assert_rejected(rep, T.GATE_G2, "restricted_value")
-    rep = check_summary(dg, swap(base, MKT, 3, S(f"{wording} 60%", (section_ref("risk_cap"),))))
-    assert_rejected(rep, T.GATE_G2, "number_not_literal")
-    assert check_summary(dg, swap(base, MKT, 3, S(wording, rc_refs))).accepted
-
-
-def test_g2_quote_cannot_launder_a_digit_inside_a_longer_number():
-    d = make_digest(market_facts=[ok_text("market.regime", "7"), ok_text("market.light", "🟢"),
-                                  ok_val("market.health", 72.5)])
-    b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted
-    sneaky = S("市場位階：7，另有 72.5（資料日 2026-10-26）", ("market.regime",))
-    rep = check_summary(d, swap(b, MKT, 0, sneaky))
-    assert rep.accepted is False and T.GATE_G2 in rep.failed_gates
-    assert is_numeric_quote("7") and not is_numeric_quote("bull")
-
-
-def test_remove_quotes_boundaries():
-    assert remove_quotes("abc 72.5 def", ("7",)).count("72.5") == 1                # 不吃進長數字
-    assert "bull" not in remove_quotes("市場位階：bull", ("bull",))
-    assert "bullish" in remove_quotes("bullish", ("bull",))                          # 不吃進較長英文字
-    assert remove_quotes("x", ("",)) == "x"
-    assert "風險" not in remove_quotes(T.RISK_CAP_HIDDEN_WORDING, (T.RISK_CAP_HIDDEN_WORDING,))
+def test_g2_value_field_on_text_only_fact_is_not_quotable(dg, base):
+    forged = S(R(REGIME, T.FIELD_LABEL), L(T.TPL_COLON), R(REGIME, T.FIELD_VALUE), L(T.TPL_DATE_OPEN),
+               R(REGIME, T.FIELD_AS_OF), L(T.TPL_CLOSE))
+    assert_rejected(check_summary(dg, swap(base, MKT, 0, forged)), T.GATE_G1, "field_not_quotable")
 
 
 # ══════════════════════════════════════════════════════════════════════
-# G3 狀態不可升級
+# G3 狀態不可升級：標示語由模板產生，句型綁定項目狀態
 # ══════════════════════════════════════════════════════════════════════
-@pytest.mark.parametrize("word", list(T.WASHING_TERMS_CJK) + sorted(T.WASHING_TERMS_LATIN))
-def test_g3_washing_terms_rejected_anywhere_outside_quotes(word):
-    d = empty_digest()
-    b = compose_rule_draft(d)
-    bad = S(f"⬜ 市場健康度：資料不足，無法判定，目前{word}", HEALTH_REFS)
-    assert_rejected(check_summary(d, swap(b, MKT, 2, bad)), T.GATE_G3, "washing_term")
+def _fact_sentence(shape_id, fid):
+    sh = next(s for s in SHAPES if s.sid == shape_id)
+    return SummarySentence(tuple(Lit(e[1]) if e[0] == "L" else Ref(fid, e[3]) for e in sh.skeleton))
 
 
-@pytest.mark.parametrize("spelled", ["中 性", "中　性", "ＮＥＵＴＲＡＬ", "Ｈｏｌｄ", "Ｎormal", "續　抱"])
-def test_g3_washing_terms_survive_whitespace_and_fullwidth_tricks(spelled):
-    d = empty_digest()
-    b = compose_rule_draft(d)
-    bad = S(f"⬜ 市場健康度：資料不足，無法判定，{spelled}", HEALTH_REFS)
-    rep = check_summary(d, swap(b, MKT, 2, bad))
-    assert rep.accepted is False and T.GATE_G3 in rep.failed_gates
-
-
-def test_g3_washing_allowed_only_inside_verbatim_digest_text():
-    d = make_digest(market_facts=[ok_text("market.regime", "neutral"), ok_text("market.light", "🟢"),
-                                  ok_val("market.health", 72.5)])
-    assert check_summary(d, compose_rule_draft(d)).accepted          # regime 的真實輸出是 neutral（規則層文字）
-    b = compose_rule_draft(d)
-    bad = S("市場位階：neutral，整體正常（資料日 2026-10-26）", ("market.regime",))
-    assert_rejected(check_summary(d, swap(b, MKT, 0, bad)), T.GATE_G3, "washing_term")
-
-
-def test_g3_missing_fact_requires_insufficient_marker():
-    d = empty_digest()
-    b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted
-    for text in ("市場健康度：不明", "⬜ 市場健康度：待補", "市場健康度（尚無輸入）"):
-        assert_rejected(check_summary(d, swap(b, MKT, 2, health(text))), T.GATE_G3, "missing_marker")
-    for text in ("市場健康度：資料不足", "市場健康度：無法判定", "⬜ 市場健康度：資料 不足"):
-        assert check_summary(d, swap(b, MKT, 2, health(text))).accepted
-
-
-def test_g3_stale_and_proxy_markers():
+def test_g3_status_cannot_be_upgraded_or_downgraded_by_picking_another_shape():
     d = make_digest(market_facts=[stale_val("market.health", 72.5), proxy_val("market.light", 3.5),
-                                  ok_text("market.regime", "bull")])
+                                  failed("market.regime")])
     b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted
-    stale_idx = next(i for i, s in enumerate(sec_of(b, MKT).sentences) if s.evidence_refs == ("market.health",))
-    proxy_idx = next(i for i, s in enumerate(sec_of(b, MKT).sentences) if s.evidence_refs == ("market.light",))
-    rep = check_summary(d, swap(b, MKT, stale_idx, health("市場健康度：72.5（資料日 2026-10-26）")))
-    assert_rejected(rep, T.GATE_G3, "missing_marker")
-    rep = check_summary(d, swap(b, MKT, proxy_idx, S("市場燈號：3.5", ("market.light",))))
-    assert_rejected(rep, T.GATE_G3, "missing_marker")
+    idx = {s.evidence_refs[0]: i for i, s in enumerate(sec_of(b, MKT).sentences)}
+    for fid, wrong in (("market.health", "fact_value_ok"), ("market.health", "fact_value_proxy"),
+                       ("market.light", "fact_value_ok"), ("market.light", "fact_value_stale"),
+                       ("market.regime", "fact_value_ok"), ("market.regime", "fact_invalid")):
+        rep = check_summary(d, swap(b, MKT, idx[fid], _fact_sentence(wrong, fid)))
+        assert_rejected(rep, T.GATE_G3, "status_mismatch")
 
 
-@pytest.mark.parametrize("term", ["確定", "確認", "肯定", "必然", "穩健", "良好", "無虞"])
-def test_g3_assertive_tone_forbidden_for_non_ok_refs_only(term):
+def test_g3_ok_fact_cannot_be_dressed_as_missing_nor_vice_versa(dg, base):
+    assert_rejected(check_summary(dg, swap(base, MKT, 2, _fact_sentence("fact_missing", HEALTH))),
+                    T.GATE_G3, "status_mismatch")
     d = empty_digest()
     b = compose_rule_draft(d)
-    bad = S(f"⬜ 市場健康度：資料不足，無法判定，{term}", HEALTH_REFS)
-    assert_rejected(check_summary(d, swap(b, MKT, 2, bad)), T.GATE_G3, "assertive_tone")
-    dg_ok = make_digest()
-    ok = health(f"市場健康度：72.5（資料日 2026-10-26），{term}")        # 引用 ok 項目時，確定語氣字眼不在此閘門
-    assert "assertive_tone" not in codes(check_summary(dg_ok, swap(compose_rule_draft(dg_ok), MKT, 2, ok)))
+    assert_rejected(check_summary(d, swap(b, MKT, 2, _fact_sentence("fact_value_ok", HEALTH))),
+                    T.GATE_G1, "field_not_quotable")
 
 
-@pytest.mark.parametrize("lone", ["N/A", "n/a", "NaN", "none", "null", "—", "-", "無資料", "未評估", "unknown", "?"])
-def test_g3_placeholder_segment_rejected(lone):
+@pytest.mark.parametrize("make_fact", [stale_val, proxy_val])
+def test_a2_stale_or_proxy_cannot_be_presented_as_current(make_fact):
+    d = make_digest(market_facts=[ok_text("market.regime", "bull"), ok_text("market.light", "🟢"),
+                                  make_fact("market.health", 72.5)])
+    b = compose_rule_draft(d)
+    ok_shape = _fact_sentence("fact_value_ok", HEALTH)
+    assert not check_summary(d, swap(b, MKT, 2, ok_shape)).accepted
+    # 把「資料已過期」那個模板拿掉（只留日期）→ 不在白名單
+    s = sec_of(b, MKT).sentences[2]
+    kept = tuple(g for g in s.segments if not (type(g) is Lit and g.template_id in (T.TPL_STALE_DATE_OPEN, T.TPL_PROXY_TAIL)))
+    assert_rejected(check_summary(d, swap(b, MKT, 2, SummarySentence(kept))), T.GATE_G4, "shape_not_whitelisted")
+
+
+def test_a2_negation_or_contradiction_has_no_way_to_be_expressed(dg):
+    """A2：否定／矛盾（「並非資料不足」「已取消，請忽略」「但前景樂觀」）— 骨架固定，加任何 Lit 都不是白名單句型。"""
     d = empty_digest()
     b = compose_rule_draft(d)
-    # 標示語齊全（不會因 missing_marker 被擋），只差一個單獨成段的缺值佔位字 —— 必須由 placeholder_segment 抓到
-    bad = S(f"⬜ 市場位階：資料不足，無法判定，{lone}", ("market.regime",))
-    assert_rejected(check_summary(d, swap(b, MKT, 0, bad)), T.GATE_G3, "placeholder_segment")
-    inside = S(f"⬜ 市場位階：資料不足，無法判定，（{lone}）", ("market.regime",))
-    assert "placeholder_segment" in codes(check_summary(d, swap(b, MKT, 0, inside)))
+    s = sec_of(b, MKT).sentences[0]
+    for extra in (T.TPL_UNDETERMINED_TAIL, T.TPL_CLOSE, T.TPL_GLYPH, T.TPL_COLON, T.TPL_ACT_NONE):
+        forged = SummarySentence(s.segments + (L(extra),))
+        assert_rejected(check_summary(d, swap(b, MKT, 0, forged)), T.GATE_G4, "shape_not_whitelisted")
+        forged = SummarySentence((L(extra),) + s.segments)
+        assert_rejected(check_summary(d, swap(b, MKT, 0, forged)), T.GATE_G4, "shape_not_whitelisted")
 
 
-def test_g3_undefined_trend_requires_not_defined_marker(dg, base):
-    for idx, rid, label in ((4, "tw_trend", "台股趨勢"), (5, "intl_trend", "國際趨勢")):
-        bad = S(f"{label}：資料不足，無法判定", (section_ref(rid),))
-        assert_rejected(check_summary(dg, swap(base, MKT, idx, bad)), T.GATE_G3, "missing_marker")
-    bad = S("大盤合理區間：資料不足，無法判定", (section_ref("valuation"),))
-    assert_rejected(check_summary(dg, swap(base, MKT, 6, bad)), T.GATE_G3, "missing_marker")
+def test_g3_undefined_sections_use_fixed_template_only(dg, base):
+    for idx, name in ((4, "tw_trend"), (5, "intl_trend"), (6, "valuation")):
+        rid = section_ref(name)
+        weaker = S(L(T.TPL_GLYPH), R(rid, T.FIELD_LABEL), L(T.TPL_COLON), R(rid, T.FIELD_VALUE))
+        assert not check_summary(dg, swap(base, MKT, idx, weaker)).accepted
+
+
+def test_a3_homoglyph_simplified_synonym_numeral_attacks_have_no_slot():
+    """A3／A4：同形異字、簡體、同義詞、中文數字、全形數字 —— 這些只可能經由「任意字串」進入，而任意字串沒有位置。"""
+    d = make_digest()
+    b = compose_rule_draft(d)
+    for payload in ("hоld", "买进", "续抱", "平穩", "七十二點五", "７２．５", "⒎2", "1e2", "中 性", "ＢＵＹ"):
+        for sentence in (S(payload), S(R(HEALTH, T.FIELD_LABEL), payload), SummarySentence((payload, R(HEALTH, T.FIELD_LABEL)))):
+            rep = check_summary(d, swap(b, MKT, 2, sentence))
+            assert rep.structural_failure and not rep.accepted, payload
+        as_template = S(L(payload), R(HEALTH, T.FIELD_LABEL))
+        assert_rejected(check_summary(d, swap(b, MKT, 2, as_template)), T.GATE_G4, "template_not_whitelisted")
+
+
+def test_a_free_ride_section_ref_cannot_carry_extra_claims(dg, base):
+    """搭便車：把 section:risk_cap 掛在句上、夾帶任意結論 —— 只能以 Lit 夾帶，而 Lit 受骨架限制。"""
+    for extra in (T.TPL_ACT_NONE, T.TPL_ENTRY_TAIL, T.TPL_UNDETERMINED_TAIL):
+        forged = S(L(extra), R(section_ref("risk_cap"), T.FIELD_WORDING))
+        assert_rejected(check_summary(dg, add(base, MKT, forged)), T.GATE_G4, "shape_not_whitelisted")
+        forged = S(R(section_ref("risk_cap"), T.FIELD_WORDING), L(extra))
+        assert_rejected(check_summary(dg, add(base, MKT, forged)), T.GATE_G4, "shape_not_whitelisted")
+    # 同一句型放錯段
+    assert_rejected(check_summary(dg, add(base, IND, S(R(section_ref("risk_cap"), T.FIELD_WORDING)))),
+                    T.GATE_G4, "shape_out_of_section")
+
+
+def test_g3_bind_field_only_exists_inside_shapes_that_declare_it(dg, base):
+    lone = S(R(section_ref("holdings"), T.FIELD_BIND))
+    assert_rejected(check_summary(dg, add(base, BH, lone)), T.GATE_G4, "shape_not_whitelisted")
 
 
 # ══════════════════════════════════════════════════════════════════════
-# G4 不得新增結論類別
+# G4 不新增結論類別：行動一對一
 # ══════════════════════════════════════════════════════════════════════
-@pytest.mark.parametrize("term", ["買進", "賣出", "加碼", "減碼", "停利", "停損", "換股", "續抱", "BUY", "sell", "Hold",
-                                  "ＢＵＹ", "出清", "降低持股"])
-def test_g4_new_action_terms_rejected_outside_quotes(dg, base, term):
-    bad = S(f"本期行動：建議{term}", ("section:actions",))
-    rep = check_summary(dg, add(base, ACT, bad))
-    assert rep.accepted is False and T.GATE_G4 in rep.failed_gates and "new_action_term" in codes(rep)
+def test_g4_action_sentence_is_symbol_plus_verbatim_text_and_nothing_else(dg, base):
+    a = sec_of(base, ACT).sentences[0]
+    assert a.segments == (R(ACT0, T.FIELD_SYMBOL), L(T.TPL_COLON), R(ACT0, T.FIELD_TEXT))
+    # A6：加前後字
+    for extra in (L(T.TPL_GLYPH), L(T.TPL_CLOSE), L(T.TPL_ACT_NONE)):
+        for forged in (SummarySentence(a.segments + (extra,)), SummarySentence((extra,) + a.segments)):
+            assert_rejected(check_summary(dg, swap(base, ACT, 0, forged)), T.GATE_G4, "shape_not_whitelisted")
 
 
-def test_g4_actions_only_via_verbatim_digest_action(dg, base):
-    assert check_summary(dg, base).accepted                         # 行動文字本身含「汰弱」「停利」，逐字引用放行
-    para = S("0050：建議出清", ("action:pf-A:0050", "action_fact:pf-A:0050"))
-    rep = check_summary(dg, swap(base, ACT, 0, para))
-    assert_rejected(rep, T.GATE_G4, "action_text_not_verbatim")
-    assert "new_action_term" in codes(rep)
-    only_symbol = S("0050：請留意", ("action:pf-A:0050",))
-    assert_rejected(check_summary(dg, swap(base, ACT, 0, only_symbol)), T.GATE_G4, "action_text_not_verbatim")
+def test_g4_action_list_must_match_digest_one_to_one_in_order(dg, base):
+    acts = sec_of(base, ACT).sentences
+    a0, a1 = acts
+    for name, sents in (("遺漏", (a0,)), ("遺漏首項", (a1,)), ("重排", (a1, a0)), ("重複", (a0, a0, a1)),
+                        ("重複2", (a0, a1, a1)), ("全空", ())):
+        rep = check_summary(dg, with_section(base, ACT, sents))
+        assert not rep.accepted, name
+        assert "action_list_mismatch" in codes(rep) or "empty_section" in codes(rep) or "duplicate_sentence" in codes(rep), name
 
 
-def test_g4_cannot_cite_action_a_but_quote_action_b(dg, base):
-    swapped = S(f"0056：{ACT_TP_TEXT}", ("action:pf-A:0050",))
-    assert_rejected(check_summary(dg, swap(base, ACT, 0, swapped)), T.GATE_G4, "action_text_not_verbatim")
+def test_g4_action_not_in_digest_cannot_be_invented(dg, base):
+    ghost = S(R("action:pf-A:9999", T.FIELD_SYMBOL), L(T.TPL_COLON), R("action:pf-A:9999", T.FIELD_TEXT))
+    assert_rejected(check_summary(dg, add(base, ACT, ghost)), T.GATE_G1, "ref_not_in_digest")
 
 
-@pytest.mark.parametrize("term", ["變強", "轉弱", "衰退", "崛起", "偏多", "偏空", "多頭", "空頭", "利多", "強勢", "bullish",
-                                  "Bear", "downtrend", "看好"])
-def test_g4_direction_terms_rejected(dg, base, term):
-    for key, idx, rid in ((IND, 0, "section:industry"), (MKT, 4, "section:tw_trend")):
-        bad = S(f"⬜ 產業趨勢：尚未定義，無法判定，{term}", (rid,))
-        rep = check_summary(dg, swap(base, key, idx, bad))
-        assert rep.accepted is False and "new_direction_term" in codes(rep) and T.GATE_G4 in rep.failed_gates
+def test_g4_action_shape_not_allowed_outside_actions_section(dg, base):
+    a = sec_of(base, ACT).sentences[0]
+    assert_rejected(check_summary(dg, add(base, MKT, a)), T.GATE_G4, "shape_out_of_section")
 
 
-def test_g4_direction_allowed_inside_verbatim_rule_text():
-    d = make_digest(entries=[entry("0050", "🟡 訊號亮但季線轉弱 → 暫停加碼、先觀望", "pause_add")],
-                    items=[action("0050", "🟡 訊號亮但季線轉弱 → 暫停加碼、先觀望", "pause_add", 1)])
-    assert check_summary(d, compose_rule_draft(d)).accepted         # 「轉弱」「暫停加碼」「觀望」來自規則層逐字文字
+def test_g4_other_section_shapes_not_allowed_in_actions(dg, base):
+    assert_rejected(check_summary(dg, add(base, ACT, sec_of(base, IND).sentences[0])), T.GATE_G4, "shape_out_of_section")
+
+
+def test_g4_action_symbol_comes_only_from_target(dg):
+    d = make_digest(entries=[entry("0050", ACT_CUT_TEXT, "cut")], items=[action("0050", ACT_CUT_TEXT, "cut", 1)])
+    force_set(d.actions.items[0], target=None)
+    # 無 target 的 Digest 行動 —— 代號句型不可用
+    b = compose_rule_draft(d)
+    assert b.sections[4].sentences[0].segments == (R(ACT0, T.FIELD_TEXT),)
+    assert check_summary(d, b).clean
+    with_symbol = S(R(ACT0, T.FIELD_SYMBOL), L(T.TPL_COLON), R(ACT0, T.FIELD_TEXT))
+    assert_rejected(check_summary(d, swap(b, ACT, 0, with_symbol)), T.GATE_G1, "field_not_quotable")
+
+
+def test_g4_stale_evidence_must_be_disclosed_with_the_oldest_stale_fact():
+    from shared.decision_digest import Fact, Provenance
+    from datetime import date
+    f_old = Fact("action_fact:pf-A:0050", DataStatus.STALE, Provenance("svc", as_of=date(2026, 10, 20)),
+                 text=ACT_CUT_TEXT, rule=RuleRef("cut", "action_branch.v1"))
+    f_new = Fact("ev.second", DataStatus.STALE, Provenance("svc", as_of=date(2026, 10, 24)), text="次要證據")
+    e = entry("0050", None, facts=(f_old, f_new))
+    d = make_digest(entries=[e], items=[action("0050", ACT_CUT_TEXT, "cut", 1, evidence=("ev.second", f_old.fact_id))])
+    b = compose_rule_draft(d)
+    s = sec_of(b, ACT).sentences[0]
+    assert render_sentence(d, s) == f"0050：{ACT_CUT_TEXT}（依據資料已過期，資料日 2026-10-20）"       # 取最舊的
+    assert check_summary(d, b).clean
+    hide = S(R(ACT0, T.FIELD_SYMBOL), L(T.TPL_COLON), R(ACT0, T.FIELD_TEXT))                         # 隱藏過期
+    assert_rejected(check_summary(d, swap(b, ACT, 0, hide)), T.GATE_G3, "stale_evidence_mismatch")
+    wrong = SummarySentence(s.segments[:-2] + (R("ev.second", T.FIELD_AS_OF), L(T.TPL_CLOSE)))        # 挑較新的那筆
+    assert_rejected(check_summary(d, swap(b, ACT, 0, wrong)), T.GATE_G3, "stale_evidence_mismatch")
+    d_fresh = make_digest()
+    stale_form = SummarySentence(sec_of(compose_rule_draft(d_fresh), ACT).sentences[0].segments
+                                 + (L(T.TPL_ACT_STALE_OPEN), R("action_fact:pf-A:0050", T.FIELD_AS_OF), L(T.TPL_CLOSE)))
+    assert not check_summary(d_fresh, swap(compose_rule_draft(d_fresh), ACT, 0, stale_form)).accepted
+
+
+def test_g4_actions_unavailable_and_none_shapes_are_state_bound():
+    d_un = make_digest(items=[])                                  # actions UNAVAILABLE
+    none_sentence = S(L(T.TPL_ACT_NONE), R(section_ref("actions"), T.FIELD_BIND))
+    b = compose_rule_draft(d_un)
+    assert_rejected(check_summary(d_un, with_section(b, ACT, (none_sentence,))), T.GATE_G3, "precondition_failed")
+    d_none = dataclasses.replace(make_digest(items=[]), actions=AB0.ActionsSection(AB0.Availability.AVAILABLE, ()))
+    b2 = compose_rule_draft(d_none)
+    assert render_draft(d_none, b2)[4][1] == (f"本期行動：{T.MARK_NO_ACTION}",)
+    assert_rejected(check_summary(d_none, with_section(b2, ACT, (sec_of(b, ACT).sentences[0],))),
+                    T.GATE_G3, "precondition_failed")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -443,315 +513,401 @@ def test_g4_direction_allowed_inside_verbatim_rule_text():
 # ══════════════════════════════════════════════════════════════════════
 def test_g5_missing_duplicate_unknown_and_order_of_sections(dg, base):
     secs = list(base.sections)
-    rep = check_summary(dg, SummaryDraft(tuple(secs[:-1])))
-    assert_rejected(rep, T.GATE_G5, "missing_section")
-    rep = check_summary(dg, SummaryDraft(tuple(secs + [secs[0]])))
-    assert_rejected(rep, T.GATE_G5, "duplicate_section")
-    rep = check_summary(dg, SummaryDraft(tuple(secs + [SummarySection("extra", (S("x", ("market.regime",)),))])))
-    assert_rejected(rep, T.GATE_G5, "unknown_section")
-    rep = check_summary(dg, SummaryDraft((secs[1], secs[0], *secs[2:])))
-    assert_rejected(rep, T.GATE_G5, "section_order")
+    assert_rejected(check_summary(dg, SummaryDraft(tuple(secs[:-1]))), T.GATE_G5, "missing_section")
+    assert_rejected(check_summary(dg, SummaryDraft(tuple(secs + [secs[0]]))), T.GATE_G5, "duplicate_section")
+    assert_rejected(check_summary(dg, SummaryDraft(tuple(secs + [SummarySection("extra", (S(R(HEALTH, T.FIELD_LABEL)),))]))),
+                    T.GATE_G5, "unknown_section")
+    assert_rejected(check_summary(dg, SummaryDraft((secs[1], secs[0], *secs[2:]))), T.GATE_G5, "section_order")
 
 
 def test_g5_empty_section_rejected(dg, base):
     for key in T.SECTION_KEYS:
-        d = SummaryDraft(tuple(SummarySection(s.key, ()) if s.key == key else s for s in base.sections))
-        assert_rejected(check_summary(dg, d), T.GATE_G5, "empty_section")
+        assert_rejected(check_summary(dg, with_section(base, key, ())), T.GATE_G5, "empty_section")
 
 
 def test_g5_every_basis_item_must_be_disclosed(dg, base):
-    # 刪掉市場段的 Risk Cap 卡面／台股／國際／合理區間 任一句 → missing_disclosure
     for idx in (3, 4, 5, 6):
-        rep = check_summary(dg, swap(base, MKT, idx, None))
-        assert_rejected(rep, T.GATE_G5, "missing_disclosure")
-    # 產業段、存股段、資本利得段的唯一說明句不可缺（刪掉就是空段）
-    for key in (IND, BH, CG):
-        d = SummaryDraft(tuple(SummarySection(s.key, ()) if s.key == key else s for s in base.sections))
-        assert not check_summary(dg, d).accepted
+        assert_rejected(check_summary(dg, swap(base, MKT, idx, None)), T.GATE_G5, "missing_disclosure")
 
 
 def test_g5_missing_fact_must_be_disclosed():
     d = empty_digest()
     b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted
+    assert check_summary(d, b).clean
     for idx in (0, 1, 2):
         assert_rejected(check_summary(d, swap(b, MKT, idx, None)), T.GATE_G5, "missing_disclosure")
+
+
+def test_g5_disclosure_must_use_the_matching_shape_for_that_ref():
+    d = make_digest(market_facts=[stale_val("market.health", 72.5), ok_text("market.regime", "bull"),
+                                  ok_text("market.light", "🟢")])
+    b = compose_rule_draft(d)
+    i = next(i for i, s in enumerate(sec_of(b, MKT).sentences) if s.evidence_refs == (HEALTH,))
+    # 換成「別的 ref」的合法句子 —— 該 ref 沒被揭露
+    other = sec_of(b, MKT).sentences[next(j for j, s in enumerate(sec_of(b, MKT).sentences)
+                                         if s.evidence_refs == ("market.light",))]
+    assert_rejected(check_summary(d, swap(b, MKT, i, other)), T.GATE_G5, "missing_disclosure")
+
+
+def test_g5_duplicate_sentence_rejected(dg, base):
+    assert_rejected(check_summary(dg, add(base, MKT, sec_of(base, MKT).sentences[0])), T.GATE_G5, "duplicate_sentence")
 
 
 def test_g5_unkeyed_holdings_must_be_disclosed():
     d = make_digest(entries=[], items=[], unkeyed=2)
     b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted
-    txt = sec_of(b, BH).sentences
-    assert any("2 檔" in s.text and T.MARK_UNKEYED in s.text for s in txt)
-    only = SummaryDraft(tuple(SummarySection(s.key, tuple(x for x in s.sentences if "2 檔" not in x.text))
-                              if s.key == BH else s for s in b.sections))
+    assert check_summary(d, b).clean
+    lines = dict(render_draft(d, b))
+    assert "⬜ 另有 2 檔持股缺少投資組合鍵，未納入判讀，資料不足，無法判定" in lines[BH]
+    only = with_section(b, BH, tuple(x for x in sec_of(b, BH).sentences if x.segments[0] != L(T.TPL_UNKEYED_OPEN)))
     assert_rejected(check_summary(d, only), T.GATE_G5, "missing_disclosure")
-    wrong_count = SummaryDraft(tuple(SummarySection(s.key, tuple(
-        S(x.text.replace("2 檔", "3 檔"), x.evidence_refs) for x in s.sentences)) if s.key == BH else s
-                                     for s in b.sections))
-    assert_rejected(check_summary(d, wrong_count), T.GATE_G2, "number_not_literal")
 
 
-def test_g5_strategy_classified_entries_need_not_wired_disclosure():
+def test_g5_strategy_classified_entries_need_their_own_sentence():
     d = make_digest(entries=[entry("0050", "t", "add", strategy=StrategyType.BUY_AND_HOLD, source="客戶設定")],
                     items=[action("0050", "t", "add")])
     b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted
-    assert section_basis(d, BH) == (("holding:pf-A:0050", (T.MARK_NOT_WIRED,)),)
-    assert section_basis(d, CG) == ((section_ref("holdings"), (T.MARK_STRATEGY_UNSET,)),)
-    lazy = S("0050：策略分類為存股（來源：客戶設定）；基本面良好", ("holding:pf-A:0050",))
-    rep = check_summary(d, swap(b, BH, 0, lazy))
-    assert rep.accepted is False and T.GATE_G5 in rep.failed_gates and T.GATE_G3 in rep.failed_gates
+    assert check_summary(d, b).clean
+    assert section_basis(d, BH) == (("holding:pf-A:0050", ("strategy_entry",)),)
+    assert section_basis(d, CG) == ((section_ref("holdings"), ("strategy_unset:capital_gain",)),)
+    assert dict(render_draft(d, b))[BH] == ("0050：策略分類為存股；基本面與配置判定尚未接線，無法判定",)
+    # 把存股的 entry 句放到資本利得段 → 策略分類不屬於此段
+    assert_rejected(check_summary(d, add(b, CG, sec_of(b, BH).sentences[0])), T.GATE_G4, "wrong_strategy")
 
 
-def test_g5_no_action_and_unavailable_actions_disclosure():
-    d = make_digest(items=[])        # actions UNAVAILABLE（AB-1 的 0 筆行動語意）
+def test_g5_strategy_entry_shape_cannot_be_used_when_holdings_unavailable():
+    d = make_digest(entries=[entry("0050", None, strategy=StrategyType.BUY_AND_HOLD, source="x")], items=[])
+    assert d.holdings.availability is AB0.Availability.UNAVAILABLE
     b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted and "資料不足" in sec_of(b, ACT).sentences[0].text
-    bad = S("本期行動：本期無事", ("section:actions",))
-    assert not check_summary(d, swap(b, ACT, 0, bad)).accepted
+    assert check_summary(d, b).clean and "持股資料不足" in dict(render_draft(d, b))[BH][0]
+    ent = S(R(holding_ref("pf-A", "0050"), T.FIELD_SYMBOL), L(T.TPL_STRATEGY_IS), R(holding_ref("pf-A", "0050"), T.FIELD_STRATEGY),
+            L(T.TPL_ENTRY_TAIL))
+    assert_rejected(check_summary(d, add(b, BH, ent)), T.GATE_G3, "precondition_failed")
 
 
-def test_g5_ref_out_of_scope_blocks_padding(dg, base):
-    pad = S("⬜ 產業趨勢：尚未定義，資料不足，無法判定", ("section:industry", "market.regime"))
-    assert_rejected(check_summary(dg, swap(base, IND, 0, pad)), T.GATE_G5, "ref_out_of_scope")
-    pad2 = S("市場健康度：72.5（資料日 2026-10-26）", ("market.health", "action:pf-A:0050"))
-    assert_rejected(check_summary(dg, swap(base, MKT, 2, pad2)), T.GATE_G5, "ref_out_of_scope")
-    # 一個與「該段」無關的事實不能拿來墊在別段的說明句上
-    pad3 = S("⬜ 存股：尚未設定投資策略分類，無法判定", ("market.regime",))
-    assert not check_summary(dg, swap(base, BH, 0, pad3)).accepted
+def test_g5_holdings_unavailable_must_cite_the_holdings_section_itself():
+    d = make_digest(entries=[entry("0050", None)], items=[])
+    b = compose_rule_draft(d)
+    assert check_summary(d, b).clean
+    pad = with_section(b, BH, (S(R(holding_ref("pf-A", "0050"), T.FIELD_SYMBOL), L(T.TPL_STRATEGY_IS),
+                                 R(holding_ref("pf-A", "0050"), T.FIELD_STRATEGY), L(T.TPL_ENTRY_TAIL)),))
+    assert not check_summary(d, pad).accepted
+
+
+def test_g5_unavailable_state_shapes_cannot_be_used_on_available_data(dg, base):
+    wrong = S(L(T.TPL_GLYPH), L(T.TPL_LABEL_BUY_AND_HOLD), L(T.TPL_HOLDINGS_UNAVAILABLE_MID),
+              R(section_ref("holdings"), T.FIELD_REASON), L(T.TPL_CLOSE))
+    assert_rejected(check_summary(dg, add(base, BH, wrong)), T.GATE_G3, "precondition_failed")
+    d_none = make_digest(entries=[], items=[], unkeyed=0)
+    assert_rejected(check_summary(d_none, add(compose_rule_draft(d_none), BH, sec_of(base, BH).sentences[0])),
+                    T.GATE_G3, "precondition_failed")
+
+
+def test_g5_industry_and_trend_wording_belongs_to_its_own_section(dg, base):
+    tw = sec_of(base, MKT).sentences[4]
+    assert_rejected(check_summary(dg, add(base, IND, tw)), T.GATE_G4, "wrong_section_ref")
+    ind = sec_of(base, IND).sentences[0]
+    assert_rejected(check_summary(dg, add(base, MKT, ind)), T.GATE_G4, "wrong_section_ref")
 
 
 # ══════════════════════════════════════════════════════════════════════
-# G6 依據可回溯
+# G6 與 accepted／usable／clean／surviving 的語意
 # ══════════════════════════════════════════════════════════════════════
-def test_g6_sentence_without_refs_is_dropped_not_fatal(dg, base):
-    extra = S("市場表現亮眼，建議買進", ())
-    rep = check_summary(dg, add(base, MKT, extra))
-    assert rep.accepted is True and rep.dropped == ((MKT, len(sec_of(base, MKT).sentences)),)
-    assert T.GATE_G6 in rep.failed_gates and "no_evidence_ref" in codes(rep)
-    assert extra not in sec_of(rep.surviving, MKT).sentences
-    assert sec_of(rep.surviving, MKT).sentences == sec_of(base, MKT).sentences
-    assert T.GATE_G6 not in rep.passed_gates
+def test_g6_sentence_without_any_ref_is_dropped_not_fatal(dg, base):
+    free_riders = [S(L(T.TPL_ACT_NONE)), S(L(T.TPL_GLYPH), L(T.TPL_COLON)), SummarySentence(())]
+    for extra in free_riders:
+        rep = check_summary(dg, add(base, MKT, extra))
+        assert rep.accepted is True and rep.usable is True and rep.clean is False
+        assert rep.dropped == ((MKT, len(sec_of(base, MKT).sentences)),)
+        assert T.GATE_G6 in rep.failed_gates and "no_evidence_ref" in codes(rep) and T.GATE_G6 not in rep.passed_gates
+        assert rep.surviving == base and extra not in sec_of(rep.surviving, MKT).sentences
+
+
+def test_a7_consumers_must_use_surviving_not_the_original_draft(dg, base):
+    dirty = add(base, MKT, S(L(T.TPL_ACT_NONE)))
+    rep = check_summary(dg, dirty)
+    assert rep.accepted and rep.usable and not rep.clean
+    assert rep.surviving != dirty                                      # 原始 draft 含未綁定句子，不得使用
+    with pytest.raises(ValueError, match="自檢"):
+        SummaryResult(dg, AB0.AiParticipation.RULE_ONLY, dirty.sections)
+    assert SummaryResult(dg, AB0.AiParticipation.RULE_ONLY, rep.surviving.sections).state is SummaryState.PARTIAL
 
 
 def test_g6_dropped_sentence_is_not_inspected_for_other_gates(dg, base):
-    rep = check_summary(dg, add(base, MKT, S("中性 TSLA 99.9 買進", ())))
+    rep = check_summary(dg, add(base, MKT, S(L("買進"), L("tpl.nope"))))
     assert rep.accepted and {v.gate for v in rep.violations} == {T.GATE_G6}
 
 
 def test_g6_dropping_the_only_disclosure_triggers_g5(dg, base):
-    sole = SummaryDraft(tuple(SummarySection(s.key, (S(s.sentences[0].text, ()),)) if s.key == IND else s
-                              for s in base.sections))
-    rep = check_summary(dg, sole)
-    assert rep.accepted is False and T.GATE_G6 in rep.failed_gates and T.GATE_G5 in rep.failed_gates
-    assert "empty_section" in codes(rep)
+    only_lit = with_section(base, IND, (S(L(T.TPL_GLYPH), L(T.TPL_COLON)),))
+    rep = check_summary(dg, only_lit)
+    assert rep.accepted is False and rep.usable is False and rep.clean is False
+    assert T.GATE_G6 in rep.failed_gates and "empty_section" in codes(rep)
+
+
+def test_accepted_usable_clean_truth_table(dg, base):
+    clean = check_summary(dg, base)
+    dropped = check_summary(dg, add(base, MKT, S(L(T.TPL_GLYPH))))
+    rejected = check_summary(dg, swap(base, MKT, 3, None))
+    structural = check_summary(dg, None)
+    assert (clean.accepted, clean.usable, clean.clean) == (True, True, True)
+    assert (dropped.accepted, dropped.usable, dropped.clean) == (True, True, False)
+    assert (rejected.accepted, rejected.usable, rejected.clean) == (False, False, False)
+    assert (structural.accepted, structural.usable, structural.clean) == (False, False, False)
+
+
+def test_failed_gates_are_in_fixed_gate_order(dg, base):
+    bad = swap(swap(base, MKT, 2, S(R("market.nope", T.FIELD_LABEL))), IND, 0, S(L("tpl.nope"), R(section_ref("industry"), T.FIELD_LABEL)))
+    rep = check_summary(dg, add(bad, MKT, S(L(T.TPL_GLYPH))))
+    assert rep.failed_gates == tuple(g for g in T.GROUNDING_GATES if g in rep.failed_gates)
+    assert list(rep.failed_gates) == ["G1", "G4", "G5", "G6"] or set(rep.failed_gates) >= {"G1", "G4", "G6"}
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 引用索引／基準資料
+# SummaryResult：與 Digest 綁定，無法手造或改裝
 # ══════════════════════════════════════════════════════════════════════
-def test_ref_index_covers_namespaces_and_restricts_risk_cap(dg):
+def _result(dg, base):
+    return SummaryResult(dg, AB0.AiParticipation.RULE_ONLY, base.sections)
+
+
+def test_summary_result_derives_everything_from_the_digest(dg, base):
+    r = _result(dg, base)
+    assert r.state is SummaryState.PARTIAL and r.retained_sections == T.SECTION_KEYS
+    assert tuple(k for k, _ in r.section_availability) == T.SECTION_KEYS
+    assert r.notices == () and r.invalid_sections == () and r.failed_gates == () and r.violations == ()
+    assert dict(r.lines)[ACT][0] == f"0050：{ACT_CUT_TEXT}"
+
+
+def test_a8_derived_fields_cannot_be_passed_or_spoofed(dg, base):
+    r = _result(dg, base)
+    for bad_kw in ({"state": SummaryState.VALID}, {"section_availability": ()}, {"retained_sections": ()},
+                   {"notices": ("x",)}, {"failed_gates": ()}):
+        with pytest.raises(TypeError):
+            SummaryResult(dg, AB0.AiParticipation.RULE_ONLY, base.sections, **bad_kw)       # type: ignore[arg-type]
+        with pytest.raises(TypeError):
+            dataclasses.replace(r, **bad_kw)                   # init=False 欄位不能經由 replace 指定
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        r.state = SummaryState.VALID                                                       # type: ignore[misc]
+
+
+def test_a8_replace_cannot_smuggle_unchecked_sections(dg, base):
+    r = _result(dg, base)
+    forged_sec = tuple(SummarySection(s.key, (S(L("買進"), R("x", T.FIELD_LABEL)),)) for s in r.sections)
+    with pytest.raises(ValueError):
+        dataclasses.replace(r, sections=forged_sec)
+    with pytest.raises(ValueError):
+        dataclasses.replace(r, sections=base.sections[:-1])
+    with pytest.raises(ValueError):
+        dataclasses.replace(r, sections=[])
+    with pytest.raises(ValueError):
+        dataclasses.replace(r, sections=swap(base, MKT, 2, S(R("market.nope", T.FIELD_LABEL))).sections)
+
+
+def test_a8_replace_digest_rebinds_and_rechecks(dg, base):
+    r = _result(dg, base)
+    other = make_digest(market_facts=[missing("market.regime"), ok_text("market.light", "🟢"), ok_val("market.health", 72.5)])
+    with pytest.raises(ValueError):
+        dataclasses.replace(r, digest=other)                    # 內容與新 Digest 不符（regime 其實缺值）
+
+
+def test_summary_result_invalid_digest_cannot_carry_sections(base):
+    bad = make_digest(schema_version="x")
+    r = SummaryResult(bad, AB0.AiParticipation.RULE_ONLY, ())
+    assert r.state is SummaryState.INVALID and r.sections == () and r.retained_sections == () and r.lines == ()
+    assert r.section_availability == () and r.invalid_sections and r.failed_gates and r.violations
+    blob = "\n".join(r.notices)
+    assert "不輸出任何投資結論" in blob and "其他段落：未保留" in blob and "失敗閘門：" in blob
+    with pytest.raises(ValueError):
+        SummaryResult(bad, AB0.AiParticipation.RULE_ONLY, base.sections)
+    with pytest.raises(ValueError):
+        SummaryResult(None, AB0.AiParticipation.RULE_ONLY, base.sections)
+
+
+def test_summary_result_mode_must_be_existing_ab0_value(dg, base):
+    for bad in ("rule_only", None, 1):
+        with pytest.raises(ValueError):
+            SummaryResult(dg, bad, base.sections)                  # type: ignore[arg-type]
+    assert {m.value for m in AB0.AiParticipation} == {"rule_only", "ai_explained", "ai_rejected"}
+
+
+def test_summary_result_state_is_never_upgraded_by_inputs(dg, base):
+    for d in (make_digest(), empty_digest(), make_digest(entries=[], items=[], unkeyed=2)):
+        r = SummaryResult(d, AB0.AiParticipation.RULE_ONLY, compose_rule_draft(d).sections)
+        assert r.state in (SummaryState.PARTIAL, SummaryState.UNAVAILABLE)       # 現行契約下 VALID 不可達
+    assert SummaryResult(empty_digest(), AB0.AiParticipation.RULE_ONLY,
+                         compose_rule_draft(empty_digest()).sections).state is SummaryState.UNAVAILABLE
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 渲染與索引
+# ══════════════════════════════════════════════════════════════════════
+def test_render_sentence_refuses_unchecked_content(dg):
+    with pytest.raises(ValueError):
+        render_sentence(dg, S(R(section_ref("risk_cap"), T.FIELD_WORDING), R("risk_cap.cap_pct", T.FIELD_VALUE)))
+    with pytest.raises(KeyError):
+        render_sentence(dg, S(L("nope")))
+
+
+def test_ref_index_covers_namespaces_and_groups(dg):
     idx = build_ref_index(dg)
-    for rid in ("market.regime", "action:pf-A:0050", "action_fact:pf-A:0050", "holding:pf-A:0050",
-                "risk_cap.cap_pct", *[section_ref(n) for n in T.DIGEST_SECTIONS]):
+    for rid in ("market.regime", ACT0, "action_fact:pf-A:0050", "holding:pf-A:0050", "risk_cap.cap_pct",
+                *[section_ref(n) for n in T.DIGEST_SECTIONS]):
         assert rid in idx
-    assert idx["risk_cap.cap_pct"].restricted and idx["risk_cap.cap_pct"].literals == ()
-    assert idx["risk_cap.cap_pct"].restricted_literals == (("60", "%"),)
-    assert idx["market.health"].literals == (("72.5", None),) and idx["market.health"].dates == ("2026-10-26",)
-    assert idx["action:pf-A:0050"].action_text == ACT_CUT_TEXT and "0050" in idx["action:pf-A:0050"].quotes
+    assert idx["risk_cap.cap_pct"].group == "restricted" and idx["market.health"].group == "market"
+    assert idx["action_fact:pf-A:0050"].group == "holding"
     with pytest.raises(ValueError):
         section_ref("nope")
 
 
-def test_ref_index_unkeyed_literal():
-    d = make_digest(entries=[], items=[], unkeyed=4)
-    idx = build_ref_index(d)
-    assert idx[section_ref("holdings")].literals == (("4", None),)
-
-
 def test_section_basis_for_baseline(dg):
-    b = section_basis(dg, MKT)
-    ids = [r for r, _ in b]
-    assert ids == [section_ref("tw_trend"), section_ref("intl_trend"), section_ref("valuation"),
-                   section_ref("risk_cap")]
-    assert dict(b)[section_ref("risk_cap")] == (T.RISK_CAP_HIDDEN_WORDING,)
-    assert section_basis(dg, ACT) == ()                                  # 有行動、無需額外明示
+    ids = [r for r, _ in section_basis(dg, MKT)]
+    assert ids == [section_ref("tw_trend"), section_ref("intl_trend"), section_ref("valuation"), section_ref("risk_cap")]
+    assert section_basis(dg, ACT) == ()
+    assert section_basis(dg, IND) == ((section_ref("industry"), ("section_undefined",)),)
     with pytest.raises(ValueError):
         section_basis(dg, "nope")
 
 
-# ══════════════════════════════════════════════════════════════════════
-# SummaryResult 不變量（狀態不得升格）
-# ══════════════════════════════════════════════════════════════════════
-def _avail(*vs):
-    return tuple(zip(T.SECTION_KEYS, vs))
-
-
-def _five():
-    return tuple(SummarySection(k, ()) for k in T.SECTION_KEYS)
-
-
-A, P, U = AB0.Availability.AVAILABLE, AB0.Availability.PARTIAL, AB0.Availability.UNAVAILABLE
-
-
-def test_summary_result_rejects_upgraded_state():
-    ok = SummaryResult(SummaryState.PARTIAL, AB0.AiParticipation.RULE_ONLY, _five(), _avail(U, U, U, U, A),
-                       retained_sections=T.SECTION_KEYS)
-    assert ok.state is SummaryState.PARTIAL
-    for state in (SummaryState.VALID, SummaryState.UNAVAILABLE):
-        with pytest.raises(ValueError):
-            SummaryResult(state, AB0.AiParticipation.RULE_ONLY, _five(), _avail(U, U, U, U, A),
-                          retained_sections=T.SECTION_KEYS)
-    with pytest.raises(ValueError):
-        SummaryResult(SummaryState.VALID, AB0.AiParticipation.RULE_ONLY, _five(), _avail(A, A, A, A, P),
-                      retained_sections=T.SECTION_KEYS)
-
-
-def test_summary_result_invalid_cannot_carry_conclusions():
-    with pytest.raises(ValueError):
-        SummaryResult(SummaryState.INVALID, AB0.AiParticipation.RULE_ONLY, _five(), (), invalid_sections=("*",))
-    with pytest.raises(ValueError):
-        SummaryResult(SummaryState.INVALID, AB0.AiParticipation.RULE_ONLY, (), (), invalid_sections=("*",),
-                      retained_sections=("market",))
-    with pytest.raises(ValueError):
-        SummaryResult(SummaryState.INVALID, AB0.AiParticipation.RULE_ONLY, (), ())     # 必須指出哪一段 invalid
-
-
-def test_summary_result_mode_must_be_existing_ab0_value_and_five_sections():
-    with pytest.raises(ValueError):
-        SummaryResult(SummaryState.PARTIAL, "rule_only", _five(), _avail(U, U, U, U, A),
-                      retained_sections=T.SECTION_KEYS)
-    with pytest.raises(ValueError):
-        SummaryResult("partial", AB0.AiParticipation.RULE_ONLY, _five(), _avail(U, U, U, U, A),
-                      retained_sections=T.SECTION_KEYS)
-    with pytest.raises(ValueError):
-        SummaryResult(SummaryState.PARTIAL, AB0.AiParticipation.RULE_ONLY, _five()[:-1], _avail(U, U, U, U, A),
-                      retained_sections=T.SECTION_KEYS)
-    assert {m.value for m in AB0.AiParticipation} == {"rule_only", "ai_explained", "ai_rejected"}
+def test_every_shape_signature_is_unique_and_templates_exist():
+    sigs = [s.signature for s in SHAPES]
+    assert len(sigs) == len(set(sigs))
+    for sh in SHAPES:
+        for el in sh.skeleton:
+            if el[0] == "L":
+                assert el[1] in T.TEMPLATES
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 字眼清單釘住（防漂移）
+# 建置期 lint：模板與標籤本身不得含被禁字眼（黑名單降級為縱深防禦）
 # ══════════════════════════════════════════════════════════════════════
-def test_terms_cover_the_c_document_wording():
-    for w in ("中性", "正常", "維持", "續抱"):          # C §2.4 G3 明列
+def test_templates_and_labels_are_lint_clean():
+    pieces = [*T.TEMPLATES.values(), *T.FACT_LABELS.values(), T.FACT_LABEL_FALLBACK, *T.SECTION_REF_LABELS.values(),
+              *T.MISSING_REASON_LABELS.values(), T.MISSING_REASON_LABEL_UNKNOWN, *T.SECTION_LABELS.values(),
+              T.MARK_INSUFFICIENT, T.MARK_UNDETERMINED, T.MARK_NOT_DEFINED, T.MARK_NOT_WIRED, T.MARK_RESEARCH_ONLY,
+              T.MARK_STALE, T.MARK_PROXY, T.MARK_STRATEGY_UNSET, T.MARK_UNKEYED, T.MARK_NO_ACTION]
+    for p in pieces:
+        assert lint_hits(p) == [], (p, lint_hits(p))
+
+
+def test_lint_actually_detects_forbidden_words():
+    for w in ("中性", "維持", "買進", "轉弱", "確定", "neutral", "BUY", "🔴", "半導體", "加碼"):
+        assert lint_hits(f"x {w} y"), w
+
+
+def test_term_lists_cover_the_c_document_wording():
+    for w in ("中性", "正常", "維持", "續抱"):
         assert w in T.WASHING_TERMS_CJK
     assert "hold" in T.WASHING_TERMS_LATIN and "neutral" in T.WASHING_TERMS_LATIN
-    for w in ("變強", "轉弱", "衰退", "崛起"):           # C §2.4 G4 明列
+    for w in ("變強", "轉弱", "衰退", "崛起"):
         assert w in T.DIRECTION_TERMS_CJK
-    assert T.PLACEHOLDER_SEGMENTS is AB0.PLACEHOLDER_TEXTS
     assert T.GROUNDING_GATES == ("G1", "G2", "G3", "G4", "G5", "G6")
     assert T.SECTION_KEYS == ("market", "industry", "buy_and_hold", "capital_gain", "actions")
     assert T.SECTION_LABELS[T.SEC_BUY_AND_HOLD] == "存股" and T.SECTION_LABELS[T.SEC_ACTIONS] == "本期行動"
 
 
-def test_direction_terms_superset_of_ab0_and_ab1_rule_codes():
+def test_direction_terms_superset_of_ab0():
     assert AB0._DIRECTION_LATIN <= T.DIRECTION_TERMS_LATIN | {"buy", "sell"} | T.ACTION_TERMS_LATIN
-    multi = [w for w in AB0._DIRECTION_CJK if len(w) > 1]
-    assert all(w in T.DIRECTION_TERMS_CJK for w in multi)
-
-
-def test_boilerplate_never_contains_forbidden_terms():
-    """摘要自己的標示語與標籤不得含任何會被自己的檢查器拒絕的字眼（否則自檢永遠過不了）。"""
-    boiler = [*T.FACT_LABELS.values(), T.FACT_LABEL_FALLBACK, T.LABEL_TW_TREND, T.LABEL_INTL_TREND,
-              T.LABEL_VALUATION, T.LABEL_INDUSTRY_TREND, *T.MISSING_REASON_LABELS.values(),
-              T.MISSING_REASON_LABEL_UNKNOWN, T.MARK_INSUFFICIENT, T.MARK_UNDETERMINED, T.MARK_NOT_DEFINED,
-              T.MARK_NOT_WIRED, T.MARK_RESEARCH_ONLY, T.MARK_STALE, T.MARK_PROXY, T.MARK_STRATEGY_UNSET,
-              T.MARK_UNKEYED, T.MARK_NO_ACTION, *T.SECTION_LABELS.values()]
-    banned = (*T.WASHING_TERMS_CJK, *T.ACTION_TERMS_CJK, *T.DIRECTION_TERMS_CJK, *T.ASSERTIVE_TERMS_CJK)
-    for text in boiler:
-        for term in banned:
-            assert term not in text, (text, term)
-
-
-def test_force_set_helper_really_bypasses_frozen():
-    f = ok_val("x.y", 1.5)
-    force_set(f, value=2.5)
-    assert f.value == 2.5
-    assert dataclasses.is_dataclass(f) and market_section((f,)) is not None and D.year == 2026
-
-
-def test_trend_observations_are_reference_only_and_never_citable_as_numbers():
-    """均線等「僅供參考」的觀測值（DEC-092 Q2）：Digest 可攜帶，摘要不渲染，AI 也不得把它寫成數字。"""
-    from shared.decision_digest import DefinitionSection, DefinitionState, RuleRef
-    obs = ok_val("tw.twii_close", 20000.5, "pts", rule=RuleRef("add", "action_branch.v1"))
-    d = dataclasses.replace(make_digest(), tw_trend=DefinitionSection(
-        DefinitionState.NOT_DEFINED, observations=(obs,)))
-    b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted
-    assert "20000.5" not in "".join(s.text for sec in b.sections for s in sec.sentences)
-    idx = build_ref_index(d)
-    assert idx["tw.twii_close"].restricted and idx["tw.twii_close"].literals == ()
-    refs = (section_ref("tw_trend"), "tw.twii_close")
-    cited = S("⬜ 台股趨勢：尚未定義，無法判定，收盤 20000.5pts", refs)
-    assert_rejected(check_summary(d, swap(b, MKT, 4, cited)), T.GATE_G2, "restricted_value")
-    uncited = S("⬜ 台股趨勢：尚未定義，無法判定，收盤 20000.5", (section_ref("tw_trend"),))
-    assert_rejected(check_summary(d, swap(b, MKT, 4, uncited)), T.GATE_G2, "number_not_literal")
-
-
-def test_summary_result_availability_must_cover_five_sections_in_order():
-    bad = tuple(zip(reversed(T.SECTION_KEYS), (U, U, U, U, A)))
-    with pytest.raises(ValueError):
-        SummaryResult(SummaryState.PARTIAL, AB0.AiParticipation.RULE_ONLY, _five(), bad,
-                      retained_sections=T.SECTION_KEYS)
-
-
-def test_g5_actions_disclosure_must_cite_the_actions_section_itself():
-    """actions 不可得時，必須有句子明示 `section:actions`；用別的（同樣在本段範圍內）引用湊數不算。"""
-    d = make_digest(items=[])
-    b = compose_rule_draft(d)
-    pad = S("⬜ 本期行動：持股資料不足，無法判定", ("section:holdings",))       # 有標示語、引用在範圍內，但不是 actions 本身
-    rep = check_summary(d, swap(b, ACT, 0, pad))
-    assert_rejected(rep, T.GATE_G5, "missing_disclosure")
-
-
-def test_g5_industry_disclosure_must_cite_the_industry_section_itself():
-    d = make_digest()
-    b = compose_rule_draft(d)
-    # 產業段只允許引用 section:industry；任何其他引用都會先被範圍檢查擋下
-    pad = S("⬜ 產業趨勢：尚未定義，資料不足，無法判定", ("section:holdings",))
-    rep = check_summary(d, swap(b, IND, 0, pad))
-    assert rep.accepted is False and ("ref_out_of_scope" in codes(rep) or "missing_disclosure" in codes(rep))
-
-
-def test_g2_restricted_fact_dates_are_not_citable_either(dg, base):
-    """Risk Cap 區段的項目整個受限：連它的資料日也不能拿來當句內日期的依據。"""
-    refs = (section_ref("risk_cap"), "risk_cap.cap_pct")
-    rep = check_summary(dg, swap(base, MKT, 3, S(f"{T.RISK_CAP_HIDDEN_WORDING}（資料日 2026-10-26）", refs)))
-    assert_rejected(rep, T.GATE_G2, "date_not_in_digest")
-
-
-def test_quote_removal_start_boundary_blocks_digit_laundering():
-    """引用 `7`、值 `5`：句子寫 `57` 不得被「吃掉 7、剩 5 剛好是字面」而放行。"""
-    d = make_digest(market_facts=[ok_text("market.regime", "7"), ok_text("market.light", "🟢"),
-                                  ok_val("market.health", 5)])
-    b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted
-    sneaky = S("市場健康度：57（資料日 2026-10-26）", ("market.health", "market.regime"))
-    rep = check_summary(d, swap(b, MKT, 2, sneaky))
-    assert rep.accepted is False and T.GATE_G2 in rep.failed_gates
-    assert remove_quotes("57", ("7",)) == "57" and remove_quotes("5 7", ("7",)).strip() == "5"
-
-
-def test_action_text_is_a_verbatim_quote_even_without_the_evidence_fact(dg, base):
-    """只引用行動 id（不帶 evidence 事實）時，行動文字仍是逐字引用（否則「汰弱」「停利」會被當成新行動字眼）。"""
-    only_action = S(f"0050：{ACT_CUT_TEXT}", ("action:pf-A:0050",))
-    rep = check_summary(dg, swap(base, ACT, 0, only_action))
-    assert rep.accepted, [(v.code, v.message) for v in rep.violations]
-
-
-def test_g5_holdings_unavailable_must_cite_the_holdings_section_itself():
-    d = make_digest(entries=[entry("0050", None)], items=[])             # 有持股 entry 但沒有任何事實 → holdings UNAVAILABLE
-    assert d.holdings.availability is AB0.Availability.UNAVAILABLE
-    b = compose_rule_draft(d)
-    assert check_summary(d, b).accepted
-    pad = S("⬜ 存股：0050 基本面尚未接線，無法判定", ("holding:pf-A:0050",))      # 範圍內、有標示語，但不是 section:holdings
-    rep = check_summary(d, swap(b, BH, 0, pad))
-    assert_rejected(rep, T.GATE_G5, "missing_disclosure")
+    assert all(w in T.DIRECTION_TERMS_CJK for w in AB0._DIRECTION_CJK if len(w) > 1)
 
 
 def test_risk_cap_wording_is_the_customer_approved_string_verbatim():
-    """DEC-081 Q2-2 客戶卡面措辭（逐字；改字＝改客戶核准的文案，必須走 Gate）。"""
     assert T.RISK_CAP_HIDDEN_WORDING == "風險上限／獨立顯示待 C2b＋RC-VISIBILITY Gate"
+
+
+def test_template_set_is_pinned():
+    """模板集合被釘住：新增／改字模板＝改摘要可說的話，必須有意識地改這裡（並過審）。"""
+    assert set(T.TEMPLATES) == {
+        "tpl.glyph", "tpl.colon", "tpl.pct", "tpl.close", "tpl.date_open", "tpl.stale_date_open", "tpl.proxy_tail",
+        "tpl.missing_open", "tpl.invalid_tail", "tpl.undetermined_tail", "tpl.unkeyed_open", "tpl.unkeyed_tail",
+        "tpl.label_buy_and_hold", "tpl.label_capital_gain", "tpl.holdings_unavailable_mid", "tpl.strategy_unset_tail",
+        "tpl.strategy_is", "tpl.entry_tail", "tpl.act_unavailable_open", "tpl.act_none", "tpl.act_stale_open"}
+    assert T.TEMPLATES[T.TPL_ACT_NONE] == "本期行動：規則層未產出行動"
+    assert T.TEMPLATES[T.TPL_UNDETERMINED_TAIL] == "，無法判定"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 欄位展開矩陣（每個（項目種類，欄位）可否展開都釘死）
+# ══════════════════════════════════════════════════════════════════════
+def test_expand_field_matrix_is_pinned():
+    d = make_digest(market_facts=[ok_text("market.regime", "bull"), missing("market.light"),
+                                  ok_val("market.health", 72.5)],
+                    entries=[entry("0050", ACT_CUT_TEXT, "cut", strategy=StrategyType.BUY_AND_HOLD, source="SRC")],
+                    items=[action("0050", ACT_CUT_TEXT, "cut", 1)])
+    idx = build_ref_index(d)
+    F = T.FIELDS
+    expected = {
+        "market.regime": {"label", "text", "as_of"},
+        "market.light": {"label", "reason"},
+        "market.health": {"label", "value", "as_of"},
+        "risk_cap.cap_pct": set(), "risk_cap.exposure_lo_pct": set(), "risk_cap.exposure_hi_pct": set(),
+        "action_fact:pf-A:0050": {"as_of"},
+        "action:pf-A:0050": {"text", "symbol"},
+        "holding:pf-A:0050": {"symbol", "strategy"},
+        "section:market": {"bind"}, "section:tw_trend": {"label", "marker", "bind"},
+        "section:intl_trend": {"label", "marker", "bind"}, "section:valuation": {"label", "marker", "bind"},
+        "section:industry": {"label", "marker", "bind"}, "section:holdings": {"bind", "count", "reason"},
+        "section:risk_cap": {"bind", "wording"}, "section:actions": {"bind", "reason"},
+    }
+    assert set(expected) == set(idx)
+    for rid, allowed in expected.items():
+        for fld in (*F, "bogus", "source", "strategy_source", ""):
+            got = expand(d, idx[rid], fld)[0]
+            assert (got is not None) == (fld in allowed), (rid, fld, got)
+    # 展開內容本身
+    assert expand(d, idx["section:holdings"], "count")[0] == "0"
+    assert expand(d, idx["section:tw_trend"], "marker")[0] == "尚未定義"
+    assert expand(d, idx["section:valuation"], "marker")[0] == "研究框架，未啟用"
+    assert expand(d, idx["holding:pf-A:0050"], "strategy")[0] == "存股"
+    assert "SRC" not in "".join(expand(d, i, f)[0] or "" for i in idx.values() for f in F)
+
+
+def test_expand_not_wired_marker_follows_digest_definition_state():
+    d = make_digest(industry=DefinitionSection(DefinitionState.NOT_DEFINED, missing_reason=MissingReason.NOT_WIRED))
+    assert expand(d, build_ref_index(d)["section:industry"], "marker")[0] == "尚未接線"
+    assert check_summary(d, compose_rule_draft(d)).clean
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 前置條件的精確閘門（縱深：同一個錯誤同時被多條規則擋時，每一條都要各自有效）
+# ══════════════════════════════════════════════════════════════════════
+def test_pre_wrong_group_when_market_shape_is_applied_to_other_groups(dg, base):
+    for rid in ("risk_cap.cap_pct", "action_fact:pf-A:0050"):
+        rep = check_summary(dg, swap(base, MKT, 2, _fact_sentence("fact_value_ok", rid)))
+        assert "wrong_group" in codes(rep), rid
+
+
+def test_pre_section_shape_must_cite_its_own_section_ref():
+    d = make_digest(entries=[], items=[])
+    b = compose_rule_draft(d)
+    forged = S(L(T.TPL_GLYPH), L(T.TPL_LABEL_BUY_AND_HOLD), L(T.TPL_HOLDINGS_UNAVAILABLE_MID),
+               R(section_ref("actions"), T.FIELD_REASON), L(T.TPL_CLOSE))
+    rep = check_summary(d, with_section(b, BH, (forged,)))
+    assert_rejected(rep, T.GATE_G4, "wrong_section_ref")
+
+
+def test_pre_action_target_consistency(dg, base):
+    nt = S(R(ACT0, T.FIELD_TEXT))                              # 行動有 target，卻用無 target 句型（藏掉代號）
+    assert_rejected(check_summary(dg, swap(base, ACT, 0, nt)), T.GATE_G4, "target_mismatch")
+
+
+def test_g5_unavailable_holdings_with_unkeyed_needs_both_disclosures():
+    d = make_digest(entries=[], items=[], unkeyed=2)           # 持股 UNAVAILABLE 且有未帶鍵持股
+    b = compose_rule_draft(d)
+    assert len(sec_of(b, BH).sentences) == 2 and check_summary(d, b).clean
+    only_unkeyed = with_section(b, BH, tuple(x for x in sec_of(b, BH).sentences if x.segments[0] == L(T.TPL_UNKEYED_OPEN)))
+    assert_rejected(check_summary(d, only_unkeyed), T.GATE_G5, "missing_disclosure")
+    only_unavail = with_section(b, BH, tuple(x for x in sec_of(b, BH).sentences if x.segments[0] != L(T.TPL_UNKEYED_OPEN)))
+    assert_rejected(check_summary(d, only_unavail), T.GATE_G5, "missing_disclosure")
+
+
+def test_summary_result_lines_on_garbage_digest_do_not_raise():
+    for bad in (None, {}, "x", make_digest(schema_version="x")):
+        r = SummaryResult(bad, AB0.AiParticipation.RULE_ONLY, ())
+        assert r.state is SummaryState.INVALID and r.lines == ()
+
+
+def test_lint_term_lists_pinned_members():
+    assert {"確定", "確認", "肯定", "必然", "穩健", "良好", "無虞"} <= set(T.ASSERTIVE_TERMS_CJK)
+    assert {"買進", "賣出", "加碼", "減碼", "停利", "停損", "換股", "續抱", "持有"} <= set(T.ACTION_TERMS_CJK)
+    assert {"🟢", "🟡", "🔴"} <= set(T.STATE_SYMBOLS) and {"bull", "neutral", "bear", "caution"} <= T.STATE_WORDS_LATIN
+    assert {"buy", "sell", "hold"} <= T.ACTION_TERMS_LATIN

@@ -5,8 +5,11 @@
 from __future__ import annotations
 
 import dataclasses
+import re
+import unicodedata
 from datetime import date, datetime, timezone
 
+from shared import decision_digest_terms as T
 from shared.decision_digest import (
     ActionOrigin, ActionRef, ActionsSection, AiParticipation, Availability, DataStatus, DecisionDigest,
     DefinitionSection, DefinitionState, Fact, FactSection, HoldingEntry, HoldingKey, HoldingsSection,
@@ -137,3 +140,21 @@ def force_set(obj, **attrs):
 def empty_digest():
     return make_digest(market_facts=[missing("market.regime"), missing("market.light"), missing("market.health")],
                        risk_valid=False, entries=[], items=[])
+
+
+def lint_hits(text: str) -> list:
+    """L0 模板／標籤的建置期 lint：不得含洗白、確定語氣、行動、方向、燈號／狀態詞、產業名。"""
+    n = unicodedata.normalize("NFKC", text).casefold()
+    n2 = "".join(n.split())
+    toks = set(t for t in re.split(r"[^0-9a-z]+", n) if t)
+    hits = [w for w in (*T.WASHING_TERMS_CJK, *T.ASSERTIVE_TERMS_CJK, *T.ACTION_TERMS_CJK, *T.DIRECTION_TERMS_CJK)
+            if "".join(unicodedata.normalize("NFKC", w).casefold().split()) in n2]
+    hits += sorted(toks & (T.WASHING_TERMS_LATIN | T.ACTION_TERMS_LATIN | T.DIRECTION_TERMS_LATIN | T.STATE_WORDS_LATIN))
+    hits += [s for s in T.STATE_SYMBOLS if s in text]
+    from shared.industry_codes import OFFICIAL_INDUSTRY_CODE_NAMES, loose_industry_name
+    for code, name in OFFICIAL_INDUSTRY_CODE_NAMES.items():
+        if name and code not in T.INDUSTRY_GENERIC_CODES:
+            for t in (name, loose_industry_name(name)):
+                if len(t) >= 2 and t in text:
+                    hits.append(t)
+    return hits

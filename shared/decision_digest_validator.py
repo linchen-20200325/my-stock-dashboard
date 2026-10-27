@@ -23,11 +23,12 @@ Digest 的跨物件不變量（fact_id 唯一、evidence 指向可用事實、�
 ═══ 本檔只做三件 AB-0／AB-1 沒做的事（其餘一律沿用，不弱化） ═══════════════════
 沿用：AB-0 `validate`、AB-1 `validate_rule_ids`、`validate_action_order`（三者逐一呼叫，各自標閘門）。
 新增（皆為「只收緊」）：
-1. `control_chars_in_text`：Fact.text／ActionRef.text／strategy_source 含控制字元或零寬／格式字元
+1. `control_chars_in_text`：Fact.text／ActionRef.text／strategy_source 含控制／零寬／格式／私用區字元、行段分隔、非普通空格的空白或孤立組合記號
    （AB-0 沒禁；摘要要**逐字**引用這些文字，帶不可見字元會讓逐字比對與字眼檢查失真）。
 2. `ref_id_reserved`／`ref_id_collision`：fact_id／action_id 以保留前綴（`section:`、`holding:`）開頭，
    或 fact_id 與 action_id 相同 —— 會讓 evidence_refs 的命名空間含糊。
 3. 輸入不是 `DecisionDigest` → INVALID（不 raise）。
+4. `unsupported_unit`：市場事實的 unit 不在 `terms.SUPPORTED_UNITS`（摘要的單位由模板決定，不展開 Digest 的 unit 字串）。
 
 分層（CLAUDE.md §8.2）：L0 —— 只 import 標準函式庫與 `shared.*`；零 I/O、零 streamlit、零 `src.*`。
 """
@@ -44,9 +45,9 @@ from shared.decision_digest import (
 )
 from shared.decision_digest_rules import validate_action_order, validate_rule_ids
 from shared.decision_digest_terms import (
-    FORBIDDEN_CHAR_CATEGORIES, GATE_AB0_CONTRACT, GATE_AB1_ACTION_ORDER, GATE_AB1_RULE_ID, GATE_AB2A_REFS,
+    ALLOWED_SPACE, COMBINING_CATEGORIES, DIGEST_GATES_ORDER, FORBIDDEN_CHAR_CATEGORIES, GATE_AB0_CONTRACT, GATE_AB1_ACTION_ORDER, GATE_AB1_RULE_ID, GATE_AB2A_REFS,
     GATE_AB2A_TEXT, REF_HOLDING_PREFIX, REF_SECTION_PREFIX, SEC_ACTIONS, SEC_BUY_AND_HOLD, SEC_CAPITAL_GAIN,
-    SEC_INDUSTRY, SEC_MARKET, SECTION_KEYS,
+    SEC_INDUSTRY, SEC_MARKET, SECTION_KEYS, SUPPORTED_UNITS,
 )
 
 #: 診斷用：不屬於任一摘要段（整份 Digest 層級）的違規，標為此鍵。
@@ -104,8 +105,24 @@ def _convert(gate: str, vs: tuple) -> list:
 
 
 def has_forbidden_char(s: Any) -> bool:
-    """字串含控制字元（Cc）或零寬／格式字元（Cf）。非 str → False。"""
-    return type(s) is str and any(unicodedata.category(ch) in FORBIDDEN_CHAR_CATEGORIES for ch in s)
+    """字串含不可見／不規範字元（非 str → False）：
+
+    - 控制（Cc）、零寬／格式（Cf）、代理（Cs）、私用區（Co）、未指派（Cn）、行／段分隔（Zl／Zp）；
+    - 普通空格 U+0020 以外的空白（Zs：NBSP、全形空白 U+3000…；全形空白的決定＝拒收）；
+    - **孤立組合記號**：組合記號（M*）出現在字串開頭，或緊接在空白／控制字元之後（沒有基底字元可附著）。
+      （`e` + U+0301、emoji + U+FE0F 這種附著在基底字元上的屬正常，不算。）
+    """
+    if type(s) is not str:
+        return False
+    prev = None
+    for ch in s:
+        cat = unicodedata.category(ch)
+        if cat in FORBIDDEN_CHAR_CATEGORIES or (cat == "Zs" and ch != ALLOWED_SPACE):
+            return True
+        if cat in COMBINING_CATEGORIES and (prev is None or prev == ALLOWED_SPACE):
+            return True
+        prev = ch
+    return False
 
 
 # ── AB-2a 新增檢查（只收緊）────────────────────────────────────────────────
@@ -128,6 +145,12 @@ def _own_checks(d: DecisionDigest) -> list:
     m = getattr(d, "market", None)
     if type(m) is FactSection:
         walk_facts("market.facts", m.facts, SEC_MARKET)
+        if type(m.facts) is tuple:
+            for i, f in enumerate(m.facts):
+                if type(f) is Fact and f.unit is not None and f.unit not in SUPPORTED_UNITS:
+                    out.append(DigestViolation(GATE_AB2A_TEXT, SEC_MARKET, "unsupported_unit",
+                                               f"market.facts[{i}].unit",
+                                               f"市場事實的單位不在摘要支援範圍 {SUPPORTED_UNITS}：{f.unit!r}"))
         fact_ids += [f.fact_id for f in m.facts if type(f) is Fact] if type(m.facts) is tuple else []
     for name in ("tw_trend", "intl_trend", "valuation", "industry"):
         s = getattr(d, name, None)
@@ -235,7 +258,7 @@ def assess_digest(digest: Any) -> DigestAssessment:
         vs += _own_checks(digest)
     if vs:
         secs = tuple(k for k in (*SECTION_KEYS, SECTION_ALL) if any(v.section == k for v in vs))
-        gates = tuple(sorted({v.gate for v in vs}))
+        gates = tuple(g for g in DIGEST_GATES_ORDER if any(v.gate == g for v in vs))
         return DigestAssessment(SummaryState.INVALID, tuple(vs), secs, gates, ())
     avail = tuple((k, section_availability(digest, k)) for k in SECTION_KEYS)
     return DigestAssessment(derive_state(avail), (), (), (), avail)
