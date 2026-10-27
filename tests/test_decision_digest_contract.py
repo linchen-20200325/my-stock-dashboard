@@ -79,7 +79,8 @@ def digest(**over):
         valuation=DefinitionSection(definition=DefinitionState.RESEARCH_ONLY),
         industry=undefined(),
         holdings=HoldingsSection(availability=Availability.AVAILABLE,
-                                 entries=(HoldingEntry(K1), HoldingEntry(K2))),
+                                 entries=(HoldingEntry(K1, facts=(ok_fact("h1"),)),
+                                          HoldingEntry(K2, facts=(ok_fact("h2"),)))),
         risk_cap=risk_cap(),
         actions=ActionsSection(availability=Availability.AVAILABLE, items=(action(),)),
     )
@@ -113,6 +114,9 @@ def test_valid_digest_passes_and_serializes_to_json():
 # ── 列舉成員鎖死（unavailable ≠ neutral；無方向值；AI 不得產值） ─────────────
 def test_enum_member_sets_are_locked():
     assert {m.value for m in DataStatus} == {"ok", "stale", "missing", "proxy", "failed"}
+    assert {m.value for m in MissingReason} == {"no_input", "fetch_failed", "not_enough_history",
+                                                 "not_applicable", "contract_drift", "no_variation",
+                                                 "not_defined", "not_wired"}
     assert {m.value for m in Availability} == {"available", "partial", "unavailable"}
     assert {m.value for m in AiParticipation} == {"rule_only", "ai_explained", "ai_rejected"}
     assert {m.value for m in StrategyType} == {"存股", "資本利得", "未分類"}
@@ -135,7 +139,8 @@ def test_no_judgement_or_neutral_values_anywhere(word):
 
 # ── Fact：missing ≠ 0、value/status 綁定 ───────────────────────────────────
 def test_missing_is_null_not_zero_in_to_dict():
-    d = digest(risk_cap=risk_cap(valid=False))
+    d = digest(risk_cap=risk_cap(valid=False),
+               actions=ActionsSection(Availability.UNAVAILABLE, missing_reason=MissingReason.NO_INPUT))
     rc = d.to_dict()["risk_cap"]
     assert rc["cap_pct"]["value"] is None and rc["cap_pct"]["status"] == "missing"
     assert rc["cap_pct"]["text"] is None
@@ -164,11 +169,15 @@ def test_missing_requires_reason_and_ok_forbids_reason():
         Fact("f", DataStatus.OK, prov(), value=1.0, missing_reason=MissingReason.NO_INPUT)
 
 
-def test_ok_requires_as_of_but_stale_and_proxy_may_lack_it():
-    with pytest.raises(ValueError, match="ok_without_as_of"):
-        Fact("f", DataStatus.OK, prov(as_of=None), value=1.0)
-    Fact("f", DataStatus.STALE, prov(as_of=None), value=1.0)
-    Fact("f", DataStatus.PROXY, prov(as_of=D), value=1.0)
+@pytest.mark.parametrize("status", [DataStatus.OK, DataStatus.STALE])
+def test_ok_and_stale_require_as_of(status):
+    with pytest.raises(ValueError, match="dated_status_without_as_of"):
+        Fact("f", status, prov(as_of=None), value=1.0)
+    Fact("f", status, prov(), value=1.0)
+
+
+def test_proxy_may_lack_as_of():
+    Fact("f", DataStatus.PROXY, prov(as_of=None), value=1.0)
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf"), True, False, "1.0"])
@@ -191,7 +200,7 @@ def test_value_and_text_mutually_exclusive_and_empty_text_rejected():
 
 # ── Provenance ──────────────────────────────────────────────────────────
 def test_provenance_rules():
-    Provenance("S", as_of=D, fetched_at=datetime(2026, 1, 1, tzinfo=TZ8))
+    Provenance("S", as_of=date(2025, 12, 31), fetched_at=datetime(2026, 1, 1, tzinfo=TZ8))
     with pytest.raises(ValueError, match="naive_datetime"):
         Provenance("S", fetched_at=datetime(2026, 1, 1))
     with pytest.raises(ValueError, match="blank_str"):
@@ -212,8 +221,8 @@ def test_schema_version_mismatch():
 
 # ── HoldingKey／策略 ─────────────────────────────────────────────────────
 def test_same_symbol_different_portfolio_can_have_different_strategy():
-    h1 = HoldingEntry(K1, StrategyType.BUY_AND_HOLD, strategy_source="sheet:col")
-    h2 = HoldingEntry(K2, StrategyType.CAPITAL_GAIN, strategy_source="sheet:col")
+    h1 = HoldingEntry(K1, StrategyType.BUY_AND_HOLD, strategy_source="sheet:col", facts=(ok_fact("h1"),))
+    h2 = HoldingEntry(K2, StrategyType.CAPITAL_GAIN, strategy_source="sheet:col", facts=(ok_fact("h2"),))
     d = digest(holdings=HoldingsSection(Availability.AVAILABLE, entries=(h1, h2)))
     assert validate(d) == ()
 
@@ -225,7 +234,7 @@ def test_duplicate_holding_key_rejected():
 
 @pytest.mark.parametrize("pid,sym", [("", "0050"), ("   ", "0050"), ("pf", ""), ("pf", " "), (None, "0050")])
 def test_blank_portfolio_id_or_symbol_rejected(pid, sym):
-    with pytest.raises(ValueError, match="blank_str"):
+    with pytest.raises(ValueError, match="bad_key"):
         HoldingKey(pid, sym)
 
 
@@ -239,13 +248,23 @@ def test_strategy_default_unclassified_and_source_rules():
         HoldingEntry(K1, "存股", strategy_source="x")  # 裸字串不得冒充列舉
 
 
-def test_holdings_unavailable_distinguishes_reason_and_has_no_entries():
+def test_holdings_availability_is_derived_from_entry_facts():
     HoldingsSection(Availability.UNAVAILABLE, missing_reason=MissingReason.FETCH_FAILED)
     with pytest.raises(ValueError, match="missing_reason_required"):
         HoldingsSection(Availability.UNAVAILABLE)
-    with pytest.raises(ValueError, match="entries_when_unavailable"):
-        HoldingsSection(Availability.UNAVAILABLE, entries=(HoldingEntry(K1),),
-                        missing_reason=MissingReason.NO_INPUT)
+    # 0 筆 → unavailable；不得宣稱 available
+    with pytest.raises(ValueError, match="availability_mismatch"):
+        HoldingsSection(Availability.AVAILABLE)
+    # 有鍵但全部缺值 → unavailable（鍵仍可保留）
+    HoldingsSection(Availability.UNAVAILABLE, entries=(HoldingEntry(K1, facts=(missing_fact("m"),)),),
+                    missing_reason=MissingReason.NO_INPUT)
+    with pytest.raises(ValueError, match="availability_mismatch"):
+        HoldingsSection(Availability.AVAILABLE, entries=(HoldingEntry(K1, facts=(missing_fact("m"),)),))
+    with pytest.raises(ValueError, match="availability_mismatch"):
+        HoldingsSection(Availability.AVAILABLE,
+                        entries=(HoldingEntry(K1, facts=(ok_fact("a"),)), HoldingEntry(K2, facts=(missing_fact("b"),))))
+    HoldingsSection(Availability.PARTIAL,
+                    entries=(HoldingEntry(K1, facts=(ok_fact("a"),)), HoldingEntry(K2, facts=(missing_fact("b"),))))
 
 
 # ── Actions ──────────────────────────────────────────────────────────────
@@ -259,7 +278,7 @@ def test_more_than_three_actions_rejected():
 def test_action_requires_evidence_rule_and_rule_origin():
     with pytest.raises(ValueError, match="empty"):
         action(refs=())
-    with pytest.raises(ValueError, match="blank_str"):
+    with pytest.raises(ValueError, match="bad_key"):
         action(refs=("",))
     with pytest.raises(ValueError, match="rule_version"):
         ActionRef("a", "t", ActionOrigin.RULE_LAYER, RuleRef("r", ""), ("x",))
@@ -356,7 +375,7 @@ def test_risk_cap_requires_rule_domain_and_order():
 
 
 def test_duplicate_fact_id_across_digest():
-    d = digest(market=FactSection(Availability.AVAILABLE, facts=(ok_fact("cap"),)))
+    d = digest(market=FactSection(Availability.AVAILABLE, facts=(ok_fact("cap", value=50.0),)))
     assert "duplicate_fact_id" in codes(d)
 
 
@@ -364,7 +383,15 @@ def test_duplicate_fact_id_across_digest():
 def test_ai_participation_consistency():
     assert "rejected_without_checks" in codes(digest(ai_participation=AiParticipation.AI_REJECTED))
     assert validate(digest(ai_participation=AiParticipation.AI_REJECTED, ai_failed_checks=("G2",))) == ()
-    assert "checks_without_rejection" in codes(digest(ai_failed_checks=("G2",)))
+    assert "checks_without_ai" in codes(digest(ai_failed_checks=("G2",)))
+    assert "checks_without_ai" in codes(digest(ai_passed_checks=("G1",)))
+    assert "explained_without_checks" in codes(digest(ai_participation=AiParticipation.AI_EXPLAINED))
+    assert validate(digest(ai_participation=AiParticipation.AI_EXPLAINED, ai_passed_checks=("G1", "G2"))) == ()
+    assert "explained_with_failures" in codes(digest(ai_participation=AiParticipation.AI_EXPLAINED,
+                                                     ai_passed_checks=("G1",), ai_failed_checks=("G2",)))
+    for bad in (("g1",), ("G0",), ("",), ("G1 ",), (1,), ["G1"]):
+        assert codes(digest(ai_participation=AiParticipation.AI_EXPLAINED, ai_passed_checks=bad)) & {
+            "bad_check_id", "not_tuple"}, bad
     assert "type" in codes(digest(ai_participation="ai_generated_values"))
 
 
@@ -392,7 +419,8 @@ def test_validate_non_digest():
 
 
 # ── 架構守衛：L0 stdlib only；不被 app 啟動路徑 import ───────────────────────
-_STDLIB_ALLOWED = {"__future__", "math", "dataclasses", "datetime", "enum", "typing"}
+_STDLIB_ALLOWED = {"__future__", "math", "numbers", "re", "unicodedata", "dataclasses", "datetime",
+                   "enum", "typing"}
 
 
 def test_module_imports_stdlib_only():
@@ -426,3 +454,304 @@ def test_dataclasses_are_frozen():
         obj = getattr(dd, name)
         if isinstance(obj, type) and dataclasses.is_dataclass(obj):
             assert obj.__dataclass_params__.frozen, name
+
+
+# ══ QA 第二輪（總管裁定 1～12）════════════════════════════════════════════
+import copy  # noqa: E402
+import random  # noqa: E402
+
+import numpy as np  # noqa: E402
+
+from shared.decision_digest import MISS_CODE_TO_REASON, PLACEHOLDER_TEXTS, TW_TZ  # noqa: E402
+
+
+def _walk_enums(obj):
+    if isinstance(obj, dict):
+        for v in obj.values():
+            yield from _walk_enums(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _walk_enums(v)
+    else:
+        yield obj
+
+
+# 1. to_dict：Enum 輸出 .value 純字串；numpy 數值轉 Python 原生
+def test_to_dict_enums_are_plain_str():
+    d = digest()
+    out = d.to_dict()
+    assert type(out["ai_participation"]) is str and out["ai_participation"] == "rule_only"
+    assert type(out["market"]["availability"]) is str
+    assert type(out["holdings"]["entries"][0]["strategy"]) is str
+    assert type(out["market"]["facts"][0]["status"]) is str
+    for leaf in _walk_enums(out):
+        assert leaf is None or type(leaf) in (str, int, float, bool), type(leaf)
+    j = json.dumps(out, ensure_ascii=False)
+    for cls in ("DataStatus.", "Availability.", "StrategyType.", "AiParticipation.", "DefinitionState."):
+        assert cls not in j
+
+
+def test_numpy_numbers_accepted_and_converted():
+    f1 = Fact("n1", DataStatus.OK, prov(), value=np.float64(1.25))
+    f2 = Fact("n2", DataStatus.OK, prov(), value=np.int64(3))
+    d = digest(market=FactSection(Availability.AVAILABLE, facts=(f1, f2)))
+    facts = d.to_dict()["market"]["facts"]
+    assert type(facts[0]["value"]) is float and facts[0]["value"] == 1.25
+    assert type(facts[1]["value"]) is int and facts[1]["value"] == 3
+    json.dumps(facts)
+
+
+@pytest.mark.parametrize("bad", [np.bool_(True), np.float64("nan"), np.float64("inf"), 10 ** 400, -(10 ** 400)])
+def test_numpy_bool_nan_and_overflow_rejected(bad):
+    with pytest.raises(ValueError, match="bad_number"):
+        Fact("f", DataStatus.OK, prov(), value=bad)
+
+
+# 2. validate 永不 raise
+def test_overflow_injected_is_violation_not_exception():
+    f = force(ok_fact("x"), value=10 ** 400)
+    d = digest(market=force(FactSection(Availability.AVAILABLE, facts=(ok_fact("x"),)), facts=(f,)))
+    assert "bad_number" in codes(d)
+
+
+_GARBAGE = [None, [], {}, [1], {"a": 1}, set(), float("nan"), 10 ** 400, object(), "", " x ", True,
+            np.bool_(False), (1, 2), ("a",), -1, 0, "ok", datetime(2026, 1, 1)]
+
+
+def fresh_digest():
+    """深拷貝：fuzz 會竄改節點，不得汙染模組級共用物件（RULE／K1／K2）。"""
+    return copy.deepcopy(digest())
+
+
+def _dataclass_nodes(obj):
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        yield obj
+        for f in dataclasses.fields(obj):
+            yield from _dataclass_nodes(getattr(obj, f.name))
+    elif isinstance(obj, tuple):
+        for x in obj:
+            yield from _dataclass_nodes(x)
+
+
+def test_fuzz_validate_never_raises():
+    rng = random.Random(20261027)
+    n_violation = 0
+    for _ in range(600):
+        d = fresh_digest()
+        nodes = list(_dataclass_nodes(d))
+        for _k in range(rng.randint(1, 3)):
+            node = rng.choice(nodes)
+            fld = rng.choice(dataclasses.fields(node)).name
+            object.__setattr__(node, fld, rng.choice(_GARBAGE))
+        res = validate(d)  # 不得 raise
+        assert isinstance(res, tuple)
+        n_violation += bool(res)
+        with pytest.raises(ValueError):
+            if res:
+                assert_valid(d)
+            else:
+                raise ValueError("garbage happened to be valid")
+    assert n_violation > 500
+
+
+@pytest.mark.parametrize("cls", [Fact, Provenance, HoldingKey, HoldingEntry, ActionRef, FactSection,
+                                 DefinitionSection, HoldingsSection, RiskCapSection, ActionsSection])
+def test_uninitialised_objects_reported_not_raised(cls):
+    blank = cls.__new__(cls)
+    # 塞到每一個可能的位置（每個位置各用一份新的 digest）
+    setters = (
+        lambda d: force(d, market=blank),
+        lambda d: force(d.market, facts=(blank,)),
+        lambda d: force(d.holdings, entries=(blank,)),
+        lambda d: force(d.actions, items=(blank,)),
+        lambda d: force(d.risk_cap, cap_pct=blank),
+        lambda d: force(d.tw_trend, observations=(blank,)),
+        lambda d: force(d.holdings.entries[0], key=blank),
+        lambda d: force(d.market.facts[0], provenance=blank),
+    )
+    for setter in setters:
+        d = fresh_digest()
+        setter(d)
+        assert validate(d), cls
+    blank_digest = DecisionDigest.__new__(DecisionDigest)
+    assert validate(blank_digest)
+
+
+def test_unhashable_keys_injected_do_not_raise():
+    d = fresh_digest()
+    force(d.holdings.entries[0].key, portfolio_id=["x"])
+    force(d.actions.items[0], target=HoldingKey("pf-A", "0050"), evidence_refs=(["cap"],))
+    force(d.market.facts[0], fact_id={"a": 1}, status=["ok"])
+    res = validate(d)
+    c = {v.code for v in res}
+    assert "bad_key" in c
+    # 守衛應給出精確違規，而不是退到「無法檢查」的兜底
+    assert "uninspectable" not in c, res
+    assert any(v.path.startswith("holdings.entries[0].key") for v in res)
+
+
+# 3. 鍵正規化
+@pytest.mark.parametrize("bad", [" 0050", "0050 ", "00\u200b50", "\ufeff0050", "００５０", "Ａ"])
+def test_key_normalisation_rejected(bad):
+    with pytest.raises(ValueError, match="bad_key"):
+        HoldingKey("pf", bad)
+    with pytest.raises(ValueError, match="bad_key"):
+        HoldingKey(bad, "0050")
+    with pytest.raises(ValueError, match="bad_key"):
+        Fact(bad, DataStatus.OK, prov(), value=1.0)
+    with pytest.raises(ValueError, match="bad_key"):
+        action(aid=bad)
+
+
+def test_keys_are_case_sensitive_not_folded():
+    h = HoldingsSection(Availability.AVAILABLE,
+                        entries=(HoldingEntry(HoldingKey("pf", "abc"), facts=(ok_fact("a"),)),
+                                 HoldingEntry(HoldingKey("pf", "ABC"), facts=(ok_fact("b"),))))
+    assert len(h.entries) == 2
+
+
+# 4. 缺值佔位字
+@pytest.mark.parametrize("ph", sorted(PLACEHOLDER_TEXTS) + [" N/A ", "NULL", "None", "NaN"])
+@pytest.mark.parametrize("status", [DataStatus.OK, DataStatus.STALE, DataStatus.PROXY])
+def test_placeholder_text_rejected(ph, status):
+    with pytest.raises(ValueError, match="placeholder_text"):
+        Fact("f", status, prov(), text=ph)
+
+
+def test_placeholder_set_locked_and_real_text_ok():
+    assert PLACEHOLDER_TEXTS == frozenset({"n/a", "na", "nan", "none", "null", "-", "--", "—",
+                                           "無資料", "未評估", "尚無資料", "0"})
+    Fact("f", DataStatus.OK, prov(), text="0050 汰弱")  # 含 0 但不是佔位字
+    with pytest.raises(ValueError, match="placeholder_text"):
+        ActionRef("a9", "N/A", ActionOrigin.RULE_LAYER, RULE, ("cap",))
+
+
+# 5. DefinitionSection
+def test_definition_observations_numeric_only():
+    DefinitionSection(DefinitionState.NOT_DEFINED, observations=(ok_fact("ma20", 101.5),))
+    with pytest.raises(ValueError, match="text_in_definition_section"):
+        DefinitionSection(DefinitionState.NOT_DEFINED, observations=(ok_fact("lbl", value=None, text="多頭排列"),))
+
+
+@pytest.mark.parametrize("ref,ok", [("twii_ohlcv", True), ("fred:dgs10", True), ("ma.20-d", True),
+                                    ("TWII", False), ("twii ohlcv", False), ("", False), ("台股", False)])
+def test_series_ref_format(ref, ok):
+    if ok:
+        DefinitionSection(DefinitionState.NOT_DEFINED, series_ref=ref)
+    else:
+        with pytest.raises(ValueError, match="bad_series_ref"):
+            DefinitionSection(DefinitionState.NOT_DEFINED, series_ref=ref)
+
+
+@pytest.mark.parametrize("reason", list(MissingReason))
+def test_definition_reason_restricted(reason):
+    if reason in (MissingReason.NOT_DEFINED, MissingReason.NOT_WIRED):
+        DefinitionSection(DefinitionState.NOT_DEFINED, missing_reason=reason)
+    else:
+        with pytest.raises(ValueError, match="bad_definition_reason"):
+            DefinitionSection(DefinitionState.NOT_DEFINED, missing_reason=reason)
+
+
+# 6. 時間一致性
+def test_generated_at_must_be_utc():
+    assert "generated_at_not_utc" in codes(digest(generated_at=NOW.astimezone(TZ8)))
+    assert validate(digest(generated_at=NOW)) == ()
+
+
+def test_fetched_after_generated_rejected():
+    late = Fact("late", DataStatus.OK, prov(fetched_at=NOW + timedelta(minutes=1)), value=1.0)
+    assert "fetched_after_generated" in codes(digest(market=FactSection(Availability.AVAILABLE, facts=(late,))))
+    same = Fact("same", DataStatus.OK, prov(fetched_at=NOW), value=1.0)
+    assert validate(digest(market=FactSection(Availability.AVAILABLE, facts=(same,)))) == ()
+
+
+def test_as_of_after_generated_tw_date_rejected():
+    # NOW = 2026-10-27 09:00 UTC = 17:00 台北 → 台北日期 10-27 合法、10-28 違規
+    ok_ = Fact("t", DataStatus.OK, prov(as_of=date(2026, 10, 27), fetched_at=None), value=1.0)
+    assert validate(digest(market=FactSection(Availability.AVAILABLE, facts=(ok_,)))) == ()
+    bad = Fact("t", DataStatus.OK, prov(as_of=date(2026, 10, 28), fetched_at=None), value=1.0)
+    assert "as_of_after_generated" in codes(digest(market=FactSection(Availability.AVAILABLE, facts=(bad,))))
+    # UTC 日期還是 10-27 23:30，但台北已是 10-28 → 10-28 合法
+    gen = datetime(2026, 10, 27, 16, 30, tzinfo=timezone.utc)
+    tw28 = Fact("t", DataStatus.OK, prov(as_of=date(2026, 10, 28), fetched_at=None), value=1.0)
+    assert "as_of_after_generated" not in codes(
+        digest(generated_at=gen, market=FactSection(Availability.AVAILABLE, facts=(tw28,))))
+
+
+def test_as_of_after_fetched_tw_date_rejected():
+    fetched = datetime(2026, 10, 26, 15, 0, tzinfo=timezone.utc)  # 台北 10-26 23:00
+    Provenance("S", as_of=date(2026, 10, 26), fetched_at=fetched)
+    with pytest.raises(ValueError, match="as_of_after_fetched"):
+        Provenance("S", as_of=date(2026, 10, 27), fetched_at=fetched)
+    fetched2 = datetime(2026, 10, 26, 16, 30, tzinfo=timezone.utc)  # 台北已 10-27
+    Provenance("S", as_of=date(2026, 10, 27), fetched_at=fetched2)
+    assert TW_TZ.utcoffset(None) == timedelta(hours=8)
+
+
+# 7. actions 段 availability
+def test_actions_partial_forbidden():
+    with pytest.raises(ValueError, match="partial_actions"):
+        ActionsSection(Availability.PARTIAL, items=(action(),))
+    with pytest.raises(ValueError, match="missing_reason_required"):
+        ActionsSection(Availability.UNAVAILABLE)
+    ActionsSection(Availability.UNAVAILABLE, missing_reason=MissingReason.NOT_WIRED)
+    ActionsSection(Availability.AVAILABLE)  # 規則層未產出行動：明文合法
+
+
+# 8. 一致性
+def test_evidence_on_missing_fact_rejected():
+    d = digest(market=FactSection(Availability.PARTIAL, facts=(ok_fact("regime", value=None, text="x"),
+                                                               missing_fact("gone"))),
+               actions=ActionsSection(Availability.AVAILABLE, items=(action(refs=("gone",)),)))
+    assert "evidence_on_missing_fact" in codes(d)
+    d2 = digest(actions=ActionsSection(Availability.AVAILABLE, items=(action(refs=("regime",)),)))
+    assert validate(d2) == ()
+
+
+def test_valid_cap_requires_usable_value():
+    with pytest.raises(ValueError, match="valid_cap_without_value"):
+        RiskCapSection(True, missing_fact("cap"), ok_fact("lo", 1.0), ok_fact("hi", 2.0), Availability.PARTIAL)
+    with pytest.raises(ValueError, match="valid_cap_without_value"):
+        RiskCapSection(True, Fact("cap", DataStatus.PROXY, prov(), value=50.0, rule=RULE),
+                       ok_fact("lo", 1.0), ok_fact("hi", 2.0), Availability.PARTIAL)
+    RiskCapSection(True, Fact("cap", DataStatus.STALE, prov(), value=50.0, rule=RULE),
+                   ok_fact("lo", 1.0), ok_fact("hi", 2.0), Availability.PARTIAL)
+
+
+# 9. AI 保留前綴
+@pytest.mark.parametrize("name", ["ai", "AI:summary", "ai.brain", "LLM_out", "gemini", "Gemini-1.5:x",
+                                  "gpt4", "GPT:x", "claude", "Claude3.output", "openai:chat", " ai:x"])
+def test_ai_reserved_prefix_rejected(name):
+    with pytest.raises(ValueError, match="ai_reserved_prefix"):
+        Provenance(name.strip() or name)
+    with pytest.raises(ValueError, match="ai_reserved_prefix"):
+        RuleRef(name, "v1")
+
+
+@pytest.mark.parametrize("name", ["air_quality", "FRED:DGS10", "allocation", "risk_cap", "llmc", "TWSE:ai"])
+def test_non_ai_names_accepted(name):
+    Provenance(name)
+    RuleRef(name, "v1")
+
+
+# 10. MissingReason ↔ station_specs.MISS_*
+def test_every_station_miss_code_maps():
+    import shared.station_specs as ss
+    miss = {k: v for k, v in vars(ss).items() if k.startswith("MISS_") and isinstance(v, str)}
+    assert miss, "掃描器壞了：station_specs 沒有 MISS_* 常數"
+    for name, code in miss.items():
+        assert code in MISS_CODE_TO_REASON, name
+        assert isinstance(MISS_CODE_TO_REASON[code], MissingReason)
+    assert set(MISS_CODE_TO_REASON) == set(miss.values())
+    assert MISS_CODE_TO_REASON[ss.MISS_NO_VARIATION] is MissingReason.NO_VARIATION
+    assert MISS_CODE_TO_REASON[ss.MISS_NOT_ENOUGH] is MissingReason.NOT_ENOUGH_HISTORY
+
+
+def test_d11_invalid_is_failed_contract_drift():
+    f = Fact("bad", DataStatus.FAILED, prov(as_of=None), missing_reason=MissingReason.CONTRACT_DRIFT)
+    assert f.value is None
+
+
+# 12. docstring 不含同步標記字樣
+def test_module_has_no_sync_marker():
+    assert "AUTO-SYNCED" not in MODULE_PATH.read_text(encoding="utf-8")
