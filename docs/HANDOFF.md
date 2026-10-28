@@ -55,6 +55,7 @@ DEC-086 規則已於 main，本表已落地。
 - **沒有新的客戶行動需求就保持沉默。**
 - **只在以下情況出聲**：(1) 真正需要客戶裁示；(2) Model×Effort 需切換且尚未通知；(3) 需客戶手動操作；(4) 整批完成；(5) context／token 不安全需交接；(6) 真實錯誤或 GitHub 狀態衝突。
 - 📌 **2026-10-28 客戶第二次指示「零過程訊息」（決策者＝客戶；append-only）**：**Process chatter = governance violation.** 出聲情況收緊為 5 種（🔴 需客戶裁示／🟡 Model×Effort 需切換且未通知／🟡 需客戶手動操作／🟢 整個 Stage 完整完成／🟡 context／token 不安全需交接）；Stage 完成標準、最終回報 ≤5 行格式與完整禁止清單見 `PROJECT_RULES.md` 第 3 節「零過程訊息」條（以該條為準，取代上列 (6)）。
+- 📌 **2026-10-28 客戶指示「Context Lifecycle／/compact 規則」（決策者＝客戶；append-only；來源：經總管轉交之要點，非逐字全文）**：安全 checkpoint 可**主動 `/compact`、不需先詢問客戶**；時機＝Stage 完整結束且正式文件已落盤後／context 明顯變長或重複增加／出現語言漂移、規則遺漏、重複回報等污染跡象／進入下一個大型 Stage 前；**不高頻、仍有大量未落盤 WIP 時不得草率壓縮**；`/compact` 前須確認 DECISIONS／BACKLOG／PROJECT_STATE／HANDOFF（Resume Checkpoint）／必要 spec 已落盤；**GitHub／repo 為 SSOT，compact summary 不得成為新 SSOT**；compact 後仍規則漂移或狀態不確定 → 回報「🟡 建議換新對話」；`/compact` 屬內部維護，**不向客戶回報**（與「零過程訊息」併存）。正式規則本文見 `PROJECT_RULES.md` 第 3 節「Context Lifecycle／/compact 規則」條（與第 22 節併讀取較嚴者；以該條為準）。
 
 **交接治理教訓（2026-10-27，AI 總管；單組，未獨立驗證）**：
 - `CLAUDE.md` §-2：總管**所有寫入都派子代理**並自己複驗回報；子代理也會錯、過度自信（AB-1 WIP 即為未驗證草稿）。
