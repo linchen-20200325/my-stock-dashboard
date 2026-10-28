@@ -43,6 +43,7 @@ import pytest
 
 from shared import ia_nav
 from shared.ia_nav import PAGE_LABELS
+from shared.ia_nav4 import LEGACY_SESSION_KEY
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 _APP = _ROOT / "app.py"
@@ -375,6 +376,9 @@ def _run_app(page: str | None = None, seed: bool = False):
     from streamlit.testing.v1 import AppTest
 
     _at = AppTest.from_file(str(_APP), default_timeout=300)
+    # NAV-1（DEC-097）：預設入口翻轉為新版固定四頁導覽；本測試守的是 D2 側欄雙層導覽 / 舊 7 頁籤（＝ legacy 模式），
+    # 故一律以 legacy session 旗標進入（斷言一字未動；新預設模式的對應守衛在 tests/test_nav1_*.py）。
+    _at.session_state[LEGACY_SESSION_KEY] = True
     if seed:
         for _k, _v in _SEED.items():
             _at.session_state[_k] = _v

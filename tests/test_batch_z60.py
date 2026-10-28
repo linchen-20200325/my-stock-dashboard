@@ -839,7 +839,17 @@ class TestOldFilesUntouched:
     #   側欄「🆕 新版戰情室（試用中）」radio 由「不使用＋7 頁」改為「不使用＋六個方向」，多方向底下的第二層 radio、
     #   「⬜ ＝ 尚未建置」圖例；新增 late-import wrapper `_ia_view_shell()`；分派處多畫位置列／佔位頁；
     #   `_IA_VIEWS` 對帳旁多一行 `reconcile_nav`。「不使用」模式（舊 7 個頁籤）一個字沒動；其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "2e1a6b2ed58bf29fc44e258119fd26cdff8053e603c7745be54dff792919a67b"
+    # ~~"2e1a6b2ed58bf29fc44e258119fd26cdff8053e603c7745be54dff792919a67b"~~（D2 導覽殼後）
+    # 📌 NAV-1 四頁導覽殼（2026-10-28，客戶裁示 DEC-097／DEC-092 Q6，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` ——
+    #   新增 `_nav4_resolve_legacy()`／`_ia_view_nav4()`／`_nav4_reconcile()` 三支 late-import wrapper、`set_page_config`
+    #   前的 legacy 旗標、側欄 D2 radio 區塊包進 `if _NAV4_LEGACY:`（AST 與原文逐節點相同，只多一層縮排；由
+    #   `tests/test_nav1_app_routing.py::test_s3_legacy_d2_block_is_ast_identical_to_head` 守）與 `else:` 新導覽、
+    #   `_IA_VIEWS` 對帳旁的新模式分支。預設入口翻轉；`?legacy=1` 的舊 7 個頁籤一個字沒動；其餘 90 檔一個字都沒動。
+    # ~~"fe294e31a999b8d31fdec8b82416657ade20bac8d48963badf2c5437f242ae6a"~~（NAV-1 首版）
+    # 📌 NAV-1 QA 回修（2026-10-28，兩組獨立 QA 後，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` ——
+    #   legacy 旗標解析 `_nav4_resolve_legacy()` 改為不 import 任何模組的內聯小函式（legacy 路徑零依賴新模組）、
+    #   `_nav4_reconcile(_IA_VIEWS)` 移進新模式分支。legacy 的 D2 radio 區塊與舊 7 個頁籤一個字沒動；其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "e9cf2c80094c10fb4d00b5c3f6c9af54931302f2eaa1af30f977cad179ab7669"
 
     def test_no_diff_against_base(self):
         import hashlib

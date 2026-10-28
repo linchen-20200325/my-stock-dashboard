@@ -108,13 +108,16 @@ def d2_revert_for(file_path, code: str) -> str:
 
 def test_d2_revert_is_exact_base_source():
     for rel in sorted(D2_REVERT_PAIRS):
-        code = d2_revert_for(rel, (REPO / rel).read_text(encoding="utf-8"))
+        # 📌 NAV-1 回修（2026-10-28；有意識的接鏈，⛔ 不是漏改）：鏈頭已往前接一節 `nav1_revert_for`，本節先收它的改動。
+        from tests.test_nav1_revert_chain import nav1_revert_for
+        code = d2_revert_for(rel, nav1_revert_for(rel, (REPO / rel).read_text(encoding="utf-8")))
         assert hashlib.sha256(code.encode("utf-8")).hexdigest() == D2_BASE_SHA[rel], rel
 
 
 def test_d2_revert_is_idempotent():
     for rel in sorted(D2_REVERT_PAIRS):
-        once = d2_revert_for(rel, (REPO / rel).read_text(encoding="utf-8"))
+        from tests.test_nav1_revert_chain import nav1_revert_for   # NAV-1 接鏈，同上
+        once = d2_revert_for(rel, nav1_revert_for(rel, (REPO / rel).read_text(encoding="utf-8")))
         assert d2_revert_for(rel, once) == once, rel
 
 

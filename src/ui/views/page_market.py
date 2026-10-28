@@ -200,6 +200,37 @@ OLD_UI_MARKET_TAB: str = "🌍 市場環境"
 OLD_UI_POINTER: str = (f"要看請在側欄「{OLD_UI_NAV_RADIO}」選「{OLD_UI_NAV_OFF}」，"
                        f"再到「{OLD_UI_MARKET_TAB}」分頁")
 
+# ══════════════════════════════════════════════════════════════════
+# NAV-1 回修（QA MAJOR-1）：預設（新四頁）模式的頁內文字 —— 不得叫使用者去一個畫面上不存在的地方
+# ══════════════════════════════════════════════════════════════════
+# 預設模式下（`app.py` 在 session 明確寫 `_nav4_legacy = False`），舊版入口（側欄「不使用」radio、舊頁籤）與
+# 「🚦 今天」「📖 憑什麼」頁對一般使用者**不存在**（DEC-097）；本頁原本寫給 D2 殼的指路句因此成了死路。
+# 做法（⚠️ 有意識的修改，⛔ 不是漏刪）：**只在呈現層**依 session 旗標分模式 ——
+#   · legacy 模式（旗標為 True）或旗標不存在（單元測試／直接呼叫）：輸出**原句逐字不變**；
+#   · 預設模式（旗標明確為 False）：改成不指向 legacy 的誠實句，或略去（不新增任何 UI 元件、不放任何 legacy 連結）。
+# 原常數一字未改。⚠️ 本批**不改** `where_to_find` 產生的路徑名（牽動 ia_nav 46 字上限與 revert chain，併 I-1 另批）。
+# ⚠️ 旗標 key 的字面值與 `shared/ia_nav4.LEGACY_SESSION_KEY` 各一份（本檔不得 import ia_nav4：legacy 路徑零依賴新模組；
+#    相等由 `tests/test_nav1_default_mode_text.py` 釘住）。
+_NAV4_LEGACY_SESSION_KEY: str = "_nav4_legacy"
+DEFAULT_MODE_NOT_YET: str = "新版尚未提供，後續批次處理"
+
+
+def _in_default_nav() -> bool:
+    """預設（新四頁）模式？只有 session 旗標**明確為 False** 才算（缺＝當成 legacy／原句）。"""
+    try:
+        return st.session_state.get(_NAV4_LEGACY_SESSION_KEY) is False
+    except Exception:  # noqa: BLE001 — 無 session 環境（純單元測試）⇒ 原句
+        return False
+
+
+def _old_ui_pointer() -> str:
+    return DEFAULT_MODE_NOT_YET if _in_default_nav() else OLD_UI_POINTER
+
+
+def _x3_text() -> str:
+    """X3 說明；預設模式拿掉指向「🚦 今天」頁的括號（那一頁在預設導覽不存在）。"""
+    return X3_TEXT.replace("（與「🚦 今天」頁同一段程式）", "") if _in_default_nav() else X3_TEXT
+
 #: 位階契約 `source`（分支識別碼，SSOT `shared.regime_arbiter.SOURCE_*`）→ 人話。
 #: ⚠️ 只描述「哪一條分支生效」，⛔ 不帶舊紅綠燈的 label／action 操作字句（R12；那份對照在
 #:    `compute.macro.macro_helpers` 的文案表裡，含操作建議，故不沿用）。字樣取自 `regime_arbiter` 各常數的 docstring。
@@ -385,8 +416,9 @@ def report_pointer(report: Any) -> str:
     """X10 指向更新報告的那一句 —— 依「這一輪有沒有報告」照實講（⛔ 不指向一段不存在的畫面）。"""
     if report is None:
         return ("本次使用中還沒按過更新，所以還沒有更新報告；"
-                "按頁首的更新鈕後，報告會出現在更新鈕下方（與「🚦 今天」頁同一份）。")
-    return "本次更新的逐來源結果見頁首更新鈕下方「上一次更新的結果」（與「🚦 今天」頁同一份報告）。"
+                "按頁首的更新鈕後，報告會出現在更新鈕下方" + ("。" if _in_default_nav() else "（與「🚦 今天」頁同一份）。"))
+    return ("本次更新的逐來源結果見頁首更新鈕下方「上一次更新的結果」"
+            + ("。" if _in_default_nav() else "（與「🚦 今天」頁同一份報告）。"))
 
 
 def status_line(report: Any, danger: Any) -> str:
@@ -520,7 +552,7 @@ def _render_x6(session: Mapping[str, Any]) -> None:
     else:
         st.caption(f"{MISSING}：本次使用中還沒有這一組資料。")
     _render_raw_table(raw_rows(session, X6_FIELDS), empty_text="")
-    st.caption(f"全球資金流向、全球風險雷達本批未接到本頁（{OLD_UI_POINTER}）；"
+    st.caption(f"全球資金流向、全球風險雷達本批未接到本頁（{_old_ui_pointer()}）；"
                "雙速合議、Risk-on／off 標籤、中國拖累不在本頁。")
 
 
@@ -552,7 +584,7 @@ def _render_x8(session: Mapping[str, Any]) -> None:
             _keep = [_c for _c, _ in LEADING_COLUMNS if _c in _cols]
             st.dataframe(_li[_keep])
             st.caption("　·　".join(f"{_c}：{_n}" for _c, _n in LEADING_COLUMNS if _n and _c in _keep))
-    st.caption(f"外資連續買賣超天數、熱錢三角、融券本批未接到本頁；{OLD_UI_POINTER}。")
+    st.caption(f"外資連續買賣超天數、熱錢三角、融券本批未接到本頁；{_old_ui_pointer()}。")
 
 
 def _render_report_guarded(report: Any) -> None:
@@ -599,7 +631,8 @@ def render_page_market() -> None:
     st.markdown(f"## {ia_nav.page_label(ia_nav.PAGE_MARKET)}")
     st.caption(PAGE_QUESTION)
     st.markdown(status_line(_report, _danger))
-    st.caption(f"{AS_OF_NOT_PROVIDED}｜🩺 資料健康：請到 "
+    st.caption(AS_OF_NOT_PROVIDED if _in_default_nav() else
+               f"{AS_OF_NOT_PROVIDED}｜🩺 資料健康：請到 "
                f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
     # 與今天頁同一支 form（⛔ 不另寫第二套更新流程）。form key 兩頁共用沒有衝突：側欄一次只選得到
     # 一頁（`app.py` 的 `_IA_PAGE` 分支＋`st.stop()`），兩頁不會出現在同一輪 script run。
@@ -643,7 +676,7 @@ def render_page_market() -> None:
     with st.expander("指標危險度：為什麼？（五桶摘要）", expanded=False):
         today._render_tiles(today.build_bucket_tiles(_readout))
     with st.expander(X3_TITLE, expanded=False):
-        st.markdown(X3_TEXT)
+        st.markdown(_x3_text())
     with st.expander("指標明細（16 項）", expanded=False):
         _tiles_by_bucket = today.build_indicator_tiles(
             _readout, band_label=_band_label, thr_text=_thr_text, l4_error=_l4_err,
@@ -664,7 +697,7 @@ def render_page_market() -> None:
     with st.expander("總經／景氣（原始資料）", expanded=False):
         _render_raw_table(raw_rows(_session, X7_FIELDS),
                           empty_text=f"{MISSING}：本次使用中還沒有總經資料。")
-        st.caption(f"景氣拐點六大面向本批未接到本頁；{OLD_UI_POINTER}。")
+        st.caption(f"景氣拐點六大面向本批未接到本頁；{_old_ui_pointer()}。")
     with st.expander("籌碼（原始資料）", expanded=False):
         _render_x8(_session)
     with st.expander(X9_TITLE, expanded=False):
@@ -672,8 +705,12 @@ def render_page_market() -> None:
     with st.expander("資料來源與完整度", expanded=False):
         st.markdown(
             f"- {report_pointer(_report)}\n"
-            f"- 各來源的健康狀態與根因：{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}。\n"
-            "- ⚠️ 揭露：更新報告的「系統風險上限」步驟說明會列出本次寫檔的數值（現行行為，本批不改）。")
+            + ("" if _in_default_nav() else
+               f"- 各來源的健康狀態與根因：{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}。\n")
+            + "- ⚠️ 揭露：更新報告的「系統風險上限」步驟說明會列出本次寫檔的數值（現行行為，本批不改）。")
     with st.expander("問 AI／查看依據", expanded=False):
-        st.markdown(f"AI 問答請到 {ia_nav.where_to_find(ia_nav.SECTION_WHY_QA)}"
-                    "（沿用既有 AI 問答，本頁不另開一套）。")
+        if _in_default_nav():
+            st.markdown(f"AI 問答：{DEFAULT_MODE_NOT_YET}。")
+        else:
+            st.markdown(f"AI 問答請到 {ia_nav.where_to_find(ia_nav.SECTION_WHY_QA)}"
+                        "（沿用既有 AI 問答，本頁不另開一套）。")

@@ -104,6 +104,16 @@
   4. **最終回報最多 5 行**：🟢 Stage 已完成／PR 與 main SHA／測試·QA·Mutation／已知限制／下一步＋Model×Effort（若需切換）。
   - 與上一條關係（撰寫組讀法，單組）：上一條 (f)「真實錯誤或 GitHub 狀態衝突」不在本條 5 種之內；本條較嚴，依「衝突取較嚴者」以本條為準 —— 真實錯誤若需客戶裁示或手動操作，落入本條 🔴／🟡；否則內部處理、不出聲。上方限定第 4 條揭露義務仍寫在該 Stage 唯一一次最終回報內。
 
+- 📌 **Context Lifecycle／/compact 規則（客戶 2026-10-28 指示；決策者＝客戶；append-only，不改上文）**（來源：客戶 2026-10-28 指示，經總管轉交之要點，非逐字全文）：目標＝減少 token 浪費，但**不得因壓縮遺失專案狀態**。
+  1. 在**安全 checkpoint** 可主動使用 `/compact`，**不需每次先詢問客戶**。
+  2. 建議觸發時機：一個 Stage 完整結束且正式文件已落盤後；context 明顯變長、重複內容增加；出現語言漂移、規則遺漏、重複回報等 context 污染跡象；準備進入下一個大型 Stage 前。
+  3. **不固定高頻 `/compact`**；仍有大量未落盤 WIP 時，不得為省 token 草率壓縮。
+  4. `/compact` 前先確認重要內容已進 repo：`docs/DECISIONS.md`、`docs/BACKLOG.md`、`docs/PROJECT_STATE.md`、`docs/HANDOFF.md`／Resume Checkpoint、必要正式 spec。
+  5. **GitHub／repo 為 SSOT；compact summary 不得成為新的 SSOT。**
+  6. 若 context 已不安全：先完成安全交接落盤；`/compact` 後仍有規則漂移或狀態不確定，就回報「🟡 建議換新對話」。
+  7. `/compact` 本身屬內部維護，**不向客戶回報**「正在 compact／compact 完成」；與上一條「零過程訊息」併存，同樣不得作為過程訊息輸出。
+  - 與既有條文關係（撰寫組讀法，單組、未經第二組驗證）：與第 11 節（Context Lifecycle）、第 15／20 節（Handoff Save Check／Resume Checkpoint）、第 22 節（Proactive Conversation Handoff，DEC-088）**併讀、取較嚴者**。第 22 節觸發條件不變（context 仍健康時不得為形式要求換對話）；本條只補「可在安全 checkpoint 自行 `/compact`」，**不取代**第 22 節的換新對話交接。
+
 - 📌 **DEC-087（2026-10-26，客戶）**：No Silent Stop 規則見 **第 21 節**（停手必標 🟡／🔴；等待可自動恢復的外部系統屬 🟢）。append-only 指向，**不改上文**。
 
 ## 第 4 節｜Stop／Decision Gate

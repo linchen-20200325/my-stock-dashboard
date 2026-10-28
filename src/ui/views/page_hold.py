@@ -4570,6 +4570,39 @@ _V2_NO_EXIT_REPORT: str = NO_EXIT_MARKER + V2_EXCERPT_GAP + "請把上面那行�
 _V2_NO_EXIT_UNWIRED: str = NO_EXIT_MARKER + " —— 這是待接線項，不是你操作的問題"
 #: 👤 我的 P1：~~"到既有的 📁 組合管理分頁把持股的張數與均價補齊，回本頁" + _V2_PRESS_RUN~~ → 新原文的摘錄。
 _V2_OLD_UI: str = "目前請切回舊版 → 📁 組合管理"   # 客戶原句的開頭一段（K1：原文摘錄）
+
+# ══════════════════════════════════════════════════════════════════
+# NAV-1 回修（QA MAJOR-1）：預設（新四頁）模式的「切回舊版」類指路句 —— 只在**呈現層**替換
+# ══════════════════════════════════════════════════════════════════
+# 預設模式下（`app.py` 在 session 明確寫 `_nav4_legacy = False`），舊版入口（側欄「不使用」radio、舊 📁 組合管理頁籤）
+# 對一般使用者**不存在**（DEC-097）⇒ 客戶原句「目前請切回舊版 → 📁 組合管理；新版 CRUD 會在下一階段處理。」成了死路。
+# 做法（⚠️ 有意識的修改，⛔ 不是漏刪）：`ia_nav.CONTENT_EDIT_OLD_UI_WHERE`（客戶逐字句，⛔ 不改常數）與本檔 `_V2_OLD_UI`
+# 在**最後送進畫面的那一刻**（`_render_one_v2`／唯讀 caption）依 session 旗標替換：
+#   · legacy 模式（旗標為 True）或旗標不存在（單元測試／直接呼叫）：原句逐字不變；
+#   · 預設模式（旗標明確為 False）：換成不指向 legacy 的誠實句（不新增任何 UI 元件、不放 legacy 連結）。
+# ⚠️ 本批**不改** `where_to_find` 產生的路徑名（🛡️持股›…、📊 大盤›🚦 今天、🩺／📖 —— 牽動 ia_nav 46 字上限與 revert chain，
+#    併 I-1 另批）；這些路徑名在預設模式仍會出現（已知限制，見 NAV-1 spec §7）。
+# ⚠️ 旗標 key 的字面值與 `shared/ia_nav4.LEGACY_SESSION_KEY` 各一份（本檔不得 import ia_nav4：legacy 路徑零依賴新模組；
+#    相等由 `tests/test_nav1_default_mode_text.py` 釘住）。
+_NAV4_LEGACY_SESSION_KEY: str = "_nav4_legacy"
+DEFAULT_MODE_NOT_YET: str = "此功能新版尚未提供，後續批次處理。"
+DEFAULT_MODE_NOT_YET_SHORT: str = "此功能新版尚未提供"
+
+
+def _in_default_nav() -> bool:
+    """預設（新四頁）模式？只有 session 旗標**明確為 False** 才算（缺＝當成 legacy／原句）。"""
+    try:
+        return st.session_state.get(_NAV4_LEGACY_SESSION_KEY) is False
+    except Exception:  # noqa: BLE001 — 無 session 環境（純單元測試）⇒ 原句
+        return False
+
+
+def _mode_text(text: str) -> str:
+    """送進畫面前的最後一道：預設模式把「切回舊版」類指路句換成誠實句；其餘模式原樣返回。"""
+    if not _in_default_nav():
+        return text
+    return (text.replace(ia_nav.CONTENT_EDIT_OLD_UI_WHERE, DEFAULT_MODE_NOT_YET)
+                .replace(_V2_OLD_UI, DEFAULT_MODE_NOT_YET_SHORT))
 _V2_FILL_LOTS: str = ("把持股的張數與均價補齊" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP
                       + "回本頁" + _V2_PRESS_RUN)
 #: 批 Z49：持有列資料異常那一句（客戶核准句；整句就是摘錄，代號清單在摺疊區原文）。
@@ -5124,7 +5157,7 @@ def _render_one_v2(card: Card, facts: Sequence[tuple[str, str]] = (),
                    signal_text: str = "") -> None:
     """畫一張 v2 卡面；炸了就**就地轉成看得見的紅卡**（⛔ 不靜默退回舊卡面）。"""
     try:
-        _html = _V2_BLANK_LINE_RE.sub("\n", v2_card_html(card, facts, signal_text))
+        _html = _V2_BLANK_LINE_RE.sub("\n", _mode_text(v2_card_html(card, facts, signal_text)))
         st.markdown(f'<div class="{V2_HOLD_CARD_CLASS}">{_html}</div>',
                     unsafe_allow_html=True)
         return
@@ -5417,7 +5450,7 @@ def _render_holdings_preview(holdings: HoldingsReadout) -> None:
     if not holdings.has_holdings:
         return
     # 👤 我的 P1（D 段）：~~「**唯讀** —— 要新增／修改／刪除請到既有的 📁 組合管理分頁。」~~
-    st.caption("**唯讀** —— " + _edit_where("要新增／修改／刪除持股")
+    st.caption(_mode_text("**唯讀** —— " + _edit_where("要新增／修改／刪除持股"))
                + f"要換 Sheet、選組合：到{ia_nav.where_to_find(ia_nav.PAGE_ME)}。")
     st.dataframe(
         [{"代號": str(_h.get("ticker", "") or ""),

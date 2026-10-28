@@ -1327,6 +1327,44 @@ D2.5 以下大方向核准：
 - **來源**：客戶 2026-10-28 裁示（經總管轉交）。
 - **與其他 DEC 的關係**：DEC-092 Q6（固定四主導航、D2 殼過渡保留）**同向具體化**；DEC-019／DEC-020（舊 UI Removal Gate）**不變、本條不構成通過**；DEC-082（先草稿後施工）、DEC-084（Model×Effort）、DEC-085（Long-lived UI）**呼叫**。不降低任何 Security／Investment／Data／CI／Audit Gate；衝突取較嚴者。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：要點摘自總管轉交，非客戶逐字全文；「待查證的可能衝突」為單組推論，未比對 wireframe 原檔。
+### DEC-098｜NAV-1 內部設計選擇（預設翻轉為新四頁導覽；桌機 `st.sidebar`＋手機底部固定列，同一 SSOT key；`?legacy=1` 為 rollback）（AI 總管內部，2026-10-28）
+> 2026-10-28 補登（ID 取下一個未用號；落盤前實測 `git grep -n "DEC-098"` 0 命中、`docs/DECISIONS.md` 最大為 DEC-097）。**本條不是客戶裁示**（DEC-097 才是客戶裁示），只記錄 NAV-1 實作時的技術／結構選擇，供 UI-M／UI-T／UI-H／UI-ME、`CROSS-VIEW-DATA-CONSISTENCY-AUDIT` 與獨立 QA 對照；不改 `CLAUDE.md`／`PROJECT_RULES.md`。
+- **決策者**：AI 總管內部（依 `CLAUDE.md` v3 §03-1 內部自決；**非客戶裁示**）。
+- **狀態**：隨 NAV-1 PR；implementation complete／waiting CI／**待客戶裁示標的頁葉選擇**，未合併。
+- **內容（實作事實，來源 `docs/vnext/NEWUI_D25_NAV1_SPEC_2026-10-28.md` §1～§3、`git diff origin/main --stat`）**：
+  1. **預設翻轉**：預設入口＝新四頁導覽（📊 市場／🎯 標的／💼 持股／👤 我的，標籤逐字取自 DEC-097）；舊 UI（D2 側欄雙層 radio＋舊 7 頁籤）＝legacy 模式。
+  2. **桌機／手機形式**：桌機＝`st.sidebar` 內垂直 radio；手機＝底部固定列（`st.container(key="nav4_bottom")`＋CSS 注入，`@media (max-width: 768px)` 才固定到底）；CSS 失效時降級為主內容流中的一般橫排 radio（仍可點、仍寫同一格 SSOT）。**兩個元件共用同一個 SSOT key `_nav4_page`**（只經 `on_change` 回呼寫入）。
+  3. **新檔／不動檔**：新增 L0 `shared/ia_nav4.py`、L5 `src/ui/views/shell_nav4.py`；**不改** `shared/ia_nav.py`（D2 事故模組）、不改 `PAGE_LABELS`、不改 `src/ui/tabs/**`。
+  4. **legacy＝`?legacy=1`**（`?legacy=0` 清除）：寫入 session 旗標（黏性），**無任何可見入口**；legacy 行為不變（`tests/test_nav1_app_routing.py` 以 HEAD AST 逐節點對照守衛），且 **legacy 路徑不依賴新模組**（旗標解析為 `app.py` 內零 import 小函式；新模組僅在新模式分支 late-import；測試以 meta_path 毒化新模組驗證 `?legacy=1` 仍完整載入）。
+  5. **預設模式頁內死路句分模式替換**：`page_me`／`page_market`／`page_hold` 的「切回舊版」類指路句在預設模式改為「此功能新版尚未提供，後續批次處理。」或略去；legacy 與無旗標（單元測試）輸出原句逐字不變。
+  6. **late-import**：`app.py` 對 `shared.ia_nav4`／`shell_nav4` 只在函式內 import（`tests/test_boot_import_smoke.py` 與 `test_nav1_app_routing.py` 釘住），沿用 D2 boot 事故後的守衛精神。
+  7. **與 PLAN §5 序 6／A 規格 N2「主畫面頂端」的差異**：以 **DEC-097＋wireframe 為準**。查證結果（FACT，讀 wireframe 原始碼，`docs/vnext/NEWUI_D25_NAV1_SPEC_2026-10-28.md` §4）：`docs/vnext/d25_wireframes/` `index.html` 圖例「桌面左側欄、手機底部列」，四頁檔皆為 `<aside class="side">`（桌機）＋`<nav class="bn">`（手機，4 等寬）——即 wireframe 本身就是桌機左側欄＋手機底部列，PLAN／A 的 N2「頂端」才是偏離者；回應 DEC-097「待查證的可能衝突」。
+- **已知限制（揭露，見 spec §7，皆當作未驗）**：
+  - Cloud 啟動與手機實機未於沙箱實測（底部固定、safe-area、窄螢幕單行、iOS／Android 均未驗）；
+  - CSS 依賴 `st-key-<key>` class、`:has()` 等 Streamlit 非公開保證（floor 1.56 是否具備未驗，沙箱僅 1.59.2）；
+  - 768px（底部列斷點）與側欄抽屜（約 640px，INFERENCE）兩套導覽並存於中間寬度；
+  - Google 登入轉跳回來為新 session、網址不帶 `legacy` ⇒ 掉回新（預設）模式；
+  - **預設畫面暫時取不到、僅 `?legacy=1` 可達的舊功能**：🚦 今天、📖 憑什麼的資料體檢、AI 問答、🔧 工具箱（資料診斷）、📁 組合管理 CRUD（新增／刪除）、🏦 ETF、🌍 總經深度（含板塊資金潮汐、產業熱力圖）。這是暫時缺口，**不是「已併入」**；**不代表通過 Old UI Removal Gate**（DEC-019／DEC-020、`UIM-REMOVAL-GATE` 不變）。
+- **偏離 wireframe（待客戶裁示，非本條可定案）**：🎯 標的頁多一條「🔍 找標的／🔬 查一檔」橫排 radio（wireframe 標的頁為單一頁）——過渡項，UI-T 合併為單頁時移除；若客戶視為「版面佈局異動」須於合併前裁示（`NAV1-TARGET-LEAF-SELECTOR`）。
+- **與其他 DEC 的關係**：DEC-097（客戶裁示）**具體實作**；DEC-092 Q6 同向；DEC-019／DEC-020 不變、本條不構成通過；DEC-082（草稿先行）、DEC-084（Model×Effort）、DEC-003（內部自決區）呼叫；不降低任何 Gate。**未經客戶**。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：QA-A（對抗）＋QA-B（語意）＋第三組回修複驗；**第三組複驗進行中，不得寫為已通過**。突變依實作組自報 **40 項（M1–M26＋N1–N14）全數轉紅**，清單由實作者自列（M23／M25 首跑 GREEN、已補強守衛後轉紅），未獨立複跑；spec §3～§7 判斷為實作組單組結論；CI 未跑；撰寫組（本 docs 同步）未重跑測試。
+
+
+### DEC-099｜NAV-1 🎯 標的頁「🔍 找標的／🔬 查一檔」過渡切換：客戶裁示方案 A（保留，僅作 NAV-1 → UI-T 之間的過渡控制）（客戶 2026-10-28）
+
+> 2026-10-28 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-0[0-9]*' docs/DECISIONS.md` 最大為 DEC-098、DEC-099 0 命中）。要點經總管轉交，**非客戶逐字全文**。
+
+- **決策者**：**客戶**（2026-10-28；經總管轉交之要點）。
+- **日期／效力日期**：2026-10-28 起生效。｜**狀態**：生效。
+- **內容（客戶選方案 A，五點明確落盤）**：
+  1. 該切換**不是最終 wireframe 設計**；
+  2. **不視為新增正式 IA**；
+  3. **UI-T 實作時，「找標的＋查一檔」必須整合回單一 🎯 標的頁，並移除此過渡切換**（連同 `NAV4_TARGET_LEAF_KEY`、`render_target_leaf_selector`）；
+  4. **不得因本次過渡方案改變既有功能語意或新增投資規則**；
+  5. **PR #957 其他範圍不變**。
+- **效力邊界（⛔ 只裁示這一項偏離）**：本條**只**針對 🎯 標的頁葉選擇切換這一項偏離 wireframe；**不涵蓋**：`NAV1-WAYFINDING-I1`（I-1 頁名）、`NAV1-PAGE-TODAY-LEGACY-WORDING`（legacy 殘留字樣）、`NAV1-DEFAULT-MISSING-CAPABILITIES`（舊功能預設不可達）、`NAV1-CLOUD-MOBILE-VERIFY`（客戶實機點驗仍為驗收必要條件）等其他項；舊 UI Removal Gate（DEC-019／DEC-020、`UIM-REMOVAL-GATE`）不變、本條不構成通過。
+- **與 DEC-097／DEC-098 的關係**：DEC-097（客戶裁示：手機底部 4 按鈕、舊 UI 預設隱藏）**不變**；DEC-098 為 **AI 總管內部設計選擇，不是客戶裁示**——其中「標的頁葉選擇＝過渡項、待客戶裁示」一點，由本條（客戶裁示）**回答**；DEC-098 其餘內容不因本條升格為客戶裁示。DEC-082（草稿先行）：客戶已就此偏離裁示，毋須再出草稿。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：撰寫組（docs-only）未重跑測試；本條只落盤裁示，不改任何程式碼。
 
 ## 2. 產品／UI
 

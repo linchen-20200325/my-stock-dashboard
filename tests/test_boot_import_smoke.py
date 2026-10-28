@@ -146,3 +146,72 @@ def test_detection_capability_stale_ia_nav_in_sys_modules_is_caught(tmp_path):
     r = _run_clean(code, 120)
     assert "NOT_CAUGHT" not in r.stdout, "舊模組竟通過 app import 區：守衛無牙"
     assert ("ImportError" in r.stderr or "AttributeError" in r.stderr), r.stderr[-1500:]
+
+# ── NAV-1 擴充（DEC-097）：預設翻轉後，boot smoke 必須同時涵蓋「新預設模式」「legacy 模式」與新模組 ──────────
+# 原三組守衛（a/b/c）一字未動：(a) 的冷啟動現在跑的是**新預設模式**；(b) 的靜態契約會掃到 app.py 函式內的
+# `from shared.ia_nav4 import ...` / `from src.ui.views.shell_nav4 import ...`（ast.walk 含函式體）；下面補四條。
+def test_cold_boot_legacy_mode_in_fresh_process_has_no_exception():
+    """legacy 模式（`?legacy=1`，rollback 路徑）也要能在乾淨行程冷啟動：rollback 不能是沒人測的死路。"""
+    code = textwrap.dedent(f"""
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_file({str(APP)!r}, default_timeout={_COLD_BOOT_TIMEOUT_S - 20})
+        at.query_params["legacy"] = "1"
+        at.run(timeout={_COLD_BOOT_TIMEOUT_S - 20})
+        exc = [str(e.value)[:500] for e in at.exception]
+        if exc:
+            print("APP_EXCEPTIONS:", exc); raise SystemExit(3)
+        labels = [getattr(t, "label", None) for t in at.tabs]
+        assert "🌍 市場環境" in labels, labels      # 真的是舊畫面，不是新模式碰巧沒炸
+        print("COLD_BOOT_LEGACY_OK")
+    """)
+    r = _run_clean(code, _COLD_BOOT_TIMEOUT_S)
+    assert r.returncode == 0 and "COLD_BOOT_LEGACY_OK" in r.stdout, (
+        f"rc={r.returncode}\nSTDOUT:\n{r.stdout[-2000:]}\nSTDERR:\n{r.stderr[-3000:]}")
+    assert "Traceback" not in r.stderr, r.stderr[-3000:]
+
+
+def test_nav4_modules_import_cleanly_in_a_fresh_process_and_l0_is_pure():
+    code = textwrap.dedent("""
+        import sys
+        import shared.ia_nav4                      # import 時 reconcile_nav4() 自檢（對不起來會 RuntimeError）
+        assert "streamlit" not in sys.modules, "shared.ia_nav4 是 L0，不得拉進 streamlit"
+        import src.ui.views.shell_nav4             # L5 元件（import 時組 CSS，token 缺值會 fail loud）
+        print("NAV4_IMPORT_OK")
+    """)
+    r = _run_clean(code, 120)
+    assert r.returncode == 0 and "NAV4_IMPORT_OK" in r.stdout, f"{r.stdout[-1500:]}\n{r.stderr[-2500:]}"
+
+
+def test_app_nav4_imports_are_late_only_and_resolved():
+    """app.py 對 nav4 的 import 一律在函式內（late import，不在 module 層／L287 import 區加名稱）；且名稱真的存在。"""
+    tree = ast.parse(APP.read_text(encoding="utf-8"))
+    fn_nodes = {id(n) for f in ast.walk(tree) if isinstance(f, ast.FunctionDef) for n in ast.walk(f)}
+    seen = {}
+    for n in ast.walk(tree):
+        if isinstance(n, ast.ImportFrom) and (n.module or "") in ("shared.ia_nav4", "src.ui.views.shell_nav4"):
+            assert id(n) in fn_nodes, f"{n.module} 在 app.py module 層被 import（應為函式內 late import）"
+            seen.setdefault(n.module, set()).update(a.name for a in n.names)
+    assert set(seen) == {"shared.ia_nav4", "src.ui.views.shell_nav4"}, seen
+    import importlib
+    for mod, names in seen.items():
+        m = importlib.import_module(mod)
+        for nm in names:
+            assert hasattr(m, nm), f"{mod}.{nm} 不存在"
+
+
+def test_detection_capability_stale_ia_nav4_in_sys_modules_is_caught(tmp_path):
+    """偵測能力驗證（同 (c)，不是產品行為也不是根因結論）：行程內殘留一份缺屬性的舊 `shared.ia_nav4`，
+    靜態契約的檢查方式必須報出缺少的名稱。"""
+    import json
+    stale = tmp_path / "stale_ia_nav4.py"
+    stale.write_text("LEGACY_QUERY_PARAM = 'legacy'\n", encoding="utf-8")   # 缺 resolve_legacy_flag / LEGACY_SESSION_KEY
+    code = textwrap.dedent(f"""
+        import importlib.util, sys
+        spec = importlib.util.spec_from_file_location("shared.ia_nav4", {str(stale)!r})
+        mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+        sys.modules["shared.ia_nav4"] = mod
+        sys.argv = ["x", {json.dumps(json.dumps([["shared.ia_nav4", ["LEGACY_QUERY_PARAM", "LEGACY_SESSION_KEY", "resolve_legacy_flag"]]]))}, "[]"]
+    """) + _CHECK_IMPORTS
+    r = _run_clean(code, 120)
+    assert r.returncode == 1, f"殘留舊模組竟通過靜態契約：守衛無牙\n{r.stdout[-800:]}"
+    assert "shared.ia_nav4.resolve_legacy_flag" in r.stdout and "shared.ia_nav4.LEGACY_SESSION_KEY" in r.stdout, r.stdout[-800:]
