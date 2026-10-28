@@ -585,7 +585,13 @@ class TestByteIdentical:
         assert [_html(x) for x in _etf(old)] == [_html(x) for x in _etf()]
 
     def test_b_batch_leaf_does_not_ask_for_failures(self, monkeypatch):
-        """葉2 批次表不傳 `failed=`（它不在本批，行為一字不變）。"""
+        """`_fetch_metrics` 預設（不帶 failed）不向 L3 要 `failed=`（斷言未改）。
+
+        📌 範圍說明更正（xview V5，有意識的更正，不是放寬）：原 docstring 寫「葉2 批次表不傳
+        `failed=`（不在本批）」—— 自 xview V5 起葉2 批次的**個股**路徑改傳 `failed=`
+        （日線抓取失敗 → 整列錯誤，不再與查無資料同顯示「—」），見
+        `tests/test_xview_v5_batch_stock_failed.py`。本測試只釘 `_fetch_metrics` 的預設行為。
+        """
         seen = []
 
         def _fm(code, kind, **kw):

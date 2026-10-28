@@ -1074,7 +1074,7 @@ def _fetch_metrics(code: str, kind: str, *, failed: dict | None = None
     （各腿獨立 try，缺的填 `None`）—— 這個差異是 L3 自己的契約，
     本檔**不去抹平它**：抹平就等於替其中一邊宣稱一件它沒說的事。
 
-    failed：透傳 L3 `fetch_metrics(failed=)`（葉1 用；葉2 批次不傳 ＝ 行為一字不變）。
+    failed：透傳 L3 `fetch_metrics(failed=)`（葉1 用；葉2 批次自 xview V5 起**個股**也傳，ETF 不傳）。
     """
     try:
         from src.services.dividend_station_service import fetch_metrics
@@ -1771,7 +1771,16 @@ def _batch_row(code: str, *, stock_kind: str, etf_kind: str,
         return BatchRow(code=code, kind=_kind, kind_label=_label,
                         is_unknown=True)
 
-    _m, _err = _fetch_metrics(code, _kind)
+    # xview V5：個股傳 `failed=`，讓「日線抓取失敗」與「查無資料」分得開 ——
+    # 不傳時兩者都是 current_price=None → 同顯示「—」（§1：失敗不得畫成沒資料）。
+    # L1 走 strict 路徑，用同一把快取鍵與失敗冷卻，不多打上游。
+    # ETF 不傳：ETF 拿不到日線本來就 raise → 已是整列紅。財報那一腿失敗不在本修範圍（仍「—」）。
+    _f: dict = {}
+    _m, _err = (_fetch_metrics(code, _kind, failed=_f) if _is_stock
+                else _fetch_metrics(code, _kind))
+    if not _err and _is_stock:
+        from src.services.dividend_station_service import FAILED_PRICE
+        _err = str(_f.get(FAILED_PRICE) or "")
     if _err:
         return BatchRow(code=code, kind=_kind, kind_label=_label,
                         is_stock=_is_stock, is_etf=_is_etf, error=_err)
