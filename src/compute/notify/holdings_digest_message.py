@@ -9,9 +9,11 @@ LINE 可讀文字。這是每日推播的**可靠主體**（不需 AI 也成立;
 """
 from __future__ import annotations
 
+import math
 import numbers
 
 from shared import dividend_station_thresholds as T
+from shared import station_specs as SS
 
 _DISCLAIMER = "　研究參考,非投資建議。"
 
@@ -65,6 +67,14 @@ def _vix_line(vix: "float | None", total: int) -> list[str]:
             f"　→ {_advice}"]
 
 
+def _data_short(digest: dict) -> bool:
+    """XV-H1-EXT（客戶 2026-10-28 裁示 A）：有抓取失敗或資料不足（燈全判不出／缺現價）的標的？
+
+    成立時正文**不印「續抱」**當缺資料的替代結論（missing ≠ HOLD；unavailable ≠ safe）。
+    """
+    return bool(digest.get("errors")) or bool(digest.get("insufficient"))
+
+
 def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:
     """建議換出（持有紅燈汰弱）。優先用 switch.switch_out（held-only,語意正確:只換你持有的）;
     switch 缺（極少數 build 失敗）才退 digest.reds,並誠實標「含觀察清單」以免暗示賣掉未持有標的。"""
@@ -75,6 +85,9 @@ def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:
         _outs = digest.get("reds") or []
         _caveat = "（含觀察清單紅燈）"
     if not _outs:
+        if _data_short(digest):
+            # XV-H1-EXT：資料不足時「無紅燈」只是「判得出的沒有紅燈」，⛔ 不接「續抱」。
+            return ["🔴 建議換出（持有紅燈汰弱）", "　✅ 判得出的標的無紅燈（資料不足者未下結論）"]
         return ["🔴 建議換出（持有紅燈汰弱）", "　✅ 無紅燈,續抱"]
     _lines = [f"🔴 建議換出（持有紅燈汰弱）{_caveat}"]
     for d in _outs:
@@ -177,6 +190,16 @@ def _allocation_line(digest: dict) -> list[str]:
             f"（目標 {_ct:.0f}/{_st:.0f},核心偏離 {_dev:+.0f}%）{_partial}"]
 
 
+def _insufficient_line(digest: dict) -> list[str]:
+    """XV-H1-EXT：資料不足／無法判定的標的（燈全判不出、缺現價）。空 → 略過。"""
+    _ins = digest.get("insufficient") or []
+    if not _ins:
+        return []
+    return [f"{SS.INSUFFICIENT_ACTION_TEXT}：" + "、".join(
+        f"{_code(d)}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))
+                                for _r in (d.get("原因") or ())) + "）" for d in _ins)]
+
+
 def _errors_line(digest: dict) -> list[str]:
     """抓取失敗未納入判斷的檔（§1 誠實排除,不當作無事）。空 → 略過。"""
     _errs = digest.get("errors") or []
@@ -207,12 +230,18 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     picks（get_switch_in_candidates 的清單,已排除持股）併入「每日選股」→ 一則涵蓋
     持股續抱/換股 + 選股清單（§ user 2026-08-23 合併需求）;None → 不顯示該段（向後相容）。
     「今日無需動作」判定:無換出、無加碼、無停利 → 明講續抱（對齊 build_summary_prompt 語氣）。
+    XV-H1-EXT（客戶 2026-10-28 裁示 A）：但有抓取失敗或資料不足（`digest.insufficient`）時
+    ⛔ 不印「續抱」，改講「判得出的標的無訊號、資料不足者未下結論」。
     「加碼」只看 digest.adds（持有列；AUD-C3）—— 觀察清單（未持有）的 235 燈號
     (`watch_adds`)不是持股動作,不阻擋這句。
     """
     digest = digest or {}
     _vix = _num(digest.get("vix"))
-    _total = int(_num(digest.get("total")) or 0)   # 契約漂移防禦:非數 total → 0,不 ValueError
+    # ~~`_total = int(_num(digest.get("total")) or 0)`~~（XV-H1-EXT 順手修，⛔ 不是漏刪）：NaN／±inf
+    # 是 truthy，`int(nan)` 拋 ValueError、`int(inf)` 拋 OverflowError → 整則推播炸掉。
+    # 現：非有限值與非數一律當 0（＝不可判斷），走下方「未能判斷」路徑。
+    _t_raw = _num(digest.get("total"))
+    _total = int(_t_raw) if _t_raw is not None and math.isfinite(_t_raw) else 0
 
     # 風險警語置頂:LINE 手機通知的預覽只顯示開頭數十字,要行動的訊息若排在
     # 標題與位階之後,推播列上根本看不到。由 orchestrator 傳入(見
@@ -246,7 +275,7 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
         if (switch or {}).get("stance") == "defensive":
             lines += ["　⚠️ 總經轉守：換股從嚴、優先汰弱、勿追高（此為換股池,非全數買進建議）"]
     for _seg in (_adds_lines(digest), _watch_adds_lines(digest), _take_profit_lines(digest),
-                 _allocation_line(digest), _errors_line(digest)):
+                 _allocation_line(digest), _errors_line(digest), _insufficient_line(digest)):
         if _seg:
             lines += [""] + _seg
 
@@ -260,6 +289,11 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
                   and not (digest.get("take_profit") or []))
     if _total <= 0:
         lines += ["", "⚠️ 今日無任何持股完成評估（資料抓取全失敗），未能判斷 —— 請稍後檢視或查 log。"]
+    elif _no_action and _data_short(digest):
+        # XV-H1-EXT（客戶 2026-10-28 裁示 A）：部分抓取失敗／燈全判不出／缺現價 → ⛔ 不印「續抱」
+        # 當缺資料的替代結論；只講判得出的範圍，並把資料不足的標的指回上方清單。
+        lines += ["", "📭 判得出的標的今日無換出／加碼／停利訊號；"
+                      "資料不足或抓取失敗的標的未下結論（見上方清單）。"]
     elif _no_action and alert_has_action:
         # 個股健檢與大盤/國際盤風險是**兩個不同的判斷範圍**,結論可以相反:
         # 手上每一檔的體質都還行(無換出/加碼/停利)、但大盤與資金面同時崩,

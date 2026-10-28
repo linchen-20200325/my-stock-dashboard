@@ -745,12 +745,27 @@ def test_prompt_digest_carries_structured_rows(monkeypatch):
 @pytest.mark.parametrize("over", _NORMAL_OVERS + [{"premium_pct": None}, {"sharpe": None},
                                                   {"weekly_close": _WK.iloc[-2:]}], ids=repr)
 def test_prompt_normal_identical_and_keeps_instruction(over, vix, monkeypatch):
-    """沒有異常（含一般缺資料）：digest 沒有 `invalid` 鍵、prompt 與修前逐字相同、仍帶「續抱」指示。"""
+    """沒有異常（含一般缺資料）：digest 沒有 `invalid` 鍵、prompt 與修前逐字相同、仍帶「續抱」指示。
+
+    XV-H1-EXT（客戶 2026-10-28 裁示，取代 Z51 該部分語意）：本參數組都是「部分燈缺、但不是
+    每一盞都判不出、持有列有現價」⇒ 依新規則仍屬可下結論 ⇒ 續抱句斷言保留；
+    「燈全判不出／缺現價／抓取失敗」改由下方 `test_prompt_missing_price_drops_instruction` 等斷言不出現。
+    """
     st, _sw, _swc, prompt = _run(monkeypatch, over, vix=vix)
     assert "invalid" not in st.digest
     assert all(SS.KEY_INVALID_TEXTS not in _x for _x in st.rows)
     _st2, _sw2, _swc2, pre = _run(monkeypatch, over, vix=vix, ds_mod=_pre(), svc_mod=_svc_pre())
     assert prompt == pre and _KEEP in prompt and _FACT_HEAD not in prompt
+    assert "insufficient" not in st.digest
+
+
+@pytest.mark.parametrize("vix", [None, 15.0])
+def test_prompt_missing_price_drops_instruction(vix, monkeypatch):
+    """XV-H1-EXT（客戶 2026-10-28 裁示，取代 Z51 該部分語意）：持有列缺現價 → 不帶續抱句。"""
+    st, _sw, _swc, prompt = _run(monkeypatch, {"current_price": None}, vix=vix)
+    assert st.digest["insufficient"] == [{"代號": "0056", "原因": (SS.INSUFF_NO_PRICE,)}]
+    assert _KEEP not in prompt and S._INSUFFICIENT_INSTRUCTION in prompt
+    assert "- 資料不足／無法判定：0056（缺現價）" in prompt
 
 
 def test_mut_prompt_reopens_keep_instruction(monkeypatch):

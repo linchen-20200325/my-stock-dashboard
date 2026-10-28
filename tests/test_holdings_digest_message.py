@@ -91,12 +91,25 @@ def test_vix_missing_shows_honest_text():
 
 
 def test_no_switch_out_shows_hold_line():
+    # XV-H1-EXT（客戶 2026-10-28 裁示，取代本測試原「有抓取失敗仍印續抱」的語意）：
+    # 資料完整（無抓取失敗、無資料不足）時才印「無紅燈,續抱」（斷言保留）。
+    d = _full_digest()
+    d["reds"] = []
+    d["errors"] = []
+    s = _full_switch()
+    s["switch_out"] = []
+    msg = F(d, s, as_of=_AS_OF)
+    assert "無紅燈,續抱" in msg
+
+
+def test_no_switch_out_with_fetch_failure_does_not_say_hold():
+    """XV-H1-EXT：有抓取失敗 → 「無紅燈」不接「續抱」。"""
     d = _full_digest()
     d["reds"] = []
     s = _full_switch()
     s["switch_out"] = []
     msg = F(d, s, as_of=_AS_OF)
-    assert "無紅燈,續抱" in msg
+    assert "無紅燈,續抱" not in msg and "判得出的標的無紅燈" in msg
 
 
 def test_allocation_partial_flag_shown():

@@ -652,3 +652,24 @@ def is_invalid_number(value) -> bool:
     except (TypeError, ValueError, OverflowError):
         return True
     return not math.isfinite(_f)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# XV-H1-EXT（客戶 2026-10-28 裁示 A）：missing ≠ HOLD；unavailable ≠ safe
+# ══════════════════════════════════════════════════════════════════════
+#: 缺資料標的的建議動作句。取代「⚪ 巡航：維持定期定額」「🟢 續抱：…」這類**持有結論**
+#: —— 資料不足時不得以「續抱」當缺資料的替代結論。有充分資料的列一字不動。
+INSUFFICIENT_ACTION_TEXT: str = "⬜ 資料不足／無法判定"
+
+#: L3 `build_station_rows` 在列上標「這列為什麼資料不足」的非顯示欄（同 `_detail` 慣例）。
+#: 值 ＝ 下列原因常數的 tuple。⚠️ **只有資料不足時才有這一鍵** —— 資料完整的列逐鍵不變。
+KEY_INSUFFICIENT: str = "_insufficient"
+#: 該列**每一盞燈都判不出**（ETF：健檢四燈皆 ⚪ 且 235 落在巡航；個股：汰換燈 ⚪）。
+INSUFF_ALL_UNJUDGED: str = "all_lights_unjudged"
+#: 持有列缺現價（含現價資料異常被排除）。
+INSUFF_NO_PRICE: str = "no_price"
+#: 原因 → 給 ⑦ AI prompt／LINE 的事實短句（只講事實，不給結論）。
+INSUFF_REASON_TEXT: dict = {
+    INSUFF_ALL_UNJUDGED: "燈號全部判不出",
+    INSUFF_NO_PRICE: "缺現價",
+}

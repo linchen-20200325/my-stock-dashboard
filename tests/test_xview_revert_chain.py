@@ -46,6 +46,11 @@ def _rel(file_path) -> str:
 def xview_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回 xview 安全小修之前的寫法（無 pair 則原樣；只套一次）。"""
     rel = _rel(file_path)
+    # 📌 XV 客戶裁示批（XV-H1-EXT／XV-H3／XV-H2-EXT／XV-M1，2026-10-28；有意識的接鏈，⛔ 不是漏改）：本批動了
+    #   `macro_core`／`dividend_station_service` 等被舊鏈基底 sha 管的檔 ⇒ 最新的那一批先換回（鏈頭往前接一節；
+    #   只套一次；⛔ 不動本表與 `XVIEW_BASE_SHA`）。`sheet_safety_revert_for` 先呼叫本函式 ⇒ 舊鏈一併涵蓋。
+    from tests.test_xvext_revert_chain import xvext_revert_for
+    code = xvext_revert_for(rel, code)
     pairs = XVIEW_REVERT_PAIRS.get(rel, ())
     if not pairs:
         return code

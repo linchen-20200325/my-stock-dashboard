@@ -259,8 +259,10 @@ def _etf_metrics(**over) -> dict:
     return base
 
 
-def _stock_metrics(price) -> dict:
-    return {"mj_grade": None, "mj_score_pct": None, "mj_headline": "", "mj_fail_items": [],
+def _stock_metrics(price, grade=None) -> dict:
+    # XV-H1-EXT（客戶 2026-10-28 裁示，取代 Z51/Z52 該部分語意）：`grade=None` ＝ 財報缺 ⇒ 個股汰換燈 ⚪
+    # ＝「燈全判不出」⇒ 組合層不再帶續抱句；要測「資料完整仍帶續抱」時傳 `grade="A"`。
+    return {"mj_grade": grade, "mj_score_pct": None, "mj_headline": "", "mj_fail_items": [],
             "kd_state": None, "current_price": price, "name": "", "trend_verdict": None}
 
 
@@ -281,7 +283,8 @@ _ORIG_DIGEST = S.build_station_digest
 _ORIG_PROMPT = S.build_summary_prompt
 
 
-def _run(monkeypatch, *, holdings, prices=None, etf_over=None, svc_mod=None, vix=15.0):
+def _run(monkeypatch, *, holdings, prices=None, etf_over=None, svc_mod=None, vix=15.0,
+         stock_grade=None):
     """走新 UI 真的 `load_station` → `load_ai_summary`（⑦）；只把 L3 抓取換成合成列。"""
     prices = {"2330": 120.0, "2317": 118.0, "0050": 30.0, "00878": 20.0, **(prices or {})}
 
@@ -289,7 +292,7 @@ def _run(monkeypatch, *, holdings, prices=None, etf_over=None, svc_mod=None, vix
         if kind == "etf":
             return _etf_metrics(**{"current_price": prices.get(tk),
                                    **((etf_over or {}) if tk == "0050" else {})})
-        return _stock_metrics(prices.get(tk))
+        return _stock_metrics(prices.get(tk), grade=stock_grade)
     monkeypatch.setattr("src.services.dividend_station_service.get_station_rows",
                         lambda hs: (S.build_station_rows(hs, vix=vix, metrics_fn=mf), vix))
     _svc = svc_mod
@@ -351,9 +354,11 @@ def test_prompt_lists_held_input_invalid_and_drops_keep(case, monkeypatch):
     _no_nonfinite(_blob(PH, PH.build_ai_summary_card(ai, st)))
     # 除了拿掉那句指示、加上事實列，prompt 其餘逐字同修前。
     _st, _ai, pre = _run(monkeypatch, holdings=_holdings(**hk), prices=px, svc_mod=_svc_pre())
-    assert _KEEP in pre and _FACT_HEAD not in pre
+    # XV-H1-EXT（客戶 2026-10-28 裁示，取代 Z52 該部分語意）：本 fixture 個股無財報（燈全判不出）
+    # ⇒ 修前（拔 Z52 digest 環）也不再帶續抱句，改帶資料不足指示；其餘逐字同修前。
+    assert _KEEP not in pre and S._INSUFFICIENT_INSTRUCTION in pre and _FACT_HEAD not in pre
     _anchor = _prompt_line(pre, "- 抓取失敗未納入：") + "\n"
-    assert prompt == pre.replace(_KEEP, "").replace(_anchor, _anchor + _fact(*want) + "\n")
+    assert prompt == pre.replace(_anchor, _anchor + _fact(*want) + "\n")
 
 
 @pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))
@@ -376,7 +381,8 @@ def test_prompt_watchlist_input_invalid_not_listed(bad, monkeypatch):
     assert "invalid" not in st.digest
     _st, _ai2, pre = _run(monkeypatch, holdings=_holdings(), prices={"00878": _BAD_STR[bad]},
                           svc_mod=_svc_pre())
-    assert prompt == pre and _KEEP in prompt
+    # XV-H1-EXT（客戶 2026-10-28 裁示，取代 Z52 該部分語意）：個股無財報 ⇒ 不帶續抱句。
+    assert prompt == pre and _KEEP not in prompt
 
 
 _NORMAL = {
@@ -393,15 +399,27 @@ _NORMAL = {
 
 @pytest.mark.parametrize("vix", [None, 15.0, 35.0])
 @pytest.mark.parametrize("case", list(_NORMAL))
-def test_prompt_normal_and_missing_identical_to_pre(case, vix, monkeypatch):
-    """沒有異常（含一般缺資料）：digest 鍵與 prompt 逐字同修前，仍帶續抱指示。"""
+@pytest.mark.parametrize("grade", [None, "A"])
+def test_prompt_normal_and_missing_identical_to_pre(case, vix, grade, monkeypatch):
+    """沒有異常（含一般缺資料）：digest 鍵與 prompt 逐字同修前。
+
+    XV-H1-EXT（客戶 2026-10-28 裁示，取代 Z52「缺值仍帶續抱」的語意）：
+    - 資料完整（個股有財報 `grade="A"`、持有列都有現價）→ **仍帶**續抱指示（斷言保留）；
+    - 缺資料（個股無財報 ⇒ 燈全判不出；或持有列缺現價 `px_none`）→ **不帶**續抱、改帶資料不足指示。
+    """
     hk, px = _NORMAL[case]
-    st, _ai, prompt = _run(monkeypatch, holdings=_holdings(**hk), prices=px, vix=vix)
+    st, _ai, prompt = _run(monkeypatch, holdings=_holdings(**hk), prices=px, vix=vix,
+                           stock_grade=grade)
     _st, _ai2, pre = _run(monkeypatch, holdings=_holdings(**hk), prices=px, vix=vix,
-                          svc_mod=_svc_pre())
+                          svc_mod=_svc_pre(), stock_grade=grade)
     assert "invalid" not in st.digest
     assert list(st.digest) == list(_st.digest)
-    assert prompt == pre and _KEEP in prompt and _FACT_HEAD not in prompt
+    assert prompt == pre and _FACT_HEAD not in prompt
+    if grade == "A" and case != "px_none":
+        assert _KEEP in prompt and "insufficient" not in st.digest
+    else:
+        assert _KEEP not in prompt and S._INSUFFICIENT_INSTRUCTION in prompt
+        assert "- 資料不足／無法判定：" in prompt
 
 
 @pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))
@@ -423,7 +441,9 @@ def test_mut_digest_reopens_keep_instruction(monkeypatch):
     m = _variant(_SVC, (Z52_DIGEST_PAIR,), "_z52_no_digest")
     st, _ai, prompt = _run(monkeypatch, holdings=_holdings(), prices={"2330": float("inf")},
                            svc_mod=m)
-    assert "invalid" not in st.digest and _KEEP in prompt and _FACT_HEAD not in prompt, \
-        "拔掉 → 持股輸入異常不進 ⑦、續抱引導重現"
+    # XV-H1-EXT（客戶 2026-10-28 裁示，取代 Z52 該部分語意）：現價異常 ⇒ 現價 None ⇒「缺現價」
+    # 另一道防線也擋住續抱 ⇒ 拔 Z52 環後續抱**不再**重現；突變只看「異常事實列消失」。
+    assert "invalid" not in st.digest and _KEEP not in prompt and _FACT_HEAD not in prompt, \
+        "拔掉 → 持股輸入異常不進 ⑦"
     st2, _ai2, prompt2 = _run(monkeypatch, holdings=_holdings(), prices={"2330": float("inf")})
     assert _KEEP not in prompt2 and _FACT_HEAD in prompt2

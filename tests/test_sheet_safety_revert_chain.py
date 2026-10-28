@@ -157,10 +157,6 @@ def sheet_safety_revert_for(file_path, code: str) -> str:
     #   的呈現層（被本鏈及更舊的鏈管）⇒ 最新的那一批先換回（鏈頭再往前接一節；只套一次；⛔ 不動本表與基底 sha）。
     # 📌 xview 安全小修（2026-10-28；有意識的接鏈，⛔ 不是漏改）：V1 動了 `dividend_station_service.build_summary_prompt`
     #   （被 dec074 鏈的基底 sha 管）⇒ 最新的那一批先換回（鏈頭再往前接一節；只套一次；⛔ 不動本表與基底 sha）。
-    # 📌 XV 客戶裁示批（XV-H1-EXT／XV-H3／XV-H2-EXT／XV-M1，2026-10-28；有意識的接鏈，⛔ 不是漏改）：本批動了
-    #   `macro_core`／`dividend_station_service` 等被舊鏈基底 sha 管的檔 ⇒ 最新的那一批先換回（鏈頭再往前接一節；只套一次；⛔ 不動本表與基底 sha）。
-    from tests.test_xvext_revert_chain import xvext_revert_for
-    code = xvext_revert_for(rel, code)
     from tests.test_xview_revert_chain import xview_revert_for
     code = xview_revert_for(rel, code)
     from tests.test_nav1_revert_chain import nav1_revert_for
