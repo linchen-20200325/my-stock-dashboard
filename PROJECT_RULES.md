@@ -97,6 +97,13 @@
   5. **只在以下情況出聲**：(a) 真正需要客戶裁示；(b) Model×Effort 需切換且尚未通知；(c) 需客戶手動操作；(d) 整批完成；(e) context／token 不安全需交接；(f) 真實錯誤或 GitHub 狀態衝突。
   - 與上文關係（撰寫組讀法，單組）：本條**收緊**上方「三種可打斷情況」與禁止清單（同向、取嚴）；(b) 的「尚未通知」限定與第 18 節 DEC-084 切換通知同向——已通知過的切換不得重複；(e)、(f) 與第 11 節（Context Lifecycle）、第 21 節（No Silent Stop）既有規則併讀。上方限定第 4 條揭露義務**不因本條減少**（揭露寫在該 Stage 唯一一次最終回報內）。`docs/HANDOFF.md` Resume Checkpoint 附近有同義顯著提醒。
 
+- 📌 **零過程訊息（客戶 2026-10-28 第二次指示；決策者＝客戶；append-only，不改上文，收緊上一條「禁止事件回音」）**（來源：客戶 2026-10-28 指示，經總管轉交之要點）：**Process chatter = governance violation.**
+  1. **只允許 5 種出聲情況**：🔴 真正需要客戶裁示；🟡 Model×Effort 需切換且尚未通知；🟡 需客戶手動操作；🟢 整個 Stage 完整完成；🟡 context／token 不安全需換新對話交接。
+  2. **其餘一律不輸出**，包括：commit、push、PR open、CI running／green、QA／mutation／agent 進度、文件同步中、retry、merge ready、merge／subscription 通知、「收到／已交給某組」、下一步預告、同時跑幾件事。
+  3. **Stage 完成標準（全部滿足才可一次回報）**：實作、測試、mutation／必要驗證、獨立 QA、修正、CI 綠、PR 已合併、`docs/DECISIONS.md`／`docs/BACKLOG.md`／`docs/PROJECT_STATE.md`／`docs/HANDOFF.md` 已同步、工作樹／交接乾淨。
+  4. **最終回報最多 5 行**：🟢 Stage 已完成／PR 與 main SHA／測試·QA·Mutation／已知限制／下一步＋Model×Effort（若需切換）。
+  - 與上一條關係（撰寫組讀法，單組）：上一條 (f)「真實錯誤或 GitHub 狀態衝突」不在本條 5 種之內；本條較嚴，依「衝突取較嚴者」以本條為準 —— 真實錯誤若需客戶裁示或手動操作，落入本條 🔴／🟡；否則內部處理、不出聲。上方限定第 4 條揭露義務仍寫在該 Stage 唯一一次最終回報內。
+
 - 📌 **DEC-087（2026-10-26，客戶）**：No Silent Stop 規則見 **第 21 節**（停手必標 🟡／🔴；等待可自動恢復的外部系統屬 🟢）。append-only 指向，**不改上文**。
 
 ## 第 4 節｜Stop／Decision Gate
