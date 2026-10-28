@@ -1426,6 +1426,13 @@ D2.5 以下大方向核准：
   - **未驗**：Streamlit Cloud 實機；真 LINE 推播與真 AI 回覆；客戶 Sheet 實際有無外幣持股。
   - **已知未改**：外幣個股**列層**建議動作文字未改（可能仍顯示「🟢 續抱」；**組合層已不給續抱**）→ BACKLOG `XV-FX-ROW-ACTION`；資料不足單一判定只看持有列，觀察清單不擋組合層 → `XV-WATCHLIST-SCOPE`（已揭露）；LINE VIX 分級行動句在資料不足時是否收 → 待客戶 `XV-LINE-VIX-LINE`。
   - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本段由 docs-only 撰寫組依 `git log`／`git diff --stat`／docstring 撰寫，未重跑測試、未經第二組驗。
+  - 📌 **第四輪回修＋QA 最終結果（2026-10-28 補；加法式，上文一字未改；決策者 AI 總管（事實更新））**（`git log 4014a77f..HEAD`）：
+    - `9c26106d`（複驗 C 第二輪 MAJOR-N1）：觀察清單列**判不出**（資料不足、燈或輸入資料異常、契約漂移）**也計入組合層資料不足**；缺現價／外幣仍只看持有列（觀察清單無持倉金額）。**AI 總管決定**，理由：同一則 LINE／⑦ 不得同時列出 ⬜ 清單又說「續抱、定期定額即可」「今日無需動作」；且與 `errors` 及 ① `cruise_or_gap` gate 本來就含觀察清單的口徑一致。L0 新增 `row_short_kind`（判不出／缺現價保留結論／外幣）。
+    - `e4742494`（MINOR-A）：契約漂移列**不計入有效判斷檔數**，並在 ⑦ prompt 與 LINE 另列「資料異常未判（契約漂移）：代號」點名；0 檔有效判斷且原因為契約漂移時，LINE 不寫「資料抓取全失敗」。
+    - `303c9703`（MINOR-B）：① 替代句依實際原因組成（判不出／只有外幣／只有缺現價三種句型）；燈全判得出、只有外幣核心 ETF 時不再說「沒東西可以判」。
+    - **QA 最終結果**：獨立複驗組 C 共三輪；**第三輪：0 BLOCKER／0 MAJOR／3 MINOR**（3 項 MINOR 登記為 BACKLOG `XV-SHORT-TEXT-CORE-SAT`／`XV-UNJUDGED-COUNT-FX`／`XV-VALID-COUNT-INSUFFICIENT`，LOW）。測試：fast lane 全套 **32325 passed／1 環境失敗**（z59，`markdown_it` 缺套件，環境因素）。上方「QA」小點「C（複驗，兩輪）」之敘述截至第三輪前，現行以本小點為準。
+    - 已知未改（更新）：`XV-WATCHLIST-SCOPE` 已部分處理（觀察清單判不出計入，見 `9c26106d`）；`XV-FX-ROW-ACTION` 升為客戶 Gate；`XV-LINE-VIX-LINE` 經複驗 C 確認為目前唯一仍讓 ⬜ 與「定期定額正常扣款即可」同則並存處。
+    - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本小點測試數與 QA 結果為總管轉述，docs-only 撰寫組未重跑測試、未經第二組驗。
 
 ## 2. 產品／UI
 

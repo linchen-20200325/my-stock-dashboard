@@ -394,3 +394,15 @@ XV-M7、XV-M8（MED，單組）；XV-C13b（MED，隨 T2）；XV-X3、XV-X6、XV
 **QA 結果**：三組獨立 QA —— A（對抗）、B（語意）、C（複驗，兩輪）；A／B 的 QA#1～#11 與 C 的 MAJOR-1～3／MINOR-1～3 皆已回修（總管轉述；撰寫組未重跑測試）。
 
 **揭露**：L3 列動作文字與外幣排除連動舊 UI 存股戰情室（舊 UI 檔未改；外幣時舊 UI 顯示錯誤原因句 → 待客戶 `XV-OLDUI-FX-REASON`）；外幣個股列層建議動作文字未改（`XV-FX-ROW-ACTION`；組合層已不給續抱）；觀察清單不擋組合層（`XV-WATCHLIST-SCOPE`）；LINE VIX 行動句待客戶 `XV-LINE-VIX-LINE`。**未驗**：Streamlit Cloud、真 LINE／AI、客戶 Sheet 實際有無外幣。⚠️ 本節為 docs-only 撰寫組單組撰寫，未經第二組驗（`CLAUDE.md` §-2 規則 6）。
+
+### §8.1 第四輪回修與 QA 最終結果（2026-10-28 補；加法式，上文一字未改；決策者 AI 總管（事實更新））
+
+| commit | 複驗 C 第二輪項目 | 處置 |
+|---|---|---|
+| `9c26106d` | MAJOR-N1 | 觀察清單列判不出也計入組合層資料不足（AI 總管決定：同則訊息不得同時列 ⬜ 又說無需動作，且與 `errors`／① gate 口徑一致）；缺現價／外幣仍只看持有列 |
+| `e4742494` | MINOR-A | 契約漂移不計入有效判斷檔數；⑦ prompt／LINE 點名「資料異常未判（契約漂移）」 |
+| `303c9703` | MINOR-B | ① 替代句依原因組成（判不出／只有外幣／只有缺現價） |
+
+**QA 最終結果**：獨立複驗組 C 共三輪，第三輪 **0 BLOCKER／0 MAJOR／3 MINOR**（登記 BACKLOG `XV-SHORT-TEXT-CORE-SAT`／`XV-UNJUDGED-COUNT-FX`／`XV-VALID-COUNT-INSUFFICIENT`，LOW）。fast lane 全套 32325 passed／1 環境失敗（z59 `markdown_it`）。上文「C（複驗，兩輪）」截至第三輪前，現行以本小節為準。
+
+**揭露更新**：`XV-WATCHLIST-SCOPE` 已部分處理（`9c26106d`）；`XV-FX-ROW-ACTION` 升為客戶 Gate（推薦保留結論＋加註「停利未判：外幣」，不改 ⬜）；`XV-LINE-VIX-LINE` 經複驗 C 確認為目前唯一仍讓 ⬜ 與「定期定額正常扣款即可」同則並存處。⚠️ 測試數與 QA 結果為總管轉述，docs-only 撰寫組未重跑、未經第二組驗。
