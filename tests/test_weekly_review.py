@@ -125,3 +125,30 @@ def test_format_message_all_normal():
               "ai_text": None}
     msg = svc.format_weekly_message(review)
     assert "均無連續落後" in msg
+
+
+# ── QA 回修 #3（XV-H1-EXT 同一原則：missing ≠ HOLD）──────────────────────
+def test_format_message_all_failed_no_blanket_hold():
+    review = {"macro_lines": ["加權指數 收 20,000"],
+              "rows": [{"代號": "0056.TW", "燈號": "⚪ 抓取失敗：ConnectionError"},
+                       {"代號": "VOO", "燈號": "⚪ 無法判定（非台股代號）"}],
+              "ai_text": None}
+    msg = svc.format_weekly_message(review)
+    assert "均無連續落後" not in msg and "續抱觀察" not in msg
+    assert "⬜ 資料不足／無法判定：0056.TW（抓取失敗：ConnectionError）、VOO（無法判定（非台股代號））" in msg
+
+
+def test_format_message_partial_unjudged():
+    review = {"macro_lines": [], "ai_text": None,
+              "rows": [{"代號": "A", "燈號": "🟢 體質正常"},
+                       {"代號": "B", "燈號": "⚪ 價格資料不足"}]}
+    msg = svc.format_weekly_message(review)
+    assert "續抱觀察" not in msg and "✅ 判得出的 1/2 檔無連續落後" in msg
+    assert "⬜ 資料不足／無法判定：B（價格資料不足）" in msg
+
+
+def test_format_message_lag_plus_unjudged_lists_both():
+    review = {"macro_lines": [], "ai_text": None,
+              "rows": [{"代號": "A", "燈號": "🔴 雙向弱勢"}, {"代號": "B", "燈號": "⚪ 樣本不足 (n=3)"}]}
+    msg = svc.format_weekly_message(review)
+    assert "亮警示 1/2" in msg and "⬜ 資料不足／無法判定：B（樣本不足 (n=3)）" in msg

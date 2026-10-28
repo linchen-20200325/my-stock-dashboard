@@ -19,6 +19,7 @@ XVEXT_BASE_SHA = {'shared/station_specs.py': 'c5747bae89fa1a1f744c302de34978b781
  'src/data/macro/macro_core.py': '68cb0fb283bb473031e423e47f0696dea0d02d871c3fea519d8a1a767a75ac9c',
  'src/services/dividend_station_service.py': '488dbb53ed9e2a2392c7bbd5b7f4ebf9d03dc03c468363219bfa92ebd34b01e3',
  'src/services/portfolio_deep_service.py': 'f4d2c99c5498371fe9000e0e291079623b40bb6c3c331f7b97ed8ab5f98f3d96',
+ 'src/services/weekly_review_service.py': '3615ff1ebe88d744ef13508cccb11bf35c70aafea3d6a8659d820544d9a68d2e',
  'src/ui/views/page_hold.py': 'e25609612b0a426896f4f89aa6f559a7906632378a5f0176e080b2aa6b5897e1'}
 
 XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_specs.py': (('\n'
@@ -327,6 +328,21 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                             ('    ⚠️ XV-H3（客戶 2026-10-28 裁示 A）：本路徑**本來就**不把海外標的混進 TWD 總額（下一行），\n'
                                              '    覆蓋率與 `overseas`／`excluded_tickers` 已揭露 ⇒ 不另套 `asset_currency_gate`（壓測／VaR 有套）。\n',
                                              '')),
+ 'src/services/weekly_review_service.py': (('    # QA 回修 #3（XV-H1-EXT 同一原則：missing ≠ HOLD）：燈號 ⚪ 的列（抓取失敗／價格資料不足／\n'
+                                            '    # 樣本不足／非台股代號…）是**判不出來**，⛔ 不得被算進「均無連續落後（續抱觀察）」的 blanket 句。\n'
+                                            '    _unjudged = [_r for _r in _rows if str(_r.get("燈號", "")).startswith("⚪")]\n'
+                                            '    _n_judged = len(_rows) - len(_unjudged)\n',
+                                            ''),
+                                           ('    elif not _unjudged:\n', '    else:\n'),
+                                           ('    elif _n_judged:\n'
+                                            '        # 判得出的照講事實，但 ⛔ 不接「續抱觀察」（旁邊還有判不出的，不是整份清單的結論）。\n'
+                                            '        _out.append(f"✅ 判得出的 {_n_judged}/{len(_rows)} 檔無連續落後")\n'
+                                            '    if _rows and _unjudged:\n'
+                                            '        _out.append("⬜ 資料不足／無法判定：" + "、".join(\n'
+                                            '            f"{_r.get(\'代號\')}（{str(_r.get(\'燈號\', \'\')).removeprefix(\'⚪\').strip() or '
+                                            '\'原因不明\'}）"\n'
+                                            '            for _r in _unjudged))\n',
+                                            '')),
  'src/ui/views/page_hold.py': (('from shared.asset_currency_gate import (\n'
                                 '    FX_PARTIAL_TEXT,\n'
                                 '    KEY_FX_UNCONFIRMED,\n'
