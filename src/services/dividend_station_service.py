@@ -1319,10 +1319,15 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
     adds: list[dict] = []
     watch_adds: list[dict] = []
     errors: list[str] = []
+    drift: list[str] = []
     valid = 0
     for r in (rows or []):
         if r.get("_detail", {}).get("error"):
             errors.append(str(r.get("代號", "")))
+            continue
+        if HDS.is_contract_drift(r):
+            # 複驗 C 第二輪 MINOR-A：契約漂移列判不出 ⇒ ⛔ 不算進「有效判斷檔數」，另列事實。
+            drift.append(str(r.get("代號", "")))
             continue
         valid += 1
         if r.get("健檢") == "🔴":
@@ -1390,6 +1395,8 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
     _short = list(dict.fromkeys(str(r.get("代號", "")) for r in (rows or []) if HDS.row_data_short(r)))
     if _short:
         _out["data_short"] = _short
+    if drift:                          # 複驗 C 第二輪 MINOR-A（只有非空才有這一鍵）
+        _out["contract_drift"] = drift
     return _out
 
 
@@ -1456,6 +1463,9 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
         _base += ("- 資料異常未判："
                   + "、".join(f"{d['代號']}（" + "　".join(f"{_lbl}：{_txt}" for _lbl, _txt in d["項目"])
                              + "）" for d in _inv) + "\n")
+    if digest.get("contract_drift"):
+        # 複驗 C 第二輪 MINOR-A：契約漂移列（保留原診斷句、不換 ⬜）在事實裡點名。
+        _base += f"- 資料異常未判（契約漂移）：{'、'.join(str(_c) for _c in digest['contract_drift'])}\n"
     for _lbl, _grp in (("持有", [d for d in _ins if d.get("held", True)]),
                        ("觀察清單", [d for d in _ins if not d.get("held", True)])):
         if _grp:

@@ -334,3 +334,21 @@ def test_watch_unjudged_line_and_prompt_no_hold():
     msg = M.format_holdings_message(d, {"switch_out": [], "switch_in": []}, as_of="t")
     assert "續抱、定期定額即可" not in msg and "無紅燈,續抱" not in msg
     assert "⬜ 資料不足／無法判定（觀察清單）：00878（燈號全部判不出）" in msg
+
+
+
+def test_contract_drift_named_and_not_counted_as_judged():
+    """複驗 C 第二輪 MINOR-A：契約漂移列在 ⑦／LINE 點名，且不算進「有效判斷檔數」。"""
+    rows = _rows(stock_metrics={"mj_grade": "Z", "kd_state": None, "current_price": 500.0})
+    d = S.build_station_digest(rows, vix=15.0)
+    assert d["contract_drift"] == ["2330"] and d["total"] == 1      # 只有 0056 算進有效判斷
+    p = S.build_summary_prompt(d)
+    assert "- 資料異常未判（契約漂移）：2330\n" in p and "- 有效判斷檔數：1\n" in p
+    msg = M.format_holdings_message(d, {"switch_out": [], "switch_in": []}, as_of="t")
+    assert "⚠️ 資料異常未判（契約漂移）：2330" in msg
+    # 只有契約漂移 → 0 檔有效判斷：收尾不得說「資料抓取全失敗」，且指回上方那一行
+    d2 = S.build_station_digest([r for r in rows if r["代號"] == "2330"], vix=15.0)
+    assert d2["total"] == 0
+    msg2 = M.format_holdings_message(d2, {"switch_out": [], "switch_in": []}, as_of="t")
+    assert "⚠️ 資料異常未判（契約漂移）：2330" in msg2 and "資料抓取全失敗" not in msg2
+    assert "⚠️ 今日無任何持股完成評估（資料異常，見上方清單），未能判斷。" in msg2

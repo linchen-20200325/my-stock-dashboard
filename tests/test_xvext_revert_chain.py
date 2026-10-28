@@ -108,12 +108,15 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                     'def _invalid_line(digest: dict) -> list[str]:\n'
                                                     '    """QA 回修 #2：資料異常未判的標的（與 ⑦ prompt「- 資料異常未判：」同一份 digest、同一種格式）。空 → 略過。"""\n'
                                                     '    _inv = digest.get("invalid") or []\n'
-                                                    '    if not _inv:\n'
-                                                    '        return []\n'
-                                                    '    return ["⚠️ 資料異常未判：" + "、".join(\n'
+                                                    '    _out = (["⚠️ 資料異常未判：" + "、".join(\n'
                                                     '        f"{_code(d)}（" + "\u3000".join(f"{_l}：{_t}" for _l, _t in (d.get("項目") or '
                                                     '())) + "）"\n'
-                                                    '        for d in _inv)]\n',
+                                                    '        for d in _inv)] if _inv else [])\n'
+                                                    '    # 複驗 C 第二輪 MINOR-A：契約漂移列（財報評等不在已知分級）同樣點名，讓收尾的「見上方清單」確有清單。\n'
+                                                    '    if digest.get("contract_drift"):\n'
+                                                    '        _out.append("⚠️ 資料異常未判（契約漂移）：" + "、".join(str(_c) for _c in '
+                                                    'digest["contract_drift"]))\n'
+                                                    '    return _out\n',
                                                     ''),
                                                    ('    XV-H1-EXT（客戶 2026-10-28 裁示 A）：但有抓取失敗或資料不足（`digest.insufficient`）時\n'
                                                     '    ⛔ 不印「續抱」，改講「判得出的標的無訊號、資料不足者未下結論」。\n',
@@ -130,6 +133,11 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                     '_invalid_line(digest),\n'
                                                     '                 _insufficient_line(digest)):\n',
                                                     '                 _allocation_line(digest), _errors_line(digest)):\n'),
+                                                   ('    if _total <= 0 and not digest.get("errors") and digest.get("contract_drift"):\n'
+                                                    '        # 複驗 C 第二輪 MINOR-A：0 檔有效判斷、但原因不是抓取失敗（例：全是契約漂移）→ ⛔ 不寫「資料抓取全失敗」。\n'
+                                                    '        lines += ["", "⚠️ 今日無任何持股完成評估（資料異常，見上方清單），未能判斷。"]\n'
+                                                    '    elif _total <= 0:\n',
+                                                    '    if _total <= 0:\n'),
                                                    ('    elif _no_action and _data_short(digest):\n'
                                                     '        # XV-H1-EXT（客戶 2026-10-28 裁示 A）：部分抓取失敗／燈全判不出／缺現價 → ⛔ 不印「續抱」\n'
                                                     '        # 當缺資料的替代結論；只講判得出的範圍，並把資料不足的標的指回上方清單。\n'
@@ -138,7 +146,8 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                     '            ("資料不足或抓取失敗的標的未下結論",\n'
                                                     '             bool(digest.get("errors") or digest.get("insufficient") or '
                                                     'digest.get("invalid")\n'
-                                                    '                  or not HDS.total_judged(digest.get("total")))),\n'
+                                                    '                  or digest.get("contract_drift") or not '
+                                                    'HDS.total_judged(digest.get("total")))),\n'
                                                     '            ("部分持股缺現價", bool(digest.get("price_missing_kept"))),\n'
                                                     '            ("部分持股為外幣／幣別未確認", bool(digest.get("fx_excluded")))) if _on]\n'
                                                     '        lines += ["", "📭 判得出的標的今日無換出／加碼／停利訊號；"\n'
@@ -256,6 +265,12 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                               ('    XV-H3（客戶 2026-10-28 裁示 A）：有任何幣別未確認的持有列 → None（⛔ 不顯示不完整的比例）。\n', ''),
                                               ('    """\n    if fx_excluded_codes(rows):\n        return None\n    _core = _sat = 0.0\n',
                                                '    """\n    _core = _sat = 0.0\n'),
+                                              ('    drift: list[str] = []\n', ''),
+                                              ('            continue\n'
+                                               '        if HDS.is_contract_drift(r):\n'
+                                               '            # 複驗 C 第二輪 MINOR-A：契約漂移列判不出 ⇒ ⛔ 不算進「有效判斷檔數」，另列事實。\n'
+                                               '            drift.append(str(r.get("代號", "")))\n',
+                                               ''),
                                               ('    # XV-H1-EXT（客戶 2026-10-28 裁示 A）：資料不足的列（`SS.KEY_INSUFFICIENT`，燈全判不出／\n'
                                                '    # 持有列缺現價）→ 列出代號與原因（**只有非空時才有這一鍵**，資料完整時 digest 逐鍵不變）。\n'
                                                '    # 下游（⑦ prompt、LINE 正文）據此不給「續抱」類組合層結論。抓取失敗列另在 errors。\n'
@@ -290,7 +305,9 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                '    _short = list(dict.fromkeys(str(r.get("代號", "")) for r in (rows or []) if '
                                                'HDS.row_data_short(r)))\n'
                                                '    if _short:\n'
-                                               '        _out["data_short"] = _short\n',
+                                               '        _out["data_short"] = _short\n'
+                                               '    if drift:                          # 複驗 C 第二輪 MINOR-A（只有非空才有這一鍵）\n'
+                                               '        _out["contract_drift"] = drift\n',
                                                ''),
                                               ('\n'
                                                '\n'
@@ -315,7 +332,11 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                ''),
                                               ('        + _guide + "\\n"\n',
                                                '        + ("" if (_inv or _no_judged) else "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。") + "\\n"\n'),
-                                              ('    for _lbl, _grp in (("持有", [d for d in _ins if d.get("held", True)]),\n'
+                                              ('    if digest.get("contract_drift"):\n'
+                                               '        # 複驗 C 第二輪 MINOR-A：契約漂移列（保留原診斷句、不換 ⬜）在事實裡點名。\n'
+                                               '        _base += f"- 資料異常未判（契約漂移）：{\'、\'.join(str(_c) for _c in '
+                                               'digest[\'contract_drift\'])}\\n"\n'
+                                               '    for _lbl, _grp in (("持有", [d for d in _ins if d.get("held", True)]),\n'
                                                '                       ("觀察清單", [d for d in _ins if not d.get("held", True)])):\n'
                                                '        if _grp:\n'
                                                '            _base += (f"- 資料不足／無法判定（{_lbl}）："\n'

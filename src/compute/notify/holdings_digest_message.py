@@ -223,11 +223,13 @@ def _insufficient_line(digest: dict) -> list[str]:
 def _invalid_line(digest: dict) -> list[str]:
     """QA 回修 #2：資料異常未判的標的（與 ⑦ prompt「- 資料異常未判：」同一份 digest、同一種格式）。空 → 略過。"""
     _inv = digest.get("invalid") or []
-    if not _inv:
-        return []
-    return ["⚠️ 資料異常未判：" + "、".join(
+    _out = (["⚠️ 資料異常未判：" + "、".join(
         f"{_code(d)}（" + "　".join(f"{_l}：{_t}" for _l, _t in (d.get("項目") or ())) + "）"
-        for d in _inv)]
+        for d in _inv)] if _inv else [])
+    # 複驗 C 第二輪 MINOR-A：契約漂移列（財報評等不在已知分級）同樣點名，讓收尾的「見上方清單」確有清單。
+    if digest.get("contract_drift"):
+        _out.append("⚠️ 資料異常未判（契約漂移）：" + "、".join(str(_c) for _c in digest["contract_drift"]))
+    return _out
 
 
 def _errors_line(digest: dict) -> list[str]:
@@ -318,7 +320,10 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     _no_action = (not (_switch_out or [])
                   and not (digest.get("adds") or [])
                   and not (digest.get("take_profit") or []))
-    if _total <= 0:
+    if _total <= 0 and not digest.get("errors") and digest.get("contract_drift"):
+        # 複驗 C 第二輪 MINOR-A：0 檔有效判斷、但原因不是抓取失敗（例：全是契約漂移）→ ⛔ 不寫「資料抓取全失敗」。
+        lines += ["", "⚠️ 今日無任何持股完成評估（資料異常，見上方清單），未能判斷。"]
+    elif _total <= 0:
         lines += ["", "⚠️ 今日無任何持股完成評估（資料抓取全失敗），未能判斷 —— 請稍後檢視或查 log。"]
     elif _no_action and _data_short(digest):
         # XV-H1-EXT（客戶 2026-10-28 裁示 A）：部分抓取失敗／燈全判不出／缺現價 → ⛔ 不印「續抱」
@@ -327,7 +332,7 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
         _why = [_t for _t, _on in (
             ("資料不足或抓取失敗的標的未下結論",
              bool(digest.get("errors") or digest.get("insufficient") or digest.get("invalid")
-                  or not HDS.total_judged(digest.get("total")))),
+                  or digest.get("contract_drift") or not HDS.total_judged(digest.get("total")))),
             ("部分持股缺現價", bool(digest.get("price_missing_kept"))),
             ("部分持股為外幣／幣別未確認", bool(digest.get("fx_excluded")))) if _on]
         lines += ["", "📭 判得出的標的今日無換出／加碼／停利訊號；"
