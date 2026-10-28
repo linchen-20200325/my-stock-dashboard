@@ -1,4 +1,4 @@
-"""XV-H2-EXT／XV-M1（客戶 2026-10-28 裁示）：側欄 🔄 強制刷新另清 macro_core 的**成功**快取。
+"""XV-H2-EXT／XV-M1（AI 總管決定（DEC-101(5) 授權邊界內），2026-10-28）：側欄 🔄 強制刷新另清 macro_core 的**成功**快取。
 
 ⛔ 失敗退避表（`_FRED_FAIL_CACHE`／`_YF_CLOSE_EMPTY_FAIL_CACHE`／`_YF_OHLCV_*`）不得被清
 （v3 §02「失敗時退避、不連續轟炸來源」）。無網路：只操作 module dict。
@@ -55,3 +55,15 @@ def test_after_clear_next_call_refetches(monkeypatch):
     mc.clear_success_caches()
     mc._fetch_yf_close_base("^VIX", "1d")
     assert len(calls) == 1                              # 清後真的重抓
+
+
+def test_decision_owner_is_ai_manager_not_client():
+    """QA 回修 #8：XV-H2-EXT／XV-M1 是 AI 總管在 DEC-101(5) 授權邊界內的決定，⛔ 不得寫成客戶裁示。"""
+    import pathlib
+    import re
+    root = pathlib.Path(__file__).resolve().parents[1]
+    for rel in ("app.py", "src/data/macro/macro_core.py", "src/services/force_refresh_service.py",
+                "tests/test_xview_v2_force_refresh_help.py", "tests/test_batch_z60.py"):
+        txt = (root / rel).read_text(encoding="utf-8")
+        for m in re.finditer(r"XV-H2-EXT／XV-M1（[^）\n]*", txt):
+            assert "客戶" not in m.group(0), (rel, m.group(0))

@@ -1,6 +1,6 @@
 """src/services/force_refresh_service.py — 側欄「🔄 強制刷新數據」的模組層快取清除（L3）。
 
-XV-H2-EXT／XV-M1（客戶 2026-10-28 裁示）：按鈕除 `st.cache_data.clear()` 外，另清 L1
+XV-H2-EXT／XV-M1（AI 總管決定（DEC-101(5) 授權邊界內），2026-10-28）：按鈕除 `st.cache_data.clear()` 外，另清 L1
 `macro_core` 的**成功**快取（`_YF_CLOSE_CACHE`／`_FRED_CACHE`）。⛔ 不清失敗退避表
 （v3 §02 失敗退避不得因刷新破功）；session 總經快照、pkl 本批不動。
 

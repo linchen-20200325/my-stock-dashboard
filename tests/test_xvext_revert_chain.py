@@ -131,7 +131,7 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                    'def clear_success_caches() -> tuple[str, ...]:\n'
                                    '    """清掉本模組的**成功**快取（`_YF_CLOSE_CACHE`、`_FRED_CACHE`），回傳實際清了哪幾層。\n'
                                    '\n'
-                                   '    XV-H2-EXT／XV-M1（客戶 2026-10-28 裁示）：側欄「🔄 強制刷新數據」原本只做\n'
+                                   '    XV-H2-EXT／XV-M1（AI 總管決定（DEC-101(5) 授權邊界內），2026-10-28）：側欄「🔄 強制刷新數據」原本只做\n'
                                    '    `st.cache_data.clear()`，本模組自建的成功快取（VIX／匯率等 Yahoo 收盤 1hr、FRED 30min）\n'
                                    '    沒有任何 production 清除路徑 ⇒ 按了刷新仍拿舊值。由 L6 `app.py` 該按鈕經 L3 `force_refresh_service` 呼叫。\n'
                                    '    ⛔ **刻意不清**失敗退避表（`_FRED_FAIL_CACHE`、`_YF_CLOSE_EMPTY_FAIL_CACHE`、\n'

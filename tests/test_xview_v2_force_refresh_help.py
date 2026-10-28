@@ -37,7 +37,7 @@ def test_help_no_longer_claims_all_caches():
 
 
 def test_help_names_what_is_not_cleared():
-    # XV-H2-EXT／XV-M1（客戶 2026-10-28 裁示）：VIX／匯率／FRED 改為會清 ⇒ 從「不在此列」移到前段；
+    # XV-H2-EXT／XV-M1（AI 總管決定（DEC-101(5) 授權邊界內），2026-10-28）：VIX／FRED 改為會清 ⇒ 從「不在此列」移到前段；
     # ~~"台灣與美國總經"~~ 不再列為不清項目。
     # QA 回修 #4：會清＝各頁資料暫存＋VIX 與美國 FRED；~~匯率~~ 不在會清之列（日線匯率 pkl 與 tw_macro 快取沒清）。
     h = _help_text()
@@ -62,7 +62,7 @@ def test_label_and_key_unchanged():
 
 
 def test_button_behavior():
-    """XV-H2-EXT／XV-M1（客戶 2026-10-28 裁示，取代 xview V2「行為不變」）：按下做
+    """XV-H2-EXT／XV-M1（AI 總管決定（DEC-101(5) 授權邊界內），2026-10-28；取代 xview V2「行為不變」）：按下做
     st.cache_data.clear() → L3 force_refresh_service → L1 macro_core.clear_success_caches()（只清成功快取）→ st.rerun()。"""
     src = _APP.read_text(encoding="utf-8")
     i = src.index("key='_sb_force_refresh'")
