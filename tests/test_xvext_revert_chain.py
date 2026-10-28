@@ -433,9 +433,7 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                             '\'原因不明\'}）"\n'
                                             '            for _r in _unjudged))\n',
                                             '')),
- 'src/ui/views/page_hold.py': (('    KEY_INSUFFICIENT,\n', ''),
-                               ('    KEY_INVALID_LIGHTS,\n', ''),
-                               ('    MISS_NOT_APPLICABLE,\n', ''),
+ 'src/ui/views/page_hold.py': (('    MISS_NOT_APPLICABLE,\n', ''),
                                ('from shared.asset_currency_gate import (\n'
                                 '    FX_ONLY_REASON,\n'
                                 '    FX_PARTIAL_TEXT,\n'
