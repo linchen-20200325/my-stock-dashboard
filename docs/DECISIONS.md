@@ -1389,7 +1389,7 @@ D2.5 以下大方向核准：
 > 2026-10-28 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/*.md docs/vnext/*.md` 最大為 DEC-100、DEC-101 0 命中）。要點經總管轉交，**非客戶逐字全文**。
 
 - **決策者**：**客戶**（2026-10-28；經總管轉交之要點）。
-- **日期／效力日期**：2026-10-28 起生效。｜**狀態**：生效；~~(1)(2) 實作中~~ (1)(2) implementation complete／waiting CI（**未合併**，PR 待開；見下方「實作紀錄」）（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））、(3) 線框草稿待客戶確認（`docs/vnext/NEWUI_D25_XVIEW_ASOF_WIREFRAME_2026-10-28.md`）。
+- **日期／效力日期**：2026-10-28 起生效。｜**狀態**：生效；~~(1)(2) 實作中~~ ~~(1)(2) implementation complete／waiting CI（**未合併**，PR 待開；見下方「實作紀錄」）~~（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） (1)(2) **已合併 PR #961（squash，main `2e97482c`，CI 綠：Fast checks／Slow tests 皆 success，head `5783a59e`）**（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））、(3) 線框草稿待客戶確認（`docs/vnext/NEWUI_D25_XVIEW_ASOF_WIREFRAME_2026-10-28.md`）。
 - **背景**：DEC-100 將稽核報告 `docs/vnext/NEWUI_D25_XVIEW_AUDIT_2026-10-28.md` 的三項客戶 Gate（G1／G2／G3）登記為 BACKLOG `XV-H3`／`XV-H1-EXT`／`XV-ASOF`，附總管推薦；客戶三項皆選 A。
 - **內容**：
   1. **XV-H3 選 A（外幣資產）**：
@@ -1414,7 +1414,7 @@ D2.5 以下大方向核准：
 - **效力邊界**：本條**不**決定過期價是否計入市值／損益／停利（報告 G4；未裁示）；**不**核准外幣換算；**不**核准 XV-ASOF 的實作（線框確認前 0 UI code）；**不**通過舊 UI Removal Gate（DEC-019／DEC-020）；不降低任何 Gate。
 - **與其他 DEC 的關係**：DEC-100（AI 總管內部處置分類）之三項客戶 Gate 由本條**回答**；DEC-100 其餘內容不因本條升格為客戶裁示。DEC-031（數值異常不顯示、不續算）**原則不變**，僅其實作批 Z51／Z52 中「缺值仍帶續抱」的測試語意由本條第 2 點取代。DEC-082（草稿先行）、DEC-003（內部自決區）、DEC-084（Model×Effort）呼叫。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：撰寫組（docs-only）未重跑測試；本條只落盤裁示，不改任何程式碼；Z51／Z52 受影響測試清單為報告 grep 結論，實作組須自行全面盤點。
-- 📌 **實作紀錄（2026-10-28 補；加法式，上文一字未改；決策者 AI 總管（事實更新））**：**狀態＝implementation complete／waiting CI，未合併**（PR 待開；分支 `ccr-fa5b6ded-9rhvoj`；基準 `f3d77703`，`git log f3d77703..HEAD`）。
+- 📌 **實作紀錄（2026-10-28 補；加法式，上文一字未改；決策者 AI 總管（事實更新））**：~~**狀態＝implementation complete／waiting CI，未合併**（PR 待開；~~ **狀態＝已合併 PR #961（squash，main `2e97482c`，CI 綠：Fast checks／Slow tests 皆 success，head `5783a59e`）**（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））（分支 `ccr-fa5b6ded-9rhvoj`；基準 `f3d77703`，`git log f3d77703..HEAD`）。
   - **commit**：`bf622ead`（XV-V1）／`af560a45`（XV-C05）／`fe618e6a`（DEC-101 落盤＋ASOF 線框，docs）／`216faccf`・`b6bb466f`・`b51168d5`（XV-H2-EXT／XV-M1）／`bf4621ef`・`38c821bb`・`485347c6`・`66249bdf`・`27081c96`・`07673760`・`41d6f839`・`9901cd0c`・`8e6958af`・`c882a299`（XV-H1-EXT）／`2bead6ad`・`82889239`・`d21d08a1`・`68233550`・`3c077ee7`・`72f87802`（XV-H3）。
   - **`XV-H1-EXT`（本條 (2)）**：新增 L0 單一判定 `shared/holdings_data_short.py`（`row_data_short`／`total_judged`／`digest_data_short`），收斂 ① 該做什麼 gate、③「未判 N」、⑦ prompt 續抱句、LINE 正文續抱／無需動作句、週報正文與 AI prompt —— 原本各自實作、各漏不同的洞（複驗組 C MAJOR-1/2）。缺資料標的顯示「⬜ 資料不足／無法判定」；**可證明結論（🔴 汰弱／加碼／停利／🟡）保留**，缺現價者另列「缺現價（結論不受影響）」，衛星缺現價寫「停利無法判定」；契約漂移（`MISS_CONTRACT_DRIFT`）**保留原診斷句**（不換 ⬜），但計入資料不足。組合層資料不足時 ⑦／LINE／週報不給「續抱」「今日無需動作」「均無連續落後（續抱觀察）」類 blanket 句。Z51／Z52 測試同步改為新語意（`tests/test_batch_z51.py`、`tests/test_batch_z52.py`、`tests/test_dividend_station_service.py` 等）；新測試 `tests/test_xv_h1ext_missing_not_hold.py`、`tests/test_xv_complete_data_parity.py`。
   - **`XV-H3`（本條 (1)）**：新增 L0 `shared/asset_currency_gate.py`＝**暫行 fail-safe 判定，不是 canonical currency 定義**（正式定義另開 `FX-CANONICAL-GATE`，屆時應被取代而非擴充）。只認 `.TW`／`.TWO` 後綴或純 ASCII 數字 4–6 碼＋可選一個大寫字母為 TWD；排除原因兩種：「外幣資產，匯率與成本幣別未定義」（明確外幣）與「幣別未確認」（其餘）。有排除時所有總額／比例為 `None` 並顯示逐字客戶句「⬜ 部分外幣資產未納入，總市值／配置比例無法完整判定」＋未納入清單；壓測／VaR 以「僅已納入台股部分」標示涵蓋範圍並標失準（全外幣時給 `FX_ONLY_REASON`）；⑤⑥ 外幣排除用既有徽章「不適用 · 重跑無效」；外幣衛星計為停利判不了；外幣列損益% 顯示「—」。新測試 `tests/test_xv_h3_fx_not_summed.py`。
