@@ -89,7 +89,7 @@ def build_sector_treemap(sectors: dict, returns: dict, market: str,
         # sub-items
         for sub in meta.get('sub', []):
             sub_ret = returns.get(sub)
-            _sub_disp = sub.replace('.TW', '').replace('.TWO', '')
+            _sub_disp = sub.replace('.TWO', '').replace('.TW', '')   # xview V6：先 .TWO 再 .TW（反序會留下 'O'）
             sub_label = (f"{_sub_disp}<br>{sub_ret:+.1f}%" if sub_ret is not None
                          else f"{_sub_disp}<br>{HEATMAP_MISSING_TEXT}")
             ids.append(f'{ticker}/{sub}')

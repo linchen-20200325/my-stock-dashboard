@@ -319,11 +319,10 @@ def _clear_pe_caches():
     """清 L1 fetcher 的 @st.cache_data,避免 case 間串擾。"""
     from src.data.stock import yield_pe_fetcher as ypf
     def _clear():
+        # xview V7：公開函式改為外層 wrapper，`.clear` 必定存在且同時清內層快取與失敗冷卻 →
+        # 不再 try/except 吞掉（清除失效必須當場炸，不得讓 case 間靜默串擾）。
         for _fn in ("fetch_twse_yield_pe", "fetch_tpex_yield_pe"):
-            try:
-                getattr(ypf, _fn).clear()
-            except Exception:
-                pass
+            getattr(ypf, _fn).clear()
     _clear()
     yield
     _clear()

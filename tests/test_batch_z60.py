@@ -849,7 +849,18 @@ class TestOldFilesUntouched:
     # 📌 NAV-1 QA 回修（2026-10-28，兩組獨立 QA 後，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` ——
     #   legacy 旗標解析 `_nav4_resolve_legacy()` 改為不 import 任何模組的內聯小函式（legacy 路徑零依賴新模組）、
     #   `_nav4_reconcile(_IA_VIEWS)` 移進新模式分支。legacy 的 D2 radio 區塊與舊 7 個頁籤一個字沒動；其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "e9cf2c80094c10fb4d00b5c3f6c9af54931302f2eaa1af30f977cad179ab7669"
+    # ~~"e9cf2c80094c10fb4d00b5c3f6c9af54931302f2eaa1af30f977cad179ab7669"~~（NAV-1 QA 回修後）
+    # 📌 xview 跨頁一致性安全小修（2026-10-28，總管拍板範圍，⛔ 不是漏改；DEC-019 揭露）：
+    #   (1) `app.py` 側欄「🔄 強制刷新數據」只改 `help=` 說明文字為據實描述（原「清除所有快取」不實）——
+    #       側欄為兩模式共用區，**「不使用」／legacy 模式同樣看到新說明**；按鈕標籤、key、行為與版面不變；
+    #   (2) `src/ui/render/sector_heatmap_render.py::build_sector_treemap`（新 UI 🔍 找標的 `page_find` 依賴的共用層）
+    #       子項顯示名去後綴改為先 `.TWO` 再 `.TW` —— 現行熱力圖子項無 `.TWO` 代號，兩模式畫面零變化。
+    #   其餘 89 檔一個字都沒動。
+    # ~~"117601a4a97760c70d3fe38ea97f1d785facb5488dfd0c15b3e8e6dd617bb08a"~~（xview 安全小修首版）
+    # 📌 xview QA 回修（2026-10-28，獨立 QA MAJOR，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄
+    #   「🔄 強制刷新數據」的 `help=` 文字 —— 補列個股股價、台灣總經與匯率、多檔批次結果等未清暫存，
+    #   結尾表明非完整清單。兩模式共用（legacy 同樣看到）；按鈕行為不變。其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "f0f0e4f7584c9797ab58f5e4a532f18c5bcba439ddf3a83b4aac989a088d02a8"
 
     def test_no_diff_against_base(self):
         import hashlib

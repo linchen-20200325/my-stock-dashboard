@@ -1366,6 +1366,23 @@ D2.5 以下大方向核准：
 - **與 DEC-097／DEC-098 的關係**：DEC-097（客戶裁示：手機底部 4 按鈕、舊 UI 預設隱藏）**不變**；DEC-098 為 **AI 總管內部設計選擇，不是客戶裁示**——其中「標的頁葉選擇＝過渡項、待客戶裁示」一點，由本條（客戶裁示）**回答**；DEC-098 其餘內容不因本條升格為客戶裁示。DEC-082（草稿先行）：客戶已就此偏離裁示，毋須再出草稿。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：撰寫組（docs-only）未重跑測試；本條只落盤裁示，不改任何程式碼。
 
+### DEC-100｜Cross-View 資料一致性稽核的處置分類＋本批 4 項半安全小修（AI 總管內部，2026-10-28）
+
+> 2026-10-28 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/*.md docs/vnext/*.md` 最大為 DEC-099、DEC-100 0 命中）。**本條不是客戶裁示**，只記錄 `CROSS-VIEW-DATA-CONSISTENCY-AUDIT` 稽核結果的處置分類與 AI 總管依 `CLAUDE.md` v3 §03-1 內部自決的安全小修；報告 `docs/vnext/NEWUI_D25_XVIEW_AUDIT_2026-10-28.md`。
+
+- **決策者**：AI 總管內部（依 `CLAUDE.md` v3 §03-1；**非客戶裁示**）。
+- **狀態**：隨 xview PR；implementation complete／waiting CI，**未合併**。
+- **處置分類**（報告 §4.1～§4.4）：38 項不一致分為 (1) 本批安全小修 S1～S5；(2) 客戶 Gate（業務語意／版面）→ BACKLOG `XV-H3`、`XV-H1-EXT`、`XV-ASOF`；(3) 內部技術 Gate（§8 完整流程＋獨立 QA）→ BACKLOG `XV-X1`、`XV-C02`、`XV-C01`、`XV-C03`、`XV-C04`、`XV-M1`、`XV-M3`、`XV-M4`、`XV-M5`、`XV-C13`、`XV-C05`、`XV-H2-EXT`；(4) 登記（§-1，待任務碰到時處理）。
+- **本批安全小修（不新增 provider／API／schema，不改投資語意、公式或版面）**：
+  - **(a) S1 ⑦／LINE AI prompt**（`188c20e7`＋QA 回修 `183dbdc3`）：`build_summary_prompt` 有效判斷檔數 `total` 須為**有限值且 ≥1** 才放「續抱、定期定額即可」句（缺／非數／NaN／inf／0／0.5 一律不放）；total>0 正常路徑逐字不變；LINE `_maybe_ai_summary` 共用同一支 prompt 同步受益。部分失敗／燈全⚪／無現價**不在範圍**（Z51／Z52 既有測試釘住，轉客戶 Gate `XV-H1-EXT`）。
+  - **(b) S2 側欄「🔄 強制刷新數據」help 文字據實**（`96880543`＋QA 回修 `183dbdc3`）：只改說明文字，列出不在清除範圍的模組自有暫存（總經戰情快照、個股股價與籌碼、台灣與美國總經含 VIX／匯率、多檔批次結果、proxy 原始回應、失敗冷卻等，結尾表明非完整清單）；按鈕標籤、key、行為、版面不變。該按鈕兩模式共用 ⇒ **legacy 模式亦可見新說明**（舊 UI digest 已更新並依 DEC-019 揭露）。行為統一轉 `XV-H2-EXT`。
+  - **(c) S3 🔬 葉2 個股抓價失敗顯示整列錯誤**（`7dbfaf4b`）：`page_inspect._batch_row` 對個股傳 `failed=`，價格抓取失敗沿用既有 `BatchRow.error` 整列錯誤態；查無資料仍「—」。⚠️ **取捨（已揭露）**：同列的財報分數一併被錯誤態蓋掉；財報腿失敗仍「—」（不在範圍）。屬「修正錯誤」非「改變設計」（`CLAUDE.md` §-1.5.A-8）。
+  - **(d) S4 `sector_heatmap_render` 去後綴順序**（`8bc93e8e`）：改為先 `.TWO` 再 `.TW`（只對調順序、不換 helper、不改大小寫）；現行子項無 `.TWO`，畫面零變化。**半項**：同型兩處在 `etf_smart_analysis`（僅舊 UI `etf_tab_smart` 使用）依 DEC-019 舊 UI 凍結**停手未修**，登記。
+  - **(e) S5 本益比對照表只快取成功＋FailCooldown**（`99e10bc6`＋QA 回修 `183dbdc3`）：TWSE／TPEX 兩支 fetcher 快取層移到內層、失敗 raise 不入快取；公開函式為外層 wrapper 照舊回空表（簽章／回傳形狀／3 個 caller 不變），接 `shared.fail_cooldown`（上市／上櫃各一份）。⚠️ **INFERENCE（已揭露）**：冷卻表為模組層、跨 session 共用 ⇒ 冷卻期間**所有使用者**都拿空表；補「晚到失敗不得覆蓋成功」測試。
+  - 守衛同步 `3c1a7550`：舊 UI 零改動 digest（舊值刪除線保留＋DEC-019 揭露）、新增 `tests/test_xview_revert_chain.py`。
+- **與其他 DEC 的關係**：DEC-019／DEC-020（舊 UI 凍結／Removal Gate）**不變**——(d) 停手即依此；DEC-003（內部自決區）、DEC-084（Model×Effort）呼叫；客戶 Gate 項不由本條定案。不降低任何 Gate。**未經客戶**。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：三組獨立稽核（A／B／C）＋一組獨立複驗（V）＋一組修正 QA（抓到 1 MAJOR＋2 MINOR，皆已於 `183dbdc3` 回修）；**回修後未再經第二組複驗**（總管轉述）。突變測試由實作者與 QA **各自自列**，未獨立複跑。**限制**：沙箱無部署端網路、Streamlit Cloud 未驗（快取／冷卻行為皆讀碼與單元測試推得）；報告內全稱句（「只有兩條價格路徑」「38 項即全部」等）為單組或 grep 結論，不得當前提（報告 §6）。撰寫組（本 docs 同步）未重跑測試。
+
 ## 2. 產品／UI
 
 ### DEC-017｜IA v2 五頁線框為台股前端實作依據
