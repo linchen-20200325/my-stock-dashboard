@@ -17,7 +17,9 @@ REPO = Path(__file__).resolve().parents[1]
 XVEXT_BASE_SHA = {'shared/station_specs.py': 'c5747bae89fa1a1f744c302de34978b781553083aa5a5e33d357b9d47bd85fc3',
  'src/compute/notify/holdings_digest_message.py': 'a894b6ae8109c515b5b668e9621e737a4a16da94c8d65a01c1e2866697a5733f',
  'src/data/macro/macro_core.py': '68cb0fb283bb473031e423e47f0696dea0d02d871c3fea519d8a1a767a75ac9c',
- 'src/services/dividend_station_service.py': '488dbb53ed9e2a2392c7bbd5b7f4ebf9d03dc03c468363219bfa92ebd34b01e3'}
+ 'src/services/dividend_station_service.py': '488dbb53ed9e2a2392c7bbd5b7f4ebf9d03dc03c468363219bfa92ebd34b01e3',
+ 'src/services/portfolio_deep_service.py': 'f4d2c99c5498371fe9000e0e291079623b40bb6c3c331f7b97ed8ab5f98f3d96',
+ 'src/ui/views/page_hold.py': 'e25609612b0a426896f4f89aa6f559a7906632378a5f0176e080b2aa6b5897e1'}
 
 XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_specs.py': (('\n'
                               '\n'
@@ -42,6 +44,7 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                               '}\n',
                               ''),),
  'src/compute/notify/holdings_digest_message.py': (('import math\n', ''),
+                                                   ('from shared import asset_currency_gate as FXG\n', ''),
                                                    ('from shared import station_specs as SS\n', ''),
                                                    ('def _data_short(digest: dict) -> bool:\n'
                                                     '    """XV-H1-EXT（客戶 2026-10-28 裁示 A）：有抓取失敗或資料不足（燈全判不出／缺現價）的標的？\n'
@@ -56,16 +59,22 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                     '            # XV-H1-EXT：資料不足時「無紅燈」只是「判得出的沒有紅燈」，⛔ 不接「續抱」。\n'
                                                     '            return ["🔴 建議換出（持有紅燈汰弱）", "\u3000✅ 判得出的標的無紅燈（資料不足者未下結論）"]\n',
                                                     ''),
-                                                   ('def _insufficient_line(digest: dict) -> list[str]:\n'
+                                                   ('        _fx = digest.get("fx_excluded") or []\n'
+                                                    '        if _fx:\n'
+                                                    '            # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入 → 不印比例數字。\n'
+                                                    '            return [f"⚖️ 配置：{FXG.FX_PARTIAL_TEXT}（{FXG.fx_excluded_text(_fx)}）"]\n',
+                                                    ''),
+                                                   ('\n'
+                                                    '\n'
+                                                    'def _insufficient_line(digest: dict) -> list[str]:\n'
                                                     '    """XV-H1-EXT：資料不足／無法判定的標的（燈全判不出、缺現價）。空 → 略過。"""\n'
                                                     '    _ins = digest.get("insufficient") or []\n'
                                                     '    if not _ins:\n'
                                                     '        return []\n'
                                                     '    return [f"{SS.INSUFFICIENT_ACTION_TEXT}：" + "、".join(\n'
                                                     '        f"{_code(d)}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))\n'
-                                                    '                                for _r in (d.get("原因") or ())) + "）" for d in _ins)]\n'
-                                                    '\n'
-                                                    '\n',
+                                                    '                                for _r in (d.get("原因") or ())) + "）" for d in '
+                                                    '_ins)]\n',
                                                     ''),
                                                    ('    XV-H1-EXT（客戶 2026-10-28 裁示 A）：但有抓取失敗或資料不足（`digest.insufficient`）時\n'
                                                     '    ⛔ 不印「續抱」，改講「判得出的標的無訊號、資料不足者未下結論」。\n',
@@ -105,7 +114,8 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                    '        _YF_CLOSE_CACHE.clear()\n'
                                    '    return ("macro_core._FRED_CACHE", "macro_core._YF_CLOSE_CACHE")\n',
                                    ''),),
- 'src/services/dividend_station_service.py': (('def _mark_insufficient(row: dict, *, ak: str, held: bool) -> None:\n'
+ 'src/services/dividend_station_service.py': (('from shared import asset_currency_gate as FXG\n', ''),
+                                              ('def _mark_insufficient(row: dict, *, ak: str, held: bool) -> None:\n'
                                                '    """XV-H1-EXT（客戶 2026-10-28 裁示 A：missing ≠ HOLD；unavailable ≠ safe）。就地標記。\n'
                                                '\n'
                                                '    資料不足的兩種情形（只有成立時才加 `SS.KEY_INSUFFICIENT`，資料完整的列逐鍵不變）：\n'
@@ -134,7 +144,37 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                '\n'
                                                '\n',
                                                ''),
-                                              ('            _mark_insufficient(_row, ak=ak, held=held)\n', ''),
+                                              ('            if held and not FXG.is_confirmed_twd_ticker(tk):\n'
+                                               '                # XV-H3（客戶 2026-10-28 裁示 A）：幣別未確認（外幣／看不出來）→ 不得與 TWD 加總；\n'
+                                               '                # 成本幣別未定義 ⇒ 損益% 亦不可判定。市值／損益% 一律 None（⛔ 不換算、不猜匯率）。\n'
+                                               '                _row[FXG.KEY_FX_UNCONFIRMED] = True\n'
+                                               '                _row["市值"] = None\n'
+                                               '                _row["損益%"] = None\n'
+                                               '            _mark_insufficient(_row, ak=ak, held=held)\n',
+                                               ''),
+                                              ('# ── XV-H3：幣別未確認的持有列（不得與 TWD 加總）────────────────────────────\n'
+                                               'def fx_excluded_codes(rows: list[dict]) -> list[str]:\n'
+                                               '    """持有、非整批抓取失敗、且被 `build_station_rows` 標了 `FXG.KEY_FX_UNCONFIRMED` 的列代號（保序去重）。\n'
+                                               '\n'
+                                               '    XV-H3（客戶 2026-10-28 裁示 A）：只要非空，總市值／未實現損益合計／80/20 一律**不算**\n'
+                                               '    （⛔ 不把剩餘台股包裝成完整組合）；畫面、LINE、AI 改講 `FXG.FX_PARTIAL_TEXT` ＋ 未納入清單。\n'
+                                               '    判定只走 L0 `asset_currency_gate.is_confirmed_twd_ticker`（同一把尺，見該檔）。\n'
+                                               '    """\n'
+                                               '    return list(dict.fromkeys(\n'
+                                               '        str(r.get("代號", "")) for r in (rows or [])\n'
+                                               '        if r.get("held") and not (r.get("_detail") or {}).get("error")\n'
+                                               '        and r.get(FXG.KEY_FX_UNCONFIRMED)))\n'
+                                               '\n'
+                                               '\n',
+                                               ''),
+                                              ('    XV-H3（客戶 2026-10-28 裁示 A）：有任何幣別未確認的持有列（`fx_excluded_codes` 非空）→ 回 `None`\n'
+                                               '    （⛔ 不把剩餘台股的總額當成整個組合；由呼叫端講 `FX_PARTIAL_TEXT`）。\n',
+                                               ''),
+                                              ('    """\n    if fx_excluded_codes(rows):\n        return None\n    _cost = _value = 0.0\n',
+                                               '    """\n    _cost = _value = 0.0\n'),
+                                              ('    XV-H3（客戶 2026-10-28 裁示 A）：有任何幣別未確認的持有列 → None（⛔ 不顯示不完整的比例）。\n', ''),
+                                              ('    """\n    if fx_excluded_codes(rows):\n        return None\n    _core = _sat = 0.0\n',
+                                               '    """\n    _core = _sat = 0.0\n'),
                                               ('    # XV-H1-EXT（客戶 2026-10-28 裁示 A）：資料不足的列（`SS.KEY_INSUFFICIENT`，燈全判不出／\n'
                                                '    # 持有列缺現價）→ 列出代號與原因（**只有非空時才有這一鍵**，資料完整時 digest 逐鍵不變）。\n'
                                                '    # 下游（⑦ prompt、LINE 正文）據此不給「續抱」類組合層結論。抓取失敗列另在 errors。\n'
@@ -144,7 +184,11 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                '                     if not r.get("_detail", {}).get("error") and '
                                                'r.get(SS.KEY_INSUFFICIENT)]\n'
                                                '    if _insufficient:\n'
-                                               '        _out["insufficient"] = _insufficient\n',
+                                               '        _out["insufficient"] = _insufficient\n'
+                                               '    # XV-H3：幣別未確認、未納入總額／比例的持有列（只有非空才有這一鍵；`allocation` 此時為 None）。\n'
+                                               '    _fx = fx_excluded_codes(rows)\n'
+                                               '    if _fx:\n'
+                                               '        _out["fx_excluded"] = _fx\n',
                                                ''),
                                               ('\n'
                                                '\n'
@@ -172,8 +216,141 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                '                  + "、".join(f"{d[\'代號\']}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, '
                                                'str(_r))\n'
                                                '                                                         for _r in d.get("原因", ())) + "）"\n'
-                                               '                             for d in _ins) + "\\n")\n',
-                                               ''))}
+                                               '                             for d in _ins) + "\\n")\n'
+                                               '    _fx = digest.get("fx_excluded") or []\n'
+                                               '    if _fx:\n'
+                                               '        # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產不進總額 ⇒ AI 拿不到混幣總額，\n'
+                                               '        # 只拿到「哪幾檔未納入、為什麼、比例無法完整判定」這個事實（⛔ 不送比例數字）。\n'
+                                               '        _base += (f"- 未納入總市值與配置比例：{\'、\'.join(str(_c) for _c in _fx)}"\n'
+                                               '                  f"（{FXG.FX_EXCLUDED_REASON}；總市值／配置比例無法完整判定）\\n")\n',
+                                               '')),
+ 'src/services/portfolio_deep_service.py': (('import functools\n', ''),
+                                            ('from dataclasses import dataclass, field, replace as _dc_replace\n',
+                                             'from dataclasses import dataclass, field\n'),
+                                            ('from shared import asset_currency_gate as FXG\n', ''),
+                                            ('def _is_fx_unconfirmed(row: dict) -> bool:\n'
+                                             '    """XV-H3（客戶 2026-10-28 裁示 A）：持有、非整批失敗、且代號**不能確定是台股**（L0\n'
+                                             '    `asset_currency_gate.is_confirmed_twd_ticker`，與 `dividend_station_service` 同一把尺）。\n'
+                                             '    這種列**不得**與 TWD 資產加總／算權重（⛔ 不換算、不猜匯率）。"""\n'
+                                             '    return (bool(row.get("held")) and not _row_failed(row)\n'
+                                             '            and not FXG.is_confirmed_twd_ticker(row.get("代號")))\n'
+                                             '\n'
+                                             '\n'
+                                             'def _fx_excluded(rows) -> tuple[str, ...]:\n'
+                                             '    """被 XV-H3 排除的持有列代號（保序去重）。"""\n'
+                                             '    return tuple(dict.fromkeys(str(_r.get("代號", "")) for _r in (rows or [])\n'
+                                             '                               if isinstance(_r, dict) and _is_fx_unconfirmed(_r)))\n'
+                                             '\n'
+                                             '\n'
+                                             'def _attach_fx(fn):\n'
+                                             '    """三支 public 函式的結果補上 `fx_excluded`（非空時）。結果型別與其餘欄位一字不動。"""\n'
+                                             '    @functools.wraps(fn)\n'
+                                             '    def _wrapped(rows, *args, **kwargs):\n'
+                                             '        _res = fn(rows, *args, **kwargs)\n'
+                                             '        _fx = _fx_excluded(rows)\n'
+                                             '        return _dc_replace(_res, fx_excluded=_fx) if _fx else _res\n'
+                                             '    return _wrapped\n'
+                                             '\n'
+                                             '\n',
+                                             ''),
+                                            ('        if _is_fx_unconfirmed(_r):      # XV-H3：外幣／幣別未確認 → 不進權重與總市值\n            continue\n',
+                                             ''),
+                                            ('        # XV-H3：對照值同樣只算台股那一批（L3 `compute_portfolio_totals` 見到幣別未確認列會回 None；\n'
+                                             '        # 本檔已把它們排出權重 ⇒ 兩邊用同一批列對帳）。\n'
+                                             '        _totals = compute_portfolio_totals(\n'
+                                             '            [_r for _r in (rows or []) if not (isinstance(_r, dict) and '
+                                             '_is_fx_unconfirmed(_r))])\n',
+                                             '        _totals = compute_portfolio_totals(list(rows or []))\n'),
+                                            ('    #: XV-H3（加性）：幣別未確認、未納入權重與總市值的持有列代號。`repr=False, compare=False` 理由同上。\n'
+                                             '    fx_excluded: tuple[str, ...] = field(default=(), repr=False, compare=False)\n',
+                                             ''),
+                                            ('\n@_attach_fx\ndef get_portfolio_stress(rows, *, drop_pct: float | None = None,\n',
+                                             '\ndef get_portfolio_stress(rows, *, drop_pct: float | None = None,\n'),
+                                            ('    #: XV-H3（加性）：同 `StressResult.fx_excluded`。\n'
+                                             '    fx_excluded: tuple[str, ...] = field(default=(), repr=False, compare=False)\n',
+                                             ''),
+                                            ('\n@_attach_fx\ndef get_portfolio_var(rows, *, strict: bool = False) -> VarResult:\n',
+                                             '\ndef get_portfolio_var(rows, *, strict: bool = False) -> VarResult:\n'),
+                                            ('    income_tax_included: bool = False\n    @property\n',
+                                             '    income_tax_included: bool = False\n\n    @property\n'),
+                                            ('    ⚠️ XV-H3（客戶 2026-10-28 裁示 A）：本路徑**本來就**不把海外標的混進 TWD 總額（下一行），\n'
+                                             '    覆蓋率與 `overseas`／`excluded_tickers` 已揭露 ⇒ 不另套 `asset_currency_gate`（壓測／VaR 有套）。\n',
+                                             '')),
+ 'src/ui/views/page_hold.py': (('from shared.asset_currency_gate import (\n'
+                                '    FX_PARTIAL_TEXT,\n'
+                                '    KEY_FX_UNCONFIRMED,\n'
+                                '    fx_excluded_text,\n'
+                                ')\n',
+                                ''),
+                               ('#: XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入時，總市值／配置比例處的客戶句。\n'
+                                '#: `Note` 文案不得帶狀態 glyph（⬜ 是「尚未載入」的 glyph）⇒ Note 用去掉 ⬜ 的同一句；\n'
+                                '#: 逐字含 ⬜ 的 `FX_PARTIAL_TEXT` 放在卡的 fact 列（L0 `asset_currency_gate` 唯一來源）。\n'
+                                'FX_PARTIAL_NOW: str = FX_PARTIAL_TEXT.removeprefix("⬜").strip()\n'
+                                '#: 同上的「去哪補」：目前沒有使用者可執行的出口（匯率來源／時點／成本幣別另開 Gate 定義）。\n'
+                                'FX_PARTIAL_WHERE: str = (f"{NO_EXIT_MARKER} —— 外幣資產的匯率來源、時點與成本幣別尚未定義，"\n'
+                                '                         "定義前本站不換算、不計入")\n'
+                                '#: fact 列標籤（總市值／配置比例那一格、未納入清單那一格）。\n'
+                                'FX_PARTIAL_FACT: str = "總市值／配置比例"\n'
+                                'FX_EXCLUDED_FACT: str = "未納入"\n'
+                                '\n'
+                                '\n'
+                                'def _fx_codes(rows: Sequence[Mapping[str, Any]]) -> tuple[str, ...]:\n'
+                                '    """XV-H3：被 L3 標了 `KEY_FX_UNCONFIRMED` 的持有列代號（條件同 L3 `fx_excluded_codes`：\n'
+                                '    持有、非整批抓取失敗；去重保序）。⛔ 本頁不自己判幣別 —— 只讀 L3 標記。"""\n'
+                                '    return tuple(dict.fromkeys(\n'
+                                '        str(_r.get("代號", "")) for _r in rows\n'
+                                '        if _r.get("held") and not (_r.get("_detail") or {}).get("error")\n'
+                                '        and _r.get(KEY_FX_UNCONFIRMED)))\n'
+                                '\n'
+                                '\n'
+                                'def _fx_facts(codes: Sequence[str]) -> list[tuple[str, str]]:\n'
+                                '    """XV-H3 的兩列 fact：`⬜ 部分外幣資產未納入…`（逐字）＋「VOO、BND｜原因：…」。"""\n'
+                                '    if not codes:\n'
+                                '        return []\n'
+                                '    return [(FX_PARTIAL_FACT, FX_PARTIAL_TEXT),\n'
+                                '            (FX_EXCLUDED_FACT, fx_excluded_text(codes).removeprefix("未納入："))]\n',
+                                ''),
+                               ('    # XV-H3（客戶 2026-10-28 裁示 A）：有外幣／幣別未確認的持有列 → L3 總額回 None（⛔ 不把剩餘台股\n'
+                                '    # 包裝成整個組合）；這一格改列客戶句 ＋ 未納入清單（排在資料異常那句之前）。\n'
+                                '    _fx = _fx_codes(station.rows)\n'
+                                '    if _fx:\n'
+                                '        return _fx_facts(_fx) + ([("未實現損益／總市值", _invalid_why(_bad))] if _bad else [])\n',
+                                ''),
+                               ('    # XV-H3：外幣／幣別未確認資產未納入 → 比例不畫（L3 回 None），列客戶句與未納入清單。\n'
+                                '    _facts = _fx_facts(_fx_codes(station.rows)) + _facts\n',
+                                ''),
+                               ('    elif _fx_codes(station.rows):\n'
+                                '        # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認 → L3 不算比例（⛔ 不把剩餘台股包裝成完整 80/20）。\n'
+                                '        _note = Note(now=FX_PARTIAL_NOW, why=fx_excluded_text(_fx_codes(station.rows)),\n'
+                                '                     where=FX_PARTIAL_WHERE)\n',
+                                ''),
+                               ('    _bits += _fx_degraded_bits(result)\n', ''),
+                               ('\n'
+                                '\n'
+                                'def _fx_degraded_bits(result: Any) -> list[tuple[str, str]]:\n'
+                                '    """XV-H3（客戶 2026-10-28 裁示 A）：L3 回報有外幣／幣別未確認的持有列沒進這個數字（`fx_excluded`）\n'
+                                '    → 失準（橘）。⛔ 不換算、不猜匯率；數字只涵蓋台股那一批。"""\n'
+                                '    _fx = tuple(getattr(result, "fx_excluded", ()) or ())\n'
+                                '    if not _fx:\n'
+                                '        return []\n'
+                                '    return [(f"**{FX_PARTIAL_NOW}** —— {fx_excluded_text(_fx)}", FX_PARTIAL_WHERE)]\n',
+                                ''),
+                               ('        # XV-H3：有外幣未納入 → 總市值那一格改列客戶句（⛔ 不顯示部分總市值）。\n'
+                                '        _fx_res = tuple(getattr(_res, "fx_excluded", ()) or ())\n'
+                                '        _facts.insert(1, (_fx_facts(_fx_res)[0] if _fx_res else\n'
+                                '                          ("納入計算的組合總市值（元）", f"{_res.total_value_twd:,.0f}")))\n',
+                                '        _facts.insert(1, ("納入計算的組合總市值（元）",\n                          f"{_res.total_value_twd:,.0f}"))\n'),
+                               ('    "兩套算法對不起來", "抓不到價格序列", "這個總額只涵蓋一部分持股",\n    "部分外幣資產未納入")      # XV-H3\n',
+                                '    "兩套算法對不起來", "抓不到價格序列", "這個總額只涵蓋一部分持股")\n'),
+                               ('    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI,\n'
+                                '    NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義")      # XV-H3\n',
+                                '    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI)\n'),
+                               ('       for _k in ("hold.alloc_split", "hold.deep.core_satellite")]\n'
+                                '    # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入（why 的代號清單在摺疊區原文）。\n'
+                                '    + [_v2_rows_for(_k, FX_PARTIAL_NOW, (\n'
+                                '           None, "未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",\n'
+                                '           NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))\n',
+                                ''))}
 
 
 
@@ -221,3 +398,7 @@ def test_chain_head_calls_xvext_first():
     assert src.index("xvext_revert_for(rel, code)") < src.index("XVIEW_REVERT_PAIRS.get(rel")
     ss = inspect.getsource(sheet_safety_revert_for)
     assert ss.index("xview_revert_for(rel, code)") < ss.index("nav1_revert_for(rel, code)")
+    # `page_hold` 等由 NAV-1 節管的檔：`nav1_revert_for` 也先呼叫本節（d2／me_p1 的直接測試經它）。
+    from tests.test_nav1_revert_chain import nav1_revert_for
+    nv = inspect.getsource(nav1_revert_for)
+    assert nv.index("xvext_revert_for(rel, code)") < nv.index("NAV1_REVERT_PAIRS.get(rel")

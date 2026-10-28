@@ -12,6 +12,7 @@ import math
 import numbers
 from typing import Callable
 
+from shared import asset_currency_gate as FXG
 from shared import dividend_station_thresholds as T
 from shared import sector_flow_thresholds as _UNITS
 from shared import station_specs as SS
@@ -506,6 +507,12 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
             _row["張數"] = float(_lots) if _lots and float(_lots) > 0 else None
             _row["均價"] = float(_avg) if _avg and float(_avg) > 0 else None
             _row["現價"] = float(_cur) if _cur and float(_cur) > 0 else None
+            if held and not FXG.is_confirmed_twd_ticker(tk):
+                # XV-H3（客戶 2026-10-28 裁示 A）：幣別未確認（外幣／看不出來）→ 不得與 TWD 加總；
+                # 成本幣別未定義 ⇒ 損益% 亦不可判定。市值／損益% 一律 None（⛔ 不換算、不猜匯率）。
+                _row[FXG.KEY_FX_UNCONFIRMED] = True
+                _row["市值"] = None
+                _row["損益%"] = None
             _mark_insufficient(_row, ak=ak, held=held)
             rows.append(_row)
         except Exception as e:  # noqa: BLE001 — 單檔失敗不炸整表（§1 誠實標記）
@@ -1134,6 +1141,20 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
     return _out
 
 
+# ── XV-H3：幣別未確認的持有列（不得與 TWD 加總）────────────────────────────
+def fx_excluded_codes(rows: list[dict]) -> list[str]:
+    """持有、非整批抓取失敗、且被 `build_station_rows` 標了 `FXG.KEY_FX_UNCONFIRMED` 的列代號（保序去重）。
+
+    XV-H3（客戶 2026-10-28 裁示 A）：只要非空，總市值／未實現損益合計／80/20 一律**不算**
+    （⛔ 不把剩餘台股包裝成完整組合）；畫面、LINE、AI 改講 `FXG.FX_PARTIAL_TEXT` ＋ 未納入清單。
+    判定只走 L0 `asset_currency_gate.is_confirmed_twd_ticker`（同一把尺，見該檔）。
+    """
+    return list(dict.fromkeys(
+        str(r.get("代號", "")) for r in (rows or [])
+        if r.get("held") and not (r.get("_detail") or {}).get("error")
+        and r.get(FXG.KEY_FX_UNCONFIRMED)))
+
+
 # ── 第 1 層結論卡:組合層彙總（純函式,#階段C）────────────────────────────
 def compute_portfolio_totals(rows: list[dict]) -> dict | None:
     """組合層的「未實現損益 / 檔數 / 總市值」（純函式,§1 缺就不算）。
@@ -1157,7 +1178,11 @@ def compute_portfolio_totals(rows: list[dict]) -> dict | None:
     當成整個組合的損益（§1 錯的數字比沒有數字更危險）。
 
     全無可計價持股 → 回 `None`（畫面顯示「算不出來」,**不顯示 0**）。
+    XV-H3（客戶 2026-10-28 裁示 A）：有任何幣別未確認的持有列（`fx_excluded_codes` 非空）→ 回 `None`
+    （⛔ 不把剩餘台股的總額當成整個組合；由呼叫端講 `FX_PARTIAL_TEXT`）。
     """
+    if fx_excluded_codes(rows):
+        return None
     _cost = _value = 0.0
     _held_n = _valued_n = 0
     for r in (rows or []):
@@ -1195,7 +1220,10 @@ def compute_allocation_split(rows: list[dict]) -> dict | None:
 
     只納入 **held 且有市值(市值>0)** 的列。§1：部分 held 缺金額 → partial=True(僅供參考);
     全無市值 → None（UI 不顯示、不捏造）。
+    XV-H3（客戶 2026-10-28 裁示 A）：有任何幣別未確認的持有列 → None（⛔ 不顯示不完整的比例）。
     """
+    if fx_excluded_codes(rows):
+        return None
     _core = _sat = 0.0
     _held_n = _valued_n = 0
     for r in (rows or []):
@@ -1326,6 +1354,10 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
                      if not r.get("_detail", {}).get("error") and r.get(SS.KEY_INSUFFICIENT)]
     if _insufficient:
         _out["insufficient"] = _insufficient
+    # XV-H3：幣別未確認、未納入總額／比例的持有列（只有非空才有這一鍵；`allocation` 此時為 None）。
+    _fx = fx_excluded_codes(rows)
+    if _fx:
+        _out["fx_excluded"] = _fx
     return _out
 
 
@@ -1395,6 +1427,12 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
                   + "、".join(f"{d['代號']}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))
                                                          for _r in d.get("原因", ())) + "）"
                              for d in _ins) + "\n")
+    _fx = digest.get("fx_excluded") or []
+    if _fx:
+        # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產不進總額 ⇒ AI 拿不到混幣總額，
+        # 只拿到「哪幾檔未納入、為什麼、比例無法完整判定」這個事實（⛔ 不送比例數字）。
+        _base += (f"- 未納入總市值與配置比例：{'、'.join(str(_c) for _c in _fx)}"
+                  f"（{FXG.FX_EXCLUDED_REASON}；總市值／配置比例無法完整判定）\n")
     _alloc = digest.get("allocation")
     if _alloc:
         _partial = "（部分持股缺金額,僅供參考）" if _alloc.get("partial") else ""

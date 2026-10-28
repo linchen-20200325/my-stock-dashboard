@@ -277,6 +277,13 @@ def _enumerate():
                                rows=_rows, split=_sp)
         add(P.build_allocation_split_card, _st)
         add(P.build_core_satellite_card, _st)
+    # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認持有列 → L3 比例 None → ⑤⑥ 灰「部分外幣資產未納入」。
+    from shared.asset_currency_gate import KEY_FX_UNCONFIRMED
+    _st = P.StationReadout(requested=True, submitted=True, bound=True, holdings_n=2,
+                           rows=(_sp_ok, {"代號": "VOO", "種類": "ETF", "held": True, "現價": 500.0,
+                                          "_detail": {}, KEY_FX_UNCONFIRMED: True}), split=None)
+    add(P.build_allocation_split_card, _st)
+    add(P.build_core_satellite_card, _st)
     # 批次 3（2026-09-26）：有持股的配息抓取失敗 → 配息卡的第二種紅（無例外）。
     add(P.build_dividend_cash_card, P.DeepReadout(
         requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,

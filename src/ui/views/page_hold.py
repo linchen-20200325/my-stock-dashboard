@@ -345,6 +345,11 @@ from shared.dividend_station_thresholds import (
 )
 # L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（Q1-r5，2026-09-26）。
 from shared.oauth_session_policy import OAUTH_LOGIN_EXPIRED_MSG
+from shared.asset_currency_gate import (
+    FX_PARTIAL_TEXT,
+    KEY_FX_UNCONFIRMED,
+    fx_excluded_text,
+)
 from shared.secret_scrub import scrub_secrets
 from shared.ui_state import (
     UI_DEGRADED,
@@ -1847,6 +1852,33 @@ MACRO_EMPTY_NOW: str = "**總經本輪未評估**"
 SPLIT_FAILED_NOW: str = "**核心／衛星的實際配置算不出來**"
 SPLIT_NO_HOLDINGS_NOW: str = "**還沒有可以拆的持股**"
 SPLIT_NO_VALUE_NOW: str = "**有持股，但算不出核心／衛星的比例**"
+#: XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入時，總市值／配置比例處的客戶句。
+#: `Note` 文案不得帶狀態 glyph（⬜ 是「尚未載入」的 glyph）⇒ Note 用去掉 ⬜ 的同一句；
+#: 逐字含 ⬜ 的 `FX_PARTIAL_TEXT` 放在卡的 fact 列（L0 `asset_currency_gate` 唯一來源）。
+FX_PARTIAL_NOW: str = FX_PARTIAL_TEXT.removeprefix("⬜").strip()
+#: 同上的「去哪補」：目前沒有使用者可執行的出口（匯率來源／時點／成本幣別另開 Gate 定義）。
+FX_PARTIAL_WHERE: str = (f"{NO_EXIT_MARKER} —— 外幣資產的匯率來源、時點與成本幣別尚未定義，"
+                         "定義前本站不換算、不計入")
+#: fact 列標籤（總市值／配置比例那一格、未納入清單那一格）。
+FX_PARTIAL_FACT: str = "總市值／配置比例"
+FX_EXCLUDED_FACT: str = "未納入"
+
+
+def _fx_codes(rows: Sequence[Mapping[str, Any]]) -> tuple[str, ...]:
+    """XV-H3：被 L3 標了 `KEY_FX_UNCONFIRMED` 的持有列代號（條件同 L3 `fx_excluded_codes`：
+    持有、非整批抓取失敗；去重保序）。⛔ 本頁不自己判幣別 —— 只讀 L3 標記。"""
+    return tuple(dict.fromkeys(
+        str(_r.get("代號", "")) for _r in rows
+        if _r.get("held") and not (_r.get("_detail") or {}).get("error")
+        and _r.get(KEY_FX_UNCONFIRMED)))
+
+
+def _fx_facts(codes: Sequence[str]) -> list[tuple[str, str]]:
+    """XV-H3 的兩列 fact：`⬜ 部分外幣資產未納入…`（逐字）＋「VOO、BND｜原因：…」。"""
+    if not codes:
+        return []
+    return [(FX_PARTIAL_FACT, FX_PARTIAL_TEXT),
+            (FX_EXCLUDED_FACT, fx_excluded_text(codes).removeprefix("未納入："))]
 TP_FAILED_NOW: str = "**停利判不出來**"
 TP_NO_HOLDINGS_NOW: str = "**還沒有可以判停利的持股**"
 TP_EMPTY_NOW: str = "**沒有任何一檔衛星達停利門檻**"
@@ -2014,6 +2046,11 @@ def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
     # 「代號：{項目}資料異常，無法計算，不下結論。」（L3 `compute_portfolio_totals()` 此時回 None；
     # 排在下面那句「持股缺張數／均價／現價」之前 —— 異常不是缺）。
     _bad = _invalid_groups(station.rows, (ITEM_LOTS, ITEM_AVG_PRICE, ITEM_PRICE))
+    # XV-H3（客戶 2026-10-28 裁示 A）：有外幣／幣別未確認的持有列 → L3 總額回 None（⛔ 不把剩餘台股
+    # 包裝成整個組合）；這一格改列客戶句 ＋ 未納入清單（排在資料異常那句之前）。
+    _fx = _fx_codes(station.rows)
+    if _fx:
+        return _fx_facts(_fx) + ([("未實現損益／總市值", _invalid_why(_bad))] if _bad else [])
     if _bad:
         return [("未實現損益／總市值", _invalid_why(_bad))]
     _t = station.totals
@@ -2687,6 +2724,8 @@ def _split_facts(station: StationReadout) -> list[tuple[str, str]]:
         ("只納入有市值的持有列",
          "缺張數的持有列**不進分子也不進分母** —— 硬算等於替你編一個比例"),
     ]
+    # XV-H3：外幣／幣別未確認資產未納入 → 比例不畫（L3 回 None），列客戶句與未納入清單。
+    _facts = _fx_facts(_fx_codes(station.rows)) + _facts
     _sp = station.split
     # Q2（2026-09-26 總管裁定）：紅態（持有列取數失敗，見 `_split_state`）**不畫比例** ⇒
     # 「這個比例只涵蓋一部分」在紅態下講的是一個卡上看不到的比例，不成立 → 紅態不渲染這一列
@@ -2796,6 +2835,10 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
     elif not station.has_rows:
         _note = _station_note(station, now=SPLIT_NO_HOLDINGS_NOW,
                               source=SRC_STATION)
+    elif _fx_codes(station.rows):
+        # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認 → L3 不算比例（⛔ 不把剩餘台股包裝成完整 80/20）。
+        _note = Note(now=FX_PARTIAL_NOW, why=fx_excluded_text(_fx_codes(station.rows)),
+                     where=FX_PARTIAL_WHERE)
     else:   # 有列、但一列都沒有市值
         _note = Note(
             now=SPLIT_NO_VALUE_NOW,
@@ -3339,7 +3382,17 @@ def _degraded_bits(result: Any) -> list[tuple[str, str]]:
             "先確認這幾檔的代號是否正確（本頁顯示的是正規化後的代號）；"
             "若是新上市／剛買進的標的，等歷史累積起來才會有價格序列，"
             f"再回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+    _bits += _fx_degraded_bits(result)
     return _bits
+
+
+def _fx_degraded_bits(result: Any) -> list[tuple[str, str]]:
+    """XV-H3（客戶 2026-10-28 裁示 A）：L3 回報有外幣／幣別未確認的持有列沒進這個數字（`fx_excluded`）
+    → 失準（橘）。⛔ 不換算、不猜匯率；數字只涵蓋台股那一批。"""
+    _fx = tuple(getattr(result, "fx_excluded", ()) or ())
+    if not _fx:
+        return []
+    return [(f"**{FX_PARTIAL_NOW}** —— {fx_excluded_text(_fx)}", FX_PARTIAL_WHERE)]
 
 
 def _degraded_note(label: str, bits: Sequence[tuple[str, str]]) -> Note:
@@ -3496,8 +3549,10 @@ def build_stress_card(deep: DeepReadout) -> _Built:
             "、".join(_res.beta_imputed)
             + " —— 查無 Beta，L2 以 1.0 估算後納入（**不是真實 Beta**）"))
     if _state in (UI_LIVE, UI_DEGRADED) and _res is not None:
-        _facts.insert(1, ("納入計算的組合總市值（元）",
-                          f"{_res.total_value_twd:,.0f}"))
+        # XV-H3：有外幣未納入 → 總市值那一格改列客戶句（⛔ 不顯示部分總市值）。
+        _fx_res = tuple(getattr(_res, "fx_excluded", ()) or ())
+        _facts.insert(1, (_fx_facts(_fx_res)[0] if _fx_res else
+                          ("納入計算的組合總市值（元）", f"{_res.total_value_twd:,.0f}")))
         _facts.insert(2, ("警示門檻（L0 SSOT）",
                           f"回撤大於總市值的 {_res.warn_pct:g} 個百分點就示警"))
         # §4.1：單位寫出來 —— 「-224,000」看不出是元還是張。
@@ -4694,14 +4749,16 @@ _V2_EMPTY_SHEET_KEYS: tuple[str, ...] = _V2_STATION_EMPTY_KEYS + ("hold.setup.pr
 #: ⑥ 三格「有值但失準」—— 失準原因可能一條或兩條同時成立，候選依「兩條都在」→ 單條排。
 _V2_DEGRADED_WHY: tuple[str, ...] = (
     "兩套算法對不起來" + V2_EXCERPT_GAP + "抓不到價格序列",
-    "兩套算法對不起來", "抓不到價格序列", "這個總額只涵蓋一部分持股")
+    "兩套算法對不起來", "抓不到價格序列", "這個總額只涵蓋一部分持股",
+    "部分外幣資產未納入")      # XV-H3
 #: 👤 我的 P1：「到既有的 📁 組合管理分頁…」那幾個候選換成新原文的摘錄（舊候選見 git 歷史 / 還原鏈）。
 _V2_DEGRADED_WHERE: tuple[str, ...] = (
     "把持股的張數／均價補齊" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP + "先確認這幾檔的代號是否正確",
     "把持股的張數／均價補齊" + V2_EXCERPT_GAP + _V2_OLD_UI,
     "先確認這幾檔的代號是否正確",
     "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP + "海外那幾檔請另按最低稅負制",
-    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI)
+    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI,
+    NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義")      # XV-H3
 
 
 #: QA-6 MUST-1（2026-10-23，PR #910）：④ 總經位階／⑤ 建議持股水位「未評估」那一個 `now` 底下另外兩支分支的摘錄。
@@ -4814,6 +4871,11 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
     + [_v2_rows_for(_k, SPLIT_NO_VALUE_NOW, (
            None, "沒有任何一列同時有張數與現價，沒有市值就沒有比例", _V2_FILL_LOTS))
+       for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
+    # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入（why 的代號清單在摺疊區原文）。
+    + [_v2_rows_for(_k, FX_PARTIAL_NOW, (
+           None, "未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",
+           NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
     # 📌 Q2-r3（2026-09-27，有意識的刪除，⛔ 不是漏刪）：`NO_PRICE_WHY` 改為客戶逐字句（45 字）後，
     #    「兩者同時」那個候選（整批失敗句 ＋ GAP ＋ 現價句）放不下卡面上限 → **刪掉、⛔ 不縮寫客戶原文**；

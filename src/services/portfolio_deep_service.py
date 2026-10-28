@@ -148,10 +148,12 @@ L2 `normalize_etf_ticker` 一律補 `.TW`（上市），但 **yfinance 的上櫃
 """
 from __future__ import annotations
 
+import functools
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as _dc_replace
 
 # L3 → L0（正常方向）。張→股 的 1000 一律取自這裡，本檔不寫死（§3.3）。
+from shared import asset_currency_gate as FXG
 from shared.sector_flow_thresholds import SHARES_PER_LOT
 from shared.station_specs import invalid_data_text
 from shared.signal_thresholds import (
@@ -297,6 +299,30 @@ def _row_failed(row: dict) -> bool:
     return bool((row.get("_detail") or {}).get("error"))
 
 
+def _is_fx_unconfirmed(row: dict) -> bool:
+    """XV-H3（客戶 2026-10-28 裁示 A）：持有、非整批失敗、且代號**不能確定是台股**（L0
+    `asset_currency_gate.is_confirmed_twd_ticker`，與 `dividend_station_service` 同一把尺）。
+    這種列**不得**與 TWD 資產加總／算權重（⛔ 不換算、不猜匯率）。"""
+    return (bool(row.get("held")) and not _row_failed(row)
+            and not FXG.is_confirmed_twd_ticker(row.get("代號")))
+
+
+def _fx_excluded(rows) -> tuple[str, ...]:
+    """被 XV-H3 排除的持有列代號（保序去重）。"""
+    return tuple(dict.fromkeys(str(_r.get("代號", "")) for _r in (rows or [])
+                               if isinstance(_r, dict) and _is_fx_unconfirmed(_r)))
+
+
+def _attach_fx(fn):
+    """三支 public 函式的結果補上 `fx_excluded`（非空時）。結果型別與其餘欄位一字不動。"""
+    @functools.wraps(fn)
+    def _wrapped(rows, *args, **kwargs):
+        _res = fn(rows, *args, **kwargs)
+        _fx = _fx_excluded(rows)
+        return _dc_replace(_res, fx_excluded=_fx) if _fx else _res
+    return _wrapped
+
+
 def _ticker_of(row: dict) -> str:
     """代號 → L2 SSOT `normalize_etf_ticker`（`0056` → `0056.TW`）。
 
@@ -432,6 +458,8 @@ def priced_rows(rows) -> list[dict]:
     for _r in (rows or []):
         if not isinstance(_r, dict) or not _r.get("held") or _row_failed(_r):
             continue
+        if _is_fx_unconfirmed(_r):      # XV-H3：外幣／幣別未確認 → 不進權重與總市值
+            continue
         _lots, _avg, _cur = (_pos(_r.get("張數")), _pos(_r.get("均價")),
                              _pos(_r.get("現價")))
         if _lots is None or _avg is None or _cur is None:
@@ -477,7 +505,10 @@ def _reconcile(rows, mine: float) -> tuple[bool, float | None]:
     )
 
     try:
-        _totals = compute_portfolio_totals(list(rows or []))
+        # XV-H3：對照值同樣只算台股那一批（L3 `compute_portfolio_totals` 見到幣別未確認列會回 None；
+        # 本檔已把它們排出權重 ⇒ 兩邊用同一批列對帳）。
+        _totals = compute_portfolio_totals(
+            [_r for _r in (rows or []) if not (isinstance(_r, dict) and _is_fx_unconfirmed(_r))])
     except Exception as _e:      # noqa: BLE001 — 對帳失敗不擋主計算，但要說
         print(f"[portfolio_deep] 對帳用的 compute_portfolio_totals 失敗："
               f"{type(_e).__name__}: {_e}")
@@ -542,6 +573,8 @@ class StressResult:
     #: 批 Z49（加性）：Beta 資料異常（NaN／±inf／轉不成數字）的代號（正規化身分）。
     #: 非空 ⇒ `computed=False` ＋ `REASON_INVALID_BETA`。`repr=False, compare=False` 理由同上。
     beta_invalid: tuple[str, ...] = field(default=(), repr=False, compare=False)
+    #: XV-H3（加性）：幣別未確認、未納入權重與總市值的持有列代號。`repr=False, compare=False` 理由同上。
+    fx_excluded: tuple[str, ...] = field(default=(), repr=False, compare=False)
 
     @property
     def partial(self) -> bool:
@@ -558,6 +591,7 @@ class StressResult:
         return bool(self.computed) and _is_full(self.coverage_pct)
 
 
+@_attach_fx
 def get_portfolio_stress(rows, *, drop_pct: float | None = None,
                          strict: bool = False) -> StressResult:
     """戰情表列 → 壓力測試。**純讀不寫。**
@@ -709,6 +743,8 @@ class VarResult:
     held_n: int = 0
     reconciled: bool = True
     reference_value_twd: float | None = None
+    #: XV-H3（加性）：同 `StressResult.fx_excluded`。
+    fx_excluded: tuple[str, ...] = field(default=(), repr=False, compare=False)
 
     @property
     def partial(self) -> bool:
@@ -858,6 +894,7 @@ def _day_str(value) -> str:
         return ""
 
 
+@_attach_fx
 def get_portfolio_var(rows, *, strict: bool = False) -> VarResult:
     """戰情表列 → VaR（歷史模擬法 ＋ 參數法）。**純讀不寫。**
 
@@ -1034,7 +1071,6 @@ class DividendCashResult:
     held_n: int = 0
     shares_total: float = 0.0
     income_tax_included: bool = False
-
     @property
     def has_payouts(self) -> bool:
         """近一年**真的有**配息紀錄。`False` ＋ `computed=True` = 有效的「沒有」。"""
@@ -1088,6 +1124,8 @@ def get_dividend_cash_flow(rows, *, strict: bool = False) -> DividendCashResult:
     ⚠️ 逐檔會打一次 L1 `fetch_etf_dividends`（L3 `dividend_tax_service` 內部做的）
     ＋ 一次 `fetch_etf_price`（後綴判定，FIX-1；上櫃股用 `.TW` 抓配息會回空序列，
     而空序列在上游等於「近一年沒有配息」）。
+    ⚠️ XV-H3（客戶 2026-10-28 裁示 A）：本路徑**本來就**不把海外標的混進 TWD 總額（下一行），
+    覆蓋率與 `overseas`／`excluded_tickers` 已揭露 ⇒ 不另套 `asset_currency_gate`（壓測／VaR 有套）。
     ⚠️ **海外標的不算進 `gross_twd`**（§4.6 不混算）→ 看 `coverage_pct` /
     `excluded_tickers`，不要把這個總額讀成「整個組合的年配息」。
     ⚠️ **上游 summary 缺欄 → `computed=False`**（`REASON_DIVIDEND_CONTRACT_DRIFT`），

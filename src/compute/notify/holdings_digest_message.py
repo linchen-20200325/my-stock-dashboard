@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 import numbers
 
+from shared import asset_currency_gate as FXG
 from shared import dividend_station_thresholds as T
 from shared import station_specs as SS
 
@@ -180,6 +181,10 @@ def _allocation_line(digest: dict) -> list[str]:
     （§1 不捏造;不因單一區段缺鍵而 KeyError 炸掉整則推播,與其他區段一致走 .get + _num）。"""
     _a = digest.get("allocation")
     if not _a:
+        _fx = digest.get("fx_excluded") or []
+        if _fx:
+            # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入 → 不印比例數字。
+            return [f"⚖️ 配置：{FXG.FX_PARTIAL_TEXT}（{FXG.fx_excluded_text(_fx)}）"]
         return []
     _core, _sat = _num(_a.get("core_pct")), _num(_a.get("sat_pct"))
     _ct, _st, _dev = _num(_a.get("core_target")), _num(_a.get("sat_target")), _num(_a.get("core_dev"))
