@@ -216,3 +216,55 @@ def test_take_profit_foreign_satellite_is_unjudged():
     assert card.note.why == "未納入：AAPL｜原因：外幣資產，匯率與成本幣別未定義"
     P.v2_short_rows(card)
     P.v2_card_html(card, facts, sig)
+
+
+# ── QA 回修 #5：壓測／VaR 外幣排除時的涵蓋範圍、標籤、全外幣 ─────────────────
+def _stub_stress(monkeypatch):
+    import src.services.portfolio_deep_service as D
+    monkeypatch.setattr(D, "_yf_tickers", lambda w, failed=None: {t: t for t in w})
+    monkeypatch.setattr("src.compute.etf.etf_calc.calc_portfolio_stress_test",
+                        lambda rows, total_value, drop_pct=None:
+                        {"drop_pct": drop_pct, "total_loss": -10.0, "loss_pct": 1.0})
+    return D
+
+
+def test_stress_coverage_counts_tw_only_and_names_fx(monkeypatch):
+    import src.ui.views.page_hold as P
+    D = _stub_stress(monkeypatch)
+    res = D.get_portfolio_stress(_deep_rows())
+    assert (res.valued_n, res.held_n) == (1, 1) and res.coverage_pct == pytest.approx(100.0)
+    deep = P.DeepReadout(requested=True, submitted=True, bound=True, holdings_n=2,
+                         has_station_rows=True, stress=res)
+    card, facts, _s = P.build_stress_card(deep)
+    f = dict(facts)
+    assert "缺張數" not in f["涵蓋範圍"]
+    assert f["涵蓋範圍"] == ("1 檔台股持有列裡納入了 1 檔；另外 未納入：VOO｜原因：外幣資產，"
+                          "匯率與成本幣別未定義 —— **不進分子也不進分母**")
+    assert "現值（僅已納入台股部分，已失準，別照門檻讀）" in f
+    assert not any("總市值（元）" in k for k in f)
+
+
+def test_stress_and_var_all_foreign(monkeypatch):
+    import src.ui.views.page_hold as P
+    from shared.ui_state import UI_NOT_APPLICABLE
+    D = _stub_stress(monkeypatch)
+    rows = [_deep_rows()[1]]
+    st, va = D.get_portfolio_stress(rows), D.get_portfolio_var(rows)
+    for res in (st, va):
+        assert res.reason == FXG.FX_ONLY_REASON and res.fx_excluded == ("VOO",)
+    deep = P.DeepReadout(requested=True, submitted=True, bound=True, holdings_n=1,
+                         has_station_rows=True, stress=st, var=va)
+    for card, facts, sig in (P.build_stress_card(deep), P.build_var_card(deep)):
+        assert card.state == UI_NOT_APPLICABLE
+        assert card.note.why == "未納入：VOO｜原因：外幣資產，匯率與成本幣別未定義"
+        assert "張數" not in card.note.where and "均價" not in card.note.where
+        P.v2_short_rows(card)
+        P.v2_card_html(card, facts, sig)
+
+
+def test_var_known_limit_text_is_truthful():
+    import src.ui.views.page_hold as P
+    deep = P.DeepReadout(requested=True, submitted=True, bound=True, holdings_n=1,
+                         has_station_rows=True)
+    f = dict(P.build_var_card(deep)[1])
+    assert f["已知限制"] == "外幣／幣別未確認的持股**不納入**本格（匯率與成本幣別未定義，不換算）"

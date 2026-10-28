@@ -64,6 +64,10 @@ def fx_excluded_text(codes) -> str:
             _groups.append(f"{'、'.join(_c)}｜原因：{_reason}")
     return "未納入：" + "；".join(_groups)
 
+#: L3 `portfolio_deep_service` 壓測／VaR 的 `reason`：持有列**全部**是外幣／幣別未確認（台股一檔都沒有）。
+#: page_hold 據此給「不適用 · 重跑無效」＋外幣原因，⛔ 不叫使用者去補張數／均價（QA 回修 #5）。
+FX_ONLY_REASON: str = "持有列全是外幣／幣別未確認資產（匯率與成本幣別未定義，本站不換算、不計入）"
+
 #: L3 `dividend_station_service.build_station_rows` 在**持有列**上標「幣別未確認、已排除於總額／比例」
 #: 的非顯示欄（同 `_detail` 慣例）。⚠️ **只有排除時才有這一鍵** —— 台股列逐鍵不變。
 KEY_FX_UNCONFIRMED: str = "_fx_unconfirmed"

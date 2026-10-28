@@ -472,10 +472,16 @@ def priced_rows(rows) -> list[dict]:
     return _out
 
 
-def _held_n(rows) -> int:
-    """有幾列是「持有」（含算不出金額的）—— 給畫面講 `valued/held`。"""
+def _held_n(rows, *, twd_only: bool = False) -> int:
+    """有幾列是「持有」（含算不出金額的）—— 給畫面講 `valued/held`。
+
+    `twd_only=True`（XV-H3 QA 回修 #5；壓測／VaR 用）：外幣／幣別未確認的列**不計**（它們已另列在
+    `fx_excluded`）⇒ `valued/held` 與 `coverage_pct` 講的是同一批台股列，⛔ 不再把外幣算成「缺張數／均價／現價」。
+    配息現金流維持預設（它有自己的海外排除與 `lots_n/held_n`）。
+    """
     return sum(1 for _r in (rows or [])
-               if isinstance(_r, dict) and _r.get("held") and not _row_failed(_r))
+               if isinstance(_r, dict) and _r.get("held") and not _row_failed(_r)
+               and not (twd_only and _is_fx_unconfirmed(_r)))
 
 
 def _weights(priced: list[dict]) -> dict[str, float]:
@@ -617,9 +623,10 @@ def get_portfolio_stress(rows, *, drop_pct: float | None = None,
 
     _drop = float(PORTFOLIO_STRESS_TEST_DROP_PCT if drop_pct is None else drop_pct)
     _priced = priced_rows(rows)
-    _held = _held_n(rows)
+    _held = _held_n(rows, twd_only=True)
     if not _priced:
-        return StressResult(reason=REASON_NO_PRICED_ROWS, drop_pct=_drop,
+        return StressResult(reason=(FXG.FX_ONLY_REASON if (not _held and _fx_excluded(rows))
+                                    else REASON_NO_PRICED_ROWS), drop_pct=_drop,
                             held_n=_held,
                             warn_pct=float(PORTFOLIO_STRESS_TEST_LOSS_WARN_PCT))
     _total = _total_value_twd(_priced)
@@ -922,12 +929,13 @@ def get_portfolio_var(rows, *, strict: bool = False) -> VarResult:
     from src.compute.etf.etf_calc import align_portfolio_returns   # L3 → L2
 
     _priced = priced_rows(rows)
-    _held = _held_n(rows)
+    _held = _held_n(rows, twd_only=True)
     _min_days = int(TRADING_DAYS_PER_MONTH)
     _base = {"warn_pct": float(PORTFOLIO_VAR_MONTHLY_WARN_PCT),
              "min_days": _min_days, "held_n": _held}
     if not _priced:
-        return VarResult(reason=REASON_NO_PRICED_ROWS, **_base)
+        return VarResult(reason=(FXG.FX_ONLY_REASON if (not _held and _fx_excluded(rows))
+                                 else REASON_NO_PRICED_ROWS), **_base)
 
     _total = _total_value_twd(_priced)
     _ok, _ref = _reconcile(rows, _total)

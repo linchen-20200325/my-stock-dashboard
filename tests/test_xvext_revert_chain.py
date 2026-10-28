@@ -307,6 +307,17 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                              ''),
                                             ('        if _is_fx_unconfirmed(_r):      # XV-H3：外幣／幣別未確認 → 不進權重與總市值\n            continue\n',
                                              ''),
+                                            ('def _held_n(rows, *, twd_only: bool = False) -> int:\n'
+                                             '    """有幾列是「持有」（含算不出金額的）—— 給畫面講 `valued/held`。\n'
+                                             '\n'
+                                             '    `twd_only=True`（XV-H3 QA 回修 #5；壓測／VaR 用）：外幣／幣別未確認的列**不計**（它們已另列在\n'
+                                             '    `fx_excluded`）⇒ `valued/held` 與 `coverage_pct` 講的是同一批台股列，⛔ 不再把外幣算成「缺張數／均價／現價」。\n'
+                                             '    配息現金流維持預設（它有自己的海外排除與 `lots_n/held_n`）。\n'
+                                             '    """\n',
+                                             'def _held_n(rows) -> int:\n    """有幾列是「持有」（含算不出金額的）—— 給畫面講 `valued/held`。"""\n'),
+                                            ('               if isinstance(_r, dict) and _r.get("held") and not _row_failed(_r)\n'
+                                             '               and not (twd_only and _is_fx_unconfirmed(_r)))\n',
+                                             '               if isinstance(_r, dict) and _r.get("held") and not _row_failed(_r))\n'),
                                             ('        # XV-H3：對照值同樣只算台股那一批（L3 `compute_portfolio_totals` 見到幣別未確認列會回 None；\n'
                                              '        # 本檔已把它們排出權重 ⇒ 兩邊用同一批列對帳）。\n'
                                              '        _totals = compute_portfolio_totals(\n'
@@ -318,11 +329,28 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                              ''),
                                             ('\n@_attach_fx\ndef get_portfolio_stress(rows, *, drop_pct: float | None = None,\n',
                                              '\ndef get_portfolio_stress(rows, *, drop_pct: float | None = None,\n'),
+                                            ('    _priced = priced_rows(rows)\n'
+                                             '    _held = _held_n(rows, twd_only=True)\n'
+                                             '    if not _priced:\n',
+                                             '    _priced = priced_rows(rows)\n    _held = _held_n(rows)\n    if not _priced:\n'),
+                                            ('        return StressResult(reason=(FXG.FX_ONLY_REASON if (not _held and '
+                                             '_fx_excluded(rows))\n'
+                                             '                                    else REASON_NO_PRICED_ROWS), drop_pct=_drop,\n',
+                                             '        return StressResult(reason=REASON_NO_PRICED_ROWS, drop_pct=_drop,\n'),
                                             ('    #: XV-H3（加性）：同 `StressResult.fx_excluded`。\n'
                                              '    fx_excluded: tuple[str, ...] = field(default=(), repr=False, compare=False)\n',
                                              ''),
                                             ('\n@_attach_fx\ndef get_portfolio_var(rows, *, strict: bool = False) -> VarResult:\n',
                                              '\ndef get_portfolio_var(rows, *, strict: bool = False) -> VarResult:\n'),
+                                            ('    _priced = priced_rows(rows)\n'
+                                             '    _held = _held_n(rows, twd_only=True)\n'
+                                             '    _min_days = int(TRADING_DAYS_PER_MONTH)\n',
+                                             '    _priced = priced_rows(rows)\n'
+                                             '    _held = _held_n(rows)\n'
+                                             '    _min_days = int(TRADING_DAYS_PER_MONTH)\n'),
+                                            ('        return VarResult(reason=(FXG.FX_ONLY_REASON if (not _held and _fx_excluded(rows))\n'
+                                             '                                 else REASON_NO_PRICED_ROWS), **_base)\n',
+                                             '        return VarResult(reason=REASON_NO_PRICED_ROWS, **_base)\n'),
                                             ('    income_tax_included: bool = False\n    @property\n',
                                              '    income_tax_included: bool = False\n\n    @property\n'),
                                             ('    ⚠️ XV-H3（客戶 2026-10-28 裁示 A）：本路徑**本來就**不把海外標的混進 TWD 總額（下一行），\n'
@@ -345,6 +373,7 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                             '')),
  'src/ui/views/page_hold.py': (('    MISS_NOT_APPLICABLE,\n', ''),
                                ('from shared.asset_currency_gate import (\n'
+                                '    FX_ONLY_REASON,\n'
                                 '    FX_PARTIAL_TEXT,\n'
                                 '    KEY_FX_UNCONFIRMED,\n'
                                 '    fx_excluded_text,\n'
@@ -401,12 +430,12 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                 '    # 同樣沒被判過，⛔ 不落到「沒有任何一檔達門檻（有效結果）」。只有這一種時走「不適用 · 重跑無效」。\n'
                                 '    _fx_tp = tuple(_c for _c in _fx_codes(station.rows)\n'
                                 '                   if any(str(_r.get("代號", "")) == _c and _r.get("種類") == "個股"\n'
-                                '                          for _r in station.rows))\n',
+                                '                          for _r in station.rows))\n'
+                                '    _fail_unjudged = bool(_unjudged)      # 取數失敗／資料異常那幾種（升紅）\n'
+                                '    _unjudged = _unjudged + _fx_tp\n',
                                 ''),
-                               ('        has_value=bool(station.take_profit) and not (_unjudged or _fx_tp),\n'
-                                '        reason=(MISS_FETCH_FAILED if _unjudged\n'
+                               ('        reason=(MISS_FETCH_FAILED if _fail_unjudged\n'
                                 '                else MISS_NOT_APPLICABLE if _fx_tp else ""))\n',
-                                '        has_value=bool(station.take_profit) and not _unjudged,\n'
                                 '        reason=MISS_FETCH_FAILED if _unjudged else "")\n'),
                                ('        if _fx_tp:                              # XV-H3 QA #10：外幣那幾檔同樣判不了\n'
                                 '            _why += f"；{fx_excluded_text(_fx_tp)}"\n',
@@ -415,8 +444,32 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                 '        # XV-H3 QA 回修 #10：只有外幣／幣別未確認的衛星判不了（沒有取數失敗）。\n'
                                 '        _note = Note(now=TP_FAILED_NOW, why=fx_excluded_text(_fx_tp), where=FX_PARTIAL_WHERE)\n',
                                 ''),
+                               ('    _held = getattr(result, "held_n", None)\n'
+                                '    _fx = tuple(getattr(result, "fx_excluded", ()) or ())\n'
+                                '    if coverage and isinstance(_valued, int) and isinstance(_held, int) and _held:\n',
+                                '    _held = getattr(result, "held_n", None)\n'
+                                '    if coverage and isinstance(_valued, int) and isinstance(_held, int) and _held:\n'),
+                               ('        # XV-H3 QA 回修 #5：有外幣排除時 L3 的 `held_n` 只數台股列 ⇒ 標明「台股」，外幣另列原因\n        # （⛔ 不把外幣講成「缺張數／均價／現價」）。\n',
+                                ''),
+                               ('                       f"{_held} 檔{\'台股\' if _fx else \'\'}持有列裡納入了 {_valued} 檔"\n',
+                                '                       f"{_held} 檔持有列裡納入了 {_valued} 檔"\n'),
+                               ('                          if _valued < _held else "")\n'
+                                '                       + (f"；另外 {fx_excluded_text(_fx)} —— **不進分子也不進分母**" if _fx else "")))\n',
+                                '                          if _valued < _held else "")))\n'),
                                ('    _bits += _fx_degraded_bits(result)\n', ''),
                                ('\n'
+                                '\n'
+                                'def _fx_value_label(result: Any) -> str:\n'
+                                '    """失準卡的「現值」列標籤。XV-H3 QA 回修 #5：有外幣排除時標明只涵蓋台股（⛔ 不稱「總市值」）。"""\n'
+                                '    if getattr(result, "fx_excluded", ()):\n'
+                                '        return "現值（僅已納入台股部分，已失準，別照門檻讀）"\n'
+                                '    return "現值（已失準，別照門檻讀）"\n'
+                                '\n'
+                                '\n'
+                                'def _fx_only(result: Any) -> bool:\n'
+                                '    """XV-H3 QA 回修 #5：L3 回報持有列全是外幣／幣別未確認（台股一檔都沒有）。"""\n'
+                                '    return getattr(result, "reason", "") == FX_ONLY_REASON\n'
+                                '\n'
                                 '\n'
                                 'def _fx_degraded_bits(result: Any) -> list[tuple[str, str]]:\n'
                                 '    """XV-H3（客戶 2026-10-28 裁示 A）：L3 回報有外幣／幣別未確認的持有列沒進這個數字（`fx_excluded`）\n'
@@ -426,11 +479,49 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                 '        return []\n'
                                 '    return [(f"**{FX_PARTIAL_NOW}** —— {fx_excluded_text(_fx)}", FX_PARTIAL_WHERE)]\n',
                                 ''),
+                               ('        # XV-H3 QA 回修 #5：持有列全是外幣 → 「不適用 · 重跑無效」（⛔ 不是「有效的結果，去補張數」）。\n'
+                                '        reason=(MISS_FETCH_FAILED if _stress_skipped\n'
+                                '                else MISS_NOT_APPLICABLE if _fx_only(_res) else ""),\n',
+                                '        reason=MISS_FETCH_FAILED if _stress_skipped else "",\n'),
                                ('        # XV-H3：有外幣未納入 → 總市值那一格改列客戶句（⛔ 不顯示部分總市值）。\n'
                                 '        _fx_res = tuple(getattr(_res, "fx_excluded", ()) or ())\n'
                                 '        _facts.insert(1, (_fx_facts(_fx_res)[0] if _fx_res else\n'
                                 '                          ("納入計算的組合總市值（元）", f"{_res.total_value_twd:,.0f}")))\n',
                                 '        _facts.insert(1, ("納入計算的組合總市值（元）",\n                          f"{_res.total_value_twd:,.0f}"))\n'),
+                               ('        # 一邊掛「🟠 門檻已失準」一邊出「門檻內」是同一張卡說兩句相反的話。\n'
+                                '        _facts.insert(0, (_fx_value_label(_res), _shown))\n'
+                                '        return (Card(key="hold.deep.stress", label="壓力測試",\n',
+                                '        # 一邊掛「🟠 門檻已失準」一邊出「門檻內」是同一張卡說兩句相反的話。\n'
+                                '        _facts.insert(0, ("現值（已失準，別照門檻讀）", _shown))\n'
+                                '        return (Card(key="hold.deep.stress", label="壓力測試",\n'),
+                               ('    elif _fx_only(_res):\n'
+                                '        _note = Note(now=FX_PARTIAL_NOW, why=fx_excluded_text(_res.fx_excluded),\n'
+                                '                     where=FX_PARTIAL_WHERE)\n',
+                                ''),
+                               ('        reason=(MISS_FETCH_FAILED if _var_skipped\n'
+                                '                else MISS_NOT_APPLICABLE if _fx_only(_res) else ""),   # XV-H3 QA #5\n',
+                                '        reason=MISS_FETCH_FAILED if _var_skipped else "",\n'),
+                               ('        # ~~"日報酬是**原幣別**報酬；外幣計價的持股未含匯率變動"~~ ← XV-H3 QA 回修 #5（有意識的更正）：\n'
+                                '        #   外幣／幣別未確認的持股自 XV-H3 起**不納入**本格（不是納入但未含匯率）。\n'
+                                '        ("已知限制", "外幣／幣別未確認的持股**不納入**本格（匯率與成本幣別未定義，不換算）"),\n',
+                                '        ("已知限制", "日報酬是**原幣別**報酬；外幣計價的持股未含匯率變動"),\n'),
+                               ('                          + (f"，占已納入台股部分市值 {_res.monthly_99_pct:.2f}%"\n'
+                                '                             if getattr(_res, "fx_excluded", ()) else\n'
+                                '                             f"，占總市值 {_res.monthly_99_pct:.2f}%")\n'
+                                '                          + f"（示警門檻 {_res.warn_pct:g}）"))\n',
+                                '                          f"，占總市值 {_res.monthly_99_pct:.2f}%"\n'
+                                '                          f"（示警門檻 {_res.warn_pct:g}）"))\n'),
+                               ('        # 燈號頻道留白：門檻已失準卻還出「月度尾部可控」，是同一張卡說兩句相反的話。\n'
+                                '        _facts.insert(0, (_fx_value_label(_res), _shown))\n'
+                                '        return (Card(key="hold.deep.var", label="VaR（風險值）",\n',
+                                '        # 燈號頻道留白：門檻已失準卻還出「月度尾部可控」，是同一張卡說兩句相反的話。\n'
+                                '        _facts.insert(0, ("現值（已失準，別照門檻讀）", _shown))\n'
+                                '        return (Card(key="hold.deep.var", label="VaR（風險值）",\n'),
+                               ('    elif _fx_only(_res):\n'
+                                '        # XV-H3 QA 回修 #5：持有列全是外幣 → 外幣原因，⛔ 不叫人補張數／均價。\n'
+                                '        _note = Note(now=FX_PARTIAL_NOW, why=fx_excluded_text(_res.fx_excluded),\n'
+                                '                     where=FX_PARTIAL_WHERE)\n',
+                                ''),
                                ('    "兩套算法對不起來", "抓不到價格序列", "這個總額只涵蓋一部分持股",\n    "部分外幣資產未納入")      # XV-H3\n',
                                 '    "兩套算法對不起來", "抓不到價格序列", "這個總額只涵蓋一部分持股")\n'),
                                ('    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI,\n'
@@ -441,7 +532,8 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                 '           None, ("未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",\n'
                                 '                  "未納入：" + V2_EXCERPT_GAP + "｜原因：幣別未確認"),\n'
                                 '           NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))\n'
-                                '       for _k in ("hold.alloc_split", "hold.deep.core_satellite")]\n',
+                                '       for _k in ("hold.alloc_split", "hold.deep.core_satellite",\n'
+                                '                  "hold.deep.stress", "hold.deep.var")]       # QA #5：壓測／VaR 全外幣\n',
                                 ''),
                                ('                  *_V2_INVALID_WHY,\n'
                                 '                  # XV-H3 QA #10：只有外幣／幣別未確認的衛星判不了。\n'
