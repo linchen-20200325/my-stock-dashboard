@@ -274,3 +274,98 @@ class TestRenderedDefaultModePages:
         assert not at.exception, at.exception
         _txt = "\n".join(_page_texts(at))
         assert "切回舊版" in _txt and "不使用" in _txt, "對照組失效：legacy 的 👤 我的 應仍含原句"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 第三組複驗回修：page_market 範圍的精準斷言（不被「資料中心／憑什麼」允許殘留豁免）
+# ══════════════════════════════════════════════════════════════════
+_MARKET_DEAD_END_PHRASES = ("資料健康：請到", "健康狀態與根因")
+
+
+def _all_text(at) -> str:
+    return "\n".join(_page_texts(at))
+
+
+@pytest.mark.usefixtures("stub_trading_day_status")
+@pytest.mark.slow
+class TestMarketPageHealthPointers:
+    def test_default_mode_market_page_has_neither_health_pointer(self):
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_file(str(_ROOT / "app.py"), default_timeout=300).run()
+        assert not at.exception, at.exception
+        _t = _all_text(at)
+        assert "市場" in _t   # 確實渲染到市場頁
+        for ph in _MARKET_DEAD_END_PHRASES:
+            assert ph not in _t, f"預設模式 📊 市場頁仍含 {ph!r}（H11／H25 分流失效）"
+        assert "請到 🩺 資料中心" not in _t and "請到 「🩺 資料中心" not in _t
+
+    def test_legacy_mode_market_page_keeps_both_original_sentences(self):
+        """對照組：legacy 的 📊 大盤頁仍含原句（證明上面的『不含』不是頁面沒畫）。"""
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_file(str(_ROOT / "app.py"), default_timeout=300)
+        at.session_state[ia_nav4.LEGACY_SESSION_KEY] = True
+        at.session_state["_sb_ia_page"] = ia_nav.direction_options()[list(ia_nav.NAV_TREE).index(ia_nav.DIR_MARKET)]
+        at.run()
+        assert not at.exception, at.exception
+        _t = _all_text(at)
+        for ph in _MARKET_DEAD_END_PHRASES:
+            assert ph in _t, f"legacy 模式 📊 大盤頁缺原句 {ph!r}"
+
+
+# ══════════════════════════════════════════════════════════════════
+# H18：`st.query_params.get` 拋例外 ⇒ 旗標維持原值、app 不炸
+# ══════════════════════════════════════════════════════════════════
+class TestQueryParamsFailureIsIsolated:
+    def _resolver(self):
+        import types
+        t = ast.parse((_ROOT / "app.py").read_text(encoding="utf-8"))
+        fn = next(f for f in t.body if isinstance(f, ast.FunctionDef) and f.name == "_nav4_resolve_legacy")
+        src = ast.get_source_segment((_ROOT / "app.py").read_text(encoding="utf-8"), fn)
+        return src, types
+
+    @pytest.mark.parametrize("cur", [False, True])
+    def test_get_raising_keeps_the_current_flag(self, cur):
+        src, types = self._resolver()
+
+        class _Boom:
+            def get(self, *_a, **_k):
+                raise RuntimeError("query_params exploded")
+        _st = types.SimpleNamespace(session_state={ia_nav4.LEGACY_SESSION_KEY: cur}, query_params=_Boom())
+        _g = {"st": _st}
+        exec(src, _g)
+        assert _g["_nav4_resolve_legacy"]() is cur
+        assert _st.session_state[ia_nav4.LEGACY_SESSION_KEY] is cur
+
+    def test_attribute_access_raising_keeps_the_flag_too(self):
+        src, types = self._resolver()
+
+        class _St:
+            session_state = {ia_nav4.LEGACY_SESSION_KEY: True}
+
+            @property
+            def query_params(self):
+                raise RuntimeError("no query_params")
+        _g = {"st": _St()}
+        exec(src, _g)
+        assert _g["_nav4_resolve_legacy"]() is True
+
+    @pytest.mark.slow
+    @pytest.mark.usefixtures("stub_trading_day_status")
+    @pytest.mark.parametrize("start_legacy", [False, True])
+    def test_app_does_not_crash_and_keeps_its_mode_when_query_params_get_raises(self, monkeypatch, start_legacy):
+        from streamlit.runtime.state.query_params_proxy import QueryParamsProxy
+        from streamlit.testing.v1 import AppTest
+        _orig = QueryParamsProxy.get
+
+        def _get(self, key, default=None):
+            if key == ia_nav4.LEGACY_QUERY_PARAM:
+                raise RuntimeError("legacy param read exploded")
+            return _orig(self, key, default)
+        monkeypatch.setattr(QueryParamsProxy, "get", _get)
+        at = AppTest.from_file(str(_ROOT / "app.py"), default_timeout=300)
+        at.session_state[ia_nav4.LEGACY_SESSION_KEY] = start_legacy
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state[ia_nav4.LEGACY_SESSION_KEY] is start_legacy
+        _labels = [getattr(t, "label", None) for t in at.tabs]
+        assert ("🌍 市場環境" in _labels) is start_legacy
