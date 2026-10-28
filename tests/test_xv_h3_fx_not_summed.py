@@ -268,3 +268,30 @@ def test_var_known_limit_text_is_truthful():
                          has_station_rows=True)
     f = dict(P.build_var_card(deep)[1])
     assert f["已知限制"] == "外幣／幣別未確認的持股**不納入**本格（匯率與成本幣別未定義，不換算）"
+
+
+def test_stress_threshold_and_var_pct_labels_under_fx(monkeypatch):
+    """複驗 C MINOR-3 ＋ 擊殺存活突變 M16：外幣排除時壓測門檻句與 VaR 月度百分比都不稱「總市值」。"""
+    import dataclasses
+    import src.ui.views.page_hold as P
+    D = _stub_stress(monkeypatch)
+    res = D.get_portfolio_stress(_deep_rows())
+    deep = P.DeepReadout(requested=True, submitted=True, bound=True, holdings_n=2,
+                         has_station_rows=True, stress=res)
+    f = dict(P.build_stress_card(deep)[1])
+    assert f["警示門檻（L0 SSOT）"].startswith("回撤大於已納入台股部分市值的 ")
+    assert "總市值" not in f["警示門檻（L0 SSOT）"]
+    v = D.VarResult(computed=True, hist_95_twd=1.0, hist_99_twd=2.0, param_95_twd=1.0,
+                    param_99_twd=2.0, monthly_99_twd=3.0, monthly_99_pct=1.5, warn=False,
+                    n_common=40, total_value_twd=10.0, covered_value_twd=10.0, coverage_pct=100.0,
+                    valued_n=1, held_n=1, tickers_used=("0050.TW",))
+    v = dataclasses.replace(v, fx_excluded=("VOO",))
+    fv = dict(P.build_var_card(P.DeepReadout(requested=True, submitted=True, bound=True,
+                                             holdings_n=2, has_station_rows=True, var=v))[1])
+    m99 = next(val for k, val in fv.items() if k.startswith("月度 99%"))
+    assert "占已納入台股部分市值 1.50%" in m99 and "總市值" not in m99
+    # 沒有外幣時照舊（與修前同字）
+    fv2 = dict(P.build_var_card(P.DeepReadout(requested=True, submitted=True, bound=True,
+                                              holdings_n=1, has_station_rows=True,
+                                              var=dataclasses.replace(v, fx_excluded=())))[1])
+    assert "占總市值 1.50%" in next(val for k, val in fv2.items() if k.startswith("月度 99%"))

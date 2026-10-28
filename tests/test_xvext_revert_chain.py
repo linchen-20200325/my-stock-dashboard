@@ -583,6 +583,10 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                 '        _facts.insert(1, (_fx_facts(_fx_res)[0] if _fx_res else\n'
                                 '                          ("納入計算的組合總市值（元）", f"{_res.total_value_twd:,.0f}")))\n',
                                 '        _facts.insert(1, ("納入計算的組合總市值（元）",\n                          f"{_res.total_value_twd:,.0f}"))\n'),
+                               ('                          # 複驗 C MINOR-3：外幣排除時分母只是台股那一批 ⇒ ⛔ 不稱「總市值」。\n'
+                                '                          f"回撤大於{\'已納入台股部分市值\' if _fx_res else \'總市值\'}的 "\n'
+                                '                          f"{_res.warn_pct:g} 個百分點就示警"))\n',
+                                '                          f"回撤大於總市值的 {_res.warn_pct:g} 個百分點就示警"))\n'),
                                ('        # 一邊掛「🟠 門檻已失準」一邊出「門檻內」是同一張卡說兩句相反的話。\n'
                                 '        _facts.insert(0, (_fx_value_label(_res), _shown))\n'
                                 '        return (Card(key="hold.deep.stress", label="壓力測試",\n',

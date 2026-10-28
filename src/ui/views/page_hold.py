@@ -3614,7 +3614,9 @@ def build_stress_card(deep: DeepReadout) -> _Built:
         _facts.insert(1, (_fx_facts(_fx_res)[0] if _fx_res else
                           ("納入計算的組合總市值（元）", f"{_res.total_value_twd:,.0f}")))
         _facts.insert(2, ("警示門檻（L0 SSOT）",
-                          f"回撤大於總市值的 {_res.warn_pct:g} 個百分點就示警"))
+                          # 複驗 C MINOR-3：外幣排除時分母只是台股那一批 ⇒ ⛔ 不稱「總市值」。
+                          f"回撤大於{'已納入台股部分市值' if _fx_res else '總市值'}的 "
+                          f"{_res.warn_pct:g} 個百分點就示警"))
         # §4.1：單位寫出來 —— 「-224,000」看不出是元還是張。
         _shown = f"約 {abs(_res.loss_twd):,.0f} 元（{_res.loss_pct:.1f}%）"
         if _state == UI_LIVE:
