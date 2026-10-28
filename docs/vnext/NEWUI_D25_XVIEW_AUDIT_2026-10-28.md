@@ -358,3 +358,23 @@ XV-M7、XV-M8（MED，單組）；XV-C13b（MED，隨 T2）；XV-X3、XV-X6、XV
 11. 所有快取行為為讀碼推得（沙箱 `cache_data` 為 no-op）；H2／H3／M7 未以 Streamlit 實測。
 12. 本報告所有未標 V 判定的項目（§4.0「單組」）均**未經第二組複驗**；§5 PASS 清單 V 未逐條複驗。
 13. §4.2 各 Gate 的推薦方案、§4.3 的分類（含 T4／T5 由 C 組原判「客戶 Gate」改列內部技術 Gate 並附轉問條件）為本彙整者依總管派工規格整理，**未經客戶確認**。
+
+---
+
+## §7 本批安全小修實際處置結果（2026-10-28 補；加法式，上文一字未改）
+
+> 本節記錄 §4.1 S1～S5 的**實際**處置（§4.1 原文為實作前的 V 讀碼建議，保留不改）。決策紀錄 `docs/DECISIONS.md` DEC-100（AI 總管內部，非客戶裁示）。狀態：隨 xview PR，implementation complete／waiting CI，**未合併**。
+
+| # | ID | commit | 實際做法 | 與 §4.1 建議的差異／停手項 |
+|---|---|---|---|---|
+| **S1** | XV-H1（最小版） | `188c20e7`＋QA 回修 `183dbdc3` | `build_summary_prompt`：`total` 須為**有限值且 ≥1** 才放「續抱」句（缺／非數／NaN／inf／0／0.5 不放）；total>0 逐字不變；LINE `_maybe_ai_summary` 共用同支 prompt 同步受益 | 比 §4.1 `int(total or 0)<=0` 更嚴（QA MINOR 回修：inf／NaN／0.5 原會漏過）；部分失敗／燈全⚪／無現價**未動**（Z51／Z52）→ 客戶 Gate `XV-H1-EXT` |
+| **S2** | XV-H2（文字） | `96880543`＋QA 回修 `183dbdc3` | 只改側欄按鈕 `help=`，據實列出不在清除範圍的模組自有暫存，結尾表明非完整清單；標籤／key／行為／版面不變 | QA MAJOR 回修：首版漏列個股股價與籌碼、台灣與美國總經（含 VIX、匯率）、多檔批次結果；按鈕兩模式共用 ⇒ legacy 亦可見（舊 UI digest 更新，DEC-019 揭露）；行為統一 → `XV-H2-EXT` |
+| **S3** | XV-X5 | `7dbfaf4b` | `page_inspect._batch_row` 對個股傳 `failed=`，價格失敗沿用 `BatchRow.error` 整列錯誤態；查無資料仍「—」；L1 走 strict 同快取鍵與冷卻 | ⚠️ 取捨：同列財報分數一併被錯誤態蓋掉（已揭露）；財報腿失敗仍「—」（已知限制） |
+| **S4** | XV-C08 | `8bc93e8e` | `sector_heatmap_render` 子項顯示名改先 `.TWO` 再 `.TW`；不換 helper、不改大小寫 | **只修 1／3 處（半項）**：`etf_smart_analysis` 兩處僅舊 UI 使用，依 DEC-019 停手 → BACKLOG `XV-ETFSMART-SUFFIX`；`etf_fetch` 小寫 `.two` → `XV-V1` |
+| **S5** | XV-M2 | `99e10bc6`＋QA 回修 `183dbdc3` | 快取移內層、失敗 raise 不入快取；公開函式為外層 wrapper 照舊回空表（3 caller 不變）；接 `shared.fail_cooldown`（上市／上櫃各一份），成功即解除；公開 `.clear` 同清內層與冷卻；3 個測試 fixture 改直接 `.clear()`、不再吞例外 | QA MINOR 回修：補「晚到失敗不得覆蓋成功」測試；⚠️ INFERENCE：冷卻為模組層共用 ⇒ 冷卻期間所有使用者拿空表 |
+| — | 守衛同步 | `3c1a7550` | 舊 UI 零改動 digest 更新（舊值刪除線保留＋DEC-019 揭露）；新增 `tests/test_xview_revert_chain.py`（接在 `sheet_safety_revert_for` 鏈頭） | — |
+
+**QA 結果**：一組修正 QA 抓到 **1 MAJOR（S2 說明列不完整）＋2 MINOR（S1 total 判定、S5 success() 世代守衛測試）**，皆已於 `183dbdc3` 回修；**回修後未再經第二組複驗**（總管轉述）。突變測試由實作者與 QA **各自自列**，未獨立複跑。
+
+**限制**：沙箱無部署端網路、Streamlit Cloud 未驗（快取與冷卻行為僅讀碼＋單元測試）；QA 時另發現兩項既有問題（非本批引入，總管轉述）：LINE `format_holdings_message` total=NaN／inf 拋例外（`XV-LINE-TOTAL-NAN`）、`tests/test_symmetry_phase1.py` c4 測試順序相依、基底 `739fa361` 亦重現（`XV-TEST-SYMMETRY-C4`）。撰寫組（本節）未重跑測試。
+
