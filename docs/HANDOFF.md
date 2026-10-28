@@ -38,6 +38,8 @@
 
 📌 **NAV-1 接手補註（2026-10-28，AI 總管事實更新）**：NAV-1 實作完成（`docs/vnext/NEWUI_D25_NAV1_SPEC_2026-10-28.md`；DEC-098），**PR 待開／waiting CI／待客戶裁示標的頁葉選擇，非 done**。**客戶實機點驗為 NAV-1 驗收必要條件**（見 `docs/BACKLOG.md` `NAV1-CLOUD-MOBILE-VERIFY`）。NAV-1 合併後的下一接手點＝`CROSS-VIEW-DATA-CONSISTENCY-AUDIT`；仍待客戶 Gate 者（AB-2b、AB-4w、RS-2、HI-1～HI-6、EPS×PE、正式趨勢定義、舊 UI Removal Gate、D2 boot 根因）不得自行啟動。
 
+📌 **NAV-1 客戶裁示補註＋Resume Checkpoint 同步（2026-10-28，決策者＝客戶，DEC-099；以下覆蓋上一則補註中「待客戶裁示標的頁葉選擇」一語，上一則原文保留）**：current PR＝**#957**；客戶已裁示標的頁葉選擇方案 A（過渡保留；UI-T 須整合為單一 🎯 標的頁並移除此切換；非最終設計、非新增正式 IA；不得改功能語意或新增投資規則）。**NAV-1 狀態＝待 PR #957 合併；客戶裁示已取得（僅此一項偏離）**，非 done；客戶實機點驗仍為驗收必要條件。**下一接手點＝NAV-1 合併後 → `CROSS-VIEW-DATA-CONSISTENCY-AUDIT`；開工前依 DEC-084 重判 Model×Effort。** 其餘待客戶 Gate 項不變。
+
 此為 DEC-086 Resume Checkpoint：**GitHub 操作事實優先於本表；不一致時修正本表**。
 只記目前狀態，不複製 BACKLOG／DECISIONS；本表不取代下方「現行短版」段（DEC-085 段仍是唯一現行短版標記）。
 DEC-086 規則已於 main，本表已落地。
