@@ -51,17 +51,19 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                               '}\n',
                               ''),),
  'src/compute/notify/holdings_digest_message.py': (('import math\n', ''),
-                                                   ('from shared import asset_currency_gate as FXG\n', ''),
+                                                   ('from shared import asset_currency_gate as FXG\n'
+                                                    'from shared import holdings_data_short as HDS\n',
+                                                    ''),
                                                    ('from shared import station_specs as SS\n', ''),
                                                    ('def _data_short(digest: dict) -> bool:\n'
                                                     '    """XV-H1-EXT（客戶 2026-10-28 裁示 A）：有抓取失敗或資料不足（燈全判不出／缺現價）的標的？\n'
                                                     '\n'
                                                     '    成立時正文**不印「續抱」**當缺資料的替代結論（missing ≠ HOLD；unavailable ≠ safe）。\n'
                                                     '    """\n'
-                                                    '    # QA 回修 #2：持有列輸入／燈資料異常（`invalid`，批 Z49～Z52）同樣是「判不出來」，不是「沒事」。\n'
-                                                    '    return (bool(digest.get("errors")) or bool(digest.get("insufficient"))\n'
-                                                    '            or bool(digest.get("price_missing_kept")) or '
-                                                    'bool(digest.get("invalid")))\n'
+                                                    '    # QA 回修 #2：持有列輸入／燈資料異常同樣是「判不出來」，不是「沒事」。\n'
+                                                    '    # 複驗 C MAJOR-1/2：改用 L0 單一判定（與 ① gate、⑦ prompt 同一份）；`invalid` 仍額外看\n'
+                                                    '    # （觀察清單列的燈異常也不該被講成「無紅燈」）。\n'
+                                                    '    return HDS.digest_data_short(digest) or bool(digest.get("invalid"))\n'
                                                     '\n'
                                                     '\n',
                                                     ''),
@@ -144,7 +146,9 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                    '        _YF_CLOSE_CACHE.clear()\n'
                                    '    return ("macro_core._FRED_CACHE", "macro_core._YF_CLOSE_CACHE")\n',
                                    ''),),
- 'src/services/dividend_station_service.py': (('from shared import asset_currency_gate as FXG\n', ''),
+ 'src/services/dividend_station_service.py': (('from shared import asset_currency_gate as FXG\n'
+                                               'from shared import holdings_data_short as HDS\n',
+                                               ''),
                                               ('def _mark_insufficient(row: dict, *, ak: str, held: bool) -> None:\n'
                                                '    """XV-H1-EXT（客戶 2026-10-28 裁示 A：missing ≠ HOLD；unavailable ≠ safe）。就地標記。\n'
                                                '\n'
@@ -233,7 +237,13 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                '    # XV-H3：幣別未確認、未納入總額／比例的持有列（只有非空才有這一鍵；`allocation` 此時為 None）。\n'
                                                '    _fx = fx_excluded_codes(rows)\n'
                                                '    if _fx:\n'
-                                               '        _out["fx_excluded"] = _fx\n',
+                                               '        _out["fx_excluded"] = _fx\n'
+                                               '    # 複驗 C MAJOR-1/2：組合層「資料不足」的單一判定（L0 `holdings_data_short.row_data_short`）\n'
+                                               '    # → 代號清單（只有非空才有這一鍵）。⑦ prompt 與 LINE 一律以 `digest_data_short()` 讀它。\n'
+                                               '    _short = list(dict.fromkeys(str(r.get("代號", "")) for r in (rows or []) if '
+                                               'HDS.row_data_short(r)))\n'
+                                               '    if _short:\n'
+                                               '        _out["data_short"] = _short\n',
                                                ''),
                                               ('\n'
                                                '\n'
@@ -251,7 +261,8 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                '    # 不得補資料）。只有 Z51/Z52 資料異常（`invalid`）時維持修前作法（兩句都不放）。\n'
                                                '    _ins = digest.get("insufficient") or []\n'
                                                '    _kept = digest.get("price_missing_kept") or []\n'
-                                               '    _short = _no_judged or bool(digest.get("errors")) or bool(_ins) or bool(_kept)\n'
+                                               '    # 複驗 C MAJOR-1/2：與 ①／LINE 同一份判定（L0 `holdings_data_short.digest_data_short`）。\n'
+                                               '    _short = HDS.digest_data_short(digest)\n'
                                                '    _guide = (_INSUFFICIENT_INSTRUCTION if _short\n'
                                                '              else "" if _inv else "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。")\n',
                                                ''),
@@ -393,17 +404,16 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                 '\n'
                                 '#: XV-H1-EXT QA 回修 #1：① 有資料不足／資料異常的列時取代巡航句（語彙沿用 L0「資料不足／無法判定」\n'
                                 '#: 與 L4 `cruise_or_gap` 的「不是都沒事,是沒東西可以判」）。\n'
-                                'SHORT_DATA_GAP_TEXT: str = "資料不足／無法判定或資料異常 —— **不是都沒事,是沒東西可以判**"\n'
+                                '#: 複驗 C：~~"資料不足／無法判定或資料異常 —— …"~~ → 判定改走 L0 單一判定後，涵蓋缺現價（保留結論）與外幣，故補字。\n'
+                                'SHORT_DATA_GAP_TEXT: str = "資料不足／無法判定、資料異常、缺現價或幣別未確認 —— **不是都沒事,是沒東西可以判**"\n'
                                 '\n'
                                 '\n'
                                 'def _short_data_flags(rows: Sequence[Mapping[str, Any]]) -> list[bool]:\n'
-                                '    """逐列：建議動作被 L3 換成 ⬜（`KEY_INSUFFICIENT`），或持有列帶資料異常標記\n'
-                                '    （`KEY_INVALID_INPUTS`／`KEY_INVALID_LIGHTS`）且非整批抓取失敗。只讀 L3 標記，⛔ 不自己判。"""\n'
-                                '    return [bool(_r.get(KEY_INSUFFICIENT))\n'
-                                '            or (not (_r.get("_detail") or {}).get("error")\n'
-                                '                and bool(_r.get(KEY_INVALID_LIGHTS)\n'
-                                '                         or (_r.get("held") and _r.get(KEY_INVALID_INPUTS))))\n'
-                                '            for _r in rows]\n',
+                                '    """逐列：是否讓組合層「資料不足」。複驗 C MAJOR-1/2：⛔ 本頁不再自己判 —— 一律走 L0\n'
+                                '    `holdings_data_short.row_data_short`（與 ⑦ prompt、LINE 正文同一份；含缺現價保留結論、\n'
+                                '    外幣／幣別未確認、契約漂移）。"""\n'
+                                '    from shared.holdings_data_short import row_data_short\n'
+                                '    return [row_data_short(dict(_r)) for _r in rows]\n',
                                 ''),
                                ('#: XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入時，總市值／配置比例處的客戶句。\n'
                                 '#: `Note` 文案不得帶狀態 glyph（⬜ 是「尚未載入」的 glyph）⇒ Note 用去掉 ⬜ 的同一句；\n'
@@ -441,7 +451,8 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                 ''),
                                ('                       f"{station.unjudged_rows} 列不是「每一盞適用燈都判得出來」"\n'
                                 '                       # XV-H1-EXT QA 回修 #1：資料不足／資料異常的列同樣算進來。\n'
-                                '                       + ("（含資料不足／無法判定或資料異常的列）" if any(_short_data_flags(station.rows))\n'
+                                '                       + ("（含資料不足／無法判定、資料異常、缺現價或幣別未確認的列）"\n'
+                                '                          if any(_short_data_flags(station.rows))\n'
                                 '                          else "")\n'
                                 '                       + "—— 只要有一列不滿足，就不准說「今天沒事」"))\n',
                                 '                       f"{station.unjudged_rows} 列不是「每一盞適用燈都判得出來」—— "\n'

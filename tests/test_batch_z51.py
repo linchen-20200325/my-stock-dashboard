@@ -728,7 +728,14 @@ def test_prompt_lists_invalid_and_drops_keep_instruction(case, held, monkeypatch
     _st_p, _sw_p, _swc_p, pre = _run(monkeypatch, over, vix=vix, held=held, cands=_POOL,
                                      svc_mod=_variant(_SVC, (Z51_L3_PROMPT_PAIR,),
                                                       "_z51_no_prompt"))
-    assert _KEEP in pre and _FACT_HEAD not in pre
+    assert _FACT_HEAD not in pre
+    if _st.digest.get("data_short"):
+        # 複驗 C MAJOR-1/2（XV-H1-EXT 單一判定，取代 Z51 該部分語意）：持有列燈資料異常 ⇒ 組合層
+        # 資料不足（例：VIX 異常 ⇒ 持有列 235 燈異常）⇒ 修前（拔 Z51 prompt 環）與修後都帶資料不足指示、都不帶續抱句。
+        assert _KEEP not in pre and S._INSUFFICIENT_INSTRUCTION in pre
+        assert S._INSUFFICIENT_INSTRUCTION in prompt
+    else:
+        assert _KEEP in pre
     assert prompt == pre.replace(_KEEP, "").replace(
         _prompt_line(pre, "- 抓取失敗未納入：") + "\n",
         _prompt_line(pre, "- 抓取失敗未納入：") + "\n" + _fact(*want) + "\n")
@@ -772,7 +779,9 @@ def test_mut_prompt_reopens_keep_instruction(monkeypatch):
     """只拔 prompt 那一環 → QA D1 重現：235 判不出來，AI 仍被要求說「續抱、定期定額即可」。"""
     m = _variant(_SVC, (Z51_L3_PROMPT_PAIR,), "_z51_no_prompt")
     _st, _sw, _c, prompt = _run(monkeypatch, {}, vix=float("nan"), svc_mod=m)
-    assert _KEEP in prompt and _FACT_HEAD not in prompt, "拔掉 → 修前的續抱引導重現"
+    # 複驗 C（XV-H1-EXT 單一判定）：持有列燈異常另有一道防線（`data_short`）⇒ 續抱句不再重現；
+    # 突變仍看得到：異常事實列消失。
+    assert _KEEP not in prompt and _FACT_HEAD not in prompt, "拔掉 → 異常事實列消失"
     assert _prompt_line(prompt, "- 235 加碼觸發：") == "- 235 加碼觸發：無"
 
 
@@ -780,8 +789,9 @@ def test_mut_digest_hides_invalid_from_prompt(monkeypatch):
     m = _variant(_SVC, (Z51_L3_DIGEST_PAIR,), "_z51_no_digest")
     st, _sw, _c, prompt = _run(monkeypatch, {"weekly_close": _wk_at(-30, float("inf"))},
                                svc_mod=m)
-    assert "invalid" not in st.digest and _KEEP in prompt and _FACT_HEAD not in prompt, \
-        "拔掉 → ⑦ 看不到資料異常、續抱引導重現"
+    # 複驗 C（XV-H1-EXT 單一判定）：同上，續抱句不再重現；突變看「異常事實列消失」。
+    assert "invalid" not in st.digest and _KEEP not in prompt and _FACT_HEAD not in prompt, \
+        "拔掉 → ⑦ 看不到資料異常"
 
 
 def test_mut_l2_agg_hides_235_from_prompt(monkeypatch):

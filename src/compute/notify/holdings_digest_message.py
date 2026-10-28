@@ -13,6 +13,7 @@ import math
 import numbers
 
 from shared import asset_currency_gate as FXG
+from shared import holdings_data_short as HDS
 from shared import dividend_station_thresholds as T
 from shared import station_specs as SS
 
@@ -73,9 +74,10 @@ def _data_short(digest: dict) -> bool:
 
     成立時正文**不印「續抱」**當缺資料的替代結論（missing ≠ HOLD；unavailable ≠ safe）。
     """
-    # QA 回修 #2：持有列輸入／燈資料異常（`invalid`，批 Z49～Z52）同樣是「判不出來」，不是「沒事」。
-    return (bool(digest.get("errors")) or bool(digest.get("insufficient"))
-            or bool(digest.get("price_missing_kept")) or bool(digest.get("invalid")))
+    # QA 回修 #2：持有列輸入／燈資料異常同樣是「判不出來」，不是「沒事」。
+    # 複驗 C MAJOR-1/2：改用 L0 單一判定（與 ① gate、⑦ prompt 同一份）；`invalid` 仍額外看
+    # （觀察清單列的燈異常也不該被講成「無紅燈」）。
+    return HDS.digest_data_short(digest) or bool(digest.get("invalid"))
 
 
 def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:

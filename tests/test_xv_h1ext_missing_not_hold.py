@@ -226,3 +226,56 @@ def test_action_card_no_cruise_when_invalid_inputs(monkeypatch):
     rows[0] = dict(rows[0], **{SS.KEY_INVALID_INPUTS: (SS.ITEM_AVG_PRICE,)})
     P, st = _load_station(monkeypatch, rows)
     assert "巡航" not in st.cruise_text and st.unjudged_rows == 1
+
+
+# ── 複驗 C MAJOR-1/2：組合層「資料不足」單一判定（① ③ ⑦ LINE 共用）──────────────
+from shared import holdings_data_short as HDS
+
+
+def _mixed_rows(stock_metrics, stock_holding):
+    _wk = pd.Series([20.0 + i * 0.1 for i in range(160)],
+                    index=pd.date_range("2023-01-06", periods=160, freq="W-FRI"))
+
+    def mf(tk, kind):
+        if kind == "etf":
+            return {"weekly_close": _wk, "premium_pct": 0.3, "sharpe": 0.8,
+                    "total_return_1y_pct": 10.0, "annual_yield_pct": 5.0, "inception_years": 5.0,
+                    "ann_return_3y_pct": 8.0, "cum_return_3y_pct": 25.0,
+                    "peer_ranks": {3: .2, 6: .2, 12: .2}, "current_price": 180.0}
+        return stock_metrics
+    return S.build_station_rows([{"ticker": "0050", "lots": 1, "avg_price": 150}, stock_holding],
+                                vix=15.0, metrics_fn=mf)
+
+
+_REPRO = {
+    "a_breakdown_no_price": (
+        {"mj_grade": "A", "kd_state": None, "current_price": None, "trend_verdict": {"is_breakdown": True}},
+        {"ticker": "2330", "lots": 1, "avg_price": 400}),
+    "b_foreign_stock": (
+        {"mj_grade": "A", "kd_state": None, "current_price": 200.0},
+        {"ticker": "AAPL", "asset_kind": "stock", "lots": 1, "avg_price": 150}),
+}
+
+
+@pytest.mark.parametrize("case", list(_REPRO))
+def test_single_predicate_blocks_cruise_prompt_and_line(case, monkeypatch):
+    rows = _mixed_rows(*_REPRO[case])
+    assert HDS.row_data_short(rows[1]) is True and HDS.row_data_short(rows[0]) is False
+    P, st = _load_station(monkeypatch, rows)
+    assert "巡航" not in st.cruise_text and "沒有需要動作" not in st.cruise_text
+    assert st.unjudged_rows >= 1
+    d = S.build_station_digest(rows, vix=15.0)
+    assert d["data_short"] == [rows[1]["代號"]] and HDS.digest_data_short(d)
+    p = S.build_summary_prompt(d)
+    assert _HOLD not in p and S._INSUFFICIENT_INSTRUCTION in p
+    msg = M.format_holdings_message(d, {"switch_out": [], "switch_in": []}, as_of="t")
+    assert "續抱、定期定額即可" not in msg and "無紅燈,續抱" not in msg
+
+
+def test_watch_rows_do_not_make_portfolio_short():
+    assert HDS.row_data_short({"held": False, SS.KEY_INSUFFICIENT: ("x",)}) is False
+    assert HDS.row_data_short({"held": True, "_detail": {"error": "e"},
+                               SS.KEY_INSUFFICIENT: ("x",)}) is False
+    assert HDS.digest_data_short({"total": 1, "errors": ["x"]}) is True
+    assert HDS.digest_data_short({"total": 1}) is False
+    assert HDS.digest_data_short({"total": float("nan")}) is True

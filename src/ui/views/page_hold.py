@@ -1465,17 +1465,16 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
 
 #: XV-H1-EXT QA 回修 #1：① 有資料不足／資料異常的列時取代巡航句（語彙沿用 L0「資料不足／無法判定」
 #: 與 L4 `cruise_or_gap` 的「不是都沒事,是沒東西可以判」）。
-SHORT_DATA_GAP_TEXT: str = "資料不足／無法判定或資料異常 —— **不是都沒事,是沒東西可以判**"
+#: 複驗 C：~~"資料不足／無法判定或資料異常 —— …"~~ → 判定改走 L0 單一判定後，涵蓋缺現價（保留結論）與外幣，故補字。
+SHORT_DATA_GAP_TEXT: str = "資料不足／無法判定、資料異常、缺現價或幣別未確認 —— **不是都沒事,是沒東西可以判**"
 
 
 def _short_data_flags(rows: Sequence[Mapping[str, Any]]) -> list[bool]:
-    """逐列：建議動作被 L3 換成 ⬜（`KEY_INSUFFICIENT`），或持有列帶資料異常標記
-    （`KEY_INVALID_INPUTS`／`KEY_INVALID_LIGHTS`）且非整批抓取失敗。只讀 L3 標記，⛔ 不自己判。"""
-    return [bool(_r.get(KEY_INSUFFICIENT))
-            or (not (_r.get("_detail") or {}).get("error")
-                and bool(_r.get(KEY_INVALID_LIGHTS)
-                         or (_r.get("held") and _r.get(KEY_INVALID_INPUTS))))
-            for _r in rows]
+    """逐列：是否讓組合層「資料不足」。複驗 C MAJOR-1/2：⛔ 本頁不再自己判 —— 一律走 L0
+    `holdings_data_short.row_data_short`（與 ⑦ prompt、LINE 正文同一份；含缺現價保留結論、
+    外幣／幣別未確認、契約漂移）。"""
+    from shared.holdings_data_short import row_data_short
+    return [row_data_short(dict(_r)) for _r in rows]
 
 
 def _digest_map(value: Any) -> Mapping[str, Any] | None:
@@ -2221,7 +2220,8 @@ def build_confidence_card(station: StationReadout) -> _Built:
         _facts.append(("判不全的列",
                        f"{station.unjudged_rows} 列不是「每一盞適用燈都判得出來」"
                        # XV-H1-EXT QA 回修 #1：資料不足／資料異常的列同樣算進來。
-                       + ("（含資料不足／無法判定或資料異常的列）" if any(_short_data_flags(station.rows))
+                       + ("（含資料不足／無法判定、資料異常、缺現價或幣別未確認的列）"
+                          if any(_short_data_flags(station.rows))
                           else "")
                        + "—— 只要有一列不滿足，就不准說「今天沒事」"))
     if _state != UI_LIVE:

@@ -13,6 +13,7 @@ import numbers
 from typing import Callable
 
 from shared import asset_currency_gate as FXG
+from shared import holdings_data_short as HDS
 from shared import dividend_station_thresholds as T
 from shared import sector_flow_thresholds as _UNITS
 from shared import station_specs as SS
@@ -1370,6 +1371,11 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
     _fx = fx_excluded_codes(rows)
     if _fx:
         _out["fx_excluded"] = _fx
+    # 複驗 C MAJOR-1/2：組合層「資料不足」的單一判定（L0 `holdings_data_short.row_data_short`）
+    # → 代號清單（只有非空才有這一鍵）。⑦ prompt 與 LINE 一律以 `digest_data_short()` 讀它。
+    _short = list(dict.fromkeys(str(r.get("代號", "")) for r in (rows or []) if HDS.row_data_short(r)))
+    if _short:
+        _out["data_short"] = _short
     return _out
 
 
@@ -1416,7 +1422,8 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
     # 不得補資料）。只有 Z51/Z52 資料異常（`invalid`）時維持修前作法（兩句都不放）。
     _ins = digest.get("insufficient") or []
     _kept = digest.get("price_missing_kept") or []
-    _short = _no_judged or bool(digest.get("errors")) or bool(_ins) or bool(_kept)
+    # 複驗 C MAJOR-1/2：與 ①／LINE 同一份判定（L0 `holdings_data_short.digest_data_short`）。
+    _short = HDS.digest_data_short(digest)
     _guide = (_INSUFFICIENT_INSTRUCTION if _short
               else "" if _inv else "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。")
     _base = (
