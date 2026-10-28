@@ -32,13 +32,12 @@ import pytest
 
 
 def _clear_fetcher_cache(*names: str) -> None:
-    """清 @st.cache_data(無 streamlit 環境時 decorator 退化為 no-op,無 .clear())。"""
+    """清 L1 快取層＋失敗冷卻（公開函式的 `.clear`，xview V7 起必定存在）。"""
     from src.data.stock import yield_pe_fetcher as ypf
+    # xview V7：公開函式改為外層 wrapper，`.clear` 必定存在且同時清內層快取與失敗冷卻 →
+    # 不再 try/except 吞掉（清除失效必須當場炸，不得讓 case 間靜默串擾）。
     for _fn in (names or ('fetch_tpex_yield_pe', 'fetch_twse_yield_pe')):
-        try:
-            getattr(ypf, _fn).clear()
-        except Exception:
-            pass
+        getattr(ypf, _fn).clear()
 
 
 @pytest.fixture(autouse=True)

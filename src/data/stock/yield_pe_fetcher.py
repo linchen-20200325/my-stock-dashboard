@@ -35,6 +35,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from shared.fail_cooldown import NO_HIT as _FC_NO_HIT
+from shared.fail_cooldown import FailCooldown as _FailCooldown
 from shared.ttls import TTL_1DAY
 
 # ── EX-CACHE-1 標準寫法(CLAUDE.md §8.2.A.1)—— 無 streamlit 環境(headless
@@ -68,11 +70,38 @@ def proxy_fetch_url(url: str, *args, **kwargs):
     return fetch_url(url, *args, **kwargs)
 
 
+class _YieldPeFetchError(Exception):
+    """快取層抓取失敗 → 拋出（`st.cache_data` 不快取例外），由外層公開函式接住回空表。"""
+
+
+#: xview V7（M2）：本益比對照表失敗的退避（§1.A-3(b)）。修前所有失敗分支都 `return pd.DataFrame()`
+#: → 空表被 `@st.cache_data(ttl=TTL_1DAY)` 當正常值快取 1 天（上游恢復後估值／名稱最長空 1 天）。
+#: 現在失敗不入快取；`shared.fail_cooldown.FAIL_COOLDOWN_SEC` 秒內同一市場不重打上游、直接回空表；
+#: 任何一次成功立即解除。上市／上櫃各一份（`.clear()` 只清自己那一份）。
+_twse_fail_cooldown = _FailCooldown()
+_tpex_fail_cooldown = _FailCooldown()
+
+
+def _only_cache_success(cooldown: _FailCooldown, cached_fn) -> pd.DataFrame:
+    """外層：成功 → 快取層的 df；失敗 → print ＋ 空 DataFrame（回傳形狀與修前相同）。"""
+    _KEY = "all"   # 每份冷卻只管一個市場的全表 → 單一鍵
+    _hit, _gen = cooldown.begin(_KEY)
+    if _hit is not _FC_NO_HIT:
+        return _hit
+    try:
+        _df = cached_fn()
+    except Exception as _e:  # noqa: BLE001 — 失敗 → 空表（呼叫端用 .empty 判斷），已 log
+        print(f'[yield_pe_fetcher] {_e}')
+        return cooldown.fail(_KEY, _gen, pd.DataFrame())
+    cooldown.success(_KEY)
+    return _df
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ① 全市場 — TWSE BWIBBU_d 單次抓取
 # ══════════════════════════════════════════════════════════════════════════════
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
-def fetch_twse_yield_pe() -> pd.DataFrame:
+def _fetch_twse_yield_pe_cached() -> pd.DataFrame:
     """從 TWSE OpenAPI 一次取得**全上市**本益比 / 殖利率 / 股價淨值比。
 
     ⚠️ B6-b（2026-08）修：原本回傳前做 `dropna(subset=['殖利率(%)'])`，把「沒有殖利率」
@@ -95,12 +124,10 @@ def fetch_twse_yield_pe() -> pd.DataFrame:
     try:
         _resp = proxy_fetch_url(TWSE_BWIBBU_URL, timeout=15)
         if _resp is None or getattr(_resp, 'status_code', 0) != 200:
-            print('[yield_pe_fetcher] TWSE BWIBBU 回傳非 200 或 None')
-            return pd.DataFrame()
+            raise _YieldPeFetchError('TWSE BWIBBU 回傳非 200 或 None')
         _data = _resp.json()
         if not isinstance(_data, list) or not _data:
-            print('[yield_pe_fetcher] TWSE BWIBBU 回傳格式異常')
-            return pd.DataFrame()
+            raise _YieldPeFetchError('TWSE BWIBBU 回傳格式異常')
         _df = pd.DataFrame(_data).rename(columns={
             'Code':          '代碼',
             'Name':          '名稱',
@@ -123,16 +150,34 @@ def fetch_twse_yield_pe() -> pd.DataFrame:
         except Exception:
             pass
         return _result
+    except _YieldPeFetchError:
+        raise
     except Exception as _e:
-        print(f'[yield_pe_fetcher] TWSE BWIBBU 解析失敗：{_e}')
-        return pd.DataFrame()
+        raise _YieldPeFetchError(f'TWSE BWIBBU 解析失敗：{_e}') from _e
+
+
+def fetch_twse_yield_pe() -> pd.DataFrame:
+    """公開入口（簽章與回傳形狀不變）：成功 → 快取的 df；失敗 → 空 DataFrame。
+
+    xview V7（M2）：失敗**不入快取**（見 `_only_cache_success`）；欄位與內容說明見
+    `_fetch_twse_yield_pe_cached`。`.clear()` 同時清快取層與退避紀錄。
+    """
+    return _only_cache_success(_twse_fail_cooldown, _fetch_twse_yield_pe_cached)
+
+
+def _clear_twse_yield_pe() -> None:
+    getattr(_fetch_twse_yield_pe_cached, "clear", lambda: None)()
+    _twse_fail_cooldown.clear()
+
+
+fetch_twse_yield_pe.clear = _clear_twse_yield_pe
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ①-b 全上櫃 — TPEX peratio_analysis 單次抓取（對稱 ①，補上櫃估值 + 名稱）
 # ══════════════════════════════════════════════════════════════════════════════
 @st.cache_data(ttl=TTL_1DAY, show_spinner=False)
-def fetch_tpex_yield_pe() -> pd.DataFrame:
+def _fetch_tpex_yield_pe_cached() -> pd.DataFrame:
     """從 TPEX OpenAPI 一次取得全上櫃本益比 / 殖利率 / 股價淨值比。
 
     對稱 `fetch_twse_yield_pe`（上市 BWIBBU_d）；補「不在 TWSE 表」的上櫃股估值 + 名稱。
@@ -149,12 +194,10 @@ def fetch_tpex_yield_pe() -> pd.DataFrame:
     try:
         _resp = proxy_fetch_url(TPEX_PERATIO_URL, timeout=15)
         if _resp is None or getattr(_resp, 'status_code', 0) != 200:
-            print('[yield_pe_fetcher] TPEX peratio 回傳非 200 或 None')
-            return pd.DataFrame()
+            raise _YieldPeFetchError('TPEX peratio 回傳非 200 或 None')
         _data = _resp.json()
         if not isinstance(_data, list) or not _data:
-            print('[yield_pe_fetcher] TPEX peratio 回傳格式異常')
-            return pd.DataFrame()
+            raise _YieldPeFetchError('TPEX peratio 回傳格式異常')
         _df = pd.DataFrame(_data)
         # 殖利率欄:TPEX openapi 曾出現 YieldRatio / DividendYield 兩種命名 → 取存在者
         _yld_col = 'YieldRatio' if 'YieldRatio' in _df.columns else 'DividendYield'
@@ -166,8 +209,7 @@ def fetch_tpex_yield_pe() -> pd.DataFrame:
             'PriceBookRatio':        '股價淨值比',
         })
         if '代碼' not in _df.columns:
-            print('[yield_pe_fetcher] TPEX peratio 缺代碼欄')
-            return pd.DataFrame()
+            raise _YieldPeFetchError('TPEX peratio 缺代碼欄')
         _df['代碼'] = _df['代碼'].astype(str).str.strip()
         for _c in ['本益比', '殖利率(%)', '股價淨值比']:
             if _c in _df.columns:
@@ -180,9 +222,27 @@ def fetch_tpex_yield_pe() -> pd.DataFrame:
         except Exception:
             pass
         return _result
+    except _YieldPeFetchError:
+        raise
     except Exception as _e:
-        print(f'[yield_pe_fetcher] TPEX peratio 解析失敗：{_e}')
-        return pd.DataFrame()
+        raise _YieldPeFetchError(f'TPEX peratio 解析失敗：{_e}') from _e
+
+
+def fetch_tpex_yield_pe() -> pd.DataFrame:
+    """公開入口（簽章與回傳形狀不變）：成功 → 快取的 df；失敗 → 空 DataFrame。
+
+    xview V7（M2）：失敗**不入快取**（見 `_only_cache_success`）；欄位與內容說明見
+    `_fetch_tpex_yield_pe_cached`。`.clear()` 同時清快取層與退避紀錄。
+    """
+    return _only_cache_success(_tpex_fail_cooldown, _fetch_tpex_yield_pe_cached)
+
+
+def _clear_tpex_yield_pe() -> None:
+    getattr(_fetch_tpex_yield_pe_cached, "clear", lambda: None)()
+    _tpex_fail_cooldown.clear()
+
+
+fetch_tpex_yield_pe.clear = _clear_tpex_yield_pe
 
 
 def fetch_pe_name_maps(*, failed_markets: list[str] | None = None) -> tuple[dict, dict]:
