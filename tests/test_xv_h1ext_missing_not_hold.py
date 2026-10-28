@@ -273,8 +273,14 @@ def test_single_predicate_blocks_cruise_prompt_and_line(case, monkeypatch):
     assert "續抱、定期定額即可" not in msg and "無紅燈,續抱" not in msg
 
 
-def test_watch_rows_do_not_make_portfolio_short():
-    assert HDS.row_data_short({"held": False, SS.KEY_INSUFFICIENT: ("x",)}) is False
+def test_watch_rows_unjudged_make_portfolio_short():
+    """~~觀察清單列不讓組合層資料不足~~ → 複驗 C 第二輪 MAJOR-N1，**AI 總管決定**（有意識的變更）：
+    觀察清單列判不出也計入 —— 同一則訊息不得同時列出 ⬜ 清單又說「無需動作／續抱」；
+    `errors` 與 ① `cruise_or_gap` 本來就含觀察清單。缺現價／外幣只看持有列（觀察清單無持倉金額）。"""
+    assert HDS.row_data_short({"held": False, SS.KEY_INSUFFICIENT: ("x",)}) is True
+    assert HDS.row_data_short({"held": False, SS.KEY_INVALID_LIGHTS: ("x",)}) is True
+    assert HDS.row_data_short({"held": False, SS.KEY_PRICE_MISSING_KEPT: True}) is False
+    assert HDS.row_data_short({"held": False, "_fx_unconfirmed": True}) is False
     assert HDS.row_data_short({"held": True, "_detail": {"error": "e"},
                                SS.KEY_INSUFFICIENT: ("x",)}) is False
     assert HDS.digest_data_short({"total": 1, "errors": ["x"]}) is True
@@ -315,3 +321,16 @@ def test_line_etf_kept_says_conclusion_unaffected():
     assert "price_missing_kept_satellite" not in d
     msg = M.format_holdings_message(d, None, as_of="t")
     assert "ℹ️ 缺現價（結論不受影響）：0056" in msg
+
+
+
+def test_watch_unjudged_line_and_prompt_no_hold():
+    """MAJOR-N1 重現：持有列齊全、觀察清單一檔燈全判不出 → LINE／⑦ 不得說續抱。"""
+    rows = [{"代號": "0050", "_detail": {}, "held": True, "健檢": "🟢", "現價": 1.0},
+            {"代號": "00878", "_detail": {}, "held": False, SS.KEY_INSUFFICIENT: (SS.INSUFF_ALL_UNJUDGED,)}]
+    d = S.build_station_digest(rows, vix=15.0)
+    assert d["data_short"] == ["00878"]
+    assert _HOLD not in S.build_summary_prompt(d)
+    msg = M.format_holdings_message(d, {"switch_out": [], "switch_in": []}, as_of="t")
+    assert "續抱、定期定額即可" not in msg and "無紅燈,續抱" not in msg
+    assert "⬜ 資料不足／無法判定（觀察清單）：00878（燈號全部判不出）" in msg
