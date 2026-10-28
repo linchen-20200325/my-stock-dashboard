@@ -616,11 +616,18 @@ with st.sidebar:
                  # 各本機 pkl（個股股價＋籌碼合併表、多檔批次結果、daily_data_fetchers、名稱）、
                  # proxy 原始回應暫存、失敗冷卻表都不清（QA 回修：清單列舉非窮舉，文字以「等」收尾）。
                  # 只改說明文字，按鈕行為不變。
-                 help=('清除各頁的資料暫存並重新抓取。以下不在此列，會沿用到各自的暫存到期：'
+                 # 📌 XV-H2-EXT／XV-M1（客戶 2026-10-28 裁示，有意識的變更，⛔ 不是漏改）：本鈕另清
+                 #   macro_core 的**成功**快取（VIX／匯率等 Yahoo 收盤、FRED）—— 不清失敗退避表；
+                 #   help 同步移除「台灣與美國總經數據（含 VIX、匯率）」這項（已會清）。
+                 #   ~~'台灣與美國總經數據（含 VIX、匯率）、'~~（舊不清單項）
+                 help=('清除各頁的資料暫存，以及 VIX、匯率與美國 FRED 總經的已抓取暫存，並重新抓取。'
+                       '以下不在此列，會沿用到各自的暫存到期：'
                        '已載入的總經戰情快照（請按該頁的更新按鈕）、個股股價與籌碼、'
-                       '台灣與美國總經數據（含 VIX、匯率）、多檔批次結果、部分網頁來源的原始回應，'
+                       '多檔批次結果、部分網頁來源的原始回應，'
                        '以及剛抓取失敗、仍在等待重試的來源等各模組自有的暫存。')):
         st.cache_data.clear()
+        from src.services.force_refresh_service import clear_module_success_caches as _mc_clear_ok
+        _mc_clear_ok()
         st.rerun()
     st.markdown('---')
 

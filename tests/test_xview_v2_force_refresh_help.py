@@ -37,10 +37,15 @@ def test_help_no_longer_claims_all_caches():
 
 
 def test_help_names_what_is_not_cleared():
+    # XV-H2-EXT／XV-M1（客戶 2026-10-28 裁示）：VIX／匯率／FRED 改為會清 ⇒ 從「不在此列」移到前段；
+    # ~~"台灣與美國總經"~~ 不再列為不清項目。
     h = _help_text()
-    for frag in ("不在此列", "總經戰情快照", "個股股價", "籌碼", "台灣與美國總經", "VIX",
-                 "匯率", "多檔批次結果", "原始回應", "等待重試"):
-        assert frag in h, frag
+    head, tail = h.split("不在此列", 1)
+    for frag in ("VIX", "匯率", "FRED"):
+        assert frag in head and frag not in tail, frag
+    assert "台灣與美國總經" not in h
+    for frag in ("總經戰情快照", "個股股價", "籌碼", "多檔批次結果", "原始回應", "等待重試"):
+        assert frag in tail, frag
 
 
 def test_help_says_list_is_not_exhaustive():
@@ -54,12 +59,15 @@ def test_label_and_key_unchanged():
     assert ast.literal_eval(kws["use_container_width"]) is True
 
 
-def test_button_behavior_unchanged():
-    """行為不變：按下仍只做 st.cache_data.clear() 與 st.rerun()。"""
+def test_button_behavior():
+    """XV-H2-EXT／XV-M1（客戶 2026-10-28 裁示，取代 xview V2「行為不變」）：按下做
+    st.cache_data.clear() → L3 force_refresh_service → L1 macro_core.clear_success_caches()（只清成功快取）→ st.rerun()。"""
     src = _APP.read_text(encoding="utf-8")
     i = src.index("key='_sb_force_refresh'")
-    body = src[i:i + 900]
+    body = src[i:i + 2000]
     j = body.index("):\n")
-    after = body[j + 3:].splitlines()[:3]
-    assert after[0].strip() == "st.cache_data.clear()"
-    assert after[1].strip() == "st.rerun()"
+    after = [ln.strip() for ln in body[j + 3:].splitlines()[:4]]
+    assert after == ["st.cache_data.clear()",
+                     "from src.services.force_refresh_service import clear_module_success_caches as _mc_clear_ok",
+                     "_mc_clear_ok()",
+                     "st.rerun()"]

@@ -860,7 +860,12 @@ class TestOldFilesUntouched:
     # 📌 xview QA 回修（2026-10-28，獨立 QA MAJOR，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄
     #   「🔄 強制刷新數據」的 `help=` 文字 —— 補列個股股價、台灣總經與匯率、多檔批次結果等未清暫存，
     #   結尾表明非完整清單。兩模式共用（legacy 同樣看到）；按鈕行為不變。其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "f0f0e4f7584c9797ab58f5e4a532f18c5bcba439ddf3a83b4aac989a088d02a8"
+    # ~~"f0f0e4f7584c9797ab58f5e4a532f18c5bcba439ddf3a83b4aac989a088d02a8"~~（xview QA 回修後）
+    # 📌 XV-H2-EXT／XV-M1（2026-10-28，客戶裁示，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄「🔄 強制刷新數據」——
+    #   按下後另經 L3 `force_refresh_service` 清 L1 `macro_core` 的成功快取（VIX／匯率等 Yahoo 收盤、FRED；
+    #   ⛔ 不清失敗退避表），`help=` 同步移除已會清的項目。兩模式共用（legacy 同樣受影響）；標籤／key／版面不變。
+    #   其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "bd28bb0fbcbe7ba289a9ba3930d0c335d47d004f83e20ba47088800ead511572"
 
     def test_no_diff_against_base(self):
         import hashlib

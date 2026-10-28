@@ -504,6 +504,23 @@ _YF_CLOSE_TTL = 3600.0  # 1hr，與 st.cache_data 對齊
 _YF_CLOSE_EMPTY_FAIL_CACHE: dict[tuple[str, str], float] = {}
 
 
+def clear_success_caches() -> tuple[str, ...]:
+    """清掉本模組的**成功**快取（`_YF_CLOSE_CACHE`、`_FRED_CACHE`），回傳實際清了哪幾層。
+
+    XV-H2-EXT／XV-M1（客戶 2026-10-28 裁示）：側欄「🔄 強制刷新數據」原本只做
+    `st.cache_data.clear()`，本模組自建的成功快取（VIX／匯率等 Yahoo 收盤 1hr、FRED 30min）
+    沒有任何 production 清除路徑 ⇒ 按了刷新仍拿舊值。由 L6 `app.py` 該按鈕經 L3 `force_refresh_service` 呼叫。
+    ⛔ **刻意不清**失敗退避表（`_FRED_FAIL_CACHE`、`_YF_CLOSE_EMPTY_FAIL_CACHE`、
+    `_YF_OHLCV_FAIL_CACHE`／`_YF_OHLCV_OK_GEN_CACHE`）：v3 §02「失敗時退避、不連續轟炸來源」
+    不得因為使用者按了刷新就破功。讀寫持與抓取端同一把鎖。
+    """
+    with _FRED_CACHE_LOCK:
+        _FRED_CACHE.clear()
+    with _YF_CLOSE_CACHE_LOCK:
+        _YF_CLOSE_CACHE.clear()
+    return ("macro_core._FRED_CACHE", "macro_core._YF_CLOSE_CACHE")
+
+
 def _fetch_yf_close_base(ticker: str, interval: str = "1d") -> pd.Series:
     """共用底層 — 固定 range='2y' + 1hr TTL，跨 tab 共享。
 
