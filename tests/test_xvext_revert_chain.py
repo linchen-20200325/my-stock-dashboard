@@ -371,13 +371,39 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                             '\'原因不明\'}）"\n'
                                             '            for _r in _unjudged))\n',
                                             '')),
- 'src/ui/views/page_hold.py': (('    MISS_NOT_APPLICABLE,\n', ''),
+ 'src/ui/views/page_hold.py': (('    KEY_INSUFFICIENT,\n', ''),
+                               ('    KEY_INVALID_LIGHTS,\n', ''),
+                               ('    MISS_NOT_APPLICABLE,\n', ''),
                                ('from shared.asset_currency_gate import (\n'
                                 '    FX_ONLY_REASON,\n'
                                 '    FX_PARTIAL_TEXT,\n'
                                 '    KEY_FX_UNCONFIRMED,\n'
                                 '    fx_excluded_text,\n'
                                 ')\n',
+                                ''),
+                               ('        # XV-H1-EXT QA 回修 #1（BLOCKER）：燈全判得出、但資料不足（建議動作被換成 ⬜）或資料異常的列\n'
+                                '        # 同樣「判不全」⇒ 計入「未判 N」，且 ⛔ 不准印巡航／沒事句。\n'
+                                '        _short = _short_data_flags(_rows)\n'
+                                '        _unjudged = sum(1 for _c, _sh in zip(_cells, _short) if _sh or not is_fully_judged(_c))\n',
+                                '        _unjudged = sum(1 for _c in _cells if not is_fully_judged(_c))\n'),
+                               ('        _cruise = (cruise_or_gap(_judged, _total, all_rows_judged=_all_judged) if not any(_short)\n'
+                                '                   else f"{sum(_short)} 檔{SHORT_DATA_GAP_TEXT}")\n',
+                                '        _cruise = cruise_or_gap(_judged, _total, all_rows_judged=_all_judged)\n'),
+                               ('\n'
+                                '\n'
+                                '#: XV-H1-EXT QA 回修 #1：① 有資料不足／資料異常的列時取代巡航句（語彙沿用 L0「資料不足／無法判定」\n'
+                                '#: 與 L4 `cruise_or_gap` 的「不是都沒事,是沒東西可以判」）。\n'
+                                'SHORT_DATA_GAP_TEXT: str = "資料不足／無法判定或資料異常 —— **不是都沒事,是沒東西可以判**"\n'
+                                '\n'
+                                '\n'
+                                'def _short_data_flags(rows: Sequence[Mapping[str, Any]]) -> list[bool]:\n'
+                                '    """逐列：建議動作被 L3 換成 ⬜（`KEY_INSUFFICIENT`），或持有列帶資料異常標記\n'
+                                '    （`KEY_INVALID_INPUTS`／`KEY_INVALID_LIGHTS`）且非整批抓取失敗。只讀 L3 標記，⛔ 不自己判。"""\n'
+                                '    return [bool(_r.get(KEY_INSUFFICIENT))\n'
+                                '            or (not (_r.get("_detail") or {}).get("error")\n'
+                                '                and bool(_r.get(KEY_INVALID_LIGHTS)\n'
+                                '                         or (_r.get("held") and _r.get(KEY_INVALID_INPUTS))))\n'
+                                '            for _r in rows]\n',
                                 ''),
                                ('#: XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入時，總市值／配置比例處的客戶句。\n'
                                 '#: `Note` 文案不得帶狀態 glyph（⬜ 是「尚未載入」的 glyph）⇒ Note 用去掉 ⬜ 的同一句；\n'
@@ -413,6 +439,13 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                 '    if _fx:\n'
                                 '        return _fx_facts(_fx) + ([("未實現損益／總市值", _invalid_why(_bad))] if _bad else [])\n',
                                 ''),
+                               ('                       f"{station.unjudged_rows} 列不是「每一盞適用燈都判得出來」"\n'
+                                '                       # XV-H1-EXT QA 回修 #1：資料不足／資料異常的列同樣算進來。\n'
+                                '                       + ("（含資料不足／無法判定或資料異常的列）" if any(_short_data_flags(station.rows))\n'
+                                '                          else "")\n'
+                                '                       + "—— 只要有一列不滿足，就不准說「今天沒事」"))\n',
+                                '                       f"{station.unjudged_rows} 列不是「每一盞適用燈都判得出來」—— "\n'
+                                '                       "只要有一列不滿足，就不准說「今天沒事」"))\n'),
                                ('    # XV-H3：外幣／幣別未確認資產未納入 → 比例不畫（L3 回 None），列客戶句與未納入清單。\n'
                                 '    _facts = _fx_facts(_fx_codes(station.rows)) + _facts\n',
                                 ''),

@@ -321,7 +321,9 @@ from shared.station_specs import (
     KEY_HEALTH_B,
     KEY_HEALTH_C,
     KEY_HEALTH_D,
+    KEY_INSUFFICIENT,
     KEY_INVALID_INPUTS,
+    KEY_INVALID_LIGHTS,
     KEY_STOCK_HEALTH,
     KEY_STOCK_KD,
     KEY_STOCK_SWAP,
@@ -1431,10 +1433,14 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
         _totals = compute_portfolio_totals(_rows)
         _cells = [(_r.get("_lights") or ()) for _r in _rows]
         _judged, _total = aggregate_judged(_cells)
-        _unjudged = sum(1 for _c in _cells if not is_fully_judged(_c))
+        # XV-H1-EXT QA 回修 #1（BLOCKER）：燈全判得出、但資料不足（建議動作被換成 ⬜）或資料異常的列
+        # 同樣「判不全」⇒ 計入「未判 N」，且 ⛔ 不准印巡航／沒事句。
+        _short = _short_data_flags(_rows)
+        _unjudged = sum(1 for _c, _sh in zip(_cells, _short) if _sh or not is_fully_judged(_c))
         _all_judged = bool(_cells) and _unjudged == 0
         _tally = tally_states(_cells)
-        _cruise = cruise_or_gap(_judged, _total, all_rows_judged=_all_judged)
+        _cruise = (cruise_or_gap(_judged, _total, all_rows_judged=_all_judged) if not any(_short)
+                   else f"{sum(_short)} 檔{SHORT_DATA_GAP_TEXT}")
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] 戰情表運算失敗 → 轉紅態：{_e!r}")
         return StationReadout(requested=True, submitted=holdings.submitted,
@@ -1455,6 +1461,21 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
         unjudged_rows=int(_unjudged),
         tally=dict(_tally or {}),
         cruise_text=_clean_signal(_cruise))
+
+
+#: XV-H1-EXT QA 回修 #1：① 有資料不足／資料異常的列時取代巡航句（語彙沿用 L0「資料不足／無法判定」
+#: 與 L4 `cruise_or_gap` 的「不是都沒事,是沒東西可以判」）。
+SHORT_DATA_GAP_TEXT: str = "資料不足／無法判定或資料異常 —— **不是都沒事,是沒東西可以判**"
+
+
+def _short_data_flags(rows: Sequence[Mapping[str, Any]]) -> list[bool]:
+    """逐列：建議動作被 L3 換成 ⬜（`KEY_INSUFFICIENT`），或持有列帶資料異常標記
+    （`KEY_INVALID_INPUTS`／`KEY_INVALID_LIGHTS`）且非整批抓取失敗。只讀 L3 標記，⛔ 不自己判。"""
+    return [bool(_r.get(KEY_INSUFFICIENT))
+            or (not (_r.get("_detail") or {}).get("error")
+                and bool(_r.get(KEY_INVALID_LIGHTS)
+                         or (_r.get("held") and _r.get(KEY_INVALID_INPUTS))))
+            for _r in rows]
 
 
 def _digest_map(value: Any) -> Mapping[str, Any] | None:
@@ -2198,8 +2219,11 @@ def build_confidence_card(station: StationReadout) -> _Built:
             or "（這一輪一格都沒有）"))
     if station.unjudged_rows:
         _facts.append(("判不全的列",
-                       f"{station.unjudged_rows} 列不是「每一盞適用燈都判得出來」—— "
-                       "只要有一列不滿足，就不准說「今天沒事」"))
+                       f"{station.unjudged_rows} 列不是「每一盞適用燈都判得出來」"
+                       # XV-H1-EXT QA 回修 #1：資料不足／資料異常的列同樣算進來。
+                       + ("（含資料不足／無法判定或資料異常的列）" if any(_short_data_flags(station.rows))
+                          else "")
+                       + "—— 只要有一列不滿足，就不准說「今天沒事」"))
     if _state != UI_LIVE:
         # ⚠️ **「有列、但沒有逐盞燈資料」是另一種空，不可以借用上面那三句。**
         #    （實跑抓到的：借用之後畫面會說「戰情表一列都沒有回來」，

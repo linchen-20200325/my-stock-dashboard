@@ -179,3 +179,50 @@ def test_line_invalid_inputs_no_hold_and_listed():
     assert "⚠️ 資料異常未判：2330（均價：均價資料異常，無法計算，不下結論。）" in msg
     p = S.build_summary_prompt(d)
     assert "- 資料異常未判：2330（均價：均價資料異常，無法計算，不下結論。）\n" in p
+
+
+# ── QA 回修 #1（BLOCKER）：page_hold ①「該做什麼」──────────────────────────
+def _load_station(monkeypatch, rows):
+    import src.ui.views.page_hold as P
+    monkeypatch.setattr("src.services.dividend_station_service.get_station_rows",
+                        lambda hs: (rows, 15.0))
+    h = P.HoldingsReadout(requested=True, submitted=True, bound=True,
+                          holdings=({"ticker": "x", "held": True},))
+    return P, P.load_station(h)
+
+
+def _etf_full_rows(price):
+    _wk = pd.Series([20.0 + i * 0.1 for i in range(160)],
+                    index=pd.date_range("2023-01-06", periods=160, freq="W-FRI"))
+    return S.build_station_rows(
+        [{"ticker": "0056", "lots": 1, "avg_price": 20}], vix=15.0,
+        metrics_fn=lambda tk, k: {"weekly_close": _wk, "premium_pct": 0.3, "sharpe": 0.8,
+                                  "total_return_1y_pct": 10.0, "annual_yield_pct": 5.0,
+                                  "inception_years": 5.0, "ann_return_3y_pct": 8.0,
+                                  "cum_return_3y_pct": 25.0, "peer_ranks": {3: .2, 6: .2, 12: .2},
+                                  "current_price": price})
+
+
+def test_action_card_no_cruise_when_price_missing(monkeypatch):
+    rows = _etf_full_rows(None)
+    assert rows[0].get(SS.KEY_INSUFFICIENT) == (SS.INSUFF_NO_PRICE,)
+    P, st = _load_station(monkeypatch, rows)
+    assert "巡航" not in st.cruise_text and "沒有需要動作" not in st.cruise_text
+    assert st.cruise_text.startswith("1 檔資料不足／無法判定")
+    assert st.unjudged_rows == 1
+    card, facts, _sig = P.build_action_card(st)
+    assert "巡航" not in card.value
+
+
+def test_action_card_cruise_when_complete(monkeypatch):
+    rows = _etf_full_rows(30.0)
+    P, st = _load_station(monkeypatch, rows)
+    assert st.unjudged_rows == 0          # fixture 每盞燈都判得出、有現價 → 巡航句照舊
+    assert "巡航" in st.cruise_text
+
+
+def test_action_card_no_cruise_when_invalid_inputs(monkeypatch):
+    rows = _etf_full_rows(30.0)
+    rows[0] = dict(rows[0], **{SS.KEY_INVALID_INPUTS: (SS.ITEM_AVG_PRICE,)})
+    P, st = _load_station(monkeypatch, rows)
+    assert "巡航" not in st.cruise_text and st.unjudged_rows == 1
