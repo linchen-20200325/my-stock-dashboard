@@ -378,3 +378,19 @@ XV-M7、XV-M8（MED，單組）；XV-C13b（MED，隨 T2）；XV-X3、XV-X6、XV
 
 **限制**：沙箱無部署端網路、Streamlit Cloud 未驗（快取與冷卻行為僅讀碼＋單元測試）；QA 時另發現兩項既有問題（非本批引入，總管轉述）：LINE `format_holdings_message` total=NaN／inf 拋例外（`XV-LINE-TOTAL-NAN`）、`tests/test_symmetry_phase1.py` c4 測試順序相依、基底 `739fa361` 亦重現（`XV-TEST-SYMMETRY-C4`）。撰寫組（本節）未重跑測試。
 
+## §8 DEC-101 實作處置（2026-10-28 補；加法式，上文一字未改；決策者 AI 總管（事實更新））
+
+> 客戶裁示見 `docs/DECISIONS.md` DEC-101（含「實作紀錄」段）。狀態：**implementation complete／waiting CI，未合併**（PR 待開）。基準 `f3d77703`。
+
+| ID | 報告出處 | commit | 處置 |
+|---|---|---|---|
+| **XV-H1-EXT** | §4 XV-H1（擴大版）／XV-L1／G2 | `bf4621ef`・`38c821bb`・`485347c6`・`66249bdf`・`27081c96`・`07673760`・`41d6f839`・`9901cd0c`・`8e6958af`・`c882a299` | L0 `shared/holdings_data_short.py` 單一判定收斂 ①／③／⑦／LINE 正文與 AI／週報正文與 AI prompt；缺資料 ⬜、可證明結論保留；契約漂移保留診斷句但計入資料不足；Z51／Z52 測試同步 |
+| **XV-H3** | §4 XV-H3／G1 | `2bead6ad`・`82889239`・`d21d08a1`・`68233550`・`3c077ee7`・`72f87802` | L0 `shared/asset_currency_gate.py`（暫行、非 canonical）；總額／比例 `None`＋逐字客戶句；壓測／VaR「僅已納入台股部分」並標失準；⑤⑥「不適用 · 重跑無效」；外幣列損益%「—」 |
+| **XV-C05** | §4 XV-C05／T11 | `af560a45` | `normalize_holding_ticker`＝`strip().upper()`，與 `holdings_service` 一致 |
+| **XV-H2-EXT**／**XV-M1** | §4 XV-H2／XV-M1／T6 | `216faccf`・`b6bb466f`・`b51168d5` | 強制刷新另清 `macro_core` VIX／FRED 成功快取，不清退避表；help 據實列不清項（AI 總管決定，DEC-101(5) 邊界內） |
+| **XV-V1** | §4 XV-V1 | `bf622ead` | `etf_fetch` 後綴大小寫不敏感 |
+| **XV-ASOF** | §4 XV-ASOF／G3 | `fe618e6a`（docs） | 只出線框草稿 `NEWUI_D25_XVIEW_ASOF_WIREFRAME_2026-10-28.md`，待客戶確認 Q1～Q3；0 UI code |
+
+**QA 結果**：三組獨立 QA —— A（對抗）、B（語意）、C（複驗，兩輪）；A／B 的 QA#1～#11 與 C 的 MAJOR-1～3／MINOR-1～3 皆已回修（總管轉述；撰寫組未重跑測試）。
+
+**揭露**：L3 列動作文字與外幣排除連動舊 UI 存股戰情室（舊 UI 檔未改；外幣時舊 UI 顯示錯誤原因句 → 待客戶 `XV-OLDUI-FX-REASON`）；外幣個股列層建議動作文字未改（`XV-FX-ROW-ACTION`；組合層已不給續抱）；觀察清單不擋組合層（`XV-WATCHLIST-SCOPE`）；LINE VIX 行動句待客戶 `XV-LINE-VIX-LINE`。**未驗**：Streamlit Cloud、真 LINE／AI、客戶 Sheet 實際有無外幣。⚠️ 本節為 docs-only 撰寫組單組撰寫，未經第二組驗（`CLAUDE.md` §-2 規則 6）。
