@@ -4874,7 +4874,8 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
     # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入（why 的代號清單在摺疊區原文）。
     + [_v2_rows_for(_k, FX_PARTIAL_NOW, (
-           None, "未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",
+           None, ("未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",
+                  "未納入：" + V2_EXCERPT_GAP + "｜原因：幣別未確認"),
            NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
     # 📌 Q2-r3（2026-09-27，有意識的刪除，⛔ 不是漏刪）：`NO_PRICE_WHY` 改為客戶逐字句（45 字）後，

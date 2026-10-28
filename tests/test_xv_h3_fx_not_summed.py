@@ -37,6 +37,23 @@ def test_text_constants_verbatim():
     assert FXG.fx_excluded_text(["VOO", "BND", "VOO"]) == "未納入：" + REASON_LINE
 
 
+@pytest.mark.parametrize("tk", ["２３３０", "٢٣٣٠", "２３３０.TW".replace(".TW", "")])
+def test_non_ascii_digits_rejected(tk):
+    """QA 回修：`\\d` 會收全形／非 ASCII 數字 → 改 `[0-9]`。"""
+    assert FXG.is_confirmed_twd_ticker(tk) is False
+
+
+def test_exclusion_reason_split():
+    """QA 回修：明確外幣 vs 幣別未確認兩種原因。"""
+    for tk in ("VOO", "BND", "BRK.B"):
+        assert FXG.fx_exclusion_reason(tk) == FXG.FX_EXCLUDED_REASON
+    for tk in ("50", "^TWII", "1234567", "00631l", ""):
+        assert FXG.fx_exclusion_reason(tk) == FXG.FX_UNCONFIRMED_REASON == "幣別未確認"
+    assert FXG.fx_excluded_text(["50", "VOO", "^TWII"]) == (
+        "未納入：VOO｜原因：外幣資產，匯率與成本幣別未定義；50、^TWII｜原因：幣別未確認")
+    assert FXG.fx_excluded_text(["50"]) == "未納入：50｜原因：幣別未確認"
+
+
 # ── L3 dividend_station_service ─────────────────────────────────────
 _WK = pd.Series([20.0 + i * 0.1 for i in range(60)],
                 index=pd.date_range("2025-01-03", periods=60, freq="W-FRI"))
@@ -85,8 +102,8 @@ def test_digest_and_prompt_have_no_mixed_total():
     assert d["fx_excluded"] == ["VOO", "BND"] and d["allocation"] is None
     p = S.build_summary_prompt(d)
     assert "實際配置" not in p
-    assert ("- 未納入總市值與配置比例：VOO、BND（外幣資產，匯率與成本幣別未定義；"
-            "總市值／配置比例無法完整判定）\n") in p
+    assert ("- 未納入總市值與配置比例：VOO、BND｜原因：外幣資產，匯率與成本幣別未定義"
+            "（總市值／配置比例無法完整判定）\n") in p
 
 
 def test_tw_only_digest_unchanged_keys():
@@ -164,4 +181,16 @@ def test_deep_stress_weights_tw_only_and_flags(monkeypatch):
     assert card.state == "degraded" and sig == ""
     assert (P.FX_PARTIAL_FACT, FX_TEXT) in facts
     assert not any(k == "納入計算的組合總市值（元）" for k, _v in facts)
+    P.v2_short_rows(card)
+
+
+def test_page_split_card_unconfirmed_only_reason():
+    """QA 回修：只有「幣別未確認」的列（例 `^TWII`）→ 原因句與短句表候選都對得上。"""
+    import src.ui.views.page_hold as P
+    rows = ({"代號": "^TWII", "種類": "ETF", "held": True, "現價": 1.0, "_detail": {},
+             FXG.KEY_FX_UNCONFIRMED: True},)
+    st = P.StationReadout(requested=True, submitted=True, bound=True, holdings_n=1,
+                          rows=rows, totals=None, split=None)
+    card, facts, _sig = P.build_allocation_split_card(st)
+    assert card.note.why == "未納入：^TWII｜原因：幣別未確認"
     P.v2_short_rows(card)

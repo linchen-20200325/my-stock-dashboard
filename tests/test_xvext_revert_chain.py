@@ -221,8 +221,8 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                '    if _fx:\n'
                                                '        # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產不進總額 ⇒ AI 拿不到混幣總額，\n'
                                                '        # 只拿到「哪幾檔未納入、為什麼、比例無法完整判定」這個事實（⛔ 不送比例數字）。\n'
-                                               '        _base += (f"- 未納入總市值與配置比例：{\'、\'.join(str(_c) for _c in _fx)}"\n'
-                                               '                  f"（{FXG.FX_EXCLUDED_REASON}；總市值／配置比例無法完整判定）\\n")\n',
+                                               '        _base += (f"- 未納入總市值與配置比例：{FXG.fx_excluded_text(_fx).removeprefix(\'未納入：\')}"\n'
+                                               '                  "（總市值／配置比例無法完整判定）\\n")\n',
                                                '')),
  'src/services/portfolio_deep_service.py': (('import functools\n', ''),
                                             ('from dataclasses import dataclass, field, replace as _dc_replace\n',
@@ -348,7 +348,8 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                ('       for _k in ("hold.alloc_split", "hold.deep.core_satellite")]\n'
                                 '    # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入（why 的代號清單在摺疊區原文）。\n'
                                 '    + [_v2_rows_for(_k, FX_PARTIAL_NOW, (\n'
-                                '           None, "未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",\n'
+                                '           None, ("未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",\n'
+                                '                  "未納入：" + V2_EXCERPT_GAP + "｜原因：幣別未確認"),\n'
                                 '           NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))\n',
                                 ''))}
 

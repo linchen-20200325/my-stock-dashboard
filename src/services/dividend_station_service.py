@@ -1431,8 +1431,8 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
     if _fx:
         # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產不進總額 ⇒ AI 拿不到混幣總額，
         # 只拿到「哪幾檔未納入、為什麼、比例無法完整判定」這個事實（⛔ 不送比例數字）。
-        _base += (f"- 未納入總市值與配置比例：{'、'.join(str(_c) for _c in _fx)}"
-                  f"（{FXG.FX_EXCLUDED_REASON}；總市值／配置比例無法完整判定）\n")
+        _base += (f"- 未納入總市值與配置比例：{FXG.fx_excluded_text(_fx).removeprefix('未納入：')}"
+                  "（總市值／配置比例無法完整判定）\n")
     _alloc = digest.get("allocation")
     if _alloc:
         _partial = "（部分持股缺金額,僅供參考）" if _alloc.get("partial") else ""
