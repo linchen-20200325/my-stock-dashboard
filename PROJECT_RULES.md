@@ -764,3 +764,60 @@ CI、GitHub Actions、audit agent、check_suite 等若可自動恢復：標 🟢
 - **強化**第 20 節（Resume Checkpoint）與第 21 節；**不建立第二套狀態 SSOT**；不取代第 18 節 Model／Effort Gate（DEC-084）。
 - **不降低任何 Gate**（Security／Investment／Data／CI／Audit）；不改產品 code、不改投資語意。
 - 若與既有文字衝突，取較嚴者。
+
+---
+
+## 第 23 節｜Scope Inflation Guard（範圍膨脹防護；客戶 2026-10-28，DEC-103）
+
+> **永久治理規則；客戶原文逐字收錄（不得改寫、不得「優化」）。** 裁示登記見 `docs/DECISIONS.md` DEC-103；本節原文為準。
+
+```
+Scope Inflation Guard
+
+目標：避免 Audit、QA、技術發現持續長出大量待辦後，專案從「完成新版投資決策 OS」漂移成「修完所有歷史技術債」。
+
+所有新發現先分類：
+
+- P0 主線阻擋
+  - 資料錯誤／跨頁不一致
+  - missing 被錯誤解讀
+  - identity/canonical key 錯
+  - 投資語意／Risk Cap／安全性錯誤
+  - 新 UI 無法正常使用
+  - 可直接阻擋當前 D2.5 Stage 的問題
+
+- P1 新版必要
+  - D2.5 四頁 UI
+  - Decision Digest／One AI Brain
+  - strategy wiring
+  - source/as_of/stale
+  - capability coverage
+  - 新 UI 正式驗收必要項目
+
+- P2 技術債
+  - 非阻擋 cache key 統一
+  - naming／wording
+  - magic constant
+  - legacy cleanup
+  - 不影響正確性的 alias／小型重構
+  - 純整潔性改善
+
+規則：
+
+1. P0 可插隊。
+2. P1 依主線順序排程。
+3. P2 只能登記，不得自動插隊。
+4. 新 Audit／QA 發現若不阻擋 D2.5 四頁、Decision Digest、資料正確性或安全性，只能進 BACKLOG，不得因此開新 Stage。
+5. 不得因「順手修」把一次批次擴張成歷史技術債清理。
+6. 每個 Stage 開工前先問：這項工作是否直接推進目前主線？
+7. 若答案是否，且非 P0，留在 BACKLOG。
+8. 目標主線優先序維持：
+   "四頁完成 → One AI Brain / Decision Digest 接線 → 資料一致與必要護欄 → 實機驗收"
+9. Scope Inflation Guard 不取代既有安全 Gate；任何新資料源、schema、公式、投資語意仍照原 Gate。
+```
+
+### 23.1 與既有條文的關係（撰寫組讀法，單組、未經第二組驗證）
+
+- 與第 5 節（Minimum Necessary Change／Scope Control）、`CLAUDE.md` §-1（沒實際 bug／沒具體需求 → 不要動）、`CLAUDE.md` §-1.5.F 判定 3（GC 是任務的收尾義務，不是找任務的理由）**同向（加嚴）**；衝突時取較嚴者。
+- **不取代任何安全 Gate**（原文第 9 條自陳）；不改變第 4 節 Stop／Decision Gate、第 9／18 節 Model／Effort Gate。
+- 落地：`docs/BACKLOG.md` 0.3 規則 6（新增列標 P0／P1／P2，既有列不回溯重標）。
