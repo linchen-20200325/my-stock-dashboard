@@ -343,7 +343,8 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                             '\'原因不明\'}）"\n'
                                             '            for _r in _unjudged))\n',
                                             '')),
- 'src/ui/views/page_hold.py': (('from shared.asset_currency_gate import (\n'
+ 'src/ui/views/page_hold.py': (('    MISS_NOT_APPLICABLE,\n', ''),
+                               ('from shared.asset_currency_gate import (\n'
                                 '    FX_PARTIAL_TEXT,\n'
                                 '    KEY_FX_UNCONFIRMED,\n'
                                 '    fx_excluded_text,\n'
@@ -386,6 +387,11 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                ('    # XV-H3：外幣／幣別未確認資產未納入 → 比例不畫（L3 回 None），列客戶句與未納入清單。\n'
                                 '    _facts = _fx_facts(_fx_codes(station.rows)) + _facts\n',
                                 ''),
+                               ('        # QA 回修 #6：外幣／幣別未確認 → 「不適用 · 重跑無效」（#8，既有徽章；重跑一樣算不出，\n'
+                                '        # 與「去哪補」的「沒有你可以執行的出口」一致），⛔ 不落在「缺漏 · 可重跑」。\n'
+                                '        reason=(MISS_FETCH_FAILED if _uncounted\n'
+                                '                else MISS_NOT_APPLICABLE if _fx_codes(station.rows) else ""))\n',
+                                '        reason=MISS_FETCH_FAILED if _uncounted else "")\n'),
                                ('    elif _fx_codes(station.rows):\n'
                                 '        # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認 → L3 不算比例（⛔ 不把剩餘台股包裝成完整 80/20）。\n'
                                 '        _note = Note(now=FX_PARTIAL_NOW, why=fx_excluded_text(_fx_codes(station.rows)),\n'

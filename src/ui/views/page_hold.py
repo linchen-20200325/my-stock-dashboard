@@ -328,6 +328,7 @@ from shared.station_specs import (
     KEY_STOCK_TREND,
     MISS_FETCH_FAILED,
     MISS_NO_INPUT,
+    MISS_NOT_APPLICABLE,
     MISS_TEXT,
     SPECS_BY_KEY,
     invalid_data_text,
@@ -2780,7 +2781,10 @@ def _split_state(station: StationReadout) -> str:
         requested=station.requested,
         error=station.error or None,
         has_value=station.split is not None and not _uncounted,
-        reason=MISS_FETCH_FAILED if _uncounted else "")
+        # QA 回修 #6：外幣／幣別未確認 → 「不適用 · 重跑無效」（#8，既有徽章；重跑一樣算不出，
+        # 與「去哪補」的「沒有你可以執行的出口」一致），⛔ 不落在「缺漏 · 可重跑」。
+        reason=(MISS_FETCH_FAILED if _uncounted
+                else MISS_NOT_APPLICABLE if _fx_codes(station.rows) else ""))
 
 
 def build_allocation_split_card(station: StationReadout) -> _Built:

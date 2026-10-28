@@ -145,6 +145,11 @@ def test_page_split_cards(builder):
     assert (P.FX_PARTIAL_FACT, FX_TEXT) in facts
     P.v2_short_rows(card)                     # 短句表有登記、摘錄對得上（否則 KeyError）
     assert "%" not in "".join(v for _k, v in facts if "比例" in _k and v != FX_TEXT)
+    # QA 回修 #6：徽章用既有「不適用 · 重跑無效」（#8），⛔ 不是「缺漏 · 可重跑」。
+    from shared.ui_state import UI_NOT_APPLICABLE
+    assert card.state == UI_NOT_APPLICABLE
+    html = P.v2_card_html(card, facts, sig)
+    assert "重跑無效" in html and "可重跑" not in html.replace("重跑無效", "")
 
 
 # ── portfolio_deep_service ───────────────────────────────────────────
