@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import unicodedata
-from collections.abc import Mapping as _AbcMapping
+from collections.abc import Iterable as _AbcIterable, Mapping as _AbcMapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Iterable, Literal, Mapping
@@ -62,6 +62,8 @@ INVALID_MISSING_TICKER: str = "missing_ticker"
 INVALID_BAD_STRATEGY: str = "bad_strategy"
 INVALID_BAD_KEY: str = "bad_key"
 INVALID_NON_TEXT_CELL: str = "non_text_cell"
+_INVALID_REASONS: frozenset = frozenset({INVALID_MISSING_NAME, INVALID_MISSING_TICKER, INVALID_BAD_STRATEGY,
+                                         INVALID_BAD_KEY, INVALID_NON_TEXT_CELL})
 
 #: 合法策略字串 → StrategyType（只認 enum 自己的值，⛔ 不加同義詞）。
 _STRATEGY_BY_VALUE: dict = {s.value: s for s in StrategyType}
@@ -140,6 +142,11 @@ class HoldingKeysResult:
                 raise ValueError("keys 只能是 ticker 原字串 → HoldingKey(pid, 同一 ticker)")
         if type(self.rejected) is not tuple or any(type(t) is not str for t in self.rejected):
             raise TypeError("rejected 必須是 str 的 tuple")
+        # 第三組 MINOR-4：同一個 ticker 不能既有鍵又被拒收；一個結果只代表單一組合（pid 必須相同）。
+        if set(keys) & set(self.rejected):
+            raise ValueError("keys 與 rejected 不得重疊")
+        if len({k.portfolio_id for k in keys.values()}) > 1:
+            raise ValueError("keys 內所有 HoldingKey 必須屬於同一個組合（portfolio_id 相同）")
         object.__setattr__(self, "keys", MappingProxyType(keys))
 
 
@@ -177,6 +184,13 @@ class InvalidRow:
     row: int
     reason: str
 
+    def __post_init__(self) -> None:
+        # 第三組 MINOR-3：列號是 1-based 的 int（⛔ bool）；原因必須是已定義的代碼。
+        if type(self.row) is not int or self.row < 1:
+            raise ValueError(f"row 必須是 ≥1 的 int：{self.row!r}")
+        if self.reason not in _INVALID_REASONS:
+            raise ValueError(f"reason 不是已定義的 INVALID_* 代碼：{self.reason!r}")
+
 
 @dataclass(frozen=True)
 class StrategyReadResult:
@@ -202,6 +216,9 @@ class StrategyReadResult:
         for k, v in entries.items():
             if type(k) is not HoldingKey or type(v) is not StrategyType or v is StrategyType.UNCLASSIFIED:
                 raise ValueError("entries 只能是 HoldingKey → 存股／資本利得")
+            # 第三組 INFO-1：以 HoldingKey(...) 重建重跑 AB-0 鍵規則（擋 object.__new__ 繞過 __post_init__ 的鍵）。
+            if HoldingKey(k.portfolio_id, k.symbol) != k:
+                raise ValueError("entries 的鍵重建後不一致")
         if type(self.invalid_rows) is not tuple or type(self.conflict_keys) is not tuple:
             raise TypeError("invalid_rows／conflict_keys 必須是 tuple")
         if any(type(r) is not InvalidRow for r in self.invalid_rows):
@@ -335,20 +352,26 @@ def lookup(result: StrategyReadResult, key: HoldingKey) -> StrategyType:
     return result.entries.get(key, StrategyType.UNCLASSIFIED)
 
 
-def unmatched_keys(result: StrategyReadResult, holding_keys: Mapping) -> tuple:
+def unmatched_keys(result: StrategyReadResult, holding_keys: Iterable) -> tuple:
     """entries 裡**不對應任何持股鍵**的鍵（孤兒；保 entries 順序）。純揭露，⛔ 不改 `lookup` 的結果。
 
-    典型成因：Sheet 把 `0050` 存成數字 `50`、大小寫不符（`00631l` vs `00631L`）、組合名打錯／改名。
-    這些列在讀取端只會讀成「未分類」，本函式是唯一能把它們揭露出來的地方（QA-A M-1）。
-    `holding_keys`：`build_holding_keys(...).keys`（ticker → HoldingKey）；型別不對 → `TypeError`。
+    用法：`holding_keys` 傳**整本 Sheet 所有組合**的持股鍵聯集（`HoldingKey` 的 iterable，例：
+    各組合 `build_holding_keys(...).keys.values()` 串起來）。只傳一個組合會把其他組合的合法列誤報成孤兒。
+    ⛔ 拒收 str 與 Mapping（`TypeError`）：誤傳 `ticker → key` 映射時，多組合同 ticker 會互蓋，造成誤報。
+    元素不是 `HoldingKey` → `TypeError`。
+
+    涵蓋：entries（合法、無衝突、非未分類）中對不上持股鍵的列 —— 典型成因是 Sheet 把 `0050` 存成數字 `50`、
+    大小寫不符（`00631l` vs `00631L`）、組合名打錯／改名。
+    不涵蓋：`conflict_keys`（另有衝突揭露，即使對不上持股也不列在這裡）、`invalid_rows`（另有無效列揭露）、
+    寫成「未分類」的列（不入 entries）。
     """
     if type(result) is not StrategyReadResult:
         raise TypeError(f"result 必須是 StrategyReadResult：{type(result).__name__}")
-    if not isinstance(holding_keys, _AbcMapping):
-        raise TypeError(f"holding_keys 必須是 Mapping：{type(holding_keys).__name__}")
+    if isinstance(holding_keys, (str, bytes, _AbcMapping)) or not isinstance(holding_keys, _AbcIterable):
+        raise TypeError(f"holding_keys 必須是 HoldingKey 的 iterable（不是 str／Mapping）：{type(holding_keys).__name__}")
     held = set()
-    for k in holding_keys.values():
+    for k in holding_keys:
         if type(k) is not HoldingKey:
-            raise TypeError(f"holding_keys 的值必須是 HoldingKey：{type(k).__name__}")
+            raise TypeError(f"holding_keys 的元素必須是 HoldingKey：{type(k).__name__}")
         held.add(k)
     return tuple(k for k in result.entries if k not in held)

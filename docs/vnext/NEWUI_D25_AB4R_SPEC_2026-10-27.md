@@ -84,7 +84,12 @@
 `__post_init__` 一律把 entries 複製成新的 `MappingProxyType`（斷開呼叫端 dict 別名），驗鍵為 `HoldingKey`、值為非未分類的
 `StrategyType`；`invalid_rows` 元素須為 `InvalidRow`、`conflict_keys` 元素須為 `HoldingKey`；非 ok 時不得有任何內容。
 `HoldingKeysResult` 同樣複製並驗 `ticker(str) → HoldingKey(symbol 同 ticker)`、`rejected` 為 str tuple。
-`unmatched_keys(result, holding_keys)`：entries 中不對應任何持股鍵的鍵（孤兒，保 entries 順序）；純揭露，⛔ 不改 `lookup` 結果。
+`unmatched_keys(result, holding_keys: Iterable[HoldingKey])`：entries 中不對應任何持股鍵的鍵（孤兒，保 entries 順序）；
+純揭露，⛔ 不改 `lookup` 結果。`holding_keys` 傳**整本 Sheet 所有組合的持股鍵聯集**（多組合同 ticker 不互蓋）；
+str／Mapping（例：誤傳 `ticker → key` 映射）一律 `TypeError`。落在 `conflict_keys` 的鍵不在此列（測試釘住）。
+`InvalidRow`：row 為 ≥1 的 int（⛔ bool）、reason 須是 `INVALID_*` 之一。`HoldingKeysResult`：keys 與 rejected 不得重疊，
+keys 內所有鍵的 portfolio_id 必須相同（單一組合）。`StrategyReadResult` 驗 entries 鍵時以 `HoldingKey(pid, symbol)` 重建，
+重跑 AB-0 鍵規則（擋 `object.__new__` 繞過）。
 `lookup(result, key)`：查無 → `未分類`；key 非 `HoldingKey` 或 result 型別錯 → `TypeError`。
 有分類時 `HoldingEntry.strategy_source` 用 `STRATEGY_SOURCE = "google_sheet:strategy_class"`（測試證明通過 AB-0 檢查）。
 
@@ -103,9 +108,9 @@
 ## 7. 已知限制（據實）
 
 1. **改名或複製 Sheet → pid 變 → 讀成未分類**（fail-safe：最壞是「沒分類」，不會錯配到別的組合）。
-2. **本批沒有任何 caller**（reader 與 `build_holding_keys` 都未接線）。AB-4r 也沒有寫入面；但若使用者**手動**在 Sheet
-   建了 `strategy_class` 分頁並填值，接線後會讀到實際分類。是否允許這條路徑在 AB-4w（HI-5）之前生效，由接線批判斷
-   （C §7.2 (8)）。
+2. **本批沒有任何 caller**（reader 與 `build_holding_keys` 都未接線），AB-4r 也沒有寫入面。依 C §7.2 (8) 原文：
+   「**在寫入面核准並上線前**：Digest `holdings[].strategy_type` 一律 `未分類`」。故即使使用者**手動**在 Sheet 建了
+   `strategy_class` 分頁並填值，接線批**不得**讓它在 AB-4w（HI-5）核准上線前生效（除非重新送 Gate）。這不是開放決策。
 3. **雙通道**：呼叫端必須固定傳**綁定的那本** sheet_id（`session_binding_snapshot()`），reader 不自行挑通道；
    若 ETF／個股兩通道指向不同 Sheet，同名組合會得到不同 pid（設計如此）。
 4. **截短碰撞**：20 hex ＝ 80 bit；生日界約 n²／2⁸¹，10⁶ 個組合時碰撞機率約 4×10⁻¹³（量級 1e-13）。
@@ -120,8 +125,10 @@
 8. **刪除後重建同名組合會繼承舊分類**：pid 只由 (sheet_id, 組合名) 決定；刪掉組合再用同名重建，`strategy_class`
    分頁裡舊列仍對得上新組合（事實，由公式推得）。
 9. **孤兒列／打錯字讀成未分類**：例如 Sheet 把 `0050` 存成 `50`、大小寫不符（`00631l` vs `00631L`）、組合名打錯／改名，
-   這些列不會出現在 `invalid_rows`（它們本身合法），讀取端 `lookup` 只會回未分類；唯一能揭露的是
-   `unmatched_keys(result, holding_keys)`（需要呼叫端提供持股鍵）。
+   這些列不會出現在 `invalid_rows`（它們本身合法），讀取端 `lookup` 只會回未分類。`unmatched_keys(result, holding_keys)`
+   會列出 **entries 中**對不上 `holding_keys` 的鍵；它**不**涵蓋 `conflict_keys`（另有衝突揭露）、`invalid_rows`、
+   寫成「未分類」的列；且只有在呼叫端傳入**整本 Sheet 所有組合的持股鍵聯集**時才不誤報（只傳一個組合 ⇒ 其他組合的
+   合法列會被列為孤兒）。
 10. **接線前必須處理的契約缺口**（推論，供接線批判斷）：接線必改 AB-1（builder 目前把策略寫死為未分類）；且 AB-0
     Digest 沒有欄位可帶 `invalid_rows`／`conflict_keys`／`unmatched_keys`。接線前須決定是否改契約（升 `SCHEMA_VERSION`＋
     獨立 QA）；否則「寫錯／衝突／孤兒」在 Digest 端與「沒設定」無法區分。

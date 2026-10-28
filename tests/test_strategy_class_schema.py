@@ -389,20 +389,66 @@ def test_unmatched_keys_reports_orphans_without_changing_lookup():
     r = parse(["核心", "50", "存股", ""], ["核心", "00631l", "資本利得", ""], ["核心", "2330", "存股", ""],
               ["核芯", "2454", "存股", ""])
     hk = S.build_holding_keys(sheet_id=SID, portfolio_name="核心", tickers=["0050", "00631L", "2330", "2454"])
-    assert S.unmatched_keys(r, hk.keys) == (key("核心", "50"), key("核心", "00631l"), key("核芯", "2454"))
+    assert S.unmatched_keys(r, hk.keys.values()) == (key("核心", "50"), key("核心", "00631l"), key("核芯", "2454"))
     assert S.lookup(r, hk.keys["0050"]) is UNC and S.lookup(r, hk.keys["00631L"]) is UNC
     assert S.lookup(r, hk.keys["2330"]) is BUY
     assert S.lookup(r, key("核心", "50")) is BUY              # 不改 lookup 結果
 
 
+def test_unmatched_keys_multi_portfolio_union_same_ticker():
+    r = parse(["核心", "2330", "存股", ""], ["衛星", "2330", "資本利得", ""])
+    core = S.build_holding_keys(sheet_id=SID, portfolio_name="核心", tickers=["2330"])
+    sat = S.build_holding_keys(sheet_id=SID, portfolio_name="衛星", tickers=["2330"])
+    union = [*core.keys.values(), *sat.keys.values()]
+    assert S.unmatched_keys(r, union) == ()                       # 同 ticker 兩組合不互蓋、不誤報
+    assert S.unmatched_keys(r, iter(union)) == ()                  # 任何 iterable（含 generator）
+    assert S.unmatched_keys(r, core.keys.values()) == (key("衛星", "2330"),)   # 只給一組合 ⇒ 另一組合被列出（用法限制）
+
+
+def test_unmatched_keys_excludes_conflict_keys():
+    r = parse(["核心", "9999", "存股", ""], ["核心", "9999", "資本利得", ""], ["核心", "8888", "存股", ""])
+    assert r.conflict_keys == (key("核心", "9999"),)
+    assert S.unmatched_keys(r, []) == (key("核心", "8888"),)      # 衝突鍵不列為孤兒（另有 conflict 揭露）
+
+
 def test_unmatched_keys_empty_when_all_matched_and_types():
     r = parse(["核心", "2330", "存股", ""])
     hk = S.build_holding_keys(sheet_id=SID, portfolio_name="核心", tickers=["2330"])
-    assert S.unmatched_keys(r, hk.keys) == ()
-    assert S.unmatched_keys(S.empty_result("not_bound"), {}) == ()
+    assert S.unmatched_keys(r, hk.keys.values()) == ()
+    assert S.unmatched_keys(S.empty_result("not_bound"), ()) == ()
+    for bad in (hk.keys, {"2330": key("核心", "2330")}, {key("核心", "2330"): BUY}, "2330", b"2330", "", b"", {}, 5, None):
+        with pytest.raises(TypeError):
+            S.unmatched_keys(r, bad)                                        # type: ignore[arg-type]
     with pytest.raises(TypeError):
-        S.unmatched_keys(r, ["2330"])                                       # type: ignore[arg-type]
+        S.unmatched_keys(r, ["2330"])                                       # type: ignore[list-item]
     with pytest.raises(TypeError):
-        S.unmatched_keys(r, {"2330": ("p", "2330")})
-    with pytest.raises(TypeError):
-        S.unmatched_keys({}, hk.keys)                                       # type: ignore[arg-type]
+        S.unmatched_keys({}, hk.keys.values())                              # type: ignore[arg-type]
+
+
+# ── 第三組：InvalidRow／HoldingKeysResult／entries 鍵重建 ───────────────────
+@pytest.mark.parametrize("row,reason", [(0, S.INVALID_BAD_KEY), (-1, S.INVALID_BAD_KEY), (True, S.INVALID_BAD_KEY),
+                                        (2.0, S.INVALID_BAD_KEY), ("2", S.INVALID_BAD_KEY), (2, "oops"), (2, None)])
+def test_invalid_row_validation(row, reason):
+    with pytest.raises(ValueError):
+        S.InvalidRow(row, reason)
+
+
+def test_invalid_row_ok():
+    assert S.InvalidRow(1, S.INVALID_MISSING_NAME).row == 1
+
+
+def test_holding_keys_result_no_overlap_and_single_portfolio():
+    with pytest.raises(ValueError):
+        S.HoldingKeysResult(keys={"2330": key("核心", "2330")}, rejected=("2330",))
+    with pytest.raises(ValueError):
+        S.HoldingKeysResult(keys={"2330": key("核心", "2330"), "0050": key("衛星", "0050")})
+    assert len(S.HoldingKeysResult(keys={"2330": key("核心", "2330"), "0050": key("核心", "0050")},
+                                   rejected=("x y",)).keys) == 2
+
+
+def test_entries_key_rebuilt_blocks_new_bypass():
+    bogus = object.__new__(HoldingKey)
+    object.__setattr__(bogus, "portfolio_id", "has space")
+    object.__setattr__(bogus, "symbol", "2330")
+    with pytest.raises(ValueError):
+        S.StrategyReadResult(status="ok", entries={bogus: BUY})
