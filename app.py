@@ -78,8 +78,47 @@ if api_key:
 # F2:`_get_fm_token()` 已下沉 L0 → `src.config.get_finmind_token()`(app.py 內
 # 本來就沒有 caller,唯一消費者是 tab_macro,原本靠 `from app import _get_fm_token`)。
 
+# ══════════════════════════════════════════════════════════════
+# NAV-1（DEC-092 Q6／DEC-097）：預設＝新版固定四頁主導覽；舊 UI（D2 側欄雙層 radio ＋ 舊 7 頁籤）＝ legacy 模式
+# ══════════════════════════════════════════════════════════════
+# 「legacy 模式」＝今天的行為一字不變，只能用網址 `?legacy=1` 進入（`?legacy=0` 清除）；**不在任何導覽 / 側欄 / 頁面放可見連結**
+# （DEC-097：legacy／rollback 入口不得出現在一般使用者主導覽）。舊 UI 程式碼一行未刪、也未註解掉 —— 只是路由預設翻轉
+# （**不等於通過 Old UI Removal Gate**，DEC-019／020 不變）。
+# 旗標首次出現即寫入 session_state（耐 rerun；網址參數被 OAuth callback 的 `query_params.clear()` 清掉也不影響本 session）。
+# ⚠️ 必須在 `set_page_config` 之前算：新版模式要讓側欄在桌機預設展開（左側欄＝桌機主導覽），legacy 維持 'collapsed'。
+#    讀 query_params / 寫 session_state 都不會送出任何前端訊息，不違反「set_page_config 必須是第一個 st 指令」。
+# ⚠️ 本函式的 import 是 late import（函式內），不在檔頭 import 區加名稱（boot incident 範圍的既有守則）。
+def _nav4_resolve_legacy() -> bool:
+    from shared.ia_nav4 import LEGACY_QUERY_PARAM, LEGACY_SESSION_KEY, resolve_legacy_flag
+    try:
+        _qv = st.query_params.get(LEGACY_QUERY_PARAM)
+    except Exception:   # 取不到 query_params（極端環境）⇒ 當作沒帶參數，維持現有旗標
+        _qv = None
+    _flag = resolve_legacy_flag(_qv, bool(st.session_state.get(LEGACY_SESSION_KEY, False)))
+    st.session_state[LEGACY_SESSION_KEY] = _flag
+    return _flag
+
+
+_NAV4_LEGACY = _nav4_resolve_legacy()
+
+
+# 新版主導覽元件的 late-import wrapper（定義在此而非 `_ia_view_*` 群組旁：側欄區塊在那之前就要呼叫它）。
+def _ia_view_nav4(part: str):
+    # NAV-1（DEC-092 Q6／DEC-097）：新版固定四頁主導覽元件。只在**新（預設）模式**才 late import
+    # ⇒ legacy 模式（`?legacy=1`）連 import 都不做（rollback 路徑不依賴本模組是否健康）。
+    #   'sidebar'：桌機左側欄單選（在 `with st.sidebar:` 內呼叫；回傳目前要渲染的 view 頁 id）
+    #   'main'   ：主畫面的手機底部固定列 ＋ 🎯 標的 的第二層選擇（在頁面內容之前呼叫）
+    from src.ui.views.shell_nav4 import render_main_nav, render_sidebar_nav
+    if part == 'sidebar':
+        return render_sidebar_nav()
+    if part == 'main':
+        return render_main_nav()
+    raise ValueError(f'_ia_view_nav4 的 part 只能是 sidebar / main，收到 {part!r}')
+
+
 st.set_page_config(page_title='台股AI戰情室 v3.0', layout='wide',
-                   page_icon='📊', initial_sidebar_state='collapsed')
+                   page_icon='📊',
+                   initial_sidebar_state=('collapsed' if _NAV4_LEGACY else 'auto'))
 
 # ── OAuth callback：URL 帶 ?code= 時自動換 token（必須早於其他 query_params 操作）
 # v18.400 D4:oauth_state 已從 src/ui/pages 歸位 src/data/portfolio
@@ -325,39 +364,53 @@ with st.sidebar:
     st.caption(f'{_today_sb.strftime("%Y/%m/%d")} 週{_wd_sb}  {_trade_sb}')
 
     # ── 🆕 新版戰情室（試用中）— IA v2 五頁的導覽入口（2026-09-08 FE-35）──
+    # NAV-1：以下 radio ＋ 第二層 ＋ 圖例只在 legacy 模式（`?legacy=1`）渲染；預設（新）模式見本區塊 `else:`（一字未改，僅縮排）。
     # ⚠️ 這裡**只讀不畫**:被選到的那一頁要到主畫面區(下方 `_IA_PAGE is not None`)
     #    才 late import + render ⇒ **沒選就一行都不跑**(§8.1 step 6 的成本前提)。
     #    守衛:tests/test_ia_v2_sidebar_nav.py::TestNothingRunsUntilYouPick
     #    (五頁模組全換成毒藥,預設態跑完整頁 app.py 也不得碰到任何一支)。
-    _IA_NAV_CHOICE = st.radio(
-        '🆕 新版戰情室（試用中）', _IA_NAV_OPTIONS, index=0, key=_IA_NAV_KEY,
-        help='選任一方向 → 主畫面整片換成新版那一頁；選「不使用」→ 回到原本的 7 個頁籤')
-    _IA_DIR = _ia_nav.direction_from_option(_IA_NAV_CHOICE)
-    if _IA_DIR is not None:
-        _ia_leaves = _ia_nav.NAV_TREE[_IA_DIR]
-        if len(_ia_leaves) == 1:
-            # 單頁方向(🛡️／👤／⚡)沒有第二層。
-            _IA_PAGE = _ia_leaves[0]
-        else:
-            st.caption(_ia_nav.leaf_subtitle(_IA_DIR))
-            _ia_leaf_opts = _ia_nav.leaf_options(_IA_DIR)
-            _ia_last = st.session_state.get(_IA_LEAF_LAST_KEY, {})
-            _ia_first = _ia_nav.first_built_page(_IA_DIR)
-            _ia_start = _ia_last.get(_IA_DIR, _ia_first)
-            _ia_idx = _ia_leaves.index(_ia_start) if _ia_start in _ia_leaves else _ia_leaves.index(_ia_first)
-            _ia_leaf_choice = st.radio(
-                _ia_nav.leaf_subtitle(_IA_DIR), _ia_leaf_opts, index=_ia_idx,
-                key=f'{_IA_LEAF_KEY_PREFIX}{_IA_DIR}', label_visibility='collapsed')
-            _IA_PAGE = _ia_nav.page_from_leaf_option(_IA_DIR, _ia_leaf_choice)
-            if _IA_PAGE is None:
-                # §1 Fail Loud:第二層選值對不到任何頁 ⇒ 不靜默退回預設頁。
-                raise RuntimeError(
-                    f'第二層選值 {_ia_leaf_choice!r} 不在 {_IA_DIR!r} 底下:{_ia_leaf_opts}')
-            _ia_last = dict(_ia_last)
-            _ia_last[_IA_DIR] = _IA_PAGE
-            st.session_state[_IA_LEAF_LAST_KEY] = _ia_last
-    st.caption(_ia_nav.NAV_LEGEND)   # ⬜ ＝ 尚未建置(DEC-090 ③)
-    st.caption('ⓘ 驗收完成後，這區會取代上方頁籤')
+    if _NAV4_LEGACY:
+        _IA_NAV_CHOICE = st.radio(
+            '🆕 新版戰情室（試用中）', _IA_NAV_OPTIONS, index=0, key=_IA_NAV_KEY,
+            help='選任一方向 → 主畫面整片換成新版那一頁；選「不使用」→ 回到原本的 7 個頁籤')
+        _IA_DIR = _ia_nav.direction_from_option(_IA_NAV_CHOICE)
+        if _IA_DIR is not None:
+            _ia_leaves = _ia_nav.NAV_TREE[_IA_DIR]
+            if len(_ia_leaves) == 1:
+                # 單頁方向(🛡️／👤／⚡)沒有第二層。
+                _IA_PAGE = _ia_leaves[0]
+            else:
+                st.caption(_ia_nav.leaf_subtitle(_IA_DIR))
+                _ia_leaf_opts = _ia_nav.leaf_options(_IA_DIR)
+                _ia_last = st.session_state.get(_IA_LEAF_LAST_KEY, {})
+                _ia_first = _ia_nav.first_built_page(_IA_DIR)
+                _ia_start = _ia_last.get(_IA_DIR, _ia_first)
+                _ia_idx = _ia_leaves.index(_ia_start) if _ia_start in _ia_leaves else _ia_leaves.index(_ia_first)
+                _ia_leaf_choice = st.radio(
+                    _ia_nav.leaf_subtitle(_IA_DIR), _ia_leaf_opts, index=_ia_idx,
+                    key=f'{_IA_LEAF_KEY_PREFIX}{_IA_DIR}', label_visibility='collapsed')
+                _IA_PAGE = _ia_nav.page_from_leaf_option(_IA_DIR, _ia_leaf_choice)
+                if _IA_PAGE is None:
+                    # §1 Fail Loud:第二層選值對不到任何頁 ⇒ 不靜默退回預設頁。
+                    raise RuntimeError(
+                        f'第二層選值 {_ia_leaf_choice!r} 不在 {_IA_DIR!r} 底下:{_ia_leaf_opts}')
+                _ia_last = dict(_ia_last)
+                _ia_last[_IA_DIR] = _IA_PAGE
+                st.session_state[_IA_LEAF_LAST_KEY] = _ia_last
+        st.caption(_ia_nav.NAV_LEGEND)   # ⬜ ＝ 尚未建置(DEC-090 ③)
+        st.caption('ⓘ 驗收完成後，這區會取代上方頁籤')
+    else:
+        # NAV-1 預設（新）模式：固定四頁主導覽 —— 桌機左側欄單選（與手機底部固定列共用同一個頁狀態 `_nav4_page`）。
+        # 不渲染上方「🆕 新版戰情室（試用中）」radio 與「不使用」（DEC-097：舊 UI 從一般使用者預設畫面／導航隱藏）。
+        # `_IA_PAGE` 在此模式＝目前要渲染的 view 頁 id（非 None）⇒ 下方側欄既有「新版模式」語意（Sheet ID 末 6 碼、
+        # 指路句改指「👤 我的」）照舊生效。導覽元件出錯 ⇒ 紅態顯示並退到 📊 市場頁（不白屏、不靜默改用舊 UI）。
+        try:
+            _IA_PAGE = _ia_view_nav4('sidebar')
+        except Exception as _e_nav4:
+            import sys as _sys_n4, traceback as _tb_n4
+            st.error(f'⚠️ 主導覽渲染異常：{type(_e_nav4).__name__}: {scrub_md(_e_nav4, 300)}')
+            print(f'[nav4 sidebar] render error:\n{_tb_n4.format_exc()}', file=_sys_n4.stderr)
+            _IA_PAGE = _IA_MARKET
     # FIX(誠實性): 移除兩段與實際狀態無關的側欄顯示 ——
     #   (1)「### 🤖 AI 分析 / 頁面底部有 AI 整合報告面板」:該面板已不存在。
     #       AI 現在住在「🧬 AI 問答」主頁籤,原指路會把使用者送到頁尾免責聲明。
@@ -688,6 +741,32 @@ if set(_IA_VIEWS) != set(_IA_PAGE_LABELS):
         f'{sorted(_IA_VIEWS)} vs {sorted(_IA_PAGE_LABELS)}')
 # D2:導覽樹(六方向 × 葉)↔ 頁表 ↔ 派發表三方對帳,對不起來同樣當場炸(raise,不用 assert)。
 _ia_nav.reconcile_nav(_IA_VIEWS)
+
+
+# NAV-1：四頁導覽表 ↔ 對映表 ↔ 頁表 ↔ 派發表對帳（legacy 模式也跑；純函式、便宜，且 drift 要當場炸）。
+def _nav4_reconcile(_view_ids) -> None:
+    from shared.ia_nav4 import reconcile_nav4
+    reconcile_nav4(_view_ids)
+
+
+_nav4_reconcile(_IA_VIEWS)
+
+if not _NAV4_LEGACY:
+    # ══════════════════════════════════════════════════════════
+    # NAV-1 預設（新）模式：固定四頁主導覽 —— 主畫面整片換成目前選到的 view（沿用既有 `_render_tab_isolated` 隔離）
+    # ══════════════════════════════════════════════════════════
+    # 與下方 legacy 分支的差異：不畫 D2 位置列（📍）、不畫舊 7 頁籤、不畫全域置底條 / 我的組合 / 總經指南針
+    # （理由同下方 legacy 分支註解：那些屬舊 IA，且置底條讀的 `warroom_summary` 在這條路徑不存在，畫了就是 §1 假訊息）。
+    # ⚠️ 導覽元件與頁面內容**各自隔離**：導覽壞了不拖垮頁、頁壞了不吞掉導覽。免責聲明照出（法遵文字不分頁面）。
+    # ⚠️ 取 renderer 一律用 `.get()`、不用下標取值：`tests/test_ia_v2_sidebar_nav.py` 釘「派發表的下標取值全檔只出現一次、在 legacy 分支」。
+    _NAV4_RENDER = _IA_VIEWS.get(_IA_PAGE)
+    if _NAV4_RENDER is None:
+        # §1 Fail Loud：頁 id 不在派發表 ⇒ 不靜默退回別頁
+        raise RuntimeError(f'新版主導覽解析出的頁 {_IA_PAGE!r} 不在 view 派發表：{sorted(_IA_VIEWS)}')
+    _render_tab_isolated(lambda: _ia_view_nav4('main'), '主導覽')
+    _render_tab_isolated(_NAV4_RENDER, _IA_PAGE_LABELS[_IA_PAGE])
+    _render_footer()
+    st.stop()
 
 if _IA_PAGE is not None:
     # 主畫面整片換成這一頁。以下三件**刻意不渲染**：

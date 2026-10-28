@@ -14,6 +14,7 @@ from streamlit.testing.v1 import AppTest
 
 import tests.sheet_safety_rw_fakes as F
 from shared import ia_nav
+from shared.ia_nav4 import LEGACY_SESSION_KEY
 from shared import sheet_id as S
 
 _APP = Path(__file__).resolve().parents[1] / "app.py"
@@ -48,6 +49,9 @@ def client(monkeypatch):
 
 def _start() -> AppTest:
     at = AppTest.from_file(str(_APP), default_timeout=300)
+    # NAV-1（DEC-097）：預設入口翻轉為新版固定四頁導覽；本測試守的是 D2 側欄 / 舊 UI 行為（＝ legacy 模式），
+    # 故一律以 legacy session 旗標進入（斷言一字未動；新預設模式的對應守衛在 tests/test_nav1_*.py）。
+    at.session_state[LEGACY_SESSION_KEY] = True
     at.session_state["custom_oauth_cfg"] = dict(F.OAUTH_CFG)
     at.session_state["gsheet_tokens"] = dict(F.TOKENS)
     at.session_state["gsheet_email"] = "qa@example.com"

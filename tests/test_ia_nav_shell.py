@@ -13,6 +13,7 @@ import pathlib
 import pytest
 
 from shared import ia_nav
+from shared.ia_nav4 import LEGACY_SESSION_KEY
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -278,6 +279,9 @@ class TestShellNavModule:
 def _run(nav=None, leaf=None, leaf_dir=None, at=None):
     from streamlit.testing.v1 import AppTest
     _at = at or AppTest.from_file(str(_ROOT / "app.py"), default_timeout=300)
+    # NAV-1（DEC-097）：預設入口翻轉為新版固定四頁導覽；本測試守的是 D2 側欄雙層導覽 / 舊 7 頁籤（＝ legacy 模式），
+    # 故一律以 legacy session 旗標進入（斷言一字未動；新預設模式的對應守衛在 tests/test_nav1_*.py）。
+    _at.session_state[LEGACY_SESSION_KEY] = True
     if nav is not None:
         _at.session_state["_sb_ia_page"] = nav
     if leaf is not None:
