@@ -224,13 +224,26 @@ def test_digest_empty_rows():
                  "errors": [], "allocation": None, "take_profit": []}
 
 
+_HOLD_SENTENCE = "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。"
+
+
 def test_summary_prompt_contains_facts_and_hold_instruction():
+    # XV-H1-EXT（客戶 2026-10-28 裁示，取代 Z51/Z52 該部分語意）：fixture 有一列抓取失敗（9999）
+    # ⇒ 屬缺資料情境：**不得**帶續抱句，改帶資料不足指示；事實照列。
     d = svc.build_station_digest(_rows_fixture(), vix=22.5)
     p = svc.build_summary_prompt(d)
     assert "2412" in p and "0056" in p          # 汰弱 + 加碼代號都入 prompt
     assert "22.5" in p                          # VIX 帶入
-    assert "續抱" in p                          # 無事時要 AI 明講續抱
+    assert _HOLD_SENTENCE not in p              # 有抓取失敗 → 不引導續抱
+    assert svc._INSUFFICIENT_INSTRUCTION in p
     assert "杜撰" in p                          # §1：禁 AI 生數字的指示
+
+
+def test_summary_prompt_complete_data_keeps_hold_instruction():
+    """XV-H1-EXT：資料完整（去掉抓取失敗列）→ 仍帶續抱句（斷言保留）。"""
+    rows = [r for r in _rows_fixture() if not r.get("_detail", {}).get("error")]
+    p = svc.build_summary_prompt(svc.build_station_digest(rows, vix=22.5))
+    assert _HOLD_SENTENCE in p and svc._INSUFFICIENT_INSTRUCTION not in p
 
 
 def test_build_ai_summary_injects_prompt_and_returns_text():

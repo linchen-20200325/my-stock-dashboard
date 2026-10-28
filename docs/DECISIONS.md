@@ -1375,6 +1375,7 @@ D2.5 以下大方向核准：
 - **處置分類**（報告 §4.1～§4.4）：38 項不一致分為 (1) 本批安全小修 S1～S5；(2) 客戶 Gate（業務語意／版面）→ BACKLOG `XV-H3`、`XV-H1-EXT`、`XV-ASOF`；(3) 內部技術 Gate（§8 完整流程＋獨立 QA）→ BACKLOG `XV-X1`、`XV-C02`、`XV-C01`、`XV-C03`、`XV-C04`、`XV-M1`、`XV-M3`、`XV-M4`、`XV-M5`、`XV-C13`、`XV-C05`、`XV-H2-EXT`；(4) 登記（§-1，待任務碰到時處理）。
 - **本批安全小修（不新增 provider／API／schema，不改投資語意、公式或版面）**：
   - **(a) S1 ⑦／LINE AI prompt**（`188c20e7`＋QA 回修 `183dbdc3`）：`build_summary_prompt` 有效判斷檔數 `total` 須為**有限值且 ≥1** 才放「續抱、定期定額即可」句（缺／非數／NaN／inf／0／0.5 一律不放）；total>0 正常路徑逐字不變；LINE `_maybe_ai_summary` 共用同一支 prompt 同步受益。部分失敗／燈全⚪／無現價**不在範圍**（Z51／Z52 既有測試釘住，轉客戶 Gate `XV-H1-EXT`）。
+    - 📌 **2026-10-28 補註（append-only；原文不改）**：部分語意已由 DEC-101(2) 取代（2026-10-28 客戶）—— 部分失敗／燈全⚪／無現價時不得以「續抱」代替缺資料結論；Z51／Z52 舊語意與相關測試同步修正（有意識的更新，不是漏刪，決策者 客戶；DEC-101）。
   - **(b) S2 側欄「🔄 強制刷新數據」help 文字據實**（`96880543`＋QA 回修 `183dbdc3`）：只改說明文字，列出不在清除範圍的模組自有暫存（總經戰情快照、個股股價與籌碼、台灣與美國總經含 VIX／匯率、多檔批次結果、proxy 原始回應、失敗冷卻等，結尾表明非完整清單）；按鈕標籤、key、行為、版面不變。該按鈕兩模式共用 ⇒ **legacy 模式亦可見新說明**（舊 UI digest 已更新並依 DEC-019 揭露）。行為統一轉 `XV-H2-EXT`。
   - **(c) S3 🔬 葉2 個股抓價失敗顯示整列錯誤**（`7dbfaf4b`）：`page_inspect._batch_row` 對個股傳 `failed=`，價格抓取失敗沿用既有 `BatchRow.error` 整列錯誤態；查無資料仍「—」。⚠️ **取捨（已揭露）**：同列的財報分數一併被錯誤態蓋掉；財報腿失敗仍「—」（不在範圍）。屬「修正錯誤」非「改變設計」（`CLAUDE.md` §-1.5.A-8）。
   - **(d) S4 `sector_heatmap_render` 去後綴順序**（`8bc93e8e`）：改為先 `.TWO` 再 `.TW`（只對調順序、不換 helper、不改大小寫）；現行子項無 `.TWO`，畫面零變化。**半項**：同型兩處在 `etf_smart_analysis`（僅舊 UI `etf_tab_smart` 使用）依 DEC-019 舊 UI 凍結**停手未修**，登記。
@@ -1382,6 +1383,56 @@ D2.5 以下大方向核准：
   - 守衛同步 `3c1a7550`：舊 UI 零改動 digest（舊值刪除線保留＋DEC-019 揭露）、新增 `tests/test_xview_revert_chain.py`。
 - **與其他 DEC 的關係**：DEC-019／DEC-020（舊 UI 凍結／Removal Gate）**不變**——(d) 停手即依此；DEC-003（內部自決區）、DEC-084（Model×Effort）呼叫；客戶 Gate 項不由本條定案。不降低任何 Gate。**未經客戶**。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：三組獨立稽核（A／B／C）＋一組獨立複驗（V）＋一組修正 QA（抓到 1 MAJOR＋2 MINOR，皆已於 `183dbdc3` 回修）；**回修後未再經第二組複驗**（總管轉述）。突變測試由實作者與 QA **各自自列**，未獨立複跑。**限制**：沙箱無部署端網路、Streamlit Cloud 未驗（快取／冷卻行為皆讀碼與單元測試推得）；報告內全稱句（「只有兩條價格路徑」「38 項即全部」等）為單組或 grep 結論，不得當前提（報告 §6）。撰寫組（本 docs 同步）未重跑測試。
+
+### DEC-101｜Cross-View 稽核客戶 Gate 裁示：XV-H3＝A（外幣不得直接與 TWD 加總、先排除並列出）／XV-H1-EXT＝A（missing ≠ HOLD，不得以「續抱」代替缺資料結論）／XV-ASOF＝A（價格旁顯示資料時間＋來源，先出線框）＋基金範圍聲明＋其餘內部技術議題授權邊界（客戶 2026-10-28）
+
+> 2026-10-28 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/*.md docs/vnext/*.md` 最大為 DEC-100、DEC-101 0 命中）。要點經總管轉交，**非客戶逐字全文**。
+
+- **決策者**：**客戶**（2026-10-28；經總管轉交之要點）。
+- **日期／效力日期**：2026-10-28 起生效。｜**狀態**：生效；~~(1)(2) 實作中~~ (1)(2) implementation complete／waiting CI（**未合併**，PR 待開；見下方「實作紀錄」）（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））、(3) 線框草稿待客戶確認（`docs/vnext/NEWUI_D25_XVIEW_ASOF_WIREFRAME_2026-10-28.md`）。
+- **背景**：DEC-100 將稽核報告 `docs/vnext/NEWUI_D25_XVIEW_AUDIT_2026-10-28.md` 的三項客戶 Gate（G1／G2／G3）登記為 BACKLOG `XV-H3`／`XV-H1-EXT`／`XV-ASOF`，附總管推薦；客戶三項皆選 A。
+- **內容**：
+  1. **XV-H3 選 A（外幣資產）**：
+     - 未定義**匯率來源、匯率時點與成本幣別**前，外幣資產**不得直接與 TWD 加總**；
+     - 外幣資產**先排除於 TWD 總市值**；畫面須**明確列出哪些標的未納入及原因**；
+     - 排除後**不得把剩餘資產包裝成完整 80/20 或完整配置比例**；完整 denominator 不存在時顯示「**⬜ 部分外幣資產未納入，總市值／配置比例無法完整判定**」；
+     - 日後外幣換算**另開 Gate**，正式定義 asset currency、cost currency、FX source、FX as_of 與 canonical TWD value（BACKLOG `FX-CANONICAL-GATE`）。
+  2. **XV-H1-EXT 選 A（缺資料不得說續抱）**：
+     - 部分持股抓不到、全部燈號無法判定、持股缺現價時，**不得以「續抱」作為缺資料的替代結論**；**missing ≠ HOLD、unavailable ≠ safe**；
+     - 有充分資料的個別標的**保留既有可證明結論**；缺資料標的顯示「**⬜ 資料不足／無法判定**」；
+     - 組合層只要關鍵資料不足，**不得產生「全部續抱」等 blanket conclusion**；
+     - **同步修正 Z51／Z52 舊語意與相關測試**：本條**取代**其「缺值／部分失敗時 prompt 與修前逐字相同、仍帶『續抱』指示」那一部分語意（批 Z51 #838、批 Z52 #839 的測試釘住者，例：`tests/test_batch_z52.py::test_prompt_normal_and_missing_identical_to_pre`、`tests/test_batch_z51.py::test_prompt_normal_identical_and_keeps_instruction`、`tests/test_dividend_station_service.py::test_summary_prompt_contains_facts_and_hold_instruction`，清單取自稽核報告 §4.2 G2，為 grep 結論）；原 DEC（DEC-031、DEC-100(a)）**加註指向本條，不刪原文**。
+  3. **XV-ASOF 選 A（價格資料時間＋來源）**：
+     - 新四頁價格旁顯示**簡潔的「資料時間＋來源」**；stale／fallback **必須明確標示**；**不得只用顏色**表達 stale；
+     - **先依既有治理出線框草稿，確認後再實作，不自行擴張版面**（DEC-082；`CLAUDE.md` §-1.5.D v3 §03-2 ①）；
+     - Level 1 簡潔，完整 methodology 可留在「查看依據」。
+  4. **範圍聲明（基金）**：股票 repo 的 Cross-View Audit **不代表基金資料一致性已驗收**（本 repo 無基金資料；報告 §1.2）；姊妹 repo `my-Fund-dashboard` **須另做**同類 Cross-View Data Consistency Audit（特別查單一基金 NAV 與組合頁同基金 NAV／日期／幣別／級別／來源一致性；BACKLOG `FUND-REPO-XVIEW-AUDIT`）；**不得把股票 Audit 標記為基金問題已結案**。
+  5. **其餘內部技術議題授權邊界**：
+     - 純技術一致性（cache key、大小寫／alias）且**不改客戶語意、不引入新來源／公式／schema** 的安全修正，可依自治規則處理（DEC-003；`CLAUDE.md` v3 §03-1）；
+     - 涉及 **canonical identity、資料契約 schema、新 provider／API、公式、投資語意或客戶可見的新計算口徑**，**必須另停 Gate**；
+     - **策略分類 key 大小寫須在接摘要前完成並驗證**（`XV-C05`，`AB4R-WIRE-BUILDER` 前），**不得造成同一標的兩個 identity**。
+- **效力邊界**：本條**不**決定過期價是否計入市值／損益／停利（報告 G4；未裁示）；**不**核准外幣換算；**不**核准 XV-ASOF 的實作（線框確認前 0 UI code）；**不**通過舊 UI Removal Gate（DEC-019／DEC-020）；不降低任何 Gate。
+- **與其他 DEC 的關係**：DEC-100（AI 總管內部處置分類）之三項客戶 Gate 由本條**回答**；DEC-100 其餘內容不因本條升格為客戶裁示。DEC-031（數值異常不顯示、不續算）**原則不變**，僅其實作批 Z51／Z52 中「缺值仍帶續抱」的測試語意由本條第 2 點取代。DEC-082（草稿先行）、DEC-003（內部自決區）、DEC-084（Model×Effort）呼叫。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：撰寫組（docs-only）未重跑測試；本條只落盤裁示，不改任何程式碼；Z51／Z52 受影響測試清單為報告 grep 結論，實作組須自行全面盤點。
+- 📌 **實作紀錄（2026-10-28 補；加法式，上文一字未改；決策者 AI 總管（事實更新））**：**狀態＝implementation complete／waiting CI，未合併**（PR 待開；分支 `ccr-fa5b6ded-9rhvoj`；基準 `f3d77703`，`git log f3d77703..HEAD`）。
+  - **commit**：`bf622ead`（XV-V1）／`af560a45`（XV-C05）／`fe618e6a`（DEC-101 落盤＋ASOF 線框，docs）／`216faccf`・`b6bb466f`・`b51168d5`（XV-H2-EXT／XV-M1）／`bf4621ef`・`38c821bb`・`485347c6`・`66249bdf`・`27081c96`・`07673760`・`41d6f839`・`9901cd0c`・`8e6958af`・`c882a299`（XV-H1-EXT）／`2bead6ad`・`82889239`・`d21d08a1`・`68233550`・`3c077ee7`・`72f87802`（XV-H3）。
+  - **`XV-H1-EXT`（本條 (2)）**：新增 L0 單一判定 `shared/holdings_data_short.py`（`row_data_short`／`total_judged`／`digest_data_short`），收斂 ① 該做什麼 gate、③「未判 N」、⑦ prompt 續抱句、LINE 正文續抱／無需動作句、週報正文與 AI prompt —— 原本各自實作、各漏不同的洞（複驗組 C MAJOR-1/2）。缺資料標的顯示「⬜ 資料不足／無法判定」；**可證明結論（🔴 汰弱／加碼／停利／🟡）保留**，缺現價者另列「缺現價（結論不受影響）」，衛星缺現價寫「停利無法判定」；契約漂移（`MISS_CONTRACT_DRIFT`）**保留原診斷句**（不換 ⬜），但計入資料不足。組合層資料不足時 ⑦／LINE／週報不給「續抱」「今日無需動作」「均無連續落後（續抱觀察）」類 blanket 句。Z51／Z52 測試同步改為新語意（`tests/test_batch_z51.py`、`tests/test_batch_z52.py`、`tests/test_dividend_station_service.py` 等）；新測試 `tests/test_xv_h1ext_missing_not_hold.py`、`tests/test_xv_complete_data_parity.py`。
+  - **`XV-H3`（本條 (1)）**：新增 L0 `shared/asset_currency_gate.py`＝**暫行 fail-safe 判定，不是 canonical currency 定義**（正式定義另開 `FX-CANONICAL-GATE`，屆時應被取代而非擴充）。只認 `.TW`／`.TWO` 後綴或純 ASCII 數字 4–6 碼＋可選一個大寫字母為 TWD；排除原因兩種：「外幣資產，匯率與成本幣別未定義」（明確外幣）與「幣別未確認」（其餘）。有排除時所有總額／比例為 `None` 並顯示逐字客戶句「⬜ 部分外幣資產未納入，總市值／配置比例無法完整判定」＋未納入清單；壓測／VaR 以「僅已納入台股部分」標示涵蓋範圍並標失準（全外幣時給 `FX_ONLY_REASON`）；⑤⑥ 外幣排除用既有徽章「不適用 · 重跑無效」；外幣衛星計為停利判不了；外幣列損益% 顯示「—」。新測試 `tests/test_xv_h3_fx_not_summed.py`。
+  - **`XV-C05`（本條 (5) 末項）**：`shared/strategy_class_schema.normalize_holding_ticker`＝`strip().upper()`，與 L3 `holdings_service.get_holdings` 逐字一致；不加減後綴、不補前導零、不做 NFKC；非 str → `TypeError`。
+  - **`XV-H2-EXT`／`XV-M1`（AI 總管決定，DEC-101(5) 邊界內）**：側欄「🔄 強制刷新數據」除 `st.cache_data.clear()` 外，經 L3 `src/services/force_refresh_service.py` 另清 L1 `macro_core` 的 VIX／Yahoo 收盤（`_YF_CLOSE_CACHE`）與 FRED（`_FRED_CACHE`）**成功**快取；**不清失敗退避表**（v3 §02）；help 據實列出不清的暫存（匯率／台灣總經等仍沿用暫存）。新測試 `tests/test_xv_h2ext_force_refresh_module_caches.py`。
+  - **`XV-V1`**：`src/data/etf/etf_fetch.py` 後綴正規化改大小寫不敏感（`.two`→`.TWO`）。新測試 `tests/test_xv_v1_etf_fetch_suffix_case.py`。突變／回退鏈：`tests/test_xvext_revert_chain.py`。
+  - **QA**：三組獨立 QA —— A（對抗）、B（語意）、C（複驗，兩輪）；A／B 所報 QA#1～#11 與 C 所報 MAJOR-1～3／MINOR-1～3 皆已回修（見上列 commit 訊息）（總管轉述，撰寫組未重跑測試）。
+  - **連動舊 UI（揭露）**：L3 列動作文字（缺資料 → ⬜）與外幣排除也會影響舊 UI 存股戰情室的顯示（**舊 UI 檔未改**）；舊 UI 在外幣持股時顯示錯誤原因句（「持股沒有張數／均價…」類）→ 待客戶裁示 BACKLOG `XV-OLDUI-FX-REASON`（DEC-019）。
+  - **未驗**：Streamlit Cloud 實機；真 LINE 推播與真 AI 回覆；客戶 Sheet 實際有無外幣持股。
+  - **已知未改**：外幣個股**列層**建議動作文字未改（可能仍顯示「🟢 續抱」；**組合層已不給續抱**）→ BACKLOG `XV-FX-ROW-ACTION`；資料不足單一判定只看持有列，觀察清單不擋組合層 → `XV-WATCHLIST-SCOPE`（已揭露）；LINE VIX 分級行動句在資料不足時是否收 → 待客戶 `XV-LINE-VIX-LINE`。
+  - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本段由 docs-only 撰寫組依 `git log`／`git diff --stat`／docstring 撰寫，未重跑測試、未經第二組驗。
+  - 📌 **第四輪回修＋QA 最終結果（2026-10-28 補；加法式，上文一字未改；決策者 AI 總管（事實更新））**（`git log 4014a77f..HEAD`）：
+    - `9c26106d`（複驗 C 第二輪 MAJOR-N1）：觀察清單列**判不出**（資料不足、燈或輸入資料異常、契約漂移）**也計入組合層資料不足**；缺現價／外幣仍只看持有列（觀察清單無持倉金額）。**AI 總管決定**，理由：同一則 LINE／⑦ 不得同時列出 ⬜ 清單又說「續抱、定期定額即可」「今日無需動作」；且與 `errors` 及 ① `cruise_or_gap` gate 本來就含觀察清單的口徑一致。L0 新增 `row_short_kind`（判不出／缺現價保留結論／外幣）。
+    - `e4742494`（MINOR-A）：契約漂移列**不計入有效判斷檔數**，並在 ⑦ prompt 與 LINE 另列「資料異常未判（契約漂移）：代號」點名；0 檔有效判斷且原因為契約漂移時，LINE 不寫「資料抓取全失敗」。
+    - `303c9703`（MINOR-B）：① 替代句依實際原因組成（判不出／只有外幣／只有缺現價三種句型）；燈全判得出、只有外幣核心 ETF 時不再說「沒東西可以判」。
+    - **QA 最終結果**：獨立複驗組 C 共三輪；**第三輪：0 BLOCKER／0 MAJOR／3 MINOR**（3 項 MINOR 登記為 BACKLOG `XV-SHORT-TEXT-CORE-SAT`／`XV-UNJUDGED-COUNT-FX`／`XV-VALID-COUNT-INSUFFICIENT`，LOW）。測試：fast lane 全套 **32325 passed／1 環境失敗**（z59，`markdown_it` 缺套件，環境因素）。上方「QA」小點「C（複驗，兩輪）」之敘述截至第三輪前，現行以本小點為準。
+    - 已知未改（更新）：`XV-WATCHLIST-SCOPE` 已部分處理（觀察清單判不出計入，見 `9c26106d`）；`XV-FX-ROW-ACTION` 升為客戶 Gate；`XV-LINE-VIX-LINE` 經複驗 C 確認為目前唯一仍讓 ⬜ 與「定期定額正常扣款即可」同則並存處。
+    - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本小點測試數與 QA 結果為總管轉述，docs-only 撰寫組未重跑測試、未經第二組驗。
 
 ## 2. 產品／UI
 
@@ -1894,6 +1945,7 @@ D2.5 以下大方向核准：
 ### DEC-031｜數值異常（NaN／±inf／無效值）不顯示、不用替代值續算；統一文案
 - **範圍**：資料語意／UI 文案｜**日期**：2026-10-13｜**決策者**：客戶｜**狀態**：生效
 - **來源**：C `H:1125`「「{項目}資料異常，無法計算，不下結論。」」；`H:1074`。B #836 `8ddc8b37`、#835 `18b51ea0`。
+- 📌 **2026-10-28 補註（append-only；原文不改）**：部分語意已由 DEC-101(2) 取代（2026-10-28 客戶）—— 本條「異常不顯示、不續算」原則不變；被取代的只有同期實作批 Z51（#838）／Z52（#839）測試所釘「缺值／部分失敗時 AI prompt 與修前逐字相同、仍帶『續抱、定期定額即可』指示」那一部分（有意識的更新，不是漏刪，決策者 客戶；DEC-101）。⚠️ Z51／Z52 與本條的對應為撰寫組判讀（Z51／Z52 程式註解自陳「客戶 2026-10-13 裁示」「沿用批 Z49／Z50 的處置」），單組。
 
 ### DEC-032｜等於門檻歸較差側（外資 −30,000 等於門檻歸「防禦」）
 - **範圍**：公式（邊界）｜**日期**：2026-10-09（Q-r10b＝A）｜**決策者**：客戶｜**狀態**：生效（「Q-r9d」本身的原文撰寫組未查到；本條依 Q-r10b 原文所述的通則）
@@ -2951,6 +3003,8 @@ Effort：High
 | DEC-091「待客戶 Design Gate 裁示」狀態（D2.5 設計文件未核准；2026-10-27 新增列） | DEC-092 | 解除（設計方向核准＋Q1～Q6 裁示；DEC-091 原文不改） | 客戶 2026-10-27 原文明示（見 DEC-092 fence） |
 | DEC-089 G1＝C 六向導覽；DEC-090 形式 (b) 與 ⚡／🩺 佔位頁文案（2026-10-27 新增列） | DEC-092 Q6 | 部分取代（固定四主導航；D2 殼過渡版保留至四頁替代；DEC-089 其餘項與 HI-1～HI-6 未核准狀態不變；原文不改） | 客戶 2026-10-27 原文明示＋撰寫組判讀範圍，單組 |
 | 設計文件 A／C 對 Q1 的總管推薦「以代號（ticker）為準、全站一致」；Q2 圖 B「沿用現有五條」中隱含的結論位；Q3「五桶各取最差一項」；Q5 以營收 YoY 中位數＋覆蓋率定義產業趨勢（2026-10-27 新增列） | DEC-092 Q1／Q3／Q5 | 修改（Q1 改 portfolio_id+symbol；Q3 加「資料不足不得硬選最差」；Q5 僅為候選維度／baseline research，不得定義為正式產業趨勢）；Q2、Q4 大致照推薦 | 客戶 2026-10-27 原文明示 |
+| 批 Z51（#838）／Z52（#839）測試語意「缺值／部分失敗時 AI prompt 與修前逐字相同、仍帶『續抱』指示」（DEC-031 同期實作；DEC-100(a) 註明不在範圍）（2026-10-28 新增列） | DEC-101(2) | 部分取代（missing ≠ HOLD；不得以續抱代替缺資料結論；DEC-031 原則與原文不改） | 客戶 2026-10-28（經總管轉交要點）；Z51／Z52↔DEC-031 對應為撰寫組判讀，單組 |
+| DEC-100 三項客戶 Gate（`XV-H3`／`XV-H1-EXT`／`XV-ASOF`）「open（待客戶裁示）」（2026-10-28 新增列） | DEC-101(1)～(3) | 裁示（三項皆 A；DEC-100 原文不改） | 客戶 2026-10-28（經總管轉交要點） |
 
 ## 6. 未升格項目（證據不足或題意不明 → 見 `docs/BACKLOG.md` 第 4 節）
 

@@ -53,16 +53,25 @@ def test_total_positive_output_byte_identical_except_count():
 
 
 def test_total_zero_differs_only_by_the_instruction():
-    """total=0 與 total=1 的差異 = 拿掉那一句 + 檔數；不改其他文字。"""
+    """total=0 與 total=1 的差異 = 續抱句換成資料不足指示 + 檔數；不改其他文字。
+
+    XV-H1-EXT（客戶 2026-10-28 裁示，取代 xview V1「只拿掉那一句」的語意）：不可判斷時改放
+    `_INSUFFICIENT_INSTRUCTION`（資料不足者寫「資料不足／無法判定」、不得給組合層「全部續抱」）。"""
+    from src.services.dividend_station_service import _INSUFFICIENT_INSTRUCTION
     z = build_summary_prompt(_digest(total=0))
     o = build_summary_prompt(_digest(total=1))
-    assert o.replace("沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。", "") \
+    assert o.replace("沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。", _INSUFFICIENT_INSTRUCTION) \
             .replace("有效判斷檔數：1", "有效判斷檔數：0") == z
 
 
-def test_partial_failure_still_keeps_instruction():
-    """範圍守衛：部分失敗（total>0、errors 非空）不在本修範圍 → 照舊保留。"""
-    assert _HOLD in build_summary_prompt(_digest(total=1, errors=["9999"]))
+def test_partial_failure_drops_instruction():
+    """~~範圍守衛：部分失敗（total>0、errors 非空）不在本修範圍 → 照舊保留。~~
+
+    XV-H1-EXT（客戶 2026-10-28 裁示，取代 Z51/Z52／xview V1 該部分語意）：部分抓取失敗 →
+    **不帶**續抱句、改帶資料不足指示。"""
+    from src.services.dividend_station_service import _INSUFFICIENT_INSTRUCTION
+    p = build_summary_prompt(_digest(total=1, errors=["9999"]))
+    assert _HOLD not in p and _INSUFFICIENT_INSTRUCTION in p
 
 
 def test_line_ai_summary_shares_the_fix(monkeypatch):

@@ -12,6 +12,8 @@ import math
 import numbers
 from typing import Callable
 
+from shared import asset_currency_gate as FXG
+from shared import holdings_data_short as HDS
 from shared import dividend_station_thresholds as T
 from shared import sector_flow_thresholds as _UNITS
 from shared import station_specs as SS
@@ -353,6 +355,46 @@ def _error_row(ticker: str, name: str, asset_class: str, asset_kind: str, reason
     }
 
 
+def _mark_insufficient(row: dict, *, ak: str, held: bool) -> None:
+    """XV-H1-EXT（客戶 2026-10-28 裁示 A：missing ≠ HOLD；unavailable ≠ safe）。就地標記。
+
+    資料不足的兩種情形（只有成立時才加 `SS.KEY_INSUFFICIENT`，資料完整的列逐鍵不變）：
+    - `SS.INSUFF_ALL_UNJUDGED`：該列每一盞燈都判不出 —— ETF：健檢四燈皆 ⚪（`健檢` 取最嚴重、
+      ⚪ 排最低，⇒ `健檢=="⚪"` 即四燈皆 ⚪）**且**建議分支落在巡航（⇒ 235 無加碼／停利，亦為 ⚪）；
+      個股：汰換燈 `健檢=="⚪"`（財報缺或契約漂移）。
+    - `SS.INSUFF_NO_PRICE`：持有列缺現價（含現價資料異常被排除，`現價` 為 None）。
+    `建議動作` 換成 `SS.INSUFFICIENT_ACTION_TEXT` 的列：既有建議是**持有結論**（ETF 巡航「⚪ 巡航：
+    維持定期定額」、個股 🟢「續抱」）、或個股汰換燈 ⚪（財報資料不足，本來就無法判定；原句移到
+    `_detail["原建議動作"]` 保留）—— 缺資料不得以「續抱」當替代結論。
+    QA 回修 #7：**只有真的被換成 ⬜ 的列**才帶 `SS.KEY_INSUFFICIENT`（才會被列成「無法判定」）；
+    可證明的結論（🔴 汰弱、加碼、停利、🟡 留意）一字不動、⛔ 不列入「無法判定」——
+    持有且缺現價者改帶 `SS.KEY_PRICE_MISSING_KEPT`（事實句「缺現價（結論不受影響）」）。
+    判燈規則與 `_action` 分支代碼不動。
+    """
+    _is_stock = ak == T.KIND_STOCK
+    _hold = (row.get("健檢") == "🟢") if _is_stock else (row.get("_action") == ds.ACTION_CRUISE)
+    _unjudged = row.get("健檢") == "⚪" and (_is_stock or row.get("_action") == ds.ACTION_CRUISE)
+    # 複驗 C MINOR-1：個股 ⚪ 若是**契約漂移**（grade 不在已知分級，L2 `assess_stock` 明定 ⛔ 不得畫成
+    # 「資料不足」）→ 保留 L2 原診斷句「⚪ 財報評等「Z」不在已知分級內（上游契約漂移,請回報）…」，
+    # ⛔ 不換成 ⬜；它仍由 L0 `holdings_data_short.row_data_short` 計入組合層資料不足。
+    # 只有「沒有輸入」的 ⚪ 才換 ⬜。
+    # ⚠️ 揭露：本函式改的是 L3 列的 `建議動作` 文字 —— 舊 UI 存股戰情室（`src/ui/etf/etf_tab_dividend_station`）
+    #   與新 UI 共用 `get_station_rows`，故舊 UI 的這一欄同樣會顯示 ⬜ 句。屬 missing ≠ HOLD 之修正，舊 UI 檔未改。
+    if _is_stock and _unjudged and row.get("_miss_reason") == SS.MISS_CONTRACT_DRIFT:
+        _unjudged = False
+    _no_price = held and row.get("現價") is None
+    _replace = _unjudged or (_no_price and _hold)
+    if _replace:
+        row[SS.KEY_INSUFFICIENT] = tuple(
+            _r for _r, _on in ((SS.INSUFF_ALL_UNJUDGED, _unjudged), (SS.INSUFF_NO_PRICE, _no_price))
+            if _on)
+        if not _hold and isinstance(row.get("_detail"), dict):
+            row["_detail"]["原建議動作"] = row.get("建議動作", "")
+        row["建議動作"] = SS.INSUFFICIENT_ACTION_TEXT
+    elif _no_price:
+        row[SS.KEY_PRICE_MISSING_KEPT] = True
+
+
 def build_station_rows(holdings: list[dict], *, vix: float | None,
                        metrics_fn: Callable[[str, str], dict]) -> list[dict]:
     """逐檔評估 → 組表。metrics_fn(ticker, asset_kind) 回一 dict 指標（依賴注入,離線可測）。
@@ -479,6 +521,13 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
             _row["張數"] = float(_lots) if _lots and float(_lots) > 0 else None
             _row["均價"] = float(_avg) if _avg and float(_avg) > 0 else None
             _row["現價"] = float(_cur) if _cur and float(_cur) > 0 else None
+            if held and not FXG.is_confirmed_twd_ticker(tk):
+                # XV-H3（客戶 2026-10-28 裁示 A）：幣別未確認（外幣／看不出來）→ 不得與 TWD 加總；
+                # 成本幣別未定義 ⇒ 損益% 亦不可判定。市值／損益% 一律 None（⛔ 不換算、不猜匯率）。
+                _row[FXG.KEY_FX_UNCONFIRMED] = True
+                _row["市值"] = None
+                _row["損益%"] = None
+            _mark_insufficient(_row, ak=ak, held=held)
             rows.append(_row)
         except Exception as e:  # noqa: BLE001 — 單檔失敗不炸整表（§1 誠實標記）
             rows.append(_error_row(tk, nm, ac, ak, f"{type(e).__name__}: {e}", held=held))
@@ -1106,6 +1155,20 @@ def build_switch_advice(rows: list[dict], macro: dict | None,
     return _out
 
 
+# ── XV-H3：幣別未確認的持有列（不得與 TWD 加總）────────────────────────────
+def fx_excluded_codes(rows: list[dict]) -> list[str]:
+    """持有、非整批抓取失敗、且被 `build_station_rows` 標了 `FXG.KEY_FX_UNCONFIRMED` 的列代號（保序去重）。
+
+    XV-H3（客戶 2026-10-28 裁示 A）：只要非空，總市值／未實現損益合計／80/20 一律**不算**
+    （⛔ 不把剩餘台股包裝成完整組合）；畫面、LINE、AI 改講 `FXG.FX_PARTIAL_TEXT` ＋ 未納入清單。
+    判定只走 L0 `asset_currency_gate.is_confirmed_twd_ticker`（同一把尺，見該檔）。
+    """
+    return list(dict.fromkeys(
+        str(r.get("代號", "")) for r in (rows or [])
+        if r.get("held") and not (r.get("_detail") or {}).get("error")
+        and r.get(FXG.KEY_FX_UNCONFIRMED)))
+
+
 # ── 第 1 層結論卡:組合層彙總（純函式,#階段C）────────────────────────────
 def compute_portfolio_totals(rows: list[dict]) -> dict | None:
     """組合層的「未實現損益 / 檔數 / 總市值」（純函式,§1 缺就不算）。
@@ -1129,7 +1192,11 @@ def compute_portfolio_totals(rows: list[dict]) -> dict | None:
     當成整個組合的損益（§1 錯的數字比沒有數字更危險）。
 
     全無可計價持股 → 回 `None`（畫面顯示「算不出來」,**不顯示 0**）。
+    XV-H3（客戶 2026-10-28 裁示 A）：有任何幣別未確認的持有列（`fx_excluded_codes` 非空）→ 回 `None`
+    （⛔ 不把剩餘台股的總額當成整個組合；由呼叫端講 `FX_PARTIAL_TEXT`）。
     """
+    if fx_excluded_codes(rows):
+        return None
     _cost = _value = 0.0
     _held_n = _valued_n = 0
     for r in (rows or []):
@@ -1167,7 +1234,10 @@ def compute_allocation_split(rows: list[dict]) -> dict | None:
 
     只納入 **held 且有市值(市值>0)** 的列。§1：部分 held 缺金額 → partial=True(僅供參考);
     全無市值 → None（UI 不顯示、不捏造）。
+    XV-H3（客戶 2026-10-28 裁示 A）：有任何幣別未確認的持有列 → None（⛔ 不顯示不完整的比例）。
     """
+    if fx_excluded_codes(rows):
+        return None
     _core = _sat = 0.0
     _held_n = _valued_n = 0
     for r in (rows or []):
@@ -1249,10 +1319,15 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
     adds: list[dict] = []
     watch_adds: list[dict] = []
     errors: list[str] = []
+    drift: list[str] = []
     valid = 0
     for r in (rows or []):
         if r.get("_detail", {}).get("error"):
             errors.append(str(r.get("代號", "")))
+            continue
+        if HDS.is_contract_drift(r):
+            # 複驗 C 第二輪 MINOR-A：契約漂移列判不出 ⇒ ⛔ 不算進「有效判斷檔數」，另列事實。
+            drift.append(str(r.get("代號", "")))
             continue
         valid += 1
         if r.get("健檢") == "🔴":
@@ -1290,7 +1365,45 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
                      and (r.get(SS.KEY_INVALID_TEXTS) or _bad_inputs(r))]
     if _invalid_rows:
         _out["invalid"] = _invalid_rows
+    # XV-H1-EXT（客戶 2026-10-28 裁示 A）：資料不足的列（`SS.KEY_INSUFFICIENT`，燈全判不出／
+    # 持有列缺現價）→ 列出代號與原因（**只有非空時才有這一鍵**，資料完整時 digest 逐鍵不變）。
+    # 下游（⑦ prompt、LINE 正文）據此不給「續抱」類組合層結論。抓取失敗列另在 errors。
+    # QA 回修 #11：每筆標明持有／觀察清單（`held`）。#7：只收建議動作真的被換成 ⬜ 的列。
+    _insufficient = [{"代號": str(r.get("代號", "")), "原因": tuple(r.get(SS.KEY_INSUFFICIENT) or ()),
+                      "held": bool(r.get("held"))}
+                     for r in (rows or [])
+                     if not r.get("_detail", {}).get("error") and r.get(SS.KEY_INSUFFICIENT)]
+    if _insufficient:
+        _out["insufficient"] = _insufficient
+    # QA 回修 #7：持有列缺現價、但結論可證明（未換成 ⬜）→ 另列事實（只有非空才有這一鍵）。
+    _kept = [str(r.get("代號", "")) for r in (rows or [])
+             if not r.get("_detail", {}).get("error") and r.get(SS.KEY_PRICE_MISSING_KEPT)]
+    if _kept:
+        _out["price_missing_kept"] = _kept
+        # 複驗 C MINOR-2：其中的衛星（個股）—— 停利判不了（只有非空才有這一鍵）。
+        _kept_sat = [str(r.get("代號", "")) for r in (rows or [])
+                     if not r.get("_detail", {}).get("error") and r.get(SS.KEY_PRICE_MISSING_KEPT)
+                     and r.get("種類") == "個股"]
+        if _kept_sat:
+            _out["price_missing_kept_satellite"] = _kept_sat
+    # XV-H3：幣別未確認、未納入總額／比例的持有列（只有非空才有這一鍵；`allocation` 此時為 None）。
+    _fx = fx_excluded_codes(rows)
+    if _fx:
+        _out["fx_excluded"] = _fx
+    # 複驗 C MAJOR-1/2：組合層「資料不足」的單一判定（L0 `holdings_data_short.row_data_short`）
+    # → 代號清單（只有非空才有這一鍵）。⑦ prompt 與 LINE 一律以 `digest_data_short()` 讀它。
+    _short = list(dict.fromkeys(str(r.get("代號", "")) for r in (rows or []) if HDS.row_data_short(r)))
+    if _short:
+        _out["data_short"] = _short
+    if drift:                          # 複驗 C 第二輪 MINOR-A（只有非空才有這一鍵）
+        _out["contract_drift"] = drift
     return _out
+
+
+#: XV-H1-EXT：資料不足（抓取失敗／燈全判不出／缺現價／無有效判斷檔）時取代「續抱」引導句。
+_INSUFFICIENT_INSTRUCTION: str = (
+    "有標的資料不足或抓取失敗,列在『資料不足／無法判定』的標的請寫『資料不足／無法判定』,"
+    "其餘已列出的結論照原樣講,不得給組合層『全部續抱』類總結,也不得自行補上缺少的資料。")
 
 
 def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
@@ -1318,15 +1431,26 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
     _inv = digest.get("invalid") or []
     # xview V1：有效判斷檔數 0（每檔抓取全失敗／total 缺或非數）→ 也**不送**「續抱」那句 ——
     # 比照 LINE 正文 `format_holdings_message` 既有 `total<=0` 防線（稽核🔴A）：零資料不給安心結論。
-    # 只看 total；部分失敗／燈全 ⚪／無現價**不在**此列（客戶 Z51/Z52 範圍，既有測試釘住）。
+    # ~~只看 total；部分失敗／燈全 ⚪／無現價**不在**此列（客戶 Z51/Z52 範圍，既有測試釘住）。~~
+    # ↑ 2026-10-28 客戶裁示 XV-H1-EXT 取代（有意識的變更，⛔ 不是漏刪）：三者現在也不放續抱句，見下。
     # QA 回修：total 須為**有限值且 ≥1** 才算有判斷（inf／NaN／0.5 → 不可判斷；與 LINE 正文 `int()` 後 `<=0` 同向）。
     _tot = digest.get("total")
     _no_judged = not (isinstance(_tot, numbers.Real) and not isinstance(_tot, bool)
                       and math.isfinite(_tot) and _tot >= 1)
+    # XV-H1-EXT（客戶 2026-10-28 裁示 A，取代 Z51/Z52 對「部分失敗／燈全判不出／缺現價仍帶續抱」的語意）：
+    # 「續抱」那句只在 total 有限且 ≥1、**無**抓取失敗、**無**燈全判不出、**無**缺現價時才放；
+    # 否則改放一句明確指示（資料不足者寫「資料不足／無法判定」、不得給組合層「全部續抱」類總結、
+    # 不得補資料）。只有 Z51/Z52 資料異常（`invalid`）時維持修前作法（兩句都不放）。
+    _ins = digest.get("insufficient") or []
+    _kept = digest.get("price_missing_kept") or []
+    # 複驗 C MAJOR-1/2：與 ①／LINE 同一份判定（L0 `holdings_data_short.digest_data_short`）。
+    _short = HDS.digest_data_short(digest)
+    _guide = (_INSUFFICIENT_INSTRUCTION if _short
+              else "" if _inv else "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。")
     _base = (
         "你是台股『存股戰情室』的推播助理。根據以下今日持股健檢結果,用繁體中文寫 3~6 句的推播摘要,"
         "聚焦『今天要不要動作』。只能引用下列數據,嚴禁自行杜撰任何代號、數字或未列出的結論;"
-        + ("" if (_inv or _no_judged) else "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。") + "\n"
+        + _guide + "\n"
         f"- 目前 VIX：{_vix_txt}\n"
         f"- 有效判斷檔數：{digest.get('total', 0)}\n"
         f"- 健檢紅燈需汰弱：{_reds}\n"
@@ -1339,6 +1463,27 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
         _base += ("- 資料異常未判："
                   + "、".join(f"{d['代號']}（" + "　".join(f"{_lbl}：{_txt}" for _lbl, _txt in d["項目"])
                              + "）" for d in _inv) + "\n")
+    if digest.get("contract_drift"):
+        # 複驗 C 第二輪 MINOR-A：契約漂移列（保留原診斷句、不換 ⬜）在事實裡點名。
+        _base += f"- 資料異常未判（契約漂移）：{'、'.join(str(_c) for _c in digest['contract_drift'])}\n"
+    for _lbl, _grp in (("持有", [d for d in _ins if d.get("held", True)]),
+                       ("觀察清單", [d for d in _ins if not d.get("held", True)])):
+        if _grp:
+            _base += (f"- 資料不足／無法判定（{_lbl}）："
+                      + "、".join(f"{d['代號']}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))
+                                                             for _r in d.get("原因", ())) + "）"
+                                 for d in _grp) + "\n")
+    _kept_sat = set(digest.get("price_missing_kept_satellite") or ())
+    for _txt, _grp in ((SS.PRICE_MISSING_KEPT_TEXT, [c for c in _kept if c not in _kept_sat]),
+                       (SS.PRICE_MISSING_KEPT_SAT_TEXT, [c for c in _kept if c in _kept_sat])):
+        if _grp:
+            _base += f"- {_txt}：{'、'.join(str(_c) for _c in _grp)}\n"
+    _fx = digest.get("fx_excluded") or []
+    if _fx:
+        # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產不進總額 ⇒ AI 拿不到混幣總額，
+        # 只拿到「哪幾檔未納入、為什麼、比例無法完整判定」這個事實（⛔ 不送比例數字）。
+        _base += (f"- 未納入總市值與配置比例：{FXG.fx_excluded_text(_fx).removeprefix('未納入：')}"
+                  "（總市值／配置比例無法完整判定）\n")
     _alloc = digest.get("allocation")
     if _alloc:
         _partial = "（部分持股缺金額,僅供參考）" if _alloc.get("partial") else ""

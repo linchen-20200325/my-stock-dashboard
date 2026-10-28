@@ -328,6 +328,7 @@ from shared.station_specs import (
     KEY_STOCK_TREND,
     MISS_FETCH_FAILED,
     MISS_NO_INPUT,
+    MISS_NOT_APPLICABLE,
     MISS_TEXT,
     SPECS_BY_KEY,
     invalid_data_text,
@@ -345,6 +346,12 @@ from shared.dividend_station_thresholds import (
 )
 # L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（Q1-r5，2026-09-26）。
 from shared.oauth_session_policy import OAUTH_LOGIN_EXPIRED_MSG
+from shared.asset_currency_gate import (
+    FX_ONLY_REASON,
+    FX_PARTIAL_TEXT,
+    KEY_FX_UNCONFIRMED,
+    fx_excluded_text,
+)
 from shared.secret_scrub import scrub_secrets
 from shared.ui_state import (
     UI_DEGRADED,
@@ -1424,10 +1431,14 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
         _totals = compute_portfolio_totals(_rows)
         _cells = [(_r.get("_lights") or ()) for _r in _rows]
         _judged, _total = aggregate_judged(_cells)
-        _unjudged = sum(1 for _c in _cells if not is_fully_judged(_c))
+        # XV-H1-EXT QA 回修 #1（BLOCKER）：燈全判得出、但資料不足（建議動作被換成 ⬜）或資料異常的列
+        # 同樣「判不全」⇒ 計入「未判 N」，且 ⛔ 不准印巡航／沒事句。
+        _short = _short_data_flags(_rows)
+        _unjudged = sum(1 for _c, _sh in zip(_cells, _short) if _sh or not is_fully_judged(_c))
         _all_judged = bool(_cells) and _unjudged == 0
         _tally = tally_states(_cells)
-        _cruise = cruise_or_gap(_judged, _total, all_rows_judged=_all_judged)
+        _cruise = (cruise_or_gap(_judged, _total, all_rows_judged=_all_judged) if not any(_short)
+                   else _short_data_text(_rows))
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] 戰情表運算失敗 → 轉紅態：{_e!r}")
         return StationReadout(requested=True, submitted=holdings.submitted,
@@ -1448,6 +1459,42 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
         unjudged_rows=int(_unjudged),
         tally=dict(_tally or {}),
         cruise_text=_clean_signal(_cruise))
+
+
+#: XV-H1-EXT QA 回修 #1：① 有資料不足／資料異常的列時取代巡航句（語彙沿用 L0「資料不足／無法判定」
+#: 與 L4 `cruise_or_gap` 的「不是都沒事,是沒東西可以判」）。
+#: 複驗 C：~~"資料不足／無法判定或資料異常 —— …"~~ → 判定改走 L0 單一判定後，涵蓋缺現價（保留結論）與外幣，故補字。
+#: 📌 複驗 C 第二輪 MINOR-B（有意識的變更，⛔ 不是漏刪）：~~本常數整句當 ① 替代句~~ → 改由
+#:    `_short_data_text()` 依實際原因組（燈全判得出、只有外幣時不得說「沒東西可以判」）。本常數保留給其頭尾。
+SHORT_DATA_GAP_TEXT: str = "資料不足／無法判定、資料異常、缺現價或幣別未確認 —— **不是都沒事,是沒東西可以判**"
+#: 只有缺現價（保留結論）／外幣時的尾句（不是「沒東西可以判」—— 燈都判得出，只是組合層總結不完整）。
+SHORT_DATA_PARTIAL_TAIL: str = "無法完整判定 —— 組合層不下結論"
+
+
+def _short_data_text(rows: Sequence[Mapping[str, Any]]) -> str:
+    """複驗 C 第二輪 MINOR-B：① 替代句依 L0 `row_short_kind` 的實際原因組（比照 LINE 收尾 `_why`）。
+
+    例：只有外幣 →「部分持股為外幣／幣別未確認，總市值／配置與停利無法完整判定 —— 組合層不下結論」；
+    有判不出的列 →「N 檔資料不足／無法判定或資料異常 —— **不是都沒事,是沒東西可以判**」（可再接其他原因）。
+    """
+    from shared.holdings_data_short import SHORT_FX, SHORT_PRICE, SHORT_UNJUDGED, row_short_kind
+    _kinds = [row_short_kind(dict(_r)) for _r in rows]
+    _n_un = sum(1 for _k in _kinds if _k == SHORT_UNJUDGED)
+    _price, _fx = SHORT_PRICE in _kinds, SHORT_FX in _kinds
+    _parts = ([f"{_n_un} 檔資料不足／無法判定或資料異常"] if _n_un else []) \
+        + (["部分持股缺現價"] if _price else []) + (["部分持股為外幣／幣別未確認"] if _fx else [])
+    if _n_un:
+        return "、".join(_parts) + " —— **不是都沒事,是沒東西可以判**"
+    return ("、".join(_parts) + "，" + ("總市值／配置與停利" if _fx else "停利")
+            + SHORT_DATA_PARTIAL_TAIL)
+
+
+def _short_data_flags(rows: Sequence[Mapping[str, Any]]) -> list[bool]:
+    """逐列：是否讓組合層「資料不足」。複驗 C MAJOR-1/2：⛔ 本頁不再自己判 —— 一律走 L0
+    `holdings_data_short.row_data_short`（與 ⑦ prompt、LINE 正文同一份；含缺現價保留結論、
+    外幣／幣別未確認、契約漂移）。"""
+    from shared.holdings_data_short import row_data_short
+    return [row_data_short(dict(_r)) for _r in rows]
 
 
 def _digest_map(value: Any) -> Mapping[str, Any] | None:
@@ -1847,6 +1894,33 @@ MACRO_EMPTY_NOW: str = "**總經本輪未評估**"
 SPLIT_FAILED_NOW: str = "**核心／衛星的實際配置算不出來**"
 SPLIT_NO_HOLDINGS_NOW: str = "**還沒有可以拆的持股**"
 SPLIT_NO_VALUE_NOW: str = "**有持股，但算不出核心／衛星的比例**"
+#: XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入時，總市值／配置比例處的客戶句。
+#: `Note` 文案不得帶狀態 glyph（⬜ 是「尚未載入」的 glyph）⇒ Note 用去掉 ⬜ 的同一句；
+#: 逐字含 ⬜ 的 `FX_PARTIAL_TEXT` 放在卡的 fact 列（L0 `asset_currency_gate` 唯一來源）。
+FX_PARTIAL_NOW: str = FX_PARTIAL_TEXT.removeprefix("⬜").strip()
+#: 同上的「去哪補」：目前沒有使用者可執行的出口（匯率來源／時點／成本幣別另開 Gate 定義）。
+FX_PARTIAL_WHERE: str = (f"{NO_EXIT_MARKER} —— 外幣資產的匯率來源、時點與成本幣別尚未定義，"
+                         "定義前本站不換算、不計入")
+#: fact 列標籤（總市值／配置比例那一格、未納入清單那一格）。
+FX_PARTIAL_FACT: str = "總市值／配置比例"
+FX_EXCLUDED_FACT: str = "未納入"
+
+
+def _fx_codes(rows: Sequence[Mapping[str, Any]]) -> tuple[str, ...]:
+    """XV-H3：被 L3 標了 `KEY_FX_UNCONFIRMED` 的持有列代號（條件同 L3 `fx_excluded_codes`：
+    持有、非整批抓取失敗；去重保序）。⛔ 本頁不自己判幣別 —— 只讀 L3 標記。"""
+    return tuple(dict.fromkeys(
+        str(_r.get("代號", "")) for _r in rows
+        if _r.get("held") and not (_r.get("_detail") or {}).get("error")
+        and _r.get(KEY_FX_UNCONFIRMED)))
+
+
+def _fx_facts(codes: Sequence[str]) -> list[tuple[str, str]]:
+    """XV-H3 的兩列 fact：`⬜ 部分外幣資產未納入…`（逐字）＋「VOO、BND｜原因：…」。"""
+    if not codes:
+        return []
+    return [(FX_PARTIAL_FACT, FX_PARTIAL_TEXT),
+            (FX_EXCLUDED_FACT, fx_excluded_text(codes).removeprefix("未納入："))]
 TP_FAILED_NOW: str = "**停利判不出來**"
 TP_NO_HOLDINGS_NOW: str = "**還沒有可以判停利的持股**"
 TP_EMPTY_NOW: str = "**沒有任何一檔衛星達停利門檻**"
@@ -2014,6 +2088,11 @@ def _totals_facts(station: StationReadout) -> list[tuple[str, str]]:
     # 「代號：{項目}資料異常，無法計算，不下結論。」（L3 `compute_portfolio_totals()` 此時回 None；
     # 排在下面那句「持股缺張數／均價／現價」之前 —— 異常不是缺）。
     _bad = _invalid_groups(station.rows, (ITEM_LOTS, ITEM_AVG_PRICE, ITEM_PRICE))
+    # XV-H3（客戶 2026-10-28 裁示 A）：有外幣／幣別未確認的持有列 → L3 總額回 None（⛔ 不把剩餘台股
+    # 包裝成整個組合）；這一格改列客戶句 ＋ 未納入清單（排在資料異常那句之前）。
+    _fx = _fx_codes(station.rows)
+    if _fx:
+        return _fx_facts(_fx) + ([("未實現損益／總市值", _invalid_why(_bad))] if _bad else [])
     if _bad:
         return [("未實現損益／總市值", _invalid_why(_bad))]
     _t = station.totals
@@ -2159,8 +2238,12 @@ def build_confidence_card(station: StationReadout) -> _Built:
             or "（這一輪一格都沒有）"))
     if station.unjudged_rows:
         _facts.append(("判不全的列",
-                       f"{station.unjudged_rows} 列不是「每一盞適用燈都判得出來」—— "
-                       "只要有一列不滿足，就不准說「今天沒事」"))
+                       f"{station.unjudged_rows} 列不是「每一盞適用燈都判得出來」"
+                       # XV-H1-EXT QA 回修 #1：資料不足／資料異常的列同樣算進來。
+                       + ("（含資料不足／無法判定、資料異常、缺現價或幣別未確認的列）"
+                          if any(_short_data_flags(station.rows))
+                          else "")
+                       + "—— 只要有一列不滿足，就不准說「今天沒事」"))
     if _state != UI_LIVE:
         # ⚠️ **「有列、但沒有逐盞燈資料」是另一種空，不可以借用上面那三句。**
         #    （實跑抓到的：借用之後畫面會說「戰情表一列都沒有回來」，
@@ -2687,6 +2770,8 @@ def _split_facts(station: StationReadout) -> list[tuple[str, str]]:
         ("只納入有市值的持有列",
          "缺張數的持有列**不進分子也不進分母** —— 硬算等於替你編一個比例"),
     ]
+    # XV-H3：外幣／幣別未確認資產未納入 → 比例不畫（L3 回 None），列客戶句與未納入清單。
+    _facts = _fx_facts(_fx_codes(station.rows)) + _facts
     _sp = station.split
     # Q2（2026-09-26 總管裁定）：紅態（持有列取數失敗，見 `_split_state`）**不畫比例** ⇒
     # 「這個比例只涵蓋一部分」在紅態下講的是一個卡上看不到的比例，不成立 → 紅態不渲染這一列
@@ -2741,7 +2826,10 @@ def _split_state(station: StationReadout) -> str:
         requested=station.requested,
         error=station.error or None,
         has_value=station.split is not None and not _uncounted,
-        reason=MISS_FETCH_FAILED if _uncounted else "")
+        # QA 回修 #6：外幣／幣別未確認 → 「不適用 · 重跑無效」（#8，既有徽章；重跑一樣算不出，
+        # 與「去哪補」的「沒有你可以執行的出口」一致），⛔ 不落在「缺漏 · 可重跑」。
+        reason=(MISS_FETCH_FAILED if _uncounted
+                else MISS_NOT_APPLICABLE if _fx_codes(station.rows) else ""))
 
 
 def build_allocation_split_card(station: StationReadout) -> _Built:
@@ -2796,6 +2884,10 @@ def build_allocation_split_card(station: StationReadout) -> _Built:
     elif not station.has_rows:
         _note = _station_note(station, now=SPLIT_NO_HOLDINGS_NOW,
                               source=SRC_STATION)
+    elif _fx_codes(station.rows):
+        # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認 → L3 不算比例（⛔ 不把剩餘台股包裝成完整 80/20）。
+        _note = Note(now=FX_PARTIAL_NOW, why=fx_excluded_text(_fx_codes(station.rows)),
+                     where=FX_PARTIAL_WHERE)
     else:   # 有列、但一列都沒有市值
         _note = Note(
             now=SPLIT_NO_VALUE_NOW,
@@ -2854,11 +2946,19 @@ def build_take_profit_card(station: StationReadout) -> _Built:
     # （同 ④ 換股（批次 2）：旁邊還有沒判過的，已列出的達標清單就不是完整的結論；
     #  已算出的達標檔照樣列在 facts，不藏）。
     _unjudged = _fetch_failed + _no_price + _invalid_codes(_tp_invalid)
+    # XV-H3 QA 回修 #10：持有衛星是外幣／幣別未確認 → L3 把損益% 設 None（成本幣別未定義）→
+    # 同樣沒被判過，⛔ 不落到「沒有任何一檔達門檻（有效結果）」。只有這一種時走「不適用 · 重跑無效」。
+    _fx_tp = tuple(_c for _c in _fx_codes(station.rows)
+                   if any(str(_r.get("代號", "")) == _c and _r.get("種類") == "個股"
+                          for _r in station.rows))
+    _fail_unjudged = bool(_unjudged)      # 取數失敗／資料異常那幾種（升紅）
+    _unjudged = _unjudged + _fx_tp
     _state = classify_ui_state(
         requested=station.requested,
         error=station.error or None,
         has_value=bool(station.take_profit) and not _unjudged,
-        reason=MISS_FETCH_FAILED if _unjudged else "")
+        reason=(MISS_FETCH_FAILED if _fail_unjudged
+                else MISS_NOT_APPLICABLE if _fx_tp else ""))
     _facts: list[tuple[str, str]] = [
         ("門檻（L0 SSOT）",
          f"衛星獲利達 {SATELLITE_TAKE_PROFIT_PCT:g} 個百分點即嚴格停利滾回核心"),
@@ -2898,7 +2998,12 @@ def build_take_profit_card(station: StationReadout) -> _Built:
         if _no_price:
             _why += f"{'、'.join(_no_price)}：{NO_PRICE_WHY}"
         _why += _invalid_why(_tp_invalid)       # 批 Z49
+        if _fx_tp:                              # XV-H3 QA #10：外幣那幾檔同樣判不了
+            _why += f"；{fx_excluded_text(_fx_tp)}"
         _note = Note(now=TP_FAILED_NOW, why=_why, where=STATION_ERROR_WHERE)
+    elif _fx_tp:
+        # XV-H3 QA 回修 #10：只有外幣／幣別未確認的衛星判不了（沒有取數失敗）。
+        _note = Note(now=TP_FAILED_NOW, why=fx_excluded_text(_fx_tp), where=FX_PARTIAL_WHERE)
     elif not station.has_rows:
         _note = _station_note(station, now=TP_NO_HOLDINGS_NOW,
                               source=SRC_STATION)
@@ -3260,11 +3365,15 @@ def _valued_facts(result: Any, *, coverage: bool = True,
     _facts: list[tuple[str, str]] = []
     _valued = getattr(result, "valued_n", None)
     _held = getattr(result, "held_n", None)
+    _fx = tuple(getattr(result, "fx_excluded", ()) or ())
     if coverage and isinstance(_valued, int) and isinstance(_held, int) and _held:
+        # XV-H3 QA 回修 #5：有外幣排除時 L3 的 `held_n` 只數台股列 ⇒ 標明「台股」，外幣另列原因
+        # （⛔ 不把外幣講成「缺張數／均價／現價」）。
         _facts.append(("涵蓋範圍",
-                       f"{_held} 檔持有列裡納入了 {_valued} 檔"
+                       f"{_held} 檔{'台股' if _fx else ''}持有列裡納入了 {_valued} 檔"
                        + ("（其餘缺張數／均價／現價 —— **不進分子也不進分母**）"
-                          if _valued < _held else "")))
+                          if _valued < _held else "")
+                       + (f"；另外 {fx_excluded_text(_fx)} —— **不進分子也不進分母**" if _fx else "")))
     if not red and getattr(result, "reconciled", True) is False:
         _facts.append((
             "⚠️ 兩套算法對不起來",
@@ -3339,7 +3448,29 @@ def _degraded_bits(result: Any) -> list[tuple[str, str]]:
             "先確認這幾檔的代號是否正確（本頁顯示的是正規化後的代號）；"
             "若是新上市／剛買進的標的，等歷史累積起來才會有價格序列，"
             f"再回本頁{press(ACTION_RUN_WARROOM_LABEL)}"))
+    _bits += _fx_degraded_bits(result)
     return _bits
+
+
+def _fx_value_label(result: Any) -> str:
+    """失準卡的「現值」列標籤。XV-H3 QA 回修 #5：有外幣排除時標明只涵蓋台股（⛔ 不稱「總市值」）。"""
+    if getattr(result, "fx_excluded", ()):
+        return "現值（僅已納入台股部分，已失準，別照門檻讀）"
+    return "現值（已失準，別照門檻讀）"
+
+
+def _fx_only(result: Any) -> bool:
+    """XV-H3 QA 回修 #5：L3 回報持有列全是外幣／幣別未確認（台股一檔都沒有）。"""
+    return getattr(result, "reason", "") == FX_ONLY_REASON
+
+
+def _fx_degraded_bits(result: Any) -> list[tuple[str, str]]:
+    """XV-H3（客戶 2026-10-28 裁示 A）：L3 回報有外幣／幣別未確認的持有列沒進這個數字（`fx_excluded`）
+    → 失準（橘）。⛔ 不換算、不猜匯率；數字只涵蓋台股那一批。"""
+    _fx = tuple(getattr(result, "fx_excluded", ()) or ())
+    if not _fx:
+        return []
+    return [(f"**{FX_PARTIAL_NOW}** —— {fx_excluded_text(_fx)}", FX_PARTIAL_WHERE)]
 
 
 def _degraded_note(label: str, bits: Sequence[tuple[str, str]]) -> Note:
@@ -3473,7 +3604,9 @@ def build_stress_card(deep: DeepReadout) -> _Built:
         requested=deep.requested,
         error=deep.stress_error or deep.error or _stress_fetch_err or None,
         has_value=bool(_res is not None and _res.computed and not _stress_skipped),
-        reason=MISS_FETCH_FAILED if _stress_skipped else "",
+        # XV-H3 QA 回修 #5：持有列全是外幣 → 「不適用 · 重跑無效」（⛔ 不是「有效的結果，去補張數」）。
+        reason=(MISS_FETCH_FAILED if _stress_skipped
+                else MISS_NOT_APPLICABLE if _fx_only(_res) else ""),
         discriminative=not _degraded)
     _facts: list[tuple[str, str]] = [
         ("這不是預測", "它回答的是「同樣的跌幅打在**你這個組合**上會是多少」，"
@@ -3496,10 +3629,14 @@ def build_stress_card(deep: DeepReadout) -> _Built:
             "、".join(_res.beta_imputed)
             + " —— 查無 Beta，L2 以 1.0 估算後納入（**不是真實 Beta**）"))
     if _state in (UI_LIVE, UI_DEGRADED) and _res is not None:
-        _facts.insert(1, ("納入計算的組合總市值（元）",
-                          f"{_res.total_value_twd:,.0f}"))
+        # XV-H3：有外幣未納入 → 總市值那一格改列客戶句（⛔ 不顯示部分總市值）。
+        _fx_res = tuple(getattr(_res, "fx_excluded", ()) or ())
+        _facts.insert(1, (_fx_facts(_fx_res)[0] if _fx_res else
+                          ("納入計算的組合總市值（元）", f"{_res.total_value_twd:,.0f}")))
         _facts.insert(2, ("警示門檻（L0 SSOT）",
-                          f"回撤大於總市值的 {_res.warn_pct:g} 個百分點就示警"))
+                          # 複驗 C MINOR-3：外幣排除時分母只是台股那一批 ⇒ ⛔ 不稱「總市值」。
+                          f"回撤大於{'已納入台股部分市值' if _fx_res else '總市值'}的 "
+                          f"{_res.warn_pct:g} 個百分點就示警"))
         # §4.1：單位寫出來 —— 「-224,000」看不出是元還是張。
         _shown = f"約 {abs(_res.loss_twd):,.0f} 元（{_res.loss_pct:.1f}%）"
         if _state == UI_LIVE:
@@ -3510,7 +3647,7 @@ def build_stress_card(deep: DeepReadout) -> _Built:
         # `Card` 規定非 live 不得帶結論文字 → 現值改掛 facts（`page_today` 同款做法）。
         # **數字不藏起來**，只是不再當結論；燈號頻道一併留白 ——
         # 一邊掛「🟠 門檻已失準」一邊出「門檻內」是同一張卡說兩句相反的話。
-        _facts.insert(0, ("現值（已失準，別照門檻讀）", _shown))
+        _facts.insert(0, (_fx_value_label(_res), _shown))
         return (Card(key="hold.deep.stress", label="壓力測試",
                      state=UI_DEGRADED,
                      note=_degraded_note("壓力測試", _degraded)),
@@ -3529,6 +3666,9 @@ def build_stress_card(deep: DeepReadout) -> _Built:
     elif not deep.has_station_rows:
         _note = _deep_note(deep, now=STRESS_NO_HOLDINGS_NOW,
                            source=SRC_STRESS, error="")
+    elif _fx_only(_res):
+        _note = Note(now=FX_PARTIAL_NOW, why=fx_excluded_text(_res.fx_excluded),
+                     where=FX_PARTIAL_WHERE)
     else:
         _note = Note(
             now=STRESS_EMPTY_NOW,
@@ -3583,14 +3723,17 @@ def build_var_card(deep: DeepReadout) -> _Built:
         requested=deep.requested,
         error=deep.var_error or deep.error or _dead_src or None,
         has_value=bool(_res is not None and _res.computed and not _var_skipped),
-        reason=MISS_FETCH_FAILED if _var_skipped else "",
+        reason=(MISS_FETCH_FAILED if _var_skipped
+                else MISS_NOT_APPLICABLE if _fx_only(_res) else ""),   # XV-H3 QA #5
         discriminative=not _degraded)
     _facts: list[tuple[str, str]] = [
         ("這個數字的意思",
          "在正常市況下，單日虧損**不超過**這個金額的機率約 95%（另一個是 99%）"),
         ("樣本怎麼取", "只取「當天全部持股都有交易」的共同日 —— "
                        "缺的日子一律剔除，**不補 0、不 ffill**（補了會低估尾部風險）"),
-        ("已知限制", "日報酬是**原幣別**報酬；外幣計價的持股未含匯率變動"),
+        # ~~"日報酬是**原幣別**報酬；外幣計價的持股未含匯率變動"~~ ← XV-H3 QA 回修 #5（有意識的更正）：
+        #   外幣／幣別未確認的持股自 XV-H3 起**不納入**本格（不是納入但未含匯率）。
+        ("已知限制", "外幣／幣別未確認的持股**不納入**本格（匯率與成本幣別未定義，不換算）"),
     ]
     # Q3 N1：持有列取數失敗觸發的紅 → 不出「涵蓋範圍」（理由見 `_valued_facts()`）。
     # ③④（取價例外）觸發、且沒有持有列失敗的既有紅態 → 「涵蓋範圍」照舊出。
@@ -3617,8 +3760,10 @@ def build_var_card(deep: DeepReadout) -> _Built:
                           "肥尾時歷史模擬法通常比它保守"))
         _facts.insert(4, ("月度 99%（√一個月交易日 近似）",
                           f"約 {_res.monthly_99_twd:,.0f} 元"
-                          f"，占總市值 {_res.monthly_99_pct:.2f}%"
-                          f"（示警門檻 {_res.warn_pct:g}）"))
+                          + (f"，占已納入台股部分市值 {_res.monthly_99_pct:.2f}%"
+                             if getattr(_res, "fx_excluded", ()) else
+                             f"，占總市值 {_res.monthly_99_pct:.2f}%")
+                          + f"（示警門檻 {_res.warn_pct:g}）"))
         if _res.window_squeezed and _res.limiter:
             _facts.append((
                 "⚠️ 樣本視窗被壓縮",
@@ -3633,7 +3778,7 @@ def build_var_card(deep: DeepReadout) -> _Built:
                     "月度尾部偏高" if _res.warn else "月度尾部可控")
         # `Card` 規定非 live 不得帶結論文字 → 現值改掛 facts（`page_today` 同款做法）。
         # 燈號頻道留白：門檻已失準卻還出「月度尾部可控」，是同一張卡說兩句相反的話。
-        _facts.insert(0, ("現值（已失準，別照門檻讀）", _shown))
+        _facts.insert(0, (_fx_value_label(_res), _shown))
         return (Card(key="hold.deep.var", label="VaR（風險值）",
                      state=UI_DEGRADED,
                      note=_degraded_note("VaR（風險值）", _degraded)),
@@ -3652,6 +3797,10 @@ def build_var_card(deep: DeepReadout) -> _Built:
     elif not deep.has_station_rows:
         _note = _deep_note(deep, now=VAR_NO_HOLDINGS_NOW,
                            source=SRC_VAR, error="")
+    elif _fx_only(_res):
+        # XV-H3 QA 回修 #5：持有列全是外幣 → 外幣原因，⛔ 不叫人補張數／均價。
+        _note = Note(now=FX_PARTIAL_NOW, why=fx_excluded_text(_res.fx_excluded),
+                     where=FX_PARTIAL_WHERE)
     elif _invalid:
         # 批 Z48：灰「無法計算」。⛔ 不寫「這是一個有效的結果」（這是資料異常，不是有效結果），
         # ⛔ 不沿用「等歷史累積」那句 where（等多久都不會讓異常值消失）。
@@ -4694,14 +4843,16 @@ _V2_EMPTY_SHEET_KEYS: tuple[str, ...] = _V2_STATION_EMPTY_KEYS + ("hold.setup.pr
 #: ⑥ 三格「有值但失準」—— 失準原因可能一條或兩條同時成立，候選依「兩條都在」→ 單條排。
 _V2_DEGRADED_WHY: tuple[str, ...] = (
     "兩套算法對不起來" + V2_EXCERPT_GAP + "抓不到價格序列",
-    "兩套算法對不起來", "抓不到價格序列", "這個總額只涵蓋一部分持股")
+    "兩套算法對不起來", "抓不到價格序列", "這個總額只涵蓋一部分持股",
+    "部分外幣資產未納入")      # XV-H3
 #: 👤 我的 P1：「到既有的 📁 組合管理分頁…」那幾個候選換成新原文的摘錄（舊候選見 git 歷史 / 還原鏈）。
 _V2_DEGRADED_WHERE: tuple[str, ...] = (
     "把持股的張數／均價補齊" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP + "先確認這幾檔的代號是否正確",
     "把持股的張數／均價補齊" + V2_EXCERPT_GAP + _V2_OLD_UI,
     "先確認這幾檔的代號是否正確",
     "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI + V2_EXCERPT_GAP + "海外那幾檔請另按最低稅負制",
-    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI)
+    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI,
+    NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義")      # XV-H3
 
 
 #: QA-6 MUST-1（2026-10-23，PR #910）：④ 總經位階／⑤ 建議持股水位「未評估」那一個 `now` 底下另外兩支分支的摘錄。
@@ -4815,6 +4966,13 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
     + [_v2_rows_for(_k, SPLIT_NO_VALUE_NOW, (
            None, "沒有任何一列同時有張數與現價，沒有市值就沒有比例", _V2_FILL_LOTS))
        for _k in ("hold.alloc_split", "hold.deep.core_satellite")]
+    # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入（why 的代號清單在摺疊區原文）。
+    + [_v2_rows_for(_k, FX_PARTIAL_NOW, (
+           None, ("未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",
+                  "未納入：" + V2_EXCERPT_GAP + "｜原因：幣別未確認"),
+           NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))
+       for _k in ("hold.alloc_split", "hold.deep.core_satellite",
+                  "hold.deep.stress", "hold.deep.var")]       # QA #5：壓測／VaR 全外幣
     # 📌 Q2-r3（2026-09-27，有意識的刪除，⛔ 不是漏刪）：`NO_PRICE_WHY` 改為客戶逐字句（45 字）後，
     #    「兩者同時」那個候選（整批失敗句 ＋ GAP ＋ 現價句）放不下卡面上限 → **刪掉、⛔ 不縮寫客戶原文**；
     #    兩者同時時卡面落到「整批抓取失敗」那一個候選（現價那一半照舊在摺疊區原文）。
@@ -4825,8 +4983,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            None, (*_V2_STATION_RAISED,
                   "整批抓取失敗 —— 看該列的錯誤訊息",
                   NO_PRICE_WHY,
-                  *_V2_INVALID_WHY),
-           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
+                  *_V2_INVALID_WHY,
+                  # XV-H3 QA #10：只有外幣／幣別未確認的衛星判不了。
+                  "未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",
+                  "未納入：" + V2_EXCERPT_GAP + "｜原因：幣別未確認"),
+           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET,
+            NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))),
        _v2_rows_for("hold.take_profit", TP_EMPTY_NOW, (
            None, "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此判不了",
            "若你預期應該要有：確認那幾檔個股的均價有填" + V2_EXCERPT_GAP + _V2_OLD_UI)),

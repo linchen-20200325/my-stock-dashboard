@@ -46,7 +46,7 @@ def build_weekly_review_prompt(macro_lines, holding_rows, *, as_of: str) -> str:
         or "（大盤資料暫時無法取得）"
     _fact_lines = build_holding_fact_lines(holding_rows)
     _data_block = "\n".join(_fact_lines) if _fact_lines else "（清單無標的或皆無資料）"
-    return f"""你是台股資料整理助手。下面 <Macro> 是本週大盤定調、<Holdings> 是使用者持股\
+    _prompt = f"""你是台股資料整理助手。下面 <Macro> 是本週大盤定調、<Holdings> 是使用者持股\
 逐檔「vs 基準是否落後」的**已算好客觀事實**(個股比大盤加權指數、ETF 比 0050)。\
 請照「先總經定調 → 再逐檔」給白話週報。
 
@@ -72,3 +72,15 @@ def build_weekly_review_prompt(macro_lines, holding_rows, *, as_of: str) -> str:
 - 代號:一句話
 
 最後另起一行小字:「以上只是把你的組合資料分類整理,不是投資建議,買賣請自己決定。」"""
+    # 複驗 C MAJOR-3（XV-H1-EXT 同一原則：missing ≠ HOLD，比照 ⑦ `build_summary_prompt`）：
+    # 有燈號 ⚪（判不出）的列時，「資料不足 → 留意即可」改為要求寫「資料不足／無法判定」，並加約束
+    # （不得給組合層 blanket 總結、不得補資料）。資料完整時 prompt 逐字不變。
+    if any(str((_r or {}).get("燈號", "")).startswith("⚪") for _r in (holding_rows or [])):
+        _prompt = _prompt.replace(
+            "資料不足 → 留意即可）",
+            "資料不足／判不出 → 寫「資料不足／無法判定」）").replace(
+            "3. 全程繁體中文,白話簡短;逐檔理由**一句話**,務必引用資料事實,不要自己編數字。\n",
+            "3. 全程繁體中文,白話簡短;逐檔理由**一句話**,務必引用資料事實,不要自己編數字。\n"
+            "4. <Holdings> 有標的資料不足或判不出:該標的請寫『資料不足／無法判定』,"
+            "不得給組合層『全部續抱』『均無落後』類總結,也不得自行補上缺少的資料。\n")
+    return _prompt

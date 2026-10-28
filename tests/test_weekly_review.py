@@ -125,3 +125,46 @@ def test_format_message_all_normal():
               "ai_text": None}
     msg = svc.format_weekly_message(review)
     assert "均無連續落後" in msg
+
+
+# ── QA 回修 #3（XV-H1-EXT 同一原則：missing ≠ HOLD）──────────────────────
+def test_format_message_all_failed_no_blanket_hold():
+    review = {"macro_lines": ["加權指數 收 20,000"],
+              "rows": [{"代號": "0056.TW", "燈號": "⚪ 抓取失敗：ConnectionError"},
+                       {"代號": "VOO", "燈號": "⚪ 無法判定（非台股代號）"}],
+              "ai_text": None}
+    msg = svc.format_weekly_message(review)
+    assert "均無連續落後" not in msg and "續抱觀察" not in msg
+    assert "⬜ 資料不足／無法判定：0056.TW（抓取失敗：ConnectionError）、VOO（無法判定（非台股代號））" in msg
+
+
+def test_format_message_partial_unjudged():
+    review = {"macro_lines": [], "ai_text": None,
+              "rows": [{"代號": "A", "燈號": "🟢 體質正常"},
+                       {"代號": "B", "燈號": "⚪ 價格資料不足"}]}
+    msg = svc.format_weekly_message(review)
+    assert "續抱觀察" not in msg and "✅ 判得出的 1/2 檔無連續落後" in msg
+    assert "⬜ 資料不足／無法判定：B（價格資料不足）" in msg
+
+
+def test_format_message_lag_plus_unjudged_lists_both():
+    review = {"macro_lines": [], "ai_text": None,
+              "rows": [{"代號": "A", "燈號": "🔴 雙向弱勢"}, {"代號": "B", "燈號": "⚪ 樣本不足 (n=3)"}]}
+    msg = svc.format_weekly_message(review)
+    assert "亮警示 1/2" in msg and "⬜ 資料不足／無法判定：B（樣本不足 (n=3)）" in msg
+
+
+# ── 複驗 C MAJOR-3：週報 AI prompt ─────────────────────────────────
+def test_weekly_prompt_short_data_requires_insufficient_wording():
+    from src.compute.notify.weekly_review_prompt import build_weekly_review_prompt as B
+    p = B(["加權指數 收 20,000"], [{"代號": "A", "燈號": "🟢 體質正常"},
+                                   {"代號": "B", "燈號": "⚪ 價格資料不足"}], as_of="t")
+    assert "留意即可" not in p and "寫「資料不足／無法判定」" in p
+    assert "4. <Holdings> 有標的資料不足或判不出:該標的請寫『資料不足／無法判定』" in p
+    assert "不得自行補上缺少的資料" in p
+
+
+def test_weekly_prompt_complete_data_unchanged():
+    from src.compute.notify.weekly_review_prompt import build_weekly_review_prompt as B
+    p = B(["加權指數 收 20,000"], [{"代號": "A", "燈號": "🟢 體質正常"}], as_of="t")
+    assert "資料不足 → 留意即可）" in p and "4. <Holdings>" not in p

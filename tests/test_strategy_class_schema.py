@@ -113,10 +113,12 @@ def test_build_holding_keys_maps_original_ticker():
 
 
 def test_build_holding_keys_rejects_without_rewriting():
-    bad = [" 2330", "２３３０", "23 30", "", "a\u200bb"]
-    r = S.build_holding_keys(sheet_id=SID, portfolio_name="核心", tickers=["2454", *bad, " 2330"])
-    assert r.rejected == tuple(bad)
-    assert list(r.keys) == ["2454"]
+    # XV-C05（客戶 2026-10-28 裁示）：前後空白與大小寫經 normalize_holding_ticker 正規化
+    # （原本 " 2330" 進 rejected；現與 holdings_service 一致 → 同一鍵 "2330"）。其餘拒收行為不變。
+    bad = ["２３３０", "23 30", "", "a\u200bB"]
+    r = S.build_holding_keys(sheet_id=SID, portfolio_name="核心", tickers=["2454", *bad, " 2330", "a\u200bb"])
+    assert r.rejected == ("２３３０", "23 30", "", "A\u200bB")
+    assert list(r.keys) == ["2454", "2330"]
 
 
 def test_build_holding_keys_does_not_apply_ab2a_symbol_pattern():
@@ -389,8 +391,10 @@ def test_unmatched_keys_reports_orphans_without_changing_lookup():
     r = parse(["核心", "50", "存股", ""], ["核心", "00631l", "資本利得", ""], ["核心", "2330", "存股", ""],
               ["核芯", "2454", "存股", ""])
     hk = S.build_holding_keys(sheet_id=SID, portfolio_name="核心", tickers=["0050", "00631L", "2330", "2454"])
-    assert S.unmatched_keys(r, hk.keys.values()) == (key("核心", "50"), key("核心", "00631l"), key("核芯", "2454"))
-    assert S.lookup(r, hk.keys["0050"]) is UNC and S.lookup(r, hk.keys["00631L"]) is UNC
+    # XV-C05（客戶 2026-10-28 裁示）：大小寫兩邊同一正規化 ⇒ "00631l" 現與持股 "00631L" 同鍵（不再是孤兒）；
+    # "50" vs "0050"（前導零）仍為孤兒（不補零）。
+    assert S.unmatched_keys(r, hk.keys.values()) == (key("核心", "50"), key("核芯", "2454"))
+    assert S.lookup(r, hk.keys["0050"]) is UNC and S.lookup(r, hk.keys["00631L"]) is CAP
     assert S.lookup(r, hk.keys["2330"]) is BUY
     assert S.lookup(r, key("核心", "50")) is BUY              # 不改 lookup 結果
 
@@ -452,3 +456,28 @@ def test_entries_key_rebuilt_blocks_new_bypass():
     object.__setattr__(bogus, "symbol", "2330")
     with pytest.raises(ValueError):
         S.StrategyReadResult(status="ok", entries={bogus: BUY})
+
+
+# ── XV-C05（客戶 2026-10-28 裁示）：持股鍵／策略分頁 ticker 同一正規化 ──────────────────
+def test_xv_c05_normalize_matches_holdings_service():
+    assert S.normalize_holding_ticker(" 00631l ") == "00631L"
+    assert S.normalize_holding_ticker("2330.tw") == "2330.TW"      # 只轉大寫，不去後綴
+    assert S.normalize_holding_ticker("50") == "50"                # 不補前導零
+    with pytest.raises(TypeError):
+        S.normalize_holding_ticker(50)                             # type: ignore[arg-type]
+
+
+def test_xv_c05_holdings_service_uses_same_rule():
+    """holdings_service 的持股代號正規化必須仍是 `.strip().upper()`（兩邊同一把尺的前提）。"""
+    src = (pathlib.Path(__file__).resolve().parents[1] / "src/services/holdings_service.py").read_text(encoding="utf-8")
+    assert 'str(_rec.get("ticker", "") or "").strip().upper()' in src
+
+
+def test_xv_c05_one_identity_across_sheet_and_holdings():
+    r = parse(["核心", "00631l", "資本利得", ""], ["核心", " 2330.tw ", "存股", ""])
+    hk = S.build_holding_keys(sheet_id=SID, portfolio_name="核心", tickers=["00631L", "2330.TW", "00631l"])
+    assert list(hk.keys) == ["00631L", "2330.TW"]                  # 同標的只一個 identity
+    assert all(k.symbol == t for t, k in hk.keys.items())          # HoldingKeysResult 不變式 + AB-0 檢查通過
+    assert S.unmatched_keys(r, hk.keys.values()) == ()
+    assert S.lookup(r, hk.keys["00631L"]) is CAP and S.lookup(r, hk.keys["2330.TW"]) is BUY
+    assert S.lookup(r, key("核心", "00631L")) is CAP

@@ -246,6 +246,14 @@ def _enumerate():
             add(P.build_stress_card, d)
             add(P.build_var_card, d)
             add(P.build_dividend_cash_card, d)
+    # XV-H3 QA 回修 #5：持有列全是外幣 → 壓測／VaR「不適用」＋外幣原因。
+    from shared.asset_currency_gate import FX_ONLY_REASON
+    _fxd = P.DeepReadout(requested=True, submitted=True, bound=True, holdings_n=1,
+                         has_station_rows=True,
+                         stress=_stress_res(computed=False, reason=FX_ONLY_REASON, fx_excluded=("VOO",)),
+                         var=_var_res(computed=False, reason=FX_ONLY_REASON, fx_excluded=("VOO",)))
+    add(P.build_stress_card, _fxd)
+    add(P.build_var_card, _fxd)
     # 批次 1（2026-09-26）：持有的衛星有整批抓取失敗列 → 停利卡的第二種紅（無例外）。
     add(P.build_take_profit_card, P.StationReadout(
         requested=True, submitted=True, bound=True, holdings_n=2,
@@ -277,6 +285,13 @@ def _enumerate():
                                rows=_rows, split=_sp)
         add(P.build_allocation_split_card, _st)
         add(P.build_core_satellite_card, _st)
+    # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認持有列 → L3 比例 None → ⑤⑥ 灰「部分外幣資產未納入」。
+    from shared.asset_currency_gate import KEY_FX_UNCONFIRMED
+    _st = P.StationReadout(requested=True, submitted=True, bound=True, holdings_n=2,
+                           rows=(_sp_ok, {"代號": "VOO", "種類": "ETF", "held": True, "現價": 500.0,
+                                          "_detail": {}, KEY_FX_UNCONFIRMED: True}), split=None)
+    add(P.build_allocation_split_card, _st)
+    add(P.build_core_satellite_card, _st)
     # 批次 3（2026-09-26）：有持股的配息抓取失敗 → 配息卡的第二種紅（無例外）。
     add(P.build_dividend_cash_card, P.DeepReadout(
         requested=True, submitted=True, bound=True, holdings_n=2, has_station_rows=True,

@@ -652,3 +652,32 @@ def is_invalid_number(value) -> bool:
     except (TypeError, ValueError, OverflowError):
         return True
     return not math.isfinite(_f)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# XV-H1-EXT（客戶 2026-10-28 裁示 A）：missing ≠ HOLD；unavailable ≠ safe
+# ══════════════════════════════════════════════════════════════════════
+#: 缺資料標的的建議動作句。取代「⚪ 巡航：維持定期定額」「🟢 續抱：…」這類**持有結論**
+#: —— 資料不足時不得以「續抱」當缺資料的替代結論。有充分資料的列一字不動。
+INSUFFICIENT_ACTION_TEXT: str = "⬜ 資料不足／無法判定"
+
+#: L3 `build_station_rows` 在列上標「這列為什麼資料不足」的非顯示欄（同 `_detail` 慣例）。
+#: 值 ＝ 下列原因常數的 tuple。⚠️ **只有資料不足時才有這一鍵** —— 資料完整的列逐鍵不變。
+KEY_INSUFFICIENT: str = "_insufficient"
+#: 該列**每一盞燈都判不出**（ETF：健檢四燈皆 ⚪ 且 235 落在巡航；個股：汰換燈 ⚪）。
+INSUFF_ALL_UNJUDGED: str = "all_lights_unjudged"
+#: 持有列缺現價（含現價資料異常被排除）。
+INSUFF_NO_PRICE: str = "no_price"
+#: QA 回修 #7：持有列缺現價、但**結論可證明**（🔴 汰弱／加碼／停利／🟡 留意，建議動作未被換成 ⬜）
+#: 的非顯示欄。⚠️ 這種列**不進** `KEY_INSUFFICIENT`（不得被列成「無法判定」），只另列事實句
+#: 「缺現價（結論不受影響）」。只有成立時才有這一鍵。
+KEY_PRICE_MISSING_KEPT: str = "_price_missing_kept"
+#: 上一鍵的事實句（⑦ prompt／LINE 共用）。
+PRICE_MISSING_KEPT_TEXT: str = "缺現價（結論不受影響）"
+#: 複驗 C MINOR-2：衛星（個股）缺現價時停利（損益%）判不了 ⇒「結論不受影響」不成立，改用這一句。
+PRICE_MISSING_KEPT_SAT_TEXT: str = "缺現價（停利無法判定，其餘結論不受影響）"
+#: 原因 → 給 ⑦ AI prompt／LINE 的事實短句（只講事實，不給結論）。
+INSUFF_REASON_TEXT: dict = {
+    INSUFF_ALL_UNJUDGED: "燈號全部判不出",
+    INSUFF_NO_PRICE: "缺現價",
+}

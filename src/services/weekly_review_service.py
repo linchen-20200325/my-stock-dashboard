@@ -101,6 +101,10 @@ def format_weekly_message(review, *, as_of: str = "") -> str:
     _out.append("")
 
     _out.append("〔逐檔體檢〕")
+    # QA 回修 #3（XV-H1-EXT 同一原則：missing ≠ HOLD）：燈號 ⚪ 的列（抓取失敗／價格資料不足／
+    # 樣本不足／非台股代號…）是**判不出來**，⛔ 不得被算進「均無連續落後（續抱觀察）」的 blanket 句。
+    _unjudged = [_r for _r in _rows if str(_r.get("燈號", "")).startswith("⚪")]
+    _n_judged = len(_rows) - len(_unjudged)
     if not _rows:
         _out.append("（清單無標的）")
     elif _lag:
@@ -109,8 +113,15 @@ def format_weekly_message(review, *, as_of: str = "") -> str:
             _rel = _r.get("相對基準%")
             _rel_txt = f" 相對基準{_rel:+g}%" if _rel is not None else ""
             _out.append(f"　• {_r.get('代號')}｜{_r.get('燈號')}{_rel_txt}")
-    else:
+    elif not _unjudged:
         _out.append(f"✅ {len(_rows)} 檔均無連續落後（體質正常者續抱觀察）")
+    elif _n_judged:
+        # 判得出的照講事實，但 ⛔ 不接「續抱觀察」（旁邊還有判不出的，不是整份清單的結論）。
+        _out.append(f"✅ 判得出的 {_n_judged}/{len(_rows)} 檔無連續落後")
+    if _rows and _unjudged:
+        _out.append("⬜ 資料不足／無法判定：" + "、".join(
+            f"{_r.get('代號')}（{str(_r.get('燈號', '')).removeprefix('⚪').strip() or '原因不明'}）"
+            for _r in _unjudged))
 
     _ai = review.get("ai_text")
     if _ai:

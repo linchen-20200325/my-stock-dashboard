@@ -6,7 +6,7 @@ D2.5 計畫 `docs/vnext/NEWUI_D25_PLAN_2026-10-27.md` §5 序 5「AB-4r 策略�
 本檔定下三件事：
 1. `portfolio_id` 的**來源**（AB-0 `HoldingKey` 刻意留白、交給本批）：
    `derive_portfolio_id(sheet_id, portfolio_name)` ＝ `"pfv1-"` ＋ sha256(sid＋NUL＋name) 前 20 個十六進位字元。
-2. 持股鍵的組法：`build_holding_keys(...)` → `{ticker 原字串: HoldingKey(pid, ticker)}`
+2. 持股鍵的組法：`build_holding_keys(...)` → `{正規化 ticker: HoldingKey(pid, 正規化 ticker)}`
    （給 AB-1 builder 的 `holding_keys: Mapping[str, HoldingKey]`；**本批不接線**）。
 3. `strategy_class` 分頁（`name | ticker | strategy | updated_at`）的**解析規則**：
    `parse_strategy_records(values, sheet_id=...)` → `StrategyReadResult`。
@@ -16,8 +16,15 @@ D2.5 計畫 `docs/vnext/NEWUI_D25_PLAN_2026-10-27.md` §5 序 5「AB-4r 策略�
 - **不猜策略**：值經 strip → NFKC 後必須**恰好**等於 `StrategyType` 三值之一，否則該列記入
   `invalid_rows`（⛔ 不默默當未分類、⛔ 不做大小寫／同義詞對映）。
 - **不擇一**：同一個鍵出現不同值 → 記入 `conflict_keys`、該鍵不入 entries（讀成未分類）。
-- **不補鍵、不改寫 ticker**：ticker 只 strip（與 `gsheet_portfolio.parse_portfolio_records` 相同）；
-  `HoldingKey` 建構失敗 → 記錄，不轉換（全形數字「２３３０」不會被變成「2330」）。
+- **不補鍵、不改寫 ticker（大小寫與前後空白除外）**：~~ticker 只 strip（與 `gsheet_portfolio.parse_portfolio_records` 相同）~~
+  → **XV-C05（客戶 2026-10-28 裁示）**：持股鍵與策略分頁的 ticker 一律經 `normalize_holding_ticker`
+  （`strip().upper()`，與 L3 `holdings_service.get_holdings` 對持股代號的正規化**逐字同一把尺**），
+  確保同一標的只有一個 identity（手打 `00631l` 與持股 `00631L` 是同一鍵）。
+  舊做法（只 strip）的理由：最不改寫使用者輸入；被權衡掉的原因：L3 持股列已轉大寫、L1 原字串未轉，
+  兩邊鍵大小寫不一致時行動會被 builder 靜默丟掉（XV-C05）。
+  ⛔ 仍**不**加減 `.TW`／`.TWO` 後綴、**不**補或去前導零（`50` ≠ `0050`、`2330` ≠ `2330.TW`，仍靠
+  `unmatched_keys` 揭露）；`HoldingKey` 建構失敗 → 記錄，不轉換（全形數字「２３３０」不會被變成「2330」）。
+  （規格文件 `docs/` 由另組同步；此處為程式端註明。）
 
 分層（CLAUDE.md §8.2）：L0 —— 只 import 標準函式庫與 `shared.*`。
 表頭不符的例外 `StrategySchemaMismatchError` 放在本檔（L0 不得 import L1 的
@@ -127,8 +134,8 @@ def derive_portfolio_id(sheet_id: str, portfolio_name: str) -> str:
 # ══════════════════════════════════════════════════════════════════════
 @dataclass(frozen=True)
 class HoldingKeysResult:
-    """`build_holding_keys` 的結果。`keys`：ticker 原字串 → HoldingKey（唯讀）；
-    `rejected`：建不出 HoldingKey 的 ticker（保序、去重；⛔ 不補鍵、不改寫）。"""
+    """`build_holding_keys` 的結果。`keys`：正規化 ticker（`normalize_holding_ticker`）→ HoldingKey（唯讀）；
+    `rejected`：建不出 HoldingKey 的正規化 ticker（保序、去重；⛔ 不補鍵、不做大小寫／空白以外的改寫）。"""
     keys: Mapping = field(default_factory=lambda: MappingProxyType({}))
     rejected: tuple = ()
 
@@ -139,7 +146,7 @@ class HoldingKeysResult:
         keys = dict(self.keys)
         for t, k in keys.items():
             if type(t) is not str or type(k) is not HoldingKey or k.symbol != t:
-                raise ValueError("keys 只能是 ticker 原字串 → HoldingKey(pid, 同一 ticker)")
+                raise ValueError("keys 只能是 ticker → HoldingKey(pid, 同一 ticker)")
         if type(self.rejected) is not tuple or any(type(t) is not str for t in self.rejected):
             raise TypeError("rejected 必須是 str 的 tuple")
         # 第三組 MINOR-4：同一個 ticker 不能既有鍵又被拒收；一個結果只代表單一組合（pid 必須相同）。
@@ -150,9 +157,22 @@ class HoldingKeysResult:
         object.__setattr__(self, "keys", MappingProxyType(keys))
 
 
+def normalize_holding_ticker(ticker: str) -> str:
+    """持股鍵／策略分頁 ticker 的唯一正規化：`strip().upper()`（XV-C05，客戶 2026-10-28 裁示）。
+
+    與 L3 `holdings_service.get_holdings` 對持股代號的處理**逐字相同**（該處 `str(...).strip().upper()`），
+    讓 Digest builder 拿 L3 持股列（已轉大寫）查 `holding_keys` 時對得上。
+    ⛔ 只做大小寫與前後空白：不加減 `.TW`／`.TWO`、不補或去前導零、不做 NFKC（非 NFKC 仍交 AB-0 拒收）。
+    非 str → `TypeError`（Fail Loud；不 str() 轉換）。
+    """
+    if type(ticker) is not str:
+        raise TypeError(f"ticker 必須是 str：{type(ticker).__name__}")
+    return ticker.strip().upper()
+
+
 def build_holding_keys(*, sheet_id: str, portfolio_name: str,
                        tickers: Iterable[str]) -> HoldingKeysResult:
-    """一個組合的持股 ticker → `{ticker: HoldingKey(pid, ticker)}`。
+    """一個組合的持股 ticker → `{正規化 ticker: HoldingKey(pid, 正規化 ticker)}`（`normalize_holding_ticker`）。
 
     ⛔ 不預先套 AB-2a 的 `SYMBOL_PATTERN`：那是 AB-2a validator 的 fail-closed 關卡，這裡先濾掉會把它遮住。
     只有 AB-0 `HoldingKey` 本身拒收（空白、控制字元、非 NFKC…）的 ticker 進 `rejected`。
@@ -166,6 +186,7 @@ def build_holding_keys(*, sheet_id: str, portfolio_name: str,
     for t in tickers:
         if type(t) is not str:
             raise TypeError(f"ticker 必須是 str：{type(t).__name__}")
+        t = normalize_holding_ticker(t)
         if t in keys or t in rejected:
             continue
         try:
@@ -313,7 +334,7 @@ def parse_strategy_records(values: list, *, sheet_id: str) -> StrategyReadResult
         if not name.strip():
             invalid.append(InvalidRow(n, INVALID_MISSING_NAME))
             continue
-        ticker = ticker.strip()
+        ticker = normalize_holding_ticker(ticker)   # XV-C05：與 build_holding_keys 同一把尺
         if not ticker:
             invalid.append(InvalidRow(n, INVALID_MISSING_TICKER))
             continue
@@ -361,7 +382,8 @@ def unmatched_keys(result: StrategyReadResult, holding_keys: Iterable) -> tuple:
     元素不是 `HoldingKey` → `TypeError`。
 
     涵蓋：entries（合法、無衝突、非未分類）中對不上持股鍵的列 —— 典型成因是 Sheet 把 `0050` 存成數字 `50`、
-    大小寫不符（`00631l` vs `00631L`）、組合名打錯／改名。
+    後綴不符（`2330` vs `2330.TW`）、組合名打錯／改名。（大小寫不符自 XV-C05 起兩邊皆經
+    `normalize_holding_ticker`，不再成為孤兒。）
     不涵蓋：`conflict_keys`（另有衝突揭露，即使對不上持股也不列在這裡）、`invalid_rows`（另有無效列揭露）、
     寫成「未分類」的列（不入 entries）。
     """

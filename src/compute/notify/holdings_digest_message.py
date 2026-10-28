@@ -9,9 +9,13 @@ LINE 可讀文字。這是每日推播的**可靠主體**（不需 AI 也成立;
 """
 from __future__ import annotations
 
+import math
 import numbers
 
+from shared import asset_currency_gate as FXG
+from shared import holdings_data_short as HDS
 from shared import dividend_station_thresholds as T
+from shared import station_specs as SS
 
 _DISCLAIMER = "　研究參考,非投資建議。"
 
@@ -65,6 +69,17 @@ def _vix_line(vix: "float | None", total: int) -> list[str]:
             f"　→ {_advice}"]
 
 
+def _data_short(digest: dict) -> bool:
+    """XV-H1-EXT（客戶 2026-10-28 裁示 A）：有抓取失敗或資料不足（燈全判不出／缺現價）的標的？
+
+    成立時正文**不印「續抱」**當缺資料的替代結論（missing ≠ HOLD；unavailable ≠ safe）。
+    """
+    # QA 回修 #2：持有列輸入／燈資料異常同樣是「判不出來」，不是「沒事」。
+    # 複驗 C MAJOR-1/2：改用 L0 單一判定（與 ① gate、⑦ prompt 同一份）；`invalid` 仍額外看
+    # （觀察清單列的燈異常也不該被講成「無紅燈」）。
+    return HDS.digest_data_short(digest) or bool(digest.get("invalid"))
+
+
 def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:
     """建議換出（持有紅燈汰弱）。優先用 switch.switch_out（held-only,語意正確:只換你持有的）;
     switch 缺（極少數 build 失敗）才退 digest.reds,並誠實標「含觀察清單」以免暗示賣掉未持有標的。"""
@@ -75,6 +90,9 @@ def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:
         _outs = digest.get("reds") or []
         _caveat = "（含觀察清單紅燈）"
     if not _outs:
+        if _data_short(digest):
+            # XV-H1-EXT：資料不足時「無紅燈」只是「判得出的沒有紅燈」，⛔ 不接「續抱」。
+            return ["🔴 建議換出（持有紅燈汰弱）", "　✅ 判得出的標的無紅燈（資料不足者未下結論）"]
         return ["🔴 建議換出（持有紅燈汰弱）", "　✅ 無紅燈,續抱"]
     _lines = [f"🔴 建議換出（持有紅燈汰弱）{_caveat}"]
     for d in _outs:
@@ -167,6 +185,10 @@ def _allocation_line(digest: dict) -> list[str]:
     （§1 不捏造;不因單一區段缺鍵而 KeyError 炸掉整則推播,與其他區段一致走 .get + _num）。"""
     _a = digest.get("allocation")
     if not _a:
+        _fx = digest.get("fx_excluded") or []
+        if _fx:
+            # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入 → 不印比例數字。
+            return [f"⚖️ 配置：{FXG.FX_PARTIAL_TEXT}（{FXG.fx_excluded_text(_fx)}）"]
         return []
     _core, _sat = _num(_a.get("core_pct")), _num(_a.get("sat_pct"))
     _ct, _st, _dev = _num(_a.get("core_target")), _num(_a.get("sat_target")), _num(_a.get("core_dev"))
@@ -175,6 +197,39 @@ def _allocation_line(digest: dict) -> list[str]:
     _partial = "（部分持股缺金額,僅供參考）" if _a.get("partial") else ""
     return [f"⚖️ 配置：核心 {_core:.0f}% / 衛星 {_sat:.0f}%"
             f"（目標 {_ct:.0f}/{_st:.0f},核心偏離 {_dev:+.0f}%）{_partial}"]
+
+
+def _insufficient_line(digest: dict) -> list[str]:
+    """XV-H1-EXT：資料不足／無法判定的標的（燈全判不出、缺現價）。空 → 略過。"""
+    _ins = digest.get("insufficient") or []
+    _out: list[str] = []
+    # QA 回修 #11：持有／觀察清單分開標明。#7：只列建議動作真的被換成 ⬜ 的標的。
+    for _lbl, _grp in (("持有", [d for d in _ins if d.get("held", True)]),
+                       ("觀察清單", [d for d in _ins if not d.get("held", True)])):
+        if _grp:
+            _out.append(f"{SS.INSUFFICIENT_ACTION_TEXT}（{_lbl}）：" + "、".join(
+                f"{_code(d)}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))
+                                        for _r in (d.get("原因") or ())) + "）" for d in _grp))
+    _kept = digest.get("price_missing_kept") or []
+    _kept_sat = set(digest.get("price_missing_kept_satellite") or ())
+    # 複驗 C MINOR-2：衛星（個股）缺現價 → 停利判不了，⛔ 不說「結論不受影響」。
+    for _txt, _grp in ((SS.PRICE_MISSING_KEPT_TEXT, [c for c in _kept if c not in _kept_sat]),
+                       (SS.PRICE_MISSING_KEPT_SAT_TEXT, [c for c in _kept if c in _kept_sat])):
+        if _grp:
+            _out.append(f"ℹ️ {_txt}：" + "、".join(str(_c) for _c in _grp))
+    return _out
+
+
+def _invalid_line(digest: dict) -> list[str]:
+    """QA 回修 #2：資料異常未判的標的（與 ⑦ prompt「- 資料異常未判：」同一份 digest、同一種格式）。空 → 略過。"""
+    _inv = digest.get("invalid") or []
+    _out = (["⚠️ 資料異常未判：" + "、".join(
+        f"{_code(d)}（" + "　".join(f"{_l}：{_t}" for _l, _t in (d.get("項目") or ())) + "）"
+        for d in _inv)] if _inv else [])
+    # 複驗 C 第二輪 MINOR-A：契約漂移列（財報評等不在已知分級）同樣點名，讓收尾的「見上方清單」確有清單。
+    if digest.get("contract_drift"):
+        _out.append("⚠️ 資料異常未判（契約漂移）：" + "、".join(str(_c) for _c in digest["contract_drift"]))
+    return _out
 
 
 def _errors_line(digest: dict) -> list[str]:
@@ -207,12 +262,18 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     picks（get_switch_in_candidates 的清單,已排除持股）併入「每日選股」→ 一則涵蓋
     持股續抱/換股 + 選股清單（§ user 2026-08-23 合併需求）;None → 不顯示該段（向後相容）。
     「今日無需動作」判定:無換出、無加碼、無停利 → 明講續抱（對齊 build_summary_prompt 語氣）。
+    XV-H1-EXT（客戶 2026-10-28 裁示 A）：但有抓取失敗或資料不足（`digest.insufficient`）時
+    ⛔ 不印「續抱」，改講「判得出的標的無訊號、資料不足者未下結論」。
     「加碼」只看 digest.adds（持有列；AUD-C3）—— 觀察清單（未持有）的 235 燈號
     (`watch_adds`)不是持股動作,不阻擋這句。
     """
     digest = digest or {}
     _vix = _num(digest.get("vix"))
-    _total = int(_num(digest.get("total")) or 0)   # 契約漂移防禦:非數 total → 0,不 ValueError
+    # ~~`_total = int(_num(digest.get("total")) or 0)`~~（XV-H1-EXT 順手修，⛔ 不是漏刪）：NaN／±inf
+    # 是 truthy，`int(nan)` 拋 ValueError、`int(inf)` 拋 OverflowError → 整則推播炸掉。
+    # 現：非有限值與非數一律當 0（＝不可判斷），走下方「未能判斷」路徑。
+    _t_raw = _num(digest.get("total"))
+    _total = int(_t_raw) if _t_raw is not None and math.isfinite(_t_raw) else 0
 
     # 風險警語置頂:LINE 手機通知的預覽只顯示開頭數十字,要行動的訊息若排在
     # 標題與位階之後,推播列上根本看不到。由 orchestrator 傳入(見
@@ -246,7 +307,8 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
         if (switch or {}).get("stance") == "defensive":
             lines += ["　⚠️ 總經轉守：換股從嚴、優先汰弱、勿追高（此為換股池,非全數買進建議）"]
     for _seg in (_adds_lines(digest), _watch_adds_lines(digest), _take_profit_lines(digest),
-                 _allocation_line(digest), _errors_line(digest)):
+                 _allocation_line(digest), _errors_line(digest), _invalid_line(digest),
+                 _insufficient_line(digest)):
         if _seg:
             lines += [""] + _seg
 
@@ -258,8 +320,23 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     _no_action = (not (_switch_out or [])
                   and not (digest.get("adds") or [])
                   and not (digest.get("take_profit") or []))
-    if _total <= 0:
+    if _total <= 0 and not digest.get("errors") and digest.get("contract_drift"):
+        # 複驗 C 第二輪 MINOR-A：0 檔有效判斷、但原因不是抓取失敗（例：全是契約漂移）→ ⛔ 不寫「資料抓取全失敗」。
+        lines += ["", "⚠️ 今日無任何持股完成評估（資料異常，見上方清單），未能判斷。"]
+    elif _total <= 0:
         lines += ["", "⚠️ 今日無任何持股完成評估（資料抓取全失敗），未能判斷 —— 請稍後檢視或查 log。"]
+    elif _no_action and _data_short(digest):
+        # XV-H1-EXT（客戶 2026-10-28 裁示 A）：部分抓取失敗／燈全判不出／缺現價 → ⛔ 不印「續抱」
+        # 當缺資料的替代結論；只講判得出的範圍，並把資料不足的標的指回上方清單。
+        # 複驗 C MINOR-2：只講實際存在的那幾種（只有缺現價保留結論／外幣時，⛔ 不寫「資料不足…未下結論」）。
+        _why = [_t for _t, _on in (
+            ("資料不足或抓取失敗的標的未下結論",
+             bool(digest.get("errors") or digest.get("insufficient") or digest.get("invalid")
+                  or digest.get("contract_drift") or not HDS.total_judged(digest.get("total")))),
+            ("部分持股缺現價", bool(digest.get("price_missing_kept"))),
+            ("部分持股為外幣／幣別未確認", bool(digest.get("fx_excluded")))) if _on]
+        lines += ["", "📭 判得出的標的今日無換出／加碼／停利訊號；"
+                      + "、".join(_why or ["部分持股資料不足"]) + "（見上方清單），不給組合層總結。"]
     elif _no_action and alert_has_action:
         # 個股健檢與大盤/國際盤風險是**兩個不同的判斷範圍**,結論可以相反:
         # 手上每一檔的體質都還行(無換出/加碼/停利)、但大盤與資金面同時崩,

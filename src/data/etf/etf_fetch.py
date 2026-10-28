@@ -67,6 +67,22 @@ def _prov_log(fn_name: str, source: str, ticker: str, result_summary: str):
         pass
 
 
+import re as _re_suffix
+
+_TW_SUFFIX_RE = _re_suffix.compile(r'\.(two|tw)$', _re_suffix.IGNORECASE)
+
+
+def _norm_tw_suffix(ticker) -> str:
+    """去前後空白＋把結尾 `.tw` / `.two` 後綴**大小寫不敏感**正規化為 `.TW` / `.TWO`。
+
+    XV-V1（客戶 2026-10-28 裁示）：原寫法（字串取代 `.tw`→`.TW`）對小寫 `.two`
+    會產生 `00679b.TWo`（後綴未正規化）。本函式只動後綴、不動代碼本體
+    （不改大小寫、不補前導零、不加減後綴）。
+    """
+    _t = (ticker or '').strip()
+    return _TW_SUFFIX_RE.sub(lambda m: '.' + m.group(1).upper(), _t)
+
+
 # S-H3 v18.244:diagnostic 錯誤儲存從 st.session_state 下移至 module-level dict
 # UI 讀取走 get_etf_manager_last_err() / get_etf_index_last_err() accessor。
 _ETF_MANAGER_LAST_ERR: dict = {}
@@ -469,7 +485,7 @@ def fetch_etf_meta_moneydj(ticker: str) -> dict:
               custodian_fee / underlying_index
     """
     import re as _re_meta
-    _t = (ticker or '').replace('.tw', '.TW').strip()
+    _t = _norm_tw_suffix(ticker)
     if not _t:
         return {}
     if '.' not in _t:
@@ -699,7 +715,7 @@ def fetch_moneydj_expense_ratio(ticker: str):
     float | None  比例形式（0.0036 = 0.36%）；找不到或抓取失敗回 None。
     """
     import re as _re_mdje
-    _t = (ticker or '').replace('.tw', '.TW').strip()
+    _t = _norm_tw_suffix(ticker)
     if not _t:
         return None
     # MoneyDJ etfid 通常吃 '0050.TW' 格式；純數字補 .TW
@@ -871,7 +887,7 @@ def fetch_etf_holdings(ticker: str):
     TTL 86400 秒（1 日），因 ETF 成份股月度才更新。
     """
     import re as _re_h
-    _t = (ticker or '').replace('.tw', '.TW').strip()
+    _t = _norm_tw_suffix(ticker)
     if not _t:
         return None
     _t_yf = _t if '.' in _t else (f'{_t}.TW' if _t.isdigit() else _t)
@@ -1178,7 +1194,7 @@ def fetch_etf_manager(ticker: str):
     """
     import re as _re_mg
     from datetime import date as _date_mg
-    _t = (ticker or '').replace('.tw', '.TW').strip()
+    _t = _norm_tw_suffix(ticker)
     if not _t:
         return None
     if '.' not in _t:
@@ -1387,7 +1403,7 @@ def track_etf_manager_change(ticker: str, manager: dict | None) -> dict:
             'is_new': _is_new, 'tenure_days': _tenure}
     if not _name:
         return _out
-    _key = (ticker or '').replace('.tw', '.TW').strip()
+    _key = _norm_tw_suffix(ticker)
     _today_d = _dt_mg.date.today()
     _today = _today_d.isoformat()
 
@@ -2216,7 +2232,7 @@ def _fetch_etf_zh_name_finmind(ticker: str) -> str | None:
     import os as _os_fn
     import re as _re_fn
     import requests as _rq_fn
-    _bare = _re_fn.sub(r'\.(TW|TWO)$', '', (ticker or '').replace('.tw', '.TW').strip())
+    _bare = _re_fn.sub(r'\.(TW|TWO)$', '', _norm_tw_suffix(ticker))
     if not _bare:
         return None
     # token 選填(FinMind 無 token 亦可 rate-limited 查詢);讀 secrets 失敗不可中斷
@@ -2261,7 +2277,7 @@ def fetch_etf_zh_name(ticker: str):
     str | None  中文名（2-30 字）；全敗回 None（呼叫端應 fallback 至 yfinance）
     """
     import re as _re_zh
-    _t = (ticker or '').replace('.tw', '.TW').strip()
+    _t = _norm_tw_suffix(ticker)
     if not _t:
         return None
     if '.' not in _t:
@@ -2327,7 +2343,7 @@ def fetch_etf_underlying_index(ticker: str):
         指數名稱（如 '臺灣加權股價報酬指數' / 'MSCI Taiwan ESG Index'），找不到回 None。
     """
     import re as _re_ui
-    _t = (ticker or '').replace('.tw', '.TW').strip()
+    _t = _norm_tw_suffix(ticker)
     if not _t:
         return None
     if '.' not in _t:
