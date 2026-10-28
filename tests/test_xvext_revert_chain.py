@@ -57,8 +57,10 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                     '\n'
                                                     '    成立時正文**不印「續抱」**當缺資料的替代結論（missing ≠ HOLD；unavailable ≠ safe）。\n'
                                                     '    """\n'
+                                                    '    # QA 回修 #2：持有列輸入／燈資料異常（`invalid`，批 Z49～Z52）同樣是「判不出來」，不是「沒事」。\n'
                                                     '    return (bool(digest.get("errors")) or bool(digest.get("insufficient"))\n'
-                                                    '            or bool(digest.get("price_missing_kept")))\n'
+                                                    '            or bool(digest.get("price_missing_kept")) or '
+                                                    'bool(digest.get("invalid")))\n'
                                                     '\n'
                                                     '\n',
                                                     ''),
@@ -89,7 +91,18 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                     '    if _kept:\n'
                                                     '        _out.append(f"ℹ️ {SS.PRICE_MISSING_KEPT_TEXT}：" + "、".join(str(_c) for _c in '
                                                     '_kept))\n'
-                                                    '    return _out\n',
+                                                    '    return _out\n'
+                                                    '\n'
+                                                    '\n'
+                                                    'def _invalid_line(digest: dict) -> list[str]:\n'
+                                                    '    """QA 回修 #2：資料異常未判的標的（與 ⑦ prompt「- 資料異常未判：」同一份 digest、同一種格式）。空 → 略過。"""\n'
+                                                    '    _inv = digest.get("invalid") or []\n'
+                                                    '    if not _inv:\n'
+                                                    '        return []\n'
+                                                    '    return ["⚠️ 資料異常未判：" + "、".join(\n'
+                                                    '        f"{_code(d)}（" + "\u3000".join(f"{_l}：{_t}" for _l, _t in (d.get("項目") or '
+                                                    '())) + "）"\n'
+                                                    '        for d in _inv)]\n',
                                                     ''),
                                                    ('    XV-H1-EXT（客戶 2026-10-28 裁示 A）：但有抓取失敗或資料不足（`digest.insufficient`）時\n'
                                                     '    ⛔ 不印「續抱」，改講「判得出的標的無訊號、資料不足者未下結論」。\n',
@@ -103,7 +116,8 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                     '    _total = int(_num(digest.get("total")) or 0)   # 契約漂移防禦:非數 total → 0,不 '
                                                     'ValueError\n'),
                                                    ('                 _allocation_line(digest), _errors_line(digest), '
-                                                    '_insufficient_line(digest)):\n',
+                                                    '_invalid_line(digest),\n'
+                                                    '                 _insufficient_line(digest)):\n',
                                                     '                 _allocation_line(digest), _errors_line(digest)):\n'),
                                                    ('    elif _no_action and _data_short(digest):\n'
                                                     '        # XV-H1-EXT（客戶 2026-10-28 裁示 A）：部分抓取失敗／燈全判不出／缺現價 → ⛔ 不印「續抱」\n'

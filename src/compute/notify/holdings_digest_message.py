@@ -73,8 +73,9 @@ def _data_short(digest: dict) -> bool:
 
     成立時正文**不印「續抱」**當缺資料的替代結論（missing ≠ HOLD；unavailable ≠ safe）。
     """
+    # QA 回修 #2：持有列輸入／燈資料異常（`invalid`，批 Z49～Z52）同樣是「判不出來」，不是「沒事」。
     return (bool(digest.get("errors")) or bool(digest.get("insufficient"))
-            or bool(digest.get("price_missing_kept")))
+            or bool(digest.get("price_missing_kept")) or bool(digest.get("invalid")))
 
 
 def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:
@@ -213,6 +214,16 @@ def _insufficient_line(digest: dict) -> list[str]:
     return _out
 
 
+def _invalid_line(digest: dict) -> list[str]:
+    """QA 回修 #2：資料異常未判的標的（與 ⑦ prompt「- 資料異常未判：」同一份 digest、同一種格式）。空 → 略過。"""
+    _inv = digest.get("invalid") or []
+    if not _inv:
+        return []
+    return ["⚠️ 資料異常未判：" + "、".join(
+        f"{_code(d)}（" + "　".join(f"{_l}：{_t}" for _l, _t in (d.get("項目") or ())) + "）"
+        for d in _inv)]
+
+
 def _errors_line(digest: dict) -> list[str]:
     """抓取失敗未納入判斷的檔（§1 誠實排除,不當作無事）。空 → 略過。"""
     _errs = digest.get("errors") or []
@@ -288,7 +299,8 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
         if (switch or {}).get("stance") == "defensive":
             lines += ["　⚠️ 總經轉守：換股從嚴、優先汰弱、勿追高（此為換股池,非全數買進建議）"]
     for _seg in (_adds_lines(digest), _watch_adds_lines(digest), _take_profit_lines(digest),
-                 _allocation_line(digest), _errors_line(digest), _insufficient_line(digest)):
+                 _allocation_line(digest), _errors_line(digest), _invalid_line(digest),
+                 _insufficient_line(digest)):
         if _seg:
             lines += [""] + _seg
 

@@ -167,3 +167,15 @@ def test_line_complete_keeps_hold():
 def test_line_nonfinite_total_does_not_raise(total):
     msg = M.format_holdings_message({"total": total, "vix": 15.0}, None, as_of="t")
     assert "未能判斷" in msg and "續抱、定期定額即可" not in msg
+
+
+def test_line_invalid_inputs_no_hold_and_listed():
+    """QA 回修 #2：持有列輸入異常（均價 NaN）→ LINE 不印續抱，並列出異常（同 ⑦ prompt 格式）。"""
+    rows = [{"代號": "2330", "_detail": {}, "held": True, "健檢": "🟢", "現價": 500.0,
+             SS.KEY_INVALID_INPUTS: (SS.ITEM_AVG_PRICE,)}]
+    d = S.build_station_digest(rows, vix=15.0)
+    msg = M.format_holdings_message(d, {"switch_out": [], "switch_in": []}, as_of="t")
+    assert "續抱、定期定額即可" not in msg and "無紅燈,續抱" not in msg
+    assert "⚠️ 資料異常未判：2330（均價：均價資料異常，無法計算，不下結論。）" in msg
+    p = S.build_summary_prompt(d)
+    assert "- 資料異常未判：2330（均價：均價資料異常，無法計算，不下結論。）\n" in p
