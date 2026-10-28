@@ -60,10 +60,11 @@ def test_provable_red_kept_even_without_price():
     d = S.build_station_digest([st], vix=15.0)
     assert "insufficient" not in d and d["price_missing_kept"] == ["2330"]
     p = S.build_summary_prompt(d)
-    assert "- 缺現價（結論不受影響）：2330\n" in p and "資料不足／無法判定（" not in p
+    # 複驗 C MINOR-2：衛星（個股）缺現價 → 停利判不了。
+    assert "- 缺現價（停利無法判定，其餘結論不受影響）：2330\n" in p and "資料不足／無法判定（" not in p
     assert _HOLD not in p
     msg = M.format_holdings_message(d, None, as_of="t")
-    assert "ℹ️ 缺現價（結論不受影響）：2330" in msg and "⬜ 資料不足／無法判定（" not in msg
+    assert "ℹ️ 缺現價（停利無法判定，其餘結論不受影響）：2330" in msg and "⬜ 資料不足／無法判定（" not in msg
 
 
 def test_stock_unjudged_replaced_and_original_kept_in_detail():
@@ -289,3 +290,28 @@ def test_contract_drift_keeps_diagnostic_but_counts_short():
     assert HDS.row_data_short(st) is True
     d = S.build_station_digest([st], vix=15.0)
     assert d["data_short"] == ["2330"] and _HOLD not in S.build_summary_prompt(d)
+
+
+def test_line_kept_only_closing_and_satellite_text():
+    """複驗 C MINOR-2 ＋ 擊殺存活突變 M6：只有「缺現價、結論保留」的列（🟡 留意，無換出／加碼）→
+    LINE 不印續抱；收尾句只講缺現價（⛔ 不寫「資料不足…未下結論」）；衛星寫「停利無法判定」。"""
+    rows = _mixed_rows(*_REPRO["a_breakdown_no_price"])
+    d = S.build_station_digest(rows, vix=15.0)
+    assert d["price_missing_kept"] == ["2330"] and d["price_missing_kept_satellite"] == ["2330"]
+    msg = M.format_holdings_message(d, {"switch_out": [], "switch_in": []}, as_of="t")
+    assert "續抱、定期定額即可" not in msg and "無紅燈,續抱" not in msg
+    assert "📭 判得出的標的今日無換出／加碼／停利訊號；部分持股缺現價（見上方清單），不給組合層總結。" in msg
+    assert "資料不足或抓取失敗的標的未下結論" not in msg
+    assert "ℹ️ 缺現價（停利無法判定，其餘結論不受影響）：2330" in msg
+    assert "缺現價（結論不受影響）" not in msg
+    p = S.build_summary_prompt(d)
+    assert "- 缺現價（停利無法判定，其餘結論不受影響）：2330\n" in p
+
+
+def test_line_etf_kept_says_conclusion_unaffected():
+    rows = [{"代號": "0056", "種類": "ETF", "held": True, "_detail": {}, "健檢": "🔴",
+             SS.KEY_PRICE_MISSING_KEPT: True}]
+    d = S.build_station_digest(rows, vix=15.0)
+    assert "price_missing_kept_satellite" not in d
+    msg = M.format_holdings_message(d, None, as_of="t")
+    assert "ℹ️ 缺現價（結論不受影響）：0056" in msg

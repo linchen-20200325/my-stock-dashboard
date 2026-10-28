@@ -1375,6 +1375,12 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
              if not r.get("_detail", {}).get("error") and r.get(SS.KEY_PRICE_MISSING_KEPT)]
     if _kept:
         _out["price_missing_kept"] = _kept
+        # 複驗 C MINOR-2：其中的衛星（個股）—— 停利判不了（只有非空才有這一鍵）。
+        _kept_sat = [str(r.get("代號", "")) for r in (rows or [])
+                     if not r.get("_detail", {}).get("error") and r.get(SS.KEY_PRICE_MISSING_KEPT)
+                     and r.get("種類") == "個股"]
+        if _kept_sat:
+            _out["price_missing_kept_satellite"] = _kept_sat
     # XV-H3：幣別未確認、未納入總額／比例的持有列（只有非空才有這一鍵；`allocation` 此時為 None）。
     _fx = fx_excluded_codes(rows)
     if _fx:
@@ -1457,8 +1463,11 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
                       + "、".join(f"{d['代號']}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))
                                                              for _r in d.get("原因", ())) + "）"
                                  for d in _grp) + "\n")
-    if _kept:
-        _base += f"- {SS.PRICE_MISSING_KEPT_TEXT}：{'、'.join(str(_c) for _c in _kept)}\n"
+    _kept_sat = set(digest.get("price_missing_kept_satellite") or ())
+    for _txt, _grp in ((SS.PRICE_MISSING_KEPT_TEXT, [c for c in _kept if c not in _kept_sat]),
+                       (SS.PRICE_MISSING_KEPT_SAT_TEXT, [c for c in _kept if c in _kept_sat])):
+        if _grp:
+            _base += f"- {_txt}：{'、'.join(str(_c) for _c in _grp)}\n"
     _fx = digest.get("fx_excluded") or []
     if _fx:
         # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產不進總額 ⇒ AI 拿不到混幣總額，

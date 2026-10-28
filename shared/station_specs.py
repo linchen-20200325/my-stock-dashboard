@@ -674,6 +674,8 @@ INSUFF_NO_PRICE: str = "no_price"
 KEY_PRICE_MISSING_KEPT: str = "_price_missing_kept"
 #: 上一鍵的事實句（⑦ prompt／LINE 共用）。
 PRICE_MISSING_KEPT_TEXT: str = "缺現價（結論不受影響）"
+#: 複驗 C MINOR-2：衛星（個股）缺現價時停利（損益%）判不了 ⇒「結論不受影響」不成立，改用這一句。
+PRICE_MISSING_KEPT_SAT_TEXT: str = "缺現價（停利無法判定，其餘結論不受影響）"
 #: 原因 → 給 ⑦ AI prompt／LINE 的事實短句（只講事實，不給結論）。
 INSUFF_REASON_TEXT: dict = {
     INSUFF_ALL_UNJUDGED: "燈號全部判不出",

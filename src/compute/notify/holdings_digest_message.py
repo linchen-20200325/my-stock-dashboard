@@ -211,8 +211,12 @@ def _insufficient_line(digest: dict) -> list[str]:
                 f"{_code(d)}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))
                                         for _r in (d.get("原因") or ())) + "）" for d in _grp))
     _kept = digest.get("price_missing_kept") or []
-    if _kept:
-        _out.append(f"ℹ️ {SS.PRICE_MISSING_KEPT_TEXT}：" + "、".join(str(_c) for _c in _kept))
+    _kept_sat = set(digest.get("price_missing_kept_satellite") or ())
+    # 複驗 C MINOR-2：衛星（個股）缺現價 → 停利判不了，⛔ 不說「結論不受影響」。
+    for _txt, _grp in ((SS.PRICE_MISSING_KEPT_TEXT, [c for c in _kept if c not in _kept_sat]),
+                       (SS.PRICE_MISSING_KEPT_SAT_TEXT, [c for c in _kept if c in _kept_sat])):
+        if _grp:
+            _out.append(f"ℹ️ {_txt}：" + "、".join(str(_c) for _c in _grp))
     return _out
 
 
@@ -319,8 +323,15 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     elif _no_action and _data_short(digest):
         # XV-H1-EXT（客戶 2026-10-28 裁示 A）：部分抓取失敗／燈全判不出／缺現價 → ⛔ 不印「續抱」
         # 當缺資料的替代結論；只講判得出的範圍，並把資料不足的標的指回上方清單。
+        # 複驗 C MINOR-2：只講實際存在的那幾種（只有缺現價保留結論／外幣時，⛔ 不寫「資料不足…未下結論」）。
+        _why = [_t for _t, _on in (
+            ("資料不足或抓取失敗的標的未下結論",
+             bool(digest.get("errors") or digest.get("insufficient") or digest.get("invalid")
+                  or not HDS.total_judged(digest.get("total")))),
+            ("部分持股缺現價", bool(digest.get("price_missing_kept"))),
+            ("部分持股為外幣／幣別未確認", bool(digest.get("fx_excluded")))) if _on]
         lines += ["", "📭 判得出的標的今日無換出／加碼／停利訊號；"
-                      "資料不足或抓取失敗的標的未下結論（見上方清單）。"]
+                      + "、".join(_why or ["部分持股資料不足"]) + "（見上方清單），不給組合層總結。"]
     elif _no_action and alert_has_action:
         # 個股健檢與大盤/國際盤風險是**兩個不同的判斷範圍**,結論可以相反:
         # 手上每一檔的體質都還行(無換出/加碼/停利)、但大盤與資金面同時崩,
