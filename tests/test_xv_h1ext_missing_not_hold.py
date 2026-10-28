@@ -352,3 +352,26 @@ def test_contract_drift_named_and_not_counted_as_judged():
     msg2 = M.format_holdings_message(d2, {"switch_out": [], "switch_in": []}, as_of="t")
     assert "⚠️ 資料異常未判（契約漂移）：2330" in msg2 and "資料抓取全失敗" not in msg2
     assert "⚠️ 今日無任何持股完成評估（資料異常，見上方清單），未能判斷。" in msg2
+
+
+# ── 複驗 C 第二輪 MINOR-B：① 替代句依實際原因 ──────────────────────────
+def test_action_text_fx_only_core_etf(monkeypatch):
+    rows = _etf_full_rows(30.0)
+    rows.append(dict(rows[0], **{"代號": "VOO", "_fx_unconfirmed": True}))
+    P, st = _load_station(monkeypatch, rows)
+    assert st.cruise_text == "部分持股為外幣／幣別未確認，總市值／配置與停利無法完整判定 —— 組合層不下結論"
+    assert "沒東西可以判" not in st.cruise_text
+
+
+def test_action_text_price_kept_only(monkeypatch):
+    rows = _mixed_rows(*_REPRO["a_breakdown_no_price"])
+    P, st = _load_station(monkeypatch, rows)
+    assert st.cruise_text == "部分持股缺現價，停利無法完整判定 —— 組合層不下結論"
+
+
+def test_action_text_unjudged_plus_fx(monkeypatch):
+    rows = _etf_full_rows(None)
+    rows.append(dict(_etf_full_rows(30.0)[0], **{"代號": "VOO", "_fx_unconfirmed": True}))
+    P, st = _load_station(monkeypatch, rows)
+    assert st.cruise_text == ("1 檔資料不足／無法判定或資料異常、部分持股為外幣／幣別未確認"
+                              " —— **不是都沒事,是沒東西可以判**")

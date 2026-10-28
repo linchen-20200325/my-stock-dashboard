@@ -1438,7 +1438,7 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
         _all_judged = bool(_cells) and _unjudged == 0
         _tally = tally_states(_cells)
         _cruise = (cruise_or_gap(_judged, _total, all_rows_judged=_all_judged) if not any(_short)
-                   else f"{sum(_short)} 檔{SHORT_DATA_GAP_TEXT}")
+                   else _short_data_text(_rows))
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_hold] 戰情表運算失敗 → 轉紅態：{_e!r}")
         return StationReadout(requested=True, submitted=holdings.submitted,
@@ -1464,7 +1464,29 @@ def load_station(holdings: HoldingsReadout) -> StationReadout:
 #: XV-H1-EXT QA 回修 #1：① 有資料不足／資料異常的列時取代巡航句（語彙沿用 L0「資料不足／無法判定」
 #: 與 L4 `cruise_or_gap` 的「不是都沒事,是沒東西可以判」）。
 #: 複驗 C：~~"資料不足／無法判定或資料異常 —— …"~~ → 判定改走 L0 單一判定後，涵蓋缺現價（保留結論）與外幣，故補字。
+#: 📌 複驗 C 第二輪 MINOR-B（有意識的變更，⛔ 不是漏刪）：~~本常數整句當 ① 替代句~~ → 改由
+#:    `_short_data_text()` 依實際原因組（燈全判得出、只有外幣時不得說「沒東西可以判」）。本常數保留給其頭尾。
 SHORT_DATA_GAP_TEXT: str = "資料不足／無法判定、資料異常、缺現價或幣別未確認 —— **不是都沒事,是沒東西可以判**"
+#: 只有缺現價（保留結論）／外幣時的尾句（不是「沒東西可以判」—— 燈都判得出，只是組合層總結不完整）。
+SHORT_DATA_PARTIAL_TAIL: str = "無法完整判定 —— 組合層不下結論"
+
+
+def _short_data_text(rows: Sequence[Mapping[str, Any]]) -> str:
+    """複驗 C 第二輪 MINOR-B：① 替代句依 L0 `row_short_kind` 的實際原因組（比照 LINE 收尾 `_why`）。
+
+    例：只有外幣 →「部分持股為外幣／幣別未確認，總市值／配置與停利無法完整判定 —— 組合層不下結論」；
+    有判不出的列 →「N 檔資料不足／無法判定或資料異常 —— **不是都沒事,是沒東西可以判**」（可再接其他原因）。
+    """
+    from shared.holdings_data_short import SHORT_FX, SHORT_PRICE, SHORT_UNJUDGED, row_short_kind
+    _kinds = [row_short_kind(dict(_r)) for _r in rows]
+    _n_un = sum(1 for _k in _kinds if _k == SHORT_UNJUDGED)
+    _price, _fx = SHORT_PRICE in _kinds, SHORT_FX in _kinds
+    _parts = ([f"{_n_un} 檔資料不足／無法判定或資料異常"] if _n_un else []) \
+        + (["部分持股缺現價"] if _price else []) + (["部分持股為外幣／幣別未確認"] if _fx else [])
+    if _n_un:
+        return "、".join(_parts) + " —— **不是都沒事,是沒東西可以判**"
+    return ("、".join(_parts) + "，" + ("總市值／配置與停利" if _fx else "停利")
+            + SHORT_DATA_PARTIAL_TAIL)
 
 
 def _short_data_flags(rows: Sequence[Mapping[str, Any]]) -> list[bool]:
