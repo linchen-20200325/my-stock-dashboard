@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import unicodedata
+from collections.abc import Mapping as _AbcMapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Iterable, Literal, Mapping
@@ -129,6 +130,18 @@ class HoldingKeysResult:
     keys: Mapping = field(default_factory=lambda: MappingProxyType({}))
     rejected: tuple = ()
 
+    def __post_init__(self) -> None:
+        # QA m-2：一律複製成新的唯讀 mapping（斷開呼叫端 dict 的別名），並驗型別。
+        if not isinstance(self.keys, _AbcMapping):
+            raise TypeError(f"keys 必須是 Mapping：{type(self.keys).__name__}")
+        keys = dict(self.keys)
+        for t, k in keys.items():
+            if type(t) is not str or type(k) is not HoldingKey or k.symbol != t:
+                raise ValueError("keys 只能是 ticker 原字串 → HoldingKey(pid, 同一 ticker)")
+        if type(self.rejected) is not tuple or any(type(t) is not str for t in self.rejected):
+            raise TypeError("rejected 必須是 str 的 tuple")
+        object.__setattr__(self, "keys", MappingProxyType(keys))
+
 
 def build_holding_keys(*, sheet_id: str, portfolio_name: str,
                        tickers: Iterable[str]) -> HoldingKeysResult:
@@ -182,13 +195,20 @@ class StrategyReadResult:
     def __post_init__(self) -> None:
         if self.status not in _STATUSES:
             raise ValueError(f"status 不合法：{self.status!r}")
-        if type(self.entries) is not MappingProxyType:
-            raise TypeError("entries 必須是 MappingProxyType（唯讀）")
-        for k, v in self.entries.items():
+        # QA m-2：一律複製成新的 MappingProxyType（斷開外部 dict 別名），再逐項驗型別。
+        if not isinstance(self.entries, _AbcMapping):
+            raise TypeError(f"entries 必須是 Mapping：{type(self.entries).__name__}")
+        entries = dict(self.entries)
+        for k, v in entries.items():
             if type(k) is not HoldingKey or type(v) is not StrategyType or v is StrategyType.UNCLASSIFIED:
                 raise ValueError("entries 只能是 HoldingKey → 存股／資本利得")
         if type(self.invalid_rows) is not tuple or type(self.conflict_keys) is not tuple:
             raise TypeError("invalid_rows／conflict_keys 必須是 tuple")
+        if any(type(r) is not InvalidRow for r in self.invalid_rows):
+            raise TypeError("invalid_rows 的元素必須是 InvalidRow")
+        if any(type(k) is not HoldingKey for k in self.conflict_keys):
+            raise TypeError("conflict_keys 的元素必須是 HoldingKey")
+        object.__setattr__(self, "entries", MappingProxyType(entries))
         if self.status != STATUS_OK and (self.entries or self.invalid_rows or self.conflict_keys):
             raise ValueError(f"status={self.status!r} 時不得有任何內容")
 
@@ -244,6 +264,8 @@ def parse_strategy_records(values: list, *, sheet_id: str) -> StrategyReadResult
       → `non_text_cell`；name 空 → `missing_name`；ticker 空 → `missing_ticker`；
       strategy 不合法（含空）→ `bad_strategy`；HoldingKey 建不出 → `bad_key`。
     - 同鍵同值去重；同鍵不同值（含「未分類」vs 其他）→ `conflict_keys`，該鍵不入 entries。
+    - 同鍵既有合法列、又有 `bad_strategy` 列（name／ticker 有效、只有策略值不合法）→ 也記 `conflict_keys`、
+      不入 entries（⛔ 不保留合法值）。`bad_key` 列對應不到鍵，只記 `invalid_rows`。
     - 「未分類」列合法但不入 entries（AB-0：未分類時 strategy_source 必須 None ＝ 不必記錄）。
     """
     sid = _normalize_sheet_id(sheet_id)
@@ -260,8 +282,9 @@ def parse_strategy_records(values: list, *, sheet_id: str) -> StrategyReadResult
     i_name, i_ticker, i_strategy = (STRATEGY_HEADERS.index(h) for h in ("name", "ticker", "strategy"))
     invalid: list = []
     seen: dict = {}          # HoldingKey → StrategyType（第一次看到的值）
-    order: list = []         # HoldingKey 首見順序
-    conflicts: list = []
+    order: list = []         # HoldingKey 首見順序（合法列）
+    conflicting: set = set()  # 同鍵不同值
+    poisoned: set = set()     # 鍵有效但策略值不合法的列所屬的鍵
     for n, row in enumerate(rows[1:], start=2):
         if all(_is_blank(c) for c in row):
             continue
@@ -277,23 +300,28 @@ def parse_strategy_records(values: list, *, sheet_id: str) -> StrategyReadResult
         if not ticker:
             invalid.append(InvalidRow(n, INVALID_MISSING_TICKER))
             continue
-        strategy = _normalize_strategy(strategy_raw)
-        if strategy is None:
-            invalid.append(InvalidRow(n, INVALID_BAD_STRATEGY))
-            continue
         try:
             key = HoldingKey(derive_portfolio_id(sid, name), ticker)
         except ValueError:
             invalid.append(InvalidRow(n, INVALID_BAD_KEY))
             continue
+        strategy = _normalize_strategy(strategy_raw)
+        if strategy is None:
+            # QA m-1：鍵有效、只有策略值不合法 ⇒ 這個鍵被「污染」：若同鍵另有合法列，
+            # 不得保留那個合法值（使用者對這檔的意圖不明）⇒ 收尾時一併記為衝突。
+            invalid.append(InvalidRow(n, INVALID_BAD_STRATEGY))
+            poisoned.add(key)
+            continue
         if key not in seen:
             seen[key] = strategy
             order.append(key)
-        elif seen[key] is not strategy and key not in conflicts:
-            conflicts.append(key)
+        elif seen[key] is not strategy:
+            conflicting.add(key)
 
+    conflicting |= poisoned & set(seen)
+    conflicts = [k for k in order if k in conflicting]
     entries = {k: seen[k] for k in order
-               if k not in conflicts and seen[k] is not StrategyType.UNCLASSIFIED}
+               if k not in conflicting and seen[k] is not StrategyType.UNCLASSIFIED}
     return StrategyReadResult(status=STATUS_OK, entries=MappingProxyType(entries),
                               invalid_rows=tuple(invalid), conflict_keys=tuple(conflicts))
 
@@ -305,3 +333,22 @@ def lookup(result: StrategyReadResult, key: HoldingKey) -> StrategyType:
     if type(key) is not HoldingKey:
         raise TypeError(f"key 必須是 HoldingKey：{type(key).__name__}")
     return result.entries.get(key, StrategyType.UNCLASSIFIED)
+
+
+def unmatched_keys(result: StrategyReadResult, holding_keys: Mapping) -> tuple:
+    """entries 裡**不對應任何持股鍵**的鍵（孤兒；保 entries 順序）。純揭露，⛔ 不改 `lookup` 的結果。
+
+    典型成因：Sheet 把 `0050` 存成數字 `50`、大小寫不符（`00631l` vs `00631L`）、組合名打錯／改名。
+    這些列在讀取端只會讀成「未分類」，本函式是唯一能把它們揭露出來的地方（QA-A M-1）。
+    `holding_keys`：`build_holding_keys(...).keys`（ticker → HoldingKey）；型別不對 → `TypeError`。
+    """
+    if type(result) is not StrategyReadResult:
+        raise TypeError(f"result 必須是 StrategyReadResult：{type(result).__name__}")
+    if not isinstance(holding_keys, _AbcMapping):
+        raise TypeError(f"holding_keys 必須是 Mapping：{type(holding_keys).__name__}")
+    held = set()
+    for k in holding_keys.values():
+        if type(k) is not HoldingKey:
+            raise TypeError(f"holding_keys 的值必須是 HoldingKey：{type(k).__name__}")
+        held.add(k)
+    return tuple(k for k in result.entries if k not in held)

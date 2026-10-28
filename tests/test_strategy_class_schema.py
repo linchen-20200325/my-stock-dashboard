@@ -53,7 +53,7 @@ def test_l0_imports_only_stdlib_and_shared():
             mods |= {a.name.split(".")[0] for a in n.names}
         elif isinstance(n, ast.ImportFrom):
             mods.add((n.module or "").split(".")[0])
-    assert mods <= {"__future__", "hashlib", "unicodedata", "dataclasses", "types", "typing", "shared"}, mods
+    assert mods <= {"__future__", "collections", "hashlib", "unicodedata", "dataclasses", "types", "typing", "shared"}, mods
 
 
 # ── portfolio_id ──────────────────────────────────────────────────────
@@ -311,8 +311,98 @@ def test_result_invariants():
     with pytest.raises(ValueError):
         S.StrategyReadResult(status="error")
     with pytest.raises(TypeError):
-        S.StrategyReadResult(status="ok", entries={})
+        S.StrategyReadResult(status="ok", entries=[])                       # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        S.StrategyReadResult(status="ok", invalid_rows=((2, "bad_key"),))
+    with pytest.raises(TypeError):
+        S.StrategyReadResult(status="ok", conflict_keys=(("pid", "2330"),))
+    with pytest.raises(ValueError):
+        S.StrategyReadResult(status="ok", entries={("pid", "2330"): BUY})
+    with pytest.raises(ValueError):
+        S.StrategyReadResult(status="ok", entries={key("核心", "2330"): "存股"})
     with pytest.raises(ValueError):
         S.StrategyReadResult(status="ok", entries=MappingProxyType({key("核心", "2330"): UNC}))
     with pytest.raises(ValueError):
         S.StrategyReadResult(status="not_bound", entries=MappingProxyType({key("核心", "2330"): BUY}))
+
+
+
+# ── QA m-2：entries／keys 一律複製（斷開外部 dict 別名）──────────────────────
+def test_result_entries_copied_from_external_dict():
+    d = {key("核心", "2330"): BUY}
+    r = S.StrategyReadResult(status="ok", entries=d)
+    d[key("核心", "0050")] = CAP
+    d[key("核心", "2330")] = CAP
+    assert dict(r.entries) == {key("核心", "2330"): BUY}
+    assert isinstance(r.entries, MappingProxyType)
+
+
+def test_result_entries_copied_even_from_mappingproxy():
+    d = {key("核心", "2330"): BUY}
+    r = S.StrategyReadResult(status="ok", entries=MappingProxyType(d))
+    d[key("核心", "2330")] = CAP
+    assert r.entries[key("核心", "2330")] is BUY
+
+
+def test_holding_keys_result_copied_and_validated():
+    d = {"2330": key("核心", "2330")}
+    r = S.HoldingKeysResult(keys=d)
+    d["0050"] = key("核心", "0050")
+    assert list(r.keys) == ["2330"] and isinstance(r.keys, MappingProxyType)
+    with pytest.raises(ValueError):
+        S.HoldingKeysResult(keys={"2330": key("核心", "0050")})
+    with pytest.raises(ValueError):
+        S.HoldingKeysResult(keys={"2330": "x"})
+    with pytest.raises(TypeError):
+        S.HoldingKeysResult(keys=[])                                         # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        S.HoldingKeysResult(rejected=(1,))
+
+
+# ── QA m-1：合法列＋bad_strategy 列同鍵 → 衝突 ─────────────────────────────
+@pytest.mark.parametrize("rows", [
+    (["核心", "2330", "存股", ""], ["核心", "2330", "HOLD", ""]),
+    (["核心", "2330", "ＢＵＹ", ""], ["核心", "2330", "存股", ""]),
+    (["核心", "2330", "存股", ""], [" 核心 ", "2330 ", "", ""]),
+])
+def test_valid_plus_bad_strategy_same_key_is_conflict(rows):
+    r = parse(*rows)
+    assert r.conflict_keys == (key("核心", "2330"),) and not r.entries
+    assert S.InvalidRow(2, S.INVALID_BAD_STRATEGY) in r.invalid_rows or \
+        S.InvalidRow(3, S.INVALID_BAD_STRATEGY) in r.invalid_rows
+    assert S.lookup(r, key("核心", "2330")) is UNC
+
+
+def test_bad_strategy_only_is_invalid_not_conflict():
+    r = parse(["核心", "2330", "HOLD", ""], ["核心", "0050", "存股", ""])
+    assert r.conflict_keys == () and dict(r.entries) == {key("核心", "0050"): BUY}
+
+
+def test_bad_key_row_does_not_poison_valid_key():
+    r = parse(["核心", "2330", "存股", ""], ["核心", "２３３０", "HOLD", ""])
+    assert dict(r.entries) == {key("核心", "2330"): BUY} and r.conflict_keys == ()
+    assert r.invalid_rows == (S.InvalidRow(3, S.INVALID_BAD_KEY),)
+
+
+# ── QA-A M-1：unmatched_keys ─────────────────────────────────────────────
+def test_unmatched_keys_reports_orphans_without_changing_lookup():
+    r = parse(["核心", "50", "存股", ""], ["核心", "00631l", "資本利得", ""], ["核心", "2330", "存股", ""],
+              ["核芯", "2454", "存股", ""])
+    hk = S.build_holding_keys(sheet_id=SID, portfolio_name="核心", tickers=["0050", "00631L", "2330", "2454"])
+    assert S.unmatched_keys(r, hk.keys) == (key("核心", "50"), key("核心", "00631l"), key("核芯", "2454"))
+    assert S.lookup(r, hk.keys["0050"]) is UNC and S.lookup(r, hk.keys["00631L"]) is UNC
+    assert S.lookup(r, hk.keys["2330"]) is BUY
+    assert S.lookup(r, key("核心", "50")) is BUY              # 不改 lookup 結果
+
+
+def test_unmatched_keys_empty_when_all_matched_and_types():
+    r = parse(["核心", "2330", "存股", ""])
+    hk = S.build_holding_keys(sheet_id=SID, portfolio_name="核心", tickers=["2330"])
+    assert S.unmatched_keys(r, hk.keys) == ()
+    assert S.unmatched_keys(S.empty_result("not_bound"), {}) == ()
+    with pytest.raises(TypeError):
+        S.unmatched_keys(r, ["2330"])                                       # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        S.unmatched_keys(r, {"2330": ("p", "2330")})
+    with pytest.raises(TypeError):
+        S.unmatched_keys({}, hk.keys)                                       # type: ignore[arg-type]

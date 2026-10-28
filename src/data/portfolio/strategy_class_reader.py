@@ -3,7 +3,8 @@
 `read_strategy_classes(sheet_id=...)` 讀 `strategy_class` 分頁 → `StrategyReadResult`。
 解析規則全在 L0 `shared/strategy_class_schema.py`；本檔只做「拿到原字串」與狀態轉換：
 
-- sheet_id 經 `sanitize_sheet_id` 後為空（含 None）→ status="not_bound"、0 entries（不打 Google）。
+- sheet_id 為 None／空字串（含只有空白）→ status="not_bound"、0 entries（不打 Google）。
+- sheet_id 非空但 `sanitize_sheet_id` 後為空（發布連結、"e"、含非法字元）→ `ValueError`（DEC-083 B3）。
 - 分頁不存在 → status="worksheet_missing"、0 entries（⛔ 讀取**不建**分頁，經
   `gsheet_portfolio.read_worksheet_values` 的只開不建路徑）。
 - 表頭不符 → `gsheet_portfolio.SheetSchemaMismatchError`（沿用既有讀取的同一例外型別，
@@ -31,12 +32,16 @@ from src.data.portfolio import gsheet_portfolio as _gsp
 
 
 def read_strategy_classes(*, sheet_id: str | None) -> StrategyReadResult:
-    """讀一本 Sheet 的策略分類（唯讀）。見檔頭。sheet_id 非 str 且非 None → `TypeError`。"""
+    """讀一本 Sheet 的策略分類（唯讀）。見檔頭。sheet_id 非 str 且非 None → `TypeError`；不合法 → `ValueError`。"""
     if sheet_id is not None and type(sheet_id) is not str:
         raise TypeError(f"sheet_id 必須是 str 或 None：{type(sheet_id).__name__}")
+    if sheet_id is None or not sheet_id.strip():
+        return empty_result(STATUS_NOT_BOUND)
     sid = sanitize_sheet_id(sheet_id)
     if not sid:
-        return empty_result(STATUS_NOT_BOUND)
+        # QA-B：有給值但不是合法 Sheet ID（例：發布連結 /d/e/…、"e"）＝ 呼叫端帶了壞的綁定，
+        # 不是「沒綁定」⇒ Fail Loud（與 derive_portfolio_id 一致；DEC-083 B3 明確拒絕）。⛔ 不回顯原值。
+        raise ValueError("read_strategy_classes: sheet_id 不是合法的 Google Sheet ID")
     try:
         values = _gsp.read_worksheet_values(STRATEGY_WORKSHEET_NAME, sheet_id=sid)
     except _gsp.SheetWorksheetMissingError:

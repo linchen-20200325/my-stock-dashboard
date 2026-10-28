@@ -16,7 +16,7 @@
 
 | 層 | 檔案 | 公開 API |
 |---|---|---|
-| L0 | `shared/strategy_class_schema.py` | 常數 `STRATEGY_WORKSHEET_NAME`、`STRATEGY_HEADERS`、`PORTFOLIO_ID_PREFIX`、`PORTFOLIO_ID_HEX_LEN`、`STRATEGY_SOURCE`、`STATUS_*`、`INVALID_*`；`derive_portfolio_id`、`build_holding_keys`→`HoldingKeysResult`、`parse_strategy_records`→`StrategyReadResult`、`lookup`、`empty_result`、`InvalidRow`、`StrategySchemaMismatchError` |
+| L0 | `shared/strategy_class_schema.py` | `unmatched_keys`（QA 回修新增）；常數 `STRATEGY_WORKSHEET_NAME`、`STRATEGY_HEADERS`、`PORTFOLIO_ID_PREFIX`、`PORTFOLIO_ID_HEX_LEN`、`STRATEGY_SOURCE`、`STATUS_*`、`INVALID_*`；`derive_portfolio_id`、`build_holding_keys`→`HoldingKeysResult`、`parse_strategy_records`→`StrategyReadResult`、`lookup`、`empty_result`、`InvalidRow`、`StrategySchemaMismatchError` |
 | L1 | `src/data/portfolio/gsheet_portfolio.py`（**加法**） | `read_worksheet_values(worksheet_name, *, sheet_id) -> list[list]` |
 | L1 | `src/data/portfolio/strategy_class_reader.py` | `read_strategy_classes(*, sheet_id) -> StrategyReadResult` |
 
@@ -38,7 +38,7 @@
 
 | 候選 | 寫入？ | 優點 | 缺點 | 判定 |
 |---|---|---|---|---|
-| A. sheet_id＋名稱原文直接拼接 | 否 | 可讀 | 鍵含使用者原文（含空白／全形／控制字元時 AB-0 `_key_problem` 直接拒收）；把 Sheet ID 全文帶進 Digest 與 AI 輸入面（違 Q4「只露末 6 碼」精神） | ✗ |
+| A. sheet_id＋名稱原文直接拼接 | 否 | 可讀 | 鍵含使用者原文（含空白／全形／控制字元時 AB-0 `_key_problem` 直接拒收）；把 Sheet ID 全文帶進 Digest 與 AI 輸入面（違 DEC-083 Q4「只露末 6 碼」精神） | ✗ |
 | **B. sha256(sid＋NUL＋name) 截 20 hex（加版本前綴）** | **否** | 決定性、字元集固定必過 AB-0／AB-2a、不外洩 ID 與名稱、不同 Sheet 同名自然分開 | 改名／換 Sheet → pid 變（見 §6） | **✓ 採用** |
 | C. 只用名稱 | 否 | 換 Sheet 不變 | 不同 Sheet 同名組合互撞（雙通道／多本 Sheet 時錯配策略 ＝ 錯誤數字）；名稱原文同 A 的字元問題 | ✗ |
 | D. 新增 ID 欄（`portfolios` 加欄或另存） | **是** | 改名不變 | 需寫入 Sheet ＝ HI-5 寫入面（AB-4w Gate）；且動 `portfolios` 表頭違反「現有 5 欄不得破壞」 | ✗（超出唯讀範圍） |
@@ -75,19 +75,25 @@
 | pid＝`derive_portfolio_id(sheet_id, name)`；`HoldingKey` 建不出 | `bad_key` | 例：全形「２３３０」、中間空白 |
 | 同鍵多列同值 | 去重 | |
 | 同鍵不同值（**含「未分類」vs 其他**） | 記入 `conflict_keys`，該鍵不入 entries（讀成未分類） | ⛔ 不擇一 |
+| 同鍵既有合法列、又有 `bad_strategy` 列（name／ticker 有效、只有策略值不合法） | 該鍵也記入 `conflict_keys`、不入 entries；該列同時記 `invalid_rows` | QA m-1：使用者對這檔的意圖不明，⛔ 不保留合法值。`bad_key` 列對應不到鍵，只記 `invalid_rows`（因此 bad_key 判定先於 bad_strategy） |
 | 「未分類」列 | 合法、不入 entries | AB-0：未分類時 `strategy_source` 必須 None |
 
 `invalid_rows` 為 `InvalidRow(row, reason)`：row＝Sheet 列號（1-based，表頭＝1），reason＝代碼；⛔ 不回顯格子內容。
 
 `StrategyReadResult(status, entries, invalid_rows, conflict_keys)`（frozen）：status ∈ {`ok`, `worksheet_missing`, `not_bound`}；
-entries 為 `MappingProxyType`，只含 `存股／資本利得`；非 ok 時不得有任何內容（`__post_init__` 檢查）。
+`__post_init__` 一律把 entries 複製成新的 `MappingProxyType`（斷開呼叫端 dict 別名），驗鍵為 `HoldingKey`、值為非未分類的
+`StrategyType`；`invalid_rows` 元素須為 `InvalidRow`、`conflict_keys` 元素須為 `HoldingKey`；非 ok 時不得有任何內容。
+`HoldingKeysResult` 同樣複製並驗 `ticker(str) → HoldingKey(symbol 同 ticker)`、`rejected` 為 str tuple。
+`unmatched_keys(result, holding_keys)`：entries 中不對應任何持股鍵的鍵（孤兒，保 entries 順序）；純揭露，⛔ 不改 `lookup` 結果。
 `lookup(result, key)`：查無 → `未分類`；key 非 `HoldingKey` 或 result 型別錯 → `TypeError`。
 有分類時 `HoldingEntry.strategy_source` 用 `STRATEGY_SOURCE = "google_sheet:strategy_class"`（測試證明通過 AB-0 檢查）。
 
 ## 6. L1 reader 與讀取函式
 
 `read_strategy_classes(*, sheet_id)`：
-- `sanitize_sheet_id` 後為空（含 None）→ `not_bound`（不打 Google）；非 str 且非 None → `TypeError`。
+- None 或空字串（含只有空白）→ `not_bound`（不打 Google）；非 str 且非 None → `TypeError`。
+- **非空但 `sanitize_sheet_id` 後為空**（發布連結 `/d/e/…`、`"e"`、含非法字元）→ `ValueError`（QA-B；與
+  `derive_portfolio_id` 一致，DEC-083 B3 明確拒絕這類值 —— 那是壞的綁定，不是「沒綁定」）。
 - 經 `gsheet_portfolio.read_worksheet_values`（**新增、加法式**；只開不建 `_ws` → `get_all_values()`）：
   分頁不存在 → `worksheet_missing`（⛔ 不建）；未登入／權限／網路／找不到 Sheet 原樣上拋。
 - `read_worksheet_values` 沿用既有本人 OAuth client（`_build_client`）、身分隔離快取（`_identity_scoped_read`，
@@ -97,15 +103,29 @@ entries 為 `MappingProxyType`，只含 `存股／資本利得`；非 ok 時不�
 ## 7. 已知限制（據實）
 
 1. **改名或複製 Sheet → pid 變 → 讀成未分類**（fail-safe：最壞是「沒分類」，不會錯配到別的組合）。
-2. **AB-4r 沒有寫入面**：production 上沒有任何東西會建 `strategy_class` 分頁或寫值，故目前讀到的一律是
-   `worksheet_missing`／空／未分類，直到 AB-4w（HI-5）落地。
+2. **本批沒有任何 caller**（reader 與 `build_holding_keys` 都未接線）。AB-4r 也沒有寫入面；但若使用者**手動**在 Sheet
+   建了 `strategy_class` 分頁並填值，接線後會讀到實際分類。是否允許這條路徑在 AB-4w（HI-5）之前生效，由接線批判斷
+   （C §7.2 (8)）。
 3. **雙通道**：呼叫端必須固定傳**綁定的那本** sheet_id（`session_binding_snapshot()`），reader 不自行挑通道；
    若 ETF／個股兩通道指向不同 Sheet，同名組合會得到不同 pid（設計如此）。
-4. **截短碰撞**：20 hex ＝ 80 bit；生日界約 n²／2⁸¹，10⁶ 個組合時碰撞機率約 4×10⁻¹³，視為可忽略；
-   碰撞的後果是兩組合共用策略分類（不是錯誤數字），且換前綴即可升級。
-5. **全域 `clear_read_cache()` 不清本快取**：改它＝改既有函式行為（規格禁止）。本快取由 B5 失效世代
-   （`invalidate_my_read_cache`／`invalidate_sheet_read_cache`）或 TTL 失效；寫入後失效由 AB-4w 負責。
+4. **截短碰撞**：20 hex ＝ 80 bit；生日界約 n²／2⁸¹，10⁶ 個組合時碰撞機率約 4×10⁻¹³（量級 1e-13）。
+   碰撞的後果是**錯配分類**（兩個組合讀到同一份策略分類 ＝ 一檔持股可能顯示別組合的分類）；機率可忽略，換前綴即可升級。
+5. **全域 `clear_read_cache()` 清不到本快取**（含已快取的 `worksheet_missing` 狀態）：改它＝改既有函式行為（規格禁止）。
+   本快取由 B5 失效世代（`invalidate_my_read_cache`／`invalidate_sheet_read_cache`）或 TTL 失效，**最長 15 分鐘**
+   （TTL_15MIN）才看得到 Sheet 端變更；寫入後失效由 AB-4w 處理。
 6. `read_worksheet_values` 未列入 `tests/test_sheet_safety_guards.py` 的 `_READ_ENTRIES`（未改既有測試檔）；
    其零寫入閉包檢查改寫在 `tests/test_strategy_class_reader.py`（沿用該檔的 AST 工具）。
 7. 本批**不接 builder**：`build_holding_keys` 的結果如何傳進 `build_decision_digest(holding_keys=...)`、
    由誰在 L3 取得 binding sheet_id 與組合名，屬接線批次。
+8. **刪除後重建同名組合會繼承舊分類**：pid 只由 (sheet_id, 組合名) 決定；刪掉組合再用同名重建，`strategy_class`
+   分頁裡舊列仍對得上新組合（事實，由公式推得）。
+9. **孤兒列／打錯字讀成未分類**：例如 Sheet 把 `0050` 存成 `50`、大小寫不符（`00631l` vs `00631L`）、組合名打錯／改名，
+   這些列不會出現在 `invalid_rows`（它們本身合法），讀取端 `lookup` 只會回未分類；唯一能揭露的是
+   `unmatched_keys(result, holding_keys)`（需要呼叫端提供持股鍵）。
+10. **接線前必須處理的契約缺口**（推論，供接線批判斷）：接線必改 AB-1（builder 目前把策略寫死為未分類）；且 AB-0
+    Digest 沒有欄位可帶 `invalid_rows`／`conflict_keys`／`unmatched_keys`。接線前須決定是否改契約（升 `SCHEMA_VERSION`＋
+    獨立 QA）；否則「寫錯／衝突／孤兒」在 Digest 端與「沒設定」無法區分。
+11. **strategy 值只接受純文字三值**：`🌱 存股`、`存股😀` 這類帶 emoji／標籤的值一律判 `bad_strategy`；AB-4w 寫入端必須寫純值
+    （`存股`／`資本利得`／`未分類`）。
+12. **HI-5 Gate 時的客戶告知**（推論）：寫入面落地後，客戶的 Sheet 會多出一個 `strategy_class` 分頁；AB-4w 送 Gate 時
+    須以商業語言事先告知（例：「你的 Google Sheet 會多一張『策略分類』分頁，用來記每檔持股是存股還是資本利得」）。

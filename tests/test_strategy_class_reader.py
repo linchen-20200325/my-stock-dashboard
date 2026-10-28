@@ -56,11 +56,19 @@ def test_reader_and_holding_keys_agree_on_pid(books):
     assert S.lookup(r, hk.keys['2454']) is StrategyType.UNCLASSIFIED
 
 
-@pytest.mark.parametrize('sid', [None, '', '   ', 'e', 'bad id', '/spreadsheets/d/x'])
+@pytest.mark.parametrize('sid', [None, '', '   '])
 def test_not_bound(books, sid):
     _, cli = books
     r = R.read_strategy_classes(sheet_id=sid)
     assert r.status == 'not_bound' and not r.entries
+    assert cli.opened == []
+
+
+@pytest.mark.parametrize('sid', ['e', ' e ', 'bad id', '/spreadsheets/d/e/2PACX-abc/pubhtml', 'https://x/y?z'])
+def test_invalid_sheet_id_raises_not_not_bound(books, sid):
+    _, cli = books
+    with pytest.raises(ValueError):
+        R.read_strategy_classes(sheet_id=sid)
     assert cli.opened == []
 
 
@@ -207,3 +215,39 @@ def test_write_api_monkeypatched_to_fail_is_never_hit(books, monkeypatch):
     b[SID] = {WS: [H, ['核心', '2330', '存股', 't']]}
     gsp.clear_read_cache()
     assert R.read_strategy_classes(sheet_id=SID).status == 'ok'
+
+
+# ── QA m-4：read_worksheet_values 跨身分（走真 st.cache_data 與 SEC-1 身分隔離）────────
+from tests.test_sec1_gsheet_cache_identity import _ROWS_A, env  # noqa: E402,F401  (pytest fixture)
+
+
+def test_rwv_other_identity_cannot_read_cached_values(env):
+    env.oauth('A')
+    assert gsp.read_worksheet_values(WS, sheet_id='SID_A') == [list(r) for r in _ROWS_A]
+    env.oauth('B')
+    with pytest.raises(PermissionError):
+        gsp.read_worksheet_values(WS, sheet_id='SID_A')
+    assert ('B', 'SID_A') in env.calls, 'B 必須真的去問 Google（由 ACL 決定），不可吃 A 的快取'
+
+
+def test_rwv_same_identity_hits_cache(env):
+    env.oauth('A')
+    gsp.read_worksheet_values(WS, sheet_id='SID_A')
+    n = len(env.calls)
+    gsp.read_worksheet_values(WS, sheet_id='SID_A')
+    assert len(env.calls) == n
+
+
+def test_rwv_identity_reverified_before_google_call(monkeypatch):
+    """快取鍵解析出的身分與實際呼叫 Google 前的身分不同 → 拒絕（`_run_as_identity`／`_require_identity`）。"""
+    gsp.clear_read_cache()
+    ids = iter(['oauth:first', 'oauth:second', 'oauth:second'])
+    monkeypatch.setattr(gsp, '_cache_identity', lambda: next(ids))
+    cli = TripwireClient({SID: {WS: [H]}})
+    monkeypatch.setattr(gsp, '_build_client', lambda: cli)
+    try:
+        with pytest.raises(RuntimeError, match='身分'):
+            gsp.read_worksheet_values(WS, sheet_id=SID)
+        assert cli.opened == []
+    finally:
+        gsp.clear_read_cache()
