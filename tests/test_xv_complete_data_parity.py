@@ -72,3 +72,17 @@ def test_complete_data_action_card_still_cruise(monkeypatch):
     st = P.load_station(P.HoldingsReadout(requested=True, submitted=True, bound=True,
                                           holdings=({"ticker": "0050", "held": True},)))
     assert st.cruise_text == P._clean_signal(CRUISE_TEXT) and st.unjudged_rows == 0
+
+
+def test_complete_data_weekly_prompt_and_message_identical_to_base():
+    import src.compute.notify.weekly_review_prompt as WP
+    BW = _base_module("src/compute/notify/weekly_review_prompt.py", "_xv_base_wprompt")
+    rows = [{"代號": "0050.TW", "燈號": "🟢 體質正常", "連敗季數": 0, "相對基準%": 1.0},
+            {"代號": "2330.TW", "燈號": "🔴 雙向弱勢", "連敗季數": 1, "相對基準%": -3.0}]
+    assert (WP.build_weekly_review_prompt(["加權指數 收 1"], rows, as_of="t")
+            == BW.build_weekly_review_prompt(["加權指數 收 1"], rows, as_of="t"))
+    import src.services.weekly_review_service as WS
+    BWS = _base_module("src/services/weekly_review_service.py", "_xv_base_wsvc")
+    for rs in (rows, rows[:1]):
+        rv = {"macro_lines": ["x"], "rows": rs, "ai_text": None}
+        assert WS.format_weekly_message(rv, as_of="t") == BWS.format_weekly_message(rv, as_of="t")

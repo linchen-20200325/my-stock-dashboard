@@ -16,6 +16,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 XVEXT_BASE_SHA = {'shared/station_specs.py': 'c5747bae89fa1a1f744c302de34978b781553083aa5a5e33d357b9d47bd85fc3',
  'src/compute/notify/holdings_digest_message.py': 'a894b6ae8109c515b5b668e9621e737a4a16da94c8d65a01c1e2866697a5733f',
+ 'src/compute/notify/weekly_review_prompt.py': 'a9b0576369f177a6cc7a16657eadf54a505034d20fd05f22f40e0aba698987e3',
  'src/data/macro/macro_core.py': '68cb0fb283bb473031e423e47f0696dea0d02d871c3fea519d8a1a767a75ac9c',
  'src/services/dividend_station_service.py': '488dbb53ed9e2a2392c7bbd5b7f4ebf9d03dc03c468363219bfa92ebd34b01e3',
  'src/services/portfolio_deep_service.py': 'f4d2c99c5498371fe9000e0e291079623b40bb6c3c331f7b97ed8ab5f98f3d96',
@@ -143,6 +144,22 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                                     '        lines += ["", "📭 判得出的標的今日無換出／加碼／停利訊號；"\n'
                                                     '                      + "、".join(_why or ["部分持股資料不足"]) + "（見上方清單），不給組合層總結。"]\n',
                                                     '')),
+ 'src/compute/notify/weekly_review_prompt.py': (('    _prompt = f"""你是台股資料整理助手。下面 <Macro> 是本週大盤定調、<Holdings> 是使用者持股\\\n',
+                                                 '    return f"""你是台股資料整理助手。下面 <Macro> 是本週大盤定調、<Holdings> 是使用者持股\\\n'),
+                                                ('    # 複驗 C MAJOR-3（XV-H1-EXT 同一原則：missing ≠ HOLD，比照 ⑦ `build_summary_prompt`）：\n'
+                                                 '    # 有燈號 ⚪（判不出）的列時，「資料不足 → 留意即可」改為要求寫「資料不足／無法判定」，並加約束\n'
+                                                 '    # （不得給組合層 blanket 總結、不得補資料）。資料完整時 prompt 逐字不變。\n'
+                                                 '    if any(str((_r or {}).get("燈號", "")).startswith("⚪") for _r in (holding_rows or '
+                                                 '[])):\n'
+                                                 '        _prompt = _prompt.replace(\n'
+                                                 '            "資料不足 → 留意即可）",\n'
+                                                 '            "資料不足／判不出 → 寫「資料不足／無法判定」）").replace(\n'
+                                                 '            "3. 全程繁體中文,白話簡短;逐檔理由**一句話**,務必引用資料事實,不要自己編數字。\\n",\n'
+                                                 '            "3. 全程繁體中文,白話簡短;逐檔理由**一句話**,務必引用資料事實,不要自己編數字。\\n"\n'
+                                                 '            "4. <Holdings> 有標的資料不足或判不出:該標的請寫『資料不足／無法判定』,"\n'
+                                                 '            "不得給組合層『全部續抱』『均無落後』類總結,也不得自行補上缺少的資料。\\n")\n'
+                                                 '    return _prompt\n',
+                                                 '')),
  'src/data/macro/macro_core.py': (('\n'
                                    '\n'
                                    'def clear_success_caches() -> tuple[str, ...]:\n'
