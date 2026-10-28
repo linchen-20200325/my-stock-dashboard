@@ -53,14 +53,49 @@ def test_stock_with_price_keeps_hold_text():
 
 
 def test_provable_red_kept_even_without_price():
+    """QA 回修 #7：可證明結論（🔴）缺現價 → 不列入「無法判定」，只另標「缺現價（結論不受影響）」。"""
     st = _rows(stock_metrics={"mj_grade": "F", "kd_state": None, "current_price": None})[1]
-    assert st["建議動作"].startswith("🔴") and st[SS.KEY_INSUFFICIENT] == (SS.INSUFF_NO_PRICE,)
+    assert st["建議動作"].startswith("🔴") and SS.KEY_INSUFFICIENT not in st
+    assert st[SS.KEY_PRICE_MISSING_KEPT] is True
+    d = S.build_station_digest([st], vix=15.0)
+    assert "insufficient" not in d and d["price_missing_kept"] == ["2330"]
+    p = S.build_summary_prompt(d)
+    assert "- 缺現價（結論不受影響）：2330\n" in p and "資料不足／無法判定（" not in p
+    assert _HOLD not in p
+    msg = M.format_holdings_message(d, None, as_of="t")
+    assert "ℹ️ 缺現價（結論不受影響）：2330" in msg and "⬜ 資料不足／無法判定（" not in msg
 
 
-def test_stock_unjudged_keeps_existing_insufficient_text():
+def test_stock_unjudged_replaced_and_original_kept_in_detail():
+    """QA 回修 #7：個股汰換燈 ⚪ ＝ 燈全判不出 → 建議動作換成 ⬜（原句留在 `_detail`）。"""
     st = _rows(stock_metrics={"mj_grade": None, "kd_state": None, "current_price": 500.0})[1]
-    assert st["建議動作"].startswith("⚪ 財報資料不足")
+    assert st["建議動作"] == SS.INSUFFICIENT_ACTION_TEXT
+    assert st["_detail"]["原建議動作"].startswith("⚪ 財報資料不足")
     assert st[SS.KEY_INSUFFICIENT] == (SS.INSUFF_ALL_UNJUDGED,)
+
+
+def test_insufficient_marks_only_replaced_rows():
+    """QA 回修 #7：帶 `KEY_INSUFFICIENT` 的列，建議動作一定是 ⬜ 句（反之亦然）。"""
+    for sm in ({"mj_grade": "A", "kd_state": None, "current_price": None},
+               {"mj_grade": "F", "kd_state": None, "current_price": None},
+               {"mj_grade": None, "kd_state": None, "current_price": None},
+               {"mj_grade": "A", "kd_state": None, "current_price": 1.0}):
+        for r in _rows(stock_metrics=sm):
+            assert (SS.KEY_INSUFFICIENT in r) == (r["建議動作"] == SS.INSUFFICIENT_ACTION_TEXT), r
+
+
+def test_watch_and_held_labelled_separately():
+    """QA 回修 #11：持有／觀察清單分開標明（prompt 與 LINE）。"""
+    rows = [{"代號": "0056", "_detail": {}, "held": True, SS.KEY_INSUFFICIENT: (SS.INSUFF_ALL_UNJUDGED,)},
+            {"代號": "00878", "_detail": {}, "held": False, SS.KEY_INSUFFICIENT: (SS.INSUFF_ALL_UNJUDGED,)}]
+    d = S.build_station_digest(rows, vix=15.0)
+    assert [x["held"] for x in d["insufficient"]] == [True, False]
+    p = S.build_summary_prompt(d)
+    assert "- 資料不足／無法判定（持有）：0056（燈號全部判不出）\n" in p
+    assert "- 資料不足／無法判定（觀察清單）：00878（燈號全部判不出）\n" in p
+    msg = M.format_holdings_message(d, None, as_of="t")
+    assert "⬜ 資料不足／無法判定（持有）：0056（燈號全部判不出）" in msg
+    assert "⬜ 資料不足／無法判定（觀察清單）：00878（燈號全部判不出）" in msg
 
 
 def test_watchlist_missing_price_not_flagged():
@@ -100,11 +135,11 @@ def test_prompt_complete_data_keeps_hold():
 
 def test_digest_insufficient_lists_codes_and_reasons():
     d = S.build_station_digest(_CASES["B_all_white"] + _CASES["C_unpriced"])
-    assert d["insufficient"] == [{"代號": "0056", "原因": (SS.INSUFF_ALL_UNJUDGED,)},
-                                 {"代號": "00878", "原因": (SS.INSUFF_ALL_UNJUDGED,)},
-                                 {"代號": "2330", "原因": (SS.INSUFF_NO_PRICE,)}]
+    assert d["insufficient"] == [{"代號": "0056", "原因": (SS.INSUFF_ALL_UNJUDGED,), "held": True},
+                                 {"代號": "00878", "原因": (SS.INSUFF_ALL_UNJUDGED,), "held": True},
+                                 {"代號": "2330", "原因": (SS.INSUFF_NO_PRICE,), "held": True}]
     p = S.build_summary_prompt(d)
-    assert "- 資料不足／無法判定：0056（燈號全部判不出）、00878（燈號全部判不出）、2330（缺現價）\n" in p
+    assert "- 資料不足／無法判定（持有）：0056（燈號全部判不出）、00878（燈號全部判不出）、2330（缺現價）\n" in p
 
 
 # ── LINE 規則式正文 ─────────────────────────────────────────────────
@@ -119,7 +154,7 @@ def test_line_short_data_no_hold(case):
 def test_line_lists_insufficient():
     d = S.build_station_digest(_CASES["C_unpriced"], vix=15.0)
     msg = M.format_holdings_message(d, None, as_of="t")
-    assert "⬜ 資料不足／無法判定：2330（缺現價）" in msg
+    assert "⬜ 資料不足／無法判定（持有）：2330（缺現價）" in msg
 
 
 def test_line_complete_keeps_hold():

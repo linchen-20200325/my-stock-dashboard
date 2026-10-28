@@ -763,9 +763,9 @@ def test_prompt_normal_identical_and_keeps_instruction(over, vix, monkeypatch):
 def test_prompt_missing_price_drops_instruction(vix, monkeypatch):
     """XV-H1-EXT（客戶 2026-10-28 裁示，取代 Z51 該部分語意）：持有列缺現價 → 不帶續抱句。"""
     st, _sw, _swc, prompt = _run(monkeypatch, {"current_price": None}, vix=vix)
-    assert st.digest["insufficient"] == [{"代號": "0056", "原因": (SS.INSUFF_NO_PRICE,)}]
+    assert st.digest["insufficient"] == [{"代號": "0056", "原因": (SS.INSUFF_NO_PRICE,), "held": True}]
     assert _KEEP not in prompt and S._INSUFFICIENT_INSTRUCTION in prompt
-    assert "- 資料不足／無法判定：0056（缺現價）" in prompt
+    assert "- 資料不足／無法判定（持有）：0056（缺現價）" in prompt
 
 
 def test_mut_prompt_reopens_keep_instruction(monkeypatch):

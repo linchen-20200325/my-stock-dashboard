@@ -668,6 +668,12 @@ KEY_INSUFFICIENT: str = "_insufficient"
 INSUFF_ALL_UNJUDGED: str = "all_lights_unjudged"
 #: 持有列缺現價（含現價資料異常被排除）。
 INSUFF_NO_PRICE: str = "no_price"
+#: QA 回修 #7：持有列缺現價、但**結論可證明**（🔴 汰弱／加碼／停利／🟡 留意，建議動作未被換成 ⬜）
+#: 的非顯示欄。⚠️ 這種列**不進** `KEY_INSUFFICIENT`（不得被列成「無法判定」），只另列事實句
+#: 「缺現價（結論不受影響）」。只有成立時才有這一鍵。
+KEY_PRICE_MISSING_KEPT: str = "_price_missing_kept"
+#: 上一鍵的事實句（⑦ prompt／LINE 共用）。
+PRICE_MISSING_KEPT_TEXT: str = "缺現價（結論不受影響）"
 #: 原因 → 給 ⑦ AI prompt／LINE 的事實短句（只講事實，不給結論）。
 INSUFF_REASON_TEXT: dict = {
     INSUFF_ALL_UNJUDGED: "燈號全部判不出",

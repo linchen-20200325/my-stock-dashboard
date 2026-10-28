@@ -419,7 +419,7 @@ def test_prompt_normal_and_missing_identical_to_pre(case, vix, grade, monkeypatc
         assert _KEEP in prompt and "insufficient" not in st.digest
     else:
         assert _KEEP not in prompt and S._INSUFFICIENT_INSTRUCTION in prompt
-        assert "- 資料不足／無法判定：" in prompt
+        assert "- 資料不足／無法判定（持有）：" in prompt
 
 
 @pytest.mark.parametrize("bad", list(_BAD), ids=list(_BAD))

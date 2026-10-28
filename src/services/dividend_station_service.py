@@ -362,23 +362,28 @@ def _mark_insufficient(row: dict, *, ak: str, held: bool) -> None:
       ⚪ 排最低，⇒ `健檢=="⚪"` 即四燈皆 ⚪）**且**建議分支落在巡航（⇒ 235 無加碼／停利，亦為 ⚪）；
       個股：汰換燈 `健檢=="⚪"`（財報缺或契約漂移）。
     - `SS.INSUFF_NO_PRICE`：持有列缺現價（含現價資料異常被排除，`現價` 為 None）。
-    只有當既有建議是**持有結論**（ETF 巡航「⚪ 巡航：維持定期定額」、個股 🟢「續抱」）時，
-    才把 `建議動作` 換成 `SS.INSUFFICIENT_ACTION_TEXT` —— 缺資料不得以「續抱」當替代結論。
-    可證明的結論（🔴 汰弱、加碼、停利、🟡 留意）與既有的資料不足句（個股「⚪ 財報資料不足…」）
-    一字不動；判燈規則與 `_action` 分支代碼不動。
+    `建議動作` 換成 `SS.INSUFFICIENT_ACTION_TEXT` 的列：既有建議是**持有結論**（ETF 巡航「⚪ 巡航：
+    維持定期定額」、個股 🟢「續抱」）、或個股汰換燈 ⚪（財報資料不足，本來就無法判定；原句移到
+    `_detail["原建議動作"]` 保留）—— 缺資料不得以「續抱」當替代結論。
+    QA 回修 #7：**只有真的被換成 ⬜ 的列**才帶 `SS.KEY_INSUFFICIENT`（才會被列成「無法判定」）；
+    可證明的結論（🔴 汰弱、加碼、停利、🟡 留意）一字不動、⛔ 不列入「無法判定」——
+    持有且缺現價者改帶 `SS.KEY_PRICE_MISSING_KEPT`（事實句「缺現價（結論不受影響）」）。
+    判燈規則與 `_action` 分支代碼不動。
     """
     _is_stock = ak == T.KIND_STOCK
     _hold = (row.get("健檢") == "🟢") if _is_stock else (row.get("_action") == ds.ACTION_CRUISE)
-    _reasons = []
-    if row.get("健檢") == "⚪" and (_is_stock or row.get("_action") == ds.ACTION_CRUISE):
-        _reasons.append(SS.INSUFF_ALL_UNJUDGED)
-    if held and row.get("現價") is None:
-        _reasons.append(SS.INSUFF_NO_PRICE)
-    if not _reasons:
-        return
-    row[SS.KEY_INSUFFICIENT] = tuple(_reasons)
-    if _hold:
+    _unjudged = row.get("健檢") == "⚪" and (_is_stock or row.get("_action") == ds.ACTION_CRUISE)
+    _no_price = held and row.get("現價") is None
+    _replace = _unjudged or (_no_price and _hold)
+    if _replace:
+        row[SS.KEY_INSUFFICIENT] = tuple(
+            _r for _r, _on in ((SS.INSUFF_ALL_UNJUDGED, _unjudged), (SS.INSUFF_NO_PRICE, _no_price))
+            if _on)
+        if not _hold and isinstance(row.get("_detail"), dict):
+            row["_detail"]["原建議動作"] = row.get("建議動作", "")
         row["建議動作"] = SS.INSUFFICIENT_ACTION_TEXT
+    elif _no_price:
+        row[SS.KEY_PRICE_MISSING_KEPT] = True
 
 
 def build_station_rows(holdings: list[dict], *, vix: float | None,
@@ -1349,11 +1354,18 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
     # XV-H1-EXT（客戶 2026-10-28 裁示 A）：資料不足的列（`SS.KEY_INSUFFICIENT`，燈全判不出／
     # 持有列缺現價）→ 列出代號與原因（**只有非空時才有這一鍵**，資料完整時 digest 逐鍵不變）。
     # 下游（⑦ prompt、LINE 正文）據此不給「續抱」類組合層結論。抓取失敗列另在 errors。
-    _insufficient = [{"代號": str(r.get("代號", "")), "原因": tuple(r.get(SS.KEY_INSUFFICIENT) or ())}
+    # QA 回修 #11：每筆標明持有／觀察清單（`held`）。#7：只收建議動作真的被換成 ⬜ 的列。
+    _insufficient = [{"代號": str(r.get("代號", "")), "原因": tuple(r.get(SS.KEY_INSUFFICIENT) or ()),
+                      "held": bool(r.get("held"))}
                      for r in (rows or [])
                      if not r.get("_detail", {}).get("error") and r.get(SS.KEY_INSUFFICIENT)]
     if _insufficient:
         _out["insufficient"] = _insufficient
+    # QA 回修 #7：持有列缺現價、但結論可證明（未換成 ⬜）→ 另列事實（只有非空才有這一鍵）。
+    _kept = [str(r.get("代號", "")) for r in (rows or [])
+             if not r.get("_detail", {}).get("error") and r.get(SS.KEY_PRICE_MISSING_KEPT)]
+    if _kept:
+        _out["price_missing_kept"] = _kept
     # XV-H3：幣別未確認、未納入總額／比例的持有列（只有非空才有這一鍵；`allocation` 此時為 None）。
     _fx = fx_excluded_codes(rows)
     if _fx:
@@ -1363,8 +1375,8 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
 
 #: XV-H1-EXT：資料不足（抓取失敗／燈全判不出／缺現價／無有效判斷檔）時取代「續抱」引導句。
 _INSUFFICIENT_INSTRUCTION: str = (
-    "有標的資料不足或抓取失敗,資料不足的標的請寫『資料不足／無法判定』,"
-    "不得給組合層『全部續抱』類總結,也不得自行補上缺少的資料。")
+    "有標的資料不足或抓取失敗,列在『資料不足／無法判定』的標的請寫『資料不足／無法判定』,"
+    "其餘已列出的結論照原樣講,不得給組合層『全部續抱』類總結,也不得自行補上缺少的資料。")
 
 
 def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
@@ -1403,7 +1415,8 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
     # 否則改放一句明確指示（資料不足者寫「資料不足／無法判定」、不得給組合層「全部續抱」類總結、
     # 不得補資料）。只有 Z51/Z52 資料異常（`invalid`）時維持修前作法（兩句都不放）。
     _ins = digest.get("insufficient") or []
-    _short = _no_judged or bool(digest.get("errors")) or bool(_ins)
+    _kept = digest.get("price_missing_kept") or []
+    _short = _no_judged or bool(digest.get("errors")) or bool(_ins) or bool(_kept)
     _guide = (_INSUFFICIENT_INSTRUCTION if _short
               else "" if _inv else "沒有紅燈也沒有加碼時,請明講『續抱、定期定額即可』。")
     _base = (
@@ -1422,11 +1435,15 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
         _base += ("- 資料異常未判："
                   + "、".join(f"{d['代號']}（" + "　".join(f"{_lbl}：{_txt}" for _lbl, _txt in d["項目"])
                              + "）" for d in _inv) + "\n")
-    if _ins:
-        _base += ("- 資料不足／無法判定："
-                  + "、".join(f"{d['代號']}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))
-                                                         for _r in d.get("原因", ())) + "）"
-                             for d in _ins) + "\n")
+    for _lbl, _grp in (("持有", [d for d in _ins if d.get("held", True)]),
+                       ("觀察清單", [d for d in _ins if not d.get("held", True)])):
+        if _grp:
+            _base += (f"- 資料不足／無法判定（{_lbl}）："
+                      + "、".join(f"{d['代號']}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))
+                                                             for _r in d.get("原因", ())) + "）"
+                                 for d in _grp) + "\n")
+    if _kept:
+        _base += f"- {SS.PRICE_MISSING_KEPT_TEXT}：{'、'.join(str(_c) for _c in _kept)}\n"
     _fx = digest.get("fx_excluded") or []
     if _fx:
         # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產不進總額 ⇒ AI 拿不到混幣總額，

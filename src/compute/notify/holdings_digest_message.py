@@ -73,7 +73,8 @@ def _data_short(digest: dict) -> bool:
 
     成立時正文**不印「續抱」**當缺資料的替代結論（missing ≠ HOLD；unavailable ≠ safe）。
     """
-    return bool(digest.get("errors")) or bool(digest.get("insufficient"))
+    return (bool(digest.get("errors")) or bool(digest.get("insufficient"))
+            or bool(digest.get("price_missing_kept")))
 
 
 def _switch_out_lines(digest: dict, switch: "dict | None") -> list[str]:
@@ -198,11 +199,18 @@ def _allocation_line(digest: dict) -> list[str]:
 def _insufficient_line(digest: dict) -> list[str]:
     """XV-H1-EXT：資料不足／無法判定的標的（燈全判不出、缺現價）。空 → 略過。"""
     _ins = digest.get("insufficient") or []
-    if not _ins:
-        return []
-    return [f"{SS.INSUFFICIENT_ACTION_TEXT}：" + "、".join(
-        f"{_code(d)}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))
-                                for _r in (d.get("原因") or ())) + "）" for d in _ins)]
+    _out: list[str] = []
+    # QA 回修 #11：持有／觀察清單分開標明。#7：只列建議動作真的被換成 ⬜ 的標的。
+    for _lbl, _grp in (("持有", [d for d in _ins if d.get("held", True)]),
+                       ("觀察清單", [d for d in _ins if not d.get("held", True)])):
+        if _grp:
+            _out.append(f"{SS.INSUFFICIENT_ACTION_TEXT}（{_lbl}）：" + "、".join(
+                f"{_code(d)}（" + "、".join(SS.INSUFF_REASON_TEXT.get(_r, str(_r))
+                                        for _r in (d.get("原因") or ())) + "）" for d in _grp))
+    _kept = digest.get("price_missing_kept") or []
+    if _kept:
+        _out.append(f"ℹ️ {SS.PRICE_MISSING_KEPT_TEXT}：" + "、".join(str(_c) for _c in _kept))
+    return _out
 
 
 def _errors_line(digest: dict) -> list[str]:
