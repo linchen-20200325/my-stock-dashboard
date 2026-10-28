@@ -279,3 +279,13 @@ def test_watch_rows_do_not_make_portfolio_short():
     assert HDS.digest_data_short({"total": 1, "errors": ["x"]}) is True
     assert HDS.digest_data_short({"total": 1}) is False
     assert HDS.digest_data_short({"total": float("nan")}) is True
+
+
+def test_contract_drift_keeps_diagnostic_but_counts_short():
+    """複驗 C MINOR-1：契約漂移 ⚪ 保留原診斷句（⛔ 不換 ⬜），但仍計入組合層資料不足。"""
+    st = _rows(stock_metrics={"mj_grade": "Z", "kd_state": None, "current_price": 500.0})[1]
+    assert st["建議動作"].startswith("⚪ 財報評等「Z」不在已知分級內（上游契約漂移,請回報）")
+    assert SS.KEY_INSUFFICIENT not in st
+    assert HDS.row_data_short(st) is True
+    d = S.build_station_digest([st], vix=15.0)
+    assert d["data_short"] == ["2330"] and _HOLD not in S.build_summary_prompt(d)
