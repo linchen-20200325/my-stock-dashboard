@@ -153,6 +153,10 @@ def sheet_safety_revert_for(file_path, code: str) -> str:
     #   `page_today.py`／`page_find.py`（被本鏈及更舊的鏈管）⇒ 最新的那一批先換回（鏈頭往前接一節；只套一次；⛔ 不動本表與基底 sha）。
     # 📌 D2 導覽殼（DEC-090，2026-10-26；有意識的接鏈，⛔ 不是漏改）：D2 動了 `src/ui/views/page_hold.py` 的三句卡面短句摘錄
     #   （被本鏈及更舊的鏈管）⇒ 最新的那一批先換回（鏈頭再往前接一節；只套一次；⛔ 不動本表與基底 sha）。
+    # 📌 NAV-1 回修（QA MAJOR-1，2026-10-28；有意識的接鏈，⛔ 不是漏改）：NAV-1 回修動了 `page_hold`／`page_me`／`page_market`
+    #   的呈現層（被本鏈及更舊的鏈管）⇒ 最新的那一批先換回（鏈頭再往前接一節；只套一次；⛔ 不動本表與基底 sha）。
+    from tests.test_nav1_revert_chain import nav1_revert_for
+    code = nav1_revert_for(rel, code)
     from tests.test_d2_shell_revert_chain import d2_revert_for
     code = d2_revert_for(rel, code)
     from tests.test_me_p1_revert_chain import me_p1_revert_for

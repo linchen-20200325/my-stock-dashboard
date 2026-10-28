@@ -52,6 +52,12 @@ class TestLabels:
             ia_nav4.page4_label("market")             # view id 不是主導覽 id
         with pytest.raises(ValueError):
             ia_nav4.coerce_page4("market")
+        for _bad in (123, "", ["x"], {"a": 1}, 1.5):      # 不可雜湊型別也要是 ValueError，不是 TypeError
+            with pytest.raises(ValueError):
+                ia_nav4.coerce_page4(_bad)
+        for _bad in (["x"], 5, ""):
+            with pytest.raises(ValueError):
+                ia_nav4.resolve_view(ia_nav4.P4_TARGET, _bad)
         assert ia_nav4.coerce_page4(None) == ia_nav4.P4_MARKET
 
     def test_label_roundtrip(self):
@@ -221,6 +227,9 @@ class TestKeyNames:
         """`_nav4_` 前綴的 key 只准出現在 L0 常數檔、元件檔、app.py（旗標）與本批測試（不撞既有 widget）。"""
         _allowed = {
             "shared/ia_nav4.py", "src/ui/views/shell_nav4.py", "app.py",
+            # QA 回修：三個 view 的頁內文字分流以註解／常數名引用旗標值 `_nav4_legacy`（字面值，不 import ia_nav4）；
+            # 相等由 tests/test_nav1_default_mode_text.py 釘住。
+            "src/ui/views/page_me.py", "src/ui/views/page_market.py", "src/ui/views/page_hold.py",
         }
         _hits = []
         for _base in ("src", "shared", "infra", "scripts"):

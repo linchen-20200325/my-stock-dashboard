@@ -69,8 +69,35 @@ SS_WL_PICK: str = ME_WATCHLIST_PICK_KEY
 SS_DRIVE_ERROR: str = ME_DRIVE_ERROR_KEY
 
 # ══════════════════════════════════════════════════════════════════
+# NAV-1 回修（QA MAJOR-1）：預設（新四頁）模式的頁內文字 —— 不得叫使用者去一個畫面上不存在的地方
+# ══════════════════════════════════════════════════════════════════
+# 預設模式下（`app.py` 在 session 明確寫 `_nav4_legacy = False`），舊版入口（側欄「不使用」radio、舊頁籤）對一般使用者
+# **不存在**（DEC-097：legacy 入口不得出現在一般導覽）；本頁原本寫給 D2 殼的「切回舊版…」類指路句因此成了死路。
+# 做法（⚠️ 有意識的修改，⛔ 不是漏刪）：**只在呈現層**依 session 旗標分模式 ——
+#   · legacy 模式（旗標為 True）或旗標不存在（單元測試／直接呼叫）：輸出**原句逐字不變**；
+#   · 預設模式（旗標明確為 False）：改成不指向 legacy 的誠實句（「新版尚未提供，後續批次處理」）或略去。
+# 原常數（含 `shared/ia_nav.CONTENT_EDIT_OLD_UI_WHERE`）一字未改；本批**不改** `where_to_find` 產生的路徑名
+# （🛡️持股›…、📊 大盤›🚦 今天、🩺／📖 —— 牽動 ia_nav 46 字上限與 revert chain，併 I-1 另批）。
+# ⚠️ 旗標 key 的字面值與 `shared/ia_nav4.LEGACY_SESSION_KEY` 各一份（本檔不得 import ia_nav4：legacy 路徑零依賴新模組；
+#    相等由 `tests/test_nav1_default_mode_text.py` 釘住）。
+_NAV4_LEGACY_SESSION_KEY: str = "_nav4_legacy"
+#: 預設模式下取代「客戶原句／切回舊版」的誠實句（不含任何 legacy 字樣）。
+DEFAULT_MODE_NOT_YET: str = "此功能新版尚未提供，後續批次處理。"
+
+
+def _in_default_nav() -> bool:
+    """預設（新四頁）模式？只有 session 旗標**明確為 False** 才算（缺＝當成 legacy／原句，保護既有單元測試與直接呼叫）。"""
+    try:
+        return st.session_state.get(_NAV4_LEGACY_SESSION_KEY) is False
+    except Exception:  # noqa: BLE001 — 無 session 環境（純單元測試）⇒ 原句
+        return False
+
+
+# ══════════════════════════════════════════════════════════════════
 # 首屏字樣（卡名 ＝ `ia_nav.SECTION_LABELS`，指路句與卡名同一個 SSOT）
 # ══════════════════════════════════════════════════════════════════
+
+
 PAGE_QUESTION: str = "我用哪個 Google 帳號、這個 App 現在讀哪一本 Sheet、這本 Sheet 裡分析的是哪一本？"
 CARD_ACCOUNT_TITLE: str = "① " + ia_nav.SECTION_LABELS[ia_nav.SECTION_ME_ACCOUNT]
 CARD_SHEET_TITLE: str = "② " + ia_nav.SECTION_LABELS[ia_nav.SECTION_ME_SHEET]
@@ -179,6 +206,8 @@ SELECT_FAILED_MISSING: str = "沒有選定：「{name}」不在這本 Sheet 的�
 SELECT_FAILED_LIST: str = "沒有選定：這本 Sheet 的清單現在讀不到，請稍後按「" + RELOAD_LABEL + "」再選。"
 SELECT_FAILED_SHEET: str = "沒有選定：還沒有選定 Sheet。"
 EDIT_CONTENT_WHERE: str = "要新增／修改組合、觀察清單或持股列：" + ia_nav.CONTENT_EDIT_OLD_UI_WHERE
+EDIT_CONTENT_WHERE_DEFAULT_MODE: str = "要新增／修改組合、觀察清單或持股列：" + DEFAULT_MODE_NOT_YET
+CREATE_SHEET_WHERE_DEFAULT_MODE: str = "要建立新 Sheet：" + DEFAULT_MODE_NOT_YET
 USED_BY_HEADING: str = "用到這本 Sheet 的頁"
 #: 「哪些頁正在用」—— 頁名一律 `ia_nav.page_label`（⛔ 不手抄）。⚡ 行動頁尚未上線（不在 PAGE_LABELS）。
 USED_BY_LINES: tuple[str, ...] = (
@@ -187,6 +216,8 @@ USED_BY_LINES: tuple[str, ...] = (
     f"{ia_nav.page_label(ia_nav.PAGE_TODAY)}：只看有沒有綁 Sheet，不讀組合內容",
     "⚡ 行動：尚未上線",
 )
+#: 預設（新四頁）模式：不列預設導覽到不了的頁（🚦 今天、⚡ 行動），只列四頁導覽內的兩頁。
+USED_BY_LINES_DEFAULT_MODE: tuple[str, ...] = USED_BY_LINES[:2]
 
 # ── 詳細（第三層，預設收合）────────────────────────────────────────────
 DETAIL_TITLE: str = "▸ 詳細：切回舊版、已知限制"
@@ -196,6 +227,14 @@ OLD_UI_NAV_OFF: str = "不使用（用下方原功能）"
 OLD_UI_TAB: str = "📁 組合管理"
 SWITCH_BACK_TEXT: str = (f"切回舊版：側欄「{OLD_UI_NAV_LABEL}」選「{OLD_UI_NAV_OFF}」→ 主畫面回到原本的頁籤 → "
                          f"「{OLD_UI_TAB}」。舊版的頁籤照舊讀它自己的設定，不受本頁的組合／觀察清單選定影響。")
+#: 預設（新四頁）模式的「已知限制」：不提側欄「不使用」（那個控制項在這個模式不存在）。
+KNOWN_LIMITS_DEFAULT_MODE: tuple[str, ...] = (
+    "組合／觀察清單的選定只記在這一次使用中：重新整理頁面、或重新登入之後要重選（不會寫進你的 Sheet 或網址）。",
+    "Google 登入轉跳回來是新的一次使用：頁面會回到起始頁，登入後請再到「" + ia_nav.page_label(ia_nav.PAGE_ME) + "」。",
+    "同時開多個瀏覽器分頁時，每個分頁依自己的網址還原 Sheet；在這裡登出只管得到目前這個分頁。",
+    "排程推播讀的是部署環境的設定，與本頁選哪一本無關。",
+)
+DETAIL_TITLE_DEFAULT_MODE: str = "▸ 詳細：已知限制"
 KNOWN_LIMITS: tuple[str, ...] = (
     "組合／觀察清單的選定只記在這一次使用中：重新整理頁面、或重新登入之後要重選（不會寫進你的 Sheet 或網址）。",
     "Google 登入轉跳回來是新的一次使用：側欄導覽會回到「" + OLD_UI_NAV_OFF + "」，登入後請在側欄再選一次「"
@@ -384,7 +423,8 @@ def build_content_card(contents, *, logged_in: bool, active_ok: bool) -> CardVie
             _lines.append(SEL_MISSING.format(what="觀察清單", name=_md(_wl_sel)))
         else:
             _lines.append(WL_SELECTED.format(name=_md(_wl_sel)))
-    return CardView(CARD_CONTENT_TITLE, _lines[0], lines=tuple(_lines[1:]), captions=(EDIT_CONTENT_WHERE,))
+    return CardView(CARD_CONTENT_TITLE, _lines[0], lines=tuple(_lines[1:]),
+                    captions=(EDIT_CONTENT_WHERE_DEFAULT_MODE if _in_default_nav() else EDIT_CONTENT_WHERE,))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -611,7 +651,7 @@ def _render_switch_sheet() -> None:
                          placeholder=PICK_PLACEHOLDER, key=SS_SHEET_PICK)
             st.button(USE_SHEET_LABEL, key="p07me_use_drive", on_click=_on_use_drive_pick,
                       type="primary", width="stretch")
-        st.caption(CREATE_SHEET_WHERE)
+        st.caption(CREATE_SHEET_WHERE_DEFAULT_MODE if _in_default_nav() else CREATE_SHEET_WHERE)
 
 
 def _render_contents(contents, *, logged_in: bool, active_ok: bool) -> None:
@@ -639,7 +679,7 @@ def _render_contents(contents, *, logged_in: bool, active_ok: bool) -> None:
         if _wcur:
             st.button(CLEAR_WL_LABEL, key="p07me_clear_wl", on_click=_on_clear_watchlist)
     st.markdown(f"**{USED_BY_HEADING}**")
-    st.markdown("\n".join(f"- {_ln}" for _ln in USED_BY_LINES))
+    st.markdown("\n".join(f"- {_ln}" for _ln in (USED_BY_LINES_DEFAULT_MODE if _in_default_nav() else USED_BY_LINES)))
 
 
 def render_page_me() -> None:
@@ -662,6 +702,11 @@ def render_page_me() -> None:
         _render_sheet(_view, logged_in=_logged)
     with _c3, st.container(border=True):
         _render_contents(_contents, logged_in=_logged, active_ok=_active_ok)
+    if _in_default_nav():
+        # 預設（新四頁）模式：沒有「切回舊版」段（那個入口對一般使用者不存在，DEC-097）；限制清單用不指向 legacy 的版本。
+        with st.expander(DETAIL_TITLE_DEFAULT_MODE, expanded=False):
+            st.markdown("**已知限制**\n" + "\n".join(f"- {_ln}" for _ln in KNOWN_LIMITS_DEFAULT_MODE))
+        return
     with st.expander(DETAIL_TITLE, expanded=False):
         st.markdown(SWITCH_BACK_TEXT)
         st.markdown("**已知限制**\n" + "\n".join(f"- {_ln}" for _ln in KNOWN_LIMITS))

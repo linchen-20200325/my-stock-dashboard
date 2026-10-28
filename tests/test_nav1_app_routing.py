@@ -354,8 +354,44 @@ class TestDefaultMode:
         monkeypatch.setitem(sys.modules, "src.ui.views.page_market", _Poison("src.ui.views.page_market"))
         at = _app().run()
         assert not at.exception
-        assert any("📊 大盤" in e.value for e in at.error)
+        assert any("📊 大盤" in e.value for e in at.error), "view 例外必須紅字顯示"
         assert at.radio(key=ia_nav4.NAV4_WIDGET_BOTTOM_KEY).value == "📊 市場", "頁壞了不得吞掉導覽"
+        assert at.sidebar.radio(key=ia_nav4.NAV4_WIDGET_SIDE_KEY).value == "📊 市場"
+        assert "僅供學術研究" in _md(at), "view 例外時免責聲明仍須出現"
+        for l in _TABS7:
+            assert l not in _tab_labels(at), "view 例外不得靜默退回舊 UI"
+
+    def test_b5_main_nav_failure_is_isolated_page_and_footer_survive(self, fake_views, monkeypatch):
+        """只有『主畫面導覽』壞（側欄導覽好）：紅字、頁面照渲染、免責聲明在。"""
+        _m = types.ModuleType(_SHELL_NAV4)
+        def _side():
+            return "market"
+        def _main():
+            raise RuntimeError("main nav boom")
+        _m.render_sidebar_nav = _side
+        _m.render_main_nav = _main
+        monkeypatch.setitem(sys.modules, _SHELL_NAV4, _m)
+        at = _app().run()
+        assert not at.exception
+        _errs = " ".join(e.value for e in at.error)
+        assert "主導覽" in _errs and "main nav boom" in _errs, _errs
+        assert "RENDERED=page_market" in _md(at)
+        assert "僅供學術研究" in _md(at)
+
+    def test_b5_sidebar_nav_failure_falls_back_to_market_with_a_red_sidebar_error(self, fake_views, monkeypatch):
+        _m = types.ModuleType(_SHELL_NAV4)
+        def _side():
+            raise RuntimeError("side nav boom")
+        _m.render_sidebar_nav = _side
+        _m.render_main_nav = lambda: None
+        monkeypatch.setitem(sys.modules, _SHELL_NAV4, _m)
+        at = _app().run()
+        assert not at.exception
+        assert any("side nav boom" in e.value for e in at.sidebar.error)
+        assert fake_views == ["page_market"], "側欄導覽出錯的回退值必須是 📊 市場頁（不是 None → 舊 UI、也不是別頁）"
+        for l in _TABS7:
+            assert l not in _tab_labels(at)
+        assert "僅供學術研究" in _md(at)
 
 
 @pytest.mark.usefixtures("stub_trading_day_status")
@@ -428,3 +464,88 @@ class TestRealViewsMountUnderTheNewNav:
             assert not at.exception, (_page, _leaf, at.exception)
             assert not _isolated_errors(), (_page, _leaf, _isolated_errors())
             assert "僅供學術研究" in _md(at)
+
+
+# ══════════════════════════════════════════════════════════════════
+# QA 回修 MAJOR-2：legacy（rollback）路徑**完全不依賴**新模組
+# ══════════════════════════════════════════════════════════════════
+_BLOCKER_CODE = '''
+import sys, importlib.abc
+class _Block(importlib.abc.MetaPathFinder):
+    BLOCKED = {blocked!r}
+    def find_spec(self, name, path=None, target=None):
+        if name in self.BLOCKED:
+            raise ImportError("POISONED: " + name)
+        return None
+sys.meta_path.insert(0, _Block())
+sys.path.insert(0, {root!r})
+from streamlit.testing.v1 import AppTest
+at = AppTest.from_file({app!r}, default_timeout=200)
+at.query_params["legacy"] = "1"
+at.run(timeout=200)
+exc = [str(e.value)[:300] for e in at.exception]
+labels = [getattr(t, "label", None) for t in at.tabs]
+poisoned_seen = [e.value[:200] for e in at.error if "POISONED" in e.value]
+print("RESULT", exc, labels[:8], poisoned_seen)
+if exc or poisoned_seen or "🌍 市場環境" not in labels or "不使用（用下方原功能）" not in [o for r in at.sidebar.radio for o in r.options]:
+    raise SystemExit(3)
+print("LEGACY_OK_WITH_POISON")
+'''
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("blocked", [
+    ["shared.ia_nav4"],
+    ["src.ui.views.shell_nav4"],
+    ["shared.ia_nav4", "src.ui.views.shell_nav4"],
+])
+def test_legacy_loads_fully_even_if_the_nav4_modules_cannot_be_imported(blocked):
+    """毒化（import 即 raise）`shared/ia_nav4.py`／`shell_nav4.py` 後，`?legacy=1` 仍完整載入舊畫面（7 頁籤＋D2 radio）。
+    乾淨行程；以 meta_path finder 讓該模組 import 一律 ImportError（等同檔案末尾 raise）。"""
+    import subprocess
+    code = _BLOCKER_CODE.format(blocked=set(blocked), root=str(_ROOT), app=str(_APP))
+    r = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=400, cwd=str(_ROOT))
+    assert r.returncode == 0 and "LEGACY_OK_WITH_POISON" in r.stdout, f"{r.stdout[-1500:]}\n{r.stderr[-2500:]}"
+
+
+@pytest.mark.slow
+def test_default_mode_with_a_poisoned_ia_nav4_is_loud_not_silent():
+    """對照組（鑑別力）：同一個毒化在**預設模式**必須有後果（否則上面三條可能只是毒藥沒生效）。"""
+    import subprocess
+    code = _BLOCKER_CODE.replace('at.query_params["legacy"] = "1"\n', "").format(
+        blocked={"shared.ia_nav4", "src.ui.views.shell_nav4"}, root=str(_ROOT), app=str(_APP))
+    r = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=400, cwd=str(_ROOT))
+    assert "LEGACY_OK_WITH_POISON" not in r.stdout
+    assert "POISONED" in r.stdout or "POISONED" in r.stderr or r.returncode != 0
+
+
+class TestLegacyPathRunsNoNav4Code:
+    def test_resolve_legacy_does_not_import_anything_from_nav4(self):
+        fn = next(f for f in _TREE.body if isinstance(f, ast.FunctionDef) and f.name == "_nav4_resolve_legacy")
+        assert not [n for n in ast.walk(fn) if isinstance(n, (ast.Import, ast.ImportFrom))], (
+            "legacy 旗標解析不得 import 任何模組（零依賴，rollback 不依賴新模組）")
+
+    def test_reconcile_is_called_only_inside_the_new_mode_branch(self):
+        _b = _module_if_not_legacy()
+        _calls = [n for n in ast.walk(_b) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                  and n.func.id == "_nav4_reconcile"]
+        assert len(_calls) == 1
+        _all = [n for n in ast.walk(_TREE) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "_nav4_reconcile"]
+        assert len(_all) == 1, "legacy 路徑不得呼叫 `_nav4_reconcile`"
+
+    def test_the_inlined_flag_logic_matches_the_l0_truth_table_and_literals(self):
+        """app.py 內聯的旗標解析與 L0 `resolve_legacy_flag`／常數必須一致（兩份字面值由這裡釘相等）。"""
+        _src = ast.get_source_segment(_SRC, next(
+            f for f in _TREE.body if isinstance(f, ast.FunctionDef) and f.name == "_nav4_resolve_legacy"))
+        assert f"'{ia_nav4.LEGACY_SESSION_KEY}'" in _src and f"'{ia_nav4.LEGACY_QUERY_PARAM}'" in _src
+        class _QP(dict):
+            pass
+        for qv in (None, "1", "0", " 1 ", "", "yes", "true", "2", ["1"], 1):
+            for cur in (False, True):
+                _st = types.SimpleNamespace(session_state={ia_nav4.LEGACY_SESSION_KEY: cur},
+                                            query_params=_QP({} if qv is None else {"legacy": qv}))
+                _g = {"st": _st}
+                exec(_src, _g)
+                assert _g["_nav4_resolve_legacy"]() is ia_nav4.resolve_legacy_flag(qv, cur), (qv, cur)
+                assert _st.session_state[ia_nav4.LEGACY_SESSION_KEY] is ia_nav4.resolve_legacy_flag(qv, cur)

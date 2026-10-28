@@ -40,7 +40,7 @@ def _imports() -> set[str]:
 class TestBoundary:
     def test_imports_are_only_streamlit_l0_and_tokens(self):
         """無取數：不得 import `src.data.*` / requests / proxy / pandas（沿用 shell_nav 的邊界）。"""
-        assert _imports() <= {"__future__", "streamlit", "shared", "src.ui_v2.tokens"}, _imports()
+        assert _imports() <= {"__future__", "streamlit", "shared", "src.ui_v2.tokens", "sys"}, _imports()
 
     def test_no_red_error_boxes(self):
         _bad = [n.func.attr for n in ast.walk(_TREE)
@@ -226,12 +226,33 @@ class TestSingleSsot:
         assert at.sidebar.radio(key=ia_nav4.NAV4_WIDGET_SIDE_KEY).value == "💼 持股"
         assert at.radio(key=ia_nav4.NAV4_WIDGET_BOTTOM_KEY).value == "💼 持股"
 
-    def test_a_corrupt_ssot_value_fails_loud_not_silently_defaults(self):
+    @pytest.mark.parametrize("bad", ["garbage", 123, "", ["x"], "market", 5, {"a": 1}, 1.5, False])
+    def test_a_corrupt_ssot_value_is_reset_to_the_default_and_logged_nav_stays(self, bad, capsys):
+        """QA 回修 m-1：壞值（垃圾字串／數字／空字串／list／view id 殘值）⇒ 重設為 📊 市場並 log，導覽不消失、
+        頁面與導覽狀態一致（原本 Fail Loud 會讓導覽整個消失）。L0 `coerce_page4` 本身仍 Fail Loud（見 test_nav1_ia_nav4）。"""
         from streamlit.testing.v1 import AppTest
         at = AppTest.from_function(_nav_app, default_timeout=60)
-        at.session_state[ia_nav4.NAV4_PAGE_KEY] = "market"       # view id 殘值，不是四頁 id
+        at.session_state[ia_nav4.NAV4_PAGE_KEY] = bad
         at.run()
-        assert at.exception, "壞掉的頁狀態被靜默吞掉了（應 Fail Loud）"
+        assert not at.exception, at.exception
+        assert at.session_state[ia_nav4.NAV4_PAGE_KEY] == ia_nav4.P4_MARKET
+        assert at.sidebar.radio(key=ia_nav4.NAV4_WIDGET_SIDE_KEY).value == "📊 市場"
+        assert at.radio(key=ia_nav4.NAV4_WIDGET_BOTTOM_KEY).value == "📊 市場"
+        assert "VIEW=market" in _md(at)
+        assert "[nav4]" in capsys.readouterr().err, "重設壞狀態必須留 log"
+
+    @pytest.mark.parametrize("bad", ["zzz", 5, "", ["x"], "hold", {"k": 1}])
+    def test_a_corrupt_leaf_value_is_reset_to_the_default_leaf_and_logged(self, bad, capsys):
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_function(_nav_app, default_timeout=60)
+        at.session_state[ia_nav4.NAV4_PAGE_KEY] = ia_nav4.P4_TARGET
+        at.session_state[ia_nav4.NAV4_TARGET_LEAF_KEY] = bad
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state[ia_nav4.NAV4_TARGET_LEAF_KEY] == "find"
+        assert "VIEW=find" in _md(at)
+        assert at.radio(key=ia_nav4.NAV4_WIDGET_LEAF_KEY).value == ia_nav.page_label("find")
+        assert "[nav4]" in capsys.readouterr().err
 
     def test_no_streamlit_warning_about_session_state_defaults(self):
         at = _run()

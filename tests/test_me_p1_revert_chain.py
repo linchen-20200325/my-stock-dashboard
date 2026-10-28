@@ -912,15 +912,17 @@ def me_p1_revert_for(file_path, code: str) -> str:
 def test_me_p1_revert_is_exact_base_source():
     # 📌 D2 導覽殼（DEC-090，2026-10-26；有意識的接鏈，⛔ 不是漏改）：鏈頭已往前接一節 `d2_revert_for`，本節先收 D2 的改動。
     from tests.test_d2_shell_revert_chain import d2_revert_for
+    from tests.test_nav1_revert_chain import nav1_revert_for   # 📌 NAV-1 回修（2026-10-28）接鏈：鏈頭再往前接一節
     for rel in sorted(ME_P1_REVERT_PAIRS):
-        code = me_p1_revert_for(rel, d2_revert_for(rel, (REPO / rel).read_text(encoding="utf-8")))
+        code = me_p1_revert_for(rel, d2_revert_for(rel, nav1_revert_for(rel, (REPO / rel).read_text(encoding="utf-8"))))
         assert hashlib.sha256(code.encode("utf-8")).hexdigest() == ME_P1_BASE_SHA[rel], rel
 
 
 def test_me_p1_revert_is_idempotent():
     from tests.test_d2_shell_revert_chain import d2_revert_for   # D2 接鏈，同上
+    from tests.test_nav1_revert_chain import nav1_revert_for   # NAV-1 接鏈，同上
     for rel in sorted(ME_P1_REVERT_PAIRS):
-        once = me_p1_revert_for(rel, d2_revert_for(rel, (REPO / rel).read_text(encoding="utf-8")))
+        once = me_p1_revert_for(rel, d2_revert_for(rel, nav1_revert_for(rel, (REPO / rel).read_text(encoding="utf-8"))))
         assert me_p1_revert_for(rel, once) == once, rel
 
 

@@ -90,16 +90,43 @@ NAV4_CSS: str = build_css()
 # ══════════════════════════════════════════════════════════════════
 # 狀態：單一真相源 = `ia_nav4.NAV4_PAGE_KEY`
 # ══════════════════════════════════════════════════════════════════
+def _log_reset(what: str, bad: object, to: str) -> None:
+    """非法狀態被重設時留 log（stderr；不上畫面——導覽沒有「真出錯」狀態，且不得讓導覽消失）。"""
+    import sys
+    print(f"[nav4] {what} 的值 {bad!r} 不合法，已重設為預設 {to!r}", file=sys.stderr)
+
+
 def current_page4() -> str:
-    """目前的主導覽頁 id（缺 → 預設 📊 市場；存在但非法 → Fail Loud）。第一次呼叫會把預設值寫進 SSOT。"""
-    _p = ia_nav4.coerce_page4(st.session_state.get(ia_nav4.NAV4_PAGE_KEY))
+    """目前的主導覽頁 id。缺 → 預設 📊 市場；**存在但非法 → 重設為預設並 log**（導覽不得因壞 state 消失，
+    頁面與導覽狀態一致；L0 `coerce_page4` 本身仍 Fail Loud，這裡是 L5 的自癒層）。第一次呼叫會把值寫進 SSOT。"""
+    _raw = st.session_state.get(ia_nav4.NAV4_PAGE_KEY)
+    try:
+        _p = ia_nav4.coerce_page4(_raw)
+    except ValueError:
+        _p = ia_nav4.default_page4()
+        _log_reset(ia_nav4.NAV4_PAGE_KEY, _raw, _p)
     st.session_state[ia_nav4.NAV4_PAGE_KEY] = _p
     return _p
 
 
+def current_leaf() -> str | None:
+    """標的頁葉選擇（view 頁 id）。None＝尚未選（用預設葉）；**存在但非法 → 重設為預設葉並 log**。"""
+    _raw = st.session_state.get(ia_nav4.NAV4_TARGET_LEAF_KEY)
+    if _raw is None:
+        return None
+    try:
+        ia_nav4.resolve_view(ia_nav4.P4_TARGET, _raw)
+    except ValueError:
+        _d = ia_nav4.views_of(ia_nav4.P4_TARGET)[0]
+        _log_reset(ia_nav4.NAV4_TARGET_LEAF_KEY, _raw, _d)
+        st.session_state[ia_nav4.NAV4_TARGET_LEAF_KEY] = _d
+        return _d
+    return _raw
+
+
 def current_view() -> str:
     """目前要渲染的 view 頁 id（🎯 標的 會再看葉選擇）。"""
-    return ia_nav4.resolve_view(current_page4(), st.session_state.get(ia_nav4.NAV4_TARGET_LEAF_KEY))
+    return ia_nav4.resolve_view(current_page4(), current_leaf())
 
 
 def _sync_widget(widget_key: str, value: str) -> None:
@@ -155,7 +182,7 @@ def render_target_leaf_selector() -> None:
     _p = current_page4()
     if not ia_nav4.has_leaves(_p):
         return
-    _view = ia_nav4.resolve_view(_p, st.session_state.get(ia_nav4.NAV4_TARGET_LEAF_KEY))
+    _view = ia_nav4.resolve_view(_p, current_leaf())
     _label = ia_nav4.leaf_options(_p)[ia_nav4.views_of(_p).index(_view)]
     _sync_widget(ia_nav4.NAV4_WIDGET_LEAF_KEY, _label)
     st.radio(

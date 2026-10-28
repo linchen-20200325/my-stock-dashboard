@@ -87,15 +87,23 @@ if api_key:
 # 旗標首次出現即寫入 session_state（耐 rerun；網址參數被 OAuth callback 的 `query_params.clear()` 清掉也不影響本 session）。
 # ⚠️ 必須在 `set_page_config` 之前算：新版模式要讓側欄在桌機預設展開（左側欄＝桌機主導覽），legacy 維持 'collapsed'。
 #    讀 query_params / 寫 session_state 都不會送出任何前端訊息，不違反「set_page_config 必須是第一個 st 指令」。
-# ⚠️ 本函式的 import 是 late import（函式內），不在檔頭 import 區加名稱（boot incident 範圍的既有守則）。
+# ⚠️ **本函式刻意不 import 任何 nav4 模組**（零依賴）：rollback 路徑（`?legacy=1`）不得依賴新模組是否健康
+#    （QA 回修 MAJOR-2；`tests/test_nav1_app_routing.py` 以「毒化 shared/ia_nav4.py」證明 legacy 仍完整載入）。
+#    代價：參數名／session key 兩個字面值在此與 `shared/ia_nav4.LEGACY_QUERY_PARAM`／`LEGACY_SESSION_KEY` 各一份；
+#    由測試釘兩邊相等，且 `resolve_legacy_flag` 真值表與本函式行為逐項對照（不是第二份會漂移的真相）。
 def _nav4_resolve_legacy() -> bool:
-    from shared.ia_nav4 import LEGACY_QUERY_PARAM, LEGACY_SESSION_KEY, resolve_legacy_flag
+    _flag = bool(st.session_state.get('_nav4_legacy', False))
     try:
-        _qv = st.query_params.get(LEGACY_QUERY_PARAM)
+        _qv = st.query_params.get('legacy')
     except Exception:   # 取不到 query_params（極端環境）⇒ 當作沒帶參數，維持現有旗標
         _qv = None
-    _flag = resolve_legacy_flag(_qv, bool(st.session_state.get(LEGACY_SESSION_KEY, False)))
-    st.session_state[LEGACY_SESSION_KEY] = _flag
+    if isinstance(_qv, str):   # 只認 '1' / '0'；空值、亂值、非字串一律維持現有旗標（不 raise、不進 legacy）
+        _v = _qv.strip()
+        if _v == '1':
+            _flag = True
+        elif _v == '0':
+            _flag = False
+    st.session_state['_nav4_legacy'] = _flag
     return _flag
 
 
@@ -743,15 +751,15 @@ if set(_IA_VIEWS) != set(_IA_PAGE_LABELS):
 _ia_nav.reconcile_nav(_IA_VIEWS)
 
 
-# NAV-1：四頁導覽表 ↔ 對映表 ↔ 頁表 ↔ 派發表對帳（legacy 模式也跑；純函式、便宜，且 drift 要當場炸）。
+# NAV-1：四頁導覽表 ↔ 對映表 ↔ 頁表 ↔ 派發表對帳（**只在新模式分支呼叫**；legacy 路徑不執行任何 nav4 代碼）。
 def _nav4_reconcile(_view_ids) -> None:
     from shared.ia_nav4 import reconcile_nav4
     reconcile_nav4(_view_ids)
 
 
-_nav4_reconcile(_IA_VIEWS)
-
 if not _NAV4_LEGACY:
+    # 只在新模式對帳（legacy 路徑不得執行任何 nav4 代碼，QA 回修 MAJOR-2）；對不起來 ⇒ 當場炸（Fail Loud）。
+    _nav4_reconcile(_IA_VIEWS)
     # ══════════════════════════════════════════════════════════
     # NAV-1 預設（新）模式：固定四頁主導覽 —— 主畫面整片換成目前選到的 view（沿用既有 `_render_tab_isolated` 隔離）
     # ══════════════════════════════════════════════════════════

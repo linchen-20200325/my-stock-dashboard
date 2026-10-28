@@ -51,11 +51,10 @@ PAGE4_TO_VIEW: dict[str, tuple[str, ...]] = {
 }
 
 #: **不在四頁導覽內**的 view：D2 過渡殼（🚦 今天、📖 憑什麼），只在 legacy 模式（`?legacy=1`）的 D2 側欄可達。
-#: 為什麼這不是能力遺失（DEC-092 Q6／A 規格 §2.1）：⚡行動→各頁「需要處理」、🩺→資料健康小入口、
-#: 📖→「查看依據」都是**之後批次**（UI-M／AB-5／AB-6）要併入四頁的能力；且這兩頁的功能在舊 7 頁籤
-#: （🔧 工具箱 › 🔎 資料診斷、🧬 AI 問答）**仍然存在**（舊 UI 不刪，DEC-019/020）。
-#: ⚠️ 誠實揭露：預設（新）模式下這兩頁的**入口**暫時不可見——這是已知的暫時缺口，不是「已併入」；
-#: 見 `docs/vnext/NEWUI_D25_NAV1_SPEC_2026-10-28.md`「已知限制」。
+#: ⚠️ 誠實揭露（QA 回修）：**能力保留在舊 UI，預設畫面暫時取不到**——這兩頁的能力（需要處理、資料健康、查看依據、AI 問答）
+#: 依 A §2.1 要在後續批次（UI-M／AB-5／AB-6）併入各頁；在那之前，預設畫面**沒有**這些入口（不是「已併入」，也不是「沒有損失」），
+#: 一般使用者只能經 `?legacy=1` 取得（舊 7 頁籤的 🔧 工具箱 › 🔎 資料診斷、🧬 AI 問答也在其中）。
+#: 完整缺口清單見 `docs/vnext/NEWUI_D25_NAV1_SPEC_2026-10-28.md` §7-2。
 LEGACY_ONLY_VIEWS: tuple[str, ...] = (ia_nav.PAGE_TODAY, ia_nav.PAGE_WHY)
 
 # ══════════════════════════════════════════════════════════════════
@@ -140,9 +139,9 @@ def coerce_page4(value: object) -> str:
     """
     if value is None:
         return default_page4()
-    if value not in PAGE4_LABELS:
+    if not (isinstance(value, str) and value in PAGE4_LABELS):   # isinstance：list 等不可雜湊型別不得讓 `in dict` 拋 TypeError
         raise ValueError(f"{NAV4_PAGE_KEY} 的值 {value!r} 不是合法頁 id；合法值：{sorted(PAGE4_LABELS)}")
-    return value  # type: ignore[return-value]
+    return value
 
 
 def views_of(page4: str) -> tuple[str, ...]:
@@ -180,9 +179,9 @@ def resolve_view(page4: str, leaf: object = None) -> str:
         return _views[0]
     if leaf is None:
         return _views[0]
-    if leaf not in _views:
+    if not (isinstance(leaf, str) and leaf in _views):
         raise ValueError(f"{page4!r} 底下沒有葉 {leaf!r}；合法值：{list(_views)}")
-    return leaf  # type: ignore[return-value]
+    return leaf
 
 
 # ══════════════════════════════════════════════════════════════════

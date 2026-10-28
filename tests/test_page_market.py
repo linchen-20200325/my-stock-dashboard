@@ -390,7 +390,10 @@ class TestCrossReferences:
         _app = (_ROOT / "app.py").read_text(encoding="utf-8")
         for _s in (M.OLD_UI_NAV_RADIO, M.OLD_UI_NAV_OFF, M.OLD_UI_MARKET_TAB):
             assert _s in _app, _s
-        assert _SRC.count("OLD_UI_POINTER}") >= 3
+        # NAV-1 回修（QA MAJOR-1）：三處引用改經 `_old_ui_pointer()`（legacy／無旗標 ⇒ 仍回 `OLD_UI_POINTER` 原句，
+        # 預設模式 ⇒ 誠實句）。引用次數門檻不變（≥3），另釘 legacy 路徑確實回原句。
+        assert _SRC.count("{_old_ui_pointer()}") >= 3
+        assert M._old_ui_pointer() == M.OLD_UI_POINTER   # 無旗標（單元測試）＝legacy 原句
         assert "見「🌍 市場環境」舊分頁" not in _SRC
 
     def test_x1_source_is_human_wording(self):
