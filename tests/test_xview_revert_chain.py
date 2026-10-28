@@ -18,13 +18,15 @@ REPO = Path(__file__).resolve().parents[1]
 XVIEW_BASE_SHA = {'src/services/dividend_station_service.py': 'b08853b73235da193e66b0465b143d740549da398261d9c91ded5d256980d750'}
 
 XVIEW_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {
-    'src/services/dividend_station_service.py': (('from __future__ import annotations\n\nimport numbers\nfrom typing import Callable\n',
+    'src/services/dividend_station_service.py': (('from __future__ import annotations\n\nimport math\nimport numbers\nfrom typing import Callable\n',
   'from __future__ import annotations\n\nfrom typing import Callable\n'),
  ('    # xview V1：有效判斷檔數 0（每檔抓取全失敗／total 缺或非數）→ 也**不送**「續抱」那句 ——\n'
   '    # 比照 LINE 正文 `format_holdings_message` 既有 `total<=0` 防線（稽核🔴A）：零資料不給安心結論。\n'
   '    # 只看 total；部分失敗／燈全 ⚪／無現價**不在**此列（客戶 Z51/Z52 範圍，既有測試釘住）。\n'
+  '    # QA 回修：total 須為**有限值且 ≥1** 才算有判斷（inf／NaN／0.5 → 不可判斷；與 LINE 正文 `int()` 後 `<=0` 同向）。\n'
   '    _tot = digest.get("total")\n'
-  '    _no_judged = not (isinstance(_tot, numbers.Real) and not isinstance(_tot, bool) and _tot > 0)\n'
+  '    _no_judged = not (isinstance(_tot, numbers.Real) and not isinstance(_tot, bool)\n'
+  '                      and math.isfinite(_tot) and _tot >= 1)\n'
   '    _base = (\n'
   '        "你是台股『存股戰情室』的推播助理。根據以下今日持股健檢結果,用繁體中文寫 3~6 句的推播摘要,"\n'
   '        "聚焦『今天要不要動作』。只能引用下列數據,嚴禁自行杜撰任何代號、數字或未列出的結論;"\n'

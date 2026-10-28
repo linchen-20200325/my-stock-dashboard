@@ -38,8 +38,14 @@ def test_help_no_longer_claims_all_caches():
 
 def test_help_names_what_is_not_cleared():
     h = _help_text()
-    for frag in ("不在此列", "總經戰情快照", "VIX", "籌碼", "等待重試"):
+    for frag in ("不在此列", "總經戰情快照", "個股股價", "籌碼", "台灣與美國總經", "VIX",
+                 "匯率", "多檔批次結果", "原始回應", "等待重試"):
         assert frag in h, frag
+
+
+def test_help_says_list_is_not_exhaustive():
+    """QA 回修：列舉不得讀成完整清單 —— 以「等各模組自有的暫存」收尾。"""
+    assert _help_text().endswith("等各模組自有的暫存。")
 
 
 def test_label_and_key_unchanged():

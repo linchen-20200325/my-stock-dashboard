@@ -25,7 +25,7 @@ def _digest(**kw):
     return d
 
 
-@pytest.mark.parametrize("total", [0, -1, None, "3", math.nan, True, False])
+@pytest.mark.parametrize("total", [0, -1, None, "3", math.nan, math.inf, -math.inf, 0.5, 0.999, True, False])
 def test_no_judged_rows_drops_hold_instruction(total):
     p = build_summary_prompt(_digest(total=total, errors=["0056", "00878"]))
     assert _HOLD not in p
@@ -39,7 +39,7 @@ def test_missing_total_key_drops_hold_instruction():
     assert _HOLD not in build_summary_prompt(d)
 
 
-@pytest.mark.parametrize("total", [1, 2, 7, 3.0])
+@pytest.mark.parametrize("total", [1, 2, 7, 3.0, 1.0])
 def test_judged_rows_keep_hold_instruction(total):
     assert _HOLD in build_summary_prompt(_digest(total=total))
 

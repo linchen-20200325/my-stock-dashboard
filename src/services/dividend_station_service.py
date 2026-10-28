@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import math
 import numbers
 from typing import Callable
 
@@ -1318,8 +1319,10 @@ def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
     # xview V1：有效判斷檔數 0（每檔抓取全失敗／total 缺或非數）→ 也**不送**「續抱」那句 ——
     # 比照 LINE 正文 `format_holdings_message` 既有 `total<=0` 防線（稽核🔴A）：零資料不給安心結論。
     # 只看 total；部分失敗／燈全 ⚪／無現價**不在**此列（客戶 Z51/Z52 範圍，既有測試釘住）。
+    # QA 回修：total 須為**有限值且 ≥1** 才算有判斷（inf／NaN／0.5 → 不可判斷；與 LINE 正文 `int()` 後 `<=0` 同向）。
     _tot = digest.get("total")
-    _no_judged = not (isinstance(_tot, numbers.Real) and not isinstance(_tot, bool) and _tot > 0)
+    _no_judged = not (isinstance(_tot, numbers.Real) and not isinstance(_tot, bool)
+                      and math.isfinite(_tot) and _tot >= 1)
     _base = (
         "你是台股『存股戰情室』的推播助理。根據以下今日持股健檢結果,用繁體中文寫 3~6 句的推播摘要,"
         "聚焦『今天要不要動作』。只能引用下列數據,嚴禁自行杜撰任何代號、數字或未列出的結論;"

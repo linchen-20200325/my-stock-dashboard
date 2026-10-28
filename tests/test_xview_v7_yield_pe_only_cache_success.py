@@ -141,3 +141,24 @@ def test_pe_name_maps_failsoft_unchanged(monkeypatch):
     pe, names = Y.fetch_pe_name_maps(failed_markets=_failed)
     assert "5314" in pe and "2330" not in pe
     assert _failed
+
+
+def test_late_failure_after_success_is_not_recorded(monkeypatch):
+    """守 `_only_cache_success` 內的 `cooldown.success(_KEY)`（世代遞增擋晚到失敗覆蓋）。
+
+    A 開始抓（記世代）→ B 成功 → A 才失敗 → A 的失敗不得寫入（否則下一位在 B 的成功已快取時
+    拿到假失敗）。拿掉 `cooldown.success(_KEY)` → 世代不變 → A 的失敗被記下 → 本測試轉紅。
+    """
+    cd = Y._twse_fail_cooldown
+    calls = {"n": 0}
+
+    def _cached():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # A 抓取途中，B 成功（走同一個 wrapper）
+            assert not Y._only_cache_success(cd, lambda: pd.DataFrame({"代碼": ["2330"]})).empty
+            raise Y._YieldPeFetchError("A 晚到的失敗")
+        return pd.DataFrame({"代碼": ["2330"]})
+    assert Y._only_cache_success(cd, _cached).empty      # A 本身仍回空表
+    assert len(cd) == 0, "晚到失敗覆蓋了 B 的成功"
+    assert not Y._only_cache_success(cd, _cached).empty

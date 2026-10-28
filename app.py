@@ -612,12 +612,14 @@ with st.sidebar:
 with st.sidebar:
     if st.button('🔄 強制刷新數據', key='_sb_force_refresh', use_container_width=True,
                  # xview V2：原 help 寫「清除所有快取」不實 —— 本鈕只清各頁資料暫存（st.cache_data）；
-                 # 總經戰情快照（session）、macro_core 模組層暫存（VIX／FRED）、籌碼本機 pkl、
-                 # proxy 原始回應暫存、失敗冷卻表都不清。只改說明文字，按鈕行為不變。
+                 # 總經戰情快照（session）、macro_core／tw_macro 模組層暫存（VIX／FRED／台灣總經／匯率）、
+                 # 各本機 pkl（個股股價＋籌碼合併表、多檔批次結果、daily_data_fetchers、名稱）、
+                 # proxy 原始回應暫存、失敗冷卻表都不清（QA 回修：清單列舉非窮舉，文字以「等」收尾）。
+                 # 只改說明文字，按鈕行為不變。
                  help=('清除各頁的資料暫存並重新抓取。以下不在此列，會沿用到各自的暫存到期：'
-                       '已載入的總經戰情快照（請按該頁的更新按鈕）、VIX 與美國總經數據、'
-                       '個股近 20 日籌碼、部分網頁來源的原始回應，'
-                       '以及剛抓取失敗、仍在等待重試的來源。')):
+                       '已載入的總經戰情快照（請按該頁的更新按鈕）、個股股價與籌碼、'
+                       '台灣與美國總經數據（含 VIX、匯率）、多檔批次結果、部分網頁來源的原始回應，'
+                       '以及剛抓取失敗、仍在等待重試的來源等各模組自有的暫存。')):
         st.cache_data.clear()
         st.rerun()
     st.markdown('---')
