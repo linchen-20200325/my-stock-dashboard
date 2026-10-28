@@ -1371,7 +1371,7 @@ D2.5 以下大方向核准：
 > 2026-10-28 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/*.md docs/vnext/*.md` 最大為 DEC-099、DEC-100 0 命中）。**本條不是客戶裁示**，只記錄 `CROSS-VIEW-DATA-CONSISTENCY-AUDIT` 稽核結果的處置分類與 AI 總管依 `CLAUDE.md` v3 §03-1 內部自決的安全小修；報告 `docs/vnext/NEWUI_D25_XVIEW_AUDIT_2026-10-28.md`。
 
 - **決策者**：AI 總管內部（依 `CLAUDE.md` v3 §03-1；**非客戶裁示**）。
-- **狀態**：隨 xview PR；implementation complete／waiting CI，**未合併**。
+- **狀態**：~~隨 xview PR；implementation complete／waiting CI，**未合併**。~~ **已合併 PR #959（squash，main `c6ad4567`，CI 綠：Fast checks／Slow tests 皆 success，head `7a233144`）**（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。
 - **處置分類**（報告 §4.1～§4.4）：38 項不一致分為 (1) 本批安全小修 S1～S5；(2) 客戶 Gate（業務語意／版面）→ BACKLOG `XV-H3`、`XV-H1-EXT`、`XV-ASOF`；(3) 內部技術 Gate（§8 完整流程＋獨立 QA）→ BACKLOG `XV-X1`、`XV-C02`、`XV-C01`、`XV-C03`、`XV-C04`、`XV-M1`、`XV-M3`、`XV-M4`、`XV-M5`、`XV-C13`、`XV-C05`、`XV-H2-EXT`；(4) 登記（§-1，待任務碰到時處理）。
 - **本批安全小修（不新增 provider／API／schema，不改投資語意、公式或版面）**：
   - **(a) S1 ⑦／LINE AI prompt**（`188c20e7`＋QA 回修 `183dbdc3`）：`build_summary_prompt` 有效判斷檔數 `total` 須為**有限值且 ≥1** 才放「續抱、定期定額即可」句（缺／非數／NaN／inf／0／0.5 一律不放）；total>0 正常路徑逐字不變；LINE `_maybe_ai_summary` 共用同一支 prompt 同步受益。部分失敗／燈全⚪／無現價**不在範圍**（Z51／Z52 既有測試釘住，轉客戶 Gate `XV-H1-EXT`）。
