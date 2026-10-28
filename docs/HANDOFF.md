@@ -34,6 +34,8 @@
 
 ~~🔴 現行（DEC-091）：兩項 Stop Gate 並存且皆 waiting_for_customer＝true——(1) Customer Design Gate：D2.5 設計文件待客戶裁示；(2) D2 Cloud 啟動事故：待 Cloud traceback／Reboot 結果。唯一安全工作＝等待；不得進 production UI code。（2026-10-27 有意識的更新，不是漏刪，決策者 客戶（DEC-091 改道 D2.5））（上一段「D1 線框已核准，waiting_for_customer＝false」已過時。）~~ 現行（DEC-092）：Customer Design Gate 已裁示，waiting_for_customer＝false；無現行客戶 Stop Gate；Boot incident 實機已恢復、根因未確認（boot smoke guard 保留）；HI-1～HI-6 另走 High Gate。（2026-10-27 有意識的更新，不是漏刪，決策者 客戶（DEC-092 Design Gate 裁示））
 
+📌 **下一接手點補註（2026-10-28，客戶指示，決策者＝客戶）**：新增正式驗收節點 `CROSS-VIEW-DATA-CONSISTENCY-AUDIT`（見 `docs/BACKLOG.md`）——**排在 NAV-1 完成後、UI-M／UI-T／UI-H／UI-ME 大量接資料前**；稽核性質（Audit First），不夾帶進 NAV-1 實作；發現需改投資規則／資料語意時走 Decision Gate。
+
 此為 DEC-086 Resume Checkpoint：**GitHub 操作事實優先於本表；不一致時修正本表**。
 只記目前狀態，不複製 BACKLOG／DECISIONS；本表不取代下方「現行短版」段（DEC-085 段仍是唯一現行短版標記）。
 DEC-086 規則已於 main，本表已落地。
