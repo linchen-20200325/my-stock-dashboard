@@ -2901,11 +2901,17 @@ def build_take_profit_card(station: StationReadout) -> _Built:
     # （同 ④ 換股（批次 2）：旁邊還有沒判過的，已列出的達標清單就不是完整的結論；
     #  已算出的達標檔照樣列在 facts，不藏）。
     _unjudged = _fetch_failed + _no_price + _invalid_codes(_tp_invalid)
+    # XV-H3 QA 回修 #10：持有衛星是外幣／幣別未確認 → L3 把損益% 設 None（成本幣別未定義）→
+    # 同樣沒被判過，⛔ 不落到「沒有任何一檔達門檻（有效結果）」。只有這一種時走「不適用 · 重跑無效」。
+    _fx_tp = tuple(_c for _c in _fx_codes(station.rows)
+                   if any(str(_r.get("代號", "")) == _c and _r.get("種類") == "個股"
+                          for _r in station.rows))
     _state = classify_ui_state(
         requested=station.requested,
         error=station.error or None,
-        has_value=bool(station.take_profit) and not _unjudged,
-        reason=MISS_FETCH_FAILED if _unjudged else "")
+        has_value=bool(station.take_profit) and not (_unjudged or _fx_tp),
+        reason=(MISS_FETCH_FAILED if _unjudged
+                else MISS_NOT_APPLICABLE if _fx_tp else ""))
     _facts: list[tuple[str, str]] = [
         ("門檻（L0 SSOT）",
          f"衛星獲利達 {SATELLITE_TAKE_PROFIT_PCT:g} 個百分點即嚴格停利滾回核心"),
@@ -2945,7 +2951,12 @@ def build_take_profit_card(station: StationReadout) -> _Built:
         if _no_price:
             _why += f"{'、'.join(_no_price)}：{NO_PRICE_WHY}"
         _why += _invalid_why(_tp_invalid)       # 批 Z49
+        if _fx_tp:                              # XV-H3 QA #10：外幣那幾檔同樣判不了
+            _why += f"；{fx_excluded_text(_fx_tp)}"
         _note = Note(now=TP_FAILED_NOW, why=_why, where=STATION_ERROR_WHERE)
+    elif _fx_tp:
+        # XV-H3 QA 回修 #10：只有外幣／幣別未確認的衛星判不了（沒有取數失敗）。
+        _note = Note(now=TP_FAILED_NOW, why=fx_excluded_text(_fx_tp), where=FX_PARTIAL_WHERE)
     elif not station.has_rows:
         _note = _station_note(station, now=TP_NO_HOLDINGS_NOW,
                               source=SRC_STATION)
@@ -4892,8 +4903,12 @@ V2_SHORT_ROWS: dict[tuple[str, str], tuple[object, object, object]] = dict(
            None, (*_V2_STATION_RAISED,
                   "整批抓取失敗 —— 看該列的錯誤訊息",
                   NO_PRICE_WHY,
-                  *_V2_INVALID_WHY),
-           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),
+                  *_V2_INVALID_WHY,
+                  # XV-H3 QA #10：只有外幣／幣別未確認的衛星判不了。
+                  "未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",
+                  "未納入：" + V2_EXCERPT_GAP + "｜原因：幣別未確認"),
+           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET,
+            NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))),
        _v2_rows_for("hold.take_profit", TP_EMPTY_NOW, (
            None, "可能是還沒漲到門檻，也可能是那幾檔沒有均價因此判不了",
            "若你預期應該要有：確認那幾檔個股的均價有填" + V2_EXCERPT_GAP + _V2_OLD_UI)),

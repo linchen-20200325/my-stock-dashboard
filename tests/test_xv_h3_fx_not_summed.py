@@ -199,3 +199,20 @@ def test_page_split_card_unconfirmed_only_reason():
     card, facts, _sig = P.build_allocation_split_card(st)
     assert card.note.why == "未納入：^TWII｜原因：幣別未確認"
     P.v2_short_rows(card)
+
+
+def test_take_profit_foreign_satellite_is_unjudged():
+    """QA 回修 #10：外幣衛星損益% None → 判不了，⛔ 不落到「沒有任何一檔達門檻（有效結果）」。"""
+    import src.ui.views.page_hold as P
+    from shared.ui_state import UI_NOT_APPLICABLE
+    rows = ({"代號": "AAPL", "種類": "個股", "held": True, "現價": 200.0, "損益%": None,
+             "_detail": {}, FXG.KEY_FX_UNCONFIRMED: True},
+            {"代號": "2330", "種類": "個股", "held": True, "現價": 500.0, "損益%": 3.0, "_detail": {}})
+    st = P.StationReadout(requested=True, submitted=True, bound=True, holdings_n=2, rows=rows,
+                          take_profit=())
+    card, facts, sig = P.build_take_profit_card(st)
+    assert card.state == UI_NOT_APPLICABLE and card.note.now == P.TP_FAILED_NOW
+    assert card.note.now != P.TP_EMPTY_NOW
+    assert card.note.why == "未納入：AAPL｜原因：外幣資產，匯率與成本幣別未定義"
+    P.v2_short_rows(card)
+    P.v2_card_html(card, facts, sig)

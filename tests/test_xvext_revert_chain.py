@@ -397,6 +397,24 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                 '        _note = Note(now=FX_PARTIAL_NOW, why=fx_excluded_text(_fx_codes(station.rows)),\n'
                                 '                     where=FX_PARTIAL_WHERE)\n',
                                 ''),
+                               ('    # XV-H3 QA 回修 #10：持有衛星是外幣／幣別未確認 → L3 把損益% 設 None（成本幣別未定義）→\n'
+                                '    # 同樣沒被判過，⛔ 不落到「沒有任何一檔達門檻（有效結果）」。只有這一種時走「不適用 · 重跑無效」。\n'
+                                '    _fx_tp = tuple(_c for _c in _fx_codes(station.rows)\n'
+                                '                   if any(str(_r.get("代號", "")) == _c and _r.get("種類") == "個股"\n'
+                                '                          for _r in station.rows))\n',
+                                ''),
+                               ('        has_value=bool(station.take_profit) and not (_unjudged or _fx_tp),\n'
+                                '        reason=(MISS_FETCH_FAILED if _unjudged\n'
+                                '                else MISS_NOT_APPLICABLE if _fx_tp else ""))\n',
+                                '        has_value=bool(station.take_profit) and not _unjudged,\n'
+                                '        reason=MISS_FETCH_FAILED if _unjudged else "")\n'),
+                               ('        if _fx_tp:                              # XV-H3 QA #10：外幣那幾檔同樣判不了\n'
+                                '            _why += f"；{fx_excluded_text(_fx_tp)}"\n',
+                                ''),
+                               ('    elif _fx_tp:\n'
+                                '        # XV-H3 QA 回修 #10：只有外幣／幣別未確認的衛星判不了（沒有取數失敗）。\n'
+                                '        _note = Note(now=TP_FAILED_NOW, why=fx_excluded_text(_fx_tp), where=FX_PARTIAL_WHERE)\n',
+                                ''),
                                ('    _bits += _fx_degraded_bits(result)\n', ''),
                                ('\n'
                                 '\n'
@@ -418,13 +436,20 @@ XVEXT_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/station_sp
                                ('    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI,\n'
                                 '    NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義")      # XV-H3\n',
                                 '    "確認上面那幾檔的代號與張數" + V2_EXCERPT_GAP + _V2_OLD_UI)\n'),
-                               ('       for _k in ("hold.alloc_split", "hold.deep.core_satellite")]\n'
-                                '    # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入（why 的代號清單在摺疊區原文）。\n'
+                               ('    # XV-H3（客戶 2026-10-28 裁示 A）：外幣／幣別未確認資產未納入（why 的代號清單在摺疊區原文）。\n'
                                 '    + [_v2_rows_for(_k, FX_PARTIAL_NOW, (\n'
                                 '           None, ("未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",\n'
                                 '                  "未納入：" + V2_EXCERPT_GAP + "｜原因：幣別未確認"),\n'
-                                '           NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))\n',
-                                ''))}
+                                '           NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))\n'
+                                '       for _k in ("hold.alloc_split", "hold.deep.core_satellite")]\n',
+                                ''),
+                               ('                  *_V2_INVALID_WHY,\n'
+                                '                  # XV-H3 QA #10：只有外幣／幣別未確認的衛星判不了。\n'
+                                '                  "未納入：" + V2_EXCERPT_GAP + "｜原因：外幣資產，匯率與成本幣別未定義",\n'
+                                '                  "未納入：" + V2_EXCERPT_GAP + "｜原因：幣別未確認"),\n'
+                                '           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET,\n'
+                                '            NO_EXIT_MARKER + " —— 外幣資產的匯率來源、時點與成本幣別尚未定義"))),\n',
+                                '                  *_V2_INVALID_WHY),\n           (_V2_NO_EXIT_REPORT, _V2_CHECK_NET))),\n'))}
 
 
 
