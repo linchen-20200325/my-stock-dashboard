@@ -865,7 +865,11 @@ class TestOldFilesUntouched:
     #   按下後另經 L3 `force_refresh_service` 清 L1 `macro_core` 的成功快取（VIX／匯率等 Yahoo 收盤、FRED；
     #   ⛔ 不清失敗退避表），`help=` 同步移除已會清的項目。兩模式共用（legacy 同樣受影響）；標籤／key／版面不變。
     #   其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "bd28bb0fbcbe7ba289a9ba3930d0c335d47d004f83e20ba47088800ead511572"
+    # ~~"bd28bb0fbcbe7ba289a9ba3930d0c335d47d004f83e20ba47088800ead511572"~~（XV-H2-EXT／XV-M1 首版）
+    # 📌 XV-H2-EXT QA 回修 #4（2026-10-28，獨立 QA MAJOR，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py`
+    #   側欄「🔄 強制刷新數據」的 `help=` —— 據實改回：匯率／台灣總經不在會清之列（日線 pkl 約 30 分、
+    #   tw_macro 快取），補列原始回應約 5 分。兩模式共用；按鈕行為不變。其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "860aa28159085d3fddbcd3ab44da00e2f19c23dc85542bcfac5decad3e8ad1ea"
 
     def test_no_diff_against_base(self):
         import hashlib

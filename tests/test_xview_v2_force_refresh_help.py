@@ -39,12 +39,14 @@ def test_help_no_longer_claims_all_caches():
 def test_help_names_what_is_not_cleared():
     # XV-H2-EXT／XV-M1（客戶 2026-10-28 裁示）：VIX／匯率／FRED 改為會清 ⇒ 從「不在此列」移到前段；
     # ~~"台灣與美國總經"~~ 不再列為不清項目。
+    # QA 回修 #4：會清＝各頁資料暫存＋VIX 與美國 FRED；~~匯率~~ 不在會清之列（日線匯率 pkl 與 tw_macro 快取沒清）。
     h = _help_text()
     head, tail = h.split("不在此列", 1)
-    for frag in ("VIX", "匯率", "FRED"):
-        assert frag in head and frag not in tail, frag
-    assert "台灣與美國總經" not in h
-    for frag in ("總經戰情快照", "個股股價", "籌碼", "多檔批次結果", "原始回應", "等待重試"):
+    for frag in ("各頁的資料暫存", "VIX", "FRED"):
+        assert frag in head, frag
+    assert "匯率" not in head and "台灣" not in head
+    for frag in ("總經戰情快照", "個股股價", "籌碼", "日線指數與匯率的本機暫存（約 30 分）",
+                 "台灣總經數據", "多檔批次結果", "原始回應（約 5 分）", "等待重試"):
         assert frag in tail, frag
 
 
