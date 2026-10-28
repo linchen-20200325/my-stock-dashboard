@@ -1330,7 +1330,7 @@ D2.5 以下大方向核准：
 ### DEC-098｜NAV-1 內部設計選擇（預設翻轉為新四頁導覽；桌機 `st.sidebar`＋手機底部固定列，同一 SSOT key；`?legacy=1` 為 rollback）（AI 總管內部，2026-10-28）
 > 2026-10-28 補登（ID 取下一個未用號；落盤前實測 `git grep -n "DEC-098"` 0 命中、`docs/DECISIONS.md` 最大為 DEC-097）。**本條不是客戶裁示**（DEC-097 才是客戶裁示），只記錄 NAV-1 實作時的技術／結構選擇，供 UI-M／UI-T／UI-H／UI-ME、`CROSS-VIEW-DATA-CONSISTENCY-AUDIT` 與獨立 QA 對照；不改 `CLAUDE.md`／`PROJECT_RULES.md`。
 - **決策者**：AI 總管內部（依 `CLAUDE.md` v3 §03-1 內部自決；**非客戶裁示**）。
-- **狀態**：隨 NAV-1 PR；implementation complete／waiting CI／**待客戶裁示標的頁葉選擇**，未合併。
+- **狀態**：~~隨 NAV-1 PR；implementation complete／waiting CI／**待客戶裁示標的頁葉選擇**，未合併。~~（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） 已合併 PR #957（squash，main `5ff860b3`，CI 綠）；客戶已裁示 DEC-099（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））
 - **內容（實作事實，來源 `docs/vnext/NEWUI_D25_NAV1_SPEC_2026-10-28.md` §1～§3、`git diff origin/main --stat`）**：
   1. **預設翻轉**：預設入口＝新四頁導覽（📊 市場／🎯 標的／💼 持股／👤 我的，標籤逐字取自 DEC-097）；舊 UI（D2 側欄雙層 radio＋舊 7 頁籤）＝legacy 模式。
   2. **桌機／手機形式**：桌機＝`st.sidebar` 內垂直 radio；手機＝底部固定列（`st.container(key="nav4_bottom")`＋CSS 注入，`@media (max-width: 768px)` 才固定到底）；CSS 失效時降級為主內容流中的一般橫排 radio（仍可點、仍寫同一格 SSOT）。**兩個元件共用同一個 SSOT key `_nav4_page`**（只經 `on_change` 回呼寫入）。
@@ -1345,9 +1345,9 @@ D2.5 以下大方向核准：
   - 768px（底部列斷點）與側欄抽屜（約 640px，INFERENCE）兩套導覽並存於中間寬度；
   - Google 登入轉跳回來為新 session、網址不帶 `legacy` ⇒ 掉回新（預設）模式；
   - **預設畫面暫時取不到、僅 `?legacy=1` 可達的舊功能**：🚦 今天、📖 憑什麼的資料體檢、AI 問答、🔧 工具箱（資料診斷）、📁 組合管理 CRUD（新增／刪除）、🏦 ETF、🌍 總經深度（含板塊資金潮汐、產業熱力圖）。這是暫時缺口，**不是「已併入」**；**不代表通過 Old UI Removal Gate**（DEC-019／DEC-020、`UIM-REMOVAL-GATE` 不變）。
-- **偏離 wireframe（待客戶裁示，非本條可定案）**：🎯 標的頁多一條「🔍 找標的／🔬 查一檔」橫排 radio（wireframe 標的頁為單一頁）——過渡項，UI-T 合併為單頁時移除；若客戶視為「版面佈局異動」須於合併前裁示（`NAV1-TARGET-LEAF-SELECTOR`）。
+- ~~**偏離 wireframe（待客戶裁示，非本條可定案）**~~（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） **已由客戶裁示方案 A（DEC-099）**；原述：🎯 標的頁多一條「🔍 找標的／🔬 查一檔」橫排 radio（wireframe 標的頁為單一頁）——過渡項，UI-T 合併為單頁時移除；若客戶視為「版面佈局異動」須於合併前裁示（`NAV1-TARGET-LEAF-SELECTOR`）。
 - **與其他 DEC 的關係**：DEC-097（客戶裁示）**具體實作**；DEC-092 Q6 同向；DEC-019／DEC-020 不變、本條不構成通過；DEC-082（草稿先行）、DEC-084（Model×Effort）、DEC-003（內部自決區）呼叫；不降低任何 Gate。**未經客戶**。
-- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：QA-A（對抗）＋QA-B（語意）＋第三組回修複驗；**第三組複驗進行中，不得寫為已通過**。突變依實作組自報 **40 項（M1–M26＋N1–N14）全數轉紅**，清單由實作者自列（M23／M25 首跑 GREEN、已補強守衛後轉紅），未獨立複跑；spec §3～§7 判斷為實作組單組結論；CI 未跑；撰寫組（本 docs 同步）未重跑測試。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：QA-A（對抗）＋QA-B（語意）＋第三組回修複驗；~~**第三組複驗進行中，不得寫為已通過**。~~（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） 第三組兩輪回修複驗皆 PASS（無 BLOCKER／MAJOR），殘餘 MINOR 已補行為測試或登記 BACKLOG（總管轉述，PR #957 已合併）。突變依實作組自報 **40 項（M1–M26＋N1–N14）全數轉紅**，清單由實作者自列（M23／M25 首跑 GREEN、已補強守衛後轉紅），未獨立複跑；spec §3～§7 判斷為實作組單組結論；~~CI 未跑~~（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） CI 已跑：#957 Fast checks 與 Slow tests 皆 success（head `3f3c0b5d`）；撰寫組（本 docs 同步）未重跑測試。
 
 
 ### DEC-099｜NAV-1 🎯 標的頁「🔍 找標的／🔬 查一檔」過渡切換：客戶裁示方案 A（保留，僅作 NAV-1 → UI-T 之間的過渡控制）（客戶 2026-10-28）
