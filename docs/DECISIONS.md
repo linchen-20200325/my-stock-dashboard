@@ -3153,3 +3153,14 @@ Effort：High
   - **測試**：Fast lane 全套 32548 passed、1 failed、50 skipped（唯一失敗為已知環境失敗 `test_batch_z59` markdown_it）；mutation 約 27 個逐一拔守衛全數轉紅（首輪 M13、M15 的存活原因與補強見 PR 描述）。
   - **QA 摘要（總管轉述）**：QA-A 0 BLOCKER／1 MAJOR（圖 D 部分覆蓋寫「全綠」，已修）；QA-B（預設直接畫圖 A／B、說明句、佔位字等，已修）；QA-C 0 BLOCKER／0 MAJOR（小修已併）。
   - **已知限制**：手機版面、Streamlit Cloud 冷啟動、Streamlit 1.56 floor 實機行為沙箱驗不到（僅 1.59.2 驗）；圖 A／圖 B 預設直接畫（首屏載入後 1+3 張線圖），若實機偏重屬版面異動須先草稿；`HERO_RISK_MAX_ITEMS` 仍在 L5（`UIM-HERO-MAX-ITEMS-SSOT`，P2）；實作組各項「保留區塊逐字相同」「本頁沒有 AI 呼叫」等結論為單組＋機械 parity，非窮舉。
+
+### DEC-106｜治理執行偏差更正：Stage 起點須比對「目前實際 Model×Effort」與「下一 Stage 最低需求」，已符合時不得停手要求客戶切換（重申 DEC-084）（客戶 2026-10-29）
+
+> 2026-10-29 補登（ID 取下一個未用號；落盤前 `grep -rn "DEC-106" --include=*.md .` 0 命中、`docs/DECISIONS.md` 最大為 DEC-105）。要點經總管轉交，**非客戶逐字全文**。**本條不新增治理規則**，只更正一次執行偏差並重申 DEC-084（`PROJECT_RULES.md` 第 18 節）。
+
+- **決策者**：**客戶**（2026-10-29；經總管轉交之要點）。｜**日期／效力日期**：2026-10-29 起生效。｜**狀態**：生效（偏差已矯正）。
+- **事件**：UI-M 完成後，AI 總管回報「需客戶切換 Model×Effort」才開 UI-T；但當時目前設定已是 Sonnet 5.5／Medium，**已符合**下一 Stage（UI-T）的 Minimum Sufficient Effort。依 DEC-084「**一致 → 維持 Silent Autonomous Cruise，直接繼續，不回報檢查結果**」，設定已符合時**不得**停下要求客戶重複切換，或要求客戶回覆「改好了」；應靜默繼續。僅在**不符**時才停手。
+- **根因（AI 總管自述）**：Stage 起點沒有先比對「目前實際 Model／Effort」與「下一 Stage 最低需求」，而沿用計畫表／`docs/HANDOFF.md` 既有的「需客戶切換」字樣。
+- **矯正**：每個 Stage 起點先比對現況；符合 → 靜默繼續；不符 → 才停手並依 `PROJECT_RULES.md` 第 18.3 節固定格式回報。`docs/HANDOFF.md` Resume Checkpoint 中「等客戶切換才開 UI-T」舊字樣已更正；BACKLOG 登記 `GOV-DEC084-REDUNDANT-STOP-2026-10-29`（P2，已矯正）。
+- **與其他 DEC 的關係**：重申並落實 DEC-084（雙向停手 Gate 的「一致則不停」半邊）；與 DEC-104（Hard Output Gate：Model×Effort 需切換且尚未通知才可出聲）同向；不降低任何 Security／Investment／Data／CI／Audit Gate。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：「與其他 DEC 的關係」為撰寫組讀法，單組；docs-only，未改程式碼。
