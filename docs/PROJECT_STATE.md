@@ -759,3 +759,12 @@
 - **清理**：NAV-1 過渡切換（`NAV4_TARGET_LEAF_KEY`、`NAV4_WIDGET_LEAF_KEY`、`render_target_leaf_selector`、`has_leaves`、`leaf_options`、`leaf_from_label`、`current_leaf`、`_on_leaf_change`）已移除。
 - **待客戶**：`UIT-S9-NO-POINTER` 一句話確認（非阻擋，總管推薦同意）。
 - **下一個主線 P1**：`NEWUI_D25_PLAN_2026-10-27.md` §5 序 7 剩餘頁 UI-H（💼 持股）→ UI-ME，再序 8；開工前依 DEC-084／DEC-106 比對目前 Model×Effort，符合即靜默繼續。
+
+
+## 47. UI-CORRECTION 新 UI 視覺修正線框草稿（DEC-108，客戶 2026-10-29；append-only）
+
+- **狀態**：線框草稿 `docs/vnext/NEWUI_D25_UI_CORRECTION_WIREFRAME_2026-10-29.md` 已撰寫（docs-only；截圖 `docs/vnext/ui_correction_assets/`），**待客戶核准**（`waiting_for_customer＝true`，僅限此線框 5 題）；未回覆＝不核准、不動工。
+- **凍結**：UI-H 其餘與 UI-ME 的正式視覺實作暫停，直到線框核准（DEC-108）。已合併的 UI-M／UI-T 不自動回退。
+- **內容摘要**：全站首屏結構／卡片／圖表／文字／圖示規則（§A）、三頁 BEFORE／AFTER 線框（§B）、偏差對照（§C）、能力守恆（§D）、施工順序 E0→E4（§E）、客戶 5 題（A 推薦／B）。
+- **限制**：偏差量測為冷啟動 FACT（沙箱無真資料；已載入後圖／表高度為 INFERENCE）；手機實機、Streamlit Cloud 未驗；單組撰寫未經第二組驗。
+- **下一步**：客戶回覆「1 A｜2 A｜…」→ 依 §E 順序施工，每批獨立 QA 對照 §D。

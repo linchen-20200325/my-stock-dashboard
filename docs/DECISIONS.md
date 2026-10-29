@@ -3192,3 +3192,19 @@ Effort：High
   - **內部拍板**：新增 `page_target`／`_target_blocks` 而不改舊兩頁（legacy D2 殼可獨立渲染）；`ia_nav4.MERGED_VIEWS`（inspect 併入 p4_target，view id 與 renderer 保留給 legacy）；每個使用者要求的結果以「session 世代 memo＋載入時間提示（超過 `shared/ttls` TTL 改「可能已過期」）」記住到下一次要求（操作隔離＋失敗不被轟炸，非快取層，`UIT-RESULT-MEMO-NOT-REFRESHED`）；新頁只認自己 gate 寫入點的世代（`own_*` 請求），legacy 殘留已套用值不觸發取數；「查看此檔」判型一律 auto。
   - **已知限制（沙箱驗不到）**：Streamlit Cloud 冷啟動、手機實機（iOS／Android、768px 斷點邊界）、`requirements.txt` floor 1.56 實機行為（沙箱僅 1.59.2；`st.form` 內放 expander 為推論）、載入板塊地圖／查看此檔實際等待時間；見 `UIT-CLOUD-MOBILE-VERIFY`。實作組各項結論（含「舊兩頁能力全數有對應位置」）為單組＋機械 parity，非窮舉。
   - **P2 登記**：`UIT-MOBILE-MATRIX`（已處理）、`UIT-MA-DISPLAY-ONLY-WORDING`、`UIT-PE-ASOF-MISSING`、`UIT-PE-DOUBLE-READ`、`UIT-RESULT-MEMO-NOT-REFRESHED`、`UIT-QUADRANT-ORDER-SSOT`、`UIT-ERROR-FRAME-LEGACY-NAME`、`UIT-CLOUD-MOBILE-VERIFY`、`UIT-S9-NO-POINTER`、`UIT-HOLD-DEADLINK-INSPECT`、`UIT-COLD-POISON-WEAK`、`UIT-JUDGE-CARD-EXTRA`、`UIT-OLD-CARD-ENG-WORDS`。
+
+
+### DEC-108｜新 UI 視覺方向修正批次：十項視覺原則＋凍結後續頁面正式視覺實作直到核准修正版線框（客戶 2026-10-29）
+
+> 2026-10-29 補登（ID 取下一個未用號；落盤前 `grep -c DEC-108 docs/*.md docs/vnext/*.md PROJECT_RULES.md` 全 0 命中、最大為 DEC-107）。要點經總管轉交，**非客戶逐字全文**。
+
+- **決策者**：**客戶**（2026-10-29；經總管轉交之要點）。｜**日期／效力日期**：2026-10-29 起生效。｜**狀態**：生效；線框草稿 `docs/vnext/NEWUI_D25_UI_CORRECTION_WIREFRAME_2026-10-29.md` **待客戶核准**（未回覆＝不核准、不動工）。
+- **背景**：客戶認為目前新 UI（📊 市場、🎯 標的、💼 持股）的畫面方向與先前核准的參考圖（mockup `docs/vnext/d25_wireframes/*.html`，DEC-092）差異過大。客戶自承偏差六點：結論區太下面（第一屏看不到）、圖表太大、空白太多／資訊密度不對、文字太多不像儀表板、板塊感不夠（變長表格／長段落）、與先前核准 mockup 差異太大。
+- **內容**：
+  1. 開 **docs-only 設計修正批次**：不改資料邏輯，把版型與資訊層級拉回客戶要的方向。
+  2. **視覺原則十項**：①結論先行（每頁第一屏先看到現在狀態／是否需行動／下一步）②卡片優先（卡片、icon、chip、badge，不要長段文字）③圖表縮小（只保留判斷必要尺寸；能用 sparkline／小型趨勢圖就不用大圖）④文字極簡（每區塊最多 1 句，其餘收進「查看依據」）⑤避免長表直出（產業機會、風險清單、候選標的優先改卡片／ranking／精簡表）⑥手機優先（第一屏不被大圖、長說明、工程控制項占滿）⑦圖示化（狀態、風險、資料新鮮度、分類、判型盡量用圖示／chip）⑧板塊感（像儀表板，不像報表頁或研究頁）⑨明細收合（依據、公式、來源、例外全進下層）⑩對齊已核准參考圖（以先前核准 mockup 為主，不要自由發散）。
+  3. **凍結**：在客戶核准修正版線框前，**不得繼續擴張後續頁面（UI-H 其餘、UI-ME）的正式視覺實作**。
+  4. **邊界**：只修版型與資訊階層；不新增資料源、不改公式、不改投資語意；不順手擴大；舊 UI 邏輯可參考，但新 UI 視覺回到核准 mockup 方向。
+- **效力邊界**：本條不核准任何新資料源、schema、公式、投資語意、AI 接線；不改 `PAGE_LABELS`／導覽殼／legacy 入口（DEC-097）。已合併的 UI-M（#965）、UI-T（#968）**不被本條自動回退**，是否／如何改由線框核准後的 E0～E2 批決定。
+- **與其他 DEC 的關係**：呼叫 DEC-092（核准 mockup 與設計方向）、DEC-082（草稿先行）、DEC-103（範圍膨脹防護）；線框 Q4 若選 A 將**推翻** DEC-107 第 1 點中「選股條件預設展開」一處（須客戶明確回覆才生效）；DEC-081 Q2-1（今日結論句）**原句保留**，只改位置。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：docs-only 撰寫組只落盤裁示與線框草稿，不改程式碼；本條要點為總管轉交、非客戶逐字全文；線框的偏差量測為**冷啟動**畫面（已載入狀態未驗）；單組撰寫、未經第二組驗。
