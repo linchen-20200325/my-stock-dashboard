@@ -50,8 +50,6 @@ from src.ui.views import page_today as today
 # ══════════════════════════════════════════════════════════════════
 # session key（沿用 page_market 的 `p00m_` 前綴；與既有 gate key 不相撞）
 # ══════════════════════════════════════════════════════════════════
-SS_GATE_CHART_A: str = "p00m_gate_chart_a"
-SS_GATE_CHART_B: str = "p00m_gate_chart_b"
 
 # ══════════════════════════════════════════════════════════════════
 # 字樣（客戶白話說明一律逐字取自 A 規格 §4.1.2，⛔ 不改寫）
@@ -82,7 +80,7 @@ HERO_RISK_NO_RANKING_NOTE: str = "依五桶固定順序列出非綠桶，不做�
 #: 超過 3 項時的尾註（N＝多出來的項數）。
 HERO_RISK_MORE_FMT: str = "另 {n} 項見圖 D"
 HERO_RISK_MAX_ITEMS: int = 3
-HERO_AI_PLACEHOLDER: str = "🤖 AI 投資總結：⬜ 尚未提供（AI 總結不在本批範圍）"
+HERO_AI_PLACEHOLDER: str = "🤖 AI 投資總結：⬜ 尚未提供"
 
 ALERTS_TITLE: str = "⚡ 需要處理"
 ALERTS_NO_SOURCE: str = "⬜ 目前沒有可列的警示來源"
@@ -95,13 +93,11 @@ CHART_A_TITLE: str = "圖A 🇹🇼 台股趨勢"
 CHART_A_SAY: str = "看台股目前是在長期上升、整理還是轉弱；趨勢與短期波動分開判斷。"
 CHART_A_MA_DISCLAIMER: str = "均線為參考，不等於正式台股趨勢判斷。"
 CHART_A_CONCLUSION: str = f"台股趨勢結論：{NOT_DEFINED}"
-CHART_A_GATE_LABEL: str = "顯示加權指數與均線參考線圖（讀本地快取）"
 CHART_A_MA_NOTE: str = "均線為『市場評估』輸入的最新值，畫成水平參考線（不是歷史均線曲線，本頁不自行算均線）"
 
 CHART_B_TITLE: str = "圖B 🌍 國際趨勢"
 CHART_B_SAY: str = "看海外市場、利率與美元是否正在幫助或壓抑台股風險偏好。"
 CHART_B_CONCLUSION: str = f"國際趨勢結論：{NOT_DEFINED}"
-CHART_B_GATE_LABEL: str = "顯示國際指數／10 年債／美元走勢圖（各系列一張）"
 CHART_B_NOTE: str = "每個系列單獨一張小圖，不疊同一座標軸、不正規化；窗口很短，不代表長期趨勢。"
 TREND_DEFINITION_NOTE: str = "正式趨勢定義另列 High Gate，定義前不由均線／單一指標補成多空結論。"
 #: 趨勢「還在等客戶定義」的一句說明（原在 `page_market`；移到這裡後由 `page_market` re-export 以保 `M.TREND_PENDING_WHY`）。
@@ -114,8 +110,7 @@ CHART_C_EMPTY: str = "需先核准：EPS 資料來源、PE 情境、計算公式
 CHART_C_BASIS: str = "查看依據：此區塊未啟用，沒有使用任何資料。"
 
 CHART_D_TITLE: str = "圖D ⚠️ 主要風險"
-CHART_D_NOTE: str = ("五個風險桶各取桶內既有的最需注意的一項；某桶資料不足就顯示「資料不足／無法判定」，"
-                     "不硬選最差。第一層最多列出非綠桶，完整燈號收在下方「指標明細（16 項）」。")
+CHART_D_NOTE: str = "只顯示最需要注意的 3–5 項、方向、是否惡化。"
 CHART_D_WORSENING: str = f"是否惡化：{NOT_DEFINED}"
 CHART_D_ALL_LAMPS_POINTER: str = "查看全部指標 › 請展開下方「指標明細（16 項）」"
 INSUFFICIENT_TEXT: str = "⬜ 資料不足／無法判定"
@@ -666,14 +661,20 @@ def render_alerts_block(*, alerts_tile: Any, alerts: Any, scanned: bool, alerts_
 
 
 def render_chart_a(session: Mapping[str, Any]) -> None:
-    """圖 A 台股趨勢：指數線＋均線水平參考線（勾選才讀本地快取）。趨勢結論固定 ⬜ 尚未定義。"""
+    """圖 A 台股趨勢：指數線＋均線水平參考線。預設直接畫（讀本地 parquet，毫秒級、非外部抓取，故無 gate）。
+
+    未載入（上游一個總經 key 都沒寫過）→ 灰字「⬜ 尚未載入，請按更新」，**不讀快取、不畫（不顯示過期值）**。
+    趨勢結論固定 ⬜ 尚未定義。
+    """
     with st.container(border=True):
         st.markdown(f"**{CHART_A_TITLE}**")
         st.markdown(CHART_A_SAY)
         _mkt = session.get("mkt_info")
         _refs, _bad = ma_reference_values(_mkt)
         _view = None
-        if st.checkbox(CHART_A_GATE_LABEL, key=SS_GATE_CHART_A):
+        if not today.upstream_requested(session):
+            st.caption(NOT_LOADED)
+        else:
             try:
                 _view = twii_svc.get_twii_trend_view(TWII_CHART_TRADING_DAYS)
             except Exception as _e:  # noqa: BLE001 — 真例外：紅，且講出來（§1）
@@ -703,7 +704,7 @@ def render_chart_a(session: Mapping[str, Any]) -> None:
 
 
 def render_chart_b(session: Mapping[str, Any], *, source_note: str) -> None:
-    """圖 B 國際趨勢：按海外／利率／美元分組，每系列一張小圖（勾選才畫）。結論固定 ⬜ 尚未定義。"""
+    """圖 B 國際趨勢：按海外／利率／美元分組，每系列一張小圖。`cl_data['intl']` 在 session 就直接畫（記憶體內資料，無 gate）；未載入灰字。"""
     with st.container(border=True):
         st.markdown(f"**{CHART_B_TITLE}**")
         st.markdown(CHART_B_SAY)
@@ -712,17 +713,16 @@ def render_chart_b(session: Mapping[str, Any], *, source_note: str) -> None:
             st.caption(NOT_LOADED)
         else:
             st.caption(source_note)
-            if st.checkbox(CHART_B_GATE_LABEL, key=SS_GATE_CHART_B):
-                _last_group = None
-                for _s in _series:
-                    if _s.group != _last_group:
-                        st.markdown(f"**{_s.group}**")
-                        _last_group = _s.group
-                    st.markdown(f"{_s.name}　·　{_s.window_text}")
-                    if _s.status == "ok":
-                        st.line_chart(_s.close)
-                    else:
-                        st.caption("⬜ 本輪沒有這個系列" if _s.status == "absent" else "⬜ 沒有可用收盤")
+            _last_group = None
+            for _s in _series:
+                if _s.group != _last_group:
+                    st.markdown(f"**{_s.group}**")
+                    _last_group = _s.group
+                st.markdown(f"{_s.name}　·　{_s.window_text}")
+                if _s.status == "ok":
+                    st.line_chart(_s.close)
+                else:
+                    st.caption("⬜ 本輪沒有這個系列" if _s.status == "absent" else "⬜ 沒有可用收盤")
             st.caption(CHART_B_NOTE)
         st.markdown(CHART_B_CONCLUSION)
         st.caption(TREND_DEFINITION_NOTE)

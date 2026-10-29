@@ -6,7 +6,7 @@
   · 方向只轉述 L2 `LampDirection` 的原詞；無資料／計算失敗絕不畫成「持平」；不翻成「惡化」。
   · 圖 A／圖 B 的窗口與資料日由資料算出；均線是水平參考線（不自行算滾動）；圖 C 區塊內零數字。
   · 水位卡首屏無百分比；「查看依據」六欄一律填寫（沒有就寫 ⬜ 與原因）。
-  · 結構：L5 不 import L1／ia_nav4；每個畫圖／讀本地快取都在 checkbox gate 之後。
+  · 結構：L5 不 import L1／ia_nav4；圖 A／圖 B 無 gate；圖 A 讀本地快取前必須先過「已載入」判斷。
 """
 from __future__ import annotations
 
@@ -328,6 +328,10 @@ class TestWaterAndBasis:
         """`shared/price_asof_label` 是個股價用的，⛔ 不得套到市場頁。"""
         assert "price_asof_label" not in _SRC
 
+    def test_chart_d_note_is_the_wireframe_sentence_and_ai_placeholder_has_no_engineering_tone(self):
+        assert B.CHART_D_NOTE == "只顯示最需要注意的 3–5 項、方向、是否惡化。"
+        assert B.HERO_AI_PLACEHOLDER == "🤖 AI 投資總結：⬜ 尚未提供"
+
     def test_ai_field_claims_only_what_is_true(self):
         assert B.AI_NOT_INVOLVED.startswith("不參與")
         for _n in ("gemini", "post_gemini", "ai_engine", "app_ai_service", "ai_fetcher"):
@@ -395,29 +399,22 @@ class TestStructure:
             if isinstance(_n, ast.Import):
                 assert not any(_a.name.startswith("src.data") for _a in _n.names)
 
-    def _under_checkbox(self, target) -> bool:
-        for _if in ast.walk(_TREE):
-            if isinstance(_if, ast.If) and "checkbox" in ast.unparse(_if.test):
-                if any(_c is target for _c in ast.walk(_if)):
-                    return True
-        return False
+    def test_chart_a_cache_read_is_behind_the_loaded_check_not_a_checkbox(self):
+        """📌 UI-M 修正（總管 QA-B）：圖 A／圖 B 去掉 checkbox gate。等義的新守衛 ——
+        `get_twii_trend_view` 只能出現在 `if not today.upstream_requested(...) … else:` 的 else 分支（未載入不讀、不畫過期值）；
+        `_market_blocks` 內不再有任何 checkbox。"""
+        assert "checkbox" not in _SRC
+        _fn = next(n for n in _TREE.body if isinstance(n, ast.FunctionDef) and n.name == "render_chart_a")
+        _reads = [c for c in ast.walk(_fn) if isinstance(c, ast.Call)
+                  and getattr(c.func, "attr", "") == "get_twii_trend_view"]
+        assert len(_reads) == 1
+        _ifs = [i for i in ast.walk(_fn) if isinstance(i, ast.If) and "upstream_requested" in ast.unparse(i.test)]
+        assert len(_ifs) == 1
+        assert any(c is _reads[0] for st_ in _ifs[0].orelse for c in ast.walk(st_))
+        assert not any(c is _reads[0] for st_ in _ifs[0].body for c in ast.walk(st_))
 
-    def test_every_chart_and_cache_read_is_behind_a_checkbox_gate(self):
-        _hit = 0
-        for _n in ast.walk(_TREE):
-            if isinstance(_n, ast.Call):
-                _name = getattr(_n.func, "attr", "") or getattr(_n.func, "id", "")
-                if _name in ("line_chart", "dataframe", "get_twii_trend_view"):
-                    _hit += 1
-                    assert self._under_checkbox(_n), ast.unparse(_n)
-        assert _hit >= 3
-
-    def test_gate_keys_are_unique_and_do_not_collide_with_page_market(self):
-        from src.ui.views import page_market as M
-        _keys = {B.SS_GATE_CHART_A, B.SS_GATE_CHART_B}
-        assert len(_keys) == 2
-        assert not _keys & {M.SS_GATE_TW_CHART, M.SS_GATE_ADL, M.SS_GATE_INTL_CHART, M.SS_GATE_LEADING}
-        assert all(_k.startswith("p00m_") for _k in _keys)
+    def test_no_gate_keys_left(self):
+        assert not hasattr(B, "SS_GATE_CHART_A") and not hasattr(B, "SS_GATE_CHART_B")
 
     def test_risk_cap_numbers_are_never_read(self):
         for _tok in ("exposure_limit_pct", "cap_text", "risk_cap_face_text",

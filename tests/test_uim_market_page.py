@@ -3,7 +3,7 @@
 守什麼：
   · 冷啟動：第一列全灰「⬜ 尚未載入，請按更新」、沒有任何紅字（未載入≠真出錯）。
   · 水位卡首屏無百分比；原有出手區間（含 risk_cap.v2）只在「🔍 查看依據」展開區內。
-  · 圖 A／圖 B 的重運算／讀快取在 checkbox gate 之後；灰（讀不到）與紅（真例外）分離；過期有警示。
+  · 圖 A／圖 B 預設直接畫（無 gate）；未載入時不讀快取、不畫（不顯示過期值）；灰（讀不到）與紅（真例外）分離；過期有警示。
   · hero「今日主要風險」與圖 D 同源（頁面層）；⚡ 區沒有來源時寫「⬜ 目前沒有可列的警示來源」。
   · parity：被保留的區塊（今日結論句、各展開區、所有未動的 helper）與 UI-M 之前逐字相同。
     「UI-M 之前」的原始碼由 `tests/test_uim_revert_chain.py::uim_revert_for` 還原（不依賴 git）。
@@ -157,19 +157,24 @@ def _view(**kw):
     return S.TwiiTrendView(**_base)
 
 
-def test_chart_a_reads_cache_only_after_checkbox(tmp_path, monkeypatch):
+_B_CHARTS = 3      # _LOADED 的 cl_data['intl'] 有 3 個系列（圖 B 預設直接畫，每系列一張）
+
+
+def test_chart_a_draws_by_default_when_loaded_and_never_reads_when_not_loaded(tmp_path, monkeypatch):
+    """無 gate：已載入 → 預設就讀本地快取並畫；未載入（冷啟動）→ 不讀、不畫（⇒ 不顯示過期值），灰字。"""
     _calls: list[int] = []
 
     def _fake(n):
         _calls.append(n)
-        return _view()
+        return _view(is_stale=True, stale_reason="落後 4 個交易日")
     monkeypatch.setattr(S, "get_twii_trend_view", _fake)
+    _cold = _run(tmp_path, name="_cold.py")
+    assert _calls == [] and _n_charts(_cold) == 0 and not _cold.warning and not _cold.error
+    assert not _cold.checkbox or all(c.key not in ("p00m_gate_chart_a", "p00m_gate_chart_b") for c in _cold.checkbox)
     _at = _run(tmp_path, _LOADED)
-    assert _calls == [] and _n_charts(_at) == 0                      # 冷的 gate：不讀、不畫
-    _at.checkbox(key=B.SS_GATE_CHART_A).check().run()
     assert not _at.exception, _at.exception
     assert _calls == [B.TWII_CHART_TRADING_DAYS]
-    assert _n_charts(_at) == 1
+    assert _n_charts(_at) == 1 + _B_CHARTS
     assert any(t == "近 3 日，資料至 2026-10-23　·　" + S.TWII_SOURCE_TEXT for t in _texts(_at))
     assert "**均線為參考，不等於正式台股趨勢判斷。**" in _texts(_at, outside_expanders=True)
     assert "台股趨勢結論：⬜ 尚未定義" in _texts(_at, outside_expanders=True)
@@ -182,26 +187,23 @@ def test_chart_a_reads_cache_only_after_checkbox(tmp_path, monkeypatch):
 def test_chart_a_grey_for_unreadable_red_for_exception(tmp_path, monkeypatch, view, red, grey_prefix):
     monkeypatch.setattr(S, "get_twii_trend_view", lambda n: view)
     _at = _run(tmp_path, _LOADED)
-    _at.checkbox(key=B.SS_GATE_CHART_A).check().run()
     assert not _at.exception
     assert bool(_at.error) is red
     if grey_prefix:
         assert any(t.startswith(grey_prefix) for t in _texts(_at, kinds=("Caption",)))
-    assert _n_charts(_at) == 0
+    assert _n_charts(_at) == _B_CHARTS            # 圖 A 沒畫；圖 B 照畫
 
 
 def test_chart_a_stale_cache_is_flagged(tmp_path, monkeypatch):
     monkeypatch.setattr(S, "get_twii_trend_view", lambda n: _view(is_stale=True, stale_reason="落後 4 個交易日"))
     _at = _run(tmp_path, _LOADED)
-    _at.checkbox(key=B.SS_GATE_CHART_A).check().run()
     assert any("已過期" in w.value and "落後 4 個交易日" in w.value for w in _at.warning)
-    assert _n_charts(_at) == 1                                   # 照畫（不擋資料），但有旗標
+    assert _n_charts(_at) == 1 + _B_CHARTS                                   # 照畫（不擋資料），但有旗標
 
 
 def test_chart_a_unknown_freshness_is_grey_not_assumed_fresh(tmp_path, monkeypatch):
     monkeypatch.setattr(S, "get_twii_trend_view", lambda n: _view(is_stale=None))
     _at = _run(tmp_path, _LOADED)
-    _at.checkbox(key=B.SS_GATE_CHART_A).check().run()
     assert "⬜ 台股指數歷史快取的新鮮度未判定" in _texts(_at, kinds=("Caption",))
 
 
@@ -215,10 +217,9 @@ def test_chart_a_missing_ma_is_listed_not_drawn_as_zero(tmp_path, monkeypatch):
 # ══════════════════════════════════════════════════════════════════
 # 圖 B
 # ══════════════════════════════════════════════════════════════════
-def test_chart_b_groups_and_one_chart_per_series_after_gate(tmp_path):
+def test_chart_b_groups_and_one_chart_per_series_by_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(S, "get_twii_trend_view", lambda n: S.TwiiTrendView(ok=False, error="x"))   # 圖 A 不畫，單獨數圖 B
     _at = _run(tmp_path, _LOADED)
-    assert _n_charts(_at) == 0
-    _at.checkbox(key=B.SS_GATE_CHART_B).check().run()
     assert not _at.exception, _at.exception
     assert _n_charts(_at) == 3                                   # DJI／10Y／DXY；IXIC／SOX 本輪沒有
     _md = _texts(_at, kinds=("Markdown",))
@@ -229,9 +230,11 @@ def test_chart_b_groups_and_one_chart_per_series_after_gate(tmp_path):
     assert "⬜ 本輪沒有這個系列" in _texts(_at, kinds=("Caption",))
 
 
-def test_chart_b_not_loaded_is_grey(tmp_path):
+def test_chart_b_not_loaded_is_grey(tmp_path, monkeypatch):
+    monkeypatch.setattr(S, "get_twii_trend_view", lambda n: S.TwiiTrendView(ok=False, error="x"))   # 圖 A 不畫，單獨看圖 B
     _at = _run(tmp_path, {k: v for k, v in _LOADED.items() if k != "cl_data"})
     assert not _at.error and _n_charts(_at) == 0
+    assert B.NOT_LOADED in _texts(_at, kinds=("Caption",))
 
 
 # ══════════════════════════════════════════════════════════════════
