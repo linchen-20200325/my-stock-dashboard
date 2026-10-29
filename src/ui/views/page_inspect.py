@@ -1876,8 +1876,8 @@ def load_batch_rows(req: BatchRequest) -> BatchReadout:
 
 #: XV-ASOF：價格時間那一行在 fact 列的標籤（P1 健康度、P2 估值共用）。
 PRICE_ASOF_FACT_KEY: str = "現價資料時間｜來源"
-#: P2 估值卡：357 沿用健康度那一輪同一個價（線框 §3.2「同上」）。
-PRICE_ASOF_SAME_AS_ABOVE: str = "同上："
+#: P2 估值卡：357 沿用健康度那一輪同一個價（線框 §3.2「同上」）—— 接在標籤後面。
+PRICE_ASOF_SAME_AS_ABOVE: str = "（同上）"
 #: 葉2 批次表頭下一行（線框 §4 方案 A；客戶 Q1＝A）。
 BATCH_ASOF_PREFIX: str = "價格資料時間："
 BATCH_ASOF_EXCEPTION_TAIL: str = "　—　例外列已在明細標示"
@@ -2152,8 +2152,9 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
     ]
     if val.price is not None:
         # XV-ASOF（線框 §3.2）：357 用的是健康度那一輪同一個價 ⇒ 寫「同上」＋同一份時間來源。
-        _facts.append((PRICE_ASOF_FACT_KEY,
-                       PRICE_ASOF_SAME_AS_ABOVE + PAL.price_asof_label(val.price_asof)))
+        # QA M1：「同上」寫在標籤上（值＝同一份字樣，⛔ 不加前綴 —— 卡面一格有長度上限）。
+        _facts.append((PRICE_ASOF_FACT_KEY + PRICE_ASOF_SAME_AS_ABOVE,
+                       PAL.price_asof_label(val.price_asof)))
     if val.msg:
         # L2 自己寫的一句話（含三檔目標價或「不適用」的理由）。
         # **原樣透傳**：那是 L2 的話，本檔不改寫、不摘要（§2.1）。

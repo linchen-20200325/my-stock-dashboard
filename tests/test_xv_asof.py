@@ -33,22 +33,22 @@ def _p(as_of=WED, src=PAL.SRC_YAHOO_ADJ, *, today=WED, ff=False, ff_from=None) -
 class TestLabels:
     def test_normal_is_unconfirmed_never_close(self):
         _l = PAL.price_asof_label(_p())
-        assert _l == "2026-10-28｜Yahoo（盤中或收盤未確認）"
+        assert _l == "10/28｜Yahoo（盤中或收盤未確認）"
         assert "收盤（" not in _l and not _l.endswith("收盤") and "盤中或收盤未確認" in _l
 
     def test_fallback_names_source_in_words(self):
         _l = PAL.price_asof_label(_p(dt.date(2026, 10, 27), PAL.SRC_FINMIND_SDK))
-        assert _l == "2026-10-27｜備援來源：FinMind（盤中或收盤未確認）"
+        assert _l == "10/27｜備援來源：FinMind（盤中或收盤未確認）"
         assert PAL.price_asof_label(_p(WED, PAL.SRC_FINMIND_RAW)).count("備援來源：FinMind") == 1
         assert "備援來源：Yahoo（預設參數）" in PAL.price_asof_label(_p(WED, PAL.SRC_YAHOO_FALLBACK))
 
     def test_stale_has_text_mark(self):
         _l = PAL.price_asof_label(_p(dt.date(2026, 10, 20)))
-        assert _l.startswith("⚠ 非最新（上次成功 2026-10-20；盤中或收盤未確認）｜Yahoo")
+        assert _l == "⚠ 非最新（上次成功 10/20）｜Yahoo（盤中或收盤未確認）"
 
     def test_ffill_last(self):
         _l = PAL.price_asof_label(_p(ff=True, ff_from=dt.date(2026, 10, 27)))
-        assert _l == "⚠ 含補值日（2026-10-28 沿用 2026-10-27；盤中或收盤未確認）｜Yahoo"
+        assert _l == "⚠ 含補值日（10/28 沿用 10/27）｜Yahoo（盤中或收盤未確認）"
         assert "為補值" in PAL.price_asof_label(_p(ff=True))
 
     def test_missing_time_never_today(self):
@@ -184,6 +184,14 @@ class TestL3Keys:
         assert _m["ffilled_last"] is True and _m["ffilled_from"] == dt.date(2026, 10, 27)
         assert PAL.price_asof_label(PAL.PriceAsOf.from_mapping(_m)).startswith("⚠ 含補值日")
 
+    def test_ffill_stale_uses_real_data_day(self, _today):
+        """QA MINOR-6：最後一根是補值 → 是否最新以補值沿用的實際資料日判。"""
+        from src.services import dividend_station_service as S
+        _f = S._price_asof_fields(WED, PAL.SRC_YAHOO_ADJ, ffilled_last=True,
+                                  ffilled_from=dt.date(2026, 10, 20))
+        assert _f["is_stale"] is True and _f["price_as_of"] == WED
+        assert S._price_asof_fields(WED, PAL.SRC_YAHOO_ADJ)["is_stale"] is False
+
     def test_rows_carry_keys_numbers_unchanged(self):
         from src.services import dividend_station_service as S
         _base = {"mj_grade": "A", "kd_state": None, "current_price": 500.0}
@@ -213,7 +221,7 @@ class TestInspect:
                             price=600.0, price_asof=_p())
         _c, _f, _ = V.build_health_card(_s)
         _d = dict(_f)
-        assert _d[V.PRICE_ASOF_FACT_KEY] == "2026-10-28｜Yahoo（盤中或收盤未確認）"
+        assert _d[V.PRICE_ASOF_FACT_KEY] == "10/28｜Yahoo（盤中或收盤未確認）"
         _keys = [_k for _k, _ in _f]
         assert _keys.index(V.PRICE_ASOF_FACT_KEY) == _keys.index("現價") + 1
         # 正常資料時，其餘既有 fact 一字不變
@@ -240,8 +248,8 @@ class TestInspect:
         import src.ui.views.page_inspect as V
         _v = V.ValuationReadout(requested=True, price=600.0, price_asof=_p(dt.date(2026, 10, 20)))
         _f = dict(V.build_valuation_card(_v)[1])
-        assert _f[V.PRICE_ASOF_FACT_KEY].startswith("同上：⚠ 非最新")
-        assert V.PRICE_ASOF_FACT_KEY not in dict(V.build_valuation_card(
+        assert _f[V.PRICE_ASOF_FACT_KEY + V.PRICE_ASOF_SAME_AS_ABOVE].startswith("⚠ 非最新")
+        assert V.PRICE_ASOF_FACT_KEY + V.PRICE_ASOF_SAME_AS_ABOVE not in dict(V.build_valuation_card(
             V.ValuationReadout(requested=True))[1])
 
     def test_load_stock_readout_carries_asof(self, monkeypatch):
@@ -267,7 +275,7 @@ class TestBatchPlanA:
         _rows = (_brow("2330", _p()), _brow("2317", _p()),
                  _brow("2454", _p(dt.date(2026, 10, 20))), _brow("9999", None, ok=False))
         _v = V.batch_price_asof_view(_rows)
-        assert _v.header == ("價格資料時間：2026-10-28｜Yahoo（盤中或收盤未確認）"
+        assert _v.header == ("價格資料時間：10/28｜Yahoo（盤中或收盤未確認）"
                              + V.BATCH_ASOF_EXCEPTION_TAIL)
         assert _v.suffix[0] == _v.suffix[1] == "" and _v.suffix[3] == ""
         assert _v.suffix[2].startswith("（⚠ 非最新")
@@ -278,7 +286,7 @@ class TestBatchPlanA:
     def test_all_same_no_exception_tail(self):
         import src.ui.views.page_inspect as V
         _v = V.batch_price_asof_view((_brow("a", _p()), _brow("b", _p())))
-        assert _v.header == "價格資料時間：2026-10-28｜Yahoo（盤中或收盤未確認）"
+        assert _v.header == "價格資料時間：10/28｜Yahoo（盤中或收盤未確認）"
         assert _v.suffix == ("", "")
 
     def test_no_majority_falls_back_to_per_row(self):
@@ -294,8 +302,9 @@ class TestBatchPlanA:
 
 
 # ══════════════════════════ UI：💼 ══════════════════════════
-def _hrow(code, p, *, kind="個股", price=100.0, held=True):
-    _r = {"代號": code, "種類": kind, "held": held, "現價": price, "_detail": {}}
+def _hrow(code, p, *, kind="個股", price=100.0, held=True, lots=1.0, avg=90.0, **extra):
+    _r = {"代號": code, "種類": kind, "held": held, "現價": price, "張數": lots, "均價": avg,
+          "_detail": {}, **extra}
     _r.update(_m(p) if p is not None else {})
     return _r
 
@@ -311,22 +320,55 @@ class TestHold:
                         _hrow("2454", _p(dt.date(2026, 10, 20))),
                         _hrow("00878", _p(), held=False)])
         _f = H._price_asof_facts(_st)
-        assert _f[0] == ("價格資料時間", "2026-10-28｜Yahoo（盤中或收盤未確認）（2 檔）")
-        assert _f[1][0] == "價格資料時間 · 另 1 檔" and _f[1][1].endswith("：2454")
-        _tp = dict(H._take_profit_asof_fact(_st))[H.TP_ASOF_FACT_KEY]
-        assert _tp == H.TP_ASOF_POINTER + "（⚠ 非最新的 1 檔已點名）"
+        assert _f[0] == ("價格資料時間（2 檔）", "10/28｜Yahoo（盤中或收盤未確認）")
+        assert _f[1] == ("價格資料時間 · ⚠ 非最新（上次成功 10/20）｜Yahoo（盤中或收盤未確認）（1 檔）",
+                         "2454")
+        _tp = dict(H._take_profit_asof_fact(_st, state="live"))[H.TP_ASOF_FACT_KEY]
+        assert _tp == H.TP_ASOF_POINTER + "（⚠ 非最新 1 檔已點名）"
+
+    def test_no_majority_is_neutral(self):
+        import src.ui.views.page_hold as H
+        _f = H._price_asof_facts(self._st([_hrow("2330", _p()),
+                                           _hrow("2454", _p(dt.date(2026, 10, 20)))]))
+        assert _f[0] == ("價格資料時間", H.HOLD_ASOF_NO_MAJORITY)
+        assert all("另" not in _k for _k, _ in _f)
+        assert [_v for _k, _v in _f[1:3]] == ["2330", "2454"]
+
+    def test_scope_matches_portfolio_totals(self):
+        """（N 檔）範圍＝總市值納入條件：缺張數／均價、資料異常、外幣列都不算。"""
+        import src.services.dividend_station_service as S
+        import src.ui.views.page_hold as H
+        _rows = [_hrow("2330", _p()), _hrow("2317", _p(), lots=None),
+                 _hrow("2454", _p(), avg=None), _hrow("1101", _p(), _invalid_inputs=("現價",)),
+                 _hrow("VOO", _p(), _fx_unconfirmed=True), _hrow("2412", _p(), held=False)]
+        _f = H._price_asof_facts(self._st(_rows))
+        assert _f[0][0] == "價格資料時間（1 檔）"
+        _tw = [_r for _r in _rows if not _r.get("_fx_unconfirmed") and not _r.get("_invalid_inputs")]
+        assert S.compute_portfolio_totals(_tw)["valued_n"] == 1
 
     def test_e17_not_provided(self):
         import src.ui.views.page_hold as H
         assert H._price_asof_facts(self._st([_hrow("2330", None, price=None)])) == \
             [("價格資料時間", "⬜ 未提供")]
-        assert H._price_asof_facts(self._st([_hrow("2330", None)]))[0][1].startswith(
-            "資料時間：⬜ 未提供")
+        _f = H._price_asof_facts(self._st([_hrow("2330", None)]))
+        assert _f[0] == ("價格資料時間（1 檔）", "⬜ 未提供")
+        assert all("資料時間：⬜" not in _v for _, _v in _f)
 
     def test_idle_no_line(self):
         import src.ui.views.page_hold as H
         assert H._price_asof_facts(self._st([])) == []
-        assert H._take_profit_asof_fact(self._st([])) == []
+        assert H._take_profit_asof_fact(self._st([]), state="live") == []
+
+    def test_tp_pointer_only_satellites_and_not_red(self):
+        import src.ui.views.page_hold as H
+        _etf_only = self._st([_hrow("0050", _p(dt.date(2026, 10, 20)), kind="ETF"),
+                              _hrow("0056", _p(), kind="ETF"), _hrow("00878", _p(), kind="ETF")])
+        assert H._take_profit_asof_fact(_etf_only, state="live") == []      # 無衛星
+        _mix = self._st([_hrow("0050", _p(dt.date(2026, 10, 20)), kind="ETF"),
+                         _hrow("2330", _p()), _hrow("2317", _p())])
+        assert dict(H._take_profit_asof_fact(_mix, state="live"))[H.TP_ASOF_FACT_KEY] == \
+            H.TP_ASOF_POINTER                                              # 例外是 ETF，不算進 ⑤
+        assert H._take_profit_asof_fact(_mix, state="failed") == []        # 紅態不出
 
     def test_action_card_e17_after_total(self):
         import src.ui.views.page_hold as H
@@ -334,9 +376,75 @@ class TestHold:
                                rows=(_hrow("2330", _p()),),
                                totals={"pnl_twd": 10, "pnl_pct": 1.0, "value_twd": 100})
         _keys = [_k for _k, _ in H.build_action_card(_st)[1]]
-        assert _keys.index("價格資料時間") == _keys.index("總市值（元）") + 1
+        assert _keys.index("價格資料時間（1 檔）") == _keys.index("總市值（元）") + 1
         _tpk = [_k for _k, _ in H.build_take_profit_card(_st)[1]]
         assert H.TP_ASOF_FACT_KEY in _tpk
+
+
+# ══════════════════════════ QA M1：卡面長度與代號完整 ══════════════════════════
+def _all_states():
+    import itertools
+    _d, _f = WED, dt.date(2026, 10, 24)
+    for _st, _src in itertools.product((True, False, None), (None, PAL.SRC_YAHOO_ADJ, PAL.SRC_FINMIND_SDK,
+                                                              PAL.SRC_FINMIND_RAW, PAL.SRC_YAHOO_FALLBACK)):
+        yield PAL.PriceAsOf(as_of=_d, src=_src, is_stale=_st, is_fallback=PAL.is_fallback_source(_src),
+                            expected_day=_d)
+    for _st, _ff, _fr in itertools.product((True, False, None), (False, True), (None, _f)):
+        yield PAL.PriceAsOf(as_of=_d, src=PAL.SRC_YAHOO_ADJ, is_stale=_st, is_fallback=False,
+                            ffilled_last=_ff, ffilled_from=_fr, expected_day=_d)
+    yield None
+
+
+class TestFaceLength:
+    def test_limit_mirrors_contract(self):
+        from src.ui_v2 import markup as M
+        assert PAL.FACE_MAX_CHARS == M.FACT_VALUE_MAX_CHARS
+
+    def test_every_state_fits_on_face(self):
+        for _p0 in _all_states():
+            _l = PAL.price_asof_label(_p0)
+            assert len(_l) <= PAL.FACE_MAX_CHARS, _l
+            assert len(PAL.hold_face_label(_p0)) <= PAL.FACE_MAX_CHARS
+            if _p0 is not None:
+                assert _l.endswith("（盤中或收盤未確認）") and _l.count("盤中或收盤未確認") == 1
+
+    def test_undetermined_differs_from_normal(self):
+        _n = PAL.price_asof_label(_p())
+        _u = PAL.price_asof_label(PAL.PriceAsOf(as_of=WED, src=PAL.SRC_YAHOO_ADJ, is_stale=None,
+                                                is_fallback=False))
+        assert _u != _n and "是否最新：無法判定" in _u
+
+    def test_inspect_cards_show_full_value_on_face(self):
+        import src.ui.views.page_inspect as V
+        from src.ui_v2 import markup as M
+        for _p0 in _all_states():
+            for _built in (V.build_health_card(V.StockReadout(requested=True, score_pct=80.0,
+                                                              price=600.0, price_asof=_p0)),
+                           V.build_valuation_card(V.ValuationReadout(requested=True, price=600.0,
+                                                                     price_asof=_p0))):
+                _c, _f, _s = _built
+                _html = V.v2_card_html(_c, _f, _s)
+                _face = _html.split('<div class="blk-fold">', 1)[0]
+                assert PAL.price_asof_label(_p0) in _face
+                assert M.FACT_VALUE_ELLIPSIS + "</span>" not in _face.split("現價資料時間", 1)[1][:200]
+
+    def test_hold_codes_complete_on_face(self):
+        import src.ui.views.page_hold as H
+        _codes = [f"{1000 + _i}" for _i in range(15)]
+        _rows = [_hrow("2330", _p()) for _ in range(20)] + \
+                [_hrow(_c, _p(dt.date(2026, 10, 20), PAL.SRC_YAHOO_FALLBACK)) for _c in _codes]
+        _st = H.StationReadout(requested=True, submitted=True, rows=tuple(_rows),
+                               totals={"pnl_twd": 1, "pnl_pct": 1.0, "value_twd": 100})
+        _f = H._price_asof_facts(_st)
+        _vals = [_v for _k, _v in _f if _k.startswith("價格資料時間 · ")]
+        assert len(_vals) >= 2 and all(len(_v) <= PAL.FACE_MAX_CHARS for _v in _vals)
+        assert "、".join(_vals).split("、") == _codes
+        _c, _ff, _s = H.build_action_card(_st)
+        _face = H.v2_card_html(_c, _ff, _s).split('<div class="blk-fold">', 1)[0]
+        for _code in _codes:
+            assert _code in _face
+        _tp = dict(H._take_profit_asof_fact(_st, state="live"))[H.TP_ASOF_FACT_KEY]
+        assert len(_tp) <= PAL.FACE_MAX_CHARS, _tp
 
 
 # ══════════════════════════ §5 查看依據（既有「▸ 詳細」摺疊區） ══════════════════════════

@@ -2174,10 +2174,15 @@ def _unvalued_codes(station: StationReadout) -> tuple[str, ...]:
                     for _k in ("張數", "均價", "現價")))
 
 
-#: XV-ASOF（客戶 2026-10-28 Q3＝A，DEC-102）：① 總市值下方既有 E17 位置（A 規格 E17「價格資料日」）
-#: 的例外列標籤 —— 例外一定點名代號（線框 §3.3）。
-HOLD_ASOF_EXCEPTION_LABEL_FMT: str = PAL.HOLD_LABEL + " · 另 {n} 檔"
-#: 沒有過半的那一種（各檔不一致）→ 第一列只講這句，下面逐組列出。
+#: XV-ASOF（客戶 2026-10-28 Q3＝A，DEC-102）：① 總市值下方既有 E17 位置（A 規格 E17「價格資料日」）。
+#: QA M1（2026-10-29）：卡面一格會被截在 `FACT_VALUE_MAX_CHARS` ⇒ 例外列改成「標籤＝例外字樣、值＝代號清單」，
+#: 代號單獨成值（太多時拆多列、⛔ 不截斷代號）；例外一定點名代號（線框 §3.3）。
+HOLD_ASOF_GROUP_LABEL_FMT: str = PAL.HOLD_LABEL + " · {label}（{n} 檔）"
+#: 同一組代號拆多列時，第二列起的標籤後綴（同一卡內多一列 fact，⛔ 不新增卡片／區塊）。
+HOLD_ASOF_CONT_SUFFIX: str = "（續）"
+#: 多數那一列的標籤（值＝多數字樣）。
+HOLD_ASOF_MAJOR_LABEL_FMT: str = PAL.HOLD_LABEL + "（{n} 檔）"
+#: 沒有過半的那一種（各檔不一致）→ 第一列只講這句，下面逐組列出（QA MINOR-3：中性，⛔ 不寫「另 N 檔」）。
 HOLD_ASOF_NO_MAJORITY: str = "各檔不一致，逐組列在下面"
 #: ⑤ 衛星停利卡只加一行指回 ①（線框 §3.4；⛔ 不逐列加）。
 TP_ASOF_FACT_KEY: str = "價格時間"
@@ -2185,61 +2190,75 @@ TP_ASOF_POINTER: str = f"損益% 以現價計；價格時間見上方「{PAL.HOL
 
 
 def _hold_asof_items(station: StationReadout):
-    """① E17 與 ⑤ 指回共用的分組：持有、非整批失敗、有現價的列（＝金額與損益% 用到的價格）。
+    """① E17 與 ⑤ 指回共用的列：**與總市值同一個範圍**（QA MINOR-2）。
 
+    逐列條件照抄 L3 `compute_portfolio_totals()` 的納入條件：持有、非整批抓取失敗、無資料異常
+    （`KEY_INVALID_INPUTS`）、張數／均價／現價三者皆 > 0；另排除外幣／幣別未確認列
+    （`KEY_FX_UNCONFIRMED`，XV-H3：它們不進總市值）。⛔ 本頁不另立判準。
     `None` ＝ 戰情表沒有列（idle／空清單）→ 兩處都不畫。分組與「多數」一律走 L0（嚴格過半）。
     ⚠️ 過期價**照樣**計入市值／損益（是否排除未裁示，線框 §6）—— 這裡只標示。
     """
     if not station.has_rows:
         return None
-    _items = tuple(
+    return tuple(
         (str(_r.get("代號", "")), PAL.PriceAsOf.from_mapping(_r)) for _r in station.rows
         if _r.get("held") and not (_r.get("_detail") or {}).get("error")
-        and isinstance(_r.get("現價"), (int, float)) and _r.get("現價") > 0)
-    return _items
+        and not _r.get(KEY_INVALID_INPUTS) and not _r.get(KEY_FX_UNCONFIRMED)
+        and all(isinstance(_r.get(_k), (int, float)) and not isinstance(_r.get(_k), bool)
+                and _r.get(_k) > 0 for _k in ("張數", "均價", "現價")))
 
 
-def _hold_asof_grouping(station: StationReadout) -> "PAL.AsOfGrouping | None":
-    _items = _hold_asof_items(station)
-    return None if _items is None else PAL.group_price_asof(_items)
+def _code_rows(label: str, codes) -> list[tuple[str, str]]:
+    """一組代號 → 一列或多列（值 ≤ 卡面上限，⛔ 不截斷代號）。"""
+    _chunks = PAL.chunk_codes(codes)
+    return [(label + (HOLD_ASOF_CONT_SUFFIX if _i else ""), _c) for _i, _c in enumerate(_chunks)]
 
 
 def _price_asof_facts(station: StationReadout) -> list[tuple[str, str]]:
-    """① 總市值下方 E17 那一行：`價格資料時間：{多數字樣}（N 檔）`；有例外才多列（點名代號）。"""
-    _g = _hold_asof_grouping(station)
-    if _g is None:
-        return []
-    if not _g.groups:
-        return [(PAL.HOLD_LABEL, PAL.HOLD_NOT_PROVIDED)]
-    _major = next((_k for _l, _k in _g.groups if _l == _g.majority_label), ())
-    _out = [(PAL.HOLD_LABEL,
-             f"{_g.majority_label}（{len(_major)} 檔）" if _g.majority_label
-             else HOLD_ASOF_NO_MAJORITY)]
-    for _lbl, _codes in _g.exceptions:
-        _out.append((HOLD_ASOF_EXCEPTION_LABEL_FMT.format(n=len(_codes)),
-                     f"{_lbl}：{'、'.join(dict.fromkeys(str(_c) for _c in _codes))}"))
-    # 線框 §5：既有「▸ 詳細」摺疊區補兩格價格說明（`V2_FOLD_ONLY_FACT_KEYS` 登記，⛔ 不上卡面、不新增區塊）。
-    _out.extend(PAL.price_basis_facts_many([_p for _, _p in _hold_asof_items(station)]))
-    return _out
-
-
-def _take_profit_asof_fact(station: StationReadout) -> list[tuple[str, str]]:
-    """⑤ 衛星停利卡那一行指回 ①（例外檔數照實寫；代號已在 ① 點名，這裡不重抄）。"""
+    """① 總市值下方 E17：`價格資料時間（N 檔）｜{多數字樣}`；有例外才多列（標籤＝字樣、值＝代號）。"""
     _items = _hold_asof_items(station)
     if _items is None:
         return []
+    if not _items:
+        return [(PAL.HOLD_LABEL, PAL.HOLD_NOT_PROVIDED)]
+    _by_label = {PAL.price_asof_label(_p): PAL.hold_face_label(_p) for _, _p in _items}
+    _g = PAL.group_price_asof(_items)
+    if _g.majority_label is not None:
+        _major = next(_k for _l, _k in _g.groups if _l == _g.majority_label)
+        _out = [(HOLD_ASOF_MAJOR_LABEL_FMT.format(n=len(_major)), _by_label[_g.majority_label])]
+    else:
+        _out = [(PAL.HOLD_LABEL, HOLD_ASOF_NO_MAJORITY)]
+    for _lbl, _codes in _g.exceptions:
+        _out += _code_rows(HOLD_ASOF_GROUP_LABEL_FMT.format(label=_by_label[_lbl], n=len(_codes)),
+                           _codes)
+    # 線框 §5：既有「▸ 詳細」摺疊區補兩格價格說明（`V2_FOLD_ONLY_FACT_KEYS` 登記，⛔ 不上卡面、不新增區塊）。
+    _out.extend(PAL.price_basis_facts_many([_p for _, _p in _items]))
+    return _out
+
+
+def _take_profit_asof_fact(station: StationReadout, *, state: str) -> list[tuple[str, str]]:
+    """⑤ 衛星停利卡那一行指回 ①（QA MINOR-4：只算 ⑤ 管的衛星個股；無衛星或紅態不出）。"""
+    if state == UI_FAILED:
+        return []
+    _items = _hold_asof_items(station)
+    if not _items:
+        return []
+    _sat = {str(_r.get("代號", "")) for _r in station.rows
+            if _r.get("held") and _r.get("種類") == "個股"}
+    if not any(_c in _sat for _c, _ in _items):
+        return []
     _g = PAL.group_price_asof(_items)
     _exc_labels = {_l for _l, _ in _g.exceptions}
-    _exc = [_p for _, _p in _items if PAL.price_asof_label(_p) in _exc_labels]
-    _exc_codes = _exc
+    _exc = [_p for _c, _p in _items if _c in _sat and PAL.price_asof_label(_p) in _exc_labels]
     _stale_n = sum(1 for _p in _exc if _p.is_stale is True)
-    _tail: list[str] = []
-    if _stale_n:
-        _tail.append(f"{PAL.STALE_MARK}的 {_stale_n} 檔已點名")
-    if len(_exc_codes) - _stale_n > 0:
-        _tail.append(f"其他例外 {len(_exc_codes) - _stale_n} 檔已點名")
-    return [(TP_ASOF_FACT_KEY,
-             TP_ASOF_POINTER + (f"（{'；'.join(_tail)}）" if _tail else ""))]
+    if _exc and _stale_n:
+        _tail = (f"（{PAL.STALE_MARK} {_stale_n} 檔已點名）" if _stale_n == len(_exc)
+                 else f"（例外 {len(_exc)} 檔已點名，含{PAL.STALE_MARK} {_stale_n} 檔）")
+    elif _exc:
+        _tail = f"（例外 {len(_exc)} 檔已點名）"
+    else:
+        _tail = ""
+    return [(TP_ASOF_FACT_KEY, TP_ASOF_POINTER + _tail)]
 
 
 def build_action_card(station: StationReadout) -> _Built:
@@ -3035,7 +3054,7 @@ def build_take_profit_card(station: StationReadout) -> _Built:
         ("為什麼缺成本就不判", "沒有均價就沒有損益%，硬判等於替你編一個報酬率"),
         ("只判衛星（個股）", "核心（ETF）走定期定額，不套這條停利規則"),
     ]
-    _facts += _take_profit_asof_fact(station)   # XV-ASOF：只加一行指回 ①（線框 §3.4）
+    _facts += _take_profit_asof_fact(station, state=_state)   # XV-ASOF：只加一行指回 ①（線框 §3.4）
     if station.take_profit and not station.error:
         _facts.insert(0, ("達門檻的衛星",
                           "、".join(f"{_d.get('代號', '')}"

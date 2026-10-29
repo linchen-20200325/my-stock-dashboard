@@ -164,28 +164,55 @@ def _source_text(p: PriceAsOf) -> str:
     return f"{FALLBACK_PREFIX}{_name}" if p.is_fallback else _name
 
 
-def price_asof_label(p: PriceAsOf | None) -> str:
-    """一個價格 → 一行小字（線框 §2；拿掉顏色後意思不變）。
+#: 判不出是否最新（`is_stale is None`）時接在日期後面的字樣（⛔ 不得與正常態長得一樣）。
+STALE_UNKNOWN = "（是否最新：無法判定）"
 
-    - 拿不到日期                → `資料時間：⬜ 未提供`
-    - 正常                      → `2026-10-28｜Yahoo（盤中或收盤未確認）`
-    - 備援                      → `2026-10-27｜備援來源：FinMind（盤中或收盤未確認）`
-    - 非最新                    → `⚠ 非最新（上次成功 2026-10-27；盤中或收盤未確認）｜Yahoo`
-    - 最後一根是補值            → `⚠ 含補值日（2026-10-28 沿用 2026-10-27；盤中或收盤未確認）｜Yahoo`
+#: 卡面一格的字數上限：L4 v2 契約層 `src/ui_v2/markup.FACT_VALUE_MAX_CHARS`（L0 不 import L4，
+#: 數值由 `tests/test_xv_asof.py` 對齊守衛；⛔ 不是業務門檻）。字樣在每一種狀態都必須 ≤ 這個長度，
+#: 否則卡面截斷會切掉來源或 ⚠ 字樣。
+FACE_MAX_CHARS = 46
+
+
+def _md(d: date) -> str:
+    """卡面日期：M/D（線框原樣；QA M1 卡面長度）。完整 ISO 日期在「查看依據」（`price_basis_facts`）。"""
+    return f"{d.month}/{d.day}"
+
+
+def price_asof_label(p: PriceAsOf | None) -> str:
+    """一個價格 → 一行小字（線框 §2；拿掉顏色後意思不變；每種狀態 ≤ `FACE_MAX_CHARS`）。
+
+    「盤中或收盤未確認」只在句尾寫一次；完整 ISO 日期在「查看依據」（`price_basis_facts`）。
+    - 拿不到日期          → `資料時間：⬜ 未提供`
+    - 正常                → `10/28｜Yahoo（盤中或收盤未確認）`
+    - 判不出是否最新      → `10/28（是否最新：無法判定）｜Yahoo（盤中或收盤未確認）`
+    - 備援                → `10/27｜備援來源：FinMind（盤中或收盤未確認）`
+    - 非最新              → `⚠ 非最新（上次成功 10/27）｜Yahoo（盤中或收盤未確認）`
+    - 最後一根是補值      → `⚠ 含補值日（10/28 沿用 10/27）｜Yahoo（盤中或收盤未確認）`
+    - 非最新＋補值        → `⚠ 非最新（上次成功 10/24，10/28 為補值）｜Yahoo（盤中或收盤未確認）`
     """
     if p is None or p.as_of is None:
         return TIME_NOT_PROVIDED
-    _d = p.as_of.isoformat()
-    _warn: list[str] = []
+    _d = _md(p.as_of)
+    _from = _md(p.ffilled_from) if (p.ffilled_last and p.ffilled_from) else None
     if p.is_stale is True:
-        _warn.append(f"{STALE_MARK}（上次成功 {_d}；{UNCONFIRMED_CLOSE}）")
-    if p.ffilled_last:
-        _from = (f"{_d} 沿用 {p.ffilled_from.isoformat()}" if p.ffilled_from
-                 else f"{_d} 為補值")
-        _warn.append(f"{FFILL_MARK}（{_from}；{UNCONFIRMED_CLOSE}）")
-    if _warn:
-        return "；".join(_warn) + f"｜{_source_text(p)}"
-    return f"{_d}｜{_source_text(p)}（{UNCONFIRMED_CLOSE}）"
+        if p.ffilled_last:
+            _head = (f"{STALE_MARK}（上次成功 {_from}，{_d} 為補值）" if _from
+                     else f"{STALE_MARK}（{_d} 為補值）")
+        else:
+            _head = f"{STALE_MARK}（上次成功 {_d}）"
+    elif p.ffilled_last:
+        _head = f"{FFILL_MARK}（{_d} 沿用 {_from}）" if _from else f"{FFILL_MARK}（{_d} 為補值）"
+    elif p.is_stale is None:
+        _head = f"{_d}{STALE_UNKNOWN}"
+    else:
+        _head = _d
+    return f"{_head}｜{_source_text(p)}（{UNCONFIRMED_CLOSE}）"
+
+
+def hold_face_label(p: PriceAsOf | None) -> str:
+    """💼 E17 那一格的值：拿不到時間寫線框原文「⬜ 未提供」（標籤已是「價格資料時間」，⛔ 不重複「資料時間：」）。"""
+    _l = price_asof_label(p)
+    return HOLD_NOT_PROVIDED if _l == TIME_NOT_PROVIDED else _l
 
 
 @dataclass(frozen=True)
@@ -233,6 +260,23 @@ def group_price_asof(items: Sequence[tuple[Hashable, PriceAsOf | None]]) -> AsOf
     _n = sum(len(_v) for _v in _by.values())
     _major = next((_l for _l in _order if len(_by[_l]) * 2 > _n), None)
     return AsOfGrouping(majority_label=_major, groups=_groups)
+
+
+def chunk_codes(codes: Sequence[Hashable], *, max_chars: int = FACE_MAX_CHARS,
+                sep: str = "、") -> tuple[str, ...]:
+    """代號清單 → 每段 ≤ `max_chars` 的字串（⛔ 不截斷任何一個代號；去重保序）。"""
+    _out: list[str] = []
+    _cur = ""
+    for _c in dict.fromkeys(str(_x) for _x in codes):
+        _try = f"{_cur}{sep}{_c}" if _cur else _c
+        if _cur and len(_try) > max_chars:
+            _out.append(_cur)
+            _cur = _c
+        else:
+            _cur = _try
+    if _cur:
+        _out.append(_cur)
+    return tuple(_out)
 
 
 BASIS_USED_LABEL = "使用的資料（價格）"

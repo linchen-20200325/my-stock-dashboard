@@ -597,14 +597,17 @@ def _price_asof_fields(as_of, src, *, ffilled_last: bool = False,
     """
     from src.services.trading_calendar_service import taipei_today
     _as_of = _coerce_plain_date(as_of)
-    _stale, _exp, _lag = PAL.assess_price_freshness(_as_of, today=taipei_today())
+    _ff_from = _coerce_plain_date(ffilled_from)
+    # QA MINOR-6：最後一根是補值 → 「是否最新」以**實際資料日**（補值沿用的那一天）判定。
+    _basis = _ff_from if (ffilled_last and _ff_from is not None) else _as_of
+    _stale, _exp, _lag = PAL.assess_price_freshness(_basis, today=taipei_today())
     _src = str(src) if src and str(src) in PAL.SOURCE_DISPLAY else None
     return {PAL.KEY_PRICE_AS_OF: _as_of,
             PAL.KEY_PRICE_SRC: _src,
             PAL.KEY_IS_STALE: _stale,
             PAL.KEY_IS_FALLBACK: PAL.is_fallback_source(_src),
             PAL.KEY_FFILLED_LAST: bool(ffilled_last),
-            PAL.KEY_FFILLED_FROM: _coerce_plain_date(ffilled_from),
+            PAL.KEY_FFILLED_FROM: _ff_from,
             PAL.KEY_PRICE_EXPECTED_DAY: _exp,
             PAL.KEY_PRICE_LAG_DAYS: _lag}
 
