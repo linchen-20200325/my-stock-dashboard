@@ -1507,6 +1507,8 @@ D2.5 以下大方向核准：
 
 ### DEC-104｜Hard Output Gate（送出前硬閘）正式入治理（客戶 2026-10-29）
 
+> 📌 2026-10-29 第二次復發（Phase 1 SSOT Reset 批次），紀錄見 `docs/BACKLOG.md` `GOV-CHATTER-2026-10-29`；澄清落點 `PROJECT_RULES.md` 第 3 節「小節：Hard Output Gate」末尾。append-only，本條內文未改。
+
 > 2026-10-29 補登（ID 取下一個未用號；落盤前 `grep -rn "DEC-104" --include=*.md .` 0 命中）。**客戶原文逐字收錄於 `PROJECT_RULES.md` 第 3 節（Silent Autonomous Cruise）「小節：Hard Output Gate（客戶 2026-10-29，DEC-104）」，原文以該處為準**；本條只作摘要與指向。
 
 - **決策者**：**客戶**（2026-10-29）。
@@ -4536,7 +4538,7 @@ Stage 完成回報保持極簡：
   - **R16**：SSOT 位階兩軸——規範軸：`CLAUDE.md`（§-2 > §-1.5 > §-1 > §0～8）> `PROCESS.md` > `PROJECT_RULES.md`＋`docs/governance` > 最新有效 DEC（客戶 DEC > 總管內部 DEC）> 正式契約／Visual SSOT > `PROJECT_STATE` > `BACKLOG` > `HANDOFF`（索引）> historical／superseded；事實軸：GitHub 實況 > code／tests > 正式文件 > HANDOFF > PROJECT_STATE > AI 記憶 > 聊天。客戶建議序（PROJECT_RULES 第一）置於既有憲法之下；兩軸不牴觸。`PROCESS.md` §1「只讀 STATE.md」與五檔讀序衝突 → 本 phase 不改 `PROCESS.md`，維持 `CV1-DR-04` 待裁示。落點 `PROJECT_RULES.md` 第 25 節。
   - **R17**：根目錄舊文件（`HANDOFF_2026-08-15.md`、`PLAN_T1_T2.md`、`PLAN_T4.md`、`BATCH_A_DELIVERY.md`）＝D 類候選，本 phase 不刪不改，只登 BACKLOG P2；repo 內 `scratchpad/*.md` 保留。
   - **R18**：`tools/visual_fidelity/`（量測 harness，非 production、不被 app import）納入 repo，確保 Visual Fidelity Gate 可重跑；不被任何 test 收集、fast checks 綠（Phase 1 PR 實跑）。
-  - **R19**（2026-10-29 第二輪 QA 總管裁定改寫）：Phase 2（helper／test 契約遷移）用 **Opus 5.5＋High**；進入**明確機械式 UI implementation**（Phase 3 起視情況，例如線框已拍板後的元件／排版搬移）才切 **Sonnet 5.5＋Medium**（客戶 DEC-109 三十二）；Phase 7（Digest／Brain）**Opus 5.5＋High**。寫入 HANDOFF 下一接手點；開工時依 DEC-084／DEC-106 比對現況，符合即靜默繼續。
+  - **R19**（2026-10-29 第二輪 QA 總管裁定改寫）：Phase 2（helper／test 契約遷移）用 **Opus 5.5＋High**；進入**明確機械式 UI implementation**（Phase 3 起視情況，例如線框已拍板後的元件／排版搬移）才切 **Sonnet 5.5＋Medium**（客戶 DEC-109 三十二）；Phase 7（Digest／Brain）**Opus 5.5＋High**。寫入 HANDOFF 下一接手點；開工時依 DEC-084／DEC-106 比對現況，符合即靜默繼續。 📌 **2026-10-29：Phase 2 的 Model×Effort 被客戶後續指示降級，見 DEC-113（以 DEC-113 為準；本條 R19 原文未改）。**
   - **同原則複查（2026-10-29 總管裁定「凡總管讀法改變客戶核准過的呈現、且 DEC-109 客戶原文沒有明確點名者，一律維持＋列入該頁 phase 線框待拍板點」後，撰寫組逐條複查）**：改為「維持＋待拍板」者＝R3（選股條件預設展開，Phase 5）、DEC-107 1A 頁面順序下候選如何提前（Phase 5）、`ZONE1_SORT_NOTE` 排序依據句由說明句改 chip（Phase 5）、DEC-017 葉1 ②兩套刻度常駐非摺疊（Phase 6，原 R6 一部分）、DEC-105 第 4 點指路由說明句改 chip（Phase 4）、卡片摺疊標籤「▸ 詳細」換字（各頁，原 R7 一部分）、tokens 客戶裁示色值（Phase 3，原 R15 一部分）。**維持原判（客戶原文有明確點名）**者＝R2（DEC-109 三／十一 Primary Visual、同日前序「主決策圖表不要藏在 expander」）、R5 價格時間＋來源改同位置 chip（DEC-109 九 as_of／source 用 chip 取代重複長句）、R5 外幣排除逐字 chip 與 Missing chip（DEC-109 八）、Risk Cap 完整性 coverage chip（DEC-109 九 coverage；仍在卡面緊鄰數字）、DEC-105 1A 結論句進第一屏（同日前序「今日結論必須在第一屏可見」）、DEC-107 4A 候選 Top-N（DEC-109 十二）、三要素位置（DEC-109 七）、更新模式 radio 下沉（同日前序「更新模式與工程說明下沉」）、R12 AI 投資總結格式（DEC-109 二十一）；R8／R9／R10／R13／R14 不改變客戶核准的呈現，維持。**第二輪 QA（2026-10-29）再收斂**：R5「DEC-105 指路為 chip」改為維持指路句＋W2 待拍板；R4 不再作讀法，改登 `CV1-DR-12`＋W9；DEC-021 取代範圍縮到 DEC-083 Q1 明確點名的「換一本／建新 Sheet」；舊 Stage D 各列改為「排程 superseded、能力項目維持 open」（`P1R-STAGE-D-CARRYOVER`）；「最大 1～3 個變化」選取規則改列 W8（Phase 7），不作內部預設。判準：客戶 DEC 的呈現裁示只有在 DEC-109 或同日前序指示（15:18Z）**明確點名**處才被取代。⚠️ 複查為撰寫組單組，未經第二組驗證。
 - **與其他 DEC 的關係**：DEC-109（客戶裁示）的內部落文；DEC-003（內部自決區）、DEC-082（版面變更草稿先行）呼叫；不降低任何 Security／Investment／Data／CI／Audit Gate。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：R1～R19 由 AI 總管依五組單組調查（Inv-1～Inv-5）＋獨立稽核組勘誤定案；撰寫組照錄，**未經第二組驗證**。
@@ -4557,3 +4559,20 @@ Stage 完成回報保持極簡：
 - **決策者**：客戶（2026-09-25；經程式碼註解轉述）。｜**日期**：2026-09-25。｜**範圍**：UI／呈現（新版 v2 卡面：三列短句、K1、hover 禁令、16 燈卡摺疊）。｜**取代鏈**：DEC-112 →（列數／位置；含下方「非 live 卡三要素照留卡面」）DEC-109 七；K1、hover 禁令、「▸ 詳細」機制與字樣仍有效。｜**狀態**：**部分取代 BY DEC-109**（2026-10-29 有意識的政策變更，不是漏刪，決策者 客戶（DEC-109））——「三列短句上卡面」的**列數／位置**被取代；**K1**（卡面字句須為 Note 原文摘錄、不新造）與「**⛔ 完整原文不得只剩 hover**」**維持**並延伸到手機；「▸ 詳細」純 CSS 摺疊**機制與標籤字樣**維持（換字與否＝各頁線框待客戶拍板點，DEC-110 R7）。
 - **來源**（類別 **E**：程式碼註解轉述；約 L 僅參考）：`page_find.py` 約 L769「v2 卡面的短語表（客戶 2026-09-25 裁示 2）」、約 L770「每一則 `Note` → 卡面上的**三列短句**（現在 / 為什麼 / 去哪補）」、約 L774「客戶 2026-09-25 最終裁示：⛔ 不得只剩 hover，手機要看得到」、約 L2098、約 L2134「2026-09-25 客戶最終裁示：**⛔ 不得有只活在 hover 的字**」；`page_hold.py` 約 L4782「客戶 2026-09-25 裁示 2 ＋ K1」；`page_today.py` 約 L3014「🔴 **2026-09-25 客戶核可線框：16 盞燈卡（`detail.*`）的三列出處說明收進「▸ 詳細」。**」、約 L3017「非 live 卡的三要素（現在／為什麼／去哪補）與 degraded 的「現值」**照留卡面、⛔ 不摺**。」（同一 2026-09-25 核可線框的範圍界定；其中「三要素照留卡面」的**位置**由 DEC-109 七取代、內容保留；degraded「現值」是觀測值、DEC-109 未明確點名 → **維持卡面**）、約 L3019「2026-09-25 客戶選 (b)」；`src/ui_v2/markup.py` 約 L586「客戶 2026-09-25 核可線框逐字「▸ 詳細」」。
 - **兩邊理由並陳**：舊做法（三列短句上卡面＋全文摺疊）在保留全文的同時讓卡面有可讀摘要——**理由仍成立**；新做法勝出原因：三列×每卡超出 Visual Budget（第一屏 3～5 數字／chip、≤1 句主要判讀），且客戶 DEC-109 七明令取消「三者必須全部常駐主畫面」。
+
+### DEC-113｜Phase 2 Model×Effort 降級：helper／測試遷移類工作用 Sonnet 5.5＋Medium（客戶 2026-10-29）
+
+> 2026-10-29 補登（取下一個未用號；落盤前 `grep -rn "DEC-113" docs PROJECT_RULES.md` 0 命中）。**來源類別：客戶，經總管轉交要點，非逐字**。
+
+- **決策者**：客戶（2026-10-29，Phase 1 完成後）。
+- **內容**：Phase 1 完成後，Phase 2 若仍是 helper／測試遷移、守衛盤點、遷移計畫與文件同步，依 Minimum Sufficient Effort 降為 **Sonnet 5.5＋Medium**；**只有**碰投資語意、Risk Cap、資料契約、重大架構衝突或其他 High Gate 才升回 **Opus 5.5**（High）。客戶已切換（「改好了，繼續 Phase 2」）。
+- **兩邊理由並陳**：舊做法（DEC-110 R19：Phase 2 用 Opus 5.5＋High）對「畫面零變更、不碰投資語意」的機械遷移較保守，**理由仍成立**於一旦牽涉守衛鏈或契約判斷；新做法勝出：DEC-073／084 Minimum Sufficient Effort，高於所需不必浪費。
+- **與其他 DEC 的關係**：修訂 DEC-110 R19（只改 Phase 2 的 Model×Effort；R19 其餘—Phase 3 起視情況、Phase 7 用 Opus 5.5＋High—不變）；承 DEC-073／084／106；DEC-109 三十二（客戶原文）不改。
+
+### DEC-114｜Phase 2 前的 Safe Handoff／Session Close 指示（客戶 2026-10-29）
+
+> 2026-10-29 補登。**來源類別：客戶，經總管轉交要點，非逐字**。
+
+- **決策者**：客戶（2026-10-29）。
+- **要點**：停止 Phase 2 實作；做正式 Safe Handoff／Session Close，使全新對話只靠 GitHub 冷啟動；Scope Guard（不開始 Phase 2、不新增資料源／公式／語意；本批只改 docs／governance）；Hard Output Gate（DEC-104，過程不輸出）；完成條件＝docs 提交並一般 push、HANDOFF 索引為實況、預備實測存入 repo。
+- **落點**：`docs/HANDOFF.md` 置頂索引；`docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md` §11；`docs/PROJECT_STATE.md` §48；`docs/BACKLOG.md` `P1R-PHASE1-CONTRACT-FREEZE`／`P1R-PHASE2-HELPER-TEST-MIGRATION`。
