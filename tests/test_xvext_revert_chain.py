@@ -696,6 +696,10 @@ def xvext_revert_for(file_path, code: str) -> str:
     from tests.test_dec102_revert_chain import dec102_revert_for
     code = dec102_revert_for(file_path, code)
     rel = _rel(file_path)
+    # 📌 XV-ASOF（DEC-102，2026-10-28；有意識的接鏈，⛔ 不是漏改）：本批之後又動了 `dividend_station_service`／
+    #   `page_hold`／`page_inspect` ⇒ 最新那一批先換回（鏈頭往前接一節；只套一次；⛔ 不動本表與 `XVEXT_BASE_SHA`）。
+    from tests.test_asof_revert_chain import asof_revert_for
+    code = asof_revert_for(rel, code)
     pairs = XVEXT_REVERT_PAIRS.get(rel, ())
     if not pairs:
         return code
