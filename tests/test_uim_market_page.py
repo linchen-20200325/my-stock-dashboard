@@ -115,6 +115,21 @@ def test_cold_start_page_never_mentions_checkbox_or_engineering_words(tmp_path):
     assert "指數線：⬜ 尚未載入，請按更新" in _chart_a_basis
 
 
+@pytest.mark.parametrize("session", (None, _LOADED), ids=("cold", "hot"))
+def test_danger_card_demotion_is_signposted_from_hero_and_chart_d(tmp_path, session):
+    """客戶裁示 3A＋附加要求（DEC-105）：指標危險度降階後，首屏「今日主要風險」卡與圖 D 都要清楚指路；
+    指路句含「指標危險度」，目標 expander 標題字面存在，且其第一張卡就是指標危險度。"""
+    _at = _run(tmp_path, session)
+    assert not _at.exception
+    _top = _texts(_at, outside_expanders=True)
+    assert _top.count(B.DANGER_POINTER) == 2                     # hero 風險卡一次＋圖 D 一次
+    assert "指標危險度" in B.DANGER_POINTER and f"「{B.LAMP_DETAIL_EXPANDER_LABEL}」" in B.DANGER_POINTER
+    _exps = _expanders(_at.main)
+    assert B.LAMP_DETAIL_EXPANDER_LABEL in _exps                  # 指路目標存在（標題字面相同）
+    _first = _exps[B.LAMP_DETAIL_EXPANDER_LABEL][0]
+    assert _first[0] == "Markdown" and "指標危險度" in _first[1]   # 展開區最上方確實是指標危險度卡
+
+
 def test_chart_a_grey_error_text_is_scrubbed(tmp_path, monkeypatch):
     _secret = "AIza" + "A" * 35
     monkeypatch.setattr(S, "get_twii_trend_view", lambda n: S.TwiiTrendView(ok=False, error=f"讀取失敗 key={_secret}"))

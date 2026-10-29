@@ -119,7 +119,11 @@ CHART_C_BASIS: str = "查看依據：此區塊未啟用，沒有使用任何資�
 CHART_D_TITLE: str = "圖D ⚠️ 主要風險"
 CHART_D_NOTE: str = "只顯示最需要注意的 3–5 項、方向、是否惡化。"
 CHART_D_WORSENING: str = f"是否惡化：{NOT_DEFINED}"
-CHART_D_ALL_LAMPS_POINTER: str = "查看全部指標 › 請展開下方「指標明細（16 項）」"
+#: 客戶裁示 3A（DEC-105）：「指標危險度」卡降階到下方展開區最上方 ⇒ 首屏必須清楚指路（字樣含「指標危險度」四字）。
+#: 展開區標題字面與 `page_market` 的 expander 標題相同（由測試對帳）。
+LAMP_DETAIL_EXPANDER_LABEL: str = "指標明細（16 項）"
+DANGER_POINTER: str = f"指標危險度（整體危險度與五桶摘要）請展開下方「{LAMP_DETAIL_EXPANDER_LABEL}」最上方。"
+CHART_D_ALL_LAMPS_POINTER: str = f"查看全部指標 › 請展開下方「{LAMP_DETAIL_EXPANDER_LABEL}」"
 INSUFFICIENT_TEXT: str = "⬜ 資料不足／無法判定"
 
 BASIS_EXPANDER_LABEL: str = "🔍 查看依據"
@@ -644,6 +648,7 @@ def render_hero(session: Mapping[str, Any], *, regime_tile: Any, exposure_tile: 
         with st.container(border=True):
             st.markdown(f"**{HERO_RISK_TITLE}**")
             _render_lines(hero_risk_lines(risks))
+            st.caption(DANGER_POINTER)
             render_basis(basis_risks(risks))
     with _cols[3]:
         with st.container(border=True):
@@ -769,6 +774,7 @@ def render_chart_d(risks: MarketRisks) -> None:
             st.markdown(f"**{risks.n_unevaluated} 項未評估**（共 {risks.n_lamps} 項燈；未評估不等於安全）")
             st.markdown(_md_table(("風險桶（每桶一項）", "方向", "是否惡化"), risk_panel_rows(risks)))
         st.markdown(CHART_D_ALL_LAMPS_POINTER)
+        st.caption(DANGER_POINTER)
         render_basis(basis_risks(risks))
 
 
