@@ -50,3 +50,14 @@ def test_non_green_bucket_main_key_is_the_headline_lamp():
         elif _b["level"] == "green":
             assert _b["main_key"] is None
     assert _seen_non_green >= 2, "測試輸入應至少讓兩桶非綠，否則上面的斷言沒有東西可驗"
+
+
+def test_main_key_is_the_worst_lamp_not_the_first_lamp():
+    """對抗性輸入：中期桶裡**排在最前面**的 `ism_pmi` 是綠燈，真正的黃燈是排在後面的 `us10y`。
+    ⇒ `main_key` 必須是 `us10y`（headline 用的那盞），不能只是桶內第一盞。"""
+    _out = compute_five_bucket_summary(macro_info={"ism_pmi": {"value": 55.0}, "us10y": {"current": 4.8}})
+    _mid = _out["mid"]
+    assert _mid["level"] == "yellow"
+    assert [d["key"] for d in _mid["details"]][0] == "ism_pmi" and _mid["details"][0]["danger"] == "green"
+    assert _mid["main_key"] == "us10y"
+    assert _mid["headline"].startswith(next(d["label"] for d in _mid["details"] if d["key"] == "us10y"))
