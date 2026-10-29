@@ -3136,7 +3136,7 @@ Effort：High
 
 > 2026-10-29 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/DECISIONS.md` 最大為 DEC-104、DEC-105 0 命中）。要點經總管轉交，**非客戶逐字全文**。
 
-- **決策者**：**客戶**（2026-10-29；經總管轉交之要點）。｜**日期／效力日期**：2026-10-29 起生效。｜**狀態**：生效；UI-M 實作 PR #965 待合併（見下方「實作紀錄」）。
+- **決策者**：**客戶**（2026-10-29；經總管轉交之要點）。｜**日期／效力日期**：2026-10-29 起生效。｜**狀態**：生效；UI-M 實作 ~~PR #965 待合併~~ 已合併（PR #965，main `3dad82e0`）（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））（見下方「實作紀錄」）。
 - **背景**：UI-M（📊 市場頁，依已核准線框與 A 規格 §4.1）實作後，三項實作層偏離需客戶看過後裁示（`docs/BACKLOG.md` `UIM-LAYOUT-DEVIATIONS` (g)(h)、`UIM-REGIME-WORDING`）。
 - **內容**：
   1. **今日結論句＝A**：維持在 Hero 四卡與「⚡ 需要處理」之間。
@@ -3147,7 +3147,7 @@ Effort：High
 - **效力邊界**：不核准任何新資料源／schema／公式／投資語意；不核准 Risk Cap 顯示、正式趨勢定義、EPS×PE、「惡化」判定；不改 `PAGE_LABELS`／`ia_nav`／`app.py`／`page_today`；舊 UI Removal Gate 不變。
 - **與其他 DEC 的關係**：落實 DEC-092（設計方向與 Q2／Q3）；與 DEC-081 Q2-1（結論句）同向；DEC-082／v3 §03-2 ①（版面異動須先草稿）— 本條即客戶對偏離的拍板。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條要點為總管轉交；「與其他 DEC 的關係」為撰寫組讀法，單組。
-- 📌 **實作紀錄（2026-10-29 補；加法式；決策者 AI 總管（事實更新））**：**狀態＝已實作，PR #965 待合併**（分支 `ccr-6eace3b6-0gglrs`，基準 `d0482441`，`git log d0482441..HEAD`）。
+- 📌 **實作紀錄（2026-10-29 補；加法式；決策者 AI 總管（事實更新））**：~~**狀態＝已實作，PR #965 待合併**~~ **狀態＝已實作並已合併（PR #965，main `3dad82e0`）**（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））（分支 `ccr-6eace3b6-0gglrs`，基準 `d0482441`，`git log d0482441..HEAD`）。
   - **commit**（前綴 `feat(UI-M):`）：`ce99f220`（L2 `main_key`＋還原鏈頭節）／`bb2ab542`（薄 L3 圖 A 讀取）／`8b4f54ea`（市場頁落地）／`2a2d16f6`／`9009b786`／`08028336`／`855ab610`（QA-B 修正）／`afca2b22`（QA-A 修正）／`c1b871e0`（QA-C 小修）／`db1c6d2a`（本條 3A 指路句）；其後為本條文件落盤 commit。
   - **改動檔**：`src/compute/macro/macro_helpers.py`（每桶加性 `main_key`）／`src/services/market_twii_view_service.py`（新，L3）／`src/ui/views/_market_blocks.py`（新，L5）／`src/ui/views/page_market.py`；測試 `test_market_blocks.py`、`test_uim_market_page.py`、`test_uim_main_key.py`、`test_market_twii_view_service.py`、`test_uim_revert_chain.py`（還原鏈新頭節，`xvext_revert_for` 第一步呼叫），並修改 `test_page_market.py` 三處因重排而失敗的斷言（理由寫在測試內）。
   - **測試**：Fast lane 全套 32548 passed、1 failed、50 skipped（唯一失敗為已知環境失敗 `test_batch_z59` markdown_it）；mutation 約 27 個逐一拔守衛全數轉紅（首輪 M13、M15 的存活原因與補強見 PR 描述）。
