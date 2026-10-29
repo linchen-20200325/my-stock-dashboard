@@ -1,0 +1,352 @@
+"""tests/test_uim_market_page.py — UI-M：📊 市場頁整頁（AppTest）＋與 UI-M 之前（d0482441）的保留區塊 parity。
+
+守什麼：
+  · 冷啟動：第一列全灰「⬜ 尚未載入，請按更新」、沒有任何紅字（未載入≠真出錯）。
+  · 水位卡首屏無百分比；原有出手區間（含 risk_cap.v2）只在「🔍 查看依據」展開區內。
+  · 圖 A／圖 B 的重運算／讀快取在 checkbox gate 之後；灰（讀不到）與紅（真例外）分離；過期有警示。
+  · hero「今日主要風險」與圖 D 同源（頁面層）；⚡ 區沒有來源時寫「⬜ 目前沒有可列的警示來源」。
+  · parity：被保留的區塊（今日結論句、各展開區、所有未動的 helper）與 UI-M 之前逐字相同。
+    「UI-M 之前」的原始碼由 `tests/test_uim_revert_chain.py::uim_revert_for` 還原（不依賴 git）。
+"""
+from __future__ import annotations
+
+import ast
+import pathlib
+
+import pandas as pd
+import pytest
+from streamlit.testing.v1 import AppTest
+
+from src.services import market_twii_view_service as S
+from src.ui.views import _market_blocks as B
+from src.ui.views import page_today as P
+
+_ROOT = pathlib.Path(__file__).resolve().parents[1]
+_REL = "src/ui/views/page_market.py"
+_SCRIPT = "from src.ui.views.page_market import render_page_market\nrender_page_market()\n"
+
+_IDX = pd.to_datetime(["2026-10-21", "2026-10-22", "2026-10-23"])
+_LOADED = {
+    "cl_data": {
+        "tw": {"台股加權指數": pd.DataFrame({"close": [22000.0, 22100.0, 22200.0]}, index=_IDX)},
+        "intl": {"道瓊工業 DJI": pd.DataFrame({"close": [40000.0, 40100.0, 39900.0]}, index=_IDX),
+                 "10Y公債殖利率": pd.DataFrame({"close": [4.1, 4.2, 4.3]}, index=_IDX),
+                 "美元指數 DXY": pd.DataFrame({"close": [99.0, 99.5, 100.0]}, index=_IDX)},
+        "tech": {}, "inst": {"外資及陸資": {"net": -50.0}}, "margin": 3123.4, "adl": None},
+    "macro_info": {"vix": {"current": 35.0, "date": "2026-10-22", "source": "yfinance:^VIX"},
+                   "us10y": {"current": 4.8, "date": "2026-10-22"},
+                   "ism_pmi": {"value": 44.0, "date": "2026-09-01"},
+                   "us_core_cpi": {"yoy": 2.0, "date": "2026-09-01"}},
+    "mkt_info": {"index_price": 22200.0, "index_as_of": "2026-10-23", "ma5": 22100.0, "ma60": 21500.0,
+                 "ma120": 20500.0, "ma200": None, "ma200_status": "歷史不足"},
+    "bias_info": {"bias_240": 5.5, "is_estimated": True, "data_days": 190},
+}
+
+
+def _run(tmp_path, session=None, script=_SCRIPT, name="_m.py") -> AppTest:
+    _f = tmp_path / name
+    _f.write_text(script, encoding="utf-8")
+    _at = AppTest.from_file(str(_f), default_timeout=120)
+    for _k, _v in (session or {}).items():
+        _at.session_state[_k] = _v
+    _at.run()
+    return _at
+
+
+_TEXT_KINDS = ("Markdown", "Caption", "Error", "Warning", "Success", "Info", "Text", "Code")
+#: `st.line_chart` 在 AppTest 樹裡的元素型別名隨 Streamlit 版本不同（1.59：vega_lite_chart；舊版：arrow_*）⇒ 全收。
+_CHART_TYPES = ("vega_lite_chart", "arrow_vega_lite_chart", "line_chart", "arrow_line_chart")
+
+
+def _n_charts(at) -> int:
+    return sum(len(at.get(_t)) for _t in _CHART_TYPES)
+
+
+def _flat(block, in_exp=False):
+    """AppTest 樹 → `(類別名, 值, 是否在 expander 內)`。"""
+    for _ch in block.children.values():
+        if hasattr(_ch, "children"):
+            yield from _flat(_ch, in_exp or type(_ch).__name__ == "Expander")
+        else:
+            _name = type(_ch).__name__
+            # 只讀文字類元素的 `.value`（widget 的 `.value` 會去查 session_state，無 key 時 KeyError）
+            yield _name, (getattr(_ch, "value", None) if _name in _TEXT_KINDS else None), in_exp
+
+
+def _expanders(block, out=None):
+    """label → 該 expander 子樹內所有 `(類別名, 值)`（含巢狀）。"""
+    out = {} if out is None else out
+    for _ch in block.children.values():
+        if hasattr(_ch, "children"):
+            if type(_ch).__name__ == "Expander":
+                out.setdefault(_ch.label, []).extend((k, v) for k, v, _ in _flat(_ch))
+            _expanders(_ch, out)
+    return out
+
+
+def _texts(at, *, outside_expanders: bool | None = None, kinds=("Markdown", "Caption", "Error", "Warning")):
+    return [v for k, v, e in _flat(at.main) if k in kinds and isinstance(v, str)
+            and (outside_expanders is None or e is (not outside_expanders))]
+
+
+# ══════════════════════════════════════════════════════════════════
+# 冷啟動
+# ══════════════════════════════════════════════════════════════════
+def test_cold_start_first_row_is_grey_and_nothing_is_red(tmp_path):
+    _at = _run(tmp_path)
+    assert not _at.exception, _at.exception
+    assert not _at.error, [e.value for e in _at.error]       # 未載入 ≠ 真出錯：沒有任何紅字
+    _top = _texts(_at, outside_expanders=True)
+    assert "## 📊 市場" in _top
+    assert B.PAGE_SUBTITLE in _top
+    assert B.NOT_LOADED in _top                              # 今日主要風險：⬜ 尚未載入，請按更新
+    assert "**⬜ 尚未核准／無法判定**" in _top                  # 水位卡永遠是 ⬜
+    assert not any("無風險" in t for t in _texts(_at))
+    assert not any("%" in t for t in _top if "style" not in t[:10] and not t.startswith("<"))   # 首屏（非 HTML 卡）無百分比
+
+
+def test_cold_start_chart_d_is_not_loaded_and_no_unevaluated_count_claim_of_safety(tmp_path):
+    _at = _run(tmp_path)
+    _top = _texts(_at, outside_expanders=True)
+    assert _top.count(B.NOT_LOADED) >= 2       # hero 風險 ＋ 圖 D（圖 B 也未載入）
+    assert not any("未評估不等於安全" in t and "0 項" in t for t in _top)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 水位卡：首屏無 %，原區間只在查看依據內
+# ══════════════════════════════════════════════════════════════════
+def test_water_card_hides_range_outside_basis_but_keeps_it_inside(tmp_path, monkeypatch):
+    from tests.test_page_market import _SCENARIOS, _fake_alloc
+    monkeypatch.setattr(P, "_load_allocation", lambda: (_fake_alloc(with_cap=True), ""))
+    monkeypatch.setattr(P, "_load_regime", lambda: _SCENARIOS["live_with_cap"]["regime"])
+    _at = _run(tmp_path, _LOADED)
+    assert not _at.exception, _at.exception
+    _all = [(k, v, e) for k, v, e in _flat(_at.main) if isinstance(v, str)]
+    _outside = [v for k, v, e in _all if not e]
+    _inside = [v for k, v, e in _all if e]
+    assert not any("40%～60%" in v or "上限 37%" in v for v in _outside), "水位卡首屏不得出現出手區間／上限數字"
+    assert any("40%～60%" in v for v in _inside), "原有出手區間（含 risk_cap.v2）應保留在查看依據內"
+    assert any("風險上限：獨立顯示待 C2b＋RC-VISIBILITY Gate" == v for k, v, e in _all if k == "Caption" and not e)
+
+
+# ══════════════════════════════════════════════════════════════════
+# hero 與圖 D 同源（頁面層）
+# ══════════════════════════════════════════════════════════════════
+def test_loaded_hero_items_match_panel_rows(tmp_path):
+    _at = _run(tmp_path, _LOADED)
+    assert not _at.exception, _at.exception
+    assert not _at.error
+    _top = _texts(_at, outside_expanders=True)
+    _items = [t for t in _top if t[:1] in "①②③"]
+    assert 1 <= len(_items) <= 3
+    _panel = next(t for t in _top if t.startswith("| 風險桶（每桶一項）"))
+    for _it in _items:
+        _lamp = _it.split("：", 1)[1].split("（", 1)[0]
+        assert _lamp in _panel, (_lamp, _panel)
+    assert any(t.startswith("**") and "項未評估**" in t for t in _top)        # 圖 D 頂端「N 項未評估」
+    assert not any("無風險" in t for t in _top)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 圖 A：gate、灰紅分離、過期
+# ══════════════════════════════════════════════════════════════════
+def _view(**kw):
+    _base = dict(ok=True, xs=("2026-10-21", "2026-10-22", "2026-10-23"), close=(22000.0, 22100.0, 22200.0),
+                 n_available=3, as_of="2026-10-23", is_stale=False)
+    _base.update(kw)
+    return S.TwiiTrendView(**_base)
+
+
+def test_chart_a_reads_cache_only_after_checkbox(tmp_path, monkeypatch):
+    _calls: list[int] = []
+
+    def _fake(n):
+        _calls.append(n)
+        return _view()
+    monkeypatch.setattr(S, "get_twii_trend_view", _fake)
+    _at = _run(tmp_path, _LOADED)
+    assert _calls == [] and _n_charts(_at) == 0                      # 冷的 gate：不讀、不畫
+    _at.checkbox(key=B.SS_GATE_CHART_A).check().run()
+    assert not _at.exception, _at.exception
+    assert _calls == [B.TWII_CHART_TRADING_DAYS]
+    assert _n_charts(_at) == 1
+    assert any(t == "近 3 日，資料至 2026-10-23　·　" + S.TWII_SOURCE_TEXT for t in _texts(_at))
+    assert "**均線為參考，不等於正式台股趨勢判斷。**" in _texts(_at, outside_expanders=True)
+    assert "台股趨勢結論：⬜ 尚未定義" in _texts(_at, outside_expanders=True)
+
+
+@pytest.mark.parametrize("view, red, grey_prefix", (
+    (S.TwiiTrendView(ok=False, error="加權指數歷史快取讀不到"), False, "⬜ 台股指數歷史暫時讀不到"),
+    (S.TwiiTrendView(ok=False, failed=True, error="OSError: disk"), True, None),
+))
+def test_chart_a_grey_for_unreadable_red_for_exception(tmp_path, monkeypatch, view, red, grey_prefix):
+    monkeypatch.setattr(S, "get_twii_trend_view", lambda n: view)
+    _at = _run(tmp_path, _LOADED)
+    _at.checkbox(key=B.SS_GATE_CHART_A).check().run()
+    assert not _at.exception
+    assert bool(_at.error) is red
+    if grey_prefix:
+        assert any(t.startswith(grey_prefix) for t in _texts(_at, kinds=("Caption",)))
+    assert _n_charts(_at) == 0
+
+
+def test_chart_a_stale_cache_is_flagged(tmp_path, monkeypatch):
+    monkeypatch.setattr(S, "get_twii_trend_view", lambda n: _view(is_stale=True, stale_reason="落後 4 個交易日"))
+    _at = _run(tmp_path, _LOADED)
+    _at.checkbox(key=B.SS_GATE_CHART_A).check().run()
+    assert any("已過期" in w.value and "落後 4 個交易日" in w.value for w in _at.warning)
+    assert _n_charts(_at) == 1                                   # 照畫（不擋資料），但有旗標
+
+
+def test_chart_a_unknown_freshness_is_grey_not_assumed_fresh(tmp_path, monkeypatch):
+    monkeypatch.setattr(S, "get_twii_trend_view", lambda n: _view(is_stale=None))
+    _at = _run(tmp_path, _LOADED)
+    _at.checkbox(key=B.SS_GATE_CHART_A).check().run()
+    assert "⬜ 台股指數歷史快取的新鮮度未判定" in _texts(_at, kinds=("Caption",))
+
+
+def test_chart_a_missing_ma_is_listed_not_drawn_as_zero(tmp_path, monkeypatch):
+    monkeypatch.setattr(S, "get_twii_trend_view", lambda n: _view())
+    _at = _run(tmp_path, _LOADED)
+    _caps = _texts(_at, kinds=("Caption",))
+    assert "⬜ 缺少的均線：MA200：無資料（歷史不足）" in _caps
+
+
+# ══════════════════════════════════════════════════════════════════
+# 圖 B
+# ══════════════════════════════════════════════════════════════════
+def test_chart_b_groups_and_one_chart_per_series_after_gate(tmp_path):
+    _at = _run(tmp_path, _LOADED)
+    assert _n_charts(_at) == 0
+    _at.checkbox(key=B.SS_GATE_CHART_B).check().run()
+    assert not _at.exception, _at.exception
+    assert _n_charts(_at) == 3                                   # DJI／10Y／DXY；IXIC／SOX 本輪沒有
+    _md = _texts(_at, kinds=("Markdown",))
+    for _g in ("**海外市場**", "**利率**", "**美元**"):
+        assert _g in _md
+    assert "道瓊工業 DJI　·　近 3 日，資料至 2026-10-23" in _md
+    assert "國際趨勢結論：⬜ 尚未定義" in _md
+    assert "⬜ 本輪沒有這個系列" in _texts(_at, kinds=("Caption",))
+
+
+def test_chart_b_not_loaded_is_grey(tmp_path):
+    _at = _run(tmp_path, {k: v for k, v in _LOADED.items() if k != "cl_data"})
+    assert not _at.error and _n_charts(_at) == 0
+
+
+# ══════════════════════════════════════════════════════════════════
+# ⚡ 需要處理
+# ══════════════════════════════════════════════════════════════════
+def test_alerts_block_without_sources_says_so_and_never_claims_all_clear(tmp_path, monkeypatch):
+    monkeypatch.setattr(P, "_load_allocation", lambda: (None, ""))
+    _at = _run(tmp_path)
+    _top = _texts(_at, outside_expanders=True)
+    assert "**⚡ 需要處理**" in _top and B.ALERTS_NO_SOURCE in _top
+    assert not any("沒有需要處理的事" in t for t in _texts(_at))
+
+
+def test_alerts_block_relays_allocation_conflicts_verbatim(tmp_path, monkeypatch):
+    from tests.test_page_market import _SCENARIOS, _fake_alloc
+    _a = _fake_alloc(with_cap=False)
+    _a.conflicts = ("某個與結論相反的既有提示",)
+    monkeypatch.setattr(P, "_load_allocation", lambda: (_a, ""))
+    monkeypatch.setattr(P, "_load_regime", lambda: _SCENARIOS["live_no_cap"]["regime"])
+    _at = _run(tmp_path, _LOADED)
+    _top = _texts(_at, outside_expanders=True)
+    assert "- 某個與結論相反的既有提示" in _top and B.ALERTS_NO_SOURCE not in _top
+
+
+# ══════════════════════════════════════════════════════════════════
+# 圖 C
+# ══════════════════════════════════════════════════════════════════
+def test_chart_c_block_is_text_only_no_numbers_no_charts(tmp_path):
+    _at = _run(tmp_path, _LOADED)
+    _flat_all = list(_flat(_at.main))
+    _i = next(i for i, (k, v, e) in enumerate(_flat_all) if isinstance(v, str) and v.startswith("**圖C"))
+    _j = next(i for i, (k, v, e) in enumerate(_flat_all) if isinstance(v, str) and v.startswith("**圖D"))
+    _block = [v for k, v, e in _flat_all[_i:_j] if isinstance(v, str)]
+    assert len(_block) == 4
+    assert not any(c.isdigit() or "%" in c for t in _block for c in t)
+    assert not [k for k, v, e in _flat_all[_i:_j] if k in ("Dataframe", "Table", "UnknownElement", "Button", "Checkbox")]
+
+
+# ══════════════════════════════════════════════════════════════════
+# 保留不動：parity
+# ══════════════════════════════════════════════════════════════════
+def _base_source() -> str:
+    from tests.test_uim_revert_chain import uim_revert_for
+    return uim_revert_for(_REL, (_ROOT / _REL).read_text(encoding="utf-8"))
+
+
+def _defs(src: str) -> dict[str, str]:
+    _out = {}
+    for _n in ast.parse(src).body:
+        if isinstance(_n, ast.FunctionDef):
+            _out[f"def {_n.name}"] = ast.dump(_n)
+        elif isinstance(_n, ast.Assign):
+            for _t in _n.targets:
+                if isinstance(_t, ast.Name):
+                    _out[f"var {_t.id}"] = ast.dump(_n)
+        elif isinstance(_n, ast.AnnAssign) and isinstance(_n.target, ast.Name):
+            _out[f"var {_n.target.id}"] = ast.dump(_n)
+    return _out
+
+
+#: UI-M 有意識改動／移出的頂層定義（其餘一律必須與 UI-M 之前逐字相同 —— 能力保留）。
+_INTENTIONALLY_CHANGED = {
+    "def render_page_market",        # 編排重排（本批本意）
+    "def _render_plain_card",       # 被 Hero／圖 A／圖 B 取代後無 caller，已刪
+    "var TREND_PENDING_WHY",        # 移入 `_market_blocks`，page_market re-export
+    "var PAGE_QUESTION",            # 值未改，只加註（AST 不含註解；保險起見列入）
+}
+
+
+def test_all_retained_toplevel_definitions_are_byte_identical_to_pre_uim():
+    _old, _new = _defs(_base_source()), _defs((_ROOT / _REL).read_text(encoding="utf-8"))
+    _same = {k for k in _old if k not in _INTENTIONALLY_CHANGED}
+    assert _same, "沒有可比對的保留定義？"
+    _diff = sorted(k for k in _same if _new.get(k) != _old[k])
+    assert not _diff, f"以下保留定義與 UI-M 之前不同（能力保留被破壞）：{_diff}"
+    # 本批只允許「移除」與「新增 re-export」，不允許默默多出別的頂層定義
+    _added = sorted(set(_new) - set(_old))
+    assert not _added, _added
+    # 保留區塊的幾個關鍵 helper 明確在列（防止比對集合被意外掏空）
+    for _k in ("def regime_clause", "def danger_clause", "def status_line", "def report_pointer",
+               "def _render_report_guarded", "def _render_x1", "def _render_x5", "def _render_x6",
+               "def _render_x8", "def raw_rows", "def inst_rows", "var X3_TEXT", "var X9_TEXT",
+               "var X5_FIELDS", "var X6_FIELDS", "var X7_FIELDS", "var CONCLUSION_HEADING"):
+        assert _k in _same
+
+
+def test_conclusion_sentence_and_expanders_are_identical_to_pre_uim(tmp_path):
+    _new = _run(tmp_path, _LOADED, name="_new.py")
+    _old = _run(tmp_path, _LOADED, script=_base_source() + "\nrender_page_market()\n", name="_old.py")
+    assert not _new.exception and not _old.exception, (_new.exception, _old.exception)
+
+    def _conclusion(at):
+        return [v for k, v, _ in _flat(at.main) if k == "Markdown" and v.startswith("市場位階：")]
+    assert _conclusion(_new) == _conclusion(_old) and len(_conclusion(_new)) == 1
+
+    _en, _eo = _expanders(_new.main), _expanders(_old.main)
+    _lamp = "指標明細（16 項）"
+    for _label, _items in _eo.items():
+        assert _label in _en, f"保留的展開區不見了：{_label}"
+        if _label == _lamp:
+            continue
+        assert _en[_label] == _items, f"展開區內容與 UI-M 之前不同：{_label}"
+    # 指標明細：最上面多一張「指標危險度」卡（原首屏卡②，同一張卡），其餘逐項相同
+    assert _en[_lamp][1:] == _eo[_lamp]
+    _old_top = {v for k, v, e in _flat(_old.main) if k == "Markdown" and not e}
+    assert _en[_lamp][0][0] == "Markdown" and _en[_lamp][0][1] in _old_top
+    # 新增的展開區只有各區塊的「🔍 查看依據」（以及原本就有的那些）
+    assert set(_en) - set(_eo) == {B.BASIS_EXPANDER_LABEL}
+
+
+def test_verdict_cards_are_all_still_drawn(tmp_path, monkeypatch):
+    """卡①②③ 一張都沒少：市場位階在 hero、出手區間在水位卡的查看依據、指標危險度在指標明細。"""
+    _drawn: list[str] = []
+    _real = P._render_one
+    monkeypatch.setattr(P, "_render_one", lambda t: (_drawn.append(t.card.key), _real(t))[1])
+    _at = _run(tmp_path, _LOADED)
+    assert not _at.exception
+    assert [k for k in _drawn if k.startswith("verdict.")] == ["verdict.regime", "verdict.exposure", "verdict.danger"]
