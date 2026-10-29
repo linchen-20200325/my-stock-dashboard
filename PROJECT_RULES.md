@@ -104,6 +104,56 @@
   4. **最終回報最多 5 行**：🟢 Stage 已完成／PR 與 main SHA／測試·QA·Mutation／已知限制／下一步＋Model×Effort（若需切換）。
   - 與上一條關係（撰寫組讀法，單組）：上一條 (f)「真實錯誤或 GitHub 狀態衝突」不在本條 5 種之內；本條較嚴，依「衝突取較嚴者」以本條為準 —— 真實錯誤若需客戶裁示或手動操作，落入本條 🔴／🟡；否則內部處理、不出聲。上方限定第 4 條揭露義務仍寫在該 Stage 唯一一次最終回報內。
 
+- 📌 **小節：Hard Output Gate（客戶 2026-10-29，DEC-104）**
+
+> 2026-10-29 新增（append-only；決策者＝**客戶**；不改上文，收緊上一條「零過程訊息」）。下方 code fence 內為**客戶原文逐字收錄**，不得改寫；原文以此處為準（`docs/DECISIONS.md` DEC-104 只作摘要與指向）。
+
+```
+Hard Output Gate
+
+在任何 user-visible 訊息送出前，必須先判斷：
+
+只有以下 5 類可以輸出：
+
+1. 🔴 真正需要客戶裁示
+2. 🟡 Model × Effort 必須切換，且尚未通知
+3. 🟡 需要客戶手動操作
+4. 🟢 整個 Stage 已完整完成
+5. 🟡 context/token 已不安全，需要換新對話交接
+
+若不屬於以上 5 類：
+不得輸出任何 user-visible 訊息。
+
+特別禁止：
+
+- 「還在進行中」
+- 「已 push」
+- 「PR 已開」
+- 「review／QA／mutation 正在跑」
+- 「還沒完成」
+- 「之後完成再回報」
+- 「我會等全部完成後再回報」
+- 「local／remote 已同步」
+- 「下一步正在做什麼」
+
+即使訊息內容是在說「我會保持安靜」，它本身仍然是 process chatter，也不得輸出。
+
+Pre-send self-check
+
+每次準備輸出前，先內部問：
+
+"Does the customer need to act now, switch model/effort now, perform a manual action now, receive a fully completed Stage report now, or switch conversation now?"
+
+若答案全部為否：
+SILENT。
+
+不得用「簡短進度」取代靜默。
+不得用英文進度句。
+不得用重複通知證明你仍在工作。
+```
+
+> 與上文關係（撰寫組讀法，單組）：與上一條「零過程訊息」5 種出聲情況**完全一致**，本小節新增的是**送出前硬閘（Pre-send self-check）**與明列禁句；衝突時取較嚴者。上方限定第 4 條揭露義務仍寫在該 Stage 唯一一次最終回報內。
+
 - 📌 **Context Lifecycle／/compact 規則（客戶 2026-10-28 指示；決策者＝客戶；append-only，不改上文）**（來源：客戶 2026-10-28 指示，經總管轉交之要點，非逐字全文）：目標＝減少 token 浪費，但**不得因壓縮遺失專案狀態**。
   1. 在**安全 checkpoint** 可主動使用 `/compact`，**不需每次先詢問客戶**。
   2. 建議觸發時機：一個 Stage 完整結束且正式文件已落盤後；context 明顯變長、重複內容增加；出現語言漂移、規則遺漏、重複回報等 context 污染跡象；準備進入下一個大型 Stage 前。

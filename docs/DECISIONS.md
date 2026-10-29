@@ -1484,6 +1484,21 @@ D2.5 以下大方向核准：
 - **與其他 DEC／條文的關係**：與 `PROJECT_RULES.md` 第 5 節 Minimum Necessary Change／Scope Control、`CLAUDE.md` §-1、§-1.5.F 判定 3 **同向（加嚴）**；不取代任何安全 Gate。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：「同向（加嚴）」為撰寫組讀法，單組；docs-only，未改程式碼。
 
+### DEC-104｜Hard Output Gate（送出前硬閘）正式入治理（客戶 2026-10-29）
+
+> 2026-10-29 補登（ID 取下一個未用號；落盤前 `grep -rn "DEC-104" --include=*.md .` 0 命中）。**客戶原文逐字收錄於 `PROJECT_RULES.md` 第 3 節（Silent Autonomous Cruise）「小節：Hard Output Gate（客戶 2026-10-29，DEC-104）」，原文以該處為準**；本條只作摘要與指向。
+
+- **決策者**：**客戶**（2026-10-29）。
+- **日期／效力日期**：2026-10-29 起生效（永久治理規則）。｜**狀態**：生效。
+- **規則落點**：`PROJECT_RULES.md` **第 3 節**，緊接「零過程訊息／Process chatter = governance violation」條之後。
+- **摘要（非逐字；以第 3 節原文為準）**：
+  1. 任何 user-visible 訊息送出前先判斷：只有 5 類可輸出（🔴 需客戶裁示／🟡 Model×Effort 需切換且尚未通知／🟡 需客戶手動操作／🟢 整個 Stage 完整完成／🟡 context／token 不安全需換新對話交接）；其餘一律不輸出。
+  2. 明列禁句（進行中／已 push／PR 已開／review·QA·mutation 正在跑／還沒完成／之後完成再回報／local·remote 已同步／下一步正在做什麼等）；「我會保持安靜」本身也是 process chatter。
+  3. Pre-send self-check：五問全否即 SILENT；不得以簡短進度、英文進度句或重複通知取代靜默。
+- **觸發背景**：AI 總管於 DEC-102 實作批次期間多次輸出過程訊息，見 `docs/BACKLOG.md` `GOV-CHATTER-2026-10-29`。
+- **與其他 DEC／條文的關係**：與 `PROJECT_RULES.md` 第 3 節「禁止事件回音」「零過程訊息」（2026-10-28）**同向（加嚴）**，5 類出聲情況一致；不取代任何安全 Gate，不減少第 3 節上方限定第 4 條揭露義務。`docs/HANDOFF.md` 必讀規則處加一行指向。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：「同向（加嚴）」「5 類一致」為撰寫組讀法，單組；docs-only，未改程式碼。
+
 ## 2. 產品／UI
 
 ### DEC-017｜IA v2 五頁線框為台股前端實作依據
