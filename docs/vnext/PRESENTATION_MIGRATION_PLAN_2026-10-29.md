@@ -18,7 +18,7 @@
 | **2** Helper／Test Contract Migration | 舊 helper 加可選參數（預設 byte-identical）、`Note` contract 不動、`V2_SHORT_ROWS` 保留、tests 改寫為「資訊守恆」等強斷言；T23（欄數）**暫不動**，待 `CV1-DR-12` 裁示 | 共用層＋tests；**畫面零變更** | **Opus 5.5＋High**（R19：契約遷移仍屬判斷型工作） | Phase 1 合併 | 零變更證明（批前／批後截圖或量測值相同） |
 | **3** Shared Visual Components | metadata／status chips、chart header、evidence expander、Missing placeholder、compact KPI card、sparkline、small multiples、Top-N 切片、segmented switcher；tokens 收斂；站殼間距子項 | 純加性新模組＋CSS；新元件未掛頁前畫面零變更（站殼子項例外） | 起判 Opus 5.5＋High；進入明確機械式 UI implementation 時切 Sonnet 5.5＋Medium（客戶 DEC-109 三十二；R19） | Phase 2 | 站殼子項動畫面前先出文字線框；零變更證明；站殼子項全 Gate |
 | **4** 📊 市場 reference implementation | 依契約 §12.1 回修；作為 Visual Fidelity reference | 單頁 UI | 線框與規格判斷用 Opus 5.5＋High；線框拍板後機械式實作視情況切 Sonnet 5.5＋Medium | Phase 3 | **先出文字線框（含 W2、W3、W9、版面差異、總管推薦）→ 客戶拍板 → 寫 UI code**；全 Gate |
-| **5** 🎯 標的 | 依契約 §12.2；線框先列待客戶拍板點 W4～W6（含選股條件預設展開 vs 收合） | 單頁 UI | 同 Phase 4 | Phase 4 | **先出文字線框（W3～W6、版面差異、總管推薦）→ 客戶拍板 → 寫 UI code**；全 Gate |
+| **5** 🎯 標的 | 依契約 §12.2；線框先列待客戶拍板點 W3～W6（含選股條件預設展開 vs 收合） | 單頁 UI | 同 Phase 4 | Phase 4 | **先出文字線框（W3～W6、版面差異、總管推薦）→ 客戶拍板 → 寫 UI code**；全 Gate |
 | **6** 💼 持股 | 依契約 §12.3（骨架 AI → ⚡ → 🌱／📈／⬜） | 單頁 UI（最大；可拆 2 PR） | 同 Phase 4，開工重判（`page_hold` 10 條還原鏈、骨架重排可能需 High） | Phase 5 | **先出文字線框（W3、W7、版面差異、總管推薦）→ 客戶拍板 → 寫 UI code**；全 Gate |
 | **7** One AI Brain／Decision Digest／AI 投資總結 | Digest v2 A1～A8、headless 組裝點、Brain、R12 輸出格式、R13 入口 | L0／L3＋UI 入口 | **Opus 5.5＋High**（R19） | Phase 6；Digest 契約已凍結（Phase 1）；v2 schema（A1～A7）定案前不寫新 prompt／glue | **先出 AI 投資總結文字線框（含 W8、版面差異、總管推薦）→ 客戶拍板 → 寫 UI code**；全 Gate＋Brain 驗收 8 條 |
 
@@ -134,7 +134,7 @@ M1 sparkline 把 NaN 補 0｜M2 metadata chip 接受未登記 kind｜M3 新 kind
 ## §7 Phase 3～7 要點
 
 - **Phase 3**：新純字串模組（建議 `src/ui_v2/compact.py`，無 streamlit）：`meta_chip_html(kind, text)`（kind 封閉集＝契約 §6）、`sparkline_svg(values, w, h)`（丟 NaN、⛔ 補 0、全 NaN→placeholder）、`mini_card_html(...)`、`chart_header_html(title, chips, say)`、`topn_view(rows, n)`、`segmented` 呈現 helper、`compact_css()`（與既有 page CSS 分開，保今天頁 CSS byte-identical）；`_ui_kit.status_chip()`、`render_fold(label, rows)`；`Basis` 合併（H31）；tokens 收斂（`P1R-TOKENS-CONVERGE`，客戶裁示色值先判）；站殼間距子項（只動站標高度與頂部留白；⛔ 改 `PAGE_LABELS`／導覽殼語意／legacy 入口；若獨立 QA 判屬 IA／殼變更 → 停手送客戶）。`requirements.txt` floor 1.56 下 `st.metric(chart_data=)`、`st.bar_chart(horizontal=)`、form 內 expander 先以 floor wheel 實跑，未驗前不使用（`P1R-FLOOR-156-API`）。
-- **Phase 4（📊 reference）**：改動檔預期 `_market_blocks.py`（無鏈）、`page_market.py`（nav1／uim 鏈 → 新頭節）；⛔ 動 `page_today.py`。重點守衛：結論句逐字、Q2-2 逐字、均線聲明逐字、⬜ 尚未定義、指標危險度指路、圖 C 零數字、hero 與圖 D 同源、EPS×PE placeholder、更新 form／gate 語意不變。版面骨架若偏離 blueprint → 草稿先行。
+- **Phase 4（📊 reference）**：改動檔預期 `_market_blocks.py`（無鏈）、`page_market.py`（nav1／uim 鏈 → 新頭節）；⛔ 動 `page_today.py`。重點守衛：結論句逐字、Q2-2 逐字、均線聲明逐字、⬜ 尚未定義、指標危險度指路、圖 C 零數字、hero 與圖 D 同源、EPS×PE placeholder、更新 form／gate 語意不變。寫 UI code 前一律先出文字線框（§1）。
 - **Phase 5（🎯）**：`_target_blocks.py`、`page_target.py`；`page_find.py`／`page_inspect.py` 不改。重點守衛：DEC-107 2A／3A／4A／5A 互動不變；R9；估值口徑揭露不刪；**選股條件維持 `expanded=True`**，除非 Phase 5 線框中客戶拍板改為收合（W4）；W5、W6 同依線框拍板。
 - **Phase 6（💼）**：新頁組裝器（新檔，無鏈）＋最小必要 `page_hold.py` 掛載點（新頭節）；重點守衛：外幣排除逐字、E17、missing≠HOLD、停利未判、AI 揭露與付費 gate、`build_station_digest` 計數來源不變、兩套刻度揭露恆在（形式依 W7 拍板）；建議拆 (i) 骨架＋第一屏 (ii) 卡片 compact 化與下沉。
 - **Phase 7（Brain）**：依 Digest 契約 §8 依賴順序；AI 投資總結線框先行（R12 新格式）；AB-2b Gate 未裁示前 AI 出口不接 production。

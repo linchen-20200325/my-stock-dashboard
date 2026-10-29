@@ -634,7 +634,7 @@ UI layout、component、copy 調整不得偷偷改變 threshold、weights、elig
 - DEC-084（Model×Effort，第 18 節）正交。
 - ⛔ 本節不授權任何施工：不開 P2、不刪舊 UI、不改 nav、不改投資規則；~~新 UI 之 Stage B／C／D 仍依 DEC-082 須客戶 Gate。~~
 - 📌 更正（2026-10-26，客戶裁示；本節為濃縮文，此為撰寫組／AI 判讀的更正，非客戶逐字；原因：上列被劃掉句是 AI 誤讀 DEC-082；有意識的更正，不是漏刪）：依 DEC-082，**Stage A＝唯讀盤點；Stage B＝可產出 wireframe／IA／互動草稿與方案；Stage C＝正式客戶 Decision Gate；Stage D＝須 Stage C 客戶核准後才可施工**。詳見 `docs/DECISIONS.md` DEC-085 更正註記。
-- 📌 **2026-10-29 呈現讀法補註（append-only；上文一字未改；決策者 客戶（DEC-109「舊 helper／test／wireframe 的 presentation requirement 與新 Presentation Contract 衝突時以新 Visual SSOT 為準」，見 DEC-109 附錄同日前序指示）＋AI 總管讀法）**：本節「衝突時以較嚴者為準」在**資料、投資、安全**面照舊取較嚴；在**呈現位置**面，舊 helper／test／wireframe 的呈現要求與 Presentation Contract 衝突時**以新 Visual SSOT 為準**（「外露」不因字面較多就算「較嚴」）。客戶既有裁示的**內容**保留、只換位置（`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md` §15、§16）。
+- 📌 **2026-10-29 呈現讀法補註（append-only；上文一字未改；決策者 客戶（DEC-109「舊 helper／test／wireframe 的 presentation requirement 與新 Presentation Contract 衝突時以新 Visual SSOT 為準」，見 DEC-109 附錄同日前序指示）＋AI 總管讀法）**：本節「衝突時以較嚴者為準」在**資料、投資、安全**面照舊取較嚴；在**呈現位置**面，舊 helper／test／wireframe 的呈現要求與 Presentation Contract 衝突時**以新 Visual SSOT 為準**（「外露」不因字面較多就算「較嚴」）。客戶既有裁示的**內容**保留；**位置只在 DEC-109／同日前序指示（15:18Z）明確點名處改，其餘維持＋列契約 §22 線框待拍板點**（`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md` §15、§16、§22）。
 
 ## 第 20 節｜Quota-safe Resume Checkpoint（客戶 2026-10-26，DEC-086）
 
@@ -882,7 +882,7 @@ Scope Inflation Guard
 ### 24.1 Presentation Contract 與 Visual SSOT
 
 - 新 UI 呈現規格＝`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md`（原則、Visual Budget、第一屏五問＋三層、主圖 header、下沉清單、metadata／status chips、三要素遷移、Missing 契約不變、UI 簡化不得減少的清單、IA、各頁方向）。
-- **blueprint（`docs/vnext/d25_wireframes/*.html`）＝ Visual SSOT／visual acceptance baseline**（客戶 DEC-109 二十四）；`src/ui_v2/tokens.py` ＝實作 token 來源；色值衝突以 blueprint 為準、Phase 3 收斂（DEC-110 R15）。
+- **blueprint（`docs/vnext/d25_wireframes/*.html`）＝ Visual SSOT／visual acceptance baseline**（客戶 DEC-109 二十四）；`src/ui_v2/tokens.py` ＝實作 token 來源；色值衝突以 blueprint 為準、Phase 3 收斂（DEC-110 R15）；**客戶裁示色值除外**（CTA 主色、`--sig-neutral`／`-bg`；改否＝W1，`P1R-P3-WF-CUSTOMER-COLORS`）。
 - 呈現最高優先序：**圖表 > 數字 > 短句 > 長文字**；但 **Visual Priority does not mean Visual Quantity**；**Simple Decision Dashboard, not Report Wall and not Chart Wall**；**Presentation Simplification must never reduce AI Decision Context**（客戶原文）。
 
 ### 24.2 Visual Fidelity Gate（UI Stage 必過）

@@ -92,7 +92,7 @@
 
 **R8（DEC-110）**：
 1. metadata／status chips 是**獨立家族**，⛔ 不進 `src/ui_v2/components.BADGES`（封閉 11 種，禁第 12 種）。狀態徽章族（BADGES＋`shared/ui_state.UI_STATE_META` 十態）不動。
-2. **🔴／紅色只給系統真錯誤**（`shared/ui_state` 的 failed 態；`CLAUDE.md` §1.A 第 4 點、v3 §02「系統真出錯才標紅」）。**stale 用 ⚠**（琥珀，非紅）。⚠️ **既有狀態徽章族優先**（既有徽章族沒有的「尚未定義／尚未核准」才用 metadata chip 既有字樣 ⬜）：凡 `shared/ui_state.UI_STATE_META` 已有的狀態，一律沿用其符號與文字——`⬜ 尚未載入`（idle）、`▨ 無資料`（empty）、`⟳ 缺漏 · 可重跑`／`⊘ 不適用 · 重跑無效`（客戶 2026-09-23 D-3(a) 三態，含 ▨）、`◧ N／M 計入`、`⛔ 未接線`（unwired）、`🔴 取得失敗`；**⛔ 同一狀態出現兩種符號**（例：未接線不得另造 `⬜ 未接線`）。
+2. **🔴／紅色只給系統真錯誤**（`shared/ui_state` 的 failed 態；`CLAUDE.md` §1.A 第 4 點、v3 §02「系統真出錯才標紅」）。**stale 用 ⚠**（琥珀，非紅）。⚠️ **既有狀態徽章族優先**（既有徽章族沒有的「尚未定義／尚未核准」才用 metadata chip 既有字樣 ⬜）：凡 `shared/ui_state.UI_STATE_META` 已有的狀態，一律沿用其符號與文字——`⬜ 尚未載入`（idle）、`▨ 無資料`（empty）、`⟳ 缺漏 · 可重跑`／`⊘ 不適用 · 重跑無效`（客戶 2026-09-23 D-3(a) 三態 `⟳`／`⊘`／`◧`；`▨` 為既有 empty 態）、`◧ N／M 計入`、`⛔ 未接線`（unwired）、`🔴 取得失敗`；**⛔ 同一狀態出現兩種符號**（例：未接線不得另造 `⬜ 未接線`）。
 3. **每個色塊都要有文字**（icon＋字，不只靠顏色；`PROJECT_RULES.md` §19.8）。
 4. metadata chip 必須走**獨立渲染通道**：⛔ 塞進訊號文字頻道（`_ui_kit.assert_signal_text_clean` 以子字串比對狀態 glyph，⬜／⚠／🔴 進訊號文字會觸發 ValueError → 紅卡；FACT，Inv-1 #10）。PR #970 草稿 A.7「🔴 偏空」重用 🔴 為失敗態以外用途 → **不採用**。
 5. 同一頁同一 metadata 事實在外露層**最多出現一次**（寫在最近的共同容器上），其他區塊不再重寫長句。
@@ -260,7 +260,7 @@ R9（DEC-110）：
 - **blueprint 檔**＝`docs/vnext/d25_wireframes/{index,market,target,holdings,mine,ai_summary}.html`（DEC-092 設計方向核准）。**本 phase 不改任何 HTML。**
 - **R15（DEC-110）**：blueprint＝**視覺驗收基準**；`src/ui_v2/tokens.py`＝**實作 token 來源**。兩者色值不一致時 **blueprint 為準**，tokens 於 Phase 3 收斂（BACKLOG `P1R-TOKENS-CONVERGE`）——**客戶裁示的色值除外**（下方 ⚠️；總管 2026-10-29 改判）。
 - **後續客戶裁示覆蓋 blueprint 的地方（不算偏離）**：DEC-105 2A（市場位階五態，取代 `index.html`／`market.html` 圖例的偏多／中性／偏空用語）；DEC-107 2A（「選一檔＋🔍 查看此檔」取代 `target.html`「點一列展開」）；DEC-107 3A（標的頁不放 ⚡）；DEC-109 R12（AI 投資總結新輸出格式取代 `ai_summary.html` 五段）。
-- **允許的合理調整**（不需開 Gate，但 Gate 報告須逐項列出）：真資料字串長度／列數／缺值（示意數字一律以真值或 ⬜ 取代）；Streamlit 限制（`st.columns` 手機塌單欄→以 HTML／CSS grid 補 2×2、無 hover、Vega 圖軸無法完全隱藏 INFERENCE）；誠實揭露 chip 比 blueprint 多。
+- **允許的合理調整**（不需開 Gate，但 Gate 報告須逐項列出）：真資料字串長度／列數／缺值（示意數字一律以真值或 ⬜ 取代）；Streamlit 限制（`st.columns` 手機塌單欄→以 HTML／CSS grid 補 2×2（排法待 `CV1-DR-12`／W9）、無 hover、Vega 圖軸無法完全隱藏 INFERENCE）；誠實揭露 chip 比 blueprint 多。
 - **明顯偏離（必須開 Gate）**：見 Gate 文件 §5。
 
 ### 14.2 blueprint vs tokens 差異表（FACT，讀檔；量測日 2026-10-29）
@@ -380,7 +380,7 @@ metadata chips、status chips、chart header、evidence expander（`▸ 為什�
 ## §21 未驗與限制
 
 - 已載入狀態量測依賴夾具（產業數、持股檔數、文字長度）；真資料下候選表預設 50 列**未渲染**；手機實機、Streamlit Cloud、`requirements.txt` floor 1.56 未驗。
-- 「主圖」選擇（§12）是撰寫組依客戶方向指定；Phase 4～6 依 Gate 與真資料再定，屬內部拍板，偏離 blueprint 版面時走草稿先行（`CLAUDE.md` §-1.5.D v3 §03-2 ①）。
+- 「主圖」選擇（§12）是撰寫組依客戶方向指定；Phase 4～6 依 Gate 與真資料再定，屬內部拍板；**寫 UI code 前一律先出文字線框**（Migration Plan §1；`CLAUDE.md` §-1.5.D v3 §03-2 ①）。
 - 本檔所有判定單組產出，**未經第二組驗證**。
 
 ## §22 各頁 phase 線框待客戶拍板點（2026-10-29 總管改判：AI 總管讀法不得推翻客戶核准過的呈現；Phase 3～7 每個 UI phase 寫 UI code 前都須先出文字線框）
