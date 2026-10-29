@@ -17,9 +17,36 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 
-DEC102_BASE_SHA = {'src/ui/etf/etf_tab_dividend_station.py': '9554556c0ed8d1bd56ea0ce6feea04f61871c72f1e271fbc1c960714267445ee'}
+DEC102_BASE_SHA = {'src/compute/notify/holdings_digest_message.py': '403da86c1ee43cb73cd3aa71f7a9672c03440a646bc8b993f5aaef5181c1b811',
+ 'src/ui/etf/etf_tab_dividend_station.py': '9554556c0ed8d1bd56ea0ce6feea04f61871c72f1e271fbc1c960714267445ee'}
 
-DEC102_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/ui/etf/etf_tab_dividend_station.py': (('from shared import asset_currency_gate as FXG  # '
+DEC102_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/compute/notify/holdings_digest_message.py': (('def _vix_line(vix: "float | None", total: int, *, '
+                                                    'data_short: bool = False) -> list[str]:\n',
+                                                    'def _vix_line(vix: "float | None", total: int) -> '
+                                                    'list[str]:\n'),
+                                                   ('\n'
+                                                    '    ═══ DEC-102(1)（客戶 '
+                                                    '2026-10-28，XV-LINE-VIX-LINE＝同意）：持股資料不足就不給行動句 ═══\n'
+                                                    '    `data_short`（呼叫端以本檔 `_data_short(digest)` ＝ L0 '
+                                                    '`holdings_data_short.digest_data_short`\n'
+                                                    '    同一謂詞判定，⛔ 不另造判定）為真時，只陳述 VIX 分級事實那一行，**不附**「→ '
+                                                    '該怎麼做」那一行\n'
+                                                    '    （missing ≠ HOLD；VIX 不得代替持股完整性判斷）。預設 False ＝ '
+                                                    '修前輸出逐字不變。\n',
+                                                    ''),
+                                                   ('    _fact = f"😱 VIX：{vix:.1f}\u3000'
+                                                    '{LEVEL_EMOJI[_level]} {_label}\u3000有效判斷 {total} 檔"\n'
+                                                    '    if data_short:\n'
+                                                    '        return [_fact]      # DEC-102(1)：持股資料不足 → '
+                                                    '只陳述分級事實，不附行動建議\n'
+                                                    '    return [_fact, f"\u3000→ {_advice}"]\n',
+                                                    '    return [f"😱 VIX：{vix:.1f}\u3000'
+                                                    '{LEVEL_EMOJI[_level]} {_label}\u3000有效判斷 {total} 檔",\n'
+                                                    '            f"\u3000→ {_advice}"]\n'),
+                                                   ('        *_vix_line(_vix, _total, '
+                                                    'data_short=_data_short(digest)),   # DEC-102(1)\n',
+                                                    '        *_vix_line(_vix, _total),\n')),
+ 'src/ui/etf/etf_tab_dividend_station.py': (('from shared import asset_currency_gate as FXG  # '
                                              'DEC-102(2)：外幣原因句（L0 唯一來源）\n',
                                              ''),
                                             ('        fx_excluded_codes,\n', ''),
