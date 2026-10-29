@@ -235,6 +235,39 @@ def group_price_asof(items: Sequence[tuple[Hashable, PriceAsOf | None]]) -> AsOf
     return AsOfGrouping(majority_label=_major, groups=_groups)
 
 
+BASIS_USED_LABEL = "使用的資料（價格）"
+BASIS_DATE_LABEL = "資料日期（價格）"
+
+
+def price_basis_facts_many(ps: Sequence[PriceAsOf | None]) -> tuple[tuple[str, str], ...]:
+    """多檔共用一個「查看依據」時的兩格（💼 ① E17、🔬 葉2 批次卡）。逐檔時間已在畫面上點名，這裡只講規則與彙總。"""
+    _ps = [_p or PriceAsOf() for _p in ps]
+    _cnt: dict[str, int] = {}
+    for _p in _ps:
+        _src = _p.src or ""
+        if _src in SOURCE_DISPLAY:
+            _k = f"{SOURCE_DISPLAY[_src]}（{SOURCE_BASIS.get(_src, '—')}）"
+            if _p.is_fallback:
+                _k = f"{FALLBACK_PREFIX}{_k}"
+        else:
+            _k = SRC_NOT_PROVIDED
+        _cnt[_k] = _cnt.get(_k, 0) + 1
+    _used = "、".join(f"{_k} {_n} 檔" for _k, _n in _cnt.items()) or NOT_PROVIDED
+    _exp = next((_p.expected_day for _p in _ps if _p.expected_day), None)
+    _ff = sum(1 for _p in _ps if _p.ffilled_last)
+    _ttl_min = TTL_1HOUR // 60
+    _parts = [
+        "最後一根 K：各檔日期見畫面上的價格資料時間",
+        f"預期最新交易日：{_exp.isoformat() if _exp else NOT_PROVIDED}（只扣週末，未扣國定假日）",
+        f"落後超過 {DAILY_MAX_LAG_TRADING_DAYS} 個平日標 {STALE_MARK}（日頻上限為交易日，此處以平日計、偏嚴）",
+        f"補值日：{_ff} 檔最後一根是補值" if _ff else "補值日：沒有任何一檔最後一根是補值（或此來源不提供）",
+        f"快取：這份價格最多可能是約 {_ttl_min} 分鐘前抓的",
+        f"盤中／收盤：{UNCONFIRMED_CLOSE}（目前技術上無法可靠判定）",
+    ]
+    return ((BASIS_USED_LABEL, f"價格來源鏈：{SOURCE_CHAIN_TEXT}。本次實際：{_used}"),
+            (BASIS_DATE_LABEL, "；".join(_parts)))
+
+
 def price_basis_facts(p: PriceAsOf | None) -> tuple[tuple[str, str], ...]:
     """「🔍 查看依據」兩格（線框 §5：使用的資料／資料日期）—— 只補價格說明。"""
     p = p or PriceAsOf()
@@ -260,4 +293,4 @@ def price_basis_facts(p: PriceAsOf | None) -> tuple[tuple[str, str], ...]:
         f"快取：這份價格最多可能是約 {_ttl_min} 分鐘前抓的",
         f"盤中／收盤：{UNCONFIRMED_CLOSE}（目前技術上無法可靠判定）",
     ]
-    return (("使用的資料（價格）", _uses), ("資料日期（價格）", "；".join(_parts)))
+    return ((BASIS_USED_LABEL, _uses), (BASIS_DATE_LABEL, "；".join(_parts)))

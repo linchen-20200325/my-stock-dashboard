@@ -337,3 +337,40 @@ class TestHold:
         assert _keys.index("價格資料時間") == _keys.index("總市值（元）") + 1
         _tpk = [_k for _k, _ in H.build_take_profit_card(_st)[1]]
         assert H.TP_ASOF_FACT_KEY in _tpk
+
+
+# ══════════════════════════ §5 查看依據（既有「▸ 詳細」摺疊區） ══════════════════════════
+def _face_and_fold(html: str) -> tuple[str, str]:
+    _i = html.index("<div class=\"blk-fold\">")
+    return html[:_i], html[_i:]
+
+
+class TestBasisInExistingFold:
+    def test_hold_action_card_basis_fold_only(self):
+        import src.ui.views.page_hold as H
+        _st = H.StationReadout(requested=True, submitted=True,
+                               rows=(_hrow("2330", _p()), _hrow("0050", _p(WED, PAL.SRC_FINMIND_SDK))),
+                               totals={"pnl_twd": 10, "pnl_pct": 1.0, "value_twd": 100})
+        _c, _f, _s = H.build_action_card(_st)
+        _d = dict(_f)
+        assert ("本次實際：Yahoo（還原） 1 檔、備援來源：FinMind（原始價，試還原） 1 檔"
+                in _d[PAL.BASIS_USED_LABEL])
+        assert PAL.BASIS_DATE_LABEL in _d
+        _face, _fold = _face_and_fold(H.v2_card_html(_c, _f, _s))
+        assert PAL.BASIS_USED_LABEL not in _face and PAL.BASIS_USED_LABEL in _fold
+        assert "價格資料時間" in _face
+
+    def test_batch_card_basis_fold_only(self):
+        import src.ui.views.page_inspect as V
+        _ro = V.BatchReadout(requested=True, rows=(_brow("2330", _p()),))
+        _req = types.SimpleNamespace(tickers=("2330",), kind_filter=V.BATCH_FILTER_ALL, truncated=0)
+        _c, _f, _s = V.build_batch_card(_ro, _req)
+        assert PAL.BASIS_USED_LABEL in dict(_f)
+        _face, _fold = _face_and_fold(V.v2_card_html(_c, _f, _s))
+        assert PAL.BASIS_USED_LABEL not in _face and PAL.BASIS_USED_LABEL in _fold
+
+    def test_batch_card_no_priced_rows_no_basis(self):
+        import src.ui.views.page_inspect as V
+        _ro = V.BatchReadout(requested=True, rows=(_brow("2330", None),))
+        _req = types.SimpleNamespace(tickers=("2330",), kind_filter=V.BATCH_FILTER_ALL, truncated=0)
+        assert PAL.BASIS_USED_LABEL not in dict(V.build_batch_card(_ro, _req)[1])

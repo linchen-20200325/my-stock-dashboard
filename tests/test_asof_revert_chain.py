@@ -4,8 +4,12 @@
 基底 sha 守衛的檔 ⇒ 在鏈頭**往前接一節**，先把本批改動換回（比照 `xvext_revert_for` 接
 `xview_revert_for` 的作法；⛔ 不動任何舊表與舊基底 sha）。`xvext_revert_for` 第一步呼叫本節。
 
-基底 ＝ `1e603094`（本批開工前的 main）。pair 於產生時驗證「套用後逐字等於基底、
-每個新寫法在現行檔恰出現 1 次、在基底 0 次」。
+整合（`asof-integrated`）後的串接：本批與 DEC-102 批（`tests/test_dec102_revert_chain.py`）基底同為
+`1e603094`、且都動了 `dividend_station_service.py` ⇒ 本表的 pair 換回的目標是「**DEC-102 批頂端**
+（`7cb05bab`）的寫法」，再交給 `dec102_revert_for` 換回 `1e603094`。
+- `asof_only_revert`：只套本表（`dec102_revert_for` 第一步呼叫它，讓 DEC-102 的 base_module 也正確）；
+- `asof_revert_for`：本表 → `dec102_revert_for`，結果 sha ＝ `ASOF_BASE_SHA`（`1e603094`）。
+pair 於產生時驗證「套用後逐字等於 `7cb05bab` 的檔、每個新寫法在現行檔恰出現 1 次、套用後 0 次」。
 """
 from __future__ import annotations
 
@@ -210,6 +214,9 @@ ASOF_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/services/divid
                                 '        _out.append((HOLD_ASOF_EXCEPTION_LABEL_FMT.format(n=len(_codes)),\n'
                                 '                     f"{_lbl}：{\'、\'.join(dict.fromkeys(str(_c) for _c in '
                                 '_codes))}"))\n'
+                                '    # 線框 §5：既有「▸ 詳細」摺疊區補兩格價格說明（`V2_FOLD_ONLY_FACT_KEYS` 登記，⛔ 不上卡面、不新增區塊）。\n'
+                                '    _out.extend(PAL.price_basis_facts_many([_p for _, _p in '
+                                '_hold_asof_items(station)]))\n'
                                 '    return _out\n'
                                 '\n'
                                 '\n'
@@ -245,7 +252,16 @@ ASOF_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/services/divid
                                 '    _facts += _take_profit_asof_fact(station)   # XV-ASOF：只加一行指回 ①（線框 '
                                 '§3.4）\n'
                                 '    if station.take_profit and not station.error:\n',
-                                '    ]\n    if station.take_profit and not station.error:\n')),
+                                '    ]\n    if station.take_profit and not station.error:\n'),
+                               ('                                    RISK_CAP_DISABLED_LABEL, '
+                                'RISK_CAP_SAHM_LABEL}),\n'
+                                '    # XV-ASOF（線框 §5）：① 該做什麼卡的價格「查看依據」兩格只進詳細。\n'
+                                '    CONCLUSION_ACTION_KEY: frozenset({PAL.BASIS_USED_LABEL, '
+                                'PAL.BASIS_DATE_LABEL}),\n'
+                                '}\n',
+                                '                                    RISK_CAP_DISABLED_LABEL, '
+                                'RISK_CAP_SAHM_LABEL}),\n'
+                                '}\n')),
  'src/ui/views/page_inspect.py': (('from shared import ia_nav\n'
                                    'from shared import price_asof_label as PAL\n'
                                    '# L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（SEC-2，2026-09-26；\n',
@@ -405,6 +421,15 @@ ASOF_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/services/divid
                                    'PAL.price_asof_label(val.price_asof)))\n'
                                    '    if val.msg:\n',
                                    '    ]\n    if val.msg:\n'),
+                                  ('            "被截掉的那幾檔**沒有查過**，請分批再貼一次"))\n'
+                                   '    _priced = [_r.price_asof for _r in readout.rows\n'
+                                   '               if _r.ok and not _r.is_unknown and _r.price_asof is not '
+                                   'None]\n'
+                                   '    if _priced:\n'
+                                   '        # XV-ASOF（線框 §5）：既有「▸ 詳細」摺疊區補兩格價格說明（只進摺疊區，⛔ 不新增區塊）。\n'
+                                   '        _facts.extend(PAL.price_basis_facts_many(_priced))\n'
+                                   '    if readout.failed_codes:\n',
+                                   '            "被截掉的那幾檔**沒有查過**，請分批再貼一次"))\n    if readout.failed_codes:\n'),
                                   ('\n'
                                    '#: 只進「▸ 詳細」摺疊區的 fact 標籤（XV-ASOF 線框 §5「查看依據」：價格完整說明 ⛔ 不上 Level 1）。\n'
                                    'V2_FOLD_ONLY_FACT_KEYS: frozenset[str] = frozenset(_k for _k, _ in '
@@ -468,8 +493,8 @@ def _rel(file_path) -> str:
     return (p.resolve().relative_to(REPO) if p.is_absolute() else p).as_posix()
 
 
-def asof_revert_for(file_path, code: str) -> str:
-    """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回 XV-ASOF 之前的寫法（無 pair 則原樣；只套一次）。"""
+def asof_only_revert(file_path, code: str) -> str:
+    """只換回 XV-ASOF 本表的改動（不碰 DEC-102 那批）。無 pair 則原樣；只套一次。"""
     rel = _rel(file_path)
     pairs = ASOF_REVERT_PAIRS.get(rel, ())
     if not pairs:
@@ -482,6 +507,12 @@ def asof_revert_for(file_path, code: str) -> str:
     for new, old in pairs:
         code = code.replace(new, old)
     return code
+
+
+def asof_revert_for(file_path, code: str) -> str:
+    """換回 XV-ASOF ＋ DEC-102 兩批 ⇒ `1e603094` 的寫法（無 pair 則原樣；只套一次）。"""
+    from tests.test_dec102_revert_chain import dec102_revert_for
+    return dec102_revert_for(file_path, asof_only_revert(file_path, code))
 
 
 def test_asof_revert_is_exact_base_source():
@@ -498,9 +529,12 @@ def test_asof_revert_is_idempotent():
 
 
 def test_chain_head_calls_asof_first():
-    """原鏈頭 `xvext_revert_for` 必須先呼叫本節（再處理自己的表）。"""
+    """原鏈頭 `xvext_revert_for` 必須先呼叫本節；`dec102_revert_for` 第一步必須先套本表。"""
     import inspect
 
+    from tests.test_dec102_revert_chain import dec102_revert_for
     from tests.test_xvext_revert_chain import xvext_revert_for
     src = inspect.getsource(xvext_revert_for)
     assert src.index("asof_revert_for(rel, code)") < src.index("XVEXT_REVERT_PAIRS.get(rel")
+    d = inspect.getsource(dec102_revert_for)
+    assert d.index("asof_only_revert(rel, code)") < d.index("DEC102_REVERT_PAIRS.get(rel")

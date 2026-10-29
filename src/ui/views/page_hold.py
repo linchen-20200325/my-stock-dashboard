@@ -2218,6 +2218,8 @@ def _price_asof_facts(station: StationReadout) -> list[tuple[str, str]]:
     for _lbl, _codes in _g.exceptions:
         _out.append((HOLD_ASOF_EXCEPTION_LABEL_FMT.format(n=len(_codes)),
                      f"{_lbl}：{'、'.join(dict.fromkeys(str(_c) for _c in _codes))}"))
+    # 線框 §5：既有「▸ 詳細」摺疊區補兩格價格說明（`V2_FOLD_ONLY_FACT_KEYS` 登記，⛔ 不上卡面、不新增區塊）。
+    _out.extend(PAL.price_basis_facts_many([_p for _, _p in _hold_asof_items(station)]))
     return _out
 
 
@@ -5275,6 +5277,8 @@ def _v2_face_value(value: str) -> str:
 V2_FOLD_ONLY_FACT_KEYS: dict[str, frozenset[str]] = {
     "hold.position_cap": frozenset({RISK_CAP_SNAPSHOT_TS_LABEL, RISK_CAP_NOT_EVALUATED_LABEL,
                                     RISK_CAP_DISABLED_LABEL, RISK_CAP_SAHM_LABEL}),
+    # XV-ASOF（線框 §5）：① 該做什麼卡的價格「查看依據」兩格只進詳細。
+    CONCLUSION_ACTION_KEY: frozenset({PAL.BASIS_USED_LABEL, PAL.BASIS_DATE_LABEL}),
 }
 
 

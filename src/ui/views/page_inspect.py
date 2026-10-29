@@ -2525,6 +2525,11 @@ def build_batch_card(readout: BatchReadout, req: BatchRequest) -> _Built:
             "超出上限被截掉",
             f"{req.truncated} 檔（一次最多 {BATCH_MAX_TICKERS} 檔）—— "
             "被截掉的那幾檔**沒有查過**，請分批再貼一次"))
+    _priced = [_r.price_asof for _r in readout.rows
+               if _r.ok and not _r.is_unknown and _r.price_asof is not None]
+    if _priced:
+        # XV-ASOF（線框 §5）：既有「▸ 詳細」摺疊區補兩格價格說明（只進摺疊區，⛔ 不新增區塊）。
+        _facts.extend(PAL.price_basis_facts_many(_priced))
     if readout.failed_codes:
         _facts.append((
             "其中失敗",

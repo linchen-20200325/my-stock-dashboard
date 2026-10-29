@@ -113,6 +113,11 @@ def _rel(file_path) -> str:
 def dec102_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批之前的寫法（無 pair 則原樣；只套一次）。"""
     rel = _rel(file_path)
+    # 📌 XV-ASOF 整合（DEC-102，2026-10-28；有意識的接鏈，⛔ 不是漏改）：XV-ASOF 批與本批同基底 `1e603094`、
+    #   同動 `dividend_station_service.py` ⇒ 先換回 XV-ASOF 的改動（只套它自己的表、只套一次），
+    #   本表與 `DEC102_BASE_SHA` ⛔ 一字未動；`base_module` 因此對兩批的檔都還原正確。
+    from tests.test_asof_revert_chain import asof_only_revert
+    code = asof_only_revert(rel, code)
     pairs = DEC102_REVERT_PAIRS.get(rel, ())
     if not pairs:
         return code
