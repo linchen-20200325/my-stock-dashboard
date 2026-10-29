@@ -1694,8 +1694,9 @@ def compute_five_bucket_summary(
 
     Returns
     -------
-    dict: {bucket: {level, label, headline, color, emoji, details:[...]}}，
-          bucket ∈ long/mid/short/chips/news。
+    dict: {bucket: {level, label, headline, color, emoji, details:[...], main_key}}，
+          bucket ∈ long/mid/short/chips/news。`main_key`（UI-M 加性）＝桶燈號的主因燈
+          `DangerSpec.key`；桶全綠／全灰 → None。
 
     §1 Fail Loud：缺值 → 該指標 gray（未載入），桶全 gray → ⬜，**不**偽綠。
     §4.1：foreign_net 2026-09-27 接線 —— `cl_data['inst']` 外資 net 已是**億元**
@@ -2084,6 +2085,10 @@ def compute_five_bucket_summary(
             "color": LEVEL_COLOR[blevel],
             "emoji": LEVEL_EMOJI[blevel],
             "details": details,
+            # UI-M（2026-10-29，加性）：外露「主因燈 key」＝上面 headline／label 已經在用的那一盞 `d0`
+            #   （桶內既有 worst-of，超標幅度最大者）。桶全綠／全灰時 `d0 is None` → None。
+            #   既有各鍵的值一個字都沒動；消費端（📊 市場頁圖 D／今日主要風險）據此取方向，⛔ 不在 L5 重算規則。
+            "main_key": d0["key"] if d0 is not None else None,
         }
     return out
 

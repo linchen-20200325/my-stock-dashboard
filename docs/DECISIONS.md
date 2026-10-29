@@ -3131,3 +3131,25 @@ Effort：High
 - 新客戶裁示：收到當輪追加為下一個 `DEC-NNN`，標來源類別；同時在 `docs/BACKLOG.md` 受影響列的 customer decision 欄引用（沿用該檔 0.3 第 4 條既有慣例：DR 列仍登在 BACKLOG §1，本檔另起 DEC 並互指）。
 - 總管技術判斷不得寫成客戶裁示；需要記錄時標「決策者：AI 總管內部」。
 - 改動既有條目：舊值以刪除線保留並註明日期與理由。
+
+### DEC-105｜UI-M 📊 市場頁三項偏離裁示 1A／2A／3A＋附加指路要求＋其餘四項偏離維持 P2（客戶 2026-10-29）
+
+> 2026-10-29 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/DECISIONS.md` 最大為 DEC-104、DEC-105 0 命中）。要點經總管轉交，**非客戶逐字全文**。
+
+- **決策者**：**客戶**（2026-10-29；經總管轉交之要點）。｜**日期／效力日期**：2026-10-29 起生效。｜**狀態**：生效；UI-M 實作 PR #965 待合併（見下方「實作紀錄」）。
+- **背景**：UI-M（📊 市場頁，依已核准線框與 A 規格 §4.1）實作後，三項實作層偏離需客戶看過後裁示（`docs/BACKLOG.md` `UIM-LAYOUT-DEVIATIONS` (g)(h)、`UIM-REGIME-WORDING`）。
+- **內容**：
+  1. **今日結論句＝A**：維持在 Hero 四卡與「⚡ 需要處理」之間。
+  2. **市場狀態卡＝A**：維持「市場位階」五態「多頭／震盪／轉守／空頭／未評估」＋「市場位階，不是台股趨勢」；**不得映射成偏多／中性／偏空**。
+  3. **指標危險度卡＝A**：降階到「指標明細（16 項）」展開區最上方。
+  4. **附加硬要求**：首屏「今日主要風險」卡與圖 D 必須有**清楚指路**到指標危險度，不得因降階造成能力實質隱藏；指路字樣中須出現「指標危險度」四字；展開區最上方確實是該卡；測試釘住（指路句存在於冷／熱 session、指路目標 expander 標題字面存在、expander 內第一張卡含「指標危險度」）。
+  5. **其餘四個小偏離維持 P2**（不擴張本批）：Hero 用 4 欄、圖 D「查看全部指標 ›」以文字指路、AI 佔位與資料狀態 chip 合併成 Hero 下一行、更新鈕字樣未改（`UIM-UPDATE-BUTTON-WORDING`）。
+- **效力邊界**：不核准任何新資料源／schema／公式／投資語意；不核准 Risk Cap 顯示、正式趨勢定義、EPS×PE、「惡化」判定；不改 `PAGE_LABELS`／`ia_nav`／`app.py`／`page_today`；舊 UI Removal Gate 不變。
+- **與其他 DEC 的關係**：落實 DEC-092（設計方向與 Q2／Q3）；與 DEC-081 Q2-1（結論句）同向；DEC-082／v3 §03-2 ①（版面異動須先草稿）— 本條即客戶對偏離的拍板。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條要點為總管轉交；「與其他 DEC 的關係」為撰寫組讀法，單組。
+- 📌 **實作紀錄（2026-10-29 補；加法式；決策者 AI 總管（事實更新））**：**狀態＝已實作，PR #965 待合併**（分支 `ccr-6eace3b6-0gglrs`，基準 `d0482441`，`git log d0482441..HEAD`）。
+  - **commit**（前綴 `feat(UI-M):`）：`ce99f220`（L2 `main_key`＋還原鏈頭節）／`bb2ab542`（薄 L3 圖 A 讀取）／`8b4f54ea`（市場頁落地）／`2a2d16f6`／`9009b786`／`08028336`／`855ab610`（QA-B 修正）／`afca2b22`（QA-A 修正）／`c1b871e0`（QA-C 小修）／`db1c6d2a`（本條 3A 指路句）；其後為本條文件落盤 commit。
+  - **改動檔**：`src/compute/macro/macro_helpers.py`（每桶加性 `main_key`）／`src/services/market_twii_view_service.py`（新，L3）／`src/ui/views/_market_blocks.py`（新，L5）／`src/ui/views/page_market.py`；測試 `test_market_blocks.py`、`test_uim_market_page.py`、`test_uim_main_key.py`、`test_market_twii_view_service.py`、`test_uim_revert_chain.py`（還原鏈新頭節，`xvext_revert_for` 第一步呼叫），並修改 `test_page_market.py` 三處因重排而失敗的斷言（理由寫在測試內）。
+  - **測試**：Fast lane 全套 32548 passed、1 failed、50 skipped（唯一失敗為已知環境失敗 `test_batch_z59` markdown_it）；mutation 約 27 個逐一拔守衛全數轉紅（首輪 M13、M15 的存活原因與補強見 PR 描述）。
+  - **QA 摘要（總管轉述）**：QA-A 0 BLOCKER／1 MAJOR（圖 D 部分覆蓋寫「全綠」，已修）；QA-B（預設直接畫圖 A／B、說明句、佔位字等，已修）；QA-C 0 BLOCKER／0 MAJOR（小修已併）。
+  - **已知限制**：手機版面、Streamlit Cloud 冷啟動、Streamlit 1.56 floor 實機行為沙箱驗不到（僅 1.59.2 驗）；圖 A／圖 B 預設直接畫（首屏載入後 1+3 張線圖），若實機偏重屬版面異動須先草稿；`HERO_RISK_MAX_ITEMS` 仍在 L5（`UIM-HERO-MAX-ITEMS-SSOT`，P2）；實作組各項「保留區塊逐字相同」「本頁沒有 AI 呼叫」等結論為單組＋機械 parity，非窮舉。

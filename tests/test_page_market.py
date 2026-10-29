@@ -94,25 +94,31 @@ class TestRiskCapAndTrendCards:
                      "risk_cap_detail_text", "risk_cap_disclosure", ".caps", "RISK_CAP_STATE_FILE"):
             assert _tok not in _SRC, f"page_market.py 出現 {_tok!r}"
 
-    def _plain_card_calls(self):
-        return [_n for _n in ast.walk(_TREE) if isinstance(_n, ast.Call)
-                and getattr(_n.func, "id", "") == "_render_plain_card"]
+    def test_plain_card_helper_is_gone_and_wording_comes_from_ssot(self):
+        """📌 UI-M（2026-10-29；有意識的修改，⛔ 不是漏刪）：~~趨勢兩卡＋風險上限卡位各一張 `_render_plain_card`~~
+        被 Hero／圖 A／圖 B 取代 —— 該 helper 已無 caller 而刪（GC：被本次改動變成孤兒）。
+        舊測試守的**實質**不變，改釘在新位置：
+          · 趨勢結論字樣取自 L0 `TREND_UNDEFINED_TEXT`（圖 A／圖 B 底下仍固定「尚未定義」，⛔ 無燈色／多空）；
+          · 風險上限卡位字樣取自 L0 常數、逐字進水位卡說明（⛔ 本頁不讀任何上限數字，上面那條 source 掃描同時涵蓋新檔）。"""
+        assert "_render_plain_card" not in _SRC
+        _blocks_src = (_ROOT / "src" / "ui" / "views" / "_market_blocks.py").read_text(encoding="utf-8")
+        assert "CONCEPT_RISK_CAP" in _blocks_src and "RISK_CAP_PENDING_TEXT" in _blocks_src
+        from src.ui.views import _market_blocks as B
+        assert B.NOT_DEFINED.endswith(MC.TREND_UNDEFINED_TEXT)
+        assert B.CHART_A_CONCLUSION == f"{MC.CONCEPT_TW_TREND}結論：⬜ 尚未定義"
+        assert B.CHART_B_CONCLUSION == f"{MC.CONCEPT_INTL_TREND}結論：⬜ 尚未定義"
 
-    def test_plain_cards_only_take_constants(self):
-        _calls = self._plain_card_calls()
-        assert len(_calls) == 3, "趨勢兩卡＋風險上限卡位應各一次"
-        for _c in _calls:
-            assert all(isinstance(_a, ast.Name) for _a in _c.args), ast.unparse(_c)
-            assert not _c.keywords
-        _args = {tuple(_a.id for _a in _c.args) for _c in _calls}
-        assert ("CONCEPT_RISK_CAP", "RISK_CAP_PENDING_TEXT") in _args
-        assert ("CONCEPT_TW_TREND", "TREND_UNDEFINED_TEXT", "TREND_PENDING_WHY") in _args
-        assert ("CONCEPT_INTL_TREND", "TREND_UNDEFINED_TEXT", "TREND_PENDING_WHY") in _args
+    def test_page_and_blocks_never_read_risk_cap_values(self):
+        """上面 `test_page_never_reads_risk_cap_values` 的對偶：UI-M 新檔 `_market_blocks.py` 同一份禁詞。"""
+        _blocks_src = (_ROOT / "src" / "ui" / "views" / "_market_blocks.py").read_text(encoding="utf-8")
+        for _tok in ("exposure_limit_pct", "cap_text", "risk_cap_face_text",
+                     "risk_cap_detail_text", "risk_cap_disclosure", ".caps", "RISK_CAP_STATE_FILE"):
+            assert _tok not in _blocks_src, f"_market_blocks.py 出現 {_tok!r}"
 
     def test_trend_texts_have_no_direction_or_light_words(self):
         from src.ui.views import page_market as M
-        assert M.TREND_UNDEFINED_TEXT == "尚未定義"
-        for _txt in (M.TREND_UNDEFINED_TEXT, M.TREND_PENDING_WHY):
+        assert MC.TREND_UNDEFINED_TEXT == "尚未定義"
+        for _txt in (MC.TREND_UNDEFINED_TEXT, M.TREND_PENDING_WHY):
             for _w in ("多", "空", "燈", "綠", "黃", "紅", "偏", "漲", "跌"):
                 assert _w not in _txt, f"趨勢卡字樣含 {_w!r}：{_txt}"
 
@@ -492,11 +498,13 @@ def test_page_mounts_clean(tmp_path):
     _md = [_m.value for _m in _at.markdown]
     _joined = "\n".join(_md)
     assert ia_nav.action_label(ia_nav.ACTION_UPDATE_TODAY) in [_b.label for _b in _at.button]
-    # Risk Cap 卡位：標題後緊接著逐字狀態字樣
-    _i = _md.index("**風險上限**")
-    assert _md[_i + 1] == "獨立顯示待 C2b＋RC-VISIBILITY Gate"
-    for _t in ("**台股趨勢**", "**國際趨勢**"):
-        assert _md[_md.index(_t) + 1] == "尚未定義"
+    # 📌 UI-M（有意識的修改，⛔ 不是漏刪）：~~`**風險上限**` 卡位 ＋ `**台股趨勢**`／`**國際趨勢**` 兩卡~~ 改為
+    #   水位卡說明（caption，逐字）＋圖 A／圖 B 底下的「趨勢結論：⬜ 尚未定義」。
+    _cap = [_c.value for _c in _at.caption]
+    assert "風險上限：獨立顯示待 C2b＋RC-VISIBILITY Gate" in _cap
+    assert "**⬜ 尚未核准／無法判定**" in _md
+    for _t in ("台股趨勢結論：⬜ 尚未定義", "國際趨勢結論：⬜ 尚未定義"):
+        assert _t in _md
     # 結論句
     assert any(_m.startswith("市場位階：") and "；台股趨勢：尚未定義；" in _m for _m in _md)
     # ⛔ 三欄摘要（今天頁的「位階／動能／風險」那一段）
@@ -539,8 +547,7 @@ def test_page_renders_with_populated_session(tmp_path):
     _md = [_m.value for _m in _at.markdown]
     _joined = "\n".join(_md)
     assert "22,100.00" in _joined and "17.30" in _joined and "估算・190 天資料" in _joined
-    _i = _md.index("**風險上限**")
-    assert _md[_i + 1] == "獨立顯示待 C2b＋RC-VISIBILITY Gate"
+    assert "風險上限：獨立顯示待 C2b＋RC-VISIBILITY Gate" in [_c.value for _c in _at.caption]   # UI-M：卡位併入水位卡說明
     assert "還沒按過更新" in _joined                 # X10 指路照實（沒有報告）
     assert "unloaded" not in _joined                  # X1 不出機器碼
     from src.ui.views.page_market import SS_GATE_LEADING
