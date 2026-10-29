@@ -876,7 +876,12 @@ class TestOldFilesUntouched:
     # 📌 DEC-102(2)（客戶 2026-10-28，XV-OLDUI-FX-REASON＝B；DEC-019 凍結的客戶核准例外，⛔ 不是漏改）：只動
     #   `src/ui/etf/etf_tab_dividend_station.py` 卡①與 80/20「算不出來」兩句在**有外幣持有列**時的原因句
     #   （改用 L0 `asset_currency_gate.FX_PARTIAL_TEXT`＋未納入清單）；無外幣時逐字不變。其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "8e8f2b732ed1f840bda8737cea87b84c287ff059f9caac6385789c6544e5660e"
+    # ~~"8e8f2b732ed1f840bda8737cea87b84c287ff059f9caac6385789c6544e5660e"~~（DEC-102(2) 後，至 4521fc39 仍成立）
+    # 📌 UI-T（2026-10-29，客戶線框裁示 1A 2A 3A 4A 5A＋DEC-099；核准過的 `app.py` 改動，⛔ 不是漏改）：只動 `app.py`
+    #   的 `_ia_view_find()`（依 session 旗標 `_nav4_legacy` 分流：legacy → 原 `render_page_find()`（一字不變）、新版模式 →
+    #   `render_page_target()`）與 `_ia_view_nav4` 的一行註解（移除「標的頁第二層選擇」的敘述）。舊 UI 的 tabs/etf/pages/render
+    #   其餘 90 檔一個字都沒動；舊 7 頁籤的程式碼路徑未變。指紋依本 docstring 的指示同步更新。
+    _BASE_DIGEST = "90e86196c19ae06ebc8a7c41e2f2519a935bab8f58a2399173ffa4f399eebad0"
 
     def test_no_diff_against_base(self):
         import hashlib

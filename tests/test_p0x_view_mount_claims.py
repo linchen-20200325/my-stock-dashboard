@@ -65,6 +65,9 @@ PAGES: tuple[tuple[str, str, str], ...] = (
     ("page_market.py", "_ia_view_market", "render_page_market"),
     ("page_today.py", "_ia_view_today", "render_page_today"),
     ("page_find.py", "_ia_view_find", "render_page_find"),
+    # UI-T（2026-10-29）：新版模式的「🎯 標的」單一頁；與 `page_find` 共用同一支 wrapper `_ia_view_find`
+    # （依 session 旗標分流：legacy → render_page_find、預設 → render_page_target），兩者都是函式體內 late import。
+    ("page_target.py", "_ia_view_find", "render_page_target"),
     ("page_inspect.py", "_ia_view_inspect", "render_page_inspect"),
     ("page_hold.py", "_ia_view_hold", "render_page_hold"),
     ("page_why.py", "_ia_view_why", "render_page_why"),

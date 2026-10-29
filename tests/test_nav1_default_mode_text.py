@@ -218,16 +218,13 @@ def _ctx(txt, w):
 @pytest.mark.slow
 class TestRenderedDefaultModePages:
     def _walk(self, at):
-        from shared.ia_nav4 import NAV4_WIDGET_BOTTOM_KEY as B, NAV4_WIDGET_LEAF_KEY as L
+        from shared.ia_nav4 import NAV4_WIDGET_BOTTOM_KEY as B
         _scan(at, "市場")
-        for label, where in (("🎯 標的", "標的/找標的"), ("💼 持股", "持股"), ("👤 我的", "我的")):
+        # UI-T（2026-10-29）：標的頁是單一頁（過渡切換的「查一檔」葉已移除，不再有第二葉要走）。
+        for label, where in (("🎯 標的", "標的"), ("💼 持股", "持股"), ("👤 我的", "我的")):
             at.radio(key=B).set_value(label).run()
             assert not at.exception, (where, at.exception)
             _scan(at, where)
-        at.radio(key=B).set_value("🎯 標的").run()
-        at.radio(key=L).set_value(ia_nav.page_label("inspect")).run()
-        assert not at.exception, at.exception
-        _scan(at, "標的/查一檔")
 
     def test_logged_out(self):
         from streamlit.testing.v1 import AppTest

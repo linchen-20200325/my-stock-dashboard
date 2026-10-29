@@ -115,7 +115,7 @@ def _ia_view_nav4(part: str):
     # NAV-1（DEC-092 Q6／DEC-097）：新版固定四頁主導覽元件。只在**新（預設）模式**才 late import
     # ⇒ legacy 模式（`?legacy=1`）連 import 都不做（rollback 路徑不依賴本模組是否健康）。
     #   'sidebar'：桌機左側欄單選（在 `with st.sidebar:` 內呼叫；回傳目前要渲染的 view 頁 id）
-    #   'main'   ：主畫面的手機底部固定列 ＋ 🎯 標的 的第二層選擇（在頁面內容之前呼叫）
+    #   'main'   ：主畫面的手機底部固定列（在頁面內容之前呼叫）
     from src.ui.views.shell_nav4 import render_main_nav, render_sidebar_nav
     if part == 'sidebar':
         return render_sidebar_nav()
@@ -714,8 +714,14 @@ def _ia_view_today() -> None:
 
 
 def _ia_view_find() -> None:
-    from src.ui.views.page_find import render_page_find
-    render_page_find()
+    # UI-T（2026-10-29，客戶線框裁示 1A 2A 3A 4A 5A）：新版（預設）模式下「🎯 標的」是單一頁，由 page_target 渲染；
+    # legacy 模式（D2 側欄）仍照舊呼叫 render_page_find（一字不變）。只有走到的那一支才會被 late import。
+    if st.session_state.get('_nav4_legacy', False):
+        from src.ui.views.page_find import render_page_find
+        render_page_find()
+        return
+    from src.ui.views.page_target import render_page_target
+    render_page_target()
 
 
 def _ia_view_inspect() -> None:

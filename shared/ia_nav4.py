@@ -40,14 +40,23 @@ PAGE4_LABELS: dict[str, str] = {
     P4_ME: "👤 我的",
 }
 
-#: 主導覽頁 id → 該頁底下承接的 view 頁 id（`ia_nav.PAGE_LABELS` 的 key）。
-#: 多於一個 ＝ 同一方向內的第二層選擇（沿用 D2 的「葉」機制；見 `leaf_options`）。
-#: 🎯 標的 ＝ 🔍 找標的 ＋ 🔬 查一檔（A 規格 §2.1「承接的現有頁」欄）。
+#: 主導覽頁 id → 該頁**自己承接**的 view 頁 id（`ia_nav.PAGE_LABELS` 的 key）。
+#: 每頁恰一個 view。🎯 標的 ＝ `ia_nav.PAGE_FIND` 這個 view id（保留舊 id 當路由 id，因 `app.py` 的派發表以它為 key）；
+#: 原「🔬 查一檔」不再有自己的導覽落點，已併入同一頁，見下方 `MERGED_VIEWS`。
 PAGE4_TO_VIEW: dict[str, tuple[str, ...]] = {
     P4_MARKET: (ia_nav.PAGE_MARKET,),
-    P4_TARGET: (ia_nav.PAGE_FIND, ia_nav.PAGE_INSPECT),
+    P4_TARGET: (ia_nav.PAGE_FIND,),
     P4_HOLD: (ia_nav.PAGE_HOLD,),
     P4_ME: (ia_nav.PAGE_ME,),
+}
+
+#: **已併入某一主導覽頁、不再有自己導覽落點**的 view：`{view 頁 id: 併入的主導覽頁 id}`。
+#: UI-T（2026-10-29，客戶 2026-10-28 DEC-099＋2026-10-29 線框裁示 1A 2A 3A 4A 5A）：
+#: 「🔬 查一檔」併入單一「🎯 標的」頁（A 規格 §4.2：同一頁，不另設查一檔）。
+#: ⚠️ 它**不是**被刪：view 頁 id 與其 renderer（`page_inspect`）仍在 `app.py` 派發表與 `ia_nav.PAGE_LABELS`，
+#: 因為 legacy 模式（`?legacy=1`）的 D2 側欄仍可獨立渲染它；只是新版四頁導覽**到不了**它，其能力由 🎯 標的頁承接。
+MERGED_VIEWS: dict[str, str] = {
+    ia_nav.PAGE_INSPECT: P4_TARGET,
 }
 
 #: **不在四頁導覽內**的 view：D2 過渡殼（🚦 今天、📖 憑什麼），只在 legacy 模式（`?legacy=1`）的 D2 側欄可達。
@@ -62,13 +71,10 @@ LEGACY_ONLY_VIEWS: tuple[str, ...] = (ia_nav.PAGE_TODAY, ia_nav.PAGE_WHY)
 # ══════════════════════════════════════════════════════════════════
 #: **頁狀態的唯一真相源**：值為四頁 id。側欄單選、底部固定列、任何將來的導覽元件都只經 on_change 寫這一格。
 NAV4_PAGE_KEY: str = "_nav4_page"
-#: 🎯 標的 的第二層（葉）選擇：值為 view 頁 id（`find` / `inspect`）。與 `NAV4_PAGE_KEY` 分開存，
-#: 切到別頁再切回來仍保留（widget 自己的 state 在該 widget 不渲染的那一輪會被 Streamlit 丟掉，所以 SSOT 不放在 widget key）。
-NAV4_TARGET_LEAF_KEY: str = "_nav4_target_leaf"
-#: 三個導覽 widget 的 key（只有「顯示」用途；值由上面兩個 SSOT 每輪預填，見 shell_nav4）。
+#: 兩個導覽 widget 的 key（只有「顯示」用途；值由上面那個 SSOT 每輪預填，見 shell_nav4）。
+#: UI-T（2026-10-29）：原第三個 widget「標的頁子選單」（`_nav4_w_leaf`）與其 SSOT（`_nav4_target_leaf`）已隨過渡切換移除。
 NAV4_WIDGET_SIDE_KEY: str = "_nav4_w_side"
 NAV4_WIDGET_BOTTOM_KEY: str = "_nav4_w_bottom"
-NAV4_WIDGET_LEAF_KEY: str = "_nav4_w_leaf"
 #: 底部固定列的 `st.container(key=...)`；CSS class 為 `.st-key-<此值>`（Streamlit 非公開保證，見 spec 已知限制）。
 NAV4_BOTTOM_CONTAINER_KEY: str = "nav4_bottom"
 
@@ -149,39 +155,16 @@ def views_of(page4: str) -> tuple[str, ...]:
     return PAGE4_TO_VIEW[page4]
 
 
-def has_leaves(page4: str) -> bool:
-    """該頁底下是否有第二層選擇（目前只有 🎯 標的）。"""
-    return len(views_of(page4)) > 1
+def resolve_view(page4: str) -> str:
+    """主導覽頁 → 要渲染的 view 頁 id（每頁恰一個 view；未知頁 id → Fail Loud）。
 
-
-def leaf_options(page4: str) -> tuple[str, ...]:
-    """第二層的顯示字串（view 頁名，來自 `ia_nav.page_label` ⇒ 不手抄第二份）。"""
-    return tuple(ia_nav.page_label(v) for v in views_of(page4))
-
-
-def leaf_from_label(page4: str, label: object) -> str:
-    """第二層顯示字串 → view 頁 id；對不到 → Fail Loud。"""
-    for _v, _l in zip(views_of(page4), leaf_options(page4)):
-        if _l == label:
-            return _v
-    raise ValueError(f"{page4!r} 底下沒有選項 {label!r}；合法值：{list(leaf_options(page4))}")
-
-
-def resolve_view(page4: str, leaf: object = None) -> str:
-    """主導覽頁 ＋（多葉頁的）葉選擇 → 要渲染的 view 頁 id。
-
-    - 單 view 頁：回唯一的 view（`leaf` 被忽略）。
-    - 多 view 頁：`leaf` 為 None → 第一個 view（進入預設落點，同 D2 `first_built_page`）；
-      `leaf` 存在但不在該頁底下 → **Fail Loud**（不靜默退回預設葉）。
+    UI-T（2026-10-29）：原 `has_leaves` / `leaf_options` / `leaf_from_label` 與 `resolve_view(page4, leaf)` 的葉參數
+    （NAV-1 過渡切換「🔍 找標的／🔬 查一檔」）已移除 —— 🎯 標的 成為單一頁。
     """
     _views = views_of(page4)
-    if len(_views) == 1:
-        return _views[0]
-    if leaf is None:
-        return _views[0]
-    if not (isinstance(leaf, str) and leaf in _views):
-        raise ValueError(f"{page4!r} 底下沒有葉 {leaf!r}；合法值：{list(_views)}")
-    return leaf
+    if len(_views) != 1:   # 自洽對帳（reconcile_nav4）已保證；這裡 raise 是防日後有人改表卻沒跑對帳
+        raise RuntimeError(f"主導覽頁 {page4!r} 必須恰承接一個 view，實得 {list(_views)}")
+    return _views[0]
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -193,8 +176,10 @@ def reconcile_nav4(view_page_ids: Iterable[str] | None = None) -> None:
     ``view_page_ids``：`app.py` 的 ``_IA_VIEWS`` 的 key 集合（真的有 renderer 的頁）；None ＝ 只驗不依賴派發表的那幾條。
     規則：
       1. 四頁恰四個；`PAGE4_TO_VIEW` 的 key ＝ `PAGE4_LABELS` 的 key；
-      2. 每個 view 頁 id 恰出現在**一處**（四頁之一 或 `LEGACY_ONLY_VIEWS`），不重複；
-      3. 四頁 ∪ legacy-only 的 view ＝ `ia_nav.PAGE_LABELS` 的全部（一頁都不能漏接、也不能多接）；
+      2. 每個 view 頁 id 恰出現在**一處**（四頁之一／`LEGACY_ONLY_VIEWS`／`MERGED_VIEWS` 的 key），不重複；
+         每個主導覽頁恰承接**一個** view（UI-T：標的頁已是單一頁，不再有葉）；
+         `MERGED_VIEWS` 的值必須是合法的主導覽頁 id（併入的去處要真的存在）；
+      3. 四頁 ∪ legacy-only ∪ merged 的 view ＝ `ia_nav.PAGE_LABELS` 的全部（一頁都不能漏接、也不能多接）；
       4. 標籤單行：非空、不重複、≤ `_LABEL_MAX_CHARS` 字；
       5. 有派發表時：派發表的 key ＝ `ia_nav.PAGE_LABELS`（即每個被導覽引用的 view 都真的有 renderer，且沒有多餘的 renderer）。
     """
@@ -206,18 +191,22 @@ def reconcile_nav4(view_page_ids: Iterable[str] | None = None) -> None:
     _labels = list(PAGE4_LABELS.values())
     if len(set(_labels)) != len(_labels) or any((not _l) or len(_l) > _LABEL_MAX_CHARS for _l in _labels):
         raise RuntimeError(f"主導覽標籤必須非空、不重複、單行（≤{_LABEL_MAX_CHARS} 字）：{_labels}")
-    _flat = [v for _vs in PAGE4_TO_VIEW.values() for v in _vs] + list(LEGACY_ONLY_VIEWS)
+    _flat = ([v for _vs in PAGE4_TO_VIEW.values() for v in _vs]
+             + list(LEGACY_ONLY_VIEWS) + list(MERGED_VIEWS))
     _dups = sorted({v for v in _flat if _flat.count(v) > 1})
     if _dups:
-        raise RuntimeError(f"view 頁同時出現在多個位置（四頁／legacy-only 重疊）：{_dups}")
+        raise RuntimeError(f"view 頁同時出現在多個位置（四頁／legacy-only／已併入 重疊）：{_dups}")
+    _bad_merge = {v: p for v, p in MERGED_VIEWS.items() if p not in PAGE4_LABELS}
+    if _bad_merge:
+        raise RuntimeError(f"MERGED_VIEWS 指向不存在的主導覽頁：{_bad_merge}")
     _known = set(ia_nav.PAGE_LABELS)
     if set(_flat) != _known:
         raise RuntimeError(
             f"四頁對映與 ia_nav.PAGE_LABELS 對不起來（漏接 / 多接）：缺 {sorted(_known - set(_flat))}，"
             f"多 {sorted(set(_flat) - _known)}")
     for _p, _vs in PAGE4_TO_VIEW.items():
-        if not _vs:
-            raise RuntimeError(f"主導覽頁 {_p!r} 沒有承接任何 view")
+        if len(_vs) != 1:
+            raise RuntimeError(f"主導覽頁 {_p!r} 必須恰承接一個 view（UI-T：不再有葉），實得 {list(_vs)}")
     if view_page_ids is not None:
         _ids = set(view_page_ids)
         if _ids != _known:
