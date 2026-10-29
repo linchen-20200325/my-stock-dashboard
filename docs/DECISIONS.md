@@ -1366,7 +1366,7 @@ D2.5 以下大方向核准：
 - **與 DEC-097／DEC-098 的關係**：DEC-097（客戶裁示：手機底部 4 按鈕、舊 UI 預設隱藏）**不變**；DEC-098 為 **AI 總管內部設計選擇，不是客戶裁示**——其中「標的頁葉選擇＝過渡項、待客戶裁示」一點，由本條（客戶裁示）**回答**；DEC-098 其餘內容不因本條升格為客戶裁示。DEC-082（草稿先行）：客戶已就此偏離裁示，毋須再出草稿。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：撰寫組（docs-only）未重跑測試；本條只落盤裁示，不改任何程式碼。
 
-- 📌 **2026-10-29 補註（UI-T；決策者 AI 總管（事實更新）；上文原文保留）**：本條裁示的「過渡切換」已由 UI-T 分支 `uit-impl` 移除（`NAV4_TARGET_LEAF_KEY`／`NAV4_WIDGET_LEAF_KEY`／`render_target_leaf_selector` 等；標的頁成為單一頁）；PR #968，見 DEC-107。
+- 📌 **2026-10-29 補註（UI-T；決策者 AI 總管（事實更新）；上文原文保留）**：本條裁示的「過渡切換」已由 UI-T 分支 `uit-impl` 移除（`NAV4_TARGET_LEAF_KEY`／`NAV4_WIDGET_LEAF_KEY`／`render_target_leaf_selector` 等；標的頁成為單一頁）；~~PR #968，見 DEC-107~~ 已合併（PR #968，main `9ec555e7`）（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）），見 DEC-107。
 
 ### DEC-100｜Cross-View 資料一致性稽核的處置分類＋本批 4 項半安全小修（AI 總管內部，2026-10-28）
 
@@ -3171,7 +3171,7 @@ Effort：High
 
 > 2026-10-29 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/DECISIONS.md` 最大為 DEC-106、DEC-107 0 命中）。要點經總管轉交，**非客戶逐字全文**。
 
-- **決策者**：**客戶**（2026-10-29；經總管轉交之要點）。｜**日期／效力日期**：2026-10-29 起生效。｜**狀態**：生效；UI-T 已實作於分支 `uit-impl`（PR #968（合併 SHA 由總管合併後同步））；非 done-verified（待客戶實機點驗）。
+- **決策者**：**客戶**（2026-10-29；經總管轉交之要點）。｜**日期／效力日期**：2026-10-29 起生效。｜**狀態**：生效；~~UI-T 已實作於分支 `uit-impl`（PR #968（合併 SHA 由總管合併後同步））~~ 已合併（PR #968，main `9ec555e7`）（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；非 done-verified（待客戶實機點驗）。
 - **背景**：DEC-099／UI-T-ACCEPT-NAV1-TRANSITION 要求把「🔍 找標的＋🔬 查一檔」整合為單一 🎯 標的頁並移除 NAV-1 過渡切換；版面與動線異動須先草稿（`CLAUDE.md` §-1.5.D v3 §03-2 ①），草稿＝`docs/vnext/NEWUI_D25_UIT_WIREFRAME_2026-10-29.md`。
 - **內容（五題皆選推薦方案 A）**：
   1. **A**：整頁順序＝問句→資料狀態→搜尋（判型／期間／均線收進「進階選項」摺疊，MA 保留並標「僅顯示」）→AI 佔位→第一區（板塊圖降為展開區）→第二區→第三區（個股七區塊／ETF 另一版型）→進階分析（多檔比較）。
@@ -3183,7 +3183,7 @@ Effort：High
 - **效力邊界**：不核准任何新資料源、schema、公式、投資語意；不改 `PAGE_LABELS`／`ia_nav`（legacy D2 殼仍用）、`src/ui/tabs/**`、`src/ui/etf/**`、`decision_digest*`；舊 UI Removal Gate 不變。
 - **與其他 DEC 的關係**：落實 DEC-092（設計方向）與 DEC-099（過渡切換移除）；與 DEC-097（legacy 入口不得出現在一般使用者導覽）並存，故 S9 不放指路（見偏離 2）；與 DEC-103（範圍膨脹防護）一致，新發現皆登記 P2。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條要點為總管轉交；「與其他 DEC 的關係」為撰寫組讀法，單組。
-- 📌 **實作紀錄（2026-10-29 補；加法式；決策者 AI 總管（事實更新））**：分支 `uit-impl`（基準 `4521fc39`）；PR #968（squash SHA 由總管合併後同步）。
+- 📌 **實作紀錄（2026-10-29 補；加法式；決策者 AI 總管（事實更新））**：分支 `uit-impl`（基準 `4521fc39`）；~~PR #968（squash SHA 由總管合併後同步）~~ 已合併（PR #968，main `9ec555e7`）（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。
   - **commit**（前綴 `feat(UI-T):`／`fix(UI-T):`／`test(UI-T):`）：`f942bd80`（新頁＋薄 L3＋守衛）／`94627c92`（移除過渡切換＋`app.py` 最小分流）／`29ae9cb5`（意外 loader 例外只呈現一次）／`7052afcb`（突變補強＋BACKLOG）／`cfc0944d`（QA 回修）／`8db04008`（TTL 表靜態守衛）；其後為本條文件落盤 commit。
   - **改動檔**：新增 `src/ui/views/page_target.py`、`src/ui/views/_target_blocks.py`、`src/services/target_industry_service.py`（薄 L3，既有 `ticker_sector.json` 唯讀視圖）、`tests/uit_fakes.py`、`tests/test_uit_target_page.py`、`tests/test_uit_target_page_qa.py`；修改 `shared/ia_nav4.py`（移除葉常數與函式，新增 `MERGED_VIEWS`，`reconcile_nav4` 同步）、`src/ui/views/shell_nav4.py`（移除葉選擇器）、`app.py`（僅 `_ia_view_find()` 依旗標分流＋一行註解）、`tests/test_batch_z60.py`（`_BASE_DIGEST`）與 `test_nav1_*`／`test_p0x_view_mount_claims` 的有理由改寫。`page_find.py`／`page_inspect.py` **一字未改**。
   - **測試**：Fast lane 全套 32685 passed、1 failed、50 skipped（唯一失敗為已知環境失敗 `test_batch_z59` markdown_it）；UI-T 專屬 138 項；slow 全套（回修前）183 passed、回修後 nav1／sidebar 相關子集 45 passed；mutation 回修前 24 個＋回修後 17 個，逐一拔守衛全數轉紅（存活者 M5、M19、N3 補強後轉紅）。
