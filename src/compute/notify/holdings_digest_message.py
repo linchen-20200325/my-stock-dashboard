@@ -49,8 +49,8 @@ def _vix_line(vix: "float | None", total: int, *, data_short: bool = False) -> l
     沒有數字卻給「照原計畫」等於憑空捏造一個「市場平靜」的結論。
 
     ═══ DEC-102(1)（客戶 2026-10-28，XV-LINE-VIX-LINE＝同意）：持股資料不足就不給行動句 ═══
-    `data_short`（呼叫端以本檔 `_data_short(digest)` ＝ L0 `holdings_data_short.digest_data_short`
-    同一謂詞判定，⛔ 不另造判定）為真時，只陳述 VIX 分級事實那一行，**不附**「→ 該怎麼做」那一行
+    `data_short`（呼叫端以本檔 `_data_short(digest)` 判定，其謂詞是
+    `digest_data_short(...) or digest.get("invalid")` —— 與本檔續抱抑制同一謂詞，⛔ 不另造判定）為真時，只陳述 VIX 分級事實那一行，**不附**「→ 該怎麼做」那一行
     （missing ≠ HOLD；VIX 不得代替持股完整性判斷）。預設 False ＝ 修前輸出逐字不變。
     """
     from shared.macro_buckets import LEVEL_EMOJI, SPECS_BY_KEY, classify_danger

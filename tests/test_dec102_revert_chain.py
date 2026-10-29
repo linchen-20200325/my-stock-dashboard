@@ -22,7 +22,8 @@ DEC102_BASE_SHA = {'shared/asset_currency_gate.py': '06362824a65587bc42bbe34cc8e
  'src/services/dividend_station_service.py': '67fdaf7302ec377379fe357ea416fee1a30ed83840f378a3ff60533dd306d1ad',
  'src/ui/etf/etf_tab_dividend_station.py': '9554556c0ed8d1bd56ea0ce6feea04f61871c72f1e271fbc1c960714267445ee'}
 
-DEC102_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/asset_currency_gate.py': (('\n'
+DEC102_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/asset_currency_gate.py': (('KEY_FX_UNCONFIRMED: str = "_fx_unconfirmed"\n'
+                                    '\n'
                                     '#: DEC-102(3)（客戶 '
                                     '2026-10-28，XV-FX-ROW-ACTION＝同意）：外幣／幣別未確認的**持有個股列**，汰換燈結論\n'
                                     '#: 判得出（🟢 續抱）時**保留**原句，同列加註停利判不了（成本幣別未定義 ⇒ 損益% 不可判定）。\n'
@@ -36,34 +37,51 @@ DEC102_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/asset_cur
                                     '    return (FX_TP_UNJUDGED_FOREIGN if fx_exclusion_reason(ticker) == '
                                     'FX_EXCLUDED_REASON\n'
                                     '            else FX_TP_UNJUDGED_UNCONFIRMED)\n',
-                                    ''),),
- 'src/compute/notify/holdings_digest_message.py': (('def _vix_line(vix: "float | None", total: int, *, '
-                                                    'data_short: bool = False) -> list[str]:\n',
+                                    'KEY_FX_UNCONFIRMED: str = "_fx_unconfirmed"\n'),),
+ 'src/compute/notify/holdings_digest_message.py': (('\n'
+                                                    'def _vix_line(vix: "float | None", total: int, *, '
+                                                    'data_short: bool = False) -> list[str]:\n'
+                                                    '    """VIX 一行 + **一句白話該怎麼辦**（user '
+                                                    '2026-08-24:「我也不知道該怎麼半」）。\n',
+                                                    '\n'
                                                     'def _vix_line(vix: "float | None", total: int) -> '
-                                                    'list[str]:\n'),
-                                                   ('\n'
+                                                    'list[str]:\n'
+                                                    '    """VIX 一行 + **一句白話該怎麼辦**（user '
+                                                    '2026-08-24:「我也不知道該怎麼半」）。\n'),
+                                                   ('    沒有數字卻給「照原計畫」等於憑空捏造一個「市場平靜」的結論。\n'
+                                                    '\n'
                                                     '    ═══ DEC-102(1)（客戶 '
                                                     '2026-10-28，XV-LINE-VIX-LINE＝同意）：持股資料不足就不給行動句 ═══\n'
-                                                    '    `data_short`（呼叫端以本檔 `_data_short(digest)` ＝ L0 '
-                                                    '`holdings_data_short.digest_data_short`\n'
-                                                    '    同一謂詞判定，⛔ 不另造判定）為真時，只陳述 VIX 分級事實那一行，**不附**「→ '
+                                                    '    `data_short`（呼叫端以本檔 `_data_short(digest)` 判定，其謂詞是\n'
+                                                    '    `digest_data_short(...) or digest.get("invalid")` '
+                                                    '—— 與本檔續抱抑制同一謂詞，⛔ 不另造判定）為真時，只陳述 VIX 分級事實那一行，**不附**「→ '
                                                     '該怎麼做」那一行\n'
                                                     '    （missing ≠ HOLD；VIX 不得代替持股完整性判斷）。預設 False ＝ '
-                                                    '修前輸出逐字不變。\n',
-                                                    ''),
-                                                   ('    _fact = f"😱 VIX：{vix:.1f}\u3000'
+                                                    '修前輸出逐字不變。\n'
+                                                    '    """\n',
+                                                    '    沒有數字卻給「照原計畫」等於憑空捏造一個「市場平靜」的結論。\n    """\n'),
+                                                   ('    }[_level]\n'
+                                                    '    _fact = f"😱 VIX：{vix:.1f}\u3000'
                                                     '{LEVEL_EMOJI[_level]} {_label}\u3000有效判斷 {total} 檔"\n'
                                                     '    if data_short:\n'
                                                     '        return [_fact]      # DEC-102(1)：持股資料不足 → '
                                                     '只陳述分級事實，不附行動建議\n'
-                                                    '    return [_fact, f"\u3000→ {_advice}"]\n',
+                                                    '    return [_fact, f"\u3000→ {_advice}"]\n'
+                                                    '\n',
+                                                    '    }[_level]\n'
                                                     '    return [f"😱 VIX：{vix:.1f}\u3000'
                                                     '{LEVEL_EMOJI[_level]} {_label}\u3000有效判斷 {total} 檔",\n'
-                                                    '            f"\u3000→ {_advice}"]\n'),
-                                                   ('        *_vix_line(_vix, _total, '
-                                                    'data_short=_data_short(digest)),   # DEC-102(1)\n',
-                                                    '        *_vix_line(_vix, _total),\n')),
- 'src/services/dividend_station_service.py': (('            if (_row.get(FXG.KEY_FX_UNCONFIRMED) and ak == '
+                                                    '            f"\u3000→ {_advice}"]\n'
+                                                    '\n'),
+                                                   ('        f"🕐 {as_of}（開盤前檢視,價格以最近交易日收盤為準）",\n'
+                                                    '        *_vix_line(_vix, _total, '
+                                                    'data_short=_data_short(digest)),   # DEC-102(1)\n'
+                                                    '        "",\n',
+                                                    '        f"🕐 {as_of}（開盤前檢視,價格以最近交易日收盤為準）",\n'
+                                                    '        *_vix_line(_vix, _total),\n'
+                                                    '        "",\n')),
+ 'src/services/dividend_station_service.py': (('            _mark_insufficient(_row, ak=ak, held=held)\n'
+                                               '            if (_row.get(FXG.KEY_FX_UNCONFIRMED) and ak == '
                                                'T.KIND_STOCK\n'
                                                '                    and not _row.get(SS.KEY_INSUFFICIENT) '
                                                'and _row.get("健檢") == "🟢"):\n'
@@ -72,13 +90,33 @@ DEC102_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/asset_cur
                                                '                #   同列加註停利判不了（損益% 已因幣別未定義為 None）；⛔ 不換成 '
                                                '⬜。台股列不經此分支、逐字不變。\n'
                                                '                _row["建議動作"] = f"{_row.get(\'建議動作\', '
-                                               '\'\')}\u3000{FXG.fx_take_profit_note(tk)}"\n',
-                                               ''),),
- 'src/ui/etf/etf_tab_dividend_station.py': (('from shared import asset_currency_gate as FXG  # '
-                                             'DEC-102(2)：外幣原因句（L0 唯一來源）\n',
-                                             ''),
-                                            ('        fx_excluded_codes,\n', ''),
-                                            ('        _fx = fx_excluded_codes(_rows)\n'
+                                               '\'\')}\u3000{FXG.fx_take_profit_note(tk)}"\n'
+                                               '            rows.append(_row)\n',
+                                               '            _mark_insufficient(_row, ak=ak, held=held)\n'
+                                               '            rows.append(_row)\n'),
+                                              ('    "有標的資料不足或抓取失敗,列在『資料不足／無法判定』的標的請寫『資料不足／無法判定』,"\n'
+                                               '    "其餘已列出的結論照原樣講,不得給組合層『全部續抱』類總結,也不得自行補上缺少的資料。"\n'
+                                               '    # DEC-102(3)（QA M1，2026-10-28）：與 LINE 正文 '
+                                               '`_vix_line(data_short=...)` 同一謂詞、同一原則 ——\n'
+                                               '    #   持股資料不足時 VIX 只陳述分級事實，不得代替持股完整性給行動句。⑦ 與 LINE AI 總結共用本 '
+                                               'prompt。\n'
+                                               '    "\\nVIX 只可陳述分級事實，不得據以給任何行動建議（如照原計畫、定期定額）。")\n'
+                                               '\n',
+                                               '    "有標的資料不足或抓取失敗,列在『資料不足／無法判定』的標的請寫『資料不足／無法判定』,"\n'
+                                               '    "其餘已列出的結論照原樣講,不得給組合層『全部續抱』類總結,也不得自行補上缺少的資料。")\n'
+                                               '\n')),
+ 'src/ui/etf/etf_tab_dividend_station.py': (('from shared import dividend_station_thresholds as T\n'
+                                             'from shared import asset_currency_gate as FXG  # '
+                                             'DEC-102(2)：外幣原因句（L0 唯一來源）\n'
+                                             'from shared import station_specs as SS\n',
+                                             'from shared import dividend_station_thresholds as T\n'
+                                             'from shared import station_specs as SS\n'),
+                                            ('        compute_portfolio_totals,\n'
+                                             '        fx_excluded_codes,\n'
+                                             '    )\n',
+                                             '        compute_portfolio_totals,\n    )\n'),
+                                            ('        _held = [r for r in _rows if r.get("held")]\n'
+                                             '        _fx = fx_excluded_codes(_rows)\n'
                                              '        if _fx:\n'
                                              '            # DEC-102(2)（DEC-019 '
                                              '凍結的客戶核准例外，XV-OLDUI-FX-REASON＝B）：外幣／幣別未確認 → L3 不算總額，\n'
@@ -87,22 +125,33 @@ DEC102_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/asset_cur
                                              '            _note = f"{FXG.FX_PARTIAL_TEXT}\u3000'
                                              '{FXG.fx_excluded_text(_fx)}"\n'
                                              '        elif not (_held and all((r.get("_detail") or '
-                                             '{}).get("error") for r in _held)):\n',
+                                             '{}).get("error") for r in _held)):\n'
+                                             '            _note = ("未實現損益與總市值算不出來：持股沒有張數／均價／現價。"\n',
+                                             '        _held = [r for r in _rows if r.get("held")]\n'
                                              '        if not (_held and all((r.get("_detail") or '
-                                             '{}).get("error") for r in _held)):\n'),
-                                            ('        compute_allocation_split, flag_take_profit, '
-                                             'fx_excluded_codes)\n',
-                                             '        compute_allocation_split, flag_take_profit)\n'),
-                                            ('        _fx = fx_excluded_codes(rows)\n'
+                                             '{}).get("error") for r in _held)):\n'
+                                             '            _note = ("未實現損益與總市值算不出來：持股沒有張數／均價／現價。"\n'),
+                                            ('    from src.services.dividend_station_service import (\n'
+                                             '        compute_allocation_split, flag_take_profit, '
+                                             'fx_excluded_codes)\n'
+                                             '    _alloc = compute_allocation_split(rows)\n',
+                                             '    from src.services.dividend_station_service import (\n'
+                                             '        compute_allocation_split, flag_take_profit)\n'
+                                             '    _alloc = compute_allocation_split(rows)\n'),
+                                            ('        _held = [r for r in (rows or []) if r.get("held")]\n'
+                                             '        _fx = fx_excluded_codes(rows)\n'
                                              '        if _fx:\n'
                                              '            # DEC-102(2)（DEC-019 '
                                              '凍結的客戶核准例外，XV-OLDUI-FX-REASON＝B）：同卡①，⛔ 不講成「未帶張數／均價」。\n'
                                              '            st.caption(f"📊 80/20 '
                                              '配置偏離：{FXG.FX_PARTIAL_TEXT}\u3000{FXG.fx_excluded_text(_fx)}")\n'
                                              '        elif _held and all((r.get("_detail") or '
-                                             '{}).get("error") for r in _held):\n',
+                                             '{}).get("error") for r in _held):\n'
+                                             '            st.caption("📊 80/20 配置偏離：無法計算實際佔比。"\n',
+                                             '        _held = [r for r in (rows or []) if r.get("held")]\n'
                                              '        if _held and all((r.get("_detail") or {}).get("error") '
-                                             'for r in _held):\n'))}
+                                             'for r in _held):\n'
+                                             '            st.caption("📊 80/20 配置偏離：無法計算實際佔比。"\n'))}
 
 
 def _rel(file_path) -> str:

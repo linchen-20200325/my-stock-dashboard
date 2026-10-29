@@ -1472,7 +1472,10 @@ def build_station_digest(rows: list[dict], vix: float | None = None) -> dict:
 #: XV-H1-EXT：資料不足（抓取失敗／燈全判不出／缺現價／無有效判斷檔）時取代「續抱」引導句。
 _INSUFFICIENT_INSTRUCTION: str = (
     "有標的資料不足或抓取失敗,列在『資料不足／無法判定』的標的請寫『資料不足／無法判定』,"
-    "其餘已列出的結論照原樣講,不得給組合層『全部續抱』類總結,也不得自行補上缺少的資料。")
+    "其餘已列出的結論照原樣講,不得給組合層『全部續抱』類總結,也不得自行補上缺少的資料。"
+    # DEC-102(3)（QA M1，2026-10-28）：與 LINE 正文 `_vix_line(data_short=...)` 同一謂詞、同一原則 ——
+    #   持股資料不足時 VIX 只陳述分級事實，不得代替持股完整性給行動句。⑦ 與 LINE AI 總結共用本 prompt。
+    "\nVIX 只可陳述分級事實，不得據以給任何行動建議（如照原計畫、定期定額）。")
 
 
 def build_summary_prompt(digest: dict, switch: dict | None = None) -> str:
