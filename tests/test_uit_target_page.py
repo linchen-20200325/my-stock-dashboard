@@ -521,7 +521,7 @@ class TestBlockIsolation:
         _click(at, F.ACTION_RUN_SCREEN_LABEL)
         assert not at.exception, at.exception
         _df = [d.value for d in at.dataframe if "標的" in list(d.value.columns)][0]
-        assert set(_df["產業"]) == {B.SECTOR_UNAVAILABLE_CELL}
+        assert set(_df["產業"]) == {B.SECTOR_READ_FAILED_CELL}, "讀取失敗≠尚未產生"
         assert list(_df["估值"])[0] == "22.5", "產業欄失敗不得連累估值欄"
 
     def test_single_stock_leg_failing_is_red_and_siblings_survive(self, monkeypatch):

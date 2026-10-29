@@ -121,6 +121,7 @@ MISSING_CELL: str = "⬜ 資料不足"
 PE_FAILED_CELL: str = "⬜ 取不到"
 PE_NOT_PROVIDED_CELL: str = "⬜ 未提供"
 SECTOR_UNAVAILABLE_CELL: str = "⬜ 產業對映尚未產生"
+SECTOR_READ_FAILED_CELL: str = "⬜ 產業對映讀取失敗"
 
 ZONE3_TITLE: str = "第三區｜單一股票"
 ZONE3_IDLE: str = "還沒選標的：在上方輸入代碼，或在候選表選一檔。"
@@ -158,7 +159,7 @@ UNCOVERED_ITEMS: tuple[tuple[str, str], ...] = (
     ("用名稱搜尋", "目前只能輸入代碼"),
     ("帶入我的持股", "新版尚未接上"),
 )
-UNCOVERED_LEAD: str = "這些功能舊畫面有、新畫面還沒接上，本次不會出現在這一頁："
+UNCOVERED_LEAD: str = "這些功能目前尚未提供，不會出現在這一頁："
 UNCOVERED_FOOT: str = f"以上功能：{DEFAULT_MODE_NOT_YET}。這不是資料壞了，也不是被刪除。"
 BATCH_NOTE: str = ("批次表的每一列走的是與單檔同一支取數，所以個股給財報體檢分數、ETF 給折溢價／配息／同儕。"
                    "估值（357）與籌碼不在批次表裡 —— 一次 20 檔會把等待時間變成好幾倍，這是刻意不做；"
@@ -765,10 +766,13 @@ def _code_of(row: Mapping) -> str:
 
 def chips_cell(code: str, single: SingleBundle | None) -> str:
     """候選表「籌碼」格：**只有使用者選取（已載入）的那一檔**有值；其餘「未取」（⛔ 不填 0、不推定中性）。"""
-    if single is None or not single.req.submitted or single.chips is None:
+    if single is None or not single.req.submitted:
         return CHIPS_NOT_FETCHED
     if single.verdict is None or not single.verdict.is_stock or single.req.ticker != code:
         return CHIPS_NOT_FETCHED
+    if single.chips is None:
+        # 選取的是這一檔、判型個股、本輪已嘗試取數，但沒有結果物件 ⇒ 取數拋了例外（`load_single._try`）：是「失敗」，不是「還沒取」。
+        return "⬜ 取數失敗"
     _c = single.chips
     if _c.error:
         return "⬜ 取數失敗"
@@ -790,7 +794,8 @@ def build_candidate_rows(bundle: ScreenBundle, single: SingleBundle | None) -> l
         _name = str(_row.get("名稱") or "").strip()
         # 產業
         if bundle.sector is None or not bundle.sector.available:
-            _ind = SECTOR_UNAVAILABLE_CELL
+            # 讀取拋例外（含 strict 的壞檔）≠ 快取尚未產生：兩句話不同。
+            _ind = SECTOR_READ_FAILED_CELL if bundle.sector_error else SECTOR_UNAVAILABLE_CELL
         else:
             _raw = _sec_map.get(_code)
             _lab = canonical_sector(_raw) if _raw not in (None, "") else ""

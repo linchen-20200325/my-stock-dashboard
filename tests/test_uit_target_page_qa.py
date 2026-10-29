@@ -159,6 +159,44 @@ class TestChipsFailureCell:
         assert df.loc[1, "籌碼"] == B.CHIPS_NOT_FETCHED
 
 
+class TestChipsLegThrew:
+    """M-2'：籌碼取數**拋例外**（`_try` 回 None）時，選取列要寫『⬜ 取數失敗』，不是『未取』。"""
+
+    def test_cell_for_selected_row_when_chips_is_none(self):
+        s = B.SingleBundle(req=I.InspectRequest(submitted=True, ticker="2330"),
+                           verdict=I.KindVerdict(requested=True, code="2330", is_stock=True), chips=None,
+                           errors=(("籌碼", "RuntimeError('x')"),))
+        assert B.chips_cell("2330", s) == "⬜ 取數失敗"
+        assert B.chips_cell("2317", s) == B.CHIPS_NOT_FETCHED, "未選取列仍是未取"
+        assert B.chips_cell("2330", None) == B.CHIPS_NOT_FETCHED, "尚未按查看此檔仍是未取"
+
+    def test_through_the_page(self, monkeypatch):
+        at, _ = _new(monkeypatch)
+        monkeypatch.setattr(I, "load_chips", lambda v, r: (_ for _ in ()).throw(RuntimeError("日線掛了")))
+        at.run()
+        _click(at, F.ACTION_RUN_SCREEN_LABEL)
+        at.selectbox(key=B.SS_PICK_WIDGET).set_value("2330").run()
+        at.button(key=B.SS_PICK_BUTTON).click().run()
+        df = _picked_rows(at)
+        assert df.loc[0, "籌碼"] == "⬜ 取數失敗" and df.loc[0, "籌碼"] not in (B.CHIPS_NOT_FETCHED, "0", "中性")
+        assert df.loc[1, "籌碼"] == B.CHIPS_NOT_FETCHED
+
+
+class TestSectorReadFailedVsMissing:
+    def test_corrupt_cache_exception_is_read_failed_and_missing_is_not_generated(self, monkeypatch):
+        at, _ = _new(monkeypatch, sector_error=True)
+        at.run()
+        _click(at, F.ACTION_RUN_SCREEN_LABEL)
+        assert set(_picked_rows(at)["產業"]) == {B.SECTOR_READ_FAILED_CELL}
+        from src.services.target_industry_service import TickerSectorMap
+        at2, _ = _new(monkeypatch)
+        monkeypatch.setattr("src.services.target_industry_service.get_ticker_sector_map",
+                            lambda: TickerSectorMap(available=False, reason="缺"))
+        at2.run()
+        _click(at2, F.ACTION_RUN_SCREEN_LABEL)
+        assert set(_picked_rows(at2)["產業"]) == {B.SECTOR_UNAVAILABLE_CELL}
+
+
 class TestPickResetsKindOverride:
     """P1-1：『🔍 查看此檔』的判型一律 auto（進階選項殘留的『強制當 ETF』不得套到候選股）；期間／均線沿用。"""
 
