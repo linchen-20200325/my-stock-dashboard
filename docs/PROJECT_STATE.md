@@ -785,4 +785,5 @@
 - **凍結狀態**：UI 視覺實作凍結（DEC-108 第 3 點）的解除條件改為「Phase 1 契約合併後依 Phase 2→7 推進，每個 UI phase 過 Visual Fidelity Gate」；已合併 UI-M（#965）、UI-T（#968）不自動回退，由 Phase 4／5 回修。
 - **吸收自 #970**：DEC-108 裁示（保留，標部分取代，並補登客戶原文）、§D 能力守恆（契約 §17）、§E 順序（Migration Plan）、A.5 工程字樣（契約 §18）、A.8 token 差異（契約 §14.2）；§C 冷啟動量測由 Phase 1 已載入量測取代。
 - **重要事實（影響未來架構判斷）**：(1) Decision Digest 市場段依賴 session warroom（新 UI 唯一寫入點＝今天頁「🚀 更新今日戰情」，`page_market` 只讀）；(2) 五桶 worst-of 只在 L5、輸入為 session 片段；(3) `build_ai_summary` 是 partial／legacy building block（帶 VIX、觀察清單 235 燈、資料不足、換入候選，不提總經位階），不是 One AI Brain；(4) AB-2a 程式寫死五段；(5) Google login 兩入口並存（側欄＋👤 我的卡①）。
+- **總管改判（2026-10-29）**：AI 總管讀法不得推翻客戶核准過的呈現——DEC-107「選股條件預設展開」、DEC-017 葉1 ②「兩套刻度常駐非摺疊」、卡片「▸ 詳細」、DEC-105 指路說明句、DEC-092 Q5 排序說明句、tokens 客戶裁示色值**維持有效**，改否列各 phase 線框待客戶拍板點 W1～W7（`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md` §22；BACKLOG `P1R-P*-WF-*`）。
 - **限制**：五份調查與 Phase 1 文件皆單組、未經第二組驗；量化上限為依 blueprint 量測的建議值；手機實機、Streamlit Cloud、1.56 floor 未驗；`PROCESS.md` §1 與五檔讀序衝突（`CV1-DR-04`）未裁示。

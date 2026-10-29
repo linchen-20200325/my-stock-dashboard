@@ -57,8 +57,8 @@
 | 層 | 內容 | 預設 |
 |---|---|---|
 | **第一眼（L1）** | 五問：狀態、核心數字、Primary Visual（compact）、是否需行動、下一步；metadata chips；Missing chip；AI 投資總結入口卡（R13） | 外露 |
-| **第二眼（L2）** | Secondary Visuals、Top-N 之外的完整清單、分組明細、進階控制項（更新模式、選股條件）、大圖（點開才畫，一次一張） | 收合或位於第一屏之下 |
-| **第三層（L3）** | `▸ 為什麼／來源／限制／去哪補`：為什麼、資料來源、as_of、口徑、公式、threshold、policy reference、限制、Missing／unavailable 原因、去哪補、provenance、工程術語 | **收合，不得預設展開**（DEC-091 §一 Level 3 同向） |
+| **第二眼（L2）** | Secondary Visuals、Top-N 之外的完整清單、分組明細、進階控制項（更新模式；選股條件是否收合待 Phase 5 線框拍板）、大圖（點開才畫，一次一張） | 收合或位於第一屏之下 |
+| **第三層（L3）** | 摺疊（主圖下方字樣＝`▸ 為什麼／來源／限制／去哪補`；卡片摺疊沿用「▸ 詳細」直到線框拍板，R7）：為什麼、資料來源、as_of、口徑、公式、threshold、policy reference、限制、Missing／unavailable 原因、去哪補、provenance、工程術語 | **收合，不得預設展開**（DEC-091 §一 Level 3 同向） |
 
 ## §4 主圖 header 結構（客戶原文 DEC-109 五＋規格）
 
@@ -171,13 +171,13 @@ R9（DEC-110）：
 2. **L3 請求參數不變**：`src/ui/views/page_find.TOP_N_OPTIONS=(20, 50, 100)`、`DEFAULT_TOP_N=50`（FACT）維持。
 3. **Digest 與 AI 不受 Top-N 影響**：Decision Digest 由 canonical data＋正式規則結果建立，⛔ 讀 UI 切片（`ONE_AI_BRAIN_BOUNDARY_vNext_2026-10-29.md` §3）。
 4. 外露 Top-N 之下恰一個「▸ 查看全部（N 筆）」入口；截斷時顯示「另 K 筆見全部」chip（沿用 `_market_blocks.HERO_RISK_MORE_FMT` 模式）。
-5. 排序依據寫一次（例 `_target_blocks.ZONE1_SORT_NOTE`「排序依據：法人資金動能，非產業趨勢。」→ 區塊 header chip；DEC-092 Q5）。
+5. 排序依據寫一次（例 `_target_blocks.ZONE1_SORT_NOTE`「排序依據：法人資金動能，非產業趨勢。」，DEC-092 Q5，字樣不改）；由現行說明句改為區塊 header chip 與否＝Phase 5 線框待客戶拍板點（§22）。
 6. 沒有排序依據的清單（例 風險 hero 依五桶固定順序，`HERO_RISK_NO_RANKING_NOTE`）→ Top-N 只是「前 N 個依固定順序」，⛔ 自創重要性排序。
 7. 建議預設 N（內部，可調）：產業 5、候選 10 列（表）或 5 張（卡）、風險 hero 3（既有 `HERO_RISK_MAX_ITEMS`）／圖 D 5、持股需處理 5、例外代號 5。
 
 ## §11 摺疊、標籤與運算（R7、R10）
 
-- **R7 摺疊標籤統一**：L3 依據入口一律 **`▸ 為什麼／來源／限制／去哪補`**（客戶 DEC-109 五給定字樣），取代 `src/ui_v2/markup.FOLD_SUMMARY_TEXT`「▸ 詳細」與各頁「🔍 查看依據」的**標籤**；內容不變。客戶裁示或測試釘住字面的**具名 expander 不改名**（例 `_market_blocks.LAMP_DETAIL_EXPANDER_LABEL`「指標明細（16 項）」，DEC-105 指路目標）。
+- **R7 摺疊標籤（2026-10-29 總管改判後範圍）**：**主圖 header 下方**的依據入口用 **`▸ 為什麼／來源／限制／去哪補`**（客戶 DEC-109 五明確給定）。**卡片摺疊標籤**「▸ 詳細」（客戶 2026-09-25 核可線框逐字，`src/ui_v2/markup.FOLD_SUMMARY_TEXT`）與各頁「🔍 查看依據」**維持有效**；是否統一換成新字樣＝各頁 phase 線框待客戶拍板點（§22）；內容不變。客戶裁示或測試釘住字面的**具名 expander 不改名**（例 `_market_blocks.LAMP_DETAIL_EXPANDER_LABEL`「指標明細（16 項）」，DEC-105 指路目標）。
 - **R10 expander 不省運算**：Streamlit expander body 每次 rerun 都會執行（FACT，Inv-2 T26）→ **收合 ≠ 省運算**；既有 button／checkbox／form gate **全部保留**，重運算仍走 gate。
 - `st.form` 內放 `st.expander` 在 `requirements.txt` floor 1.56 的行為**未驗**（沙箱 1.59.2）；未驗前改用「form 外 expander 放進階控制項＋form 內只留主鍵」的保守排法。
 - ⛔ 任何資訊只活在 `title=` 屬性（`page_today.V2_HOVER_ONLY_FACTS`／`V2_HOVER_OPTIONAL_FACTS` 於 Phase 4 起移入摺疊）。
@@ -190,7 +190,7 @@ R9（DEC-110）：
 
 | 項 | 規格 |
 |---|---|
-| 第一屏 | 市場位階（DEC-105 2A 五態＋「市場位階，不是台股趨勢」）、Risk Cap／尚未核准狀態（`WATER_VALUE`＋Q2-2 逐字句）、今日主要風險（≤3 chip＋「指標危險度」指路 chip）、是否需行動（⚡ 計數）、今日結論句（DEC-081 Q2-1）、**主要市場圖** |
+| 第一屏 | 市場位階（DEC-105 2A 五態＋「市場位階，不是台股趨勢」）、Risk Cap／尚未核准狀態（`WATER_VALUE`＋Q2-2 逐字句）、今日主要風險（≤3 chip＋「指標危險度」指路，形式待 Phase 4 線框拍板）、是否需行動（⚡ 計數）、今日結論句（DEC-081 Q2-1）、**主要市場圖** |
 | Primary Visual | **市場環境主圖**：一張 compact 圖＋segmented／switcher（台股｜海外市場｜利率｜美元，**只用既有序列**：圖 A 加權指數＋`_market_blocks.INTL_GROUPS` 既有 5 系列），預設台股；或改以 small multiples 呈現（擇一，Phase 4 依 Gate 決定）。⛔ 同時把全部畫成大型圖 |
 | Secondary | ≤ 3：例 國際 small multiples（若 Primary 用 switcher）、圖 D 五桶風險 compact view、圖 C 大盤合理區間 placeholder |
 | EPS×PE | 未核准 → 維持 placeholder（`CHART_C_EMPTY`）／`⬜ 尚未核准`；⛔ 為畫面完整自建公式或假圖 |
@@ -201,9 +201,9 @@ R9（DEC-110）：
 | 項 | 規格 |
 |---|---|
 | 優先修（客戶原文） | 不要再：先攤開 30～40 個產業長卡；每個產業重複顯示相同 Missing 說明；候選標的被推到很後面 |
-| Primary Visual | **產業強弱／資金動能／機會分布**：Top 5 ranking／heatmap／bubble／compact sector tiles 擇一，**資料＝既有 `target_industry_service` 矩陣列**，⛔ 新算法；header chip「排序：法人資金動能，非產業趨勢」（DEC-092 Q5） |
+| Primary Visual | **產業強弱／資金動能／機會分布**：Top 5 ranking／heatmap／bubble／compact sector tiles 擇一，**資料＝既有 `target_industry_service` 矩陣列**，⛔ 新算法；排序依據句「排序依據：法人資金動能，非產業趨勢。」寫一次（DEC-092 Q5；說明句 vs chip＝Phase 5 待拍板） |
 | 完整產業清單 | 收合／drill-down（L2） |
-| 候選標的 | **提前**：第二區 header 須在 desktop 第一屏可見；候選 Top-N（§10）＋「查看全部」；選股條件**預設收合＋一行條件摘要 chip**（R3，條件與語意不變） |
+| 候選標的 | **提前**（客戶原文）；候選 Top-N（§10，DEC-109 十二）＋「查看全部」。在 DEC-107 1A 頁面順序內如何提前（例 第二區 header 是否須進 desktop 第一屏）＝Phase 5 線框待拍板（§22）。**選股條件維持 DEC-107「預設展開」**；在 Visual Budget 下是否改為預設收合＋一行條件摘要 chip＝Phase 5 線框待客戶拍板點（R3，總管 2026-10-29 改判） |
 | 單一股票 | 先摘要卡（≤4）＋主圖，再展開完整分析（七區塊／ETF 三卡原樣）；「判型結果」卡縮為 chip `🏢 個股 · 自動判型`，明細入 L3 |
 | 互動不變 | 「選一檔＋🔍 查看此檔」（DEC-107 2A）、籌碼只取選取檔（4A）、估值口徑揭露（chip＋L3 全文，⛔ 刪）、不放 ⚡（3A） |
 
@@ -215,6 +215,7 @@ R9（DEC-110）：
 | Primary Visual | 依實際資料擇一：持股配置／風險分布／損益分布／核心衛星（**僅能標「依 ETF／個股種類近似，非投資目的」**）／主要曝險；資料不足 → placeholder |
 | Secondary | ≤ 3（例 VIX sparkline、燈牆 compact grid、現金流 compact bar＋`稅前` chip） |
 | 不得全部第一層外露 | VaR、壓力測試、配息、完整規則、門檻、分母（客戶原文） |
+| 兩套刻度 | DEC-017 葉1 ②「兩套刻度…常駐揭露 · 非摺疊」**維持有效**；在 Visual Budget 下是否改為 L1 一顆 chip＋完整雙表可展開＝Phase 6 線框待客戶拍板點（§22） |
 | 投資目的分類 | 存股／資本利得／未分類**保留**；⛔ AI 推論分類（客戶原文「AI 不得自行推測分類」） |
 | 骨架 | blueprint `holdings.html`＝AI 摘要 → ⚡ → 🌱 → 📈 → ⬜ 未分類（A 規格 §4.3）；現況＝兩葉 tab＋①～⑦（FACT，Inv-3）；骨架重排屬 Phase 6 |
 
@@ -257,7 +258,7 @@ R9（DEC-110）：
 核准 blueprint 不再只是參考圖。正式定義：**blueprint = Visual SSOT / visual acceptance baseline**。Production 可以因真資料、Streamlit 限制、mobile constraint 做合理調整；但不可自行改掉：第一屏資訊順序、主圖／次圖層級、資訊密度、圖文比例、card hierarchy。若必須明顯偏離：開 Gate。
 
 - **blueprint 檔**＝`docs/vnext/d25_wireframes/{index,market,target,holdings,mine,ai_summary}.html`（DEC-092 設計方向核准）。**本 phase 不改任何 HTML。**
-- **R15（DEC-110）**：blueprint＝**視覺驗收基準**；`src/ui_v2/tokens.py`＝**實作 token 來源**。兩者色值不一致時 **blueprint 為準**，tokens 於 Phase 3 收斂（BACKLOG `P1R-TOKENS-CONVERGE`）。
+- **R15（DEC-110）**：blueprint＝**視覺驗收基準**；`src/ui_v2/tokens.py`＝**實作 token 來源**。兩者色值不一致時 **blueprint 為準**，tokens 於 Phase 3 收斂（BACKLOG `P1R-TOKENS-CONVERGE`）——**客戶裁示的色值除外**（下方 ⚠️；總管 2026-10-29 改判）。
 - **後續客戶裁示覆蓋 blueprint 的地方（不算偏離）**：DEC-105 2A（市場位階五態，取代 `index.html`／`market.html` 圖例的偏多／中性／偏空用語）；DEC-107 2A（「選一檔＋🔍 查看此檔」取代 `target.html`「點一列展開」）；DEC-107 3A（標的頁不放 ⚡）；DEC-109 R12（AI 投資總結新輸出格式取代 `ai_summary.html` 五段）。
 - **允許的合理調整**（不需開 Gate，但 Gate 報告須逐項列出）：真資料字串長度／列數／缺值（示意數字一律以真值或 ⬜ 取代）；Streamlit 限制（`st.columns` 手機塌單欄→以 HTML／CSS grid 補 2×2、無 hover、Vega 圖軸無法完全隱藏 INFERENCE）；誠實揭露 chip 比 blueprint 多。
 - **明顯偏離（必須開 Gate）**：見 Gate 文件 §5。
@@ -276,7 +277,7 @@ R9（DEC-110）：
 | 字級 | 頁標 22px／卡標 13px／大數 26px | 卡值 24px（`CARD_VALUE`） | 同上 |
 | hero 網格 | `repeat(auto-fit,minmax(170px,1fr))`，gap 12px；手機 `@media(max-width:500px)` | `MAX_COLS=3` | 見 §15 R4 |
 
-- ⚠️ **待總管處理的事實（FACT，不改判 R15）**：`tokens.py` 內至少兩組值的註解自陳為**客戶裁示**：`--sig-neutral`／`--sig-neutral-bg`（「客戶 2026-09-21 裁示」）、`--cta-primary-bg #1f6feb`（「客戶 2026-09-22 裁示逐字：接受 Streamlit config 的 primaryColor #1f6feb」）；blueprint 無對應 token。依 `PROJECT_RULES.md` §0.1「對既有裁示的任何變更需要新的客戶 Decision」，Phase 3 收斂時**這幾個值不得以 R15 默默覆寫**，須先由總管判定（登 `P1R-TOKENS-CONVERGE` 註記）。此點為撰寫組讀碼所見，**未經第二組驗證**。
+- ⚠️ **待總管處理的事實（FACT，不改判 R15）**：`tokens.py` 內至少兩組值的註解自陳為**客戶裁示**：`--sig-neutral`／`--sig-neutral-bg`（「客戶 2026-09-21 裁示」）、`--cta-primary-bg #1f6feb`（「客戶 2026-09-22 裁示逐字：接受 Streamlit config 的 primaryColor #1f6feb」）；blueprint 無對應 token。依 `PROJECT_RULES.md` §0.1「對既有裁示的任何變更需要新的客戶 Decision」，**這幾個客戶裁示色值維持有效、不在 R15 射程內**；是否改為 blueprint 色值＝Phase 3 草稿待客戶拍板點（`P1R-P3-WF-CUSTOMER-COLORS`；§22）。「哪些 token 屬客戶裁示」為撰寫組讀碼所見，**未經第二組驗證**。
 
 ## §15 呈現位階與讀法（R4、R16 摘要）
 
@@ -291,22 +292,22 @@ R9（DEC-110）：
 | DEC-081 Q2-1 | 今日結論句（`shared/market_conclusion.build_market_conclusion`；「；」並列、缺值明寫、⛔ 缺值當中性）⭐ 句子不改 | Hero 與 ⚡ 之間（DEC-105 1A） | **L1 第一屏**（作為頁級主要判讀句，B4）；Hero／⚡ 相對順序可維持，但必須進第一屏 |
 | DEC-081 Q2-2 | ⭐「風險上限／獨立顯示待 C2b＋RC-VISIBILITY Gate」 | 建議總持股水位卡面 | 該卡的那 1 句，**逐字**（客戶自訂措辭，工程字樣例外） |
 | DEC-092 Q2 | ⭐「均線為參考，不等於正式台股趨勢判斷。」；趨勢＝⬜ 尚未定義 | 圖 A 旁、展開區外 | Primary 主圖 header chip 或那 1 句（逐字）＋`⬜ 尚未定義` chip |
-| DEC-092 Q5 | 「排序依據：法人資金動能，非產業趨勢。」 | 第一區 caption | 產業區 header chip（寫一次） |
+| DEC-092 Q5 | 「排序依據：法人資金動能，非產業趨勢。」 | 第一區 caption | 字樣逐字、寫一次；形式（說明句 vs header chip）＝Phase 5 線框待拍板 |
 | DEC-101(3)／DEC-102 Q1～Q3 | 價格旁「資料時間＋來源」；⛔ 猜收盤；不只靠顏色；💼 沿用 **E17**（總市值下方「價格資料日」） | E17 小字 | **同位置（E17）metadata chip**。PR #970 線框 B.3 ② 把價格時間改放頁首 chip＝**錯誤、更正回 E17** |
-| DEC-105 第 4 點 | 首屏「今日主要風險」與圖 D 必須指路到指標危險度，字面含「指標危險度」 | caption（`DANGER_POINTER`） | 一顆指路 **chip**（字面含「指標危險度」，指向「指標明細（16 項）」expander），冷／熱 session 皆有 |
+| DEC-105 第 4 點 | 首屏「今日主要風險」與圖 D 必須指路到指標危險度，字面含「指標危險度」 | caption（`DANGER_POINTER`） | **維持指路句**（字面含「指標危險度」，指向「指標明細（16 項）」expander，冷／熱 session 皆有）；改為 chip 與否＝Phase 4 線框待拍板 |
 | DEC-051（DR-2026-10-16-4） | Risk Cap 完整性（「未評估：…」）卡面直接揭露 | 卡面一列 | **緊鄰上限數字的 coverage chip**；⛔ 與數字拆開（移位時一起走） |
 | DEC-101(1) | ⭐ `FX_PARTIAL_TEXT`「⬜ 部分外幣資產未納入，總市值／配置比例無法完整判定」＋未納入標的與原因 | 卡面 fact | **逐字 chip**＋`（N 檔）`＋前 5 代號；完整清單與原因在 L2 |
 | DEC-102(4) | ⭐「停利未判：外幣」 | 列內文字 | 列內 chip |
 | DEC-101(2) | missing ≠ HOLD；⭐「⬜ 資料不足／無法判定」 | 列狀態 | 列狀態 chip |
 | DEC-054／055 | AI 生成、非投資建議揭露 | 卡面全文 | `🤖 AI 生成·非投資建議` chip＋正文旁全文照舊 |
 | 股利卡 | 「稅前」但書 | 卡面句 | `稅前` chip＋摺疊全文 |
-| DEC-107 第 1 點（UIT 線框「▾ 選股條件（預設展開）」） | 選股條件表單（因子、門檻）與 🎯 開始選股鍵 | 預設展開（`_target_blocks` `SCREEN_EXPANDER` `expanded=True`） | **預設收合＋一行條件摘要 chip**（R3：呈現取代，條件與語意不變）。⚠️ DEC-108 曾記「改此點須客戶明確回覆」→ AI 總管讀法，Phase 5 交付報告一句揭露，客戶不同意即回復展開（單點可回復） |
+| DEC-107 第 1 點（UIT 線框「▾ 選股條件（預設展開）」） | 選股條件表單（因子、門檻）與 🎯 開始選股鍵 | 預設展開（`_target_blocks` `SCREEN_EXPANDER` `expanded=True`） | **維持預設展開**（客戶核准線框裁示；DEC-108 記「改此點須客戶明確回覆」）。在 Visual Budget 下是否改為預設收合＋一行條件摘要 chip＝**Phase 5 線框待客戶拍板點**（R3，總管 2026-10-29 改判；依草稿先行，本 phase 不另開 Gate、不改） |
 | DEC-017 鐵律 4（2026-09-05） | 三要素「現況一句話／為什麼沒有／去哪補」**內容**必填 | 卡面常駐 | 內容契約不變（`Note` 三段非空）；位置改 L3 摺疊 |
-| DEC-017 葉1 ②「兩套刻度…常駐揭露 · 非摺疊」 | 兩套刻度不得互比的警示 | 常駐雙表 | **L1 一顆 chip**（例「健檢兩套刻度，不能互比」）＋完整雙表可展開 |
+| DEC-017 葉1 ②「兩套刻度…常駐揭露 · 非摺疊」 | 兩套刻度不得互比的警示 | 常駐雙表 | **維持常駐非摺疊**（DEC-109 原文未點名）；改為 L1 一顆 chip（例「健檢兩套刻度，不能互比」）＋完整雙表可展開與否＝Phase 6 線框待客戶拍板點 |
 | 客戶 2026-09-24「三要素要在卡面上看得到」（程式碼註解 `page_today.py` 約 L2933） | — | 卡面三列 | **位置被 DEC-109 取代**；內容契約保留 |
 | 客戶 2026-09-25「v2 卡面三列短句」（`page_find.py` 約 L769）＋K1 | K1：卡面那 1 句須為 Note 原文子字串、不新造 | 卡面三列 | 三列上卡面**被取代**；K1 **維持** |
 | 客戶 2026-09-25「⛔ 不得只剩 hover」（`page_find.py` 約 L774／L2098／L2134） | 原文可取得 | — | **維持並延伸到手機**（必須可點開） |
-| 客戶 2026-09-25「16 燈卡三列出處收進 ▸ 詳細」（`page_today.py` 約 L3014） | 純 CSS 摺疊機制 | — | 機制有效；標籤依 R7 換字 |
+| 客戶 2026-09-25「16 燈卡三列出處收進 ▸ 詳細」（`page_today.py` 約 L3014） | 純 CSS 摺疊機制與「▸ 詳細」字樣 | — | 機制與字樣維持；換字與否＝線框待拍板（R7） |
 | DEC-091 §一／DEC-108 十項 | 三層資訊、L3 不得預設展開、第一列 3～4、圖表縮小、明細收合 | — | 同向；本契約為其具體化（DEC-108 ③「圖表縮小」讀為**主圖外露但縮小**，R2） |
 
 ## §17 能力守恆表（吸收自 PR #970 §D，依本契約更新；⛔ 能力消失、⛔ 語意改變）
@@ -318,7 +319,7 @@ R9（DEC-110）：
 | 📊 | 今日結論句（DEC-081 Q2-1） | L1 第一屏主要判讀句 | 改位置，句子不改 |
 | 📊 | 市場位階卡（三段 Note） | 位階 tile（主值＋chip）＋L3 | 改形式 |
 | 📊 | 建議總持股水位＋Q2-2 逐字句 | tile＋那 1 句逐字；`WATER_WHY` 進 L3 | 改形式（客戶措辭不動） |
-| 📊 | 今日主要風險（≤3）＋指標危險度指路 | tile 內 chip＋指路 chip | 改形式 |
+| 📊 | 今日主要風險（≤3）＋指標危險度指路 | tile 內 chip；指路句維持（chip 化待 Phase 4 線框拍板） | 改形式（風險項）／維持（指路） |
 | 📊 | 更新 form（模式 radio＋🚀 主鍵＋報告 caption＋「更新時間≠資料日」） | 主鍵留 L1；radio 與長 caption 進 L2；一句留 tile | 部分下沉（form／gate 語意不變） |
 | 📊 | `status_line`、`AS_OF_NOT_PROVIDED` | metadata chip | 改形式 |
 | 📊 | ⚡ 需要處理（含 `ALERTS_NO_SOURCE`） | 計數 chip＋L2 清單；「沒有來源不寫沒事」不變 | 改形式 |
@@ -330,13 +331,13 @@ R9（DEC-110）：
 | 🎯 | 代碼搜尋 form＋進階選項（判型／期間／MA「僅顯示」） | 不變（DEC-107） | 保留 |
 | 🎯 | 資料狀態、AI 佔位；不放 ⚡ | chip 列；AI 入口卡（R13） | 保留 |
 | 🎯 | 第一區矩陣、🗺️ 載入板塊地圖 gate、熱力圖／泡泡圖（含持股 ⭐） | Primary compact 產業 view（Top 5）＋L2 完整矩陣與兩圖；gate 不變 | 改形式＋部分下沉 |
-| 🎯 | 選股條件 form＋🎯 開始選股＋💾 CSV | 條件預設收合＋摘要 chip（R3）；按鈕與 CSV 原樣 | 下沉（R3） |
+| 🎯 | 選股條件 form＋🎯 開始選股＋💾 CSV | **維持預設展開**；收合＋摘要 chip 與否待 Phase 5 線框拍板（R3）；按鈕與 CSV 原樣 | 維持（待拍板） |
 | 🎯 | 候選表 6 欄＋估值口徑說明＋籌碼只取選取檔 | Top-N＋全表展開；說明 chip＋L3 | 改形式 |
 | 🎯 | 選一檔＋🔍 查看此檔 | **不變** | 保留 |
 | 🎯 | 第三區個股七區塊／ETF 三卡／判不出灰卡／價格時間 | 摘要卡 ≤4＋主圖＋展開完整分析；價格 chip 原位 | 改形式＋下沉 |
 | 🎯 | 進階分析（多檔比較、仍未覆蓋） | 不變 | 保留 |
 | 💼 | ① 三張結論卡 | 第一屏「該做什麼／需處理 N 檔」摘要（同一 `build_conclusion_cards`／`build_station_digest` 結果）；全文進 L3 | 改形式 |
-| 💼 | ② 兩套刻度（常駐非摺疊） | L1 chip＋完整雙表可展開（R6） | 改形式 |
+| 💼 | ② 兩套刻度（常駐非摺疊） | **維持**；chip＋可展開與否待 Phase 6 線框拍板 | 維持（待拍板） |
 | 💼 | ③ 燈牆＋VIX、④ 換股、⑤ 80/20＋衛星停利、⑥ 深度（VaR／壓測） | compact chart／card（Secondary ≤3）＋進階分析（⑤ 標題改「依種類近似，非投資目的」） | 改形式＋下沉 |
 | 💼 | ⑦ AI 戰情總結（付費、點擊才生成、唯一推播出口） | AI 投資總結入口卡（R13）；付費 gate 不變；Phase 7 前不接新 Brain | 位置調整 |
 | 💼 | 🚀 跑存股戰情室 form、組合設定葉、價格資料時間 E17、外幣排除、資料不足 ⬜ | 見 §16 | 保留（位置調整） |
@@ -379,3 +380,19 @@ metadata chips、status chips、chart header、evidence expander（`▸ 為什�
 - 已載入狀態量測依賴夾具（產業數、持股檔數、文字長度）；真資料下候選表預設 50 列**未渲染**；手機實機、Streamlit Cloud、`requirements.txt` floor 1.56 未驗。
 - 「主圖」選擇（§12）是撰寫組依客戶方向指定；Phase 4～6 依 Gate 與真資料再定，屬內部拍板，偏離 blueprint 版面時走草稿先行（`CLAUDE.md` §-1.5.D v3 §03-2 ①）。
 - 本檔所有判定單組產出，**未經第二組驗證**。
+
+## §22 各頁 phase 線框待客戶拍板點（2026-10-29 總管改判：AI 總管讀法不得推翻客戶核准過的呈現）
+
+> 原則：凡「改變客戶核准過的呈現」、且 DEC-109 客戶原文**沒有明確點名**者，一律**維持現行**，並列入該頁 phase 的線框草稿，由客戶拍板（`CLAUDE.md` §-1.5.D v3 §03-2 ① 草稿先行；**本 phase 不另開 Gate、不改**）。每點須附總管推薦方案與理由。
+
+| # | Phase | 維持中的客戶核准呈現 | 待拍板的替代方案（總管提案方向） | BACKLOG |
+|---|---|---|---|---|
+| W1 | 3 | tokens 客戶裁示色值（CTA 主色 `#1f6feb`／light `#044cb6`；`--sig-neutral`／`-bg`） | 改為 blueprint 色值或保留 | `P1R-P3-WF-CUSTOMER-COLORS` |
+| W2 | 4 | DEC-105 第 4 點「指標危險度」指路**說明句** | 改為指路 chip（字面不變） | `P1R-P4-WF-POINTS` |
+| W3 | 4～6 | 卡片摺疊標籤「▸ 詳細」（客戶 2026-09-25 核可線框逐字）、「🔍 查看依據」 | 統一為「▸ 為什麼／來源／限制／去哪補」 | `P1R-WF-FOLD-LABEL` |
+| W4 | 5 | **DEC-107「選股條件預設展開」** | 預設收合＋一行條件摘要 chip | `P1R-P5-WF-SCREEN-COND` |
+| W5 | 5 | DEC-107 1A 頁面順序 | 在原順序內讓候選更早出現（例 第二區 header 進 desktop 第一屏、第一區 Top 5 壓高度） | `P1R-P5-WF-POINTS` |
+| W6 | 5 | DEC-092 Q5 排序依據**說明句**（`ZONE1_SORT_NOTE`） | 改為區塊 header chip（字樣不變） | `P1R-P5-WF-POINTS` |
+| W7 | 6 | DEC-017 葉1 ②「兩套刻度…常駐揭露 · 非摺疊」 | L1 一顆 chip＋完整雙表可展開 | `P1R-P6-WF-TWO-SCALES` |
+
+- 本表為撰寫組依總管改判原則逐條複查的結果（單組，未經第二組驗證）；維持原判、因客戶原文明確點名者見 `docs/DECISIONS.md` DEC-110「同原則複查」。

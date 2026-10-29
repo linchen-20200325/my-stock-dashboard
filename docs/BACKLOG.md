@@ -1068,8 +1068,8 @@
 | **P1R-PHASE2-HELPER-TEST-MIGRATION** | **P1** | Helper／Test Contract Migration：可選參數（預設 byte-identical）、tests 改「資訊守恆」等強斷言、T23 拆兩條；**畫面零變更**；不碰受還原鏈守衛的檔 | open | `P1R-PHASE1-CONTRACT-FREEZE` 合併 | **第 0 步**：以當時 main 重新實測 T1～T26 與還原鏈覆蓋（Migration Plan §4）；Sonnet 5.5＋Medium | 1 |
 | **P1R-PHASE3-SHARED-COMPONENTS** | **P1** | metadata／status chips、chart header、evidence expander、Missing placeholder、compact KPI、sparkline、small multiples、Top-N 切片、segmented；`Basis` 合併；站殼間距子項 | open | Phase 2 | Migration Plan §7 | 1 |
 | **P1R-PHASE4-MARKET** | **P1** | 📊 市場 reference implementation（契約 §12.1）＋Visual Fidelity Gate | open | Phase 3 | 版面骨架若偏離 blueprint → 草稿先行 | 1 |
-| **P1R-PHASE5-TARGET** | **P1** | 🎯 標的（契約 §12.2；含 R3 選股條件預設收合＋交付報告一句揭露）＋Gate | open | Phase 4 | — | 1 |
-| **P1R-PHASE6-HOLD** | **P1** | 💼 持股（契約 §12.3；骨架 AI → ⚡ → 🌱／📈／⬜＝UI-H 本體；可拆 2 PR）＋Gate；UI-ME 視覺併入後續 | open | Phase 5 | 開工重判 Model×Effort | 1 |
+| **P1R-PHASE5-TARGET** | **P1** | 🎯 標的（契約 §12.2）＋Gate；線框須列待客戶拍板點 W4～W6（`P1R-P5-WF-SCREEN-COND`、`P1R-P5-WF-POINTS`） | open | Phase 4 | — | 1 |
+| **P1R-PHASE6-HOLD** | **P1** | 💼 持股（契約 §12.3；骨架 AI → ⚡ → 🌱／📈／⬜＝UI-H 本體；可拆 2 PR）＋Gate；UI-ME 視覺併入後續；線框須列待拍板點 W7（`P1R-P6-WF-TWO-SCALES`） | open | Phase 5 | 開工重判 Model×Effort | 1 |
 | **P1R-PHASE7-BRAIN** | **P1** | Decision Digest v2＋One AI Brain＋AI 投資總結（R12 新輸出格式、R13 入口）；AI 投資總結線框先行 | open | Phase 6；下列 Digest 前置；AB-2b Gate | Opus＋High | 1 |
 | **P1R-AB4R-WIRE-BUILDER-DEP** | **P1** | Phase 7 依賴：`AB4R-WIRE-BUILDER`（策略分類接 builder；未核准分類仍「未分類」） | open（指標列，本體見 `AB4R-WIRE-BUILDER`） | AB-4w／HI-5 | Phase 7 第 1 步 | 1 |
 | **P1R-FIVE-BUCKET-L3** | **P1** | 五桶／key alerts：worst-of（`build_rows`／`bucket_summary`／`overall_verdict`）只在 L5 `tab_macro_v2`；計算核心在 L2（`macro_helpers.compute_five_bucket_summary`、`daily_key_alerts.collect_key_alerts`），輸入皆為 session 片段；`macro_alerts` 唯一寫入點為舊 UI `section_mid` → worst-of 由 L5 下沉＋建 L3 canonical 輸入組裝（不讀 session） | open | — | Phase 7 第 2 步（Digest A4 前置） | 1（稽核組勘誤） |
@@ -1077,7 +1077,7 @@
 | **P1R-DIGEST-V2-A1..A8** | **P1** | Digest 加性 v2：A1 provenance／freshness 兩軸、A2 STALE、A3 candidates、A4 risks、A5 持股數值 facts、A6 coverage N／M（⛔ confidence）、A7 excluded_count、A8 RuleRef 對回 SSOT | open | 上兩列 | Phase 7 第 4 步；升 `decision_digest.v2`；獨立 QA | 1 |
 | **P1R-AB2A-FIVE-SECTION-REWIRE** | **P1** | AB-2a 程式寫死五段（`shared/decision_digest_terms.SECTION_KEYS`、`decision_digest_grounding.py` G5、`src/services/decision_digest_summary.py`）→ 依 R12 新輸出格式內部改動 | open | Phase 7 線框核准 | 內部技術決定，過獨立 QA | 1 |
 | **P1R-AI-EXIT-LEGACY-CLEANUP** | **P2** | AI 出口 legacy 清理：`build_ai_summary` prompt／出口 replace（保留 `build_station_digest`）、LINE refactor、週報 replace、`push_daily_signals`／`ai_judgment` legacy、`TAIWAN_ADVISOR_PERSONA` 衝突（`CV1-FU-06`）——判定見 Brain 文件 §6 | open（登記） | Phase 7 | 不插隊 | 1 |
-| **P1R-TOKENS-CONVERGE** | **P2** | `src/ui_v2/tokens.py` 色值／幾何與 blueprint 不同（契約 §14.2）→ Phase 3 收斂（R15，blueprint 為準）。⚠️ tokens 內有客戶裁示色值（CTA 主色 2026-09-22、`--sig-neutral` 2026-09-21）：**收斂前須先判，不得默默覆寫客戶裁示**（可能需客戶 Gate） | open | Phase 3 | 總管先判客戶裁示色值處置 | 1 |
+| **P1R-TOKENS-CONVERGE** | **P2** | `src/ui_v2/tokens.py` 色值／幾何與 blueprint 不同（契約 §14.2）→ Phase 3 收斂（R15，blueprint 為準）。⚠️ tokens 內**客戶裁示色值**（CTA 主色 2026-09-22、`--sig-neutral` 2026-09-21）**維持有效、不在收斂射程內**；改否另列 `P1R-P3-WF-CUSTOMER-COLORS`（總管 2026-10-29 改判） | open | Phase 3 | 只收斂非客戶裁示的 token | 1 |
 | **P1R-GOOGLE-LOGIN-SIDEBAR-GATE** | **P2** | 👤 我的 Google login：預設 nav4 模式側欄仍渲染登入／登出／Sheet ID 區塊，與 👤 我的卡①兩入口並存（DEC-083 第 1 點＋第 11 點）；舊側欄區塊是否隱藏屬版面異動、碰 DEC-083 E 段 → **未來客戶 Gate**（R14；本 phase 不問、不改） | open（未來客戶 Gate；未送題） | DEC-083 E 段 Removal Gate | Phase 6 前後依需要出線框＋推薦方案 | 1 |
 | **P1R-ROOT-LEGACY-DOCS** | **P2** | 根目錄 D 類候選：`HANDOFF_2026-08-15.md`（0 引用）、`PLAN_T1_T2.md`、`PLAN_T4.md`、`BATCH_A_DELIVERY.md`（只被前者引用）；「已被 `STATE.md` 吸收」未逐項驗證（R17） | open（登記，不刪不改） | — | 逐項比對後才可刪（四條件） | 1 |
 | **P1R-UIM-PREFIX-COLLISION** | **P2** | ID 前綴撞名：`UIM-*` 同時用於舊 UI 移植（5.1.9.A）與 UI-M P2（5.1.13 後段）；新 ID 一律不用 `UIM-` | open（登記） | — | 不回溯改 ID（ID 永不重用）；閱讀時以所在小節判別 | 1 |
@@ -1085,3 +1085,9 @@
 | **P1R-FLOOR-156-API** | **P2** | `st.metric(chart_data=, chart_type=, border=)`、`st.bar_chart(horizontal=)`、`st.form` 內 `st.expander` 在 `requirements.txt` floor 1.56 行為未驗（沙箱 1.59.2；repo 0 使用前兩者） | open | Phase 3 | floor wheel 實跑；未驗前不使用 | 1 |
 | **P1R-STALE-RED-OLDUI** | **P2** | 舊 UI `data_freshness.staleness_badge_html` 把 stale 塗紅（違紅只給系統失敗）；舊 UI 凍結（DEC-019）不改，新 UI ⛔ 重用 | open（登記；舊 UI 凍結） | DEC-019 | Old UI Removal Gate 時處理 | 1 |
 | **P1R-STATCARD-ZERO-OLDUI** | **P2** | 舊 `ui_widgets.stat_card` 把無法解析的 pct 變 0 當中性（missing≠0 風險）；舊 UI 凍結不改，新 UI ⛔ 重用 | open（登記；舊 UI 凍結） | DEC-019 | 同上 | 1 |
+| **P1R-P5-WF-SCREEN-COND** | **P1** | **Phase 5 線框待客戶拍板點：選股條件預設展開 vs 收合**。DEC-107「選股條件預設展開」（客戶核准線框裁示；DEC-108 記「改此點須客戶明確回覆」）**維持有效**；在 DEC-109 Visual Budget 下是否改為「預設收合＋一行條件摘要 chip」，於 Phase 5（🎯 標的）線框草稿列為待客戶拍板點，附總管推薦方案。總管 2026-10-29 改判 R3：AI 總管讀法不得推翻客戶裁示 | open（依草稿先行；本 phase 不另開 Gate、不改） | `P1R-PHASE4-MARKET` 完成、Phase 5 線框 | Phase 5 線框草稿列題＋推薦 | 1 |
+| **P1R-P5-WF-POINTS** | **P2** | Phase 5 線框其他待拍板點：W5 DEC-107 1A 頁面順序內候選如何「更早出現」（DEC-109 十二）；W6 DEC-092 Q5 排序依據說明句改 chip（字樣不變） | open（同上） | Phase 5 線框 | 同上 | 1 |
+| **P1R-P4-WF-POINTS** | **P2** | Phase 4 線框待拍板點：W2 DEC-105 第 4 點「指標危險度」指路說明句改 chip（字面、冷熱 session、目標 expander 不變） | open（依草稿先行） | Phase 4 線框 | Phase 4 線框列題 | 1 |
+| **P1R-P6-WF-TWO-SCALES** | **P1** | Phase 6 線框待拍板點：W7 DEC-017 葉1 ②「兩套刻度…常駐揭露 · 非摺疊」**維持有效**；是否改為 L1 一顆 chip＋完整雙表可展開 | open（依草稿先行） | Phase 6 線框 | Phase 6 線框列題＋推薦 | 1 |
+| **P1R-WF-FOLD-LABEL** | **P2** | 各頁線框待拍板點：W3 卡片摺疊標籤「▸ 詳細」（客戶 2026-09-25 核可線框逐字）與「🔍 查看依據」**維持**；是否統一為「▸ 為什麼／來源／限制／去哪補」（DEC-109 五只明確點名主圖下方） | open（依草稿先行） | Phase 4～6 線框 | 首個 UI phase 線框列題 | 1 |
+| **P1R-P3-WF-CUSTOMER-COLORS** | **P2** | Phase 3 草稿待拍板點：W1 tokens 客戶裁示色值（CTA 主色 `#1f6feb`／light `#044cb6`；`--sig-neutral`／`-bg`）**維持**；是否改為 blueprint 色值 | open（依草稿先行） | Phase 3 | Phase 3 草稿列題＋推薦 | 1 |

@@ -84,7 +84,7 @@
 
 > ⚠️ 依 DEC-109（契約 §2 B1：每頁 1 Primary 在第一屏）新讀法，第 2 項「L1 無圖」不再全數視為已核准：產業區需有 compact sector view（heatmap／Top-N bar，用既有矩陣資料）外露；DEC-107 降階的是**大圖**（熱力圖／泡泡圖全尺寸），compact view 在 Phase 5 落地（契約 §12.2）。此為撰寫組讀法。
 
-**Gaps → 契約 §12.2**：(a) 矩陣 Top 5，其餘收進 expander；手機每產業卡 ~190px → ≤72px。(b) 每列重複的「僅有資金動能」說明改欄頭寫一次。(c) 候選：外露 Top 10 列（或 5 卡），完整表進 expander（L3 請求仍 50）。(d) 「判型結果」卡（498px）縮成 chip「🏢 個股 · 自動判型」，明細入摺疊。(e) 卡面工程字樣（FACT）：「本次條件 eps_high」「判型來源…（L2 判型」。(f) AI 一行 caption → 小卡。(g) 選股條件預設收合＋條件摘要 chip（R3）。
+**Gaps → 契約 §12.2**：(a) 矩陣 Top 5，其餘收進 expander；手機每產業卡 ~190px → ≤72px。(b) 每列重複的「僅有資金動能」說明改欄頭寫一次。(c) 候選：外露 Top 10 列（或 5 卡），完整表進 expander（L3 請求仍 50）。(d) 「判型結果」卡（498px）縮成 chip「🏢 個股 · 自動判型」，明細入摺疊。(e) 卡面工程字樣（FACT）：「本次條件 eps_high」「判型來源…（L2 判型」。(f) AI 一行 caption → 小卡。(g) 選股條件**維持 DEC-107 預設展開**；改為預設收合＋條件摘要 chip 與否＝Phase 5 線框待客戶拍板（契約 §22 W4）。
 
 ---
 
@@ -111,7 +111,7 @@
 
 **10 項評分（INFERENCE，Inv-3）**：1 第一屏結構 ❌（tab＋①～⑦，而非 AI → ⚡ → 三區）｜2 圖文比例 ❌（零圖表、4,464 字）｜3 卡片密度 ❌｜4 圖表尺寸 🟡（完全沒有圖；mockup mini 圖是否有資料源＝INFERENCE 未確認）｜5 空白比例 🟡（① 三卡 498／467／355 不等高）｜6 Top-N 🟡（燈牆列全部持股；刻度表固定 9 列）｜7 長文字下沉 ❌（①～⑦ 每區開頭「線框：…」caption；⑥ caption 199 字）｜8 Missing placeholder ❌（兩張未接線卡各一大段說明，含「實作住在 L5…widget key」）｜9 CTA／結論首屏 🟡（結論卡部分可見；AI 在 5,692）｜10 Mobile ❌（全頁 11,416px；單卡最高 705px）
 
-**Gaps → 契約 §12.3**：(a) 骨架改為 AI 摘要 → ⚡（沿用既有 digest 加碼／汰弱／未判計數）→ 🌱／📈／⬜ 三區（blueprint 已核准方向；DEC-109 起不再待 PR #970 草稿核准，由 Phase 6 施工並過 Gate）。(b) 18 張卡（355–735px）→ ≤160px tile，說明移入摺疊。(c) 移除 L1／L2 所有「線框：」caption 與 L0／L3／SSOT／digest／expander 等字樣。(d) ② 刻度表與 ③ 圖例收進 expander；「兩套刻度不能互比」改 L1 chip（R6）。(e) 未接線卡 575／393px → `⬜ 未接線` chip。(f) ⑦ AI 摘要出口移到頁首；付費 API gate 保留。
+**Gaps → 契約 §12.3**：(a) 骨架改為 AI 摘要 → ⚡（沿用既有 digest 加碼／汰弱／未判計數）→ 🌱／📈／⬜ 三區（blueprint 已核准方向；DEC-109 起不再待 PR #970 草稿核准，由 Phase 6 施工並過 Gate）。(b) 18 張卡（355–735px）→ ≤160px tile，說明移入摺疊。(c) 移除 L1／L2 所有「線框：」caption 與 L0／L3／SSOT／digest／expander 等字樣。(d) ③ 圖例收進 expander；② 兩套刻度常駐非摺疊**維持**（DEC-017 葉1 ②），改 L1 chip＋可展開與否＝Phase 6 線框待客戶拍板（契約 §22 W7）。(e) 未接線卡 575／393px → `⬜ 未接線` chip。(f) ⑦ AI 摘要出口移到頁首；付費 API gate 保留。
 
 ---
 
