@@ -1439,7 +1439,7 @@ D2.5 以下大方向核准：
 > 2026-10-28 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/*.md docs/vnext/*.md PROJECT_RULES.md` 最大為 DEC-101、DEC-102 0 命中）。要點經總管轉交，**非客戶逐字全文**；下列引號內關鍵句照總管轉交原句。
 
 - **決策者**：**客戶**（2026-10-28；經總管轉交之要點）。
-- **日期／效力日期**：2026-10-28 起生效。｜**狀態**：生效；~~四項**實作中**（ASOF＋三項小修）。~~ 四項**已實作（PR #963，待合併；見下方「實作紀錄」）**（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。
+- **日期／效力日期**：2026-10-28 起生效。｜**狀態**：生效；~~四項**實作中**（ASOF＋三項小修）。~~ ~~四項**已實作（PR #963，待合併；見下方「實作紀錄」）**（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ 四項**已實作並已合併（PR #963，main `6bdd9af6`；見下方「實作紀錄」）**（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。
 - **背景**：DEC-101(3) 要求 XV-ASOF 先出線框（`docs/vnext/NEWUI_D25_XVIEW_ASOF_WIREFRAME_2026-10-28.md` §8 三題，附總管推薦）；DEC-101 實作紀錄另登記三項客戶 Gate（BACKLOG `XV-OLDUI-FX-REASON`／`XV-LINE-VIX-LINE`／`XV-FX-ROW-ACTION`，各附總管推薦）。客戶本次逐項裁示。
 - **內容**：
   1. **XV-ASOF 線框（§8）：Q1＝A、Q2＝A、Q3＝A** —— 線框**已核准、可實作**。原則：
@@ -1466,7 +1466,7 @@ D2.5 以下大方向核准：
 - **效力邊界**：本條**不**決定過期價是否計入市值／損益／停利（仍 open）；**不**核准外幣換算（`FX-CANONICAL-GATE` 照舊另開）；**不**通過舊 UI Removal Gate、**不**放寬 DEC-019／DEC-020 除第 2 點那一處以外的任何凍結；XV-ASOF 只授權**依已核准線框**實作，版面擴張仍須另出線框（DEC-082）；不新增資料來源／schema／公式／投資語意；不降低任何 Gate。
 - **與其他 DEC 的關係**：**回答** DEC-101(3)「先出線框，確認後再實作」之確認步驟與 DEC-101 實作紀錄所列三項待客戶 Gate；DEC-101(1)(2) 原文不改，本條第 3、4 點與 DEC-101(2)「missing ≠ HOLD」同向、精確化列層與推播層讀法。DEC-019／DEC-020 原文不改，本條第 2 點為**一處**有範圍的例外。DEC-082（草稿先行）呼叫。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：docs-only 撰寫組只落盤裁示，不改任何程式碼、未重跑測試；本條要點為總管轉交、非客戶逐字全文；「本條與 DEC-101／019／020 的關係」為撰寫組讀法，單組。
-- 📌 **實作紀錄（2026-10-29 補；加法式，上文一字未改；決策者 AI 總管（事實更新））**：**狀態＝已實作，PR #963 待合併**（分支 `ccr-6eace3b6-0gglrs`；基準 `1e603094`，`git log 1e603094..HEAD`）。
+- 📌 **實作紀錄（2026-10-29 補；加法式，上文一字未改；決策者 AI 總管（事實更新））**：~~**狀態＝已實作，PR #963 待合併**~~ **狀態＝已合併（PR #963，main `6bdd9af6`）**（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））（分支 `ccr-6eace3b6-0gglrs`；基準 `1e603094`，`git log 1e603094..HEAD`）。
   - **commit**：`afe5ec42`（DEC-102／DEC-103 落盤，docs）／`61d81d45`（XV-OLDUI-FX-REASON）／`c3874a12`（XV-LINE-VIX-LINE）／`7cb05bab`（XV-FX-ROW-ACTION）／`d3a50f27`・`f6f536f2`・`8d84ef7d`・`600916f5`・`34f56a0c`・本批收尾 commit（XV-ASOF 實作與 QA 回修）／`8b794c04`（AI 總結 prompt 同步禁止 VIX 行動建議＋docstring＋BACKLOG 登記）／`f6d61468`・`81ed94dc`（兩組整合 merge）。（`27de9c61` 為 DEC-104 治理 docs，非本條實作。）
   - **改動檔**：`shared/price_asof_label.py`（新，L0）／`src/services/dividend_station_service.py`（L3 加性非顯示鍵 `price_as_of`／`price_src`／`is_stale`／`is_fallback`／`ffilled_last` 等；AI 總結 prompt）／`src/ui/views/page_inspect.py`（🔬 P1／P2／P4 與查看依據）／`src/ui/views/page_hold.py`（💼 ① E17 位置、⑤ 指回一行）／`src/compute/notify/holdings_digest_message.py`（LINE VIX 句）／`shared/asset_currency_gate.py`（列層加註句）／`src/ui/etf/etf_tab_dividend_station.py`（舊 UI 最小例外）；測試 `tests/test_xv_asof.py`、`tests/test_dec102_*.py`、還原鏈頭節 `tests/test_asof_revert_chain.py`／`tests/test_dec102_revert_chain.py`。
   - **決定（AI 總管，DEC-102 授權邊界內）**：
