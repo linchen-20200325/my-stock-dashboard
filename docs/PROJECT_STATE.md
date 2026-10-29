@@ -752,9 +752,9 @@
 - **下一個主線 P1**：`docs/vnext/NEWUI_D25_PLAN_2026-10-27.md` §5 序 7 剩餘頁（UI-T → UI-H → UI-ME）與序 8（AB-5／AB-6）；唯一下一步＝UI-T；開工前依 DEC-084 重判 Model×Effort、等客戶切換。⚠️ 「UI-T 先」為計畫表列序讀法，單組。
 - **P2 登記**：`UIM-LAYOUT-DEVIATIONS`、`UIM-MA-FLAT-REFERENCE`、`UIM-UPDATE-BUTTON-WORDING`、`UIM-HERO-MAX-ITEMS-SSOT`（`UIM-REGIME-WORDING` 已由 DEC-105 結案為維持現狀）。
 
-## 46. UI-T 🎯 標的頁整合（找標的＋查一檔）已實作，PR #968（DEC-107，客戶 2026-10-29；append-only）
+## 46. UI-T 🎯 標的頁整合（找標的＋查一檔）~~已實作，PR #968~~ 已合併（PR #968，main `9ec555e7`）（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））（DEC-107，客戶 2026-10-29；append-only）
 
-- **狀態**：已實作於分支 `uit-impl`（基準 `4521fc39`）；PR #968（合併 SHA 由總管同步）；非 done-verified（待客戶實機點驗，見 `UIT-CLOUD-MOBILE-VERIFY`）。客戶線框五題 1A 2A 3A 4A 5A，見 `docs/DECISIONS.md` DEC-107。
+- **狀態**：~~已實作於分支 `uit-impl`（基準 `4521fc39`）；PR #968（合併 SHA 由總管同步）~~ 已合併（PR #968，main `9ec555e7`）（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；非 done-verified（待客戶實機點驗，見 `UIT-CLOUD-MOBILE-VERIFY`）。客戶線框五題 1A 2A 3A 4A 5A，見 `docs/DECISIONS.md` DEC-107。
 - **架構**：新增 L5 `src/ui/views/page_target.py`（編排）＋`_target_blocks.py`（區塊）、薄 L3 `src/services/target_industry_service.py`；重用 `page_find`／`page_inspect` 既有 loader／builder（兩檔一字未改）；`shared/ia_nav4` 移除過渡切換並新增 `MERGED_VIEWS`；`app.py` 僅 `_ia_view_find()` 依旗標分流。
 - **清理**：NAV-1 過渡切換（`NAV4_TARGET_LEAF_KEY`、`NAV4_WIDGET_LEAF_KEY`、`render_target_leaf_selector`、`has_leaves`、`leaf_options`、`leaf_from_label`、`current_leaf`、`_on_leaf_change`）已移除。
 - **待客戶**：`UIT-S9-NO-POINTER` 一句話確認（非阻擋，總管推薦同意）。
