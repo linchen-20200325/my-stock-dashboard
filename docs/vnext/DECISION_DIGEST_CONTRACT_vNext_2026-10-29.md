@@ -95,19 +95,19 @@ One AI Brain 不得：scrape Streamlit 文字當 canonical data；從顏色猜�
 | 台股／國際趨勢、估值 | `DefinitionSection` 固定 NOT_DEFINED／RESEARCH_ONLY | 正式定義屬 High Gate |
 | 產業 | NOT_DEFINED | 產業趨勢正式定義未核准（DEC-092 Q5） |
 | 候選／新機會 | 無此段（C §11 #4 拿掉） | A3 |
-| 主要風險／五桶／變化 | 無此段，只存在 UI 層 | A4；「最大 1～3 變化」無正式變化量排序規則 → 內部先用 Q3 五桶規則＋既有方向值，沒有就 MISSING（若客戶要依變化幅度排序才需裁示） |
+| 主要風險／五桶／變化 | 無此段，只存在 UI 層 | A4；「最大 1～3 變化」**無正式變化量選取規則** → 列為 Phase 7 線框待客戶拍板點 **W8**（Presentation Contract §22；BACKLOG `P1R-P7-WF-CHANGE-RANK`），**不作內部預設**；拍板前此項誠實 MISSING |
 | 資料健康 N／M | 無 | A6 |
 
 ## §8 Phase 7 依賴順序（INFERENCE，內部；可調）
 
-1. `AB4R-WIRE-BUILDER`（策略分類接 builder；未核准分類仍「未分類」）
+1. `AB4R-WIRE-BUILDER`（策略分類唯讀接 builder）。依 BACKLOG 該列原文：**唯讀接線本身不是 HI-5 寫入面**，但「使用者手動建立的 `strategy_class` 分頁分類不得在 AB-4w（HI-5）核准上線前生效」→ 接線後 Digest `holdings[].strategy_type` 仍一律「未分類」，提前生效須重新送 Gate；且**接線前必修 `XV-C05`**（鍵大小寫不一致致行動被靜默丟棄）。
 2. 五桶／key alerts worst-of 由 L5 下沉＋L3 canonical 輸入組裝（A4 前置，`P1R-FIVE-BUCKET-L3`）
 3. headless canonical Digest 組裝點取代 session warroom 依賴（`P1R-DIGEST-HEADLESS-ASSEMBLY`）
 4. A1～A7 升 v2（含 A8 規範）
 5. AB-5／AB-6：UI 先只用規則式摘要（`build_rule_summary`，輸出格式依 R12 調整）
 6. AB-2b（AI 出口）先過既有 Decision Gate（`BP-DR-20`：AI 只選句型填 slot vs 自然語言潤飾）
 
-**硬限制（客戶原文 DEC-109 三十一）**：⛔ 在 Decision Digest contract 未凍結前直接開始寫新的 LLM prompt／glue。本檔即凍結版；但上列 1～4 未完成前，新 prompt 仍不得接 production。
+**硬限制（客戶原文 DEC-109 三十一）**：「**不得在 Decision Digest contract 未凍結前：直接開始寫新的 LLM prompt／glue。**」本檔凍結的是**最低概念契約與 v1 不動項**；**v2 schema（A1～A7）定案前，不寫新的 prompt／glue**（A8 為規範、不另成 schema 欄位）。
 
 ## §9 驗收（Phase 7 開工時寫成測試；本 phase 不寫 code）
 

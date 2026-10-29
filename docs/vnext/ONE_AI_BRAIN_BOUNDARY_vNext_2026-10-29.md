@@ -65,7 +65,7 @@
 - 第 6 題（Missing）以每項的 Missing 誠實句＋查看依據回答，不另設段落（內部讀法）。
 - **不另開客戶 Gate**：依 `PROJECT_RULES.md` §0.1「變更既有裁示需新的客戶 Decision」——客戶最新指示本身即新 DEC-109；DEC-013「已裁示事項不重問」。**Phase 7 實作前仍須依草稿先行出線框**（`CLAUDE.md` §-1.5.D v3 §03-2 ①）。
 - 程式寫死五段（FACT）：`shared/decision_digest_terms.SECTION_KEYS`（固定順序）、`decision_digest_grounding.py` G5「五段齊全、唯一、固定順序」、`src/services/decision_digest_summary.py` 各段組裝 → Phase 7 內部改動，BACKLOG `P1R-AB2A-FIVE-SECTION-REWIRE`。
-- 「最大 1～3 個變化」無正式變化量排序規則 → 內部先用 DEC-092 Q3 五桶規則＋既有方向值，沒有就 MISSING；若客戶要依變化幅度排序才需裁示。
+- 「最大 1～3 個變化」**無正式選取規則** → 列為 **Phase 7 線框待客戶拍板點 W8**（Presentation Contract §22；BACKLOG `P1R-P7-WF-CHANGE-RANK`），**不作內部預設**；拍板前此項誠實 MISSING。
 
 ## §6 AI 出口盤點與判定（FACT＋稽核勘誤；判定＝DEC-110）
 
@@ -86,6 +86,20 @@
 | `sidebar_health._call_gemini_brief`、`financial_health_engine` AI insight、`section_news_ai`、`tab_stock`、`tab_stock_grp`、`etf_tab_ai` 等 | grep 分類 | legacy |
 | 新四頁 `page_market`／`page_target` | `HERO_AI_PLACEHOLDER`／`AI_PLACEHOLDER`「🤖 AI 投資總結：⬜ 尚未提供」，無 AI 呼叫 | AB-5 接點 |
 
+### §6.1 `build_ai_summary` 七面向小表（FACT＝程式現況；判定見上表）
+
+| 面向 | 現況 |
+|---|---|
+| input | `build_station_digest` dict（L3 結構化）＋`build_switch_advice`；含 VIX、觀察清單 235 燈、資料不足項、換入候選 |
+| scope | 以持股為主；**不提**總經位階／成數 |
+| provenance | 無 `as_of`；無 grounding（輸出不逐句對回來源） |
+| missing handling | 只靠 prompt 句要求 AI 說明資料不足，無結構化 MISSING 欄 |
+| freshness | 無新鮮度欄位、無 stale 判定 |
+| Risk Cap integration | 無（不讀 Risk Cap、不提成數） |
+| cross-page consistency | App 走 `gemini_call`（固定 `TAIWAN_ADVISOR_PERSONA`、temperature 0.3）vs LINE 走 `post_gemini`（無 persona、temperature 0.2）→ 同輸入可能分歧（INFERENCE）；無共用 Digest |
+
+⚠️ 本小表為撰寫組單組依程式碼閱讀整理，未經第二組獨立複驗（`CLAUDE.md` §-2 規則 6）。
+
 ## §7 入口（R13）
 
 AI 投資總結入口＝**各頁 L1 固定元素**（E2 卡＋展開面板；桌機展開面板、手機全螢幕面板），**計入 Visual Budget**；**不是第五頁、IA 不變**（DEC-091 §三「不是第五個主導航頁」；`ai_summary.html`；`index.html`「全站唯一，不是第五個主導航」）→ 不需 page-count Decision Gate（客戶 DEC-109 二十：只有真的需要 page-count／IA 變更才整理單一最小 Decision Gate）。
@@ -105,5 +119,5 @@ AI 投資總結入口＝**各頁 L1 固定元素**（E2 卡＋展開面板；桌
 
 - **AB-2b Decision Gate**（`BP-DR-20`）：AI 只選句型填 slot vs 自然語言潤飾 —— 未裁示前 AI 出口不接 production。
 - **RC-VISIBILITY／DEC-081 Q2-2**：核准顯示前只能答 Risk Cap 狀態與核准措辭；把 cap 連到具體行動屬新規則（HI-1／HI-4），⛔ AI 推論。
-- **變化排序**：無正式規則 → MISSING（§5 末點）。
+- **變化選取規則**：無正式規則 → W8 待 Phase 7 線框拍板；拍板前 MISSING（§5 末點）。
 - **AB-4w（HI-5）**：策略分類寫入面未核准 → 讀不到即「未分類」。

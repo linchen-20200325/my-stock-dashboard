@@ -352,7 +352,7 @@ Effort：Low / Medium / High
 （機制依客戶 2026-10-16 列舉之共通治理機制建立，DEC-016。）
 
 - 完整階段（milestone）結束時是建議換對話的時點；換對話前先達到 Safe Checkpoint（第 6 節）並更新~~四檔~~ 五檔（第 15 節 Handoff Save Check；2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068）。
-- ~~新對話依序讀：`CLAUDE.md` → 本檔 → `docs/HANDOFF.md` → `docs/BACKLOG.md` → `docs/DECISIONS.md`；~~ **新對話的啟動程序、讀檔清單與優先序以第 15 節為準**（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068：舊讀序未含 `docs/PROJECT_STATE.md`，且與第 15 節不同）；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。~~做新 UI／產品方向相關工作時另讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（2026-10-17 新增；依據 DEC-056 第 4 點、DEC-057）。~~ **現行（2026-10-29；有意識的政策變更，不是漏刪；決策者 客戶（DEC-109）＋AI 總管（DEC-110））**：做新 UI 工作時必讀 `docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md`（Presentation Contract＋Visual SSOT）、`docs/governance/UI_VISUAL_FIDELITY_GATE.md`、核准 blueprint `docs/vnext/d25_wireframes/*.html`；做 AI／Digest 工作時另讀 `docs/vnext/DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md` 與 `docs/vnext/ONE_AI_BRAIN_BOUNDARY_vNext_2026-10-29.md`。`VNEXT_PRODUCT_BLUEPRINT.md` 降為產品方向背景（DEC-056／057 原地位不變，非新 UI 現行規格）。兩邊理由：舊指向在 2026-10-17 時 Blueprint 是唯一方向文件（成立）；其後 D2.5（DEC-091／092）與 DEC-109 已產生正式契約，繼續指 Blueprint 會讓新 session 讀到過期版面。
+- ~~新對話依序讀：`CLAUDE.md` → 本檔 → `docs/HANDOFF.md` → `docs/BACKLOG.md` → `docs/DECISIONS.md`；~~ **新對話的啟動程序、讀檔清單與優先序以第 15 節為準**（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068：舊讀序未含 `docs/PROJECT_STATE.md`，且與第 15 節不同）；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。~~做新 UI／產品方向相關工作時另讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（2026-10-17 新增；依據 DEC-056 第 4 點、DEC-057）。~~ **現行（2026-10-29；有意識的政策變更，不是漏刪；決策者 客戶（DEC-109）＋AI 總管（DEC-110））**：做新 UI 工作時必讀 `docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md`（Presentation Contract＋Visual SSOT）、`docs/governance/UI_VISUAL_FIDELITY_GATE.md`、核准 blueprint `docs/vnext/d25_wireframes/*.html`；做 AI／Digest 工作時另讀 `docs/vnext/DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md` 與 `docs/vnext/ONE_AI_BRAIN_BOUNDARY_vNext_2026-10-29.md`。**做產品方向相關工作時仍讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`**（產品方向文件；DEC-056 第 4 點／DEC-057 地位不變）；它**不是新 UI 的視覺／呈現規格**（視覺依上列契約與 blueprint mockup；兩者區分見第 25.1 節第 5 點）。兩邊理由：舊指向在 2026-10-17 時 Blueprint 是唯一方向文件（成立）；其後 D2.5（DEC-091／092）與 DEC-109 已產生正式契約，繼續指 Blueprint 會讓新 session 讀到過期版面。
 - 本檔（含第 3 節靜默巡航、第 9 節 Effort 自主管理）是**永久規則**：新對話讀完本檔即自動繼承，不需客戶再次提醒；不得只寫在 HANDOFF、對話或單次 prompt（DEC-059）。
 - **不得要求客戶重講已落盤資訊**（`PROCESS.md` §1「嚴禁要求使用者重複解釋」；DEC-014「不重新摘要；不重問；不重做」）。
 - AI 自動產生的對話壓縮摘要**不是客戶原文**，不得當 Decision 來源（DEC 來源類別規則，`docs/DECISIONS.md` 0.1）。
@@ -908,7 +908,7 @@ Scope Inflation Guard
 2. `PROCESS.md`
 3. `PROJECT_RULES.md`＋`docs/governance/*`（例 `MODEL_EFFORT_POLICY_2026-10-25.md`、`UI_VISUAL_FIDELITY_GATE.md`）
 4. 最新有效 DEC（`docs/DECISIONS.md`；**客戶 DEC > AI 總管內部 DEC**；被取代者看條頭 📌 與第 5 節取代鏈）
-5. 正式契約／Visual SSOT：Phase 1 新文件（Presentation Contract、Decision Digest Contract、One AI Brain Boundary、Migration Plan、Supersede Map）＋D2.5 A／B／C 規格（`docs/vnext/NEWUI_D25_{A,B,C}_*.md`；與 Phase 1 契約衝突時以 Phase 1 契約為準）＋核准 blueprint（`docs/vnext/d25_wireframes/*.html`）
+5. 正式契約／Visual SSOT：Phase 1 新文件（Presentation Contract、Decision Digest Contract、One AI Brain Boundary、Migration Plan、Supersede Map）＋D2.5 A／B／C 規格（`docs/vnext/NEWUI_D25_{A,B,C}_*.md`；與 Phase 1 契約衝突時以 Phase 1 契約為準）＋核准 blueprint（`docs/vnext/d25_wireframes/*.html`）。⚠️ **用語區分**：小寫 **blueprint**＝DEC-092 核准的 d25 mockup（`docs/vnext/d25_wireframes/*.html`），是 **Visual SSOT**（視覺驗收基準）；大寫 **Blueprint**＝產品方向文件 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（DEC-056 第 4 點／DEC-057；最終產品方向，非實作授權、非視覺規格）。產品方向相關工作讀 Blueprint；視覺／呈現依 blueprint 與 Presentation Contract。
 6. `docs/PROJECT_STATE.md`
 7. `docs/BACKLOG.md`
 8. `docs/HANDOFF.md`（**只當索引**，指向正式文件；不是規格 SSOT）
@@ -921,7 +921,7 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 ### 25.3 兩軸不牴觸
 
 - 規範軸 PROJECT_STATE > HANDOFF（知識摘要的效力高於索引）；事實軸 HANDOFF > PROJECT_STATE（熱狀態快照較新）。兩者回答不同問題，**不牴觸**。
-- 呈現衝突：舊 helper／test／wireframe／DEC 的呈現要求 vs Presentation Contract → 以 Presentation Contract＋blueprint 為準；資料／投資／安全仍取較嚴（第 19.11 節補註）。
+- 呈現衝突：舊 helper／test／wireframe 的呈現要求 vs Presentation Contract → 以 Presentation Contract＋blueprint 為準；資料／投資／安全仍取較嚴（第 19.11 節補註）。**客戶 DEC 的呈現裁示**只有在 DEC-109 或同日前序指示（客戶 2026-10-29T15:18Z）**明確點名**處才被取代；其餘一律「**維持＋列入該頁 phase 線框待拍板**」（Presentation Contract §22），⛔ 以 AI 總管讀法推翻（2026-10-29 第二輪 QA 總管裁定；本句為本 PR 內撰寫之文字，直接改寫）。
 - ⚠️ **已知未調和**：`PROCESS.md` §1「每次任務只讀 STATE.md」與第 15 節五檔讀序衝突（`CV1-DR-04`，未裁示）。本節**不改 `PROCESS.md`**；在客戶裁示前，新 session 依第 15 節五檔讀序＋讀 `CLAUDE.md`，`STATE.md` 只作歷史參考（撰寫組讀法，單組）。
 
 ## 第 26 節｜Durable Memory Contract（客戶 2026-10-29，DEC-109 二十五～二十七）

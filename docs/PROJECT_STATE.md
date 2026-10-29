@@ -713,7 +713,7 @@
 - 規則落點／依據：DEC-082（Stage A→B→C→D）、DEC-085／`PROJECT_RULES.md` 第 19 節（責任方向≠現行 nav 命名、SSOT、Coverage 四狀態、Missing 語意）；DEC-088 已記於第 42 節。
 - ⚠️ 草稿內的程式碼層級宣稱，除各處標 `FACT` 並附 `file::symbol` 者外，均為 `INFERENCE`／未複驗；總管推薦（RECOMMENDATION）不是已選。
 
-## 44. New UI Stage C 核准（DEC-089，客戶 2026-10-26；append-only；~~Approved~~ **historical：G1＝C 六向導覽與 Stage D 批次已被 DEC-091／092（D2.5 四頁）與 DEC-109 Phase 2～7 取代；本節內的 D2.5／AB／NAV-1／XV 補註為當時進度紀錄，現況見 §45～§48**（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）；上一值刪除線保留））
+## 44. New UI Stage C 核准（DEC-089，客戶 2026-10-26；append-only；~~Approved~~ **部分 historical：G1（六向導覽）與 Stage D 排程已被 DEC-091／092（D2.5 四頁）與 DEC-109 Phase 2～7 取代；G2／G5／G6／G7 與 7 項補充執行條件仍有效**（承接清單 BACKLOG `P1R-STAGE-D-CARRYOVER`）；本節內的 D2.5／AB／NAV-1／XV 補註為當時進度紀錄，現況見 §45～§48（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）；上一值刪除線保留））
 
 - 裁示：**G1 C｜G2 X｜G3 B｜G4 B｜G5 B｜G6 A｜G7 B｜線框套件（B3～B7）核准｜「⚑／結構性自決項確認表」（24 項）全同意**，另有 7 項補充執行條件；逐字原文見 `docs/DECISIONS.md` DEC-089。
 - 核准範圍：Stage C 的 IA／UX／線框**設計方向**；**不涵蓋** HI-1～HI-6（G7＝B：High 項目分批處理，須另走 High Gate，不得視為已核准施工）；**不**把 INFERENCE 升格為 FACT；不新增或修改投資語意、Risk Cap、threshold、weights、趨勢／估值定義、資料來源。
@@ -763,15 +763,15 @@
 
 ## 47. UI-CORRECTION 新 UI 視覺修正線框草稿（DEC-108，客戶 2026-10-29；append-only；**SUPERSEDED BY DEC-109**（2026-10-29 有意識的更新，不是漏刪，決策者 客戶（DEC-109）；上一值刪除線保留））
 
-- **狀態**：~~線框草稿 `docs/vnext/NEWUI_D25_UI_CORRECTION_WIREFRAME_2026-10-29.md` 已撰寫（docs-only；截圖 `docs/vnext/ui_correction_assets/`），**待客戶核准**（`waiting_for_customer＝true`，僅限此線框 5 題）；未回覆＝不核准、不動工。~~ **現行**：被 DEC-109 取代——5 題撤回、`waiting_for_customer＝false`；線框檔與截圖已自本分支移除（稽核出處＝PR #970 commit `06a7a3e5`）；有效部分已吸收（見 §48）（2026-10-29 有意識的更新，不是漏刪，決策者 客戶（DEC-109）；上一值刪除線保留）。
-- **凍結**：UI-H 其餘與 UI-ME 的正式視覺實作暫停，直到線框核准（DEC-108）。已合併的 UI-M／UI-T 不自動回退。
+- **狀態**：~~線框草稿 `docs/vnext/NEWUI_D25_UI_CORRECTION_WIREFRAME_2026-10-29.md` 已撰寫（docs-only；截圖 `docs/vnext/ui_correction_assets/`），**待客戶核准**（`waiting_for_customer＝true`，僅限此線框 5 題）；未回覆＝不核准、不動工。~~ **現行**：被 DEC-109 取代——5 題撤回、`waiting_for_customer＝false`；線框檔與截圖已自本分支移除（原貌只保存在 PR #970 commit `06a7a3e5`）；有效部分已吸收（見 §48）（2026-10-29 有意識的更新，不是漏刪，決策者 客戶（DEC-109）；上一值刪除線保留）。
+- **凍結**：~~UI-H 其餘與 UI-ME 的正式視覺實作暫停，直到線框核准（DEC-108）。~~ **現行**：凍結解除條件已由 DEC-109 改寫為「Phase 1 契約合併後依 Phase 2→7 推進，每個 UI phase 過 Visual Fidelity Gate」（見 §48）（2026-10-29 有意識的更新，不是漏刪，決策者 客戶（DEC-109 一）；上一值刪除線保留）。已合併的 UI-M／UI-T 不自動回退。
 - **內容摘要**：全站首屏結構／卡片／圖表／文字／圖示規則（§A）、三頁 BEFORE／AFTER 線框（§B）、偏差對照（§C）、能力守恆（§D）、施工順序 E0→E4（§E）、客戶 5 題（A 推薦／B）。
 - **限制**：偏差量測為冷啟動 FACT（沙箱無真資料；已載入後圖／表高度為 INFERENCE）；手機實機、Streamlit Cloud 未驗；單組撰寫未經第二組驗。
 - **下一步**：~~客戶回覆「1 A｜2 A｜…」→ 依 §E 順序施工，每批獨立 QA 對照 §D。~~ 見 §48（2026-10-29 有意識的更新，不是漏刪，決策者 客戶（DEC-109）；上一值刪除線保留）。
 
 ## 48. Phase 1 SSOT Reset／Contract Freeze（DEC-109 客戶／DEC-110 總管內部，2026-10-29；append-only）
 
-- **main**：PR base＝`978ecedc`（cron；最後非 cron＝#969 `71587857`）；Phase 1 落盤＝分支 `ccr-6eace3b6-0gglrs` 新 docs PR（合併後的 main 以 GitHub 為準）。#970（DEC-108 線框）**superseded、不合併、不作 production baseline**。
+- **main**：PR base＝`978ecedc`（cron；最後非 cron＝#969 `71587857`）；Phase 1 落盤＝分支 `ccr-6eace3b6-0gglrs` 新 docs PR（head=`ccr-6eace3b6-0gglrs` 的 open PR，取代 #970；以 **squash merge** 合併；合併後的 main 以 GitHub 為準）。#970（DEC-108 線框）**superseded、由總管關閉（留言指向 commit `06a7a3e5`）、不作 production baseline**；squash 後 `06a7a3e5` 不進 main 歷史，#970 原貌只保存在該 commit。**Phase 1 文件落盤完成；合併＋main verification 前 Phase 1 未完成。**
 - **客戶方向（DEC-109，逐字見 DECISIONS）**：簡化 UI，不簡化判斷；圖表 > 數字 > 短句 > 長文字，但 Visual Priority ≠ Visual Quantity；Simple Decision Dashboard, not Report Wall and not Chart Wall；Presentation Simplification must never reduce AI Decision Context；Data View ≠ Decision Context ≠ AI Output；One AI Brain, Many Data Views；Conversation 不是 SSOT，GitHub 是 durable memory。
 - **新文件位置**（正式契約層；位階見 `PROJECT_RULES.md` 第 25 節）：
   - Presentation Contract＋Visual SSOT：`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md`
@@ -781,9 +781,9 @@
   - Supersede Map：`docs/vnext/PHASE1_SUPERSEDE_MAP_2026-10-29.md`
   - Migration Plan（Phase 2→7）：`docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md`
   - 治理：`PROJECT_RULES.md` 第 24 節（Visual Fidelity＋Presentation）、第 25 節（SSOT 位階兩軸）、第 26 節（Durable Memory Contract）；第 7 節 DoD 補註（UI Stage＝CI 綠＋Visual Fidelity PASS）；第 11 節必讀改指新契約；第 19.11 節呈現讀法
-- **Phase 2～7 路線**：2 Helper／Test Contract Migration（畫面零變更）→ 3 Shared Visual Components → 4 📊 市場 reference → 5 🎯 標的 → 6 💼 持股 → 7 One AI Brain／Decision Digest／AI 投資總結（BACKLOG §5.1.16 `P1R-*`）。Digest contract 已凍結；Phase 7 前置未完成前新 prompt 不接 production。
+- **Phase 2～7 路線**：2 Helper／Test Contract Migration（畫面零變更）→ 3 Shared Visual Components → 4 📊 市場 reference → 5 🎯 標的 → 6 💼 持股 → 7 One AI Brain／Decision Digest／AI 投資總結（BACKLOG §5.1.16 `P1R-*`）。Digest contract 已凍結最低概念契約；**v2 schema（A1～A7）定案前不寫新 prompt／glue**（客戶 DEC-109 三十一）。Phase 3～7 每個 UI phase 寫 UI code 前先出文字線框（含該頁 W 點、版面差異、總管推薦；`CLAUDE.md` v3 §03-2 ①）。
 - **凍結狀態**：UI 視覺實作凍結（DEC-108 第 3 點）的解除條件改為「Phase 1 契約合併後依 Phase 2→7 推進，每個 UI phase 過 Visual Fidelity Gate」；已合併 UI-M（#965）、UI-T（#968）不自動回退，由 Phase 4／5 回修。
-- **吸收自 #970**：DEC-108 裁示（保留，標部分取代，並補登客戶原文）、§D 能力守恆（契約 §17）、§E 順序（Migration Plan）、A.5 工程字樣（契約 §18）、A.8 token 差異（契約 §14.2）；§C 冷啟動量測由 Phase 1 已載入量測取代。
+- **吸收自 #970**：DEC-108 裁示（保留，標部分取代，並補登客戶原文）、§D 能力守恆（契約 §17）、§E 順序（Migration Plan）、A.5 工程字樣（契約 §18）、A.8 token 差異（契約 §14.2）；§C 偏差量測由 Phase 1 已載入量測取代；**冷啟動量測不吸收**，Phase 3 Gate 前重量（BACKLOG `P1R-COLD-START-BASELINE`）。
 - **重要事實（影響未來架構判斷）**：(1) Decision Digest 市場段依賴 session warroom（新 UI 唯一寫入點＝今天頁「🚀 更新今日戰情」，`page_market` 只讀）；(2) 五桶 worst-of 只在 L5、輸入為 session 片段；(3) `build_ai_summary` 是 partial／legacy building block（帶 VIX、觀察清單 235 燈、資料不足、換入候選，不提總經位階），不是 One AI Brain；(4) AB-2a 程式寫死五段；(5) Google login 兩入口並存（側欄＋👤 我的卡①）。
-- **總管改判（2026-10-29）**：AI 總管讀法不得推翻客戶核准過的呈現——DEC-107「選股條件預設展開」、DEC-017 葉1 ②「兩套刻度常駐非摺疊」、卡片「▸ 詳細」、DEC-105 指路說明句、DEC-092 Q5 排序說明句、tokens 客戶裁示色值**維持有效**，改否列各 phase 線框待客戶拍板點 W1～W7（`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md` §22；BACKLOG `P1R-P*-WF-*`）。
+- **總管改判（2026-10-29）**：AI 總管讀法不得推翻客戶核准過的呈現——DEC-107「選股條件預設展開」、DEC-017 葉1 ②「兩套刻度常駐非摺疊」、卡片「▸ 詳細」、DEC-105 指路說明句、DEC-092 Q5 排序說明句、tokens 客戶裁示色值**維持有效**，改否列各 phase 線框待客戶拍板點 W1～W9（第二輪 QA 追加：W8「最大 1～3 個變化」選取規則〔Phase 7〕、W9 KPI 欄數 vs `CLAUDE.md` v3 §00「固定 3 欄」〔Phase 4，`CV1-DR-12`〕；DEC-021 取代縮到 DEC-083 Q1 明確點名的「換一本／建新 Sheet」；舊 Stage D 能力項目維持 open〔`P1R-STAGE-D-CARRYOVER`〕）（`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md` §22；BACKLOG `P1R-P*-WF-*`）。
 - **限制**：五份調查與 Phase 1 文件皆單組、未經第二組驗；量化上限為依 blueprint 量測的建議值；手機實機、Streamlit Cloud、1.56 floor 未驗；`PROCESS.md` §1 與五檔讀序衝突（`CV1-DR-04`）未裁示。

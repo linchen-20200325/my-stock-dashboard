@@ -117,6 +117,6 @@
 
 ## §4 原始資料與重現
 
-- 截圖（本檔引用）：`docs/vnext/`（PNG 256 色量化，單張 < 300KB；全頁長圖縮 25%；手機全頁長圖因體積未入庫，可用工具重產）。
-- 冷啟動版本截圖（PR #970 草稿用）：已自本分支移除，稽核出處＝PR #970 commit `06a7a3e5`（`docs/vnext/ui_correction_assets/now_*`）。
+- 截圖（本檔引用）：`docs/vnext/visual_fidelity/phase1_baseline/`（PNG 256 色量化，單張 < 300KB；全頁長圖縮 25%；手機全頁長圖因體積未入庫，可用工具重產）。
+- 冷啟動版本截圖（PR #970 草稿用）：已自本分支移除，原貌只保存在 PR #970 commit `06a7a3e5`（`docs/vnext/ui_correction_assets/now_*`；新 PR squash merge，該 commit 不進 main 歷史）。冷啟動 baseline 須於 Phase 3 Gate 前重量（BACKLOG `P1R-COLD-START-BASELINE`）。
 - 重現：`tools/visual_fidelity/README.md`（harness 查詢參數 `?p=market&report=1`、`?p=target`（`&realflow=1`）、`?p=hold`）。原始 JSON 未入庫（夾具量測值，可重產）。

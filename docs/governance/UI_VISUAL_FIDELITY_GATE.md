@@ -11,11 +11,12 @@
 
 ## §1 Gate 定義
 
-1. **適用**：任何改變新 UI（`src/ui/views/**`、`src/ui_v2/**`、新 UI 依賴的共用 render 層、`app.py` 站殼）**畫面**的 PR，含 Phase 3～7 全部 UI 批次。純 docs、純資料層／L3 且畫面零變化的 PR 不適用（PR 描述寫「Visual Fidelity：N/A，理由…」）；Phase 2 等「宣稱畫面零變更」的 PR 須附批前／批後截圖或量測值對照證明零變更。
-2. **核心規則（客戶原文）**：**CI / QA / tests / mutation 全綠 ≠ UI Stage complete。** 若 screenshot 與 blueprint 在資訊層級、圖文比例、第一屏、Visual Budget、圖表尺寸、卡片密度明顯偏離：**Visual Fidelity FAIL**。若一頁無法明確回答「第一眼看什麼？第二眼看什麼？第三層才看什麼？」：**Visual Fidelity FAIL**。
-3. **與 Definition of Done**：UI Stage 的 DoD（`PROJECT_RULES.md` 第 7 節＋第 24 節補註）＝**CI 綠＋Visual Fidelity PASS**：`… → independent audit → Visual Fidelity Gate（本檔）→ … → merge`。Gate 未過，BACKLOG 不得把該 Stage 移到「已結案」，HANDOFF 不得寫 complete。
-4. **與客戶 Gate 的關係**：本 Gate 是**內部品質閘門**（判定者＝獨立 QA＋總管複驗），**不是**客戶裁示 Gate。只有「偏離屬版面設計變更」時才走 `CLAUDE.md` §-1.5.D v3 §03-2 ① 草稿先行送客戶（§5）。
-5. **不勝過資料規則**：截圖只證明「長什麼樣」，**不**證明資料正確；Gate 通過不豁免任何資料／投資／安全守衛。⛔ 為了過 Gate 改資料語意、公式、Risk Cap、投資語意或刪資訊（契約 §9）。
+1. **前置**：Phase 3～7 每個 UI phase 寫 UI code 前，須先出**文字線框**（含該頁 W 點、與 blueprint 的版面差異、總管推薦），依 `CLAUDE.md` §-1.5.D v3 §03-2 ①；線框核准後施工，施工完過本 Gate。
+2. **適用**：任何改變新 UI（`src/ui/views/**`、`src/ui_v2/**`、新 UI 依賴的共用 render 層、`app.py` 站殼）**畫面**的 PR，含 Phase 3～7 全部 UI 批次。純 docs、純資料層／L3 且畫面零變化的 PR 不適用（PR 描述寫「Visual Fidelity：N/A，理由…」）；Phase 2 等「宣稱畫面零變更」的 PR 須附批前／批後截圖或量測值對照證明零變更。
+3. **核心規則（客戶原文）**：**CI / QA / tests / mutation 全綠 ≠ UI Stage complete。** 若 screenshot 與 blueprint 在資訊層級、圖文比例、第一屏、Visual Budget、圖表尺寸、卡片密度明顯偏離：**Visual Fidelity FAIL**。若一頁無法明確回答「第一眼看什麼？第二眼看什麼？第三層才看什麼？」：**Visual Fidelity FAIL**。
+4. **與 Definition of Done**：UI Stage 的 DoD（`PROJECT_RULES.md` 第 7 節＋第 24 節補註）＝**CI 綠＋Visual Fidelity PASS**：`… → independent audit → Visual Fidelity Gate（本檔）→ … → merge`。Gate 未過，BACKLOG 不得把該 Stage 移到「已結案」，HANDOFF 不得寫 complete。
+5. **與客戶 Gate 的關係**：本 Gate 是**內部品質閘門**（判定者＝獨立 QA＋總管複驗），**不是**客戶裁示 Gate。只有「偏離屬版面設計變更」時才走 `CLAUDE.md` §-1.5.D v3 §03-2 ① 草稿先行送客戶（§5）。
+6. **不勝過資料規則**：截圖只證明「長什麼樣」，**不**證明資料正確；Gate 通過不豁免任何資料／投資／安全守衛。⛔ 為了過 Gate 改資料語意、公式、Risk Cap、投資語意或刪資訊（契約 §9）。
 
 ## §2 檢查項
 
@@ -36,7 +37,7 @@
 | A8 | **詳細文字是否下沉** | 外露層 0 段 > 32 字的非客戶原句；下沉清單（契約 §5）全在 L3 | 1～2 處 | ≥ 3 處 |
 | A9 | **Missing 是否用 placeholder** | 缺值全為 ⬜ chip／placeholder；0／中性／續抱／安全 0 次冒充；未載入灰、出錯紅分離 | placeholder 正確但重複（同句每列重寫） | 缺值畫成 0／中性／HOLD；或未載入畫成紅色錯誤 |
 | A10 | **主要 CTA / 行動是否首屏可見** | 主 CTA 與行動（或下一步）在兩個 viewport 第一屏內；主要判讀句頂端符合 Q11 | 只在 desktop 第一屏可見 | 兩個 viewport 都不可見 |
-| A11 | **mobile 是否被大表、大圖、長文塞滿** | 390px 第一屏無單一元素 > 50% 屏高；無水平捲動；KPI 2×2 ≤ 340px | 單一元素 50%～100% 屏高 | 單一元素 > 1 屏高；或水平捲動 |
+| A11 | **mobile 是否被大表、大圖、長文塞滿** | 390px 第一屏無單一元素 > 50% 屏高；無水平捲動；KPI 區塊 ≤ 340px（KPI 列欄數暫不判定，待 `CV1-DR-12`） | 單一元素 50%～100% 屏高 | 單一元素 > 1 屏高；或水平捲動 |
 
 ### 2.2 Visual Budget／契約補充檢查（DEC-110 內部）
 
@@ -50,13 +51,15 @@
 | V6 | 第一屏五問 | 五問各至少一元素可見（豁免見契約 §3） |
 | V7 | 三層 | Gate 報告逐頁寫出「第一眼／第二眼／第三層」三行；寫不出＝FAIL（客戶原文） |
 | V8 | chip 文字化 | 每個色塊／圖示都有文字；🔴 只用於系統真錯誤；metadata chip 不在訊號文字頻道（契約 §6） |
-| V9 | Missing 符號 | missing／未載入／未接線＝⬜；stale＝⚠；失敗＝🔴＋1 句原因（契約 §6、§8） |
+| V9 | Missing 符號（**只適用 metadata chip 家族**） | **狀態一律沿用 `shared/ui_state.UI_STATE_META` 既有符號，既有徽章族優先**（`⛔ 未接線`、`▨ 無資料`、`⟳ 缺漏 · 可重跑`／`⊘ 不適用 · 重跑無效`（客戶 2026-09-23 D-3(a) 三態）、`⬜ 尚未載入`、`◧ N／M 計入`、`🔴 取得失敗`＋1 句原因）；既有徽章族沒有的狀態才用 metadata chip 既有字樣（`⬜ 尚未定義`、`⬜ 尚未核准／無法判定`）；stale＝⚠；**同一狀態出現兩種符號＝❌**（契約 §6、§8） |
 | V10 | 工程字樣 | 外露層 0（契約 §18；客戶自訂措辭例外） |
 | V11 | 手機無 hover 依賴 | 0 項資訊只活在 `title=` 屬性；所有 L3 內容在手機可點開 |
 
 - **合計規則**：A 或 V 任一 ❌ ＝ Gate **不通過**；🟡 合計 ≥ 4 項亦視為 ❌（累積偏離即明顯偏離）。
 - **墨水比例**（`inkRatioFirst`）只作 INFERENCE 級輔助觀察，⛔ 單獨據以判 ✅／❌。
 - 👤 我的（非分析頁）：A2、V1、V2 以「設定卡結構」判（契約 §12.4），不要求 Primary Visual。
+- **KPI 列欄數**（3 vs 4、手機 2×2）：與 `CLAUDE.md` v3 §00「固定 3 欄」的牴觸待客戶裁示（BACKLOG `CV1-DR-12`、契約 §22 W9）；裁示前本 Gate **不判定欄數**，現狀維持。
+- **線框待拍板點**（契約 §22 W1～W9）：未經客戶拍板者以現行呈現為準，⛔ 據以判 ❌。
 
 ## §3 必附截圖規格
 
@@ -71,6 +74,7 @@
 | 量測數據 | A／V 兩表＋關鍵量測值（全頁高、主要判讀句頂端、主卡高、Primary 高、外露字數、工程字樣次數） |
 | 誠實標註 | 夾具 vs 真資料；Streamlit 版本（`requirements.txt` floor 未驗寫「1.56 floor 未驗」）；手機實機／Streamlit Cloud 未驗 |
 
+- **Phase 1 baseline 例外**：`docs/vnext/visual_fidelity/phase1_baseline/` 的 app 截圖皆為**已載入**態（夾具），檔名不含 state 段（`app_<page>_<1440|390>[_tall].png`）屬例外；冷啟動 baseline 需於 Phase 3 Gate 重量（PR #970 §C 冷啟動量測只存於 commit `06a7a3e5`；BACKLOG `P1R-COLD-START-BASELINE`）。
 - ⛔ 截圖不得含真實個人持股、Sheet ID、金鑰或 OAuth 資訊；用夾具或遮蔽。
 - 截圖上的夾具數字是**示意**，PR 描述須寫明，⛔ 被引用為投資結論。
 

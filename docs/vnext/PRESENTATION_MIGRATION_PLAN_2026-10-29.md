@@ -12,16 +12,17 @@
 
 ## §1 總覽（客戶 DEC-109 三十一 Phase 1～7；PR #970 §E 順序吸收）
 
-| Phase | 內容 | 性質 | 建議 Model／Effort（R19；開工時依 DEC-084／DEC-106 比對現況，符合即靜默繼續） | 前置 | Gate |
+| Phase | 內容 | 性質 | 建議 Model／Effort（R19；開工時依 DEC-084／DEC-106 比對現況，符合即靜默繼續） | 前置 | Gate（UI phase 寫 UI code 前一律先出文字線框） |
 |---|---|---|---|---|---|
 | **1** SSOT Reset／Contract Freeze | 本 PR：契約、Gate、Digest、Brain、supersede、durable memory、migration plan、visual gap audit、工具入庫 | docs／governance＋非 production 工具 | Opus 5.5＋High（客戶 DEC-109 三十二） | DEC-109 | N/A（docs-only） |
-| **2** Helper／Test Contract Migration | 舊 helper 加可選參數（預設 byte-identical）、`Note` contract 不動、`V2_SHORT_ROWS` 保留、tests 改寫為「資訊守恆」等強斷言、T23 拆兩條 | 共用層＋tests；**畫面零變更** | **Sonnet 5.5＋Medium**（R19） | Phase 1 合併 | 零變更證明（批前／批後截圖或量測值相同） |
-| **3** Shared Visual Components | metadata／status chips、chart header、evidence expander、Missing placeholder、compact KPI card、sparkline、small multiples、Top-N 切片、segmented switcher；tokens 收斂；站殼間距子項 | 純加性新模組＋CSS；新元件未掛頁前畫面零變更（站殼子項例外） | Sonnet 5.5＋Medium（客戶 DEC-109 三十二） | Phase 2 | 零變更證明；站殼子項全 Gate |
-| **4** 📊 市場 reference implementation | 依契約 §12.1 回修；作為 Visual Fidelity reference | 單頁 UI | Sonnet 5.5＋Medium 起判 | Phase 3 | **全 Gate** |
-| **5** 🎯 標的 | 依契約 §12.2；線框先列待客戶拍板點 W4～W6（含選股條件預設展開 vs 收合） | 單頁 UI | Sonnet 5.5＋Medium 起判 | Phase 4 | 全 Gate |
-| **6** 💼 持股 | 依契約 §12.3（骨架 AI → ⚡ → 🌱／📈／⬜） | 單頁 UI（最大；可拆 2 PR） | Sonnet 5.5＋Medium 起判，開工重判（`page_hold` 10 條還原鏈、骨架重排可能需 High） | Phase 5 | 全 Gate |
-| **7** One AI Brain／Decision Digest／AI 投資總結 | Digest v2 A1～A8、headless 組裝點、Brain、R12 輸出格式、R13 入口 | L0／L3＋UI 入口 | **Opus＋High**（R19） | Phase 6；Digest 契約已凍結（Phase 1）；先出 AI 投資總結線框（草稿先行） | 全 Gate＋Brain 驗收 8 條 |
+| **2** Helper／Test Contract Migration | 舊 helper 加可選參數（預設 byte-identical）、`Note` contract 不動、`V2_SHORT_ROWS` 保留、tests 改寫為「資訊守恆」等強斷言；T23（欄數）**暫不動**，待 `CV1-DR-12` 裁示 | 共用層＋tests；**畫面零變更** | **Opus 5.5＋High**（R19：契約遷移仍屬判斷型工作） | Phase 1 合併 | 零變更證明（批前／批後截圖或量測值相同） |
+| **3** Shared Visual Components | metadata／status chips、chart header、evidence expander、Missing placeholder、compact KPI card、sparkline、small multiples、Top-N 切片、segmented switcher；tokens 收斂；站殼間距子項 | 純加性新模組＋CSS；新元件未掛頁前畫面零變更（站殼子項例外） | 起判 Opus 5.5＋High；進入明確機械式 UI implementation 時切 Sonnet 5.5＋Medium（客戶 DEC-109 三十二；R19） | Phase 2 | 站殼子項動畫面前先出文字線框；零變更證明；站殼子項全 Gate |
+| **4** 📊 市場 reference implementation | 依契約 §12.1 回修；作為 Visual Fidelity reference | 單頁 UI | 線框與規格判斷用 Opus 5.5＋High；線框拍板後機械式實作視情況切 Sonnet 5.5＋Medium | Phase 3 | **先出文字線框（含 W2、W3、W9、版面差異、總管推薦）→ 客戶拍板 → 寫 UI code**；全 Gate |
+| **5** 🎯 標的 | 依契約 §12.2；線框先列待客戶拍板點 W4～W6（含選股條件預設展開 vs 收合） | 單頁 UI | 同 Phase 4 | Phase 4 | **先出文字線框（W3～W6、版面差異、總管推薦）→ 客戶拍板 → 寫 UI code**；全 Gate |
+| **6** 💼 持股 | 依契約 §12.3（骨架 AI → ⚡ → 🌱／📈／⬜） | 單頁 UI（最大；可拆 2 PR） | 同 Phase 4，開工重判（`page_hold` 10 條還原鏈、骨架重排可能需 High） | Phase 5 | **先出文字線框（W3、W7、版面差異、總管推薦）→ 客戶拍板 → 寫 UI code**；全 Gate |
+| **7** One AI Brain／Decision Digest／AI 投資總結 | Digest v2 A1～A8、headless 組裝點、Brain、R12 輸出格式、R13 入口 | L0／L3＋UI 入口 | **Opus 5.5＋High**（R19） | Phase 6；Digest 契約已凍結（Phase 1）；v2 schema（A1～A7）定案前不寫新 prompt／glue | **先出 AI 投資總結文字線框（含 W8、版面差異、總管推薦）→ 客戶拍板 → 寫 UI code**；全 Gate＋Brain 驗收 8 條 |
 
+- **線框先行（`CLAUDE.md` §-1.5.D v3 §03-2 ①）**：Phase 3～7 每個會改畫面的 UI phase，**寫 UI code 前**都須先出文字線框草稿（含該頁 W 點、與現況的版面差異、總管推薦方案）送客戶拍板；拍板前只能做不改畫面的工作。
 - 每個 phase：獨立 PR、可回滾；實作與稽核分離（≥2 組不同角度 QA，`CLAUDE.md` §-2 規則 4）；交付報告三段式落 PR 描述、對客戶 ≤5 行（DEC-060）。
 - **UI 視覺實作凍結**（DEC-108 第 3 點，DEC-109 改寫解除條件）：Phase 1 契約合併後依 Phase 2→7 推進，**每個 UI phase 過 Visual Fidelity Gate** 才算該頁解凍完成。UI-H 其餘與 UI-ME 的正式視覺實作併入 Phase 6／後續，不另開。
 - 「具體 dependency 可以調整」（客戶原文）：調整屬內部拍板，於 HANDOFF 與 BACKLOG 同步；⛔ 跳過 Phase 7 前置直接寫 prompt。
@@ -34,7 +35,7 @@
 |---|---|---|---|---|---|
 | H1 | `src/ui/tabs/tab_today.py::Note(now,why,where)` | 非 live 卡必附三段非空 prose | P-C | 資料契約不變 | — |
 | H2 | `tab_today.Card` | degraded 值只能進 facts | P-C | compact KPI 從 facts 取值 | — |
-| H3 | `tab_today.MAX_COLS=3`／`_ui_kit.grid`；`render_hero` `st.columns(4)` | ≤3 欄 | P-C／P-D | R4：卡片網格 ≤3、KPI 首列 ≤4；手機 2×2 需 HTML／CSS grid | 2（守衛拆）／3（grid） |
+| H3 | `tab_today.MAX_COLS=3`／`_ui_kit.grid`；`render_hero` `st.columns(4)` | ≤3 欄 | P-C／P-D | **維持現狀**；v3 §00「固定 3 欄」vs DEC-091 §四「3～4」／Hero 4 欄的牴觸待客戶裁示（`CV1-DR-12`，Phase 4 線框 W9）；手機版排法同待拍板 | 待 `CV1-DR-12` |
 | H4 | `_ui_kit.render_note()` | 三段常駐外露 | P-B | 收進摺疊 | 4～6 |
 | H5 | `_ui_kit.render_card()` | facts＋Note 外露 | P-B | facts 與 Note 下沉；🔴 碰撞守衛保留 | 2（參數）／4～6 |
 | H6 | `_ui_kit.render_card_isolated()` | 失敗紅卡含 `repr(e)` | P-C | 隔離不弱化；紅卡卡面 1 句、`repr(e)` 進摺疊 | 4～6 |
@@ -97,7 +98,7 @@
 | T20 | `test_uit_target_page::TestColdParity`、`TestParityWithLegacyPages`；`test_uit_target_page_qa::TestParityEdgeStates`、`TestNonCardElementDiff` | 卡 HTML 逐 byte 相同 | 能力守恆 | 資料層 parity（card.key／state／value／note／facts 集合） | 5 |
 | T21 | `test_uit_target_page::TestTextScans::test_first_screen_order_is_chip_search_ai`；`test_uit_target_page_qa::test_first_zone_is_lean…` | 首屏順序、元素型別 | DEC-092 Q5 | 依 Phase 5 線框拍板結果（W5、W6）重訂順序斷言；「非產業趨勢」字面恆在 | 5 |
 | T22 | `test_uit_target_page` 其餘（工程字／死路字、`TestUnwired`、`TestScreening`、`TestMobileMatrixCards`） | 禁工程字等 | §1、v3 §02 | 照舊（擴及新元件） | — |
-| T23 | `test_market_blocks::TestStructure::test_hero_has_four_cards…` vs `test_p01_today_skeleton::TestThreeColumnGrid`、p02～p05 `MAX_COLS==3` | 4 欄 hero 與 3 欄上限並存 | — | 拆「卡片網格 ≤3」「KPI 首列 ≤4」兩條（R4） | 2 |
+| T23 | `test_market_blocks::TestStructure::test_hero_has_four_cards…` vs `test_p01_today_skeleton::TestThreeColumnGrid`、p02～p05 `MAX_COLS==3` | 4 欄 hero 與 3 欄上限並存 | DEC-105 第 5 點（P2 偏離） | **暫不動**；改寫方式依 `CV1-DR-12` 裁示結果（W9） | 待 `CV1-DR-12` |
 | T24 | `test_p01_today_skeleton::TestEachCardIsHonest`、`TestFailLoud` | Note 三段非空 | 非 live 必附原因與去處 | 照舊 | — |
 | T25 | `test_market_blocks::TestWaterAndBasis`、`TestWording`；`test_page_me`；`test_nav1_default_mode_text`；`test_views_no_unverified_universal_claims`；`test_p0x_view_mount_claims` 等 | 逐字內容、首屏無 %、依據 6 欄、全稱句登記 | 各自語意 | 照舊；文字搬檔時機械更新 registry | 4～6 |
 | T26 | `test_dividend_station_mounted::test_light_detail_layer_renders_without_expander`（legacy，DEC-019 凍結） | 明細禁放 expander | 效能 | legacy 不動；新 UI：下沉 ≠ 省運算（R10），重運算仍走 gate | — |
@@ -109,7 +110,7 @@
 | **0**（唯一下一安全接手點） | 以當時 main 重新實測：T1～T26 檔清單與 grep 計數、`v2_short_rows` 引用、還原鏈 sha 守衛覆蓋（§5）、H 系列 caller；與本檔差異寫回本檔（append-only）；⛔ 改產品程式 | 實測清單（docs／test-only） | — |
 | 1 | `src/ui_v2/markup.card_html()` 加可選參數（H22）、`_ui_kit.single_submit_form(options_label=None)`（H8）、`render_card(compact=False)`（H5）、`FOLD_SUMMARY_TEXT` 外加 `label` 參數（H24）——**預設輸出逐 byte 不變** | 共用層可選參數 | `test_block_registry`、`test_lamp_card_fold` **不改**；新 golden 覆蓋新參數 |
 | 2 | 改寫 T2～T7、T13、T5（同字串換容器）為資訊守恆斷言（現行畫面下仍綠） | tests | 每條改寫寫理由 |
-| 3 | T23 拆兩條 | tests | M11／M12 |
+| 3 | ~~T23 拆兩條~~（本 PR 第二輪 QA 改寫：欄數待 `CV1-DR-12` 裁示，Phase 2 不動 T23） | — | — |
 | 4 | 新增「hover-only 0 項」「摺疊預設收合」通用斷言（T7 擴及） | tests | — |
 | 5 | mutation：§6 清單逐一拔守衛必紅 | PR 描述 | — |
 
@@ -126,7 +127,7 @@
 
 ## §6 Mutation 清單（Phase 2／3）
 
-M1 sparkline 把 NaN 補 0｜M2 metadata chip 接受未登記 kind｜M3 新 kind 與 `BADGES` 重名｜M4 Top-N 切片回傳複製或改序｜M5 `card_html` 新參數改變預設輸出 1 byte｜M6 摺疊預設 `expanded=True`｜M7 chart header 把說明句放在 chip 之前｜M8 新模組 import `src.services`｜M9 stale chip 用紅色 class｜M10 metadata chip 經訊號文字頻道輸出｜M11 KPI 首列改 5｜M12 卡片網格放寬到 4｜M13 摺疊內容只留在 `title=`。
+M1 sparkline 把 NaN 補 0｜M2 metadata chip 接受未登記 kind｜M3 新 kind 與 `BADGES` 重名｜M4 Top-N 切片回傳複製或改序｜M5 `card_html` 新參數改變預設輸出 1 byte｜M6 摺疊預設 `expanded=True`｜M7 chart header 把說明句放在 chip 之前｜M8 新模組 import `src.services`｜M9 stale chip 用紅色 class｜M10 metadata chip 經訊號文字頻道輸出｜M11／M12（欄數）待 `CV1-DR-12` 裁示後再訂｜M13 摺疊內容只留在 `title=`。
 
 各頁 phase 另列（至少）：Primary 被放進 expander、Primary 超高、≥2 張大型圖同屏、主要判讀句離開第一屏、Top-N 改 L3 參數、Missing 冒充 0、工程字樣外露、價格 chip 離開 E17、完整性 chip 與上限數字拆開、指路字面缺「指標危險度」、hover-only 回歸、Digest 受 UI Top-N 影響（Phase 7）。
 
@@ -151,7 +152,7 @@ M1 sparkline 把 NaN 補 0｜M2 metadata chip 接受未登記 kind｜M3 新 kind
 | `st.columns` 手機塌單欄 | HTML／CSS grid |
 | 還原鏈成本（page_hold 10、page_today 5、page_why 3、page_market 2，粗估） | 卡面組裝下沉無鏈檔；新頭節慣例 |
 | 測試檔量（約 67 檔引用 v2 卡 helper、約 40 檔 187 處 `v2_short_rows`，grep 粗估） | 頁面層斷言分批到各頁 phase |
-| 線框待拍板點（W1～W7）未獲客戶拍板 | 維持現行呈現；不阻擋其餘施工 |
+| 線框待拍板點（W1～W9）未獲客戶拍板 | 維持現行呈現；不阻擋其餘不改畫面的施工 |
 | 站殼改動被判 IA | 停手條件（§7 Phase 3） |
 | Digest 依賴 session warroom | Phase 7 前置 headless 組裝點 |
 
@@ -166,6 +167,7 @@ M1 sparkline 把 NaN 補 0｜M2 metadata chip 接受未登記 kind｜M3 新 kind
 | Phase | 待拍板點 |
 |---|---|
 | 3 | W1 tokens 客戶裁示色值是否改 blueprint 色值（`P1R-P3-WF-CUSTOMER-COLORS`） |
-| 4 | W2 指標危險度指路說明句 → chip（`P1R-P4-WF-POINTS`）；W3 卡片摺疊標籤（`P1R-WF-FOLD-LABEL`） |
+| 4 | W2 指標危險度指路說明句維持 vs 改 chip（`P1R-P4-WF-POINTS`）；W3 卡片摺疊標籤（`P1R-WF-FOLD-LABEL`）；**W9** KPI／Hero 欄數（`CV1-DR-12`，v3 §00「固定 3 欄」vs DEC-091 §四「3～4」／Hero 4 欄；裁示前維持現狀） |
 | 5 | **W4 選股條件預設展開 vs 預設收合＋摘要 chip**（`P1R-P5-WF-SCREEN-COND`）；W5 1A 順序內候選如何提前；W6 排序依據說明句 → chip（`P1R-P5-WF-POINTS`）；W3 |
 | 6 | W7 兩套刻度常駐非摺疊 vs L1 chip＋可展開（`P1R-P6-WF-TWO-SCALES`）；W3 |
+| 7 | **W8**「主要風險／變化 1～3 項」的選取規則（`P1R-P7-WF-CHANGE-RANK`）；拍板前誠實 MISSING，⛔ 內部預設 |
