@@ -72,18 +72,20 @@ REGIME_SCOPE_CAPTION: str = "市場位階，不是台股趨勢"
 #: 建議總持股水位卡（A 規格 §7.2 選項 A／I-10；C11 沿用 DEC-081 Q2-2）。
 WATER_TITLE: str = "建議總持股水位"
 WATER_VALUE: str = "⬜ 尚未核准／無法判定"
-WATER_WHY: str = "正式 Risk Cap 尚未核准，核准前首屏不顯示任何百分比。"
+WATER_WHY: str = "正式 Risk Cap 尚未核准。核准前，此卡不顯示任何百分比（頁首更新報告展開後的步驟說明除外）。"
 WATER_BASIS_NOTE: str = "原有出手區間（含 risk_cap.v2 硬否決天花板；未經 C2b 核准）如下："
 
 HERO_RISK_TITLE: str = "今日主要風險"
 HERO_RISK_NO_RANKING_NOTE: str = "依五桶固定順序列出非綠桶，不做重要性排序"
 #: 超過 3 項時的尾註（N＝多出來的項數）。
 HERO_RISK_MORE_FMT: str = "另 {n} 項見圖 D"
-HERO_RISK_MAX_ITEMS: int = 3
+HERO_RISK_MAX_ITEMS: int = 3   # P2 登記：宜移 L0（目前沒有合適的 UI 顯示上限 SSOT 檔）
 HERO_AI_PLACEHOLDER: str = "🤖 AI 投資總結：⬜ 尚未提供"
 
 ALERTS_TITLE: str = "⚡ 需要處理"
 ALERTS_NO_SOURCE: str = "⬜ 目前沒有可列的警示來源"
+ALERTS_CONFLICTS_NUMBER_NOTE: str = ("上列提示若提到「數字」，指建議總持股水位卡「🔍 查看依據」裡的原有出手區間；"
+                                     "該區間未經 C2b 核准，首屏不顯示。")
 ALERTS_CONFLICTS_HEADING: str = "建議持股附帶的衝突／警示提示（原樣轉述，不新增行動語彙）"
 
 HEALTH_CHIP: str = "⬜ 資料狀態：尚未彙總"
@@ -330,7 +332,9 @@ def hero_risk_lines(risks: MarketRisks) -> list[tuple[str, str]]:
         return [("grey", f"{UNDETERMINED}（五桶資料皆不足）")]
     if risks.n_insufficient:
         return [("grey", f"本輪沒有非綠桶可列；另有 {risks.n_insufficient} 桶資料不足、無法判定（不代表安全）")]
-    return [("grey", "本輪五桶皆為綠燈，沒有非綠桶可列（只根據本輪已取得的資料，不代表安全）")]
+    _ev = risks.n_lamps - risks.n_unevaluated
+    return [("grey", f"本輪五桶皆為綠燈，沒有非綠桶可列（已評估 {_ev}／{risks.n_lamps} 項燈，"
+                     f"{risks.n_unevaluated} 項未評估；只根據已取得的資料，不代表安全）")]
 
 
 def risk_panel_rows(risks: MarketRisks) -> list[tuple[str, str, str]]:
@@ -343,8 +347,8 @@ def risk_panel_rows(risks: MarketRisks) -> list[tuple[str, str, str]]:
             _out.append((f"{LEVEL_EMOJI[_r.level]} {_r.title}：{_r.lamp_label}{_val}"
                          f"（{_r.level_text}）{_tie}", _r.direction_word, CHART_D_WORSENING))
         elif _r.kind == KIND_GREEN:
-            _out.append((f"{LEVEL_EMOJI['green']} {_r.title}：{_r.headline}"
-                         f"（{_r.level_text}）", "—（桶內全綠，沒有挑出燈）", CHART_D_WORSENING))
+            _out.append((f"{LEVEL_EMOJI['green']} {_r.title}：已評估 {_r.covered[0]}／{_r.covered[1]} 項皆綠"
+                         f"（{_r.level_text}）", "—（沒有非綠燈可挑）", CHART_D_WORSENING))
         else:
             _out.append((f"{LEVEL_EMOJI['gray']} {_r.title}", INSUFFICIENT_TEXT, INSUFFICIENT_TEXT))
     return _out
@@ -655,6 +659,7 @@ def render_alerts_block(*, alerts_tile: Any, alerts: Any, scanned: bool, alerts_
         if _conf:
             st.markdown(f"**{ALERTS_CONFLICTS_HEADING}**")
             st.markdown("\n".join(f"- {_cell(_c)}" for _c in _conf))
+            st.caption(ALERTS_CONFLICTS_NUMBER_NOTE)
         if not alerts_has_listable_source(alerts, alloc):
             st.caption(ALERTS_NO_SOURCE)
         render_basis(basis_alerts(alerts, scanned, alerts_error, alloc))

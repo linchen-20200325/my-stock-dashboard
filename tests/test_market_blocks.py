@@ -94,7 +94,7 @@ class TestRiskSelection:
         _r = B.build_market_risks(_five({"long": "red"}), _all_up())
         assert [_i.bucket for _i in B.hero_risk_items(_r)[0]] == ["long"]
         _panel = B.risk_panel_rows(_r)
-        assert len(_panel) == 5 and "全綠" in _panel[1][0]
+        assert len(_panel) == 5 and "已評估 1／1 項皆綠" in _panel[1][0]
 
     def test_insufficient_bucket_is_never_picked_even_if_main_key_present(self):
         """資料不足 ⇒ 顯示「⬜ 資料不足／無法判定」，⛔ 不硬選最差（即使上游誤帶了 main_key）。"""
@@ -132,6 +132,25 @@ class TestRiskSelection:
         _r = B.build_market_risks(_five({}), _all_up())
         _txt = " ".join(x for _, x in B.hero_risk_lines(_r))
         assert "不代表安全" in _txt and "無風險" not in _txt
+
+    def test_partially_covered_green_bucket_never_says_all_green(self):
+        """QA-A M-1：桶內 3 盞只評估 1 盞（其餘灰）→ 圖 D 寫「已評估 1／3 項皆綠」，⛔ 不出現「全綠」；hero 句帶未評估數。"""
+        _ro = _five({})
+        _ro.summary["long"]["details"] = [_detail("l1", "燈1", "green"), _detail("l2", "燈2", "gray"),
+                                          _detail("l3", "燈3", "gray")]
+        _ro.summary["long"]["headline"] = "1 項指標全綠"        # L2 的 headline 本身就會這樣寫
+        _r = B.build_market_risks(_ro, _all_up())
+        _row = B.risk_panel_rows(_r)[0]
+        assert "已評估 1／3 項皆綠" in _row[0] and "全綠" not in " ".join(_row)
+        _hero = " ".join(x for _, x in B.hero_risk_lines(_r))
+        assert "項未評估" in _hero and f"{_r.n_unevaluated} 項未評估" in _hero and "不代表安全" in _hero
+        assert _r.n_lamps - _r.n_unevaluated == 5      # long 1 盞＋其餘四桶各 1 盞綠
+
+    def test_no_panel_cell_or_hero_line_ever_says_all_green(self):
+        for _lv in ({}, {"long": "red"}, {"long": "gray"}):
+            _r = B.build_market_risks(_five(_lv), _all_up())
+            _all = " ".join(c for _row in B.risk_panel_rows(_r) for c in _row) + " ".join(x for _, x in B.hero_risk_lines(_r))
+            assert "全綠" not in _all
 
     def test_tied_lamps_are_disclosed_not_silently_picked(self):
         _ro = _five({"mid": "yellow"})
@@ -327,6 +346,12 @@ class TestWaterAndBasis:
     def test_price_asof_label_helper_is_not_used(self):
         """`shared/price_asof_label` 是個股價用的，⛔ 不得套到市場頁。"""
         assert "price_asof_label" not in _SRC
+
+    def test_water_caption_is_honest_about_the_update_report_and_has_no_percent(self):
+        assert "更新報告" in B.WATER_WHY and "%" not in B.WATER_WHY and "％" not in B.WATER_WHY
+
+    def test_alerts_conflicts_note_explains_hidden_number(self):
+        assert "查看依據" in B.ALERTS_CONFLICTS_NUMBER_NOTE and "未經 C2b 核准" in B.ALERTS_CONFLICTS_NUMBER_NOTE
 
     def test_chart_d_note_is_the_wireframe_sentence_and_ai_placeholder_has_no_engineering_tone(self):
         assert B.CHART_D_NOTE == "只顯示最需要注意的 3–5 項、方向、是否惡化。"

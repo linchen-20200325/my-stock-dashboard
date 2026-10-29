@@ -52,6 +52,16 @@ def test_non_green_bucket_main_key_is_the_headline_lamp():
     assert _seen_non_green >= 2, "測試輸入應至少讓兩桶非綠，否則上面的斷言沒有東西可驗"
 
 
+def test_same_level_tie_picks_the_more_exceeding_lamp_not_the_first_one():
+    """QA-A MINOR 1：中期桶 us10y（先）與 dxy（後）同為黃，dxy 超標幅度遠大於 us10y ⇒ main_key 必須是 dxy。"""
+    _out = compute_five_bucket_summary(macro_info={"us10y": {"current": 4.55}},
+                                       cl_data={"intl": {"美元指數 DXY": __import__("pandas").DataFrame({"close": [109.0]})}})
+    _mid = _out["mid"]
+    _yellow = [d["key"] for d in _mid["details"] if d["danger"] == "yellow"]
+    assert _yellow[:2] == ["us10y", "dxy"], _yellow          # 兩盞同黃，us10y 排在前
+    assert _mid["main_key"] == "dxy"
+
+
 def test_main_key_is_the_worst_lamp_not_the_first_lamp():
     """對抗性輸入：中期桶裡**排在最前面**的 `ism_pmi` 是綠燈，真正的黃燈是排在後面的 `us10y`。
     ⇒ `main_key` 必須是 `us10y`（headline 用的那盞），不能只是桶內第一盞。"""

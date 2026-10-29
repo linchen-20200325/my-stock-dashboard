@@ -132,6 +132,15 @@ def test_water_card_hides_range_outside_basis_but_keeps_it_inside(tmp_path, monk
 # ══════════════════════════════════════════════════════════════════
 # hero 與圖 D 同源（頁面層）
 # ══════════════════════════════════════════════════════════════════
+def test_hero_and_panel_share_one_build_market_risks_call(tmp_path, monkeypatch):
+    _calls: list = []
+    _real = B.build_market_risks
+    monkeypatch.setattr(B, "build_market_risks", lambda *a, **k: (_calls.append(a), _real(*a, **k))[1])
+    _at = _run(tmp_path, _LOADED)
+    assert not _at.exception
+    assert len(_calls) == 1, "hero 與圖 D 必須共用同一次 build_market_risks（單一來源）"
+
+
 def test_loaded_hero_items_match_panel_rows(tmp_path):
     _at = _run(tmp_path, _LOADED)
     assert not _at.exception, _at.exception
@@ -144,6 +153,12 @@ def test_loaded_hero_items_match_panel_rows(tmp_path):
         _lamp = _it.split("：", 1)[1].split("（", 1)[0]
         assert _lamp in _panel, (_lamp, _panel)
     assert any(t.startswith("**") and "項未評估**" in t for t in _top)        # 圖 D 頂端「N 項未評估」
+    # QA-A MINOR 2：hero 每一項的「方向」文字必須與圖 D 對應列的方向欄逐字相同（同一份 `_risks`）
+    _rows = {ln.split(" | ")[0].strip("| "): ln.split(" | ")[1] for ln in _panel.splitlines()[2:]}
+    for _it in _items:
+        _dir = _it.split("｜方向：", 1)[1].split("｜", 1)[0]
+        assert any(_dir == v.strip() for v in _rows.values()), (_dir, _rows)
+    assert any("↗ 上升" in _it for _it in _items)                                  # 非全「無資料」，才有鑑別力
     assert not any("無風險" in t for t in _top)
 
 
