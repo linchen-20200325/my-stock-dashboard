@@ -89,6 +89,13 @@ class TestFreshness:
         assert B.FRESH_TTL_SEC == {"screen": ttls.TTL_1DAY, "map": ttls.TTL_30MIN,
                                    "single": ttls.TTL_1HOUR, "batch": ttls.TTL_1HOUR}
 
+    def test_ttl_table_is_built_from_names_not_literals(self):
+        import ast
+        from pathlib import Path
+        tree = ast.parse((Path(B.__file__)).read_text(encoding="utf-8"))
+        node = next(n for n in tree.body if isinstance(n, ast.AnnAssign) and getattr(n.target, "id", "") == "FRESH_TTL_SEC")
+        assert node.value.values and all(isinstance(v, ast.Name) for v in node.value.values), "TTL 不得寫 inline 數字（§3.3）"
+
     def test_freshness_line_is_pure_and_boundary_exact(self):
         t = dt.datetime(2026, 10, 29, 9, 0, tzinfo=B.TAIPEI)
         assert "可能已過期" not in B.freshness_line(t, t + dt.timedelta(seconds=3600), 3600, "X")
