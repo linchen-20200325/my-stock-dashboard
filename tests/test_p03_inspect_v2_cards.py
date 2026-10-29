@@ -520,8 +520,14 @@ def test_existing_facts_all_stay_on_the_face_after_the_short_rows(built):
     out = _html(built)
     rows = _face_rows(out)
     tail = rows[3:] if card.note is not None else rows
-    assert len(tail) == len(facts)
     fold = _fold_rows(out)
+    # XV-ASOF（線框 §5）：「查看依據」價格說明那幾格只進摺疊區（⛔ 不上卡面）—— 整列原文一定在摺疊區。
+    _fold_only = tuple(_f for _f in facts if _f[0] in P.V2_FOLD_ONLY_FACT_KEYS)
+    for k, v in _fold_only:
+        assert (P.v2_plain(k), P.v2_plain(v)) in fold, f"{card.key}: 查看依據沒進摺疊區：{k}"
+        assert P.v2_plain(k) not in [_r[0] for _r in tail], f"{card.key}: 查看依據上了卡面：{k}"
+    facts = tuple(_f for _f in facts if _f[0] not in P.V2_FOLD_ONLY_FACT_KEYS)
+    assert len(tail) == len(facts)
     for (fk, fv), (k, v) in zip(tail, facts):
         k, v = P.v2_plain(k), P.v2_plain(v)
         assert fk == k, "卡面標籤必須是整句原文"

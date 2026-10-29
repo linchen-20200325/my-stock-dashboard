@@ -10,6 +10,7 @@ import pytest
 
 import src.services.dividend_station_service as S
 from shared import asset_currency_gate as FXG
+from shared import price_asof_label as PAL
 from shared import station_specs as SS
 from tests.test_dec102_revert_chain import base_module
 
@@ -57,9 +58,15 @@ def test_reason_split_matches_exclusion_reason():
 def test_tw_and_watchlist_rows_identical_to_base(BS, hs):
     rows, brows = _rows(hs), _rows(hs, mod=BS)
     assert [r["建議動作"] for r in rows] == [r["建議動作"] for r in brows]
-    assert [sorted(r) for r in rows] == [sorted(r) for r in brows]       # 逐鍵不變（無新鍵）
+    # 📌 XV-ASOF 整合（2026-10-28，有意識的放寬，⛔ 不是漏改）：XV-ASOF 批（同基底 `1e603094`）在每一列加性帶出
+    #   價格時間＋來源的非顯示鍵（`PAL.PRICE_ASOF_KEYS`）；整合後 `base_module` 兩批一起還原 ⇒ 這幾鍵排除後
+    #   才是本批要守的「逐鍵不變」。其餘鍵與值照舊逐一比對。
+    _asof = set(PAL.PRICE_ASOF_KEYS)
+    assert [sorted(set(r) - _asof) for r in rows] == [sorted(br) for br in brows]   # 逐鍵不變（無新鍵）
     for r, br in zip(rows, brows):
         for k in r:
+            if k in _asof:
+                continue
             if k != S.KEY_WEEKLY_SERIES:    # 週線原料含 Series（另由既有測試守）
                 assert r[k] == br[k], (r["代號"], k)
 

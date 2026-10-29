@@ -14,6 +14,8 @@ from typing import Callable
 
 from shared import asset_currency_gate as FXG
 from shared import holdings_data_short as HDS
+from shared import price_asof_label as PAL
+from shared.dated_value import coerce_plain_date as _coerce_plain_date
 from shared import dividend_station_thresholds as T
 from shared import sector_flow_thresholds as _UNITS
 from shared import station_specs as SS
@@ -521,6 +523,9 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
             _row["張數"] = float(_lots) if _lots and float(_lots) > 0 else None
             _row["均價"] = float(_avg) if _avg and float(_avg) > 0 else None
             _row["現價"] = float(_cur) if _cur and float(_cur) > 0 else None
+            # XV-ASOF：價格時間＋來源（非顯示鍵，加性；💼 ① E17 位置讀它）。過期價照樣計入上面兩個數字。
+            for _k in PAL.PRICE_ASOF_KEYS:
+                _row[_k] = m.get(_k)
             if held and not FXG.is_confirmed_twd_ticker(tk):
                 # XV-H3（客戶 2026-10-28 裁示 A）：幣別未確認（外幣／看不出來）→ 不得與 TWD 加總；
                 # 成本幣別未定義 ⇒ 損益% 亦不可判定。市值／損益% 一律 None（⛔ 不換算、不猜匯率）。
@@ -580,6 +585,37 @@ def _latest_vix_close() -> float | None:
     return None
 
 
+def _price_asof_fields(as_of, src, *, ffilled_last: bool = False,
+                       ffilled_from=None) -> dict:
+    """XV-ASOF（客戶 2026-10-28 確認線框 Q1～Q3＝A，DEC-102）：價格的時間＋來源 → 非顯示鍵。
+
+    **加性**：只多出 `PAL.PRICE_ASOF_KEYS` 這幾個鍵，`current_price` 與所有數字一個字都沒動；
+    過期價**照樣**計入市值／損益（是否排除未裁示，本函式只標示）。
+    stale 判定：L0 `PAL.assess_price_freshness`（`expected_latest_trading_day()` ＋ freshness SSOT
+    `DAILY_MAX_LAG_TRADING_DAYS`），⛔ 本檔不寫任何天數。
+    「今天」＝台北當日（L3 `trading_calendar_service.taipei_today`，⛔ 不用伺服器本地時區）。
+    """
+    from src.services.trading_calendar_service import taipei_today
+    _as_of = _coerce_plain_date(as_of)
+    _stale, _exp, _lag = PAL.assess_price_freshness(_as_of, today=taipei_today())
+    _src = str(src) if src and str(src) in PAL.SOURCE_DISPLAY else None
+    return {PAL.KEY_PRICE_AS_OF: _as_of,
+            PAL.KEY_PRICE_SRC: _src,
+            PAL.KEY_IS_STALE: _stale,
+            PAL.KEY_IS_FALLBACK: PAL.is_fallback_source(_src),
+            PAL.KEY_FFILLED_LAST: bool(ffilled_last),
+            PAL.KEY_FFILLED_FROM: _coerce_plain_date(ffilled_from),
+            PAL.KEY_PRICE_EXPECTED_DAY: _exp,
+            PAL.KEY_PRICE_LAG_DAYS: _lag}
+
+
+#: 拿不到價格時的非顯示鍵（全部 None／False；⛔ 不用今天代替）。
+_PRICE_ASOF_EMPTY: dict = {PAL.KEY_PRICE_AS_OF: None, PAL.KEY_PRICE_SRC: None,
+                           PAL.KEY_IS_STALE: None, PAL.KEY_IS_FALLBACK: None,
+                           PAL.KEY_FFILLED_LAST: False, PAL.KEY_FFILLED_FROM: None,
+                           PAL.KEY_PRICE_EXPECTED_DAY: None, PAL.KEY_PRICE_LAG_DAYS: None}
+
+
 def _fetch_stock_metrics(ticker: str, *, failed: dict | None = None) -> dict:
     """個股汰換指標：財報體檢(no-AI grade) + KD 狀態 + 現價（供市值/損益%）。
 
@@ -598,7 +634,7 @@ def _fetch_stock_metrics(ticker: str, *, failed: dict | None = None) -> dict:
 
     m: dict = {"mj_grade": None, "mj_score_pct": None, "mj_headline": "",
                "mj_fail_items": [], "kd_state": None, "current_price": None, "name": "",
-               "trend_verdict": None}
+               "trend_verdict": None, **_PRICE_ASOF_EMPTY}
 
     # 1) 日 OHLC → KD。B1(v19.198):改走 StockDataLoader.get_combined_data(個股專屬 4 源鏈
     #    yfinance→FinMind→.TWO,與個股單/多檔頁同源),取代原 fetch_etf_price(ETF 抓價函式:
@@ -614,6 +650,16 @@ def _fetch_stock_metrics(ticker: str, *, failed: dict | None = None) -> dict:
             _ohlc = _df_stk[["close", "high", "low"]].dropna()
             if len(_ohlc):
                 m["current_price"] = float(_ohlc["close"].iloc[-1])
+                # XV-ASOF：同一根 K 的日期 ＋ L1 寫在 attrs 的實際成功那一腿（加性，不改現價）。
+                #   ⚠️ 讀 `_df_stk` 原表（`_ohlc` 是子集，同 index），⛔ 不另抓一次。
+                if "date" in _df_stk.columns:
+                    try:
+                        m.update(_price_asof_fields(
+                            _df_stk.loc[_ohlc.index[-1], "date"],
+                            getattr(_df_stk, "attrs", {}).get("price_src")))
+                    except Exception as _e_asof:  # noqa: BLE001 — 時間來源算不出 → 照舊 None（不擋現價）
+                        print(f"[dividend_station] {ticker} 價格時間來源判定失敗: "
+                              f"{type(_e_asof).__name__}: {_e_asof}")
                 from src.compute.strategy.tech_indicators import (
                     analyze_kd_state, kd_cross_state)
                 _kd = analyze_kd_state(_ohlc)
@@ -754,6 +800,24 @@ def fetch_metrics(ticker: str, asset_kind: str = T.KIND_ETF, *,
     _as_of = pd.Timestamp.today().normalize()
     _cur = float(_close.iloc[-1])
     m["current_price"] = _cur          # #38：供 市值 = 張數×現價 / 損益% 計算
+    # XV-ASOF：ETF 固定 Yahoo 還原那一腿（`fetch_etf_price`，auto_adjust=True）；
+    #   最後一根是否為 L1 `df.ffill()` 補出來的，讀 L1 既有 attrs（批 Z48），⛔ 不另判。
+    m.update(_PRICE_ASOF_EMPTY)
+    try:
+        from src.data.etf.etf_fetch import PRICE_CLOSE_FFILLED_ATTR
+        _ff = set(getattr(_px, "attrs", {}).get(PRICE_CLOSE_FFILLED_ATTR) or ())
+        _last = _close.index[-1]
+        _last_s = pd.Timestamp(_last).strftime("%Y-%m-%d")
+        _ff_last = _last_s in _ff
+        _ff_from = None
+        if _ff_last:
+            _orig = [_i for _i in _close.index
+                     if pd.Timestamp(_i).strftime("%Y-%m-%d") not in _ff and _i < _last]
+            _ff_from = _orig[-1] if _orig else None
+        m.update(_price_asof_fields(_last, PAL.SRC_YAHOO_ADJ,
+                                    ffilled_last=_ff_last, ffilled_from=_ff_from))
+    except Exception as _e_asof:  # noqa: BLE001 — 時間來源算不出 → 照舊 None（不擋現價）
+        print(f"[dividend_station] {ticker} 價格時間來源判定失敗: {type(_e_asof).__name__}: {_e_asof}")
 
     def _close_before(days: int) -> float | None:
         _sub = _close.loc[:_as_of - pd.Timedelta(days=days)]

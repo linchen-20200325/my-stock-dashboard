@@ -312,6 +312,7 @@ from typing import Any, Mapping, Sequence
 import streamlit as st
 
 from shared import ia_nav
+from shared import price_asof_label as PAL
 # L0 SSOT：燈號規格表（含 `discriminative` 旗標）與缺值原因語彙。
 from shared.station_specs import (
     ITEM_AVG_PRICE,
@@ -2173,6 +2174,74 @@ def _unvalued_codes(station: StationReadout) -> tuple[str, ...]:
                     for _k in ("張數", "均價", "現價")))
 
 
+#: XV-ASOF（客戶 2026-10-28 Q3＝A，DEC-102）：① 總市值下方既有 E17 位置（A 規格 E17「價格資料日」）
+#: 的例外列標籤 —— 例外一定點名代號（線框 §3.3）。
+HOLD_ASOF_EXCEPTION_LABEL_FMT: str = PAL.HOLD_LABEL + " · 另 {n} 檔"
+#: 沒有過半的那一種（各檔不一致）→ 第一列只講這句，下面逐組列出。
+HOLD_ASOF_NO_MAJORITY: str = "各檔不一致，逐組列在下面"
+#: ⑤ 衛星停利卡只加一行指回 ①（線框 §3.4；⛔ 不逐列加）。
+TP_ASOF_FACT_KEY: str = "價格時間"
+TP_ASOF_POINTER: str = f"損益% 以現價計；價格時間見上方「{PAL.HOLD_LABEL}」"
+
+
+def _hold_asof_items(station: StationReadout):
+    """① E17 與 ⑤ 指回共用的分組：持有、非整批失敗、有現價的列（＝金額與損益% 用到的價格）。
+
+    `None` ＝ 戰情表沒有列（idle／空清單）→ 兩處都不畫。分組與「多數」一律走 L0（嚴格過半）。
+    ⚠️ 過期價**照樣**計入市值／損益（是否排除未裁示，線框 §6）—— 這裡只標示。
+    """
+    if not station.has_rows:
+        return None
+    _items = tuple(
+        (str(_r.get("代號", "")), PAL.PriceAsOf.from_mapping(_r)) for _r in station.rows
+        if _r.get("held") and not (_r.get("_detail") or {}).get("error")
+        and isinstance(_r.get("現價"), (int, float)) and _r.get("現價") > 0)
+    return _items
+
+
+def _hold_asof_grouping(station: StationReadout) -> "PAL.AsOfGrouping | None":
+    _items = _hold_asof_items(station)
+    return None if _items is None else PAL.group_price_asof(_items)
+
+
+def _price_asof_facts(station: StationReadout) -> list[tuple[str, str]]:
+    """① 總市值下方 E17 那一行：`價格資料時間：{多數字樣}（N 檔）`；有例外才多列（點名代號）。"""
+    _g = _hold_asof_grouping(station)
+    if _g is None:
+        return []
+    if not _g.groups:
+        return [(PAL.HOLD_LABEL, PAL.HOLD_NOT_PROVIDED)]
+    _major = next((_k for _l, _k in _g.groups if _l == _g.majority_label), ())
+    _out = [(PAL.HOLD_LABEL,
+             f"{_g.majority_label}（{len(_major)} 檔）" if _g.majority_label
+             else HOLD_ASOF_NO_MAJORITY)]
+    for _lbl, _codes in _g.exceptions:
+        _out.append((HOLD_ASOF_EXCEPTION_LABEL_FMT.format(n=len(_codes)),
+                     f"{_lbl}：{'、'.join(dict.fromkeys(str(_c) for _c in _codes))}"))
+    # 線框 §5：既有「▸ 詳細」摺疊區補兩格價格說明（`V2_FOLD_ONLY_FACT_KEYS` 登記，⛔ 不上卡面、不新增區塊）。
+    _out.extend(PAL.price_basis_facts_many([_p for _, _p in _hold_asof_items(station)]))
+    return _out
+
+
+def _take_profit_asof_fact(station: StationReadout) -> list[tuple[str, str]]:
+    """⑤ 衛星停利卡那一行指回 ①（例外檔數照實寫；代號已在 ① 點名，這裡不重抄）。"""
+    _items = _hold_asof_items(station)
+    if _items is None:
+        return []
+    _g = PAL.group_price_asof(_items)
+    _exc_labels = {_l for _l, _ in _g.exceptions}
+    _exc = [_p for _, _p in _items if PAL.price_asof_label(_p) in _exc_labels]
+    _exc_codes = _exc
+    _stale_n = sum(1 for _p in _exc if _p.is_stale is True)
+    _tail: list[str] = []
+    if _stale_n:
+        _tail.append(f"{PAL.STALE_MARK}的 {_stale_n} 檔已點名")
+    if len(_exc_codes) - _stale_n > 0:
+        _tail.append(f"其他例外 {len(_exc_codes) - _stale_n} 檔已點名")
+    return [(TP_ASOF_FACT_KEY,
+             TP_ASOF_POINTER + (f"（{'；'.join(_tail)}）" if _tail else ""))]
+
+
 def build_action_card(station: StationReadout) -> _Built:
     """線框 ① 第一張：**今天該做什麼** —— 已接線。
 
@@ -2187,6 +2256,7 @@ def build_action_card(station: StationReadout) -> _Built:
         has_value=station.has_rows)
     _facts: list[tuple[str, str]] = [("檔數", f"{len(station.rows)} 檔")]
     _facts += _totals_facts(station)
+    _facts += _price_asof_facts(station)     # XV-ASOF：E17 位置（總市值下方）
     if station.err_n:
         _facts.append(("⚠️ 未納入任何判斷",
                        f"另有 {station.err_n} 檔整批抓取失敗 —— "
@@ -2965,6 +3035,7 @@ def build_take_profit_card(station: StationReadout) -> _Built:
         ("為什麼缺成本就不判", "沒有均價就沒有損益%，硬判等於替你編一個報酬率"),
         ("只判衛星（個股）", "核心（ETF）走定期定額，不套這條停利規則"),
     ]
+    _facts += _take_profit_asof_fact(station)   # XV-ASOF：只加一行指回 ①（線框 §3.4）
     if station.take_profit and not station.error:
         _facts.insert(0, ("達門檻的衛星",
                           "、".join(f"{_d.get('代號', '')}"
@@ -5206,6 +5277,8 @@ def _v2_face_value(value: str) -> str:
 V2_FOLD_ONLY_FACT_KEYS: dict[str, frozenset[str]] = {
     "hold.position_cap": frozenset({RISK_CAP_SNAPSHOT_TS_LABEL, RISK_CAP_NOT_EVALUATED_LABEL,
                                     RISK_CAP_DISABLED_LABEL, RISK_CAP_SAHM_LABEL}),
+    # XV-ASOF（線框 §5）：① 該做什麼卡的價格「查看依據」兩格只進詳細。
+    CONCLUSION_ACTION_KEY: frozenset({PAL.BASIS_USED_LABEL, PAL.BASIS_DATE_LABEL}),
 }
 
 
