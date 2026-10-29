@@ -409,7 +409,9 @@ class TestHealthCard:
         stock_env(_CF_FAIL)
         card, facts, _ = _health()
         _assert_red(card, P.HEALTH_FAILED_NOW)
-        assert {k for k, _ in facts} <= {"名稱", "現價"}, facts
+        # XV-ASOF（DEC-102）：現價下面那一行時間＋來源與「查看依據」價格說明是本批新增（不是分數，可上紅卡）。
+        assert {k for k, _ in facts} <= ({"名稱", "現價", P.PRICE_ASOF_FACT_KEY}
+                                         | P.V2_FOLD_ONLY_FACT_KEYS), facts
 
     def test_b_genuinely_no_statements_stays_grey(self, stock_env):
         stock_env(_NONE)
