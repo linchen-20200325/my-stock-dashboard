@@ -3183,7 +3183,7 @@ Effort：High
 - **效力邊界**：不核准任何新資料源、schema、公式、投資語意；不改 `PAGE_LABELS`／`ia_nav`（legacy D2 殼仍用）、`src/ui/tabs/**`、`src/ui/etf/**`、`decision_digest*`；舊 UI Removal Gate 不變。
 - **與其他 DEC 的關係**：落實 DEC-092（設計方向）與 DEC-099（過渡切換移除）；與 DEC-097（legacy 入口不得出現在一般使用者導覽）並存，故 S9 不放指路（見偏離 2）；與 DEC-103（範圍膨脹防護）一致，新發現皆登記 P2。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條要點為總管轉交；「與其他 DEC 的關係」為撰寫組讀法，單組。
-- 📌 **實作紀錄（2026-10-29 補；加法式；決策者 AI 總管（事實更新））**：分支 `uit-impl`（基準 `4521fc39`）；PR **待開**（號碼與 squash SHA 由總管合併後同步）。
+- 📌 **實作紀錄（2026-10-29 補；加法式；決策者 AI 總管（事實更新））**：分支 `uit-impl`（基準 `4521fc39`）；PR #968（squash SHA 由總管合併後同步）。
   - **commit**（前綴 `feat(UI-T):`／`fix(UI-T):`／`test(UI-T):`）：`f942bd80`（新頁＋薄 L3＋守衛）／`94627c92`（移除過渡切換＋`app.py` 最小分流）／`29ae9cb5`（意外 loader 例外只呈現一次）／`7052afcb`（突變補強＋BACKLOG）／`cfc0944d`（QA 回修）／`8db04008`（TTL 表靜態守衛）；其後為本條文件落盤 commit。
   - **改動檔**：新增 `src/ui/views/page_target.py`、`src/ui/views/_target_blocks.py`、`src/services/target_industry_service.py`（薄 L3，既有 `ticker_sector.json` 唯讀視圖）、`tests/uit_fakes.py`、`tests/test_uit_target_page.py`、`tests/test_uit_target_page_qa.py`；修改 `shared/ia_nav4.py`（移除葉常數與函式，新增 `MERGED_VIEWS`，`reconcile_nav4` 同步）、`src/ui/views/shell_nav4.py`（移除葉選擇器）、`app.py`（僅 `_ia_view_find()` 依旗標分流＋一行註解）、`tests/test_batch_z60.py`（`_BASE_DIGEST`）與 `test_nav1_*`／`test_p0x_view_mount_claims` 的有理由改寫。`page_find.py`／`page_inspect.py` **一字未改**。
   - **測試**：Fast lane 全套 32685 passed、1 failed、50 skipped（唯一失敗為已知環境失敗 `test_batch_z59` markdown_it）；UI-T 專屬 138 項；slow 全套（回修前）183 passed、回修後 nav1／sidebar 相關子集 45 passed；mutation 回修前 24 個＋回修後 17 個，逐一拔守衛全數轉紅（存活者 M5、M19、N3 補強後轉紅）。
