@@ -171,3 +171,58 @@ M1 sparkline 把 NaN 補 0｜M2 metadata chip 接受未登記 kind｜M3 新 kind
 | 5 | **W4 選股條件預設展開 vs 預設收合＋摘要 chip**（`P1R-P5-WF-SCREEN-COND`）；W5 1A 順序內候選如何提前；W6 排序依據說明句 → chip（`P1R-P5-WF-POINTS`）；W3 |
 | 6 | W7 兩套刻度常駐非摺疊 vs L1 chip＋可展開（`P1R-P6-WF-TWO-SCALES`）；W3 |
 | 7 | **W8**「主要風險／變化 1～3 項」的選取規則（`P1R-P7-WF-CHANGE-RANK`）；拍板前誠實 MISSING，⛔ 內部預設 |
+
+## §11 Phase 2 步驟 0 預備實測（2026-10-29，單組、未經第二組驗證、尚未完成；下一個 session 以當時 main 重測為準）
+
+> append-only。來源：Phase 1 合併後（main `3bbdaf0f`）同一對話的唯讀預備實測（兩組單組調查濃縮）。**不是 Phase 2 步驟 0 完成**，不授權改任何產品程式；只當線索。⚠️「目標 4 檔不受守衛」為**單組全稱句，待另一組以不同方法複驗**，不得當作 Phase 2 前提。
+
+### 11.1 測試與守衛（對 §3 T1～T26／§4／§5 的差異）
+
+| # | 文件寫 | 實測（`3bbdaf0f`） | 影響 |
+|---|---|---|---|
+| D1 | `tab_today.py` 不受守衛 | **有**：`tests/test_batch_z60.py::TestOldFilesUntouched::test_no_diff_against_base` 對 `src/ui/tabs\|etf\|pages\|render/**/*.py`＋`app.py`（91 檔）逐檔 sha256 彙總比 `_BASE_DIGEST`；改 1 byte 即紅，核准改動須同步 digest | 改 `tab_today.py` 須同步 `_BASE_DIGEST` |
+| D2 | `_ui_kit`／`_market_blocks`／`_target_blocks`／`ui_v2/markup` 不受守衛 | 成立（AST 窮舉 121 筆路徑→hex dict＋39 檔 hex 字面分類＋48 個 REVERT／PAIRS 鍵；盲點＝不循命名的 `_mutant(...)` tuple） | 單組，待驗 |
+| D3 | `test_block_registry`、`test_lamp_card_fold` 足以守「預設輸出逐 byte 不變」 | **不足**：多為新舊互比或結構檢查。真 golden＝`tests/test_lamp_direction.py::TestRenderLive::test_first_four_match_origin_main_golden`（4 張 detail 卡；只蓋有摺疊、經 `page_today.v2_card_html` 路徑） | 新參數若改預設輸出 1 byte（M5）須**另寫 golden** |
+| D4 | 新增通用斷言「hover-only 0 項」 | 今天頁**刻意**有 hover-only 列並被釘住：`test_batch_z59`（已知限制只進 hover）、`test_batch_c21::TestDisclosure`、`test_lamp_card_fold::TestUntouched`、`test_lamp_direction::TestHoverTitleNewline` | 通用斷言若涵蓋 `page_today` 必紅 ⇒ **範圍限 p02～p05 或移 Phase 4** |
+| D5 | T1：p03～p05 `test_every_state_renders_through_the_v2_face` 守前 3 列＝三要素 | 該支未斷言前 3 列；明確 `rows[:3]` 只有 p02 | 描述修正 |
+| D6 | T7：p02～p05 皆有「預設收合」 | 只有 p02；今天頁另有 `test_lamp_card_fold::TestLiveFold::test_toggle_collapsed_by_default` | 描述修正 |
+| D7 | T13 `TestLiveCardKeepsItsNote` 等強替代＝摺疊含 Note 三段 | 該測試驗**舊式** `_ui_kit.render_card`（FakeST）；正是 `render_card(compact=…)` 要守的對象 | compact 下 Note 不得丟 |
+| D8 | （未列） | `test_lamp_card_fold::TestNonLive::test_guide_rows_stay_on_face`／`test_degraded_keeps_value_on_face`：16 燈卡三種狀態三段常駐，綁 `page_today` | 排 Phase 4 |
+| D9～D13 | T22 檔名／T9／T12 類別名／T12 環境失敗／T23 `==3` 範圍／鏈清單 | T22＝`test_uit_target_page_qa.py`；T9＝`TestFaceLength::…`；T12 本環境 passed；`==3` 字面僅 `test_p04_hold_view`（＋p01 skeleton、ui_v2/test_components），p02／p03／p05 為 `<= MAX_COLS`；有 sha 的鏈與 §5 一致，另有無 sha 錨點 pair（z49 `_PRE_PAIRS`、z53 `_ALL_PAIRS`、z56 `Z56_REVERT_PAIRS`，另 z58）會擋改字 | 描述修正 |
+| T5 | 引用 `v2_short_rows`／`V2_SHORT_ROWS` 的測試檔數 | 40 檔（扣 p02～p05 為 36，與文件相符） | — |
+
+### 11.2 Helper（H1～H35）與四個可選參數
+
+| 項目 | 實測 |
+|---|---|
+| `card_html`／`single_submit_form`／`render_card` 簽名 | 皆 **keyword-only**；production＋tests caller 皆用關鍵字（AST 窮舉），加預設值不變的 keyword-only 參數不會改現有 caller 輸出 |
+| `fold_label` | 計畫寫 `fold_label=FOLD_SUMMARY_TEXT` 會在 def 時綁定（現行 `markup.py` 約 747 行於呼叫當下才讀）；**應用 `None` 於函式內解析**。H22／H24／§4 的 `fold_label`／`label` 是同一參數 |
+| 加參數的實際使用者 | `single_submit_form` 的 2 caller（page_today、page_hold）與 `render_card_isolated` 的 13 caller 全在受鏈守衛頁 ⇒ **Phase 2 加參數暫無使用者**；`render_card` 外部直接 caller 0（頁面僅經 `render_card_isolated`），`render_cards` 為死碼 |
+| docstring | `render_card` docstring 被 `test_p01_today_view::TestSignalChannelDocumentsTheDegradedRule` 釘住（degraded／觀測／判決／留白／`station_specs.py:139`／`:527`／「未評估 ≠ 綠」）；改時須保留 |
+| 風險 | `render.py` 以 `**dict(card)` 呼叫 `card_html`：未知 key 現報錯，加參數後同名 key 會被靜默收下（僅影響目前即報錯的輸入） |
+
+### 11.3 §2 文件與實測的 11 項差異
+
+| # | 文件 | 實測 |
+|---|---|---|
+| 1 | H25 `grid_html`／`layer_html` 0 caller | 各 1 caller：`ui_v2/render.py` 142／152（僅獨立入口 `app_today.py` 用） |
+| 2 | H15 `REGIME_SCOPE_NOTE` 193 字 | `len()`＝207 |
+| 3 | H5 `render_card` 像有直接 caller | 外部 0；`render_cards` 死碼 |
+| 4 | H8 未提 | 2 caller 皆受守衛 |
+| 5 | H12 只列 page_today | 三個 FACT_KEY 被 find／hold／inspect／why 各 import，牽動 5 受守衛檔 |
+| 6 | H13／H20「0 caller 後清理」 | 目前都還有 caller（檔內 1～2 次），前提尚不成立 |
+| 7 | H20 只寫 page_hold | hold／why／inspect 各有一份 |
+| 8 | H21 `v2_plain` 約 5 份複本 | 只有 1 份定義（page_today，82 次呼叫）；5 份複本的是 `_V2_BLANK_LINE_RE`、`_inject_v2_css` |
+| 9 | H22／H24／§4 參數名不一致 | 同一參數（見 11.2） |
+| 10 | §8「約 40 檔 187 處 `v2_short_rows`」 | substring 不分大小寫 40 檔 165 處（區分大小寫 118、全字 37 檔 109） |
+| 11 | §5 page_inspect「z46～z48 是否 sha 鏈未確認」 | z46～z48 檔內無 64 位 sha；page_inspect 的 sha 只有 asof；z49／z53 為錨點 pair |
+
+另：H17 `_render_one` 外部 4 處（`_market_blocks` 3、`page_market` 1）；H31 `_target_blocks.Basis` 第一欄叫 `sources`、無 `extra`（合併成超集時處理）；H30 `_market_blocks.Basis` 六欄全必填；H26 BADGES 11 個；H27 SERIES_DARK／LIGHT 0 consumer（與文件一致）。
+
+### 11.4 方法與窮舉程度（誠實揭露）
+
+- **窮舉（AST）**：production 引用數、呼叫形狀（位置參數數、`*`、`**`、關鍵字名；production＋tests）、sha 守衛對映（`*BASE_SHA`／`*REVERT_PAIRS`／`*PAIRS` dict key＋全 tests 64 位 hex 掃描）、T 測試「是否存在」、T5 檔數。
+- **抽查／人工**：H7／H32～H35 的畫面細節、Basis 欄位差異、`REGIME_SCOPE_NOTE` 長度、components 數值；T 表斷言內容只讀了 T1～T4、T6、T7、T9、T11～T13、T16、T19、T20、T23，其餘只驗名稱；tests 端 caller 檔數為**下界**（parametrize／`sys.modules` 解不出）。
+- **未做**：**未跑 pytest 全套**（僅局部實跑：z60 1 passed、鏈守衛測試 28 passed）；未逐條核對 T1～T26 全文。
+- **動態呼叫**：production 僅 `page_today.py` 約 3113 行 `importlib`＋`getattr` 解析 `page_hold.COUNT_EMPTY_NOW`（非目標符號）。
+- ⚠️ **待驗全稱句**：「目標 4 檔（`_ui_kit`／`_market_blocks`／`_target_blocks`／`ui_v2/markup`）不受任何 sha／還原守衛」「窮舉清單無遺漏」皆單組結論，須另派一組用不同方法複驗後才能當前提（`CLAUDE.md` §-2 規則 6）。
