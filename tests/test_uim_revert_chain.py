@@ -61,10 +61,7 @@ UIM_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/compute/macro/m
                                   'from shared.secret_scrub import scrub_secrets\n'
                                   'from shared.ui_state import UI_DEGRADED, UI_LIVE, UI_PARTIAL\n'
                                   'from src.ui.views import _market_blocks as blocks\n'
-                                  'from src.ui.views import page_today as today\n'
-                                  'from src.ui.views._market_blocks import TREND_PENDING_WHY  # noqa: F401 — '
-                                  '趨勢「等客戶定義」說明（原定義在本檔，UI-M 移入 blocks；re-export 保 `M.TREND_PENDING_WHY`）\n'
-                                  'from src.ui_v2 import components as v2_components\n',
+                                  'from src.ui.views import page_today as today\n',
                                   'from shared.inst_net import is_net_observed\n'
                                   'from shared.market_conclusion import (\n'
                                   '    CONCEPT_INTL_TREND,\n'
@@ -76,9 +73,11 @@ UIM_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/compute/macro/m
                                   ')\n'
                                   'from shared.secret_scrub import scrub_secrets\n'
                                   'from shared.ui_state import UI_DEGRADED, UI_LIVE, UI_PARTIAL\n'
-                                  'from src.ui.views import page_today as today\n'
-                                  'from src.ui_v2 import components as v2_components\n'),
+                                  'from src.ui.views import page_today as today\n'),
                                  ('# ══════════════════════════════════════════════════════════════════\n'
+                                  '#: 趨勢「還在等客戶定義」的說明：原定義在本檔，UI-M 移入 `_market_blocks`（圖 A／圖 B 使用），這裡轉出以保 '
+                                  '`M.TREND_PENDING_WHY`。\n'
+                                  'TREND_PENDING_WHY: str = blocks.TREND_PENDING_WHY\n'
                                   '#: ~~頁首問句~~ 已被 UI-M 取代為 `_market_blocks.PAGE_SUBTITLE`（A 規格 §2.1 '
                                   '客戶原文）。常數保留作歷史字樣，本頁不再引用。\n'
                                   'PAGE_QUESTION: str = "現在市場環境適不適合投資？目前可以承擔多少風險？"\n'

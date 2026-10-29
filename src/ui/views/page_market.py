@@ -68,7 +68,6 @@ from shared.secret_scrub import scrub_secrets
 from shared.ui_state import UI_DEGRADED, UI_LIVE, UI_PARTIAL
 from src.ui.views import _market_blocks as blocks
 from src.ui.views import page_today as today
-from src.ui.views._market_blocks import TREND_PENDING_WHY  # noqa: F401 — 趨勢「等客戶定義」說明（原定義在本檔，UI-M 移入 blocks；re-export 保 `M.TREND_PENDING_WHY`）
 from src.ui_v2 import components as v2_components
 from src.ui.views._ui_kit import section_header
 
@@ -84,6 +83,8 @@ SS_GATE_LEADING: str = "p00m_gate_leading"
 # ══════════════════════════════════════════════════════════════════
 # 首屏字樣
 # ══════════════════════════════════════════════════════════════════
+#: 趨勢「還在等客戶定義」的說明：原定義在本檔，UI-M 移入 `_market_blocks`（圖 A／圖 B 使用），這裡轉出以保 `M.TREND_PENDING_WHY`。
+TREND_PENDING_WHY: str = blocks.TREND_PENDING_WHY
 #: ~~頁首問句~~ 已被 UI-M 取代為 `_market_blocks.PAGE_SUBTITLE`（A 規格 §2.1 客戶原文）。常數保留作歷史字樣，本頁不再引用。
 PAGE_QUESTION: str = "現在市場環境適不適合投資？目前可以承擔多少風險？"
 CONCLUSION_HEADING: str = "今日結論（五項各自判斷，只並列，不合成）"

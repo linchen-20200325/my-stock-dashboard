@@ -21,7 +21,6 @@ import pytest
 from shared.macro_buckets import BUCKET_ORDER
 from src.compute.macro.lamp_direction import LampDirection
 from src.ui.views import _market_blocks as B
-from src.ui.views import page_today as today
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 _SRC = (_ROOT / "src" / "ui" / "views" / "_market_blocks.py").read_text(encoding="utf-8")
