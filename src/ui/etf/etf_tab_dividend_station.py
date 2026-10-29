@@ -28,6 +28,7 @@ import streamlit as st
 from shared.secret_md import scrub_md  # SEC-3：例外原文上畫面前先洗金鑰／識別碼／路徑
 
 from shared import dividend_station_thresholds as T
+from shared import asset_currency_gate as FXG  # DEC-102(2)：外幣原因句（L0 唯一來源）
 from shared import station_specs as SS
 from src.ui.render.station_cards import CSS as _LIGHT_CSS
 from src.ui.render.station_cards import (
@@ -324,6 +325,7 @@ def _render_layer1(rows: list[dict], vix) -> None:
     from src.services.dividend_station_service import (
         build_station_digest,
         compute_portfolio_totals,
+        fx_excluded_codes,
     )
 
     _rows = list(rows or [])
@@ -375,7 +377,12 @@ def _render_layer1(rows: list[dict], vix) -> None:
         #   (2) 的判法照抄 L3 的跳過條件（`held` ＋ `_detail.error`），⛔ 不另立一套；
         #   沒有任何持有列時照修前出這一句（只換句尾；該情形不在本批範圍）。
         _held = [r for r in _rows if r.get("held")]
-        if not (_held and all((r.get("_detail") or {}).get("error") for r in _held)):
+        _fx = fx_excluded_codes(_rows)
+        if _fx:
+            # DEC-102(2)（DEC-019 凍結的客戶核准例外，XV-OLDUI-FX-REASON＝B）：外幣／幣別未確認 → L3 不算總額，
+            #   ⛔ 不講成「持股沒有張數／均價／現價」；改用新 UI 同一 L0 客戶句＋未納入清單（不新寫文案）。
+            _note = f"{FXG.FX_PARTIAL_TEXT}　{FXG.fx_excluded_text(_fx)}"
+        elif not (_held and all((r.get("_detail") or {}).get("error") for r in _held)):
             _note = ("未實現損益與總市值算不出來：持股沒有張數／均價／現價。"
                      f"§1 這裡**不填 0** —— {_IF_LOTS_AVG_MISSING_WHERE}。")
     if _err_n:
@@ -577,7 +584,7 @@ def _render_allocation_take_profit(rows: list[dict]) -> None:
     批 H3 H1-f10：修前寫成只看張數與均價 —— 正是造成 H1-f5 的同一個誤解。
     """
     from src.services.dividend_station_service import (
-        compute_allocation_split, flag_take_profit)
+        compute_allocation_split, flag_take_profit, fx_excluded_codes)
     _alloc = compute_allocation_split(rows)
     _tp = flag_take_profit(rows)
 
@@ -613,7 +620,11 @@ def _render_allocation_take_profit(rows: list[dict]) -> None:
         #       判法照抄 L3 的跳過條件（`held` ＋ `_detail.error`），同卡① H1-f6，⛔ 不另立一套。
         #   (2) 其餘情形照修前，只把半形「張數/均價」統一為同段既有的全形「張數／均價」（標點，字未動）。
         _held = [r for r in (rows or []) if r.get("held")]
-        if _held and all((r.get("_detail") or {}).get("error") for r in _held):
+        _fx = fx_excluded_codes(rows)
+        if _fx:
+            # DEC-102(2)（DEC-019 凍結的客戶核准例外，XV-OLDUI-FX-REASON＝B）：同卡①，⛔ 不講成「未帶張數／均價」。
+            st.caption(f"📊 80/20 配置偏離：{FXG.FX_PARTIAL_TEXT}　{FXG.fx_excluded_text(_fx)}")
+        elif _held and all((r.get("_detail") or {}).get("error") for r in _held):
             st.caption("📊 80/20 配置偏離：無法計算實際佔比。"
                        f"　⚠️ 另有 {len(_held)} 檔整批抓取失敗，未納入任何判斷。")
         else:

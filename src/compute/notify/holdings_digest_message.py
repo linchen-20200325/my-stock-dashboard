@@ -31,7 +31,7 @@ def _code(d: dict, key: str = "代號") -> str:
     return str(d.get(key) or "")
 
 
-def _vix_line(vix: "float | None", total: int) -> list[str]:
+def _vix_line(vix: "float | None", total: int, *, data_short: bool = False) -> list[str]:
     """VIX 一行 + **一句白話該怎麼辦**（user 2026-08-24:「我也不知道該怎麼半」）。
 
     原本只印一個裸數字「😱 VIX：15.9」—— 對不看盤的人那等於沒有資訊,
@@ -47,6 +47,11 @@ def _vix_line(vix: "float | None", total: int) -> list[str]:
     ═══ §1:抓不到就不給建議 ═══════════════════════════════════════════
     VIX 缺值 → classify 回 'gray' → 只誠實說抓取失敗,**不給任何動作建議**。
     沒有數字卻給「照原計畫」等於憑空捏造一個「市場平靜」的結論。
+
+    ═══ DEC-102(1)（客戶 2026-10-28，XV-LINE-VIX-LINE＝同意）：持股資料不足就不給行動句 ═══
+    `data_short`（呼叫端以本檔 `_data_short(digest)` 判定，其謂詞是
+    `digest_data_short(...) or digest.get("invalid")` —— 與本檔續抱抑制同一謂詞，⛔ 不另造判定）為真時，只陳述 VIX 分級事實那一行，**不附**「→ 該怎麼做」那一行
+    （missing ≠ HOLD；VIX 不得代替持股完整性判斷）。預設 False ＝ 修前輸出逐字不變。
     """
     from shared.macro_buckets import LEVEL_EMOJI, SPECS_BY_KEY, classify_danger
 
@@ -65,8 +70,10 @@ def _vix_line(vix: "float | None", total: int) -> list[str]:
         "red": ("市場恐慌",
                 "別急著接刀，也別恐慌殺出；等波動收斂再分批，不要一次全下。"),
     }[_level]
-    return [f"😱 VIX：{vix:.1f}　{LEVEL_EMOJI[_level]} {_label}　有效判斷 {total} 檔",
-            f"　→ {_advice}"]
+    _fact = f"😱 VIX：{vix:.1f}　{LEVEL_EMOJI[_level]} {_label}　有效判斷 {total} 檔"
+    if data_short:
+        return [_fact]      # DEC-102(1)：持股資料不足 → 只陳述分級事實，不附行動建議
+    return [_fact, f"　→ {_advice}"]
 
 
 def _data_short(digest: dict) -> bool:
@@ -281,7 +288,7 @@ def format_holdings_message(digest: dict, switch: "dict | None" = None, *,
     lines: list[str] = ([alert_block, ""] if alert_block else []) + [
         "💼 持股戰情室｜每日續抱 / 換股",
         f"🕐 {as_of}（開盤前檢視,價格以最近交易日收盤為準）",
-        *_vix_line(_vix, _total),
+        *_vix_line(_vix, _total, data_short=_data_short(digest)),   # DEC-102(1)
         "",
     ]
     lines += _switch_out_lines(digest, switch)

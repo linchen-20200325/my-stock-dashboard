@@ -271,6 +271,7 @@ from typing import Any, Mapping, Sequence
 import streamlit as st
 
 from shared import ia_nav
+from shared import price_asof_label as PAL
 # L0：要畫上畫面的上游例外字串，先洗掉金鑰／Sheet ID／檔案路徑（SEC-2，2026-09-26；
 # 同 `page_hold` 批次 B 的作法，遮罩沿用 `***`、⛔ 不加說明字）。
 from shared.secret_scrub import scrub_secrets
@@ -1049,6 +1050,9 @@ class StockReadout:
     error: str = ""
     health_error: str = ""
     price_error: str = ""
+    #: XV-ASOF（DEC-102）：同一輪 `fetch_metrics` 帶回的價格時間＋來源（L3 非顯示鍵的唯讀視圖）。
+    #: `None` ＝ 這一輪沒有價格；有價格但 L3 給不出時間 → 欄位全 None（卡上寫「⬜ 未提供」）。
+    price_asof: PAL.PriceAsOf | None = None
 
 
 def _num(value: Any) -> float | None:
@@ -1116,7 +1120,8 @@ def load_stock_readout(verdict: KindVerdict) -> StockReadout:
         return StockReadout(
             requested=True, name=str(_m.get("name") or ""),
             price=_num(_m.get("current_price")),
-            health_error=_health_err, price_error=_price_err)
+            health_error=_health_err, price_error=_price_err,
+            price_asof=PAL.PriceAsOf.from_mapping(_m))
     _trend = _m.get("trend_verdict")
     return StockReadout(
         requested=True,
@@ -1127,7 +1132,8 @@ def load_stock_readout(verdict: KindVerdict) -> StockReadout:
         trend_verdict=_trend if isinstance(_trend, Mapping) else None,
         name=str(_m.get("name") or ""),
         price=_num(_m.get("current_price")),
-        price_error=_price_err)
+        price_error=_price_err,
+        price_asof=PAL.PriceAsOf.from_mapping(_m))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1380,6 +1386,8 @@ class ValuationReadout:
     price: float | None = None
     error: str = ""
     invalid_items: tuple[str, ...] = ()
+    #: XV-ASOF：沿用健康度那一輪的同一份時間來源（⛔ 不重抓；卡上寫「同上」）。
+    price_asof: PAL.PriceAsOf | None = None
 
     @property
     def has_zone(self) -> bool:
@@ -1444,14 +1452,15 @@ def load_valuation(verdict: KindVerdict, stock: StockReadout
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_inspect] 配息取數失敗 → 估值轉紅態：{_e!r}")
         return ValuationReadout(
-            requested=True, price=stock.price,
+            requested=True, price=stock.price, price_asof=stock.price_asof,
             error=_error_why(SRC_DIVIDENDS, repr(_e)))
 
     if getattr(_div, "invalid", False):
         # 批 Z49（客戶 2026-10-13 裁示 B）：配息資料異常 → 不呼叫 L2（⛔ 不拿異常值算殖利率、
         # ⛔ 不下位階結論），平均股利／配息年數一律不帶（L3 已給 `None`）。
         return ValuationReadout(
-            requested=True, price=stock.price, source=_div.source,
+            requested=True, price=stock.price, price_asof=stock.price_asof,
+            source=_div.source,
             years_n=len(_div.years), invalid_items=("配息",))
 
     try:
@@ -1463,7 +1472,7 @@ def load_valuation(verdict: KindVerdict, stock: StockReadout
     except Exception as _e:  # noqa: BLE001 — 轉成紅態顯示，不吞
         print(f"[views/page_inspect] 357 位階計算失敗 → 估值轉紅態：{_e!r}")
         return ValuationReadout(
-            requested=True, price=stock.price,
+            requested=True, price=stock.price, price_asof=stock.price_asof,
             avg_div_twd=_div.avg_div_twd, paying_years=_div.paying_years,
             source=_div.source, years_n=len(_div.years),
             error=_error_why(SRC_357, repr(_e)))
@@ -1476,7 +1485,8 @@ def load_valuation(verdict: KindVerdict, stock: StockReadout
         signal=str(_z.get("signal") or ""),
         msg=str(_z.get("msg") or ""),
         avg_div_twd=_div.avg_div_twd, paying_years=_div.paying_years,
-        source=_div.source, years_n=len(_div.years), price=stock.price)
+        source=_div.source, years_n=len(_div.years), price=stock.price,
+        price_asof=stock.price_asof)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1701,6 +1711,8 @@ class BatchRow:
     headline: str = ""
     metrics: tuple[tuple[str, str], ...] = ()
     error: str = ""
+    #: XV-ASOF：這一列現價的時間＋來源（`None` ＝ 這一列沒有現價可標）。
+    price_asof: PAL.PriceAsOf | None = None
 
     @property
     def ok(self) -> bool:
@@ -1800,7 +1812,9 @@ def _batch_row(code: str, *, stock_kind: str, etf_kind: str,
                 ("現價", _fmt_num(_num(_m.get("current_price")), digits=2)),
                 ("估值（357）", "未接線"),
                 ("籌碼", "未接線"),
-            ))
+            ),
+            price_asof=(PAL.PriceAsOf.from_mapping(_m)
+                        if _num(_m.get("current_price")) is not None else None))
 
     _bench = benchmark_of(_kind)
     _peer = _m.get("peer_ranks")
@@ -1815,7 +1829,9 @@ def _batch_row(code: str, *, stock_kind: str, etf_kind: str,
              if isinstance(_peer, Mapping) else "—"),
             ("現價", _fmt_num(_num(_m.get("current_price")), digits=2)),
             ("基準", str(_bench or "—")),
-        ))
+        ),
+        price_asof=(PAL.PriceAsOf.from_mapping(_m)
+                    if _num(_m.get("current_price")) is not None else None))
 
 
 def load_batch_rows(req: BatchRequest) -> BatchReadout:
@@ -1856,6 +1872,60 @@ def load_batch_rows(req: BatchRequest) -> BatchReadout:
                              benchmark_of=pick_benchmark)
                   for _c in req.tickers)
     return BatchReadout(requested=True, rows=_rows)
+
+
+#: XV-ASOF：價格時間那一行在 fact 列的標籤（P1 健康度、P2 估值共用）。
+PRICE_ASOF_FACT_KEY: str = "現價資料時間｜來源"
+#: P2 估值卡：357 沿用健康度那一輪同一個價（線框 §3.2「同上」）—— 接在標籤後面。
+PRICE_ASOF_SAME_AS_ABOVE: str = "（同上）"
+#: 葉2 批次表頭下一行（線框 §4 方案 A；客戶 Q1＝A）。
+BATCH_ASOF_PREFIX: str = "價格資料時間："
+BATCH_ASOF_EXCEPTION_TAIL: str = "　—　例外列已在明細標示"
+#: 各列不一致到沒有多數 → 退回逐列寫法（線框 §4 風險欄）。
+BATCH_ASOF_NO_MAJORITY: str = "價格資料時間：各列不一致，逐列標示在明細"
+
+
+@dataclass(frozen=True)
+class BatchAsOfView:
+    """葉2 批次表的價格時間呈現（純資料；`_render_batch_leaf()` 照畫）。
+
+    Attributes:
+        header: 表頭下一行；`""` ＝ 這一批沒有任何一列有現價（不畫）。
+        suffix: 與 `rows` 同序；`""` ＝ 這一列不加字（屬於多數組、或沒有現價）。
+    """
+
+    header: str = ""
+    suffix: tuple[str, ...] = ()
+
+
+def batch_price_asof_view(rows: Sequence[BatchRow]) -> BatchAsOfView:
+    """方案 A：多數組寫在表頭下一行，只有例外列在「明細」加字；沒有過半 → 每列都寫（方案 B 寫法）。
+
+    分組與「多數」的判定一律走 L0 `PAL.group_price_asof()`（嚴格過半），本檔不另判。
+    只有「算出來、且有現價」的列參與（失敗／判不出型別的列沒有價格可標）。
+    """
+    _items = tuple((_i, _r.price_asof) for _i, _r in enumerate(rows)
+                   if _r.ok and not _r.is_unknown and _r.price_asof is not None)
+    if not _items:
+        return BatchAsOfView(header="", suffix=tuple("" for _ in rows))
+    _g = PAL.group_price_asof(_items)
+    if _g.majority_label is None:
+        _header = BATCH_ASOF_NO_MAJORITY
+    else:
+        _header = (BATCH_ASOF_PREFIX + _g.majority_label
+                   + (BATCH_ASOF_EXCEPTION_TAIL if _g.exceptions else ""))
+    _suffix = []
+    for _i in range(len(rows)):
+        _lbl = _g.label_of(_i)
+        _suffix.append("" if _lbl is None or _lbl == _g.majority_label else f"（{_lbl}）")
+    return BatchAsOfView(header=_header, suffix=tuple(_suffix))
+
+
+def batch_detail_metrics(row: BatchRow, suffix: str) -> tuple[tuple[str, str], ...]:
+    """一列的明細 `(欄位, 值)`；有例外字樣時接在「現價」那一格後面（⛔ 不新增欄位）。"""
+    if not suffix:
+        return row.metrics
+    return tuple((_k, _v + suffix if _k == "現價" else _v) for _k, _v in row.metrics)
 
 
 def visible_batch_rows(readout: BatchReadout,
@@ -1980,6 +2050,10 @@ def build_health_card(stock: StockReadout) -> _Built:
         _facts.append(("名稱", stock.name))
     if stock.price is not None:
         _facts.append(("現價", _fmt_num(stock.price, digits=2)))
+        # XV-ASOF（線框 §3.1）：現價下面一行小字 ＝ 資料時間＋來源（字樣全走 L0，顏色不承載意思）。
+        _facts.append((PRICE_ASOF_FACT_KEY, PAL.price_asof_label(stock.price_asof)))
+        # 線框 §5：完整說明只進「▸ 詳細」摺疊區（`V2_FOLD_ONLY_FACT_KEYS`），⛔ 不上卡面。
+        _facts.extend(PAL.price_basis_facts(stock.price_asof))
     if stock.headline:
         # L3 自己寫的一句話。**原樣透傳**（§2.1：那是 L3 的話）。
         _facts.append(("L3 總結", stock.headline))
@@ -2076,6 +2150,11 @@ def build_valuation_card(val: ValuationReadout) -> _Built:
          ("—（日線那一腿沒抓到）" if _ran else "—")
          if val.price is None else _fmt_num(val.price, digits=2)),
     ]
+    if val.price is not None:
+        # XV-ASOF（線框 §3.2）：357 用的是健康度那一輪同一個價 ⇒ 寫「同上」＋同一份時間來源。
+        # QA M1：「同上」寫在標籤上（值＝同一份字樣，⛔ 不加前綴 —— 卡面一格有長度上限）。
+        _facts.append((PRICE_ASOF_FACT_KEY + PRICE_ASOF_SAME_AS_ABOVE,
+                       PAL.price_asof_label(val.price_asof)))
     if val.msg:
         # L2 自己寫的一句話（含三檔目標價或「不適用」的理由）。
         # **原樣透傳**：那是 L2 的話，本檔不改寫、不摘要（§2.1）。
@@ -2447,6 +2526,11 @@ def build_batch_card(readout: BatchReadout, req: BatchRequest) -> _Built:
             "超出上限被截掉",
             f"{req.truncated} 檔（一次最多 {BATCH_MAX_TICKERS} 檔）—— "
             "被截掉的那幾檔**沒有查過**，請分批再貼一次"))
+    _priced = [_r.price_asof for _r in readout.rows
+               if _r.ok and not _r.is_unknown and _r.price_asof is not None]
+    if _priced:
+        # XV-ASOF（線框 §5）：既有「▸ 詳細」摺疊區補兩格價格說明（只進摺疊區，⛔ 不新增區塊）。
+        _facts.extend(PAL.price_basis_facts_many(_priced))
     if readout.failed_codes:
         _facts.append((
             "其中失敗",
@@ -2798,6 +2882,10 @@ def v2_fold_id(card: Card) -> str:
     return v2_markup.fold_dom_id(card.key)
 
 
+#: 只進「▸ 詳細」摺疊區的 fact 標籤（XV-ASOF 線框 §5「查看依據」：價格完整說明 ⛔ 不上 Level 1）。
+V2_FOLD_ONLY_FACT_KEYS: frozenset[str] = frozenset(_k for _k, _ in PAL.price_basis_facts(None))
+
+
 def v2_card_html(card: Card, facts: Sequence[tuple[str, str]] = (),
                  signal_text: str = "") -> str:
     """一張本頁的 `Card` → v2 卡面 HTML。**所有文字都由 `card_html()` escape。**
@@ -2811,11 +2899,15 @@ def v2_card_html(card: Card, facts: Sequence[tuple[str, str]] = (),
     _v2_state, _reason = V2_STATE_VOCAB[card.state]   # 未知狀態 → KeyError（⛔ 不兜底）
     _badge_n = v2_card_badge_n(card)   # 各頁共用（#11 登記制在 page_today；本頁 0 筆登記）
     _short, _full = v2_short_rows(card)
+    # XV-ASOF（線框 §5）：「查看依據」那幾格只進摺疊區、⛔ 不上卡面。
+    _fold_only = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts
+                       if _k in V2_FOLD_ONLY_FACT_KEYS)
+    facts = tuple(_f for _f in facts if _f[0] not in V2_FOLD_ONLY_FACT_KEYS)
     _plain_facts = tuple((v2_plain(_k), v2_plain(_v)) for _k, _v in facts)
     _face_facts = tuple((_k, _v2_face_value(_v)) for _k, _v in _plain_facts)
     _long = tuple(_r for _r, _f in zip(_plain_facts, _face_facts)
                   if _r != _f or len(_r[1]) > v2_markup.FACT_VALUE_MAX_CHARS)
-    _folded = tuple(_full) + _long
+    _folded = tuple(_full) + _long + _fold_only
     return v2_markup.card_html(
         block=card.key,
         state=_v2_state,
@@ -3142,6 +3234,10 @@ def _render_batch_leaf(session: Mapping[str, Any]) -> None:
     # ── 批次表。欄位隨型別不同，故攤成「代碼 / 型別 / 狀態 / 明細」四欄，
     #    每一列的指標以 `key=value` 串在「明細」欄 —— 個股與 ETF 的欄位
     #    **重疊近零**，硬併成一張寬表會有一半的格子永遠是空的。────────────
+    # XV-ASOF（線框 §4 方案 A；客戶 Q1＝A）：表頭下一行共同時間，例外列在明細標示。
+    _asof = batch_price_asof_view(_rows)
+    if _asof.header:
+        st.caption(_asof.header)
     st.dataframe(
         [{"代碼": _r.code,
           "型別": _r.kind_label,
@@ -3150,9 +3246,9 @@ def _render_batch_leaf(session: Mapping[str, Any]) -> None:
           # SEC-2：失敗列的「明細」是例外原文（`repr(e)`）→ 先洗秘密。`st.dataframe`
           #    不走 Markdown，⛔ 不做 `*` 跳脫。
           "明細": (scrub_state_glyphs(scrub_secrets(_r.error))[0] if not _r.ok else
-                   " · ".join(f"{_k}：{_v}" for _k, _v in _r.metrics)
+                   " · ".join(f"{_k}：{_v}" for _k, _v in batch_detail_metrics(_r, _sfx))
                    or "（此型別不取數）")}
-         for _r in _rows],
+         for _r, _sfx in zip(_rows, _asof.suffix)],
         hide_index=True, width="stretch")
 
     # ── 下鑽：**在 form 外**，而且**零額外 L3 呼叫** —— 換一列看的是
@@ -3169,7 +3265,8 @@ def _render_batch_leaf(session: Mapping[str, Any]) -> None:
     section_header(f"{_row.code} · {_row.kind_label}",
                    "依型別走 A 或 B 的欄位。**這一段沒有再發任何取數** —— "
                    "顯示的是上面那一輪批次已經算完的同一份結果。")
-    for _chunk, _columns in grid(_row.metrics, MAX_COLS):
+    _drill_sfx = next((_s for _r2, _s in zip(_rows, _asof.suffix) if _r2 is _row), "")
+    for _chunk, _columns in grid(batch_detail_metrics(_row, _drill_sfx), MAX_COLS):
         for (_k, _v), _col in zip(_chunk, _columns):
             with _col:
                 st.markdown(f"**{_k}**　{_v}")

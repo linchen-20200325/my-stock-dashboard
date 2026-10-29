@@ -104,6 +104,56 @@
   4. **最終回報最多 5 行**：🟢 Stage 已完成／PR 與 main SHA／測試·QA·Mutation／已知限制／下一步＋Model×Effort（若需切換）。
   - 與上一條關係（撰寫組讀法，單組）：上一條 (f)「真實錯誤或 GitHub 狀態衝突」不在本條 5 種之內；本條較嚴，依「衝突取較嚴者」以本條為準 —— 真實錯誤若需客戶裁示或手動操作，落入本條 🔴／🟡；否則內部處理、不出聲。上方限定第 4 條揭露義務仍寫在該 Stage 唯一一次最終回報內。
 
+- 📌 **小節：Hard Output Gate（客戶 2026-10-29，DEC-104）**
+
+> 2026-10-29 新增（append-only；決策者＝**客戶**；不改上文，收緊上一條「零過程訊息」）。下方 code fence 內為**客戶原文逐字收錄**，不得改寫；原文以此處為準（`docs/DECISIONS.md` DEC-104 只作摘要與指向）。
+
+```
+Hard Output Gate
+
+在任何 user-visible 訊息送出前，必須先判斷：
+
+只有以下 5 類可以輸出：
+
+1. 🔴 真正需要客戶裁示
+2. 🟡 Model × Effort 必須切換，且尚未通知
+3. 🟡 需要客戶手動操作
+4. 🟢 整個 Stage 已完整完成
+5. 🟡 context/token 已不安全，需要換新對話交接
+
+若不屬於以上 5 類：
+不得輸出任何 user-visible 訊息。
+
+特別禁止：
+
+- 「還在進行中」
+- 「已 push」
+- 「PR 已開」
+- 「review／QA／mutation 正在跑」
+- 「還沒完成」
+- 「之後完成再回報」
+- 「我會等全部完成後再回報」
+- 「local／remote 已同步」
+- 「下一步正在做什麼」
+
+即使訊息內容是在說「我會保持安靜」，它本身仍然是 process chatter，也不得輸出。
+
+Pre-send self-check
+
+每次準備輸出前，先內部問：
+
+"Does the customer need to act now, switch model/effort now, perform a manual action now, receive a fully completed Stage report now, or switch conversation now?"
+
+若答案全部為否：
+SILENT。
+
+不得用「簡短進度」取代靜默。
+不得用英文進度句。
+不得用重複通知證明你仍在工作。
+```
+
+> 與上文關係（撰寫組讀法，單組）：與上一條「零過程訊息」5 種出聲情況**完全一致**，本小節新增的是**送出前硬閘（Pre-send self-check）**與明列禁句；衝突時取較嚴者。上方限定第 4 條揭露義務仍寫在該 Stage 唯一一次最終回報內。
+
 - 📌 **Context Lifecycle／/compact 規則（客戶 2026-10-28 指示；決策者＝客戶；append-only，不改上文）**（來源：客戶 2026-10-28 指示，經總管轉交之要點，非逐字全文）：目標＝減少 token 浪費，但**不得因壓縮遺失專案狀態**。
   1. 在**安全 checkpoint** 可主動使用 `/compact`，**不需每次先詢問客戶**。
   2. 建議觸發時機：一個 Stage 完整結束且正式文件已落盤後；context 明顯變長、重複內容增加；出現語言漂移、規則遺漏、重複回報等 context 污染跡象；準備進入下一個大型 Stage 前。
@@ -764,3 +814,60 @@ CI、GitHub Actions、audit agent、check_suite 等若可自動恢復：標 🟢
 - **強化**第 20 節（Resume Checkpoint）與第 21 節；**不建立第二套狀態 SSOT**；不取代第 18 節 Model／Effort Gate（DEC-084）。
 - **不降低任何 Gate**（Security／Investment／Data／CI／Audit）；不改產品 code、不改投資語意。
 - 若與既有文字衝突，取較嚴者。
+
+---
+
+## 第 23 節｜Scope Inflation Guard（範圍膨脹防護；客戶 2026-10-28，DEC-103）
+
+> **永久治理規則；客戶原文逐字收錄（不得改寫、不得「優化」）。** 裁示登記見 `docs/DECISIONS.md` DEC-103；本節原文為準。
+
+```
+Scope Inflation Guard
+
+目標：避免 Audit、QA、技術發現持續長出大量待辦後，專案從「完成新版投資決策 OS」漂移成「修完所有歷史技術債」。
+
+所有新發現先分類：
+
+- P0 主線阻擋
+  - 資料錯誤／跨頁不一致
+  - missing 被錯誤解讀
+  - identity/canonical key 錯
+  - 投資語意／Risk Cap／安全性錯誤
+  - 新 UI 無法正常使用
+  - 可直接阻擋當前 D2.5 Stage 的問題
+
+- P1 新版必要
+  - D2.5 四頁 UI
+  - Decision Digest／One AI Brain
+  - strategy wiring
+  - source/as_of/stale
+  - capability coverage
+  - 新 UI 正式驗收必要項目
+
+- P2 技術債
+  - 非阻擋 cache key 統一
+  - naming／wording
+  - magic constant
+  - legacy cleanup
+  - 不影響正確性的 alias／小型重構
+  - 純整潔性改善
+
+規則：
+
+1. P0 可插隊。
+2. P1 依主線順序排程。
+3. P2 只能登記，不得自動插隊。
+4. 新 Audit／QA 發現若不阻擋 D2.5 四頁、Decision Digest、資料正確性或安全性，只能進 BACKLOG，不得因此開新 Stage。
+5. 不得因「順手修」把一次批次擴張成歷史技術債清理。
+6. 每個 Stage 開工前先問：這項工作是否直接推進目前主線？
+7. 若答案是否，且非 P0，留在 BACKLOG。
+8. 目標主線優先序維持：
+   "四頁完成 → One AI Brain / Decision Digest 接線 → 資料一致與必要護欄 → 實機驗收"
+9. Scope Inflation Guard 不取代既有安全 Gate；任何新資料源、schema、公式、投資語意仍照原 Gate。
+```
+
+### 23.1 與既有條文的關係（撰寫組讀法，單組、未經第二組驗證）
+
+- 與第 5 節（Minimum Necessary Change／Scope Control）、`CLAUDE.md` §-1（沒實際 bug／沒具體需求 → 不要動）、`CLAUDE.md` §-1.5.F 判定 3（GC 是任務的收尾義務，不是找任務的理由）**同向（加嚴）**；衝突時取較嚴者。
+- **不取代任何安全 Gate**（原文第 9 條自陳）；不改變第 4 節 Stop／Decision Gate、第 9／18 節 Model／Effort Gate。
+- 落地：`docs/BACKLOG.md` 0.3 規則 6（新增列標 P0／P1／P2，既有列不回溯重標）。
