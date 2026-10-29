@@ -13,6 +13,7 @@
 - 本檔只做**彙整與索引**：**不修改、不重新解釋** `CLAUDE.md` 或 `PROCESS.md` 任何一條；本檔與兩者牴觸時，**以 `CLAUDE.md` 為準**，並把牴觸登記到 `docs/BACKLOG.md` 第 4 節。
 - 本檔**不改變任何既有治理或產品裁示**。對既有裁示的任何變更，都需要一筆**新的客戶 Decision**（追加於 `docs/DECISIONS.md`）。
 - 本檔不帶憲法效力的新增條文：凡寫「規則」者，都附 DEC 編號或既有錨點；附不出來源的一律不寫。
+- 📌 **2026-10-29 補註（append-only；上文一字未改；決策者 客戶（DEC-109）＋AI 總管讀法（DEC-110 R16））**：完整 SSOT 位階（規範軸與事實軸兩條）見**第 25 節**；Conversation 不是 SSOT、GitHub 是 durable memory 見**第 26 節**。本補註不改變本節「`CLAUDE.md` 與 `PROCESS.md` 凌駕本檔」的位階。
 
 ### 0.2 射程
 
@@ -218,6 +219,7 @@ implementation → relevant tests（含真實引擎路徑 regression）→ indep
 
 - 沒跑的就寫沒跑；不得虛構驗證；不得把自己的結果寫成第二組已複驗。
 - 來源：客戶 MSG 1 §24、MSG 2 第 6 點（研究 → 實作 → tests → independent audit → push → PR → CI → fix → merge → main verification → handover）；`docs/BACKLOG.md` 0.3 第 1 條；`CLAUDE.md` §-2 規則 3、6。
+- 📌 **2026-10-29 補註（append-only；上文一字未改；有意識的更新，不是漏刪；決策者 客戶（DEC-109 二十三））**：**UI Stage 的 Definition of Done ＝ CI 綠＋Visual Fidelity PASS**（第 24 節；`docs/governance/UI_VISUAL_FIDELITY_GATE.md`）：`… → independent audit → Visual Fidelity Gate → … → merge`。客戶原文「CI / QA / tests / mutation 全綠 ≠ UI Stage complete」；Gate 未過，BACKLOG 不得移入「已結案」、HANDOFF 不得寫 complete。
 
 ## 第 8 節｜Independent Audit／Red Team
 
@@ -350,7 +352,7 @@ Effort：Low / Medium / High
 （機制依客戶 2026-10-16 列舉之共通治理機制建立，DEC-016。）
 
 - 完整階段（milestone）結束時是建議換對話的時點；換對話前先達到 Safe Checkpoint（第 6 節）並更新~~四檔~~ 五檔（第 15 節 Handoff Save Check；2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068）。
-- ~~新對話依序讀：`CLAUDE.md` → 本檔 → `docs/HANDOFF.md` → `docs/BACKLOG.md` → `docs/DECISIONS.md`；~~ **新對話的啟動程序、讀檔清單與優先序以第 15 節為準**（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068：舊讀序未含 `docs/PROJECT_STATE.md`，且與第 15 節不同）；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。做新 UI／產品方向相關工作時另讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（2026-10-17 新增；依據 DEC-056 第 4 點、DEC-057）。
+- ~~新對話依序讀：`CLAUDE.md` → 本檔 → `docs/HANDOFF.md` → `docs/BACKLOG.md` → `docs/DECISIONS.md`；~~ **新對話的啟動程序、讀檔清單與優先序以第 15 節為準**（2026-10-22 更新，有意識的變更，不是漏刪，決策者 客戶；DEC-068：舊讀序未含 `docs/PROJECT_STATE.md`，且與第 15 節不同）；舊脈絡查 handoff 分支 `HANDOFF.md`（只讀）。~~做新 UI／產品方向相關工作時另讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（2026-10-17 新增；依據 DEC-056 第 4 點、DEC-057）。~~ **現行（2026-10-29；有意識的政策變更，不是漏刪；決策者 客戶（DEC-109）＋AI 總管（DEC-110））**：做新 UI 工作時必讀 `docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md`（Presentation Contract＋Visual SSOT）、`docs/governance/UI_VISUAL_FIDELITY_GATE.md`、核准 blueprint `docs/vnext/d25_wireframes/*.html`；做 AI／Digest 工作時另讀 `docs/vnext/DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md` 與 `docs/vnext/ONE_AI_BRAIN_BOUNDARY_vNext_2026-10-29.md`。**做產品方向相關工作時仍讀 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`**（產品方向文件；DEC-056 第 4 點／DEC-057 地位不變）；它**不是新 UI 的視覺／呈現規格**（視覺依上列契約與 blueprint mockup；兩者區分見第 25.1 節第 5 點）。兩邊理由：舊指向在 2026-10-17 時 Blueprint 是唯一方向文件（成立）；其後 D2.5（DEC-091／092）與 DEC-109 已產生正式契約，繼續指 Blueprint 會讓新 session 讀到過期版面。
 - 本檔（含第 3 節靜默巡航、第 9 節 Effort 自主管理）是**永久規則**：新對話讀完本檔即自動繼承，不需客戶再次提醒；不得只寫在 HANDOFF、對話或單次 prompt（DEC-059）。
 - **不得要求客戶重講已落盤資訊**（`PROCESS.md` §1「嚴禁要求使用者重複解釋」；DEC-014「不重新摘要；不重問；不重做」）。
 - AI 自動產生的對話壓縮摘要**不是客戶原文**，不得當 Decision 來源（DEC 來源類別規則，`docs/DECISIONS.md` 0.1）。
@@ -632,6 +634,7 @@ UI layout、component、copy 調整不得偷偷改變 threshold、weights、elig
 - DEC-084（Model×Effort，第 18 節）正交。
 - ⛔ 本節不授權任何施工：不開 P2、不刪舊 UI、不改 nav、不改投資規則；~~新 UI 之 Stage B／C／D 仍依 DEC-082 須客戶 Gate。~~
 - 📌 更正（2026-10-26，客戶裁示；本節為濃縮文，此為撰寫組／AI 判讀的更正，非客戶逐字；原因：上列被劃掉句是 AI 誤讀 DEC-082；有意識的更正，不是漏刪）：依 DEC-082，**Stage A＝唯讀盤點；Stage B＝可產出 wireframe／IA／互動草稿與方案；Stage C＝正式客戶 Decision Gate；Stage D＝須 Stage C 客戶核准後才可施工**。詳見 `docs/DECISIONS.md` DEC-085 更正註記。
+- 📌 **2026-10-29 呈現讀法補註（append-only；上文一字未改；決策者 客戶（DEC-109「舊 helper／test／wireframe 的 presentation requirement 與新 Presentation Contract 衝突時以新 Visual SSOT 為準」，見 DEC-109 附錄同日前序指示）＋AI 總管讀法）**：本節「衝突時以較嚴者為準」在**資料、投資、安全**面照舊取較嚴；在**呈現位置**面，舊 helper／test／wireframe 的呈現要求與 Presentation Contract 衝突時**以新 Visual SSOT 為準**（「外露」不因字面較多就算「較嚴」）。客戶既有裁示的**內容**保留；**位置只在 DEC-109／同日前序指示（15:18Z）明確點名處改，其餘維持＋列契約 §22 線框待拍板點**（`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md` §15、§16、§22）。
 
 ## 第 20 節｜Quota-safe Resume Checkpoint（客戶 2026-10-26，DEC-086）
 
@@ -871,3 +874,64 @@ Scope Inflation Guard
 - 與第 5 節（Minimum Necessary Change／Scope Control）、`CLAUDE.md` §-1（沒實際 bug／沒具體需求 → 不要動）、`CLAUDE.md` §-1.5.F 判定 3（GC 是任務的收尾義務，不是找任務的理由）**同向（加嚴）**；衝突時取較嚴者。
 - **不取代任何安全 Gate**（原文第 9 條自陳）；不改變第 4 節 Stop／Decision Gate、第 9／18 節 Model／Effort Gate。
 - 落地：`docs/BACKLOG.md` 0.3 規則 6（新增列標 P0／P1／P2，既有列不回溯重標）。
+
+## 第 24 節｜Visual Fidelity Gate＋Presentation Contract（客戶 2026-10-29，DEC-109）
+
+> **永久治理規則；忠實濃縮，與原文有出入時以 `docs/DECISIONS.md` DEC-109 逐字原文為準。** 本節管「UI Stage 怎麼判完成、呈現規格在哪」（流程），**不**寫畫面本文。**本節不改任何資料語意、公式、門檻、Risk Cap、投資語意、資料來源，不授權任何新功能。**
+
+### 24.1 Presentation Contract 與 Visual SSOT
+
+- 新 UI 呈現規格＝`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md`（原則、Visual Budget、第一屏五問＋三層、主圖 header、下沉清單、metadata／status chips、三要素遷移、Missing 契約不變、UI 簡化不得減少的清單、IA、各頁方向）。
+- **blueprint（`docs/vnext/d25_wireframes/*.html`）＝ Visual SSOT／visual acceptance baseline**（客戶 DEC-109 二十四）；`src/ui_v2/tokens.py` ＝實作 token 來源；色值衝突以 blueprint 為準、Phase 3 收斂（DEC-110 R15）；**客戶裁示色值除外**（CTA 主色、`--sig-neutral`／`-bg`；改否＝W1，`P1R-P3-WF-CUSTOMER-COLORS`）。
+- 呈現最高優先序：**圖表 > 數字 > 短句 > 長文字**；但 **Visual Priority does not mean Visual Quantity**；**Simple Decision Dashboard, not Report Wall and not Chart Wall**；**Presentation Simplification must never reduce AI Decision Context**（客戶原文）。
+
+### 24.2 Visual Fidelity Gate（UI Stage 必過）
+
+- Gate 全文：`docs/governance/UI_VISUAL_FIDELITY_GATE.md`（客戶 11 項＋補充 V1～V11、截圖規格、判定者、例外流程、記錄格式、工具 `tools/visual_fidelity/`）。
+- 每個 UI PR 至少附 **desktop＋mobile 390px** 實際截圖，對核准 blueprint 檢查；**CI／QA／tests／mutation 全綠 ≠ UI Stage complete**；明顯偏離＝Visual Fidelity FAIL；第一屏三層答不出＝FAIL（客戶原文）。
+- **DoD 修訂**：UI Stage 完成＝**CI 綠＋Visual Fidelity PASS**（第 7 節 2026-10-29 補註）。
+- 判定者：獨立 QA 組；AI 總管複驗（第 8 節；實作者不得自己驗收自己）。PR 描述須含「Visual Fidelity」段（`.github/PULL_REQUEST_TEMPLATE.md`）。
+- 屬版面設計變更者仍走 `CLAUDE.md` §-1.5.D v3 §03-2 ① 草稿先行；本 Gate 是內部品質閘門，不是客戶 Gate。
+
+### 24.3 執行順序與 Scope Guard
+
+- Phase 1 SSOT Reset／Contract Freeze → Phase 2 Helper／Test Contract Migration → Phase 3 Shared Visual Components → Phase 4 📊 市場 reference → Phase 5 🎯 標的 → Phase 6 💼 持股 → Phase 7 One AI Brain／Decision Digest／AI 投資總結（客戶 DEC-109 三十一；施工計畫 `docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md`）。**Decision Digest contract 未凍結前不得直接開始寫新的 LLM prompt／glue**（客戶原文；契約 `docs/vnext/DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md`）。
+- Scope Guard（與第 23 節併讀取較嚴）：不新增資料來源、投資公式、台股／國際趨勢公式；不改 Risk Cap 算法；不新增 EPS×PE production rule；不改投資語意；不做大量 production UI implementation（Phase 1）；不清理無關歷史技術債；發現 → `docs/BACKLOG.md`（P0 correctness／security blocker 除外）。
+
+## 第 25 節｜SSOT 位階（兩條軸；客戶 2026-10-29 DEC-109 二十九＋AI 總管 DEC-110 R16）
+
+> 客戶原文：「請正式建立 precedence。至少要讓新 session 不需要猜：哪份規格有效。」「若 repo 現有 constitution 有更高 precedence：遵守既有 constitution，並在其下整合。不得無聲覆寫更高階規則。」客戶建議序（PROJECT_RULES／permanent governance 第一）**置於既有憲法之下整合**（第 0.1 節：`CLAUDE.md`、`PROCESS.md` 凌駕本檔）。
+
+### 25.1 規範軸（「哪份規則／規格有效」）
+
+1. `CLAUDE.md`（內部 §-2 > §-1.5（v3 現行）> §-1 > §0～§8）
+2. `PROCESS.md`
+3. `PROJECT_RULES.md`＋`docs/governance/*`（例 `MODEL_EFFORT_POLICY_2026-10-25.md`、`UI_VISUAL_FIDELITY_GATE.md`）
+4. 最新有效 DEC（`docs/DECISIONS.md`；**客戶 DEC > AI 總管內部 DEC**；被取代者看條頭 📌 與第 5 節取代鏈）
+5. 正式契約／Visual SSOT：Phase 1 新文件（Presentation Contract、Decision Digest Contract、One AI Brain Boundary、Migration Plan、Supersede Map）＋D2.5 A／B／C 規格（`docs/vnext/NEWUI_D25_{A,B,C}_*.md`；與 Phase 1 契約衝突時以 Phase 1 契約為準）＋核准 blueprint（`docs/vnext/d25_wireframes/*.html`）。⚠️ **用語區分**：小寫 **blueprint**＝DEC-092 核准的 d25 mockup（`docs/vnext/d25_wireframes/*.html`），是 **Visual SSOT**（視覺驗收基準）；大寫 **Blueprint**＝產品方向文件 `docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md`（DEC-056 第 4 點／DEC-057；最終產品方向，非實作授權、非視覺規格）。產品方向相關工作讀 Blueprint；視覺／呈現依 blueprint 與 Presentation Contract。
+6. `docs/PROJECT_STATE.md`
+7. `docs/BACKLOG.md`
+8. `docs/HANDOFF.md`（**只當索引**，指向正式文件；不是規格 SSOT）
+9. historical／superseded（條頭標 SUPERSEDED、刪除線段、根目錄舊文件、舊線框）
+
+### 25.2 事實軸（「現在實際是什麼」）
+
+GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `docs/PROJECT_STATE.md` 狀態快照 > AI 記憶 > 聊天（與第 1.1 節、第 15 節第 3 點、第 16.8 節同向）。
+
+### 25.3 兩軸不牴觸
+
+- 規範軸 PROJECT_STATE > HANDOFF（知識摘要的效力高於索引）；事實軸 HANDOFF > PROJECT_STATE（熱狀態快照較新）。兩者回答不同問題，**不牴觸**。
+- 呈現衝突：舊 helper／test／wireframe 的呈現要求 vs Presentation Contract → 以 Presentation Contract＋blueprint 為準；資料／投資／安全仍取較嚴（第 19.11 節補註）。**客戶 DEC 的呈現裁示**只有在 DEC-109 或同日前序指示（客戶 2026-10-29T15:18Z）**明確點名**處才被取代；其餘一律「**維持＋列入該頁 phase 線框待拍板**」（Presentation Contract §22），⛔ 以 AI 總管讀法推翻（2026-10-29 第二輪 QA 總管裁定；本句為本 PR 內撰寫之文字，直接改寫）。
+- ⚠️ **已知未調和**：`PROCESS.md` §1「每次任務只讀 STATE.md」與第 15 節五檔讀序衝突（`CV1-DR-04`，未裁示）。本節**不改 `PROCESS.md`**；在客戶裁示前，新 session 依第 15 節五檔讀序＋讀 `CLAUDE.md`，`STATE.md` 只作歷史參考（撰寫組讀法，單組）。
+
+## 第 26 節｜Durable Memory Contract（客戶 2026-10-29，DEC-109 二十五～二十七）
+
+> 永久治理規則；強化第 15 節（Handoff Save Check、Context Loss Check）與第 20 節（Resume Checkpoint），不建立第二套 SSOT。
+
+1. **Conversation 不是 SSOT；GitHub 是 durable memory。**（客戶原文）重要結論不得只留在 ChatGPT／Claude conversation。
+2. **必須落 GitHub 的事**（客戶原文）：客戶裁示、Presentation Contract、Visual Fidelity、Decision Digest、One AI Brain architecture、Missing semantics、IA、blueprint、未完成工作、supersede 關係、Next Action。
+3. **落盤位置**：`PROJECT_RULES.md`（跨 Batch 長期治理規則）／`docs/DECISIONS.md`（客戶正式裁示、amendment、supersede）／正式 vNext design／architecture spec（Presentation Contract、Visual SSOT、Visual Fidelity、Decision Digest、One AI Brain、IA／blueprint）／`docs/BACKLOG.md`（未完成工作、Gate、後續 Batch）／`docs/PROJECT_STATE.md`（當前 Stage 與狀態）／`docs/HANDOFF.md`（目前 main、Stop Point、唯一下一步）。
+4. **HANDOFF 只是索引，不是規格 SSOT**；HANDOFF 應指向正式文件（客戶原文）。
+5. **新 session 只讀 GitHub 可完整恢復**（中斷／Compact 防遺失驗收；客戶原文）：若立刻 compact、換新對話、額度中斷、換模型、換 AI session，新 session 只讀 GitHub current main、`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、`docs/PROJECT_STATE.md`、`docs/HANDOFF.md`、正式 SSOT 就能完整恢復；**做不到＝本 Stage 尚未完成**。
+6. **Context Loss Check**（第 15 節第 5 點 A～F，加 G）：**G.** 有沒有 Presentation／Visual／Digest／Brain／IA／blueprint 的正式結論或 supersede 關係只在聊天裡？→ 有則落正式 vNext spec 或 DECISIONS。⛔ 任何答案為「有」且未保存：不得宣告交接完成。
+7. **未落盤的客戶原文**：若發現客戶指示只存在 session 紀錄（例：前一輪撰寫被中止），下一個撰寫批次須逐字補錄（DEC-109 附錄即一例）。
