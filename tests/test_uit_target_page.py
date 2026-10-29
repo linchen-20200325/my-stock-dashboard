@@ -671,8 +671,8 @@ class TestSectorMap:
         at, _ = _new(monkeypatch, flow=U.make_flow(stale=True))
         at.run()
         _click(at, F.ACTION_LOAD_MAP_LABEL)
-        _t = _all_text(at)
-        assert "資料過期" in _t and "最後一次成功凍結" in _t
+        _caps = [t for k, t in _walk(at.main) if k == "Caption"]
+        assert any("資料過期" in c and "最後一次成功凍結" in c for c in _caps), "矩陣下方必須有明寫的過期說明（不能只靠展開區裡的卡）"
 
     def test_heatmap_proxy_disclosure_and_no_legacy_pointer(self, monkeypatch):
         at, _ = _new(monkeypatch)
@@ -791,8 +791,29 @@ class TestSingleStock:
         _adv = [e for e in at.expander if e.label == B.ADV_LABEL][0]
         assert not _adv.proto.expanded
         _t = _all_text(at)
-        assert B.MA_ONLY_DISPLAY_NOTE in _t and "僅顯示" in _t
+        _md = "\n".join(t for k, t in _walk(at.main) if k == "Markdown")
+        assert B.MA_ONLY_DISPLAY_NOTE in _t
+        assert "均線（僅顯示）" in _md, "均線群組標題必須在畫面上寫明『僅顯示』（不能只靠 help 提示）"
         assert len([c for c in at.checkbox if str(c.key).startswith(I.SS_MA_WIDGET_PREFIX)]) == len(I.MA_OPTIONS)
+
+
+class TestColdParity:
+    def test_cold_idle_cards_are_byte_identical_to_the_legacy_pages(self, monkeypatch):
+        from streamlit.testing.v1 import AppTest
+
+        def _lf():
+            from src.ui.views.page_find import render_page_find
+            render_page_find()
+
+        def _li():
+            from src.ui.views.page_inspect import render_page_inspect
+            render_page_inspect()
+        U.install(monkeypatch, U.Calls())
+        new = _cards_html(AppTest.from_function(U.page_app, default_timeout=120).run())
+        of = _cards_html(AppTest.from_function(_lf, default_timeout=120).run())
+        oi = _cards_html(AppTest.from_function(_li, default_timeout=120).run())
+        assert new["選股結果"] == of["選股結果"]
+        assert new["批次分析結果"] == oi["批次分析結果"]
 
 
 class TestBatch:

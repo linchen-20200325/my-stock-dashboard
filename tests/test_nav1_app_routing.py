@@ -430,6 +430,17 @@ class TestLegacyMode:
         assert fake_views[-1] in ("page_market",)
         assert any("📍 位置：" in c.value for c in at.caption)
 
+    def test_b3_legacy_find_still_dispatches_to_page_find_not_page_target(self, fake_views):
+        """UI-T（2026-10-29）：`_ia_view_find` 依旗標分流 —— legacy 的 D2 側欄選到「找標的」仍呼叫 render_page_find。"""
+        at = _app(legacy=True)
+        _d = ia_nav.page_direction(ia_nav.PAGE_FIND)
+        at.session_state["_sb_ia_page"] = ia_nav.direction_options()[list(ia_nav.NAV_TREE).index(_d)]
+        if len(ia_nav.NAV_TREE[_d]) > 1:
+            at.session_state[f"_sb_ia_leaf_{_d}"] = ia_nav.leaf_options(_d)[ia_nav.NAV_TREE[_d].index(ia_nav.PAGE_FIND)]
+        at.run()
+        assert not at.exception, at.exception
+        assert fake_views == ["page_find"], fake_views
+
     def test_b4_flag_survives_reruns_without_the_query_param(self, fake_views):
         at = _app(qp={"legacy": "1"}).run()
         assert at.session_state[ia_nav4.LEGACY_SESSION_KEY] is True
