@@ -441,9 +441,18 @@ class MapBundle:
 
 def map_bundle(session: Any) -> MapBundle:
     def _compute() -> MapBundle:
+        # loader 自己會把例外轉成 `error=`；這裡再包一層是為了「意外的例外」也被記住（失敗結果只呈現、不在 rerun 重打）。
         with st.spinner("載入板塊資料…"):
-            _hm = F.load_heatmap(requested=True)
-            _flow = F.load_sector_flow(session, requested=True)
+            try:
+                _hm = F.load_heatmap(requested=True)
+            except Exception as _e:  # noqa: BLE001 — 轉成紅態，不吞
+                print(f"[views/page_target] 熱力圖 loader 拋例外：{_e!r}")
+                _hm = F.HeatmapReadout(requested=True, error=repr(_e))
+            try:
+                _flow = F.load_sector_flow(session, requested=True)
+            except Exception as _e:  # noqa: BLE001
+                print(f"[views/page_target] 板塊資金 loader 拋例外：{_e!r}")
+                _flow = F.SectorFlowReadout(requested=True, error=repr(_e))
         return MapBundle(flow=_flow, heatmap=_hm)
     return memoized(session, "map", (int(session.get(SS_GEN_MAP, 0) or 0), True), _compute)
 
@@ -602,7 +611,11 @@ def _load_screen_bundle(req: Any) -> ScreenBundle:
     if not req.submitted:
         # 冷啟動：沒有人要求 ⇒ 連 loader 都不呼叫。
         return ScreenBundle(req=req, result=F.ScreenResult(requested=False))
-    _result = F.load_screen_result(req)
+    try:
+        _result = F.load_screen_result(req)
+    except Exception as _e:  # noqa: BLE001 — loader 自己會轉 error=；意外的例外也要被記住（不在 rerun 重打）
+        print(f"[views/page_target] 選股 loader 拋例外：{_e!r}")
+        _result = F.ScreenResult(requested=True, error=repr(_e))
     if not _result.requested or not _result.has_rows:
         return ScreenBundle(req=req, result=_result)
     _sector = None
@@ -618,7 +631,11 @@ def _load_screen_bundle(req: Any) -> ScreenBundle:
     _pe_map = None
     _pe_failed = True
     if _result.pe_n:
-        _m, _n, _err, _fm = F._load_pe_name_maps()
+        try:
+            _m, _n, _err, _fm = F._load_pe_name_maps()
+        except Exception as _e:  # noqa: BLE001 — 估值欄轉 ⬜，不拖垮候選表
+            print(f"[views/page_target] 本益比再讀失敗：{_e!r}")
+            _m, _err = None, repr(_e)
         if _m is not None and not _err:
             _pe_map, _pe_failed = _m, False
     return ScreenBundle(req=req, result=_result, sector=_sector, sector_error=_sec_err,
@@ -972,12 +989,22 @@ def render_batch_form(session: Any) -> None:
     st.caption(BATCH_NOTE)
 
 
+def _load_batch(req: Any) -> Any:
+    if not req.submitted:
+        return I.BatchReadout(requested=False)
+    try:
+        return I.load_batch_rows(req)
+    except Exception as _e:  # noqa: BLE001 — 轉成紅態並記住（不在 rerun 重打）
+        print(f"[views/page_target] 批次 loader 拋例外：{_e!r}")
+        return I.BatchReadout(requested=True, error=repr(_e))
+
+
 def render_batch(session: Any) -> None:
     st.markdown(f"**{BATCH_TITLE}**")
     render_batch_form(session)
     _req = I.applied_batch_request(session)
     _readout = memoized(session, "batch", _gen(session, SS_GEN_BATCH, I.SS_APPLIED_BATCH),
-                        lambda: I.load_batch_rows(_req) if _req.submitted else I.BatchReadout(requested=False))
+                        lambda: _load_batch(_req))
     _card, _facts, _signal = I.build_batch_card(_readout, _req)
     I._render_one((_card, _facts, _signal))
     if _card.state != UI_LIVE:

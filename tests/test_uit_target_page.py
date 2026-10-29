@@ -424,6 +424,47 @@ class TestFailureNotBombed:
         assert list(_df["估值"]) == [B.PE_FAILED_CELL] * 3, "取不到本益比必須顯示 ⬜，不得填 0"
 
 
+class TestUnexpectedLoaderExceptionIsRememberedToo:
+    """loader 自己會把例外轉成 `error=`；但「意外的例外」（loader 本身壞掉）也只能呈現、不能每次 rerun 重打。"""
+
+    @pytest.mark.parametrize("target,button,attr", [
+        ("load_screen_result", F.ACTION_RUN_SCREEN_LABEL, "screen"),
+        ("load_heatmap", F.ACTION_LOAD_MAP_LABEL, "heat"),
+        ("load_sector_flow", F.ACTION_LOAD_MAP_LABEL, "flow"),
+    ])
+    def test_find_side_loaders(self, monkeypatch, target, button, attr):
+        at, _ = _new(monkeypatch)
+        _n = {"c": 0}
+
+        def _boom(*a, **k):
+            _n["c"] += 1
+            raise RuntimeError("loader 壞了 password=hunter2")
+        monkeypatch.setattr(F, target, _boom)
+        at.run()
+        _click(at, button)
+        assert not at.exception, at.exception
+        assert "loader 壞了" in _all_text(at) and "hunter2" not in _all_text(at), "例外原文要看得見，但秘密要洗掉"
+        _first = _n["c"]
+        for _ in range(3):
+            at.run()
+        assert _n["c"] == _first, "意外例外後 rerun 又重打了"
+
+    def test_batch_loader(self, monkeypatch):
+        at, _ = _new(monkeypatch)
+        _n = {"c": 0}
+
+        def _boom(req):
+            _n["c"] += 1
+            raise RuntimeError("批次壞了")
+        monkeypatch.setattr(I, "load_batch_rows", _boom)
+        at.run()
+        at.text_area(key=I.SS_BATCH_WIDGET).set_value("2330")
+        _click(at, I.ACTION_RUN_BATCH_LABEL)
+        assert "批次壞了" in _all_text(at) and _n["c"] == 1
+        at.run()
+        assert _n["c"] == 1
+
+
 # ══════════════════════════════════════════════════════════════════
 # C6 widget key 不重複
 # ══════════════════════════════════════════════════════════════════
@@ -778,6 +819,28 @@ class TestBatch:
         _t = _all_text(at)
         for _w in DEAD_POINTERS + ENGINEERING:
             assert _w not in _t, _w
+
+
+class TestLegacyOnlyRenderersAreNotReused:
+    """舊兩頁帶工程字樣的 render 函式／常數（葉1／葉2／線框／接線揭露／本頁不重複掛載）一個都不能被新頁拿來用。"""
+
+    _FORBIDDEN_NAMES = ("_render_single_leaf", "_render_batch_leaf", "_render_screen_leaf", "_render_map_leaf",
+                        "_render_ticker_form", "_render_batch_form", "_render_screen_form", "render_page_find",
+                        "render_page_inspect", "WIRING_DISCLOSURE", "WIRING_DISCLOSURE_SINGLE",
+                        "WIRING_DISCLOSURE_BATCH", "build_detail_card", "DETAIL_WHERE", "HEATMAP_SWITCH_HINT",
+                        "LEAF_SCREEN_TITLE", "LEAF_MAP_TITLE", "LEAF_SINGLE_TITLE", "LEAF_BATCH_TITLE")
+
+    def test_new_files_do_not_reference_them(self):
+        for _p in (_BLOCKS, _PAGE):
+            _tree = ast.parse(_p.read_text(encoding="utf-8"))
+            _used = {n.attr for n in ast.walk(_tree) if isinstance(n, ast.Attribute)} | \
+                    {n.id for n in ast.walk(_tree) if isinstance(n, ast.Name)}
+            _hit = sorted(set(self._FORBIDDEN_NAMES) & _used)
+            assert not _hit, (_p.name, _hit)
+
+    def test_heatmap_switch_hint_is_replaced_not_leaked(self):
+        _facts = B.sanitize_facts((("切換市場或區間", F.HEATMAP_SWITCH_HINT), ("x", "y")))
+        assert _facts == (("切換市場或區間", B.HEATMAP_SWITCH_PLAIN), ("x", "y"))
 
 
 class TestUnwired:
