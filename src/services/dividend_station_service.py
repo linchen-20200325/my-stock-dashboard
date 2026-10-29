@@ -528,6 +528,11 @@ def build_station_rows(holdings: list[dict], *, vix: float | None,
                 _row["市值"] = None
                 _row["損益%"] = None
             _mark_insufficient(_row, ak=ak, held=held)
+            if (_row.get(FXG.KEY_FX_UNCONFIRMED) and ak == T.KIND_STOCK
+                    and not _row.get(SS.KEY_INSUFFICIENT) and _row.get("健檢") == "🟢"):
+                # DEC-102(3)（客戶 2026-10-28，XV-FX-ROW-ACTION＝同意）：外幣個股 🟢 續抱結論可證明 → 保留原句，
+                #   同列加註停利判不了（損益% 已因幣別未定義為 None）；⛔ 不換成 ⬜。台股列不經此分支、逐字不變。
+                _row["建議動作"] = f"{_row.get('建議動作', '')}　{FXG.fx_take_profit_note(tk)}"
             rows.append(_row)
         except Exception as e:  # noqa: BLE001 — 單檔失敗不炸整表（§1 誠實標記）
             rows.append(_error_row(tk, nm, ac, ak, f"{type(e).__name__}: {e}", held=held))

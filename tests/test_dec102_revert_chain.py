@@ -17,10 +17,27 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 
-DEC102_BASE_SHA = {'src/compute/notify/holdings_digest_message.py': '403da86c1ee43cb73cd3aa71f7a9672c03440a646bc8b993f5aaef5181c1b811',
+DEC102_BASE_SHA = {'shared/asset_currency_gate.py': '06362824a65587bc42bbe34cc8ed383b8a6eab2220692287d508bd230335d39a',
+ 'src/compute/notify/holdings_digest_message.py': '403da86c1ee43cb73cd3aa71f7a9672c03440a646bc8b993f5aaef5181c1b811',
+ 'src/services/dividend_station_service.py': '67fdaf7302ec377379fe357ea416fee1a30ed83840f378a3ff60533dd306d1ad',
  'src/ui/etf/etf_tab_dividend_station.py': '9554556c0ed8d1bd56ea0ce6feea04f61871c72f1e271fbc1c960714267445ee'}
 
-DEC102_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/compute/notify/holdings_digest_message.py': (('def _vix_line(vix: "float | None", total: int, *, '
+DEC102_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'shared/asset_currency_gate.py': (('\n'
+                                    '#: DEC-102(3)（客戶 '
+                                    '2026-10-28，XV-FX-ROW-ACTION＝同意）：外幣／幣別未確認的**持有個股列**，汰換燈結論\n'
+                                    '#: 判得出（🟢 續抱）時**保留**原句，同列加註停利判不了（成本幣別未定義 ⇒ 損益% 不可判定）。\n'
+                                    '#: ⛔ 不把整列換成 ⬜（燈號本身判得出）。明確外幣 → 前者；其餘（幣別未確認）→ 後者。\n'
+                                    'FX_TP_UNJUDGED_FOREIGN: str = "停利未判：外幣"\n'
+                                    'FX_TP_UNJUDGED_UNCONFIRMED: str = "停利未判：幣別未確認"\n'
+                                    '\n'
+                                    '\n'
+                                    'def fx_take_profit_note(ticker) -> str:\n'
+                                    '    """被排除代號的列層停利加註（同 `fx_exclusion_reason` 的兩分法，⛔ 不另立判定）。"""\n'
+                                    '    return (FX_TP_UNJUDGED_FOREIGN if fx_exclusion_reason(ticker) == '
+                                    'FX_EXCLUDED_REASON\n'
+                                    '            else FX_TP_UNJUDGED_UNCONFIRMED)\n',
+                                    ''),),
+ 'src/compute/notify/holdings_digest_message.py': (('def _vix_line(vix: "float | None", total: int, *, '
                                                     'data_short: bool = False) -> list[str]:\n',
                                                     'def _vix_line(vix: "float | None", total: int) -> '
                                                     'list[str]:\n'),
@@ -46,6 +63,17 @@ DEC102_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/compute/noti
                                                    ('        *_vix_line(_vix, _total, '
                                                     'data_short=_data_short(digest)),   # DEC-102(1)\n',
                                                     '        *_vix_line(_vix, _total),\n')),
+ 'src/services/dividend_station_service.py': (('            if (_row.get(FXG.KEY_FX_UNCONFIRMED) and ak == '
+                                               'T.KIND_STOCK\n'
+                                               '                    and not _row.get(SS.KEY_INSUFFICIENT) '
+                                               'and _row.get("健檢") == "🟢"):\n'
+                                               '                # DEC-102(3)（客戶 '
+                                               '2026-10-28，XV-FX-ROW-ACTION＝同意）：外幣個股 🟢 續抱結論可證明 → 保留原句，\n'
+                                               '                #   同列加註停利判不了（損益% 已因幣別未定義為 None）；⛔ 不換成 '
+                                               '⬜。台股列不經此分支、逐字不變。\n'
+                                               '                _row["建議動作"] = f"{_row.get(\'建議動作\', '
+                                               '\'\')}\u3000{FXG.fx_take_profit_note(tk)}"\n',
+                                               ''),),
  'src/ui/etf/etf_tab_dividend_station.py': (('from shared import asset_currency_gate as FXG  # '
                                              'DEC-102(2)：外幣原因句（L0 唯一來源）\n',
                                              ''),

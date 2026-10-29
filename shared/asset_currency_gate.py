@@ -71,3 +71,15 @@ FX_ONLY_REASON: str = "持有列全是外幣／幣別未確認資產（匯率與
 #: L3 `dividend_station_service.build_station_rows` 在**持有列**上標「幣別未確認、已排除於總額／比例」
 #: 的非顯示欄（同 `_detail` 慣例）。⚠️ **只有排除時才有這一鍵** —— 台股列逐鍵不變。
 KEY_FX_UNCONFIRMED: str = "_fx_unconfirmed"
+
+#: DEC-102(3)（客戶 2026-10-28，XV-FX-ROW-ACTION＝同意）：外幣／幣別未確認的**持有個股列**，汰換燈結論
+#: 判得出（🟢 續抱）時**保留**原句，同列加註停利判不了（成本幣別未定義 ⇒ 損益% 不可判定）。
+#: ⛔ 不把整列換成 ⬜（燈號本身判得出）。明確外幣 → 前者；其餘（幣別未確認）→ 後者。
+FX_TP_UNJUDGED_FOREIGN: str = "停利未判：外幣"
+FX_TP_UNJUDGED_UNCONFIRMED: str = "停利未判：幣別未確認"
+
+
+def fx_take_profit_note(ticker) -> str:
+    """被排除代號的列層停利加註（同 `fx_exclusion_reason` 的兩分法，⛔ 不另立判定）。"""
+    return (FX_TP_UNJUDGED_FOREIGN if fx_exclusion_reason(ticker) == FX_EXCLUDED_REASON
+            else FX_TP_UNJUDGED_UNCONFIRMED)
