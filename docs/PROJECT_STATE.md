@@ -743,3 +743,11 @@
 - 📌 **DEC-101 第四輪回修（2026-10-28；append-only；決策者 AI 總管（事實更新））**：`9c26106d`（觀察清單判不出計入組合層資料不足，AI 總管決定）／`e4742494`（契約漂移不計入有效判斷檔數、⑦／LINE 點名）／`303c9703`（① 替代句依原因組成）；獨立複驗組 C 三輪，最終 0 BLOCKER／0 MAJOR／3 MINOR（登記 LOW）；fast lane 32325 passed／1 環境失敗（z59）。~~**狀態＝implementation complete／PR 待開／waiting CI，未合併**~~ **狀態＝merged（已合併 PR #961（squash，main `2e97482c`，CI 綠：Fast checks／Slow tests 皆 success，head `5783a59e`））**（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。**待客戶裁示**＝`XV-ASOF` 線框 Q1～Q3、`XV-OLDUI-FX-REASON`、`XV-LINE-VIX-LINE`、`XV-FX-ROW-ACTION`（新升客戶 Gate；推薦保留結論＋加註「停利未判：外幣」）。⚠️ 總管轉述，撰寫組未重跑測試、未經第二組驗。
 - 📌 **DEC-101 後續四項客戶裁示（DEC-102，客戶 2026-10-28；append-only；Approved）**：`XV-ASOF` 線框 Q1 A／Q2 A／Q3 A 已核准可實作（表頭下一行共同時間＋例外列標示；「盤中或收盤未確認」不猜收盤；持股沿用總市值下方「價格資料日」位置；不只靠顏色；不擴張版面）；`XV-OLDUI-FX-REASON`＝B（舊 UI 只修外幣錯誤原因句一處，DEC-019／020 其餘不變）；`XV-LINE-VIX-LINE` 同意（資料不足時只陳述 VIX 事實、不附行動句）；`XV-FX-ROW-ACTION` 同意（可證明的「🟢 續抱」保留＋加註「停利未判：外幣」，局部降級）。過期價是否計入市值／損益／停利仍 open。狀態：實作中。⚠️ 單一撰寫組產出，無第二組驗過。
 - 📌 **DEC-102 實作（2026-10-29；append-only；決策者 AI 總管（事實更新））**：`XV-ASOF`（價格旁資料時間＋來源，🔬 P1／P2／葉2、💼 ① E17／⑤；L0 `shared/price_asof_label.py`＋L3 加性非顯示鍵）／`XV-OLDUI-FX-REASON`／`XV-LINE-VIX-LINE`／`XV-FX-ROW-ACTION`＋AI 總結 prompt 同步 —— ~~**已實作，PR #963 待合併**~~ **已合併（PR #963，main `6bdd9af6`）**（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））；非 done-verified（待客戶實機點驗 NAV1／ASOF）。下一接手點＝UI-M（`docs/vnext/NEWUI_D25_PLAN_2026-10-27.md` §5 序 7；開工前依 DEC-084 重判 Model×Effort）。
+
+## 45. UI-M 📊 市場頁完成待合併（DEC-105，客戶 2026-10-29；append-only）
+
+- **狀態**：UI-M 已實作（PR #965 待合併；非 done-verified，待客戶實機點驗）。客戶裁示 1A（結論句位置）／2A（市場位階五態字樣，不映射偏多／中性／偏空）／3A（指標危險度降階到「指標明細（16 項）」最上方，首屏需指路），見 `docs/DECISIONS.md` DEC-105。
+- **架構**：L2 `compute_five_bucket_summary` 加性 `main_key`；L3 `market_twii_view_service`（圖 A，attrs 透傳）；L5 `src/ui/views/_market_blocks.py`（Hero 4 卡／⚡／圖 A～D／「查看依據」六欄）；`page_market.py` 只編排並保留既有展開區。還原鏈新頭節 `tests/test_uim_revert_chain.py`。
+- **未動**：`PAGE_LABELS`／`ia_nav`／`app.py`／`page_today`／L1。
+- **下一個主線 P1**：`docs/vnext/NEWUI_D25_PLAN_2026-10-27.md` §5 序 7 剩餘頁（UI-T → UI-H → UI-ME）與序 8（AB-5／AB-6）；唯一下一步＝UI-T；開工前依 DEC-084 重判 Model×Effort、等客戶切換。⚠️ 「UI-T 先」為計畫表列序讀法，單組。
+- **P2 登記**：`UIM-LAYOUT-DEVIATIONS`、`UIM-MA-FLAT-REFERENCE`、`UIM-UPDATE-BUTTON-WORDING`、`UIM-HERO-MAX-ITEMS-SSOT`（`UIM-REGIME-WORDING` 已由 DEC-105 結案為維持現狀）。
