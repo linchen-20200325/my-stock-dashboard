@@ -42,11 +42,13 @@ KEY_FFILLED_LAST = "ffilled_last"        # bool：最後一根是補值（只有
 KEY_FFILLED_FROM = "ffilled_from"        # date | None：補值沿用的那一天
 KEY_PRICE_EXPECTED_DAY = "price_expected_day"   # date | None：預期最新交易日
 KEY_PRICE_LAG_DAYS = "price_lag_weekdays"       # int | None：落後幾個平日
+KEY_PRICE_EVALUATED_ON = "price_evaluated_on"   # date | None：L3 判定時的台北當日（卡面跨年判斷用）
 
 #: 全部非顯示鍵（測試與「拿不到」時的預設值用）。
 PRICE_ASOF_KEYS: tuple[str, ...] = (
     KEY_PRICE_AS_OF, KEY_PRICE_SRC, KEY_IS_STALE, KEY_IS_FALLBACK,
-    KEY_FFILLED_LAST, KEY_FFILLED_FROM, KEY_PRICE_EXPECTED_DAY, KEY_PRICE_LAG_DAYS)
+    KEY_FFILLED_LAST, KEY_FFILLED_FROM, KEY_PRICE_EXPECTED_DAY, KEY_PRICE_LAG_DAYS,
+    KEY_PRICE_EVALUATED_ON)
 
 # ── 來源腿（值沿用 L1 `data_loader._get_combined_data_body` 寫進 `attrs["price_src"]` 的字面）──
 SRC_YAHOO_ADJ = "yahoo_adj"              # 主源：Yahoo auto_adjust（還原）；ETF 路徑亦是這一腿
@@ -62,7 +64,7 @@ SOURCE_DISPLAY: Mapping[str, str] = {
     SRC_YAHOO_ADJ: "Yahoo",
     SRC_FINMIND_SDK: "FinMind",
     SRC_FINMIND_RAW: "FinMind",
-    SRC_YAHOO_FALLBACK: "Yahoo（預設參數）",
+    SRC_YAHOO_FALLBACK: "Yahoo 預設",     # QA r2：卡面長度（跨年最長組合 ≤ 46）；口徑全文見 SOURCE_BASIS
 }
 
 #: 還原口徑（只上「查看依據」，線框 §5）。
@@ -130,6 +132,7 @@ class PriceAsOf:
     ffilled_from: date | None = None
     expected_day: date | None = None
     lag_weekdays: int | None = None
+    evaluated_on: date | None = None
 
     @classmethod
     def from_mapping(cls, m: Mapping[str, Any] | None) -> "PriceAsOf":
@@ -148,6 +151,7 @@ class PriceAsOf:
             ffilled_from=coerce_plain_date(m.get(KEY_FFILLED_FROM)),
             expected_day=coerce_plain_date(m.get(KEY_PRICE_EXPECTED_DAY)),
             lag_weekdays=(_lag if isinstance(_lag, int) and not isinstance(_lag, bool) else None),
+            evaluated_on=coerce_plain_date(m.get(KEY_PRICE_EVALUATED_ON)),
         )
 
     @property
@@ -173,12 +177,15 @@ STALE_UNKNOWN = "（是否最新：無法判定）"
 FACE_MAX_CHARS = 46
 
 
-def _md(d: date) -> str:
-    """卡面日期：M/D（線框原樣；QA M1 卡面長度）。完整 ISO 日期在「查看依據」（`price_basis_facts`）。"""
+def _md(d: date, today: date | None) -> str:
+    """卡面日期：M/D（線框原樣；QA M1 卡面長度）；年份 ≠ `today` 的年份時寫 `YYYY/M/D`（QA r2 跨年歧義）。
+    `today` 不知道（None）→ M/D。完整 ISO 日期在「查看依據」（`price_basis_facts`）。"""
+    if today is not None and d.year != today.year:
+        return f"{d.year}/{d.month}/{d.day}"
     return f"{d.month}/{d.day}"
 
 
-def price_asof_label(p: PriceAsOf | None) -> str:
+def price_asof_label(p: PriceAsOf | None, *, today: date | None = None) -> str:
     """一個價格 → 一行小字（線框 §2；拿掉顏色後意思不變；每種狀態 ≤ `FACE_MAX_CHARS`）。
 
     「盤中或收盤未確認」只在句尾寫一次；完整 ISO 日期在「查看依據」（`price_basis_facts`）。
@@ -188,20 +195,26 @@ def price_asof_label(p: PriceAsOf | None) -> str:
     - 備援                → `10/27｜備援來源：FinMind（盤中或收盤未確認）`
     - 非最新              → `⚠ 非最新（上次成功 10/27）｜Yahoo（盤中或收盤未確認）`
     - 最後一根是補值      → `⚠ 含補值日（10/28 沿用 10/27）｜Yahoo（盤中或收盤未確認）`
-    - 非最新＋補值        → `⚠ 非最新（上次成功 10/24，10/28 為補值）｜Yahoo（盤中或收盤未確認）`
+    - 非最新＋補值        → `⚠ 非最新（上次成功 10/24；末筆為補值）｜Yahoo（盤中或收盤未確認）`
+    - 跨年（年份 ≠ today）→ `YYYY/M/D`（同一句第二個日期與第一個同年時只寫 M/D）
     """
     if p is None or p.as_of is None:
         return TIME_NOT_PROVIDED
-    _d = _md(p.as_of)
-    _from = _md(p.ffilled_from) if (p.ffilled_last and p.ffilled_from) else None
+    _today = today or p.evaluated_on      # 呼叫端傳入 ＞ L3 判定時的台北當日
+    _d = _md(p.as_of, _today)
+    _from = _md(p.ffilled_from, _today) if (p.ffilled_last and p.ffilled_from) else None
+    # 同一句裡的第二個日期與第一個同年 → 只寫 M/D（跨年也不重複年份，卡面長度）。
+    _from_after_d = (_md(p.ffilled_from, p.as_of) if (p.ffilled_last and p.ffilled_from) else None)
     if p.is_stale is True:
         if p.ffilled_last:
-            _head = (f"{STALE_MARK}（上次成功 {_from}，{_d} 為補值）" if _from
+            # 非最新＋補值：補值那天就是最後一根（日期在查看依據），卡面只講「末筆為補值」。
+            _head = (f"{STALE_MARK}（上次成功 {_from}；末筆為補值）" if _from
                      else f"{STALE_MARK}（{_d} 為補值）")
         else:
             _head = f"{STALE_MARK}（上次成功 {_d}）"
     elif p.ffilled_last:
-        _head = f"{FFILL_MARK}（{_d} 沿用 {_from}）" if _from else f"{FFILL_MARK}（{_d} 為補值）"
+        _head = (f"{FFILL_MARK}（{_d} 沿用 {_from_after_d}）" if _from
+                 else f"{FFILL_MARK}（{_d} 為補值）")
     elif p.is_stale is None:
         _head = f"{_d}{STALE_UNKNOWN}"
     else:
@@ -299,9 +312,14 @@ def price_basis_facts_many(ps: Sequence[PriceAsOf | None]) -> tuple[tuple[str, s
     _used = "、".join(f"{_k} {_n} 檔" for _k, _n in _cnt.items()) or NOT_PROVIDED
     _exp = next((_p.expected_day for _p in _ps if _p.expected_day), None)
     _ff = sum(1 for _p in _ps if _p.ffilled_last)
+    # QA r2：逐組列出 ISO 日期（卡面是 M/D，完整日期只在摺疊依據）。
+    _dates: dict[str, int] = {}
+    for _p in _ps:
+        _k = _p.as_of.isoformat() if _p.as_of else NOT_PROVIDED
+        _dates[_k] = _dates.get(_k, 0) + 1
     _ttl_min = TTL_1HOUR // 60
     _parts = [
-        "最後一根 K：各檔日期見畫面上的價格資料時間",
+        "最後一根 K：" + ("、".join(f"{_k}（{_n} 檔）" for _k, _n in _dates.items()) or NOT_PROVIDED),
         f"預期最新交易日：{_exp.isoformat() if _exp else NOT_PROVIDED}（只扣週末，未扣國定假日）",
         f"落後超過 {DAILY_MAX_LAG_TRADING_DAYS} 個平日標 {STALE_MARK}（日頻上限為交易日，此處以平日計、偏嚴）",
         f"補值日：{_ff} 檔最後一根是補值" if _ff else "補值日：沒有任何一檔最後一根是補值（或此來源不提供）",

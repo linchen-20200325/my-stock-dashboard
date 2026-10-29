@@ -1439,7 +1439,7 @@ D2.5 以下大方向核准：
 > 2026-10-28 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/*.md docs/vnext/*.md PROJECT_RULES.md` 最大為 DEC-101、DEC-102 0 命中）。要點經總管轉交，**非客戶逐字全文**；下列引號內關鍵句照總管轉交原句。
 
 - **決策者**：**客戶**（2026-10-28；經總管轉交之要點）。
-- **日期／效力日期**：2026-10-28 起生效。｜**狀態**：生效；四項**實作中**（ASOF＋三項小修）。
+- **日期／效力日期**：2026-10-28 起生效。｜**狀態**：生效；~~四項**實作中**（ASOF＋三項小修）。~~ 四項**已實作（PR #963，待合併；見下方「實作紀錄」）**（2026-10-29 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））。
 - **背景**：DEC-101(3) 要求 XV-ASOF 先出線框（`docs/vnext/NEWUI_D25_XVIEW_ASOF_WIREFRAME_2026-10-28.md` §8 三題，附總管推薦）；DEC-101 實作紀錄另登記三項客戶 Gate（BACKLOG `XV-OLDUI-FX-REASON`／`XV-LINE-VIX-LINE`／`XV-FX-ROW-ACTION`，各附總管推薦）。客戶本次逐項裁示。
 - **內容**：
   1. **XV-ASOF 線框（§8）：Q1＝A、Q2＝A、Q3＝A** —— 線框**已核准、可實作**。原則：
@@ -1466,6 +1466,20 @@ D2.5 以下大方向核准：
 - **效力邊界**：本條**不**決定過期價是否計入市值／損益／停利（仍 open）；**不**核准外幣換算（`FX-CANONICAL-GATE` 照舊另開）；**不**通過舊 UI Removal Gate、**不**放寬 DEC-019／DEC-020 除第 2 點那一處以外的任何凍結；XV-ASOF 只授權**依已核准線框**實作，版面擴張仍須另出線框（DEC-082）；不新增資料來源／schema／公式／投資語意；不降低任何 Gate。
 - **與其他 DEC 的關係**：**回答** DEC-101(3)「先出線框，確認後再實作」之確認步驟與 DEC-101 實作紀錄所列三項待客戶 Gate；DEC-101(1)(2) 原文不改，本條第 3、4 點與 DEC-101(2)「missing ≠ HOLD」同向、精確化列層與推播層讀法。DEC-019／DEC-020 原文不改，本條第 2 點為**一處**有範圍的例外。DEC-082（草稿先行）呼叫。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：docs-only 撰寫組只落盤裁示，不改任何程式碼、未重跑測試；本條要點為總管轉交、非客戶逐字全文；「本條與 DEC-101／019／020 的關係」為撰寫組讀法，單組。
+- 📌 **實作紀錄（2026-10-29 補；加法式，上文一字未改；決策者 AI 總管（事實更新））**：**狀態＝已實作，PR #963 待合併**（分支 `ccr-6eace3b6-0gglrs`；基準 `1e603094`，`git log 1e603094..HEAD`）。
+  - **commit**：`afe5ec42`（DEC-102／DEC-103 落盤，docs）／`61d81d45`（XV-OLDUI-FX-REASON）／`c3874a12`（XV-LINE-VIX-LINE）／`7cb05bab`（XV-FX-ROW-ACTION）／`d3a50f27`・`f6f536f2`・`8d84ef7d`・`600916f5`・`34f56a0c`・本批收尾 commit（XV-ASOF 實作與 QA 回修）／`8b794c04`（AI 總結 prompt 同步禁止 VIX 行動建議＋docstring＋BACKLOG 登記）／`f6d61468`・`81ed94dc`（兩組整合 merge）。（`27de9c61` 為 DEC-104 治理 docs，非本條實作。）
+  - **改動檔**：`shared/price_asof_label.py`（新，L0）／`src/services/dividend_station_service.py`（L3 加性非顯示鍵 `price_as_of`／`price_src`／`is_stale`／`is_fallback`／`ffilled_last` 等；AI 總結 prompt）／`src/ui/views/page_inspect.py`（🔬 P1／P2／P4 與查看依據）／`src/ui/views/page_hold.py`（💼 ① E17 位置、⑤ 指回一行）／`src/compute/notify/holdings_digest_message.py`（LINE VIX 句）／`shared/asset_currency_gate.py`（列層加註句）／`src/ui/etf/etf_tab_dividend_station.py`（舊 UI 最小例外）；測試 `tests/test_xv_asof.py`、`tests/test_dec102_*.py`、還原鏈頭節 `tests/test_asof_revert_chain.py`／`tests/test_dec102_revert_chain.py`。
+  - **決定（AI 總管，DEC-102 授權邊界內）**：
+    - **stale 判定**：只用既有 `shared/staleness.expected_latest_trading_day()`＋freshness SSOT `assess_daily(calendar_kind="weekday")`＋`DAILY_MAX_LAG_TRADING_DAYS`（DEC-029），⛔ 不自創天數；只扣週末、不扣國定假日（偏嚴，長假後可能多標 ⚠）→ BACKLOG `XV-ASOF-HOLIDAY`。ETF 最後一根為補值時以實際資料日判。
+    - **卡面字樣**：日期 M/D、年份 ≠ 判定日年份時寫 YYYY/M/D；「盤中或收盤未確認」只在句尾寫一次（⛔ 不猜收盤）；每種 production 可達狀態 ≤ 卡面上限 46 字；完整 ISO 日期只在既有「查看依據」摺疊區。拿不到時間寫「資料時間：⬜ 未提供」（💼「價格資料時間：⬜ 未提供」），⛔ 不用今天代替。過期價**照樣**計入市值／損益（是否排除仍 open，只標示）。
+    - **舊 UI 兩句同一缺陷**：舊 UI 卡①與 80/20「算不出來」兩句在有外幣持股時都講成「持股沒有張數／均價…」，屬同一缺陷，依 DEC-102(2) 一併改用新 UI 同一客戶句；舊 UI 其餘凍結不變。
+    - **列層加註只限 🟢**：外幣列只有在原結論為「🟢 續抱」時保留並加註「停利未判：外幣／幣別未確認」；🔴／⚪ 等非續抱結論逐字不變。
+    - **AI 總結 prompt 同步**：持股資料不足（同一謂詞 `digest_data_short`）時 prompt 追加「VIX 只可陳述分級事實，不得據以給任何行動建議（如照原計畫、定期定額）」，與 LINE 正文同原則；資料齊全時 prompt 與 `1e603094` 逐字相同。
+    - **XV-X1 不修**：新四頁顯示價格的位置都走 L3 `fetch_metrics` → 同一快取鍵（個股 360 日），P2 沿用 P1 同一份；判定經 QA 複驗在其查到範圍內成立（非窮舉保證）。
+  - **QA**：ASOF 獨立 QA 兩輪（第一輪 1 MAJOR＋6 MINOR 已回修；第二輪 0 BLOCKER／0 MAJOR，所報兩項亦已回修）（總管轉述）。測試數見本批 commit 訊息與 PR 描述。
+  - **已知未改（登記）**：`XV-ASOF-HOLIDAY`／`XV-ASOF-FOLD-GAPS`／`XV-ASOF-TTL-2ND-SSOT`／`XV-ASOF-LEN-UNREACHABLE`／`XV-OLDUI-AI-CARD-HOLD`（客戶 Gate）／`XV-FX-ROW-NOKD`（皆 P2）；過期價是否計入仍 open。
+  - **未驗**：盤中行為、部署時區、Streamlit Cloud 快取下 `attrs["price_src"]` 是否保留、手機排版 → 待客戶實機點驗（HANDOFF）。
+  - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本段由實作組撰寫；「XV-X1 不修」等判定為實作組讀碼結論經 QA 複驗，仍非窮舉保證。
 
 ### DEC-103｜Scope Inflation Guard（範圍膨脹防護）正式入治理（客戶 2026-10-28）
 

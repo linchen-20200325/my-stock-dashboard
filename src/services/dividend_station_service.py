@@ -600,7 +600,8 @@ def _price_asof_fields(as_of, src, *, ffilled_last: bool = False,
     _ff_from = _coerce_plain_date(ffilled_from)
     # QA MINOR-6：最後一根是補值 → 「是否最新」以**實際資料日**（補值沿用的那一天）判定。
     _basis = _ff_from if (ffilled_last and _ff_from is not None) else _as_of
-    _stale, _exp, _lag = PAL.assess_price_freshness(_basis, today=taipei_today())
+    _today = taipei_today()
+    _stale, _exp, _lag = PAL.assess_price_freshness(_basis, today=_today)
     _src = str(src) if src and str(src) in PAL.SOURCE_DISPLAY else None
     return {PAL.KEY_PRICE_AS_OF: _as_of,
             PAL.KEY_PRICE_SRC: _src,
@@ -609,14 +610,16 @@ def _price_asof_fields(as_of, src, *, ffilled_last: bool = False,
             PAL.KEY_FFILLED_LAST: bool(ffilled_last),
             PAL.KEY_FFILLED_FROM: _ff_from,
             PAL.KEY_PRICE_EXPECTED_DAY: _exp,
-            PAL.KEY_PRICE_LAG_DAYS: _lag}
+            PAL.KEY_PRICE_LAG_DAYS: _lag,
+            PAL.KEY_PRICE_EVALUATED_ON: _today}
 
 
 #: 拿不到價格時的非顯示鍵（全部 None／False；⛔ 不用今天代替）。
 _PRICE_ASOF_EMPTY: dict = {PAL.KEY_PRICE_AS_OF: None, PAL.KEY_PRICE_SRC: None,
                            PAL.KEY_IS_STALE: None, PAL.KEY_IS_FALLBACK: None,
                            PAL.KEY_FFILLED_LAST: False, PAL.KEY_FFILLED_FROM: None,
-                           PAL.KEY_PRICE_EXPECTED_DAY: None, PAL.KEY_PRICE_LAG_DAYS: None}
+                           PAL.KEY_PRICE_EXPECTED_DAY: None, PAL.KEY_PRICE_LAG_DAYS: None,
+                           PAL.KEY_PRICE_EVALUATED_ON: None}
 
 
 def _fetch_stock_metrics(ticker: str, *, failed: dict | None = None) -> dict:

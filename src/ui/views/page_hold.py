@@ -2251,9 +2251,10 @@ def _take_profit_asof_fact(station: StationReadout, *, state: str) -> list[tuple
     _exc_labels = {_l for _l, _ in _g.exceptions}
     _exc = [_p for _c, _p in _items if _c in _sat and PAL.price_asof_label(_p) in _exc_labels]
     _stale_n = sum(1 for _p in _exc if _p.is_stale is True)
+    # QA r2：兩位數檔數時仍須 ≤ 卡面上限 ⇒ 混合時縮成「（例外 14 檔，⚠ 11 檔）」（代號已在 ① 點名）。
     if _exc and _stale_n:
         _tail = (f"（{PAL.STALE_MARK} {_stale_n} 檔已點名）" if _stale_n == len(_exc)
-                 else f"（例外 {len(_exc)} 檔已點名，含{PAL.STALE_MARK} {_stale_n} 檔）")
+                 else f"（例外 {len(_exc)} 檔，⚠ {_stale_n} 檔）")
     elif _exc:
         _tail = f"（例外 {len(_exc)} 檔已點名）"
     else:

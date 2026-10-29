@@ -40,7 +40,7 @@ class TestLabels:
         _l = PAL.price_asof_label(_p(dt.date(2026, 10, 27), PAL.SRC_FINMIND_SDK))
         assert _l == "10/27｜備援來源：FinMind（盤中或收盤未確認）"
         assert PAL.price_asof_label(_p(WED, PAL.SRC_FINMIND_RAW)).count("備援來源：FinMind") == 1
-        assert "備援來源：Yahoo（預設參數）" in PAL.price_asof_label(_p(WED, PAL.SRC_YAHOO_FALLBACK))
+        assert "備援來源：Yahoo 預設（" in PAL.price_asof_label(_p(WED, PAL.SRC_YAHOO_FALLBACK))
 
     def test_stale_has_text_mark(self):
         _l = PAL.price_asof_label(_p(dt.date(2026, 10, 20)))
@@ -383,15 +383,24 @@ class TestHold:
 
 # ══════════════════════════ QA M1：卡面長度與代號完整 ══════════════════════════
 def _all_states():
+    """production 走得到的全部組合（個股：無補值；ETF：固定 yahoo_adj），含跨年（評估日 2026/1/2）。
+
+    ⚠️ 「補值＋備援／來源未提供」production 碰不到（BACKLOG `XV-ASOF-LEN-UNREACHABLE`），不在此列。"""
     import itertools
-    _d, _f = WED, dt.date(2026, 10, 24)
-    for _st, _src in itertools.product((True, False, None), (None, PAL.SRC_YAHOO_ADJ, PAL.SRC_FINMIND_SDK,
-                                                              PAL.SRC_FINMIND_RAW, PAL.SRC_YAHOO_FALLBACK)):
-        yield PAL.PriceAsOf(as_of=_d, src=_src, is_stale=_st, is_fallback=PAL.is_fallback_source(_src),
-                            expected_day=_d)
-    for _st, _ff, _fr in itertools.product((True, False, None), (False, True), (None, _f)):
-        yield PAL.PriceAsOf(as_of=_d, src=PAL.SRC_YAHOO_ADJ, is_stale=_st, is_fallback=False,
-                            ffilled_last=_ff, ffilled_from=_fr, expected_day=_d)
+    _jan = dt.date(2026, 1, 2)
+    for _today, _d, _f in ((WED, WED, dt.date(2026, 10, 24)),
+                           (_jan, dt.date(2025, 12, 31), dt.date(2025, 12, 24)),
+                           (_jan, _jan, dt.date(2025, 12, 30))):
+        for _st, _src in itertools.product((True, False, None),
+                                           (None, PAL.SRC_YAHOO_ADJ, PAL.SRC_FINMIND_SDK,
+                                            PAL.SRC_FINMIND_RAW, PAL.SRC_YAHOO_FALLBACK)):
+            yield PAL.PriceAsOf(as_of=_d, src=_src, is_stale=_st,
+                                is_fallback=PAL.is_fallback_source(_src),
+                                expected_day=_d, evaluated_on=_today)
+        for _st, _ff, _fr in itertools.product((True, False, None), (False, True), (None, _f)):
+            yield PAL.PriceAsOf(as_of=_d, src=PAL.SRC_YAHOO_ADJ, is_stale=_st, is_fallback=False,
+                                ffilled_last=_ff, ffilled_from=_fr, expected_day=_d,
+                                evaluated_on=_today)
     yield None
 
 
@@ -482,3 +491,44 @@ class TestBasisInExistingFold:
         _ro = V.BatchReadout(requested=True, rows=(_brow("2330", None),))
         _req = types.SimpleNamespace(tickers=("2330",), kind_filter=V.BATCH_FILTER_ALL, truncated=0)
         assert PAL.BASIS_USED_LABEL not in dict(V.build_batch_card(_ro, _req)[1])
+
+
+# ══════════════════════════ QA r2：跨年、⑤ 兩位數、依據逐組 ISO ══════════════════════════
+class TestQaRound2:
+    def test_cross_year_writes_year(self):
+        _jan = dt.date(2026, 1, 2)
+        _p0 = PAL.PriceAsOf(as_of=dt.date(2025, 12, 31), src=PAL.SRC_YAHOO_ADJ, is_stale=False,
+                            is_fallback=False, evaluated_on=_jan)
+        assert PAL.price_asof_label(_p0) == "2025/12/31｜Yahoo（盤中或收盤未確認）"
+        assert PAL.price_asof_label(_p0, today=dt.date(2025, 12, 31)).startswith("12/31｜")
+        _same = PAL.PriceAsOf(as_of=_jan, src=PAL.SRC_YAHOO_ADJ, is_stale=False, is_fallback=False,
+                              evaluated_on=_jan)
+        assert PAL.price_asof_label(_same).startswith("1/2｜")
+        # 第二個日期與第一個同年 → 只寫 M/D
+        _ff = PAL.PriceAsOf(as_of=dt.date(2025, 12, 31), src=PAL.SRC_YAHOO_ADJ, is_stale=False,
+                            is_fallback=False, ffilled_last=True, ffilled_from=dt.date(2025, 12, 30),
+                            evaluated_on=_jan)
+        assert PAL.price_asof_label(_ff).startswith("⚠ 含補值日（2025/12/31 沿用 12/30）")
+
+    def test_l3_carries_evaluated_on(self, _today):
+        from src.services import dividend_station_service as S
+        assert S._price_asof_fields(WED, PAL.SRC_YAHOO_ADJ)["price_evaluated_on"] == WED
+
+    def test_tp_tail_two_digit_counts_fit(self):
+        import src.ui.views.page_hold as H
+        _rows = ([_hrow(f"{2000 + _i}", _p()) for _i in range(40)]
+                 + [_hrow(f"{3000 + _i}", _p(dt.date(2026, 10, 20))) for _i in range(11)]
+                 + [_hrow(f"{4000 + _i}", _p(WED, PAL.SRC_FINMIND_SDK)) for _i in range(3)])
+        _st = H.StationReadout(requested=True, submitted=True, rows=tuple(_rows))
+        _tp = dict(H._take_profit_asof_fact(_st, state="live"))[H.TP_ASOF_FACT_KEY]
+        assert _tp == H.TP_ASOF_POINTER + "（例外 14 檔，⚠ 11 檔）"
+        assert len(_tp) <= PAL.FACE_MAX_CHARS
+        _all = H.StationReadout(requested=True, submitted=True, rows=tuple(
+            [_hrow(f"{2000 + _i}", _p()) for _i in range(20)]
+            + [_hrow(f"{3000 + _i}", _p(dt.date(2026, 10, 20))) for _i in range(14)]))
+        _tp2 = dict(H._take_profit_asof_fact(_all, state="live"))[H.TP_ASOF_FACT_KEY]
+        assert len(_tp2) <= PAL.FACE_MAX_CHARS and "14 檔" in _tp2
+
+    def test_basis_lists_iso_dates_per_group(self):
+        _f = dict(PAL.price_basis_facts_many([_p(), _p(), _p(dt.date(2026, 10, 20))]))
+        assert "最後一根 K：2026-10-28（2 檔）、2026-10-20（1 檔）" in _f[PAL.BASIS_DATE_LABEL]
