@@ -42,7 +42,7 @@ _PAGE = _ROOT / "src/ui/views/page_target.py"
 _SERVICE = _ROOT / "src/services/target_industry_service.py"
 
 #: 第一屏／各區禁用的工程字樣（客戶 UI-T 邊界 9）與已移除的舊指路句。
-ENGINEERING = ("葉1", "葉2", "線框", "鐵律", "接線揭露")
+ENGINEERING = ("葉1", "葉2", "線框", "鐵律", "接線揭露", "尚未接線", "只降階", "功能保留")
 DEAD_POINTERS = ("🔍 找標的", "🔬 查一檔", "🌍 市場環境", "🏦 ETF 分頁", "找標的", "查一檔", "本頁不重複掛載")
 
 
@@ -89,6 +89,25 @@ def _texts(at) -> list[str]:
 
 def _all_text(at) -> str:
     return "\n".join(_texts(at))
+
+
+def _matrix_df(at):
+    """產業矩陣現為單一 HTML 表格（桌機表格／手機卡片列同一份 DOM）→ 解析回 DataFrame；沒有則 None。"""
+    import html as _h
+
+    import pandas as pd
+    for _k, _t in _walk(at.main):
+        if _k == "Markdown" and 'class="ptg-mx-t"' in _t:
+            _cols = [_h.unescape(c) for c in re.findall(r"<th>(.*?)</th>", _t)]
+            _rows = [[_h.unescape(v) for v in re.findall(r"<td data-label=\"[^\"]*\">(.*?)</td>", r)]
+                     for r in re.findall(r"<tr>(<td.*?)</tr>", _t)]
+            return pd.DataFrame(_rows, columns=_cols)
+    return None
+
+
+def _has_download(at, label="💾 下載選股結果 CSV"):
+    """Streamlit 1.56 的 AppTest download_button 元素沒有 `.key` 屬性 ⇒ 改比 proto.label（語意不變：頁上有這顆下載鈕）。"""
+    return any(getattr(getattr(d, "proto", None), "label", None) == label for d in at.get("download_button"))
 
 
 def _new(monkeypatch, **kw):
@@ -158,6 +177,8 @@ class TestCoverage:
         _full(at)
         _txt = _all_text(at)
         _dfs = [list(d.value.columns) for d in at.dataframe]
+        _mx = _matrix_df(at)
+        assert _mx is not None
         for _item, _spec in COVERAGE.items():
             _kind, _, _arg = _spec.partition(":")
             if _kind == "multiselect":
@@ -171,7 +192,7 @@ class TestCoverage:
             elif _kind == "button":
                 assert any(b.label == _arg for b in at.button), _item
             elif _kind == "download":
-                assert any(getattr(d, "key", None) == _arg for d in at.get("download_button")), _item
+                assert _has_download(at), _item
             elif _kind == "df":
                 assert any(_arg in cols for cols in _dfs), _item
             else:
@@ -598,7 +619,7 @@ class TestScreening:
         at, _ = _new(monkeypatch)
         at.run()
         _click(at, F.ACTION_RUN_SCREEN_LABEL)
-        assert any(getattr(d, "key", None) == B.SS_CSV_BUTTON for d in at.get("download_button"))
+        assert _has_download(at)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -618,13 +639,15 @@ class TestMacroFilterNote:
 # ══════════════════════════════════════════════════════════════════
 class TestSectorMap:
     def _matrix(self, at):
-        return [d.value for d in at.dataframe if "產業" in list(d.value.columns) and "法人／籌碼" in list(d.value.columns)][0]
+        _m = _matrix_df(at)
+        assert _m is not None, "找不到產業矩陣"
+        return _m
 
     def test_map_is_gated_by_the_button(self, monkeypatch):
         at, calls = _new(monkeypatch)
         at.run()
         assert calls["flow"] == 0 and calls["heatmap"] == 0
-        assert not [d for d in at.dataframe if "法人／籌碼" in list(d.value.columns)]
+        assert _matrix_df(at) is None
         _click(at, F.ACTION_LOAD_MAP_LABEL)
         assert calls["flow"] == 1 and calls["heatmap"] == 1
 
@@ -688,7 +711,7 @@ class TestSectorMap:
         _click(at, F.ACTION_LOAD_MAP_LABEL)
         assert not at.error, [e.value for e in at.error]
         assert "尚未產生" in _all_text(at)
-        assert not [d for d in at.dataframe if "法人／籌碼" in list(d.value.columns)]
+        assert _matrix_df(at) is None
 
     def test_flow_failure_is_red_and_heatmap_failure_expands(self, monkeypatch):
         at, _ = _new(monkeypatch, flow=U.make_flow(error="OSError('壞檔')"), heatmap=U.make_heatmap(failed=True))
@@ -880,7 +903,7 @@ class TestUnwired:
         at, _ = _new(monkeypatch)
         at.run()
         _texts = _texts_before_zone1(at)
-        assert not any("尚未接上" in t for t in _texts)
+        assert not any(B.UNCOVERED_TITLE in t for t in _texts)
 
 
 # ══════════════════════════════════════════════════════════════════

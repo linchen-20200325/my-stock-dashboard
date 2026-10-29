@@ -36,12 +36,19 @@ class TickerSectorMap:
 
 
 def get_ticker_sector_map() -> TickerSectorMap:
-    """讀產業對映。reader 拋例外 → 原樣往上拋（§1，由 L5 loader 轉成可見的紅態，不吞）。"""
+    """讀產業對映。
+
+    · 板塊資金快取**壞檔**（strict）→ 例外原樣往上拋（§1，由 L5 轉成「⬜ 產業對映尚未產生」，不吞）；
+    · 快取尚未產生（`ok=False`）或 `ticker_sector.json` 缺／壞／空（reader 對這三種都回 `{}`）→ `available=False`
+      ＝「對映本身沒有」，與「對映在、只是查無此股」（`available=True` 且代碼不在 `mapping`）是兩件事，呼叫端文案不同。
+    """
     from src.data.sector_flow.reader import read_sector_flow_cache
 
-    _view = read_sector_flow_cache()
+    _view = read_sector_flow_cache(strict=True)
     if not isinstance(_view, dict) or not _view.get("ok"):
         _reason = str((_view or {}).get("reason") or "") if isinstance(_view, dict) else ""
         return TickerSectorMap(available=False, mapping={}, reason=_reason)
     _m = _view.get("ticker_sector")
-    return TickerSectorMap(available=True, mapping=dict(_m) if isinstance(_m, dict) else {})
+    if not isinstance(_m, dict) or not _m:
+        return TickerSectorMap(available=False, mapping={}, reason="ticker_sector.json 缺、損壞或內容為空")
+    return TickerSectorMap(available=True, mapping=dict(_m))

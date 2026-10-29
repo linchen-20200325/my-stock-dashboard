@@ -78,14 +78,18 @@ def make_heatmap(*, failed: bool = False) -> F.HeatmapReadout:
                             figure=None, single_stock_proxy=True, disclosure="台股側每個類股其實是一檔代表股")
 
 
-def make_stock(*, score: float | None = 82.0, fail_items: tuple[str, ...] = ("負債比",)) -> I.StockReadout:
+def make_stock(*, score: float | None = 82.0, fail_items: tuple[str, ...] = ("負債比",),
+               grade: str | None = None) -> I.StockReadout:
     return I.StockReadout(
-        requested=True, score_pct=score, grade="A" if score is not None else "", headline="體質良好",
+        requested=True, score_pct=score, grade=(grade if grade is not None else ("A" if score is not None else "")),
+        headline="體質良好",
         fail_items=fail_items, trend_verdict={"verdict": "跨季穩定"}, name="台積電", price=900.0,
         price_asof=I.PAL.PriceAsOf(as_of=_dt.date(2026, 10, 28), src="yfinance"))
 
 
-def make_chips(*, ok: bool = True) -> I.ChipsView:
+def make_chips(*, ok: bool = True, error: str = "") -> I.ChipsView:
+    if error:
+        return I.ChipsView(requested=True, error=error, days_loaded=250)
     if ok:
         return I.ChipsView(requested=True, signal="🔥 大戶吸籌", concentration=6.3, days=20, pos_days=14,
                            rows=250, days_loaded=250, outlier_verdict="normal", outlier_ratio=0.2,
@@ -112,7 +116,8 @@ def make_etf() -> I.EtfReadout:
 
 def install(monkeypatch: Any, calls: Calls, *, screen_error: str = "", flow: F.SectorFlowReadout | None = None,
             heatmap: F.HeatmapReadout | None = None, chips_ok: bool = True, stock_score: float | None = 82.0,
-            sector_error: bool = False) -> None:
+            sector_error: bool = False, chips_error: str = "",
+            pe_failed_markets: tuple[str, ...] = (), stock_grade: str | None = None) -> None:
     """把所有 loader 換成計次假貨。`calls[name]` 就是該 loader 被呼叫的次數。"""
     def _screen(req):
         calls["screen"] += 1
@@ -120,7 +125,7 @@ def install(monkeypatch: Any, calls: Calls, *, screen_error: str = "", flow: F.S
 
     def _pe():
         calls["pe"] += 1
-        return dict(PE), {c[0]: c[1] for c in CANDIDATES}, "", ()
+        return dict(PE), {c[0]: c[1] for c in CANDIDATES}, "", tuple(pe_failed_markets)
 
     def _sector():
         calls["sector"] += 1
@@ -138,7 +143,7 @@ def install(monkeypatch: Any, calls: Calls, *, screen_error: str = "", flow: F.S
 
     def _stock(verdict):
         calls["stock"] += 1
-        return make_stock(score=stock_score)
+        return make_stock(score=stock_score, grade=stock_grade)
 
     def _val(verdict, stock):
         calls["valuation"] += 1
@@ -146,7 +151,7 @@ def install(monkeypatch: Any, calls: Calls, *, screen_error: str = "", flow: F.S
 
     def _chips(verdict, req):
         calls["chips"] += 1
-        return make_chips(ok=chips_ok)
+        return make_chips(ok=chips_ok, error=chips_error)
 
     def _profit(verdict):
         calls["profit"] += 1

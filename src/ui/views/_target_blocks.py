@@ -23,9 +23,11 @@
 """
 from __future__ import annotations
 
+import html as _html
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import streamlit as st
@@ -36,6 +38,7 @@ from shared.fundamental_prescreen_thresholds import (
     EPS_MIN,
     PRESCREEN_REQUIRED_PASSES,
 )
+from shared.health_thresholds import HEALTH_GRADE_B_MIN
 from shared.secret_scrub import scrub_secrets
 from shared.sector_flow_thresholds import (
     QUADRANT_INSUFFICIENT,
@@ -49,6 +52,7 @@ from shared.sector_flow_thresholds import (
     canonical_sector,
     format_unavailable_caption,
 )
+from shared.ttls import TTL_1DAY, TTL_1HOUR, TTL_30MIN
 from shared.ui_state import UI_LIVE
 from src.ui.tabs.tab_today import scrub_state_glyphs
 from src.ui.views import page_find as F
@@ -80,7 +84,7 @@ HEALTH_CHIP: str = "⬜ 資料狀態：尚未彙總"
 AI_PLACEHOLDER: str = "🤖 AI 投資總結：⬜ 尚未提供"
 SEARCH_PLACEHOLDER: str = "輸入代碼（例：2330 或 00878）"
 ADV_LABEL: str = "進階選項（判型・期間・均線）"
-MA_ONLY_DISPLAY_NOTE: str = "均線勾選目前只會顯示，不影響任何結論"
+MA_ONLY_DISPLAY_NOTE: str = "僅顯示：勾選只會回顯在判型結果；K 線與均線圖新版尚未接上，不影響任何結論。"
 MA_GROUP_LABEL: str = "**均線（僅顯示）**"
 PERIOD_NOTE: str = "期間只決定籌碼載入多長的日線；近 20 日的判讀窗由上游決定，改期間不會改變籌碼結論。"
 REAL_PRICE_NOTE: str = "K 線一律用還原價（已還原除權息）。"
@@ -88,6 +92,7 @@ REAL_PRICE_NOTE: str = "K 線一律用還原價（已還原除權息）。"
 ZONE1_TITLE: str = "第一區｜產業機會"
 ZONE1_SAY: str = "先找正在變強的產業，再從產業裡找公司；避免只看單一股票短線漲跌。"
 ZONE1_SORT_NOTE: str = "排序依據：法人資金動能，非產業趨勢。"
+#: F9：這段說明收進第一區的「🔍 查看依據」（規則欄），首屏只留客戶原句＋排序依據。
 ZONE1_NO_TREND_NOTE: str = "產業趨勢為研究中，尚未定義；本表不判斷產業興衰，沒有正式資料的維度一律顯示 ⬜，不補值、不由 AI 補。"
 ZONE1_IDLE: str = "按下「🗺️ 載入板塊地圖」後顯示產業資料（在按之前不會取數）。"
 MATRIX_COLS: tuple[str, ...] = ("產業", "基本面成長", "相對強弱", "法人／籌碼", "估值", "資料可信度")
@@ -121,24 +126,25 @@ ZONE3_TITLE: str = "第三區｜單一股票"
 ZONE3_IDLE: str = "還沒選標的：在上方輸入代碼，或在候選表選一檔。"
 EPS_BLOCK: str = "EPS／營收"
 EPS_PLACEHOLDER: str = "⬜ 趨勢圖尚未建置"
-TREND_BLOCK: str = "財報趨勢"
+TREND_BLOCK: str = "財報體檢（健康度）"
 VALUATION_BLOCK: str = "估值（357 存股估值）"
 CHIPS_BLOCK: str = "籌碼"
 RISK_BLOCK: str = "風險"
-RISK_PLACEHOLDER: str = "⬜ 個股風險指標尚未接線"
+RISK_PLACEHOLDER: str = "⬜ 個股風險指標尚未提供"
 RISK_NOTE: str = "目前只有財報體檢未通過項目與籌碼的單日爆量檢查，分別列在「為什麼不能買／資料不足」與「籌碼」。"
 WORTH_BLOCK: str = "為什麼值得看"
 WORTH_EMPTY: str = "⬜ 目前沒有可列的命中項目（可能尚未載入選股結果，或資料不足）"
-WORTH_NOTE: str = "只列已命中的既有檢查，不構成買賣判斷。"
+WORTH_NOTE: str = "只列已命中的既有檢查（通過／達標者），不構成買賣判斷。"
 WHY_NOT_BLOCK: str = "為什麼不能買／資料不足"
 FACTS_ONLY_NOTE: str = "僅列事實，不下買賣判斷"
 RESEARCH_ONLY_NOTE: str = "本頁只呈現研究資訊，不提供交易操作"
 WHY_NOT_EMPTY: str = "⬜ 目前沒有可列的未通過項目或資料缺漏"
 PROFIT_HEADER: str = "💰 獲利能力診斷"
+PROFIT_CAPTION: str = "缺值是灰的「資料缺漏」，不是紅的「辛苦生意」。"
 ETF_HEADER: str = "ETF"
 UNKNOWN_HINT: str = "這個代碼系統無法判定是個股或 ETF；可展開上方「進階選項」手動指定判型後再載入。"
 
-ADVANCED_EXPANDER: str = "進階分析（預設收合；功能保留，只降階）"
+ADVANCED_EXPANDER: str = "進階分析"
 BATCH_TITLE: str = "多檔比較（可混貼）"
 UNCOVERED_TITLE: str = "仍未覆蓋的功能"
 DEFAULT_MODE_NOT_YET: str = "新版尚未提供，後續批次處理"
@@ -152,6 +158,7 @@ UNCOVERED_ITEMS: tuple[tuple[str, str], ...] = (
     ("用名稱搜尋", "目前只能輸入代碼"),
     ("帶入我的持股", "新版尚未接上"),
 )
+UNCOVERED_LEAD: str = "這些功能舊畫面有、新畫面還沒接上，本次不會出現在這一頁："
 UNCOVERED_FOOT: str = f"以上功能：{DEFAULT_MODE_NOT_YET}。這不是資料壞了，也不是被刪除。"
 BATCH_NOTE: str = ("批次表的每一列走的是與單檔同一支取數，所以個股給財報體檢分數、ETF 給折溢價／配息／同儕。"
                    "估值（357）與籌碼不在批次表裡 —— 一次 20 檔會把等待時間變成好幾倍，這是刻意不做；"
@@ -195,6 +202,48 @@ def guard(name: str, fn: Callable[[], None]) -> None:
         st.error(f"🔴 「{name}」這一區畫不出來（其他區照常）：{_err or F.UNKNOWN_ERROR_TEXT}", icon="🔴")
 
 
+TAIPEI = timezone(timedelta(hours=8))
+#: 記住的結果的欄數：(世代, 結果, 載入時間)。
+_MEMO_LEN = 3
+
+
+def now_taipei() -> datetime:
+    """台北時間現在。⚠️ 測試以 `monkeypatch.setattr(B, "now_taipei", ...)` 注入假時鐘（呼叫端查模組屬性）。"""
+    return datetime.now(TAIPEI)
+
+
+#: 各區「記住的結果」多久後改寫「可能已過期」。TTL 取 `shared/ttls` 的既有常數（對應該區上游最短的 L1 快取）：
+#: 選股＝本益比／季快照日頻；地圖＝熱力圖 30 分鐘快取；單檔、批次＝行情／財報 1 小時。
+FRESH_TTL_SEC: dict[str, int] = {"screen": TTL_1DAY, "map": TTL_30MIN, "single": TTL_1HOUR, "batch": TTL_1HOUR}
+RELOAD_LABEL: dict[str, str] = {"screen": "🎯 開始選股", "map": "🗺️ 載入板塊地圖",
+                                "single": "🔍 載入完整分析", "batch": "🚀 批次分析"}
+
+
+def freshness_line(fetched_at: datetime, now: datetime, ttl_sec: int, reload_label: str) -> str:
+    """§2.4：記住的結果不得靜默過期 —— 一行灰字講「載入於幾點」與「怎麼重新載入」；超過 TTL 改寫「可能已過期」。"""
+    _hm = fetched_at.astimezone(TAIPEI).strftime("%H:%M")
+    _tail = f"（本次工作階段內不會自動更新；再按「{reload_label}」重新載入）"
+    _aged = (now - fetched_at).total_seconds() > ttl_sec
+    return f"此結果載入於 {_hm}，可能已過期{_tail}" if _aged else f"此結果載入於 {_hm}{_tail}"
+
+
+def memo_loaded_at(session: Any, slot: str) -> datetime | None:
+    _cur = session.get(f"{SS_MEMO_PREFIX}{slot}")
+    if isinstance(_cur, tuple) and len(_cur) == _MEMO_LEN and isinstance(_cur[2], datetime):
+        return _cur[2]
+    return None
+
+
+#: slot → 該區的世代計數器（只有使用者真的要求過，才有「載入於」可講；冷啟動的空殼不算）。
+_SLOT_COUNTER: dict[str, str] = {"screen": SS_GEN_SCREEN, "map": SS_GEN_MAP, "single": SS_GEN_TICKER, "batch": SS_GEN_BATCH}
+
+
+def render_freshness(session: Any, slot: str) -> None:
+    _at = memo_loaded_at(session, slot)
+    if _at is not None and own_gen(session, _SLOT_COUNTER[slot]) > 0:
+        st.caption(freshness_line(_at, now_taipei(), FRESH_TTL_SEC[slot], RELOAD_LABEL[slot]))
+
+
 def memoized(session: Any, slot: str, gen: Any, compute: Callable[[], Any]) -> Any:
     """依「使用者要求的世代」記住結果：同世代 ⇒ 不再呼叫 `compute`（不論成功或失敗），新世代 ⇒ 重算。
 
@@ -203,16 +252,37 @@ def memoized(session: Any, slot: str, gen: Any, compute: Callable[[], Any]) -> A
     """
     _key = f"{SS_MEMO_PREFIX}{slot}"
     _cur = session.get(_key)
-    if isinstance(_cur, tuple) and len(_cur) == 2 and _cur[0] == gen:
+    if isinstance(_cur, tuple) and len(_cur) == _MEMO_LEN and _cur[0] == gen:
         return _cur[1]
     _val = compute()
-    session[_key] = (gen, _val)
+    session[_key] = (gen, _val, now_taipei())
     return _val
 
 
 def _gen(session: Any, counter_key: str, applied_key: str) -> tuple[int, str]:
     """世代 ＝（計數器, 已套用值的內容）：兩者任一變就算新一次要求。"""
     return int(session.get(counter_key, 0) or 0), repr(session.get(applied_key))
+
+
+def own_gen(session: Any, counter_key: str) -> int:
+    return int(session.get(counter_key, 0) or 0)
+
+
+def own_inspect_request(session: Any) -> Any:
+    """本頁的單檔要求：**只認本頁 gate 寫入點的世代** —— legacy 殘留的 `_p03_applied_ticker` 不會觸發取數。"""
+    return I.applied_inspect_request(session) if own_gen(session, SS_GEN_TICKER) > 0 else I.InspectRequest(submitted=False)
+
+
+def own_screen_request(session: Any) -> Any:
+    return F.applied_screen_request(session) if own_gen(session, SS_GEN_SCREEN) > 0 else F.ScreenRequest(submitted=False)
+
+
+def own_batch_request(session: Any) -> Any:
+    return I.applied_batch_request(session) if own_gen(session, SS_GEN_BATCH) > 0 else I.BatchRequest(submitted=False)
+
+
+def own_map_requested(session: Any) -> bool:
+    return F.map_requested(session) and own_gen(session, SS_GEN_MAP) > 0
 
 
 def bump(session: Any, counter_key: str) -> None:
@@ -262,7 +332,7 @@ def render_basis(basis: Basis) -> None:
 # ══════════════════════════════════════════════════════════════════
 # 單檔入口（搜尋框＋進階選項；同一個 form、一顆送出鈕）
 # ══════════════════════════════════════════════════════════════════
-def write_applied_ticker(session: Any, ticker: Any) -> None:
+def write_applied_ticker(session: Any, ticker: Any, *, kind_choice: Any = None) -> None:
     """**唯一**寫「已套用代碼」（單檔 gate 鍵 `_p03_applied_ticker`）的地方。
 
     呼叫者只有兩個（`tests/test_uit_target_page.py::TestGateWritePoints` 以 AST 白名單釘住）：
@@ -275,7 +345,7 @@ def write_applied_ticker(session: Any, ticker: Any) -> None:
         "period_days": int(session.get(I.SS_PERIOD_WIDGET, I.DEFAULT_PERIOD_DAYS)),
         "mas": [_m for _m in I.MA_OPTIONS
                 if session.get(f"{I.SS_MA_WIDGET_PREFIX}{_m}", _m in I.DEFAULT_MAS)],
-        "kind_choice": session.get(I.SS_KIND_WIDGET, I.KIND_CHOICE_AUTO),
+        "kind_choice": (session.get(I.SS_KIND_WIDGET, I.KIND_CHOICE_AUTO) if kind_choice is None else kind_choice),
     }
     bump(session, SS_GEN_TICKER)
 
@@ -290,7 +360,8 @@ def on_pick_click() -> None:
     _code = str(_s.get(SS_PICK_WIDGET) or "").strip()
     if not _code:
         return
-    write_applied_ticker(_s, _code)
+    # 判型一律 auto：進階選項裡殘留的「強制當 ETF」是為上一個代碼設的，不得套到候選股身上（期間／均線沿用）。
+    write_applied_ticker(_s, _code, kind_choice=I.KIND_CHOICE_AUTO)
     _s[I.SS_TICKER_WIDGET] = _code
 
 
@@ -311,7 +382,7 @@ def render_search_form(session: Any) -> None:
                 for _ma, _col in zip(_chunk, _columns):
                     with _col:
                         st.checkbox(f"MA{_ma}", value=(_ma in I.DEFAULT_MAS),
-                                    key=f"{I.SS_MA_WIDGET_PREFIX}{_ma}", help="僅顯示，不影響任何結論")
+                                    key=f"{I.SS_MA_WIDGET_PREFIX}{_ma}", help=MA_ONLY_DISPLAY_NOTE)
         _submitted = st.form_submit_button(I.ACTION_LOAD_INSPECT_LABEL, type="primary")
     if _submitted:
         handle_ticker_submit(session)
@@ -344,7 +415,7 @@ def _try(errors: list, name: str, fn: Callable[[], Any]) -> Any:
 
 
 def load_single(session: Any) -> SingleBundle:
-    _req = I.applied_inspect_request(session)
+    _req = own_inspect_request(session)
     if not _req.submitted:
         # 冷啟動：沒有人要求 ⇒ 連 loader 都不呼叫（比 loader 自己的 `requested=False` 早退更嚴）。
         return SingleBundle(req=_req, verdict=I.KindVerdict(requested=False))
@@ -433,6 +504,32 @@ def build_industry_matrix(sectors: Sequence[Any]) -> tuple[MatrixRow, ...]:
     return tuple(_r for _, _, _r in _rows)
 
 
+#: F1：同一份 HTML 表格，窄螢幕（≤768px）以 CSS 變成「每產業一張卡片列」（每格前面帶欄名），桌機維持表格。
+#: 單一 DOM（不是畫兩份）；樣式只掛在 `.ptg-mx` 底下，不影響其他頁。
+MATRIX_CSS: str = (
+    ".ptg-mx-t{width:100%;border-collapse:collapse;font-size:.9rem}"
+    ".ptg-mx-t th,.ptg-mx-t td{border-bottom:1px solid rgba(128,128,128,.35);padding:.35rem .5rem;"
+    "text-align:left;vertical-align:top;overflow-wrap:anywhere}"
+    "@media (max-width:768px){"
+    ".ptg-mx-t thead{display:none}"
+    ".ptg-mx-t,.ptg-mx-t tbody,.ptg-mx-t tr,.ptg-mx-t td{display:block;width:100%;box-sizing:border-box}"
+    ".ptg-mx-t tr{border:1px solid rgba(128,128,128,.45);border-radius:8px;margin:.5rem 0;padding:.3rem .6rem}"
+    ".ptg-mx-t td{border:0;padding:.15rem 0}"
+    ".ptg-mx-t td::before{content:attr(data-label) \"：\";font-weight:600}}")
+
+
+def matrix_html(rows: Sequence[MatrixRow]) -> str:
+    """矩陣 → 單行 HTML（無空白行，免得 CommonMark 在中間截斷）。所有格子先 escape。"""
+    _e = lambda t: _html.escape(str(t), quote=True)   # noqa: E731
+    _head = "".join(f"<th>{_e(c)}</th>" for c in MATRIX_COLS)
+    _body = "".join(
+        "<tr>" + "".join(f'<td data-label="{_e(c)}">{_e(v)}</td>'
+                         for c, v in zip(MATRIX_COLS, (r.sector, r.fundamentals, r.strength, r.flow,
+                                                       r.valuation, r.trust), strict=True)) + "</tr>"
+        for r in rows)
+    return f'<style>{MATRIX_CSS}</style><div class="ptg-mx"><table class="ptg-mx-t"><thead><tr>{_head}</tr></thead><tbody>{_body}</tbody></table></div>'
+
+
 @dataclass(frozen=True)
 class MapBundle:
     flow: Any
@@ -477,12 +574,11 @@ def _render_figure(draw: Callable[[], None], label: str) -> None:
 def render_zone_industry(session: Any) -> None:
     section_header(ZONE1_TITLE, ZONE1_SAY)
     st.caption(ZONE1_SORT_NOTE)
-    st.caption(ZONE1_NO_TREND_NOTE)
     # 板塊地圖的**唯一** gate 寫入點（單顆 st.button，不在 form 內）。
     if st.button(F.ACTION_LOAD_MAP_LABEL, key=F.SS_MAP_BUTTON, type="primary"):
         session[F.SS_MAP_REQUESTED] = True
         bump(session, SS_GEN_MAP)
-    if not F.map_requested(session):
+    if not own_map_requested(session):
         st.caption(ZONE1_IDLE)
         render_basis(basis_industry(None))
         return
@@ -495,9 +591,9 @@ def render_zone_industry(session: Any) -> None:
     else:
         _matrix = build_industry_matrix(_flow.sectors)
         if _matrix:
-            st.dataframe([_r.as_record() for _r in _matrix], hide_index=True, width="stretch")
+            st.markdown(matrix_html(_matrix), unsafe_allow_html=True)
         if _flow.stale:
-            st.caption("⚠️ 資料過期：畫的是最後一次成功凍結的快照"
+            st.caption("⚠️ 資料過期（載入當下判定）：畫的是最後一次成功凍結的快照"
                        + (f"（{_md_safe(_flow.stale_reason)}）" if _flow.stale_reason else "") + "。")
         if _flow.tpex_complete is not True:
             st.caption(SECTOR_FLOW_TWSE_ONLY_NOTE)
@@ -526,6 +622,7 @@ def render_zone_industry(session: Any) -> None:
                         with _col:
                             st.markdown(f"**{_q}**　{_n} 個板塊")
             st.caption(F.SECTOR_FLOW_AXIS_NOTE)
+    render_freshness(session, "map")
     render_basis(basis_industry(_flow))
 
 
@@ -533,7 +630,8 @@ def basis_industry(flow: Any) -> Basis:
     if flow is None or not getattr(flow, "requested", False):
         return Basis(
             sources="三大法人資金流快取（板塊資金潮汐）；產業分類用官方產業別。尚未載入。",
-            as_of="尚未載入", rule="尚未載入；載入後以近 N 日累計淨流入與動能變化分象限，不做綜合強弱分數。",
+            as_of="尚未載入",
+            rule=f"尚未載入；載入後以近 N 日累計淨流入與動能變化分象限，不做綜合強弱分數。{ZONE1_NO_TREND_NOTE}",
             missing="基本面成長、相對強弱（價格）、估值：尚未建置；其餘待載入後列出。",
             confidence="尚未載入")
     if not flow.ok:
@@ -546,7 +644,7 @@ def basis_industry(flow: Any) -> Basis:
         sources="三大法人資金流快取（板塊資金潮汐）；產業分類用官方產業別",
         as_of=(flow.updated_at or "⬜ 未提供"),
         rule=(f"近 {WINDOW_X} 個交易日累計淨流入與動能變化 → 漲潮／輪動／退潮／觀望；"
-              "交易日不足者標「資料不足」。本表不做綜合強弱分數。"),
+              f"交易日不足者標「資料不足」。本表不做綜合強弱分數。{ZONE1_NO_TREND_NOTE}"),
         missing=("基本面成長、相對強弱（價格）、估值：尚未建置"
                  + (f"；窗口內缺值的板塊：{'、'.join(flow.unavailable)}" if flow.unavailable else "")),
         confidence=(f"上櫃資料完整：{_tp}；資料過期：{'是' if flow.stale else '否'}；"
@@ -605,6 +703,8 @@ class ScreenBundle:
     sector_error: str = ""
     pe_map: Mapping | None = None
     pe_failed: bool = False
+    #: 第二次讀本益比時 L1 回報「本輪沒給出任何有效本益比」的市場（`'上市 TWSE'`／`'上櫃 TPEX'`）。
+    pe_failed_markets: tuple[str, ...] = ()
 
 
 def _load_screen_bundle(req: Any) -> ScreenBundle:
@@ -630,20 +730,21 @@ def _load_screen_bundle(req: Any) -> ScreenBundle:
     # 選股那一輪確定沒拿到本益比（pe_n 為 None／0）⇒ 不再重打（失敗不被轟炸）。
     _pe_map = None
     _pe_failed = True
+    _pe_fm: tuple[str, ...] = ()
     if _result.pe_n:
         try:
             _m, _n, _err, _fm = F._load_pe_name_maps()
         except Exception as _e:  # noqa: BLE001 — 估值欄轉 ⬜，不拖垮候選表
             print(f"[views/page_target] 本益比再讀失敗：{_e!r}")
-            _m, _err = None, repr(_e)
+            _m, _err, _fm = None, repr(_e), ()
         if _m is not None and not _err:
-            _pe_map, _pe_failed = _m, False
+            _pe_map, _pe_failed, _pe_fm = _m, False, tuple(_fm or ())
     return ScreenBundle(req=req, result=_result, sector=_sector, sector_error=_sec_err,
-                        pe_map=_pe_map, pe_failed=_pe_failed)
+                        pe_map=_pe_map, pe_failed=_pe_failed, pe_failed_markets=_pe_fm)
 
 
 def screen_bundle(session: Any) -> ScreenBundle:
-    _req = F.applied_screen_request(session)
+    _req = own_screen_request(session)
     return memoized(session, "screen", _gen(session, SS_GEN_SCREEN, F.SS_APPLIED_SCREEN),
                     lambda: _load_screen_bundle(_req))
 
@@ -651,7 +752,7 @@ def screen_bundle(session: Any) -> ScreenBundle:
 def peek_screen_bundle(session: Any) -> ScreenBundle | None:
     """只讀：第二區已記住的選股結果（同世代才算）；沒有就 None。⛔ 不取數、不觸發選股。"""
     _cur = session.get(f"{SS_MEMO_PREFIX}screen")
-    if (isinstance(_cur, tuple) and len(_cur) == 2
+    if (isinstance(_cur, tuple) and len(_cur) == _MEMO_LEN
             and _cur[0] == _gen(session, SS_GEN_SCREEN, F.SS_APPLIED_SCREEN)
             and isinstance(_cur[1], ScreenBundle)):
         return _cur[1]
@@ -702,7 +803,8 @@ def build_candidate_rows(bundle: ScreenBundle, single: SingleBundle | None) -> l
             _pe = PE_FAILED_CELL
         else:
             _pv = _fmt_f(bundle.pe_map.get(_code), 1)
-            _pe = _pv if _pv is not None else PE_NOT_PROVIDED_CELL
+            # 某個市場本輪整個沒給本益比 ⇒ 缺的代碼可能就是那個市場的 ⇒ 寫「取不到」，不寫「未提供」（兩者不是一件事）。
+            _pe = _pv if _pv is not None else (PE_FAILED_CELL if bundle.pe_failed_markets else PE_NOT_PROVIDED_CELL)
         _out.append({
             "標的": f"{_code} {_name}".strip(),
             "產業": _ind,
@@ -729,10 +831,11 @@ def render_zone_candidates(session: Any) -> None:
     _card, _facts = F.build_screen_result_card(_sb.result, _sb.req)
     F._render_one(_card, _facts)
     if _card.state != UI_LIVE:
+        render_freshness(session, "screen")
         render_basis(basis_candidates(_sb))
         return
     st.caption("本次因子：" + (" · ".join(_sb.result.hits) if _sb.result.hits else "僅基本面四項全過"))
-    _single = single_bundle(session) if I.applied_inspect_request(session).submitted else None
+    _single = single_bundle(session) if own_inspect_request(session).submitted else None
     _records = build_candidate_rows(_sb, _single)
     st.dataframe(_records, hide_index=True, width="stretch")
     st.caption(PE_COL_NOTE)
@@ -755,6 +858,7 @@ def render_zone_candidates(session: Any) -> None:
                      key=SS_PICK_WIDGET)
         st.button(PICK_BUTTON_LABEL, key=SS_PICK_BUTTON, on_click=on_pick_click)
         st.caption(PICK_NOTE)
+    render_freshness(session, "screen")
     render_basis(basis_candidates(_sb))
 
 
@@ -798,18 +902,17 @@ def picked_row(sb: ScreenBundle | None, code: str) -> Mapping | None:
 
 
 def worth_facts(single: SingleBundle, pick: Mapping | None) -> list[str]:
-    """「為什麼值得看」：只列**已命中的既有檢查**（事實），不產生新語意。"""
+    """「為什麼值得看」：只列**已通過／達標**的既有檢查（事實），不產生新語意、不列低分。
+
+    · 入選本次選股 ＝ 通過基本面四項初篩（候選列存在即成立）；
+    · 財報體檢綜合分 **≥ `HEALTH_GRADE_B_MIN`**（L0 既有等第下界，不另立門檻）才列。分數與各因子百分位分留在候選表／健康度卡。
+    """
     _out: list[str] = []
     if pick is not None:
-        _sc = _fmt_f(pick.get("綜合分"))
-        _head = "入選本次選股（通過基本面四項初篩）"
-        _out.append(_head + (f"，綜合分 {_sc}" if _sc is not None else ""))
-        for _col in ("估值分", "EPS分", "缺貨分", "RS分", "跨季分"):
-            _v = _fmt_f(pick.get(_col))
-            if _v is not None:
-                _out.append(f"{_col} {_v}")
+        _out.append("入選本次選股（通過基本面四項初篩）")
     _st = single.stock
-    if _st is not None and _st.score_pct is not None and not _st.error and not _st.health_error:
+    if (_st is not None and _st.score_pct is not None and not _st.error and not _st.health_error
+            and _st.score_pct >= HEALTH_GRADE_B_MIN):
         _s = f"財報體檢綜合分 {_fmt_f(_st.score_pct, 0)} / 100" + (f"（{_st.grade} 級）" if _st.grade else "")
         _out.append(_s + ("；沒有不及格項目" if not _st.fail_items else ""))
     return _out
@@ -907,7 +1010,7 @@ def render_stock_blocks(single: SingleBundle, sb: ScreenBundle | None) -> None:
     st.caption(RESEARCH_ONLY_NOTE)
 
     if single.profit is not None:
-        section_header(PROFIT_HEADER, "缺值是灰的「資料缺漏」，不是紅的「辛苦生意」。")
+        section_header(PROFIT_HEADER, PROFIT_CAPTION)
         for _chunk, _columns in grid(tuple(I.build_profit_cards(single.profit)), MAX_COLS):
             for _built, _col in zip(_chunk, _columns):
                 with _col:
@@ -948,7 +1051,7 @@ def basis_single(single: SingleBundle) -> Basis:
 
 def render_zone_single(session: Any, sb: ScreenBundle | None) -> None:
     section_header(ZONE3_TITLE)
-    if not I.applied_inspect_request(session).submitted:
+    if not own_inspect_request(session).submitted:
         st.caption(ZONE3_IDLE)
         return
     _single = single_bundle(session)
@@ -967,6 +1070,7 @@ def render_zone_single(session: Any, sb: ScreenBundle | None) -> None:
         # 沿用既有灰卡原樣（v2 短句表與 Note 原文綁定，改字會讓卡面轉紅）；指路另補一行白話。
         _render_built(I.build_unknown_card(_v))
         st.caption(UNKNOWN_HINT)
+    render_freshness(session, "single")
     render_basis(basis_single(_single))
 
 
@@ -1002,11 +1106,12 @@ def _load_batch(req: Any) -> Any:
 def render_batch(session: Any) -> None:
     st.markdown(f"**{BATCH_TITLE}**")
     render_batch_form(session)
-    _req = I.applied_batch_request(session)
+    _req = own_batch_request(session)
     _readout = memoized(session, "batch", _gen(session, SS_GEN_BATCH, I.SS_APPLIED_BATCH),
                         lambda: _load_batch(_req))
     _card, _facts, _signal = I.build_batch_card(_readout, _req)
     I._render_one((_card, _facts, _signal))
+    render_freshness(session, "batch")
     if _card.state != UI_LIVE:
         return
     _rows = I.visible_batch_rows(_readout, _req)
@@ -1048,7 +1153,7 @@ def render_batch(session: Any) -> None:
 
 def render_uncovered() -> None:
     st.markdown(f"**{UNCOVERED_TITLE}**")
-    st.caption("這些功能舊畫面有、新畫面還沒接上，本次不會出現在這一頁：")
+    st.caption(UNCOVERED_LEAD)
     st.markdown("\n".join(f"- **{_k}**：{_v}" for _k, _v in UNCOVERED_ITEMS))
     st.caption(UNCOVERED_FOOT)
 
