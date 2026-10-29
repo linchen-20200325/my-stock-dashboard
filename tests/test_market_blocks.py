@@ -328,7 +328,7 @@ class TestWaterAndBasis:
         _bases = [B.basis_risks(_r) for _r in _states]
         _bases += [B.basis_water(None, ""), B.basis_water(None, "boom"), B.basis_water(object(), ""),
                    B.basis_alerts(None, False, "", None), B.basis_alerts({"items": [{"text": "x"}]}, True, "", None),
-                   B.basis_chart_a(None, None), B.basis_chart_b(None, "src"), B.basis_chart_b([], "src")]
+                   B.basis_chart_a(None, None), B.basis_chart_b(None), B.basis_chart_b([])]
         for _b in _bases:
             _rows = B.basis_rows(_b)
             assert [k for k, _ in _rows] == ["使用的資料", "資料日期", "規則／計算結果", "missing",
@@ -343,12 +343,33 @@ class TestWaterAndBasis:
         assert B.basis_water(None, "").as_of == "⬜ 此判斷的資料日：契約未提供"
         assert B.basis_risks(B.build_market_risks(_five({}), _all_up())).as_of.startswith("⬜ 此判斷的資料日：契約未提供")
 
+    def test_basis_texts_have_no_engineering_symbols(self):
+        """查看依據是給客戶看的：六欄內不得出現程式符號／層級代號／檔案路徑（內部對照放程式註解）。"""
+        _bad = ("L2 ", "L3 ", "compute_", "allocation_service", "daily_key_alerts", "AllocationDecision", "conflicts",
+                "lamp_direction", "session", "mkt_info", "cl_data", "data_cache", ".parquet", "cron", "核取方塊", "勾選")
+        _states = (B.build_market_risks(_readout({}, requested=False), None),
+                   B.build_market_risks(_readout({}, error="boom"), None),
+                   B.build_market_risks(_five({"long": "red", "mid": "gray"}), _all_up()))
+        _bases = [B.basis_risks(_r) for _r in _states]
+        _bases += [B.basis_water(None, ""), B.basis_water(None, "x"), B.basis_water(object(), ""),
+                   B.basis_alerts(None, False, "", None), B.basis_alerts({"items": [{"text": "x"}]}, True, "", None),
+                   B.basis_chart_a(None, None), B.basis_chart_b(None), B.basis_chart_b([])]
+        for _b in _bases:
+            _txt = " ".join(v for _, v in B.basis_rows(_b))
+            for _w in _bad:
+                assert _w not in _txt, (_w, _txt)
+
+    def test_water_basis_carries_the_update_report_disclosure_not_the_first_screen(self):
+        assert "更新報告" not in B.WATER_WHY and "工程" not in B.WATER_WHY
+        _b = B.basis_water(None, "")
+        assert B.WATER_REPORT_DISCLOSURE in _b.rule and B.WATER_REPORT_DISCLOSURE in _b.missing
+
     def test_price_asof_label_helper_is_not_used(self):
         """`shared/price_asof_label` 是個股價用的，⛔ 不得套到市場頁。"""
         assert "price_asof_label" not in _SRC
 
-    def test_water_caption_is_honest_about_the_update_report_and_has_no_percent(self):
-        assert "更新報告" in B.WATER_WHY and "%" not in B.WATER_WHY and "％" not in B.WATER_WHY
+    def test_water_caption_has_no_percent_and_plain_wording(self):
+        assert "%" not in B.WATER_WHY and "％" not in B.WATER_WHY and B.WATER_WHY.endswith("不顯示任何百分比。")
 
     def test_alerts_conflicts_note_explains_hidden_number(self):
         assert "查看依據" in B.ALERTS_CONFLICTS_NUMBER_NOTE and "未經 C2b 核准" in B.ALERTS_CONFLICTS_NUMBER_NOTE

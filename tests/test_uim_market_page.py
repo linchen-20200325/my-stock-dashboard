@@ -105,6 +105,24 @@ def test_cold_start_first_row_is_grey_and_nothing_is_red(tmp_path):
     assert not any("%" in t for t in _top if "style" not in t[:10] and not t.startswith("<"))   # 首屏（非 HTML 卡）無百分比
 
 
+def test_cold_start_page_never_mentions_checkbox_or_engineering_words(tmp_path):
+    """圖 A 去 gate 後，冷啟動畫面（含各「查看依據」內容）不得殘留「核取方塊／勾選」或工程符號。"""
+    _at = _run(tmp_path)
+    _all = "\n".join(_texts(_at))
+    for _w in ("核取方塊", "勾選上方", "session mkt_info", "data_cache/", "allocation_service", "compute_five_bucket_summary"):
+        assert _w not in _all, _w
+    _chart_a_basis = next(v for v in _texts(_at, outside_expanders=False) if v.startswith("- **使用的資料**：本地加權指數歷史快取"))
+    assert "指數線：⬜ 尚未載入，請按更新" in _chart_a_basis
+
+
+def test_chart_a_grey_error_text_is_scrubbed(tmp_path, monkeypatch):
+    _secret = "AIza" + "A" * 35
+    monkeypatch.setattr(S, "get_twii_trend_view", lambda n: S.TwiiTrendView(ok=False, error=f"讀取失敗 key={_secret}"))
+    _at = _run(tmp_path, _LOADED)
+    assert not _at.exception
+    assert _secret not in "\n".join(_texts(_at))
+
+
 def test_cold_start_chart_d_is_not_loaded_and_no_unevaluated_count_claim_of_safety(tmp_path):
     _at = _run(tmp_path)
     _top = _texts(_at, outside_expanders=True)

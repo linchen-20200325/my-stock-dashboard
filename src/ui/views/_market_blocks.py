@@ -72,7 +72,12 @@ REGIME_SCOPE_CAPTION: str = "市場位階，不是台股趨勢"
 #: 建議總持股水位卡（A 規格 §7.2 選項 A／I-10；C11 沿用 DEC-081 Q2-2）。
 WATER_TITLE: str = "建議總持股水位"
 WATER_VALUE: str = "⬜ 尚未核准／無法判定"
-WATER_WHY: str = "正式 Risk Cap 尚未核准。核准前，此卡不顯示任何百分比（頁首更新報告展開後的步驟說明除外）。"
+WATER_WHY: str = "正式 Risk Cap 尚未核准，此卡不顯示任何百分比。"
+#: 事實（放「查看依據」而非首屏）：更新報告展開後的步驟說明可能列出本次寫檔的上限數值（現行行為，本批不改）。
+WATER_REPORT_DISCLOSURE: str = "頁首「上一次更新的結果」展開後，系統風險上限那一步的說明可能列出本次寫檔的數值（現行行為，不屬本卡）"
+#: 圖 B「使用的資料」白話說明（內部對照：session cl_data['intl']；畫面不寫工程符號）。
+CHART_B_SOURCE_PLAIN: str = ("Yahoo Finance 的國際指數、10 年債殖利率（^TNX）與美元指數"
+                             "（本次更新抓到的資料；10 年債與總經區的 FRED 10 年債不同源）")
 WATER_BASIS_NOTE: str = "原有出手區間（含 risk_cap.v2 硬否決天花板；未經 C2b 核准）如下："
 
 HERO_RISK_TITLE: str = "今日主要風險"
@@ -118,6 +123,8 @@ CHART_D_ALL_LAMPS_POINTER: str = "查看全部指標 › 請展開下方「指�
 INSUFFICIENT_TEXT: str = "⬜ 資料不足／無法判定"
 
 BASIS_EXPANDER_LABEL: str = "🔍 查看依據"
+#: 內部對照：L2 compute_five_bucket_summary（16 盞燈）＋ L2 lamp_direction；畫面只寫白話。
+RISK_DATA_PLAIN: str = "五桶風險摘要（16 項指標燈）＋各燈的變化方向"
 AI_NOT_INVOLVED: str = "不參與（本區由規則／資料顯示產生，本頁沒有 AI 呼叫）"
 
 # ══════════════════════════════════════════════════════════════════
@@ -416,10 +423,10 @@ def basis_water(alloc: Any, alloc_error: str) -> Basis:
     else:
         _missing = "本頁未另做缺漏檢查，沿用下方原卡的說明"
     return Basis(
-        data_used="建議持股服務（L3 allocation_service，姿態油門與各 Cap 取小；含 risk_cap.v2）",
+        data_used="建議持股結果（姿態油門與各項上限取小；含 risk_cap.v2 規則）",
         as_of=ASOF_CONTRACT_MISSING,
-        rule="首屏固定顯示「尚未核准／無法判定」；原有出手區間只放在本展開區，且未經 C2b 核准",
-        missing=_missing,
+        rule=("首屏固定顯示「尚未核准／無法判定」；原有出手區間只放在本展開區，且未經 C2b 核准。" + WATER_REPORT_DISCLOSURE),
+        missing=_missing + "；" + WATER_REPORT_DISCLOSURE,
         confidence="⬜ 契約未提供",
         ai=AI_NOT_INVOLVED)
 
@@ -428,12 +435,12 @@ def basis_risks(risks: MarketRisks) -> Basis:
     """hero「今日主要風險」與圖 D 共用的依據（同一份 `risks`）。"""
     if risks.cold:
         return Basis(
-            data_used="五桶摘要（L2 compute_five_bucket_summary，16 盞燈）＋燈卡變化方向（L2 lamp_direction）",
+            data_used=RISK_DATA_PLAIN,
             as_of=ASOF_CONTRACT_MISSING, rule="尚未載入，沒有可列的風險項",
             missing=NOT_LOADED, confidence="⬜ 契約未提供", ai=AI_NOT_INVOLVED)
     if risks.failed:
         return Basis(
-            data_used="五桶摘要（L2 compute_five_bucket_summary）",
+            data_used="五桶風險摘要",
             as_of=ASOF_CONTRACT_MISSING, rule="五桶摘要算不出來，沒有可列的風險項",
             missing=f"計算失敗：{scrub_secrets(risks.error)}", confidence="⬜ 契約未提供", ai=AI_NOT_INVOLVED)
     _insuff = [_r.title for _r in risks.rows if _r.kind == KIND_INSUFFICIENT]
@@ -444,9 +451,9 @@ def basis_risks(risks: MarketRisks) -> Basis:
     _dirs = "；".join(f"{_r.title}「{_r.lamp_label}」{_r.direction_full}"
                       for _r in risks.rows if _r.kind == KIND_RISK) or "（本輪沒有非綠桶）"
     return Basis(
-        data_used="五桶摘要（L2 compute_five_bucket_summary，16 盞燈）＋燈卡變化方向（L2 lamp_direction）",
+        data_used=RISK_DATA_PLAIN,
         as_of=f"{ASOF_CONTRACT_MISSING}；方向列各自的資料日：{_dirs}",
-        rule=("每桶取桶內既有的主因燈（五桶摘要的 worst-of 規則）；只列非綠桶、依五桶固定順序、最多 3 項、"
+        rule=("每桶取桶內既有的主因燈（沿用五桶摘要既有的挑法：桶內最差、超標最多者）；只列非綠桶、依五桶固定順序、最多 3 項、"
               "不做重要性排序；方向為原詞，不翻成「惡化」。逐桶：" + _per),
         missing=(f"{risks.n_unevaluated}／{risks.n_lamps} 項燈未評估；資料不足的桶：" + ("、".join(_insuff) or "無")),
         confidence=f"⬜ 契約未提供（覆蓋率：{risks.n_lamps - risks.n_unevaluated}／{risks.n_lamps} 項燈有資料）",
@@ -463,7 +470,7 @@ def basis_alerts(alerts: Any, scanned: bool, error: str, alloc: Any) -> Basis:
     else:
         _missing = "—（門檻層已掃描；沒有列出的事項只代表這兩個來源沒有，不代表沒有其他需要處理的事）"
     return Basis(
-        data_used="今日關鍵警示（L2 daily_key_alerts）＋建議持股的衝突提示（AllocationDecision.conflicts）",
+        data_used="今日關鍵警示＋建議持股附帶的衝突提示",
         as_of=ASOF_CONTRACT_MISSING,
         rule=f"只轉述既有輸出：警示 {len(_items)} 則、被壓制的相反訊號 {len(_conf)} 則；不新增行動語彙",
         missing=_missing, confidence="⬜ 契約未提供", ai=AI_NOT_INVOLVED)
@@ -506,8 +513,8 @@ def basis_chart_a(view: twii_svc.TwiiTrendView | None, mkt_info: Any) -> Basis:
     _ma_date = (str(mkt_info.get("index_as_of"))[:10]
                 if isinstance(mkt_info, Mapping) and mkt_info.get("index_as_of") else DATA_DATE_NOT_PROVIDED)
     if view is None:
-        _line = "指數線：尚未讀取（勾選上方核取方塊才讀本地快取）"
-        _avail = "⬜ 契約未提供（指數線尚未讀取）"
+        _line = f"指數線：{NOT_LOADED}"
+        _avail = f"⬜ 契約未提供（指數線{NOT_LOADED}）"
     elif not view.ok:
         _line = f"指數線：⬜ 讀不到（{scrub_secrets(view.error)}）"
         _avail = "⬜ 指數線讀不到"
@@ -522,7 +529,7 @@ def basis_chart_a(view: twii_svc.TwiiTrendView | None, mkt_info: Any) -> Basis:
     if view is not None and view.ok and view.upstream_error:
         _miss.append(f"上游最後一次錯誤：{scrub_secrets(view.upstream_error)}")
     return Basis(
-        data_used=f"{twii_svc.TWII_SOURCE_TEXT}；均線取自『市場評估』輸入 session mkt_info",
+        data_used=f"{twii_svc.TWII_SOURCE_TEXT}；均線取自『市場評估』結果",
         as_of=f"{_line}；均線資料日 {_ma_date}（兩者來源不同）",
         rule=f"{CHART_A_MA_NOTE}。{CHART_A_MA_DISCLAIMER}{CHART_A_CONCLUSION}",
         missing="；".join(_miss) or "—（可畫的均線皆有值）",
@@ -580,7 +587,8 @@ def intl_series(session: Mapping[str, Any]) -> list[IntlSeries] | None:
     return _out
 
 
-def basis_chart_b(series: list[IntlSeries] | None, source_note: str) -> Basis:
+def basis_chart_b(series: list[IntlSeries] | None) -> Basis:
+    source_note = CHART_B_SOURCE_PLAIN
     if series is None:
         return Basis(data_used=source_note, as_of=NOT_LOADED, rule=CHART_B_NOTE,
                      missing=NOT_LOADED, confidence="⬜ 契約未提供", ai=AI_NOT_INVOLVED)
@@ -689,7 +697,7 @@ def render_chart_a(session: Mapping[str, Any]) -> None:
                 if _view.failed:
                     st.error(f"台股指數歷史讀取失敗：`{scrub_secrets(_view.error)}`", icon="❌")
                 elif not _view.ok:
-                    st.caption(f"⬜ 台股指數歷史暫時讀不到：{_view.error}")
+                    st.caption(f"⬜ 台股指數歷史暫時讀不到：{scrub_secrets(_view.error)}")
                 else:
                     if _view.is_stale:
                         st.warning(f"台股指數歷史快取已過期：{scrub_secrets(_view.stale_reason or '原因未提供')}", icon="⚠️")
@@ -731,7 +739,7 @@ def render_chart_b(session: Mapping[str, Any], *, source_note: str) -> None:
             st.caption(CHART_B_NOTE)
         st.markdown(CHART_B_CONCLUSION)
         st.caption(TREND_DEFINITION_NOTE)
-        render_basis(basis_chart_b(_series, source_note))
+        render_basis(basis_chart_b(_series))
 
 
 def chart_c_texts() -> tuple[str, ...]:

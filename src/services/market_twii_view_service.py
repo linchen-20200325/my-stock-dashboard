@@ -19,7 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 #: 資料來源說明（給「查看依據」用；與 A 規格 §4.1.2 圖 A 來源列同一個說法）。
-TWII_SOURCE_TEXT: str = "本地快取 data_cache/twii_ohlcv.parquet（Yahoo:^TWII:chart，每日 cron 更新）"
+# 內部對照：data_cache/twii_ohlcv.parquet（Yahoo:^TWII:chart，每日 cron 更新）；畫面上只寫白話。
+TWII_SOURCE_TEXT: str = "本地加權指數歷史快取（來源 Yahoo，每日更新）"
 
 
 @dataclass(frozen=True)
