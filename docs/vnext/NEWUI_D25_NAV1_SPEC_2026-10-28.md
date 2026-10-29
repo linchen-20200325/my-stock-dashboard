@@ -222,3 +222,5 @@ wireframe 導覽事實：桌機 `<aside class="side">`（寬 150px、品牌字�
 | N14 | 旗標黏性失效（沒帶參數就清掉） | `TestLegacyMode::test_b3_legacy_d2_navigation_still_works_end_to_end`／`test_b4_flag_survives_reruns…` |
 
 QA 回修後共 **40 項**突變（M1–M26＋N1–N14）全數轉紅（M23／M25 首跑漏網，已補強守衛；QA 指名的 M18（壞頁狀態）、M21（footer）、M26（widget 分叉）、以及 renderer／導覽例外隔離、側欄回退值、旗標黏性幾項皆有**行為測試**直接擊殺，不只靠 `test_batch_z60` 的 hash 釘）。突變在複製的工作樹內執行，未動 repo；每項以 `pytest -x` 停在第一個失敗，故上表只列首個抓到的測試。
+
+> 📌 **2026-10-29 補註（UI-T；append-only；決策者 AI 總管（事實更新））**：上文 §4 偏離 1（標的頁第二層葉 radio）與 §3 差異表 #8 所述的過渡切換，**已由 UI-T 分支 `uit-impl` 移除**（標的頁成為單一頁 `page_target`；`PAGE4_TO_VIEW[p4_target]` 只剩 `find`，`inspect` 列入 `MERGED_VIEWS`）。PR #968，見 `docs/DECISIONS.md` DEC-107。上文為 NAV-1 當時的真相，保留不刪。

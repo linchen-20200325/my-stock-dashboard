@@ -18,7 +18,7 @@
 
 ═══ 邊界（先讀）═══════════════════════════════════════════════════════
 - ❌ **不取數、不讀任何資料、不顯示任何數字或燈號。** 只有導覽字串。
-- ❌ **不手抄頁名**：四頁名／葉名全部來自 L0 `shared/ia_nav4`（葉名再轉 `ia_nav.page_label`）。
+- ❌ **不手抄頁名**：四頁名全部來自 L0 `shared/ia_nav4`。
 - ❌ **不使用紅色錯誤框**（導覽沒有「真出錯」的狀態；§-1.5.D §02）。壞掉的 state 一律 raise（由 `app.py` 的隔離器紅態顯示）。
 - ❌ **不渲染任何指向舊 UI／legacy 的字或連結**（DEC-097：legacy 入口不得出現在一般使用者主導覽）。
 """
@@ -109,24 +109,9 @@ def current_page4() -> str:
     return _p
 
 
-def current_leaf() -> str | None:
-    """標的頁葉選擇（view 頁 id）。None＝尚未選（用預設葉）；**存在但非法 → 重設為預設葉並 log**。"""
-    _raw = st.session_state.get(ia_nav4.NAV4_TARGET_LEAF_KEY)
-    if _raw is None:
-        return None
-    try:
-        ia_nav4.resolve_view(ia_nav4.P4_TARGET, _raw)
-    except ValueError:
-        _d = ia_nav4.views_of(ia_nav4.P4_TARGET)[0]
-        _log_reset(ia_nav4.NAV4_TARGET_LEAF_KEY, _raw, _d)
-        st.session_state[ia_nav4.NAV4_TARGET_LEAF_KEY] = _d
-        return _d
-    return _raw
-
-
 def current_view() -> str:
-    """目前要渲染的 view 頁 id（🎯 標的 會再看葉選擇）。"""
-    return ia_nav4.resolve_view(current_page4(), current_leaf())
+    """目前要渲染的 view 頁 id（每個主導覽頁恰一個 view；UI-T 起 🎯 標的 不再有葉）。"""
+    return ia_nav4.resolve_view(current_page4())
 
 
 def _sync_widget(widget_key: str, value: str) -> None:
@@ -138,12 +123,6 @@ def _sync_widget(widget_key: str, value: str) -> None:
 def _on_nav_change(widget_key: str) -> None:
     """兩個導覽 widget 共用的回呼：**只寫 SSOT 一格**。對不到的值 → Fail Loud（不靜默改用預設頁）。"""
     st.session_state[ia_nav4.NAV4_PAGE_KEY] = ia_nav4.page4_from_label(st.session_state.get(widget_key))
-
-
-def _on_leaf_change() -> None:
-    _p = current_page4()
-    st.session_state[ia_nav4.NAV4_TARGET_LEAF_KEY] = ia_nav4.leaf_from_label(
-        _p, st.session_state.get(ia_nav4.NAV4_WIDGET_LEAF_KEY))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -172,25 +151,9 @@ def render_bottom_nav() -> None:
             on_change=_on_nav_change, args=(ia_nav4.NAV4_WIDGET_BOTTOM_KEY,))
 
 
-def render_target_leaf_selector() -> None:
-    """🎯 標的 的第二層選擇（🔍 找標的／🔬 查一檔；沿用 D2 的「同一方向內第二層」機制）。其他頁不渲染。
-
-    ⚠️ 過渡項：A 規格 §4.2 把標的頁定義成**單一頁**（產業機會 → 候選標的 → 單一股票同頁展開），
-    那是 UI-T 批次（PLAN §5 序 7）的內容；NAV-1 只換導覽殼，現有 `page_find`／`page_inspect` 兩個 view 仍是兩頁，
-    故用本選擇器在標的頁內切換。UI-T 落地時本函式應連同 `NAV4_TARGET_LEAF_KEY` 一併移除。
-    """
-    _p = current_page4()
-    if not ia_nav4.has_leaves(_p):
-        return
-    _view = ia_nav4.resolve_view(_p, current_leaf())
-    _label = ia_nav4.leaf_options(_p)[ia_nav4.views_of(_p).index(_view)]
-    _sync_widget(ia_nav4.NAV4_WIDGET_LEAF_KEY, _label)
-    st.radio(
-        "標的頁子選單", ia_nav4.leaf_options(_p), key=ia_nav4.NAV4_WIDGET_LEAF_KEY,
-        horizontal=True, label_visibility="collapsed", on_change=_on_leaf_change)
-
-
 def render_main_nav() -> None:
-    """主畫面區的導覽部分：底部固定列 ＋（🎯 標的 才有的）葉選擇器。"""
+    """主畫面區的導覽部分：底部固定列。
+
+    UI-T（2026-10-29）：NAV-1 過渡切換（🎯 標的 頁內的「🔍 找標的／🔬 查一檔」葉選擇器）已移除 —— 標的頁成為單一頁。
+    """
     render_bottom_nav()
-    render_target_leaf_selector()

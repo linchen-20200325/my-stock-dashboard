@@ -84,7 +84,8 @@ class TestBoundary:
                 for k in n.keywords:
                     if k.arg == "on_change" and isinstance(k.value, ast.Name):
                         _cbs.append(k.value.id)
-        assert sorted(_cbs) == ["_on_leaf_change", "_on_nav_change", "_on_nav_change"], _cbs
+        # UI-T（2026-10-29）：第三個 widget（標的頁子選單）與其回呼 `_on_leaf_change` 已隨過渡切換移除；兩個導覽 widget 仍共用同一支。
+        assert sorted(_cbs) == ["_on_nav_change", "_on_nav_change"], _cbs
 
     def test_no_streamlit_import_side_effect_at_module_level_besides_css(self):
         """模組層沒有任何 `st.*` 呼叫（import 它不得畫東西）。"""
@@ -241,18 +242,19 @@ class TestSingleSsot:
         assert "VIEW=market" in _md(at)
         assert "[nav4]" in capsys.readouterr().err, "重設壞狀態必須留 log"
 
-    @pytest.mark.parametrize("bad", ["zzz", 5, "", ["x"], "hold", {"k": 1}])
-    def test_a_corrupt_leaf_value_is_reset_to_the_default_leaf_and_logged(self, bad, capsys):
+    def test_a_leftover_leaf_value_from_a_previous_version_is_ignored(self):
+        """UI-T（2026-10-29）：舊版 session 若還留著 `_nav4_target_leaf`（NAV-1 過渡切換的殘值），新版必須忽略它、直接渲染 `find`。
+
+        取代舊 `test_a_corrupt_leaf_value_is_reset_to_the_default_leaf_and_logged`：葉機制已移除，壞葉值不再有「重設」可言，
+        但「舊殘值不得讓標的頁渲染到別的 view」這個意旨仍要守。
+        """
         from streamlit.testing.v1 import AppTest
         at = AppTest.from_function(_nav_app, default_timeout=60)
         at.session_state[ia_nav4.NAV4_PAGE_KEY] = ia_nav4.P4_TARGET
-        at.session_state[ia_nav4.NAV4_TARGET_LEAF_KEY] = bad
+        at.session_state["_nav4_target_leaf"] = "inspect"
         at.run()
         assert not at.exception, at.exception
-        assert at.session_state[ia_nav4.NAV4_TARGET_LEAF_KEY] == "find"
-        assert "VIEW=find" in _md(at)
-        assert at.radio(key=ia_nav4.NAV4_WIDGET_LEAF_KEY).value == ia_nav.page_label("find")
-        assert "[nav4]" in capsys.readouterr().err
+        assert "VIEW=find" in _md(at) and "VIEW=inspect" not in _md(at)
 
     def test_no_streamlit_warning_about_session_state_defaults(self):
         at = _run()
@@ -261,32 +263,35 @@ class TestSingleSsot:
 
 
 class TestTargetLeaf:
+    """UI-T（2026-10-29，客戶 DEC-099）：NAV-1 過渡切換（標的頁葉選擇器）已移除；標的頁是單一頁。
+
+    原 `test_leaf_selector_only_on_target_page` / `test_leaf_pick_switches_view_and_survives_leaving_and_returning` 作廢
+    （它們守的是已被客戶裁示移除的過渡機制），改守「它真的不在了」：沒有子選單 widget、沒有第二組 radio、
+    標的頁永遠渲染同一個 view。
+    """
+
     def _to_target(self):
         at = _run()
         at.radio(key=ia_nav4.NAV4_WIDGET_BOTTOM_KEY).set_value("🎯 標的")
         return _run(at)
 
-    def test_leaf_selector_only_on_target_page(self):
+    def test_no_leaf_selector_anywhere_and_target_is_one_view(self):
         at = _run()
-        assert not [r for r in at.radio if r.key == ia_nav4.NAV4_WIDGET_LEAF_KEY]
+        assert not [r for r in at.radio if "leaf" in str(r.key)]
         at = self._to_target()
-        _leaf = at.radio(key=ia_nav4.NAV4_WIDGET_LEAF_KEY)
-        assert list(_leaf.options) == [ia_nav.page_label("find"), ia_nav.page_label("inspect")]
+        assert not [r for r in at.radio if "leaf" in str(r.key)], "標的頁出現了子選單 radio —— 過渡切換殘留"
+        _radios = {r.key for r in at.radio} | {r.key for r in at.sidebar.radio}
+        assert _radios == {ia_nav4.NAV4_WIDGET_SIDE_KEY, ia_nav4.NAV4_WIDGET_BOTTOM_KEY}
         assert "VIEW=find" in _md(at)
 
-    def test_leaf_pick_switches_view_and_survives_leaving_and_returning(self):
+    def test_target_page_survives_leaving_and_returning(self):
         at = self._to_target()
-        at.radio(key=ia_nav4.NAV4_WIDGET_LEAF_KEY).set_value(ia_nav.page_label("inspect"))
-        _run(at)
-        assert "VIEW=inspect" in _md(at)
         at.radio(key=ia_nav4.NAV4_WIDGET_BOTTOM_KEY).set_value("💼 持股")
         _run(at)
         assert "VIEW=hold" in _md(at)
-        assert not [r for r in at.radio if r.key == ia_nav4.NAV4_WIDGET_LEAF_KEY]
         at.sidebar.radio(key=ia_nav4.NAV4_WIDGET_SIDE_KEY).set_value("🎯 標的")
         _run(at)
-        assert "VIEW=inspect" in _md(at), "切頁後再回標的頁，葉選擇沒有保留"
-        assert at.radio(key=ia_nav4.NAV4_WIDGET_LEAF_KEY).value == ia_nav.page_label("inspect")
+        assert "VIEW=find" in _md(at)
 
     def test_no_red_error_anywhere_in_the_nav(self):
         at = self._to_target()

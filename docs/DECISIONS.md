@@ -1366,6 +1366,8 @@ D2.5 以下大方向核准：
 - **與 DEC-097／DEC-098 的關係**：DEC-097（客戶裁示：手機底部 4 按鈕、舊 UI 預設隱藏）**不變**；DEC-098 為 **AI 總管內部設計選擇，不是客戶裁示**——其中「標的頁葉選擇＝過渡項、待客戶裁示」一點，由本條（客戶裁示）**回答**；DEC-098 其餘內容不因本條升格為客戶裁示。DEC-082（草稿先行）：客戶已就此偏離裁示，毋須再出草稿。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：撰寫組（docs-only）未重跑測試；本條只落盤裁示，不改任何程式碼。
 
+- 📌 **2026-10-29 補註（UI-T；決策者 AI 總管（事實更新）；上文原文保留）**：本條裁示的「過渡切換」已由 UI-T 分支 `uit-impl` 移除（`NAV4_TARGET_LEAF_KEY`／`NAV4_WIDGET_LEAF_KEY`／`render_target_leaf_selector` 等；標的頁成為單一頁）；PR #968，見 DEC-107。
+
 ### DEC-100｜Cross-View 資料一致性稽核的處置分類＋本批 4 項半安全小修（AI 總管內部，2026-10-28）
 
 > 2026-10-28 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/*.md docs/vnext/*.md` 最大為 DEC-099、DEC-100 0 命中）。**本條不是客戶裁示**，只記錄 `CROSS-VIEW-DATA-CONSISTENCY-AUDIT` 稽核結果的處置分類與 AI 總管依 `CLAUDE.md` v3 §03-1 內部自決的安全小修；報告 `docs/vnext/NEWUI_D25_XVIEW_AUDIT_2026-10-28.md`。
@@ -3164,3 +3166,29 @@ Effort：High
 - **矯正**：每個 Stage 起點先比對現況；符合 → 靜默繼續；不符 → 才停手並依 `PROJECT_RULES.md` 第 18.3 節固定格式回報。`docs/HANDOFF.md` Resume Checkpoint 中「等客戶切換才開 UI-T」舊字樣已更正；BACKLOG 登記 `GOV-DEC084-REDUNDANT-STOP-2026-10-29`（P2，已矯正）。
 - **與其他 DEC 的關係**：重申並落實 DEC-084（雙向停手 Gate 的「一致則不停」半邊）；與 DEC-104（Hard Output Gate：Model×Effort 需切換且尚未通知才可出聲）同向；不降低任何 Security／Investment／Data／CI／Audit Gate。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：「與其他 DEC 的關係」為撰寫組讀法，單組；docs-only，未改程式碼。
+
+### DEC-107｜UI-T 🎯 標的頁線框五題裁示 1A／2A／3A／4A／5A＋補充邊界（客戶 2026-10-29）
+
+> 2026-10-29 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/DECISIONS.md` 最大為 DEC-106、DEC-107 0 命中）。要點經總管轉交，**非客戶逐字全文**。
+
+- **決策者**：**客戶**（2026-10-29；經總管轉交之要點）。｜**日期／效力日期**：2026-10-29 起生效。｜**狀態**：生效；UI-T 已實作於分支 `uit-impl`（PR #968（合併 SHA 由總管合併後同步））；非 done-verified（待客戶實機點驗）。
+- **背景**：DEC-099／UI-T-ACCEPT-NAV1-TRANSITION 要求把「🔍 找標的＋🔬 查一檔」整合為單一 🎯 標的頁並移除 NAV-1 過渡切換；版面與動線異動須先草稿（`CLAUDE.md` §-1.5.D v3 §03-2 ①），草稿＝`docs/vnext/NEWUI_D25_UIT_WIREFRAME_2026-10-29.md`。
+- **內容（五題皆選推薦方案 A）**：
+  1. **A**：整頁順序＝問句→資料狀態→搜尋（判型／期間／均線收進「進階選項」摺疊，MA 保留並標「僅顯示」）→AI 佔位→第一區（板塊圖降為展開區）→第二區→第三區（個股七區塊／ETF 另一版型）→進階分析（多檔比較）。
+  2. **A**：候選表下方「選一檔＋🔍 查看此檔」（不用 dataframe 點列；使用者明確操作後才取數）。
+  3. **A**：資料狀態「⬜ 尚未彙總」、AI「⬜ 尚未提供」；**不放**「⚡ 需要處理」。
+  4. **A**：候選表六欄（標的／產業／基本面／估值／籌碼／狀態）；產業用既有對映；估值＝當日本益比並標明與第三區 357 口徑不同；籌碼只對選取那檔取數，其餘「未取」。
+  5. **A**：「仍未覆蓋」功能於進階分析以白話揭露。
+  - **補充邊界**：不新增資料源／公式／投資語意／Risk Cap／AI 新規則；不寫 Sheet；缺維度一律 ⬜；移除 NAV-1 過渡切換；手機第一屏不放工程字樣。
+- **效力邊界**：不核准任何新資料源、schema、公式、投資語意；不改 `PAGE_LABELS`／`ia_nav`（legacy D2 殼仍用）、`src/ui/tabs/**`、`src/ui/etf/**`、`decision_digest*`；舊 UI Removal Gate 不變。
+- **與其他 DEC 的關係**：落實 DEC-092（設計方向）與 DEC-099（過渡切換移除）；與 DEC-097（legacy 入口不得出現在一般使用者導覽）並存，故 S9 不放指路（見偏離 2）；與 DEC-103（範圍膨脹防護）一致，新發現皆登記 P2。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本條要點為總管轉交；「與其他 DEC 的關係」為撰寫組讀法，單組。
+- 📌 **實作紀錄（2026-10-29 補；加法式；決策者 AI 總管（事實更新））**：分支 `uit-impl`（基準 `4521fc39`）；PR #968（squash SHA 由總管合併後同步）。
+  - **commit**（前綴 `feat(UI-T):`／`fix(UI-T):`／`test(UI-T):`）：`f942bd80`（新頁＋薄 L3＋守衛）／`94627c92`（移除過渡切換＋`app.py` 最小分流）／`29ae9cb5`（意外 loader 例外只呈現一次）／`7052afcb`（突變補強＋BACKLOG）／`cfc0944d`（QA 回修）／`8db04008`（TTL 表靜態守衛）；其後為本條文件落盤 commit。
+  - **改動檔**：新增 `src/ui/views/page_target.py`、`src/ui/views/_target_blocks.py`、`src/services/target_industry_service.py`（薄 L3，既有 `ticker_sector.json` 唯讀視圖）、`tests/uit_fakes.py`、`tests/test_uit_target_page.py`、`tests/test_uit_target_page_qa.py`；修改 `shared/ia_nav4.py`（移除葉常數與函式，新增 `MERGED_VIEWS`，`reconcile_nav4` 同步）、`src/ui/views/shell_nav4.py`（移除葉選擇器）、`app.py`（僅 `_ia_view_find()` 依旗標分流＋一行註解）、`tests/test_batch_z60.py`（`_BASE_DIGEST`）與 `test_nav1_*`／`test_p0x_view_mount_claims` 的有理由改寫。`page_find.py`／`page_inspect.py` **一字未改**。
+  - **測試**：Fast lane 全套 32685 passed、1 failed、50 skipped（唯一失敗為已知環境失敗 `test_batch_z59` markdown_it）；UI-T 專屬 138 項；slow 全套（回修前）183 passed、回修後 nav1／sidebar 相關子集 45 passed；mutation 回修前 24 個＋回修後 17 個，逐一拔守衛全數轉紅（存活者 M5、M19、N3 補強後轉紅）。
+  - **QA 摘要（總管轉述）**：三組獨立 QA 0 BLOCKER；2 MAJOR（結果記在 session 後靜默過期＝§2.4；`chips_cell`「取數失敗」分支無測試）與數個 P1（查看此檔沿用判型覆寫、值得看列出低分、無指路、文案）已於 `cfc0944d` 回修並補測試與突變。
+  - **與線框的偏離（逐項）**：(1) 產業矩陣手機版已改為每產業一張卡片列（回到線框；playwright 390px 驗無橫向捲動），`UIT-MOBILE-MATRIX` 已處理；(2) S9 不放「回舊畫面」指路（遵 DEC-097），只寫「新版尚未提供，後續批次處理」＝`UIT-S9-NO-POINTER`，**待客戶一句話確認，總管推薦同意**；(3) 第三區多一張既有判型結果卡、獲利能力區塊自行安置、排列與 `target.html` 不同＝`UIT-JUDGE-CARD-EXTRA`；(4) 候選表估值資料日寫「⬜ 未提供」（L1 無日期欄）＝`UIT-PE-ASOF-MISSING`；(5) 均線說明改為「僅顯示：勾選只會回顯在判型結果；K 線與均線圖新版尚未接上，不影響任何結論。」（`UIT-MA-DISPLAY-ONLY-WORDING`）。
+  - **內部拍板**：新增 `page_target`／`_target_blocks` 而不改舊兩頁（legacy D2 殼可獨立渲染）；`ia_nav4.MERGED_VIEWS`（inspect 併入 p4_target，view id 與 renderer 保留給 legacy）；每個使用者要求的結果以「session 世代 memo＋載入時間提示（超過 `shared/ttls` TTL 改「可能已過期」）」記住到下一次要求（操作隔離＋失敗不被轟炸，非快取層，`UIT-RESULT-MEMO-NOT-REFRESHED`）；新頁只認自己 gate 寫入點的世代（`own_*` 請求），legacy 殘留已套用值不觸發取數；「查看此檔」判型一律 auto。
+  - **已知限制（沙箱驗不到）**：Streamlit Cloud 冷啟動、手機實機（iOS／Android、768px 斷點邊界）、`requirements.txt` floor 1.56 實機行為（沙箱僅 1.59.2；`st.form` 內放 expander 為推論）、載入板塊地圖／查看此檔實際等待時間；見 `UIT-CLOUD-MOBILE-VERIFY`。實作組各項結論（含「舊兩頁能力全數有對應位置」）為單組＋機械 parity，非窮舉。
+  - **P2 登記**：`UIT-MOBILE-MATRIX`（已處理）、`UIT-MA-DISPLAY-ONLY-WORDING`、`UIT-PE-ASOF-MISSING`、`UIT-PE-DOUBLE-READ`、`UIT-RESULT-MEMO-NOT-REFRESHED`、`UIT-QUADRANT-ORDER-SSOT`、`UIT-ERROR-FRAME-LEGACY-NAME`、`UIT-CLOUD-MOBILE-VERIFY`、`UIT-S9-NO-POINTER`、`UIT-HOLD-DEADLINK-INSPECT`、`UIT-COLD-POISON-WEAK`、`UIT-JUDGE-CARD-EXTRA`、`UIT-OLD-CARD-ENG-WORDS`。

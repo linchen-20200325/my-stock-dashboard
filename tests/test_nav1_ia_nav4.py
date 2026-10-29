@@ -55,9 +55,10 @@ class TestLabels:
         for _bad in (123, "", ["x"], {"a": 1}, 1.5):      # 不可雜湊型別也要是 ValueError，不是 TypeError
             with pytest.raises(ValueError):
                 ia_nav4.coerce_page4(_bad)
-        for _bad in (["x"], 5, ""):
+        # UI-T（2026-10-29）：`resolve_view` 的葉參數已隨過渡切換移除；未知「頁」id 仍須 Fail Loud。
+        for _bad in ("market", "", "p4_ghost"):
             with pytest.raises(ValueError):
-                ia_nav4.resolve_view(ia_nav4.P4_TARGET, _bad)
+                ia_nav4.resolve_view(_bad)
         assert ia_nav4.coerce_page4(None) == ia_nav4.P4_MARKET
 
     def test_label_roundtrip(self):
@@ -70,42 +71,43 @@ class TestMapping:
     #: 第二來源：寫死的期望對映（view id 字面值即 `ia_nav` 現行常數值）。
     _EXPECT = {
         "p4_market": ("market",),
-        "p4_target": ("find", "inspect"),
+        # UI-T（2026-10-29，有意識的修改，⛔ 不是漏刪）：舊期望 `("find", "inspect")`（NAV-1 過渡切換的兩葉）→ 單一 view；
+        # 「inspect」改列在 `MERGED_VIEWS`（已併入 🎯 標的，不再有自己的導覽落點）。
+        "p4_target": ("find",),
         "p4_hold": ("hold",),
         "p4_me": ("me",),
     }
 
     def test_mapping_is_exactly_the_expected_one(self):
         assert dict(ia_nav4.PAGE4_TO_VIEW) == self._EXPECT
+        assert dict(ia_nav4.MERGED_VIEWS) == {"inspect": "p4_target"}
 
     def test_every_ia_nav_view_is_in_exactly_one_place(self):
-        _flat = [v for vs in ia_nav4.PAGE4_TO_VIEW.values() for v in vs] + list(ia_nav4.LEGACY_ONLY_VIEWS)
+        _flat = ([v for vs in ia_nav4.PAGE4_TO_VIEW.values() for v in vs] + list(ia_nav4.LEGACY_ONLY_VIEWS)
+                 + list(ia_nav4.MERGED_VIEWS))
         assert sorted(_flat) == sorted(ia_nav.PAGE_LABELS)
         assert len(_flat) == len(set(_flat))
 
     def test_legacy_only_views_are_today_and_why(self):
         assert set(ia_nav4.LEGACY_ONLY_VIEWS) == {"today", "why"}
 
-    def test_target_has_two_leaves_built_from_ia_nav_labels(self):
-        assert ia_nav4.has_leaves(ia_nav4.P4_TARGET)
-        assert ia_nav4.leaf_options(ia_nav4.P4_TARGET) == (
-            ia_nav.page_label("find"), ia_nav.page_label("inspect"))
-        for _p in (ia_nav4.P4_MARKET, ia_nav4.P4_HOLD, ia_nav4.P4_ME):
-            assert not ia_nav4.has_leaves(_p)
+    def test_target_is_a_single_page_with_no_leaf_api(self):
+        """UI-T（2026-10-29，客戶 DEC-099）：舊 `test_target_has_two_leaves_built_from_ia_nav_labels` 作廢 —— 標的頁成為單一頁。
+
+        舊守衛的理由（標的頁有兩葉、葉名來自 `ia_nav.page_label`）仍屬 NAV-1 當時的真相；被權衡掉的是「兩葉」這個設計本身。
+        """
+        for _p in ia_nav4.PAGE4_TO_VIEW:
+            assert len(ia_nav4.views_of(_p)) == 1
+        for _gone in ("has_leaves", "leaf_options", "leaf_from_label", "NAV4_TARGET_LEAF_KEY", "NAV4_WIDGET_LEAF_KEY"):
+            assert not hasattr(ia_nav4, _gone), f"過渡切換殘留：shared.ia_nav4.{_gone}"
 
     def test_resolve_view(self):
         assert ia_nav4.resolve_view(ia_nav4.P4_MARKET) == "market"
-        assert ia_nav4.resolve_view(ia_nav4.P4_MARKET, "inspect") == "market"   # 單頁忽略葉
-        assert ia_nav4.resolve_view(ia_nav4.P4_TARGET) == "find"                # 預設第一葉
-        assert ia_nav4.resolve_view(ia_nav4.P4_TARGET, "inspect") == "inspect"
-        with pytest.raises(ValueError):
-            ia_nav4.resolve_view(ia_nav4.P4_TARGET, "hold")                     # 不靜默退回預設葉
-
-    def test_leaf_from_label(self):
-        _lab = ia_nav.page_label("inspect")
-        assert ia_nav4.leaf_from_label(ia_nav4.P4_TARGET, _lab) == "inspect"
-        with pytest.raises(ValueError):
-            ia_nav4.leaf_from_label(ia_nav4.P4_TARGET, "💼 我的持股")
+        assert ia_nav4.resolve_view(ia_nav4.P4_TARGET) == "find"                # 單一頁：路由 id 沿用 `find`
+        assert ia_nav4.resolve_view(ia_nav4.P4_HOLD) == "hold"
+        assert ia_nav4.resolve_view(ia_nav4.P4_ME) == "me"
+        with pytest.raises(TypeError):                                          # 葉參數已移除，不得默默吞掉
+            ia_nav4.resolve_view(ia_nav4.P4_TARGET, "inspect")
 
 
 class TestReconcileHasTeeth:
@@ -145,10 +147,21 @@ class TestReconcileHasTeeth:
             ia_nav4.reconcile_nav4()
 
     def test_view_dropped(self, monkeypatch):
-        _m = dict(ia_nav4.PAGE4_TO_VIEW)
-        _m["p4_target"] = ("find",)
-        monkeypatch.setattr(ia_nav4, "PAGE4_TO_VIEW", _m)
+        # UI-T：原本是「標的頁少掛一葉」→ 現在是「被併入的 view 沒登記在 MERGED_VIEWS」。同一種漂移（漏接），同一道牙。
+        monkeypatch.setattr(ia_nav4, "MERGED_VIEWS", {})
         with pytest.raises(RuntimeError, match="漏接"):
+            ia_nav4.reconcile_nav4()
+
+    def test_merged_view_must_point_at_a_real_page(self, monkeypatch):
+        monkeypatch.setattr(ia_nav4, "MERGED_VIEWS", {"inspect": "p4_ghost"})
+        with pytest.raises(RuntimeError, match="MERGED_VIEWS"):
+            ia_nav4.reconcile_nav4()
+
+    def test_merged_view_also_mapped_to_a_page_is_rejected(self, monkeypatch):
+        _m = dict(ia_nav4.PAGE4_TO_VIEW)
+        _m["p4_target"] = ("find", "inspect")      # 兩個 view（舊葉結構）＋ 又登記為已併入 ⇒ 重複 ＋ 違反「每頁恰一個 view」
+        monkeypatch.setattr(ia_nav4, "PAGE4_TO_VIEW", _m)
+        with pytest.raises(RuntimeError):
             ia_nav4.reconcile_nav4()
 
     def test_legacy_only_overlaps_a_page(self, monkeypatch):
@@ -242,8 +255,9 @@ class TestKeyNames:
         assert set(_hits) <= _allowed, f"`_nav4_` 出現在允許清單之外：{sorted(set(_hits) - _allowed)}"
 
     def test_all_state_keys_share_the_prefix_and_are_distinct(self):
-        _keys = [ia_nav4.NAV4_PAGE_KEY, ia_nav4.NAV4_TARGET_LEAF_KEY, ia_nav4.NAV4_WIDGET_SIDE_KEY,
-                 ia_nav4.NAV4_WIDGET_BOTTOM_KEY, ia_nav4.NAV4_WIDGET_LEAF_KEY, ia_nav4.LEGACY_SESSION_KEY]
+        # UI-T（2026-10-29）：葉的兩個 key（SSOT 與 widget）隨過渡切換移除，其餘守衛不變。
+        _keys = [ia_nav4.NAV4_PAGE_KEY, ia_nav4.NAV4_WIDGET_SIDE_KEY,
+                 ia_nav4.NAV4_WIDGET_BOTTOM_KEY, ia_nav4.LEGACY_SESSION_KEY]
         assert all(k.startswith("_nav4_") for k in _keys)
         assert len(set(_keys)) == len(_keys)
         assert ia_nav4.NAV4_BOTTOM_CONTAINER_KEY == "nav4_bottom"

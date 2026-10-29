@@ -198,6 +198,8 @@ _VIEW_MODS = {
     "src.ui.views.page_today": "render_page_today",
     "src.ui.views.page_find": "render_page_find",
     "src.ui.views.page_inspect": "render_page_inspect",
+    # UI-T（2026-10-29）：新版模式的 🎯 標的 由 page_target 渲染（`app.py::_ia_view_find` 依旗標分流）。
+    "src.ui.views.page_target": "render_page_target",
     "src.ui.views.page_hold": "render_page_hold",
     "src.ui.views.page_why": "render_page_why",
     "src.ui.views.page_me": "render_page_me",
@@ -307,7 +309,8 @@ class TestDefaultMode:
             assert "legacy" not in str(getattr(l, "url", "")).lower()
 
     @pytest.mark.parametrize("label,expect", [
-        ("🎯 標的", ["page_market", "page_find"]),
+        # UI-T（2026-10-29）：標的頁不再渲染 page_find（過渡切換已移除），改由 page_target 單一頁渲染。
+        ("🎯 標的", ["page_market", "page_target"]),
         ("💼 持股", ["page_market", "page_hold"]),
         ("👤 我的", ["page_market", "page_me"]),
     ])
@@ -326,17 +329,25 @@ class TestDefaultMode:
             at.radio(key=ia_nav4.NAV4_WIDGET_BOTTOM_KEY).set_value(_l).run()
         assert "page_today" not in fake_views and "page_why" not in fake_views
 
-    def test_b2_target_leaf_and_state_are_kept_across_pages(self, fake_views):
+    def test_b2_target_page_state_is_kept_across_pages(self, fake_views):
+        """UI-T（2026-10-29）：取代 `test_b2_target_leaf_and_state_are_kept_across_pages` —— 葉已移除（標的頁是單一頁），
+        「離頁的 session 資料仍在、回來還是同一頁」這個意旨保留。"""
         at = _app().run()
         at.radio(key=ia_nav4.NAV4_WIDGET_BOTTOM_KEY).set_value("🎯 標的").run()
-        at.radio(key=ia_nav4.NAV4_WIDGET_LEAF_KEY).set_value(ia_nav.page_label("inspect")).run()
-        assert "RENDERED=page_inspect" in _md(at)
+        assert "RENDERED=page_target" in _md(at)
+        assert not [r for r in at.radio if "leaf" in str(r.key)], "標的頁出現子選單 radio —— 過渡切換殘留"
         at.radio(key=ia_nav4.NAV4_WIDGET_BOTTOM_KEY).set_value("💼 持股").run()
         assert "RENDERED=page_hold" in _md(at)
-        assert at.session_state["_probe_page_inspect"] == 1      # 離開頁的 session 資料仍在
+        assert at.session_state["_probe_page_target"] == 1      # 離開頁的 session 資料仍在
         at.sidebar.radio(key=ia_nav4.NAV4_WIDGET_SIDE_KEY).set_value("🎯 標的").run()
-        assert "RENDERED=page_inspect" in _md(at), "回到標的頁沒有落在上次的葉"
+        assert "RENDERED=page_target" in _md(at) and "RENDERED=page_inspect" not in _md(at)
         assert at.session_state[ia_nav4.NAV4_PAGE_KEY] == ia_nav4.P4_TARGET
+
+    def test_b2_inspect_is_not_reachable_from_the_four_page_nav(self, fake_views):
+        at = _app().run()
+        for _l in ia_nav4.page4_options():
+            at.radio(key=ia_nav4.NAV4_WIDGET_BOTTOM_KEY).set_value(_l).run()
+        assert "page_inspect" not in fake_views and "page_find" not in fake_views
 
     def test_b5_a_broken_nav_component_is_red_but_the_page_still_renders(self, fake_views, monkeypatch):
         monkeypatch.setitem(sys.modules, _SHELL_NAV4, _Poison(_SHELL_NAV4))
@@ -419,6 +430,17 @@ class TestLegacyMode:
         assert fake_views[-1] in ("page_market",)
         assert any("📍 位置：" in c.value for c in at.caption)
 
+    def test_b3_legacy_find_still_dispatches_to_page_find_not_page_target(self, fake_views):
+        """UI-T（2026-10-29）：`_ia_view_find` 依旗標分流 —— legacy 的 D2 側欄選到「找標的」仍呼叫 render_page_find。"""
+        at = _app(legacy=True)
+        _d = ia_nav.page_direction(ia_nav.PAGE_FIND)
+        at.session_state["_sb_ia_page"] = ia_nav.direction_options()[list(ia_nav.NAV_TREE).index(_d)]
+        if len(ia_nav.NAV_TREE[_d]) > 1:
+            at.session_state[f"_sb_ia_leaf_{_d}"] = ia_nav.leaf_options(_d)[ia_nav.NAV_TREE[_d].index(ia_nav.PAGE_FIND)]
+        at.run()
+        assert not at.exception, at.exception
+        assert fake_views == ["page_find"], fake_views
+
     def test_b4_flag_survives_reruns_without_the_query_param(self, fake_views):
         at = _app(qp={"legacy": "1"}).run()
         assert at.session_state[ia_nav4.LEGACY_SESSION_KEY] is True
@@ -456,11 +478,10 @@ class TestRealViewsMountUnderTheNewNav:
         def _isolated_errors():
             return [e.value for e in at.error if "分頁渲染異常" in e.value]
         assert not _isolated_errors(), _isolated_errors()
-        _steps = [("🎯 標的", None), ("🎯 標的", ia_nav.page_label("inspect")), ("💼 持股", None), ("👤 我的", None), ("📊 市場", None)]
+        # UI-T（2026-10-29）：標的頁是單一頁（真的 page_target），不再有「查一檔」葉的步驟。
+        _steps = [("🎯 標的", None), ("💼 持股", None), ("👤 我的", None), ("📊 市場", None)]
         for _page, _leaf in _steps:
             at.radio(key=ia_nav4.NAV4_WIDGET_BOTTOM_KEY).set_value(_page).run()
-            if _leaf is not None:
-                at.radio(key=ia_nav4.NAV4_WIDGET_LEAF_KEY).set_value(_leaf).run()
             assert not at.exception, (_page, _leaf, at.exception)
             assert not _isolated_errors(), (_page, _leaf, _isolated_errors())
             assert "僅供學術研究" in _md(at)
