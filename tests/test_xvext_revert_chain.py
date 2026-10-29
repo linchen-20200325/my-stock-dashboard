@@ -692,6 +692,10 @@ def _rel(file_path) -> str:
 
 def xvext_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批之前的寫法（無 pair 則原樣；只套一次）。"""
+    # UI-M（2026-10-29；有意識的接鏈，⛔ 不是漏改）：本批改了 `page_market.py`／`macro_helpers.py`（被 nav1／dec074 等
+    #   舊鏈的基底 sha 管）⇒ 最新的那一批先換回（鏈頭再往前接一節；只套一次；⛔ 不動本表與 `XVEXT_BASE_SHA`）。
+    from tests.test_uim_revert_chain import uim_revert_for
+    code = uim_revert_for(file_path, code)
     # DEC-102 批（2026-10-28）往前接一節：先換回 DEC-102 的改動（見 `tests/test_dec102_revert_chain.py`）。
     from tests.test_dec102_revert_chain import dec102_revert_for
     code = dec102_revert_for(file_path, code)
