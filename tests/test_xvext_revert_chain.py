@@ -692,6 +692,9 @@ def _rel(file_path) -> str:
 
 def xvext_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回本批之前的寫法（無 pair 則原樣；只套一次）。"""
+    # DEC-102 批（2026-10-28）往前接一節：先換回 DEC-102 的改動（見 `tests/test_dec102_revert_chain.py`）。
+    from tests.test_dec102_revert_chain import dec102_revert_for
+    code = dec102_revert_for(file_path, code)
     rel = _rel(file_path)
     pairs = XVEXT_REVERT_PAIRS.get(rel, ())
     if not pairs:

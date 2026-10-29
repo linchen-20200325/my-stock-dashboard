@@ -872,7 +872,11 @@ class TestOldFilesUntouched:
     # ~~"860aa28159085d3fddbcd3ab44da00e2f19c23dc85542bcfac5decad3e8ad1ea"~~（QA 回修 #4 後）
     # 📌 XV-H2-EXT QA 回修 #8（2026-10-28，總管指派，⛔ 不是漏改；DEC-019 揭露）：只動 `app.py` 側欄按鈕的
     #   **註解**（決策者歸屬更正為 AI 總管，DEC-101(5) 授權邊界內）；help 文字、行為、版面不變。其餘 90 檔一個字都沒動。
-    _BASE_DIGEST = "c4adb6357e6eb6ab475e438cd812ccb7729c44745a4f7848c2ebc0490ccaf020"
+    # ~~"c4adb6357e6eb6ab475e438cd812ccb7729c44745a4f7848c2ebc0490ccaf020"~~（XV-H2-EXT QA 回修 #8 後，至 1e603094 仍成立）
+    # 📌 DEC-102(2)（客戶 2026-10-28，XV-OLDUI-FX-REASON＝B；DEC-019 凍結的客戶核准例外，⛔ 不是漏改）：只動
+    #   `src/ui/etf/etf_tab_dividend_station.py` 卡①與 80/20「算不出來」兩句在**有外幣持有列**時的原因句
+    #   （改用 L0 `asset_currency_gate.FX_PARTIAL_TEXT`＋未納入清單）；無外幣時逐字不變。其餘 90 檔一個字都沒動。
+    _BASE_DIGEST = "8e8f2b732ed1f840bda8737cea87b84c287ff059f9caac6385789c6544e5660e"
 
     def test_no_diff_against_base(self):
         import hashlib
