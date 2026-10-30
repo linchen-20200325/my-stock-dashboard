@@ -4534,7 +4534,7 @@ Stage 完成回報保持極簡：
   - **R12**：AI 投資總結輸出格式＝客戶 DEC-109 二十一（市場一句／持股一句／標的機會一句／主要風險 1～3／本期行動 ≤3，每項附查看依據）即新客戶裁示，取代 DEC-091(d)／A 規格 §5／`ai_summary.html` 五段的**呈現格式**；分類資料保留於 Digest 與查看依據，AI 不得推論分類；Phase 7 實作前依草稿先行出線框；**不另開 Gate**（依據：`PROJECT_RULES.md` §0.1「變更需新的客戶 Decision」——DEC-109 即是；DEC-013 已裁示事項不重問）。
   - **R13**：AI 投資總結入口＝各頁 L1 固定元素（E2 卡＋展開面板），計入 Visual Budget；不是第五頁，IA 不變。
   - **R14**：👤 我的 Google login 只做衝突分析（契約 §13.4）；正式位置維持 👤 我的卡①；舊側欄登入區塊隱藏與否屬版面異動且碰 DEC-083 E 段 → 登 BACKLOG 為未來客戶 Gate（本 phase 不問、不改）。
-  - **R15**：Visual SSOT：blueprint（`docs/vnext/d25_wireframes` 核准 mockup）＝視覺驗收基準；`src/ui_v2/tokens.py`＝實作 token 來源；色值不一致 → blueprint 為準，tokens 於 Phase 3 收斂（BACKLOG）；差異表寫入契約 §14.2。**2026-10-29 總管改判範圍**：tokens 內**客戶裁示的色值**（CTA 主色 `#1f6feb`／light `#044cb6`，客戶 2026-09-22；`--sig-neutral`／`-bg`，客戶 2026-09-21）**維持有效**、不在 R15「blueprint 為準」的射程內；是否改為 blueprint 色值列為 Phase 3 草稿待客戶拍板點（`P1R-P3-WF-CUSTOMER-COLORS`）。
+  - **R15**：Visual SSOT：blueprint（`docs/vnext/d25_wireframes` 核准 mockup）＝視覺驗收基準；`src/ui_v2/tokens.py`＝實作 token 來源；色值不一致 → blueprint 為準，tokens 於 Phase 3 收斂（BACKLOG）；差異表寫入契約 §14.2。**2026-10-29 總管改判範圍**：tokens 內**客戶裁示的色值**（CTA 主色 `#1f6feb`／light `#044cb6`，客戶 2026-09-22；`--sig-neutral`／`-bg`，客戶 2026-09-21）**維持有效**、不在 R15「blueprint 為準」的射程內；是否改為 blueprint 色值列為 Phase 3 草稿待客戶拍板點（`P1R-P3-WF-CUSTOMER-COLORS`）。 📌 **2026-10-30：客戶已裁示（DEC-115 D1a=A 維持客戶裁示色值；D1b=B 非客戶色延到 Phase 4～6 逐頁收斂＝本條「tokens 於 Phase 3 收斂」時程被客戶調整；R15 其餘不變）。**（有意識的更新，不是漏刪；決策者 客戶（DEC-115）；本條原文未改）
   - **R16**：SSOT 位階兩軸——規範軸：`CLAUDE.md`（§-2 > §-1.5 > §-1 > §0～8）> `PROCESS.md` > `PROJECT_RULES.md`＋`docs/governance` > 最新有效 DEC（客戶 DEC > 總管內部 DEC）> 正式契約／Visual SSOT > `PROJECT_STATE` > `BACKLOG` > `HANDOFF`（索引）> historical／superseded；事實軸：GitHub 實況 > code／tests > 正式文件 > HANDOFF > PROJECT_STATE > AI 記憶 > 聊天。客戶建議序（PROJECT_RULES 第一）置於既有憲法之下；兩軸不牴觸。`PROCESS.md` §1「只讀 STATE.md」與五檔讀序衝突 → 本 phase 不改 `PROCESS.md`，維持 `CV1-DR-04` 待裁示。落點 `PROJECT_RULES.md` 第 25 節。
   - **R17**：根目錄舊文件（`HANDOFF_2026-08-15.md`、`PLAN_T1_T2.md`、`PLAN_T4.md`、`BATCH_A_DELIVERY.md`）＝D 類候選，本 phase 不刪不改，只登 BACKLOG P2；repo 內 `scratchpad/*.md` 保留。
   - **R18**：`tools/visual_fidelity/`（量測 harness，非 production、不被 app import）納入 repo，確保 Visual Fidelity Gate 可重跑；不被任何 test 收集、fast checks 綠（Phase 1 PR 實跑）。
@@ -4576,3 +4576,46 @@ Stage 完成回報保持極簡：
 - **決策者**：客戶（2026-10-29）。
 - **要點**：停止 Phase 2 實作；做正式 Safe Handoff／Session Close，使全新對話只靠 GitHub 冷啟動；Scope Guard（不開始 Phase 2、不新增資料源／公式／語意；本批只改 docs／governance）；Hard Output Gate（DEC-104，過程不輸出）；完成條件＝docs 提交並一般 push、HANDOFF 索引為實況、預備實測存入 repo。
 - **落點**：`docs/HANDOFF.md` 置頂索引；`docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md` §11；`docs/PROJECT_STATE.md` §48；`docs/BACKLOG.md` `P1R-PHASE1-CONTRACT-FREEZE`／`P1R-PHASE2-HELPER-TEST-MIGRATION`。
+
+### DEC-115｜Phase 3 步驟 0 客戶裁示：D1a=A／D1b=B／D3=A／D5=A／D6=B／D8=B／D10=(a)＋七項補充邊界＋站殼間距處置＋施工授權（客戶 2026-10-30）
+
+> 2026-10-30 補登（取下一個未用號；落盤前 `grep -rn "DEC-115" docs PROJECT_RULES.md` 0 命中，DEC-114 為上一號）。**來源類別：客戶（使用者本輪對話原文），經總管轉交「逐字要點」給撰寫組；撰寫組照錄要點，非客戶訊息全文逐字**（客戶原訊息全文撰寫組未見；下列引號內文字為總管轉交的客戶要點原句）。
+
+- **決策者**：客戶（2026-10-30，針對 `docs/vnext/PHASE3_SHARED_COMPONENTS_WIREFRAME_2026-10-30.md` §6 裁示表七題；題幹／選項見該檔 §6）。｜**日期**：2026-10-30。｜**範圍**：UI／呈現（Phase 3 共用視覺元件：色彩、chip、迷你圖、冷啟動空槽、切換鈕、圖 A 標籤配額）。｜**狀態**：**生效**。
+- **裁示（客戶逐字要點，以此為準）**：
+
+| 題 | 裁示 | 白話 |
+|---|---|---|
+| D1a | **A** | 客戶已裁示的顏色全部維持（含淺色版中性暫值照現況，不另改） |
+| D1b | **B** | 客戶沒裁示過的顏色與圓角，**延到 Phase 4～6 逐頁收斂**，Phase 3 不全站換色 |
+| D3 | **A** | chip 採三族；護欄＝實線粗框 |
+| D5 | **A** | 迷你趨勢線與小倍數都不顯示數字 |
+| D6 | **B** | 主圖冷啟動保持同高；次要圖／小倍數缺資料時縮成一行誠實 placeholder |
+| D8 | **B** | 切換鈕用膠囊式；但須先在最低支援 Streamlit 1.56 實跑驗證，不成立就退回 A |
+| D10 | **(a)** | 圖 A 的「來源」下沉到摺疊；兩條逐字護欄各自獨立、不合併 |
+
+- **補充邊界（客戶要點）**：
+  1. **D1a**：已由客戶裁示的主按鈕藍（`#1f6feb`／light `#044cb6`）、深色中性灰藍（`--sig-neutral`／`-bg` dark `#8fa3b8`／`#26313d`）維持，**不因 Phase 3 共用元件重做而改色**。（📌 來源標示：「淺色版中性暫值照現況」＝D1a 題幹／客戶裁示 A 的內容；「深色中性灰藍 `#8fa3b8`／`#26313d`」數值＝D1a 題幹所載之現況值，**非總管加碼**；此為標示來源，非新增決定。）
+  2. **D1b**：未裁示的顏色與圓角**不要在 Phase 3 一次改全站**；Phase 4～6 各頁依核准線框**逐頁收斂**，避免 Phase 3 擴張成全站換膚。
+  3. **D3**：chip 採三族（資訊／狀態／護欄）；護欄用**實線粗框**。**不得**新增會與既有 Missing／限制語意混淆的**第四套視覺語言**。
+  4. **D5**：mini sparkline／small multiples **不額外顯示最新／最高／最低數字**。重要數字應由 KPI／status chip 承擔，避免圖表再次數字化。
+  5. **D6=B**：Primary Visual 保持正式高度／位置，避免載入前後 layout jump；Secondary Visual 缺資料時縮為一行誠實 placeholder，避免手機與桌機出現大片無資訊空槽；**不得因此隱藏 Missing／unavailable 狀態**；此項若改變既有 Presentation Contract 字面規則，**以本次客戶裁示正式追加 DEC 並同步契約／相關 SSOT，不得只留在線框**（＝本 DEC＋契約 §8-4 就地加註，見下）。
+  6. **D8=B**：膠囊式切換**必須先在最低支援 Streamlit 1.56 實跑驗證**；若 API／行為／手機互動不成立，**直接退回 A 圓點單選，不需要再次請示**；**不得為了 B 升高最低版本**（`requirements.txt` floor 不動）。
+  7. **D10=(a)**：來源下沉到「為什麼／來源／限制」摺疊；兩條語意護欄維持各自獨立，不合併。理由：語意護欄優先於 metadata source；來源仍可追溯，只是進 L3，不算刪除資訊。（📌 來源標示：「語意護欄優先於 metadata source；來源仍可追溯、不算刪除資訊」為**客戶原文要點**，非總管加碼；此為標示來源，非新增決定。）**不要為了把 6 顆壓成 5 顆而做出一顆過長、混合兩個語意的 chip。**
+- **站殼間距（原 D7）**：依 AI 總管原方案——**先內部實測**，取得實際像素差與最小改動方案後，**若屬整體 layout 變更再送客戶裁示**；本 DEC 不核准任何站殼改動。
+- **W2～W9**：**維持原 Gate，不提前處理**（Presentation Contract §22 原樣有效；W1 已由 D1a 裁示「維持」）。
+- **施工授權（客戶要點）**：依**已核准 Phase 3 範圍**靜默施工；Sonnet 5.5＋Medium 若符合最低必要設定直接繼續；除真正 Customer Decision Gate、Model×Effort 必須切換、需客戶手動操作、完整 Phase 3 完成或 context 不安全外，全程 SILENT。（承 DEC-084／DEC-106 不重複要求切換；DEC-113 對 Phase 2 的降級已隨 Phase 2 結束，Phase 3 步驟 1 起的 Model×Effort 仍依 DEC-084／106 開工前核對實際設定。）
+  - 📌 **來源標示（2026-10-30 有意識的更正，不是漏刪；決策者 AI 總管〔事實更正：來源歸屬〕）**：上列「施工授權」五項（依已核准 Phase 3 範圍靜默施工；Sonnet 5.5＋Medium 若符合 Minimum Sufficient Effort 直接繼續、不需再次確認；除 Customer Decision Gate／Model×Effort 必須切換／需客戶手動操作／完整 Phase 3 完成／context 不安全外全程 SILENT）為**客戶授權**，保留。**「只有碰投資語意、Risk Cap、資料契約、重大架構衝突才升回 Opus 5.5＋High」不是客戶原文，是 AI 總管內部判斷（依 DEC-084／DEC-106）**，僅為總管判斷何時須回報「Model×Effort 必須切換」的操作準則，不得被引用為客戶授權；Migration Plan §16.1 已同步改標。
+- **改變既有契約字面的三處（有意識的政策變更，不是漏刪；契約原文保留、已就地加註）**：
+  1. **D6=B → 契約 §8-4**「圖槽保留同一 compact 高度」的冷啟動字面：改為**僅 Secondary／small multiples／mini 圖**缺資料時縮為一行；**Primary 不變**（仍同高、仍不畫任何線／點）。Gate A9 的「圖槽」判準同步讀作 Primary。
+  2. **D1b=B → 契約 §14 R15／§14.2「tokens 於 Phase 3 收斂」**時程：改為**Phase 4～6 逐頁**；Phase 3 只加性新增幾何 token（含 14px 圓角 token，只新增、不套用）、不改任何既有色值，`page_css()` 輸出 byte-identical。DEC-110 R15 的時程部分被本條取代（R15 其餘——blueprint＝Visual SSOT、客戶裁示色值除外——不變）。
+  3. **D10(a) → 契約 §4 圖 A chip 配額**：圖 A 外露 5 顆＝資料日、窗口、可讀＋2 顆**各自獨立**的逐字護欄；客戶範例（DEC-109 五）中的「來源」chip **移入摺疊「來源」段**（資訊仍在、可追溯）。契約 §6 同步記 D3（chip 三族、護欄實線粗框、禁第四套視覺語言）。
+  - 未改字面、僅記錄採用：D1a、D3（契約 §6 無外觀規定，屬新增）、D5（契約 §19 Q4／Q5 無數字規定，屬新增）、D8（契約 §12.1 僅寫「segmented／switcher」，未定外觀）。
+- **兩邊理由並陳**：
+  - **D6**：舊字面（所有圖槽冷啟動同高）的理由——載入前後版面不跳動——**仍成立，故 Primary 保留**；新做法勝出於 Secondary，因為客戶的第一個抱怨之一是「空白太多／資訊密度不對」（DEC-108，經總管轉交），次要圖在第一屏之外，載入後位移影響最小。**代價（據實）**：載入後下方內容會下移一次。
+  - **D1b**：舊時程（Phase 3 全站一次收斂）的理由——新舊頁立刻同色、與 blueprint 一致最早——**仍成立**；新做法勝出因為 Phase 3 沒有任何頁面掛新元件，無法證明換色後第一屏仍合格，逐頁換色可逐頁對照驗收。**代價（據實）**：過渡期既有頁面與 blueprint 視覺基準不一致、新舊頁可能並存兩套近似色（登 BACKLOG `P1R-P3-D1B-TRANSITION-PALETTE`）。
+  - **D10(a)**：DEC-109 五的客戶範例把「來源」列為外露 chip——**理由仍成立**（來源是可追溯性的第一線）；(a) 勝出於客戶本次明示「語意護欄優先於 metadata source」，且不犧牲追溯（來源進 L3 摺疊）、不做出混合兩個語意的長 chip。
+- **線框草案中因本裁示而「未採用」的內容**（原文保留於 `PHASE3_SHARED_COMPONENTS_WIREFRAME_2026-10-30.md`，已加註）：D10(b) 的合併護欄 chip（`parts` 欄位與合併 kind 規則、桌／手機 (b) 線框）；護欄虛線（D3 B）；D5 B／C（小倍數每格最新值、三個數字）；D6 A／C（全部同高／全部縮一行）；D8 C（pills）、D8 預設 A 的「不裁示預設」；D1a B／C、D1b A。
+- **與其他 DEC 的關係**：承 DEC-109（客戶 Phase 1～7、blueprint＝Visual SSOT）、DEC-110（R15、契約 §4／§6／§8／§19 內部規格——被本裁示調整的三處見上）、DEC-113／114；呼叫 DEC-082（版面草稿先行：本裁示即該線框的核准）、DEC-106（Model×Effort 不重複要求切換）；不降低任何 Security／Investment／Data／CI／Audit Gate；Missing Contract（DEC-109 八）、逐字護欄句（DEC-092 Q2）、`UI_STATE_META` 十態、`BADGES` 封閉 11 種皆不變。
+- **落點**：`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md`（§4、§6、§8、§11、§14、§19、§22 就地加註）；`docs/vnext/PHASE3_SHARED_COMPONENTS_WIREFRAME_2026-10-30.md`（狀態改已核准、§6「裁示結果」）；`docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md` §16（核准範圍與施工拆分）；`docs/HANDOFF.md`、`docs/PROJECT_STATE.md` §48、`docs/BACKLOG.md`。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本 DEC 由撰寫組依總管轉交之要點落盤，**未經第二組獨立驗證**；「三處改變契約字面、其餘未改」為撰寫組單組判讀（已 grep 契約與線框文件相關詞，但全稱句屬待驗事項）；D8 的 1.56 實跑**尚未做**，不得當作已驗。

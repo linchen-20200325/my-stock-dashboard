@@ -3,6 +3,7 @@
 - **狀態**：正式／現行（Phase 1 SSOT Reset／Contract Freeze 凍結版）
 - **日期**：2026-10-29　**基準**：PR base＝main `978ecedc`（撰寫時基準 `55739129`＝`978ecedc`＋#970 commit `06a7a3e5` 的 merge；`src/`、`shared/` 與 main 相同）
 - **決策來源**：原則、Visual Budget、第一屏五問、主圖 header、下沉清單、chips 家族、三要素遷移、Missing 不變、硬規則、IA 不變、各頁方向＝**客戶 2026-10-29 指示（`docs/DECISIONS.md` DEC-109，逐字收錄）**；本檔的量化上限、詞彙表、讀法 R2～R15＝**AI 總管內部決定（DEC-110，依 `CLAUDE.md` §-1.5.D v3 §03-1）**，客戶可推翻任何一條，推翻後以客戶為準。
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：客戶裁示 D1a=A／D1b=B／D3=A／D5=A／D6=B／D8=B／D10=(a)（`docs/DECISIONS.md` DEC-115）。**就地加註處**＝§4（D10(a)：圖 A 配額）、§6（D3：chip 三族）、§8-4（D6：Secondary 缺資料縮一行）、§11（D8：切換鈕）、§14（D1a／D1b：色彩收斂時程）、§19（D5：迷你圖不顯示數字；站殼量測）、§22（W1 已裁示；W2～W9 不變）。原文一律保留、舊句加刪除線或註記。
 - **上位**：`CLAUDE.md`（§-2 > §-1.5 > §-1 > §0～§8）> `PROCESS.md` > `PROJECT_RULES.md`＋`docs/governance/*` > 最新有效 DEC > **本檔（正式契約／Visual SSOT 層）**（位階全文見 `PROJECT_RULES.md` 第 25 節）。本檔**不改 `CLAUDE.md` 一個字**；與憲法表面衝突時走讀法（§15）或送客戶。
 - **配套**：閘門＝`docs/governance/UI_VISUAL_FIDELITY_GATE.md`；AI 決策輸入＝`docs/vnext/DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md`；AI 邊界＝`docs/vnext/ONE_AI_BRAIN_BOUNDARY_vNext_2026-10-29.md`；取代關係＝`docs/vnext/PHASE1_SUPERSEDE_MAP_2026-10-29.md`；施工＝`docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md`；現況量測＝`docs/vnext/visual_fidelity/phase1_baseline/VISUAL_GAP_AUDIT_2026-10-29.md`；工具＝`tools/visual_fidelity/`。
 - **Scope Guard（客戶 DEC-109 三十）**：本檔**只遷移呈現責任**。⛔ 新資料來源、新投資公式、台股／國際趨勢公式、Risk Cap 算法、EPS×PE production rule、投資語意變更、大量 production UI 實作、無關歷史技術債。發現 → `docs/BACKLOG.md`。
@@ -73,7 +74,8 @@
 
 - **順序固定**：標題 → chip 列 → 1 句 → 圖 → 摺疊。⛔ 圖上方放一整篇說明（客戶原文「不要在圖上方放一整篇說明」）。
 - **chip 選擇（DEC-110）**：優先 metadata（資料日／來源／窗口）＋一顆可讀性（`✅ 可讀`／`⚠ 過期`／`⬜ 未提供`）＋必要的**語意護欄 chip**。超過 5 顆時，把語意護欄以外的 chip 移入摺疊；**語意護欄 chip 優先保留**。
-- **客戶逐字護欄**：`_market_blocks.CHART_A_MA_DISCLAIMER`「均線為參考，不等於正式台股趨勢判斷。」（DEC-092 Q2）作 chip 或作那 1 句時**逐字不縮寫**；趨勢結論位置固定 `_market_blocks.NOT_DEFINED`「⬜ 尚未定義」chip。⛔ mini 圖被讀成結論。
+  - 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：**D10=(a)**——圖 A（客戶範例 4 顆＋2 顆逐字護欄＝6 顆）外露 5 顆＝**資料日、窗口、可讀＋兩條護欄各自獨立**；範例中的「來源」chip **移入摺疊「來源」段**（資訊仍在、可追溯，不算刪除）。~~兩顆護欄合併成 1 顆、來源外露（草案 D10(b)）~~**未採用**；⛔ 為了把 6 顆壓成 5 顆而做出一顆過長、混合兩個語意的 chip。語意護欄優先於 metadata source（客戶要點）。
+- **客戶逐字護欄**：`_market_blocks.CHART_A_MA_DISCLAIMER`「均線為參考，不等於正式台股趨勢判斷。」（DEC-092 Q2）作 chip 或作那 1 句時**逐字不縮寫**；趨勢結論位置固定 `_market_blocks.NOT_DEFINED`「⬜ 尚未定義」chip。⛔ mini 圖被讀成結論。 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：兩條護欄（`CHART_A_MA_DISCLAIMER`、`NOT_DEFINED`）**各自獨立成 chip、不合併**（DEC-115 D10(a)）。
 - **那 1 句**：客戶原句（例 `CHART_A_SAY`、`CHART_B_SAY`）優先，**逐字、不截斷、不改寫**；沒有客戶原句時才由規則輸出／既有常數取，⛔ AI 生成、⛔ 自擬帶結論的句子（例「仍維持上升」若無既有正式規則輸出支撐，不得寫；客戶範例句只示範句型）。
 - **摺疊內容**（固定四段，不適用寫「—」並說明）：為什麼（判讀說明、`Note.why`）／來源（source、as_of、TTL 說明引用 `shared/ttls.py` 等既有 SSOT）／限制（窗口、口徑、估算／代理、未驗）／去哪補（`Note.where`、`page_today.V2_EXIT_PHRASES` 對應短語或 `NO_EXIT_MARKER`）。
 
@@ -98,6 +100,7 @@
    - 📌 **2026-10-30 事實更正（有意識的更正，不是漏刪；決策者 AI 總管（事實更正，依 v3 §03-1 內部自決））**：上句「⬜／⚠／🔴 進訊號文字會觸發 ValueError」中的「⚠」為假。實測（2026-10-30，`_ui_kit.assert_signal_text_clean`／`_BANNED_SIGNAL_GLYPHS` ＝ `UI_STATE_META` glyph ∪ `LEVEL_EMOJI`）：⬜、🔴 會 raise，⚠／⚠️ **不會** raise（`tests/test_p2_step1_shared_optional_params.py` 釘住此現況；現況不是承諾）。chip 走獨立通道的理由是**語意**（metadata 不是訊號文字），**不是**靠 ValueError 擋；⚠ 不被擋不改變本條結論。
 5. 同一頁同一 metadata 事實在外露層**最多出現一次**（寫在最近的共同容器上），其他區塊不再重寫長句。
 6. 取值**只能讀既有 SSOT**，⛔ 自算、⛔ 以按鈕時間冒充資料日（A 規格 §2.3）。
+7. 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：**chip 外觀採三族（D3=A）**——**資訊**（資料日／來源／窗口）＝細外框膠囊、次要墨色；**狀態**（✅／⚠／⬜／⛔）＝淡底膠囊，icon＋字；**護欄**（`not_defined`、`not_approved`、`fx_*`、`data_quality`、`estimated`／`proxy`／`imputed`、逐字客戶句）＝**實線粗框**膠囊，不得收進摺疊。⛔ **不得新增會與既有 Missing／限制語意混淆的第四套視覺語言**；~~護欄用虛線外框~~（草案 D3 B）**未採用**——repo 內虛線已有「低層級／未接線／示意、未啟用」語意（低層級卡片、`⛔ 未接線`徽章），護欄不應長得像次要。紅色仍只給 `failed`、stale 用琥珀。兩條護欄各自獨立、不合併（D10(a)，見 §4）。
 
 | kind | icon＋文字（例） | 取值 SSOT（只讀既有） |
 |---|---|---|
@@ -149,7 +152,7 @@
 1. 外露形式：短 chip，**符號與文字先沿用 `shared/ui_state.UI_STATE_META`**（`⬜ 尚未載入`、`▨ 無資料`、`⟳ 缺漏 · 可重跑`、`⊘ 不適用 · 重跑無效`、`◧ N／M 計入`、`⛔ 未接線`）；既有徽章族沒有的才用 metadata chip 的 ⬜（例 `_market_blocks.NOT_DEFINED`「⬜ 尚未定義」、`WATER_VALUE`「⬜ 尚未核准／無法判定」，皆為既有字樣）；主值槽留白，⛔ 放 0／—％／中性字。
 2. 完整原因與去處：在該判斷 L3「去哪補」段，⛔ 刪除。
 3. 未載入＝灰 ⬜；系統真出錯＝🔴＋1 句原因（`CLAUDE.md` §1.A 第 4 點）；⛔ 滿版假紅字。
-4. 圖的 Missing：圖槽保留同一 compact 高度，內畫「⬜ <原因>」，**不畫任何線／點**。
+4. 圖的 Missing：~~圖槽保留同一 compact 高度~~（📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：**D6=B 調整冷啟動字面**——**Primary Visual 圖槽仍保留正式的同一 compact 高度／位置**，避免載入前後 layout jump；**Secondary／small multiples／mini 圖缺資料時縮為一行誠實 placeholder**，載入後撐開，避免手機與桌機出現大片無資訊空槽。⛔ **不得因此隱藏 Missing／unavailable 狀態**：那一行仍須依 `UI_STATE_META` 畫出符號＋原因，完整原因與去處仍在摺疊「去哪補」。代價：載入後下方內容下移一次。），內畫「⬜ <原因>」，**不畫任何線／點**（Primary、Secondary 皆然，不變）。
 5. 未接線功能：只在進階／查看依據以一顆 `⛔ 未接線`（既有徽章族）＋一句白話揭露。
 6. missing ≠ HOLD：持股列缺資料＝`⬜ 資料不足／無法判定`，⛔ 以「續抱」頂替（DEC-101(2)）；可判定部分照實、不可判定部分局部降級（DEC-102(4)）。
 7. 重複的 Missing 說明（例 🎯 矩陣每列「⬜（僅有資金動能，非價格相對強弱）」）→ 寫一次在欄頭或區塊 header chip。
@@ -182,6 +185,7 @@ R9（DEC-110）：
 - **R10 expander 不省運算**：Streamlit expander body 每次 rerun 都會執行（FACT，Inv-2 T26）→ **收合 ≠ 省運算**；既有 button／checkbox／form gate **全部保留**，重運算仍走 gate。
 - `st.form` 內放 `st.expander` 在 `requirements.txt` floor 1.56 的行為**未驗**（沙箱 1.59.2）；未驗前改用「form 外 expander 放進階控制項＋form 內只留主鍵」的保守排法。
 - ⛔ 任何資訊只活在 `title=` 屬性（`page_today.V2_HOVER_ONLY_FACTS`／`V2_HOVER_OPTIONAL_FACTS` 於 Phase 4 起移入摺疊）。
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：**D8=B segmented／switcher 外觀＝膠囊式切換鈕**（取代舊總經頁圓點單選的樣式偏好；該偏好唯一出處為舊頁程式註解、無對應 DEC）。**前置條件**：必須先在最低支援 Streamlit 1.56（`requirements.txt` floor，現場讀取）**實跑驗證** API、行為與手機互動（`P1R-FLOOR-156-API`）；**不成立 → 直接退回 A 圓點單選（`st.radio(horizontal=True)`），不需再次請示客戶**；⛔ 不得為了 B 升高最低版本。退回時須在交付報告第 2 段揭露。D5 同屬 Phase 3 新增記錄見 §19。
 
 ## §12 IA：正式四頁不變＋各頁方向
 
@@ -259,7 +263,7 @@ R9（DEC-110）：
 核准 blueprint 不再只是參考圖。正式定義：**blueprint = Visual SSOT / visual acceptance baseline**。Production 可以因真資料、Streamlit 限制、mobile constraint 做合理調整；但不可自行改掉：第一屏資訊順序、主圖／次圖層級、資訊密度、圖文比例、card hierarchy。若必須明顯偏離：開 Gate。
 
 - **blueprint 檔**＝`docs/vnext/d25_wireframes/{index,market,target,holdings,mine,ai_summary}.html`（DEC-092 設計方向核准）。**本 phase 不改任何 HTML。**
-- **R15（DEC-110）**：blueprint＝**視覺驗收基準**；`src/ui_v2/tokens.py`＝**實作 token 來源**。兩者色值不一致時 **blueprint 為準**，tokens 於 Phase 3 收斂（BACKLOG `P1R-TOKENS-CONVERGE`）——**客戶裁示的色值除外**（下方 ⚠️；總管 2026-10-29 改判）。
+- **R15（DEC-110）**：blueprint＝**視覺驗收基準**；`src/ui_v2/tokens.py`＝**實作 token 來源**。兩者色值不一致時 **blueprint 為準**，~~tokens 於 Phase 3 收斂~~（BACKLOG `P1R-TOKENS-CONVERGE`）——**客戶裁示的色值除外**（下方 ⚠️；總管 2026-10-29 改判）。 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：**D1b=B**——**非客戶裁示的色與圓角延到 Phase 4～6 逐頁收斂**（各頁依核准線框重做時一併換，屆時有該頁完整 Gate）；Phase 3 **不全站換膚**：只加性新增幾何 token（chip 膠囊半徑、14px 卡圓角〔只新增、不套用〕、觸控區等），**不改任何既有色值**，`markup.page_css()` 輸出 byte-identical。**D1a=A**——客戶裁示色（CTA 主色 `#1f6feb`／light `#044cb6`；`--sig-neutral`／`-bg` dark `#8fa3b8`／`#26313d`；light 中性暫值照現況）**維持**，不因共用元件重做而改色。代價：過渡期既有頁與 blueprint 基準不一致（BACKLOG `P1R-P3-D1B-TRANSITION-PALETTE`）。
 - **後續客戶裁示覆蓋 blueprint 的地方（不算偏離）**：DEC-105 2A（市場位階五態，取代 `index.html`／`market.html` 圖例的偏多／中性／偏空用語）；DEC-107 2A（「選一檔＋🔍 查看此檔」取代 `target.html`「點一列展開」）；DEC-107 3A（標的頁不放 ⚡）；DEC-109 R12（AI 投資總結新輸出格式取代 `ai_summary.html` 五段）。
 - **允許的合理調整**（不需開 Gate，但 Gate 報告須逐項列出）：真資料字串長度／列數／缺值（示意數字一律以真值或 ⬜ 取代）；Streamlit 限制（`st.columns` 手機塌單欄→以 HTML／CSS grid 補 2×2（排法待 `CV1-DR-12`／W9）、無 hover、Vega 圖軸無法完全隱藏 INFERENCE）；誠實揭露 chip 比 blueprint 多。
 - **明顯偏離（必須開 Gate）**：見 Gate 文件 §5。
@@ -268,7 +272,7 @@ R9（DEC-110）：
 
 | 面 | blueprint（`market.html` `:root` 與規則） | `src/ui_v2/tokens.py`／`components.py`（dark） | 處置（R15） |
 |---|---|---|---|
-| 頁底 | `--bg #0a0e16` | `--paper #0e141b` | blueprint 為準，Phase 3 收斂 |
+| 頁底 | `--bg #0a0e16` | `--paper #0e141b` | blueprint 為準，~~Phase 3 收斂~~ Phase 4～6 逐頁收斂（📌 見本表下方註記／DEC-115 D1b=B） |
 | 面板 | `--panel #0f1521` | `--panel #151d26` | 同上 |
 | 卡片 | `--card #151d2c`、`--card2 #1a2437` | `--panel-2 #1b242f` | 同上 |
 | 線 | `--line #26334a` | `--rule #2e3b48`、`--rule-2 #46545f` | 同上 |
@@ -278,7 +282,8 @@ R9（DEC-110）：
 | 字級 | 頁標 22px／卡標 13px／大數 26px | 卡值 24px（`CARD_VALUE`） | 同上 |
 | hero 網格 | `repeat(auto-fit,minmax(170px,1fr))`，gap 12px；手機 `@media(max-width:500px)` | `MAX_COLS=3` | 欄數牴觸見 §15 R4（`CV1-DR-12`，待客戶裁示） |
 
-- ⚠️ **待總管處理的事實（FACT，不改判 R15）**：`tokens.py` 內至少兩組值的註解自陳為**客戶裁示**：`--sig-neutral`／`--sig-neutral-bg`（「客戶 2026-09-21 裁示」）、`--cta-primary-bg #1f6feb`（「客戶 2026-09-22 裁示逐字：接受 Streamlit config 的 primaryColor #1f6feb」）；blueprint 無對應 token。依 `PROJECT_RULES.md` §0.1「對既有裁示的任何變更需要新的客戶 Decision」，**這幾個客戶裁示色值維持有效、不在 R15 射程內**；是否改為 blueprint 色值＝Phase 3 草稿待客戶拍板點（`P1R-P3-WF-CUSTOMER-COLORS`；§22）。「哪些 token 屬客戶裁示」為撰寫組讀碼所見，**未經第二組驗證**。
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：上表「處置（R15）」欄的「blueprint 為準，Phase 3 收斂」＝~~Phase 3 收斂~~，**現行讀作「blueprint 為準，Phase 4～6 逐頁收斂」**（D1b=B；**指向 DEC-115 D1b：未裁示的顏色與圓角延到 Phase 4～6 逐頁收斂，Phase 3 不改任何既有色值，上表各列「同上」一併適用**）；「卡片圓角」列的加性 token 於 Phase 3 新增、**不套用**（Phase 4 線框確認）。
+- ⚠️ **待總管處理的事實（FACT，不改判 R15）**：`tokens.py` 內至少兩組值的註解自陳為**客戶裁示**：`--sig-neutral`／`--sig-neutral-bg`（「客戶 2026-09-21 裁示」）、`--cta-primary-bg #1f6feb`（「客戶 2026-09-22 裁示逐字：接受 Streamlit config 的 primaryColor #1f6feb」）；blueprint 無對應 token。依 `PROJECT_RULES.md` §0.1「對既有裁示的任何變更需要新的客戶 Decision」，**這幾個客戶裁示色值維持有效、不在 R15 射程內**；是否改為 blueprint 色值＝Phase 3 草稿待客戶拍板點（`P1R-P3-WF-CUSTOMER-COLORS`；§22）。 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：**已裁示＝維持**（D1a=A）。「哪些 token 屬客戶裁示」為撰寫組讀碼所見，**未經第二組驗證**。
 
 ## §15 呈現位階與讀法（R4、R16 摘要）
 
@@ -372,6 +377,7 @@ R9（DEC-110）：
 | Q11 | 頁級主要判讀句頂端 | 相對頁面 H2：desktop ≤ +200px、mobile ≤ +260px，且在第一屏內 | 現況市場 +998 |
 | Q12 | 全頁高（已載入） | ≤ 1.3× blueprint＝✅、≤ 2×＝🟡、> 2×＝❌ | mockup contentH 市場 1517／2480、標的 2193／3185、持股 1643／2501 |
 
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：**D5=A**——sparkline（Q5）與 small multiples／mini 圖（Q4）**不額外顯示最新／最高／最低數字**；重要數字由 KPI 主值或 status chip 承擔，避免圖表再次數字化（單色中性線、窗口以可見 chip 標明，不變）。**站殼間距**：客戶同意 AI 總管原方案——**先內部實測**取得實際像素差與最小改動方案，**若屬整體 layout 變更再送客戶裁示**；實測前不改 `app.py`（Migration Plan §16 步驟 3 僅量測）。
 - ⚠️ 站殼限制（FACT，Inv-3）：`app.py` 站標＋Streamlit 頂欄使頁面 H2 起於 y≈223（約占第一屏 25%），Q10～Q11 在不壓縮站殼時可能達不到 → 站殼間距屬 Phase 3 子項（Migration Plan），⛔ 因此改 `PAGE_LABELS`／導覽殼語意／legacy 入口（DEC-097）。
 
 ## §20 Phase 3 共用元件（客戶 DEC-109 三十一 Phase 3 清單）
@@ -390,7 +396,7 @@ metadata chips、status chips、chart header、evidence expander（`▸ 為什�
 
 | # | Phase | 維持中的客戶核准呈現 | 待拍板的替代方案（總管提案方向） | BACKLOG |
 |---|---|---|---|---|
-| W1 | 3 | tokens 客戶裁示色值（CTA 主色 `#1f6feb`／light `#044cb6`；`--sig-neutral`／`-bg`） | 改為 blueprint 色值或保留 | `P1R-P3-WF-CUSTOMER-COLORS` |
+| W1 | 3 | tokens 客戶裁示色值（CTA 主色 `#1f6feb`／light `#044cb6`；`--sig-neutral`／`-bg`） | 改為 blueprint 色值或保留 | `P1R-P3-WF-CUSTOMER-COLORS`（📌 2026-10-30 已解決：客戶裁示 D1a=A **維持**，DEC-115） |
 | W2 | 4 | DEC-105 第 4 點「指標危險度」指路**說明句** | 改為指路 chip（字面不變） | `P1R-P4-WF-POINTS` |
 | W3 | 4～6 | 卡片摺疊標籤「▸ 詳細」（客戶 2026-09-25 核可線框逐字）、「🔍 查看依據」 | 統一為「▸ 為什麼／來源／限制／去哪補」 | `P1R-WF-FOLD-LABEL` |
 | W4 | 5 | **DEC-107「選股條件預設展開」** | 預設收合＋一行條件摘要 chip | `P1R-P5-WF-SCREEN-COND` |
@@ -400,4 +406,5 @@ metadata chips、status chips、chart header、evidence expander（`▸ 為什�
 | W8 | 7 | （無既有正式規則）AI 投資總結「最大的 1～3 個變化」的選取規則 | 候選：DEC-092 Q3 五桶規則＋既有方向值；沒有則 MISSING；或依變化幅度排序（需客戶定義）——**不作內部預設** | `P1R-P7-WF-CHANGE-RANK` |
 | W9 | 4 | 現行 Hero 4 欄（DEC-105 第 5 點 P2 偏離）＋卡片網格 3 欄；`CLAUDE.md` v3 §00「固定 3 欄自適應網格」 | KPI 首列 4 格、手機 2×2，或 3＋1 排（須客戶裁示 `CV1-DR-12`） | `CV1-DR-12` |
 
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：**W1 已裁示（維持，D1a=A）**；客戶明示 **W2～W9 維持原 Gate、不提前處理**。Phase 3 另有 D1b／D3／D5／D6／D8／D10 六題已裁示（非 W 系列，見 DEC-115），不增加新 W。
 - 本表為撰寫組依總管改判原則逐條複查的結果（單組，未經第二組驗證）；維持原判、因客戶原文明確點名者見 `docs/DECISIONS.md` DEC-110「同原則複查」。

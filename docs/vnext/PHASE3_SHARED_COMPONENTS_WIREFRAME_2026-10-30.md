@@ -1,8 +1,9 @@
 # Phase 3 共用視覺元件｜文字線框草稿＋客戶裁示表（Phase 3 步驟 0）
 
-- **狀態**：**草稿 rev3（rev2 經複審後再修訂），待客戶拍板**（出處：Migration Plan §15.6「不論共用元件是否掛頁，寫 UI code 前先出文字線框」；契約 §22；`CLAUDE.md` §-1.5.D v3 §03-2 ① 草稿先行）。**本檔核准前不得寫任何 UI code**；客戶不裁示的項目依各題「不裁示預設」（見 §6 開頭）。
+- **狀態**：**已核准（客戶 2026-10-30，DEC-115）**——七題全部已裁示，見 §6「裁示結果」；核准範圍＝本檔 §1 的 Phase 3 範圍，步驟 1 起依 Migration Plan §16 施工（本檔「未採用」標記處不得實作）。📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**；下列舊狀態句原文保留。<br>~~**草稿 rev3（rev2 經複審後再修訂），待客戶拍板**（出處：Migration Plan §15.6「不論共用元件是否掛頁，寫 UI code 前先出文字線框」；契約 §22；`CLAUDE.md` §-1.5.D v3 §03-2 ① 草稿先行）。**本檔核准前不得寫任何 UI code**；客戶不裁示的項目依各題「不裁示預設」（見 §6 開頭）。~~（已被取代：客戶已全數裁示，不再適用「不裁示預設」）
 - **修訂紀錄（rev2，2026-10-30，有意識的更新，不是漏刪；決策者 AI 總管（內部））**：rev1 的裁示表 D1～D9 經 QA-B（合規）／QA-A（事實）兩組獨立檢視後重編為 **D1a、D1b、D3、D5、D6、D8、D10**（七題）；對應見 §6 開頭「題號對照」。D2 併入 D1b；D4、D9 移除（契約／內部自決已定）；D7 改為內部先量測、量到真值後才另送。
 - **修訂紀錄（rev3，2026-10-30，有意識的更新，不是漏刪；決策者 AI 總管（內部））**：依複審 N1～N7 修訂——裁示表題幹與選項去除內部代號、D8 技術前提移到 §3.9／§7、出處引用移到文末腳註（N1）；tile 內允許一顆「窗口」chip 並補 chip 合計上限（N2，§3.5／§3.6／M2／M19）；D6 補契約字面調整註記並新增 B 方案冷啟動線框（N3）；D8 改述為舊頁程式註解記載的偏好（N4）；「不等距」改放摺疊「限制」段並補邊界說明（N5）；補 D10 (b) 已載入線框與合併護欄 chip 的 kind 規則（N6）；D1b／D6 題幹補強（DEC-109 二十四、DEC-108 轉交註記）。修訂版未經第三輪獨立驗證。
+- **修訂紀錄（rev4，2026-10-30 客戶核准版，有意識的更新，不是漏刪；決策者 客戶（裁示）＋AI 總管（落文））**：客戶 2026-10-30 裁示 D1a=A／D1b=B／D3=A／D5=A／D6=B／D8=B／D10=(a)＋七項補充邊界（`docs/DECISIONS.md` DEC-115）。本檔處置：狀態改已核准；§6 新增「裁示結果」；與裁示相左的草案內容（D10(b) 合併護欄 chip 的 kind 規則與 `parts`、護欄虛線、D5 B／C、D6 A／C、D8 預設 A 的『不裁示預設』、D1b A）**原文保留、就地標『未採用』**；M2 對帳規則改為護欄各自獨立；保留 D8 的 floor 1.56 實跑驗證前置與退回 A 條款。除標註外，§1～§5、§7 內容未改（仍為單組撰寫＋兩組 QA 修訂，核准**不等於**內容已全數驗證）。
 - **日期／基準**：2026-10-30；main `2acf4ee`（`src/`、`tests/` 乾淨）。量測日一律 2026-10-30，不寫行號（`CLAUDE.md` §8.2.A.0 規則 1）。
 - **決策來源**：Phase 3 清單＝客戶 DEC-109 三十一（只管 Phase 3 清單，**不是**「線框先行」的出處；「線框先行」出處見上方「狀態」）、`CLAUDE.md` v3 §03-2 ①；元件規格、量化上限、R8～R10、R15、W1＝Presentation Contract §4、§6、§8、§10、§11、§14、§19、§20、§22（客戶原文＋DEC-110 內部決定）；本檔的方案設計、推薦、API 草案＝**AI 總管內部（DEC-110 同層）**，客戶可推翻。
 - **上位**：`CLAUDE.md` > `PROCESS.md` > `PROJECT_RULES.md`＋`docs/governance/*` > 最新有效 DEC > Presentation Contract／Migration Plan／Visual Fidelity Gate > 本檔。本檔**不改**契約與 DEC 一個字，只在契約留白處提方案。
@@ -18,8 +19,8 @@
 |---|---|---|---|
 | a | 純字串模組（建議 `src/ui_v2/compact.py`，不 import streamlit、不 import `src.data`／`src.services`）：metadata chip、chart header、Missing placeholder、compact KPI tile、sparkline、small multiples 版面、Top-N 切片、segmented 選項標準化、`compact_css()` | 純加性新模組 | **0**（沒有任何頁面 import 它） |
 | b | `_ui_kit` 薄封裝：公開 status chip、`render_fold`（證據摺疊）；`Basis` 兩份合併為超集（H31，舊名 alias） | 加性 | **0**（既有 caller 輸出逐 byte 不變，沿用 Phase 2 golden 手法） |
-| c | tokens 收斂（`P1R-TOKENS-CONVERGE`）——**範圍取決於裁示 D1a／D1b**；推薦方案＝只加幾何 token（含契約 §14.2 已定的 14px 圓角 token，只新增、Phase 3 不套用）、不改任何既有色值 | 加性（推薦方案） | 推薦方案 **0**；D1b=A 方案會動既有頁 |
-| d | 站殼間距子項——**先做內部量測（步驟 1 前置工作項，無需客戶）**；量到真值後才另送客戶「A 不做／B 最小」，不核准則不做（見 §3.11） | 動 `app.py`（僅在核准後） | 全站（nav4 模式）第一屏上緣 |
+| c | tokens 收斂（`P1R-TOKENS-CONVERGE`）——~~範圍取決於裁示 D1a／D1b~~（已裁示 D1a=A、D1b=B，DEC-115）；~~推薦方案~~ **核准方案**＝只加幾何 token（含契約 §14.2 已定的 14px 圓角 token，只新增、Phase 3 不套用）、不改任何既有色值 | 加性（~~推薦方案~~ 核准方案） | ~~推薦方案~~ 核准方案 **0**；~~D1b=A 方案會動既有頁~~（未採用） |
+| d | 站殼間距子項——**先做內部量測（~~步驟 1 前置工作項~~ 以 Plan §16 為準：步驟 3，位於步驟 1、2 之後；無需客戶）**；量到真值後才另送客戶「A 不做／B 最小」，不核准則不做（見 §3.11） | 動 `app.py`（僅在核准後） | 全站（nav4 模式）第一屏上緣 |
 
 ### 1.2 不做清單（⛔）
 
@@ -146,11 +147,12 @@
 
 - 狀態詞彙（`⬜ 尚未載入`、`▨ 無資料`、`⛔ 未接線`、`◧ N／M 計入`、`⟳`／`⊘`、`🔴 取得失敗`，即 `UI_STATE_META` 十態）**直接讀 `UI_STATE_META`／既有徽章字**（同 `BADGES` #11 手法），不另造符號；chip 只是同字不同幾何（膠囊）。
 - **`unavailable` kind 不另造 chip 樣式**：契約 §6 表已定「沿用既有徽章族」——`⛔ 未接線`（`UI_STATE_META[UI_UNWIRED]`）、「尚未提供」沿用 `🤖 AI 投資總結：⬜ 尚未提供`。實作上走 `status_chip(ui_state)`，不走 `meta_chip`；`META_KINDS` 的 `unavailable` 條目只登記「委派給 status_chip」，不含自有文字。
-- 契約 §6 表的其餘 kind（`asof`、`asof_missing`、`source`、`retrieved_at`、`window`、`readable`、`stale`、`freshness`、`coverage`、`not_defined`、`not_approved`、`estimated`、`proxy`、`imputed`、`data_quality`、`fx_partial`、`fx_tp`、`pretax`、`ai`）＝**封閉集合常數**，未登記 kind → `ValueError`（M2）。**M2 對帳規則**：`META_KINDS` 的鍵集合必須與契約 §6 表的 kind 欄（含 `unavailable`）逐一相等；測試從契約表內容抽 kind（或測試內以常數釘住並註明出處），契約表與常數任一方變動而另一方未同步 → 紅燈（呼應 `CLAUDE.md` §8.2.A.0 規則 3）。
-- **合併護欄 chip 的 kind 規則（D10 (b) 的配套，N6）**：合併 chip **仍屬護欄單一族（tone=guard），不新增 kind**；文字＝兩句**逐字串接**（中間以全形空格），各句字不改、不截；`Chip` 以 `parts` 記錄被併入的各原 kind（例 `not_defined` 與逐字護欄句的 kind），只有護欄族 kind 可互相合併，其他族傳入 → `ValueError`。M2 對帳對 `parts` 逐一核對（每個 part 的 kind 都必須屬 `META_KINDS`），合併 chip 本身不另佔 `META_KINDS` 條目；排序與溢出時視為 1 顆護欄 chip（計入外露上限 1 顆）。
+- 契約 §6 表的其餘 kind（`asof`、`asof_missing`、`source`、`retrieved_at`、`window`、`readable`、`stale`、`freshness`、`coverage`、`not_defined`、`not_approved`、`estimated`、`proxy`、`imputed`、`data_quality`、`fx_partial`、`fx_tp`、`pretax`、`ai`）＝**封閉集合常數**，未登記 kind → `ValueError`（M2）。**M2 對帳規則**：`META_KINDS` 的鍵集合必須與契約 §6 表的 kind 欄（含 `unavailable`）逐一相等；測試從契約表內容抽 kind（或測試內以常數釘住並註明出處），契約表與常數任一方變動而另一方未同步 → 紅燈（呼應 `CLAUDE.md` §8.2.A.0 規則 3）。📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**：**護欄各自獨立**——`META_KINDS` 的護欄族 kind 每個對應 1 顆獨立 chip；對帳不再有 `parts` 逐一核對，改為『護欄 chip 數＝傳入護欄數，無合併』。
+- ~~**合併護欄 chip 的 kind 規則（D10 (b) 的配套，N6）**：合併 chip **仍屬護欄單一族（tone=guard），不新增 kind**；文字＝兩句**逐字串接**（中間以全形空格），各句字不改、不截；`Chip` 以 `parts` 記錄被併入的各原 kind（例 `not_defined` 與逐字護欄句的 kind），只有護欄族 kind 可互相合併，其他族傳入 → `ValueError`。M2 對帳對 `parts` 逐一核對（每個 part 的 kind 都必須屬 `META_KINDS`），合併 chip 本身不另佔 `META_KINDS` 條目；排序與溢出時視為 1 顆護欄 chip（計入外露上限 1 顆）。~~
+  - 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**：**未採用**（客戶 D10=(a)）。**現行規則：護欄 chip 各自獨立**——`Chip` **無 `parts` 欄位、無合併 API**；`CHART_A_MA_DISCLAIMER` 與 `NOT_DEFINED` 各為 1 顆護欄 chip，各計 1 顆外露；⛔ 做出混合兩個語意的長 chip。逐字客戶句仍豁免字數上限、逐字不截、不改寫。
 - 訊號文字頻道不碰：chip 走獨立 HTML；紅色只給 `failed`；`stale`＝琥珀 ⚠；`readable` 只在 live 態；degraded／partial 不得掛 ✅。
 
-**chip 排序與溢出規則（契約 §4 的可執行化）**：優先序＝**語意護欄 chip**（`not_defined`、`not_approved`、`fx_*`、`data_quality`、`estimated`／`proxy`／`imputed`、逐字客戶句）＞ **狀態 chip**（readable／stale／freshness／unavailable／missing）＞ `asof` ＞ `window` ＞ `source` ＞ `retrieved_at`。超過 5 顆時**由低優先序往下移入摺疊「來源」段**；護欄 chip 本身超過 5 顆 → `ValueError`（不靜默丟；先嘗試依 D10 (b) 合併）。
+**chip 排序與溢出規則（契約 §4 的可執行化）**：優先序＝**語意護欄 chip**（`not_defined`、`not_approved`、`fx_*`、`data_quality`、`estimated`／`proxy`／`imputed`、逐字客戶句）＞ **狀態 chip**（readable／stale／freshness／unavailable／missing）＞ `asof` ＞ `window` ＞ `source` ＞ `retrieved_at`。超過 5 顆時**由低優先序往下移入摺疊「來源」段**；護欄 chip 本身超過 5 顆 → `ValueError`（不靜默丟；~~先嘗試依 D10 (b) 合併~~〔未採用，DEC-115；護欄各自獨立、不合併，超過即 `ValueError`〕）。**圖 A 的處置（D10=(a)）**：呼叫端傳入 6 顆（資料日、來源、窗口、可讀＋2 護欄）→ 依本優先序外露 5 顆（2 護欄＋可讀＋資料日＋窗口），`來源` 溢出交給 `render_fold` 的「來源」段。
 
 ⚠️ **排序與客戶範例順序不同（明說）**：客戶 DEC-109 五的範例順序是 `資料日 → 來源 → 窗口 → ✅ 可讀`（護欄 chip 範例中沒有）。本檔的排序是「護欄＞狀態＞asof＞window＞source」，是**溢出時的移出優先序**（誰最後被移走），契約 §4「語意護欄 chip 優先保留」的可執行化；**不一定等於視覺由左到右的順序**。視覺順序是否照客戶範例（資料日→來源→窗口→可讀，護欄置於其後或前）屬 Phase 4 線框確認事項，本草稿的線框為示意。來源被移出的情形見 D10。
 
@@ -178,7 +180,7 @@
 │ ( 🕒 資料 10/28 ) ( 近 252 日 ) ( ✅ 可讀 )                ← 2 行 ≈ 52px
 ```
 
-**外觀（取決於 D3）**：推薦方案＝三族並存——資訊 chip（資料日／來源／窗口）＝外框膠囊、次要墨色；狀態 chip（✅／⚠／⬜／⛔）＝淡底膠囊（綠／琥珀／灰），一律 icon＋字；護欄 chip＝**實線粗框**膠囊（與資訊 chip 一眼可分，且不能被收進摺疊）。⚠️ 護欄**不採虛線**的原因見 D3：repo 內虛線已有「低層級／未接線／示意、未啟用」的語意。顏色全取既有 token；護欄樣式是可被客戶推翻的選項。
+**外觀（~~取決於 D3~~ D3=A 已核准）**：~~推薦方案~~ 核准方案＝三族並存——資訊 chip（資料日／來源／窗口）＝外框膠囊、次要墨色；狀態 chip（✅／⚠／⬜／⛔）＝淡底膠囊（綠／琥珀／灰），一律 icon＋字；護欄 chip＝**實線粗框**膠囊（與資訊 chip 一眼可分，且不能被收進摺疊）。⚠️ 護欄**不採虛線**的原因見 D3：repo 內虛線已有「低層級／未接線／示意、未啟用」的語意。顏色全取既有 token；護欄樣式是可被客戶推翻的選項。
 
 **API 草案（內部，可調）**
 
@@ -214,15 +216,15 @@ def chips_html(chips: Sequence[Chip], *, max_chips: int = 5) -> tuple[str, tuple
 │ ( 均線為參考，不等於正式台股趨勢判斷。 ) ( ⬜ 尚未定義 ) ( 🕒 資料 10/28 ) ( 近 252 日 ) ( ✅ 可讀 )
 │ 看台股目前是在長期上升、整理還是轉弱；趨勢與短期波動分開判斷。
 │ ░░░░░ 原生折線圖（指數＋均線水平參考線），高 ≤220px ░░░░░
-│ ▸ 為什麼／來源／限制／去哪補         ← 預設收合；若 D10=(a)，「來源 Yahoo」在此段；D10=(b) 則來源外露（此示意畫的是 (a)）
+│ ▸ 為什麼／來源／限制／去哪補         ← 預設收合；D10=(a)（✅ 客戶核准）：「來源 Yahoo」在此段；~~D10=(b) 則來源外露~~（未採用）（此示意畫的是 (a)）
 ```
 
-**D10=(b) 版已載入（桌機；外露 5 顆：資料日、來源、窗口、可讀＋合併護欄；※示意）**
+~~**D10=(b) 版已載入（桌機；外露 5 顆：資料日、來源、窗口、可讀＋合併護欄；※示意）**~~ 〔**未採用**（客戶 D10=(a)，DEC-115）；僅留作紀錄，⛔ 不得依此實作〕
 
 ```
 │ 圖A 🇹🇼 台股趨勢
 │ ( 🕒 資料 10/28 ) ( 來源 Yahoo ) ( 近 252 日 ) ( ✅ 可讀 )
-│ ( 均線為參考，不等於正式台股趨勢判斷。　⬜ 尚未定義 )   ← 合併護欄 1 顆（粗實線框，兩句逐字）；桌機寬度不足時整顆換到第 2 行
+│ ( 均線為參考，不等於正式台股趨勢判斷。　⬜ 尚未定義 )   ← 【未採用，DEC-115】合併護欄 1 顆（粗實線框，兩句逐字）；桌機寬度不足時整顆換到第 2 行
 │ 看台股目前是在長期上升、整理還是轉弱；趨勢與短期波動分開判斷。
 │ ░░░░░ 原生折線圖 ≤220px ░░░░░
 │ ▸ 為什麼／來源／限制／去哪補         ← 來源段仍列完整來源說明（外露 chip 不取代摺疊內容）
@@ -246,7 +248,7 @@ def chips_html(chips: Sequence[Chip], *, max_chips: int = 5) -> tuple[str, tuple
 │ （1 句，2 行）
 │ ░░░░ 原生折線圖 ≤140px ░░░░
 │ ▸ 為什麼／來源／限制／去哪補
-D10=(b) 版已載入（手機；合併護欄換行，逐字不變）
+【未採用，DEC-115】D10=(b) 版已載入（手機；合併護欄換行，逐字不變）
 │ 圖A 🇹🇼 台股趨勢
 │ ( 🕒 資料 10/28 ) ( 來源 Yahoo )
 │ ( 近 252 日 ) ( ✅ 可讀 )
@@ -257,7 +259,7 @@ D10=(b) 版已載入（手機；合併護欄換行，逐字不變）
 │ ▸ 為什麼／來源／限制／去哪補
 ```
 
-**設計發現（升為客戶裁示 D10）**：圖 A 的「客戶範例（DEC-109 五）4 顆（資料日／來源／窗口／可讀）＋2 顆逐字護欄（`CHART_A_MA_DISCLAIMER`、`⬜ 尚未定義`）」＝6 顆 > 契約 §4 的 3～5 顆。契約機械規則（護欄以外移入摺疊）會讓 **`來源` 落在摺疊「來源」段**，這與客戶範例把「來源」列為外露 chip 不同；到底接受哪種，是客戶看得見的取捨，故不再當成已決定事項，改列 D10（三個方案）。
+**設計發現（升為客戶裁示 D10；📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**：已裁示 (a)——來源進摺疊、兩護欄各自獨立）**：圖 A 的「客戶範例（DEC-109 五）4 顆（資料日／來源／窗口／可讀）＋2 顆逐字護欄（`CHART_A_MA_DISCLAIMER`、`⬜ 尚未定義`）」＝6 顆 > 契約 §4 的 3～5 顆。契約機械規則（護欄以外移入摺疊）會讓 **`來源` 落在摺疊「來源」段**，這與客戶範例把「來源」列為外露 chip 不同；到底接受哪種，是客戶看得見的取捨，故不再當成已決定事項，改列 D10（三個方案）。
 
 **readable 與 ⬜ 並排（Phase 4 線框待處理）**：圖 A 的「✅ 可讀」（資料讀得到）與「⬜ 尚未定義」（趨勢結論尚未定義）並排在同一 chip 列時，讀者可能誤讀為矛盾或誤把「可讀」當成「趨勢可信」。本草稿不判；兩者的措辭與是否同列，留 Phase 4 線框（登 BACKLOG `P1R-P3-READABLE-VS-UNDEFINED`）。
 
@@ -304,7 +306,7 @@ def chart_header_html(*, title: str, chips: Sequence[Chip], say: str | None, max
 
 ### 3.4 Missing placeholder（圖槽／數值槽／清單槽）
 
-**規則（契約 §8，Gate A9／V9）**：missing ≠ 0／中性／HOLD；圖槽**保留同一 compact 高度**，內畫「<符號> <原因>」，**不畫任何線、點、軸、格線**；未載入＝灰、真錯誤＝🔴＋1 句原因；完整原因與去處在摺疊「去哪補」。
+**規則（契約 §8，Gate A9／V9）**：missing ≠ 0／中性／HOLD；~~圖槽**保留同一 compact 高度**~~（📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**：D6=B——**僅 Primary 圖槽保留同高**；Secondary／small multiples／mini 圖缺資料縮為一行，見 §6 裁示結果與契約 §8-4），內畫「<符號> <原因>」，**不畫任何線、點、軸、格線**；未載入＝灰、真錯誤＝🔴＋1 句原因；完整原因與去處在摺疊「去哪補」。
 
 **符號與字由呼叫端傳入 `UI_STATE_META` 的 state（rev2 修訂）**：元件**不自用 ⬜**。符號／文字一律沿用既有十態（契約 §8-1、R8-2「⛔ 同一狀態出現兩種符號」）：`idle`＝⬜ 尚未載入、`empty`＝▨ 無資料、`missing_retryable`＝⟳ 缺漏 · 可重跑、`not_applicable`＝⊘ 不適用 · 重跑無效、`partial`＝◧ N／M 計入、`unwired`＝⛔ 未接線、`failed`＝🔴 取得失敗、`loading`＝⏳ 載入中。⬜ 只在 `idle`（以及既有字樣 `NOT_DEFINED`／`WATER_VALUE` 這類既有徽章族沒有的「尚未定義／尚未核准」）使用。
 
@@ -327,7 +329,7 @@ def chart_header_html(*, title: str, chips: Sequence[Chip], say: str | None, max
 
 **手機 390×844**：同上，圖槽 140px，文字可換 2 行；錯誤原因 1 句，不放 `repr(e)`（`repr(e)` 進摺疊，H6 既有判斷）。
 
-**⚠️ 設計張力（見 D6）**：契約要「冷啟動圖槽保留同高」，但冷啟動頁面會因此出現多個 140～220px 的灰色空槽（Gate A5 的「無 > 120px 無內容空洞」只在**已載入**量測，冷啟動不判，但客戶抱怨過「空白太多」）。D6 讓客戶決定 Secondary／mini 是否縮成一行。
+**⚠️ 設計張力（見 D6）**：契約要「冷啟動圖槽保留同高」，但冷啟動頁面會因此出現多個 140～220px 的灰色空槽（Gate A5 的「無 > 120px 無內容空洞」只在**已載入**量測，冷啟動不判，但客戶抱怨過「空白太多」）。D6 讓客戶決定 Secondary／mini 是否縮成一行。**→ 已裁示 B：Secondary／mini 縮一行、Primary 同高；縮成的那一行仍是 `UI_STATE_META` 符號＋原因，不得隱藏 Missing／unavailable。**
 
 **API 草案**：`chart_slot_missing_html(ui_state: str, reason: str, *, height_px: int) -> str`——`ui_state` 為 `UI_STATE_META` 的鍵（十態皆可，未知鍵 `ValueError`），符號與狀態字由元件**讀 `UI_STATE_META`**，`reason` 必填（呼叫端傳既有常數字），**⛔ 元件不自造符號或原因字**；`failed` 才用紅，其餘一律灰。
 
@@ -397,7 +399,7 @@ def chart_header_html(*, title: str, chips: Sequence[Chip], say: str | None, max
 
 **手機 390×844**：同上，寬 ≈ 100px，緊貼主值右側；視窗不足時移到主值下方整列（高度仍 ≤64px）。
 
-**端點數值是否顯示＝D5**（推薦：不顯示；主值已在 tile 文字裡）。
+**端點數值是否顯示＝D5**（推薦：不顯示；主值已在 tile 文字裡）。📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**：**D5=A 已裁示——不顯示最新／最高／最低數字**；數字由 KPI 主值或 status chip 承擔。
 
 **API 草案**
 
@@ -421,7 +423,7 @@ sparkline_svg(values: Sequence[float | None], *, w: int = 100, h: int = 48,
 │ 圖B 🌍 國際趨勢
 │ ( ⬜ 尚未定義 )                      ← 「尚未載入」只寫在各格內（二選一）
 │ 看海外市場、利率與美元是否正在幫助或壓抑台股風險偏好。
-│ ┌ 海外市場 ┐┌ 利率 ┐┌ 美元 ┐       ← 每格 ≤96px，內寫 ⬜ 尚未載入
+│ ┌ 海外市場 ┐┌ 利率 ┐┌ 美元 ┐       ← 每格 ≤96px，內寫 ⬜ 尚未載入   【未採用：D6=A 同高空格；客戶裁示 D6=B，改用下方縮一行版】
 已載入（5 格，※示意）
 │ 道瓊 DJI    │ 那指 IXIC   │ 費半 SOX
 │ ░ 折線 ░    │ ░ 折線 ░    │ ░ 折線 ░          各格自己的座標
@@ -430,7 +432,7 @@ sparkline_svg(values: Sequence[float | None], *, w: int = 100, h: int = 48,
 │ ▸ 為什麼／來源／限制／去哪補
 ```
 
-**D6=B 方案冷啟動（次要圖／小倍數縮成一行，載入後撐開；對照上方 A＝契約字面的 96px 空格）**
+**D6=B 方案冷啟動（次要圖／小倍數縮成一行，載入後撐開；對照上方 A＝契約字面的 96px 空格）**——✅ **客戶核准採此（DEC-115）**；一行仍須是 `UI_STATE_META` 符號＋原因，不得隱藏 Missing／unavailable；Primary 冷啟動仍同高
 
 ```
 桌機 1440×900                                   手機 390×844
@@ -453,6 +455,8 @@ sparkline_svg(values: Sequence[float | None], *, w: int = 100, h: int = 48,
 ```
 
 **設計發現（§7 U4）**：圖 B 5 系列在手機 2 欄需 3 列 ≈ 300px，超過 Primary 的手機 140px 預算，但小倍數屬 Secondary（無 Primary 高度上限，僅 mini 格 ≤96px）。是否與 switcher 取捨（契約 §12.1「擇一」）留 Phase 4 線框。
+
+D5=A：格內只有系列名＋折線，**不加最新值**（草案 D5 B 未採用）。
 
 **API 草案**：`small_multiples_html(cells: Sequence[SmCell], *, cols_desktop: int = 3, cols_mobile: int = 2) -> str`；`SmCell(name, svg: SafeHtml | None, window_chip: Chip | None, missing_state: str | None, missing_text: str | None)`（`window_chip` 僅在該格窗口與組級不同時才給）。
 
@@ -485,7 +489,7 @@ sparkline_svg(values: Sequence[float | None], *, w: int = 100, h: int = 48,
 
 ### 3.9 segmented switcher
 
-**規則**：一組 switcher 內的多張候選圖算 1 個 Primary（B1），一次只顯示一張；預設項由呼叫端明確指定；⛔ 預設選項被取消後無結果（必須有預設回退）；`options` 標準化（去重、保序、空字串報錯）。**實際 widget 外觀＝D8**。⚠️ 切換＝一次 rerun（R10；legacy `tab_macro_v2` 註解亦記載：切換一次會讓 app.py 七個頂層 tab 的 body 全部重跑）——Phase 4 掛頁時需評估是否包 `st.fragment`（floor 1.56 有，但**行為未驗**）。
+**規則**：一組 switcher 內的多張候選圖算 1 個 Primary（B1），一次只顯示一張；預設項由呼叫端明確指定；⛔ 預設選項被取消後無結果（必須有預設回退）；`options` 標準化（去重、保序、空字串報錯）。**實際 widget 外觀＝D8**（📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**：**D8=B 膠囊式**，須先在 floor 1.56 實跑驗證；不成立退回 A，見下方技術前提）。⚠️ 切換＝一次 rerun（R10；legacy `tab_macro_v2` 註解亦記載：切換一次會讓 app.py 七個頂層 tab 的 body 全部重跑）——Phase 4 掛頁時需評估是否包 `st.fragment`（floor 1.56 有，但**行為未驗**）。
 
 **桌機 1440×900（圖 A 主圖的切換列，※選項取自契約 §12.1：台股｜海外市場｜利率｜美元）**
 
@@ -502,7 +506,7 @@ sparkline_svg(values: Sequence[float | None], *, w: int = 100, h: int = 48,
 
 **海外市場在 switcher 單圖內不可疊軸（rev2 補）**：「海外市場」選項含 3 個系列（道瓊／那指／費半），但 switcher 一次只顯示一張圖。**⛔ 不得把 3 系列疊在同一軸或正規化**（`CHART_B_NOTE`）；Phase 4 須二擇一：(i) 該選項內改用 3 格 small multiples（各自座標），或 (ii) switcher 拆成逐系列選項。本草稿不判，登 Phase 4 線框待確認。
 
-**D8 的技術前提（內部，不進裁示表）**：若客戶選 B（膠囊式）或 C（pills），需 `st.segmented_control`／`st.pills`；這兩個 API 在最低支援版本（`requirements.txt` floor，現為 `>=1.56.0,<1.60.0`）上的**行為**必須先實跑驗證（`P1R-FLOOR-156-API`，目前只做過原始碼靜態掃描，見 §2.3）；實跑不過 → 退回 A（`st.radio(horizontal=True)`），並通知客戶。D8 的歷史背景（舊總經頁用 `st.radio` 的理由、出處為舊頁程式註解）見 §7。
+**D8 的技術前提（內部，不進裁示表）**：若客戶選 B（膠囊式）或 C（pills），需 `st.segmented_control`／`st.pills`；這兩個 API 在最低支援版本（`requirements.txt` floor，現為 `>=1.56.0,<1.60.0`）上的**行為**必須先實跑驗證（`P1R-FLOOR-156-API`，目前只做過原始碼靜態掃描，見 §2.3）；實跑不過 → 退回 A（`st.radio(horizontal=True)`），~~並通知客戶~~（📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**：**直接退回、不需再次請示**；於交付報告揭露即可；⛔ 不得為了 B 升高 `requirements.txt` 最低版本）。D8 的歷史背景（舊總經頁用 `st.radio` 的理由、出處為舊頁程式註解）見 §7。
 
 **API 草案**：`segment_options(options: Sequence[str], default: str) -> SegmentSpec`（純標準化＋驗證）；widget 呼叫在 `_ui_kit` 薄封裝，**不在 compact.py**（compact 無 streamlit）。
 
@@ -514,6 +518,7 @@ sparkline_svg(values: Sequence[float | None], *, w: int = 100, h: int = 48,
 
 **契約已有的規定（rev2 必須先講清楚）**：契約 §14 **R15（DEC-110，AI 總管內部決定）** 與契約 §14.2 差異表本就規定「色值不一致時 **blueprint 為準，tokens 於 Phase 3 收斂**（`P1R-TOKENS-CONVERGE`）——客戶裁示的色值除外」；圓角等幾何值「blueprint 為準（**以加性 token 新增，不改既有值**）」。因此本節拆兩題，不再把「全部不改」當成理所當然的預設：
 
+- ✅ **已裁示（DEC-115）：D1a=A（全部維持）、D1b=B（延到 Phase 4～6 逐頁收斂）**——下列為提問當時的題幹，保留作紀錄。
 - **D1a（客戶裁示色）**：CTA 主按鈕藍（客戶 2026-09-22）、`--sig-neutral`／`-bg` dark（客戶 2026-09-21）——維持或改？另注明 `--sig-neutral`／`-bg` 的 **light 值是 AI 總管選的暫值、可被推翻**。
 - **D1b（非客戶色）**：頁底／面板／卡／線／文字／語意色——依 R15 **Phase 3 全站一次收斂**，還是**延到 Phase 4～6 逐頁**？⚠️ 選「延後」＝**調整 R15 的時程**（不是遵守契約），已在 D1b 明寫；另注明 **blueprint 只有 dark 版，light 沒有基準色**，收斂 light 需另定來源。
 - **圓角（原 D2）併入 D1b 的幾何子項**：契約 §14.2 已定 blueprint 14px 圓角以**加性 token** 新增。Phase 3 **只新增 token、不套用**；`compact_css()` 內 tile 暫沿用現行 `CARD_BASE` 2px 與既有頁一致；Phase 4 線框（看得到整頁組合時）再確認是否套 14px。這與契約同向，不是推薦與契約相反的做法。
@@ -549,7 +554,8 @@ sparkline_svg(values: Sequence[float | None], *, w: int = 100, h: int = 48,
 
 **處置（rev2）**：rev1 把「要不要做」直接送客戶（D7）。但「約 50px」是 **INFERENCE、未量測**，拿未量測的數字請客戶裁示等於請客戶為一個猜測拍板。改為：
 
-1. **步驟 1 的前置工作項（內部、無需客戶）**：以瀏覽器 DOM 量測 nav4 預設模式 1440／390 下，站標帶與頂部留白實際可收的 px，並量 `?legacy=1` 是否共用同一組 CSS 選擇器；結果寫回本檔或 Migration Plan。
+1. ~~**步驟 1 的前置工作項（內部、無需客戶）**~~ **站殼量測（內部、無需客戶；以 Plan §16 為準＝步驟 3，位於步驟 1、2 之後）**：以瀏覽器 DOM 量測 nav4 預設模式 1440／390 下，站標帶與頂部留白實際可收的 px，並量 `?legacy=1` 是否共用同一組 CSS 選擇器；結果寫回本檔或 Migration Plan。
+   - 📌 2026-10-30 有意識的更正，不是漏刪；決策者 AI 總管（事實更正：量測順序）；站殼量測順序**以 Migration Plan §16 為準（步驟 3，位於步驟 1、2 之後）**，舊『步驟 1 前置』說法作廢（舊說法理由——量測早做可早知影響面——仍成立，但 §16 已把量測獨立成步驟 3 且與步驟 1、2 無檔案衝突）。
 2. **量到真值後才另送客戶**一題「A 不做／B 最小（只減新四頁模式的頂部留白）」，附實測數字與前後並排示意。
 3. **已移除 rev1 的選項 C（把站標帶併進頂欄）**：那屬殼／IA 變更，契約 §19 站殼註記明列 ⛔（不得因此改 `PAGE_LABELS`／導覽殼語意／legacy 入口），也超出 Phase 3。
 
@@ -579,7 +585,7 @@ y≈223 │ 頁面 H2                               y≈170  │ 頁面 H2   （
 
 | W | 內容 | 與 Phase 3 | 本草稿處置 |
 |---|---|---|---|
-| **W1** | tokens 客戶裁示色值是否改 blueprint 色值（`P1R-P3-WF-CUSTOMER-COLORS`） | **Phase 3 項** | **裁示表 D1a**（客戶裁示色）；非客戶色的收斂時程＝D1b |
+| **W1** | tokens 客戶裁示色值是否改 blueprint 色值（`P1R-P3-WF-CUSTOMER-COLORS`） | **Phase 3 項** | **裁示表 D1a**（客戶裁示色）；非客戶色的收斂時程＝D1b（📌 2026-10-30 已裁示：D1a=A 維持、D1b=B 逐頁，DEC-115） |
 | W2 | 指標危險度指路說明句 vs chip | Phase 4 | 不在本 phase，維持現況；元件只**提供**能力（chip 可承載逐字句） |
 | W3 | 卡片摺疊標籤「▸ 詳細」／「🔍 查看依據」是否統一為新字樣 | Phase 4～6 | 不在本 phase，維持現況；`render_fold`／`card_html` 的 `label` 為可選參數、預設不變 |
 | W4 | 選股條件預設展開 vs 收合＋摘要 chip | Phase 5 | 不在本 phase，維持現況 |
@@ -591,7 +597,7 @@ y≈223 │ 頁面 H2                               y≈170  │ 頁面 H2   （
 
 > ⚠️ **「W2～W9 維持現況」是待驗事項**：這些 W 點的「維持現況」處置來自契約 §22 與本檔單組判讀，**未經第二組獨立驗證**；尤其 W2（chip 承載指路句）、W6（Top-N 排序依據 chip）與本 phase 元件能力的邊界，Phase 4／5 線框時須再驗。
 >
-> 其他由本草稿**新增的待客戶決定點**＝D1b、D3、D5、D6、D8、D10（Phase 3 元件外觀／色彩收斂時程／切換樣式／chip 配額；非 W 系列）。
+> 其他由本草稿**新增的待客戶決定點**＝D1b、D3、D5、D6、D8、D10（Phase 3 元件外觀／色彩收斂時程／切換樣式／chip 配額；非 W 系列）。📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**：**以上七題（含 W1）已全部裁示**；W2～W9 客戶明示**維持原 Gate、不提前處理**。
 
 ---
 
@@ -609,14 +615,14 @@ y≈223 │ 頁面 H2                               y≈170  │ 頁面 H2   （
 
 ### 5.2 零變更證明（每個 phase PR 必附，Migration Plan §4）
 
-(a) diff 僅 `src/ui_v2/**`、`src/ui/views/_ui_kit.py`、`tests/**`、docs（若站殼子項經量測並獲核准另含 `app.py`＋z60 digest）；`src/services|compute|data`、`shared/` 語意模組 0 行。(b) `page_css('dark'|'light')` sha256＝§2.5 基準；`card_html`／`single_submit_form`／`render_card` Phase 2 golden 不變；`tokens.DARK/LIGHT` 既有色值映射不變（D1a=A 且 D1b=B；若 D1b=A 則本條改為「變動僅限 D1b 列出的 token，並附前後對照」）。(c) AST：`compact.py` 只 import 標準庫與 `src.ui_v2.*`／`shared.ui_state`（L0）；不 import streamlit／`src.data`／`src.services`／`_ui_kit`；全 repo 0 個 production caller（grep 測試）。(d) mutation（下表）。(e) 分層守衛 `test_c3_layering_guard` 綠。
+(a) diff 僅 `src/ui_v2/**`、`src/ui/views/_ui_kit.py`、`tests/**`、docs（若站殼子項經量測並獲核准另含 `app.py`＋z60 digest）；`src/services|compute|data`、`shared/` 語意模組 0 行。(b) `page_css('dark'|'light')` sha256＝§2.5 基準；`card_html`／`single_submit_form`／`render_card` Phase 2 golden 不變；`tokens.DARK/LIGHT` 既有色值映射不變（D1a=A 且 D1b=B——✅ 客戶已如此裁示，本條成立；~~若 D1b=A 則本條改為「變動僅限 D1b 列出的 token，並附前後對照」~~未採用）。(c) AST：`compact.py` 只 import 標準庫與 `src.ui_v2.*`／`shared.ui_state`（L0）；不 import streamlit／`src.data`／`src.services`／`_ui_kit`；全 repo 0 個 production caller（grep 測試）。(d) mutation（下表）。(e) 分層守衛 `test_c3_layering_guard` 綠。
 
 ### 5.3 Mutation 對應（Migration Plan §6 M1～M4、M7～M10、M13；M5、M6 已於 Phase 2 驗）
 
 | M | 在 Phase 3 的測試（必須先紅後綠） |
 |---|---|
 | M1 sparkline NaN 補 0／跨缺口連線 | 輸入 `[1, nan, 3]`／`[None, 2, 4]`：輸出路徑點數＝有效點數、不含 y 軸基線座標；**缺口兩側不連線（`[1, nan, 3]` 產生 2 段／孤立點，不是 1 條直線）、有效點的 x 保留原索引、不位移**（`[1, nan, 3]` 的 3 其 x 在第 3 格而非第 2 格）；全 NaN／<2 有效點 → 回 placeholder（含 `missing_text`），**不含 `<polyline>`／`<path>`**；窗口 chip 必須在可見 HTML 中（`<title>` 不算）；**邊界**：`[1, nan, nan]`／全 NaN → placeholder（有效點 <2）、`[1, 2, nan]` → 1 段線、`[1, nan, 3]` → 2 個孤立圓點（無 `<polyline>`）；「不等距」字樣只出現在 `render_fold` 的「限制」段，不在窗口 chip 文字內 |
-| M2 chip 接受未登記 kind | `meta_chip("made_up")` → `ValueError`；`META_KINDS` 鍵集合 == 契約 §6 表（對帳測試）；**合併護欄 chip**：`parts` 每個 kind 都屬 `META_KINDS` 且屬護欄族，合併 chip 文字＝各 part 逐字串接，非護欄族互併 → `ValueError`，`META_KINDS` 不因合併新增條目 |
+| M2 chip 接受未登記 kind | `meta_chip("made_up")` → `ValueError`；`META_KINDS` 鍵集合 == 契約 §6 表（對帳測試）；~~**合併護欄 chip**：`parts` 每個 kind 都屬 `META_KINDS` 且屬護欄族，合併 chip 文字＝各 part 逐字串接，非護欄族互併 → `ValueError`，`META_KINDS` 不因合併新增條目~~〔未採用，DEC-115 D10(a)〕；**現行**：兩條護欄各自獨立——`Chip` 無 `parts`／無合併 API；傳入 2 顆護欄 → 輸出 2 顆各自逐字的護欄 chip（文字不被串接、不截、不改寫）；mutation：把兩條護欄合成 1 顆必紅 |
 | M3 新 kind 與 `BADGES` 重名 | 斷言 `META_KINDS` 鍵與 `BADGES[*]["name"]`／`state_const` 零交集；`BADGES` 長度仍 11；狀態 chip 的 icon＋字 == `UI_STATE_META`（讀同源） |
 | M4 Top-N 回傳複製／改序 | `topn_view(rows, n).shown[i] is rows[i]`；順序一致；`hidden == len(rows)-len(shown)`；`n` 大於長度時 `hidden==0`；L3 `TOP_N_OPTIONS`／`DEFAULT_TOP_N` 所在檔 0 diff |
 | M7 說明句放在 chip 之前 | header HTML 內 `title` < `chips` < `say` < 圖槽／svg < 摺疊入口 的 index 嚴格遞增 |
@@ -639,7 +645,36 @@ y≈223 │ 頁面 H2                               y≈170  │ 頁面 H2   （
 
 ## §6 客戶裁示表（Decision Gate）
 
+> 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**：**七題已全部裁示，現行結果見下方「裁示結果」**；本節以下各題為提問紀錄，『不裁示預設』已不適用。
 > 共 **7 題**（D1a、D1b、D3、D5、D6、D8、D10），只列需要客戶決定的外觀／色彩收斂時程／切換樣式／chip 配額。**技術細節不進本表**（檔名、函式、版本驗證、預覽方式、測試、內部代號）由 AI 總管內部拍板；出處引用放文末腳註。每題格式：問題｜方案表（優點／缺點／風險）｜AI 總管推薦｜理由｜不裁示預設。**D3 無現況可維持**（chip 目前沒有任何樣式，不裁示則以推薦為準）。
+
+### 裁示結果（客戶 2026-10-30，`docs/DECISIONS.md` DEC-115）
+
+> 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**。**來源類別：客戶（使用者本輪對話原文），經總管轉交要點；撰寫組照錄要點，非客戶訊息全文逐字。** 本節為**現行有效**；下方 D1a～D10 各題的方案表是提問當時的紀錄，**原文保留**，其中與本節相左的方案標「未採用」。
+
+| 題 | 裁示 | 對線框的落實 | 未採用（原文保留，⛔ 不得實作） |
+|---|---|---|---|
+| D1a | **A** 全部維持 | tokens 客戶裁示色不動（CTA `#1f6feb`／light `#044cb6`；`--sig-neutral`／`-bg` dark `#8fa3b8`／`#26313d`；light 中性暫值照現況） | B（按鈕改 `#1f5fae`）、C |
+| D1b | **B** 延到 Phase 4～6 逐頁 | Phase 3 只加性新增幾何 token（§3.10 表），**不改任何既有色值**；`page_css()` byte-identical（§5.2 (b) 成立） | A（Phase 3 全站一次收斂） |
+| D3 | **A** 三族；護欄實線粗框 | §3.1 外觀；`compact_css()` 的護欄 class 用實線粗框；不得有第四套視覺語言 | B（護欄虛線）、C（全同一種中性膠囊） |
+| D5 | **A** 都不顯示數字 | §3.6、§3.7：sparkline／小倍數格內不顯示最新／最高／最低；數字由 KPI 主值或 status chip 承擔 | B（小倍數每格最新值）、C（三個數字） |
+| D6 | **B** Primary 同高；Secondary 缺資料縮一行 | §3.4 規則僅 Primary；§3.7「D6=B 方案冷啟動」線框為現行；縮成的一行仍為 `UI_STATE_META` 符號＋原因，**不得隱藏 Missing／unavailable** | A（全部同高）、C（全部縮一行，含 Primary） |
+| D8 | **B** 膠囊式（前置：floor 1.56 實跑） | §3.9；步驟 4 實跑 `st.segmented_control` 等（獨立 venv `streamlit==1.56.0` AppTest）；不成立 → **直接退回 A，不需再請示**；不升高 floor | C（pills）；原『不裁示預設＝A』不再適用（客戶已裁示 B） |
+| D10 | **(a)** 來源進摺疊；兩護欄各自獨立 | §3.1 排序與溢出；§3.2 圖 A 外露 5 顆＝資料日、窗口、可讀＋2 護欄，`來源` 進摺疊「來源」段 | (b) 合併護欄 chip（含其 kind 規則與 `parts`、桌／手機 (b) 線框）、(c) 6 顆全外露 |
+
+**補充邊界（客戶要點，逐項）**：
+
+1. D1a：已裁示的主按鈕藍／深色中性灰藍維持，不因 Phase 3 共用元件重做而改色。
+2. D1b：未裁示的顏色與圓角不要在 Phase 3 一次改全站；Phase 4～6 各頁依核准線框逐頁收斂，避免 Phase 3 擴張成全站換膚。
+3. D3：chip 三族；護欄實線粗框；不得新增會與既有 Missing／限制語意混淆的第四套視覺語言。
+4. D5：不額外顯示最新／最高／最低數字；重要數字由 KPI／status chip 承擔，避免圖表再次數字化。
+5. D6=B：Primary 保持正式高度／位置，避免載入前後 layout jump；Secondary 缺資料縮為一行誠實 placeholder，避免大片無資訊空槽；不得因此隱藏 Missing／unavailable；契約字面（§8-4）已由 DEC-115 正式追加並就地加註，不只留在線框。
+6. D8=B：必須先在最低支援 Streamlit 1.56 實跑驗證；API／行為／手機互動不成立 → 直接退回 A 圓點單選，不需再次請示；不得為了 B 升高最低版本。
+7. D10=(a)：來源下沉到「為什麼／來源／限制」摺疊；兩條語意護欄各自獨立、不合併；語意護欄優先於 metadata source；來源仍可追溯（進 L3，不算刪除資訊）；不要為了 6 壓 5 而做出一顆過長、混合兩個語意的 chip。
+
+**M2 對帳規則（修訂）**：`META_KINDS` 鍵集合仍須與契約 §6 表 kind 欄逐一相等；**護欄 chip 各自獨立**——無合併、無 `parts`；護欄 chip 超過外露上限 5 → `ValueError`（不靜默丟、不合併）。**保留的前置與退路**：D8 的 1.56 實跑驗證（`P1R-FLOOR-156-API`）與『不成立即退回 A』條款原樣有效。
+
+**其他處置**：站殼間距（§3.11）——依 AI 總管原方案，先內部實測取得實際像素差與最小改動方案，若屬整體 layout 變更再送客戶裁示（本核准**不含**任何站殼改動）；W2～W9 維持原 Gate、不提前處理（§4）。施工授權與步驟拆分見 Migration Plan §16、DEC-115。
 
 ### D1a 您已裁示的顏色，要維持還是改？[^1]
 
@@ -737,7 +772,7 @@ y≈223 │ 頁面 H2                               y≈170  │ 頁面 H2   （
 | D9（預覽方式） | **移除** | 內部自決：離線 HTML＋截圖附 PR |
 | （新增） | **D10** | 圖 A chip 配額與「來源」去處 |
 
-**D7（站殼間距）不在本表**：①「約 50px」是未量測的推論，不該請您為猜測拍板；② rev1 的選項 C（併站標帶進頂欄）屬殼／IA 變更，契約 §19 明列 ⛔。處置：內部先量測（步驟 1 前置工作項，無需客戶），量到真值後才另送您「A 不做／B 最小」。細節與風險（高；須走 Gate §5）見 §3.11。
+**D7（站殼間距）不在本表**：①「約 50px」是未量測的推論，不該請您為猜測拍板；② rev1 的選項 C（併站標帶進頂欄）屬殼／IA 變更，契約 §19 明列 ⛔。處置：內部先量測（~~步驟 1 前置工作項~~ 以 Plan §16 為準＝步驟 3，無需客戶），量到真值後才另送您「A 不做／B 最小」。細節與風險（高；須走 Gate §5）見 §3.11。
 
 ---
 
@@ -755,9 +790,10 @@ y≈223 │ 頁面 H2                               y≈170  │ 頁面 H2   （
    - **U3**（rev1 的「圖 A 6 顆 chip 溢出」）→ **已升為客戶裁示 D10**，不再是不確定處。
    - **U4** 圖 B 小倍數 vs switcher 的高度取捨（§3.7）；以及「海外市場」3 系列在 switcher 單圖內不可疊軸的排法（§3.9）。
    - **U5** Primary 為原生圖、其餘為 SVG，兩種繪圖路徑在同頁的視覺一致性（線寬、色、字級）需元件預覽時比對。
-   - **U6** 站殼間距的「提早 50px」是否真的只影響 nav4 模式：已改為內部量測的步驟 1 前置工作項（§3.11），量到前不送客戶。
+   - **U6** 站殼間距的「提早 50px」是否真的只影響 nav4 模式：已改為內部量測的~~步驟 1 前置工作項~~（以 Plan §16 為準＝步驟 3；§3.11），量到前不送客戶。
    - **U7** 「✅ 可讀」與「⬜ 尚未定義」並排的讀法（§3.2）；Phase 4 線框處理，登 BACKLOG。
 8. **D8 出處與限制（N4）**：舊總經頁選 `st.radio(horizontal=True)` 的理由「視覺一致優先」，**唯一出處是 `src/ui/tabs/tab_macro_v2.py` 的程式註解**（註解標為 user 2026-08-27）；本檔**未在 `docs/DECISIONS.md` 找到對應 DEC**（單組 grep，非窮舉），故 §6 D8 僅敘述為「舊頁程式註解記載的偏好」，不稱為客戶正式裁示。floor 1.56 的 `st.segmented_control`／`st.pills` 行為未實跑（§3.9）。
+10. 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）**：**核准後仍未驗（不得當成已驗）**——(a) D8 膠囊切換在 floor 1.56 的 API／行為／手機互動**尚未實跑**（Migration Plan §16 步驟 4）；(b) D6=B 載入後撐開造成下方內容下移一次，其實際位移量與 Gate A5／A11 影響**未量測**；(c) D3 護欄實線粗框的視覺權重（相對資訊／狀態 chip）**未渲染驗證**，待離線預覽；(d) 站殼間距**尚未量測**；(e) 本檔 §1～§5、§7 其餘內容仍是單組撰寫＋兩組 QA 修訂，**核准不等於已全數驗證**。
 9. **新發現（登 `docs/BACKLOG.md`，P2，不插隊）**：`P1R-P3-BG-THREE-SOURCES`（三個底色來源，D1b 背景）、`P1R-P3-KPI-VALUE-WIDTH`（Q7 與 2 欄手機寬度）、`P1R-P3-CHART-A-SIX-CHIPS`（圖 A 6 顆 chip；已升為 D10）、`P1R-P3-COLD-GAP`（冷啟動空槽 vs 「空白太多」，D6）、`P1R-P3-NATIVE-VS-SVG`（原生圖與 SVG 兩條繪圖路徑一致性）、`P1R-P3-SHELL-SCOPE`（站殼 padding 與 legacy／z60 共用；改為內部先量測）。rev2 新增：`P1R-P3-LEGACY-SPARKLINE-FORKS`（legacy 三份 sparkline 實作，只登記不動）、`P1R-P3-READABLE-VS-UNDEFINED`（✅ 可讀與 ⬜ 尚未定義並排的讀法，Phase 4 線框）。
 
 ---
