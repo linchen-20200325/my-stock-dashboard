@@ -642,7 +642,11 @@ def render_page_market() -> None:
 
     # ── 層 1：首屏（P4-1，DEC-117 Q5=B 新順序）────────────────────────────
     # 狀態列逐字拆兩半（`status_line` 的分隔字＝「｜」）：更新時間（≠ 資料日）在頁首、覆蓋率在風險 tile（C6-4）。
-    _time_text, _coverage_text = status_line(_report, _danger).split("｜", 1)
+    # QA 修正輪：分隔字必須恰好一個，否則 fail loud（§1；⛔ 拆錯位置把半句話放到錯的地方）。
+    _status = status_line(_report, _danger)
+    if _status.count("｜") != 1:
+        raise ValueError(f"狀態列應恰含一個「｜」才能拆成更新時間／覆蓋率兩半，實得：{_status!r}")
+    _time_text, _coverage_text = _status.split("｜")
     # L1 決策區包在一個具名容器裡：窄螢幕只在這裡壓縮間距（`blocks.P4M_LAYOUT_CSS`；只排版、不藏內容）。
     blocks.render_layout_css()
     with st.container(key=blocks.P4M_L1_KEY):
@@ -673,7 +677,9 @@ def render_page_market() -> None:
             regime_tile=_regime_tile, regime_face=regime_clause(_regime_tile, _regime),
             regime_badge=(card_badge_text(_regime_tile) if _regime_tile.card.state == UI_LIVE else ""),
             exposure_tile=_exposure, alloc=_alloc, alloc_error=_alloc_err, risks=_risks,
-            coverage_text=_coverage_text)
+            coverage_text=_coverage_text,
+            # QA 修正輪（客戶 Q6 真錯誤外露逐字）：讀契約失敗時，tile 外露 X1 同一句紅字（字樣與 `_render_x1` 相同）。
+            regime_error_line=(f"市場位階契約讀不出來：`{scrub_secrets(_regime_err)}`" if _regime_err else ""))
 
         # ④ ⚡ 需要處理（一行 bar＋展開清單；只轉述既有警示＋建議持股的衝突提示；三態判別沿用 `build_key_alert_tile`）。
         blocks.render_alerts_block(alerts_tile=_alerts_tile, alerts=_alerts, scanned=_scanned,
