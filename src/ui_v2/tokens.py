@@ -198,6 +198,34 @@ SPACING: Final[Mapping[str, str]] = MappingProxyType({
     "--sp-8": "26px",   # UI_TOKENS.md §C 表「--sp-7／--sp-8」列
 })
 
+# ══════════════════════════════════════════════════════════════════
+# D. Phase 3 共用元件的**加性幾何 token**（2026-10-30，客戶 DEC-115 核准；
+#    線框 `PHASE3_SHARED_COMPONENTS_WIREFRAME_2026-10-30.md` §3.10 表）。
+# ⛔ 刻意**不併進** `_DARK`／`_LIGHT`：`markup.page_css()` 以 `tuple(tokens.DARK)`
+#    產生 `:root`，併進去會改變 `page_css()` 輸出（基準 sha256 前 16 碼
+#    dark 432d88ab064e5144／light 2ad61fd99eea422c，長度 6391，必須 byte-identical）。
+# ⛔ 與 dark/light 無關（純幾何），只由 `compact.compact_css()` 宣告到 `:root`。
+# ⛔ 不改任何既有值；`--cp-card-radius-bp`（blueprint 14px）**只新增、Phase 3 不套用**
+#    （契約 §14.2；D1b=B）。
+# ══════════════════════════════════════════════════════════════════
+COMPACT_GEOMETRY: Final[Mapping[str, str]] = MappingProxyType({
+    "--cp-chip-radius": "999px",      # 線框 §3.10「chip 膠囊半徑」（blueprint .pill；_chip 既有 999px）
+    "--cp-chip-h": "22px",            # 線框 §3.10「chip 高／字級／內距」
+    "--cp-chip-fs": "11.5px",         # 同上；沿用 BADGE_BASE 字級
+    "--cp-chip-pad-v": "2px",         # 同上
+    "--cp-chip-pad-h": "8px",         # 同上
+    "--cp-card-radius-bp": "14px",    # 線框 §3.10「卡圓角（blueprint）」；只新增，Phase 3 不套用
+    "--cp-tile-pad-v": "10px",        # 線框 §3.10「tile 內距」＝CARD_TIERS t2（10×12）
+    "--cp-tile-pad-h": "12px",
+    "--cp-tile-radius": "2px",        # 線框 §3.10「tile 圓角暫沿用現行 2px」
+    "--cp-tile-min-h": "96px",        # 契約 §19 Q1 下限
+    "--cp-slot-h-desktop": "220px",   # 契約 §19 Q3
+    "--cp-slot-h-mobile": "140px",    # 契約 §19 Q3
+    "--cp-mini-h": "96px",            # 契約 §19 Q4
+    "--cp-spark-h": "64px",           # 契約 §19 Q5
+    "--cp-touch-min": "44px",         # 線框 §3.10「觸控區最小高」
+})
+
 _MODES: Final[dict[str, Mapping[str, object]]] = {"dark": DARK, "light": LIGHT}
 
 
@@ -231,6 +259,7 @@ __all__ = [
     "DARK",
     "LIGHT",
     "SPACING",
+    "COMPACT_GEOMETRY",
     "SERIES_DARK",
     "SERIES_LIGHT",
     "STATUS_PAIRS",
