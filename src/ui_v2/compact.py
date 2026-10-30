@@ -15,6 +15,9 @@
   不自造原因字（原因由呼叫端傳入，且不得自帶第二個狀態符號）。
 - ⛔ sparkline／小倍數不顯示最新／最高／最低數字（D5=A）。
 - 色彩：紅色只給 `failed`；stale 用琥珀 ⚠；護欄為實線粗框（D3=A，⛔ 虛線）。
+- ⚠️ 掛頁注意（Phase 3 步驟 4，floor 1.56.0 實跑，`docs/vnext/PHASE3_D8_FLOOR156_VERIFICATION_2026-10-30.md`）：
+  **SVG 不可經 `st.html`**（1.56.0 會把行內 `<svg>` 整段剝除，無 exception）；`sparkline_svg` 的輸出掛頁時
+  用 `st.markdown(unsafe_allow_html=True)`，或改包成 data-URI `<img>`。
 """
 from __future__ import annotations
 
@@ -249,11 +252,14 @@ META_KINDS: Final[Mapping[str, MetaKindSpec]] = MappingProxyType({
 #: 非 META_KINDS 的兩種 Chip.kind：狀態 chip（`status_chip`）與逐字客戶護欄句（`guard_chip`）。
 KIND_STATUS: Final[str] = "status"
 KIND_GUARD_TEXT: Final[str] = "guard_text"
-_EXTRA_KINDS: Final[frozenset[str]] = frozenset({KIND_STATUS, KIND_GUARD_TEXT})
+#: Top-N「另 K 筆見全部」chip（F10）：資訊族、不屬契約 §6 表的封閉集合 `META_KINDS`（故放 `_EXTRA_KINDS`），
+#: 文字必須由 `TOPN_MORE_FMT` 推導（K≥1）；只經 `TopN.more_chip()` 產生。
+KIND_TOPN_MORE: Final[str] = "topn_more"
+_EXTRA_KINDS: Final[frozenset[str]] = frozenset({KIND_STATUS, KIND_GUARD_TEXT, KIND_TOPN_MORE})
 
 #: 一個 chip 列內最多出現一次的 kind（契約 §6-5：同一 metadata 事實外露層最多一次）。
 _SINGLETON_KINDS: Final[frozenset[str]] = frozenset(
-    {"asof", "asof_missing", "source", "retrieved_at", "readable", "window"}
+    {"asof", "asof_missing", "source", "retrieved_at", "readable", "window", "topn_more"}
 )
 
 
@@ -292,6 +298,11 @@ def _validate_chip_text(kind: str, text: str, tone: str) -> None:
         return
     if kind == KIND_GUARD_TEXT:
         return                                     # 逐字客戶句：只驗非空單行（上面已驗）
+    if kind == KIND_TOPN_MORE:
+        mt = re.fullmatch(r"另 (\d+) 筆見全部", text, re.ASCII)
+        if tone != "info" or not mt or str(int(mt.group(1))) != mt.group(1) or int(mt.group(1)) < 1:
+            raise ValueError(f"topn_more chip 必須是 tone='info'、文字 {TOPN_MORE_FMT!r}（K≥1、無前導零）：{text!r}")
+        return
     spec = META_KINDS[kind]
     if spec.tone is not None and tone != spec.tone:
         raise ValueError(f"kind {kind!r} 的 tone 必須是 {spec.tone!r}，收到 {tone!r}")
@@ -345,7 +356,7 @@ def _validate_chip(kind: object, text: object, tone: object) -> None:
         if not isinstance(val, str):
             raise ValueError(f"Chip.{fname} 必須是 str，收到 {type(val).__name__}：{val!r}")
     if kind in _EXTRA_KINDS:
-        family = _S if kind == KIND_STATUS else _G
+        family = {KIND_STATUS: _S, KIND_GUARD_TEXT: _G, KIND_TOPN_MORE: _I}[kind]
     elif kind in META_KINDS:
         spec = META_KINDS[kind]
         if spec.family == _D:
@@ -394,6 +405,8 @@ class Chip:
             return _S
         if self.kind == KIND_GUARD_TEXT:
             return _G
+        if self.kind == KIND_TOPN_MORE:
+            return _I
         return META_KINDS[self.kind].family
 
     @property
@@ -402,6 +415,8 @@ class Chip:
             return 1
         if self.kind == KIND_GUARD_TEXT:
             return 0
+        if self.kind == KIND_TOPN_MORE:
+            return 5
         return META_KINDS[self.kind].rank
 
 
@@ -563,8 +578,10 @@ def chart_header_html(*, title: str, chips: Sequence[Chip], say: str | None,
     回傳 `(html, 溢出 chip)`；溢出 chip 交給 `render_fold` 的「來源」段。
     `say` 非客戶原句時 ≤32 字（`say_verbatim=True` 豁免、逐字不截）；不得含換行。
     標題 ≤40 字（客戶逐字標題傳 `title_verbatim=True` 豁免）。
-    ⚠️ **chip 下限由呼叫端負責**：契約 §4 要求圖 header 外露 3～5 顆 chip，本函式只擋上限
+    ⚠️ **chip 下限由呼叫端負責**：契約 §4／線框 §3.2 要求圖 header 外露 3～5 顆 chip，本函式只擋上限
     （溢出回傳）；chip 太少（含 0 顆）**不會**報錯——呼叫端須自行確保至少有資料日／狀態類 chip。
+    **唯一合法例外＝冷啟動**：尚未載入時線框 §3.2 本來就只畫 2 顆（護欄＋狀態），2 顆是合法的；
+    除冷啟動外少於 3 顆＝呼叫端缺 chip（例如漏了資料日）。本函式不自判是否冷啟動。
     """
     say_verbatim = _check_bool("say_verbatim", say_verbatim)
     title_verbatim = _check_bool("title_verbatim", title_verbatim)
@@ -672,6 +689,8 @@ def kpi_tile_html(*, label: str, value: str | None, chips: Sequence[Chip] = (),
       0 可為真值，是否為真值由呼叫端負責（沒資料請用 `value=None`）。
     - 資料日／來源／抓取時間／可讀不在 tile 內（寫在組級 chip 列）；傳入 → ValueError。
     - chip 合計 ≤2（≤1 窗口＋≤1 狀態／護欄）；窗口與 `group_window_text` 相同 → ValueError。
+    - `value=None` 且 `spark` 是 placeholder → ValueError（F3：說明原因的 chip 已外露一次，
+      placeholder 會再說一次；冷啟動請不要傳 spark）。
     - 有 `spark` 時必須有可見窗口：tile 內窗口 chip，或 `group_window_text`（組級已外露的窗口）。
     - `spark` 只收 `SafeHtml`；主值 ≤12 字；卡面可見字（標籤＋主值＋chip＋1 句）≤60，
       客戶原句（`say_verbatim=True`）另計。
@@ -709,6 +728,11 @@ def kpi_tile_html(*, label: str, value: str | None, chips: Sequence[Chip] = (),
         s = _check_str("say", say, allow_glyph=True)
     if spark is not None:
         spark_ph = _check_safe_html("spark", spark)
+        if val is None and spark_ph:
+            raise ValueError(
+                "主值留白（冷啟動）時不得帶 placeholder sparkline：原因 chip 已說明一次，"
+                "placeholder 會讓『尚未載入』在同一 tile 外露兩次（契約 §6-5）；請不要傳 spark"
+            )
         if not spark_ph and not windows and group_window_text is None:
             raise ValueError("有 sparkline 的 tile 必須有可見窗口 chip（tile 內或組級）")
     face = len(lab) + len(val or "") + sum(len(c.text) for c in items)
@@ -773,6 +797,12 @@ def sparkline_svg(values: Sequence[float | None], *, w: int = 100, h: int = 48, 
     - 連續有效點成一段 `<polyline>`；孤立單點畫 `<circle>`；**有效點 <2 → placeholder**（不畫線也不畫點）。
     - 單色中性線；⛔ 不顯示最新／最高／最低數字（D5=A）；無軸無圖例；`<title>` 供讀屏，不算外露。
     - `missing_state`（UI_STATE_META 鍵）與 `missing_text` 必填（即使這次畫得出來），元件不自判未載入或無資料。
+    - ⚠️ **掛頁**：回傳的行內 `<svg>` **不可經 `st.html`**（Streamlit 1.56.0 會把行內 svg 整段剝除，
+      畫面上只剩文字、不報錯）；請用 `st.markdown(unsafe_allow_html=True)`，或改包成 data-URI `<img>`
+      （兩者在 1.56.0 實測保留；`docs/vnext/PHASE3_D8_FLOOR156_VERIFICATION_2026-10-30.md` §3.3）。
+      placeholder（`<span>`）不受影響，但為一致建議走同一條路徑。
+    - 孤立點畫 `r=2.5` 的實心圓（F5：1.5 在 100×48 上近乎看不見；2.2 → 2.5 為 QA 看圖後加大）。
+    - `<polyline>` 帶 `vector-effect="non-scaling-stroke"`：SVG 被 CSS 縮放（小倍數 `width:100%`）時線寬不隨之變化。
     """
     _check_int("w", w, 20, 600)
     _check_int("h", h, 8, SPARK_HEIGHT_MAX_PX)
@@ -815,10 +845,10 @@ def sparkline_svg(values: Sequence[float | None], *, w: int = 100, h: int = 48, 
     for run in runs:
         if len(run) == 1:
             x, y = xy(*run[0])
-            shapes.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="1.5"/>')
+            shapes.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="2.5"/>')
         else:
             coords = " ".join("{:.2f},{:.2f}".format(*xy(i, v)) for i, v in run)
-            shapes.append(f'<polyline fill="none" points="{coords}"/>')
+            shapes.append(f'<polyline fill="none" vector-effect="non-scaling-stroke" points="{coords}"/>')
     return _safe(
         f'<svg class="cp-spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" '
         f'aria-label="{_esc(ttl)}"><title>{_esc(ttl)}</title>{"".join(shapes)}</svg>'
@@ -919,6 +949,15 @@ class TopN(Generic[T]):
     def more_text(self) -> str | None:
         return TOPN_MORE_FMT.format(k=self.hidden) if self.hidden > 0 else None
 
+    def more_chip(self) -> Chip:
+        """「另 K 筆見全部」chip（F10）：資訊族（細外框）、文字＝`TOPN_MORE_FMT`，kind=`topn_more`
+        （不在 `META_KINDS` 封閉集合內，僅此處產生）。可進 `chips_html`／`_check_chip_seq` 的去重檢查
+        （同列最多一顆）。`hidden == 0` 時沒有「另 K 筆」可說 → ValueError（⛔ 不回傳 K=0 的假 chip；
+        呼叫端先看 `more_text is not None`）。"""
+        if self.hidden <= 0:
+            raise ValueError("TopN 沒有被隱藏的筆數（hidden=0），不產生『另 K 筆』chip")
+        return Chip(kind=KIND_TOPN_MORE, text=TOPN_MORE_FMT.format(k=self.hidden), tone="info")
+
     @property
     def all_label(self) -> str | None:
         return TOPN_ALL_LABEL_FMT.format(n=self.total) if self.hidden > 0 else None
@@ -965,7 +1004,23 @@ class SegmentSpec:
 
 
 def segment_options(options: Sequence[str], default: str) -> SegmentSpec:
-    """標準化 switcher 選項：去重（保第一次出現的位置）、保序、空字串報錯；預設必須在選項內。"""
+    """標準化 switcher 選項：去重（保第一次出現的位置）、保序、空字串報錯；預設必須在選項內。
+
+    本函式**只回傳資料**（⛔ 不碰 streamlit）。日後掛 `st.segmented_control`（D8=B，floor 1.56.0 已驗，
+    `docs/vnext/PHASE3_D8_FLOOR156_VERIFICATION_2026-10-30.md` §4）的呼叫端必須遵守 5 條硬性約束：
+
+    1. **取消選取回退**：單選下點已選項會回 `None`（即使有 `default=`）；`None` 不得外洩到下游——
+       首選 `on_change` 回呼把 key 寫回 `last_valid`；次選 `eff = v if v is not None else last_valid`。
+       `last_valid` 只能是使用者上一次真實選擇或 `default`，⛔ 不得自編值。
+    2. **form 內**：點選項不 rerun，值在 submit 才送出；submit 分支同樣要把 `None` 視同缺值
+       （`None → 上次已套用值 ?? default`）；form 內 `on_change` 不即時觸發。
+    3. **點擊尺寸**：預設 32px（<44px）；要 ≥44px 須用 CSS 覆寫（依賴內部 `data-testid`，失效退化為 32px），
+       否則交付報告須揭露。
+    4. **換行**：選項多／字長會換行（不橫捲、不裁切）；form 內 390 寬 5 顆×3 字會換 2 列（孤立第 5 顆）；
+       設計稿須畫換行態。
+    5. **避免 tuple options 與雙重指定**：⛔ 不用 tuple 當選項值（`default=<tuple>` 會 raise）；
+       key 播種與 `default=` **二選一**；同 key 但 options 變動時選取值不在新 options 會靜默回 default。
+    """
     if isinstance(options, (str, bytes)) or not isinstance(options, (list, tuple)):
         raise ValueError(f"options 必須是 list／tuple，收到 {type(options).__name__}")
     seen: list[str] = []
@@ -999,7 +1054,8 @@ def compact_css() -> str:
         "min-height:var(--cp-chip-h);padding:var(--cp-chip-pad-v) var(--cp-chip-pad-h);"
         "border-radius:var(--cp-chip-radius);font-size:var(--cp-chip-fs);line-height:1.3;"
         "max-width:100%;overflow-wrap:anywhere}",
-        ".cp-info{border:1px solid var(--rule-2);color:var(--ink-2);background:transparent}",
+        # F6：邊框改引既有 --ink-3（對 --panel：dark 4.97／light 5.34，≥3:1；--rule-2 僅 2.18／2.51）
+        ".cp-info{border:1px solid var(--ink-3);color:var(--ink-2);background:transparent}",
         ".cp-status{border:1px solid transparent;color:var(--ink)}",
         ".cp-t-green{background:var(--sig-green-bg);color:var(--sig-green)}",
         ".cp-t-amber{background:var(--sig-amber-bg);color:var(--sig-amber)}",
@@ -1016,14 +1072,17 @@ def compact_css() -> str:
         ".cp-s-red{color:var(--sig-red)}",
         ".cp-tile{box-sizing:border-box;min-height:var(--cp-tile-min-h);"
         "padding:var(--cp-tile-pad-v) var(--cp-tile-pad-h);border:1px solid var(--rule);"
-        "border-radius:var(--cp-tile-radius);background:var(--panel)}",
+        "border-radius:var(--cp-tile-radius);background:var(--panel);"
+        # F2：flex column，使宿主格網 align-items:stretch 時同列等高、spark 貼底（DOM 結構不變）
+        "display:flex;flex-direction:column}",
         ".cp-tile-label{font-size:13px;color:var(--ink-2)}",
-        ".cp-tile-value{font-size:20px;color:var(--ink);overflow-wrap:anywhere}",
+        # F4：平衡折行，避免孤字
+        ".cp-tile-value{font-size:20px;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance}",
         ".cp-tile-value.cp-blank{min-height:24px}",
         ".cp-tile-say{font-size:12px;color:var(--ink-2);margin-top:var(--sp-2)}",
-        ".cp-tile-spark{margin-top:var(--sp-2)}",
+        ".cp-tile-spark{margin-top:auto;padding-top:var(--sp-2)}",
         ".cp-spark{display:block;max-height:var(--cp-spark-h);color:var(--ink-2)}",
-        ".cp-spark polyline{stroke:currentColor;stroke-width:1.5;fill:none}",
+        ".cp-spark polyline{stroke:currentColor;stroke-width:1.5;fill:none;vector-effect:non-scaling-stroke}",
         ".cp-spark circle{fill:currentColor}",
         # M2/F5：⛔ 不裁字——Missing 原因文字必須完整可見：不設 overflow:hidden；
         # 高度只給 min-height（可長）、寬度 100% 上限 max-width（可縮），文字自動換行。
@@ -1031,7 +1090,8 @@ def compact_css() -> str:
         "max-height:none;font-size:11px;color:var(--sig-grey);overflow-wrap:anywhere;white-space:normal}",
         ".cp-sm{display:grid;gap:var(--sp-3)}",
         ".cp-sm-cell{min-width:0}",
-        ".cp-sm-cell .cp-spark{max-height:var(--cp-mini-h)}",
+        # F1：SVG 隨格寬縮放（已有 viewBox，等比）
+        ".cp-sm-cell .cp-spark{width:100%;height:auto;max-height:var(--cp-mini-h)}",
         ".cp-sm-cell .cp-spark-missing{max-height:none}",
         ".cp-sm-name{font-size:12px;color:var(--ink-2)}",
         ".cp-sm-missing{font-size:12px;color:var(--sig-grey);min-height:32px;"

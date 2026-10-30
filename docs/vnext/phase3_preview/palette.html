@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>色票並排表</title><style>:root{--ochre:#d59a5e;--ochre-bg:#2a2013;--ochre-line:#8a6234;--focus:#8fc0ff;--paper:#0e141b;--panel:#151d26;--panel-2:#1b242f;--grid:#1a242e;--rule:#2e3b48;--rule-2:#46545f;--ink:#dbe5ef;--ink-2:#9fb0c1;--ink-3:#7d8d99;--review-bg:#1d1b28;--review-line:#8b82b4;--review-ink:#c3bbe4;--sig-green:#57b985;--sig-green-bg:#11241a;--sig-amber:#d3a43c;--sig-amber-bg:#292110;--sig-red:#e8706b;--sig-red-bg:#2b1615;--sig-blue:#4b8efe;--sig-blue-bg:#141f2b;--sig-grey:#8b98a4;--sig-grey-bg:#1b232b;--sig-neutral:#8fa3b8;--sig-neutral-bg:#26313d;--cta-primary-bg:#1f6feb;--cta-primary-fg:#ffffff;--sp-1:4px;--sp-2:6px;--sp-3:8px;--sp-4:10px;--sp-5:12px;--sp-6:16px;--sp-7:22px;--sp-8:26px;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+/* ── block 網格（卡內一列幾格）── */
+.grd{display:grid;gap:var(--sp-5)}
+.grd>*{min-width:0}
+.grd>.blk{margin-top:0px}
+.grd-t1{margin-top:15px}
+.grd-t2{margin-top:10px}
+.grd-t3{margin-top:6px}
+.grd-t4{margin-top:5px}
+.g-1-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}
+.g-3-2-1{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* ── 層級網格（同一層的 block 彼此怎麼並排）── */
+.lyr{display:grid;gap:var(--sp-5)}
+.lyr>*{min-width:0}
+.lyr>.grd{margin-top:0px}
+.lyr-t2{margin-top:10px}
+.lg-3-2-1{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* ── 卡片基準 ── */
+.blk{box-sizing:border-box;background:var(--panel);border-width:1px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk *{box-sizing:border-box}
+/* ── 四階密度階梯（UI_COMPONENTS §1）── */
+.blk-t1{margin-top:15px;padding-top:15px;padding-bottom:15px;padding-left:17px;padding-right:17px;border-width:2px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk-t2{margin-top:10px;padding-top:10px;padding-bottom:10px;padding-left:12px;padding-right:12px;border-width:1px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk-t3{margin-top:6px;padding-top:6px;padding-bottom:6px;padding-left:9px;padding-right:9px;border-width:1px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk-t4{margin-top:5px;padding-top:5px;padding-bottom:5px;padding-left:9px;padding-right:9px;border-width:1px;border-style:dashed;border-color:var(--rule-2);border-radius:2px}
+/* ── 卡內結構 ── */
+.blk-head{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);flex-wrap:wrap}
+.blk-head>.bdg{flex-shrink:0}
+.blk-title{flex:1 1 0;min-width:0}
+.blk-t1 .blk-title{font-size:17.5px;font-weight:700}
+.blk-t2 .blk-title{font-size:14.5px;font-weight:700}
+.blk-t3 .blk-title{font-size:13px;font-weight:700}
+.blk-t4 .blk-title{font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.blk-val{font-size:24px;font-weight:700;font-family:var(--mono);line-height:1.25;font-variant-numeric:tabular-nums}
+.blk-t4 .blk-val{font-size:22px}
+.blk-lvl{color:var(--ink-2)}
+.blk-facts{margin-top:var(--sp-3)}
+.blk-fact{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);padding-top:var(--sp-1);padding-bottom:var(--sp-1);border-top-width:1px;border-top-style:solid;border-top-color:var(--grid)}
+.blk-fact:first-child{border-top-width:0px}
+.blk-fact-k{color:var(--ink-3);font-size:11.5px;flex-shrink:0;white-space:nowrap}
+.blk-fact-v{color:var(--ink);font-variant-numeric:tabular-nums}
+/* ── 徽章共用幾何 ── */
+.bdg{display:inline-flex;align-items:center;gap:4px;border-radius:3px;padding-top:1px;padding-bottom:1px;padding-left:7px;padding-right:7px;font-size:11.5px;font-weight:600;white-space:nowrap;border-width:1px;border-style:solid}
+/* ── 徽章編號配色（⛔ #9 與 #1 零共用色 token）── */
+.bdg-1{background:var(--sig-green-bg);color:var(--sig-green);border-width:1px;border-style:solid;border-color:var(--sig-green)}
+.bdg-2{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-3{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-4{background:var(--sig-amber-bg);color:var(--sig-amber);border-width:1px;border-style:solid;border-color:var(--sig-amber)}
+.bdg-5{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:dashed;border-color:var(--rule-2)}
+.bdg-6{background:var(--sig-red-bg);color:var(--sig-red);border-width:1px;border-style:solid;border-color:var(--sig-red)}
+.bdg-7{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-8{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-9{background:var(--sig-neutral-bg);color:var(--sig-neutral);border-width:1px;border-style:dashed;border-color:var(--sig-blue)}
+.bdg-11{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+/* ── 徽章尺寸（依所在卡層 t1→b1 … t4→b4）── */
+.bdg.sb-b1{font-size:14.5px;padding-top:10px;padding-bottom:10px;padding-left:22px;padding-right:22px;min-height:46px;border-width:2px;border-radius:3px}
+.bdg.sb-b2{font-size:12.5px;padding-top:5px;padding-bottom:5px;padding-left:13px;padding-right:13px;min-height:36px;border-width:1px;border-radius:3px}
+.bdg.sb-b3{font-size:11px;padding-top:2px;padding-bottom:2px;padding-left:10px;padding-right:10px;min-height:28px;border-width:1px;border-radius:3px}
+.bdg.sb-b4{font-size:10.5px;padding-top:2px;padding-bottom:2px;padding-left:5px;padding-right:5px;min-height:26px;border-width:0px;border-radius:3px}
+/* ── 燈卡「▸ 詳細」純 CSS 開關 ── */
+.blk-fold{position:relative}
+.blk-fold-i{position:absolute;top:0;left:0;width:1px;height:1px;margin:0;padding:0;opacity:0;pointer-events:none}
+.blk-fold-s{display:block;cursor:pointer;padding-top:var(--sp-2);padding-bottom:var(--sp-2);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+.blk-fold-i:focus-visible~.blk-fold-s{outline:2px solid currentColor;outline-offset:2px}
+.blk-fold-b{display:none}
+.blk-fold-i:checked~.blk-fold-b{display:block}
+@media (max-width:880px){.g-1-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}.g-3-2-1{grid-template-columns:repeat(2,minmax(0,1fr))}.lg-3-2-1{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.g-1-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}.g-3-2-1{grid-template-columns:repeat(1,minmax(0,1fr))}.lg-3-2-1{grid-template-columns:repeat(1,minmax(0,1fr))}.blk-t1{padding-top:11px;padding-bottom:11px;padding-left:12px;padding-right:12px}}
+:root{--cp-chip-radius:999px;--cp-chip-h:22px;--cp-chip-fs:11.5px;--cp-chip-pad-v:2px;--cp-chip-pad-h:8px;--cp-card-radius-bp:14px;--cp-tile-pad-v:10px;--cp-tile-pad-h:12px;--cp-tile-radius:2px;--cp-tile-min-h:96px;--cp-slot-h-desktop:220px;--cp-slot-h-mobile:140px;--cp-mini-h:96px;--cp-spark-h:64px;--cp-touch-min:44px;}
+.cp-chips{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin:var(--sp-2) 0}
+.cp-chip{display:inline-flex;align-items:center;box-sizing:border-box;min-height:var(--cp-chip-h);padding:var(--cp-chip-pad-v) var(--cp-chip-pad-h);border-radius:var(--cp-chip-radius);font-size:var(--cp-chip-fs);line-height:1.3;max-width:100%;overflow-wrap:anywhere}
+.cp-info{border:1px solid var(--ink-3);color:var(--ink-2);background:transparent}
+.cp-status{border:1px solid transparent;color:var(--ink)}
+.cp-t-green{background:var(--sig-green-bg);color:var(--sig-green)}
+.cp-t-amber{background:var(--sig-amber-bg);color:var(--sig-amber)}
+.cp-t-red{background:var(--sig-red-bg);color:var(--sig-red)}
+.cp-t-grey{background:var(--sig-grey-bg);color:var(--sig-grey)}
+.cp-guard{border:2px solid var(--ink-2);color:var(--ink);background:transparent;font-weight:600}
+.cp-ch-title{font-size:var(--sp-6);font-weight:600;color:var(--ink);margin:0 0 var(--sp-2)}
+.cp-ch-say{color:var(--ink-2);margin:var(--sp-2) 0}
+.cp-slot{box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;overflow-wrap:anywhere}
+.cp-slot-primary{height:var(--cp-slot-h);border:1px solid var(--rule)}
+.cp-slot-line{min-height:32px;padding:var(--sp-2) var(--sp-3);justify-content:flex-start}
+.cp-s-grey{color:var(--sig-grey)}
+.cp-s-red{color:var(--sig-red)}
+.cp-tile{box-sizing:border-box;min-height:var(--cp-tile-min-h);padding:var(--cp-tile-pad-v) var(--cp-tile-pad-h);border:1px solid var(--rule);border-radius:var(--cp-tile-radius);background:var(--panel);display:flex;flex-direction:column}
+.cp-tile-label{font-size:13px;color:var(--ink-2)}
+.cp-tile-value{font-size:20px;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance}
+.cp-tile-value.cp-blank{min-height:24px}
+.cp-tile-say{font-size:12px;color:var(--ink-2);margin-top:var(--sp-2)}
+.cp-tile-spark{margin-top:auto;padding-top:var(--sp-2)}
+.cp-spark{display:block;max-height:var(--cp-spark-h);color:var(--ink-2)}
+.cp-spark polyline{stroke:currentColor;stroke-width:1.5;fill:none;vector-effect:non-scaling-stroke}
+.cp-spark circle{fill:currentColor}
+.cp-spark-missing{display:flex;align-items:center;box-sizing:border-box;max-height:none;font-size:11px;color:var(--sig-grey);overflow-wrap:anywhere;white-space:normal}
+.cp-sm{display:grid;gap:var(--sp-3)}
+.cp-sm-cell{min-width:0}
+.cp-sm-cell .cp-spark{width:100%;height:auto;max-height:var(--cp-mini-h)}
+.cp-sm-cell .cp-spark-missing{max-height:none}
+.cp-sm-name{font-size:12px;color:var(--ink-2)}
+.cp-sm-missing{font-size:12px;color:var(--sig-grey);min-height:32px;overflow-wrap:anywhere;white-space:normal}
+.cp-sm-d1-m1{grid-template-columns:repeat(1,minmax(0,1fr))}
+.cp-sm-d1-m2{grid-template-columns:repeat(1,minmax(0,1fr))}
+.cp-sm-d2-m1{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cp-sm-d2-m2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cp-sm-d3-m1{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cp-sm-d3-m2{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:640px){.cp-slot-primary{height:min(var(--cp-slot-h),var(--cp-slot-h-mobile))}.cp-sm-d1-m1{grid-template-columns:repeat(1,minmax(0,1fr))}.cp-sm-d1-m2{grid-template-columns:repeat(2,minmax(0,1fr))}.cp-sm-d2-m1{grid-template-columns:repeat(1,minmax(0,1fr))}.cp-sm-d2-m2{grid-template-columns:repeat(2,minmax(0,1fr))}.cp-sm-d3-m1{grid-template-columns:repeat(1,minmax(0,1fr))}.cp-sm-d3-m2{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:"Noto Sans CJK TC","PingFang TC","Microsoft JhengHei","WenQuanYi Zen Hei",system-ui,sans-serif;font-size:14px;line-height:1.5}
+.pv-wrap{max-width:940px;margin:0 auto;padding:16px}
+.pv-h1{font-size:18px;margin:0 0 4px}
+.pv-banner{font-size:12px;color:var(--ink-3);border:1px solid var(--rule);padding:6px 10px;margin:0 0 14px}
+.pv-state{margin:18px 0 6px;font-size:12px;font-weight:700;color:var(--ink-2);letter-spacing:.04em}
+.pv-state b{color:var(--sig-blue)}
+.pv-card{background:var(--panel);border:1px solid var(--rule-2);border-radius:2px;padding:12px}
+.pv-note{font-size:11.5px;color:var(--ink-3);margin:6px 0 0}
+.pv-fold{border-top:1px solid var(--rule);margin-top:10px;padding-top:6px;font-size:12.5px;color:var(--ink-2)}
+.pv-fold .t{color:var(--ink);font-size:13px}
+.pv-fold dl{margin:6px 0 0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
+.pv-fold dt{color:var(--ink-3)} .pv-fold dd{margin:0}
+.pv-native{height:var(--h,220px);border:1px dashed var(--rule-2);display:flex;align-items:center;justify-content:center;position:relative;background:var(--grid);color:var(--ink-3);font-size:12px;overflow:hidden}
+.pv-native svg{position:absolute;inset:0;width:100%;height:100%}
+.pv-native span{position:relative;background:var(--panel);padding:1px 6px}
+.pv-row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.pv-row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.pv-cell{display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0}
+.pv-cap{font-size:11.5px;color:var(--ink-3)}
+.pv-list{margin:6px 0;padding:0;list-style:none}
+.pv-list li{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule);min-height:36px;align-items:center}
+.pv-list .r{color:var(--ink-3);width:18px}
+.pv-list .v{margin-left:auto;font-family:var(--mono);color:var(--ink-2)}
+.pv-allbtn{display:flex;align-items:center;min-height:var(--cp-touch-min);color:var(--ink-2)}
+.pv-seg{display:inline-flex;border:1px solid var(--rule-2);border-radius:999px;padding:2px;gap:2px}
+.pv-seg span{padding:6px 14px;border-radius:999px;color:var(--ink-2);min-height:var(--cp-touch-min);display:inline-flex;align-items:center}
+.pv-seg span.on{background:var(--cta-primary-bg);color:var(--cta-primary-fg)}
+table.pv-t{border-collapse:collapse;width:100%;font-size:12.5px}
+table.pv-t th,table.pv-t td{border:1px solid var(--rule);padding:5px 8px;text-align:left;vertical-align:top}
+table.pv-t th{color:var(--ink-3);font-weight:600}
+.pv-sw{display:inline-block;width:14px;height:14px;border:1px solid #888;vertical-align:-2px;margin-right:6px}
+.pv-bgbox{padding:12px;border:1px solid #444;margin:6px 0}
+@media (max-width:640px){.pv-wrap{padding:16px}.pv-row3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style></head><body><div class="pv-wrap"><h1 class="pv-h1">色票並排表</h1><div class="pv-banner">Phase 3 離線靜態預覽｜元件 HTML 由 <code>compact.py</code> 產出，<code>pv-</code> 前綴為預覽外殼（非元件）｜資料全為夾具 ※示意，禁止當投資結論｜mode=dark</div><div class="pv-state"><b>●</b> D1a 維持（客戶裁示色，Phase 3 不改）</div><div class="pv-card"><table class="pv-t"><tr><th>token</th><th>dark</th><th>light</th></tr><tr><td>--cta-primary-bg</td><td><span class="pv-sw" style="background:#1f6feb"></span>#1f6feb</td><td><span class="pv-sw" style="background:#044cb6"></span>#044cb6</td></tr><tr><td>--cta-primary-fg</td><td><span class="pv-sw" style="background:#ffffff"></span>#ffffff</td><td><span class="pv-sw" style="background:#ffffff"></span>#ffffff</td></tr><tr><td>--sig-neutral</td><td><span class="pv-sw" style="background:#8fa3b8"></span>#8fa3b8</td><td><span class="pv-sw" style="background:#1e3b4f"></span>#1e3b4f</td></tr><tr><td>--sig-neutral-bg</td><td><span class="pv-sw" style="background:#26313d"></span>#26313d</td><td><span class="pv-sw" style="background:#d7dce1"></span>#d7dce1</td></tr></table><div class="pv-note">light 的 --sig-neutral/-bg 為 AI 總管暫選值（可被推翻）。按鈕白字對比 4.63:1（dark）／7.74:1（light）</div></div><div class="pv-state"><b>●</b> D1b 現況：三套頁底色並排，同一組 chip／Missing 槽放在各底色上（Phase 3 不收斂，僅供對照）</div><div class="pv-bgbox" style="background:#0e1117"><div class="pv-cap" style="color:#aab"><span class="pv-sw" style="background:#0e1117"></span>D1a/D1b：config.toml [theme] #0e1117</div><div class="cp-chips"><span class="cp-chip cp-info" data-kind="asof">🕒 資料 10/28</span><span class="cp-chip cp-status cp-t-green" data-kind="readable">✅ 可讀</span><span class="cp-chip cp-guard" data-kind="not_defined">⬜ 尚未定義</span></div><div class="cp-chips"><span class="cp-chip cp-status cp-t-red" data-kind="status">🔴 取得失敗</span></div><div class="cp-slot cp-slot-line cp-s-grey" role="status" data-state="idle">⬜ 尚未載入：請按更新</div></div><div class="pv-bgbox" style="background:#0e141b"><div class="pv-cap" style="color:#aab"><span class="pv-sw" style="background:#0e141b"></span>D1b 現況：tokens --paper #0e141b</div><div class="cp-chips"><span class="cp-chip cp-info" data-kind="asof">🕒 資料 10/28</span><span class="cp-chip cp-status cp-t-green" data-kind="readable">✅ 可讀</span><span class="cp-chip cp-guard" data-kind="not_defined">⬜ 尚未定義</span></div><div class="cp-chips"><span class="cp-chip cp-status cp-t-red" data-kind="status">🔴 取得失敗</span></div><div class="cp-slot cp-slot-line cp-s-grey" role="status" data-state="idle">⬜ 尚未載入：請按更新</div></div><div class="pv-bgbox" style="background:#0a0e16"><div class="pv-cap" style="color:#aab"><span class="pv-sw" style="background:#0a0e16"></span>D1b 現況：blueprint market.html --bg #0a0e16</div><div class="cp-chips"><span class="cp-chip cp-info" data-kind="asof">🕒 資料 10/28</span><span class="cp-chip cp-status cp-t-green" data-kind="readable">✅ 可讀</span><span class="cp-chip cp-guard" data-kind="not_defined">⬜ 尚未定義</span></div><div class="cp-chips"><span class="cp-chip cp-status cp-t-red" data-kind="status">🔴 取得失敗</span></div><div class="cp-slot cp-slot-line cp-s-grey" role="status" data-state="idle">⬜ 尚未載入：請按更新</div></div><div class="pv-state"><b>●</b> 元件色彩對比（WCAG 相對亮度公式，本預覽腳本計算；文字 AA 需 ≥4.5，非文字邊框 ≥3）</div><div class="pv-card"><table class="pv-t"><tr><th>用途</th><th>前景 / 背景 token</th><th>dark</th><th>light</th></tr><tr><td>資訊 chip 字 / 面板</td><td>--ink-2 / --panel</td><td>7.65</td><td>6.91</td></tr><tr><td>資訊 chip 字 / 頁底</td><td>--ink-2 / --paper</td><td>8.33</td><td>6.38</td></tr><tr><td>護欄 chip 字 / 面板</td><td>--ink / --panel</td><td>13.33</td><td>14.66</td></tr><tr><td>綠 chip</td><td>--sig-green / --sig-green-bg</td><td>6.73</td><td>5.26</td></tr><tr><td>琥珀 chip</td><td>--sig-amber / --sig-amber-bg</td><td>6.93</td><td>4.93</td></tr><tr><td>紅 chip</td><td>--sig-red / --sig-red-bg</td><td>5.67</td><td>5.42</td></tr><tr><td>灰 chip(⬜ 等)</td><td>--sig-grey / --sig-grey-bg</td><td>5.39</td><td>4.98</td></tr><tr><td>Missing 槽字 / 面板</td><td>--sig-grey / --panel</td><td>5.77</td><td>6.00</td></tr><tr><td>Missing 槽字 / 頁底</td><td>--sig-grey / --paper</td><td>6.28</td><td>5.54</td></tr><tr><td>tile 標籤 / 面板</td><td>--ink-2 / --panel</td><td>7.65</td><td>6.91</td></tr><tr><td>次要墨 ink-3 / 面板</td><td>--ink-3 / --panel</td><td>4.97</td><td>5.34</td></tr><tr><td>資訊 chip 邊框 ink-3 / 面板（F6 現行）</td><td>--ink-3 / --panel</td><td>4.97</td><td>5.34</td></tr><tr><td>〔舊〕chip 細邊框 rule-2 / 面板（F6 前；現已不用）</td><td>--rule-2 / --panel</td><td>2.18 ⚠</td><td>2.51 ⚠</td></tr><tr><td>護欄粗框 ink-2 / 面板</td><td>--ink-2 / --panel</td><td>7.65</td><td>6.91</td></tr></table></div></div></body></html>
