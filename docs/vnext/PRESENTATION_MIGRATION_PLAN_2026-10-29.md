@@ -133,6 +133,7 @@ M1 sparkline 把 NaN 補 0｜M2 metadata chip 接受未登記 kind｜M3 新 kind
 
 ## §7 Phase 3～7 要點
 
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）＋AI 總管（落文）**：Phase 3 的線框已由客戶核准（DEC-115），具體施工拆分與每步 DoD 見 **§16**；下一行 Phase 3 要點的範圍以 §16 為準（tokens 收斂＝只加性新增、不改既有色值，D1b=B；站殼間距＝先量測，不改）。
 - **Phase 3**：新純字串模組（建議 `src/ui_v2/compact.py`，無 streamlit）：`meta_chip_html(kind, text)`（kind 封閉集＝契約 §6）、`sparkline_svg(values, w, h)`（丟 NaN、⛔ 補 0、全 NaN→placeholder）、`mini_card_html(...)`、`chart_header_html(title, chips, say)`、`topn_view(rows, n)`、`segmented` 呈現 helper、`compact_css()`（與既有 page CSS 分開，保今天頁 CSS byte-identical）；`_ui_kit.status_chip()`、`render_fold(label, rows)`；`Basis` 合併（H31）；tokens 收斂（`P1R-TOKENS-CONVERGE`，客戶裁示色值先判）；站殼間距子項（只動站標高度與頂部留白；⛔ 改 `PAGE_LABELS`／導覽殼語意／legacy 入口；若獨立 QA 判屬 IA／殼變更 → 停手送客戶）。`requirements.txt` floor 1.56 下 `st.metric(chart_data=)`、`st.bar_chart(horizontal=)`、form 內 expander 先以 floor wheel 實跑，未驗前不使用（`P1R-FLOOR-156-API`）。
 - **Phase 4（📊 reference）**：改動檔預期 `_market_blocks.py`（無鏈）、`page_market.py`（nav1／uim 鏈 → 新頭節）；⛔ 動 `page_today.py`。重點守衛：結論句逐字、Q2-2 逐字、均線聲明逐字、⬜ 尚未定義、指標危險度指路、圖 C 零數字、hero 與圖 D 同源、EPS×PE placeholder、更新 form／gate 語意不變。寫 UI code 前一律先出文字線框（§1）。
 - **Phase 5（🎯）**：`_target_blocks.py`、`page_target.py`；`page_find.py`／`page_inspect.py` 不改。重點守衛：DEC-107 2A／3A／4A／5A 互動不變；R9；估值口徑揭露不刪；**選股條件維持 `expanded=True`**，除非 Phase 5 線框中客戶拍板改為收合（W4）；W5、W6 同依線框拍板。
@@ -462,3 +463,39 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 - **Phase 2：步驟 0、1、2＋4、5 完成（步驟 3 已取消）。** 共用層新增 `card_html` chips／summary／fold_label／spark、`single_submit_form(options_label)`、`render_card(compact)`（預設輸出 byte-identical、0 production caller）；p02～p05＋p01 測試改為資訊守恆斷言。
 - **未清事項（誠實）**：M1～M4、M7、M9 待 Phase 3 元件；M8 無新模組；M11／M12 待 `CV1-DR-12`；M10 完整驗待 Phase 3；`.blk-chips*` 等 CSS 未寫；截圖 Gate 未做；slow 本次未重跑。
 - **下一階段 Phase 3（Shared Visual Components）為 UI phase：寫 UI code 前須先出文字線框供客戶拍板**（`CLAUDE.md` §-1.5.D v3 §03-2 ①）。**Phase 3 以較嚴者為準：不論共用元件是否掛頁，寫 UI code 前先出文字線框供客戶拍板**（不得以『未掛頁畫面零變更』為由跳過）。站殼間距子項需線框；共用元件新模組在未掛頁前畫面零變更。Model×Effort 依 §1 與 DEC-084／DEC-106 比對：Phase 3 起判 **Opus 5.5＋High**，進入明確機械式實作後切 **Sonnet 5.5＋Medium**（⚠️ 與 DEC-113 對 Phase 2 的 Sonnet 5.5＋Medium 並列時，開工前依 DEC-084／DEC-106 核對實際設定，不符才通知客戶）。
+
+## §16 Phase 3 核准範圍與施工拆分（2026-10-30，客戶 DEC-115 核准後；append-only）
+
+> 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115）＋AI 總管（落文）**。§7 Phase 3 要點與 §15.6 未改動；本節是其**核准後的施工拆分**。**docs-only 落文，`src/`、`tests/` 0 diff。**
+> 依據：客戶 2026-10-30 對 `docs/vnext/PHASE3_SHARED_COMPONENTS_WIREFRAME_2026-10-30.md` §6 七題的裁示（`docs/DECISIONS.md` DEC-115）；元件規格＝該線框檔 §3（「未採用」標記處不得實作）＋契約 §4／§6／§8／§11／§14／§19（含 2026-10-30 就地加註）。
+> ⚠️ **揭露（`CLAUDE.md` §-2 規則 6）**：本拆分由單組撰寫，**未經第二組驗證**；步驟內的『若需要』『不動受鏈檔』判斷須在開工時以**當時 main 重測**（Plan §5／§12.2 的還原鏈與 z60 範圍），⛔ 把本節數字或檔案清單當前提。
+
+### 16.1 通則（所有步驟共用）
+
+- **範圍**：只做已核准的 Phase 3 清單（線框 §1.1 a～c；d 站殼間距只量測）。⛔ 掛任何頁、⛔ 新增 app 頁或導覽、⛔ 新資料源／公式／門檻／TTL／投資語意、⛔ 動 Risk Cap／EPS×PE／趨勢定義、⛔ 動 Digest／Brain、⛔ 處理 W2～W9。
+- **寫入序列化**：一次一檔（`PROCESS.md` §3）；實作與 QA 分離（`CLAUDE.md` §-2）。
+- **每步 DoD（共通四項，缺一不得宣稱完成）**：(1) **CI 綠**（Fast checks＋Slow tests，以 `gh api` 實查，不引用聊天）；(2) **獨立 QA ≥2 組**、不同角度（建議 QA-A＝差分＋mutation、QA-B＝契約／逐字句／glyph 碰撞稽核；不得由實作者自驗）；(3) **零資料語意證明**（沿用 §15.2 (a)～(g) 格式：diff 僅限允許路徑、`src/services|compute|data`／`shared/` 語意模組 0 行、AST import 白名單、Top-N 參數所在檔 0 diff）；(4) **既有頁面 0 diff**（`page_css('dark'|'light')` sha256 ＝線框 §2.5 基準；`card_html`／`single_submit_form`／`render_card` Phase 2 golden 不變；`tokens.DARK/LIGHT` 既有色值映射不變；0 個 production caller）。
+- **Model×Effort**：客戶已授權『Sonnet 5.5＋Medium 若符合最低必要設定直接繼續』（DEC-115；承 DEC-084／106 不重複要求切換）。開工前核對實際設定。~~只有碰投資語意、Risk Cap、資料契約、重大架構衝突才升回 Opus 5.5＋High。~~ 📌 **2026-10-30 來源標示更正（有意識的更正，不是漏刪；決策者 AI 總管（事實更正：來源歸屬））**：客戶授權原文僅為「Sonnet 5.5＋Medium 若符合 Minimum Sufficient Effort 直接繼續、不需再次確認」；**「只有碰投資語意、Risk Cap、資料契約、重大架構衝突才升回 Opus 5.5＋High」是 AI 總管內部判斷（依 DEC-084／DEC-106），不是客戶原文**。
+- **靜默規則（客戶授權）**：依已核准範圍靜默施工；僅在下列情況停手回報：真正的 Customer Decision Gate（例：站殼量測結論屬整體 layout 變更）、Model×Effort 必須切換、需客戶手動操作、完整 Phase 3 完成、context 不安全。Hard Output Gate（DEC-104）與 No Silent Stop（DEC-087）照舊。
+- **D6／D8 的不得**：D6=B 不得因縮一行而隱藏 Missing／unavailable；D8=B 不成立即退回 A、不請示、不升 floor。
+
+### 16.2 步驟
+
+| 步 | 內容 | 允許改動 | 步驟專屬 DoD（加於 16.1 共通四項） |
+|---|---|---|---|
+| **1** | **新純字串模組 `src/ui_v2/compact.py`**（無 streamlit、不 import `src.data`／`src.services`／`_ui_kit`）：`META_KINDS` 封閉集＋`Chip`（**無 `parts`、護欄各自獨立**）＋`meta_chip`／`status_chip`（讀 `UI_STATE_META`）／`chips_html`；`chart_header_html`；`chart_slot_missing_html`（Primary 同高；Secondary 縮一行版）；`kpi_tile_html`；`sparkline_svg`（NaN 不補 0、不跨缺口連線、<2 有效點→placeholder；`SafeHtml`；**不顯示數字**）；`small_multiples_html`（格內不顯示數字）；`topn_view`；`segment_options`；`compact_css()`（與 `page_css()` 分開；護欄＝實線粗框；stale 琥珀、`failed` 才紅）。**tokens 加性新增**（`src/ui_v2/tokens.py`：chip 膠囊半徑、chip 高／字級／內距、14px 卡圓角〔只新增不套用〕、tile 內距、圖槽高、small multiple／sparkline 高、觸控區 44px——**不改既有值**） | `src/ui_v2/compact.py`（新）、`src/ui_v2/tokens.py`（僅加不改）、`tests/**`（新）、docs | **golden**：`page_css` sha256 不變、`tokens` 既有鍵值映射逐項相等；**mutation（必先紅後綠）**：M1（sparkline 補 0／跨缺口連線）、M2（未登記 kind；護欄合併／`parts`）、M3（kind 與 `BADGES` 重名）、M4（Top-N 複製／改序）、M7（說明句在 chip 前）、M8（import `src.services`）、M9（stale 用紅）、M10（chip 經訊號文字頻道）、M14～M20（線框 §5.3）；AST 白名單；`test_c3_layering_guard` 綠；0 production caller（grep 測試）；工程字樣 0 命中（契約 §18） |
+| **2** | **`_ui_kit` 薄封裝（若需要）**：公開 `status_chip`、`render_fold`（`st.expander` 薄封裝，四段不得留白）；`Basis` 兩份合併為超集（H31，舊名 alias）。**若需要才做；且不動受還原鏈／sha 基底守衛鎖定的檔**——開工前以當時 main 重測 `src/ui/views/_ui_kit.py` 是否受鏈（Plan §5／§12.2）；受鏈 → 停手，改以不碰受鏈檔的方式（例 薄封裝放新檔）或回報 | `src/ui/views/_ui_kit.py`（僅加性且確認不受鏈時）或新檔、`tests/**`、docs | 既有 caller 輸出 byte-identical（沿用 §13 手法的 golden）；M13（摺疊內容只留 `title=` 必紅）、M6（預設收合）AppTest；`render_fold` 預設 `expanded=False` |
+| **3** | **站殼間距內部量測（只量測，不改）**：以瀏覽器 DOM 量測 nav4 預設模式 1440／390 下站標帶與頂部留白實際可收的 px；量 `?legacy=1` 是否共用同一組 CSS 選擇器；評估最小改動方案與影響面（z60 `_BASE_DIGEST`、四頁全 Gate）。結果寫回線框 §3.11 或本節（append-only） | **0 行 src／tests**（可加量測腳本於 `tools/`，不被 app／test import——若需要） | 實際像素差（附量測方法、限制）；最小改動方案；**局部變更由內部自決；經實測判為整體 layout 變更才送客戶裁示（附推薦方案；客戶 2026-10-30）**；~~屬局部且不碰殼語意 → 仍須先出線框草稿供拍板（`CLAUDE.md` v3 §03-2 ①）~~（📌 2026-10-30 有意識的更正，不是漏刪；決策者 客戶〔DEC-115 站殼間距：「先內部實測…若屬整體 layout 變更再送客戶裁示」〕；舊句理由——UI 動線異動先草稿——**仍成立於整體 layout 變更**，被權衡掉的只是「局部也須先拍板」這半邊）；⛔ 未經核准的整體 layout 變更不改 `app.py`。**站殼量測順序以本節（步驟 3，位於步驟 1、2 之後）為準** |
+| **4** | **D8 切換鈕 floor 1.56 實跑驗證**：**獨立 venv** 安裝 `streamlit==1.56.0`，以 AppTest（必要時另加手機互動可行性分析）實跑 `st.segmented_control`（及線框 §7 列的 `P1R-FLOOR-156-API` 其他 API）：預設值、取消選取回退、rerun、`st.form` 內行為；**不升高 `requirements.txt` floor**、不改 repo 依賴 | 驗證腳本／結果寫入 docs；`tests/**` 僅在驗證可穩定重跑時加（標 slow／環境條件） | 結果表（API×行為×通過／失敗，附 venv 版本號）；**成立 → 步驟 1／後續 caller 採 B；不成立 → 直接退回 A（`st.radio(horizontal=True)`），不請示**，並在交付報告第 2 段揭露；`TestStreamlitFloorCompatibility` 仍綠 |
+| **5** | **離線靜態預覽**：HTML＋截圖（附 PR）；**不掛頁、不新增 app 頁或導覽**。每元件 1440／390 × 冷啟動／已載入（夾具，標 ※示意），單張 <300KB；含色票並排表（D1a／D1b 現況）、D6=B 冷啟動 Secondary 縮一行、D3 三族 chip（護欄實線粗框）、D10(a) 圖 A 外露 5 顆 | `tools/` 或 PR 附件（不進 app 路徑、不被 test 收集）、docs | 元件層 Visual Gate：A6 尺寸、V8 chip 文字化、V9 Missing 符號、V10 工程字樣、V11 無 hover 依賴；PR 描述 Visual Fidelity 段寫『N/A（頁面）：0 頁 import `compact`；`page_css()` sha256 不變』；站殼子項若經核准另走全 Gate（Gate §5） |
+
+### 16.3 順序與相依
+
+- 順序 1 → 2 → 3 → 4 → 5；3、4 為驗證／量測類，與 1、2 無檔案衝突，**可由總管依序列化安排**（寫入端仍一次一檔）。步驟 5 依賴 1（元件存在）。
+- **Phase 3 完成條件**：步驟 1～5 各自 DoD 達成、站殼子項已有結論（不做／經客戶核准後另 PR）、BACKLOG 殘留已登記、HANDOFF／PROJECT_STATE 同步。完成後才進 Phase 4（📊 reference；W2、W3、W9 等屆時仍須線框拍板）。
+
+### 16.4 已知限制（誠實揭露）
+
+- 所有 px 為線框『預算』（契約 §19＋CJK 字寬估算），**尚未量測**；手機實機、Streamlit Cloud 未驗。
+- 本拆分未經第二組驗證；『若需要』『不動受鏈檔』為開工時須重測的條件，不是已確認事實。
+- D8 的 1.56 行為、D6=B 載入後位移量、D3 護欄實線粗框的視覺權重，**皆未驗**（線框 §7 第 10 點）。
