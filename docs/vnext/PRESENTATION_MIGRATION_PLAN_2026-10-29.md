@@ -567,3 +567,28 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 
 **Phase 4 步驟 0**：以當時 main 重測、出 **📊 市場頁文字線框**（W2、W3、W9）送客戶拍板；**客戶拍板前不得寫 Phase 4 UI code**。本節施工**未**提前做 Phase 4 任何事。
 
+## §19 Phase 4 步驟 0：📊 市場頁重測、能力盤點、文字線框與客戶決策表（2026-10-30；append-only；docs-only）
+
+> 全文＝`docs/vnext/PHASE4_MARKET_PAGE_WIREFRAME_2026-10-30.md`（rev1，**待客戶拍板**）。本節只記錄對 Plan 的增補與修正；§16～§18 一字未動。⚠️ 單組撰寫、未經第二組獨立驗證（`CLAUDE.md` §-2 規則 6）。
+
+### 19.1 結果摘要
+
+- **GitHub Verification Gate**（2026-10-30）：main `15071a47`；Open PR 0；相關分支無需合併。相關守衛子集（鏈守衛、z60、`test_page_market`／`test_market_blocks`／`test_uim_market_page`、C3、`tests/ui_v2`）**1348 passed／1 skipped**（本機單組）。
+- **現況重測**（夾具、Streamlit 1.59.2、1440×900／390×844、冷啟動／已載入／更新報告態）：全頁高 5575／7966（loaded）；結論句頂端相對 H2 **+942／+1802**（Q11 上限 +200／+260）；第一屏 0 張圖（6 張皆 350px 原生圖）；Hero 4 卡等高 641（桌）／手機 1402；hover-only 1～2 處；工程字樣非客戶例外 ≥1（`warroom`）。量測腳本與截圖＝`docs/vnext/phase4_market/baseline/`。
+- **能力盤點**：19 項 Old→New 對映（線框 §3）；12 項「會改形」資訊（§3.6）皆有保留處、無靜默刪除；全稱句屬待驗事項。
+- **客戶決策表**：Q1（W9／`CV1-DR-12`）、Q2（W2）、Q3（W3）、Q4（主圖形態）、Q5（結論句位置，DEC-105 1A）、Q6（風險卡縮短行）、Q7（手機第一屏不含主圖）；各題附推薦與動檔／守衛。
+
+### 19.2 對 §7、§12.2、§17.1 的增補／修正（以當時 main 重測；原文保留）
+
+- **還原鏈／sha 守衛（FACT，regex 粗掃 `tests/**` 的 `'path': 'sha256'` 表）**：`page_market.py` 仍被 `tests/test_nav1_revert_chain.py`、`tests/test_uim_revert_chain.py` 釘住（`test_xvext_revert_chain` 第一步呼叫 `uim_revert_for`）→ 動它須再接一節鏈頭；`_market_blocks.py`、`_ui_kit.py`、`src/ui_v2/*` **0 命中**（無 sha 鏈，但受 AST／golden／字串守衛）。~~§17.1「`_ui_kit.py` 是否受鏈須以當時 main 重測」~~ 已重測：不受 sha 鏈（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。
+- **z60 `_BASE_DIGEST`（FACT）**：指紋範圍＝`src/ui/{tabs,etf,pages,render}`＋`app.py`（91 檔），**不含** `src/ui/views/`、`src/ui_v2/` → Phase 4 只改 views／ui_v2 時**不需**改指紋；若動 `app.py` 則須同步。
+- **§7 Phase 4 行的「≤3 chip」與元件現況**：風險 tile 無法以 chip 承接（`TILE_CHIPS_MAX=2`、META 封閉、燈 emoji 屬訊號文字通道）；線框 Q6 以「≤3 行縮短行」承接，待客戶拍板。
+- **F-1～F-8 技術發現**（線框 §7.2）：同列單一狀態 chip 規則、小倍數名稱 8 字上限 vs 現有系列名 9 字、`st.html` 剝 svg 的掛頁規則、動作列 form＋expander 真高未驗、兩種資料日語意、harness cold 非真冷啟動、鏈頭節最後產生。
+
+### 19.3 未驗
+
+真資料態、真冷啟動、floor 1.56（本頁）、手機實機、Streamlit Cloud；§4.5 px 為靜態 HTML 示意；A8／V3／V4 精確計數；鏈守衛覆蓋為 regex 粗掃。
+
+### 19.4 下一個唯一安全接手點
+
+**等客戶就 `docs/vnext/PHASE4_MARKET_PAGE_WIREFRAME_2026-10-30.md` §6（Q1～Q7）拍板。** 拍板前**禁止**：任何 Phase 4 UI code（`page_market.py`、`_market_blocks.py`、`_ui_kit.py`／`compact.py` 的頁面掛載、`app.py`、Phase 4 的 tests 改寫）、提前做 Phase 5～7／W4～W8、動 `page_today.py`、提高 floor。拍板後：依裁示寫 DEC（客戶裁示→新 DEC，同步契約／Plan／BACKLOG），再依 §7.4 的 Model×Effort 與拆 PR 建議施工；動工前 `git fetch` 重確認 main 與鏈守衛。
