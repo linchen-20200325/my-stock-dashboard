@@ -50,7 +50,7 @@
 
 ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本索引由 Phase 1 撰寫組單組撰寫，未經第二組驗證；「無新 Gate」「既有 open 客戶項」清單依 BACKLOG／舊 Checkpoint 轉錄，非窮舉。
 
-> ### 📌 2026-10-30 站殼間距 D7=B 施工補註（現行；**與上表衝突處以本段為準**；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕，依客戶 D7=B 裁示 DEC-116；上表各欄原文保留）
+> ### 📌 2026-10-30 站殼間距 D7=B 施工補註（~~現行；**與上表衝突處以本段為準**~~ 已過時：D7=B 已隨 **#981 合併**（main `15071a47`），現行見下方 DEC-117 段（2026-10-30 有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕，依客戶 D7=B 裁示 DEC-116；上表各欄原文保留）
 >
 > | 欄位 | 現行 |
 > |---|---|
@@ -78,11 +78,13 @@
 >
 > | 欄位 | 現行 |
 > |---|---|
-> | main／PR | `origin/main`＝`1af374fb`（#982 Phase 4 步驟 0 線框已合併；上一段「PR 待開」已過時）。本批＝DEC-117 落盤，**docs-only**，分支 `ccr-c8ef17de-9tw7yt` 本地 commit（未 push、未開 PR；由總管決定）。以 GitHub 實查為準 |
+> | main／PR | `origin/main`＝`1af374fb`（#982 Phase 4 步驟 0 線框已合併；上一段「PR 待開」已過時）。本批＝DEC-117 落盤（含 QA 修正），**docs-only**，分支 `ccr-c8ef17de-9tw7yt`；**本批隨 PR 合併；main 以 `git fetch` 為準**（本表不記錄 push／PR 狀態，以 GitHub 實查為準） |
 > | current task／batch | **Phase 4 步驟 1 施工（📊 市場頁）——客戶已核准線框（DEC-117：Q1=B／Q2=A′／Q3=A／Q4=P-B／Q5=B／Q6=A／Q7=A／Q8 全 A＋補充裁示），尚未開工**。本批只做 Durable Memory 落盤：DEC-117（含逐字客戶原文、整理表、supersede 表；DEC-091／DEC-105／DEC-109／DEC-110 條頭 📌、§5 取代鏈）、線框（狀態已核准、§4 標題、§6 各題裁示、**§10 施工驗收條件**）、契約（§3／§12.1／§15／§16／§19／§22 就地加註）、Gate（A2／A11／KPI 欄數／§8 mobile exception）、Migration Plan **§20**（施工計畫）、PROJECT_STATE、BACKLOG |
 > | 已核准順序（Q5=B，客戶原文） | 頁首 → 更新 CTA → 今日結論 → 3 個核心狀態 → ⚡需要處理 → AI／資料狀態 → Primary Visual（取代 DEC-105 1A 在市場頁的舊相對順序） |
-> | unresolved true Stop Gates | **Model×Effort 切換**：客戶同意頁面組裝用 **Opus 5.5＋High**，並指示「先停在安全 checkpoint，通知我切換；我回覆「改好了」後再施工」。線框 §10.6 未決 U1～U6 交總管判定（是否需再請示由總管判）。既有 open 客戶項不變 |
-> | **下一個唯一安全接手點** | **等客戶回覆「改好了」（確認已切換 Opus 5.5＋High）後，才開始寫 Phase 4 UI code（Migration Plan §20 P4-1 第一屏）。** 開工時：`git fetch` 重確認 main → 重跑鏈守衛（`test_uim_revert_chain`／`test_nav1_revert_chain`／`test_xvext_revert_chain`）、z60 → 依線框 §10 驗收條件逐條施工＋守衛。機械式工作（測試改寫／mutation／截圖量測）若可安全降回 Sonnet 5.5＋Medium，**須在完整安全 checkpoint 通知客戶後**才降 |
+> | **必讀（依序）** | ① `docs/DECISIONS.md` **DEC-117**（客戶原文 fence＋supersede 表）→ ② 線框 `docs/vnext/PHASE4_MARKET_PAGE_WIREFRAME_2026-10-30.md` **§10**（施工驗收條件 C1～C8、N1～N7；§10.6 U1～U6 總管判定）→ ③ `docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md` **§20**（PR 切分 P4-1／P4-2／P4-3、還原鏈頭節在 P4-1 末步、Model×Effort）→ ④ `docs/governance/UI_VISUAL_FIDELITY_GATE.md` **§8**（Q7 mobile exception：§5 第 2 列、三條件） |
+> | 已完成／風險 | **已完成**：DEC-117 落盤＋兩組獨立 QA（無 BLOCKER）＋QA 修正（Q8a 對 DEC-091 §四 圖C／DEC-092 的部分取代補登、C6-3 真錯誤字串更正、U1～U6 總管判定、Plan §20.3 鏈頭節改 P4-1 末步）。**風險**：手機第一屏要同時放下結論＋3 tile＋⚡ bar（C1-10）尚未實量，頁首動作列實高未驗（C1-11）——若不改核准結構做不到，須附推薦方案送客戶；鏈頭節接 `uim_revert_for` 開頭為推論、施工時實跑確認；P4-1／P4-2 為中間批，Gate 未過、Stage 不得標 complete |
+> | unresolved true Stop Gates | **Model×Effort 切換**：客戶同意頁面組裝用 **Opus 5.5＋High**，並指示「先停在安全 checkpoint，通知我切換；我回覆「改好了」後再施工」。~~線框 §10.6 未決 U1～U6 交總管判定（是否需再請示由總管判）。~~ U1～U6 已由總管判定（線框 §10.6；有意識的更新，不是漏刪；決策者 AI 總管〔內部自決〕）；僅 C1-10／C1-11 實量後若不改核准結構做不到，才附推薦方案送客戶。既有 open 客戶項不變 |
+> | **下一個唯一安全接手點** | **等客戶回覆「改好了」（確認已切換 Opus 5.5＋High）後，才開始寫 Phase 4 UI code（Migration Plan §20 P4-1 第一屏）。** 線框 §10.6 U1～U6 **已由總管判定**（內部自決，已轉成 §10 驗收條件），不再是待決事項。 開工時：`git fetch` 重確認 main → 重跑鏈守衛（`test_uim_revert_chain`／`test_nav1_revert_chain`／`test_xvext_revert_chain`）、z60 → 依線框 §10 驗收條件逐條施工＋守衛。機械式工作（測試改寫／mutation／截圖量測）若可安全降回 Sonnet 5.5＋Medium，**須在完整安全 checkpoint 通知客戶後**才降 |
 > | 禁止事項 | ⛔ 客戶回覆「改好了」前任何 `src/`、`tests/`、`app.py`、`requirements.txt` 變更；⛔ 把 §10.6 未決疑點自行定案為客戶面決定；⛔ 新資料源／公式／門檻／TTL／投資語意；⛔ Risk Cap 數字、EPS×PE production、台股／國際趨勢正式定義（維持 `⬜ 尚未定義`）；⛔ 動 `page_today.py`、`PAGE_LABELS`／導覽殼／legacy；⛔ 更新鈕改字（`UIM-UPDATE-BUTTON-WORDING` 另案）；⛔ 新增指路 chip（Q2）；⛔ 主圖切換列（Q4）；⛔ 刪除任何外露資訊（Q8：只能下沉）；⛔ 動舊還原鏈表／舊基底 sha；⛔ 提前做 Phase 5～7、W4～W8；⛔ 提高 Streamlit floor；⛔ 改 `CLAUDE.md`（Q1「固定 3 欄」客戶解釋記於 DEC-117） |
 > | 未驗 | 本批 docs-only；線框 §4.5 px 為靜態示意；真資料態、真冷啟動、floor 1.56（本頁）、手機實機、Streamlit Cloud 皆未驗；DEC-117 整理表／supersede 表／§10 為單組產出，待兩組獨立 QA |
 
