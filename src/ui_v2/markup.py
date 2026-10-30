@@ -663,6 +663,21 @@ def _facts_block(rows: Sequence[tuple[object, object]], truncate: bool = True) -
     return "".join(out)
 
 
+def _validate_chips(chips: Sequence[str]) -> tuple[str, ...]:
+    """`card_html(chips=)` 的輸入檢查：非 str／空字串一律 `ValueError`（⛔ 不靜默丟）。"""
+    if chips is None:
+        raise ValueError("chips 不得為 None（要「沒有 chip」請給空序列或不傳）")
+    if isinstance(chips, (str, bytes)):
+        raise ValueError(f"chips 必須是 str 的序列，不是單一字串：{chips!r}")
+    if isinstance(chips, Mapping):
+        raise ValueError(f"chips 不得是 Mapping（迭代只會得到 key，語意含糊）：{chips!r}")
+    out = tuple(chips)
+    for i, c in enumerate(out):
+        if not isinstance(c, str) or not c.strip():
+            raise ValueError(f"chips[{i}] 必須是非空 str，實得 {c!r}")
+    return out
+
+
 def card_html(
     *,
     block: str,
@@ -675,6 +690,10 @@ def card_html(
     folded_facts: Iterable[tuple[object, object]] = (),
     fold_id: str | None = None,
     fold_truncate: bool = True,
+    chips: Sequence[str] = (),
+    summary: str | None = None,
+    fold_label: str | None = None,
+    spark: str | None = None,
 ) -> str:
     """一張卡。
 
@@ -693,6 +712,34 @@ def card_html(
     · `fold_truncate`（2026-09-25，客戶裁示「完整原文進摺疊、⛔ 不得只剩 hover」）：
       `False` ⇒ 摺疊區的值**整段顯示**、不截斷。預設 `True` ＝ 加這個參數之前的行為
       （「🚦 今天」的輸出逐 byte 不變）。⛔ 與密度階無關，不是覆寫入口。
+
+    ── Phase 2 步驟 1（2026-10-30）新增的四個**可選** keyword-only 參數 ──
+    預設值下輸出與加參數之前**逐 byte 相同**（`tests/test_p2_step1_shared_optional_params.py`
+    的 golden 釘住）；截至本次**沒有任何 production caller 使用它們**。
+    輸出位置（由上而下）：標題列 → `chips` → `summary` → 大字 → 判決 → `spark` → `facts` → 摺疊。
+
+    · `chips`：metadata chip 序列（契約 §6 / R8：獨立通道，⛔ 不是訊號文字）。
+      **空（預設）⇒ 整列不渲染**；非空 ⇒ 一列 `<div class="blk-chips">`，每顆
+      `<span class="blk-chip">`，內容一律 `_esc`。⛔ 不經 `assert_signal_text_clean`
+      （⬜／⚠ 等 glyph 在這條通道是合法的），也⛔ 不進 `title=`／訊號頻道。
+      元素必須是**非空 str**（含全空白視為空）；否則 `ValueError`（§1：⛔ 不靜默丟）。
+      裸 `str`／`bytes`（會被當成字元序列）、`None`、`Mapping`（dict，迭代只得 key）也 `ValueError`；
+      其餘非 str 非 Mapping 的 iterable（list／tuple／generator…）照收。
+      ⚠️ 已知限制：「空」只以 `str.strip()` 判定，**零寬字元（如 U+200B）不視為空**。
+    · `summary`：1 句摘要。`None`（預設）⇒ 不渲染；非 None ⇒ 一行 `<div class="blk-summary">`，
+      `_esc`。必須是非空 str（空字串 `ValueError`，不拿空行冒充有摘要）。
+    · `fold_label`：摺疊開關字。`None`（預設）⇒ **呼叫時**讀 `FOLD_SUMMARY_TEXT`
+      （⛔ 不得 def 時綁定——測試會 monkeypatch 該常數）；非空且非全空白 ⇒ 取代之（`_esc`）；
+      空字串 `""` ⇒ 視同未給（沿用預設）；**全空白字串（如 `"  "`）⇒ `ValueError`**（兩者刻意不同：
+      空字串是「沒給」，全空白是「給了一個看不見的字」，Fail Loud）。非 str ⇒ `ValueError`。
+      沒有 `folded_facts` 時無作用。
+    · `spark`：迷你圖。⚠️ **呼叫端已組好的受信任 HTML 字串，本函式⛔ 不 escape**
+      （圖是 SVG／標記，escape 會把圖變成字面文字）。⛔ 不得把使用者資料未經 escape 傳入。
+      `None`（預設）⇒ 不渲染；非 None ⇒ `<div class="blk-spark">…</div>`。
+      空字串／全空白／非 str ⇒ `ValueError`（Fail Loud：⛔ 不渲染一個空圖框去冒充有資料）。
+      Missing 值**一律不補 0**——缺的點由呼叫端在組 HTML 時處理，本函式不碰。
+    ⚠️ 本次**不新增任何 CSS**：`.blk-chips`／`.blk-chip`／`.blk-summary`／`.blk-spark`
+    在 `page_css()` 尚無樣式（尚無 caller，樣式待首個使用者的 phase 一併落地）。
     """
     # 2026-09-25 客戶裁示 1：經 `blocks` 登記處查 —— block 屬哪一頁就由那一頁的契約回答
     # （「🚦 今天」仍是 `page_today.tier_for_block`，⛔ 同一套機制、不是第二套）。
@@ -702,6 +749,18 @@ def card_html(
             f"#{badge_n} 不畫在這一頁（該頁契約的 BADGES_NOT_ON_PAGE）："
             "⛔ 不得為了畫得出來就把它併進別的徽章 —— 要畫請先改規格。"
         )
+    chip_list = _validate_chips(chips)
+    if summary is not None and (not isinstance(summary, str) or not summary.strip()):
+        raise ValueError(f"summary 必須是非空 str 或 None，實得 {summary!r}")
+    if fold_label is not None and not isinstance(fold_label, str):
+        raise ValueError(f"fold_label 必須是 str 或 None，實得 {fold_label!r}")
+    if fold_label and not fold_label.strip():
+        raise ValueError(
+            f"fold_label 不得是全空白字串（空字串 \"\" 才視同未給）：{fold_label!r}")
+    if spark is not None and (not isinstance(spark, str) or not spark.strip()):
+        raise ValueError(
+            f"spark 必須是非空的 HTML str 或 None，實得 {spark!r}"
+            "（⛔ 不渲染空圖框冒充有資料）")
     badge = badge_html(badge_n, size=str(components.CARD_TIERS[tier]["badge_size"]))
     value_text = page_today.card_value_text(state=state, value=value)
     level_text = page_today.card_level_text(state=state, level=level)
@@ -721,11 +780,20 @@ def card_html(
         badge,
         '</div>',
     ]
+    if chip_list:
+        parts.append(
+            '<div class="blk-chips">'
+            + "".join(f'<span class="blk-chip">{_esc(c)}</span>' for c in chip_list)
+            + '</div>')
+    if summary is not None:
+        parts.append(f'<div class="blk-summary">{_esc(summary)}</div>')
     # ⚠️ 留白＝**整段不渲染**，⛔ 不畫一個 `0`、⛔ 不畫「--」以外的任何代打值。
     if value_text is not None:
         parts.append(f'<div class="blk-val">{_esc(value_text)}</div>')
     if level_text is not None:
         parts.append(f'<div class="blk-lvl">{_esc(level_text)}</div>')
+    if spark is not None:
+        parts.append(f'<div class="blk-spark">{spark}</div>')   # 受信任 HTML，不 escape
     rows = tuple(facts)
     if rows:
         parts.append(_facts_block(rows))
@@ -744,7 +812,7 @@ def card_html(
             f' aria-labelledby="{fold_label_id(fold_id)} {fold_title_id(fold_id)}"'
             f' aria-controls="{fold_body_id(fold_id)}">'
             f'<label class="blk-fold-s" id="{fold_label_id(fold_id)}" for="{fold_id}">'
-            f'{_esc(FOLD_SUMMARY_TEXT)}</label>'
+            f'{_esc(fold_label if fold_label and fold_label.strip() else FOLD_SUMMARY_TEXT)}</label>'
             f'<div class="blk-fold-b" id="{fold_body_id(fold_id)}">'
             + _facts_block(folded, fold_truncate)
             + '</div></div>'

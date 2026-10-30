@@ -95,6 +95,7 @@
 2. **🔴／紅色只給系統真錯誤**（`shared/ui_state` 的 failed 態；`CLAUDE.md` §1.A 第 4 點、v3 §02「系統真出錯才標紅」）。**stale 用 ⚠**（琥珀，非紅）。⚠️ **既有狀態徽章族優先**（既有徽章族沒有的「尚未定義／尚未核准」才用 metadata chip 既有字樣 ⬜）：凡 `shared/ui_state.UI_STATE_META` 已有的狀態，一律沿用其符號與文字——`⬜ 尚未載入`（idle）、`▨ 無資料`（empty）、`⟳ 缺漏 · 可重跑`／`⊘ 不適用 · 重跑無效`（客戶 2026-09-23 D-3(a) 三態 `⟳`／`⊘`／`◧`；`▨` 為既有 empty 態）、`◧ N／M 計入`、`⛔ 未接線`（unwired）、`🔴 取得失敗`；**⛔ 同一狀態出現兩種符號**（例：未接線不得另造 `⬜ 未接線`）。
 3. **每個色塊都要有文字**（icon＋字，不只靠顏色；`PROJECT_RULES.md` §19.8）。
 4. metadata chip 必須走**獨立渲染通道**：⛔ 塞進訊號文字頻道（`_ui_kit.assert_signal_text_clean` 以子字串比對狀態 glyph，⬜／⚠／🔴 進訊號文字會觸發 ValueError → 紅卡；FACT，Inv-1 #10）。PR #970 草稿 A.7「🔴 偏空」重用 🔴 為失敗態以外用途 → **不採用**。
+   - 📌 **2026-10-30 事實更正（有意識的更正，不是漏刪；決策者 AI 總管（事實更正，依 v3 §03-1 內部自決））**：上句「⬜／⚠／🔴 進訊號文字會觸發 ValueError」中的「⚠」為假。實測（2026-10-30，`_ui_kit.assert_signal_text_clean`／`_BANNED_SIGNAL_GLYPHS` ＝ `UI_STATE_META` glyph ∪ `LEVEL_EMOJI`）：⬜、🔴 會 raise，⚠／⚠️ **不會** raise（`tests/test_p2_step1_shared_optional_params.py` 釘住此現況；現況不是承諾）。chip 走獨立通道的理由是**語意**（metadata 不是訊號文字），**不是**靠 ValueError 擋；⚠ 不被擋不改變本條結論。
 5. 同一頁同一 metadata 事實在外露層**最多出現一次**（寫在最近的共同容器上），其他區塊不再重寫長句。
 6. 取值**只能讀既有 SSOT**，⛔ 自算、⛔ 以按鈕時間冒充資料日（A 規格 §2.3）。
 
