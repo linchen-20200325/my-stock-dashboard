@@ -393,3 +393,72 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 ### 14.7 下一步
 
 **步驟 5**：§6 mutation 清單逐一拔守衛必紅（M1～M13 中與 Phase 2 現有碼相關者；**M11／M12 欄數待 `CV1-DR-12` 裁示，不做**），然後收尾 Phase 2（零資料語意證明、DoD、HANDOFF）。
+
+
+## §15 Phase 2 步驟 5 與收尾（2026-10-30）
+
+> append-only。§4 步驟表與 §13／§14 未改動。**本節 docs-only：`git diff --stat -- src tests` 為空**（mutation 臨時改 `src/` 後每次 `git checkout -- src`，收尾 `git status` 只剩 docs）。基準＝main `59201e2`（#975 合併後；該 commit 的 Fast checks／Slow tests 以 `gh api` 實查皆 success）。
+> ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本節 mutation 與證明由**單組執行 AI** 實跑，**未再經第二組獨立複驗**；其中「N/A」項是『此 phase 沒有被 mutation 的對象』，**不是『已驗過』**。
+
+### 15.1 §6 Mutation 清單 M1～M13 判定與實跑結果
+
+實跑方式：臨時改 `src/ui_v2/markup.py`／`src/ui/views/_ui_kit.py`（字串替換，出現次數須恰為預期）→ 跑測試 → `git checkout -- src`。受測集合＝`tests/test_p2_step1_shared_optional_params.py`、`tests/ui_v2/test_block_registry.py`、`tests/ui_v2/test_lamp_card_fold.py`、`tests/test_p01_today_view.py`、`test_p02～p05_*_v2_cards.py`、`test_p02～p05_*_view.py`（共 5763 條）。**基準（無 mutation）全綠。**
+
+| M | 判定 | 實跑 mutation（臨時）與結果：必紅的測試 |
+|---|---|---|
+| **M1** sparkline NaN 補 0 | **N/A，待 Phase 3**：Phase 2 沒有 sparkline 產生器；`card_html(spark=)` 只是受信任 HTML 的透傳，不碰數值 | — |
+| **M2** metadata chip 接受未登記 kind | **N/A，待 Phase 3**：Phase 2 的 `chips` 是自由字串序列（只驗非空 str），沒有 kind 登記表可拔 | — |
+| **M3** 新 kind 與 `BADGES` 重名 | **N/A，待 Phase 3**：同上；`BADGES` 本 phase 0 diff | — |
+| **M4** Top-N 切片回傳複製／改序 | **N/A，待 Phase 3**：Top-N 切片元件尚不存在（Phase 2 零 Top-N 程式變更，見 15.2 (f)） | — |
+| **M5** 新參數改變預設輸出 1 byte | **適用，已實跑 5 個變體，全紅** | **M5a** `chips` 空時仍輸出空 `<div class="blk-chips">`：5 紅（`TestGoldenDefaultOutputUnchanged::test_card_html_default_output_golden`、`TestCardHtmlChips::test_default_has_no_chip_row`、`TestNonDefaultOutputByteGolden::test_summary_only／test_spark_only／test_fold_label_only`）。**M5b** `card_html` 預設尾端多一個空白：6 紅（`test_card_html_default_output_golden`＋`TestNonDefaultOutputByteGolden` 5 條）。**M5c** `single_submit_form` 預設路徑多一個 `st.caption('')`：1 紅（`test_single_submit_form_default_calls_golden`）。**M5d** `render_card` 預設 `compact=True`：17 紅（`test_render_card_default_calls_golden`、`TestRenderCardCompact::test_default_false_equals_omitted`、p01／p03／p04／p05 多條）。**M5e** `render_card` 預設路徑 facts 分隔字元由全形空白改半形：1 紅（`test_render_card_default_calls_golden`） |
+| **M6** 摺疊預設 `expanded=True`／checked | **適用，已實跑 3 個變體，全紅** | **M6a** `render_card(compact)` expander `expanded=True`：4 紅（`TestRenderCardCompact::test_compact_moves_facts_and_all_three_note_parts_into_collapsed_expander`、`test_real_streamlit_compact_expander_collapsed`、p01 `test_compact_keeps_all_three_note_parts_in_the_collapsed_fold[live-]／[unwired-]`）。**M6b** `single_submit_form(options_label)` expander `expanded=True`：1 紅（`TestSingleSubmitFormOptionsLabel::test_label_wraps_radio_in_collapsed_expander_inside_form`）。**M6c** `card_html` 摺疊 checkbox 預設 `checked`：426 紅（含 `TestFoldStaysCollapsedAndComplete::test_fold_checkbox_never_checked_by_default`、`test_lamp_card_fold::TestLiveFold::test_toggle_collapsed_by_default`、p02 `test_folds_are_collapsed_by_default_on_every_card[*]`、既有 golden） |
+| **M7** chart header 說明句放在 chip 之前 | **N/A，待 Phase 3**：chart header 元件不存在。（鄰近但**不是** M7：`card_html` 的 chips→summary→大字順序有 `TestCardHtmlChips::test_chips_rendered_after_header_before_value_and_facts` 守，不可算成已驗 M7） | — |
+| **M8** 新模組 import `src.services` | **N/A，Phase 2 無新模組**；15.2 (e) 的 AST 實測確認兩檔無新增 `src.data`／`src.services` import。**未做 mutation** | — |
+| **M9** stale chip 用紅色 class | **N/A，待 Phase 3**：stale chip 元件與 CSS 都還沒有（`.blk-chip*` 尚無樣式，§13.7 第 1 點） | — |
+| **M10** metadata chip 經訊號文字頻道輸出 | **部分適用，已實跑 3 個變體，全紅；但對應測試只有一條且偏窄**（見下「M10 判斷」） | **M10a** chips 併進 `blk-lvl`（等級／訊號文字）：3 紅（`test_missing_value_stays_blank_not_zero_with_new_params`、`TestNonDefaultOutputByteGolden::test_chips_only／test_all_combined`）。**M10b** chips 經 `assert_signal_text_clean`：2 紅（`TestCardHtmlChips::test_chips_do_not_go_through_signal_text_channel`、`test_missing_value_stays_blank_not_zero_with_new_params`）。**M10c** chips 洩進 `title=`：4 紅（`test_chips_do_not_leak_into_title_attributes`、`test_chips_rendered_after_header_before_value_and_facts`、`TestNonDefaultOutputByteGolden::test_chips_only／test_all_combined`） |
+| **M11／M12** 欄數 | **N/A，待 `CV1-DR-12` 客戶裁示**（T23 Phase 2 不動，§4 第 3 列） | — |
+| **M13** 摺疊內容只留 `title=` | **適用，已實跑 2 個變體，全紅** | **M13a** `card_html` 摺疊 body 清空（只剩截斷 fact 的 `title=`）：1864 紅（~~1864~~ 為本次撰寫時計數；**QA 重現為 1865，差 1 視為計數口徑差異**（原因未逐項查明），兩者皆為『大量必紅』結論不變；含 `test_full_text_is_in_fold_body_not_only_in_title_attr`、`test_truncated_fold_keeps_original_in_hover_only_as_before`、`test_block_registry::test_fold_truncate_false_shows_full_text_and_default_is_unchanged`、`test_lamp_card_fold::TestLiveFold::test_source_rows_only_inside_fold[*]`）。**M13b** `render_card(compact)` expander 內不放 facts／Note：5 紅（`TestRenderCardCompact::test_compact_moves_facts_and_all_three_note_parts_into_collapsed_expander`、`test_compact_live_note_not_dropped`、`test_real_streamlit_compact_expander_collapsed`、p01 `test_compact_keeps_all_three_note_parts_in_the_collapsed_fold[live-]／[unwired-]`） |
+
+**M10 判斷（據實）**：`markup.card_html` 本身**從未呼叫** `assert_signal_text_clean`（訊號頻道檢查在 `_ui_kit` 層），而 Phase 2 無任何 caller 把 chips 接進 `render_card` 的 `signal_text`。因此 M10 在 Phase 2 能守的只有『`card_html` 內 chips 不進等級／值頻道、不進 `title=`、glyph 合法』——上列三個變體都被擋下。**缺口（不是 bug，列為 Phase 3 待補）**：(1) 沒有一條測試直接斷言『chip 文字不出現在 `blk-val`／`blk-lvl` 節點內』，M10a 是被『失敗態不得有 `blk-lvl`』與 byte golden **間接**擋下；有 value／level 的 live 態下 M10a 僅靠 byte golden 擋；(2) `test_chips_do_not_go_through_signal_text_channel` 的 `⚠` 斷言綁現況（見該測試註解）；(3) 真正的 M10（metadata chip 元件的輸出頻道 vs `render_card(signal_text=)`）要等 Phase 3 chip 元件落地才能完整驗。**以上不宣稱 M10 已完整驗。**
+
+**步驟 1 兩個 mutation 重跑（受測集合 241 條）**：
+- spark 空字串／受信任 HTML：**S1** spark 改經 `_esc`（受信任 HTML 被轉義）→ 3 紅（`TestCardHtmlSpark::test_trusted_html_not_escaped`、`test_spark_only`、`test_all_combined`）；**S2** 拿掉 spark 驗證 → 4 紅（`test_empty_or_non_str_spark_raises[]／[   ]／[0]／[x]`）；**S3** 空 spark 靜默當 `None` 略過而非 raise → 同 4 紅。
+- fold_label 呼叫時解析：**F1** 預設開關字寫死字面 `'▸ 詳細'`（不讀 `FOLD_SUMMARY_TEXT`）→ 1 紅（`TestCardHtmlFoldLabel::test_label_resolved_at_call_time_not_def_time`）；**F2** `fold_label` 被忽略 → 3 紅（`test_custom_label_replaces_and_is_escaped`、`test_fold_label_only`、`test_all_combined`）。
+- **每個 mutation 後 `git checkout -- src`；全部 18 個 mutation（M5×5、M6×3、M10×3、M13×2、S×3、F×2）皆被測試抓到，無存活。**
+
+### 15.2 零資料語意證明 (a)～(g)（以 main `59201e2` 對 Phase 2 基底 `64fdeae` 實測）
+
+- **(a)** `git diff --name-only 64fdeae HEAD -- src shared` ＝ 只有 `src/ui/views/_ui_kit.py`、`src/ui_v2/markup.py`（~~+50/−6、+70/−1~~；**有意識的更正，不是漏刪；決策者 AI 總管（事實更正）**：依 `git diff --numstat 64fdeae HEAD` 重跑實測為 `_ui_kit.py` **+45/−5**、`markup.py` **+69/−1**，舊數字不符實測）；`src/services`、`src/compute`、`src/data`、`shared/` 的 numstat 皆 **0 行**。
+- **(b)** builder parity：`src/ui/views/page_*.py`、`src/ui/tabs/tab_today.py`、`_market_blocks.py`、`_target_blocks.py`、`risk_cap_gate.py`、`src/ui_v2/page_today.py`、`shell_nav.py` 對 `64fdeae` **0 行 diff**，且其上游（services／compute／data／shared）0 行 diff ⇒ 產出 `card.key／state／value／note／facts` 的程式碼**逐字相同**（以程式碼同一性代替抽樣比對；未動的 builder 在相同輸入下輸出相同）。另有 §13.6／§14 的 QA 差分（card_html 6000／single_submit_form 480／render_card 420 組對基底 0 差異）。
+- **(c)** 資訊守恆：見 §14（卡面 ∪ 摺疊 ∪ 既有 expander；p02～p05 測試已改寫，本次全套 fast lane 全綠）。
+- **(d)** mutation：見 15.1。
+- **(e)** AST（`ast` 實測，`64fdeae` vs HEAD）：`markup.py` **0 個新增 import**；`_ui_kit.py` 新增 import **僅** `from src.ui_v2 import markup`（`render_card` 函式內 lazy，約 307 行）；兩檔皆無新增 `src.data`／`src.services` import；`st.cache_data`／`st.cache_resource` 引用在兩檔前後皆 **0**。分層守衛 `tests/test_c3_layering_guard.py` 在本次全套中綠。
+- **(f)** Top-N：`TOP_N_OPTIONS`／`DEFAULT_TOP_N` 所在檔（`page_find.py`、`_target_blocks.py`、`page_inspect.py`）對 `64fdeae` **0 行 diff**；L3 參數所在 `src/services` 0 行 diff。Phase 2 沒有 Top-N 切片程式，故『切片物件同一性』無對象（M4 N/A）。
+- **(g)** `shared/ui_state.py`（`classify_ui_state`、`NO_VALUE_STATES`）、`src/ui/views/page_today.py`（`v2_card_badge_n`）對 `64fdeae` **0 行 diff**。
+
+### 15.3 畫面零變更證明：採用的替代方案與其限制（誠實揭露）
+
+- **採用**：byte 級 golden（修改前實測：`card_html` 1950 組含 652 組 raise／`single_submit_form` 13 組／`render_card` 135 組，sha256 釘在 `tests/test_p2_step1_shared_optional_params.py`）＋兩組 QA 差分（0 差異）＋ 15.2 (b) 的 page 原始碼 0 diff。理由：Phase 2 **沒有任何 production caller 使用新參數**（§13.6），且所有 page／builder 原始碼 0 diff，預設輸出 byte 相同 ⇒ 瀏覽器看到的 HTML／Streamlit 呼叫序列相同。
+- **未做**：§4 DoD 原文的『1440／390 三頁第一屏截圖』**未做**。限制：(1) 沒有實際瀏覽器渲染比對；(2) CSS 檔 0 diff 為『`page_css()` 未動』的推論，非截圖證明；(3) 手機實機、Streamlit Cloud 未驗。此為 §4 DoD 的**有意識替代**，非宣稱已達原文；Phase 3 起新元件掛頁時必須恢復截圖 Gate。
+
+### 15.4 全套測試（目標：盡量覆蓋 fast lane）
+
+- 指令：`python3 -m pytest tests -q -p no:cacheprovider --tb=short -rf`（預設 `-m "not slow"`）。**一次跑完，未分批**（背景執行，耗時 **938.90 s／約 15.6 分**，超過 9 分鐘但完整跑完，未使用 `-x`）。
+- 結果：**35366 passed、0 failed、46 skipped、185 deselected（slow）、535 warnings**。
+- 環境：Python 3.13、streamlit 1.59.2、`markdown-it-py` 4.2.0 已裝 ⇒ `test_batch_z59` 通過（未重現 `P1R-Z59-MARKDOWN-IT-DEP`；該項只在『僅裝 requirements.txt』環境才紅，BACKLOG 已登，不動）。
+- **slow lane（185 條 deselected，AppTest e2e）本次未跑**；以 GitHub 實查 `59201e2`：Fast checks／Slow tests 皆 success（#975）。
+
+### 15.5 DoD 對照
+
+| DoD | 狀態 |
+|---|---|
+| CI 綠（fast＋slow） | PR #973／#974／#975 皆 fast＋slow 綠（#975 的 `59201e2` 以 `gh api` 實查 success；#973／#974 依總管交付資訊，本次未逐一重查） |
+| 零畫面變更證明 | 替代方案（byte golden＋QA 差分＋page 0 diff），**未做 1440／390 截圖**，限制見 15.3 |
+| 獨立 QA ≥2 組 | 步驟 1：QA-A／QA-B；步驟 2：QA-A／QA-B；步驟 0：QA 1 組（§12）；步驟 5：單組執行（本節），無第二組 |
+| BACKLOG／HANDOFF 同步 | 本批已同步 HANDOFF／PROJECT_STATE；BACKLOG 殘留項 `P1R-SPARK-TRUSTED-HTML`、`P2R-STEP2-SCENARIO-GAPS`、`P1R-Z59-MARKDOWN-IT-DEP` 已確認登記（以 ID 引用，不寫行號——`CLAUDE.md` §8.2.A.0 規則 1），未新增 |
+
+### 15.6 Phase 2 結論與下一階段
+
+- **Phase 2：步驟 0、1、2＋4、5 完成（步驟 3 已取消）。** 共用層新增 `card_html` chips／summary／fold_label／spark、`single_submit_form(options_label)`、`render_card(compact)`（預設輸出 byte-identical、0 production caller）；p02～p05＋p01 測試改為資訊守恆斷言。
+- **未清事項（誠實）**：M1～M4、M7、M9 待 Phase 3 元件；M8 無新模組；M11／M12 待 `CV1-DR-12`；M10 完整驗待 Phase 3；`.blk-chips*` 等 CSS 未寫；截圖 Gate 未做；slow 本次未重跑。
+- **下一階段 Phase 3（Shared Visual Components）為 UI phase：寫 UI code 前須先出文字線框供客戶拍板**（`CLAUDE.md` §-1.5.D v3 §03-2 ①）。**Phase 3 以較嚴者為準：不論共用元件是否掛頁，寫 UI code 前先出文字線框供客戶拍板**（不得以『未掛頁畫面零變更』為由跳過）。站殼間距子項需線框；共用元件新模組在未掛頁前畫面零變更。Model×Effort 依 §1 與 DEC-084／DEC-106 比對：Phase 3 起判 **Opus 5.5＋High**，進入明確機械式實作後切 **Sonnet 5.5＋Medium**（⚠️ 與 DEC-113 對 Phase 2 的 Sonnet 5.5＋Medium 並列時，開工前依 DEC-084／DEC-106 核對實際設定，不符才通知客戶）。
