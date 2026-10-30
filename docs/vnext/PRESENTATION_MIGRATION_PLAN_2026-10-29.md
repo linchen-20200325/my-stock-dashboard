@@ -592,3 +592,47 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 ### 19.4 下一個唯一安全接手點
 
 **等客戶就 `docs/vnext/PHASE4_MARKET_PAGE_WIREFRAME_2026-10-30.md` §6（Q1～Q8）拍板。** 拍板前**禁止**：任何 Phase 4 UI code（`page_market.py`、`_market_blocks.py`、`_ui_kit.py`／`compact.py` 的頁面掛載、`app.py`、Phase 4 的 tests 改寫）、提前做 Phase 5～7／W4～W8、動 `page_today.py`、提高 floor。拍板後：依裁示寫 DEC（客戶裁示→新 DEC，同步契約／Plan／BACKLOG），再依 §7.4 的 Model×Effort 與拆 PR 建議施工；動工前 `git fetch` 重確認 main 與鏈守衛。
+
+## §20 Phase 4 步驟 1+：📊 市場頁施工計畫（DEC-117 核准後；2026-10-30；append-only；docs-only 落文）
+
+> 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-117）＋AI 總管（施工拆分落文）**。§19 一字未動；§19.4「等客戶拍板」已由 DEC-117 解除，但**寫 UI code 仍須等客戶回覆「改好了」**（確認 Opus 5.5＋High 已切換；DEC-117 Model×Effort 條）。
+> 依據：客戶裁示 DEC-117（Q1=B／Q2=A′／Q3=A／Q4=P-B／Q5=B／Q6=A／Q7=A／Q8 全 A＋補充裁示）；線框 `docs/vnext/PHASE4_MARKET_PAGE_WIREFRAME_2026-10-30.md` §3（能力盤點）、§4（已核准線框）、§7（守衛預估）、**§10（施工驗收條件 C1～C8、N1～N7、未決 U1～U6）**。
+> ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本拆分由撰寫組單組撰寫，**未經第二組驗證**；動檔與守衛清單沿用線框 §7（regex 粗掃、以當時 main `15071a47`／`1af374fb` 為基），**開工前須以當時 main 重測**，⛔ 當作前提。頁面組裝／機械式切分屬 AI 總管內部判斷，客戶可推翻。
+
+### 20.1 通則
+
+- **開工閘門（順序不可顛倒）**：① 客戶回覆「改好了」（Opus 5.5＋High 已切換）→ ② `git fetch` 重確認 main、重跑鏈守衛（`test_uim_revert_chain`／`test_nav1_revert_chain`／`test_xvext_revert_chain`）、z60、`TestStreamlitFloorCompatibility` 基線 → ③ 才動 `src/`。
+- **範圍**：只做 DEC-117 核准的 📊 市場頁版面；⛔ 新資料源／公式／門檻／TTL／投資語意；⛔ Risk Cap 數字、EPS×PE、趨勢正式定義；⛔ `page_today.py`、`app.py`、`PAGE_LABELS`／導覽殼、`requirements.txt` floor；⛔ Digest／Brain（Phase 7）；⛔ Phase 5～7、W4～W8；⛔ 更新鈕改字（`UIM-UPDATE-BUTTON-WORDING` 另案）。
+- **寫入序列化**：一次一檔（`PROCESS.md` §3）；實作與 QA 分離（`CLAUDE.md` §-2 規則 3／4）；一次改一個模組（`CLAUDE.md` §8.5）。
+- **每步 DoD**：沿用 §16.1 共通四項（CI 綠以 `gh api` 實查、獨立 QA ≥2 組不同角度、零資料語意證明 (a)～(g)、既有頁面 0 diff——此處「既有頁面」＝📊 市場以外三頁與 `?legacy=1`）＋線框 §10 對應條目全部有守衛。**UI Stage 完成＝CI 綠＋Visual Fidelity PASS**（`PROJECT_RULES.md` 第 24 節）。
+
+### 20.2 動檔預估（依 DEC-117；INFERENCE，開工重測）
+
+| 檔 | 預估 | 對應裁示／驗收條件 | 鏈／守衛 |
+|---|---|---|---|
+| `src/ui/views/page_market.py` | 區塊順序改為 Q5 新順序；頁首加主 CTA 動作列（form＋「更新選項」expander）；Hero 呼叫改 3 tile | Q1、Q5、Q7、Q8b；C1-1～C1-8 | **還原鏈新頭節**：比照 `test_uim_revert_chain`，基底＝Phase 4 開工前 main，pair 以 difflib 於**最終檔**產生（F-8，最後一步），⛔ 動舊表／舊 sha；`test_xvext_revert_chain` 照跑 |
+| `src/ui/views/_market_blocks.py` | `render_hero`（3 tile）、風險縮短行（`risk_item_text` 縮短版＋整句版留摺疊）、`DANGER_POINTER` 縮短（三要素）、`render_alerts_block`（一行 bar＋展開）、`render_chart_a`（Primary，原生圖＋MA＋y 軸＋圖例）、`render_chart_b`（small multiples，無數字、不切換）、圖 C（原句→「為什麼」）、圖 D（「是否惡化」寫一次、兩欄）、六欄 Basis→四段映射（只用於圖） | Q1～Q4、Q6、Q8；C2～C8 | 無 sha 鏈；`test_market_blocks`／`test_page_market`／`test_uim_market_page` AST／字串守衛須改寫為資訊守恆（⛔ 降強度） |
+| `src/ui_v2/compact.py` | 可能新增：「今日主要風險」tile 變體（3 行縮短行超過 `TILE_FACE_MAX_CHARS`，`kpi_tile_html` 不足）；小倍數顯示名對映或名稱上限（F-3）。⛔ 新增指路 chip kind（Q2：不新增 chip） | Q2、Q4、Q6 | `tests/ui_v2/test_compact.py` golden／mutation M1～M20：**只加不改**既有輸出 |
+| `src/ui/views/_ui_kit.py` | 視需要加 `render_fold` 薄封裝／公開 `status_chip`（只加不改） | Q3 | Phase 2 golden（`test_p2_step1_shared_optional_params`）、`tests/test_p0*_*`、`tests/ui_v2` |
+| `tests/**` | 改寫：T23 欄數、順序斷言、hero 文字、`TestWaterAndBasis`、圖 D 欄；新增：鏈頭節、資訊守恆、四類退化句外露（C6-3）、Primary 緊接 L1（C1-7）、不切換（C4-2）、Phase 4 mutation | 線框 §10 全表 | 等強替代（Plan §3 T 表）；`test_views_no_unverified_universal_claims` REGISTRY |
+| `app.py`、`src/services/*`、`src/compute/*`、`src/data/*`、`shared/*`、`page_today.py` | **不動** | N5 | `test_c3_layering_guard`、`test_batch_z60` |
+
+### 20.3 PR 切分建議（AI 總管內部；可依實測調整並同步 HANDOFF／BACKLOG）
+
+| PR | 內容 | Model×Effort（客戶 DEC-117） | 主要驗收 |
+|---|---|---|---|
+| **P4-1 第一屏** | 頁首主 CTA 動作列（Q1／Q8b）→ 今日結論前移（Q5）→ 3 核心狀態 tile（Q1；風險縮短行 Q6；指路 A′ Q2）→ ⚡ 一行 bar（Q8c）→ AI／資料狀態一行；位階 tile hover-only 退場 | **Opus 5.5＋High**（頁面組裝：結論位置、missing≠0、未評估≠安全、Risk Cap 未核准語意、客戶逐字句） | C1-1～C1-7、C2、C3-2、C6-1～C6-4、C8-b、C8-c、N1～N3 |
+| **P4-2 圖區** | 圖 A Primary（Q4；摺疊四段 Q3）→ 國際 small multiples（Q4）→ 圖 D compact（四段）→ 圖 C 一行＋原句入「為什麼」（Q8a） | **Opus 5.5＋High**（趨勢 `⬜ 尚未定義`、Missing 路徑、D6=B） | C1-8、C3-1、C4-1～C4-6、C8-a、C8-0 |
+| **P4-3 鏈頭節＋收尾** | `page_market.py` 還原鏈新頭節（最終檔上產生）；零資料語意證明；Visual Fidelity Gate（1440／390 × cold／loaded 截圖與量測；Q7 mobile exception 依 Gate §8 條件判） | 鏈頭節：**Opus 5.5＋High**；Gate 截圖／量測：可降 **Sonnet 5.5＋Medium**（見 20.4） | N4、N5、Gate 全項 |
+
+- ⛔ 合併 P4-1 與 P4-2 為一個 PR（一次一模組；`CLAUDE.md` §8.5）。P4-1、P4-2 皆動 `_market_blocks.py`，須序列化（P4-1 合併後再開 P4-2）。鏈頭節須在 `page_market.py` 最終版之後產生——若 P4-2 不動 `page_market.py`，鏈頭節可併入 P4-1 末步；否則放 P4-3。
+
+### 20.4 Model×Effort（客戶 DEC-117；承 DEC-084／DEC-106／`PROJECT_RULES.md` 第 18 節）
+
+- **頁面組裝**（P4-1、P4-2、鏈頭節）：**Opus 5.5＋High**（客戶同意）。**在客戶回覆「改好了」前不開工。**
+- **機械式工作**（測試機械改寫、mutation 逐一拔守衛、截圖與量測）：客戶同意「若可安全降回 Sonnet 5.5＋Medium，依既有 Gate 在完整安全 checkpoint 再通知」→ 只能在**完整安全 checkpoint**（例：P4-1 或 P4-2 已 commit＋push、守衛綠、HANDOFF 已更新）停手、依第 18.3 節固定格式**通知客戶**後切換；⛔ 頁面組裝中途降級；⛔ 未通知自行降級。
+- 開工前依 DEC-084／DEC-106 核對實際設定：已符合 → 靜默繼續；不符 → 停手通知。
+
+### 20.5 下一個唯一安全接手點
+
+**等客戶回覆「改好了」（確認 Opus 5.5＋High 已切換）後，才開始 P4-1（第一屏）。** 在那之前只允許 docs 落盤與唯讀重測；⛔ 任何 `src/`、`tests/`、`app.py` 變更。

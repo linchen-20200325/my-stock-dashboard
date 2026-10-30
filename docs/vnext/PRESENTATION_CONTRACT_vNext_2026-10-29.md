@@ -4,6 +4,7 @@
 - **日期**：2026-10-29　**基準**：PR base＝main `978ecedc`（撰寫時基準 `55739129`＝`978ecedc`＋#970 commit `06a7a3e5` 的 merge；`src/`、`shared/` 與 main 相同）
 - **決策來源**：原則、Visual Budget、第一屏五問、主圖 header、下沉清單、chips 家族、三要素遷移、Missing 不變、硬規則、IA 不變、各頁方向＝**客戶 2026-10-29 指示（`docs/DECISIONS.md` DEC-109，逐字收錄）**；本檔的量化上限、詞彙表、讀法 R2～R15＝**AI 總管內部決定（DEC-110，依 `CLAUDE.md` §-1.5.D v3 §03-1）**，客戶可推翻任何一條，推翻後以客戶為準。
 - 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：客戶裁示 D1a=A／D1b=B／D3=A／D5=A／D6=B／D8=B／D10=(a)（`docs/DECISIONS.md` DEC-115）。**就地加註處**＝§4（D10(a)：圖 A 配額）、§6（D3：chip 三族）、§8-4（D6：Secondary 缺資料縮一行）、§11（D8：切換鈕）、§14（D1a／D1b：色彩收斂時程）、§19（D5：迷你圖不顯示數字；站殼量測）、§22（W1 已裁示；W2～W9 不變）。原文一律保留、舊句加刪除線或註記。
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-117，Phase 4 步驟 0 裁示）**：客戶就 📊 市場頁線框（`docs/vnext/PHASE4_MARKET_PAGE_WIREFRAME_2026-10-30.md` §6）裁示 Q1=B／Q2=A′／Q3=A／Q4=P-B／Q5=B／Q6=A／Q7=A／Q8 全 A（`docs/DECISIONS.md` DEC-117）。本檔原文一字未改，**就地加註**於 §3（手機五問③ mobile exception）、§12.1（📊 市場第一屏、Primary 擇一、風險 tile 形式）、§15 R4（W9 結案）、§16（DEC-081 Q2-1 位置）、§19 Q2（手機排法）、§22（W2／W3／W9 結案）。**衝突處以 DEC-117 為準**；施工驗收條件見線框 §10。
 - **上位**：`CLAUDE.md`（§-2 > §-1.5 > §-1 > §0～§8）> `PROCESS.md` > `PROJECT_RULES.md`＋`docs/governance/*` > 最新有效 DEC > **本檔（正式契約／Visual SSOT 層）**（位階全文見 `PROJECT_RULES.md` 第 25 節）。本檔**不改 `CLAUDE.md` 一個字**；與憲法表面衝突時走讀法（§15）或送客戶。
 - **配套**：閘門＝`docs/governance/UI_VISUAL_FIDELITY_GATE.md`；AI 決策輸入＝`docs/vnext/DECISION_DIGEST_CONTRACT_vNext_2026-10-29.md`；AI 邊界＝`docs/vnext/ONE_AI_BRAIN_BOUNDARY_vNext_2026-10-29.md`；取代關係＝`docs/vnext/PHASE1_SUPERSEDE_MAP_2026-10-29.md`；施工＝`docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md`；現況量測＝`docs/vnext/visual_fidelity/phase1_baseline/VISUAL_GAP_AUDIT_2026-10-29.md`；工具＝`tools/visual_fidelity/`。
 - **Scope Guard（客戶 DEC-109 三十）**：本檔**只遷移呈現責任**。⛔ 新資料來源、新投資公式、台股／國際趨勢公式、Risk Cap 算法、EPS×PE production rule、投資語意變更、大量 production UI 實作、無關歷史技術債。發現 → `docs/BACKLOG.md`。
@@ -60,6 +61,8 @@
 | **第一眼（L1）** | 五問：狀態、核心數字、Primary Visual（compact）、是否需行動、下一步；metadata chips；Missing chip；AI 投資總結入口卡（R13） | 外露 |
 | **第二眼（L2）** | Secondary Visuals、Top-N 之外的完整清單、分組明細、進階控制項（更新模式；選股條件是否收合待 Phase 5 線框拍板）、大圖（點開才畫，一次一張） | 收合或位於第一屏之下 |
 | **第三層（L3）** | 摺疊（主圖下方字樣＝`▸ 為什麼／來源／限制／去哪補`；卡片摺疊沿用「▸ 詳細」直到線框拍板，R7）：為什麼、資料來源、as_of、口徑、公式、threshold、policy reference、限制、Missing／unavailable 原因、去哪補、provenance、工程術語 | **收合，不得預設展開**（DEC-091 §一 Level 3 同向） |
+
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-117，Phase 4 步驟 0 裁示）**：**📊 市場頁手機版**的五問③「Primary Visual header＋圖上緣在第一屏」由客戶核准**合理 mobile exception**（Q7）：手機 Primary 可位於第一屏下方；手機第一屏優先序＝**今日結論 > 核心狀態 > 是否需行動 > Primary Visual**；⛔ 為塞主圖把結論或核心狀態擠出第一屏；**Primary 必須緊接 L1 決策區後方，不得被 L2／L3 長內容插隊**。桌機與其他頁不適用本例外（§2 B1 照舊）。Gate 登記見 `docs/governance/UI_VISUAL_FIDELITY_GATE.md` §8。
 
 ## §4 主圖 header 結構（客戶原文 DEC-109 五＋規格）
 
@@ -203,6 +206,14 @@ R9（DEC-110）：
 | EPS×PE | 未核准 → 維持 placeholder（`CHART_C_EMPTY`）／`⬜ 尚未核准`；⛔ 為畫面完整自建公式或假圖 |
 | 下沉 | 更新模式 radio 與長說明（L2 更新選項）、位階卡三列與 `REGIME_SCOPE_NOTE`（L3）、`WATER_WHY`／`WATER_REPORT_DISCLOSURE`（L3）、圖 D 完整表（L2）、「生效分支 warroom」等工程字 |
 
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-117，Phase 4 步驟 0 裁示）**（上表原文保留；衝突處以本註為準）：
+  - **第一屏順序（Q5=B）**：頁首 → 更新 CTA → 今日結論 → 3 個核心狀態 → ⚡需要處理 → AI／資料狀態 → Primary Visual（取代 DEC-105 1A 在市場頁的舊相對順序）。
+  - **核心狀態（Q1=B）**：桌機 3 個 tile（市場位階／建議總持股水位／今日主要風險）；「🚀 更新今日戰情」為**頁首主 CTA**、不占 tile；手機 2＋1。
+  - **今日主要風險（Q6=A／Q2=A′）**：上表「≤3 chip」由**≤3 行縮短行「燈色＋桶名＋燈名＋方向」**承接（chip 無對應 kind，線框 F-2）；完整原句等進摺疊；退化／護欄句（未評估不等於安全、資料不足／無法判定、尚未載入、真錯誤）外露逐字；「指標危險度」指路**維持說明句**（縮短、保留三要素、不新增 chip）。
+  - **Primary Visual（Q4=P-B）**：上表「segmented／switcher **或** small multiples（擇一）」定案為 **🇹🇼 台股趨勢（圖 A）＝Primary**（原生圖、MA 參考線、y 軸、圖例），**國際 5 系列＝Secondary small multiples**，**不做切換列**；小倍數不顯示數字；詳細數值留 L2；趨勢正式定義不變、未定義顯示 `⬜ 尚未定義`。
+  - **下沉（Q8 全 A）**：圖 C 完整原句→「為什麼」；更新模式 radio＋長說明→「更新選項」；⚡→一行 bar＋展開清單；資訊只能下沉、不得刪除。
+  - **摺疊標籤（Q3=A）**：圖用「▸ 為什麼／來源／限制／去哪補」；tile／⚡ 維持「🔍 查看依據」。
+
 ### 12.2 🎯 標的 —「現在有哪些值得看的產業與股票？」
 
 | 項 | 規格 |
@@ -292,6 +303,7 @@ R9（DEC-110）：
 - **呈現 precedence**：舊 helper／test／wireframe 的**呈現要求**與本契約衝突時，以本契約＋blueprint（新 Visual SSOT）為準（客戶原文範圍）；**客戶 DEC 的呈現裁示只有在 DEC-109 或同日前序指示（2026-10-29T15:18Z，DEC-109 附錄）明確點名處才被取代，其餘一律「維持＋列入該頁 phase 線框待拍板」**（§22）；**只遷移呈現責任**。**資料、投資、安全規則仍取較嚴者**（Missing 語意、DEC-031、Risk Cap、AI 揭露、No Look-ahead、Sheet Safety…）。客戶既有裁示的**內容**保留、只換位置（§16）。完整兩軸位階見 `PROJECT_RULES.md` 第 25 節。
 - **PROJECT_RULES §19.11「衝突時以較嚴者為準」的呈現讀法**：「較嚴」在資料／投資／安全面照舊；在**呈現位置**面以 Visual SSOT 為準（「外露」不因字面較多就算「較嚴」）。
 - **R4（2026-10-29 總管改判；本行為本 PR 內撰寫之文字，直接改寫）**：`CLAUDE.md` v3 §00「固定 3 欄自適應網格」與 DEC-091 §四客戶指定「第一列只放 3～4 個核心狀態」／現行市場 Hero 4 欄（DEC-105 第 5 點登記為 P2 偏離）之間的牴觸，**本檔與 DECISIONS 不重新解釋 `CLAUDE.md`**：登 BACKLOG `CV1-DR-12` 待客戶裁示，並列為 Phase 4 線框待拍板點 W9（§22）。裁示前**維持現狀**（Hero 4 欄照舊、卡片網格 `MAX_COLS=3` 照舊），Visual Fidelity Gate 對 **KPI 列欄數暫不判定**；手機 KPI 2×2 同屬此題。
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-117，Phase 4 步驟 0 裁示）**：上一條 R4 所登的牴觸已由客戶裁示結案（DEC-117 Q1；BACKLOG `CV1-DR-12`）：📊 市場頁**桌機 3 個核心狀態 tile、手機 2＋1**；客戶明示「**「固定 3 欄」是桌機核心狀態網格要求，不代表手機必須硬排 3 欄；手機應依可讀性自適應。**」——此為**客戶本人**的解釋（記於 DEC-117），**`CLAUDE.md` 一字不改**；R4「本檔與 DECISIONS 不以總管讀法重新解釋 `CLAUDE.md`」仍有效。Visual Fidelity Gate 自此對 📊 市場頁 **判定 KPI 列欄數**（桌機 3、手機 2＋1）；其他頁的 KPI 列仍依各頁線框。
 
 ## §16 既有客戶裁示：內容保留、只換位置（R5、R6）
 
@@ -317,6 +329,8 @@ R9（DEC-110）：
 | 客戶 2026-09-25「⛔ 不得只剩 hover」（`page_find.py` 約 L774／L2098／L2134） | 原文可取得 | — | **維持並延伸到手機**（必須可點開） |
 | 客戶 2026-09-25「16 燈卡三列出處收進 ▸ 詳細」（`page_today.py` 約 L3014） | 純 CSS 摺疊機制與「▸ 詳細」字樣 | — | 機制與字樣維持；換字與否＝線框待拍板（R7） |
 | DEC-091 §一／DEC-108 十項 | 三層資訊、L3 不得預設展開、第一列 3～4、圖表縮小、明細收合 | — | 同向；本契約為其具體化（DEC-108 ③「圖表縮小」讀為**主圖外露但縮小**，R2） |
+
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-117，Phase 4 步驟 0 裁示）**：上表 **DEC-081 Q2-1** 列「新位置」中的「Hero／⚡ 相對順序可維持」在 **📊 市場頁失效**——客戶 Q5=B 明確同意取代 DEC-105 1A 的舊相對順序，今日結論**提前到 3 個核心狀態 tile 之前**（順序見 §12.1 註）；「L1 第一屏、頁級主要判讀句、句子不改」照舊。DEC-081 Q2-2、DEC-092 Q2 兩列不變（逐字）。
 
 ## §17 能力守恆表（吸收自 PR #970 §D，依本契約更新；⛔ 能力消失、⛔ 語意改變）
 
@@ -380,6 +394,7 @@ R9（DEC-110）：
 | Q12 | 全頁高（已載入） | ≤ 1.3× blueprint＝✅、≤ 2×＝🟡、> 2×＝❌ | mockup contentH 市場 1517／2480、標的 2193／3185、持股 1643／2501 |
 
 - 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：**D5=A**——sparkline（Q5）與 small multiples／mini 圖（Q4）**不額外顯示最新／最高／最低數字**；重要數字由 KPI 主值或 status chip 承擔，避免圖表再次數字化（單色中性線、窗口以可見 chip 標明，不變）。**站殼間距**：客戶同意 AI 總管原方案——**先內部實測**取得實際像素差與最小改動方案，**若屬整體 layout 變更再送客戶裁示**；實測前不改 `app.py`（Migration Plan §16 步驟 3 僅量測）。
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-117，Phase 4 步驟 0 裁示）**：**Q2**「2×2 排法待 `CV1-DR-12`／W9 裁示，裁示前不判欄數」→ 📊 市場頁已裁示：手機 **2＋1**（位階｜水位並排、風險整列），KPI 區塊仍以 ≤340px 判；桌機 3 tile 以 **Q1** 判。**Q11** 不變（Q5=B 同向；真值待 Gate 實量）。手機 Primary 依 Q7 mobile exception（§3 註），**Q3** 尺寸上限照舊。
 - ⚠️ 站殼限制（FACT，Inv-3）：`app.py` 站標＋Streamlit 頂欄使頁面 H2 起於 y≈223（約占第一屏 25%），Q10～Q11 在不壓縮站殼時可能達不到 → 站殼間距屬 Phase 3 子項（Migration Plan），⛔ 因此改 `PAGE_LABELS`／導覽殼語意／legacy 入口（DEC-097）。
 
 ## §20 Phase 3 共用元件（客戶 DEC-109 三十一 Phase 3 清單）
@@ -409,4 +424,5 @@ metadata chips、status chips、chart header、evidence expander（`▸ 為什�
 | W9 | 4 | 現行 Hero 4 欄（DEC-105 第 5 點 P2 偏離）＋卡片網格 3 欄；`CLAUDE.md` v3 §00「固定 3 欄自適應網格」 | KPI 首列 4 格、手機 2×2，或 3＋1 排（須客戶裁示 `CV1-DR-12`） | `CV1-DR-12` |
 
 - 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-115，Phase 3 步驟 0 裁示）**：**W1 已裁示（維持，D1a=A）**；客戶明示 **W2～W9 維持原 Gate、不提前處理**。Phase 3 另有 D1b／D3／D5／D6／D8／D10 六題已裁示（非 W 系列，見 DEC-115），不增加新 W。
+- 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-117，Phase 4 步驟 0 裁示）**：**W2 已裁示**（Q2=A′：維持說明句、縮短、保留「指標危險度」「指標明細（16 項）」與指向最上方的關係，不新增 chip；`P1R-P4-WF-POINTS`）；**W3 在 📊 市場頁已裁示**（Q3=A：圖用四段字樣、tile／⚡ 維持「🔍 查看依據」；Phase 5～6 仍待；`P1R-WF-FOLD-LABEL`）；**W9 已裁示**（Q1=B：桌機 3 tile＋頁首主 CTA、手機 2＋1；`CV1-DR-12` 結案）。W4～W8 不變。
 - 本表為撰寫組依總管改判原則逐條複查的結果（單組，未經第二組驗證）；維持原判、因客戶原文明確點名者見 `docs/DECISIONS.md` DEC-110「同原則複查」。
