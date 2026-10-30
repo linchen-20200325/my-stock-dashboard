@@ -42,6 +42,7 @@ from src.ui_v2 import blocks, components
 from src.ui_v2 import markup as M
 from src.ui_v2 import page_inspect as V2I
 from src.ui_v2 import page_today as V2
+from tests import _p25_info_conservation as C
 
 _VIEW = pathlib.Path(P.__file__)
 _E = "RuntimeError('boom')"
@@ -190,6 +191,8 @@ _CASES = list(_NOTES.values()) + list(
 _IDS = [f"{b[0].key}:{b[0].state}:{i}" for i, b in enumerate(_CASES)]
 
 _ROW_RE = r'<span class="blk-fact-k">(.*?)</span><span class="blk-fact-v"[^>]*>(.*?)</span>'
+#: Note 三列的標籤（現況／為什麼沒有／去哪補）。Phase 2 步驟 2 的資訊守恆斷言用來扣掉 Note 三列。
+_NOTE_KEYS = (P.V2_NOW_FACT_KEY, P.V2_WHY_FACT_KEY, P.V2_GUIDE_FACT_KEY)
 
 
 def _split(outer: str) -> tuple[str, str]:
@@ -515,32 +518,32 @@ def test_badge_11_never_appears_on_this_page():
 
 @pytest.mark.parametrize("built", _CASES, ids=_IDS)
 def test_existing_facts_all_stay_on_the_face_after_the_short_rows(built):
-    """既有 facts 一列不少、順序不變、標籤整句原文；被摘過的值，**整列原文**一定在摺疊區。"""
+    """既有 facts 一列不少、標籤整句原文、數量相等；被摘過的值，**整列原文**一定在摺疊區。
+
+    📌 Phase 2 步驟 2（T2，2026-10-30）改寫 —— 有意識的改寫，不是漏刪。測試名不改（文件與 mutation 紀錄引用它）。
+      舊：`rows[3:]`（卡面前三列之後）逐列 zip 原 facts：標籤相等、值是原值摘錄、被摘過的整列原文在摺疊。
+      新：同一組不變量改成「卡面 ∪ 摺疊」的守恆（`C.fact_union_problems`）——
+          (a) 每個原 fact 的 (標籤, 整句原值) 逐字在卡面或摺疊（被摘過／截斷的，整句原文必須在**摺疊**）；
+          (b) 卡面 ∪ 摺疊（扣 Note 三列）的標籤多重集合 ＝ 原 facts（少一列、多一列都紅）；
+          (c) 卡面每格值是同標籤原值的摘錄（卡面標籤也必須整句原文 —— 摘錄過的標籤對不到任何原標籤）；
+              摺疊每格與某個原 fact 逐字相同。
+      等強論證：舊版隱含的「資訊不丟、卡面不捏造、被摘過的原文可展開」三件事全數保留，值比對只增不減；
+          放掉的只有「第 4 列起、依原順序」這個**版面位置**（新畫面會改）。
+      XV-ASOF（線框 §5）「查看依據」那幾格：只進摺疊、⛔ 不上卡面 —— 這是版面規則不是守恆規則，**原樣保留**（下半段）。
+      mutation：A（某 fact 完全不輸出）舊紅／新紅；B（非 live 卡面多長一列「狀態＝正常」）舊紅／新紅。"""
     card, facts, _s = built
     out = _html(built)
-    rows = _face_rows(out)
-    tail = rows[3:] if card.note is not None else rows
-    fold = _fold_rows(out)
-    # XV-ASOF（線框 §5）：「查看依據」價格說明那幾格只進摺疊區（⛔ 不上卡面）—— 整列原文一定在摺疊區。
-    _fold_only = tuple(_f for _f in facts if _f[0] in P.V2_FOLD_ONLY_FACT_KEYS)
-    for k, v in _fold_only:
-        assert (P.v2_plain(k), P.v2_plain(v)) in fold, f"{card.key}: 查看依據沒進摺疊區：{k}"
-        assert P.v2_plain(k) not in [_r[0] for _r in tail], f"{card.key}: 查看依據上了卡面：{k}"
-    facts = tuple(_f for _f in facts if _f[0] not in P.V2_FOLD_ONLY_FACT_KEYS)
-    assert len(tail) == len(facts)
-    for (fk, fv), (k, v) in zip(tail, facts):
-        k, v = P.v2_plain(k), P.v2_plain(v)
-        assert fk == k, "卡面標籤必須是整句原文"
-        shown = (fv[:-1] if fv.endswith(M.FACT_VALUE_ELLIPSIS)
-                 and len(fv) > M.FACT_VALUE_MAX_CHARS else fv)
-        pos = 0
-        for piece in shown.split(P.V2_EXCERPT_GAP):
-            if piece:
-                at = v.find(piece, pos)
-                assert at >= 0, f"{card.key}: 卡面值不是原值摘錄：{fv!r}"
-                pos = at + len(piece)
-        if (fk, fv) != (k, v):
-            assert (k, v) in fold, f"{card.key}: 卡面被摘過的列，原文沒進摺疊區：{k}"
+    assert C.fact_union_problems(
+        out, facts, note=card.note, note_keys=_NOTE_KEYS, plain=P.v2_plain,
+        gap=P.V2_EXCERPT_GAP, ellipsis=M.FACT_VALUE_ELLIPSIS,
+        max_chars=M.FACT_VALUE_MAX_CHARS) == []
+    # XV-ASOF（線框 §5，原樣保留）：「查看依據」價格說明那幾格只進摺疊區（⛔ 不上卡面）。
+    face_labels = [k for k, _ in C.drop_note_rows(
+        C.face_rows(out), card.note, _NOTE_KEYS, P.v2_plain, exact=False)]
+    for k, v in (_f for _f in facts if _f[0] in P.V2_FOLD_ONLY_FACT_KEYS):
+        assert (P.v2_plain(k), P.v2_plain(v)) in C.fold_rows(out), (
+            f"{card.key}: 查看依據沒進摺疊區：{k}")
+        assert P.v2_plain(k) not in face_labels, f"{card.key}: 查看依據上了卡面：{k}"
 
 
 def test_face_has_no_long_unbroken_ascii_run():
@@ -846,14 +849,26 @@ def test_must_keep_table_covers_every_pinned_now():
 @pytest.mark.parametrize("key", sorted(_NOTES),
                          ids=[f"{k[0]}|{k[1][:10]}|{i}" for i, k in enumerate(sorted(_NOTES))])
 def test_face_rows_keep_the_qualifiers_of_their_full_text(key):
+    """限定詞（`_MUST_KEEP`）逐字在「卡面 ∪ 摺疊」，且綁**同一標籤**的列。
+
+    📌 Phase 2 步驟 2（T3，2026-10-30）改寫 —— 有意識的改寫，不是漏刪。測試名不改（文件引用它）。
+      舊：`dict(_face_rows(...))[標籤]` 含每個片語（只認卡面）。
+      新：`C.phrase_union_problems`：同標籤的卡面列 ∪ 摺疊列串起來含每個片語。
+      等強論證（⚠️ 據實，不是『一樣強』）：
+        · 保留的：片語是**原文拿來限定的條件／另一種可能／原因／去處／數字**，缺值不得被讀成沒事 ——
+          這些字必須逐字可取得，不因卡面改版而遺失。綁標籤 ⇒ 別張卡或別段的字不能代打。
+        · 放掉的：舊版也在擋『卡面短句自己丟了限定詞』（摺疊裡有全文，所以新版對這件事看不到）。
+          這是客戶原則（資訊守恆，非『一定在卡面』）有意識的取捨；短句忠實度仍由
+          `test_every_short_cell_is_an_excerpt_of_its_own_note`（短句必為原文摘錄）守，但那條不守『是否留住限定詞』。
+        · 反向（缺值不得講成 0／中性／正常／續抱／安全）**沒有放掉** —— 見 `test_a_missing_card_face_never_reads_as_zero_or_normal`。
+      mutation：A（某段完全不輸出）舊紅／新紅；『短句自己丟限定詞但摺疊全文還在』舊紅／新**綠**（已揭露，見上）。"""
     card = _NOTES[key][0]
     name = _const_name_of(card.note.now)
-    face = dict(_face_rows(_html(_NOTES[key])))
-    for label, phrases in _MUST_KEEP[name].items():
-        for ph in phrases:
-            assert ph in face[label], f"{card.key}「{label}」卡面少了「{ph}」：{face[label]!r}"
+    out = _html(_NOTES[key])
+    assert C.phrase_union_problems(out, _MUST_KEEP[name]) == []
     if name == "PROFIT_EMPTY_NOW_TEMPLATE":
-        assert any(all(ph in face[_WHY] for ph in grp) for grp in _PROFIT_EMPTY_WHY_ANY), face[_WHY]
+        text = C.label_union_text(out, _WHY)
+        assert any(all(ph in text for ph in grp) for grp in _PROFIT_EMPTY_WHY_ANY), text
 
 
 # ── SA-r2-f1（2026-09-27）：健康度／獲利能力「查無」的去哪補 ⛔ 不得再指向資料體檢 ──
@@ -873,3 +888,141 @@ def test_f1_health_and_profit_empty_do_not_point_to_data_health(key):
     card = _NOTES[key][0]
     for bad in ("資料體檢", "備援鏈", "MOPS"):
         assert bad not in card.note.where, f"{card.key} 去哪補仍指向「{bad}」：{card.note.where!r}"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Phase 2 步驟 2＋4（2026-10-30）新增：版面無關的通用守衛（判定在 tests/_p25_info_conservation.py）
+# 以下全是**新增**，上面既有測試（含 T4/T7 的資料層斷言）一字未動。
+# ══════════════════════════════════════════════════════════════════════════
+_WITH_NOTE = [b for b in _CASES if b[0].note is not None]
+_NON_LIVE = [b for b in _CASES if b[0].state != UI_LIVE]
+
+
+@pytest.mark.parametrize("built", _WITH_NOTE, ids=[f"{b[0].key}:{b[0].state}" for b in _WITH_NOTE])
+def test_note_three_parts_are_reachable_on_the_face_or_in_the_fold(built):
+    """T1：Note 三段全文各綁自己的標籤，逐字在卡面 ∪ 摺疊（本頁原本沒有位置斷言，這條是資訊面的補強）。"""
+    assert C.note_union_problems(_html(built), built[0].note, keys=_NOTE_KEYS,
+                                 plain=P.v2_plain) == []
+
+
+def test_no_exit_is_not_rewritten_into_a_pointer_in_the_rendered_card():
+    """T4 追加（資料層的 `test_no_exit_stays_no_exit_and_keeps_its_next_step` 一字未動）：
+    同一個不變量看**實際渲染**的『去哪補』列（卡面、摺疊各自檢查）。"""
+    marked = 0
+    for built in _NOTES.values():
+        card = built[0]
+        probs, seen = C.no_exit_problems(_html(built), card.note, guide_key=P.V2_GUIDE_FACT_KEY,
+                                         marker=NO_EXIT_MARKER, plain=P.v2_plain)
+        assert probs == [], (card.key, probs)
+        assert seen >= 2, (card.key, "卡面與摺疊都該有『去哪補』一列")
+        marked += NO_EXIT_MARKER in card.note.where
+    assert marked >= 4, "有標記的分支沒被打到＝只驗了一半"
+
+
+@pytest.mark.parametrize("built", _CASES, ids=_IDS)
+def test_hover_only_information_is_zero(built):
+    """T7 通用化：`title=` 的字必須也在可見文字（卡面或摺疊本文）。0 項。範圍限 p02～p05（⛔ 不含今天頁）。"""
+    assert C.hover_only_items(_html(built), P.V2_EXCERPT_GAP) == []
+
+
+@pytest.mark.parametrize("built", _CASES, ids=_IDS)
+def test_folds_are_collapsed_by_default_on_every_card(built):
+    """T7 通用化：每張卡的摺疊預設收合（無 `checked`／`aria-expanded="true"`／`open`）。"""
+    assert C.folds_open_by_default(_html(built)) == []
+
+
+@pytest.mark.parametrize("built", _NON_LIVE, ids=[f"{b[0].key}:{b[0].state}" for b in _NON_LIVE])
+def test_a_missing_card_face_never_reads_as_zero_or_normal(built):
+    """T3 反向（強度不降）：非 live 卡面 ⛔ 不得把缺值講成『0／中性／正常／續抱／安全』。
+
+    本檔原本沒有逐字的反向斷言（grep 證實）；計畫 §3 T3 要求保留，故補上。這些字在否定句裡合法
+    （例：「本站不以『中性』代替未評估」），所以綁來源：整格值不得就是它們（除非是原始 fact 的真值）；
+    出現次數不得多於該卡原始 label／Note／facts 的次數 —— 卡面只准摘錄原文，⛔ 不准自己長出一個。"""
+    card, facts, _s = built
+    src = [P.v2_plain(card.label)]
+    if card.note is not None:
+        src += [P.v2_plain(card.note.now), P.v2_plain(card.note.why), P.v2_plain(card.note.where)]
+    src += [P.v2_plain(k) + "\n" + P.v2_plain(v) for k, v in facts]
+    assert C.misleading_face_problems(_html(built), src,
+                                      [P.v2_plain(v) for _k, v in facts]) == []
+
+_NOW = P.V2_NOW_FACT_KEY
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Phase 2 步驟 2 QA-A 補強（2026-10-30，兩組獨立 QA 回報後追加；以下全是**新增**，上面一字未動）
+# 判定在 tests/_p25_info_conservation.py。
+# ══════════════════════════════════════════════════════════════════════════
+@pytest.mark.parametrize("built", _CASES, ids=_IDS)
+def test_face_keeps_relative_order_and_note_rows_are_contiguous(built):
+    """M07（QA-A）：T2 改成『卡面 ∪ 摺疊』守恆後，**順序**不再被任何斷言守 —— 補回『相對順序』。
+
+    · Note 三列（現況／為什麼沒有／去哪補）整體連續、依序，不得有 fact 穿插其間；
+    · 扣掉 Note 三列後，卡面各 fact 標籤依原 facts 順序出現（子序列）。
+    ⛔ 不綁絕對位置（Phase 3 換版面時不必改這條）；Note 在 facts 之前是 `drop_note_rows` 的**前提**，
+      另由 `note_rows_lead_problems` 守 —— 改版面的人必須同時升級 `drop_note_rows`。"""
+    card, facts, _s = built
+    out = _html(built)
+    assert C.note_rows_lead_problems(out, card.note, _NOTE_KEYS) == []
+    assert C.face_order_problems(out, facts, note=card.note, keys=_NOTE_KEYS,
+                                 plain=P.v2_plain) == []
+
+
+#: 每個『有 Note 的狀態』取一張（紅／灰都涵蓋）。
+_ESC_CASES = list({b[0].state: b for b in _CASES if b[0].note is not None}.values())
+
+@pytest.mark.parametrize("built", _ESC_CASES, ids=[f"{b[0].key}:{b[0].state}" for b in _ESC_CASES])
+def test_everything_is_escaped(built):
+    """M18（QA-A）：與 p02 同型 —— 標題含 `<`／`&`／引號、Note.why 與兩個 fact 帶標籤閉合＋script，
+    渲染後不得有未轉義的 HTML，且 unescape 後對得回原文（摺疊不吞字）。"""
+    card, facts, sig = built
+    assert C.evil_card_problems(P.v2_card_html, card, facts, sig, keys=_NOTE_KEYS,
+                                plain=P.v2_plain) == []
+
+
+#: M04（QA-A）：手寫釘住的『否定／限定詞』—— (Note.now 常數名) → ((標籤, 片語), …)。
+#: 片語是人手寫的第二把尺；只在『來源 Note 該段確實含這個片語』的卡上檢查（⛔ 不要求原文沒有的字）。
+#: 挑選規則：該常數窮舉出的**每一張**卡，原文含片語者，現行卡面短句也都含 —— 所以這是『把現行已有的
+#: 保護釘死』而非新要求。
+#: ⚠️ 已知缺口（據實，未硬寫）：另有數十組（例：『不是故障』『不是還沒讀』『不是還沒算』）
+#:   現行卡面短句**本來就沒留**（短句是原文摘錄、僅在摺疊保有全文）—— 這不是本批造成的，
+#:   要求它們留在卡面等於要求 src 改，故不寫；其全文仍受 `test_face_rows_keep_the_qualifiers_of_their_full_text`
+#:   （卡面 ∪ 摺疊）守。
+_NEG_PINS: dict[str, tuple[tuple[str, str], ...]] = {
+    "SINGLE_IDLE_NOW": ((_NOW, "尚未載入任何分析"),),
+    "UNKNOWN_NOW": ((_WHY, "這不是故障"),),
+    "CHIPS_EMPTY_NOW": ((_WHY, "不是這一檔籌碼不好"),),
+    "PREMIUM_EMPTY_NOW": ((_WHY, "不是「折溢價為 0」"),),
+    "BATCH_IDLE_NOW": ((_NOW, "尚未批次分析"),),
+    "BATCH_FAILED_NOW": ((_WHERE, "不是某一檔的問題"),),
+}
+
+
+def test_negation_words_of_the_source_stay_on_the_face_short_rows():
+    checked = 0
+    for const, pins in _NEG_PINS.items():
+        now = getattr(P, const)
+        cases = [b for b in _CASES if b[0].note is not None and b[0].note.now == now]
+        assert cases, f"{const}: 窮舉沒打到這則 Note（釘住的常數對不上）"
+        got = 0
+        for b in cases:
+            probs, n = C.negation_on_face_problems(_html(b), b[0].note, pins, keys=_NOTE_KEYS,
+                                                   plain=P.v2_plain)
+            assert probs == [], (const, b[0].key, probs)
+            got += n
+        assert got >= len(pins), f"{const}: 原文沒有含到釘住的片語（空轉）"
+        checked += got
+    assert checked >= 6
+
+
+@pytest.mark.parametrize("built", _CASES, ids=_IDS)
+def test_split_face_fold_sentinel(built):
+    """`split_face_fold` 哨兵：有摺疊開關的卡必須切出非空摺疊、且讀得到列 —— 否則所有『卡面 ∪ 摺疊』
+    斷言會默默退化成只看卡面。"""
+    assert C.fold_sentinel_problems(_html(built)) == []
+
+
+def test_split_face_fold_sentinel_is_not_vacuous():
+    folded = [b for b in _CASES if C.FOLD_MARK in _html(b)]
+    assert len(folded) >= 3, "幾乎沒有卡有摺疊 ⇒ 哨兵空轉"
+    assert all(C.fold_rows(_html(b)) for b in folded)

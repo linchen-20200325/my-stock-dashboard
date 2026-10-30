@@ -313,6 +313,92 @@ class TestLiveCardKeepsItsNote:
                                      where="沒有出口")))
         assert "尚未接線" in "\n".join(_fake.markdown)
 
+    # ── Phase 2 步驟 2（T13，2026-10-30）追加：`compact=True` 變體 ──────────────────────────────
+    # 上面三條（舊式 `render_card` 路徑）一字未動。計畫 §3 T13：『摺疊含 Note 三段』。
+    # 不變量不變 —— live 帶 Note 不得被靜默丟棄（§1）；變的只是**位置**：compact 時 Note 三段整段
+    # 移進一個預設收合的 `st.expander`，所以斷言改成「三段全在（卡面 ∪ 摺疊）、且在**收合**的摺疊裡、
+    # 卡面本體（expander 之外）沒有被剩一半」。這是新增，⛔ 不是取代舊測試（舊式路徑仍有人用）。
+    @staticmethod
+    def _spy(monkeypatch):
+        """錄音替身：記每段文字寫在 expander 之內還是之外，以及 expander 的標題與 expanded 旗標。"""
+        import contextlib
+
+        _log = {"outside": [], "inside": [], "expanders": []}
+        _depth = [0]
+
+        def _md(_s, **_k):
+            _log["inside" if _depth[0] else "outside"].append(str(_s))
+
+        def _cap(_s, **_k):
+            _log["inside" if _depth[0] else "outside"].append(str(_s))
+
+        @contextlib.contextmanager
+        def _exp(label, **kw):
+            _log["expanders"].append((label, kw.get("expanded")))
+            _depth[0] += 1
+            try:
+                yield
+            finally:
+                _depth[0] -= 1
+
+        _ns = type("NS", (), {})()
+        _ns.markdown, _ns.caption, _ns.expander = _md, _cap, _exp
+        monkeypatch.setattr(K, "st", _ns)
+        return _log
+
+    #: 📌 QA-A 補強（2026-10-30）：三段內容刻意**不撞** `render_note` 自己吐的標籤字
+    #:   （「為什麼沒有」「去哪補」是標籤；舊版 where＝「去哪補」、why＝「為什麼沒有」，內容被拿掉時標籤
+    #:   仍讓子字串斷言綠 —— 弱點）。現在 where＝「請至設定頁補資料」、why＝「因為上游尚無回應」。
+    _NOTE_PARTS = ("現況一句話", "因為上游尚無回應", "請至設定頁補資料")
+
+    @classmethod
+    def _note_problems(cls, inside: str, outside: str) -> list[str]:
+        probs = []
+        for _piece in cls._NOTE_PARTS:
+            if _piece not in inside:
+                probs.append(f"compact 的 Note 被丟棄了：{_piece!r} 不在摺疊裡")
+            if _piece in outside:
+                probs.append(f"compact 卡面不該保留 Note 半截：{_piece!r}")
+        return probs
+
+    @pytest.mark.parametrize("state,value", [(UI_LIVE, ""), (UI_UNWIRED, "")])
+    def test_compact_keeps_all_three_note_parts_in_the_collapsed_fold(
+            self, monkeypatch, state, value):
+        _log = self._spy(monkeypatch)
+        K.render_card(Card(key="k", label="市場位階", state=state, value=value,
+                           note=Note(now=self._NOTE_PARTS[0], why=self._NOTE_PARTS[1],
+                                     where=self._NOTE_PARTS[2])),
+                      compact=True)
+        _inside, _outside = "\n".join(_log["inside"]), "\n".join(_log["outside"])
+        assert self._note_problems(_inside, _outside) == []
+        # 摺疊預設收合、只開一個、開關字是共用的那個
+        from src.ui_v2 import markup as _M
+
+        assert _log["expanders"] == [(_M.FOLD_SUMMARY_TEXT, False)]
+        assert "市場位階" in _outside, "卡面標題不見了"
+        # 卡面 ∪ 摺疊：三段全文仍可取得
+        _all = _inside + "\n" + _outside
+        assert all(_p in _all for _p in self._NOTE_PARTS)
+
+    @pytest.mark.parametrize("missing", ["現況一句話", "因為上游尚無回應", "請至設定頁補資料"])
+    def test_compact_note_check_goes_red_when_any_part_vanishes(self, missing):
+        """QA-A：『where 內容消失則紅』的負向對照 —— 手造一份缺了某段的錄音，判定器必須報問題。
+        （標籤字「為什麼沒有」「去哪補」仍在摺疊裡，也不得讓它放行。）"""
+        _inside = "\n".join(p for p in self._NOTE_PARTS if p != missing) + "\n　**為什麼沒有**：\n　**去哪補**："
+        assert any(missing in p for p in self._note_problems(_inside, "市場位階"))
+
+    def test_compact_goes_red_when_the_where_text_is_not_rendered(self, monkeypatch):
+        """端到端：把 `render_note` 換成漏掉 where 的版本 → 主測試用的判定器紅。"""
+        _log = self._spy(monkeypatch)
+        monkeypatch.setattr(K, "render_note", lambda n: K.st.markdown(
+            f"{n.now}\n\n　**為什麼沒有**：{n.why}\n\n　**去哪補**："))
+        K.render_card(Card(key="k", label="市場位階", state=UI_UNWIRED, value="",
+                           note=Note(now=self._NOTE_PARTS[0], why=self._NOTE_PARTS[1],
+                                     where=self._NOTE_PARTS[2])),
+                      compact=True)
+        _probs = self._note_problems("\n".join(_log["inside"]), "\n".join(_log["outside"]))
+        assert any(self._NOTE_PARTS[2] in p for p in _probs)
+
 
 # ══════════════════════════════════════════════════════════════════
 # 【7】訊號頻道在**建構期**就驗（不留到渲染期 → 不會半截死頁）

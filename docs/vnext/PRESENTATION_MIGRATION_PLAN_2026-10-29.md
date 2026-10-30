@@ -341,3 +341,55 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 ### 13.8 下一步
 
 步驟 2（改寫 T2～T7、T13、T5 為資訊守恆斷言，現行畫面下仍綠；範圍限 p02～p05，不碰今天頁 hover-only 測試與受鏈檔）。
+
+
+## §14 Phase 2 步驟 2＋4 結果（2026-10-30）
+
+> append-only。**步驟 2＋4 完成（tests-only，未 commit 的工作樹 diff；`git diff --stat -- src` 為空）。** §4 步驟表與 §13 未改動。步驟 3 已取消（見 §4 第 3 列：欄數待 `CV1-DR-12`，Phase 2 不動 T23）。**單組實作＋兩組獨立 QA（QA-A 36 個 mutation、另一組 QA-B），無第三輪。**
+
+### 14.1 範圍與改寫清單
+
+- 範圍限 p02～p05（`tests/test_p02_find_v2_cards.py`、`test_p03_inspect_v2_cards.py`、`test_p04_hold_v2_cards.py`、`test_p05_why_v2_cards.py`）＋ `tests/test_p01_today_view.py`（T13 compact）。⛔ 未碰今天頁 hover-only 測試、⛔ 未碰還原鏈受鏈守衛檔、⛔ 未碰 `src/`。
+- 新增共用判定器 `tests/_p25_info_conservation.py`（只讀 `card_html` 實際吐出的 HTML，以 `<div class="blk-fold">` 切卡面／摺疊；期望值一律由呼叫端用原始 `Card`／`Note`／`facts` 傳入＝測試是第二把尺）與其單元測試 `tests/test_p25_info_conservation_helpers.py`（手造 HTML 正反例）。
+- T1（Note 三段全文）：新增「全文逐字在卡面 ∪ 摺疊、各綁自己標籤」。T2（facts）：`rows[3:]` 位置比對改為「卡面 ∪ 摺疊」守恆（逐字 (標籤, 整句值) 不遺失、扣 Note 三列後標籤多重集合相等、卡面值為原值摘錄、摺疊值與原值逐字同）。T3（限定詞 `_MUST_KEEP`）：改為同標籤卡面 ∪ 摺疊含片語；另補 T3 反向（缺值不得講成 0／中性／正常／續抱／安全…）。T4（沒有出口）：資料層斷言一字未動，另加看實際渲染的『去哪補』列。T7：hover-only 0 項、摺疊預設收合通用化。T13：`render_card(compact=True)` 的 Note 三段在預設收合的 expander。步驟 4＝上述 T7 通用斷言（限 p02～p05）。
+- 既有測試的處置：被改寫者皆在 docstring 寫「有意識的改寫，不是漏刪」＋舊／新／等強論證／mutation；測試名不改（文件與 mutation 紀錄引用）。其餘既有測試一字未動。
+- 兩組 QA 後的補強（本批 A，同為 tests-only）：
+  1. **M07 順序**：p03～p05 新增 `test_face_keeps_relative_order_and_note_rows_are_contiguous`——Note 三列整體連續依序、不得被 fact 穿插；其餘 fact 標籤依原 facts 順序出現（子序列）；⛔ 不綁絕對位置（p02 既有 `rows[:3]` 不動）。另以 `note_rows_lead_problems` 守 `drop_note_rows` 的前提（Note 在 facts 之前；實例：`hold.setup.*` 有 fact 標籤叫「為什麼」，與 Note 標籤撞名）。
+  2. **M18 轉義**：p03～p05 新增與 p02 同型的 `test_everything_is_escaped`（標題含 `<`／`&`／雙引號／單引號、Note.why 與兩個 fact 帶標籤閉合＋script；每個有 Note 的狀態取一張）。
+  3. **M04 否定／限定詞**：p03～p05 新增 `test_negation_words_of_the_source_stay_on_the_face_short_rows`——人手寫釘住的片語（如『尚未載入任何分析』『這不是故障』『不是發了失敗』『不是你操作的問題』）；只在『來源 Note 該段確實含該片語』的卡上要求同標籤卡面短句也含，不要求原文沒有的字。
+  4. **T13 compact 弱點**：`test_p01_today_view.py` 原本 where＝「去哪補」、why＝「為什麼沒有」與 `render_note` 自己吐的標籤字相同，內容被拿掉時標籤仍讓子字串斷言綠。改用不撞標籤的內容（where＝「請至設定頁補資料」），並新增負向對照（判定器對缺某段的錄音必紅）與端到端（把 `render_note` 換成漏 where 的版本必紅）。
+  5. **共用判定器**：`misleading_face_problems` 補 NFKC 正規化（全形 `０` 與 `0` 同判）、句中 `0.0`／`0.00`（可帶 `%`）視為獨立零（`0.05`、`10.0`、`0.0.1`、`00878` 不算）、詞表加『無異常、沒問題、穩定、無風險』；實測真實資料仍全綠（新詞在真實卡面 0 誤報，所以未退為『整格值』規則）。`split_face_fold` 加哨兵（有摺疊開關的卡必切出非空摺疊且讀得到列；另測哨兵非空轉）。以上皆以 helper 單元測試釘住正反例。順帶修正：NFKC 會把全形逗號變成 ASCII 逗號，故『逗號／句點後緊接數字』才當千分位／小數點排除。
+
+### 14.2 等強論證（據實）
+
+- **保留的不變量**：資訊不遺失、卡面不捏造、被摘過的原文可在摺疊取得、限定詞逐字可取得且綁同標籤、『沒有出口』不被改寫成指路、缺值不被講成 0／中性…、hover-only 0 項、摺疊預設收合。值比對（連值都逐字比）只增不減。
+- **放掉的**：『第 4 列起、依原順序』這個版面位置（新畫面會改）。其中『順序』已由 14.1 之 1 以不綁絕對位置的相對順序補回；『Note 排在卡面最前』仍只由 p02 既有 `rows[:3]` 與 `note_rows_lead_problems`（前提檢查）守。
+
+### 14.3 Mutation 對照
+
+- 實作者自做：A（某 fact 完全不輸出）、B（非 live 卡面多長一列『狀態＝正常』）、B'、B''、C、D、E——對應被改寫測試，舊紅／新紅（各測試 docstring 有逐項）。
+- QA-A 共 36 個 mutation：**僅 M07 為強度損失**（p03 順序／位置；已由 14.1 之 1 補強）。**新版更強的項目**：M02、M22、M23、M27、M29。
+- 本批補強後重跑（臨時改 `src/`，每個之後 `git checkout -- src`；最後 `git diff --stat -- src` 為空）：
+  - M07a（Note 列移到 facts 之後）、M07b（facts 反序）、M07c（Note 列與 facts 交錯）× p03／p04／p05：**9 個全紅**，且新增的順序測試本身在每個 mutation 下都紅；還原後全綠。
+  - M18（`markup._esc` 不轉義）：新增轉義測試紅（p02～p05）；還原後綠。
+  - M28（`render_note` 的 where 內容消失）：`test_compact_keeps_all_three_note_parts_in_the_collapsed_fold` 紅；還原後綠。（修前此 mutation 因標籤字『去哪補』仍在而可能存活——見 14.1 之 4。）
+  - M04（p03 刪『這不是故障』、p04 刪『不是發了失敗』、p05 刪『不是「叫了沒回」』於卡面短句表）：三個新否定詞測試各自紅；還原後綠。
+
+### 14.4 有意識的強度損失
+
+- **F 變體**：卡面短句丟了限定詞、而摺疊全文仍在時，`_MUST_KEEP` 新版（卡面 ∪ 摺疊）**不紅**（舊版只認卡面會紅）。這是客戶『資訊守恆於卡面 ∪ 摺疊』原則的代價，非疏漏。14.1 之 3 只把『現行卡面短句已保留的否定／限定詞』釘住（p03 6 組、p04 13 組、p05 10 組常數）；其餘約數十組（例：『不是故障』『不是還沒讀』『不是還沒算』在多張卡上）現行卡面短句**本來就沒留**，要求它們留在卡面等於要求改 `src/`，**不硬寫，列為已知缺口**——全文仍受卡面 ∪ 摺疊的 `_MUST_KEEP` 測試守。p02 沒有新增此項（現行無否定詞保護範圍可釘，亦不重複）。
+
+### 14.5 T3 反向測試的來歷與已知可繞過寫法
+
+- T3 反向（缺值不得講成 0／中性／正常／續抱／安全）**不是計畫原文**；原檔 grep 證實沒有這條逐字反向斷言，是總管／實作者的替代設計：整格值不得就是這些字；出現次數不得多於該卡原始 label／Note／facts 的次數。
+- 已知可繞過寫法（不得當成『已防住』）：(a) 把缺值字搬到別的位置換語境（次數不增就過）；(b) live 態缺值轉 0——live 卡整個跳過、**不檢查**；(c) `own_values` 白名單過寬——原 facts 值剛好是 `0`／『正常』時，卡面整格值同為該字就放行。
+
+### 14.6 未覆蓋缺口與未驗項
+
+- **未覆蓋缺口**：M34（inspect `_long` 被摘過的原文）、M35（hold fold-only『查看依據』）——目前**沒有任何場景會觸發**，登 BACKLOG **`P2R-STEP2-SCENARIO-GAPS`**（P2，只登記）。
+- **未驗**：slow 測試、AppTest／瀏覽器實機、全套 pytest（只跑指定檔）；第二輪 mutation 集**非窮舉**；手機與 Streamlit Cloud 未驗。
+- 驗證層級：單組實作＋兩組獨立 QA；本批 A 補強由實作者自跑 mutation，**未再經第三組獨立複驗**。
+
+### 14.7 下一步
+
+**步驟 5**：§6 mutation 清單逐一拔守衛必紅（M1～M13 中與 Phase 2 現有碼相關者；**M11／M12 欄數待 `CV1-DR-12` 裁示，不做**），然後收尾 Phase 2（零資料語意證明、DoD、HANDOFF）。
