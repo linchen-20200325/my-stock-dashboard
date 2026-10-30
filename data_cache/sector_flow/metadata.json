@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-29T16:21:09.546930+00:00",
-  "last_updated": "2026-10-29",
-  "row_count": 1393,
-  "n_days": 30,
+  "updated_at": "2026-10-30T16:09:06.628195+00:00",
+  "last_updated": "2026-10-30",
+  "row_count": 1440,
+  "n_days": 31,
   "fetch_diag": {
     "days_fetched": 1,
     "days_holiday_or_empty": 0,
@@ -11,24 +11,24 @@
     "unresolved_expired": []
   },
   "coverage": {
-    "n_stock_days_with_net": 19549,
-    "n_dropped_missing_price": 17334,
+    "n_stock_days_with_net": 19343,
+    "n_dropped_missing_price": 17095,
     "n_unclassified_stock_days": 0,
-    "n_sectors": 46,
+    "n_sectors": 47,
     "n_days": 1,
     "n_missing_foreign_stock_days": 0,
     "n_missing_trust_stock_days": 0,
     "n_missing_dealer_stock_days": 0,
-    "n_excluded_foreign_ccy_stock_days": 4
+    "n_excluded_foreign_ccy_stock_days": 6
   },
   "last_error": null,
   "warnings": [],
   "per_day": {
-    "20261029": {
-      "twse_inst": 18672,
-      "twse_close": 1365,
-      "tpex_inst": 881,
-      "tpex_close": 989,
+    "20261030": {
+      "twse_inst": 18432,
+      "twse_close": 1375,
+      "tpex_inst": 917,
+      "tpex_close": 995,
       "tpex_inst_status": "ok",
       "tpex_close_status": "ok",
       "twse_ok": true,
@@ -42,7 +42,7 @@
       "ok_days": 1,
       "fail_days": 0,
       "ok_dates": [
-        "20261029"
+        "20261030"
       ],
       "fail_dates": [],
       "not_written_dates": []
@@ -51,7 +51,7 @@
       "ok_days": 1,
       "fail_days": 0,
       "ok_dates": [
-        "20261029"
+        "20261030"
       ],
       "fail_dates": [],
       "not_written_dates": []
@@ -72,19 +72,19 @@
     "n_trading_days_used": 20,
     "n_days_tpex_ok": 20,
     "tpex_complete": true,
-    "n_absent_cells": 53,
+    "n_absent_cells": 52,
     "n_missing_value_cells": 0,
     "raw_axis": {
       "n_sectors": 49,
       "n_trading_days_used": 20,
-      "n_absent_cells": 53,
+      "n_absent_cells": 52,
       "n_missing_value_cells": 0,
       "n_days_tpex_ok": 20
     },
     "canonical_axis": {
       "n_sectors": 41,
       "n_trading_days_used": 20,
-      "n_absent_cells": 53,
+      "n_absent_cells": 52,
       "n_missing_value_cells": 0,
       "n_days_tpex_ok": 20
     },
@@ -94,10 +94,10 @@
   "industry": {
     "scheme": "z43-official-code-v1",
     "raw_available": true,
-    "fetched_at": "2026-10-29T16:21:04.227736+00:00",
+    "fetched_at": "2026-10-30T16:09:00.442727+00:00",
     "rules": {
-      "finmind_no_official": 1189,
-      "official_match_finmind": 1975,
+      "finmind_no_official": 1188,
+      "official_match_finmind": 1976,
       "official_name": 9
     },
     "n_from_prev": 0,
@@ -110,14 +110,14 @@
       },
       "上櫃": {
         "ok": true,
-        "n": 896,
+        "n": 897,
         "reason": null,
         "endpoint": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O"
       }
     },
     "finmind_status": {
       "ok": true,
-      "n_rows": 4377
+      "n_rows": 4379
     },
     "unavailable_markets": [],
     "alias_consistency": {
