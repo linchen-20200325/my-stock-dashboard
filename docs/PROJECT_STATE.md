@@ -789,3 +789,4 @@
 - **限制**：五份調查與 Phase 1 文件皆單組、未經第二組驗；量化上限為依 blueprint 量測的建議值；手機實機、Streamlit Cloud、1.56 floor 未驗；`PROCESS.md` §1 與五檔讀序衝突（`CV1-DR-04`）未裁示。
 - **Phase 2 預備實測（未完成、單組）**：存於 `docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md` §11（含 `tab_today.py` 的 z60 目錄指紋守衛、真 golden 位置、hover-only 斷言範圍、文件與實測 11 項差異）；下一 session 以當時 main 重測為準。
 - **Phase 2 步驟 0 實測（2026-10-30，main `64fdeae`；待本 PR merge）**：已完成並存於 Migration Plan **§12**（§11 預備實測的更新版；路徑更正 `src/ui/views/`、z60 守衛範圍 91 檔、`v2_short_rows` 計數視口徑（區分大小寫 39 檔／118 次；不分大小寫含常數 40 檔／165 次，見 §12.3）、helper 簽名／caller 修正）；單組各自結論＋總管自驗，未經第二輪 QA。Phase 2 步驟 1～5 尚未開始。
+- **Phase 2 步驟 1 完成（2026-10-30；共用層可選參數：`card_html` chips／summary／fold_label／spark、`single_submit_form(options_label)`、`render_card(compact)`；預設輸出 byte-identical、0 production caller；工作樹 diff 未 commit）**：實測與已知限制存於 Migration Plan **§13**；步驟 2 為下一步。單組實作＋兩組獨立 QA，無第三輪。

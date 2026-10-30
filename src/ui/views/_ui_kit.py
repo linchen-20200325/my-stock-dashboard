@@ -226,7 +226,8 @@ def _chip(text: str, color: str) -> str:
 def render_card(card: Card, *,
                 signal_text: str = "",
                 signal_color: str = "",
-                facts: Sequence[tuple[str, str]] = ()) -> None:
+                facts: Sequence[tuple[str, str]] = (),
+                compact: bool = False) -> None:
     """畫一張卡。**狀態頻道（glyph ＋ 中文）與訊號頻道（純中文）分開出。**
 
     Args:
@@ -265,6 +266,14 @@ def render_card(card: Card, *,
             **任何狀態都可帶** —— 這些不是「這一輪量到的數字」，
             而是「這盞燈本來長什麼樣」，未接線時照樣該讓人看見。
 
+        compact: （Phase 2 步驟 1 新增，預設 `False` ＝ 與加參數前**逐 byte 同一條呼叫序列**。
+            截至本次**沒有 production caller 使用它**。）`True` 時卡面只留
+            狀態／標題／大字，`facts` 與 `Note` 三段（現況／為什麼沒有／去哪補）**整段**移進
+            一個**預設收合**的 `st.expander(FOLD_SUMMARY_TEXT, expanded=False)`。
+            ⛔ 三段一個都不丟、⛔ 不改文字；碰撞守衛（`assert_signal_text_clean`）照舊在最前面跑。
+            開關字取 `src.ui_v2.markup.FOLD_SUMMARY_TEXT`（**呼叫時**才讀）。
+            沒有 facts 也沒有 Note ⇒ 不開空的 expander。
+
     Raises:
         ValueError: `signal_text` 帶了狀態 glyph 或燈號 emoji（見檔頭鐵律 3）。
 
@@ -291,6 +300,17 @@ def render_card(card: Card, *,
         + "</div>",
         unsafe_allow_html=True,
     )
+    if compact:
+        _facts = tuple(facts)
+        if _facts or card.note is not None:
+            # 呼叫時才讀（⛔ 不 def／import 時綁定）；lazy import 亦避免 L5 檔頂層依賴 ui_v2。
+            from src.ui_v2 import markup as _v2_markup
+            with st.expander(_v2_markup.FOLD_SUMMARY_TEXT, expanded=False):
+                for _k, _v in _facts:
+                    st.caption(f"{_k}　{_v}")
+                if card.note is not None:
+                    render_note(card.note)
+        return
     for _k, _v in facts:
         st.caption(f"{_k}　{_v}")
     # 【6】2026-09-07 修：**只要有 Note 就畫，不再只在非 live 時畫。**
@@ -381,7 +401,8 @@ def single_submit_form(form_key: str, *,
                        options: Sequence[str],
                        option_labels: dict,
                        widget_key: str,
-                       applied_key: str) -> bool:
+                       applied_key: str,
+                       options_label: str | None = None) -> bool:
     """本 kit 唯一的表單入口：**一個 form、一組 radio、一顆 submit**。
 
     Args:
@@ -392,6 +413,14 @@ def single_submit_form(form_key: str, *,
         widget_key: radio 的 session key —— **widget 當下值**。下游禁止讀它。
         applied_key: **已套用值**的 session key。只有本函式的 submit 分支會寫，
             寫入形狀為 `{"mode": <option>}`。
+
+        options_label: （Phase 2 步驟 1 新增；截至本次**沒有 production caller 使用它**。）
+            `None`（預設）⇒ 行為與加參數前**逐呼叫相同**。非 None ⇒ radio 包進
+            `st.expander(options_label, expanded=False)`（預設收合；仍在 form 內，
+            submit 鈕仍在 expander 之外，form 內仍只有一顆 submit）。
+            已用 AppTest 於目前 requirements 的 streamlit 實證：form 內 expander 可用、
+            收合時 radio 的值仍隨 submit 送出。空字串／非 str ⇒ `ValueError`
+            （⛔ 不渲染無標題的 expander）。
 
     Returns:
         這一次 rerun 是否由 submit 觸發。
@@ -407,10 +436,21 @@ def single_submit_form(form_key: str, *,
         raise ValueError(
             f"single_submit_form({form_key!r}) 的 options {_missing} 沒有對應的顯示名 —— "
             "§1：不拿 key 當畫面文字混過去")
+    if options_label is not None and (
+            not isinstance(options_label, str) or not options_label.strip()):
+        raise ValueError(
+            f"single_submit_form({form_key!r}) 的 options_label 必須是非空 str 或 None，"
+            f"實得 {options_label!r}")
     with st.form(form_key):
-        st.radio(radio_label, options=list(options),
-                 format_func=lambda _k: option_labels[_k],
-                 key=widget_key, horizontal=True)
+        if options_label is None:
+            st.radio(radio_label, options=list(options),
+                     format_func=lambda _k: option_labels[_k],
+                     key=widget_key, horizontal=True)
+        else:
+            with st.expander(options_label, expanded=False):
+                st.radio(radio_label, options=list(options),
+                         format_func=lambda _k: option_labels[_k],
+                         key=widget_key, horizontal=True)
         _submitted = st.form_submit_button(submit_label, type="primary")
     if _submitted:
         # 唯一的寫入點：widget 當下值 → 已套用值。

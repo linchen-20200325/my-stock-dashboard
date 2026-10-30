@@ -294,3 +294,50 @@ M1 sparkline 把 NaN 補 0｜M2 metadata chip 接受未登記 kind｜M3 新 kind
 
 - 本節即步驟 0 交付。Phase 2 步驟 1～5（改共用層／改寫 tests／mutation）**尚未開始**。
 - **Model×Effort 以 DEC-113 為準＝Sonnet 5.5＋Medium**（§1 R19 的 Opus 5.5＋High 原文已被 DEC-113 取代，R19 原文未改）。開工前只需依 DEC-084／DEC-106 核對實際設定，不符才通知客戶切換。
+
+## §13 Phase 2 步驟 1 實測與結果（2026-10-30）
+
+> append-only。**步驟 1 完成（未 commit 的工作樹 diff，待總管複驗與 PR）；步驟 2 為下一步。** §4 步驟表未改動。
+
+### 13.1 三函式最終簽名（皆新增可選、預設值＝加參數前行為）
+
+- `src/ui_v2/markup.py::card_html(*, block, state, badge_n, facts=(), folded_facts=(), fold_id=None, fold_truncate=True, chips=(), summary=None, fold_label=None, spark=None)`
+- `src/ui/views/_ui_kit.py::single_submit_form(..., options_label=None)`
+- `src/ui/views/_ui_kit.py::render_card(..., compact=False)`
+
+`card_html` 輸入驗證（一致 Fail Loud）：`chips` 為 `None`／`str`／`bytes`／`Mapping` 或含非 str／空白元素 ⇒ `ValueError`；`summary`、`spark` 空或全空白 ⇒ `ValueError`；`fold_label` 空字串 `""` ＝視同未給，全空白 ⇒ `ValueError`，非 str ⇒ `ValueError`。已知限制：零寬字元不視為空。
+
+### 13.2 `card_html` 輸出順序
+
+標題列 → chips → summary → 大字 → 判決 → spark → facts → 摺疊。
+
+### 13.3 Golden 矩陣（皆為**修改前**實測，sha256 寫在測試檔）
+
+card_html 1950 組（含 652 組 raise）／single_submit_form 13 組／render_card 135 組；既有 3 個 golden 未改動。測試現以 `==` 釘住實際組數（不再是下限）。另補「非預設輸出」byte 級 golden（chips／summary／spark／fold_label 各一＋全組合，整串 `==`）。
+
+### 13.4 Mutation
+
+M5、M6、M13 必紅。QA 另做 10 個 mutation，8 個紅；M8 存活，已由「非預設輸出 byte golden」補洞（實跑「chips 列 `</div>` 後多一個空白」mutation ⇒ `test_chips_only`、`test_all_combined` 紅，還原後全綠）。
+
+### 13.5 form 內 expander 實證
+
+AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander 收合時其中 `radio` 的值仍隨 submit 送出。
+
+### 13.6 Caller 與 QA 結果
+
+- production caller：**0**（新參數目前無任何使用者）。
+- QA-A（獨立差分）：card_html 6000 組／single_submit_form 480／render_card 420，對基底 **0 差異**。
+- QA-B：5020 passed。
+
+### 13.7 已知限制（誠實揭露，不得當成已驗事實）
+
+1. `.blk-chips`／`.blk-chip`／`.blk-summary`／`.blk-spark` 在 `page_css()` 尚無 CSS，留待 Phase 3。
+2. `spark` 為**受信任 HTML、不 escape**：首個 caller 須在規格與測試中規定其只能由 `src/ui_v2` 內部 builder 產出（BACKLOG `P1R-SPARK-TRUSTED-HTML`）；且 `render.py` 的 `**dict(card)` 需確認 view model 來源。
+3. `compact=True` 時非 live 卡的 Note 預設收合：首個使用頁面須確認客戶接受。
+4. slow 測試與瀏覽器渲染**未驗**。
+5. 單組實作＋兩組獨立 QA，**無第三輪**。
+6. 「零寬字元不視為空」為已知限制。
+
+### 13.8 下一步
+
+步驟 2（改寫 T2～T7、T13、T5 為資訊守恆斷言，現行畫面下仍綠；範圍限 p02～p05，不碰今天頁 hover-only 測試與受鏈檔）。
