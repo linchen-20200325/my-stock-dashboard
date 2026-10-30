@@ -22,6 +22,7 @@ from src.ui.tabs.tab_today import NO_EXIT_MARKER
 from src.ui.views import page_find as P
 from src.ui_v2 import markup as M
 from src.ui_v2 import page_today as V2
+from tests import _p25_info_conservation as C
 
 _VIEW = pathlib.Path(P.__file__)
 
@@ -147,11 +148,23 @@ def test_every_card_renders_through_the_v2_face_in_every_state(name, build, stat
 
 @pytest.mark.parametrize("name,build,state", SCENARIOS, ids=_IDS)
 def test_existing_facts_are_all_still_on_the_card(name, build, state):
-    """既有 facts 一列不少、順序不變，排在三列短句之後（語意不變，裁示 4）。"""
+    """既有 facts 一列不少、標籤逐字、數量相等 —— 在「卡面 ∪ 摺疊」守恆（裁示 4）。
+
+    📌 Phase 2 步驟 2（T2，2026-10-30）改寫 —— 有意識的改寫，不是漏刪。
+      舊：`rows[3:]`（卡面前三列之後）的標籤 == 原 facts 標籤（含順序）。
+      新：每個原 fact 的 (標籤, 整句原值) 逐字在卡面 ∪ 摺疊；卡面 ∪ 摺疊（扣 Note 三列）的標籤多重集合
+          ＝ 原 facts 的標籤多重集合（少一列、多一列都紅）；卡面每格是原值摘錄；摺疊每格與原值逐字相同。
+      為何不降低強度：「資訊不得靜默丟失、不得憑空長出」這個不變量原樣保留，且比舊版更嚴 ——
+          舊版只比標籤，新版連**值**都逐字比；唯一放掉的是「它必須排在卡面第 4 列起、且順序不變」
+          這個**版面位置**，那正是新畫面會改的東西（共用判定見 `tests/_p25_info_conservation.py`）。
+      mutation：某 fact 完全不輸出（A）→ 舊紅／新紅；多長出一列「狀態＝正常」（B）→ 舊紅／新紅。"""
     card, facts = build()
-    rows = _face_rows(P.v2_card_html(card, facts))
-    tail = rows[3:] if card.note is not None else rows   # 卡面（摺疊區之前）
-    assert [k for k, _ in tail] == [P.v2_plain(k) for k, _ in facts]
+    out = P.v2_card_html(card, facts)
+    keys = (P.V2_NOW_FACT_KEY, P.V2_WHY_FACT_KEY, P.V2_GUIDE_FACT_KEY)
+    assert C.fact_union_problems(
+        out, facts, note=card.note, note_keys=keys, plain=P.v2_plain,
+        gap=P.V2_EXCERPT_GAP, ellipsis=M.FACT_VALUE_ELLIPSIS,
+        max_chars=M.FACT_VALUE_MAX_CHARS) == []
 
 
 # ── 短句表 ─────────────────────────────────────────────────────────
@@ -225,6 +238,13 @@ def test_short_rows_are_first_and_come_from_the_table(name, build, state):
         assert _got in _alts, f"第 {_i} 格短句 {_got!r} 不是表裡第 {_i} 格的候選 {_alts!r}"
     assert rows[:3] == [(P.V2_NOW_FACT_KEY, now_s), (P.V2_WHY_FACT_KEY, why_s),
                         (P.V2_GUIDE_FACT_KEY, where_s)]
+    # 📌 Phase 2 步驟 2（T1，2026-10-30）追加（上面的位置斷言一字未動 —— 現行畫面確實是「卡面前三列＝
+    #   三短句」，且它與下面這條不重複：位置斷言守『短句在卡面且排第一』，這條守『三要素**全文**逐字可取得』）：
+    #   現況／為什麼沒有／去哪補三段全文，各綁自己的標籤，逐字在「卡面 ∪ 摺疊」。
+    #   日後卡面改版（短句換位置或換成 chip）時，位置斷言隨該頁 Phase 改；這條不必動。
+    assert C.note_union_problems(
+        P.v2_card_html(card, facts), card.note,
+        keys=(P.V2_NOW_FACT_KEY, P.V2_WHY_FACT_KEY, P.V2_GUIDE_FACT_KEY), plain=P.v2_plain) == []
 
 
 def test_no_exit_stays_no_exit():
@@ -235,6 +255,29 @@ def test_no_exit_stays_no_exit():
             continue
         where_s = P.v2_short_rows(card)[0][2][1]
         assert (where_s == NO_EXIT_MARKER) == (NO_EXIT_MARKER in card.note.where), _name
+
+
+@pytest.mark.parametrize("name,build,state", SCENARIOS, ids=_IDS)
+def test_no_exit_is_not_rewritten_into_a_pointer_in_the_rendered_card(name, build, state):
+    """📌 Phase 2 步驟 2（T4，2026-10-30）追加（上一條資料層斷言一字未動）：同一個不變量改看**實際渲染**。
+
+    「去哪補」原文是『沒有出口』（`NO_EXIT_MARKER`）→ 渲染出來的卡面列與摺疊列都必須仍帶這個標記；
+    原文不是 → 不得憑空多出標記。只看『去哪補』標籤的列（卡面 ∪ 摺疊，各自檢查），所以不管短句
+    日後在卡面的哪個位置、或換成 chip 文字，都還是同一個守衛。"""
+    card, facts = build()
+    if card.note is None:
+        pytest.skip("無 Note 的卡沒有『去哪補』")
+    probs, seen = C.no_exit_problems(P.v2_card_html(card, facts), card.note,
+                                     guide_key=P.V2_GUIDE_FACT_KEY, marker=NO_EXIT_MARKER,
+                                     plain=P.v2_plain)
+    assert probs == []
+    assert seen >= 2, "卡面與摺疊都該有一列『去哪補』，沒掃到＝掃描壞了"
+
+
+def test_some_scenario_really_is_a_no_exit_card():
+    """防空轉：上一條的『有標記』分支至少被一個情境打到（否則它只驗了『沒有標記』那半）。"""
+    assert any(NO_EXIT_MARKER in b()[0].note.where for _n, b, _s in SCENARIOS
+               if b()[0].note is not None)
 
 
 # ── ⛔ 一個字都沒刪：完整原文在「▸ 詳細」摺疊區（客戶 2026-09-25 最終裁示）──
@@ -314,6 +357,46 @@ def test_live_card_without_note_or_long_facts_has_no_fold():
     assert '<div class="blk-fold">' not in P.v2_card_html(card, facts)
 
 
+# ── Phase 2 步驟 2＋4（2026-10-30）：版面無關的通用守衛（p02～p05 同一套，判定在 tests/_p25_info_conservation.py）──
+@pytest.mark.parametrize("name,build,state", SCENARIOS, ids=_IDS)
+def test_hover_only_information_is_zero(name, build, state):
+    """T7 通用化：卡上每個 `title=` 的字，都必須也出現在**可見文字**（卡面或摺疊本文）。0 項才合格。
+
+    與上面 `test_nothing_lives_only_in_a_title_attribute`（只認摺疊區）的關係：那條**保留不動**；
+    這條認「卡面 ∪ 摺疊」，所以日後把資訊搬回卡面也不必改。範圍限本頁（⛔ 不含「🚦 今天」頁，
+    那一頁的 hover 屬刻意設計，見 `test_batch_z59`／`test_lamp_card_fold`）。"""
+    card, facts = build()
+    assert C.hover_only_items(P.v2_card_html(card, facts), P.V2_EXCERPT_GAP) == []
+
+
+@pytest.mark.parametrize("name,build,state", SCENARIOS, ids=_IDS)
+def test_folds_are_collapsed_by_default_on_every_card(name, build, state):
+    """T7 通用化：每一張卡（不是只有 idle 那張）的摺疊預設都收合 —— 無 `checked`／`aria-expanded="true"`／`open`。"""
+    card, facts = build()
+    out = P.v2_card_html(card, facts)
+    assert C.folds_open_by_default(out) == []
+    if '<div class="blk-fold">' in out:
+        assert re.search(r'<input type="checkbox" class="blk-fold-i"[^>]*>', out)
+
+
+@pytest.mark.parametrize("name,build,state", SCENARIOS, ids=_IDS)
+def test_a_missing_card_face_never_reads_as_zero_or_normal(name, build, state):
+    """T3 反向（強度不降）：非 live 卡面 ⛔ 不得把缺值講成『0／中性／正常／續抱／安全』。
+
+    📌 本檔原本沒有這條逐字反向斷言（grep 證實）；計畫 §3 T3 要求保留這個不變量，故補上。
+    ⚠️ 不能逐字禁這些字：它們在**否定句**裡是合法的（例：「本站不以『中性』代替未評估」）。
+    所以改成綁來源：整格值不得就是這些字；出現次數不得多於該卡原始 label／Note／facts 的次數。"""
+    card, facts = build()
+    if card.state == UI_LIVE:
+        pytest.skip("live 卡有真值，不在缺值語意範圍")
+    src = [P.v2_plain(card.label)]
+    if card.note is not None:
+        src += [P.v2_plain(card.note.now), P.v2_plain(card.note.why), P.v2_plain(card.note.where)]
+    src += [P.v2_plain(k) + "\n" + P.v2_plain(v) for k, v in facts]
+    assert C.misleading_face_problems(P.v2_card_html(card, facts), src,
+                                      [P.v2_plain(v) for _k, v in facts]) == []
+
+
 # ── escape ──────────────────────────────────────────────────────────
 def test_everything_is_escaped():
     evil = '"><script>alert(1)</script>' + "x" * 50
@@ -391,3 +474,19 @@ def test_no_find_card_draws_badge_11():
     card, facts = dict((s[0], s[1]) for s in SCENARIOS)["screen.empty"]()
     assert card.note.now == P.SCREEN_EMPTY_NOW
     assert "bdg bdg-7 " in P.v2_card_html(card, facts)
+
+
+# ── Phase 2 步驟 2 QA-A 補強（2026-10-30，新增；上面一字未動）──────────────────────────────
+@pytest.mark.parametrize("name,build,state", SCENARIOS, ids=_IDS)
+def test_split_face_fold_sentinel(name, build, state):
+    """`split_face_fold` 哨兵：有摺疊開關的卡必須切出非空摺疊、且讀得到列 —— 否則所有『卡面 ∪ 摺疊』
+    斷言會默默退化成只看卡面。"""
+    card, facts = build()
+    assert C.fold_sentinel_problems(P.v2_card_html(card, facts)) == []
+
+
+def test_split_face_fold_sentinel_is_not_vacuous():
+    folded = [P.v2_card_html(*b()) for _n, b, _s in SCENARIOS]
+    folded = [o for o in folded if C.FOLD_MARK in o]
+    assert len(folded) >= 5, "幾乎沒有卡有摺疊 ⇒ 哨兵空轉"
+    assert all(C.fold_rows(o) for o in folded)
