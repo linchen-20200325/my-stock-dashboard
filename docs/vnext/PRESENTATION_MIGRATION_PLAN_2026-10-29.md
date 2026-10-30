@@ -576,7 +576,7 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 - **GitHub Verification Gate**（2026-10-30）：main `15071a47`；Open PR 0；相關分支無需合併。相關守衛子集（鏈守衛、z60、`test_page_market`／`test_market_blocks`／`test_uim_market_page`、C3、`tests/ui_v2`）**1348 passed／1 skipped**（本機單組）。
 - **現況重測**（夾具、Streamlit 1.59.2、1440×900／390×844、冷啟動／已載入／更新報告態）：全頁高 5575／7966（loaded）；結論句頂端相對 H2 **+942／+1802**（Q11 上限 +200／+260）；第一屏 0 張圖（6 張皆 350px 原生圖）；Hero 4 卡等高 641（桌）／手機 1402；hover-only 1～2 處；工程字樣非客戶例外 ≥1（`warroom`）。量測腳本與截圖＝`docs/vnext/phase4_market/baseline/`。
 - **能力盤點**：19 項 Old→New 對映（線框 §3）；12 項「會改形」資訊（§3.6）皆有保留處、無靜默刪除；全稱句屬待驗事項。
-- **客戶決策表**：Q1（W9／`CV1-DR-12`）、Q2（W2）、Q3（W3）、Q4（主圖形態）、Q5（結論句位置，DEC-105 1A）、Q6（風險卡縮短行）、Q7（手機第一屏不含主圖）；各題附推薦與動檔／守衛。
+- **客戶決策表**：Q1（W9／`CV1-DR-12`）、Q2（W2）、Q3（W3）、Q4（主圖形態）、Q5（結論句位置，DEC-105 1A）、Q6（風險卡縮短行）、Q7（手機第一屏不含主圖）、Q8（圖 C 原句、更新模式 radio、⚡ bar 三項已定案但移動客戶原句／行為者）；Q5 已加第三案並註明須 Re-open DEC-105 1A；各題附推薦與動檔／守衛。
 
 ### 19.2 對 §7、§12.2、§17.1 的增補／修正（以當時 main 重測；原文保留）
 
@@ -591,4 +591,4 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 
 ### 19.4 下一個唯一安全接手點
 
-**等客戶就 `docs/vnext/PHASE4_MARKET_PAGE_WIREFRAME_2026-10-30.md` §6（Q1～Q7）拍板。** 拍板前**禁止**：任何 Phase 4 UI code（`page_market.py`、`_market_blocks.py`、`_ui_kit.py`／`compact.py` 的頁面掛載、`app.py`、Phase 4 的 tests 改寫）、提前做 Phase 5～7／W4～W8、動 `page_today.py`、提高 floor。拍板後：依裁示寫 DEC（客戶裁示→新 DEC，同步契約／Plan／BACKLOG），再依 §7.4 的 Model×Effort 與拆 PR 建議施工；動工前 `git fetch` 重確認 main 與鏈守衛。
+**等客戶就 `docs/vnext/PHASE4_MARKET_PAGE_WIREFRAME_2026-10-30.md` §6（Q1～Q8）拍板。** 拍板前**禁止**：任何 Phase 4 UI code（`page_market.py`、`_market_blocks.py`、`_ui_kit.py`／`compact.py` 的頁面掛載、`app.py`、Phase 4 的 tests 改寫）、提前做 Phase 5～7／W4～W8、動 `page_today.py`、提高 floor。拍板後：依裁示寫 DEC（客戶裁示→新 DEC，同步契約／Plan／BACKLOG），再依 §7.4 的 Model×Effort 與拆 PR 建議施工；動工前 `git fetch` 重確認 main 與鏈守衛。

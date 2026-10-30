@@ -106,7 +106,7 @@
 | P-05 | **市場位階卡**：標題「市場位階（總經契約）」、🟢 運作中徽章、五態主值、副行重複主值、「生效分支 warroom」、hover `title=`（位階出處）；卡外一句 `REGIME_SCOPE_CAPTION`「市場位階，不是台股趨勢」（DEC-105 2A，⛔ 映射偏多／中性／偏空） | L1 **tile**：label「市場位階」、主值＝五態原詞、say＝`REGIME_SCOPE_CAPTION`（逐字）、狀態徽章沿用 `UI_STATE_META`；「生效分支 warroom」、「（總經契約）」、hover 出處→ **tile「▸ 詳細」摺疊**（hover-only 退場，契約 §11） | 全部可點開取得；X1「市場位階：為什麼？」L2 expander 原樣保留 | tile 由 `build_verdict_tiles` 同一支輸出組成（不再呼叫 `today._render_one`，故不碰 `page_today.py`）；位階 `ui_state` 對應 tile 狀態 chip 的映射需單測 |
 | P-06 | **建議總持股水位卡**：`WATER_TITLE`、`WATER_VALUE`「⬜ 尚未核准／無法判定」、`WATER_WHY`「正式 Risk Cap 尚未核准，此卡不顯示任何百分比。」、「風險上限：獨立顯示待 C2b＋RC-VISIBILITY Gate」（Q2-2 客戶逐字）、「🔍 查看依據」（六欄＋原有出手區間卡①，含 `risk_cap.v2` 硬否決天花板） | L1 **tile**：主值槽留白（⛔ 不放 0／％）＋護欄 chip `⬜ 尚未核准／無法判定`（`not_approved`）＋say＝Q2-2 句**逐字**（`say_verbatim=True`）；`WATER_WHY`→ tile 摺疊「為什麼」；六欄＋原有出手區間→ tile 摺疊 | 卡①「原有出手區間」整段保留（含揭露：更新報告可能列出寫檔數值，`WATER_REPORT_DISCLOSURE`） | ⚠ 主值槽由「文字」變「留白＋chip」：`WATER_VALUE` 字串不再是主值而是 chip 字（同字）；`test_market_blocks::TestWaterAndBasis`「首屏無 %」要改寫為資訊守恆 |
 | P-07 | **今日主要風險卡**：≤3 行風險項（`risk_item_text`：序號＋燈色＋桶名＋燈名＋（燈說明）＋「｜方向：…」＋並列）、「另 K 項見圖 D」、「另有 N 桶資料不足、無法判定（見圖 D）」、`HERO_RISK_NO_RANKING_NOTE`、`DANGER_POINTER`（DEC-105 指路）、「🔍 查看依據」 | L1 **風險 tile**：≤3 行**縮短行**（燈色＋桶名＋燈名＋方向詞；§6 Q6）＋「另 K 項見圖 D」＋「另有 N 桶資料不足…」＋指路句（§6 Q2）＋coverage chip；完整原句、`HERO_RISK_NO_RANKING_NOTE`、六欄→ tile 摺疊 | 每個風險項完整原句在摺疊可取得；hero 與圖 D 仍同源（同一份 `MarketRisks`，`hero_risk_items`＝`risks.risk_rows[:HERO_RISK_MAX_ITEMS]`，⛔ 重排／重算） | ⚠ 風險項字串形式改變（見 Q6）；風險燈色 emoji 走**訊號文字通道**、不是 chip（`compact` 無「風險桶 chip」kind，且 META 表封閉）；「≤3 chip」的契約字面由「≤3 行」承接＝§6 Q6 |
-| P-08 | **更新卡**：標題「更新」、`single_submit_form`（模式 radio：正常更新（吃暖快取）／強制重抓（清快取）＋🚀 更新今日戰情）、一段 188 字 caption（`PAGE_REFRESH_SCOPE_WHY`＋`REFRESH_SPEED_HINT`）、`data_date_text`（資料日：加權指數最後一根，或 `⬜ 資料日未提供`） | **頁首動作列**（§6 Q1=B）：主鍵留 L1；模式 radio 進 form 內 `st.expander`（`single_submit_form(options_label=…)`，Phase 2 已備、floor 1.56 AppTest 驗過，見 D8 驗證報告）；188 字 caption→ 該 expander 內；一行短句留在鍵旁（契約 §17：「一句留 tile」） | form／gate 語意不變：只有按 🚀 才重抓，radio 不即時 rerun；`st.rerun()` 流程不動 | ⚠ 動作列內含 form＋expander，**實高可能 >40px**（靜態示意只放按鈕；INFERENCE 真高再多 ~40～56px，Gate 時實量）；Q1=A 時此卡仍為第 4 個 tile |
+| P-08 | **更新卡**：標題「更新」、`single_submit_form`（模式 radio：正常更新（吃暖快取）／強制重抓（清快取）＋🚀 更新今日戰情）、一段 約 190 字 caption（`PAGE_REFRESH_SCOPE_WHY`＋`REFRESH_SPEED_HINT`）、`data_date_text`（資料日：加權指數最後一根，或 `⬜ 資料日未提供`） | **頁首動作列**（§6 Q1=B）：主鍵留 L1；模式 radio 進 form 內 `st.expander`（`single_submit_form(options_label=…)`，Phase 2 已備、floor 1.56 AppTest 驗過，見 D8 驗證報告）；約 190 字 caption→ 該 expander 內；一行短句留在鍵旁（契約 §17：「一句留 tile」） | form／gate 語意不變：只有按 🚀 才重抓，radio 不即時 rerun；`st.rerun()` 流程不動 | ⚠ 動作列內含 form＋expander，**實高可能 >40px**（靜態示意只放按鈕；INFERENCE 真高再多 ~40～56px，Gate 時實量）；Q1=A 時此卡仍為第 4 個 tile |
 | P-09 | `HERO_AI_PLACEHOLDER`「🤖 AI 投資總結：⬜ 尚未提供」＋`HEALTH_CHIP`「⬜ 資料狀態：尚未彙總」＋指路 | L1 維持**一行字**（現況 `st.caption`，字不改）；Phase 7 才換為 AI 入口卡（R13） | 原樣 | `compact` **沒有**對應 chip kind（`unavailable` 委派給 `⛔ 未接線`，字不同；`ai` kind 字樣是「🤖 AI 生成·非投資建議」，語意不同）→ 維持現況字串，不硬套 chip |
 | P-10 | 加權指數資料日（更新卡內）：`資料日：YYYY-MM-DD（加權指數，來源：市場評估輸入）` | 併入**圖 A header 的 `asof` chip**（圖 A 自己的 view `as_of`）與更新動作列旁短句；全句→ 摺疊「來源」段 | 資訊在 | 兩個資料日來源不同：更新卡讀 `mkt_info["index_as_of"]`、圖 A 讀 `get_twii_trend_view().as_of`——**可能不同值**，必須各自標示，⛔ 互相替代（`CLAUDE.md` §2.3／契約 §6-6） |
 
@@ -140,6 +140,19 @@
 
 > 六欄元件 `Basis` 的 `ValueError`「不得留白」性質與 `AI_NOT_INVOLVED`、`confidence／availability` 欄標字面都有測試釘住（`TestWaterAndBasis` 等）；映射改字面＝測試要改寫為資訊守恆（Plan §3 T25）。Q3 選 B 才把 hero tile／⚡ 也併入四段；選 A 只動圖。
 
+### 3.5b 退化狀態與內層路徑補列（QA 補；單組讀碼，未逐項實跑）
+
+| 掛在 | 補列的能力／路徑 | 新位置／處置 |
+|---|---|---|
+| P-07 風險 tile | 「本輪五桶皆為綠燈…不代表安全」「本輪沒有非綠桶可列；另有 N 桶資料不足、無法判定（不代表安全）」「⬜ 無法判定（五桶資料皆不足）」「五桶風險摘要算不出來」（紅）「⬜ 尚未載入」（灰） | **逐字保留於 tile 外露層**（Q6 說明）；⛔ 不得為縮高刪「不代表安全」 |
+| P-11 結論句 | `build_market_conclusion` 拋 `ValueError` → `st.error("結論句組不出來：…")`（§1：不自己改寫） | 路徑與字樣原樣 |
+| P-13 圖 A | `⬜ 台股指數歷史快取的新鮮度未判定`、`⬜ 均線：尚未載入`、`⬜ 缺少的均線：…`、`⬜ 台股指數歷史暫時讀不到：…`、失敗紅字、過期警告 | chip／槽內／摺疊「限制」（過期＝`⚠ 過期`、失敗＝`🔴 取得失敗`＋1 句、其餘＝`UI_STATE_META` 符號＋原因） |
+| P-14 圖 B | `⬜ 沒有可用收盤`、`⬜ 本輪沒有這個系列`、未載入灰字 | 小倍數缺格 placeholder／一行 Secondary |
+| P-16 圖 D | 未載入（`NOT_LOADED`）、算不出來（紅）、五桶 `⬜ 資料不足／無法判定` 列 | 一行／紅字／列照舊 |
+| P-17 L2 內層 | ADL 逐日 dataframe（checkbox gate）、先行指標連續失敗 `♻️` warning、三大法人**未觀測顯示「無資料」**（⛔ 不印 0）、`SEGMENT_COVERAGE_NOTE`、`AS_OF_NOT_IN_CONTRACT`、`_old_ui_pointer`／`_in_default_nav` 兩分支文案 | **原樣不動**（L2 expander 內容本批不改） |
+
+> **未逐項對碼的盤點列（未驗）**：P-01、P-03、P-04、P-10、P-15、P-18、P-19 為依檔頭／常數與瀏覽器所見的粗列，未逐行對碼；其餘列亦屬單組讀碼，退化路徑以本表補列者為限，仍不證明窮舉。
+
 ### 3.6 會丟失或改形的資訊——一覽（**不靜默刪**；皆有保留處）
 
 | # | 變動 | 保留處 | 客戶可見？ | 去向 |
@@ -148,9 +161,9 @@
 | L-2 | 圖 B 5 系列在 L1 不顯示 y 軸數值 | L2「國際市場」表格＋走勢圖 gate | 是 | **Q4** 資訊影響欄（D5=A 已裁示，故不另設題） |
 | L-3 | 圖 B 由「5 張直接畫」→「小倍數一組」 | 同上 | 是 | **Q4** |
 | L-4 | 結論句位置前移 | — | 是 | **Q5** |
-| L-5 | 更新卡 188 字 caption、模式 radio 離開 L1 | 動作列 expander | 是 | **Q1**（B）／§6.2 |
-| L-6 | 圖 C 客戶原句 `CHART_C_SAY` 外露→摺疊 | 圖 C 摺疊「為什麼」 | 是 | §6.2 供過目 |
-| L-7 | `⚡ 需要處理` 313px 整塊→一行 bar | bar 摺疊 | 是 | §6.2 供過目 |
+| L-5 | 更新卡 約 190 字 caption、模式 radio 離開 L1 | 動作列 expander | 是 | **Q1**（B）／§6.2 |
+| L-6 | 圖 C 客戶原句 `CHART_C_SAY` 外露→摺疊 | 圖 C 摺疊「為什麼」 | 是 | **Q8a** |
+| L-7 | `⚡ 需要處理` 313px 整塊→一行 bar | bar 摺疊 | 是 | **Q8c** |
 | L-8 | 位階卡「生效分支 warroom」「（總經契約）」hover 出處 | tile 摺疊 | 是（外露字減少） | §6.2 |
 | L-9 | 圖 D「是否惡化」每列重複→header 寫一次 | header chip | 是 | §6.2 |
 | L-10 | 指路句（W2） | 見 Q2 | 是 | **Q2** |
@@ -159,7 +172,7 @@
 
 ---
 
-## §4 文字線框（推薦方案 R：Q1=B／Q2=A′／Q3=A／Q4=P-B／Q5=B／Q6=A／Q7=A）
+## §4 文字線框（推薦方案 R：Q1=B／Q2=A′／Q3=A／Q4=P-B／Q5=B〔推薦調整後以 A 為預設，線框以 B 示意〕／Q6=A／Q7=A／Q8=A）
 
 ### 4.0 閱讀約定
 
@@ -260,7 +273,8 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 ```
 
 - **FACT（靜態示意）手機 KPI 區塊高度（Q2 上限 ≤340px）**：W9-B1 單欄堆疊 **389**（✗）、W9-B2「位階｜水位並排＋風險整列」**299**（✓）、W9-A 2×2 **356**（✗ +16）、W9-C **467**（✗）。
-- **預測偏離（INFERENCE，見 Q7）**：不論 Q1 選哪案，手機 Primary 標題約在 y≈1000（靜態示意 y997），**不在第一屏**——blueprint 手機框本身也在圖 A 前標「往下捲」。
+- **基準說明**：本節 ASCII 以 B2 排 tile，但 `first_screen_*_390` 預覽檔與其量測（結論句 +207、Primary y997）是 **B1 單欄堆疊**基準；B2 估計 Primary 約 y≈907（−90px）。結論句在 tile 之前時，+207 與 tile 排法無關。
+- **預測偏離（INFERENCE，見 Q7）**：不論 Q1 選哪案，手機 Primary 標題約在 y≈907（B2）～997（B1），**不在第一屏**——blueprint 手機框本身也在圖 A 前標「往下捲」。
 
 ### 4.4 chip 家族分配（D3=A）與 F-1 設計發現
 
@@ -282,7 +296,7 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | W9-B（3 tile＋動作列；手機 B1 單欄／B2 2＋1） | **145** | B1 **389**／B2 **299** | 同上 |
 | W9-C（3＋1 窄 CTA 格／手機單欄＋CTA 整列） | **145** | **467** | 同上 |
 | 結論句頂端（相對 H2） | 結論在 tile 後 **+312**／在 tile 前 **+151** | 後 **+612**／前 **+207** | 桌 ≤200／手 ≤260 |
-| Primary header y | 628（第一屏內） | 997（第一屏外） | 第一屏內 |
+| Primary header y | 628（第一屏內） | 997（B1 基準；B2 估計 ≈907，皆在第一屏外） | 第一屏內 |
 
 > 這些是「compact 元件＋16px 間距」的靜態值；Streamlit 的真實元素容器、`st.form`＋`st.expander` 動作列、原生圖外框都會再加高，**Gate 實測才算數**。tile 列高 145 由「風險 tile 兩行縮短行＋指路句＋coverage chip」撐起——若維持現行整句（約 4 行），靜態高度 **>184px**，超過 160px 上限（見 Q6）。
 
@@ -328,9 +342,10 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | **Q2**（W2） | 「指標危險度」指路：維持說明句、縮短句、還是改 chip？ | **A′**（維持「句」，縮到 ≤32 字） |
 | **Q3**（W3） | 摺疊標籤要不要統一成「▸ 為什麼／來源／限制／去哪補」？ | **A**（圖用新字樣；tile／⚡ 維持「🔍 查看依據」六欄） |
 | **Q4** | 主圖長什麼樣：單圖＋切換列、台股主圖＋國際小倍數、還是全小倍數？ | **P-B**（台股主圖＋國際小倍數，不做切換列） |
-| **Q5** | 今日結論句放在 tile 之前還是之後（DEC-105 1A 是之後）？ | **B**（移到 tile 之前、頁首下方） |
+| **Q5** | 今日結論句放在 tile 之前還是之後（DEC-105 1A 是之後；改動須 Re-open）？ | **A** 為預設可行線、**B** 次選（信心中等；新增 C 僅手機前移） |
 | **Q6** | 「今日主要風險」卡的風險項顯示整句還是縮短行？ | **A**（縮短行，整句進摺疊） |
 | **Q7** | 手機第一屏看不到主圖（預測），接受還是要求提前？ | **A**（接受，Gate 登 🟡） |
+| **Q8** | 三項已定案但會移動客戶原句／行為者：圖 C 原句入摺疊、更新模式 radio 入摺疊、⚡ 變一行 bar | **8a／8b／8c 皆 A（照辦）** |
 
 ### Q1｜W9／CV1-DR-12：第一列核心狀態欄數、更新鈕位置、手機排法
 
@@ -339,10 +354,10 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | 選項 | 內容 | 優點 | 缺點 | 風險／實測（靜態示意） |
 |---|---|---|---|---|
 | **A** 4 欄 | 桌機 4 欄（位階｜水位｜風險｜更新 tile）、手機 2×2（＝blueprint／現況） | 與 blueprint、DEC-105 一致；改動最小 | **與 `CLAUDE.md` v3 §00「固定 3 欄」字面牴觸**——選 A 需客戶**明示**「KPI 列不適用 3 欄」，並由有權限的一方在 `CLAUDE.md` 加註（本團隊不改）；更新 tile 只剩一顆按鈕卻占一整欄 | 桌機 tile 高 163（>160）、手機 2×2 高 356（>340） |
-| **B**（推薦） | 桌機 **3 欄 tile**（位階｜水位｜風險）；「🚀 更新」改為**頁首動作列**（與 H2 同列右側／手機 H2 下一整列）；手機 tile 排法 **B2**：位階｜水位並排、風險整列 | 字面符合 `CLAUDE.md` §00「固定 3 欄」＋DEC-091 §四「3～4」（3 個核心狀態＋主 CTA）；Q2 手機 ≤340 ✅（299）；更新 tile 本來內容在 Q3 之後只剩一顆鍵（模式 radio、188 字說明進 expander），放動作列更合理；桌機 tile 145 ✅ | 與 blueprint「4 張 hero」不同（更新由 tile 變動作列）；動作列含 form＋expander，真高未驗 | 更新 form 位置改變（form 語意不變）；`test_market_blocks` 的 `st.columns(4)` 斷言（T23）要改寫 |
+| **B**（推薦） | 桌機 **3 欄 tile**（位階｜水位｜風險）；「🚀 更新」改為**頁首動作列**（與 H2 同列右側／手機 H2 下一整列）；手機 tile 排法 **B2**：位階｜水位並排、風險整列 | 桌機 tile 數符合 `CLAUDE.md` §00「固定 3 欄」＋DEC-091 §四「3～4 個核心狀態」（取 3；撰寫組判讀，單組）；Q2 手機 ≤340 ✅（299）；更新 tile 本來內容在 Q3 之後只剩一顆鍵（模式 radio、約 190 字說明進 expander），放動作列更合理；桌機 tile 145 ✅ | **第一列只剩 3 項，不含 DEC-091 §四 客戶列出的第 4 項「更新：主 CTA」**（CTA 移到第一列之外的動作列，是否仍算「第一列」由客戶判）；與 blueprint「4 張 hero」不同；**手機 B2（2＋1）排法同樣有「固定 3 欄」字面疑義**（手機本身不是 3 欄）；動作列含 form＋expander，真高未驗 | 更新 form 位置改變（form 語意不變）；`test_market_blocks` 的 `st.columns(4)` 斷言（T23）要改寫 |
 | **C** 3＋1 | 桌機 3 tile＋同列第 4 個窄 CTA 格；手機單欄＋CTA 整列 | 更新仍在第一列、視覺上接近 blueprint | 手機 467（>340）；第 4 格仍是「第 4 欄」，與「固定 3 欄」字面仍有爭議 | 需客戶判定「3＋1」算不算 3 欄 |
 
-**AI 總管推薦：B（手機取 B2）。** 理由：(1) 是唯一不需要客戶修改或加註最高位階文件、也不用重新解釋條文的選項；(2) 滿足 DEC-091 §四「3～4」與「更新＝主 CTA」；(3) 靜態實測唯有 B2 同時滿足桌機 tile ≤160、手機 KPI 區塊 ≤340；(4) 更新卡經 Q3 瘦身後只剩一顆鍵，單獨占一欄是浪費。代價（據實）：偏離 blueprint 的「4 張 hero」。
+**AI 總管推薦：B（手機取 B2）。** 理由（單組判斷、推測性質，非已驗全稱句）：(1) 在桌機上，推測較不需要客戶修改或加註最高位階文件（B 仍可能被讀成與 §四「第一列含更新」不符，且手機 2＋1 同有「固定 3 欄」疑義，最終判讀權在客戶）；(2) 3 個核心狀態落在 DEC-091 §四「3～4」內，「更新＝主 CTA」仍在頁首但不在第一列；(3) 靜態實測唯有 B2 同時滿足桌機 tile ≤160、手機 KPI 區塊 ≤340；(4) 更新卡經 Q3 瘦身後只剩一顆鍵，單獨占一欄是浪費。代價（據實）：偏離 blueprint 的「4 張 hero」。
 **會動到**：`_market_blocks.render_hero`（`columns(4)`→3＋動作列）、`page_market.render_page_market` 頁首（→ **還原鏈新頭節**，見 §7）、`tests/test_market_blocks.py::TestStructure`（T23，改為欄數＋資訊守恆）；**不需動** `CLAUDE.md`、`z60 _BASE_DIGEST`（不在指紋範圍，§7）。若選 A：另需客戶就 `CLAUDE.md` §00 的明示處置（本團隊不處理）。
 **不裁示預設**：維持現行 4 欄（Gate 不判欄數，Plan 既定）；但 Q4／Q5 的第一屏版面將無法落地——Phase 4 該區塊不開工。
 
@@ -366,12 +381,12 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 
 | 選項 | 內容 | 優點 | 缺點 | 風險 |
 |---|---|---|---|---|
-| **A**（推薦） | **圖**（圖 A、國際組、圖 D）用新四段字樣；**tile／⚡** 維持「🔍 查看依據」六欄 | 符合客戶對「主圖」的明確字樣；tile 的六欄與原有出手區間等內容不重排；blueprint 對 tile 的六欄保留 | 一頁兩種摺疊標籤 | 六欄→四段映射（§3.5）要改測試；兩種標籤並存的認知成本 |
-| **B** 全頁統一四段 | 圖與 tile／⚡ 全用新字樣；六欄併入四段 | 一致 | 六欄元件（`Basis`、欄標、`AI_NOT_INVOLVED`、`confidence／availability` 欄標）被測試釘字面，併入＝大改；偏離 blueprint 六欄 | 測試改寫量最大；水位 tile 的「原有出手區間（含 `risk_cap.v2`）」須放哪一段需另判 |
+| **A**（推薦） | **圖**（圖 A、國際組、圖 D）用新四段字樣；**tile／⚡** 維持「🔍 查看依據」六欄 | 符合客戶對「主圖」的明確字樣；tile 的六欄與原有出手區間等內容不重排；blueprint 對 tile 的六欄保留 | 一頁兩種摺疊標籤 | 一頁兩種摺疊標籤的認知成本；映射細節見 §3.5／§7.2 F-10 |
+| **B** 全頁統一四段 | 圖與 tile／⚡ 全用新字樣；六欄併入四段 | 一致 | 既有「查看依據」六項內容與用字是客戶核准線框的一部分，併入四段＝改動最大；偏離 blueprint | 技術細節與測試改寫量見 §7.2 F-10 |
 | **C** 全頁維持「🔍 查看依據」 | 圖也不用新字樣 | 零重排 | **與 DEC-109 五客戶明給字樣相左**（主圖） | 不建議 |
 
 **AI 總管推薦：A。** 理由：客戶明確只就「主圖」給了字樣；tile 是不同物件（卡片詳細），且其六欄結構受 blueprint 與測試釘住。`▸ 詳細`（16 燈卡）本來不動。
-**會動到**：`_market_blocks`（新增 `render_fold`＝`st.expander` 薄封裝，Phase 3 §17.1 預留；`Basis` 映射）、守衛 T25（`TestWaterAndBasis` 等改為資訊守恆）。
+**會動到**：`_market_blocks`（摺疊元件與映射）及其測試；細節見 §7.1／§7.2 F-10。
 **不裁示預設**：A。
 
 ### Q4｜主圖形態（契約 §12.1「擇一」；屬版面異動，列客戶）
@@ -380,25 +395,27 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 
 | 選項 | 內容 | 優點 | 缺點 | 資訊影響／風險 |
 |---|---|---|---|---|
-| **P-A** 單圖＋切換列 | 一張主圖＋膠囊切換列（台股｜海外市場｜利率｜美元），預設台股；一次一張 | 所有選項都是帶軸的原生圖（軸數字保留）；非選中不畫（R10 省一點運算）；Secondary 只剩圖 D、圖 C | 圖 A／圖 B 的身份被合併（各有的標題、說明句、護欄要隨選項切換）；「海外市場」含 3 系列，**不得疊軸**（`CHART_B_NOTE`）→ 該選項內仍得做 3 格小倍數（無軸數字）；需 D8 五條硬約束（取消選取回退、form 內 `None`、44px、換行、options 型別）；手機 4 項切換列 | 國際資訊被藏在 3 次點擊後；切換狀態屬新互動 |
-| **P-B**（推薦） | **圖 A＝Primary**（原生圖，保留 y 軸、MA 水平參考線、圖例）；**國際 5 系列＝Secondary small multiples 一組**（桌 3 欄／手 2 欄，≤96px，無數字）；圖 D、圖 C 為其餘 Secondary（圖 C 一行）；**不做切換列** | 圖 A／圖 B 各保身份與護欄（客戶 DEC-091 §四 兩張圖）；國際 5 系列同屏並列（「海外／利率／美元是否幫助或壓抑」本來就是跨系列比較）；不依賴 D8／floor 1.56 的 `st.segmented_control`；互動最少 | Secondary 總數達 3（上限 ≤3、建議 2；圖 C 為一行 placeholder，Gate 時登記）；**L1 失去國際 5 系列的 y 軸數值**（D5=A 必然結果；數值在 L2 既有「國際市場」表格＋走勢圖 gate） | 小倍數元件名稱上限 8 字 vs 現有 `納斯達克 IXIC`（9）、`費城半導體 SOX`（9）→ 顯示名對映（§7 F-3） |
+| **P-A** 單圖＋切換列 | 一張主圖＋膠囊切換列（台股｜海外市場｜利率｜美元），預設台股；一次一張 | 所有選項都是帶軸的原生圖（軸數字保留）；非選中不畫（R10 省一點運算）；Secondary 只剩圖 D、圖 C | 圖 A／圖 B 的身份被合併（各有的標題、說明句、護欄要隨選項切換）；「海外市場」含 3 系列，**不得疊軸**（`CHART_B_NOTE`）→ 該選項內仍得做 3 格小倍數（無軸數字）；需先通過最低支援版本的實跑驗證（細節見 §7.2 F-9）；手機 4 項切換列 | 國際資訊被藏在 3 次點擊後；切換狀態屬新互動 |
+| **P-B**（推薦） | **圖 A＝Primary**（原生圖，保留 y 軸、MA 水平參考線、圖例）；**國際 5 系列＝Secondary small multiples 一組**（桌 3 欄／手 2 欄，≤96px，無數字）；圖 D、圖 C 為其餘 Secondary（圖 C 一行）；**不做切換列** | 圖 A／圖 B 各保身份與護欄（客戶 DEC-091 §四 兩張圖）；國際 5 系列同屏並列（「海外／利率／美元是否幫助或壓抑」本來就是跨系列比較）；不依賴切換鈕元件（免最低版本的實跑驗證）；互動最少 | Secondary 總數達 3（上限 ≤3、建議 2；圖 C 為一行 placeholder，Gate 時登記）；**L1 失去國際 5 系列的 y 軸數值**（D5=A 必然結果；數值在 L2 既有「國際市場」表格＋走勢圖 gate） | 小倍數元件名稱上限 8 字 vs 現有 `納斯達克 IXIC`（9）、`費城半導體 SOX`（9）→ 顯示名對映（§7 F-3） |
 | **P-C** 全小倍數 | 台股＋國際 5 系列 6 格小倍數當 Primary | 版面最小 | 台股的 MA 水平參考線與圖例無法放進 ≤96px 迷你圖且不得顯示數字 → **資訊直接丟失**（只能入摺疊）；Primary 失去「主圖」的辨識度 | 不建議 |
 
 **AI 總管推薦：P-B。** 理由：(1) 不改圖 A／圖 B 的客戶定義與護欄結構；(2) 台股主圖資訊完整保留；(3) 國際系列同屏比較；(4) 零 D8 依賴；(5) 成本只是 Secondary 達 3 並使 L1 國際圖失軸數值（客戶已就迷你圖不顯示數字裁示 D5=A，且數值在 L2 保留）。若客戶更看重「國際圖保留軸數字」，選 P-A。
-**會動到**：`_market_blocks.render_chart_a`／`render_chart_b`（重寫）、新增小倍數組裝（`compact.small_multiples_html`＋`sparkline_svg`，掛頁用 `st.markdown(unsafe_allow_html=True)`，⛔ `st.html`——會剝 svg，見 D8 驗證報告）；守衛：圖 A／B 護欄逐字、`⬜ 尚未定義` 位置、`INTL_GROUPS` 對帳、`CHART_B_NOTE` 不疊軸／不正規化。
+**會動到**：`_market_blocks.render_chart_a`／`render_chart_b`（重寫）、新增小倍數組裝（`compact.small_multiples_html`＋`sparkline_svg`，掛頁方式見 §7.2 F-4）；守衛見 §7.1／§7.3。
 **不裁示預設**：現況（圖 A、圖 B 各自照舊）——但 Primary 在第一屏的要求（契約 B1）不會達成；Phase 4 版面實作無法落地。
 
 ### Q5｜今日結論句位置（DEC-105 1A）
 
-**背景（FACT）**：DEC-105 1A（客戶）：結論句維持在 Hero 四卡與「⚡ 需要處理」之間；DEC-109 部分取代：Hero／⚡ 相對順序可維持，但結論句**必須落在第一屏**（客戶「今日結論必須在第一屏可見」、DEC-108 ①「結論先行」）；契約 Q11（建議上限）：主要判讀句頂端相對 H2 桌機 ≤+200／手機 ≤+260。
+**背景（FACT）**：DEC-105 1A（客戶）：結論句維持在 Hero 四卡與「⚡ 需要處理」之間；DEC-109 部分取代：Hero／⚡ 相對順序可維持，但結論句**必須落在第一屏**（客戶「今日結論必須在第一屏可見」、DEC-108 ①「結論先行」）。契約 Q11（相對 H2 桌機 ≤+200／手機 ≤+260）是 **DEC-110 內部建議上限**，不是客戶原話（可調，調整須在 Gate 報告寫理由）。**⚠️ 選 B 或 C＝修改客戶 DEC-105 1A 已裁示的順序，須走新 DEC（Decision Re-open；治理組指示依 `PROJECT_RULES.md` §0.1——撰寫組在該節未找到「Re-open」字樣，條文出處待治理組核）。**
 
-| 選項 | 內容 | 靜態實測（相對 H2） | 風險 |
+| 選項 | 內容 | 靜態實測（相對 H2；手機為 B1 單欄堆疊基準） | 風險 |
 |---|---|---|---|
-| **A** 維持在 tile 之後 | H2→chip→**tile 列**→結論句→⚡ | 桌機 **+312**（>200）、手機 **+612**（>260；手機結論句下緣 y≈863，已被第一屏裁切） | Q11／A10 不過；手機結論句在第一屏邊緣被截 |
-| **B**（推薦） | H2→chip→**結論句**→tile 列→⚡ | 桌機 **+151** ✅、手機 **+207** ✅ | 改動 DEC-105 1A 的相對順序（結論句移到 Hero 之前）；契約 §16 只說「進第一屏」，沒要求在 Hero 之後 |
+| **A** 維持 1A | H2→chip→**tile 列**→結論句→⚡ | 桌機 **+312**（結論句 y≈447，**已在第一屏內**；僅超過內部 Q11 +200）；手機 **+612**（句子下緣 y≈863，被第一屏〔可用約 790〕截斷） | 桌機：客戶「第一屏可見」已達成，僅內部 Q11 未達（Gate 登 🟡＋理由）；手機：結論句被截 |
+| **B** 全面前移 | H2→chip→**結論句**→tile 列→⚡ | 桌機 **+151**、手機 **+207** | 修改 DEC-105 1A（Re-open）；桌機本來已達標，改動多於必要 |
+| **C** 僅手機前移 | 桌機維持 A；手機把結論句排在 tile 之前 | 桌機 +312（同 A）、手機 +207 | 同樣修改 1A 的手機部分（Re-open）；Streamlit 同一份元素樹要依視窗換順序，**技術上可能需重複渲染或自訂 CSS 排序（INFERENCE，未驗）**，可行性待實作前驗 |
+| （D）只壓縮 tile 高度 | 順序不變，tile 列再壓矮 | 結論句在 tile 之後，頂端 ≥ H2＋約 151（tile 起點）＋tile 高 ≥96（Q1 下限）＋間距 ≈ **+263 以上**，**不可能降到 ≤+200** | 不能單獨解決；可與 A 併用降低 +312 |
 
-**AI 總管推薦：B。** 理由：這是唯一能同時達成 Q11 與「結論先行」（DEC-108 ①）的排法；A 的代價是手機第一屏看不完整結論句。
-**會動到**：`page_market.render_page_market` 的區塊順序（還原鏈頭節；「今日結論原樣保留（parity 腳本逐字比對）」的 parity 比對仍成立，句子與標題不改）；守衛：`test_page_market`／`test_uim_market_page` 中關於區塊順序的斷言要改。
+**AI 總管推薦（重審後調整）：A 為預設可行線，B 為次選、信心中等。** 理由：客戶原話只要求「結論第一屏可見」；桌機 A 已達成，+200 是內部建議值，未達可在 Gate 報告寫理由（契約 §14.1／Gate §5）。真正的缺口在手機（結論句被截）。若客戶重視手機結論先行並同意 Re-open DEC-105 1A，選 B（簡單、桌手機一致）；C 因可行性未驗不推薦。若客戶不想動 1A，選 A 並接受手機結論句被截、Gate 登 🟡。（原稿「B 是唯一能同時達成 Q11 與結論先行」不實，已撤回。）
+**會動到**：`page_market.render_page_market` 區塊順序（還原鏈頭節）；選 B／C 另需新 DEC；`test_page_market`／`test_uim_market_page` 順序斷言。
 **不裁示預設**：A（維持 DEC-105 1A）。
 
 ### Q6｜「今日主要風險」卡：整句 vs 縮短行
@@ -411,13 +428,14 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | **B** 維持整句 | 與現況相同 | 零改字 | 靜態 tile 高 **>184**（>160，同列 3 欄全被拉高）；手機更長 | Gate A4／A5 🟡/❌ |
 | **C** chip | ≤3 顆風險 chip | 契約字面 | 需新 kind（動契約表＋元件）；燈 emoji 屬訊號文字通道不得進 chip | 不建議 |
 
+**退化狀態文案處理（QA 補）**：縮短只適用於「風險項行」；`hero_risk_lines` 的其餘分支——「本輪五桶皆為綠燈…不代表安全」、「本輪沒有非綠桶可列；另有 N 桶資料不足、無法判定（不代表安全）」、「⬜ 無法判定（五桶資料皆不足）」、「五桶風險摘要算不出來」紅字、「⬜ 尚未載入」灰字——**一律逐字保留在 tile 外露層**（它們本身是單句，取代項目行；⛔ 不得為了縮高而刪「不代表安全」）。
 **AI 總管推薦：A。** 理由：資訊不減（整句在摺疊）、達成高度上限、不擴元件。
 **會動到**：`_market_blocks.hero_risk_lines`／`risk_item_text`（新增縮短函式）、`test_market_blocks`（hero 文字斷言→資訊守恆）。
 **不裁示預設**：B（維持整句；第一屏高度預算會超）。
 
 ### Q7｜手機第一屏不含主圖（預測偏離）
 
-**背景（INFERENCE，靜態示意）**：手機第一屏（可用約 790px）依序要放頁首、結論句（4～5 行）、3 個 tile（B2＝299）——Primary 標題約在 y≈1000，**無論 Q1 選哪案都不在第一屏**。blueprint 手機框也把圖 A 放在「── 往下捲 ──」之後。契約 R2／B1 要求 Primary 在第一屏。
+**背景（INFERENCE，靜態示意）**：手機第一屏（可用約 790px）依序要放頁首、結論句（4～5 行）、3 個 tile——`first_screen_*_390` 示意用 **B1 單欄堆疊**（tile 區 389），Primary 標題 y≈997；**改為 B2（tile 區 299，少 90px）估計 Primary 約 y≈907**，仍超出 844（與可用 790），**Q7 結論不變：無論 Q1 選哪案都不在第一屏**。blueprint 手機框也把圖 A 放在「── 往下捲 ──」之後。契約 R2／B1 要求 Primary 在第一屏。
 
 | 選項 | 內容 | 優點 | 缺點 |
 |---|---|---|---|
@@ -431,20 +449,31 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 
 ### 6.1 W3 以外、W2／W9 以外的其他版面差異
 
-已併入 Q4～Q7；其餘差異屬「已依契約定案」（§6.2）。
+已併入 Q4～Q8；其餘差異屬「已依契約定案」（§6.2）。
 
-### 6.2 已依契約／既有 DEC 定案、本線框照辦（客戶可推翻；不另設題）
+### Q8｜已依契約定案、但會移動客戶原句或行為的三項（升格為客戶可推翻項；統一 L-5／D-5 口徑）
+
+| 子項 | 現況→新做法 | 選項 | AI 總管推薦 |
+|---|---|---|---|
+| **8a** 圖 C 客戶原句（L-6） | `CHART_C_SAY`「用企業獲利 EPS 搭配…」現在外露；圖 C 縮成一行後，這句改放摺疊「為什麼」 | A 照辦（外露只留標題＋「研究框架，未啟用」＋需先核准一句）／B 維持外露原句（圖 C 多占約 2 行） | **A**：圖 C 無資料，客戶原句描述的是尚不存在的圖；內容在摺疊保留。（客戶原句位置改動，故請過目） |
+| **8b** 更新模式（L-5／D-5） | 現況：模式 radio（含「強制重抓（清快取）」）與約 190 字說明外露在更新卡；新做法：兩者收進「▸ 更新選項」摺疊（預設收合），鍵旁留一短句；**預設值與「按了才重抓」語意不變**，已套用模式在摺疊內與一句短語可見 | A 照辦／B 維持外露 radio（只收說明） | **A**。**Q1 選 A 或 C 時 D-5 同樣照辦**（收進摺疊的理由是第一屏高度與 Q3，與欄數無關）；僅「更新卡是 tile 或動作列」隨 Q1 而異 |
+| **8c** ⚡ 需要處理（D-1） | 現況：整塊容器（約 313px，含今日關鍵 tile、衝突提示、依據）；新做法：一行 bar（計數＋摘要）＋「▸ 查看清單」摺疊；「沒有來源不寫沒事」與三態判別不變 | A 照辦／B 維持整塊（第一屏多 ≈270px） | **A**：計數仍在第一屏回答「是否需要行動」，清單一點即開 |
+
+**會動到**：`_market_blocks.render_alerts_block`、`render_hero`／更新 form 組裝、圖 C 渲染；守衛：`chart_c_texts` 零數字、`ALERTS_NO_SOURCE` 三態、更新 form 單次 submit（細節見 §7）。
+**不裁示預設**：B（三項皆維持現況外露）——第一屏高度預算會超，Phase 4 該區塊不開工。
+
+### 6.2 其餘已依契約／既有 DEC 定案、本線框照辦（客戶可推翻；不另設題）
 
 | # | 事項 | 依據 |
 |---|---|---|
-| D-1 | ⚡ 需要處理：一行 bar（計數）＋清單入摺疊；「沒有來源不寫沒事」不變 | 契約 §17；DEC-109 十二 Top-N |
-| D-2 | 圖 C：Secondary 縮成一行 placeholder；`CHART_C_SAY`（客戶原句）、`CHART_C_BASIS` 入摺疊；零數值／零圖形不變 | DEC-115 D6=B；契約 §5 |
-| D-3 | 圖 D：「是否惡化：⬜ 尚未定義」寫一次成 header 護欄 chip，表去重複欄 | 契約 §8-7；DEC-105 |
+| D-2 | 圖 C：Secondary 縮成一行 placeholder，零數值／零圖形不變（客戶原句位置見 Q8a） | DEC-115 D6=B |
+| D-3 | 圖 D：「是否惡化：⬜ 尚未定義」寫一次成 header 護欄 chip，表去重複欄 | 契約 §8-7 |
 | D-4 | 位階 tile：「生效分支 warroom」「（總經契約）」、hover 出處入摺疊 | 契約 §11／§18 |
-| D-5 | 更新動作：主鍵外露；模式 radio＋188 字說明入 form 內 expander（`options_label`）；form／gate 語意不變 | 契約 §17；Phase 2 步驟 1／D8 驗證 |
 | D-6 | 圖 A chip：5 顆（兩護欄各自獨立＋資料日＋窗口＋可讀），來源入摺疊 | DEC-115 D10=(a) |
-| D-7 | 新元件一律走 `compact.py`（chip 三族、護欄實線粗框、迷你圖無數字）；紅只給 `failed` | DEC-115 D3／D5 |
-| D-8 | 11 個具名 L2 expander 原樣、原標籤、預設收合；`指標明細（16 項）`不改名 | 契約 R7；DEC-105 |
+| D-7 | 新元件走 `compact.py`（chip 三族、護欄實線粗框、迷你圖無數字）；紅只給 `failed` | DEC-115 D3／D5 |
+| D-8 | 11 個具名 L2 expander 原樣、原標籤、預設收合 | 契約 R7；DEC-105 |
+
+（原 D-1 ⚡、D-5 更新 radio 已升格為 Q8b／Q8c。）
 
 ---
 
@@ -457,13 +486,15 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | `src/ui/views/page_market.py` | **改**（頁首、區塊順序、Hero→3 tile＋動作列、L1 重組） | **還原鏈**：被 `tests/test_nav1_revert_chain.py`、`tests/test_uim_revert_chain.py` 以基底 sha 釘住；`test_xvext_revert_chain` 第一步呼叫 `uim_revert_for`。→ 須在鏈頭**再接一節**（比照 `test_uim_revert_chain`：基底＝Phase 4 開工前 main、pair 以 difflib 產生並驗「套用後逐字等於基底」），⛔ 動任何舊表／舊基底 sha。**FACT：掃描 `tests/**` 中形如 `'src/ui/views/<file>.py': '<sha256>'` 的表，`page_market.py` 只出現在上述兩條鏈（regex 粗掃，可能漏其他格式）。** |
 | `src/ui/views/_market_blocks.py` | **大改**（`render_hero`／`render_alerts_block`／`render_chart_a–d`／`risk_panel_rows`／`Basis` 映射／縮短行） | **FACT：無 sha 鏈**（同上掃描 0 命中）；但被 `test_market_blocks`（58 tests）、`test_page_market`（46）、`test_uim_market_page`（21）等 AST／字串守衛釘住（含 `st.columns(4)`、hero 文字、首屏無 %） |
 | `src/ui/views/_ui_kit.py` | 可能加 `render_fold`（薄封裝）／公開 `status_chip`（Phase 3 §17.1 預留） | **FACT：無 sha 鏈**；Phase 2 golden（`test_p2_step1_shared_optional_params`）釘 `render_card`／`single_submit_form` 輸出，只加不改即不影響；`page_today`／`page_hold` 共用，改前跑 `tests/test_p0*_*`、`ui_v2` |
-| `src/ui_v2/compact.py` | 可能微調（小倍數名稱上限 F-3；若 Q2 選 B 則新 kind） | `tests/ui_v2/test_compact.py`（golden sha；Phase 3 已有 mutation M1～M20） |
+| `src/ui_v2/compact.py` | **需新增**：(1)「今日主要風險」tile 變體——3 行風險項遠超 `TILE_FACE_MAX_CHARS=60`，**無法用 `kpi_tile_html`**（本檔預覽以自訂 `cp-tile` 容器近似）；(2) 小倍數名稱上限（F-3）；(3) 若 Q2 選 B 則新 kind。另：「尚未載入」時 coverage 不能用 `coverage` chip（其值須為 N／M 計數），只能用 `status_chip(idle)` | `tests/ui_v2/test_compact.py`（golden sha；Phase 3 已有 mutation M1～M20） |
 | `src/ui/views/page_today.py` | **⛔ 不動**（Plan §7；多鏈釘住） | — |
 | `app.py` | **不動**（掛載點 `_ia_view_market` 不變） | **`tests/test_batch_z60.py::TestOldFilesUntouched._BASE_DIGEST` 不需改**：FACT 指紋範圍＝`src/ui/{tabs,etf,pages,render}` ＋ `app.py`（91 檔），**不含** `src/ui/views/`、`src/ui_v2/`（讀測試內容＋本批實跑 z60 綠）。⚠️ 以上對本批當時 main 成立；若實作期改了 `app.py` 或上述四目錄，則須同步指紋 |
 | `src/services/*`、`src/compute/*`、`shared/*` | **不動**（零資料語意變更；`build_market_risks`、`build_verdict_tiles`、`build_key_alert_tile` 等照舊被呼叫） | `tests/test_c3_layering_guard.py`（L5 不得 import L1；本頁 ⛔ 零 `src.data.*`） |
 | `tests/*` | 改寫：`test_market_blocks`（T23／T25／hero／圖 D 欄）、`test_page_market`、`test_uim_market_page`、新鏈頭節測試；新增 Phase 4 mutation 與資訊守恆測試 | 按 Plan §3 T-表「等強替代」（資訊守恆，不降強度） |
 
 > **`z60 _BASE_DIGEST`、`_ui_kit.py`、還原鏈覆蓋＝以當時 main 重測**（Plan §17.1 指示）：本批重測結論如上（FACT：z60 範圍不含 views；`_ui_kit.py` 無 sha 表；`page_market.py` 有兩條鏈）。**不沿用 Phase 2 步驟 0 的舊結論**——Phase 2 §12.2 當時寫「`_ui_kit.py` 是否受鏈待判」，本批已判：不受 sha 鏈，但受 Phase 2 golden 與 p0x 測試的 AST／輸出守衛。
+
+**其他會被牽動的守衛（QA 補列；實作前逐一跑）**：`tests/test_views_no_unverified_universal_claims.py`（新文案含全稱關鍵詞須登記 REGISTRY）、`tests/test_views_no_unused_imports.py`、`tests/test_nav1_default_mode_text.py`（含 46 字上限）、`tests/test_nav1_app_routing.py`、`tests/test_p0x_view_mount_claims.py`、`tests/test_nav1_ia_nav4.py`、`tests/test_lamp_foreign_net_wiring.py`（掃 `page_market.py`）、`tests/ui_v2/test_compact.py` 與 `tests/test_p2_step1_shared_optional_params.py` 的 golden。
 
 ### 7.2 技術發現（需在實作前處理；皆內部自決）
 
@@ -477,6 +508,8 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | F-6 | 兩個「資料日」語意（逐指標 vs 加權指數最後一根）可能不同值 | 各自 chip／各自摺疊，⛔ 互相替代 |
 | F-7 | harness 的 cold 態 L3 仍被假資料取代 | 真冷啟動態需實機／真資料補驗；Gate 報告據實標 |
 | F-8 | 還原鏈頭節 pair 的錨點必須在最終檔上產生（實作完成後最後一步） | 比照 UI-M 作法 |
+| F-9 | （Q4 P-A 才需要）膠囊切換鈕須在 floor 1.56 通過五條硬約束：取消選取回退、form 內 `None`、44px 觸控、換行、options 型別（見 `PHASE3_D8_FLOOR156_VERIFICATION_2026-10-30.md`） | 不成立退回圓點單選，不請示（DEC-115 D8） |
+| F-10 | 六欄 Basis→四段映射（§3.5）牽動 `Basis`／欄標／`AI_NOT_INVOLVED`／`confidence／availability` 字面與 T25 測試；水位 tile 的「原有出手區間（含 `risk_cap.v2`）」須指定放哪一段（建議「為什麼」） | Q3 定案後內部拍板 |
 
 ### 7.3 mutation 預估（拔守衛必紅；沿用 Phase 3 M1～M20 手法，Phase 4 專屬）
 
@@ -496,7 +529,7 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | A4／A6 | tile ≤160 ✅（Q6=A）；Primary ≤220／140、mini ≤96 ✅ |
 | A7／A8 | 風險 Top-3、圖 D 5 桶 ✅；外露非客戶原句 >32 字＝指路句 A′ 後 0～1 段 |
 | A9／V9 | Missing 全為 chip／placeholder ✅；圖 D 重複 Missing 已去除 |
-| A10／Q11 | 桌機 ✅；手機結論句 +207 ✅，主 CTA 第一屏 ✅（動作列） |
+| A10／Q11 | 桌機 ✅；手機結論句（前移時）+207 ✅，主 CTA 第一屏 ✅（動作列） |
 | V10／V11 | 工程字樣外露 0（`Gate`、`C2b` 為客戶例外）；hover-only 0 |
 
 ---
