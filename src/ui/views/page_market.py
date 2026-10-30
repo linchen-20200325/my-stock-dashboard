@@ -647,6 +647,15 @@ def render_page_market() -> None:
     if _status.count("｜") != 1:
         raise ValueError(f"狀態列應恰含一個「｜」才能拆成更新時間／覆蓋率兩半，實得：{_status!r}")
     _time_text, _coverage_text = _status.split("｜")
+    # DEC-118 問題 2=D1（客戶 2026-10-30）＋總管判定 Z：報告含**真錯誤**（取不到／回空）時，整份既有報告（真錯誤 `st.error`
+    #   ＋預設收合的報告標題）改畫在今日結論正下方 —— 真錯誤外露、不擠出結論；CTA 與結論之間只剩收合標題列。
+    #   ⛔ 拆 `page_today._render_refresh_report`（禁改，DEC-081 Q1=C）、⛔ 複寫。讀不出（舊格式）⇒ 照原位置交給
+    #   `_render_report_guarded` 講出來並清掉（§1，不在這裡吞）。
+    try:
+        _report_errors_below = _report is not None and bool(_report.failures or _report.empties)
+    except Exception as _e:  # noqa: BLE001 — 只決定位置；真正的紅字由 `_render_report_guarded` 負責
+        print(f"[views/page_market] 判斷更新報告有無真錯誤時讀不出來：{_e!r} —— 報告留在原位，由原路徑講出來")
+        _report_errors_below = False
     # L1 決策區包在一個具名容器裡：窄螢幕只在這裡壓縮間距（`blocks.P4M_LAYOUT_CSS`；只排版、不藏內容）。
     blocks.render_layout_css()
     with st.container(key=blocks.P4M_L1_KEY):
@@ -661,7 +670,7 @@ def render_page_market() -> None:
             # 一頁（`app.py` 的 `_IA_PAGE` 分支＋`st.stop()`），兩頁不會出現在同一輪 script run。
             # 已套用模式與上一次的更新報告刻意共用 —— 按一次更新，兩頁看到的是同一份結果。
             blocks.render_update_cta(_session)
-        if _report is not None:
+        if _report is not None and not _report_errors_below:
             _render_report_guarded(_report)
 
         # ② 今日結論（逐字；只改位置）。
@@ -671,6 +680,8 @@ def render_page_market() -> None:
                                                 danger_text=danger_clause(_danger_tile)))
         except ValueError as _e:  # §1：字樣不合規 ⇒ 講出來，⛔ 不自己改寫
             st.error(f"結論句組不出來：{_e}", icon="❌")
+        if _report_errors_below:
+            _render_report_guarded(_report)   # D1：真錯誤緊接今日結論（外露，不收合）
 
         # ③ 3 個核心狀態 tile（位階 tile 的外露字＝結論句同一支 `regime_clause`）。
         blocks.render_core_tiles(
