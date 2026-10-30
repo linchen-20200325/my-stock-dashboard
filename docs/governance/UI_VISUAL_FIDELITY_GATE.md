@@ -117,3 +117,10 @@
 - 工具＝`tools/visual_fidelity/`（`harness_app.py`、`measure_app.js`、`measure_mock.js`、`mock_ink.js`、`count_eng_words.js`、`summarize.py`、`README.md`）。
 - ⛔ 工具不得被 `app.py`、`src/**`、`shared/**`、`tests/**` import；檔名不以 `test_` 開頭、不在 `tests/`（`pytest.ini` `testpaths = tests`，不收集）；harness 假資料只在本 process monkeypatch，不寫 repo／Sheet、不打外部 API。
 - 工具驗不到：手機實機（iOS／Android）、Streamlit Cloud、`requirements.txt` floor 實機行為、付費 AI 生成後狀態；Gate 報告照實寫「未驗」。
+
+## §8 例外流程使用紀錄（append-only）
+
+| 日期 | 事項 | 走的例外列 | 證據／狀態 |
+|---|---|---|---|
+| 2026-10-30 | 站殼間距 D7=B（nav4 上留白 96→72px＋隱藏 style-only 空容器；四頁第一屏統一上移） | §5「版面設計變更」列：整體 layout 變更 → 送客戶（附推薦方案 R）→ **客戶裁示 D7=B（DEC-116）**；核准後施工 | 四頁×1440／390×cold／loaded 前後截圖 `docs/vnext/phase3_shell/`；量測＝`PHASE3_SHELL_SPACING_MEASUREMENT_2026-10-30.md` §8。**Gate 判定：待獨立 QA（執行組不自判）**；未驗：1.56～1.58、真資料載入態、實機／Cloud |
+

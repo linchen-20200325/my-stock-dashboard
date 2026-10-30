@@ -4619,3 +4619,24 @@ Stage 完成回報保持極簡：
 - **與其他 DEC 的關係**：承 DEC-109（客戶 Phase 1～7、blueprint＝Visual SSOT）、DEC-110（R15、契約 §4／§6／§8／§19 內部規格——被本裁示調整的三處見上）、DEC-113／114；呼叫 DEC-082（版面草稿先行：本裁示即該線框的核准）、DEC-106（Model×Effort 不重複要求切換）；不降低任何 Security／Investment／Data／CI／Audit Gate；Missing Contract（DEC-109 八）、逐字護欄句（DEC-092 Q2）、`UI_STATE_META` 十態、`BADGES` 封閉 11 種皆不變。
 - **落點**：`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md`（§4、§6、§8、§11、§14、§19、§22 就地加註）；`docs/vnext/PHASE3_SHARED_COMPONENTS_WIREFRAME_2026-10-30.md`（狀態改已核准、§6「裁示結果」）；`docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md` §16（核准範圍與施工拆分）；`docs/HANDOFF.md`、`docs/PROJECT_STATE.md` §48、`docs/BACKLOG.md`。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本 DEC 由撰寫組依總管轉交之要點落盤，**未經第二組獨立驗證**；「三處改變契約字面、其餘未改」為撰寫組單組判讀（已 grep 契約與線框文件相關詞，但全稱句屬待驗事項）；D8 的 1.56 實跑**尚未做**，不得當作已驗。
+
+### DEC-116｜Phase 3 站殼間距（原 D7）客戶裁示：D7=B 最小改動，七條限制；施工結果（客戶 2026-10-30）
+
+> 2026-10-30 補登（取下一個未用號；落盤前 `grep -c "DEC-116" docs/DECISIONS.md` ＝ 0，DEC-115 為上一號）。**來源類別：客戶裁示（經 AI 總管轉交的要點，撰寫／施工組照錄；非客戶訊息全文逐字）**。承 **DEC-115**「站殼間距：先內部實測，若屬整體 layout 變更再送客戶裁示；本 DEC 不核准任何站殼改動」——本條即該客戶裁示。
+
+- **決策者**：客戶（2026-10-30）；AI 總管依 DEC-115 判定屬整體 layout 變更後，附推薦方案 R 送客戶。｜**範圍**：UI／呈現（站殼：新版四頁模式上留白）。｜**狀態**：**生效**（施工與實測結果見下；Streamlit 僅量 1.59.2）。
+- **裁示（客戶要點）**：**D7＝B 最小改動**。以下七條為限制，違反任一條＝退回方案 C（維持現況、不改 `src/`），不需請示：
+  1. 只作用於新版四頁（nav4）模式；`?legacy=1` 逐 byte 不得受影響（只能改 `src/ui/views/shell_nav4.py::_CSS_TEMPLATE`；不得動 `app.py`、不得動 z60 指紋範圍內任何檔）。
+  2. 上留白縮到約 72px，且只隱藏「確定只含 `<style>`／無內容」的空 element-container（Measurement 報告 §4 方案 R 的兩條規則）。
+  3. `:has()` 或 Streamlit 內部 selector 失效時必須安全退回現況、不得破版；須有測試守這點（不得有任何「靠 CSS 才顯示」的規則）。
+  4. 完成後四頁（📊 市場、🎯 標的、💼 持股、👤 我的）都要驗：desktop 1440×900、mobile 390×844、cold start、loaded state（能造什麼造什麼，造不出須據實寫「未實測」與原因）、並做 Visual Fidelity Gate（`docs/governance/UI_VISUAL_FIDELITY_GATE.md` §5 例外流程：前後截圖）。
+  5. 若 selector 誤藏內容、造成 layout jump、影響 legacy，或必須擴大成全站高風險 CSS → 退回方案 C，並如實寫報告，不需請示。
+  6. 不得提高 Streamlit 最低版本（`requirements.txt` 不動）。
+  7. 不得提前做 Phase 4 任何事。
+- **兩邊理由並陳**：
+  - **方案 C（不做）／方案 A（只改 padding −24px）**：理由仍成立——零風險／風險最低，且不依賴 Streamlit 內部 `data-testid` 與 `:has()`。
+  - **方案 B（R）勝出**：客戶明示「空白太多／資訊密度不對」（DEC-108 經轉交）；R 不增減任何可見元件、僅 nav4 注入、`:has()` 失效時規則不命中而回到現況（良性降級）。**代價（據實）**：新增對 Streamlit 內部 `stMainBlockContainer`／`stVerticalBlock`／`stElementContainer`／`stMarkdownContainer` 的依賴；四頁第一屏所有內容統一上移（見施工結果）。
+- **施工結果（2026-10-30，執行組實測；細節見 `docs/vnext/PHASE3_SHELL_SPACING_MEASUREMENT_2026-10-30.md` §8）**：未觸發退回 C。改動＝`src/ui/views/shell_nav4.py::_CSS_TEMPLATE` 加兩條無 media 規則（`padding-top:72px !important`、隱藏 style-only 容器）＋`tests/test_nav1_shell_nav4.py::TestCss` 守衛調整（放寬只到「style-only 容器那一條」，另加 mutation 守衛）；`app.py`、z60 指紋範圍、`requirements.txt`、`src/ui_v2/tokens.py`／`page_css()` 0 diff。實測：四頁第一個 H2／第一個可見內容 y 一律 **135.19**（原 223.19／207.19）；`?legacy=1` 全部量測值前後相同、DOM 不含新規則；規則剝除後回到原值。僅量 Streamlit 1.59.2，**1.56～1.58 未驗**；單組執行與自驗，待獨立 QA。
+- **與其他 DEC 的關係**：承 DEC-115（站殼間距條）、DEC-108／109（空白太多、Phase 1～7）；呼叫 DEC-082（版面草稿先行：客戶裁示即核准）；不降低任何 Security／Investment／Data／CI／Audit Gate；不動 DEC-115 的 D1a～D10 任何一條；Phase 4 仍須先出 📊 市場頁文字線框（W2、W3、W9）送客戶拍板，拍板前不得寫 Phase 4 UI code。
+- **落點**：`docs/vnext/PHASE3_SHELL_SPACING_MEASUREMENT_2026-10-30.md`（§8）、`docs/vnext/PRESENTATION_MIGRATION_PLAN_2026-10-29.md`（§17.2／§17.6／§18）、`docs/governance/UI_VISUAL_FIDELITY_GATE.md`（§5 例外流程紀錄）、`docs/HANDOFF.md`、`docs/PROJECT_STATE.md`、`docs/BACKLOG.md`。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本 DEC 的「客戶裁示」欄由執行組依總管轉交要點落盤；「施工結果」為單組實測自述，**未經獨立 QA 複驗**，不得當前提。

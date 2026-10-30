@@ -1,7 +1,7 @@
 # Phase 3 步驟 3：站殼間距內部量測報告（只量測，不改）
 
 - **日期**：2026-10-30　**依據**：Migration Plan §16.2 步驟 3、線框 §3.11、`docs/DECISIONS.md` DEC-115（站殼：先內部實測；~~局部變更內部自決，整體 layout 變更才送客戶並附推薦方案~~ → 📌 2026-10-30 QA 輪更正（有意識的更正，不是漏刪）：**DEC-115 本文（`docs/DECISIONS.md` 站殼間距條）只寫「先內部實測…若屬整體 layout 變更再送客戶裁示；本 DEC 不核准任何站殼改動」**；「局部變更內部自決」**不是 DEC-115 原文**，僅見於 Migration Plan §16.2 的轉述，本檔初版把轉述當成 DEC 原文引用，特此更正）
-- **範圍**：`src/`、`tests/`、`app.py` **0 diff**。唯一新增＝本檔＋`tools/phase3_measure/*.js`（量測腳本，不被 app／test import）。
+- **範圍**：~~`src/`、`tests/`、`app.py` **0 diff**。~~ 📌 2026-10-30 **客戶已裁示 D7=B 並施工**（有意識的更新，不是漏刪；決策者 客戶〔DEC-116〕＋執行組〔事實更新〕）：本檔 §1～§7 為施工前量測，**0 diff 僅描述當時**；施工後 `src/ui/views/shell_nav4.py`、`tests/test_nav1_shell_nav4.py` 有改動，見 **§8**。唯一新增＝本檔＋`tools/phase3_measure/*.js`（量測腳本，不被 app／test import）。
 - ⚠️ **揭露（`CLAUDE.md` §-2 規則 6）**：本檔初版為單組量測與判定；📌 2026-10-30 QA 輪：像素值已有**兩組 QA 獨立重現**（見 §7，含候選 R 實跑 135.19），「局部／整體」判定**已被 AI 總管改判**（見 §5）；影響面推論（z60、受鏈、`:has()` 支援度）仍屬待驗事項，不得當前提。
 
 ## 1. 量測方法與限制
@@ -139,3 +139,68 @@ legacy 與 nav4 的站標列 y（128）、padding-top（96）、元素 1～3 完
 - 兩組 QA 各自以 `tools/phase3_measure/*.js` 對 Streamlit 實跑，重現 §2 的實測值：V0 H2 y＝223.2（1440／390 皆同）、拆解算式 96＋16×2＋31.2＋16×4＝223.2、V1／V2／V3／V4 的差值與本檔 §2.3 吻合。
 - **候選 R（padding-top 72＋隱藏 style-only 容器）QA 實跑 H2 y＝135.19**（本檔初版的 ≈135.2 為加成推算、未單獨實跑；此為首次實跑值，與推算差 0.01px，在量測誤差內）。H2 以下第一屏剩餘約 85%。
 - 限制不變：Streamlit 1.59.2 實跑；1.56～1.58 未量；冷啟動狀態；沙箱單一 CJK 字型；Safari／Firefox／實機未驗。
+
+## 8. 客戶裁示與施工結果（2026-10-30；append-only，§1～§7 一字未動）
+
+> ⚠️ **揭露（`CLAUDE.md` §-2 規則 6）**：本節為**執行組單組實測與自述**，未經獨立 QA 複驗；數值為執行組親自跑的結果（指令附於下），推論另標。
+
+### 8.1 客戶裁示（DEC-116）
+
+客戶 2026-10-30 裁示 **D7＝B 最小改動**（方案 R），並附七條限制（只作用 nav4、legacy 逐 byte 不受影響、上留白約 72px 且只隱藏 style-only 容器、失效須安全退回現況並有測試守、四頁×兩視窗×冷／載入後＋前後截圖 Gate、任何誤藏／layout jump／影響 legacy／擴大成全站 CSS 即退回 C、不升 Streamlit floor、不做 Phase 4）。全文見 `docs/DECISIONS.md` DEC-116。**§5 的「待客戶裁示」狀態因此結案；本節為結果。**
+
+### 8.2 改動（FACT：`git diff --stat`）
+
+| 檔 | 改動 |
+|---|---|
+| `src/ui/views/shell_nav4.py` | `_CSS_TEMPLATE` +6 行：①`[data-testid="stMainBlockContainer"]{padding-top:72px !important;}` ②`[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:only-child){display:none !important;}`；皆**無 media**（桌機＋手機）；無新增色碼 |
+| `tests/test_nav1_shell_nav4.py` | `TestCss::test_failure_degradation_is_benign` 放寬（見 8.5）＋新增 3 個守衛 |
+| `app.py`、`src/ui/{tabs,etf,pages,render}/**`（z60 指紋範圍）、`requirements.txt`、`src/ui_v2/**` | 0 diff |
+
+### 8.3 實測（FACT；Streamlit **1.59.2**，Playwright＋chromium-1243，沙箱無 secrets／外網，單一 CJK 字型）
+
+腳本：`tools/phase3_measure/measure_shell_fix.js`（四頁×兩視窗，每頁全新 browser context；`TAG=before|after LOAD=1`）、`measure_jump.js`（rAF 取樣 layout jump）。截圖：`docs/vnext/phase3_shell/{page}_{viewport}_{before|after}_{cold|loaded}.png`（另 `legacy_*`）。before＝`git checkout` 還原 `shell_nav4.py` 後實跑；量完已還原到提交狀態。
+
+**第一個 H2 y（px；第一個可見內容 y 與之同值，「我的」無 H2 故看第一個可見內容）**
+
+| 頁 | 1440×900 前→後 | 390×844 前→後 | 差 |
+|---|---|---|---|
+| 📊 市場 | 223.19→135.19 | 223.19→135.19 | −88 |
+| 🎯 標的 | 223.19→135.19 | 223.19→135.19 | −88 |
+| 💼 持股 | 207.19→135.19 | 207.19→135.19 | −72 |
+| 👤 我的（第一可見內容） | 207.19→135.19 | 207.19→135.19 | −72 |
+
+- `stMainBlockContainer` padding-top：96px→72px（四頁、兩視窗皆然）。站標 span top：132→76。
+- **持股／我的只少 72（非 88）**：INFERENCE——這兩頁改前即比市場／標的少一個 16px 的零高度容器（改前 H2 207.19），故可收的 gap 少一個；未另行驗證其成因。
+- **loaded state**（FACT）：市場＝點「🚀 更新今日戰情」、標的＝「🔍 載入完整分析」、持股＝「⚡ 生成 AI 總結」，各等 9 秒後量；**沙箱無 secrets／外網，點擊後頁面呈現的是「尚未載入／缺漏」類誠實狀態而非真資料**，故「loaded」＝**按鈕已觸發後的頁面**，**不是真實資料載入完成態**；真資料載入態**未實測**（無資料源）。👤 我的頁無載入按鈕：**未造出 loaded**。四頁 loaded 的 H2／第一內容 y 與 cold 相同（135.19）。
+- **誤藏內容檢查**（FACT）：改後 nav4 各頁各視窗，頂層子節點中 `display:none` 者 3～4 個，**其可見文字（排除 style／script）皆為空**（`hiddenWithText=[]`）；改前為 0 個。
+- **`?legacy=1`**（FACT）：兩視窗，整份探針（站標 top 132、padding-top 96px、第一可見內容 175.19、`st.tabs` 頂 359.19／435.97、側欄背景、頂層隱藏數 1…）**前後完全相同**；legacy 頁面 DOM 不含 `padding-top:72px`／`style:only-child`（`innerHTML` 檢查，nav4 則含）。截圖：1440 前後 **md5 相同**；390 前後 19 個像素差 1/255（抗鋸齒；DOM 量測全同），視覺無差。
+- **`<style>` 容器被隱藏後樣式仍生效**（FACT）：側欄背景 `rgb(22,27,34)`、字色 `rgb(230,237,243)`；手機底部固定列 position/display/背景/字色/邊框/rect（390×844：top 791，h 53，w 390）**前後逐項相同**；`scrollWidth`＝視窗寬（無橫向溢出）。
+- **layout jump**（FACT，`measure_jump.js`，每視窗 3 次、rAF 取樣）：前＝`[-|-]→[-|352]→[132|223]`（或 `[132|-]→…`）；後＝`[-|-]→[-|352]→[76|135]`。**中間那一步（初始骨架 H2＝352）改前就存在**；改後**沒有新增的中間位移**，終值一次到位。⚠️ rAF 取樣無法排除 <1 frame 的瞬間；未量更細。
+- **`:has()`／selector 失效退路**（FACT，`STRIP_RULES=1`：載入後把兩條規則從 DOM 的 `<style>` 文字剔除以模擬失效）：四頁×兩視窗**回到 padding-top 96px、站標 132、H2 223.19／207.19、被隱藏頂層節點 0 個**——**與改前逐值相同，無破版**。（⚠️ 這是模擬：以 JS 刪規則文字，**不等於**真的在不支援 `:has()` 的瀏覽器跑；Safari 15.4 以前／Firefox 120 以前**未驗**。）
+
+### 8.4 Mutation（FACT，實跑；每次只改 `shell_nav4.py` 一處，跑 `TestCss`，之後還原）
+
+| # | 改壞方式 | 結果 |
+|---|---|---|
+| M1 | 拔掉 padding-top 規則 | 紅：`test_shell_spacing_padding_top_rule_exists_and_clears_the_header` |
+| M2 | padding-top 72→40（低於 stHeader 60） | 紅：同上 |
+| M3 | 隱藏規則去掉 `stMainBlockContainer > stVerticalBlock >` scope | 紅：`test_shell_spacing_hide_rule_is_scoped_under_main_block_and_style_only` |
+| M4 | 隱藏規則去掉 `> style:only-child`（會藏有內容的容器） | 紅：`test_failure_degradation_is_benign` |
+| M5 | 整條隱藏規則拔掉 | 紅：scoped／style-only 守衛 |
+| M6 | 新增無 media 的 `.st-key-nav4_bottom{display:none}`（藏導覽本體） | 紅：`test_failure_degradation_is_benign` |
+| M7 | 新增無 media 的 `display:block`（靠 CSS 才顯示） | 紅：`test_no_rule_depends_on_css_to_show_content` |
+| M8 | scope 前綴換成 `body ` | 紅：scoped 守衛 |
+
+還原後 `tests/test_nav1_shell_nav4.py` 42 passed。（M8 與 M3 同守衛；M5 與「少一條」同屬守衛數量斷言。）
+
+### 8.5 測試守衛的放寬範圍（理由）
+
+原斷言「無 media 的 `display:none` 一律不准」會對第二條規則紅燈。放寬**只到**：無 media 的 `display:none` **恰一條**，其選擇器必須含 `stElementContainer`＋`:has(`＋`style:only-child`，且不得含 `nav4`／`radio`／`stSidebar`；導覽本體仍不得被藏。窄螢幕內的 `display:none` 仍只允許 `first-child`（隱藏 radio 圓點）。另新增：padding-top 規則恰一條且 ≥ 60px 且 `!important`；隱藏規則必須以 `stMainBlockContainer` 開頭 scope；無 media 的 `display:` 規則只允許那一條 `none`（不得有「靠 CSS 才顯示」）。
+
+### 8.6 限制與未驗（據實）
+
+- **僅量 Streamlit 1.59.2；1.56～1.58 未驗**（`requirements.txt` floor 1.56 不動、未動）。依賴 Streamlit 非公開 `data-testid`（`stElementContainer`／`stMarkdownContainer`／`stVerticalBlock` 為新增依賴）。
+- 沙箱字型單一；Safari／Firefox／iOS／Android 實機、Streamlit Cloud 未驗；真資料載入態未驗（見 8.3）；列印版面未驗；側欄展開／收合全組合未驗；站標下出現 `st.warning`／橫幅時未驗。
+- 「第一屏可用空間」未另行重算比例（H2 y 由 223→135；以屏高 900／844 換算屬推算，非量測）。
+- **Visual Fidelity Gate**：本檔提供前後截圖（`docs/vnext/phase3_shell/`）與量測；**Gate 判定須由獨立 QA 做**（`UI_VISUAL_FIDELITY_GATE.md` §4），執行組不自判通過。
+

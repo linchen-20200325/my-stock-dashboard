@@ -514,7 +514,7 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 
 - 量測報告：`docs/vnext/PHASE3_SHELL_SPACING_MEASUREMENT_2026-10-30.md`（0 行 `src`／`tests`／`app.py`；腳本 `tools/phase3_measure/`）。實測 H2 y＝223.2（1440／390 同）；拆解＝padding-top 96＋零高度 `<style>` 容器 flex gap 64＋站標列 31.2＋其餘；最小方案 R（nav4 專屬注入 `padding-top:72px`＋隱藏 style-only 容器）H2 ≈135.2（QA 獨立重現實跑 135.19），`?legacy=1` 因只從 nav4 注入而不變。
 - **判定**：~~局部變更、內部自決~~（初版單組判斷；📌 有意識的更正，不是漏刪）→ **AI 總管判定屬整體 layout 變更**（全站每頁第一屏統一上移 88px），依 DEC-115 **送客戶裁示並附推薦方案**。DEC-115 本文只寫「若屬整體 layout 變更再送客戶；本 DEC 不核准任何站殼改動」，「局部內部自決」僅見於本 Plan §16.2 轉述。
-- **狀態：待客戶裁示（D7）**；裁示前 `app.py`、`src/ui/views/shell_nav4.py` 0 行改動。`docs/DECISIONS.md` **不新增 DEC**（裁示尚未發生，裁示後才登）。
+- ~~**狀態：待客戶裁示（D7）**；裁示前 `app.py`、`src/ui/views/shell_nav4.py` 0 行改動。`docs/DECISIONS.md` **不新增 DEC**（裁示尚未發生，裁示後才登）。~~ 📌 2026-10-30 **客戶已裁示 D7=B 並施工完成**（有意識的更新，不是漏刪；決策者 客戶〔DEC-116〕＋執行組〔事實更新〕）：見 §18 與 DEC-116；舊句描述的是裁示前狀態，理由（裁示前不動 src）在當時成立。
 
 ### 17.3 步驟 4（D8 切換鈕 floor 1.56 實跑）：結論
 
@@ -547,4 +547,23 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 
 ### 17.6 Phase 3 完成條件
 
-步驟 1～5 **已處理**（步驟 2＝判定不需要並登 BACKLOG；步驟 3＝量測完成、判定整體 layout 變更；步驟 4＝D8=B 成立；步驟 5＝預覽與元件層自評完成）。**唯一未結＝站殼間距客戶裁示（D7）**。BACKLOG 殘留已登記、HANDOFF／PROJECT_STATE 已同步。**下一步＝Phase 4 步驟 0**：以當時 main 重測、並出 📊 市場頁文字線框（W2、W3、W9）送客戶拍板（寫 UI code 前）。
+步驟 1～5 **已處理**（步驟 2＝判定不需要並登 BACKLOG；步驟 3＝量測完成、判定整體 layout 變更；步驟 4＝D8=B 成立；步驟 5＝預覽與元件層自評完成）。~~**唯一未結＝站殼間距客戶裁示（D7）**。~~ 📌 2026-10-30 **站殼間距已結**（D7=B 已施工，§18；有意識的更新，不是漏刪）。BACKLOG 殘留已登記、HANDOFF／PROJECT_STATE 已同步。**下一步＝Phase 4 步驟 0**：以當時 main 重測、並出 📊 市場頁文字線框（W2、W3、W9）送客戶拍板（寫 UI code 前）。
+
+## §18 Phase 3 站殼間距（D7=B）施工結果與 Phase 3 結案條件（2026-10-30；append-only）
+
+> 客戶裁示＝`docs/DECISIONS.md` DEC-116（D7=B 最小改動＋七條限制）；量測／mutation／前後數值＝`docs/vnext/PHASE3_SHELL_SPACING_MEASUREMENT_2026-10-30.md` §8；截圖＝`docs/vnext/phase3_shell/`。⚠️ 執行組單組實測，**未經獨立 QA 複驗**（`CLAUDE.md` §-2 規則 6）。
+
+### 18.1 結果
+
+- **未觸發退回方案 C。** 改動＝`src/ui/views/shell_nav4.py::_CSS_TEMPLATE` +2 條無 media 規則（`padding-top:72px !important`；隱藏 style-only 的 `stElementContainer`，scope 於 `stMainBlockContainer > stVerticalBlock`）＋`tests/test_nav1_shell_nav4.py::TestCss` 守衛調整（放寬只到那一條；另加 3 個守衛，8 個 mutation 全紅）。`app.py`、z60 指紋範圍、`requirements.txt`、`page_css()` 0 diff。
+- 四頁（📊🎯💼👤）× 1440×900／390×844：第一個 H2（我的＝第一可見內容）y 一律 **135.19**（原 223.19／207.19；市場、標的 −88，持股、我的 −72）；`?legacy=1` 量測全同、DOM 不含新規則；規則剝除（模擬 `:has()` 失效）回到原值、無破版；無新增 layout jump；側欄與手機底部列樣式前後逐項相同。
+- **限制**：僅量 Streamlit 1.59.2（1.56～1.58 未驗）；真資料載入態未驗（無資料源，loaded＝按鈕觸發後的誠實缺漏態）；實機／Cloud／Safari／Firefox 未驗；Visual Fidelity Gate 判定待獨立 QA。
+
+### 18.2 Phase 3 結案條件（現況）
+
+步驟 1～5 已處理；站殼間距（D7）已施工。**Phase 3 結案前尚需**：(1) 獨立 QA ≥2 組複驗本節與 §8（不得由執行組自驗）；(2) PR CI（Fast checks／Slow tests）以 `gh api` 實查為綠；(3) 客戶實機點驗（手機／Streamlit Cloud）仍待。其餘不變。
+
+### 18.3 下一個唯一安全接手點
+
+**Phase 4 步驟 0**：以當時 main 重測、出 **📊 市場頁文字線框**（W2、W3、W9）送客戶拍板；**客戶拍板前不得寫 Phase 4 UI code**。本節施工**未**提前做 Phase 4 任何事。
+
