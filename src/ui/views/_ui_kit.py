@@ -402,7 +402,8 @@ def single_submit_form(form_key: str, *,
                        option_labels: dict,
                        widget_key: str,
                        applied_key: str,
-                       options_label: str | None = None) -> bool:
+                       options_label: str | None = None,
+                       options_note: str | None = None) -> bool:
     """本 kit 唯一的表單入口：**一個 form、一組 radio、一顆 submit**。
 
     Args:
@@ -421,6 +422,11 @@ def single_submit_form(form_key: str, *,
             已用 AppTest 於目前 requirements 的 streamlit 實證：form 內 expander 可用、
             收合時 radio 的值仍隨 submit 送出。空字串／非 str ⇒ `ValueError`
             （⛔ 不渲染無標題的 expander）。
+        options_note: （Phase 4 P4-1 新增，DEC-117 Q8b「更新模式 radio＋長說明移到『更新選項』」；只加不改。）
+            `None`（預設）⇒ 行為與加參數前**逐呼叫相同**。非 None ⇒ 在 `options_label` 那個 expander 內、
+            radio 之下多畫一行 `st.caption(options_note)`（說明文跟著 radio 一起收合）。
+            必須同時給 `options_label`（沒有 expander 就沒有地方收；⛔ 靜默畫到 expander 外）；
+            空字串／非 str ⇒ `ValueError`。
 
     Returns:
         這一次 rerun 是否由 submit 觸發。
@@ -441,6 +447,11 @@ def single_submit_form(form_key: str, *,
         raise ValueError(
             f"single_submit_form({form_key!r}) 的 options_label 必須是非空 str 或 None，"
             f"實得 {options_label!r}")
+    if options_note is not None and (
+            options_label is None or not isinstance(options_note, str) or not options_note.strip()):
+        raise ValueError(
+            f"single_submit_form({form_key!r}) 的 options_note 必須是非空 str，且須同時給 options_label，"
+            f"實得 options_note={options_note!r}、options_label={options_label!r}")
     with st.form(form_key):
         if options_label is None:
             st.radio(radio_label, options=list(options),
@@ -451,6 +462,8 @@ def single_submit_form(form_key: str, *,
                 st.radio(radio_label, options=list(options),
                          format_func=lambda _k: option_labels[_k],
                          key=widget_key, horizontal=True)
+                if options_note is not None:
+                    st.caption(options_note)
         _submitted = st.form_submit_button(submit_label, type="primary")
     if _submitted:
         # 唯一的寫入點：widget 當下值 → 已套用值。
