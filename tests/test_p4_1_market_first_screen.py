@@ -172,14 +172,45 @@ class TestC1Order:
                 assert len(_exps) == 1 and "上一次更新的結果" in _exps[0]
                 assert dict(_expanded_flags(_at.main))[_exps[0]] is False
 
-    def test_c1_9_true_errors_of_a_failed_report_stay_outside_the_fold(self, tmp_path):
-        """⚠️ C1-9 的已知例外（待總管判定，見 PR_NOTES）：更新報告的**真錯誤**依 2026-09-24 客戶裁示留在收合區外，
-        所以有失敗時 CTA 與結論之間會出現 `st.error`。本測試把這個現況釘住（只允許報告自己的 error，⛔ 其他元素）。"""
-        _at = _run(tmp_path, {**_LOADED, P.SS_REFRESH_REPORT: _report(failed=True)})
+    @pytest.mark.parametrize("session", (_LOADED, None), ids=("loaded", "cold"))
+    def test_c1_9_strict_nothing_exposed_between_cta_and_conclusion_in_any_state(self, tmp_path, session):
+        """C1-9 嚴格化（DEC-118 D1）：無報告／乾淨報告／**有真錯誤的報告**三態，更新鈕與今日結論標題之間都**沒有任何外露元素**；
+        有真錯誤時那一段連報告標題都沒有（整份報告移到結論正下方，總管判定 Z）。"""
+        for _name, _rep in (("none", None), ("clean", _report()), ("failed", _report(failed=True))):
+            _sess = dict(session or {})
+            if _rep is not None:
+                _sess[P.SS_REFRESH_REPORT] = _rep
+            _at = _run(tmp_path, _sess, name=f"_c19s_{_name}.py")
+            _evs = list(_events(_at.main))
+            _idx = _anchor_index(_evs)
+            _between = _evs[_idx["更新鈕"] + 1: _idx["結論標題"]]
+            assert not [e for e in _between if e[2] is None and e[0] != "Expander"], (_name, _between)
+            _exps = [e[1] for e in _between if e[0] == "Expander" and e[2] is None]
+            assert len(_exps) == (1 if _name == "clean" else 0), (_name, _exps)
+            assert all("上一次更新的結果" in x and dict(_expanded_flags(_at.main))[x] is False for x in _exps)
+
+    @pytest.mark.parametrize("session", (_LOADED, None), ids=("loaded", "cold"))
+    def test_d1_partial_true_errors_are_exposed_directly_below_the_conclusion(self, tmp_path, session):
+        """DEC-118 問題 2=D1：更新部分失敗 ⇒ 報告的真錯誤外露（不在 expander 內）、**緊接今日結論句**；
+        其後是同一份報告的收合標題，再其後**緊接** 3 tile（中間無其他 L2／L3）；⚡ 仍緊接 tile。"""
+        _at = _run(tmp_path, {**(session or {}), P.SS_REFRESH_REPORT: _report(failed=True)})
+        assert not _at.exception, _at.exception
         _evs = list(_events(_at.main))
         _idx = _anchor_index(_evs)
-        _between = [_e for _e in _evs[_idx["更新鈕"] + 1: _idx["結論標題"]] if _e[2] is None and _e[0] != "Expander"]
-        assert _between and all(_k == "Error" and "這一輪有取不到的來源" in _t for _k, _t, _, _ in _between)
+        assert sorted(_idx, key=_idx.get) == _ORDER
+        _first = _evs[_idx["結論句"] + 1]
+        assert _first[0] == "Error" and _first[2] is None and "這一輪有取不到的來源" in _first[1]
+        _gap = _evs[_idx["結論句"] + 1: _idx["tile位階"]]
+        _top_level = [e for e in _gap if e[2] is None]
+        assert all((e[0] == "Error") or (e[0] == "Expander" and "上一次更新的結果" in e[1]) for e in _top_level), _top_level
+        assert [e[1] for e in _top_level if e[0] == "Expander"] and dict(_expanded_flags(_at.main))[
+            next(e[1] for e in _top_level if e[0] == "Expander")] is False
+        # 結論句與第一張 tile 之間只有「這份報告」：外露真錯誤、報告標題、報告標題內（含巢狀）的內容 —— 沒有別的東西
+        _report_exps = {e[1] for e in _gap if e[0] == "Expander"}
+        assert all(e[2] is None or e[2] in _report_exps for e in _gap), [e for e in _gap if e[2] not in _report_exps]
+        assert _report_exps <= {e[1] for e in _gap if e[0] == "Expander" and ("上一次更新的結果" in e[1] or e[2])}
+        _last_tile = max(i for i, e in enumerate(_evs) if B.P4M_CORE_TILES_KEY in e[3])
+        assert _idx["⚡bar"] == _last_tile + 1
 
 
 class TestC1Structure:
