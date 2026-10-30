@@ -581,6 +581,39 @@ y≈223 │ 頁面 H2                               y≈170  │ 頁面 H2   （
 
 ---
 
+### 3.12 實作註記（append-only；2026-10-30 步驟 1 實作＋兩組獨立 QA 後追加，不改上方任何既有句）
+
+> 📌 本小節只**追加**。上方 §3.1～§3.11 的文字、API 草案與 ※示意 一字未動；若與本註記有出入，**以本註記（實作現況）為準**，出入處即為下列「實作新增」或「QA 修正」。實作在 `src/ui_v2/compact.py`（無 caller、不掛頁）。
+
+**A. 實作新增的 API（API 草案沒有、實作為落地客戶裁示而加）**
+
+| API | 為什麼加 |
+|---|---|
+| `guard_chip(sentence)`／`Chip.kind="guard_text"` | 逐字客戶護欄句（例 `CHART_A_MA_DISCLAIMER`）要作獨立護欄 chip（D10=(a)），但它不屬契約 §6 表的任何 kind；`guard_text` 與 `status` 是僅有的兩個非 `META_KINDS` 的 kind，`meta_chip` 不接受 |
+| `chart_header_html(..., say_verbatim=, title_verbatim=)` | 客戶原句豁免 ≤32 字；標題 ≤40 字、客戶逐字標題豁免 |
+| `chart_slot_missing_html(ui_state, reason, *, height_px, variant="primary"｜"secondary", n, m)` | D6=B：Primary 保留高度、Secondary 縮一行；`partial` 需 N／M |
+| `kpi_tile_html(..., state_badge_n=, group_window_text=, say_verbatim=)` | 狀態徽章位、組級窗口（有 sparkline 時窗口可見性）、客戶原句 |
+| `sparkline_svg(..., missing_state=, missing_text=)` | 缺值參數必填；元件不自判「未載入」或「無資料」 |
+| `SmCell`、`small_multiples_html(cells, cols_desktop=, cols_mobile=)` | 小倍數資料格；格內不放資料日 |
+| `TopN`（`shown`／`hidden`／`total`／`more_text`／`all_label`／`empty`）、`topn_view` | 純顯示切片 |
+| `SegmentSpec`、`segment_options` | D8：只產生選項資料，不碰 streamlit |
+| `meta_chip(kind, value, verbatim=)`、`status_chip(ui_state, n=, m=)` | 同 §3.1 草案；`fx_partial` 可另傳 value＝檔數 |
+| `CHIP_VALUE_MAX_CHARS`、`CHIPS_MAX`、`SAY_MAX_CHARS`、`TITLE_MAX_CHARS`、`SLOT_HEIGHT_MIN_PX`／`SLOT_HEIGHT_MAX_PX`、`TILE_*`、`SPARK_HEIGHT_MAX_PX`、`SM_NAME_MAX_CHARS` | 契約 §19 上限常數化 |
+| `tokens.COMPACT_GEOMETRY` | §3.10 幾何 token，**不**併進 DARK／LIGHT，`page_css` 輸出 byte-identical |
+
+**B. QA 後的修正（行為比上方草案更嚴；內部拍板，方向皆為更保守）**
+
+1. **主值留白（M1／F6）**：`value=None` 時 chips 必須含一顆說明原因的「非 live 狀態族／護欄族／stale 類」chip（窗口、資訊、`readable`、🟢 運作中都不算），否則 `ValueError`。
+2. **Missing 原因文字不得被裁（M2／F5）**：sparkline／小倍數的 Missing placeholder 不設 `overflow:hidden`，高度只給 `min-height`、寬度 `width:100%`＋`max-width`，文字自動換行。
+3. **`Chip` 直接建構即驗證（F2／L1）**：固定文字 kind 的 text＝模板；status 的 text 必須由 `UI_STATE_META` 推導且 tone 相符；`stale`／`freshness` 只能 degraded、`readable` 只能 live、`coverage` 只能 partial、紅只給 status failed；護欄 `guard_text` 只驗非空單行；tone／kind／text 非 str → `ValueError`。選擇「`__post_init__` 驗證」而非私有 token（驗證只讀 `META_KINDS`／`UI_STATE_META`，無循環）。
+4. **同列互斥（F3）**：`readable` 不得與 stale／freshness／coverage／非 live 的 status chip 同列；同列最多一顆非 `readable` 的狀態類 chip。
+5. **sparkline 有限性（F4）**：`hi−lo` 或縮放結果非有限 → `ValueError`。
+6. **`SafeHtml`（F1）**：移出 `__all__`、建構需私有 token、`placeholder` 唯讀。⚠️ 這是**防呆，不是 XSS 邊界**；呼叫端只能傳 compact 內部（`sparkline_svg`）的產出。
+7. **輸入嚴格化（F7／L3／L4）**：`state_badge_n` 排除 bool、非法值 `ValueError`；旗標只收 `True`／`False`；組級窗口比對先正規化（NFKC、去零寬、空白收斂）；`SegmentSpec`／`TopN` 建構即驗證；小倍數拒絕重複系列名與 `cols_mobile>cols_desktop`；零寬字元視為空；kpi 主值拒絕「—」「-」「—％」「N/A」「nan」「None」「null」等占位字樣（`"0"` 保留：可為真值，由呼叫端負責）；Primary 槽高度下限 96px；`TopN.empty` 旗標，空清單須由呼叫端另行處理為 Missing；`chart_header_html` 的 chip 下限由呼叫端負責。
+8. **溢出優先序（F8）**：`ai`、`pretax` 揭露類 chip 由 rank 3 提到 1（與狀態類同級），不會先於資料日被擠進摺疊；同 rank 依傳入順序、後者先移出；護欄最後被移出的規則不變。
+
+**C. 未驗（誠實揭露，見 `docs/BACKLOG.md` 新增三項）**：`compact_css()` 沒有在真實瀏覽器渲染過（手機換行、字級、實際高度皆未實測）；色彩對比（contrast）未驗；`.cp-ch-title` 的字級借用間距 token `--sp-6`（命名不當，非字級 token）。
+
 ## §4 與 W1～W9 的關係表
 
 | W | 內容 | 與 Phase 3 | 本草稿處置 |
