@@ -141,6 +141,17 @@ class TestC1Order:
         _idx = _anchor_index(_evs)
         assert _idx["圖A"] == _idx["AI行"] + 1, _evs[_idx["AI行"]: _idx["圖A"] + 1]
 
+    @pytest.mark.parametrize("session", (None, _LOADED), ids=("cold", "loaded"))
+    def test_c1_10_alerts_bar_follows_the_three_tiles_with_nothing_in_between(self, tmp_path, session):
+        """C1-10（DEC-118 問題 1=A；客戶 2026-10-30）：⚡ 列為手機 mobile exception，但必須**緊接 3 核心狀態之後**，
+        中間不得有任何 L2／L3 內容 —— 風險 tile（最後一張）裡最後一個元素的下一個「tile 容器外」事件就是 ⚡ bar。"""
+        _at = _run(tmp_path, session)
+        _evs = list(_events(_at.main))
+        _idx = _anchor_index(_evs)
+        _last_tile = max(i for i, e in enumerate(_evs) if B.P4M_CORE_TILES_KEY in e[3])
+        assert _idx["⚡bar"] == _last_tile + 1, _evs[_last_tile + 1: _idx["⚡bar"] + 1]
+        assert _evs[_last_tile + 1][2] is None and B.P4M_L1_KEY in _evs[_last_tile + 1][3]
+
     @pytest.mark.parametrize("session", (_LOADED, None), ids=("loaded", "cold"))
     def test_c1_9_between_cta_and_conclusion_only_collapsed_report_expander(self, tmp_path, session):
         """C1-9：更新鈕 → 今日結論之間只允許「更新報告」expander（預設收合）及其內容；無報告時什麼都沒有。"""

@@ -700,3 +700,11 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | 狀態列拆分 | 改為斷言恰一個「｜」否則 `ValueError`（fail loud） | `test_c6_4_report_state_split_keeps_both_halves_verbatim`、`test_c6_4_status_line_with_extra_separator_fails_loud`；M22 |
 | 語意守衛 | 位階 tile 徽章、結論紅字外露各有獨立語意測試（不靠還原鏈錨點） | `test_n3_live_regime_tile_shows_the_card_badge`（M23）；M22／M24／M25 在排除還原鏈 AST 測試後仍由語意測試轉紅 |
 | N4 | `page_market.py` 本輪有改 ⇒ 以同一基底 `7484c57b` 重產 pair（sha 不變、3 組） | `tests/test_p4_revert_chain.py`；uim／nav1／xvext 綠 |
+
+#### 10.7.2 DEC-118 後（2026-10-30；append-only；決策者 AI 總管〔事實更新〕）
+
+| 項 | 狀態 | 證據 |
+|---|---|---|
+| C1-10（DEC-118 新條件）⚡ 緊接 3 tile、中間無他物 | ✅ | `TestC1Order::test_c1_10_alerts_bar_follows_the_three_tiles_with_nothing_in_between`（cold／loaded）；mutation M26（插外露內容）、M27（插 expander）必紅 |
+| C1-10 手機第一屏含今日結論＋位階｜水位列（390×844，可用 791；1.59.2 夾具） | loaded ✅（結論 427～545、列 537～741）／cold ✅（404～497、489～693）／**report 🟡**（結論 514～632 ✅；列 624～828，標題與值在第一屏內、底部「🔍 查看依據」標題列被截 37px）／**partial ❌**（結論 896、列 1006，待 D1） | `docs/vnext/phase4_market/p4_1/measure_p4_1.js` 重跑 |
+| C1-9 嚴格化＋D1 | **⏸ 停點，未實作** | **D1 實作停點（實作組未動結構、未改 `page_today.py`）**：① `page_today._render_refresh_report` 一次畫完「真錯誤 `st.error`」與「預設收合的報告 expander」，沒有可單獨呼叫的 API；要把真錯誤放到今日結論下方、報告標題留在 CTA 下方，只能 (X) 改 `page_today.py`（拆成兩支、今天頁輸出逐字不變，但受多條還原鏈守衛且 DEC-081 Q1=C「驗收前不改」）、(Y) 在 `page_market` 複寫約 90 行報告渲染（第二套、需逐字 parity 測試防漂移）、或 (Z) 只在「報告有真錯誤」時把整份既有報告（真錯誤＋收合標題）改畫在今日結論正下方（零複寫，但 X3／X10「頁首更新鈕下方」指路句在該態不準）；② 即使 D1 落地，partial 態真錯誤區塊在手機約 330px 高，放在結論下方會把位階｜水位列推出第一屏（結論底 ≈632＋330 ≈ 960 > 可用 791），與 DEC-118 理由 1「第一屏優先維持今日結論＋核心狀態」互相牽制。 |

@@ -173,3 +173,14 @@ M1 結論移回 tile 後（C1-1）／M2 退化句刪「不代表安全」（C6-3
 - 相關子集（市場頁 4 檔＋鏈守衛＋Phase 2 golden＋views 守衛，含 slow）：370 passed、4 skipped。
 - 全量 Fast／slow：**Fast（`pytest`）35732 passed、46 skipped、185 deselected、0 failed**（16 分 18 秒）；**slow（`pytest -m slow`）183 passed、5 skipped、0 failed**（16 分 05 秒）。
 - 第一屏量測未重跑：本輪 CSS 只加 expander 內換行規則（收合時不影響版面），其餘修改只在 failed／degraded 態加字；第一屏數字沿用 §5.3（夾具各態皆非 failed）。
+
+
+---
+
+## 七、DEC-118 後（2026-10-30；append-only）
+
+- 落盤：DEC-118（客戶原文 fence）、`PROJECT_RULES.md` 第 2／3／21.2 節、Gate §8 手機 ⚡ mobile exception、線框 §10 C1-9／C1-10 改寫。
+- 已做：C1-10 新條件守衛（⚡ 緊接 3 tile、中間無他物）＋mutation M26／M27 必紅。
+- 手機 390×844 實量（1.59.2 夾具）：結論＋位階｜水位列——loaded ✅、cold ✅、report 🟡（列底部 🔍 標題列被截 37px）、partial ❌（待 D1）。
+- **D1 實作停點（實作組未動結構、未改 `page_today.py`）**：① `page_today._render_refresh_report` 一次畫完「真錯誤 `st.error`」與「預設收合的報告 expander」，沒有可單獨呼叫的 API；要把真錯誤放到今日結論下方、報告標題留在 CTA 下方，只能 (X) 改 `page_today.py`（拆成兩支、今天頁輸出逐字不變，但受多條還原鏈守衛且 DEC-081 Q1=C「驗收前不改」）、(Y) 在 `page_market` 複寫約 90 行報告渲染（第二套、需逐字 parity 測試防漂移）、或 (Z) 只在「報告有真錯誤」時把整份既有報告（真錯誤＋收合標題）改畫在今日結論正下方（零複寫，但 X3／X10「頁首更新鈕下方」指路句在該態不準）；② 即使 D1 落地，partial 態真錯誤區塊在手機約 330px 高，放在結論下方會把位階｜水位列推出第一屏（結論底 ≈632＋330 ≈ 960 > 可用 791），與 DEC-118 理由 1「第一屏優先維持今日結論＋核心狀態」互相牽制。
+- 本輪測試：市場頁 4 檔＋鏈守衛（p4／uim／nav1／xvext）＋z60＋floor 相容：420 passed；floor 1.56.0 venv 市場頁 4 檔 AppTest：249 passed。Fast／slow 全量待 D1 定案後重跑（本輪未改 `src/`）。
