@@ -62,7 +62,7 @@
 | `src/ui/views/_ui_kit.py` | `single_submit_form` 加性參數 `options_note`（None 時逐呼叫不變；Phase 2 golden 照綠） |
 | `src/ui/views/_market_blocks.py` | 第一屏區塊（見第一段）；刪 `render_hero` |
 | `src/ui/views/page_market.py` | 區塊順序、頁首 CTA、狀態列拆兩處、逐項資料日句下沉 |
-| `tests/test_p4_1_market_first_screen.py` | 新增 49 項（線框 §10 P4-1 條目） |
+| `tests/test_p4_1_market_first_screen.py` | 新增 ~~49~~ 72 項（線框 §10 P4-1 條目；QA 修正輪＋23） |
 | `tests/test_market_blocks.py`／`tests/test_uim_market_page.py`／`tests/test_page_market.py` | 改寫為等強或加嚴（皆附 📌 有意識的修改註） |
 | `tests/test_p4_revert_chain.py`（新）／`tests/test_uim_revert_chain.py` | P4 還原鏈頭節 |
 | `docs/vnext/phase4_market/p4_1/` | 量測腳本、JSON、第一屏截圖 8 張（皆 <300KB）、本檔 |
@@ -131,3 +131,45 @@ M1 結論移回 tile 後（C1-1）／M2 退化句刪「不代表安全」（C6-3
 
 - 頁首右側（手機在標題下）按「🚀 更新今日戰情」更新；要切「強制重抓」先展開上方「更新選項」。
 - 第一屏讀法：今日結論 → 市場位階｜建議總持股水位｜今日主要風險 → ⚡ 需要處理（一行；展開「🔍 查看依據」看完整清單）。每張卡只有一個「🔍 查看依據」，原本只在滑鼠停留時看得到的出處說明也在裡面。
+
+
+---
+
+## 六、QA 修正輪（2026-10-30；兩組獨立 QA 無 BLOCKER；append-only）
+
+> 結構與區塊順序**未動**：C1-10（手機第一屏 ⚡ bar）與 partial 態結論被擠出手機第一屏，總管已送客戶裁示。逐條見線框 §10.7.1。
+
+### 6.1 修正
+1. **C6-3 真錯誤外露（MAJOR）**：位階 tile failed＝紅框內「外露值＋原因」；讀契約失敗的原因＝X1 既有句「市場位階契約讀不出來：`…`」逐字（`page_market` 傳入），其他 failed＝卡上既有 `why`；⚡ failed＝紅 bar 帶卡上既有 `why`（「L2 `compute.macro.daily_key_alerts`（今日關鍵）拋出例外：…」）逐字；結論紅字確認在外露層（緊接結論標題）。⚠️ ⚡ 的 `why` 是**卡片資料**原句，v2 卡面渲染時另加的「為什麼：」前綴屬卡面版型，bar 上未加。
+2. **目視 bug**：L1 內 expander 內容可任意處換行（`overflow-wrap:anywhere`、`word-break:break-word`、`min-width:0`；@media 外）。實量：修前手機位階摺疊右溢 155px、`scrollWidth 318 > 151`；修後五個摺疊×2 viewport×cold／loaded 右溢 0。
+3. **CSS 白名單守衛**、4. **degraded**（位階粗體＋徽章；⚡ 帶「N 紅 · M 黃」，格式同既有 live 態 value）、5. **狀態列拆分 fail loud**、6. **語意守衛**（位階徽章、結論紅字外露），見線框 §10.7.1。
+7. `page_market.py` 有改 ⇒ 以同一基底 `7484c57b` 重產還原鏈 pair（基底 sha 不變）。
+
+### 6.2 下沉清單（外露 → 摺疊；全部只下沉、未刪；QA 要求明列）
+| 原外露內容 | 新位置 |
+|---|---|
+| 「正式 Risk Cap 尚未核准，此卡不顯示任何百分比。」（`WATER_WHY`） | 水位 tile「🔍 查看依據」內（外露仍有 `⬜ 尚未核准／無法判定`＋Q2-2 句逐字） |
+| 原有出手區間卡（含 risk_cap.v2；UI-M 起就在摺疊） | 同上（未變） |
+| 風險項整句（燈說明、「｜方向：」、「｜同級並列 N 項」）、`HERO_RISK_NO_RANKING_NOTE`、UI-M 原指路句 `DANGER_POINTER_UIM` | 風險 tile「🔍 查看依據」 |
+| 位階原卡（標題「市場位階（總經契約）」、生效分支、hover-only「位階的出處」） | 位階 tile「🔍 查看依據」六欄＋原卡整張（工程字樣維持原文，已登 BACKLOG `P1R-P4-REGIME-FOLD-ENG-WORDS`） |
+| 更新模式 radio、已套用模式句、`PAGE_REFRESH_SCOPE_WHY`＋`REFRESH_SPEED_HINT` | 「更新選項」 |
+| 「今日關鍵」原卡整張、衝突提示原文、`ALERTS_CONFLICTS_NUMBER_NOTE` | ⚡「🔍 查看依據」（bar 外露計數與「沒有來源」） |
+| 「逐項資料日：尚未提供…」＋資料健康指路 | 「資料來源與完整度」展開區最上方 |
+
+### 6.3 新增 mutation（全部轉紅）
+| 突變 | 首個紅燈 |
+|---|---|
+| M18 位階 tile 失敗不帶原因 | `TestInvariants::test_n3_regime_contract_failure_is_red` |
+| M19 ⚡ 失敗 bar 不帶原因 | `TestC8::test_c8_c_bar_line_states` |
+| M20 ⚡ degraded 不帶紅黃計數 | `TestC8::test_c8_c_bar_line_states` |
+| M21 拿掉摺疊換行規則 | `TestC1Structure::test_c1_5_fold_contents_wrap_instead_of_overflowing` |
+| M22 狀態列拆分不 fail loud | `TestC6RiskTile::test_c6_4_status_line_with_extra_separator_fails_loud`（排除還原鏈 AST 測試後） |
+| M23 位階 tile 不帶徽章 | `TestInvariants::test_n3_live_regime_tile_shows_the_card_badge` |
+| M24 結論紅字收進 expander | `TestC1Structure::test_c1_2_conclusion_failure_is_red_and_named`（排除還原鏈 AST 測試後） |
+| M25 位階 tile 外露錯誤句不傳入 | `TestInvariants::test_n3_regime_contract_failure_is_red`（排除還原鏈 AST 測試後） |
+| CSS 源碼突變 ×6：font-size:0／position:absolute／clip／transform:scale(0)／color:transparent／left:-9999px | `test_c1_5_layout_css_declarations_are_whitelisted` |
+
+### 6.4 本輪測試
+- 相關子集（市場頁 4 檔＋鏈守衛＋Phase 2 golden＋views 守衛，含 slow）：370 passed、4 skipped。
+- 全量 Fast／slow：**Fast（`pytest`）35732 passed、46 skipped、185 deselected、0 failed**（16 分 18 秒）；**slow（`pytest -m slow`）183 passed、5 skipped、0 failed**（16 分 05 秒）。
+- 第一屏量測未重跑：本輪 CSS 只加 expander 內換行規則（收合時不影響版面），其餘修改只在 failed／degraded 態加字；第一屏數字沿用 §5.3（夾具各態皆非 failed）。

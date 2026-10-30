@@ -98,7 +98,8 @@
 > | unresolved true Stop Gates | **待總管判斷（實作組停在這裡，未自行改結構）**：上欄 ①②，推薦方案見 PR_NOTES「停下來請總管判斷」。其餘 Gate 不變 |
 > | **下一個唯一安全接手點** | **總管就 C1-10／C1-9 判定（必要時附推薦方案送客戶）＋兩組獨立 QA 複驗 P4-1 → push／開 PR／CI 綠 → 才開始 P4-2（圖區）。** 中間批：Stage 不得標 complete、BACKLOG 不得結案 |
 > | 禁止事項 | 沿用上一段；另：⛔ 在 C1-10／C1-9 判定前自行改核准結構（例：手機把 ⚡ 移到 tile 前、把報告真錯誤收進摺疊）；⛔ P4-2 以新基底重產還原組（必須沿用 `7484c57b`） |
-> | 未驗 | floor 1.56.0 已以獨立 venv 跑 AppTest（293 passed）與瀏覽器量測（同序）；1.57～1.58 未驗；真資料態、真冷啟動（harness cold 的 L3 仍是假資料）、手機實機、Streamlit Cloud、Safari／Firefox 未驗；本批全部為實作組單組產出，未經第二組驗證 |
+> | QA 修正輪（2026-10-30） | 兩組獨立 QA 無 BLOCKER；已修：C6-3 真錯誤原因外露（位階 tile／⚡ failed）、手機位階摺疊溢出、CSS 屬性白名單、degraded 守衛、狀態列拆分 fail loud、語意守衛；還原鏈以同一基底重產。**C1-10、partial 態結論被擠出手機第一屏：總管送客戶裁示中，實作組未動結構**。逐條＝線框 §10.7.1、PR_NOTES 第六段 |
+| 未驗 | floor 1.56.0 已以獨立 venv 跑 AppTest（293 passed）與瀏覽器量測（同序）；1.57～1.58 未驗；真資料態、真冷啟動（harness cold 的 L3 仍是假資料）、手機實機、Streamlit Cloud、Safari／Firefox 未驗；本批全部為實作組單組產出，未經第二組驗證 |
 
 ### 📌 Resume Checkpoint（DEC-086）— ⛔ HISTORICAL（2026-10-29 起由上方「Resume Checkpoint 索引」取代；本表與其下各補註、「現行短版」段、§1～§6 均為歷史，原文保留不刪；有意識的更新，不是漏刪，決策者 客戶（DEC-109 二十八 B）＋AI 總管（事實更新））
 

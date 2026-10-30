@@ -677,7 +677,7 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | C3-2 | ✅ | `TestC3Basis::test_c3_2_each_tile_and_alerts_has_exactly_one_basis_expander`、`test_c3_2_page_basis_expanders_count_and_no_second_label`、`test_c3_2_hover_only_regime_provenance_is_visible_text_in_the_basis`；DOM 實量第一屏 `title=` 0 個（四態兩 viewport） |
 | C6-1 | ✅ | `TestC6RiskTile::test_c6_1_short_line_is_lamp_color_bucket_lamp_direction`、`test_c6_1_short_lines_use_the_same_rows_as_chart_d` |
 | C6-2 | ✅ | `test_c6_2_full_sentences_are_all_kept_in_the_fold`、`test_c6_2_full_sentences_are_in_the_risk_basis_on_the_page`；`tests/test_uim_market_page.py::test_loaded_hero_items_match_panel_rows`（外露縮短行↔摺疊整句↔圖 D 三方逐項一致） |
-| C6-3 | ✅ | `test_c6_3_degenerate_and_guard_sentences_are_exposed_verbatim`（全綠／全部不足／部分不足／有項目＋不足）、`test_c6_3_cold_and_failed_on_the_page`（未載入灰、五桶算不出來紅）、`test_c6_3_other_true_errors_stay_outside_folds`（圖 A 讀取失敗紅）；位階契約失敗紅＝`TestInvariants::test_n3_regime_contract_failure_is_red`；結論句失敗紅＝`test_c1_2_conclusion_failure_is_red_and_named` |
+| C6-3 | ~~✅~~ → ✅（QA 修正輪後） | ~~位階契約失敗紅＝`test_n3_regime_contract_failure_is_red`；結論句失敗紅＝`test_c1_2_conclusion_failure_is_red_and_named`~~（📌 2026-10-30 QA 修正輪，有意識的更正，不是漏刪；決策者 AI 總管〔依兩組獨立 QA〕：原依據有誤——兩條測試當時只驗「頁上某處有紅」，位階 tile 的紅框也沒有帶原因句；X1 那句紅字在 expander 內，不算外露）。**現行依據**：`test_c6_3_degenerate_and_guard_sentences_are_exposed_verbatim`（全綠／全部不足／部分不足／有項目＋不足）、`test_c6_3_cold_and_failed_on_the_page`（未載入灰、五桶算不出來紅，皆外露）、`test_c6_3_other_true_errors_stay_outside_folds`（圖 A 讀取失敗紅）、`TestInvariants::test_n3_regime_contract_failure_is_red`（**只認外露層**：位階 tile 紅框＝外露值＋X1 同一句「市場位階契約讀不出來：…」逐字）、`TestC1Structure::test_c1_2_conclusion_failure_is_red_and_named`（**只認外露層**，緊接結論標題）、`TestInvariants::test_c6_3_alerts_failed_bar_is_red_with_reason_outside`（⚡ failed＝紅 bar＋卡上既有原因句逐字）；mutation M18／M19／M24／M25 必紅 |
 | C6-4 | ✅ | `test_c6_4_coverage_is_exposed_in_the_risk_tile_and_split_is_lossless`、`test_c6_4_cold_coverage_says_not_loaded_not_zero` |
 | C6-5 | ✅ | `test_c6_5_tile_never_adds_new_unevaluated_wording_and_chart_d_keeps_it_outside` |
 | C8-b | ✅ | `TestC8::test_c8_b_radio_and_long_note_are_inside_update_options_collapsed`、`test_c8_b_note_is_the_same_string_as_today_page`、`test_c8_b_options_note_contract_in_ui_kit`；Phase 2 golden（`tests/test_p2_step1_shared_optional_params.py`）照綠 |
@@ -688,3 +688,15 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | N4 | ✅ | `tests/test_p4_revert_chain.py`（基底 `7484c57b` sha `59c9801b…`；3 組 pair；接在 `uim_revert_for` 開頭，`test_chain_head_calls_p4_first`）；`test_uim_revert_chain`／`test_nav1_revert_chain`／`test_xvext_revert_chain` 與其餘 30＋條鏈全綠 |
 | N5～N7 | ⏭ P4-3（本批已自查） | `src/services|compute|data`、`shared/`、`app.py`、`page_today.py`、`requirements.txt` 0 diff；`test_c3_layering_guard`、`test_batch_z60` 綠；新文案無全稱關鍵詞（REGISTRY 不需新增） |
 | C3-1／C4-*／C8-a／C8-0 | ⏭ P4-2 | 圖區 |
+
+#### 10.7.1 QA 修正輪（2026-10-30；append-only；兩組獨立 QA 無 BLOCKER；決策者 AI 總管〔內部自決〕；結構與順序未動——C1-10、partial 態結論被擠出手機第一屏兩件**送客戶裁示中**）
+
+| 項 | 修正 | 守衛／證據 |
+|---|---|---|
+| C6-3（MAJOR） | 位階 tile failed：外露紅框＝外露值＋原因（讀契約失敗＝X1 同一句「市場位階契約讀不出來：…」；其他 failed＝卡上既有 `why`）；⚡ failed：紅 bar 帶卡上既有 `why` 逐字；結論紅字確認在外露層 | 見上方 C6-3 列；M18／M19／M24／M25 |
+| 目視 bug（中） | 手機開位階「🔍 查看依據」後六欄長 inline code 溢出蓋到水位 tile ⇒ L1 內 expander 內容 `overflow-wrap:anywhere`／`word-break:break-word`／`min-width:0`（不在 @media 內；只換行、不截斷） | `test_c1_5_fold_contents_wrap_instead_of_overflowing`；實量 `measure_p4_1_overflow.js`：修前位階摺疊右溢 155px（手機）／19px（桌機）、`scrollWidth 318 > 151`（`_measure_p4_1_overflow_without_fix.json`）→ 修後 L1 五個摺疊（form、3 tile、⚡）× 2 viewport × cold／loaded 右溢 0、`scrollWidth＝clientWidth`（`_measure_p4_1_overflow.json`；截圖 `p4_1_overflow_regime_open_390.png`）；M21 |
+| CSS 守衛 | 禁字清單 → **屬性白名單**（gap、padding*、margin*、flex*、width、min-width、overflow-wrap、word-break、font-size ≥0.875rem；禁負值、transparent／hidden／none、`::before`／`content`／`url(`） | `test_c1_5_layout_css_declarations_are_whitelisted`＋`test_c1_5_whitelist_rejects_hiding_tricks`（16 種藏法參數化必紅）；源碼突變 font-size:0／position／clip／transform／color:transparent／left:-9999px 6 項必紅 |
+| degraded | 位階 tile degraded＝粗體外露值＋徽章（不可灰）；⚡ degraded bar 帶紅／黃計數（格式同既有 live 態 value「N 紅 · M 黃」） | `test_n3_regime_degraded_is_bold_value_with_badge_not_grey`、`test_c8_c_bar_line_states`；M20 |
+| 狀態列拆分 | 改為斷言恰一個「｜」否則 `ValueError`（fail loud） | `test_c6_4_report_state_split_keeps_both_halves_verbatim`、`test_c6_4_status_line_with_extra_separator_fails_loud`；M22 |
+| 語意守衛 | 位階 tile 徽章、結論紅字外露各有獨立語意測試（不靠還原鏈錨點） | `test_n3_live_regime_tile_shows_the_card_badge`（M23）；M22／M24／M25 在排除還原鏈 AST 測試後仍由語意測試轉紅 |
+| N4 | `page_market.py` 本輪有改 ⇒ 以同一基底 `7484c57b` 重產 pair（sha 不變、3 組） | `tests/test_p4_revert_chain.py`；uim／nav1／xvext 綠 |
