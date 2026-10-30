@@ -48,7 +48,7 @@ def _state_glyphs() -> tuple[str, ...]:
 
 
 #: 零寬／不可見字元：視為空（不可見的「文字」不是文字）。
-_INVISIBLE: Final[str] = "\u200b\u200c\u200d\u200e\u200f\u2060\u2061\u2062\u2063\ufeff\u00ad\u180e"
+_INVISIBLE: Final[str] = "\u200b\u200c\u200d\u200e\u200f\u2060\u2061\u2062\u2063\ufeff\u00ad\u180e\u3164\u2800\u115f\u1160"
 _INVISIBLE_TABLE: Final[dict[int, None]] = {ord(c): None for c in _INVISIBLE}
 _LINE_BREAKS: Final[str] = "\n\r\x0b\x0c\x85\u2028\u2029"
 
@@ -130,6 +130,20 @@ class SafeHtml(str):
 
     def __delattr__(self, name: str) -> None:
         raise AttributeError("SafeHtml 不可變")
+
+
+def _check_safe_html(name: str, x: object) -> bool:
+    """`SafeHtml` 的唯一驗證點（kpi_tile／small_multiples 共用）：必須 isinstance SafeHtml，且 `_ph`
+    存在且為真正的 bool。回傳 placeholder。`str.__new__(SafeHtml, ..)` 偽造（沒有 `_ph`）→ ValueError。"""
+    if not isinstance(x, SafeHtml):
+        raise ValueError(f"{name} 只收 SafeHtml（由 sparkline_svg 產出）")
+    try:
+        ph = object.__getattribute__(x, "_ph")
+    except AttributeError:
+        raise ValueError(f"{name} 不是由 sparkline_svg 產出的 SafeHtml（缺 _ph；疑似偽造）") from None
+    if ph is not True and ph is not False:
+        raise ValueError(f"{name} 的 SafeHtml._ph 必須是 bool（疑似偽造）：{ph!r}")
+    return ph
 
 
 def _safe(markup_text: str, *, placeholder: bool = False) -> SafeHtml:
@@ -265,6 +279,10 @@ def _state_of_status_text(text: str) -> tuple[str, int | None, int | None]:
     raise ValueError(f"狀態 chip 文字 {text!r} 不是由 UI_STATE_META 推導的（⛔ 自造狀態字）")
 
 
+#: stale／freshness 的值禁用的「可讀」符號（✅ 可讀 與 過期 互斥）。
+_READABLE_SYMBOLS: Final[tuple[str, ...]] = ("✅", "✔", "☑", "✓", "可讀")
+
+
 def _validate_chip_text(kind: str, text: str, tone: str) -> None:
     """固定文字 kind 的 text 必須等於模板；status 的 text 必須由 UI_STATE_META 推導（F2/L1）。"""
     if kind == KIND_STATUS:
@@ -294,6 +312,59 @@ def _validate_chip_text(kind: str, text: str, tone: str) -> None:
         _check_str(f"{kind}.value", v)
         if len(v) > CHIP_VALUE_MAX_CHARS:
             raise ValueError(f"chip 值最多 {CHIP_VALUE_MAX_CHARS} 字：{kind}={v!r}")
+        if kind in ("stale", "freshness"):
+            for sym in _READABLE_SYMBOLS:
+                if sym in v:
+                    raise ValueError(f"{kind} 的值不得含可讀符號 {sym!r}（過期與可讀互斥）：{v!r}")
+        if kind == "coverage":
+            _check_coverage_value(v)
+
+
+def _check_coverage_value(v: str) -> None:
+    """coverage 的值只接受契約 §6 的兩種形式：(a)『N／M』或『N／M 項有資料』（半形數字、無前導零、
+    M≥1、0≤N≤M）；(b)『N 項未評估』（N≥0、無前導零）。其餘 ValueError。"""
+    mt = re.fullmatch(r"(\d+)／(\d+)( 項有資料)?", v, re.ASCII)
+    if mt:
+        n_s, m_s = mt.group(1), mt.group(2)
+        n, m = int(n_s), int(m_s)
+        if str(n) != n_s or str(m) != m_s or m < 1 or n > m:
+            raise ValueError(f"coverage 的 N／M 不合法（需 0≤N≤M、M≥1、無前導零）：{v!r}")
+        return
+    mu = re.fullmatch(r"(\d+) 項未評估", v, re.ASCII)
+    if mu:
+        if str(int(mu.group(1))) != mu.group(1):
+            raise ValueError(f"coverage 的『N 項未評估』N 不得有前導零：{v!r}")
+        return
+    raise ValueError(f"coverage 的值必須是『N／M』『N／M 項有資料』或『N 項未評估』（半形數字）：{v!r}")
+
+
+def _validate_chip(kind: object, text: object, tone: object) -> None:
+    """Chip 的唯一驗證點：建構（`__post_init__`）與輸出前（`_chip_span`／`_check_chip_seq`）共用，
+    使 `object.__setattr__` 偽造的 Chip 在輸出前被擋下。"""
+    for fname, val in (("kind", kind), ("text", text), ("tone", tone)):
+        if not isinstance(val, str):
+            raise ValueError(f"Chip.{fname} 必須是 str，收到 {type(val).__name__}：{val!r}")
+    if kind in _EXTRA_KINDS:
+        family = _S if kind == KIND_STATUS else _G
+    elif kind in META_KINDS:
+        spec = META_KINDS[kind]
+        if spec.family == _D:
+            raise ValueError(f"kind {kind!r} 委派給 status_chip，不可直接建 Chip")
+        family = spec.family
+    else:
+        raise ValueError(f"未登記的 chip kind {kind!r}（封閉集合，見 META_KINDS）")
+    _check_str("Chip.text", text, allow_glyph=True)
+    if tone not in _valid_tones():
+        raise ValueError(f"Chip.tone {tone!r} 不合法；合法值：{sorted(_valid_tones())}")
+    if family == _I and tone != "info":
+        raise ValueError(f"資訊族 chip 的 tone 必須是 'info'：{kind}/{tone}")
+    if family == _G and tone != "guard":
+        raise ValueError(f"護欄族 chip 的 tone 必須是 'guard'：{kind}/{tone}")
+    if family == _S and tone in ("info", "guard"):
+        raise ValueError(f"狀態族 chip 的 tone 必須是 UI_STATE_META 鍵：{kind}/{tone}")
+    # 紅（failed）只給 status failed：由上面的族別 tone 規則（資訊／護欄只能 info／guard）
+    # ＋ `_validate_chip_text`（固定 kind 的 tone 必須等於模板 tone）共同保證，無需另寫一條。
+    _validate_chip_text(kind, text, tone)
 
 
 @dataclass(frozen=True)
@@ -315,31 +386,7 @@ class Chip:
     tone: str
 
     def __post_init__(self) -> None:
-        for fname in ("kind", "text", "tone"):
-            val = getattr(self, fname)
-            if not isinstance(val, str):
-                raise ValueError(f"Chip.{fname} 必須是 str，收到 {type(val).__name__}：{val!r}")
-        if self.kind in _EXTRA_KINDS:
-            family = _S if self.kind == KIND_STATUS else _G
-        elif self.kind in META_KINDS:
-            spec = META_KINDS[self.kind]
-            if spec.family == _D:
-                raise ValueError(f"kind {self.kind!r} 委派給 status_chip，不可直接建 Chip")
-            family = spec.family
-        else:
-            raise ValueError(f"未登記的 chip kind {self.kind!r}（封閉集合，見 META_KINDS）")
-        _check_str("Chip.text", self.text, allow_glyph=True)
-        if self.tone not in _valid_tones():
-            raise ValueError(f"Chip.tone {self.tone!r} 不合法；合法值：{sorted(_valid_tones())}")
-        if family == _I and self.tone != "info":
-            raise ValueError(f"資訊族 chip 的 tone 必須是 'info'：{self.kind}/{self.tone}")
-        if family == _G and self.tone != "guard":
-            raise ValueError(f"護欄族 chip 的 tone 必須是 'guard'：{self.kind}/{self.tone}")
-        if family == _S and self.tone in ("info", "guard"):
-            raise ValueError(f"狀態族 chip 的 tone 必須是 UI_STATE_META 鍵：{self.kind}/{self.tone}")
-        # 紅（failed）只給 status failed：由上面的族別 tone 規則（資訊／護欄只能 info／guard）
-        # ＋ `_validate_chip_text`（固定 kind 的 tone 必須等於模板 tone）共同保證，無需另寫一條。
-        _validate_chip_text(self.kind, self.text, self.tone)
+        _validate_chip(self.kind, self.text, self.tone)
 
     @property
     def family(self) -> str:
@@ -422,6 +469,9 @@ def status_chip(ui_state: str, *, n: int | None = None, m: int | None = None) ->
 
 
 def _chip_span(chip: Chip) -> str:
+    if not isinstance(chip, Chip):
+        raise ValueError(f"chip 必須是 Chip，收到 {type(chip).__name__}")
+    _validate_chip(chip.kind, chip.text, chip.tone)      # 輸出前再驗（擋 object.__setattr__ 偽造）
     if chip.family == _I:
         cls = "cp-chip cp-info"
     elif chip.family == _G:
@@ -437,6 +487,7 @@ def _check_chip_seq(chips: object) -> tuple[Chip, ...]:
     for c in chips:
         if not isinstance(c, Chip):
             raise ValueError(f"chips 只收 Chip，收到 {type(c).__name__}：{c!r}")
+        _validate_chip(c.kind, c.text, c.tone)            # 每顆再驗（擋 object.__setattr__ 偽造）
     seen: set[tuple[str, str]] = set()
     singles: set[str] = set()
     for c in chips:
@@ -591,7 +642,9 @@ _TILE_FORBIDDEN_KINDS: Final[frozenset[str]] = frozenset(
 #: （「沒資料」必須傳 `value=None` 並帶說明原因的 chip，⛔ 不得用 "0" 充數）。
 _PLACEHOLDER_VALUES: Final[frozenset[str]] = frozenset({
     "n/a", "na", "nan", "none", "null", "nil", "undefined", "unknown", "tbd", "?", "？",
+    "暫無", "無資料", "無", "尚無", "暫無資料", "尚無資料", "沒有資料", "無數據", "暫無數據", "待補", "缺",
 })
+_PLACEHOLDER_STRIP = re.compile(r"[\s.．·・。…]+")
 _DASH_ONLY = re.compile(r"[\s\-–—―−－ー_=.．·・*＊?？%％]*")
 
 
@@ -599,7 +652,7 @@ def _check_tile_value(value: object) -> str:
     v = _check_str("value", value, allow_glyph=True)
     if len(v) > TILE_VALUE_MAX_CHARS:
         raise ValueError(f"主值最多 {TILE_VALUE_MAX_CHARS} 字（超過改 chip）：{len(v)} 字")
-    norm = _norm(v)
+    norm = _PLACEHOLDER_STRIP.sub("", _norm(v))          # 去空白與點號後再比（"N. A."、"暫 無"）
     if _DASH_ONLY.fullmatch(norm) or norm.casefold() in _PLACEHOLDER_VALUES:
         raise ValueError(
             f"主值不得是占位字樣 {v!r}（沒資料請傳 value=None 並帶說明原因的 chip；⛔ 沉默的假值）"
@@ -655,9 +708,8 @@ def kpi_tile_html(*, label: str, value: str | None, chips: Sequence[Chip] = (),
     if say is not None:
         s = _check_str("say", say, allow_glyph=True)
     if spark is not None:
-        if not isinstance(spark, SafeHtml):
-            raise ValueError("spark 只收 SafeHtml（由 sparkline_svg 產出）")
-        if not spark.placeholder and not windows and group_window_text is None:
+        spark_ph = _check_safe_html("spark", spark)
+        if not spark_ph and not windows and group_window_text is None:
             raise ValueError("有 sparkline 的 tile 必須有可見窗口 chip（tile 內或組級）")
     face = len(lab) + len(val or "") + sum(len(c.text) for c in items)
     if s is not None and not say_verbatim:
@@ -700,7 +752,10 @@ def _spark_points(values: object) -> list[float | None]:
             continue
         if isinstance(v, bool) or not isinstance(v, numbers.Real):
             raise ValueError(f"values[{i}] 不是實數：{v!r}")
-        f = float(v)
+        try:
+            f = float(v)
+        except OverflowError:
+            raise ValueError(f"values[{i}] 數值過大，無法轉為有限浮點：{type(v).__name__}") from None
         if math.isnan(f):
             out.append(None)
         elif math.isinf(f):
@@ -810,8 +865,7 @@ def small_multiples_html(cells: Sequence[SmCell], *, cols_desktop: int = 3, cols
         if len(name) > SM_NAME_MAX_CHARS:
             raise ValueError(f"系列名最多 {SM_NAME_MAX_CHARS} 字：{name!r}")
         if c.svg is not None:
-            if not isinstance(c.svg, SafeHtml):
-                raise ValueError("SmCell.svg 只收 SafeHtml（由 sparkline_svg 產出）")
+            _check_safe_html("SmCell.svg", c.svg)
             if c.missing_state is not None or c.missing_text is not None:
                 raise ValueError("有 svg 的格不得同時給 missing_state／missing_text")
             body = str(c.svg)

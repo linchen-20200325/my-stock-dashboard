@@ -904,7 +904,7 @@ class TestChipDirectConstructionValidated:                    # F2／L1
         with pytest.raises(ValueError):
             cp.Chip("readable", "✅ 可讀", "degraded")                   # readable 只能 live
         with pytest.raises(ValueError):
-            cp.Chip("coverage", "8／16 項有資料", "live")                # coverage 只能 partial
+            cp.Chip("coverage", "8／16 項有資料", "live")              # coverage 只能 partial
         with pytest.raises(ValueError):
             cp.Chip("guard_text", "紅色護欄", "failed")                  # 紅只給 status failed
         with pytest.raises(ValueError):
@@ -1273,3 +1273,96 @@ class TestNoEngineeringWording:
         h, _ = cp.chart_header_html(title="L3 service 取數", chips=[], say=None)
         assert re.search(r"\bL[0-6x]\b", _strip_tags(h)) and "service" in _strip_tags(h)
         assert len(_all_outputs()) > 30
+
+
+class TestQaRound2Hardening:
+    """複驗 QA 第二輪 A～G：偽造／極端輸入必須 ValueError（臨時 mutation 驗證必紅）。"""
+
+    # C：SafeHtml 偽造
+    def test_c_forged_safehtml_str_new_rejected(self):
+        fake = str.__new__(cp.SafeHtml, "<svg/>")                   # 沒有 _ph
+        with pytest.raises(ValueError):
+            cp.kpi_tile_html(label="水位", value="1", spark=fake)
+        with pytest.raises(ValueError):
+            cp.small_multiples_html([cp.SmCell(name="A", svg=fake)])
+
+    def test_c_non_bool_ph_rejected(self):
+        bad = _spark([1, 2, 3])
+        object.__setattr__(bad, "_ph", "yes")
+        with pytest.raises(ValueError):
+            cp.kpi_tile_html(label="水位", value="1", chips=[cp.meta_chip("window", "近 30 日")], spark=bad)
+        with pytest.raises(ValueError):
+            cp.small_multiples_html([cp.SmCell(name="A", svg=bad)])
+
+    def test_c_genuine_safehtml_still_ok(self):
+        cp.small_multiples_html([cp.SmCell(name="A", svg=_spark([1, 2, 3]))])
+
+    # B：超大 int
+    def test_b_huge_int_is_valueerror(self):
+        with pytest.raises(ValueError):
+            _spark([1, 10**400, 3])
+
+    # A：object.__setattr__ 偽造 chip
+    def test_a_forged_chip_blocked_before_output(self):
+        c = cp.meta_chip("asof", "10/28")
+        object.__setattr__(c, "text", "<script>")
+        with pytest.raises(ValueError):
+            cp._chip_span(c)
+        with pytest.raises(ValueError):
+            cp.chips_html([c])
+        with pytest.raises(ValueError):
+            cp.kpi_tile_html(label="水位", value="1", chips=[c])
+
+    def test_a_forged_tone_and_kind_blocked(self):
+        c = cp.meta_chip("not_defined")
+        object.__setattr__(c, "tone", "failed")
+        with pytest.raises(ValueError):
+            cp.chips_html([c])
+        c2 = cp.meta_chip("asof", "10/28")
+        object.__setattr__(c2, "kind", "nope")
+        with pytest.raises(ValueError):
+            cp.chips_html([c2])
+
+    # D：coverage 兩種契約形式（§6 表）；其餘 ValueError
+    @pytest.mark.parametrize("v", ["8／16 項", "全部完整", "5／3", "8／16 項有資料 ✅ 可讀", "8/16", "08／16", "8／0",
+                                   "８／１６", "-1／3", "8／", "8／16 項有資料 ", "3 項未評估 x", "-1 項未評估",
+                                   "03 項未評估", "３ 項未評估", "項未評估", "任意文字"])
+    def test_d_coverage_strict(self, v):
+        with pytest.raises(ValueError):
+            cp.meta_chip("coverage", v)
+        with pytest.raises(ValueError):
+            cp.Chip("coverage", v, "partial")
+
+    @pytest.mark.parametrize("v", ["8／16 項有資料", "8／16", "0／16", "16／16", "1／1", "0 項未評估", "3 項未評估",
+                                   "12 項未評估"])
+    def test_d_coverage_ok(self, v):
+        assert cp.meta_chip("coverage", v).text == v
+        assert cp.Chip("coverage", v, "partial").text == v
+
+    # E：stale／freshness 不得含可讀符號
+    @pytest.mark.parametrize("kind", ["stale", "freshness"])
+    @pytest.mark.parametrize("v", ["✅ 可讀", "✅", "可讀", "✔ 7 天"])
+    def test_e_readable_symbol_banned(self, kind, v):
+        with pytest.raises(ValueError):
+            cp.meta_chip(kind, v)
+        with pytest.raises(ValueError):
+            cp.Chip(kind, f"⚠ {v}" if kind == "freshness" else f"⚠ 過期 {v}", "degraded")
+
+    # F：不可見字元
+    @pytest.mark.parametrize("ch", ["ㅤ", "⠀", "ᅟ", "ᅠ"])
+    def test_f_invisible_is_empty(self, ch):
+        assert ch in cp._INVISIBLE
+        with pytest.raises(ValueError):
+            cp._check_str("x", ch * 3)
+        with pytest.raises(ValueError):
+            cp.kpi_tile_html(label="水位", value=ch)
+
+    # G：占位主值
+    @pytest.mark.parametrize("v", ["暫無", "無資料", "無", "尚無", "N. A.", "n.a.", "暫 無", "無 資 料", "無。", "…", "暫無資料"])
+    def test_g_placeholder_values(self, v):
+        with pytest.raises(ValueError, match="占位"):
+            cp.kpi_tile_html(label="水位", value=v)
+
+    def test_g_real_values_still_ok(self):
+        for v in ("0", "震盪", "無風險"):
+            cp.kpi_tile_html(label="水位", value=v)
