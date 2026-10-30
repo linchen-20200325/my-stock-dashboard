@@ -226,3 +226,71 @@ M1 sparkline 把 NaN 補 0｜M2 metadata chip 接受未登記 kind｜M3 新 kind
 - **未做**：**未跑 pytest 全套**（僅局部實跑：z60 1 passed、鏈守衛測試 28 passed）；未逐條核對 T1～T26 全文。
 - **動態呼叫**：production 僅 `page_today.py` 約 3113 行 `importlib`＋`getattr` 解析 `page_hold.COUNT_EMPTY_NOW`（非目標符號）。
 - ⚠️ **待驗全稱句**：「目標 4 檔（`_ui_kit`／`_market_blocks`／`_target_blocks`／`ui_v2/markup`）不受任何 sha／還原守衛」「窮舉清單無遺漏」皆單組結論，須另派一組用不同方法複驗後才能當前提（`CLAUDE.md` §-2 規則 6）。
+
+## §12 Phase 2 步驟 0 實測結果（2026-10-30，main 64fdeae）
+
+> append-only。§1～§11 一字未動；§12 與前文不一致處，**以本節為準**（理由：本節為較新、以 main `64fdeae` 重測；舊文字在其寫下當日是依當時證據寫的，不是漏刪）。
+> 來源：3 組獨立調查（測試盤點／守衛／helper caller）＋總管對 ①②④ 的自行複驗。**FACT**＝可由程式碼／pytest 重現；**INFERENCE**＝推論或建議。
+> 本節即 Phase 2 步驟 0 的交付（docs-only；0 產品程式、0 tests 變更）。步驟 1～5 **尚未開始**。
+
+### 12.1 路徑更正（FACT）
+
+- `_ui_kit.py`、`_market_blocks.py`、`_target_blocks.py`、`page_today.py`／`page_find.py`／`page_hold.py`／`page_inspect.py`／`page_why.py`／`page_market.py` 實際在 **`src/ui/views/`**，不是 `src/ui/tabs/`。
+- `tab_today.py` 在 `src/ui/tabs/`；`src/ui_v2/markup.py` 路徑正確。
+- §2／§4／§5／§11 凡寫 `src/ui/tabs/_ui_kit` 等處，**以本條為準**。
+
+### 12.2 守衛（FACT，另標 INFERENCE）
+
+- **FACT** `tests/test_batch_z60.py::TestOldFilesUntouched::test_no_diff_against_base` 範圍＝`src/ui/{tabs,etf,pages,render}/**/*.py`＋`app.py`，共 91 檔；**不含 `src/ui/views`、`src/ui_v2`**。`tab_today.py` 受此守衛，改動須同步 `_BASE_DIGEST`。
+- **FACT** z60＋`test_uim_revert_chain` 在本環境（裝 `requirements.txt` 後）158 passed。
+- **FACT** sha 鏈清單：page_today 5／page_hold 10／page_why 3／page_market 2／page_me 1／page_find 1／page_inspect 1（asof，已確認有 sha key）／risk_cap_gate 1，與 §5 一致。
+- **單組結論，兩法一致（仍待驗，不得當前提）** 「`_ui_kit`／`_market_blocks`／`_target_blocks`／`ui_v2/markup` 不受 sha／getsource／byte／AST 守衛」：AST 窮舉與 grep／regex 64hex 掃描結論一致。
+- ⚠️ **仍不等於證明無遺漏**，維持「待驗」，但可信度較 §11 提高；git 歷史僅 50 commit，無法用歷史驗。
+- **FACT（間接約束，改共用層會踩）**：`test_uit_target_page::TestParityWithLegacyPages`（新標的頁卡 HTML 與舊 page_find／page_inspect 逐字相同）；`test_v2_card_blank_line_guard`（Card 輸出）；`test_batch_z49` `_PRE_PAIRS`／z53／z56 無 sha 錨點 pair（`PI/PH.v2_card_html` 與還原前版 byte 相同）；`test_asof_revert_chain` 與 `test_batch_c21` 的 pair 釘死 `_short, _full = v2_short_rows(card)` 附近原始碼。**改 `v2_card_html` 輸出 1 byte 或該段原始碼即紅。**
+
+### 12.3 測試盤點（T1～T26）
+
+**FACT 名稱修正**：T1～T26 點名的檔／類別／函式在 main 全存在。T4 p03～p05 實名 `test_no_exit_stays_no_exit_and_keeps_its_next_step`；T7 p02 `test_full_original_text_is_inside_the_fold_not_only_hover`、p03～p05 `test_full_note_text_is_in_the_fold`；T14 `TestTheAiIsAlwaysDisclosedAsAi`。
+
+**D5 修正（FACT）**：p03／p04 該支未斷言前 3 列，但 facts 測試以 `rows[3:]` 切片，隱含前 3 列是短句；p02 明確 `rows[:3]`。
+
+**T5 重要發現（FACT，QA 以 grep 重現）**：`v2_short_rows` 引用 tests 的計數**視口徑而異**：區分大小寫（僅小寫函式名）＝39 檔／118 次（與 §11 D10 一致）；不分大小寫（含 `V2_SHORT_ROWS` 常數）＝40 檔／165 次，多出的一檔是 `tests/test_v2_words_reuse_b9_b6.py`；全字區分大小寫 37 檔／109 次；全字不分大小寫 39 檔／156 次。口徑差異＝大小寫／常數，已對帳（BACKLOG `P1R-D10-COUNT-RECONCILE` 已解決）。T5 族多數是**資料層**斷言 `dict(P.v2_short_rows(card)[0])[KEY]==字串`，不碰 HTML。
+
+- **INFERENCE** 「換容器」假設對 T5 多半不適用：只在 `v2_short_rows` 回傳形狀／內容改變時受影響。
+
+**強制「在卡面」而 Phase 2 改寫需處理者（FACT）**：T1（p02 `rows[:3]`）、T2（p02～p04 `rows[3:]` 且 len 相等）、T3（`_MUST_KEEP` 卡面）、T8／T9（blk-fold 切卡面）、T11 test_both_cards、T12、T16～T18、T20、T21。
+**純資料層、與位置無關（FACT）**：T4、T6、T14、T15、T11 的 face_length。
+
+**計畫未列、斷言卡面必含的新增（FACT）**：`test_uia_01_02_07_data_state::test_essential_disclosure_visible_without_hover`（今天頁）、z49 pair、`test_asof_revert_chain`／`test_batch_c21` pair、`test_batch_z54`（低）、`test_v2_card_blank_line_guard`／`ui_v2/test_today_fold_no_truncate`（低）。
+**候補（未逐一讀斷言，僅名稱／grep 命中）**：z39／z48／z50～z53／z55～z58、`p01_today_summary_risk`、`v2_silent_fail_b5/b6/b9`、`v2_why_sa2f12`、`v2_sec2_scrub_pages`、`v2_client_words_0927`。
+
+**實跑（FACT，2026-10-30）**：指定子集 1125 passed／1 skipped／0 failed（約 21s）；擴大集合 3065 passed，1 failed＝`test_batch_z59::TestMarkdownItDependency`（環境缺 `markdown-it-py`；它只在 CI fast lane 的 pip 行、不在 `requirements.txt`；補裝後 z59 全檔 44 passed）。
+
+### 12.4 Helper（FACT）
+
+- **簽名並非全 keyword-only**（更正 §11.2「皆 keyword-only」）：`card_html` 全 kw-only；`single_submit_form(form_key, *, …)` 首參位置；`render_card(card, *, …)`、`render_card_isolated(card, *, …)` 首參位置。`render_cards` 0 caller（死碼）；`single_submit_form` tests 端 0 直接呼叫（僅物件同一性）。
+- **caller**：`card_html` production 6（5 頁各 1＋`ui_v2/render.py` 的 `**dict(card)`，唯一 `**` 展開）、tests 18 呼叫節點（下界）；`render_card_isolated` production 13；`render_card` 外部 0。
+- `FOLD_SUMMARY_TEXT` 在 `card_html` 呼叫時才讀（非 def 時綁定）；tests 釘死字面「▸ 詳細」。`render_card.__doc__` 被 `test_p01_today_view::TestSignalChannelDocumentsTheDegradedRule` 釘住。
+- §11.3 的 #1～#8、#10、#11 皆複驗屬實（#10 的計數口徑見 12.3）；`REGIME_SCOPE_NOTE` `len`＝207。
+- **H13／H20 前提不成立**：目前 caller 非 0（`_v2_why_phrase` prod 1；`_v2_pick_excerpt` 3；`_v2_face_value` prod 4／tests 12；`V2_FACE_TOKEN_MAX` 3 頁）→「0 caller 後清理」前提尚不成立。
+- **H18** `V2_SHORT_ROWS` 在 find／hold／why／inspect 各 1 份，page_why 另有 `V2_SHORT_ROW_HEADS`、`v2_short_rows_key`。**H19** `V2_FOLD_ONLY_FACT_KEYS` hold 為 dict、inspect 為 frozenset。**H9** `_chip` 私有，prod 僅 `_ui_kit` 內 2 處。**H34** `TOP_N_OPTIONS`／`DEFAULT_TOP_N`（20／50／100，預設 50）定義在 `page_find`，不在 `_target_blocks`。
+- **H31 兩份 `Basis`**：除欄位名（`data_used` vs `sources`）、`render_basis(extra)` 外，**`BASIS_FIELDS` 標籤與 `AI_NOT_INVOLVED` 文字也不同，`ai` 預設值不同**（market 版 `ai` 無預設、必填；target 版 `ai` 預設 `AI_NOT_INVOLVED`）。INFERENCE：合併超集若要預設 byte-identical，兩邊標籤與預設文字須各自保留，不能只加 alias。
+
+### 12.5 對 §4 步驟的修正建議（INFERENCE，建議、待 Phase 2 開工時採用）
+
+1. 步驟 1 的 `fold_label` 用 `None`，於函式內解析。
+2. 加參數目前**無 production 使用者**（`single_submit_form`／`render_card_isolated` 的 caller 皆在受鏈守衛頁）→ Phase 2 加參數只能靠**新 golden** 驗證。
+3. 步驟 4「hover-only 0 項」通用斷言範圍限 p02～p05（今天頁刻意 hover-only，見 §11 D4）。
+4. T23 維持不動（待 `CV1-DR-12`）。
+5. D3：既有 golden 僅 `test_lamp_direction::TestRenderLive::test_first_four_match_origin_main_golden`；M5 需另寫 golden。
+
+### 12.6 方法與未查完（誠實揭露）
+
+- T5 約 25／36 檔取樣；T10、T22、T24～T26 只驗名稱；T15／T19／T20 部分閱讀；**全套 pytest 未跑**。
+- 以上為 3 組單組各自結論＋總管對 ①②④ 的自驗；**未經第二輪獨立 QA**（`CLAUDE.md` §-2 規則 6）。⚠️ 12.2 的「不受守衛」全稱句仍只能當待驗，不得當 Phase 2 前提。
+- 本節以 main `64fdeae` 為準；下一 session 動工前仍須 `git fetch` 確認 main 未漂移。
+
+### 12.7 步驟 0 完成度與下一步
+
+- 本節即步驟 0 交付。Phase 2 步驟 1～5（改共用層／改寫 tests／mutation）**尚未開始**。
+- **Model×Effort 以 DEC-113 為準＝Sonnet 5.5＋Medium**（§1 R19 的 Opus 5.5＋High 原文已被 DEC-113 取代，R19 原文未改）。開工前只需依 DEC-084／DEC-106 核對實際設定，不符才通知客戶切換。
