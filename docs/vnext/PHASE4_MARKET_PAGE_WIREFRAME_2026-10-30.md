@@ -653,3 +653,38 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
   - → **總管判定（內部自決，依 `CLAUDE.md` §-1.5.A-4；單組判定經兩組 QA 建議一致）**：施工時先實量頁首動作列實高；與 U4 一併判斷，只有不改核准結構就無法讓結論＋⚡ 留在手機第一屏時才送客戶。轉成 **C1-11**。（📌 2026-10-30 QA 修正輪，有意識的更新，不是漏刪；決策者 AI 總管〔內部自決〕）
 - **U6 tile 的摺疊入口標籤**：§4.1／§4.3 ASCII 與 §3.2 P-05～P-07 在 tile 上畫「▸ 詳細」，而 Q3=A 客戶原文為「tile／⚡：維持『查看依據』」。撰寫組讀法＝tile／⚡ 的摺疊入口一律用「🔍 查看依據」（六欄），ASCII 的「▸ 詳細」為示意字、未採用；若實作需要 tile 同時有「▸ 詳細」（例：位階 tile 的工程出處）與「🔍 查看依據」兩個入口，屬版面元件增減，須總管判定是否再送客戶。⛔ 實作批自行在 tile 上新增第二種摺疊標籤。
   - → **總管判定（內部自決，依 `CLAUDE.md` §-1.5.A-4；單組判定經兩組 QA 建議一致）**：每張 tile 只有一個「🔍 查看依據」入口，原 hover-only 出處併入六欄；**禁止新增第二個入口**（ASCII「▸ 詳細」未採用）。轉成 **C3-2／N3**。（📌 2026-10-30 QA 修正輪，有意識的更新，不是漏刪；決策者 AI 總管〔內部自決〕）
+
+### 10.7 P4-1（第一屏）施工狀態（2026-10-30；append-only；實作組單組產出，**未經獨立 QA**；中間批，Visual Fidelity Gate **未判**）
+
+> 📌 有意識的更新，不是漏刪；決策者 AI 總管（事實更新：P4-1 實作完成於分支 `ccr-c8ef17de-9tw7yt`，未 push、未開 PR）。§10.1～§10.6 原文一字未改。
+> 量測：`docs/vnext/phase4_market/p4_1/`（`measure_p4_1.js`＋`_measure_p4_1.json`＋第一屏截圖 8 張；harness 夾具、Streamlit 1.59.2；floor 1.56.0 另以獨立 venv 量一份 `_measure_p4_1_floor156.json`（順序與高度與 1.59.2 一致、差 ≤32px）並跑 AppTest 293 passed；**真資料、手機實機、1.57～1.58 未驗**）。
+> 狀態字：✅＝守衛已落地且綠（含 mutation 必紅）；📏＝屬 Gate 量測，已實量（數字見右欄），正式判定在 P4-3；❌＝實量不達、須總管判斷；⏭＝不屬 P4-1（P4-2／P4-3）。
+
+| # | 狀態 | 守衛／證據 |
+|---|---|---|
+| C1-1 | ✅ | `tests/test_p4_1_market_first_screen.py::TestC1Order::test_c1_1_block_order_is_dec117_q5`（cold／loaded）、`test_c1_1_order_holds_with_a_report`；DOM 實量兩 viewport × 四態順序皆為 H2 > 更新選項 > 更新鈕 >（更新報告）> 結論標題 > 結論句 > 3 tile > ⚡ > AI 行 > 圖A |
+| C1-2 | ✅ | `TestC1Structure::test_c1_2_conclusion_sentence_is_identical_to_pre_p4`（組句 `try` 區塊與 P4 前基底 AST 相同）、`test_c1_2_conclusion_failure_is_red_and_named`；`tests/test_uim_market_page.py::test_conclusion_sentence_and_expanders_are_identical_to_pre_uim`（渲染逐字） |
+| C1-3 | ✅ | `TestC1Structure::test_c1_3_exactly_three_core_tiles_and_update_is_not_a_tile`、`test_c1_3_tiles_live_inside_the_keyed_container`；`tests/test_market_blocks.py::TestStructure::test_core_tiles_are_three_and_hidden_contents_only_inside_basis` |
+| C1-4 | ✅（📏 A10） | `TestC1Structure::test_c1_4_cta_is_in_the_header_before_the_conclusion`、`test_c1_4_cta_uses_the_same_form_and_session_keys_as_today`、`test_c1_4_only_submit_triggers_refresh_radio_does_not`；實量：🚀 桌機 y207、手機 y351（loaded）／y328（cold），兩 viewport 第一屏內 |
+| C1-5 | ✅（📏） | `test_c1_5_mobile_two_plus_one_rule_is_scoped_and_hides_nothing`；實量手機 tile：位階｜水位並排各寬 175、風險整列寬 358；KPI 區塊高 loaded 204＋8＋250＝462（> 契約 Q2 內部上限 340）、cold 204＋8＋183＝395 |
+| C1-6 | 📏（部分 ❌） | 手機結論句頂端：loaded y427（相對 H2 +292）、cold y404（+269）、report y514（+379）——三態皆在第一屏內；**partial（更新報告有失敗）y896，被報告的真錯誤推出第一屏** ⇒ 見 PR_NOTES「停下來請總管判斷」第 2 點；核心狀態：位階｜水位列在第一屏內，風險 tile 頂端 loaded y749（底緣 999，被截）／cold y701（底緣 884） |
+| C1-7 | ✅ | `TestC1Order::test_c1_7_primary_follows_ai_line_with_nothing_in_between`（AI 行的下一個元素就是圖 A 標題） |
+| C1-8 | ⏭ P4-2 | 圖區本批未動；桌機圖 A 標題 loaded y941（第一屏外）——P4-2 壓圖高後由 P4-3 Gate 判 |
+| C1-9 | ✅（附例外） | `test_c1_9_between_cta_and_conclusion_only_collapsed_report_expander`（無報告／乾淨報告：只有預設收合的報告 expander）、`test_c1_9_true_errors_of_a_failed_report_stay_outside_the_fold`（把現況釘住：報告有失敗時，`_render_refresh_report` 依 2026-09-24 客戶裁示把真錯誤留在收合區外 ⇒ CTA 與結論之間出現 `st.error`，與 C1-9 字面衝突，**待總管判定**） |
+| C1-10 | ❌ | 手機 390×844（可用高 791＝844−底部導覽 53）：⚡ bar 頂端 loaded **y1016**、cold **y900**、report y1102、partial y1485 ⇒ **皆在第一屏外**（差 109～694px）。已做的壓縮（只排版、不藏內容）：L1 具名容器內元素間距 16→8px、框內距 16→8/10px、expander 標題列上下內距、結論小標字級；更新說明／水位說明句／排列說明下沉。**不改核准結構無法達成** ⇒ 依 C1-10／U5 送總管（推薦方案見 PR_NOTES） |
+| C1-11 | 📏 | 頁首動作列（form：「更新選項」標題列＋🚀）實高：**桌機 128px、手機 106px**（壓縮後；壓縮前手機 128px） |
+| C2 | ✅ | `TestC2Pointer`（三字面＋≤32 字、風險 tile 與圖 D 各一、冷熱皆有、UI-M 原句只下沉、未新增指路 chip kind）；`tests/test_uim_market_page.py::test_danger_card_demotion_is_signposted_from_hero_and_chart_d`（目標 expander 標題字面、第一張卡含「指標危險度」）；新句 `指標危險度：見下方「指標明細（16 項）」最上方`（24 字） |
+| C3-2 | ✅ | `TestC3Basis::test_c3_2_each_tile_and_alerts_has_exactly_one_basis_expander`、`test_c3_2_page_basis_expanders_count_and_no_second_label`、`test_c3_2_hover_only_regime_provenance_is_visible_text_in_the_basis`；DOM 實量第一屏 `title=` 0 個（四態兩 viewport） |
+| C6-1 | ✅ | `TestC6RiskTile::test_c6_1_short_line_is_lamp_color_bucket_lamp_direction`、`test_c6_1_short_lines_use_the_same_rows_as_chart_d` |
+| C6-2 | ✅ | `test_c6_2_full_sentences_are_all_kept_in_the_fold`、`test_c6_2_full_sentences_are_in_the_risk_basis_on_the_page`；`tests/test_uim_market_page.py::test_loaded_hero_items_match_panel_rows`（外露縮短行↔摺疊整句↔圖 D 三方逐項一致） |
+| C6-3 | ✅ | `test_c6_3_degenerate_and_guard_sentences_are_exposed_verbatim`（全綠／全部不足／部分不足／有項目＋不足）、`test_c6_3_cold_and_failed_on_the_page`（未載入灰、五桶算不出來紅）、`test_c6_3_other_true_errors_stay_outside_folds`（圖 A 讀取失敗紅）；位階契約失敗紅＝`TestInvariants::test_n3_regime_contract_failure_is_red`；結論句失敗紅＝`test_c1_2_conclusion_failure_is_red_and_named` |
+| C6-4 | ✅ | `test_c6_4_coverage_is_exposed_in_the_risk_tile_and_split_is_lossless`、`test_c6_4_cold_coverage_says_not_loaded_not_zero` |
+| C6-5 | ✅ | `test_c6_5_tile_never_adds_new_unevaluated_wording_and_chart_d_keeps_it_outside` |
+| C8-b | ✅ | `TestC8::test_c8_b_radio_and_long_note_are_inside_update_options_collapsed`、`test_c8_b_note_is_the_same_string_as_today_page`、`test_c8_b_options_note_contract_in_ui_kit`；Phase 2 golden（`tests/test_p2_step1_shared_optional_params.py`）照綠 |
+| C8-c | ✅ | `test_c8_c_bar_line_states`（live／無異常／degraded／未載入／未完成掃描／failed／有衝突）、`test_c8_c_page_bar_is_one_line_and_full_list_is_in_the_fold`；`tests/test_uim_market_page.py::test_alerts_block_*` 兩條改寫 |
+| N1 | ✅ | `TestInvariants::test_n1_water_tile_has_no_number_and_verbatim_guards`（cold／loaded；有上限的夾具下 tile 外露 0 個 %，原區間只在摺疊） |
+| N2 | ✅ | `test_n2_cold_first_screen_has_no_red_and_no_zero_standins` |
+| N3 | ✅ | `test_n3_regime_tile_face_equals_conclusion_clause`（三態）、`test_n3_regime_basis_carries_every_fact_verbatim`、`test_n3_regime_contract_failure_is_red` |
+| N4 | ✅ | `tests/test_p4_revert_chain.py`（基底 `7484c57b` sha `59c9801b…`；3 組 pair；接在 `uim_revert_for` 開頭，`test_chain_head_calls_p4_first`）；`test_uim_revert_chain`／`test_nav1_revert_chain`／`test_xvext_revert_chain` 與其餘 30＋條鏈全綠 |
+| N5～N7 | ⏭ P4-3（本批已自查） | `src/services|compute|data`、`shared/`、`app.py`、`page_today.py`、`requirements.txt` 0 diff；`test_c3_layering_guard`、`test_batch_z60` 綠；新文案無全稱關鍵詞（REGISTRY 不需新增） |
+| C3-1／C4-*／C8-a／C8-0 | ⏭ P4-2 | 圖區 |
