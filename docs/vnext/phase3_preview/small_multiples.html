@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>small multiples</title><style>:root{--ochre:#d59a5e;--ochre-bg:#2a2013;--ochre-line:#8a6234;--focus:#8fc0ff;--paper:#0e141b;--panel:#151d26;--panel-2:#1b242f;--grid:#1a242e;--rule:#2e3b48;--rule-2:#46545f;--ink:#dbe5ef;--ink-2:#9fb0c1;--ink-3:#7d8d99;--review-bg:#1d1b28;--review-line:#8b82b4;--review-ink:#c3bbe4;--sig-green:#57b985;--sig-green-bg:#11241a;--sig-amber:#d3a43c;--sig-amber-bg:#292110;--sig-red:#e8706b;--sig-red-bg:#2b1615;--sig-blue:#4b8efe;--sig-blue-bg:#141f2b;--sig-grey:#8b98a4;--sig-grey-bg:#1b232b;--sig-neutral:#8fa3b8;--sig-neutral-bg:#26313d;--cta-primary-bg:#1f6feb;--cta-primary-fg:#ffffff;--sp-1:4px;--sp-2:6px;--sp-3:8px;--sp-4:10px;--sp-5:12px;--sp-6:16px;--sp-7:22px;--sp-8:26px;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+/* ── block 網格（卡內一列幾格）── */
+.grd{display:grid;gap:var(--sp-5)}
+.grd>*{min-width:0}
+.grd>.blk{margin-top:0px}
+.grd-t1{margin-top:15px}
+.grd-t2{margin-top:10px}
+.grd-t3{margin-top:6px}
+.grd-t4{margin-top:5px}
+.g-1-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}
+.g-3-2-1{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* ── 層級網格（同一層的 block 彼此怎麼並排）── */
+.lyr{display:grid;gap:var(--sp-5)}
+.lyr>*{min-width:0}
+.lyr>.grd{margin-top:0px}
+.lyr-t2{margin-top:10px}
+.lg-3-2-1{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* ── 卡片基準 ── */
+.blk{box-sizing:border-box;background:var(--panel);border-width:1px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk *{box-sizing:border-box}
+/* ── 四階密度階梯（UI_COMPONENTS §1）── */
+.blk-t1{margin-top:15px;padding-top:15px;padding-bottom:15px;padding-left:17px;padding-right:17px;border-width:2px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk-t2{margin-top:10px;padding-top:10px;padding-bottom:10px;padding-left:12px;padding-right:12px;border-width:1px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk-t3{margin-top:6px;padding-top:6px;padding-bottom:6px;padding-left:9px;padding-right:9px;border-width:1px;border-style:solid;border-color:var(--rule-2);border-radius:2px}
+.blk-t4{margin-top:5px;padding-top:5px;padding-bottom:5px;padding-left:9px;padding-right:9px;border-width:1px;border-style:dashed;border-color:var(--rule-2);border-radius:2px}
+/* ── 卡內結構 ── */
+.blk-head{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);flex-wrap:wrap}
+.blk-head>.bdg{flex-shrink:0}
+.blk-title{flex:1 1 0;min-width:0}
+.blk-t1 .blk-title{font-size:17.5px;font-weight:700}
+.blk-t2 .blk-title{font-size:14.5px;font-weight:700}
+.blk-t3 .blk-title{font-size:13px;font-weight:700}
+.blk-t4 .blk-title{font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.blk-val{font-size:24px;font-weight:700;font-family:var(--mono);line-height:1.25;font-variant-numeric:tabular-nums}
+.blk-t4 .blk-val{font-size:22px}
+.blk-lvl{color:var(--ink-2)}
+.blk-facts{margin-top:var(--sp-3)}
+.blk-fact{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);padding-top:var(--sp-1);padding-bottom:var(--sp-1);border-top-width:1px;border-top-style:solid;border-top-color:var(--grid)}
+.blk-fact:first-child{border-top-width:0px}
+.blk-fact-k{color:var(--ink-3);font-size:11.5px;flex-shrink:0;white-space:nowrap}
+.blk-fact-v{color:var(--ink);font-variant-numeric:tabular-nums}
+/* ── 徽章共用幾何 ── */
+.bdg{display:inline-flex;align-items:center;gap:4px;border-radius:3px;padding-top:1px;padding-bottom:1px;padding-left:7px;padding-right:7px;font-size:11.5px;font-weight:600;white-space:nowrap;border-width:1px;border-style:solid}
+/* ── 徽章編號配色（⛔ #9 與 #1 零共用色 token）── */
+.bdg-1{background:var(--sig-green-bg);color:var(--sig-green);border-width:1px;border-style:solid;border-color:var(--sig-green)}
+.bdg-2{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-3{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-4{background:var(--sig-amber-bg);color:var(--sig-amber);border-width:1px;border-style:solid;border-color:var(--sig-amber)}
+.bdg-5{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:dashed;border-color:var(--rule-2)}
+.bdg-6{background:var(--sig-red-bg);color:var(--sig-red);border-width:1px;border-style:solid;border-color:var(--sig-red)}
+.bdg-7{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-8{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+.bdg-9{background:var(--sig-neutral-bg);color:var(--sig-neutral);border-width:1px;border-style:dashed;border-color:var(--sig-blue)}
+.bdg-11{background:var(--sig-grey-bg);color:var(--sig-grey);border-width:1px;border-style:solid;border-color:var(--rule-2)}
+/* ── 徽章尺寸（依所在卡層 t1→b1 … t4→b4）── */
+.bdg.sb-b1{font-size:14.5px;padding-top:10px;padding-bottom:10px;padding-left:22px;padding-right:22px;min-height:46px;border-width:2px;border-radius:3px}
+.bdg.sb-b2{font-size:12.5px;padding-top:5px;padding-bottom:5px;padding-left:13px;padding-right:13px;min-height:36px;border-width:1px;border-radius:3px}
+.bdg.sb-b3{font-size:11px;padding-top:2px;padding-bottom:2px;padding-left:10px;padding-right:10px;min-height:28px;border-width:1px;border-radius:3px}
+.bdg.sb-b4{font-size:10.5px;padding-top:2px;padding-bottom:2px;padding-left:5px;padding-right:5px;min-height:26px;border-width:0px;border-radius:3px}
+/* ── 燈卡「▸ 詳細」純 CSS 開關 ── */
+.blk-fold{position:relative}
+.blk-fold-i{position:absolute;top:0;left:0;width:1px;height:1px;margin:0;padding:0;opacity:0;pointer-events:none}
+.blk-fold-s{display:block;cursor:pointer;padding-top:var(--sp-2);padding-bottom:var(--sp-2);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+.blk-fold-i:focus-visible~.blk-fold-s{outline:2px solid currentColor;outline-offset:2px}
+.blk-fold-b{display:none}
+.blk-fold-i:checked~.blk-fold-b{display:block}
+@media (max-width:880px){.g-1-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}.g-3-2-1{grid-template-columns:repeat(2,minmax(0,1fr))}.lg-3-2-1{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.g-1-1-1{grid-template-columns:repeat(1,minmax(0,1fr))}.g-3-2-1{grid-template-columns:repeat(1,minmax(0,1fr))}.lg-3-2-1{grid-template-columns:repeat(1,minmax(0,1fr))}.blk-t1{padding-top:11px;padding-bottom:11px;padding-left:12px;padding-right:12px}}
+:root{--cp-chip-radius:999px;--cp-chip-h:22px;--cp-chip-fs:11.5px;--cp-chip-pad-v:2px;--cp-chip-pad-h:8px;--cp-card-radius-bp:14px;--cp-tile-pad-v:10px;--cp-tile-pad-h:12px;--cp-tile-radius:2px;--cp-tile-min-h:96px;--cp-slot-h-desktop:220px;--cp-slot-h-mobile:140px;--cp-mini-h:96px;--cp-spark-h:64px;--cp-touch-min:44px;}
+.cp-chips{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin:var(--sp-2) 0}
+.cp-chip{display:inline-flex;align-items:center;box-sizing:border-box;min-height:var(--cp-chip-h);padding:var(--cp-chip-pad-v) var(--cp-chip-pad-h);border-radius:var(--cp-chip-radius);font-size:var(--cp-chip-fs);line-height:1.3;max-width:100%;overflow-wrap:anywhere}
+.cp-info{border:1px solid var(--ink-3);color:var(--ink-2);background:transparent}
+.cp-status{border:1px solid transparent;color:var(--ink)}
+.cp-t-green{background:var(--sig-green-bg);color:var(--sig-green)}
+.cp-t-amber{background:var(--sig-amber-bg);color:var(--sig-amber)}
+.cp-t-red{background:var(--sig-red-bg);color:var(--sig-red)}
+.cp-t-grey{background:var(--sig-grey-bg);color:var(--sig-grey)}
+.cp-guard{border:2px solid var(--ink-2);color:var(--ink);background:transparent;font-weight:600}
+.cp-ch-title{font-size:var(--sp-6);font-weight:600;color:var(--ink);margin:0 0 var(--sp-2)}
+.cp-ch-say{color:var(--ink-2);margin:var(--sp-2) 0}
+.cp-slot{box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;overflow-wrap:anywhere}
+.cp-slot-primary{height:var(--cp-slot-h);border:1px solid var(--rule)}
+.cp-slot-line{min-height:32px;padding:var(--sp-2) var(--sp-3);justify-content:flex-start}
+.cp-s-grey{color:var(--sig-grey)}
+.cp-s-red{color:var(--sig-red)}
+.cp-tile{box-sizing:border-box;min-height:var(--cp-tile-min-h);padding:var(--cp-tile-pad-v) var(--cp-tile-pad-h);border:1px solid var(--rule);border-radius:var(--cp-tile-radius);background:var(--panel);display:flex;flex-direction:column}
+.cp-tile-label{font-size:13px;color:var(--ink-2)}
+.cp-tile-value{font-size:20px;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance}
+.cp-tile-value.cp-blank{min-height:24px}
+.cp-tile-say{font-size:12px;color:var(--ink-2);margin-top:var(--sp-2)}
+.cp-tile-spark{margin-top:auto;padding-top:var(--sp-2)}
+.cp-spark{display:block;max-height:var(--cp-spark-h);color:var(--ink-2)}
+.cp-spark polyline{stroke:currentColor;stroke-width:1.5;fill:none;vector-effect:non-scaling-stroke}
+.cp-spark circle{fill:currentColor}
+.cp-spark-missing{display:flex;align-items:center;box-sizing:border-box;max-height:none;font-size:11px;color:var(--sig-grey);overflow-wrap:anywhere;white-space:normal}
+.cp-sm{display:grid;gap:var(--sp-3)}
+.cp-sm-cell{min-width:0}
+.cp-sm-cell .cp-spark{width:100%;height:auto;max-height:var(--cp-mini-h)}
+.cp-sm-cell .cp-spark-missing{max-height:none}
+.cp-sm-name{font-size:12px;color:var(--ink-2)}
+.cp-sm-missing{font-size:12px;color:var(--sig-grey);min-height:32px;overflow-wrap:anywhere;white-space:normal}
+.cp-sm-d1-m1{grid-template-columns:repeat(1,minmax(0,1fr))}
+.cp-sm-d1-m2{grid-template-columns:repeat(1,minmax(0,1fr))}
+.cp-sm-d2-m1{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cp-sm-d2-m2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cp-sm-d3-m1{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cp-sm-d3-m2{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:640px){.cp-slot-primary{height:min(var(--cp-slot-h),var(--cp-slot-h-mobile))}.cp-sm-d1-m1{grid-template-columns:repeat(1,minmax(0,1fr))}.cp-sm-d1-m2{grid-template-columns:repeat(2,minmax(0,1fr))}.cp-sm-d2-m1{grid-template-columns:repeat(1,minmax(0,1fr))}.cp-sm-d2-m2{grid-template-columns:repeat(2,minmax(0,1fr))}.cp-sm-d3-m1{grid-template-columns:repeat(1,minmax(0,1fr))}.cp-sm-d3-m2{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:"Noto Sans CJK TC","PingFang TC","Microsoft JhengHei","WenQuanYi Zen Hei",system-ui,sans-serif;font-size:14px;line-height:1.5}
+.pv-wrap{max-width:940px;margin:0 auto;padding:16px}
+.pv-h1{font-size:18px;margin:0 0 4px}
+.pv-banner{font-size:12px;color:var(--ink-3);border:1px solid var(--rule);padding:6px 10px;margin:0 0 14px}
+.pv-state{margin:18px 0 6px;font-size:12px;font-weight:700;color:var(--ink-2);letter-spacing:.04em}
+.pv-state b{color:var(--sig-blue)}
+.pv-card{background:var(--panel);border:1px solid var(--rule-2);border-radius:2px;padding:12px}
+.pv-note{font-size:11.5px;color:var(--ink-3);margin:6px 0 0}
+.pv-fold{border-top:1px solid var(--rule);margin-top:10px;padding-top:6px;font-size:12.5px;color:var(--ink-2)}
+.pv-fold .t{color:var(--ink);font-size:13px}
+.pv-fold dl{margin:6px 0 0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
+.pv-fold dt{color:var(--ink-3)} .pv-fold dd{margin:0}
+.pv-native{height:var(--h,220px);border:1px dashed var(--rule-2);display:flex;align-items:center;justify-content:center;position:relative;background:var(--grid);color:var(--ink-3);font-size:12px;overflow:hidden}
+.pv-native svg{position:absolute;inset:0;width:100%;height:100%}
+.pv-native span{position:relative;background:var(--panel);padding:1px 6px}
+.pv-row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.pv-row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.pv-cell{display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0}
+.pv-cap{font-size:11.5px;color:var(--ink-3)}
+.pv-list{margin:6px 0;padding:0;list-style:none}
+.pv-list li{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule);min-height:36px;align-items:center}
+.pv-list .r{color:var(--ink-3);width:18px}
+.pv-list .v{margin-left:auto;font-family:var(--mono);color:var(--ink-2)}
+.pv-allbtn{display:flex;align-items:center;min-height:var(--cp-touch-min);color:var(--ink-2)}
+.pv-seg{display:inline-flex;border:1px solid var(--rule-2);border-radius:999px;padding:2px;gap:2px}
+.pv-seg span{padding:6px 14px;border-radius:999px;color:var(--ink-2);min-height:var(--cp-touch-min);display:inline-flex;align-items:center}
+.pv-seg span.on{background:var(--cta-primary-bg);color:var(--cta-primary-fg)}
+table.pv-t{border-collapse:collapse;width:100%;font-size:12.5px}
+table.pv-t th,table.pv-t td{border:1px solid var(--rule);padding:5px 8px;text-align:left;vertical-align:top}
+table.pv-t th{color:var(--ink-3);font-weight:600}
+.pv-sw{display:inline-block;width:14px;height:14px;border:1px solid #888;vertical-align:-2px;margin-right:6px}
+.pv-bgbox{padding:12px;border:1px solid #444;margin:6px 0}
+@media (max-width:640px){.pv-wrap{padding:16px}.pv-row3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style></head><body><div class="pv-wrap"><h1 class="pv-h1">small multiples</h1><div class="pv-banner">Phase 3 離線靜態預覽｜元件 HTML 由 <code>compact.py</code> 產出，<code>pv-</code> 前綴為預覽外殼（非元件）｜資料全為夾具 ※示意，禁止當投資結論｜mode=dark</div><div class="pv-state"><b>●</b> 已載入 5 格（含缺系列格 美元 DXY；桌 3 欄／手 2 欄；格內無資料日、無數字）</div><div class="pv-card"><div class="cp-chart-header"><div class="cp-ch-title">圖B 🌍 國際趨勢</div><div class="cp-chips"><span class="cp-chip cp-guard" data-kind="not_defined">⬜ 尚未定義</span><span class="cp-chip cp-info" data-kind="asof">🕒 資料 10/28</span><span class="cp-chip cp-info" data-kind="window">近 120 日</span></div><div class="cp-ch-say">看海外市場、利率與美元是否正在幫助或壓抑台股風險偏好。</div></div><div class="cp-sm cp-sm-d3-m2"><div class="cp-sm-cell"><div class="cp-sm-name">道瓊 DJI</div><svg class="cp-spark" viewBox="0 0 160 64" width="160" height="64" role="img" aria-label="道瓊 DJI"><title>道瓊 DJI</title><polyline fill="none" vector-effect="non-scaling-stroke" points="2.00,62.00 4.64,57.01 7.29,52.18 9.93,47.66 12.58,43.60 15.22,40.10 17.86,37.28 20.51,35.21 23.15,33.92 25.80,33.43 28.44,33.73 31.08,34.75 33.73,36.41 36.37,38.62 39.02,41.24 41.66,44.12 44.31,47.12 46.95,50.07 49.59,52.82 52.24,55.22 54.88,57.12 57.53,58.42 60.17,59.02 62.81,58.86 65.46,57.91 68.10,56.16 70.75,53.64 73.39,50.42 76.03,46.58 78.68,42.23 81.32,37.51 83.97,32.57 86.61,27.56 89.25,22.65 91.90,17.98 94.54,13.71 97.19,9.97 99.83,6.86 102.47,4.46 105.12,2.85 107.76,2.03 110.41,2.00 113.05,2.72 115.69,4.13 118.34,6.13 120.98,8.59 123.63,11.39 126.27,14.36 128.92,17.35 131.56,20.20 134.20,22.76 136.85,24.88 139.49,26.45 142.14,27.35 144.78,27.51 147.42,26.89 150.07,25.47 152.71,23.27 155.36,20.33 158.00,16.73"/></svg></div><div class="cp-sm-cell"><div class="cp-sm-name">那指 IXIC</div><svg class="cp-spark" viewBox="0 0 160 64" width="160" height="64" role="img" aria-label="那指 IXIC"><title>那指 IXIC</title><polyline fill="none" vector-effect="non-scaling-stroke" points="2.00,62.00 4.64,57.63 7.29,53.48 9.93,49.77 12.58,46.66 15.22,44.31 17.86,42.81 20.51,42.20 23.15,42.48 25.80,43.57 28.44,45.36 31.08,47.68 33.73,50.35 36.37,53.14 39.02,55.84 41.66,58.22 44.31,60.10 46.95,61.29 49.59,61.68 52.24,61.19 54.88,59.81 57.53,57.56 60.17,54.55 62.81,50.90 65.46,46.80 68.10,42.45 70.75,38.07 73.39,33.88 76.03,30.09 78.68,26.89 81.32,24.44 83.97,22.82 86.61,22.09 89.25,22.25 91.90,23.24 94.54,24.95 97.19,27.21 99.83,29.85 102.47,32.64 105.12,35.36 107.76,37.80 110.41,39.75 113.05,41.04 115.69,41.54 118.34,41.17 120.98,39.90 123.63,37.77 126.27,34.85 128.92,31.28 131.56,27.23 134.20,22.90 136.85,18.50 139.49,14.28 142.14,10.43 144.78,7.14 147.42,4.58 150.07,2.84 152.71,2.00 155.36,2.05 158.00,2.93"/></svg></div><div class="cp-sm-cell"><div class="cp-sm-name">費半 SOX</div><svg class="cp-spark" viewBox="0 0 160 64" width="160" height="64" role="img" aria-label="費半 SOX"><title>費半 SOX</title><polyline fill="none" vector-effect="non-scaling-stroke" points="2.00,24.91 4.64,20.91 7.29,17.03 9.93,13.40 12.58,10.11 15.22,7.28 17.86,4.98 20.51,3.30 23.15,2.30 25.80,2.00 28.44,2.43 31.08,3.59 33.73,5.46 36.37,7.98 39.02,11.12 41.66,14.78 44.31,18.88 46.95,23.31 49.59,27.97 52.24,32.72 54.88,37.46 57.53,42.06 60.17,46.41 62.81,50.39 65.46,53.90 68.10,56.86 70.75,59.19 73.39,60.85 76.03,61.79 78.68,62.00 81.32,61.49 83.97,60.27 86.61,58.40 89.25,55.94 91.90,52.96 94.54,49.55 97.19,45.83 99.83,41.91 102.47,37.90 105.12,33.92 107.76,30.11 110.41,26.57 113.05,23.41 115.69,20.72 118.34,18.61 120.98,17.13 123.63,16.33 126.27,16.25 128.92,16.90 131.56,18.28 134.20,20.35 136.85,23.06 139.49,26.37 142.14,30.17 144.78,34.38 147.42,38.89 150.07,43.59 152.71,48.36 155.36,53.07 158.00,57.60"/></svg></div><div class="cp-sm-cell"><div class="cp-sm-name">美債 10Y</div><svg class="cp-spark" viewBox="0 0 160 64" width="160" height="64" role="img" aria-label="美債 10Y"><title>美債 10Y</title><polyline fill="none" vector-effect="non-scaling-stroke" points="2.00,32.00 4.64,27.73 7.29,23.54 9.93,19.53 12.58,15.77 15.22,12.35 17.86,9.32 20.51,6.76 23.15,4.71 25.80,3.21 28.44,2.30 31.08,2.00 33.73,2.31 36.37,3.22 39.02,4.72 41.66,6.78 44.31,9.35 46.95,12.38 49.59,15.81 52.24,19.57 54.88,23.58 57.53,27.77 60.17,32.04 62.81,36.31 65.46,40.49 68.10,44.50 70.75,48.26 73.39,51.68 76.03,54.70 78.68,57.26 81.32,59.31 83.97,60.80 86.61,61.70 89.25,62.00 91.90,61.69 94.54,60.77 97.19,59.26 99.83,57.20 102.47,54.63 105.12,51.59 107.76,48.16 110.41,44.40 113.05,40.38 115.69,36.20 118.34,31.92 120.98,27.65 123.63,23.47 126.27,19.46 128.92,15.71 131.56,12.29 134.20,9.27 136.85,6.71 139.49,4.67 142.14,3.19 144.78,2.29 147.42,2.00 150.07,2.32 152.71,3.24 155.36,4.75 158.00,6.82"/></svg></div><div class="cp-sm-cell"><div class="cp-sm-name">美元 DXY</div><div class="cp-sm-missing">▨ 無資料：本輪沒有這個系列</div></div></div><div class="pv-fold"><div class="t">▸ 為什麼／來源／限制／去哪補</div></div></div><div class="pv-state"><b>●</b> 格內窗口 chip（僅窗口與組級不同時）</div><div class="pv-card"><div class="cp-sm cp-sm-d3-m2"><div class="cp-sm-cell"><div class="cp-sm-name">道瓊 DJI</div><svg class="cp-spark" viewBox="0 0 160 64" width="160" height="64" role="img" aria-label="道瓊 DJI"><title>道瓊 DJI</title><polyline fill="none" vector-effect="non-scaling-stroke" points="2.00,62.00 4.64,57.01 7.29,52.18 9.93,47.66 12.58,43.60 15.22,40.10 17.86,37.28 20.51,35.21 23.15,33.92 25.80,33.43 28.44,33.73 31.08,34.75 33.73,36.41 36.37,38.62 39.02,41.24 41.66,44.12 44.31,47.12 46.95,50.07 49.59,52.82 52.24,55.22 54.88,57.12 57.53,58.42 60.17,59.02 62.81,58.86 65.46,57.91 68.10,56.16 70.75,53.64 73.39,50.42 76.03,46.58 78.68,42.23 81.32,37.51 83.97,32.57 86.61,27.56 89.25,22.65 91.90,17.98 94.54,13.71 97.19,9.97 99.83,6.86 102.47,4.46 105.12,2.85 107.76,2.03 110.41,2.00 113.05,2.72 115.69,4.13 118.34,6.13 120.98,8.59 123.63,11.39 126.27,14.36 128.92,17.35 131.56,20.20 134.20,22.76 136.85,24.88 139.49,26.45 142.14,27.35 144.78,27.51 147.42,26.89 150.07,25.47 152.71,23.27 155.36,20.33 158.00,16.73"/></svg><span class="cp-chip cp-info" data-kind="window">近 60 日</span></div><div class="cp-sm-cell"><div class="cp-sm-name">那指 IXIC</div><svg class="cp-spark" viewBox="0 0 160 64" width="160" height="64" role="img" aria-label="那指 IXIC"><title>那指 IXIC</title><polyline fill="none" vector-effect="non-scaling-stroke" points="2.00,62.00 4.64,57.63 7.29,53.48 9.93,49.77 12.58,46.66 15.22,44.31 17.86,42.81 20.51,42.20 23.15,42.48 25.80,43.57 28.44,45.36 31.08,47.68 33.73,50.35 36.37,53.14 39.02,55.84 41.66,58.22 44.31,60.10 46.95,61.29 49.59,61.68 52.24,61.19 54.88,59.81 57.53,57.56 60.17,54.55 62.81,50.90 65.46,46.80 68.10,42.45 70.75,38.07 73.39,33.88 76.03,30.09 78.68,26.89 81.32,24.44 83.97,22.82 86.61,22.09 89.25,22.25 91.90,23.24 94.54,24.95 97.19,27.21 99.83,29.85 102.47,32.64 105.12,35.36 107.76,37.80 110.41,39.75 113.05,41.04 115.69,41.54 118.34,41.17 120.98,39.90 123.63,37.77 126.27,34.85 128.92,31.28 131.56,27.23 134.20,22.90 136.85,18.50 139.49,14.28 142.14,10.43 144.78,7.14 147.42,4.58 150.07,2.84 152.71,2.00 155.36,2.05 158.00,2.93"/></svg></div><div class="cp-sm-cell"><div class="cp-sm-name">費半 SOX</div><svg class="cp-spark" viewBox="0 0 160 64" width="160" height="64" role="img" aria-label="費半 SOX"><title>費半 SOX</title><polyline fill="none" vector-effect="non-scaling-stroke" points="2.00,24.91 4.64,20.91 7.29,17.03 9.93,13.40 12.58,10.11 15.22,7.28 17.86,4.98 20.51,3.30 23.15,2.30 25.80,2.00 28.44,2.43 31.08,3.59 33.73,5.46 36.37,7.98 39.02,11.12 41.66,14.78 44.31,18.88 46.95,23.31 49.59,27.97 52.24,32.72 54.88,37.46 57.53,42.06 60.17,46.41 62.81,50.39 65.46,53.90 68.10,56.86 70.75,59.19 73.39,60.85 76.03,61.79 78.68,62.00 81.32,61.49 83.97,60.27 86.61,58.40 89.25,55.94 91.90,52.96 94.54,49.55 97.19,45.83 99.83,41.91 102.47,37.90 105.12,33.92 107.76,30.11 110.41,26.57 113.05,23.41 115.69,20.72 118.34,18.61 120.98,17.13 123.63,16.33 126.27,16.25 128.92,16.90 131.56,18.28 134.20,20.35 136.85,23.06 139.49,26.37 142.14,30.17 144.78,34.38 147.42,38.89 150.07,43.59 152.71,48.36 155.36,53.07 158.00,57.60"/></svg></div></div></div><div class="pv-state"><b>●</b> 冷啟動（D6=B）：整組縮成一行 Missing；Primary 不受影響</div><div class="pv-card"><div class="cp-chart-header"><div class="cp-ch-title">圖B 🌍 國際趨勢</div><div class="cp-chips"><span class="cp-chip cp-guard" data-kind="not_defined">⬜ 尚未定義</span></div><div class="cp-ch-say">看海外市場、利率與美元是否正在幫助或壓抑台股風險偏好。</div></div><div class="cp-slot cp-slot-line cp-s-grey" role="status" data-state="idle">⬜ 尚未載入：請按更新</div><div class="pv-fold"><div class="t">▸ 為什麼／來源／限制／去哪補</div></div></div><div class="pv-state"><b>●</b> 冷啟動若改為每格各自 Missing（對照：Secondary 5 格逐一縮一行）</div><div class="pv-card"><div class="cp-sm cp-sm-d3-m2"><div class="cp-sm-cell"><div class="cp-sm-name">道瓊 DJI</div><div class="cp-sm-missing">⬜ 尚未載入：請按更新</div></div><div class="cp-sm-cell"><div class="cp-sm-name">那指 IXIC</div><div class="cp-sm-missing">⬜ 尚未載入：請按更新</div></div><div class="cp-sm-cell"><div class="cp-sm-name">費半 SOX</div><div class="cp-sm-missing">⬜ 尚未載入：請按更新</div></div><div class="cp-sm-cell"><div class="cp-sm-name">美債 10Y</div><div class="cp-sm-missing">⬜ 尚未載入：請按更新</div></div><div class="cp-sm-cell"><div class="cp-sm-name">美元 DXY</div><div class="cp-sm-missing">⬜ 尚未載入：請按更新</div></div></div></div></div></body></html>

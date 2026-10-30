@@ -499,3 +499,52 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 - 所有 px 為線框『預算』（契約 §19＋CJK 字寬估算），**尚未量測**；手機實機、Streamlit Cloud 未驗。
 - 本拆分未經第二組驗證；『若需要』『不動受鏈檔』為開工時須重測的條件，不是已確認事實。
 - D8 的 1.56 行為、D6=B 載入後位移量、D3 護欄實線粗框的視覺權重，**皆未驗**（線框 §7 第 10 點）。
+
+## §17 Phase 3 步驟 2～5 結果與完成狀態（2026-10-30）
+
+> append-only；§16 一字未動。步驟 1（`compact.py`）已於 #979 合併；本節記錄步驟 2～5 與本輪（工作樹、**未 commit**）的修正輪結果。⚠️ 本節由執行 AI 起草；其中「QA 回報」類句子為兩組獨立 QA 的回報轉錄，執行 AI 未自行重跑（`CLAUDE.md` §-2 規則 6）。
+
+### 17.1 步驟 2（`_ui_kit` 薄封裝）：**未做（判定不需要）**
+
+- **理由**：§16.2 步驟 2 本就是「若需要才做」。步驟 1 的 `compact.py` 已是純字串（`chips_html`／`chart_header_html`／`chart_slot_missing_html`／`kpi_tile_html` 等直接產出 HTML），Phase 3 不掛頁、0 個 production caller，**沒有任何 Streamlit 呼叫端需要薄封裝**；為不存在的 caller 先造抽象正是 `CLAUDE.md` §8.1 step 6 的反例。
+- **掛頁時**：由 **Phase 4** 以最小薄封裝處理（`render_fold`＝`st.expander` 薄封裝、`status_chip` 公開、`Basis` 超集合併 H31 等屆時才決定要不要做、放哪個檔）；是否受還原鏈／z60 `_BASE_DIGEST` 鎖定須**以當時 main 重測**（本節不宣稱 `_ui_kit.py` 是否受鏈，§12.2 的結論可能已變）。
+- **BACKLOG**：已登（P2，見 `docs/BACKLOG.md`「Phase 3 收尾」列）。
+
+### 17.2 步驟 3（站殼間距量測）：結果與「站殼＝待客戶裁示」
+
+- 量測報告：`docs/vnext/PHASE3_SHELL_SPACING_MEASUREMENT_2026-10-30.md`（0 行 `src`／`tests`／`app.py`；腳本 `tools/phase3_measure/`）。實測 H2 y＝223.2（1440／390 同）；拆解＝padding-top 96＋零高度 `<style>` 容器 flex gap 64＋站標列 31.2＋其餘；最小方案 R（nav4 專屬注入 `padding-top:72px`＋隱藏 style-only 容器）H2 ≈135.2（QA 獨立重現實跑 135.19），`?legacy=1` 因只從 nav4 注入而不變。
+- **判定**：~~局部變更、內部自決~~（初版單組判斷；📌 有意識的更正，不是漏刪）→ **AI 總管判定屬整體 layout 變更**（全站每頁第一屏統一上移 88px），依 DEC-115 **送客戶裁示並附推薦方案**。DEC-115 本文只寫「若屬整體 layout 變更再送客戶；本 DEC 不核准任何站殼改動」，「局部內部自決」僅見於本 Plan §16.2 轉述。
+- **狀態：待客戶裁示（D7）**；裁示前 `app.py`、`src/ui/views/shell_nav4.py` 0 行改動。`docs/DECISIONS.md` **不新增 DEC**（裁示尚未發生，裁示後才登）。
+
+### 17.3 步驟 4（D8 切換鈕 floor 1.56 實跑）：結論
+
+- 驗證報告：`docs/vnext/PHASE3_D8_FLOOR156_VERIFICATION_2026-10-30.md`（獨立 venv，`streamlit==1.56.0`，AppTest 44 列 0 FAIL＋Playwright 真瀏覽器；`requirements.txt` 0 diff）。1.59.2 QA 亦重現相同結論；1.57～1.58 未驗。
+- **結論：D8=B（`st.segmented_control`）成立，不退回 A。** 5 條硬性約束：
+  1. **取消選取回退**：點已選項回 `None`（即使有 `default=`）；每個 caller 保證 `None` 不外洩（首選 `on_change` 寫回 `last_valid`，播種 key、不傳 `default=`）。
+  2. **form 內 `None`**：form 內不即時 rerun，值在 submit 才送出；submit 分支須把 `None` 視同缺值（`single_submit_form` 現行 `.get(widget_key, options[0])` 在 key 存在且為 `None` 時會寫出 `{"mode": None}`——換元件時須改，現況 radio 路徑無 bug）。
+  3. **44px**：預設膠囊 32px；要 44px 須 CSS 覆寫 `min-height:44px`（依賴內部 `data-testid`，失效退化為 32px），否則在交付報告揭露 32px。
+  4. **換行**：必須容忍換行（0 橫向溢出）；form 內 5 顆×3 字在 390 寬會 2 列、孤立第 5 顆；設計稿須畫換行態。
+  5. **options 型別**：用 str key＋`format_func`；**不用 tuple options**（`default=<tuple>` 會 raise）；`default` 須在 options 內；空 options 呼叫端自擋；options 變動靜默回 default。
+- **`st.html` 剝 svg 的掛頁規則**（重大發現，與 D8 無關）：`st.html` 在 1.56.0（及 1.59.2）把行內 `<svg>` 整段剝除、無 exception。`sparkline_svg` 的輸出**不得經 `st.html`**；掛頁用 `st.markdown(unsafe_allow_html=True)` 或改包 data-URI `<img>`（兩者實測保留）。已寫入 `compact.py` 模組與 `sparkline_svg` docstring。
+- 任一約束做不到的**該處**退回 A（`st.radio(horizontal=True)`），不請示。
+
+### 17.4 步驟 5（離線靜態預覽）與 Gate 元件層自評
+
+- 預覽：`docs/vnext/PHASE3_PREVIEW_README_2026-10-30.md`；`docs/vnext/phase3_preview/`（19 張 PNG＋HTML，皆 <300KB）；腳本 `tools/phase3_preview/`。本輪重生：Missing 槽 Primary 四態（idle／empty／failed／unwired）**傳同一 `height_px=220`**，量測桌 882×220×4、手 332×140×4（D6「Primary 同高」成立；執行 AI 自己 Read PNG 確認）；冷啟動第三張 tile 以 `say_verbatim=True` 傳入客戶逐字例外句；色票表加「資訊 chip 邊框 ink-3」列。
+- 本輪 `compact.py` 修正：sparkline／小倍數 `<polyline>` 加 `vector-effect="non-scaling-stroke"`（屬性＋CSS）；孤立點 `r` 2.2→2.5；`TopN.more_chip()`（`topn_more` 資訊族，契約 §6／§10 已就地加註為 §6 META 表之外的非 META 家族，M2 對帳不含）；`kpi_tile_html` 拒絕冷啟動帶 placeholder spark；`.cp-info` 邊框改 `--ink-3`；golden sha 同步更新、`page_css` sha 不變。
+- **Gate 元件層自評**：A6 ✅／🟡（原生折線圖未驗）、V8 ✅、V9 ✅🟡、V10 ✅（README 原「未使用客戶例外句」自評已更正）、V11 ✅🟡。頁面層 N/A（0 頁 import `compact`）。**單組自評，不得宣稱 Gate 通過。**
+- **看圖發現（QA，列 Phase 4 線框／宿主決定）**：護欄與資訊 chip 難分辨（D3 設計代價）；Top-N「查看全部」不像入口；flex 等高前提（宿主格網必須 stretch）；placeholder 100px 寬折兩行；⬜ 兩種語意同符號。
+- **限制**：靜態 HTML 非 Streamlit 渲染；Linux headless 字型；原生圖與 `st.expander`／`st.segmented_control` 為外殼示意；無 iOS／Android 實機；夾具為合成資料（※示意）。
+
+### 17.5 共通 DoD 對照（§16.1 四項）
+
+| 項 | 現況 |
+|---|---|
+| (1) CI 綠 | ⏳ **尚未**——本輪內容在工作樹、**未 commit／未開 PR**；PR 後須以 `gh api` 實查 Fast checks＋Slow tests。本機：`python3 -m pytest tests/ui_v2 tests/test_c3_layering_guard.py tests/test_batch_z60.py tests/test_uim_revert_chain.py -q` → 1169 passed、1 skipped（不等於 CI） |
+| (2) 獨立 QA ≥2 組 | ✅ 兩組獨立 QA（差分／mutation 與契約／看圖稽核角度）已回報並併入本輪修正；QA 結論以其回報為準，執行 AI 未自行複驗其全部宣稱 |
+| (3) 零資料語意證明 | `git diff --stat -- src tests` 僅 `src/ui_v2/compact.py`、`tests/ui_v2/test_compact.py`；`src/services|compute|data`／`shared/` 0 行；`compact.py` 只 import 標準庫、`shared.ui_state`、`src.ui_v2.*`（AST 守衛在 `test_compact.py`，綠）；Top-N 參數所在檔 0 diff |
+| (4) 既有頁面 0 diff | `page_css('dark'|'light')` sha256 不變（`test_page_css_sha256_unchanged` 綠）；`tokens` 既有鍵值映射 sha 不變；0 個 production caller；`app.py` 0 diff |
+
+### 17.6 Phase 3 完成條件
+
+步驟 1～5 **已處理**（步驟 2＝判定不需要並登 BACKLOG；步驟 3＝量測完成、判定整體 layout 變更；步驟 4＝D8=B 成立；步驟 5＝預覽與元件層自評完成）。**唯一未結＝站殼間距客戶裁示（D7）**。BACKLOG 殘留已登記、HANDOFF／PROJECT_STATE 已同步。**下一步＝Phase 4 步驟 0**：以當時 main 重測、並出 📊 市場頁文字線框（W2、W3、W9）送客戶拍板（寫 UI code 前）。

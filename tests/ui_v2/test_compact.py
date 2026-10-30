@@ -552,7 +552,7 @@ class TestSparkline:
     def test_golden(self):
         svg = _spark([1, NAN, 3, 4, 2])
         assert isinstance(svg, cp.SafeHtml) and svg.placeholder is False
-        assert _sha(svg) == "dac22fe206792bbe"
+        assert _sha(svg) == "07ca0387991acc17"
 
     def test_fail_loud_types(self):
         for bad in ([1, "2", 3], [1, True, 3], [1, math.inf], [1, -math.inf, 2], "123", None, (x for x in [1, 2]),
@@ -622,7 +622,7 @@ class TestKpiTile:
         html = cp.kpi_tile_html(label="市場位階", value="震盪", chips=[cp.meta_chip("window", "近 30 日")],
                                 say="市場位階，不是台股趨勢", spark=sp, state_badge_n=1)
         assert "cp-tile-spark" in html and "bdg-1" in html and _strip_tags(re.sub(r"<svg.*?</svg>", "", html)).count("近 30 日") == 1
-        assert _sha(html) == "6838f0377ebfeae8"
+        assert _sha(html) == "7be6ae2475494acb"
 
     @pytest.mark.parametrize("kind,val", [("asof", "10/28"), ("source", "TWSE"), ("retrieved_at", "10/29"),
                                           ("readable", None)])
@@ -700,7 +700,7 @@ class TestSmallMultiples:
     def test_golden_and_cols(self):
         html = cp.small_multiples_html(self._cells())
         assert html.startswith('<div class="cp-sm cp-sm-d3-m2">') and html.count("cp-sm-cell") == 3
-        assert _sha(html) == "2b05d288c7db44ec"
+        assert _sha(html) == "bd789d45ae9c305f"
         assert "cp-sm-d2-m1" in cp.small_multiples_html(self._cells(), cols_desktop=2, cols_mobile=1)
 
     def test_no_numbers_in_cells(self):        # D5=A
@@ -854,7 +854,7 @@ class TestCompactCss:
             assert v in declared or v == "--cp-slot-h", v      # --cp-slot-h 由元件 inline 設定
 
     def test_golden(self):
-        assert _sha(self.css) == "157df4313b88b380"
+        assert _sha(self.css) == "924ff981bb635ff4"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1366,3 +1366,144 @@ class TestQaRound2Hardening:
     def test_g_real_values_still_ok(self):
         for v in ("0", "震盪", "無風險"):
             cp.kpi_tile_html(label="水位", value=v)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 離線預覽看圖發現（README §3 F1～F10）的修正守衛
+# ══════════════════════════════════════════════════════════════════
+def _lin(c: float) -> float:
+    return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def _lum(hex_color: str) -> float:
+    raw = hex_color.lstrip("#")
+    r, g, b = (int(raw[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+    return 0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b)
+
+
+def _contrast(a: str, b: str) -> float:
+    la, lb = _lum(a), _lum(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+class TestPreviewFindingsFixed:
+    css = cp.compact_css()
+
+    # F1：小倍數 SVG 隨格寬縮放
+    def test_f1_small_multiples_svg_scales_with_cell(self):
+        body = _rule(self.css, ".cp-sm-cell .cp-spark")
+        assert "width:100%" in body and "height:auto" in body and "max-height:var(--cp-mini-h)" in body
+        assert 'viewBox="0 0 160 64"' in _spark([1, 2, 3], w=160, h=64)      # 等比縮放的前提
+        # placeholder 不得被 height:auto 影響其「可長」語意
+        assert "max-height:none" in _rule(self.css, ".cp-sm-cell .cp-spark-missing")
+
+    # F2：tile 為 flex column（同列可 stretch），DOM 結構不變
+    def test_f2_tile_flex_column_and_dom_unchanged(self):
+        body = _rule(self.css, ".cp-tile")
+        assert "display:flex" in body and "flex-direction:column" in body
+        assert "margin-top:auto" in _rule(self.css, ".cp-tile-spark")
+        html = cp.kpi_tile_html(label="水位", value=None, chips=[cp.meta_chip("not_approved")])
+        assert re.findall(r'class="(cp-[a-z-]+)', html)[:2] == ["cp-tile", "cp-tile-label"]
+
+    # F3：冷啟動 tile 不得外露兩次「尚未載入」
+    def test_f3_blank_tile_rejects_placeholder_spark(self):
+        ph = cp.sparkline_svg([NAN] * 5, title="VIX", missing_state="idle", missing_text="請按更新")
+        assert ph.placeholder is True
+        with pytest.raises(ValueError, match="placeholder"):
+            cp.kpi_tile_html(label="VIX", value=None, chips=[cp.status_chip("idle")], spark=ph)
+        # 沒有 spark 的冷啟動：「尚未載入」只出現一次
+        html = cp.kpi_tile_html(label="VIX", value=None, chips=[cp.status_chip("idle")])
+        assert _strip_tags(html).count("尚未載入") == 1
+
+    def test_f3_other_combos_still_ok(self):
+        ph = cp.sparkline_svg([NAN] * 5, title="VIX", missing_state="idle", missing_text="請按更新")
+        # 有主值 + placeholder spark（資料有、只是這條線缺）仍合法，由呼叫端負責
+        cp.kpi_tile_html(label="VIX", value="18.4", chips=[cp.meta_chip("window", "近 30 日")], spark=ph)
+        # 留白 + 真 spark（非 placeholder）不在 F3 範圍
+        cp.kpi_tile_html(label="VIX", value=None, chips=[cp.status_chip("idle"), cp.meta_chip("window", "近 30 日")],
+                         spark=_spark([1, 2, 3]))
+
+    # F4
+    def test_f4_value_text_wrap_balance(self):
+        assert "text-wrap:balance" in _rule(self.css, ".cp-tile-value")
+
+    # F5：孤立點半徑 2.5（QA 看圖後自 2.2 加大）
+    def test_f5_isolated_point_radius(self):
+        svg = _spark([1, NAN, 3])
+        assert _nums(svg, "circle", "r") == [2.5, 2.5]
+        assert 'r="1.5"' not in svg and 'r="2.2"' not in svg
+        assert "<circle" not in _spark([1, 2, 3])            # 連續段仍是 polyline
+
+    # 線寬不隨縮放：polyline 屬性與 CSS 規則都要有 non-scaling-stroke
+    def test_non_scaling_stroke(self):
+        svg = _spark([1, 3, 2, 4])
+        assert 'vector-effect="non-scaling-stroke"' in svg
+        assert svg.count("<polyline") == svg.count('vector-effect="non-scaling-stroke"')
+        assert "vector-effect:non-scaling-stroke" in _rule(self.css, ".cp-spark polyline")
+
+    # F6：資訊 chip 邊框對 --panel ≥3:1（dark／light 各自以 WCAG 公式驗算）
+    @pytest.mark.parametrize("mode,table", [("dark", tokens.DARK), ("light", tokens.LIGHT)])
+    def test_f6_info_chip_border_contrast(self, mode, table):
+        m = re.search(r"border:1px solid var\((--[a-z0-9-]+)\)", _rule(self.css, ".cp-info"))
+        assert m, "資訊 chip 必須是 1px 實線細外框（引 token）"
+        token = m.group(1)
+        assert token in table                              # 既有 token，未新增、未改值
+        assert _contrast(str(table[token]), str(table["--panel"])) >= 3.0, (mode, token)
+
+    def test_f6_old_border_was_below_3(self):                # 證明這條測試有鑑別力
+        assert _contrast(str(tokens.DARK["--rule-2"]), str(tokens.DARK["--panel"])) < 3.0
+        assert _contrast(str(tokens.LIGHT["--rule-2"]), str(tokens.LIGHT["--panel"])) < 3.0
+
+    # F9：docstring 與線框一致
+    def test_f9_header_docstring_states_floor_and_cold_start_exception(self):
+        doc = cp.chart_header_html.__doc__ or ""
+        assert "3～5" in doc and "呼叫端" in doc and "冷啟動" in doc and "2 顆" in doc
+
+    # F10：TopN.more_chip
+    def test_f10_more_chip(self):
+        r = cp.topn_view(list(range(36)), 5)
+        c = r.more_chip()
+        assert isinstance(c, cp.Chip) and c.text == r.more_text == "另 31 筆見全部"
+        assert c.family == "info" and c.tone == "info" and c.kind not in cp.META_KINDS
+        html, over = cp.chips_html([c])
+        assert 'class="cp-chip cp-info"' in html and over == ()
+        assert len(cp.META_KINDS) == 20                       # 契約 §6 封閉集合未被擴張
+
+    def test_f10_no_chip_when_nothing_hidden(self):
+        for r in (cp.topn_view([1, 2, 3], 10), cp.topn_view([], 5)):
+            with pytest.raises(ValueError, match="hidden"):
+                r.more_chip()
+
+    def test_f10_dedup_and_forgery_rejected(self):
+        c = cp.topn_view(list(range(9)), 5).more_chip()
+        with pytest.raises(ValueError):
+            cp.chips_html([c, c])
+        c2 = cp.topn_view(list(range(12)), 5).more_chip()
+        with pytest.raises(ValueError, match="只能出現一次"):
+            cp.chips_html([c, c2])
+        for bad in ("另 0 筆見全部", "另 05 筆見全部", "另 x 筆見全部", "任意文字"):
+            with pytest.raises(ValueError):
+                cp.Chip("topn_more", bad, "info")
+        with pytest.raises(ValueError):
+            cp.Chip("topn_more", "另 3 筆見全部", "guard")
+        forged = cp.topn_view(list(range(9)), 5).more_chip()
+        object.__setattr__(forged, "text", "偽造")
+        with pytest.raises(ValueError):
+            cp.chips_html([forged])
+
+    def test_f10_overflow_rank_lowest(self):
+        more = cp.topn_view(list(range(9)), 5).more_chip()
+        chips = [cp.meta_chip("asof", "10/28"), cp.meta_chip("window", "近 30 日"), cp.meta_chip("source", "TWSE"),
+                 cp.meta_chip("retrieved_at", "10/29"), more, cp.meta_chip("readable")]
+        _html, over = cp.chips_html(chips)
+        assert len(over) == 1 and over[0] in (more,)          # rank 5 與 retrieved_at 同級，後者(傳入順序晚)先移出
+
+    # 步驟 4：docstring 約束
+    def test_d8_docstrings(self):
+        mod = cp.__doc__ or ""
+        assert "st.html" in mod and "st.markdown(unsafe_allow_html=True)" in mod and "data-URI" in mod
+        sd = cp.sparkline_svg.__doc__ or ""
+        assert "st.html" in sd and "1.56.0" in sd and "unsafe_allow_html=True" in sd and "data-URI" in sd
+        sg = cp.segment_options.__doc__ or ""
+        for needle in ("取消選取", "None", "last_valid", "form", "44px", "換行", "tuple", "二選一"):
+            assert needle in sg, needle

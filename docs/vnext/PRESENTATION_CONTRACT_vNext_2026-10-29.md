@@ -125,6 +125,7 @@
 | `ai` | `🤖 AI 生成·非投資建議` | 既有 AI 揭露（DEC-054／055）的濃縮；全文仍在正文旁 |
 
 - 新增 kind 只能在本表登記（Phase 3 落地為封閉集合常數＋測試），⛔ 各頁自創字串。
+  - 📌 **2026-10-30 就地加註（Phase 3 QA 輪；有意識的補充，不是漏刪；決策者 AI 總管〔v3 §03-1 內部自決，不改客戶裁示內容〕）**：`topn_more`（Top-N「另 K 筆見全部」chip，§10 第 4 點；`compact.TopN.more_chip()`、`compact.KIND_TOPN_MORE`）是**本 §6 META 表之外的非 META 家族**，與 `status`（狀態 chip）、`guard_text`（逐字客戶護欄句）**同類**：歸**資訊族**（細外框）、文字由 `TOPN_MORE_FMT` 推導（K≥1）、同列最多一顆、不進 `META_KINDS` 封閉集合（放 `_EXTRA_KINDS`）。**M2 對帳（META_KINDS 與本表一一相等）不含它**——M2 對的是本表登記的 kind 集合，不是 `Chip.kind` 的全部值域。上句「新增 kind 只能在本表登記」仍適用於 **META** kind；非 META 家族的登記處是 `compact.py` 的 `_EXTRA_KINDS` 與其測試。
 - 逐字客戶句作 chip 時**豁免字數上限、逐字不截**（手機可換行）。
 
 ## §7 「現在／為什麼／去哪補」正式遷移（客戶 DEC-109 七）
@@ -175,6 +176,7 @@ R9（DEC-110）：
 2. **L3 請求參數不變**：`src/ui/views/page_find.TOP_N_OPTIONS=(20, 50, 100)`、`DEFAULT_TOP_N=50`（FACT）維持。
 3. **Digest 與 AI 不受 Top-N 影響**：Decision Digest 由 canonical data＋正式規則結果建立，⛔ 讀 UI 切片（`ONE_AI_BRAIN_BOUNDARY_vNext_2026-10-29.md` §3）。
 4. 外露 Top-N 之下恰一個「▸ 查看全部（N 筆）」入口；截斷時顯示「另 K 筆見全部」chip（沿用 `_market_blocks.HERO_RISK_MORE_FMT` 模式）。
+   - 📌 **2026-10-30 就地加註（Phase 3 QA 輪；決策者 AI 總管，內部自決）**：「另 K 筆見全部」chip 的 builder＝`compact.TopN.more_chip()`，`Chip.kind="topn_more"`，是 §6 META 表**之外**的非 META 家族（與 `status`／`guard_text` 同類，見 §6 表後註），M2 對帳不含；`hidden=0` 時不產生（ValueError，⛔ 不出 K=0 的假 chip）。「查看全部」入口的**外觀**（現在只是文字，不像入口）待 Phase 4 線框。
 5. 排序依據寫一次（例 `_target_blocks.ZONE1_SORT_NOTE`「排序依據：法人資金動能，非產業趨勢。」，DEC-092 Q5，字樣不改）；由現行說明句改為區塊 header chip 與否＝Phase 5 線框待客戶拍板點（§22）。
 6. 沒有排序依據的清單（例 風險 hero 依五桶固定順序，`HERO_RISK_NO_RANKING_NOTE`）→ Top-N 只是「前 N 個依固定順序」，⛔ 自創重要性排序。
 7. 建議預設 N（內部，可調）：產業 5、候選 10 列（表）或 5 張（卡）、風險 hero 3（既有 `HERO_RISK_MAX_ITEMS`）／圖 D 5、持股需處理 5、例外代號 5。
