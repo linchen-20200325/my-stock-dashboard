@@ -17,6 +17,21 @@
 - ⛔ 不 import `src.data.*`（L1）、不 import `shared.ia_nav4`（legacy 路徑零依賴新模組，沿用 `page_market` 作法）。
 
 §1／v3 §02：missing 一律 ⬜ 顯式，⛔ 不當 0／中性／續抱；未載入＝灰、真出錯＝紅；狀態不只靠顏色（每個狀態都有文字）。
+
+═══ Phase 4 P4-1（2026-10-30，客戶 DEC-117 已核准線框；有意識的修改，⛔ 不是漏刪）═══════════
+第一屏改為「頁首 → 更新 CTA → 今日結論 → 3 個核心狀態 → ⚡ 需要處理 → AI／資料狀態 →（圖區，P4-2）」：
+  · Q1=B：~~Hero 4 卡 `render_hero`（`st.columns(4)`）~~ → `render_core_tiles`（桌機 3 欄：市場位階｜建議總持股水位｜
+    今日主要風險；手機 2＋1 走 `P4M_LAYOUT_CSS` 的窄螢幕規則，CSS 失效時退化為單欄堆疊，⛔ 不藏任何內容）。
+    「🚀 更新今日戰情」改由 `render_update_cta` 畫在頁首（同一支 `single_submit_form`、同一組 session key）。
+  · Q8b：更新模式 radio＋長說明收進「更新選項」摺疊（`single_submit_form(options_label=, options_note=)`）。
+  · Q6=A：風險項外露縮短行（`risk_item_short_text`）；整句版 `risk_item_text`、`HERO_RISK_NO_RANKING_NOTE` 進 tile 的
+    「🔍 查看依據」；退化／護欄句（未載入、算不出來、資料不足、全綠不代表安全）逐字外露（`hero_risk_face_lines`）。
+  · Q2=A′：`DANGER_POINTER` 縮短（三要素「指標危險度」「指標明細（16 項）」「最上方」）；舊句原文保留為
+    `DANGER_POINTER_UIM`，放風險 tile 的摺疊（資訊只下沉）。
+  · Q3=A／U6：tile／⚡ 各**只有一個**「🔍 查看依據」；位階卡原 hover-only 的「位階的出處」與「生效分支」、
+    原卡標題（含「總經契約」）併入位階 tile 的六欄（`basis_regime`），原卡整張畫在同一摺疊內。
+  · Q8c：⚡ 需要處理＝一行 bar（`alerts_bar_line`）＋同一個「🔍 查看依據」摺疊內的完整清單（原卡、衝突提示）。
+  · 圖 A～D 本批不動（P4-2）。
 """
 from __future__ import annotations
 
@@ -41,11 +56,14 @@ from shared.macro_buckets import (
     CL_INTL_KEY_US10Y,
     LEVEL_EMOJI,
 )
-from shared.market_conclusion import CONCEPT_RISK_CAP, RISK_CAP_PENDING_TEXT
+from shared import ia_nav
+from shared.market_conclusion import CONCEPT_REGIME, CONCEPT_RISK_CAP, RISK_CAP_PENDING_TEXT
 from shared.secret_scrub import scrub_secrets
 from shared.signal_thresholds import TRADING_DAYS_PER_YEAR
+from shared.ui_state import UI_DEGRADED, UI_FAILED, UI_LIVE
 from src.services import market_twii_view_service as twii_svc
 from src.ui.views import page_today as today
+from src.ui.views._ui_kit import single_submit_form
 
 # ══════════════════════════════════════════════════════════════════
 # session key（沿用 page_market 的 `p00m_` 前綴；與既有 gate key 不相撞）
@@ -122,11 +140,53 @@ CHART_D_WORSENING: str = f"是否惡化：{NOT_DEFINED}"
 #: 客戶裁示 3A（DEC-105）：「指標危險度」卡降階到下方展開區最上方 ⇒ 首屏必須清楚指路（字樣含「指標危險度」四字）。
 #: 展開區標題字面與 `page_market` 的 expander 標題相同（由測試對帳）。
 LAMP_DETAIL_EXPANDER_LABEL: str = "指標明細（16 項）"
-DANGER_POINTER: str = f"指標危險度（整體危險度與五桶摘要）請展開下方「{LAMP_DETAIL_EXPANDER_LABEL}」最上方。"
+#: 📌 P4-1（客戶 DEC-117 Q2=A′；有意識的修改，⛔ 不是漏刪）：~~UI-M 原句（38 字）~~ 縮到 ≤32 字，仍是說明句（⛔ chip），
+#:   必須同時含「指標危險度」「指標明細（16 項）」「最上方」三要素（`tests/test_p4_1_market_first_screen.py` 釘字面）。
+#:   UI-M 原句保留為 `DANGER_POINTER_UIM`，放在風險 tile 的「🔍 查看依據」內（只下沉，⛔ 刪）。
+DANGER_POINTER_UIM: str = f"指標危險度（整體危險度與五桶摘要）請展開下方「{LAMP_DETAIL_EXPANDER_LABEL}」最上方。"
+DANGER_POINTER: str = f"指標危險度：見下方「{LAMP_DETAIL_EXPANDER_LABEL}」最上方"
+#: 指路句長度上限（契約 Gate A8：外露的非客戶原句 ≤32 字）。
+DANGER_POINTER_MAX_CHARS: int = 32
 CHART_D_ALL_LAMPS_POINTER: str = f"查看全部指標 › 請展開下方「{LAMP_DETAIL_EXPANDER_LABEL}」"
 INSUFFICIENT_TEXT: str = "⬜ 資料不足／無法判定"
 
 BASIS_EXPANDER_LABEL: str = "🔍 查看依據"
+
+# ══════════════════════════════════════════════════════════════════
+# P4-1（DEC-117）第一屏字樣
+# ══════════════════════════════════════════════════════════════════
+#: Q8b：更新模式 radio＋長說明收進的摺疊（客戶原文「移到『更新選項』」）。
+UPDATE_OPTIONS_LABEL: str = "更新選項"
+#: Q1：位階 tile 的標題＝結論句的概念名（L0 SSOT；原卡標題「市場位階（總經契約）」移入摺疊）。
+REGIME_TILE_LABEL: str = CONCEPT_REGIME
+#: Q8c：⚡ bar 上的衝突提示計數（清單本身原樣轉述在「🔍 查看依據」內）。
+ALERTS_CONFLICTS_COUNT_FMT: str = "建議持股另附 {n} 則衝突／警示提示（見查看依據）"
+#: Q6：tile 摺疊內整句版的小標（整句、燈說明、同級並列、不排序說明都在這一段）。
+HERO_RISK_FULL_HEADING: str = "完整風險項（原句）"
+#: Q1：手機 2＋1 用的容器 key（CSS class `.st-key-<key>`；Streamlit 非公開保證 ⇒ 失效時退化為單欄堆疊）。
+P4M_CORE_TILES_KEY: str = "p4m_core_tiles"
+#: C1-10／U4：L1 決策區（頁首～AI／資料狀態）的容器 key；窄螢幕只在這個容器內壓縮間距、內距與結論小標字級。
+P4M_L1_KEY: str = "p4m_l1"
+#: L1 內各個有框容器（3 tile、⚡）的 key 前綴：窄螢幕只縮它們的內距（`[class*="st-key-<前綴>"]`）。
+P4M_BOX_KEY_PREFIX: str = "p4m_box_"
+#: ⚠️ 只排版、⛔ 不藏任何東西：規則全部失效時＝Streamlit 預設（窄螢幕單欄堆疊、預設間距），
+#:   沒有任何「靠 CSS 才顯示」的內容；⛔ display:none／visibility／height:0／overflow 截斷。
+P4M_LAYOUT_CSS: str = (
+    "@media (max-width: 640px){"
+    f".st-key-{P4M_L1_KEY},.st-key-{P4M_L1_KEY} [data-testid=\"stVerticalBlock\"]{{gap:0.5rem !important;}}"
+    f".st-key-{P4M_L1_KEY} [class*=\"st-key-{P4M_BOX_KEY_PREFIX}\"],"
+    f".st-key-{P4M_L1_KEY} [data-testid=\"stForm\"]{{padding:0.5rem 0.625rem !important;}}"
+    f".st-key-{P4M_L1_KEY} [data-testid=\"stExpander\"] summary{{padding-top:0.3rem !important;"
+    "padding-bottom:0.3rem !important;}"
+    f".st-key-{P4M_L1_KEY} h4{{font-size:1rem !important;padding-top:0.25rem !important;"
+    "padding-bottom:0.25rem !important;}"
+    f".st-key-{P4M_CORE_TILES_KEY} [data-testid=\"stHorizontalBlock\"]{{flex-wrap:wrap !important;gap:0.5rem !important;}}"
+    f".st-key-{P4M_CORE_TILES_KEY} [data-testid=\"stHorizontalBlock\"] > [data-testid=\"stColumn\"]:nth-child(-n+2)"
+    "{flex:1 1 calc(50% - 0.25rem) !important;min-width:calc(50% - 0.25rem) !important;"
+    "width:calc(50% - 0.25rem) !important;}"
+    f".st-key-{P4M_CORE_TILES_KEY} [data-testid=\"stHorizontalBlock\"] > [data-testid=\"stColumn\"]:nth-child(3)"
+    "{flex:1 1 100% !important;min-width:100% !important;width:100% !important;}"
+    "}")
 #: 內部對照：L2 compute_five_bucket_summary（16 盞燈）＋ L2 lamp_direction；畫面只寫白話。
 RISK_DATA_PLAIN: str = "五桶風險摘要（16 項指標燈）＋各燈的變化方向"
 AI_NOT_INVOLVED: str = "不參與（本區由規則／資料顯示產生，本頁沒有 AI 呼叫）"
@@ -321,6 +381,14 @@ def risk_item_text(row: BucketRiskRow, *, index: int | None = None) -> str:
             f"｜方向：{row.direction_word}{_tie}")
 
 
+def risk_item_short_text(row: BucketRiskRow) -> str:
+    """P4-1（客戶 DEC-117 Q6=A）外露縮短行：**燈色＋桶名＋燈名＋方向**（方向＝L2 原詞，⛔ 翻成惡化／好轉）。
+
+    整句版（燈說明、「｜方向：」、「｜同級並列 N 項」）照舊由 `risk_item_text` 產生，放 tile 的「🔍 查看依據」。
+    """
+    return f"{LEVEL_EMOJI[row.level]} {row.title}：{row.lamp_label}　{row.direction_word}"
+
+
 def hero_risk_lines(risks: MarketRisks) -> list[tuple[str, str]]:
     """hero「今日主要風險」要畫的行：`(tone, text)`；tone ∈ item／note／grey／error。
 
@@ -346,6 +414,28 @@ def hero_risk_lines(risks: MarketRisks) -> list[tuple[str, str]]:
     _ev = risks.n_lamps - risks.n_unevaluated
     return [("grey", f"本輪五桶皆為綠燈，沒有非綠桶可列（已評估 {_ev}／{risks.n_lamps} 項燈，"
                      f"{risks.n_unevaluated} 項未評估；只根據已取得的資料，不代表安全）")]
+
+
+def hero_risk_face_lines(risks: MarketRisks) -> list[tuple[str, str]]:
+    """P4-1 風險 tile **外露層**要畫的行（Q6=A）。
+
+    - 有風險項：項目行換成縮短行；「另 K 項見圖 D」「另有 N 桶資料不足、無法判定（見圖 D）」照舊外露；
+      只有 `HERO_RISK_NO_RANKING_NOTE`（排列說明）下沉到摺疊。
+    - 沒有風險項（未載入／算不出來／全部不足／部分不足／全綠）：**與 `hero_risk_lines` 逐字相同**——
+      這些退化／護欄句（含「不代表安全」）客戶明示必須外露逐字保留，⛔ 縮、⛔ 移進摺疊。
+    """
+    _full = hero_risk_lines(risks)
+    _items, _ = hero_risk_items(risks)
+    if not _items:
+        return _full
+    return ([("item", risk_item_short_text(_r)) for _r in _items]
+            + [(_t, _x) for _t, _x in _full if _t != "item" and _x != HERO_RISK_NO_RANKING_NOTE])
+
+
+def hero_risk_fold_lines(risks: MarketRisks) -> list[tuple[str, str]]:
+    """P4-1 風險 tile 摺疊內的整句版（＝UI-M 外露的那一份，逐字）；沒有風險項時外露層已是全文 ⇒ 空。"""
+    _items, _ = hero_risk_items(risks)
+    return hero_risk_lines(risks) if _items else []
 
 
 def risk_panel_rows(risks: MarketRisks) -> list[tuple[str, str, str]]:
@@ -401,9 +491,13 @@ def basis_rows(basis: Basis) -> list[tuple[str, str]]:
     return _out
 
 
-def render_basis(basis: Basis, *, extra: Callable[[], None] | None = None) -> None:
-    """預設收合的「🔍 查看依據」。`extra`＝展開後在六欄下面多畫的內容（例：水位卡的原有出手區間）。"""
+def render_basis(basis: Basis, *, extra: Callable[[], None] | None = None,
+                 lead: Callable[[], None] | None = None) -> None:
+    """預設收合的「🔍 查看依據」。`extra`＝展開後在六欄下面多畫的內容（例：水位卡的原有出手區間）；
+    `lead`（P4-1 加性）＝畫在六欄**上面**的內容（例：⚡ 的完整清單 —— 展開後先看到清單，再看依據）。"""
     with st.expander(BASIS_EXPANDER_LABEL, expanded=False):
+        if lead is not None:
+            lead()
         st.markdown("\n".join(f"- **{_k}**：{scrub_secrets(_v)}" for _k, _v in basis_rows(basis)))
         if extra is not None:
             extra()
@@ -420,6 +514,27 @@ def _md_table(headers: Sequence[str], rows: Sequence[Sequence[Any]]) -> str:
 
 
 # ── 各區塊的依據內容（純函式，可單測）──────────────────────────────
+def basis_regime(regime_tile: Any) -> Basis:
+    """P4-1 位階 tile 的六欄（Q3=A／U6）：原卡標題、原 hover-only 的「位階的出處」與「生效分支」等**全部 facts 逐字**
+    寫進「規則／計算結果」—— 從此不再只活在 `title=`（手機無 hover）。非 live 態把卡上的 now／why 寫進 missing。"""
+    _card = regime_tile.card
+    _facts = "；".join(f"{_k}：{_v}" for _k, _v in tuple(getattr(regime_tile, "facts", ()) or ()))
+    _rule = f"卡片原標題「{_card.label}」" + (f"；{_facts}" if _facts else "")
+    if _card.state == UI_LIVE:
+        _missing = "—（本卡本輪有值）"
+    else:
+        _note = getattr(_card, "note", None)
+        _bits = [str(getattr(_note, _a, "") or "").replace("**", "").strip() for _a in ("now", "why")]
+        _missing = "；".join(_b for _b in _bits if _b) or "⬜ 卡片沒有提供原因"
+    return Basis(
+        data_used="市場位階契約（總經狀態；仲裁後的位階與生效分支）",
+        as_of=ASOF_CONTRACT_MISSING,
+        rule=_rule,
+        missing=_missing,
+        confidence="⬜ 契約未提供（紅綠燈資料來源齊備程度見下方「市場位階：為什麼？」的信心度）",
+        ai=AI_NOT_INVOLVED)
+
+
 def basis_water(alloc: Any, alloc_error: str) -> Basis:
     if alloc is None:
         _missing = (f"建議持股讀取失敗：{scrub_secrets(alloc_error)}" if alloc_error
@@ -626,35 +741,106 @@ def _render_lines(lines: Sequence[tuple[str, str]]) -> None:
             st.caption(_text)
 
 
-def render_hero(session: Mapping[str, Any], *, regime_tile: Any, exposure_tile: Any,
-                alloc: Any, alloc_error: str, risks: MarketRisks) -> None:
-    """Hero 4 卡：市場狀態｜建議總持股水位｜今日主要風險｜更新（A §4.1.1；窄螢幕由 Streamlit 自動疊成一欄）。"""
-    _cols = st.columns(4)
-    with _cols[0]:
-        today._render_one(regime_tile)
-        st.caption(REGIME_SCOPE_CAPTION)
-    with _cols[1]:
-        with st.container(border=True):
-            st.markdown(f"**{WATER_TITLE}**")
-            st.markdown(f"**{WATER_VALUE}**")
-            st.caption(WATER_WHY)
-            st.caption(f"{CONCEPT_RISK_CAP}：{RISK_CAP_PENDING_TEXT}")
+def render_layout_css() -> None:
+    """P4-1 版面規則（手機 2＋1、L1 決策區窄螢幕間距壓縮）。由 `page_market` 在 L1 決策區之前呼叫一次。
+    ⚠️ 只排版：全部失效時＝Streamlit 預設單欄堆疊與預設間距，⛔ 沒有任何內容靠 CSS 才看得到。"""
+    st.markdown(f"<style>{P4M_LAYOUT_CSS}</style>", unsafe_allow_html=True)
 
-            def _original_range() -> None:
-                st.caption(WATER_BASIS_NOTE)
-                today._render_one(exposure_tile)
-            render_basis(basis_water(alloc, alloc_error), extra=_original_range)
-    with _cols[2]:
-        with st.container(border=True):
-            st.markdown(f"**{HERO_RISK_TITLE}**")
-            _render_lines(hero_risk_lines(risks))
-            st.caption(DANGER_POINTER)
-            render_basis(basis_risks(risks))
-    with _cols[3]:
-        with st.container(border=True):
-            st.markdown("**更新**")
-            today._render_update_form(session)
-            st.caption(data_date_text(session.get("mkt_info")))
+
+def update_options_note(session: Mapping[str, Any]) -> str:
+    """「更新選項」摺疊內那一句：與 `page_today._render_update_form` 鍵下 caption **同一組常數、同一格式**（逐字）。"""
+    _mode = today.applied_update_mode(session)
+    return (f"已套用的更新模式：**{today.MODE_LABELS[_mode] if _mode else '（尚未送出過）'}**"
+            f"　·　⚠️ {today.PAGE_REFRESH_SCOPE_WHY}。{today.REFRESH_SPEED_HINT}")
+
+
+def render_update_cta(session: Mapping[str, Any]) -> None:
+    """P4-1 頁首主 CTA（DEC-117 Q1／Q8b）：「🚀 更新今日戰情」＋預設收合的「更新選項」（radio＋已套用模式＋長說明）。
+
+    ⛔ 不是第二套更新流程：form key、radio 的 widget／已套用 key、選項與顯示名、模式對映、重抓函式、報告 key
+    **全部是 `page_today` 的同一組 SSOT**（經模組屬性取用）；與今天頁唯一的差別是 radio 與說明收進摺疊
+    （`single_submit_form(options_label=, options_note=)`）。form 語意不變：只有按鈕送出才重抓、radio 不即時 rerun、
+    單次 submit；送出後報告落 session → `st.rerun()`，下一輪由頁首的更新報告畫出（同今天頁）。
+    """
+    _submitted = single_submit_form(
+        today.FORM_KEY,
+        submit_label=ia_nav.action_label(ia_nav.ACTION_UPDATE_TODAY),
+        radio_label="更新模式",
+        options=tuple(today.MODE_LABELS),
+        option_labels=today.MODE_LABELS,
+        widget_key=today.SS_MODE_WIDGET,
+        applied_key=today.SS_APPLIED_MODE,
+        options_label=UPDATE_OPTIONS_LABEL,
+        options_note=update_options_note(session),
+    )
+    if not _submitted:
+        return
+    _mode = today.applied_update_mode(session)
+    if _mode not in today.UPDATE_MODE_TO_REFRESH_MODE:
+        # §1：對不上就出聲（同今天頁），⛔ 拿一個預設模式假裝使用者選了它。
+        st.error(f"未知的更新模式 `{_mode!r}` —— 本頁不替你挑一個模式跑。", icon="❌")
+        return
+    st.session_state[today.SS_REFRESH_REPORT] = today._run_refresh_now(
+        today.UPDATE_MODE_TO_REFRESH_MODE[_mode])
+    st.rerun()
+
+
+def _render_regime_face(regime_tile: Any, face: str, badge: str) -> None:
+    """位階 tile 外露值：有值（live／degraded）＝粗體＋徽章字；真錯誤＝紅；其餘（未載入／未評估）＝灰。"""
+    _state = regime_tile.card.state
+    if _state == UI_FAILED:
+        st.error(face, icon="❌")
+    elif _state in (UI_LIVE, UI_DEGRADED):
+        st.markdown(f"**{face}**" + (f"　{badge}" if badge else ""))
+    else:
+        st.caption(face)
+
+
+def render_core_tiles(*, regime_tile: Any, regime_face: str, regime_badge: str, exposure_tile: Any,
+                      alloc: Any, alloc_error: str, risks: MarketRisks, coverage_text: str) -> None:
+    """P4-1 三個核心狀態 tile（DEC-117 Q1=B）：市場位階｜建議總持股水位｜今日主要風險。
+
+    桌機 3 欄；手機 2＋1（`P4M_LAYOUT_CSS`）。每張 tile **只有一個**「🔍 查看依據」（Q3=A／U6）。
+    `regime_face`／`regime_badge` 由 `page_market` 以結論句同一支 `regime_clause`／`card_badge_text` 算好傳入
+    （tile 與結論句同字，⛔ 另寫一套說法）。`coverage_text` ＝ `page_market.status_line` 的覆蓋率那一半（逐字）。
+    """
+    with st.container(key=P4M_CORE_TILES_KEY):
+        _cols = st.columns(3)
+        with _cols[0]:
+            with st.container(border=True, key=f"{P4M_BOX_KEY_PREFIX}regime"):
+                st.markdown(f"**{REGIME_TILE_LABEL}**")
+                _render_regime_face(regime_tile, regime_face, regime_badge)
+                st.caption(REGIME_SCOPE_CAPTION)
+                render_basis(basis_regime(regime_tile), extra=lambda: today._render_one(regime_tile))
+        with _cols[1]:
+            with st.container(border=True, key=f"{P4M_BOX_KEY_PREFIX}water"):
+                st.markdown(f"**{WATER_TITLE}**")
+                st.markdown(f"**{WATER_VALUE}**")
+                st.caption(f"{CONCEPT_RISK_CAP}：{RISK_CAP_PENDING_TEXT}")
+
+                def _original_range() -> None:
+                    st.caption(WATER_WHY)
+                    st.caption(WATER_BASIS_NOTE)
+                    today._render_one(exposure_tile)
+                render_basis(basis_water(alloc, alloc_error), extra=_original_range)
+        with _cols[2]:
+            with st.container(border=True, key=f"{P4M_BOX_KEY_PREFIX}risk"):
+                st.markdown(f"**{HERO_RISK_TITLE}**")
+                _render_lines(hero_risk_face_lines(risks))
+                st.caption(DANGER_POINTER)
+                st.caption(coverage_text)
+
+                def _full_risk_lines() -> None:
+                    _fold = hero_risk_fold_lines(risks)
+                    if _fold:
+                        st.markdown(f"**{HERO_RISK_FULL_HEADING}**")
+                        _render_lines(_fold)
+                    st.caption(DANGER_POINTER_UIM)
+                render_basis(basis_risks(risks), extra=_full_risk_lines)
+
+
+def render_ai_status_line() -> None:
+    """AI／資料狀態一行（DEC-105 第 5 點合併一行；位置由 DEC-117 Q5 定在 ⚡ 之後、圖區之前）。字樣不改。"""
     st.caption(f"{HERO_AI_PLACEHOLDER}　{HEALTH_CHIP}{HEALTH_CHIP_POINTER}")
 
 
@@ -663,19 +849,45 @@ def alerts_has_listable_source(alerts: Any, alloc: Any) -> bool:
     return bool(_items) or bool(getattr(alloc, "conflicts", ()) if alloc is not None else ())
 
 
+def alerts_bar_line(alerts_tile: Any, alerts: Any, alloc: Any) -> tuple[str, str]:
+    """P4-1（DEC-117 Q8c）⚡ 一行 bar：`(tone, text)`；tone ∈ item／grey／error（同 `_render_lines`）。
+
+    字一律取自既有卡：有值＝卡的 label＋value（例「今日關鍵：1 紅 · 1 黃」）；其餘態＝卡上 `now` 那一句（例「今日關鍵
+    尚未載入 —— 未評估 ≠ 無異常」）。三態判別仍由 `build_key_alert_tile` 負責（⛔ 本函式不另判）。
+    沒有可列來源 ⇒ 同一行明寫 `ALERTS_NO_SOURCE`（⛔ 不寫沒事）；真錯誤（卡 failed）＝紅；未載入／未評估＝灰。
+    """
+    _card = alerts_tile.card
+    _state = _card.state
+    if _state == UI_LIVE:
+        _summary = f"{_card.label}：{_card.value}"
+    else:
+        _summary = str(getattr(_card.note, "now", "") or "").replace("**", "").strip() or _card.label
+    _bits = [f"**{ALERTS_TITLE}**　{_summary}"]
+    _conf = list(getattr(alloc, "conflicts", ()) or ()) if alloc is not None else []
+    if _conf:
+        _bits.append(ALERTS_CONFLICTS_COUNT_FMT.format(n=len(_conf)))
+    if not alerts_has_listable_source(alerts, alloc):
+        _bits.append(ALERTS_NO_SOURCE)
+    _tone = "error" if _state == UI_FAILED else ("item" if _state in (UI_LIVE, UI_DEGRADED) else "grey")
+    return _tone, "　".join(_bits)
+
+
 def render_alerts_block(*, alerts_tile: Any, alerts: Any, scanned: bool, alerts_error: str, alloc: Any) -> None:
-    """⚡ 需要處理：只轉述既有警示（`_load_key_alerts`）＋建議持股的衝突提示。三態判別由既有 tile 負責。"""
-    with st.container(border=True):
-        st.markdown(f"**{ALERTS_TITLE}**")
+    """⚡ 需要處理（P4-1：一行 bar＋同一個「🔍 查看依據」內的完整清單）。只轉述既有警示＋建議持股的衝突提示。
+
+    摺疊內先畫完整清單（原「今日關鍵」卡整張、衝突提示原文與數字說明），再畫六欄依據 —— 資訊只下沉，⛔ 刪。
+    """
+    _conf = list(getattr(alloc, "conflicts", ()) or ()) if alloc is not None else []
+
+    def _full_list() -> None:
         today._render_one(alerts_tile)
-        _conf = list(getattr(alloc, "conflicts", ()) or ()) if alloc is not None else []
         if _conf:
             st.markdown(f"**{ALERTS_CONFLICTS_HEADING}**")
             st.markdown("\n".join(f"- {_cell(_c)}" for _c in _conf))
             st.caption(ALERTS_CONFLICTS_NUMBER_NOTE)
-        if not alerts_has_listable_source(alerts, alloc):
-            st.caption(ALERTS_NO_SOURCE)
-        render_basis(basis_alerts(alerts, scanned, alerts_error, alloc))
+    with st.container(border=True, key=f"{P4M_BOX_KEY_PREFIX}alerts"):
+        _render_lines([alerts_bar_line(alerts_tile, alerts, alloc)])
+        render_basis(basis_alerts(alerts, scanned, alerts_error, alloc), lead=_full_list)
 
 
 def render_chart_a(session: Mapping[str, Any]) -> None:
@@ -785,4 +997,6 @@ STATIC_TEXTS: tuple[str, ...] = (
     HEALTH_CHIP, CHART_A_TITLE, CHART_A_SAY, CHART_A_MA_DISCLAIMER, CHART_A_CONCLUSION, CHART_B_TITLE,
     CHART_B_SAY, CHART_B_CONCLUSION, CHART_C_TITLE, CHART_C_TAG, CHART_C_SAY, CHART_C_EMPTY, CHART_D_TITLE,
     CHART_D_NOTE, CHART_D_WORSENING, INSUFFICIENT_TEXT,
+    # P4-1（DEC-117）新增的第一屏字樣
+    UPDATE_OPTIONS_LABEL, REGIME_TILE_LABEL, DANGER_POINTER, ALERTS_CONFLICTS_COUNT_FMT, HERO_RISK_FULL_HEADING,
 )
