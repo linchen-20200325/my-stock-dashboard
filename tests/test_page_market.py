@@ -175,6 +175,10 @@ def test_verdict_cards_identical_to_today(name, monkeypatch):
     monkeypatch.setattr(P, "_render_tiles", lambda ts, cols=3: _drawn.extend(ts))
     # 兩頁共用的互動元件與 v2 樣式在這裡不是受測對象 —— 換成 no-op（bare mode 下 form 也不會送出）。
     monkeypatch.setattr(P, "_render_update_form", lambda s: None)
+    # 📌 P4-1（DEC-117 Q1／Q8b）：市場頁的更新鈕改由 `_market_blocks.render_update_cta` 畫（同一組 form／session key），
+    #   同屬「兩頁共用的互動元件、不是受測對象」⇒ 同樣換成 no-op（bare mode 下真跑 `st.form` 會把 form 狀態漏到後續 AppTest）。
+    from src.ui.views import _market_blocks as _B
+    monkeypatch.setattr(_B, "render_update_cta", lambda s: None)
     monkeypatch.setattr(P, "_inject_v2_css", lambda: None)
     monkeypatch.setattr(P, "load_sheet_binding", lambda: (None, "stub"))
     monkeypatch.setattr(P, "load_trading_day_status", lambda: (None, "stub"))
