@@ -195,7 +195,12 @@ class TestC1Structure:
             raise ValueError("測試用")
         monkeypatch.setattr(M, "build_market_conclusion", _boom)
         _at = _run(tmp_path, _LOADED)
-        assert any(e.value.startswith("結論句組不出來：") for e in _at.error)
+        # QA 修正輪：只認**外露層**（不在任何 expander 內），且落在 L1 決策區、結論標題之後。
+        _evs = list(_events(_at.main))
+        _hits = [i for i, e in enumerate(_evs) if e[0] == "Error" and e[1].startswith("結論句組不出來：測試用")]
+        assert len(_hits) == 1 and _evs[_hits[0]][2] is None and B.P4M_L1_KEY in _evs[_hits[0]][3]
+        _head = next(i for i, e in enumerate(_evs) if e[1].startswith("#### 今日結論"))
+        assert _hits[0] == _head + 1
 
     def test_c1_3_exactly_three_core_tiles_and_update_is_not_a_tile(self):
         _fn_t = _fn(_MB_TREE, "render_core_tiles")
@@ -253,18 +258,70 @@ class TestC1Structure:
         assert _at.session_state[P.SS_APPLIED_MODE] == {"mode": _force}
         assert any("上一次更新的結果" in e.label for e in _at.expander)
 
-    def test_c1_5_mobile_two_plus_one_rule_is_scoped_and_hides_nothing(self):
+    def test_c1_5_mobile_two_plus_one_rule_is_scoped(self):
         _css = B.P4M_LAYOUT_CSS
-        assert _css.startswith("@media (max-width: 640px){")
+        _media = _css[_css.index("@media (max-width: 640px){"):]
         _k = f".st-key-{B.P4M_CORE_TILES_KEY}"
-        assert f'{_k} [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(-n+2)' in _css
-        assert "calc(50% - 0.25rem)" in _css
-        assert f'{_k} [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(3)' in _css
-        assert "min-width:100%" in _css
-        for _bad in ("display:none", "visibility", "height:0", "max-height", "overflow", "opacity"):
-            assert _bad not in _css.replace(" ", ""), _bad
+        assert f'{_k} [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(-n+2)' in _media
+        assert "calc(50% - 0.25rem)" in _media
+        assert f'{_k} [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(3)' in _media
+        assert "min-width:100%" in _media
         _src = ast.unparse(_fn(_MB_TREE, "render_core_tiles"))
         assert "st.container(key=P4M_CORE_TILES_KEY)" in _src
+
+    def test_c1_5_layout_css_declarations_are_whitelisted(self):
+        """QA 修正輪：禁字清單 → **屬性白名單**。版面 CSS 只准排版／換行屬性，任何能把內容藏起來的寫法
+        （font-size:0、position、clip、transform、color／opacity、visibility、display、height、overflow、負位移…）一律紅。"""
+        _assert_layout_css_only_lays_out(B.P4M_LAYOUT_CSS)
+
+    @pytest.mark.parametrize("bad", (
+        "font-size:0", "font-size:0.1rem", "position:absolute", "clip:rect(0 0 0 0)", "transform:scale(0)",
+        "color:transparent", "left:-9999px", "display:none", "visibility:hidden", "height:0", "opacity:0",
+        "overflow:hidden", "max-height:0", "margin-left:-9999px", "clip-path:inset(50%)", "text-indent:-9999px"))
+    def test_c1_5_whitelist_rejects_hiding_tricks(self, bad):
+        _evil = B.P4M_LAYOUT_CSS.replace("gap:0.5rem !important;", f"gap:0.5rem !important;{bad} !important;", 1)
+        assert _evil != B.P4M_LAYOUT_CSS
+        with pytest.raises(AssertionError):
+            _assert_layout_css_only_lays_out(_evil)
+
+    def test_c1_5_fold_contents_wrap_instead_of_overflowing(self):
+        """QA 修正輪（目視 bug：手機位階摺疊內長 inline code 溢出蓋到水位 tile）：L1 內 expander 內容一律可任意處換行
+        （規則在 @media 外，桌機手機都適用）；實量見 `docs/vnext/phase4_market/p4_1/_measure_p4_1_overflow.json`。"""
+        _css = B.P4M_LAYOUT_CSS
+        _rule = _css[:_css.index("@media")]
+        assert f'.st-key-{B.P4M_L1_KEY} [data-testid="stExpander"] details *' in _rule
+        assert "overflow-wrap:anywhere" in _rule and "word-break:break-word" in _rule
+
+
+_CSS_ALLOWED = frozenset({
+    "gap", "padding", "padding-top", "padding-bottom", "padding-left", "padding-right",
+    "margin", "margin-top", "margin-bottom", "margin-left", "margin-right",
+    "flex", "flex-wrap", "width", "min-width", "overflow-wrap", "word-break", "font-size"})
+#: 字級下限（rem）：再小就等於藏字。
+_CSS_FONT_MIN_REM = 0.875
+
+
+def _assert_layout_css_only_lays_out(css: str) -> None:
+    import re
+    assert css.count("@media") == 1 and "@media (max-width: 640px){" in css
+    for _bad in ("::before", "::after", "content", "@import", "url(", "expression"):
+        assert _bad not in css, _bad
+    _blocks = re.findall(r"\{([^{}]*)\}", css)
+    assert _blocks
+    for _blk in _blocks:
+        for _decl in filter(None, (d.strip() for d in _blk.split(";"))):
+            _prop, _, _val = _decl.partition(":")
+            _prop, _val = _prop.strip().lower(), _val.replace("!important", "").strip().lower()
+            assert _prop in _CSS_ALLOWED, f"不在白名單的 CSS 屬性：{_decl!r}"
+            assert re.search(r"(^|[\s(,])-\d", _val) is None, f"負值（可能把內容推出畫面）：{_decl!r}"
+            for _w in ("transparent", "hidden", "none", "0px)"):
+                assert _w not in _val, _decl
+            if _prop == "font-size":
+                _m = re.fullmatch(r"([0-9.]+)rem", _val)
+                assert _m and float(_m.group(1)) >= _CSS_FONT_MIN_REM, f"字級過小或非 rem：{_decl!r}"
+            if _prop in ("width", "min-width"):
+                assert _val == "0" and _prop == "min-width" or re.fullmatch(
+                    r"(100%|calc\(50% - 0\.25rem\))", _val), _decl
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -435,6 +492,25 @@ class TestC6RiskTile:
             assert _w not in _covs[0][1]
         assert any(t.startswith(f"{M.NO_REFRESH_YET}｜") for t in _top(_evs))      # 更新時間那半在頁首
 
+    def test_c6_4_report_state_split_keeps_both_halves_verbatim(self, tmp_path):
+        """QA 修正輪：有報告時（時間那半含送出時間）也恰好拆成兩半，各在原位。"""
+        from src.ui.views import page_market as M
+        _rep = _report()
+        _line = M.status_line(_rep, None)
+        assert _line.count("｜") == 1
+        _time, _cov = _line.split("｜")
+        assert _rep.started_at in _time and M.REFRESH_TIME_NOTE in _time
+        _at = _run(tmp_path, {**_LOADED, P.SS_REFRESH_REPORT: _rep})
+        _evs = list(_events(_at.main))
+        assert any(e[2] is None and e[1].startswith(f"{_time}｜") and B.P4M_CORE_TILES_KEY not in e[3] for e in _evs)
+        assert any(e[2] is None and e[1].startswith("指標危險度覆蓋：") and B.P4M_CORE_TILES_KEY in e[3] for e in _evs)
+
+    def test_c6_4_status_line_with_extra_separator_fails_loud(self, tmp_path, monkeypatch):
+        from src.ui.views import page_market as M
+        monkeypatch.setattr(M, "status_line", lambda r, d: "本頁更新於 a｜b｜指標危險度覆蓋：尚未載入")
+        _at = _run(tmp_path, _LOADED)
+        assert _at.exception and "恰含一個「｜」" in _at.exception[0].message
+
     def test_c6_4_cold_coverage_says_not_loaded_not_zero(self, tmp_path):
         _at = _run(tmp_path, None)
         _covs = [t for t in _top(list(_events(_at.main))) if t.startswith("指標危險度覆蓋：")]
@@ -499,14 +575,17 @@ class TestC8:
         _clear = B.alerts_bar_line(self._tile(UI_LIVE, value="門檻層與急變層本輪皆無異常"), {"items": []}, None)
         assert _clear[0] == "item" and _clear[1].endswith(B.ALERTS_NO_SOURCE)      # 沒有可列來源 ⇒ 同一行明寫
         _deg = B.alerts_bar_line(self._tile(UI_DEGRADED, note=_n("今日關鍵　已列出異常，但**本列僅含急變層**")),
-                                 {"items": [{"text": "x"}]}, None)
-        assert _deg == ("item", "**⚡ 需要處理**　今日關鍵　已列出異常，但本列僅含急變層")
+                                 {"items": [{"text": "x"}, {"text": "y"}], "n_red": 1, "n_yellow": 1}, None)
+        # QA 修正輪：degraded 帶上既有的紅／黃計數（格式同 live 態 value「N 紅 · M 黃」）
+        assert _deg == ("item", "**⚡ 需要處理**　今日關鍵　已列出異常，但本列僅含急變層　1 紅 · 1 黃")
         _cold = B.alerts_bar_line(self._tile(UI_IDLE, note=_n("今日關鍵　尚未載入 —— **未評估 ≠ 無異常**")), None, None)
         assert _cold[0] == "grey" and "未評估 ≠ 無異常" in _cold[1] and B.ALERTS_NO_SOURCE in _cold[1]
         _empty = B.alerts_bar_line(self._tile(UI_EMPTY, note=_n("今日關鍵　**門檻掃描尚未完成**")), {"items": []}, None)
         assert _empty[0] == "grey"
-        _fail = B.alerts_bar_line(self._tile(UI_FAILED, note=_n("今日關鍵　橫幅本身無法產生")), None, None)
-        assert _fail[0] == "error"
+        _fail = B.alerts_bar_line(self._tile(UI_FAILED, note=SimpleNamespace(
+            now="今日關鍵　橫幅本身無法產生", why="L2 `compute.macro.daily_key_alerts`（今日關鍵）拋出例外：RuntimeError('x')")),
+            None, None)
+        assert _fail[0] == "error" and "拋出例外：RuntimeError('x')" in _fail[1]      # QA 修正輪：原因逐字外露
         _conf = B.alerts_bar_line(self._tile(UI_LIVE, value="0 紅"), {"items": []},
                                   SimpleNamespace(conflicts=("甲", "乙")))
         assert B.ALERTS_CONFLICTS_COUNT_FMT.format(n=2) in _conf[1] and B.ALERTS_NO_SOURCE not in _conf[1]
@@ -570,7 +649,7 @@ class TestInvariants:
         monkeypatch.setattr(P, "_load_regime", lambda: _sc["regime"])
         _faces: list[str] = []
         _real = B._render_regime_face
-        monkeypatch.setattr(B, "_render_regime_face", lambda t, f, b: (_faces.append(f), _real(t, f, b))[1])
+        monkeypatch.setattr(B, "_render_regime_face", lambda t, f, b, e="": (_faces.append(f), _real(t, f, b, e))[1])
         _clauses: list[str] = []
         _rc = M.regime_clause
         monkeypatch.setattr(M, "regime_clause", lambda *a, **k: (_clauses.append(_rc(*a, **k)), _clauses[-1])[1])
@@ -585,9 +664,56 @@ class TestInvariants:
     def test_n3_regime_contract_failure_is_red(self, tmp_path, monkeypatch):
         monkeypatch.setattr(P, "_load_regime", lambda: (None, "RuntimeError('契約壞')"))
         _at = _run(tmp_path, _LOADED)
-        _l1_err = [e for e in _events(_at.main) if e[0] == "Error" and B.P4M_CORE_TILES_KEY in e[3]]
-        assert _l1_err, "位階契約讀取失敗時，位階 tile 外露值必須是紅（真錯誤）"
-        assert any(e.value.startswith("市場位階契約讀不出來：") for e in _at.error)   # X1 原路徑照舊
+        _evs = list(_events(_at.main))
+        # QA 修正輪：只認**外露層**（不在 expander 內）＋位階 tile 內；原因句與 X1 那句**逐字相同**。
+        _x1 = [e[1] for e in _evs if e[0] == "Error" and e[2] == "市場位階：為什麼？"]
+        assert len(_x1) == 1 and _x1[0].startswith("市場位階契約讀不出來：")
+        _tile = [e for e in _evs if e[0] == "Error" and e[2] is None and B.P4M_CORE_TILES_KEY in e[3]]
+        assert len(_tile) == 1, "位階契約讀取失敗時，位階 tile 外露值必須是紅（真錯誤）"
+        assert _tile[0][1].endswith(_x1[0]) and "契約壞" in _tile[0][1]
+
+    def test_n3_regime_degraded_is_bold_value_with_badge_not_grey(self, tmp_path, monkeypatch):
+        """QA 修正輪：degraded（有值、門檻已失準）＝粗體外露值＋徽章字，⛔ 灰 caption、⛔ 紅。"""
+        from shared import regime_arbiter as RA
+        from src.ui.views import page_market as M
+        _reg = {"regime": "bull", "light": "🟢", "source": RA.SOURCE_FILE_RULE_ENGINE, "health": 60,
+                "is_loaded": True, "trend_regime": None, "defense": False, "exposure_limit_pct": None,
+                "traffic_light": None}
+        monkeypatch.setattr(P, "_load_regime", lambda: (_reg, ""))
+        _tiles: list = []
+        _real = B._render_regime_face
+        monkeypatch.setattr(B, "_render_regime_face", lambda t, f, b, e="": (_tiles.append(t), _real(t, f, b, e))[1])
+        _at = _run(tmp_path, _LOADED)
+        assert not _at.exception, _at.exception
+        from shared.ui_state import UI_DEGRADED
+        assert _tiles and _tiles[0].card.state == UI_DEGRADED
+        _badge = M.card_badge_text(_tiles[0])
+        _evs = [e for e in _events(_at.main) if e[2] is None and B.P4M_CORE_TILES_KEY in e[3]]
+        _i = next(i for i, e in enumerate(_evs) if e[1] == f"**{B.REGIME_TILE_LABEL}**")
+        _k, _t = _evs[_i + 1][0], _evs[_i + 1][1]
+        assert _k == "Markdown" and _t.startswith("**") and _badge and _badge in _t, (_k, _t, _badge)
+
+    def test_n3_live_regime_tile_shows_the_card_badge(self, tmp_path, monkeypatch):
+        """QA 修正輪：live 位階 tile 外露值旁必帶卡片徽章字（與原卡同一支 `card_badge_text`）。"""
+        from src.ui.views import page_market as M
+        from tests.test_page_market import _SCENARIOS
+        monkeypatch.setattr(P, "_load_regime", lambda: _SCENARIOS["live_no_cap"]["regime"])
+        _tiles: list = []
+        _real = B._render_regime_face
+        monkeypatch.setattr(B, "_render_regime_face", lambda t, f, b, e="": (_tiles.append((t, b)), _real(t, f, b, e))[1])
+        _at = _run(tmp_path, _LOADED)
+        _tile, _b = _tiles[0]
+        assert _b and _b == M.card_badge_text(_tile)
+        _evs = [e for e in _events(_at.main) if e[2] is None and B.P4M_CORE_TILES_KEY in e[3]]
+        _i = next(i for i, e in enumerate(_evs) if e[1] == f"**{B.REGIME_TILE_LABEL}**")
+        assert _evs[_i + 1][1] == f"**{_tile.card.value}**　{_b}"
+
+    def test_c6_3_alerts_failed_bar_is_red_with_reason_outside(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(P, "_load_key_alerts", lambda s: (None, False, "RuntimeError('警示壞')"))
+        _at = _run(tmp_path, _LOADED)
+        _bars = [e for e in _events(_at.main) if e[1].startswith(f"**{B.ALERTS_TITLE}**") and e[2] is None]
+        assert len(_bars) == 1 and _bars[0][0] == "Error"
+        assert "拋出例外" in _bars[0][1] and "警示壞" in _bars[0][1]
 
     def test_layering_no_data_layer_and_no_digest_import(self):
         for _tree in (_PM_TREE, _MB_TREE):
