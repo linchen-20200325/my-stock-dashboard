@@ -172,6 +172,10 @@ P4M_BOX_KEY_PREFIX: str = "p4m_box_"
 #: ⚠️ 只排版、⛔ 不藏任何東西：規則全部失效時＝Streamlit 預設（窄螢幕單欄堆疊、預設間距），
 #:   沒有任何「靠 CSS 才顯示」的內容；⛔ display:none／visibility／height:0／overflow 截斷。
 P4M_LAYOUT_CSS: str = (
+    # QA 修正輪：L1 內所有摺疊內容（六欄依據裡的長 inline code）一律可在任意處換行，不溢出蓋到隔壁 tile（只換行、⛔ 截斷）。
+    f".st-key-{P4M_L1_KEY} [data-testid=\"stExpander\"] details,"
+    f".st-key-{P4M_L1_KEY} [data-testid=\"stExpander\"] details *{{overflow-wrap:anywhere !important;"
+    "word-break:break-word !important;min-width:0 !important;}"
     "@media (max-width: 640px){"
     f".st-key-{P4M_L1_KEY},.st-key-{P4M_L1_KEY} [data-testid=\"stVerticalBlock\"]{{gap:0.5rem !important;}}"
     f".st-key-{P4M_L1_KEY} [class*=\"st-key-{P4M_BOX_KEY_PREFIX}\"],"
@@ -785,11 +789,21 @@ def render_update_cta(session: Mapping[str, Any]) -> None:
     st.rerun()
 
 
-def _render_regime_face(regime_tile: Any, face: str, badge: str) -> None:
-    """位階 tile 外露值：有值（live／degraded）＝粗體＋徽章字；真錯誤＝紅；其餘（未載入／未評估）＝灰。"""
+def regime_failed_reason(regime_tile: Any, regime_error_line: str) -> str:
+    """位階 tile 真錯誤的外露原因（QA 修正輪，客戶 Q6「真錯誤必須外露逐字」）：讀契約拋例外 ⇒ `page_market` 傳入的
+    X1 既有紅字（「市場位階契約讀不出來：…」逐字）；其餘 failed（例：上一次更新的紅綠燈步驟失敗）⇒ 卡上既有 `why`。
+    ⛔ 新造文案；兩者都沒有 ⇒ 空字串（不補一句）。"""
+    if regime_error_line:
+        return regime_error_line
+    return str(getattr(getattr(regime_tile.card, "note", None), "why", "") or "").strip()
+
+
+def _render_regime_face(regime_tile: Any, face: str, badge: str, error_line: str = "") -> None:
+    """位階 tile 外露值：有值（live／degraded）＝粗體＋徽章字；真錯誤＝紅（外露值＋原因同一個紅框）；其餘＝灰。"""
     _state = regime_tile.card.state
     if _state == UI_FAILED:
-        st.error(face, icon="❌")
+        _why = regime_failed_reason(regime_tile, error_line)
+        st.error(f"{face}\n\n{_why}" if _why else face, icon="❌")
     elif _state in (UI_LIVE, UI_DEGRADED):
         st.markdown(f"**{face}**" + (f"　{badge}" if badge else ""))
     else:
@@ -797,7 +811,8 @@ def _render_regime_face(regime_tile: Any, face: str, badge: str) -> None:
 
 
 def render_core_tiles(*, regime_tile: Any, regime_face: str, regime_badge: str, exposure_tile: Any,
-                      alloc: Any, alloc_error: str, risks: MarketRisks, coverage_text: str) -> None:
+                      alloc: Any, alloc_error: str, risks: MarketRisks, coverage_text: str,
+                      regime_error_line: str = "") -> None:
     """P4-1 三個核心狀態 tile（DEC-117 Q1=B）：市場位階｜建議總持股水位｜今日主要風險。
 
     桌機 3 欄；手機 2＋1（`P4M_LAYOUT_CSS`）。每張 tile **只有一個**「🔍 查看依據」（Q3=A／U6）。
@@ -809,7 +824,7 @@ def render_core_tiles(*, regime_tile: Any, regime_face: str, regime_badge: str, 
         with _cols[0]:
             with st.container(border=True, key=f"{P4M_BOX_KEY_PREFIX}regime"):
                 st.markdown(f"**{REGIME_TILE_LABEL}**")
-                _render_regime_face(regime_tile, regime_face, regime_badge)
+                _render_regime_face(regime_tile, regime_face, regime_badge, regime_error_line)
                 st.caption(REGIME_SCOPE_CAPTION)
                 render_basis(basis_regime(regime_tile), extra=lambda: today._render_one(regime_tile))
         with _cols[1]:
@@ -863,6 +878,14 @@ def alerts_bar_line(alerts_tile: Any, alerts: Any, alloc: Any) -> tuple[str, str
     else:
         _summary = str(getattr(_card.note, "now", "") or "").replace("**", "").strip() or _card.label
     _bits = [f"**{ALERTS_TITLE}**　{_summary}"]
+    if _state == UI_DEGRADED and isinstance(alerts, Mapping):
+        # QA 修正輪：degraded（有值、只含急變層）照樣帶紅／黃計數 —— 格式同 `build_key_alert_tile` live 態的 value。
+        _bits.append(f"{int(alerts.get('n_red') or 0)} 紅 · {int(alerts.get('n_yellow') or 0)} 黃")
+    if _state == UI_FAILED:
+        # QA 修正輪（客戶 Q6「真錯誤必須外露逐字」）：卡上既有的原因句（`why`）逐字外露在紅 bar 上。
+        _why = str(getattr(_card.note, "why", "") or "").strip()
+        if _why:
+            _bits.append(_why)
     _conf = list(getattr(alloc, "conflicts", ()) or ()) if alloc is not None else []
     if _conf:
         _bits.append(ALERTS_CONFLICTS_COUNT_FMT.format(n=len(_conf)))
