@@ -149,15 +149,54 @@ class TestCss:
         _mn = int(re.search(r"min-width:\s*(\d+)px", next(k for k in _b if "min-width" in k)).group(1))
         assert _mn == _mx + 1, "手機／桌機斷點不互補（會出現兩邊都沒規則或重疊的寬度）"
 
+    # ── 站殼間距（D7=B，DEC-116）：兩條無 media 規則。守衛「規則失效＝回到現況」＋「放寬只到這一條」 ──
+    _MAIN = '[data-testid="stMainBlockContainer"]'
+
+    @classmethod
+    def _outside_media(cls) -> str:
+        return re.sub(r"@media[^{]+\{(?:[^{}]|\{[^{}]*\})*\}", "", re.sub(r"/\*.*?\*/", "", cls._CSS.replace("<style>", "").replace("</style>", ""), flags=re.S), flags=re.S)
+
+    @classmethod
+    def _rules(cls, css: str):
+        return [(m.group(1).strip(), m.group(2)) for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", css)]
+
     def test_failure_degradation_is_benign(self):
-        """CSS 完全失效 ⇒ 沒有任何規則把導覽藏起來：`display:none` 只在 min-width / print 的 media 內，
-        且預設（無 media）沒有「先隱藏、靠 CSS 才顯示」的規則。"""
-        _outside = re.sub(r"@media[^{]+\{(?:[^{}]|\{[^{}]*\})*\}", "", self._CSS, flags=re.S)
-        assert "display:none" not in _outside
+        """CSS 完全失效 ⇒ 沒有任何規則把導覽藏起來：預設（無 media）**唯一**允許的 `display:none` 是 D7=B 的
+        「隱藏 style-only 空容器」那一條（選擇器必須命中 stElementContainer 且帶 `:has(… style:only-child)`；
+        導覽本體〔`.st-key-nav4_bottom`／radio〕不是 style-only，不會命中）。其餘 `display:none` 仍只在 media 內。"""
+        _outside = self._outside_media()
+        for sel, body in self._rules(_outside):
+            if "display:none" in body.replace(" ", ""):
+                assert "stElementContainer" in sel and ":has(" in sel and "style:only-child" in sel, \
+                    f"無 media 的 display:none 只允許 style-only 空容器那一條：{sel}"
+                assert "nav4" not in sel and "radio" not in sel and "stSidebar" not in sel, f"不得藏導覽：{sel}"
         _narrow = next(v for k, v in _media_blocks(self._CSS).items() if "max-width" in k)
         # 窄螢幕內只允許「隱藏 radio 圓點」那一條 display:none（導覽本體不得被藏）
         for rule in re.findall(r"([^{}]+)\{[^{}]*display:none[^{}]*\}", _narrow):
             assert "first-child" in rule, f"窄螢幕內不應隱藏導覽本體：{rule.strip()}"
+
+    def test_shell_spacing_padding_top_rule_exists_and_clears_the_header(self):
+        """上留白規則必須存在、無 media（桌機＋手機都生效）、且 ≥ stHeader 高度 60px（否則站標被頂欄蓋住）。"""
+        _hits = [(s, b) for s, b in self._rules(self._outside_media()) if s == self._MAIN and "padding-top" in b]
+        assert len(_hits) == 1, f"應恰有一條無 media 的 stMainBlockContainer padding-top 規則，得 {len(_hits)}"
+        _px = int(re.search(r"padding-top:\s*(\d+)px", _hits[0][1]).group(1))
+        assert _px >= 60, f"padding-top {_px}px < stHeader 60px，站標會被頂欄蓋住"
+        assert "!important" in _hits[0][1]
+
+    def test_shell_spacing_hide_rule_is_scoped_under_main_block_and_style_only(self):
+        """隱藏規則：必須 scope 在 stMainBlockContainer 底下（不得是全站裸選擇器）、只命中 style-only 容器。"""
+        _hits = [(s, b) for s, b in self._rules(self._outside_media()) if "display:none" in b.replace(" ", "")]
+        assert len(_hits) == 1, f"無 media 的 display:none 應恰一條，得 {len(_hits)}"
+        _sel = _hits[0][0]
+        assert _sel.startswith(self._MAIN), f"隱藏規則必須 scope 在 stMainBlockContainer 底下：{_sel}"
+        assert re.search(r'stElementContainer"\]:has\(\[data-testid="stMarkdownContainer"\]\s*>\s*style:only-child\)\s*$', _sel), \
+            f"隱藏規則必須只命中 style-only 的 markdown 容器：{_sel}"
+
+    def test_no_rule_depends_on_css_to_show_content(self):
+        """沒有「預設隱藏、靠 CSS 才顯示」的規則：無 media 的規則裡，除了那一條 display:none 之外不得有任何 `display:`
+        （尤其不得有 display:block/flex/revert 之類把東西「顯示回來」的規則——那代表隱藏是預設、顯示要靠 CSS）。"""
+        _disp = [(s, b) for s, b in self._rules(self._outside_media()) if "display:" in b.replace(" ", "")]
+        assert len(_disp) == 1 and "display:none" in _disp[0][1].replace(" ", ""), f"無 media 的 display 規則只允許那一條 none：{_disp}"
 
     def test_colors_come_from_tokens_not_hardcoded_hex_literals_in_the_template(self):
         from src.ui.views import shell_nav4

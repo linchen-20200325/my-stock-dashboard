@@ -38,6 +38,12 @@ _MOBILE_MAX_PX = 768
 _DESKTOP_MIN_PX = _MOBILE_MAX_PX + 1
 
 _CSS_TEMPLATE = """<style>
+/* 站殼間距（D7=B，DEC-116；僅新版四頁模式注入，其他模式不載入本模組）。兩條規則皆無 media 限制（桌機＋手機）。
+   失效（:has() 不支援／Streamlit 改了 data-testid）＝規則不命中＝回到現況；沒有任何「靠 CSS 才顯示」的規則。 */
+/* ① 上留白 96→72px：仍高於 stHeader 的 60px，站標不會被頂欄蓋住 */
+[data-testid="stMainBlockContainer"]{padding-top:72px !important;}
+/* ② 只隱藏「確定只含樣式標籤、無任何可見內容」的空 element-container（flex gap 16px/個的來源）；導覽本體不是 style-only，不會命中 */
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:only-child){display:none !important;}
 /* NAV-1：手機底部固定四按鈕（DEC-097）。key=@@KEY@@ ⇒ class .st-key-@@KEY@@（Streamlit 非公開保證；失效時退化為主內容流中的橫排 radio） */
 @media (max-width: @@MOBILE@@px){
   .st-key-@@KEY@@{position:fixed;left:0;right:0;bottom:0;z-index:999;

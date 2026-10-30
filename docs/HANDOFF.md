@@ -50,6 +50,18 @@
 
 ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：本索引由 Phase 1 撰寫組單組撰寫，未經第二組驗證；「無新 Gate」「既有 open 客戶項」清單依 BACKLOG／舊 Checkpoint 轉錄，非窮舉。
 
+> ### 📌 2026-10-30 站殼間距 D7=B 施工補註（現行；**與上表衝突處以本段為準**；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕，依客戶 D7=B 裁示 DEC-116；上表各欄原文保留）
+>
+> | 欄位 | 現行 |
+> |---|---|
+> | current task／batch | **Phase 3 站殼間距 D7=B 已施工（本地 commit，未 push／未開 PR，待總管複驗＋獨立 QA）**；Phase 3 其餘步驟 1～5 已處理 |
+> | completed in this batch | `shell_nav4.py::_CSS_TEMPLATE` +2 規則（padding-top 72px＋隱藏 style-only 空容器）；`test_nav1_shell_nav4.py::TestCss` 守衛調整＋3 新守衛（8 mutation 全紅）；`tools/phase3_measure/measure_shell_fix.js`／`measure_jump.js`；前後截圖 `docs/vnext/phase3_shell/`；DEC-116；Measurement §8、Migration Plan §18、Gate §8、PROJECT_STATE、BACKLOG（`P2R-P3-SHELL-SPACING-CUSTOMER-DECISION` 結案、新增 `P2R-P3-SHELL-FLOOR-156-158`） |
+> | 實測結論（單組、Streamlit 1.59.2） | 四頁 H2／第一可見內容 y 一律 135.19（原 223.19／207.19）；`?legacy=1` 量測全同、DOM 不含新規則；規則剝除回原值；無新增 layout jump；**未觸發退回方案 C** |
+> | tests／CI | 本機：`test_nav1_shell_nav4`／`test_batch_z60`／`test_boot_import_smoke`／`test_nav1_app_routing`／`tests/ui_v2`／`test_uim_revert_chain`／`test_c3_layering_guard` 合計 1234 passed、1 skipped；全量 fast lane（`pytest -q`，預設 not slow，施工後、docs 補寫前跑）35656 passed／0 failed／46 skipped／185 deselected，984 s；docs 補寫後另跑讀治理文件的 4 檔 2940 passed。**CI（Fast checks／Slow tests）尚未跑（未開 PR），以 `gh api` 實查為準**；slow lane 未跑 |
+> | 未驗 | 1.56～1.58；真資料載入態；實機／Streamlit Cloud／Safari／Firefox；Visual Fidelity Gate 判定（待獨立 QA）；客戶實機點驗 |
+> | unresolved true Stop Gates | **無新 Gate**；既有 open 客戶項不變（見上表） |
+> | **下一個唯一安全接手點** | **Phase 4 步驟 0**：以當時 main 重測，出 **📊 市場頁文字線框**（W2、W3、W9）送客戶拍板；**客戶拍板前不得寫 Phase 4 UI code**。（先處理本批的 QA 複驗／PR／CI，再進 Phase 4） |
+
 ### 📌 Resume Checkpoint（DEC-086）— ⛔ HISTORICAL（2026-10-29 起由上方「Resume Checkpoint 索引」取代；本表與其下各補註、「現行短版」段、§1～§6 均為歷史，原文保留不刪；有意識的更新，不是漏刪，決策者 客戶（DEC-109 二十八 B）＋AI 總管（事實更新））
 
 | 欄位 | ~~內容（2026-10-26T13:18:33Z；DEC-089 Stage C 核准落盤後 checkpoint 更新，執行組自檢，未獨立重驗）~~ ~~內容（2026-10-26T14:09:33Z；#940 合併後、D0 實證報告 docs-only PR 撰寫中 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ ~~內容（2026-10-26T14:53:39Z；#941 合併後、D1 導覽殼線框草稿＋三輪獨立 QA 後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ ~~內容（DEC-090 D1 線框核准落盤後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-26 有意識的更新，不是漏刪，決策者 客戶（DEC-090 D1 線框核准））~~ ~~內容（D2 導覽殼實作 commit 後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-26 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ ~~內容（D2 啟動事故守衛補強後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-27 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ ~~內容（DEC-091 D2.5 改道落盤後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-27 有意識的更新，不是漏刪，決策者 客戶（DEC-091 改道 D2.5））~~ ~~內容（DEC-092 Design Gate 裁示落盤後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-27 有意識的更新，不是漏刪，決策者 客戶（DEC-092 Design Gate 裁示））~~ ~~內容（RS-1 研究完成後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-27 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ ~~內容（AB-0 Decision Digest 契約實作 commit 後、PR 開立前 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-27 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ ~~內容（AB-0 已合併 #949、AB-1 WIP 交接 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-27 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ ~~內容（AB-1 已合併 #951 後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-27 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ ~~內容（NAV-1 實作完成後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ ~~內容（NAV-1 已合併 #957 後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ ~~內容（Cross-View 稽核＋安全小修 commit 後、PR 開立前 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新））~~ 內容（DEC-101 實作已合併 #961 後 checkpoint 更新，執行組自檢，未獨立重驗）（2026-10-28 有意識的更新，不是漏刪，決策者 AI 總管（事實更新）） |
