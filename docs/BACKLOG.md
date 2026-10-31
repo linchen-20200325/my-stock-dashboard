@@ -1157,3 +1157,6 @@
 | **P2R-P4-CHARTA-GUARD-FONT** | **P2**（Low） | PR #987 獨立 QA 發現（不擋合併，非本 PR 範圍）：圖例寬度守衛不防字級過小（`labelFontSize` 6px 仍綠）。補 `labelFontSize` 下限斷言。2026-10-31 新增；單組 QA 結論，未另行複驗 | open（登記） | PR #987 獨立 QA | 補下限後字級 6px 的 mutation 應轉紅 | 1 |
 | **P2R-P4-CHARTA-LEGEND-TITLE-WORDING** | **P3**（Low） | PR #987 獨立 QA 發現（不擋合併，非本 PR 範圍）：圖例標題「MA 均為最新值，參考的水平線」與首項「加權指數收盤」同列，字面可能被誤讀為指數線也是 MA；另 y 軸 0 起算壓縮線條（改版前即如此，非退化）。涉及客戶可見文字／圖面，改動前先判是否屬 UI 草稿先行範圍。2026-10-31 新增；單組 QA 結論，未另行複驗 | open（登記） | PR #987 獨立 QA | 登記，不構成動工授權（§-1）；有任務碰到圖 A 時再判 | 1 |
 | **P2R-P4-QA-UNVERIFIED-987** | **P2** | PR #987 獨立 QA **未驗項**（〔未驗證〕，QA 環境無法涵蓋）：真資料／真冷啟動、手機實機、Safari／Firefox、Streamlit 1.57–1.58、淺色主題、指數線 hover、缺口（gap）真實渲染。已查 BACKLOG／HANDOFF 無同類條目（`git grep` 與 `grep -n '#987'`），故新增本列。2026-10-31 新增 | open（未驗證） | PR #987 獨立 QA | 需真實瀏覽器／部署環境；客戶或可連線環境實測後寫回本列 | 0（未實測） |
+
+- **P1R-PHASE5-TARGET（open，P1）**：Phase 5 🎯 標的頁 UI 實作。裁示已定（DEC-121：Q1=A／Q2=B／Q3=A），UI **尚未開始**。起點＝重跑 GitHub Verification Gate 後依 wireframe 分 PR（Sonnet 5.5＋Medium；Q1 若觸及領域語意才升 Opus 5.5＋High）。（2026-10-31）
+- **P1R-ONEBRAIN-OB0（done 登記）**：OneBrain OB-0 架構治理已隨 PR #986 合併（`2e034a69`）；Provider-neutral，未啟用任何 production Claude API／runtime／key；後續啟用須客戶 Decision Gate。不得另建第二套規格。（2026-10-31）
