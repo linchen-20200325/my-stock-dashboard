@@ -590,8 +590,8 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 | C1-6 | ⭐ 手機第一屏優先序：**今日結論 > 核心狀態 > 是否需行動 > Primary Visual**；⛔ 為塞主圖進第一屏而把結論或核心狀態擠出第一屏 | Q7 | Gate：390×844 第一屏截圖＋結論句與 tile 的 y 量測（結論句頂端在第一屏內；契約 Q11 手機 ≤+260 為內部建議上限）；由 C1-1 順序測試間接守 |
 | C1-7 | ⭐ **Primary 緊接 L1 決策區後方**（L1 決策區＝今日結論＋3 核心狀態＋⚡ bar＋AI／資料狀態一行），**中間不得插入任何 L2／L3 長內容**（例：具名 expander、圖 D 表、圖 C 原句、更新說明長文） | Q7 | 順序測試：Primary 的前一個區塊必為 AI／資料狀態行；mutation：在兩者之間插一個 expander → 紅；Gate §8 例外紀錄的成立條件 |
 | C1-8 | 桌機 Primary（圖 A header＋圖上緣）**仍須在第一屏**（mobile exception 只給手機） | Q7（反面）＋契約 B1 | Gate A2（1440×900）截圖量測 |
-| C1-9 | 更新 CTA 與今日結論之間**只允許**：預設收合的「更新選項」expander 與「更新報告」expander 的**標題列**（各 1 行）；**更新報告不得**插在 CTA 與今日結論之間展開、也**不得**插在 AI／資料狀態與 Primary 之間——收進 CTA 區**預設收合**的 expander，標題與內容用**既有字樣**（`today._render_refresh_report` 既有文案；舊格式畫不出來時紅字＋清掉的路徑不變），⛔ 新造文案。頁級 chip 列（資料日／覆蓋率）屬「頁首」 | U1 判定＋Q5／Q7 | 順序測試：CTA 與結論之間的元素集合 ⊆ {更新選項 expander, 更新報告 expander}，且兩者 `expanded=False`；報告態（`&report=1`）截圖量測結論句仍在第一屏；mutation：報告改為展開或移到結論後 → 紅 |
-| C1-10 | 手機 390×844 第一屏**必須含**「⚡ 需要處理」bar（或誠實的「⬜ 無警示來源」）；Q7 例外**只豁免 Primary**。以內部壓縮間距／高度達成；確實做不到才附推薦方案送客戶 | U4 判定＋契約 §3／DEC-109 四④＋DEC-117 Q5 客戶理由 | Gate：390×844 loaded／cold 第一屏截圖＋⚡ bar 底緣 y 量測（≤ 第一屏可用高）；量不到即 ❌，不得以 Q7 例外放行 |
+| C1-9 | 更新 CTA 與今日結論之間**只允許**：預設收合的「更新選項」expander 與「更新報告」expander 的**標題列**（各 1 行）；**更新報告不得**插在 CTA 與今日結論之間展開、也**不得**插在 AI／資料狀態與 Primary 之間——收進 CTA 區**預設收合**的 expander，標題與內容用**既有字樣**（`today._render_refresh_report` 既有文案；舊格式畫不出來時紅字＋清掉的路徑不變），⛔ 新造文案。頁級 chip 列（資料日／覆蓋率）屬「頁首」 | U1 判定＋Q5／Q7 | 順序測試：CTA 與結論之間的元素集合 ⊆ {更新選項 expander, 更新報告 expander}，且兩者 `expanded=False`；報告態（`&report=1`）截圖量測結論句仍在第一屏；mutation：報告改為展開或移到結論後 → 紅<br>📌 **DEC-118 問題 2=D1（客戶 2026-10-30；有意識的政策變更，不是漏刪）**：更新部分失敗時，報告的**真錯誤外露、放在「今日結論」正下方**（不收合；不得擠出今日結論）；CTA 與今日結論之間在**任何狀態**都只剩收合的「更新選項」「更新報告」標題列（嚴格化）。上文「真錯誤留在收合區外因而落在 CTA 與結論之間」的例外（§10.7 原記載）由本條取代。 |
+| C1-10 | ~~手機 390×844 第一屏**必須含**「⚡ 需要處理」bar（或誠實的「⬜ 無警示來源」）；Q7 例外**只豁免 Primary**。以內部壓縮間距／高度達成；確實做不到才附推薦方案送客戶~~ **現行（DEC-118 問題 1=A，客戶 2026-10-30）**：⚡ 需要處理列為**手機 mobile exception**——手機 390×844 第一屏**必含今日結論＋核心狀態（位階｜水位列）**；⚡ bar **緊接在 3 核心狀態之後**，中間**不得有任何 L2／L3 內容**（📌 有意識的政策變更，不是漏刪；決策者 客戶（DEC-118）；舊條理由〔DEC-109 四④ 是否需行動在第一屏〕並陳於 DEC-118） | U4 判定＋契約 §3／DEC-109 四④＋DEC-117 Q5 客戶理由；**DEC-118 問題 1=A** | ~~Gate：390×844 loaded／cold 第一屏截圖＋⚡ bar 底緣 y 量測（≤ 第一屏可用高）；量不到即 ❌，不得以 Q7 例外放行~~ **現行**：順序測試「⚡ bar 緊接風險 tile 之後、中間無他物」＋390×844 × loaded／cold／report／partial 實量（結論與位階｜水位列在第一屏內）；Gate §8 例外登記 |
 | C1-11 | 施工時**先實量**頁首動作列（form＋「更新選項」expander）實高；與 C1-10 一併判斷：只有在不改核准結構就無法讓結論＋⚡ 留在手機第一屏時才送客戶（附推薦方案） | U5 判定 | 實量結果寫入 Gate 報告（`P1R-P4-HEADER-FORM-HEIGHT`） |
 
 ### 10.2 指路、摺疊標籤、風險 tile
@@ -653,3 +653,89 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
   - → **總管判定（內部自決，依 `CLAUDE.md` §-1.5.A-4；單組判定經兩組 QA 建議一致）**：施工時先實量頁首動作列實高；與 U4 一併判斷，只有不改核准結構就無法讓結論＋⚡ 留在手機第一屏時才送客戶。轉成 **C1-11**。（📌 2026-10-30 QA 修正輪，有意識的更新，不是漏刪；決策者 AI 總管〔內部自決〕）
 - **U6 tile 的摺疊入口標籤**：§4.1／§4.3 ASCII 與 §3.2 P-05～P-07 在 tile 上畫「▸ 詳細」，而 Q3=A 客戶原文為「tile／⚡：維持『查看依據』」。撰寫組讀法＝tile／⚡ 的摺疊入口一律用「🔍 查看依據」（六欄），ASCII 的「▸ 詳細」為示意字、未採用；若實作需要 tile 同時有「▸ 詳細」（例：位階 tile 的工程出處）與「🔍 查看依據」兩個入口，屬版面元件增減，須總管判定是否再送客戶。⛔ 實作批自行在 tile 上新增第二種摺疊標籤。
   - → **總管判定（內部自決，依 `CLAUDE.md` §-1.5.A-4；單組判定經兩組 QA 建議一致）**：每張 tile 只有一個「🔍 查看依據」入口，原 hover-only 出處併入六欄；**禁止新增第二個入口**（ASCII「▸ 詳細」未採用）。轉成 **C3-2／N3**。（📌 2026-10-30 QA 修正輪，有意識的更新，不是漏刪；決策者 AI 總管〔內部自決〕）
+
+### 10.7 P4-1（第一屏）施工狀態（2026-10-30；append-only；實作組單組產出，**未經獨立 QA**；中間批，Visual Fidelity Gate **未判**）
+
+> 📌 有意識的更新，不是漏刪；決策者 AI 總管（事實更新：P4-1 實作完成於分支 `ccr-c8ef17de-9tw7yt`，未 push、未開 PR）。§10.1～§10.6 原文一字未改。
+> 量測：`docs/vnext/phase4_market/p4_1/`（`measure_p4_1.js`＋`_measure_p4_1.json`＋第一屏截圖 8 張；harness 夾具、Streamlit 1.59.2；floor 1.56.0 另以獨立 venv 量一份 `_measure_p4_1_floor156.json`（順序與高度與 1.59.2 一致、差 ≤32px）並跑 AppTest 293 passed；**真資料、手機實機、1.57～1.58 未驗**）。
+> 狀態字：✅＝守衛已落地且綠（含 mutation 必紅）；📏＝屬 Gate 量測，已實量（數字見右欄），正式判定在 P4-3；❌＝實量不達、須總管判斷；⏭＝不屬 P4-1（P4-2／P4-3）。
+
+| # | 狀態 | 守衛／證據 |
+|---|---|---|
+| C1-1 | ✅ | `tests/test_p4_1_market_first_screen.py::TestC1Order::test_c1_1_block_order_is_dec117_q5`（cold／loaded）、`test_c1_1_order_holds_with_a_report`；DOM 實量兩 viewport × 四態順序皆為 H2 > 更新選項 > 更新鈕 >（更新報告）> 結論標題 > 結論句 > 3 tile > ⚡ > AI 行 > 圖A |
+| C1-2 | ✅ | `TestC1Structure::test_c1_2_conclusion_sentence_is_identical_to_pre_p4`（組句 `try` 區塊與 P4 前基底 AST 相同）、`test_c1_2_conclusion_failure_is_red_and_named`；`tests/test_uim_market_page.py::test_conclusion_sentence_and_expanders_are_identical_to_pre_uim`（渲染逐字） |
+| C1-3 | ✅ | `TestC1Structure::test_c1_3_exactly_three_core_tiles_and_update_is_not_a_tile`、`test_c1_3_tiles_live_inside_the_keyed_container`；`tests/test_market_blocks.py::TestStructure::test_core_tiles_are_three_and_hidden_contents_only_inside_basis` |
+| C1-4 | ✅（📏 A10） | `TestC1Structure::test_c1_4_cta_is_in_the_header_before_the_conclusion`、`test_c1_4_cta_uses_the_same_form_and_session_keys_as_today`、`test_c1_4_only_submit_triggers_refresh_radio_does_not`；實量：🚀 桌機 y207、手機 y351（loaded）／y328（cold），兩 viewport 第一屏內 |
+| C1-5 | ✅（📏） | `test_c1_5_mobile_two_plus_one_rule_is_scoped_and_hides_nothing`；實量手機 tile：位階｜水位並排各寬 175、風險整列寬 358；KPI 區塊高 loaded 204＋8＋250＝462（> 契約 Q2 內部上限 340）、cold 204＋8＋183＝395 |
+| C1-6 | 📏（部分 ❌） | 手機結論句頂端：loaded y427（相對 H2 +292）、cold y404（+269）、report y514（+379）——三態皆在第一屏內；**partial（更新報告有失敗）y896，被報告的真錯誤推出第一屏** ⇒ 見 PR_NOTES「停下來請總管判斷」第 2 點；核心狀態：位階｜水位列在第一屏內，風險 tile 頂端 loaded y749（底緣 999，被截）／cold y701（底緣 884） |
+| C1-7 | ✅ | `TestC1Order::test_c1_7_primary_follows_ai_line_with_nothing_in_between`（AI 行的下一個元素就是圖 A 標題） |
+| C1-8 | ⏭ P4-2 | 圖區本批未動；桌機圖 A 標題 loaded y941（第一屏外）——P4-2 壓圖高後由 P4-3 Gate 判 |
+| C1-9 | ✅（附例外） | `test_c1_9_between_cta_and_conclusion_only_collapsed_report_expander`（無報告／乾淨報告：只有預設收合的報告 expander）、`test_c1_9_true_errors_of_a_failed_report_stay_outside_the_fold`（把現況釘住：報告有失敗時，`_render_refresh_report` 依 2026-09-24 客戶裁示把真錯誤留在收合區外 ⇒ CTA 與結論之間出現 `st.error`，與 C1-9 字面衝突，**待總管判定**） |
+| C1-10 | ❌ | 手機 390×844（可用高 791＝844−底部導覽 53）：⚡ bar 頂端 loaded **y1016**、cold **y900**、report y1102、partial y1485 ⇒ **皆在第一屏外**（差 109～694px）。已做的壓縮（只排版、不藏內容）：L1 具名容器內元素間距 16→8px、框內距 16→8/10px、expander 標題列上下內距、結論小標字級；更新說明／水位說明句／排列說明下沉。**不改核准結構無法達成** ⇒ 依 C1-10／U5 送總管（推薦方案見 PR_NOTES） |
+| C1-11 | 📏 | 頁首動作列（form：「更新選項」標題列＋🚀）實高：**桌機 128px、手機 106px**（壓縮後；壓縮前手機 128px） |
+| C2 | ✅ | `TestC2Pointer`（三字面＋≤32 字、風險 tile 與圖 D 各一、冷熱皆有、UI-M 原句只下沉、未新增指路 chip kind）；`tests/test_uim_market_page.py::test_danger_card_demotion_is_signposted_from_hero_and_chart_d`（目標 expander 標題字面、第一張卡含「指標危險度」）；新句 `指標危險度：見下方「指標明細（16 項）」最上方`（24 字） |
+| C3-2 | ✅ | `TestC3Basis::test_c3_2_each_tile_and_alerts_has_exactly_one_basis_expander`、`test_c3_2_page_basis_expanders_count_and_no_second_label`、`test_c3_2_hover_only_regime_provenance_is_visible_text_in_the_basis`；DOM 實量第一屏 `title=` 0 個（四態兩 viewport） |
+| C6-1 | ✅ | `TestC6RiskTile::test_c6_1_short_line_is_lamp_color_bucket_lamp_direction`、`test_c6_1_short_lines_use_the_same_rows_as_chart_d` |
+| C6-2 | ✅ | `test_c6_2_full_sentences_are_all_kept_in_the_fold`、`test_c6_2_full_sentences_are_in_the_risk_basis_on_the_page`；`tests/test_uim_market_page.py::test_loaded_hero_items_match_panel_rows`（外露縮短行↔摺疊整句↔圖 D 三方逐項一致） |
+| C6-3 | ~~✅~~ → ✅（QA 修正輪後） | ~~位階契約失敗紅＝`test_n3_regime_contract_failure_is_red`；結論句失敗紅＝`test_c1_2_conclusion_failure_is_red_and_named`~~（📌 2026-10-30 QA 修正輪，有意識的更正，不是漏刪；決策者 AI 總管〔依兩組獨立 QA〕：原依據有誤——兩條測試當時只驗「頁上某處有紅」，位階 tile 的紅框也沒有帶原因句；X1 那句紅字在 expander 內，不算外露）。**現行依據**：`test_c6_3_degenerate_and_guard_sentences_are_exposed_verbatim`（全綠／全部不足／部分不足／有項目＋不足）、`test_c6_3_cold_and_failed_on_the_page`（未載入灰、五桶算不出來紅，皆外露）、`test_c6_3_other_true_errors_stay_outside_folds`（圖 A 讀取失敗紅）、`TestInvariants::test_n3_regime_contract_failure_is_red`（**只認外露層**：位階 tile 紅框＝外露值＋X1 同一句「市場位階契約讀不出來：…」逐字）、`TestC1Structure::test_c1_2_conclusion_failure_is_red_and_named`（**只認外露層**，緊接結論標題）、`TestInvariants::test_c6_3_alerts_failed_bar_is_red_with_reason_outside`（⚡ failed＝紅 bar＋卡上既有原因句逐字）；mutation M18／M19／M24／M25 必紅 |
+| C6-4 | ✅ | `test_c6_4_coverage_is_exposed_in_the_risk_tile_and_split_is_lossless`、`test_c6_4_cold_coverage_says_not_loaded_not_zero` |
+| C6-5 | ✅ | `test_c6_5_tile_never_adds_new_unevaluated_wording_and_chart_d_keeps_it_outside` |
+| C8-b | ✅ | `TestC8::test_c8_b_radio_and_long_note_are_inside_update_options_collapsed`、`test_c8_b_note_is_the_same_string_as_today_page`、`test_c8_b_options_note_contract_in_ui_kit`；Phase 2 golden（`tests/test_p2_step1_shared_optional_params.py`）照綠 |
+| C8-c | ✅ | `test_c8_c_bar_line_states`（live／無異常／degraded／未載入／未完成掃描／failed／有衝突）、`test_c8_c_page_bar_is_one_line_and_full_list_is_in_the_fold`；`tests/test_uim_market_page.py::test_alerts_block_*` 兩條改寫 |
+| N1 | ✅ | `TestInvariants::test_n1_water_tile_has_no_number_and_verbatim_guards`（cold／loaded；有上限的夾具下 tile 外露 0 個 %，原區間只在摺疊） |
+| N2 | ✅ | `test_n2_cold_first_screen_has_no_red_and_no_zero_standins` |
+| N3 | ✅ | `test_n3_regime_tile_face_equals_conclusion_clause`（三態）、`test_n3_regime_basis_carries_every_fact_verbatim`、`test_n3_regime_contract_failure_is_red` |
+| N4 | ✅ | `tests/test_p4_revert_chain.py`（基底 `7484c57b` sha `59c9801b…`；3 組 pair；接在 `uim_revert_for` 開頭，`test_chain_head_calls_p4_first`）；`test_uim_revert_chain`／`test_nav1_revert_chain`／`test_xvext_revert_chain` 與其餘 30＋條鏈全綠 |
+| N5～N7 | ⏭ P4-3（本批已自查） | `src/services|compute|data`、`shared/`、`app.py`、`page_today.py`、`requirements.txt` 0 diff；`test_c3_layering_guard`、`test_batch_z60` 綠；新文案無全稱關鍵詞（REGISTRY 不需新增） |
+| C3-1／C4-*／C8-a／C8-0 | ⏭ P4-2 | 圖區 |
+
+#### 10.7.1 QA 修正輪（2026-10-30；append-only；兩組獨立 QA 無 BLOCKER；決策者 AI 總管〔內部自決〕；結構與順序未動——C1-10、partial 態結論被擠出手機第一屏兩件**送客戶裁示中**）
+
+| 項 | 修正 | 守衛／證據 |
+|---|---|---|
+| C6-3（MAJOR） | 位階 tile failed：外露紅框＝外露值＋原因（讀契約失敗＝X1 同一句「市場位階契約讀不出來：…」；其他 failed＝卡上既有 `why`）；⚡ failed：紅 bar 帶卡上既有 `why` 逐字；結論紅字確認在外露層 | 見上方 C6-3 列；M18／M19／M24／M25 |
+| 目視 bug（中） | 手機開位階「🔍 查看依據」後六欄長 inline code 溢出蓋到水位 tile ⇒ L1 內 expander 內容 `overflow-wrap:anywhere`／`word-break:break-word`／`min-width:0`（不在 @media 內；只換行、不截斷） | `test_c1_5_fold_contents_wrap_instead_of_overflowing`；實量 `measure_p4_1_overflow.js`：修前位階摺疊右溢 155px（手機）／19px（桌機）、`scrollWidth 318 > 151`（`_measure_p4_1_overflow_without_fix.json`）→ 修後 L1 五個摺疊（form、3 tile、⚡）× 2 viewport × cold／loaded 右溢 0、`scrollWidth＝clientWidth`（`_measure_p4_1_overflow.json`；截圖 `p4_1_overflow_regime_open_390.png`）；M21 |
+| CSS 守衛 | 禁字清單 → **屬性白名單**（gap、padding*、margin*、flex*、width、min-width、overflow-wrap、word-break、font-size ≥0.875rem；禁負值、transparent／hidden／none、`::before`／`content`／`url(`） | `test_c1_5_layout_css_declarations_are_whitelisted`＋`test_c1_5_whitelist_rejects_hiding_tricks`（16 種藏法參數化必紅）；源碼突變 font-size:0／position／clip／transform／color:transparent／left:-9999px 6 項必紅 |
+| degraded | 位階 tile degraded＝粗體外露值＋徽章（不可灰）；⚡ degraded bar 帶紅／黃計數（格式同既有 live 態 value「N 紅 · M 黃」） | `test_n3_regime_degraded_is_bold_value_with_badge_not_grey`、`test_c8_c_bar_line_states`；M20 |
+| 狀態列拆分 | 改為斷言恰一個「｜」否則 `ValueError`（fail loud） | `test_c6_4_report_state_split_keeps_both_halves_verbatim`、`test_c6_4_status_line_with_extra_separator_fails_loud`；M22 |
+| 語意守衛 | 位階 tile 徽章、結論紅字外露各有獨立語意測試（不靠還原鏈錨點） | `test_n3_live_regime_tile_shows_the_card_badge`（M23）；M22／M24／M25 在排除還原鏈 AST 測試後仍由語意測試轉紅 |
+| N4 | `page_market.py` 本輪有改 ⇒ 以同一基底 `7484c57b` 重產 pair（sha 不變、3 組） | `tests/test_p4_revert_chain.py`；uim／nav1／xvext 綠 |
+
+#### 10.7.2 DEC-118 後（2026-10-30；append-only；決策者 AI 總管〔事實更新〕）
+
+| 項 | 狀態 | 證據 |
+|---|---|---|
+| C1-10（DEC-118 新條件）⚡ 緊接 3 tile、中間無他物 | ✅ | `TestC1Order::test_c1_10_alerts_bar_follows_the_three_tiles_with_nothing_in_between`（cold／loaded）；mutation M26（插外露內容）、M27（插 expander）必紅 |
+| C1-10 手機第一屏含今日結論＋位階｜水位列（390×844，可用 791；1.59.2 夾具） | loaded ✅（結論 427～545、列 537～741）／cold ✅（404～497、489～693）／**report 🟡**（結論 514～632 ✅；列 624～828，標題與值在第一屏內、底部「🔍 查看依據」標題列被截 37px）／**partial ❌**（結論 896、列 1006，待 D1） | `docs/vnext/phase4_market/p4_1/measure_p4_1.js` 重跑 |
+| C1-9 嚴格化＋D1 | **⏸ 停點，未實作** | **D1 實作停點（實作組未動結構、未改 `page_today.py`）**：① `page_today._render_refresh_report` 一次畫完「真錯誤 `st.error`」與「預設收合的報告 expander」，沒有可單獨呼叫的 API；要把真錯誤放到今日結論下方、報告標題留在 CTA 下方，只能 (X) 改 `page_today.py`（拆成兩支、今天頁輸出逐字不變，但受多條還原鏈守衛且 DEC-081 Q1=C「驗收前不改」）、(Y) 在 `page_market` 複寫約 90 行報告渲染（第二套、需逐字 parity 測試防漂移）、或 (Z) 只在「報告有真錯誤」時把整份既有報告（真錯誤＋收合標題）改畫在今日結論正下方（零複寫，但 X3／X10「頁首更新鈕下方」指路句在該態不準）；② 即使 D1 落地，partial 態真錯誤區塊在手機約 330px 高，放在結論下方會把位階｜水位列推出第一屏（結論底 ≈632＋330 ≈ 960 > 可用 791），與 DEC-118 理由 1「第一屏優先維持今日結論＋核心狀態」互相牽制。 |
+
+#### 10.7.3 總管判定 Z 後施工（2026-10-30；append-only；決策者 AI 總管〔內部自決〕；上方 §10.7.2「⏸ 停點」已解除，原文保留）
+
+- **判定**：拆法採 **Z**——只在報告含真錯誤（`failures`／`empties`）時，整份既有報告（真錯誤 `st.error`＋預設收合標題）改畫在今日結論正下方；無真錯誤時維持 CTA 區收合。不改 `page_today.py`（DEC-081 Q1=C）、不複寫。partial 態 3 tile 被下推：客戶裁示 D1 時已知情（送審 D1 缺點明列「部分失敗時，3 張狀態卡會被往下推」）→ 接受，不縮摘要、不新增文案。report 態位階｜水位列底部「🔍 查看依據」標題列被截 37px：接受（標題與值在第一屏內）。
+
+| 條件 | 狀態 | 守衛／證據 |
+|---|---|---|
+| C1-9 嚴格化（任何狀態 CTA→結論之間無外露內容；乾淨報告只有 1 個收合標題，有真錯誤時 0 個） | ✅ | `TestC1Order::test_c1_9_strict_nothing_exposed_between_cta_and_conclusion_in_any_state`（loaded／cold × 無報告／乾淨／有真錯誤）、`test_c1_9_between_cta_and_conclusion_only_collapsed_report_expander`；M28／M29 |
+| D1：partial 真錯誤外露、緊接今日結論；結論→tile 之間只有這份報告；⚡ 緊接 tile | ✅ | `test_d1_partial_true_errors_are_exposed_directly_below_the_conclusion`（loaded／cold）；M30 |
+| C1-10（DEC-118）⚡ 緊接 3 tile | ✅ | `test_c1_10_alerts_bar_follows_the_three_tiles_with_nothing_in_between`；M26／M27 |
+| 手機 390×844（可用 791）今日結論在第一屏內 | loaded 427～545 ✅／cold 404～497 ✅／report 514～632 ✅／**partial 449～568 ✅**（真錯誤 576 起緊接） | `_measure_p4_1.json`（1.59.2 夾具）；截圖 `p4_1_*_390.png` |
+| 手機位階｜水位列 | loaded 537～741 ✅／cold 489～693 ✅／report 624～828（底部標題列截 37px，接受）／partial 1006～1210（被真錯誤下推，客戶知情接受） | 同上 |
+| 桌機 | partial：結論 362～430、真錯誤 446～614、報告標題 631、3 tile 686、⚡ 1052 | 同上 |
+
+**「頁首／更新鈕下方」位置字串逐字盤點（總管指示）**：
+
+| 字串（出處） | 顯示位置 | 各態 | partial 態判定（報告在今日結論正下方） |
+|---|---|---|---|
+| X3「按過更新之後，頁首更新鈕下方的「上一次更新的結果」會列出…」（`page_market.X3_TEXT`） | 「風險上限：為什麼…」展開區（L2，收合） | 四態皆在 | **字面成立**：報告仍在頁首「🚀 更新今日戰情」鈕的下方（手機鈕 y≈404、報告 y≈576 起；桌機鈕 y207、報告 y446 起），只是中間隔了今日結論一段 |
+| X10 `report_pointer`：「本次更新的逐來源結果見頁首更新鈕下方「上一次更新的結果」」／無報告時「按頁首的更新鈕後，報告會出現在更新鈕下方」 | 「資料來源與完整度」展開區（L2，收合） | 四態皆在 | **字面成立**（同上） |
+| `HEALTH_CHIP_POINTER`「（逐來源結果見頁首更新鈕下方的更新報告）」 | AI／資料狀態行（L1 外露） | 四態皆在 | **字面成立**；且該行在 ⚡ 之後，報告位於其上方 |
+| `WATER_REPORT_DISCLOSURE`「頁首「上一次更新的結果」展開後…」 | 水位 tile「🔍 查看依據」內（收合） | 四態皆在 | **判定可接受（單組判讀，列 QA 複核點）**：此句說報告在「頁首」；partial 態報告位於頁首 CTA 區之後第一段（今日結論）的正下方、在 3 核心狀態之前，仍屬頁面最上方區塊（桌機報告標題 y631 在第一屏內；手機真錯誤 y576 起在第一屏內、報告標題 y921 在第一屏外）。不新造文案、也不隱藏這條揭露 |
+| `REFRESH_SPEED_HINT`「…並在頁首留下這一輪的結果」（`page_today` 常數，經「更新選項」說明逐字沿用） | 「更新選項」摺疊（收合） | 四態皆在 | 同上判定（單組判讀，列 QA 複核點）；改它＝動 `page_today.py` 或與今天頁字串分岔 |
+
+#### 10.7.4 QA 第二輪（2026-10-30；append-only；兩組獨立 QA 無 BLOCKER；決策者 AI 總管〔內部自決〕）
+
+- **§10.7.3 的「客戶知情接受」依據改引 DEC-118「送審題幹附錄」**（AI 總管 2026-10-30 送審原文逐字：D1 缺點「部分失敗時，3 張狀態卡會被往下推」；A 缺點「手機要往下捲一下才看到 ⚡」）；Gate §8 該列條件② 已加但書（partial 態、report 態邊界）。
+- **Z fallback 擴大**：不是現行 `MacroRefreshReport` 型別、判斷時拋例外、或乾淨報告在原位渲染途中拋例外（佔位清掉半份內容）⇒ 一律移到今日結論正下方由 `_render_report_guarded` 講出來。守衛 `TestD1Fallbacks`（empties-only、舊格式、非現行型別但畫得出來、渲染中拋錯）；mutation M31～M34 必紅。
+- **位置字串**：`WATER_REPORT_DISCLOSURE` 位置詞改用 X3／X10 既有片段「頁首更新鈕下方的「上一次更新的結果」」（本句非客戶原句；無逐字守衛；其餘字逐字未改）；`REFRESH_SPEED_HINT`（`page_today` 常數「…並在頁首留下這一輪的結果」）**不改**，登記為已知字面偏差 BACKLOG `P1R-P4-SPEED-HINT-HEADER-WORD`（P2）。
+- **CSS 白名單加嚴**：唯一允許的 calc＝`calc(50% - 0.25rem)`；其餘 calc、任何負號（含 `-.5`、`-(`）一律紅；padding／margin／gap ≤2rem／32px。M36～M38 必紅。
+- **degraded 夾具**改 2 紅 1 黃（對調 M35 必紅）。`page_market.py` 模組 docstring 過期敘述已加 📌 更正。還原鏈以基底 `7484c57b` 重產。

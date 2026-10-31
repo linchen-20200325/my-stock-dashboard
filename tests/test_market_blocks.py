@@ -468,16 +468,27 @@ class TestStructure:
                      "final_lo", "final_hi", "range_text"):
             assert _tok not in _SRC, _tok
 
-    def test_hero_has_four_cards_and_expanders_are_not_nested_in_expanders(self):
-        _fn = next(n for n in _TREE.body if isinstance(n, ast.FunctionDef) and n.name == "render_hero")
-        assert "st.columns(4)" in ast.unparse(_fn)
-        # 水位卡的「原有出手區間」只放在 `render_basis(..., extra=_original_range)` 的 callback 裡：
-        # 畫 `exposure_tile` 的呼叫必須只出現在內層函式 `_original_range`（⇒ 只在「🔍 查看依據」展開區內）。
+    def test_core_tiles_are_three_and_hidden_contents_only_inside_basis(self):
+        """📌 P4-1（客戶 DEC-117 Q1=B；有意識的修改，⛔ 不是降強度）：~~`render_hero` 斷言 `st.columns(4)`~~ →
+        `render_core_tiles` 恰一個 `st.columns(3)`（更新鈕不再占 tile，改頁首主 CTA）。原斷言守的實質照守、且加嚴：
+          · 水位卡的「原有出手區間」（`exposure_tile`）只出現在內層 `_original_range`（⇒ 只在「🔍 查看依據」內）；
+          · 新增：位階原卡（`regime_tile`）整張只出現在 `render_basis(..., extra=…)` 的 callback 內（⇒ 只在摺疊內）；
+          · 新增：整支函式沒有任何 `st.expander`（每張 tile 唯一的摺疊入口是 `render_basis`，C3-2）。"""
+        _fn = next(n for n in _TREE.body if isinstance(n, ast.FunctionDef) and n.name == "render_core_tiles")
+        assert [ast.unparse(c) for c in ast.walk(_fn) if isinstance(c, ast.Call)
+                and ast.unparse(c.func) == "st.columns"] == ["st.columns(3)"]
+        assert not any(isinstance(n, ast.FunctionDef) and n.name == "render_hero" for n in _TREE.body)
         _calls = [c for c in ast.walk(_fn) if isinstance(c, ast.Call) and any(
             isinstance(a, ast.Name) and a.id == "exposure_tile" for a in c.args)]
         assert len(_calls) == 1
         _inner = next(n for n in ast.walk(_fn) if isinstance(n, ast.FunctionDef) and n.name == "_original_range")
         assert any(c is _calls[0] for c in ast.walk(_inner))
+        _reg = [c for c in ast.walk(_fn) if isinstance(c, ast.Call) and ast.unparse(c) == "today._render_one(regime_tile)"]
+        assert len(_reg) == 1
+        _lam = [k.value for c in ast.walk(_fn) if isinstance(c, ast.Call) and ast.unparse(c.func) == "render_basis"
+                for k in c.keywords if k.arg == "extra" and isinstance(k.value, ast.Lambda)]
+        assert any(_reg[0] is c for _l in _lam for c in ast.walk(_l))
+        assert "st.expander" not in ast.unparse(_fn)
 
     def test_blocks_do_not_recompute_lamp_rules(self):
         for _tok in ("classify_danger", "aggregate_level", "danger_exceedance", "BUCKET_LEVEL_LABEL"):

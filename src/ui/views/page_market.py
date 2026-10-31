@@ -45,6 +45,21 @@
   · 今日結論句、X1～X11 展開區、更新模式 radio 與更新報告**原樣保留**（parity 腳本逐字比對）。
   · 頁內標題字樣「📊 市場」（本地常數 `_market_blocks.PAGE_TITLE`；⛔ 不改 `shared/ia_nav.PAGE_LABELS`）。
 
+═══ Phase 4 P4-1（2026-10-30）落地 DEC-117 已核准線框第一屏（有意識的修改，⛔ 不是漏刪）═══════════════
+第一屏改為「頁首（＋更新 CTA）→ 今日結論 → 3 個核心狀態 → ⚡ 需要處理 → AI／資料狀態 → 圖區」（Q5=B 新順序，
+取代 DEC-105 1A 在本頁的舊相對順序）；圖區緊接 L1 決策區（Q7），本批圖區本身不動（P4-2）。
+  · Q1=B：~~Hero 4 卡~~ → 3 個核心狀態 tile（`blocks.render_core_tiles`）；「🚀 更新今日戰情」改為頁首主 CTA
+    （`blocks.render_update_cta`；與今天頁同一組 form／session key，radio＋長說明收進「更新選項」，Q8b）。
+  · 狀態列 `status_line()` 原樣呼叫、**逐字拆兩處**：更新時間那半在頁首、指標危險度覆蓋率那半在風險 tile（C6-4）。
+    「逐項資料日：尚未提供…」整句與資料健康指路下沉到「資料來源與完整度」展開區（線框 P-03，只下沉）。
+  · 更新報告（`_render_report_guarded`）仍緊接更新鈕下方（X3／X10 字樣不必改）；其主體本來就是預設收合的
+    expander，真錯誤（取不到／回空）依 2026-09-24 客戶裁示照舊留在收合區外。
+    📌 2026-10-30 更正（有意識的更新，不是漏刪；決策者 客戶 DEC-118 問題 2=D1＋AI 總管判定 Z；上兩行原文保留＝P4-1 第一版
+    的行為）：**現行**——報告**沒有**真錯誤時仍在更新鈕下方（預設收合）；報告含真錯誤（取不到／回空），或不是現行報告型別
+    （舊格式）、或在原位渲染時拋例外 ⇒ 整份既有報告改畫在**今日結論正下方**（真錯誤外露、不收合）。CTA 與今日結論之間
+    在任何狀態都沒有外露內容。
+  · 今日結論句與標題逐字不改（DEC-081 Q2-1），只改位置。
+
 掛載：`app.py::_ia_view_market()` 於側欄「🆕 新版戰情室（試用中）」radio 選到本頁時
 late import 並呼叫 `render_page_market()`；沒被選到時本檔連 import 都不發生。
 
@@ -629,31 +644,75 @@ def render_page_market() -> None:
         _alerts, requested=_readout.requested, threshold_scanned=_scanned,
         error=_alerts_err, band_zh_color=_band_zh)
 
-    # ── 層 1：首屏 ───────────────────────────────────────────────
-    st.markdown(f"## {blocks.PAGE_TITLE}")
-    st.caption(blocks.PAGE_SUBTITLE)
-    st.markdown(status_line(_report, _danger))
-    st.caption(AS_OF_NOT_PROVIDED if _in_default_nav() else
-               f"{AS_OF_NOT_PROVIDED}｜🩺 資料健康：請到 "
-               f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
-    # Hero 4 卡。更新鈕與今天頁同一支 form（⛔ 不另寫第二套更新流程）；form key 兩頁共用沒有衝突：側欄一次只選得到
-    # 一頁（`app.py` 的 `_IA_PAGE` 分支＋`st.stop()`），兩頁不會出現在同一輪 script run。
-    # 已套用模式與上一次的更新報告刻意共用 —— 按一次更新，兩頁看到的是同一份結果。
-    blocks.render_hero(_session, regime_tile=_regime_tile, exposure_tile=_exposure,
-                       alloc=_alloc, alloc_error=_alloc_err, risks=_risks)
-    if _report is not None:
-        _render_report_guarded(_report)
-
-    section_header(CONCLUSION_HEADING)
+    # ── 層 1：首屏（P4-1，DEC-117 Q5=B 新順序）────────────────────────────
+    # 狀態列逐字拆兩半（`status_line` 的分隔字＝「｜」）：更新時間（≠ 資料日）在頁首、覆蓋率在風險 tile（C6-4）。
+    # QA 修正輪：分隔字必須恰好一個，否則 fail loud（§1；⛔ 拆錯位置把半句話放到錯的地方）。
+    _status = status_line(_report, _danger)
+    if _status.count("｜") != 1:
+        raise ValueError(f"狀態列應恰含一個「｜」才能拆成更新時間／覆蓋率兩半，實得：{_status!r}")
+    _time_text, _coverage_text = _status.split("｜")
+    # DEC-118 問題 2=D1（客戶 2026-10-30）＋總管判定 Z：報告含**真錯誤**（取不到／回空）時，整份既有報告（真錯誤 `st.error`
+    #   ＋預設收合的報告標題）改畫在今日結論正下方 —— 真錯誤外露、不擠出結論；CTA 與結論之間只剩收合標題列。
+    #   ⛔ 拆 `page_today._render_refresh_report`（禁改，DEC-081 Q1=C）、⛔ 複寫。
+    #   QA 第二輪：不是現行報告型別（舊格式）或判斷時拋例外 ⇒ **一律視為有真錯誤**、移到結論下方，由
+    #   `_render_report_guarded` 在那裡講出來並清掉（§1：紅字不得落在 CTA 與結論之間）。
+    from src.services.macro_refresh_service import MacroRefreshReport
     try:
-        st.markdown(build_market_conclusion(regime_text=regime_clause(_regime_tile, _regime),
-                                            danger_text=danger_clause(_danger_tile)))
-    except ValueError as _e:  # §1：字樣不合規 ⇒ 講出來，⛔ 不自己改寫
-        st.error(f"結論句組不出來：{_e}", icon="❌")
+        _report_errors_below = _report is not None and (
+            not isinstance(_report, MacroRefreshReport) or bool(_report.failures or _report.empties))
+    except Exception as _e:  # noqa: BLE001 — 只決定位置；真正的紅字由 `_render_report_guarded` 在結論下方講出來
+        print(f"[views/page_market] 判斷更新報告有無真錯誤時讀不出來：{_e!r} —— 視為有真錯誤，移到結論下方")
+        _report_errors_below = True
+    # L1 決策區包在一個具名容器裡：窄螢幕只在這裡壓縮間距（`blocks.P4M_LAYOUT_CSS`；只排版、不藏內容）。
+    blocks.render_layout_css()
+    with st.container(key=blocks.P4M_L1_KEY):
+        # ① 頁首（＋主 CTA）：桌機與標題同列右側；窄螢幕 Streamlit 自動疊成「標題 → CTA」。
+        _head = st.columns([3, 2])
+        with _head[0]:
+            st.markdown(f"## {blocks.PAGE_TITLE}")
+            st.caption(blocks.PAGE_SUBTITLE)
+            st.caption(f"{_time_text}｜{blocks.data_date_text(_session.get('mkt_info'))}")
+        with _head[1]:
+            # 更新鈕與今天頁同一組 form／session key（⛔ 不另寫第二套更新流程）；form key 兩頁共用沒有衝突：側欄一次只選得到
+            # 一頁（`app.py` 的 `_IA_PAGE` 分支＋`st.stop()`），兩頁不會出現在同一輪 script run。
+            # 已套用模式與上一次的更新報告刻意共用 —— 按一次更新，兩頁看到的是同一份結果。
+            blocks.render_update_cta(_session)
+        if _report is not None and not _report_errors_below:
+            # 乾淨報告畫在佔位內：渲染途中拋例外 ⇒ 清掉已畫一半的內容、改到結論下方由 `_render_report_guarded` 講出來
+            # （⛔ 半份報告或紅字留在 CTA 與結論之間）。
+            _report_slot = st.empty()
+            try:
+                with _report_slot.container():
+                    today._render_refresh_report(_report)
+            except Exception as _e:  # noqa: BLE001 — 不吞：下方 `_render_report_guarded` 會再畫一次並講出來
+                print(f"[views/page_market] 更新報告在原位畫不出來：{_e!r} —— 改到今日結論下方處理")
+                _report_slot.empty()
+                _report_errors_below = True
 
-    # ⚡ 需要處理（只轉述既有警示＋建議持股的衝突提示；三態判別沿用 `build_key_alert_tile`）。
-    blocks.render_alerts_block(alerts_tile=_alerts_tile, alerts=_alerts, scanned=_scanned,
-                               alerts_error=_alerts_err, alloc=_alloc)
+        # ② 今日結論（逐字；只改位置）。
+        section_header(CONCLUSION_HEADING)
+        try:
+            st.markdown(build_market_conclusion(regime_text=regime_clause(_regime_tile, _regime),
+                                                danger_text=danger_clause(_danger_tile)))
+        except ValueError as _e:  # §1：字樣不合規 ⇒ 講出來，⛔ 不自己改寫
+            st.error(f"結論句組不出來：{_e}", icon="❌")
+        if _report_errors_below:
+            _render_report_guarded(_report)   # D1：真錯誤緊接今日結論（外露，不收合）
+
+        # ③ 3 個核心狀態 tile（位階 tile 的外露字＝結論句同一支 `regime_clause`）。
+        blocks.render_core_tiles(
+            regime_tile=_regime_tile, regime_face=regime_clause(_regime_tile, _regime),
+            regime_badge=(card_badge_text(_regime_tile) if _regime_tile.card.state == UI_LIVE else ""),
+            exposure_tile=_exposure, alloc=_alloc, alloc_error=_alloc_err, risks=_risks,
+            coverage_text=_coverage_text,
+            # QA 修正輪（客戶 Q6 真錯誤外露逐字）：讀契約失敗時，tile 外露 X1 同一句紅字（字樣與 `_render_x1` 相同）。
+            regime_error_line=(f"市場位階契約讀不出來：`{scrub_secrets(_regime_err)}`" if _regime_err else ""))
+
+        # ④ ⚡ 需要處理（一行 bar＋展開清單；只轉述既有警示＋建議持股的衝突提示；三態判別沿用 `build_key_alert_tile`）。
+        blocks.render_alerts_block(alerts_tile=_alerts_tile, alerts=_alerts, scanned=_scanned,
+                                   alerts_error=_alerts_err, alloc=_alloc)
+        # ⑤ AI／資料狀態一行。之後緊接圖區（Q7：中間⛔ 插任何 L2／L3 長內容）。
+        blocks.render_ai_status_line()
 
     # 圖 A～D（兩欄網格；窄螢幕由 Streamlit 自動改一欄，順序同下）。
     _r1 = st.columns(2)
@@ -703,6 +762,10 @@ def render_page_market() -> None:
     with st.expander(X9_TITLE, expanded=False):
         st.markdown(X9_TEXT)
     with st.expander("資料來源與完整度", expanded=False):
+        # P4-1（線框 P-03，只下沉）：原首屏「逐項資料日」整句與資料健康指路移到這裡，字樣逐字。
+        st.caption(AS_OF_NOT_PROVIDED if _in_default_nav() else
+                   f"{AS_OF_NOT_PROVIDED}｜🩺 資料健康：請到 "
+                   f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
         st.markdown(
             f"- {report_pointer(_report)}\n"
             + ("" if _in_default_nav() else

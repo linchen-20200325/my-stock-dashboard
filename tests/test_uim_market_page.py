@@ -175,22 +175,26 @@ def test_hero_and_panel_share_one_build_market_risks_call(tmp_path, monkeypatch)
 
 
 def test_loaded_hero_items_match_panel_rows(tmp_path):
+    """📌 P4-1（客戶 DEC-117 Q6=A；有意識的修改，⛔ 不是降強度）：外露層改為縮短行「燈色＋桶名＋燈名＋方向」，
+    整句版（①②③…｜方向：…）下沉到風險 tile 的「🔍 查看依據」。原斷言全部照守、改釘在新位置並加嚴：
+    外露縮短行與摺疊整句**逐項一一對應**（同燈名、同方向），且兩者都與圖 D 同列逐字相同（同一份 `_risks`）。"""
     _at = _run(tmp_path, _LOADED)
     assert not _at.exception, _at.exception
     assert not _at.error
     _top = _texts(_at, outside_expanders=True)
-    _items = [t for t in _top if t[:1] in "①②③"]
-    assert 1 <= len(_items) <= 3
+    _items = [t for t in _top if t[:1] in "🟡🔴" and "：" in t and "　" in t]          # 外露縮短行
+    _full = [t for t in _texts(_at, outside_expanders=False) if t[:1] in "①②③"]      # 摺疊內整句
+    assert 1 <= len(_items) <= 3 and len(_full) == len(_items)
     _panel = next(t for t in _top if t.startswith("| 風險桶（每桶一項）"))
-    for _it in _items:
-        _lamp = _it.split("：", 1)[1].split("（", 1)[0]
-        assert _lamp in _panel, (_lamp, _panel)
-    assert any(t.startswith("**") and "項未評估**" in t for t in _top)        # 圖 D 頂端「N 項未評估」
-    # QA-A MINOR 2：hero 每一項的「方向」文字必須與圖 D 對應列的方向欄逐字相同（同一份 `_risks`）
     _rows = {ln.split(" | ")[0].strip("| "): ln.split(" | ")[1] for ln in _panel.splitlines()[2:]}
-    for _it in _items:
-        _dir = _it.split("｜方向：", 1)[1].split("｜", 1)[0]
+    for _it, _f in zip(_items, _full):
+        _lamp = _it.split("：", 1)[1].split("　", 1)[0]
+        _dir = _it.rsplit("　", 1)[1]
+        assert _lamp in _panel, (_lamp, _panel)
+        assert _lamp in _f and f"｜方向：{_dir}" in _f, (_it, _f)
+        # QA-A MINOR 2：hero 每一項的「方向」文字必須與圖 D 對應列的方向欄逐字相同（同一份 `_risks`）
         assert any(_dir == v.strip() for v in _rows.values()), (_dir, _rows)
+    assert any(t.startswith("**") and "項未評估**" in t for t in _top)        # 圖 D 頂端「N 項未評估」
     assert any("↗ 上升" in _it for _it in _items)                                  # 非全「無資料」，才有鑑別力
     assert not any("無風險" in t for t in _top)
 
@@ -292,7 +296,10 @@ def test_alerts_block_without_sources_says_so_and_never_claims_all_clear(tmp_pat
     monkeypatch.setattr(P, "_load_allocation", lambda: (None, ""))
     _at = _run(tmp_path)
     _top = _texts(_at, outside_expanders=True)
-    assert "**⚡ 需要處理**" in _top and B.ALERTS_NO_SOURCE in _top
+    # 📌 P4-1（客戶 DEC-117 Q8c；有意識的修改，⛔ 不是降強度）：⚡ 改一行 bar ⇒ 標題與「沒有來源」寫在**同一行**外露
+    #   （原斷言：兩者各自一個外露元素）。改為：恰一個外露元素同時以「**⚡ 需要處理**」開頭並含 `ALERTS_NO_SOURCE`。
+    _bar = [t for t in _top if t.startswith("**⚡ 需要處理**")]
+    assert len(_bar) == 1 and B.ALERTS_NO_SOURCE in _bar[0]
     assert not any("沒有需要處理的事" in t for t in _texts(_at))
 
 
@@ -304,7 +311,11 @@ def test_alerts_block_relays_allocation_conflicts_verbatim(tmp_path, monkeypatch
     monkeypatch.setattr(P, "_load_regime", lambda: _SCENARIOS["live_no_cap"]["regime"])
     _at = _run(tmp_path, _LOADED)
     _top = _texts(_at, outside_expanders=True)
-    assert "- 某個與結論相反的既有提示" in _top and B.ALERTS_NO_SOURCE not in _top
+    # 📌 P4-1（客戶 DEC-117 Q8c「資訊只能下沉，不得刪除」；有意識的修改，⛔ 不是降強度）：衝突提示原文由外露改到 ⚡ 的
+    #   「🔍 查看依據」內（逐字），外露 bar 帶計數；「有來源 ⇒ 不出現『沒有來源』」照守（外露、摺疊都不得出現）。
+    assert "- 某個與結論相反的既有提示" in _texts(_at, outside_expanders=False)
+    assert any(t.startswith("**⚡ 需要處理**") and B.ALERTS_CONFLICTS_COUNT_FMT.format(n=1) in t for t in _top)
+    assert not any(B.ALERTS_NO_SOURCE in t for t in _texts(_at))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -380,17 +391,25 @@ def test_conclusion_sentence_and_expanders_are_identical_to_pre_uim(tmp_path):
 
     _en, _eo = _expanders(_new.main), _expanders(_old.main)
     _lamp = "指標明細（16 項）"
+    # 📌 P4-1（線框 P-03「只下沉」；有意識的修改，⛔ 不是降強度）：原首屏的「逐項資料日：尚未提供…」整句（含資料健康指路）
+    #   移到「資料來源與完整度」展開區最上方。該展開區＝〔那一句（必須與 UI-M 之前首屏的那一個元素逐字相同）〕＋原內容逐項相同。
+    _src_label = "資料來源與完整度"
+    _old_top_caps = [v for k, v, e in _flat(_old.main) if k == "Caption" and not e]
+    assert _en[_src_label][0][0] == "Caption" and _en[_src_label][0][1] in _old_top_caps
+    assert _en[_src_label][0][1].startswith("逐項資料日：尚未提供")
+    assert _en[_src_label][1:] == _eo[_src_label]
+    assert _en[_src_label][0][1] not in [v for k, v, e in _flat(_new.main) if not e]     # 不再外露（只下沉，不重複）
     for _label, _items in _eo.items():
         assert _label in _en, f"保留的展開區不見了：{_label}"
-        if _label == _lamp:
+        if _label in (_lamp, _src_label):
             continue
         assert _en[_label] == _items, f"展開區內容與 UI-M 之前不同：{_label}"
     # 指標明細：最上面多一張「指標危險度」卡（原首屏卡②，同一張卡），其餘逐項相同
     assert _en[_lamp][1:] == _eo[_lamp]
     _old_top = {v for k, v, e in _flat(_old.main) if k == "Markdown" and not e}
     assert _en[_lamp][0][0] == "Markdown" and _en[_lamp][0][1] in _old_top
-    # 新增的展開區只有各區塊的「🔍 查看依據」（以及原本就有的那些）
-    assert set(_en) - set(_eo) == {B.BASIS_EXPANDER_LABEL}
+    # 新增的展開區只有各區塊的「🔍 查看依據」與 P4-1 的「更新選項」（以及原本就有的那些）
+    assert set(_en) - set(_eo) == {B.BASIS_EXPANDER_LABEL, B.UPDATE_OPTIONS_LABEL}
 
 
 def test_verdict_cards_are_all_still_drawn(tmp_path, monkeypatch):

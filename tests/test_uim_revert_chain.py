@@ -217,6 +217,10 @@ def _rel(file_path) -> str:
 
 def uim_revert_for(file_path, code: str) -> str:
     """給模組 `__file__`（或 repo 相對路徑）與原始碼，換回 UI-M 之前的寫法（無 pair 則原樣；只套一次）。"""
+    # 📌 Phase 4 P4-1（2026-10-30，客戶 DEC-117；有意識的接鏈，⛔ 不是漏改）：本批改了 `page_market.py`（被本節
+    #   與 nav1 舊鏈的基底 sha 管）⇒ 最新的那一批先換回（鏈頭往前接一節；只套一次；⛔ 不動本表與 `UIM_BASE_SHA`）。
+    from tests.test_p4_revert_chain import p4_revert_for
+    code = p4_revert_for(file_path, code)
     rel = _rel(file_path)
     pairs = UIM_REVERT_PAIRS.get(rel, ())
     if not pairs:
