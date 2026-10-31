@@ -515,7 +515,10 @@ class TestC8a:
         assert [e[0] for e in _outside] == ["Markdown", "Caption"]
         assert _is_chart_header(_outside[0][1], B.CHART_C_TITLE)
         assert f'data-kind="guard_text">{B.CHART_C_TAG}</span>' in _outside[0][1]
-        assert _outside[1][1] == B.CHART_C_EMPTY
+        # 📌 P4-4（A8，有意識的修改，⛔ 不是降強度）：外露一行由整句 `CHART_C_EMPTY`（50 字）縮成它的第一句 `CHART_C_EMPTY_FACE`
+        #   （≤32 字、逐字取自原句前半）；整句逐字下沉「為什麼」（見下一條測試）。外露層**不得**再出現整句後半。
+        assert _outside[1][1] == B.CHART_C_EMPTY_FACE and B.CHART_C_EMPTY.startswith(B.CHART_C_EMPTY_FACE)
+        assert B.CHART_C_EMPTY not in " ".join(_all_text(_outside))
         assert B.CHART_C_SAY not in " ".join(_all_text(_outside))      # 子字串層級（header HTML 裡也不得夾帶客戶原句）
         assert B.CHART_C_BASIS not in " ".join(_all_text(_outside))
 
@@ -524,7 +527,8 @@ class TestC8a:
         assert B.CHART_C_BASIS == "查看依據：此區塊未啟用，沒有使用任何資料。"
         _evs = list(_events(_run(tmp_path, _LOADED).main))
         _sec = _fold_sections(_evs, "C")
-        assert [t for _, t in _sec["為什麼"]] == [B.CHART_C_SAY]
+        # 📌 P4-4（A8）：「為什麼」＝客戶原句 `CHART_C_SAY`（Q8a 逐字）＋ 外露縮短後下沉的整句 `CHART_C_EMPTY`（逐字，資訊不丟）。
+        assert [t for _, t in _sec["為什麼"]] == [B.CHART_C_SAY, B.CHART_C_EMPTY]
         assert [t for _, t in _sec["來源"]] == [B.CHART_C_BASIS]
         assert [t for _, t in _sec["限制"]] == [B.CHART_C_LIMIT] and B.CHART_C_LIMIT.startswith("—（")
         assert "「" + PM.X9_TITLE + "」" in _sec["去哪補"][0][1]

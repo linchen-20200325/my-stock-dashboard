@@ -147,6 +147,8 @@ CHART_C_TITLE: str = "圖C 💰 大盤合理區間"
 CHART_C_TAG: str = "研究框架，未啟用"
 CHART_C_SAY: str = "用企業獲利 EPS 搭配不同合理本益比情境，觀察目前指數位在便宜、合理或偏貴區域。"
 CHART_C_EMPTY: str = "需先核准：EPS 資料來源、PE 情境、計算公式、更新頻率。核准前這個區塊不畫任何圖形、區間或指數位置。"
+#: P4-4（A8）：圖 C 外露一行只畫 `CHART_C_EMPTY` 的第一句（逐字取自原句前半，不新造字；≤32 字）；整句 `CHART_C_EMPTY` 逐字進「為什麼」。
+CHART_C_EMPTY_FACE: str = "需先核准：EPS 資料來源、PE 情境、計算公式、更新頻率。"
 CHART_C_BASIS: str = "查看依據：此區塊未啟用，沒有使用任何資料。"
 
 CHART_D_TITLE: str = "圖D ⚠️ 主要風險"
@@ -746,11 +748,21 @@ def basis_chart_b(series: list[IntlSeries] | None) -> Basis:
 # ══════════════════════════════════════════════════════════════════
 # 渲染（薄）
 # ══════════════════════════════════════════════════════════════════
-def data_date_text(mkt_info: Any) -> str:
-    """更新卡的「資料日」＝`mkt_info['index_as_of']`（市場評估用的加權指數最後一根）；取不到 → ⬜。"""
+#: 資料日的來源說明（原與日期同一句外露；P4-4 A8 只下沉：外露層只留「資料日：YYYY-MM-DD」，本句逐字進「資料來源與完整度」）。
+DATA_DATE_SOURCE_NOTE: str = "（加權指數，來源：市場評估輸入）"
+
+
+def data_date_text(mkt_info: Any, *, full: bool = True) -> str:
+    """更新卡的「資料日」＝`mkt_info['index_as_of']`（市場評估用的加權指數最後一根）；取不到 → ⬜。
+
+    📌 P4-4（A8，有意識的修改，⛔ 不是漏刪；決策者 AI 總管〔v3 §03-1 內部自決〕）：`full=True`（預設）＝原整句不變
+    （`資料日：{日期}（加權指數，來源：市場評估輸入）`）；`full=False`＝外露層短版（只到日期，取自原句前半，不新造字）。
+    被拿掉的後半句＝`DATA_DATE_SOURCE_NOTE`，由 `page_market` 以 `full=True` 逐字放進「資料來源與完整度」展開區。"""
     _v = mkt_info.get("index_as_of") if isinstance(mkt_info, Mapping) else None
     _s = str(_v).strip()[:10] if _v is not None else ""
-    return f"資料日：{_s}（加權指數，來源：市場評估輸入）" if _s else DATA_DATE_NOT_PROVIDED
+    if not _s:
+        return DATA_DATE_NOT_PROVIDED
+    return f"資料日：{_s}" + (DATA_DATE_SOURCE_NOTE if full else "")
 
 
 def _render_lines(lines: Sequence[tuple[str, str]]) -> None:
@@ -876,9 +888,23 @@ def render_core_tiles(*, regime_tile: Any, regime_face: str, regime_badge: str, 
                 render_basis(basis_risks(risks), extra=_full_risk_lines)
 
 
+def ai_status_line_face() -> str:
+    """AI／資料狀態一行的外露短版＝`HERO_AI_PLACEHOLDER`＋`HEALTH_CHIP`（原句前兩段，不新造字；P4-4 A8，≤32 字）。"""
+    return f"{HERO_AI_PLACEHOLDER}　{HEALTH_CHIP}"
+
+
+def ai_status_line_full() -> str:
+    """AI／資料狀態一行的**原整句**（DEC-105 第 5 點合併一行的原字樣）。P4-4 起不外露，逐字放進「資料來源與完整度」展開區。"""
+    return f"{ai_status_line_face()}{HEALTH_CHIP_POINTER}"
+
+
 def render_ai_status_line() -> None:
-    """AI／資料狀態一行（DEC-105 第 5 點合併一行；位置由 DEC-117 Q5 定在 ⚡ 之後、圖區之前）。字樣不改。"""
-    st.caption(f"{HERO_AI_PLACEHOLDER}　{HEALTH_CHIP}{HEALTH_CHIP_POINTER}")
+    """AI／資料狀態一行（DEC-105 第 5 點合併一行；位置由 DEC-117 Q5 定在 ⚡ 之後、圖區之前）。
+
+    📌 P4-4（A8，有意識的修改，⛔ 不是漏刪；決策者 AI 總管〔v3 §03-1 內部自決〕）：外露層只畫 `ai_status_line_face()`（前兩段，
+    原整句 44 字 → 外露 ≤32 字）；後半的 `HEALTH_CHIP_POINTER`（指路句）連同原整句 `ai_status_line_full()` 逐字下沉到
+    「資料來源與完整度」展開區（資訊只下沉、不刪）。"""
+    st.caption(ai_status_line_face())
 
 
 def alerts_has_listable_source(alerts: Any, alloc: Any) -> bool:
@@ -1222,12 +1248,12 @@ CHART_C_LIMIT: str = FOLD_NOT_APPLICABLE_FMT.format(why=CHART_C_TAG)
 
 def chart_c_texts() -> tuple[str, ...]:
     """圖 C 區塊內的**全部**靜態文字（含摺疊；供「零數字」測試；「去哪補」的展開區標題由頁面測試另驗）。"""
-    return (CHART_C_TITLE, CHART_C_TAG, CHART_C_SAY, CHART_C_EMPTY, CHART_C_BASIS, CHART_C_LIMIT)
+    return (CHART_C_TITLE, CHART_C_TAG, CHART_C_SAY, CHART_C_EMPTY, CHART_C_EMPTY_FACE, CHART_C_BASIS, CHART_C_LIMIT)
 
 
 def chart_c_fold(*, where_label: str) -> ChartFold:
     """Q8a／C3-1：`CHART_C_SAY`（客戶原句）→「為什麼」逐字；`CHART_C_BASIS` →「來源」逐字。"""
-    return chart_fold(None, why=(("md", CHART_C_SAY),), source=(("caption", CHART_C_BASIS),),
+    return chart_fold(None, why=(("md", CHART_C_SAY), ("caption", CHART_C_EMPTY)), source=(("caption", CHART_C_BASIS),),
                       limit=(("caption", CHART_C_LIMIT),),
                       where=(("caption", FOLD_WHERE_FMT.format(label=where_label)),))
 
@@ -1237,7 +1263,7 @@ def render_chart_c(*, where_label: str) -> None:
     ⛔ 區塊內零數值、零圖形、不畫區間標籤。"""
     with st.container(border=True, key=f"{P4M_SECONDARY_KEY_PREFIX}c"):
         render_chart_header(title=CHART_C_TITLE, chips=[cp.guard_chip(CHART_C_TAG)], say=None)
-        st.caption(CHART_C_EMPTY)
+        st.caption(CHART_C_EMPTY_FACE)       # P4-4（A8）：外露只畫第一句；整句 `CHART_C_EMPTY` 在摺疊「為什麼」
         render_chart_fold(chart_c_fold(where_label=where_label))
 
 
