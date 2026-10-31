@@ -641,3 +641,10 @@ AppTest（streamlit 1.59.2）：`st.form` 內放 `st.expander` 可用；expander
 ### 20.5 下一個唯一安全接手點
 
 **等客戶回覆「改好了」（確認 Opus 5.5＋High 已切換）後，才開始 P4-1（第一屏）。** 在那之前只允許 docs 落盤與唯讀重測；⛔ 任何 `src/`、`tests/`、`app.py` 變更。
+
+### 20.6 P4-3 收尾紀錄（2026-10-31；append-only；docs＋量測腳本／截圖，`src/`、`tests/` 0 diff；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）
+
+- **基準**：`origin/main` `228b9fa9`（含 P4-1 #984、P4-2 #985；撰寫時實查）。**正式 Gate 初判＝❌ FAIL**：A5／A6／A8 ❌、🟡 4 項（A4、A10、A11、V3）觸發合計規則；PASS 14 項。逐項證據、Q7／DEC-118 例外條件實測、零資料語意證明 (a)～(g)、線框 §10 全表最終狀態、其他頁／`?legacy=1` 前後比對（8 組逐字相同）、floor 1.56.0 量測＝`docs/vnext/phase4_market/p4_3/GATE_REPORT.md`。
+- **Stage 狀態**：**維持「未完成」**（Stage 完成＝CI 綠＋Gate PASS；Gate 未過）。Gate §4 要求的獨立 QA 組與總管複驗**尚未發生**，本判定為單組初判。
+- **DoD 對照**：零資料語意 (a)～(g) ✅（兩範圍 `git diff`）；N5～N7 ✅；守衛 978 項相關子集綠；全量 Fast／slow 本批未重跑。
+- **下一步**：總管複驗＋派獨立 QA → 內部 P4-4 小修批（A8 縮短 3 塊 AI 自寫句、F1 手機圖例；不動核准結構）→ 客戶 3 題（頁面長度／手機主圖高／四項 🟡 是否接受）→ 重判 Gate。**Phase 4 完成（Gate PASS＋CI 綠）後的下一步＝Phase 5（🎯 標的頁）步驟 0（出文字線框 W3～W6，客戶拍板前不寫 UI code）；本批不開始。**

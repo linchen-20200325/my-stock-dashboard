@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import json
+import math
 import pathlib
 import re
 
@@ -189,31 +190,155 @@ class TestZone:
 
 
 # ══════════════════════════════════════════════════════════════════
-# C4-1：圖 A＝Primary，正式原生圖
+# C4-1：圖 A＝Primary，正式主圖（DEC-119：自訂 vega-lite spec，取代 st.line_chart）
 # ══════════════════════════════════════════════════════════════════
-def _chart_spec_and_series(at):
+#: 手機 390px 視窗下圖 A 的實測寬（`_measure_p4_5_legend`：326px；守衛用它估算圖例右緣，不得超過）。
+MOBILE_CHART_WIDTH_PX = 326
+_SERIES_FULL = [B.TWII_COLUMN, "MA5（最新值，參考）", "MA60（最新值，參考）", "MA120（最新值，參考）"]
+_SERIES_FULL5 = [B.TWII_COLUMN] + [f"{_n}（最新值，參考）" for _n in ("MA5", "MA60", "MA120", "MA200")]
+
+
+def _chart_spec_and_data(at):
+    """AppTest 渲染後的圖 A：`(spec dict, 資料表 dict[col → list])`；恰一個 vega_lite_chart。"""
     import io
 
     import pyarrow as pa
     _ch = at.get("vega_lite_chart")
     assert len(_ch) == 1, len(_ch)
     _pr = _ch[0].proto
-    _spec = json.loads(_pr.spec)
-    _tbl = pa.ipc.open_stream(io.BytesIO(_pr.datasets[0].data.data)).read_all()
-    return _spec, sorted(set(_tbl.column("color -- streamlit-generated").to_pylist()))
+    _tbl = pa.ipc.open_stream(io.BytesIO(_pr.data.data)).read_all()
+    return json.loads(_pr.spec), _tbl.to_pydict()
+
+
+def _chart_spec_and_series(at):
+    _spec, _data = _chart_spec_and_data(at)
+    return _spec, sorted(set(_data["series"]))
+
+
+def _legend_labels(spec):
+    """圖例上實際顯示的文字：color scale domain 各項，套 `labelExpr` 的 replace(限定語, '')。"""
+    _c = spec["encoding"]["color"]
+    _expr = _c["legend"].get("labelExpr", "")
+    _m = re.fullmatch(r"replace\(datum\.label, '(.*)', ''\)", _expr)
+    return [_n.replace(_m.group(1), "", 1) if _m else _n for _n in _c["scale"]["domain"]]
+
+
+def _est_text_px(text, font_px):
+    """全形字＝1em、ASCII＝0.6em 的保守估算（只供圖例寬度守衛；實測見 p4_5 腳本）。"""
+    return sum(font_px if ord(_ch) > 0x2E80 else 0.6 * font_px for _ch in text)
+
+
+def _estimate_legend_width_px(spec):
+    """圖例橫向總寬估算 ＝ 欄數 × 單欄寬（符號＋6px 間隙＋最寬標籤）＋欄距；title 另計，取兩者較大。"""
+    _lg = spec["encoding"]["color"]["legend"]
+    _font = _lg["labelFontSize"]
+    _col = _lg["symbolSize"] ** 0.5 + 6 + max(_est_text_px(_t, _font) for _t in _legend_labels(spec))
+    _cols = min(_lg["columns"], len(spec["encoding"]["color"]["scale"]["domain"]))
+    _w = _cols * _col + (_cols - 1) * _lg["columnPadding"]
+    return max(_w, _est_text_px(_lg["title"], _lg["titleFontSize"]))
 
 
 class TestC41:
-    def test_c4_1_primary_is_the_native_line_chart_with_ma_lines_legend_and_y_axis(self, tmp_path):
+    def test_c4_1_primary_is_the_custom_vega_chart_with_ma_lines_legend_and_y_axis(self, tmp_path):
         _at = _run(tmp_path, _LOADED)
         _spec, _series = _chart_spec_and_series(_at)
-        # 指數＋三條 MA 水平參考線（ma200 歷史不足 ⇒ 不畫、不補 0，缺項在摺疊「限制」列出）
-        assert _series == sorted([B.TWII_COLUMN, "MA5（最新值，參考）", "MA60（最新值，參考）", "MA120（最新值，參考）"])
-        _layer = _spec["layer"][0]["encoding"]
-        assert _layer["y"]["type"] == "quantitative" and _layer["y"].get("axis") is not None     # y 軸沒被隱藏
-        assert "labels" not in _layer["y"]["axis"] or _layer["y"]["axis"]["labels"] is not False
-        assert _layer["color"]["legend"] is not None                                              # 圖例保留
-        assert _layer["x"]["type"] == "temporal"
+        # 指數＋三條 MA 水平參考線（ma200 歷史不足 ⇒ 不畫、不補 0，缺項在摺疊「限制」列出）；系列名逐字（含限定語）留在資料
+        assert _series == sorted(_SERIES_FULL)
+        _enc = _spec["encoding"]
+        assert _enc["y"]["type"] == "quantitative" and isinstance(_enc["y"].get("axis"), dict)   # y 軸沒被隱藏
+        for _flag in ("labels", "ticks", "domain", "grid"):
+            assert _enc["y"]["axis"].get(_flag, True) is not False or _flag == "grid", _flag
+        assert _enc["y"]["axis"].get("grid") is True
+        assert _enc["x"]["type"] == "temporal" and _enc["x"].get("axis") is not None
+        assert _enc["color"]["legend"] is not None                                             # 圖例保留（且不是 None／False）
+        assert _spec["mark"]["type"] == "line"
+
+    def test_c4_1_legend_lists_every_series_and_keeps_the_qualifier_somewhere_readable(self, tmp_path):
+        """DEC-119：5 項圖例都在 legend；縮短系列名時「最新值，參考」限定語移到圖例標題，完整系列名逐字留在資料／tooltip。"""
+        _spec, _data = _chart_spec_and_data(_run(tmp_path, _LOADED))
+        _c = _spec["encoding"]["color"]
+        assert _c["scale"]["domain"] == _SERIES_FULL                       # 圖例項＝資料系列（固定順序：指數、MA5、MA60、MA120）
+        assert _legend_labels(_spec) == [B.TWII_COLUMN, "MA5", "MA60", "MA120"]
+        assert "最新值，參考" in _c["legend"]["title"] == B.TWII_LEGEND_TITLE
+        assert all(_n in set(_data["series"]) for _n in _SERIES_FULL)       # 完整系列名逐字在資料
+        _tips = {_t["field"] for _t in _spec["encoding"]["tooltip"]}
+        assert {"date", "series", "value"} <= _tips                        # tooltip 帶完整系列名＋數值＋日期
+
+    def test_c4_1_five_series_all_present_in_legend_when_ma200_is_available(self):
+        _spec = B.twii_chart_spec(_SERIES_FULL5, height=220)
+        assert _legend_labels(_spec) == [B.TWII_COLUMN, "MA5", "MA60", "MA120", "MA200"]
+        assert len(set(_spec["encoding"]["color"]["scale"]["range"])) == 5
+
+    def test_c4_1_legend_fits_inside_the_390_phone_chart_width(self, tmp_path):
+        """右緣不超過手機圖寬（DEC-119 題 1：5 項全部可見、不遮圖）；欄數過多／標籤帶回限定語都會超出。"""
+        for _names in (_SERIES_FULL, _SERIES_FULL5):
+            _spec = B.twii_chart_spec(_names, height=220)
+            assert _estimate_legend_width_px(_spec) <= MOBILE_CHART_WIDTH_PX, (_names, _estimate_legend_width_px(_spec))
+            assert _spec["encoding"]["color"]["legend"]["orient"] == "bottom"
+        _rendered, _ = _chart_spec_and_data(_run(tmp_path, _LOADED))
+        assert _estimate_legend_width_px(_rendered) <= MOBILE_CHART_WIDTH_PX
+
+    def test_c4_1_spec_is_a_full_chart_not_a_sparkline_and_does_no_transform(self, tmp_path):
+        _spec, _ = _chart_spec_and_data(_run(tmp_path, _LOADED))
+        assert "transform" not in _spec and "layer" not in _spec or all("transform" not in _l for _l in _spec["layer"])
+        _blob = json.dumps(_spec, ensure_ascii=False)
+        for _bad in ('"stack"', '"normalize"', '"window"', '"joinaggregate"', '"aggregate"', '"bin"', '"timeUnit"',
+                     '"fold"', '"calculate"', '"impute"', '"loess"', '"regression"'):
+            assert _bad not in _blob, _bad                                 # ⛔ 正規化／滾動／補值／聚合
+        assert _spec["encoding"]["y"].get("scale", {}).get("type", "linear") == "linear"
+        assert "width" not in _spec                                        # 沒有縮小寬度的 mini chart
+        assert _spec["height"] == 220 and _spec["autosize"]["type"] == "fit"
+        assert _spec["mark"].get("strokeWidth", 1) >= 1 and _spec["mark"]["type"] == "line"
+        for _ax in ("x", "y"):
+            _a = _spec["encoding"][_ax]["axis"]
+            assert _a is not None and all(_a.get(_k, True) is not False for _k in ("labels", "ticks", "domain"))
+
+    def test_c4_1_golden_chart_data_equals_the_view_close_and_the_ma_reference_values(self, tmp_path):
+        """固定資料 → spec 的 data values 逐值相等：指數＝view.close；每條 MA＝同一個最新值（水平線）；ma200 缺 ⇒ 無列、不補 0。"""
+        _spec, _d = _chart_spec_and_data(_run(tmp_path, _LOADED))
+        _v = _view()
+        _rows = list(zip(_d["date"], _d["series"], _d["value"]))
+        _idx = [r for r in _rows if r[1] == B.TWII_COLUMN]
+        assert [r[2] for r in _idx] == list(_v.close)
+        assert [str(r[0])[:10] for r in _idx] == list(_v.xs)
+        _refs, _ = B.ma_reference_values(_LOADED["mkt_info"])
+        for _name, _val in _refs:
+            _ma = [r for r in _rows if r[1] == f"{_name}（最新值，參考）"]
+            assert len(_ma) == len(_v.close) and {r[2] for r in _ma} == {_val}, _name
+        assert not [r for r in _rows if "MA200" in r[1]]
+        assert len(_rows) == len(_v.close) * (1 + len(_refs)) and all(r[2] is not None for r in _rows)
+
+    def test_c4_1_long_frame_keeps_gaps_as_nulls_no_fill_no_normalize(self):
+        _df = pd.DataFrame({B.TWII_COLUMN: [22000.0, float("nan"), 22200.0], "MA5（最新值，參考）": [22100.0] * 3},
+                           index=pd.to_datetime(["2026-10-21", "2026-10-22", "2026-10-23"]))
+        _long = B.twii_chart_long(_df)
+        assert list(_long.columns) == list(B.TWII_LONG_COLUMNS) and len(_long) == 6
+        _ix = _long[_long.series == B.TWII_COLUMN].value.tolist()
+        assert _ix[0] == 22000.0 and _ix[2] == 22200.0 and math.isnan(_ix[1])      # 缺口留缺口（⛔ ffill／fillna(0)）
+        assert _long[_long.series == "MA5（最新值，參考）"].value.tolist() == [22100.0] * 3
+
+    def test_c4_1_series_colors_are_a_fixed_mapping_per_series(self):
+        _spec = B.twii_chart_spec(_SERIES_FULL5, height=220)
+        _sc = _spec["encoding"]["color"]["scale"]
+        assert dict(zip(_sc["domain"], _sc["range"])) == dict(zip(_SERIES_FULL5, (
+            "#2563eb", "#f59e0b", "#10b981", "#a855f7", "#ef4444")))
+
+    def test_c4_1_primary_height_is_the_contract_cap_and_the_cold_slot_uses_the_same_height(self):
+        assert B.PRIMARY_CHART_HEIGHT_PX == cp.SLOT_HEIGHT_MAX_PX == 220
+        _src = ast.unparse(_fn(_MB_TREE, "render_chart_a"))
+        _uses = [n for n in ast.walk(_fn(_MB_TREE, "render_chart_a")) if isinstance(n, ast.Name) and n.id == "PRIMARY_CHART_HEIGHT_PX"]
+        assert len(_uses) == 2                                                  # 圖與冷啟動槽同一個名字（C4-6）
+        assert "render_twii_chart(twii_chart_frame(_view, _refs), height=PRIMARY_CHART_HEIGHT_PX)" in _src
+        assert "st.container(height=PRIMARY_CHART_HEIGHT_PX, border=True)" in _src
+        _r = ast.unparse(_fn(_MB_TREE, "render_twii_chart"))                     # 高度同時給 spec 與元件（兩處一致）
+        assert "twii_chart_spec(list(frame.columns), height=height)" in _r and "height=height" in _r
+
+    def test_c4_1_chart_call_does_not_hide_axes_or_legend(self):
+        _call = next(n for n in ast.walk(_fn(_MB_TREE, "render_twii_chart"))
+                     if isinstance(n, ast.Call) and ast.unparse(n.func) == "st.vega_lite_chart")
+        assert {k.arg for k in _call.keywords} == {"width", "height"}          # ⛔ theme／selection／key 等花樣
+        assert len(_call.args) == 2
+        assert not any(ast.unparse(n.func) == "st.line_chart" for n in ast.walk(_MB_TREE) if isinstance(n, ast.Call))
 
     def test_c4_1_exactly_one_native_chart_on_the_page_and_it_is_in_the_primary_container(self, tmp_path):
         _at = _run(tmp_path, _full_intl_session())
@@ -221,20 +346,6 @@ class TestC41:
         _evs = list(_events(_at.main))
         assert any(e[0] == "UnknownElement" for e in _zone(_evs, "A"))       # AppTest 把 vega_lite_chart 列為 UnknownElement
         assert not any(e[0] == "UnknownElement" for _w in "BDC" for e in _zone(_evs, _w))
-
-    def test_c4_1_primary_height_is_the_contract_cap_and_the_cold_slot_uses_the_same_height(self):
-        assert B.PRIMARY_CHART_HEIGHT_PX == cp.SLOT_HEIGHT_MAX_PX == 220
-        _src = ast.unparse(_fn(_MB_TREE, "render_chart_a"))
-        _uses = [n for n in ast.walk(_fn(_MB_TREE, "render_chart_a")) if isinstance(n, ast.Name) and n.id == "PRIMARY_CHART_HEIGHT_PX"]
-        assert len(_uses) == 2                                                  # 圖與冷啟動槽同一個名字（C4-6）
-        assert "st.line_chart(twii_chart_frame(_view, _refs), height=PRIMARY_CHART_HEIGHT_PX)" in _src
-        assert "st.container(height=PRIMARY_CHART_HEIGHT_PX, border=True)" in _src
-
-    def test_c4_1_chart_call_does_not_hide_axes_or_legend(self):
-        _call = next(n for n in ast.walk(_fn(_MB_TREE, "render_chart_a"))
-                     if isinstance(n, ast.Call) and ast.unparse(n.func) == "st.line_chart")
-        assert {k.arg for k in _call.keywords} == {"height"}          # ⛔ x_label／y_label／color／use_container_width 等花樣
-        assert len(_call.args) == 1
 
     def test_c4_1_layout_css_never_selects_chart_internals(self):
         _css = B.P4M_LAYOUT_CSS.lower() + cp.compact_css().lower()
@@ -515,7 +626,10 @@ class TestC8a:
         assert [e[0] for e in _outside] == ["Markdown", "Caption"]
         assert _is_chart_header(_outside[0][1], B.CHART_C_TITLE)
         assert f'data-kind="guard_text">{B.CHART_C_TAG}</span>' in _outside[0][1]
-        assert _outside[1][1] == B.CHART_C_EMPTY
+        # 📌 P4-4（A8，有意識的修改，⛔ 不是降強度）：外露一行由整句 `CHART_C_EMPTY`（50 字）縮成它的第一句 `CHART_C_EMPTY_FACE`
+        #   （≤32 字、逐字取自原句前半）；整句逐字下沉「為什麼」（見下一條測試）。外露層**不得**再出現整句後半。
+        assert _outside[1][1] == B.CHART_C_EMPTY_FACE and B.CHART_C_EMPTY.startswith(B.CHART_C_EMPTY_FACE)
+        assert B.CHART_C_EMPTY not in " ".join(_all_text(_outside))
         assert B.CHART_C_SAY not in " ".join(_all_text(_outside))      # 子字串層級（header HTML 裡也不得夾帶客戶原句）
         assert B.CHART_C_BASIS not in " ".join(_all_text(_outside))
 
@@ -524,7 +638,8 @@ class TestC8a:
         assert B.CHART_C_BASIS == "查看依據：此區塊未啟用，沒有使用任何資料。"
         _evs = list(_events(_run(tmp_path, _LOADED).main))
         _sec = _fold_sections(_evs, "C")
-        assert [t for _, t in _sec["為什麼"]] == [B.CHART_C_SAY]
+        # 📌 P4-4（A8）：「為什麼」＝客戶原句 `CHART_C_SAY`（Q8a 逐字）＋ 外露縮短後下沉的整句 `CHART_C_EMPTY`（逐字，資訊不丟）。
+        assert [t for _, t in _sec["為什麼"]] == [B.CHART_C_SAY, B.CHART_C_EMPTY]
         assert [t for _, t in _sec["來源"]] == [B.CHART_C_BASIS]
         assert [t for _, t in _sec["限制"]] == [B.CHART_C_LIMIT] and B.CHART_C_LIMIT.startswith("—（")
         assert "「" + PM.X9_TITLE + "」" in _sec["去哪補"][0][1]

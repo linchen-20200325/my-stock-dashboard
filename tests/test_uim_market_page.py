@@ -349,10 +349,11 @@ def test_chart_c_block_is_text_only_no_numbers_no_charts(tmp_path):
     _j = next(i for i, (k, v, e) in enumerate(_flat_all) if isinstance(v, str) and v == "以下為可展開區塊（預設收合）。")
     _block = [(k, v, e) for k, v, e in _flat_all[_i:_j] if isinstance(v, str)]
     _outside = [v for k, v, e in _block if not e]
-    assert len(_outside) == 2 and _outside[1] == B.CHART_C_EMPTY                  # header ＋ 一行
-    assert B.CHART_C_SAY not in _outside and B.CHART_C_BASIS not in _outside
+    # 📌 P4-4（A8，有意識的修改，⛔ 不是降強度）：外露一行＝`CHART_C_EMPTY` 第一句（≤32 字）；整句改在摺疊內逐字。
+    assert len(_outside) == 2 and _outside[1] == B.CHART_C_EMPTY_FACE                  # header ＋ 一行
+    assert B.CHART_C_SAY not in _outside and B.CHART_C_BASIS not in _outside and B.CHART_C_EMPTY not in _outside
     _inside = [v for k, v, e in _block if e]
-    assert B.CHART_C_SAY in _inside and B.CHART_C_BASIS in _inside
+    assert B.CHART_C_SAY in _inside and B.CHART_C_BASIS in _inside and B.CHART_C_EMPTY in _inside
     _visible = "".join(re.sub(r"<[^>]+>", "", v) for _, v, _ in _block)           # 去標籤（class 名無數字，保險）
     assert not any(c.isdigit() or "%" in c for c in _visible)
     assert not [k for k, v, e in _flat_all[_i:_j] if k in ("Dataframe", "Table", "UnknownElement", "Button", "Checkbox")]
@@ -423,7 +424,11 @@ def test_conclusion_sentence_and_expanders_are_identical_to_pre_uim(tmp_path):
     _old_top_caps = [v for k, v, e in _flat(_old.main) if k == "Caption" and not e]
     assert _en[_src_label][0][0] == "Caption" and _en[_src_label][0][1] in _old_top_caps
     assert _en[_src_label][0][1].startswith("逐項資料日：尚未提供")
-    assert _en[_src_label][1:] == _eo[_src_label]
+    # 📌 P4-4（A8「只下沉」；有意識的修改，⛔ 不是降強度）：首屏縮短的兩句原整句（資料日來源說明、AI／資料狀態行指路句）逐字再下沉到
+    #   同一展開區、緊接第一句之後；其餘內容仍逐項與 UI-M 之前相同。
+    _sunk = [("Caption", B.data_date_text({"index_as_of": "2026-10-23"})), ("Caption", B.ai_status_line_full())]
+    assert _en[_src_label][1:3] == _sunk
+    assert _en[_src_label][3:] == _eo[_src_label]
     assert _en[_src_label][0][1] not in [v for k, v, e in _flat(_new.main) if not e]     # 不再外露（只下沉，不重複）
     for _label, _items in _eo.items():
         assert _label in _en, f"保留的展開區不見了：{_label}"

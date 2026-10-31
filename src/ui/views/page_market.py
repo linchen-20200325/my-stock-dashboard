@@ -676,7 +676,7 @@ def render_page_market() -> None:
         with _head[0]:
             st.markdown(f"## {blocks.PAGE_TITLE}")
             st.caption(blocks.PAGE_SUBTITLE)
-            st.caption(f"{_time_text}｜{blocks.data_date_text(_session.get('mkt_info'))}")
+            st.caption(f"{_time_text}｜{blocks.data_date_text(_session.get('mkt_info'), full=False)}")
         with _head[1]:
             # 更新鈕與今天頁同一組 form／session key（⛔ 不另寫第二套更新流程）；form key 兩頁共用沒有衝突：側欄一次只選得到
             # 一頁（`app.py` 的 `_IA_PAGE` 分支＋`st.stop()`），兩頁不會出現在同一輪 script run。
@@ -768,6 +768,11 @@ def render_page_market() -> None:
         st.caption(AS_OF_NOT_PROVIDED if _in_default_nav() else
                    f"{AS_OF_NOT_PROVIDED}｜🩺 資料健康：請到 "
                    f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")
+        # P4-4（A8，只下沉）：首屏兩句縮短後被拿掉的原整句，逐字放這裡。
+        _date_full = blocks.data_date_text(_session.get("mkt_info"))
+        if _date_full != blocks.data_date_text(_session.get("mkt_info"), full=False):
+            st.caption(_date_full)
+        st.caption(blocks.ai_status_line_full())
         st.markdown(
             f"- {report_pointer(_report)}\n"
             + ("" if _in_default_nav() else

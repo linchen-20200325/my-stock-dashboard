@@ -9,6 +9,7 @@
 「套用後逐字等於基底、每個新寫法在現行檔恰出現 1 次、套用後 0 次」。基底 sha 寫死以免測試依賴 git。
 ⚠️ P4-2 若再動 `page_market.py`：以**同一基底**（`7484c57b`）對當時最終檔重產本表（⛔ 另立新基底、⛔ 改舊表）。
 ✅ P4-2（2026-10-31，圖區）已動 `page_market.py` ⇒ 本表已以**同一基底**對 P4-2 最終檔重產（4 組；基底 sha 不變）。
+✅ P4-4（2026-10-31，A8 外露字數）再動 `page_market.py`（頁首資料日短版＋「資料來源與完整度」下沉兩句）⇒ 同一基底、同 4 組，第 2、4 組新寫法已更新（基底 sha 不變）。
 
 ⚠️ 只套一次（idempotent）：同一份程式碼可能經過兩個掛點（nav1 與 uim 兩條路都會走到本節）。判定（整檔一起看）：
 每一組的 `新寫法` 都恰好出現一次 ⇒ 換回；都 0 次 ⇒ 已被前一個掛點換回；其餘 ⇒ AssertionError（錨點漂移，須重產）。
@@ -82,7 +83,8 @@ P4_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/ui/views/page_ma
                                   '            st.markdown(f"## {blocks.PAGE_TITLE}")\n'
                                   '            st.caption(blocks.PAGE_SUBTITLE)\n'
                                   '            '
-                                  'st.caption(f"{_time_text}｜{blocks.data_date_text(_session.get(\'mkt_info\'))}")\n'
+                                  'st.caption(f"{_time_text}｜{blocks.data_date_text(_session.get(\'mkt_info\'), '
+                                  'full=False)}")\n'
                                   '        with _head[1]:\n'
                                   '            # 更新鈕與今天頁同一組 form／session key（⛔ 不另寫第二套更新流程）；form key 兩頁共用沒有衝突：側欄一次只選得到\n'
                                   '            # 一頁（`app.py` 的 `_IA_PAGE` 分支＋`st.stop()`），兩頁不會出現在同一輪 script run。\n'
@@ -202,6 +204,12 @@ P4_REVERT_PAIRS: dict[str, tuple[tuple[str, str], ...]] = {'src/ui/views/page_ma
                                   '        st.caption(AS_OF_NOT_PROVIDED if _in_default_nav() else\n'
                                   '                   f"{AS_OF_NOT_PROVIDED}｜🩺 資料健康：請到 "\n'
                                   '                   f"{ia_nav.where_to_find(ia_nav.SECTION_WHY_DATA_HEALTH)}")\n'
+                                  '        # P4-4（A8，只下沉）：首屏兩句縮短後被拿掉的原整句，逐字放這裡。\n'
+                                  '        _date_full = blocks.data_date_text(_session.get("mkt_info"))\n'
+                                  '        if _date_full != blocks.data_date_text(_session.get("mkt_info"), '
+                                  'full=False):\n'
+                                  '            st.caption(_date_full)\n'
+                                  '        st.caption(blocks.ai_status_line_full())\n'
                                   '        st.markdown(\n',
                                   '    with st.expander("資料來源與完整度", expanded=False):\n        st.markdown(\n'))}
 

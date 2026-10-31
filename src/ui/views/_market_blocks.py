@@ -36,7 +36,7 @@
 ═══ Phase 4 P4-2（2026-10-30，客戶 DEC-117 Q4=P-B／Q3=A／Q8a；有意識的修改，⛔ 不是漏刪）═══════════
 圖區改為「Primary（圖 A）→ Secondary（國際小倍數 → 圖 D → 圖 C）」，每張圖＝header（標題→chip→1 句，`compact.chart_header_html`）
 → 圖或誠實 placeholder → **恰一個**「▸ 為什麼／來源／限制／去哪補」摺疊（`render_chart_fold`；六欄依據依線框 §3.5 分四段，逐字）：
-  · 圖 A：正式原生 `st.line_chart`（指數＋MA 水平參考線＋圖例＋y 軸），高 `PRIMARY_CHART_HEIGHT_PX`；冷啟動／讀不到同高槽（D6=B）；
+  · 圖 A：正式主圖（DEC-119：`st.vega_lite_chart` 自訂 spec；指數＋MA 水平參考線＋圖例＋y 軸），高 `PRIMARY_CHART_HEIGHT_PX`；冷啟動／讀不到同高槽（D6=B）；
     兩條護欄（均線聲明逐字、`⬜ 尚未定義`）各自獨立成 chip（D10(a)），來源 caption 下沉「來源」。
   · 圖 B：5 格 small multiples（`compact.small_multiples_html`＋`sparkline_svg`，⛔ 數字、⛔ 切換列）；缺系列格＝既有字樣；
     超過 8 字的兩個系列名用顯示名對映（`INTL_DISPLAY_NAMES`），正式全名在摺疊與 L2。
@@ -147,6 +147,8 @@ CHART_C_TITLE: str = "圖C 💰 大盤合理區間"
 CHART_C_TAG: str = "研究框架，未啟用"
 CHART_C_SAY: str = "用企業獲利 EPS 搭配不同合理本益比情境，觀察目前指數位在便宜、合理或偏貴區域。"
 CHART_C_EMPTY: str = "需先核准：EPS 資料來源、PE 情境、計算公式、更新頻率。核准前這個區塊不畫任何圖形、區間或指數位置。"
+#: P4-4（A8）：圖 C 外露一行只畫 `CHART_C_EMPTY` 的第一句（逐字取自原句前半，不新造字；≤32 字）；整句 `CHART_C_EMPTY` 逐字進「為什麼」。
+CHART_C_EMPTY_FACE: str = "需先核准：EPS 資料來源、PE 情境、計算公式、更新頻率。"
 CHART_C_BASIS: str = "查看依據：此區塊未啟用，沒有使用任何資料。"
 
 CHART_D_TITLE: str = "圖D ⚠️ 主要風險"
@@ -645,8 +647,68 @@ def twii_chart_frame(view: twii_svc.TwiiTrendView,
     _idx = pd.to_datetime(list(view.xs))
     _df = pd.DataFrame({TWII_COLUMN: list(view.close)}, index=_idx)
     for _name, _val in refs:
-        _df[f"{_name}（最新值，參考）"] = _val
+        _df[f"{_name}{TWII_MA_QUALIFIER}"] = _val
     return _df
+
+
+# ── 圖 A 自訂圖表（DEC-119 題 1=A：手機 Primary 維持 220px，改用可控圖例的 `st.vega_lite_chart`）──
+#: 均線系列名的限定語。完整系列名（`MA5（最新值，參考）`）逐字留在資料與 tooltip；圖例只顯示短名，限定語搬到圖例標題。
+TWII_MA_QUALIFIER: str = "（最新值，參考）"
+#: 圖例標題：限定語在圖例上永遠看得到（⛔ 縮短系列名而丟掉限定語）。
+TWII_LEGEND_TITLE: str = "MA 均為最新值，參考的水平線"
+#: 圖例排法：置底、3 欄（5 項＝2 列）；字級／欄距與手機圖寬估算見守衛 `TestF1VegaSpec`（⛔ 改欄數前先量 390px 右緣）。
+TWII_LEGEND_COLUMNS: int = 3
+TWII_LEGEND_FONT_PX: int = 11
+TWII_LEGEND_SYMBOL_PX: int = 24
+TWII_LEGEND_COLUMN_PADDING_PX: int = 12
+#: 系列→色（固定對映；指數＝主線藍，四條 MA 各一色）。鍵＝完整系列名的「基底名」。
+TWII_CHART_COLORS: dict[str, str] = {TWII_COLUMN: "#2563eb", "MA5": "#f59e0b", "MA60": "#10b981",
+                                     "MA120": "#a855f7", "MA200": "#ef4444"}
+TWII_LONG_COLUMNS: tuple[str, str, str] = ("date", "series", "value")
+
+
+def twii_chart_long(frame: pd.DataFrame) -> pd.DataFrame:
+    """`twii_chart_frame` 的寬表 → 長表（date／series／value）。純轉置：⛔ 不補值、不正規化、不滾動；各系列點數與原欄一致。"""
+    _long = frame.rename_axis("date").reset_index().melt(id_vars="date", var_name="series", value_name="value")
+    return _long[list(TWII_LONG_COLUMNS)]
+
+
+def _twii_series_color(name: str) -> str:
+    return TWII_CHART_COLORS[name.removesuffix(TWII_MA_QUALIFIER)]
+
+
+def twii_chart_spec(series_names: Sequence[str], *, height: int) -> dict[str, Any]:
+    """圖 A 的 Vega-Lite spec：指數線＋MA 水平參考線；y 軸（有刻度）、x 時間軸、圖例置底多欄、tooltip 帶完整系列名。
+    ⛔ 不隱藏軸、不正規化（無 stack／normalize／window／joinaggregate transform）、不做 sparkline／mini。"""
+    _names = list(series_names)
+    _legend: dict[str, Any] = {
+        "orient": "bottom", "direction": "horizontal", "columns": TWII_LEGEND_COLUMNS,
+        "title": TWII_LEGEND_TITLE, "titleOrient": "top", "titleAnchor": "start", "titleLimit": 0,
+        "titleFontSize": TWII_LEGEND_FONT_PX, "labelFontSize": TWII_LEGEND_FONT_PX, "labelLimit": 0,
+        "symbolType": "stroke", "symbolSize": TWII_LEGEND_SYMBOL_PX ** 2, "symbolStrokeWidth": 3,
+        "columnPadding": TWII_LEGEND_COLUMN_PADDING_PX, "rowPadding": 2, "padding": 0,
+        "labelExpr": f"replace(datum.label, '{TWII_MA_QUALIFIER}', '')",
+    }
+    return {
+        "height": height,
+        "autosize": {"type": "fit", "contains": "padding"},
+        "mark": {"type": "line", "strokeWidth": 2},
+        "encoding": {
+            "x": {"field": "date", "type": "temporal", "title": "", "axis": {"grid": False}},
+            "y": {"field": "value", "type": "quantitative", "title": "", "axis": {"grid": True}},
+            "color": {"field": "series", "type": "nominal", "legend": _legend,
+                      "scale": {"domain": _names, "range": [_twii_series_color(_n) for _n in _names]}},
+            "tooltip": [{"field": "date", "type": "temporal", "title": "日期", "format": "%Y-%m-%d"},
+                        {"field": "series", "type": "nominal", "title": "系列"},
+                        {"field": "value", "type": "quantitative", "title": "數值", "format": ",.2f"}],
+        },
+    }
+
+
+def render_twii_chart(frame: pd.DataFrame, *, height: int) -> None:
+    """畫圖 A（DEC-119）：`st.vega_lite_chart` 自訂 spec 取代 `st.line_chart`（後者圖例只能單行、手機被裁）。"""
+    st.vega_lite_chart(twii_chart_long(frame), twii_chart_spec(list(frame.columns), height=height),
+                       width="stretch", height=height)
 
 
 def basis_chart_a(view: twii_svc.TwiiTrendView | None, mkt_info: Any) -> Basis:
@@ -746,11 +808,21 @@ def basis_chart_b(series: list[IntlSeries] | None) -> Basis:
 # ══════════════════════════════════════════════════════════════════
 # 渲染（薄）
 # ══════════════════════════════════════════════════════════════════
-def data_date_text(mkt_info: Any) -> str:
-    """更新卡的「資料日」＝`mkt_info['index_as_of']`（市場評估用的加權指數最後一根）；取不到 → ⬜。"""
+#: 資料日的來源說明（原與日期同一句外露；P4-4 A8 只下沉：外露層只留「資料日：YYYY-MM-DD」，本句逐字進「資料來源與完整度」）。
+DATA_DATE_SOURCE_NOTE: str = "（加權指數，來源：市場評估輸入）"
+
+
+def data_date_text(mkt_info: Any, *, full: bool = True) -> str:
+    """更新卡的「資料日」＝`mkt_info['index_as_of']`（市場評估用的加權指數最後一根）；取不到 → ⬜。
+
+    📌 P4-4（A8，有意識的修改，⛔ 不是漏刪；決策者 AI 總管〔v3 §03-1 內部自決〕）：`full=True`（預設）＝原整句不變
+    （`資料日：{日期}（加權指數，來源：市場評估輸入）`）；`full=False`＝外露層短版（只到日期，取自原句前半，不新造字）。
+    被拿掉的後半句＝`DATA_DATE_SOURCE_NOTE`，由 `page_market` 以 `full=True` 逐字放進「資料來源與完整度」展開區。"""
     _v = mkt_info.get("index_as_of") if isinstance(mkt_info, Mapping) else None
     _s = str(_v).strip()[:10] if _v is not None else ""
-    return f"資料日：{_s}（加權指數，來源：市場評估輸入）" if _s else DATA_DATE_NOT_PROVIDED
+    if not _s:
+        return DATA_DATE_NOT_PROVIDED
+    return f"資料日：{_s}" + (DATA_DATE_SOURCE_NOTE if full else "")
 
 
 def _render_lines(lines: Sequence[tuple[str, str]]) -> None:
@@ -876,9 +948,23 @@ def render_core_tiles(*, regime_tile: Any, regime_face: str, regime_badge: str, 
                 render_basis(basis_risks(risks), extra=_full_risk_lines)
 
 
+def ai_status_line_face() -> str:
+    """AI／資料狀態一行的外露短版＝`HERO_AI_PLACEHOLDER`＋`HEALTH_CHIP`（原句前兩段，不新造字；P4-4 A8，≤32 字）。"""
+    return f"{HERO_AI_PLACEHOLDER}　{HEALTH_CHIP}"
+
+
+def ai_status_line_full() -> str:
+    """AI／資料狀態一行的**原整句**（DEC-105 第 5 點合併一行的原字樣）。P4-4 起不外露，逐字放進「資料來源與完整度」展開區。"""
+    return f"{ai_status_line_face()}{HEALTH_CHIP_POINTER}"
+
+
 def render_ai_status_line() -> None:
-    """AI／資料狀態一行（DEC-105 第 5 點合併一行；位置由 DEC-117 Q5 定在 ⚡ 之後、圖區之前）。字樣不改。"""
-    st.caption(f"{HERO_AI_PLACEHOLDER}　{HEALTH_CHIP}{HEALTH_CHIP_POINTER}")
+    """AI／資料狀態一行（DEC-105 第 5 點合併一行；位置由 DEC-117 Q5 定在 ⚡ 之後、圖區之前）。
+
+    📌 P4-4（A8，有意識的修改，⛔ 不是漏刪；決策者 AI 總管〔v3 §03-1 內部自決〕）：外露層只畫 `ai_status_line_face()`（前兩段，
+    原整句 44 字 → 外露 ≤32 字）；後半的 `HEALTH_CHIP_POINTER`（指路句）連同原整句 `ai_status_line_full()` 逐字下沉到
+    「資料來源與完整度」展開區（資訊只下沉、不刪）。"""
+    st.caption(ai_status_line_face())
 
 
 def alerts_has_listable_source(alerts: Any, alloc: Any) -> bool:
@@ -1088,7 +1174,7 @@ def chart_a_fold(view: twii_svc.TwiiTrendView | None, mkt_info: Any, *, requeste
 
 
 def render_chart_a(session: Mapping[str, Any], *, where_label: str) -> None:
-    """圖 A 台股趨勢＝**Primary Visual**（DEC-117 Q4=P-B）：header（標題→chip→客戶原句）→ 正式原生圖（指數＋MA 水平參考線
+    """圖 A 台股趨勢＝**Primary Visual**（DEC-117 Q4=P-B）：header（標題→chip→客戶原句）→ 正式主圖（DEC-119 自訂 vega-lite；指數＋MA 水平參考線
     ＋圖例＋y 軸，高 `PRIMARY_CHART_HEIGHT_PX`）→ 恰一個四段摺疊。預設直接畫（讀本地 parquet，毫秒級、非外部抓取，故無 gate）。
 
     未載入（上游一個總經 key 都沒寫過）→ 同高槽內灰字「⬜ 尚未載入，請按更新」，**不讀快取、不畫（不顯示過期值）**；
@@ -1120,8 +1206,9 @@ def render_chart_a(session: Mapping[str, Any], *, where_label: str) -> None:
             with st.container(height=PRIMARY_CHART_HEIGHT_PX, border=True):
                 _render_lines(_slot)
         else:
-            # 正式原生圖（Q4：MA 參考線、y 軸、圖例保留 —— 多序列 DataFrame 欄名＝圖例；⛔ 以參數或 CSS 隱藏軸）。
-            st.line_chart(twii_chart_frame(_view, _refs), height=PRIMARY_CHART_HEIGHT_PX)
+            # 正式主圖（DEC-117 Q4＋DEC-119 澄清：保留指數線／MA 參考線／y 軸／5 項圖例；實作由 `st.line_chart` 換成
+            # `st.vega_lite_chart` 自訂 spec 以控制手機圖例；⛔ 以參數或 CSS 隱藏軸、⛔ sparkline／正規化）。
+            render_twii_chart(twii_chart_frame(_view, _refs), height=PRIMARY_CHART_HEIGHT_PX)
         render_chart_fold(chart_a_fold(_view, _mkt, requested=_requested, where_label=where_label,
                                        overflow=_overflow))
 
@@ -1222,12 +1309,12 @@ CHART_C_LIMIT: str = FOLD_NOT_APPLICABLE_FMT.format(why=CHART_C_TAG)
 
 def chart_c_texts() -> tuple[str, ...]:
     """圖 C 區塊內的**全部**靜態文字（含摺疊；供「零數字」測試；「去哪補」的展開區標題由頁面測試另驗）。"""
-    return (CHART_C_TITLE, CHART_C_TAG, CHART_C_SAY, CHART_C_EMPTY, CHART_C_BASIS, CHART_C_LIMIT)
+    return (CHART_C_TITLE, CHART_C_TAG, CHART_C_SAY, CHART_C_EMPTY, CHART_C_EMPTY_FACE, CHART_C_BASIS, CHART_C_LIMIT)
 
 
 def chart_c_fold(*, where_label: str) -> ChartFold:
     """Q8a／C3-1：`CHART_C_SAY`（客戶原句）→「為什麼」逐字；`CHART_C_BASIS` →「來源」逐字。"""
-    return chart_fold(None, why=(("md", CHART_C_SAY),), source=(("caption", CHART_C_BASIS),),
+    return chart_fold(None, why=(("md", CHART_C_SAY), ("caption", CHART_C_EMPTY)), source=(("caption", CHART_C_BASIS),),
                       limit=(("caption", CHART_C_LIMIT),),
                       where=(("caption", FOLD_WHERE_FMT.format(label=where_label)),))
 
@@ -1237,7 +1324,7 @@ def render_chart_c(*, where_label: str) -> None:
     ⛔ 區塊內零數值、零圖形、不畫區間標籤。"""
     with st.container(border=True, key=f"{P4M_SECONDARY_KEY_PREFIX}c"):
         render_chart_header(title=CHART_C_TITLE, chips=[cp.guard_chip(CHART_C_TAG)], say=None)
-        st.caption(CHART_C_EMPTY)
+        st.caption(CHART_C_EMPTY_FACE)       # P4-4（A8）：外露只畫第一句；整句 `CHART_C_EMPTY` 在摺疊「為什麼」
         render_chart_fold(chart_c_fold(where_label=where_label))
 
 
