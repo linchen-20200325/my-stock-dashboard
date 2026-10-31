@@ -337,6 +337,47 @@ class TestC42C43:
             assert not any(ch.isdigit() for ch in _vis), _vis
             assert "%" not in _vis
 
+    def test_c4_3_svg_title_and_aria_label_are_exactly_the_formal_series_name_and_no_svg_text(self, tmp_path):
+        """QA MAJOR 1：只掃可見文字不夠 —— svg 的 `<title>`／`aria-label`（讀屏與 hover 會讀出）也不得夾帶數字或任何別的字：
+        必須逐字等於該格**正式系列名**（非顯示名），且 svg 內沒有 `<text>`。"""
+        _grid = _grid_html(_run(tmp_path, _full_intl_session()))
+        _svgs = re.findall(r"<svg.*?</svg>", _grid, flags=re.S)
+        assert len(_svgs) == 5
+        _formal = [n for _, ns in B.INTL_GROUPS for n in ns]
+        for _svg, _name in zip(_svgs, _formal):
+            assert re.findall(r"<title>(.*?)</title>", _svg) == [_name]
+            assert re.findall(r'aria-label="(.*?)"', _svg) == [_name]
+            assert "<text" not in _svg
+
+    def test_c4_3_golden_polyline_direction_and_group_window_chip(self, tmp_path):
+        """QA MAJOR 2：固定 3 點遞增 ⇒ polyline y 座標單調**遞減**（SVG y 向下）；組級窗口 chip 文字＝`近 {n} 日`（n＝輸入窗口）。"""
+        _ix = pd.to_datetime(["2026-10-21", "2026-10-22", "2026-10-23"])
+        _series = [B.IntlSeries(_g, _n, "ok", pd.Series([1.0, 2.0, 3.0], index=_ix)) for _g, _ns in B.INTL_GROUPS for _n in _ns]
+        _chips, _cells = B.chart_b_parts(_series, today_date=pd.Timestamp("2026-10-30").date())
+        _win = [c for c in _chips if c.kind == "window"]
+        assert len(_win) == 1 and _win[0].text.endswith("近 3 日"), [c.text for c in _chips]
+        _html = cp.small_multiples_html(_cells, cols_desktop=3, cols_mobile=2)
+        _pts = re.findall(r'<polyline[^>]*points="([^"]+)"', _html)
+        assert len(_pts) == 5
+        for _p in _pts:
+            _ys = [float(pt.split(",")[1]) for pt in _p.split()]
+            assert len(_ys) == 3 and _ys[0] > _ys[1] > _ys[2], _ys
+        # 頁面層：窗口 chip 實際出現在 header、n 對輸入
+        _sess = dict(_LOADED)
+        _cl = dict(_LOADED["cl_data"])
+        _cl["intl"] = {n: pd.DataFrame({"close": [1.0, 2.0, 3.0]}, index=_ix) for _, ns in B.INTL_GROUPS for n in ns}
+        _sess["cl_data"] = _cl
+        _evs = list(_events(_run(tmp_path, _sess).main))
+        _head = next(e[1] for e in _zone(_evs, "B") if _is_chart_header(e[1], B.CHART_B_TITLE))
+        assert 'data-kind="window">近 3 日</span>' in _head
+
+    def test_c4_3_small_multiples_container_has_no_extra_text_besides_header_grid_and_fold(self, tmp_path):
+        """QA MINOR 3：小倍數容器外露層只有 header、格子（單一 HTML 元素）；其餘文字只能在摺疊內。"""
+        _evs = list(_events(_run(tmp_path, _full_intl_session()).main))
+        _outer = [e for e in _zone(_evs, "B") if e[2] is None and e[0] != "Expander"]
+        assert [e[0] for e in _outer] == ["Markdown", "Markdown"]
+        assert _is_chart_header(_outer[0][1], B.CHART_B_TITLE) and _outer[1][1].startswith('<div class="cp-sm ')
+
     def test_c4_3_cell_with_a_value_text_is_rejected_by_the_component(self):
         _svg = cp.sparkline_svg([1.0, 2.0, 3.0], w=B.SM_SPARK_W, h=B.SM_SPARK_H, title="x",
                                 missing_state="empty", missing_text="x")
@@ -373,6 +414,14 @@ class TestC42C43:
         _evs = list(_events(_run(tmp_path, _full_intl_session()).main))
         _src = " ".join(t for _, t in _fold_sections(_evs, "B")["來源"])
         assert "納斯達克 IXIC" in _src and "費城半導體 SOX" in _src          # 正式全名在摺疊「來源」
+
+    def test_asof_chip_value_returns_none_when_unparseable_and_formats_by_year(self):
+        """QA MINOR 4：解析失敗 ⇒ None（⛔ 猜一個日期）；同年 `MM/DD`、跨年 `YYYY/MM/DD`。"""
+        _t = pd.Timestamp("2026-10-30").date()
+        for _bad in (None, "", "未提供", "2026/10/23", "10-23", "not a date", 20261023):
+            assert B.asof_chip_value(_bad, today_date=_t) is None, _bad
+        assert B.asof_chip_value("2026-10-23", today_date=_t) == "10/23"
+        assert B.asof_chip_value("2025-12-31T00:00:00", today_date=_t) == "2025/12/31"
 
     def test_c4_5_group_chips_say_not_defined_once_and_dates_only_when_uniform(self):
         _ix = pd.to_datetime(["2026-10-22", "2026-10-23"])

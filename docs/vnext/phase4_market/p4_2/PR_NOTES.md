@@ -155,3 +155,26 @@
 ### 5.8 成品操作指引
 
 向下捲到「圖 A 台股趨勢」：上方三顆 chip 是護欄與資料日；圖本身可看指數與均線參考線；「▸ 為什麼／來源／限制／去哪補」展開看依據與補資料的去處。其後依序是國際趨勢（5 個小圖，只看形狀、不顯示數字；要看數值去下方「國際市場（原始資料…）」展開區）、主要風險、大盤合理區間（研究框架，未啟用）。
+
+
+---
+
+## 七、QA 回報後補強（2026-10-31；兩組獨立 QA 無 BLOCKER；append-only）
+
+### 7.1 守衛補強（tests/test_p4_2_market_charts.py，新增 4 項→共 59 項；新增 mutation M25～M29 全轉紅）
+| QA | 守衛 | mutation |
+|---|---|---|
+| MAJOR 1 | `test_c4_3_svg_title_and_aria_label_are_exactly_the_formal_series_name_and_no_svg_text`：每個 svg 的 `<title>`、`aria-label` 逐字＝該格**正式**系列名、無 `<text>` | M25 title 帶最新收盤值 → 紅 |
+| MAJOR 2 | `test_c4_3_golden_polyline_direction_and_group_window_chip`：固定 3 點遞增 ⇒ polyline y 單調遞減；組級窗口 chip＝`近 3 日`（單元＋頁面層） | M26 資料反向、M27 窗口 +1 → 紅 |
+| MINOR 3 | `test_c4_3_small_multiples_container_has_no_extra_text_besides_header_grid_and_fold` | M28 容器多一行 caption → 紅 |
+| MINOR 4 | `test_asof_chip_value_returns_none_when_unparseable_and_formats_by_year` | M29 解析失敗改猜日期 → 紅 |
+
+### 7.2 資訊守恆的表面變動（QA 要求明列；資訊皆仍可取得，無刪除）
+- 圖 D 表格三欄→兩欄（「是否惡化」改 header 護欄 chip）。
+- 圖 C 標題拆成 header（標題＋「研究框架，未啟用」chip）。
+- 兩句趨勢結論（`台股趨勢結論：⬜ 尚未定義`／`國際趨勢結論：…`）併入摺疊「為什麼」的規則長句內（圖 B 冷啟動因規則欄沒有而另列一行）。
+- 「其他（未分組）」等非核心系列：原獨立的 close 缺值 caption 改入摺疊「來源／限制」。
+- 圖 A「新鮮度未判定」整句僅在摺疊「限制」；外露層只是不給 ✅ 可讀 chip（不是顯示別的狀態）。
+
+### 7.3 QA NOTE（已登 BACKLOG P2 一行）
+圖 B 摺疊「限制」段重複 `CHART_B_NOTE`（規則欄與限制欄各一次）；`cl_data['intl']` 工程字樣為既有（六欄內）；各系列窗口不齊時組級窗口 chip 不顯示（改各格自帶窗口 chip）。
