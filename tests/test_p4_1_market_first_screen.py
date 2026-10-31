@@ -98,6 +98,16 @@ def _anchor_index(evs):
     return _idx
 
 
+def _report_empties_only():
+    """只有「回空」（`empties`）、沒有任何 `failures` 的報告（QA 第二輪：Z 判斷式拿掉 empties 必須轉紅）。"""
+    _r = RS.MacroRefreshReport(
+        mode=RS.MODE_WARM, started_at="2026-10-29 13:45", elapsed_s=3.2,
+        sources=tuple(RS.SourceResult(k, True, "1.0s") for k in RS.SOURCE_LABELS), steps=(),
+        contents=(RS.SourceContent("tw", 0, 1, "檔"),), written_keys=("cl_data",), popped_keys=(), cleared=())
+    assert _r.empties and not _r.failures
+    return _r
+
+
 def _report(*, failed: bool = False):
     return RS.MacroRefreshReport(
         mode=RS.MODE_WARM, started_at="2026-10-29 13:45", elapsed_s=3.2,
@@ -213,6 +223,63 @@ class TestC1Order:
         assert _idx["⚡bar"] == _last_tile + 1
 
 
+class TestD1Fallbacks:
+    """QA 第二輪（DEC-118 D1／總管判定 Z 的 fallback）：任何會畫出紅字的報告，紅字都不得落在 CTA 與今日結論之間。"""
+
+    def _between_and_after(self, at):
+        _evs = list(_events(at.main))
+        _idx = _anchor_index(_evs)
+        _between = [e for e in _evs[_idx["更新鈕"] + 1: _idx["結論標題"]] if e[2] is None and e[0] in _TEXT]
+        return _evs, _idx, _between
+
+    def test_empties_only_report_goes_below_the_conclusion(self, tmp_path):
+        _at = _run(tmp_path, {**_LOADED, P.SS_REFRESH_REPORT: _report_empties_only()})
+        _evs, _idx, _between = self._between_and_after(_at)
+        assert not _between and not [e for e in _evs[_idx["更新鈕"] + 1: _idx["結論標題"]] if e[0] == "Expander"]
+        _first = _evs[_idx["結論句"] + 1]
+        assert _first[0] == "Error" and _first[2] is None and "這幾個來源這一輪回空" in _first[1]
+
+    def test_old_format_report_is_cleared_and_announced_below_the_conclusion(self, tmp_path):
+        _at = _run(tmp_path, {**_LOADED, P.SS_REFRESH_REPORT: SimpleNamespace(started_at="10/30 09:00")})
+        assert not _at.exception, _at.exception
+        _evs, _idx, _between = self._between_and_after(_at)
+        assert not _between
+        _first = _evs[_idx["結論句"] + 1]
+        assert _first[0] == "Error" and _first[1].startswith("上一次更新的報告畫不出來") and _first[2] is None
+        assert P.SS_REFRESH_REPORT not in _at.session_state
+
+    def test_non_current_report_type_is_treated_as_true_error_even_if_it_renders(self, tmp_path):
+        """不是現行 `MacroRefreshReport` 的物件（例：熱重載後殘留的舊類別實例），即使欄位齊全、畫得出來，也一律移到
+        結論下方（Z fallback）；CTA 與結論之間不留任何東西。"""
+        _rep = _report()
+        _names = ("ok", "failures", "empties", "partials", "skipped", "mode", "started_at", "elapsed_s", "sources",
+                  "steps", "contents", "written_keys", "not_written_keys", "popped_keys", "cleared", "untouched")
+        _fake = SimpleNamespace(**{_n: getattr(_rep, _n) for _n in _names})
+        _at = _run(tmp_path, {**_LOADED, P.SS_REFRESH_REPORT: _fake})
+        assert not _at.exception, _at.exception
+        _evs = list(_events(_at.main))
+        _idx = _anchor_index(_evs)
+        assert not [e for e in _evs[_idx["更新鈕"] + 1: _idx["結論標題"]] if e[2] is None]
+        _below = [e for e in _evs[_idx["結論句"] + 1: _idx["tile位階"]] if e[0] == "Expander" and e[2] is None]
+        assert _below and "上一次更新的結果" in _below[0][1]
+
+    def test_clean_report_that_raises_while_rendering_moves_below_the_conclusion(self, tmp_path, monkeypatch):
+        def _boom(report):
+            st_ = __import__("streamlit")
+            st_.caption("畫到一半的內容")
+            raise RuntimeError("渲染壞")
+        monkeypatch.setattr(P, "_render_refresh_report", _boom)
+        _at = _run(tmp_path, {**_LOADED, P.SS_REFRESH_REPORT: _report()})
+        assert not _at.exception, _at.exception
+        _evs, _idx, _between = self._between_and_after(_at)
+        assert not _between, _between                                     # 半份內容已清掉
+        # 結論下方由 `_render_report_guarded` 再畫一次：夾具的「半份內容」（同一次呼叫）＋紅字，緊接結論句
+        _next2 = _evs[_idx["結論句"] + 1: _idx["結論句"] + 3]
+        assert [e[1] for e in _next2][0] == "畫到一半的內容"
+        assert _next2[1][0] == "Error" and _next2[1][1].startswith("上一次更新的報告畫不出來") and "渲染壞" in _next2[1][1]
+        assert sum(1 for e in _evs if e[1] == "畫到一半的內容") == 1           # CTA 區那半份已清掉
+
+
 class TestC1Structure:
     def test_c1_2_conclusion_sentence_is_identical_to_pre_p4(self):
         """C1-2：結論句與標題逐字不變 —— 組句的 `try` 區塊（含輸入 `regime_clause`／`danger_clause` 與紅字路徑）
@@ -319,7 +386,10 @@ class TestC1Structure:
     @pytest.mark.parametrize("bad", (
         "font-size:0", "font-size:0.1rem", "position:absolute", "clip:rect(0 0 0 0)", "transform:scale(0)",
         "color:transparent", "left:-9999px", "display:none", "visibility:hidden", "height:0", "opacity:0",
-        "overflow:hidden", "max-height:0", "margin-left:-9999px", "clip-path:inset(50%)", "text-indent:-9999px"))
+        "overflow:hidden", "max-height:0", "margin-left:-9999px", "clip-path:inset(50%)", "text-indent:-9999px",
+        # QA 第二輪
+        "margin-left:-.5rem", "padding:calc(0px - 9999px)", "margin-top:calc(100vh)", "gap:99rem", "padding:500px",
+        "padding-top:3rem", "margin:-(1rem)"))
     def test_c1_5_whitelist_rejects_hiding_tricks(self, bad):
         _evil = B.P4M_LAYOUT_CSS.replace("gap:0.5rem !important;", f"gap:0.5rem !important;{bad} !important;", 1)
         assert _evil != B.P4M_LAYOUT_CSS
@@ -341,6 +411,11 @@ _CSS_ALLOWED = frozenset({
     "flex", "flex-wrap", "width", "min-width", "overflow-wrap", "word-break", "font-size"})
 #: 字級下限（rem）：再小就等於藏字。
 _CSS_FONT_MIN_REM = 0.875
+#: 唯一允許的 calc（手機 2＋1 兩欄寬）。
+_CSS_ALLOWED_CALC = "calc(50% - 0.25rem)"
+#: 間距（padding／margin／gap）上限：再大就等於把內容推出畫面。
+_CSS_SPACE_MAX_REM = 2.0
+_CSS_SPACE_MAX_PX = 32.0
 
 
 def _assert_layout_css_only_lays_out(css: str) -> None:
@@ -355,7 +430,14 @@ def _assert_layout_css_only_lays_out(css: str) -> None:
             _prop, _, _val = _decl.partition(":")
             _prop, _val = _prop.strip().lower(), _val.replace("!important", "").strip().lower()
             assert _prop in _CSS_ALLOWED, f"不在白名單的 CSS 屬性：{_decl!r}"
-            assert re.search(r"(^|[\s(,])-\d", _val) is None, f"負值（可能把內容推出畫面）：{_decl!r}"
+            # QA 第二輪：唯一允許的 calc 是 `calc(50% - 0.25rem)`；其餘任何 calc、任何負號（含 `-.5`、`-(`）一律紅。
+            _rest = _val.replace(_CSS_ALLOWED_CALC, "")
+            assert "calc(" not in _rest, f"不在白名單的 calc：{_decl!r}"
+            assert "-" not in _rest.replace("break-word", "").replace("-n+2", ""), f"負值（可能把內容推出畫面）：{_decl!r}"
+            if _prop.startswith(("padding", "margin")) or _prop == "gap":
+                for _num, _unit in re.findall(r"([0-9.]+)(rem|px|em)?", _val):
+                    _limit = {"rem": _CSS_SPACE_MAX_REM, "em": _CSS_SPACE_MAX_REM, "px": _CSS_SPACE_MAX_PX}.get(_unit, 0.0)
+                    assert float(_num) <= _limit, f"間距超過上限（{_CSS_SPACE_MAX_REM}rem／{_CSS_SPACE_MAX_PX}px）：{_decl!r}"
             for _w in ("transparent", "hidden", "none", "0px)"):
                 assert _w not in _val, _decl
             if _prop == "font-size":
@@ -617,9 +699,9 @@ class TestC8:
         _clear = B.alerts_bar_line(self._tile(UI_LIVE, value="門檻層與急變層本輪皆無異常"), {"items": []}, None)
         assert _clear[0] == "item" and _clear[1].endswith(B.ALERTS_NO_SOURCE)      # 沒有可列來源 ⇒ 同一行明寫
         _deg = B.alerts_bar_line(self._tile(UI_DEGRADED, note=_n("今日關鍵　已列出異常，但**本列僅含急變層**")),
-                                 {"items": [{"text": "x"}, {"text": "y"}], "n_red": 1, "n_yellow": 1}, None)
-        # QA 修正輪：degraded 帶上既有的紅／黃計數（格式同 live 態 value「N 紅 · M 黃」）
-        assert _deg == ("item", "**⚡ 需要處理**　今日關鍵　已列出異常，但本列僅含急變層　1 紅 · 1 黃")
+                                 {"items": [{"text": "x"}, {"text": "y"}, {"text": "z"}], "n_red": 2, "n_yellow": 1}, None)
+        # QA 修正輪：degraded 帶上既有的紅／黃計數（格式同 live 態 value「N 紅 · M 黃」）；QA 第二輪：紅黃數不相等（對調必紅）
+        assert _deg == ("item", "**⚡ 需要處理**　今日關鍵　已列出異常，但本列僅含急變層　2 紅 · 1 黃")
         _cold = B.alerts_bar_line(self._tile(UI_IDLE, note=_n("今日關鍵　尚未載入 —— **未評估 ≠ 無異常**")), None, None)
         assert _cold[0] == "grey" and "未評估 ≠ 無異常" in _cold[1] and B.ALERTS_NO_SOURCE in _cold[1]
         _empty = B.alerts_bar_line(self._tile(UI_EMPTY, note=_n("今日關鍵　**門檻掃描尚未完成**")), {"items": []}, None)
