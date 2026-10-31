@@ -195,3 +195,13 @@ M1 結論移回 tile 後（C1-1）／M2 退化句刪「不代表安全」（C6-3
 - 手機實量與位置字串盤點：見線框 §10.7.3。
 - 下沉／位置清單補一列：更新報告（含真錯誤）——有真錯誤時位置由「CTA 下方」改為「今日結論正下方」（DEC-118 D1；只移位、未收合真錯誤）。
 - 測試：floor 1.56.0 venv 市場頁 4 檔＋Phase 2 golden AppTest 321 passed；Fast／slow 全量：**Fast 35737 passed、46 skipped、0 failed；slow 183 passed、5 skipped、0 failed**；鏈守衛（p4／uim／nav1／xvext）＋z60＋floor 相容另跑綠。
+
+## 九、QA 第二輪（2026-10-30；append-only；兩組獨立 QA 無 BLOCKER）
+
+- **DEC-118 送審題幹附錄**已補（AI 總管送審原文逐字）；Gate §8 條件② 加但書（partial 態核心狀態列可被真錯誤推出第一屏、今日結論仍須在第一屏且真錯誤緊接；report 態 🔍 標題列約 36～37px 超出為接受邊界）；線框 §10.7.3／§10.7.4 改引附錄。
+- **Z fallback**：非現行報告型別、判斷拋例外、原位渲染拋例外（佔位清掉半份內容）⇒ 一律移到今日結論下方。
+- **位置字串**：`WATER_REPORT_DISCLOSURE` 改用 X3／X10 既有片段「頁首更新鈕下方的「上一次更新的結果」」（非客戶原句、無逐字守衛）；`REFRESH_SPEED_HINT`（page_today 常數）不改，登記已知字面偏差 `P1R-P4-SPEED-HINT-HEADER-WORD`（P2）。
+- **下沉／移位清單補列**：`WATER_REPORT_DISCLOSURE` 位置詞改寫（見上）。
+- **新增 mutation（皆由語意測試轉紅，排除還原鏈 AST 測試後）**：M31 Z 判斷拿掉 empties → `TestD1Fallbacks::test_empties_only_report_goes_below_the_conclusion`；M32 非現行型別不視為真錯誤 → `test_non_current_report_type_is_treated_as_true_error_even_if_it_renders`；M33 原位渲染拋錯不清半份、M34 不移到結論下 → `test_clean_report_that_raises_while_rendering_moves_below_the_conclusion`；M35 degraded 紅黃數對調 → `test_c8_c_bar_line_states`；M36 CSS `-.5rem`、M37 `calc(0px - 9999px)`、M38 `padding-top:40rem` → `test_c1_5_layout_css_declarations_are_whitelisted`。
+- **新發現（登記，不動）**：送審題 1 選項 A 做法欄寫「第一屏維持『結論＋位階｜水位＋風險卡』」，實量手機 loaded 風險卡只露上半；施工依 Gate §8 條件 → BACKLOG `P1R-P4-RISK-TILE-FIRST-SCREEN`（P2，P4-3 Gate 一併呈現）。
+- **測試**：鏈守衛＋z60＋讀治理文件測試（p02／p04 v2 cards）＋floor 相容 3042 passed；floor 1.56.0 venv 市場頁 4 檔 263 passed；Fast／slow 全量：**Fast 35748 passed、46 skipped、0 failed；slow 183 passed、5 skipped、0 failed**。
