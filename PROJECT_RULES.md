@@ -938,6 +938,7 @@ Scope Inflation Guard
 - 每個 UI PR 至少附 **desktop＋mobile 390px** 實際截圖，對核准 blueprint 檢查；**CI／QA／tests／mutation 全綠 ≠ UI Stage complete**；明顯偏離＝Visual Fidelity FAIL；第一屏三層答不出＝FAIL（客戶原文）。
 - **DoD 修訂**：UI Stage 完成＝**CI 綠＋Visual Fidelity PASS**（第 7 節 2026-10-29 補註）。
 - 判定者：獨立 QA 組；AI 總管複驗（第 8 節；實作者不得自己驗收自己）。PR 描述須含「Visual Fidelity」段（`.github/PULL_REQUEST_TEMPLATE.md`）。
+- 📌 **2026-10-31 補註（append-only；上文一字未改；有意識的更新，不是漏刪；決策者 **客戶**（DEC-119））**：📊 市場頁兩項 Gate 例外——(1) 手機 Primary 圖高維持約 220px（契約 Q3「mobile ≤140px」內部建議值的明確例外，只限 📊 市場頁圖 A；「不要再為了 140px 壓縮可讀性」），且 DEC-117 Q4「保留正式原生圖」澄清為「保留正式完整主圖的資料與視覺語意」、**不是把 implementation 綁死 `st.line_chart`**（允許為 mobile readability 改用 Streamlit 可承載的自訂圖表元件；⛔ sparkline／mini、⛔ 正規化／改公式／改趨勢定義）；(2) 桌機全頁高約 blueprint 2.02× 登記為客戶接受之已知輕微偏差（⛔ 不得因此展開頁尾結構重構）。登記於 `docs/governance/UI_VISUAL_FIDELITY_GATE.md` §8。他頁／他圖不適用。
 - 屬版面設計變更者仍走 `CLAUDE.md` §-1.5.D v3 §03-2 ① 草稿先行；本 Gate 是內部品質閘門，不是客戶 Gate。
 
 ### 24.3 執行順序與 Scope Guard
