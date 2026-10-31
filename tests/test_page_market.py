@@ -507,8 +507,12 @@ def test_page_mounts_clean(tmp_path):
     _cap = [_c.value for _c in _at.caption]
     assert "風險上限：獨立顯示待 C2b＋RC-VISIBILITY Gate" in _cap
     assert "**⬜ 尚未核准／無法判定**" in _md
+    # 📌 P4-2（客戶 DEC-117 Q3=A／Q4=P-B；有意識的修改，⛔ 不是降強度）：兩句趨勢結論由外露改下沉到圖 A／圖 B 摺疊「為什麼」
+    #   （逐字；冷啟動兩張圖都有），外露層改由 header 的「⬜ 尚未定義」護欄 chip 承載（A、B 各一顆）。原斷言（句子在頁上）照守，
+    #   並加嚴：外露層也必須各有一顆 chip。
     for _t in ("台股趨勢結論：⬜ 尚未定義", "國際趨勢結論：⬜ 尚未定義"):
-        assert _t in _md
+        assert _t in _joined
+    assert _joined.count('data-kind="not_defined">⬜ 尚未定義</span>') == 2
     # 結論句
     assert any(_m.startswith("市場位階：") and "；台股趨勢：尚未定義；" in _m for _m in _md)
     # ⛔ 三欄摘要（今天頁的「位階／動能／風險」那一段）

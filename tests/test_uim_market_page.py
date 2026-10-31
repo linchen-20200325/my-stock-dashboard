@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ast
 import pathlib
+import re
 
 import pandas as pd
 import pytest
@@ -186,7 +187,8 @@ def test_loaded_hero_items_match_panel_rows(tmp_path):
     _full = [t for t in _texts(_at, outside_expanders=False) if t[:1] in "①②③"]      # 摺疊內整句
     assert 1 <= len(_items) <= 3 and len(_full) == len(_items)
     _panel = next(t for t in _top if t.startswith("| 風險桶（每桶一項）"))
-    _rows = {ln.split(" | ")[0].strip("| "): ln.split(" | ")[1] for ln in _panel.splitlines()[2:]}
+    # 📌 P4-2（線框 P-16；有意識的修改，⛔ 不是降強度）：圖 D 表格三欄→兩欄（桶／方向；「是否惡化」改 header 護欄 chip 寫一次）。
+    _rows = {ln.strip("| ").split(" | ")[0]: ln.strip("| ").split(" | ")[1] for ln in _panel.splitlines()[2:]}
     for _it, _f in zip(_items, _full):
         _lamp = _it.split("：", 1)[1].split("　", 1)[0]
         _dir = _it.rsplit("　", 1)[1]
@@ -209,7 +211,9 @@ def _view(**kw):
     return S.TwiiTrendView(**_base)
 
 
-_B_CHARTS = 3      # _LOADED 的 cl_data['intl'] 有 3 個系列（圖 B 預設直接畫，每系列一張）
+#: 📌 P4-2（客戶 DEC-117 Q4=P-B；有意識的修改，⛔ 不是降強度）：圖 B 由「每系列一張原生折線圖」改為 small multiples 一組
+#:（行內 svg，不是原生圖元素 ⇒ `_n_charts` 不再計入）。原生折線圖只剩 Primary（圖 A）**一張**。
+_PRIMARY_CHARTS = 1
 
 
 def test_chart_a_draws_by_default_when_loaded_and_never_reads_when_not_loaded(tmp_path, monkeypatch):
@@ -226,10 +230,15 @@ def test_chart_a_draws_by_default_when_loaded_and_never_reads_when_not_loaded(tm
     _at = _run(tmp_path, _LOADED)
     assert not _at.exception, _at.exception
     assert _calls == [B.TWII_CHART_TRADING_DAYS]
-    assert _n_charts(_at) == 1 + _B_CHARTS
-    assert any(t == "近 3 日，資料至 2026-10-23　·　" + S.TWII_SOURCE_TEXT for t in _texts(_at))
-    assert "**均線為參考，不等於正式台股趨勢判斷。**" in _texts(_at, outside_expanders=True)
-    assert "台股趨勢結論：⬜ 尚未定義" in _texts(_at, outside_expanders=True)
+    assert _n_charts(_at) == _PRIMARY_CHARTS
+    # 來源 caption 與趨勢結論句下沉到圖 A 摺疊（只下沉，逐字）；兩條護欄各自獨立成 header chip（外露，D10(a)）
+    _inner = _expanders(_at.main)[B.FOLD_LABEL]
+    assert any(k == "Caption" and v == "近 3 日，資料至 2026-10-23　·　" + S.TWII_SOURCE_TEXT for k, v in _inner)
+    assert any(k == "Markdown" and "台股趨勢結論：⬜ 尚未定義" in v for k, v in _inner)
+    _head = next(t for t in _texts(_at, outside_expanders=True) if t.startswith('<div class="cp-chart-header"><div class="cp-ch-title">圖A'))
+    assert f'data-kind="guard_text">{B.CHART_A_MA_DISCLAIMER}</span>' in _head
+    assert 'data-kind="not_defined">⬜ 尚未定義</span>' in _head
+    assert B.CHART_A_SAY in _head
 
 
 @pytest.mark.parametrize("view, red, grey_prefix", (
@@ -243,14 +252,17 @@ def test_chart_a_grey_for_unreadable_red_for_exception(tmp_path, monkeypatch, vi
     assert bool(_at.error) is red
     if grey_prefix:
         assert any(t.startswith(grey_prefix) for t in _texts(_at, kinds=("Caption",)))
-    assert _n_charts(_at) == _B_CHARTS            # 圖 A 沒畫；圖 B 照畫
+    assert _n_charts(_at) == 0            # 圖 A 沒畫（圖 B 本來就不是原生圖元素）
 
 
 def test_chart_a_stale_cache_is_flagged(tmp_path, monkeypatch):
     monkeypatch.setattr(S, "get_twii_trend_view", lambda n: _view(is_stale=True, stale_reason="落後 4 個交易日"))
     _at = _run(tmp_path, _LOADED)
     assert any("已過期" in w.value and "落後 4 個交易日" in w.value for w in _at.warning)
-    assert _n_charts(_at) == 1 + _B_CHARTS                                   # 照畫（不擋資料），但有旗標
+    assert _n_charts(_at) == _PRIMARY_CHARTS                               # 照畫（不擋資料），但有旗標
+    # 過期旗標除了摺疊「限制」內的原句，header 還有琥珀 chip（不塗紅；紅只給 failed）
+    assert any('data-kind="stale"' in t and "cp-t-amber" in t for t in _texts(_at, outside_expanders=True))
+    assert not _at.error
 
 
 def test_chart_a_unknown_freshness_is_grey_not_assumed_fresh(tmp_path, monkeypatch):
@@ -269,17 +281,23 @@ def test_chart_a_missing_ma_is_listed_not_drawn_as_zero(tmp_path, monkeypatch):
 # ══════════════════════════════════════════════════════════════════
 # 圖 B
 # ══════════════════════════════════════════════════════════════════
-def test_chart_b_groups_and_one_chart_per_series_by_default(tmp_path, monkeypatch):
-    monkeypatch.setattr(S, "get_twii_trend_view", lambda n: S.TwiiTrendView(ok=False, error="x"))   # 圖 A 不畫，單獨數圖 B
+def test_chart_b_is_one_small_multiples_group_with_five_cells(tmp_path, monkeypatch):
+    """📌 P4-2（有意識的修改，⛔ 不是降強度）：原「每系列一張原生圖＋分組小標＋名稱·近 N 日」→ small multiples 一組 5 格；
+    分組小標、每系列「名稱　·　近 N 日，資料至…」、趨勢結論句下沉到摺疊「來源」（逐字）。"""
+    monkeypatch.setattr(S, "get_twii_trend_view", lambda n: S.TwiiTrendView(ok=False, error="x"))   # 圖 A 不畫，單獨看圖 B
     _at = _run(tmp_path, _LOADED)
     assert not _at.exception, _at.exception
-    assert _n_charts(_at) == 3                                   # DJI／10Y／DXY；IXIC／SOX 本輪沒有
-    _md = _texts(_at, kinds=("Markdown",))
+    assert _n_charts(_at) == 0                                   # 不再有原生圖；5 格是行內 svg
+    _grid = next(t for t in _texts(_at, outside_expanders=True) if t.startswith('<div class="cp-sm '))
+    assert _grid.count('class="cp-sm-cell"') == 5               # DJI／IXIC／SOX／10Y／DXY（固定順序）
+    assert _grid.count("<svg") == 3                              # 本輪有資料的 DJI／10Y／DXY；IXIC／SOX 本輪沒有
+    assert _grid.count("⬜ 本輪沒有這個系列") == 2
+    _inner = _expanders(_at.main)[B.FOLD_LABEL]
+    _md = [v for k, v in _inner if k == "Markdown"]
     for _g in ("**海外市場**", "**利率**", "**美元**"):
         assert _g in _md
     assert "道瓊工業 DJI　·　近 3 日，資料至 2026-10-23" in _md
-    assert "國際趨勢結論：⬜ 尚未定義" in _md
-    assert "⬜ 本輪沒有這個系列" in _texts(_at, kinds=("Caption",))
+    assert any("國際趨勢結論：⬜ 尚未定義" in v for v in _md)
 
 
 def test_chart_b_not_loaded_is_grey(tmp_path, monkeypatch):
@@ -322,13 +340,21 @@ def test_alerts_block_relays_allocation_conflicts_verbatim(tmp_path, monkeypatch
 # 圖 C
 # ══════════════════════════════════════════════════════════════════
 def test_chart_c_block_is_text_only_no_numbers_no_charts(tmp_path):
+    """📌 P4-2（客戶 DEC-117 Q8a／D6=B；有意識的修改，⛔ 不是降強度）：圖 C 外露＝header（標題＋「研究框架，未啟用」chip）＋
+    `CHART_C_EMPTY` 一行；`CHART_C_SAY`／`CHART_C_BASIS` 下沉摺疊。整塊（含摺疊）仍零數字、零圖形、零按鈕。"""
     _at = _run(tmp_path, _LOADED)
     _flat_all = list(_flat(_at.main))
-    _i = next(i for i, (k, v, e) in enumerate(_flat_all) if isinstance(v, str) and v.startswith("**圖C"))
-    _j = next(i for i, (k, v, e) in enumerate(_flat_all) if isinstance(v, str) and v.startswith("**圖D"))
-    _block = [v for k, v, e in _flat_all[_i:_j] if isinstance(v, str)]
-    assert len(_block) == 4
-    assert not any(c.isdigit() or "%" in c for t in _block for c in t)
+    _i = next(i for i, (k, v, e) in enumerate(_flat_all) if isinstance(v, str) and v.startswith(
+        '<div class="cp-chart-header"><div class="cp-ch-title">圖C'))
+    _j = next(i for i, (k, v, e) in enumerate(_flat_all) if isinstance(v, str) and v == "以下為可展開區塊（預設收合）。")
+    _block = [(k, v, e) for k, v, e in _flat_all[_i:_j] if isinstance(v, str)]
+    _outside = [v for k, v, e in _block if not e]
+    assert len(_outside) == 2 and _outside[1] == B.CHART_C_EMPTY                  # header ＋ 一行
+    assert B.CHART_C_SAY not in _outside and B.CHART_C_BASIS not in _outside
+    _inside = [v for k, v, e in _block if e]
+    assert B.CHART_C_SAY in _inside and B.CHART_C_BASIS in _inside
+    _visible = "".join(re.sub(r"<[^>]+>", "", v) for _, v, _ in _block)           # 去標籤（class 名無數字，保險）
+    assert not any(c.isdigit() or "%" in c for c in _visible)
     assert not [k for k, v, e in _flat_all[_i:_j] if k in ("Dataframe", "Table", "UnknownElement", "Button", "Checkbox")]
 
 
@@ -408,8 +434,8 @@ def test_conclusion_sentence_and_expanders_are_identical_to_pre_uim(tmp_path):
     assert _en[_lamp][1:] == _eo[_lamp]
     _old_top = {v for k, v, e in _flat(_old.main) if k == "Markdown" and not e}
     assert _en[_lamp][0][0] == "Markdown" and _en[_lamp][0][1] in _old_top
-    # 新增的展開區只有各區塊的「🔍 查看依據」與 P4-1 的「更新選項」（以及原本就有的那些）
-    assert set(_en) - set(_eo) == {B.BASIS_EXPANDER_LABEL, B.UPDATE_OPTIONS_LABEL}
+    # 新增的展開區只有各區塊的「🔍 查看依據」、P4-1 的「更新選項」與 P4-2 的圖表摺疊（以及原本就有的那些）
+    assert set(_en) - set(_eo) == {B.BASIS_EXPANDER_LABEL, B.UPDATE_OPTIONS_LABEL, B.FOLD_LABEL}
 
 
 def test_verdict_cards_are_all_still_drawn(tmp_path, monkeypatch):

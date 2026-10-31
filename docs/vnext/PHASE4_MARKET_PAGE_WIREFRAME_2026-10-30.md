@@ -739,3 +739,29 @@ y~475┌ 市場位階 ─────┐┌ 建議總持股水位 ──┐     
 - **位置字串**：`WATER_REPORT_DISCLOSURE` 位置詞改用 X3／X10 既有片段「頁首更新鈕下方的「上一次更新的結果」」（本句非客戶原句；無逐字守衛；其餘字逐字未改）；`REFRESH_SPEED_HINT`（`page_today` 常數「…並在頁首留下這一輪的結果」）**不改**，登記為已知字面偏差 BACKLOG `P1R-P4-SPEED-HINT-HEADER-WORD`（P2）。
 - **CSS 白名單加嚴**：唯一允許的 calc＝`calc(50% - 0.25rem)`；其餘 calc、任何負號（含 `-.5`、`-(`）一律紅；padding／margin／gap ≤2rem／32px。M36～M38 必紅。
 - **degraded 夾具**改 2 紅 1 黃（對調 M35 必紅）。`page_market.py` 模組 docstring 過期敘述已加 📌 更正。還原鏈以基底 `7484c57b` 重產。
+
+### 10.8 P4-2（圖區）施工狀態（2026-10-31；append-only；實作組單組產出，**未經獨立 QA**；中間批，Visual Fidelity Gate **未判**）
+
+> 📌 有意識的更新，不是漏刪；決策者 AI 總管（事實更新：P4-2 實作完成於分支 `ccr-c8ef17de-9tw7yt`，基底＝P4-1 main `4c1546b5`，未 push、未開 PR）。§10.1～§10.7 原文一字未改。
+> 量測：`docs/vnext/phase4_market/p4_2/`（`measure_p4_2.js`＋`_measure_p4_2.json`＋`_measure_p4_2_floor156.json`＋截圖 16 張＋`compare_other_pages.js`／`_compare_other_pages.json`＋`PR_NOTES.md`）；Streamlit 1.59.2 harness 夾具；floor 1.56.0 另以獨立 venv 量一份與跑 AppTest；**真資料、手機實機、1.57～1.58 未驗**。
+> 狀態字同 §10.7：✅＝守衛已落地且綠（含 mutation 必紅）；📏＝屬 Gate 量測，已實量，正式判定在 P4-3；⏭＝不屬 P4-2。
+
+| # | 狀態 | 守衛／證據（`tests/test_p4_2_market_charts.py`，下列省略檔名） |
+|---|---|---|
+| C3-1 | ✅ | `TestC31::test_c3_1_each_chart_has_exactly_one_four_section_fold`（cold／loaded；四張圖各恰一個、四段固定順序、不留白）、`test_c3_1_fold_label_and_sections_are_the_customer_words`、`test_c3_1_where_points_at_the_real_l2_expander_of_each_chart`、`test_c3_1_no_chart_uses_the_tile_basis_label`、`test_c3_1_six_field_basis_is_split_losslessly_into_four_sections`；圖 C 兩句在指定段逐字＝`TestC8a::test_c8_a_say_is_verbatim_in_why_and_basis_verbatim_in_source`；`tests/test_p4_1_market_first_screen.py::TestC3Basis::test_c3_2_page_basis_expanders_count_and_no_second_label`（tile／⚡ 4 個「🔍 查看依據」＋圖 4 個四段，互不借用）；M10／M11／M16 |
+| C4-1 | ✅（📏） | `TestC41`：原生 vega 圖含指數＋3 條 MA 水平線（ma200 歷史不足不畫、不補 0）、y 軸 `axis` 未被隱藏、圖例保留、圖高 220＝`SLOT_HEIGHT_MAX_PX`、冷啟動槽同名高度、`st.line_chart` 只帶 `height`、版面 CSS 不選圖內部；`TestZone`（Primary 恰 1）；實量 y 軸刻度 14、圖例 5 項、圖高 220（桌機／手機）；M4／M5／M13／M14／M15／M22 |
+| C4-2 | ✅ | `TestC42C43::test_c4_2_five_cells_in_fixed_order_even_when_series_are_missing`、`…_all_five_present_draws_five_sparklines`、`…_cell_count_is_the_five_intl_groups_series_and_other_series_are_not_cells`、`…_cold_collapses_to_one_line_and_no_grid`、`…_placeholder_wording_for_empty_and_too_short_series`、`…_non_finite_close_becomes_placeholder_not_a_fake_line`；`TestZone::test_chart_zone_contains_no_widgets_and_no_l2_expanders`＋`test_c4_2_no_switcher_widget_is_called_by_the_market_page`（AST）；M1／M2／M3／M24 |
+| C4-3 | ✅ | `test_c4_3_small_multiples_show_no_numbers`（渲染後 HTML 去 svg、去系列名後 0 數字）、`…_cell_with_a_value_text_is_rejected_by_the_component`、`…_missing_verbatim_contract`、`…_svg_is_mounted_by_markdown_never_st_html`（AST）、`…_every_series_name_fits_the_8_char_cap_…`；DOM 實量：5 格 0 個含數字的可見文字、0 個 svg `<text>`；M1／M12／M13／M18 |
+| C4-4 | ✅ | `TestC44`（L2「台股盤勢／國際市場（原始資料…）」展開區標題與內容未動）＋`tests/test_uim_market_page.py::test_conclusion_sentence_and_expanders_are_identical_to_pre_uim`（L2 逐項相同） |
+| C4-5 | ✅ | `TestC45`（冷／熱：圖 A、圖 B header 各一顆外露 `⬜ 尚未定義`；`CHART_A_MA_DISCLAIMER` 獨立成 chip；客戶原句逐字；零新公式 AST）；`tests/test_page_market.py::test_page_mounts_clean`（改寫等強＋加嚴）；M6／M14／M17 |
+| C4-6 | ✅（📏） | `TestC46`、`TestC41::test_c4_1_primary_cold_and_unreadable_keep_a_slot_not_a_missing_chart`；實量 cold：Primary 同高 220 槽、圖 B／D 容器 203／241（桌機）、228／267（手機，一行灰字＋摺疊入口）；cold 全頁高桌機 2409→2573（+164，D6=B 設計代價） |
+| C8-a | ✅ | `TestC8a`（外露＝header＋`CHART_C_EMPTY` 一行；子字串層級不夾帶客戶原句；整塊零數字零圖形零按鈕）；M7／M11／M19／M21 |
+| C8-0 | ✅ | `TestC80`（舊外露的 15 句圖區字串全部仍在新頁；圖 B 分組／每系列窗口／來源 caption、圖 A 來源／缺均線／過期警告／新鮮度未判定在摺疊；錯誤字串 scrub）＋圖 B 冷啟動結論句另列一行的去重例外；M20 |
+| C6-5（圖 D） | ✅ | `TestChartD::test_c6_5_unevaluated_is_not_safe_stays_outside_the_fold_in_chart_d`（外露層、比渲染後文字、摺疊內不得出現）、`…_chart_d_header_says_worsening_not_defined_once_and_table_is_two_columns`、`…_table_rows_are_the_first_two_columns_of_risk_panel_rows`、`…_cold_and_failed_paths_are_kept`；M8 |
+| C1-7／C1-8 | ✅／📏 | P4-1 的 `test_c1_7_primary_follows_ai_line_with_nothing_in_between` 仍綠；實量 AI 行→Primary 間距 0px；C1-8：桌機 Primary 頂端 loaded y760（第一屏內、圖本體約 y850～1070，只露上緣）、手機 y1167（Q7 mobile exception）——正式判定在 P4-3 |
+| N4 | ✅ | `tests/test_p4_revert_chain.py`：以**同一基底 `7484c57b`**（sha `59c9801b…` 不變）重產 4 組 pair；uim／nav1／xvext 與其餘還原鏈全綠 |
+| N5～N7 | ✅（自查） | `src/services|compute|data`、`shared/`、`app.py`、`page_today.py`、`requirements.txt`、`markup.py` 0 diff；`test_c3_layering_guard`、`test_batch_z60`、`test_views_no_unverified_universal_claims` 綠；`compact.py` 只加性（既有 287 項＋golden 不變；`TestBoundaries` 改為「唯一 production caller＝`_market_blocks.py`」，強度加嚴） |
+
+- **24 項 mutation 全轉紅**（M1～M24，見 PR_NOTES 5.3；M19 初版綠燈暴露守衛漏洞，已補強後轉紅）。
+- **其他頁與 legacy**：🎯 標的、💼 持股、`?legacy=1`（市場／標的）× 1440／390 共 8 組與 P4-2 前基底（`4c1546b5`）逐字相同；👤 我的頁 harness 不支援未比對。
+- **登記（不改核准結構）**：圖 D 手機容器 723px（表格兩欄、方向欄換行）、手機圖例單行被裁（P4-1 基底同；`P1R-P4-PRIMARY-LEGEND-MOBILE`）——交 P4-3 Gate。

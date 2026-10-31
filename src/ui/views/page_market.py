@@ -60,6 +60,11 @@
     在任何狀態都沒有外露內容。
   · 今日結論句與標題逐字不改（DEC-081 Q2-1），只改位置。
 
+═══ Phase 4 P4-2（2026-10-30）落地 DEC-117 已核准線框圖區（有意識的修改，⛔ 不是漏刪）═══════════════
+~~圖 A～D 兩欄網格（A｜B、C｜D）~~ → Primary（圖 A，整列寬）緊接 L1 決策區；其後 Secondary 國際小倍數 → 圖 D → 圖 C（整列寬；
+線框 §4.1 順序）。各圖的「▸ 為什麼／來源／限制／去哪補」摺疊在 `_market_blocks`；「去哪補」指向的 L2 展開區標題與下方展開區
+共用同一個字串（本檔算一次）。L2／L3 展開區內容一字未改。
+
 掛載：`app.py::_ia_view_market()` 於側欄「🆕 新版戰情室（試用中）」radio 選到本頁時
 late import 並呼叫 `render_page_market()`；沒被選到時本檔連 import 都不發生。
 
@@ -714,17 +719,14 @@ def render_page_market() -> None:
         # ⑤ AI／資料狀態一行。之後緊接圖區（Q7：中間⛔ 插任何 L2／L3 長內容）。
         blocks.render_ai_status_line()
 
-    # 圖 A～D（兩欄網格；窄螢幕由 Streamlit 自動改一欄，順序同下）。
-    _r1 = st.columns(2)
-    with _r1[0]:
-        blocks.render_chart_a(_session)
-    with _r1[1]:
-        blocks.render_chart_b(_session, source_note=FRAME_SOURCE_NOTE["intl"])
-    _r2 = st.columns(2)
-    with _r2[0]:
-        blocks.render_chart_c()
-    with _r2[1]:
-        blocks.render_chart_d(_risks)
+    # 圖區（P4-2，DEC-117 Q4=P-B）：Primary（圖 A）緊接 L1 決策區、整列寬；其後 Secondary 依線框 §4.1 順序
+    #   國際小倍數 → 圖 D → 圖 C（各自整列寬）。各圖摺疊「去哪補」指向的 L2 展開區標題在這裡算一次、與下方展開區共用同一個字串。
+    _tw_raw_label = f"台股盤勢（{RAW_DATA_SUFFIX}）"
+    _intl_raw_label = f"國際市場（{RAW_DATA_SUFFIX}）"
+    blocks.render_chart_a(_session, where_label=_tw_raw_label)
+    blocks.render_chart_b(_session, source_note=FRAME_SOURCE_NOTE["intl"], where_label=_intl_raw_label)
+    blocks.render_chart_d(_risks)
+    blocks.render_chart_c(where_label=X9_TITLE)
 
     # ── 層 2／3：可展開區（預設收合；重的部分勾選才畫）────────────────
     st.caption("以下為可展開區塊（預設收合）。")
@@ -749,9 +751,9 @@ def render_page_market() -> None:
             _meta = today.BUCKET_META[_b]
             section_header(f"{_meta['emoji']} {_meta['title']}", str(_meta["sub"]))
             today._render_tiles(_tiles_by_bucket.get(_b, ()))
-    with st.expander(f"台股盤勢（{RAW_DATA_SUFFIX}）", expanded=False):
+    with st.expander(_tw_raw_label, expanded=False):
         _render_x5(_session)
-    with st.expander(f"國際市場（{RAW_DATA_SUFFIX}）", expanded=False):
+    with st.expander(_intl_raw_label, expanded=False):
         _render_x6(_session)
     with st.expander("總經／景氣（原始資料）", expanded=False):
         _render_raw_table(raw_rows(_session, X7_FIELDS),

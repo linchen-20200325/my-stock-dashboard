@@ -32,12 +32,23 @@
     原卡標題（含「總經契約」）併入位階 tile 的六欄（`basis_regime`），原卡整張畫在同一摺疊內。
   · Q8c：⚡ 需要處理＝一行 bar（`alerts_bar_line`）＋同一個「🔍 查看依據」摺疊內的完整清單（原卡、衝突提示）。
   · 圖 A～D 本批不動（P4-2）。
+
+═══ Phase 4 P4-2（2026-10-30，客戶 DEC-117 Q4=P-B／Q3=A／Q8a；有意識的修改，⛔ 不是漏刪）═══════════
+圖區改為「Primary（圖 A）→ Secondary（國際小倍數 → 圖 D → 圖 C）」，每張圖＝header（標題→chip→1 句，`compact.chart_header_html`）
+→ 圖或誠實 placeholder → **恰一個**「▸ 為什麼／來源／限制／去哪補」摺疊（`render_chart_fold`；六欄依據依線框 §3.5 分四段，逐字）：
+  · 圖 A：正式原生 `st.line_chart`（指數＋MA 水平參考線＋圖例＋y 軸），高 `PRIMARY_CHART_HEIGHT_PX`；冷啟動／讀不到同高槽（D6=B）；
+    兩條護欄（均線聲明逐字、`⬜ 尚未定義`）各自獨立成 chip（D10(a)），來源 caption 下沉「來源」。
+  · 圖 B：5 格 small multiples（`compact.small_multiples_html`＋`sparkline_svg`，⛔ 數字、⛔ 切換列）；缺系列格＝既有字樣；
+    超過 8 字的兩個系列名用顯示名對映（`INTL_DISPLAY_NAMES`），正式全名在摺疊與 L2。
+  · 圖 D：「是否惡化：⬜ 尚未定義」改成 header 護欄 chip（寫一次），表格兩欄；「N 項未評估（…未評估不等於安全）」外露。
+  · 圖 C：一行（標題＋「研究框架，未啟用」chip＋`CHART_C_EMPTY`）；`CHART_C_SAY`→「為什麼」、`CHART_C_BASIS`→「來源」（Q8a）。
 """
 from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pandas as pd
@@ -60,10 +71,11 @@ from shared import ia_nav
 from shared.market_conclusion import CONCEPT_REGIME, CONCEPT_RISK_CAP, RISK_CAP_PENDING_TEXT
 from shared.secret_scrub import scrub_secrets
 from shared.signal_thresholds import TRADING_DAYS_PER_YEAR
-from shared.ui_state import UI_DEGRADED, UI_FAILED, UI_LIVE
+from shared.ui_state import UI_DEGRADED, UI_EMPTY, UI_FAILED, UI_LIVE
 from src.services import market_twii_view_service as twii_svc
 from src.ui.views import page_today as today
 from src.ui.views._ui_kit import single_submit_form
+from src.ui_v2 import compact as cp
 
 # ══════════════════════════════════════════════════════════════════
 # session key（沿用 page_market 的 `p00m_` 前綴；與既有 gate key 不相撞）
@@ -179,7 +191,9 @@ P4M_LAYOUT_CSS: str = (
     f".st-key-{P4M_L1_KEY} [data-testid=\"stExpander\"] details,"
     f".st-key-{P4M_L1_KEY} [data-testid=\"stExpander\"] details *{{overflow-wrap:anywhere !important;"
     "word-break:break-word !important;min-width:0 !important;}"
-    "@media (max-width: 640px){"
+    # 📌 P4-2（線框 §10 C1-8「桌機 Primary header＋圖上緣在第一屏」；有意識的修改，⛔ 不是漏刪；決策者 AI 總管〔內部自決〕）：
+    #   ~~以下四條 L1 間距／內距／摺疊標題列／結論小標規則只在窄螢幕（@media 內）~~ → 桌機也套用（只排版、⛔ 藏內容）。
+    #   P4-1 時只為手機第一屏壓縮；桌機實量 Primary 標題 y941（第一屏外）⇒ 同一組規則擴到全寬。
     f".st-key-{P4M_L1_KEY},.st-key-{P4M_L1_KEY} [data-testid=\"stVerticalBlock\"]{{gap:0.5rem !important;}}"
     f".st-key-{P4M_L1_KEY} [class*=\"st-key-{P4M_BOX_KEY_PREFIX}\"],"
     f".st-key-{P4M_L1_KEY} [data-testid=\"stForm\"]{{padding:0.5rem 0.625rem !important;}}"
@@ -187,6 +201,7 @@ P4M_LAYOUT_CSS: str = (
     "padding-bottom:0.3rem !important;}"
     f".st-key-{P4M_L1_KEY} h4{{font-size:1rem !important;padding-top:0.25rem !important;"
     "padding-bottom:0.25rem !important;}"
+    "@media (max-width: 640px){"
     f".st-key-{P4M_CORE_TILES_KEY} [data-testid=\"stHorizontalBlock\"]{{flex-wrap:wrap !important;gap:0.5rem !important;}}"
     f".st-key-{P4M_CORE_TILES_KEY} [data-testid=\"stHorizontalBlock\"] > [data-testid=\"stColumn\"]:nth-child(-n+2)"
     "{flex:1 1 calc(50% - 0.25rem) !important;min-width:calc(50% - 0.25rem) !important;"
@@ -750,8 +765,12 @@ def _render_lines(lines: Sequence[tuple[str, str]]) -> None:
 
 def render_layout_css() -> None:
     """P4-1 版面規則（手機 2＋1、L1 決策區窄螢幕間距壓縮）。由 `page_market` 在 L1 決策區之前呼叫一次。
-    ⚠️ 只排版：全部失效時＝Streamlit 預設單欄堆疊與預設間距，⛔ 沒有任何內容靠 CSS 才看得到。"""
-    st.markdown(f"<style>{P4M_LAYOUT_CSS}</style>", unsafe_allow_html=True)
+    ⚠️ 只排版：全部失效時＝Streamlit 預設單欄堆疊與預設間距，⛔ 沒有任何內容靠 CSS 才看得到。
+
+    📌 P4-2（有意識的修改，⛔ 不是漏刪）：同一個 `<style>` 另帶 `compact.compact_css()`（圖區 chip／header／小倍數元件樣式；
+    顏色引用 `page_today._inject_v2_css` 已注入的 `page_css` token）—— ⛔ 多一個 `<style>` 元素（不在圖區前多出一個元素，
+    C1-7「AI 行之後緊接 Primary」）。`compact_css()` 本身不改（Phase 3 golden）。"""
+    st.markdown(f"<style>{P4M_LAYOUT_CSS}\n{cp.compact_css()}</style>", unsafe_allow_html=True)
 
 
 def update_options_note(session: Mapping[str, Any]) -> str:
@@ -916,104 +935,349 @@ def render_alerts_block(*, alerts_tile: Any, alerts: Any, scanned: bool, alerts_
         render_basis(basis_alerts(alerts, scanned, alerts_error, alloc), lead=_full_list)
 
 
-def render_chart_a(session: Mapping[str, Any]) -> None:
-    """圖 A 台股趨勢：指數線＋均線水平參考線。預設直接畫（讀本地 parquet，毫秒級、非外部抓取，故無 gate）。
+# ══════════════════════════════════════════════════════════════════
+# P4-2（客戶 DEC-117 Q4=P-B／Q3=A／Q8a；線框 §10 C3-1／C4-1～C4-6／C8-a／C8-0）圖區
+# ══════════════════════════════════════════════════════════════════
+#: 圖表摺疊入口（客戶 DEC-109 五原文字樣；DEC-117 Q3=A：圖用四段、tile／⚡ 維持「🔍 查看依據」）。每張圖恰一個。
+FOLD_LABEL: str = "▸ 為什麼／來源／限制／去哪補"
+#: 四段（契約 §4：固定四段，不適用寫「—」並說明）。
+FOLD_SECTIONS: tuple[str, ...] = ("為什麼", "來源", "限制", "去哪補")
+#: 六欄 Basis → 四段（線框 §3.5；「去哪補」六欄沒有對應欄，由各圖另給）。
+BASIS_TO_FOLD: Mapping[str, tuple[str, ...]] = {
+    "為什麼": ("rule", "ai"), "來源": ("data_used", "as_of"), "限制": ("missing", "confidence"), "去哪補": ()}
+#: 「去哪補」指向 L2 展開區的句型 —— **既有片段**（`CHART_D_ALL_LAMPS_POINTER`／`DANGER_POINTER_UIM` 的「請展開下方「…」」），
+#: 只換成該圖詳細數值所在的既有展開區標題（由 `page_market` 傳入同一個字串，⛔ 另抄一份）。
+FOLD_WHERE_FMT: str = "請展開下方「{label}」"
+#: 「不適用寫『—』並說明」（契約 §4）的句型 —— 沿用本檔既有「—（…）」寫法（例 `—（本卡本輪有值）`）；說明一律取既有常數。
+FOLD_NOT_APPLICABLE_FMT: str = "—（{why}）"
+#: Primary 圖高（契約 §19 Q3 桌機上限＝`compact.SLOT_HEIGHT_MAX_PX`；冷啟動／讀不到時的槽同高，D6=B）。
+PRIMARY_CHART_HEIGHT_PX: int = cp.SLOT_HEIGHT_MAX_PX
+#: 小倍數 SVG 的 viewBox（寬 300 × 高 64；高＝`compact.SPARK_HEIGHT_MAX_PX`，格寬縮放時等比）。
+SM_SPARK_W: int = 300
+SM_SPARK_H: int = cp.SPARK_HEIGHT_MAX_PX
+#: 缺系列格（既有字樣，線框 Phase 3 §3.7／Phase 4 §10 C4-2 指定逐字沿用）。
+SM_MISSING_ABSENT: str = "⬜ 本輪沒有這個系列"
+SM_MISSING_EMPTY: str = "⬜ 沒有可用收盤"
+#: 線框 F-3：小倍數格名 ≤`compact.SM_NAME_MAX_CHARS`（8）字。**只對映超過上限的兩個系列**（顯示名，⛔ 改 `INTL_GROUPS`／
+#: `INTL_MAP` 的正式名）；簡稱取自已核准線框（Phase 3 §3.7／Phase 4 §4.1）。正式全名在摺疊「來源」與 L2「國際市場」表格。
+INTL_DISPLAY_NAMES: Mapping[str, str] = {"納斯達克 IXIC": "那指 IXIC", "費城半導體 SOX": "費半 SOX"}
+#: 圖區容器 key（DOM 量測與窄螢幕排版用；`.st-key-<key>`）。
+P4M_PRIMARY_KEY: str = "p4m_primary"
+P4M_SECONDARY_KEY_PREFIX: str = "p4m_secondary_"
+_TW_TZ = timezone(timedelta(hours=8))
 
-    未載入（上游一個總經 key 都沒寫過）→ 灰字「⬜ 尚未載入，請按更新」，**不讀快取、不畫（不顯示過期值）**。
-    趨勢結論固定 ⬜ 尚未定義。
+FoldLine = tuple[str, str]   # (tone, text)；tone ∈ md／caption／warning
+
+
+@dataclass(frozen=True)
+class ChartFold:
+    """圖表摺疊的四段內容（每段 ≥1 行；空段 ⇒ `ValueError`：不適用必須寫「—」並說明，⛔ 留白）。"""
+
+    why: tuple[FoldLine, ...]
+    source: tuple[FoldLine, ...]
+    limit: tuple[FoldLine, ...]
+    where: tuple[FoldLine, ...]
+
+    def sections(self) -> tuple[tuple[str, tuple[FoldLine, ...]], ...]:
+        _out = tuple(zip(FOLD_SECTIONS, (self.why, self.source, self.limit, self.where)))
+        for _name, _lines in _out:
+            if not _lines or not all(str(_t).strip() for _, _t in _lines):
+                raise ValueError(f"圖表摺疊「{_name}」不得留白（不適用寫「—」並說明）")
+            for _tone, _ in _lines:
+                if _tone not in ("md", "caption", "warning"):
+                    raise ValueError(f"圖表摺疊行的 tone 不合法：{_tone!r}")
+        return _out
+
+
+def chart_fold(basis: Basis | None, *, why: Sequence[FoldLine] = (), source: Sequence[FoldLine] = (),
+               limit: Sequence[FoldLine] = (), where: Sequence[FoldLine] = ()) -> ChartFold:
+    """六欄 Basis（有的話）依 `BASIS_TO_FOLD` 分到四段（同一格式「- **欄名**：內容」、逐字），再接各段額外行。
+    六欄內容一字不改（資訊守恆：原「🔍 查看依據」的每一欄都在某一段）。"""
+    _extra = {"為什麼": tuple(why), "來源": tuple(source), "限制": tuple(limit), "去哪補": tuple(where)}
+    _rows = dict(zip((_a for _, _a in BASIS_FIELDS), basis_rows(basis))) if basis is not None else {}
+    _sec: dict[str, tuple[FoldLine, ...]] = {}
+    for _name in FOLD_SECTIONS:
+        _attrs = [_a for _a in BASIS_TO_FOLD[_name] if _a in _rows]
+        _md = "\n".join(f"- **{_rows[_a][0]}**：{scrub_secrets(_rows[_a][1])}" for _a in _attrs)
+        _sec[_name] = ((("md", _md),) if _md else ()) + _extra[_name]
+    return ChartFold(why=_sec["為什麼"], source=_sec["來源"], limit=_sec["限制"], where=_sec["去哪補"])
+
+
+def render_chart_fold(fold: ChartFold) -> None:
+    """每張圖**恰一個**摺疊（預設收合）：四段依序「**段名**」＋內容。"""
+    _sections = fold.sections()          # 先驗（留白就紅），再畫
+    with st.expander(FOLD_LABEL, expanded=False):
+        for _name, _lines in _sections:
+            st.markdown(f"**{_name}**")
+            for _tone, _text in _lines:
+                if _tone == "warning":
+                    st.warning(_text, icon="⚠️")
+                elif _tone == "caption":
+                    st.caption(_text)
+                else:
+                    st.markdown(_text)
+
+
+def render_chart_header(*, title: str, chips: Sequence[Any], say: str | None,
+                        say_verbatim: bool = True) -> tuple[Any, ...]:
+    """圖 header（契約 §4：標題 → chip 列 → 1 句；`compact.chart_header_html`）。回傳溢出 chip（交摺疊「來源」）。
+    ⚠️ 走 `st.markdown(unsafe_allow_html=True)`（線框 F-4：`st.html` 會剝行內 svg；header 本身沒有 svg，同一路徑保持一致）。"""
+    _html, _overflow = cp.chart_header_html(title=title, chips=list(chips), say=say,
+                                            say_verbatim=say_verbatim, title_verbatim=True)
+    st.markdown(_html, unsafe_allow_html=True)
+    return _overflow
+
+
+def _overflow_lines(overflow: Sequence[Any]) -> tuple[FoldLine, ...]:
+    return tuple(("caption", str(_c.text)) for _c in overflow)
+
+
+def asof_chip_value(as_of: Any, *, today_date: Any = None) -> str | None:
+    """資料日 → chip 值（契約 §6：`MM/DD`，跨年 `YYYY/MM/DD`）；不是 `YYYY-MM-DD` ⇒ None（不出 chip，⛔ 猜一個日期）。
+    `today_date`（`date`；預設＝台北今天）只用來判斷是否跨年。"""
+    _s = str(as_of or "").strip()[:10]
+    try:
+        _d = datetime.strptime(_s, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    _today = today_date if today_date is not None else datetime.now(_TW_TZ).date()
+    return f"{_d:%m/%d}" if _d.year == _today.year else f"{_d:%Y/%m/%d}"
+
+
+# ── 圖 A（Primary）─────────────────────────────────────────────
+def chart_a_chips(view: twii_svc.TwiiTrendView | None, *, today_date: Any = None) -> list[Any]:
+    """圖 A header chip（DEC-115 D10(a)：兩條護欄各自獨立、來源下沉）：均線聲明（逐字）＋`⬜ 尚未定義`＋（有圖時）資料日、
+    窗口、可讀性（✅ 可讀＝未過期；⚠ 過期；新鮮度未判定＝不給 ✅，原句在摺疊「限制」）。"""
+    _chips: list[Any] = [cp.guard_chip(CHART_A_MA_DISCLAIMER), cp.meta_chip("not_defined")]
+    if view is None or not view.ok:
+        return _chips
+    _asof = asof_chip_value(view.as_of, today_date=today_date)
+    if _asof:
+        _chips.append(cp.meta_chip("asof", _asof))
+    _chips.append(cp.meta_chip("window", f"近 {len(view.close)} 日"))
+    if view.is_stale is True:
+        _chips.append(cp.meta_chip("stale", f"{view.age_days} 天") if view.age_days is not None
+                      else cp.meta_chip("stale"))
+    elif view.is_stale is False:
+        _chips.append(cp.meta_chip("readable"))
+    return _chips
+
+
+def chart_a_fold(view: twii_svc.TwiiTrendView | None, mkt_info: Any, *, requested: bool, where_label: str,
+                 overflow: Sequence[Any] = ()) -> ChartFold:
+    """圖 A 摺疊：原外露的趨勢結論句、來源 caption、均線說明、缺均線清單、過期／新鮮度、趨勢定義說明**全部下沉到這裡**（逐字）。"""
+    _, _bad = ma_reference_values(mkt_info)
+    _source: list[FoldLine] = []
+    _limit: list[FoldLine] = []
+    if view is not None and view.ok:
+        _source.append(("caption", f"近 {len(view.close)} 日，資料至 {view.as_of}　·　{twii_svc.TWII_SOURCE_TEXT}"))
+        if view.is_stale:
+            _limit.append(("warning", f"台股指數歷史快取已過期：{scrub_secrets(view.stale_reason or '原因未提供')}"))
+        elif view.is_stale is None:
+            _limit.append(("caption", "⬜ 台股指數歷史快取的新鮮度未判定"))
+    if not isinstance(mkt_info, Mapping) or not mkt_info:
+        _limit.append(("caption", f"⬜ 均線：{NOT_LOADED}"))
+    elif _bad:
+        _limit.append(("caption", "⬜ 缺少的均線：" + "、".join(f"{_n}：{_w}" for _n, _w in _bad)))
+    _limit += [("caption", CHART_A_MA_NOTE), ("caption", TREND_DEFINITION_NOTE)]
+    _where: list[FoldLine] = [] if requested else [("caption", NOT_LOADED)]
+    _where.append(("caption", FOLD_WHERE_FMT.format(label=where_label)))
+    # 趨勢結論句 `CHART_A_CONCLUSION` 已在六欄「規則／計算結果」內逐字（`basis_chart_a`）⇒ 不再另列一行（同段重複）。
+    return chart_fold(basis_chart_a(view, mkt_info),
+                      source=(*_source, *_overflow_lines(overflow)), limit=_limit, where=_where)
+
+
+def render_chart_a(session: Mapping[str, Any], *, where_label: str) -> None:
+    """圖 A 台股趨勢＝**Primary Visual**（DEC-117 Q4=P-B）：header（標題→chip→客戶原句）→ 正式原生圖（指數＋MA 水平參考線
+    ＋圖例＋y 軸，高 `PRIMARY_CHART_HEIGHT_PX`）→ 恰一個四段摺疊。預設直接畫（讀本地 parquet，毫秒級、非外部抓取，故無 gate）。
+
+    未載入（上游一個總經 key 都沒寫過）→ 同高槽內灰字「⬜ 尚未載入，請按更新」，**不讀快取、不畫（不顯示過期值）**；
+    讀不到＝灰、真例外＝紅（字串逐字沿用，外露在槽內）。趨勢結論固定 `⬜ 尚未定義`（header chip；原句在摺疊「為什麼」）。
     """
-    with st.container(border=True):
-        st.markdown(f"**{CHART_A_TITLE}**")
-        st.markdown(CHART_A_SAY)
+    with st.container(border=True, key=P4M_PRIMARY_KEY):
         _mkt = session.get("mkt_info")
-        _refs, _bad = ma_reference_values(_mkt)
+        _refs, _ = ma_reference_values(_mkt)
         _view = None
+        _slot: list[tuple[str, str]] = []
+        _requested = True
         if not today.upstream_requested(session):
-            st.caption(NOT_LOADED)
+            _requested = False
+            _slot = [("grey", NOT_LOADED)]
         else:
             try:
                 _view = twii_svc.get_twii_trend_view(TWII_CHART_TRADING_DAYS)
             except Exception as _e:  # noqa: BLE001 — 真例外：紅，且講出來（§1）
                 print(f"[views/_market_blocks] 圖 A 讀取失敗：{_e!r}")
-                st.error(f"台股指數歷史讀取失敗：`{scrub_secrets(repr(_e))}`", icon="❌")
+                _slot = [("error", f"台股指數歷史讀取失敗：`{scrub_secrets(repr(_e))}`")]
             else:
                 if _view.failed:
-                    st.error(f"台股指數歷史讀取失敗：`{scrub_secrets(_view.error)}`", icon="❌")
+                    _slot = [("error", f"台股指數歷史讀取失敗：`{scrub_secrets(_view.error)}`")]
                 elif not _view.ok:
-                    st.caption(f"⬜ 台股指數歷史暫時讀不到：{scrub_secrets(_view.error)}")
-                else:
-                    if _view.is_stale:
-                        st.warning(f"台股指數歷史快取已過期：{scrub_secrets(_view.stale_reason or '原因未提供')}", icon="⚠️")
-                    elif _view.is_stale is None:
-                        st.caption("⬜ 台股指數歷史快取的新鮮度未判定")
-                    st.line_chart(twii_chart_frame(_view, _refs))
-                    st.caption(f"近 {len(_view.close)} 日，資料至 {_view.as_of}　·　{twii_svc.TWII_SOURCE_TEXT}")
-        if not isinstance(_mkt, Mapping) or not _mkt:
-            st.caption(f"⬜ 均線：{NOT_LOADED}")
-        elif _bad:
-            st.caption("⬜ 缺少的均線：" + "、".join(f"{_n}：{_w}" for _n, _w in _bad))
-        st.caption(CHART_A_MA_NOTE)
-        st.markdown(f"**{CHART_A_MA_DISCLAIMER}**")
-        st.markdown(f"{CHART_A_CONCLUSION}")
-        st.caption(TREND_DEFINITION_NOTE)
-        render_basis(basis_chart_a(_view, _mkt))
+                    _slot = [("grey", f"⬜ 台股指數歷史暫時讀不到：{scrub_secrets(_view.error)}")]
+        _overflow = render_chart_header(title=CHART_A_TITLE, chips=chart_a_chips(_view), say=CHART_A_SAY)
+        if _slot:
+            # D6=B：Primary 冷啟動／讀不到保持正式高度（⛔ 縮掉造成載入前後跳動）；槽內只有誠實的一句。
+            with st.container(height=PRIMARY_CHART_HEIGHT_PX, border=True):
+                _render_lines(_slot)
+        else:
+            # 正式原生圖（Q4：MA 參考線、y 軸、圖例保留 —— 多序列 DataFrame 欄名＝圖例；⛔ 以參數或 CSS 隱藏軸）。
+            st.line_chart(twii_chart_frame(_view, _refs), height=PRIMARY_CHART_HEIGHT_PX)
+        render_chart_fold(chart_a_fold(_view, _mkt, requested=_requested, where_label=where_label,
+                                       overflow=_overflow))
 
 
-def render_chart_b(session: Mapping[str, Any], *, source_note: str) -> None:
-    """圖 B 國際趨勢：按海外／利率／美元分組，每系列一張小圖。`cl_data['intl']` 在 session 就直接畫（記憶體內資料，無 gate）；未載入灰字。"""
-    with st.container(border=True):
-        st.markdown(f"**{CHART_B_TITLE}**")
-        st.markdown(CHART_B_SAY)
+# ── 圖 B（Secondary：國際 small multiples）──────────────────────
+def intl_core_series(series: Sequence[IntlSeries]) -> list[IntlSeries]:
+    """小倍數的 5 格＝`INTL_GROUPS` 的 5 個系列（固定順序；`intl_series` 對缺的系列也會給一列 `absent`）。
+    其他（未分組）系列不進格（格數固定 5，C4-2），在摺疊「來源」逐列列出（只下沉，⛔ 丟）。"""
+    _by = {_s.name: _s for _s in series}
+    return [_by.get(_n, IntlSeries(_g, _n, "absent")) for _g, _ns in INTL_GROUPS for _n in _ns]
+
+
+def intl_display_name(name: str) -> str:
+    return INTL_DISPLAY_NAMES.get(name, name)
+
+
+def chart_b_parts(series: Sequence[IntlSeries] | None, *, today_date: Any = None) -> tuple[list[Any], list[Any]]:
+    """圖 B → `(組級 chip, 小倍數格)`。chip：`⬜ 尚未定義`（一律）＋資料日（各系列相同時才寫一次）＋窗口（相同時寫一次；
+    不同時改寫在各格）。格：5 格固定順序；有 ≥2 點畫 sparkline（⛔ 數字）；缺系列／沒有收盤／點數不足＝既有字樣 placeholder。"""
+    _chips: list[Any] = [cp.meta_chip("not_defined")]
+    if series is None:
+        return _chips, []
+    _core = intl_core_series(series)
+    _ok = [_s for _s in _core if _s.status == "ok"]
+    _dates = {_s.last_date for _s in _ok}
+    if len(_dates) == 1:
+        _asof = asof_chip_value(next(iter(_dates)), today_date=today_date)
+        if _asof:
+            _chips.append(cp.meta_chip("asof", _asof))
+    _uniform = len({_s.n for _s in _ok}) == 1
+    if _ok and _uniform:
+        _chips.append(cp.meta_chip("window", f"近 {_ok[0].n} 日"))
+    _cells: list[Any] = []
+    for _s in _core:
+        _name = intl_display_name(_s.name)
+        if _s.status == "ok" and _s.n >= 2:
+            try:
+                _svg = cp.sparkline_svg([float(_v) for _v in _s.close.tolist()], w=SM_SPARK_W, h=SM_SPARK_H,
+                                        title=_s.name, missing_state=UI_EMPTY,
+                                        missing_text=INSUFFICIENT_TEXT.removeprefix("⬜ "))
+            except ValueError as _e:   # 非有限值等：講出來（log），格內寫既有「資料不足／無法判定」，⛔ 畫一條假線
+                print(f"[views/_market_blocks] 圖 B {_s.name} 畫不出小圖：{_e!r}")
+                _cells.append(cp.SmCell(_name, missing_verbatim=INSUFFICIENT_TEXT))
+                continue
+            _win = None if _uniform else cp.meta_chip("window", f"近 {_s.n} 日")
+            _cells.append(cp.SmCell(_name, svg=_svg, window_chip=_win))
+        elif _s.status == "ok":
+            _cells.append(cp.SmCell(_name, missing_verbatim=INSUFFICIENT_TEXT))
+        else:
+            _cells.append(cp.SmCell(_name, missing_verbatim=(SM_MISSING_ABSENT if _s.status == "absent"
+                                                              else SM_MISSING_EMPTY)))
+    return _chips, _cells
+
+
+def chart_b_fold(series: Sequence[IntlSeries] | None, *, source_note: str, where_label: str,
+                 overflow: Sequence[Any] = ()) -> ChartFold:
+    """圖 B 摺疊：原外露的分組小標、每系列「名稱　·　近 N 日，資料至…」、來源 caption、窗口說明、趨勢結論句、
+    趨勢定義說明**全部下沉到這裡**（逐字；系列名用正式全名）。"""
+    _source: list[FoldLine] = []
+    if series is not None:
+        _source.append(("caption", source_note))
+        _last = None
+        for _s in series:
+            if _s.group != _last:
+                _source.append(("md", f"**{_s.group}**"))
+                _last = _s.group
+            _source.append(("md", f"{_s.name}　·　{_s.window_text}"))
+    _where: list[FoldLine] = [("caption", NOT_LOADED)] if series is None else []
+    _where.append(("caption", FOLD_WHERE_FMT.format(label=where_label)))
+    # 趨勢結論句 `CHART_B_CONCLUSION`：有資料時已在六欄「規則／計算結果」內逐字（`basis_chart_b`）⇒ 不再另列一行（同段重複）；
+    # 未載入時 `basis_chart_b` 的規則欄沒有它 ⇒ 另列一行（資訊守恆：外露的「⬜ 尚未定義」句只下沉、不能因去重而掉）。
+    _basis = basis_chart_b(None if series is None else list(series))
+    return chart_fold(_basis, why=() if CHART_B_CONCLUSION in _basis.rule else (("md", CHART_B_CONCLUSION),),
+                      source=(*_source, *_overflow_lines(overflow)),
+                      limit=(("caption", CHART_B_NOTE), ("caption", TREND_DEFINITION_NOTE)), where=_where)
+
+
+def render_chart_b(session: Mapping[str, Any], *, source_note: str, where_label: str) -> None:
+    """圖 B 國際趨勢＝**Secondary small multiples 一組**（DEC-117 Q4=P-B）：5 格、各自座標、⛔ 疊軸／正規化／數字（D5=A）、
+    ⛔ 切換列。未載入 ⇒ 縮成一行灰字（D6=B）。詳細數值（最後收盤、資料日、筆數）與完整走勢圖仍在 L2「國際市場」展開區。"""
+    with st.container(border=True, key=f"{P4M_SECONDARY_KEY_PREFIX}intl"):
         _series = intl_series(session)
+        _chips, _cells = chart_b_parts(_series)
+        _overflow = render_chart_header(title=CHART_B_TITLE, chips=_chips, say=CHART_B_SAY)
         if _series is None:
             st.caption(NOT_LOADED)
         else:
-            st.caption(source_note)
-            _last_group = None
-            for _s in _series:
-                if _s.group != _last_group:
-                    st.markdown(f"**{_s.group}**")
-                    _last_group = _s.group
-                st.markdown(f"{_s.name}　·　{_s.window_text}")
-                if _s.status == "ok":
-                    st.line_chart(_s.close)
-                else:
-                    st.caption("⬜ 本輪沒有這個系列" if _s.status == "absent" else "⬜ 沒有可用收盤")
-            st.caption(CHART_B_NOTE)
-        st.markdown(CHART_B_CONCLUSION)
-        st.caption(TREND_DEFINITION_NOTE)
-        render_basis(basis_chart_b(_series))
+            # ⚠️ 行內 svg 一律走 `st.markdown(unsafe_allow_html=True)`（線框 F-4：`st.html` 在 1.56.0 會整段剝掉 svg）。
+            st.markdown(cp.small_multiples_html(_cells, cols_desktop=3, cols_mobile=2), unsafe_allow_html=True)
+        render_chart_fold(chart_b_fold(_series, source_note=source_note, where_label=where_label,
+                                       overflow=_overflow))
+
+
+# ── 圖 C（Secondary：研究框架，一行）────────────────────────────
+#: 圖 C 摺疊「限制」：不適用（本區塊未啟用），說明取既有 `CHART_C_TAG`。
+CHART_C_LIMIT: str = FOLD_NOT_APPLICABLE_FMT.format(why=CHART_C_TAG)
 
 
 def chart_c_texts() -> tuple[str, ...]:
-    """圖 C 區塊內的**全部**文字（供「零數字」測試）。"""
-    return (CHART_C_TITLE, CHART_C_TAG, CHART_C_SAY, CHART_C_EMPTY, CHART_C_BASIS)
+    """圖 C 區塊內的**全部**靜態文字（含摺疊；供「零數字」測試；「去哪補」的展開區標題由頁面測試另驗）。"""
+    return (CHART_C_TITLE, CHART_C_TAG, CHART_C_SAY, CHART_C_EMPTY, CHART_C_BASIS, CHART_C_LIMIT)
 
 
-def render_chart_c() -> None:
-    """圖 C 大盤合理區間：空框＋「研究框架，未啟用」。⛔ 區塊內零數值、零圖形、不畫區間標籤。"""
-    with st.container(border=True):
-        st.markdown(f"**{CHART_C_TITLE}**　`{CHART_C_TAG}`")
-        st.markdown(CHART_C_SAY)
+def chart_c_fold(*, where_label: str) -> ChartFold:
+    """Q8a／C3-1：`CHART_C_SAY`（客戶原句）→「為什麼」逐字；`CHART_C_BASIS` →「來源」逐字。"""
+    return chart_fold(None, why=(("md", CHART_C_SAY),), source=(("caption", CHART_C_BASIS),),
+                      limit=(("caption", CHART_C_LIMIT),),
+                      where=(("caption", FOLD_WHERE_FMT.format(label=where_label)),))
+
+
+def render_chart_c(*, where_label: str) -> None:
+    """圖 C 大盤合理區間：一行（D6=B）＝標題＋「研究框架，未啟用」護欄 chip＋`CHART_C_EMPTY`；客戶原句下沉到「為什麼」（Q8a）。
+    ⛔ 區塊內零數值、零圖形、不畫區間標籤。"""
+    with st.container(border=True, key=f"{P4M_SECONDARY_KEY_PREFIX}c"):
+        render_chart_header(title=CHART_C_TITLE, chips=[cp.guard_chip(CHART_C_TAG)], say=None)
         st.caption(CHART_C_EMPTY)
-        st.caption(CHART_C_BASIS)
+        render_chart_fold(chart_c_fold(where_label=where_label))
+
+
+# ── 圖 D（Secondary：主要風險 compact）──────────────────────────
+#: 圖 D 表格欄（線框 P-16：三欄→兩欄；「是否惡化」改成 header 護欄 chip 寫一次）。
+CHART_D_HEADERS: tuple[str, str] = ("風險桶（每桶一項）", "方向")
+
+
+def chart_d_table_rows(risks: MarketRisks) -> list[tuple[str, str]]:
+    """圖 D 兩欄＝`risk_panel_rows` 的前兩欄（同一份 `risks.rows`、同字）；第三欄恆為 `CHART_D_WORSENING`（風險／綠桶）或
+    與方向欄同字的 `INSUFFICIENT_TEXT`（資料不足桶）—— 前者改由 header 護欄 chip 寫一次，後者方向欄已有 ⇒ 不丟資訊。"""
+    _out: list[tuple[str, str]] = []
+    for _bucket, _dir, _worse in risk_panel_rows(risks):
+        if _worse not in (CHART_D_WORSENING, _dir):
+            raise ValueError(f"圖 D 第三欄出現未預期的內容（不能直接併掉）：{_worse!r}")
+        _out.append((_bucket, _dir))
+    return _out
+
+
+def chart_d_fold(risks: MarketRisks, *, overflow: Sequence[Any] = ()) -> ChartFold:
+    """圖 D 摺疊：原「🔍 查看依據」六欄分四段；原外露的「查看全部指標 › …」指路移到「去哪補」（只下沉）。"""
+    return chart_fold(basis_risks(risks), source=_overflow_lines(overflow),
+                      where=(("md", CHART_D_ALL_LAMPS_POINTER),))
 
 
 def render_chart_d(risks: MarketRisks) -> None:
-    """圖 D 主要風險：五桶各一列（與 hero 同一份 `risks`）；頂端「N 項未評估」。"""
-    with st.container(border=True):
-        st.markdown(f"**{CHART_D_TITLE}**")
-        st.caption(CHART_D_NOTE)
+    """圖 D 主要風險（Secondary compact）：五桶各一列（兩欄；與 hero 同一份 `risks`）；「N 項未評估（…未評估不等於安全）」
+    **外露**（C6-5）；指標危險度指路句外露（C2）；未載入一行灰、算不出來紅（外露）。"""
+    with st.container(border=True, key=f"{P4M_SECONDARY_KEY_PREFIX}d"):
+        _overflow = render_chart_header(title=CHART_D_TITLE, chips=[cp.guard_chip(CHART_D_WORSENING)],
+                                        say=CHART_D_NOTE, say_verbatim=False)
         if risks.cold:
             st.caption(NOT_LOADED)
         elif risks.failed:
             st.error(f"五桶風險摘要算不出來：{scrub_secrets(risks.error)}", icon="❌")
         else:
             st.markdown(f"**{risks.n_unevaluated} 項未評估**（共 {risks.n_lamps} 項燈；未評估不等於安全）")
-            st.markdown(_md_table(("風險桶（每桶一項）", "方向", "是否惡化"), risk_panel_rows(risks)))
-        st.markdown(CHART_D_ALL_LAMPS_POINTER)
+            st.markdown(_md_table(CHART_D_HEADERS, chart_d_table_rows(risks)))
         st.caption(DANGER_POINTER)
-        render_basis(basis_risks(risks))
+        render_chart_fold(chart_d_fold(risks, overflow=_overflow))
 
 
 #: 供測試掃描「不得出現的詞」用：頁面各區塊字樣的聚合入口（不含動態資料）。
@@ -1025,4 +1289,7 @@ STATIC_TEXTS: tuple[str, ...] = (
     CHART_D_NOTE, CHART_D_WORSENING, INSUFFICIENT_TEXT,
     # P4-1（DEC-117）新增的第一屏字樣
     UPDATE_OPTIONS_LABEL, REGIME_TILE_LABEL, DANGER_POINTER, ALERTS_CONFLICTS_COUNT_FMT, HERO_RISK_FULL_HEADING,
+    # P4-2（DEC-117）圖區字樣
+    FOLD_LABEL, *FOLD_SECTIONS, FOLD_WHERE_FMT, CHART_C_LIMIT, SM_MISSING_ABSENT, SM_MISSING_EMPTY,
+    *INTL_DISPLAY_NAMES.values(),
 )
