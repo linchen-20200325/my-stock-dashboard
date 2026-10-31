@@ -185,8 +185,9 @@ class TestA8ExposedSentenceLength:
 
 
 class TestA6PrimaryHeightIsPinnedAtTodaysValue:
-    """⛔ 這不是「220 才對」的宣告：A6（手機 220 vs 契約 ≤140）是待客戶判斷的題 2（GATE_REPORT §11.1）。
-    本組只釘**現況**，讓任何人改圖高都必須同時改這裡＝先過客戶裁示。"""
+    """⛔ 這不是「220 才對」的宣告：A6（手機 220 vs 契約 ≤140）原為待客戶判斷的題 2（GATE_REPORT §11.1）。
+    📌 2026-10-31 客戶 DEC-119 題 1=A：手機 Primary 維持約 220px（市場頁對 ≤140 的明確例外）——本組仍釘 220，
+    讓任何人改圖高都必須同時改這裡＝先過客戶裁示。"""
 
     def test_primary_chart_height_is_220_for_desktop_and_mobile_alike(self):
         assert B.PRIMARY_CHART_HEIGHT_PX == 220 == cp.SLOT_HEIGHT_MAX_PX

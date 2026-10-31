@@ -36,7 +36,7 @@
 ═══ Phase 4 P4-2（2026-10-30，客戶 DEC-117 Q4=P-B／Q3=A／Q8a；有意識的修改，⛔ 不是漏刪）═══════════
 圖區改為「Primary（圖 A）→ Secondary（國際小倍數 → 圖 D → 圖 C）」，每張圖＝header（標題→chip→1 句，`compact.chart_header_html`）
 → 圖或誠實 placeholder → **恰一個**「▸ 為什麼／來源／限制／去哪補」摺疊（`render_chart_fold`；六欄依據依線框 §3.5 分四段，逐字）：
-  · 圖 A：正式原生 `st.line_chart`（指數＋MA 水平參考線＋圖例＋y 軸），高 `PRIMARY_CHART_HEIGHT_PX`；冷啟動／讀不到同高槽（D6=B）；
+  · 圖 A：正式主圖（DEC-119：`st.vega_lite_chart` 自訂 spec；指數＋MA 水平參考線＋圖例＋y 軸），高 `PRIMARY_CHART_HEIGHT_PX`；冷啟動／讀不到同高槽（D6=B）；
     兩條護欄（均線聲明逐字、`⬜ 尚未定義`）各自獨立成 chip（D10(a)），來源 caption 下沉「來源」。
   · 圖 B：5 格 small multiples（`compact.small_multiples_html`＋`sparkline_svg`，⛔ 數字、⛔ 切換列）；缺系列格＝既有字樣；
     超過 8 字的兩個系列名用顯示名對映（`INTL_DISPLAY_NAMES`），正式全名在摺疊與 L2。
@@ -647,8 +647,68 @@ def twii_chart_frame(view: twii_svc.TwiiTrendView,
     _idx = pd.to_datetime(list(view.xs))
     _df = pd.DataFrame({TWII_COLUMN: list(view.close)}, index=_idx)
     for _name, _val in refs:
-        _df[f"{_name}（最新值，參考）"] = _val
+        _df[f"{_name}{TWII_MA_QUALIFIER}"] = _val
     return _df
+
+
+# ── 圖 A 自訂圖表（DEC-119 題 1=A：手機 Primary 維持 220px，改用可控圖例的 `st.vega_lite_chart`）──
+#: 均線系列名的限定語。完整系列名（`MA5（最新值，參考）`）逐字留在資料與 tooltip；圖例只顯示短名，限定語搬到圖例標題。
+TWII_MA_QUALIFIER: str = "（最新值，參考）"
+#: 圖例標題：限定語在圖例上永遠看得到（⛔ 縮短系列名而丟掉限定語）。
+TWII_LEGEND_TITLE: str = "MA 均為最新值，參考的水平線"
+#: 圖例排法：置底、3 欄（5 項＝2 列）；字級／欄距與手機圖寬估算見守衛 `TestF1VegaSpec`（⛔ 改欄數前先量 390px 右緣）。
+TWII_LEGEND_COLUMNS: int = 3
+TWII_LEGEND_FONT_PX: int = 11
+TWII_LEGEND_SYMBOL_PX: int = 24
+TWII_LEGEND_COLUMN_PADDING_PX: int = 12
+#: 系列→色（固定對映；指數＝主線藍，四條 MA 各一色）。鍵＝完整系列名的「基底名」。
+TWII_CHART_COLORS: dict[str, str] = {TWII_COLUMN: "#2563eb", "MA5": "#f59e0b", "MA60": "#10b981",
+                                     "MA120": "#a855f7", "MA200": "#ef4444"}
+TWII_LONG_COLUMNS: tuple[str, str, str] = ("date", "series", "value")
+
+
+def twii_chart_long(frame: pd.DataFrame) -> pd.DataFrame:
+    """`twii_chart_frame` 的寬表 → 長表（date／series／value）。純轉置：⛔ 不補值、不正規化、不滾動；各系列點數與原欄一致。"""
+    _long = frame.rename_axis("date").reset_index().melt(id_vars="date", var_name="series", value_name="value")
+    return _long[list(TWII_LONG_COLUMNS)]
+
+
+def _twii_series_color(name: str) -> str:
+    return TWII_CHART_COLORS[name.removesuffix(TWII_MA_QUALIFIER)]
+
+
+def twii_chart_spec(series_names: Sequence[str], *, height: int) -> dict[str, Any]:
+    """圖 A 的 Vega-Lite spec：指數線＋MA 水平參考線；y 軸（有刻度）、x 時間軸、圖例置底多欄、tooltip 帶完整系列名。
+    ⛔ 不隱藏軸、不正規化（無 stack／normalize／window／joinaggregate transform）、不做 sparkline／mini。"""
+    _names = list(series_names)
+    _legend: dict[str, Any] = {
+        "orient": "bottom", "direction": "horizontal", "columns": TWII_LEGEND_COLUMNS,
+        "title": TWII_LEGEND_TITLE, "titleOrient": "top", "titleAnchor": "start", "titleLimit": 0,
+        "titleFontSize": TWII_LEGEND_FONT_PX, "labelFontSize": TWII_LEGEND_FONT_PX, "labelLimit": 0,
+        "symbolType": "stroke", "symbolSize": TWII_LEGEND_SYMBOL_PX ** 2, "symbolStrokeWidth": 3,
+        "columnPadding": TWII_LEGEND_COLUMN_PADDING_PX, "rowPadding": 2, "padding": 0,
+        "labelExpr": f"replace(datum.label, '{TWII_MA_QUALIFIER}', '')",
+    }
+    return {
+        "height": height,
+        "autosize": {"type": "fit", "contains": "padding"},
+        "mark": {"type": "line", "strokeWidth": 2},
+        "encoding": {
+            "x": {"field": "date", "type": "temporal", "title": "", "axis": {"grid": False}},
+            "y": {"field": "value", "type": "quantitative", "title": "", "axis": {"grid": True}},
+            "color": {"field": "series", "type": "nominal", "legend": _legend,
+                      "scale": {"domain": _names, "range": [_twii_series_color(_n) for _n in _names]}},
+            "tooltip": [{"field": "date", "type": "temporal", "title": "日期", "format": "%Y-%m-%d"},
+                        {"field": "series", "type": "nominal", "title": "系列"},
+                        {"field": "value", "type": "quantitative", "title": "數值", "format": ",.2f"}],
+        },
+    }
+
+
+def render_twii_chart(frame: pd.DataFrame, *, height: int) -> None:
+    """畫圖 A（DEC-119）：`st.vega_lite_chart` 自訂 spec 取代 `st.line_chart`（後者圖例只能單行、手機被裁）。"""
+    st.vega_lite_chart(twii_chart_long(frame), twii_chart_spec(list(frame.columns), height=height),
+                       width="stretch", height=height)
 
 
 def basis_chart_a(view: twii_svc.TwiiTrendView | None, mkt_info: Any) -> Basis:
@@ -1114,7 +1174,7 @@ def chart_a_fold(view: twii_svc.TwiiTrendView | None, mkt_info: Any, *, requeste
 
 
 def render_chart_a(session: Mapping[str, Any], *, where_label: str) -> None:
-    """圖 A 台股趨勢＝**Primary Visual**（DEC-117 Q4=P-B）：header（標題→chip→客戶原句）→ 正式原生圖（指數＋MA 水平參考線
+    """圖 A 台股趨勢＝**Primary Visual**（DEC-117 Q4=P-B）：header（標題→chip→客戶原句）→ 正式主圖（DEC-119 自訂 vega-lite；指數＋MA 水平參考線
     ＋圖例＋y 軸，高 `PRIMARY_CHART_HEIGHT_PX`）→ 恰一個四段摺疊。預設直接畫（讀本地 parquet，毫秒級、非外部抓取，故無 gate）。
 
     未載入（上游一個總經 key 都沒寫過）→ 同高槽內灰字「⬜ 尚未載入，請按更新」，**不讀快取、不畫（不顯示過期值）**；
@@ -1146,8 +1206,9 @@ def render_chart_a(session: Mapping[str, Any], *, where_label: str) -> None:
             with st.container(height=PRIMARY_CHART_HEIGHT_PX, border=True):
                 _render_lines(_slot)
         else:
-            # 正式原生圖（Q4：MA 參考線、y 軸、圖例保留 —— 多序列 DataFrame 欄名＝圖例；⛔ 以參數或 CSS 隱藏軸）。
-            st.line_chart(twii_chart_frame(_view, _refs), height=PRIMARY_CHART_HEIGHT_PX)
+            # 正式主圖（DEC-117 Q4＋DEC-119 澄清：保留指數線／MA 參考線／y 軸／5 項圖例；實作由 `st.line_chart` 換成
+            # `st.vega_lite_chart` 自訂 spec 以控制手機圖例；⛔ 以參數或 CSS 隱藏軸、⛔ sparkline／正規化）。
+            render_twii_chart(twii_chart_frame(_view, _refs), height=PRIMARY_CHART_HEIGHT_PX)
         render_chart_fold(chart_a_fold(_view, _mkt, requested=_requested, where_label=where_label,
                                        overflow=_overflow))
 
