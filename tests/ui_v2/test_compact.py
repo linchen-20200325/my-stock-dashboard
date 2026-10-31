@@ -109,7 +109,10 @@ class TestBoundaries:
                       and getattr(n.func, "id", getattr(n.func, "attr", "")) == "assert_signal_text_clean"]
         assert not code_calls
 
-    def test_zero_production_caller(self):
+    def test_production_callers_are_exactly_the_market_blocks(self):
+        """📌 Phase 4 P4-2（2026-10-30，有意識的修改，不是漏刪；決策者 AI 總管〔內部自決〕，依客戶 DEC-117 Q4=P-B）：
+        原「0 production caller」（Phase 3 元件庫尚未掛頁）→ 「**唯一**的 production caller 是 `_market_blocks.py`」。
+        強度只增不減：集合必須**恰等於**這一檔（另一個頁面偷偷 import、或 `_market_blocks` 不再用，皆紅）。"""
         hits = []
         for p in list((ROOT / "src").rglob("*.py")) + [ROOT / "app.py"]:
             if p == COMPACT_PY or "__pycache__" in p.parts:
@@ -117,7 +120,7 @@ class TestBoundaries:
             t = p.read_text(encoding="utf-8", errors="ignore")
             if re.search(r"ui_v2\.compact|ui_v2 import[^\n]*\bcompact\b|from\s+\.compact|from\s+src\.ui_v2\.compact", t):
                 hits.append(str(p.relative_to(ROOT)))
-        assert hits == [], hits
+        assert hits == ["src/ui/views/_market_blocks.py"], hits
 
 
 # ══════════════════════════════════════════════════════════════════

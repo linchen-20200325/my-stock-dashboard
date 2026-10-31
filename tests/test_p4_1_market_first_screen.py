@@ -72,6 +72,11 @@ def _expanded_flags(block, out=None):
 
 _SUBMIT = ia_nav.action_label(ia_nav.ACTION_UPDATE_TODAY)
 
+def _is_chart_header(text: str, title: str) -> bool:
+    """P4-2：圖 header 元素＝`<div class="cp-chart-header"><div class="cp-ch-title">{title}</div>…`。"""
+    return text.startswith('<div class="cp-chart-header"><div class="cp-ch-title">' + title + "</div>")
+
+
 #: L1 錨點（名稱, 事件判定）。只認**外露**（不在 expander 內）的元素，除了「更新選項」本身就是 expander 標題。
 _ANCHORS = (
     ("H2", lambda k, t, e: k == "Markdown" and t == f"## {B.PAGE_TITLE}" and e is None),
@@ -84,7 +89,8 @@ _ANCHORS = (
     ("tile風險", lambda k, t, e: k == "Markdown" and t == f"**{B.HERO_RISK_TITLE}**" and e is None),
     ("⚡bar", lambda k, t, e: k in _TEXT and t.startswith(f"**{B.ALERTS_TITLE}**") and e is None),
     ("AI行", lambda k, t, e: k == "Caption" and t.startswith(B.HERO_AI_PLACEHOLDER) and e is None),
-    ("圖A", lambda k, t, e: k == "Markdown" and t == f"**{B.CHART_A_TITLE}**" and e is None),
+    # 📌 P4-2（有意識的修改，⛔ 不是降強度）：圖 A 標題改由 `compact.chart_header_html` 輸出（header 的一部分）⇒ 認 header 元素。
+    ("圖A", lambda k, t, e: k == "Markdown" and _is_chart_header(t, B.CHART_A_TITLE) and e is None),
 )
 _ORDER = [_n for _n, _ in _ANCHORS]
 
@@ -492,8 +498,10 @@ class TestC3Basis:
         _at = _run(tmp_path, _LOADED)
         _evs = list(_events(_at.main))
         _labels = [e[1] for e in _evs if e[0] == "Expander"]
-        # tile 3 ＋ ⚡ 1 ＋ 圖 A／B／D 各 1（圖區 P4-2 才動）
-        assert _labels.count(B.BASIS_EXPANDER_LABEL) == 7
+        # 📌 P4-2（客戶 DEC-117 Q3=A；有意識的修改，⛔ 不是降強度）：tile 3 ＋ ⚡ 1 ＝ 4 個「🔍 查看依據」（原 7 個含圖 A／B／D 的 3 個）；
+        #   圖 A／B／C／D 改為各**恰一個**「▸ 為什麼／來源／限制／去哪補」（見 `tests/test_p4_2_market_charts.py::TestC31`），兩種字樣不互相出現。
+        assert _labels.count(B.BASIS_EXPANDER_LABEL) == 4
+        assert _labels.count(B.FOLD_LABEL) == 4
         for _bad in ("▸ 詳細", "詳細", "▸ 查看清單", "查看清單"):
             assert _bad not in _labels
         _l1 = [e for e in _evs if e[0] == "Expander" and B.P4M_L1_KEY in e[3]]

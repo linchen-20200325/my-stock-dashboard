@@ -866,6 +866,12 @@ class SmCell:
     """一格。`svg` 有值＝畫圖（不得同時給 missing_*）；`svg=None`＝缺系列 placeholder（missing_* 必填）。
 
     `window_chip` 只在該格窗口與組級不同時才給（kind 必須是 window）；格內不放資料日。
+
+    📌 Phase 4 P4-2（2026-10-30；**加性**，既有欄位與既有輸出一字不變；決策者 AI 總管〔內部自決〕）：
+    `missing_verbatim`＝呼叫端的**既有**誠實 placeholder 整句（例 `_market_blocks` 的「⬜ 本輪沒有這個系列」——
+    已核准線框 Phase 3 §3.7／Phase 4 §10 C4-2 指定逐字沿用的既有字樣）。與 `svg`／`missing_state`／`missing_text`
+    互斥；必須以 `UI_STATE_META` 的**一個**狀態符號＋空格開頭（不得自帶第二個符號）、單行、不得含數字（D5=A）。
+    本檔仍不自造任何符號或原因字：整句由呼叫端的既有常數提供。
     """
 
     name: str
@@ -873,6 +879,25 @@ class SmCell:
     window_chip: Chip | None = None
     missing_state: str | None = None
     missing_text: str | None = None
+    missing_verbatim: str | None = None
+
+
+def _check_missing_verbatim(text: object) -> str:
+    """`SmCell.missing_verbatim` 的唯一驗證點（P4-2 加性）：非空單行、恰以一個 `UI_STATE_META` 符號＋空格開頭、
+    全句只含那一個狀態符號、不含任何數字（小倍數不顯示數字，D5=A）。其餘 ValueError。"""
+    t = _check_str("SmCell.missing_verbatim", text, allow_glyph=True)
+    glyphs = [g for g in _state_glyphs() if t.startswith(g + " ")]
+    if len(glyphs) != 1:
+        raise ValueError(f"missing_verbatim 必須以一個 UI_STATE_META 狀態符號＋空格開頭：{t!r}")
+    rest = t[len(glyphs[0]) + 1:]
+    if not rest.strip():
+        raise ValueError(f"missing_verbatim 只有符號沒有原因：{t!r}")
+    for g in _state_glyphs():
+        if g in rest:
+            raise ValueError(f"missing_verbatim 不得自帶第二個狀態符號 {g!r}：{t!r}")
+    if any(ch.isdigit() for ch in t):
+        raise ValueError(f"missing_verbatim 不得含數字（小倍數不顯示數字，D5=A）：{t!r}")
+    return t
 
 
 def small_multiples_html(cells: Sequence[SmCell], *, cols_desktop: int = 3, cols_mobile: int = 2) -> str:
@@ -896,9 +921,13 @@ def small_multiples_html(cells: Sequence[SmCell], *, cols_desktop: int = 3, cols
             raise ValueError(f"系列名最多 {SM_NAME_MAX_CHARS} 字：{name!r}")
         if c.svg is not None:
             _check_safe_html("SmCell.svg", c.svg)
-            if c.missing_state is not None or c.missing_text is not None:
-                raise ValueError("有 svg 的格不得同時給 missing_state／missing_text")
+            if c.missing_state is not None or c.missing_text is not None or c.missing_verbatim is not None:
+                raise ValueError("有 svg 的格不得同時給 missing_state／missing_text／missing_verbatim")
             body = str(c.svg)
+        elif c.missing_verbatim is not None:
+            if c.missing_state is not None or c.missing_text is not None:
+                raise ValueError("missing_verbatim 與 missing_state／missing_text 互斥（同一格只能有一種說法）")
+            body = f'<div class="cp-sm-missing">{_esc(_check_missing_verbatim(c.missing_verbatim))}</div>'
         else:
             if c.missing_state is None or c.missing_text is None:
                 raise ValueError("缺系列的格必須給 missing_state 與 missing_text（⛔ 不隱藏 Missing）")
