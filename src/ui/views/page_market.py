@@ -54,6 +54,10 @@
     「逐項資料日：尚未提供…」整句與資料健康指路下沉到「資料來源與完整度」展開區（線框 P-03，只下沉）。
   · 更新報告（`_render_report_guarded`）仍緊接更新鈕下方（X3／X10 字樣不必改）；其主體本來就是預設收合的
     expander，真錯誤（取不到／回空）依 2026-09-24 客戶裁示照舊留在收合區外。
+    📌 2026-10-30 更正（有意識的更新，不是漏刪；決策者 客戶 DEC-118 問題 2=D1＋AI 總管判定 Z；上兩行原文保留＝P4-1 第一版
+    的行為）：**現行**——報告**沒有**真錯誤時仍在更新鈕下方（預設收合）；報告含真錯誤（取不到／回空），或不是現行報告型別
+    （舊格式）、或在原位渲染時拋例外 ⇒ 整份既有報告改畫在**今日結論正下方**（真錯誤外露、不收合）。CTA 與今日結論之間
+    在任何狀態都沒有外露內容。
   · 今日結論句與標題逐字不改（DEC-081 Q2-1），只改位置。
 
 掛載：`app.py::_ia_view_market()` 於側欄「🆕 新版戰情室（試用中）」radio 選到本頁時
@@ -649,13 +653,16 @@ def render_page_market() -> None:
     _time_text, _coverage_text = _status.split("｜")
     # DEC-118 問題 2=D1（客戶 2026-10-30）＋總管判定 Z：報告含**真錯誤**（取不到／回空）時，整份既有報告（真錯誤 `st.error`
     #   ＋預設收合的報告標題）改畫在今日結論正下方 —— 真錯誤外露、不擠出結論；CTA 與結論之間只剩收合標題列。
-    #   ⛔ 拆 `page_today._render_refresh_report`（禁改，DEC-081 Q1=C）、⛔ 複寫。讀不出（舊格式）⇒ 照原位置交給
-    #   `_render_report_guarded` 講出來並清掉（§1，不在這裡吞）。
+    #   ⛔ 拆 `page_today._render_refresh_report`（禁改，DEC-081 Q1=C）、⛔ 複寫。
+    #   QA 第二輪：不是現行報告型別（舊格式）或判斷時拋例外 ⇒ **一律視為有真錯誤**、移到結論下方，由
+    #   `_render_report_guarded` 在那裡講出來並清掉（§1：紅字不得落在 CTA 與結論之間）。
+    from src.services.macro_refresh_service import MacroRefreshReport
     try:
-        _report_errors_below = _report is not None and bool(_report.failures or _report.empties)
-    except Exception as _e:  # noqa: BLE001 — 只決定位置；真正的紅字由 `_render_report_guarded` 負責
-        print(f"[views/page_market] 判斷更新報告有無真錯誤時讀不出來：{_e!r} —— 報告留在原位，由原路徑講出來")
-        _report_errors_below = False
+        _report_errors_below = _report is not None and (
+            not isinstance(_report, MacroRefreshReport) or bool(_report.failures or _report.empties))
+    except Exception as _e:  # noqa: BLE001 — 只決定位置；真正的紅字由 `_render_report_guarded` 在結論下方講出來
+        print(f"[views/page_market] 判斷更新報告有無真錯誤時讀不出來：{_e!r} —— 視為有真錯誤，移到結論下方")
+        _report_errors_below = True
     # L1 決策區包在一個具名容器裡：窄螢幕只在這裡壓縮間距（`blocks.P4M_LAYOUT_CSS`；只排版、不藏內容）。
     blocks.render_layout_css()
     with st.container(key=blocks.P4M_L1_KEY):
@@ -671,7 +678,16 @@ def render_page_market() -> None:
             # 已套用模式與上一次的更新報告刻意共用 —— 按一次更新，兩頁看到的是同一份結果。
             blocks.render_update_cta(_session)
         if _report is not None and not _report_errors_below:
-            _render_report_guarded(_report)
+            # 乾淨報告畫在佔位內：渲染途中拋例外 ⇒ 清掉已畫一半的內容、改到結論下方由 `_render_report_guarded` 講出來
+            # （⛔ 半份報告或紅字留在 CTA 與結論之間）。
+            _report_slot = st.empty()
+            try:
+                with _report_slot.container():
+                    today._render_refresh_report(_report)
+            except Exception as _e:  # noqa: BLE001 — 不吞：下方 `_render_report_guarded` 會再畫一次並講出來
+                print(f"[views/page_market] 更新報告在原位畫不出來：{_e!r} —— 改到今日結論下方處理")
+                _report_slot.empty()
+                _report_errors_below = True
 
         # ② 今日結論（逐字；只改位置）。
         section_header(CONCLUSION_HEADING)
