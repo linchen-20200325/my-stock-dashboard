@@ -537,7 +537,9 @@ class TestNonCardElementDiff:
                 continue
             s = t.strip("*")
             if (s in consts or any(s in c or c in s for c in consts if len(c) >= 4)
-                    or re.match(r"^(此結果載入於|本次因子：|現有文字判讀|\*\*\d{4,5}\b|\*\*\d{2}\.\d)|^- ", t)):
+                    or re.match(r"^(此結果載入於|本次因子：|現有文字判讀|\*\*\d{4,5}\b|\*\*\d{2}\.\d)|^- ", t)
+                    # P5-2：選股條件摘要是 `B.SCREEN_SUMMARY_FMT` 填入已套用／預設條件的結果（動態值，形狀釘死；內容守衛在 test_p5_2）
+                    or re.fullmatch(r"4 項基本面全過(＋[^；]+)?；排序：綜合評分；顯示 \d+ 筆", t)):
                 continue
             unexplained.append(t)
         assert not unexplained, unexplained

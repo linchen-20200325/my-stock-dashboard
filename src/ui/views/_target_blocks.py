@@ -129,6 +129,17 @@ BASIS_TO_FOLD: Mapping[str, tuple[str, ...]] = {
 ZONE2_TITLE: str = "第二區｜候選標的"
 ZONE2_SAY: str = "優先看基本面，再看價格與技術面。選一檔，下方展開單一股票。"
 SCREEN_EXPANDER: str = "選股條件"
+#: P5-2（客戶 DEC-121 Q2=B；線框 §10 C1-7）：選股條件 expander **預設收合**＋外露一行摘要。
+#: ⚠️ 收合只是畫面：form、🎯 開始選股鈕、所有 gate 都還在 expander 裡照常執行（收合≠少抓／少算）。
+SCREEN_EXPANDER_EXPANDED: bool = False
+#: 摘要只轉述「已套用條件；還沒按過 🎯 開始選股就轉述預設條件」，⛔ 新增任何條件。
+SCREEN_SUMMARY_FMT: str = "{n} 項基本面全過{factors}；排序：綜合評分；顯示 {top} 筆"
+#: P5-2（DEC-121 Q2=B；C1-5／C1-6）：候選外露 Top 10 —— **純顯示切片**（保序、不重算）。
+#: ⛔ 與請求參數 `F.TOP_N_OPTIONS`／`F.DEFAULT_TOP_N`（20／50／100、預設 50）無關，兩者不動。
+CANDIDATE_TOP_N: int = 10
+#: 估值口徑外露 chip（護欄族；全文 `PE_COL_NOTE` 逐字在「說明」摺疊內，兩者必須同時存在）。
+PE_BASIS_CHIP: str = "估值口徑≠第三區 357（不能互相驗證）"
+CANDIDATE_NOTES_EXPANDER: str = "▸ 說明（估值口徑・籌碼未取・金融股）"
 CANDIDATE_COLS: tuple[str, ...] = ("標的", "產業", "基本面", "估值", "籌碼", "狀態")
 PICK_LABEL: str = "選擇標的"
 PICK_BUTTON_LABEL: str = "🔍 查看此檔"
@@ -1077,10 +1088,56 @@ def pick_options(bundle: ScreenBundle) -> list[str]:
     return [_code_of(_r) for _r in _df.to_dict("records") if _code_of(_r)]
 
 
+def screen_summary(labels: Mapping[str, str] | None, req: Any) -> str | None:
+    """「選股條件」收合時外露的一行摘要（DEC-121 Q2=B）。**只轉述**已套用條件（尚未送出 ⇒ 轉述預設條件）：
+    因子名稱走 L3 的 label SSOT 反查；排序固定「綜合評分」（與 form ③ 同一句）；筆數＝已套用／預設。
+    ⛔ 不新增條件、不推測；label 清單讀不到、或已套用 key 不在清單內 ⇒ None（form 會自己畫紅卡，摘要不編）。"""
+    if labels is None:
+        return None
+    if getattr(req, "submitted", False):
+        _keys = tuple(getattr(req, "factors", ()) or ())
+        _top = int(getattr(req, "top_n", F.DEFAULT_TOP_N))
+    else:
+        _keys = (F.DEFAULT_FACTOR_KEY,) if F.DEFAULT_FACTOR_KEY in labels.values() else ()
+        _top = F.DEFAULT_TOP_N
+    _by_key = {_k: _l for _l, _k in labels.items()}
+    if any(_k not in _by_key for _k in _keys):
+        return None          # 已套用的 key 不在 label SSOT 裡：不外露原始 key、不猜名稱 ⇒ 整句不畫摘要
+    _names = [_by_key[_k] for _k in _keys]
+    _fac = ("＋" + "、".join(_names)) if _names else ""
+    return SCREEN_SUMMARY_FMT.format(n=PRESCREEN_REQUIRED_PASSES, factors=_fac, top=_top)
+
+
+def candidate_csv_bytes(df: Any) -> bytes:
+    """💾 CSV 內容＝L3 排名原表**全量**（⛔ 受 Top 10 切片影響；與舊選股網相同）。"""
+    return df.to_csv(index=False).encode("utf-8-sig")
+
+
+def render_chip_row(chips: Sequence[Any]) -> None:
+    _html, _ = cp.chips_html(list(chips))
+    if _html:
+        st.markdown(_html, unsafe_allow_html=True)
+
+
+def render_candidate_notes() -> None:
+    """估值口徑全文／籌碼未取／金融股 —— 逐字（只下沉、不刪）。"""
+    with st.expander(CANDIDATE_NOTES_EXPANDER, expanded=False):
+        st.caption(PE_COL_NOTE)
+        st.caption(CHIPS_COL_HINT)
+        st.caption(FIN_STOCK_NOTE)
+
+
 def render_zone_candidates(session: Any) -> None:
     section_header(ZONE2_TITLE, ZONE2_SAY)
-    with st.expander(SCREEN_EXPANDER, expanded=True):
+    # 摘要版位在 expander 上方，但內容要等 form 跑完才填：送出鈕的 handler 在 form 內才把「已套用條件」寫進 session，
+    # 先算會慢一拍（顯示上一輪的條件）。
+    _summary_slot = st.empty()
+    with st.expander(SCREEN_EXPANDER, expanded=SCREEN_EXPANDER_EXPANDED):
         render_screen_form(session)
+    _labels, _ = F.load_factor_labels()
+    _summary = screen_summary(_labels, own_screen_request(session))
+    if _summary:
+        _summary_slot.caption(_summary)
     _sb = screen_bundle(session)
     _card, _facts = F.build_screen_result_card(_sb.result, _sb.req)
     F._render_one(_card, _facts)
@@ -1091,20 +1148,27 @@ def render_zone_candidates(session: Any) -> None:
     st.caption("本次因子：" + (" · ".join(_sb.result.hits) if _sb.result.hits else "僅基本面四項全過"))
     _single = single_bundle(session) if own_inspect_request(session).submitted else None
     _records = build_candidate_rows(_sb, _single)
-    st.dataframe(_records, hide_index=True, width="stretch")
-    st.caption(PE_COL_NOTE)
-    st.caption(CHIPS_COL_HINT)
-    st.caption(FIN_STOCK_NOTE)
-    # CSV 鈕在 form 外；內容＝L3 排名原表（與舊選股網相同）。
+    _top = cp.topn_view(_records, CANDIDATE_TOP_N)       # 純顯示切片：保序、不重算
+    if _top.empty:
+        st.caption(MISSING_CELL)
+    else:
+        st.dataframe(list(_top.shown), hide_index=True, width="stretch")
+    if _top.hidden > 0:
+        render_chip_row([_top.more_chip()])
+        with st.expander(_top.all_label, expanded=False):
+            st.dataframe(_records, hide_index=True, width="stretch")
+    render_chip_row([cp.guard_chip(PE_BASIS_CHIP)])
+    render_candidate_notes()
+    # CSV 鈕在 form 外；內容＝L3 排名原表（與舊選股網相同，全量）。
     try:
-        _csv = _sb.result.df.to_csv(index=False).encode("utf-8-sig")
+        _csv = candidate_csv_bytes(_sb.result.df)
     except Exception as _e:  # noqa: BLE001 — 下載不可用不該炸掉整張表
         print(f"[views/page_target] CSV 匯出失敗：{_e!r}")
         st.caption(f"（CSV 匯出暫不可用：{_md_safe(repr(_e))}）")
     else:
         st.download_button("💾 下載選股結果 CSV", data=_csv, file_name="screener_result.csv",
                            mime="text/csv", key=SS_CSV_BUTTON)
-    # 選一檔＋查看此檔：維持「使用者明確操作後才取數」（不用 dataframe 點列）。
+    # 選一檔＋查看此檔：維持「使用者明確操作後才取數」（不用 dataframe 點列）。選項是**全部**候選，不只 Top 10。
     _opts = pick_options(_sb)
     if _opts:
         _names = {_code_of(_r): str(_r.get("名稱") or "").strip() for _r in _sb.result.df.to_dict("records")}
