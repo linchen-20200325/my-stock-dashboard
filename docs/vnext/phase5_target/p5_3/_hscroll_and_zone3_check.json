@@ -1,0 +1,450 @@
+{
+ "390": {
+  "docSW": 390,
+  "docCW": 390,
+  "mainSW": 390,
+  "mainCW": 390,
+  "tiles": [
+   {
+    "h": 100,
+    "w": 358,
+    "t": "財報體檢 82 / 100 A 級"
+   },
+   {
+    "h": 100,
+    "w": 358,
+    "t": "357 估值 殖利率 5.50% 合理（5~7%）"
+   },
+   {
+    "h": 100,
+    "w": 358,
+    "t": "近 20 日籌碼 集中度 6.30% 大戶吸籌"
+   }
+  ],
+  "slot": [
+   {
+    "h": 96,
+    "t": "⛔ 未接線：K 線新版尚未接上"
+   }
+  ],
+  "chips": [
+   "🕒 資料 10/28",
+   "抓取 15:10",
+   "近 5 日",
+   "3／4 項有資料",
+   "估值口徑≠第三區 357（不能互相驗證）",
+   "抓取 15:10",
+   "🏢 個股 · 自動判型",
+   "✅ 命中 2 項",
+   "⬜ 未通過／缺漏 1 項",
+   "抓取 15:10"
+  ],
+  "exps": [
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_down",
+    "open": true,
+    "h": 503
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   }
+  ],
+  "bigLeaves": [
+   893,
+   582,
+   560,
+   496
+  ]
+ },
+ "1440": {
+  "docSW": 1440,
+  "docCW": 1440,
+  "mainSW": 1140,
+  "mainCW": 1140,
+  "tiles": [
+   {
+    "h": 100,
+    "w": 316,
+    "t": "財報體檢 82 / 100 A 級"
+   },
+   {
+    "h": 100,
+    "w": 316,
+    "t": "357 估值 殖利率 5.50% 合理（5~7%）"
+   },
+   {
+    "h": 100,
+    "w": 316,
+    "t": "近 20 日籌碼 集中度 6.30% 大戶吸籌"
+   }
+  ],
+  "slot": [
+   {
+    "h": 96,
+    "t": "⛔ 未接線：K 線新版尚未接上"
+   }
+  ],
+  "chips": [
+   "🕒 資料 10/28",
+   "抓取 15:09",
+   "近 5 日",
+   "3／4 項有資料",
+   "估值口徑≠第三區 357（不能互相驗證）",
+   "抓取 15:10",
+   "🏢 個股 · 自動判型",
+   "✅ 命中 2 項",
+   "⬜ 未通過／缺漏 1 項",
+   "抓取 15:10"
+  ],
+  "exps": [
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_down",
+    "open": true,
+    "h": 281
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   }
+  ],
+  "bigLeaves": [
+   560,
+   498,
+   496,
+   433
+  ]
+ },
+ "390_big50": {
+  "docSW": 390,
+  "docCW": 390,
+  "mainSW": 390,
+  "mainCW": 390,
+  "tiles": [
+   {
+    "h": 100,
+    "w": 358,
+    "t": "財報體檢 82 / 100 A 級"
+   },
+   {
+    "h": 100,
+    "w": 358,
+    "t": "357 估值 殖利率 5.50% 合理（5~7%）"
+   },
+   {
+    "h": 100,
+    "w": 358,
+    "t": "近 20 日籌碼 集中度 6.30% 大戶吸籌"
+   }
+  ],
+  "slot": [
+   {
+    "h": 96,
+    "t": "⛔ 未接線：K 線新版尚未接上"
+   }
+  ],
+  "chips": [
+   "🕒 資料 10/28",
+   "抓取 15:10",
+   "近 5 日",
+   "3／4 項有資料",
+   "另 40 筆見全部",
+   "估值口徑≠第三區 357（不能互相驗證）",
+   "抓取 15:10",
+   "🏢 個股 · 自動判型",
+   "✅ 命中 2 項",
+   "⬜ 未通過／缺漏 1 項",
+   "抓取 15:10"
+  ],
+  "exps": [
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_down",
+    "open": true,
+    "h": 503
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   }
+  ],
+  "bigLeaves": [
+   893,
+   582,
+   560,
+   496
+  ]
+ },
+ "1440_big50": {
+  "docSW": 1440,
+  "docCW": 1440,
+  "mainSW": 1140,
+  "mainCW": 1140,
+  "tiles": [
+   {
+    "h": 100,
+    "w": 316,
+    "t": "財報體檢 82 / 100 A 級"
+   },
+   {
+    "h": 100,
+    "w": 316,
+    "t": "357 估值 殖利率 5.50% 合理（5~7%）"
+   },
+   {
+    "h": 100,
+    "w": 316,
+    "t": "近 20 日籌碼 集中度 6.30% 大戶吸籌"
+   }
+  ],
+  "slot": [
+   {
+    "h": 96,
+    "t": "⛔ 未接線：K 線新版尚未接上"
+   }
+  ],
+  "chips": [
+   "🕒 資料 10/28",
+   "抓取 15:10",
+   "近 5 日",
+   "3／4 項有資料",
+   "另 40 筆見全部",
+   "估值口徑≠第三區 357（不能互相驗證）",
+   "抓取 15:10",
+   "🏢 個股 · 自動判型",
+   "✅ 命中 2 項",
+   "⬜ 未通過／缺漏 1 項",
+   "抓取 15:10"
+  ],
+  "exps": [
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_down",
+    "open": true,
+    "h": 281
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   },
+   {
+    "l": "keyboard_arrow_right",
+    "open": false,
+    "h": 40
+   }
+  ],
+  "bigLeaves": [
+   560,
+   498,
+   496,
+   433
+  ]
+ }
+}

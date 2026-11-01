@@ -488,8 +488,10 @@ class TestParityEdgeStates:
         assert o["健康度"] == n["健康度"] and o["判型結果"] == n["判型結果"]
         # 失敗的籌碼卡是精簡卡面（沒有 `blk-title`）→ 改取『含籌碼＋取得失敗』的整張卡 HTML 比對
         def pick(at):
+            # P5-3：第三區新增摘要卡（`cp-tile`，同樣含「籌碼」＋「取得失敗」）→ 比對對象限定為「卡」本身，
+            # 摘要卡另由 tests/test_p5_3_target_single.py 守衛（資訊守恆：被比對的卡面一字未變，只排除新增的摘要卡）。
             return [t for k, t in _walk(at.main) if k == "Markdown" and t.startswith("<div")
-                    and "籌碼" in t and "取得失敗" in t]
+                    and 'class="cp-tile"' not in t and "籌碼" in t and "取得失敗" in t]
         assert pick(old) and pick(old) == pick(new)
 
 
