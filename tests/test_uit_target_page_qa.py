@@ -62,7 +62,9 @@ class TestFreshness:
 
     @staticmethod
     def _lines(at):
-        return [t for k, t in _walk(at.main) if k == "Caption" and "此結果載入於" in t]
+        # P5-1：地圖區（第一區）的整句下沉到 Primary 圖下方「▸ 為什麼／來源／限制／去哪補」的『限制』（Markdown）；
+        # 其餘三區仍是外露 Caption。資訊守恆：四區整句都還在、字一個不少。
+        return [t for k, t in _walk(at.main) if k in ("Caption", "Markdown") and "此結果載入於" in t]
 
     def test_each_of_the_four_zones_shows_load_time_and_reload_instruction(self, monkeypatch):
         at, _ = self._loaded(monkeypatch)

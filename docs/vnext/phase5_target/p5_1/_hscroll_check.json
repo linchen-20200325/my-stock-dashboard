@@ -1,0 +1,64 @@
+{
+ "390": {
+  "docSW": 390,
+  "docCW": 390,
+  "mainSW": 390,
+  "mainCW": 390,
+  "title": [
+   "產業 Top 4｜近 5 日法人累計淨流入（億）"
+  ],
+  "rowsInChartText": 4,
+  "overflowEls": 0
+ },
+ "1440": {
+  "docSW": 1440,
+  "docCW": 1440,
+  "mainSW": 1140,
+  "mainCW": 1140,
+  "title": [
+   "產業 Top 4｜近 5 日法人累計淨流入（億）"
+  ],
+  "rowsInChartText": 4,
+  "overflowEls": 0
+ },
+ "1440_real": {
+  "docSW": 1440,
+  "docCW": 1440,
+  "mainSW": 1140,
+  "mainCW": 1140,
+  "title": [
+   "產業 Top 5｜近 5 日法人累計淨流入（億）"
+  ],
+  "rowsInChartText": 5,
+  "overflowEls": 0
+ },
+ "390_real": {
+  "docSW": 390,
+  "docCW": 390,
+  "mainSW": 390,
+  "mainCW": 390,
+  "title": [
+   "產業 Top 5｜近 5 日法人累計淨流入（億）"
+  ],
+  "rowsInChartText": 5,
+  "overflowEls": 0
+ },
+ "1440_cold": {
+  "docSW": 1440,
+  "docCW": 1440,
+  "mainSW": 1140,
+  "mainCW": 1140,
+  "title": [],
+  "rowsInChartText": 0,
+  "overflowEls": 0
+ },
+ "390_cold": {
+  "docSW": 390,
+  "docCW": 390,
+  "mainSW": 390,
+  "mainCW": 390,
+  "title": [],
+  "rowsInChartText": 0,
+  "overflowEls": 0
+ }
+}

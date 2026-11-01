@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import pandas as pd
 import streamlit as st
 
 from shared import price_asof_label as PAL
@@ -53,11 +54,12 @@ from shared.sector_flow_thresholds import (
     format_unavailable_caption,
 )
 from shared.ttls import TTL_1DAY, TTL_1HOUR, TTL_30MIN
-from shared.ui_state import UI_LIVE
+from shared.ui_state import UI_EMPTY, UI_IDLE, UI_LIVE
 from src.ui.tabs.tab_today import scrub_state_glyphs
 from src.ui.views import page_find as F
 from src.ui.views import page_inspect as I
 from src.ui.views._ui_kit import MAX_COLS, grid, section_header
+from src.ui_v2 import compact as cp
 from src.ui_v2 import markup as v2_markup
 
 # ══════════════════════════════════════════════════════════════════
@@ -102,6 +104,27 @@ FLOW_MISSING: str = "⬜ 資料不足（窗口內缺值，不補 0）"
 HEATMAP_EXPANDER: str = "產業漲跌熱力圖（單一代表股近似，非類股指數）"
 BUBBLE_EXPANDER: str = "三大法人資金流泡泡圖（含持股⭐）"
 HEATMAP_SWITCH_PLAIN: str = "本頁固定畫這一組；新版尚未提供切換市場或區間。"
+#: P5-1（客戶 DEC-121 Q1=A／Q3=A；線框 §4／§10 C1-3／C1-4／C2-3／C3-2）第一區 Primary：產業 Top 5 橫條。
+#: 排序鍵 ＝ 既有欄位 `x_yi`（近 `WINDOW_X` 日法人累計淨流入，億）由大到小 —— **僅是 Top 5 的顯示排序**，
+#: ⛔ 不改候選池／個股排序／Risk Cap／趨勢定義；「查看全部」內的 6 欄表維持原順序（象限→產業名稱）。
+ZONE1_RANK_FIELD: str = "x_yi"
+ZONE1_TOP_N: int = 5
+#: Primary 圖槽高（契約 §19 Q3：桌機 ≤220、手機 ≤140 ⇒ 兩者共用 140；冷啟動／無資料的槽同高，D6=B）。
+ZONE1_CHART_HEIGHT_PX: int = 140
+ZONE1_TITLE_FMT: str = "產業 Top {n}｜近 {w} 日法人累計淨流入（億）"
+#: 缺值列在圖上的文字（⛔ 不畫 0、不畫條；完整原因「窗口內缺值」在『查看全部』的 6 欄表）。
+ZONE1_ROW_MISSING: str = "⬜ 資料不足"
+#: 區塊級 Missing（取代矩陣每列重複的三句；摺疊內的完整表仍逐列保留）。
+ZONE1_MISSING_DIMS: str = "⬜ 基本面成長／相對強弱／估值：尚未建置"
+ZONE1_ALL_LABEL_FMT: str = "▸ 查看全部（{n} 個產業）"
+ZONE1_FOLD_WHERE_FMT: str = "完整產業清單（6 欄表、未取得名單、資料範圍與過期說明）請展開下方「{label}」。"
+ZONE1_IDLE_REASON: str = ZONE1_IDLE
+#: 圖表摺疊入口（客戶 DEC-109 五原文字樣；DEC-121 Q3=A：Primary 圖用四段，其餘區塊維持「🔍 查看依據」）。恰一個。
+FOLD_LABEL: str = "▸ 為什麼／來源／限制／去哪補"
+FOLD_SECTIONS: tuple[str, ...] = ("為什麼", "來源", "限制", "去哪補")
+#: 六欄 Basis → 四段（Phase 4 §3.5 同一映射；「去哪補」六欄沒有對應欄，由各圖另給）。
+BASIS_TO_FOLD: Mapping[str, tuple[str, ...]] = {
+    "為什麼": ("rule", "ai"), "來源": ("sources", "as_of"), "限制": ("missing", "confidence"), "去哪補": ()}
 
 ZONE2_TITLE: str = "第二區｜候選標的"
 ZONE2_SAY: str = "優先看基本面，再看價格與技術面。選一檔，下方展開單一股票。"
@@ -220,11 +243,16 @@ RELOAD_LABEL: dict[str, str] = {"screen": "🎯 開始選股", "map": "🗺️ �
                                 "single": "🔍 載入完整分析", "batch": "🚀 批次分析"}
 
 
+def is_aged(fetched_at: datetime, now: datetime, ttl_sec: int) -> bool:
+    """記住的結果是否已超過 TTL（`freshness_line` 與 header 的 stale chip 共用同一個判定，⛔ 兩套）。"""
+    return (now - fetched_at).total_seconds() > ttl_sec
+
+
 def freshness_line(fetched_at: datetime, now: datetime, ttl_sec: int, reload_label: str) -> str:
     """§2.4：記住的結果不得靜默過期 —— 一行灰字講「載入於幾點」與「怎麼重新載入」；超過 TTL 改寫「可能已過期」。"""
     _hm = fetched_at.astimezone(TAIPEI).strftime("%H:%M")
     _tail = f"（本次工作階段內不會自動更新；再按「{reload_label}」重新載入）"
-    _aged = (now - fetched_at).total_seconds() > ttl_sec
+    _aged = is_aged(fetched_at, now, ttl_sec)
     return f"此結果載入於 {_hm}，可能已過期{_tail}" if _aged else f"此結果載入於 {_hm}{_tail}"
 
 
@@ -239,10 +267,18 @@ def memo_loaded_at(session: Any, slot: str) -> datetime | None:
 _SLOT_COUNTER: dict[str, str] = {"screen": SS_GEN_SCREEN, "map": SS_GEN_MAP, "single": SS_GEN_TICKER, "batch": SS_GEN_BATCH}
 
 
-def render_freshness(session: Any, slot: str) -> None:
+def freshness_text(session: Any, slot: str) -> str | None:
+    """該區「載入於…」整句；使用者還沒要求過 ⇒ None（冷啟動的空殼不算）。"""
     _at = memo_loaded_at(session, slot)
     if _at is not None and own_gen(session, _SLOT_COUNTER[slot]) > 0:
-        st.caption(freshness_line(_at, now_taipei(), FRESH_TTL_SEC[slot], RELOAD_LABEL[slot]))
+        return freshness_line(_at, now_taipei(), FRESH_TTL_SEC[slot], RELOAD_LABEL[slot])
+    return None
+
+
+def render_freshness(session: Any, slot: str) -> None:
+    _line = freshness_text(session, slot)
+    if _line is not None:
+        st.caption(_line)
 
 
 def memoized(session: Any, slot: str, gen: Any, compute: Callable[[], Any]) -> Any:
@@ -290,11 +326,19 @@ def bump(session: Any, counter_key: str) -> None:
     session[counter_key] = int(session.get(counter_key, 0) or 0) + 1
 
 
+#: P5-1 手機內部壓縮（線框 §4.3；總管裁示，內部自決）：窄螢幕把頁面主欄的元素間距由預設 1rem 收到 .5rem，
+#: 讓第一區 Primary 圖上緣進第一屏。⚠️ 只排版：CSS 失效時＝Streamlit 預設間距，⛔ 沒有任何內容靠它才看得到；
+#: 只掛在本頁（`inject_css` 只由 `render_page_target` 呼叫），不改搜尋卡結構、不改任何元件。
+TARGET_LAYOUT_CSS: str = (
+    "@media (max-width:768px){"
+    '[data-testid="stMainBlockContainer"]>[data-testid="stVerticalBlock"]{gap:.5rem}}')
+
+
 def inject_css() -> None:
     """兩族 v2 卡面的樣式表**一次**吐齊（page_find 的 `_inject_v2_css` 與 page_inspect 的各吐一份 ⇒ 重複）。"""
     try:
         st.markdown(
-            f"<style>{v2_markup.page_css(F.V2_CSS_MODE)}\n{F.V2_FOLD_WRAP_CSS}\n{I.V2_INSPECT_CARD_CSS}</style>",
+            f"<style>{v2_markup.page_css(F.V2_CSS_MODE)}\n{F.V2_FOLD_WRAP_CSS}\n{I.V2_INSPECT_CARD_CSS}\n{cp.compact_css()}\n{TARGET_LAYOUT_CSS}</style>",
             unsafe_allow_html=True)
         st.session_state[F.SS_V2_CSS_DONE] = True    # 之後 page_find 的 `_render_one_v2` 不再重複吐
     except Exception as _e:  # noqa: BLE001 — 沒樣式卡片仍可讀；page_find 的 renderer 會自己再試一次
@@ -572,6 +616,198 @@ def _render_figure(draw: Callable[[], None], label: str) -> None:
                  icon="🔴")
 
 
+# ── P5-1 Primary：產業 Top 5 橫條（DEC-121 Q1=A）──────────────────────────────
+@dataclass(frozen=True)
+class RankRow:
+    """Top 5 橫條的一列。`x_yi is None` ＝ 缺值（窗口內缺值／欄位缺／非有限數）：不補 0、不當最強或最弱。"""
+
+    sector: str
+    quadrant: str
+    x_yi: float | None
+
+    @property
+    def missing(self) -> bool:
+        return self.x_yi is None
+
+
+def _finite(value: Any) -> float | None:
+    """數字 → float；缺值／NaN／inf／bool／非數字 → None（⛔ 不寫 0）。"""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        _v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return _v if math.isfinite(_v) else None
+
+
+def rank_industries(sectors: Sequence[Any]) -> tuple[RankRow, ...]:
+    """板塊資金資料 → 產業顯示排序（DEC-121 Q1=A）：`x_yi`（近 N 日法人累計淨流入）**由大到小**；
+    缺值列（`unavailable`／`x_yi` 缺或非有限）一律排最後。同值／同為缺值者依產業名稱（僅為讓畫面穩定的決定性次序）。
+    ⛔ 純顯示排序：不改輸入、不補值、不增刪列；候選池／個股排序／Risk Cap／趨勢定義都不經過這裡。
+    """
+    _valued: list[RankRow] = []
+    _missing: list[RankRow] = []
+    for _s in sectors or ():
+        if not isinstance(_s, Mapping):
+            continue
+        _name = str(_s.get("sector") or "").strip() or "（未命名）"
+        _quad = str(_s.get("quadrant") or "").strip()
+        _x = None if _s.get("unavailable") is True else _finite(_s.get(ZONE1_RANK_FIELD))
+        (_missing if _x is None else _valued).append(RankRow(sector=_name, quadrant=_quad, x_yi=_x))
+    _valued.sort(key=lambda _r: (-_r.x_yi, _r.sector))    # type: ignore[operator]  # _valued 的 x_yi 皆非 None
+    _missing.sort(key=lambda _r: _r.sector)
+    return tuple(_valued + _missing)
+
+
+def rank_row_label(index: int, row: RankRow) -> str:
+    """橫條的列標：名次、產業、象限名、數值全是文字 ⇒ 顏色不是唯一資訊；缺值寫 ⬜，不寫數字。"""
+    _quad = row.quadrant or "—"
+    _val = ZONE1_ROW_MISSING if row.x_yi is None else f"{row.x_yi:.1f} 億"
+    return f"{index}. {row.sector}｜{_quad}｜{_val}"
+
+
+def rank_chart_frame(rows: Sequence[RankRow]) -> pd.DataFrame:
+    """橫條圖的資料：缺值列的 `x_yi` 是空值（NaN）⇒ 圖上不畫條（⛔ 不是 0）。"""
+    return pd.DataFrame({
+        "row": [rank_row_label(_i, _r) for _i, _r in enumerate(rows, start=1)],
+        "x_yi": pd.Series([_r.x_yi for _r in rows], dtype="float64"),
+    })
+
+
+def rank_chart_spec(row_labels: Sequence[str], *, height: int = ZONE1_CHART_HEIGHT_PX) -> dict[str, Any]:
+    """橫條 Vega-Lite spec：列順序＝資料順序（`scale.domain` 明列、`sort: null`，⛔ 由圖自己重排）；x 軸有刻度；
+    條色單一（正負看位置與列標文字）。⚠️ `scale.domain` 必須明列：x 空值（缺值列）會被 Vega-Lite 當無效值濾掉，
+    不明列的話該列連列標都消失（缺值列「⬜ 資料不足」就被藏起來了）。
+    `labelOverlap: False`：窄螢幕列距小時 Vega 會自動隱藏「疑似重疊」的列標（實測手機 5 列時第 2、4 列列標被吃掉 ⇒ 名次、
+    象限名、數值全看不到）；列標就是這張圖的文字資訊，一列都不能被自動藏起來。"""
+    return {
+        "height": height,
+        "autosize": {"type": "fit", "contains": "padding"},
+        "mark": {"type": "bar", "color": "#2563eb"},
+        "encoding": {
+            "y": {"field": "row", "type": "ordinal", "sort": None, "title": "",
+                  "scale": {"domain": list(row_labels)},
+                  "axis": {"labelLimit": 220, "labelFontSize": 11, "labelOverlap": False,
+                           "ticks": False, "domain": False}},
+            "x": {"field": ZONE1_RANK_FIELD, "type": "quantitative", "title": "",
+                  "axis": {"grid": True, "labelFontSize": 10, "tickCount": 4}},
+            "tooltip": [{"field": "row", "type": "nominal", "title": "產業"},
+                        {"field": ZONE1_RANK_FIELD, "type": "quantitative", "title": "近 5 日累計淨流入（億）",
+                         "format": ",.1f"}],
+        },
+    }
+
+
+def render_industry_chart(frame: pd.DataFrame) -> None:
+    st.vega_lite_chart(frame, rank_chart_spec(list(frame["row"])), width="stretch", height=ZONE1_CHART_HEIGHT_PX)
+
+
+@dataclass(frozen=True)
+class ChartFold:
+    """圖表摺疊的四段內容（每段 ≥1 行；空段 ⇒ `ValueError`：不適用必須寫「—」並說明，⛔ 留白）。"""
+
+    why: tuple[str, ...]
+    source: tuple[str, ...]
+    limit: tuple[str, ...]
+    where: tuple[str, ...]
+
+    def sections(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        _out = tuple(zip(FOLD_SECTIONS, (self.why, self.source, self.limit, self.where), strict=True))
+        for _name, _lines in _out:
+            if not _lines or not all(str(_t).strip() for _t in _lines):
+                raise ValueError(f"圖表摺疊「{_name}」不得留白（不適用寫「—」並說明）")
+        return _out
+
+
+def chart_fold(basis: Basis, *, limit: Sequence[str] = (), where: Sequence[str] = ()) -> ChartFold:
+    """六欄 Basis 依 `BASIS_TO_FOLD` 分到四段（「- **欄名**：內容」、逐字、洗秘密），再接各段額外行。
+    資訊守恆：原「🔍 查看依據」的每一欄都落在某一段，一字不改。"""
+    _rows = dict(zip((_a for _, _a in BASIS_FIELDS), basis_rows(basis), strict=True))
+    _sec: dict[str, tuple[str, ...]] = {}
+    for _name in FOLD_SECTIONS:
+        _attrs = [_a for _a in BASIS_TO_FOLD[_name] if _a in _rows]
+        _md = "\n".join(f"- **{_rows[_a][0]}**：{scrub_secrets(_rows[_a][1])}" for _a in _attrs)
+        _sec[_name] = ((_md,) if _md else ())
+    return ChartFold(why=_sec["為什麼"], source=_sec["來源"],
+                     limit=_sec["限制"] + tuple(limit), where=tuple(where))
+
+
+def render_chart_fold(fold: ChartFold) -> None:
+    """Primary 圖下方**恰一個**摺疊（預設收合）：四段依序「**段名**」＋內容。"""
+    _sections = fold.sections()          # 先驗（留白就紅），再畫
+    with st.expander(FOLD_LABEL, expanded=False):
+        for _name, _lines in _sections:
+            st.markdown(f"**{_name}**")
+            for _text in _lines:
+                st.markdown(_text)
+
+
+def _asof_chip(updated_at: Any) -> Any:
+    """資料日 chip（`MM/DD`）；`updated_at` 不是 `YYYY-MM-DD…` ⇒ `⬜ 資料日未提供`（⛔ 猜一個日期）。"""
+    _s = str(updated_at or "").strip()[:10]
+    try:
+        _d = datetime.strptime(_s, "%Y-%m-%d").date()
+    except ValueError:
+        return cp.meta_chip("asof_missing")
+    return cp.meta_chip("asof", f"{_d:%m/%d}")
+
+
+def industry_chips(flow: Any, rows: Sequence[RankRow], *, fetched_at: datetime | None, aged: bool) -> list[Any]:
+    """Primary header 的 chip：資料日、抓取時間、窗口、（過期才有）過期、（有缺值才有）覆蓋。每個事實外露層最多一次。"""
+    _chips: list[Any] = [_asof_chip(getattr(flow, "updated_at", ""))]
+    if fetched_at is not None:
+        _chips.append(cp.meta_chip("retrieved_at", fetched_at.astimezone(TAIPEI).strftime("%H:%M")))
+    _chips.append(cp.meta_chip("window", f"近 {WINDOW_X} 日"))
+    _n_ok = sum(1 for _r in rows if not _r.missing)
+    if getattr(flow, "stale", False) or aged:
+        # 狀態類 chip 同列互斥（契約 §6）：過期優先外露；覆蓋數仍在摺疊「限制」逐字可查（`industry_fold`）。
+        _chips.append(cp.meta_chip("stale"))
+    elif rows and _n_ok < len(rows):
+        _chips.append(cp.meta_chip("coverage", f"{_n_ok}／{len(rows)} 項有資料"))
+    return _chips
+
+
+def industry_fold(flow: Any, *, fresh_line: str | None, n_total: int, n_ok: int | None = None) -> ChartFold:
+    """Primary 摺疊：六欄依據分四段；整句 freshness、資料範圍／過期說明、清單指路都在這（只下沉）。"""
+    _limit: list[str] = []
+    if flow is not None and getattr(flow, "requested", False) and getattr(flow, "ok", False):
+        if getattr(flow, "stale", False):
+            _limit.append("⚠️ " + _stale_caption(flow))
+        if getattr(flow, "tpex_complete", None) is not True:
+            _limit.append(SECTOR_FLOW_TWSE_ONLY_NOTE)
+        if n_ok is not None and n_total and n_ok < n_total:
+            _limit.append(f"有資料的產業：{n_ok}／{n_total}（其餘為窗口內缺值或交易日不足，名單見「查看全部」）")
+    if fresh_line:
+        _limit.append(fresh_line)
+    if flow is None or not getattr(flow, "requested", False):
+        _where = [ZONE1_IDLE]
+    elif not getattr(flow, "ok", False):
+        _where = [f"請再按「{RELOAD_LABEL['map']}」重新載入；快取要等盤後凍結任務產生。"]
+    else:
+        _where = [ZONE1_FOLD_WHERE_FMT.format(label=ZONE1_ALL_LABEL_FMT.format(n=n_total))]
+    return chart_fold(basis_industry(flow), limit=_limit, where=_where)
+
+
+def _stale_caption(flow: Any) -> str:
+    return ("資料過期（載入當下判定）：畫的是最後一次成功凍結的快照"
+            + (f"（{_md_safe(flow.stale_reason)}）" if flow.stale_reason else "") + "。")
+
+
+def render_all_industries(flow: Any, matrix: Sequence[MatrixRow]) -> None:
+    """「▸ 查看全部（N 個產業）」：原 6 欄表逐列（維持象限→名稱的原順序）、過期註、TWSE-only 註、未取得名單 —— 只下沉、不刪。"""
+    with st.expander(ZONE1_ALL_LABEL_FMT.format(n=len(matrix)), expanded=False):
+        if matrix:
+            st.markdown(matrix_html(matrix), unsafe_allow_html=True)
+        if flow.stale:
+            st.caption("⚠️ " + _stale_caption(flow))
+        if flow.tpex_complete is not True:
+            st.caption(SECTOR_FLOW_TWSE_ONLY_NOTE)
+        _unav = format_unavailable_caption(flow.sectors)
+        if _unav:
+            st.caption(_unav)
+
+
 def render_zone_industry(session: Any) -> None:
     section_header(ZONE1_TITLE, ZONE1_SAY)
     st.caption(ZONE1_SORT_NOTE)
@@ -580,27 +816,42 @@ def render_zone_industry(session: Any) -> None:
         session[F.SS_MAP_REQUESTED] = True
         bump(session, SS_GEN_MAP)
     if not own_map_requested(session):
-        st.caption(ZONE1_IDLE)
-        render_basis(basis_industry(None))
+        # 冷啟動零取數：Primary 槽放同高的灰色 placeholder（⬜ 尚未載入；不是空白、不是假圖、不是紅）。
+        st.markdown(cp.chart_slot_missing_html(UI_IDLE, ZONE1_IDLE_REASON, height_px=ZONE1_CHART_HEIGHT_PX),
+                    unsafe_allow_html=True)
+        render_chart_fold(industry_fold(None, fresh_line=None, n_total=0))
         return
     _mb = map_bundle(session)
     _flow, _hm = _mb.flow, _mb.heatmap
+    _fresh = freshness_text(session, "map")
     if not _flow.ok:
         # 快取還沒產生（灰）／取數失敗（紅）：狀態卡放在區塊外面，不收進展開區。
         _card, _facts = F.build_sector_flow_card(_flow)
         F._render_one(_card, _facts)
+        render_chart_fold(industry_fold(_flow, fresh_line=_fresh, n_total=0))
     else:
         _matrix = build_industry_matrix(_flow.sectors)
-        if _matrix:
-            st.markdown(matrix_html(_matrix), unsafe_allow_html=True)
-        if _flow.stale:
-            st.caption("⚠️ 資料過期（載入當下判定）：畫的是最後一次成功凍結的快照"
-                       + (f"（{_md_safe(_flow.stale_reason)}）" if _flow.stale_reason else "") + "。")
-        if _flow.tpex_complete is not True:
-            st.caption(SECTOR_FLOW_TWSE_ONLY_NOTE)
-        _unav = format_unavailable_caption(_flow.sectors)
-        if _unav:
-            st.caption(_unav)
+        _ranked = rank_industries(_flow.sectors)
+        _top = cp.topn_view(_ranked, ZONE1_TOP_N)
+        _at = memo_loaded_at(session, "map")
+        _aged = _at is not None and is_aged(_at, now_taipei(), FRESH_TTL_SEC["map"])
+        _hdr, _overflow = cp.chart_header_html(
+            title=ZONE1_TITLE_FMT.format(n=len(_top.shown) or ZONE1_TOP_N, w=WINDOW_X),
+            chips=industry_chips(_flow, _ranked, fetched_at=_at, aged=_aged), say=None, title_verbatim=True)
+        st.markdown(_hdr, unsafe_allow_html=True)
+        if _top.empty:
+            st.markdown(cp.chart_slot_missing_html(UI_EMPTY, "板塊資料沒有任何產業列", height_px=ZONE1_CHART_HEIGHT_PX),
+                        unsafe_allow_html=True)
+        else:
+            _render_figure(lambda: render_industry_chart(rank_chart_frame(_top.shown)), "產業橫條圖")
+            st.caption(ZONE1_MISSING_DIMS)
+        _fold = industry_fold(_flow, fresh_line=_fresh, n_total=len(_ranked),
+                          n_ok=sum(1 for _r in _ranked if not _r.missing))
+        if _overflow:
+            _fold = ChartFold(why=_fold.why, source=_fold.source + tuple(_c.text for _c in _overflow),
+                              limit=_fold.limit, where=_fold.where)
+        render_chart_fold(_fold)
+        render_all_industries(_flow, _matrix)
     # 熱力圖／泡泡圖降為展開區；有狀態異常（紅／橘）時預設展開，避免把問題藏在收合裡。
     _hm_card, _hm_facts = F.build_heatmap_card(_hm)
     with st.expander(HEATMAP_EXPANDER, expanded=(_hm_card.state != UI_LIVE)):
@@ -623,8 +874,6 @@ def render_zone_industry(session: Any) -> None:
                         with _col:
                             st.markdown(f"**{_q}**　{_n} 個板塊")
             st.caption(F.SECTOR_FLOW_AXIS_NOTE)
-    render_freshness(session, "map")
-    render_basis(basis_industry(_flow))
 
 
 def basis_industry(flow: Any) -> Basis:
