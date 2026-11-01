@@ -99,7 +99,20 @@ async function flow(p) {
   if (PAGE === 'target' && !COLD) {
     const click = async (name) => { await p.getByRole('button', {name}).first().click(); await p.waitForTimeout(800); await waitIdle(p); };
     await click('🗺️ 載入板塊地圖');
+    // P5-3 工具修正（Phase 5 驗證必要；DEC-121 Q2=B 起「選股條件」expander 預設收合 ⇒ 🎯 開始選股鈕在收合內、不可見，
+    // 舊流程 click 會逾時）：先展開 expander 再按。只動操作流程，量測算法（measure）未改。
+    const runBtn = p.getByRole('button', {name: '🎯 開始選股'}).first();
+    if (!(await runBtn.isVisible())) {
+      await p.locator('summary', {hasText: '選股條件'}).first().click();
+      await p.waitForTimeout(500);
+    }
     await click('🎯 開始選股');
+    // 按完後把「選股條件」收回預設（Streamlit 會讓使用者開過的 expander 維持展開，會把 loaded 全頁高灌水 281/503px）；
+    // 想量「使用者開著條件」的高度，設 KEEP_SCREEN_OPEN=1。
+    if (!process.env.KEEP_SCREEN_OPEN) {
+      await p.locator('summary', {hasText: '選股條件'}).first().click();
+      await p.waitForTimeout(500);
+    }
     await click('🔍 查看此檔');
   }
 }

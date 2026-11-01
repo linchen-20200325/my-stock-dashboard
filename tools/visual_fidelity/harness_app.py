@@ -15,6 +15,7 @@
 - `&cold=1` 冷啟動（不預置已載入 session）。
 - `&report=1|partial`（📊 市場）預置一份全成功／部分失敗的更新報告。
 - `&realflow=1`（🎯 標的）改用 repo 內真本地板塊快取（產業數較多）。
+- `&big=N`（🎯 標的，P5-3 新增）選股結果改成 N 列假候選（預設 3 列）。
 🎯 標的頁的已載入狀態由 `measure_app.js` 依序點「🗺️ 載入板塊地圖 → 🎯 開始選股 → 🔍 查看此檔」。
 """
 import datetime as _dt
@@ -42,6 +43,22 @@ U.install(_mp, U.Calls())
 if st.query_params.get('realflow') == '1' or st.session_state.get('_pcm_realflow'):
     st.session_state['_pcm_realflow'] = True
     _mp.setattr(_F, 'load_sector_flow', _REAL_FLOW)
+
+# P5-3 工具擴充（Phase 5 驗證用）：`&big=N` ⇒ 🎯 選股結果改成 N 列假候選（預設 3 列看不出 Top-N 切片與全頁高成長）。
+_big = st.query_params.get('big')
+if _big and _big.isdigit() and int(_big) > 3:
+    _BIG_N = int(_big)
+
+    def _big_screen(req):
+        if not req.submitted:
+            return _F.ScreenResult(requested=False)
+        _codes = [c[0] for c in U.CANDIDATES] + [str(1101 + _i) for _i in range(_BIG_N - len(U.CANDIDATES))]
+        _names = [c[1] for c in U.CANDIDATES] + [f"範例{_i}" for _i in range(_BIG_N - len(U.CANDIDATES))]
+        _df = pd.DataFrame({"代碼": _codes, "名稱": _names,
+                            "綜合分": [90.0 - _i * 0.5 for _i in range(_BIG_N)], "估值分": [50.0] * _BIG_N})
+        return _F.ScreenResult(requested=True, df=_df, note="", rows=len(_df), survivors_n=324, pe_n=2, name_n=3,
+                               hits=("估值 2/3",))
+    _mp.setattr(_F, 'load_screen_result', _big_screen)
 
 # ── 📊 market ──
 from src.services import market_twii_view_service as S

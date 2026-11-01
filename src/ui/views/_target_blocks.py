@@ -54,7 +54,7 @@ from shared.sector_flow_thresholds import (
     format_unavailable_caption,
 )
 from shared.ttls import TTL_1DAY, TTL_1HOUR, TTL_30MIN
-from shared.ui_state import UI_EMPTY, UI_IDLE, UI_LIVE
+from shared.ui_state import UI_EMPTY, UI_IDLE, UI_LIVE, UI_PARTIAL, UI_STATE_META, UI_UNWIRED
 from src.ui.tabs.tab_today import scrub_state_glyphs
 from src.ui.views import page_find as F
 from src.ui.views import page_inspect as I
@@ -143,7 +143,9 @@ CANDIDATE_NOTES_EXPANDER: str = "▸ 說明（估值口徑・籌碼未取・金�
 CANDIDATE_COLS: tuple[str, ...] = ("標的", "產業", "基本面", "估值", "籌碼", "狀態")
 PICK_LABEL: str = "選擇標的"
 PICK_BUTTON_LABEL: str = "🔍 查看此檔"
+#: P5-3 A8：全文（`PICK_NOTE`）逐字下沉到「▸ 說明」摺疊（L3）；外露只留短句（非客戶原句，可縮）。
 PICK_NOTE: str = "選一檔後按「🔍 查看此檔」才會取這一檔的資料；候選表本身不會自動逐檔取數。"
+PICK_NOTE_SHORT: str = "按「🔍 查看此檔」才取該檔資料。"
 CHIPS_NOT_FETCHED: str = "未取（展開後顯示）"
 CHIPS_COL_HINT: str = "籌碼欄：點選一檔後才會取，其他候選顯示「未取」，不是沒有資料。"
 PE_COL_NOTE: str = ("估值欄是當日本益比（資料日：⬜ 未提供）；第三區的估值是另一種算法（殖利率口徑），"
@@ -178,6 +180,28 @@ PROFIT_HEADER: str = "💰 獲利能力診斷"
 PROFIT_CAPTION: str = "缺值是灰的「資料缺漏」，不是紅的「辛苦生意」。"
 ETF_HEADER: str = "ETF"
 UNKNOWN_HINT: str = "這個代碼系統無法判定是個股或 ETF；可展開上方「進階選項」手動指定判型後再載入。"
+
+#: P5-3（客戶 DEC-121／DEC-107 補充；線框 §3.4／§10 C2-5～C2-7）第三區「單一股票」：判型卡 → chip、≤4 摘要卡＋主圖槽、
+#: 計數 chip（命中／未通過·缺漏，**分開兩顆**）、「▸ 完整分析」（七區塊＋獲利能力診斷）**預設收合且原樣**（資訊只下沉、不刪）。
+#: ⛔ 摘要卡的值只取既有 builder／readout 欄位（不新增計算）；⛔ 不合成「單一結論／評分／HOLD／買賣」。
+#: 暫名：判型 chip／計數 chip 現以 `guard_chip`（護欄族、實線粗框）承載，因 `META_KINDS` 封閉集無 info 族自由文字 kind
+#: （登記 BACKLOG `P5-CHIP-KIND-NAMES`；待總管決定是否新增 kind）。
+KIND_CHIP_STOCK: str = "🏢 個股"
+KIND_CHIP_ETF: str = "ETF"
+KIND_SRC_AUTO: str = "自動判型"
+KIND_SRC_MANUAL: str = "手動指定"
+KIND_DETAIL_EXPANDER: str = "▸ 判型明細"
+SUMMARY_HEALTH_LABEL: str = "財報體檢"
+SUMMARY_VALUATION_LABEL: str = "357 估值"
+SUMMARY_CHIPS_LABEL: str = "近 20 日籌碼"
+HIT_CHIP_FMT: str = "✅ 命中 {n} 項"
+MISS_CHIP_FMT: str = "⬜ 未通過／缺漏 {m} 項"
+NOT_EVALUATED_CHIP: str = "⬜ 尚未評估"
+PARTIAL_NOT_EVALUATED_FMT: str = "⬜ {k} 塊尚未評估"
+#: 主圖槽（誠實 placeholder：K 線新版尚未接上；`UI_UNWIRED`＝⛔ 未接線，灰、不是紅、不畫任何線）。
+SINGLE_CHART_REASON: str = "K 線新版尚未接上"
+SINGLE_CHART_HEIGHT_PX: int = 96
+FULL_ANALYSIS_EXPANDER: str = "▸ 完整分析（七區塊＋獲利能力診斷）"
 
 ADVANCED_EXPANDER: str = "進階分析"
 BATCH_TITLE: str = "多檔比較（可混貼）"
@@ -292,6 +316,18 @@ def render_freshness(session: Any, slot: str) -> None:
         st.caption(_line)
 
 
+def freshness_chips(session: Any, slot: str) -> list[Any]:
+    """P5-3 A8（線框 T-18／C2-4）：外露只留 `抓取 HH:MM`（過 TTL 另加 `⚠ 可能已過期`）；整句 `freshness_text` 逐字下沉到該區
+    「🔍 查看依據」摺疊（L3）。TTL 判定與整句**同一個** `is_aged`（⛔ 兩套）。冷啟動／使用者未要求過 ⇒ 空。"""
+    _at = memo_loaded_at(session, slot)
+    if _at is None or own_gen(session, _SLOT_COUNTER[slot]) <= 0:
+        return []
+    _chips: list[Any] = [cp.meta_chip("retrieved_at", _at.astimezone(TAIPEI).strftime("%H:%M"))]
+    if is_aged(_at, now_taipei(), FRESH_TTL_SEC[slot]):
+        _chips.append(cp.meta_chip("stale"))
+    return _chips
+
+
 def memoized(session: Any, slot: str, gen: Any, compute: Callable[[], Any]) -> Any:
     """依「使用者要求的世代」記住結果：同世代 ⇒ 不再呼叫 `compute`（不論成功或失敗），新世代 ⇒ 重算。
 
@@ -342,7 +378,14 @@ def bump(session: Any, counter_key: str) -> None:
 #: 只掛在本頁（`inject_css` 只由 `render_page_target` 呼叫），不改搜尋卡結構、不改任何元件。
 TARGET_LAYOUT_CSS: str = (
     "@media (max-width:768px){"
-    '[data-testid="stMainBlockContainer"]>[data-testid="stVerticalBlock"]{gap:.5rem}}')
+    '[data-testid="stMainBlockContainer"]>[data-testid="stVerticalBlock"]{gap:.125rem}'
+    # QA P3：header 的 chip 列會溢出自己的容器（容器高 43、chip 列底部多出約 10px；main 基準已被圖頂蓋 2px，gap 收緊後蓋 6px）⇒ 補回下緣留白。
+    '[data-testid="stMainBlockContainer"] .cp-chips{padding-bottom:.5rem}'
+    # QA P3（cold 手機）：Primary 灰色佔位框溢出自己的容器，下方「為什麼／來源」摺疊疊在框底（main 基準同樣有）⇒ 補回下緣留白。
+    '[data-testid="stMainBlockContainer"] .cp-slot-primary{margin-bottom:.75rem}'
+    # P5-3 A2（線框 §4.3 內部壓縮；只排版）：元素間距收到 .125rem（原 .5rem），讓第一區 Primary 圖整張進第一屏。
+    # （試過同時收 h2/h4 的 padding：標題會壓到下一行文字（實測截圖）⇒ 只收間距、不動標題。）
+    '}')
 
 
 def inject_css() -> None:
@@ -380,9 +423,11 @@ def basis_rows(basis: Basis) -> list[tuple[str, str]]:
     return _rows
 
 
-def render_basis(basis: Basis) -> None:
+def render_basis(basis: Basis, fresh_line: str | None = None) -> None:
     with st.expander(BASIS_EXPANDER_LABEL, expanded=False):
         st.markdown("\n".join(f"- **{_k}**：{scrub_secrets(_v)}" for _k, _v in basis_rows(basis)))
+        if fresh_line:
+            st.markdown(fresh_line)       # P5-3 A8：freshness 整句逐字（含「不會自動更新」「再按…重新載入」「可能已過期」）
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1123,6 +1168,7 @@ def render_candidate_notes() -> None:
     """估值口徑全文／籌碼未取／金融股 —— 逐字（只下沉、不刪）。"""
     with st.expander(CANDIDATE_NOTES_EXPANDER, expanded=False):
         st.caption(PE_COL_NOTE)
+        st.caption(PICK_NOTE)
         st.caption(CHIPS_COL_HINT)
         st.caption(FIN_STOCK_NOTE)
 
@@ -1142,8 +1188,8 @@ def render_zone_candidates(session: Any) -> None:
     _card, _facts = F.build_screen_result_card(_sb.result, _sb.req)
     F._render_one(_card, _facts)
     if _card.state != UI_LIVE:
-        render_freshness(session, "screen")
-        render_basis(basis_candidates(_sb))
+        render_chip_row(freshness_chips(session, "screen"))
+        render_basis(basis_candidates(_sb), freshness_text(session, "screen"))
         return
     st.caption("本次因子：" + (" · ".join(_sb.result.hits) if _sb.result.hits else "僅基本面四項全過"))
     _single = single_bundle(session) if own_inspect_request(session).submitted else None
@@ -1175,9 +1221,9 @@ def render_zone_candidates(session: Any) -> None:
         st.selectbox(PICK_LABEL, _opts, format_func=lambda _c: f"{_c} {_names.get(_c, '')}".strip(),
                      key=SS_PICK_WIDGET)
         st.button(PICK_BUTTON_LABEL, key=SS_PICK_BUTTON, on_click=on_pick_click)
-        st.caption(PICK_NOTE)
-    render_freshness(session, "screen")
-    render_basis(basis_candidates(_sb))
+        st.caption(PICK_NOTE_SHORT)
+    render_chip_row(freshness_chips(session, "screen"))
+    render_basis(basis_candidates(_sb), freshness_text(session, "screen"))
 
 
 def basis_candidates(sb: ScreenBundle) -> Basis:
@@ -1367,6 +1413,89 @@ def basis_single(single: SingleBundle) -> Basis:
         confidence=("判型：" + (_v.kind_label or "⬜ 無法判定") + ("（手動指定）" if _v.overridden else "（系統自動）")))
 
 
+def kind_chip_text(verdict: Any) -> str:
+    """判型 chip 文字（`🏢 個股 · 自動判型`／`ETF · 手動指定`…）。只轉述 `KindVerdict`，⛔ 自行判型。"""
+    _kind = KIND_CHIP_STOCK if verdict.is_stock else KIND_CHIP_ETF if verdict.is_etf else ""
+    if not _kind:
+        raise ValueError("判型 chip 只給已判出個股／ETF 的結果（判不出型別走外露灰卡）")
+    return f"{_kind} · {KIND_SRC_MANUAL if verdict.overridden else KIND_SRC_AUTO}"
+
+
+def _tile_state(state: str) -> str:
+    """空槽原因 chip 的狀態：沿用 `UI_STATE_META`；`live` 不是缺資料、`partial` 需 N／M ⇒ 一律退 `empty`（灰）。"""
+    return state if state in UI_STATE_META and state not in (UI_LIVE, UI_PARTIAL) else UI_EMPTY
+
+
+def _summary_tile(label: str, value: str | None, *, say: str | None = None, blank_state: str = UI_EMPTY) -> str:
+    """一張摘要卡（compact KPI tile）。`value=None` ⇒ 主值留白＋說明原因的狀態 chip（⛔ 不補 0／—）。"""
+    if value is None:
+        return cp.kpi_tile_html(label=label, value=None, chips=[cp.status_chip(_tile_state(blank_state))])
+    return cp.kpi_tile_html(label=label, value=value, say=say or None)
+
+
+def summary_tiles(single: SingleBundle) -> list[str]:
+    """個股摘要卡（≤4；目前 3 張）。**值只取既有 builder／readout 欄位**：財報體檢＝`StockReadout.score_pct`／`grade`，
+    357 估值與籌碼＝各自 builder 的 `Card.value`（`殖利率 x%`／`集中度 x%`）與訊號標籤。⛔ 合成、⛔ 重算、⛔ 評分。"""
+    _st, _val, _ch = single.stock, single.valuation, single.chips
+    _tiles: list[str] = []
+    # 財報體檢
+    if _st is None:
+        _tiles.append(_summary_tile(SUMMARY_HEALTH_LABEL, None))
+    else:
+        _c = I.build_health_card(_st)[0]
+        _score = _fmt_f(_st.score_pct, 0) if _c.state == UI_LIVE else None
+        _tiles.append(_summary_tile(SUMMARY_HEALTH_LABEL, f"{_score} / 100" if _score is not None else None,
+                                    say=(f"{_st.grade} 級" if _st.grade else None), blank_state=_c.state))
+    # 357 估值（標題必帶 357：與候選表「估值（本益比）」是兩種口徑）
+    if _val is None:
+        _tiles.append(_summary_tile(SUMMARY_VALUATION_LABEL, None))
+    else:
+        _c, _, _sig = I.build_valuation_card(_val)
+        _tiles.append(_summary_tile(SUMMARY_VALUATION_LABEL, _c.value if _c.state == UI_LIVE and _c.value else None,
+                                    say=_sig, blank_state=_c.state))
+    # 近 20 日籌碼
+    if _ch is None:
+        _tiles.append(_summary_tile(SUMMARY_CHIPS_LABEL, None))
+    else:
+        _c, _, _sig = I.build_chips_card(_ch)
+        _tiles.append(_summary_tile(SUMMARY_CHIPS_LABEL, _c.value if _c.state == UI_LIVE and _c.value else None,
+                                    say=_sig, blank_state=_c.state))
+    return _tiles
+
+
+def why_not_count(single: SingleBundle) -> int:
+    """「未通過／缺漏」的**真項數**：體檢未通過項目逐項計（`fail_items` 每項 1），其餘缺漏／失敗各 1。
+    ⛔ 不是 `why_not_facts` 的列數（那一列「財報體檢未通過的項目：A、B、C」會把 3 項算成 1 項）。"""
+    _facts = why_not_facts(single)
+    _fails = len(single.stock.fail_items) if single.stock is not None and single.stock.fail_items else 0
+    return len(_facts) - (1 if _fails else 0) + _fails
+
+
+def count_chips(single: SingleBundle, pick: Mapping | None) -> list[Any]:
+    """計數 chip：「✅ 命中 N 項」與「⬜ 未通過／缺漏 M 項」**兩顆分開**（⛔ 合併成一個分數／結論／HOLD）。
+    N＝`worth_facts` 列數（每項 1 列）、M＝`why_not_count` 真項數。
+    三塊（體檢／357／籌碼）全為 None＝這一輪什麼都沒評估到：⛔ 不得顯示「命中 0 項／缺漏 0 項」（missing≠0），
+    改一顆 `⬜ 尚未評估`（取數例外的紅字另在上方外露）；只有部分塊為 None ⇒ 另加 `⬜ k 塊尚未評估`。"""
+    if single.stock is None and single.valuation is None and single.chips is None:
+        return [cp.guard_chip(NOT_EVALUATED_CHIP)]
+    _chips = [cp.guard_chip(HIT_CHIP_FMT.format(n=len(worth_facts(single, pick)))),
+              cp.guard_chip(MISS_CHIP_FMT.format(m=why_not_count(single)))]
+    # 部分整塊為 None（例如只有體檢有值）：「缺漏 N 項」只數得到已評估那幾塊的缺項，⛔ 不得讓 0 讀成「沒有缺漏」
+    # ⇒ 另補明確一顆「⬜ k 塊尚未評估」（missing≠0；與缺漏數分開、不合併）。
+    _k = sum(1 for _x in (single.stock, single.valuation, single.chips) if _x is None)
+    if _k:
+        _chips.append(cp.guard_chip(PARTIAL_NOT_EVALUATED_FMT.format(k=_k)))
+    return _chips
+
+
+def render_summary_tiles(single: SingleBundle) -> None:
+    _tiles = summary_tiles(single)
+    for _chunk, _columns in grid(tuple(_tiles), MAX_COLS):
+        for _html_tile, _col in zip(_chunk, _columns):
+            with _col:
+                st.markdown(_html_tile, unsafe_allow_html=True)
+
+
 def render_zone_single(session: Any, sb: ScreenBundle | None) -> None:
     section_header(ZONE3_TITLE)
     if not own_inspect_request(session).submitted:
@@ -1376,11 +1505,24 @@ def render_zone_single(session: Any, sb: ScreenBundle | None) -> None:
     _v = _single.verdict
     for _name, _err in _single.errors:
         st.error(f"🔴 {_name}這一區取數拋例外（其他區照常）：{_md_safe(_err)}", icon="🔴")
-    _render_built(I.build_kind_card(_v, _single.req))
+    _resolved = _v.is_stock or _v.is_etf
+    if _resolved:
+        # 判型結果卡 → chip；原卡逐字下沉到「▸ 判型明細」（L3，預設收合）。
+        render_chip_row([cp.guard_chip(kind_chip_text(_v))])
+        with st.expander(KIND_DETAIL_EXPANDER, expanded=False):
+            _render_built(I.build_kind_card(_v, _single.req))
+    else:
+        # 判不出型別／判型失敗／沒填代碼＝真狀態，不是明細：灰（或紅）卡維持外露。
+        _render_built(I.build_kind_card(_v, _single.req))
     if _v.is_stock:
         st.markdown(f"**{_v.code}" + (f" {_single.stock.name}" if _single.stock is not None and _single.stock.name else "")
                     + "（個股）**")
-        render_stock_blocks(_single, sb)
+        guard("摘要卡", lambda: render_summary_tiles(_single))
+        render_chip_row(count_chips(_single, picked_row(sb, _single.req.ticker)))
+        st.markdown(cp.chart_slot_missing_html(UI_UNWIRED, SINGLE_CHART_REASON, height_px=SINGLE_CHART_HEIGHT_PX),
+                    unsafe_allow_html=True)
+        with st.expander(FULL_ANALYSIS_EXPANDER, expanded=False):
+            render_stock_blocks(_single, sb)
     elif _v.is_etf:
         st.markdown(f"**{_v.code}（{ETF_HEADER}）**")
         render_etf_blocks(_single)
@@ -1388,8 +1530,8 @@ def render_zone_single(session: Any, sb: ScreenBundle | None) -> None:
         # 沿用既有灰卡原樣（v2 短句表與 Note 原文綁定，改字會讓卡面轉紅）；指路另補一行白話。
         _render_built(I.build_unknown_card(_v))
         st.caption(UNKNOWN_HINT)
-    render_freshness(session, "single")
-    render_basis(basis_single(_single))
+    render_chip_row(freshness_chips(session, "single"))
+    render_basis(basis_single(_single), freshness_text(session, "single"))
 
 
 # ══════════════════════════════════════════════════════════════════
