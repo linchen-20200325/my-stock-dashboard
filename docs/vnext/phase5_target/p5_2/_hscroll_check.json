@@ -1,0 +1,30 @@
+{
+ "390": {
+  "docSW": 390,
+  "docCW": 390,
+  "mainSW": 390,
+  "mainCW": 390,
+  "blockSW": 390,
+  "blockCW": 390
+ },
+ "1440": {
+  "docSW": 1440,
+  "docCW": 1440,
+  "mainSW": 1140,
+  "mainCW": 1140,
+  "blockSW": 1140,
+  "blockCW": 1140
+ },
+ "1440_open": {
+  "docSW": 1440,
+  "docCW": 1440,
+  "mainSW": 1140,
+  "mainCW": 1140
+ },
+ "390_open": {
+  "docSW": 390,
+  "docCW": 390,
+  "mainSW": 390,
+  "mainCW": 390
+ }
+}
