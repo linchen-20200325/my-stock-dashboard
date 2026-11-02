@@ -8,7 +8,7 @@
 
 > 依客戶 2026-10-22 裁示（DEC-068），本檔改為**短版交接**：只保存 current active work、blocker、next safe point、必要的 main／PR／CI 狀態。完整專案知識見 `docs/PROJECT_STATE.md`；未完成工作見 `docs/BACKLOG.md`；新對話啟動程序見 `PROJECT_RULES.md` 第 15 節。**現況以本節與 GitHub 為準。**
 
-> 📌 **2026-11-02 現行接手點**：見本檔**最末**「Safe Handoff（2026-11-02，Final UI Contract Freeze）」（DEC-122）；下方索引表為 2026-10-29 起的歷史索引，必讀規則仍有效（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。
+> 📌 **2026-11-02 現行接手點**：見本檔**最末**「~~Safe Handoff（2026-11-02，Final UI Contract Freeze）~~ Safe Handoff（2026-11-02 更新：Freeze 已拍板）」（DEC-122）（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔事實更新〕；原文刪除線保留）；下方索引表為 2026-10-29 起的歷史索引，必讀規則仍有效（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。
 
 ### 📌 Resume Checkpoint 索引（現行；2026-10-29 Phase 1 SSOT Reset／Contract Freeze；DEC-086 欄位＋DEC-109 索引要求）
 
@@ -670,7 +670,7 @@ DEC-086 規則已於 main，本表已落地。
 
 - ~~**Safe Handoff（2026-11-01，Phase 5 PR3 實作完成）**~~（**已過期**：PR3 已合併 #994 `4e4aa5e`；現行見本檔最末「Safe Handoff（2026-11-02，Final UI Contract Freeze）」；2026-11-02 有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕；本條原文保留）：PR1 #992、PR2 #993 已合併；PR3（🎯 第三區單一股票＋進階分析＋治理同步）實作於分支 `ccr-a0b4e085-ijdaio`，**本地、未 commit／未 push／未開 PR**（`git status` 實查）。**Phase 5 未結案**：本批已含 A8（freshness chip 化、`PICK_NOTE` 縮句）與 A2 手機間距修正；自評 Visual Fidelity Gate＝❌0／🟡3（A5 桌機、A4、A10），單組、夾具量測，證據＝`docs/vnext/phase5_target/p5_3/GATE_REPORT.md`。**下一唯一 safe action**：commit／PR 本批 → 獨立 QA 複驗 → 客戶／總管對三項 🟡 是否接受裁示。**Phase 5 Gate 通過後，下一個唯一安全工作＝Phase 6 持股頁，且僅待客戶／總管啟動，⛔ 不要自行開工。** 本批沒驗到：真資料態、手機實機、Streamlit Cloud、真冷啟動。
 
-- **Safe Handoff（2026-11-02，Final UI Contract Freeze；現行）**（SESSION_CONTINUITY C1 欄位；有意識的更新，不是漏刪；決策者 客戶（DEC-122）＋AI 總管〔事實更新〕）：
+- ~~**Safe Handoff（2026-11-02，Final UI Contract Freeze；現行）**~~（**已過期**：草案已合併 #995、客戶已裁示 Q1～Q3；現行見本檔最末「Safe Handoff（2026-11-02 更新：Freeze 已拍板）」（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔事實更新〕；原文刪除線保留））（SESSION_CONTINUITY C1 欄位；有意識的更新，不是漏刪；決策者 客戶（DEC-122）＋AI 總管〔事實更新〕）：
 
 | 欄位（C1） | 內容 |
 |---|---|
@@ -683,3 +683,19 @@ DEC-086 規則已於 main，本表已落地。
 | required Model×Effort for resume | Stage A＝**Sonnet 5.5＋Medium**（客戶 §0 表；四態 L0 語意層若需改動才升 Opus 5.5＋High）；Freeze 收尾文件同步＝Sonnet 5.5＋Low／Medium。依 DEC-084／106：已符合即靜默繼續。 |
 | 正式文件索引 | 契約 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md`；能力對照 `docs/vnext/FINAL_UI_CAPABILITY_MAP_2026-11-02.md`；取代關係 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md`；決策 `docs/DECISIONS.md` DEC-122；待辦 `docs/BACKLOG.md` §5.1.17；知識 `docs/PROJECT_STATE.md` §49。 |
 | 禁止事項（摘要） | ⛔ 一邊改 UI、一邊提前接 LLM、一邊重構資料層（客戶 §2）；⛔ 新增 Risk Cap 百分比顯示面與公式／門檻變更（待 Q1＋RC Gate；持股頁⑤已核准區間維持）；⛔ 改市場頁手機 ⚡ 位置（待 Q3）；⛔「減碼 1/2」「全出」（待 Q2＋DEC-053）；⛔ 新資料源（含 Forward EPS）；⛔ 提前刪舊 UI（DEC-019／020）；⛔ 在 Headless Digest 合格前開始 OneBrain runtime。 |
+
+- **Safe Handoff（2026-11-02 更新：Freeze 已拍板；現行）**（SESSION_CONTINUITY C1 欄位；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔事實更新〕）：
+
+| 欄位（C1） | 內容 |
+|---|---|
+| live GitHub state（撰寫時實查） | `origin/main`＝`c1e10a6`（PR #995 Freeze 草案合併點；2026-11-02 `git fetch` 實查；工作分支 `ccr-a0b4e085-ijdaio` 開工時與 origin/main 對齊、工作樹乾淨）。⚠️ cron 會推進 main，接手以當下 `git fetch` 為準（DEC-118）。open PR 以 GitHub 實查為準。 |
+| current Stage／exact safe stopping point | **Final UI Contract Freeze：客戶已拍板（Q1=A／Q2=A／Q3=A，2026-11-02）**。裁示收斂批（DEC-122 裁示段逐字、契約 §0.1 條文化、supersede map S10／S11 正式取代、capability map §3.1、BACKLOG／PROJECT_STATE／HANDOFF）已落盤於分支，**待 commit／PR／CI／merge**。~~**Freeze 獨立驗收尚未做**；~~ **Freeze 獨立驗收兩輪已 PASS（第一輪 PASS with fixes F1～F6、第二輪 PASS；單組驗收）**；**Stage A 未開始。** |
+| customer decisions not yet canonically indexed | 無（Q1～Q3 裁示全文已逐字入 DEC-122「客戶裁示 Q1～Q3」段；DR-2026-11-02-2）。 |
+| 待客戶裁示 | 無即時待裁題。後續另開：`FUI-RC-NUMERIC-GATE`（Risk Cap 數值啟用／曝險分母／現金總資產來源）、`FUI-PROPORTIONAL-ACTION-RULES`（比例 Action 正式規則）——都未送題、不阻塞 Stage A。 |
+| known limitations／blockers | Freeze 三文件與收斂批皆單組撰寫，待 `FUI-FREEZE-SECOND-AUDIT`；capability map critical 7 列；手機市場頁第一屏能否放下四項未實測。 |
+| **下一個唯一安全工作** | ~~**Freeze 獨立驗收（`FUI-FREEZE-SECOND-AUDIT`，含必要 QA）→ PASS 後才開 Stage A（Shared Presentation Foundation）**：開工前重做 GitHub Verification Gate，依契約 §17.4 A-1（≤3 項）。⛔ 驗收前不得開工 Stage A，~~ **待客戶切換 Model×Effort（Opus 5.5＋High → Sonnet 5.5＋Medium）後開 Stage A-1（≤3 項）**：Freeze 獨立驗收兩輪已 PASS（`FUI-FREEZE-SECOND-AUDIT` done）；**依客戶指示先停下通知客戶切換 Model×Effort，客戶修改後才開工**；開工前重做 GitHub Verification Gate，依契約 §17.4 A-1（≤3 項）（2026-11-02 Freeze 獨立驗收第二輪 PASS 後同步；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕；原文刪除線保留）。⛔ 客戶切換前不得開工 Stage A，也 ⛔ 動任何 `src/`、`tests/`、`shared/`、`app.py`、`requirements.txt`。（收斂批的 commit／PR／CI／merge 屬本批收尾。） |
+| required Model×Effort for resume | Freeze 獨立驗收＝依驗收性質（語意／supersede 完整性稽核建議 Opus 5.5＋High）；**Stage A 建議 Sonnet 5.5＋Medium**（四態 L0 語意層若需改動才升 Opus 5.5＋High）。依客戶 2026-11-02 指示：判斷 Model／Effort 不足或需切換 → **立即停下通知客戶、等客戶修改後才能繼續，不得自行切換**。 |
+| 正式文件索引 | 契約 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md`（§0.1 客戶拍板與永久要求）；能力對照 `docs/vnext/FINAL_UI_CAPABILITY_MAP_2026-11-02.md`（§3.1）；取代關係 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md`（S10／S11 正式取代）；決策 `docs/DECISIONS.md` DEC-122；待辦 `docs/BACKLOG.md` §5.1.17；知識 `docs/PROJECT_STATE.md` §49。 |
+| session 紀錄落點（F6） | repo **沒有** `SESSION_LOG` 檔；依 `docs/governance/SESSION_CONTINUITY_RULES_2026-10-31.md` C1，session 紀錄＝本檔 Safe Handoff 區塊（`PROJECT_RULES.md` 第 20 節 Resume Checkpoint 同處）。根目錄 `STATE.md` 現為 cron 自動更新，**不作 session log**。 |
+| Model×Effort 切換（建議 2） | 現行 Opus 5.5＋High → **Stage A 建議 Sonnet 5.5＋Medium**；**依客戶 2026-11-02 指示，切換前須停下通知客戶（說明建議與原因），客戶修改後才開工**，⛔ 自行切換後繼續施工。 |
+| 禁止事項（摘要） | ⛔ 跳過 Freeze 驗收開 Stage A；⛔ 發明曝險分母／現金／總資產／替代值；⛔ 新增 Risk Cap 百分比顯示面（持股頁已核准區間維持）；⛔「減碼 1/2」「全出」映射或產生；⛔ 資料不足算成「今日無需調整」；⛔ 一邊改 UI、一邊提前接 LLM、一邊重構資料層；⛔ 新資料源；⛔ 提前刪舊 UI；⛔ Headless Digest 合格前開始 OneBrain runtime。 |
