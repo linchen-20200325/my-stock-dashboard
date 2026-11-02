@@ -838,6 +838,7 @@
 - 📌 **客戶拍板（2026-11-02；DEC-122 裁示段逐字；DR-2026-11-02-2）**（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔事實更新〕；原文刪除線保留）：
   - **main**：Freeze 草案已合併 PR #995（`origin/main`＝`c1e10a6`，撰寫組 `git fetch` 實查；以當下 fetch 為準）。裁示收斂批落盤於分支，待 PR。
   - **狀態**：Freeze＝**客戶拍板版**；~~**Stage A 須待 Freeze 獨立驗收（含必要 QA）PASS**（客戶原文「不得因本裁示直接跳過 Freeze 驗收」）。~~ **Freeze 獨立驗收兩輪已 PASS（第一輪 PASS with fixes F1～F6、第二輪 PASS；單組驗收，已揭露）；下一個唯一安全工作＝待客戶切換 Model×Effort（Opus 5.5＋High → Sonnet 5.5＋Medium）後開 Stage A-1（≤3 項）**（2026-11-02 Freeze 獨立驗收第二輪 PASS 後同步；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕；原文刪除線保留）。
+  - 📌 **上一句「下一個唯一安全工作＝待客戶切換 Model×Effort 後開 Stage A-1」自 2026-11-02 起失效**：客戶 New UI2 裁示（DEC-123）停止原 Stage A；現行狀態與下一步見 **§50** 與 `docs/HANDOFF.md`「Safe Handoff（2026-11-02 New UI2）」（有意識的政策變更，不是漏刪；決策者 客戶（DEC-123）；本節原文一字未改）。
   - **產品方向**：「簡化 UI，但不簡化 Decision Context」；前台只呈現真正需要決策的資訊，完整資料不得因 UI 精簡而裁掉。
   - **正式架構鏈**：Canonical Data → Deterministic Rules／Formulas → Risk Cap／Hard Constraints → System Action State → Decision Digest → OneBrain → UI。
   - **6 條永久 invariant**（契約 §0.1.3）：UI 越簡潔 Decision Context 不能越少；Presentation Slice ≠ Decision Context ≠ AI Output；System Action State 是唯一正式動作權威；OneBrain 只負責 reasoning／summary／explanation／counter-evidence／limitations；OneBrain 不得創造第二套 portfolio action、不得覆寫 deterministic action、不得繞過 Risk Cap；OneBrain 讀完整 Decision Digest，不只讀 UI Top-N／摘要。
@@ -846,3 +847,23 @@
   - **Q3=A**：📊 市場頁 Mobile-first；手機第一屏＝市場目前狀態＋Risk Cap＋是否需要行動＋主 Update CTA；今日主要風險緊接其後、仍屬 L1；DEC-117 Q1 手機 2＋1、DEC-118 問題 1=A、DEC-120 A10／A11 **正式取代**（supersede map S10／S11）。
   - **工作模式**：Silent Autonomous Cruise、每批 ≤3 項；Model／Effort 不足 → 立即停下通知客戶、等客戶修改後才繼續，不得自行切換。
   - **限制**：裁示收斂批仍為單組撰寫；capability map critical 仍 7 列（Stage J 第 6 條不成立）。
+
+## 50. New UI2 Greenfield Presentation Layer（DEC-123，客戶 2026-11-02；append-only；**客戶裁示生效；Architecture Gate 草案待客戶裁示（G1、G3′、四頁線框、G2＋#996 合併確認）——不是 Approved 架構；目前只存在工作樹、尚未落盤 GitHub**）
+
+- **main**：撰寫組 2026-11-02 `git fetch origin main` 實查 `origin/main`＝`c1e10a62`（#995）；工作樹＝PR #996 head `139e315b`（Freeze 收斂＋獨立驗收 PASS，**尚未合併**）。cron 會推進 tip，**一律以當下 `git fetch origin` 為準**。
+- **客戶裁示（DEC-123，逐字見 DECISIONS）**：立即停止原 Stage A／現有 New UI 延續路線；**後續正式 UI 路線改為 New UI2 Greenfield Presentation Layer**——「全新的 Presentation Layer，但沿用成熟的底層資料與投資邏輯」，**不是整套系統重寫**。#996 維持現狀、定位不變（⛔ 擴大範圍、⛔ 丟棄）；⛔ 修改 production UI、⛔ 刪除現有 New UI／Old UI、⛔ 新增 Risk Cap runtime／OneBrain runtime、⛔ 重寫既有 data／services／rules。
+- **三代 UI**：Old UI（`src/ui/tabs|etf|pages|render`＋`app.py` 內嵌；`?legacy=1`）＝只讀 Logic／Capability Reference、禁止修改；現有 New UI（`src/ui/views`＋`src/ui_v2`；預設四頁）＝**Legacy New UI／Reuse Candidate**，停止當主線 patch；**New UI2**＝未來唯一主要 Presentation Layer（尚無程式；提案目錄 `shared/ui2_contract`（L0）＋`src/services/ui2/{*_feed,*_vm}`（L3）＋`src/ui2/{shell,components,views}`（L5）＋`app_ui2.py`（L6））。⚠️ `src/ui2`（New UI2）≠ `src/ui_v2`（Legacy New UI 共用元件層）。
+- **目標鏈（客戶原文）**：Canonical Data／Sources → Normalization／Validation → Deterministic Rules／Formulas → Risk Cap／Hard Constraints → System Action State → View Model／Presentation Contract → New UI2；未來 System Action State → Decision Digest → OneBrain；**New UI2 與 LINE 都是 consumer**；LINE ⛔ 形成第二套投資大腦。
+- **Freeze（DEC-122）的位置**：**全部 semantic contracts 保留為 New UI2 的 input**（Q1=A／Q2=A／Q3=A、產品方向、6 條 invariant、四態、chip、Risk Cap boundary、Single Action Authority、freshness／provenance、Digest、OneBrain boundary、Mobile-first、四頁 IA）；**施工路線**：Stage A 暫停／被取代（語意項移作 UI2 components 需求）；B～E 改為 New UI2 四頁（Freeze 各頁語意內容仍是需求）；F～J 保留（F 與 UI2 先後依 G3；J 對象擴為 Old UI 與 Legacy New UI）（F 與 UI2 先後依 G3′；撰寫組讀法，客戶可推翻；DEC-123「與 DEC-122 的關係」）。
+- **正式文件位置**（草案）：Architecture Gate `docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md`；Reuse Matrix `docs/vnext/NEWUI2_REUSE_MATRIX_2026-11-02.md`（88 列：KEEP 26／WRAP 21／PORT 24／REIMPLEMENT 2／RETIRE LATER 5／DO NOT TOUCH 10）；四頁線框 `docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md`（手機 390×844 先、桌機 1440×900 後；W-1～W-9 送核准點）；待辦 BACKLOG §5.1.18 `NUI2-*`。
+- **送客戶四題（PENDING）**：**G1** Preview（推薦 A：獨立入口＋獨立 Cloud 預覽 app，需客戶人工操作）；**G3′** 系統動作彙整層（推薦 A′：先建單一 headless L3 彙整層——合併 ETF 七分支與個股四級、加／留／換／減計數、「沒事 vs 判不出」、加碼列 Risk Cap 標註、跨頁 ⚡ N；不新增規則、不新增寫入〔只觸發既有服務的既有副作用〕；UI2／LINE／Digest 共用、VM 不聚合；請客戶確認不算新增 runtime；B：等 Stage F 完整 Headless Digest）；**四頁線框核准**（W-4、W-5〔推薦 A：加／換／減＋暫停加碼計入，其餘「留」只做分布〕、W-9、W-10〔⚡ N 來源〕、W-11〔持股桌機對齊 Freeze〕）；**G2** Cutover（推薦 A：逐頁 preview 驗收、全過後一次切預設、`?ui=1`／`?legacy=1` 隱藏保留、回滾一行）＋**#996 可否現在合併**（推薦：可；合併後本 Gate 以新 PR 落盤）。LINE 維持現狀不送題（客戶已明說）。獨立稽核（2026-11-02，單組）判 PASS with fixes，已改寫。
+- **重要現況知識（FACT，單組 grep／讀碼，非窮舉；invC／invD）**：
+  - System Action State 層**不存在**；Decision Digest builder **0 production caller**；`st.session_state` 是事實上的狀態匯流排（L3 寫 session 者 9 檔）；主 Update CTA（`refresh_macro_now`）是 producer 鏈。
+  - 風控／語意閘門住在顯示層：`src/ui/views/risk_cap_gate`（L5）、`src/ui/render/station_cards.cruise_or_gap`（L4，Old UI）→ UI2 前須 PORT（預設新建＋parity，Old UI 與 Legacy New UI 原處皆不改；`cruise_or_gap` 去向＝系統動作彙整層，依 G3′）。
+  - Legacy New UI 依賴 Old UI（`tab_today.Card` 等）；c3 guard **不擋 L5→L5**，且新目錄未登記時五條規則**靜默失效**（`src/ui_v2` 前例）→ UI2 首個實作 PR 須同 PR 登記＋meta 測試。
+  - Old UI `section_mid` render 期登記 caps／conflicts（OLD-7）：`get_allocation` 以 `_derive_intrinsic_caps()` 重算並剔除同名登記 ⇒ **建議持股數字不受影響**，只有 `register_conflict` 揭露文字隨舊頁 render 而不同（稽核 F4 更正，P2）。
+  - App 端另有不經天花板仲裁的持股比例輸出：`check_macro_veto().max_position`、`market_strategy.exposure_pct`、💼 ④ `posture_range`（未套天花板）——登記於 `NUI2-LINE-SECOND-BRAIN`，UI2 ⛔ 整包搬。
+  - LINE：`market_alert_banner`「建議持股降至 10%／20%」＋「請以警語為準」＝第二套動作權威；週報自建定調；cron regime 來源與 App 不同；LINE 看不到 Risk Cap；持股頁 ⑦ Gemini 直呼——皆**登記**（`NUI2-LINE-SECOND-BRAIN`、`NUI2-LINE-REGIME-SOURCE`、`FUI-PUSH-ACTION-CONSISTENCY`、`FUI-HOLD-GEMINI-DIRECT`），本批不改。
+  - `app.py` 被 82 個測試檔以原始碼字面讀取（改入口爆炸半徑大）；`tools/visual_fidelity/harness_app.py` 不支援 👤 我的。
+- **完成條件（客戶 (5)-13）**：architecture frozen、reuse matrix frozen、four-page wireframe approved、migration boundary approved、preview strategy approved、cutover strategy approved、no unresolved architecture blocker——全部成立才發「🟡 Model / Effort Change Gate：New UI2 architecture 已凍結，後續 presentation implementation 可切 Claude Sonnet 5.5 + Medium。」並**立即停手**；⛔ 自行開始 production。
+- **限制**：三份 Architecture Gate 文件與本段皆單組撰寫、未經第二組驗證（`NUI2-ARCH-SECOND-AUDIT`）；未跑 runtime、未在 Streamlit Cloud／手機實機／Python 3.14 驗；OAuth 轉跳後旗標遺失為讀碼推論。

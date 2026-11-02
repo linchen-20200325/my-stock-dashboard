@@ -3151,6 +3151,7 @@ Effort：High
 | Digest 契約 §4「市場事實刻意不帶 rule」；ONEBRAIN Arch §11 概念 schema（2026-11-02 新增列） | DEC-122（S14、S15） | 部分取代：市場事實可帶 Registry 產生、對映既有 SSOT 門檻的 rule id（⛔ 編造）；OneBrain 輸出最低集改為客戶 §35 欄位（confidence 不納入） | 客戶 2026-11-02 原文明示（DEC-122） |
 | DEC-109 三十一 Phase 1～7；DEC-060（Stage 完成回報）；MODEL_EFFORT_POLICY Rule 2（本主線）（2026-11-02 新增列；以上各列皆隨 Freeze 待客戶拍板） | DEC-122（S16、S17、S19） | 部分取代：以 Stage A–J 為準（Digest 凍結前不寫 prompt／glue 仍有效）；Stage 完成回報改用客戶 §48 表；本主線文件同步依客戶 §0 表 | 客戶 2026-11-02 原文明示（DEC-122）；S17／S19 讀法＝撰寫組（INFERENCE） |
 | DEC-051／PQ-C6-3（持股頁卡⑤建議持股區間）；DEC-081 Q2-2／`RC-VISIBILITY`；DEC-053；DEC-054 Action 名稱；DEC-109 十三「加／留／換／減」（2026-11-02 新增列） | DEC-122 Q1=A／Q2=A | **不取代、裁示確認**：持股頁區間維持；市場頁 Risk Cap 數值仍隱藏，數值啟用／曝險分母／現金總資產另開 Gate；比例 Action 待正式規則＋驗證＋回測／Shadow＋Gate；「加／留／換／減」僅呈現分組 | 客戶 2026-11-02 Q1／Q2 裁示原文 |
+| DEC-122 狀態欄「Freeze 驗收 PASS 後開 Stage A-1」；Freeze §17.4 Stage A 範圍（優先 reuse `src/ui_v2`）；Freeze §17.1 Stage A～E「在現有 New UI 上施工」的路線（2026-11-02 新增列） | DEC-123 | **部分取代（施工路線）**：原 Stage A 暫停；四頁 Final UI 改由 New UI2 Greenfield Presentation Layer 承接（Architecture Gate 先行，送客戶四題 G1／G3′／線框／G2＋#996 合併確認 PENDING）；**Freeze 全部 semantic contracts 保留為 New UI2 的 input**；Stage F～J 保留（F 與 UI2 先後依 G3′；J 對象擴為 Old UI 與 Legacy New UI）；#996 定位不變 | 客戶 2026-11-02 原文明示（DEC-123 (5)-0／(5)-2）；Stage 逐項對映＝撰寫組讀法（INFERENCE） |
 
 ## 6. 未升格項目（證據不足或題意不明 → 見 `docs/BACKLOG.md` 第 4 節）
 
@@ -5049,6 +5050,7 @@ Hard Output Gate 不只判斷「能不能說」，還要判斷「最少要說多
 - ⚠️ 揭露：裁示內容轉錄自 PR #990 checkpoint（`docs/HANDOFF_QUOTA_CHECKPOINT_2026-10-31.md` §2），未見客戶逐字原文；以客戶原訊息為準。
 
 ### DEC-122｜Final UI Contract Freeze：客戶 2026-11-02「vNext Final UI Convergence＋Decision Digest Headless＋OneBrain Integration」指示全文＋裁示 A（先做 docs-only Freeze，不開始 Stage A）；四頁 Final UI Blueprint、Semantic Chip、四態、Single Action Authority、Risk Cap Enforcement 等 Freeze 草案落盤，~~Freeze 內容待客戶拍板；Q1～Q3 PENDING~~ **Freeze 已由客戶拍板；Q1=A／Q2=A／Q3=A**（客戶 2026-11-02）
+> 📌 **施工路線（原 Stage A～E）由 DEC-123（New UI2 Greenfield Presentation Layer）取代；Freeze semantic contracts 全部保留為 New UI2 的 input**（2026-11-02 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-123）；append-only，本條原文與下方各補註一字未改）：客戶 2026-11-02 裁示 (5)「立即停止目前原本的 Stage A／現有 New UI 延續路線」「後續正式 UI 路線改為 New UI2 Greenfield Presentation Layer」「#996 的定位不變……全部保留。New UI2 必須以這些 semantic contracts 為 input」（逐字見 DEC-123）。**仍有效**：本條 Q1=A／Q2=A／Q3=A、產品方向、架構鏈、6 條永久 invariant、四頁 IA、Mobile-first、Risk Cap boundary、Single Action Authority、Missing semantics、Freshness／Provenance、Decision Digest、OneBrain boundary、Stage F～J（F 與 UI2 先後依 DEC-123 G3′）。**被取代**：「Freeze 驗收 PASS 後開 Stage A-1」與 Stage A～E「在現有 New UI 上施工」的路線（本條狀態欄「下一步＝待客戶切換 Model×Effort 後開 Stage A-1」自 2026-11-02 起失效）。兩邊理由：舊路線沿用已上線的 New UI，改動小、交付快（當時成立）；新路線依客戶明示——持續 patch 現有 New UI 不再是主線，改建全新 Presentation Layer、沿用底層。逐項對映見 DEC-123「與 DEC-122 的關係」與 `docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md`。
 
 > 2026-11-02 補登（ID 取下一個未用號；落盤前 `grep -rn "DEC-122" docs PROJECT_RULES.md` 0 命中，DEC-121 為上一號）。**來源類別 D：客戶 2026-11-02 本輪對話原文，經總管轉交逐字檔；下方 fence 內逐字收錄，未改一字**（撰寫組未見客戶原訊息本身，只見總管轉交之全文；若有出入以原訊息為準）。總管送審題幹（A／B／C）由總管撰寫，**非客戶原文**，另列於 fence 後。
 
@@ -5594,3 +5596,364 @@ Effort：High
 - **Session 紀錄落點（F6）**：repo **沒有** `SESSION_LOG` 檔；依 `docs/governance/SESSION_CONTINUITY_RULES_2026-10-31.md` C1，session 紀錄（durable checkpoint）落在 `docs/HANDOFF.md` 的「Safe Handoff」區塊（`PROJECT_RULES.md` 第 20 節 Resume Checkpoint 同處）。根目錄 `STATE.md` 現為 cron 自動更新，**不作 session log**。
 - **效力邊界（裁示後）**：仍為 docs-only 收斂；⛔ 改 production UI、資料層、公式、Risk Cap 數值、OneBrain runtime；Q1～Q3 裁示不核准任何新資料源、曝險分母、比例 Action、rule id。
 - ⚠️ 揭露（裁示後收斂批）：條文化與 supersede 改判為撰寫組單組產出，待 Freeze 獨立驗收（BACKLOG `FUI-FREEZE-SECOND-AUDIT`）。
+
+### DEC-123｜New UI2 Greenfield Presentation Layer：客戶 2026-11-02 裁示——立即停止原 Stage A／現有 New UI 延續路線，後續正式 UI 路線改為 New UI2（全新 Presentation Layer、沿用成熟底層）；本批只做 Architecture Gate（docs-only）；送客戶四題（G1／G3′／四頁線框／G2＋#996 合併確認）**PENDING**（客戶 2026-11-02）
+
+> 2026-11-02 補登（ID 取下一個未用號；落盤前 `grep -rn "DEC-123" docs PROJECT_RULES.md` 0 命中，DEC-122 為上一號）。**來源類別 D：客戶 2026-11-02 本輪對話原文，經總管轉交逐字檔（`customer_directive_2026-11-02.md` 第 (5) 段）；下方 fence 內逐字收錄，未改一字**（撰寫組未見客戶原訊息本身，只見總管轉交之全文；若有出入以原訊息為準）。
+
+- **決策者**：**客戶**（2026-11-02）。｜**效力日期**：2026-11-02 起。｜**範圍**：產品／UI 路線（Presentation Layer 重建）＋架構（View Model／Presentation Contract、consumer 邊界）＋治理（Architecture Gate、Model×Effort Change Gate、Silent Autonomous Cruise）。
+- **狀態**：**客戶裁示生效**（停止原 Stage A／現有 New UI 延續路線；正式 UI 路線改為 New UI2）；**New UI2 Architecture Gate＝草案，待客戶裁示**——送客戶四題 **G1（Preview 方式）、G3′（系統動作彙整層）、四頁線框核准（W-4、W-5 含計入範圍、W-9、W-10 ⚡ N 來源、W-11 持股桌機）、G2（Cutover＋#996 可否現在合併）PENDING**；⛔ production coding。⚠️ 三份 Gate 文件目前**只存在工作樹**（受「只能推指定分支」權限限制；#996 合併後以新 PR 落盤），落盤前依 DEC-122「沒寫入 GitHub 的新規格，不視為正式完成」**尚非正式文件**。2026-11-02 獨立稽核（單組）判 PASS with fixes，文件已依修正項改寫。
+- **正式規格落點**：`docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md`（Architecture Proposal、VM／Migration 邊界、目錄、Preview／Cutover、Testing、Consumer 邊界、Gate 題、governance 清單）；`docs/vnext/NEWUI2_REUSE_MATRIX_2026-11-02.md`（88 列、六類）；`docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md`（四頁、手機 390×844 先、桌機 1440×900 後）。三份皆**草案、待客戶裁示／核准**。
+- **客戶原文：New UI2 Greenfield Presentation Layer 裁示全文（逐字，fence 內未改一字；具約束力）**：
+
+```
+立即停止目前原本的 Stage A / 現有 New UI 延續路線。
+
+新的客戶裁示如下：
+
+「後續正式 UI 路線改為 New UI2 Greenfield Presentation Layer。」
+
+現在開始，不再以「持續 patch 現有 New UI」作為主要 production 路線。
+
+但這不是整套系統重寫。
+
+---
+
+1. 先停手
+
+目前 #996 維持現狀。
+
+禁止：
+
+- 開始原 Stage A
+- 修改 production UI
+- 擴大 #996 範圍
+- 因為改走 New UI2 就丟棄 #996
+- 刪除現有 New UI
+- 刪除 Old UI
+- 新增 Risk Cap runtime
+- 新增 OneBrain runtime
+- 重寫既有 data / services / rules
+
+目前 CI 可以自然跑完，但不要因 CI 綠燈就自行開始舊 Stage A。
+
+---
+
+2. #996 的定位不變
+
+#996 仍是 Final UI Contract Freeze 的重要正式輸入。
+
+其中已確定的：
+
+- Q1=A
+- Q2=A
+- Q3=A
+- 簡化 UI，但不簡化 Decision Context
+- Risk Cap boundary
+- Single Action Authority
+- Missing semantics
+- Freshness / Provenance
+- Presentation Slice ≠ Decision Context ≠ AI Output
+- Decision Digest
+- OneBrain boundary
+- Mobile-first
+- 四頁 IA
+
+全部保留。
+
+New UI2 必須以這些 semantic contracts 為 input。
+
+不要因為 New UI2 而重新發明投資語意。
+
+---
+
+3. 新正式方向
+
+建立：
+
+New UI2 Greenfield Presentation Architecture
+
+定位：
+
+「全新的 Presentation Layer，但沿用成熟的底層資料與投資邏輯。」
+
+目標架構：
+
+Canonical Data / Sources
+↓
+Normalization / Validation
+↓
+Deterministic Rules / Formulas
+↓
+Risk Cap / Hard Constraints
+↓
+System Action State
+↓
+View Model / Presentation Contract
+↓
+New UI2
+
+未來：
+
+System Action State
+↓
+Decision Digest
+↓
+OneBrain
+
+New UI2 與 LINE 都是 consumer。
+
+---
+
+4. 三代 UI 邊界
+
+Old UI：
+只讀 Logic / Capability Reference。
+禁止修改。
+
+現有 New UI：
+改為 Legacy New UI / Reuse Candidate。
+停止把持續 patch 當正式主線。
+
+New UI2：
+未來唯一主要 Presentation Layer。
+
+---
+
+5. 本批只做 Architecture Gate
+
+本批禁止 production coding。
+
+只做：
+
+1. New UI2 Architecture Proposal
+2. Reuse Matrix
+3. 四頁 textual wireframe
+4. View Model boundary
+5. Migration boundary
+6. proposed directory structure
+7. Preview strategy
+8. Cutover strategy
+9. Testing strategy
+10. UI / LINE / Decision Digest / OneBrain consumer boundary
+11. 真正需要客戶裁示的 Decision Gates
+12. 必要 GitHub governance docs 同步
+
+---
+
+6. Reuse 原則
+
+必須實查 repo 後分類：
+
+KEEP AS-IS
+WRAP
+PORT
+REIMPLEMENT
+RETIRE LATER
+DO NOT TOUCH
+
+優先保留：
+
+- canonical data
+- services
+- source adapters
+- deterministic rules
+- valuation logic
+- Risk Cap logic
+- freshness / provenance
+- validated domain tests
+- pure helpers
+
+New UI2 主要重做：
+
+- shell
+- navigation
+- card system
+- layout
+- chart container
+- responsive
+- status presentation
+- source / freshness presentation
+- empty / stale / unavailable states
+- OneBrain summary container
+- audit presentation
+
+---
+
+7. 四頁 IA 固定
+
+只維持：
+
+1. 📊 市場
+2. 🎯 標的
+3. 💼 持股
+4. 👤 我的
+
+禁止新增第五個主要頁面。
+
+---
+
+8. 永久產品方向
+
+核心原則：
+
+「簡化 UI，但不簡化 Decision Context。」
+
+UI 可以少顯示。
+
+底層資料不能因 UI 精簡而減少。
+
+永久 invariant：
+
+- UI 越簡潔，Decision Context 不能越少
+- Presentation Slice ≠ Decision Context ≠ AI Output
+- System Action State 是唯一正式動作權威
+- OneBrain 只負責 reasoning / summary / explanation
+- OneBrain 不得覆寫 deterministic action
+- UI 不得自己創造正式投資規則
+
+---
+
+9. Mobile-first
+
+每頁第一屏優先回答：
+
+1. 現在狀態
+2. 是否需要行動
+3. 下一步
+4. 主 CTA
+
+禁止先做 desktop 再縮手機。
+
+---
+
+10. LINE 邊界
+
+LINE 不得形成第二套投資大腦。
+
+未來方向：
+
+System Action State
+↓
+Decision Digest
+↙        ↘
+New UI2   LINE
+↓
+OneBrain summary
+
+本批只定 interface / ownership。
+
+不要修改 LINE production。
+
+---
+
+11. Silent Autonomous Cruise
+
+從現在起完全靜默執行。
+
+不要回報：
+
+- 正在讀檔
+- 正在盤點
+- 正在跑 test
+- CI running
+- CI green
+- commit
+- push
+- PR ready
+- agent activity
+- 中間研究結果
+
+只有以下情況才輸出：
+
+1. 真 Decision Gate
+2. blocker
+3. Model / Effort Change
+4. Manual Action
+5. 整個 Architecture Gate 完成
+6. Safe Handoff
+
+---
+
+12. Model / Effort
+
+本批使用：
+
+Claude Opus 5.5
+Effort：High
+
+原因：
+
+這是 Architecture Boundary / Reuse / Migration / Decision Contract 工作。
+
+如果執行途中判斷應切換模型或 Effort：
+
+必須立即停止，
+告訴我：
+
+- 建議 Model
+- 建議 Effort
+- 原因
+
+等我修改後才能繼續。
+
+不得自行切換後繼續。
+
+---
+
+13. 完成 Architecture Gate 後
+
+只有在以下全部完成：
+
+- architecture frozen
+- reuse matrix frozen
+- four-page wireframe approved
+- migration boundary approved
+- preview strategy approved
+- cutover strategy approved
+- no unresolved architecture blocker
+
+才通知：
+
+「🟡 Model / Effort Change Gate：New UI2 architecture 已凍結，後續 presentation implementation 可切 Claude Sonnet 5.5 + Medium。」
+
+然後立即停手。
+
+不得自行開始 production。
+```
+
+- **裁示要點（撰寫組依上方原文歸納；與原文有出入以原文為準）**：
+  1. **停手**：立即停止原 Stage A／現有 New UI 延續路線；#996 維持現狀；⛔ 開始原 Stage A、⛔ 修改 production UI、⛔ 擴大 #996 範圍、⛔ 因改走 New UI2 丟棄 #996、⛔ 刪除現有 New UI、⛔ 刪除 Old UI、⛔ 新增 Risk Cap runtime、⛔ 新增 OneBrain runtime、⛔ 重寫既有 data／services／rules；CI 可自然跑完，但⛔ 因 CI 綠燈自行開始舊 Stage A（(5)-1）。
+  2. **#996 定位不變**：Q1=A／Q2=A／Q3=A、「簡化 UI，但不簡化 Decision Context」、Risk Cap boundary、Single Action Authority、Missing semantics、Freshness／Provenance、Presentation Slice ≠ Decision Context ≠ AI Output、Decision Digest、OneBrain boundary、Mobile-first、四頁 IA **全部保留**；**New UI2 以這些 semantic contracts 為 input，⛔ 重新發明投資語意**（(5)-2）。
+  3. **新正式方向**：New UI2 Greenfield Presentation Architecture＝「全新的 Presentation Layer，但沿用成熟的底層資料與投資邏輯」；目標鏈 Canonical Data／Sources → Normalization／Validation → Deterministic Rules／Formulas → Risk Cap／Hard Constraints → System Action State → View Model／Presentation Contract → New UI2；未來 System Action State → Decision Digest → OneBrain；**New UI2 與 LINE 都是 consumer**（(5)-3）。
+  4. **三代 UI 邊界**：Old UI＝只讀 Logic／Capability Reference、禁止修改；現有 New UI＝Legacy New UI／Reuse Candidate、停止把持續 patch 當正式主線；New UI2＝未來唯一主要 Presentation Layer（(5)-4）。
+  5. **本批只做 Architecture Gate**（12 項；禁止 production coding）（(5)-5）→ 落點見 Architecture Gate §0 表。
+  6. **Reuse 原則**：實查 repo 後分六類；優先保留底層；New UI2 主要重做 presentation 各項（(5)-6）→ Reuse Matrix。
+  7. **四頁 IA 固定**：📊 市場／🎯 標的／💼 持股／👤 我的；⛔ 第五個主要頁面（(5)-7）。
+  8. **永久產品方向與 invariant**（6 條，含「UI 不得自己創造正式投資規則」）（(5)-8）——與 DEC-122 六條永久 invariant **同向並存**，⛔ 讀成取代。
+  9. **Mobile-first**：每頁第一屏優先回答現在狀態／是否需要行動／下一步／主 CTA；⛔ 先做 desktop 再縮手機（(5)-9）。
+  10. **LINE 邊界**：LINE ⛔ 形成第二套投資大腦；本批只定 interface／ownership；⛔ 修改 LINE production（(5)-10）。
+  11. **Silent Autonomous Cruise**：只在真 Decision Gate、blocker、Model／Effort Change、Manual Action、整個 Architecture Gate 完成、Safe Handoff 時輸出（(5)-11）。
+  12. **Model／Effort**：本批 Opus 5.5＋High；判斷應切換 → 立即停止並告知建議 Model、Effort、原因，等客戶修改後才繼續，⛔ 自行切換（(5)-12）。
+  13. **完成條件**：architecture frozen、reuse matrix frozen、four-page wireframe approved、migration boundary approved、preview strategy approved、cutover strategy approved、no unresolved architecture blocker **全部完成**，才通知「🟡 Model / Effort Change Gate：New UI2 architecture 已凍結，後續 presentation implementation 可切 Claude Sonnet 5.5 + Medium。」然後**立即停手，⛔ 自行開始 production**（(5)-13）。
+- **與 DEC-122 的關係（逐項；「停止原 Stage A／現有 New UI 延續路線」「semantic contracts 全保留」＝客戶原文明示；其餘 Stage 對映＝撰寫組讀法〔INFERENCE〕，客戶可推翻）**：
+  - **Freeze semantic contracts（`docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md` §0.1、§1～§16、§18～§21）**：**全部保留，為 New UI2 的 input**；New UI2 文件只寫「怎麼承接」，⛔ 重定義（客戶 (5)-2）。DEC-122 已加之所有 📌 與 supersede map S1～S20 **不變**。
+  - **Stage A（Shared Presentation Foundation；優先 reuse `src/ui_v2`）**：**暫停／被取代**——不在現有 New UI 上建 primitives；A-1～A-3 的**語意項**（Neutral／Info tone、四態語意層、`unavailable`→`unwired`、metric card 四欄、freshness／source tag、Risk Cap alert 兩態文字、L1／L2／L3 層級）**保留為 New UI2 components 的需求**；「優先 reuse `src/ui_v2`」改依 Reuse Matrix U1～U4 判定（BACKLOG `FUI-STAGE-A` paused／superseded）。
+  - **Stage B～E（四頁 Final UI，原為在現有 New UI 上施工）**：**施工路線被取代**——改為 New UI2 四頁；各頁 Freeze 語意內容（§2、§3、§10、§12、§16）**全保留為 UI2 頁面需求**；Freeze §2.0「各頁開工前出逐頁細線框送客戶拍板」由 `NEWUI2_WIREFRAMES_2026-11-02.md` 承接。BACKLOG `FUI-STAGE-B`～`E` 的內容欄仍是需求來源，施工落點改為 New UI2。
+  - **Stage F（Headless Decision Digest）**：**保留**；與 New UI2 的先後依 **G3′**（A′：先建 Stage F 的「System Action 彙整」最小切片〔單一 headless L3 系統動作彙整層，只彙整既有正式分支＋Risk Cap 狀態、不新增規則與寫入〕，UI2 與日後 LINE／Digest 共用；其餘 Stage F 照舊；B：等 Stage F 完整 Headless Digest 後才開始 UI2）。
+  - **Stage G（OneBrain Runtime）**：**保留**；仍⛔ 在 Headless Digest 合格前開始；UI2 只提供 OneBrain summary container（`🤖 ⬜ 尚未提供`）。
+  - **Stage H（Cross-page Consistency）**：**保留**；射程＝New UI2 四頁＋所有 Digest consumer（含 LINE）。
+  - **Stage I（Real-data／Mobile Acceptance）**：**保留**；驗收對象改為 New UI2；真機條件依 **G1**。
+  - **Stage J（Old UI Supersede／Removal Gate）**：**保留**；對象擴為 **Old UI** 與 **Legacy New UI** 兩個，各自走 Removal Gate（Freeze §19 六條件∪DEC-083 第 11 點 E 段）；Capability Map 擴 Old → Legacy New → UI2 三欄。
+  - **Freeze §17.1「⛔ 一邊改 UI、一邊提前接 LLM、一邊重構資料層」**：**繼續有效**。**Freeze §17.2 Model×Effort 表**：對 New UI2 施工改讀為——純 presentation 批 Sonnet 5.5＋Medium（Architecture 凍結後，客戶 (5)-13）；Risk Cap／Action Authority／Data semantic／Digest／OneBrain 批仍 Opus 5.5＋High（客戶 §0 表，DEC-122 原文一）。
+- **與其他 DEC 的關係**：承 DEC-019／020（舊 UI 不得提前刪）、DEC-097（`?legacy=1` 不放可見連結）、DEC-091／092／097（四頁 IA）、DEC-104（Hard Output Gate）、DEC-084／106（Model×Effort 已符合時靜默繼續、不符停手通知）、DEC-118（GitHub Verification Gate 以當下 `origin/main` 為準）、DEC-122（Freeze）；`CLAUDE.md` v3 §03-2 ①（版面草稿先行）適用 New UI2 四頁線框。
+- **Decision Gate（PENDING；送客戶四題；全文含推薦與理由見 Architecture Gate §11）**：
+  - **G1｜Preview 方式**：**A（總管推薦）**獨立入口 `app_ui2.py`＋獨立 Streamlit Cloud 預覽 app（production 0 diff、手機真機＋真登入；需客戶人工操作：建 Cloud app、複製 secrets、GCP 加 redirect URI；外部 API 呼叫約加倍）；**B** 現行 app 加 `?ui=2`（便宜但改 production 入口，登入後旗標會遺失）；**C** 只在沙箱預覽，不給真機。
+  - **G3′｜系統動作彙整層**：**A′（總管推薦）**先建單一 headless L3「系統動作彙整層」（＝Freeze §6 第 6 點／Stage F 的 System Action 彙整切片提前做），**只彙整**現有正式分支＋Risk Cap 狀態（合併 ETF 七分支與個股四級、加／留／換／減分組計數、「沒事 vs 判不出」gate、加碼列 Risk Cap 標註、跨頁 ⚡ N），**不新增任何規則**；**不新增任何寫入，只觸發既有服務的既有副作用**（如 `get_allocation` cache key、`refresh_macro_now` 鏈）；UI2 與日後 LINE／Digest 共用，VM 不做聚合；**請客戶確認此層不算其禁止的「新增 runtime」**。**B** 等 Stage F 完整 Headless Digest 後才開始（期間 UI2 動作欄位 `⬜ 尚未提供`）。
+  - **四頁線框核准**：W-4（標的頁第一屏一行市場 context）、**W-5（「今日需處理」計入哪幾組；「留」組＝巡航、續抱、暫停加碼、高溢價、🟡 留意；A〔推薦〕加／換／減＋暫停加碼計入〔暫停加碼是 `RULE_ID_ALLOWLIST` 正式行動 id `pause_add`〕，巡航／續抱／高溢價／🟡 留意只做分布；B 只計加／換／減〔則暫停加碼、留意的日子會顯示「今日無需調整」〕）**、W-9（覆蓋度標籤改名）、**W-10（市場頁 ⚡ N 來源：彙整層建好前維持既有 ⚡ 語意＝`_market_blocks.render_alerts_block` 的關鍵警示＋allocation conflicts，或顯示 `⬜ 尚未提供`；建好後改讀彙整層）**、**W-11（持股桌機第一屏；推薦對齊 Freeze §16.3）**。
+  - **G2｜Cutover＋#996 合併確認**：(1) **A（總管推薦）**四頁逐頁在 preview 驗收，全數通過後一次切換預設；現行 New UI 改隱藏 `?ui=1`、Old UI 維持 `?legacy=1`，不刪程式，回滾一行；**B** 逐頁切換 production；**C** 其他。(2) **是／否**：「#996（Freeze 已兩輪驗收 PASS、CI 綠）可否現在合併？」**推薦：可**；合併後本 Architecture Gate 以新 PR 落盤（同一指定分支，重設到新 main）。在此之前本 Gate 只存在工作樹（受分支權限限制）。
+  - **不送題**：LINE 維持現狀、不改 LINE production（客戶 (5)-10 已明說）；目錄名、層別、守衛、session／CSS 前綴＝內部自決（v3 §03-1）。
+  - 📌 擬題沿革（本批內修正，DEC-123 尚未落盤，故直接改寫、不留刪除線）：初稿 G3「唯讀轉接層」→ 稽核後改為 G3′ 系統動作彙整層；初稿 G4「落盤順序 A／B／C」→ 併入 G2 第 (2) 小題的是／否。
+- **效力邊界**：docs-only；`src/`、`tests/`、`shared/`、`app.py`、`requirements.txt`、`tools/`、`scripts/`、`.github/` 0 diff；不核准任何新資料源、schema、公式、門檻、投資語意、Risk Cap 數值、rule id、System Action runtime、OneBrain runtime；HI-1～HI-6 不變；舊 UI 與 Legacy New UI 一律不刪；本 DEC **不構成** New UI2 動工授權（含系統動作彙整層），直到客戶 (5)-13 七項完成條件全部成立並經 Model／Effort Change Gate。
+- **Session 紀錄落點**：同 DEC-122 F6——repo 無 `SESSION_LOG` 檔；session 紀錄＝`docs/HANDOFF.md`「Safe Handoff（2026-11-02 New UI2）」區塊。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：裁示要點、與 DEC-122 關係的 Stage 對映、Gate 擬題為撰寫組單組產出（底稿＝兩份單組調查 invC Reuse Matrix、invD 架構約束），**未經第二組驗證**（BACKLOG `NUI2-ARCH-SECOND-AUDIT`）。

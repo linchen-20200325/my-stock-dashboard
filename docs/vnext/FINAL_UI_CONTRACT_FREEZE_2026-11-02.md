@@ -580,6 +580,8 @@ A Shared Presentation Foundation → B 市場頁 → C 標的頁 → D 持股頁
 
 ### §17.4 Stage A 範圍（AI 總管暫定切批；開工時以當時 main 重判）
 
+> 📌 **Stage A 暫停；施工路線由 New UI2 Architecture Gate 取代，semantic contracts 不變**（2026-11-02 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-123）；append-only，本節原文與下方既有 📌 一字未改）：客戶 2026-11-02 裁示 (5)「立即停止目前原本的 Stage A／現有 New UI 延續路線」「後續正式 UI 路線改為 New UI2 Greenfield Presentation Layer」（逐字見 DEC-123）。**被取代**：下表 A-1～A-3 作為「在現有 New UI／`src/ui_v2` 上施工」的批次安排、「優先 reuse `src/ui_v2`」的施工指引、Stage A DoD 的掛載條款。**仍有效（移作 New UI2 components 的需求）**：§4 Semantic Chip（Neutral／Info tone 只加不改、Danger 文字 ≠ 取得失敗）、§5 四態語意層與 `unavailable`→`unwired` 改名、§9 metric card 四欄與 freshness／source tag、§0.1.4 Risk Cap alert 兩態文字（只做元件、⛔ 接數值）、L1／L2／L3 層級；以及本檔**全部 semantic contracts**（New UI2 的 input）。兩邊理由：舊安排在已上線的 New UI 上補共用元件，改動小（當時成立）；新路線依客戶明示——現有 New UI 改為 Legacy New UI／Reuse Candidate，New UI2 為未來唯一主要 Presentation Layer。`src/ui_v2` 各模組是否沿用改依 `docs/vnext/NEWUI2_REUSE_MATRIX_2026-11-02.md` U1～U4；施工順序與完成條件見 `docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md`（BACKLOG `FUI-STAGE-A` paused／superseded、§5.1.18 `NUI2-*`）。
+
 > 📌 **Stage A 前置（2026-11-02 客戶拍板後）**：Freeze 已由客戶拍板，但**須先完成 Freeze 獨立驗收（含必要 QA）PASS**（BACKLOG `FUI-FREEZE-SECOND-AUDIT`；客戶原文「不得因本裁示直接跳過 Freeze 驗收」），才能依下表開 A-1。A-2 的 Risk Cap alert primitive 依 §0.1.4 只做 `⬜ 無法判定`／`🔴 超限 · 禁止新增曝險` 兩態文字，⛔ 接數值。
 
 目標〔客戶原文〕：先建立四頁共用 presentation primitives；**優先 reuse `src/ui_v2` 與既有 common component**；⛔ 重寫整套 component library。
