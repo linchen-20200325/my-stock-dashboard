@@ -1,6 +1,6 @@
 # New UI2 Migration／Cutover Contract
 
-- **狀態**：**客戶核准（Q4=A，2026-11-02；逐字見 `docs/DECISIONS.md` DEC-123「客戶裁示 Q1～Q4」）；隨 #997 獨立稽核＋合併後凍結。** Cutover 鏈、rollback、不得先刪、Removal Gate 另進＝客戶原文；migration 細則（§3）＝Architecture Gate §5 的條文化，屬 AI 總管內部自決（客戶可推翻）。
+- **狀態**：**客戶核准（Q4=A，2026-11-02；逐字見 `docs/DECISIONS.md` DEC-123「客戶裁示 Q1～Q4」）；~~隨 #997 獨立稽核＋合併後凍結~~ #997 獨立稽核兩輪完成（第一輪 PASS with fixes → 第二輪 PASS）；#997 合併即凍結（merge SHA 由下一位補記）。** Cutover 鏈、rollback、不得先刪、Removal Gate 另進＝客戶原文；migration 細則（§3）＝Architecture Gate §5 的條文化，屬 AI 總管內部自決（客戶可推翻）。
 - **日期**：2026-11-02　**基準**：`origin/main`＝`acd1648c`（#996 合併點）；分支 `ccr-a0b4e085-ijdaio`（PR #997）。以當下 `git fetch` 為準（DEC-118）。
 - **上位**：`CLAUDE.md` > `PROCESS.md` > `PROJECT_RULES.md` > DEC-123 > DEC-122 > `docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md` > 本檔。語意一律取 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md`。
 - **配套**：逐批驗收＝`docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md`；可重用／不可碰清單＝`docs/vnext/NEWUI2_REUSE_MATRIX_2026-11-02.md`。
@@ -31,8 +31,8 @@ New UI2
 
 | # | 關卡 | 通過判準 | 對應 BACKLOG |
 |---|---|---|---|
-| C1 | 獨立 Preview | 獨立 Streamlit Cloud Preview 可開、正式網站 0 diff；Preview 與 production 讀相同 canonical services／contracts（客戶 Q1）；需人工建 App／Secrets／OAuth 網址時才發 🟡 Manual Action Gate | `NUI2-PREVIEW`、`NUI2-PREVIEW-APP-MANUAL` |（依賴：`NUI2-PREVIEW`）
-| C2 | 四頁逐頁驗收 | 每頁：線框（客戶核准版＋§9 條件）一致；第一屏四問；L1／L2／L3；Visual Fidelity（含 Decision Density／Text Reduction）；PR 驗收六問；**動作欄 `⬜ 尚未提供` 只允許在 Preview 期**——C2 通過前 💼／📊 的動作能力必須已改讀 System Action Aggregator（`NUI2-AGGREGATOR-IMPL`、M-A3）（#997 稽核 M2） | `FUI-STAGE-B`～`E`（落點改 UI2） |（依賴：`NUI2-VM-BOUNDARY`、`NUI2-AGGREGATOR-IMPL`）
+| C1 | 獨立 Preview | 獨立 Streamlit Cloud Preview 可開、正式網站 0 diff；Preview 與 production 讀相同 canonical services／contracts（客戶 Q1）；需人工建 App／Secrets／OAuth 網址時才發 🟡 Manual Action Gate | `NUI2-PREVIEW`、`NUI2-PREVIEW-APP-MANUAL`（依賴：`NUI2-PREVIEW`） |
+| C2 | 四頁逐頁驗收 | 每頁：線框（客戶核准版＋§9 條件）一致；第一屏四問；L1／L2／L3；Visual Fidelity（含 Decision Density／Text Reduction）；PR 驗收六問；**動作欄 `⬜ 尚未提供` 只允許在 Preview 期**——C2 通過前 💼／📊 的動作能力必須已改讀 System Action Aggregator（`NUI2-AGGREGATOR-IMPL`、M-A3）（#997 稽核 M2） | `FUI-STAGE-B`～`E`（落點改 UI2）（依賴：`NUI2-VM-BOUNDARY`、`NUI2-AGGREGATOR-IMPL`） |
 | C3 | mobile／desktop | 390×844 與 1440×900 第一屏「不用滑」項目全部可見（各頁清單見線框 §1）；放不下 → Decision Gate，⛔ 自行移出 | `NUI2-ACC-MOBILE`、`NUI2-ACC-DESKTOP` |
 | C4 | missing／stale／source failure | 四態字樣與色正確；missing ≠ 0／HOLD／neutral；unavailable ≠ safe；部分失敗真錯誤外露；冷啟動灰色 | `NUI2-ACC-MISSING-STALE-FAILURE` |
 | C5 | real-data acceptance | 真資料（非夾具）四頁全通；Cold Start、Partial Data、Stale、API Failure、AI Failure 下仍安全顯示 deterministic output（Freeze／客戶 Stage I） | `NUI2-ACC-REAL-DATA`（＝`FUI-STAGE-I`） |

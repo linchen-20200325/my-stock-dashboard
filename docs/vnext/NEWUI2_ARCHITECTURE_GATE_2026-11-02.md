@@ -1,6 +1,6 @@
 # New UI2 Architecture Gate（New UI2 Greenfield Presentation Layer 架構閘門）
 
-- **狀態**：**客戶核准（Q1=A／Q2=A〔修正分類〕／Q3 四頁線框核准／Q4=A，2026-11-02；逐字見 DEC-123「客戶裁示 Q1～Q4」）；待 #997 獨立稽核＋合併後凍結**。#996 已合併（main＝`acd1648c`）；本 Gate 已落盤為 commit `6d30dcea`、Draft PR #997（分支 `ccr-a0b4e085-ijdaio`）。⛔ production coding（含 System Action Aggregator runtime）：Architecture 凍結並發 Model／Effort Change Gate 前一律不得施工；Aggregator 另須 implementation Gate（§4.6）。（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）<br>原文：~~**Architecture Gate 草案，待客戶裁示**（§11 送客戶四題：**G1 預覽、G3′ System Action Aggregator（系統動作彙整層）、四頁線框核准、G2 cutover＋#996 合併確認**，皆 **PENDING**）。⚠️ **本 Gate 目前只存在於工作樹**（受「只能推指定分支」權限限制；#996 合併後才以新 PR 落盤，見 §11 G2 第 2 小題）；依 DEC-122「沒寫入 GitHub 的新規格，不視為正式完成」，落盤前**不是正式文件**。獨立稽核（2026-11-02）判 **PASS with fixes**，本版已依修正項 F2～F7、m1～m6 改寫（單組稽核）。本檔**不是 Approved 規格**；客戶裁示前，本檔所有「目標架構／目錄／守衛」一律只是提案，⛔ 據以寫任何 production code（客戶 (5)-5「本批禁止 production coding」）。~~
+- **狀態**：**客戶核准（Q1=A／Q2=A〔修正分類〕／Q3 四頁線框核准／Q4=A，2026-11-02；逐字見 DEC-123「客戶裁示 Q1～Q4」）；~~待 #997 獨立稽核＋合併後凍結~~ #997 獨立稽核兩輪完成（第一輪 PASS with fixes → 第二輪 PASS）；**#997 合併即凍結**（merge SHA 由下一位補記）**（2026-11-02 #997 獨立稽核第二輪 PASS 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕；原文刪除線保留）。凍結後**下一個唯一安全工作**＝發 🟡 Model／Effort Change Gate，**客戶切換 Model×Effort 至 Sonnet 5.5＋Medium** 後，經 **implementation Gate** 開第一個 New UI2 批次（建議先 `NUI2-GUARD-REGISTRATION`／View Model boundary（`NUI2-VM-BOUNDARY`）／Preview 入口骨架（`NUI2-PREVIEW`），≤3 項，fake／snapshot 資料）；**未經客戶切換與 Gate 不得開始 implementation**；System Action Aggregator 實作另需 implementation Gate（`NUI2-AGGREGATOR-IMPL`）。#996 已合併（main＝`acd1648c`）；本 Gate 已落盤為 commit `6d30dcea`、Draft PR #997（分支 `ccr-a0b4e085-ijdaio`）。⛔ production coding（含 System Action Aggregator runtime）：Architecture 凍結並發 Model／Effort Change Gate 前一律不得施工；Aggregator 另須 implementation Gate（§4.6）。（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）<br>原文：~~**Architecture Gate 草案，待客戶裁示**（§11 送客戶四題：**G1 預覽、G3′ System Action Aggregator（系統動作彙整層）、四頁線框核准、G2 cutover＋#996 合併確認**，皆 **PENDING**）。⚠️ **本 Gate 目前只存在於工作樹**（受「只能推指定分支」權限限制；#996 合併後才以新 PR 落盤，見 §11 G2 第 2 小題）；依 DEC-122「沒寫入 GitHub 的新規格，不視為正式完成」，落盤前**不是正式文件**。獨立稽核（2026-11-02）判 **PASS with fixes**，本版已依修正項 F2～F7、m1～m6 改寫（單組稽核）。本檔**不是 Approved 規格**；客戶裁示前，本檔所有「目標架構／目錄／守衛」一律只是提案，⛔ 據以寫任何 production code（客戶 (5)-5「本批禁止 production coding」）。~~
 - **日期**：2026-11-02　**基準（裁示整合批）**：`origin/main`＝`acd1648c`（#996 合併點；總管實查）；本檔所在分支 `ccr-a0b4e085-ijdaio`（#997）。以當下 `git fetch` 為準。**基準（初稿，歷史）**：工作樹＝PR #996 head `139e315b`；撰寫組 2026-11-02 `git fetch origin main` 實查 `origin/main`＝`c1e10a62`（#995），HEAD 比 main 多 1 個 commit（#996 收斂批）。⚠️ cron 會推進 main，**一律以當下 `git fetch` 後的 `origin/main` 為準**（DEC-118），不得引用本欄當最新 main。
 - **決策來源**：客戶 2026-11-02 裁示 **(5)「New UI2 Greenfield Presentation Layer」**（逐字收錄於 `docs/DECISIONS.md` **DEC-123** fence；本檔與原文有出入時以原文為準）。下文〔客戶 (5)-n〕＝該裁示第 n 節原文要求。
 - **上位與輸入**：`CLAUDE.md`（§-2、§-1.5、§1、§8.2）> `PROCESS.md` > `PROJECT_RULES.md`＋`docs/governance/*` > DEC-123 > DEC-122 > 本檔。**`docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md`（下稱 Freeze）全部 semantic contracts 是本檔的 input**〔客戶 (5)-2「New UI2 必須以這些 semantic contracts 為 input。不要因為 New UI2 而重新發明投資語意」〕；本檔**不重新定義**任何四態、chip、Risk Cap、Single Action、freshness、估值、Digest、OneBrain 條文，只寫「New UI2 怎麼承接」。
@@ -274,7 +274,7 @@ Existing Formal Rules + Risk Cap
 | # | 欄位 | 內容 | 對應允許責任 |
 |---|---|---|---|
 | O1 | `items[]` | 每檔：`ticker`、`name`、`source_rule`（`action_branch.v1` 碼或 `swap_level`）、`formal_label`（原名，逐字）、`action_class` ∈ {actionable, non_actionable, unavailable, not_evaluated}、`group` ∈ {加, 留, 換, 減}、`counts_toward_today`（bool）、`risk_cap_tag`、`rule_id`（只限 `RULE_ID_ALLOWLIST`；無則空）、`as_of`、`source`；（#997 稽核 M3 補）`data_short_kind`（`row_short_kind` 原樣：`unjudged`／`price_missing`／`fx_unconfirmed`／空） | 1～4 |
-| O2 | `counts` | `today_n`（計入「今日需處理」檔數）、`by_group`（加／留／換／減）、`not_evaluated_n`、`unavailable_n` | 5 |
+| O2 | `counts` | `today_n`（計入「今日需處理」檔數）、`by_group`（加／留／換／減）、`not_evaluated_n`、`unavailable_n`；（#997 複驗 N1 補）`incomplete_rows_n`＝現行 `page_hold` 的 `_unjudged` 口徑：`row_data_short(row)` 為真**或**該列燈未全判出（`not is_fully_judged(cells)`）的列數（與既有 `unjudged_rows` 同口徑；⛔ 另訂） | 5 |
 | O3 | `day_status` | ~~`needs_action`（`today_n`>0）／`no_adjustment_today`（`today_n`=0 且 `not_evaluated_n`=0 且 `unavailable_n`=0）／`undeterminable`（`today_n`=0 且有任一未評估或不可得 →「無法判定」）~~ **既有 gate 的組合結果，⛔ 自行重新判定**（#997 稽核 M3）：`needs_action`＝`today_n`>0（同時揭露判不出檔數）；`no_adjustment_today`＝`today_n`=0 **且** `cruise_or_gap(judged, total, all_rows_judged=…)` 回巡航（`is_fully_judged` 全列成立、`judged==total>0`）**且** `digest_data_short(digest)` 為 False；其餘 `today_n`=0 的情形＝`undeterminable`（「無法判定」）。分子分母與資料不足判定**只沿用 I6／I7 既有函式**，⛔ 另訂門檻、分母或例外 | 6（Freeze §0.1.5 第 3、4 點） |
 | ~~O4~~ | ~~`risk_cap`~~ | ~~原樣帶出 Risk Cap state；Q1 數值 Gate 前恆 `undeterminable`；加碼類 item 的 `risk_cap_tag`＝「Risk Cap 無法判定」；`🔴 Risk Cap 超限 · 禁止新增曝險` 只在 `FUI-RC-NUMERIC-GATE` 啟用後才可能出現~~ | ~~2（禁止 6）~~（#997 稽核 m6 拆欄（2026-11-02 #997 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）） |
 | O4a | `risk_cap_state` | Risk Cap state **原樣傳遞**（＝輸入 I4，⛔ 改寫、⛔ 補值） | 2（禁止 6） |
@@ -296,7 +296,7 @@ Existing Formal Rules + Risk Cap
 - A-T5 禁用字樣：輸出 ⛔ 含「減碼 1/2」「全出」或任何比例字樣；⛔ 新 action code。
 - A-T6 `rule_id` ⊆ `RULE_ID_ALLOWLIST`。
 - A-T7 原名逐字：`formal_label` 與來源字樣 byte-identical。
-- A-T8 parity：與既有 `cruise_or_gap`／`aggregate_judged`／`tally_states`／`holdings_data_short` 在 golden 夾具上一致（不一致須說明並送 Gate，⛔ 擅自改哪一邊）。（#997 稽核 M3：parity 範圍明列 I6／I7 的 `judged_count`／`is_fully_judged`／`aggregate_judged`／`tally_states`／`cruise_or_gap`／`row_short_kind`／`total_judged`／`digest_data_short`；保留）
+- A-T8 parity：與既有 `cruise_or_gap`／`aggregate_judged`／`tally_states`／`holdings_data_short` 在 golden 夾具上一致（不一致須說明並送 Gate，⛔ 擅自改哪一邊）。（#997 稽核 M3：parity 範圍明列 I6／I7 的 `judged_count`／`is_fully_judged`／`aggregate_judged`／`tally_states`／`cruise_or_gap`／`row_short_kind`／`total_judged`／`digest_data_short`；保留）（#997 複驗 N1：parity 另含 `incomplete_rows_n` 對 `page_hold` 的 `_unjudged`／`unjudged_rows`）
 - A-T9 Presentation Slice independence：輸出不受 consumer 的 top_n／收合影響。
 - ~~A-T10 Risk Cap 不覆寫：輸入 Risk Cap state 與輸出 `risk_cap` 相等；⛔ 自行產生數值或分母。~~
 - A-T10（#997 稽核 m6 改寫，與 O4a／O4b 一致）Risk Cap：O4a `risk_cap_state` 與輸入 I4 逐欄相等（原樣傳遞）；O4b `exposure_gate` 在數值 Gate 前恆 `undeterminable`；⛔ 自行產生數值、分母、現金或總資產
@@ -663,13 +663,13 @@ Freeze §13-2 四情境（Top 5／Top 10／collapsed／never rendered）→ 在 
 
 | 條件（客戶原文） | 現況（2026-11-02；客戶裁示 Q1～Q4 後更新，舊值刪除線保留） |
 |---|---|
-| architecture frozen | ~~⬜ 本檔為草案（僅在工作樹）；待 G1、G3′、G2 裁示＋落盤＋`NUI2-ARCH-SECOND-AUDIT`~~ ⬜ 客戶已核准（Q1～Q4）；**待 #997 獨立稽核＋合併**後凍結 |
-| reuse matrix frozen | ~~⬜ 草案（單組）~~ ⬜ 隨 #997 獨立稽核＋合併凍結（客戶未逐列裁示；隨 Q1～Q4 整體核准，INFERENCE） |
+| architecture frozen | ~~⬜ 本檔為草案（僅在工作樹）；待 G1、G3′、G2 裁示＋落盤＋`NUI2-ARCH-SECOND-AUDIT`~~ ⬜ 客戶已核准（Q1～Q4）；**待 #997 獨立稽核＋合併**後凍結 📌 #997 獨立稽核兩輪完成（第一輪 PASS with fixes → 第二輪 PASS）；**#997 合併即凍結**（merge SHA 由下一位補記）（2026-11-02 #997 獨立稽核第二輪 PASS 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕；原文刪除線保留） |
+| reuse matrix frozen | ~~⬜ 草案（單組）~~ ⬜ 隨 #997 獨立稽核＋合併凍結（客戶未逐列裁示；隨 Q1～Q4 整體核准，INFERENCE） 📌 #997 獨立稽核兩輪完成（第一輪 PASS with fixes → 第二輪 PASS）；**#997 合併即凍結**（merge SHA 由下一位補記）（2026-11-02 #997 獨立稽核第二輪 PASS 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕；原文刪除線保留） |
 | four-page wireframe approved | ~~⬜ 待客戶核准（W-1～W-11）~~ ✅ 客戶核准（Q3，附 W-4／W-5／W-9／W-10／W-11 條件） |
 | migration boundary approved | ~~⬜ 草案 ✅ 客戶核准 Q4（Cutover 鏈＋rollback＋不得先刪）；migration 規則條文化於 Migration／Cutover Contract，隨 #997 稽核凍結~~ **cutover＝✅ 客戶 Q4 核准**（Cutover 鏈＋rollback＋不得先刪）；**migration 規則**（新建＋parity、Old UI 只讀、Legacy New UI 不改、不得整包搬、語意測試先 PORT）＝**AI 總管內部自決**（Migration／Cutover Contract §3，客戶可推翻），隨 #997 稽核凍結（2026-11-02 #997 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留） |
 | preview strategy approved | ~~⬜ PENDING G1~~ ✅ 客戶核准 Q1=A（含成本控制四點） |
 | cutover strategy approved | ~~⬜ PENDING G2~~ ✅ 客戶核准 Q4=A |
-| no unresolved architecture blocker | ~~⬜ G3′ 未裁示；#996 未合併、本 Gate 未落盤~~ ⬜ 待 #997 獨立稽核＋合併；Aggregator 實作另走 implementation Gate（不阻塞凍結，屬後續 prerequisite） |
+| no unresolved architecture blocker | ~~⬜ G3′ 未裁示；#996 未合併、本 Gate 未落盤~~ ⬜ 待 #997 獨立稽核＋合併；Aggregator 實作另走 implementation Gate（不阻塞凍結，屬後續 prerequisite） 📌 #997 獨立稽核兩輪完成（第一輪 PASS with fixes → 第二輪 PASS）；**#997 合併即凍結**（merge SHA 由下一位補記）（2026-11-02 #997 獨立稽核第二輪 PASS 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕；原文刪除線保留） |
 
 ⚠️ 提醒（INFERENCE）：Sonnet 5.5＋Medium 適用「純 presentation」批；M1 的 `risk_cap_gate` PORT、System Action Aggregator（~~系統動作彙整層（G3′=A′）~~ implementation Gate 後）、💼 持股 VM（G6／G7）、Stage F／G 屬語意／架構批，依客戶 §0 表仍需 **Opus 5.5＋High**——屆時依 DEC-084／DEC-106 比對實際設定，不符即停下通知客戶。
 
