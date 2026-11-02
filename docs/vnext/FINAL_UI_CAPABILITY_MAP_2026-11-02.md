@@ -1,6 +1,6 @@
 # Final UI Capability Map：Old UI Capability → New UI Location（2026-11-02）
 
-- **狀態**：**客戶指示 A 生效；Freeze 內容待客戶拍板（含 Q1～Q3）**（Final UI Contract Freeze 配套，隨 Freeze 送拍板；嚴重度定義為 AI 總管暫定；契約本體 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md`，取代關係 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md`，決策 `docs/DECISIONS.md` DEC-122）。
+- **狀態**：**客戶拍板版**（客戶 2026-11-02 裁示 Q1=A／Q2=A／Q3=A；嚴重度定義仍為 AI 總管暫定）（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）；~~**客戶指示 A 生效；Freeze 內容待客戶拍板（含 Q1～Q3）**~~（Final UI Contract Freeze 配套，隨 Freeze 送拍板；嚴重度定義為 AI 總管暫定；契約本體 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md`，取代關係 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md`，決策 `docs/DECISIONS.md` DEC-122）。
 - **日期**：2026-11-02　**基準**：`origin/main`＝`ce8422d`（撰寫組 `git fetch` 實查；cron 會推進 main，以當下 `git fetch` 為準）。
 - **客戶依據**：Old UI Capability → New UI Location Map〔客戶裁示 A 清單〕；「不得靜默移除的舊能力」重新盤點：大盤判斷、台股趨勢、國際趨勢、EPS × PE 研究、macro、industry、chip、valuation、risk、portfolio、candidate、source audit〔客戶 §42〕；Stage J 第 6 條「old/new capability map 無 critical gap」〔客戶 Stage J〕。
 - **方法**：invB 調查（2026-11-02，單組；**讀程式為主**：`app.py` 路由、`shared/ia_nav4.py`、`src/ui/views/*`、`src/ui_v2/compact.py`、`src/services/*`、`src/compute/etf/dividend_station.py`、`shared/decision_digest*`；文件為輔：`docs/vnext/NEWUI_D25_B_COVERAGE_2026-10-27.md` 70 列 CV-xx、Phase 1 baseline、P4-3／P5-3 Gate 報告）。本檔把 invB 的 85 列表正式化；**列內容逐列轉錄自 invB**，撰寫組只做結構化與機械計數，未逐列重驗。
@@ -50,6 +50,23 @@
 | **H01** | Portfolio Risk Cap＋目前曝險 vs Cap | 無曝險資料（Sheet 表頭無現金／總資產；單組 grep）；無封鎖規則 | D | **Q1** |
 | **H02** | System Action（客戶五詞） | 現行 ETF 七分支＋個股四級，無「減碼 1/2」「全出」；無 Risk Cap 封鎖 | D（＋F） | **Q2**；DEC-053 |
 | **E08** | Decision Digest Viewer | builder／summary **0 production caller**（grep `decision_digest` import，除自身模組與 `shared/strategy_class_schema` 外 0 命中） | E（殼）→ F（真資料） | Stage F Headless Digest |
+
+
+### §3.1 客戶裁示 Q1～Q3 後的落點更新（2026-11-02；append-only，上表與 §4 原列一字未改；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示））
+
+| ID | 依據 | 更新後 Final 落點與說明 | critical 是否解除 |
+|---|---|---|---|
+| **M02** Risk Cap／建議總持股水位 | Q1=A | 📊 市場 L1（手機第一屏必含，Q3=A）：**只凍結規則形狀**；數值仍隱藏、`⬜ 尚未核准／無法判定`；💼 持股頁卡⑤已核准區間（DEC-051／PQ-C6-3）**維持**；兩頁統一、數值啟用、曝險分母、現金／總資產來源 → `FUI-RC-NUMERIC-GATE`（另開正式 Decision Gate） | **否**（待 RC Gate） |
+| **M03** System Action State（市場層） | 架構鏈＋invariant 3 | 正式來源＝架構鏈中的 **System Action State** 層（Risk Cap／Hard Constraints 下游、Digest 上游）；Stage F 建層，Stage B 先以 `⬜ 尚未提供` 呈現 | **否**（待 Stage F） |
+| **M04** 是否需行動 | Q3=A | 📊 市場**手機第一屏必含**（不用滑）；判不出 ⛔ 寫成「今日無需調整」（Q2-4 同精神） | —（原 minor） |
+| **M07** 主要風險 | Q3=A | L1；手機**緊接第一屏之後**、⛔ 被 L2／L3 插隊 | —（原 minor） |
+| **M19** 一鍵更新 | Q3=A | 主 Update CTA＝手機第一屏必含 | — |
+| **H01** Portfolio Risk Cap＋目前曝險 vs Cap | Q1=A | 💼 持股 L1：曝險或有效上限任一不可得 → `⬜ 無法判定`；⛔ 發明分母／現金／總資產／替代值；超限＝`🔴 Risk Cap 超限 · 禁止新增曝險`（數值啟用後）；`⬜` 時加碼 ⛔ 被當成允許 | **否**（待 RC Gate） |
+| **H02** System Action（客戶五詞） | Q2=A | 💼 持股 L1「今日需處理」：沿用既有分支原名（ETF 七分支、個股 `swap_level`）；「加／留／換／減」只作呈現分組；只有無正式動作時才「今日無需調整」；資料不足／未評估 ⛔ 算無需調整；「減碼 1/2」「全出」⛔ 映射或產生 → `FUI-PROPORTIONAL-ACTION-RULES` | **部分**：第一版承接方式已定；比例 Action 仍缺正式規則（客戶 Q2-6），critical 維持至 Stage D 實作＋獨立 QA |
+| **H03** 今日需處理 | Q2=A | 同 H02；「沒事 vs 判不出」分開（Q2-3、Q2-4） | — |
+| **E08** Decision Digest Viewer | invariant 6 | Viewer 顯示**完整 Digest**；OneBrain 亦讀完整 Digest，⛔ 只讀 Top-N／摘要 | **否**（待 Stage F） |
+
+- ⇒ 裁示後 critical 仍為 **7 列**（M02、M03、T16、T21、H01、H02、E08；H02 部分承接）；**Stage J 第 6 條仍不成立**。critical 的解除只能由實作合併＋獨立 QA 證據或客戶裁示達成（附錄 D 第 2 條）。
 
 ## §4 能力清單表（Old → New → Final 落點）
 

@@ -1,12 +1,13 @@
 # Final UI Contract Freeze（vNext Final UI Convergence＋Headless Decision Digest＋OneBrain 的正式契約）
 
-- **狀態**：**客戶指示 A 生效；Freeze 內容待客戶拍板（含 Q1～Q3）**（2026-11-02）。本檔是送客戶拍板的 Freeze 草案，**不是 Approved 規格**；本檔內「凍結」字樣一律指「Freeze 草案條款」，客戶拍板前不得當已核准規格引用。與 Q1／Q2／Q3 有關的條款另標 **PENDING**（見 §20）。**PENDING 條款在裁示前一律以「較嚴、不放寬風控」的讀法暫行**（寫在各條內）。
+- **狀態**：**客戶拍板版**（客戶 2026-11-02 裁示「Q1：A Q2：A Q3：A 依此正式完成 Final UI Contract Freeze」；逐字見 DEC-122）。Q1～Q3 已裁示，條文化見 **§0.1**；**Stage A 須待 Freeze 獨立驗收（含必要 QA）PASS 後才能開始**（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）。<br>~~**客戶指示 A 生效；Freeze 內容待客戶拍板（含 Q1～Q3）**（2026-11-02）。本檔是送客戶拍板的 Freeze 草案，**不是 Approved 規格**；本檔內「凍結」字樣一律指「Freeze 草案條款」，客戶拍板前不得當已核准規格引用。與 Q1／Q2／Q3 有關的條款另標 **PENDING**（見 §20）。**PENDING 條款在裁示前一律以「較嚴、不放寬風控」的讀法暫行**（寫在各條內）。~~
 - **日期**：2026-11-02　**基準**：`origin/main`＝`ce8422d`（cron；最後非 cron 合併＝#994 `4e4aa5e`）；撰寫組 2026-11-02 `git fetch origin main` 實查。⚠️ cron 會推進 main，**一律以當下 `git fetch` 後的 `origin/main` 為準**（DEC-118），不得引用本欄當最新 main。
+- 📌 **客戶拍板收斂批基準**：`origin/main`＝`c1e10a6`（PR #995 Freeze 草案合併點；撰寫組 2026-11-02 `git fetch` 實查）；同樣以當下 `git fetch` 為準。
 - **決策來源**：客戶 2026-11-02 指示全文＋「A」裁示（**逐字收錄於 `docs/DECISIONS.md` DEC-122**）。本檔把該指示整理成可追溯規格；**客戶原文以 DEC-122 fence 為準**，本檔與原文有出入時以原文為準。
 - **配套文件**：舊→新能力對照＝`docs/vnext/FINAL_UI_CAPABILITY_MAP_2026-11-02.md`；取代關係＝`docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md`。
 - **位階**：`CLAUDE.md` > `PROCESS.md` > `PROJECT_RULES.md`＋`docs/governance/*` > 最新有效客戶 DEC（本檔的上位＝DEC-122）> 本檔＝正式 vNext 契約（與 Presentation Contract、Decision Digest Contract、ONEBRAIN 文件同層；**衝突處以本檔為準，僅限 supersede map 明列的條目**，其餘仍以原契約為準）。
 - **標記**：**〔客戶 §n〕**＝客戶 2026-11-02 指示第 n 節原文要求（無編號段落以「§0／§1／§2／§3／Stage X」標示）；**〔裁示 n〕**＝客戶「A」裁示第 n 點；**FACT**＝撰寫組或兩份調查（invA 衝突盤點、invB 能力盤點，皆 2026-11-02、單組）讀碼／grep 實查；**INFERENCE**＝推論；**AI 總管暫定**＝內部技術自決（`CLAUDE.md` v3 §03-1），客戶可推翻。
-- **不授權施工**：本檔**不修改** production UI、資料層、公式、Risk Cap、OneBrain runtime〔裁示 4〕；**客戶拍板本 Freeze＋裁示 Q1～Q3 後**，才能開始 Stage A〔裁示 6〕。登記≠動工授權（`CLAUDE.md` §-1）。
+- **不授權施工**：本檔**不修改** production UI、資料層、公式、Risk Cap、OneBrain runtime〔裁示 4〕；~~**客戶拍板本 Freeze＋裁示 Q1～Q3 後**，才能開始 Stage A〔裁示 6〕。~~ **客戶已拍板（2026-11-02）；Stage A 須待 Freeze 獨立驗收與必要 QA 通過後才能開始**（客戶原文「不得因本裁示直接跳過 Freeze 驗收」）（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）。登記≠動工授權（`CLAUDE.md` §-1）。
 - ⚠️ **揭露（`CLAUDE.md` §-2 規則 6）**：本檔由單一撰寫組依兩份單組調查（invA／invB）撰寫，**未經第二組獨立驗證**。文中「0 命中／不存在／沒有」皆為 grep 結果、**非窮舉**；其中三句承重宣稱——「持股資料無現金／總資產欄」「新四頁無數值型未校準機率」「現行 grounding 無 Risk Cap 一致性檢查」——**只能當待驗事項**，Stage D／G 開工前須另組複驗（BACKLOG `FUI-FREEZE-SECOND-AUDIT`）。
 
 ---
@@ -15,32 +16,91 @@
 
 | 節 | 主題 | 客戶出處 | 狀態 |
 |---|---|---|---|
-| §1 | 三條 invariant | 〔客戶 §51〕 | 待客戶拍板 |
-| §2 | 四頁 Final UI Blueprint（L1／L2／L3） | 〔客戶 §6～§27〕 | 待客戶拍板（各頁開工前仍出逐頁細線框，見 §2.0） |
-| §3 | 標的雙模式＋Ad-hoc Session Isolation＋加入觀察 CTA | 〔客戶 §10～§13〕 | 待客戶拍板 |
-| §4 | Semantic Chip Contract | 〔客戶 §4〕 | 待客戶拍板 |
-| §5 | 四態契約（Missing／Stale／Unavailable／Not evaluated） | 〔客戶 §5〕 | 待客戶拍板 |
-| §6 | Single Action Authority | 〔客戶 §20、§23、§35、§38、§51-2〕 | 待客戶拍板；**動作詞彙 PENDING Q2** |
-| §7 | No Uncalibrated Probability | 〔客戶 §36〕 | 待客戶拍板 |
-| §8 | Risk Cap Enforcement | 〔客戶 §19、§38〕 | 規則形狀待客戶拍板；**曝險分母／數值啟用 PENDING Q1** |
-| §9 | Field-level Freshness／Provenance | 〔客戶 §7、§31〕 | 待客戶拍板 |
-| §10 | 單檔 Valuation Contract | 〔客戶 §16、§17〕 | 待客戶拍板 |
-| §11 | 大盤 EPS×PE 與單檔估值分離治理 | 〔客戶 §43〕 | 待客戶拍板 |
-| §12 | Decision Digest Viewer／唯讀 Rule Registry | 〔客戶 §25～§27〕 | 待客戶拍板 |
-| §13 | Presentation Slice ≠ Decision Context | 〔客戶 §11、§32、§51-1／3〕 | 待客戶拍板 |
-| §14 | Headless Decision Digest prerequisite | 〔客戶 Stage F §28～§32〕 | 待客戶拍板 |
-| §15 | OneBrain 僅解釋／反證 | 〔客戶 §18、§23、Stage G §33～§37〕 | 待客戶拍板；詞彙值域延後 Stage G Gate |
-| §16 | Desktop／Mobile L1 Blueprint（文字線框） | 〔客戶 §6、§40、§41〕 | 待客戶拍板；**市場頁手機第一屏 PENDING Q3**（版面細節逐頁 Stage 前實測） |
-| §17 | Stage A–J 順序、Model×Effort、Stage A 範圍與 DoD | 〔客戶 §0、§2、§3、Stage A、§52〕 | 待客戶拍板 |
-| §18 | 每批驗收、Visual Gate 加嚴、輸出規則 | 〔客戶 §1、§41、§44～§49〕 | 待客戶拍板 |
-| §19 | 完成定義 | 〔客戶 §50〕 | 待客戶拍板 |
-| §20 | Decision Gate：Q1／Q2／Q3 | 〔裁示 5〕 | **PENDING** |
+| §1 | 三條 invariant | 〔客戶 §51〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §2 | 四頁 Final UI Blueprint（L1／L2／L3） | 〔客戶 §6～§27〕 | ~~待客戶拍板~~ 客戶拍板（各頁開工前仍出逐頁細線框，見 §2.0） |
+| §3 | 標的雙模式＋Ad-hoc Session Isolation＋加入觀察 CTA | 〔客戶 §10～§13〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §4 | Semantic Chip Contract | 〔客戶 §4〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §5 | 四態契約（Missing／Stale／Unavailable／Not evaluated） | 〔客戶 §5〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §6 | Single Action Authority | 〔客戶 §20、§23、§35、§38、§51-2〕 | ~~待客戶拍板~~ 客戶拍板；~~**動作詞彙 PENDING Q2**~~ **Q2=A 已裁示** |
+| §7 | No Uncalibrated Probability | 〔客戶 §36〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §8 | Risk Cap Enforcement | 〔客戶 §19、§38〕 | 規則形狀 ~~待客戶拍板~~ 客戶拍板；~~**曝險分母／數值啟用 PENDING Q1**~~ **Q1=A 已裁示（數值另開 Gate）** |
+| §9 | Field-level Freshness／Provenance | 〔客戶 §7、§31〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §10 | 單檔 Valuation Contract | 〔客戶 §16、§17〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §11 | 大盤 EPS×PE 與單檔估值分離治理 | 〔客戶 §43〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §12 | Decision Digest Viewer／唯讀 Rule Registry | 〔客戶 §25～§27〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §13 | Presentation Slice ≠ Decision Context | 〔客戶 §11、§32、§51-1／3〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §14 | Headless Decision Digest prerequisite | 〔客戶 Stage F §28～§32〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §15 | OneBrain 僅解釋／反證 | 〔客戶 §18、§23、Stage G §33～§37〕 | ~~待客戶拍板~~ 客戶拍板；詞彙值域延後 Stage G Gate |
+| §16 | Desktop／Mobile L1 Blueprint（文字線框） | 〔客戶 §6、§40、§41〕 | ~~待客戶拍板~~ 客戶拍板；~~**市場頁手機第一屏 PENDING Q3**~~ **Q3=A 已裁示**（版面細節逐頁 Stage 前實測） |
+| §17 | Stage A–J 順序、Model×Effort、Stage A 範圍與 DoD | 〔客戶 §0、§2、§3、Stage A、§52〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §18 | 每批驗收、Visual Gate 加嚴、輸出規則 | 〔客戶 §1、§41、§44～§49〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §19 | 完成定義 | 〔客戶 §50〕 | ~~待客戶拍板~~ 客戶拍板 |
+| §20 | Decision Gate：Q1／Q2／Q3 | 〔裁示 5〕 | ~~**PENDING**~~ **已裁示 Q1=A／Q2=A／Q3=A** |
 | §21 | 術語統一表 | 〔客戶 §39〕 | AI 總管暫定 |
+| **§0.1** | **客戶拍板與永久要求（產品方向、架構鏈、6 條 invariant、Q1～Q3 條文）** | 〔裁示 Q1～Q3，2026-11-02〕 | **客戶拍板；與他節衝突時以本節為準** |
 | §22 | 未驗與限制 | — | — |
+
+
+## §0.1 客戶拍板與永久要求（客戶 2026-11-02 裁示 Q1=A／Q2=A／Q3=A；逐字見 DEC-122；**與本檔他節衝突時以本節為準**）
+
+> 標記：〔裁示 Qn-k〕＝客戶 2026-11-02 Q1～Q3 裁示「補充永久要求」第 n 題第 k 點（依原文順序編號，編號為撰寫組所加）。
+
+### §0.1.1 產品方向（客戶原文，再次確認）
+
+**「簡化 UI，但不簡化 Decision Context。」** 前台只呈現真正需要決策的資訊；完整資料不得因 UI 精簡而裁掉。
+
+### §0.1.2 正式架構鏈（客戶原文）
+
+**Canonical Data → Deterministic Rules／Formulas → Risk Cap／Hard Constraints → System Action State → Decision Digest → OneBrain → UI**
+
+- 與 §14 Pipeline（Canonical Services → Canonical Snapshot → Deterministic Rules → Risk Cap → System Action → Decision Digest）**同向**：本鏈把 OneBrain 與 UI 明確放在 Digest 下游；**UI 是 consumer，不是 data producer**；OneBrain 只讀 Digest（§15.1）。
+- Risk Cap／Hard Constraints 在 System Action State **上游**生效：**被封鎖的動作不會成為 System Action；Digest 仍保存原始 rule result 與 Risk Cap 封鎖紀錄（§14 第 4 點）**，讓 Viewer、OneBrain 解釋與稽核看得到「哪條規則想動、被哪個上限擋下」；grounding 只是第二道檢查（§15.4）。
+
+### §0.1.3 永久 invariant（6 條；擴充 §1 三條，§1 原文保留）
+
+1. UI 越簡潔，Decision Context 不能越少。
+2. Presentation Slice ≠ Decision Context ≠ AI Output。
+3. System Action State 是唯一正式動作權威。
+4. OneBrain 只負責 reasoning、summary、explanation、counter-evidence、limitations。
+5. OneBrain 不得創造第二套 portfolio action，不得覆寫 deterministic action，不得繞過 Risk Cap。
+6. **OneBrain 應讀完整 Decision Digest，而不是只讀 UI 顯示的 Top-N／摘要資料。**
+
+### §0.1.4 Q1=A｜Risk Cap（取代 §8、§20 的裁示前暫行讀法）
+
+1. 本次只凍結 Risk Cap 的**規則形狀**〔裁示 Q1-1〕。
+2. 超限時必須「**禁止新增曝險**」〔Q1-2〕；顯示 `🔴 Risk Cap 超限 · 禁止新增曝險`（文字須與 `🔴 取得失敗`／`🔴 來源目前不可用` 不同，§4.1）。
+3. **目前曝險或有效 Risk Cap 任一資料不足 → 一律顯示 `⬜ 無法判定`**〔Q1-3〕；有效上限的判定沿用 DEC-044／048／051（§8.1 第 5 點）。
+4. **unavailable／not evaluated 不得解讀成 safe，也不得因此允許加碼**〔Q1-4〕：Risk Cap `⬜ 無法判定` 時，加碼類動作 ⛔ 以無上限呈現、⛔ 當作允許（同列標「Risk Cap 無法判定」）。
+5. ⛔ **自行發明曝險分母、現金、總資產或任何替代值**〔Q1-5〕（含以持股市值合計充當分母、以 session 輸入的總資金充當正式來源）。
+6. Risk Cap 數值正式啟用、曝險分母與現金／總資產來源 → **另開正式 Decision Gate**〔Q1-6〕（BACKLOG `FUI-RC-NUMERIC-GATE`）。
+7. 💼 持股頁既有已核准的建議持股區間（卡⑤，DEC-051／PQ-C6-3）**先維持**，不因本次 Freeze 擅自修改〔Q1-7〕；📊 市場頁維持隱藏（DEC-081 Q2-2／`RC-VISIBILITY`），統一與否併入上述 Gate。
+
+### §0.1.5 Q2=A｜持股動作（取代 §6 第 5 點、§20 的裁示前暫行讀法）
+
+1. 第一版**沿用現有 deterministic rule 的正式分支與原名稱**〔Q2-1〕（ETF `action_branch` 七分支、個股 `swap_level` 四級）。
+2. UI 可依「**加／留／換／減**」整理呈現，但**不得藉分類創造新的投資語意**〔Q2-2〕：分組只是排版，分支名照原名寫；⛔ 因分組改變任何分支的觸發條件、優先序、比例或解讀。§20 Q2 推薦 A 的分組清單（暫停加碼、高溢價、🟡 留意歸「留」等）是**總管提案**，Stage D 線框仍須客戶確認分組外觀，⛔ 讀成新規則。
+3. **只有沒有需要處理的正式動作時**才可顯示「今日無需調整」〔Q2-3〕。
+4. **資料不足／未評估不得算成「今日無需調整」**〔Q2-4〕（⚪ 資料不足、`⬜ 尚未評估`、任一燈判不出 → 顯示判不出，沿用 `cruise_or_gap` gate 精神）。
+5. 「減碼 1/2」「全出」**目前不得自行映射或產生**〔Q2-5〕（UI、Digest、OneBrain、推播皆同）。
+6. 比例 Action 只有在**正式規則、驗證、必要回測／Shadow 與 Decision Gate** 完成後才能啟用〔Q2-6〕（DEC-053 同向；BACKLOG `FUI-PROPORTIONAL-ACTION-RULES`）。
+
+### §0.1.6 Q3=A｜📊 市場頁 Mobile-first（取代 §16.1 手機的裁示前讀法）
+
+1. 市場頁 **Mobile-first**〔Q3-1〕。
+2. 手機第一屏**不用滑**就看到：**市場目前狀態**、**Risk Cap**、**是否需要行動**、**主 Update CTA**〔Q3-2〕。
+3. 「**今日主要風險**」緊接第一屏之後，**仍屬 L1**，⛔ 被 L2／L3 插隊〔Q3-3〕。
+4. **正式 supersede** 與此衝突的 DEC-117 Q1 手機 2＋1、DEC-118 問題 1=A、相關 DEC-120 mobile exception（A10／A11），落點＝`docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md` S10／S11〔Q3-4〕。另見 S11：DEC-120 **A4 手機部分**（三卡均高、手機卡面字數）一併失去前提、Stage B 重量＝**AI 總管內部收緊判定**（客戶可推翻）；A4 桌機部分仍有效。
+5. 實際能否放下**未實測**；Stage B 第一步以當時 main 實測（BACKLOG `FUI-MARKET-MOBILE-FIRST-SCREEN`），放不下 → 依 §16.5 先縮字句／合併成一行，仍不行則停在 Decision Gate，⛔ 自行把第一屏必要項移出。**四必要項＋今日結論放不下時，任一項（含今日結論）都不得自行移出，一律交 Decision Gate**（今日結論在第一屏＝DEC-081 Q2-1／DEC-109 仍有效的既有裁示，與 Q3 四必要項同屬客戶要求）。
+
+### §0.1.7 工作模式（客戶原文要點）
+
+Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、人工操作、Model／Effort change、Safe Handoff、完整 Stage 完成時輸出。**執行途中判斷 Model 或 Effort 不足、需要切換 → 必須立即停下來通知客戶（說明建議的新 Model＋Effort 與原因），等客戶修改後才能繼續；不得自行切換後繼續施工。** 開始前重做 GitHub Verification Gate。
 
 ---
 
 ## §1 三條 invariant（整個施工期間永遠不可破）〔客戶 §51，逐字〕
+
+> 📌 **已由客戶 2026-11-02 擴充為 6 條永久 invariant（§0.1.3）**；下列三條原文保留、全部仍有效（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）。
 
 1. **UI 越簡潔，Decision Context 不能越少。**
 2. **Deterministic System 是唯一動作權威；OneBrain 只能推理、解釋與反證。**
@@ -66,7 +126,7 @@
 
 | 層 | 內容 | 現行資料來源（FACT） | 缺口／狀態 |
 |---|---|---|---|
-| **L1 市場總結**〔§6〕 | Regime、Risk Cap、System Action State、OneBrain Outlook、是否需行動；⛔ 塞大量說明 | Regime＝市場位階 tile（`page_today.build_verdict_tiles`）；Risk Cap＝`allocation_service.get_allocation`（現行卡面 `_market_blocks.WATER_VALUE`「⬜ 尚未核准／無法判定」）；是否需行動＝`blocks.render_alerts_block`（⚡） | **System Action State（市場層）無正式來源**（invB M03，critical；grep `system_action` 0 命中，非窮舉）→ 只能 `⬜ 尚未提供`；**Risk Cap 數值 PENDING Q1**；OneBrain Outlook＝`🤖 ⬜ 尚未提供`（Stage G 前） |
+| **L1 市場總結**〔§6〕 | Regime、Risk Cap、System Action State、OneBrain Outlook、是否需行動；⛔ 塞大量說明 | Regime＝市場位階 tile（`page_today.build_verdict_tiles`）；Risk Cap＝`allocation_service.get_allocation`（現行卡面 `_market_blocks.WATER_VALUE`「⬜ 尚未核准／無法判定」）；是否需行動＝`blocks.render_alerts_block`（⚡） | **System Action State（市場層）無正式來源**（invB M03，critical；grep `system_action` 0 命中，非窮舉）→ 只能 `⬜ 尚未提供`；~~**Risk Cap 數值 PENDING Q1**~~ **Risk Cap 數值：Q1=A 已裁示——只凍結規則形狀，數值另開 Gate（§0.1.4）**（2026-11-02 Freeze 獨立驗收修正；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔驗收修正〕；原文刪除線保留）；OneBrain Outlook＝`🤖 ⬜ 尚未提供`（Stage G 前） |
 | L1（續） | **今日主要風險**（DEC-092 Q3、DEC-117 Q1／Q6 仍有效；新 L1 清單用「包含」，INFERENCE：非封閉清單） | `blocks.render_chart_d`、主要風險 tile | 手機位置見 §16.1 |
 | **L1 核心指標卡**〔§7〕 | 台股、VIX、US 10Y、利差、DXY、PMI／景氣、其他已正式存在且重要的指標；每卡 value／short state／as_of／source | 16 燈（`today.build_indicator_tiles`）、`INTL_GROUPS`、L3 原始表（`page_market` 的 `X7_FIELDS`） | 現行**無 L1 指標卡**；`get_macro_state` 無逐指標 as_of（Digest 契約 §4 `AS_OF_NOT_IN_CONTRACT`）→ 缺者 `⬜ 資料日未提供`，⛔ 共用全域更新時間 |
 | **L1 Charts**〔§8〕 | 台股主圖（index＋**正式**趨勢線／均線＋Regime annotation）；Volatility（VIX＋正式門檻帶）；International small multiples（DJI、NASDAQ、SOX、DXY、Yield）；Macro mini chart／sparkline／multi-series 取代大段文字 | 圖 A（加權＋MA 最新值水平參考線）、圖 B（`INTL_GROUPS`） | **正式趨勢線不存在**（DEC-092 Q2：台股趨勢＝`⬜ 尚未定義`，均線只是參考線）→ 維持；**Regime 歷史序列不存在**（grep `regime_history` 0 命中）→ 只能標當下位階或 ⬜；**VIX 圖不存在**→新增，門檻帶只能引既有 SSOT（`VIX_MEDIUM_RISK_THRESHOLD`、`shared/macro_buckets` VIX red），⛔ 新門檻；Macro mini chart 不存在→新增（純呈現） |
@@ -92,7 +152,7 @@
 
 | 層 | 內容 | 現行（FACT；`page_hold` 仍為 IA v2 版，Phase 6 未開工） | 缺口 |
 |---|---|---|---|
-| **L1 第一屏** | Portfolio Risk Cap、目前曝險、System Action State、今日需處理 | 無首屏 Risk Cap；`build_position_cap_card` 在 ⑤ 依 DEC-051／PQ-C6-3（客戶 2026-10-16 核准）外露市場端建議持股區間 `range_text`（已核准顯示，**非違規**）；① `build_action_card` 只列汰弱／加碼計數或巡航句 | **曝險無資料**（`gsheet_portfolio._HEADERS`＝name／ticker／lots／avg_price／updated_at，無現金／總資產；單組 grep）→ **PENDING Q1**；動作詞彙 **PENDING Q2** |
+| **L1 第一屏** | Portfolio Risk Cap、目前曝險、System Action State、今日需處理 | 無首屏 Risk Cap；`build_position_cap_card` 在 ⑤ 依 DEC-051／PQ-C6-3（客戶 2026-10-16 核准）外露市場端建議持股區間 `range_text`（已核准顯示，**非違規**）；① `build_action_card` 只列汰弱／加碼計數或巡航句 | **曝險無資料**（`gsheet_portfolio._HEADERS`＝name／ticker／lots／avg_price／updated_at，無現金／總資產；單組 grep）~~→ **PENDING Q1**；動作詞彙 **PENDING Q2**~~ → **Q1=A 已裁示（§0.1.4）**；動作詞彙 **Q2=A 已裁示（§0.1.5）**（2026-11-02 Freeze 獨立驗收修正；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔驗收修正〕；原文刪除線保留） |
 | L1 | Portfolio Overview charts：performance、benchmark、sector exposure、strategy distribution、concentration（能圖就不要長表） | 0 張圖 | performance／benchmark 無組合歷史淨值（資料缺口，INFERENCE 非窮舉）→ placeholder；sector exposure／concentration 有既有算法（`compute/risk/concentration.py`、產業集中度）；strategy distribution 在 HI-5 前全為 `⬜ 未分類` |
 | **L1 Holdings Table** | 代碼、名稱、持股比例、成本、現價、報酬、策略、System Action | 無逐檔表（只有燈牆） | 「持股比例」：外幣列依 DEC-101(1) ⛔ 與 TWD 加總 → 排除並揭露；「策略」：AB-4w（HI-5）前 `⬜ 未分類` |
 | L2 | fundamental、risk、chip、evidence、rule IDs；兩套刻度揭露（DEC-017 葉1 ② 仍有效，Stage D 線框待拍板 `P1R-P6-WF-TWO-SCALES`）；80/20、停利、換股、VaR／壓測／配息 | ②～⑥ | 再平衡、葡萄串為 `UnwiredSpec` |
@@ -211,7 +271,7 @@
 2. **今日需處理**只呈現真正 Action；**沒有動作時顯示「今日無需調整」**〔§20 原文〕；⛔ 硬填 action。「沒事」與「判不出」必須分開（既有 `cruise_or_gap` gate 同向）：判不出＝`⬜ 尚未評估`，⛔ 寫成「今日無需調整」。
 3. **AI 文字必須遵守 System Action**：System Action＝禁止加碼時，任何頁、推播、OneBrain 文字 ⛔ 出現 unrestricted Add〔§23、§38〕；由 automated grounding check 強制（§15.4）。
 4. **FACT（現行正式動作來源）**：ETF 軌 `src/compute/etf/dividend_station.action_branch` 七分支（汰弱 `cut`／強制停利 `take_profit_force`（>+3σ）／分批停利 `take_profit_partial`（>+2σ）／暫停加碼 `pause_add`／加碼 `add`／高溢價 `premium`／巡航 `cruise`）；個股軌 `StockAssessment.swap_level`（🔴換出／🟡留意／🟢續抱／⚪資料不足）；Digest 允許名單 `shared/decision_digest_rules.RULE_ID_ALLOWLIST` 只收 `risk_cap`＋前五個分支碼（`action_branch.v1`，DEC-094：內部命名、非客戶核准版本）。**「減碼 1/2」「全出」不存在任何正式規則**；分批停利沒有定義為 1/2。
-5. **動作詞彙 → PENDING Q2**（§20）。裁示前暫行（較嚴）：L1 只用既有分支原名；「減碼 1/2」「全出」⛔ 產生、⛔ 顯示。DEC-053（正式加減碼比例須經資料驗證→規則設計→回測／Shadow→客戶裁示）、DEC-092 Q4（不新增續抱／注意／減碼／換股四態）、DEC-054 七種 Action 名稱 **繼續有效**，⛔ 讀成已被 §20 取代。
+5. ~~**動作詞彙 → PENDING Q2**（§20）。~~ **Q2=A 已裁示：見 §0.1.5（正式條文）**（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）。舊文：裁示前暫行（較嚴）：L1 只用既有分支原名；「減碼 1/2」「全出」⛔ 產生、⛔ 顯示。DEC-053（正式加減碼比例須經資料驗證→規則設計→回測／Shadow→客戶裁示）、DEC-092 Q4（不新增續抱／注意／減碼／換股四態）、DEC-054 七種 Action 名稱 **繼續有效**，⛔ 讀成已被 §20 取代。
 6. **System Action State 需要一個 deterministic 組裝層**（Risk Cap → System Action → Digest，§14）；它只**彙整**既有分支與 Risk Cap 封鎖結果，⛔ 新規則。現況無此層（invB H02／M03 critical）。
 
 ---
@@ -228,14 +288,16 @@
 
 ---
 
-## §8 Risk Cap Enforcement〔客戶 §19、§38〕（規則形狀凍結；數值 **PENDING Q1**）
+## §8 Risk Cap Enforcement〔客戶 §19、§38〕~~（規則形狀凍結；數值 **PENDING Q1**）~~ （規則形狀凍結；**數值：Q1=A 已裁示，另開 Gate**）
+
+> 📌 **Q1=A 已裁示（2026-11-02）：正式條文見 §0.1.4**；本節 §8.1 形狀與 §8.3「裁示前」維持現狀的讀法即為裁示結果（持股頁區間維持、市場頁隱藏、數值另開 Gate）；與 §0.1.4 衝突處以 §0.1.4 為準（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）。
 
 ### §8.1 規則形狀（凍結，客戶原文）
 
 1. 若 **Exposure > Cap** → 立即顯示 **`🔴 Risk Cap 超限 · 禁止新增曝險`**，**而不是**「AI 看多 加碼」〔§19〕。
 2. 同一 Snapshot 下 Risk Cap blocked → 市場、標的、持股、OneBrain **任何地方不得出現 unrestricted Add**〔§38〕。
 3. 🔴 Danger 文字必須與 `🔴 取得失敗`／`🔴 來源目前不可用` **文字不同**（§4.1）。
-4. **目前曝險或有效上限任一不可得 → `⬜ Risk Cap 無法判定`**；依 not evaluated ≠ safe，此時加碼類動作 ⛔ 以「無上限」呈現，必須同列標「Risk Cap 無法判定」（**PENDING Q1 的推薦暫行讀法**）。
+4. **目前曝險或有效上限任一不可得 → `⬜ Risk Cap 無法判定`**；依 not evaluated ≠ safe，此時加碼類動作 ⛔ 以「無上限」呈現，必須同列標「Risk Cap 無法判定」~~（**PENDING Q1 的推薦暫行讀法**）~~ （**Q1=A 已裁示：正式條文 §0.1.4 第 3、4 點**）（2026-11-02 Freeze 獨立驗收修正；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔驗收修正〕；原文刪除線保留）。
 5. 「有效上限」的判定沿用既有規則：**DEC-044**（Risk Cap 既有細項維持現行）、**DEC-048**（Required Core＝VIX、PMI 當期、PMI 前月、外資期貨＋MA5；Core 缺→上限無效）、**DEC-051**（卡面揭露 Optional 資料完整性、中性措辭）**全部仍有效**，本契約不改。
 
 ### §8.2 現況（FACT）
@@ -245,7 +307,7 @@
 - **跨頁呈現差異（FACT，讀碼，未實機）**：市場頁水位卡隱藏數字（DEC-081 Q2-2／`RC-VISIBILITY`）；持股頁 ⑤ `build_position_cap_card` 有有效上限時卡面外露建議持股區間 `range_text`——這是 **DEC-051／PQ-C6-3（客戶 2026-10-16 核准線框）已核准的顯示，不是違規**。兩頁差異是否統一（統一成哪一邊）＝**併入 Q1 請客戶一併決定**；裁示前**維持現狀**（持股頁保留區間、市場頁維持隱藏）（BACKLOG `FUI-RISKCAP-CROSSPAGE`）。
 - **曝險分母不存在**：`build_position_cap_card` 明寫 Risk Cap 分母是「整體資產」；持股 Sheet 表頭無現金／總資產（單組 grep，**待驗**）→「目前曝險 %」**算不出來**。
 
-### §8.3 PENDING Q1（見 §20）
+### §8.3 ~~PENDING Q1（見 §20）~~ Q1=A 已裁示（見 §0.1.4）
 
 曝險分母、數值啟用時點、是否新增現金／總資產輸入、兩頁區間顯示是否統一——**裁示前**：Freeze 只定 §8.1 形狀；「Exposure vs Cap」閘門狀態一律 `⬜ 無法判定`；**既有顯示維持現狀**：市場頁 `⬜ 尚未核准／無法判定` 維持隱藏、持股頁 ⑤ 依 DEC-051／PQ-C6-3 已核准外露的建議持股區間維持；⛔ **新增**任何 Risk Cap 百分比顯示面（含把市場頁解除隱藏）；⛔ 修改 Risk Cap 公式／門檻（〔客戶 §46〕Risk Cap modification → Decision Gate）。
 
@@ -362,7 +424,7 @@ Domain ⛔ hardcode Claude：OneBrain → Provider interface（Claude／Fake／f
 
 所有 output 必須通過 grounding check，至少檢查：evidence refs 存在、不引用不存在數值、不創造 Rule ID、**不違反 Risk Cap**、**不產生禁用 action**、**不產生偽 probability**。**Failure → fallback deterministic summary**（現行 `src/services/decision_digest_summary.build_rule_summary`）。
 - **現況（總管稽核轉述，撰寫組未逐條讀實作）**：現行 `shared/decision_digest_grounding` G1～G6 是**封閉句型白名單**（AI 只能選句型填 slot），**不涵蓋 §15.2 的自由結構輸出**（`reasons[]`、`counter_evidence[]` 等）→ Stage G 須另建結構化 grounding（BACKLOG `FUI-GROUNDING-RISKCAP`）。
-- **Risk Cap 封鎖必須在 System Action 層上游生效**（§14 Pipeline：Risk Cap → System Action → Digest）：被封鎖的加碼在 Digest 裡就不存在；grounding 只是第二道檢查，⛔ 以 grounding 作為唯一防線。
+- **Risk Cap 封鎖必須在 System Action 層上游生效**（§14 Pipeline：Risk Cap → System Action → Digest）：~~被封鎖的加碼在 Digest 裡就不存在；~~ 被封鎖的加碼不會成為 System Action；Digest 仍保存原始 rule result 與 Risk Cap 封鎖紀錄（§14 第 4 點）（2026-11-02 Freeze 獨立驗收修正；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔驗收修正〕；原文刪除線保留）；grounding 只是第二道檢查，⛔ 以 grounding 作為唯一防線。
 
 ### §15.5 Cache／Cost〔§37〕
 
@@ -396,9 +458,31 @@ Domain ⛔ hardcode Claude：OneBrain → Provider interface（Claude／Fake／f
   ↓ 國際 small multiples → VIX＋門檻帶 → Macro mini│ │ 指標卡（2 欄堆疊）…       │
   ↓ 圖 D 主要風險 → 圖 C Research → L2／L3 摺疊   │ └──────────────────────────┘
 ```
+> 📌 上圖「`⬜ PENDING Q1`」為裁示前字樣（線框圖內無法加刪除線，原圖保留）：**Q1=A 已裁示**，Risk Cap 卡面＝`⬜ 尚未核准／無法判定`（數值另開 Gate）；手機欄以 §16.1-M 為準（2026-11-02 Freeze 獨立驗收修正；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔驗收修正〕；原文刪除線保留）。
 
 - **桌機**：沿用 DEC-117 Q5 已核准順序（頁首→CTA→結論→3 核心狀態→⚡→AI／資料狀態→Primary）；**AI 總管暫定**：「System Action State」與「是否需行動」併成 ⚡ 列一行（不加第 4 張 tile，維持 DEC-117 Q1 三 tile）；核心指標卡列放在 Primary 之後（避免把 Primary 擠出第一屏，契約 B1）。
-- **手機（PENDING Q3）**：§40 要求「是否行動」不用滑，與客戶 2026-10-30 **知情**選的 DEC-118 問題 1=A（⚡ 位於第一屏之後的 mobile exception）相反，且需改 DEC-117 Q1 手機「2＋1」→ **送 Q3**。上方手機線框＝Q3 推薦 A 的樣子（是否行動進第一屏、今日主要風險卡緊接第一屏之後）；**裁示前 DEC-118 問題 1=A、DEC-117 Q1、DEC-120 A10／A11 全部維持**。**「今日主要風險」無論 Q3 結果都仍屬 L1**（DEC-092 Q3「第一層」＝L1，L1 ≠ 第一屏，INFERENCE），⛔ 被 L2／L3 插隊。實際能否放下**未實測**，Stage B 第一步實測（BACKLOG `FUI-MARKET-MOBILE-FIRST-SCREEN`）。
+- **手機（~~PENDING Q3~~ Q3=A 已裁示，正式條文見 §0.1.6；下段為裁示前敘述，保留作歷史）**：§40 要求「是否行動」不用滑，與客戶 2026-10-30 **知情**選的 DEC-118 問題 1=A（⚡ 位於第一屏之後的 mobile exception）相反，且需改 DEC-117 Q1 手機「2＋1」→ **送 Q3**。上方手機線框＝Q3 推薦 A 的樣子（是否行動進第一屏、今日主要風險卡緊接第一屏之後）；**裁示前 DEC-118 問題 1=A、DEC-117 Q1、DEC-120 A10／A11 全部維持**。**「今日主要風險」無論 Q3 結果都仍屬 L1**（DEC-092 Q3「第一層」＝L1，L1 ≠ 第一屏，INFERENCE），⛔ 被 L2／L3 插隊。實際能否放下**未實測**，Stage B 第一步實測（BACKLOG `FUI-MARKET-MOBILE-FIRST-SCREEN`）。
+
+**§16.1-M 📊 市場手機線框（客戶拍板版，Q3=A，2026-11-02；取代上方手機欄的裁示前讀法；px 未實測）**
+
+```
+手機 390×844（第一屏可用約 791px）
+┌──────────────────────────────┐
+│ 📊 市場            [🚀 更新]  │ ← 主 Update CTA（不用滑）
+│ 今日結論（一句；逐字）         │
+│ 市場目前狀態（市場位階）       │ ← 不用滑
+│ Risk Cap：⬜ 無法判定／🔴 超限  │ ← 不用滑（數值未啟用前不顯示 %）
+│ 是否需要行動：⚡ N 項／今日無需調整│ ← 不用滑（判不出 → ⬜，⛔ 寫無需調整）
+├────────── 第一屏底 ───────────┤
+│ 今日主要風險（L1，緊接，⛔ 插隊）│
+│ 🤖 OneBrain Outlook ⬜｜資料狀態 │
+│ Primary 台股主圖（約 220px）    │
+│ 核心指標卡（2 欄堆疊）…         │
+│ ▸ L2／L3 摺疊                  │
+└──────────────────────────────┘
+```
+- 取代 DEC-117 Q1 手機 2＋1、DEC-118 問題 1=A、DEC-120 A10／A11（supersede map S10／S11）；桌機（左欄）不變。
+- 「今日結論」是否留在第一屏：DEC-081 Q2-1／DEC-109「今日結論必須在第一屏可見」仍有效 → 保留；四個必要項＋結論能否同時放下待 Stage B 實測（INFERENCE）。**放不下時任一項不得自行移出，一律交 Decision Gate**（§0.1.6 第 5 點）。
 
 ### §16.2 🎯 標的
 
@@ -496,6 +580,8 @@ A Shared Presentation Foundation → B 市場頁 → C 標的頁 → D 持股頁
 
 ### §17.4 Stage A 範圍（AI 總管暫定切批；開工時以當時 main 重判）
 
+> 📌 **Stage A 前置（2026-11-02 客戶拍板後）**：Freeze 已由客戶拍板，但**須先完成 Freeze 獨立驗收（含必要 QA）PASS**（BACKLOG `FUI-FREEZE-SECOND-AUDIT`；客戶原文「不得因本裁示直接跳過 Freeze 驗收」），才能依下表開 A-1。A-2 的 Risk Cap alert primitive 依 §0.1.4 只做 `⬜ 無法判定`／`🔴 超限 · 禁止新增曝險` 兩態文字，⛔ 接數值。
+
 目標〔客戶原文〕：先建立四頁共用 presentation primitives；**優先 reuse `src/ui_v2` 與既有 common component**；⛔ 重寫整套 component library。
 
 | 批 | 項目（≤3） | 依據 |
@@ -542,10 +628,12 @@ A Shared Presentation Foundation → B 市場頁 → C 標的頁 → D 持股頁
 
 ---
 
-## §20 Decision Gate（**PENDING**，待客戶裁示；共 3 題〔裁示 5：最多 2～3 題〕）
+## §20 Decision Gate（~~**PENDING**，待客戶裁示~~ **已裁示：Q1=A／Q2=A／Q3=A（客戶 2026-11-02）**；共 3 題〔裁示 5：最多 2～3 題〕）
+
+> 📌 **三題已全數裁示 A**；正式條文見 §0.1.4～§0.1.6。下列題文為送題當時的版本，保留作歷史；「裁示前暫行」各句已失效（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）。
 
 > 判題原則：客戶指示已寫明者不問；技術細節不問；只問投資語意／門檻／版面，且指示沒寫到、或與另一條**客戶**裁示互撞者。OneBrain 詞彙值域延後 Stage G Gate、新版加入觀察是否啟用延後 ME-P2／HI-5 Gate，**不送題**。
-> **本 Freeze 整體也待客戶拍板**：客戶拍板 Freeze＋裁示 Q1～Q3 後，才開始 Stage A。
+~~> **本 Freeze 整體也待客戶拍板**：客戶拍板 Freeze＋裁示 Q1～Q3 後，才開始 Stage A。~~ **Freeze 已由客戶拍板、Q1～Q3 已裁示（2026-11-02）；Stage A 須待 Freeze 獨立驗收（含必要 QA）PASS 後才能開始**（2026-11-02 Freeze 獨立驗收修正；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔驗收修正〕；原文刪除線保留）。
 
 ### Q1｜Risk Cap 閘門：「目前曝險」用什麼分母？數值何時開始真的生效？兩頁的區間顯示要不要統一？〔投資語意＋門檻〕
 
@@ -579,7 +667,7 @@ A Shared Presentation Foundation → B 市場頁 → C 標的頁 → D 持股頁
 | Risk Cap | Risk Cap（風險上限） | `risk_cap` | DEC-081 Q2-2 卡面措辭逐字有效 |
 | Missing | 資料未取得／資料未備 | `missing` | §5 |
 | Freshness | 資料日／過期 | `as_of`／`stale` | §9 |
-| System Action | 系統動作 | `system_action` | §6；詞彙 PENDING Q2 |
+| System Action | 系統動作 | `system_action` | ~~§6；詞彙 PENDING Q2~~ §6；詞彙 Q2=A 已裁示（§0.1.5） |
 | OneBrain | 🤖 OneBrain | `onebrain` | 取代「AI 投資總結」入口名與否＝Stage G 線框 |
 | Strategy | 策略（存股／資本利得／未分類） | `strategy_class` | AB-4w 前一律未分類 |
 | Valuation | 估值 | `valuation` | §10／§11 兩契約分開 |
