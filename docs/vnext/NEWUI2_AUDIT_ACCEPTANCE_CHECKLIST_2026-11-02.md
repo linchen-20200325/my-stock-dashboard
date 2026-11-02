@@ -132,3 +132,12 @@
 - [ ] 逐類回答（有／無；有則寫落點）：Rule → `PROJECT_RULES.md`／正式 spec；Decision → `docs/DECISIONS.md`；Audit finding → 正式 spec／`docs/BACKLOG.md`；Limitation → 正式 spec「未驗與限制」＋`docs/PROJECT_STATE.md`；Backlog → `docs/BACKLOG.md`；Migration debt → `docs/BACKLOG.md`＋Migration／Cutover Contract
 - [ ] `docs/PROJECT_STATE.md`、`docs/HANDOFF.md`（session 紀錄落點：Safe Handoff 區塊）已同步
 - [ ] 「沒有寫進 GitHub的項目，不視為可靠專案狀態。」——scratchpad、聊天、PR 描述、HANDOFF 一句話、Claude memory **不算**落盤〔客戶 (6)〕
+
+---
+
+## §14 Batch 1 驗收證據索引（2026-11-02；append-only）
+
+- G1：`tests/test_ui2_registration_and_boot.py`（meta＋teeth）；G2／G3／G4／G5／G9／chip 語意：`tests/test_ui2_guards.py`；G10：同上（floor 掃 `app_ui2.py`、AppTest、乾淨行程冷啟動）。
+- 未做（屬後續批）：G6／G7（Aggregator＋持股 VM）、G8 y 座標量測、G11 路由毒化、G12 逐頁術語驗收（見 BACKLOG `NUI2-G6-G7-G8-G11-G12-PENDING`）。
+- 截圖：`docs/vnext/newui2_batch1/`（FAKE；只存證據，**不是** Visual Fidelity Gate 判定；§3 手機第一屏四問**未量測**）。
+- §13 收尾 Gate 檢查：新 Rule＝無（本批未新增規則；G2 允許清單與 `ui2_` key 前綴為 Gate §4.2／§9 既有條文的落地）；新 Decision＝無；Audit finding／Limitation／Backlog／Migration debt＝已寫入 BACKLOG §5.1.20、PROJECT_STATE §52、Migration Contract §6。

@@ -84,6 +84,11 @@ _PATH_LAYERS: tuple[tuple[str, int], ...] = (
     #    這正是 CLAUDE.md §8.2.A 末段講的「未經登錄的軟例外 / 漏登 = 沒人發現」。
     # ⚠️ 同上:只加這一條具名前綴,不要補 ("src/ui/", L5) 兜底。
     ("src/ui_v2/", L5),
+    # New UI2(2026-11-02 NUI2-GUARD-REGISTRATION;Architecture Gate §6.1/§9 G1)。
+    # ⚠️ "src/ui2/" 與 "src/ui/" 不相交(實測 "src/ui2/x.py".startswith("src/ui/") is False),
+    #    不登記 ⇒ _layer_of_file 回 None ⇒ 五條硬規則對整個 New UI2 靜默失效(同 src/ui_v2/ 前車之鑑)。
+    # ⚠️ src/services/ui2/(L3)、shared/ui2_contract/(L0)已被既有 "src/services/"、"shared/" 前綴涵蓋。
+    ("src/ui2/", L5),
 )
 
 # 被 import 的模組路徑 → 層(most-specific-first;順序有意義)
@@ -105,13 +110,16 @@ _MODULE_LAYERS: tuple[tuple[str, int], ...] = (
     #    不是被兜底誤判成 L5);但本表註明 most-specific-first,順序寫對才不會
     #    在日後有人把比對式改成裸 startswith 時,讓 ui_v2 被兜底悄悄吃掉。
     ("src.ui_v2", L5),
+    # New UI2(同上,必須具名:"src.ui2" 咬不到 "src.ui." 兜底)。
+    ("src.ui2", L5),
     ("src.ui", L5),          # 兜底:未知的 src.ui.* 視為 L5
     ("app", L6),
+    ("app_ui2", L6),         # New UI2 Preview 入口(L6);無人應 import 它,登記使 R5 對「L5 import 入口」生效
 )
 
 # 只掃這幾個 root — 其餘(infra/、mcp_server/、tests/)未納入 §8.2 分層
 _SCAN_ROOTS = ("shared", "src", "scripts")
-_SCAN_FILES = ("app.py",)
+_SCAN_FILES = ("app.py", "app_ui2.py")   # app_ui2.py:New UI2 Preview 入口(L6),NUI2-GUARD-REGISTRATION
 _SKIP_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules",
               "build", "dist", ".mypy_cache", ".pytest_cache"}
 
@@ -180,7 +188,7 @@ def _package_of_file(relpath: str) -> str:
 
 
 def _layer_of_file(relpath: str) -> int | None:
-    if relpath == "app.py":
+    if relpath in ("app.py", "app_ui2.py"):
         return L6
     for prefix, layer in _PATH_LAYERS:
         if relpath.startswith(prefix):
