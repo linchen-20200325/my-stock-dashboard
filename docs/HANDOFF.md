@@ -8,7 +8,7 @@
 
 > 依客戶 2026-10-22 裁示（DEC-068），本檔改為**短版交接**：只保存 current active work、blocker、next safe point、必要的 main／PR／CI 狀態。完整專案知識見 `docs/PROJECT_STATE.md`；未完成工作見 `docs/BACKLOG.md`；新對話啟動程序見 `PROJECT_RULES.md` 第 15 節。**現況以本節與 GitHub 為準。**
 
-> 📌 **2026-11-02 現行接手點**：見本檔**最末**「~~Safe Handoff（2026-11-02，Final UI Contract Freeze）~~ ~~Safe Handoff（2026-11-02 更新：Freeze 已拍板）~~ ~~Safe Handoff（2026-11-02 New UI2）~~ **Safe Handoff（2026-11-02 New UI2 Architecture 客戶核准）**」（DEC-122）（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔事實更新〕；原文刪除線保留）；下方索引表為 2026-10-29 起的歷史索引，必讀規則仍有效（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。② 2026-11-02 客戶 New UI2 裁示後更新（DEC-123；決策者 客戶（DEC-123）＋AI 總管〔事實更新〕；有意識的更新，不是漏刪）；③ 2026-11-02 客戶裁示 Q1～Q4＋#996 合併後更新（DEC-123 裁示；決策者 客戶（DEC-123 裁示）＋AI 總管〔事實更新〕；有意識的更新，不是漏刪）。（#997 稽核 m3：上一版把 #996 的括號標註改寫為「更新紀錄 ①」，已還原為 #996 原文逐字、再追加 ②③。）
+> 📌 **2026-11-02 現行接手點**：見本檔**最末**「~~Safe Handoff（2026-11-02，Final UI Contract Freeze）~~ ~~Safe Handoff（2026-11-02 更新：Freeze 已拍板）~~ ~~Safe Handoff（2026-11-02 New UI2）~~ ~~Safe Handoff（2026-11-02 New UI2 Architecture 客戶核准）~~ **Safe Handoff（2026-11-02 New UI2 Semantic Correction Gate）**（④ 2026-11-02 DEC-124 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔事實更新〕；原文刪除線保留；Batch 1 段亦已標過期）」（DEC-122）（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔事實更新〕；原文刪除線保留）；下方索引表為 2026-10-29 起的歷史索引，必讀規則仍有效（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。② 2026-11-02 客戶 New UI2 裁示後更新（DEC-123；決策者 客戶（DEC-123）＋AI 總管〔事實更新〕；有意識的更新，不是漏刪）；③ 2026-11-02 客戶裁示 Q1～Q4＋#996 合併後更新（DEC-123 裁示；決策者 客戶（DEC-123 裁示）＋AI 總管〔事實更新〕；有意識的更新，不是漏刪）。（#997 稽核 m3：上一版把 #996 的括號標註改寫為「更新紀錄 ①」，已還原為 #996 原文逐字、再追加 ②③。）
 
 ### 📌 Resume Checkpoint 索引（現行；2026-10-29 Phase 1 SSOT Reset／Contract Freeze；DEC-086 欄位＋DEC-109 索引要求）
 
@@ -731,7 +731,7 @@ DEC-086 規則已於 main，本表已落地。
 | 永久收尾 Gate | 每批完成前檢查新的 Rule／Decision／Audit finding／Limitation／Backlog／Migration debt，同步 GitHub 正式文件後才能宣告完成（`PROJECT_RULES.md` 第 27 節；Audit Checklist §13）。 |
 | 禁止事項（摘要） | ⛔ 自行開始 implementation；⛔ 實作 System Action Aggregator（未經 implementation Gate）；⛔ 提前要求客戶建 Preview App；⛔ 為 Preview 建第二套 pipeline；⛔ 修改 production UI、`app.py`、LINE production；⛔ 刪 Legacy New UI／Old UI；⛔ 新增 Risk Cap runtime／OneBrain runtime；⛔ 重寫既有 data／services／rules；⛔ Architecture 凍結前降模型。 |
 
-- **Safe Handoff（2026-11-02 New UI2 Batch 1 完成；現行）**（SESSION_CONTINUITY C1 欄位；決策者 客戶 (7)＋AI 總管〔事實〕；**實作組單組產出，待總管複驗**）：
+- ~~**Safe Handoff（2026-11-02 New UI2 Batch 1 完成；現行）**~~（**已過期**：#998 已合併並由客戶 (8) 整體接受；本段「第 6 態 `NOT_PROVIDED`／Risk Cap 歸類待覆核」已由 DEC-124 裁示處理；現行見本檔最末「Safe Handoff（2026-11-02 New UI2 Semantic Correction Gate）」（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔事實更新〕；原文刪除線保留））（SESSION_CONTINUITY C1 欄位；決策者 客戶 (7)＋AI 總管〔事實〕；**實作組單組產出，待總管複驗**）：
 
 | 欄位（C1） | 內容 |
 |---|---|
@@ -745,3 +745,18 @@ DEC-086 規則已於 main，本表已落地。
 | 如何本機看 Preview | `streamlit run app_ui2.py`（入口在 repo 根；不影響 `app.py`）。floor 驗證用 `streamlit==1.56.0` venv 跑 `tests/test_ui2_*.py`。 |
 | 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule／Decision＝無；Audit finding／Limitation／Backlog／Migration debt 已寫入上列 GitHub 正式文件。 |
 | 禁止事項（摘要） | ⛔ 修改 `app.py`／加 `?ui=2`／切 production default；⛔ 刪／改 Legacy New UI 與 Old UI；⛔ 實作 System Action Aggregator（未經 implementation Gate）；⛔ 在 VM 或 UI2 聚合動作、創造投資規則；⛔ 為 Preview 建第二套 data pipeline；⛔ 提前要求客戶建 Preview App；⛔ 用 `guard_chip` 承載中性資訊；⛔ 把 Batch 1 截圖當 Visual Fidelity Gate 通過；⛔ 修改 LINE production。 |
+
+- **Safe Handoff（2026-11-02 New UI2 Semantic Correction Gate；現行）**（SESSION_CONTINUITY C1 欄位；決策者 客戶 (8)〔DEC-124〕＋AI 總管〔事實〕；**實作組單組產出，待總管複驗**）：
+
+| 欄位（C1） | 內容 |
+|---|---|
+| live GitHub state | 基準 `origin/main`＝`57b361ab`（含 #998 New UI2 Batch 1；實作組 `git status` 實查分支 `ccr-a0b4e085-ijdaio` 與之一致；cron 會推進 tip，以當下 `git fetch` 為準）。本批變更在工作樹，**commit／push／PR 由總管處理**（實作組未 commit）。 |
+| current Stage／exact safe stopping point | **New UI2 Semantic Correction Gate（DEC-124）語意修正完成，待驗收**（總管複驗＋獨立 QA＋客戶驗收）：① FieldState／capability 語意邊界（選項 A）② Risk Cap `⬜ 無法判定`＝Unable to Determine（≠ Not Evaluated）③ 守衛＋GitHub 文件同步。0 investment semantic change；未新增 Risk Cap 規則或數值；#998 未回退。 |
+| 待客戶裁示 | **無即時待裁題**。可推翻的 AI 總管暫定：選項 A、Aggregator O1 第五類 `undeterminable`；待第二組覆核：DEC-074／075 字樣歸類（`NUI2-DATA-SHORT-CLASSIFICATION-REVIEW`）、`⬜ 尚未核准／無法判定` 混合字樣（`NUI2-NOT-APPROVED-LITERAL-REVIEW`）。 |
+| known limitations／blockers | 見 `docs/PROJECT_STATE.md` §53「限制」與 BACKLOG §5.1.21：capability marker Preview-only 以檔案允許清單強制（非 runtime）；Old UI／Legacy New UI 字樣語意未盤點（範圍外）；導覽仍為 temporary implementation gap（**不是 W-1 amendment**，下一個 presentation batch 修）。 |
+| **下一個唯一安全工作** | 總管複驗 DEC-124 批（獨立 QA；重點：`tests/test_ui2_guards.py` DEC-124 段 teeth、既有斷言 6 處改寫未放寬、`git diff --stat` 0 diff 清單）→ PR／CI → 客戶驗收。**驗收通過後**：若下一批只剩 navigation／cards／layout／responsive／fake-data presentation，回報「🟡 Model / Effort Change Gate：語意修正完成，可切 Claude Sonnet 5.5 + Medium。」並**停手**，等客戶切 Model（客戶 (8)-7）；⛔ 自行開始下一批。 |
+| required Model×Effort for resume | 本 Gate＝Opus 5.5＋High（客戶 (8) 建議）；驗收後純 presentation 批＝Sonnet 5.5＋Medium（待客戶切換）；Aggregator／Risk Cap／Action Authority／Digest／OneBrain／資料語意＝Opus 5.5＋High。判斷需切換 → 先停手通知客戶，⛔ 自行切換。 |
+| 正式文件索引 | 決策 `docs/DECISIONS.md` DEC-124；規格 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md` §5.1 📌、`docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md` §4.6.6／§9.2；規則 `PROJECT_RULES.md` §19.8 📌；待辦 `docs/BACKLOG.md` §5.1.21；知識 `docs/PROJECT_STATE.md` §53；債務 `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` §7；證據 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §15。 |
+| 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule＝有（§19.8 加註）；新 Decision＝有（DEC-124）；Audit finding／Limitation／Backlog／Migration debt 已寫入上列 GitHub 正式文件（落盤以總管 commit／push 為準）。 |
+| 禁止事項（摘要） | ⛔ navigation 實作、real data wiring、Aggregator、Risk Cap runtime、Digest、OneBrain、LINE（客戶 (8)-5）；⛔ 修改已凍結 W-1；⛔ 把 `⬜ 尚未提供` 稱為資料語意態；⛔ 合併 Not Evaluated 與 Unable to Determine；⛔ 新增 Risk Cap 規則或數值；⛔ 回退 #998；其餘沿 Batch 1 段禁止事項。 |
+

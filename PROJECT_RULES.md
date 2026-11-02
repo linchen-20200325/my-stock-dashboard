@@ -665,6 +665,12 @@ AI 是分析／解釋層，不得成為資料真相或核心 deterministic rule 
 
 長期演進不得破壞既有資料語意：missing ≠ 0；missing ≠ 中性；missing ≠ 正常；missing ≠ HOLD；proxy／estimated ≠ real；stale ≠ current；error ≠ missing。UI 必須能表達這些不同狀態，不得只靠顏色。
 
+- 📌 **2026-11-02 永久語意補充（append-only；上文一字未改；決策者 客戶（DEC-124，客戶 (8) 逐字見 `docs/DECISIONS.md`））**：
+  1. **正式資料語意只有五個**：OK／Missing／Stale／Unavailable／Not Evaluated。
+  2. **Not Evaluated**＝「這項規則／計算尚未執行或不在本次評估範圍。」**Unable to Determine**＝「有進入判定流程，但因必要輸入 Missing / Unavailable / Invalid / insufficient，無法得到正式結果。」（客戶逐字）**兩者禁止合併**；Unable to Determine（例：Risk Cap `⬜ 無法判定`）⛔ 自動等同 NOT_EVALUATED，⛔ 推導 safe／neutral／no action／無需調整／可加碼。
+  3. **「⬜ 尚未提供」**只能是 **Capability／Implementation Availability State**（功能尚未實作／接線；Preview-only；與資料語意正交），**不是** objective data quality state，⛔ 稱為「第 6 個正式資料語意態」。
+  4. 收入本節的理由：本節是「資料語意不得被演進破壞」的永久規則落點；DEC-124 是客戶明定的**永久語意**（非 New UI2 專屬），故在此加註、不另立節。New UI2 落點與守衛見 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md` §5.1 📌、`tests/test_ui2_guards.py`（DEC-124 段）。
+
 ### 19.9 Presentation／Decision Logic 分離
 
 UI layout、component、copy 調整不得偷偷改變 threshold、weights、eligibility、investment semantics、Risk Cap、trend definition、valuation definition。UI change 與 investment-rule change 是不同類型的變更、不同 Gate。

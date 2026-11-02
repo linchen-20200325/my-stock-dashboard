@@ -895,3 +895,18 @@
 - **限制（誠實揭露）**：(1) 未實機（手機真機、Streamlit Cloud、真登入）；(2) 第一屏「不用滑」**未量測 y 座標**，只目視；(3) 導覽用 Streamlit 原生頂部水平 radio，**與已核准 W-1（底部固定列／左側欄）有落差**（`NUI2-NAV-W1-FIDELITY`）；(4) `src/services/__init__.py` eager import 使 Preview 行程載入 L1 模組（不呼叫；`NUI2-SERVICES-INIT-EAGER`）；(5) 第 6 態 `NOT_PROVIDED` 與 Risk Cap→Not evaluated 歸類為 AI 總管暫定（`NUI2-STATE-NOT-PROVIDED-AUDIT`）；(6) 截圖腳本為一次性、不在 repo（`tools/` 禁動；`NUI2-VF-UI2-SUPPORT`）；(7) 守衛是 AST／原始碼層級，非 import graph／runtime 層級；(8) 全部 FAKE，無真資料驗證（Stage I）。
 - **未碰（硬限制）**：`app.py`、`requirements.txt`、`src/ui/**`、`src/ui_v2/**`、`src/data`、`src/compute`、`tools`、`scripts`、`.github`；System Action Aggregator／Risk Cap／Decision Digest／OneBrain runtime；LINE production。
 - **下一步**：見 HANDOFF Safe Handoff（Batch 1）；`NUI2-PREVIEW-APP-MANUAL` **未發** Manual Action Gate（客戶：需要時才通知，⛔ 提前要求）。
+- 📌 **2026-11-02 DEC-124 後註（append-only；本節上文一字未改）**：上文「`FieldState`（OK＋Freeze 四態＋`NOT_PROVIDED`）」「第 6 態 `NOT_PROVIDED` 與 Risk Cap→Not evaluated 歸類」已由客戶 (8) 裁示修正——`⬜ 尚未提供`＝capability state（⛔ 第 6 資料態）、Risk Cap `⬜ 無法判定`＝Unable to Determine；現況見 §53（有意識的更新，不是漏刪；決策者 客戶（DEC-124））。
+
+## 53. New UI2 Semantic Correction Gate（DEC-124，客戶 2026-11-02 (8)；append-only；實作組單組、待總管複驗）
+
+- **依據**：客戶 (8)（逐字見 `docs/DECISIONS.md` DEC-124）；範圍限 (8)-5 三項。基準 `origin/main`＝`57b361ab`（含 #998 New UI2 Batch 1；分支 `ccr-a0b4e085-ijdaio`，實作組 `git status` 實查與 origin/main 一致）。**未 commit／push（由總管處理）**。#998 整體接受、未回退。
+- **做了什麼（0 投資語意；未新增 Risk Cap 規則或數值）**：
+  - **① FieldState／capability 語意邊界＝選項 A**：`FieldState` 恰五態（OK／Missing／Stale／Unavailable／Not Evaluated）；`⬜ 尚未提供` 改為 `CapabilityState.NOT_PROVIDED`（`FieldVM.capability`；該欄 `state` 必為 None、⛔ 帶值）；三張字樣表互斥。理由見 DEC-124「落地」（客戶 (8)-2 明言資料語意仍維持五個；影響面只在 New UI2 套件；第 2 項本就需新型別）。
+  - **② Risk Cap `⬜ 無法判定`**＝`JudgementState.UNDETERMINABLE`（判定結果，非資料語意；依 Freeze §0.1.4 第 3 點、§8.2、Architecture Gate O4b）；⛔ NOT_EVALUATED、⛔ 綠、⛔ 「今日無需調整」等 safe 讀法。DEC-074／075 客戶逐字 `⬜ 未評估／資料不足` 依原始語境歸 Unable to Determine（字樣不改；單組判讀待覆核）。`⬜ 尚未核准／無法判定` 維持 Not Evaluated（混合字樣，登記待覆核）。canonical spec 未知 `state` 提示改為 raise（原會默默落成 OK／MISSING）。
+  - **③ 守衛**：`tests/test_ui2_guards.py` 新增 DEC-124 段（資料語意恰五態、三軸型別互斥、UTD≠NE 不同值不同字樣、字樣跨軸禁用、客戶字樣逐字釘死、Risk Cap 無法判定 ⛔ safe 讀法／綠、capability marker Preview-only 允許清單、未知 state 提示 raise），各附 teeth。既有斷言改寫 6 處（皆標「DEC-124 語意修正」：`NOT_PROVIDED` 從資料態改到 capability 軸、Risk Cap 從 NOT_EVALUATED 改為 UNDETERMINABLE、字樣互斥掃描擴到三張表、查表改依語意軸），**未放寬**（每處斷言數不減、範圍不縮）。
+  - **文件**：DEC-124（含客戶 (8) 逐字）＋DECISIONS §5 取代鏈一列；Freeze §0.1.4／§5.1／§5.3／§8.1／§22；Architecture Gate §4.6.5／§4.6.6（O1 增 `undeterminable`、`unjudged→undeterminable`、O2 增 `undeterminable_n`）／§9.2 G5／§14；Audit Checklist §2／§4／§5／§11／§15；Wireframes §0.2；Migration Contract §6（W-1 措辭）／§7；`PROJECT_RULES.md` §19.8 加註；BACKLOG §5.1.20 兩列更新＋§5.1.21；HANDOFF Safe Handoff。
+- **驗證（實作組實測；單組）**：見 HANDOFF Safe Handoff（DEC-124）「tests」欄與 PR 描述。mutation：DEC-124 守衛 11 項＋Batch 1 既有 15 項全部轉紅後已還原。
+- **限制（誠實揭露）**：(1) 守衛為原始碼／契約層級；capability marker 的 Preview-only 以**檔案允許清單**強制，**不是** runtime 斷言（cutover 前補：`NUI2-CAPABILITY-MARKER-CUTOVER-ZERO`）；(2) DEC-074／075 字樣與 `not_approved` 混合字樣歸類為單組判讀；(3) Aggregator O1 第五類 `undeterminable` 為 docs-only 契約修正，Aggregator 未實作；(4) Old UI／Legacy New UI 中 `⬜ 未評估／資料不足` 等字樣的語意歸類**未盤點、未修改**（範圍外）；(5) 全部 FAKE；未實機。
+- **未碰（硬限制）**：`app.py`、`requirements.txt`、`src/ui/**`、`src/ui_v2/**`、`src/data`、`src/compute`、`shared` 既有非 ui2 檔；navigation 實作、real data wiring、Aggregator、Risk Cap runtime、Digest、OneBrain、LINE。
+- **W-1**：頂部 navigation 維持 temporary implementation gap（**不是 W-1 amendment**；`NUI2-NAV-W1-FIDELITY`），下一個 presentation batch 修。
+

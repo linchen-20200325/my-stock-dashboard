@@ -1,8 +1,12 @@
 """VM 共用純函式：canonical spec → L0 VM 型別。
 
 輸入 spec（dict）鍵：label／value／as_of／source／state／stale_days／reason／sub_reason／missing_kind。
-規則（Freeze §5）：value 為 None 且無明示態 → MISSING（⛔ 補 0／中性／續抱／safe）；
-明示 unavailable／not_evaluated／not_provided 時**丟棄** value（unavailable ≠ safe）。
+規則（Freeze §5；DEC-124）：value 為 None 且無明示態 → MISSING（⛔ 補 0／中性／續抱／safe）；
+明示 unavailable／not_evaluated／undeterminable／not_provided 時**丟棄** value（unavailable ≠ safe；
+無法判定 ≠ safe）。`state` 提示只收 `SPEC_STATE_HINTS`，其餘 → raise（⛔ 未知態默默落成 OK）。
+- `not_evaluated`（資料語意）＝規則／計算尚未執行或不在本次評估範圍。
+- `undeterminable`（判定結果）＝已進入判定、必要輸入不足／不可得／無效；⛔ 映射成 not_evaluated。
+- `not_provided`（capability marker，Preview-only）＝功能尚未實作／接線；`state` 為 None。
 """
 from __future__ import annotations
 
@@ -10,16 +14,20 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from shared.ui2_contract.models import (
-    CardVM, CtaVM, FieldState, FieldVM, FirstScreenVM, FreshnessInfo,
-    PageContext, PageVM, PresentationSlice, SectionVM,
+    CapabilityState, CardVM, CtaVM, FieldState, FieldVM, FirstScreenVM, FreshnessInfo,
+    JudgementState, PageContext, PageVM, PresentationSlice, SectionVM,
 )
 from shared.ui2_contract.text import (
     PREVIEW_BANNER_TEXT, TEXT_MISSING_NOT_FETCHED, TEXT_MISSING_NOT_READY,
     TEXT_NOT_EVALUATED, TEXT_NOT_PROVIDED, TEXT_NOT_PROVIDED_AGGREGATOR,
-    TEXT_UNAVAILABLE, stale_text,
+    TEXT_RISK_CAP_UNDETERMINABLE, TEXT_UNAVAILABLE, stale_text,
 )
 
 Spec = Mapping[str, Any]
+
+#: canonical spec 的 `state` 提示白名單（None＝依 value 判 OK／MISSING）。
+SPEC_STATE_HINTS = frozenset({None, "stale", "unavailable", "not_evaluated", "undeterminable",
+                              "not_provided"})
 
 #: 這些頁的 `action_needed` 不得由 canonical 提供（Aggregator 未實作；VM ⛔ 創造動作）。
 PAGES_ACTION_FROM_AGGREGATOR_ONLY = frozenset({"p4_market", "p4_hold"})
@@ -31,14 +39,19 @@ def field_from_spec(spec: Spec) -> FieldVM:
     hint = spec.get("state")
     value = spec.get("value")
     detail = spec.get("reason")
+    if hint not in SPEC_STATE_HINTS:
+        raise ValueError(f"{label}: 未知 state 提示 {hint!r}（允許 {sorted(map(str, SPEC_STATE_HINTS))}）")
     if hint == "unavailable":
         return FieldVM(label, FieldState.UNAVAILABLE, None, TEXT_UNAVAILABLE, detail, fresh)
     if hint == "not_evaluated":
         return FieldVM(label, FieldState.NOT_EVALUATED, None,
                        spec.get("sub_reason") or TEXT_NOT_EVALUATED, detail, fresh)
+    if hint == "undeterminable":
+        return FieldVM(label, JudgementState.UNDETERMINABLE, None,
+                       spec.get("sub_reason") or TEXT_RISK_CAP_UNDETERMINABLE, detail, fresh)
     if hint == "not_provided":
-        return FieldVM(label, FieldState.NOT_PROVIDED, None,
-                       spec.get("sub_reason") or TEXT_NOT_PROVIDED, detail, fresh)
+        return FieldVM(label, None, None, spec.get("sub_reason") or TEXT_NOT_PROVIDED, detail, fresh,
+                       capability=CapabilityState.NOT_PROVIDED)
     if value is None:
         status = (TEXT_MISSING_NOT_READY if spec.get("missing_kind") == "not_ready"
                   else TEXT_MISSING_NOT_FETCHED)
@@ -61,9 +74,13 @@ def section_from_spec(spec: Spec) -> SectionVM:
 
 
 def aggregator_pending_field(label: str) -> FieldVM:
-    """動作欄：Aggregator 未實作 → `⬜ 尚未提供（待 System Action Aggregator）`（僅 Preview 期；Gate §4.6.5）。"""
-    return FieldVM(label, FieldState.NOT_PROVIDED, None, TEXT_NOT_PROVIDED_AGGREGATOR,
-                   "動作權威尚未實作（Preview）", FreshnessInfo())
+    """動作欄：Aggregator 未實作 → `⬜ 尚未提供（待 System Action Aggregator）`（僅 Preview 期；Gate §4.6.5）。
+
+    capability marker（DEC-124）：⛔ 帶資料語意、⛔ 讀成「今日無需調整」或「無法判定」。
+    """
+    return FieldVM(label, None, None, TEXT_NOT_PROVIDED_AGGREGATOR,
+                   "動作權威尚未實作（Preview）", FreshnessInfo(),
+                   capability=CapabilityState.NOT_PROVIDED)
 
 
 def build_page_vm(canonical: Spec, *, top_n: int | None = None) -> PageVM:

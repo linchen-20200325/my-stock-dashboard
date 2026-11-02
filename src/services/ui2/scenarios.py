@@ -5,7 +5,9 @@
 ⛔ 本檔不 import 任何取數／規則模組；不含門檻、分支、公式（只有字串占位）。
 
 場景（六種）：cold／loaded／missing／stale／unavailable／not_evaluated。
-`fixed=True` 的 spec 不隨場景變化（例：Risk Cap 在 Q1 數值 Gate 前恆 `⬜ 無法判定`）。
+`not_evaluated` 場景同時示意 Not Evaluated（`⬜ 尚未定義`）與 Unable to Determine
+（DEC-074／075 客戶逐字 `⬜ 未評估／資料不足`）——兩者語意不同、分屬不同態（DEC-124）。
+`fixed=True` 的 spec 不隨場景變化（例：Risk Cap 在 Q1 數值 Gate 前恆 `⬜ 無法判定`＝Unable to Determine）。
 """
 from __future__ import annotations
 
@@ -34,8 +36,8 @@ def _spec(key: str, label: str, value: str | None, **kw: Any) -> dict:
     return d
 
 
-def _fixed_not_evaluated(key: str, label: str, sub: str, reason: str) -> dict:
-    return _spec(key, label, None, state="not_evaluated", sub_reason=sub,
+def _fixed_undeterminable(key: str, label: str, sub: str, reason: str) -> dict:
+    return _spec(key, label, None, state="undeterminable", sub_reason=sub,
                  reason=reason, fixed=True, as_of=None, source=None)
 
 
@@ -45,9 +47,13 @@ def _fixed_not_provided(key: str, label: str, reason: str) -> dict:
 
 
 def _risk_cap_row() -> dict:
-    return _fixed_not_evaluated(
+    """Risk Cap 閘門＝Unable to Determine（Freeze §0.1.4 第 3、5 點：目前曝險無正式來源）。
+
+    ⛔ 等同 Not Evaluated（DEC-124）；⛔ 推導 safe／無需調整；⛔ 任何數值（不新增 Risk Cap 規則）。
+    """
+    return _fixed_undeterminable(
         "risk_cap", "Risk Cap", TEXT_RISK_CAP_UNDETERMINABLE,
-        "上限數值尚未核准（Q1 數值 Gate 前恆為此）")
+        "必要輸入不足：目前曝險無正式來源（數值另開 Gate）")
 
 
 def _sections_market() -> list[dict]:
@@ -178,9 +184,10 @@ def _transform(spec: dict, scenario: str, idx: int) -> dict:
         s.update(state="stale", stale_days=3 if idx == 0 else None)
     elif scenario == SCENARIO_UNAVAILABLE and idx in (1, 2):
         s.update(value=None, state="unavailable", reason="FAKE 來源逾時（示意）")
-    elif scenario == SCENARIO_NOT_EVALUATED and idx in (0, 2):
-        s.update(value=None, state="not_evaluated",
-                 sub_reason=TEXT_NOT_DEFINED if idx == 0 else TEXT_NOT_EVALUATED_DATA_SHORT)
+    elif scenario == SCENARIO_NOT_EVALUATED and idx == 0:     # Not Evaluated：規則未定義 → 未執行
+        s.update(value=None, state="not_evaluated", sub_reason=TEXT_NOT_DEFINED)
+    elif scenario == SCENARIO_NOT_EVALUATED and idx == 2:     # Unable to Determine（DEC-074／075 字樣）
+        s.update(value=None, state="undeterminable", sub_reason=TEXT_NOT_EVALUATED_DATA_SHORT)
     return s
 
 
@@ -195,8 +202,8 @@ def _transform_current(spec: dict, scenario: str) -> dict:
         s.update(state="stale", stale_days=3)
     elif scenario == SCENARIO_UNAVAILABLE:
         s.update(value=None, state="unavailable", reason="FAKE 來源逾時（示意）")
-    elif scenario == SCENARIO_NOT_EVALUATED:
-        s.update(value=None, state="not_evaluated", sub_reason=TEXT_NOT_EVALUATED_DATA_SHORT)
+    elif scenario == SCENARIO_NOT_EVALUATED:   # DEC-075：位階因必要輸入不足而無法判定（≠ Not Evaluated）
+        s.update(value=None, state="undeterminable", sub_reason=TEXT_NOT_EVALUATED_DATA_SHORT)
     return s
 
 

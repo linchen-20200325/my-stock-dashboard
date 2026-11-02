@@ -9,20 +9,33 @@ from __future__ import annotations
 from html import escape
 
 from shared.ui2_contract.models import (
-    CardVM, CtaVM, FieldState, FieldVM, FirstScreenVM, FreshnessInfo,
+    CapabilityState, CardVM, CtaVM, FieldState, FieldVM, FirstScreenVM, FreshnessInfo, JudgementState,
 )
 from shared.ui2_contract.text import TEXT_ASOF_MISSING
 from shared.ui2_contract.tones import TONE_SYMBOL, ChipTone
 
-#: 語意態 → chip 色調。Missing／Not evaluated／未提供＝灰（Neutral）；Stale＝琥珀；Unavailable＝紅（系統真錯誤）。
-STATE_TONE: dict[FieldState, ChipTone] = {
+#: 資料語意五態＋判定結果 → chip 色調。Missing／Not evaluated／無法判定＝灰（Neutral）；Stale＝琥珀；
+#: Unavailable＝紅（系統真錯誤）。⛔ 無法判定給 Positive（綠＝safe 誤讀；DEC-124）。
+STATE_TONE: dict[FieldState | JudgementState, ChipTone] = {
     FieldState.OK: ChipTone.NEUTRAL_INFO,
     FieldState.MISSING: ChipTone.NEUTRAL_INFO,
     FieldState.STALE: ChipTone.WARNING,
     FieldState.UNAVAILABLE: ChipTone.DANGER,
     FieldState.NOT_EVALUATED: ChipTone.NEUTRAL_INFO,
-    FieldState.NOT_PROVIDED: ChipTone.NEUTRAL_INFO,
+    JudgementState.UNDETERMINABLE: ChipTone.NEUTRAL_INFO,
 }
+
+#: Capability marker（Preview-only；與資料語意正交）→ 灰。
+CAPABILITY_TONE: dict[CapabilityState, ChipTone] = {
+    CapabilityState.NOT_PROVIDED: ChipTone.NEUTRAL_INFO,
+}
+
+
+def tone_for(field: FieldVM) -> ChipTone:
+    if field.capability is CapabilityState.NOT_PROVIDED:
+        return CAPABILITY_TONE[field.capability]
+    return STATE_TONE[field.state]
+
 
 _TONE_CLASS: dict[ChipTone, str] = {
     ChipTone.POSITIVE: "ui2-chip--positive",
@@ -50,7 +63,7 @@ def status_chip_html(field: FieldVM) -> str:
     """欄位狀態字樣 chip（OK 態無）。紅色只給 Unavailable（系統真錯誤）；未載入＝灰。"""
     if field.state is FieldState.OK or not field.status_text:
         return ""
-    return chip_html(field.status_text, STATE_TONE[field.state])
+    return chip_html(field.status_text, tone_for(field))
 
 
 def freshness_html(fresh: FreshnessInfo) -> str:
