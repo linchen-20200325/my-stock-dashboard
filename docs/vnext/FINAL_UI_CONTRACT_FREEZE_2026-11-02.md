@@ -236,9 +236,9 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 
 > 📌 **DEC-124 Semantic Correction（客戶 2026-11-02 (8)；append-only，上表與上句一字未刪，僅 Not evaluated 列以刪除線標示一處）**
 > - **正式資料語意只有五個**：OK／Missing／Stale／Unavailable／Not Evaluated（上表四態＋OK）。
-> - **Not Evaluated**＝「這項規則／計算尚未執行或不在本次評估範圍。」**Unable to Determine**＝「有進入判定流程，但因必要輸入 Missing / Unavailable / Invalid / insufficient，無法得到正式結果。」（客戶逐字）**兩者禁止合併**。Unable to Determine 是**判定結果**、不是第 5 種資料品質態；L1 字樣：`⬜ 無法判定`（Risk Cap，§0.1.4）、客戶逐字 `⬜ 未評估／資料不足`（DEC-074／075 語境＝必要輸入〔正式 breadth〕不足而無法可靠計算 ⇒ Unable to Determine；**字樣不改**；單組判讀，待覆核 BACKLOG `NUI2-DATA-SHORT-CLASSIFICATION-REVIEW`）。灰色；同用 ⬜ → **必須以文字區分**。
+> - **Not Evaluated**＝「這項規則／計算尚未執行或不在本次評估範圍。」**Unable to Determine**＝「有進入判定流程，但因必要輸入 Missing / Unavailable / Invalid / insufficient，無法得到正式結果。」（客戶逐字）**兩者禁止合併**。Unable to Determine 是**判定結果**、~~不是第 5 種資料品質態~~ **不是資料語意態**（2026-11-02 DEC-124 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）；L1 字樣：`⬜ 無法判定`（Risk Cap，§0.1.4）、客戶逐字 `⬜ 未評估／資料不足`（DEC-074／075 語境＝必要輸入〔正式 breadth〕不足而無法可靠計算 ⇒ Unable to Determine；**字樣不改**；單組判讀，待覆核 BACKLOG `NUI2-DATA-SHORT-CLASSIFICATION-REVIEW`）。灰色；同用 ⬜ → **必須以文字區分**。
 > - **永遠（延伸）**：無法判定 ≠ safe；≠ neutral；≠ no action；≠「今日無需調整」；≠ 可加碼；⛔ 帶值。
-> - `⬜ 尚未核准／無法判定`（§5.2 metadata `not_approved`）維持 Not evaluated（規則／數值未核准 → 未執行），字樣尾綴含「無法判定」屬混合字樣、逐字不改，待覆核（BACKLOG `NUI2-NOT-APPROVED-LITERAL-REVIEW`）。
+> - `⬜ 尚未核准／無法判定`（§5.2 metadata `not_approved`）維持 Not evaluated（規則／數值未核准 → 未執行），字樣尾綴含「無法判定」屬混合字樣、逐字不改，待覆核（BACKLOG `NUI2-NOT-APPROVED-LITERAL-REVIEW`）。 📌 New UI2 **不允許**使用此字樣（已自 UI2 契約 Not Evaluated 允許表移除；`FieldVM` 建構即 raise；守衛 `tests/test_ui2_guards.py`），Legacy 字樣不動（2026-11-02 DEC-124 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）。
 > - New UI2 落點：`shared/ui2_contract`（`FieldState` 恰五態；`JudgementState.UNDETERMINABLE`；`CapabilityState.NOT_PROVIDED`），守衛 `tests/test_ui2_guards.py`（DEC-124 段）。
 
 - **⬜ 共用時以文字區分**：Missing 與 Not evaluated 同用 ⬜，⛔ 只靠符號判讀；L1 字樣必須含「資料未取得／資料未備」或「尚未評估（／尚未定義／尚未核准／尚未載入）」其中之一。

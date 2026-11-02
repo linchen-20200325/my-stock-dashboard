@@ -874,3 +874,36 @@ def test_dec124_capability_marker_never_counted_as_data_quality():
                 else:
                     assert f.layer in ("data", "judgement")
     assert seen > 0
+
+
+# ── 混合字樣 `⬜ 尚未核准／無法判定`：UI2 ⛔ 使用（DEC-124 獨立稽核修正）───────────────
+def check_no_undeterminable_wording_outside_judgement(tables) -> list[str]:
+    """「無法判定」字樣只准出現在判定結果表；資料語意／capability 表出現 → 違規（含混合字樣）。"""
+    bad = []
+    for name, table in tables.items():
+        for state, prefixes in table.items():
+            for p in prefixes:
+                if "無法判定" in p:
+                    bad.append(f"{name}.{state} 收了含「無法判定」的字樣 {p!r}")
+    return bad
+
+
+def test_not_approved_mixed_literal_is_not_allowed_in_ui2():
+    assert check_no_undeterminable_wording_outside_judgement(
+        {"data": T.ALLOWED_STATUS_PREFIXES, "capability": T.CAPABILITY_STATUS_PREFIXES}) == []
+    with pytest.raises(ValueError):
+        FieldVM("x", FieldState.NOT_EVALUATED, None, T.TEXT_NOT_APPROVED)
+    with pytest.raises(ValueError):
+        FieldVM("x", JudgementState.UNDETERMINABLE, None, T.TEXT_NOT_APPROVED)
+    assert T.TEXT_NOT_APPROVED == "⬜ 尚未核准／無法判定"          # Legacy 字樣逐字不改
+    for p in PAGE_IDS:
+        for sc in SCENARIO_IDS:
+            assert all(T.TEXT_NOT_APPROVED not in (f.status_text or "")
+                       for f in _all_fields(get_preview_page_vm(p, sc)))
+
+
+def test_not_approved_guard_has_teeth():
+    leaky = dict(T.ALLOWED_STATUS_PREFIXES,
+                 not_evaluated=T.ALLOWED_STATUS_PREFIXES["not_evaluated"] + (T.TEXT_NOT_APPROVED,))
+    assert check_no_undeterminable_wording_outside_judgement({"data": leaky})
+

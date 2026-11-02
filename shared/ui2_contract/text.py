@@ -22,9 +22,10 @@ TEXT_UNAVAILABLE = "🔴 來源目前不可用"       # 後面可接一句原因
 # ── Not evaluated（灰）：規則／計算尚未執行或不在本次評估範圍（含子原因）────
 TEXT_NOT_EVALUATED = "⬜ 尚未評估"
 TEXT_NOT_DEFINED = "⬜ 尚未定義"
-#: Freeze §5.2 metadata `not_approved`（規則／數值未核准 → 未執行）＝Not evaluated。
-#: ⚠️ 既有字樣尾綴含「無法判定」，屬混合字樣，逐字保留不改；UI2 ⛔ 用它表示 Risk Cap
-#: （Risk Cap 一律 `TEXT_RISK_CAP_UNDETERMINABLE`）；待覆核：BACKLOG `NUI2-NOT-APPROVED-LITERAL-REVIEW`。
+#: Freeze §5.2 metadata `not_approved`（規則／數值未核准 → 未執行）＝Not evaluated（Legacy 字樣）。
+#: ⚠️ 字樣尾綴含「無法判定」，屬混合字樣（會與 Unable to Determine 混讀）⇒ **New UI2 ⛔ 使用**：
+#: **不列入任何允許字樣表**（`FieldVM` 建構即 raise）；常數只為逐字對照 Legacy 保留。
+#: Risk Cap 一律 `TEXT_RISK_CAP_UNDETERMINABLE`。待覆核：BACKLOG `NUI2-NOT-APPROVED-LITERAL-REVIEW`。
 TEXT_NOT_APPROVED = "⬜ 尚未核准／無法判定"
 TEXT_NOT_LOADED = "⬜ 尚未載入"
 
@@ -57,7 +58,7 @@ ALLOWED_STATUS_PREFIXES: dict[str, tuple[str, ...]] = {
     "missing": (TEXT_MISSING_NOT_FETCHED, TEXT_MISSING_NOT_READY, TEXT_ASOF_MISSING),
     "stale": ("⚠ 過期", TEXT_STALE_UNKNOWN),
     "unavailable": (TEXT_UNAVAILABLE,),
-    "not_evaluated": (TEXT_NOT_EVALUATED, TEXT_NOT_DEFINED, TEXT_NOT_APPROVED, TEXT_NOT_LOADED),
+    "not_evaluated": (TEXT_NOT_EVALUATED, TEXT_NOT_DEFINED, TEXT_NOT_LOADED),   # ⛔ TEXT_NOT_APPROVED（混合字樣）
 }
 
 #: **判定結果**允許字樣（key 為 `JudgementState.value`）。⛔ 併入 `not_evaluated`（DEC-124）。

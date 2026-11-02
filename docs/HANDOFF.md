@@ -750,7 +750,7 @@ DEC-086 規則已於 main，本表已落地。
 
 | 欄位（C1） | 內容 |
 |---|---|
-| live GitHub state | 基準 `origin/main`＝`57b361ab`（含 #998 New UI2 Batch 1；實作組 `git status` 實查分支 `ccr-a0b4e085-ijdaio` 與之一致；cron 會推進 tip，以當下 `git fetch` 為準）。本批變更在工作樹，**commit／push／PR 由總管處理**（實作組未 commit）。 |
+| live GitHub state | 基準 `origin/main`＝`57b361ab`（含 #998 New UI2 Batch 1；實作組 `git status` 實查分支 `ccr-a0b4e085-ijdaio` 與之一致；cron 會推進 tip，以當下 `git fetch` 為準）。~~本批變更在工作樹，**commit／push／PR 由總管處理**（實作組未 commit）。~~ **實作＝commit `64e6fe2c`（已 push）**；獨立稽核 PASS with fixes 的修正批在同分支工作樹，SHA 由總管 commit 後補記（2026-11-02 DEC-124 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正／事實更新〕；原文刪除線保留）。 |
 | current Stage／exact safe stopping point | **New UI2 Semantic Correction Gate（DEC-124）語意修正完成，待驗收**（總管複驗＋獨立 QA＋客戶驗收）：① FieldState／capability 語意邊界（選項 A）② Risk Cap `⬜ 無法判定`＝Unable to Determine（≠ Not Evaluated）③ 守衛＋GitHub 文件同步。0 investment semantic change；未新增 Risk Cap 規則或數值；#998 未回退。 |
 | 待客戶裁示 | **無即時待裁題**。可推翻的 AI 總管暫定：選項 A、Aggregator O1 第五類 `undeterminable`；待第二組覆核：DEC-074／075 字樣歸類（`NUI2-DATA-SHORT-CLASSIFICATION-REVIEW`）、`⬜ 尚未核准／無法判定` 混合字樣（`NUI2-NOT-APPROVED-LITERAL-REVIEW`）。 |
 | known limitations／blockers | 見 `docs/PROJECT_STATE.md` §53「限制」與 BACKLOG §5.1.21：capability marker Preview-only 以檔案允許清單強制（非 runtime）；Old UI／Legacy New UI 字樣語意未盤點（範圍外）；導覽仍為 temporary implementation gap（**不是 W-1 amendment**，下一個 presentation batch 修）。 |
@@ -758,5 +758,6 @@ DEC-086 規則已於 main，本表已落地。
 | required Model×Effort for resume | 本 Gate＝Opus 5.5＋High（客戶 (8) 建議）；驗收後純 presentation 批＝Sonnet 5.5＋Medium（待客戶切換）；Aggregator／Risk Cap／Action Authority／Digest／OneBrain／資料語意＝Opus 5.5＋High。判斷需切換 → 先停手通知客戶，⛔ 自行切換。 |
 | 正式文件索引 | 決策 `docs/DECISIONS.md` DEC-124；規格 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md` §5.1 📌、`docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md` §4.6.6／§9.2；規則 `PROJECT_RULES.md` §19.8 📌；待辦 `docs/BACKLOG.md` §5.1.21；知識 `docs/PROJECT_STATE.md` §53；債務 `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` §7；證據 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §15。 |
 | 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule＝有（§19.8 加註）；新 Decision＝有（DEC-124）；Audit finding／Limitation／Backlog／Migration debt 已寫入上列 GitHub 正式文件（落盤以總管 commit／push 為準）。 |
+| 驗證（稽核修正批；實作組實測，單組） | 目標測試（`tests/test_ui2_*.py`、`test_uim_market_page.py`、`test_c3_layering_guard`、`test_zz_test_portability`、`test_views_no_unverified_universal_claims`）387 passed；`streamlit==1.56.0` venv（ui2＋uim_market_page）339 passed；**全 repo 序列 `-m "not slow"`：36265 passed、0 failed、46 skipped**；修正批 mutation 4 項（混合字樣放回 UI2 NE 表、無法判定字樣併入 NE 表、拔掉方向夾具改讀 live、夾具 PMI 改持平）全紅後已還原；bisect 以 worktree 實跑 `6b814b0d`／`e5be97a6`。 |
 | 禁止事項（摘要） | ⛔ navigation 實作、real data wiring、Aggregator、Risk Cap runtime、Digest、OneBrain、LINE（客戶 (8)-5）；⛔ 修改已凍結 W-1；⛔ 把 `⬜ 尚未提供` 稱為資料語意態；⛔ 合併 Not Evaluated 與 Unable to Determine；⛔ 新增 Risk Cap 規則或數值；⛔ 回退 #998；其餘沿 Batch 1 段禁止事項。 |
 
