@@ -983,3 +983,14 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 5. **新 session 只讀 GitHub 可完整恢復**（中斷／Compact 防遺失驗收；客戶原文）：若立刻 compact、換新對話、額度中斷、換模型、換 AI session，新 session 只讀 GitHub current main、`PROJECT_RULES.md`、`docs/DECISIONS.md`、`docs/BACKLOG.md`、`docs/PROJECT_STATE.md`、`docs/HANDOFF.md`、正式 SSOT 就能完整恢復；**做不到＝本 Stage 尚未完成**。
 6. **Context Loss Check**（第 15 節第 5 點 A～F，加 G）：**G.** 有沒有 Presentation／Visual／Digest／Brain／IA／blueprint 的正式結論或 supersede 關係只在聊天裡？→ 有則落正式 vNext spec 或 DECISIONS。⛔ 任何答案為「有」且未保存：不得宣告交接完成。
 7. **未落盤的客戶原文**：若發現客戶指示只存在 session 紀錄（例：前一輪撰寫被中止），下一個撰寫批次須逐字補錄（DEC-109 附錄即一例）。
+
+## 第 27 節｜永久收尾 Gate（客戶 2026-11-02，DEC-123）
+
+> 永久治理規則；決策者 **客戶**（2026-11-02，`docs/DECISIONS.md` DEC-123「客戶裁示 Q1～Q4」逐字段）。強化第 26 節 Durable Memory Contract 與第 15 節 Handoff Save Check，不建立第二套 SSOT。
+
+1. **收尾 Gate（客戶原文，逐字）**：「每一批完成前，必須檢查是否出現新的 Rule / Decision / Audit finding / Limitation / Backlog / Migration debt；若有，必須同步 GitHub 正式文件後才能宣告該批完成。」
+2. **可靠專案狀態（客戶原文，逐字）**：「沒有寫進 GitHub的項目，不視為可靠專案狀態。」
+3. **不算落盤的位置**（客戶原文列舉）：scratchpad、聊天、PR 描述、HANDOFF 一句話、Claude memory。
+4. **落點**（沿第 26 節第 3 點）：Rule → `PROJECT_RULES.md`／正式 vNext spec；Decision → `docs/DECISIONS.md`；Audit finding → 正式 spec 或 `docs/BACKLOG.md`；Limitation → 正式 spec「未驗與限制」＋`docs/PROJECT_STATE.md`；Backlog → `docs/BACKLOG.md`；Migration debt → `docs/BACKLOG.md`＋（New UI2）`docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md`；當前狀態 → `docs/PROJECT_STATE.md`；下一步與 session 紀錄 → `docs/HANDOFF.md` Safe Handoff 區塊。
+5. **檢查表**：New UI2 主線另見 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §13。
+6. **與既有治理的關係**（撰寫組讀法，單組）：與第 26 節（Conversation 不是 SSOT）、第 20 節（Resume Checkpoint）、`docs/governance/SESSION_CONTINUITY_RULES_2026-10-31.md` C1 同向；本節把「同步正式文件」升為**每一批**的宣告完成前置條件。

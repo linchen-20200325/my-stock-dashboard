@@ -1,12 +1,12 @@
 # New UI2 Architecture Gate（New UI2 Greenfield Presentation Layer 架構閘門）
 
-- **狀態**：**Architecture Gate 草案，待客戶裁示**（§11 送客戶四題：**G1 預覽、G3′ 系統動作彙整層、四頁線框核准、G2 cutover＋#996 合併確認**，皆 **PENDING**）。⚠️ **本 Gate 目前只存在於工作樹**（受「只能推指定分支」權限限制；#996 合併後才以新 PR 落盤，見 §11 G2 第 2 小題）；依 DEC-122「沒寫入 GitHub 的新規格，不視為正式完成」，落盤前**不是正式文件**。獨立稽核（2026-11-02）判 **PASS with fixes**，本版已依修正項 F2～F7、m1～m6 改寫（單組稽核）。本檔**不是 Approved 規格**；客戶裁示前，本檔所有「目標架構／目錄／守衛」一律只是提案，⛔ 據以寫任何 production code（客戶 (5)-5「本批禁止 production coding」）。
-- **日期**：2026-11-02　**基準**：工作樹＝PR #996 head `139e315b`；撰寫組 2026-11-02 `git fetch origin main` 實查 `origin/main`＝`c1e10a62`（#995），HEAD 比 main 多 1 個 commit（#996 收斂批）。⚠️ cron 會推進 main，**一律以當下 `git fetch` 後的 `origin/main` 為準**（DEC-118），不得引用本欄當最新 main。
+- **狀態**：**客戶核准（Q1=A／Q2=A〔修正分類〕／Q3 四頁線框核准／Q4=A，2026-11-02；逐字見 DEC-123「客戶裁示 Q1～Q4」）；待 #997 獨立稽核＋合併後凍結**。#996 已合併（main＝`acd1648c`）；本 Gate 已落盤為 commit `6d30dcea`、Draft PR #997（分支 `ccr-a0b4e085-ijdaio`）。⛔ production coding（含 System Action Aggregator runtime）：Architecture 凍結並發 Model／Effort Change Gate 前一律不得施工；Aggregator 另須 implementation Gate（§4.6）。（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）<br>原文：~~**Architecture Gate 草案，待客戶裁示**（§11 送客戶四題：**G1 預覽、G3′ System Action Aggregator（系統動作彙整層）、四頁線框核准、G2 cutover＋#996 合併確認**，皆 **PENDING**）。⚠️ **本 Gate 目前只存在於工作樹**（受「只能推指定分支」權限限制；#996 合併後才以新 PR 落盤，見 §11 G2 第 2 小題）；依 DEC-122「沒寫入 GitHub 的新規格，不視為正式完成」，落盤前**不是正式文件**。獨立稽核（2026-11-02）判 **PASS with fixes**，本版已依修正項 F2～F7、m1～m6 改寫（單組稽核）。本檔**不是 Approved 規格**；客戶裁示前，本檔所有「目標架構／目錄／守衛」一律只是提案，⛔ 據以寫任何 production code（客戶 (5)-5「本批禁止 production coding」）。~~
+- **日期**：2026-11-02　**基準（裁示整合批）**：`origin/main`＝`acd1648c`（#996 合併點；總管實查）；本檔所在分支 `ccr-a0b4e085-ijdaio`（#997）。以當下 `git fetch` 為準。**基準（初稿，歷史）**：工作樹＝PR #996 head `139e315b`；撰寫組 2026-11-02 `git fetch origin main` 實查 `origin/main`＝`c1e10a62`（#995），HEAD 比 main 多 1 個 commit（#996 收斂批）。⚠️ cron 會推進 main，**一律以當下 `git fetch` 後的 `origin/main` 為準**（DEC-118），不得引用本欄當最新 main。
 - **決策來源**：客戶 2026-11-02 裁示 **(5)「New UI2 Greenfield Presentation Layer」**（逐字收錄於 `docs/DECISIONS.md` **DEC-123** fence；本檔與原文有出入時以原文為準）。下文〔客戶 (5)-n〕＝該裁示第 n 節原文要求。
 - **上位與輸入**：`CLAUDE.md`（§-2、§-1.5、§1、§8.2）> `PROCESS.md` > `PROJECT_RULES.md`＋`docs/governance/*` > DEC-123 > DEC-122 > 本檔。**`docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md`（下稱 Freeze）全部 semantic contracts 是本檔的 input**〔客戶 (5)-2「New UI2 必須以這些 semantic contracts 為 input。不要因為 New UI2 而重新發明投資語意」〕；本檔**不重新定義**任何四態、chip、Risk Cap、Single Action、freshness、估值、Digest、OneBrain 條文，只寫「New UI2 怎麼承接」。
 - **配套文件**：Reuse Matrix＝`docs/vnext/NEWUI2_REUSE_MATRIX_2026-11-02.md`；四頁線框＝`docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md`。
 - **標記**：**FACT**＝撰寫組或兩份調查（invC Reuse Matrix、invD 架構約束，皆 2026-11-02、單組、唯讀）讀碼／grep／實跑；**INFERENCE**＝推論；**DOC**＝轉述文件；**AI 總管暫定**＝內部技術自決（`CLAUDE.md` v3 §03-1），客戶可推翻；**PENDING**＝待客戶裁示。
-- ⚠️ **揭露（`CLAUDE.md` §-2 規則 6）**：本檔由**單一撰寫組**依兩份**單組**調查（invC、invD）撰寫，**未經第二組獨立驗證**。文中「0 命中／只有／不存在／沒有」皆為 grep 結果、**非窮舉**。撰寫組另自行抽查 6 項事實（`src/ui2`／`app_ui2.py`／`pages/`／`shared/ui2_contract*` 不存在；c3 guard `_PATH_LAYERS` 僅具名登記 `src/ui/views/`、`src/ui_v2/`；`push_holdings_daily`／`push_weekly_report` cron 存在；`market_alert_banner` 的「建議持股降至」10%／20% 字串與 `holdings_digest_message`「請以警語為準」存在；`page_hold` 經 `app_ai_service.gemini_call` 注入 Gemini）——皆命中，但仍是單組。**三個承重判定**（§4 VM 邊界、§5 Migration 邊界、§4.5／§11 G3′「系統動作彙整層不算新增 runtime」界線）**只能當待驗事項**，Architecture 凍結前須另派一組獨立稽核（BACKLOG `NUI2-ARCH-SECOND-AUDIT`）。
+- ⚠️ **揭露（`CLAUDE.md` §-2 規則 6）**：本檔由**單一撰寫組**依兩份**單組**調查（invC、invD）撰寫，**未經第二組獨立驗證**。文中「0 命中／只有／不存在／沒有」皆為 grep 結果、**非窮舉**。撰寫組另自行抽查 6 項事實（`src/ui2`／`app_ui2.py`／`pages/`／`shared/ui2_contract*` 不存在；c3 guard `_PATH_LAYERS` 僅具名登記 `src/ui/views/`、`src/ui_v2/`；`push_holdings_daily`／`push_weekly_report` cron 存在；`market_alert_banner` 的「建議持股降至」10%／20% 字串與 `holdings_digest_message`「請以警語為準」存在；`page_hold` 經 `app_ai_service.gemini_call` 注入 Gemini）——皆命中，但仍是單組。**三個承重判定**（§4 VM 邊界、§5 Migration 邊界、§4.5／§11 G3′「System Action Aggregator（~~系統動作彙整層~~）不算新增 runtime」界線）**只能當待驗事項**，Architecture 凍結前須另派一組獨立稽核（BACKLOG `NUI2-ARCH-SECOND-AUDIT`）。
 
 ---
 
@@ -16,16 +16,18 @@
 |---|---|---|---|
 | 1 | New UI2 Architecture Proposal | §1 | 草案 |
 | 2 | Reuse Matrix | §2 → `NEWUI2_REUSE_MATRIX_2026-11-02.md` | 草案（88 列） |
-| 3 | 四頁 textual wireframe | §3 → `NEWUI2_WIREFRAMES_2026-11-02.md` | **待客戶核准** |
+| 3 | 四頁 textual wireframe | §3 → `NEWUI2_WIREFRAMES_2026-11-02.md` | ~~**待客戶核准**~~ **客戶核准（Q3）** |
 | 4 | View Model boundary | §4 | 草案（承重，待第二組驗） |
 | 5 | Migration boundary | §5 | 草案（承重，待第二組驗） |
 | 6 | proposed directory structure | §6 | AI 總管暫定，客戶可推翻 |
-| 7 | Preview strategy | §7 | **PENDING G1** |
-| 8 | Cutover strategy | §8 | **PENDING G2**（含 #996 合併確認） |
+| 7 | Preview strategy | §7 | ~~**PENDING G1**~~ **客戶核准（Q1=A；§7.3）** |
+| 8 | Cutover strategy | §8 | ~~**PENDING G2**（含 #996 合併確認）~~ **客戶核准（Q4=A；§8.3、`NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md`）；#996 已合併** |
 | 9 | Testing strategy | §9 | 草案 |
 | 10 | UI／LINE／Decision Digest／OneBrain consumer boundary | §10 | 草案（LINE 只定 interface／ownership） |
-| 11 | 真正需要客戶裁示的 Decision Gates | §11 | **PENDING**：G1 預覽、G3′ 系統動作彙整層、四頁線框核准（W-4、W-5、W-9、W-10、W-11）、G2 cutover＋#996 合併確認 |
-| 12 | 必要 GitHub governance docs 同步 | §12 | 本批同步清單 |
+| 11 | 真正需要客戶裁示的 Decision Gates | §11 | ~~**PENDING**：G1 預覽、G3′ System Action Aggregator（系統動作彙整層）、四頁線框核准（W-4、W-5、W-9、W-10、W-11）、G2 cutover＋#996 合併確認~~ **已裁示（Q1～Q4＋#996，2026-11-02）** |
+| 12 | 必要 GitHub governance docs 同步 | §12 | 本批同步清單（裁示整合批見 §12.3） |
+| — | Migration／Cutover Contract；Audit／Acceptance Checklist | `NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md`、`NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` | 客戶 (6) 要求同步（裁示整合批新增） |
+| — | System Action Aggregator 契約 | §4.6 | **客戶核准（Q2）；只凍結 contract，⛔ 實作** |
 | — | 完成條件（客戶 (5)-13） | §13 | — |
 | — | 未驗與限制 | §14 | — |
 
@@ -95,7 +97,7 @@ OneBrain summary
 「**New UI2 與 LINE 都是 consumer。**」〔客戶 (5)-3〕
 
 - 與 Freeze §0.1.2 正式架構鏈（Canonical Data → Rules → Risk Cap → System Action State → Decision Digest → OneBrain → UI）**同向**（INFERENCE）：本鏈把「View Model／Presentation Contract」明確放在 System Action State 與 UI2 之間；Digest／OneBrain 成熟後，View Model 的輸入由「System Action State＋既有規則輸出」換成「Decision Digest」（§10.2）。
-- **FACT（現況缺口，invC §9 N7／N11、invD §5.1）**：`System Action State` 層**不存在**（grep `system_action|SystemAction` 0 命中，非窮舉）；`decision_digest_builder.build_decision_digest` **0 production caller**；`st.session_state` 是事實上的狀態匯流排。⇒ UI2 第一版能讀到的「System Action」只能是既有正式分支（ETF `action_branch` 七分支、個股 `swap_level` 四級）與 Risk Cap 閘門輸出——這個過渡安排是 **§4.5／§11 G3′（系統動作彙整層）**。
+- **FACT（現況缺口，invC §9 N7／N11、invD §5.1）**：`System Action State` 層**不存在**（grep `system_action|SystemAction` 0 命中，非窮舉）；`decision_digest_builder.build_decision_digest` **0 production caller**；`st.session_state` 是事實上的狀態匯流排。⇒ UI2 第一版能讀到的「System Action」只能是既有正式分支（ETF `action_branch` 七分支、個股 `swap_level` 四級）與 Risk Cap 閘門輸出——這個過渡安排是 **§4.5／§11 G3′（System Action Aggregator（~~系統動作彙整層~~））**。
 
 ### §1.4 四頁 IA（固定）〔客戶 (5)-7〕
 
@@ -118,7 +120,7 @@ OneBrain summary
 
 每頁第一屏（手機 390×844 優先）**優先回答**：**1. 現在狀態　2. 是否需要行動　3. 下一步　4. 主 CTA**。「**禁止先做 desktop 再縮手機。**」〔客戶 (5)-9〕
 - 與 Freeze §0.1.6（Q3=A 市場頁手機第一屏四必要項）、Freeze §16 各頁「不用滑」項目**疊加取嚴**（INFERENCE）：四問是**每頁的通用框架**；各頁的「不用滑」必要項（市場：市場目前狀態／Risk Cap／是否需要行動／主 Update CTA；標的：mode／search／查詢摘要；持股：portfolio status／Risk Cap／是否需要處理；我的：connection state／primary management actions）是**該頁對四問的具體答案**。對照與逐頁版面見線框檔 §1。
-- 「是否需要行動」**只能讀 System Action State／既有正式分支**（invC N13）；⛔ 由市場位階或 UI 自行推導（推導＝新投資語意）。市場頁 ⚡ N 的過渡來源（系統動作彙整層建好前維持既有 `_market_blocks.render_alerts_block` 語意或 `⬜ 尚未提供`）＝線框 **W-10**，待客戶核准。判不出 → `⬜ 尚未評估`，⛔ 寫「今日無需調整」（Freeze §0.1.5 第 4 點）。
+- 「是否需要行動」**只能讀 System Action State／既有正式分支**（invC N13）；⛔ 由市場位階或 UI 自行推導（推導＝新投資語意）。市場頁 ⚡ N 的過渡來源（System Action Aggregator（~~系統動作彙整層~~）建好前維持既有 `_market_blocks.render_alerts_block` 語意或 `⬜ 尚未提供`）＝線框 **W-10**，待客戶核准。判不出 → `⬜ 尚未評估`，⛔ 寫「今日無需調整」（Freeze §0.1.5 第 4 點）。
 
 ---
 
@@ -147,7 +149,7 @@ View Model（VM）＝**把既有正式輸出（L3 service 回傳值；未來＝D
 1. **純函式**：VM builder 輸入＝已取好的 feed 結果（L3 回傳物件），輸出＝L0 VM 型別（frozen dataclass）；⛔ I/O、⛔ 網路、⛔ cache、⛔ 讀時鐘以外的外部狀態（時間由參數傳入）。
 2. **只讀既有 L3 輸出**：VM ⛔ import `src.data.*`（L1）、⛔ import `src.ui*`（Old UI／Legacy New UI）、⛔ import `streamlit`。取數唯一入口＝`*_feed.py`（§6），feed 只**原樣帶出**既有 service 結果（同 `market_twii_view_service` 先例：薄 L3、帶 provenance／is_stale）。
 3. **⛔ 新增任何寫入**：VM 與 feed ⛔ 寫 `st.session_state` 投資狀態 key、⛔ 寫檔、⛔ 寫 Sheet；feed 呼叫既有服務時**只觸發既有服務的既有副作用**（例：`allocation_service.get_allocation` 的 cache key、主 Update CTA 觸發的既有 `refresh_macro_now` 鏈），⛔ 新增任何副作用；UI2 L5 只可寫 `ui2_` 前綴的**純 UI 狀態**（目前頁、模式、展開）（invD C-SS-1／C-SS-3）。
-4. **⛔ 聚合動作**：動作的彙整（合併 ETF 七分支與個股四級、加／留／換／減計數、「沒事 vs 判不出」、加碼列 Risk Cap 標註、跨頁 ⚡ N）**只屬系統動作彙整層（§4.5）**；VM 只把彙整結果轉成呈現，⛔ 自己算。
+4. **⛔ 聚合動作**：動作的彙整（合併 ETF 七分支與個股四級、加／留／換／減計數、「沒事 vs 判不出」、加碼列 Risk Cap 標註、跨頁 ⚡ N）**只屬System Action Aggregator（~~系統動作彙整層~~）（§4.5）**；VM 只把彙整結果轉成呈現，⛔ 自己算。
 5. **⛔ 創造投資規則**：VM ⛔ 新門檻、⛔ 新分支、⛔ 新比例、⛔ 新排序規則、⛔ 改既有分支觸發條件或優先序、⛔ 由 regime 推導「是否需要行動」、⛔ 為缺值補 0／中性／續抱／safe。
 6. **VM 輸出分兩層**（Freeze §13 Presentation Slice ≠ Decision Context）：`context`（全量，與 UI 切片無關）＋`slice`（呈現切片：Top-N、收合、手機堆疊）；`slice` 只能由 `context` 截取，⛔ 反向影響 `context`；VM 函式簽名 ⛔ 讓 `top_n`／`expanded`／`tab` 影響 `context`（§9 G3 測試）。
 
@@ -160,10 +162,10 @@ View Model（VM）＝**把既有正式輸出（L3 service 回傳值；未來＝D
 | P1 | **四態語意層**（Missing／Stale／Unavailable／Not evaluated）＋十態→四態 map | Freeze §5.2 已給完整對映表；四態是語意分類層，十態不改符號 | ⛔ 第 11 態（DEC-110 R8）；L1 字樣取 Freeze §5.1 |
 | P2 | **Field-level freshness 物件**（value／state／as_of／source） | Freeze §9；原料在 `DatedValue`／`staleness`／`price_asof_label`／fetcher `source`、`fetched_at` | 補不到 → `⬜ 資料日未提供`；⛔ 共用全域更新時間；⛔ 補推估日期 |
 | P3 | **Chip 語意色調**（Positive／Warning／Danger／Neutral-Info） | Freeze §4 四 tone | `guard_chip` 只限客戶逐字護欄句（§4.2）；Danger 文字 ≠ 取得失敗文字 |
-| P4 | **「沒事 vs 判不出」的呈現**（「今日無需調整」vs `⬜ 尚未評估`） | 判定由**系統動作彙整層（§4.5）**產出（沿用既有 `station_cards.cruise_or_gap`＋L0 `holdings_data_short` 規則，Freeze §0.1.5 第 3、4 點）；VM 只把結果轉成字樣 | VM ⛔ 自行判定；彙整層不存在時（G3′=B 期間）顯示 `⬜ 尚未提供` |
-| P5 | **加／留／換／減分組的呈現** | 分組與計數由**系統動作彙整層**產出（Freeze §0.1.5 第 2 點「只是排版」）；VM 只排版 | 分支名原名照寫；分組外觀與「哪幾組計入今日需處理」屬線框 **W-5** 待客戶核准；⛔ 讀成新規則 |
+| P4 | **「沒事 vs 判不出」的呈現**（「今日無需調整」vs `⬜ 尚未評估`） | 判定由**System Action Aggregator（~~系統動作彙整層~~）（~~§4.5~~ §4.6；Q2 核准契約、implementation Gate 後才有）**產出（沿用既有 `station_cards.cruise_or_gap`＋L0 `holdings_data_short` 規則，Freeze §0.1.5 第 3、4 點）；VM 只把結果轉成字樣 | VM ⛔ 自行判定；~~彙整層不存在時（G3′=B 期間）顯示 `⬜ 尚未提供`~~ Aggregator 實作前顯示 `⬜ 尚未提供（待 System Action Aggregator）` |
+| P5 | **加／留／換／減分組的呈現** | 分組與計數由**System Action Aggregator（~~系統動作彙整層~~）**產出（Freeze §0.1.5 第 2 點「只是排版」）；VM 只排版 | 分支名原名照寫；分組外觀與「哪幾組計入今日需處理」屬線框 **W-5** 待客戶核准；⛔ 讀成新規則 |
 | P6 | **中立 VM 卡片型別**（取代 Old UI `tab_today.Card`） | 純型別 | — |
-| P7 | **Risk Cap 閘門呈現**（`⬜ 無法判定`／`🔴 Risk Cap 超限 · 禁止新增曝險`） | Freeze §0.1.4；字串 PORT 自既有 `risk_cap_gate`（逐字不改，下沉 L0）；**加碼列的「Risk Cap 無法判定」標註由系統動作彙整層產出**，VM 只呈現 | Q1=A：數值未啟用前恆 `⬜ 無法判定`；⛔ 曝險分母／現金／總資產替代值 |
+| P7 | **Risk Cap 閘門呈現**（`⬜ 無法判定`／`🔴 Risk Cap 超限 · 禁止新增曝險`） | Freeze §0.1.4；字串 PORT 自既有 `risk_cap_gate`（逐字不改，下沉 L0）；**加碼列的「Risk Cap 無法判定」標註由System Action Aggregator（~~系統動作彙整層~~）產出**，VM 只呈現 | Q1=A：數值未啟用前恆 `⬜ 無法判定`；⛔ 曝險分母／現金／總資產替代值 |
 | P8 | **Rule Registry 讀取模型**（只讀 `RULE_ID_ALLOWLIST` 6 id＋版本常數） | Freeze §12.1 | ⛔ 編造 rule id；version／effective_from 不可得 → `⬜ 資料未備` |
 | P9 | **Digest Viewer 模型**（L1 human-readable／L2 raw，過 `scrub_secrets`） | Freeze §12.2 | 真資料依賴 Stage F；之前 `⬜ 尚未提供（待 Headless Digest）` |
 | P10 | **OneBrain summary container** | 槽位 | 值域詞彙 → `FUI-ONEBRAIN-VOCAB-GATE`；Stage G 前 `🤖 ⬜ 尚未提供` |
@@ -184,23 +186,124 @@ View Model（VM）＝**把既有正式輸出（L3 service 回傳值；未來＝D
 | X9 | **大盤 EPS×PE productionize** | Freeze §11 Research Gate | `DEC092-EPSPE-HIGH-GATE` |
 | X10 | **個股買賣語意**（停利停損、目標價、部位大小、三維出場「建議減碼／強烈出場」） | Capability Map T21 critical、HI-3 | `FUI-OLD-UI-ACTION-SEMANTICS` |
 | X11 | **市場層「是否需要行動」由 regime 推導** | 推導＝新投資語意（invC N13） | 只讀 System Action State；未就緒 `⬜ 尚未提供` |
-| X12 | **在 VM／UI2 內做任何動作聚合**；以及 System Action State **完整版**（Canonical Snapshot、Digest 組裝、新規則） | 聚合屬 L3 deterministic 組裝，**不是** UI2 presentation 工作（invC N7）；最小彙整切片的提前與否＝**G3′**（§4.5），完整版屬 Stage F | `FUI-SYSTEM-ACTION-LAYER`；`NUI2-G3-SYSTEM-ACTION-SUMMARY`；UI2 只消費 |
+| X12 | **在 VM／UI2 內做任何動作聚合**；以及 System Action State **完整版**（Canonical Snapshot、Digest 組裝、新規則） | 聚合屬 L3 deterministic 組裝，**不是** UI2 presentation 工作（invC N7）；最小彙整切片的提前與否＝**G3′**（~~§4.5~~ §4.6；Q2 核准契約、implementation Gate 後才有），完整版屬 Stage F | `FUI-SYSTEM-ACTION-LAYER`；`NUI2-G3-SYSTEM-ACTION-SUMMARY`；UI2 只消費 |
 
-⚠️ 承重提醒：P4／P5／P7 的**判定**都在系統動作彙整層，這是「呈現既有規則」與「新規則」的分界最細處；彙整層實作批須由 Opus 5.5＋High 撰寫＋獨立 QA，並以 Freeze §0.1.4／§0.1.5 表格驅動測試（§9 G6／G7）。
+⚠️ 承重提醒：P4／P5／P7 的**判定**都在System Action Aggregator（~~系統動作彙整層~~），這是「呈現既有規則」與「新規則」的分界最細處；彙整層實作批須由 Opus 5.5＋High 撰寫＋獨立 QA，並以 Freeze §0.1.4／§0.1.5 表格驅動測試（§9 G6／G7）。
 
-### §4.5 系統動作彙整層（**G3′ 提案，PENDING**；＝Freeze §6 第 6 點／Stage F System Action 彙整的最小切片提前做）
+### §4.5 System Action Aggregator（~~系統動作彙整層~~）~~（**G3′ 提案，PENDING**；＝Freeze §6 第 6 點／Stage F System Action 彙整的最小切片提前做）~~ 裁示前提案（歷史；**正式契約見 §4.6**）
+
+> 📌 **本節為裁示前提案文字，原文保留；客戶 Q2 裁示後以 §4.6 為準**（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）。客戶修正一點分類：**它仍屬「新的 runtime component」**——本節末「總管讀法為『不算新增 runtime』」**被客戶推翻**；本 Gate 只凍結 interface／ownership／input-output contract／tests／migration plan，**本批不得實作 production runtime**。本節的暫定模組名 `system_action_state.py` 由 §4.6 的名稱取代。
 
 - **是什麼**：單一 **headless L3 純函式模組**（AI 總管暫定名 `src/services/system_action_state.py`＋L0 型別 `shared/system_action_state.py`；同 `decision_digest_builder` 先例：不 import streamlit、不讀 session，輸入由 feed 把既有服務結果以參數傳入；任何頁面都不必 render 就能跑）。**不屬於** `src/ui2/`——UI2、日後 LINE、日後 Decision Digest **共用同一份**，避免三處各自聚合。
 - **只彙整既有正式輸出**：(1) 合併 ETF `action_branch` 七分支與個股 `swap_level` 四級（原名照用）；(2) 加／留／換／減分組計數（分組依 W-5 客戶核准結果）；(3)「沒事 vs 判不出」gate（沿用 `cruise_or_gap`＋`holdings_data_short` 既有規則）；(4) 加碼列的 Risk Cap 狀態標註（Q1=A：數值未啟用前恆「Risk Cap 無法判定」）；(5) 跨頁 ⚡ N（市場頁「是否需要行動」、持股頁「今日需處理」同源，計入範圍依 W-5／W-10）。
 - **⛔**：新門檻、新分支、新比例（含「減碼 1/2」「全出」）、改既有分支觸發條件或優先序、由市場位階推導動作、Risk Cap 數值判定（`FUI-RC-NUMERIC-GATE`）、新增任何寫入（只觸發既有服務的既有副作用）。
 - **與 Stage F 的關係**：Stage F 的完整版（Canonical Snapshot、Digest 組裝、`allocation_service` session-free 化）**不在**本切片；本切片的輸出型別日後直接成為 Digest 的 System Action 段來源（INFERENCE）。
-- **為什麼要客戶確認**：客戶 (5)-1 禁止「新增 Risk Cap runtime／OneBrain runtime」，未明列 System Action；本層**不新增任何規則、不新增任何寫入**，總管讀法為「不算新增 runtime」，但這是新模組，**請客戶確認**（G3′）。若客戶選 B（等 Stage F 完整 Headless Digest），UI2 的動作相關欄位在那之前一律 `⬜ 尚未提供`，VM ⛔ 自行聚合補位。
+- **為什麼要客戶確認**：客戶 (5)-1 禁止「新增 Risk Cap runtime／OneBrain runtime」，未明列 System Action；本層**不新增任何規則、不新增任何寫入**，~~總管讀法為「不算新增 runtime」~~（**客戶 Q2 裁示：屬新的 runtime component**；（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）），但這是新模組，**請客戶確認**（G3′）。若客戶選 B（等 Stage F 完整 Headless Digest），UI2 的動作相關欄位在那之前一律 `⬜ 尚未提供`，VM ⛔ 自行聚合補位。
 
 ---
+
+### §4.6 System Action Aggregator 正式契約（**客戶核准 Q2=A〔修正分類〕，2026-11-02**；**只凍結 contract，⛔ 實作**）
+
+> 出處：客戶 2026-11-02 裁示 Q2（逐字見 DEC-123「客戶裁示 Q1～Q4」）。〔客戶 Q2〕＝客戶原文；其餘欄位名、模組名、測試編號＝AI 總管暫定（客戶可推翻）。
+
+**§4.6.1 正式名稱**：**System Action Aggregator**（客戶核准用語：「共用 System Action Aggregation Layer」）。舊稱「~~系統動作彙整層~~」停用。
+
+**§4.6.2 定位（客戶原文，逐字）**：
+
+```
+Existing Formal Rules + Risk Cap
+→ System Action Aggregator
+→ System Action State / action-facing canonical contract
+→ Decision Digest / New UI2 / LINE
+```
+
+「**不是第二套規則引擎。**」〔客戶 Q2〕
+
+**§4.6.3 允許責任（客戶原文，逐字；只允許這 7 項）**：
+1. 收集既有 deterministic rules 的正式結果
+2. 收集既有 Risk Cap state
+3. 區分 actionable / non-actionable / unavailable / not evaluated
+4. 加／留／換／減 presentation grouping
+5. 統一計數
+6. 區分「今日無需調整」與「無法判定」
+7. 提供 New UI2 / 未來 LINE / Decision Digest 共用的 canonical action-facing view
+
+**§4.6.4 禁止（客戶原文，逐字；9 項）**：
+1. 新增投資規則
+2. 新門檻
+3. 新比例
+4. AI action
+5. 改寫既有 deterministic result
+6. 覆寫 Risk Cap
+7. 自行決定減碼 1/2／全出
+8. portfolio write
+9. Sheet write
+
+**§4.6.5 分類與施工限制（客戶原文要點）**：「它仍屬『新的 runtime component』。」本 Architecture Gate「只允許凍結 interface / ownership / input-output contract / tests / migration plan」；「**本批不得實作 production runtime**」；「請把它正式登錄為 New UI2 後續 prerequisite backlog，再經 implementation Gate 才施工」（BACKLOG `NUI2-AGGREGATOR-IMPL`）。
+- **Aggregator 實作前的 UI2 讀法（AI 總管暫定，依客戶 Q2／W-10）**：UI2 動作相關欄位（💼 今日需處理、計數、「今日無需調整 vs 無法判定」）一律 `⬜ 尚未提供（待 System Action Aggregator）`；VM ⛔ 自行聚合補位（§4.2 第 4 點）；📊 市場頁「是否需要行動」依 **W-10 transitional contract** 沿用舊警示並標 source／scope（線框 §9）。
+
+**§4.6.6 Interface／Input-Output contract（AI 總管暫定欄位名）**
+
+- **形態**：L3 純函式（暫定 `src/services/system_action_aggregator.py::aggregate_system_actions(...)`）＋L0 型別（暫定 `shared/system_action_contract.py`）；**不 import streamlit、不讀 session、不做 I/O、不寫任何東西**；輸入一律以參數傳入（由 caller／feed 取既有服務結果），任何頁面都不必 render 就能跑（headless）。同一輸入 → 同一輸出（deterministic）。
+- **輸入（只收既有正式規則輸出＋Risk Cap state）**：
+
+| # | 輸入 | 既有來源（FACT，讀碼） | 備註 |
+|---|---|---|---|
+| I1 | ETF 持股的正式分支 | `dividend_station_service.get_station_rows` → `dividend_station.action_branch` 七分支（`cut`／`take_profit_force`／`take_profit_partial`／`pause_add`／`add`／`premium`／`cruise`）＋原名字樣 | 原名照帶，⛔ 改寫 |
+| I2 | 個股的正式換股等級 | `StockAssessment.swap_level`（🔴 換出／🟡 留意／🟢 續抱／⚪ 資料不足） | 同上 |
+| I3 | 資料不足判定 | L0 `shared/holdings_data_short` | 與 LINE 共用的既有判定 |
+| I4 | Risk Cap state | `allocation_service.get_allocation(require_valid_risk_cap=True)` 結果＋（PORT 至 L0 後的）`risk_cap_gate.has_system_risk_cap` | Q1=A：曝險分母不存在 → 閘門恆「無法判定」；⛔ 自行計算曝險 |
+| I5 | 每項輸入的 as_of／source | 各 service 回傳的 provenance | 缺 → 照實標缺 |
+
+- **輸出（System Action State／action-facing canonical contract）**：
+
+| # | 欄位 | 內容 | 對應允許責任 |
+|---|---|---|---|
+| O1 | `items[]` | 每檔：`ticker`、`name`、`source_rule`（`action_branch.v1` 碼或 `swap_level`）、`formal_label`（原名，逐字）、`action_class` ∈ {actionable, non_actionable, unavailable, not_evaluated}、`group` ∈ {加, 留, 換, 減}、`counts_toward_today`（bool）、`risk_cap_tag`、`rule_id`（只限 `RULE_ID_ALLOWLIST`；無則空）、`as_of`、`source` | 1～4 |
+| O2 | `counts` | `today_n`（計入「今日需處理」檔數）、`by_group`（加／留／換／減）、`not_evaluated_n`、`unavailable_n` | 5 |
+| O3 | `day_status` | `needs_action`（`today_n`>0）／`no_adjustment_today`（`today_n`=0 且 `not_evaluated_n`=0 且 `unavailable_n`=0）／`undeterminable`（`today_n`=0 且有任一未評估或不可得 →「無法判定」） | 6（Freeze §0.1.5 第 3、4 點） |
+| O4 | `risk_cap` | 原樣帶出 Risk Cap state；Q1 數值 Gate 前恆 `undeterminable`；加碼類 item 的 `risk_cap_tag`＝「Risk Cap 無法判定」；`🔴 Risk Cap 超限 · 禁止新增曝險` 只在 `FUI-RC-NUMERIC-GATE` 啟用後才可能出現 | 2（禁止 6） |
+| O5 | `provenance` | 輸入 as_of／source 彙總、`contract_version` | 7（Freeze §9） |
+
+- **計入規則（客戶 W-5=A）**：「今日需處理」包含**加、換、減、暫停加碼**（暫停加碼是正式 action code `pause_add`，⛔ 顯示成「今日無需調整」）；巡航／🟢 續抱／高溢價只做分布；**🟡 留意若只是資訊狀態、沒有正式 action code，⛔ 自行升格成 portfolio action**（`counts_toward_today`=False）。
+- **分組（W-5 客戶核准）**：加＝加碼；留＝巡航、🟢 續抱、暫停加碼、高溢價、🟡 留意；換＝🔴 換出；減＝強制停利（>+3σ）、分批停利（>+2σ）、汰弱；⚪ 資料不足＝`not_evaluated`。分組只是排版（Freeze §0.1.5-2），⛔ 改任何分支觸發條件、優先序或比例。
+
+**§4.6.7 Ownership**
+- **Owner**：System Action contract（L0 型別＋L3 Aggregator），**不屬** `src/ui2/`、不屬任何 consumer。修改契約欄位＝契約變更（PR 必附 What changed／NOT changed／contract／tests／semantic change 驗收，且經獨立 QA）；**新增任何規則＝禁止**（§4.6.4），只能走既有規則本身的 Decision Gate。
+- **Consumers**：New UI2 VM（只讀，⛔ 再聚合）；Decision Digest builder（Stage F，取 System Action 段）；LINE formatter（**未來另批、另 Gate**；本批 ⛔ 改 LINE production）。三者 ⛔ 各自重算分組／計數。
+
+**§4.6.8 測試清單（實作批必備；皆附 mutation：拔掉守衛邏輯必轉紅）**
+- A-T1 純度 AST：⛔ import `streamlit`／`src.ui*`／`src.data*`／`requests`；⛔ `session_state`；⛔ 呼叫任何寫入（Sheet 寫入、檔案寫入、`*_apply`）。
+- A-T2 表格驅動：七分支 × 四級 × Risk Cap state {valid, invalid, missing} → `action_class`／`group`／`risk_cap_tag` 全組合。
+- A-T3 W-5 計入：暫停加碼計入；🟡 留意（無正式 action code）不計入；巡航／續抱／高溢價不計入。
+- A-T4 `day_status`：「今日無需調整」只在 `today_n`=0 且 0 未評估、0 不可得；任一判不出 → `undeterminable`。
+- A-T5 禁用字樣：輸出 ⛔ 含「減碼 1/2」「全出」或任何比例字樣；⛔ 新 action code。
+- A-T6 `rule_id` ⊆ `RULE_ID_ALLOWLIST`。
+- A-T7 原名逐字：`formal_label` 與來源字樣 byte-identical。
+- A-T8 parity：與既有 `cruise_or_gap`／`aggregate_judged`／`tally_states`／`holdings_data_short` 在 golden 夾具上一致（不一致須說明並送 Gate，⛔ 擅自改哪一邊）。
+- A-T9 Presentation Slice independence：輸出不受 consumer 的 top_n／收合影響。
+- A-T10 Risk Cap 不覆寫：輸入 Risk Cap state 與輸出 `risk_cap` 相等；⛔ 自行產生數值或分母。
+- A-T11（Stage H）跨 consumer 一致：UI2 與 LINE 讀同一份輸出時計數相同。
+
+**§4.6.9 Migration plan**
+
+| 步 | 內容 | Gate |
+|---|---|---|
+| M-A0 | 本 Gate 凍結契約（§4.6） | #997 獨立稽核＋合併 |
+| M-A1 | **Implementation Gate**（客戶）：核准實作 Aggregator runtime | 客戶（`NUI2-AGGREGATOR-IMPL`） |
+| M-A2 | 實作 L0 契約＋L3 Aggregator＋A-T1～A-T10；**不接任何 consumer** | Opus 5.5＋High；獨立 QA |
+| M-A3 | UI2 VM 改讀 Aggregator（取代 `⬜ 尚未提供`） | 各頁 UI2 批 |
+| M-A4 | 📊 市場頁 ⚡ 由 W-10 transitional 切到 Aggregator（與 💼 同一 canonical action source） | 市場頁 UI2 批 |
+| M-A5 | Decision Digest（Stage F）以 Aggregator 輸出作 System Action 段 | Stage F |
+| M-A6 | LINE 改讀同一 canonical action source（收斂第二套權威） | **另批、另客戶 Gate**（改 LINE production；`NUI2-LINE-UI-ACTION-CONVERGENCE`） |
+
+- Legacy New UI／Old UI 的既有判定（`cruise_or_gap` 等）**不改**，只以 A-T8 parity 對照，退場隨 Removal Gate。
 
 ## §5 Migration boundary（承重；待第二組驗）
 
 ### §5.1 原則
+
+> 📌 客戶 Q4=A 後，Migration／Cutover 規則正式條文另見 `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md`（本節原文保留）（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）。
 
 1. **PORT 的定義**（invC §0）：邏輯須**搬家或解耦**才能給 UI2 用（UI 層 → L0／L3／presentation contract；或 session 隱性輸入 → 顯式參數）。屬 UI2 頁面施工的**前置**。
 2. **Old UI 一字不改**〔客戶 (5)-4「禁止修改」〕：PORT 自 Old UI 的純函式＝**新位置另建**（UI2 的 SSOT），Old UI 原檔保留至 Removal Gate；兩處以 **parity／golden 測試**釘同輸出（AI 總管暫定；理由：去重須改 Old UI import，客戶已禁止；暫時雙份是較小的惡，且有機械守衛）。
@@ -214,7 +317,7 @@ View Model（VM）＝**把既有正式輸出（L3 service 回傳值；未來＝D
 |---|---|---|---|---|
 | M1 | **Old UI 業務邏輯 11 列前置**（OLD-1～OLD-11 中屬 UI2 需要者）：`tab_today.Card`／`Note`／`MAX_COLS`／`scrub_state_glyphs`／`classify_macro_contract`…；`tab_macro_v2.build_rows`／`bucket_summary`／`summary_coverage`／`overall_verdict`；`station_cards.judged_count`／`is_fully_judged`／`aggregate_judged`／`tally_states`／`cruise_or_gap`；`macro_v2_cards.band_meta`／`threshold_text`；`tab_stock_picker.summarize_factor_hits`；`section_357_valuation` 歷史河流純計算（只搬歷史實際值）；`app.py` 選股網 regime 濾網解析規則 | Old UI（一字不改） | L0 contract（型別、字樣）／L2-L3 純函式（判態、彙整）＋parity 測試 | OLD-1～OLD-6、OLD-8 |
 | M1 | **`risk_cap_gate`**（`has_system_risk_cap`、`SYSTEM_RISK_CAP_NAME`、`RISK_CAP_UNAVAILABLE_NOW`…；零 st） | `src/ui/views/risk_cap_gate.py`（L5） | L0 `shared/`（VM 依 R5 ⛔ import L5，故須下沉 L0） | V10 |
-| M1 | **`cruise_or_gap`**（「沒事 vs 判不出」gate；docstring 明寫刻意不進 L2 因同時餵 LINE） | `src/ui/render/station_cards.py`（L4，Old UI，原處不改） | 系統動作彙整層（§4.5；G3′=A′ 才建）；G3′=B 則延到 Stage F（⛔ 改 `suggest_action`） | OLD-3 |
+| M1 | **`cruise_or_gap`**（「沒事 vs 判不出」gate；docstring 明寫刻意不進 L2 因同時餵 LINE） | `src/ui/render/station_cards.py`（L4，Old UI，原處不改） | System Action Aggregator（~~系統動作彙整層~~）（§4.5；G3′=A′ 才建）；G3′=B 則延到 Stage F（⛔ 改 `suggest_action`） | OLD-3 |
 | M2 | **私有符號 public 化**：`data_loader._fm_raw_headers`（V-PICKER-PRIV-1）、`yield_pe_fetcher._twse_official_pbratio`、`src.data.etf._fetch_news_for`／`_fetch_sector_returns`／`_fetch_holdings_yahoo_tw` | L1 private | public L3 介面（thin） | L1-9 |
 | M2 | **New UI 可重用純函式**（`page_market`／`_market_blocks`／`_target_blocks`／`page_hold`／`page_me`／`page_today`／`page_find`／`page_inspect`／`page_why` 的 pure builder，逐函式挑選） | Legacy New UI | L0 contract／L3 `*_vm` | V1～V2、V4～V8 |
 | M2 | **`src/ui_v2/compact`／`markup` 解耦**（切斷 `compact → markup → blocks → page_*` 對五頁版面契約的傳遞依賴；`unavailable`→`unwired` 改名、新增 Danger／Positive／Neutral tone 只加不改） | Legacy New UI | UI2 components（WRAP `tokens`／`components`） | U1～U3 |
@@ -262,9 +365,11 @@ src/ui2/                        L5  只吃 VM 渲染；⛔ 取數、⛔ 判態�
     views/                          market／target／hold／me 四頁
 app_ui2.py                      L6  preview 期獨立入口（repo 根）；cutover 後由 app.py 分派（PENDING G1／G2）
 
-（G3′=A′ 時另建，不屬 ui2、UI2／LINE／Digest 共用）
-shared/system_action_state.py   L0  系統動作彙整型別
-src/services/system_action_state.py  L3  系統動作彙整層（純函式、headless；§4.5）
+（~~G3′=A′ 時另建~~ 客戶 Q2 核准契約、implementation Gate 後才建；不屬 ui2、UI2／LINE／Digest 共用）
+~~shared/system_action_state.py   L0  系統動作彙整型別~~
+~~src/services/system_action_state.py  L3  系統動作彙整層（純函式、headless；§4.5）~~
+shared/system_action_contract.py           L0  System Action Aggregator 契約型別（§4.6；Q2 核准後改名）
+src/services/system_action_aggregator.py   L3  System Action Aggregator（純函式、headless；§4.6；⛔ 實作直到 implementation Gate）
 ```
 
 - **c3 guard 同 PR 登記**（invD §6.2；FACT：`_layer_of_file()` 對未登記前綴回 `None`，五條規則對該檔**靜默失效**；`src/ui_v2/` 2026-09-21 曾發生）：`_PATH_LAYERS` 加 `("src/ui2/", L5)`、`_MODULE_LAYERS` 加 `("src.ui2", L5)`（`"src.ui2"` 與 `"src.ui."` 不相交，必須具名）；`app_ui2.py` 加入 `_SCAN_FILES` 視為 L6；`src/services/ui2/`、`shared/ui2_contract*` 已被既有前綴（L3／L0）涵蓋。**同 PR 新增 meta 測試**：掃到的每個 `.py`（含入口）`_layer_of_file` 皆非 None（§9 G1）。
@@ -284,7 +389,7 @@ src/services/system_action_state.py  L3  系統動作彙整層（純函式、hea
 
 ---
 
-## §7 Preview strategy（**PENDING G1**）
+## §7 Preview strategy（~~**PENDING G1**~~ **客戶核准 Q1=A**）
 
 ### §7.1 候選比較（FACT＋INFERENCE，invD §2）
 
@@ -306,7 +411,20 @@ src/services/system_action_state.py  L3  系統動作彙整層（純函式、hea
 
 ---
 
-## §8 Cutover strategy（**PENDING G2**）
+### §7.3 客戶裁示 Q1=A（2026-11-02；逐字見 DEC-123）
+
+- **採獨立 Streamlit Cloud New UI2 Preview；正式網站維持不動。**〔客戶 Q1〕
+- **Preview-first 成本控制（客戶原文四點，逐字）**：
+  1. 架構／UI 驗收優先使用 fake / snapshot / view-model scenario。
+  2. 真實外部資料只在 real-data acceptance 階段或必要人工驗收時使用。
+  3. 不得為了 Preview 建第二套 data/service/source pipeline。
+  4. Preview 與 production 最終必須讀相同 canonical services / contracts。
+- **Manual Action**：「需要我人工建立 Preview App、複製 Secrets、Google OAuth 新增網址時，再以 🟡 Manual Action Gate 通知我；不要提前要求。」〔客戶 Q1〕→ BACKLOG `NUI2-PREVIEW-APP-MANUAL` 維持 blocked，**直到 `app_ui2.py` 實際可部署**才發 🟡 Manual Action Gate。
+- **落實（AI 總管暫定）**：§7.1 表「外部 API 約加倍」由成本控制第 1、2 點壓低——Preview 日常以夾具／snapshot／VM 情境跑；真資料只在 Stage I（real-data acceptance）或客戶指定的人工驗收時開；Preview 與正式同一套 `src/services`／L0 contract（第 3、4 點），⛔ 為 Preview 新增 fetcher、cache 或資料分支。
+
+---
+
+## §8 Cutover strategy（~~**PENDING G2**~~ **客戶核准 Q4=A**）
 
 ### §8.1 候選比較（invD §3）
 
@@ -322,6 +440,27 @@ src/services/system_action_state.py  L3  系統動作彙整層（純函式、hea
 - **回滾**：預設值一行切回；因 UI2 不寫投資狀態（§4.2 第 3 點），回滾不留資料殘留。UI2 session key 一律 `ui2_` 前綴，避免與 `_nav4_page` 等互相污染。
 - **OAuth**：cutover 後 UI2 為預設 → 登入回呼落地即 UI2；`?ui=1`／`?legacy=1` 在登入後會掉回 UI2，屬可接受降級，須在交付揭露（invD C-OAUTH-1，未實機驗）。
 - **Cutover ≠ Removal**：Stage J 對象擴為兩個——Old UI、Legacy New UI，各自走 Removal Gate（Freeze §19 六條件∪DEC-083 第 11 點 E 段七步）；⛔ 本批與 cutover 批刪任何舊碼〔客戶 (5)-1〕。
+
+---
+
+### §8.3 客戶裁示 Q4=A（2026-11-02；逐字見 DEC-123）
+
+- **Cutover 鏈（客戶原文，逐字）**：
+
+```
+New UI2
+→ 獨立 Preview
+→ 四頁逐頁驗收
+→ mobile / desktop
+→ missing / stale / source failure
+→ real-data acceptance
+→ cross-page consistency
+→ 全部通過
+→ 一次切成正式 default
+```
+
+- 「現有 New UI 與 Old UI 在 Cutover 後先保留 rollback path。」「不得先刪程式。」「正式切換後，再另進 Removal Gate。」〔客戶 Q4〕
+- 正式條文、rollback 路徑與 migration 規則：`docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md`；逐批驗收清單：`docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md`。
 
 ---
 
@@ -343,8 +482,8 @@ src/services/system_action_state.py  L3  系統動作彙整層（純函式、hea
 | G3 | **Presentation Slice independence** | 同一份 canonical 輸入 → VM `context`（將來＝Digest）在 Top5／Top10／collapsed／never-rendered 四情境**逐欄相等**（Freeze §13-2 判準）；mutation：讓 VM 讀 UI top_n → 紅 | 首個 VM PR |
 | G4 | **UI2 獨立性** | `src/ui2`／`src/services/ui2`／`shared/ui2_contract` ⛔ import `src.ui.views`／`src.ui.tabs`／`src.ui.etf`／`src.ui.pages`／`src.ui.render`／`app`；`src.ui_v2` 只走明列允許清單 | UI2 首個實作 PR |
 | G5 | **四態** | 每個 VM 欄位狀態 ∈ {ok, missing, stale, unavailable, not_evaluated}；四態 ⛔ 映射 0／中性／續抱／safe；L1 字樣取 Freeze §5.1 常數；property-based：任一輸入缺 → 該欄非 ok | 首個 VM PR |
-| G6 | **Risk Cap 不得 unrestricted add** | 表格驅動：cap ∈ {valid, invalid, missing, exceeded} × action ∈ 七分支＋四級：`⬜ 無法判定`／`🔴 超限` 時 ⛔ 任何「加碼」可執行 CTA 或無標註文字；加碼列必帶「Risk Cap 無法判定」；⛔ 出現曝險分母／現金／總資產替代值 | 系統動作彙整層 PR（G3′=A′）＋💼 持股 VM PR（Opus 5.5＋High） |
-| G7 | **Single Action Authority** | VM 動作字串集合 ⊆ deterministic 原名；⛔「減碼 1/2」「全出」；「今日無需調整」只在「W-5 計入組 0 個正式動作且 0 個未評估」；計入範圍以 W-5 核准結果為準；VM ⛔ 自行聚合（AST：VM ⛔ import `src.compute.etf.dividend_station` 規則函式） | 系統動作彙整層 PR＋💼 持股 VM PR |
+| G6 | **Risk Cap 不得 unrestricted add** | 表格驅動：cap ∈ {valid, invalid, missing, exceeded} × action ∈ 七分支＋四級：`⬜ 無法判定`／`🔴 超限` 時 ⛔ 任何「加碼」可執行 CTA 或無標註文字；加碼列必帶「Risk Cap 無法判定」；⛔ 出現曝險分母／現金／總資產替代值 | System Action Aggregator（~~系統動作彙整層~~） PR（~~G3′=A′~~ Q2 核准、implementation Gate 後）＋💼 持股 VM PR（Opus 5.5＋High） |
+| G7 | **Single Action Authority** | VM 動作字串集合 ⊆ deterministic 原名；⛔「減碼 1/2」「全出」；「今日無需調整」只在「W-5 計入組 0 個正式動作且 0 個未評估」；計入範圍以 W-5 核准結果為準；VM ⛔ 自行聚合（AST：VM ⛔ import `src.compute.etf.dividend_station` 規則函式） | System Action Aggregator（~~系統動作彙整層~~） PR＋💼 持股 VM PR |
 | G8 | **手機第一屏量測** | UI2 harness＋measure：390×844 第一屏內可見各頁「不用滑」項目（線框檔 §1）；市場頁「今日主要風險」緊接第一屏後；DOM 順序 AppTest 粗守衛進 CI，Playwright 量測進 VF Gate 附件 | 各頁 PR |
 | G9 | **Producer 禁令** | UI2 AST：⛔ 呼叫 `*_apply`、`refresh_macro_now`（主 Update CTA 例外：只經登記的單一 L3 入口）、`gemini_call`、`post_gemini`、`build_ai_summary`、`run_agent`；⛔ 寫非 `ui2_` 前綴 session key | UI2 首個實作 PR |
 | G10 | **入口 boot smoke＋floor** | `app_ui2.py` 納入 `tests/test_boot_import_smoke.py` 與 `tests/test_macro_v2_tab.py::TestStreamlitFloorCompatibility` 掃描目標（FACT：floor 守衛現只掃 `src/**`＋`app.py`） | UI2 首個實作 PR |
@@ -382,9 +521,9 @@ Freeze §13-2 四情境（Top 5／Top 10／collapsed／never rendered）→ 在 
 | 層 | Owner（模組位置） | 對外 interface | 過渡期（Stage F 前） | 目標（Stage F／G 後） |
 |---|---|---|---|---|
 | Deterministic Rules／Risk Cap | L0 `shared/*`、L2 `src/compute/**`、L3 `macro_state_locker`／`risk_cap_apply`／`allocation_service`／`dividend_station_service` | 既有函式（change-frozen） | 同左 | 同左 |
-| **System Action State** | L3 新組裝層（Stage F；`FUI-SYSTEM-ACTION-LAYER`）——**只彙整**既有分支＋Risk Cap 封鎖紀錄，⛔ 新規則 | 單一唯讀物件（含 rule result、Risk Cap 封鎖、未評估清單、加／留／換／減計數、跨頁 ⚡ N） | **不存在**；G3′=A′：先建最小彙整切片（§4.5）；G3′=B：UI2 動作欄位 `⬜ 尚未提供` | UI2 VM、Digest、LINE 皆從此讀 |
+| **System Action State** | L3 新組裝層（Stage F；`FUI-SYSTEM-ACTION-LAYER`）——**只彙整**既有分支＋Risk Cap 封鎖紀錄，⛔ 新規則 | 單一唯讀物件（含 rule result、Risk Cap 封鎖、未評估清單、加／留／換／減計數、跨頁 ⚡ N） | **不存在**；~~G3′=A′：先建最小彙整切片（§4.5）；G3′=B：UI2 動作欄位 `⬜ 尚未提供`~~ Q2：System Action Aggregator 契約凍結（§4.6）、implementation Gate 後實作；實作前 UI2 動作欄位 `⬜ 尚未提供` | UI2 VM、Digest、LINE 皆從此讀 |
 | **Decision Digest** | L0 `shared/decision_digest*`（契約）＋L3 `decision_digest_builder` | `DecisionDigest`（`SCHEMA_VERSION`） | 0 production caller；UI2 Viewer `⬜ 尚未提供` | Headless 組裝；UI2 VM／LINE formatter／OneBrain 共同唯一輸入 |
-| **View Model** | L3 `src/services/ui2/*_vm.py`＋L0 `shared/ui2_contract` | VM 型別 | 輸入＝feed（既有規則輸出）＋系統動作彙整層（G3′=A′） | 輸入＝Digest（只換 feed 來源，VM／畫面不重做） |
+| **View Model** | L3 `src/services/ui2/*_vm.py`＋L0 `shared/ui2_contract` | VM 型別 | 輸入＝feed（既有規則輸出）＋System Action Aggregator（~~系統動作彙整層~~）（~~G3′=A′~~ Q2 核准、implementation Gate 後） | 輸入＝Digest（只換 feed 來源，VM／畫面不重做） |
 | **New UI2** | L5 `src/ui2/**`＋L6 `app_ui2.py` | — | consumer | consumer |
 | **LINE formatter** | L2 `src/compute/notify/*`＋`scripts/push_*`（**DO NOT TOUCH**） | `dispatch.send_notification` | **維持現狀**（station digest＋自建定調＋各自 Gemini） | 改讀 Digest（另批、另 Gate） |
 | **OneBrain** | Stage G（provider-neutral） | 結構化輸出（Freeze §15.2） | ⛔（Stage F 合格前不得開始） | 只讀完整 Digest；grounding；deterministic fallback |
@@ -410,10 +549,12 @@ Freeze §13-2 四情境（Top 5／Top 10／collapsed／never rendered）→ 在 
 
 ---
 
-## §11 Decision Gates（**PENDING**；送客戶四題；客戶 (5)-5 第 11 項）
+## §11 Decision Gates（~~**PENDING**~~ **已裁示 2026-11-02**；送客戶四題；客戶 (5)-5 第 11 項）
+
+> 📌 **裁示結果（逐字見 DEC-123「客戶裁示 Q1～Q4」；下列題文為送題當時版本，保留作歷史）**（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）：**G1→Q1=A**（獨立 Streamlit Cloud Preview＋成本控制四點，§7.3）；**G3′→Q2=A，但修正分類**（System Action Aggregator 屬新的 runtime component，只凍結契約、⛔ 實作，§4.6）；**四頁線框→Q3 核准**（W-4 限輕量 context、W-5=A、W-9「可判定覆蓋度」、W-10 transitional contract、W-11 依 Freeze；線框 §9）；**G2→Q4=A**（Cutover 鏈，§8.3）；**#996→可以現在合併**（已合併，main＝`acd1648c`）。
 
 > 判題原則（AI 總管）：只問「需要客戶人工操作」「何時／如何碰 production」「使用者可見的版面與回退」「投資語意流向」；目錄名、層別、守衛、session／CSS 前綴、feed／VM 拆法、測試設計＝內部自決（v3 §03-1），⛔ 送題。**LINE 維持現狀、不改 LINE production 為客戶已明說〔(5)-10〕，不送題。**
-> 📌 2026-11-02 獨立稽核（PASS with fixes）後改版：原 G3「唯讀轉接層」改為 **G3′ 系統動作彙整層**；原 G4「落盤順序 A／B／C」改為一句是／否，併入 G2；新增「四頁線框核准」為獨立一題。
+> 📌 2026-11-02 獨立稽核（PASS with fixes）後改版：原 G3「唯讀轉接層」改為 **G3′ System Action Aggregator（~~系統動作彙整層~~）**；原 G4「落盤順序 A／B／C」改為一句是／否，併入 G2；新增「四頁線框核准」為獨立一題。
 
 ### G1｜你要在哪裡預覽 New UI2？（涉及你的人工操作與正式網站是否被碰）
 
@@ -422,13 +563,14 @@ Freeze §13-2 四情境（Top 5／Top 10／collapsed／never rendered）→ 在 
 - **C**：只在沙箱模擬手機尺寸截圖給你看，不提供真機試用。
 - **理由**：A 是唯一「正式網站完全不動＋真手機＋真登入＋真資料」的方案。
 
-### G3′｜要不要先建一個「系統動作彙整層」，讓 New UI2 第一版就能用真資料？（投資語意流向）
+### G3′｜要不要先建一個「System Action Aggregator（~~系統動作彙整層~~）」，讓 New UI2 第一版就能用真資料？（投資語意流向）
 
 - **背景**：你要的鏈是 規則 → Risk Cap → **System Action State** → View Model → New UI2；目前**沒有**獨立的 System Action State，各頁的「今日需處理」「是否需要行動」各自在畫面裡算。
-- **A′（總管推薦）**：先建**單一個**「系統動作彙整層」（後台、不需要任何頁面打開就能跑），**只把現有正式規則的結果彙整在一起**：合併 ETF 七種分支與個股換股四級（原名照用）、算出加／留／換／減各幾檔、分清「今天沒事」與「判不出來」、在加碼列標上 Risk Cap 狀態、算出各頁共用的「⚡ 需處理 N 項」。**不新增任何規則、不新增任何寫入**（只會觸發既有服務原本就有的動作，例如既有的快取與既有的「更新」流程）。New UI2、日後的 LINE 與 Decision Digest **共用這一份**，畫面本身不再自己算。這等於把原本 Stage F 裡「系統動作彙整」那一小塊提前做。
+- **A′（總管推薦）**：先建**單一個**「System Action Aggregator（~~系統動作彙整層~~）」（後台、不需要任何頁面打開就能跑），**只把現有正式規則的結果彙整在一起**：合併 ETF 七種分支與個股換股四級（原名照用）、算出加／留／換／減各幾檔、分清「今天沒事」與「判不出來」、在加碼列標上 Risk Cap 狀態、算出各頁共用的「⚡ 需處理 N 項」。**不新增任何規則、不新增任何寫入**（只會觸發既有服務原本就有的動作，例如既有的快取與既有的「更新」流程）。New UI2、日後的 LINE 與 Decision Digest **共用這一份**，畫面本身不再自己算。這等於把原本 Stage F 裡「系統動作彙整」那一小塊提前做。
 - **B**：等原 Stage F 的完整 Headless Decision Digest 做完才開始；在那之前 New UI2 的動作相關欄位一律顯示「⬜ 尚未提供」。
 - **理由**：A′ 讓動作只在一個地方彙整（New UI2、LINE、Digest 不會各算各的），又能讓 New UI2 用真資料逐頁驗收；B 時程最長。
-- **請你確認**：你曾禁止「新增 Risk Cap runtime／OneBrain runtime」；這個彙整層**不新增規則、不新增寫入**，總管認為**不算**你禁止的「新增 runtime」——若你認為算，請選 B。
+- **請你確認**：你曾禁止「新增 Risk Cap runtime／OneBrain runtime」；這個彙整層**不新增規則、不新增寫入**，~~總管認為**不算**你禁止的「新增 runtime」~~——若你認為算，請選 B。
+- 📌 **客戶裁示：A，但修正分類——「它仍屬『新的 runtime component』」；只凍結 interface／ownership／input-output contract／tests／migration plan，本批不得實作 production runtime**（§4.6）（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）。
 
 ### 四頁線框核准（`docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md`）
 
@@ -446,10 +588,13 @@ Freeze §13-2 四情境（Top 5／Top 10／collapsed／never rendered）→ 在 
    - **B**：逐頁切換正式網站（會有一段時間兩種外觀並存，正式網站要改 4 次）。
    - **C**：其他（請說明）。
 2. **#996 合併確認（是／否）**：「#996（Freeze 已兩輪驗收 PASS、CI 綠）可否現在合併？」**推薦：可。** 合併後，本 Architecture Gate 以**新 PR** 落盤（同一指定分支，重設到新 main）。
-   - **在此之前，本 Gate 只存在工作樹**（受「只能推指定分支」權限限制，無法另開分支；疊進 #996 又會擴大 #996 範圍，你已禁止）——因此依 DEC-122「沒寫入 GitHub 的新規格，不視為正式完成」，本 Gate 在落盤前**尚非正式文件**。
+   - ~~**在此之前，本 Gate 只存在工作樹**（受「只能推指定分支」權限限制，無法另開分支；疊進 #996 又會擴大 #996 範圍，你已禁止）——因此依 DEC-122「沒寫入 GitHub 的新規格，不視為正式完成」，本 Gate 在落盤前**尚非正式文件**。~~
+   - 📌 **已解除**：客戶裁示「#996 可以現在合併」；#996 已合併（main＝`acd1648c`），本 Gate 已落盤為 commit `6d30dcea`／Draft PR #997（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）。
 - **理由**：切換只動正式網站一次、可立即回滾；先合併已驗收的 Freeze，讓它成為 main 上的正式 input，本 Gate 再以獨立 PR 送審，範圍乾淨。
 
-**裁示前暫行（較嚴讀法）**：⛔ 任何 UI2 production code；⛔ 建系統動作彙整層；⛔ 動 `app.py`；⛔ 建 preview app；⛔ 開始原 Stage A；#996 維持現狀。
+~~**裁示前暫行（較嚴讀法）**：⛔ 任何 UI2 production code；⛔ 建System Action Aggregator（系統動作彙整層）；⛔ 動 `app.py`；⛔ 建 preview app；⛔ 開始原 Stage A；#996 維持現狀。~~
+
+**裁示後（現行）**：⛔ 任何 UI2 production code（直到 Architecture 凍結並發 🟡 Model／Effort Change Gate、客戶修改後）；⛔ 實作 System Action Aggregator（直到 implementation Gate）；⛔ 動 `app.py`；⛔ 提前要求客戶建 Preview app（Q1：需要時才發 🟡 Manual Action Gate）；⛔ 開始原 Stage A；⛔ 刪 Legacy New UI／Old UI。
 
 ---
 
@@ -476,23 +621,38 @@ Freeze §13-2 四情境（Top 5／Top 10／collapsed／never rendered）→ 在 
 - `docs/governance/UI_VISUAL_FIDELITY_GATE.md` 加 UI2 harness 與四頁（含我的）量測（`NUI2-VF-HARNESS`）。
 - Presentation Contract §6 表新增 Neutral／Danger tone、`unwired` 改名（原 `FUI-CHIP-NEUTRAL-INFO`／`FUI-UNAVAILABLE-KIND-RENAME`，改由 UI2 components 承接）。
 
+### §12.3 裁示整合批（2026-11-02，客戶 Q1～Q4＋#996 裁示後；docs-only；分支 `ccr-a0b4e085-ijdaio`／#997）
+
+| 檔 | 動作 |
+|---|---|
+| `docs/DECISIONS.md` | DEC-123 新增「客戶裁示 Q1～Q4」逐字段＋裁示要點；Gate 各點 PENDING → 已裁示（刪除線保留）；#996 合併、#997 落盤 |
+| 本檔 | §4.6 System Action Aggregator 契約；§7.3 Q1；§8.3 Q4；§11 裁示結果；§13 完成條件更新 |
+| `docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md` | 狀態改「客戶核准」；§9 Q3 裁示落點（W-4／W-5／W-9／W-10／W-11 條件） |
+| `docs/vnext/NEWUI2_REUSE_MATRIX_2026-11-02.md` | 狀態更新 |
+| `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` | **新增** |
+| `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` | **新增** |
+| `PROJECT_RULES.md` | 新增第 27 節「永久收尾 Gate」（客戶 2026-11-02，DEC-123） |
+| `docs/BACKLOG.md` | DR-2026-11-02-4；§1.1 五題結案；§5.1.18 狀態更新；新增 §5.1.19（客戶點名 16 項獨立列＋衍生待辦） |
+| `docs/PROJECT_STATE.md` | 新增 §51 |
+| `docs/HANDOFF.md` | 新 Safe Handoff（Architecture 客戶已核准，待 #997 獨立稽核＋合併後凍結） |
+
 ---
 
 ## §13 完成條件〔客戶 (5)-13〕
 
 只有以下**全部**完成，才通知「🟡 Model / Effort Change Gate：New UI2 architecture 已凍結，後續 presentation implementation 可切 Claude Sonnet 5.5 + Medium。」然後**立即停手、⛔ 自行開始 production**：
 
-| 條件（客戶原文） | 現況（2026-11-02） |
+| 條件（客戶原文） | 現況（2026-11-02；客戶裁示 Q1～Q4 後更新，舊值刪除線保留） |
 |---|---|
-| architecture frozen | ⬜ 本檔為草案（僅在工作樹）；待 G1、G3′、G2 裁示＋落盤＋`NUI2-ARCH-SECOND-AUDIT` |
-| reuse matrix frozen | ⬜ 草案（單組） |
-| four-page wireframe approved | ⬜ 待客戶核准（W-1～W-11） |
-| migration boundary approved | ⬜ 草案 |
-| preview strategy approved | ⬜ PENDING G1 |
-| cutover strategy approved | ⬜ PENDING G2 |
-| no unresolved architecture blocker | ⬜ G3′ 未裁示；#996 未合併、本 Gate 未落盤 |
+| architecture frozen | ~~⬜ 本檔為草案（僅在工作樹）；待 G1、G3′、G2 裁示＋落盤＋`NUI2-ARCH-SECOND-AUDIT`~~ ⬜ 客戶已核准（Q1～Q4）；**待 #997 獨立稽核＋合併**後凍結 |
+| reuse matrix frozen | ~~⬜ 草案（單組）~~ ⬜ 隨 #997 獨立稽核＋合併凍結（客戶未逐列裁示；隨 Q1～Q4 整體核准，INFERENCE） |
+| four-page wireframe approved | ~~⬜ 待客戶核准（W-1～W-11）~~ ✅ 客戶核准（Q3，附 W-4／W-5／W-9／W-10／W-11 條件） |
+| migration boundary approved | ~~⬜ 草案~~ ✅ 客戶核准 Q4（Cutover 鏈＋rollback＋不得先刪）；migration 規則條文化於 Migration／Cutover Contract，隨 #997 稽核凍結 |
+| preview strategy approved | ~~⬜ PENDING G1~~ ✅ 客戶核准 Q1=A（含成本控制四點） |
+| cutover strategy approved | ~~⬜ PENDING G2~~ ✅ 客戶核准 Q4=A |
+| no unresolved architecture blocker | ~~⬜ G3′ 未裁示；#996 未合併、本 Gate 未落盤~~ ⬜ 待 #997 獨立稽核＋合併；Aggregator 實作另走 implementation Gate（不阻塞凍結，屬後續 prerequisite） |
 
-⚠️ 提醒（INFERENCE）：Sonnet 5.5＋Medium 適用「純 presentation」批；M1 的 `risk_cap_gate` PORT、系統動作彙整層（G3′=A′）、💼 持股 VM（G6／G7）、Stage F／G 屬語意／架構批，依客戶 §0 表仍需 **Opus 5.5＋High**——屆時依 DEC-084／DEC-106 比對實際設定，不符即停下通知客戶。
+⚠️ 提醒（INFERENCE）：Sonnet 5.5＋Medium 適用「純 presentation」批；M1 的 `risk_cap_gate` PORT、System Action Aggregator（~~系統動作彙整層（G3′=A′）~~ implementation Gate 後）、💼 持股 VM（G6／G7）、Stage F／G 屬語意／架構批，依客戶 §0 表仍需 **Opus 5.5＋High**——屆時依 DEC-084／DEC-106 比對實際設定，不符即停下通知客戶。
 
 ---
 

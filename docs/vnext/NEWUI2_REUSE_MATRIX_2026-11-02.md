@@ -1,6 +1,6 @@
 # New UI2 Reuse Matrix（KEEP AS-IS／WRAP／PORT／REIMPLEMENT／RETIRE LATER／DO NOT TOUCH）
 
-- **狀態**：**Architecture Gate 草案，待客戶裁示**（隨 `docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md` 一併送審；客戶 (5)-13「reuse matrix frozen」前 ⛔ 據以施工）。
+- **狀態**：**隨 Architecture Gate 經客戶裁示 Q1～Q4 整體核准（2026-11-02；逐字見 DEC-123），待 #997 獨立稽核＋合併後凍結**；客戶未逐列裁示本矩陣（INFERENCE：隨整體核准）。（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）<br>原文：~~**Architecture Gate 草案，待客戶裁示**（隨 `docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md` 一併送審；客戶 (5)-13「reuse matrix frozen」前 ⛔ 據以施工）。~~
 - **日期**：2026-11-02　**基準**：工作樹＝PR #996 head `139e315b`（調查 invC 讀此 SHA；撰寫組 2026-11-02 `git fetch` 實查 `origin/main`＝`c1e10a62`，HEAD 比 main 多 1 個 docs commit）。以當下 `git fetch` 為準（DEC-118）。
 - **決策來源**：客戶 2026-11-02 裁示 (5)-6「必須實查 repo 後分類：KEEP AS-IS／WRAP／PORT／REIMPLEMENT／RETIRE LATER／DO NOT TOUCH」（逐字見 `docs/DECISIONS.md` DEC-123）。
 - **底稿**：調查 C（invC，2026-11-02，**單組唯讀**）：自寫 AST 掃描 433 個 .py（shared／src／scripts）抽 streamlit import、`session_state` 字面、`st.<UI>` 呼叫、I/O import、層間 import；對 `src/ui/views/*.py` 逐函式分「不直接引用 `st`／引用 `st`／引用 `st.session_state`」；計算每個 L1/L2/L3 模組的 importer 層；逐檔讀碼確認關鍵宣稱。
@@ -179,7 +179,7 @@
 | N2 | Semantic chip tone＋`unavailable`→`unwired` | ✅（只加不改） |
 | N3 | Field-level freshness 物件 | ✅；補 as_of 進 canonical 契約＝Stage F |
 | N4 | 中立 VM 卡片型別 | ✅ |
-| N5 | 「今日無需調整 vs 判不出」組合層 | ✅（PORT 既有規則進**系統動作彙整層**〔Architecture Gate §4.5，G3′〕，⛔ 新門檻；VM ⛔ 自算） |
+| N5 | 「今日無需調整 vs 判不出」組合層 | ✅（PORT 既有規則進**System Action Aggregator（~~系統動作彙整層~~）**〔Architecture Gate §4.5，G3′〕，⛔ 新門檻；VM ⛔ 自算） |
 | N6 | 加／留／換／減呈現分組 | ✅ presentation-only；分組外觀屬線框待客戶核准 |
 | N7 | System Action State 聚合層 | ✅ 允許作 **L3 deterministic 組裝**：最小彙整切片可依 **G3′=A′** 提前（Architecture Gate §4.5），完整版屬 Stage F；**不是** UI2 presentation 工作 |
 | N8 | Risk Cap 閘門數值判定 | ❌ `FUI-RC-NUMERIC-GATE` |
