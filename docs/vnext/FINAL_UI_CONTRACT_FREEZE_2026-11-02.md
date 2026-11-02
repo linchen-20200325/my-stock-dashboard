@@ -262,6 +262,7 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 
 - **FACT**：Presentation Contract §6 表 `unavailable` kind＝**委派到 `⛔ 未接線`**（功能沒做）；與客戶新 Unavailable（來源壞了）語意不同。
 - **處置（凍結）**：自本契約起，文件中「Unavailable」一律指**來源目前不可用**；舊義改稱「**功能尚未提供（未接線）**」，符號 `⛔ 未接線` 不變。程式識別名 `compact` 的 `unavailable` kind 於 **Stage A** 改名（建議 `unwired`；與 §6 表、`tests/ui_v2/test_compact.py::_contract_kinds` 同一 PR 同步，因該測試以 §6 表列對帳 `META_KINDS` 20 項）；改名前視為**舊義別名**，⛔ 用來表示來源不可用。BACKLOG `FUI-UNAVAILABLE-KIND-RENAME`。
+- 📌 **2026-11-02 New UI2 Batch 1 註記（append-only；AI 總管暫定，待覆核）**：New UI2 契約（`shared/ui2_contract`）實作「功能尚未提供」用字樣 `⬜ 尚未提供`（第 6 態 `NOT_PROVIDED`，四態之外），**不是**本節舊義別名 `⛔ 未接線`；兩者是否合併／是否保留第 6 態待第二組覆核（BACKLOG `NUI2-STATE-NOT-PROVIDED-AUDIT`）。
 
 ---
 

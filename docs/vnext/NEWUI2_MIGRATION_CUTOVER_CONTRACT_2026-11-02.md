@@ -96,3 +96,13 @@ New UI2
 
 - 單組撰寫；未實機驗 OAuth 轉跳與 `?ui=1` 行為；Preview Cloud app 尚不存在。
 - §1.1 判準與 §2 機制為 AI 總管暫定；與客戶原文有出入時以 DEC-123 逐字為準。
+
+---
+
+## §6 Batch 1 Migration debt（2026-11-02；append-only；`PROJECT_RULES.md` 第 27 節第 4 點落點）
+
+- **`preview_feed.py` 是 FAKE feed → 真 feed 為 cutover 前債務**（BACKLOG `NUI2-REAL-FEED`）：Preview 與 production 必須讀相同 canonical services／contracts（客戶 Q1 成本控制第 3、4 點）；⛔ 為 Preview 建第二套 pipeline。換成真 feed 時，VM builder 與 `src/ui2` 畫面**不重做**，只換 feed；`tests/test_ui2_guards.py` 的 `_G2_ALLOWED_PROJECT` 須明確擴充並過審。
+- **動作欄 `⬜ 尚未提供（待 System Action Aggregator）` 只允許 Preview 期**（沿 Architecture Gate §4.6.5）：Batch 1 的 VM 恆輸出此字樣；cutover 前必須完成 `NUI2-AGGREGATOR-IMPL` 與 M-A3／M-A4。
+- **導覽形態債**：Batch 1 用頂部水平 radio，未落地已核准 W-1（底部固定列／左側欄）；cutover 前須對齊或經客戶改核（`NUI2-NAV-W1-FIDELITY`）。
+- **`src/services/__init__.py` eager import**（`NUI2-SERVICES-INIT-EAGER`）：Preview 行程載入 L1 模組；正式 cutover 前評估是否改 lazy（動既有套件，需 Gate）。
+- **`app_ui2.py` 登記為 L6、入 c3 掃描**；cutover 批須新增 G11 路由毒化測試（毒化 UI2 套件 → `?legacy=1`／`?ui=1` 仍完整載入）。

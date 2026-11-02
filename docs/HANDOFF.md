@@ -730,3 +730,18 @@ DEC-086 規則已於 main，本表已落地。
 | session 紀錄落點 | repo **沒有** `SESSION_LOG` 檔；session 紀錄＝本檔 Safe Handoff 區塊（同 DEC-122 F6；`docs/governance/SESSION_CONTINUITY_RULES_2026-10-31.md` C1）。 |
 | 永久收尾 Gate | 每批完成前檢查新的 Rule／Decision／Audit finding／Limitation／Backlog／Migration debt，同步 GitHub 正式文件後才能宣告完成（`PROJECT_RULES.md` 第 27 節；Audit Checklist §13）。 |
 | 禁止事項（摘要） | ⛔ 自行開始 implementation；⛔ 實作 System Action Aggregator（未經 implementation Gate）；⛔ 提前要求客戶建 Preview App；⛔ 為 Preview 建第二套 pipeline；⛔ 修改 production UI、`app.py`、LINE production；⛔ 刪 Legacy New UI／Old UI；⛔ 新增 Risk Cap runtime／OneBrain runtime；⛔ 重寫既有 data／services／rules；⛔ Architecture 凍結前降模型。 |
+
+- **Safe Handoff（2026-11-02 New UI2 Batch 1 完成；現行）**（SESSION_CONTINUITY C1 欄位；決策者 客戶 (7)＋AI 總管〔事實〕；**實作組單組產出，待總管複驗**）：
+
+| 欄位（C1） | 內容 |
+|---|---|
+| live GitHub state | 基準 `origin/main`＝`ebb093be`（#997 合併點；實作組 `git fetch` 實查；cron 會推進 tip，以當下實查為準）。本批變更在分支 `ccr-a0b4e085-ijdaio` 工作樹，**commit／push／PR 由總管處理**（實作組未 commit）。 |
+| current Stage／exact safe stopping point | **New UI2 Batch 1 實作完成（待總管複驗、PR、CI）**：① c3 層／import guard 登記＋G1／G2／G4／G5／G9／G10 守衛 ② VM boundary 骨架（L0 `shared/ui2_contract/`、L3 `src/services/ui2/`）③ Preview 入口骨架（`app_ui2.py`＋`src/ui2/`）。資料全為 **FAKE**；**未實作** System Action Aggregator／Risk Cap runtime／Digest／OneBrain；`app.py` 等 0 diff。 |
+| 待客戶裁示 | **無即時待裁題**。`NUI2-PREVIEW-APP-MANUAL` 仍 blocked，**未發** Manual Action Gate（客戶：需要時才通知）；實作組判斷 Preview 要部署到 Streamlit Cloud 時才需要。 |
+| known limitations／blockers | 見 `docs/PROJECT_STATE.md` §52「限制」與 BACKLOG §5.1.20：導覽與已核准 W-1 有落差、第一屏未量測 y、`src/services/__init__.py` eager import、第 6 態 `NOT_PROVIDED`／Risk Cap 歸類待覆核、截圖腳本不在 repo、未實機。 |
+| **下一個唯一安全工作** | 總管複驗 Batch 1（獨立 QA；重點：`tests/test_ui2_*.py` 的 teeth、G2 允許清單、`git diff --stat` 0 diff 清單）→ PR／CI → 合併。**之後**（仍須客戶 implementation Gate，⛔ 自行開始）：下一個 presentation 批＝市場頁 UI2 第一屏（依線框 §2；`NUI2-PREVIEW-MOBILE-MEASURE`／`NUI2-NAV-W1-FIDELITY` 先決策殼形態）；System Action Aggregator、Risk Cap、Digest、OneBrain 屬 Opus 5.5＋High 批。 |
+| required Model×Effort for resume | 純 presentation（元件／版面／CSS）＝Sonnet 5.5＋Medium；Aggregator／Risk Cap／Action Authority／Digest／OneBrain／資料語意＝Opus 5.5＋High；判斷需切換 → 先停手通知客戶，⛔ 自行切換。 |
+| 正式文件索引 | 規格 `docs/vnext/NEWUI2_*_2026-11-02.md`；待辦 `docs/BACKLOG.md` §5.1.18～§5.1.20；知識 `docs/PROJECT_STATE.md` §52；債務 `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` §6；證據 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §14、`docs/vnext/newui2_batch1/`（截圖，FAKE）。 |
+| 如何本機看 Preview | `streamlit run app_ui2.py`（入口在 repo 根；不影響 `app.py`）。floor 驗證用 `streamlit==1.56.0` venv 跑 `tests/test_ui2_*.py`。 |
+| 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule／Decision＝無；Audit finding／Limitation／Backlog／Migration debt 已寫入上列 GitHub 正式文件。 |
+| 禁止事項（摘要） | ⛔ 修改 `app.py`／加 `?ui=2`／切 production default；⛔ 刪／改 Legacy New UI 與 Old UI；⛔ 實作 System Action Aggregator（未經 implementation Gate）；⛔ 在 VM 或 UI2 聚合動作、創造投資規則；⛔ 為 Preview 建第二套 data pipeline；⛔ 提前要求客戶建 Preview App；⛔ 用 `guard_chip` 承載中性資訊；⛔ 把 Batch 1 截圖當 Visual Fidelity Gate 通過；⛔ 修改 LINE production。 |
