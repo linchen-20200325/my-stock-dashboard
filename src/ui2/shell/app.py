@@ -20,7 +20,7 @@ KEY_SCENARIO = "ui2_scenario"
 _SCENARIO_LABELS = {
     "cold": "冷啟動（未載入）", "loaded": "已載入", "missing": "Missing（資料未取得／未備）",
     "stale": "Stale（過期）", "unavailable": "Unavailable（來源不可用）",
-    "not_evaluated": "Not evaluated（尚未評估）",
+    "not_evaluated": "Not evaluated／無法判定（兩者不同態）",
 }
 
 

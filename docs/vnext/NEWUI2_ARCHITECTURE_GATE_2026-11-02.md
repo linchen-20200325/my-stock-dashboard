@@ -241,6 +241,7 @@ Existing Formal Rules + Risk Cap
 
 **§4.6.5 分類與施工限制（客戶原文要點）**：「它仍屬『新的 runtime component』。」本 Architecture Gate「只允許凍結 interface / ownership / input-output contract / tests / migration plan」；「**本批不得實作 production runtime**」；「請把它正式登錄為 New UI2 後續 prerequisite backlog，再經 implementation Gate 才施工」（BACKLOG `NUI2-AGGREGATOR-IMPL`）。
 - **Aggregator 實作前的 UI2 讀法（AI 總管暫定，依客戶 Q2／W-10）**：UI2 動作相關欄位（💼 今日需處理、計數、「今日無需調整 vs 無法判定」）一律 `⬜ 尚未提供（待 System Action Aggregator）`；VM ⛔ 自行聚合補位（§4.2 第 4 點）；📊 市場頁「是否需要行動」依 **W-10 transitional contract** 沿用舊警示並標 source／scope（線框 §9）。
+- 📌 **`⬜ 尚未提供` 的語意（DEC-124）**：Capability／Implementation Availability State（Preview-only），與資料語意正交；⛔ 稱第 6 個資料語意態；⛔ 讀成「今日無需調整」或「無法判定」。New UI2 契約以 `CapabilityState.NOT_PROVIDED` 建模（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔語意修正〕；原文刪除線保留）。
 - **`⬜ 尚未提供` 只允許在 Preview 期**（#997 獨立稽核 M2；AI 總管）：動作欄的 `⬜ 尚未提供（待 System Action Aggregator）` **只允許出現在 Preview 期**；**cutover 前必須完成 `NUI2-AGGREGATOR-IMPL` 與 M-A3（UI2 VM 改讀 Aggregator）、M-A4（📊 市場 ⚡ 切到 Aggregator）**——否則正式版 💼 持股頁的「今日需處理」動作能力消失（違客戶 §42「新 UI 看起來簡潔，不代表功能消失」與 Capability Map 能力守恆）。Migration／Cutover Contract C2、C6、C7 同步（2026-11-02 #997 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）。
 
 **§4.6.6 Interface／Input-Output contract（AI 總管暫定欄位名）**
@@ -262,7 +263,7 @@ Existing Formal Rules + Risk Cap
 
 | 原因（`row_short_kind`／組合層） | 既有條件（FACT） | `action_class` | `counts_toward_today` | 對 `day_status` 的影響 |
 |---|---|---|---|---|
-| `unjudged` | `KEY_INSUFFICIENT`（建議動作已換成「⬜ 資料不足／無法判定」）／`KEY_INVALID_INPUTS`／`KEY_INVALID_LIGHTS`／個股汰換燈 ⚪ 且契約漂移；持有列與觀察清單列皆算 | `not_evaluated` | False | ⛔ `no_adjustment_today` |
+| `unjudged` | `KEY_INSUFFICIENT`（建議動作已換成「⬜ 資料不足／無法判定」）／`KEY_INVALID_INPUTS`／`KEY_INVALID_LIGHTS`／個股汰換燈 ⚪ 且契約漂移；持有列與觀察清單列皆算 | ~~`not_evaluated`~~ **`undeterminable`**（DEC-124：已進入判定、必要輸入不足／無效＝Unable to Determine，⛔ 併入 Not Evaluated）（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔語意修正〕；原文刪除線保留） | False | ⛔ `no_adjustment_today` |
 | `price_missing` | 持有列缺現價、但結論可證明（`KEY_PRICE_MISSING_KEPT`；結論保留、停利等判不了） | **原分支的 class 照帶**（結論保留），另帶 `data_short_kind=price_missing` | 依原分支 | ⛔ `no_adjustment_today`（組合層資料不足） |
 | `fx_unconfirmed` | 持有列外幣／幣別未確認（`KEY_FX_UNCONFIRMED`；不進總額、損益% 判不了） | 同上（原分支 class 照帶）＋`data_short_kind=fx_unconfirmed` | 依原分支 | ⛔ `no_adjustment_today` |
 | 整批抓取失敗列（`_detail.error`；`row_short_kind` 回 None、由 `errors` 管） | digest `errors` 非空 | `unavailable` | False | ⛔ `no_adjustment_today` |
@@ -273,8 +274,8 @@ Existing Formal Rules + Risk Cap
 
 | # | 欄位 | 內容 | 對應允許責任 |
 |---|---|---|---|
-| O1 | `items[]` | 每檔：`ticker`、`name`、`source_rule`（`action_branch.v1` 碼或 `swap_level`）、`formal_label`（原名，逐字）、`action_class` ∈ {actionable, non_actionable, unavailable, not_evaluated}、`group` ∈ {加, 留, 換, 減}、`counts_toward_today`（bool）、`risk_cap_tag`、`rule_id`（只限 `RULE_ID_ALLOWLIST`；無則空）、`as_of`、`source`；（#997 稽核 M3 補）`data_short_kind`（`row_short_kind` 原樣：`unjudged`／`price_missing`／`fx_unconfirmed`／空） | 1～4 |
-| O2 | `counts` | `today_n`（計入「今日需處理」檔數）、`by_group`（加／留／換／減）、`not_evaluated_n`、`unavailable_n`；（#997 複驗 N1 補）`incomplete_rows_n`＝現行 `page_hold` 的 `_unjudged` 口徑：`row_data_short(row)` 為真**或**該列燈未全判出（`not is_fully_judged(cells)`）的列數（與既有 `unjudged_rows` 同口徑；⛔ 另訂） | 5 |
+| O1 | `items[]` | 每檔：`ticker`、`name`、`source_rule`（`action_branch.v1` 碼或 `swap_level`）、`formal_label`（原名，逐字）、`action_class` ∈ {actionable, non_actionable, unavailable, not_evaluated}（📌 DEC-124 增 **`undeterminable`**：`not_evaluated`＝規則／計算尚未執行或不在本次評估範圍；`undeterminable`＝已進入判定但必要輸入 Missing／Unavailable／Invalid／insufficient；兩者禁止合併；客戶 Q2 原文四類一字未改，第五類為 AI 總管暫定、客戶可推翻）（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔語意修正〕；原文刪除線保留）、`group` ∈ {加, 留, 換, 減}、`counts_toward_today`（bool）、`risk_cap_tag`、`rule_id`（只限 `RULE_ID_ALLOWLIST`；無則空）、`as_of`、`source`；（#997 稽核 M3 補）`data_short_kind`（`row_short_kind` 原樣：`unjudged`／`price_missing`／`fx_unconfirmed`／空） | 1～4 |
+| O2 | `counts` | `today_n`（計入「今日需處理」檔數）、`by_group`（加／留／換／減）、`not_evaluated_n`、`unavailable_n`、📌 `undeterminable_n`（DEC-124）（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔語意修正〕；原文刪除線保留）；（#997 複驗 N1 補）`incomplete_rows_n`＝現行 `page_hold` 的 `_unjudged` 口徑：`row_data_short(row)` 為真**或**該列燈未全判出（`not is_fully_judged(cells)`）的列數（與既有 `unjudged_rows` 同口徑；⛔ 另訂） | 5 |
 | O3 | `day_status` | ~~`needs_action`（`today_n`>0）／`no_adjustment_today`（`today_n`=0 且 `not_evaluated_n`=0 且 `unavailable_n`=0）／`undeterminable`（`today_n`=0 且有任一未評估或不可得 →「無法判定」）~~ **既有 gate 的組合結果，⛔ 自行重新判定**（#997 稽核 M3）：`needs_action`＝`today_n`>0（同時揭露判不出檔數）；`no_adjustment_today`＝`today_n`=0 **且** `cruise_or_gap(judged, total, all_rows_judged=…)` 回巡航（`is_fully_judged` 全列成立、`judged==total>0`）**且** `digest_data_short(digest)` 為 False；其餘 `today_n`=0 的情形＝`undeterminable`（「無法判定」）。分子分母與資料不足判定**只沿用 I6／I7 既有函式**，⛔ 另訂門檻、分母或例外 | 6（Freeze §0.1.5 第 3、4 點） |
 | ~~O4~~ | ~~`risk_cap`~~ | ~~原樣帶出 Risk Cap state；Q1 數值 Gate 前恆 `undeterminable`；加碼類 item 的 `risk_cap_tag`＝「Risk Cap 無法判定」；`🔴 Risk Cap 超限 · 禁止新增曝險` 只在 `FUI-RC-NUMERIC-GATE` 啟用後才可能出現~~ | ~~2（禁止 6）~~（#997 稽核 m6 拆欄（2026-11-02 #997 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）） |
 | O4a | `risk_cap_state` | Risk Cap state **原樣傳遞**（＝輸入 I4，⛔ 改寫、⛔ 補值） | 2（禁止 6） |
@@ -292,7 +293,7 @@ Existing Formal Rules + Risk Cap
 - A-T1 純度 AST：⛔ import `streamlit`／`src.ui*`／`src.data*`／`requests`；⛔ `session_state`；⛔ 呼叫任何寫入（Sheet 寫入、檔案寫入、`*_apply`）。
 - A-T2 表格驅動：七分支 × 四級 × Risk Cap state {valid, invalid, missing} → `action_class`／`group`／`risk_cap_tag` 全組合。
 - A-T3 W-5 計入：暫停加碼計入；🟡 留意（無正式 action code）不計入；巡航／續抱／高溢價不計入。
-- A-T4 `day_status`：「今日無需調整」只在 `today_n`=0 且 0 未評估、0 不可得；任一判不出 → `undeterminable`。
+- A-T4 `day_status`：「今日無需調整」只在 `today_n`=0 且 0 未評估、0 不可得；任一判不出 → `undeterminable`。（📌 DEC-124：「判不出」含 `not_evaluated` 與 `undeterminable` 兩類，計數分列、⛔ 合併；A-T2 表格驅動同樣分列）（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔語意修正〕；原文刪除線保留）
 - A-T5 禁用字樣：輸出 ⛔ 含「減碼 1/2」「全出」或任何比例字樣；⛔ 新 action code。
 - A-T6 `rule_id` ⊆ `RULE_ID_ALLOWLIST`。
 - A-T7 原名逐字：`formal_label` 與來源字樣 byte-identical。
@@ -498,7 +499,7 @@ New UI2
 | G2 | **VM 純度** | `src/services/ui2/*_vm.py` AST：⛔ import `streamlit`／`src.ui*`／`src.data*`／`requests`；⛔ `session_state`；⛔ `top_n`／`expanded`／`tab` 類參數影響 `context` | 首個 VM PR |
 | G3 | **Presentation Slice independence** | 同一份 canonical 輸入 → VM `context`（將來＝Digest）在 Top5／Top10／collapsed／never-rendered 四情境**逐欄相等**（Freeze §13-2 判準）；mutation：讓 VM 讀 UI top_n → 紅 | 首個 VM PR |
 | G4 | **UI2 獨立性** | `src/ui2`／`src/services/ui2`／`shared/ui2_contract` ⛔ import `src.ui.views`／`src.ui.tabs`／`src.ui.etf`／`src.ui.pages`／`src.ui.render`／`app`；`src.ui_v2` 只走明列允許清單 | UI2 首個實作 PR |
-| G5 | **四態** | 每個 VM 欄位狀態 ∈ {ok, missing, stale, unavailable, not_evaluated}；四態 ⛔ 映射 0／中性／續抱／safe；L1 字樣取 Freeze §5.1 常數；property-based：任一輸入缺 → 該欄非 ok | 首個 VM PR |
+| G5 | **四態** | 每個 VM 欄位狀態 ∈ {ok, missing, stale, unavailable, not_evaluated}（📌 DEC-124：此為**資料語意**軸，恰五個；另有**判定結果** `undeterminable`（⛔ 併入 not_evaluated）與**capability** `not_provided`（Preview-only、與資料語意正交、⛔ 算第 6 資料態），三軸型別互斥）（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔語意修正〕；原文刪除線保留）；四態 ⛔ 映射 0／中性／續抱／safe；L1 字樣取 Freeze §5.1 常數；property-based：任一輸入缺 → 該欄非 ok | 首個 VM PR |
 | G6 | **Risk Cap 不得 unrestricted add** | 表格驅動：cap ∈ {valid, invalid, missing, exceeded} × action ∈ 七分支＋四級：`⬜ 無法判定`／`🔴 超限` 時 ⛔ 任何「加碼」可執行 CTA 或無標註文字；加碼列必帶「Risk Cap 無法判定」；⛔ 出現曝險分母／現金／總資產替代值 | System Action Aggregator（~~系統動作彙整層~~） PR（~~G3′=A′~~ Q2 核准、implementation Gate 後）＋💼 持股 VM PR（Opus 5.5＋High） |
 | G7 | **Single Action Authority** | VM 動作字串集合 ⊆ deterministic 原名；⛔「減碼 1/2」「全出」；「今日無需調整」只在「W-5 計入組 0 個正式動作且 0 個未評估」；計入範圍以 W-5 核准結果為準；VM ⛔ 自行聚合（AST：VM ⛔ import `src.compute.etf.dividend_station` 規則函式） | System Action Aggregator（~~系統動作彙整層~~） PR＋💼 持股 VM PR |
 | G8 | **手機第一屏量測** | UI2 harness＋measure：390×844 第一屏內可見各頁「不用滑」項目（線框檔 §1）；市場頁「今日主要風險」緊接第一屏後；DOM 順序 AppTest 粗守衛進 CI，Playwright 量測進 VF Gate 附件 | 各頁 PR |
@@ -683,3 +684,4 @@ Freeze §13-2 四情境（Top 5／Top 10／collapsed／never rendered）→ 在 
 - tests 分類（≈298／≈130／≈148／≈77）為 regex 啟發式量級。
 - 撰寫組未見客戶原訊息本身，只見總管轉交逐字檔（`customer_directive_2026-11-02.md` 第 (5) 段）；若有出入以原訊息為準。
 - 待第二組獨立驗證（`NUI2-ARCH-SECOND-AUDIT`）後，本註保留作 provenance。
+- 📌 DEC-124（2026-11-02，append-only）：§4.6.6 O1／O2／`unjudged` 列與 §9.2 G5 的語意修正為實作組單組產出（Aggregator 仍未實作；實作批 A-T2／A-T4 須以 `undeterminable` 與 `not_evaluated` 分列的表格驅動測試落地），待總管複驗與獨立 QA。

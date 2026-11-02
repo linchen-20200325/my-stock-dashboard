@@ -24,6 +24,7 @@
 - [ ] G3 Presentation Slice independence：Top5／Top10／collapsed／never-rendered 四情境 `context` 逐欄相等
 - [ ] G4 UI2 獨立性：⛔ import Legacy New UI／Old UI／`app`；`src.ui_v2` 只走明列允許清單
 - [ ] G5 四態：VM 欄位狀態 ∈ {ok, missing, stale, unavailable, not_evaluated}；⛔ 映射 0／中性／續抱／safe
+- [ ] G5′ 三軸語意邊界〔DEC-124〕：資料語意**恰五態**（OK／Missing／Stale／Unavailable／Not Evaluated）；`⬜ 尚未提供`＝capability state（Preview-only、`state` 為 None、⛔ 第 6 資料態、只在允許清單檔出現）；Unable to Determine（`⬜ 無法判定`、`⬜ 未評估／資料不足`）≠ Not Evaluated（不同值、不同字樣、不同表）；三者皆 ⛔ 帶值（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）；原文刪除線保留）
 - [ ] G6 Risk Cap 不得 unrestricted add（表格驅動）
 - [ ] G7 Single Action Authority：動作字串 ⊆ deterministic 原名；⛔「減碼 1/2」「全出」
 - [ ] G8 手機第一屏量測（390×844）
@@ -49,12 +50,15 @@
 
 - [ ] Missing＝`⬜ 資料未取得`／`⬜ 資料未備`（灰）；Stale＝`⚠ 過期 N 天`（琥珀）；Unavailable＝`🔴 來源目前不可用`＋原因（紅）；Not evaluated＝`⬜ 尚未評估`（灰）——四者不混用
 - [ ] missing ≠ 0；missing ≠ HOLD；missing ≠ neutral；unavailable ≠ safe；not evaluated ≠ safe
+- [ ] 〔DEC-124〕Not Evaluated（規則／計算尚未執行或不在本次評估範圍）與 Unable to Determine（已進入判定、必要輸入 Missing／Unavailable／Invalid／insufficient）**分開呈現、⛔ 合併**；無法判定 ≠ safe／neutral／no action／無需調整／可加碼
+- [ ] 〔DEC-124〕`⬜ 尚未提供` 只表示功能尚未實作／接線（capability），⛔ 寫成資料品質態或「第 6 個資料語意態」
 - [ ] 冷啟動＝灰色說明（⛔ 紅）；紅色兩義文字不同（真錯誤 vs `🔴 Risk Cap 超限 · 禁止新增曝險`）
 - [ ] 每卡 value／state／as_of／source；⛔ 共用全域更新時間；缺 as_of → `⬜ 資料日未提供`
 
 ## §5 Risk Cap〔Fz §0.1.4；Q1=A of DEC-122〕
 
 - [ ] 目前曝險或有效上限任一不足 → `⬜ 無法判定`
+- [ ] 〔DEC-124〕Risk Cap `⬜ 無法判定`＝Unable to Determine：⛔ 等同 NOT_EVALUATED；⛔ 渲染成 OK／綠／safe／「今日無需調整」；⛔ 帶值；⛔ 新增 Risk Cap 規則或數值
 - [ ] 無法判定時加碼類 ⛔ 以無上限呈現；加碼列標「Risk Cap 無法判定」
 - [ ] ⛔ 自行發明曝險分母／現金／總資產／替代值
 - [ ] ⛔ 新增 Risk Cap 百分比顯示面；市場頁維持隱藏；持股頁已核准建議持股區間維持
@@ -117,6 +121,7 @@
 - [ ] Legacy New UI（`?ui=1`）與 Old UI（`?legacy=1`）rollback path 保留且可載入（G11）
 - [ ] ⛔ 先刪程式
 - [ ] 回滾一行可行；UI2 無投資狀態殘留
+- [ ] 〔DEC-124〕production 預設 VM 中 capability marker（`⬜ 尚未提供`）**0 個**（Preview-only implementation state；BACKLOG `NUI2-CAPABILITY-MARKER-CUTOVER-ZERO`）
 
 ## §12 Removal Gate 條件〔Fz §19 ∪ DEC-083 第 11 點 E 段；MC §4〕
 
@@ -141,3 +146,10 @@
 - 未做（屬後續批）：G6／G7（Aggregator＋持股 VM）、G8 y 座標量測、G11 路由毒化、G12 逐頁術語驗收（見 BACKLOG `NUI2-G6-G7-G8-G11-G12-PENDING`）。
 - 截圖：`docs/vnext/newui2_batch1/`（FAKE；只存證據，**不是** Visual Fidelity Gate 判定；§3 手機第一屏四問**未量測**）。
 - §13 收尾 Gate 檢查：新 Rule＝無（本批未新增規則；G2 允許清單與 `ui2_` key 前綴為 Gate §4.2／§9 既有條文的落地）；新 Decision＝無；Audit finding／Limitation／Backlog／Migration debt＝已寫入 BACKLOG §5.1.20、PROJECT_STATE §52、Migration Contract §6。
+
+## §15 Semantic Correction Gate 驗收證據索引（DEC-124，2026-11-02；append-only）
+
+- 契約：`shared/ui2_contract/models.py`（`FieldState` 恰五態／`JudgementState.UNDETERMINABLE`／`CapabilityState.NOT_PROVIDED`＋`FieldVM.capability`）、`text.py`（三張互斥字樣表）；VM：`src/services/ui2/{vm_common,scenarios}.py`；渲染：`src/ui2/components/html.py`（`STATE_TONE`＋`CAPABILITY_TONE`）。
+- 守衛：`tests/test_ui2_guards.py`「DEC-124」段（資料語意恰五態、三軸型別互斥、UTD≠NE 不同值不同字樣、字樣跨軸禁用、客戶字樣逐字、Risk Cap 無法判定 ⛔ safe 讀法、capability marker Preview-only 允許清單、未知 state 提示 raise），各附 teeth；既有斷言改寫處皆標「DEC-124 語意修正」且未放寬。
+- §13 收尾 Gate：新 Rule＝有（永久語意，`PROJECT_RULES.md` §19.8 加註）；新 Decision＝有（DEC-124）；Audit finding／Limitation／Backlog／Migration debt＝BACKLOG §5.1.21、PROJECT_STATE §53、Migration Contract §7。
+

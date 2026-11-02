@@ -103,6 +103,13 @@ New UI2
 
 - **`preview_feed.py` 是 FAKE feed → 真 feed 為 cutover 前債務**（BACKLOG `NUI2-REAL-FEED`）：Preview 與 production 必須讀相同 canonical services／contracts（客戶 Q1 成本控制第 3、4 點）；⛔ 為 Preview 建第二套 pipeline。換成真 feed 時，VM builder 與 `src/ui2` 畫面**不重做**，只換 feed；`tests/test_ui2_guards.py` 的 `_G2_ALLOWED_PROJECT` 須明確擴充並過審。
 - **動作欄 `⬜ 尚未提供（待 System Action Aggregator）` 只允許 Preview 期**（沿 Architecture Gate §4.6.5）：Batch 1 的 VM 恆輸出此字樣；cutover 前必須完成 `NUI2-AGGREGATOR-IMPL` 與 M-A3／M-A4。
-- **導覽形態債**：Batch 1 用頂部水平 radio，未落地已核准 W-1（底部固定列／左側欄）；cutover 前須對齊或經客戶改核（`NUI2-NAV-W1-FIDELITY`）。
+- **導覽形態債**：Batch 1 用頂部水平 radio，未落地已核准 W-1（底部固定列／左側欄）；cutover 前須對齊~~或經客戶改核~~（客戶 (8)-4：頂部 navigation 只是 temporary implementation gap，**不是 W-1 amendment**；⛔ 因骨架方便修改已凍結 W-1；有意識的更新，不是漏刪；決策者 客戶（DEC-124）；原文刪除線保留）（`NUI2-NAV-W1-FIDELITY`）。
 - **`src/services/__init__.py` eager import**（`NUI2-SERVICES-INIT-EAGER`）：Preview 行程載入 L1 模組；正式 cutover 前評估是否改 lazy（動既有套件，需 Gate）。
 - **`app_ui2.py` 登記為 L6、入 c3 掃描**；cutover 批須新增 G11 路由毒化測試（毒化 UI2 套件 → `?legacy=1`／`?ui=1` 仍完整載入）。
+
+## §7 Semantic Correction Gate Migration debt（DEC-124，2026-11-02；append-only；`PROJECT_RULES.md` 第 27 節第 4 點落點）
+
+- **capability marker 是 Preview-only**：`⬜ 尚未提供`（`CapabilityState.NOT_PROVIDED`）只允許 Preview 期；**cutover 前 production 預設 VM 須 0 個**（動作欄由 Aggregator〔M-A3／M-A4〕取代；其餘 OneBrain／Digest／Audit 各欄須已實作或經客戶 Gate 處置）。守衛現況＝原始碼允許清單（`tests/test_ui2_guards.py::CAPABILITY_MARKER_ALLOWLIST`），**不是** runtime 斷言；cutover 批須補「production VM 0 capability marker」runtime 測試（BACKLOG `NUI2-CAPABILITY-MARKER-CUTOVER-ZERO`）。
+- **Aggregator 契約 O1 第五類 `undeterminable`**（Architecture Gate §4.6.6；DEC-124）：實作批（`NUI2-AGGREGATOR-IMPL`）須以 `not_evaluated`／`undeterminable` 分列的表格驅動測試落地；M-A3 時 VM 以 `JudgementState.UNDETERMINABLE` 呈現 `undeterminable`。
+- **導覽 W-1**：頂部 radio 仍為 temporary implementation gap（**不是 W-1 amendment**；客戶 (8)-4）；§6 導覽形態債不變，下一個 presentation batch 修。
+

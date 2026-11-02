@@ -70,6 +70,7 @@
 1. 本次只凍結 Risk Cap 的**規則形狀**〔裁示 Q1-1〕。
 2. 超限時必須「**禁止新增曝險**」〔Q1-2〕；顯示 `🔴 Risk Cap 超限 · 禁止新增曝險`（文字須與 `🔴 取得失敗`／`🔴 來源目前不可用` 不同，§4.1）。
 3. **目前曝險或有效 Risk Cap 任一資料不足 → 一律顯示 `⬜ 無法判定`**〔Q1-3〕；有效上限的判定沿用 DEC-044／048／051（§8.1 第 5 點）。
+   - 📌 **語意（DEC-124，客戶 2026-11-02 (8)-3）**：`⬜ 無法判定`＝**Unable to Determine**（已進入判定流程，但必要輸入 Missing／Unavailable／Invalid／insufficient → 無法得到正式結果），**⛔ 自動等同 Not Evaluated**（規則／計算尚未執行或不在本次評估範圍）；兩者禁止合併。**⛔ 因此推導 safe／neutral／no action／無需調整／可加碼**。現況（目前曝險無正式來源，§8.2）屬 Unable to Determine。字樣逐字不改；⛔ 新增任何 Risk Cap 計算規則或數值（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）；原文刪除線保留）。
 4. **unavailable／not evaluated 不得解讀成 safe，也不得因此允許加碼**〔Q1-4〕：Risk Cap `⬜ 無法判定` 時，加碼類動作 ⛔ 以無上限呈現、⛔ 當作允許（同列標「Risk Cap 無法判定」）。
 5. ⛔ **自行發明曝險分母、現金、總資產或任何替代值**〔Q1-5〕（含以持股市值合計充當分母、以 session 輸入的總資金充當正式來源）。
 6. Risk Cap 數值正式啟用、曝險分母與現金／總資產來源 → **另開正式 Decision Gate**〔Q1-6〕（BACKLOG `FUI-RC-NUMERIC-GATE`）。
@@ -229,9 +230,16 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 | **Missing** | 資料未取得／資料未備 | `⬜ 資料未取得`（應有輸入但這次沒拿到）／`⬜ 資料未備`（來源尚未發布、歷史長度不足、不適用）〔字樣＝客戶原文〕 | 灰 |
 | **Stale** | 有資料，但已超過 freshness tolerance | 沿用 `⚠ 過期 N 天`／`⚠ 可能已過期`（既有 `stale` chip） | 琥珀 |
 | **Unavailable** | 來源目前不可用 | `🔴 來源目前不可用`＋一句原因（AI 總管暫定字樣；L2 保留既有 `🔴 取得失敗` 子原因） | 紅（系統真錯誤） |
-| **Not evaluated** | 尚未評估 | `⬜ 尚未評估`；子原因字樣沿用 `⬜ 尚未定義`、`⬜ 尚未核准／無法判定`、`⬜ 尚未載入`，以及**客戶逐字字樣 `⬜ 未評估／資料不足`（DEC-074、DEC-075；保留原字樣，⛔ 改寫）** | 灰 |
+| **Not evaluated** | 尚未評估 | `⬜ 尚未評估`；子原因字樣沿用 `⬜ 尚未定義`、`⬜ 尚未核准／無法判定`、`⬜ 尚未載入`~~，以及**客戶逐字字樣 `⬜ 未評估／資料不足`（DEC-074、DEC-075；保留原字樣，⛔ 改寫）**~~（該字樣改歸 Unable to Determine，見表下 📌 DEC-124；字樣仍逐字保留、⛔ 改寫）（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）；原文刪除線保留） | 灰 |
 
 **永遠**〔客戶原文〕：missing ≠ 0；missing ≠ HOLD；missing ≠ neutral；unavailable ≠ safe；not evaluated ≠ safe。（同向既有：DEC-026、DEC-031、DEC-040、DEC-054 第 3 點、DEC-101(2)、Presentation §8、`PROJECT_RULES.md` §19.8、OneBrain G2。）
+
+> 📌 **DEC-124 Semantic Correction（客戶 2026-11-02 (8)；append-only，上表與上句一字未刪，僅 Not evaluated 列以刪除線標示一處）**
+> - **正式資料語意只有五個**：OK／Missing／Stale／Unavailable／Not Evaluated（上表四態＋OK）。
+> - **Not Evaluated**＝「這項規則／計算尚未執行或不在本次評估範圍。」**Unable to Determine**＝「有進入判定流程，但因必要輸入 Missing / Unavailable / Invalid / insufficient，無法得到正式結果。」（客戶逐字）**兩者禁止合併**。Unable to Determine 是**判定結果**、~~不是第 5 種資料品質態~~ **不是資料語意態**（2026-11-02 DEC-124 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）；L1 字樣：`⬜ 無法判定`（Risk Cap，§0.1.4）、客戶逐字 `⬜ 未評估／資料不足`（DEC-074／075 語境＝必要輸入〔正式 breadth〕不足而無法可靠計算 ⇒ Unable to Determine；**字樣不改**；單組判讀，待覆核 BACKLOG `NUI2-DATA-SHORT-CLASSIFICATION-REVIEW`）。灰色；同用 ⬜ → **必須以文字區分**。
+> - **永遠（延伸）**：無法判定 ≠ safe；≠ neutral；≠ no action；≠「今日無需調整」；≠ 可加碼；⛔ 帶值。
+> - `⬜ 尚未核准／無法判定`（§5.2 metadata `not_approved`）維持 Not evaluated（規則／數值未核准 → 未執行），字樣尾綴含「無法判定」屬混合字樣、逐字不改，待覆核（BACKLOG `NUI2-NOT-APPROVED-LITERAL-REVIEW`）。 📌 New UI2 **不允許**使用此字樣（已自 UI2 契約 Not Evaluated 允許表移除；`FieldVM` 建構即 raise；守衛 `tests/test_ui2_guards.py`），Legacy 字樣不動（2026-11-02 DEC-124 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）。
+> - New UI2 落點：`shared/ui2_contract`（`FieldState` 恰五態；`JudgementState.UNDETERMINABLE`；`CapabilityState.NOT_PROVIDED`），守衛 `tests/test_ui2_guards.py`（DEC-124 段）。
 
 - **⬜ 共用時以文字區分**：Missing 與 Not evaluated 同用 ⬜，⛔ 只靠符號判讀；L1 字樣必須含「資料未取得／資料未備」或「尚未評估（／尚未定義／尚未核准／尚未載入）」其中之一。
 - **FACT**：`資料未取得`／`資料未備` 作為狀態 chip 字樣在 `shared`、`src/ui_v2`、`src/ui/views` **無**；`src/` 他處（舊 UI、`allocation_service`、`financial_health_engine`）有散文用法，非狀態 chip（grep，非窮舉）。
@@ -262,7 +270,8 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 
 - **FACT**：Presentation Contract §6 表 `unavailable` kind＝**委派到 `⛔ 未接線`**（功能沒做）；與客戶新 Unavailable（來源壞了）語意不同。
 - **處置（凍結）**：自本契約起，文件中「Unavailable」一律指**來源目前不可用**；舊義改稱「**功能尚未提供（未接線）**」，符號 `⛔ 未接線` 不變。程式識別名 `compact` 的 `unavailable` kind 於 **Stage A** 改名（建議 `unwired`；與 §6 表、`tests/ui_v2/test_compact.py::_contract_kinds` 同一 PR 同步，因該測試以 §6 表列對帳 `META_KINDS` 20 項）；改名前視為**舊義別名**，⛔ 用來表示來源不可用。BACKLOG `FUI-UNAVAILABLE-KIND-RENAME`。
-- 📌 **2026-11-02 New UI2 Batch 1 註記（append-only；AI 總管暫定，待覆核）**：New UI2 契約（`shared/ui2_contract`）實作「功能尚未提供」用字樣 `⬜ 尚未提供`（第 6 態 `NOT_PROVIDED`，四態之外），**不是**本節舊義別名 `⛔ 未接線`；兩者是否合併／是否保留第 6 態待第二組覆核（BACKLOG `NUI2-STATE-NOT-PROVIDED-AUDIT`）。
+- 📌 **2026-11-02 New UI2 Batch 1 註記（append-only；AI 總管暫定，待覆核）**：New UI2 契約（`shared/ui2_contract`）實作「功能尚未提供」用字樣 `⬜ 尚未提供`~~（第 6 態 `NOT_PROVIDED`，四態之外）~~，**不是**本節舊義別名 `⛔ 未接線`；~~兩者是否合併／是否保留第 6 態待第二組覆核（BACKLOG `NUI2-STATE-NOT-PROVIDED-AUDIT`）。~~
+- 📌 **DEC-124（客戶 2026-11-02 (8)-2）**：`⬜ 尚未提供` 的正式意義**只能是 Capability／Implementation Availability State**（例：System Action Aggregator／OneBrain 尚未實作、某 Preview 功能尚未接線），**不是** objective data quality state，**⛔ 描述成「第 6 個正式資料語意態」**；與資料語意正交，屬 **Preview-only implementation state**。New UI2 契約以獨立型別 `CapabilityState.NOT_PROVIDED`（`FieldVM.capability`，該欄 `state` 必為 None）建模（選項 A），`FieldState` 恰五態；cutover 前 production VM 須 0 個 capability marker（BACKLOG `NUI2-CAPABILITY-MARKER-CUTOVER-ZERO`）。與 `⛔ 未接線`（舊義 Unavailable 別名）是否合併仍屬 `FUI-UNAVAILABLE-KIND-RENAME`／Stage J 範圍，本條不動 Legacy（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）；原文刪除線保留）。
 
 ---
 
@@ -298,7 +307,7 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 1. 若 **Exposure > Cap** → 立即顯示 **`🔴 Risk Cap 超限 · 禁止新增曝險`**，**而不是**「AI 看多 加碼」〔§19〕。
 2. 同一 Snapshot 下 Risk Cap blocked → 市場、標的、持股、OneBrain **任何地方不得出現 unrestricted Add**〔§38〕。
 3. 🔴 Danger 文字必須與 `🔴 取得失敗`／`🔴 來源目前不可用` **文字不同**（§4.1）。
-4. **目前曝險或有效上限任一不可得 → `⬜ Risk Cap 無法判定`**；依 not evaluated ≠ safe，此時加碼類動作 ⛔ 以「無上限」呈現，必須同列標「Risk Cap 無法判定」~~（**PENDING Q1 的推薦暫行讀法**）~~ （**Q1=A 已裁示：正式條文 §0.1.4 第 3、4 點**）（2026-11-02 Freeze 獨立驗收修正；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔驗收修正〕；原文刪除線保留）。
+4. **目前曝險或有效上限任一不可得 → `⬜ Risk Cap 無法判定`**；依 not evaluated ≠ safe（📌 DEC-124：此狀態語意＝**Unable to Determine**，⛔ 等同 Not Evaluated；同樣 ⛔ safe／可加碼）（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）；原文刪除線保留），此時加碼類動作 ⛔ 以「無上限」呈現，必須同列標「Risk Cap 無法判定」~~（**PENDING Q1 的推薦暫行讀法**）~~ （**Q1=A 已裁示：正式條文 §0.1.4 第 3、4 點**）（2026-11-02 Freeze 獨立驗收修正；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔驗收修正〕；原文刪除線保留）。
 5. 「有效上限」的判定沿用既有規則：**DEC-044**（Risk Cap 既有細項維持現行）、**DEC-048**（Required Core＝VIX、PMI 當期、PMI 前月、外資期貨＋MA5；Core 缺→上限無效）、**DEC-051**（卡面揭露 Optional 資料完整性、中性措辭）**全部仍有效**，本契約不改。
 
 ### §8.2 現況（FACT）
@@ -686,3 +695,4 @@ A Shared Presentation Foundation → B 市場頁 → C 標的頁 → D 持股頁
 - 撰寫組只讀本地 `origin/main` `ce8422d`；open PR／遠端分支以 GitHub 實查為準。
 - 客戶原文取自總管轉交之逐字檔；撰寫組未見客戶原訊息本身（DEC-122 揭露）。
 - 待第二組獨立驗證後，本註保留作 provenance（BACKLOG `FUI-FREEZE-SECOND-AUDIT`）。
+- 📌 DEC-124（2026-11-02，append-only）：§0.1.4／§5.1／§5.3／§8.1 的語意註記由實作組單組撰寫；DEC-074／075 字樣與 `not_approved` 混合字樣的歸類為單組判讀，待覆核（BACKLOG `NUI2-DATA-SHORT-CLASSIFICATION-REVIEW`、`NUI2-NOT-APPROVED-LITERAL-REVIEW`）。

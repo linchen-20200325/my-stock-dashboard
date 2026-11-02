@@ -3152,6 +3152,7 @@ Effort：High
 | DEC-109 三十一 Phase 1～7；DEC-060（Stage 完成回報）；MODEL_EFFORT_POLICY Rule 2（本主線）（2026-11-02 新增列；以上各列皆隨 Freeze 待客戶拍板） | DEC-122（S16、S17、S19） | 部分取代：以 Stage A–J 為準（Digest 凍結前不寫 prompt／glue 仍有效）；Stage 完成回報改用客戶 §48 表；本主線文件同步依客戶 §0 表 | 客戶 2026-11-02 原文明示（DEC-122）；S17／S19 讀法＝撰寫組（INFERENCE） |
 | DEC-051／PQ-C6-3（持股頁卡⑤建議持股區間）；DEC-081 Q2-2／`RC-VISIBILITY`；DEC-053；DEC-054 Action 名稱；DEC-109 十三「加／留／換／減」（2026-11-02 新增列） | DEC-122 Q1=A／Q2=A | **不取代、裁示確認**：持股頁區間維持；市場頁 Risk Cap 數值仍隱藏，數值啟用／曝險分母／現金總資產另開 Gate；比例 Action 待正式規則＋驗證＋回測／Shadow＋Gate；「加／留／換／減」僅呈現分組 | 客戶 2026-11-02 Q1／Q2 裁示原文 |
 | DEC-122 狀態欄「Freeze 驗收 PASS 後開 Stage A-1」；Freeze §17.4 Stage A 範圍（優先 reuse `src/ui_v2`）；Freeze §17.1 Stage A～E「在現有 New UI 上施工」的路線（2026-11-02 新增列） | DEC-123 | **部分取代（施工路線）**：原 Stage A 暫停；四頁 Final UI 改由 New UI2 Greenfield Presentation Layer 承接（Architecture Gate 先行，送客戶四題 G1／G3′／線框／G2＋#996 合併確認 ~~PENDING~~ 已裁示 Q1～Q4（2026-11-02；Aggregator 屬新 runtime、只凍結契約））；**Freeze 全部 semantic contracts 保留為 New UI2 的 input**；Stage F～J 保留（F 與 UI2 先後依 G3′；J 對象擴為 Old UI 與 Legacy New UI）；#996 定位不變 | 客戶 2026-11-02 原文明示（DEC-123 (5)-0／(5)-2）；Stage 逐項對映＝撰寫組讀法（INFERENCE） |
+| DEC-122 Freeze §5.1「Not evaluated 子原因含 `⬜ 未評估／資料不足`」與 Supersede 摘要「DEC-074／075 字樣保留為 Not evaluated 子原因」；Freeze §5.3 Batch 1 註記「第 6 態 `NOT_PROVIDED`」；Architecture Gate §4.6.6 O1 `unjudged→not_evaluated`；Batch 1 契約 Risk Cap `⬜ 無法判定`→Not evaluated（2026-11-02 新增列） | DEC-124 | **部分取代（語意歸類）**：`⬜ 未評估／資料不足` 與 Risk Cap `⬜ 無法判定` 歸 Unable to Determine（字樣不改）；`⬜ 尚未提供`＝capability state（Preview-only、⛔ 第 6 資料態）；`unjudged→undeterminable`；四態定義與「永遠」五條仍有效 | 客戶 2026-11-02 (8) 原文明示（Not Evaluated／Unable to Determine 定義、兩者禁止合併）；DEC-074／075 歸類＝撰寫組讀法（單組，待覆核） |
 
 ## 6. 未升格項目（證據不足或題意不明 → 見 `docs/BACKLOG.md` 第 4 節）
 
@@ -5479,7 +5480,7 @@ Effort：High
   5. **沒寫入 GitHub 的新規格不算正式完成**（原文二第 3 點）。
   6. 真正需要客戶選的投資語意／門檻／版面衝突集中成 ≤2～3 題（原文二第 5 點）→ **本輪送 3 題（Q1、Q2、Q3）**；OneBrain 詞彙值域（延後 Stage G Gate）、新版加入觀察是否啟用（延後 ME-P2／HI-5 Gate）不送題（理由見契約 §20 判題原則）。~~本輪送 2 題（Q1、Q2）；市場頁手機主要風險位置不送題~~（2026-11-02 同批獨立稽核後更正，有意識的更新，不是漏刪；決策者 AI 總管〔稽核補正〕：DEC-118 問題 1=A 為客戶知情選擇，與客戶 §40 相反，屬客戶裁示互撞，須送題）。
   7. **三條 invariant**（原文一 §51）自本 DEC 起為整個 Final UI 主線的最高施工約束（契約 §1）。
-- **Supersede 摘要**（逐條「被取代部分／仍有效部分／依據」見 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md` §1；**已加 📌**＝DEC-051（兩則）、DEC-053、DEC-054、DEC-117、DEC-060、DEC-083、DEC-089、DEC-099、DEC-107、DEC-109（兩則）、DEC-110、DEC-115、DEC-118、DEC-120、DEC-121、Presentation Contract §6／§8、Visual Fidelity Gate V 表後與 §8 例外表後、Digest 契約 §4、ONEBRAIN Arch §11、Brain 邊界 §3、BACKLOG `P5-CHIP-KIND-NAMES`；**未加 📌（只在 map 登記，原檔不改）**＝S13 Phase 5 線框、S18 d25 HTML、S19 MODEL_EFFORT_POLICY、DEC-074／075（字樣保留）、~~DEC-081／092／053／054／117（條件式或仍有效）~~ DEC-081／092（仍有效）；DEC-053／054／117 已於 2026-11-02 加 📌）：S1 DEC-107 1A 整頁順序→雙模式；S2 DEC-121 Q2「整頁順序不變」一句；S3 DEC-099 第 3 點終態讀法；S4 Presentation §6 R8-2／§8-3／Gate V8「🔴 只給系統真錯誤」→ 加確定性違規；S5 DEC-115 D3 末句（第四套視覺語言）；S6 `P5-CHIP-KIND-NAMES`「或維持」；S7 Presentation §6 `unavailable` 列語意；S8 D-3(a) L1 外露字樣；S9 Brain 邊界 §3（超限→禁止新增曝險一條）；S10 DEC-118 問題 1（手機 ⚡；~~**條件式待 Q3**~~ **Q3=A 正式取代，並含 DEC-117 Q1 手機 2＋1**）；S11 DEC-120 A10／A11（~~**條件式待 Q3**~~ **Q3=A 正式取代**）（2026-11-02 裁示後更新，有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）；S12 DEC-089 G6 L1 欄位集；S13 Phase 5 線框單檔順序；S14 Digest 契約 §4「市場事實不帶 rule」；S15 ONEBRAIN Arch §11 schema；S16 DEC-109 三十一 Phase 編號 → Stage A–J；S17 DEC-060（只限 Stage 完成回報）；S18 d25 `target.html`／`holdings.html`；S19 MODEL_EFFORT_POLICY Rule 2（本主線）；S20 DEC-109 十一／十三／二十一 與客戶 §6／§19～§20／§35 的對映~~（十一、二十一不取代；十三「加／留／換／減」條件式待 Q2）~~ （十一、二十一不取代；十三「加／留／換／減」依 Q2=A 只作呈現分組）。~~**條件式（未取代）**：DEC-081 Q2-2／RC-VISIBILITY、DEC-051／PQ-C6-3（待 Q1）、DEC-092 Q4／DEC-053／DEC-054 動作名稱（待 Q2）、~~ **裁示前登記的待裁示項（皆已裁示）**：~~DEC-118 問題 1／DEC-120 A10／A11／DEC-117 Q1 手機 2＋1（待 Q3）~~。**裁示後**：Q1 相關＝維持（DEC-051／PQ-C6-3 區間維持；DEC-081 Q2-2 市場頁隱藏，數值另開 Gate）；Q2 相關＝繼續有效（DEC-053／054 加 📌）；Q3 相關＝正式取代（S10／S11）（2026-11-02 裁示後更新，有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）。**仍有效、取聯集或字樣保留**：DEC-083 E 段 Removal Gate ∪ Stage J 六條件；DEC-074／075「⬜ 未評估／資料不足」保留為 Not evaluated 子原因字樣；DEC-110 R8 十態不另造；DEC-044／048／051 有效上限判定。
+- **Supersede 摘要**（逐條「被取代部分／仍有效部分／依據」見 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md` §1；**已加 📌**＝DEC-051（兩則）、DEC-053、DEC-054、DEC-117、DEC-060、DEC-083、DEC-089、DEC-099、DEC-107、DEC-109（兩則）、DEC-110、DEC-115、DEC-118、DEC-120、DEC-121、Presentation Contract §6／§8、Visual Fidelity Gate V 表後與 §8 例外表後、Digest 契約 §4、ONEBRAIN Arch §11、Brain 邊界 §3、BACKLOG `P5-CHIP-KIND-NAMES`；**未加 📌（只在 map 登記，原檔不改）**＝S13 Phase 5 線框、S18 d25 HTML、S19 MODEL_EFFORT_POLICY、DEC-074／075（字樣保留）、~~DEC-081／092／053／054／117（條件式或仍有效）~~ DEC-081／092（仍有效）；DEC-053／054／117 已於 2026-11-02 加 📌）：S1 DEC-107 1A 整頁順序→雙模式；S2 DEC-121 Q2「整頁順序不變」一句；S3 DEC-099 第 3 點終態讀法；S4 Presentation §6 R8-2／§8-3／Gate V8「🔴 只給系統真錯誤」→ 加確定性違規；S5 DEC-115 D3 末句（第四套視覺語言）；S6 `P5-CHIP-KIND-NAMES`「或維持」；S7 Presentation §6 `unavailable` 列語意；S8 D-3(a) L1 外露字樣；S9 Brain 邊界 §3（超限→禁止新增曝險一條）；S10 DEC-118 問題 1（手機 ⚡；~~**條件式待 Q3**~~ **Q3=A 正式取代，並含 DEC-117 Q1 手機 2＋1**）；S11 DEC-120 A10／A11（~~**條件式待 Q3**~~ **Q3=A 正式取代**）（2026-11-02 裁示後更新，有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）；S12 DEC-089 G6 L1 欄位集；S13 Phase 5 線框單檔順序；S14 Digest 契約 §4「市場事實不帶 rule」；S15 ONEBRAIN Arch §11 schema；S16 DEC-109 三十一 Phase 編號 → Stage A–J；S17 DEC-060（只限 Stage 完成回報）；S18 d25 `target.html`／`holdings.html`；S19 MODEL_EFFORT_POLICY Rule 2（本主線）；S20 DEC-109 十一／十三／二十一 與客戶 §6／§19～§20／§35 的對映~~（十一、二十一不取代；十三「加／留／換／減」條件式待 Q2）~~ （十一、二十一不取代；十三「加／留／換／減」依 Q2=A 只作呈現分組）。~~**條件式（未取代）**：DEC-081 Q2-2／RC-VISIBILITY、DEC-051／PQ-C6-3（待 Q1）、DEC-092 Q4／DEC-053／DEC-054 動作名稱（待 Q2）、~~ **裁示前登記的待裁示項（皆已裁示）**：~~DEC-118 問題 1／DEC-120 A10／A11／DEC-117 Q1 手機 2＋1（待 Q3）~~。**裁示後**：Q1 相關＝維持（DEC-051／PQ-C6-3 區間維持；DEC-081 Q2-2 市場頁隱藏，數值另開 Gate）；Q2 相關＝繼續有效（DEC-053／054 加 📌）；Q3 相關＝正式取代（S10／S11）（2026-11-02 裁示後更新，有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）。**仍有效、取聯集或字樣保留**：DEC-083 E 段 Removal Gate ∪ Stage J 六條件；DEC-074／075「⬜ 未評估／資料不足」保留~~為 Not evaluated 子原因~~字樣（📌 DEC-124：語意歸類改為 Unable to Determine，字樣不改（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）；原文刪除線保留））；DEC-110 R8 十態不另造；DEC-044／048／051 有效上限判定。
 - ~~**PENDING 題（Customer Decision Gate；全文含理由見契約 §20）**~~ **已裁示題（Q1=A／Q2=A／Q3=A，客戶 2026-11-02；下列為送題當時的題文，保留作歷史；裁示要點見本條末）**（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）：
   - **Q1｜Risk Cap 閘門**：「目前曝險」分母（持股資料目前無現金／總資產）、數值啟用時點（`RC-VISIBILITY` 仍未核准）、兩頁區間顯示（持股頁卡⑤依 DEC-051／PQ-C6-3〔客戶 2026-10-16 核准〕已外露建議持股區間 `range_text`、市場頁隱藏——請客戶一併決定是否保留）。**A（總管推薦）**：Freeze 只定規則形狀；目前曝險或有效上限任一不可得 → `⬜ 無法判定`，且加碼不得被當作無上限；數值啟用另開 RC Gate；兩頁區間維持現狀。**B**：現在就定分母＝持股市值合計（不含現金）並啟用超限判定。**C**：先補現金／總資產輸入再啟用（新增 Sheet 現金欄，或由 👤 我的 輸入總資產／現金；舊 UI 有 session 版總資金輸入可參考〔FACT，2026-11-02 grep：`src/ui/tabs/stock_sections/section_when_buy_sell.py` 的 `render_when_buy_sell_section` 內 `st.number_input`「💰 你的總資金（元）— 填了才會算『建議買幾張 + 真 ATR 停損』」，session key `_pos_capital`、跨股共用，供 `calculate_position_size` 算建議張數；只存 session、不寫 Sheet〕）。**裁示前暫行＝A 的較嚴讀法**（維持現狀：持股頁保留已核准區間、市場頁維持隱藏；⛔ 新增 Risk Cap 百分比顯示面；⛔ 改 Risk Cap 公式／門檻）。
   - **Q2｜持股動作詞彙**：客戶要的「加碼／持有／減碼 1/2／全出」 vs 現有 `action_branch` 七分支＋`swap_level`。**A（總管推薦）**：沿用既有分支原名對應顯示，無動作顯示「今日無需調整」，「減碼 1/2／全出」在走完 DEC-053 驗證回測前不產生。**B**：建立五詞彙對映表（既有分支→五詞，無對應者不顯示）。**C**：另開投資規則研究批。題文另說明 `swap_level` 🔴 換出、強制停利／分批停利、暫停加碼的呈現方式，以及 DEC-109 十三「加／留／換／減」與五詞的關係（A 以「加／留／換／減」分組顯示既有分支原名；分組為總管提案，待客戶裁示）。**裁示前暫行＝A 的較嚴讀法**。
@@ -6218,3 +6219,242 @@ Architecture Gate 尚未正式凍結，不得降模型。
   8. **Model／Effort**：維持 Opus 5.5＋High；**Architecture Gate 尚未正式凍結，不得降模型**；判斷應切換 → 先停手通知客戶。Silent Autonomous Cruise。
 - 📌 **警語解除**（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）：本條狀態與 HANDOFF／PROJECT_STATE 中「Gate 只存在工作樹」「GitHub 舊接手點仍寫開 Stage A-1」兩則警語**已解除**——#996 已合併、本 Gate 已落盤（commit `6d30dcea`／PR #997）；`main` 上的 HANDOFF 舊段仍保留其原文，以本條與 #997 HANDOFF 新 Safe Handoff 為準。
 - ⚠️ 揭露（裁示整合批）：裁示要點、題號對映、Aggregator I／O 欄位名、Migration／Cutover 判準與 Audit 清單為撰寫組單組產出，待 #997 獨立稽核（`NUI2-ARCH-SECOND-AUDIT`）。
+
+### DEC-124｜New UI2 Semantic Correction Gate：正式資料語意只有 OK／Missing／Stale／Unavailable／Not Evaluated 五個；「⬜ 尚未提供」＝Capability／Implementation Availability State（Preview-only、與資料語意正交，⛔ 稱第 6 個資料語意態）；Risk Cap「⬜ 無法判定」＝Unable to Determine，⛔ 等同 NOT_EVALUATED（客戶 2026-11-02）
+
+> 2026-11-02 補登（ID 取下一個未用號；落盤前 `grep -rn "DEC-124" docs PROJECT_RULES.md CLAUDE.md` 0 命中，DEC-123 為上一號）。**來源類別 D：客戶 2026-11-02 本輪對話原文，經總管轉交逐字檔（`customer_directive_2026-11-02.md` 第 (8) 段）；下方 fence 內逐字收錄，未改一字**（撰寫組未見客戶原訊息本身，只見總管轉交之全文；若有出入以原訊息為準）。
+
+- **決策者**：**客戶**（2026-11-02）。｜**效力日期**：2026-11-02 起。｜**範圍**：資料語意（永久）＋New UI2 View Model 契約（`shared/ui2_contract`）＋Risk Cap 呈現語意（不含數值）＋治理同步。
+- **狀態**：**客戶指示生效**；Semantic Correction Gate 實作完成、**待總管複驗＋獨立 QA＋客戶驗收**；#998（New UI2 Batch 1）整體接受、⛔ 回退。驗收通過後若下一批只剩 navigation／cards／layout／responsive／fake-data presentation，回報「🟡 Model / Effort Change Gate：語意修正完成，可切 Claude Sonnet 5.5 + Medium。」並停手（客戶 (8)-7）。
+- **客戶原文：Semantic Correction Gate 全文（逐字，fence 內未改一字；具約束力）**：
+
+```
+先不要開始 New UI2 下一個一般 UI Batch。
+
+請先處理一個小型 Semantic Correction Gate。
+
+建議 Model / Effort：
+
+Claude Opus 5.5
+Effort：High
+
+原因：這次涉及 FieldState、Missing semantics、Risk Cap「無法判定」語意，不是純 presentation 修補。
+
+---
+
+1. #998 整體接受
+
+#998 的：
+
+- layering guards
+- View Model skeleton
+- fake Preview entrypoint
+- production 0 diff
+- System Action Aggregator / Risk Cap / Digest / OneBrain 未施工
+- §27 GitHub 落盤
+
+均接受。
+
+不要回退 #998。
+
+---
+
+2. "⬜ 尚未提供" 可以保留，但重新定義邊界
+
+允許：
+
+"⬜ 尚未提供"
+
+但它的正式意義只能是：
+
+Capability / Implementation Availability State
+
+例如：
+
+- System Action Aggregator 尚未實作
+- OneBrain 尚未實作
+- 某 Preview 功能尚未接線
+
+它不是 objective data quality state。
+
+因此不要把它描述成：
+
+「第 6 個正式資料語意態」。
+
+正式資料語意仍維持：
+
+- OK
+- Missing
+- Stale
+- Unavailable
+- Not Evaluated
+
+而 "Not Provided" 是 orthogonal capability state / Preview-only implementation state。
+
+請檢查目前 "FieldState.NOT_PROVIDED" 是否會造成資料語意與 capability 語意混層。
+
+優先考慮：
+
+A. 將 capability availability 與 data state 分開建模
+或
+B. 若本批不值得重構 enum，至少先把 contract、型別註解、guards、tests 明確限制為 Preview-only capability marker，並登記後續拆分 backlog。
+
+請依最小必要變更選擇，不要為此大改架構。
+
+---
+
+3. Risk Cap "⬜ 無法判定" 不得等同 "NOT_EVALUATED"
+
+這點必須修正。
+
+永久語意：
+
+Not Evaluated
+
+代表：
+
+「這項規則／計算尚未執行或不在本次評估範圍。」
+
+Unable to Determine
+
+代表：
+
+「有進入判定流程，但因必要輸入 Missing / Unavailable / Invalid / insufficient，無法得到正式結果。」
+
+兩者禁止合併。
+
+因此：
+
+Risk Cap 顯示：
+
+"⬜ 無法判定"
+
+時，不得自動等同：
+
+"NOT_EVALUATED"
+
+也不得因此推導：
+
+- safe
+- neutral
+- no action
+- 無需調整
+- 可加碼
+
+請先查目前正式 Risk Cap / Freeze contract，再決定 VM 最小正確表示方式。
+
+不得自行新增 Risk Cap 計算規則或數值。
+
+---
+
+4. 導覽 W-1
+
+目前 Streamlit 內建頂部 navigation 可暫時保留作 Preview skeleton。
+
+但它只是：
+
+temporary implementation gap
+
+不是 W-1 amendment。
+
+正式凍結規格仍是：
+
+- mobile：底部固定 navigation
+- desktop：左側 navigation
+
+請維持 BACKLOG / Acceptance item。
+
+下一個 presentation batch 再修。
+
+不得因目前骨架方便而修改已凍結 W-1。
+
+---
+
+5. 本 Gate 範圍
+
+最多處理：
+
+1. FieldState / capability-state semantic boundary
+2. Risk Cap "無法判定" vs "未評估" 修正
+3. tests + GitHub governance sync
+
+不要順便做：
+
+- navigation implementation
+- real data wiring
+- Aggregator
+- Risk Cap runtime
+- Digest
+- OneBrain
+- LINE
+
+---
+
+6. GitHub 落盤
+
+依 PROJECT_RULES §27：
+
+若這次形成新的：
+
+- Rule
+- Decision
+- Audit finding
+- Limitation
+- Backlog
+- Migration debt
+
+必須同步 GitHub 正式文件後才能完成。
+
+至少核對：
+
+- PROJECT_RULES
+- DECISIONS
+- BACKLOG
+- PROJECT_STATE
+- HANDOFF
+- New UI2 contract / audit checklist
+
+---
+
+7. 完成後 Model Gate
+
+這個 Semantic Correction Gate 完成並驗收通過後：
+
+若下一批只剩 navigation / cards / layout / responsive / fake-data presentation，
+
+回報：
+
+「🟡 Model / Effort Change Gate：語意修正完成，可切 Claude Sonnet 5.5 + Medium。」
+
+然後停手。
+
+不得自行開始下一批。
+
+維持 Silent Autonomous Cruise。
+```
+
+- **永久語意規則（撰寫組依上方原文條文化；與原文有出入以原文為準）**：
+  1. **正式資料語意只有五個**：OK／Missing／Stale／Unavailable／Not Evaluated〔(8)-2〕。
+  2. **「⬜ 尚未提供」**＝**Capability／Implementation Availability State**（例：System Action Aggregator 尚未實作、OneBrain 尚未實作、某 Preview 功能尚未接線）；**不是** objective data quality state；**⛔ 描述成「第 6 個正式資料語意態」**；與資料語意**正交**，屬 **Preview-only implementation state**〔(8)-2〕。
+  3. **Not Evaluated**＝「這項規則／計算尚未執行或不在本次評估範圍。」〔(8)-3，逐字〕
+  4. **Unable to Determine**＝「有進入判定流程，但因必要輸入 Missing / Unavailable / Invalid / insufficient，無法得到正式結果。」〔(8)-3，逐字〕
+  5. **兩者禁止合併**；Risk Cap 顯示「⬜ 無法判定」時，**⛔ 自動等同 NOT_EVALUATED**，**⛔ 因此推導** safe／neutral／no action／無需調整／可加碼〔(8)-3〕。
+  6. **⛔ 自行新增 Risk Cap 計算規則或數值**〔(8)-3〕（Freeze §0.1.4 第 5、6 點、BACKLOG `FUI-RC-NUMERIC-GATE` 不變）。
+  7. **導覽 W-1**：Streamlit 內建頂部 navigation 只是 **temporary implementation gap**，**不是 W-1 amendment**；正式凍結規格仍是 mobile 底部固定 navigation、desktop 左側 navigation；維持 BACKLOG／Acceptance item；下一個 presentation batch 再修；⛔ 因骨架方便修改已凍結 W-1〔(8)-4〕。
+- **落地（AI 總管內部自決，客戶可推翻；`CLAUDE.md` v3 §03-1）**：
+  - **選項 A（capability 與資料語意分開建模）**，理由：(1) 客戶「優先考慮 A」，且 (8)-2 明言「正式資料語意仍維持」五個——B 保留 enum 成員就等於在型別層繼續把 capability 列為第六個資料態，與該句直接衝突；(2) 影響面小：`FieldState` 只在 `shared/ui2_contract`、`src/services/ui2`、`src/ui2`、`tests/test_ui2_*.py` 使用（grep 實查，New UI2 套件外 0 引用；單組），拆分不動任何 Legacy／production 檔；(3) 第 2 項（Unable to Determine）本來就需要在型別層新增一個非資料語意的值，同一批一起分軸比先 B 再拆少一次契約變更。**未大改架構**：`FieldVM` 仍是單一型別，只新增 `capability` 欄位與兩個小 enum。
+  - **契約三軸**（`shared/ui2_contract/models.py`／`text.py`）：`FieldState`＝資料語意五態（恰五個；守衛釘死）；`JudgementState.UNDETERMINABLE`＝判定結果（非資料語意）；`CapabilityState.NOT_PROVIDED`＝capability marker（`FieldVM.capability`；該欄位 `state` 必為 None、⛔ 帶值）。三張字樣表互斥（`ALLOWED_STATUS_PREFIXES`／`JUDGEMENT_STATUS_PREFIXES`／`CAPABILITY_STATUS_PREFIXES`）。
+  - **Risk Cap 表示**：依 Freeze §0.1.4 第 3 點（「目前曝險或有效 Risk Cap 任一資料不足 → 一律顯示 `⬜ 無法判定`」）、§8.2「曝險分母不存在」、Architecture Gate §4.6.6 O4b（`exposure_gate` 數值 Gate 前恆 `undeterminable`）——現況是**已進入判定（閘門形狀已凍結），但必要輸入「目前曝險」無正式來源** ⇒ **Unable to Determine**。VM 以 `JudgementState.UNDETERMINABLE`＋字樣 `⬜ 無法判定`（逐字不改）表示；⛔ 帶值、⛔ 綠色、⛔ 「今日無需調整」等 safe 讀法（守衛＋mutation）。⛔ 新增任何 Risk Cap 規則或數值。
+  - **「⬜ 未評估／資料不足」（DEC-074／075 客戶逐字）語意歸類**：原始語境＝「受 breadth 影響且**無法依既有正式規則可靠計算**的健康分」「健康分**因缺少正式 breadth** 而未評估時……市場位階也顯示」——該健康分／位階**在正常評估範圍內**、計算因**必要輸入（正式 breadth）不足**而得不到正式結果 ⇒ 依本條第 4 點屬 **Unable to Determine**，**不是** Not Evaluated（規則並非未執行或不在範圍）。**字樣逐字保留不改**（含「未評估」三字），只修語意歸類。⚠️ 單組判讀；字樣含「未評估」易誤讀，登記待第二組覆核（BACKLOG `NUI2-DATA-SHORT-CLASSIFICATION-REVIEW`）。
+  - **`⬜ 尚未核准／無法判定`**（Freeze §5.2 metadata `not_approved`）：規則／數值未核准 → 未執行 ⇒ 維持 Not Evaluated；但字樣尾綴含「無法判定」屬混合字樣，**逐字不改**；~~UI2 ⛔ 用它表示 Risk Cap~~ **New UI2 一律 ⛔ 使用此字樣**（已自 UI2 Not Evaluated 允許表移除，建構即 raise，守衛有 teeth）（2026-11-02 DEC-124 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）；登記待覆核（BACKLOG `NUI2-NOT-APPROVED-LITERAL-REVIEW`）。
+  - **Aggregator 契約（docs-only，未實作）**：Architecture Gate §4.6.6 O1 原把 `holdings_data_short` 的 `unjudged`（`KEY_INSUFFICIENT`「⬜ 資料不足／無法判定」／`KEY_INVALID_INPUTS`／`KEY_INVALID_LIGHTS`）映射成 `action_class=not_evaluated`——依本條第 4、5 點屬 Unable to Determine 被併入 Not Evaluated；改為新增 `action_class=undeterminable`、`unjudged→undeterminable`、O2 加 `undeterminable_n`（刪除線保留原文；O3／O4b 既有 `undeterminable` 不變）。客戶 Q2 原文四類（actionable／non-actionable／unavailable／not evaluated）一字未改，`undeterminable` 為依本條加的第五類（AI 總管暫定，客戶可推翻）。
+- **與其他 DEC 的關係**（append-only；撰寫組讀法，單組，⚠️ 待第二組 evidence audit）：
+  - **DEC-122（Final UI Contract Freeze）§5.1／§5.3、DEC-122 Supersede 摘要「DEC-074／075『⬜ 未評估／資料不足』保留為 Not evaluated 子原因字樣」**：**部分取代**——該字樣與 Risk Cap `⬜ 無法判定` 自本條起歸 **Unable to Determine**（字樣不改）；§5.3 Batch 1 註記「第 6 態 `NOT_PROVIDED`」改為 capability state。四態定義、L1 字樣、「永遠」五條（missing ≠ 0……not evaluated ≠ safe）**全部仍有效**，並延伸：**無法判定 ≠ safe／neutral／no action／無需調整／可加碼**。
+  - **DEC-122 Q1=A（Freeze §0.1.4）**：**同向、精確化**——「unavailable／not evaluated 不得解讀成 safe，也不得因此允許加碼」不變；本條補「無法判定」是獨立語意、同樣 ⛔ safe／加碼。
+  - **DEC-123 Q2（Aggregator 允許責任 3「區分 actionable / non-actionable / unavailable / not evaluated」、責任 6「區分『今日無需調整』與『無法判定』」）**：**同向**；本條把責任 6 的「無法判定」與責任 3 的 not evaluated 明確分開（見上「Aggregator 契約」）。
+  - **DEC-074／DEC-075**：**字樣保留、語意歸類精確化**（見上）；「不得因為產品希望『有結論』而補出投資結論」**同向**。
+  - **DEC-110 R8「十態不另造」**：不衝突——本條未新增 `UI_STATE_META` 第 11 態；三軸是 New UI2 VM 契約的分類層。
+  - **PROJECT_RULES 第 19.8 節（Missing 語意）**：同向；已加註本條為永久語意補充。
+- **效力邊界**：⛔ navigation implementation、real data wiring、Aggregator runtime、Risk Cap runtime、Digest、OneBrain、LINE〔(8)-5〕；`app.py`、`requirements.txt`、`src/ui/**`、`src/ui_v2/**`、`src/data`、`src/compute`、`shared` 既有非 ui2 檔 0 diff；不核准任何新資料源、公式、門檻、Risk Cap 數值。
+- ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：選項 A 的理由、Risk Cap／DEC-074／075／`not_approved` 的語意歸類、Aggregator O1 修正均為實作組單組產出，**待總管複驗與獨立 QA**；「`FieldState` 在 New UI2 套件外 0 引用」為 grep 結果、非窮舉。
+- 📌 **獨立稽核結果（2026-11-02，第二組，非實作組）**：判 **PASS with fixes**——選項 A、Risk Cap＝`UNDETERMINABLE`、DEC-074／075 歸 Unable to Determine、Aggregator O1 第五類 `undeterminable` **皆同意**（9 項 mutation 全紅）；修正項（`⬜ 尚未核准／無法判定` 自 UI2 移除、文件指標與措辭、CI 阻擋的既有脆弱測試決定化）已於同分支修正批處理。實作 commit＝`64e6fe2c`；修正批 SHA 由總管補記（2026-11-02 DEC-124 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）。

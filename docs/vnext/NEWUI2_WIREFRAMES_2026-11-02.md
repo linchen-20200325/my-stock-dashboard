@@ -24,8 +24,9 @@
 | Missing | `⬜ 資料未取得`／`⬜ 資料未備` | 灰 | 應有但沒拿到／來源未發布、歷史不足、不適用 |
 | Stale | `⚠ 過期 N 天`／`⚠ 可能已過期` | 琥珀 | 有資料但超過 freshness tolerance |
 | Unavailable | `🔴 來源目前不可用`＋一句原因（L2 保留 `🔴 取得失敗` 子原因） | 紅（系統真錯誤） | 來源壞了 |
-| Not evaluated | `⬜ 尚未評估`（子原因 `⬜ 尚未定義`／`⬜ 尚未核准／無法判定`；客戶逐字 `⬜ 未評估／資料不足` 保留） | 灰 | 規則未跑／未定義／未核准 |
-| 功能尚未提供 | `⛔ 未接線`／`⬜ 尚未提供` | 灰 | 能力未做（≠ Unavailable，Fz §5.3） |
+| Not evaluated | `⬜ 尚未評估`（子原因 `⬜ 尚未定義`／`⬜ 尚未核准／無法判定`~~；客戶逐字 `⬜ 未評估／資料不足` 保留~~） | 灰 | 規則未跑／未定義／未核准 |
+| 無法判定（判定結果，非資料語意；DEC-124） | `⬜ 無法判定`（Risk Cap）／客戶逐字 `⬜ 未評估／資料不足`（DEC-074／075，字樣保留） | 灰 | 已進入判定，但必要輸入 Missing／Unavailable／Invalid／insufficient；⛔ 等同 Not evaluated；⛔ safe／無需調整／可加碼（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）；原文刪除線保留） |
+| 功能尚未提供 | `⛔ 未接線`／`⬜ 尚未提供` | 灰 | 能力未做（≠ Unavailable，Fz §5.3）；📌 DEC-124：Capability／Implementation Availability State（Preview-only、與資料語意正交），⛔ 稱第 6 個資料語意態（2026-11-02 Semantic Correction Gate 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）；原文刪除線保留） |
 | Danger（確定性違規） | `🔴 Risk Cap 超限 · 禁止新增曝險` | 紅＋**違規專用文字** | 只在 Q1 數值 Gate 啟用後才可能出現 |
 
 永遠：missing ≠ 0；missing ≠ HOLD；missing ≠ neutral；unavailable ≠ safe；not evaluated ≠ safe〔Fz §5.1〕。紅色兩義（真錯誤 vs 確定性違規）**文字必須不同**〔Fz §4.1〕。

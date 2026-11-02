@@ -18,9 +18,10 @@ from dataclasses import replace
 
 import pytest
 
+from shared.ui2_contract import models as M
 from shared.ui2_contract import text as T
 from shared.ui2_contract.models import (
-    CardVM, FieldState, FieldVM, FreshnessInfo, PageVM,
+    CapabilityState, CardVM, FieldState, FieldVM, FreshnessInfo, JudgementState, PageVM,
 )
 from shared.ui2_contract.pages import PAGE_IDS, SCENARIO_IDS
 from shared.ui2_contract.tones import ChipTone
@@ -332,8 +333,10 @@ def test_chip_tone_has_exactly_four_families():
 def test_red_is_only_for_unavailable_never_for_unloaded():
     """未載入＝灰、系統真出錯＝紅（CLAUDE.md §1.A-4）。"""
     assert H.STATE_TONE[FieldState.UNAVAILABLE] is ChipTone.DANGER
-    for s in (FieldState.NOT_EVALUATED, FieldState.MISSING, FieldState.NOT_PROVIDED, FieldState.OK):
+    # DEC-124 語意修正：NOT_PROVIDED 改屬 capability 軸（CAPABILITY_TONE），新增判定結果 UNDETERMINABLE；皆灰
+    for s in (FieldState.NOT_EVALUATED, FieldState.MISSING, FieldState.OK, JudgementState.UNDETERMINABLE):
         assert H.STATE_TONE[s] is ChipTone.NEUTRAL_INFO
+    assert H.CAPABILITY_TONE[CapabilityState.NOT_PROVIDED] is ChipTone.NEUTRAL_INFO
     assert H.STATE_TONE[FieldState.STALE] is ChipTone.WARNING
     for p in PAGE_IDS:
         cold = get_preview_page_vm(p, "cold")
@@ -358,9 +361,15 @@ def test_state_text_constants_are_unique():
     assert len(set(consts.values())) == len(consts), "兩個 TEXT_* 常數字樣重複"
 
 
+def _all_prefix_tables() -> dict[str, tuple[str, ...]]:
+    """資料語意＋判定結果＋capability 三張表合併（只供「互斥」掃描；⛔ 用來查表）。"""
+    return {**T.ALLOWED_STATUS_PREFIXES, **T.JUDGEMENT_STATUS_PREFIXES, **T.CAPABILITY_STATUS_PREFIXES}
+
+
 def test_four_states_never_share_a_status_prefix():
     seen: dict[str, str] = {}
-    for state, prefixes in T.ALLOWED_STATUS_PREFIXES.items():
+    # DEC-124：掃描範圍＝三張表（原為單一表；範圍不縮小，NOT_PROVIDED／無法判定仍在掃描內）
+    for state, prefixes in _all_prefix_tables().items():
         for p in prefixes:
             assert p not in seen, f"字樣 {p!r} 同時屬於 {seen[p]} 與 {state}"
             seen[p] = state
@@ -375,13 +384,25 @@ def test_every_state_is_covered_by_the_enum():
 
 @pytest.mark.parametrize("state,value", [
     (FieldState.MISSING, "0"), (FieldState.UNAVAILABLE, "1.23"),
-    (FieldState.NOT_EVALUATED, "HOLD"), (FieldState.NOT_PROVIDED, "safe"),
+    (FieldState.NOT_EVALUATED, "HOLD"), (JudgementState.UNDETERMINABLE, "safe"),
 ])
 def test_non_value_states_reject_a_value(state, value):
-    """missing ≠ 0；missing ≠ HOLD；unavailable ≠ safe；not evaluated ≠ safe。"""
-    status = T.ALLOWED_STATUS_PREFIXES[state.value][0]
+    """missing ≠ 0；missing ≠ HOLD；unavailable ≠ safe；not evaluated ≠ safe；無法判定 ≠ safe。
+
+    DEC-124 語意修正：原 `(FieldState.NOT_PROVIDED, "safe")` 列改由下一個測試（capability 軸）承接，
+    並新增判定結果 UNDETERMINABLE 列；斷言（帶值必 raise）未放寬。
+    """
+    status = M.status_prefixes_for(state)[0]
     with pytest.raises(ValueError):
         FieldVM("x", state, value, status)
+
+
+@pytest.mark.parametrize("value,state", [("safe", None), (None, FieldState.OK), ("0", FieldState.MISSING),
+                                         (None, FieldState.NOT_EVALUATED)])
+def test_capability_marker_rejects_value_and_any_data_state(value, state):
+    """`⬜ 尚未提供` 與資料語意正交：帶值或帶任何資料語意態 → raise（⛔ 偽裝成資料態）。"""
+    with pytest.raises(ValueError):
+        FieldVM("x", state, value, T.TEXT_NOT_PROVIDED, capability=CapabilityState.NOT_PROVIDED)
 
 
 def test_status_text_must_belong_to_its_own_state():
@@ -401,7 +422,7 @@ def test_all_preview_vms_obey_state_invariants(page, scenario):
         if f.state not in (FieldState.OK, FieldState.STALE):
             assert f.value_text is None, f"{page}/{scenario}/{f.label}"
             assert f.status_text, f"{page}/{scenario}/{f.label}"
-        prefixes = T.ALLOWED_STATUS_PREFIXES[f.state.value]
+        prefixes = f.allowed_status_prefixes()          # DEC-124：依欄位所屬語意軸查表
         assert f.state is FieldState.OK or f.status_text.startswith(prefixes)
 
 
@@ -496,7 +517,9 @@ def test_vm_creates_no_actions_and_no_forbidden_terms(page, scenario):
 @pytest.mark.parametrize("scenario", SCENARIO_IDS)
 def test_action_field_is_aggregator_pending_until_aggregator_exists(page, scenario):
     a = get_preview_page_vm(page, scenario).context.first_screen.action_needed
-    assert a.state is FieldState.NOT_PROVIDED and a.status_text == T.TEXT_NOT_PROVIDED_AGGREGATOR
+    # DEC-124 語意修正：「尚未提供」是 capability marker（state 為 None），不是資料語意態
+    assert a.capability is CapabilityState.NOT_PROVIDED and a.state is None
+    assert a.status_text == T.TEXT_NOT_PROVIDED_AGGREGATOR and a.value_text is None
 
 
 @pytest.mark.parametrize("page", ("p4_market", "p4_hold"))
@@ -515,7 +538,8 @@ def test_risk_cap_is_always_undeterminable_and_exposure_is_never_invented(page, 
     rc = [f for f in _all_fields(vm) if f.label == "Risk Cap"]
     for f in rc:
         assert f.status_text == T.TEXT_RISK_CAP_UNDETERMINABLE and f.value_text is None
-        assert f.state is FieldState.NOT_EVALUATED        # not evaluated ≠ safe
+        # DEC-124 語意修正（客戶 (8)-3）：Risk Cap「⬜ 無法判定」＝Unable to Determine，⛔ 等同 NOT_EVALUATED
+        assert f.state is JudgementState.UNDETERMINABLE and f.state != FieldState.NOT_EVALUATED
     for f in _all_fields(vm):
         if f.label == "目前曝險":
             assert f.state is FieldState.MISSING and f.value_text is None
@@ -582,3 +606,304 @@ def test_html_escapes_dynamic_text():
     f = FieldVM("<b>x</b>", FieldState.OK, "<script>1</script>", None)
     out = H.metric_card_html(CardVM("a\"b", "<i>t</i>", f))
     assert "<script>" not in out and "<i>t</i>" not in out and "&lt;script&gt;" in out
+
+
+# ════════════════════════════════════════════════════════════════════
+# DEC-124 Semantic Correction Gate（客戶 2026-11-02 (8)）：三軸語意邊界
+#   資料語意（五態）／判定結果（無法判定）／capability（尚未提供，Preview-only）互不混層。
+#   每個檢查器都是純函式；對真契約必須 0 違規，對刻意壞掉的輸入必須 >0 違規（teeth）。
+# ════════════════════════════════════════════════════════════════════
+_CUSTOMER_DATA_STATES = {"ok", "missing", "stale", "unavailable", "not_evaluated"}   # 客戶 (8)-2 逐項
+
+
+def check_data_semantic_layer(state_enum, data_prefix_table) -> list[str]:
+    """正式資料語意只有五個（含 OK）；capability marker／判定結果 ⛔ 混入。"""
+    bad: list[str] = []
+    values = {s.value for s in state_enum}
+    if values != _CUSTOMER_DATA_STATES:
+        bad.append(f"資料語意態 {sorted(values)} ≠ 客戶五態 {sorted(_CUSTOMER_DATA_STATES)}")
+    if set(data_prefix_table) != _CUSTOMER_DATA_STATES:
+        bad.append(f"資料語意字樣表 key {sorted(data_prefix_table)} ≠ 客戶五態")
+    capability_or_judgement = (T.CAPABILITY_STATUS_PREFIXES["not_provided"]
+                               + T.JUDGEMENT_STATUS_PREFIXES["undeterminable"])
+    for state, prefixes in data_prefix_table.items():
+        for p in prefixes:
+            if any(p.startswith(q) or q.startswith(p) for q in capability_or_judgement):
+                bad.append(f"資料語意 {state} 收了非資料語意字樣 {p!r}")
+    return bad
+
+
+def test_dec124_data_semantics_are_exactly_the_five():
+    assert check_data_semantic_layer(FieldState, T.ALLOWED_STATUS_PREFIXES) == []
+    assert M.DATA_SEMANTIC_STATES == frozenset(FieldState)
+    assert "not_provided" not in {s.value for s in FieldState}
+    assert "undeterminable" not in {s.value for s in FieldState}
+
+
+def test_dec124_data_semantic_guard_has_teeth():
+    from enum import Enum
+
+    class Sixth(str, Enum):           # 違憲：把 capability marker 塞回資料語意（Batch 1 的形狀）
+        OK = "ok"; MISSING = "missing"; STALE = "stale"; UNAVAILABLE = "unavailable"
+        NOT_EVALUATED = "not_evaluated"; NOT_PROVIDED = "not_provided"
+
+    class Merged(str, Enum):          # 違憲：把無法判定當成第 6 個資料態
+        OK = "ok"; MISSING = "missing"; STALE = "stale"; UNAVAILABLE = "unavailable"
+        NOT_EVALUATED = "not_evaluated"; UNDETERMINABLE = "undeterminable"
+
+    assert check_data_semantic_layer(Sixth, T.ALLOWED_STATUS_PREFIXES)
+    assert check_data_semantic_layer(Merged, T.ALLOWED_STATUS_PREFIXES)
+    leaky = dict(T.ALLOWED_STATUS_PREFIXES, not_provided=(T.TEXT_NOT_PROVIDED,))
+    assert check_data_semantic_layer(FieldState, leaky)
+    ne_merged = dict(T.ALLOWED_STATUS_PREFIXES,
+                     not_evaluated=T.ALLOWED_STATUS_PREFIXES["not_evaluated"] + (T.TEXT_RISK_CAP_UNDETERMINABLE,))
+    assert check_data_semantic_layer(FieldState, ne_merged)
+
+
+def test_dec124_three_axes_are_disjoint_types():
+    assert not (set(FieldState) & set(JudgementState))
+    assert {s.value for s in JudgementState} == set(T.JUDGEMENT_STATUS_PREFIXES) == {"undeterminable"}
+    assert {CapabilityState.NOT_PROVIDED.value} == set(T.CAPABILITY_STATUS_PREFIXES)
+    with pytest.raises(TypeError):                       # 原始字串不得冒充語意態
+        FieldVM("x", "not_provided", None, T.TEXT_NOT_PROVIDED)
+    with pytest.raises(TypeError):
+        FieldVM("x", None, None, T.TEXT_NOT_EVALUATED)    # PROVIDED 欄位必須有語意態
+
+
+# ── Unable to Determine ≠ Not Evaluated（不同值、不同字樣、不同表）──────────
+def check_utd_ne_separation(ne_prefixes, utd_prefixes, build_field) -> list[str]:
+    bad: list[str] = []
+    for p in utd_prefixes:
+        for q in ne_prefixes:
+            if p == q or p.startswith(q) or q.startswith(p):
+                bad.append(f"字樣混用：無法判定 {p!r} ／ 未評估 {q!r}")
+    utd = build_field({"label": "x", "value": None, "state": "undeterminable"})
+    ne = build_field({"label": "x", "value": None, "state": "not_evaluated"})
+    if utd.state is not JudgementState.UNDETERMINABLE:
+        bad.append(f"undeterminable 被建成 {utd.state!r}")
+    if utd.state == ne.state or utd.state == FieldState.NOT_EVALUATED:
+        bad.append("無法判定與未評估同值")
+    if utd.status_text == ne.status_text:
+        bad.append("無法判定與未評估同字樣")
+    if utd.value_text is not None or ne.value_text is not None:
+        bad.append("無法判定／未評估帶了 value")
+    return bad
+
+
+def test_dec124_unable_to_determine_is_not_not_evaluated():
+    assert check_utd_ne_separation(T.ALLOWED_STATUS_PREFIXES["not_evaluated"],
+                                   T.JUDGEMENT_STATUS_PREFIXES["undeterminable"],
+                                   vm_common.field_from_spec) == []
+    assert JudgementState.UNDETERMINABLE.value != FieldState.NOT_EVALUATED.value
+
+
+def test_dec124_utd_ne_guard_has_teeth():
+    def merging_builder(spec):         # 違憲 builder：把無法判定映射成 NOT_EVALUATED
+        if spec.get("state") == "undeterminable":
+            return FieldVM(spec["label"], FieldState.NOT_EVALUATED, None, T.TEXT_NOT_EVALUATED)
+        return vm_common.field_from_spec(spec)
+    assert check_utd_ne_separation(T.ALLOWED_STATUS_PREFIXES["not_evaluated"],
+                                   T.JUDGEMENT_STATUS_PREFIXES["undeterminable"], merging_builder)
+    merged_ne = T.ALLOWED_STATUS_PREFIXES["not_evaluated"] + (T.TEXT_RISK_CAP_UNDETERMINABLE,)
+    assert check_utd_ne_separation(merged_ne, T.JUDGEMENT_STATUS_PREFIXES["undeterminable"],
+                                   vm_common.field_from_spec)
+
+
+def test_dec124_status_text_cannot_cross_axes():
+    with pytest.raises(ValueError):    # 無法判定欄位不得掛「尚未評估」字樣
+        FieldVM("x", JudgementState.UNDETERMINABLE, None, T.TEXT_NOT_EVALUATED)
+    with pytest.raises(ValueError):    # 未評估欄位不得掛「無法判定」字樣
+        FieldVM("x", FieldState.NOT_EVALUATED, None, T.TEXT_RISK_CAP_UNDETERMINABLE)
+    with pytest.raises(ValueError):    # DEC-074／075 字樣屬無法判定，不得掛在未評估
+        FieldVM("x", FieldState.NOT_EVALUATED, None, T.TEXT_NOT_EVALUATED_DATA_SHORT)
+    with pytest.raises(ValueError):    # 資料語意欄位不得掛 capability 字樣
+        FieldVM("x", FieldState.NOT_EVALUATED, None, T.TEXT_NOT_PROVIDED)
+    with pytest.raises(ValueError):    # capability 欄位不得掛無法判定字樣
+        FieldVM("x", None, None, T.TEXT_RISK_CAP_UNDETERMINABLE, capability=CapabilityState.NOT_PROVIDED)
+
+
+def test_dec124_customer_literals_are_verbatim_and_classified():
+    """字樣逐字不改（Freeze §0.1.4／DEC-074／075）；只修語意歸類。"""
+    assert T.TEXT_RISK_CAP_UNDETERMINABLE == "⬜ 無法判定"
+    assert T.TEXT_NOT_EVALUATED_DATA_SHORT == "⬜ 未評估／資料不足"
+    assert T.TEXT_NOT_PROVIDED == "⬜ 尚未提供"
+    assert T.TEXT_NOT_EVALUATED_DATA_SHORT in T.JUDGEMENT_STATUS_PREFIXES["undeterminable"]
+    assert T.TEXT_RISK_CAP_UNDETERMINABLE in T.JUDGEMENT_STATUS_PREFIXES["undeterminable"]
+    assert T.TEXT_NOT_EVALUATED_DATA_SHORT not in T.ALLOWED_STATUS_PREFIXES["not_evaluated"]
+
+
+def test_dec124_scenarios_show_both_ne_and_utd_distinctly():
+    vm = get_preview_page_vm("p4_market", "not_evaluated")
+    states = {f.state for f in _all_fields(vm)}
+    assert FieldState.NOT_EVALUATED in states and JudgementState.UNDETERMINABLE in states
+    cur = vm.context.first_screen.current_state
+    assert cur.state is JudgementState.UNDETERMINABLE and cur.status_text == T.TEXT_NOT_EVALUATED_DATA_SHORT
+
+
+def test_unknown_state_hint_is_rejected_not_defaulted_to_ok():
+    with pytest.raises(ValueError):
+        vm_common.field_from_spec({"label": "x", "value": "1", "state": "safe"})
+    with pytest.raises(ValueError):
+        vm_common.field_from_spec({"label": "x", "value": "1", "state": "unable_to_determine"})
+
+
+# ── Risk Cap「⬜ 無法判定」⛔ 渲染／推導成 OK／綠／safe／今日無需調整／可加碼 ────────
+_SAFE_READINGS = ("今日無需調整", "無需調整", "可加碼", "加碼", "safe", "Safe", "neutral", "Neutral",
+                  "中性", "no action", "無需行動", "安全", "✅")
+
+
+def _visible_text(html_: str) -> str:
+    import re
+    return re.sub(r"<[^>]+>", " ", html_)
+
+
+def check_undeterminable_never_reads_safe(fields, tone_of, render) -> list[str]:
+    bad: list[str] = []
+    for f in fields:
+        if f.state is FieldState.OK or f.value_text is not None:
+            bad.append(f"{f.label}: 無法判定被當成 OK／帶值 {f.value_text!r}")
+        if tone_of(f) is ChipTone.POSITIVE:
+            bad.append(f"{f.label}: 無法判定給了正向（綠）色調")
+        html_ = render(f)
+        text = _visible_text(html_)
+        if T.TEXT_RISK_CAP_UNDETERMINABLE not in text and T.TEXT_NOT_EVALUATED_DATA_SHORT not in text:
+            bad.append(f"{f.label}: 畫面沒有「無法判定」字樣")
+        if "ui2-chip--positive" in html_:
+            bad.append(f"{f.label}: 畫面用了正向（綠）chip")
+        for w in _SAFE_READINGS:
+            if w in text:
+                bad.append(f"{f.label}: 畫面出現 safe 讀法 {w!r}")
+    return bad
+
+
+def _undeterminable_fields() -> list[FieldVM]:
+    out = []
+    for p in PAGE_IDS:
+        for sc in SCENARIO_IDS:
+            out += [f for f in _all_fields(get_preview_page_vm(p, sc))
+                    if f.state is JudgementState.UNDETERMINABLE]
+    return out
+
+
+def test_dec124_risk_cap_undeterminable_never_rendered_as_safe():
+    fields = _undeterminable_fields()
+    assert any(f.label == "Risk Cap" for f in fields)
+    for render in (lambda f: H.qa_row_html(None, f), H.field_row_html):
+        assert check_undeterminable_never_reads_safe(fields, H.tone_for, render) == []
+    for p in ("p4_market", "p4_target", "p4_hold"):     # 第一屏整塊也不得出現 safe 讀法
+        fs_html = H.first_screen_html(get_preview_page_vm(p, "loaded").context.first_screen)
+        assert T.TEXT_RISK_CAP_UNDETERMINABLE in fs_html
+        assert "今日無需調整" not in _visible_text(fs_html) and "ui2-chip--positive" not in fs_html
+
+
+def test_dec124_risk_cap_safe_guard_has_teeth():
+    fields = [f for f in _undeterminable_fields() if f.label == "Risk Cap"]
+
+    def green(f):                       # 違憲：無法判定塗綠
+        return ChipTone.POSITIVE
+
+    def says_no_adjust(f):              # 違憲：無法判定被渲染成「今日無需調整」
+        return H.qa_row_html(None, f) + "今日無需調整"
+
+    def drops_text(f):                  # 違憲：把「無法判定」字樣吞掉
+        return "<div>Risk Cap</div>"
+    assert check_undeterminable_never_reads_safe(fields, green, lambda f: H.qa_row_html(None, f))
+    assert check_undeterminable_never_reads_safe(fields, H.tone_for, says_no_adjust)
+    assert check_undeterminable_never_reads_safe(fields, H.tone_for, drops_text)
+
+
+# ── Capability marker：Preview-only，只准在明列的 Preview producer／契約／渲染檔出現 ─────
+#: 允許出現 `CapabilityState.NOT_PROVIDED`／`TEXT_NOT_PROVIDED*` 的檔（其餘＝違規）。
+#: 日後真 feed 若要用，須**明確、經審查地**擴充本清單（cutover 前須清零：BACKLOG `NUI2-CAPABILITY-MARKER-CUTOVER-ZERO`）。
+CAPABILITY_MARKER_ALLOWLIST = (
+    "shared/ui2_contract/models.py",          # 定義
+    "shared/ui2_contract/text.py",            # 字樣
+    "src/services/ui2/vm_common.py",          # Preview 期 Aggregator 未實作的動作欄
+    "src/services/ui2/scenarios.py",          # FAKE scenario
+    "src/ui2/components/html.py",             # 渲染（只上色，不產生）
+)
+_CAP_NAMES = {"NOT_PROVIDED", "TEXT_NOT_PROVIDED", "TEXT_NOT_PROVIDED_AGGREGATOR"}
+
+
+def check_capability_marker_scope(source: str, relpath: str) -> list[str]:
+    if relpath in CAPABILITY_MARKER_ALLOWLIST:
+        return []
+    bad = []
+    for n in ast.walk(ast.parse(source)):
+        name = n.id if isinstance(n, ast.Name) else (n.attr if isinstance(n, ast.Attribute) else None)
+        if name in _CAP_NAMES:
+            bad.append(f"{relpath}:L{n.lineno}: capability marker {name} 不在 Preview 允許清單")
+        if isinstance(n, (ast.ImportFrom,)) and any(a.name in _CAP_NAMES for a in n.names):
+            bad.append(f"{relpath}:L{n.lineno}: import capability marker")
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and (
+                n.value == "not_provided" or n.value.startswith(T.TEXT_NOT_PROVIDED)):
+            bad.append(f"{relpath}:L{n.lineno}: 字面 capability marker {n.value!r}")
+    return bad
+
+
+@pytest.mark.parametrize("path", ALL_FILES, ids=lambda p: p.relative_to(ROOT).as_posix())
+def test_dec124_capability_marker_is_preview_only(path):
+    rel = path.relative_to(ROOT).as_posix()
+    assert check_capability_marker_scope(path.read_text(encoding="utf-8"), rel) == []
+
+
+@pytest.mark.parametrize("injected", [
+    "from shared.ui2_contract.models import CapabilityState\nx = CapabilityState.NOT_PROVIDED\n",
+    "from shared.ui2_contract.text import TEXT_NOT_PROVIDED\n",
+    "x = {'state': 'not_provided'}\n",
+    "x = '⬜ 尚未提供（待 OneBrain）'\n",
+])
+def test_dec124_capability_marker_guard_has_teeth(injected):
+    clean = (L3_DIR / "market_vm.py").read_text(encoding="utf-8")
+    rel = "src/services/ui2/market_vm.py"
+    assert check_capability_marker_scope(clean, rel) == []
+    assert check_capability_marker_scope(injected + clean, rel), f"沒抓到：{injected!r}"
+
+
+def test_dec124_capability_marker_never_counted_as_data_quality():
+    """capability marker 欄位：layer＝capability、state 為 None、⛔ 帶值、⛔ safe 讀法。"""
+    seen = 0
+    for p in PAGE_IDS:
+        for sc in SCENARIO_IDS:
+            for f in _all_fields(get_preview_page_vm(p, sc)):
+                if f.capability is CapabilityState.NOT_PROVIDED:
+                    seen += 1
+                    assert f.layer == "capability" and f.state is None and f.value_text is None
+                    assert f.status_text.startswith(T.TEXT_NOT_PROVIDED)
+                    assert not any(w in (f.status_text + (f.detail or "")) for w in _SAFE_READINGS)
+                else:
+                    assert f.layer in ("data", "judgement")
+    assert seen > 0
+
+
+# ── 混合字樣 `⬜ 尚未核准／無法判定`：UI2 ⛔ 使用（DEC-124 獨立稽核修正）───────────────
+def check_no_undeterminable_wording_outside_judgement(tables) -> list[str]:
+    """「無法判定」字樣只准出現在判定結果表；資料語意／capability 表出現 → 違規（含混合字樣）。"""
+    bad = []
+    for name, table in tables.items():
+        for state, prefixes in table.items():
+            for p in prefixes:
+                if "無法判定" in p:
+                    bad.append(f"{name}.{state} 收了含「無法判定」的字樣 {p!r}")
+    return bad
+
+
+def test_not_approved_mixed_literal_is_not_allowed_in_ui2():
+    assert check_no_undeterminable_wording_outside_judgement(
+        {"data": T.ALLOWED_STATUS_PREFIXES, "capability": T.CAPABILITY_STATUS_PREFIXES}) == []
+    with pytest.raises(ValueError):
+        FieldVM("x", FieldState.NOT_EVALUATED, None, T.TEXT_NOT_APPROVED)
+    with pytest.raises(ValueError):
+        FieldVM("x", JudgementState.UNDETERMINABLE, None, T.TEXT_NOT_APPROVED)
+    assert T.TEXT_NOT_APPROVED == "⬜ 尚未核准／無法判定"          # Legacy 字樣逐字不改
+    for p in PAGE_IDS:
+        for sc in SCENARIO_IDS:
+            assert all(T.TEXT_NOT_APPROVED not in (f.status_text or "")
+                       for f in _all_fields(get_preview_page_vm(p, sc)))
+
+
+def test_not_approved_guard_has_teeth():
+    leaky = dict(T.ALLOWED_STATUS_PREFIXES,
+                 not_evaluated=T.ALLOWED_STATUS_PREFIXES["not_evaluated"] + (T.TEXT_NOT_APPROVED,))
+    assert check_no_undeterminable_wording_outside_judgement({"data": leaky})
+

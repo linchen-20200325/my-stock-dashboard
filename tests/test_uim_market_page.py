@@ -175,10 +175,32 @@ def test_hero_and_panel_share_one_build_market_risks_call(tmp_path, monkeypatch)
     assert len(_calls) == 1, "hero 與圖 D 必須共用同一次 build_market_risks（單一來源）"
 
 
-def test_loaded_hero_items_match_panel_rows(tmp_path):
+#: 方向（變化方向列）用的**釘死**歷史序列（2026-11-02 決定化；有意識的修改，⛔ 不是降強度）。
+#: 修前本測試讀 live `data_cache`（L3 `macro_v2_service.get_chart_series`／`get_monthly_history`），
+#: bot commit `e5be97a6`（`tw_pmi.parquet` 等每日增量）後台灣 PMI 末兩月由升轉降 ⇒「↗ 上升」消失、測試紅燈
+#: ——斷言隨資料漂移，不是程式退化。這裡只把 **L3 歷史輸入** 換成固定夾具；L2 `compute_lamp_direction`、
+#: 頁面組裝、hero／圖 D 同源全部照跑真程式。三盞各給一個方向（上升／持平／下降）。
+_PINNED_DIRECTION_HISTORY = {
+    "get_monthly_history": {"ism_pmi": [("2026-08-01", 43.0), ("2026-09-01", 44.0)]},   # +1.0 點 > 帶寬 0.5 ⇒ ↗ 上升
+    "get_chart_series": {
+        "margin": [(f"2026-09-{d:02d}T00:00:00", 3123.4) for d in range(1, 22)],             # 0% ⇒ → 持平
+        "bias_240": [(f"2026-09-{d:02d}T00:00:00", 7.0 - 0.075 * (d - 1)) for d in range(1, 22)],  # −1.5 個百分點 ⇒ ↘ 下降
+    },
+}
+
+
+def _pin_direction_history(monkeypatch, pinned=_PINNED_DIRECTION_HISTORY):
+    from src.services import macro_v2_service as _svc
+    for _name, _hist in pinned.items():
+        monkeypatch.setattr(_svc, _name, lambda _h=_hist: dict(_h))
+
+
+def test_loaded_hero_items_match_panel_rows(tmp_path, monkeypatch):
     """📌 P4-1（客戶 DEC-117 Q6=A；有意識的修改，⛔ 不是降強度）：外露層改為縮短行「燈色＋桶名＋燈名＋方向」，
     整句版（①②③…｜方向：…）下沉到風險 tile 的「🔍 查看依據」。原斷言全部照守、改釘在新位置並加嚴：
-    外露縮短行與摺疊整句**逐項一一對應**（同燈名、同方向），且兩者都與圖 D 同列逐字相同（同一份 `_risks`）。"""
+    外露縮短行與摺疊整句**逐項一一對應**（同燈名、同方向），且兩者都與圖 D 同列逐字相同（同一份 `_risks`）。
+    📌 2026-11-02：方向的 L3 歷史改用 `_PINNED_DIRECTION_HISTORY`（見該常數註解；原斷言全保留並加嚴）。"""
+    _pin_direction_history(monkeypatch)
     _at = _run(tmp_path, _LOADED)
     assert not _at.exception, _at.exception
     assert not _at.error
@@ -199,6 +221,22 @@ def test_loaded_hero_items_match_panel_rows(tmp_path):
     assert any(t.startswith("**") and "項未評估**" in t for t in _top)        # 圖 D 頂端「N 項未評估」
     assert any("↗ 上升" in _it for _it in _items)                                  # 非全「無資料」，才有鑑別力
     assert not any("無風險" in t for t in _top)
+    # 加嚴（2026-11-02 決定化後才可能）：方向確實來自夾具、且逐燈正確（PMI 上升、融資持平），不是碰巧有一列上升
+    assert any("台灣 PMI" in _it and _it.endswith("↗ 上升") for _it in _items), _items
+    assert any("融資餘額" in _it and _it.endswith("→ 持平") for _it in _items), _items
+
+
+def test_hero_direction_assertion_bites_when_pinned_history_falls(tmp_path, monkeypatch):
+    """teeth：同一頁、同一 session，只把 PMI 夾具改成下降 ⇒「↗ 上升」必須消失、改成「↘ 下降」
+    （證明上一個測試的方向斷言真的由輸入決定，不是常數字樣）。"""
+    _falling = dict(_PINNED_DIRECTION_HISTORY,
+                    get_monthly_history={"ism_pmi": [("2026-08-01", 45.0), ("2026-09-01", 44.0)]})
+    _pin_direction_history(monkeypatch, _falling)
+    _at = _run(tmp_path, _LOADED)
+    assert not _at.exception, _at.exception
+    _items = [t for t in _texts(_at, outside_expanders=True) if t[:1] in "🟡🔴" and "：" in t and "　" in t]
+    assert not any("↗ 上升" in _it for _it in _items), _items
+    assert any("台灣 PMI" in _it and _it.endswith("↘ 下降") for _it in _items), _items
 
 
 # ══════════════════════════════════════════════════════════════════
