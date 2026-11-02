@@ -31,15 +31,24 @@ New UI2
 
 | # | 關卡 | 通過判準 | 對應 BACKLOG |
 |---|---|---|---|
-| C1 | 獨立 Preview | 獨立 Streamlit Cloud Preview 可開、正式網站 0 diff；Preview 與 production 讀相同 canonical services／contracts（客戶 Q1）；需人工建 App／Secrets／OAuth 網址時才發 🟡 Manual Action Gate | `NUI2-PREVIEW`、`NUI2-PREVIEW-APP-MANUAL` |
-| C2 | 四頁逐頁驗收 | 每頁：線框（客戶核准版＋§9 條件）一致；第一屏四問；L1／L2／L3；Visual Fidelity（含 Decision Density／Text Reduction）；PR 驗收六問 | `FUI-STAGE-B`～`E`（落點改 UI2） |
+| C1 | 獨立 Preview | 獨立 Streamlit Cloud Preview 可開、正式網站 0 diff；Preview 與 production 讀相同 canonical services／contracts（客戶 Q1）；需人工建 App／Secrets／OAuth 網址時才發 🟡 Manual Action Gate | `NUI2-PREVIEW`、`NUI2-PREVIEW-APP-MANUAL` |（依賴：`NUI2-PREVIEW`）
+| C2 | 四頁逐頁驗收 | 每頁：線框（客戶核准版＋§9 條件）一致；第一屏四問；L1／L2／L3；Visual Fidelity（含 Decision Density／Text Reduction）；PR 驗收六問；**動作欄 `⬜ 尚未提供` 只允許在 Preview 期**——C2 通過前 💼／📊 的動作能力必須已改讀 System Action Aggregator（`NUI2-AGGREGATOR-IMPL`、M-A3）（#997 稽核 M2） | `FUI-STAGE-B`～`E`（落點改 UI2） |（依賴：`NUI2-VM-BOUNDARY`、`NUI2-AGGREGATOR-IMPL`）
 | C3 | mobile／desktop | 390×844 與 1440×900 第一屏「不用滑」項目全部可見（各頁清單見線框 §1）；放不下 → Decision Gate，⛔ 自行移出 | `NUI2-ACC-MOBILE`、`NUI2-ACC-DESKTOP` |
 | C4 | missing／stale／source failure | 四態字樣與色正確；missing ≠ 0／HOLD／neutral；unavailable ≠ safe；部分失敗真錯誤外露；冷啟動灰色 | `NUI2-ACC-MISSING-STALE-FAILURE` |
 | C5 | real-data acceptance | 真資料（非夾具）四頁全通；Cold Start、Partial Data、Stale、API Failure、AI Failure 下仍安全顯示 deterministic output（Freeze／客戶 Stage I） | `NUI2-ACC-REAL-DATA`（＝`FUI-STAGE-I`） |
-| C6 | cross-page consistency | 同一 market context；Risk Cap blocked／無法判定時任何頁 ⛔ unrestricted Add；術語統一；市場 ⚡ 與持股今日需處理同源（Aggregator 完成後；完成前依 W-10 並列揭露） | `NUI2-ACC-CROSS-PAGE`（＝`FUI-STAGE-H`） |
-| C7 | 全部通過 → 一次切成正式 default | C1～C6 皆有 PR／報告證據＋獨立 QA；一次 PR 切換 `app.py` 預設；切換前 G11 路由毒化測試綠 | `NUI2-CUTOVER` |
+| C6 | cross-page consistency | 同一 market context；Risk Cap blocked／無法判定時任何頁 ⛔ unrestricted Add；術語統一；市場 ⚡ 與持股今日需處理同源（Aggregator 完成後；完成前依 W-10 並列揭露）；Aggregator 完成並經 M-A4 後，市場 ⚡ 與持股今日需處理**必須同源**（W-10 transitional 不得延續到 cutover）（#997 稽核 M2） | `NUI2-ACC-CROSS-PAGE`（＝`FUI-STAGE-H`） |
+| C7 | 全部通過 → 一次切成正式 default | C1～C6 皆有 PR／報告證據＋獨立 QA；一次 PR 切換 `app.py` 預設；切換前 G11 路由毒化測試綠；**前置必含 `NUI2-AGGREGATOR-IMPL`＋M-A3＋M-A4 完成**（否則持股頁動作能力消失）（#997 稽核 M2） | `NUI2-CUTOVER` |
 
 ---
+
+### §1.2 Cutover 前置清單（#997 獨立稽核 M1／M2；對映 BACKLOG §5.1.19 編號）
+
+| 類 | 項目 | 是否 cutover 前置 | 依據 |
+|---|---|---|---|
+| Q4 鏈各關 | #1 New UI2 Preview（`NUI2-PREVIEW`）、#2 View Model boundary（`NUI2-VM-BOUNDARY`）、#9 mobile（`NUI2-ACC-MOBILE`）、#10 desktop（`NUI2-ACC-DESKTOP`）、#11 missing／stale／failure（`NUI2-ACC-MISSING-STALE-FAILURE`）、#12 real-data（`FUI-STAGE-I`）、#13 cross-page（`FUI-STAGE-H`） | **是** | 客戶 Q4 Cutover 鏈逐字 |
+| 動作能力 | #3 System Action Aggregator implementation（`NUI2-AGGREGATOR-IMPL`，含 M-A3、M-A4） | **是** | `⬜ 尚未提供` 只允許在 Preview 期，否則持股頁動作能力消失（M2；Architecture Gate §4.6.5） |
+| 非前置 | #4 Risk Cap Numeric Gate（`FUI-RC-NUMERIC-GATE`）、#5 proportional action rules（`FUI-PROPORTIONAL-ACTION-RULES`）、#8 LINE／UI canonical action convergence（`NUI2-LINE-UI-ACTION-CONVERGENCE`） | **否** | 數值未啟用時 Risk Cap 恆 `⬜ 無法判定`（Q1=A）；比例 Action 未核准即不顯示（Q2=A of DEC-122）；LINE 改動另批另 Gate（客戶 (5)-10） |
+| 讀法待定 | #6 Headless Decision Digest（`FUI-STAGE-F`）、#7 OneBrain runtime（`FUI-STAGE-G`） | **AI 總管讀法：是**——DEC-122 保留的 Stage 順序 F → G → H → I，而 Q4 鏈含 cross-page consistency（H）與 real-data acceptance（I），故 F、G 在其前；**客戶可推翻**；接近 cutover 時若欲讓 F／G 不再是前置（提前 cutover），**另送客戶裁示** | DEC-122 原文 §2 順序；DEC-123 Stage F～J 保留 |
 
 ## §2 Rollback（Cutover 後保留）
 

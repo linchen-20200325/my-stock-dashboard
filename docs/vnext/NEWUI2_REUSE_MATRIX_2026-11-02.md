@@ -179,9 +179,9 @@
 | N2 | Semantic chip tone＋`unavailable`→`unwired` | ✅（只加不改） |
 | N3 | Field-level freshness 物件 | ✅；補 as_of 進 canonical 契約＝Stage F |
 | N4 | 中立 VM 卡片型別 | ✅ |
-| N5 | 「今日無需調整 vs 判不出」組合層 | ✅（PORT 既有規則進**System Action Aggregator（~~系統動作彙整層~~）**〔Architecture Gate §4.5，G3′〕，⛔ 新門檻；VM ⛔ 自算） |
-| N6 | 加／留／換／減呈現分組 | ✅ presentation-only；分組外觀屬線框待客戶核准 |
-| N7 | System Action State 聚合層 | ✅ 允許作 **L3 deterministic 組裝**：最小彙整切片可依 **G3′=A′** 提前（Architecture Gate §4.5），完整版屬 Stage F；**不是** UI2 presentation 工作 |
+| N5 | 「今日無需調整 vs 判不出」組合層 | ✅（PORT 既有規則進**System Action Aggregator（~~系統動作彙整層~~）**〔Architecture Gate ~~§4.5，G3′~~ §4.6，客戶 Q2；implementation Gate 後實作〕，⛔ 新門檻；VM ⛔ 自算） |
+| N6 | 加／留／換／減呈現分組 | ✅ presentation-only；~~分組外觀屬線框待客戶核准~~ 分組與計入範圍客戶已核准（Q3 W-5=A），計數由 System Action Aggregator 產出 |
+| N7 | System Action State 聚合層 | ✅ 允許作 **L3 deterministic 組裝**：~~最小彙整切片可依 **G3′=A′** 提前（Architecture Gate §4.5）~~ 最小彙整切片＝System Action Aggregator（客戶 Q2：新 runtime，契約凍結於 Architecture Gate §4.6，implementation Gate 後實作），完整版屬 Stage F；**不是** UI2 presentation 工作 |
 | N8 | Risk Cap 閘門數值判定 | ❌ `FUI-RC-NUMERIC-GATE` |
 | N9 | Rule Registry 讀取模型 | ✅ 讀既有 6 id；❌ 新造 rule id（`FUI-RULE-ID-SPEC`） |
 | N10 | Decision Digest Viewer 模型 | ✅；真資料依賴 Stage F |

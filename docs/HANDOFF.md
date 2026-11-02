@@ -8,7 +8,7 @@
 
 > 依客戶 2026-10-22 裁示（DEC-068），本檔改為**短版交接**：只保存 current active work、blocker、next safe point、必要的 main／PR／CI 狀態。完整專案知識見 `docs/PROJECT_STATE.md`；未完成工作見 `docs/BACKLOG.md`；新對話啟動程序見 `PROJECT_RULES.md` 第 15 節。**現況以本節與 GitHub 為準。**
 
-> 📌 **2026-11-02 現行接手點**：見本檔**最末**「~~Safe Handoff（2026-11-02，Final UI Contract Freeze）~~ ~~Safe Handoff（2026-11-02 更新：Freeze 已拍板）~~ ~~Safe Handoff（2026-11-02 New UI2）~~ **Safe Handoff（2026-11-02 New UI2 Architecture 客戶核准）**」（DEC-123）。更新紀錄（皆有意識的更新，不是漏刪；原文刪除線保留）：① 2026-11-02 客戶裁示 Q1～Q3 後更新（決策者 客戶（DEC-122 裁示）＋AI 總管〔事實更新〕）；② 2026-11-02 客戶 New UI2 裁示後更新（決策者 客戶（DEC-123）＋AI 總管〔事實更新〕）；③ 2026-11-02 客戶裁示 Q1～Q4＋#996 合併後更新（決策者 客戶（DEC-123 裁示）＋AI 總管〔事實更新〕）。下方索引表為 2026-10-29 起的歷史索引，必讀規則仍有效（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。
+> 📌 **2026-11-02 現行接手點**：見本檔**最末**「~~Safe Handoff（2026-11-02，Final UI Contract Freeze）~~ ~~Safe Handoff（2026-11-02 更新：Freeze 已拍板）~~ ~~Safe Handoff（2026-11-02 New UI2）~~ **Safe Handoff（2026-11-02 New UI2 Architecture 客戶核准）**」（DEC-122）（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔事實更新〕；原文刪除線保留）；下方索引表為 2026-10-29 起的歷史索引，必讀規則仍有效（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。② 2026-11-02 客戶 New UI2 裁示後更新（DEC-123；決策者 客戶（DEC-123）＋AI 總管〔事實更新〕；有意識的更新，不是漏刪）；③ 2026-11-02 客戶裁示 Q1～Q4＋#996 合併後更新（DEC-123 裁示；決策者 客戶（DEC-123 裁示）＋AI 總管〔事實更新〕；有意識的更新，不是漏刪）。（#997 稽核 m3：上一版把 #996 的括號標註改寫為「更新紀錄 ①」，已還原為 #996 原文逐字、再追加 ②③。）
 
 ### 📌 Resume Checkpoint 索引（現行；2026-10-29 Phase 1 SSOT Reset／Contract Freeze；DEC-086 欄位＋DEC-109 索引要求）
 
@@ -719,7 +719,7 @@ DEC-086 規則已於 main，本表已落地。
 
 | 欄位（C1） | 內容 |
 |---|---|
-| live GitHub state | `main`＝`acd1648c`（#996 合併點；總管實查）。New UI2 Architecture Gate 草案＝commit `6d30dcea`，**Draft PR #997**（分支 `ccr-a0b4e085-ijdaio`，對齊新 main）；本裁示整合批（docs-only）寫入同分支工作樹，**commit／push 由總管處理**。⚠️ cron 會推進 main，接手以當下 `git fetch` 為準（DEC-118）。 |
+| live GitHub state | `main`＝`acd1648c`（#996 合併點；總管實查）。New UI2 Architecture Gate 草案＝commit `6d30dcea`，**Draft PR #997**（分支 `ccr-a0b4e085-ijdaio`，對齊新 main）；~~本裁示整合批（docs-only）寫入同分支工作樹，**commit／push 由總管處理**。~~ 裁示整合批＝commit `b6878ab4`（已 push）；#997 獨立稽核 PASS with fixes 的修正批寫入同分支，**其 commit 後的 head SHA 由總管 commit 後補記**（以 GitHub 實查為準）（2026-11-02 #997 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）。⚠️ cron 會推進 main，接手以當下 `git fetch` 為準（DEC-118）。 |
 | current Stage／exact safe stopping point | **New UI2 Architecture：客戶已核准（Q1～Q4，2026-11-02）**；**待 #997 獨立稽核＋合併後凍結**。原 Stage A 暫停／被取代。0 production code。 |
 | customer decisions not yet canonically indexed | 無（客戶 (6) 裁示全文已逐字入 DEC-123「客戶裁示 Q1～Q4」段；DR-2026-11-02-4）——**以 #997 合併後為準**。 |
 | 待客戶裁示 | 無即時待裁題。後續另開：System Action Aggregator **implementation Gate**（`NUI2-AGGREGATOR-IMPL`）、`FUI-RC-NUMERIC-GATE`、`FUI-PROPORTIONAL-ACTION-RULES`、LINE／UI canonical action convergence（`NUI2-LINE-UI-ACTION-CONVERGENCE`）。Preview App／Secrets／OAuth 網址＝需要時才發 🟡 Manual Action Gate（`NUI2-PREVIEW-APP-MANUAL`），⛔ 提前要求。 |
