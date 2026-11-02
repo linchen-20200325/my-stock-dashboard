@@ -93,6 +93,8 @@
 
 ## §6 Shared metadata／status chips 家族（客戶 DEC-109 九＋R8）
 
+> 📌 **R8 第 2 點「🔴／紅色只給系統真錯誤」與本節表 `unavailable` 列語意部分取代 BY DEC-122**（2026-11-02 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-122，`docs/DECISIONS.md`）；append-only，本節原文一字未改；判讀出處 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md` §1 S4、S7）：(1) 紅色射程擴為「系統真錯誤＋**確定性違規**（Danger／Risk Cap，例 `🔴 Risk Cap 超限 · 禁止新增曝險`）」，兩者**文字必須不同**、不得只靠顏色；未載入＝灰、stale 用 ⚠ 琥珀、每個色塊有文字、獨立渲染通道**仍有效**。(2) 新增 Semantic Chip 四語意 tone（Positive／Warning／Danger／Neutral-Info），與 D3 三族外觀軸正交；`guard_chip` 只限客戶逐字護欄句（`docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md` §4）。(3) 「Unavailable」自 DEC-122 起指**來源目前不可用**；本表 `unavailable` 列的舊義（委派 `⛔ 未接線`）改稱「功能尚未提供（未接線）」。**本表該列文字本次不改**——`tests/ui_v2/test_compact.py::_contract_kinds` 以本表對帳 `META_KINDS`（20 項）；kind 改名於 Final UI Stage A 與程式、測試同一 PR 同步（BACKLOG `FUI-UNAVAILABLE-KIND-RENAME`）。
+
 **客戶原文**：優先建立共用呈現方式：source、as_of、retrieved_at（若既有）、stale、freshness、unavailable、estimated／proxy、coverage、data quality。不要每一張卡重複寫「這筆資料來自……目前資料日……可能因為……」，用 chip／metadata component 取代。
 
 **R8（DEC-110）**：
@@ -148,6 +150,8 @@
 - **舊測試改寫原則（客戶原文）**：測試驗證「三段文字一定要顯示在頁面」者，改驗：**資訊沒有遺失、正確資料可取得、詳細說明可展開、provenance 可追溯、Missing 語意未改**（逐條對照見 Migration Plan §3）。
 
 ## §8 Missing Contract 不變（客戶 DEC-109 八）
+
+> 📌 **第 1 點（L1 外露字樣先沿用 ⟳／▨／⊘）與第 3 點（系統真出錯＝🔴）部分取代 BY DEC-122**（2026-11-02 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-122，`docs/DECISIONS.md`）；append-only，本節原文一字未改；判讀出處 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md` §1 S4、S8）：L1 Missing 外露字樣全站統一為 `⬜ 資料未取得`／`⬜ 資料未備`（客戶 2026-11-02 §5），`UI_STATE_META` 十態保留為 L0 細分類、⟳／⊘／▨ 留作 L2 子原因；四態（Missing／Stale／Unavailable／Not evaluated）與十態對映見 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md` §5。紅色另可用於確定性違規（文字須不同）。**本節「不變」清單全部仍有效**（missing ≠ 0／neutral／HOLD；unavailable ≠ safe；not evaluated ≠ safe；AI 不得補值）。
 
 **不變**：missing ≠ 0；missing ≠ neutral；unavailable ≠ neutral；not evaluated ≠ safe；missing ≠ HOLD；AI 不得補值。（同 `PROJECT_RULES.md` §19.8、DEC-026、DEC-031、DEC-101(2)。）
 

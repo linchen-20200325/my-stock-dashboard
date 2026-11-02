@@ -374,6 +374,8 @@ onebrain/
 
 ## 11. Structured Output
 
+> 📌 **下方概念 schema 部分取代 BY DEC-122**（2026-11-02 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-122，`docs/DECISIONS.md`）；append-only，本節原文一字未改；判讀出處 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md` §1 S15）：OneBrain output 最低集改為客戶 2026-11-02 §35：`summary`、`outlook`、`signal_consistency`、`reasons[]`、`counter_evidence[]`、`limitations[]`、`evidence_refs[]`；有 action explanation 時 `system_action_ref`；AI 不產生 independent action；`confidence` 依 No Uncalibrated Probability 不納入。`outlook`／`signal_consistency` 值域**未定義**，延到 Stage G 線框與 AB-2b 一併送客戶 Gate。**本節硬規則全部仍有效**（只用既有正式詞彙、新詞走 Customer Decision Gate、evidence 回指 Digest／provenance／RuleRef、raw text 不是 final result）。Grounding 加嚴（不違反 Risk Cap、不產生禁用 action、不產生偽 probability、不創造 Rule ID）見 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md` §15。
+
 正式 OneBrain 不以自由文字作唯一正式結果。
 
 概念 schema：

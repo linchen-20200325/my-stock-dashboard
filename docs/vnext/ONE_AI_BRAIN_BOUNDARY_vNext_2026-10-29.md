@@ -22,6 +22,8 @@
 
 ## §3 禁止清單（客戶 DEC-109 十七＋內部）
 
+> 📌 **末條「⛔ 把 Risk Cap 連到具體行動」部分取代 BY DEC-122**（2026-11-02 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-122，`docs/DECISIONS.md`）；append-only，本節原文一字未改；判讀出處 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md` §1 S9）：只限「Exposure > Cap → 🔴 Risk Cap 超限 · 禁止新增曝險」與「同一 Snapshot 下 Risk Cap blocked → 任何地方不得出現 unrestricted Add」這一條（客戶 2026-11-02 §19、§38）。**仍有效**：其他「Risk Cap → 具體行動」（例：自動減碼比例）仍屬新規則（HI-1／HI-4）⛔；RC-VISIBILITY 核准前只答 Risk Cap 狀態；曝險分母與數值啟用待 DEC-122 Q1。本節其餘禁止項全部仍有效。
+
 - ⛔ 掃 Streamlit 文字當 canonical data；⛔ 從顏色猜狀態；⛔ 從 widget 顯示文字推斷數據；⛔ 因 expander 收合就不讀某資料；⛔ 因 UI 沒顯示某指標就認定不存在；⛔ 從 UI Top-N 認為只有 Top-N 資料存在（客戶原文）。
 - ⛔ 讀 `st.session_state`；⛔ 接受 `top_n`／`expanded` 等 UI 參數；⛔ 搬 `macro_state.json` 的 AI 文字欄位；⛔ AI 情緒當規則（`exit_signals.judge_news_sentiment`）；⛔ 各頁自建 prompt；⛔ 使用 `src/config/persona.TAIWAN_ADVISOR_PERSONA`（「給出明確的動作」與 DEC-054 第 6 點衝突，`CV1-FU-06`）。
 - ⛔ 創造：行動、四態、產業或趨勢結論、confidence、數字、門檻、公式、股票、產業趨勢、策略分類（DEC-027、DEC-091 §三、DEC-092 Q1）。

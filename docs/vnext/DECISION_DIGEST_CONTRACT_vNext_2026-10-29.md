@@ -49,6 +49,8 @@ One AI Brain 不得：scrape Streamlit 文字當 canonical data；從顏色猜�
 
 ## §4 最低概念契約（客戶 DEC-109 十八：每個可判斷項概念上至少保留）
 
+> 📌 **下表「rule result：市場事實刻意不帶 rule（維持）」部分取代 BY DEC-122**（2026-11-02 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-122，`docs/DECISIONS.md`）；append-only，本節原文一字未改；判讀出處 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md` §1 S14）：市場事實**可以**帶由唯讀 Rule Registry 產生、對映既有 SSOT 門檻的 rule id（客戶 2026-11-02 §26／§27）。**仍有效**：⛔ 編造 rule id、Registry 外 id 一律違規、Digest ⛔ 搬門檻值（§6 A8）、不得創造新的 confidence 語意；現行正式 rule id 只有 `shared/decision_digest_rules.RULE_ID_ALLOWLIST`（6 個）；新 id＝新規格，屬改契約 → Stage F 升 `SCHEMA_VERSION`＋獨立 QA。另：客戶 §31 要求 Digest 保存 raw values、normalized values、candidates、industries、System Action 等（`docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md` §14），為 v2 加性項。
+
 客戶原文欄位：identifier／value／result／unit（如適用）／source／as_of／retrieved_at（若已有）／stale／freshness／missing／unavailable／provenance／rule result／relevant threshold／policy reference／confidence／evidence state（**只有既有正式語意才保留**）。**不得創造新的 confidence 語意。** 不要現在建立巨大 schema；先盤點、建立 minimum sufficient contract。
 
 | 概念 | AB-0 v1 現況（FACT） | 缺口 → v2 加性項 |
