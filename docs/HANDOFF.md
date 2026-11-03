@@ -12,6 +12,8 @@
 
 > 📌 **2026-11-03 現行接手點更新（append）**：最新為本檔**最末**「**Safe Handoff（2026-11-03 New UI2 Batch 2 …；現行）**」；上一行所指 Semantic Correction Gate 段已標「~~現行~~」（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。
 
+> 📌 **2026-11-03 最新現行接手點（DEC-128，append）**：**先讀 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128**——它們是 New UI2 presentation 的唯一有效讀法（四頁 Human UI 不顯示完整 L2／L3、完整診斷集中 👤 資料健康度、UI VM ≠ Decision Digest）；⛔ 依舊 Wireframes L2／L3 expander 施工。現行 Safe Handoff＝本檔**最末**「Safe Handoff（2026-11-03 Presentation Compression ≠ Information Loss／DEC-128…）」（上方各 Safe Handoff 段已降為歷史，有意識的更新，不是漏刪）。
+
 > 📌 **新永久規則（2026-11-03，DEC-126）**：**多元解法與最小成本決策規則**＝`PROJECT_RULES.md` **第 29 節**。一句話：遇到問題先在內部比較 ≥3 個方案、選 Minimum Sufficient Path，不得在同一路徑原地試錯或用更高模型／更多 Token 掩蓋錯誤路徑；僅 6 種情形才回報客戶 3 方案（須附推薦）。**新 session 先讀 `PROJECT_RULES.md` 第 29 節**（原文逐字見 `docs/DECISIONS.md` DEC-126）。本段僅為索引，非規格 SSOT。
 
 ### 📌 Resume Checkpoint 索引（現行；2026-10-29 Phase 1 SSOT Reset／Contract Freeze；DEC-086 欄位＋DEC-109 索引要求）
@@ -839,3 +841,20 @@ DEC-086 規則已於 main，本表已落地。
   - **仍未驗**：Preview Cloud 狀態檔（R2）；import 期 eager 鏈連 proxy（FAKE 亦同，`NUI2-SERVICES-INIT-EAGER`）；ROOT 外檔案寫入監看（`NUI2-REALFEED-FINGERPRINT-SCOPE`）；iOS／Safari／真機。
 - **獨立複驗最後一輪補記（2026-11-03；append）**：複驗（`756ed846`）無 P0／P1；P2-1／P2-3／P3-2／P3-4 已修（mapping §12、PROJECT_STATE §58 補、Audit §19 第 11 項）。依 `PROJECT_RULES.md` §29 不再擴充靜態守衛，已知限制登記 `NUI2-GUARD-STATIC-LIMITS`。**下一個唯一安全工作**：總管複驗本輪 → push → 開 PR → CI。
 
+
+- **Safe Handoff（2026-11-03 Presentation Compression ≠ Information Loss／DEC-128 落盤＋Active Rule Supersede Cleanup；現行；實作組單組、待總管複驗）**
+
+> ⛔ **新 session 先讀**：`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`＋`docs/DECISIONS.md` DEC-128，再讀本表。**禁止依舊 Wireframes／Freeze／Presentation Contract 內的 L2／L3 expander（`▸ 為什麼（L2）`／`▸ 指標明細（16 項）（L3）`／`▸ 原始資料表／工程診斷（L3）` 等）施工**——它們已標 `SUPERSEDED / HISTORICAL — NOT ACTIVE`。
+
+| 欄位（C1） | 內容 |
+|---|---|
+| live GitHub state | 基準 `origin/main`＝`74435cab`（#1003）；分支 `ccr-a0b4e085-ijdaio`；本批由實作組 commit（**未 push、未開 PR**；push／PR 由總管）。cron 會推進 tip，以當下 `git fetch` 為準。 |
+| current Stage／exact safe stopping point | **DEC-128＋Active Contract＋Supersede Cleanup 已落盤（docs＋`tests/test_ui2_active_contract_docs.py`；待總管複驗＋獨立稽核）**。**UI 程式與既有測試尚未改**：現行 Preview 仍有舊 L2／L3 expander 等（implementation deviation，見 Active Contract §9）。 |
+| 待客戶裁示／確認 | **無即時 Gate**。PROVISIONAL 待客戶覆核（可推翻）：(a) 資料健康度 Level 1 符號為面內別名；(b) 稽核面／選股條件與查看全部／指標危險度指路／一行資料狀態入口；(c) Preview 控制 `?ui2_dev=1`。格式：`Re-open DEC-128 (x)：改為 …`（DEC-128 §四 (d)）。 |
+| known limitations／blockers | 取代清單單組、未經第二組獨立稽核；AppTest query_params 於 1.56／1.59 未驗；資料健康度欄位 `retrieved_at`／`source health`／`proxy／estimated` canonical 多半缺（`NUI2-DATA-HEALTH-FIELD-GAPS`）；Digest 補 data health 區塊需另案 Opus High Gate（`NUI2-DIGEST-DATAHEALTH-XREF`）。 |
+| **下一個唯一安全工作** | ① 總管複驗本批（派**獨立一組**做 `NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT`：grep 全 repo 找仍描述舊 L2／L3 為現行規格的殘留；反向掃描豁免句）→ push → 開 PR → CI。② 之後依 BACKLOG §5.1.26 的 UI correction 批（建議序 P1→P3→P6→P2→P4→P5；每批 ≤3 項；新版面先出文字線框）。 |
+| required Model×Effort for resume | **P1／P2／P3／P4／P6 的純 presentation＝Sonnet 5.5＋Medium**；**P5（💼 第一屏，涉 Risk Cap／動作呈現語意）與圖表接真資料、資料健康度新增欄位、Digest data health 區塊＝Opus 5.5＋High**。 |
+| 正式文件索引 | DEC-128（`docs/DECISIONS.md`）；`PROJECT_RULES.md` 第 30 節；Active Contract `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`；Supersede Map S21～S35；待辦 `docs/BACKLOG.md` §5.1.26；狀態 `docs/PROJECT_STATE.md` §59；驗收 Audit Checklist §20（**未自勾**）；測試 `tests/test_ui2_active_contract_docs.py`。 |
+| 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Decision＝DEC-128；新 Rule＝第 30 節；Audit finding／Limitation／Backlog／Migration debt／Acceptance item 已寫入上列 GitHub 文件。 |
+| DEC-129 追加（客戶 (14)） | 桌機左側 Account Area（BACKLOG P7；`NUI2-AUTH-CONTRACT-GATE` 屬 Opus 5.5＋High）；舊斷言 5 處已改寫、`tests/test_ui2_contract_teeth_pending.py` 的 7 個 **strict xfail**：UI 批修好時它們會 XPASS 轉紅，**必須移除對應 xfail**（不得 skip）。 |
+| 禁止事項（摘要） | ⛔ 依舊 L2／L3 expander 施工；⛔ 為配合現行 UI 改 Active Contract；⛔ 刪 canonical／VM `sections`／RuleIDs／provenance 等（UI 移除 ≠ 刪資料）；⛔ 用 xfail／skip 隱藏仍斷言舊 presentation 的測試；⛔ 降低資料／語意安全守衛；⛔ 改 Decision Digest schema／Risk Cap／System Action／新資料 contract／公式／門檻／source；⛔ OneBrain／Digest runtime；⛔ 切 production default；⛔ 刪 Old UI／Legacy New UI。 |

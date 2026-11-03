@@ -1,5 +1,7 @@
 # Final UI Contract Freeze（vNext Final UI Convergence＋Headless Decision Digest＋OneBrain 的正式契約）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§2.0 的「三層」定義（L2＝為什麼／反證／freshness／source、L3＝raw／完整明細／工程診斷作為頁內層）；§2.1～§2.4 表中的 L2／L3 列；§10 「必須外露（L2）」中的完整 calculation；§12.2 Digest Viewer 的 L2 raw structured snapshot；§16.1～§16.4 線框內「↓ …L2／L3 摺疊」「▸ L2／L3」行；§16.5 縮短字句後「下沉」的頁內落點（S29；落點改為 backend Evidence／👤 資料健康度）。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
+
 - **狀態**：**客戶拍板版**（客戶 2026-11-02 裁示「Q1：A Q2：A Q3：A 依此正式完成 Final UI Contract Freeze」；逐字見 DEC-122）。Q1～Q3 已裁示，條文化見 **§0.1**；**Stage A 須待 Freeze 獨立驗收（含必要 QA）PASS 後才能開始**（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）。<br>~~**客戶指示 A 生效；Freeze 內容待客戶拍板（含 Q1～Q3）**（2026-11-02）。本檔是送客戶拍板的 Freeze 草案，**不是 Approved 規格**；本檔內「凍結」字樣一律指「Freeze 草案條款」，客戶拍板前不得當已核准規格引用。與 Q1／Q2／Q3 有關的條款另標 **PENDING**（見 §20）。**PENDING 條款在裁示前一律以「較嚴、不放寬風控」的讀法暫行**（寫在各條內）。~~
 - **日期**：2026-11-02　**基準**：`origin/main`＝`ce8422d`（cron；最後非 cron 合併＝#994 `4e4aa5e`）；撰寫組 2026-11-02 `git fetch origin main` 實查。⚠️ cron 會推進 main，**一律以當下 `git fetch` 後的 `origin/main` 為準**（DEC-118），不得引用本欄當最新 main。
 - 📌 **客戶拍板收斂批基準**：`origin/main`＝`c1e10a6`（PR #995 Freeze 草案合併點；撰寫組 2026-11-02 `git fetch` 實查）；同樣以當下 `git fetch` 為準。
@@ -115,6 +117,9 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 
 ### §2.0 共通規則
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：三層定義中「L2／L3 作為四個投資頁內的摺疊層」已被取代：Human UI＝L1＋少量必要 evidence／micro-tag／SPEC；完整層＝backend Evidence／Decision Digest 與 👤 資料健康度。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 - **IA 不變**：📊 市場／🎯 標的／💼 持股／👤 我的（DEC-091 §二、DEC-097、`shared/ia_nav4.PAGE4_LABELS`）；⛔ 增減頂層頁（DEC-109 十）。
 - **三層**：L1＝結論與狀態（第一眼）；L2＝為什麼、反證、freshness、source（第二眼）；L3＝raw table、完整明細、工程診斷（需要時才展開）〔客戶 §9〕。L1 ≠ 第一屏：L1 可延伸到第一屏下方，但第一屏必須放得下該頁 §16 列的「不用滑」項目〔客戶 §40〕。
 - **草稿先行仍適用**（`CLAUDE.md` v3 §03-2 ①）：本節是**結構藍圖**；各頁 Stage（B～E）開工的第一步仍以當時 main 實測並出逐頁細線框（含量測）送客戶拍板，⛔ 拍板前寫該頁 UI code。**AI 總管暫定**：若客戶表示本藍圖即足，可免逐頁細線框。
@@ -122,6 +127,9 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 - **每卡四欄**：value、short state、as_of、source（見 §9）〔客戶 §7〕。
 
 ### §2.1 📊 市場頁〔客戶 Stage B、§6～§9〕
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：表中 L2／L3 列（為什麼、counter evidence、freshness、source、raw table、full macro detail、engineering diagnostics）不再放在 📊 頁內；counter evidence→🤖 OneBrain Outlook＋Digest，freshness／source→micro-tag＋資料健康度。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 **頁責任（客戶原文）**：「現在市場環境如何？風險多大？目前可以多積極？」
 
@@ -137,6 +145,9 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 
 ### §2.2 🎯 標的頁〔客戶 Stage C、§10～§18〕
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：L2／L3 列中的 raw、完整分析明細不再作為頁內 expander；基本面／估值／籌碼／產業／風險改精簡 chart-first 卡；「查看全部候選」是使用者功能（維持）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 **頁責任（客戶原文）**：「A. 系統替我找；B. 我指定一檔研究。必須明確切開。」雙模式、Session 隔離、CTA 見 §3。
 
 | 模式 | 層 | 內容 | 現行（FACT） | 缺口 |
@@ -151,6 +162,9 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 
 ### §2.3 💼 持股頁〔客戶 Stage D、§19～§23〕（「Phase 6 最重要頁」）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：L2 的 evidence、rule IDs、L3 原始明細不再放在 💼 頁內；兩套刻度、80/20、停利、換股、VaR 等使用者分析以精簡 chart-first 形態保留。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 | 層 | 內容 | 現行（FACT；`page_hold` 仍為 IA v2 版，Phase 6 未開工） | 缺口 |
 |---|---|---|---|
 | **L1 第一屏** | Portfolio Risk Cap、目前曝險、System Action State、今日需處理 | 無首屏 Risk Cap；`build_position_cap_card` 在 ⑤ 依 DEC-051／PQ-C6-3（客戶 2026-10-16 核准）外露市場端建議持股區間 `range_text`（已核准顯示，**非違規**）；① `build_action_card` 只列汰弱／加碼計數或巡航句 | **曝險無資料**（`gsheet_portfolio._HEADERS`＝name／ticker／lots／avg_price／updated_at，無現金／總資產；單組 grep）~~→ **PENDING Q1**；動作詞彙 **PENDING Q2**~~ → **Q1=A 已裁示（§0.1.4）**；動作詞彙 **Q2=A 已裁示（§0.1.5）**（2026-11-02 Freeze 獨立驗收修正；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔驗收修正〕；原文刪除線保留） |
@@ -160,6 +174,9 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 | L2 | **OneBrain 持股摘要**（§15）：只解釋 system actions、共同風險、portfolio context、反證；System Action＝禁止加碼時 AI 文字也必須遵守；automated grounding check | ⑦ 直呼 `app_ai_service.gemini_call`（輸入＝station digest，非 Decision Digest、無 grounding） | **現行 ⑦ 列為違反本契約，待 Stage G 處理**（BACKLOG `FUI-HOLD-GEMINI-DIRECT`）；Stage G 前不擴充、不新增其他 AI 出口 |
 
 ### §2.4 👤 我的／Audit〔客戶 Stage E、§24～§27〕
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：L2／L3（Digest raw snapshot、Registry 明細、資料健康牆、工程診斷）→ 👤 我的·資料健康度（Level 1／2／3）；Audit 入口維持為稽核面（⚠ PROVISIONAL）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 | 區 | 內容 | 現行（FACT） | 缺口 |
 |---|---|---|---|
@@ -340,6 +357,9 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 
 ## §10 單檔 Valuation Contract〔客戶 §16、§17〕
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：「必須外露（L2）」的完整 calculation 不在 🎯 Human UI 展開；EPS basis／source／as_of／PE multiple／policy 壓成一行 SPEC 行維持外露（必要 evidence），完整 calculation→Evidence。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 | 類 | 客戶規則 | 現況（FACT） | 凍結處置 |
 |---|---|---|---|
 | **Current** | PE、PB、existing valuation metrics | TWSE 當日 PE（`valuation_service.get_pe_name_maps`）；357 殖利率估值（`valuation_service.get_stock_dividends`）；**PB 新 UI 無**（舊 UI 有） | 外露 Current；PB 補接屬 Stage C（既有資料，⛔ 新公式） |
@@ -380,6 +400,9 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 - 門檻數值**只從 SSOT 常數渲染**；Digest ⛔ 搬門檻值（Digest 契約 §6 A8 仍有效）。
 
 ### §12.2 Decision Digest Viewer
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：「L2 raw structured snapshot」不在一般 Audit 層外露→資料健康度 Level 3 developer diagnostics（預設收合、過 scrub_secrets）。L1 句型與 secrets 禁令維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 - **L1 human-readable**〔§27〕：例 `VIX 32.4　R-VIX-02　→ 高波動狀態`（客戶範例；R-VIX-02 現不存在 → 實作時只能顯示 Registry 內 id，無 id 者顯示事實＋狀態、不顯示 id 欄）。
 - **L2 raw structured snapshot**。
@@ -453,6 +476,9 @@ Domain ⛔ hardcode Claude：OneBrain → Provider interface（Claude／Fake／f
 
 ### §16.1 📊 市場
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：線框內「↓ … L2／L3 摺疊」「▸ L2／L3」行已不是現行規格（其餘版面順序維持；DEC-127 CTA 順序與 W-4 維持）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 ```
 桌機 1440×900                                   │ 手機 390×844（「不用滑」：市場狀態、Risk Cap、是否行動、refresh）
 ┌─────────────────────────────────────────────┐ │ ┌──────────────────────────┐
@@ -496,6 +522,9 @@ Domain ⛔ hardcode Claude：OneBrain → Provider interface（Claude／Fake／f
 
 ### §16.2 🎯 標的
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：線框內「↓ … L2／L3 摺疊」「▸ L2／L3」行已不是現行規格（其餘版面順序維持；DEC-127 CTA 順序與 W-4 維持）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 ```
 桌機                                            │ 手機（不用滑：mode、search、查詢摘要）
 ┌─────────────────────────────────────────────┐ │ ┌──────────────────────────┐
@@ -518,6 +547,9 @@ Domain ⛔ hardcode Claude：OneBrain → Provider interface（Claude／Fake／f
 
 ### §16.3 💼 持股
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：線框內「↓ … L2／L3 摺疊」「▸ L2／L3」行已不是現行規格（其餘版面順序維持；DEC-127 CTA 順序與 W-4 維持）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 ```
 桌機                                            │ 手機（不用滑：portfolio status、Risk Cap、是否需要處理）
 ┌─────────────────────────────────────────────┐ │ ┌──────────────────────────┐
@@ -538,6 +570,9 @@ Domain ⛔ hardcode Claude：OneBrain → Provider interface（Claude／Fake／f
 
 ### §16.4 👤 我的
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：線框內「↓ … L2／L3 摺疊」「▸ L2／L3」行已不是現行規格（其餘版面順序維持；DEC-127 CTA 順序與 W-4 維持）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 ```
 桌機                                            │ 手機（不用滑：connection state、primary management actions）
 ┌─────────────────────────────────────────────┐ │ ┌──────────────────────────┐
@@ -553,6 +588,9 @@ Domain ⛔ hardcode Claude：OneBrain → Provider interface（Claude／Fake／f
 - **FACT**：我的頁**無量測基準**（`tools/visual_fidelity/harness_app.py` 只支援 `?p=market|target|hold`）→ Stage E／I 前補 harness（BACKLOG `FUI-ME-HARNESS`）。
 
 ### §16.5 放不下時
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：「優先縮短字句（只下沉、⛔ 刪除）」的「下沉」落點由「頁內 L2」改為 backend Evidence／👤 資料健康度；「⛔ 自行移出必要項→Decision Gate」維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 第一屏實測放不下「不用滑」項目時：優先縮短字句（只下沉、⛔ 刪除，DEC-109 七）→ 合併成一行計數 → 仍不行則該頁 Stage 停在 Decision Gate（版面＝客戶拍板，v3 §03-2 ①），⛔ 自行把客戶核准結構改掉。
 

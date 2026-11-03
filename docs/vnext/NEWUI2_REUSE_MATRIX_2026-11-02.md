@@ -1,5 +1,7 @@
 # New UI2 Reuse Matrix（KEEP AS-IS／WRAP／PORT／REIMPLEMENT／RETIRE LATER／DO NOT TOUCH）
 
+> 📌 **DEC-128 補註（2026-11-03；補充、非取代；本檔分類全部仍有效）**：矩陣中的 L0～L6 是**程式分層**（`CLAUDE.md` §8.2），與 presentation 的 L1／L2／L3 無關，勿混讀。DEC-128 新增的 projection 邊界（Human UI VM ≠ Decision Digest）**不改任何 KEEP／WRAP／PORT 分類**：「從 Human UI 移除 L2／L3」只改 views 的 render policy（`src/ui2/views/_page.py::render_sections` 等 presentation 檔，屬 REIMPLEMENT 範圍），**不碰** `PageVM`／`PageContext.sections` 內容、`real_canonical`、`real_feed`、`scenarios`、`shared/ui2_contract`。見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §8。
+
 - **狀態**：**隨 Architecture Gate 經客戶裁示 Q1～Q4 整體核准（2026-11-02；逐字見 DEC-123），待 #997 獨立稽核＋合併後凍結**；客戶未逐列裁示本矩陣（INFERENCE：隨整體核准）。（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）<br>原文：~~**Architecture Gate 草案，待客戶裁示**（隨 `docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md` 一併送審；客戶 (5)-13「reuse matrix frozen」前 ⛔ 據以施工）。~~
 - **日期**：2026-11-02　**基準**：工作樹＝PR #996 head `139e315b`（調查 invC 讀此 SHA；撰寫組 2026-11-02 `git fetch` 實查 `origin/main`＝`c1e10a62`，HEAD 比 main 多 1 個 docs commit）。以當下 `git fetch` 為準（DEC-118）。
 - **決策來源**：客戶 2026-11-02 裁示 (5)-6「必須實查 repo 後分類：KEEP AS-IS／WRAP／PORT／REIMPLEMENT／RETIRE LATER／DO NOT TOUCH」（逐字見 `docs/DECISIONS.md` DEC-123）。

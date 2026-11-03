@@ -1,5 +1,7 @@
 # UI Visual Fidelity Gate（視覺保真閘門）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§1 第 3 點、V7 與 §8 報告格式中的「第一眼／第二眼／第三層答不出＝FAIL」之**第三層（頁內摺疊）**判準（S21）——改讀「第一眼／第二眼在頁內；完整 evidence 層在 backend／👤 資料健康度」。**其餘（Gate 本體、V1～V6、V8～V11、Decision Density／Text Reduction、截圖規格、判定者）全部仍有效**。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
+
 - **狀態**：正式／現行
 - **日期**：2026-10-29
 - **決策來源**：Gate 的存在、「UI Stage 完成條件」地位、每個 UI PR 至少附 desktop＋mobile 390px 截圖、對核准 blueprint 檢查 11 項、「CI／QA／tests／mutation 全綠 ≠ UI Stage complete」、明顯偏離＝Visual Fidelity FAIL、第一屏三層答不出＝FAIL ＝ **客戶 2026-10-29（`docs/DECISIONS.md` DEC-109 四、二十三、二十四，逐字收錄於該條）**；本檔的量化門檻、截圖規格、判定流程、補充檢查 V1～V11、工具 ＝ **AI 總管內部決定（DEC-110，依 `CLAUDE.md` §-1.5.D v3 §03-1；客戶可推翻）**。

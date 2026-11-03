@@ -1,5 +1,7 @@
 # New UI2 Architecture Gate（New UI2 Greenfield Presentation Layer 架構閘門）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§4.3 P9 Digest Viewer 的「L2 raw structured snapshot」位置（MIGRATE→👤 資料健康度 Level 3，S28）。**本檔其餘條文（§1.5 invariant、§4 View Model 邊界、§5 Migration、§7 Preview strategy、§9 守衛）全部仍有效**，DEC-128 對本檔只**補**兩條（見 §1.5 與 §7 的 📌 補註）。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
+
 - **狀態**：**客戶核准（Q1=A／Q2=A〔修正分類〕／Q3 四頁線框核准／Q4=A，2026-11-02；逐字見 DEC-123「客戶裁示 Q1～Q4」）；~~待 #997 獨立稽核＋合併後凍結~~ #997 獨立稽核兩輪完成（第一輪 PASS with fixes → 第二輪 PASS）；**#997 合併即凍結**（merge SHA 由下一位補記）**（2026-11-02 #997 獨立稽核第二輪 PASS 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕；原文刪除線保留）。凍結後**下一個唯一安全工作**＝發 🟡 Model／Effort Change Gate，**客戶切換 Model×Effort 至 Sonnet 5.5＋Medium** 後，經 **implementation Gate** 開第一個 New UI2 批次（建議先 `NUI2-GUARD-REGISTRATION`／View Model boundary（`NUI2-VM-BOUNDARY`）／Preview 入口骨架（`NUI2-PREVIEW`），≤3 項，fake／snapshot 資料）；**未經客戶切換與 Gate 不得開始 implementation**；System Action Aggregator 實作另需 implementation Gate（`NUI2-AGGREGATOR-IMPL`）。#996 已合併（main＝`acd1648c`）；本 Gate 已落盤為 commit `6d30dcea`、Draft PR #997（分支 `ccr-a0b4e085-ijdaio`）。⛔ production coding（含 System Action Aggregator runtime）：Architecture 凍結並發 Model／Effort Change Gate 前一律不得施工；Aggregator 另須 implementation Gate（§4.6）。（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）<br>原文：~~**Architecture Gate 草案，待客戶裁示**（§11 送客戶四題：**G1 預覽、G3′ System Action Aggregator（系統動作彙整層）、四頁線框核准、G2 cutover＋#996 合併確認**，皆 **PENDING**）。⚠️ **本 Gate 目前只存在於工作樹**（受「只能推指定分支」權限限制；#996 合併後才以新 PR 落盤，見 §11 G2 第 2 小題）；依 DEC-122「沒寫入 GitHub 的新規格，不視為正式完成」，落盤前**不是正式文件**。獨立稽核（2026-11-02）判 **PASS with fixes**，本版已依修正項 F2～F7、m1～m6 改寫（單組稽核）。本檔**不是 Approved 規格**；客戶裁示前，本檔所有「目標架構／目錄／守衛」一律只是提案，⛔ 據以寫任何 production code（客戶 (5)-5「本批禁止 production coding」）。~~
 - **日期**：2026-11-02　**基準（裁示整合批）**：`origin/main`＝`acd1648c`（#996 合併點；總管實查）；本檔所在分支 `ccr-a0b4e085-ijdaio`（#997）。以當下 `git fetch` 為準。**基準（初稿，歷史）**：工作樹＝PR #996 head `139e315b`；撰寫組 2026-11-02 `git fetch origin main` 實查 `origin/main`＝`c1e10a62`（#995），HEAD 比 main 多 1 個 commit（#996 收斂批）。⚠️ cron 會推進 main，**一律以當下 `git fetch` 後的 `origin/main` 為準**（DEC-118），不得引用本欄當最新 main。
 - **決策來源**：客戶 2026-11-02 裁示 **(5)「New UI2 Greenfield Presentation Layer」**（逐字收錄於 `docs/DECISIONS.md` **DEC-123** fence；本檔與原文有出入時以原文為準）。下文〔客戶 (5)-n〕＝該裁示第 n 節原文要求。
@@ -104,6 +106,9 @@ OneBrain summary
 只維持 **1. 📊 市場　2. 🎯 標的　3. 💼 持股　4. 👤 我的**；⛔ 新增第五個主要頁面〔客戶 (5)-7〕。SSOT 沿用 `shared/ia_nav4.PAGE4_LABELS`（FACT；KEEP AS-IS，Reuse Matrix L0-5）；🎯 標的頁「市場精選／即時查一檔」是**頁內模式切換**，⛔ 新 IA 層（Freeze §3.1 第 4 點）；👤 我的頁的 Audit 是**頁內區塊**，⛔ 第五頁。
 
 ### §1.5 永久 invariant（客戶原文；UI2 施工期全部適用）
+
+> 📌 **DEC-128 補註（2026-11-03；補充、非取代）——Human UI ViewModel ≠ Decision Digest（OneBrain）Context 雙 projection**：Complete Evidence Layer 之後分成**兩個 projection**——Human UI ViewModel（簡化、Chart-first、關鍵 evidence、少量文字）與 Decision Digest／OneBrain Context（完整正式 evidence、Missing、provenance、source、as_of、freshness、deterministic results、Risk Cap、System Action、counter-evidence、limitations、cross-page context）。**UI 沒顯示的資料，不代表 OneBrain 不得讀；OneBrain 能讀的資料，也不代表 UI 必須全部呈現。** 本檔 §4.2-6（context／slice 兩層）的 `context` 是「Human UI 全量」，**不是** Decision Context。細節見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §8。
+
 
 〔客戶 (5)-8，逐字〕：
 - UI 越簡潔，Decision Context 不能越少
@@ -408,6 +413,9 @@ src/services/system_action_aggregator.py   L3  System Action Aggregator（純函
 ---
 
 ## §7 Preview strategy（~~**PENDING G1**~~ **客戶核准 Q1=A**）
+
+> 📌 **DEC-128 補註（2026-11-03；補充、非取代）——Preview 控制的位置規則**：本節 Q1=A（Preview 策略）**不變**；新增位置規則：「Preview 控制（資料來源／fake 場景／帳戶）」屬**開發／測試專用控制**，不得畫成四頁產品內容（⚠ PROVISIONAL：僅 `?ui2_dev=1` 之類開發旗標時顯示、明顯標示「非產品內容」、不用 sidebar、不開第五導覽項；預設道 0 個）。FAKE／Real 切換保留供測試，**不屬 production presentation contract**。現行殼（`src/ui2/shell/app.py` 把它畫成頁面 expander）是 implementation deviation，由 `docs/BACKLOG.md` §5.1.26 P1 修正。見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §6。
+
 
 ### §7.1 候選比較（FACT＋INFERENCE，invD §2）
 

@@ -1,5 +1,7 @@
 # Presentation Contract vNext＋Visual SSOT（新 UI 呈現契約）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§3 表中的 L3 列（頁內摺疊）；§4 主圖 header 的「▸ 為什麼／來源／限制／去哪補」摺疊入口；§5 預設下沉清單的「頁內收合」位置；§7 三要素「L3 摺疊內可取得、資訊守恆＝卡面∪摺疊∪expander」；§8 第 2、5 點的位置（完整原因在 L3「去哪補」）；§11 R7 摺疊標籤；§12.1 市場「下沉」列；§16 既有裁示表中「三要素→L3 摺疊」「▸ 詳細」「DEC-105 指路」列；§17 能力守恆表的落點欄「既有 L3 expander」（S26；對 New UI2；Legacy 凍結維持）。**仍有效**：§1 最高原則、§2 Visual Budget、§3 第一屏五問與 L1／L2(Secondary visuals)、§8 Missing ≠ 0、§9 UI 簡化不得減少的清單、§10 Top-N、§11 R10、§12.4、§18 工程字樣（擴及四頁全部 Human UI）。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
+
 - **狀態**：正式／現行（Phase 1 SSOT Reset／Contract Freeze 凍結版）
 - **日期**：2026-10-29　**基準**：PR base＝main `978ecedc`（撰寫時基準 `55739129`＝`978ecedc`＋#970 commit `06a7a3e5` 的 merge；`src/`、`shared/` 與 main 相同）
 - **決策來源**：原則、Visual Budget、第一屏五問、主圖 header、下沉清單、chips 家族、三要素遷移、Missing 不變、硬規則、IA 不變、各頁方向＝**客戶 2026-10-29 指示（`docs/DECISIONS.md` DEC-109，逐字收錄）**；本檔的量化上限、詞彙表、讀法 R2～R15＝**AI 總管內部決定（DEC-110，依 `CLAUDE.md` §-1.5.D v3 §03-1）**，客戶可推翻任何一條，推翻後以客戶為準。
@@ -44,6 +46,9 @@
 
 ## §3 第一屏五問＋三層
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26）：L3 列（頁內摺疊：為什麼、來源、as_of、口徑、公式、threshold、工程術語）已 REMOVE FROM ACTIVE；內容 MIGRATE→Evidence／資料健康度。五問與 L1／L2 維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 **客戶原文（DEC-109 四）**：正常決策頁第一屏必須優先回答：1 現在狀態 2 重要數字 3 主要圖 4 是否需要行動 5 下一步。如果一頁無法明確回答「第一眼看什麼？第二眼看什麼？第三層才看什麼？」，則 **Visual Fidelity FAIL**。
 
 | 五問 | 第一屏須可見的元素（判準） | 經客戶裁示的豁免 |
@@ -66,6 +71,9 @@
 
 ## §4 主圖 header 結構（客戶原文 DEC-109 五＋規格）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26）：chip 列內容改為圖下 SPEC 行（Active Contract §4）；「▸ 為什麼／來源／限制／去哪補」摺疊入口 REMOVE。標題／一句話維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 ```
 【圖表標題】                                                       ← 既有常數，不改字
 〔資料 10/29〕〔來源 TWSE〕〔近 60 日〕〔✅ 可讀〕                   ← 3～5 顆 metadata／status chip（§6）
@@ -83,6 +91,9 @@
 - **摺疊內容**（固定四段，不適用寫「—」並說明）：為什麼（判讀說明、`Note.why`）／來源（source、as_of、TTL 說明引用 `shared/ttls.py` 等既有 SSOT）／限制（窗口、口徑、估算／代理、未驗）／去哪補（`Note.where`、`page_today.V2_EXIT_PHRASES` 對應短語或 `NO_EXIT_MARKER`）。
 
 ## §5 預設下沉清單（客戶原文 DEC-109 六）
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26）：「頁內預設收合」的位置已取代：下沉目標＝backend Evidence／👤 資料健康度；工程字樣 L1／L2＝0 維持（擴及四頁全部層）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 **必須保留、正常情況預設收合**：為什麼、資料來源、as_of、計算口徑、公式、threshold、policy reference、限制、Missing 原因、unavailable 原因、去哪補、provenance、工程術語、service／helper／Lx 等工程資訊。
 
@@ -135,6 +146,9 @@
 
 ## §7 「現在／為什麼／去哪補」正式遷移（客戶 DEC-109 七）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26）：「L3 摺疊內可取得／頁內可展開」已取代；資訊守恆改為「卡面 ∪ backend Evidence ∪ 👤 資料健康度」（資訊必須存在、可追溯維持）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 **客戶原文**：舊 contract 中「現在／為什麼／去哪補」承載的資訊不能刪除，但正式取消「三者必須全部常駐主畫面」。新 contract：**資訊必須存在、可取得、可追溯、可展開，但不要求全部外露。**
 
 | 面 | 新契約 | 判準（Phase 2 測試據此改寫） |
@@ -150,6 +164,9 @@
 - **舊測試改寫原則（客戶原文）**：測試驗證「三段文字一定要顯示在頁面」者，改驗：**資訊沒有遺失、正確資料可取得、詳細說明可展開、provenance 可追溯、Missing 語意未改**（逐條對照見 Migration Plan §3）。
 
 ## §8 Missing Contract 不變（客戶 DEC-109 八）
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26）：第 2 點「完整原因與去處在 L3『去哪補』」、第 5 點「未接線只在『查看依據』揭露」的**位置**（完整原因→👤 資料健康度 Level 2；Missing ≠ 0 等其餘維持）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 > 📌 **第 1 點（L1 外露字樣先沿用 ⟳／▨／⊘）與第 3 點（系統真出錯＝🔴）部分取代 BY DEC-122**（2026-11-02 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-122，`docs/DECISIONS.md`）；append-only，本節原文一字未改；判讀出處 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md` §1 S4、S8）：L1 Missing 外露字樣全站統一為 `⬜ 資料未取得`／`⬜ 資料未備`（客戶 2026-11-02 §5），`UI_STATE_META` 十態保留為 L0 細分類、⟳／⊘／▨ 留作 L2 子原因；四態（Missing／Stale／Unavailable／Not evaluated）與十態對映見 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md` §5。紅色另可用於確定性違規（文字須不同）。**本節「不變」清單全部仍有效**（missing ≠ 0／neutral／HOLD；unavailable ≠ safe；not evaluated ≠ safe；AI 不得補值）。
 
@@ -190,6 +207,9 @@ R9（DEC-110）：
 
 ## §11 摺疊、標籤與運算（R7、R10）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26）：R7 摺疊標籤規則已取代；R10「expander 不省運算」技術事實維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 - **R7 摺疊標籤（2026-10-29 總管改判後範圍）**：**主圖 header 下方**的依據入口用 **`▸ 為什麼／來源／限制／去哪補`**（客戶 DEC-109 五明確給定）。**卡片摺疊標籤**「▸ 詳細」（客戶 2026-09-25 核可線框逐字，`src/ui_v2/markup.FOLD_SUMMARY_TEXT`）與各頁「🔍 查看依據」**維持有效**；是否統一換成新字樣＝各頁 phase 線框待客戶拍板點（§22）；內容不變。客戶裁示或測試釘住字面的**具名 expander 不改名**（例 `_market_blocks.LAMP_DETAIL_EXPANDER_LABEL`「指標明細（16 項）」，DEC-105 指路目標）。
 - **R10 expander 不省運算**：Streamlit expander body 每次 rerun 都會執行（FACT，Inv-2 T26）→ **收合 ≠ 省運算**；既有 button／checkbox／form gate **全部保留**，重運算仍走 gate。
 - `st.form` 內放 `st.expander` 在 `requirements.txt` floor 1.56 的行為**未驗**（沙箱 1.59.2）；未驗前改用「form 外 expander 放進階控制項＋form 內只留主鍵」的保守排法。
@@ -201,6 +221,9 @@ R9（DEC-110）：
 **客戶原文（DEC-109 十）**：不要因這次改造自行增加或刪除頂層頁面。維持 1 📊 市場 2 🎯 標的 3 💼 持股 4 👤 我的。若發現現有正式 spec 與此不一致：先做 conflict analysis，不要自行改 IA。（FACT：`shared/ia_nav4.PAGE4_LABELS` 恰為此四頁，`reconcile_nav4` 強制恰好 4 頁；與 DEC-091 §二、DEC-097、`d25_wireframes/index.html` 一致。）
 
 ### 12.1 📊 市場 —「現在市場環境好不好？可以承擔多少風險？」
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26）：市場「下沉」列（頁內）已取代，見 DEC-117 Q3／Q8 註（S25）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 | 項 | 規格 |
 |---|---|
@@ -311,6 +334,9 @@ R9（DEC-110）：
 
 ## §16 既有客戶裁示：內容保留、只換位置（R5、R6）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26）：對 New UI2：三要素→L3 摺疊、「▸ 詳細」、DEC-105 指路（指向 16 項 expander）三列已取代；E17 價格資料日 chip、Risk Cap 完整性 chip、外幣逐字句、稅前、AI 揭露 chip 等少量必要 evidence／micro-tag 維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 | 裁示 | 必須保留的內容（⭐＝逐字） | 舊位置 | 新位置 |
 |---|---|---|---|
 | DEC-081 Q2-1 | 今日結論句（`shared/market_conclusion.build_market_conclusion`；「；」並列、缺值明寫、⛔ 缺值當中性）⭐ 句子不改 | Hero 與 ⚡ 之間（DEC-105 1A） | **L1 第一屏**（作為頁級主要判讀句，B4）；Hero／⚡ 相對順序可維持，但必須進第一屏 |
@@ -337,6 +363,9 @@ R9（DEC-110）：
 - 📌 **2026-10-30 有意識的更新，不是漏刪；決策者 客戶（DEC-117，Phase 4 步驟 0 裁示）**：上表 **DEC-081 Q2-1** 列「新位置」中的「Hero／⚡ 相對順序可維持」在 **📊 市場頁失效**——客戶 Q5=B 明確同意取代 DEC-105 1A 的舊相對順序，今日結論**提前到 3 個核心狀態 tile 之前**（順序見 §12.1 註）；「L1 第一屏、頁級主要判讀句、句子不改」照舊。DEC-081 Q2-2、DEC-092 Q2 兩列不變（逐字）。
 
 ## §17 能力守恆表（吸收自 PR #970 §D，依本契約更新；⛔ 能力消失、⛔ 語意改變）
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26）：落點欄「既有 L3 expander 原樣，預設收合」等已 MIGRATE→Evidence／資料健康度；**能力一個都不消失**。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 > 原表出處：PR #970 commit `06a7a3e5` 的 `docs/vnext/NEWUI_D25_UI_CORRECTION_WIREFRAME_2026-10-29.md` §D（該檔已自本分支移除，見 supersede map §4）。單組讀碼所列，**非窮舉**；各施工 phase 須以機械 parity 測試逐項驗。
 

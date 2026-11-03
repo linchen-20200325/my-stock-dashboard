@@ -1,5 +1,7 @@
 # Phase 4 步驟 0｜📊 市場頁：現況重測＋能力盤點＋文字線框＋客戶決策表
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（對 New UI2；DEC-128 S26／S30 的 Legacy 時代同源條文；客戶 2026-11-03）**：本檔屬 **Legacy New UI（`src/ui_v2`，DEC-123 後凍結）時代**文件；其中「頁內 L2／L3 摺疊」「▸ 為什麼／來源／限制／去哪補」「查看依據」「指標明細（16 項）」等 presentation 條文**對 New UI2 一律不是現行規則**。New UI2 的現行唯一有效讀法＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128。對 Legacy New UI／Old UI 本檔照舊（凍結，不刪不改）；舊文一字未刪。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；單組判讀，掃描範圍見 DEC-128 §六。）
+
 - **狀態**：~~**草稿 rev1，待客戶拍板**~~ **已核准（客戶 2026-10-30 裁示 DEC-117：Q1=B／Q2=A′／Q3=A／Q4=P-B／Q5=B／Q6=A／Q7=A／Q8 8a／8b／8c 全 A＋補充裁示）**（📌 2026-10-30 有意識的更新，不是漏刪；決策者 **客戶**（DEC-117），落文 AI 總管；本行其餘原文保留。⚠️ 核准≠可以開工：客戶指示先落盤、再停在安全 checkpoint 通知切換 Opus 5.5＋High，**客戶回覆「改好了」後才寫 Phase 4 UI code**；施工驗收條件見 **§10**）（出處：Migration Plan §1「Phase 4：先出文字線框（含 W2、W3、W9、版面差異、總管推薦）→ 客戶拍板 → 寫 UI code」；`CLAUDE.md` §-1.5.D v3 §03-2 ① 草稿先行；契約 §22）。**本檔核准前不得寫任何 Phase 4 UI code**（不得改 `src/`、`tests/`、`app.py`）；客戶不裁示的項目依各題「不裁示預設」（§6）。
 - **日期／基準**：2026-10-30；main `15071a47`（Phase 3 含站殼 D7=B 已合併；`src/`、`tests/`、`app.py` 與 main 相同，本批只新增 `docs/`）。量測日一律 2026-10-30，不寫行號（`CLAUDE.md` §8.2.A.0 規則 1）。
 - **決策來源**：W2／W3／W9 清單＝契約 §22（客戶 DEC-109 之後的總管改判原則）；Phase 3 已裁示約束＝DEC-115（D1a／D1b／D3／D5／D6／D8／D10）、DEC-116（D7=B）；市場頁既有客戶裁示＝DEC-081（Q2-1／Q2-2）、DEC-092（Q2 均線聲明、Q3）、DEC-105（1A／2A／3A＋指路）、DEC-109（Visual Budget、第一屏五問、Top-N、Missing Contract）；方案設計、推薦、API 對映、動檔預測＝**AI 總管內部（DEC-110 同層）**，客戶可推翻。

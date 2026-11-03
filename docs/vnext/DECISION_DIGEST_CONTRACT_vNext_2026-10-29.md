@@ -1,5 +1,7 @@
 # Decision Digest Contract vNext（AI 決策輸入層契約）
 
+> 📌 **DEC-128 交叉參照（2026-11-03；補充、非取代）**：Decision Digest／OneBrain Context 是 Complete Evidence Layer 的**完整 projection**，與 Human UI ViewModel 互不決定對方（永久 invariant：**UI 沒顯示的資料，不代表 OneBrain 不得讀；OneBrain 能讀的資料，也不代表 UI 必須全部呈現**）；OneBrain 必須讀完整 Digest、不是 UI Summary Bot，並整合 data health／freshness。**本註不新增任何 Digest schema 欄位**——Digest 是否補 data health／freshness 區塊＝`NUI2-DIGEST-DATAHEALTH-XREF`（`docs/BACKLOG.md` §5.1.26，需另案 Opus 5.5＋High Gate）。見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §7～§8。
+
 - **狀態**：正式／現行（Phase 1 凍結版；**本 phase 只凍結契約，不改 `shared/decision_digest*.py`、`src/services/decision_digest_*.py` 任何一行**）
 - **日期**：2026-10-29　**基準**：PR base＝main `978ecedc`；程式事實適用 `978ecedc`（本分支只多 docs）
 - **決策來源**：架構鏈、「Digest 不是 UI scrape」、AI 不得從 UI 反推、最低概念契約欄位、不得創造新 confidence 語意、「Digest contract 凍結前不得寫新 LLM prompt／glue」＝**客戶 2026-10-29（`docs/DECISIONS.md` DEC-109 十六～十八、三十一，逐字）**；以 AB-0 v1 為基底、加性 v2 計畫 A1～A8、依賴順序＝**AI 總管內部決定（DEC-110，`CLAUDE.md` §-1.5.D v3 §03-1）**，Phase 7 實作並過獨立 QA。

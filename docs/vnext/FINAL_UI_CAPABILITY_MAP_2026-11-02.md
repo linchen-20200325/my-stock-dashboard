@@ -1,5 +1,7 @@
 # Final UI Capability Map：Old UI Capability → New UI Location（2026-11-02）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§4 能力清單表「Final 建議落點」欄與 §3.1 落點更新中的「市 L2／L3」「標精 L2／L3」「標查 L2／L3」「持 L2／L3」「我A L2／L3」（含 M06、M11～M17、T02／T04／T08／T14～T20／T26～T28、H07～H10、E10 Data Freshness／資料健康牆等）**作為頁內層的落點**——落點改為「Human UI 精簡卡／圖」或「backend Evidence／👤 資料健康度」（MIGRATE，S31）。**能力一個都不消失**；Stage J 第 6 條（能力守恆計算）不變，只換落點。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
+
 - **狀態**：**客戶拍板版**（客戶 2026-11-02 裁示 Q1=A／Q2=A／Q3=A；嚴重度定義仍為 AI 總管暫定）（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）；原文刪除線保留）；~~**客戶指示 A 生效；Freeze 內容待客戶拍板（含 Q1～Q3）**~~（Final UI Contract Freeze 配套，隨 Freeze 送拍板；嚴重度定義為 AI 總管暫定；契約本體 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md`，取代關係 `docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md`，決策 `docs/DECISIONS.md` DEC-122）。
 - **日期**：2026-11-02　**基準**：`origin/main`＝`ce8422d`（撰寫組 `git fetch` 實查；cron 會推進 main，以當下 `git fetch` 為準）。
 - **客戶依據**：Old UI Capability → New UI Location Map〔客戶裁示 A 清單〕；「不得靜默移除的舊能力」重新盤點：大盤判斷、台股趨勢、國際趨勢、EPS × PE 研究、macro、industry、chip、valuation、risk、portfolio、candidate、source audit〔客戶 §42〕；Stage J 第 6 條「old/new capability map 無 critical gap」〔客戶 Stage J〕。
@@ -69,6 +71,9 @@
 - ⇒ 裁示後 critical 仍為 **7 列**（M02、M03、T16、T21、H01、H02、E08；H02 部分承接）；**Stage J 第 6 條仍不成立**。critical 的解除只能由實作合併＋獨立 QA 證據或客戶裁示達成（附錄 D 第 2 條）。
 
 ## §4 能力清單表（Old → New → Final 落點）
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S31）：本表落點欄寫「市 L2／L3」等頁內層者，一律改讀 Active Contract §3 與 §8 對照（Human UI 精簡／Evidence／資料健康度）；能力本身與 Gap 嚴重度不變。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 **落點縮寫**：市＝📊 市場｜標精＝🎯 標的·市場精選｜標查＝🎯 標的·即時查一檔｜持＝💼 持股｜我設＝👤 我的·設定｜我A＝👤 我的·Audit｜L1／L2／L3＝層級。
 **欄位**：ID｜舊能力｜舊位置（檔＋符號）｜新 UI 現況（檔＋符號）｜**承接程度**｜**Final 新落點**｜**Gap 嚴重度**｜舊獨有｜證據等級／備註。`CV-nn`＝`NEWUI_D25_B_COVERAGE_2026-10-27.md` 列號（2026-10-27 基準，「新 UI 現況」欄以 2026-11-02 讀碼覆寫）。

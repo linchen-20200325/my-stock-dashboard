@@ -400,9 +400,8 @@ def test_regime_is_identical_across_pages(monkeypatch, variant):
     vms = _vms(_feed(monkeypatch, **_REGIME_VARIANTS[variant]))
     assert check_cross_page_regime(vms) == []
     m_, t_, d_ = _regime_triplet(vms)
-    if m_.state is not FieldState.UNAVAILABLE and m_.state is not FieldState.OK:  # 指引只在未評估類態出現
-        assert RC.REGIME_SEE_WHY in m_.detail and RC.REGIME_SEE_WHY_MARKET not in m_.detail
-        assert RC.REGIME_SEE_WHY_MARKET in t_.detail and RC.REGIME_SEE_WHY_MARKET in d_.detail
+    # DEC-128／129：舊版在此強制「說明見『為什麼（L2）』」指引存在（保護已失效的頁內 L2 presentation）——已移除；
+    # 跨頁一致性（值／態／字樣／freshness／除指引外 detail 逐字相同）由 check_cross_page_regime 照舊守住。
     w = _why_regime(vms[P4_MARKET])                          # L2 位階說明：同態同字樣（只 detail 較完整）
     m = vms[P4_MARKET].context.first_screen.current_state
     assert (w.state, w.value_text, w.status_text, w.freshness) == (m.state, m.value_text, m.status_text, m.freshness)
@@ -662,7 +661,9 @@ def test_real_mode_renders_every_page_with_the_real_banner(monkeypatch):
     assert at.selectbox(key="ui2_scenario").disabled and at.selectbox(key="ui2_account").disabled
     # Real 模式：Preview 控制標題與（disabled）帳戶 widget 不顯示 fake 字樣（QA P3）
     ctrl = [e.label for e in at.expander if e.label.startswith("Preview 控制")]
-    assert ctrl == ["Preview 控制（資料來源）"], ctrl
+    # DEC-128／129：舊版強制 expander 標題 == 「Preview 控制（資料來源）」（保護已失效的「Preview 控制是頁面 expander」）——
+    # 已改為不強制位置／標題，只保留 Real 模式不得顯示 fake 字樣（資料誠實性）。新位置規則見 tests/test_ui2_contract_teeth_pending.py。
+    assert all("fake" not in c.lower() for c in ctrl), ctrl
     assert "fake" not in at.selectbox(key="ui2_account").label.lower()
 
 

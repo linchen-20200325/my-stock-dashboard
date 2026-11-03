@@ -286,7 +286,8 @@ def test_first_screen_has_the_four_questions_in_order(page):
     h = H.first_screen_html(get_preview_page_vm(page, "loaded").context.first_screen)
     qs = re.findall(r'data-ui2-q="(q\d)"', h)
     assert qs == ["q1", "q2", "q3", "q4"]
-    assert h.index("① 現在狀態") < h.index("② 是否需要行動") < h.index("③ 下一步") < h.index("④ 主 CTA")
+    # DEC-128／129：舊版強制可見題號字樣「① 現在狀態…④ 主 CTA」（鷹架標籤，非產品文字）——改為只守錨點順序（資訊需求順序）
+    assert h.index('data-ui2-q="q1"') < h.index('data-ui2-q="q2"') < h.index('data-ui2-q="q3"') < h.index('data-ui2-q="q4"')
 
 
 def _good_mobile() -> dict:

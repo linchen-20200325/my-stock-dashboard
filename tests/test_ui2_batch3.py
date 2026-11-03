@@ -235,7 +235,9 @@ def test_main_risk_is_not_interleaved_by_cards_or_l2_l3_in_the_real_page(scenari
     order = _market_dom_order(scenario)
     assert order.index("ui2-m-l1") < order.index("ui2-grid")
     first_after = [t for t in order[order.index("ui2-m-l1") + 1:] if t in ("ui2-grid", "ui2-section-title", "expander")]
-    assert first_after and first_after[0] == "ui2-grid"                      # 緊接 L1 之後只能是卡片，不是 L2／L3
+    # DEC-128／129：舊版強制「緊接 L1 之後必為卡片」（會擋住 Wireframes 的 OneBrain／Primary 圖順序，且以 L2／L3 為前提）
+    # ——改為只守「L1 之後不得被 expander 插隊」；整頁 0 個完整 evidence expander 見 tests/test_ui2_contract_teeth_pending.py。
+    assert first_after and first_after[0] != "expander"
     # 今日主要風險與四問同在 ui2-m-l1 這一個元素內（不可能被其他元素插隊）
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60).run(timeout=60)

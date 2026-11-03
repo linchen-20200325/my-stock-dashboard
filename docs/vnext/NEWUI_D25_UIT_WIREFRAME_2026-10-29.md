@@ -1,5 +1,7 @@
 # UI-T 🎯 標的頁整合：文字線框草稿（新四頁）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（對 New UI2；DEC-128 S26／S30 的 Legacy 時代同源條文；客戶 2026-11-03）**：本檔屬 **Legacy New UI（`src/ui_v2`，DEC-123 後凍結）時代**文件；其中「頁內 L2／L3 摺疊」「▸ 為什麼／來源／限制／去哪補」「查看依據」「指標明細（16 項）」等 presentation 條文**對 New UI2 一律不是現行規則**。New UI2 的現行唯一有效讀法＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128。對 Legacy New UI／Old UI 本檔照舊（凍結，不刪不改）；舊文一字未刪。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；單組判讀，掃描範圍見 DEC-128 §六。）
+
 - **日期**：2026-10-29　**基準**：main `2a678199`（撰寫時 `git log -1` 實查）
 - **狀態**：⛔ **只是草稿，尚未實作；待客戶確認**（`CLAUDE.md` §-1.5.D v3 §03-2 ①「版面佈局／欄位增減／分頁動線異動前先出文字線框」、A-8、§8.1）。客戶確認前：0 UI 程式碼、0 版面變更。**未回覆＝不核准、不動工。**
 - **依據**：DEC-099（客戶 2026-10-28：UI-T 須把 🔍找標的＋🔬查一檔 整合成單一 🎯 標的頁並移除過渡切換）；A 規格 `docs/vnext/NEWUI_D25_A_FOUR_PAGE_SPEC_2026-10-27.md` §4.2；已核准 wireframe `docs/vnext/d25_wireframes/target.html`（DEC-092，本組已用 playwright 渲染桌面 1440 與手機 390 檢視）；NAV-1 規格 §3 差異表 #8、§4 偏離 1；XV-ASOF 線框（DEC-102 已核准）；DEC-105（UI-M 的指路要求，作為同類指路的參考）。
