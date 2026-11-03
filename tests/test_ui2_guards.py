@@ -67,6 +67,12 @@ def _imports(tree: ast.AST) -> list[tuple[int, str]]:
     return out
 
 
+def _relative_imports(tree: ast.AST) -> list[str]:
+    """`from .x import y`（level>0）會繞過 `_imports()`（只收 level 0）⇒ 一律違規（QA 2026-11-03；加性強化）。"""
+    return [f"L{n.lineno}: 禁止相對 import（level={n.level}）{'.' * n.level}{n.module or ''}"
+            for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.level > 0]
+
+
 def _is_session_state(node: ast.AST) -> bool:
     return ((isinstance(node, ast.Attribute) and node.attr == "session_state")
             or (isinstance(node, ast.Name) and node.id == "session_state"))
@@ -89,7 +95,7 @@ _CLOCK_CALLS = {("datetime", "now"), ("datetime", "utcnow"), ("datetime", "today
 
 def check_vm_purity(source: str) -> list[str]:
     tree = ast.parse(source)
-    bad: list[str] = []
+    bad: list[str] = list(_relative_imports(tree))      # NUI2-REAL-FEED QA（加性）：相對 import 一律違規
     for ln, mod in _imports(tree):
         if any(_mod_match(mod, b) for b in _G2_BANNED_IMPORTS):
             bad.append(f"L{ln}: 禁止 import {mod}")
@@ -126,6 +132,8 @@ def test_g2_vm_layer_is_pure(path):
     "x = session_state\n",
     "from datetime import datetime\nx = datetime.now()\n",
     "x = open('f.txt')\n",
+    "from .real_feed import read_real_snapshot\n",           # 相對 import 繞過（QA 2026-11-03）
+    "from ..allocation_service import get_allocation\n",
 ])
 def test_g2_guard_has_teeth(injected):
     """mutation：對乾淨檔注入單一違規，檢查器必須回報（否則守衛是裝飾品）。"""
@@ -139,19 +147,32 @@ def test_g2_guard_has_teeth(injected):
 #   feed＝New UI2 唯一做 I/O 的檔：只准 import 具名 canonical L3 白名單＋shared＋src.services.ui2；
 #   ⛔ streamlit／src.data／src.compute／Legacy UI／網路／檔案／時鐘、⛔ session_state、⛔ producer 與寫入呼叫。
 # ════════════════════════════════════════════════════════════════════
-#: feed 允許的專案內 import（canonical L3 **具名**白名單；擴充須明確、經審查，並同步 mapping 文件）。
-G2F_ALLOWED_PROJECT = ("shared", "src.services.ui2",
-                       "src.services.market_twii_view_service", "src.services.allocation_service")
-_G2F_BANNED_IMPORTS = _G2_BANNED_IMPORTS     # 同 G2 的外部／I/O 禁令（含 streamlit、src.data、src.compute、socket…）
-#: feed 禁止呼叫／匯入的名稱（producer、session 寫入、canonical 寫檔、OAuth nonce、Sheet 讀寫、選股寫入）。
+#: feed 的**精確** import 白名單（module → 允許的名稱；None＝該模組任何名稱）。只准 `from X import a, b`；
+#: ⛔ `import X`（整包取得後可任意取屬性）、⛔ `from X import *`、⛔ 相對 import。擴充須明確、經審查並同步 mapping。
+#: （QA 2026-11-03 強化：原「模組前綴白名單」可 `from allocation_service import st／_invalidate／get_allocation_sleeves`。）
+G2F_IMPORT_ALLOWLIST: dict[str, frozenset[str] | None] = {
+    "__future__": frozenset({"annotations"}),
+    "src.services.market_twii_view_service": frozenset({"get_twii_trend_view"}),
+    "src.services.allocation_service": frozenset({"get_macro_regime"}),
+    "src.services.ui2.real_canonical": None,
+    # 明列的 shared 模組：目前無（需要時逐一具名加入）。
+}
+#: feed 內任何位置（Name／Attribute／import 名稱）都不得出現的識別字：動態取用、反射、檔案／序列化、producer、寫入。
 _G2F_BANNED_NAMES = {
-    "refresh_macro_now", "get_allocation", "compute_and_lock_risk_cap", "compute_and_store_warroom_summary",
-    "reset_allocation_registry", "get_account", "build_login_url", "get_holdings", "get_sheet_view",
-    "get_sheet_contents", "logout", "gemini_call", "post_gemini", "build_ai_summary", "run_agent",
-    "run_headless_refresh", "open",
+    "importlib", "__import__", "exec", "eval", "compile", "getattr", "setattr", "delattr", "vars", "globals",
+    "locals", "builtins", "__builtins__", "__dict__", "open", "pandas", "pd", "json", "pickle", "os", "sys",
+    "subprocess", "socket", "requests", "pathlib", "Path", "datetime", "time", "st", "streamlit", "session_state",
+    "refresh_macro_now", "get_allocation", "get_allocation_sleeves", "compute_and_lock_risk_cap",
+    "compute_and_store_warroom_summary", "reset_allocation_registry", "get_account", "build_login_url",
+    "get_holdings", "get_sheet_view", "get_sheet_contents", "logout", "gemini_call", "post_gemini",
+    "build_ai_summary", "run_agent", "run_headless_refresh", "_invalidate",
 }
 _G2F_BANNED_PREFIXES = ("register_", "apply_", "clear_", "save_", "write_", "delete_", "bind_", "select_",
                         "set_", "add_to_", "create_", "rename_", "risk_cap_history_", "lock_", "execute_")
+#: 屬性名：時鐘、pandas／檔案讀寫。
+_G2F_BANNED_ATTRS = {"now", "utcnow", "today", "write_text", "write_bytes", "read_text", "read_bytes", "mkdir",
+                     "unlink", "to_csv", "to_parquet", "to_json", "to_pickle", "to_sql", "to_excel",
+                     "read_csv", "read_parquet", "read_json", "read_pickle", "read_sql", "read_excel"}
 
 
 def _g2f_name_banned(name: str) -> bool:
@@ -161,26 +182,35 @@ def _g2f_name_banned(name: str) -> bool:
 
 def check_feed_boundary(source: str) -> list[str]:
     tree = ast.parse(source)
-    bad: list[str] = []
-    for ln, mod in _imports(tree):
-        if any(_mod_match(mod, b) for b in _G2F_BANNED_IMPORTS):
-            bad.append(f"L{ln}: feed 禁止 import {mod}")
-        elif (mod.split(".")[0] in {"src", "shared", "scripts"}
-              and not any(_mod_match(mod, a) for a in G2F_ALLOWED_PROJECT)):
-            bad.append(f"L{ln}: 專案內 import {mod} 不在 feed 白名單 {G2F_ALLOWED_PROJECT}")
-        if _g2f_name_banned(mod.rsplit(".", 1)[-1]):
-            bad.append(f"L{ln}: feed 禁止匯入 producer／寫入名稱 {mod}")
+    bad: list[str] = list(_relative_imports(tree))
     for n in ast.walk(tree):
-        if _is_session_state(n):
-            bad.append(f"L{n.lineno}: feed 不得存取 session_state")
+        if isinstance(n, ast.Import):
+            bad += [f"L{n.lineno}: feed 禁止 `import {a.name}`（只准具名 from-import）" for a in n.names]
+        elif isinstance(n, ast.ImportFrom) and n.level == 0:
+            allowed = G2F_IMPORT_ALLOWLIST.get(n.module or "", False)
+            if allowed is False:
+                bad.append(f"L{n.lineno}: feed import 模組 {n.module} 不在精確白名單")
+                continue
+            for a in n.names:
+                if a.name == "*":
+                    bad.append(f"L{n.lineno}: feed 禁止 `from {n.module} import *`")
+                elif allowed is not None and a.name not in allowed:
+                    bad.append(f"L{n.lineno}: feed 不得自 {n.module} 取 {a.name}（只准 {sorted(allowed)}）")
+                if _g2f_name_banned(a.name) or (a.asname and _g2f_name_banned(a.asname)):
+                    bad.append(f"L{n.lineno}: feed 禁止匯入名稱 {a.name}")
+        elif isinstance(n, ast.Name) and n.id in _G2F_BANNED_NAMES:
+            bad.append(f"L{n.lineno}: feed 禁止使用 {n.id}")
+        elif isinstance(n, ast.Attribute):
+            if n.attr in _G2F_BANNED_ATTRS or n.attr in _G2F_BANNED_NAMES:
+                bad.append(f"L{n.lineno}: feed 禁止屬性 .{n.attr}")
         if isinstance(n, ast.Call):
             f = n.func
             name = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else "")
             if _g2f_name_banned(name):
                 bad.append(f"L{n.lineno}: feed 禁止呼叫 {name}()")
-            if (isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name)
-                    and (f.value.id, f.attr) in _CLOCK_CALLS):
-                bad.append(f"L{n.lineno}: feed 不得讀時鐘")
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value in (
+                "session_state", "get_allocation", "refresh_macro_now", "__import__"):
+            bad.append(f"L{n.lineno}: feed 出現可供反射取用的字面 {n.value!r}")
     return bad
 
 
@@ -212,6 +242,28 @@ def test_g2f_feed_respects_boundary(path):
     "x = st.session_state['warroom_summary']\n", "x = open('macro_state.json', 'w')\n",
     "from datetime import datetime\nx = datetime.now()\n",
     "from src.services.allocation_service import get_allocation\n",
+    # ── QA 2026-11-03 列出的繞過（精確白名單＋反射禁令）──
+    "import importlib\nm = importlib.import_module('src.services.allocation_service')\n",
+    "m = __import__('src.services.allocation_service')\n",
+    "from ..allocation_service import get_allocation\n",
+    "from . import real_canonical\n",
+    "from src.services.allocation_service import st\n",
+    "from src.services.allocation_service import _invalidate\n",
+    "from src.services.allocation_service import get_allocation_sleeves\n",
+    "from src.services.allocation_service import get_breadth_proxy_presence\n",   # 精確名稱白名單本身的牙
+    "from src.services.market_twii_view_service import TwiiTrendView\n",
+    "f = getattr(obj, 'x')\n",                                                   # getattr 禁令本身的牙
+    "from src.services.allocation_service import get_macro_regime as g\nimport src.services.allocation_service as a\n",
+    "from src.services import allocation_service\nf = getattr(allocation_service, 'get_' + 'allocation')\n",
+    "x = vars()['get_macro_regime']\n", "x = globals()['open']\n", "exec('x=1')\n", "eval('1')\n",
+    "import builtins\nbuiltins.open('x', 'w')\n",
+    "import pandas as pd\npd.read_parquet('data_cache/x.parquet')\n",
+    "df.to_parquet('data_cache/x.parquet')\n",
+    "import json\njson.dump({}, fh)\n",
+    "from datetime import datetime as D\nx = D.now()\n",
+    "from src.services.market_twii_view_service import *\n",
+    "from shared.secret_scrub import scrub_secrets\n",
+    "p.write_text('x')\n",
 ])
 def test_g2f_guard_has_teeth(injected):
     clean = FEED_FILES[0].read_text(encoding="utf-8")
@@ -317,10 +369,53 @@ def _key_of(node: ast.AST, consts: dict[str, str]) -> str | None:
     return None
 
 
+_SS_ALLOWED_METHODS = {"get", "pop", "setdefault"}
+
+
+def _session_state_misuse(tree: ast.AST, consts: dict[str, str]) -> list[str]:
+    """G9 強化（QA 2026-11-03；加性）：`session_state` 只准出現在下列位置，其餘一律違規——
+    `ss[ui2_常數]`（Subscript）／`ui2_常數 in ss`（Compare In／NotIn）／`ss.get|pop|setdefault(ui2_常數…)`／`ss.ui2_*`。
+    （例：`.to_dict()`、`.items()`、`.keys()`、`.__setitem__`、當 list／tuple 元素、預設參數、傳參、取別名、
+    `getattr(st, 'session_state')`、`from streamlit import session_state` 皆違規。）key 是否為 `ui2_` 由既有規則另驗。"""
+    parent: dict[ast.AST, ast.AST] = {}
+    for n in ast.walk(tree):
+        for c in ast.iter_child_nodes(n):
+            parent[c] = n
+    bad: list[str] = []
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.Import, ast.ImportFrom)):
+            for a in n.names:
+                if a.name.rsplit(".", 1)[-1] == "session_state":
+                    bad.append(f"L{n.lineno}: 禁止 import session_state（{a.name}）")
+        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in {"getattr", "setattr", "delattr"}
+                and any(isinstance(x, ast.Constant) and x.value == "session_state" for x in n.args)):
+            bad.append(f"L{n.lineno}: 禁止以 {n.func.id}() 取用 session_state")
+        if not _is_session_state(n):
+            continue
+        p = parent.get(n)
+        ok = False
+        if isinstance(p, ast.Subscript) and p.value is n:
+            ok = True
+        elif isinstance(p, ast.Compare) and n in p.comparators and all(
+                isinstance(o, (ast.In, ast.NotIn)) for o in p.ops):
+            ok = True
+        elif isinstance(p, ast.Attribute) and p.value is n:
+            if p.attr.startswith("ui2_"):
+                ok = True
+            elif p.attr in _SS_ALLOWED_METHODS:
+                gp = parent.get(p)
+                ok = isinstance(gp, ast.Call) and gp.func is p and bool(gp.args)
+            elif p.attr in {"update", "clear"}:
+                ok = True        # 既有規則另報（保留原訊息）
+        if not ok:
+            bad.append(f"L{n.lineno}: session_state 不允許的用法（{ast.unparse(p) if p is not None else ''}）")
+    return bad
+
+
 def check_not_a_producer(source: str) -> list[str]:
     tree = ast.parse(source)
     consts = _const_str_map(tree)
-    bad: list[str] = []
+    bad: list[str] = list(_relative_imports(tree)) + _session_state_misuse(tree, consts)
 
     def need_ui2(node: ast.AST, what: str) -> None:
         k = _key_of(node, consts)
@@ -388,6 +483,18 @@ def test_g9_ui2_is_not_a_producer(path):
     "import streamlit as st\nf(state=st.session_state)\n",
     "import streamlit as st\nf(**st.session_state)\n",
     "import streamlit as st\ns = st.session_state\n",
+    # QA 2026-11-03 G9 強化
+    "import streamlit as st\nd = st.session_state.to_dict()\n",
+    "import streamlit as st\nfor k, v in st.session_state.items(): pass\n",
+    "import streamlit as st\nks = list(st.session_state.keys())\n",
+    "import streamlit as st\nst.session_state.__setitem__('ui2_page', 1)\n",
+    "import streamlit as st\nxs = [st.session_state]\n",
+    "import streamlit as st\nxs = (1, st.session_state)\n",
+    "import streamlit as st\ndef f(s=st.session_state): pass\n",
+    "import streamlit as st\ns = getattr(st, 'session_state')\n",
+    "from streamlit import session_state as ss\nss['x'] = 1\n",
+    "import streamlit as st\nx = st.session_state.get\n",
+    "from .views import VIEWS\n",
 ])
 def test_g9_guard_has_teeth(injected):
     clean = (L5_DIR / "shell" / "app.py").read_text(encoding="utf-8")

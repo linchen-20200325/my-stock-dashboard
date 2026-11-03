@@ -15,7 +15,7 @@
 
 ## §0 一句話結論
 
-- 本批可零寫入、零網路、自帶 provenance 讀取、且**已確認 canonical** 的事實只有兩個：**台股加權指數**（📊 卡）與**市場位階**（📊 現在狀態、🎯 W-4 context、🎯 6 維「市場環境」三處＋📊 L2「位階說明」）。
+- 本批可零寫入、~~零網路~~ **feed 呼叫期 0 連線**（import 期既有 eager 鏈另見 §9 末點）（📌 2026-11-03 QA 修正後更新；有意識的更新，不是漏刪；決策者 AI 總管〔依兩組獨立 QA〕；原文刪除線保留）、自帶 provenance 讀取、且**已確認 canonical** 的事實只有兩個：**台股加權指數**（📊 卡）與**市場位階**（📊 現在狀態、🎯 W-4 context、🎯 6 維「市場環境」三處＋📊 L2「位階說明」）。
 - 市場位階在現行正式規則下（`BREADTH_PROXY_SCORING_ENABLED=False`、UI2 Preview 不跑 🚀 更新鏈）**恆為 ⬜**：冷啟動＝Not Evaluated `⬜ 尚未載入`；
   若 session 有 warroom 但缺真實廣度＝Unable to Determine `⬜ 未評估／資料不足`。**這是現行正式語意，不是 bug**；Real-data Preview 誠實呈現它。
 - 市場核心事實（16 燈 readiness、五桶、VIX／US10Y／DXY、指標危險度、今日主要風險、結論子句）**只存在 session**，須 🚀 `refresh_macro_now`
@@ -49,7 +49,7 @@ Existing Canonical Services（唯讀）
         require_valid_risk_cap=True)                                     session .get＋讀本地 macro_state.json／risk_cap_state.json
         │
         ▼
-src/services/ui2/real_feed.py（L3；New UI2 唯一做 I/O 的檔；G2F）     每 rerun 一次；例外接住→錯誤字串；兩事實隔離
+src/services/ui2/real_feed.py（L3；New UI2 唯一做 I/O 的檔；G2F）     每 rerun 一次；例外／契約違反接住→錯誤代碼（型別名）；兩事實隔離
         │   RealFeedSnapshot（frozen；TwiiFact／RegimeFact 原樣欄位；⛔ Risk Cap 欄位）
         ▼
 src/services/ui2/real_canonical.py（L3；純函式；G2）                    snapshot → canonical dict（沿用既有 spec 鍵）
@@ -187,20 +187,23 @@ Real 模式「⬜ 尚未提供＋原因」＝capability marker（Preview-only；
 | `is_stale=True` | Stale `⚠ 過期 N 天`（N＝`age_days`；None → `⚠ 可能已過期`） | §2.4 Freshness |
 | `is_stale=None` | Stale `⚠ 可能已過期`＋「新鮮度未判定」 | **AI 總管內部判準（可推翻）**：新鮮度未知 ⛔ 當 OK |
 | `is_stale=False` | OK（值＝最新收盤，`f"{v:,.2f}"`） | — |
-| `ok=True` 但無收盤值／非有限數／`is_stale` 非 bool | **raise**（fail loud） | §1 |
-| `upstream_error`／`stale_reason` | 放 detail（原樣，只截長度） | provenance |
+| `ok=True` 但無收盤值／非有限數／`is_stale` 非 bool | ~~**raise**（fail loud）~~ **契約違反**：feed 讀取期接住 → 該欄紅色 Unavailable「canonical 契約違反（詳見 log）」＋log 全文；位階照常（📌 2026-11-03 QA 修正後更新；有意識的更新，不是漏刪；決策者 AI 總管〔依兩組獨立 QA〕；原文刪除線保留） | §1；§1.A-4（見 §11-8） |
+| ~~`upstream_error`／`stale_reason`~~ | ~~放 detail（原樣，只截長度）~~ | ~~provenance~~ |
+| `upstream_error` | 只顯示固定句「上游最近一次抓取失敗（詳見 log）」；原文只 log（📌 2026-11-03 QA 修正後更新；有意識的更新，不是漏刪；決策者 AI 總管〔依兩組獨立 QA〕；原文刪除線保留） | 避免 token／路徑上畫面 |
+| `stale_reason`（L1 依規則產生的說明句，非錯誤原文） | 放 detail | provenance |
+| 例外訊息（任何讀取例外） | 畫面只顯示「…讀取失敗（例外型別名；詳見 log）」；snapshot 只收型別名（識別字，建構即驗） | 同上 |
 
 ### §5.2 市場位階（三處＋L2 共用同一個 `RegimeFact`）
 
 | 輸入 | 呈現 | 依據 |
 |---|---|---|
-| strict 讀取例外 | Unavailable＋原因（⛔ 吞成「未評估」） | `get_macro_state` strict 語意 |
+| strict 讀取例外 | Unavailable＋~~原因~~ 例外型別名（訊息原文只 log）（⛔ 吞成「未評估」） | `get_macro_state` strict 語意 |
 | `is_loaded=True` | OK＋`REGIME_LABEL[regime]`；as_of `None`＋detail `⬜ 資料日未提供` | 全站統一顯示字；⛔ `cl_ts` 頂替（SG-10） |
 | `source=unloaded` | Not Evaluated `⬜ 尚未載入`；L2 detail＝L0 `NOT_LOADED_PENDING_BREADTH_EXPLAIN`（旗標 False；DH-REGIME-NOWARROOM）＋「Real-data Preview 不觸發更新」 | 既有 L0 SSOT |
 | `source=unevaluated:breadth_unavailable` | Unable to Determine `⬜ 未評估／資料不足`；L2 detail＝L0 `UNEVALUATED_BREADTH_EXPLAIN` | DEC-074／075 客戶逐字；DEC-124 歸類 |
-| 未知 `source`；`is_loaded` 與 `source`／`regime` 矛盾 | **raise** | §1 fail loud |
+| 未知 `source`；`is_loaded` 與 `source`／`regime` 矛盾 | ~~**raise**~~ **契約違反**：讀取期接住 → 位階各處紅色 Unavailable＋log；台股照常（📌 2026-11-03 QA 修正後更新；有意識的更新，不是漏刪；決策者 AI 總管〔依兩組獨立 QA〕；原文刪除線保留） | §1 fail loud（見 §11-8） |
 | `FieldVM.source` | `規則分支 id：<source>（非資料來源）` | 規格：⛔ 偽裝資料來源 |
-| `file_error`（strict 下 Risk Cap／舊檔讀壞） | 留在 snapshot、**不呈現**（不影響位階；Risk Cap 恆 ⬜） | 登記 `NUI2-REALFEED-FILE-ERROR-UNSURFACED` |
+| `file_error`（strict 下 Risk Cap／舊檔讀壞） | ~~留在 snapshot~~ snapshot 只留 `has_file_error` 旗標、原文只 log（📌 2026-11-03 QA 修正後更新；有意識的更新，不是漏刪；決策者 AI 總管〔依兩組獨立 QA〕；原文刪除線保留）；**不呈現**（不影響位階；Risk Cap 恆 ⬜） | 登記 `NUI2-REALFEED-FILE-ERROR-UNSURFACED` |
 
 ---
 
@@ -209,7 +212,7 @@ Real 模式「⬜ 尚未提供＋原因」＝capability marker（Preview-only；
 | SG | 欄位 | 觸發類型 | 現況與推薦（AI 總管；客戶可推翻） |
 |---|---|---|---|
 | SG-01 | 📊／💼 🚀 更新 CTA（Preview refresh） | 外部取數＋寫 canonical 檔（`risk_cap_state.json`／`macro_state.json`）＋Risk Cap runtime 寫入 | 也是 Preview 出現「已載入」macro 的唯一既有路徑。(a) 維持冷啟動誠實呈現〔**推薦**〕(b) Preview 接 🚀、寫入隔離 state_dir（需客戶裁示）(c) 等 Stage F Canonical Snapshot |
-| SG-02 | 📊 利差 | 新資料定義 | 無 canonical 欄（D5）；10Y-2Y／10Y-3M／M1B-M2 三種語意 |
+| SG-02 | 📊 利差 | 新資料定義（＋可能新公式／新 threshold） | 無 canonical 欄（D5）；10Y-2Y／10Y-3M／M1B-M2 三種語意。📌 補證據（QA）：`src/data/macro/macro_core.py` 的 `MACRO_THRESHOLDS` 有 `YIELD_10Y2Y`／`YIELD_10Y3M`（red_below 0.0／yellow_below 0.5），L1 `macro_core.spread_series()` 存在，但 `grep -rn "spread_series" src scripts app.py tests`（排除 macro_core 自身）**0 個 production consumer**——有門檻與工具函式≠有 canonical「利差」欄位，選哪一個仍屬資料定義 |
 | SG-03 | 📊 PMI／景氣 | 新資料定義（選源／合併卡） | 台灣 PMI（CIER）vs NDC 景氣燈號；session readiness vs `tw_pmi.parquet` 兩條路 |
 | SG-04 | 🎯 候選 Top 10／精選摘要 | 新資料定義 | 因子組合無 canonical 定義（UI 表單 vs cron 全因子 vs 每月凍結 picks） |
 | SG-05 | 💼 目前曝險 | 新 source | 現金／總資產分母 |
@@ -221,6 +224,7 @@ Real 模式「⬜ 尚未提供＋原因」＝capability marker（Preview-only；
 | SG-11 | 👤 E1～E4、💼 H1／H7 | OAuth／credential architecture | 讀路徑寫 `_oauth_state`＋nonce；app_ui2 OAuth bootstrap；Preview redirect URI（🟡 Manual Action）；改用 service account＝credential 架構改變 |
 | SG-12 | 📊 五桶／16 燈／關鍵警示 thin L3 | 是否算第二套 | 組 B 讀法：只包同一支 L2 ⇒ 不算新規則；但仍是新 service ⇒ PORT 批前由總管裁定（內部自決；登記） |
 | SG-13 | 🎯 候選 Top 10 因子 | 無 canonical 定義 | 同 SG-04（獨立列出供客戶勾選） |
+| SG-14 | 任何欄位 | **新公式／新 threshold**（明確觸發類型；QA 補） | 接任一欄位若需要新計算式（例：由收盤算漲跌幅、由利差算燈色）或新門檻（例：VIX 燈色帶、PMI 50 線）→ 立即停該項送 Gate；本批只做格式化（千分位），0 新公式／0 新門檻 |
 
 ---
 
@@ -257,18 +261,35 @@ Real 模式「⬜ 尚未提供＋原因」＝capability marker（Preview-only；
 - **G2F（新增）**：只套 `FEED_FILES`；import 白名單＝`shared`、`src.services.ui2`、`src.services.market_twii_view_service`、`src.services.allocation_service`；
   ⛔ streamlit／`src.data`／`src.compute`／Legacy UI／網路／檔案／時鐘、⛔ `session_state`、⛔ producer／寫入名稱（`refresh_macro_now`、`get_allocation`、`register_*`、`apply_*`、`compute_and_lock_risk_cap`、`risk_cap_history_*`、`get_account`、`build_login_url`、`get_holdings`、`save_*`、`write_*`、`delete_*`、`bind_*`、`select_*`、`open`…）；24 項注入 mutation 全紅；純 VM 檔 ⛔ 反向 import feed。
 - **G9 補洞（加性）**：UI2 L5／L6 ⛔ 整包傳 `st.session_state`（`dict(st.session_state)`、`fn(st.session_state)`、`f(state=st.session_state)`、`f(**st.session_state)`）與取別名（`s = st.session_state`）；5 項注入 mutation 全紅。
+- 📌 **QA 強化（2026-11-03，加性、只收緊）**：G2F 改為**精確 import 白名單**（只准 `from __future__ import annotations`、`from src.services.market_twii_view_service import get_twii_trend_view`、`from src.services.allocation_service import get_macro_regime`、`from src.services.ui2.real_canonical import …`；明列 shared 模組目前 0 個；⛔ `import X`、⛔ `import *`），feed 內 ⛔ `importlib`／`__import__`／`exec`／`eval`／`getattr`／`vars`／`globals`／`builtins`／`pandas`／`json`／`open`／時鐘屬性／pandas 讀寫屬性；G2／G2F／G9 **任何 `level>0` 相對 import 皆違規**；G9 的 `session_state` 只准 `ss[ui2_常數]`／`ui2_常數 in ss`／`ss.get|pop|setdefault(ui2_常數…)`／`ss.ui2_*`，其餘（`to_dict`／`items`／`keys`／`__setitem__`／list・tuple 元素／預設參數／`getattr(st,'session_state')`／`from streamlit import session_state`）皆違規。QA 列出的繞過全數加入 teeth；既有 UI2 檔 0 相對 import、shell／views 合規（測試實跑）。
 - **capability marker 允許清單**：明確擴充 `src/services/ui2/real_canonical.py`（Real 模式未接線欄位＝`⬜ 尚未提供`＋原因）；cutover 前清零規則不變。
 - c3 layering：`real_feed`／`real_canonical` 皆 L3（`src/services/` 前綴）；L3→L3／L0 合法；c3 未改。
-- `src/services/__init__.py` eager import（`NUI2-SERVICES-INIT-EAGER`）：本批**只記錄、不修**——Preview 行程 import `src.services.*` 本來就會載入 L1／Legacy L4 模組（只 import、不取數）；real feed 本身零網路由 socket guard 實測。
+- ~~`src/services/__init__.py` eager import（`NUI2-SERVICES-INIT-EAGER`）：本批**只記錄、不修**——Preview 行程 import `src.services.*` 本來就會載入 L1／Legacy L4 模組（只 import、不取數）；real feed 本身零網路由 socket guard 實測。~~（📌 2026-11-03 QA P2-4 更正；有意識的更新，不是漏刪；決策者 AI 總管〔依兩組獨立 QA〕；原文刪除線保留）
+  **更正後**：real feed **呼叫期** 0 連線（socket guard 實測：`read_real_snapshot()`＋四頁 VM 建構 0 次 connect）。但 **import 期**不是零網路：`import src.services.*` 會經既有 eager import 鏈 `src/data/macro/__init__.py` → `leading_indicators`（module 層 `_TWSE_S = _bps()`）→ `proxy_helper.build_unverified_proxy_session` → `src.data.stock.build_proxy_session` → `tw_stock_data_fetcher._proxy_alive_tfw`（`socket.create_connection` 探測 proxy，**設定了 proxy URL 時**）——Preview 行程啟動時即可能連 proxy，**FAKE 模式亦同、本批前即存在**（UI2 殼 import `src.services.ui2` 即觸發 `src/services/__init__.py`）。本批只記錄、不修；併入 BACKLOG `NUI2-SERVICES-INIT-EAGER`（Real feed 增補列）。
 
 ---
 
 ## §10 未驗與限制（誠實揭露）
 
 1. **Preview Cloud 的 CWD 與 `macro_state.json`／`risk_cap_state.json` 是否存在：未驗**（R2；`NUI2-PREVIEW-CLOUD-STATE-FILES`）。本地 sandbox 兩檔皆不存在 ⇒ 位階＝冷啟動。
-2. 錯誤字串**未經金鑰遮蔽**（只截長度 300 字）：UI2 守衛 `check_no_oauth_or_sheet` 禁止識別字含 `secrets`（擋到 `scrub_secrets`），本批不放寬該守衛；兩個讀取皆本地檔、不涉憑證（`NUI2-REALFEED-ERROR-SCRUB`）。
+2. ~~錯誤字串**未經金鑰遮蔽**（只截長度 300 字）~~ **已收斂（QA 必修 2）**：畫面只顯示例外型別名＋固定說明、upstream_error 只顯示固定句，原文只 log（測試植入 `token=SECRET…` 驗證畫面與 snapshot 皆不含）（📌 2026-11-03 QA 修正後更新；有意識的更新，不是漏刪；決策者 AI 總管〔依兩組獨立 QA〕；原文刪除線保留）。原文：錯誤字串未經金鑰遮蔽（只截長度 300 字）：UI2 守衛 `check_no_oauth_or_sheet` 禁止識別字含 `secrets`（擋到 `scrub_secrets`），本批不放寬該守衛；兩個讀取皆本地檔、不涉憑證（`NUI2-REALFEED-ERROR-SCRUB`）。
 3. TWII `is_stale` 由 L1 依「今天」判定 ⇒ 測試以相對斷言（⛔ 寫死值／is_stale）；viewport 證據為量測日（2026-11-03）快照。
 4. Real 模式 🎯 查一檔未查詢 ⇒ 6 維 Snapshot（含「市場環境」）**不渲染**；位階一致性在 VM 層驗。
 5. 第一屏量測（390×844／1440×900，Streamlit 1.59.2 與 1.56.0）**11/11** 通過，但手機市場頁「今日主要風險後第一區塊距導覽」餘裕 **27.8px**（門檻 1 行行高 24px；AI 總管內部判準）——任何一句 L1 字串再變長即可能不過（Freeze §16.5：縮字句 → 合併一行 → Decision Gate）。
 6. 兩份盤點與本整合皆為**單組**；計數非 AST 窮舉；E8～E10、E14、T1／T13～T15 的 I/O 輪廓部分**未驗**。
 7. 本批是 **shadow** acceptance：**不得**宣稱 Migration Contract C5（real-data acceptance）通過；C5 依 Cutover 鏈在 C2（含 Aggregator）之後，且 Audit Checklist §9 的「Desktop 真資料／真機、AI Failure」等未做。
+
+---
+
+## §11 兩組獨立 QA 修正補記（2026-11-03；append-only；原 commit `70c4969b`；兩組皆無 P0）
+
+1. **只有已接事實可帶值**（必修 1）：`tests/test_ui2_real_feed.py` §9 白名單不變量——四頁全部 FieldVM 在 7 種台股 × 6 種位階注入組合（＋sandbox 實況）下，帶 value／source／as_of／資料語意態者只能是 {📊 台股、📊 市場目前狀態、📊 位階說明、🎯 市場位階、🎯 市場環境} 或明列的契約固定欄（Risk Cap `⬜ 無法判定`、💼 目前曝險 `⬜ 資料未備`、🎯 趨勢／產業 `⬜ 尚未定義`）；其餘必須 `⬜ 尚未提供`＋原因、無 value／source／as_of。mutation：VIX 捏造 `0.00`／`18.20`＋as_of＋source → 轉紅。另補：多筆收盤取最後一筆、畫面錯誤句長度有界。
+2. **錯誤字串**（必修 2）：見 §5.1／§5.2 更新。`NUI2-REALFEED-ERROR-SCRUB` 收斂。
+3. **G2F 精確白名單＋反射禁令**、4. **G9 session_state 用法白名單**：見 §9 📌。
+5. **eager import 鏈連 proxy**：見 §9 末點更正。
+6. 🎯 W-4／市場環境的指引改為「說明見 📊 市場頁『為什麼（L2）』」（🎯 沒有自己的 L2 位階說明）；跨頁一致性測試改為「除指引外 detail 逐字相同」。
+7. 位階 L2 說明：L0 原文一字不改，後接連接句「註：上句的『按更新』指正式網站；本 Real-data Preview 不觸發更新，所以這一格維持尚未載入」；移除 `_REGIME_UNLOADED_GENERIC`（旗標為 True 的冷啟動只放「本 Real-data Preview 不觸發更新…」短句＋資料日說明，不另寫一份 L0 意思的說明）。
+8. **契約違反的處置（實作組依 `CLAUDE.md` §1／§1.A-4 判斷；可推翻）**：選「**讀取期隔離**」——`real_feed` 讀取時以 `validate_twii_fact`／`validate_regime_fact` 驗契約，違反（`RealFeedContractError`）→ 該事實記錯誤代碼、該欄紅色 Unavailable「canonical 契約違反（詳見 log）」＋log 全文，**另一事實照常顯示**；純轉換函式直接收到壞 fact 仍 raise（防呆）。理由：§1 要的是「清楚說明、⛔ 讓流程看起來成功」——紅色 Unavailable＋log 就是 fail loud，⛔ 默默落某一態；而整頁例外會把另一個有效事實一起蓋掉，且把「某來源契約壞了」放大成「整頁壞了」（§1.A-3 同精神：一個源掛了 ⛔ 拖垮整條鏈）。
+9. Real 模式殼：expander 標題改「Preview 控制（資料來源）」；帳戶 widget 標籤固定為「帳戶狀態（👤 我的頁，示意場景）」（兩模式同 label，避免 widget 身分改變丟狀態）。
+10. 文件：SG-02 補證據、SG-14 新公式／新 threshold；Reuse Matrix S6／S23 回填「已由 real_feed 使用」；BACKLOG 登記 parquet 壞檔被 L1 吞成 Missing、fingerprint 只涵蓋 ROOT、未來整合 app 的 warroom unknown 路徑。
+

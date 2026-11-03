@@ -209,3 +209,4 @@
 - [ ] **7. mutation ≥6 實測轉紅後還原**：見 `docs/PROJECT_STATE.md` §58（13 項）。
 - [ ] **8. viewport（real 模式）**：390×844／1440×900，四頁＋🎯 查一檔＋手機市場壓力態＝11 態；Streamlit 1.59.2 與 1.56.0 各 11/11；新判定 `real_feed_banner_on_top`。證據 `docs/vnext/newui2_realfeed/`（**手機五張請逐張目視**）。⚠️ 手機市場頁主要風險後餘裕僅 27.8px（`NUI2-REALFEED-REGIME-L1-BRIEF`）。
 - [ ] **9. ⛔ 不得勾選為 C5 通過**：本批是 shadow（Migration Contract §10）；§9 各項（真機、Cloud、AI Failure、四頁真資料全通）**仍未驗**（`NUI2-REALFEED-ACCEPTANCE-OPEN`）。
+- [ ] **10. QA 修正批（兩組獨立 QA 後；2026-11-03 append）**：(a) 白名單不變量：只有 5 個已接落點＋明列契約固定欄可帶資料，跑在 42 種注入組合（`tests/test_ui2_real_feed.py` §9）；(b) 錯誤原文不上畫面／不進 snapshot、只進 log（§10）；(c) G2F 精確 import 白名單＋反射禁令、G2／G2F／G9 相對 import 違規、G9 `session_state` 用法白名單（`tests/test_ui2_guards.py`）；(d) 契約違反＝讀取期隔離（該欄紅色 Unavailable＋log、另一事實照常；**實作組判斷、可推翻**）；(e) mapping 更正「零網路」→「呼叫期 0 連線；import 期 eager 鏈可連 proxy」。mutation 13 項見 PROJECT_STATE §58 補。

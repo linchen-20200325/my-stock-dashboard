@@ -15,10 +15,12 @@ NUI2-REAL-FEED A2（客戶 2026-11-03 (11)）。**純函式**（G2 照掃：⛔ 
 ═══ 語意映射（AI 總管內部判準標「可推翻」者，登記於 BACKLOG `NUI2-REAL-FEED` 段）═══
 台股：
 - 讀取丟例外（feed 接住）→ Unavailable；`failed=True` → Unavailable；`ok=False, failed=False` → Missing `⬜ 資料未取得`。
+  畫面錯誤句＝固定說明＋例外型別名（⛔ 訊息原文）；`upstream_error` 只顯示「上游最近一次抓取失敗（詳見 log）」。
 - `is_stale=True` → Stale `⚠ 過期 N 天`（N＝`age_days`；None → `⚠ 可能已過期`）。
 - `is_stale=None` → Stale `⚠ 可能已過期`（**AI 總管內部判準，可推翻**：新鮮度未知 ⛔ 當 OK；service 檔頭明文
   「attrs 缺 → is_stale=None（⬜ 未判定），⛔ 不當成新鮮」）。
-- `ok=True` 但無收盤值／非有限數 → raise（契約破壞，fail loud）。
+- `ok=True` 但無收盤值／非有限數、`is_stale` 非 bool／None → 契約違反（見 `RealFeedContractError`：讀取期隔離、
+  該欄紅色 Unavailable＋log、另一事實照常）。
 市場位階：
 - 讀取丟例外（strict：「讀壞了」≠「未評估」）→ Unavailable。
 - `is_loaded=True` → OK＋`shared.allocation_decision.REGIME_LABEL`（全站統一顯示字；⛔ 另寫一份）。
@@ -26,7 +28,7 @@ NUI2-REAL-FEED A2（客戶 2026-11-03 (11)）。**純函式**（G2 照掃：⛔ 
   `NOT_LOADED_PENDING_BREADTH_EXPLAIN`（DH-REGIME-NOWARROOM 既有說明）。
 - `source=unevaluated:breadth_unavailable` → Unable to Determine `⬜ 未評估／資料不足`（DEC-074／075 客戶逐字；
   DEC-124 歸類）＋L0 `UNEVALUATED_BREADTH_EXPLAIN`。⛔ 新造字樣。
-- 未知 `source`、或 `is_loaded` 與 `source` 矛盾 → raise（fail loud；⛔ 默默落某一態）。
+- 未知 `source`、或 `is_loaded` 與 `source` 矛盾 → 契約違反（同上；⛔ 默默落某一態）。
 - 位階契約**沒有 as_of** → `as_of=None`（呈現 `⬜ 資料日未提供`），⛔ 用 `cl_ts`／抓取時間頂替（新資料定義＝Stop Gate）。
 - `FieldVM.source` 誠實標「規則分支 id」，⛔ 偽裝成資料來源。
 - 契約回傳的 `exposure_limit_pct`／`risk_cap_disclosure`（Risk Cap）**不進 snapshot**（Risk Cap 恆 `⬜ 無法判定`）。
@@ -34,6 +36,7 @@ NUI2-REAL-FEED A2（客戶 2026-11-03 (11)）。**純函式**（G2 照掃：⛔ 
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -55,9 +58,28 @@ from src.services.ui2.skeleton_vm import build_skeleton_page_vm
 # ════════════════════════════════════════════════════════════════════
 # Snapshot（feed 產出的 frozen 原樣結果；每 rerun 一份、四頁共用）
 # ════════════════════════════════════════════════════════════════════
+class RealFeedContractError(ValueError):
+    """canonical service 回傳值違反其自身契約（未知 source、is_loaded 與分支矛盾、ok 卻無有限收盤值…）。
+
+    §1 fail loud 的落點（實作組依 `CLAUDE.md` §1／§1.A-4 判斷，可推翻）：`real_feed` 在**讀取期**驗證，違反時該事實記為
+    錯誤（畫面＝紅色 Unavailable「canonical 契約違反（詳見 log）」＋log 全文），**另一個事實照常顯示**——
+    ⛔ 默默落成某一態（掩蓋），也 ⛔ 讓整頁例外（會把另一個有效事實一起蓋掉）。純函式本身遇到違反仍 raise（防呆）。
+    """
+
+
+#: 錯誤代碼只允許「例外型別名」這種識別字（⛔ 例外訊息／路徑／URL 進 snapshot；全文只進 log）。
+_ERR_CODE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+#: 錯誤代碼：canonical 契約違反（`RealFeedContractError`）。
+CONTRACT_ERROR = RealFeedContractError.__name__
+
+
 @dataclass(frozen=True)
 class TwiiFact:
-    """`TwiiTrendView` 的原樣欄位（只拷貝本卡用到者；錯誤字串只截長度）。"""
+    """`TwiiTrendView` 的欄位（只拷貝本卡用到者）。
+
+    錯誤細節（例外訊息、`metadata.last_error` 原文）**不進 snapshot**——畫面只顯示例外型別名／固定說明句，全文只 log
+    （NUI2-REALFEED-ERROR-SCRUB 收斂：避免 token／路徑上畫面）。`stale_reason` 為 L1 依規則產生的說明句（非錯誤原文）。
+    """
 
     ok: bool
     close: tuple[float, ...]
@@ -65,10 +87,14 @@ class TwiiFact:
     is_stale: bool | None
     stale_reason: str
     age_days: int | None
-    upstream_error: str
-    error: str
+    has_upstream_error: bool
+    error_type: str            # failed=True 時的例外型別名；其餘 ""
     failed: bool
     source: str
+
+    def __post_init__(self) -> None:
+        if self.error_type and not _ERR_CODE_RE.match(self.error_type):
+            raise ValueError(f"error_type 只能是例外型別名（識別字），收到 {self.error_type!r}")
 
 
 @dataclass(frozen=True)
@@ -76,20 +102,20 @@ class RegimeFact:
     """`get_macro_regime()` 契約的**位階**欄位（原樣）。
 
     ⛔ 收 `exposure_limit_pct`／`risk_cap_disclosure`（Risk Cap 數值 Gate 前 UI2 恆 `⬜ 無法判定`；測試鎖定欄位集合）。
-    `file_error`：strict 下契約多帶的讀檔錯誤（只在 warroom 可用或 Risk Cap 新檔讀壞時出現）；不影響位階，**不呈現**，
-    留在 snapshot 供稽核（mapping 文件登記）。
+    `has_file_error`：strict 下契約多帶 `file_error`（只在 warroom 可用或 Risk Cap 新檔讀壞時）；不影響位階，**不呈現**，
+    原文只 log（mapping 登記 `NUI2-REALFEED-FILE-ERROR-UNSURFACED`）。
     """
 
     regime: str
     light: str
     source: str
     is_loaded: bool
-    file_error: str = ""
+    has_file_error: bool = False
 
 
 @dataclass(frozen=True)
 class RealFeedSnapshot:
-    """一次 rerun 的真資料快照。每個事實恰為「有值」或「有錯誤字串」其一。"""
+    """一次 rerun 的真資料快照。每個事實恰為「有值」或「有錯誤代碼」其一；錯誤代碼必為識別字（例外型別名）。"""
 
     twii: TwiiFact | None
     twii_error: str
@@ -99,7 +125,9 @@ class RealFeedSnapshot:
     def __post_init__(self) -> None:
         for name, fact, err in (("twii", self.twii, self.twii_error), ("regime", self.regime, self.regime_error)):
             if (fact is None) == (not err):
-                raise ValueError(f"{name}: 必須恰為『有值』或『有錯誤字串』其一（收到 fact={fact!r}, error={err!r}）")
+                raise ValueError(f"{name}: 必須恰為『有值』或『有錯誤代碼』其一（收到 fact={fact!r}, error={err!r}）")
+            if err and not _ERR_CODE_RE.match(err):
+                raise ValueError(f"{name}: 錯誤代碼只能是例外型別名（識別字；⛔ 訊息原文），收到 {err!r}")
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -115,62 +143,90 @@ REGIME_SOURCE_FMT = "規則分支 id：{source}（非資料來源）"
 REGIME_ASOF_NOTE = f"{TEXT_ASOF_MISSING}（市場位階契約不含資料日）"
 #: 第一屏（L1）只放短句；L0 既有完整說明放 📊「為什麼（L2）」的「位階說明」列（Freeze §16.5：先縮字句，⛔ 移出必要項）。
 REGIME_SEE_WHY = "說明見「為什麼（L2）」"
-_REGIME_UNLOADED_GENERIC = "總經尚未載入：這一次使用中還沒有紅綠燈結果（Real-data Preview 不觸發更新）"
+#: 🎯 標的頁沒有「為什麼（L2）」區塊 ⇒ 指向 📊 市場頁（QA P3：⛔ 指向本頁不存在的區塊）。
+REGIME_SEE_WHY_MARKET = "說明見 📊 市場頁「為什麼（L2）」"
+#: L0 說明句提到「按更新」指正式網站；Real-data Preview 沒有可用的更新入口 ⇒ 另加連接句說清楚（⛔ 改 L0 原文）。
+PREVIEW_NO_REFRESH_NOTE = "註：上句的「按更新」指正式網站；本 Real-data Preview 不觸發更新，所以這一格維持尚未載入"
+PREVIEW_NO_REFRESH_SHORT = "本 Real-data Preview 不觸發更新，所以這一格維持尚未載入"
+
+_TWII_MISSING_TEXT = "加權指數歷史快取讀不到（檔案不存在、壞檔、缺欄或內容為空）"
+_UPSTREAM_ERROR_TEXT = "上游最近一次抓取失敗（詳見 log）"
 
 
-def regime_spec(snap: RealFeedSnapshot, key: str, label: str, *, brief: bool = True) -> dict:
+def _error_text(what: str, code: str) -> str:
+    """畫面上的錯誤句：只放固定說明＋例外型別名（⛔ 訊息原文；全文已由 feed log）。"""
+    if code == CONTRACT_ERROR:
+        return f"{what}：canonical 契約違反（詳見 log）"
+    return f"{what}讀取失敗（{code}；詳見 log）"
+
+
+def validate_regime_fact(f: RegimeFact) -> None:
+    """位階契約自洽檢查（純）。違反 → `RealFeedContractError`。"""
+    if f.source not in KNOWN_REGIME_SOURCES:
+        raise RealFeedContractError(f"市場位階：未知 source {f.source!r}（允許 {sorted(KNOWN_REGIME_SOURCES)}）")
+    if f.is_loaded and (f.source in _NOT_LOADED_SOURCES or f.regime not in REGIME_LABEL or f.regime == "unknown"):
+        raise RealFeedContractError(f"市場位階契約矛盾：is_loaded=True 但 regime={f.regime!r} source={f.source!r}")
+    if not f.is_loaded and f.source not in _NOT_LOADED_SOURCES:
+        raise RealFeedContractError(f"市場位階契約矛盾：is_loaded=False 但 source={f.source!r} 屬已載入分支")
+
+
+def validate_twii_fact(t: TwiiFact) -> None:
+    """台股契約自洽檢查（純）。違反 → `RealFeedContractError`。"""
+    if t.is_stale not in (True, False, None):
+        raise RealFeedContractError(f"台股：is_stale 不是 True／False／None：{t.is_stale!r}")
+    if t.ok:
+        if not t.close:
+            raise RealFeedContractError("台股：ok=True 但沒有收盤值")
+        last = t.close[-1]
+        if not isinstance(last, (int, float)) or isinstance(last, bool) or not math.isfinite(last):
+            raise RealFeedContractError(f"台股：收盤值不是有限數 {last!r}")
+
+
+def regime_spec(snap: RealFeedSnapshot, key: str, label: str, *, brief: bool = True,
+                see_why: str = REGIME_SEE_WHY) -> dict:
     """市場位階 → spec。📊／🎯 三處（`brief=True`）＋📊 L2 位階說明（`brief=False`）都呼叫本函式、吃同一個
-    `snap.regime`（⛔ 各自讀取）。`brief` 只決定 detail 放短句或 L0 完整說明；態／值／字樣／provenance 完全相同。"""
+    `snap.regime`（⛔ 各自讀取）。`brief`／`see_why` 只決定 detail 文字；態／值／字樣／provenance 完全相同。"""
     base: dict[str, Any] = {"key": key, "label": label, "value": None, "as_of": None, "source": None}
     if snap.regime is None:
-        return {**base, "state": "unavailable", "reason": f"市場位階讀取失敗：{snap.regime_error}"}
+        return {**base, "state": "unavailable", "reason": _error_text("市場位階", snap.regime_error)}
     f = snap.regime
-    if f.source not in KNOWN_REGIME_SOURCES:
-        raise ValueError(f"市場位階：未知 source {f.source!r}（允許 {sorted(KNOWN_REGIME_SOURCES)}）")
+    validate_regime_fact(f)                     # 防呆：feed 已驗；直接餵壞 fact 仍 fail loud
     src = REGIME_SOURCE_FMT.format(source=f.source)
     if f.is_loaded:
-        if f.source in _NOT_LOADED_SOURCES or f.regime not in REGIME_LABEL or f.regime == "unknown":
-            raise ValueError(f"市場位階契約矛盾：is_loaded=True 但 regime={f.regime!r} source={f.source!r}")
         return {**base, "value": REGIME_LABEL[f.regime], "source": src, "reason": REGIME_ASOF_NOTE}
+    short = f"{REGIME_ASOF_NOTE}；{see_why}"
     if f.source == RA.SOURCE_UNEVALUATED_BREADTH:
         return {**base, "state": "undeterminable", "sub_reason": TEXT_NOT_EVALUATED_DATA_SHORT, "source": src,
-                "reason": (f"{REGIME_ASOF_NOTE}；{REGIME_SEE_WHY}" if brief
-                           else f"{RA.UNEVALUATED_BREADTH_EXPLAIN}。{REGIME_ASOF_NOTE}")}
-    if f.source == RA.SOURCE_UNLOADED:
-        state = {"is_loaded": f.is_loaded, "source": f.source}
-        explain = (f"{RA.NOT_LOADED_PENDING_BREADTH_EXPLAIN}。Real-data Preview 不觸發更新"
-                   if RA.is_not_loaded_pending_breadth(state) else _REGIME_UNLOADED_GENERIC)
-        return {**base, "state": "not_evaluated", "sub_reason": TEXT_NOT_LOADED, "source": src,
-                "reason": (f"{REGIME_ASOF_NOTE}；{REGIME_SEE_WHY}" if brief else f"{explain}。{REGIME_ASOF_NOTE}")}
-    raise ValueError(f"市場位階契約矛盾：is_loaded=False 但 source={f.source!r} 屬已載入分支")
+                "reason": short if brief else f"{RA.UNEVALUATED_BREADTH_EXPLAIN}。{REGIME_ASOF_NOTE}"}
+    # SOURCE_UNLOADED（validate 已排除其他分支）
+    state = {"is_loaded": f.is_loaded, "source": f.source}
+    explain = (f"{RA.NOT_LOADED_PENDING_BREADTH_EXPLAIN}。{PREVIEW_NO_REFRESH_NOTE}"
+               if RA.is_not_loaded_pending_breadth(state) else PREVIEW_NO_REFRESH_SHORT)
+    return {**base, "state": "not_evaluated", "sub_reason": TEXT_NOT_LOADED, "source": src,
+            "reason": short if brief else f"{explain}。{REGIME_ASOF_NOTE}"}
 
 
 def twii_card_spec(snap: RealFeedSnapshot) -> dict:
     """台股加權指數 → 📊 `cards.twii` spec（值＝最新一筆收盤，原樣格式化；⛔ 任何計算）。"""
     base: dict[str, Any] = {"key": "twii", "label": "台股", "value": None, "as_of": None, "source": None}
     if snap.twii is None:
-        return {**base, "state": "unavailable", "reason": f"台股加權指數讀取失敗：{snap.twii_error}"}
+        return {**base, "state": "unavailable", "reason": _error_text("台股加權指數", snap.twii_error)}
     t = snap.twii
+    validate_twii_fact(t)                       # 防呆：feed 已驗
     base.update(source=t.source, as_of=t.as_of)
     if not t.ok:
         if t.failed:
-            return {**base, "state": "unavailable", "reason": t.error or "讀取時發生例外"}
-        return {**base, "missing_kind": "not_fetched", "reason": t.error or "加權指數歷史快取讀不到"}
-    if not t.close:
-        raise ValueError("台股：ok=True 但沒有收盤值（契約破壞）")
+            return {**base, "state": "unavailable", "reason": _error_text("台股加權指數", t.error_type or "Exception")}
+        return {**base, "missing_kind": "not_fetched", "reason": _TWII_MISSING_TEXT}
     last = t.close[-1]
-    if not isinstance(last, (int, float)) or isinstance(last, bool) or not math.isfinite(last):
-        raise ValueError(f"台股：收盤值不是有限數 {last!r}（契約破壞）")
-    notes = [x for x in (t.stale_reason, f"上游最後一次錯誤：{t.upstream_error}" if t.upstream_error else "") if x]
+    notes = [x for x in (t.stale_reason, _UPSTREAM_ERROR_TEXT if t.has_upstream_error else "") if x]
     spec = {**base, "value": f"{last:,.2f}"}
     if t.is_stale is True:
         return {**spec, "state": "stale", "stale_days": t.age_days, "reason": "；".join(notes) or None}
     if t.is_stale is None:      # 新鮮度未判定 ⛔ 當 OK（AI 總管內部判準，可推翻）
         return {**spec, "state": "stale", "stale_days": None,
                 "reason": "；".join(["新鮮度未判定（快取缺新鮮度判定）", *notes])}
-    if t.is_stale is False:
-        return {**spec, "reason": "；".join(notes) or None}
-    raise ValueError(f"台股：is_stale 不是 True／False／None：{t.is_stale!r}")
+    return {**spec, "reason": "；".join(notes) or None}
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -236,13 +292,14 @@ def _target(snap: RealFeedSnapshot) -> dict:
          "sub_reason": TEXT_NOT_DEFINED, "as_of": None, "source": None},
         {"key": "dim_industry", "label": "產業", "value": None, "state": "not_evaluated",
          "sub_reason": TEXT_NOT_DEFINED, "as_of": None, "source": None},
-        regime_spec(snap, "dim_market_env", "市場環境"),
+        regime_spec(snap, "dim_market_env", "市場環境", see_why=REGIME_SEE_WHY_MARKET),
     ]
     return {
         "page": P4_TARGET, "title": PAGE4_LABELS[P4_TARGET],
         "current_state": _not_provided("pick_summary", "精選摘要",
                                        "尚未接線：精選需連網取數，候選因子組合無 canonical 定義（待定義）"),
-        "context_rows": [regime_spec(snap, "market_regime", "市場位階"), _risk_cap_row()],
+        "context_rows": [regime_spec(snap, "market_regime", "市場位階", see_why=REGIME_SEE_WHY_MARKET),
+                         _risk_cap_row()],
         "action_needed": _not_provided("no_holding_action", "是否需要行動", "本頁不產生持股動作；動作權威＝💼 持股"),
         "next_step": _not_provided("next", "下一步", "選一檔後進入研究 workspace（尚未提供）"),
         "cta": {"label": "查詢", "disabled_reason": "Real-data Preview：真查詢不在本批"},

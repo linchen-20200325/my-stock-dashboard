@@ -132,12 +132,12 @@ def test_twii_parquet_is_the_real_local_cache_and_feed_reads_it_without_hardcodi
      FieldState.MISSING, T.TEXT_MISSING_NOT_FETCHED, "讀不到"),
     (_twii_view(ok=False, close=(), as_of=None, failed=True, error="OSError: disk"), None,
      FieldState.UNAVAILABLE, T.TEXT_UNAVAILABLE, "OSError"),
-    (None, RuntimeError("boom-twii"), FieldState.UNAVAILABLE, T.TEXT_UNAVAILABLE, "boom-twii"),
+    (None, RuntimeError("boom-twii"), FieldState.UNAVAILABLE, T.TEXT_UNAVAILABLE, "RuntimeError"),
     (_twii_view(is_stale=True, age_days=3, stale_reason="快取超過 3 天"), None,
      FieldState.STALE, "⚠ 過期 3 天", "快取超過 3 天"),
     (_twii_view(is_stale=True, age_days=None), None, FieldState.STALE, T.TEXT_STALE_UNKNOWN, None),
     (_twii_view(is_stale=None, age_days=None), None, FieldState.STALE, T.TEXT_STALE_UNKNOWN, "新鮮度未判定"),
-    (_twii_view(is_stale=False, upstream_error="HTTP 500"), None, FieldState.OK, None, "HTTP 500"),
+    (_twii_view(is_stale=False, upstream_error="HTTP 500"), None, FieldState.OK, None, "上游最近一次抓取失敗（詳見 log）"),
 ])
 def test_twii_states_are_mapped_without_inventing_values(monkeypatch, view, exc, state, status, detail_has):
     snap = _feed(monkeypatch, twii=view, twii_exc=exc)
@@ -161,10 +161,31 @@ def test_twii_unknown_freshness_is_never_ok(monkeypatch):
     _twii_view(close=()), _twii_view(close=(float("nan"),)), _twii_view(close=(float("inf"),)),
     _twii_view(is_stale="yes"),
 ])
-def test_twii_broken_contract_fails_loud(monkeypatch, bad):
-    snap = _feed(monkeypatch, twii=bad)
-    with pytest.raises(ValueError):
+def test_twii_broken_contract_is_loud_and_isolated(monkeypatch, capsys, bad):
+    """契約違反：讀取期接住 → 該欄紅色 Unavailable「canonical 契約違反」＋log；位階照常（⛔ 默默落態、⛔ 整頁崩）。"""
+    snap = _feed(monkeypatch, twii=bad, regime=_regime("bull", RA.SOURCE_BULL_SCORE, True))
+    assert snap.twii is None and snap.twii_error == RC.CONTRACT_ERROR
+    f = _twii_field(snap)
+    assert f.state is FieldState.UNAVAILABLE and "契約違反" in f.detail and f.value_text is None
+    assert "RealFeedContractError" in capsys.readouterr().out                 # 全文進 log
+    assert _vms(snap)[P4_MARKET].context.first_screen.current_state.value_text == REGIME_LABEL["bull"]
+
+
+@pytest.mark.parametrize("bad", [
+    TwiiFact(True, (), "2026-01-01", False, "", 1, False, "", False, "s"),
+    TwiiFact(True, (float("nan"),), "2026-01-01", False, "", 1, False, "", False, "s"),
+])
+def test_pure_converter_still_raises_on_a_bad_fact(bad):
+    """防呆：純轉換直接收到壞 fact 仍 fail loud（feed 已在讀取期擋下）。"""
+    snap = RealFeedSnapshot(twii=bad, twii_error="", regime=RegimeFact("unknown", "⬜", RA.SOURCE_UNLOADED, False),
+                            regime_error="")
+    with pytest.raises(RC.RealFeedContractError):
         get_real_page_vm(P4_MARKET, snap)
+
+
+def test_twii_takes_the_last_close_when_several_are_returned(monkeypatch):
+    f = _twii_field(_feed(monkeypatch, twii=_twii_view(xs=("a", "b", "c"), close=(100.0, 200.5, 300.25))))
+    assert f.value_text == "300.25"
 
 
 def test_twii_reads_exactly_one_trading_day(monkeypatch):
@@ -191,6 +212,9 @@ def test_regime_unloaded_is_not_evaluated_with_the_l0_explanation(monkeypatch):
     from shared import signal_thresholds as ST
     if not ST.BREADTH_PROXY_SCORING_ENABLED:
         assert RA.NOT_LOADED_PENDING_BREADTH_EXPLAIN in w.detail      # 既有 L0 說明逐字（⛔ 另寫一份）
+        # L0 句說「可以按更新」；Preview 沒有更新入口 ⇒ 連接句必須說清楚（QA P3：⛔ 兩句互相矛盾、⛔ 改 L0）
+        assert RC.PREVIEW_NO_REFRESH_NOTE in w.detail
+        assert w.detail.index(RA.NOT_LOADED_PENDING_BREADTH_EXPLAIN) < w.detail.index(RC.PREVIEW_NO_REFRESH_NOTE)
     assert w.state is FieldState.NOT_EVALUATED
 
 
@@ -206,7 +230,7 @@ def test_regime_read_failure_is_unavailable_not_unevaluated(monkeypatch):
     vms = _vms(_feed(monkeypatch, regime_exc=RuntimeError("macro_state.json: JSONDecodeError")))
     for f in _regime_triplet(vms):
         assert f.state is FieldState.UNAVAILABLE and f.status_text == T.TEXT_UNAVAILABLE
-        assert "JSONDecodeError" in f.detail
+        assert "RuntimeError" in f.detail and "JSONDecodeError" not in f.detail     # 畫面只放型別名
 
 
 def test_strict_really_raises_on_a_corrupt_state_file_end_to_end(tmp_path, monkeypatch):
@@ -214,7 +238,7 @@ def test_strict_really_raises_on_a_corrupt_state_file_end_to_end(tmp_path, monke
     (tmp_path / "macro_state.json").write_text("{bad json", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     snap = RF.read_real_snapshot()
-    assert snap.regime is None and "macro_state.json" in snap.regime_error
+    assert snap.regime is None and snap.regime_error == "RuntimeError"
     m, t, d = _regime_triplet(_vms(snap))
     assert m.state is t.state is d.state is FieldState.UNAVAILABLE
     # 同一 cwd 下台股快取不存在 → Missing（partial：兩事實各自隔離，⛔ 互相拖垮）
@@ -236,16 +260,26 @@ def test_regime_loaded_uses_the_site_wide_label(monkeypatch, regime, label):
     _regime("unknown", RA.SOURCE_BULL_SCORE, True),                     # loaded 但 regime 未知
     _regime("bull", RA.SOURCE_BULL_SCORE, False),                       # 未載入卻是已載入分支
 ])
-def test_regime_unknown_or_contradictory_contract_fails_loud(monkeypatch, regime):
+def test_regime_unknown_or_contradictory_contract_is_loud_and_isolated(monkeypatch, capsys, regime):
     snap = _feed(monkeypatch, regime=regime)
-    for p in (P4_MARKET, P4_TARGET):
-        with pytest.raises(ValueError):
-            get_real_page_vm(p, snap)
+    assert snap.regime is None and snap.regime_error == RC.CONTRACT_ERROR
+    assert "RealFeedContractError" in capsys.readouterr().out
+    vms = _vms(snap)
+    for f in _regime_triplet(vms):
+        assert f.state is FieldState.UNAVAILABLE and "契約違反" in f.detail          # ⛔ 默默落成未評估
+    assert vms[P4_MARKET].context.cards[0].field.state is FieldState.OK            # 台股照常（隔離）
+
+
+def test_pure_regime_converter_still_raises_on_an_unknown_source():
+    snap = RealFeedSnapshot(twii=None, twii_error="OSError",
+                            regime=RegimeFact("bull", "🟢", "mystery:branch", True), regime_error="")
+    with pytest.raises(RC.RealFeedContractError):
+        get_real_page_vm(P4_MARKET, snap)
 
 
 def test_regime_fact_never_carries_risk_cap_fields():
     """Risk Cap 數值 Gate 前：snapshot ⛔ 收 exposure_limit_pct／risk_cap_disclosure（mutation：加欄位即紅）。"""
-    assert {f.name for f in dataclasses.fields(RegimeFact)} == {"regime", "light", "source", "is_loaded", "file_error"}
+    assert {f.name for f in dataclasses.fields(RegimeFact)} == {"regime", "light", "source", "is_loaded", "has_file_error"}
 
 
 def test_risk_cap_stays_undeterminable_even_if_the_contract_returns_a_cap(monkeypatch):
@@ -321,10 +355,19 @@ def test_every_unwired_real_field_states_its_reason():
 # ════════════════════════════════════════════════════════════════════
 # §4 跨頁一致性（同一 snapshot、同一次呼叫）
 # ════════════════════════════════════════════════════════════════════
+def _detail_core(f: FieldVM) -> str | None:
+    """detail 去掉「說明見…」指引（📊 指本頁 L2、🎯 指 📊 市場頁 L2；QA P3）後的內容——其餘必須逐字相同。"""
+    d = f.detail
+    for ptr in (RC.REGIME_SEE_WHY_MARKET, RC.REGIME_SEE_WHY):
+        d = d.replace(ptr, "<see-why>") if d else d
+    return d
+
+
 def check_cross_page_regime(vms: dict[str, PageVM]) -> list[str]:
-    """位階三處（📊 current_state／🎯 market_regime／🎯 dim_market_env）value／state／字樣／detail／freshness 必相同。"""
+    """位階三處（📊 current_state／🎯 market_regime／🎯 dim_market_env）value／state／字樣／freshness 必相同；
+    detail 除「說明見…」指引外逐字相同（🎯 指向 📊 市場頁）。"""
     m, t, d = _regime_triplet(vms)
-    key = lambda f: (f.state, f.value_text, f.status_text, f.detail, f.freshness, f.capability)
+    key = lambda f: (f.state, f.value_text, f.status_text, _detail_core(f), f.freshness, f.capability)
     return [f"{name} 與 📊 不一致：{key(x)} vs {key(m)}" for name, x in (("🎯 market_regime", t), ("🎯 dim_market_env", d))
             if key(x) != key(m)]
 
@@ -341,6 +384,10 @@ _REGIME_VARIANTS = {
 def test_regime_is_identical_across_pages(monkeypatch, variant):
     vms = _vms(_feed(monkeypatch, **_REGIME_VARIANTS[variant]))
     assert check_cross_page_regime(vms) == []
+    m_, t_, d_ = _regime_triplet(vms)
+    if m_.state is not FieldState.UNAVAILABLE and m_.state is not FieldState.OK:  # 指引只在未評估類態出現
+        assert RC.REGIME_SEE_WHY in m_.detail and RC.REGIME_SEE_WHY_MARKET not in m_.detail
+        assert RC.REGIME_SEE_WHY_MARKET in t_.detail and RC.REGIME_SEE_WHY_MARKET in d_.detail
     w = _why_regime(vms[P4_MARKET])                          # L2 位階說明：同態同字樣（只 detail 較完整）
     m = vms[P4_MARKET].context.first_screen.current_state
     assert (w.state, w.value_text, w.status_text, w.freshness) == (m.state, m.value_text, m.status_text, m.freshness)
@@ -415,7 +462,7 @@ def test_real_me_page_does_not_pretend_to_know_the_account():
 
 
 def test_snapshot_requires_exactly_value_or_error():
-    tw = TwiiFact(True, (1.0,), "2026-01-01", False, "", 1, "", "", False, "s")
+    tw = TwiiFact(True, (1.0,), "2026-01-01", False, "", 1, False, "", False, "s")
     rg = RegimeFact("unknown", "⬜", RA.SOURCE_UNLOADED, False)
     with pytest.raises(ValueError):
         RealFeedSnapshot(twii=None, twii_error="", regime=rg, regime_error="")
@@ -423,6 +470,10 @@ def test_snapshot_requires_exactly_value_or_error():
         RealFeedSnapshot(twii=tw, twii_error="x", regime=rg, regime_error="")
     with pytest.raises(TypeError):
         RC.real_canonical(P4_MARKET, {"twii": None})
+    with pytest.raises(ValueError):                           # 錯誤代碼只能是型別名（⛔ 訊息原文進 snapshot）
+        RealFeedSnapshot(twii=None, twii_error="OSError: /home/x token=SECRET", regime=rg, regime_error="")
+    with pytest.raises(ValueError):
+        TwiiFact(False, (), None, None, "", None, False, "OSError: token=SECRET", True, "s")
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -590,6 +641,10 @@ def test_real_mode_renders_every_page_with_the_real_banner(monkeypatch):
     at.radio(key="ui2_page").set_value(P4_MARKET).run(timeout=60)
     assert 'data-card-id="twii"' in _blob(at)
     assert at.selectbox(key="ui2_scenario").disabled and at.selectbox(key="ui2_account").disabled
+    # Real 模式：Preview 控制標題與（disabled）帳戶 widget 不顯示 fake 字樣（QA P3）
+    ctrl = [e.label for e in at.expander if e.label.startswith("Preview 控制")]
+    assert ctrl == ["Preview 控制（資料來源）"], ctrl
+    assert "fake" not in at.selectbox(key="ui2_account").label.lower()
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -665,3 +720,142 @@ def test_real_me_evaluator_rejects_a_pretend_account():
     assert MV.evaluate(m)["me_account_state_first_screen"] == []
     m2 = dict(m, account={"top": 300.0, "bottom": 340.0, "state": "signed_in"})
     assert MV.evaluate(m2)["me_account_state_first_screen"]
+
+
+# ════════════════════════════════════════════════════════════════════
+# §9 只有已接事實可帶值（白名單不變量；QA 2026-11-03 必修 1）——跑在注入組合上，不只 sandbox 實況
+# ════════════════════════════════════════════════════════════════════
+#: 允許帶「資料」（value／source／as_of／資料語意或判定態）的欄位：(頁, label)。
+WIRED_FIELDS = frozenset({
+    (P4_MARKET, "台股"), (P4_MARKET, "市場目前狀態"), (P4_MARKET, "位階說明"),
+    (P4_TARGET, "市場位階"), (P4_TARGET, "市場環境"),
+})
+
+
+def _fixed_ok(page: str, f: FieldVM) -> bool:
+    """契約固定欄（明列）：無值、無 source／as_of、固定態與字樣。"""
+    blank = f.value_text is None and f.freshness.source is None and f.freshness.as_of is None
+    if f.label == "Risk Cap" and page in (P4_MARKET, P4_TARGET, P4_HOLD):
+        return blank and f.state is JudgementState.UNDETERMINABLE and f.status_text == T.TEXT_RISK_CAP_UNDETERMINABLE
+    if f.label == "目前曝險" and page == P4_HOLD:
+        return blank and f.state is FieldState.MISSING and f.status_text == T.TEXT_MISSING_NOT_READY
+    if f.label in ("趨勢", "產業") and page == P4_TARGET:
+        return blank and f.state is FieldState.NOT_EVALUATED and f.status_text == T.TEXT_NOT_DEFINED
+    return False
+
+
+def _page_fields(vm: PageVM) -> list[FieldVM]:
+    fields = list(_all_fields(vm))
+    t = vm.context.target
+    if t is not None:        # `_all_fields` 已含 search／lookup；再補 lookup 區塊（防漏）
+        fields += [f for s_ in t.lookup.sections for f in s_.fields]
+    return fields
+
+
+def check_only_wired_fields_carry_data(vms: dict[str, PageVM]) -> list[str]:
+    bad: list[str] = []
+    for page, vm in vms.items():
+        for c in vm.context.cards:
+            if c.chips and (page, c.field.label) not in WIRED_FIELDS:
+                bad.append(f"{page}/{c.title}: 未接線卡帶 chip")
+        for f in _page_fields(vm):
+            carries = (f.value_text is not None or f.freshness.source is not None or f.freshness.as_of is not None
+                       or f.capability is CapabilityState.PROVIDED)
+            if (page, f.label) in WIRED_FIELDS or not carries:
+                if (page, f.label) not in WIRED_FIELDS:
+                    if not (f.capability is CapabilityState.NOT_PROVIDED and f.detail):
+                        bad.append(f"{page}/{f.label}: 未接線欄位必須是 `⬜ 尚未提供`＋原因")
+                continue
+            if _fixed_ok(page, f):
+                continue
+            bad.append(f"{page}/{f.label}: 未接線欄位帶資料（value={f.value_text!r} source={f.freshness.source!r} "
+                       f"as_of={f.freshness.as_of!r} state={f.state!r}）")
+    return bad
+
+
+_TWII_COMBOS = {
+    "ok": dict(twii=_twii_view()),
+    "missing": dict(twii=_twii_view(ok=False, close=(), as_of=None, error="讀不到")),
+    "failed": dict(twii=_twii_view(ok=False, close=(), as_of=None, failed=True, error="OSError: x")),
+    "stale": dict(twii=_twii_view(is_stale=True, age_days=5)),
+    "stale_none": dict(twii=_twii_view(is_stale=None, age_days=None)),
+    "exception": dict(twii_exc=RuntimeError("x")),
+    "contract": dict(twii=_twii_view(close=())),
+}
+_REGIME_COMBOS = {
+    "unloaded": dict(regime=_regime()),
+    "breadth": dict(regime=_regime(source=RA.SOURCE_UNEVALUATED_BREADTH)),
+    "failed": dict(regime_exc=RuntimeError("x")),
+    "loaded_bull": dict(regime=_regime("bull", RA.SOURCE_BULL_SCORE, True, exposure_limit_pct=40)),
+    "loaded_bear": dict(regime=_regime("bear", RA.SOURCE_BEAR_TREND, True)),
+    "contract": dict(regime=_regime(source="mystery:branch")),
+}
+
+
+@pytest.mark.parametrize("tw", list(_TWII_COMBOS))
+@pytest.mark.parametrize("rg", list(_REGIME_COMBOS))
+def test_only_wired_fields_carry_data_across_injected_combinations(monkeypatch, tw, rg):
+    snap = _feed(monkeypatch, **_TWII_COMBOS[tw], **_REGIME_COMBOS[rg])
+    assert check_only_wired_fields_carry_data(_vms(snap)) == []
+
+
+def test_only_wired_fields_carry_data_on_sandbox_reality():
+    assert check_only_wired_fields_carry_data(_vms(RF.read_real_snapshot())) == []
+
+
+@pytest.mark.parametrize("fake_value", ["0.00", "18.20"])
+def test_whitelist_checker_has_teeth_against_a_fabricated_vix(monkeypatch, fake_value):
+    """mutation：VIX 捏造值＋as_of＋source（例：補 0／中性或抄 FAKE 值）→ 檢查器必紅。"""
+    orig = RC._market
+
+    def fabricated(snap):
+        c = orig(snap)
+        c["cards"] = [({"key": "vix", "label": "VIX", "value": fake_value, "as_of": "2026-11-02", "source": "x"}
+                       if x["key"] == "vix" else x) for x in c["cards"]]
+        return c
+    monkeypatch.setattr(RC, "_market", fabricated)
+    bad = check_only_wired_fields_carry_data(_vms(_feed(monkeypatch)))
+    assert any("VIX" in b for b in bad), bad
+
+
+def test_whitelist_checker_has_teeth_against_a_valued_fixed_field(monkeypatch):
+    orig = RC._risk_cap_row
+    monkeypatch.setattr(RC, "_risk_cap_row", lambda: {**orig(), "value": "50%", "state": None})
+    assert check_only_wired_fields_carry_data(_vms(_feed(monkeypatch)))
+
+
+# ════════════════════════════════════════════════════════════════════
+# §10 錯誤字串不上畫面（QA 2026-11-03 必修 2；NUI2-REALFEED-ERROR-SCRUB 收斂）
+# ════════════════════════════════════════════════════════════════════
+_SECRET = "token=SECRET123"
+
+
+def _rendered_blob(vms: dict[str, PageVM]) -> str:
+    return "\n".join(s for vm in vms.values() for s in _all_strings(vm))
+
+
+@pytest.mark.parametrize("inject", [
+    dict(twii=_twii_view(upstream_error=f"https://x.example/q?{_SECRET}")),
+    dict(twii=_twii_view(ok=False, close=(), as_of=None, failed=True, error=f"OSError: /home/u/{_SECRET}")),
+    dict(twii=_twii_view(ok=False, close=(), as_of=None, error=f"bad {_SECRET}")),
+    dict(twii_exc=RuntimeError(f"fetch {_SECRET}")),
+    dict(regime_exc=RuntimeError(f"macro_state.json {_SECRET}")),
+    dict(regime=_regime(file_error=f"risk_cap_state.json {_SECRET}")),
+    dict(regime=_regime(source=f"mystery {_SECRET}")),
+])
+def test_error_details_never_reach_the_screen_but_are_logged(monkeypatch, capsys, inject):
+    snap = _feed(monkeypatch, **inject)
+    assert _SECRET not in repr(snap)                                   # snapshot 本身就不收原文
+    assert _SECRET not in _rendered_blob(_vms(snap))                   # 畫面不含
+    assert _SECRET in capsys.readouterr().out                          # 全文只進 log
+
+
+def test_upstream_error_is_shown_as_a_fixed_sentence(monkeypatch):
+    f = _twii_field(_feed(monkeypatch, twii=_twii_view(upstream_error="x" * 5000)))
+    assert f.detail == "上游最近一次抓取失敗（詳見 log）" and f.state is FieldState.OK
+
+
+def test_on_screen_error_text_is_bounded_even_for_huge_messages(monkeypatch):
+    vms = _vms(_feed(monkeypatch, twii_exc=RuntimeError("y" * 10000), regime_exc=OSError("z" * 10000)))
+    for f in (vms[P4_MARKET].context.cards[0].field, vms[P4_MARKET].context.first_screen.current_state):
+        assert f.state is FieldState.UNAVAILABLE and len(f.detail) < 80 and "yyy" not in f.detail

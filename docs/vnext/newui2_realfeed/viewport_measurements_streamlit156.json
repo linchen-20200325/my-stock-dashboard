@@ -216,7 +216,7 @@
     "banner_bottom": 134.0,
     "qa_top": 190.9
    },
-   "last_content_bottom": 730.7,
+   "last_content_bottom": 523.7,
    "card_heights": [
     200,
     200,
@@ -348,7 +348,7 @@
     "risk_bottom": 823.9,
     "scroll_end_bottom": 764.3,
     "scroll_end_gap_to_nav": 26.7,
-    "risk_bottom_at_scroll_end": -486.1
+    "risk_bottom_at_scroll_end": -217.1
    },
    "failures": {},
    "pass": true
@@ -450,7 +450,7 @@
     "banner_bottom": 134.0,
     "qa_top": 341.2
    },
-   "last_content_bottom": 730.6,
+   "last_content_bottom": 579.6,
    "card_heights": [
     200,
     200
@@ -970,7 +970,7 @@
     "banner_bottom": 116.1,
     "qa_top": 176.1
    },
-   "last_content_bottom": 834.9,
+   "last_content_bottom": 627.9,
    "card_heights": [
     204,
     204,
@@ -1103,7 +1103,7 @@
     "banner_bottom": 116.1,
     "qa_top": 326.4
    },
-   "last_content_bottom": 835.4,
+   "last_content_bottom": 684.4,
    "card_heights": [
     142,
     142

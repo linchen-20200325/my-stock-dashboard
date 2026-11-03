@@ -68,12 +68,14 @@ def run() -> None:
         note = PREVIEW_BANNER_NOTE if vm.is_fake else REAL_PREVIEW_BANNER_NOTE
         st.markdown(banner_html(vm.banner_text, note), unsafe_allow_html=True)
     VIEWS[st.session_state[KEY_PAGE]](vm)
-    with st.expander("Preview 控制（資料來源／fake 場景）", expanded=False):
+    # Real 模式標題不出現 fake 字樣（QA P3）；兩種模式都以「Preview 控制」開頭（量測腳本錨點）。
+    with st.expander("Preview 控制（資料來源）" if real else "Preview 控制（資料來源／fake 場景）", expanded=False):
         st.selectbox("資料來源（feed）", FEED_IDS, key=KEY_FEED, format_func=lambda f: _FEED_LABELS[f])
         # Real-data Preview 時 FAKE 維度不適用：保留 widget（狀態不丟），但 disabled。
         st.selectbox("場景", SCENARIO_IDS, key=KEY_SCENARIO, disabled=real,
                      format_func=lambda s: _SCENARIO_LABELS[s])
-        st.selectbox("帳戶狀態（👤 我的頁，FAKE）", ACCOUNT_IDS, key=KEY_ACCOUNT, disabled=real,
+        # label 固定（避免切換模式時 widget 身分改變而丟狀態），且兩種模式都不帶 fake 字樣（QA P3）。
+        st.selectbox("帳戶狀態（👤 我的頁，示意場景）", ACCOUNT_IDS, key=KEY_ACCOUNT, disabled=real,
                      format_func=lambda a: _ACCOUNT_LABELS[a])
     # W-1：固定四頁導覽（手機＝底部固定四格、桌機＝左側四項；位置由 CSS 決定，見 shell/css.py）。
     # 放在內容之後：視覺位置由 `position:fixed` 決定，DOM 順序＝手機底部列的 Tab 順序（內容→導覽）。

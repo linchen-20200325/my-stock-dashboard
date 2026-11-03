@@ -16,53 +16,65 @@
 `get_holdings`、任何 save／write／delete／bind）。⛔ import streamlit、`src.data`、`src.compute`（G2F 鎖定）。
 
 每次 rerun 由殼呼叫**一次** `read_real_snapshot()`，四頁共用同一份（位階三處同一次呼叫結果）。
-例外一律接住 → 該事實記錯誤字串（只截長度）→ 由 `real_canonical` 映射成 Unavailable；兩個事實互相隔離。
+例外與 canonical 契約違反一律在讀取期接住 → 該事實只記錯誤代碼（例外型別名；訊息全文只 print 進 log）→
+由 `real_canonical` 映射成紅色 Unavailable；兩個事實互相隔離（一個壞不拖垮另一個）。
 """
 from __future__ import annotations
 
-from src.services.ui2.real_canonical import RealFeedSnapshot, RegimeFact, TwiiFact
+from src.services.ui2.real_canonical import (
+    CONTRACT_ERROR, RealFeedContractError, RealFeedSnapshot, RegimeFact, TwiiFact, validate_regime_fact,
+    validate_twii_fact,
+)
 
 #: 卡片只顯示最新一筆收盤（取尾端 1 個交易日；「畫幾天」屬呈現決策，卡片＝1）。
 TWII_CARD_DAYS = 1
-#: 錯誤字串上畫面的長度上限（呈現保護；全文另 print 進 log）。
-_ERR_MAX = 300
 
 
-def _clip(text: object) -> str:
-    """錯誤字串原樣（上畫面前只截長度）。⚠️ 未經金鑰遮蔽：UI2 守衛禁止識別字含 secrets（Batch 3
-    `check_no_oauth_or_sheet`），本批不放寬該守衛；兩個讀取皆為本地檔、不涉憑證（BACKLOG `NUI2-REALFEED-ERROR-SCRUB`）。"""
-    s = "" if text is None else str(text)
-    return s if len(s) <= _ERR_MAX else s[:_ERR_MAX] + "…"
+def _code(e: BaseException) -> str:
+    """畫面／snapshot 只留例外型別名；契約違反＝固定代碼。訊息全文只進 log（⛔ token／路徑上畫面）。"""
+    return CONTRACT_ERROR if isinstance(e, RealFeedContractError) else type(e).__name__
 
 
-def _err(e: BaseException) -> str:
-    return _clip(f"{type(e).__name__}: {e}") or type(e).__name__
+def _type_of_service_error(text: str) -> str:
+    """service 的 `error`（`"{型別}: {訊息}"`）→ 只取型別名；取不到 → `Exception`。"""
+    head = (text or "").split(":", 1)[0].strip()
+    return head if head.isidentifier() else "Exception"
 
 
 def _read_twii() -> tuple[TwiiFact | None, str]:
     try:
         from src.services.market_twii_view_service import get_twii_trend_view
         v = get_twii_trend_view(TWII_CARD_DAYS)
-        return TwiiFact(
+        if v.upstream_error:
+            print(f"[ui2.real_feed] 台股快取上游最近一次錯誤（只進 log）：{v.upstream_error}")
+        if v.error:
+            print(f"[ui2.real_feed] 台股讀取說明（只進 log）：{v.error}")
+        fact = TwiiFact(
             ok=bool(v.ok), close=tuple(v.close), as_of=v.as_of, is_stale=v.is_stale,
-            stale_reason=_clip(v.stale_reason), age_days=v.age_days,
-            upstream_error=_clip(v.upstream_error), error=_clip(v.error),
-            failed=bool(v.failed), source=str(v.source)), ""
-    except Exception as e:  # noqa: BLE001 — 讀不到就講出來（§1）；由 real_canonical 映射 Unavailable
+            stale_reason=str(v.stale_reason or ""), age_days=v.age_days,
+            has_upstream_error=bool(v.upstream_error),
+            error_type=_type_of_service_error(v.error) if v.failed else "",
+            failed=bool(v.failed), source=str(v.source))
+        validate_twii_fact(fact)                # 讀取期驗契約：違反 → 本事實 Unavailable，另一事實照常
+        return fact, ""
+    except Exception as e:  # noqa: BLE001 — 讀不到就講出來（§1）：log 全文、畫面只放型別名
         print(f"[ui2.real_feed] 台股加權指數讀取失敗：{type(e).__name__}: {e}")
-        return None, _err(e)
+        return None, _code(e)
 
 
 def _read_regime() -> tuple[RegimeFact | None, str]:
     try:
         from src.services.allocation_service import get_macro_regime
         d = get_macro_regime(strict=True, require_valid_risk_cap=True)
-        return RegimeFact(regime=str(d["regime"]), light=str(d["light"]), source=str(d["source"]),
-                          is_loaded=bool(d["is_loaded"]),
-                          file_error=_clip(d.get("file_error") or "")), ""
-    except Exception as e:  # noqa: BLE001 — strict：讀壞了 ≠ 未評估；由 real_canonical 映射 Unavailable
+        if d.get("file_error"):
+            print(f"[ui2.real_feed] 位階契約帶 file_error（不呈現、不影響位階；只進 log）：{d.get('file_error')}")
+        fact = RegimeFact(regime=str(d["regime"]), light=str(d["light"]), source=str(d["source"]),
+                          is_loaded=bool(d["is_loaded"]), has_file_error=bool(d.get("file_error")))
+        validate_regime_fact(fact)              # 讀取期驗契約
+        return fact, ""
+    except Exception as e:  # noqa: BLE001 — strict：讀壞了 ≠ 未評估；log 全文、畫面只放型別名
         print(f"[ui2.real_feed] 市場位階讀取失敗：{type(e).__name__}: {e}")
-        return None, _err(e)
+        return None, _code(e)
 
 
 def read_real_snapshot() -> RealFeedSnapshot:
