@@ -12,6 +12,8 @@
 
 > 📌 **2026-11-03 現行接手點更新（append）**：最新為本檔**最末**「**Safe Handoff（2026-11-03 New UI2 Batch 2 …；現行）**」；上一行所指 Semantic Correction Gate 段已標「~~現行~~」（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。
 
+> 📌 **新永久規則（2026-11-03，DEC-126）**：**多元解法與最小成本決策規則**＝`PROJECT_RULES.md` **第 29 節**。一句話：遇到問題先在內部比較 ≥3 個方案、選 Minimum Sufficient Path，不得在同一路徑原地試錯或用更高模型／更多 Token 掩蓋錯誤路徑；僅 6 種情形才回報客戶 3 方案（須附推薦）。**新 session 先讀 `PROJECT_RULES.md` 第 29 節**（原文逐字見 `docs/DECISIONS.md` DEC-126）。本段僅為索引，非規格 SSOT。
+
 ### 📌 Resume Checkpoint 索引（現行；2026-10-29 Phase 1 SSOT Reset／Contract Freeze；DEC-086 欄位＋DEC-109 索引要求）
 
 > **HANDOFF 只是索引，不是規格 SSOT**（客戶 DEC-109 二十六）；本節只指向正式文件。**GitHub 操作事實優先於本節；不一致時修正本節**（`PROJECT_RULES.md` 第 20 節、第 25 節事實軸）。本節以下全部內容為 **historical**——⚠️ **例外**：舊段中仍有效的**必讀規則不屬 historical**，例如「⛔ 禁止事件回音」、Hard Output Gate（DEC-104）、DEC-106（Model×Effort 不重複要求切換）、Scope Inflation Guard（DEC-103）；其效力以 `docs/DECISIONS.md` 各條為準，不因所在段落被標 historical 而失效。

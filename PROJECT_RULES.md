@@ -320,6 +320,8 @@ implementation → relevant tests（含真實引擎路徑 regression）→ indep
 - 等待狀態不觸發 Effort 切換（升或降）：見 9.2。
 - ⚠️ Effort 只決定推理強度，**不改變**派工、獨立稽核與揭露義務（`CLAUDE.md` §-2 規則 1／4／6；第 3 節限定第 2、4 條）：Low 不等於免派工、免稽核。
 
+- 📌 **Cross-reference（2026-11-03，DEC-126，append-only）**：Minimum Sufficient Effort 與**解法路徑**綁定——選 Model／Effort／Test Scope 之前先選 Minimum Sufficient Path；⛔ 不得用更高模型／更多 Token 掩蓋錯誤架構或錯誤路徑。規則本文只在**第 29 節**，此處不複製。
+
 ### 9.2 Effort 主動提醒（DEC-059；強制 Effort Check 由 DEC-061 強化）
 
 ~~如果「下一完整階段」明顯應使用不同 Effort（較高**或較低**），專案 AI 必須在**安全停點**（第 6 節）主動提醒客戶，不得等客戶詢問。~~（2026-10-18 改為下方「強制 Effort Check」，決策者客戶，DEC-061；有意識的修改，不是漏刪 —— 舊句「明顯應使用」是裁量式觸發、沒有強制檢查步驟，「不覺得不同」就不會做檢查，導致 #872 合併後進入收尾同步時漏提醒降級；舊句的雙向、安全停點、不等客戶詢問三要點全數保留於下方）
@@ -1012,3 +1014,25 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 5. **市場趨勢產品主軸只有兩條：台股趨勢、國際趨勢**（客戶 A3；DEC-071 第 5 點再確認）。Old UI／Legacy New UI 只作 capability／logic／source reference，**不得**重新增加第三、第四套市場主軸。規格見 `docs/vnext/MARKET_TREND_RESEARCH_BASELINE_2026-11-03.md` §7。
 6. **Research Baseline 的永久語意**（客戶 A1／A2；規格本體在上列 research spec，此處只索引）：EPS × PE 只是台股大盤情境估值方法之一，不等於完整市場趨勢判斷；EPS source／PE multiple／growth assumption／production formula 不得自行核准或發明，不得由 EPS×PE 直接產生買賣 action；國際趨勢各維度只能作 objective input／research dimension／context overlay，除非 repo 已有正式 validated deterministic contract，不得自行組成多空公式／scoring／Risk Cap rule／System Action／probability。
 7. **與既有規則的關係（撰寫組讀法，單組）**：第 13 節與第 23 節（Scope Guard）同向；第 19 節 Missing 語意與 DEC-124 三軸邊界不受影響；本節未取代任何舊條文，故無刪除線。
+
+## 第 29 節｜多元解法與最小成本決策規則（Multi-Path Decision & Minimum Cost Rule；客戶 2026-11-03，DEC-126）
+
+> 永久治理規則；決策者 **客戶**（2026-11-03，原文逐字見 `docs/DECISIONS.md` DEC-126 fenced block）。本節是條文化重述（不改語意）；與客戶原文不一致時**以 DEC-126 原文為準**。不取代、不放寬任何舊條文。
+
+1. **觸發**：遇到技術、資料、UI、架構、流程或除錯問題時，⛔ 不得預設只有單一路徑，⛔ 不得在同一路徑持續原地試錯。
+2. **進入實作前**至少評估 **3 個可行方案**；客觀上不足 3 個時，必須明確說明原因。
+3. **每個方案至少比較 7 項**：(a) 正確性與資料語意風險；(b) 實作／修復速度；(c) Token 與模型成本；(d) 修改範圍與回歸風險；(e) 可逆性；(f) 是否可沿用既有模組、資料或流程；(g) 失敗後的降級／替代路徑。
+4. **預設決策排序**：① 正確性足夠且風險低 → ② 完成最快 → ③ Token／成本最低 → ④ 修改範圍最小。
+5. **Sunk cost**：⛔ 不得因第一個方案已經開始就持續投入。
+6. **必須停止原路徑、重新比較 B／C 的觸發**（任一即是）：同一路徑重複失敗／修改範圍持續擴大／需要新增不必要依賴／Token 成本明顯升高／時間成本明顯高於替代方案／回歸風險持續增加。
+7. **主動性**：專案 AI 應主動比使用者更早發現替代方案，⛔ 不得等使用者提出後才開始思考。
+8. **執行方式**：本規則**不是**要求每次輸出長篇比較。正常情況下 AI 在**內部**完成 3 路徑比較，選出 Minimum Sufficient Path 後直接執行，不為展示比較而浪費 Token。
+9. **只有下列 6 種情形才向客戶回報 3 方案**：(1) 三方案風險／成本差異顯著；(2) 涉及不可逆變更；(3) 涉及新 source／新依賴／新架構；(4) 涉及 Risk Cap／Action Authority／正式投資語意；(5) 需要客戶裁示；(6) 原路徑已失敗一次以上且準備切換方案。**回報時必須附 AI 總管推薦方案與具體原因，⛔ 不得只丟選項**（`CLAUDE.md` v3 §03「嚴禁拋選擇題」；§8.4 step 4 同款）。
+10. **與 Minimum Sufficient Effort 綁定（同向）**：同時優化解法路徑、Model、Effort、Test Scope、Token 成本。⛔ **禁止「用更高模型／更多 Token 掩蓋錯誤架構或錯誤路徑」**；若更簡單的 B／C 方案可用較低模型、較少修改、較少測試達成**同等正確性**，應優先採用較小方案。
+11. **自檢問法**：「我現在是在這條路徑上第二次試同一類修法嗎？若是，B／C 是什麼、哪個更便宜且同樣正確？」
+12. **與既有條文的關係（撰寫組讀法，單組、未經第二組驗證）**：
+    - 第 9.1／第 17 節（Minimum Sufficient Effort／Test Scope）：**同向綁定**，本節把「夠用」從 Effort 擴及解法路徑。
+    - 第 3 節 Silent Autonomous Cruise／Hard Output Gate（第 3 節小節 DEC-104、DEC-118）：**正交**——內部比較**不輸出**；僅第 9 點 6 種情形才對客戶輸出，且仍受輸出硬限制拘束。
+    - `CLAUDE.md` §-2（派工、獨立複驗）：併用——比較/選定路徑由總管負責，實作仍派工；路徑「同等正確」的宣稱屬全稱句，須獨立複驗或明說未驗。
+    - `CLAUDE.md` §8.4 step 4（scope 範圍問客戶）與 v3 §03「嚴禁拋選擇題」：併用——回報 3 方案＝附推薦方案。
+    - ⛔ **不放寬任何既有 Gate**：Decision Gate、Model Change Gate（第 9.0 節）、Stop Conditions、第 13 節投資語意、第 23 節 Scope Guard 皆不因「選了更小方案」而被跳過；「更小方案」不得以降低正確性或資料語意為代價（排序第 1 條）。
