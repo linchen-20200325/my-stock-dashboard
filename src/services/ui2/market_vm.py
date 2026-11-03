@@ -4,7 +4,7 @@
 輸出＝`PageVM`。
 
 ⛔ 本檔**不**：聚合動作、由 regime 推導「是否需要行動」（Gate §4.4 X11）、新增門檻／分支、
-為缺值補 0／中性／續抱／safe。「是否需要行動」恆為 `⬜ 尚未提供（待 System Action Aggregator）`。
+為缺值補 0／中性／續抱／safe。「是否需要行動」恆為 `TEXT_NOT_PROVIDED_AGGREGATOR`（`⬜ 尚未提供（待系統動作整合）`）。
 """
 from __future__ import annotations
 

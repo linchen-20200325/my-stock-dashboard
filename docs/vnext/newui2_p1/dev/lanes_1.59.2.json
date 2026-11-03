@@ -1,0 +1,306 @@
+[
+ {
+  "selectboxes": 0,
+  "expanders_preview": 0,
+  "dev_surface": false,
+  "dev_head": null,
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "mobile",
+  "lane": "default",
+  "page": "p4_market",
+  "url_after": "/"
+ },
+ {
+  "selectboxes": 0,
+  "expanders_preview": 0,
+  "dev_surface": false,
+  "dev_head": null,
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "mobile",
+  "lane": "default",
+  "page": "p4_target",
+  "url_after": "/"
+ },
+ {
+  "selectboxes": 0,
+  "expanders_preview": 0,
+  "dev_surface": false,
+  "dev_head": null,
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "mobile",
+  "lane": "default",
+  "page": "p4_hold",
+  "url_after": "/"
+ },
+ {
+  "selectboxes": 0,
+  "expanders_preview": 0,
+  "dev_surface": false,
+  "dev_head": null,
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "mobile",
+  "lane": "default",
+  "page": "p4_me",
+  "url_after": "/"
+ },
+ {
+  "selectboxes": 3,
+  "expanders_preview": 0,
+  "dev_surface": true,
+  "dev_head": "🧪 開發／測試工具（非產品內容）",
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "mobile",
+  "lane": "dev",
+  "page": "p4_market",
+  "url_after": "/?ui2_dev=1"
+ },
+ {
+  "selectboxes": 3,
+  "expanders_preview": 0,
+  "dev_surface": true,
+  "dev_head": "🧪 開發／測試工具（非產品內容）",
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "mobile",
+  "lane": "dev",
+  "page": "p4_target",
+  "url_after": "/?ui2_dev=1"
+ },
+ {
+  "selectboxes": 3,
+  "expanders_preview": 0,
+  "dev_surface": true,
+  "dev_head": "🧪 開發／測試工具（非產品內容）",
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "mobile",
+  "lane": "dev",
+  "page": "p4_hold",
+  "url_after": "/?ui2_dev=1"
+ },
+ {
+  "selectboxes": 3,
+  "expanders_preview": 0,
+  "dev_surface": true,
+  "dev_head": "🧪 開發／測試工具（非產品內容）",
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "mobile",
+  "lane": "dev",
+  "page": "p4_me",
+  "url_after": "/?ui2_dev=1"
+ },
+ {
+  "selectboxes": 0,
+  "expanders_preview": 0,
+  "dev_surface": false,
+  "dev_head": null,
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "desktop",
+  "lane": "default",
+  "page": "p4_market",
+  "url_after": "/"
+ },
+ {
+  "selectboxes": 0,
+  "expanders_preview": 0,
+  "dev_surface": false,
+  "dev_head": null,
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "desktop",
+  "lane": "default",
+  "page": "p4_target",
+  "url_after": "/"
+ },
+ {
+  "selectboxes": 0,
+  "expanders_preview": 0,
+  "dev_surface": false,
+  "dev_head": null,
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "desktop",
+  "lane": "default",
+  "page": "p4_hold",
+  "url_after": "/"
+ },
+ {
+  "selectboxes": 0,
+  "expanders_preview": 0,
+  "dev_surface": false,
+  "dev_head": null,
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "desktop",
+  "lane": "default",
+  "page": "p4_me",
+  "url_after": "/"
+ },
+ {
+  "selectboxes": 3,
+  "expanders_preview": 0,
+  "dev_surface": true,
+  "dev_head": "🧪 開發／測試工具（非產品內容）",
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "desktop",
+  "lane": "dev",
+  "page": "p4_market",
+  "url_after": "/?ui2_dev=1"
+ },
+ {
+  "selectboxes": 3,
+  "expanders_preview": 0,
+  "dev_surface": true,
+  "dev_head": "🧪 開發／測試工具（非產品內容）",
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "desktop",
+  "lane": "dev",
+  "page": "p4_target",
+  "url_after": "/?ui2_dev=1"
+ },
+ {
+  "selectboxes": 3,
+  "expanders_preview": 0,
+  "dev_surface": true,
+  "dev_head": "🧪 開發／測試工具（非產品內容）",
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "desktop",
+  "lane": "dev",
+  "page": "p4_hold",
+  "url_after": "/?ui2_dev=1"
+ },
+ {
+  "selectboxes": 3,
+  "expanders_preview": 0,
+  "dev_surface": true,
+  "dev_head": "🧪 開發／測試工具（非產品內容）",
+  "sidebar": false,
+  "toolbar_visible": false,
+  "nav_labels": [
+   "📊 市場",
+   "🎯 標的",
+   "💼 持股",
+   "👤 我的"
+  ],
+  "hscroll": false,
+  "vp": "desktop",
+  "lane": "dev",
+  "page": "p4_me",
+  "url_after": "/?ui2_dev=1"
+ }
+]

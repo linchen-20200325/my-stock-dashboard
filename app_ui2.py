@@ -3,7 +3,8 @@
     streamlit run app_ui2.py
 
 ⚠️ 這是 **Preview 入口**，不是 production default：`app.py` 不引用本檔、不加路由、不加 `?ui=2`
-（Architecture Gate §7／§8；Cutover 另走 Gate）。資料一律為 FAKE scenario。
+（Architecture Gate §7／§8；Cutover 另走 Gate）。預設資料為 FAKE scenario；FAKE／Real 資料來源、場景、帳戶示意態的切換
+只在 `?ui2_dev=1` 開發面（一般畫面不顯示；`ui2_dev` 不是登入證據，見 `src/ui2/shell/app.py`）。
 
 ⛔ 本檔不得 import `app.py`／Legacy UI（`src.ui.*`、`src.ui_v2`）。
 `st.set_page_config()` 必須是第一個 Streamlit 呼叫（host 設定，不屬頁面邏輯）。

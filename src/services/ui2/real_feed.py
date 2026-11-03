@@ -16,7 +16,7 @@
 `get_holdings`、任何 save／write／delete／bind）。⛔ import streamlit、`src.data`、`src.compute`（G2F 鎖定）。
 
 每次 rerun 由殼呼叫**一次** `read_real_snapshot()`，四頁共用同一份（位階三處同一次呼叫結果）。
-例外與 canonical 契約違反一律在讀取期接住 → 該事實只記錯誤代碼（例外型別名；訊息全文只 print 進 log）→
+例外與 canonical 契約違反一律在讀取期接住 → 該事實只記錯誤代碼（例外型別名，僅存 snapshot 內部欄位；訊息全文只 print 進 log；P1 QA 起畫面一律不放型別名）→
 由 `real_canonical` 映射成紅色 Unavailable；兩個事實互相隔離（一個壞不拖垮另一個）。
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ TWII_CARD_DAYS = 1
 
 
 def _code(e: BaseException) -> str:
-    """畫面／snapshot 只留例外型別名；契約違反＝固定代碼。訊息全文只進 log（⛔ token／路徑上畫面）。"""
+    """snapshot 只留例外型別名（內部代碼）；契約違反＝固定代碼。訊息全文只進 log（⛔ token／路徑上畫面）。畫面**不放**型別名（`real_canonical._error_text` 一律固定人話句）。"""
     return exception_code(e)
 
 
@@ -57,7 +57,7 @@ def _read_twii() -> tuple[TwiiFact | None, str]:
             failed=bool(v.failed), source=str(v.source))
         validate_twii_fact(fact)                # 讀取期驗契約：違反 → 本事實 Unavailable，另一事實照常
         return fact, ""
-    except Exception as e:  # noqa: BLE001 — 讀不到就講出來（§1）：log 全文、畫面只放型別名
+    except Exception as e:  # noqa: BLE001 — 讀不到就講出來（§1）：log 全文、snapshot 只留型別名代碼、畫面只放固定句
         print(f"[ui2.real_feed] 台股加權指數讀取失敗：{exception_code(e)}: {e}")
         return None, _code(e)
 
@@ -72,7 +72,7 @@ def _read_regime() -> tuple[RegimeFact | None, str]:
                           is_loaded=bool(d["is_loaded"]), has_file_error=bool(d.get("file_error")))
         validate_regime_fact(fact)              # 讀取期驗契約
         return fact, ""
-    except Exception as e:  # noqa: BLE001 — strict：讀壞了 ≠ 未評估；log 全文、畫面只放型別名
+    except Exception as e:  # noqa: BLE001 — strict：讀壞了 ≠ 未評估；log 全文、snapshot 只留型別名代碼、畫面只放固定句
         print(f"[ui2.real_feed] 市場位階讀取失敗：{exception_code(e)}: {e}")
         return None, _code(e)
 

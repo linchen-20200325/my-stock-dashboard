@@ -7,6 +7,8 @@ Architecture Gate §4.6.5／§7（Preview 期動作欄）、DEC-124（三軸語�
 """
 from __future__ import annotations
 
+import re
+
 # ── Missing（灰）：資料未取得／資料未備 ──────────────────────────────
 TEXT_MISSING_NOT_FETCHED = "⬜ 資料未取得"   # 應有輸入但這次沒拿到
 TEXT_MISSING_NOT_READY = "⬜ 資料未備"       # 來源尚未發布、歷史不足、不適用
@@ -53,16 +55,21 @@ RISK_ERROR_FMT = "五桶風險摘要算不出來：{error}"
 # ── Capability／Implementation Availability（與資料語意正交；Preview-only；DEC-124）──
 #: ≠ Unavailable（來源壞了）；≠ 資料品質態；⛔ 稱為「第 6 個資料語意態」。
 TEXT_NOT_PROVIDED = "⬜ 尚未提供"
-TEXT_NOT_PROVIDED_AGGREGATOR = "⬜ 尚未提供（待 System Action Aggregator）"
+TEXT_NOT_PROVIDED_AGGREGATOR = "⬜ 尚未提供（待系統動作整合）"
 
-#: Preview 頁首標示（客戶指示：頁面頂部清楚標示）。
-PREVIEW_BANNER_TEXT = "New UI2 Preview（fake data）"
-PREVIEW_BANNER_NOTE = "以下全部是 FAKE／scenario 示意資料，不是真實行情、持股或建議。"
+#: FAKE 示意資料單行標示（P1：去工程字樣；仍必須讓 FAKE 資料不被誤認為真資料，DEC-126 前既有規則）。
+#: ⛔ 含 `Preview`／`fake data` 等開發字樣；開發用 Preview 控制見 `?ui2_dev=1` 開發面。
+PREVIEW_BANNER_TEXT = "示意資料（FAKE）"
+PREVIEW_BANNER_NOTE = "非真實行情、持股或建議"
 
-#: Real-data Preview 頁首標示（NUI2-REAL-FEED A2／A3；客戶 (11)：「Preview 明確標示 Real-data Preview／非正式
-#: production default」）。⛔ 與 FAKE 標示共用：兩者必須一眼可分（`is_fake` 決定用哪一個）。
+#: Real-data 單行標示（客戶 (11) A3／2026-11-03 Real Feed 指示：標明 Real-data Preview／非正式 production default；
+#: P1：縮為單行、不再帶工程句）。⛔ 與 FAKE 標示共用：兩者必須一眼可分（`is_fake` 決定用哪一個）。
 REAL_PREVIEW_BANNER_TEXT = "Real-data Preview（非正式 production default）"
-REAL_PREVIEW_BANNER_NOTE = "只接 2 項真資料（台股、市場位階），其餘 ⬜ 附原因；唯讀、不觸發更新。"
+REAL_PREVIEW_BANNER_NOTE = "僅台股與市場位階為真資料"
+
+#: 「規則分支 id」型 provenance 的來源前綴：它是規則分支識別，不是資料來源（Active Contract §8）。
+#: 值留在 `FieldVM.freshness.source`；UI 不把它畫成「來源」chip（P1）。
+RULE_BRANCH_SOURCE_PREFIX = "規則分支 id："
 
 #: 資料來源欄位的 FAKE 前綴（避免 fake 值被誤認為真來源）。
 FAKE_SOURCE_PREFIX = "FAKE"
@@ -86,6 +93,24 @@ JUDGEMENT_STATUS_PREFIXES: dict[str, tuple[str, ...]] = {
 CAPABILITY_STATUS_PREFIXES: dict[str, tuple[str, ...]] = {
     "not_provided": (TEXT_NOT_PROVIDED,),
 }
+
+
+#: 「治理／實作參照」型句子：含決策編號（`DEC-074`）、狀態檔檔名（`macro_state.json`）或 backtick 程式碼標記。
+#: 這類句子（例：L0 `regime_arbiter.*_EXPLAIN` 逐字常數，客戶裁示原文含 DEC 編號）**逐字保留在 VM**（teeth 鎖定、不得改），
+#: 但 Human UI 不畫（P1；完整說明的去處＝資料健康度·市場位階項，P6）。
+_DEV_ONLY_RX = re.compile(r"DEC-\d+|macro_state\.json|`")
+
+
+def is_dev_only_text(text: str | None) -> bool:
+    return bool(text) and bool(_DEV_ONLY_RX.search(text))
+
+
+def is_known_l0_explain(text: str | None) -> bool:
+    """`text` 是否含 L0 `regime_arbiter` 逐字說明常數（唯一獲准「含治理參照卻被 Human UI 略過」的句子）。"""
+    if not text:
+        return False
+    from shared import regime_arbiter as RA     # 延遲 import（L0 內部；避免載入期循環）
+    return RA.NOT_LOADED_PENDING_BREADTH_EXPLAIN in text or RA.UNEVALUATED_BREADTH_EXPLAIN in text
 
 
 def stale_text(days: int | None) -> str:

@@ -244,3 +244,20 @@
 4. [ ] 各文件（BACKLOG／PROJECT_STATE／HANDOFF／PROJECT_RULES §30／橫幅）不再把 (a)(b)(c) 當 PROVISIONAL；舊字僅以刪除線＋📌 保留。
 5. [ ] 新守衛 `check_axis_separation`／`check_ui2_dev_not_auth` 對真檔 0 違規、對注入違規轉紅；`T_new_8`／`T_new_9` 為 strict xfail（reason 含 DEC-130）。
 6. [ ] `git diff --name-only origin/main` 只含 `docs/`、`PROJECT_RULES.md`、`tests/`；src／shared／app.py 零變更；`NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT` 未被宣稱完成。
+
+## §22 UI Correction P1 驗收項（Preview 控制 → `?ui2_dev=1`／去工程字樣與題號／標題與註解同步；2026-11-03；append-only；實作組單組，**待總管／獨立 QA／客戶勾選——本節未自勾**）
+
+1. [ ] 預設道（無旗標）四頁 0 個 Preview 控制（0 selectbox、0「Preview 控制」expander、0 sidebar、導覽恰四項）；`?ui2_dev=1` 才出現「🧪 開發／測試工具（非產品內容）」虛線框（不是 expander、不佔桌機左導覽）；預設值＝FAKE／cold／signed_in；session key 仍僅 `ui2_` 前綴。
+2. [ ] `ui2_dev` 只控制開發面是否顯示：四頁產品內容在 dev／非 dev 逐字相同（T_new_9）；`check_ui2_dev_not_auth` 綠；URL 不影響登入顯示（無 Account Area／真 auth，P7／`NUI2-AUTH-CONTRACT-GATE` 未做）。
+3. [ ] 四頁使用者畫面（FAKE 六場景×兩模式×三帳戶態、Real 九種 snapshot）無 `ENGINEERING_VOCAB` 詞彙、無 `L1～L6`、無可見題號；`data-ui2-q`／`data-ui2-qname`／aria 結構保留；OneBrain 標題與列標籤只出現一次、「是否需要行動」每頁一次。
+4. [ ] 正式資料狀態字樣（OK／Missing／Stale／Unavailable／Not Evaluated、capability 標記、source／as_of microtag、`⬜ 無法判定`）未退化；capability 字樣表未新增字樣（`TEXT_NOT_PROVIDED_AGGREGATOR` 仍以 `⬜ 尚未提供` 開頭）；L0 `regime_arbiter` 說明常數逐字未改（VM 內仍在）。
+5. [ ] Real 單行標示 `Real-data Preview（非正式 production default）` 保留且單行（手機不附說明）；FAKE 單行 `示意資料（FAKE）`。
+6. [ ] Deploy／⋮ 以 UI2 CSS 隱藏（本機 1.59.2／1.56.0 Chromium 實測不可見；**Cloud 未驗**，已登記）；`.streamlit/config.toml` 未動。
+7. [ ] 標題無外露「（L2）」「（L3）」、「指標明細（16 項）」逐字；`NUI2-COMMENT-DOCSTRING-SYNC` 列出的註解／docstring 已同步且 0 邏輯變更。
+8. [ ] `T_new_2`／`T_new_5`／`T_new_9` 無 xfail 且為綠；其餘 `T_new_*` 仍 strict xfail；`GRADUATED_TEETH` 守衛綠；無新增 xfail／skip；既有資料／語意安全守衛未降低。
+9. [ ] 手機 390×844／桌機 1440×900 viewport：FAKE 70 態＋Real 11 態（Streamlit 1.59.2 與 1.56.0 各一輪）＋Real 固定 snapshot 56 態全綠；`docs/vnext/newui2_p1/` 精選截圖目視（版面未跑版、文字無截斷、第一屏要素與 DEC-127 順序、導覽餘裕不退化）。
+10. [ ] `git diff --name-only origin/main -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 為空；`shared` 只動 `ui2_contract`；`src/services` 只動 `ui2/`；未碰 Risk Cap／System Action／Digest／OAuth／資料來源；未刪 VM 欄位／canonical／provenance；未擴張 P2～P7。
+11. [ ] 未宣稱「已無工程字樣」為窮舉語意稽核（詞彙清單掃描）；未宣稱 Cloud／Safari／真機已驗；未宣稱獨立 QA 完成。
+12. [ ] （P1 QA 修正）Capability 欄位原因句不含「資料未備／資料未取得／尚無資料」、Missing 欄位不含「尚未開放／尚未提供」（`test_capability_and_missing_copy_never_cross_axes`）；同頁無「需按更新」vs「目前不提供更新」矛盾句。
+13. [ ] （P1 QA 修正）畫面無例外型別名（`\w+(Error|Exception)`）；FAKE 來源／資料日為「FAKE 示意資料／FAKE 示意」（FAKE 前綴保留）；無「冷啟動」「占位」「FAKE·scenario」「FAKE-ASOF」；expander 標題無文字「▸」；Real 台股來源 chip 換行不貼邊。
+14. [ ] （P1 QA 修正）`BREADTH_PROXY_SCORING_ENABLED` 前提測試綠；`html.shown()` 對未知治理參照句 print 警告。

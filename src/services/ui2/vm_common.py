@@ -98,7 +98,7 @@ def target_from_canonical(spec: Spec) -> TargetVM:
         search=SearchBoxVM(
             placeholder=str(srch["placeholder"]),
             name_search=field_from_spec(srch["name_search"]),
-            cta=cta_from_spec(srch["cta"], "Preview：不查真資料（FAKE，session-only）")),
+            cta=cta_from_spec(srch["cta"], "尚未開放查詢")),
         lookup=LookupResultVM(
             ticker_text=str(lk["ticker"]), name_text=str(lk["name"]),
             chips=tuple(ChipVM(str(t), ChipTone.NEUTRAL_INFO) for t in lk["chips"]),
@@ -116,7 +116,7 @@ def account_from_canonical(spec: Spec) -> AccountVM:
     if st_ not in ACCOUNT_IDS:
         raise ValueError(f"未知帳戶狀態 {st_!r}（允許 {ACCOUNT_IDS}）")
     return AccountVM(account_state=st_, actions=tuple(
-        cta_from_spec(a, "Preview：不接 Google OAuth／不讀寫 Sheet") for a in spec["actions"]))
+        cta_from_spec(a, "登入與 Sheet 操作尚未開放") for a in spec["actions"]))
 
 
 def aggregator_pending_field(label: str) -> FieldVM:
@@ -125,7 +125,7 @@ def aggregator_pending_field(label: str) -> FieldVM:
     capability marker（DEC-124）：⛔ 帶資料語意、⛔ 讀成「今日無需調整」或「無法判定」。
     """
     return FieldVM(label, None, None, TEXT_NOT_PROVIDED_AGGREGATOR,
-                   "動作權威尚未實作（Preview）", FreshnessInfo(),
+                   "動作判斷功能尚未開放", FreshnessInfo(),
                    capability=CapabilityState.NOT_PROVIDED)
 
 
@@ -168,7 +168,7 @@ def build_page_vm(canonical: Spec, *, top_n: int | None = None, mode: str | None
         action_needed=action,
         next_step=next_step,
         primary_cta=CtaVM(label=str(cta_spec["label"]), enabled=False,
-                          disabled_reason=str(cta_spec.get("disabled_reason", "Preview：不觸發任何動作"))),
+                          disabled_reason=str(cta_spec.get("disabled_reason", "此功能尚未開放"))),
         context_rows=tuple(field_from_spec(s) for s in canonical.get("context_rows", ())),
         conclusion=(field_from_spec(canonical["conclusion"])
                     if canonical.get("conclusion") is not None else None),

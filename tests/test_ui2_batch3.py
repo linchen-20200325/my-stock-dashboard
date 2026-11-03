@@ -214,7 +214,9 @@ def test_main_risk_directly_follows_first_screen_block_in_one_l1_container():
 def _market_dom_order(scenario: str) -> list[str]:
     """整頁實際渲染的元素順序（AppTest；每個元素一個標記）。"""
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60).run(timeout=60)
+    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
+    at.run(timeout=60)
     at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)
     assert not at.exception
     out: list[str] = []
@@ -240,7 +242,9 @@ def test_main_risk_is_not_interleaved_by_expanders_in_the_real_page(scenario):
     assert first_after and first_after[0] != "expander"
     # 今日主要風險與四問同在 ui2-m-l1 這一個元素內（不可能被其他元素插隊）
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60).run(timeout=60)
+    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
+    at.run(timeout=60)
     at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)
     l1 = [m.value for m in at.markdown if 'class="ui2-m-l1"' in m.value]
     assert len(l1) == 1 and l1[0].index('data-ui2-q="q4"') < l1[0].index("ui2-risk")
@@ -281,7 +285,9 @@ def test_unknown_mode_is_rejected():
 
 def _at_target(scenario: str):
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60).run(timeout=60)
+    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
+    at.run(timeout=60)
     at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)
     at.radio(key="ui2_page").set_value(P4_TARGET).run(timeout=60)
     assert not at.exception
@@ -508,7 +514,9 @@ def test_me_default_account_is_unchanged_from_batch2_content():
 
 def test_me_page_switches_account_in_the_real_app():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60).run(timeout=60)
+    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
+    at.run(timeout=60)
     at.radio(key="ui2_page").set_value(P4_ME).run(timeout=60)
     for acct in ACCOUNT_IDS:
         at.selectbox(key="ui2_account").set_value(acct).run(timeout=60)
@@ -891,7 +899,9 @@ def test_cta_order_market_l1_html_puts_refresh_cta_before_conclusion(scenario):
 def test_cta_order_in_real_page_default_lane(scenario):
     """預設道（AppTest 整頁）：實際輸出的市場 L1 區塊內，CTA 在今日結論之前。"""
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60).run(timeout=60)
+    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
+    at.run(timeout=60)
     at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)
     assert not at.exception
     l1 = [m.value for m in at.markdown if 'class="ui2-m-l1"' in m.value]

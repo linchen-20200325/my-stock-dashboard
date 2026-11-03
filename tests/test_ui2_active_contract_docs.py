@@ -248,15 +248,10 @@ PENDING_UI_CORRECTION_TESTS: tuple[tuple[str, str], ...] = (
     ("tests/test_ui2_real_feed.py", "_why_regime"),
     ("tests/test_ui2_real_feed.py", "test_regime_unloaded_is_not_evaluated_with_the_l0_explanation"),
     ("tests/test_ui2_real_feed.py", "check_cross_page_regime"),
-    # T10：measure_viewport 以 Preview 控制 expander 為操作入口與頁底錨點
-    ("tests/ui2_viewport/measure_viewport.py", "_select_box"),
-    # 依賴 Preview 控制 selectbox（ui2_feed／ui2_scenario／ui2_account）的 AppTest（P1③ 移到開發面時須同步）
-    ("tests/test_ui2_batch2.py", "test_full_rendered_page_has_no_global_update_time"),
-    ("tests/test_ui2_batch3.py", "_market_dom_order"),
-    ("tests/test_ui2_batch3.py", "_at_target"),
-    ("tests/test_ui2_batch3.py", "test_cta_order_in_real_page_default_lane"),
-    ("tests/test_ui2_batch3.py", "test_me_page_switches_account_in_the_real_app"),
-    ("tests/test_ui2_registration_and_boot.py", "test_every_page_switches_and_renders_in_every_scenario"),
+    # ✅ P1（2026-11-03）已處理並自本登記移除：T10 `measure_viewport._select_box`、T13 依賴 Preview 控制 selectbox 的 6 個 AppTest
+    # （test_full_rendered_page_has_no_global_update_time／_market_dom_order／_at_target／test_cta_order_in_real_page_default_lane／
+    # test_me_page_switches_account_in_the_real_app／test_every_page_switches_and_renders_in_every_scenario）——
+    # 已改以 `?ui2_dev=1`（AppTest `at.query_params["ui2_dev"]="1"`）開啟開發面驅動，斷言語意不變。
 )
 
 
@@ -301,6 +296,21 @@ def test_legacy_tests_are_not_in_the_pending_registry():
 TEETH_REL = "tests/test_ui2_contract_teeth_pending.py"
 
 
+#: 已隨 UI correction 批修好、**移除 xfail** 的 teeth（永久守衛；值＝畢業批）。新畢業者在此登記，docs 測試會要求它們不得再掛 xfail。
+GRADUATED_TEETH: dict[str, str] = {
+    "test_T_new_2_human_text_has_no_engineering_tokens": "P1",
+    "test_T_new_5_preview_controls_are_dev_surface_only": "P1",
+    "test_T_new_9_ui2_dev_shows_preview_controls_and_never_changes_account_area": "P1",
+}
+
+
+def test_graduated_teeth_exist_and_are_plain_tests():
+    fns = _function_nodes(TEETH_REL)
+    for name in GRADUATED_TEETH:
+        assert name in fns, name
+        assert not any("xfail" in ast.unparse(d) or "skip" in ast.unparse(d) for d in fns[name].decorator_list), name
+
+
 def test_pending_teeth_are_strict_xfail_with_dec128_reason_and_never_hide_safety_tests():
     """逐一驗證每個 xfail：必須是 strict=True 且 reason 含 DEC-128（AST，不是 substring 計數）；
     xfail 只准出現在這個 teeth 檔——其餘 tests/ 不得新增指向 DEC-128 的 xfail（防止拿它隱藏現有守衛）。"""
@@ -323,6 +333,9 @@ def test_pending_teeth_are_strict_xfail_with_dec128_reason_and_never_hide_safety
     # (b) 每個 test_T_new_* 都用 `_xfail("P#")`（或直接 pytest.mark.xfail 且同樣 strict+DEC-128）
     n = 0
     for fn in [x for x in ast.walk(tree) if isinstance(x, ast.FunctionDef) and x.name.startswith("test_T_new_")]:
+        if fn.name in GRADUATED_TEETH:       # P1 修好後移除 xfail 的永久守衛：必須真的沒有 xfail／skip（不得又被偷偷掛回去）
+            assert not any("xfail" in ast.unparse(d) or "skip" in ast.unparse(d) for d in fn.decorator_list), fn.name
+            continue
         ok = False
         for d in fn.decorator_list:
             if isinstance(d, ast.Call) and ast.unparse(d.func) in ("_xfail", "_xfail130"):
@@ -335,7 +348,7 @@ def test_pending_teeth_are_strict_xfail_with_dec128_reason_and_never_hide_safety
                 ok = True
         assert ok, f"{fn.name} 沒有 strict xfail"
         n += 1
-    assert n >= 9      # DEC-130 後：T_new_1/1b/2/3/5/6/7 + 8/9
+    assert n >= 6      # P1 後仍待後續批的 teeth：T_new_1/1b（P3）、3（P6）、6（P2）、7（P7）、8（P6）；2／5／9 已隨 P1 畢業（GRADUATED_TEETH）
     # (c) 此檔內除 test_T_new_* 外，不得有任何 xfail／skip（現綠 teeth 不得被偷偷隱藏）
     for fn in [x for x in ast.walk(tree) if isinstance(x, ast.FunctionDef) and not x.name.startswith("test_T_new_")]:
         for d in fn.decorator_list:

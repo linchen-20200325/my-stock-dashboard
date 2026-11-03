@@ -26,13 +26,23 @@ _BANNED_EXPANDER_WORDS = ("為什麼", "指標明細", "原始資料", "工程�
 _ENGINEERING_TOKENS = ("PORT", "Gate", "Stage", "Aggregator", "路徑 C", "nonce", "traceback", "Exception", "src.", ".py")
 
 
-def _at():
+def _at(dev: bool = False):
+    """`dev=True`：開發面（`?ui2_dev=1`）。預設道（無旗標）不得有任何 Preview 控制（P1 起）。"""
     from streamlit.testing.v1 import AppTest
-    return AppTest.from_file(str(APP_UI2), default_timeout=60).run(timeout=60)
+    a = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    if dev:
+        a.query_params["ui2_dev"] = "1"
+    return a.run(timeout=60)
 
 
 def _blob(at) -> str:
     return "\n".join(m.value for m in at.markdown)
+
+
+def _human_text(at) -> str:
+    """使用者可見文字：去掉 `<style>` 區塊（CSS 不是人讀的字）與開發面標題區塊、再去 HTML 標籤。"""
+    parts = [m.value for m in at.markdown if 'data-ui2-dev="1"' not in m.value]
+    return re.sub(r"<[^>]+>", " ", re.sub(r"<style>.*?</style>", "", "\n".join(parts), flags=re.S))
 
 
 def _xfail(p: str):
@@ -85,7 +95,7 @@ def test_me_page_audit_surface_exception_does_not_allow_evidence_expanders():
     所以 T_new_1 不涵蓋 👤 的全部 expander；但 👤 同樣**不得**有 evidence 類 expander（為什麼／指標明細／原始資料／工程診斷）。"""
     at = _at()
     at.radio(key="ui2_page").set_value("p4_me").run(timeout=60)
-    labels = [e.label for e in at.expander if not e.label.startswith("Preview 控制")]
+    labels = [e.label for e in at.expander]
     assert [lb for lb in labels if any(w in lb for w in ("為什麼", "指標明細", "原始資料", "工程診斷"))] == []
 
 
@@ -95,8 +105,14 @@ def test_me_page_audit_surface_exception_does_not_allow_evidence_expanders():
 def test_T_new_1_human_pages_have_no_full_evidence_expander(page):
     at = _at()
     at.radio(key="ui2_page").set_value(page).run(timeout=60)
-    labels = [e.label for e in at.expander if not e.label.startswith("Preview 控制")]
+    labels = [e.label for e in at.expander]
     bad = [lb for lb in labels if any(w in lb for w in _BANNED_EXPANDER_WORDS)]
+    # P1 把標題上外顯的「（L2）／（L3）」層級字樣拿掉了 → 光看字樣會漏抓；另以 VM 的 L2／L3 區塊標題對照（結構判準）。
+    sections = list(get_preview_page_vm(page, "loaded").context.sections)
+    if page == "p4_target":
+        sections += list(get_preview_page_vm(page, "loaded").context.target.lookup.sections)
+    l23 = {s_.title for s_ in sections if s_.level in ("L2", "L3")}
+    bad += [lb for lb in labels if lb.removeprefix("▸ ") in l23]
     assert bad == [], bad
 
 
@@ -107,12 +123,11 @@ def test_T_new_1b_human_vm_sections_are_not_l2_l3(page):
     assert [s.section_id for s in vm.context.sections if s.level in ("L2", "L3")] == []
 
 
-@_xfail("P1")
-@pytest.mark.parametrize("page", ["p4_market", "p4_hold", "p4_me"])         # FAKE loaded 場景；🎯 的工程字樣只在 Real 模式出現
+@pytest.mark.parametrize("page", ["p4_market", "p4_target", "p4_hold", "p4_me"])   # P1 起轉綠（四頁預設道）；完整詞彙清單×場景×Real 見 test_ui2_p1_human_text.py
 def test_T_new_2_human_text_has_no_engineering_tokens(page):
     at = _at()
     at.radio(key="ui2_page").set_value(page).run(timeout=60)
-    text = re.sub(r"<[^>]+>", " ", _blob(at))
+    text = _human_text(at)
     hits = sorted({t for t in _ENGINEERING_TOKENS if t in text})
     assert hits == [], hits
 
@@ -123,11 +138,19 @@ def test_T_new_3_me_page_has_layered_data_health_section():
     assert any("資料健康度" in (s.title or "") for s in vm.context.sections)
 
 
-@_xfail("P1")
 def test_T_new_5_preview_controls_are_dev_surface_only():
     # DEC-130 註：T_new_5 管「預設道 0 個 Preview 控制」；「`ui2_dev=1` 才顯示、且不影響 account 顯示」見 T_new_9（不重複）。
     at = _at()                                                  # 預設道（無開發旗標）
     assert [e.label for e in at.expander if e.label.startswith("Preview 控制")] == []
+    assert len(at.selectbox) == 0                               # 資料來源／場景／帳戶三個控制一個都沒有（不是收合、是不存在）
+    assert "開發／測試工具" not in _human_text(at) and 'data-ui2-dev="1"' not in _blob(at)
+    # 其他旗標值（含看起來像「開」的）也不開（只認精確 "1"）
+    from streamlit.testing.v1 import AppTest
+    for v in ("0", "true", "yes", "1 ", ""):
+        a = AppTest.from_file(str(APP_UI2), default_timeout=60)
+        a.query_params["ui2_dev"] = v
+        a.run(timeout=60)
+        assert len(a.selectbox) == 0, v
 
 
 @_xfail("P2")
@@ -157,21 +180,27 @@ def test_T_new_8_data_health_rows_separate_data_state_from_capability():
     assert not any("尚未接線" in c for c in ds)                          # ⬜ 尚未接線 不得出現在 Data State 欄
 
 
-@_xfail130("P1")
 def test_T_new_9_ui2_dev_shows_preview_controls_and_never_changes_account_area():
-    """`?ui2_dev=1` 才顯示 Preview 控制；且該 query parameter 不得影響 Account Area（不是登入證據）。
-    （預設道 0 控制見 T_new_5；Account Area 本體見 T_new_7。）"""
-    from streamlit.testing.v1 import AppTest
+    """`?ui2_dev=1` 才顯示 Preview 控制（開發面）；且該 query parameter 不得影響帳戶顯示（不是登入證據）。
+    （預設道 0 控制見 T_new_5；Account Area 本體屬 P7，見 T_new_7。）
 
+    P1 斷言：(1) 開發面只在 dev 道出現且帶「非產品內容」標示；(2) 四頁的**產品內容**（去掉開發面標題區塊後的全部 markdown）
+    在 dev／非 dev 兩道逐字相同——`ui2_dev` 不改任何頁面內容，特別是 👤 我的的連線狀態／帳戶動作；
+    (3) 若日後 Account Area（`data-ui2-account-area`）存在，同樣兩道相同。"""
     def _area(b: str) -> str:
         m = re.search(r'<[^>]*data-ui2-account-area[^>]*>.*?</(?:div|section|aside)>', b, re.S)
         return m.group(0) if m else ""
 
-    plain = _at()
-    dev = AppTest.from_file(str(APP_UI2), default_timeout=60)
-    dev.query_params["ui2_dev"] = "1"
-    dev.run(timeout=60)
-    assert [e.label for e in plain.expander if e.label.startswith("Preview 控制")] == []
-    assert [e.label for e in dev.expander if e.label.startswith("Preview 控制")] != []
-    a0, a1 = _area(_blob(plain)), _area(_blob(dev))
-    assert a0 and a0 == a1                                              # Account Area 存在，且與 ui2_dev 無關
+    plain, dev = _at(), _at(dev=True)
+    assert len(plain.selectbox) == 0 and len(dev.selectbox) == 3
+    assert {s_.key for s_ in dev.selectbox} == {"ui2_feed", "ui2_scenario", "ui2_account"}   # 且仍是 ui2_ 前綴
+    assert "開發／測試工具（非產品內容）" in "\n".join(m.value for m in dev.markdown)
+    assert "開發／測試工具" not in _human_text(plain) and 'data-ui2-dev="1"' not in _blob(plain)
+    for page in PAGE_IDS:
+        for a_ in (plain, dev):
+            a_.radio(key="ui2_page").set_value(page).run(timeout=60)
+
+        def _product(at):
+            return "\n".join(m.value for m in at.markdown if 'data-ui2-dev="1"' not in m.value)
+        assert _product(plain) == _product(dev), page
+        assert _area(_product(plain)) == _area(_product(dev))

@@ -12,7 +12,7 @@ from shared.ui2_contract.models import (
     AccountVM, CapabilityState, CardVM, CtaVM, FieldState, FieldVM, FirstScreenVM, FreshnessInfo,
     JudgementState, LookupResultVM, SearchBoxVM,
 )
-from shared.ui2_contract.text import TEXT_ASOF_MISSING
+from shared.ui2_contract.text import TEXT_ASOF_MISSING, is_dev_only_text, is_known_l0_explain
 from shared.ui2_contract.tones import TONE_SYMBOL, ChipTone
 
 #: 資料語意五態＋判定結果 → chip 色調。Missing／Not evaluated／無法判定＝灰（Neutral）；Stale＝琥珀；
@@ -40,6 +40,18 @@ AXIS_CLASS: dict[str, str] = {
     "judgement": "ui2-chip--axis-judgement",
     "capability": "ui2-chip--axis-capability",
 }
+
+
+def shown(detail: str | None) -> bool:
+    """該段 `detail` 是否畫在 Human UI：有字、且不是只給開發面／資料健康度讀的治理參照句（見 `is_dev_only_text`）。
+    ⛔ 這只是呈現政策：被略過的句子仍完整留在 `FieldVM.detail`（Active Contract §8）。"""
+    if not detail:
+        return False
+    if is_dev_only_text(detail):
+        if not is_known_l0_explain(detail):      # 不沉默：不是已知 L0 常數卻命中治理參照 → 有人把工程句寫進 detail
+            print(f"[ui2.html] WARNING 含治理參照的 detail 未顯示（不是已知 L0 說明常數）：{detail[:80]!r}")
+        return False
+    return True
 
 
 def tone_for(field: FieldVM) -> ChipTone:
@@ -100,7 +112,7 @@ def metric_card_html(card: CardVM) -> str:
     f = card.field
     value = (f'<div class="ui2-card__value">{escape(f.value_text)}</div>'
              if f.value_text is not None else '<div class="ui2-card__value ui2-card__value--blank">—</div>')
-    detail = f'<div class="ui2-card__detail">{escape(f.detail)}</div>' if f.detail else ""
+    detail = f'<div class="ui2-card__detail">{escape(f.detail)}</div>' if shown(f.detail) else ""
     chips = "".join(chip_html(c.text, c.tone) for c in card.chips)
     return (f'<div class="ui2-card" data-card-id="{escape(card.card_id)}" data-axis="{f.layer}" '
             f'data-state="{_state_attr(f)}">'
@@ -111,16 +123,18 @@ def metric_card_html(card: CardVM) -> str:
 
 def empty_state_html(field: FieldVM) -> str:
     """空／冷／未提供狀態的區塊呈現（取代空白）：chip（三軸各自樣式）＋原因一句。⛔ 空白、⛔ 補 0、⛔ 紅色（除 Unavailable）。"""
-    reason = f'<div class="ui2-empty__reason">{escape(field.detail)}</div>' if field.detail else ""
+    reason = f'<div class="ui2-empty__reason">{escape(field.detail)}</div>' if shown(field.detail) else ""
     return (f'<div class="ui2-empty" data-axis="{field.layer}" data-state="{_state_attr(field)}">'
             f'<span class="ui2-row__label">{escape(field.label)}</span> {status_chip_html(field)}{reason}</div>')
 
 
-def field_row_html(field: FieldVM) -> str:
+def field_row_html(field: FieldVM, *, hide_label: bool = False) -> str:
+    """一列欄位。`hide_label=True`：區塊標題已是同一個名稱時不重複顯示 label（P1 重複標籤合併；欄位資料不變）。"""
     value = escape(field.value_text) if field.value_text is not None else ""
-    detail = f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if field.detail else ""
+    detail = f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if shown(field.detail) else ""
+    label = "" if hide_label else f'<div class="ui2-row__label">{escape(field.label)}</div>'
     return (f'<div class="ui2-row" data-axis="{field.layer}" data-state="{_state_attr(field)}">'
-            f'<div class="ui2-row__label">{escape(field.label)}</div>'
+            f'{label}'
             f'<div class="ui2-row__body"><span class="ui2-row__value">{value}</span>'
             f'{status_chip_html(field)}</div>{detail}</div>')
 
@@ -138,26 +152,31 @@ def cta_html(cta: CtaVM, *, with_reason: bool = True) -> str:
             f'aria-disabled="{str(not cta.enabled).lower()}"{tip}>{escape(cta.label)}</span>{reason}</div>')
 
 
-def banner_html(text: str, note: str) -> str:
-    return (f'<div class="ui2-banner" role="note"><strong>{escape(text)}</strong>'
-            f'<span class="ui2-banner__note">{escape(note)}</span></div>')
+def banner_html(text: str, note: str, *, note_hidden_on_mobile: bool = False) -> str:
+    """頂部單行標示。`note_hidden_on_mobile=True`：手機窄螢幕不顯示補充說明（避免折成兩行；主標示文字不變）。"""
+    cls = "ui2-banner__note ui2-banner__note--wide" if note_hidden_on_mobile else "ui2-banner__note"
+    tail = f'<span class="{cls}">{escape(note)}</span>' if note else ""
+    return f'<div class="ui2-banner" role="note"><strong>{escape(text)}</strong>{tail}</div>'
 
 
 def qa_row_html(question: str | None, field: FieldVM, *, qid: str = "ctx") -> str:
-    """第一屏一列：（選配）問題編號＋欄位 label／value／狀態 chip／原因。緊湊單列，手機優先。
+    """第一屏一列：欄位 label／value／狀態 chip／原因。緊湊單列，手機優先。
 
     `data-ui2-q`＝量測錨點（`q1`～`q3`／`ctx`；④ 見 `first_screen_html`），不影響呈現。
+    `question`＝該列回答的第一屏問題名（無題號）：只寫成 `data-ui2-qname` 屬性（測試／無障礙工具用），
+    **不渲染成可見文字**（P1：題號「①②③④」是線框的草稿註記，不是 UI 文案）。
     """
-    q = f'<span class="ui2-q">{escape(question)}</span>' if question else ""
+    q = ""
+    qname = f' data-ui2-qname="{escape(question)}"' if question else ""
     value = f'<span class="ui2-row__value">{escape(field.value_text)}</span>' if field.value_text is not None else ""
-    detail = f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if field.detail else ""
-    return (f'<div class="ui2-qrow" data-ui2-q="{qid}" data-axis="{field.layer}" data-state="{_state_attr(field)}">'
+    detail = f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if shown(field.detail) else ""
+    return (f'<div class="ui2-qrow" data-ui2-q="{qid}"{qname} data-axis="{field.layer}" data-state="{_state_attr(field)}">'
             f'{q}<span class="ui2-row__label">{escape(field.label)}</span> '
             f'{value}{status_chip_html(field)}{detail}</div>')
 
 
 def first_screen_html(fs: FirstScreenVM, *, cta_first: bool = False) -> str:
-    """第一屏四問（客戶 (5)-9）：① 現在狀態 ② 是否需要行動 ③ 下一步 ④ 主 CTA（單一緊湊區塊）。
+    """第一屏四問（客戶 (5)-9）：現在狀態／是否需要行動／下一步／主 CTA（單一緊湊區塊；題號不外露，錨點 `data-ui2-q`）。
 
     `cta_first=True`（📊 市場頁；Wireframes §2.1／§2.2、DEC-117 Q5：頁首→更新 CTA→今日結論→…）：主 CTA 排在
     **最前**（今日結論之前）。四問是**資訊需求**，不代表 DOM 固定按 ①→④ 排列（客戶 2026-11-03 裁示）；
@@ -169,12 +188,12 @@ def first_screen_html(fs: FirstScreenVM, *, cta_first: bool = False) -> str:
                     + cta_html(fs.primary_cta) + "</div>")
         if fs.conclusion is not None:
             rows.append(conclusion_row_html(fs.conclusion))
-    rows += [qa_row_html("① 現在狀態", fs.current_state, qid="q1")]
+    rows += [qa_row_html("現在狀態", fs.current_state, qid="q1")]
     rows += [qa_row_html(None, r, qid="ctx") for r in fs.context_rows]
-    rows += [qa_row_html("② 是否需要行動", fs.action_needed, qid="q2"),
-             qa_row_html("③ 下一步", fs.next_step, qid="q3")]
+    rows += [qa_row_html("是否需要行動", fs.action_needed, qid="q2"),
+             qa_row_html("下一步", fs.next_step, qid="q3")]
     tail = ("" if cta_first else
-            '<div class="ui2-qrow ui2-qrow--cta" data-ui2-q="q4"><span class="ui2-q">④ 主 CTA</span>'
+            '<div class="ui2-qrow ui2-qrow--cta" data-ui2-q="q4" data-ui2-qname="主 CTA">'
             + cta_html(fs.primary_cta) + "</div>")
     return '<div class="ui2-qa">' + "".join(rows) + tail + "</div>"
 
@@ -189,7 +208,7 @@ def conclusion_row_html(field: FieldVM) -> str:
     """
     text = (f'<span class="ui2-concl__text">{escape(field.value_text)}</span>'
             if field.value_text is not None else status_chip_html(field))
-    detail = f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if field.detail else ""
+    detail = f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if shown(field.detail) else ""
     return (f'<div class="ui2-qrow ui2-qrow--concl" data-ui2-q="concl" data-axis="{field.layer}" '
             f'data-state="{_state_attr(field)}"><span class="ui2-q">今日結論</span>{text}{detail}</div>')
 
@@ -199,7 +218,7 @@ def main_risk_html(field: FieldVM) -> str:
 
     ⛔ 不產生風險項、⛔ 寫「無風險」「安全」。冷啟動＝灰色說明（⛔ 紅），真錯誤＝紅（Unavailable）。
     """
-    detail = f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if field.detail else ""
+    detail = f'<div class="ui2-row__detail">{escape(field.detail)}</div>' if shown(field.detail) else ""
     value = f'<span class="ui2-row__value">{escape(field.value_text)}</span>' if field.value_text else ""
     return (f'<div class="ui2-risk" data-ui2-l1="main_risk" data-axis="{field.layer}" '
             f'data-state="{_state_attr(field)}"><span class="ui2-q">{escape(field.label)}</span>'
@@ -253,10 +272,10 @@ def search_html(search: SearchBoxVM) -> str:
 
 def target_first_screen_html(fs: FirstScreenVM, summary: FieldVM) -> str:
     """🎯 標的頁第一屏（搜尋列在模式切換之下；本函式只含 ① 摘要、W-4 context 行、② ③）。"""
-    return ('<div class="ui2-qa">' + qa_row_html("① 現在狀態（查詢摘要）", summary, qid="q1")
+    return ('<div class="ui2-qa">' + qa_row_html("現在狀態（查詢摘要）", summary, qid="q1")
             + ctxline_html(fs.context_rows)
-            + qa_row_html("② 是否需要行動", fs.action_needed, qid="q2")
-            + qa_row_html("③ 下一步", fs.next_step, qid="q3") + "</div>")
+            + qa_row_html("是否需要行動", fs.action_needed, qid="q2")
+            + qa_row_html("下一步", fs.next_step, qid="q3") + "</div>")
 
 
 def snapshot_html(fields: tuple[FieldVM, ...]) -> str:
@@ -288,8 +307,8 @@ def lookup_result_html(lk: LookupResultVM) -> str:
             f'<div class="ui2-row__detail">{escape(lk.isolation_note)}</div></div>')
 
 
-_ACCOUNT_STATE_LABEL = {"signed_out": "signed-out（尚未登入）", "signed_in": "signed-in（已登入）",
-                        "unavailable": "unavailable（Sheet 讀取失敗）"}
+#: 帳戶示意態的人話標示（FAKE 場景；⛔ 不是登入證據，真實 auth 狀態另案 `NUI2-AUTH-CONTRACT-GATE`）。
+_ACCOUNT_STATE_LABEL = {"signed_out": "尚未登入", "signed_in": "已登入", "unavailable": "Sheet 讀取失敗"}
 
 
 def account_actions_html(account: AccountVM) -> str:
@@ -299,5 +318,5 @@ def account_actions_html(account: AccountVM) -> str:
     note = f'<div class="ui2-cta__reason">{escape("；".join(reasons))}</div>' if reasons else ""
     return (f'<div class="ui2-account" data-ui2-l1="account_actions" '
             f'data-ui2-account="{escape(account.account_state)}">'
-            f'<span class="ui2-q">帳戶管理（FAKE 狀態：{escape(_ACCOUNT_STATE_LABEL.get(account.account_state, account.account_state))}）</span>'
+            f'<span class="ui2-q">帳戶管理（示意狀態：{escape(_ACCOUNT_STATE_LABEL.get(account.account_state, account.account_state))}）</span>'
             f'<div class="ui2-account__btns">{btns}</div>{note}</div>')

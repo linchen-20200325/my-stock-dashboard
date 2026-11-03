@@ -15,7 +15,7 @@ NUI2-REAL-FEED A2（客戶 2026-11-03 (11)）。**純函式**（G2 照掃：⛔ 
 ═══ 語意映射（AI 總管內部判準標「可推翻」者，登記於 BACKLOG `NUI2-REAL-FEED` 段）═══
 台股：
 - 讀取丟例外（feed 接住）→ Unavailable；`failed=True` → Unavailable；`ok=False, failed=False` → Missing `⬜ 資料未取得`。
-  畫面錯誤句＝固定說明＋例外型別名（⛔ 訊息原文）；`upstream_error` 只顯示「上游最近一次抓取失敗（詳見 log）」。
+  畫面錯誤句＝固定人話句（⛔ 例外型別名、⛔ 訊息原文；型別名只留 snapshot 內部代碼與 log）；`upstream_error` 只顯示「上游最近一次抓取失敗」。
 - `is_stale=True` → Stale `⚠ 過期 N 天`（N＝`age_days`；None → `⚠ 可能已過期`）。
 - `is_stale=None` → Stale `⚠ 可能已過期`（**AI 總管內部判準，可推翻**：新鮮度未知 ⛔ 當 OK；service 檔頭明文
   「attrs 缺 → is_stale=None（⬜ 未判定），⛔ 不當成新鮮」）。
@@ -48,7 +48,7 @@ from shared.ui2_contract.pages import (
     SCENARIO_REAL,
 )
 from shared.ui2_contract.text import (
-    TEXT_ASOF_MISSING, TEXT_NOT_DEFINED, TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
+    RULE_BRANCH_SOURCE_PREFIX, TEXT_ASOF_MISSING, TEXT_NOT_DEFINED, TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
     TEXT_RISK_CAP_UNDETERMINABLE,
 )
 from src.services.ui2.market_vm import build_market_page_vm
@@ -62,7 +62,7 @@ class RealFeedContractError(ValueError):
     """canonical service 回傳值違反其自身契約（未知 source、is_loaded 與分支矛盾、ok 卻無有限收盤值…）。
 
     §1 fail loud 的落點（實作組依 `CLAUDE.md` §1／§1.A-4 判斷，可推翻）：`real_feed` 在**讀取期**驗證，違反時該事實記為
-    錯誤（畫面＝紅色 Unavailable「canonical 契約違反（詳見 log）」＋log 全文），**另一個事實照常顯示**——
+    錯誤（畫面＝紅色 Unavailable「資料格式異常，暫時無法顯示」＋log 全文），**另一個事實照常顯示**——
     ⛔ 默默落成某一態（掩蓋），也 ⛔ 讓整頁例外（會把另一個有效事實一起蓋掉）。純函式本身遇到違反仍 raise（防呆）。
     """
 
@@ -93,7 +93,7 @@ def _safe_code(err: str) -> str:
 class TwiiFact:
     """`TwiiTrendView` 的欄位（只拷貝本卡用到者）。
 
-    錯誤細節（例外訊息、`metadata.last_error` 原文）**不進 snapshot**——畫面只顯示例外型別名／固定說明句，全文只 log
+    錯誤細節（例外訊息、`metadata.last_error` 原文）**不進 snapshot**——畫面只顯示固定說明句（型別名只留 snapshot 內部代碼），全文只 log
     （NUI2-REALFEED-ERROR-SCRUB 收斂：避免 token／路徑上畫面）。`stale_reason` 為 L1 依規則產生的說明句（非錯誤原文）。
     """
 
@@ -164,25 +164,32 @@ KNOWN_REGIME_SOURCES: frozenset[str] = frozenset(
 _NOT_LOADED_SOURCES = frozenset({RA.SOURCE_UNLOADED, RA.SOURCE_UNEVALUATED_BREADTH})
 
 #: 位階 `FieldVM.source`：誠實標規則分支 id（⛔ 偽裝成資料來源）。
-REGIME_SOURCE_FMT = "規則分支 id：{source}（非資料來源）"
-REGIME_ASOF_NOTE = f"{TEXT_ASOF_MISSING}（市場位階契約不含資料日）"
-#: 第一屏（L1）只放短句；L0 既有完整說明放 📊「為什麼（L2）」的「位階說明」列（Freeze §16.5：先縮字句，⛔ 移出必要項）。
-REGIME_SEE_WHY = "說明見「為什麼（L2）」"
-#: 🎯 標的頁沒有「為什麼（L2）」區塊 ⇒ 指向 📊 市場頁（QA P3：⛔ 指向本頁不存在的區塊）。
-REGIME_SEE_WHY_MARKET = "說明見 📊 市場頁「為什麼（L2）」"
+REGIME_SOURCE_FMT = RULE_BRANCH_SOURCE_PREFIX + "{source}（非資料來源）"
+REGIME_ASOF_NOTE = f"{TEXT_ASOF_MISSING}（市場位階未提供資料日）"
+#: 第一屏（L1）只放一句人話原因（P1：不再指向「為什麼（L2）」——該區塊屬 P3 移除範圍，且其中的 L0 完整說明含
+#: 決策編號／狀態檔名，不畫在 Human UI；完整說明改放資料健康度·市場位階項〔P6〕，現在只留在 VM 的 `regime_explain` 欄）。
+#: 這句只轉述 L0 `NOT_LOADED_PENDING_BREADTH_EXPLAIN`／`UNEVALUATED_BREADTH_EXPLAIN` 共同的原因（缺正式市場廣度資料），
+#: ⛔ 新增原因或推論。
+#: ⚠ 前提：目前 `shared.signal_thresholds.BREADTH_PROXY_SCORING_ENABLED=False`（市場廣度代理值不計分、缺正式廣度來源 →
+#: 位階恆未評估）。若日後改 True，這句「尚缺正式的市場廣度」可能不再成立 → 須重審文案與 L0 `*_EXPLAIN`；
+#: `tests/test_ui2_p1_human_text.py::test_regime_see_why_premise_breadth_proxy_scoring_is_off` 會轉紅提醒。
+REGIME_SEE_WHY = "原因：尚缺正式的市場廣度（漲跌家數）資料"
+#: 🎯 與 📊 同一句（跨頁一致性測試鎖定；舊版 🎯 指向 📊 的區塊，區塊不再是指引目標）。
+REGIME_SEE_WHY_MARKET = REGIME_SEE_WHY
 #: L0 說明句提到「按更新」指正式網站；Real-data Preview 沒有可用的更新入口 ⇒ 另加連接句說清楚（⛔ 改 L0 原文）。
-PREVIEW_NO_REFRESH_NOTE = "註：上句的「按更新」指正式網站；本 Real-data Preview 不觸發更新，所以這一格維持尚未載入"
-PREVIEW_NO_REFRESH_SHORT = "本 Real-data Preview 不觸發更新，所以這一格維持尚未載入"
+PREVIEW_NO_REFRESH_NOTE = "註：上句的「按更新」指正式網站；這裡不提供更新，所以這一格維持尚未載入"
+PREVIEW_NO_REFRESH_SHORT = "這裡不提供更新，所以這一格維持尚未載入"
 
 _TWII_MISSING_TEXT = "加權指數歷史快取讀不到（檔案不存在、壞檔、缺欄或內容為空）"
-_UPSTREAM_ERROR_TEXT = "上游最近一次抓取失敗（詳見 log）"
+_UPSTREAM_ERROR_TEXT = "上游最近一次抓取失敗"
 
 
 def _error_text(what: str, code: str) -> str:
-    """畫面上的錯誤句：只放固定說明＋例外型別名（⛔ 訊息原文；全文已由 feed log）。"""
+    """畫面上的錯誤句：**固定人話句**（⛔ 例外型別名、⛔ 訊息原文）。型別名留在 snapshot 的錯誤代碼與 feed 的 log
+    （P1 QA 修：型別名是工程資訊，不上使用者畫面）。契約違反＝另一句固定說明。"""
     if code == CONTRACT_ERROR:
-        return f"{what}：canonical 契約違反（詳見 log）"
-    return f"{what}讀取失敗（{code}；詳見 log）"
+        return f"{what}：資料格式異常，暫時無法顯示"
+    return f"{what}暫時無法讀取"
 
 
 def validate_regime_fact(f: RegimeFact) -> None:
@@ -253,7 +260,7 @@ def twii_card_spec(snap: RealFeedSnapshot) -> dict:
         return {**spec, "state": "stale", "stale_days": t.age_days, "reason": "；".join(notes) or None}
     if t.is_stale is None:      # 新鮮度未判定 ⛔ 當 OK（AI 總管內部判準，可推翻）
         return {**spec, "state": "stale", "stale_days": None,
-                "reason": "；".join(["新鮮度未判定（快取缺新鮮度判定）", *notes])}
+                "reason": "；".join(["新鮮度未判定", *notes])}
     return {**spec, "reason": "；".join(notes) or None}
 
 
@@ -268,15 +275,17 @@ def _not_provided(key: str, label: str, reason: str, sub: str = TEXT_NOT_PROVIDE
 def _risk_cap_row() -> dict:
     """Risk Cap＝Unable to Determine（Freeze §0.1.4；DEC-124）。⛔ 讀 `get_macro_regime` 的 exposure／disclosure。"""
     return {"key": "risk_cap", "label": "Risk Cap", "value": None, "state": "undeterminable",
-            "sub_reason": TEXT_RISK_CAP_UNDETERMINABLE, "reason": "必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+            "sub_reason": TEXT_RISK_CAP_UNDETERMINABLE, "reason": "必要輸入不足：目前曝險尚無正式來源",
             "as_of": None, "source": None}
 
 
-_R_SESSION = "尚未接線：值只存在 🚀 更新後的 session（Real-data Preview 不觸發更新），且編排需先 PORT 至 L3"
-_R_PORT = "尚未接線：判定／排序邏輯住在 Legacy UI 層，接了＝第二套規則（需先 PORT 至 L3）"
-_R_PATH_C = "尚未接線：需 Google OAuth／Sheet（路徑 C，另開 Decision Gate）"
-_R_NOT_IN_BATCH = "尚未接線（Real-data Preview 本批只接台股加權指數與市場位階）"
-_R_STAGE_G = "Stage G 前不提供"
+#: 使用者可見的簡短人話原因（P1；原工程原因〔session／PORT／Legacy／OAuth／路徑 C／Gate／Stage〕不外露，
+#: 對映與出處留在 mapping 文件 `NEWUI2_REAL_FEED_MAPPING_2026-11-03.md` 與 BACKLOG，見 Active Contract §8）。
+_R_SESSION = "此項目尚未開放"
+_R_PORT = "此項目尚未開放"
+_R_PATH_C = "需登入並讀取 Sheet，目前尚未開放"
+_R_NOT_IN_BATCH = "此項目尚未開放"
+_R_STAGE_G = "此功能尚未開放"
 
 
 def _market(snap: RealFeedSnapshot) -> dict:
@@ -285,29 +294,29 @@ def _market(snap: RealFeedSnapshot) -> dict:
         "current_state": regime_spec(snap, "regime", "市場目前狀態"),
         "context_rows": [_risk_cap_row()],
         "next_step": None,                      # → 待 System Action Aggregator（VM 統一處理）
-        "cta": {"label": "🚀 更新今日戰情", "disabled_reason": "Preview 不觸發更新（另開 Gate）"},
+        "cta": {"label": "🚀 更新今日戰情", "disabled_reason": "目前不提供更新"},
         "cards": [
             twii_card_spec(snap),
             _not_provided("vix", "VIX", _R_SESSION),
             _not_provided("us10y", "US 10Y", _R_SESSION),
-            _not_provided("spread", "利差", "尚未接線：無 canonical「利差」定義（10Y-2Y／10Y-3M／M1B-M2，待定義）"),
+            _not_provided("spread", "利差", "「利差」尚無正式定義（10Y-2Y／10Y-3M／M1B-M2 擇一，待定義）"),
             _not_provided("dxy", "DXY", _R_SESSION),
-            _not_provided("pmi", "PMI／景氣", "尚未接線：台灣 PMI 與景氣燈號語意不同、兩條取數路徑（待定義）"),
+            _not_provided("pmi", "PMI／景氣", "台灣 PMI 與景氣燈號意義不同，用哪一個尚待定義"),
         ],
         "sections": [
             {"key": "onebrain", "title": "🤖 OneBrain Outlook", "level": "L1",
              "fields": [_not_provided("onebrain_f", "OneBrain Outlook", _R_STAGE_G)]},
-            {"key": "why", "title": "為什麼（L2）", "level": "L2",
+            {"key": "why", "title": "為什麼", "level": "L2",
              "fields": [regime_spec(snap, "regime_explain", "位階說明", brief=False),
                         _not_provided("why_f", "位階理由／反證／資料新鮮度／來源", _R_SESSION)]},
-            {"key": "detail", "title": "指標明細（16 項）（L3）", "level": "L3",
+            {"key": "detail", "title": "指標明細（16 項）", "level": "L3",
              "fields": [_not_provided("detail_f", "指標明細", _R_SESSION)]},
-            {"key": "raw", "title": "原始資料表／工程診斷（L3）", "level": "L3",
+            {"key": "raw", "title": "原始資料表", "level": "L3",
              "fields": [_not_provided("raw_f", "原始資料表", _R_SESSION)]},
         ],
         # 第一屏短句（Freeze §16.5 縮字句）；完整原因見 mapping 文件 M6／M7。
-        "conclusion": _not_provided("conclusion", "今日結論", "尚未接線（結論子句需先 PORT）"),
-        "main_risk": _not_provided("main_risk_f", "今日主要風險", "尚未接線（需 🚀 更新後的 session）"),
+        "conclusion": _not_provided("conclusion", "今日結論", "今日結論尚未提供"),
+        "main_risk": _not_provided("main_risk_f", "今日主要風險", "今日風險摘要尚未開放"),
     }
 
 
@@ -325,20 +334,20 @@ def _target(snap: RealFeedSnapshot) -> dict:
     return {
         "page": P4_TARGET, "title": PAGE4_LABELS[P4_TARGET],
         "current_state": _not_provided("pick_summary", "精選摘要",
-                                       "尚未接線：精選需連網取數，候選因子組合無 canonical 定義（待定義）"),
+                                       "精選尚未開放（需連網取得，且候選的組合方式尚待定義）"),
         "context_rows": [regime_spec(snap, "market_regime", "市場位階", see_why=REGIME_SEE_WHY_MARKET),
                          _risk_cap_row()],
         "action_needed": _not_provided("no_holding_action", "是否需要行動", "本頁不產生持股動作；動作權威＝💼 持股"),
-        "next_step": _not_provided("next", "下一步", "選一檔後進入研究 workspace（尚未提供）"),
-        "cta": {"label": "查詢", "disabled_reason": "Real-data Preview：真查詢不在本批"},
+        "next_step": _not_provided("next", "下一步", "選一檔後進入研究頁（尚未提供）"),
+        "cta": {"label": "查詢", "disabled_reason": "尚未開放查詢"},
         "cards": [
             _not_provided("industry_top", "產業機會 Top 5", _R_PORT),
-            _not_provided("candidates", "候選 Top 10", "尚未接線：候選 Top 10 的因子組合無 canonical 定義（待定義）"),
+            _not_provided("candidates", "候選 Top 10", "候選 Top 10 尚未開放（組合方式尚待定義）"),
         ],
         "sections": [
             {"key": "conditions", "title": "選股條件（收合）", "level": "L2", "mode": MODE_CURATED,
              "fields": [_not_provided("cond_f", "選股條件", _R_NOT_IN_BATCH)]},
-            {"key": "full", "title": "完整 6 欄表／跨季趨勢（L3）", "level": "L3", "mode": MODE_CURATED,
+            {"key": "full", "title": "完整 6 欄表／跨季趨勢", "level": "L3", "mode": MODE_CURATED,
              "fields": [_not_provided("full_f", "完整表", _R_NOT_IN_BATCH)]},
         ],
         "target": {
@@ -347,19 +356,19 @@ def _target(snap: RealFeedSnapshot) -> dict:
             "search": {
                 "placeholder": "代碼／名稱",
                 "name_search": _not_provided("name_search", "名稱搜尋", "請輸入代碼（名稱搜尋尚未提供）"),
-                "cta": {"label": "查詢", "disabled_reason": "Real-data Preview：真查詢不在本批"},
+                "cta": {"label": "查詢", "disabled_reason": "尚未開放查詢"},
             },
             "lookup": {
                 "ticker": "", "name": "", "chips": [], "queried": False,
-                "summary": _not_provided("lookup_summary", "查詢摘要", "即時查一檔真查詢尚未接線（不在本批）"),
+                "summary": _not_provided("lookup_summary", "查詢摘要", "即時查一檔尚未開放"),
                 "snapshot": snapshot,
                 "add_watch": {"label": "加入觀察（尚未提供）",
-                              "disabled_reason": "尚未提供：正式加入觀察流程僅舊 UI；Preview 不寫入任何持股／觀察／Sheet"},
-                "isolation_note": "查一檔僅限本次 session：不加入持股／觀察／候選池，不改 strategy／Risk Cap／ranking，不寫 Sheet。",
+                              "disabled_reason": "加入觀察尚未開放；這裡不會寫入任何持股或觀察清單"},
+                "isolation_note": "查一檔只在這次瀏覽有效：不會加入持股、觀察或候選池，也不會改變策略、Risk Cap 或排名，不寫入 Sheet。",
                 "sections": [
-                    {"key": "lk_fundamental", "title": "基本面（L2）", "level": "L2", "mode": MODE_LOOKUP,
+                    {"key": "lk_fundamental", "title": "基本面", "level": "L2", "mode": MODE_LOOKUP,
                      "fields": [_not_provided("lk_f1", "基本面明細", _R_NOT_IN_BATCH)]},
-                    {"key": "lk_valuation", "title": "估值（L2）", "level": "L2", "mode": MODE_LOOKUP,
+                    {"key": "lk_valuation", "title": "估值", "level": "L2", "mode": MODE_LOOKUP,
                      "fields": [_not_provided("lk_f2", "估值（EPS basis／PE 口徑）", _R_NOT_IN_BATCH)]},
                     {"key": "lk_research", "title": "🤖 研究解釋", "level": "L2", "mode": MODE_LOOKUP,
                      "fields": [_not_provided("lk_f3", "研究解釋", _R_STAGE_G)]},
@@ -379,20 +388,20 @@ def _hold() -> dict:
              "reason": "無現金／總資產來源", "as_of": None, "source": None},
         ],
         "next_step": None,
-        "cta": {"label": "🚀 更新持股戰情", "disabled_reason": "Real-data Preview 不觸發更新；持股讀取待路徑 C"},
-        "cards": [_not_provided("holdings_table", "Holdings（占位）", _R_PATH_C)],
+        "cta": {"label": "🚀 更新持股戰情", "disabled_reason": "目前不提供更新；需登入後才能讀取持股"},
+        "cards": [_not_provided("holdings_table", "持股清單", _R_PATH_C)],
         "sections": [
             {"key": "onebrain", "title": "🤖 OneBrain 持股摘要", "level": "L1",
              "fields": [_not_provided("ob_f", "OneBrain 持股摘要", _R_STAGE_G)]},
-            {"key": "why", "title": "L2 明細", "level": "L2",
+            {"key": "why", "title": "明細", "level": "L2",
              "fields": [_not_provided("why_f", "基本面／風險／籌碼／證據", _R_PATH_C)]},
-            {"key": "raw", "title": "L3 原始明細", "level": "L3",
+            {"key": "raw", "title": "原始明細", "level": "L3",
              "fields": [_not_provided("raw_f", "原始明細", _R_PATH_C)]},
         ],
     }
 
 
-_R_ME = "尚未接線：Real-data Preview 不讀帳戶（OAuth 已設定時讀取會寫入登入狀態與 nonce）；待路徑 C"
+_R_ME = "需登入 Google 才能顯示，目前尚未開放"
 
 
 def _me() -> dict:
@@ -402,7 +411,7 @@ def _me() -> dict:
         "context_rows": [],
         "action_needed": _not_provided("conn_issue", "連線異常", _R_ME),
         "next_step": _not_provided("next", "下一步", _R_ME),
-        "cta": {"label": "帳戶管理", "disabled_reason": "Real-data Preview：不接 Google OAuth／不讀寫 Sheet（路徑 C）"},
+        "cta": {"label": "帳戶管理", "disabled_reason": "登入與 Sheet 操作尚未開放"},
         "cards": [
             _not_provided("google", "Google", _R_PATH_C),
             _not_provided("sheet", "Sheet（末 6 碼）", _R_PATH_C),
@@ -415,8 +424,7 @@ def _me() -> dict:
                 _not_provided("notify", "Notifications", _R_NOT_IN_BATCH),
                 _not_provided("display", "Display preference", _R_NOT_IN_BATCH)]},
             {"key": "digest", "title": "Audit：Decision Digest", "level": "L2", "fields": [
-                _not_provided("digest_f", "Decision Digest", "Stage F 前不提供",
-                              sub="⬜ 尚未提供（待 Headless Digest）")]},
+                _not_provided("digest_f", "Decision Digest", _R_STAGE_G)]},
             {"key": "registry", "title": "Audit：Rule Registry（唯讀）", "level": "L2",
              "fields": [_not_provided("registry_f", "Rule Registry", _R_NOT_IN_BATCH)]},
             {"key": "fresh", "title": "Audit：Data Freshness", "level": "L2",

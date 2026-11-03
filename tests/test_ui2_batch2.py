@@ -201,14 +201,16 @@ def test_no_global_update_time_anywhere_on_a_page(page, scenario):
         H.field_row_html(f) for s in vm.context.sections for f in s.fields)
     assert "更新時間" not in blob
     assert not re.search(r"\b\d{1,2}:\d{2}\b", blob), "出現時鐘時間字樣（可能是全域假更新時間）"
-    assert not re.search(r"20\d\d-\d\d-\d\d", blob), "出現真實日期字樣（Preview 全部為 FAKE-ASOF）"
+    assert not re.search(r"20\d\d-\d\d-\d\d", blob), "出現真實日期字樣（Preview 全部為「FAKE 示意」）"
 
 
 @pytest.mark.parametrize("scenario", ["cold", "loaded", "stale"])
 def test_full_rendered_page_has_no_global_update_time(scenario):
     """整頁（含 view／殼）實際 markdown：⛔ 全域假更新時間（`按更新時間 HH:MM`、時鐘時間、真實日期）。"""
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60).run(timeout=60)
+    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60)
+    at.query_params["ui2_dev"] = "1"          # P1：場景／帳戶切換控制只在開發面（?ui2_dev=1）
+    at.run(timeout=60)
     at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)
     for page in PAGE_IDS:
         at.radio(key="ui2_page").set_value(page).run(timeout=60)
@@ -224,7 +226,7 @@ def test_every_card_carries_its_own_freshness_tag():
     for c in vm.context.cards:
         h = H.metric_card_html(c)
         assert "ui2-freshrow" in h
-        assert ("資料日 FAKE-ASOF" in h) or (T.TEXT_ASOF_MISSING in h)
+        assert ("資料日 FAKE 示意" in h) or (T.TEXT_ASOF_MISSING in h)
 
 
 def test_missing_asof_is_marked_not_guessed():

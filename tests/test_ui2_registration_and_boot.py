@@ -130,8 +130,11 @@ def test_g10_floor_scan_covers_the_entrypoint_and_bites(tmp_path, monkeypatch):
 # ── G10 boot smoke（AppTest：in-process＋乾淨行程）─────────────────────────
 @pytest.fixture(scope="module")
 def at():
+    """開發面開啟（`?ui2_dev=1`）：本檔的場景輪詢測試要操作 `ui2_scenario`；預設道（0 控制）見 test_ui2_contract_teeth_pending。"""
     from streamlit.testing.v1 import AppTest
-    return AppTest.from_file(str(APP_UI2), default_timeout=60).run(timeout=60)
+    a = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    a.query_params["ui2_dev"] = "1"
+    return a.run(timeout=60)
 
 
 def _blob(at_) -> str:
