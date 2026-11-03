@@ -126,3 +126,11 @@ New UI2
 - **新債（cutover 前須清零）**：① FAKE 今日結論句→真結論句（`NUI2-CONCLUSION-REAL-FEED`）② 今日主要風險 capability `⬜ 尚未提供`→真風險項（`NUI2-MAIN-RISK-REAL-FEED`）③ 標的搜尋 disabled 示意＋FAKE 查一檔結果→真查詢／研究 workspace（`NUI2-TARGET-SEARCH-FUNCTIONAL`）④ 帳戶 FAKE skeleton→真 Google OAuth／Sheet（`NUI2-ME-ACCOUNT-REAL-GATE`，Opus 5.5＋High＋另開 Decision Gate）⑤ Preview 控制的 FAKE 維度（場景／帳戶／模式）隨 FAKE scenario 一併移除（`NUI2-PREVIEW-CONTROL-AXES`）⑥ capability marker 使用處增加（`NUI2-CAPABILITY-MARKER-COUNT-UP`；`NUI2-CAPABILITY-MARKER-CUTOVER-ZERO` 規則不變）。
 - **Rollback／Cutover 步驟不變**：本批不碰 `app.py`、不切 production default、不刪 Legacy。
 
+
+## §10 NUI2-REAL-FEED A 批 Migration debt／補註（2026-11-03；append-only；`PROJECT_RULES.md` 第 27 節第 4 點落點）
+
+- **A3 是 shadow acceptance，⛔ 不是 C5 通過**：客戶 (11) A3 明定「read-only，不切 production default」。§1 Cutover 鏈為有序（四頁逐頁驗收 C2〔含 Aggregator〕→ … → C5 real-data acceptance），本批只證明 Real-data Preview 對 **2 個事實**（台股加權指數、市場位階）的 loaded／missing／stale／unavailable／partial／provenance／跨頁一致與 no-write；多數欄位 ⬜。⛔ 任何文件／PR／報告寫「C5 通過」「真資料已接上」。
+- **§6 第一點（`_G2_ALLOWED_PROJECT` 須明確擴充並過審）的落地方式**：本批**未擴充** G2 白名單；改以具名 `FEED_FILES`＋新守衛 G2F（更窄：只准兩個 canonical L3 模組＋`shared`＋`src.services.ui2`）。VM 檔的 G2 一字未改。§6 原文未改。
+- **新債（cutover 前須清零或經 Gate 處置）**：① Real 模式多數欄位為 capability `⬜ 尚未提供`（`NUI2-CAPABILITY-MARKER-CUTOVER-ZERO` 規則不變；允許清單新增 `real_canonical.py`）② readiness／結論子句／主要風險／產業排序／指標逐格判態需 PORT 至 L3（`NUI2-PORT-*`）③ Preview 🚀 是否觸發更新鏈＝Stop Gate（`NUI2-REALFEED-SG-01-PREVIEW-REFRESH`）④ VIX 雙路徑（`NUI2-VIX-TWO-PATHS`）⑤ Preview Cloud 狀態檔存在性未驗（`NUI2-PREVIEW-CLOUD-STATE-FILES`）⑥ Preview 控制新增第三個維度（資料來源 `ui2_feed`），cutover 時與 FAKE 場景一併移除（`NUI2-PREVIEW-CONTROL-AXES`）。
+- **第二套 pipeline 判定（§3-6）**：real feed 只呼叫既有 L3（`market_twii_view_service.get_twii_trend_view`、`allocation_service.get_macro_regime`），⛔ 新 fetcher／cache／正規化／規則；值原樣帶出（台股只做千分位格式化；位階顯示字取既有 L0 `REGIME_LABEL`）。單組判讀，待獨立 QA。
+- **Rollback／Cutover 步驟不變**：本批不碰 `app.py`、不切 production default、不刪 Legacy；Real-data Preview 預設關（`ui2_feed=fake`）。

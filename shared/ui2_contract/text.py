@@ -59,6 +59,11 @@ TEXT_NOT_PROVIDED_AGGREGATOR = "⬜ 尚未提供（待 System Action Aggregator�
 PREVIEW_BANNER_TEXT = "New UI2 Preview（fake data）"
 PREVIEW_BANNER_NOTE = "以下全部是 FAKE／scenario 示意資料，不是真實行情、持股或建議。"
 
+#: Real-data Preview 頁首標示（NUI2-REAL-FEED A2／A3；客戶 (11)：「Preview 明確標示 Real-data Preview／非正式
+#: production default」）。⛔ 與 FAKE 標示共用：兩者必須一眼可分（`is_fake` 決定用哪一個）。
+REAL_PREVIEW_BANNER_TEXT = "Real-data Preview（非正式 production default）"
+REAL_PREVIEW_BANNER_NOTE = "只接 2 項真資料（台股、市場位階），其餘 ⬜ 附原因；唯讀、不觸發更新。"
+
 #: 資料來源欄位的 FAKE 前綴（避免 fake 值被誤認為真來源）。
 FAKE_SOURCE_PREFIX = "FAKE"
 

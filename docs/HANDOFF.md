@@ -816,3 +816,26 @@ DEC-086 規則已於 main，本表已落地。
   - **下一個唯一安全工作**：總管複驗本批（獨立 QA；重點：`tests/test_ui2_batch3.py` §9、`tests/ui2_viewport/measure_viewport.py` 三條新判定與 `scroll_end_bottom` 量測修正、`git diff --name-only origin/main -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 與 `shared`（非 `ui2_contract`）為空、`docs/vnext/newui2_batch3b/mobile_p4_market_*.png` 目視）。通過後下一批待客戶指示（候選仍為 💼 持股頁第一屏；動作欄仍待 Aggregator）。
   - **仍禁止（不變）**：System Action Aggregator／Risk Cap runtime／Action Authority／Decision Digest／OneBrain／real-data wiring／真 OAuth／Sheet 寫入／LINE／切 production default／新公式／門檻／source／刪 Old UI 與 Legacy New UI／UI2 人名字樣（§28）；自行切換 Model／Effort。
   - **仍未驗（不得宣稱已驗）**：iOS safe-area、Safari／Firefox／真機／螢幕閱讀器、真資料字串長度（BACKLOG `NUI2-NAV-SAFEAREA-IOS-UNVERIFIED`／`NUI2-VIEWPORT-NON-CHROMIUM-UNVERIFIED`／`NUI2-VIEWPORT-FAKE-ONLY`）。
+
+- **Safe Handoff（2026-11-03 New UI2 NUI2-REAL-FEED A 批：A1 mapping／A2 最小 read-only real feed／A3 real-data shadow acceptance；現行；實作組單組、待總管複驗）**（SESSION_CONTINUITY C1 欄位；決策者 客戶 (11)；上方 Batch 3／DEC-127 段內容仍有效）：
+
+| 欄位（C1） | 內容 |
+|---|---|
+| live GitHub state | 基準 `origin/main`＝`ade8181e`（#1002）；分支 `ccr-a0b4e085-ijdaio`；本批由實作組 commit；~~（**未 push、未開 PR**；push／PR 由總管）~~ ~~**`70c4969b` 已 push 至遠端分支、待開 PR**；兩組獨立 QA（無 P0）的修正為同分支另一 commit（未 push）~~ **已 push 至 `origin/ccr-a0b4e085-ijdaio`、待開 PR**（最新 commit 以 `git log origin/ccr-a0b4e085-ijdaio` 為準；本檔不寫死 commit 推送狀態）（📌 2026-11-03 複驗後更新；有意識的更新，不是漏刪；決策者 AI 總管〔依獨立複驗〕；原文刪除線保留）。cron 會推進 main tip，以當下 `git fetch` 為準。 |
+| current Stage／exact safe stopping point | **NUI2-REAL-FEED A 批實作完成（待總管複驗＋獨立 QA＋客戶驗收）**。Real-data Preview（Preview 控制「資料來源」切換；**預設仍 FAKE**；非 production default）**只接 2 個事實**：台股加權指數、市場位階（三處＋L2 同一次呼叫）。其餘欄位 ⬜＋原因；Risk Cap 恆 `⬜ 無法判定`；動作欄恆待 Aggregator；💼／👤 全 capability（C 擋）。 |
+| Fake→Real 邊界 | Existing canonical services（`market_twii_view_service.get_twii_trend_view`、`allocation_service.get_macro_regime(strict=True, require_valid_risk_cap=True)`）→ `src/services/ui2/real_feed.py`（唯一 I/O；G2F）→ `real_canonical.py`（純）→ 既有 VM builder → `src/ui2`。詳 `docs/vnext/NEWUI2_REAL_FEED_MAPPING_2026-11-03.md` §2。 |
+| 仍缺（為什麼是 ⬜） | 市場核心事實（16 燈 readiness、五桶、VIX／US10Y／DXY、危險度、主要風險、結論子句）只存在 🚀 更新後的 session 且編排住在 Legacy UI 層（需 PORT；Preview 🚀＝SG-01）；利差／PMI／候選因子無 canonical 定義（SG-02～04）；💼／👤 需 OAuth／Sheet（C）；OneBrain／Digest（Stage F／G）。位階在現行正式規則下恆 ⬜（`BREADTH_PROXY_SCORING_ENABLED=False`＋Preview 不跑更新鏈）。 |
+| 待客戶裁示 | **無即時待裁題**。Stop Gate 候選（本批未觸發）登記於 mapping §6／BACKLOG §5.1.25；需客戶時才送：SG-01 Preview 🚀 是否觸發更新鏈（推薦維持冷啟動）、SG-02 利差定義、SG-03 PMI／景氣、SG-04 候選因子。可推翻的內部判準：`is_stale=None`→Stale、位階 L1 短句＋L2 完整說明。 |
+| known limitations／blockers | shadow ≠ Migration Contract C5；Preview Cloud 狀態檔存在性未驗（R2）；錯誤字串未經 scrub（UI2 守衛擋 `secrets` 識別字）；手機市場頁餘裕 27.8px（薄）；真值為量測日快照；iOS／Safari／真機未測；兩份盤點與整合皆單組。 |
+| **下一個唯一安全工作** | 總管複驗本批（獨立 QA；重點：`tests/test_ui2_real_feed.py` no-write／跨頁／strict 端到端、`tests/test_ui2_guards.py` G2F／G9 teeth、mapping §1 差異裁定、`git diff --name-only origin/main -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 為空、`docs/vnext/newui2_realfeed/mobile_*.png` 目視）。通過後下一批待客戶指示；**候選**＝PORT 批（`NUI2-PORT-READINESS-L3` 等；但 Preview 仍受 SG-01 限制恆冷）或 session-free 小項（`NUI2-REALFEED-NEXT-SESSIONFREE`）。 |
+| 仍禁 | ⛔ Aggregator／Risk Cap 規則與數值啟用／Action Authority／Digest／OneBrain runtime／LINE production／OAuth write path／Sheet write／portfolio／watchlist／strategy 寫入／production default 切換／刪 Old UI 與 Legacy New UI／新公式／新門檻／新 source／AI 產生 canonical data；⛔ UI2 呼叫 `refresh_macro_now`／`get_allocation`／`get_account`／`build_login_url`／`get_holdings`；⛔ 整包傳 `st.session_state`；⛔ 用 `cl_ts` 頂替位階 as_of；⛔ 宣稱 C5 通過；⛔ 自行切換 Model／Effort。 |
+| required Model×Effort for resume | 複驗＝Opus 5.5＋High（資料語意／real-data mapping）；純 presentation 才可 Sonnet 5.5＋Medium。 |
+| 正式文件索引 | mapping `docs/vnext/NEWUI2_REAL_FEED_MAPPING_2026-11-03.md`；待辦 `docs/BACKLOG.md` §5.1.25（並更新 `NUI2-REAL-FEED` 列）；狀態 `docs/PROJECT_STATE.md` §58；驗收 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §19；債務 `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` §10；證據 `docs/vnext/newui2_realfeed/`；重跑 `python -m tests.ui2_viewport.measure_viewport --feed real --shots all --out <dir>`。 |
+| 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule＝無；新 Decision＝無（無新客戶裁示）；Audit finding／Limitation／Backlog／Migration debt／Acceptance item 已寫入上列正式文件（落盤以總管 push 為準）。 |
+
+- **NUI2-REAL-FEED A 批 QA 修正補記（2026-11-03；append；現行接手點仍以上方 Safe Handoff 表為準，本補記更新其中三格）**：
+  - **已完成**：兩組獨立 QA（`70c4969b`，無 P0）必修 1～5 與 P3 6～10（見 mapping §11、PROJECT_STATE §58 補、BACKLOG §5.1.25 末、Audit §19 第 10 項）。`NUI2-REALFEED-ERROR-SCRUB` closed。
+  - **下一個唯一安全工作**：總管複驗 QA 修正 commit → push → 開 PR（含兩個 commit）→ CI。重點：白名單不變量 §9、錯誤字串 §10、G2F／G9 新 teeth、契約違反讀取期隔離（可推翻判準 `NUI2-REALFEED-CONTRACT-ISOLATION-RULE`）。
+  - **仍未驗**：Preview Cloud 狀態檔（R2）；import 期 eager 鏈連 proxy（FAKE 亦同，`NUI2-SERVICES-INIT-EAGER`）；ROOT 外檔案寫入監看（`NUI2-REALFEED-FINGERPRINT-SCOPE`）；iOS／Safari／真機。
+- **獨立複驗最後一輪補記（2026-11-03；append）**：複驗（`756ed846`）無 P0／P1；P2-1／P2-3／P3-2／P3-4 已修（mapping §12、PROJECT_STATE §58 補、Audit §19 第 11 項）。依 `PROJECT_RULES.md` §29 不再擴充靜態守衛，已知限制登記 `NUI2-GUARD-STATIC-LIMITS`。**下一個唯一安全工作**：總管複驗本輪 → push → 開 PR → CI。
+

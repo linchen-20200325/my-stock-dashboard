@@ -20,6 +20,15 @@ SCENARIO_IDS: tuple[str, ...] = (
     SCENARIO_STALE, SCENARIO_UNAVAILABLE, SCENARIO_NOT_EVALUATED,
 )
 
+#: Real-data Preview（NUI2-REAL-FEED A2）的 `PageVM.scenario_id`。⛔ 加入 `SCENARIO_IDS`：FAKE 場景軸與
+#: 真資料 feed 軸是兩條軸，不混（FAKE 六場景照舊當 regression）。
+SCENARIO_REAL = "real"
+
+#: Preview 資料來源（feed）切換：預設 FAKE（既有行為不變）；Real＝唯讀 real-data shadow（非 production default）。
+FEED_FAKE = "fake"
+FEED_REAL = "real"
+FEED_IDS: tuple[str, ...] = (FEED_FAKE, FEED_REAL)
+
 #: 🎯 標的頁雙模式（Freeze §3／§16.2；⛔ 同時完整展開）。
 MODE_CURATED = "curated"     # 市場精選
 MODE_LOOKUP = "lookup"       # 即時查一檔

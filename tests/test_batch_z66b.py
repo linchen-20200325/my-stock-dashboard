@@ -529,9 +529,16 @@ class TestReadSide:
         # ~~                "src/ui/views/page_why.py", "src/services/ai_qa_service.py"}, hits~~
         # 📌 VN1-STORE 最小 PoC（客戶 2026-10-19 裁示 A，有意識的變更，⛔ 不是漏改）：無頭紀錄端
         #   `risk_cap_history_service.build_record` 以官方讀端（同一條收件條件）判斷「這一輪是不是 VALID」。
+        # ~~assert hits == {"src/ui/views/page_today.py", "src/ui/views/page_hold.py",~~
+        # ~~                "src/ui/views/page_why.py", "src/services/ai_qa_service.py",~~
+        # ~~                "src/services/risk_cap_history_service.py"}, hits~~
+        # 📌 NUI2-REAL-FEED A2（2026-11-03，有意識的變更，⛔ 不是漏改；決策者 AI 總管〔依客戶 (11) A 批〕）：New UI2 唯讀 feed
+        #   `real_feed._read_regime` 與 Legacy New UI 市場頁同一呼叫（`get_macro_regime(strict=True, require_valid_risk_cap=True)`），
+        #   屬「新 UI」呼叫點；其回傳的 Risk Cap 欄位**不收**（UI2 Risk Cap 恆 ⬜ 無法判定；`tests/test_ui2_real_feed.py` 鎖定）。
         assert hits == {"src/ui/views/page_today.py", "src/ui/views/page_hold.py",
                         "src/ui/views/page_why.py", "src/services/ai_qa_service.py",
-                        "src/services/risk_cap_history_service.py"}, hits
+                        "src/services/risk_cap_history_service.py",
+                        "src/services/ui2/real_feed.py"}, hits
         assert not any(h.startswith("src/ui/tabs") or h == "app.py" for h in hits)
 
 
