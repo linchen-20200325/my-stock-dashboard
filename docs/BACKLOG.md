@@ -1570,6 +1570,19 @@
 | **NUI2-P1-TOOLBAR-CLOUD-UNVERIFIED** | P2 | UI2 CSS 隱藏 `stToolbar`／`stAppDeployButton`／`stMainMenu`：本機 1.59.2／1.56.0 Chromium 實測不可見；Streamlit Cloud 未驗；不動 `.streamlit/config.toml`（會連帶影響 Legacy app；`client.toolbarMode` 屬 cutover Gate） | open | cutover Gate | 部署後目視 | 0 |
 | **NUI2-P1-REAL-LOOKUP-SUMMARY-DUP** | P3 | 🎯 Real 即時查一檔：查詢摘要在第一屏與 idle 區塊各出現一次（ui_gap_B L1；非「題號／重複標籤」範圍，P1 不處理） | open | P4／P6 | P4 | 0 |
 
+#### #1006 施工附件合併記錄與其 P3 登記（2026-11-03／04；append-only；實作組依總管轉達登記——合併／CI／獨立 QA 結論為總管回報，實作組僅實查 merge 內容）
+
+- **#1006（docs-only，ChatGPT）已於 `origin/main` 合併**，merge SHA `de5f272e734bad0b5de48096586c7bd5aa0a19bd`；新增 `docs/vnext/NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md`（Active Contract 的人類可讀施工附件，**非第二套 SSOT**；效力依 DEC-128／129／130→Active Contract→本附件）。CI 綠、獨立 QA 結論（總管轉達）：P1-1「Wireframes 兩橫幅互相矛盾」已以 S1 勘誤；S2～S11 已套用於 `aaa9ea30`。本分支已 `git merge origin/main`（無衝突；實作組查：附件 §1「Preview」列與 P1 一致〔一般畫面 0 個控制、僅 `?ui2_dev=1`、不可當 auth〕；與 P1 無牴觸）。
+- **登記（P3；施工時仍以 Active Contract 與 Wireframes 未被取代部分為準）**：
+
+| ID | 優先級 | 內容 | status | dependency | next action | 驗證組數 |
+|---|---|---|---|---|---|---|
+| **NUI2-EXEC-SPEC-UNCOVERED-DETAILS** | P3 | 附件**未複述**的已核准細節：W-9 命名、W-2、W-5、W-6、W-8、冷啟動灰色說明、今日結論／今日主要風險逐字約束（DEC-081／DEC-117 Q6）、👤 E13～E17 落點。附件不是完整規格；後續 UI 批不得因附件沒寫就當作取消 | open | P2～P6 | 各批施工前對照 Active Contract＋Wireframes 未被取代部分 | 0 |
+| **NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER** | P3 | Active Contract §3.1 與 Wireframes §2.1 在「今日主要風險／是否需要行動」順序上**既有不一致**（附件 §2 取 DEC-127 已核准手機首屏順序）；P1 未動順序 | open | P2 | P2 施工前由總管判定 | 0 |
+| **NUI2-EXEC-SPEC-P7-ORDER-NOT-AUTHORITATIVE** | P3 | 附件 §8.3 對 P7 的排序為附件自創；**以 BACKLOG §5.1.26 批次表為準**（建議序 P1→P3→P6→P2→P4→P5；P7 依 `NUI2-AUTH-CONTRACT-GATE`） | open | — | 以 BACKLOG 為準 | 0 |
+
+- 撰寫組暫定四項（Level 1／2 預設展開或收合、Level 3 遮罩嚴於客戶原文、`⛔` 顏色、🎯 跨季趨勢是否保留）**維持 Pending**，未升格。
+
 #### Backlog 項（新增）
 
 | ID | 優先級 | 內容 | status | dependency | next action | 驗證組數 |
