@@ -11,6 +11,9 @@ stale／unavailable／not_evaluated）逐一量測並輸出 `viewport_measuremen
 判定門檻**全部引用既有條文，不自創新門檻**（見 `THRESHOLDS`）。第一屏高度、導覽列高度出自
 Freeze §16／Architecture Gate §3：手機第一屏可用高 = 844 − 底部導覽 53 = 791px。
 本腳本是 Preview 層量測，⛔ 不連任何真資料（場景全為 FAKE）。
+
+Batch 3 擴充（2026-11-03）：📊 今日結論／今日主要風險（位置與不被插隊）、🎯 模式切換／搜尋框／
+W-4 context 行／模式互斥、👤 三種帳戶狀態；🎯 每場景另量「即時查一檔」模式、👤 另量 signed-out／unavailable。
 """
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -56,6 +60,28 @@ THRESHOLDS: list[dict[str, str]] = [
     {"id": "content_not_covered_by_nav",
      "rule": "捲到頁底後，最後一個內容元素底緣 ≤ 導覽列上緣（手機）／左緣 ≥ 導覽右緣（桌機）。",
      "source": "Wireframes §0.4（導覽不得遮住主要內容）"},
+    {"id": "market_conclusion_in_first_screen",
+     "rule": "📊 市場：今日結論列存在、位於第一屏（底緣 ≤ 可用高；與 ①～④ 同一條門檻）、且在 ① 市場目前狀態之上。",
+     "source": "Freeze §0.1.6-5（四必要項＋今日結論同在第一屏）、Wireframes §2.1／§9、DEC-081 Q2-1／DEC-109"},
+    {"id": "market_main_risk_follows_first_screen",
+     "rule": "📊 市場：今日主要風險（L1）存在，手機位於第一屏四問之後且其後第一個內容區塊（卡片／摺疊）不早於它的底緣"
+             "（⛔ 被 L2／L3 插隊）；桌機與 ①、Risk Cap 同列排成三 tile（頂緣差 ≤ 2px）。",
+     "source": "Freeze §0.1.6-3（Q3-3）、Wireframes §2.1 手機／§2.2 桌機三 tile、DEC-117 Q1 桌機"},
+    {"id": "target_mode_search_first_screen",
+     "rule": "🎯 標的：模式切換恰兩項（市場精選／即時查一檔）且恰一項為當前、搜尋框＋搜尋 CTA 在其下、查詢摘要在搜尋之下，"
+             "三者底緣皆 ≤ 可用高。",
+     "source": "Freeze §16.2（不用滑：mode、search、查詢摘要）、Wireframes §3.1／W-3"},
+    {"id": "target_mode_exclusive",
+     "rule": "🎯 標的：同一時間只展開一個模式的內容（精選＝產業／候選卡；查一檔＝查詢結果）；兩者不得同時存在於 DOM。",
+     "source": "Freeze §3.1-2／客戶 (10)-B-2（不得同時完整展開）"},
+    {"id": "target_w4_context_light",
+     "rule": "🎯 標的：市場位階＋Risk Cap 為一行輕量 context，位於查詢摘要之下、字級小於查詢摘要；"
+             "查一檔 6 維 Snapshot 的「市場環境」不排第一格。",
+     "source": "Wireframes §9 W-4（客戶 Q3）、§3.2"},
+    {"id": "me_account_state_first_screen",
+     "rule": "👤 我的：帳戶狀態（signed-in／signed-out／unavailable）標示存在；帳戶管理動作列與主 CTA 在第一屏；"
+             "主 CTA 字樣依帳戶狀態（未登入＝Google 登入／已登入＝切換 Sheet／讀取失敗＝重新讀取）。",
+     "source": "Wireframes §1（👤 我的列）／§5.1、Freeze §16.4（不用滑：connection state、primary management actions）"},
     {"id": "no_title_overlap",
      "rule": "頁面標題不與 Preview banner、第一屏區塊重疊（上下緣依序不交疊）。",
      "source": "客戶 (9) 手機截圖目視項（標題無重疊）轉為可量測條件"},
@@ -117,6 +143,7 @@ def evaluate(m: dict) -> dict[str, list[str]]:
         out["content_not_covered_by_nav"].append(f"頁底內容 {last['bottom']:.0f} > 導覽上緣 {nav['top']:.0f}")
     if not mobile and nav["right"] is not None and last["left"] < nav["right"] - 0.5:
         out["content_not_covered_by_nav"].append(f"頁底內容左緣 {last['left']:.0f} < 導覽右緣 {nav['right']:.0f}")
+    _evaluate_batch3(m, out, mobile, limit)
     # 標題不重疊
     t = m["title"]
     if t["banner_bottom"] is not None and t["top"] < t["banner_bottom"] - 0.5:
@@ -124,6 +151,102 @@ def evaluate(m: dict) -> dict[str, list[str]]:
     if t["qa_top"] is not None and t["qa_top"] < t["bottom"] - 0.5:
         out["no_title_overlap"].append("標題與第一屏區塊重疊")
     return out
+
+
+_ME_PRIMARY_CTA = {"signed_out": "Google 登入", "signed_in": "切換 Sheet", "unavailable": "重新讀取"}
+_TARGET_MODE_LABELS = ("市場精選", "即時查一檔")
+
+
+def _evaluate_batch3(m: dict, out: dict[str, list[str]], mobile: bool, limit: float) -> None:
+    """Batch 3 新增檢查。缺 `page` 鍵（舊版量測 dict）→ 略過，保持向下相容。"""
+    page = m.get("page")
+    if page is None:
+        return
+    els = {e["q"]: e for e in m["elements"]}
+    if page == "p4_market":
+        c = "market_conclusion_in_first_screen"
+        if "concl" not in els:
+            out[c].append("缺今日結論列")
+        else:
+            if els["concl"]["bottom"] > limit + 0.5:
+                out[c].append(f"今日結論底緣 {els['concl']['bottom']:.0f} > 可用高 {limit}")
+            if "q1" in els and els["concl"]["top"] > els["q1"]["top"] + 0.5:
+                out[c].append("今日結論不在 ① 市場目前狀態之上")
+        k = "market_main_risk_follows_first_screen"
+        r = m.get("risk")
+        if not r:
+            out[k].append("缺今日主要風險")
+        else:
+            if not r["inside_l1"]:
+                out[k].append("今日主要風險不在 L1 容器內（可能被移出）")
+            if mobile:
+                last_q = max((els[q]["bottom"] for q in ("q1", "q2", "q3", "q4") if q in els), default=0)
+                if r["top"] < last_q - 0.5:
+                    out[k].append(f"手機：今日主要風險 top {r['top']:.0f} 早於第一屏四問底緣 {last_q:.0f}")
+            else:
+                for q in ("q1", "ctx"):
+                    if q in els and abs(els[q]["top"] - r["top"]) > 2:
+                        out[k].append(f"桌機三 tile：{q}.top {els[q]['top']:.0f} 與今日主要風險 {r['top']:.0f} 不同列")
+            nb = m.get("first_block_after_l1_top")
+            if nb is not None and nb < r["bottom"] - 0.5:
+                out[k].append(f"今日主要風險之後的內容區塊 top {nb:.0f} < 其底緣 {r['bottom']:.0f}（被插隊）")
+    elif page == "p4_target":
+        k = "target_mode_search_first_screen"
+        mode = m.get("mode_box")
+        srch = els.get("q4")
+        if not mode:
+            out[k].append("缺模式切換")
+        else:
+            if tuple(mode["labels"]) != _TARGET_MODE_LABELS:
+                out[k].append(f"模式切換項 {mode['labels']!r} ≠ {_TARGET_MODE_LABELS!r}")
+            if mode["checked_count"] != 1:
+                out[k].append(f"當前模式（checked）數量 {mode['checked_count']} ≠ 1")
+            if mode["bottom"] > limit + 0.5:
+                out[k].append(f"模式切換底緣 {mode['bottom']:.0f} > 可用高 {limit}")
+        if srch is None:
+            out[k].append("缺搜尋框／搜尋 CTA")
+        else:
+            if mode and srch["top"] < mode["bottom"] - 0.5:
+                out[k].append("搜尋框不在模式切換之下")
+            if "q1" in els and els["q1"]["top"] < srch["bottom"] - 0.5:
+                out[k].append("查詢摘要不在搜尋框之下")
+        e = "target_mode_exclusive"
+        cm = m.get("mode_content")
+        if cm is not None and mode:
+            curated_on, lookup_on = cm["curated"], cm["lookup"]
+            if curated_on and lookup_on:
+                out[e].append("兩個模式同時展開")
+            if mode["checked_index"] == 0 and (lookup_on or not curated_on):
+                out[e].append(f"選『市場精選』但內容 curated={curated_on} lookup={lookup_on}")
+            if mode["checked_index"] == 1 and (curated_on or not lookup_on):
+                out[e].append(f"選『即時查一檔』但內容 curated={curated_on} lookup={lookup_on}")
+        w = "target_w4_context_light"
+        ctx = els.get("ctx")
+        if ctx is None:
+            out[w].append("缺 W-4 市場位階＋Risk Cap context 行")
+        else:
+            if "q1" in els and ctx["top"] < els["q1"]["bottom"] - 0.5:
+                out[w].append("context 行不在查詢摘要之下")
+            fs = m.get("font_sizes") or {}
+            if fs.get("ctx") is not None and fs.get("q1") is not None and fs["ctx"] >= fs["q1"]:
+                out[w].append(f"context 字級 {fs['ctx']} 未小於查詢摘要 {fs['q1']}")
+        dims = m.get("snapshot_labels")
+        if dims and dims[0] == "市場環境":
+            out[w].append("6 維 Snapshot 的『市場環境』排在第一格")
+    elif page == "p4_me":
+        k = "me_account_state_first_screen"
+        acc = m.get("account")
+        if not acc:
+            out[k].append("缺帳戶管理動作列")
+        else:
+            if acc["state"] not in _ME_PRIMARY_CTA:
+                out[k].append(f"未知帳戶狀態 {acc['state']!r}")
+            if acc["bottom"] > limit + 0.5:
+                out[k].append(f"帳戶管理動作列底緣 {acc['bottom']:.0f} > 可用高 {limit}")
+            q4 = els.get("q4")
+            want = _ME_PRIMARY_CTA.get(acc["state"])
+            if q4 is None or want is None or want not in q4["text"]:
+                out[k].append(f"主 CTA 字樣不符：state={acc['state']} 期望含 {want!r}，實際 {q4['text'] if q4 else None!r}")
 
 
 # ── 瀏覽器端量測 ──────────────────────────────────────────────────────────
@@ -136,7 +259,7 @@ _JS = r"""
   const labels = nav ? [...nav.querySelectorAll('[role="radiogroup"] > label')] : [];
   const checkedIdx = labels.findIndex(l => l.querySelector('input').checked);
   const elements = [...document.querySelectorAll('[data-ui2-q]')].map(e => ({q: e.dataset.ui2Q, text: e.innerText.replace(/\s+/g,' ').trim(), ...R(e)}));
-  const qa = document.querySelector('.ui2-qa');
+  const qa = document.querySelector('.ui2-m-l1') || document.querySelector('.ui2-qa');
   const title = document.querySelector('.ui2-pagetitle');
   const banner = document.querySelector('.ui2-banner');
   const sc = el => ({scrollWidth: el.scrollWidth, clientWidth: el.clientWidth});
@@ -147,7 +270,28 @@ _JS = r"""
   const lastEl = blocks.length ? blocks[blocks.length-1] : null;
   const last = lastEl ? R(lastEl) : {bottom:0,left:0};
   main.scrollTo({top: prev, behavior: 'instant'});
+  // ── Batch 3 錨點 ──
+  const riskEl = document.querySelector('.ui2-risk');
+  const l1 = document.querySelector('.ui2-m-l1');
+  const after = [...document.querySelectorAll('.ui2-grid, [data-testid="stExpander"], .ui2-section-title')]
+    .filter(e => R(e).height > 1 && (!l1 || !l1.contains(e)) && !e.closest('.st-key-ui2_nav'));
+  const afterTops = after.map(e => R(e).top).filter(t => !riskEl || t >= R(riskEl).top - 0.5);
+  const modeBox = document.querySelector('.st-key-ui2_target_mode_box');
+  const modeLabels = modeBox ? [...modeBox.querySelectorAll('[role="radiogroup"] > label')] : [];
+  const modeChecked = modeLabels.findIndex(l => l.querySelector('input').checked);
+  const fz = sel => { const e = document.querySelector(sel); return e ? parseFloat(getComputedStyle(e).fontSize) : null; };
+  const accEl = document.querySelector('[data-ui2-l1="account_actions"]');
+  const snap = [...document.querySelectorAll('.ui2-snapshot [data-dim]')].map(e => e.dataset.dim);
+  const pageEl = document.querySelector('.ui2-pagetitle');
   return {
+    page: pageEl ? pageEl.dataset.ui2Page : null,
+    risk: riskEl ? {...R(riskEl), inside_l1: !!(l1 && l1.contains(riskEl)), text: riskEl.innerText.replace(/\s+/g,' ').trim()} : null,
+    first_block_after_l1_top: afterTops.length ? Math.min(...afterTops) : null,
+    mode_box: modeBox ? {...R(modeBox), labels: modeLabels.map(l => l.innerText.trim()), checked_count: modeLabels.filter(l => l.querySelector('input').checked).length, checked_index: modeChecked} : null,
+    mode_content: pageEl && pageEl.dataset.ui2Page === 'p4_target' ? {curated: !!document.querySelector('[data-ui2-mode-content="curated"]'), lookup: !!document.querySelector('[data-ui2-mode-content="lookup"]')} : null,
+    font_sizes: {q1: fz('[data-ui2-q="q1"]'), ctx: fz('.ui2-ctxline')},
+    account: accEl ? {...R(accEl), state: accEl.dataset.ui2Account} : null,
+    snapshot_labels: snap,
     nav: nr && {...nr, position: getComputedStyle(nav).position, labels: labels.map(l => l.innerText.trim()),
       label_tops: labels.map(l => l.getBoundingClientRect().top), label_lefts: labels.map(l => l.getBoundingClientRect().left),
       label_heights: labels.map(l => l.getBoundingClientRect().height),
@@ -208,45 +352,87 @@ def launch_chromium(p):
         return p.chromium.launch(executable_path=cands[-1])
 
 
+def _record(page, vp_name: str, vw: int, vh: int, pid: str, scenario: str, *, mode: str | None = None,
+            account: str | None = None) -> dict:
+    m = measure_state(page, vw, vh)
+    m["scenario"] = scenario
+    checks = evaluate(m)
+    rd = lambda d: {k: (round(v, 1) if isinstance(v, float) else v) for k, v in d.items()}
+    rec = {"viewport_name": vp_name, "viewport": m["viewport"], "page": pid, "scenario": scenario,
+           "mode": mode, "account": account,
+           "elements": [rd(e) for e in m["elements"]],
+           "nav": {k: (round(v, 1) if isinstance(v, float) else v) for k, v in m["nav"].items()
+                   if k in ("top", "bottom", "left", "right", "width", "height", "position", "labels", "checked_index")},
+           "hscroll": m["hscroll"], "title": {k: (round(v, 1) if v is not None else None) for k, v in m["title"].items()},
+           "last_content_bottom": round(m["last_content"]["bottom"], 1),
+           "card_heights": m["card_heights"],
+           "batch3": {"risk": rd(m["risk"]) if m.get("risk") else None,
+                      "mode_box": rd(m["mode_box"]) if m.get("mode_box") else None,
+                      "mode_content": m.get("mode_content"), "font_sizes": m.get("font_sizes"),
+                      "account": rd(m["account"]) if m.get("account") else None,
+                      "snapshot_labels": m.get("snapshot_labels"),
+                      "first_block_after_l1_top": (round(m["first_block_after_l1_top"], 1)
+                                                   if m.get("first_block_after_l1_top") is not None else None)},
+           "failures": {k: v for k, v in checks.items() if v}, "pass": not any(checks.values())}
+    return rec
+
+
 def run_measurements(url: str, out: Path | None, shots: str = "all", server_python: str | None = None,
                      streamlit_version: str | None = None) -> dict:
     from playwright.sync_api import sync_playwright
 
-    from shared.ui2_contract.pages import PAGE4_LABELS, PAGE_IDS, SCENARIO_IDS
-    from src.ui2.shell.app import _SCENARIO_LABELS
+    from shared.ui2_contract.pages import (
+        ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, MODE_LABELS, MODE_LOOKUP,
+        P4_ME, P4_TARGET, PAGE4_LABELS, PAGE_IDS, SCENARIO_IDS, SCENARIO_LOADED,
+    )
+    from src.ui2.shell.app import _ACCOUNT_LABELS, _SCENARIO_LABELS
 
     results: list[dict] = []
+
+    def shot(page, vp_name, pid, scenario, suffix=""):
+        if out is not None and _want_shot(shots, vp_name, scenario):
+            page.screenshot(path=str(out / f"{vp_name}_{pid}_{scenario}{suffix}.png"))
+
     with sync_playwright() as p:
         browser = launch_chromium(p)
         for vp_name, (vw, vh) in VIEWPORTS.items():
             page = browser.new_page(viewport={"width": vw, "height": vh})
             page.goto(url)
             page.wait_for_selector(".ui2-qa", timeout=40000)
+            nav_click = lambda pid: page.locator(
+                ".st-key-ui2_nav [role='radiogroup'] > label", has_text=PAGE4_LABELS[pid]).click()
             for scenario in SCENARIO_IDS:
-                _select_scenario(page, _SCENARIO_LABELS[scenario], scenario)
+                _select_box(page, "場景", _SCENARIO_LABELS[scenario], f'[data-ui2-scenario="{scenario}"]')
                 for pid in PAGE_IDS:
-                    page.locator(".st-key-ui2_nav [role='radiogroup'] > label", has_text=PAGE4_LABELS[pid]).click()
+                    nav_click(pid)
                     page.wait_for_selector(f'[data-ui2-page="{pid}"][data-ui2-scenario="{scenario}"]', timeout=30000)
                     page.wait_for_timeout(250)
-                    m = measure_state(page, vw, vh)
-                    checks = evaluate(m)
-                    rec = {"viewport_name": vp_name, "viewport": m["viewport"], "page": pid, "scenario": scenario,
-                           "elements": [{k: (round(v, 1) if isinstance(v, float) else v) for k, v in e.items()}
-                                        for e in m["elements"]],
-                           "nav": {k: (round(v, 1) if isinstance(v, float) else v) for k, v in m["nav"].items()
-                                   if k in ("top", "bottom", "left", "right", "width", "height", "position", "labels", "checked_index")},
-                           "hscroll": m["hscroll"], "title": {k: (round(v, 1) if v is not None else None) for k, v in m["title"].items()},
-                           "last_content_bottom": round(m["last_content"]["bottom"], 1),
-                           "card_heights": m["card_heights"],
-                           "failures": {k: v for k, v in checks.items() if v}, "pass": not any(checks.values())}
-                    results.append(rec)
-                    if out is not None and _want_shot(shots, vp_name, scenario):
-                        page.screenshot(path=str(out / f"{vp_name}_{pid}_{scenario}.png"))
+                    results.append(_record(page, vp_name, vw, vh, pid, scenario,
+                                           mode="curated" if pid == P4_TARGET else None,
+                                           account=ACCOUNT_SIGNED_IN if pid == P4_ME else None))
+                    shot(page, vp_name, pid, scenario)
+                    if pid == P4_TARGET:        # 同一場景再量『即時查一檔』模式
+                        page.locator(".st-key-ui2_target_mode_box [role='radiogroup'] > label",
+                                     has_text=MODE_LABELS[MODE_LOOKUP]).click()
+                        page.wait_for_selector(f'[data-ui2-page="{pid}"][data-ui2-mode="{MODE_LOOKUP}"]', timeout=30000)
+                        page.wait_for_timeout(250)
+                        results.append(_record(page, vp_name, vw, vh, pid, scenario, mode=MODE_LOOKUP))
+                        shot(page, vp_name, pid, scenario, "_lookup")
+            # 👤 我的：signed-out／unavailable（以 loaded 場景；signed-in 已含於上方六場景）
+            _select_box(page, "場景", _SCENARIO_LABELS[SCENARIO_LOADED], f'[data-ui2-scenario="{SCENARIO_LOADED}"]')
+            nav_click(P4_ME)
+            for acct in (ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE):
+                _select_box(page, "帳戶狀態", _ACCOUNT_LABELS[acct], f'[data-ui2-account="{acct}"]')
+                page.wait_for_timeout(250)
+                results.append(_record(page, vp_name, vw, vh, P4_ME, SCENARIO_LOADED, account=acct))
+                shot(page, vp_name, P4_ME, SCENARIO_LOADED, f"_{acct}")
+            _select_box(page, "帳戶狀態", _ACCOUNT_LABELS[ACCOUNT_SIGNED_IN], f'[data-ui2-account="{ACCOUNT_SIGNED_IN}"]')
             page.close()
         streamlit_version = streamlit_version or _streamlit_version(server_python)
         browser.close()
     summary = {"states": len(results), "passed": sum(r["pass"] for r in results),
-               "failed": [f"{r['viewport_name']}/{r['page']}/{r['scenario']}" for r in results if not r["pass"]]}
+               "failed": [f"{r['viewport_name']}/{r['page']}/{r['scenario']}/{r.get('mode')}/{r.get('account')}"
+                          for r in results if not r["pass"]]}
     return {"meta": {"tool": "tests/ui2_viewport/measure_viewport.py", "streamlit_version": streamlit_version,
                      "viewports": {k: list(v) for k, v in VIEWPORTS.items()}, "nav_mobile_h": NAV_MOBILE_H,
                      "thresholds": THRESHOLDS,
@@ -270,8 +456,8 @@ def _streamlit_version(python: str | None = None) -> str:
         [python, "-c", "import streamlit;print(streamlit.__version__)"], text=True).strip()
 
 
-def _select_scenario(page, label: str, scenario: str) -> None:
-    """展開『Preview 控制』並選場景（⛔ 動 app 程式；純用 UI 操作）。"""
+def _select_box(page, name: str, option_label: str, anchor: str) -> None:
+    """展開『Preview 控制』並在名為 `name` 的 selectbox 選 `option_label`（⛔ 動 app 程式；純用 UI 操作）。"""
     exp = page.locator('[data-testid="stExpander"]', has_text="Preview 控制").first
     if exp.locator("details[open]").count() == 0:
         exp.locator("summary").click()
@@ -279,13 +465,13 @@ def _select_scenario(page, label: str, scenario: str) -> None:
         "() => { const e = document.querySelector('[data-testid=\"stSelectbox\"]'); "
         "return e && e.getBoundingClientRect().height > 10; }", timeout=10000)
     page.wait_for_timeout(500)          # 展開動畫
-    box = page.get_by_role("combobox", name="場景")
-    box.click()
+    box = page.get_by_role("combobox", name=re.compile(re.escape(name)))
+    box.first.click()
     page.wait_for_timeout(250)
-    if box.get_attribute("aria-expanded") != "true":      # Streamlit 1.59（react-aria）click 不一定展開 → 鍵盤展開
-        box.press("ArrowDown")
-    page.get_by_role("option", name=label, exact=True).click()
-    page.wait_for_selector(f'[data-ui2-scenario="{scenario}"]', timeout=30000)
+    if box.first.get_attribute("aria-expanded") != "true":      # Streamlit 1.59（react-aria）click 不一定展開 → 鍵盤展開
+        box.first.press("ArrowDown")
+    page.get_by_role("option", name=option_label, exact=True).click()
+    page.wait_for_selector(anchor, timeout=30000)
     page.wait_for_timeout(200)
 
 

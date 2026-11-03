@@ -367,3 +367,11 @@
   4. 與 💼 持股頁衝突時 **⛔ 自行選一邊**——兩邊**並列揭露**（並列揭露的做法＝AI 總管暫定，客戶可推翻）（例：「市場警示：⚡ 2 項｜持股頁今日需處理：⬜ 尚未提供」），並在 L2 說明兩者來源不同。
   **Aggregator 完成後，市場與持股必須改成同一 canonical action source**〔客戶 Q3〕（Architecture Gate §4.6.9 M-A4）。§2 示意中「⚡ N 項需處理／今日無需調整／⬜ 尚未評估」即 Aggregator 完成後的樣子。
 - **W-11（💼 持股桌機）**：核准；依 Freeze：**圖表、建議持股區間、後續表格**〔客戶 Q3〕（§4.2 版面）。**建議持股區間不得被誤寫成已啟用的 Portfolio Risk Cap；兩者語意維持分離**〔客戶 Q3〕→ 落實：~~建議持股卡標題固定「建議持股（市場端上限，DEC-051／PQ-C6-3）」~~ 建議持股卡標題**沿用現行已核准字樣「建議持股水位（市場端）」**（`page_hold.build_position_cap_card` 的 label；卡面⛔ 放 DEC 編號）（AI 總管暫定，客戶可推翻）（2026-11-02 #997 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）；⛔ 用「Portfolio Risk Cap」「已啟用上限」等字樣；Portfolio Risk Cap tile 在 Q1 數值 Gate 前恆 `⬜ 無法判定`，兩者 ⛔ 互相引用或並排成同一指標。
+
+## §10 實作註記（2026-11-03，New UI2 Batch 3；append-only；本檔 §0～§9 原文一字未改）
+
+- **📊 市場**（§2.1／§2.2）：今日結論已落地為第一屏首列（FAKE 示意句，DEC-081 Q2-1 句型）；今日主要風險已落地為 L1、緊接第一屏四問之後（手機堆疊、桌機三 tile 同列）；退化句 DEC-117 Q6 逐字。「⚡ N 項需處理」欄位仍為 capability `⬜ 尚未提供（待 System Action Aggregator）`（W-10 不變）。
+- **🎯 標的**（§3.1～§3.3）：模式切換（膠囊 radio）→ 搜尋框＋搜尋 CTA → 查詢摘要／W-4 context 行 → 當前模式內容；搜尋為 disabled 示意、查一檔為 FAKE 結果＋6 維 Snapshot；加入觀察 disabled。**§3.2 手機線框的「Primary Price Chart／基本面／估值／籌碼／產業／風險／研究解釋」區塊未做**（僅 L2 占位，`NUI2-TARGET-SEARCH-FUNCTIONAL`）。排序偏差：搜尋列（＝④ 主 CTA 錨點）置於 ① 查詢摘要**之上**（線框 §3.1 的 mode→search→摘要順序），故標的頁的「④」編號標籤不顯示。
+- **👤 我的**（§5.1／§5.2）：三態＋動作列＋依狀態主 CTA；FAKE skeleton，無 OAuth。Wireframes §5.1 例示的 `⬜ 尚未登入` 字面**未採用**（見 `NUI2-ME-SIGNEDOUT-CLASSIFICATION-REVIEW`）。
+- 以上為實作，**不是 W-1～W-11 的 amendment**（版面結構未變）。證據與限制見 `docs/PROJECT_STATE.md` §56、BACKLOG §5.1.24。
+

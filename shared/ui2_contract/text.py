@@ -39,6 +39,17 @@ TEXT_RISK_CAP_UNDETERMINABLE = "⬜ 無法判定"
 #: 單組判讀，待覆核：BACKLOG `NUI2-DATA-SHORT-CLASSIFICATION-REVIEW`）。
 TEXT_NOT_EVALUATED_DATA_SHORT = "⬜ 未評估／資料不足"
 
+# ── 今日主要風險 退化／護欄句（DEC-117 Q6=A；客戶要求「必須外露逐字保留」；一字不改）──────────
+#: 出處：Legacy `src/ui/views/_market_blocks.py` 的 NOT_LOADED／UNDETERMINED 與 `hero_risk_lines` 退化句
+#: （tests/test_ui2_batch3.py 以原始碼逐字比對）。⛔ UI2 改寫、⛔ 縮短、⛔ 搬進摺疊。
+#: 四個必須外露的語意：未評估不等於安全／資料不足／無法判定／尚未載入／真錯誤。
+#: 這些是**整句**，前綴各自屬於既有三軸字樣表（尚未載入＝Not Evaluated、無法判定＝判定結果、
+#: 真錯誤＝Unavailable），**不另立字樣表、不另立語意態**。
+RISK_SENTENCE_NOT_LOADED = "⬜ 尚未載入，請按更新"
+RISK_SENTENCE_ALL_INSUFFICIENT = "⬜ 無法判定（五桶資料皆不足）"
+RISK_NOTE_UNEVALUATED_NOT_SAFE = "未評估不等於安全"
+RISK_ERROR_FMT = "五桶風險摘要算不出來：{error}"
+
 # ── Capability／Implementation Availability（與資料語意正交；Preview-only；DEC-124）──
 #: ≠ Unavailable（來源壞了）；≠ 資料品質態；⛔ 稱為「第 6 個資料語意態」。
 TEXT_NOT_PROVIDED = "⬜ 尚未提供"

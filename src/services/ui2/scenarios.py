@@ -15,15 +15,18 @@ from copy import deepcopy
 from typing import Any
 
 from shared.ui2_contract.pages import (
-    P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS, SCENARIO_COLD,
-    SCENARIO_IDS, SCENARIO_LOADED, SCENARIO_MISSING, SCENARIO_NOT_EVALUATED,
+    ACCOUNT_IDS, ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, MODE_CURATED,
+    MODE_LOOKUP, MODE_LABELS, P4_HOLD, P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS,
+    SCENARIO_COLD, SCENARIO_IDS, SCENARIO_LOADED, SCENARIO_MISSING, SCENARIO_NOT_EVALUATED,
     SCENARIO_STALE, SCENARIO_UNAVAILABLE,
 )
 from shared.ui2_contract.text import (
-    FAKE_SOURCE_PREFIX, TEXT_MISSING_NOT_READY, TEXT_NOT_DEFINED,
-    TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
+    FAKE_SOURCE_PREFIX, RISK_ERROR_FMT, RISK_NOTE_UNEVALUATED_NOT_SAFE,
+    RISK_SENTENCE_ALL_INSUFFICIENT, RISK_SENTENCE_NOT_LOADED, TEXT_MISSING_NOT_READY,
+    TEXT_NOT_DEFINED, TEXT_NOT_EVALUATED_DATA_SHORT, TEXT_NOT_LOADED, TEXT_NOT_PROVIDED,
     TEXT_RISK_CAP_UNDETERMINABLE,
 )
+from src.services.ui2.vm_common import field_from_spec
 
 _FAKE_SRC = f"{FAKE_SOURCE_PREFIX}·scenario"
 _FAKE_ASOF = f"{FAKE_SOURCE_PREFIX}-ASOF"
@@ -56,10 +59,56 @@ def _risk_cap_row() -> dict:
         "必要輸入不足：目前曝險無正式來源（數值另開 Gate）")
 
 
+_SNAPSHOT_DIMS = (("fundamental", "基本面"), ("valuation", "估值"), ("chips", "籌碼"),
+                  ("trend", "趨勢"), ("industry", "產業"), ("market_env", "市場環境"))
+
+
+def _target_block() -> dict:
+    """🎯 標的頁：雙模式＋搜尋框＋查一檔 FAKE 結果（Ad-hoc、session-only；⛔ 真資料／候選池規則）。
+
+    6 維 Snapshot 的「趨勢」「產業」＝`⬜ 尚未定義`（DEC-092 Q2；固定、不隨場景變）；「市場環境」排最後
+    且為 Neutral（W-4：不搶過查一檔／基本面／valuation，⛔ 把市場訊號變成單股主要判斷）。
+    其餘維度只放 FAKE 占位值（⛔ 任何投資判斷字樣）。
+    """
+    snapshot = [
+        _spec("dim_fundamental", "基本面", "FAKE 占位"),
+        _spec("dim_valuation", "估值", "FAKE 占位"),
+        _spec("dim_chips", "籌碼", "FAKE 占位"),
+        _spec("dim_trend", "趨勢", None, state="not_evaluated", sub_reason=TEXT_NOT_DEFINED,
+              fixed=True, as_of=None, source=None),
+        _spec("dim_industry", "產業", None, state="not_evaluated", sub_reason=TEXT_NOT_DEFINED,
+              fixed=True, as_of=None, source=None),
+        _spec("dim_market_env", "市場環境", "震盪"),
+    ]
+    return {
+        "modes": [{"id": m, "label": MODE_LABELS[m]} for m in (MODE_CURATED, MODE_LOOKUP)],
+        "default_mode": MODE_CURATED,
+        "search": {
+            "placeholder": "代碼／名稱",
+            "name_search": _fixed_not_provided("name_search", "名稱搜尋", "請輸入代碼（名稱搜尋尚未提供）"),
+            "cta": {"label": "查詢", "disabled_reason": "Preview：不查真資料（FAKE，session-only）"},
+        },
+        "lookup": {
+            "ticker": "FAKE-0001", "name": "FAKE 示意公司", "chips": ["股票", "FAKE 產業"],
+            "summary": _spec("lookup_summary", "查詢摘要", "FAKE-0001 FAKE 示意公司 · 類型 股票"),
+            "snapshot": snapshot,
+            "add_watch": {"label": "加入觀察（尚未提供）",
+                          "disabled_reason": "尚未提供：正式加入觀察流程僅舊 UI；Preview 不寫入任何持股／觀察／Sheet"},
+            "isolation_note": "查一檔僅限本次 session：不加入持股／觀察／候選池，不改 strategy／Risk Cap／ranking，不寫 Sheet。",
+            "sections": [
+                {"key": "lk_fundamental", "title": "基本面（L2）", "level": "L2", "mode": MODE_LOOKUP,
+                 "fields": [_fixed_not_provided("lk_f1", "基本面明細", "Preview：尚未接線")]},
+                {"key": "lk_valuation", "title": "估值（L2）", "level": "L2", "mode": MODE_LOOKUP,
+                 "fields": [_fixed_not_provided("lk_f2", "估值（EPS basis／PE 口徑）", "Preview：尚未接線")]},
+                {"key": "lk_research", "title": "🤖 研究解釋", "level": "L2", "mode": MODE_LOOKUP,
+                 "fields": [_fixed_not_provided("lk_f3", "研究解釋", "Stage G 前不提供")]},
+            ],
+        },
+    }
+
+
 def _sections_market() -> list[dict]:
     return [
-        {"key": "main_risk", "title": "今日主要風險", "level": "L1", "fields": [
-            _fixed_not_provided("main_risk_f", "今日主要風險", "Preview：尚未接線")]},
         {"key": "onebrain", "title": "🤖 OneBrain Outlook", "level": "L1", "fields": [
             _fixed_not_provided("onebrain_f", "OneBrain Outlook", "Stage G 前不提供")]},
         {"key": "why", "title": "為什麼（L2）", "level": "L2", "fields": [
@@ -69,6 +118,93 @@ def _sections_market() -> list[dict]:
         {"key": "raw", "title": "原始資料表／工程診斷（L3）", "level": "L3", "fields": [
             _fixed_not_provided("raw_f", "原始資料表", "Preview：尚未接線")]},
     ]
+
+
+_LOOKUP_COLD = "FAKE 冷啟動：輸入代碼並查詢後顯示"
+_ME_ACTION_REASON = "Preview：不接 Google OAuth／不讀寫 Sheet"
+
+
+def _me_sections() -> list[dict]:
+    return [
+        {"key": "settings", "title": "一般設定", "level": "L1", "fields": [
+            _fixed_not_provided("strategy", "Strategy", "Preview：尚未接線"),
+            _fixed_not_provided("notify", "Notifications", "Preview：尚未接線"),
+            _fixed_not_provided("display", "Display preference", "Preview：尚未接線")]},
+        {"key": "digest", "title": "Audit：Decision Digest", "level": "L2", "fields": [
+            _spec("digest_f", "Decision Digest", None, state="not_provided",
+                  sub_reason="⬜ 尚未提供（待 Headless Digest）", fixed=True,
+                  as_of=None, source=None, reason="Stage F 前不提供")]},
+        {"key": "registry", "title": "Audit：Rule Registry（唯讀）", "level": "L2", "fields": [
+            _fixed_not_provided("registry_f", "Rule Registry", "Preview：尚未接線")]},
+        {"key": "fresh", "title": "Audit：Data Freshness", "level": "L2", "fields": [
+            _fixed_not_provided("fresh_f", "Data Freshness", "Preview：尚未接線")]},
+        {"key": "sysinfo", "title": "Audit：System Information", "level": "L2", "fields": [
+            _fixed_not_provided("sys_f", "System Information", "Preview：尚未接線")]},
+    ]
+
+
+def _me_base() -> dict:
+    """👤 我的（signed_in 預設；與 Batch 2 內容相同）。"""
+    return {
+        "page": P4_ME, "title": PAGE4_LABELS[P4_ME],
+        "current_state": _spec("conn", "連線狀態", "Google 已登入（FAKE 帳號）· Sheet …FAKE00"),
+        "context_rows": [],
+        "action_needed": _spec("conn_issue", "連線異常", "無異常（FAKE）"),
+        "next_step": _spec("next", "下一步", "無需處理（FAKE）"),
+        "cta": {"label": "切換 Sheet", "disabled_reason": _ME_ACTION_REASON},
+        "cards": [
+            _spec("google", "Google", "已登入（FAKE）"),
+            _spec("sheet", "Sheet（末 6 碼）", "FAKE00"),
+            _spec("portfolio", "組合", "FAKE 組合"),
+            _spec("watchlist", "觀察清單", "FAKE 觀察清單"),
+        ],
+        "sections": _me_sections(),
+        "account": {"account_state": ACCOUNT_SIGNED_IN, "actions": [
+            {"label": "切換 Sheet"}, {"label": "選組合"}, {"label": "選觀察清單"}, {"label": "Google 登出"}]},
+    }
+
+
+def _me_account_variant(account: str) -> dict:
+    """signed_out／unavailable 的 FAKE 連線事實（⛔ 真 OAuth／Sheet）。
+
+    語意歸類：「尚未登入」是**確定的連線事實**（OK 值），不是缺值；登入前依賴登入的欄位＝Missing 的
+    `⬜ 資料未備`（不適用）；Sheet 讀取失敗＝Unavailable（真錯誤，紅）。三軸不混層。
+    """
+    c = _me_base()
+    fixed = dict(fixed=True, as_of=None, source=None)
+    if account == ACCOUNT_SIGNED_OUT:
+        c["current_state"] = _spec("conn", "連線狀態", "Google 尚未登入（FAKE）", **fixed)
+        c["action_needed"] = _spec("conn_issue", "連線異常", "尚未登入 Google（FAKE）", **fixed)
+        c["next_step"] = _spec("next", "下一步", "請先登入 Google（登入後才會顯示 Sheet）", **fixed)
+        c["cta"] = {"label": "Google 登入", "disabled_reason": _ME_ACTION_REASON}
+        dep = dict(missing_kind="not_ready", reason="需先登入 Google", **fixed)
+        c["cards"] = [
+            _spec("google", "Google", "尚未登入", **fixed),
+            _spec("sheet", "Sheet（末 6 碼）", None, **dep),
+            _spec("portfolio", "組合", None, **dep),
+            _spec("watchlist", "觀察清單", None, **dep),
+        ]
+        c["account"] = {"account_state": ACCOUNT_SIGNED_OUT, "actions": [{"label": "Google 登入"}]}
+    elif account == ACCOUNT_UNAVAILABLE:
+        c["current_state"] = _spec("conn", "連線狀態", "Google 已登入（FAKE 帳號）", **fixed)
+        c["action_needed"] = _spec("conn_issue", "連線異常", None, state="unavailable",
+                                   reason="Sheet 讀取失敗（FAKE 示意）", **fixed)
+        c["next_step"] = _spec("next", "下一步", "重新讀取，或重新綁定 Sheet", **fixed)
+        c["cta"] = {"label": "重新讀取", "disabled_reason": _ME_ACTION_REASON}
+        c["cards"] = [
+            _spec("google", "Google", "已登入（FAKE）", **fixed),
+            _spec("sheet", "Sheet（末 6 碼）", None, state="unavailable",
+                  reason="Sheet 讀取失敗（FAKE 示意）", **fixed),
+            _spec("portfolio", "組合", None, missing_kind="not_fetched",
+                  reason="Sheet 無法讀取，未取得", **fixed),
+            _spec("watchlist", "觀察清單", None, missing_kind="not_fetched",
+                  reason="Sheet 無法讀取，未取得", **fixed),
+        ]
+        c["account"] = {"account_state": ACCOUNT_UNAVAILABLE, "actions": [
+            {"label": "重新讀取"}, {"label": "切換 Sheet"}, {"label": "Google 登出"}]}
+    else:
+        raise ValueError(f"unknown account {account!r}")
+    return c
 
 
 def _base(page: str) -> dict:
@@ -93,7 +229,8 @@ def _base(page: str) -> dict:
         return {
             "page": page, "title": PAGE4_LABELS[page],
             "current_state": _spec("pick_summary", "精選摘要", "產業 Top 5 · 候選 10／完整 50（FAKE）"),
-            "context_rows": [_risk_cap_row()],
+            # W-4：市場位階＋Risk Cap 一行 context（輕量 chip 行；同一份 FAKE market context）
+            "context_rows": [_spec("market_regime", "市場位階", "震盪"), _risk_cap_row()],
             "action_needed": _spec("no_holding_action", "是否需要行動", None, state="not_provided",
                                    sub_reason=TEXT_NOT_PROVIDED,
                                    reason="本頁不產生持股動作；動作權威＝💼 持股",
@@ -101,17 +238,18 @@ def _base(page: str) -> dict:
             "next_step": _spec("next", "下一步", "選一檔後進入研究 workspace（尚未提供）",
                                state="not_provided", sub_reason=TEXT_NOT_PROVIDED,
                                fixed=True, as_of=None, source=None),
-            "cta": {"label": "查詢"},
+            "cta": {"label": "查詢", "disabled_reason": "Preview：不查真資料（FAKE，session-only）"},
             "cards": [
                 _spec("industry_top", "產業機會 Top 5", "FAKE 產業 A／B／C／D／E"),
                 _spec("candidates", "候選 Top 10", "FAKE 候選 01～10"),
             ],
             "sections": [
-                {"key": "conditions", "title": "選股條件（收合）", "level": "L2", "fields": [
-                    _fixed_not_provided("cond_f", "選股條件", "Preview：尚未接線")]},
-                {"key": "full", "title": "完整 6 欄表／跨季趨勢（L3）", "level": "L3", "fields": [
-                    _fixed_not_provided("full_f", "完整表", "Preview：尚未接線")]},
+                {"key": "conditions", "title": "選股條件（收合）", "level": "L2", "mode": MODE_CURATED,
+                 "fields": [_fixed_not_provided("cond_f", "選股條件", "Preview：尚未接線")]},
+                {"key": "full", "title": "完整 6 欄表／跨季趨勢（L3）", "level": "L3", "mode": MODE_CURATED,
+                 "fields": [_fixed_not_provided("full_f", "完整表", "Preview：尚未接線")]},
             ],
+            "target": _target_block(),
         }
     if page == P4_HOLD:
         return {
@@ -137,47 +275,18 @@ def _base(page: str) -> dict:
             ],
         }
     if page == P4_ME:
-        return {
-            "page": page, "title": PAGE4_LABELS[page],
-            "current_state": _spec("conn", "連線狀態", "Google 已登入（FAKE 帳號）· Sheet …FAKE00"),
-            "context_rows": [],
-            "action_needed": _spec("conn_issue", "連線異常", "無異常（FAKE）"),
-            "next_step": _spec("next", "下一步", "無需處理（FAKE）"),
-            "cta": {"label": "切換 Sheet"},
-            "cards": [
-                _spec("google", "Google", "已登入（FAKE）"),
-                _spec("sheet", "Sheet（末 6 碼）", "FAKE00"),
-                _spec("portfolio", "組合", "FAKE 組合"),
-                _spec("watchlist", "觀察清單", "FAKE 觀察清單"),
-            ],
-            "sections": [
-                {"key": "settings", "title": "一般設定", "level": "L1", "fields": [
-                    _fixed_not_provided("strategy", "Strategy", "Preview：尚未接線"),
-                    _fixed_not_provided("notify", "Notifications", "Preview：尚未接線"),
-                    _fixed_not_provided("display", "Display preference", "Preview：尚未接線")]},
-                {"key": "digest", "title": "Audit：Decision Digest", "level": "L2", "fields": [
-                    _spec("digest_f", "Decision Digest", None, state="not_provided",
-                          sub_reason="⬜ 尚未提供（待 Headless Digest）", fixed=True,
-                          as_of=None, source=None, reason="Stage F 前不提供")]},
-                {"key": "registry", "title": "Audit：Rule Registry（唯讀）", "level": "L2", "fields": [
-                    _fixed_not_provided("registry_f", "Rule Registry", "Preview：尚未接線")]},
-                {"key": "fresh", "title": "Audit：Data Freshness", "level": "L2", "fields": [
-                    _fixed_not_provided("fresh_f", "Data Freshness", "Preview：尚未接線")]},
-                {"key": "sysinfo", "title": "Audit：System Information", "level": "L2", "fields": [
-                    _fixed_not_provided("sys_f", "System Information", "Preview：尚未接線")]},
-            ],
-        }
+        return _me_base()
     raise ValueError(f"unknown page {page!r}")
 
 
-def _transform(spec: dict, scenario: str, idx: int) -> dict:
+def _transform(spec: dict, scenario: str, idx: int, cold_reason: str = "按 🚀 更新後載入（FAKE 冷啟動）") -> dict:
     """場景轉換：只改呈現狀態旗標，⛔ 計算任何值。"""
     if spec.get("fixed"):
         return spec
     s = dict(spec)
     if scenario == SCENARIO_COLD:
         s.update(value=None, state="not_evaluated", sub_reason=TEXT_NOT_LOADED,
-                 as_of=None, source=None, reason="按 🚀 更新後載入（FAKE 冷啟動）")
+                 as_of=None, source=None, reason=cold_reason)
     elif scenario == SCENARIO_MISSING and idx in (1, 3):
         s.update(value=None, missing_kind="not_ready" if idx == 3 else "not_fetched")
     elif scenario == SCENARIO_STALE and idx in (0, 2):
@@ -191,11 +300,11 @@ def _transform(spec: dict, scenario: str, idx: int) -> dict:
     return s
 
 
-def _transform_current(spec: dict, scenario: str) -> dict:
+def _transform_current(spec: dict, scenario: str, cold_reason: str = "按 🚀 更新後載入（FAKE 冷啟動）") -> dict:
     s = dict(spec)
     if scenario == SCENARIO_COLD:
         s.update(value=None, state="not_evaluated", sub_reason=TEXT_NOT_LOADED,
-                 as_of=None, source=None, reason="按 🚀 更新後載入（FAKE 冷啟動）")
+                 as_of=None, source=None, reason=cold_reason)
     elif scenario == SCENARIO_MISSING:
         s.update(value=None, missing_kind="not_ready")
     elif scenario == SCENARIO_STALE:
@@ -207,20 +316,99 @@ def _transform_current(spec: dict, scenario: str) -> dict:
     return s
 
 
-def fake_canonical(page: str, scenario: str) -> dict:
-    """回傳 `page`×`scenario` 的 FAKE canonical dict（每次回新 dict，呼叫端可安全改動）。"""
+def _status_of(spec: dict) -> str:
+    """spec → 其 L1 狀態字樣（借用 vm_common 的唯一映射；⛔ 另寫一套）。"""
+    f = field_from_spec(spec)
+    return f.status_text or ""
+
+
+def _fake_conclusion(c: dict) -> dict:
+    """今日結論（DEC-081 Q2-1 句型）：各判斷**獨立並列**以「；」相接；缺值／不可用／未評估**明寫**；
+    ⛔「但／因此」硬做因果；⛔ 由位階或指標推導多空／動作。內容為 FAKE 示意（標 `FAKE 示意結論：`）。
+    句中的「市場目前狀態」值是 canonical 的 FAKE 占位值**原樣複述**，不是推論。
+    """
+    cs = c["current_state"]
+    if cs.get("state") == "not_evaluated" and cs.get("sub_reason") == TEXT_NOT_LOADED:
+        return _spec("conclusion", "今日結論", None, state="not_evaluated", sub_reason=TEXT_NOT_LOADED,
+                     reason="按 🚀 更新後載入（FAKE 冷啟動）", as_of=None, source=None)
+    f = field_from_spec(cs)
+    clauses = [f"市場目前狀態 {f.value_text}" + (f"（{f.status_text}）" if f.status_text and f.value_text else "")
+               if f.value_text else f"市場目前狀態 {f.status_text}"]
+    for card in c["cards"]:
+        cf = field_from_spec(card)
+        if cf.status_text:                         # 非 OK 一律明寫（missing 不當中性）
+            clauses.append(f"{cf.label} {cf.status_text}")
+    clauses.append("各項判斷並列、互不推導")
+    return _spec("conclusion", "今日結論", "FAKE 示意結論：" + "；".join(clauses),
+                 as_of=None, source=None)
+
+
+def _fake_main_risk(scenario: str) -> dict:
+    """今日主要風險（L1）。退化／護欄句逐字取自 DEC-117 Q6（`shared/ui2_contract/text.py`）。
+
+    ⛔ 本檔不產生任何風險項（燈色＋桶名＋燈名＋方向）：Preview 的 loaded／stale＝capability 尚未提供。
+    冷啟動＝**不出列**（無風險項列），只外露 `⬜ 尚未載入，請按更新`（灰，⛔ 紅）。
+    """
+    base = dict(as_of=None, source=None)
+    if scenario == SCENARIO_COLD:
+        return _spec("main_risk_f", "今日主要風險", None, state="not_evaluated",
+                     sub_reason=RISK_SENTENCE_NOT_LOADED, **base)
+    if scenario == SCENARIO_MISSING:
+        return _spec("main_risk_f", "今日主要風險", None, state="undeterminable",
+                     sub_reason=RISK_SENTENCE_ALL_INSUFFICIENT, **base)
+    if scenario == SCENARIO_UNAVAILABLE:
+        return _spec("main_risk_f", "今日主要風險", None, state="unavailable",
+                     reason=RISK_ERROR_FMT.format(error="FAKE 來源逾時（示意）"), **base)
+    if scenario == SCENARIO_NOT_EVALUATED:
+        return _spec("main_risk_f", "今日主要風險", None, state="not_evaluated",
+                     sub_reason="⬜ 尚未評估", reason=RISK_NOTE_UNEVALUATED_NOT_SAFE, **base)
+    return _spec("main_risk_f", "今日主要風險", None, state="not_provided", sub_reason=TEXT_NOT_PROVIDED,
+                 reason="Preview：風險桶（燈色＋桶名＋燈名＋方向）尚未接線，不推導任何風險", **base)
+
+
+def fake_canonical(page: str, scenario: str, account: str | None = None) -> dict:
+    """回傳 `page`×`scenario` 的 FAKE canonical dict（每次回新 dict，呼叫端可安全改動）。
+
+    `account`（僅 👤 我的）：`signed_in`（預設，＝Batch 2 內容）／`signed_out`／`unavailable`；
+    非 signed_in 的連線事實不隨 `scenario` 轉換（fixed），其餘頁忽略此參數。
+    """
     if page not in PAGE_IDS:
         raise ValueError(f"unknown page {page!r}")
     if scenario not in SCENARIO_IDS:
         raise ValueError(f"unknown scenario {scenario!r}")
+    if account is not None and account not in ACCOUNT_IDS:
+        raise ValueError(f"unknown account {account!r}")
+    if page == P4_ME and account in (ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE):
+        c = _me_account_variant(account)
+        c["scenario"] = scenario
+        c["is_fake"] = True
+        c["cards"] = [dict(s) for s in c["cards"]]
+        return c
     c = deepcopy(_base(page))
     c["scenario"] = scenario
     c["is_fake"] = True
-    c["current_state"] = _transform_current(c["current_state"], scenario)
-    c["cards"] = [_transform(s, scenario, i) for i, s in enumerate(c["cards"])]
+    # 🎯 標的頁沒有「🚀 更新」入口（精選走載入 gate、查一檔走搜尋）→ 冷啟動說明不得指向不存在的按鈕
+    cold_reason = ("FAKE 冷啟動：精選尚未載入" if page == P4_TARGET
+                   else "FAKE 冷啟動：尚未載入" if page == P4_ME
+                   else "按 🚀 更新後載入（FAKE 冷啟動）")
+    c["current_state"] = _transform_current(c["current_state"], scenario, cold_reason)
+    c["cards"] = [_transform(s, scenario, i, cold_reason) for i, s in enumerate(c["cards"])]
     if scenario == SCENARIO_COLD and c.get("next_step") is None and page != P4_ME:
         c["next_step"] = _spec("next", "下一步", "按 🚀 更新", fixed=True, as_of=None, source=None)
     if page == P4_ME:   # 我的頁：連線異常／下一步隨場景（非投資動作）
-        c["action_needed"] = _transform_current(c["action_needed"], scenario)
-        c["next_step"] = _transform_current(c["next_step"], scenario)
+        c["action_needed"] = _transform_current(c["action_needed"], scenario, cold_reason)
+        c["next_step"] = _transform_current(c["next_step"], scenario, cold_reason)
+    if page == P4_MARKET:
+        c["conclusion"] = _fake_conclusion(c)
+        c["main_risk"] = _fake_main_risk(scenario)
+    if page == P4_TARGET:
+        # 市場位階 context 與市場頁同一份 FAKE 位階，且隨場景同步（W-4；不得與市場頁各說各話）
+        c["context_rows"] = [_transform_current(r, scenario) if r.get("key") == "market_regime" else r
+                             for r in c["context_rows"]]
+        lk = c["target"]["lookup"]
+        lk["summary"] = _transform_current(lk["summary"], scenario, _LOOKUP_COLD)
+        lk["snapshot"] = [
+            (_transform_current(d, scenario, _LOOKUP_COLD) if d["key"] == "dim_market_env"
+             else _transform(d, scenario, i, _LOOKUP_COLD))
+            for i, d in enumerate(lk["snapshot"])]
     return c

@@ -21,10 +21,11 @@ MARKET_CARD_IDS: tuple[str, ...] = (
 )
 
 
-def build_market_page_vm(canonical: Mapping[str, Any], *, top_n: int | None = None) -> PageVM:
+def build_market_page_vm(canonical: Mapping[str, Any], *, top_n: int | None = None,
+                         mode: str | None = None) -> PageVM:
     if canonical.get("page") != P4_MARKET:
         raise ValueError(f"build_market_page_vm 只接受市場頁 canonical，收到 {canonical.get('page')!r}")
     got = tuple(c["key"] for c in canonical.get("cards", ()))
     if got != MARKET_CARD_IDS:
         raise ValueError(f"市場頁核心指標卡須為 {MARKET_CARD_IDS}，收到 {got}")
-    return build_page_vm(canonical, top_n=top_n)
+    return build_page_vm(canonical, top_n=top_n, mode=mode)

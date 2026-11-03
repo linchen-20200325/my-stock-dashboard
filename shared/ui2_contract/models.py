@@ -164,23 +164,87 @@ class CtaVM:
 
 @dataclass(frozen=True)
 class FirstScreenVM:
-    """每頁第一屏四問（客戶 (5)-9）：現在狀態／是否需要行動／下一步／主 CTA。"""
+    """每頁第一屏四問（客戶 (5)-9）：現在狀態／是否需要行動／下一步／主 CTA。
+
+    `conclusion`（📊 市場頁專用；Batch 3）＝今日結論一行（DEC-081 Q2-1：各判斷獨立並列、缺值明寫）。
+    VM **原樣帶出** canonical 提供的句子，⛔ 由位階／指標推導多空、⛔ 新增動作。
+    """
 
     current_state: FieldVM
     action_needed: FieldVM
     next_step: FieldVM
     primary_cta: CtaVM
     context_rows: tuple[FieldVM, ...] = ()   # 例：Risk Cap 一行
+    conclusion: FieldVM | None = None
 
 
 @dataclass(frozen=True)
 class SectionVM:
-    """L2／L3 摺疊區塊。"""
+    """L2／L3 摺疊區塊。`mode`＝所屬模式（🎯 標的頁雙模式；None＝與模式無關）。"""
 
     section_id: str
     title: str
-    level: str                      # "L2" | "L3"
+    level: str                      # "L1" | "L2" | "L3"
     fields: tuple[FieldVM, ...] = ()
+    mode: str | None = None
+
+
+@dataclass(frozen=True)
+class SearchBoxVM:
+    """🎯 標的頁搜尋框（Preview 期為 disabled 示意；⛔ 真查詢／真資料 fetch）。"""
+
+    placeholder: str
+    name_search: FieldVM            # 名稱搜尋尚未提供（capability；FUI-NAME-SEARCH）
+    cta: CtaVM
+
+
+@dataclass(frozen=True)
+class LookupResultVM:
+    """🎯 即時查一檔的 FAKE 結果（Ad-hoc、session-only；⛔ 寫入持股／觀察／候選池／Sheet）。
+
+    `snapshot`＝6 維 Snapshot（state＋短句）；`add_watch_cta`＝加入觀察，Preview 恆 disabled。
+    """
+
+    ticker_text: str
+    name_text: str
+    chips: tuple[ChipVM, ...]
+    summary: FieldVM                # 查詢摘要（查一檔模式的 ①）
+    snapshot: tuple[FieldVM, ...]
+    add_watch_cta: CtaVM
+    isolation_note: str
+    sections: tuple[SectionVM, ...] = ()
+
+
+@dataclass(frozen=True)
+class ModeOptionVM:
+    mode_id: str
+    label: str
+
+
+@dataclass(frozen=True)
+class TargetVM:
+    """🎯 標的頁：雙模式（市場精選／即時查一檔）＋搜尋框＋查一檔 FAKE 結果。
+
+    兩個模式的內容**都在 context**（完整 Decision Context 不因呈現切換而減少）；
+    哪一個展開只由 `PresentationSlice.active_mode` 決定（Presentation Slice ≠ Decision Context）。
+    """
+
+    modes: tuple[ModeOptionVM, ...]
+    default_mode: str
+    search: SearchBoxVM
+    lookup: LookupResultVM
+
+
+@dataclass(frozen=True)
+class AccountVM:
+    """👤 我的頁帳戶／登入切換 skeleton（FAKE；⛔ 真 Google OAuth／Sheet 讀寫）。
+
+    `account_state`＝`signed_out`／`signed_in`／`unavailable`（連線事實，fake 場景維度；
+    **不是**資料語意態、capability 或判定結果）。`actions`＝管理動作（Preview 恆 disabled）。
+    """
+
+    account_state: str
+    actions: tuple[CtaVM, ...]
 
 
 @dataclass(frozen=True)
@@ -190,6 +254,10 @@ class PageContext:
     first_screen: FirstScreenVM
     cards: tuple[CardVM, ...] = ()
     sections: tuple[SectionVM, ...] = ()
+    #: 📊 市場頁「今日主要風險」：L1，緊接第一屏之後、⛔ 被 L2／L3 插隊（Freeze §0.1.6-3）。
+    main_risk: FieldVM | None = None
+    target: TargetVM | None = None          # 🎯 標的頁專用
+    account: AccountVM | None = None        # 👤 我的頁專用
 
 
 @dataclass(frozen=True)
@@ -198,6 +266,8 @@ class PresentationSlice:
 
     top_n: int | None
     visible_card_ids: tuple[str, ...]
+    #: 🎯 標的頁目前展開的模式（其餘模式收合；⛔ 同時完整展開）。其他頁 None。
+    active_mode: str | None = None
 
 
 @dataclass(frozen=True)

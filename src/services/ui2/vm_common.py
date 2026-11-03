@@ -14,9 +14,14 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from shared.ui2_contract.models import (
-    CapabilityState, CardVM, CtaVM, FieldState, FieldVM, FirstScreenVM, FreshnessInfo,
-    JudgementState, PageContext, PageVM, PresentationSlice, SectionVM,
+    AccountVM, CapabilityState, CardVM, ChipVM, CtaVM, FieldState, FieldVM, FirstScreenVM,
+    FreshnessInfo, JudgementState, LookupResultVM, ModeOptionVM, PageContext, PageVM,
+    PresentationSlice, SearchBoxVM, SectionVM, TargetVM,
 )
+from shared.ui2_contract.pages import (
+    ACCOUNT_IDS, MODE_CURATED, MODE_IDS, P4_ME, P4_MARKET, P4_TARGET,
+)
+from shared.ui2_contract.tones import ChipTone
 from shared.ui2_contract.text import (
     PREVIEW_BANNER_TEXT, TEXT_MISSING_NOT_FETCHED, TEXT_MISSING_NOT_READY,
     TEXT_NOT_EVALUATED, TEXT_NOT_PROVIDED, TEXT_NOT_PROVIDED_AGGREGATOR,
@@ -70,7 +75,47 @@ def card_from_spec(spec: Spec) -> CardVM:
 def section_from_spec(spec: Spec) -> SectionVM:
     return SectionVM(section_id=str(spec["key"]), title=str(spec["title"]),
                      level=str(spec["level"]),
-                     fields=tuple(field_from_spec(f) for f in spec.get("fields", ())))
+                     fields=tuple(field_from_spec(f) for f in spec.get("fields", ())),
+                     mode=spec.get("mode"))
+
+
+def cta_from_spec(spec: Spec, default_reason: str) -> CtaVM:
+    """CTA 一律 disabled（Preview：⛔ 觸發任何更新／寫入／OAuth／查詢）。"""
+    return CtaVM(label=str(spec["label"]), enabled=False,
+                 disabled_reason=str(spec.get("disabled_reason", default_reason)))
+
+
+def target_from_canonical(spec: Spec) -> TargetVM:
+    """🎯 標的頁 canonical → TargetVM。模式內容全量保留；⛔ 依模式裁掉 context。"""
+    modes = tuple(ModeOptionVM(str(m["id"]), str(m["label"])) for m in spec["modes"])
+    if tuple(m.mode_id for m in modes) != MODE_IDS:
+        raise ValueError(f"標的頁模式須恰為 {MODE_IDS}，收到 {[m.mode_id for m in modes]}")
+    srch = spec["search"]
+    lk = spec["lookup"]
+    add = lk["add_watch"]
+    return TargetVM(
+        modes=modes, default_mode=str(spec.get("default_mode", MODE_CURATED)),
+        search=SearchBoxVM(
+            placeholder=str(srch["placeholder"]),
+            name_search=field_from_spec(srch["name_search"]),
+            cta=cta_from_spec(srch["cta"], "Preview：不查真資料（FAKE，session-only）")),
+        lookup=LookupResultVM(
+            ticker_text=str(lk["ticker"]), name_text=str(lk["name"]),
+            chips=tuple(ChipVM(str(t), ChipTone.NEUTRAL_INFO) for t in lk["chips"]),
+            summary=field_from_spec(lk["summary"]),
+            snapshot=tuple(field_from_spec(f) for f in lk["snapshot"]),
+            add_watch_cta=CtaVM(label=str(add["label"]), enabled=False,
+                                disabled_reason=str(add["disabled_reason"])),
+            isolation_note=str(lk["isolation_note"]),
+            sections=tuple(section_from_spec(x) for x in lk.get("sections", ()))))
+
+
+def account_from_canonical(spec: Spec) -> AccountVM:
+    st_ = str(spec["account_state"])
+    if st_ not in ACCOUNT_IDS:
+        raise ValueError(f"未知帳戶狀態 {st_!r}（允許 {ACCOUNT_IDS}）")
+    return AccountVM(account_state=st_, actions=tuple(
+        cta_from_spec(a, "Preview：不接 Google OAuth／不讀寫 Sheet") for a in spec["actions"]))
 
 
 def aggregator_pending_field(label: str) -> FieldVM:
@@ -83,9 +128,15 @@ def aggregator_pending_field(label: str) -> FieldVM:
                    capability=CapabilityState.NOT_PROVIDED)
 
 
-def build_page_vm(canonical: Spec, *, top_n: int | None = None) -> PageVM:
-    """canonical → PageVM。`top_n` 只影響 `slice`，⛔ 影響 `context`（Gate §4.2-6／G3）。"""
+def build_page_vm(canonical: Spec, *, top_n: int | None = None, mode: str | None = None) -> PageVM:
+    """canonical → PageVM。`top_n`／`mode` 只影響 `slice`，⛔ 影響 `context`（Gate §4.2-6／G3）。"""
     page = str(canonical["page"])
+    for key, only in (("conclusion", P4_MARKET), ("main_risk", P4_MARKET),
+                      ("target", P4_TARGET), ("account", P4_ME)):
+        if canonical.get(key) is not None and page != only:
+            raise ValueError(f"{page}: canonical 不得提供 {key}（僅 {only} 頁）")
+    if mode is not None and mode not in MODE_IDS:
+        raise ValueError(f"未知模式 {mode!r}（允許 {MODE_IDS}）")
     if page in PAGES_ACTION_FROM_AGGREGATOR_ONLY:
         if canonical.get("action_needed") is not None:
             raise ValueError(f"{page}: canonical 不得提供 action_needed（VM 不創造動作；待 Aggregator）")
@@ -103,16 +154,31 @@ def build_page_vm(canonical: Spec, *, top_n: int | None = None) -> PageVM:
         primary_cta=CtaVM(label=str(cta_spec["label"]), enabled=False,
                           disabled_reason=str(cta_spec.get("disabled_reason", "Preview：不觸發任何動作"))),
         context_rows=tuple(field_from_spec(s) for s in canonical.get("context_rows", ())),
+        conclusion=(field_from_spec(canonical["conclusion"])
+                    if canonical.get("conclusion") is not None else None),
     )
     cards = tuple(card_from_spec(s) for s in canonical.get("cards", ()))
     sections = tuple(section_from_spec(s) for s in canonical.get("sections", ()))
+    target = (target_from_canonical(canonical["target"])
+              if canonical.get("target") is not None else None)
+    account = (account_from_canonical(canonical["account"])
+               if canonical.get("account") is not None else None)
     ids = tuple(c.card_id for c in cards)
     visible = ids if top_n is None else ids[: max(int(top_n), 0)]
+    active_mode = None
+    if target is not None:
+        active_mode = mode or target.default_mode
+        if active_mode != MODE_CURATED:
+            visible = ()            # 查一檔模式：精選收合（呈現切片；context.cards 不變）
     return PageVM(
         page_id=page, title=str(canonical["title"]), scenario_id=str(canonical["scenario"]),
         is_fake=bool(canonical.get("is_fake", False)),
-        context=PageContext(first_screen=first, cards=cards, sections=sections),
-        slice=PresentationSlice(top_n=top_n, visible_card_ids=visible),
+        context=PageContext(
+            first_screen=first, cards=cards, sections=sections,
+            main_risk=(field_from_spec(canonical["main_risk"])
+                       if canonical.get("main_risk") is not None else None),
+            target=target, account=account),
+        slice=PresentationSlice(top_n=top_n, visible_card_ids=visible, active_mode=active_mode),
         banner_text=PREVIEW_BANNER_TEXT if canonical.get("is_fake") else None,
     )
 

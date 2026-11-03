@@ -791,3 +791,18 @@ DEC-086 規則已於 main，本表已落地。
 | 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule／Decision／Backlog／Limitation 已寫入上列 GitHub 正式文件（落盤以總管 commit／push 為準）。 |
 | 禁止事項（摘要） | ⛔ 自行核准 EPS source／PE multiple／growth assumption；⛔ 新增 production formula；⛔ 由 EPS×PE 產生買賣 action；⛔ 自行組成國際趨勢多空公式／scoring／Risk Cap rule／System Action／probability；⛔ 新增第三、第四套市場主軸；⛔ 在 UI／rule id 使用老師／個人姓名；⛔ Aggregator／Risk Cap／Action Authority／Digest／OneBrain／LINE／real-data／production default runtime；⛔ 刪 Old UI／Legacy New UI；⛔ 巡邏式清理命名債（`CLAUDE.md` §-1）。 |
 
+- **Safe Handoff（2026-11-03 New UI2 Batch 3：📊 今日結論＋今日主要風險／🎯 雙模式＋搜尋＋查一檔 FAKE／👤 帳戶 skeleton；現行；實作組單組、待總管複驗）**（SESSION_CONTINUITY C1 欄位；決策者 客戶 (10) B～F；與上方 Batch 2、(10) A 段並存，其內容仍有效）：
+
+| 欄位（C1） | 內容 |
+|---|---|
+| live GitHub state | 基準 `origin/main`＝`e5f9a0d7`（#1000 `a726b05e` 之後僅純資料 bot commit；分支 `ccr-a0b4e085-ijdaio` 含 A 段 docs `f683e0d9`；cron 會推進 tip，以當下 `git fetch` 為準）。本批變更在工作樹，**commit／push／PR 由總管處理**（實作組未 commit）。 |
+| current Stage／exact safe stopping point | **New UI2 Batch 3 實作完成（待總管複驗＋獨立 QA＋客戶驗收）**：① 📊 今日結論（第一屏首列）＋今日主要風險（L1 緊接、桌機三 tile、DEC-117 Q6 退化句逐字）② 🎯 雙模式（不同時展開）＋搜尋框／搜尋 CTA（disabled 示意）＋fake ticker／fake result＋W-4 context 行＋加入觀察 disabled ③ 👤 signed-out／signed-in／unavailable＋帳戶／登入切換 skeleton（FAKE、無 OAuth／Sheet）。**全為 FAKE；0 投資語意。** |
+| 待客戶裁示 | **無即時待裁題**。需客戶／總管知悉的單組解讀（登記待覆核）：冷啟動今日主要風險「不出列」解讀（`NUI2-COLD-MAIN-RISK-READING`）；「尚未登入」歸類（`NUI2-ME-SIGNEDOUT-CLASSIFICATION-REVIEW`）；W-4 與紅色兩義在 Unavailable 場景的交會（`NUI2-TARGET-W4-RED-ON-UNAVAILABLE`）；今日結論句為 FAKE 示意句（DEC-081 Q2-1 只有規則、無逐字句；`NUI2-CONCLUSION-REAL-FEED`）。 |
+| known limitations／blockers | 見 `docs/PROJECT_STATE.md` §56「限制」與 BACKLOG §5.1.24：FAKE 字串量測（手機今日主要風險 bottom 最大 772 vs 導覽上緣 791，真資料只會更長）；Chromium headless 兩 viewport；搜尋為 disabled 示意（W-3／名稱搜尋／真查詢未做）；桌機三 tile 依賴 `display:contents`；真機／Safari／螢幕閱讀器未測；本 repo 無 `SESSION_LOG` 檔。 |
+| **下一個唯一安全工作** | 總管複驗 Batch 3（獨立 QA；重點：`tests/test_ui2_batch3.py` 的 AST 守衛與判定器 teeth、`tests/ui2_viewport/measure_viewport.py` 新增 6 條門檻出處、`git diff --name-only HEAD -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 與 `shared`（非 `ui2_contract`）為空、手機截圖 `docs/vnext/newui2_batch3/mobile_*.png` 目視）。通過後的下一批待客戶 (11) 指示；候選＝💼 持股頁第一屏（Freeze §16.3；動作欄仍待 Aggregator）。 |
+| required Model×Effort for resume | 純 presentation（版面／元件／CSS／文件）＝Sonnet 5.5＋Medium；Aggregator／Risk Cap／Action Authority／Digest／OneBrain／新資料語意／新 source／新公式／real-data mapping／真 Google OAuth／正式台股國際趨勢演算法＝停手回報 `🟡 Model / Effort Change Gate`（Opus 5.5＋High）。 |
+| 正式文件索引 | 待辦 `docs/BACKLOG.md` §5.1.24（並更新 `NUI2-WIREFRAME-FIRST-SCREEN-EXTRAS`）；狀態 `docs/PROJECT_STATE.md` §56；驗收 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §17；債務 `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` §9；線框註記 `docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md` §10；證據 `docs/vnext/newui2_batch3/`。 |
+| 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule＝無；新 Decision＝無；Audit finding／Limitation／Backlog／Migration debt／Acceptance item 已寫入上列 GitHub 正式文件（落盤以總管 commit／push 為準）。 |
+| 驗證（實作組實測，單組） | `tests/test_ui2_batch3.py` 180 passed；`tests/test_ui2_*.py`＋`test_c3_layering_guard` 於 Streamlit 1.59.2 與 1.56.0 皆綠；viewport 量測 1.59.2 與 1.56.0 各 64/64；mutation 12 項轉紅後還原；全量序列 `pytest tests -m "not slow"` 與 slow 真瀏覽器結果見 PROJECT_STATE §56／總管複驗。 |
+| 禁止事項（摘要） | ⛔ 修改 `app.py`／加 `?ui=2`／切 production default；⛔ 刪／改 Legacy New UI 與 Old UI；⛔ 實作 System Action Aggregator／Risk Cap 規則數值 runtime／Action Authority／Decision Digest／OneBrain／LINE／real-data wiring／真 OAuth／Sheet 讀寫；⛔ 由結論／位階推導多空或動作；⛔ 把 `⬜ 尚未提供` 稱為資料語意態；⛔ 合併 Not Evaluated 與 Unable to Determine；⛔ UI2 出現人名字樣（PROJECT_RULES §28）；⛔ 自行切換 Model／Effort。 |
+

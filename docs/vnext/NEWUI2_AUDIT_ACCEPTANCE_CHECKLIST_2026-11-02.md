@@ -167,3 +167,20 @@
 - **不得誤讀**：§3 表格的各格（「今日結論」「mode 切換＋搜尋」「今日主要風險緊接」等頁別必要項）**未全部落地**（`NUI2-WIREFRAME-FIRST-SCREEN-EXTRAS`）；本批只證明「四問」在第一屏內，**不是** Visual Fidelity Gate 判定（`NUI2-VF-HARNESS` 仍 open）。
 - §13 收尾 Gate：新 Rule＝無；新 Decision＝無；其餘見 BACKLOG §5.1.22、Migration Contract §8。
 
+## §17 Batch 3 驗收項與量測證據（2026-11-03；append-only；實作組單組，**待總管複驗／獨立 QA／客戶驗收**——下列 `[ ]` 為驗收者勾選，實作組不自勾）
+
+- **新增驗收項**：
+  - [ ] **📊 今日結論**：第一屏首列、位於 ① 市場目前狀態之上、底緣 ≤ 可用高（手機 791／桌機 900）；句型＝各判斷獨立並列（「；」）、缺值／Stale／Unavailable／未評估明寫、⛔「但／因此」、⛔ 方向（多頭／空頭／偏多／偏空…）與動作字樣；VM 原樣帶出、⛔ 由位階／指標推導；FAKE 示意句明標 `FAKE 示意結論：`；冷啟動＝灰色 `⬜ 尚未載入`〔DEC-081 Q2-1；Freeze §0.1.6-5；Wireframes §2.1／§9〕。⚠️ 句子是**FAKE 示意**，非逐字結論句（Q2-1 只有規則）。
+  - [ ] **📊 今日主要風險**：L1、緊接第一屏四問之後（同一 `.ui2-m-l1` 容器；其後第一個內容區塊＝卡片，⛔ L2／L3 插隊）；桌機與 ①、Risk Cap 同列三 tile；退化／護欄句與 Legacy 原始碼**逐字**一致（`未評估不等於安全`／`無法判定`／`尚未載入`／真錯誤）；冷啟動灰（⛔ 紅）、真錯誤才紅；⛔ 風險項／「無風險」「安全」字樣〔Freeze §0.1.6-3；DEC-117 Q6〕。⚠️ 冷啟動「不出列」＝單組解讀（`NUI2-COLD-MAIN-RISK-READING`）。
+  - [ ] **🎯 雙模式**：頂部恰兩項（市場精選／即時查一檔）、恰一項當前（● 符號＋粗體＋邊框，⛔ 只靠顏色）；**不同時完整展開**（DOM 只有一個 `data-ui2-mode-content`）；兩模式內容都在 `PageVM.context`、切換只改 slice〔Freeze §3.1-2；客戶 (10)-B-2；Presentation Slice ≠ Decision Context〕。
+  - [ ] **🎯 搜尋與查一檔 FAKE**：搜尋框＋搜尋 CTA 在模式切換之下、查詢摘要之上、底緣 ≤ 可用高；disabled 示意（⛔ 真查詢／`<input>`／`<form>`）；fake ticker 標 FAKE 且無真實代號樣式；加入觀察 CTA 恆 disabled；**session-only**：只寫 `ui2_` 前綴 key（AppTest＋AST 守衛）、⛔ 持股／觀察／候選池／strategy／Sheet；⛔ 買賣判斷字樣；動作權威不在本頁〔Freeze §3.2／§3.3；DEC-083〕。
+  - [ ] **🎯 W-4 context row**：市場位階＋Risk Cap 一行輕量 chip、在查詢摘要之下、字級小於摘要；6 維 Snapshot『市場環境』不排第一格、Neutral；位階與市場頁同一份 FAKE market context〔Wireframes §9 W-4；客戶 Q3〕。⚠️ `unavailable` 場景紅色呈現屬單組讀法（`NUI2-TARGET-W4-RED-ON-UNAVAILABLE`）。
+  - [ ] **👤 三態**：signed-out／signed-in／unavailable 各有狀態標示、動作列（全 disabled）與依狀態的主 CTA（Google 登入／切換 Sheet／重新讀取）；連線事實全在資料語意軸（三軸不混層）；**無 OAuth／Sheet／secrets／`src.data`**（AST／import 守衛含注入）〔Wireframes §1／§5.1；Freeze §16.4〕。⚠️ 「尚未登入」歸類為單組判讀（`NUI2-ME-SIGNEDOUT-CLASSIFICATION-REVIEW`）。
+  - [ ] **三軸不混層（Batch 3 新欄位）**：今日主要風險／結論／查一檔 Snapshot／帳戶卡的 `layer` 與字樣表一致；Unable to Determine ≠ Not Evaluated；capability 不帶 state〔DEC-124〕。
+  - [ ] **無人名字樣**：`src/ui2`、`src/services/ui2`、`shared/ui2_contract`、`app_ui2.py` 原始碼與渲染 VM 無人名（PROJECT_RULES §28）。
+  - [ ] **兩個 Streamlit 版本**：1.59.2 與 1.56.0 的 UI2 測試皆綠、量測皆 64/64。
+- **量測證據**：`docs/vnext/newui2_batch3/viewport_measurements.json`（Streamlit 1.59.2；64 態）、`viewport_measurements_streamlit156.json`（1.56.0；64 態）；截圖 `*.png`（手機全部態＋桌機 cold／loaded；`*_lookup`＝即時查一檔、`*_signed_out`／`*_unavailable`＝我的帳戶態）。重跑 `python -m tests.ui2_viewport.measure_viewport --out <dir>`（floor：`--python /tmp/v156/bin/python --json-name viewport_measurements_streamlit156.json --shots none`）；判定器與門檻出處 `tests/ui2_viewport/measure_viewport.py::THRESHOLDS`（新增 6 條，皆引既有條文）。
+- **測試**：`tests/test_ui2_batch3.py`（今日結論無方向推導、主要風險不被插隊〔靜態＋AppTest 整頁順序〕、模式互斥、session 隔離、我的頁 AST 守衛、三軸、無人名、判定器 teeth）；既有 `tests/test_ui2_guards.py`／`test_ui2_batch2.py` 的 `_all_fields`／預期態數只增不減。
+- **不得誤讀**：本批全為 FAKE；「第一屏放得下」**不是** Visual Fidelity Gate 判定（`NUI2-VF-HARNESS` 仍 open）；搜尋為 disabled 示意、今日結論為 FAKE 示意句、帳戶為 FAKE skeleton。
+- §13 收尾 Gate：新 Rule＝無；新 Decision＝無；其餘見 BACKLOG §5.1.24、Migration Contract §9、PROJECT_STATE §56。
+
