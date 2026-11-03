@@ -703,14 +703,15 @@ def _m_market(desktop: bool = False) -> dict:
     m = _good_desktop() if desktop else _good_mobile()
     left = 200.0 if desktop else 14.0
     if desktop:   # 三 tile：q1／ctx／risk 同列
-        els = [_el("concl", 100, 150, left), _el("q1", 160, 260, left), _el("ctx", 160, 260, 500),
-               _el("q2", 270, 330, left), _el("q3", 340, 400, left), _el("q4", 410, 480, left)]
+        els = [_el("q4", 60, 98, left), _el("concl", 100, 150, left), _el("q1", 160, 260, left), _el("ctx", 160, 260, 500),
+               _el("q2", 270, 330, left), _el("q3", 340, 400, left)]
         risk = {"top": 160.0, "bottom": 260.0, "left": 900.0, "right": 1300.0, "inside_l1": True, "text": "r"}
     else:
-        els = [_el("concl", 100, 150), _el("q1", 150, 210), _el("ctx", 210, 260), _el("q2", 260, 320),
-               _el("q3", 320, 380), _el("q4", 380, 450)]
+        els = [_el("q4", 60, 98), _el("concl", 100, 150), _el("q1", 150, 210), _el("ctx", 210, 260),
+               _el("q2", 260, 320), _el("q3", 320, 380)]
         risk = {"top": 455.0, "bottom": 520.0, "left": 14.0, "right": 376.0, "inside_l1": True, "text": "r"}
-    m.update(page="p4_market", scenario="loaded", elements=els, risk=risk, first_block_after_l1_top=530.0)
+    m.update(page="p4_market", scenario="loaded", elements=els, risk=risk, first_block_after_l1_top=530.0,
+             risk_line_height=24.0, scroll_end_bottom=764.0, risk_bottom_at_scroll_end=300.0)
     return m
 
 
@@ -760,7 +761,7 @@ def _el_of(m, q):
 
 
 @pytest.mark.parametrize("name,base,fn,check", [
-    ("結論缺", _m_market, lambda m: m["elements"].pop(0), "market_conclusion_in_first_screen"),
+    ("結論缺", _m_market, lambda m: m["elements"].remove(_el_of(m, "concl")), "market_conclusion_in_first_screen"),
     ("結論太低", _m_market, lambda m: _el_of(m, "concl").update(bottom=792.0), "market_conclusion_in_first_screen"),
     ("結論在 ① 之下", _m_market, lambda m: _el_of(m, "concl").update(top=300.0, bottom=330.0),
      "market_conclusion_in_first_screen"),
@@ -770,6 +771,14 @@ def _el_of(m, q):
      "market_main_risk_follows_first_screen"),
     ("風險後被插隊", _m_market, lambda m: m.update(first_block_after_l1_top=500.0),
      "market_main_risk_follows_first_screen"),
+    ("CTA 在結論之後（移回最後）", _m_market,
+     lambda m: _el_of(m, "q4").update(top=400.0, bottom=450.0), "market_cta_before_conclusion"),
+    ("桌機 CTA 在結論之後", lambda: _m_market(True),
+     lambda m: _el_of(m, "q4").update(top=410.0, bottom=470.0), "market_cta_before_conclusion"),
+    ("缺主 CTA", _m_market, lambda m: m["elements"].remove(_el_of(m, "q4")), "market_cta_before_conclusion"),
+    ("主要風險後區塊貼著導覽（2.5px）", _m_market, lambda m: m.update(first_block_after_l1_top=788.5),
+     "market_main_risk_nav_margin"),
+    ("捲到底後內容被導覽遮住", _m_market, lambda m: m.update(scroll_end_bottom=800.0), "content_not_covered_by_nav"),
     ("桌機不同列", lambda: _m_market(True), lambda m: m["risk"].update(top=400.0, bottom=480.0),
      "market_main_risk_follows_first_screen"),
     ("模式項錯", _m_target, lambda m: m["mode_box"].update(labels=["市場精選", "即時查一檔", "第三種"]),
@@ -853,3 +862,174 @@ def test_f4_nothing_but_title_precedes_market_l1_in_default_lane(scenario):
     i = order.index("ui2-m-l1")
     before = order[:i]
     assert set(before) <= {"ui2-banner", "ui2-pagetitle"}, f"L1 之前出現 {before}"
+
+
+# ════════════════════════════════════════════════════════════════════
+# 9. 客戶 2026-11-03 裁示（DEC-127）：市場更新 CTA 順序／W-4 驗收／底部導覽餘裕（presentation-only）
+# ════════════════════════════════════════════════════════════════════
+_MARKET_ORDER = ["q4", "concl", "q1", "ctx", "q2", "q3"]
+
+
+def _css() -> str:
+    from src.ui2.shell.css import CSS
+    return CSS
+
+
+@pytest.mark.parametrize("scenario", SCENARIO_IDS)
+def test_cta_order_market_l1_html_puts_refresh_cta_before_conclusion(scenario):
+    """Wireframes §2.1／§2.2、DEC-117 Q5：頁首→更新 CTA→今日結論→核心狀態…；risk 仍緊接其後。"""
+    vm = get_preview_page_vm(P4_MARKET, scenario)
+    h = H.market_l1_html(vm.context.first_screen, vm.context.main_risk)
+    qs = re.findall(r'data-ui2-q="(\w+)"', h)
+    assert qs[0] == "q4" and qs.index("q4") < qs.index("concl") < qs.index("q1") < qs.index("q2") < qs.index("q3")
+    assert h.index('data-ui2-q="q4"') < h.index('data-ui2-q="concl"') < h.index("ui2-risk")
+
+
+@pytest.mark.parametrize("scenario", SCENARIO_IDS)
+def test_cta_order_in_real_page_default_lane(scenario):
+    """預設道（AppTest 整頁）：實際輸出的市場 L1 區塊內，CTA 在今日結論之前。"""
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(ROOT / "app_ui2.py"), default_timeout=60).run(timeout=60)
+    at.selectbox(key="ui2_scenario").set_value(scenario).run(timeout=60)
+    assert not at.exception
+    l1 = [m.value for m in at.markdown if 'class="ui2-m-l1"' in m.value]
+    assert len(l1) == 1
+    assert l1[0].index('data-ui2-q="q4"') < l1[0].index('data-ui2-q="concl"') < l1[0].index('data-ui2-q="q1"')
+
+
+def test_cta_first_changes_order_only_not_content():
+    """不改 VM 語意：cta_first 與預設版的**文字內容集合**一致（只差順序；唯一差別＝省去 ④ 編號標籤）。"""
+    for sc in SCENARIO_IDS:
+        fs = get_preview_page_vm(P4_MARKET, sc).context.first_screen
+        a, b = H.first_screen_html(fs), H.first_screen_html(fs, cta_first=True)
+        assert sorted(re.findall(r'data-ui2-q="(\w+)"', a)) == sorted(re.findall(r'data-ui2-q="(\w+)"', b))
+        ta, tb = _txt(a).replace("④ 主 CTA", ""), _txt(b)
+        assert sorted(ta.split()) == sorted(tb.split()), sc
+        assert fs.primary_cta.label in b and (fs.primary_cta.disabled_reason or "") in b
+
+
+def test_cta_order_other_pages_keep_four_question_order():
+    """只動市場頁：持股／我的（render_page）預設仍 ①②③④。"""
+    for pid in (P4_HOLD, P4_ME):
+        fs = get_preview_page_vm(pid, "loaded").context.first_screen
+        assert re.findall(r'data-ui2-q="(\w+)"', H.first_screen_html(fs))[-1] == "q4"
+
+
+def test_cta_order_desktop_grid_places_cta_row_above_conclusion():
+    css = _css()
+    r_cta = int(re.search(r'\[data-ui2-q="q4"\]\{grid-row:(\d+)\}', css).group(1))
+    r_concl = int(re.search(r'\[data-ui2-q="concl"\]\{grid-row:(\d+)\}', css).group(1))
+    r_q1 = int(re.search(r'\[data-ui2-q="q1"\]\{grid-column:1;grid-row:(\d+)\}', css).group(1))
+    r_q2 = int(re.search(r'\[data-ui2-q="q2"\]\{grid-row:(\d+)\}', css).group(1))
+    assert r_cta < r_concl < r_q1 < r_q2
+    assert re.search(r">\.ui2-risk\{grid-column:3;grid-row:%d;" % r_q1, css)        # 三 tile 仍同列
+
+
+def test_cta_top_row_is_not_a_semantics_change_for_system_action_or_risk_cap():
+    """CTA 仍 disabled 示意、⚡ 欄位仍是 capability 未提供、Risk Cap 仍無法判定（本批不碰 System Action／Risk Cap）。"""
+    for sc in SCENARIO_IDS:
+        fs = get_preview_page_vm(P4_MARKET, sc).context.first_screen
+        assert fs.primary_cta.enabled is False
+        assert fs.action_needed.capability is CapabilityState.NOT_PROVIDED
+        rc = next(r for r in fs.context_rows if r.label == "Risk Cap")
+        assert rc.status_text == T.TEXT_RISK_CAP_UNDETERMINABLE
+
+
+# ── 底部導覽餘裕（presentation-only）──────────────────────────────
+def test_nav_margin_content_bottom_reserve_covers_nav_height_and_safe_area():
+    """手機內容底部保留量 ＝ 5rem（80px）＋ env(safe-area-inset-bottom)；必須 ≥ 導覽高 53px，且帶 safe-area 項。
+    ⚠️ env() 在 Chromium 實測為 0；iOS Safari 未驗（viewport-fit 未設時亦可能為 0）——本測試只鎖 CSS 規則存在。"""
+    css = _css()
+    m = re.search(r"@supports \(padding-bottom:env\(safe-area-inset-bottom\)\)\{\s*@media \(max-width:768px\)\{\.block-container"
+                  r"\{padding-bottom:calc\((\d+(?:\.\d+)?)rem \+ env\(safe-area-inset-bottom,0px\)\) !important\}", css)
+    assert m, "手機 block-container padding-bottom 必須含 env(safe-area-inset-bottom)（@supports 覆寫；基礎 5rem 規則保留）"
+    assert ".block-container{padding-bottom:5rem !important}" in css      # 基礎規則（無 env 支援時的後備）不動
+    nav_h = int(re.search(r"\.st-key-ui2_nav\{left:0;right:0;bottom:0;height:(\d+)px", css).group(1))
+    assert float(m.group(1)) * 16 >= nav_h + 16, "保留量至少要多於導覽高一個基本間距（16px）"
+    assert nav_h == MV.NAV_MOBILE_H
+
+
+def test_nav_margin_cta_row_puts_reason_beside_button_not_below():
+    css = _css()
+    assert ".ui2-qrow--cta-top .ui2-ctawrap{display:flex;flex-wrap:wrap" in css       # B：原因與按鈕同列（窄時才折行）
+    assert ".ui2-qrow--cta-top .ui2-cta__reason{margin:0}" in css
+    # 未縮字、未刪資訊：CTA 原因句仍在 DOM
+    fs = get_preview_page_vm(P4_MARKET, "loaded").context.first_screen
+    assert fs.primary_cta.disabled_reason in H.first_screen_html(fs, cta_first=True)
+
+
+def test_nav_margin_thresholds_registered_and_stress_evaluator_has_teeth():
+    ids = {t["id"] for t in MV.THRESHOLDS}
+    assert {"market_cta_before_conclusion", "market_main_risk_nav_margin", "market_stress_reachable"} <= ids
+    nav = {"top": 791.0}
+    good = {"nav": nav, "scroll_end_bottom": 764.0, "risk_bottom_at_scroll_end": 400.0,
+            "hscroll": {"doc": {"scrollWidth": 390, "clientWidth": 390}, "main": {"scrollWidth": 390, "clientWidth": 390}},
+            "elements": [_el("q4", 100, 150), _el("concl", 150, 220)]}
+    assert not any(MV.evaluate_stress(good).values())
+    for name, fn in [("內容被導覽遮住", lambda m: m.update(scroll_end_bottom=800.0)),
+                     ("風險捲不出導覽", lambda m: m.update(risk_bottom_at_scroll_end=900.0)),
+                     ("水平捲動", lambda m: m["hscroll"]["doc"].update(scrollWidth=500)),
+                     ("CTA 不在結論前", lambda m: _el_of(m, "q4").update(top=300.0, bottom=350.0)),
+                     ("缺量測", lambda m: m.update(scroll_end_bottom=None))]:
+        m = copy.deepcopy(good)
+        fn(m)
+        assert any(MV.evaluate_stress(m).values()), name
+
+
+def test_nav_margin_evidence_json_locks_real_browser_numbers():
+    """證據 JSON（Chromium 實測；1.59 與 1.56 各一份）：手機市場頁六場景 nav_margin_after_risk ≥ 1 行行高，
+    壓力態全過；CTA 在結論之前。檔不存在（尚未重量）→ fail（證據必須隨批次提交）。"""
+    import json
+    for name in ("viewport_measurements.json", "viewport_measurements_streamlit156.json"):
+        d = json.loads((ROOT / "docs" / "vnext" / "newui2_batch3b" / name).read_text(encoding="utf-8"))
+        assert d["summary"]["failed"] == [], name
+        mk = [r for r in d["results"] if r["page"] == "p4_market" and r["viewport_name"] == "mobile" and r.get("mode") is None]
+        st = [r for r in d["results"] if r.get("mode") == "stress"]
+        assert len(mk) == 6 and len(st) == 6, name
+        for r in mk:
+            b = r["batch3"]
+            assert b["nav_margin_after_risk"] >= b["risk_line_height"], (name, r["scenario"], b["nav_margin_after_risk"])
+            q = {e["q"]: e for e in r["elements"]}
+            assert q["q4"]["bottom"] <= q["concl"]["top"] + 0.5
+        for r in st:
+            assert r["pass"] and r["stress"]["scroll_end_gap_to_nav"] >= 0, (name, r["scenario"])
+
+
+# ── W-4 驗收收斂（客戶 2026-11-03：目前 Neutral／Info 方向接受；對照 Gate／Wireframes §9 W-4 逐點鎖定）──
+def test_w4_contract_points_are_each_locked_by_a_test():
+    """對照表（逐點→鎖定測試）；本測試確認被引用的測試函式都真實存在（防文件與測試脫鉤）。"""
+    locks = {
+        "輕量 context row／chip（一行、僅 市場位階＋Risk Cap）": "test_w4_context_row_is_light_neutral_and_below_summary",
+        "Neutral／Info 外觀（含 Stale／Unavailable 場景）": "test_f2_w4_context_and_market_env_are_neutral_tone_with_text_state",
+        "字級低於查詢摘要與 6 維格": "test_w4_context_font_is_smaller_than_summary_and_snapshot_cells",
+        "置於查詢摘要之下、搜尋之後（整頁 DOM 順序）": "test_w4_context_sits_after_search_and_summary_in_real_page",
+        "不搶過查一檔／基本面：『市場環境』不排第一格、Neutral": "test_six_dim_snapshot_order_and_semantics",
+        "市場技術訊號不成為單一股票主要判斷（無方向／買賣字樣）": "test_target_creates_no_buy_judgement_or_action_authority",
+        "與市場頁位階同源（不各說各話）": "test_target_market_regime_follows_the_same_market_context",
+        "真瀏覽器：context 在摘要之下、字級較小（viewport 判定器）": "test_batch3_evaluator_has_teeth",
+    }
+    g = globals()
+    for point, name in locks.items():
+        assert name in g and callable(g[name]), f"W-4 點『{point}』引用的測試 {name} 不存在"
+
+
+def test_w4_context_font_is_smaller_than_summary_and_snapshot_cells():
+    css = _css()
+    ctx = float(re.search(r"\.ui2-ctxline\{[^}]*font-size:([\d.]+)rem", css).group(1))
+    dim = float(re.search(r"\.ui2-dim\{[^}]*font-size:([\d.]+)rem", css).group(1))
+    assert ctx < 1.0 and ctx < dim          # 查詢摘要＝內文 1rem；基本面等 6 維格 .85rem
+
+
+@pytest.mark.parametrize("scenario", ["cold", "loaded", "stale", "unavailable"])
+def test_w4_context_sits_after_search_and_summary_in_real_page(scenario):
+    at = _at_target(scenario)
+    blob = _page_blob(at)
+    i_search, i_q1, i_ctx = blob.index('class="ui2-searchbox"'), blob.index('class="ui2-qrow" data-ui2-q="q1"'), blob.index('class="ui2-qrow ui2-ctxline" data-ui2-q="ctx"')
+    assert i_search < i_q1 < i_ctx
+    at.radio(key="ui2_target_mode").set_value(MODE_LOOKUP).run(timeout=60)
+    blob = _page_blob(at)
+    if scenario == "cold":          # F3：冷啟動查一檔不畫 Snapshot（只有搜尋框＋灰色說明）
+        assert 'class="ui2-snapshot"' not in blob
+        return
+    assert 'class="ui2-snapshot"' in blob
+    assert blob.index('class="ui2-qrow ui2-ctxline" data-ui2-q="ctx"') < blob.index('class="ui2-snapshot"')

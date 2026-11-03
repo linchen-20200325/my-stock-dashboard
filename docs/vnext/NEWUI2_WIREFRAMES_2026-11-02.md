@@ -375,3 +375,4 @@
 - **👤 我的**（§5.1／§5.2）：三態＋動作列＋依狀態主 CTA；FAKE skeleton，無 OAuth。Wireframes §5.1 例示的 `⬜ 尚未登入` 字面**未採用**（見 `NUI2-ME-SIGNEDOUT-CLASSIFICATION-REVIEW`）。
 - 以上為實作，**不是 W-1～W-11 的 amendment**（版面結構未變）。證據與限制見 `docs/PROJECT_STATE.md` §56、BACKLOG §5.1.24。
 
+- 📌 **2026-11-03 DEC-127 補註（append；§0～§9 與本節上文原文一字未改）**：📊 市場頁「更新 CTA 排第一屏最後」是 implementation deviation，已**依本檔 §2.1／§2.2 與 DEC-117 Q5 修正**為 頁首→🚀 更新今日戰情 CTA→今日結論→（手機：①狀態／Risk Cap／②／③；桌機：3 tile→②→③）；今日主要風險仍緊接其後。客戶明示：**不是規格衝突、不改本檔條文**；四問（§1）是資訊需求，不代表 DOM 須按 ①→④ 排列。實作＝`first_screen_html(cta_first=True)`（只用於市場頁；持股／我的維持原序）＋CSS grid 列序；CTA 列原因句與按鈕同列、不再顯示「④」編號標籤（資訊不刪）。桌機 CTA 為結論之上的獨立緊湊列，與線框『頁首列右側』非逐像素等同（`NUI2-MARKET-CTA-DESKTOP-PLACEMENT`）。**W-4**：客戶 2026-11-03 確認目前 Neutral／Info 實作符合 §9 W-4 條件、不再待覆核（`NUI2-TARGET-W4-RED-ON-UNAVAILABLE` 收斂；valuation／基本面區塊落地後須重驗）。證據 `docs/vnext/newui2_batch3b/`。（有意識的補註，不是漏刪；決策者 客戶〔DEC-127〕）

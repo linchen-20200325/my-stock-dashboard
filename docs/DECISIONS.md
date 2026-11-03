@@ -6692,3 +6692,72 @@ GitHub 落盤：依 PROJECT_RULES §27 同步 PROJECT_RULES.md、docs/DECISIONS.
 - **與其他規則的關係（append-only，撰寫組讀法，單組，⚠️ 未經第二組驗證）**：Minimum Sufficient Model／Effort／Test Scope（DEC-059／078，第 9.1／17 節）**同向綁定**；Silent Autonomous Cruise／Hard Output Gate（DEC-104／118）**正交**（內部比較不輸出，僅 6 種情形回報）；`CLAUDE.md` §-2、§8.4 step 4、v3 §03「嚴禁拋選擇題」**併用**——回報 3 方案必須附 AI 總管推薦方案與原因；**不放寬**任何 Decision Gate／Model Change Gate／Stop Conditions。
 - **衝突檢查**：撰寫組僅讀既有第 3、9、17 節相關條文，未發現與本 DEC 牴觸之處（單組、非窮舉）；無舊條文需加刪除線。
 - **效力邊界（⛔ 不是實作授權）**：不改 `src/`／`tests/`／`shared/`／`app.py`；不新增資料來源、公式、門檻；不啟動任何 Batch。
+
+
+### DEC-127｜New UI2 小型 presentation correction（#1001 整體接受）：📊 市場更新 CTA 依 frozen contract 修正順序（不開 Decision Gate）／W-4 Neutral／Info 收斂為 accepted／底部導覽餘裕 presentation-only 小修（客戶 2026-11-03）
+
+> 2026-11-03 補登（ID 取下一個未用號；DEC-126 為上一號）。**來源類別 D：客戶 2026-11-03 指示原文，經總管轉交；下方 fence 內逐字收錄，未改一字**（實作組未見客戶原訊息本身，只見總管轉交之全文；若有出入以原訊息為準）。
+
+- **決策者**：**客戶**（2026-11-03）。｜**效力日期**：2026-11-03 起。｜**範圍**：產品／UX（presentation-only；📊 市場頁更新 CTA 位置、🎯 W-4 驗收收斂、手機底部導覽餘裕）。
+- **狀態**：**客戶指示生效**；落地＝本 PR（presentation correction 批）；實作組單組、待總管複驗。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：
+
+```
+#1001 整體接受。
+
+1. Market Update CTA order
+"NUI2-MARKET-REFRESH-CTA-ORDER" 不需要再開客戶 Decision Gate。
+GitHub frozen contract 已有足夠依據：
+頁首
+→ 🚀 更新今日戰情 CTA
+→ 今日結論
+→ 3 個核心狀態 tile
+目前 CTA 放在第一屏四問最後屬 implementation deviation，不是規格衝突。
+請依 frozen wireframe 修正。
+注意：
+- 不改 VM investment semantics
+- 不改 System Action
+- 不改 Risk Cap
+- 不重新定義「第一屏四問」
+- 四問是資訊需求，不代表視覺 DOM 必須固定按 1→2→3→4 排列
+- frozen visual contract 優先決定此頁 CTA 位置
+修完後更新對應 acceptance / backlog 狀態。
+
+2. W-4 context row
+目前 Neutral / Info 的方向接受。
+既有 New UI2 Architecture Gate 已定：
+- W-4 只能是 lightweight context row / chip
+- Neutral / Info 外觀
+- 字級低於查詢摘要
+- 放在查詢摘要之下
+- 不得搶過查一檔
+- 不得搶過基本面
+- 不得搶過 valuation / company-first research
+- 市場技術訊號不得成為單一股票主要判斷
+因此不再列為待客戶覆核。
+若目前實作符合上述 contract：
+直接將相關 backlog / audit finding 收斂為 accepted / implemented。
+不得藉此修改 investment semantics。
+
+3. Mobile bottom-nav safety margin
+"NUI2-MAIN-RISK-NAV-MARGIN" 請做 presentation-only 小修。
+目前 stale / unavailable FAKE 場景僅剩約 2.5px 餘裕，真實字串可能更長，因此不應等 real-data wiring 才處理。
+請先比較至少 3 個最小修法，例如：
+A. 增加 content bottom padding / safe-area reserve
+B. 壓縮非必要垂直 spacing
+C. 調整主要風險區塊與下一內容區的 layout
+依 PROJECT_RULES §29 選：正確性足夠且低風險 → 最快 → Token 成本最低 → 修改範圍最小
+優先避免改字體過小或刪資訊來硬塞。
+需要同時考慮：fixed bottom nav height、env(safe-area-inset-bottom) 可用性、390×844、長字串、stale、unavailable、capability-not-provided、judgement-undeterminable
+保持目前 Chromium viewport regression。
+Safari / Firefox / 真機 / iOS safe-area 尚未實測仍保留 acceptance backlog，不要假裝已驗證。
+
+範圍限制：本批只做 presentation correction。不得碰：System Action Aggregator、Risk Cap runtime、Action Authority、Decision Digest、OneBrain、real-data canonical wiring、Google OAuth runtime、Sheet write、LINE production、production default、新公式、新 threshold、新 source。Old UI / Legacy New UI 不刪。
+
+§27 收尾：所有新的 Rule / Decision / Audit Finding / Limitation / Backlog / Migration Debt / Acceptance Item 必須正式同步 GitHub。尤其：CTA order 從「待判定」改成已依 frozen contract 修正；W-4 從「待覆核」改成符合既有 Architecture Gate；mobile margin 更新實作與仍未驗證範圍。完整落盤。維持 Silent Autonomous Cruise。
+```
+
+- **落點**：項 1＝`src/ui2/components/html.py::first_screen_html(cta_first=)`／`market_l1_html`、`src/ui2/shell/css.py`（桌機 grid 列序）；項 2＝既有測試逐點對照（`tests/test_ui2_batch3.py::test_w4_contract_points_are_each_locked_by_a_test`）＋BACKLOG／Checklist 狀態收斂；項 3＝CSS（CTA 列原因與按鈕同列＋`@supports` safe-area 保留量）＋`tests/ui2_viewport/measure_viewport.py` 三條新判定；證據 `docs/vnext/newui2_batch3b/`；BACKLOG §5.1.24 補、PROJECT_STATE §57、Audit Checklist §18、HANDOFF 最末 Safe Handoff。
+- **與其他規則的關係（append-only，實作組讀法，單組，⚠️ 未經第二組驗證）**：項 1 **不是**對 Wireframes／Freeze／DEC-117 Q5 的修訂——客戶明示只是確認既有 frozen contract、本批把實作改回該條文（`NEWUI2_WIREFRAMES_2026-11-02.md` §2.1／§2.2 條文**未改**）；項 2 **不是**新條文——W-4 條件早已在 Wireframes §9／Architecture Gate 核准（DEC-123 Q3），本 DEC 只是把「待覆核」登記收斂；項 3 依 PROJECT_RULES §29（DEC-126）多路徑比較。四問（Freeze §0.1.6／Wireframes §1）內容**不變**，只放寬「DOM 須按 ①→④」的讀法（客戶原文明示）；**其餘頁**（持股／我的）的 CTA 位置本批未動（客戶裁示只針對 📊 市場頁）。
+- **衝突檢查**：實作組讀過 Wireframes §0.4／§1／§2／§9、Freeze §0.1.6／§16.1、DEC-117 Q5（`FINAL_UI_CONTRACT_FREEZE` 第 937／3132 列引文）、Architecture Gate W-4 條（§9 第 360 行）；未發現牴觸（單組、非窮舉）；無舊條文需加刪除線。
+- **效力邊界（⛔ 不是實作授權）**：不授權 System Action Aggregator、Risk Cap runtime、Action Authority、Decision Digest、OneBrain、real-data wiring、OAuth／Sheet、LINE、production default、新公式／門檻／source；Old UI／Legacy New UI 不刪。

@@ -156,16 +156,27 @@ def qa_row_html(question: str | None, field: FieldVM, *, qid: str = "ctx") -> st
             f'{value}{status_chip_html(field)}{detail}</div>')
 
 
-def first_screen_html(fs: FirstScreenVM) -> str:
-    """第一屏四問（客戶 (5)-9）：① 現在狀態 ② 是否需要行動 ③ 下一步 ④ 主 CTA（單一緊湊區塊）。"""
-    rows = [conclusion_row_html(fs.conclusion)] if fs.conclusion is not None else []
+def first_screen_html(fs: FirstScreenVM, *, cta_first: bool = False) -> str:
+    """第一屏四問（客戶 (5)-9）：① 現在狀態 ② 是否需要行動 ③ 下一步 ④ 主 CTA（單一緊湊區塊）。
+
+    `cta_first=True`（📊 市場頁；Wireframes §2.1／§2.2、DEC-117 Q5：頁首→更新 CTA→今日結論→…）：主 CTA 排在
+    **最前**（今日結論之前）。四問是**資訊需求**，不代表 DOM 固定按 ①→④ 排列（客戶 2026-11-03 裁示）；
+    只調順序與排版，⛔ 不改任何 VM 欄位／字樣。此模式 CTA 與原因同列（`ui2-qrow--cta-top`），不另顯示「④」編號標籤。
+    """
+    rows = [] if cta_first else ([conclusion_row_html(fs.conclusion)] if fs.conclusion is not None else [])
+    if cta_first:
+        rows.append('<div class="ui2-qrow ui2-qrow--cta ui2-qrow--cta-top" data-ui2-q="q4">'
+                    + cta_html(fs.primary_cta) + "</div>")
+        if fs.conclusion is not None:
+            rows.append(conclusion_row_html(fs.conclusion))
     rows += [qa_row_html("① 現在狀態", fs.current_state, qid="q1")]
     rows += [qa_row_html(None, r, qid="ctx") for r in fs.context_rows]
     rows += [qa_row_html("② 是否需要行動", fs.action_needed, qid="q2"),
              qa_row_html("③ 下一步", fs.next_step, qid="q3")]
-    return ('<div class="ui2-qa">' + "".join(rows)
-            + '<div class="ui2-qrow ui2-qrow--cta" data-ui2-q="q4"><span class="ui2-q">④ 主 CTA</span>'
-            + cta_html(fs.primary_cta) + "</div></div>")
+    tail = ("" if cta_first else
+            '<div class="ui2-qrow ui2-qrow--cta" data-ui2-q="q4"><span class="ui2-q">④ 主 CTA</span>'
+            + cta_html(fs.primary_cta) + "</div>")
+    return '<div class="ui2-qa">' + "".join(rows) + tail + "</div>"
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -196,8 +207,8 @@ def main_risk_html(field: FieldVM) -> str:
 
 
 def market_l1_html(fs: FirstScreenVM, main_risk: FieldVM | None) -> str:
-    """市場頁 L1 區：第一屏四問區塊 ＋ **緊接**其後的今日主要風險（同一個容器，桌機排成三 tile，手機堆疊）。"""
-    return ('<div class="ui2-m-l1">' + first_screen_html(fs)
+    """市場頁 L1 區：（更新 CTA→今日結論→）第一屏四問區塊 ＋ **緊接**其後的今日主要風險（同一個容器，桌機排成三 tile，手機堆疊）。"""
+    return ('<div class="ui2-m-l1">' + first_screen_html(fs, cta_first=True)
             + (main_risk_html(main_risk) if main_risk is not None else "") + "</div>")
 
 

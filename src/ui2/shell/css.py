@@ -77,6 +77,10 @@ CSS = """
   .st-key-ui2_nav [role="radiogroup"]>label:has(input:checked){border-top-color:currentColor}
   .block-container{padding-bottom:5rem !important}
 }
+/* 內容底部保留量加上 safe-area（iOS 家的指示條）：僅在瀏覽器支援 env() 時覆寫；Chromium 實測為 0（不變）、iOS 未驗 */
+@supports (padding-bottom:env(safe-area-inset-bottom)){
+  @media (max-width:768px){.block-container{padding-bottom:calc(5rem + env(safe-area-inset-bottom,0px)) !important}}
+}
 @media (min-width:769px){
   .st-key-ui2_nav{top:0;left:0;bottom:0;width:11rem;border-right-width:1px;padding-top:4rem !important}
   .st-key-ui2_nav [role="radiogroup"]{flex-direction:column}
@@ -107,14 +111,17 @@ CSS = """
   .ui2-m-l1{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0}
   .ui2-m-l1>.ui2-qa{display:contents}
   .ui2-m-l1 [data-ui2-q]{border:1px solid rgba(128,128,128,.4);border-radius:10px;padding:6px 12px;grid-column:1/-1}
-  .ui2-m-l1 [data-ui2-q="concl"]{grid-row:1}
-  .ui2-m-l1 [data-ui2-q="q1"]{grid-column:1;grid-row:2}
-  .ui2-m-l1 [data-ui2-q="ctx"]{grid-column:2;grid-row:2}
-  .ui2-m-l1>.ui2-risk{grid-column:3;grid-row:2;margin:0}
-  .ui2-m-l1 [data-ui2-q="q2"]{grid-row:3}
-  .ui2-m-l1 [data-ui2-q="q3"]{grid-row:4}
-  .ui2-m-l1 [data-ui2-q="q4"]{grid-row:5}
+  .ui2-m-l1 [data-ui2-q="q4"]{grid-row:1}      /* 更新 CTA 在今日結論之前（DEC-117 Q5／Wireframes §2.2） */
+  .ui2-m-l1 [data-ui2-q="concl"]{grid-row:2}
+  .ui2-m-l1 [data-ui2-q="q1"]{grid-column:1;grid-row:3}
+  .ui2-m-l1 [data-ui2-q="ctx"]{grid-column:2;grid-row:3}
+  .ui2-m-l1>.ui2-risk{grid-column:3;grid-row:3;margin:0}
+  .ui2-m-l1 [data-ui2-q="q2"]{grid-row:4}
+  .ui2-m-l1 [data-ui2-q="q3"]{grid-row:5}
 }
+/* 市場頁更新 CTA 列（頂部）：按鈕與原因同列（手機窄時才折行），省去原本獨立一行的原因高度 */
+.ui2-qrow--cta-top .ui2-ctawrap{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;margin:0}
+.ui2-qrow--cta-top .ui2-cta__reason{margin:0}
 /* 🎯 模式切換（膠囊式 radio；DOM 無關寫法同導覽：只用 container key＋role＋input:checked） */
 .st-key-ui2_target_mode_box [data-testid="stWidgetLabel"]{display:none}
 .st-key-ui2_target_mode_box [role="radiogroup"]{display:flex !important;gap:8px !important;width:100%;margin:0;flex-wrap:nowrap}
