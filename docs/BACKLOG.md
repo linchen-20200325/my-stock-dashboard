@@ -1463,7 +1463,7 @@
 > | **NUI2-NAV-SAFEAREA-IOS-UNVERIFIED** | P2 | `@supports (padding-bottom:env(safe-area-inset-bottom))` 內容底部保留量與導覽高度：Chromium 實測 env＝0；**iOS Safari 的 safe-area、是否需 `viewport-fit=cover`（Streamlit 是否設定）、導覽列本身是否被家的指示條遮住皆未驗**。本批**不**宣稱 iOS 已驗 | open | 真機／Safari 驗收 | 客戶真機驗收；有疑義另開批（導覽高度是否需含 safe-area 屬 UI 結構外的 presentation 小修） | 1 |
 > | **NUI2-VIEWPORT-NON-CHROMIUM-UNVERIFIED** | P2 | Safari／Firefox／真機／螢幕閱讀器未測；viewport 量測只有 Chromium headless 兩 viewport（390×844／1440×900）；CTA 同列排版與 `display:contents` 桌機 grid 的跨瀏覽器行為未驗 | open | — | 客戶／驗收者實機；不得由實作組宣稱已驗 | 1 |
 > | **NUI2-MARKET-CTA-DESKTOP-PLACEMENT** | P3 | Wireframes §2.2 桌機線框 CTA 在『頁首列右側』；實作為『頁首與今日結論之間的獨立緊湊列』（DOM／座標順序符合 DEC-117 Q5「頁首→CTA→結論」，視覺非逐像素等同）。手機線框 CTA 亦在頁首列；實作同為頁首之下的緊湊列（原因句同列） | open | — | 客戶驗收時看截圖；若要求與頁首列同一水平線＝後續 presentation 小修 | 1 |
-> | **NUI2-NAV-MARGIN-CRITERION-INTERNAL** | P3 | `market_main_risk_nav_margin`（≥1 行行高）為 AI 總管內部判準、非條文；真資料字串長度未知（`NUI2-VIEWPORT-FAKE-ONLY`）；壓力測試＝1.5× 文字注入，不等於真資料 | open | `NUI2-VIEWPORT-FAKE-ONLY` | 真 feed 批以真字串重量；客戶可推翻判準 | 1 |
+> | **NUI2-NAV-MARGIN-CRITERION-INTERNAL** | P3 | `market_main_risk_nav_margin`（≥1 行行高）為 AI 總管內部判準、非條文；真資料字串長度未知（`NUI2-VIEWPORT-FAKE-ONLY`）；壓力測試＝1.5× 文字注入，不等於真資料；且該注入對風險區行數壓力偏弱（風險區高度幾乎不變，主要壓 CTA／今日結論列），真資料較長的風險句仍未驗 | open | `NUI2-VIEWPORT-FAKE-ONLY` | 真 feed 批以真字串重量；客戶可推翻判準 | 1 |
 > | **NUI2-W4-RECHECK-WHEN-RESEARCH-BLOCKS-LAND** | P3 | W-4『不搶過 基本面／valuation／company-first research』目前只能在現有區塊（搜尋、查詢摘要、6 維 Snapshot）驗；標的頁 Primary Price Chart／基本面／估值／研究解釋區塊（`NUI2-TARGET-SEARCH-FUNCTIONAL`）落地後須重驗 context 仍較輕（字級、位置、Neutral） | open | `NUI2-TARGET-SEARCH-FUNCTIONAL` | 該批落地時重驗並更新 Checklist | 1 |
 
 

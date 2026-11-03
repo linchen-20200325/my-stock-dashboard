@@ -186,7 +186,7 @@
 
 - 📌 **§17 補（獨立 QA 修正後；append）**：
   - [ ] **🎯 查一檔 cold**：只有搜尋框＋灰色說明（⛔ FAKE-0001 頭／Snapshot／加入觀察）〔Wireframes §6〕。
-  - [ ] **W-4 色調**：context 行與『市場環境』格 Neutral＋文字狀態；其他欄位 Unavailable 仍紅、Stale 仍琥珀〔W-4；Freeze §4.1；單組判讀待覆核〕。
+  - [ ] **W-4 色調**：context 行與『市場環境』格 Neutral＋文字狀態；其他欄位 Unavailable 仍紅、Stale 仍琥珀〔W-4；Freeze §4.1；~~單組判讀待覆核~~〕。 📌 **2026-11-03（DEC-127）客戶接受 Neutral／Info 方向，已收斂為 accepted／implemented，不再待覆核**；驗收改查 §18 第 2 項（有意識的更新，不是漏刪；決策者 客戶〔DEC-127〕）。
   - [ ] **市場 L1 之前無 L2／L3／expander**（預設道 AppTest）。
   - [ ] **更新 CTA 順序（`NUI2-MARKET-REFRESH-CTA-ORDER`）**：凍結線框／DEC-117 Q5＝頁首→更新 CTA→今日結論→3 tile；實作＝CTA 在第一屏最後（q4）。~~**偏離未裁示**，驗收時須判定修正或裁示。~~ 📌 **2026-11-03（DEC-127）已依 frozen contract 修正，驗收改查見 §18 第 1 項**（客戶裁示：implementation deviation、不開 Decision Gate；有意識的更新，不是漏刪；決策者 客戶〔DEC-127〕）。
   - [ ] 觀察項：signed-out『Google 登入』重複（`NUI2-ME-DUP-LOGIN-BUTTON`）；Risk Cap 缺值明寫範圍（`NUI2-Q21-RISKCAP-MISSING-WORDING`）；手機主要風險後餘裕 2.5px（`NUI2-MAIN-RISK-NAV-MARGIN`）。
