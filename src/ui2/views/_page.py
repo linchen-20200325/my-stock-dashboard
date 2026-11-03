@@ -17,7 +17,9 @@ def _md(html: str) -> None:
 
 
 def render_page(vm: PageVM) -> None:
-    _md(f'<div class="ui2-pagetitle">{escape(vm.title)}</div>')
+    # data-ui2-page／-scenario＝量測與測試錨點（tests/ui2_viewport），不影響呈現。
+    _md(f'<div class="ui2-pagetitle" data-ui2-page="{escape(vm.page_id)}" '
+        f'data-ui2-scenario="{escape(vm.scenario_id)}">{escape(vm.title)}</div>')
     _md(first_screen_html(vm.context.first_screen))      # ①②③④（④ Preview：disabled 示意）
     visible = set(vm.slice.visible_card_ids)
     cards = [c for c in vm.context.cards if c.card_id in visible]

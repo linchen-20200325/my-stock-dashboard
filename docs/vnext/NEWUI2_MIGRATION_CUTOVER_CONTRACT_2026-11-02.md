@@ -113,3 +113,10 @@ New UI2
 - **Aggregator 契約 O1 第五類 `undeterminable`**（Architecture Gate §4.6.6；DEC-124）：實作批（`NUI2-AGGREGATOR-IMPL`）須以 `not_evaluated`／`undeterminable` 分列的表格驅動測試落地；M-A3 時 VM 以 `JudgementState.UNDETERMINABLE` 呈現 `undeterminable`。
 - **導覽 W-1**：頂部 radio 仍為 temporary implementation gap（**不是 W-1 amendment**；客戶 (8)-4）；§6 導覽形態債不變，下一個 presentation batch 修。
 
+## §8 Batch 2 Migration debt／債務收斂（2026-11-03；append-only；`PROJECT_RULES.md` 第 27 節第 4 點落點）
+
+- **導覽形態債（§6 第三點）已收斂（待驗收）**：Batch 2 以 `st.container(key="ui2_nav")`＋`st.radio(key="ui2_page")`＋CSS 落地 W-1（手機底部固定 53px／桌機左側）；§6 該點原文一字未改，其「temporary implementation gap」自 Batch 2 起不再成立（BACKLOG `NUI2-NAV-W1-FIDELITY`）。**cutover 前仍須**：Streamlit 版本升級時重量（`NUI2-NAV-DOM-COUPLING`）、真機／Safari／iOS 安全區（`NUI2-NAV-SAFE-AREA`、`NUI2-ACC-REAL-DEVICE`）、Light theme 一致性（`NUI2-NAV-THEME-LIGHT`）、螢幕閱讀器（`NUI2-NAV-A11Y-AUDIT`）。
+- **新債：第一屏高度為 FAKE 字串量測**（`NUI2-VIEWPORT-FAKE-ONLY`）：真 feed 換入後，同一腳本對真資料重量；放不下依 Freeze §16.5，⛔ 自行移出必要項。
+- **新債：線框第一屏非「四問」部分未落地**（`NUI2-WIREFRAME-FIRST-SCREEN-EXTRAS`）：今日結論、今日主要風險、標的 mode＋搜尋、我的登入態切換。
+- **量測腳本位置**：`tests/ui2_viewport/`（未動 `tools/`）；整併進 `tools/visual_fidelity` harness 屬 `NUI2-VF-HARNESS`（需解禁 `tools/` 修改）。
+

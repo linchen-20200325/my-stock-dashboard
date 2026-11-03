@@ -153,3 +153,17 @@
 - 守衛：`tests/test_ui2_guards.py`「DEC-124」段（資料語意恰五態、三軸型別互斥、UTD≠NE 不同值不同字樣、字樣跨軸禁用、客戶字樣逐字、Risk Cap 無法判定 ⛔ safe 讀法、capability marker Preview-only 允許清單、未知 state 提示 raise），各附 teeth；既有斷言改寫處皆標「DEC-124 語意修正」且未放寬。
 - §13 收尾 Gate：新 Rule＝有（永久語意，`PROJECT_RULES.md` §19.8 加註）；新 Decision＝有（DEC-124）；Audit finding／Limitation／Backlog／Migration debt＝BACKLOG §5.1.21、PROJECT_STATE §53、Migration Contract §7。
 
+## §16 Batch 2 驗收項與量測證據（2026-11-03；append-only；實作組單組，**待總管複驗／獨立 QA／客戶驗收**——下列 `[ ]` 為驗收者勾選，實作組不自勾）
+
+- **新增驗收項**：
+  - [ ] **W-1 導覽**：手機＝底部固定四格（top＝844−53＝791、貼底、全寬、四格同列）；桌機＝左側四項（left＝0、垂直）；恰四頁、⛔ 第五頁；當前頁除顏色外有 `● ` 符號＋粗體＋色條＋原生 radio `checked`（Freeze §4.1）；內容底部／左側讓位、不被導覽遮住〔Wireframes §0.4／§7 W-1；BACKLOG `NUI2-NAV-W1-FIDELITY`〕。⚠️ 無螢幕閱讀器驗證（`NUI2-NAV-A11Y-AUDIT`）。
+  - [ ] **三軸呈現**：資料五態／判定結果（無法判定）／capability（尚未提供）各有**文字＋樣式**（實線／雙線／虛線＋`data-axis`），互不混用；每個非 OK 態都有可見文字；⛔ 只靠顏色〔DEC-124；Freeze §4.1〕。
+  - [ ] **field-level source／as_of**；⛔ 全域假更新時間（含整頁 AppTest markdown 掃描）〔Freeze §9〕。
+  - [ ] **CTA**：Preview 期 disabled 示意（`aria-disabled="true"`、無互動標籤）；動作欄維持 capability `⬜ 尚未提供（待 System Action Aggregator）`；Risk Cap 維持 `⬜ 無法判定`（判定結果）。
+  - [ ] **§3 第一屏四問（量測）**：四頁 × 六場景 × 兩 viewport 共 48 態，①～④（與 Risk Cap 列）底緣 ≤ 可用高（手機 791／桌機 900）、不被導覽遮住、無水平捲動、標題不重疊；**Preview（FAKE）範圍**，真資料需 Stage I 重量（`NUI2-VIEWPORT-FAKE-ONLY`）。
+  - [ ] **兩個 Streamlit 版本**：floor 1.56.0 與現行 1.59.2 的 UI2 測試皆綠、量測皆 48/48。
+- **量測證據**：`docs/vnext/newui2_batch2/viewport_measurements.json`（Streamlit 1.59.2）、`viewport_measurements_streamlit156.json`（1.56.0）；截圖 `*.png`（手機全部場景＋桌機 cold／loaded）；重跑 `python -m tests.ui2_viewport.measure_viewport --out <dir>`；判定器與門檻出處 `tests/ui2_viewport/measure_viewport.py::THRESHOLDS`。手機各元素底緣 y 範圍見 `docs/PROJECT_STATE.md` §54（④ 主 CTA 底緣最大 636px，可用高 791px）。
+- **測試**：`tests/test_ui2_batch2.py`（靜態 W-1 契約、三軸元件、全頁 AppTest 掃描、`evaluate()` 判定器 teeth、slow 真瀏覽器）。
+- **不得誤讀**：§3 表格的各格（「今日結論」「mode 切換＋搜尋」「今日主要風險緊接」等頁別必要項）**未全部落地**（`NUI2-WIREFRAME-FIRST-SCREEN-EXTRAS`）；本批只證明「四問」在第一屏內，**不是** Visual Fidelity Gate 判定（`NUI2-VF-HARNESS` 仍 open）。
+- §13 收尾 Gate：新 Rule＝無；新 Decision＝無；其餘見 BACKLOG §5.1.22、Migration Contract §8。
+
