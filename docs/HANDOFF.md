@@ -777,3 +777,17 @@ DEC-086 規則已於 main，本表已落地。
 | 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule＝無；新 Decision＝無（實作選擇屬 `CLAUDE.md` v3 §03-1 內部自決）；Audit finding／Limitation／Backlog／Migration debt／Acceptance item 已寫入上列 GitHub 正式文件（落盤以總管 commit／push 為準）。 |
 | 驗證（實作組實測，單組） | `tests/test_ui2_batch2.py` 94 passed＋1 slow（真瀏覽器，另跑 PASS）；`tests/test_ui2_*.py`＋`test_c3_layering_guard`＋`test_zz_test_portability`＋`test_views_no_unverified_universal_claims` 綠；`streamlit==1.56.0` venv（`/tmp/v156`；ui2＋c3）435 passed；**全 repo 序列（無 xdist）`python -m pytest tests -q -p no:cacheprovider -m "not slow"`：36359 passed、0 failed、46 skipped、186 deselected（20 分 35 秒）**；viewport 量測 1.59.2／1.56.0 各 48/48；mutation 10 項（見 `docs/PROJECT_STATE.md` §54）全紅後已還原；`git diff --name-only HEAD -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 實查為空。⚠️ 全 repo 序列是在 HANDOFF／PROJECT_STATE 末段文件編修**之前**跑完，之後只改文件文字；文件相關守衛（`test_zz_test_portability`、`test_views_no_unverified_universal_claims`、`test_ui2_*`）已於編修後重跑。 |
 | 禁止事項（摘要） | ⛔ 修改 `app.py`／加 `?ui=2`／切 production default；⛔ 刪／改 Legacy New UI 與 Old UI；⛔ 實作 System Action Aggregator／Risk Cap 規則數值 runtime／Decision Digest／OneBrain／LINE／real-data wiring；⛔ 把 `⬜ 尚未提供` 稱為資料語意態；⛔ 合併 Not Evaluated 與 Unable to Determine；⛔ 以「第一屏四問通過量測」宣稱線框第一屏全部落地；⛔ 動 `tools/`（量測腳本在 `tests/ui2_viewport/`）；其餘沿 Batch 1／DEC-124 段禁止事項。 |
+
+- **Safe Handoff（2026-11-03 Historical Context Loss Check＋GitHub SSOT 補落盤：客戶 (10) A 節；現行；文件組單組、待總管複驗）**（SESSION_CONTINUITY C1 欄位；決策者 客戶 (10) A；與上方 Batch 2 段並存，Batch 2 內容仍有效）：
+
+| 欄位（C1） | 內容 |
+|---|---|
+| live GitHub state | 基準 `origin/main`＝`e5f9a0d7`（#1000 `a726b05e` 之後僅純資料 bot commit；分支 `ccr-a0b4e085-ijdaio` 與之一致，`git status` 實查）。本批變更在工作樹，**commit／push／PR 由總管處理**（文件組未 commit）。 |
+| current Stage／exact safe stopping point | **(10) A 段完成**：A1 台股／A2 國際 Research Baseline、A3 兩主軸、A4 中性命名永久規則、A5 落盤；**B 段（New UI2 Batch 3）尚未開始**。 |
+| 待客戶裁示 | **無阻擋 B 段的 Decision Gate**。疑點（可平行等待，不擋 Batch 3）：`MKT-RB-AXES-INDUSTRY-READING`、`MKT-RB-NAMING-SCOPE`、`MKT-RB-NAMING-EPONYM`（見 DEC-125 疑點）。 |
+| **下一個唯一安全工作** | 總管複驗 A 段（獨立一組核對 `docs/vnext/MARKET_TREND_RESEARCH_BASELINE_2026-11-03.md` §2／§3／§5 與 BACKLOG §5.1.23 `MKT-RB-INTL-CONTRACT-INVENTORY`；`git diff --name-only HEAD -- src tests shared app.py requirements.txt tools scripts .github` 為空）→ PR／CI → 繼續客戶 (10) B 段 New UI2 Batch 3（📊 今日結論＋今日主要風險／🎯 模式切換＋搜尋＋fake／👤 signed-out／in／unavailable skeleton；純 presentation，Sonnet 5.5＋Medium）。 |
+| required Model×Effort for resume | Batch 3 純 presentation＝Sonnet 5.5＋Medium；涉及 Aggregator／Risk Cap／Action Authority／Digest／OneBrain／新資料語意／新 source／新公式／real-data mapping／正式趨勢演算法＝停手回報 `🟡 Model / Effort Change Gate`（Opus 5.5＋High）。 |
+| 正式文件索引 | 規則 `PROJECT_RULES.md` 第 28 節；決策 `docs/DECISIONS.md` DEC-125；規格 `docs/vnext/MARKET_TREND_RESEARCH_BASELINE_2026-11-03.md`；待辦 `docs/BACKLOG.md` §5.1.23；狀態 `docs/PROJECT_STATE.md` §55。 |
+| 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule／Decision／Backlog／Limitation 已寫入上列 GitHub 正式文件（落盤以總管 commit／push 為準）。 |
+| 禁止事項（摘要） | ⛔ 自行核准 EPS source／PE multiple／growth assumption；⛔ 新增 production formula；⛔ 由 EPS×PE 產生買賣 action；⛔ 自行組成國際趨勢多空公式／scoring／Risk Cap rule／System Action／probability；⛔ 新增第三、第四套市場主軸；⛔ 在 UI／rule id 使用老師／個人姓名；⛔ Aggregator／Risk Cap／Action Authority／Digest／OneBrain／LINE／real-data／production default runtime；⛔ 刪 Old UI／Legacy New UI；⛔ 巡邏式清理命名債（`CLAUDE.md` §-1）。 |
+

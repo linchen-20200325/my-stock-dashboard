@@ -247,6 +247,8 @@
 - **同名不同義的 regime（易混淆）**：`src/compute/macro/macro_helpers.py::classify_long_term_regime`（12M 長期位階，舊 UI；⛔ 未經客戶定義不得當台股趨勢原料）；`calculate_system_state` 輸出的 `market_regime`（Risk Cap 上限分級，§11）；另舊版 `src/ui/tabs/macro/section_cross_ai.py` 有自判的「目前總經位階」（獨立 QA 已讀原碼確認 `render_section_cross_ai` 渲染「① 目前總經位階」）。皆**不是**「市場位階」SSOT。
 - ⚠️ `src/data/macro/leading_indicators.py` 是**籌碼先行指標**（期貨／PCR 等），**不是景氣領先指標**。
 
+> 📌 **2026-11-03 DEC-125 後註（append-only；§22 上文一字未改）**：客戶 2026-11-03 (10) A1／A2 再確認並擴充台股／國際維度清單（台股新增融資／市場擁擠度／回撤與市場風險／市場廣度；國際新增殖利率曲線／PMI／Inflation／Fed／Real Yield／VIX／Credit Spread／USD／Major Equity Markets），正式 Research Baseline 見 `docs/vnext/MARKET_TREND_RESEARCH_BASELINE_2026-11-03.md`（與本節 22.2 取聯集，不取代）；規則見 `PROJECT_RULES.md` 第 28 節。
+
 ### 22.4 研究框架 → repo 對照（簡表）
 
 | 研究框架 | repo 現有資料／規則 | 舊 UI | 新 UI | 缺口／分類（BACKLOG） |
@@ -923,3 +925,15 @@
 - **限制（誠實揭露）**：(1) 量測全在 **FAKE 字串**；真資料文字較長會改變高度（餘裕：手機 ④ 最大 636 vs 791）；(2) 只測 Chromium headless 兩個 viewport；Safari／Firefox／真機／iOS 安全區／360px 未測；(3) 無螢幕閱讀器驗證，「aria-current 類」以原生 radio `checked`＋符號等價實現；(4) 導覽自帶深色底（Streamlit 無公開主題變數），使用者切 Light theme 時不一致；(5) 凍結線框第一屏的「今日結論」「mode 切換＋搜尋」等**未做**（BACKLOG `NUI2-WIREFRAME-FIRST-SCREEN-EXTRAS`）；(6) CI slow lane 是否有 Chromium 未確認；(7) 導覽 CSS 依賴 `.st-key-*` class 與 `:has()`，Streamlit 升版需重量。
 - **未碰（硬限制；`git diff --name-only HEAD -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 實查為空）**：`app.py`、`requirements.txt`、`tools/`、`scripts/`、`.github/`、`src/ui/**`、`src/ui_v2/**`、`src/data`、`src/compute`；System Action Aggregator、Risk Cap 規則／數值／runtime、Decision Digest、OneBrain、LINE、real-data wiring、production default、Old UI／Legacy New UI。
 - **§27 檢查**：新 Rule＝無（既有 Freeze §4.1／DEC-124 三軸邊界原樣適用；量測門檻不自創屬既有 PROJECT_RULES 精神）；新 Decision＝無（實作選擇屬 `CLAUDE.md` v3 §03-1 內部自決）；Audit finding／Limitation／Backlog／Migration debt／Acceptance item 已寫入 BACKLOG §5.1.22、Audit Checklist §16、Migration Contract §8、HANDOFF Safe Handoff。
+
+## 55. 市場趨勢 Research Baseline 落盤＋中性命名永久規則（DEC-125，客戶 2026-11-03 (10) A 節；2026-11-03；append-only；文件組單組、待總管複驗）
+
+- **依據**：客戶 (10) A1～A5（逐字見 `docs/DECISIONS.md` DEC-125）。基準 `origin/main`＝`e5f9a0d7`（=#1000 `a726b05e` 之後僅一個純資料 bot commit，`src/data/etf/etf_managers.json`；分支 `ccr-a0b4e085-ijdaio`）。
+- **做了什麼（docs/governance only；0 production 變更）**：① 新增 `docs/vnext/MARKET_TREND_RESEARCH_BASELINE_2026-11-03.md`（台股 6 維度、國際 11 維度、定位、「不得自行」清單、Pending、現況盤點、與 Freeze §11 關係、A3 兩主軸規格）；② `PROJECT_RULES.md` 第 28 節（中性命名＋兩主軸＋Baseline 永久語意）；③ DEC-125（A 節逐字）；④ BACKLOG §5.1.23 `MKT-RB-*`；⑤ 本節與 HANDOFF Safe Handoff。
+- **已存在且只 cross-reference（未建第二份）**：DEC-071、PROJECT_STATE §22、DEC-091(g)／092、Freeze §11、`DEC092-EPSPE-HIGH-GATE`、`VN1-MT-*`、`NSR-*`。
+- **現況（FACT，單組）**：repo **沒有**任何已核准的台股趨勢／國際趨勢 validated deterministic contract（`tw_trend`／`intl_trend`＝`NOT_DEFINED`）；相鄰既有正式概念＝市場位階、指標危險度（16 燈）、Risk Cap、持股層 Rule ID 允許名單（皆非趨勢）。大盤 EPS／PE／forward EPS 資料源不存在。
+- **A4 命名盤點（grep＋讀檔，未窮舉）**：使用者可見字串未發現老師／個人姓名；識別字層有 v19.174 去識別化遺留（22 個 `MJ_*` alias、`mj_*` 欄位、`*caisen*` 函式 alias、4 個 `tests/test_mj_*.py`、舊快取目錄常數）；**New UI2 範圍 0 命中**。皆只登記（`MKT-RB-NAMING-*`），未改 code。
+- **未驗與限制**：文件組單組；盤點非窮舉；§1.1 三定位詞釋義、A3 與產業趨勢的關係、A4 適用範圍皆 INFERENCE，已列疑點待客戶確認（DEC-125 疑點；`MKT-RB-AXES-INDUSTRY-READING`／`MKT-RB-NAMING-SCOPE`／`MKT-RB-NAMING-EPONYM`）。
+- **§27 檢查**：新 Rule＝`PROJECT_RULES.md` 第 28 節；新 Decision＝DEC-125；Audit finding／Backlog／Limitation＝BACKLOG §5.1.23 與上列；Migration debt＝無新增（命名債登記於 BACKLOG）；Acceptance item＝待總管複驗 A1～A4 對照。
+- **未碰（硬限制）**：`src/`、`tests/`、`shared/`、`app.py`、`requirements.txt`、`tools/`、`scripts/`、`.github/`。
+

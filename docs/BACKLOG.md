@@ -1365,3 +1365,43 @@
 > - **Streamlit 1.56.0 的瀏覽器量測僅依 `viewport_measurements_streamlit156.json`**，**QA 未重跑**；1.56 venv 的單元／AppTest 測試亦為實作組單組結果。
 > - **`NUI2-VIEWPORT-M8-NOISY-RED` 建議（QA）**：量測腳本改用 JS `scrollTo`／`evaluate` 操作 Preview 控制，避免 Playwright 點擊被底部導覽遮住而以例外轉紅，使該 mutation 改以 `content_not_covered_by_nav` 斷言轉紅。
 
+
+### 5.1.23 市場趨勢 Research Baseline 落盤（DEC-125）與衍生待辦（2026-11-03；append-only）
+
+> 2026-11-03 新增。依客戶 (10) A 節（A1～A5，逐字見 `docs/DECISIONS.md` DEC-125）。規格本體：`docs/vnext/MARKET_TREND_RESEARCH_BASELINE_2026-11-03.md`；規則本體：`PROJECT_RULES.md` 第 28 節。**全部 open／Pending／Decision Gate；本節不構成動工授權**（`CLAUDE.md` §-1），⛔ 不得替客戶決定任何 source／multiple／assumption／formula。
+> ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：文件組單組產出（驗證組數 1），待總管複驗；命名違反盤點為 grep＋讀檔，**未窮舉**（見 `MKT-RB-NAMING-SCOPE`）。
+> 與既有列的關係：`DEC092-EPSPE-HIGH-GATE`（正式 Gate，not started）、`VN1-MT-VALUATION`（研究候選）、`VN1-MT-TREND-DEF`、`VN1-MT-YIELD-CLI`、`VN1-MT-CAPEX-EPS`、`VN1-MT-LEGACY-GAP`、`NSR-*` **原樣有效**；下列 `MKT-RB-*` 是 A 節要求的**逐項獨立 Pending 子列**，各自 cross-reference，不取代。
+
+| ID | 優先級 | 內容 | status | dependency | next action | 驗證組數 |
+|---|---|---|---|---|---|---|
+| **MKT-RB-DONE** | P1 | A 段 docs／governance 落盤完成：DEC-125、`PROJECT_RULES.md` 第 28 節、research spec、本節、`PROJECT_STATE.md` §55、HANDOFF Safe Handoff；0 production code 變更 | done（已經獨立複驗 PASS with fixes，2026-11-03） | DEC-125 | 總管複驗＋獨立稽核 A1～A4「已存在／新補」對照 | 1 |
+| **MKT-RB-EPS-SOURCE** | P2 | 大盤 EPS／forward EPS 資料來源——**未核准**；repo 無此資料源 | Pending／Decision Gate（blocked-on-customer） | `DEC092-EPSPE-HIGH-GATE`、`VN1-MT-VALUATION`、DEC-009 新資料源 Gate | 客戶指定／核准前不研究落地；⛔ 不得自估或使用示意值 | 1 |
+| **MKT-RB-PE-MULTIPLE** | P2 | 「合理 PE」multiple 區間與 rationale——**未核准** | Pending／Decision Gate | 同上 | 同上 | 1 |
+| **MKT-RB-GROWTH** | P2 | growth assumption——**未核准**；⛔ 不得發明 | Pending／Decision Gate | 同上 | 同上 | 1 |
+| **MKT-RB-HORIZON** | P2 | EPS×PE 情境的 horizon（TTM／NTM／年度等）——**未核准**；同一算式 EPS basis 與 PE basis 須同時間軸（Freeze §10 第 3 點，AI 總管暫定） | Pending／Decision Gate | 同上 | 同上 | 1 |
+| **MKT-RB-UPDATE-FREQ** | P2 | 大盤 EPS／PE 更新頻率——**未核准** | Pending／Decision Gate | 同上 | 同上 | 1 |
+| **MKT-RB-FORMULA** | P2 | 大盤 EPS×PE 情境矩陣的正式公式——**未核准**；⛔ 由 EPS×PE 直接產生買賣 action；⛔ productionize | Pending／High Gate | `DEC092-EPSPE-HIGH-GATE`（正式 Gate 列，不重複開） | 客戶開 High Gate 後才可設計 | 1 |
+| **MKT-RB-TW-DEFINITION** | P2 | 「台股趨勢」正式定義（A1 六維度如何構成，或是否構成）——**未定義**；repo 現況 `shared/decision_digest.py` `tw_trend`＝`NOT_DEFINED` | Pending／Decision Gate | `VN1-MT-TREND-DEF` | 同 `VN1-MT-TREND-DEF` | 1 |
+| **MKT-RB-CROWDING** | P3 | 「市場擁擠度」——A1 新列維度，repo **無定義也無資料**；定義權在客戶 | Pending／research dimension | `MKT-RB-TW-DEFINITION` | 客戶提供定義前不研究落地 | 1 |
+| **MKT-RB-DRAWDOWN** | P3 | 「回撤／市場風險」——A1 新列維度，repo **無大盤層定義**（grep 命中的回撤計算皆個股／校準／ETF 層，**未逐檔讀**）；⛔ 不得與 Risk Cap／指標危險度合併 | Pending／research dimension | `MKT-RB-TW-DEFINITION`、DEC-071 四概念分離 | 同上 | 1 |
+| **MKT-RB-BREADTH** | P3 | 「市場廣度」——現有 `adl`（^TWII 推估）／`jingqi` 燈；真實漲跌家數＝新資料源研究；是否納入趨勢維度未定 | Pending／research dimension | `VN1-MT-SSOT-ADL-LABEL`、`NSR-*`（真實廣度）、`DH-BREADTH-COPY-NOPROXY` | 同上 | 1 |
+| **MKT-RB-MARGIN** | P3 | 「融資」作為趨勢維度——現有 `margin` 燈（門檻失準＋單位混用「資料疑義」，`CLAUDE.md` §1.A）；是否／如何入趨勢未定 | Pending／research dimension | Gate 檔 X8／F10、`DH-*` 融資列 | 同上 | 1 |
+| **MKT-RB-INTL-CONTRACT-INVENTORY** | P1 | 國際趨勢 11 維度「各自是否已有 validated deterministic contract」盤點：文件組結論＝**國際趨勢整體無已核准 contract**（`tw_trend`／`intl_trend`＝`NOT_DEFINED`）；個別維度只有「單指標燈」（16 燈 `BUCKET_DANGER_SPECS` 的 `us10y`／`vix`／`dxy`／`us_core_cpi`／`ism_pmi`／`ndc_signal`）屬指標危險度 contract，**不是**趨勢 contract。明細見 spec §5。**單組、未窮舉** | 盤點初稿完成；待第二組獨立複驗 | spec §5 | 總管派獨立一組複驗（依 §-2 規則 4，不得由撰寫組自查） | 1 |
+| **MKT-RB-INTL-DEFINITION** | P2 | 「國際趨勢」正式定義與各維度（長債殖利率／殖利率曲線／Leading／PMI／Inflation／Fed／Real Yield／VIX／Credit Spread／USD／Major Equity）如何構成——**未定義**；⛔ 自行組成多空公式／scoring／Risk Cap rule／System Action／probability | Pending／Decision Gate | `VN1-MT-TREND-DEF`、`VN1-MT-YIELD-CLI` | 客戶定義前保持 `⬜ 尚未定義` | 1 |
+| **MKT-RB-YCURVE** | P3 | 殖利率曲線維度：2Y／利差系列不存在（現有僅 10Y-3M logit 內部用） | Pending／research dimension | `NSR-US2Y`、`NSR-YIELD-SPREADS`、DEC-009 | 新資料源 Gate | 1 |
+| **MKT-RB-REALYIELD** | P3 | Real Yield 維度：資料源不存在 | Pending／research dimension | `NSR-TIPS` | 新資料源 Gate | 1 |
+| **MKT-RB-CREDIT** | P3 | Credit Spread 維度：HY OAS 取數目前只在 L2 `risk_radar`（**V-RADAR-1** 待修範圍，`CLAUDE.md` §8.2.A.2）；不得把 `risk_radar` 擴為趨勢來源 | Pending／research dimension | V-RADAR-1 | 有任務碰到 `risk_radar` 時併處理（§-1） | 1 |
+| **MKT-RB-FED** | P3 | Fed／monetary policy 維度：現有 FEDFUNDS fetcher 與利率變化敘述，無趨勢維度定義 | Pending／research dimension | `MKT-RB-INTL-DEFINITION` | 同上 | 1 |
+| **MKT-RB-MAJOREQ** | P3 | Major Equity Markets：「主要股市」清單**未定義**（現有 `^GSPC`、新聞歸檔字串中的 ^IXIC／^DJI／^SOX 等） | Pending／Decision Gate（清單由客戶定義） | Gate 檔 X6、`UIX-MKT-GLOBAL-FLOW` | 同上 | 1 |
+| **MKT-RB-AXES-INDUSTRY-READING** | P2 | （併入 mapping：`decision_digest` industry 區段＝標的層產業趨勢；市場頁 Macro mini／sparkline＝國際趨勢 context overlay、非第三主軸，請客戶一併確認）A3「不得第三、第四套市場主軸」與「產業趨勢」（DEC-091／092 Q5 先研究；標的層研究線）的關係——文件組讀法：產業趨勢屬標的層、不是市場主軸（INFERENCE）；**請客戶確認** | Decision Gate（疑點，blocked-on-customer） | DEC-125 疑點 (1) | 客戶確認或推翻 | 1 |
+| **MKT-RB-UI2-MARKET-PLAN** | P2 | 台股趨勢／國際趨勢在 New UI2 的承接計畫：現況＝UI2 📊 市場頁只讀 fake／ViewModel；Legacy New UI 圖A／圖B 結論欄為「尚未定義」。承接原則＝兩主軸佔位＋`⬜ 尚未定義`（沿 DEC-124 三軸語意：定義未核准屬判定/定義狀態，⛔ 當資料缺漏）；⛔ 不新增第三、第四主軸；⛔ 在趨勢定義與 Aggregator 契約核准前不接 real data | open（規格層；隨 Batch 3 B-1 市場頁處理） | DEC-125、DEC-124、`NUI2-WIREFRAME-FIRST-SCREEN-EXTRAS` | Batch 3 實作時只讀 fake／VM；趨勢內容的任何實質化須客戶 Gate（Opus 5.5＋High） | 1 |
+| **MKT-RB-NAMING-SCOPE** | P2 | A4 適用範圍讀法：內部私有變數名／測試檔名／過渡 alias 是否算「production 邏輯名稱」——撰寫組暫以「使用者可見／規則名稱流通處」為準（INFERENCE）；盤點為 grep（人名／MJ／caisen／eponym 關鍵字）＋讀檔，**未窮舉** | Decision Gate（疑點） | `PROJECT_RULES.md` 第 28 節第 3 點 | 客戶確認範圍後，才決定下列 NAMING 列是否升級為動工項 | 1 |
+| **MKT-RB-NAMING-MJ-ALIAS** | P3 | `shared/financial_health_thresholds.py` 保留 22 個 `MJ_*` 過渡 alias（`MJ_X = FH_X`）；`src/compute/health/fin_*`、`__init__` 另保留 `diff_mj_health`／`compute_mj_trend_subscore` 與 `mj_subscore`／`mj_detail`／`mj_sub` 同值並存 key。**範圍：Legacy／Old UI 與 L0–L2（FACT：grep 命中；v19.174 去識別化遺留）** | open（只登記） | v19.174 去識別化；`CLAUDE.md` §3.3 | 有任務碰到時依 `CLAUDE.md` §-1.5.F 判定 3(4) 收尾移除；⛔ 巡邏 | 1 |
+| **MKT-RB-NAMING-MJ-FIELDS** | P3 | `mj_grade`／`mj_score_pct`／`mj_headline`／`mj_fail_items`：`src/compute/etf/dividend_station.py` dataclass 欄位與函式參數、`src/services/dividend_station_service.py`、`src/ui/views/page_inspect.py`（讀 `_m.get("mj_*")`）。**使用者可見字串已中性**（顯示「財報總評」「財報弱項」；grep 字串字面量無 MJ 命中）。範圍：Legacy New UI／L2–L3 識別字 | open（只登記） | 同上 | 同上；⛔ New UI2 VM 不得沿用這些 key 名 | 1 |
+| **MKT-RB-NAMING-CAISEN-ALIAS** | P3 | `src/compute/strategy/pattern_targets.py`（`derive_caisen_levels`／`compute_caisen_targets`／`summarize_caisen`）與 `src/ui/tabs/pattern_targets_ui.py`（`render_caisen_for_ticker`）保留帶人名羅馬拼音的舊函式名 alias。範圍：Legacy／Old UI | open（只登記） | v19.174 去識別化 | 同 MJ-ALIAS | 1 |
+| **MKT-RB-NAMING-TESTS** | P3 | `tests/test_mj_health_diff.py`／`test_mj_health_diff_mounted.py`／`test_mj_snapshot_io.py`／`test_mj_trend_score.py` 檔名帶 `mj`（測試檔名；不影響 production） | open（只登記；測試檔名依 A4 讀法暫不算 production） | `MKT-RB-NAMING-SCOPE` | 同上 | 1 |
+| **MKT-RB-NAMING-LEGACY-DIR** | P3 | `src/compute/health/fin_snapshot_io.py` 保留舊快取目錄常數 `data_cache/mj_snapshots`（舊路徑讀取相容）。⚠️ 涉資料目錄；刪除受 `CLAUDE.md` §-1.5.F 判定 3(5)（能否重建）拘束 | open（只登記；⛔ 不動資料） | 同上 | 有任務碰到時先判可重建性 | 1 |
+| **MKT-RB-NAMING-EPONYM** | P3 | **人名衍生的通用方法名**（非「老師」）：技術指標／財務框架如 `Bollinger`（布林）、`Wilder`（RSI/ATR 平滑）、`DuPont`（杜邦）、`Merrill Clock`（美林時鐘，教學頁）、`Graham`（葛拉漢，註解）；多在教學頁／docstring／指標名，UI 可見處如「布林」「杜邦槓桿防呆」。撰寫組讀為**業界通用術語、不屬 A4 所指老師／個人**（INFERENCE），**請客戶確認是否納入 A4** | Decision Gate（疑點） | `MKT-RB-NAMING-SCOPE` | 客戶確認 | 1 |
+| **MKT-RB-NAMING-UI2-AVOID** | P1 | **New UI2 範圍盤點**：`src/ui2/**`、`src/services/ui2/**`、`shared/ui2_contract/**`、`app_ui2.py` 對「老師／蕭／MJ／朱／阿水／Minervini／VCP／CANSLIM／Piotroski／Wilder／Granville」關鍵字 grep **0 命中**（FACT，2026-11-03，單組；關鍵字集非窮舉）＝**目前 UI2 範圍無已知違反**。**Batch 3 必須避免項**：① 不得沿用 `mj_*`／`*caisen*` 作 VM 欄位或 key；② 不得在 UI2 字樣出現人名／老師名（含「某某老師法」「某某式」）；③ 估值區塊只用中性名稱（台股大盤情境估值／EPS × PE 情境矩陣／市場估值區間），並維持研究/佔位狀態；④ 不得把 eponym 通用術語升為功能名（待 `MKT-RB-NAMING-EPONYM` 裁示）。建議於 `tests/test_ui2_guards.py` 增名稱守衛（未實作；本批 docs-only） | open（守衛未建；批 3 須遵守） | `PROJECT_RULES.md` 第 28 節 | Batch 3 起執行；守衛由批 3 或之後 Presentation 批的測試任務承接 | 1 |
+| **MKT-RB-NAMING-CHIPRADAR-LOCAL** | P3 | `src/ui/tabs/chip_radar.py` 區域變數 `_mj_v`（實為「大戶比例」，非人名；僅命名形似 `mj`）。區域變數，Legacy UI 範圍 | open（只登記） | `MKT-RB-NAMING-SCOPE` | 有任務碰到該檔時順改 | 1 |
+| **MKT-RB-NAMING-GUARD** | P3 | 目前**無**自動化守衛禁止 production 字樣/識別字出現人名（`tests/test_b2a_breach_and_naming.py`、`test_pattern_targets.py` 等是個別去識別化回歸測試，非通用守衛；以檔名/內容 grep 判斷，單組）。通用守衛需定義名稱黑名單來源（客戶提供人名清單？）→ 屬設計決策 | Pending（需客戶提供名單或同意讀法） | `MKT-RB-NAMING-SCOPE` | 客戶裁示後再設計；⛔ 自創人名黑名單 | 1 |

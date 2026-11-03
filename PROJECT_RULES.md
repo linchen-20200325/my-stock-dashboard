@@ -1000,3 +1000,15 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 4. **落點**（沿第 26 節第 3 點）：Rule → `PROJECT_RULES.md`／正式 vNext spec；Decision → `docs/DECISIONS.md`；Audit finding → 正式 spec 或 `docs/BACKLOG.md`；Limitation → 正式 spec「未驗與限制」＋`docs/PROJECT_STATE.md`；Backlog → `docs/BACKLOG.md`；Migration debt → `docs/BACKLOG.md`＋（New UI2）`docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md`；當前狀態 → `docs/PROJECT_STATE.md`；下一步與 session 紀錄 → `docs/HANDOFF.md` Safe Handoff 區塊。
 5. **檢查表**：New UI2 主線另見 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §13。
 6. **與既有治理的關係**（撰寫組讀法，單組）：與第 26 節（Conversation 不是 SSOT）、第 20 節（Resume Checkpoint）、`docs/governance/SESSION_CONTINUITY_RULES_2026-10-31.md` C1 同向；本節把「同步正式文件」升為**每一批**的宣告完成前置條件。
+
+## 第 28 節｜中性命名永久規則＋市場產品主軸（客戶 2026-11-03，DEC-125）
+
+> 永久治理規則；決策者 **客戶**（2026-11-03 指示 (10) A4／A3，逐字見 `docs/DECISIONS.md` DEC-125）。不取代任何舊規則；與第 13 節（Investment Domain Constitution）、第 24 節（Presentation Contract）、第 27 節（永久收尾 Gate）併讀。
+
+1. **研究文件與 provenance 可以保存原始作者／來源人物**（客戶原文）。例：`docs/` 內的研究框架出處、DEC 來源欄、程式碼註解中的 provenance。
+2. **正式 UI、navigation、card title、indicator name、feature name、OneBrain output、LINE output、production rule identifier，不得使用老師／個人姓名作為 production 功能或邏輯名稱**（客戶原文）。使用中性產品語意，例：「台股大盤情境估值」「EPS × PE 情境矩陣」「台股趨勢」「國際趨勢」「市場估值區間」。
+3. **適用範圍（撰寫組讀法，INFERENCE；客戶可推翻）**：第 2 點的八類名稱是**使用者可見或會被當作規則名稱流通**的位置；內部私有變數名、測試檔名、已去識別化後保留的過渡 alias 屬「命名債」，登記 `docs/BACKLOG.md` §5.1.23 `MKT-RB-NAMING-*`，**不因本節自動構成動工授權**（`CLAUDE.md` §-1）。
+4. **新程式／新文件／New UI2 一律遵守**：New UI2（`src/ui2/**`、`src/services/ui2/**`、`shared/ui2_contract/**`、`app_ui2.py`）的字樣與識別字不得出現人名；v19.174 去識別化（`MJ_*`→`FH_*`、人名檔名改中性名等；`CLAUDE.md` §3.3、`shared/financial_health_thresholds.py` 檔頭）是同方向的既有做法，本節把它升為永久規則。
+5. **市場趨勢產品主軸只有兩條：台股趨勢、國際趨勢**（客戶 A3；DEC-071 第 5 點再確認）。Old UI／Legacy New UI 只作 capability／logic／source reference，**不得**重新增加第三、第四套市場主軸。規格見 `docs/vnext/MARKET_TREND_RESEARCH_BASELINE_2026-11-03.md` §7。
+6. **Research Baseline 的永久語意**（客戶 A1／A2；規格本體在上列 research spec，此處只索引）：EPS × PE 只是台股大盤情境估值方法之一，不等於完整市場趨勢判斷；EPS source／PE multiple／growth assumption／production formula 不得自行核准或發明，不得由 EPS×PE 直接產生買賣 action；國際趨勢各維度只能作 objective input／research dimension／context overlay，除非 repo 已有正式 validated deterministic contract，不得自行組成多空公式／scoring／Risk Cap rule／System Action／probability。
+7. **與既有規則的關係（撰寫組讀法，單組）**：第 13 節與第 23 節（Scope Guard）同向；第 19 節 Missing 語意與 DEC-124 三軸邊界不受影響；本節未取代任何舊條文，故無刪除線。
