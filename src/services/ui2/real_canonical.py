@@ -15,7 +15,7 @@ NUI2-REAL-FEED A2（客戶 2026-11-03 (11)）。**純函式**（G2 照掃：⛔ 
 ═══ 語意映射（AI 總管內部判準標「可推翻」者，登記於 BACKLOG `NUI2-REAL-FEED` 段）═══
 台股：
 - 讀取丟例外（feed 接住）→ Unavailable；`failed=True` → Unavailable；`ok=False, failed=False` → Missing `⬜ 資料未取得`。
-  畫面錯誤句＝固定說明＋例外型別名（⛔ 訊息原文）；`upstream_error` 只顯示「上游最近一次抓取失敗（詳見 log）」。
+  畫面錯誤句＝固定人話句（⛔ 例外型別名、⛔ 訊息原文；型別名只留 snapshot 內部代碼與 log）；`upstream_error` 只顯示「上游最近一次抓取失敗」。
 - `is_stale=True` → Stale `⚠ 過期 N 天`（N＝`age_days`；None → `⚠ 可能已過期`）。
 - `is_stale=None` → Stale `⚠ 可能已過期`（**AI 總管內部判準，可推翻**：新鮮度未知 ⛔ 當 OK；service 檔頭明文
   「attrs 缺 → is_stale=None（⬜ 未判定），⛔ 不當成新鮮」）。
@@ -93,7 +93,7 @@ def _safe_code(err: str) -> str:
 class TwiiFact:
     """`TwiiTrendView` 的欄位（只拷貝本卡用到者）。
 
-    錯誤細節（例外訊息、`metadata.last_error` 原文）**不進 snapshot**——畫面只顯示例外型別名／固定說明句，全文只 log
+    錯誤細節（例外訊息、`metadata.last_error` 原文）**不進 snapshot**——畫面只顯示固定說明句（型別名只留 snapshot 內部代碼），全文只 log
     （NUI2-REALFEED-ERROR-SCRUB 收斂：避免 token／路徑上畫面）。`stale_reason` 為 L1 依規則產生的說明句（非錯誤原文）。
     """
 
