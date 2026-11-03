@@ -954,3 +954,17 @@
 - **§56 補（獨立 QA 修正；append）**：F3 查一檔 cold 只畫搜尋框＋灰色說明（`LookupResultVM.queried`）；F2 W-4 context／『市場環境』改 Neutral＋文字狀態（只放寬此二處；`NUI2-TARGET-W4-RED-ON-UNAVAILABLE` 更新）；F4 預設道補「市場 L1 之前無 L2／L3」AppTest（mutation 轉紅）；F5 三個自證式 teeth 測試改真實 mutation／刪除；新登記 `NUI2-MARKET-REFRESH-CTA-ORDER`（Batch 2 起的未登記偏離）、`NUI2-ME-DUP-LOGIN-BUTTON`、`NUI2-Q21-RISKCAP-MISSING-WORDING`、`NUI2-MAIN-RISK-NAV-MARGIN`（BACKLOG §5.1.24 末）。證據 JSON／截圖已重量（1.59.2 與 1.56.0）。
 
 - **索引（DEC-126／PROJECT_RULES 第 29 節；append）**：客戶 2026-11-03 新增「多元解法與最小成本決策規則」，逐字見 `docs/DECISIONS.md` DEC-126、規則本體 `PROJECT_RULES.md` 第 29 節（第 9 點為併用 `CLAUDE.md` v3 §03、第 11／12 點為 AI 總管增添，均非客戶原文，已於該處明註）。
+
+## 57. New UI2 小型 presentation correction（DEC-127，客戶 2026-11-03「#1001 整體接受」；2026-11-03；append-only；實作組單組、待總管複驗）
+
+- **依據**：客戶 2026-11-03 裁示三項（逐字 `docs/DECISIONS.md` DEC-127）。純 presentation；基準 `origin/main`＝`bd41ee11`（#1001）。
+- **做了什麼（0 投資語意；未碰 System Action Aggregator／Risk Cap runtime／Action Authority／Decision Digest／OneBrain／real-data／OAuth／Sheet／LINE／production default／新公式／門檻／source）**：
+  - **① 📊 市場更新 CTA 順序**：`NUI2-MARKET-REFRESH-CTA-ORDER` 依 frozen contract（Wireframes §2.1／§2.2、DEC-117 Q5）修正＝頁首→🚀 更新今日戰情 CTA→今日結論→核心狀態…；`first_screen_html(cta_first=True)`（僅市場頁）＋桌機 grid 列序。四問內容／VM 欄位／字樣未變（測試鎖定）；其他頁不動。客戶明示不開 Decision Gate、不改 Wireframes 條文。
+  - **② W-4**：逐點對照客戶列 8 點，**現行實作符合**（輕量一行 chip／Neutral／字級 .78rem < 摘要 1rem 與 6 維格 .85rem／在搜尋與摘要之下／『市場環境』不排第一格／無方向與買賣字樣／與市場頁位階同源）；補 2 條測試（字級、整頁 DOM 順序），其餘引既有測試；`NUI2-TARGET-W4-RED-ON-UNAVAILABLE` 收斂為 accepted／implemented。valuation／基本面區塊落地後須重驗（`NUI2-W4-RECHECK-WHEN-RESEARCH-BLOCKS-LAND`）。
+  - **③ 手機底部導覽餘裕**：比較 A／B／C（BACKLOG §5.1.24 DEC-127 補）→ 採 **B（主解：CTA 列原因與按鈕同列、不重複「④」標籤；不縮字、不刪資訊）＋A（保險層：`@supports` safe-area 內容保留量）**，不採 C。stale／unavailable 餘裕 2.5px→42px；壓力態（L1 文字 1.5×，頁內 DOM 注入）六場景可達。
+  - **量測腳本**：新增 `market_cta_before_conclusion`／`market_main_risk_nav_margin`／`market_stress_reachable` 三條判定；修正頁底內容量測（`scroll_end_bottom`）。總態數 64→70。
+- **量測結果（Chromium headless，390×844／1440×900；FAKE）**：Streamlit **1.59.2：70/70**；**1.56.0（`/tmp/v156` venv）：70/70**；證據 `docs/vnext/newui2_batch3b/`（JSON 兩份＋手機全部態與桌機 cold／loaded 截圖；手機六場景已逐張目視：CTA 在頁首下、結論之上，風險區塊與下一卡片頂緣皆在導覽之上）。
+- **驗證（實作組實測；單組）**：新增測試於 `tests/test_ui2_batch3.py` §9（`tests/test_ui2_batch3.py` 222 passed（重跑確認；含讀證據 JSON 的測試））；**mutation 6 項實測轉紅後還原**：M1 CTA 移回最後（單元 12 紅；真瀏覽器 `market_cta_before_conclusion`／`market_main_risk_nav_margin`／`market_stress_reachable` 手機 12 態紅）、M2 桌機 grid 列序（1 紅）、M3 拿掉 safe-area 保留量（1 紅）、M4 原因句改回按鈕下方（1 紅）、M5 關掉餘裕判定（1 紅）、M6 頁底保留量 5rem→3rem（真瀏覽器 `content_not_covered_by_nav` 31 態＋`market_stress_reachable` 6 態紅）。全量序列結果見回報（⚠️ 以總管複驗為準）。
+- **限制（誠實揭露）**：(1) iOS safe-area 未驗（Chromium env＝0；`NUI2-NAV-SAFEAREA-IOS-UNVERIFIED`）；(2) Safari／Firefox／真機／螢幕閱讀器未測（`NUI2-VIEWPORT-NON-CHROMIUM-UNVERIFIED`）；(3) 量測全在 FAKE 字串，壓力態＝1.5× 文字注入、非真資料（`NUI2-VIEWPORT-FAKE-ONLY`、`NUI2-NAV-MARGIN-CRITERION-INTERNAL`）；(4)『≥1 行行高』餘裕門檻為 AI 總管內部判準、客戶可推翻；(5) 桌機 CTA 與線框『頁首列右側』非逐像素等同（`NUI2-MARKET-CTA-DESKTOP-PLACEMENT`）。
+- **未碰（硬限制；`git diff --name-only origin/main -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 與 `shared`（非 `ui2_contract`）實查為空）**：同 §54／§56。
+- **§27 檢查**：新 Decision＝DEC-127（客戶原文逐字）；新 Rule＝無；Audit finding／Limitation／Backlog／Acceptance item 已寫入 BACKLOG §5.1.24 DEC-127 補、Audit Checklist §18、Wireframes §10 補註、HANDOFF。

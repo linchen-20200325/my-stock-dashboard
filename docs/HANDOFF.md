@@ -809,3 +809,10 @@ DEC-086 規則已於 main，本表已落地。
 | 禁止事項（摘要） | ⛔ 修改 `app.py`／加 `?ui=2`／切 production default；⛔ 刪／改 Legacy New UI 與 Old UI；⛔ 實作 System Action Aggregator／Risk Cap 規則數值 runtime／Action Authority／Decision Digest／OneBrain／LINE／real-data wiring／真 OAuth／Sheet 讀寫；⛔ 由結論／位階推導多空或動作；⛔ 把 `⬜ 尚未提供` 稱為資料語意態；⛔ 合併 Not Evaluated 與 Unable to Determine；⛔ UI2 出現人名字樣（PROJECT_RULES §28）；⛔ 自行切換 Model／Effort。 |
 
 - **Batch 3 QA 修正補記（2026-11-03；append）**：F2／F3／F4／F5 已修、F1 與三個觀察項已登記（見 PROJECT_STATE §56 補、BACKLOG §5.1.24 末、Audit Checklist §17 補）。下一個唯一安全工作不變（總管複驗）；**`NUI2-MARKET-REFRESH-CTA-ORDER` 需總管／客戶判定**。
+
+- **DEC-127 小型 presentation correction 補記（2026-11-03；append；現行接手點仍以本檔最末 Safe Handoff 表為準，本補記更新其中三格）**：
+  - **已完成**（見 PROJECT_STATE §57、BACKLOG §5.1.24 DEC-127 補、Checklist §18、DECISIONS DEC-127）：市場更新 CTA 依 frozen contract 移到今日結論之前（`NUI2-MARKET-REFRESH-CTA-ORDER` fixed）；W-4 收斂為 accepted／implemented（`NUI2-TARGET-W4-RED-ON-UNAVAILABLE`）；手機底部導覽餘裕 2.5px→42px（A＋B，不縮字不刪資訊；`NUI2-MAIN-RISK-NAV-MARGIN` mitigated）。證據 `docs/vnext/newui2_batch3b/`（1.59.2 與 1.56.0 各 70/70）。
+  - ~~**待客戶裁示**：`NUI2-TARGET-W4-RED-ON-UNAVAILABLE`、`NUI2-MARKET-REFRESH-CTA-ORDER` 需總管／客戶判定~~ → **已裁示，無即時待裁題**（其餘單組解讀 `NUI2-COLD-MAIN-RISK-READING`、`NUI2-ME-SIGNEDOUT-CLASSIFICATION-REVIEW`、`NUI2-CONCLUSION-REAL-FEED` 仍待覆核；有意識的更新，不是漏刪；決策者 客戶〔DEC-127〕）。
+  - **下一個唯一安全工作**：總管複驗本批（獨立 QA；重點：`tests/test_ui2_batch3.py` §9、`tests/ui2_viewport/measure_viewport.py` 三條新判定與 `scroll_end_bottom` 量測修正、`git diff --name-only origin/main -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 與 `shared`（非 `ui2_contract`）為空、`docs/vnext/newui2_batch3b/mobile_p4_market_*.png` 目視）。通過後下一批待客戶指示（候選仍為 💼 持股頁第一屏；動作欄仍待 Aggregator）。
+  - **仍禁止（不變）**：System Action Aggregator／Risk Cap runtime／Action Authority／Decision Digest／OneBrain／real-data wiring／真 OAuth／Sheet 寫入／LINE／切 production default／新公式／門檻／source／刪 Old UI 與 Legacy New UI／UI2 人名字樣（§28）；自行切換 Model／Effort。
+  - **仍未驗（不得宣稱已驗）**：iOS safe-area、Safari／Firefox／真機／螢幕閱讀器、真資料字串長度（BACKLOG `NUI2-NAV-SAFEAREA-IOS-UNVERIFIED`／`NUI2-VIEWPORT-NON-CHROMIUM-UNVERIFIED`／`NUI2-VIEWPORT-FAKE-ONLY`）。

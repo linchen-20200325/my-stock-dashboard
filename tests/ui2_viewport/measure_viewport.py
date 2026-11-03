@@ -67,6 +67,19 @@ THRESHOLDS: list[dict[str, str]] = [
      "rule": "📊 市場：今日主要風險（L1）存在，手機位於第一屏四問之後且其後第一個內容區塊（卡片／摺疊）不早於它的底緣"
              "（⛔ 被 L2／L3 插隊）；桌機與 ①、Risk Cap 同列排成三 tile（頂緣差 ≤ 2px）。",
      "source": "Freeze §0.1.6-3（Q3-3）、Wireframes §2.1 手機／§2.2 桌機三 tile、DEC-117 Q1 桌機"},
+    {"id": "market_cta_before_conclusion",
+     "rule": "📊 市場：主更新 CTA（q4）在 DOM 與座標上都位於今日結論**之前**（CTA 底緣 ≤ 今日結論頂緣；手機與桌機皆然）。"
+             "四問是資訊需求，不要求視覺順序 ①→④。",
+     "source": "Wireframes §2.1／§2.2（頁首→更新 CTA→今日結論）、DEC-117 Q5、Freeze §16.1／§0.1.6；客戶 2026-11-03 裁示（DEC-127）"},
+    {"id": "market_main_risk_nav_margin",
+     "rule": "📊 市場（手機，FAKE 六場景）：今日主要風險之後第一個內容區塊的頂緣，距底部導覽上緣 ≥ 1 行內文行高"
+             "（行高由頁內 `getComputedStyle(.ui2-risk).lineHeight` 現場量，⛔ 寫死 px）。"
+             "**AI 總管內部判準（無條文給 px；客戶可推翻）**：餘裕不得小到下一區塊『剛好貼著導覽』而看不出頁面還有內容。",
+     "source": "客戶 2026-11-03 裁示項 3（NUI2-MAIN-RISK-NAV-MARGIN）；判準本身＝AI 總管內部（Wireframes §0.4 導覽不得遮住主要內容為上位原則）"},
+    {"id": "market_stress_reachable",
+     "rule": "📊 市場（手機，壓力測試：L1 區內所有文字加長 1.5×，非改 production 常數）：捲到頁底後最後內容底緣 ≤ 導覽上緣、"
+             "今日主要風險可整塊捲到導覽之上、無水平捲動、CTA 仍在今日結論之前。長字串只允許把內容往下推，不得被導覽遮住而捲不到。",
+     "source": "Wireframes §0.4（導覽不得遮住主要內容）、Gate §3（Mobile-first）；客戶 2026-11-03 裁示項 3（長字串）"},
     {"id": "target_mode_search_first_screen",
      "rule": "🎯 標的：模式切換恰兩項（市場精選／即時查一檔）且恰一項為當前、搜尋框＋搜尋 CTA 在其下、查詢摘要在搜尋之下，"
              "三者底緣皆 ≤ 可用高。",
@@ -143,6 +156,9 @@ def evaluate(m: dict) -> dict[str, list[str]]:
         out["content_not_covered_by_nav"].append(f"頁底內容 {last['bottom']:.0f} > 導覽上緣 {nav['top']:.0f}")
     if not mobile and nav["right"] is not None and last["left"] < nav["right"] - 0.5:
         out["content_not_covered_by_nav"].append(f"頁底內容左緣 {last['left']:.0f} < 導覽右緣 {nav['right']:.0f}")
+    se = m.get("scroll_end_bottom")        # 捲到底後 block-container 內容底緣（扣掉底部 padding）；舊 dict 無此鍵 → 略過
+    if mobile and se is not None and nav["top"] is not None and se > nav["top"] + 0.5:
+        out["content_not_covered_by_nav"].append(f"捲到底後內容底緣 {se:.0f} > 導覽上緣 {nav['top']:.0f}")
     _evaluate_batch3(m, out, mobile, limit)
     # 標題不重疊
     t = m["title"]
@@ -150,6 +166,30 @@ def evaluate(m: dict) -> dict[str, list[str]]:
         out["no_title_overlap"].append("標題與 banner 重疊")
     if t["qa_top"] is not None and t["qa_top"] < t["bottom"] - 0.5:
         out["no_title_overlap"].append("標題與第一屏區塊重疊")
+    return out
+
+
+def evaluate_stress(m: dict) -> dict[str, list[str]]:
+    """壓力測試態（手機）：只判『長字串不得讓內容被導覽遮住、捲不到』。⛔ 不套第一屏高度（長字串本來就會往下推）。"""
+    k = "market_stress_reachable"
+    out: dict[str, list[str]] = {k: []}
+    nav = m["nav"]
+    ntop = nav["top"]
+    se = m.get("scroll_end_bottom")
+    if se is None or ntop is None:
+        out[k].append("缺 scroll_end_bottom／導覽")
+        return out
+    if se > ntop + 0.5:
+        out[k].append(f"捲到底後內容底緣 {se:.0f} > 導覽上緣 {ntop:.0f}（被遮住）")
+    rb = m.get("risk_bottom_at_scroll_end")
+    if rb is None or rb > ntop + 0.5:
+        out[k].append(f"捲到底後今日主要風險底緣 {rb} 仍在導覽之下（捲不出來）")
+    for kk in ("doc", "main"):
+        if m["hscroll"][kk]["scrollWidth"] > m["hscroll"][kk]["clientWidth"] + 0.5:
+            out[k].append(f"出現水平捲動（{kk}）")
+    els = {e["q"]: e for e in m["elements"]}
+    if "q4" not in els or "concl" not in els or els["q4"]["bottom"] > els["concl"]["top"] + 0.5:
+        out[k].append("壓力下 CTA 不在今日結論之前")
     return out
 
 
@@ -172,6 +212,11 @@ def _evaluate_batch3(m: dict, out: dict[str, list[str]], mobile: bool, limit: fl
                 out[c].append(f"今日結論底緣 {els['concl']['bottom']:.0f} > 可用高 {limit}")
             if "q1" in els and els["concl"]["top"] > els["q1"]["top"] + 0.5:
                 out[c].append("今日結論不在 ① 市場目前狀態之上")
+        c2 = "market_cta_before_conclusion"
+        if "q4" not in els or "concl" not in els:
+            out[c2].append("缺主 CTA 或今日結論")
+        elif els["q4"]["bottom"] > els["concl"]["top"] + 0.5:
+            out[c2].append(f"主 CTA 底緣 {els['q4']['bottom']:.0f} > 今日結論頂緣 {els['concl']['top']:.0f}（CTA 不在結論之前）")
         k = "market_main_risk_follows_first_screen"
         r = m.get("risk")
         if not r:
@@ -190,6 +235,10 @@ def _evaluate_batch3(m: dict, out: dict[str, list[str]], mobile: bool, limit: fl
             nb = m.get("first_block_after_l1_top")
             if nb is not None and nb < r["bottom"] - 0.5:
                 out[k].append(f"今日主要風險之後的內容區塊 top {nb:.0f} < 其底緣 {r['bottom']:.0f}（被插隊）")
+            mg = "market_main_risk_nav_margin"
+            lh, ntop = m.get("risk_line_height"), m["nav"]["top"]
+            if mobile and nb is not None and lh is not None and ntop is not None and ntop - nb < lh - 0.5:
+                out[mg].append(f"手機：今日主要風險後第一區塊 top {nb:.1f} 距導覽上緣 {ntop:.0f} 僅 {ntop - nb:.1f}px < 1 行行高 {lh:.1f}px")
     elif page == "p4_target":
         k = "target_mode_search_first_screen"
         mode = m.get("mode_box")
@@ -269,6 +318,11 @@ _JS = r"""
     .filter(e => R(e).height > 1 && (!e.checkVisibility || e.checkVisibility()) && (!nav || (!nav.contains(e) && !e.contains(nav))));   // 排除導覽本身與其 0 高的外層包裝
   const lastEl = blocks.length ? blocks[blocks.length-1] : null;
   const last = lastEl ? R(lastEl) : {bottom:0,left:0};
+  // 捲到底後的真實內容底緣（block-container 底緣扣掉底部 padding＝保留量之上）與今日主要風險位置
+  const bc = document.querySelector('.block-container');
+  const scrollEndBottom = bc ? R(bc).bottom - parseFloat(getComputedStyle(bc).paddingBottom) : null;
+  const riskAtEnd = document.querySelector('.ui2-risk');
+  const riskBottomAtEnd = riskAtEnd ? R(riskAtEnd).bottom : null;
   main.scrollTo({top: prev, behavior: 'instant'});
   // ── Batch 3 錨點 ──
   const riskEl = document.querySelector('.ui2-risk');
@@ -283,8 +337,10 @@ _JS = r"""
   const accEl = document.querySelector('[data-ui2-l1="account_actions"]');
   const snap = [...document.querySelectorAll('.ui2-snapshot [data-dim]')].map(e => e.dataset.dim);
   const pageEl = document.querySelector('.ui2-pagetitle');
+  const riskLH = riskEl ? parseFloat(getComputedStyle(riskEl).lineHeight) : null;
   return {
     page: pageEl ? pageEl.dataset.ui2Page : null,
+    scroll_end_bottom: scrollEndBottom, risk_bottom_at_scroll_end: riskBottomAtEnd, risk_line_height: riskLH,
     risk: riskEl ? {...R(riskEl), inside_l1: !!(l1 && l1.contains(riskEl)), text: riskEl.innerText.replace(/\s+/g,' ').trim()} : null,
     first_block_after_l1_top: afterTops.length ? Math.min(...afterTops) : null,
     mode_box: modeBox ? {...R(modeBox), labels: modeLabels.map(l => l.innerText.trim()), checked_count: modeLabels.filter(l => l.querySelector('input').checked).length, checked_index: modeChecked} : null,
@@ -304,6 +360,18 @@ _JS = r"""
     last_content: {bottom: last.bottom, left: last.left},
     card_heights: [...document.querySelectorAll('.ui2-card')].slice(0,8).map(e => Math.round(R(e).height)),
   };
+}
+"""
+
+
+#: 壓力測試：把 `.ui2-m-l1`（CTA／今日結論／四問／今日主要風險）內所有文字節點加長 1.5×（頁內 DOM 操作；⛔ 改 production 常數／VM）。
+STRESS_FACTOR = 1.5
+_STRESS_JS = """
+(f) => {
+  const root = document.querySelector('.ui2-m-l1'); if (!root) return 0;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n, c = 0;
+  while ((n = w.nextNode())) { const t = n.nodeValue; if (t.trim().length > 6) { n.nodeValue = t + t.slice(0, Math.ceil(t.length * (f - 1))); c++; } }
+  return c;
 }
 """
 
@@ -372,9 +440,37 @@ def _record(page, vp_name: str, vw: int, vh: int, pid: str, scenario: str, *, mo
                       "account": rd(m["account"]) if m.get("account") else None,
                       "snapshot_labels": m.get("snapshot_labels"),
                       "first_block_after_l1_top": (round(m["first_block_after_l1_top"], 1)
-                                                   if m.get("first_block_after_l1_top") is not None else None)},
+                                                   if m.get("first_block_after_l1_top") is not None else None),
+                      "risk_line_height": m.get("risk_line_height"),
+                      "scroll_end_bottom": (round(m["scroll_end_bottom"], 1) if m.get("scroll_end_bottom") is not None else None),
+                      "nav_margin_after_risk": (round(m["nav"]["top"] - m["first_block_after_l1_top"], 1)
+                                                if m.get("first_block_after_l1_top") is not None and m["nav"]["top"] is not None
+                                                and m["viewport"]["w"] <= MOBILE_MAX_W else None)},
            "failures": {k: v for k, v in checks.items() if v}, "pass": not any(checks.values())}
     return rec
+
+
+def _record_stress(page, vp_name: str, vw: int, vh: int, scenario: str) -> dict:
+    """手機市場頁壓力測試態：L1 區文字 1.5×（頁內 DOM 操作）後量測可達性（`evaluate_stress`）。"""
+    n = page.evaluate(_STRESS_JS, STRESS_FACTOR)
+    page.wait_for_timeout(200)
+    m = measure_state(page, vw, vh)
+    checks = evaluate_stress(m)
+    risk = m.get("risk") or {}
+    return {"viewport_name": vp_name, "viewport": m["viewport"], "page": "p4_market", "scenario": scenario,
+            "mode": "stress", "account": None, "stress_factor": STRESS_FACTOR, "stressed_text_nodes": n,
+            "elements": [{k: (round(v, 1) if isinstance(v, float) else v) for k, v in e.items()} for e in m["elements"]],
+            "nav": {k: (round(v, 1) if isinstance(v, float) else v) for k, v in m["nav"].items()
+                    if k in ("top", "bottom", "position")},
+            "hscroll": m["hscroll"],
+            "stress": {"risk_top": round(risk["top"], 1) if risk else None,
+                       "risk_bottom": round(risk["bottom"], 1) if risk else None,
+                       "scroll_end_bottom": round(m["scroll_end_bottom"], 1) if m.get("scroll_end_bottom") is not None else None,
+                       "scroll_end_gap_to_nav": (round(m["nav"]["top"] - m["scroll_end_bottom"], 1)
+                                                 if m.get("scroll_end_bottom") is not None else None),
+                       "risk_bottom_at_scroll_end": (round(m["risk_bottom_at_scroll_end"], 1)
+                                                     if m.get("risk_bottom_at_scroll_end") is not None else None)},
+            "failures": {k: v for k, v in checks.items() if v}, "pass": not any(checks.values())}
 
 
 def run_measurements(url: str, out: Path | None, shots: str = "all", server_python: str | None = None,
@@ -383,7 +479,7 @@ def run_measurements(url: str, out: Path | None, shots: str = "all", server_pyth
 
     from shared.ui2_contract.pages import (
         ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, MODE_LABELS, MODE_LOOKUP,
-        P4_ME, P4_TARGET, PAGE4_LABELS, PAGE_IDS, SCENARIO_IDS, SCENARIO_LOADED,
+        P4_ME, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS, SCENARIO_IDS, SCENARIO_LOADED,
     )
     from src.ui2.shell.app import _ACCOUNT_LABELS, _SCENARIO_LABELS
 
@@ -411,6 +507,8 @@ def run_measurements(url: str, out: Path | None, shots: str = "all", server_pyth
                                            mode="curated" if pid == P4_TARGET else None,
                                            account=ACCOUNT_SIGNED_IN if pid == P4_ME else None))
                     shot(page, vp_name, pid, scenario)
+                    if pid == P4_MARKET and vw <= MOBILE_MAX_W:       # 手機市場頁：長字串壓力測試（每場景；shot 之後才動 DOM）
+                        results.append(_record_stress(page, vp_name, vw, vh, scenario))
                     if pid == P4_TARGET:        # 同一場景再量『即時查一檔』模式
                         page.locator(".st-key-ui2_target_mode_box [role='radiogroup'] > label",
                                      has_text=MODE_LABELS[MODE_LOOKUP]).click()
