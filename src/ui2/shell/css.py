@@ -41,6 +41,7 @@ CSS = """
 .ui2-chip--axis-capability{border-style:dashed}
 .ui2-empty{border:1px dotted rgba(128,128,128,.5);border-radius:8px;padding:6px 10px;margin:4px 0}
 .ui2-empty__reason{font-size:.8rem;opacity:.75}
+.ui2-freshrow .ui2-chip{max-width:100%;box-sizing:border-box;overflow-wrap:anywhere;border-radius:12px;padding:1px 10px}   /* 長來源文字換行時不成貼邊的長膠囊 */
 .ui2-freshrow{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:.75rem;opacity:.85;margin-top:4px}
 .ui2-fresh--missing{opacity:.8}
 .ui2-qa{border:1px solid rgba(128,128,128,.4);border-radius:10px;padding:4px 12px 8px 12px;margin:8px 0}

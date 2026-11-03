@@ -28,10 +28,10 @@ from shared.ui2_contract.text import (
 )
 from src.services.ui2.vm_common import field_from_spec
 
-_FAKE_SRC = f"{FAKE_SOURCE_PREFIX}·scenario"
-_FAKE_ASOF = f"{FAKE_SOURCE_PREFIX}-ASOF"
+_FAKE_SRC = f"{FAKE_SOURCE_PREFIX} 示意資料"
+_FAKE_ASOF = f"{FAKE_SOURCE_PREFIX} 示意"
 #: 使用者可見的簡短人話原因（P1；工程原因不外露——見 Active Contract §8）。
-_R_EMPTY = "此項目前尚無資料"
+_R_EMPTY = "此項目尚未開放"
 _R_NOT_OPEN = "此功能尚未開放"
 _SEARCH_REASON = "尚未開放查詢（示意資料）"
 
@@ -75,9 +75,9 @@ def _target_block() -> dict:
     其餘維度只放 FAKE 占位值（⛔ 任何投資判斷字樣）。
     """
     snapshot = [
-        _spec("dim_fundamental", "基本面", "FAKE 占位"),
-        _spec("dim_valuation", "估值", "FAKE 占位"),
-        _spec("dim_chips", "籌碼", "FAKE 占位"),
+        _spec("dim_fundamental", "基本面", "FAKE 示意"),
+        _spec("dim_valuation", "估值", "FAKE 示意"),
+        _spec("dim_chips", "籌碼", "FAKE 示意"),
         _spec("dim_trend", "趨勢", None, state="not_evaluated", sub_reason=TEXT_NOT_DEFINED,
               fixed=True, as_of=None, source=None),
         _spec("dim_industry", "產業", None, state="not_evaluated", sub_reason=TEXT_NOT_DEFINED,
@@ -124,7 +124,7 @@ def _sections_market() -> list[dict]:
     ]
 
 
-_LOOKUP_COLD = "FAKE 冷啟動：輸入代碼並查詢後顯示"
+_LOOKUP_COLD = "FAKE 示意：輸入代碼並查詢後顯示"
 _ME_ACTION_REASON = "登入與 Sheet 操作尚未開放"
 
 
@@ -267,7 +267,7 @@ def _base(page: str) -> dict:
             "next_step": None,
             "cta": {"label": "🚀 更新持股戰情"},
             "cards": [
-                _spec("holdings_table", "Holdings（占位）", "FAKE 4 欄精簡表"),
+                _spec("holdings_table", "持股清單", "FAKE 4 欄精簡表"),
             ],
             "sections": [
                 {"key": "onebrain", "title": "🤖 OneBrain 持股摘要", "level": "L1", "fields": [
@@ -283,7 +283,7 @@ def _base(page: str) -> dict:
     raise ValueError(f"unknown page {page!r}")
 
 
-def _transform(spec: dict, scenario: str, idx: int, cold_reason: str = "按 🚀 更新後載入（FAKE 冷啟動）") -> dict:
+def _transform(spec: dict, scenario: str, idx: int, cold_reason: str = "按 🚀 更新後載入（FAKE 示意）") -> dict:
     """場景轉換：只改呈現狀態旗標，⛔ 計算任何值。"""
     if spec.get("fixed"):
         return spec
@@ -304,7 +304,7 @@ def _transform(spec: dict, scenario: str, idx: int, cold_reason: str = "按 🚀
     return s
 
 
-def _transform_current(spec: dict, scenario: str, cold_reason: str = "按 🚀 更新後載入（FAKE 冷啟動）") -> dict:
+def _transform_current(spec: dict, scenario: str, cold_reason: str = "按 🚀 更新後載入（FAKE 示意）") -> dict:
     s = dict(spec)
     if scenario == SCENARIO_COLD:
         s.update(value=None, state="not_evaluated", sub_reason=TEXT_NOT_LOADED,
@@ -334,7 +334,7 @@ def _fake_conclusion(c: dict) -> dict:
     cs = c["current_state"]
     if cs.get("state") == "not_evaluated" and cs.get("sub_reason") == TEXT_NOT_LOADED:
         return _spec("conclusion", "今日結論", None, state="not_evaluated", sub_reason=TEXT_NOT_LOADED,
-                     reason="按 🚀 更新後載入（FAKE 冷啟動）", as_of=None, source=None)
+                     reason="按 🚀 更新後載入（FAKE 示意）", as_of=None, source=None)
     f = field_from_spec(cs)
     clauses = [f"市場目前狀態 {f.value_text}" + (f"（{f.status_text}）" if f.status_text and f.value_text else "")
                if f.value_text else f"市場目前狀態 {f.status_text}"]
@@ -392,9 +392,9 @@ def fake_canonical(page: str, scenario: str, account: str | None = None) -> dict
     c["scenario"] = scenario
     c["is_fake"] = True
     # 🎯 標的頁沒有「🚀 更新」入口（精選走載入 gate、查一檔走搜尋）→ 冷啟動說明不得指向不存在的按鈕
-    cold_reason = ("FAKE 冷啟動：精選尚未載入" if page == P4_TARGET
-                   else "FAKE 冷啟動：尚未載入" if page == P4_ME
-                   else "按 🚀 更新後載入（FAKE 冷啟動）")
+    cold_reason = ("FAKE 示意：精選尚未載入" if page == P4_TARGET
+                   else "FAKE 示意：尚未載入" if page == P4_ME
+                   else "按 🚀 更新後載入（FAKE 示意）")
     c["current_state"] = _transform_current(c["current_state"], scenario, cold_reason)
     c["cards"] = [_transform(s, scenario, i, cold_reason) for i, s in enumerate(c["cards"])]
     if scenario == SCENARIO_COLD and c.get("next_step") is None and page != P4_ME:

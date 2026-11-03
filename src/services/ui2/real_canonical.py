@@ -170,6 +170,9 @@ REGIME_ASOF_NOTE = f"{TEXT_ASOF_MISSING}（市場位階未提供資料日）"
 #: 決策編號／狀態檔名，不畫在 Human UI；完整說明改放資料健康度·市場位階項〔P6〕，現在只留在 VM 的 `regime_explain` 欄）。
 #: 這句只轉述 L0 `NOT_LOADED_PENDING_BREADTH_EXPLAIN`／`UNEVALUATED_BREADTH_EXPLAIN` 共同的原因（缺正式市場廣度資料），
 #: ⛔ 新增原因或推論。
+#: ⚠ 前提：目前 `shared.signal_thresholds.BREADTH_PROXY_SCORING_ENABLED=False`（市場廣度代理值不計分、缺正式廣度來源 →
+#: 位階恆未評估）。若日後改 True，這句「尚缺正式的市場廣度」可能不再成立 → 須重審文案與 L0 `*_EXPLAIN`；
+#: `tests/test_ui2_p1_human_text.py::test_regime_see_why_premise_breadth_proxy_scoring_is_off` 會轉紅提醒。
 REGIME_SEE_WHY = "原因：尚缺正式的市場廣度（漲跌家數）資料"
 #: 🎯 與 📊 同一句（跨頁一致性測試鎖定；舊版 🎯 指向 📊 的區塊，區塊不再是指引目標）。
 REGIME_SEE_WHY_MARKET = REGIME_SEE_WHY
@@ -182,11 +185,11 @@ _UPSTREAM_ERROR_TEXT = "上游最近一次抓取失敗"
 
 
 def _error_text(what: str, code: str) -> str:
-    """畫面上的錯誤句：只放固定說明＋例外型別名（⛔ 訊息原文；全文已由 feed log）。P1：拿掉「詳見 log」「canonical 契約」等工程字樣；
-    例外型別名保留（紅色 Unavailable 的最小診斷線索，仍是識別字而非訊息原文）。"""
+    """畫面上的錯誤句：**固定人話句**（⛔ 例外型別名、⛔ 訊息原文）。型別名留在 snapshot 的錯誤代碼與 feed 的 log
+    （P1 QA 修：型別名是工程資訊，不上使用者畫面）。契約違反＝另一句固定說明。"""
     if code == CONTRACT_ERROR:
         return f"{what}：資料格式異常，暫時無法顯示"
-    return f"{what}讀取失敗（{code}）"
+    return f"{what}暫時無法讀取"
 
 
 def validate_regime_fact(f: RegimeFact) -> None:
@@ -278,10 +281,10 @@ def _risk_cap_row() -> dict:
 
 #: 使用者可見的簡短人話原因（P1；原工程原因〔session／PORT／Legacy／OAuth／路徑 C／Gate／Stage〕不外露，
 #: 對映與出處留在 mapping 文件 `NEWUI2_REAL_FEED_MAPPING_2026-11-03.md` 與 BACKLOG，見 Active Contract §8）。
-_R_SESSION = "此項目前尚無資料（需按更新後才有）"
-_R_PORT = "此項目前尚無資料"
+_R_SESSION = "此項目尚未開放"
+_R_PORT = "此項目尚未開放"
 _R_PATH_C = "需登入並讀取 Sheet，目前尚未開放"
-_R_NOT_IN_BATCH = "此項目前尚無資料"
+_R_NOT_IN_BATCH = "此項目尚未開放"
 _R_STAGE_G = "此功能尚未開放"
 
 
@@ -313,7 +316,7 @@ def _market(snap: RealFeedSnapshot) -> dict:
         ],
         # 第一屏短句（Freeze §16.5 縮字句）；完整原因見 mapping 文件 M6／M7。
         "conclusion": _not_provided("conclusion", "今日結論", "今日結論尚未提供"),
-        "main_risk": _not_provided("main_risk_f", "今日主要風險", "需按 🚀 更新後才有，目前尚未開放"),
+        "main_risk": _not_provided("main_risk_f", "今日主要風險", "今日風險摘要尚未開放"),
     }
 
 
@@ -331,7 +334,7 @@ def _target(snap: RealFeedSnapshot) -> dict:
     return {
         "page": P4_TARGET, "title": PAGE4_LABELS[P4_TARGET],
         "current_state": _not_provided("pick_summary", "精選摘要",
-                                       "精選需連網取得，且候選的組合方式尚待定義，目前尚無資料"),
+                                       "精選尚未開放（需連網取得，且候選的組合方式尚待定義）"),
         "context_rows": [regime_spec(snap, "market_regime", "市場位階", see_why=REGIME_SEE_WHY_MARKET),
                          _risk_cap_row()],
         "action_needed": _not_provided("no_holding_action", "是否需要行動", "本頁不產生持股動作；動作權威＝💼 持股"),
@@ -339,7 +342,7 @@ def _target(snap: RealFeedSnapshot) -> dict:
         "cta": {"label": "查詢", "disabled_reason": "尚未開放查詢"},
         "cards": [
             _not_provided("industry_top", "產業機會 Top 5", _R_PORT),
-            _not_provided("candidates", "候選 Top 10", "候選 Top 10 的組合方式尚待定義，目前尚無資料"),
+            _not_provided("candidates", "候選 Top 10", "候選 Top 10 尚未開放（組合方式尚待定義）"),
         ],
         "sections": [
             {"key": "conditions", "title": "選股條件（收合）", "level": "L2", "mode": MODE_CURATED,
@@ -386,7 +389,7 @@ def _hold() -> dict:
         ],
         "next_step": None,
         "cta": {"label": "🚀 更新持股戰情", "disabled_reason": "目前不提供更新；需登入後才能讀取持股"},
-        "cards": [_not_provided("holdings_table", "Holdings（占位）", _R_PATH_C)],
+        "cards": [_not_provided("holdings_table", "持股清單", _R_PATH_C)],
         "sections": [
             {"key": "onebrain", "title": "🤖 OneBrain 持股摘要", "level": "L1",
              "fields": [_not_provided("ob_f", "OneBrain 持股摘要", _R_STAGE_G)]},

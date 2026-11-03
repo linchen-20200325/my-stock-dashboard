@@ -201,7 +201,7 @@ def test_no_global_update_time_anywhere_on_a_page(page, scenario):
         H.field_row_html(f) for s in vm.context.sections for f in s.fields)
     assert "更新時間" not in blob
     assert not re.search(r"\b\d{1,2}:\d{2}\b", blob), "出現時鐘時間字樣（可能是全域假更新時間）"
-    assert not re.search(r"20\d\d-\d\d-\d\d", blob), "出現真實日期字樣（Preview 全部為 FAKE-ASOF）"
+    assert not re.search(r"20\d\d-\d\d-\d\d", blob), "出現真實日期字樣（Preview 全部為「FAKE 示意」）"
 
 
 @pytest.mark.parametrize("scenario", ["cold", "loaded", "stale"])
@@ -226,7 +226,7 @@ def test_every_card_carries_its_own_freshness_tag():
     for c in vm.context.cards:
         h = H.metric_card_html(c)
         assert "ui2-freshrow" in h
-        assert ("資料日 FAKE-ASOF" in h) or (T.TEXT_ASOF_MISSING in h)
+        assert ("資料日 FAKE 示意" in h) or (T.TEXT_ASOF_MISSING in h)
 
 
 def test_missing_asof_is_marked_not_guessed():

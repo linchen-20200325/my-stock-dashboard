@@ -12,7 +12,7 @@ from shared.ui2_contract.models import (
     AccountVM, CapabilityState, CardVM, CtaVM, FieldState, FieldVM, FirstScreenVM, FreshnessInfo,
     JudgementState, LookupResultVM, SearchBoxVM,
 )
-from shared.ui2_contract.text import TEXT_ASOF_MISSING, is_dev_only_text
+from shared.ui2_contract.text import TEXT_ASOF_MISSING, is_dev_only_text, is_known_l0_explain
 from shared.ui2_contract.tones import TONE_SYMBOL, ChipTone
 
 #: 資料語意五態＋判定結果 → chip 色調。Missing／Not evaluated／無法判定＝灰（Neutral）；Stale＝琥珀；
@@ -45,7 +45,13 @@ AXIS_CLASS: dict[str, str] = {
 def shown(detail: str | None) -> bool:
     """該段 `detail` 是否畫在 Human UI：有字、且不是只給開發面／資料健康度讀的治理參照句（見 `is_dev_only_text`）。
     ⛔ 這只是呈現政策：被略過的句子仍完整留在 `FieldVM.detail`（Active Contract §8）。"""
-    return bool(detail) and not is_dev_only_text(detail)
+    if not detail:
+        return False
+    if is_dev_only_text(detail):
+        if not is_known_l0_explain(detail):      # 不沉默：不是已知 L0 常數卻命中治理參照 → 有人把工程句寫進 detail
+            print(f"[ui2.html] WARNING 含治理參照的 detail 未顯示（不是已知 L0 說明常數）：{detail[:80]!r}")
+        return False
+    return True
 
 
 def tone_for(field: FieldVM) -> ChipTone:

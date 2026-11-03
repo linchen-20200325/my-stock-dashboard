@@ -258,3 +258,6 @@
 9. [ ] 手機 390×844／桌機 1440×900 viewport：FAKE 70 態＋Real 11 態（Streamlit 1.59.2 與 1.56.0 各一輪）＋Real 固定 snapshot 56 態全綠；`docs/vnext/newui2_p1/` 精選截圖目視（版面未跑版、文字無截斷、第一屏要素與 DEC-127 順序、導覽餘裕不退化）。
 10. [ ] `git diff --name-only origin/main -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 為空；`shared` 只動 `ui2_contract`；`src/services` 只動 `ui2/`；未碰 Risk Cap／System Action／Digest／OAuth／資料來源；未刪 VM 欄位／canonical／provenance；未擴張 P2～P7。
 11. [ ] 未宣稱「已無工程字樣」為窮舉語意稽核（詞彙清單掃描）；未宣稱 Cloud／Safari／真機已驗；未宣稱獨立 QA 完成。
+12. [ ] （P1 QA 修正）Capability 欄位原因句不含「資料未備／資料未取得／尚無資料」、Missing 欄位不含「尚未開放／尚未提供」（`test_capability_and_missing_copy_never_cross_axes`）；同頁無「需按更新」vs「目前不提供更新」矛盾句。
+13. [ ] （P1 QA 修正）畫面無例外型別名（`\w+(Error|Exception)`）；FAKE 來源／資料日為「FAKE 示意資料／FAKE 示意」（FAKE 前綴保留）；無「冷啟動」「占位」「FAKE·scenario」「FAKE-ASOF」；expander 標題無文字「▸」；Real 台股來源 chip 換行不貼邊。
+14. [ ] （P1 QA 修正）`BREADTH_PROXY_SCORING_ENABLED` 前提測試綠；`html.shown()` 對未知治理參照句 print 警告。

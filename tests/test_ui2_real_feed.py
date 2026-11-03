@@ -133,8 +133,8 @@ def test_twii_parquet_is_the_real_local_cache_and_feed_reads_it_without_hardcodi
     (_twii_view(ok=False, close=(), as_of=None, error="加權指數歷史快取讀不到"), None,
      FieldState.MISSING, T.TEXT_MISSING_NOT_FETCHED, "讀不到"),
     (_twii_view(ok=False, close=(), as_of=None, failed=True, error="OSError: disk"), None,
-     FieldState.UNAVAILABLE, T.TEXT_UNAVAILABLE, "OSError"),
-    (None, RuntimeError("boom-twii"), FieldState.UNAVAILABLE, T.TEXT_UNAVAILABLE, "RuntimeError"),
+     FieldState.UNAVAILABLE, T.TEXT_UNAVAILABLE, "台股加權指數暫時無法讀取"),
+    (None, RuntimeError("boom-twii"), FieldState.UNAVAILABLE, T.TEXT_UNAVAILABLE, "台股加權指數暫時無法讀取"),
     (_twii_view(is_stale=True, age_days=3, stale_reason="快取超過 3 天"), None,
      FieldState.STALE, "⚠ 過期 3 天", "快取超過 3 天"),
     (_twii_view(is_stale=True, age_days=None), None, FieldState.STALE, T.TEXT_STALE_UNKNOWN, None),
@@ -151,6 +151,7 @@ def test_twii_states_are_mapped_without_inventing_values(monkeypatch, view, exc,
         assert f.value_text is None                       # missing ≠ 0；unavailable ≠ safe
     if detail_has:
         assert detail_has in (f.detail or "")
+    assert not re.search(r"\w+(Error|Exception)", f.detail or "")             # 例外型別名不上畫面（型別名在 snapshot／log）
 
 
 def test_twii_unknown_freshness_is_never_ok(monkeypatch):
@@ -245,7 +246,8 @@ def test_regime_read_failure_is_unavailable_not_unevaluated(monkeypatch):
     vms = _vms(_feed(monkeypatch, regime_exc=RuntimeError("macro_state.json: JSONDecodeError")))
     for f in _regime_triplet(vms):
         assert f.state is FieldState.UNAVAILABLE and f.status_text == T.TEXT_UNAVAILABLE
-        assert "RuntimeError" in f.detail and "JSONDecodeError" not in f.detail     # 畫面只放型別名
+        assert f.detail == "市場位階暫時無法讀取"                                    # P1 QA：固定人話句，型別名／訊息都不上畫面
+        assert "RuntimeError" not in f.detail and "JSONDecodeError" not in f.detail
 
 
 def test_strict_really_raises_on_a_corrupt_state_file_end_to_end(tmp_path, monkeypatch):

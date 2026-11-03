@@ -105,6 +105,14 @@ def is_dev_only_text(text: str | None) -> bool:
     return bool(text) and bool(_DEV_ONLY_RX.search(text))
 
 
+def is_known_l0_explain(text: str | None) -> bool:
+    """`text` 是否含 L0 `regime_arbiter` 逐字說明常數（唯一獲准「含治理參照卻被 Human UI 略過」的句子）。"""
+    if not text:
+        return False
+    from shared import regime_arbiter as RA     # 延遲 import（L0 內部；避免載入期循環）
+    return RA.NOT_LOADED_PENDING_BREADTH_EXPLAIN in text or RA.UNEVALUATED_BREADTH_EXPLAIN in text
+
+
 def stale_text(days: int | None) -> str:
     """Stale 字樣；天數未知 → `⚠ 可能已過期`（⛔ 不補推估天數）。"""
     if days is None:

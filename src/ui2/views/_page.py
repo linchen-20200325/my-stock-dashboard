@@ -55,7 +55,7 @@ def render_sections(vm: PageVM, *, mode: str | None = None, extra=()) -> None:
         if sec.level == "L1":
             _md(f'<div class="ui2-section-title">{escape(sec.title)}</div>' + rows)
         else:
-            with st.expander(f"▸ {sec.title}", expanded=False):
+            with st.expander(sec.title, expanded=False):   # Streamlit 自帶展開箭頭；不再加文字「▸」（雙箭頭）
                 _md(rows)
 
 

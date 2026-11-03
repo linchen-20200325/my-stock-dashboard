@@ -37,7 +37,11 @@ ENGINEERING_VOCAB: tuple[str, ...] = (
     "Preview", "尚未接線", "接線", "PORT", "Gate", "Stage", "Aggregator", "Headless", "session", "Session",
     "路徑 C", "OAuth", "nonce", "契約", "canonical", "Legacy", "第二套規則", "workspace", "macro_state",
     "規則分支", "DEC-", "traceback", "Traceback", "Exception", "src.", ".py", "詳見 log", "fake data",
+    # QA 追加（P3）：FAKE microtag／內部場景用語
+    "scenario", "ASOF", "冷啟動", "占位", "placeholder", "FAKE·",
 )
+#: 例外型別名（`OSError`、`RuntimeError`、`RealFeedContractError`…）不得上畫面：型別名只留 log／snapshot。
+_ERROR_SUFFIX_RX = re.compile(r"\b\w+(?:Error|Exception)\b")
 #: 層級標記（獨立字詞，避免誤傷 "L1" 以外的英數）：標題上外顯的「（L2）」「（L3）」「L2 明細」。
 _LAYER_RX = re.compile(r"(?<![A-Za-z0-9])L[1-6](?![A-Za-z0-9])")
 _NUMBERED_RX = re.compile(r"[①②③④⑤]")
@@ -82,6 +86,7 @@ def hits_in(text: str) -> list[str]:
     for ph in _ALLOWED_PHRASES:
         text = text.replace(ph, "")
     found = [w for w in ENGINEERING_VOCAB if w in text]
+    found += sorted(set(m.group(0) for m in _ERROR_SUFFIX_RX.finditer(text)))
     found += sorted(set(_LAYER_RX.findall(text)))
     found += sorted(set(_NUMBERED_RX.findall(text)))
     return found
@@ -145,13 +150,98 @@ def test_only_the_verbatim_l0_explain_constants_are_withheld_from_the_human_ui()
         assert RA.NOT_LOADED_PENDING_BREADTH_EXPLAIN in d or RA.UNEVALUATED_BREADTH_EXPLAIN in d, d
 
 
+# ── 三軸文案：Capability 欄位的原因句不得讀成 Missing（資料缺）；Missing 欄位不得讀成「尚未開放」──────────
+#: Missing 軸字樣（資料缺）／Capability 軸字樣（功能未開放）。各自只准出現在自己那一軸的欄位 detail。
+MISSING_AXIS_WORDS = ("資料未備", "資料未取得", "尚無資料", "無資料")
+CAPABILITY_AXIS_WORDS = ("尚未開放", "尚未提供")
+
+
+def _all_fields(vm) -> list:
+    from shared.ui2_contract.models import FieldVM
+    out: list = []
+
+    def walk(o):
+        if isinstance(o, FieldVM):
+            out.append(o)
+        elif dataclasses.is_dataclass(o) and not isinstance(o, type):
+            for f in dataclasses.fields(o):
+                walk(getattr(o, f.name))
+        elif isinstance(o, (list, tuple)):
+            for x in o:
+                walk(x)
+    walk(vm)
+    return out
+
+
+def _axis_violations(vm) -> list[str]:
+    from shared.ui2_contract.models import CapabilityState, FieldState
+    bad = []
+    for f in _all_fields(vm):
+        d = f.detail or ""
+        if f.capability is CapabilityState.NOT_PROVIDED:
+            bad += [f"capability『{f.label}』的原因含 Missing 軸字樣 {w!r}：{d}" for w in MISSING_AXIS_WORDS if w in d]
+        elif f.state is FieldState.MISSING:
+            bad += [f"Missing『{f.label}』的原因含 Capability 軸字樣 {w!r}：{d}" for w in CAPABILITY_AXIS_WORDS if w in d]
+    return bad
+
+
+@pytest.mark.parametrize("page", PAGE_IDS)
+def test_capability_and_missing_copy_never_cross_axes(page):
+    for scenario in SCENARIO_IDS:
+        accounts = ACCOUNT_IDS if page == P4_ME else (None,)
+        for acct in accounts:
+            assert _axis_violations(get_preview_page_vm(page, scenario, account=acct)) == [], f"{page}/{scenario}/{acct}"
+    for name, snap in _snapshots().items():
+        assert _axis_violations(get_real_page_vm(page, snap)) == [], f"{page}/{name}"
+
+
+def test_axis_copy_guard_has_teeth():
+    vm = get_real_page_vm("p4_market", _snapshots()["loaded"])
+    assert _axis_violations(vm) == []
+    f0 = next(f for f in _all_fields(vm) if f.label == "VIX")
+    bad_cap = dataclasses.replace(f0, detail="此項目前尚無資料")
+    assert _axis_violations(dataclasses.replace(vm, context=dataclasses.replace(
+        vm.context, cards=(dataclasses.replace(vm.context.cards[1], field=bad_cap),)))), "capability 讀成缺資料 → 要被抓"
+    from shared.ui2_contract.models import FieldState
+    miss = dataclasses.replace(f0, capability=type(f0.capability).PROVIDED, state=FieldState.MISSING,
+                               status_text=T.TEXT_MISSING_NOT_READY, detail="此功能尚未開放")
+    assert _axis_violations(dataclasses.replace(vm, context=dataclasses.replace(
+        vm.context, cards=(dataclasses.replace(vm.context.cards[1], field=miss),)))), "Missing 讀成尚未開放 → 要被抓"
+
+
+def test_error_type_names_never_reach_the_screen():
+    snap = _snapshots()["unavailable"]
+    for page in ("p4_market", "p4_target"):
+        text = vm_visible_text(get_real_page_vm(page, snap))
+        assert "OSError" not in text and "RuntimeError" not in text and "暫時無法讀取" in text
+    assert snap.twii_error == "OSError" and snap.regime_error == "RuntimeError"      # 型別名仍在 snapshot（內部／log）
+    assert hits_in("台股加權指數讀取失敗（OSError）") == ["OSError"]
+    assert hits_in("RealFeedContractError") == ["RealFeedContractError"]
+
+
+def test_regime_see_why_premise_breadth_proxy_scoring_is_off():
+    """`REGIME_SEE_WHY`「尚缺正式的市場廣度」的前提＝廣度代理值不計分（DEC-074）。改 True 時須重審文案與 L0 說明。"""
+    from shared import signal_thresholds as ST
+    assert ST.BREADTH_PROXY_SCORING_ENABLED is False, "BREADTH_PROXY_SCORING_ENABLED 變了：重審 REGIME_SEE_WHY 與 L0 *_EXPLAIN 文案"
+
+
+def test_shown_warns_instead_of_silently_hiding_unknown_governance_text(capsys):
+    from src.ui2.components import html as H
+    assert H.shown("普通原因句") is True
+    assert H.shown(RA.NOT_LOADED_PENDING_BREADTH_EXPLAIN + "。x") is False
+    assert capsys.readouterr().out == ""                          # 已知 L0 常數：安靜略過
+    assert H.shown("工程句（DEC-999）") is False
+    assert "WARNING" in capsys.readouterr().out                   # 未知治理參照句：略過但不沉默
+
+
 def test_vocabulary_scanner_has_teeth():
     """mutation：把工程字樣塞進任何一個欄位 → 掃描器必須抓到（防掃描器本身壞掉而假綠）。"""
     vm = get_preview_page_vm("p4_market", "loaded")
     assert hits_in(vm_visible_text(vm)) == []
     f0 = vm.context.cards[0].field
     for bad in ("尚未接線：PORT 至 L3", "Stage G 前不提供", "待 System Action Aggregator", "路徑 C", "OAuth nonce",
-                "詳見 log", "規則分支 id：x", "標題（L2）", "① 現在狀態", "DEC-074", "macro_state.json"):
+                "詳見 log", "規則分支 id：x", "標題（L2）", "① 現在狀態", "DEC-074", "macro_state.json",
+                "FAKE·scenario", "FAKE-ASOF", "FAKE 冷啟動", "Holdings（占位）", "OSError"):
         mutated = dataclasses.replace(vm, context=dataclasses.replace(
             vm.context, cards=(dataclasses.replace(vm.context.cards[0], field=dataclasses.replace(f0, value_text=bad)),)))
         assert hits_in(vm_visible_text(mutated)), bad
@@ -281,3 +371,12 @@ def test_viewport_p1_evaluators_have_teeth():
     legacy = out()                            # 舊版量測 dict（無這兩個鍵）→ 略過，不誤判
     MV._evaluate_p1({}, legacy)
     assert not any(legacy.values())
+
+
+def test_expander_labels_have_no_text_arrow_prefix_streamlit_draws_its_own():
+    """QA P3-7：摺疊列已有 Streamlit 自帶箭頭，標題不再加文字「▸」（雙箭頭）。區塊本身仍在（P3 才移除），故只驗前綴。"""
+    at = _at(dev=False)
+    for page in PAGE_IDS:
+        at.radio(key="ui2_page").set_value(page).run(timeout=60)
+        labels = [e.label for e in at.expander]
+        assert all(not lb.lstrip().startswith("▸") for lb in labels), (page, labels)

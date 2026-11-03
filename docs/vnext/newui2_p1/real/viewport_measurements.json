@@ -226,10 +226,10 @@
     "banner_bottom": 87.9,
     "qa_top": 140.9
    },
-   "last_content_bottom": 250.7,
+   "last_content_bottom": 250.2,
    "card_heights": [
-    159,
-    159,
+    158,
+    158,
     180,
     180,
     159,
@@ -244,7 +244,7 @@
      "height": 76.7,
      "width": 361.2,
      "inside_l1": true,
-     "text": "今日主要風險 ⬜ 尚未提供 需按 🚀 更新後才有，目前尚未開放"
+     "text": "今日主要風險 ⬜ 尚未提供 今日風險摘要尚未開放"
     },
     "mode_box": null,
     "mode_content": null,
@@ -256,7 +256,7 @@
     "snapshot_labels": [],
     "first_block_after_l1_top": 618.1,
     "risk_line_height": 24,
-    "scroll_end_bottom": 764.4,
+    "scroll_end_bottom": 763.9,
     "nav_margin_after_risk": 172.9
    },
    "failures": {},
@@ -356,9 +356,9 @@
    "stress": {
     "risk_top": 589.3,
     "risk_bottom": 666.0,
-    "scroll_end_bottom": 764.3,
-    "scroll_end_gap_to_nav": 26.7,
-    "risk_bottom_at_scroll_end": -368.0
+    "scroll_end_bottom": 763.8,
+    "scroll_end_gap_to_nav": 27.2,
+    "risk_bottom_at_scroll_end": -367.0
    },
    "failures": {},
    "pass": true
@@ -388,19 +388,19 @@
     },
     {
      "q": "q1",
-     "text": "精選摘要 ⬜ 尚未提供 精選需連網取得，且候選的組合方式尚待定義，目前尚無資料",
+     "text": "精選摘要 ⬜ 尚未提供 精選尚未開放（需連網取得，且候選的組合方式尚待定義）",
      "top": 296.1,
-     "bottom": 370.2,
+     "bottom": 351.0,
      "left": 27.4,
      "right": 362.6,
-     "height": 74.1,
+     "height": 54.9,
      "width": 335.2
     },
     {
      "q": "ctx",
      "text": "市場位階 ⬜ 尚未載入 Risk Cap ⬜ 無法判定",
-     "top": 370.2,
-     "bottom": 406.0,
+     "top": 351.0,
+     "bottom": 386.8,
      "left": 27.4,
      "right": 362.6,
      "height": 35.7,
@@ -409,8 +409,8 @@
     {
      "q": "q2",
      "text": "是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
-     "top": 406.0,
-     "bottom": 460.9,
+     "top": 386.8,
+     "bottom": 441.7,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -419,8 +419,8 @@
     {
      "q": "q3",
      "text": "下一步 ⬜ 尚未提供 選一檔後進入研究頁（尚未提供）",
-     "top": 460.9,
-     "bottom": 515.8,
+     "top": 441.7,
+     "bottom": 496.6,
      "left": 27.4,
      "right": 362.6,
      "height": 54.9,
@@ -460,7 +460,7 @@
     "banner_bottom": 87.9,
     "qa_top": 291.1
    },
-   "last_content_bottom": 306.2,
+   "last_content_bottom": 306.0,
    "card_heights": [
     159,
     159
@@ -491,10 +491,10 @@
     },
     "account": null,
     "snapshot_labels": [],
-    "first_block_after_l1_top": 540.8,
+    "first_block_after_l1_top": 521.6,
     "risk_line_height": null,
-    "scroll_end_bottom": 764.0,
-    "nav_margin_after_risk": 250.2
+    "scroll_end_bottom": 763.8,
+    "nav_margin_after_risk": 269.4
    },
    "failures": {},
    "pass": true
@@ -998,7 +998,7 @@
      "height": 77.1,
      "width": 381.3,
      "inside_l1": true,
-     "text": "今日主要風險 ⬜ 尚未提供 需按 🚀 更新後才有，目前尚未開放"
+     "text": "今日主要風險 ⬜ 尚未提供 今日風險摘要尚未開放"
     },
     "mode_box": null,
     "mode_content": null,
@@ -1041,7 +1041,7 @@
     },
     {
      "q": "q1",
-     "text": "精選摘要 ⬜ 尚未提供 精選需連網取得，且候選的組合方式尚待定義，目前尚無資料",
+     "text": "精選摘要 ⬜ 尚未提供 精選尚未開放（需連網取得，且候選的組合方式尚待定義）",
      "top": 299.2,
      "bottom": 354.2,
      "left": 213,

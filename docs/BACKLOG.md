@@ -1566,9 +1566,23 @@
 |---|---|---|---|---|---|---|
 | **NUI2-P1-L0-EXPLAIN-WITHHELD** | P2 | L0 `regime_arbiter.NOT_LOADED_PENDING_BREADTH_EXPLAIN`／`UNEVALUATED_BREADTH_EXPLAIN`（客戶裁示原文；逐字 teeth 不得改）內含 `DEC-074／075` 與 `macro_state.json`，與「Human UI 無工程字樣」衝突。P1 的解法＝**render policy**：`html.shown()`（`is_dev_only_text`：`DEC-\d+`／`macro_state.json`／backtick）使含治理參照的 `detail` 不畫；**VM `detail` 仍逐字保留**（測試 `test_only_the_verbatim_l0_explain_constants_are_withheld_from_the_human_ui` 斷言被略過者只可能是這兩個 L0 常數）。結果：📊 為什麼 expander 內「位階說明」列現只剩標籤＋狀態 chip；使用者看到的原因＝`REGIME_SEE_WHY` 一句。P6 資料健康度·市場位階項 Level 2 須決定如何呈現完整說明（DEC／檔名是否外露） | open | P3、P6 | P6 設計時決定 | 0 |
 | **NUI2-P1-DETAIL-COPY-REVIEW** | P2 | P1 把 `reason`／`disabled_reason` 的工程句改寫成人話後，**VM `detail` 字串不再含原工程原因**（原原因對映：`docs/vnext/NEWUI2_REAL_FEED_MAPPING_2026-11-03.md` 與本補記）。若日後要保留「人話＋debug」雙欄 ＝ VM schema 變更（先過 Gate）。另：新文案措辭未經客戶看過 | open | — | 客戶覆核措辭；需雙欄時送 Gate | 0 |
-| **NUI2-P1-ERROR-TYPE-NAMES** | P3 | 紅色 Unavailable 錯誤句仍含例外型別名（如 `台股加權指數讀取失敗（OSError）`）：保留為最小診斷線索（識別字、非訊息原文；原測試 `test_twii_states_are_mapped…` 的設計）；P1 只拿掉「詳見 log」「canonical 契約」。是否也移到開發面／資料健康度 L3 待客戶／P6 | open | P6 | P6 決定 | 0 |
+| **NUI2-P1-ERROR-TYPE-NAMES** | P3 | 紅色 Unavailable 錯誤句仍含例外型別名（如 `台股加權指數讀取失敗（OSError）`）：保留為最小診斷線索（識別字、非訊息原文；原測試 `test_twii_states_are_mapped…` 的設計）；P1 只拿掉「詳見 log」「canonical 契約」。是否也移到開發面／資料健康度 L3 待客戶／P6 | ~~open~~ **closed（P1 QA 修，2026-11-03）**：`_error_text` 改固定句「…暫時無法讀取」／契約違反「…：資料格式異常，暫時無法顯示」，型別名只留 snapshot 錯誤代碼與 feed log；`ENGINEERING_VOCAB`＋渲染層掃描加 `\b\w+(Error|Exception)\b` 規則 | — | — | 0 |
 | **NUI2-P1-TOOLBAR-CLOUD-UNVERIFIED** | P2 | UI2 CSS 隱藏 `stToolbar`／`stAppDeployButton`／`stMainMenu`：本機 1.59.2／1.56.0 Chromium 實測不可見；Streamlit Cloud 未驗；不動 `.streamlit/config.toml`（會連帶影響 Legacy app；`client.toolbarMode` 屬 cutover Gate） | open | cutover Gate | 部署後目視 | 0 |
-| **NUI2-P1-REAL-LOOKUP-SUMMARY-DUP** | P3 | 🎯 Real 即時查一檔：查詢摘要在第一屏與 idle 區塊各出現一次（ui_gap_B L1；非「題號／重複標籤」範圍，P1 不處理） | open | P4／P6 | P4 | 0 |
+| **NUI2-P1-REAL-LOOKUP-SUMMARY-DUP** | P3 | 🎯 Real 即時查一檔：查詢摘要在第一屏與 idle 區塊各出現一次（ui_gap_B L1；非「題號／重複標籤」範圍，P1 不處理） | open（📌 QA1 P3-6 查證：**P1 前就存在**〔`git show 13632c1e:src/ui2/components/html.py` 的 `lookup_idle_html`＋`target_first_screen_html` 同時畫查詢摘要，FAKE cold 亦然〕，非 P1 造成；只登記，不修） | P4／P6 | P4 | 0 |
+
+#### P1 QA 修正補記（兩組獨立 QA 無 P0／P1；2026-11-03；append-only；實作組單組，待總管複驗）
+
+| QA 發現 | 處置 |
+|---|---|
+| QA1 P2-1 三軸文案：`⬜ 尚未提供`（Capability）欄位的原因寫「此項目前尚無資料」會被讀成 Missing | 已修：`_R_EMPTY`／`_R_PORT`／`_R_NOT_IN_BATCH`／`_R_SESSION` 改「此項目尚未開放」；Real 精選／候選／今日風險句同改；同頁矛盾句（VIX「需按更新後才有」vs CTA「目前不提供更新」）已除。新測試 `test_capability_and_missing_copy_never_cross_axes`（Capability 欄 detail 不得含「資料未備／資料未取得／尚無資料／無資料」，Missing 欄不得含「尚未開放／尚未提供」；具名清單 `MISSING_AXIS_WORDS`／`CAPABILITY_AXIS_WORDS`）＋teeth；mutation：`_R_EMPTY`／`_R_PORT`／`_R_NOT_IN_BATCH` 改回「尚無資料」→轉紅 |
+| QA2 P2-1 例外型別名上畫面 | 已修（`NUI2-P1-ERROR-TYPE-NAMES` 結案，見上）；mutation：放回型別名→轉紅 |
+| 詞彙擴充（`scenario`／`ASOF`／`冷啟動`／`占位`／`placeholder`／`FAKE·`） | FAKE 來源改「FAKE 示意資料」、資料日「FAKE 示意」（**FAKE 前綴與 banner 保留**；既有 FAKE 前綴雙向守衛未放寬）；「冷啟動」文案改「示意」；「Holdings（占位）」→「持股清單」；「FAKE 占位」→「FAKE 示意」；mutation 4 項（`FAKE·scenario`／`FAKE-ASOF`／`FAKE 冷啟動`／`Holdings（占位）`）皆轉紅 |
+| QA1 P3-7 雙箭頭 | `render_sections` 的 expander 標題不再加文字「▸」（Streamlit 自帶箭頭；區塊本身仍在，P3 才移除）；新測試 `test_expander_labels_have_no_text_arrow_prefix…`＋mutation |
+| QA1 P3-5 台股卡來源 chip 三行貼邊 | CSS：`.ui2-freshrow .ui2-chip` 允許換行、`max-width:100%`、圓角 12px（來源字串來自 L1 service，不改） |
+| QA1 P3-6 🎯 cold 兩個相同「查詢摘要」 | 查證為 P1 前既有（見 `NUI2-P1-REAL-LOOKUP-SUMMARY-DUP`），只登記 |
+| QA1 P3-3／P3-4 `REGIME_SEE_WHY` 前提 | 常數旁加註前提（`BREADTH_PROXY_SCORING_ENABLED=False`）；測試 `test_regime_see_why_premise_breadth_proxy_scoring_is_off`（改 True 轉紅提醒重審文案；mutation 實測轉紅） |
+| QA2 P2-2 `html.shown()` 靜默略過 | 非已知 L0 說明常數而命中治理參照 → `print` 警告（`is_known_l0_explain`）；測試 `test_shown_warns_instead_of_silently_hiding_unknown_governance_text`＋mutation |
+| `NUI2-P1-L0-EXPLAIN-WITHHELD` | 維持 P6 決定 |
 
 #### #1006 施工附件合併記錄與其 P3 登記（2026-11-03／04；append-only；實作組依總管轉達登記——合併／CI／獨立 QA 結論為總管回報，實作組僅實查 merge 內容）
 
