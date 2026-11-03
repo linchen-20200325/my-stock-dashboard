@@ -10,6 +10,8 @@
 
 > 📌 **2026-11-02 現行接手點**：見本檔**最末**「~~Safe Handoff（2026-11-02，Final UI Contract Freeze）~~ ~~Safe Handoff（2026-11-02 更新：Freeze 已拍板）~~ ~~Safe Handoff（2026-11-02 New UI2）~~ ~~Safe Handoff（2026-11-02 New UI2 Architecture 客戶核准）~~ **Safe Handoff（2026-11-02 New UI2 Semantic Correction Gate）**（④ 2026-11-02 DEC-124 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-124）＋AI 總管〔事實更新〕；原文刪除線保留；Batch 1 段亦已標過期）」（DEC-122）（2026-11-02 客戶裁示 Q1～Q3 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示）＋AI 總管〔事實更新〕；原文刪除線保留）；下方索引表為 2026-10-29 起的歷史索引，必讀規則仍有效（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。② 2026-11-02 客戶 New UI2 裁示後更新（DEC-123；決策者 客戶（DEC-123）＋AI 總管〔事實更新〕；有意識的更新，不是漏刪）；③ 2026-11-02 客戶裁示 Q1～Q4＋#996 合併後更新（DEC-123 裁示；決策者 客戶（DEC-123 裁示）＋AI 總管〔事實更新〕；有意識的更新，不是漏刪）。（#997 稽核 m3：上一版把 #996 的括號標註改寫為「更新紀錄 ①」，已還原為 #996 原文逐字、再追加 ②③。）
 
+> 📌 **2026-11-03 現行接手點更新（append）**：最新為本檔**最末**「**Safe Handoff（2026-11-03 New UI2 Batch 2 …；現行）**」；上一行所指 Semantic Correction Gate 段已標「~~現行~~」（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。
+
 ### 📌 Resume Checkpoint 索引（現行；2026-10-29 Phase 1 SSOT Reset／Contract Freeze；DEC-086 欄位＋DEC-109 索引要求）
 
 > **HANDOFF 只是索引，不是規格 SSOT**（客戶 DEC-109 二十六）；本節只指向正式文件。**GitHub 操作事實優先於本節；不一致時修正本節**（`PROJECT_RULES.md` 第 20 節、第 25 節事實軸）。本節以下全部內容為 **historical**——⚠️ **例外**：舊段中仍有效的**必讀規則不屬 historical**，例如「⛔ 禁止事件回音」、Hard Output Gate（DEC-104）、DEC-106（Model×Effort 不重複要求切換）、Scope Inflation Guard（DEC-103）；其效力以 `docs/DECISIONS.md` 各條為準，不因所在段落被標 historical 而失效。
@@ -746,7 +748,7 @@ DEC-086 規則已於 main，本表已落地。
 | 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule／Decision＝無；Audit finding／Limitation／Backlog／Migration debt 已寫入上列 GitHub 正式文件。 |
 | 禁止事項（摘要） | ⛔ 修改 `app.py`／加 `?ui=2`／切 production default；⛔ 刪／改 Legacy New UI 與 Old UI；⛔ 實作 System Action Aggregator（未經 implementation Gate）；⛔ 在 VM 或 UI2 聚合動作、創造投資規則；⛔ 為 Preview 建第二套 data pipeline；⛔ 提前要求客戶建 Preview App；⛔ 用 `guard_chip` 承載中性資訊；⛔ 把 Batch 1 截圖當 Visual Fidelity Gate 通過；⛔ 修改 LINE production。 |
 
-- **Safe Handoff（2026-11-02 New UI2 Semantic Correction Gate；現行）**（SESSION_CONTINUITY C1 欄位；決策者 客戶 (8)〔DEC-124〕＋AI 總管〔事實〕；**實作組單組產出，待總管複驗**）：
+- **Safe Handoff（2026-11-02 New UI2 Semantic Correction Gate；~~現行~~ 已由下方 Batch 2 段接手，內容仍有效作歷史）**（2026-11-03 New UI2 Batch 2 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕；原文刪除線保留）（SESSION_CONTINUITY C1 欄位；決策者 客戶 (8)〔DEC-124〕＋AI 總管〔事實〕；**實作組單組產出，待總管複驗**）：
 
 | 欄位（C1） | 內容 |
 |---|---|
@@ -761,3 +763,17 @@ DEC-086 規則已於 main，本表已落地。
 | 驗證（稽核修正批；實作組實測，單組） | 目標測試（`tests/test_ui2_*.py`、`test_uim_market_page.py`、`test_c3_layering_guard`、`test_zz_test_portability`、`test_views_no_unverified_universal_claims`）387 passed；`streamlit==1.56.0` venv（ui2＋uim_market_page）339 passed；**全 repo 序列 `-m "not slow"`：36265 passed、0 failed、46 skipped**；修正批 mutation 4 項（混合字樣放回 UI2 NE 表、無法判定字樣併入 NE 表、拔掉方向夾具改讀 live、夾具 PMI 改持平）全紅後已還原；bisect 以 worktree 實跑 `6b814b0d`／`e5be97a6`。 |
 | 禁止事項（摘要） | ⛔ navigation 實作、real data wiring、Aggregator、Risk Cap runtime、Digest、OneBrain、LINE（客戶 (8)-5）；⛔ 修改已凍結 W-1；⛔ 把 `⬜ 尚未提供` 稱為資料語意態；⛔ 合併 Not Evaluated 與 Unable to Determine；⛔ 新增 Risk Cap 規則或數值；⛔ 回退 #998；其餘沿 Batch 1 段禁止事項。 |
 
+- **Safe Handoff（2026-11-03 New UI2 Batch 2：W-1 導覽／共用元件三軸呈現／Mobile-first 第一屏＋viewport 量測；現行）**（SESSION_CONTINUITY C1 欄位；決策者 客戶 (9)；**實作組單組產出，待總管複驗**）：
+
+| 欄位（C1） | 內容 |
+|---|---|
+| live GitHub state | 基準 `origin/main`＝`830e8ad3`（含 #998 Batch 1、#999 DEC-124；實作組 `git status` 實查分支 `ccr-a0b4e085-ijdaio` 與之一致；cron 會推進 tip，以當下 `git fetch` 為準）。本批變更在工作樹，**commit／push／PR 由總管處理**（實作組未 commit、未 push）。 |
+| current Stage／exact safe stopping point | **New UI2 Batch 2 實作完成（待總管複驗＋獨立 QA＋客戶驗收）**：① W-1 導覽保真（手機底部固定四格／桌機左側；`temporary implementation gap` 收斂）② 共用元件三軸呈現（文字＋樣式雙載體）③ Mobile-first 第一屏＋可重現 viewport 量測（48 態，Streamlit 1.59.2／1.56.0 各 48/48 通過；FAKE 資料）。0 投資語意；未碰 Aggregator／Risk Cap runtime／Digest／OneBrain／LINE／real-data／production default。 |
+| 待客戶裁示 | **無即時待裁題**。需客戶知悉：凍結線框第一屏的「今日結論」「mode 切換＋搜尋」等**本批未做**（`NUI2-WIREFRAME-FIRST-SCREEN-EXTRAS`，屬 Stage B／C）；導覽自帶深色底（Light theme 不一致，`NUI2-NAV-THEME-LIGHT`）。 |
+| known limitations／blockers | 見 `docs/PROJECT_STATE.md` §54「限制」與 BACKLOG §5.1.22：量測為 FAKE 字串、Chromium headless 兩個 viewport；真機／Safari／iOS 安全區／螢幕閱讀器未測；CI slow lane 是否具 Chromium 未確認；導覽 CSS 依賴 `.st-key-*` 與 `:has()`。 |
+| **下一個唯一安全工作** | 總管複驗 Batch 2（獨立 QA；重點：`tests/test_ui2_batch2.py` 判定器 teeth、`tests/ui2_viewport/measure_viewport.py` 門檻出處、`git diff --name-only HEAD -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 為空、手機截圖目視）→ PR／CI → 客戶驗收。**驗收通過後**：下一批依 Stage 順序（B 市場頁 Final UI）；若涉及 System Action Aggregator／Risk Cap／Action Authority／Decision Digest／OneBrain／新資料語意／投資規則（含「今日結論」若需新資料語意）→ 停手回報建議 Claude Opus 5.5＋High，等客戶切換；⛔ 自行開始下一批。 |
+| required Model×Effort for resume | 純 presentation（版面／元件／CSS／文件）＝Sonnet 5.5＋Medium；Aggregator／Risk Cap／Action Authority／Digest／OneBrain／資料語意＝Opus 5.5＋High。判斷需切換 → 先停手通知客戶，⛔ 自行切換。 |
+| 正式文件索引 | 待辦 `docs/BACKLOG.md` §5.1.22（並更新 `NUI2-NAV-W1-FIDELITY`／`NUI2-PREVIEW-MOBILE-MEASURE`／`NUI2-VF-UI2-SUPPORT`／`NUI2-COMPONENT-GAP`）；知識 `docs/PROJECT_STATE.md` §54；驗收 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §16；債務 `docs/vnext/NEWUI2_MIGRATION_CUTOVER_CONTRACT_2026-11-02.md` §8；線框註記 `docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md` §0.4；量測證據 `docs/vnext/newui2_batch2/`；重跑 `python -m tests.ui2_viewport.measure_viewport --out <dir>`。 |
+| 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Rule＝無；新 Decision＝無（實作選擇屬 `CLAUDE.md` v3 §03-1 內部自決）；Audit finding／Limitation／Backlog／Migration debt／Acceptance item 已寫入上列 GitHub 正式文件（落盤以總管 commit／push 為準）。 |
+| 驗證（實作組實測，單組） | `tests/test_ui2_batch2.py` 94 passed＋1 slow（真瀏覽器，另跑 PASS）；`tests/test_ui2_*.py`＋`test_c3_layering_guard`＋`test_zz_test_portability`＋`test_views_no_unverified_universal_claims` 綠；`streamlit==1.56.0` venv（`/tmp/v156`；ui2＋c3）435 passed；**全 repo 序列（無 xdist）`python -m pytest tests -q -p no:cacheprovider -m "not slow"`：36359 passed、0 failed、46 skipped、186 deselected（20 分 35 秒）**；viewport 量測 1.59.2／1.56.0 各 48/48；mutation 10 項（見 `docs/PROJECT_STATE.md` §54）全紅後已還原；`git diff --name-only HEAD -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 實查為空。⚠️ 全 repo 序列是在 HANDOFF／PROJECT_STATE 末段文件編修**之前**跑完，之後只改文件文字；文件相關守衛（`test_zz_test_portability`、`test_views_no_unverified_universal_claims`、`test_ui2_*`）已於編修後重跑。 |
+| 禁止事項（摘要） | ⛔ 修改 `app.py`／加 `?ui=2`／切 production default；⛔ 刪／改 Legacy New UI 與 Old UI；⛔ 實作 System Action Aggregator／Risk Cap 規則數值 runtime／Decision Digest／OneBrain／LINE／real-data wiring；⛔ 把 `⬜ 尚未提供` 稱為資料語意態；⛔ 合併 Not Evaluated 與 Unable to Determine；⛔ 以「第一屏四問通過量測」宣稱線框第一屏全部落地；⛔ 動 `tools/`（量測腳本在 `tests/ui2_viewport/`）；其餘沿 Batch 1／DEC-124 段禁止事項。 |

@@ -1,0 +1,4970 @@
+{
+ "meta": {
+  "tool": "tests/ui2_viewport/measure_viewport.py",
+  "streamlit_version": "1.56.0",
+  "viewports": {
+   "mobile": [
+    390,
+    844
+   ],
+   "desktop": [
+    1440,
+    900
+   ]
+  },
+  "nav_mobile_h": 53,
+  "thresholds": [
+   {
+    "id": "first_screen_within_usable_height",
+    "rule": "第一屏四問（① 現在狀態／② 是否需要行動／③ 下一步／④ 主 CTA）與頁面 context 列（Risk Cap 等）的元素底緣 ≤ 可用高：手機 = 844 − 底部導覽 53 = 791px；桌機 = 900px。",
+    "source": "Freeze §16 視窗說明＋§0.1.6-2、Gate §3、Wireframes §0.4／§1／§8（px 數值出自 Freeze §16『可用高約 791px』）"
+   },
+   {
+    "id": "first_screen_above_nav",
+    "rule": "手機：第一屏元素底緣 ≤ 導覽列上緣（不被底部固定列遮住）；桌機：元素左緣 ≥ 左側導覽右緣。",
+    "source": "Wireframes §0.4（W-1）／Freeze §16"
+   },
+   {
+    "id": "no_horizontal_scroll",
+    "rule": "document／stMain 的 scrollWidth ≤ clientWidth（無水平捲動）；第一屏區塊內容不被橫向裁切。",
+    "source": "Gate §3（Mobile-first）、Audit Checklist 手機項（客戶 (5)-9）"
+   },
+   {
+    "id": "nav_fixed_four",
+    "rule": "導覽恰 4 項（📊 市場／🎯 標的／💼 持股／👤 我的）；手機＝底部固定（top = 844 − 53、貼底、全寬、4 格同列）；桌機＝左側固定（left = 0、垂直排列）；恰一項為當前頁。",
+    "source": "Wireframes §0.4／§7 W-1；客戶 (5)-7（固定四頁、⛔ 第五頁）"
+   },
+   {
+    "id": "nav_current_marked_not_by_color_only",
+    "rule": "當前頁除顏色外另有符號（`● ` 前綴 pseudo-element）與原生 radio `checked` 狀態。",
+    "source": "Freeze §4.1（顏色不是唯一載體）"
+   },
+   {
+    "id": "content_not_covered_by_nav",
+    "rule": "捲到頁底後，最後一個內容元素底緣 ≤ 導覽列上緣（手機）／左緣 ≥ 導覽右緣（桌機）。",
+    "source": "Wireframes §0.4（導覽不得遮住主要內容）"
+   },
+   {
+    "id": "no_title_overlap",
+    "rule": "頁面標題不與 Preview banner、第一屏區塊重疊（上下緣依序不交疊）。",
+    "source": "客戶 (9) 手機截圖目視項（標題無重疊）轉為可量測條件"
+   }
+  ],
+  "note": "全部場景為 FAKE；量測值未四捨五入的原始 px 於 elements／nav；門檻不自創（見 thresholds.source）。"
+ },
+ "summary": {
+  "states": 48,
+  "passed": 48,
+  "failed": []
+ },
+ "results": [
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_market",
+   "scenario": "cold",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 195.9,
+     "bottom": 267.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 267.6,
+     "bottom": 323.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 323.5,
+     "bottom": 419.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 按 🚀 更新",
+     "top": 419.2,
+     "bottom": 471.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 51.8,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 471.0,
+     "bottom": 561.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 731.4,
+   "card_heights": [
+    159,
+    159,
+    159,
+    159,
+    159,
+    159
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_target",
+   "scenario": "cold",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 195.9,
+     "bottom": 267.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 267.6,
+     "bottom": 323.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 323.5,
+     "bottom": 395.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 395.2,
+     "bottom": 447.8,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 447.8,
+     "bottom": 538.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 579.7,
+   "card_heights": [
+    159,
+    159
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_hold",
+   "scenario": "cold",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 195.9,
+     "bottom": 267.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 267.6,
+     "bottom": 323.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 323.5,
+     "bottom": 378.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 54.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 378.4,
+     "bottom": 474.1,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 按 🚀 更新",
+     "top": 474.1,
+     "bottom": 525.9,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 51.8,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 525.9,
+     "bottom": 616.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 579.7,
+   "card_heights": [
+    139
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_me",
+   "scenario": "cold",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 195.9,
+     "bottom": 267.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 267.6,
+     "bottom": 339.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 339.3,
+     "bottom": 411.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 411.0,
+     "bottom": 501.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 468.0,
+   "card_heights": [
+    159,
+    159,
+    159,
+    159
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_market",
+   "scenario": "loaded",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 震盪",
+     "top": 195.9,
+     "bottom": 247.7,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 51.8,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 247.7,
+     "bottom": 303.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 303.6,
+     "bottom": 399.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 399.3,
+     "bottom": 471.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 471.0,
+     "bottom": 561.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 730.6,
+   "card_heights": [
+    121,
+    121,
+    121,
+    121,
+    121,
+    121
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_target",
+   "scenario": "loaded",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 產業 Top 5 · 候選 10／完整 50（FAKE）",
+     "top": 195.9,
+     "bottom": 247.7,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 51.8,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 247.7,
+     "bottom": 303.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 303.6,
+     "bottom": 375.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 375.3,
+     "bottom": 427.8,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 427.8,
+     "bottom": 518.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 579.7,
+   "card_heights": [
+    143,
+    143
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_hold",
+   "scenario": "loaded",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 FAKE 組合 · 12 檔",
+     "top": 195.9,
+     "bottom": 247.7,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 51.8,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 247.7,
+     "bottom": 303.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 303.6,
+     "bottom": 358.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 54.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 358.5,
+     "bottom": 454.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 454.2,
+     "bottom": 525.9,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 525.9,
+     "bottom": 616.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 580.0,
+   "card_heights": [
+    97
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_me",
+   "scenario": "loaded",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 Google 已登入（FAKE 帳號）· Sheet …FAKE00",
+     "top": 195.9,
+     "bottom": 271.7,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 75.8,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 無異常（FAKE）",
+     "top": 271.7,
+     "bottom": 323.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 51.8,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 無需處理（FAKE）",
+     "top": 323.5,
+     "bottom": 375.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 51.8,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 375.3,
+     "bottom": 465.8,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 468.4,
+   "card_heights": [
+    121,
+    121,
+    121,
+    121
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_market",
+   "scenario": "missing",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 ⬜ 資料未備",
+     "top": 195.9,
+     "bottom": 248.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 248.4,
+     "bottom": 304.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 304.3,
+     "bottom": 400.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 400.0,
+     "bottom": 471.8,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 471.8,
+     "bottom": 562.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 730.8,
+   "card_heights": [
+    143,
+    143,
+    143,
+    143,
+    121,
+    121
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_target",
+   "scenario": "missing",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 ⬜ 資料未備",
+     "top": 195.9,
+     "bottom": 248.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 248.4,
+     "bottom": 304.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 304.3,
+     "bottom": 376.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 376.0,
+     "bottom": 428.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 428.6,
+     "bottom": 519.1,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 580.5,
+   "card_heights": [
+    143,
+    143
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_hold",
+   "scenario": "missing",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 ⬜ 資料未備",
+     "top": 195.9,
+     "bottom": 248.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 248.4,
+     "bottom": 304.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 304.3,
+     "bottom": 359.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 54.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 359.2,
+     "bottom": 455.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 455.0,
+     "bottom": 526.7,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 526.7,
+     "bottom": 617.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 579.8,
+   "card_heights": [
+    97
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_me",
+   "scenario": "missing",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 ⬜ 資料未備",
+     "top": 195.9,
+     "bottom": 248.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 ⬜ 資料未備",
+     "top": 248.4,
+     "bottom": 301.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 資料未備",
+     "top": 301.0,
+     "bottom": 353.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 353.5,
+     "bottom": 444.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 468.0,
+   "card_heights": [
+    143,
+    143,
+    143,
+    143
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_market",
+   "scenario": "stale",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 震盪⚠ 過期 3 天",
+     "top": 195.9,
+     "bottom": 248.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 248.4,
+     "bottom": 304.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 304.3,
+     "bottom": 400.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 400.0,
+     "bottom": 471.8,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 471.8,
+     "bottom": 562.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 730.8,
+   "card_heights": [
+    143,
+    143,
+    143,
+    143,
+    121,
+    121
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_target",
+   "scenario": "stale",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 產業 Top 5 · 候選 10／完整 50（FAKE）⚠ 過期 3 天",
+     "top": 195.9,
+     "bottom": 272.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 76.5,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 272.4,
+     "bottom": 328.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 328.3,
+     "bottom": 400.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 400.0,
+     "bottom": 452.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 452.6,
+     "bottom": 543.1,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 580.2,
+   "card_heights": [
+    166,
+    166
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_hold",
+   "scenario": "stale",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 FAKE 組合 · 12 檔⚠ 過期 3 天",
+     "top": 195.9,
+     "bottom": 248.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 248.4,
+     "bottom": 304.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 304.3,
+     "bottom": 359.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 54.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 359.2,
+     "bottom": 455.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 455.0,
+     "bottom": 526.7,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 526.7,
+     "bottom": 617.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 580.5,
+   "card_heights": [
+    120
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_me",
+   "scenario": "stale",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 Google 已登入（FAKE 帳號）· Sheet …FAKE00⚠ 過期 3 天",
+     "top": 195.9,
+     "bottom": 272.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 76.5,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 無異常（FAKE）⚠ 過期 3 天",
+     "top": 272.4,
+     "bottom": 325.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 無需處理（FAKE）⚠ 過期 3 天",
+     "top": 325.0,
+     "bottom": 377.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 377.5,
+     "bottom": 468.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 468.0,
+   "card_heights": [
+    143,
+    143,
+    143,
+    143
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_market",
+   "scenario": "unavailable",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 195.9,
+     "bottom": 267.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 267.6,
+     "bottom": 323.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 323.5,
+     "bottom": 419.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 419.2,
+     "bottom": 490.9,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 490.9,
+     "bottom": 581.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 730.9,
+   "card_heights": [
+    166,
+    166,
+    166,
+    166,
+    121,
+    121
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_target",
+   "scenario": "unavailable",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 195.9,
+     "bottom": 267.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 267.6,
+     "bottom": 323.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 323.5,
+     "bottom": 395.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 395.2,
+     "bottom": 447.8,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 447.8,
+     "bottom": 538.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 580.0,
+   "card_heights": [
+    166,
+    166
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_hold",
+   "scenario": "unavailable",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 195.9,
+     "bottom": 267.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 267.6,
+     "bottom": 323.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 323.5,
+     "bottom": 378.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 54.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 378.4,
+     "bottom": 474.1,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 474.1,
+     "bottom": 545.8,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 545.8,
+     "bottom": 636.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 579.9,
+   "card_heights": [
+    97
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_me",
+   "scenario": "unavailable",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 195.9,
+     "bottom": 267.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 267.6,
+     "bottom": 339.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 339.3,
+     "bottom": 411.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 411.0,
+     "bottom": 501.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 467.5,
+   "card_heights": [
+    166,
+    166,
+    166,
+    166
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_market",
+   "scenario": "not_evaluated",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 ⬜ 未評估／資料不足",
+     "top": 195.9,
+     "bottom": 249.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 53.5,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 249.4,
+     "bottom": 305.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 305.3,
+     "bottom": 401.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 401.0,
+     "bottom": 472.8,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 472.8,
+     "bottom": 563.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 730.8,
+   "card_heights": [
+    143,
+    143,
+    145,
+    145,
+    121,
+    121
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_target",
+   "scenario": "not_evaluated",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 ⬜ 未評估／資料不足",
+     "top": 195.9,
+     "bottom": 249.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 53.5,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 249.4,
+     "bottom": 305.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 305.3,
+     "bottom": 377.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 377.0,
+     "bottom": 429.6,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 52.5,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 429.6,
+     "bottom": 520.1,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 580.3,
+   "card_heights": [
+    143,
+    143
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_hold",
+   "scenario": "not_evaluated",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 ⬜ 未評估／資料不足",
+     "top": 195.9,
+     "bottom": 249.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 53.5,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 249.4,
+     "bottom": 305.3,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 55.9,
+     "width": 335.2
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 305.3,
+     "bottom": 360.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 54.9,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 360.2,
+     "bottom": 456.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 95.7,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 456.0,
+     "bottom": 527.7,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 71.7,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 527.7,
+     "bottom": 618.2,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 580.5,
+   "card_heights": [
+    120
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "mobile",
+   "viewport": {
+    "w": 390,
+    "h": 844
+   },
+   "page": "p4_me",
+   "scenario": "not_evaluated",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 ⬜ 未評估／資料不足",
+     "top": 195.9,
+     "bottom": 249.4,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 53.5,
+     "width": 335.2
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 ⬜ 未評估／資料不足",
+     "top": 249.4,
+     "bottom": 303.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 53.5,
+     "width": 335.2
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 未評估／資料不足",
+     "top": 303.0,
+     "bottom": 356.5,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 53.5,
+     "width": 335.2
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 356.5,
+     "bottom": 447.0,
+     "left": 27.4,
+     "right": 362.6,
+     "height": 90.5,
+     "width": 335.2
+    }
+   ],
+   "nav": {
+    "top": 791,
+    "bottom": 844,
+    "left": 0,
+    "right": 390,
+    "height": 53,
+    "width": 390,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "main": {
+     "scrollWidth": 390,
+     "clientWidth": 390
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 150.0,
+    "bottom": 174.9,
+    "banner_bottom": 134.0,
+    "qa_top": 190.9
+   },
+   "last_content_bottom": 468.0,
+   "card_heights": [
+    143,
+    143,
+    145,
+    145
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_market",
+   "scenario": "cold",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 181.1,
+     "bottom": 252.8,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 252.8,
+     "bottom": 308.7,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 308.7,
+     "bottom": 380.4,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 按 🚀 更新",
+     "top": 380.4,
+     "bottom": 432.2,
+     "left": 213,
+     "right": 1347,
+     "height": 51.8,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 432.2,
+     "bottom": 522.8,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 834.8,
+   "card_heights": [
+    163,
+    163,
+    163,
+    163,
+    163,
+    163
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_target",
+   "scenario": "cold",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 181.1,
+     "bottom": 252.8,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 252.8,
+     "bottom": 308.7,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 308.7,
+     "bottom": 380.4,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 380.4,
+     "bottom": 433.0,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 433.0,
+     "bottom": 523.5,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 682.6,
+   "card_heights": [
+    142,
+    142
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_hold",
+   "scenario": "cold",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 181.1,
+     "bottom": 252.8,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 252.8,
+     "bottom": 308.7,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 308.7,
+     "bottom": 363.6,
+     "left": 213,
+     "right": 1347,
+     "height": 54.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 363.6,
+     "bottom": 435.3,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 按 🚀 更新",
+     "top": 435.3,
+     "bottom": 487.1,
+     "left": 213,
+     "right": 1347,
+     "height": 51.8,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 487.1,
+     "bottom": 577.7,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 684.0,
+   "card_heights": [
+    142
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_me",
+   "scenario": "cold",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 181.1,
+     "bottom": 252.8,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 252.8,
+     "bottom": 324.5,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未載入 按 🚀 更新後載入（FAKE 冷啟動）",
+     "top": 324.5,
+     "bottom": 396.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 396.2,
+     "bottom": 486.8,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 572.4,
+   "card_heights": [
+    142,
+    142,
+    142,
+    142
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_market",
+   "scenario": "loaded",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 震盪",
+     "top": 181.1,
+     "bottom": 232.9,
+     "left": 213,
+     "right": 1347,
+     "height": 51.8,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 232.9,
+     "bottom": 288.8,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 288.8,
+     "bottom": 360.5,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 360.5,
+     "bottom": 432.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 432.2,
+     "bottom": 522.8,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 834.9,
+   "card_heights": [
+    124,
+    124,
+    124,
+    124,
+    124,
+    124
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_target",
+   "scenario": "loaded",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 產業 Top 5 · 候選 10／完整 50（FAKE）",
+     "top": 181.1,
+     "bottom": 232.9,
+     "left": 213,
+     "right": 1347,
+     "height": 51.8,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 232.9,
+     "bottom": 288.8,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 288.8,
+     "bottom": 360.5,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 360.5,
+     "bottom": 413.0,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 413.0,
+     "bottom": 503.6,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 621.0,
+   "card_heights": [
+    100,
+    100
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_hold",
+   "scenario": "loaded",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 FAKE 組合 · 12 檔",
+     "top": 181.1,
+     "bottom": 232.9,
+     "left": 213,
+     "right": 1347,
+     "height": 51.8,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 232.9,
+     "bottom": 288.8,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 288.8,
+     "bottom": 343.7,
+     "left": 213,
+     "right": 1347,
+     "height": 54.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 343.7,
+     "bottom": 415.4,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 415.4,
+     "bottom": 487.1,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 487.1,
+     "bottom": 577.7,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 684.4,
+   "card_heights": [
+    100
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_me",
+   "scenario": "loaded",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 Google 已登入（FAKE 帳號）· Sheet …FAKE00",
+     "top": 181.1,
+     "bottom": 232.9,
+     "left": 213,
+     "right": 1347,
+     "height": 51.8,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 無異常（FAKE）",
+     "top": 232.9,
+     "bottom": 284.7,
+     "left": 213,
+     "right": 1347,
+     "height": 51.8,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 無需處理（FAKE）",
+     "top": 284.7,
+     "bottom": 336.5,
+     "left": 213,
+     "right": 1347,
+     "height": 51.8,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 336.5,
+     "bottom": 427.0,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 572.1,
+   "card_heights": [
+    100,
+    100,
+    100,
+    100
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_market",
+   "scenario": "missing",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 ⬜ 資料未備",
+     "top": 181.1,
+     "bottom": 233.6,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 233.6,
+     "bottom": 289.5,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 289.5,
+     "bottom": 361.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 361.2,
+     "bottom": 433.0,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 433.0,
+     "bottom": 523.5,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 835.3,
+   "card_heights": [
+    146,
+    146,
+    146,
+    146,
+    146,
+    146
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_target",
+   "scenario": "missing",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 ⬜ 資料未備",
+     "top": 181.1,
+     "bottom": 233.6,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 233.6,
+     "bottom": 289.5,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 289.5,
+     "bottom": 361.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 361.2,
+     "bottom": 413.8,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 413.8,
+     "bottom": 504.3,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 644.5,
+   "card_heights": [
+    123,
+    123
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_hold",
+   "scenario": "missing",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 ⬜ 資料未備",
+     "top": 181.1,
+     "bottom": 233.6,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 233.6,
+     "bottom": 289.5,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 289.5,
+     "bottom": 344.5,
+     "left": 213,
+     "right": 1347,
+     "height": 54.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 344.5,
+     "bottom": 416.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 416.2,
+     "bottom": 487.9,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 487.9,
+     "bottom": 578.4,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 684.1,
+   "card_heights": [
+    100
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_me",
+   "scenario": "missing",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 ⬜ 資料未備",
+     "top": 181.1,
+     "bottom": 233.6,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 ⬜ 資料未備",
+     "top": 233.6,
+     "bottom": 286.2,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 資料未備",
+     "top": 286.2,
+     "bottom": 338.7,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 338.7,
+     "bottom": 429.2,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 571.9,
+   "card_heights": [
+    123,
+    123,
+    123,
+    123
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_market",
+   "scenario": "stale",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 震盪⚠ 過期 3 天",
+     "top": 181.1,
+     "bottom": 233.6,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 233.6,
+     "bottom": 289.5,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 289.5,
+     "bottom": 361.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 361.2,
+     "bottom": 433.0,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 433.0,
+     "bottom": 523.5,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 835.3,
+   "card_heights": [
+    146,
+    146,
+    146,
+    146,
+    146,
+    146
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_target",
+   "scenario": "stale",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 產業 Top 5 · 候選 10／完整 50（FAKE）⚠ 過期 3 天",
+     "top": 181.1,
+     "bottom": 233.6,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 233.6,
+     "bottom": 289.5,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 289.5,
+     "bottom": 361.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 361.2,
+     "bottom": 413.8,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 413.8,
+     "bottom": 504.3,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 644.5,
+   "card_heights": [
+    123,
+    123
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_hold",
+   "scenario": "stale",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 FAKE 組合 · 12 檔⚠ 過期 3 天",
+     "top": 181.1,
+     "bottom": 233.6,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 233.6,
+     "bottom": 289.5,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 289.5,
+     "bottom": 344.5,
+     "left": 213,
+     "right": 1347,
+     "height": 54.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 344.5,
+     "bottom": 416.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 416.2,
+     "bottom": 487.9,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 487.9,
+     "bottom": 578.4,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 683.8,
+   "card_heights": [
+    123
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_me",
+   "scenario": "stale",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 Google 已登入（FAKE 帳號）· Sheet …FAKE00⚠ 過期 3 天",
+     "top": 181.1,
+     "bottom": 233.6,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 無異常（FAKE）⚠ 過期 3 天",
+     "top": 233.6,
+     "bottom": 286.2,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 無需處理（FAKE）⚠ 過期 3 天",
+     "top": 286.2,
+     "bottom": 338.7,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 338.7,
+     "bottom": 429.2,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 571.9,
+   "card_heights": [
+    123,
+    123,
+    123,
+    123
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_market",
+   "scenario": "unavailable",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 181.1,
+     "bottom": 252.8,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 252.8,
+     "bottom": 308.7,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 308.7,
+     "bottom": 380.4,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 380.4,
+     "bottom": 452.1,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 452.1,
+     "bottom": 542.7,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 835,
+   "card_heights": [
+    169,
+    169,
+    169,
+    169,
+    169,
+    169
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_target",
+   "scenario": "unavailable",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 181.1,
+     "bottom": 252.8,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 252.8,
+     "bottom": 308.7,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 308.7,
+     "bottom": 380.4,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 380.4,
+     "bottom": 433.0,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 433.0,
+     "bottom": 523.5,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 684.1,
+   "card_heights": [
+    146,
+    146
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_hold",
+   "scenario": "unavailable",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 181.1,
+     "bottom": 252.8,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 252.8,
+     "bottom": 308.7,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 308.7,
+     "bottom": 363.6,
+     "left": 213,
+     "right": 1347,
+     "height": 54.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 363.6,
+     "bottom": 435.3,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 435.3,
+     "bottom": 507.0,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 507.0,
+     "bottom": 597.6,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 684.3,
+   "card_heights": [
+    100
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_me",
+   "scenario": "unavailable",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 181.1,
+     "bottom": 252.8,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 252.8,
+     "bottom": 324.5,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 🔴 來源目前不可用 FAKE 來源逾時（示意）",
+     "top": 324.5,
+     "bottom": 396.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 396.2,
+     "bottom": 486.8,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 572.0,
+   "card_heights": [
+    146,
+    146,
+    146,
+    146
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_market",
+   "scenario": "not_evaluated",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 市場目前狀態 ⬜ 未評估／資料不足",
+     "top": 181.1,
+     "bottom": 234.6,
+     "left": 213,
+     "right": 1347,
+     "height": 53.5,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 234.6,
+     "bottom": 290.5,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 290.5,
+     "bottom": 362.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 362.2,
+     "bottom": 434.0,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新今日戰情 Preview：不觸發任何動作",
+     "top": 434.0,
+     "bottom": 524.5,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 0
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 835.3,
+   "card_heights": [
+    148,
+    148,
+    148,
+    148,
+    148,
+    148
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_target",
+   "scenario": "not_evaluated",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 精選摘要 ⬜ 未評估／資料不足",
+     "top": 181.1,
+     "bottom": 234.6,
+     "left": 213,
+     "right": 1347,
+     "height": 53.5,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 234.6,
+     "bottom": 290.5,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供 本頁不產生持股動作；動作權威＝💼 持股",
+     "top": 290.5,
+     "bottom": 362.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供",
+     "top": 362.2,
+     "bottom": 414.8,
+     "left": 213,
+     "right": 1347,
+     "height": 52.5,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 查詢 Preview：不觸發任何動作",
+     "top": 414.8,
+     "bottom": 505.3,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 1
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 645.5,
+   "card_heights": [
+    123,
+    123
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_hold",
+   "scenario": "not_evaluated",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 組合狀態 ⬜ 未評估／資料不足",
+     "top": 181.1,
+     "bottom": 234.6,
+     "left": 213,
+     "right": 1347,
+     "height": 53.5,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "Risk Cap ⬜ 無法判定 必要輸入不足：目前曝險無正式來源（數值另開 Gate）",
+     "top": 234.6,
+     "bottom": 290.5,
+     "left": 213,
+     "right": 1347,
+     "height": 55.9,
+     "width": 1134
+    },
+    {
+     "q": "ctx",
+     "text": "目前曝險 ⬜ 資料未備 無現金／總資產來源",
+     "top": 290.5,
+     "bottom": 345.5,
+     "left": 213,
+     "right": 1347,
+     "height": 54.9,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 是否需要行動 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 345.5,
+     "bottom": 417.2,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 尚未提供（待 System Action Aggregator） 動作權威尚未實作（Preview）",
+     "top": 417.2,
+     "bottom": 488.9,
+     "left": 213,
+     "right": 1347,
+     "height": 71.7,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 🚀 更新持股戰情 Preview：不觸發任何動作",
+     "top": 488.9,
+     "bottom": 579.4,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 2
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 683.8,
+   "card_heights": [
+    123
+   ],
+   "failures": {},
+   "pass": true
+  },
+  {
+   "viewport_name": "desktop",
+   "viewport": {
+    "w": 1440,
+    "h": 900
+   },
+   "page": "p4_me",
+   "scenario": "not_evaluated",
+   "elements": [
+    {
+     "q": "q1",
+     "text": "① 現在狀態 連線狀態 ⬜ 未評估／資料不足",
+     "top": 181.1,
+     "bottom": 234.6,
+     "left": 213,
+     "right": 1347,
+     "height": 53.5,
+     "width": 1134
+    },
+    {
+     "q": "q2",
+     "text": "② 是否需要行動 連線異常 ⬜ 未評估／資料不足",
+     "top": 234.6,
+     "bottom": 288.2,
+     "left": 213,
+     "right": 1347,
+     "height": 53.5,
+     "width": 1134
+    },
+    {
+     "q": "q3",
+     "text": "③ 下一步 下一步 ⬜ 未評估／資料不足",
+     "top": 288.2,
+     "bottom": 341.7,
+     "left": 213,
+     "right": 1347,
+     "height": 53.5,
+     "width": 1134
+    },
+    {
+     "q": "q4",
+     "text": "④ 主 CTA 切換 Sheet Preview：不觸發任何動作",
+     "top": 341.7,
+     "bottom": 432.2,
+     "left": 213,
+     "right": 1347,
+     "height": 90.5,
+     "width": 1134
+    }
+   ],
+   "nav": {
+    "top": 0,
+    "bottom": 900,
+    "left": 0,
+    "right": 176,
+    "height": 900,
+    "width": 176,
+    "position": "fixed",
+    "labels": [
+     "📊 市場",
+     "🎯 標的",
+     "💼 持股",
+     "👤 我的"
+    ],
+    "checked_index": 3
+   },
+   "hscroll": {
+    "doc": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "main": {
+     "scrollWidth": 1440,
+     "clientWidth": 1440
+    },
+    "qa_clipped": false
+   },
+   "title": {
+    "top": 132.1,
+    "bottom": 160.1,
+    "banner_bottom": 116.1,
+    "qa_top": 176.1
+   },
+   "last_content_bottom": 571.9,
+   "card_heights": [
+    125,
+    125,
+    125,
+    125
+   ],
+   "failures": {},
+   "pass": true
+  }
+ ]
+}
