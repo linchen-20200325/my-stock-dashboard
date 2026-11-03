@@ -300,7 +300,7 @@
 
 ### §5.1 手機 390×844（先）
 
-> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：`▸ L2／L3：Digest raw snapshot、Registry 明細、工程診斷` 不得施工；Data Freshness／System Information／raw／工程診斷→👤 資料健康度（Level 1／2／3）；Audit 入口（Digest Viewer L1、Rule Registry 唯讀）維持為稽核面（⚠ PROVISIONAL）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：`▸ L2／L3：Digest raw snapshot、Registry 明細、工程診斷` 不得施工；Data Freshness／System Information／raw／工程診斷→👤 資料健康度（Level 1／2／3）；Audit 入口（Digest Viewer L1、Rule Registry 唯讀）維持為稽核面（預設收合；Active，DEC-130 (b)；~~⚠ PROVISIONAL~~ 已升格）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
 
 
 ```

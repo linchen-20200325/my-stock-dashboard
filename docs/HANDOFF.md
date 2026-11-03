@@ -850,7 +850,7 @@ DEC-086 規則已於 main，本表已落地。
 |---|---|
 | live GitHub state | 基準 `origin/main`＝`74435cab`（#1003）；分支 `ccr-a0b4e085-ijdaio`；本批由實作組 commit（**未 push、未開 PR**；push／PR 由總管）。cron 會推進 tip，以當下 `git fetch` 為準。 |
 | current Stage／exact safe stopping point | **DEC-128＋Active Contract＋Supersede Cleanup 已落盤（docs＋`tests/test_ui2_active_contract_docs.py`；待總管複驗＋獨立稽核）**。**UI 程式與既有測試尚未改**：現行 Preview 仍有舊 L2／L3 expander 等（implementation deviation，見 Active Contract §9）。 |
-| 待客戶裁示／確認 | **無即時 Gate**。PROVISIONAL 待客戶覆核（可推翻）：(a) 資料健康度 Level 1 符號為面內別名；(b) 稽核面／選股條件與查看全部／指標危險度指路／一行資料狀態入口；(c) Preview 控制 `?ui2_dev=1`。格式：`Re-open DEC-128 (x)：改為 …`（DEC-128 §四 (d)）。 |
+| 待客戶裁示／確認 | **無即時 Gate**。~~PROVISIONAL 待客戶覆核（可推翻）：(a) 資料健康度 Level 1 符號為面內別名；(b) 稽核面／選股條件與查看全部／指標危險度指路／一行資料狀態入口；(c) Preview 控制 `?ui2_dev=1`。~~ 📌 **(a)(b)(c) 已由客戶 2026-11-03 (15)／DEC-130 升為正式 Active**（(a) 有條件同意：Data State 五態與 Capability 兩軸分離）；Re-open 格式 `Re-open DEC-128 (x)：改為 …` 仍可用於日後推翻。 |
 | known limitations／blockers | 取代清單單組、未經第二組獨立稽核；AppTest query_params 於 1.56／1.59 未驗；資料健康度欄位 `retrieved_at`／`source health`／`proxy／estimated` canonical 多半缺（`NUI2-DATA-HEALTH-FIELD-GAPS`）；Digest 補 data health 區塊需另案 Opus High Gate（`NUI2-DIGEST-DATAHEALTH-XREF`）。 |
 | **下一個唯一安全工作** | ① 總管複驗本批（派**獨立一組**做 `NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT`：grep 全 repo 找仍描述舊 L2／L3 為現行規格的殘留；反向掃描豁免句）→ push → 開 PR → CI。② 之後依 BACKLOG §5.1.26 的 UI correction 批（建議序 P1→P3→P6→P2→P4→P5；每批 ≤3 項；新版面先出文字線框）。 |
 | required Model×Effort for resume | **P1／P2／P3／P4／P6 的純 presentation＝Sonnet 5.5＋Medium**；**P5（💼 第一屏，涉 Risk Cap／動作呈現語意）與圖表接真資料、資料健康度新增欄位、Digest data health 區塊＝Opus 5.5＋High**。 |
@@ -860,3 +860,5 @@ DEC-086 規則已於 main，本表已落地。
 | 禁止事項（摘要） | ⛔ 依舊 L2／L3 expander 施工；⛔ 為配合現行 UI 改 Active Contract；⛔ 刪 canonical／VM `sections`／RuleIDs／provenance 等（UI 移除 ≠ 刪資料）；⛔ 用 xfail／skip 隱藏仍斷言舊 presentation 的測試；⛔ 降低資料／語意安全守衛；⛔ 改 Decision Digest schema／Risk Cap／System Action／新資料 contract／公式／門檻／source；⛔ OneBrain／Digest runtime；⛔ 切 production default；⛔ 刪 Old UI／Legacy New UI。 |
 
 - **獨立稽核（`ca6209c8`）增補補記（2026-11-03；append）**：P2／P3 已修（見 PROJECT_STATE §59 末條、DEC-128 §七、BACKLOG §5.1.26 `NUI2-COMMENT-DOCSTRING-SYNC`）；現行 Safe Handoff 表不變（上一個 DEC-128 Safe Handoff 表）。**下一個唯一安全工作**不變：總管複驗→push→PR→CI，之後 UI correction 批。
+
+- **DEC-130 補記（2026-11-03；append；現行 Safe Handoff 表不變，僅更新其「待客戶裁示」格）**：客戶 (15) 覆核 PROVISIONAL (a)(b)(c) 全部升 Active（(a) 有條件同意：**Data State 只有五態；`⬜ 尚未接線` 是 Capability 軸、不是 Data State；同列拆 `狀態(Data State)`／`接線(Capability)` 兩欄**；(b) 稽核面預設收合、🎯 使用者功能維持精簡不做資料牆；(c) `?ui2_dev=1` 開發面、**不得與 auth state 混用、不能當登入證據**）。落盤：DEC-130、Active Contract §5.1、PROJECT_STATE §60、Audit Checklist §21、新守衛（`check_axis_separation`／`check_ui2_dev_not_auth`）與 strict xfail `T_new_8`（P6）／`T_new_9`（P1）。**下一個唯一安全工作不變**（獨立複驗 `NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT` 客戶明示後補、不阻擋；UI correction 依 P1～P7，純 presentation＝Sonnet 5.5＋Medium，碰 auth contract／Digest schema／Risk Cap／System Action／新 canonical data contract 即 STOP → Opus 5.5＋High）。

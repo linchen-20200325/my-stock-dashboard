@@ -175,7 +175,7 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 
 ### §2.4 👤 我的／Audit〔客戶 Stage E、§24～§27〕
 
-> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：L2／L3（Digest raw snapshot、Registry 明細、資料健康牆、工程診斷）→ 👤 我的·資料健康度（Level 1／2／3）；Audit 入口維持為稽核面（⚠ PROVISIONAL）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S29）：L2／L3（Digest raw snapshot、Registry 明細、資料健康牆、工程診斷）→ 👤 我的·資料健康度（Level 1／2／3）；Audit 入口維持為稽核面（預設收合；Active，DEC-130 (b)；~~⚠ PROVISIONAL~~ 已升格）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
 
 
 | 區 | 內容 | 現行（FACT） | 缺口 |
