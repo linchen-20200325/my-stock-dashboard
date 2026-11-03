@@ -231,7 +231,7 @@ def _market_dom_order(scenario: str) -> list[str]:
 
 
 @pytest.mark.parametrize("scenario", ["cold", "loaded", "unavailable"])
-def test_main_risk_is_not_interleaved_by_cards_or_l2_l3_in_the_real_page(scenario):
+def test_main_risk_is_not_interleaved_by_expanders_in_the_real_page(scenario):
     order = _market_dom_order(scenario)
     assert order.index("ui2-m-l1") < order.index("ui2-grid")
     first_after = [t for t in order[order.index("ui2-m-l1") + 1:] if t in ("ui2-grid", "ui2-section-title", "expander")]

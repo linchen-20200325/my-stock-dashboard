@@ -242,6 +242,9 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 
 ### §5.1 定義與 L1 字樣（全站統一；四者不得混用）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S43）：表中「L2 保留 `🔴 取得失敗`」「`▨` 留 L2 子原因」「『可重跑』留 L2」的「L2」落點改讀 👤 資料健康度 Level 2（子原因與符號仍保留，只是不在四個投資頁內）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘仍有效。
+
+
 | 語意態 | 定義（客戶原文） | L1 外露字樣 | 色 |
 |---|---|---|---|
 | **Missing** | 資料未取得／資料未備 | `⬜ 資料未取得`（應有輸入但這次沒拿到）／`⬜ 資料未備`（來源尚未發布、歷史長度不足、不適用）〔字樣＝客戶原文〕 | 灰 |
@@ -284,6 +287,9 @@ Silent Autonomous Cruise；每批 ≤3 個安全項目；只在客戶裁示、�
 - 客戶 2026-09-23 D-3(a) 的 ⟳／⊘ L1 外露字樣 → **部分取代**（只限 L1 外露字樣；L0 與 L2 保留）。⚠️ 若客戶希望 L1 仍見「⟳ 可重跑」，屬客戶可推翻的呈現細節。
 
 ### §5.3 `unavailable` 舊義改名處置
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S43）：同 §5.1：任何「留 L2」的子原因落點改為資料健康度 Level 2；`⛔ 未接線` 舊義不變。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘仍有效。
+
 
 - **FACT**：Presentation Contract §6 表 `unavailable` kind＝**委派到 `⛔ 未接線`**（功能沒做）；與客戶新 Unavailable（來源壞了）語意不同。
 - **處置（凍結）**：自本契約起，文件中「Unavailable」一律指**來源目前不可用**；舊義改稱「**功能尚未提供（未接線）**」，符號 `⛔ 未接線` 不變。程式識別名 `compact` 的 `unavailable` kind 於 **Stage A** 改名（建議 `unwired`；與 §6 表、`tests/ui_v2/test_compact.py::_contract_kinds` 同一 PR 同步，因該測試以 §6 表列對帳 `META_KINDS` 20 項）；改名前視為**舊義別名**，⛔ 用來表示來源不可用。BACKLOG `FUI-UNAVAILABLE-KIND-RENAME`。

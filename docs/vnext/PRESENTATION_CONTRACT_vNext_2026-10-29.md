@@ -1,6 +1,6 @@
 # Presentation Contract vNext＋Visual SSOT（新 UI 呈現契約）
 
-> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§3 表中的 L3 列（頁內摺疊）；§4 主圖 header 的「▸ 為什麼／來源／限制／去哪補」摺疊入口；§5 預設下沉清單的「頁內收合」位置；§7 三要素「L3 摺疊內可取得、資訊守恆＝卡面∪摺疊∪expander」；§8 第 2、5 點的位置（完整原因在 L3「去哪補」）；§11 R7 摺疊標籤；§12.1 市場「下沉」列；§16 既有裁示表中「三要素→L3 摺疊」「▸ 詳細」「DEC-105 指路」列；§17 能力守恆表的落點欄「既有 L3 expander」（S26；對 New UI2；Legacy 凍結維持）。**仍有效**：§1 最高原則、§2 Visual Budget、§3 第一屏五問與 L1／L2(Secondary visuals)、§8 Missing ≠ 0、§9 UI 簡化不得減少的清單、§10 Top-N、§11 R10、§12.4、§18 工程字樣（擴及四頁全部 Human UI）。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§3 表中的 L3 列（頁內摺疊）；§4 主圖 header 的「▸ 為什麼／來源／限制／去哪補」摺疊入口；§5 預設下沉清單的「頁內收合」位置；§7 三要素「L3 摺疊內可取得、資訊守恆＝卡面∪摺疊∪expander」；§8 第 2、5 點的位置（完整原因在 L3「去哪補」）；§11 R7 摺疊標籤；§12.1 市場「下沉」列；§12.2／§12.3 的頁內 L2／L3 落點；§9 判準 (a) 的「L3」；§16 既有裁示表中「三要素→L3 摺疊」「▸ 詳細」「DEC-105 指路」列；§17 能力守恆表的落點欄「既有 L3 expander」（S26；對 New UI2；Legacy 凍結維持）。**仍有效**：§1 最高原則、§2 Visual Budget、§3 第一屏五問與 L1／L2(Secondary visuals)、§8 Missing ≠ 0、§9 UI 簡化不得減少的清單、§10 Top-N、§11 R10、§12.4、§18 工程字樣（擴及四頁全部 Human UI）。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
 
 - **狀態**：正式／現行（Phase 1 SSOT Reset／Contract Freeze 凍結版）
 - **日期**：2026-10-29　**基準**：PR base＝main `978ecedc`（撰寫時基準 `55739129`＝`978ecedc`＋#970 commit `06a7a3e5` 的 merge；`src/`、`shared/` 與 main 相同）
@@ -184,6 +184,9 @@
 
 ## §9 硬規則：UI 簡化不得減少的清單（客戶 DEC-109 十五，逐字）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26/S40）：判準 (a)「在 L3／Decision Digest／既有 service 仍可取得」中的「L3」改讀「backend Evidence／Digest／資料健康度」；UI 簡化不得減少的清單本身維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘仍有效。
+
+
 **UI 可以**：少顯示、聚合、Top-N、收合、隱藏工程細節、圖像化、用摘要取代長文字。
 
 **但不得因此刪除或降低**：canonical data、normalized data、provenance、source、as_of、stale／freshness、missing／unavailable、deterministic rule outputs、indicator outputs、Risk Cap inputs／outputs、market data、international data、sector data、candidate data、holdings data、strategy classification、identity、relevant history、AI Decision Context。
@@ -243,6 +246,9 @@ R9（DEC-110）：
 
 ### 12.2 🎯 標的 —「現在有哪些值得看的產業與股票？」
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26/S40）：「完整產業清單：收合／drill-down（L2）」「單一股票：明細入 L3」「估值口徑揭露（chip＋L3 全文）」中的頁內 L2／L3 落點已取代：完整產業清單改為使用者功能「查看全部」或 Evidence；判型明細、估值口徑完整全文→Evidence／資料健康度（一行 SPEC 保留）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘仍有效。
+
+
 | 項 | 規格 |
 |---|---|
 | 優先修（客戶原文） | 不要再：先攤開 30～40 個產業長卡；每個產業重複顯示相同 Missing 說明；候選標的被推到很後面 |
@@ -253,6 +259,9 @@ R9（DEC-110）：
 | 互動不變 | 「選一檔＋🔍 查看此檔」（DEC-107 2A）、籌碼只取選取檔（4A）、估值口徑揭露（chip＋L3 全文，⛔ 刪）、不放 ⚡（3A） |
 
 ### 12.3 💼 持股 —「我的持股該加、留、換、減什麼？」
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S26/S40）：「不得全部第一層外露：VaR、壓力測試、配息、完整規則、門檻、分母」維持（不外露），但其「下沉」落點由頁內 L2／L3 改為使用者分析精簡 chart-first 卡或 Evidence。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘仍有效。
+
 
 | 項 | 規格 |
 |---|---|

@@ -1,5 +1,7 @@
 # vNext Product Blueprint：投資決策 OS／Investment Inbox
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（對 New UI2；DEC-128 S44，客戶 2026-11-03）**：本檔屬 **Legacy New UI／Old UI 時代**文件；其中頁內 L2／L3 摺疊、「查看依據」、指標明細等 presentation 條文**對 New UI2 一律不是現行規則**。New UI2 現行唯一有效讀法＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128／DEC-129。對 Legacy 本檔照舊（凍結，不刪不改）；舊文一字未刪。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；單組判讀。）
+
 > **用途**：承載新 UI 的**最終產品方向**。`docs/DECISIONS.md` DEC-056 第 4 點指定由 Blueprint 負責這件事，對應 `docs/BACKLOG.md` **VN-00**。客戶 2026-10-17 指派本批建立這份「可長期維護的 vNext Product Blueprint」。
 >
 > **位階**：

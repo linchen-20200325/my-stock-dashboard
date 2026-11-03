@@ -302,17 +302,37 @@ TEETH_REL = "tests/test_ui2_contract_teeth_pending.py"
 
 
 def test_pending_teeth_are_strict_xfail_with_dec128_reason_and_never_hide_safety_tests():
-    """新 UI 行為斷言必須是 xfail(strict=True)（UI 修好時 XPASS→轉紅，逼人移除標記）；
-    且 xfail 只准出現在這個 teeth 檔——其餘 tests/ 內不得新增指向 DEC-128 的 xfail（防止拿它隱藏現有守衛）。"""
-    tree = ast.parse(_read(TEETH_REL))
+    """逐一驗證每個 xfail：必須是 strict=True 且 reason 含 DEC-128（AST，不是 substring 計數）；
+    xfail 只准出現在這個 teeth 檔——其餘 tests/ 不得新增指向 DEC-128 的 xfail（防止拿它隱藏現有守衛）。"""
+    src = _read(TEETH_REL)
+    tree = ast.parse(src)
+    # (a) `_xfail(p)` 工廠本身：pytest.mark.xfail(strict=True, reason=<含 DEC-128 的字串>)
+    fac = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_xfail")
+    calls = [c for c in ast.walk(fac) if isinstance(c, ast.Call) and ast.unparse(c.func) == "pytest.mark.xfail"]
+    assert len(calls) == 1
+    kw = {k.arg: k.value for k in calls[0].keywords}
+    assert isinstance(kw.get("strict"), ast.Constant) and kw["strict"].value is True
+    assert "DEC-128" in ast.unparse(kw["reason"]) and "待 UI correction 批" in ast.unparse(kw["reason"])
+    # (b) 每個 test_T_new_* 都用 `_xfail("P#")`（或直接 pytest.mark.xfail 且同樣 strict+DEC-128）
     n = 0
     for fn in [x for x in ast.walk(tree) if isinstance(x, ast.FunctionDef) and x.name.startswith("test_T_new_")]:
-        decs = " ".join(ast.unparse(d) for d in fn.decorator_list)
-        assert "_xfail(" in decs or "xfail" in decs, fn.name
+        ok = False
+        for d in fn.decorator_list:
+            if isinstance(d, ast.Call) and ast.unparse(d.func) == "_xfail":
+                assert re.fullmatch(r"P\d", ast.literal_eval(d.args[0])), fn.name
+                ok = True
+            elif isinstance(d, ast.Call) and ast.unparse(d.func) == "pytest.mark.xfail":
+                k = {x.arg: x.value for x in d.keywords}
+                assert isinstance(k.get("strict"), ast.Constant) and k["strict"].value is True, fn.name
+                assert "DEC-128" in ast.unparse(k["reason"]), fn.name
+                ok = True
+        assert ok, f"{fn.name} 沒有 strict xfail"
         n += 1
     assert n >= 7
-    src = _read(TEETH_REL)
-    assert "strict=True" in src and "待 UI correction 批" in src and "DEC-128" in src
+    # (c) 此檔內除 test_T_new_* 外，不得有任何 xfail／skip（現綠 teeth 不得被偷偷隱藏）
+    for fn in [x for x in ast.walk(tree) if isinstance(x, ast.FunctionDef) and not x.name.startswith("test_T_new_")]:
+        for d in fn.decorator_list:
+            assert "xfail" not in ast.unparse(d) and "skip" not in ast.unparse(d), fn.name
     for f in sorted((ROOT / "tests").glob("test_*.py")):
         if f.name in (Path(TEETH_REL).name, "test_ui2_active_contract_docs.py"):
             continue
@@ -365,3 +385,85 @@ def test_active_contract_lists_the_eleven_points_and_account_area_and_no_old_mus
     assert BANNER in sm[i:i + 1500] and "DEC-129" in sm[i:i + 1500]
     pr = _read("PROJECT_RULES.md")
     assert "桌機 Account Area 與導覽" in pr and "舊 presentation 假設退出 Active" in pr
+
+
+# ---------------------------------------------------------------- (viii) 客戶原文 fence 整段 sha256 釘住
+# 值＝客戶 (13)／(14) 原文（總管轉交之全文，scratchpad customer_directive）的 sha256；fence 內任何一字被改都會紅。
+_FENCE_SHA256 = {
+    "### DEC-128｜": "ed26051734a3dc1df2aee6321ac218cda0b2439872006bf2f94090eff6272a87",
+    "### DEC-129｜": "210c1c2d55e2f37f7a5e0fcb809f3c43539609b72ede829bcc195ea707fdcf79",
+}
+
+
+@pytest.mark.parametrize("head", list(_FENCE_SHA256))
+def test_customer_fences_are_pinned_by_sha256(head):
+    import hashlib
+    d = _read("docs/DECISIONS.md")
+    b = d[d.index(head):]
+    a = b.index("```\n") + 4
+    fence = b[a:b.index("\n```", a)]
+    assert hashlib.sha256(fence.encode("utf-8")).hexdigest() == _FENCE_SHA256[head]
+
+
+# ---------------------------------------------------------------- (ix) 章節橫幅逐節配對
+_L23_LINE = re.compile(r"▸ *(為什麼|指標明細|原始資料表|完整分析|完整 6 欄表|L2|L3)|（L[23]）|↓ *L2|L2／L3 摺疊|▸ L[23]")
+
+
+def _unbannered_sections(rel: str, text: str | None = None) -> list[str]:
+    """每個『在 code fence 內含 ▸ L2／L3 行』的章節：從該章節標題到該行之間必須出現橫幅。回傳違規 `行號:標題`。"""
+    lines = (text if text is not None else _read(rel)).split("\n")
+    bad, head_idx, in_fence, fence_start = [], None, False, None
+    for i, ln in enumerate(lines):
+        if ln.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not in_fence and re.match(r"^#{2,3} ", ln):
+            head_idx = i
+            continue
+        if in_fence and _L23_LINE.search(ln) and ("▸" in ln or "↓" in ln):
+            seg = lines[head_idx:i] if head_idx is not None else lines[:i]
+            if not any(BANNER in x for x in seg):
+                bad.append(f"{i + 1}:{lines[head_idx] if head_idx is not None else '(top)'}")
+    return sorted(set(bad))
+
+
+@pytest.mark.parametrize("rel", ("docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md", "docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md"))
+def test_every_section_with_l2_l3_expander_lines_is_bannered_before_the_block(rel):
+    assert _unbannered_sections(rel) == [], rel
+
+
+def test_section_banner_pairing_has_teeth():
+    """mutation：把 Wireframes §3.2 的章節橫幅拿掉 → 逐節配對必紅；且確實偵測得到有 ▸ L2／L3 行的章節。"""
+    rel = "docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md"
+    real = _read(rel)
+    j = real.index(BANNER, real.index("### §3.2 "))
+    mutated = real[:j] + "XX" + real[j + len(BANNER):]
+    assert any("§3.2" in x for x in _unbannered_sections(rel, mutated))
+    assert _unbannered_sections(rel, real) == []
+
+
+LEGACY_ERA_2 = (
+    "docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md",
+    "docs/vnext/NEWUI_STAGE_B_DRAFT_2026-10-26.md",
+    "docs/vnext/MARKET_PAGE_DECISION_GATE_2026-10-24.md",
+    "docs/vnext/NEWUI_D25_B_COVERAGE_2026-10-27.md",
+    "docs/vnext/VNEXT_PRODUCT_BLUEPRINT.md",
+)
+
+
+@pytest.mark.parametrize("rel", LEGACY_ERA_2)
+def test_second_batch_of_legacy_era_documents_are_bannered(rel):
+    head = _read(rel)[:4000]
+    line = next(ln for ln in head.split("\n") if BANNER in ln)
+    assert "DEC-128" in line and ACTIVE_NAME in line and "Legacy" in line, rel
+
+
+@pytest.mark.parametrize("rel,needle", (
+    ("docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md", "DEC-128 S38"),
+    ("docs/governance/UI_VISUAL_FIDELITY_GATE.md", "DEC-128 S39"),
+    ("docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md", "DEC-128 S26/S40"),
+    ("docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md", "DEC-128 S43"),
+    ("docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md", "DEC-128 S43"),
+))
+def test_audit_p2_sections_are_bannered(rel, needle):
+    assert needle in _read(rel), (rel, needle)

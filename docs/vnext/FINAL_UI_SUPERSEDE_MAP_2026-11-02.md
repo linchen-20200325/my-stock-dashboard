@@ -53,6 +53,13 @@
 | **S35** | （新規則，非取代）**Preview 控制位置**：現行殼把「Preview 控制（資料來源／fake 場景）」畫成頁面 expander（`src/ui2/shell/app.py`），**無任何既有條文規定其位置**；依 (13) 與 (12)-3，視為 **implementation deviation** | —（新增規則（見 Active Contract §6）） | `ALLOWED_UI2_WRITES` ui2_ 前綴、NUI2-PREVIEW-CONTROL-AXES（cutover 前移除） | 〔客戶 2026-11-03 (13) 第 1～10 點，逐字見 DEC-128〕 | 實作組單組（取代判讀為本批單組結論；待總管複驗） | 各文件頂端／章節 `⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128…）` 橫幅；DEC-072／076／081／091／105／109／111／112／117／122 條頭 📌 |
 | **S36** | `NEWUI2_WIREFRAMES_2026-11-02.md` §0.4 W-1「桌機：左側欄 4 項…不改導覽結構」 | 桌機左側只有 4 項 → 加 Product／Logo＋compact Account Area（Login／Auth Status）（SUPERSEDE 部分） | 手機底部四格、四頁固定、Account Area 不算第五頁 | 〔客戶 2026-11-03 (14) §1〕 | 實作組單組 | Wireframes §0.4 橫幅；DEC-129 |
 | **S37** | 凡要求 L2／L3 必須顯示於四主頁／expander 必須存在／raw 或完整 Missing 在主頁／「OneBrain 只能讀 UI slice」／與新導覽衝突的登入位置的敘述與測試斷言 | 該等有效性（REMOVE FROM ACTIVE；字面「OneBrain 只能讀 UI slice」實查 0 命中） | 資料／語意安全守衛全部維持 | 〔客戶 2026-11-03 (14) §2、§5〕 | 實作組單組 | DEC-129；`tests/test_ui2_active_contract_docs.py`；BACKLOG §5.1.26 |
+| **S38** | Architecture Gate §4.2-6／§9.2 G3／§9.4 「VM context（將來＝Digest）」 | context 讀法更正（SUPERSEDE 讀法） | 四情境等價判準與 mutation | 〔客戶 (13)/(14)；獨立稽核 `ca6209c8` 增補〕 | 實作組單組 | 對應文件橫幅／DEC 條頭 📌；DEC-128 §七 |
+| **S39** | Visual Fidelity Gate A8「下沉清單全在 L3」、V11「所有 L3 內容在手機可點開」 | 對 New UI2 不得逼出頁內 L3（SUPERSEDE／MIGRATE） | A8 其餘、V11 title 禁令 | 〔客戶 (13)/(14)；獨立稽核 `ca6209c8` 增補〕 | 實作組單組 | 對應文件橫幅／DEC 條頭 📌；DEC-128 §七 |
+| **S40** | Presentation Contract §12.2／§12.3 頁內 L2／L3 落點、§9 判準 (a) 的「L3」 | 同上 | 不得全部第一層外露清單、Top-N | 〔客戶 (13)/(14)；獨立稽核 `ca6209c8` 增補〕 | 實作組單組 | 對應文件橫幅／DEC 條頭 📌；DEC-128 §七 |
+| **S41** | DEC-123 A-3 expander 層級；Architecture Gate §6.1；BACKLOG NUI2-COMPONENT-GAP「expander 層級規範」 | New UI2 無 L1／L2／L3 expander 層級規範 | 其餘元件缺口 | 〔客戶 (13)/(14)；獨立稽核 `ca6209c8` 增補〕 | 實作組單組 | 對應文件橫幅／DEC 條頭 📌；DEC-128 §七 |
+| **S42** | DEC-092 Q3／DEC-108／DEC-101 「收合到查看依據」通則 | 頁內收合落點（僅 New UI2） | 各 DEC 實質裁示 | 〔客戶 (13)/(14)；獨立稽核 `ca6209c8` 增補〕 | 實作組單組 | 對應文件橫幅／DEC 條頭 📌；DEC-128 §七 |
+| **S43** | Wireframes §7 W-1 桌機 4 項、W-6 下沉 L2；Freeze §5.1／§5.3「留 L2」 | Account Area；L2 落點→資料健康度 Level 2 | 手機四格、W-6 欄位集 | 〔客戶 (13)/(14)；獨立稽核 `ca6209c8` 增補〕 | 實作組單組 | 對應文件橫幅／DEC 條頭 📌；DEC-128 §七 |
+| **S44** | Legacy 時代 5 份未加橫幅文件（INTERACTION_COVERAGE_MATRIX、NEWUI_STAGE_B_DRAFT、MARKET_PAGE_DECISION_GATE、NEWUI_D25_B_COVERAGE、VNEXT_PRODUCT_BLUEPRINT） | 對 New UI2 非 active | Legacy 凍結 | 〔客戶 (13)/(14)；獨立稽核 `ca6209c8` 增補〕 | 實作組單組 | 對應文件橫幅／DEC 條頭 📌；DEC-128 §七 |
 
 
 > 📌 **S10／S11 裁示前原列全文（刪除線保留，2026-11-02 Q3=A 後已過期；有意識的更新，不是漏刪；決策者 客戶（DEC-122 裁示））**：

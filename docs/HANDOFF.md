@@ -819,7 +819,7 @@ DEC-086 規則已於 main，本表已落地。
   - **仍禁止（不變）**：System Action Aggregator／Risk Cap runtime／Action Authority／Decision Digest／OneBrain／real-data wiring／真 OAuth／Sheet 寫入／LINE／切 production default／新公式／門檻／source／刪 Old UI 與 Legacy New UI／UI2 人名字樣（§28）；自行切換 Model／Effort。
   - **仍未驗（不得宣稱已驗）**：iOS safe-area、Safari／Firefox／真機／螢幕閱讀器、真資料字串長度（BACKLOG `NUI2-NAV-SAFEAREA-IOS-UNVERIFIED`／`NUI2-VIEWPORT-NON-CHROMIUM-UNVERIFIED`／`NUI2-VIEWPORT-FAKE-ONLY`）。
 
-- **Safe Handoff（2026-11-03 New UI2 NUI2-REAL-FEED A 批：A1 mapping／A2 最小 read-only real feed／A3 real-data shadow acceptance；現行；實作組單組、待總管複驗）**（SESSION_CONTINUITY C1 欄位；決策者 客戶 (11)；上方 Batch 3／DEC-127 段內容仍有效）：
+- **Safe Handoff（2026-11-03 New UI2 NUI2-REAL-FEED A 批：A1 mapping／A2 最小 read-only real feed／A3 real-data shadow acceptance；~~現行~~ **歷史快照**〔現行接手點已是本檔最末 DEC-128 Safe Handoff；有意識的更新，不是漏刪〕；實作組單組、待總管複驗）**（SESSION_CONTINUITY C1 欄位；決策者 客戶 (11)；上方 Batch 3／DEC-127 段內容仍有效）：
 
 | 欄位（C1） | 內容 |
 |---|---|
@@ -858,3 +858,5 @@ DEC-086 規則已於 main，本表已落地。
 | 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Decision＝DEC-128；新 Rule＝第 30 節；Audit finding／Limitation／Backlog／Migration debt／Acceptance item 已寫入上列 GitHub 文件。 |
 | DEC-129 追加（客戶 (14)） | 桌機左側 Account Area（BACKLOG P7；`NUI2-AUTH-CONTRACT-GATE` 屬 Opus 5.5＋High）；舊斷言 5 處已改寫、`tests/test_ui2_contract_teeth_pending.py` 的 7 個 **strict xfail**：UI 批修好時它們會 XPASS 轉紅，**必須移除對應 xfail**（不得 skip）。 |
 | 禁止事項（摘要） | ⛔ 依舊 L2／L3 expander 施工；⛔ 為配合現行 UI 改 Active Contract；⛔ 刪 canonical／VM `sections`／RuleIDs／provenance 等（UI 移除 ≠ 刪資料）；⛔ 用 xfail／skip 隱藏仍斷言舊 presentation 的測試；⛔ 降低資料／語意安全守衛；⛔ 改 Decision Digest schema／Risk Cap／System Action／新資料 contract／公式／門檻／source；⛔ OneBrain／Digest runtime；⛔ 切 production default；⛔ 刪 Old UI／Legacy New UI。 |
+
+- **獨立稽核（`ca6209c8`）增補補記（2026-11-03；append）**：P2／P3 已修（見 PROJECT_STATE §59 末條、DEC-128 §七、BACKLOG §5.1.26 `NUI2-COMMENT-DOCSTRING-SYNC`）；現行 Safe Handoff 表不變（上一個 DEC-128 Safe Handoff 表）。**下一個唯一安全工作**不變：總管複驗→push→PR→CI，之後 UI correction 批。

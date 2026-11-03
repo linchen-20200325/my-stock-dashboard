@@ -9,6 +9,7 @@
 > 1. Presentation Compression ≠ Information Loss　2. 簡單但不能失去判讀能力　3. Chart-first　4. 主要圖表提供精簡 SPEC　5. 四個主要投資頁不承載完整 L2／L3 diagnostics　6. 完整 Evidence 仍保留　7. 👤 我的 → 資料健康度　8. UI ViewModel ≠ Decision Digest　9. OneBrain 讀完整正式 Evidence（⛔ 只能讀 UI slice 的讀法不是 Active）　10. **桌機左側有 Login＋Auth Status（compact Account Area，§2.5）**　11. **手機仍只有四格導航**
 >
 > - **決策來源**：客戶 2026-11-03 指示 (13)（逐字見 DEC-128 fence）與追加裁示 (14)（逐字見 DEC-129 fence；**優先於 (13) 衝突處**）。**本文件不是新的客戶裁示**：凡標「⚠ PROVISIONAL」者是 AI 總管暫定讀法，客戶可推翻（DEC-128 §四）。
+> - **src 註解與 docstring 若與本契約衝突，以本契約為準**（現存過時註解已登記 `docs/BACKLOG.md` §5.1.26 `NUI2-COMMENT-DOCSTRING-SYNC`，待 UI 批 P1／P3 改；本批不改 src）。
 > - **範圍**：只管 New UI2（`src/ui2/**`、`src/services/ui2/**`、`shared/ui2_contract/**`、`app_ui2.py`）的**四個正式投資頁** Human Presentation 與其周邊（資料健康度、Preview 控制、OneBrain Outlook 區塊、projection 邊界）。Old UI／Legacy New UI 不在範圍（凍結，不刪不改）。
 > - **不改**：資料語意（DEC-124）、Single Action Authority、Risk Cap、System Action 語意、Decision Digest schema、任何公式／門檻／source。
 > - **本批沒有改任何 UI 程式**（只改 docs 與測試清理，DEC-129 §四）：現行 Preview 與本文件有落差，屬 **implementation deviation**（§9），由後續 UI correction 批（`docs/BACKLOG.md` §5.1.26）修正；**⛔ 不得反過來改本文件去配合現行 UI**（客戶 (12)-6）。
@@ -47,7 +48,7 @@
 
 ## §3 各頁「應有／不應有」（L1 為主；L2／L3 明細移出的內容改放哪裡）
 
-> **形態規則**：四頁 Human VM 的 `SectionVM.level` 只允許 `L1` 與「關鍵 evidence 精簡層」；**⛔ 不得出現任何標示 L2／L3 的 expander、標題或標籤**（資料健康度的 Level 3 developer diagnostics 除外，見 §5）。「精簡 evidence」＝單行／小 chip／圖下方 SPEC 行／必要數字旁的 micro-tag，**不是**被摺起來的段落。
+> **形態規則**（📊🎯💼 整頁 0 個完整 evidence expander；👤 的稽核面入口〔Digest Viewer L1、Rule Registry，預設收合〕為明列例外〔⚠ PROVISIONAL (b)①〕，但 👤 同樣不得有「為什麼／指標明細／原始資料／工程診斷」類 evidence expander）：四頁 Human VM 的 `SectionVM.level` 只允許 `L1` 與「關鍵 evidence 精簡層」；**⛔ 不得出現任何標示 L2／L3 的 expander、標題或標籤**（資料健康度的 Level 3 developer diagnostics 除外，見 §5）。「精簡 evidence」＝單行／小 chip／圖下方 SPEC 行／必要數字旁的 micro-tag，**不是**被摺起來的段落。
 
 ### 3.1 📊 市場
 
@@ -102,11 +103,11 @@ SPEC｜日頻｜FRED｜單位 %｜資料日 11/02（T+1）｜缺值不補     �
 
 | 層 | 內容 | 預設 |
 |---|---|---|
-| **Level 1 使用者可讀摘要** | 逐項 status，符號：`✅ 正常`、`◷ 可能過期`、`◇ 資料未備`、`⛔ 來源不可用`、`⬜ 尚未接線`；頂端一行總計（例「資料 8／9 正常 · 1 項待更新」，DEC-091 §二） | 展開可見 |
-| **Level 2 來源／日期／provenance／freshness** | source、as_of、retrieved_at、freshness、Missing／failed reason、proxy／estimated | 預設收合或點開 |
-| **Level 3 developer diagnostics** | 供 QA／工程；**預設收合**；仍受下列禁曝險清單約束 | 收合 |
+| **Level 1 使用者可讀摘要** | 逐項 status，符號：`✅ 正常`、`◷ 可能過期`、`◇ 資料未備`、`⛔ 來源不可用`、`⬜ 尚未接線`；頂端一行總計（例「資料 8／9 正常 · 1 項待更新」，DEC-091 §二） | 展開可見（⚠ PROVISIONAL：預設展開是撰寫組暫定） |
+| **Level 2 來源／日期／provenance／freshness** | source、as_of、retrieved_at、freshness、Missing／failed reason、proxy／estimated | 預設收合或點開（⚠ PROVISIONAL：預設展開／收合是撰寫組暫定，客戶原文只規定 Level 3 預設收合） |
+| **Level 3 developer diagnostics** | 供 QA／工程；**預設收合**；仍受下列禁曝險清單約束（⚠ 「Level 3 只准遮罩後診斷代碼」**比客戶原文嚴格**，屬 PROVISIONAL；客戶原文只禁清單所列項目） | 收合 |
 
-**⛔ 不得一般曝光（任何層、任何 Human 面；Level 3 也只准遮罩後的診斷代碼）**：API key、secret、token、env var 名、raw exception、traceback、module path、credential detail、internal stack、OAuth credential（Sheet ID 只顯示末 6 碼）。一律過 `scrub_secrets`。
+**⛔ 不得一般曝光（任何層、任何 Human 面；⚠ 「Level 3 只准遮罩後診斷代碼」比客戶原文嚴格，PROVISIONAL）**：API key、secret、token、env var 名、raw exception、traceback、module path、credential detail、internal stack、OAuth credential（Sheet ID 只顯示末 6 碼）。一律過 `scrub_secrets`。
 
 **⚠ PROVISIONAL (a)——Level 1 符號是「資料健康度面的別名」**（DEC-128 §四 (a)）：
 
@@ -204,7 +205,7 @@ Data / Sources → Validation / Normalization → Domain / Deterministic Logic
 | 〃 | DEC-124 | KEEP | |
 | 〃 | DEC-127 | KEEP | |
 | `PRESENTATION_CONTRACT_vNext` | §1、§2 Budget、§3 五問與 L1／L2 | KEEP | |
-| 〃 | §3 L3 列；§4 摺疊入口；§5 下沉位置；§7；§8 第 2／5 點；§11 R7；§12.1 下沉；§16 對應列；§17 落點欄 | SUPERSEDE／MIGRATE／REMOVE | S26 |
+| 〃 | §3 L3 列；§4 摺疊入口；§5 下沉位置；§7；§8 第 2／5 點；§11 R7；§12.1 下沉；§12.2／§12.3 頁內 L2／L3 落點；§9 判準 (a)；§16 對應列；§17 落點欄 | SUPERSEDE／MIGRATE／REMOVE | S26 |
 | 〃 | §8 Missing ≠ 0、§9、§11 R10、§12.4、§18 工程字樣 | KEEP | §18 擴及四頁全部 Human UI |
 | `FINAL_UI_CONTRACT_FREEZE` | §0.1、§1、§5、§6～§9、§13～§15、§16.5 後半 | KEEP | |
 | 〃 | §2.0 三層；§2.1～§2.4 L2／L3 列；§10 完整 calculation；§12.2 raw；§16.1～§16.4 摺疊線框 | SUPERSEDE／REMOVE／MIGRATE | S29 |

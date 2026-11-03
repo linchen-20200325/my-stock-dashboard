@@ -1046,6 +1046,8 @@ Old UI capability → New 4-page destination → 是否首層 → 是否進階�
 ```
 
 ### DEC-092｜D2.5 Customer Design Gate 裁示：Q1 策略分類（portfolio_id+symbol）／Q2 趨勢（均線僅參考、正式定義另列 High Gate）／Q3 風險桶／Q4 沿用既有建議動作／Q5 產業趨勢先研究／Q6 D2 殼過渡保留＋D2 驗收通過＋設計方向核准（客戶 2026-10-27）
+
+> 📌 **SUPERSEDED IN PART BY DEC-128（範圍：S42：Q3 等「第一層最多 3–5 項；完整燈號與細節留在『查看全部指標／查看依據』」的頁內展開落點；僅限 New UI2）** — 歷史證據保留、原文一字未改；現行讀法見 `docs/DECISIONS.md` DEC-128 與 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`（2026-11-03 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；其餘條文仍有效）。
 > 📌 **設計方向核准「每張圖上方有白話說明」在 📊 市場頁圖 C 部分取代 BY DEC-117 Q8a**（2026-10-30 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-117）；append-only，本條原文一字未改）：圖 C（大盤合理區間，Research Framework、零數值）的白話說明句 `CHART_C_SAY` 不再外露於圖上方，移到圖 C 摺疊「為什麼」（逐字保留、只下沉，客戶原文「資訊只能下沉，不得刪除」）；圖 A、國際組、圖 D 的圖上方說明句照舊；本條 Q1～Q6 與其餘設計方向不變。
 > 📌 **設計核准中承接之「AI 投資總結五段」呈現格式部分取代 BY DEC-109（R12）**（2026-10-29 有意識的政策變更，不是漏刪；決策者 客戶（DEC-109）；append-only，本條原文一字未改；判讀出處 `docs/vnext/PHASE1_SUPERSEDE_MAP_2026-10-29.md` §2）：本條 Q1～Q6 裁示**全部仍有效**；本條本文無「五段」字樣，但其「設計方向核准」承接了 DEC-091(d)／A 規格 §5／`ai_summary.html` 的五段格式——該呈現格式由 DEC-109 二十一取代。`docs/vnext/d25_wireframes/*.html` 自 DEC-109 起定為 **Visual SSOT／visual acceptance baseline**（Presentation Contract §14）。
 > 2026-10-27 補登（ID 取下一個未用號；落盤前實測 `git grep -n "DEC-092"` 0 命中、最大為 DEC-091）。**本條只落盤客戶的 Design Gate 裁示，不改任何產品 code／測試／navigation，不改 CLAUDE.md／PROJECT_RULES.md。** 來源類別＝**客戶 Customer Design Gate 裁示**（回覆 DEC-091 之 D2.5 設計文件；客戶原文逐字收錄於下方）。
@@ -1398,6 +1400,8 @@ D2.5 以下大方向核准：
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：三組獨立稽核（A／B／C）＋一組獨立複驗（V）＋一組修正 QA（抓到 1 MAJOR＋2 MINOR，皆已於 `183dbdc3` 回修）；**回修後未再經第二組複驗**（總管轉述）。突變測試由實作者與 QA **各自自列**，未獨立複跑。**限制**：沙箱無部署端網路、Streamlit Cloud 未驗（快取／冷卻行為皆讀碼與單元測試推得）；報告內全稱句（「只有兩條價格路徑」「38 項即全部」等）為單組或 grep 結論，不得當前提（報告 §6）。撰寫組（本 docs 同步）未重跑測試。
 
 ### DEC-101｜Cross-View 稽核客戶 Gate 裁示：XV-H3＝A（外幣不得直接與 TWD 加總、先排除並列出）／XV-H1-EXT＝A（missing ≠ HOLD，不得以「續抱」代替缺資料結論）／XV-ASOF＝A（價格旁顯示資料時間＋來源，先出線框）＋基金範圍聲明＋其餘內部技術議題授權邊界（客戶 2026-10-28）
+
+> 📌 **SUPERSEDED IN PART BY DEC-128（範圍：S42：「完整 methodology 可留在『查看依據』」的頁內落點（外幣不得直接與 TWD 加總之 XV-H3 裁示本身維持）；僅限 New UI2）** — 歷史證據保留、原文一字未改；現行讀法見 `docs/DECISIONS.md` DEC-128 與 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`（2026-11-03 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；其餘條文仍有效）。
 
 > 2026-10-28 補登（ID 取下一個未用號；落盤前 `grep -o 'DEC-[0-9]*' docs/*.md docs/vnext/*.md` 最大為 DEC-100、DEC-101 0 命中）。要點經總管轉交，**非客戶逐字全文**。
 
@@ -3274,6 +3278,8 @@ Effort：High
 
 
 ### DEC-108｜新 UI 視覺方向修正批次：十項視覺原則＋凍結後續頁面正式視覺實作直到核准修正版線框（客戶 2026-10-29）
+
+> 📌 **SUPERSEDED IN PART BY DEC-128（範圍：S42：十項視覺原則中「其餘收合到『查看依據』」「『查看依據』的收合層級規則」的頁內收合通則；僅限 New UI2）** — 歷史證據保留、原文一字未改；現行讀法見 `docs/DECISIONS.md` DEC-128 與 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`（2026-11-03 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；其餘條文仍有效）。
 > 📌 **部分取代 BY DEC-109**（2026-10-29 有意識的政策變更，不是漏刪；決策者 客戶（DEC-109）；append-only，本條原文一字未改；判讀出處 `docs/vnext/PHASE1_SUPERSEDE_MAP_2026-10-29.md` §2）：客戶 DEC-109 一「目前不要繼續依 #970、DEC-108 或較早的 Presentation／Wireframe 規則往下施工。#970 暫時不要合併。它只作為：舊一輪視覺修正草稿與歷史輸入資料」。**十項視覺原則仍有效**，由 DEC-109 Presentation Contract 具體化（③「圖表縮小」讀為**主圖外露但縮小**，DEC-110 R2）；線框草稿 §客戶待確認 5 題**撤回**；**第 3 點凍結的解除條件改寫為：Phase 1 契約合併後依 Phase 2→7 推進，每個 UI phase 過 Visual Fidelity Gate**（`docs/governance/UI_VISUAL_FIDELITY_GATE.md`）。「線框 Q4 若選 A 將推翻 DEC-107 第 1 點」一句：DEC-107 第 1 點維持有效，改列 Phase 5 線框待客戶拍板點（DEC-110 R3）。線框草稿檔已自本分支移除（原貌只保存在 PR #970 commit `06a7a3e5`）。
 
 > 2026-10-29 補登（ID 取下一個未用號；落盤前 `grep -c DEC-108 docs/*.md docs/vnext/*.md PROJECT_RULES.md` 全 0 命中、最大為 DEC-107）。要點經總管轉交，**非客戶逐字全文**。
@@ -5620,6 +5626,8 @@ Effort：High
 
 ### DEC-123｜New UI2 Greenfield Presentation Layer：客戶 2026-11-02 裁示——立即停止原 Stage A／現有 New UI 延續路線，後續正式 UI 路線改為 New UI2（全新 Presentation Layer、沿用成熟底層）；本批只做 Architecture Gate（docs-only）；送客戶四題（G1／G3′／四頁線框／G2＋#996 合併確認）~~**PENDING**~~ **已裁示（Q1～Q4＋#996，客戶 2026-11-02）**（客戶 2026-11-02）
 
+> 📌 **SUPERSEDED IN PART BY DEC-128（範圍：S41：A-3「mobile stack＋expander 層級（L1／L2／L3 摺疊層級）」；僅限 New UI2）** — 歷史證據保留、原文一字未改；現行讀法見 `docs/DECISIONS.md` DEC-128 與 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`（2026-11-03 有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；其餘條文仍有效）。
+
 > 2026-11-02 補登（ID 取下一個未用號；落盤前 `grep -rn "DEC-123" docs PROJECT_RULES.md` 0 命中，DEC-122 為上一號）。**來源類別 D：客戶 2026-11-02 本輪對話原文，經總管轉交逐字檔（`customer_directive_2026-11-02.md` 第 (5) 段）；下方 fence 內逐字收錄，未改一字**（撰寫組未見客戶原訊息本身，只見總管轉交之全文；若有出入以原訊息為準）。
 
 - **決策者**：**客戶**（2026-11-02）。｜**效力日期**：2026-11-02 起。｜**範圍**：產品／UI 路線（Presentation Layer 重建）＋架構（View Model／Presentation Contract、consumer 邊界）＋治理（Architecture Gate、Model×Effort Change Gate、Silent Autonomous Cruise）。
@@ -7122,3 +7130,17 @@ Model / Effort：Claude Sonnet 5.5 Medium
 #### 五、揭露與效力邊界（⛔ 不是實作授權）
 
 單組撰寫、未經第二組獨立驗證。不授權：auth／OAuth 架構本體、Decision Digest schema、Risk Cap、System Action、新資料 contract／source／公式／threshold、production default、刪 Old UI／Legacy New UI。Account Area 的**實作**（UI 版型）仍須先出文字線框（v3 §03-2 ①；BACKLOG P7）。
+
+#### 七、補充取代範圍（獨立稽核 `ca6209c8` 後增補，S38～S44；2026-11-03；append；以上各節原文不動）
+
+| # | 舊條文 | 被取代／更正的部分 | 分類 | 仍有效 |
+|---|---|---|---|---|
+| **S38** | `NEWUI2_ARCHITECTURE_GATE` §4.2-6、§9.2 G3、§9.4：「VM `context`（將來＝Digest）」 | 讀法更正：`context` 是 Human UI 全量，**不是** Decision Context／Digest（Active Contract §8） | SUPERSEDE（讀法） | 四情境等價測試的判準與 mutation |
+| **S39** | `UI_VISUAL_FIDELITY_GATE` A8「下沉清單全在 L3」、V11「所有 L3 內容在手機可點開」 | 對 New UI2 不得再逼出頁內 L3；落點改 Evidence／資料健康度 | SUPERSEDE／MIGRATE | A8 其餘（外露層 0 段 > 32 字非客戶原句）、V11「0 項資訊只活在 title」、Legacy 判準 |
+| **S40** | `PRESENTATION_CONTRACT_vNext` §12.2／§12.3 的頁內 L2／L3 落點、§9 判準 (a) 的「L3」 | 同上 | SUPERSEDE／MIGRATE | 「不得全部第一層外露」清單、Top-N、查看全部 |
+| **S41** | DEC-123 A-3「expander 層級（L1／L2／L3 摺疊層級）」；`ARCHITECTURE_GATE` §6.1 目錄註解；BACKLOG `NUI2-COMPONENT-GAP`「expander 層級規範」 | New UI2 元件不再需要 L1／L2／L3 expander 層級規範 | SUPERSEDE | 其餘元件缺口（chart container、mobile stack、Risk Cap alert、Semantic Chip…） |
+| **S42** | DEC-092 Q3 等、DEC-108、DEC-101 的「收合到『查看依據』」通則 | 頁內收合落點（僅 New UI2） | SUPERSEDE／MIGRATE | 各 DEC 的實質裁示（第一層 3–5 項、視覺原則其餘、XV-H3） |
+| **S43** | Wireframes §7 W-1 表列「桌機左側欄 4 項」、§4 W-6「其餘欄下沉 L2」；Freeze §5.1／§5.3 表中「留 L2」 | 桌機 Account Area（DEC-129）；L2 落點→資料健康度 Level 2 | SUPERSEDE／MIGRATE | 手機四格、W-6 欄位集、子原因符號本身 |
+| **S44** | Legacy 時代未加橫幅的文件：`INTERACTION_COVERAGE_MATRIX`、`NEWUI_STAGE_B_DRAFT`、`MARKET_PAGE_DECISION_GATE`、`NEWUI_D25_B_COVERAGE`、`VNEXT_PRODUCT_BLUEPRINT` | 對 New UI2 非 active（頁內 L2／L3、查看依據） | SUPERSEDE（HISTORICAL） | Legacy 凍結 |
+
+- **S32 用語澄清（消除與 PROVISIONAL (b)① 的張力）**：S32 的「四頁整頁 0 個完整 evidence expander」改讀為「**📊🎯💼 三個投資頁整頁 0 個完整 evidence expander；👤 的稽核面入口（Digest Viewer L1、Rule Registry，預設收合）為明列例外**，但 👤 同樣不得有「為什麼／指標明細／原始資料／工程診斷」類 evidence expander；Digest raw 與工程診斷屬資料健康度 Level 3」。

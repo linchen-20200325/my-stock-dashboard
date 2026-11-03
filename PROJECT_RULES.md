@@ -941,6 +941,7 @@ Scope Inflation Guard
 
 - 新 UI 呈現規格＝`docs/vnext/PRESENTATION_CONTRACT_vNext_2026-10-29.md`（原則、Visual Budget、第一屏五問＋三層、主圖 header、下沉清單、metadata／status chips、三要素遷移、Missing 契約不變、UI 簡化不得減少的清單、IA、各頁方向）。
 - **blueprint（`docs/vnext/d25_wireframes/*.html`）＝ Visual SSOT／visual acceptance baseline**（客戶 DEC-109 二十四）；`src/ui_v2/tokens.py` ＝實作 token 來源；色值衝突以 blueprint 為準、Phase 3 收斂（DEC-110 R15）；**客戶裁示色值除外**（CTA 主色、`--sig-neutral`／`-bg`；改否＝W1，`P1R-P3-WF-CUSTOMER-COLORS`）。
+  - 📌 **DEC-128（2026-11-03）補**：上述 blueprint HTML 是 **Legacy New UI** 的 Visual SSOT；**New UI2 的視覺基準＝`NEWUI2_WIREFRAMES_2026-11-02.md` 的有效部分（扣除被取代的 `▸ L2／L3` 行）與 Active Contract**；`d25_wireframes/*.html` 內的 `<details>` 摺疊對 New UI2 **非 active**。
 - 呈現最高優先序：**圖表 > 數字 > 短句 > 長文字**；但 **Visual Priority does not mean Visual Quantity**；**Simple Decision Dashboard, not Report Wall and not Chart Wall**；**Presentation Simplification must never reduce AI Decision Context**（客戶原文）。
 
 ### 24.2 Visual Fidelity Gate（UI Stage 必過）

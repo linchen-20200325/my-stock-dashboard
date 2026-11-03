@@ -75,6 +75,15 @@ def test_mobile_nav_stays_four_cells_in_css():
     assert "position: fixed" in css or "position:fixed" in css
 
 
+def test_me_page_audit_surface_exception_does_not_allow_evidence_expanders():
+    """👤 的稽核面入口（Digest Viewer L1、Rule Registry，預設收合；PROVISIONAL (b)①）是明列例外，
+    所以 T_new_1 不涵蓋 👤 的全部 expander；但 👤 同樣**不得**有 evidence 類 expander（為什麼／指標明細／原始資料／工程診斷）。"""
+    at = _at()
+    at.radio(key="ui2_page").set_value("p4_me").run(timeout=60)
+    labels = [e.label for e in at.expander if not e.label.startswith("Preview 控制")]
+    assert [lb for lb in labels if any(w in lb for w in ("為什麼", "指標明細", "原始資料", "工程診斷"))] == []
+
+
 # ══════════════════════════════════════════════════════════════════ B. 待 UI 批（strict xfail）
 @_xfail("P3")
 @pytest.mark.parametrize("page", ["p4_market", "p4_target", "p4_hold"])     # 👤 的 Audit 為稽核面（PROVISIONAL (b)），不在此列

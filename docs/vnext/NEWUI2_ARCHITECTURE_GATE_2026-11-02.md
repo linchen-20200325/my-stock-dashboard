@@ -151,6 +151,9 @@ View Model（VM）＝**把既有正式輸出（L3 service 回傳值；未來＝D
 
 ### §4.2 硬規則（AI 總管暫定；對齊客戶 (5)-8「UI 不得自己創造正式投資規則」＋Freeze §13／§14）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S38）：「VM `context`（將來＝Digest）」的讀法已更正：`PageVM.context` 是 **Human UI 全量**（presentation 前的完整 VM），**不是** Decision Context／Digest；Digest 由 canonical services headless 組裝，不由 UI2 VM 衍生（Freeze §14；Active Contract §8）。四情境等價測試（G3）的判準本身（輸出不受 top_n／收合影響）維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘仍有效。
+
+
 1. **純函式**：VM builder 輸入＝已取好的 feed 結果（L3 回傳物件），輸出＝L0 VM 型別（frozen dataclass）；⛔ I/O、⛔ 網路、⛔ cache、⛔ 讀時鐘以外的外部狀態（時間由參數傳入）。
 2. **只讀既有 L3 輸出**：VM ⛔ import `src.data.*`（L1）、⛔ import `src.ui*`（Old UI／Legacy New UI）、⛔ import `streamlit`。取數唯一入口＝`*_feed.py`（§6），feed 只**原樣帶出**既有 service 結果（同 `market_twii_view_service` 先例：薄 L3、帶 provenance／is_stale）。
 3. **⛔ 新增任何寫入**：VM 與 feed ⛔ 寫 `st.session_state` 投資狀態 key、⛔ 寫檔、⛔ 寫 Sheet；feed 呼叫既有服務時**只觸發既有服務的既有副作用**（例：`allocation_service.get_allocation` 的 cache key、主 Update CTA 觸發的既有 `refresh_macro_now` 鏈），⛔ 新增任何副作用；UI2 L5 只可寫 `ui2_` 前綴的**純 UI 狀態**（目前頁、模式、展開）（invD C-SS-1／C-SS-3）。
@@ -376,6 +379,9 @@ FACT（invC §7，regex 啟發式量級）：New-UI-bound 測試 ≈130 支，�
 
 ### §6.1 推薦：三段式（invD §6 D-A）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S41）：目錄註解中的「expander 層級」元件（L1／L2／L3 摺疊層級規範）不再是 New UI2 元件需求；資料健康度 Level 3 的收合除外。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘仍有效。
+
+
 ```
 shared/ui2_contract/            L0  VM 型別（frozen dataclass）、四態對映、chip tone、L1 字樣常數、術語 SSOT 引用
                                     零 I/O、零 streamlit；⛔ 依賴 L1+（R3）
@@ -499,6 +505,9 @@ New UI2
 
 ### §9.2 UI2 新增守衛 G1～G12（invD §4.2；皆附 mutation：拔掉守衛邏輯必轉紅）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S38）：「VM `context`（將來＝Digest）」的讀法已更正：`PageVM.context` 是 **Human UI 全量**（presentation 前的完整 VM），**不是** Decision Context／Digest；Digest 由 canonical services headless 組裝，不由 UI2 VM 衍生（Freeze §14；Active Contract §8）。四情境等價測試（G3）的判準本身（輸出不受 top_n／收合影響）維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘仍有效。
+
+
 > 守衛編號 G1～G12 是**測試守衛**，與 §11 送客戶的 Decision Gate（G1、G2、G3′）**無關**，只是沿用 invD 編號。
 
 | # | 守衛 | 判準 | 首次落地批 |
@@ -523,6 +532,9 @@ New UI2
 - **截圖 ⛔ 含真實持股、Sheet ID、金鑰**（VF Gate §3）。
 
 ### §9.4 Presentation Slice 四情境
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S38）：「VM `context`（將來＝Digest）」的讀法已更正：`PageVM.context` 是 **Human UI 全量**（presentation 前的完整 VM），**不是** Decision Context／Digest；Digest 由 canonical services headless 組裝，不由 UI2 VM 衍生（Freeze §14；Active Contract §8）。四情境等價測試（G3）的判準本身（輸出不受 top_n／收合影響）維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘仍有效。
+
 
 Freeze §13-2 四情境（Top 5／Top 10／collapsed／never rendered）→ 在 UI2 期以 **VM `context`** 驗（G3）；Stage F 後同一組測試改驗 **Decision Digest**（`to_dict()` 去除 `generated_at` 類時間戳後逐欄相等）。
 

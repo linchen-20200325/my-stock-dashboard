@@ -174,7 +174,7 @@
 - **新增驗收項**：
   - [ ] **📊 今日結論**：第一屏首列、位於 ① 市場目前狀態之上、底緣 ≤ 可用高（手機 791／桌機 900）；句型＝各判斷獨立並列（「；」）、缺值／Stale／Unavailable／未評估明寫、⛔「但／因此」、⛔ 方向（多頭／空頭／偏多／偏空…）與動作字樣；VM 原樣帶出、⛔ 由位階／指標推導；FAKE 示意句明標 `FAKE 示意結論：`；冷啟動＝灰色 `⬜ 尚未載入`〔DEC-081 Q2-1；Freeze §0.1.6-5；Wireframes §2.1／§9〕。⚠️ 句子是**FAKE 示意**，非逐字結論句（Q2-1 只有規則）。
   - [ ] **📊 今日主要風險**：L1、緊接第一屏四問之後（同一 `.ui2-m-l1` 容器；其後第一個內容區塊＝卡片，⛔ L2／L3 插隊）；桌機與 ①、Risk Cap 同列三 tile；退化／護欄句與 Legacy 原始碼**逐字**一致（`未評估不等於安全`／`無法判定`／`尚未載入`／真錯誤）；冷啟動灰（⛔ 紅）、真錯誤才紅；⛔ 風險項／「無風險」「安全」字樣〔Freeze §0.1.6-3；DEC-117 Q6〕。⚠️ 冷啟動「不出列」＝單組解讀（`NUI2-COLD-MAIN-RISK-READING`）。
-  - ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S32）：本項的「⛔ L2／L3 插隊」讀法已改為「四頁整頁 0 個完整 evidence expander」；其餘（L1、緊接、同列三 tile）維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §3。
+  - ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S32）：本項的「⛔ L2／L3 插隊」讀法已改為「📊🎯💼 整頁 0 個完整 evidence expander（👤 稽核面入口為明列例外）」；其餘（L1、緊接、同列三 tile）維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §3。
   - [ ] **🎯 雙模式**：頂部恰兩項（市場精選／即時查一檔）、恰一項當前（● 符號＋粗體＋邊框，⛔ 只靠顏色）；**不同時完整展開**（DOM 只有一個 `data-ui2-mode-content`）；兩模式內容都在 `PageVM.context`、切換只改 slice〔Freeze §3.1-2；客戶 (10)-B-2；Presentation Slice ≠ Decision Context〕。
   - [ ] **🎯 搜尋與查一檔 FAKE**：搜尋框＋搜尋 CTA 在模式切換之下、查詢摘要之上、底緣 ≤ 可用高；disabled 示意（⛔ 真查詢／`<input>`／`<form>`）；fake ticker 標 FAKE 且無真實代號樣式；加入觀察 CTA 恆 disabled；**session-only**：只寫 `ui2_` 前綴 key（AppTest＋AST 守衛）、⛔ 持股／觀察／候選池／strategy／Sheet；⛔ 買賣判斷字樣；動作權威不在本頁〔Freeze §3.2／§3.3；DEC-083〕。
   - [ ] **🎯 W-4 context row**：市場位階＋Risk Cap 一行輕量 chip、在查詢摘要之下、字級小於摘要；6 維 Snapshot『市場環境』不排第一格、Neutral；位階與市場頁同一份 FAKE market context〔Wireframes §9 W-4；客戶 Q3〕。~~⚠️ `unavailable` 場景紅色呈現屬單組讀法（`NUI2-TARGET-W4-RED-ON-UNAVAILABLE`）。~~ 📌 **2026-11-03（DEC-127）客戶接受 Neutral／Info 方向、不再待覆核；改查 §18 第 2 項**（有意識的更新，不是漏刪；決策者 客戶〔DEC-127〕）。
@@ -191,7 +191,7 @@
   - [ ] **🎯 查一檔 cold**：只有搜尋框＋灰色說明（⛔ FAKE-0001 頭／Snapshot／加入觀察）〔Wireframes §6〕。
   - [ ] **W-4 色調**：context 行與『市場環境』格 Neutral＋文字狀態；其他欄位 Unavailable 仍紅、Stale 仍琥珀〔W-4；Freeze §4.1；~~單組判讀待覆核~~〕。 📌 **2026-11-03（DEC-127）客戶接受 Neutral／Info 方向，已收斂為 accepted／implemented，不再待覆核**；驗收改查 §18 第 2 項（有意識的更新，不是漏刪；決策者 客戶〔DEC-127〕）。
   - [ ] **市場 L1 之前無 L2／L3／expander**（預設道 AppTest）。
-  - ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S32，部分）：擴大為「四頁**整頁**無完整 evidence expander」（見 §20 T-new-1）；「L1 之前無 expander」維持。
+  - ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S32，部分）：擴大為「📊🎯💼**整頁**無完整 evidence expander（👤 稽核面入口為明列例外，仍不得有 evidence 類 expander）」（見 §20 T-new-1）；「L1 之前無 expander」維持。
   - [ ] **更新 CTA 順序（`NUI2-MARKET-REFRESH-CTA-ORDER`）**：凍結線框／DEC-117 Q5＝頁首→更新 CTA→今日結論→3 tile；實作＝CTA 在第一屏最後（q4）。~~**偏離未裁示**，驗收時須判定修正或裁示。~~ 📌 **2026-11-03（DEC-127）已依 frozen contract 修正，驗收改查見 §18 第 1 項**（客戶裁示：implementation deviation、不開 Decision Gate；有意識的更新，不是漏刪；決策者 客戶〔DEC-127〕）。
   - [ ] 觀察項：signed-out『Google 登入』重複（`NUI2-ME-DUP-LOGIN-BUTTON`）；Risk Cap 缺值明寫範圍（`NUI2-Q21-RISKCAP-MISSING-WORDING`）；手機主要風險後餘裕 2.5px（`NUI2-MAIN-RISK-NAV-MARGIN`）。
 
@@ -234,3 +234,4 @@
 11. [ ] DEC-129：fence 與客戶 (14) 原文逐字一致；Active Contract 開頭 11 點 Active interpretation；§2.5 Account Area（不算第五頁、手機四格、不由 URL／query 猜登入、`ui2_account`≠auth contract）。
 12. [ ] 舊斷言改寫（BACKLOG §5.1.26「已改／移除的舊測試」5 項）逐一確認屬「保護已失效 presentation」而非資料／語意安全；DEC-124 三軸、G2／G2F／G4／G9、no-write、白名單、禁用字樣守衛 `git diff` 無放寬。
 13. [ ] `tests/test_ui2_contract_teeth_pending.py`：7 個 strict xfail 皆為新 UI 行為斷言（非現有安全測試）；UI 批修好時必須轉為一般測試。
+14. [ ] 獨立稽核增補：DEC-128 §七 S38～S44 逐列在原文位置可查；Gate A8／V11、Architecture Gate G3、Presentation Contract §12.2／§12.3 橫幅到位；Active Contract 的 PROVISIONAL 擴充處（Level 預設／Level 3 嚴格化）標明；`tests/test_ui2_active_contract_docs.py` 的 sha256 pin、逐節橫幅配對、逐 decorator strict 檢查綠且 mutation 轉紅。
