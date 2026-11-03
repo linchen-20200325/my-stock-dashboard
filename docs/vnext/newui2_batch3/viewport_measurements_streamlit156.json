@@ -452,7 +452,7 @@
     "banner_bottom": 134.0,
     "qa_top": 341.2
    },
-   "last_content_bottom": 524.0,
+   "last_content_bottom": 647.0,
    "card_heights": [],
    "batch3": {
     "risk": null,
@@ -479,15 +479,8 @@
      "ctx": 12.48
     },
     "account": null,
-    "snapshot_labels": [
-     "基本面",
-     "估值",
-     "籌碼",
-     "趨勢",
-     "產業",
-     "市場環境"
-    ],
-    "first_block_after_l1_top": 884.0
+    "snapshot_labels": [],
+    "first_block_after_l1_top": 663.0
    },
    "failures": {},
    "pass": true
@@ -2188,7 +2181,7 @@
     },
     {
      "q": "ctx",
-     "text": "市場位階 ⚠ 過期 3 天 Risk Cap ⬜ 無法判定",
+     "text": "市場位階 震盪⚠ 過期 3 天 Risk Cap ⬜ 無法判定",
      "top": 422.7,
      "bottom": 458.4,
      "left": 27.4,
@@ -2319,7 +2312,7 @@
     },
     {
      "q": "ctx",
-     "text": "市場位階 ⚠ 過期 3 天 Risk Cap ⬜ 無法判定",
+     "text": "市場位階 震盪⚠ 過期 3 天 Risk Cap ⬜ 無法判定",
      "top": 422.7,
      "bottom": 458.4,
      "left": 27.4,
@@ -4540,7 +4533,7 @@
     "banner_bottom": 116.1,
     "qa_top": 326.4
    },
-   "last_content_bottom": 627.5,
+   "last_content_bottom": 632.2,
    "card_heights": [],
    "batch3": {
     "risk": null,
@@ -4567,15 +4560,8 @@
      "ctx": 12.48
     },
     "account": null,
-    "snapshot_labels": [
-     "基本面",
-     "估值",
-     "籌碼",
-     "趨勢",
-     "產業",
-     "市場環境"
-    ],
-    "first_block_after_l1_top": 744.5
+    "snapshot_labels": [],
+    "first_block_after_l1_top": 648.2
    },
    "failures": {},
    "pass": true
@@ -6276,7 +6262,7 @@
     },
     {
      "q": "ctx",
-     "text": "市場位階 ⚠ 過期 3 天 Risk Cap ⬜ 無法判定",
+     "text": "市場位階 震盪⚠ 過期 3 天 Risk Cap ⬜ 無法判定",
      "top": 383.9,
      "bottom": 419.6,
      "left": 213,
@@ -6407,7 +6393,7 @@
     },
     {
      "q": "ctx",
-     "text": "市場位階 ⚠ 過期 3 天 Risk Cap ⬜ 無法判定",
+     "text": "市場位階 震盪⚠ 過期 3 天 Risk Cap ⬜ 無法判定",
      "top": 383.9,
      "bottom": 419.6,
      "left": 213,

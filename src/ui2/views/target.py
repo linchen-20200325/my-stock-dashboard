@@ -41,4 +41,5 @@ def render(vm: PageVM) -> None:
         render_sections(vm, mode=MODE_CURATED)
     else:
         _md(lookup_result_html(t.lookup))
-        render_sections(vm, mode=MODE_LOOKUP, extra=t.lookup.sections)
+        if t.lookup.queried:
+            render_sections(vm, mode=MODE_LOOKUP, extra=t.lookup.sections)

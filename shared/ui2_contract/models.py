@@ -213,6 +213,8 @@ class LookupResultVM:
     add_watch_cta: CtaVM
     isolation_note: str
     sections: tuple[SectionVM, ...] = ()
+    #: False＝尚未查詢（cold）：只畫灰色說明，⛔ 結果頭／Snapshot／加入觀察（Wireframes §6）。
+    queried: bool = True
 
 
 @dataclass(frozen=True)

@@ -1434,3 +1434,17 @@
 > | 🎯 mode 切換＋搜尋框 | **已做（模式切換可操作；搜尋框／搜尋 CTA＝disabled 示意；fake ticker／fake result；W-4 context 行）**；真搜尋＝`NUI2-TARGET-SEARCH-FUNCTIONAL` |
 > | 👤 我的 [Google 登入]／[切換 Sheet] 依登入狀態切換 | **已做（skeleton；三態＋disabled 動作列；主 CTA 字樣依狀態）**；真 OAuth＝`NUI2-ME-ACCOUNT-REAL-GATE` |
 > | 💼 持股頁線框第一屏其餘項、📊 OneBrain Outlook／資料狀態列、Primary 圖 | **仍未做**（不屬 Batch 3 三項） |
+
+> 📌 **Batch 3 獨立 QA 後續（2026-11-03；append；上表原文未改；有意識的更新，不是漏刪；決策者 AI 總管〔QA 修正〕；實作組單組）**：
+> - **F3 已修**：🎯 查一檔 cold 場景只畫搜尋框＋灰色說明（`LookupResultVM.queried=False`；⛔ FAKE-0001 結果頭／Snapshot／加入觀察／L2 占位；Wireframes §6）。
+> - **F2 已修（`NUI2-TARGET-W4-RED-ON-UNAVAILABLE` 更新）**：W-4 context 行與 6 維『市場環境』格一律 Neutral 色調，狀態改由**文字**（⚠／🔴／⬜ 字樣＋軸別邊框樣式）承載；Stale 值照顯。**只放寬這兩處**，其他欄位 Unavailable 仍紅、Stale 仍琥珀（Freeze §4.1；測試鎖定）。此列 status 改為「已處理（單組判讀：Neutral＋文字不與 §4.1 衝突，因 §4.1 規範紅色只給 Unavailable、未規定 Unavailable 必為紅）；待覆核」。
+> - **F4 已補**：預設道 AppTest 斷言市場 L1 之前只有 banner／標題（mutation「L2／L3 搬到 L1 前」實測轉紅）。**F5 已修**：三個自證式 teeth 測試改為對真實函式 mutation 或刪除（真正的牙見測試內註解）。
+>
+> | ID | 優先級 | 內容 | status | dependency | next action | 驗證組數 |
+> |---|---|---|---|---|---|---|
+> | **NUI2-MARKET-REFRESH-CTA-ORDER** | P2 | **偏離凍結條文（Batch 2 起即有、先前未登記）**：📊 市場的主更新 CTA（④ `🚀 更新今日戰情`）在實作中排第一屏**最後**（q4；手機 y 底緣 633–679），而 Wireframes §2.1／DEC-117 Q5 順序為「頁首→更新 CTA→今日結論→3 核心狀態→⚡」（CTA 在今日結論之前）。量測位置：`viewport_measurements.json` 市場頁 `q4`（④）底緣 633–679 vs `concl` 268–293。判準：若客戶認定「CTA 必須在結論之前」＝**內部修正**（調整 `first_screen_html` 市場頁列序＋判定器加 CTA-before-concl 檢查，不涉語意）；若認定四問順序（①②③④）優先＝**客戶裁示**修訂 Wireframes §2.1。⛔ 本批未改程式 | open | — | 總管／客戶判定後修正或裁示 | 1 |
+> | **NUI2-ME-DUP-LOGIN-BUTTON** | P3 | signed-out 時『Google 登入』按鈕出現兩次（④ 主 CTA 與帳戶管理動作列），signed-in／unavailable 亦主 CTA 重複動作列首項。Wireframes §5.1 允許主 CTA＋管理動作並列，但重複觀感待客戶確認 | open | — | 客戶驗收時確認；必要時動作列略過與主 CTA 同名項 | 1 |
+> | **NUI2-Q21-RISKCAP-MISSING-WORDING** | P2 | DEC-081 Q2-1「missing／unavailable／未評估必須明寫」在今日結論句是否也涵蓋 Risk Cap（目前恆 `⬜ 無法判定`，結論句**未**複述 Risk Cap）。真 feed 批需確認；⛔ 把 Risk Cap 缺值省略成中性 | open | `NUI2-CONCLUSION-REAL-FEED` | 真 feed 批留意；有疑義交客戶 | 1 |
+> | **NUI2-MAIN-RISK-NAV-MARGIN** | P2 | 手機 stale／unavailable 場景，今日主要風險之後第一個內容區塊距底部導覽上緣僅約 2.5px（餘裕警示；量測見 `viewport_measurements.json` 市場頁 `first_block_after_l1_top`）。真資料更長時內容只會更往下被導覽遮擋風險（頁底留白已有，但此為首屏邊緣） | open | `NUI2-VIEWPORT-FAKE-ONLY` | 真 feed 批重量；放不下依 Freeze §16.5 | 1 |
+
+> 📌 **索引（DEC-126／PROJECT_RULES 第 29 節；append）**：多元解法與最小成本決策規則見 `docs/DECISIONS.md` DEC-126、`PROJECT_RULES.md` 第 29 節；第 9／11／12 點非客戶原文（已明註、單組撰寫），待總管複驗。

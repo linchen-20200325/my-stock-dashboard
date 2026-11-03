@@ -184,3 +184,10 @@
 - **不得誤讀**：本批全為 FAKE；「第一屏放得下」**不是** Visual Fidelity Gate 判定（`NUI2-VF-HARNESS` 仍 open）；搜尋為 disabled 示意、今日結論為 FAKE 示意句、帳戶為 FAKE skeleton。
 - §13 收尾 Gate：新 Rule＝無；新 Decision＝無；其餘見 BACKLOG §5.1.24、Migration Contract §9、PROJECT_STATE §56。
 
+- 📌 **§17 補（獨立 QA 修正後；append）**：
+  - [ ] **🎯 查一檔 cold**：只有搜尋框＋灰色說明（⛔ FAKE-0001 頭／Snapshot／加入觀察）〔Wireframes §6〕。
+  - [ ] **W-4 色調**：context 行與『市場環境』格 Neutral＋文字狀態；其他欄位 Unavailable 仍紅、Stale 仍琥珀〔W-4；Freeze §4.1；單組判讀待覆核〕。
+  - [ ] **市場 L1 之前無 L2／L3／expander**（預設道 AppTest）。
+  - [ ] **更新 CTA 順序（`NUI2-MARKET-REFRESH-CTA-ORDER`）**：凍結線框／DEC-117 Q5＝頁首→更新 CTA→今日結論→3 tile；實作＝CTA 在第一屏最後（q4）。**偏離未裁示**，驗收時須判定修正或裁示。
+  - [ ] 觀察項：signed-out『Google 登入』重複（`NUI2-ME-DUP-LOGIN-BUTTON`）；Risk Cap 缺值明寫範圍（`NUI2-Q21-RISKCAP-MISSING-WORDING`）；手機主要風險後餘裕 2.5px（`NUI2-MAIN-RISK-NAV-MARGIN`）。
+

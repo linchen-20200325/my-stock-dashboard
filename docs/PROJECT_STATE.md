@@ -951,3 +951,6 @@
 - **未碰（硬限制；`git diff --name-only HEAD -- app.py requirements.txt tools scripts .github src/ui src/ui_v2 src/data src/compute` 與 `shared`（非 `ui2_contract`）實查為空）**：同 Batch 2；另 System Action Aggregator runtime／Action Authority／Decision Digest／OneBrain／LINE／real-data canonical wiring／新 source／新 threshold／新公式／新 probability。
 - **§27 檢查**：新 Rule＝無（既有 DEC-124 三軸、DEC-117 Q6、DEC-081 Q2-1、PROJECT_RULES §28 原樣適用）；新 Decision＝無；Audit finding／Limitation／Backlog／Migration debt／Acceptance item 已寫入 BACKLOG §5.1.24、Audit Checklist §17、Migration Contract §9、Wireframes §10、HANDOFF Safe Handoff。
 
+- **§56 補（獨立 QA 修正；append）**：F3 查一檔 cold 只畫搜尋框＋灰色說明（`LookupResultVM.queried`）；F2 W-4 context／『市場環境』改 Neutral＋文字狀態（只放寬此二處；`NUI2-TARGET-W4-RED-ON-UNAVAILABLE` 更新）；F4 預設道補「市場 L1 之前無 L2／L3」AppTest（mutation 轉紅）；F5 三個自證式 teeth 測試改真實 mutation／刪除；新登記 `NUI2-MARKET-REFRESH-CTA-ORDER`（Batch 2 起的未登記偏離）、`NUI2-ME-DUP-LOGIN-BUTTON`、`NUI2-Q21-RISKCAP-MISSING-WORDING`、`NUI2-MAIN-RISK-NAV-MARGIN`（BACKLOG §5.1.24 末）。證據 JSON／截圖已重量（1.59.2 與 1.56.0）。
+
+- **索引（DEC-126／PROJECT_RULES 第 29 節；append）**：客戶 2026-11-03 新增「多元解法與最小成本決策規則」，逐字見 `docs/DECISIONS.md` DEC-126、規則本體 `PROJECT_RULES.md` 第 29 節（第 9 點為併用 `CLAUDE.md` v3 §03、第 11／12 點為 AI 總管增添，均非客戶原文，已於該處明註）。

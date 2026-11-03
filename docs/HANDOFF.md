@@ -808,3 +808,4 @@ DEC-086 規則已於 main，本表已落地。
 | 驗證（實作組實測，單組） | `tests/test_ui2_batch3.py` 180 passed；`tests/test_ui2_*.py`＋`test_c3_layering_guard` 於 Streamlit 1.59.2 與 1.56.0 皆綠；viewport 量測 1.59.2 與 1.56.0 各 64/64；mutation 12 項轉紅後還原；全量序列 `pytest tests -m "not slow"` 與 slow 真瀏覽器結果見 PROJECT_STATE §56／總管複驗。 |
 | 禁止事項（摘要） | ⛔ 修改 `app.py`／加 `?ui=2`／切 production default；⛔ 刪／改 Legacy New UI 與 Old UI；⛔ 實作 System Action Aggregator／Risk Cap 規則數值 runtime／Action Authority／Decision Digest／OneBrain／LINE／real-data wiring／真 OAuth／Sheet 讀寫；⛔ 由結論／位階推導多空或動作；⛔ 把 `⬜ 尚未提供` 稱為資料語意態；⛔ 合併 Not Evaluated 與 Unable to Determine；⛔ UI2 出現人名字樣（PROJECT_RULES §28）；⛔ 自行切換 Model／Effort。 |
 
+- **Batch 3 QA 修正補記（2026-11-03；append）**：F2／F3／F4／F5 已修、F1 與三個觀察項已登記（見 PROJECT_STATE §56 補、BACKLOG §5.1.24 末、Audit Checklist §17 補）。下一個唯一安全工作不變（總管複驗）；**`NUI2-MARKET-REFRESH-CTA-ORDER` 需總管／客戶判定**。

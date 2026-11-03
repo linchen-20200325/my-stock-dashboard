@@ -107,7 +107,8 @@ def target_from_canonical(spec: Spec) -> TargetVM:
             add_watch_cta=CtaVM(label=str(add["label"]), enabled=False,
                                 disabled_reason=str(add["disabled_reason"])),
             isolation_note=str(lk["isolation_note"]),
-            sections=tuple(section_from_spec(x) for x in lk.get("sections", ()))))
+            sections=tuple(section_from_spec(x) for x in lk.get("sections", ())),
+            queried=bool(lk.get("queried", True))))
 
 
 def account_from_canonical(spec: Spec) -> AccountVM:

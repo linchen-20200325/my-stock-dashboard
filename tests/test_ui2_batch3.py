@@ -244,14 +244,7 @@ def test_main_risk_is_not_interleaved_by_cards_or_l2_l3_in_the_real_page(scenari
     assert len(l1) == 1 and l1[0].index('data-ui2-q="q4"') < l1[0].index("ui2-risk")
 
 
-def test_main_risk_html_order_checker_has_teeth():
-    """mutation：把 risk 搬到卡片之後 → 順序檢查必須紅。"""
-    good = ["ui2-pagetitle", "ui2-m-l1", "ui2-grid", "expander"]
-    bad = ["ui2-pagetitle", "ui2-grid", "ui2-m-l1", "expander"]
-
-    def ok(o):
-        return o.index("ui2-m-l1") < o.index("ui2-grid")
-    assert ok(good) and not ok(bad)
+# （原 order_checker_has_teeth 為自證式 tautology，已刪；真正的牙＝上方 AppTest 整頁順序測試，mutation「卡片先於 L1」實測轉紅）
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -312,12 +305,7 @@ def test_modes_are_never_fully_expanded_together(scenario):
     assert 'data-ui2-mode-content="curated"' in blob and 'data-ui2-mode-content="lookup"' not in blob
 
 
-def test_mode_exclusivity_checker_has_teeth():
-    """mutation：兩模式同時渲染（拿掉模式過濾）→ 檢查必須紅。"""
-    def exclusive(blob: str) -> bool:
-        return not ('data-ui2-mode-content="curated"' in blob and 'data-ui2-mode-content="lookup"' in blob)
-    both = 'data-ui2-mode-content="curated" data-ui2-mode-content="lookup"'
-    assert not exclusive(both) and exclusive('data-ui2-mode-content="lookup"')
+# （原 mode_exclusivity_checker_has_teeth 為自證式 tautology，已刪；真正的牙＝test_modes_are_never_fully_expanded_together，mutation「兩模式同時渲染」實測轉紅）
 
 
 def test_search_box_and_cta_present_in_both_modes_and_not_actionable():
@@ -645,13 +633,17 @@ _BANNED_PERSON_TOKENS = ("陳重銘", "林明樟", "明樟", "孫慶龍", "郭�
 _MJ_RE = re.compile(r"(?<![0-9A-Za-z])MJ(?![0-9A-Za-z])")
 
 
+def check_no_person_names(src: str) -> list[str]:
+    hits = [t for t in _BANNED_PERSON_TOKENS if t.lower() in src.lower()]
+    if _MJ_RE.search(src):
+        hits.append("MJ")
+    return hits
+
+
 @pytest.mark.parametrize("path", UI2_FILES, ids=lambda p: p.relative_to(ROOT).as_posix())
 def test_no_person_names_in_ui2_source(path):
     """PROJECT_RULES §28：New UI2 字樣與識別字不得出現人名。"""
-    src = path.read_text(encoding="utf-8")
-    for tok in _BANNED_PERSON_TOKENS:
-        assert tok.lower() not in src.lower(), f"{path.name} 含人名字樣 {tok!r}"
-    assert not _MJ_RE.search(src)
+    assert check_no_person_names(path.read_text(encoding="utf-8")) == []
 
 
 def test_no_person_names_in_any_rendered_text():
@@ -667,7 +659,10 @@ def test_no_person_names_in_any_rendered_text():
 
 
 def test_name_guard_has_teeth():
-    assert any(t in "這是蔡森的方法" for t in _BANNED_PERSON_TOKENS)
+    clean = (ROOT / "src/ui2/views/me.py").read_text(encoding="utf-8")
+    assert check_no_person_names(clean) == []
+    for inj in ("# 蔡森\n", "x = 'MJ'\n", "# caisen_x\n", "label = '老師'\n"):
+        assert check_no_person_names(inj + clean), inj
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -801,3 +796,60 @@ def _el_of(m, q):
 ])
 def test_batch3_evaluator_has_teeth(name, base, fn, check):
     assert check in _mut3(base, fn), f"判定器沒抓到：{name}"
+
+
+# ════════════════════════════════════════════════════════════════════
+# 8. 獨立 QA 修正（F2／F3／F4）
+# ════════════════════════════════════════════════════════════════════
+def test_f3_lookup_cold_shows_only_search_and_gray_note():
+    """Wireframes §6：查一檔冷啟動只有搜尋框＋灰色說明；⛔ FAKE 結果頭／Snapshot／加入觀察。"""
+    vm = _target("cold", MODE_LOOKUP)
+    lk = vm.context.target.lookup
+    assert lk.queried is False and lk.summary.state is FieldState.NOT_EVALUATED
+    h = H.lookup_result_html(lk)
+    for bad in ("FAKE-0001", "ui2-snapshot", "加入觀察", "ui2-chip--danger"):
+        assert bad not in h, bad
+    assert 'data-ui2-queried="false"' in h and T.TEXT_NOT_LOADED in h
+    for sc in SCENARIO_IDS:
+        if sc != "cold":
+            assert _target(sc, MODE_LOOKUP).context.target.lookup.queried is True
+            assert "FAKE-0001" in H.lookup_result_html(_target(sc, MODE_LOOKUP).context.target.lookup)
+
+
+def test_f3_lookup_cold_in_real_app_has_no_result_blocks():
+    at = _at_target("cold")
+    at.radio(key="ui2_target_mode").set_value(MODE_LOOKUP).run(timeout=60)
+    blob = _page_blob(at)
+    assert 'data-ui2-queried="false"' in blob and 'class="ui2-snapshot"' not in blob and "加入觀察" not in blob
+    assert len(at.expander) == 0 or all("研究解釋" not in e.label for e in at.expander)
+
+
+@pytest.mark.parametrize("scenario", ["stale", "unavailable", "not_evaluated", "missing"])
+def test_f2_w4_context_and_market_env_are_neutral_tone_with_text_state(scenario):
+    vm = _target(scenario, MODE_LOOKUP)
+    ctx = H.ctxline_html(vm.context.first_screen.context_rows)
+    snap = H.snapshot_html(vm.context.target.lookup.snapshot)
+    env = snap[snap.index('data-dim="市場環境"'):]
+    for h in (ctx, env):
+        for cls in ("ui2-chip--warning", "ui2-chip--danger", "ui2-chip--positive"):
+            assert cls not in h, f"{scenario}: W-4 context 出現 {cls}"
+    reg = next(r for r in vm.context.first_screen.context_rows if r.label == "市場位階")
+    if reg.status_text:                                   # 狀態以文字標示（⚠／🔴／⬜ 字樣），不靠色調
+        assert reg.status_text in _txt(ctx)
+
+
+def test_f2_non_context_chips_keep_state_tone():
+    """只放寬 W-4 的 context／市場環境；其他欄位的 Unavailable 仍紅、Stale 仍琥珀（Freeze §4.1）。"""
+    un = _target("unavailable", MODE_LOOKUP).context.target.lookup.snapshot
+    assert "ui2-chip--danger" in H.snapshot_html(un)       # 籌碼 Unavailable 仍紅
+    st = _target("stale", MODE_LOOKUP).context.target.lookup.snapshot
+    assert "ui2-chip--warning" in H.snapshot_html(st)
+
+
+@pytest.mark.parametrize("scenario", SCENARIO_IDS)
+def test_f4_nothing_but_title_precedes_market_l1_in_default_lane(scenario):
+    """預設道：市場頁 L1 區塊之前不得有 expander／L2／L3／卡片（含 section 標題）。"""
+    order = _market_dom_order(scenario)
+    i = order.index("ui2-m-l1")
+    before = order[:i]
+    assert set(before) <= {"ui2-banner", "ui2-pagetitle"}, f"L1 之前出現 {before}"

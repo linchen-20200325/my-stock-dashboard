@@ -407,6 +407,7 @@ def fake_canonical(page: str, scenario: str, account: str | None = None) -> dict
                              for r in c["context_rows"]]
         lk = c["target"]["lookup"]
         lk["summary"] = _transform_current(lk["summary"], scenario, _LOOKUP_COLD)
+        lk["queried"] = scenario != SCENARIO_COLD          # cold：尚未查詢，只有搜尋框＋灰色說明
         lk["snapshot"] = [
             (_transform_current(d, scenario, _LOOKUP_COLD) if d["key"] == "dim_market_env"
              else _transform(d, scenario, i, _LOOKUP_COLD))

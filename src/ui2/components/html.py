@@ -201,11 +201,24 @@ def market_l1_html(fs: FirstScreenVM, main_risk: FieldVM | None) -> str:
             + (main_risk_html(main_risk) if main_risk is not None else "") + "</div>")
 
 
+def neutral_status_chip_html(field: FieldVM) -> str:
+    """狀態 chip，但色調固定 Neutral/Info（W-4：市場 context 不以 Warning／Danger 主導）。
+
+    狀態由**文字**（⚠／🔴 字樣＋軸別樣式 `data-axis`／`data-state`）承載，不靠色調；OK 態無 chip。
+    """
+    if field.state is FieldState.OK or not field.status_text:
+        return ""
+    state = field.capability.value if field.layer == "capability" else field.state.value
+    return chip_html(field.status_text, ChipTone.NEUTRAL_INFO, axis=field.layer, state=state)
+
+
 def _ctx_chip(field: FieldVM) -> str:
-    """W-4 輕量 context chip：一律 Neutral/Info 外觀（⛔ Warning／Danger 主導、⛔ 綠）；非 OK 態走各軸狀態 chip。"""
+    """W-4 輕量 context chip：一律 Neutral/Info 外觀（⛔ Warning／Danger／綠）；非 OK 態以文字標示狀態。"""
     if field.value_text is not None and field.state is FieldState.OK:
         return neutral_chip_html(field.value_text)
-    return status_chip_html(field)
+    if field.value_text is not None:                      # Stale：值照顯示，狀態文字附上
+        return neutral_chip_html(field.value_text) + neutral_status_chip_html(field)
+    return neutral_status_chip_html(field)
 
 
 def ctxline_html(rows: tuple[FieldVM, ...]) -> str:
@@ -241,14 +254,23 @@ def snapshot_html(fields: tuple[FieldVM, ...]) -> str:
         f'<div class="ui2-dim" data-dim="{escape(f.label)}" data-axis="{f.layer}" data-state="{_state_attr(f)}">'
         f'<span class="ui2-row__label">{escape(f.label)}</span> '
         + (f'<span class="ui2-row__value">{escape(f.value_text)}</span>' if f.value_text is not None else "")
-        + status_chip_html(f) + "</div>" for f in fields)
+        + (neutral_status_chip_html(f) if f.label == "市場環境" else status_chip_html(f)) + "</div>"
+        for f in fields)
     return f'<div class="ui2-snapshot">{cells}</div>'
+
+
+def lookup_idle_html(lk: LookupResultVM) -> str:
+    """尚未查詢（cold）：只有灰色說明（Wireframes §6；⛔ 畫結果頭／Snapshot／加入觀察、⛔ 紅色）。"""
+    return (f'<div class="ui2-lookup ui2-lookup--idle" data-ui2-mode-content="lookup" data-ui2-queried="false">'
+            f'{empty_state_html(lk.summary)}</div>')
 
 
 def lookup_result_html(lk: LookupResultVM) -> str:
     """即時查一檔 FAKE 結果：Header（Neutral chip）→ 6 維 Snapshot → 加入觀察（disabled）→ session 隔離說明。"""
+    if not lk.queried:
+        return lookup_idle_html(lk)
     chips = "".join(neutral_chip_html(c.text) for c in lk.chips)
-    return (f'<div class="ui2-lookup" data-ui2-mode-content="lookup">'
+    return (f'<div class="ui2-lookup" data-ui2-mode-content="lookup" data-ui2-queried="true">'
             f'<div class="ui2-lookup__head"><strong>{escape(lk.ticker_text)} {escape(lk.name_text)}</strong> '
             f'{chips}</div>{snapshot_html(lk.snapshot)}'
             f'<div class="ui2-lookup__add">{cta_html(lk.add_watch_cta)}</div>'
