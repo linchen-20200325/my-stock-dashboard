@@ -229,9 +229,18 @@
 6. [ ] **獨立**第二組全 repo 掃描（含反向掃描：免／不必／例外／直接做／摺疊／expander／下沉）未找到仍把 L2／L3 頁內摺疊描述為**現行**規格的殘留（`NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT`）；結論前 ⛔ 宣稱「已無牴觸」。
 7. [ ] `tests/test_ui2_active_contract_docs.py` 綠；mutation（拿掉橫幅／刪 DEC-128 關鍵句）實測轉紅；`PENDING_UI_CORRECTION_TESTS` 清單與 BACKLOG §5.1.26 測試改動清單一致。
 8. [ ] 本批 `git diff --name-only origin/main` 只含 `docs/`、`PROJECT_RULES.md`、`tests/test_ui2_active_contract_docs.py`；0 條既有測試斷言變更；無 xfail／skip 新增。
-9. [ ] PROVISIONAL 項（DEC-128 §四 (a)～(d)）在所有文件中**皆標 PROVISIONAL**，沒有被寫成「客戶已核准」。
+9. [ ] PROVISIONAL 項（DEC-128 §四 (a)～(d)）在所有文件中**皆標 PROVISIONAL**，沒有被寫成「客戶已核准」。📌 **2026-11-03 更新（DEC-130）**：(a)(b)(c) 已由客戶 (15) 升為正式 Active（(a) 有條件同意），本項改驗「各文件不再把 (a)(b)(c) 標 PROVISIONAL、且 (a) 以兩軸分離語意書寫」（見 §21）；非 (a)(b)(c) 的撰寫組暫定項仍須標明未經客戶覆核。
 10. [ ] 未碰 Decision Digest schema／Risk Cap／System Action／新資料 contract／公式／門檻／source。
 11. [ ] DEC-129：fence 與客戶 (14) 原文逐字一致；Active Contract 開頭 11 點 Active interpretation；§2.5 Account Area（不算第五頁、手機四格、不由 URL／query 猜登入、`ui2_account`≠auth contract）。
 12. [ ] 舊斷言改寫（BACKLOG §5.1.26「已改／移除的舊測試」5 項）逐一確認屬「保護已失效 presentation」而非資料／語意安全；DEC-124 三軸、G2／G2F／G4／G9、no-write、白名單、禁用字樣守衛 `git diff` 無放寬。
-13. [ ] `tests/test_ui2_contract_teeth_pending.py`：7 個 strict xfail 皆為新 UI 行為斷言（非現有安全測試）；UI 批修好時必須轉為一般測試。
+13. [ ] `tests/test_ui2_contract_teeth_pending.py`：7 個（📌 DEC-130 後為 9 個，新增 T_new_8／T_new_9）strict xfail 皆為新 UI 行為斷言（非現有安全測試）；UI 批修好時必須轉為一般測試。
 14. [ ] 獨立稽核增補：DEC-128 §七 S38～S44 逐列在原文位置可查；Gate A8／V11、Architecture Gate G3、Presentation Contract §12.2／§12.3 橫幅到位；Active Contract 的 PROVISIONAL 擴充處（Level 預設／Level 3 嚴格化）標明；`tests/test_ui2_active_contract_docs.py` 的 sha256 pin、逐節橫幅配對、逐 decorator strict 檢查綠且 mutation 轉紅。
+
+## §21 DEC-130（客戶 (15) 覆核 PROVISIONAL (a)(b)(c) 升 Active）驗收項（2026-11-03；append-only；實作組單組，**待總管／獨立 QA 勾選——本節未自勾**）
+
+1. [ ] DEC-130 fence 與客戶 (15) 原文逐字一致（sha256 釘住）；DEC-128 §四 有 📌 指向 DEC-130，(a)(b)(c) 原文未改。
+2. [ ] Active Contract §5.1：Data State 五態與 Capability 兩軸分離；四對映（✅→OK、◷→Stale、◇→Missing、⛔→Unavailable）；`⬜ 尚未接線` 明寫「不是 Data State」；Not Evaluated 不併入 `⬜`；表格每列兩個分離欄位。
+3. [ ] (b)：稽核面預設收合；🎯 選股條件精簡、完整 rule detail 不上主頁、全部候選／CSV 次層、不做成資料牆。(c)：`?ui2_dev=1`、不顯示給一般使用者、不放 sidebar、不增導航、不曝光 secret、**`ui2_dev` 不得當登入證據**。
+4. [ ] 各文件（BACKLOG／PROJECT_STATE／HANDOFF／PROJECT_RULES §30／橫幅）不再把 (a)(b)(c) 當 PROVISIONAL；舊字僅以刪除線＋📌 保留。
+5. [ ] 新守衛 `check_axis_separation`／`check_ui2_dev_not_auth` 對真檔 0 違規、對注入違規轉紅；`T_new_8`／`T_new_9` 為 strict xfail（reason 含 DEC-130）。
+6. [ ] `git diff --name-only origin/main` 只含 `docs/`、`PROJECT_RULES.md`、`tests/`；src／shared／app.py 零變更；`NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT` 未被宣稱完成。

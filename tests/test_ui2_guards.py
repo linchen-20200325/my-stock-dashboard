@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import pathlib
+import re
 from dataclasses import replace
 
 import pytest
@@ -1179,3 +1180,210 @@ def test_not_approved_guard_has_teeth():
                  not_evaluated=T.ALLOWED_STATUS_PREFIXES["not_evaluated"] + (T.TEXT_NOT_APPROVED,))
     assert check_no_undeterminable_wording_outside_judgement({"data": leaky})
 
+
+
+# ════════════════════════════════════════════════════════════════════
+# DEC-130（客戶 2026-11-03 (15)）：Data State 軸 ≠ Capability／Implementation Availability 軸
+#   ＋ `ui2_dev` query parameter 只控開發面、不得當登入證據
+#   以下皆 **defense-in-depth 靜態守衛**（AST；不窮舉所有繞過）。主要保證仍是 FieldVM 建構期驗證（models.py）
+#   與 DEC-124 三軸字樣表守衛（上方）；本段補「資料健康度兩軸分離」被未來 UI／VM 程式混回去的防線。
+# ════════════════════════════════════════════════════════════════════
+_FIELDSTATE_NAMES = frozenset({"OK", "MISSING", "STALE", "UNAVAILABLE", "NOT_EVALUATED"})
+_CAPABILITYSTATE_NAMES = frozenset({"PROVIDED", "NOT_PROVIDED"})
+_CAP_MARKER_IDS = frozenset({"CapabilityState", "NOT_PROVIDED", "TEXT_NOT_PROVIDED", "TEXT_NOT_PROVIDED_AGGREGATOR"})
+_CAP_TEXT_MARKERS = ("尚未接線", "尚未提供")
+_DATA_STATE_IDS = frozenset({"FieldState", "JudgementState"})
+
+
+def _name_ids(node: ast.AST | None) -> set[str]:
+    if node is None:
+        return set()
+    return {n.id for n in ast.walk(node) if isinstance(n, ast.Name)} | \
+           {n.attr for n in ast.walk(node) if isinstance(n, ast.Attribute)}
+
+
+def _has_cap_text(node: ast.AST | None) -> bool:
+    if node is None:
+        return False
+    return any(isinstance(n, ast.Constant) and isinstance(n.value, str) and any(m in n.value for m in _CAP_TEXT_MARKERS)
+               for n in ast.walk(node))
+
+
+def check_axis_separation(source: str) -> list[str]:
+    """Data State 軸（FieldState 五態）與 Capability 軸（`尚未接線`／NOT_PROVIDED）不得混用。
+    (1) `FieldState.X` 的 X 只能是五態、`CapabilityState.X` 的 X 只能是 PROVIDED／NOT_PROVIDED（擋 `FieldState.NOT_PROVIDED`）；
+    (2) `FieldVM(...)` 的 state 引數（第 2 位或 state=）不得引用 capability 標記；
+    (3) `FieldVM(...)` 的 capability= 不得引用 FieldState／JudgementState；
+    (4) state 引用 FieldState／JudgementState 的 `FieldVM(...)`，status_text／detail 不得含 capability 字樣
+        （`尚未接線`／`尚未提供`／TEXT_NOT_PROVIDED*）——把「尚未接線」塞進 Data State 欄。"""
+    bad: list[str] = []
+    for n in ast.walk(ast.parse(source)):
+        if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name):
+            if n.value.id == "FieldState" and n.attr not in _FIELDSTATE_NAMES and not n.attr.startswith("_") \
+                    and n.attr not in {"value", "name"}:
+                bad.append(f"L{n.lineno}: FieldState.{n.attr} 不是正式資料語意五態（不得新增第六態）")
+            if n.value.id == "CapabilityState" and n.attr not in _CAPABILITYSTATE_NAMES and not n.attr.startswith("_") \
+                    and n.attr not in {"value", "name"}:
+                bad.append(f"L{n.lineno}: CapabilityState.{n.attr} 不是既有 capability 成員")
+        if isinstance(n, ast.Call) and _name_ids(n.func) & {"FieldVM"} and isinstance(n.func, (ast.Name, ast.Attribute)):
+            kw = {k.arg: k.value for k in n.keywords if k.arg}
+            state = kw.get("state", n.args[1] if len(n.args) > 1 else None)
+            status = kw.get("status_text", n.args[3] if len(n.args) > 3 else None)
+            detail = kw.get("detail", n.args[4] if len(n.args) > 4 else None)
+            cap = kw.get("capability", n.args[6] if len(n.args) > 6 else None)
+            if _name_ids(state) & _CAP_MARKER_IDS:
+                bad.append(f"L{n.lineno}: FieldVM 的 state（Data State 軸）引用了 capability 標記")
+            if _name_ids(cap) & _DATA_STATE_IDS:
+                bad.append(f"L{n.lineno}: FieldVM 的 capability 欄（Capability 軸）引用了 FieldState／JudgementState")
+            if _name_ids(state) & _DATA_STATE_IDS and (
+                    _name_ids(status) & _CAP_MARKER_IDS or _has_cap_text(status)
+                    or _name_ids(detail) & _CAP_MARKER_IDS or _has_cap_text(detail)):
+                bad.append(f"L{n.lineno}: 帶 Data State 的 FieldVM 其 status_text／detail 含 capability 字樣（尚未接線／尚未提供）")
+    return bad
+
+
+def test_dec130_data_state_is_exactly_five_and_capability_axis_is_disjoint():
+    """FieldState 成員名單釘住（名稱＋值）；CapabilityState／JudgementState 與 FieldState 無共用成員（名稱或值）。"""
+    assert [m.name for m in FieldState] == ["OK", "MISSING", "STALE", "UNAVAILABLE", "NOT_EVALUATED"]
+    assert {m.name for m in FieldState} == _FIELDSTATE_NAMES
+    assert [m.name for m in CapabilityState] == ["PROVIDED", "NOT_PROVIDED"]
+    for other in (CapabilityState, JudgementState):
+        assert not ({m.name for m in FieldState} & {m.name for m in other}), other
+        assert not ({m.value for m in FieldState} & {m.value for m in other}), other
+    assert not (set(FieldState) & set(CapabilityState))
+    # 「尚未接線／尚未提供」字樣只在 capability 字樣表，不在任一 Data State 字樣表
+    for prefixes in T.ALLOWED_STATUS_PREFIXES.values():
+        assert not any(m in p for p in prefixes for m in _CAP_TEXT_MARKERS), prefixes
+
+
+def test_dec130_fieldvm_rejects_cross_axis_construction_at_runtime():
+    with pytest.raises(ValueError):                       # capability 不得同時帶 Data State
+        FieldVM("x", FieldState.NOT_EVALUATED, None, T.TEXT_NOT_PROVIDED, capability=CapabilityState.NOT_PROVIDED)
+    with pytest.raises(ValueError):                       # Data State 欄不得收 capability 字樣
+        FieldVM("x", FieldState.MISSING, None, T.TEXT_NOT_PROVIDED)
+    with pytest.raises(ValueError):
+        FieldVM("x", FieldState.UNAVAILABLE, None, T.TEXT_NOT_PROVIDED)
+
+
+@pytest.mark.parametrize("path", ALL_FILES, ids=lambda p: p.relative_to(ROOT).as_posix())
+def test_dec130_axis_separation_in_ui2_code(path):
+    assert check_axis_separation(path.read_text(encoding="utf-8")) == []
+
+
+@pytest.mark.parametrize("injected", [
+    "x = FieldState.NOT_PROVIDED\n",                                                        # 第六態
+    "x = FieldState.PENDING_WIRING\n",
+    "x = CapabilityState.MISSING\n",
+    "FieldVM('a', CapabilityState.NOT_PROVIDED, None, '⬜ 尚未提供', capability=CapabilityState.NOT_PROVIDED)\n",
+    "FieldVM('a', state=NOT_PROVIDED)\n",
+    "FieldVM('a', None, None, '⬜ 尚未提供', capability=FieldState.NOT_EVALUATED)\n",
+    "FieldVM('a', FieldState.NOT_EVALUATED, None, '⬜ 尚未接線')\n",                       # 尚未接線 塞進 Data State
+    "FieldVM('a', FieldState.MISSING, None, T.TEXT_NOT_PROVIDED)\n",
+    "FieldVM('a', FieldState.MISSING, None, '⬜ 資料未取得', detail='尚未接線')\n",
+])
+def test_dec130_axis_separation_guard_has_teeth(injected):
+    clean = (L3_DIR / "vm_common.py").read_text(encoding="utf-8")
+    assert check_axis_separation(clean) == []
+    assert check_axis_separation(injected + clean), f"沒抓到：{injected!r}"
+
+
+def test_dec130_axis_separation_guard_allows_legitimate_capability_marker():
+    ok = ("FieldVM('a', None, None, T.TEXT_NOT_PROVIDED, detail='Preview：尚未接線', "
+          "capability=CapabilityState.NOT_PROVIDED)\n"
+          "FieldVM('b', FieldState.MISSING, None, T.TEXT_MISSING_NOT_FETCHED)\n")
+    assert check_axis_separation(ok) == []
+
+
+# ── `ui2_dev` query parameter 只控開發面，不得當登入證據（客戶 (15)(c)）──────────────────
+_AUTHISH = re.compile(r"login|logged|signed|sign_in|auth|account", re.I)
+
+
+def check_ui2_dev_not_auth(source: str) -> list[str]:
+    """defense-in-depth（不窮舉）。三層：
+    (1) 同一函式內同時出現 `query_params` 與 auth／account 識別字（沿用既有 test_ui2_never_derives… 的規則）；
+    (2) 簡單污染傳播：由 `query_params` 衍生的變數（逐函式、逐 Assign 傳遞到不動點）**以及呼叫「讀 query_params 的
+        函式」的結果**（跨函式 `dev = flag()`）不得與 auth／account 識別字出現在同一個簡單陳述式／if-while 條件／
+        三元式內（即不得流入 account／auth 變數或 session key）；
+    (3) 檔案含 `ui2_dev` 字串者，模組層（函式外）陳述式同樣套用 (2)。"""
+    tree = ast.parse(source)
+    bad: list[str] = []
+    funcs = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    #: 「query_params 讀取函式」：函式內讀 query_params 者。跨函式呼叫它（`dev = flag()`）等同讀 query_params。
+    readers = {fn.name for fn in funcs if "query_params" in (ast.get_source_segment(source, fn) or "")}
+    call_rx = re.compile(r"\b(?:" + "|".join(map(re.escape, sorted(readers))) + r")\(") if readers else None
+    q = lambda s: "query_params" in s or bool(call_rx and call_rx.search(s))   # noqa: E731
+
+    def check_scope(body_nodes: list[ast.stmt], label: str) -> None:
+        tainted: set[str] = set()
+        simple = (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Return, ast.Expr)
+        exprs: list[tuple[int, str, ast.AST]] = []
+        for st in body_nodes:
+            for n in ast.walk(st):
+                if isinstance(n, simple):
+                    exprs.append((n.lineno, ast.unparse(n), n))
+                elif isinstance(n, (ast.If, ast.While)):
+                    exprs.append((n.lineno, ast.unparse(n.test), n.test))
+                elif isinstance(n, ast.IfExp):
+                    exprs.append((n.lineno, ast.unparse(n), n))
+        changed = True
+        while changed:
+            changed = False
+            for _, _, n in exprs:
+                if isinstance(n, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                    val = n.value
+                    if val is None:
+                        continue
+                    if q(ast.unparse(val)) or (_name_ids(val) & tainted):
+                        targets = n.targets if isinstance(n, ast.Assign) else [n.target]
+                        for t in targets:
+                            for nm in ast.walk(t):
+                                if isinstance(nm, ast.Name) and nm.id not in tainted:
+                                    tainted.add(nm.id)
+                                    changed = True
+        for ln, txt, n in exprs:
+            names = {x.id for x in ast.walk(n) if isinstance(x, ast.Name)}
+            if (q(txt) or (names & tainted)) and _AUTHISH.search(txt):
+                bad.append(f"L{ln} ({label}): query_params（或其衍生變數）與 auth／account 在同一陳述式：{txt[:80]!r}")
+
+    for fn in funcs:
+        seg = ast.get_source_segment(source, fn) or ""
+        if "query_params" in seg and _AUTHISH.search(seg):
+            bad.append(f"L{fn.lineno}: 函式 {fn.name} 同時出現 query_params 與 auth／account 識別字")
+        check_scope(fn.body, fn.name)
+    if "ui2_dev" in source:
+        check_scope([s for s in tree.body if not isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))],
+                    "module")
+    return sorted(set(bad))
+
+
+@pytest.mark.parametrize("path", ALL_FILES, ids=lambda p: p.relative_to(ROOT).as_posix())
+def test_dec130_ui2_dev_query_param_is_never_auth_evidence(path):
+    assert check_ui2_dev_not_auth(path.read_text(encoding="utf-8")) == []
+
+
+@pytest.mark.parametrize("injected", [
+    # (1) 同函式共現
+    "def f(st):\n    dev = st.query_params.get('ui2_dev')\n    return account_ui(dev)\n",
+    # (2) 污染傳播：query_params → 變數 → account／auth 變數
+    "def f(st):\n    dev = st.query_params.get('ui2_dev') == '1'\n    x = dev\n    signed_in = x\n    return signed_in\n",
+    "def f(st):\n    flag = st.query_params.get('ui2_dev')\n    st.session_state['ui2_account'] = 'signed_in' if flag else 'signed_out'\n",
+    "def f(st):\n    flag = st.query_params.get('ui2_dev')\n    if flag and auth_ok:\n        pass\n",
+    # (3) 模組層
+    "import streamlit as st\nDEV = st.query_params.get('ui2_dev')\nlogged_in = DEV\n",
+    # (2') 跨函式：讀 query_params 的函式結果流入 account／auth（單看呼叫端函式沒有 query_params 字樣）
+    "import streamlit as st\ndef dev_flag():\n    return st.query_params.get('ui2_dev') == '1'\n"
+    "def shell():\n    st.session_state['ui2_account'] = 'signed_in' if dev_flag() else 'signed_out'\n",
+    "import streamlit as st\ndef dev_flag():\n    return st.query_params.get('ui2_dev') == '1'\n"
+    "def shell():\n    d = dev_flag()\n    authed = d\n    return authed\n",
+])
+def test_dec130_ui2_dev_guard_has_teeth(injected):
+    assert check_ui2_dev_not_auth((L6_FILE).read_text(encoding="utf-8")) == []
+    assert check_ui2_dev_not_auth(injected), f"沒抓到：{injected!r}"
+
+
+def test_dec130_ui2_dev_guard_allows_flag_that_only_gates_the_dev_surface():
+    ok = ("import streamlit as st\n"
+          "def dev_surface_enabled():\n    return st.query_params.get('ui2_dev') == '1'\n"
+          "def shell():\n    if dev_surface_enabled():\n        render_preview_controls()\n"
+          "def controls():\n    st.selectbox('帳戶', ['a'], key='ui2_account')\n")
+    assert check_ui2_dev_not_auth(ok) == []

@@ -313,12 +313,19 @@ def test_pending_teeth_are_strict_xfail_with_dec128_reason_and_never_hide_safety
     kw = {k.arg: k.value for k in calls[0].keywords}
     assert isinstance(kw.get("strict"), ast.Constant) and kw["strict"].value is True
     assert "DEC-128" in ast.unparse(kw["reason"]) and "待 UI correction 批" in ast.unparse(kw["reason"])
+    # DEC-130：`_xfail130` 工廠同樣 strict=True，reason 同時含 DEC-128 與 DEC-130
+    fac130 = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_xfail130")
+    calls130 = [c for c in ast.walk(fac130) if isinstance(c, ast.Call) and ast.unparse(c.func) == "pytest.mark.xfail"]
+    assert len(calls130) == 1
+    kw130 = {k.arg: k.value for k in calls130[0].keywords}
+    assert isinstance(kw130.get("strict"), ast.Constant) and kw130["strict"].value is True
+    assert "DEC-130" in ast.unparse(kw130["reason"]) and "待 UI correction 批" in ast.unparse(kw130["reason"])
     # (b) 每個 test_T_new_* 都用 `_xfail("P#")`（或直接 pytest.mark.xfail 且同樣 strict+DEC-128）
     n = 0
     for fn in [x for x in ast.walk(tree) if isinstance(x, ast.FunctionDef) and x.name.startswith("test_T_new_")]:
         ok = False
         for d in fn.decorator_list:
-            if isinstance(d, ast.Call) and ast.unparse(d.func) == "_xfail":
+            if isinstance(d, ast.Call) and ast.unparse(d.func) in ("_xfail", "_xfail130"):
                 assert re.fullmatch(r"P\d", ast.literal_eval(d.args[0])), fn.name
                 ok = True
             elif isinstance(d, ast.Call) and ast.unparse(d.func) == "pytest.mark.xfail":
@@ -328,7 +335,7 @@ def test_pending_teeth_are_strict_xfail_with_dec128_reason_and_never_hide_safety
                 ok = True
         assert ok, f"{fn.name} 沒有 strict xfail"
         n += 1
-    assert n >= 7
+    assert n >= 9      # DEC-130 後：T_new_1/1b/2/3/5/6/7 + 8/9
     # (c) 此檔內除 test_T_new_* 外，不得有任何 xfail／skip（現綠 teeth 不得被偷偷隱藏）
     for fn in [x for x in ast.walk(tree) if isinstance(x, ast.FunctionDef) and not x.name.startswith("test_T_new_")]:
         for d in fn.decorator_list:
@@ -392,6 +399,7 @@ def test_active_contract_lists_the_eleven_points_and_account_area_and_no_old_mus
 _FENCE_SHA256 = {
     "### DEC-128｜": "ed26051734a3dc1df2aee6321ac218cda0b2439872006bf2f94090eff6272a87",
     "### DEC-129｜": "210c1c2d55e2f37f7a5e0fcb809f3c43539609b72ede829bcc195ea707fdcf79",
+    "### DEC-130｜": "dc28ea44aab00f12d3a0eb4977c517550385a60616ae8dd5c7a51b9e7398899c",   # 客戶 (15) 覆核 PROVISIONAL (a)(b)(c)
 }
 
 
@@ -467,3 +475,155 @@ def test_second_batch_of_legacy_era_documents_are_bannered(rel):
 ))
 def test_audit_p2_sections_are_bannered(rel, needle):
     assert needle in _read(rel), (rel, needle)
+
+
+# ---------------------------------------------------------------- (x) DEC-130（客戶 (15)：PROVISIONAL (a)(b)(c) 升 Active）
+def _dec130() -> str:
+    d = _read("docs/DECISIONS.md")
+    return d[d.index("### DEC-130｜"):]
+
+
+def _dec130_fence() -> str:
+    d = _dec130()
+    a = d.index("```\n") + 4
+    return d[a:d.index("\n```", a)]
+
+
+def _strip_struck(text: str) -> str:
+    """刪除線 `~~…~~` 內是「保留的舊字」，不算現行用法。"""
+    return re.sub(r"~~.*?~~", "", text, flags=re.S)
+
+
+_PROV_ABC = re.compile(r"PROVISIONAL[^\n]{0,6}\([abc]\)")
+
+
+def test_dec130_fence_has_customer_text_and_effect_is_recorded():
+    f = _dec130_fence()
+    for must in ("(a) 有條件同意，需修正語意邊界", "Data State 仍只有五態", "不得新增第六態",
+                 "⬜ 尚未接線不是 Data State。", "Capability / Implementation Availability",
+                 "不得映射成 Not Evaluated、Missing、Unavailable 或任何第六態",
+                 "必須拆成不同欄位／不同軸，不得混成單一 status", "\"Not Evaluated\" 仍保留原有正式語意",
+                 "(b) 同意", "預設收合，不得搶主 UI", "不得讓這些功能把 🎯 主頁重新做成資料牆",
+                 "(c) 同意", "\"?ui2_dev=1\"", "不放 sidebar", "不增加正式導航",
+                 "不得將 \"ui2_dev\" query parameter 與正式 auth state 混用", "不能被當成登入證據",
+                 "請從 PROVISIONAL 升為正式 Active interpretation", "NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT"):
+        assert must in f, must
+    d = _dec130()
+    for must in ("升為正式 Active", "有條件同意", "兩軸", "⬜ 尚未接線", "Capability／Implementation Availability",
+                 "ui2_dev", "不能被當成登入證據", "NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT",
+                 "0 行 `src/`"):
+        assert must in d, must
+
+
+def test_dec128_provisional_block_is_marked_promoted_and_original_text_kept():
+    d = _dec128()
+    i = d.index("#### 四、⚠️ PROVISIONAL 判讀")
+    near = d[i:i + 900]
+    assert "已由 DEC-130 升為正式 Active" in near and "(a) 為「有條件同意」" in near
+    # 原文一字未改
+    assert "**(a) 資料健康度 Level 1 符號 ✅ ◷ ◇ ⛔ ⬜ 是「僅用於 👤 我的·資料健康度面」的別名**" in d
+    assert "不得被引用為「客戶已核准」" in d and "不是客戶裁示" in d
+
+
+def test_active_contract_no_longer_uses_provisional_abc_as_current_status():
+    t = _read(ACTIVE_REL)
+    live = _strip_struck(t)
+    assert _PROV_ABC.findall(live) == [], _PROV_ABC.findall(live)
+    assert "DEC-130" in t and "升為正式 Active" in t
+    # 殘留的「撰寫組暫定」必須誠實標明、不得被寫成客戶已核准
+    assert "撰寫組暫定" in t and "未經客戶覆核" in t
+
+
+@pytest.mark.parametrize("rel", (
+    "docs/vnext/NEWUI2_WIREFRAMES_2026-11-02.md", "docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md",
+    "docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md", "docs/vnext/FINAL_UI_SUPERSEDE_MAP_2026-11-02.md"))
+def test_other_vnext_docs_do_not_keep_abc_as_provisional(rel):
+    assert _PROV_ABC.findall(_strip_struck(_read(rel))) == [], rel
+
+
+def test_project_rules_section_30_and_backlog_batch_table_treat_abc_as_active():
+    pr = _read("PROJECT_RULES.md")
+    sec = pr[pr.index("## 第 30 節｜"):]
+    assert _PROV_ABC.findall(_strip_struck(sec)) == []
+    for must in ("DEC-130", "`⬜ 尚未接線` 不是 Data State", "同一列同時需要兩者時**必須拆成不同欄位**",
+                 "不能被當成登入證據", "預設收合、不搶主 UI"):
+        assert must in sec, must
+    b = _read("docs/BACKLOG.md")
+    sec = b[b.index("### 5.1.26 "):b.index("#### 📌 DEC-130（客戶 2026-11-03 (15)）落盤補記")]
+    assert _PROV_ABC.findall(_strip_struck(sec)) == [], _PROV_ABC.findall(_strip_struck(sec))
+    p6 = next(ln for ln in sec.split("\n") if ln.startswith("| **P6**"))
+    assert "兩軸欄位分離" in p6 and "狀態(Data State)" in p6 and "接線(Capability)" in p6
+    # 資料健康度欄位表：Data State 與 Capability 分欄
+    assert "`狀態(Data State)`（Level 1）" in sec and "`接線(Capability)`（Level 1；**獨立欄位，DEC-130**）" in sec
+    # 結案的 CONFIRM 項不得再是 open
+    for item in ("NUI2-DATA-HEALTH-SYMBOLS-CONFIRM", "NUI2-AUDIT-SURFACE-CONFIRM"):
+        row = next(ln for ln in sec.split("\n") if item in ln and ln.startswith("|"))
+        assert "closed by DEC-130" in row or "closed（DEC-130）" in row, item
+
+
+def test_independent_audit_item_is_kept_and_not_claimed_done():
+    b = _read("docs/BACKLOG.md")
+    row = next(ln for ln in b.split("\n") if ln.startswith("| **NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT**"))
+    assert "| open |" in row and "closed" not in row
+
+
+_MAPPING_ROWS = (
+    ("`✅ 正常`", "OK"), ("`◷ 可能過期`", "Stale"), ("`◇ 資料未備`", "Missing"), ("`⛔ 來源不可用`", "Unavailable"),
+)
+
+
+def _health_section(text: str) -> str:
+    i = text.index("## §5 👤 我的 → 資料健康度")
+    return text[i:text.index("## §6 Preview 控制")]
+
+
+def test_active_contract_data_health_is_two_axis_separated():
+    s = _health_section(_read(ACTIVE_REL))
+    assert "### §5.1 Level 1 兩軸分離" in s
+    # 四對映：符號 → Data State 軸 → 既有五態成員
+    for sym, state in _MAPPING_ROWS:
+        row = next((ln for ln in s.split("\n") if ln.startswith(f"| {sym} | Data State |")), None)
+        assert row is not None and f"**{state}**" in row, (sym, state)
+    # ⬜ 尚未接線 屬 Capability 軸、不對映任何 Data State
+    cap = next(ln for ln in s.split("\n") if ln.startswith("| `⬜ 尚未接線` |"))
+    assert "Capability／Implementation Availability" in cap and "不是 Data State" in cap and "無對映" in cap
+    for st in ("**OK**", "**Stale**", "**Missing**", "**Unavailable**", "**Not Evaluated**"):
+        assert st not in cap, st
+    # 條文：不新增第六態、Not Evaluated 保留原義且不併入 ⬜、同列拆欄
+    for must in ("**只有五態**：OK／Missing／Stale／Unavailable／Not Evaluated", "**不得新增第六態**",
+                 "`Not Evaluated` **保留原有正式語意**", "**`⬜ 尚未接線` 不是 Data State**",
+                 "⛔ 映射成 Not Evaluated、Missing、Unavailable 或任何第六態",
+                 "Level 1 符號集**不含 Not Evaluated 的專用符號**", "Not Evaluated 另以**既有字樣**", "不併入 `⬜`（尚未接線）",
+                 "必須拆成不同欄位", "`狀態(Data State)` 欄與 `接線(Capability)` 欄", "⛔ 單一 status 欄混用",
+                 "只准出現在 `接線(Capability)` 欄"):
+        assert must in s, must
+    # Level 1 表格列本身也是兩欄（不是單一 status）
+    l1 = next(ln for ln in s.split("\n") if ln.startswith("| **Level 1 使用者可讀摘要**"))
+    assert "`狀態(Data State)`" in l1 and "`接線(Capability)`" in l1
+
+
+def test_active_contract_health_example_rows_never_put_wiring_in_data_state_column():
+    s = _health_section(_read(ACTIVE_REL))
+    i = s.index("| 項目 | 狀態(Data State) | 接線(Capability) |")
+    rows = [ln for ln in s[i:].split("\n")[2:] if ln.startswith("|")]
+    assert rows
+    for ln in rows:
+        cells = [c.strip() for c in ln.strip("|").split("|")]
+        assert "尚未接線" not in cells[1], ln            # Data State 欄
+        assert cells[1] in ("✅ 正常", "◷ 可能過期", "◇ 資料未備", "⛔ 來源不可用", "（不適用）"), ln
+
+
+def test_active_contract_dev_surface_clauses_and_ui2_dev_is_not_login_evidence():
+    s = _read(ACTIVE_REL)
+    i = s.index("## §6 Preview 控制")
+    sec = s[i:s.index("## §7 ")]
+    for must in ("`?ui2_dev=1`", "developer-only surface", "不放 sidebar", "不增加正式導航", "production presentation 不依賴它",
+                 "不曝光 secret／credential／raw developer diagnostics",
+                 "`ui2_dev` query parameter 只能控制 developer preview surface", "不得與正式 auth state 混用",
+                 "不能被當成登入證據"):
+        assert must in sec, must
+    # (b)：稽核面預設收合、🎯 不做成資料牆
+    assert "預設收合、不搶主 UI" in s
+    for must in ("選股條件只顯示精簡、人類可讀版本", "完整 rule detail／engineering detail 不上主頁",
+                 "全部候選／CSV 為次層操作", "不得讓這些功能把 🎯 主頁做成資料牆"):
+        assert must in s, must

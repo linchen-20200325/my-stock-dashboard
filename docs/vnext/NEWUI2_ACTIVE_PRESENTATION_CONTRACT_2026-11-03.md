@@ -8,7 +8,7 @@
 >
 > 1. Presentation Compression ≠ Information Loss　2. 簡單但不能失去判讀能力　3. Chart-first　4. 主要圖表提供精簡 SPEC　5. 四個主要投資頁不承載完整 L2／L3 diagnostics　6. 完整 Evidence 仍保留　7. 👤 我的 → 資料健康度　8. UI ViewModel ≠ Decision Digest　9. OneBrain 讀完整正式 Evidence（⛔ 只能讀 UI slice 的讀法不是 Active）　10. **桌機左側有 Login＋Auth Status（compact Account Area，§2.5）**　11. **手機仍只有四格導航**
 >
-> - **決策來源**：客戶 2026-11-03 指示 (13)（逐字見 DEC-128 fence）與追加裁示 (14)（逐字見 DEC-129 fence；**優先於 (13) 衝突處**）。**本文件不是新的客戶裁示**：凡標「⚠ PROVISIONAL」者是 AI 總管暫定讀法，客戶可推翻（DEC-128 §四）。
+> - **決策來源**：客戶 2026-11-03 指示 (13)（逐字見 DEC-128 fence）與追加裁示 (14)（逐字見 DEC-129 fence；**優先於 (13) 衝突處**）。**本文件不是新的客戶裁示**。📌 **2026-11-03 客戶 (15) 覆核（`docs/DECISIONS.md` DEC-130，逐字 fence）**：DEC-128 §四 (a)(b)(c) 三項已由 ~~PROVISIONAL~~ **升為正式 Active interpretation**——(a) 為**有條件同意**（Data State 五態與 Capability／Implementation Availability 兩軸分離，見 §5）、(b)(c) 同意並附客戶新增限制（§3.2／§3.4／§6）。凡標「撰寫組暫定」者（非 (a)(b)(c)）仍是 AI 總管暫定讀法、未經客戶覆核（見 §11）。
 > - **src 註解與 docstring 若與本契約衝突，以本契約為準**（現存過時註解已登記 `docs/BACKLOG.md` §5.1.26 `NUI2-COMMENT-DOCSTRING-SYNC`，待 UI 批 P1／P3 改；本批不改 src）。
 > - **範圍**：只管 New UI2（`src/ui2/**`、`src/services/ui2/**`、`shared/ui2_contract/**`、`app_ui2.py`）的**四個正式投資頁** Human Presentation 與其周邊（資料健康度、Preview 控制、OneBrain Outlook 區塊、projection 邊界）。Old UI／Legacy New UI 不在範圍（凍結，不刪不改）。
 > - **不改**：資料語意（DEC-124）、Single Action Authority、Risk Cap、System Action 語意、Decision Digest schema、任何公式／門檻／source。
@@ -48,7 +48,7 @@
 
 ## §3 各頁「應有／不應有」（L1 為主；L2／L3 明細移出的內容改放哪裡）
 
-> **形態規則**（📊🎯💼 整頁 0 個完整 evidence expander；👤 的稽核面入口〔Digest Viewer L1、Rule Registry，預設收合〕為明列例外〔⚠ PROVISIONAL (b)①〕，但 👤 同樣不得有「為什麼／指標明細／原始資料／工程診斷」類 evidence expander）：四頁 Human VM 的 `SectionVM.level` 只允許 `L1` 與「關鍵 evidence 精簡層」；**⛔ 不得出現任何標示 L2／L3 的 expander、標題或標籤**（資料健康度的 Level 3 developer diagnostics 除外，見 §5）。「精簡 evidence」＝單行／小 chip／圖下方 SPEC 行／必要數字旁的 micro-tag，**不是**被摺起來的段落。
+> **形態規則**（📊🎯💼 整頁 0 個完整 evidence expander；👤 的稽核面入口〔Digest Viewer L1、Rule Registry，預設收合〕為明列例外〔Active：DEC-130 (b)，預設收合、不搶主 UI；~~⚠ PROVISIONAL (b)①~~ 📌 已升格〕，但 👤 同樣不得有「為什麼／指標明細／原始資料／工程診斷」類 evidence expander）：四頁 Human VM 的 `SectionVM.level` 只允許 `L1` 與「關鍵 evidence 精簡層」；**⛔ 不得出現任何標示 L2／L3 的 expander、標題或標籤**（資料健康度的 Level 3 developer diagnostics 除外，見 §5）。「精簡 evidence」＝單行／小 chip／圖下方 SPEC 行／必要數字旁的 micro-tag，**不是**被摺起來的段落。
 
 ### 3.1 📊 市場
 
@@ -60,7 +60,7 @@
 
 | 應有 | 不應有 | 新去處 |
 |---|---|---|
-| 模式膠囊（市場精選／即時查一檔）→ 搜尋 → 查詢摘要 → W-4 context 行（輕量、Neutral／Info）→ **精選**：產業機會 Top 5、候選 Top 10、**查看全部候選／CSV／`› 查看此檔`**（使用者功能，DEC-121 Q2=B）、選股條件＋一行摘要（使用者功能；⚠ PROVISIONAL (b)②）→ **查一檔**：Header＋chips → 6 維 Snapshot → Primary 價格圖（+SPEC）→ 基本面／估值（EPS basis·source·as_of·PE multiple 壓成一行 SPEC，Freeze §10）／籌碼／產業／風險的**精簡 chart-first 卡** → `🤖 研究解釋` 槽 → 加入觀察（disabled，直到寫入 Gate） | 標題含「（L2）」「（L3）」的 expander；`▸ 完整 6 欄表／跨季趨勢（L3）` 作為 **evidence** 摺疊（「查看全部」是使用者功能，保留）；「Legacy UI 層…第二套規則…PORT 至 L3」類工程句；大量 Missing 清單 | 跨季趨勢／完整分析明細→Evidence／Digest（⚠ PROVISIONAL：是否保留為使用者「完整分析」功能待客戶確認）；來源／口徑／公式→資料健康度 Level 2 |
+| 模式膠囊（市場精選／即時查一檔）→ 搜尋 → 查詢摘要 → W-4 context 行（輕量、Neutral／Info）→ **精選**：產業機會 Top 5、候選 Top 10、**查看全部候選／CSV／`› 查看此檔`**（使用者功能，DEC-121 Q2=B）、選股條件＋一行摘要（使用者功能；**Active：DEC-130 (b)**——選股條件只顯示精簡、人類可讀版本，完整 rule detail／engineering detail 不上主頁；全部候選／CSV 為次層操作；⛔ 不得讓這些功能把 🎯 主頁做成資料牆；~~⚠ PROVISIONAL (b)②~~ 📌 已升格）→ **查一檔**：Header＋chips → 6 維 Snapshot → Primary 價格圖（+SPEC）→ 基本面／估值（EPS basis·source·as_of·PE multiple 壓成一行 SPEC，Freeze §10）／籌碼／產業／風險的**精簡 chart-first 卡** → `🤖 研究解釋` 槽 → 加入觀察（disabled，直到寫入 Gate） | 標題含「（L2）」「（L3）」的 expander；`▸ 完整 6 欄表／跨季趨勢（L3）` 作為 **evidence** 摺疊（「查看全部」是使用者功能，保留）；「Legacy UI 層…第二套規則…PORT 至 L3」類工程句；大量 Missing 清單 | 跨季趨勢／完整分析明細→Evidence／Digest（⚠ 撰寫組暫定：是否保留為使用者「完整分析」功能待客戶確認；非 DEC-130 範圍）；來源／口徑／公式→資料健康度 Level 2 |
 
 ### 3.3 💼 持股
 
@@ -72,7 +72,7 @@
 
 | 應有 | 不應有 | 新去處 |
 |---|---|---|
-| 連線狀態（Google／Sheet）＋主 CTA（**各只出現一次**）→ 一般設定（Portfolio、Watchlist、Strategy、Notifications、Display）→ **資料健康度**（§5，新增／預留）→ **稽核面**（Audit：Decision Digest Viewer L1 句型、Rule Registry 唯讀；預設收合；⚠ PROVISIONAL (b)①） | 同一連線狀態或 CTA 重複出現；「OAuth…nonce…路徑 C」等工程句；Digest 的 raw structured snapshot／Registry 明細／工程診斷放在 Audit 一般層 | Data Freshness、System Information→**資料健康度 Level 1／2**；Digest raw snapshot、工程診斷→**資料健康度 Level 3（預設收合）**；過 `scrub_secrets`，⛔ 外露 §5 禁曝險清單 |
+| 連線狀態（Google／Sheet）＋主 CTA（**各只出現一次**）→ 一般設定（Portfolio、Watchlist、Strategy、Notifications、Display）→ **資料健康度**（§5，新增／預留）→ **稽核面**（Audit：Decision Digest Viewer L1 句型、Rule Registry 唯讀；預設收合、不搶主 UI；**Active：DEC-130 (b)**；~~⚠ PROVISIONAL (b)①~~ 📌 已升格） | 同一連線狀態或 CTA 重複出現；「OAuth…nonce…路徑 C」等工程句；Digest 的 raw structured snapshot／Registry 明細／工程診斷放在 Audit 一般層 | Data Freshness、System Information→**資料健康度 Level 1／2**；Digest raw snapshot、工程診斷→**資料健康度 Level 3（預設收合）**；過 `scrub_secrets`，⛔ 外露 §5 禁曝險清單 |
 
 ## §4 Chart-first＋Chart SPEC
 
@@ -93,7 +93,7 @@ SPEC｜日頻｜FRED｜單位 %｜資料日 11/02（T+1）｜缺值不補     �
 
 ## §5 👤 我的 → 資料健康度（完整資料診斷的唯一集中處）
 
-**定位**：完整資料診斷**集中**至此，不再散落四個投資頁（四頁只留 micro-tag 與一行狀態入口，點擊導向本區；⚠ PROVISIONAL (b)④）。
+**定位**：完整資料診斷**集中**至此，不再散落四個投資頁（四頁只留 micro-tag 與一行狀態入口，點擊導向本區；**Active：DEC-130 (b)**；~~⚠ PROVISIONAL (b)④~~ 📌 已升格）。
 
 **涵蓋項目（適用者）**：台股大盤、國際市場、VIX、利率／殖利率／利差、DXY、PMI／景氣、市場廣度、產業、法人／籌碼／融資、個股價格、基本面、估值、持股／portfolio、Risk Cap inputs、System Action inputs、Sheet／settings、其他正式 canonical sources。（尚無 canonical 的項目顯示 `⬜ 尚未接線`，⛔ 捏造來源。）
 
@@ -103,28 +103,50 @@ SPEC｜日頻｜FRED｜單位 %｜資料日 11/02（T+1）｜缺值不補     �
 
 | 層 | 內容 | 預設 |
 |---|---|---|
-| **Level 1 使用者可讀摘要** | 逐項 status，符號：`✅ 正常`、`◷ 可能過期`、`◇ 資料未備`、`⛔ 來源不可用`、`⬜ 尚未接線`；頂端一行總計（例「資料 8／9 正常 · 1 項待更新」，DEC-091 §二） | 展開可見（⚠ PROVISIONAL：預設展開是撰寫組暫定） |
-| **Level 2 來源／日期／provenance／freshness** | source、as_of、retrieved_at、freshness、Missing／failed reason、proxy／estimated | 預設收合或點開（⚠ PROVISIONAL：預設展開／收合是撰寫組暫定，客戶原文只規定 Level 3 預設收合） |
-| **Level 3 developer diagnostics** | 供 QA／工程；**預設收合**；仍受下列禁曝險清單約束（⚠ 「Level 3 只准遮罩後診斷代碼」**比客戶原文嚴格**，屬 PROVISIONAL；客戶原文只禁清單所列項目） | 收合 |
+| **Level 1 使用者可讀摘要** | 逐項**兩個分離欄位**（見下「兩軸分離」）：`狀態(Data State)` 欄用符號 `✅ 正常`、`◷ 可能過期`、`◇ 資料未備`、`⛔ 來源不可用`（＋Not Evaluated 的既有字樣）；`接線(Capability)` 欄用 `⬜ 尚未接線`／已接線；頂端一行總計（例「資料 8／9 正常 · 1 項待更新」，DEC-091 §二） | 展開可見（⚠ 撰寫組暫定：預設展開未經客戶覆核） |
+| **Level 2 來源／日期／provenance／freshness** | source、as_of、retrieved_at、freshness、Missing／failed reason、proxy／estimated | 預設收合或點開（⚠ 撰寫組暫定：客戶原文只規定 Level 3 預設收合） |
+| **Level 3 developer diagnostics** | 供 QA／工程；**預設收合**；仍受下列禁曝險清單約束（⚠ 「Level 3 只准遮罩後診斷代碼」**比客戶原文嚴格**，屬撰寫組暫定；客戶原文只禁清單所列項目） | 收合 |
 
-**⛔ 不得一般曝光（任何層、任何 Human 面；⚠ 「Level 3 只准遮罩後診斷代碼」比客戶原文嚴格，PROVISIONAL）**：API key、secret、token、env var 名、raw exception、traceback、module path、credential detail、internal stack、OAuth credential（Sheet ID 只顯示末 6 碼）。一律過 `scrub_secrets`。
+**⛔ 不得一般曝光（任何層、任何 Human 面；⚠ 「Level 3 只准遮罩後診斷代碼」比客戶原文嚴格，屬撰寫組暫定）**：API key、secret、token、env var 名、raw exception、traceback、module path、credential detail、internal stack、OAuth credential（Sheet ID 只顯示末 6 碼）。一律過 `scrub_secrets`。
 
-**⚠ PROVISIONAL (a)——Level 1 符號是「資料健康度面的別名」**（DEC-128 §四 (a)）：
+### §5.1 Level 1 兩軸分離（Active；客戶 2026-11-03 (15)(a)「有條件同意」；DEC-130 §二）
 
-| Level 1 符號 | 對映既有資料語意（DEC-124／Freeze §5.1） | 備註 |
+資料健康度同時涉及**兩條互相獨立的軸**，**不得混成單一 status**：
+
+| 軸 | 成員 | 規則 |
 |---|---|---|
-| `✅ 正常` | OK | |
-| `◷ 可能過期` | Stale（全站字樣 `⚠ 過期 N 天／⚠ 可能已過期`） | 別名僅限本面 |
-| `◇ 資料未備` | Missing（全站字樣 `⬜ 資料未備`／`⬜ 資料未取得`） | 別名僅限本面 |
-| `⛔ 來源不可用` | Unavailable（全站字樣 `🔴 來源目前不可用`） | **本面 `⛔`＝來源不可用（新義）**；Freeze §5.3 舊義「功能未接」在其他頁不變；色暫沿 Unavailable 紅 |
-| `⬜ 尚未接線` | capability 尚未接線（全站字樣 `⬜ 尚未提供`） | 屬 capability 軸，**不是**資料語意第 6 態 |
+| **Data State 軸** | **只有五態**：OK／Missing／Stale／Unavailable／Not Evaluated | **不得新增第六態**；`Not Evaluated` **保留原有正式語意**（規則／計算尚未執行或不在本次評估範圍） |
+| **Capability／Implementation Availability 軸** | 尚未接線（`⬜ 尚未接線`）／已接線 | **`⬜ 尚未接線` 不是 Data State**；⛔ 映射成 Not Evaluated、Missing、Unavailable 或任何第六態 |
 
-> 不新增第 6 個資料語意態；不改全站字樣與 `text.py`／guard；全站統一需客戶另裁示。
+**Level 1 符號對映表**（符號是資料健康度面的**顯示別名**；只有 Data State 四項有對映）：
+
+| Level 1 符號 | 軸 | 對映（DEC-124／Freeze §5.1） | 備註 |
+|---|---|---|---|
+| `✅ 正常` | Data State | **OK** | |
+| `◷ 可能過期` | Data State | **Stale**（全站字樣 `⚠ 過期 N 天／⚠ 可能已過期`） | 別名僅限本面 |
+| `◇ 資料未備` | Data State | **Missing**（全站字樣 `⬜ 資料未備`／`⬜ 資料未取得`） | 別名僅限本面 |
+| `⛔ 來源不可用` | Data State | **Unavailable**（全站字樣 `🔴 來源目前不可用`） | **本面 `⛔`＝來源不可用（新義）**；Freeze §5.3 舊義「功能未接」在其他頁不變；色沿 Unavailable 紅（撰寫組讀法，客戶未指定） |
+| `⬜ 尚未接線` | **Capability／Implementation Availability** | **不是 Data State；無對映**（全站同源字樣 `⬜ 尚未提供`） | **不是** Not Evaluated／Missing／Unavailable／第六態 |
+
+- **Not Evaluated 的呈現**：Level 1 符號集**不含 Not Evaluated 的專用符號**。Not Evaluated 另以**既有字樣**（`⬜ 尚未評估` 等 DEC-124／Freeze §5 全站字樣）呈現，**不併入 `⬜`（尚未接線）**，也不另造符號。
+- **欄位拆分（硬規則）**：資料健康度表格每列若需同時表達「Data State」與「尚未接線」，**必須拆成不同欄位**——`狀態(Data State)` 欄與 `接線(Capability)` 欄；⛔ 單一 status 欄混用。`⬜ 尚未接線` **只准出現在 `接線(Capability)` 欄**；尚未接線的項目其 `狀態(Data State)` 欄**不得**填五態中任何一個來冒充（無資料可評＝該欄不適用，⛔ 填 Missing／Not Evaluated）。
+- 範例列（版型示意，非線框；版型仍須先出草稿）：
+
+| 項目 | 狀態(Data State) | 接線(Capability) | source | as_of |
+|---|---|---|---|---|
+| 台股大盤 | ✅ 正常 | 已接線 | TWSE | 11/03 |
+| 利率／殖利率 | ◷ 可能過期 | 已接線 | FRED | 10/30 |
+| 市場廣度 | ◇ 資料未備 | 已接線 | — | — |
+| 法人／籌碼 | ⛔ 來源不可用 | 已接線 | — | — |
+| 估值 | （不適用） | ⬜ 尚未接線 | — | — |
+
+- 不改全站 DEC-124／Freeze §5.1 既有字樣、`shared/ui2_contract/text.py` 與其 guard；全站統一需客戶另裁示。
+- **守衛**：`tests/test_ui2_guards.py` `check_axis_separation`（FieldState 恰五態、capability 不共用成員、Data State 欄不得含「尚未接線／尚未提供」）；`tests/test_ui2_contract_teeth_pending.py` `T_new_8`（待 P6，strict xfail）。
 
 ## §6 Preview 控制的去向（FAKE／Real 切換、場景、帳戶）
 
-- **不是正式產品資訊架構**；⛔ 不得讓它看起來像四頁的產品內容（⚠ PROVISIONAL (c)）。
-- **去向**：開發／測試專用面——僅當 `?ui2_dev=1`（或等價的開發旗標）時顯示；明顯標示「非產品內容」；外觀與產品區隔（虛線框、等寬字）；不用 sidebar（與桌機 W-1 左導覽衝突）、不開第五導覽項。
+- **不是正式產品資訊架構**；⛔ 不得讓它看起來像四頁的產品內容（**Active：DEC-130 (c)**；~~⚠ PROVISIONAL (c)~~ 📌 已升格）。
+- **去向**：開發／測試專用面——僅當 `?ui2_dev=1`（或等價的 developer-only surface）時顯示；明顯標示「非產品內容」；外觀與產品區隔（虛線框、等寬字）。客戶 (15)(c) 要求（Active）：**①一般使用者 UI 不顯示 ②不放 sidebar（亦與桌機 W-1 左導覽衝突）③不增加正式導航（不開第五導覽項）④production presentation 不依賴它 ⑤不曝光 secret／credential／raw developer diagnostics ⑥`ui2_dev` query parameter 只能控制 developer preview surface，⛔ 不得與正式 auth state 混用、⛔ 不能被當成登入證據**（Authentication State 只來自正式 auth contract，§2.5）。守衛：`tests/test_ui2_guards.py` `check_ui2_dev_not_auth`（defense-in-depth）；`T_new_5`／`T_new_9`（待 P1）。
 - 預設道（無旗標）**0 個** Preview 控制（含 `ui2_account` 帳戶場景——它只屬開發面 FAKE，非 auth contract）；預設 feed＝FAKE 不變。session key 仍限 `ui2_` 前綴（`ALLOWED_UI2_WRITES` 不擴）。
 - FAKE／Real 與場景維度（loaded／cold／missing／stale／unavailable／not_evaluated）、帳戶三態**保留供測試**，不屬 production presentation contract；cutover 前移除（`NUI2-PREVIEW-CONTROL-AXES` 不變）。
 - 橫幅（「New UI2 Preview（fake data）」／Real 版）屬 Preview 標示，保留至 cutover（客戶 (11) A3）。
@@ -180,7 +202,7 @@ Data / Sources → Validation / Normalization → Domain / Deterministic Logic
 | 文件 | 段落 | 狀態 | S／備註 |
 |---|---|---|---|
 | `PROJECT_RULES.md` | §19.2 資料中心責任 | MIGRATE | S23 → 👤 資料健康度 |
-| 〃 | §19.8 Missing 語意／DEC-124 五態三軸 | KEEP | 資料健康度符號為別名（PROVISIONAL a） |
+| 〃 | §19.8 Missing 語意／DEC-124 五態三軸 | KEEP | 資料健康度符號為別名；兩軸分離（Active，DEC-130 (a)） |
 | 〃 | §19.9／§19.4 Presentation vs Decision Logic 分離 | KEEP | |
 | 〃 | §24.1 Presentation Contract 是呈現 SSOT | KEEP | 現行 SSOT＝本文件（見 §30） |
 | 〃 | §24.2「第一屏三層答不出＝FAIL」 | SUPERSEDE | S21 |
@@ -228,7 +250,7 @@ Data / Sources → Validation / Normalization → Domain / Deterministic Logic
 | `ONEBRAIN_ARCHITECTURE` | 「不把大量 raw 無差別塞 LLM」 | KEEP | Digest 是結構化，不是 raw dump |
 | `BACKLOG.md` | `DH-DATA-CENTER`、`UIX-DATACENTER-CONTROLS`、`NEWUI-STAGE-D8-DATA-CENTER`、`NEWUI-STAGE-D10-SHARED-COMPONENTS`、`UIX-MKT-ENTRY-BUTTONS`、`NUI2-REALFEED-REGIME-L1-BRIEF` | MIGRATE／SUPERSEDE | S34 |
 | 〃 | `NUI2-PREVIEW-CONTROL-AXES` | KEEP＋新增位置列 | S35 |
-| `CLAUDE.md` §1.A-4 | 灰＝未載入、紅＝真錯誤 | KEEP（不動） | 與 `⛔ 來源不可用` 色張力見 PROVISIONAL (a) |
+| `CLAUDE.md` §1.A-4 | 灰＝未載入、紅＝真錯誤 | KEEP（不動） | 與 `⛔ 來源不可用` 色張力見 §5.1（沿 Unavailable 紅，撰寫組讀法） |
 
 ### 程式／測試（本批不改；列為後續 UI correction 批的待改清單）
 
@@ -236,9 +258,10 @@ Data / Sources → Validation / Normalization → Domain / Deterministic Logic
 
 ## §11 PROVISIONAL 與未驗
 
-- **PROVISIONAL（AI 總管暫定、客戶可推翻）**：(a) 資料健康度 Level 1 符號為別名；(b) 稽核面保留在 👤／選股條件與查看全部保留／指標危險度指路改向／全站一行資料狀態入口；(c) Preview 控制去 `?ui2_dev=1` 開發面；其餘見 DEC-128 §四。
+- **~~PROVISIONAL (a)(b)(c)~~ 📌 已升為正式 Active**（客戶 2026-11-03 (15)，`docs/DECISIONS.md` DEC-130）：(a) 資料健康度 Level 1 符號為別名，**有條件同意**＝Data State 五態與 Capability 軸分離、`⬜ 尚未接線` 不是 Data State、同列拆欄（§5.1）；(b) 稽核面保留在 👤 並預設收合／🎯 選股條件與查看全部候選・CSV・查看此檔保留但維持 Presentation Compression（§3.2／§3.4）；(c) Preview 控制去 `?ui2_dev=1` 開發面且不得當登入證據（§6）。**現行殘留的 (a)(b)(c) PROVISIONAL＝0。**
+- **撰寫組暫定（非 (a)(b)(c)；客戶 (15) 未涵蓋；未經客戶覆核）**：Level 1／2 預設展開或收合；「Level 3 只准遮罩後診斷代碼」嚴於客戶原文；`⛔ 來源不可用` 的顏色（沿 Unavailable 紅）；🎯 跨季趨勢／完整分析是否保留為使用者功能。DEC-128 §四 (d) Re-open 模板仍可用於推翻。
 - **INFERENCE**：題號鷹架可見文字應移除；工程字樣擴及四頁全部 Human UI（PC §18 擴大）。
-- **未驗**：FAKE 非 loaded 場景截圖；Safari／Firefox／iOS／真機；Cloud 上 Deploy 按鈕；AppTest query_params 支援；本文件由單組撰寫（獨立 QA 見 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §20，**未自勾**）。
+- **未驗**：FAKE 非 loaded 場景截圖；Safari／Firefox／iOS／真機；Cloud 上 Deploy 按鈕；AppTest query_params 在 Streamlit 1.56 floor 的支援（1.59.2 已實測可設定；DEC-130）；本文件由單組撰寫（獨立 QA 見 `docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md` §20，**未自勾**）。
 
 ## §12 怎麼用（給新 session）
 

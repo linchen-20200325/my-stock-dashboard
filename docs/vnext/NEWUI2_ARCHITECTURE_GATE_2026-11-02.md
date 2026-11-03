@@ -420,7 +420,7 @@ src/services/system_action_aggregator.py   L3  System Action Aggregator（純函
 
 ## §7 Preview strategy（~~**PENDING G1**~~ **客戶核准 Q1=A**）
 
-> 📌 **DEC-128 補註（2026-11-03；補充、非取代）——Preview 控制的位置規則**：本節 Q1=A（Preview 策略）**不變**；新增位置規則：「Preview 控制（資料來源／fake 場景／帳戶）」屬**開發／測試專用控制**，不得畫成四頁產品內容（⚠ PROVISIONAL：僅 `?ui2_dev=1` 之類開發旗標時顯示、明顯標示「非產品內容」、不用 sidebar、不開第五導覽項；預設道 0 個）。FAKE／Real 切換保留供測試，**不屬 production presentation contract**。現行殼（`src/ui2/shell/app.py` 把它畫成頁面 expander）是 implementation deviation，由 `docs/BACKLOG.md` §5.1.26 P1 修正。見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §6。
+> 📌 **DEC-128 補註（2026-11-03；補充、非取代）——Preview 控制的位置規則**：本節 Q1=A（Preview 策略）**不變**；新增位置規則：「Preview 控制（資料來源／fake 場景／帳戶）」屬**開發／測試專用控制**，不得畫成四頁產品內容（**Active，DEC-130 (c)**；~~⚠ PROVISIONAL~~ 已升格：僅 `?ui2_dev=1` 之類開發旗標時顯示、明顯標示「非產品內容」、不用 sidebar、不開第五導覽項、不得當登入證據；預設道 0 個）。FAKE／Real 切換保留供測試，**不屬 production presentation contract**。現行殼（`src/ui2/shell/app.py` 把它畫成頁面 expander）是 implementation deviation，由 `docs/BACKLOG.md` §5.1.26 P1 修正。見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §6。
 
 
 ### §7.1 候選比較（FACT＋INFERENCE，invD §2）

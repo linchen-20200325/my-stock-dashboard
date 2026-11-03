@@ -6934,6 +6934,8 @@ MIGRATE：內容仍需要，但位置應改到「資料健康度」或 backend E
 
 #### 四、⚠️ PROVISIONAL 判讀（AI 總管暫定；**不是客戶裁示**；客戶可推翻）
 
+> 📌 **已由 DEC-130 升為正式 Active（客戶 2026-11-03 (15) 覆核；(a) 為「有條件同意」——語意邊界以 DEC-130 §二為準，(b)(c) 同意並補客戶新增限制）**。下文 (a)(b)(c) 原文**一字未改**，保留為歷史（當時為 AI 總管暫定、非客戶裁示）；自 DEC-130 起**不再是 PROVISIONAL**，PR 描述不必再標 PROVISIONAL。(d) Re-open 模板仍保留作為日後推翻用格式。⚠ 若本段 (a) 的字面與 DEC-130 §二不一致，**以 DEC-130 fence 與 §二為準**（例：本段 (a)「`⬜ 尚未接線`＝capability」維持；新增「資料健康度同一列須拆兩欄」）。
+
 > 以下四項是為了讓 Active Contract 能「只剩一套」而由 AI 總管暫定的**讀法**，其中 (a) 觸及資料語意字樣、(b)(c) 屬灰色地帶。**它們不得被引用為「客戶已核准」**；客戶覆核前，凡依據這些判讀的施工，PR 描述須標註「PROVISIONAL」。
 
 - **(a) 資料健康度 Level 1 符號 ✅ ◷ ◇ ⛔ ⬜ 是「僅用於 👤 我的·資料健康度面」的別名**，對映既有資料語意：✅ 正常＝OK、◷ 可能過期＝Stale、◇ 資料未備＝Missing、⛔ 來源不可用＝Unavailable、⬜ 尚未接線＝capability 尚未接線。**不新增第 6 個資料語意態**；**不改**全站 DEC-124／Freeze §5.1 既有字樣、`text.py` 與其 guard；全站替換需客戶另裁示。**`⛔` 在 Freeze §5.3 舊義為「功能未接」**——**限定在資料健康度面內以新義（來源不可用）為準並於該面加註**，**不外溢**到其他頁（其他頁 `⛔ 未接線` 仍為舊義）。⚠ 另有張力：`CLAUDE.md` §1.A-4「紅＝系統真錯誤」與 `⛔ 來源不可用` 的色未在客戶原文指定——Active Contract 暫定「⛔ 來源不可用＝紅（沿 Freeze §5.1 Unavailable 紅）」。
@@ -7144,3 +7146,188 @@ Model / Effort：Claude Sonnet 5.5 Medium
 | **S44** | Legacy 時代未加橫幅的文件：`INTERACTION_COVERAGE_MATRIX`、`NEWUI_STAGE_B_DRAFT`、`MARKET_PAGE_DECISION_GATE`、`NEWUI_D25_B_COVERAGE`、`VNEXT_PRODUCT_BLUEPRINT` | 對 New UI2 非 active（頁內 L2／L3、查看依據） | SUPERSEDE（HISTORICAL） | Legacy 凍結 |
 
 - **S32 用語澄清（消除與 PROVISIONAL (b)① 的張力）**：S32 的「四頁整頁 0 個完整 evidence expander」改讀為「**📊🎯💼 三個投資頁整頁 0 個完整 evidence expander；👤 的稽核面入口（Digest Viewer L1、Rule Registry，預設收合）為明列例外**，但 👤 同樣不得有「為什麼／指標明細／原始資料／工程診斷」類 evidence expander；Digest raw 與工程診斷屬資料健康度 Level 3」。
+
+
+### DEC-130｜客戶覆核 DEC-128 PROVISIONAL (a)(b)(c)：(a) 有條件同意（Data State 五態與 Capability／Implementation Availability 兩軸分離，`⬜ 尚未接線` 不是 Data State，同列須拆欄）、(b) 同意（稽核面預設收合；🎯 使用者功能維持 Presentation Compression）、(c) 同意（`?ui2_dev=1` 開發面；不得當登入證據）——三項由 PROVISIONAL 升為正式 Active interpretation（客戶 2026-11-03 (15)）
+
+> 2026-11-03 補登。**編號**：DEC-129 為上一號。repo 慣例是「每一則客戶指示訊息一個 DEC」，(15) 是 (13)(14) 之後的**獨立覆核訊息**，故另立 DEC-130；DEC-128／DEC-129 原文不動（DEC-128 §四 加 📌 指向本條）。**來源類別 D：客戶 2026-11-03 覆核 (15)，經總管轉交；下方 fence 逐字收錄，未改一字**（實作組未見客戶原訊息本身；若有出入以原訊息為準）。
+
+- **決策者**：**客戶**（2026-11-03）。｜**效力日期**：2026-11-03 起。｜**範圍**：產品／UX／治理（資料健康度語意邊界、稽核面、開發面）；**docs＋tests 落盤，0 行 `src/`／`shared/`／`app.py` 變更**（src 過時註解仍走 `NUI2-COMMENT-DOCSTRING-SYNC`）。
+- **狀態**：**客戶指示生效**；DEC-128 §四 (a)(b)(c) 自本條起為正式 Active interpretation；UI 程式尚未改（後續 UI correction 批，`docs/BACKLOG.md` §5.1.26）。
+- **客戶原文（逐字，fence 內未改一字；具約束力；sha256 釘住於 `tests/test_ui2_active_contract_docs.py`）**：
+
+```
+覆核 PROVISIONAL (a)(b)(c)：
+
+(a) 有條件同意，需修正語意邊界
+
+資料健康度可使用：
+
+- ✅ 正常
+- ◷ 可能過期
+- ◇ 資料未備
+- ⛔ 來源不可用
+- ⬜ 尚未接線
+
+但必須明確維持既有三軸語意：
+
+Data State 仍只有五態
+
+- OK
+- Missing
+- Stale
+- Unavailable
+- Not Evaluated
+
+不得新增第六態。
+
+其中：
+
+- ✅ 正常 → OK
+- ◷ 可能過期 → Stale
+- ◇ 資料未備 → Missing
+- ⛔ 來源不可用 → Unavailable
+
+而：
+
+⬜ 尚未接線不是 Data State。
+
+它屬於：
+
+Capability / Implementation Availability
+
+不得映射成 Not Evaluated、Missing、Unavailable 或任何第六態。
+
+如果資料健康度同一列同時需要表達「尚未接線」與 Data State，必須拆成不同欄位／不同軸，不得混成單一 status。
+
+"Not Evaluated" 仍保留原有正式語意。
+
+請把這個修正同步進 Active Contract / tests / guards，避免未來再把 Capability 與 Data State 混回去。
+
+---
+
+(b) 同意
+
+保留：
+
+- 👤 我的 → Audit
+- Decision Digest Viewer
+- Rule Registry
+
+但預設收合，不得搶主 UI。
+
+🎯 標的頁保留：
+
+- 選股條件
+- 查看全部候選
+- CSV
+- 查看此檔
+
+這些屬使用者功能，不是 raw evidence。
+
+但必須維持 Presentation Compression 原則：
+
+- 選股條件只顯示精簡、人類可讀版本
+- 完整 rule detail / engineering detail 不直接塞主頁
+- 全部候選／CSV 作為次層操作
+- 不得讓這些功能把 🎯 主頁重新做成資料牆
+
+---
+
+(c) 同意
+
+Preview / FAKE / scenario 控制移至：
+
+"?ui2_dev=1"
+
+或等價的 developer-only surface。
+
+要求：
+
+- 一般使用者 UI 不顯示
+- 不放 sidebar
+- 不增加正式導航
+- production presentation 不依賴它
+- 不曝光 secret / credential / raw developer diagnostics
+- 不得將 "ui2_dev" query parameter 與正式 auth state 混用
+- query parameter 只能控制 developer preview surface，不能被當成登入證據
+
+---
+
+以上三項請從 PROVISIONAL 升為正式 Active interpretation。
+
+另外：
+
+"NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT"
+
+仍保留，後續適當批次補獨立複驗即可，不阻擋目前純 presentation correction。
+
+下一批仍依既定 P1～P7 進行；純 presentation 優先使用：
+
+Claude Sonnet 5.5
+Effort：Medium
+
+若碰到 auth contract、Decision Digest schema、Risk Cap、System Action、新 canonical data contract，再 STOP → Opus 5.5 + High。
+```
+
+#### 一、效力與優先序
+
+- 客戶明示「以上三項請從 PROVISIONAL 升為正式 Active interpretation」：DEC-128 §四 (a)(b)(c) **不再是 PROVISIONAL**。**(a) 是「有條件同意」**——升為 Active 的是**經客戶修正後的語意邊界（§二）**，不是 DEC-128 §四 (a) 的原字面；二者衝突處以本條為準。(b)(c) 同意，並附客戶新增限制（§三、§四）。
+- `NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT` **仍保留**（客戶：「後續適當批次補獨立複驗即可，不阻擋目前純 presentation correction」）；本批不執行它，也不得以本批宣稱「已無牴觸」。
+- 下一批仍依既定 P1～P7；純 presentation 用 Sonnet 5.5＋Medium，碰 auth contract／Decision Digest schema／Risk Cap／System Action／新 canonical data contract 即 STOP → Opus 5.5＋High（BACKLOG 各批 Gate 欄不變）。
+
+#### 二、(a) 的語意邊界（⛔ 不得簡化）
+
+**兩條互相獨立的軸，資料健康度每列都要分得開：**
+
+| 軸 | 成員 | 說明 |
+|---|---|---|
+| **Data State**（DEC-124 資料語意軸） | **只有五態**：OK／Missing／Stale／Unavailable／Not Evaluated | **不得新增第六態**。`Not Evaluated` 保留原有正式語意（規則／計算尚未執行或不在本次評估範圍），**不是**「尚未接線」的別名 |
+| **Capability／Implementation Availability**（能力可用性軸） | 尚未接線（`⬜ 尚未接線`；全站同源字樣 `⬜ 尚未提供`）／已接線 | **不是 Data State**；⛔ 映射成 Not Evaluated、Missing、Unavailable 或任何第六態 |
+
+Level 1 符號對映（客戶逐項列出；**僅 Data State 四項有對映**）：
+
+| 符號 | 軸 | 對映 |
+|---|---|---|
+| `✅ 正常` | Data State | OK |
+| `◷ 可能過期` | Data State | Stale |
+| `◇ 資料未備` | Data State | Missing |
+| `⛔ 來源不可用` | Data State | Unavailable |
+| `⬜ 尚未接線` | **Capability／Implementation Availability** | **無 Data State 對映**（⛔ Not Evaluated／Missing／Unavailable／第六態） |
+
+- **同一列同時需要「尚未接線」與 Data State → 必須拆成不同欄位／不同軸，⛔ 混成單一 status。** 條文化：資料健康度表格每列至少有 `狀態(Data State)` 與 `接線(Capability)` 兩個分離欄位；`⬜ 尚未接線` 只准出現在後者。尚未接線的項目其 Data State 欄不得填五態中的任何一個來冒充（無資料可評＝該欄留空／不適用，⛔ 填 Missing 或 Not Evaluated）。
+- **`Not Evaluated` 的呈現**：Level 1 符號集（客戶列的五個符號）**不含 Not Evaluated 的專用符號**；Not Evaluated 另以既有字樣（`⬜ 尚未評估` 等 DEC-124／Freeze §5 全站字樣）呈現，**不併入 `⬜`（尚未接線）**，也不另造符號。
+- 與 DEC-124 的關係：本條是 DEC-124 三軸（資料語意／判定語意／能力可用性）在資料健康度面的**落地約束**，不改 DEC-124、不改全站字樣與 `shared/ui2_contract/text.py`、不放寬任一既有守衛。`⛔` 在 Freeze §5.3 舊義（功能未接）在其他頁不變；資料健康度面 `⛔`＝來源不可用（Data State: Unavailable）。`⛔ 來源不可用` 的顏色客戶未指定，**沿 Freeze §5.1 Unavailable 紅**（`CLAUDE.md` §1.A-4「紅＝真錯誤」與之一致：來源不可用＝真錯誤；`⬜ 尚未接線` 灰）——此為撰寫組讀法，非客戶原文。
+- 客戶要求「同步進 Active Contract／tests／guards，避免未來再把 Capability 與 Data State 混回去」：見 §六。
+
+#### 三、(b) 的 Active 條文（客戶新增限制）
+
+- **稽核面**：👤 我的 → Audit、Decision Digest Viewer、Rule Registry **保留，預設收合，不得搶主 UI**。
+- **🎯 標的頁保留**選股條件、查看全部候選、CSV、查看此檔——**屬使用者功能，不是 raw evidence**；但必須維持 Presentation Compression：選股條件**只顯示精簡、人類可讀版本**；完整 rule detail／engineering detail **不直接塞主頁**；全部候選／CSV 是**次層操作**；**不得讓這些功能把 🎯 主頁重新做成資料牆**。
+- 其餘 DEC-128 §四 (b)③（「指標危險度」指路改向）與 (b)④（全站一行資料狀態入口）：客戶 (15) 對 (b) 整體「同意」，一併升 Active（入口點擊導向 👤 資料健康度，完整診斷本體不留在四個投資頁）。
+
+#### 四、(c) 的 Active 條文（客戶新增限制）
+
+Preview／FAKE／scenario 控制移至 `?ui2_dev=1` 或等價 developer-only surface，且：
+
+1. 一般使用者 UI 不顯示；2. 不放 sidebar；3. 不增加正式導航；4. production presentation 不依賴它；5. 不曝光 secret／credential／raw developer diagnostics；6. **`ui2_dev` query parameter 不得與正式 auth state 混用；只能控制 developer preview surface，不能被當成登入證據**（與 DEC-129「不得從 URL／query parameter 猜登入狀態」同向、更具體）。
+
+AppTest `query_params` 支援：本批實測 Streamlit 1.59.2 的 `AppTest.query_params["ui2_dev"]="1"` 可設定並跑完（1.56 未驗；BACKLOG `NUI2-PREVIEW-DEV-SURFACE` 實作批須在 `requirements.txt` floor 版本複測）。
+
+#### 五、取代／影響範圍（單組實查，非窮舉）
+
+- **DEC-128 §四 (a)(b)(c)**：升 Active（📌 已加；原文不動）。(a) 的字面以本條 §二 為準。
+- **Active Contract**：§5 資料健康度改寫為兩軸分離；§6／§3.4／§3.2 的 PROVISIONAL (b)(c) 標示改 Active；§11 清單更新。**資料健康度表格每列兩欄**。
+- **BACKLOG／PROJECT_STATE／HANDOFF／Audit Checklist／PROJECT_RULES §30／Wireframes・Freeze・Architecture Gate・Supersede Map 的橫幅與註記**：凡寫 PROVISIONAL (a)(b)(c) 處改為 Active（舊字加刪除線＋📌）；`NUI2-DATA-HEALTH-SYMBOLS-CONFIRM`／`NUI2-AUDIT-SURFACE-CONFIRM` 結案；`NUI2-PREVIEW-DEV-SURFACE` 去掉 PROVISIONAL。
+- **BACKLOG 批次表**：涉及資料健康度的 P6（及 P3③ 過渡）新增驗收條件「兩軸欄位分離」；新增待 UI 批 teeth `T_new_8`（資料健康度每列 Data State／Capability 欄位分離）、`T_new_9`（`ui2_dev=1` 才顯示 Preview 控制且不影響 Account Area）。
+- **仍保留的「撰寫組暫定」（非 (a)(b)(c)，客戶 (15) 未涵蓋）**：Level 1／2 預設展開或收合、「Level 3 只准遮罩後診斷代碼」嚴於客戶原文、`⛔ 來源不可用` 的顏色、🎯 跨季趨勢是否保留為「完整分析」使用者功能。這些**不是**客戶已核准項；Active Contract §11 逐項標明為「撰寫組暫定」。
+
+#### 六、tests／guards（本批新增；皆附 mutation）
+
+- `tests/test_ui2_active_contract_docs.py`：DEC-130 fence sha256 與關鍵句、DEC-128 §四 📌、Active Contract 不再把 (a)(b)(c) 當 PROVISIONAL 現行用法、資料健康度節含兩軸分離與四對映／「不是 Data State」句／`ui2_dev` 不得當登入證據句。
+- `tests/test_ui2_guards.py`：`check_axis_separation`（FieldState 恰五態、CapabilityState 不共用成員、UI2 程式碼不得把 capability 標記用於 Data State 欄或反之、Data State 欄不得含「尚未接線／尚未提供」字樣）、`check_ui2_dev_not_auth`（`ui2_dev`／`query_params` 與 auth／account 不得同函式共現、污染傳播不得流入 account／auth 變數或 session key）——**defense-in-depth，AST 不窮舉所有繞過**；主要保證仍是 `FieldVM` 建構期驗證與 DEC-124 字樣表守衛。
+- `tests/test_ui2_contract_teeth_pending.py`：`xfail(strict=True)` 的 `T_new_8`、`T_new_9`（reason 含 DEC-130）。
+
+#### 七、揭露與效力邊界（⛔ 不是實作授權）
+
+單組撰寫、未經第二組獨立驗證（`NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT` 仍待）。不授權：auth／OAuth 架構本體、Decision Digest schema、Risk Cap、System Action、新資料 contract／source／公式／threshold、production default、刪 Old UI／Legacy New UI；資料健康度的**實作**（版型）仍須先出文字線框草稿（`CLAUDE.md` §-1.5.D v3 §03-2 ①；BACKLOG P6）。T_new_8 的 DOM 標記名（`data-ui2-col`）是撰寫組暫擬，P6 定案時同步改測試。

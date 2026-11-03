@@ -1533,16 +1533,16 @@
 
 ⚠ B 的邊界：圖表（Primary／VIX／國際／Macro mini）、持股表、候選清單、產業條、卡片短狀態、coverage chip 需要資料或 VM 欄位，**不是純 presentation**——UI 批只能先放 honest `⬜` 槽，功能留在 `NUI2-COMPONENT-GAP` 與各 PORT 項。
 
-#### UI correction 批次表（每批 ≤3 項；建議執行序 P1 → P3 → P6 → P2 → P4 → P5；先 P3 前須確認 PROVISIONAL (c) 與 (b) 未被客戶推翻）
+#### UI correction 批次表（每批 ≤3 項；建議執行序 P1 → P3 → P6 → P2 → P4 → P5；~~先 P3 前須確認 PROVISIONAL (c) 與 (b) 未被客戶推翻~~ 📌 **2026-11-03 客戶 (15)/DEC-130 已確認：(a)(b)(c) 升為正式 Active，不需再確認**；資料健康度相關批次（P6、P3③）新增驗收條件「兩軸欄位分離」）
 
 | 批 | 內容（≤3 項） | Model／Effort 建議 | 前置 Gate／註記 |
 |---|---|---|---|
-| **P1** 工程字樣／題號／Preview 控制開發面 | ① 四頁 Human 文字中的工程字樣（PORT／Gate／Stage／Aggregator／路徑 C／nonce／規則分支 id…）改一句人話（debug detail 保留在 VM；若須把 `detail` 拆成「人話」與「debug」兩欄＝VM schema 變更→先過 Gate）② 題號鷹架「①②③④」可見文字移除（保留 `data-ui2-q` 錨點）、重複標籤（OneBrain 標題與列標籤、「② 是否需要行動」＋「是否需要行動」）合併 ③ Preview 控制移到 `?ui2_dev=1` 開發面（預設 0 個；明顯標示非產品內容；`ui2_` 前綴；先實測 AppTest query_params 於 1.56／1.59，備案 session 預設值）＋ `tests/ui2_viewport/measure_viewport.py` 與 `test_ui2_real_feed.py` 同步；Deploy／⋮ 以 UI2 CSS 隱藏（不動 `.streamlit/config.toml`） | Sonnet 5.5＋Medium | ①需 T-new-2；③依 PROVISIONAL (c)；純 presentation |
+| **P1** 工程字樣／題號／Preview 控制開發面 | ① 四頁 Human 文字中的工程字樣（PORT／Gate／Stage／Aggregator／路徑 C／nonce／規則分支 id…）改一句人話（debug detail 保留在 VM；若須把 `detail` 拆成「人話」與「debug」兩欄＝VM schema 變更→先過 Gate）② 題號鷹架「①②③④」可見文字移除（保留 `data-ui2-q` 錨點）、重複標籤（OneBrain 標題與列標籤、「② 是否需要行動」＋「是否需要行動」）合併 ③ Preview 控制移到 `?ui2_dev=1` 開發面（預設 0 個；明顯標示非產品內容；`ui2_` 前綴；先實測 AppTest query_params 於 1.56／1.59，備案 session 預設值）＋ `tests/ui2_viewport/measure_viewport.py` 與 `test_ui2_real_feed.py` 同步；Deploy／⋮ 以 UI2 CSS 隱藏（不動 `.streamlit/config.toml`） | Sonnet 5.5＋Medium | ①需 T-new-2；③依 Active DEC-130 (c)（~~PROVISIONAL (c)~~ 已升格）；純 presentation |
 | **P2** 📊 OneBrain 位置與 Primary 圖＋SPEC placeholder | ① 🤖 OneBrain Outlook 槽移到今日主要風險之後、卡片之前（Wireframes §2.1）② Primary 台股主圖槽＋SPEC 行（honest `⬜` 槽，缺資料不補）③ 核心指標卡的 micro-tag 欄位統一（值·短狀態·as_of·源；短狀態需對映既有 SSOT 門檻，**不新增門檻**＝語意問題不併入本批） | Sonnet 5.5＋Medium（圖表接真資料→Opus 5.5＋High） | T-new-6；coverage chip 是 VM 欄位→若須新增先過 Gate |
 | **P3** 移除各頁 L2／L3 expander＋測試同步 | ① views 的 `render_sections` 不再畫 L2／L3（VM `sections` 一字不動）② 更新「測試改動清單」T1～T10 的過期斷言並新增 T-new-1／T-new-4 ③ 位階完整說明（L0 `*_EXPLAIN`）改由資料健康度·市場位階項取用（P6 到位前，內容留在 VM、UI 不顯示——**這是已知過渡狀態**，須在 PR 揭露） | Sonnet 5.5＋Medium | ⚠ 移除前先在 PR 證明「VM `sections`／canonical／L0 常數」逐字未動（T-new-4）；⛔ 用 xfail／skip 隱藏舊測試 |
 | **P4** 🎯 補齊 | ① 精選：查看全部候選（④）、CSV、`› 查看此檔` 入口（honest `⬜` 若無資料）② 查一檔：基本面／估值／籌碼／產業／風險改精簡 chart-first 卡（取代「（L2）」expander；估值一行 SPEC）③ `🤖 研究解釋` 可見槽、選股條件一行摘要（去「（收合）」） | Sonnet 5.5＋Medium（含資料欄位新增→Opus 5.5＋High） | 版型新增→先出文字線框（v3 §03-2 ①） |
 | **P5** 💼 第一屏 | ① 主 CTA 移到 header 列 ② 桌機 W-11 三 tile ③ 「今日需處理」label；持股表／建議持股水位卡骨架 | **Opus 5.5＋High**（涉 Risk Cap／System Action 呈現語意） | Wireframes §4；Risk Cap 數值仍 `⬜`（Freeze §0.1.4）；版型→先出線框 |
-| **P6** 👤 桌機兩欄＋資料健康度 | ① 桌機兩欄（Wireframes §5.2）② 資料健康度區塊（Level 1／2／3 skeleton；先接現有 canonical，缺欄位顯示 `⬜`）③ 移除重複連線卡／CTA、②③ 無異常時隱藏；稽核面（Digest Viewer L1／Rule Registry）預設收合 | Sonnet 5.5＋Medium（資料健康度**新增欄位**〔retrieved_at、source health…〕＝新資料 contract→Opus 5.5＋High） | 新區塊版型→先出文字線框；PROVISIONAL (a)(b)；過 `scrub_secrets` |
+| **P6** 👤 桌機兩欄＋資料健康度 | ① 桌機兩欄（Wireframes §5.2）② 資料健康度區塊（Level 1／2／3 skeleton；先接現有 canonical，缺欄位顯示 `⬜`）③ 移除重複連線卡／CTA、②③ 無異常時隱藏；稽核面（Digest Viewer L1／Rule Registry）預設收合 | Sonnet 5.5＋Medium（資料健康度**新增欄位**〔retrieved_at、source health…〕＝新資料 contract→Opus 5.5＋High） | 新區塊版型→先出文字線框；~~PROVISIONAL (a)(b)~~ 📌 Active（DEC-130）；過 `scrub_secrets`；**📌 DEC-130 驗收條件（兩軸欄位分離，必過）**：資料健康度每列 `狀態(Data State)` 與 `接線(Capability)` 為**分離欄位**；`⬜ 尚未接線` 只在 Capability 欄、Data State 欄只用五態（OK／Missing／Stale／Unavailable／Not Evaluated），Not Evaluated 另以既有字樣呈現、不併入 `⬜`；`T_new_8` 由 xfail 轉為一般測試；`check_axis_separation` 保持綠 |
 
 #### Backlog 項（新增）
 
@@ -1553,9 +1553,9 @@
 | **NUI2-DATA-HEALTH-SECTION** | P1 | 👤 資料健康度區塊（P6②）；併入並取代舊列 `DH-DATA-CENTER`／`UIX-DATACENTER-CONTROLS`／`NEWUI-STAGE-D8-DATA-CENTER`／`NEWUI-STAGE-D10-SHARED-COMPONENTS`／`UIX-MKT-ENTRY-BUTTONS`（舊列加 📌，原文不動） | open | P3、P6 | 出文字線框草稿（客戶拍板）→ 實作 | 0 |
 | **NUI2-DATA-HEALTH-FIELD-GAPS** | P2 | 資料健康度欄位「是否取得、source、as_of、retrieved_at、freshness、Missing／failed reason、proxy／estimated、source health」中，canonical 目前**無**的欄位（至少 `retrieved_at`、`source health`、`proxy／estimated`）＝**資料契約缺口**；⛔ UI 批自行新增 | open（需 Opus 5.5＋High Gate） | NUI2-DATA-HEALTH-SECTION | 盤點各 canonical 是否已有；缺者送 Decision Gate | 0 |
 | **NUI2-DIGEST-DATAHEALTH-XREF** | P2 | (13)-8 要求 OneBrain 整合 data health／freshness：Digest 是否補一個 data health／freshness 區塊（Digest schema 變更）；Digest 契約表「資料健康 N／M｜A6」列優先序 | open（需 Opus 5.5＋High Gate；**本批不授權**） | DEC-128 | 另案 Decision Gate | 0 |
-| **NUI2-DATA-HEALTH-SYMBOLS-CONFIRM** | P2 | PROVISIONAL (a)：Level 1 符號 ✅◷◇⛔⬜ 是資料健康度面別名 vs 全站替換 DEC-124／Freeze §5 字樣；`⛔` 新舊義；`⛔ 來源不可用` 顏色（`CLAUDE.md` §1.A-4） | open（待客戶覆核；Decision Re-open Proposal 格式見 DEC-128 §四 (d)） | — | 客戶覆核；未覆核前 P6 標 PROVISIONAL | 0 |
-| **NUI2-PREVIEW-DEV-SURFACE** | P1 | PROVISIONAL (c)：Preview 控制 → `?ui2_dev=1` 開發面（P1③）；補 `NUI2-PREVIEW-CONTROL-AXES` 位置列；AppTest query_params 於 Streamlit 1.56／1.59 支援**未驗** | open | P1 | 先實測 query_params，不行改 session 預設值備案 | 0 |
-| **NUI2-AUDIT-SURFACE-CONFIRM** | P2 | PROVISIONAL (b)①：👤 內 Audit／Digest Viewer／Rule Registry 入口＝稽核面保留；Digest raw snapshot→資料健康度 L3；(b)④ 全站一行資料狀態入口是否保留 | open（待客戶覆核） | — | 客戶覆核 | 0 |
+| ~~**NUI2-DATA-HEALTH-SYMBOLS-CONFIRM**~~ 📌 **closed by DEC-130（客戶 2026-11-03 (15)：(a) 有條件同意——兩軸分離，見 Active Contract §5.1）** | P2 | ~~PROVISIONAL (a)：Level 1 符號 ✅◷◇⛔⬜ 是資料健康度面別名 vs 全站替換 DEC-124／Freeze §5 字樣；`⛔` 新舊義；`⛔ 來源不可用` 顏色（`CLAUDE.md` §1.A-4）~~ | closed（DEC-130；`⛔` 色仍為撰寫組讀法〔沿 Unavailable 紅〕，客戶未指定） | — | P6 依 Active Contract §5.1 | 0 |
+| **NUI2-PREVIEW-DEV-SURFACE** | P1 | ~~PROVISIONAL (c)~~ 📌 **Active（DEC-130）**：Preview 控制 → `?ui2_dev=1` 開發面（P1③）；一般使用者不顯示／不放 sidebar／不增導航／production 不依賴／不曝光 secret／**`ui2_dev` 不得與 auth state 混用、不能當登入證據**（守衛 `check_ui2_dev_not_auth`、`T_new_9`）；補 `NUI2-PREVIEW-CONTROL-AXES` 位置列；AppTest query_params：Streamlit 1.59.2 已實測可用（DEC-130）、1.56 floor **未驗** | open | P1 | 先實測 query_params，不行改 session 預設值備案 | 0 |
+| ~~**NUI2-AUDIT-SURFACE-CONFIRM**~~ 📌 **closed by DEC-130（客戶 (15)：(b) 同意；稽核面預設收合不搶主 UI；🎯 使用者功能維持 Presentation Compression）** | P2 | ~~PROVISIONAL (b)①：👤 內 Audit／Digest Viewer／Rule Registry 入口＝稽核面保留；Digest raw snapshot→資料健康度 L3；(b)④ 全站一行資料狀態入口是否保留~~ | closed（DEC-130） | — | — | 0 |
 | **NUI2-TESTS-PENDING-UI-CORRECTION** | P1 | 仍斷言舊 presentation 的測試清單（見下「測試改動清單」；登記於 `tests/test_ui2_active_contract_docs.py::PENDING_UI_CORRECTION_TESTS`）；**P3 完成後須同步移除登記**；⛔ xfail／skip 隱藏 | open | P1、P3 | 隨 UI 批更新 | 0 |
 | **NUI2-UI-CORRECTION-P7** | P1 | 桌機左側 Navigation Rail 加 compact Account Area（Product／Logo → Login／Auth Status → 四頁）；未登入「登入」＋「⬜ 尚未登入」、已登入「✅ 已登入」＋使用者識別＋登出入口；手機仍四格。**僅 presentation 殼**，狀態先以 `⬜ 尚未接線`/FAKE 場景顯示，⛔ 自行實作 auth | open | `NUI2-AUTH-CONTRACT-GATE` 之外可先做版面；版型→先出文字線框（v3 §03-2 ①）；Sonnet 5.5＋Medium（接真 auth 狀態＝Opus High） | 出線框 → 實作；移除 `test_T_new_7` xfail | 0 |
 | **NUI2-AUTH-CONTRACT-GATE** | P1 | (14)：Authentication State 必須來自正式 auth contract，**repo 目前沒有 New UI2 用的 auth contract**（`ui2_account` 只是開發面 FAKE 場景）。真實 auth 架構（OAuth 本體、session、token、Sheet/Portfolio selection contract）＝**Opus 5.5＋High Gate**；本批只記「未來需正式 auth contract」，**不設計** | open（需 Opus 5.5＋High Gate） | — | 另案 Decision Gate | 0 |
@@ -1571,7 +1571,7 @@
 |---|---|---|---|
 | **T-new-1** | `test_ui2_human_pages_have_no_full_evidence_expander` | 四頁×六場景×FAKE／Real：AppTest `at.expander` 標籤 ∌ {為什麼、指標明細、原始資料、工程診斷、raw、debug、provenance、L2、L3}；VM 層：四頁 `SectionVM.level ∉ {"L2","L3"}`（資料健康度 Level 3 除外） | 放回 `_sections_market` why → 紅 |
 | **T-new-2** | `test_ui2_human_text_has_no_engineering_tokens` | 四頁 Human 文字（標題／label／detail／CTA 原因）∌ {L1～L6、Stage、Gate、PORT、session、契約、接線、traceback、`src.`、`.py`、env var 樣式、`Exception`}；允許清單只給客戶逐字句（DEC-081 Q2-2）與 Preview-only 字樣 | detail 塞「PORT 至 L3」→ 紅 |
-| **T-new-3** | `test_ui2_data_health_section_exists_in_me_and_is_layered` | 👤 VM 有資料健康度：Level 1 逐項 status＋source／as_of／freshness；Level 3 預設收合；⛔ secret／env var／traceback／module path（過 `scrub_secrets`）；L1 符號依 PROVISIONAL (a) | Level 3 預設展開或注入假 key → 紅 |
+| **T-new-3** | `test_ui2_data_health_section_exists_in_me_and_is_layered` | 👤 VM 有資料健康度：Level 1 逐項 status＋source／as_of／freshness；Level 3 預設收合；⛔ secret／env var／traceback／module path（過 `scrub_secrets`）；L1 符號依 Active Contract §5.1（DEC-130）；每列 Data State 與 Capability 為分離欄位 | Level 3 預設展開或注入假 key → 紅 |
 | **T-new-4** | `test_removed_human_fields_still_exist_in_evidence_projection` | 同一 canonical 輸入：Human VM 移除的欄位（位階完整說明、16 燈、raw、provenance）在 Evidence／資料健康度 projection 仍存在且值相等 | 從 projection 刪一項 → 紅（Evidence projection 型別存在前，以 L0／service 輸出存在性代替） |
 | **T-new-5** | `test_preview_controls_are_dev_surface_only` | 預設道 0 個 Preview 控制；開發旗標開啟才出現且帶開發面 class／「非產品內容」；session 寫入仍限 `ui2_` 前綴（`ALLOWED_UI2_WRITES`） | 預設道畫出控制 → 紅 |
 | **T-new-6** | `test_main_charts_carry_short_spec_line` | 每個主要 chart 有 SPEC 行（含頻率／來源／資料日／缺值處理）、長度上限；⛔ 雙軸混單位（元件層禁止） | 拿掉 SPEC 行 → 紅（圖落地後） |
@@ -1600,7 +1600,8 @@
 | 欄位 | 說明 | canonical 現況（未全驗） |
 |---|---|---|
 | 資料名稱 | 涵蓋項目名（台股大盤、國際市場、VIX、利率／殖利率／利差、DXY、PMI／景氣、市場廣度、產業、法人／籌碼／融資、個股價格、基本面、估值、持股／portfolio、Risk Cap inputs、System Action inputs、Sheet／settings…） | 部分有（`FieldVM.label`） |
-| status（Level 1） | `✅ 正常`／`◷ 可能過期`／`◇ 資料未備`／`⛔ 來源不可用`／`⬜ 尚未接線`（PROVISIONAL (a) 別名） | 由 `FieldVM.state`／`capability` 對映 |
+| `狀態(Data State)`（Level 1） | `✅ 正常`→OK／`◷ 可能過期`→Stale／`◇ 資料未備`→Missing／`⛔ 來源不可用`→Unavailable；Not Evaluated 另用既有字樣（Active，DEC-130） | 由 `FieldVM.state`／`capability` 對映；**Data State 與 Capability 分欄（DEC-130）** |
+| `接線(Capability)`（Level 1；**獨立欄位，DEC-130**） | `⬜ 尚未接線`／已接線；**不是 Data State**，⛔ 映射成 Not Evaluated／Missing／Unavailable／第六態 | 由 `FieldVM.capability` 對映 |
 | 是否取得 | 取得／未取得 | 由 state 推 |
 | source / as_of / freshness | micro-tag 同源 | `FieldVM.freshness` 有 |
 | retrieved_at | 取得當下時間 | **多數 canonical 無** → FIELD-GAPS |
@@ -1612,7 +1613,7 @@
 
 見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §8（保留清單與上游對照表）與 §4（SPEC 格式＋範例）；`PROJECT_RULES.md` 第 30 節第 3、4 點。
 
-#### 仍待客戶確認（PROVISIONAL；客戶可推翻）
+#### ~~仍待客戶確認（PROVISIONAL；客戶可推翻）~~ 📌 (a)(b)(c) 已由客戶 2026-11-03 (15)／DEC-130 升為正式 Active；下列原文保留為歷史，**殘留 (a)(b)(c) PROVISIONAL＝0**
 
 (a) 資料健康度 Level 1 符號為「面內別名」而非全站替換（含 `⛔` 新舊義與顏色）；(b)① 稽核面保留在 👤、Digest raw 移資料健康度 L3；(b)② 選股條件／查看全部／CSV／查看此檔保留；(b)③ 指標危險度指路句改向；(b)④ 全站一行資料狀態入口保留；(c) Preview 控制 `?ui2_dev=1`。另：跨季趨勢／「完整分析」是否保留為使用者功能（Active Contract §3.2）。
 
@@ -1642,6 +1643,15 @@
 | `test_T_new_5_preview_controls_are_dev_surface_only` | 預設道 0 個 Preview 控制 expander | P1 |
 | `test_T_new_6_main_chart_has_short_spec_line` | 頁面含 `SPEC｜` 行 | P2 |
 | `test_T_new_7_desktop_navigation_rail_has_account_area_with_auth_status` | 含「登入」「尚未登入」與 `data-ui2-account-area` | P7 |
+| `test_T_new_8_data_health_rows_separate_data_state_from_capability`（📌 DEC-130） | 👤 資料健康度每列有分離的 `data-ui2-col="data-state"` 與 `"capability"` 欄；`尚未接線` 不在 Data State 欄（DOM 標記名為撰寫組暫擬，P6 定案時同步） | P6 |
+| `test_T_new_9_ui2_dev_shows_preview_controls_and_never_changes_account_area`（📌 DEC-130） | `?ui2_dev=1` 才顯示 Preview 控制；Account Area 內容與 `ui2_dev` 無關（預設道 0 控制見 T_new_5） | P1 |
 | 現在就綠的 teeth | VM `why/detail/raw` 仍在（移除≠刪資料）；導覽恰四頁；UI2 不得用 query_params 猜登入狀態（AST）；手機底部導覽規則仍在 | — |
 
 > mutation：strict 翻紅已實測——把 Preview 控制改名離開產品頁 → `T_new_5` XPASS(strict) 轉紅；banner 加入 `SPEC｜`／`data-ui2-account-area 登入 尚未登入` → `T_new_6`／`T_new_7` XPASS(strict) 轉紅（實測後已還原）。T_new_1／1b／2／3 的翻紅依賴 UI 批，**本批未能 mutation 驗證**（UI 未改）。
+
+#### 📌 DEC-130（客戶 2026-11-03 (15)）落盤補記（2026-11-03；append-only）
+
+- **升 Active**：DEC-128 §四 (a)(b)(c) 由 PROVISIONAL 升為正式 Active；(a)＝有條件同意（Data State 五態與 Capability 兩軸分離；`⬜ 尚未接線` 不是 Data State；同列拆欄；Not Evaluated 另用既有字樣）。已結案：`NUI2-DATA-HEALTH-SYMBOLS-CONFIRM`、`NUI2-AUDIT-SURFACE-CONFIRM`。`NUI2-ACTIVE-CONTRACT-INDEPENDENT-AUDIT` **保留不動**（客戶：後續補、不阻擋）。
+- **新守衛（現綠）**：`tests/test_ui2_guards.py` `check_axis_separation`／`check_ui2_dev_not_auth`＋`test_dec130_*`（defense-in-depth AST，不窮舉）；**新 strict xfail**：`T_new_8`（P6）、`T_new_9`（P1）。
+- **仍殘留的撰寫組暫定（非 (a)(b)(c)）**：Level 1／2 預設展開或收合、Level 3 遮罩嚴於客戶原文、`⛔ 來源不可用` 顏色、🎯 跨季趨勢是否保留——見 Active Contract §11。
+- **限制**：單組撰寫、未經第二組獨立驗證；T_new_8 DOM 標記名暫擬；`ui2_dev` 的 AppTest 於 Streamlit 1.56 floor 未驗（1.59.2 已驗）。
