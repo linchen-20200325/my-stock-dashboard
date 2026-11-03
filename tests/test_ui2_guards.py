@@ -45,6 +45,10 @@ def _py(d: pathlib.Path) -> list[pathlib.Path]:
 VM_FILES = _py(L0_DIR) + _py(L3_DIR)             # 純度範圍（L0 契約＋L3 VM 層）
 UI_FILES = _py(L5_DIR) + [L6_FILE]                # L5＋L6
 ALL_FILES = VM_FILES + UI_FILES
+#: NUI2-REAL-FEED（2026-11-03）：New UI2 唯一允許呼叫既有 canonical service 的 feed 檔（**具名列舉**，⛔ 目錄／萬用字元）。
+#: 這些檔不走 G2（VM 純度），改走更窄的 G2F（見下）；G2 的規則與允許清單 `_G2_ALLOWED_PROJECT` **一字未改**。
+FEED_FILES = (L3_DIR / "real_feed.py",)
+PURE_VM_FILES = [p for p in VM_FILES if p not in FEED_FILES]
 
 
 # ── 共用 AST 工具 ────────────────────────────────────────────────────
@@ -105,7 +109,7 @@ def check_vm_purity(source: str) -> list[str]:
     return bad
 
 
-@pytest.mark.parametrize("path", VM_FILES, ids=lambda p: p.relative_to(ROOT).as_posix())
+@pytest.mark.parametrize("path", PURE_VM_FILES, ids=lambda p: p.relative_to(ROOT).as_posix())
 def test_g2_vm_layer_is_pure(path):
     assert check_vm_purity(path.read_text(encoding="utf-8")) == []
 
@@ -128,6 +132,105 @@ def test_g2_guard_has_teeth(injected):
     clean = (L3_DIR / "market_vm.py").read_text(encoding="utf-8")
     assert check_vm_purity(clean) == []
     assert check_vm_purity(injected + clean), f"檢查器沒抓到：{injected!r}"
+
+
+# ════════════════════════════════════════════════════════════════════
+# G2F Real feed 邊界（NUI2-REAL-FEED A2，2026-11-03；加性：G2 一字未改，只作用於具名 FEED_FILES）
+#   feed＝New UI2 唯一做 I/O 的檔：只准 import 具名 canonical L3 白名單＋shared＋src.services.ui2；
+#   ⛔ streamlit／src.data／src.compute／Legacy UI／網路／檔案／時鐘、⛔ session_state、⛔ producer 與寫入呼叫。
+# ════════════════════════════════════════════════════════════════════
+#: feed 允許的專案內 import（canonical L3 **具名**白名單；擴充須明確、經審查，並同步 mapping 文件）。
+G2F_ALLOWED_PROJECT = ("shared", "src.services.ui2",
+                       "src.services.market_twii_view_service", "src.services.allocation_service")
+_G2F_BANNED_IMPORTS = _G2_BANNED_IMPORTS     # 同 G2 的外部／I/O 禁令（含 streamlit、src.data、src.compute、socket…）
+#: feed 禁止呼叫／匯入的名稱（producer、session 寫入、canonical 寫檔、OAuth nonce、Sheet 讀寫、選股寫入）。
+_G2F_BANNED_NAMES = {
+    "refresh_macro_now", "get_allocation", "compute_and_lock_risk_cap", "compute_and_store_warroom_summary",
+    "reset_allocation_registry", "get_account", "build_login_url", "get_holdings", "get_sheet_view",
+    "get_sheet_contents", "logout", "gemini_call", "post_gemini", "build_ai_summary", "run_agent",
+    "run_headless_refresh", "open",
+}
+_G2F_BANNED_PREFIXES = ("register_", "apply_", "clear_", "save_", "write_", "delete_", "bind_", "select_",
+                        "set_", "add_to_", "create_", "rename_", "risk_cap_history_", "lock_", "execute_")
+
+
+def _g2f_name_banned(name: str) -> bool:
+    return (name in _G2F_BANNED_NAMES or name.endswith("_apply")
+            or any(name.startswith(p) for p in _G2F_BANNED_PREFIXES))
+
+
+def check_feed_boundary(source: str) -> list[str]:
+    tree = ast.parse(source)
+    bad: list[str] = []
+    for ln, mod in _imports(tree):
+        if any(_mod_match(mod, b) for b in _G2F_BANNED_IMPORTS):
+            bad.append(f"L{ln}: feed 禁止 import {mod}")
+        elif (mod.split(".")[0] in {"src", "shared", "scripts"}
+              and not any(_mod_match(mod, a) for a in G2F_ALLOWED_PROJECT)):
+            bad.append(f"L{ln}: 專案內 import {mod} 不在 feed 白名單 {G2F_ALLOWED_PROJECT}")
+        if _g2f_name_banned(mod.rsplit(".", 1)[-1]):
+            bad.append(f"L{ln}: feed 禁止匯入 producer／寫入名稱 {mod}")
+    for n in ast.walk(tree):
+        if _is_session_state(n):
+            bad.append(f"L{n.lineno}: feed 不得存取 session_state")
+        if isinstance(n, ast.Call):
+            f = n.func
+            name = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else "")
+            if _g2f_name_banned(name):
+                bad.append(f"L{n.lineno}: feed 禁止呼叫 {name}()")
+            if (isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name)
+                    and (f.value.id, f.attr) in _CLOCK_CALLS):
+                bad.append(f"L{n.lineno}: feed 不得讀時鐘")
+    return bad
+
+
+def test_g2f_feed_files_are_exactly_the_named_one():
+    """具名列舉（⛔ 目錄層級放寬）：只有 real_feed.py 走 G2F，其餘 L0／L3 UI2 檔全部仍走 G2。"""
+    assert [p.relative_to(ROOT).as_posix() for p in FEED_FILES] == ["src/services/ui2/real_feed.py"]
+    assert all(p.exists() for p in FEED_FILES)
+    assert set(PURE_VM_FILES) | set(FEED_FILES) == set(VM_FILES)
+    assert not set(PURE_VM_FILES) & set(FEED_FILES)
+    assert check_vm_purity((FEED_FILES[0]).read_text(encoding="utf-8")), "feed 檔若能過 G2 就不該被豁免"
+
+
+@pytest.mark.parametrize("path", FEED_FILES, ids=lambda p: p.relative_to(ROOT).as_posix())
+def test_g2f_feed_respects_boundary(path):
+    assert check_feed_boundary(path.read_text(encoding="utf-8")) == []
+
+
+@pytest.mark.parametrize("injected", [
+    "import streamlit as st\n",
+    "from src.data.macro.macro_cache_reader import load_twii_close\n",
+    "from src.compute.macro import macro_helpers\n",
+    "from src.services import market_strategy\n",
+    "from src.services.macro_refresh_service import refresh_macro_now\n",
+    "from src.ui.views import page_today\n",
+    "import requests\n", "import socket\n", "import os\n",
+    "refresh_macro_now()\n", "get_allocation()\n", "register_cap('x', 1)\n", "apply_vix_veto(30)\n",
+    "compute_and_lock_risk_cap({})\n", "risk_cap_history_read()\n", "get_account()\n",
+    "build_login_url()\n", "get_holdings()\n", "save_portfolio({})\n", "bind_sheet('x')\n",
+    "x = st.session_state['warroom_summary']\n", "x = open('macro_state.json', 'w')\n",
+    "from datetime import datetime\nx = datetime.now()\n",
+    "from src.services.allocation_service import get_allocation\n",
+])
+def test_g2f_guard_has_teeth(injected):
+    clean = FEED_FILES[0].read_text(encoding="utf-8")
+    assert check_feed_boundary(clean) == []
+    assert check_feed_boundary(injected + clean), f"G2F 沒抓到：{injected!r}"
+
+
+@pytest.mark.parametrize("path", PURE_VM_FILES, ids=lambda p: p.relative_to(ROOT).as_posix())
+def test_g2f_pure_vm_files_do_not_import_the_feed(path):
+    """依賴方向：feed → 純轉換（⛔ 純 VM／契約檔反向 import feed，否則經由 G2 允許的 `src.services.ui2` 前綴偷渡 I/O）。"""
+    feed_mods = {"src.services.ui2." + p.stem for p in FEED_FILES}
+    for ln, mod in _imports(ast.parse(path.read_text(encoding="utf-8"))):
+        assert not any(_mod_match(mod, fm) for fm in feed_mods), f"{path.name}:L{ln} import {mod}"
+
+
+def test_g2f_feed_import_guard_has_teeth():
+    bad = "from src.services.ui2.real_feed import read_real_snapshot\n"
+    feed_mods = {"src.services.ui2." + p.stem for p in FEED_FILES}
+    assert any(_mod_match(m, fm) for _, m in _imports(ast.parse(bad)) for fm in feed_mods)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -244,6 +347,15 @@ def check_not_a_producer(source: str) -> list[str]:
                     need_ui2(n.args[0], f"session_state.{f.attr}")
         elif isinstance(n, ast.Subscript) and _is_session_state(n.value):
             need_ui2(n.slice, "session_state[...]")
+        # NUI2-REAL-FEED G9 補洞（加性）：整包 session_state 傳出去（`dict(st.session_state)`、`fn(st.session_state)`、
+        # `**st.session_state`）或另取別名（`s = st.session_state`）都會繞過上面的逐 key 前綴檢查 → 一律禁止。
+        if isinstance(n, ast.Call):
+            for a in [*n.args, *(k.value for k in n.keywords)]:
+                inner = a.value if isinstance(a, ast.Starred) else a
+                if _is_session_state(inner):
+                    bad.append(f"L{n.lineno}: 整包 session_state 傳給 {ast.unparse(n.func)}()（無法驗證 key 前綴）")
+        if isinstance(n, (ast.Assign, ast.AnnAssign, ast.NamedExpr)) and n.value is not None and _is_session_state(n.value):
+            bad.append(f"L{n.lineno}: session_state 取別名（無法驗證 key 前綴）")
         elif isinstance(n, ast.Compare) and any(_is_session_state(c) for c in n.comparators):
             need_ui2(n.left, "`in session_state`")
         elif isinstance(n, ast.Attribute) and _is_session_state(n.value) and isinstance(
@@ -270,6 +382,12 @@ def test_g9_ui2_is_not_a_producer(path):
     "import streamlit as st\nst.radio('x', [1], key='page')\n",
     "import streamlit as st\nk = 'dyn' + 'x'\nst.session_state[k] = 1\n",
     "import streamlit as st\nif 'macro' in st.session_state: pass\n",
+    # NUI2-REAL-FEED G9 補洞（整包傳遞／別名）
+    "import streamlit as st\nx = dict(st.session_state)\n",
+    "import streamlit as st\nread_real_snapshot(st.session_state)\n",
+    "import streamlit as st\nf(state=st.session_state)\n",
+    "import streamlit as st\nf(**st.session_state)\n",
+    "import streamlit as st\ns = st.session_state\n",
 ])
 def test_g9_guard_has_teeth(injected):
     clean = (L5_DIR / "shell" / "app.py").read_text(encoding="utf-8")
@@ -828,6 +946,9 @@ CAPABILITY_MARKER_ALLOWLIST = (
     "src/services/ui2/vm_common.py",          # Preview 期 Aggregator 未實作的動作欄
     "src/services/ui2/scenarios.py",          # FAKE scenario
     "src/ui2/components/html.py",             # 渲染（只上色，不產生）
+    # NUI2-REAL-FEED（2026-11-03；明確、經審查的擴充）：Real-data Preview 未接線欄位＝capability `⬜ 尚未提供`＋原因
+    # （⛔ FAKE 值、⛔ 補 0／中性）。同屬 Preview-only；cutover 前清零規則不變（`NUI2-CAPABILITY-MARKER-CUTOVER-ZERO`）。
+    "src/services/ui2/real_canonical.py",
 )
 _CAP_NAMES = {"NOT_PROVIDED", "TEXT_NOT_PROVIDED", "TEXT_NOT_PROVIDED_AGGREGATOR"}
 

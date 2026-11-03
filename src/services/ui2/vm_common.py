@@ -19,11 +19,11 @@ from shared.ui2_contract.models import (
     PresentationSlice, SearchBoxVM, SectionVM, TargetVM,
 )
 from shared.ui2_contract.pages import (
-    ACCOUNT_IDS, MODE_CURATED, MODE_IDS, P4_ME, P4_MARKET, P4_TARGET,
+    ACCOUNT_IDS, MODE_CURATED, MODE_IDS, P4_ME, P4_MARKET, P4_TARGET, SCENARIO_IDS, SCENARIO_REAL,
 )
 from shared.ui2_contract.tones import ChipTone
 from shared.ui2_contract.text import (
-    PREVIEW_BANNER_TEXT, TEXT_MISSING_NOT_FETCHED, TEXT_MISSING_NOT_READY,
+    PREVIEW_BANNER_TEXT, REAL_PREVIEW_BANNER_TEXT, TEXT_MISSING_NOT_FETCHED, TEXT_MISSING_NOT_READY,
     TEXT_NOT_EVALUATED, TEXT_NOT_PROVIDED, TEXT_NOT_PROVIDED_AGGREGATOR,
     TEXT_RISK_CAP_UNDETERMINABLE, TEXT_UNAVAILABLE, stale_text,
 )
@@ -129,9 +129,24 @@ def aggregator_pending_field(label: str) -> FieldVM:
                    capability=CapabilityState.NOT_PROVIDED)
 
 
+def _banner_for(canonical: Spec) -> str | None:
+    """頁首標示：FAKE 場景 → `PREVIEW_BANNER_TEXT`；Real-data Preview（`scenario`＝`real`）→
+    `REAL_PREVIEW_BANNER_TEXT`（NUI2-REAL-FEED）。兩軸 ⛔ 混用：FAKE 不得標 real、real 不得用 FAKE 場景 id。"""
+    is_fake = bool(canonical.get("is_fake", False))
+    scenario = canonical.get("scenario")
+    if is_fake and scenario == SCENARIO_REAL:
+        raise ValueError("FAKE canonical 不得使用 real 場景 id（Real／Fake feed 必須可區分）")
+    if not is_fake and scenario in SCENARIO_IDS:
+        raise ValueError(f"非 FAKE canonical 不得使用 FAKE 場景 id {scenario!r}（Real／Fake feed 必須可區分）")
+    if is_fake:
+        return PREVIEW_BANNER_TEXT
+    return REAL_PREVIEW_BANNER_TEXT if scenario == SCENARIO_REAL else None
+
+
 def build_page_vm(canonical: Spec, *, top_n: int | None = None, mode: str | None = None) -> PageVM:
     """canonical → PageVM。`top_n`／`mode` 只影響 `slice`，⛔ 影響 `context`（Gate §4.2-6／G3）。"""
     page = str(canonical["page"])
+    banner = _banner_for(canonical)
     for key, only in (("conclusion", P4_MARKET), ("main_risk", P4_MARKET),
                       ("target", P4_TARGET), ("account", P4_ME)):
         if canonical.get(key) is not None and page != only:
@@ -180,7 +195,7 @@ def build_page_vm(canonical: Spec, *, top_n: int | None = None, mode: str | None
                        if canonical.get("main_risk") is not None else None),
             target=target, account=account),
         slice=PresentationSlice(top_n=top_n, visible_card_ids=visible, active_mode=active_mode),
-        banner_text=PREVIEW_BANNER_TEXT if canonical.get("is_fake") else None,
+        banner_text=banner,
     )
 
 

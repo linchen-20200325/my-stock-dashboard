@@ -197,3 +197,15 @@
 - [ ] **2. W-4 context row（客戶已接受；不再待覆核）**：輕量一行 chip、Neutral／Info、字級 < 查詢摘要與 6 維格、在搜尋與查詢摘要之下、『市場環境』不排第一格、無方向／買賣字樣、與市場頁位階同源。逐點鎖定測試見 `test_w4_contract_points_are_each_locked_by_a_test`。⚠️ 『不搶過 基本面／valuation／company-first research』目前只能對現有區塊驗，區塊落地後須重驗（`NUI2-W4-RECHECK-WHEN-RESEARCH-BLOCKS-LAND`）。
 - [ ] **3. 手機底部導覽餘裕**：FAKE 六場景『今日主要風險之後第一區塊距導覽上緣』≥ 1 行行高（stale／unavailable 2.5px→42px）；壓力態（L1 文字 1.5×）六場景捲到底後內容不被導覽遮住（餘裕 26.5–27.2px）、無水平捲動；不縮字、不刪資訊。證據 `docs/vnext/newui2_batch3b/viewport_measurements.json`（1.59.2）與 `viewport_measurements_streamlit156.json`（1.56.0）各 70/70；`test_nav_margin_*`。⚠️ 『≥1 行行高』為 AI 總管內部判準（`NUI2-NAV-MARGIN-CRITERION-INTERNAL`）。
 - [ ] **4. 仍未驗（誠實保留，⛔ 不得宣稱已驗）**：iOS safe-area（`env(safe-area-inset-bottom)`；Chromium 為 0，`NUI2-NAV-SAFEAREA-IOS-UNVERIFIED`）、Safari／Firefox／真機／螢幕閱讀器（`NUI2-VIEWPORT-NON-CHROMIUM-UNVERIFIED`）、真資料字串長度（`NUI2-VIEWPORT-FAKE-ONLY`）。
+
+## §19 NUI2-REAL-FEED A 批驗收項（A1 mapping／A2 read-only adapter／A3 real-data shadow acceptance；2026-11-03；append-only；實作組單組，**待總管複驗／獨立 QA／客戶驗收**——下列 `[ ]` 為驗收者勾選，實作組不自勾）
+
+- [ ] **1. A1 mapping 落盤**：`docs/vnext/NEWUI2_REAL_FEED_MAPPING_2026-11-03.md` 四頁逐欄（UI2 Field → VM → canonical → provenance → freshness／missing → 分類）、兩組盤點差異裁定（§1）、SG 清單（§6）、跨頁 fact（§7）、OAuth／Sheet（§8）、Fake→Real 邊界（§2）。⚠️ 單組整合；計數非 AST 窮舉。
+- [ ] **2. 只接 2 個事實**：台股加權指數（📊 卡）、市場位階（📊 現在狀態＋L2 位階說明、🎯 W-4、🎯 市場環境，**同一次呼叫**）。其餘欄位 Real 模式＝`⬜ 尚未提供`＋原因（⛔ FAKE 值／補 0／中性）；Risk Cap 恆 `⬜ 無法判定`；動作欄恆待 Aggregator；💼／👤 不呼叫 `get_holdings`／`get_account`／`build_login_url`。證據：`tests/test_ui2_real_feed.py` §2～§5。
+- [ ] **3. 語意映射**：台股 例外／failed→Unavailable、`ok=False`→Missing、stale→`⚠ 過期 N 天`、`is_stale=None`→`⚠ 可能已過期`（**AI 總管內部判準，可推翻**）；位階 unloaded→`⬜ 尚未載入`＋L0 說明、缺真實廣度→`⬜ 未評估／資料不足`（Unable to Determine）、讀壞→Unavailable（strict，端到端以壞 `macro_state.json` 實測）、未知 source／契約矛盾→raise；位階 as_of＝`⬜ 資料日未提供`（⛔ `cl_ts`）；source＝「規則分支 id：…（非資料來源）」。
+- [ ] **4. Real／Fake 可區分**：banner「Real-data Preview（非正式 production default）」；`scenario_id="real"` 不在 `SCENARIO_IDS`；real 任何字串 ⛔ `FAKE`、fake source 必 `FAKE`（雙向）；預設 feed 仍 FAKE；FAKE 六場景 regression 全綠。
+- [ ] **5. 守衛（加性）**：G2 規則一字未改（範圍扣除具名 `FEED_FILES`）；G2F（24 項注入）；G9 補洞（整包 session_state 傳遞／別名，5 項注入）；capability allowlist 明確加 `real_canonical.py`。
+- [ ] **6. no-write proof**：(1) AST G2F＋mutation；(2) AppTest runtime 紀錄器：Real 模式四頁＋查一檔期間 session 寫入 0 次（首跑只寫明列 `ui2_page／ui2_scenario／ui2_account／ui2_feed`）；(3) 工作樹全檔（含 git 忽略檔；純 Python）mtime＋size，及 `data_cache/**`、`macro_state.json`、`risk_cap_state.json` sha256＋mtime 前後相同（另人工 `git status --porcelain` 前後比對相同）；(4) socket connect guard＝0 次連線（且真讀本地檔仍成功）。
+- [ ] **7. mutation ≥6 實測轉紅後還原**：見 `docs/PROJECT_STATE.md` §58（13 項）。
+- [ ] **8. viewport（real 模式）**：390×844／1440×900，四頁＋🎯 查一檔＋手機市場壓力態＝11 態；Streamlit 1.59.2 與 1.56.0 各 11/11；新判定 `real_feed_banner_on_top`。證據 `docs/vnext/newui2_realfeed/`（**手機五張請逐張目視**）。⚠️ 手機市場頁主要風險後餘裕僅 27.8px（`NUI2-REALFEED-REGIME-L1-BRIEF`）。
+- [ ] **9. ⛔ 不得勾選為 C5 通過**：本批是 shadow（Migration Contract §10）；§9 各項（真機、Cloud、AI Failure、四頁真資料全通）**仍未驗**（`NUI2-REALFEED-ACCEPTANCE-OPEN`）。

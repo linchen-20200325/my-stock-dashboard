@@ -4,13 +4,15 @@
 
     python -m tests.ui2_viewport.measure_viewport --out docs/vnext/newui2_batch2 [--shots all|first|none]
     python -m tests.ui2_viewport.measure_viewport --url http://localhost:8501 --out /tmp/x   # 量既有 server
+    python -m tests.ui2_viewport.measure_viewport --feed real --shots all --out docs/vnext/newui2_realfeed  # Real-data Preview
 
 對 `streamlit run app_ui2.py` 於 390×844（手機）與 1440×900（桌機），四頁 ×（cold／loaded／missing／
 stale／unavailable／not_evaluated）逐一量測並輸出 `viewport_measurements.json`＋截圖。
 
 判定門檻**全部引用既有條文，不自創新門檻**（見 `THRESHOLDS`）。第一屏高度、導覽列高度出自
 Freeze §16／Architecture Gate §3：手機第一屏可用高 = 844 − 底部導覽 53 = 791px。
-本腳本是 Preview 層量測，⛔ 不連任何真資料（場景全為 FAKE）。
+本腳本是 Preview 層量測；預設 `--feed fake`（場景全為 FAKE）。`--feed real`（NUI2-REAL-FEED A3，2026-11-03）
+切到 Real-data Preview（唯讀 feed：本地 git 追蹤快取＋本地狀態檔；不觸發更新）量四頁第一屏與 banner。
 
 Batch 3 擴充（2026-11-03）：📊 今日結論／今日主要風險（位置與不被插隊）、🎯 模式切換／搜尋框／
 W-4 context 行／模式互斥、👤 三種帳戶狀態；🎯 每場景另量「即時查一檔」模式、👤 另量 signed-out／unavailable。
@@ -95,6 +97,12 @@ THRESHOLDS: list[dict[str, str]] = [
      "rule": "👤 我的：帳戶狀態（signed-in／signed-out／unavailable）標示存在；帳戶管理動作列與主 CTA 在第一屏；"
              "主 CTA 字樣依帳戶狀態（未登入＝Google 登入／已登入＝切換 Sheet／讀取失敗＝重新讀取）。",
      "source": "Wireframes §1（👤 我的列）／§5.1、Freeze §16.4（不用滑：connection state、primary management actions）"},
+    {"id": "real_feed_banner_on_top",
+     "rule": "Real-data Preview（`--feed real`）：頁首 banner 文字以 `REAL_PREVIEW_BANNER_TEXT`（Real-data Preview（非正式 "
+             "production default））開頭、底緣 ≤ 頁面標題頂緣（在頁首）且 ≤ 可用高。FAKE feed 不適用（恆通過）。"
+             "另：👤 我的在 real 模式不讀帳戶（account＝None，路徑 C 擋）⇒ `me_account_state_first_screen` 改判"
+             "『不得出現帳戶動作列（不假裝已登入／未登入）、主 CTA 仍在第一屏』。",
+     "source": "客戶 (11) A3（Preview 明確標示 Real-data Preview／非正式 production default）；Freeze §16（可用高）"},
     {"id": "no_title_overlap",
      "rule": "頁面標題不與 Preview banner、第一屏區塊重疊（上下緣依序不交疊）。",
      "source": "客戶 (9) 手機截圖目視項（標題無重疊）轉為可量測條件"},
@@ -160,6 +168,16 @@ def evaluate(m: dict) -> dict[str, list[str]]:
     if mobile and se is not None and nav["top"] is not None and se > nav["top"] + 0.5:
         out["content_not_covered_by_nav"].append(f"捲到底後內容底緣 {se:.0f} > 導覽上緣 {nav['top']:.0f}")
     _evaluate_batch3(m, out, mobile, limit)
+    if m.get("feed") == "real":
+        rb = "real_feed_banner_on_top"
+        bt, tt = m.get("banner_text"), m["title"]
+        from shared.ui2_contract.text import REAL_PREVIEW_BANNER_TEXT
+        if not bt or not bt.startswith(REAL_PREVIEW_BANNER_TEXT):
+            out[rb].append(f"banner 文字 {bt!r} 不是 Real-data Preview 標示")
+        elif tt["banner_bottom"] is None or tt["top"] is None or tt["banner_bottom"] > tt["top"] + 0.5:
+            out[rb].append("banner 不在頁面標題之上")
+        elif tt["banner_bottom"] > limit + 0.5:
+            out[rb].append(f"banner 底緣 {tt['banner_bottom']:.0f} > 可用高 {limit}")
     # 標題不重疊
     t = m["title"]
     if t["banner_bottom"] is not None and t["top"] < t["banner_bottom"] - 0.5:
@@ -282,6 +300,13 @@ def _evaluate_batch3(m: dict, out: dict[str, list[str]], mobile: bool, limit: fl
         dims = m.get("snapshot_labels")
         if dims and dims[0] == "市場環境":
             out[w].append("6 維 Snapshot 的『市場環境』排在第一格")
+    elif page == "p4_me" and m.get("feed") == "real":
+        k = "me_account_state_first_screen"
+        if m.get("account"):
+            out[k].append("Real-data Preview 不讀帳戶，卻出現帳戶動作列（不得假裝已知帳戶狀態）")
+        q4 = els.get("q4")
+        if q4 is None or q4["bottom"] > limit + 0.5:
+            out[k].append(f"主 CTA 不在第一屏：{q4['bottom'] if q4 else None}")
     elif page == "p4_me":
         k = "me_account_state_first_screen"
         acc = m.get("account")
@@ -340,6 +365,7 @@ _JS = r"""
   const riskLH = riskEl ? parseFloat(getComputedStyle(riskEl).lineHeight) : null;
   return {
     page: pageEl ? pageEl.dataset.ui2Page : null,
+    banner_text: banner ? banner.innerText.replace(/\s+/g,' ').trim() : null,
     scroll_end_bottom: scrollEndBottom, risk_bottom_at_scroll_end: riskBottomAtEnd, risk_line_height: riskLH,
     risk: riskEl ? {...R(riskEl), inside_l1: !!(l1 && l1.contains(riskEl)), text: riskEl.innerText.replace(/\s+/g,' ').trim()} : null,
     first_block_after_l1_top: afterTops.length ? Math.min(...afterTops) : null,
@@ -421,13 +447,14 @@ def launch_chromium(p):
 
 
 def _record(page, vp_name: str, vw: int, vh: int, pid: str, scenario: str, *, mode: str | None = None,
-            account: str | None = None) -> dict:
+            account: str | None = None, feed: str = "fake") -> dict:
     m = measure_state(page, vw, vh)
     m["scenario"] = scenario
+    m["feed"] = feed
     checks = evaluate(m)
     rd = lambda d: {k: (round(v, 1) if isinstance(v, float) else v) for k, v in d.items()}
     rec = {"viewport_name": vp_name, "viewport": m["viewport"], "page": pid, "scenario": scenario,
-           "mode": mode, "account": account,
+           "mode": mode, "account": account, "feed": feed, "banner_text": m.get("banner_text"),
            "elements": [rd(e) for e in m["elements"]],
            "nav": {k: (round(v, 1) if isinstance(v, float) else v) for k, v in m["nav"].items()
                    if k in ("top", "bottom", "left", "right", "width", "height", "position", "labels", "checked_index")},
@@ -450,7 +477,7 @@ def _record(page, vp_name: str, vw: int, vh: int, pid: str, scenario: str, *, mo
     return rec
 
 
-def _record_stress(page, vp_name: str, vw: int, vh: int, scenario: str) -> dict:
+def _record_stress(page, vp_name: str, vw: int, vh: int, scenario: str, feed: str = "fake") -> dict:
     """手機市場頁壓力測試態：L1 區文字 1.5×（頁內 DOM 操作）後量測可達性（`evaluate_stress`）。"""
     n = page.evaluate(_STRESS_JS, STRESS_FACTOR)
     page.wait_for_timeout(200)
@@ -458,7 +485,7 @@ def _record_stress(page, vp_name: str, vw: int, vh: int, scenario: str) -> dict:
     checks = evaluate_stress(m)
     risk = m.get("risk") or {}
     return {"viewport_name": vp_name, "viewport": m["viewport"], "page": "p4_market", "scenario": scenario,
-            "mode": "stress", "account": None, "stress_factor": STRESS_FACTOR, "stressed_text_nodes": n,
+            "mode": "stress", "account": None, "feed": feed, "stress_factor": STRESS_FACTOR, "stressed_text_nodes": n,
             "elements": [{k: (round(v, 1) if isinstance(v, float) else v) for k, v in e.items()} for e in m["elements"]],
             "nav": {k: (round(v, 1) if isinstance(v, float) else v) for k, v in m["nav"].items()
                     if k in ("top", "bottom", "position")},
@@ -474,8 +501,11 @@ def _record_stress(page, vp_name: str, vw: int, vh: int, scenario: str) -> dict:
 
 
 def run_measurements(url: str, out: Path | None, shots: str = "all", server_python: str | None = None,
-                     streamlit_version: str | None = None) -> dict:
+                     streamlit_version: str | None = None, feed: str = "fake") -> dict:
     from playwright.sync_api import sync_playwright
+
+    if feed == "real":
+        return _run_real(url, out, shots, server_python, streamlit_version)
 
     from shared.ui2_contract.pages import (
         ACCOUNT_SIGNED_IN, ACCOUNT_SIGNED_OUT, ACCOUNT_UNAVAILABLE, MODE_LABELS, MODE_LOOKUP,
@@ -538,6 +568,57 @@ def run_measurements(url: str, out: Path | None, shots: str = "all", server_pyth
             "summary": summary, "results": results}
 
 
+def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
+              streamlit_version: str | None) -> dict:
+    """Real-data Preview（NUI2-REAL-FEED A3）：每 viewport 四頁＋🎯 查一檔模式；手機市場頁加壓力態。"""
+    from playwright.sync_api import sync_playwright
+
+    from shared.ui2_contract.pages import (
+        FEED_REAL, MODE_LABELS, MODE_LOOKUP, P4_MARKET, P4_TARGET, PAGE4_LABELS, PAGE_IDS, SCENARIO_REAL,
+    )
+    from src.ui2.shell.app import _FEED_LABELS
+
+    results: list[dict] = []
+    with sync_playwright() as p:
+        browser = launch_chromium(p)
+        for vp_name, (vw, vh) in VIEWPORTS.items():
+            page = browser.new_page(viewport={"width": vw, "height": vh})
+            page.goto(url)
+            page.wait_for_selector(".ui2-qa", timeout=40000)
+            _select_box(page, "資料來源", _FEED_LABELS[FEED_REAL], f'[data-ui2-scenario="{SCENARIO_REAL}"]')
+            for pid in PAGE_IDS:
+                page.locator(".st-key-ui2_nav [role='radiogroup'] > label", has_text=PAGE4_LABELS[pid]).click()
+                page.wait_for_selector(f'[data-ui2-page="{pid}"][data-ui2-scenario="{SCENARIO_REAL}"]', timeout=30000)
+                page.wait_for_timeout(300)
+                results.append(_record(page, vp_name, vw, vh, pid, SCENARIO_REAL,
+                                       mode="curated" if pid == P4_TARGET else None, feed="real"))
+                if out is not None and shots != "none":
+                    page.screenshot(path=str(out / f"{vp_name}_{pid}_real.png"))
+                if pid == P4_MARKET and vw <= MOBILE_MAX_W:
+                    results.append(_record_stress(page, vp_name, vw, vh, SCENARIO_REAL, feed="real"))
+                if pid == P4_TARGET:
+                    page.locator(".st-key-ui2_target_mode_box [role='radiogroup'] > label",
+                                 has_text=MODE_LABELS[MODE_LOOKUP]).click()
+                    page.wait_for_selector(f'[data-ui2-page="{pid}"][data-ui2-mode="{MODE_LOOKUP}"]', timeout=30000)
+                    page.wait_for_timeout(300)
+                    results.append(_record(page, vp_name, vw, vh, pid, SCENARIO_REAL, mode=MODE_LOOKUP, feed="real"))
+                    if out is not None and shots != "none":
+                        page.screenshot(path=str(out / f"{vp_name}_{pid}_real_lookup.png"))
+            page.close()
+        streamlit_version = streamlit_version or _streamlit_version(server_python)
+        browser.close()
+    summary = {"states": len(results), "passed": sum(r["pass"] for r in results),
+               "failed": [f"{r['viewport_name']}/{r['page']}/{r['scenario']}/{r.get('mode')}"
+                          for r in results if not r["pass"]]}
+    return {"meta": {"tool": "tests/ui2_viewport/measure_viewport.py", "feed": "real",
+                     "streamlit_version": streamlit_version,
+                     "viewports": {k: list(v) for k, v in VIEWPORTS.items()}, "nav_mobile_h": NAV_MOBILE_H,
+                     "thresholds": THRESHOLDS,
+                     "note": ("Real-data Preview（唯讀 feed）：只接台股加權指數與市場位階兩項真資料，其餘欄位 ⬜＋原因；"
+                              "量測當下的真值會隨每日 cron 與本地狀態檔變動（證據為量測日快照）。")},
+            "summary": summary, "results": results}
+
+
 def _want_shot(mode: str, vp_name: str, scenario: str) -> bool:
     if mode == "all":
         return True
@@ -581,6 +662,8 @@ def main() -> int:
     ap.add_argument("--python", default=None, help="用此 python 起 streamlit server（例：/tmp/v156/bin/python 驗 floor 1.56）")
     ap.add_argument("--streamlit-version", default=None, help="搭配 --url：被量測 server 的 streamlit 版本標示")
     ap.add_argument("--json-name", default="viewport_measurements.json")
+    ap.add_argument("--feed", default="fake", choices=("fake", "real"),
+                    help="real＝Real-data Preview（NUI2-REAL-FEED；唯讀 feed）")
     a = ap.parse_args()
     repo = Path(__file__).resolve().parents[2]
     out = Path(a.out)
@@ -591,7 +674,7 @@ def main() -> int:
         proc, url = start_server(repo, a.python or sys.executable)
     try:
         report = run_measurements(url, out, a.shots, a.python if proc is not None else None,
-                                  a.streamlit_version if proc is None else None)
+                                  a.streamlit_version if proc is None else None, feed=a.feed)
     finally:
         if proc is not None:
             proc.kill()
