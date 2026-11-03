@@ -1,5 +1,8 @@
 # New UI2 四頁 Textual Wireframe（Mobile-first）
 
+> **⚠ 歷史線框，非現行施工指令集合（2026-11-04 文件整理）**：新 UI2 應從 [`NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md`](NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md) 取得四頁乾淨施工順序，再以 [`NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`](NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md) 核對正式語意。**本文件 ASCII 圖裡的所有舊 L2/L3 展開、來源診斷和第五頁資料中心寫法已退出 Active**；不可引用本檔過時段落當作現行規則。歷史線框保留作 DEC 追溯／原先版面決策比對（append-only/freeze），不因其存在恢復失效呈現。
+
+
 > ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§0.1 三層定義；§2.1／§2.2 的 `▸ 為什麼（L2）`／`▸ 指標明細（16 項）（L3）`／`▸ 原始資料表／工程診斷（L3）`；§3.1 `▸ 完整 6 欄表／跨季趨勢（L3）`／`▸ 產業趨勢（L2）` 的 L2／L3 標籤；§3.2 `L1 摘要／▸ L2 明細`、`▸ 完整分析（L3）`；§3.3；§4.1／§4.2 `▸ L2：…rule IDs…`／`▸ L3：原始明細`；§5.1／§5.2 `▸ L2／L3：Digest raw snapshot、Registry 明細、工程診斷`（S30；ASCII 線框的其餘版面〔順序、CTA 位置、tile、W-1～W-11、DEC-127、W-4〕仍有效；ASCII 區塊內不加刪除線以免破壞版面，一律以本橫幅與各節橫幅為準）。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
 
 - **狀態**：**客戶核准（Q3，2026-11-02；逐字見 DEC-123「客戶裁示 Q1～Q4」）**，附 W-4／W-5／W-9／W-10／W-11 條件（**§9**，與本檔他處衝突時以 §9 為準）；隨 #997 獨立稽核＋合併凍結。⛔ UI2 頁面 code 仍須待 Architecture 凍結並經 🟡 Model／Effort Change Gate。（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）<br>原文：~~**待客戶核准**（2026-11-02 獨立稽核 PASS with fixes 後改版：F3 ⚡ N 來源＝W-10、F5 W-5 計入範圍、F6 持股桌機對齊 Freeze＝W-11；客戶 (5)-13「four-page wireframe approved」；`CLAUDE.md` v3 §03-2 ① 草稿先行——**核准前 ⛔ 寫任何 UI2 頁面 code**）。隨 `docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md` 一併送審。~~
