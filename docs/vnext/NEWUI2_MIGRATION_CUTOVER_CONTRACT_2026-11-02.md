@@ -120,3 +120,9 @@ New UI2
 - **新債：線框第一屏非「四問」部分未落地**（`NUI2-WIREFRAME-FIRST-SCREEN-EXTRAS`）：今日結論、今日主要風險、標的 mode＋搜尋、我的登入態切換。
 - **量測腳本位置**：`tests/ui2_viewport/`（未動 `tools/`）；整併進 `tools/visual_fidelity` harness 屬 `NUI2-VF-HARNESS`（需解禁 `tools/` 修改）。
 
+## §9 Batch 3 Migration debt／債務收斂（2026-11-03；append-only；`PROJECT_RULES.md` 第 27 節第 4 點落點）
+
+- **已收斂（待驗收）**：`NUI2-WIREFRAME-FIRST-SCREEN-EXTRAS` 的四項（今日結論、今日主要風險、標的 mode＋搜尋、我的登入態切換）以 **FAKE／disabled skeleton** 落地（BACKLOG §5.1.24 逐項更新）；§8 原「新債」一行原文未改。
+- **新債（cutover 前須清零）**：① FAKE 今日結論句→真結論句（`NUI2-CONCLUSION-REAL-FEED`）② 今日主要風險 capability `⬜ 尚未提供`→真風險項（`NUI2-MAIN-RISK-REAL-FEED`）③ 標的搜尋 disabled 示意＋FAKE 查一檔結果→真查詢／研究 workspace（`NUI2-TARGET-SEARCH-FUNCTIONAL`）④ 帳戶 FAKE skeleton→真 Google OAuth／Sheet（`NUI2-ME-ACCOUNT-REAL-GATE`，Opus 5.5＋High＋另開 Decision Gate）⑤ Preview 控制的 FAKE 維度（場景／帳戶／模式）隨 FAKE scenario 一併移除（`NUI2-PREVIEW-CONTROL-AXES`）⑥ capability marker 使用處增加（`NUI2-CAPABILITY-MARKER-COUNT-UP`；`NUI2-CAPABILITY-MARKER-CUTOVER-ZERO` 規則不變）。
+- **Rollback／Cutover 步驟不變**：本批不碰 `app.py`、不切 production default、不刪 Legacy。
+

@@ -395,5 +395,6 @@ def test_real_browser_viewport_acceptance(tmp_path):
             raise
     finally:
         proc.kill()
-    assert report["summary"]["states"] == 2 * len(PAGE_IDS) * len(SCENARIO_IDS)
+    # Batch 3：每 viewport＝四頁×六場景＋🎯 每場景另量『即時查一檔』＋👤 signed-out／unavailable
+    assert report["summary"]["states"] == 2 * (len(PAGE_IDS) * len(SCENARIO_IDS) + len(SCENARIO_IDS) + 2)
     assert report["summary"]["failed"] == [], report["summary"]["failed"]

@@ -85,5 +85,49 @@ CSS = """
   .st-key-ui2_nav [role="radiogroup"]>label:has(input:checked){border-left-color:currentColor}
   .block-container{padding-left:12.5rem !important}
 }
+
+/* ── Batch 3：📊 今日結論／今日主要風險、🎯 雙模式＋搜尋、👤 帳戶 skeleton ── */
+.ui2-qrow--concl .ui2-concl__text{display:block;font-weight:600;line-height:1.45}
+.ui2-risk{border:1px solid rgba(128,128,128,.4);border-radius:10px;padding:6px 12px 8px 12px;margin:8px 0;line-height:1.5}
+.ui2-ctxline{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.78rem}
+.ui2-ctxline__item{white-space:nowrap}
+.ui2-search{display:flex;gap:8px;align-items:center;margin:4px 0 2px 0}
+.ui2-searchbox{flex:1 1 auto;min-width:0;border:1px dashed currentColor;border-radius:8px;padding:6px 10px;opacity:.65;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ui2-search .ui2-ctawrap{flex:0 0 auto;margin:0}
+.ui2-search__hint{font-size:.78rem;margin:0 0 4px 0}
+.ui2-snapshot{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:6px;margin:6px 0}
+.ui2-dim{border:1px solid rgba(128,128,128,.4);border-radius:8px;padding:5px 8px;min-width:0;overflow-wrap:anywhere;font-size:.85rem}
+.ui2-lookup__head{margin:6px 0 2px 0}
+.ui2-lookup__add{margin:6px 0 2px 0}
+.ui2-account{margin:6px 0}
+.ui2-account__btns{display:flex;flex-wrap:wrap;gap:6px 10px}
+.ui2-account__btns .ui2-ctawrap{margin:0}
+@media (min-width:769px){
+  .ui2-m-l1{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0}
+  .ui2-m-l1>.ui2-qa{display:contents}
+  .ui2-m-l1 [data-ui2-q]{border:1px solid rgba(128,128,128,.4);border-radius:10px;padding:6px 12px;grid-column:1/-1}
+  .ui2-m-l1 [data-ui2-q="concl"]{grid-row:1}
+  .ui2-m-l1 [data-ui2-q="q1"]{grid-column:1;grid-row:2}
+  .ui2-m-l1 [data-ui2-q="ctx"]{grid-column:2;grid-row:2}
+  .ui2-m-l1>.ui2-risk{grid-column:3;grid-row:2;margin:0}
+  .ui2-m-l1 [data-ui2-q="q2"]{grid-row:3}
+  .ui2-m-l1 [data-ui2-q="q3"]{grid-row:4}
+  .ui2-m-l1 [data-ui2-q="q4"]{grid-row:5}
+}
+/* 🎯 模式切換（膠囊式 radio；DOM 無關寫法同導覽：只用 container key＋role＋input:checked） */
+.st-key-ui2_target_mode_box [data-testid="stWidgetLabel"]{display:none}
+.st-key-ui2_target_mode_box [role="radiogroup"]{display:flex !important;gap:8px !important;width:100%;margin:0;flex-wrap:nowrap}
+.st-key-ui2_target_mode_box [role="radiogroup"]>label{flex:1 1 0;min-width:0;margin:0 !important;cursor:pointer;
+  display:flex !important;align-items:center;justify-content:center;box-sizing:border-box;
+  border:1px solid rgba(128,128,128,.55);border-radius:999px;padding:6px 8px}
+.st-key-ui2_target_mode_box [role="radiogroup"]>label div:not(:empty){display:flex;align-items:center;
+  justify-content:inherit;width:100%;min-width:0;margin:0}
+.st-key-ui2_target_mode_box [role="radiogroup"]>label *:has(>div:empty):not(:has(p)){display:none !important}
+.st-key-ui2_target_mode_box [role="radiogroup"]>label p{margin:0;font-size:.9rem;line-height:1.2;white-space:nowrap}
+.st-key-ui2_target_mode_box [role="radiogroup"]>label:has(input:checked){font-weight:700;border-width:2px;
+  background:rgba(128,128,128,.14)}
+.st-key-ui2_target_mode_box [role="radiogroup"]>label:has(input:checked) p::before{content:"● ";font-size:.7em}
+.st-key-ui2_target_mode_box [role="radiogroup"]>label:has(input:focus-visible){outline:2px solid currentColor;outline-offset:2px}
 </style>
 """

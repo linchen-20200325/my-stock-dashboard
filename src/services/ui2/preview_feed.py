@@ -14,12 +14,14 @@ from src.services.ui2.skeleton_vm import build_skeleton_page_vm
 DEFAULT_SCENARIO = SCENARIO_COLD
 
 
-def get_preview_page_vm(page_id: str, scenario_id: str, *, top_n: int | None = None) -> PageVM:
+def get_preview_page_vm(page_id: str, scenario_id: str, *, top_n: int | None = None,
+                        mode: str | None = None, account: str | None = None) -> PageVM:
+    """`top_n`／`mode`＝呈現切片參數（只影響 slice）；`account`＝👤 我的頁 FAKE 帳戶狀態（fake canonical 維度）。"""
     if page_id not in PAGE_IDS:
         raise ValueError(f"unknown page {page_id!r}")
     if scenario_id not in SCENARIO_IDS:
         raise ValueError(f"unknown scenario {scenario_id!r}")
-    canonical = fake_canonical(page_id, scenario_id)
+    canonical = fake_canonical(page_id, scenario_id, account=account)
     if page_id == P4_MARKET:
-        return build_market_page_vm(canonical, top_n=top_n)
-    return build_skeleton_page_vm(canonical, top_n=top_n)
+        return build_market_page_vm(canonical, top_n=top_n, mode=mode)
+    return build_skeleton_page_vm(canonical, top_n=top_n, mode=mode)

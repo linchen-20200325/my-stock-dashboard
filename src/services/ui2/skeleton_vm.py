@@ -11,7 +11,8 @@ from src.services.ui2.vm_common import build_page_vm
 _SKELETON_PAGES = (P4_TARGET, P4_HOLD, P4_ME)
 
 
-def build_skeleton_page_vm(canonical: Mapping[str, Any], *, top_n: int | None = None) -> PageVM:
+def build_skeleton_page_vm(canonical: Mapping[str, Any], *, top_n: int | None = None,
+                           mode: str | None = None) -> PageVM:
     if canonical.get("page") not in _SKELETON_PAGES:
         raise ValueError(f"build_skeleton_page_vm 不接受 {canonical.get('page')!r}")
-    return build_page_vm(canonical, top_n=top_n)
+    return build_page_vm(canonical, top_n=top_n, mode=mode)

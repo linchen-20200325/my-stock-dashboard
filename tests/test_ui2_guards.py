@@ -353,6 +353,13 @@ def _all_fields(vm: PageVM) -> list[FieldVM]:
     out += [c.field for c in vm.context.cards]
     for s in vm.context.sections:
         out += list(s.fields)
+    # Batch 3（只增加掃描範圍，⛔ 縮小）：今日結論／今日主要風險／標的查一檔 FAKE 結果／帳戶欄位
+    out += [f for f in (fs.conclusion, vm.context.main_risk) if f is not None]
+    t = vm.context.target
+    if t is not None:
+        out += [t.search.name_search, t.lookup.summary, *t.lookup.snapshot]
+        for s in t.lookup.sections:
+            out += list(s.fields)
     return out
 
 

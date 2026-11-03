@@ -6458,3 +6458,237 @@ temporary implementation gap
 - **效力邊界**：⛔ navigation implementation、real data wiring、Aggregator runtime、Risk Cap runtime、Digest、OneBrain、LINE〔(8)-5〕；`app.py`、`requirements.txt`、`src/ui/**`、`src/ui_v2/**`、`src/data`、`src/compute`、`shared` 既有非 ui2 檔 0 diff；不核准任何新資料源、公式、門檻、Risk Cap 數值。
 - ⚠️ 揭露（`CLAUDE.md` §-2 規則 6）：選項 A 的理由、Risk Cap／DEC-074／075／`not_approved` 的語意歸類、Aggregator O1 修正均為實作組單組產出，**待總管複驗與獨立 QA**；「`FieldState` 在 New UI2 套件外 0 引用」為 grep 結果、非窮舉。
 - 📌 **獨立稽核結果（2026-11-02，第二組，非實作組）**：判 **PASS with fixes**——選項 A、Risk Cap＝`UNDETERMINABLE`、DEC-074／075 歸 Unable to Determine、Aggregator O1 第五類 `undeterminable` **皆同意**（9 項 mutation 全紅）；修正項（`⬜ 尚未核准／無法判定` 自 UI2 移除、文件指標與措辭、CI 阻擋的既有脆弱測試決定化）已於同分支修正批處理。實作 commit＝`64e6fe2c`；修正批 SHA 由總管補記（2026-11-02 DEC-124 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）。
+
+### DEC-125｜歷史脈絡遺失檢查與 GitHub 補落盤：台股趨勢／國際趨勢 Research Baseline、市場產品主軸只留兩條、中性命名永久規則、GitHub 落盤位置（客戶 2026-11-03）
+
+> 2026-11-03 補登（ID 取下一個未用號；落盤前 `grep -n "DEC-125" docs/DECISIONS.md PROJECT_RULES.md docs/BACKLOG.md` 0 命中，DEC-124 為上一號）。**來源類別 D：客戶 2026-11-03 本輪指示 (10) A 節原文，經總管轉交逐字檔（`customer_directive_2026-11-02.md` 第 (10) 段）；下方 fence 內逐字收錄 A1～A5，未改一字**（撰寫組未見客戶原訊息本身，只見總管轉交之全文；若有出入以原訊息為準）。
+
+- **決策者**：**客戶**（2026-11-03）。｜**效力日期**：2026-11-03 起。｜**範圍**：治理（落盤規則已有）＋市場趨勢 Research Baseline（docs-only）＋中性命名永久規則。
+- **狀態**：**客戶指示生效**；A 段 docs／governance 落盤完成（撰寫組單組，待總管複驗）；**不新增任何 production investment logic**。B 段（New UI2 Batch 3）另行，不屬本 DEC。
+- **客戶原文：A 節全文（A1～A5，逐字，fence 內未改一字；具約束力）**：
+
+```
+A. Historical Context Loss Check＋GitHub SSOT 補落盤
+
+這段先做 docs / governance 收斂，不新增 production investment logic。
+
+先確認 GitHub 是否已經有完整 SSOT 保存以下內容；已有就只 cross-reference，不建立第二份。
+
+A1. 台股趨勢 Research Baseline
+
+正式研究方向至少保存：
+
+- EPS × 合理 PE 的加權指數情境估值
+- 外資籌碼
+- 融資
+- 市場擁擠度
+- 回撤／市場風險
+- 市場廣度
+
+永久語意：
+
+EPS × PE 只是台股大盤情境估值方法之一，不等於完整市場趨勢判斷。
+
+不得自行：
+
+- 核准 EPS source
+- 核准 PE multiple
+- 發明 growth assumption
+- 新增 production formula
+- 由 EPS×PE 直接產生買賣 action
+
+尚未正式核准的 source / formula / horizon / update frequency / PE rationale 保持 Pending／Decision Gate。
+
+A2. 國際趨勢 Research Baseline
+
+至少保存：
+
+- 長債殖利率
+- 殖利率曲線
+- Leading Indicators
+- PMI
+- Inflation
+- Fed / monetary policy
+- Real Yield
+- VIX
+- Credit Spread
+- USD
+- Major Equity Markets
+
+這些只能作：
+
+- objective input
+- research dimension
+- context overlay
+
+除非 repo 已有正式 validated deterministic contract，禁止自行重新組成：
+
+- 多頭／空頭公式
+- scoring model
+- Risk Cap rule
+- System Action
+- probability
+
+A3. 市場產品主軸
+
+正式市場趨勢只保留：
+
+1. 台股趨勢
+2. 國際趨勢
+
+Old UI / Legacy New UI 可以提供 capability / logic / source reference，但不得重新增加第三、第四套市場主軸。
+
+A4. 中性命名永久規則
+
+研究文件與 provenance 可以保存原始作者／來源人物。
+
+但正式：
+
+- UI
+- navigation
+- card title
+- indicator name
+- feature name
+- OneBrain output
+- LINE output
+- production rule identifier
+
+不得使用老師／個人姓名作為 production 功能或邏輯名稱。
+
+使用中性產品語意，例如：
+
+- 台股大盤情境估值
+- EPS × PE 情境矩陣
+- 台股趨勢
+- 國際趨勢
+- 市場估值區間
+
+A5. GitHub 落盤
+
+依 PROJECT_RULES §27：
+
+- Rule → PROJECT_RULES / 正式 spec
+- Decision → DECISIONS
+- Pending → BACKLOG
+- Current status → PROJECT_STATE
+- Safe Handoff → HANDOFF
+- Research baseline → 正式 vNext research / market spec
+
+不得只留在：
+
+- 聊天
+- scratchpad
+- PR body
+- Claude memory
+
+```
+
+- **裁示要點（撰寫組條文化；與原文有出入以原文為準）**：
+  1. **A1 台股趨勢 Research Baseline**：維度＝EPS×合理 PE 的加權指數情境估值／外資籌碼／融資／市場擁擠度／回撤與市場風險／市場廣度。永久語意：**EPS×PE 只是台股大盤情境估值方法之一，不等於完整市場趨勢判斷**。⛔ 不得自行核准 EPS source、核准 PE multiple、發明 growth assumption、新增 production formula、由 EPS×PE 直接產生買賣 action；未核准的 source／formula／horizon／update frequency／PE rationale 保持 Pending／Decision Gate。
+  2. **A2 國際趨勢 Research Baseline**：維度＝長債殖利率／殖利率曲線／Leading Indicators／PMI／Inflation／Fed／monetary policy／Real Yield／VIX／Credit Spread／USD／Major Equity Markets，**只能**作 objective input／research dimension／context overlay；除非 repo 已有正式 validated deterministic contract，⛔ 不得自行組成多空公式、scoring model、Risk Cap rule、System Action、probability。
+  3. **A3 市場產品主軸**：正式市場趨勢只保留 1. 台股趨勢、2. 國際趨勢；Old UI／Legacy New UI 只作 capability／logic／source reference，⛔ 不得新增第三、第四套市場主軸。
+  4. **A4 中性命名**：研究文件與 provenance 可保存原始作者／來源人物；正式 UI／navigation／card title／indicator name／feature name／OneBrain output／LINE output／production rule identifier ⛔ 不得使用老師／個人姓名作為 production 功能或邏輯名稱。
+  5. **A5 GitHub 落盤**：依 `PROJECT_RULES.md` 第 27 節（Rule→PROJECT_RULES／正式 spec；Decision→DECISIONS；Pending→BACKLOG；Current status→PROJECT_STATE；Safe Handoff→HANDOFF；Research baseline→正式 vNext research／market spec）；⛔ 不得只留在聊天、scratchpad、PR body、Claude memory。
+- **落盤位置（本 DEC 的實作；A5）**：Rule → `PROJECT_RULES.md` 第 28 節；Research baseline／A3 規格 → `docs/vnext/MARKET_TREND_RESEARCH_BASELINE_2026-11-03.md`；Pending → `docs/BACKLOG.md` §5.1.23（`MKT-RB-*`）；Current status → `docs/PROJECT_STATE.md` §55；Safe Handoff → `docs/HANDOFF.md` 最末段。
+- **與其他 DEC／契約的關係（append-only，撰寫組讀法，單組，⚠️ 待第二組 evidence audit）**：
+  - **DEC-071**（兩主軸、研究框架非 Approved）：**同向、再確認**（A3 = DEC-071 第 5 點；A1／A2 清單與 PROJECT_STATE §22.2 取聯集，不取代）。
+  - **DEC-091(g)／DEC-092／Freeze §11（客戶 §43）／`DEC092-EPSPE-HIGH-GATE`／`VN1-MT-VALUATION`**：**同向**；大盤 EPS×PE 維持 Research Gate、與單檔估值分開治理；本 DEC 不新增 EPS×PE Gate 列。
+  - **DEC-123／DEC-124**（New UI2、三軸語意）：不衝突；A 段不動 UI2 code。
+  - **DEC-122**（Final UI Freeze）：Freeze 全部 semantic contracts 不受影響。
+  - **舊 DEC 衝突檢查**：以關鍵字（台股趨勢／國際趨勢／EPS×PE／老師／去識別）掃 `docs/DECISIONS.md` 與 `PROJECT_RULES.md`，**未發現需加刪除線或 📌 取代標記的衝突**（單組、未窮舉）。注意：`docs/DECISIONS.md` DEC-092（圖 C 條）與 `docs/PROJECT_STATE.md` §22.2／§32 等**文件內**含研究作者姓名，屬 A4 第一句允許的「研究文件與 provenance」，不構成違反。
+- **效力邊界（⛔ 不是實作授權）**：不新增資料來源、公式、門檻、probability；不改 Risk Cap；不實作 Aggregator／Digest／OneBrain／LINE；不改任何 `src/`／`tests/`／`shared/`／`app.py`。A4 的命名違反盤點只**登記**不修（`CLAUDE.md` §-1）。
+- **疑點（需客戶知悉／裁示，撰寫組不自決）**：(1) A3「不得第三、第四套市場主軸」與 DEC-091／092 Q5「產業趨勢先研究」（標的層研究線）的關係——撰寫組讀為兩者不衝突（產業趨勢屬標的層），若客戶意指不同請裁示（`MKT-RB-AXES-INDUSTRY-READING`）；**Mapping（獨立複驗補）**：`decision_digest` 的 industry 區段（`NOT_DEFINED`）屬標的層產業趨勢；市場頁 Macro mini／sparkline 區塊屬國際趨勢 context overlay、不構成第三主軸，併入該列請客戶一併確認；(2) A4 適用範圍（內部私有變數名、測試檔名、過渡 alias 是否算「production 邏輯名稱」）——撰寫組暫以「使用者可見／規則名稱流通處」為準（`PROJECT_RULES.md` 第 28 節第 3 點，INFERENCE）。
+
+### DEC-126｜多元解法與最小成本決策規則（Multi-Path Decision & Minimum Cost Rule）：遇問題先評估 ≥3 方案、內部比較不輸出、僅 6 種情形回報（須附推薦）、禁止以更高模型／更多 Token 掩蓋錯誤路徑（客戶 2026-11-03）
+
+> 2026-11-03 補登（ID 取下一個未用號；DEC-125 為上一號）。**來源類別 D：客戶 2026-11-03 指示原文，經總管轉交；下方 fence 內逐字收錄，未改一字**（撰寫組未見客戶原訊息本身，只見總管轉交之全文；若有出入以原訊息為準）。
+
+- **決策者**：**客戶**（2026-11-03）。｜**效力日期**：2026-11-03 起。｜**範圍**：治理（永久規則）；docs-only，不新增任何 production code／資料邏輯／投資規則。
+- **狀態**：**客戶指示生效**；條文化落盤為 `PROJECT_RULES.md` **第 29 節**（9.1 加 cross-reference）；撰寫組單組、待總管複驗。
+- **客戶原文（逐字，fence 內未改一字；具約束力）**：
+
+```
+多元解法與最小成本決策規則
+
+遇到技術、資料、UI、架構、流程或除錯問題時，不得預設只有單一路徑，也不得在同一路徑持續原地試錯。
+
+在進入實作前，應至少先評估 3 個可行方案。
+
+若客觀上不足 3 個方案，必須明確說明原因。
+
+每個方案至少比較：
+
+- 正確性與資料語意風險
+- 實作／修復速度
+- Token 與模型成本
+- 修改範圍與回歸風險
+- 可逆性
+- 是否可沿用既有模組、資料或流程
+- 失敗後的降級／替代路徑
+
+預設決策排序：
+
+1. 正確性足夠且風險低
+2. 完成最快
+3. Token／成本最低
+4. 修改範圍最小
+
+不得因第一個方案已經開始，就持續投入 sunk cost。
+
+如果出現以下任一情況：
+
+- 同一路徑重複失敗
+- 修改範圍持續擴大
+- 需要新增不必要依賴
+- Token 成本明顯升高
+- 時間成本明顯高於替代方案
+- 回歸風險持續增加
+
+必須停止原路徑，重新比較 B／C 方案。
+
+專案 AI 應主動比使用者更早發現替代方案，不得等使用者提出後才開始思考。
+
+執行方式
+
+這條規則不是要求每次都輸出長篇比較。
+
+正常情況下：
+
+- AI 可在內部完成 3 路徑比較
+- 選出 Minimum Sufficient Path 後直接執行
+- 不需為了展示比較而浪費 Token
+
+只有以下情況才需要回報 3 方案給使用者：
+
+1. 三個方案在風險／成本上差異顯著
+2. 涉及不可逆變更
+3. 涉及新 source／新依賴／新架構
+4. 涉及 Risk Cap／Action Authority／正式投資語意
+5. 需要使用者裁示
+6. 原路徑已失敗一次以上且準備切換方案
+
+與 Minimum Sufficient Effort 的關係
+
+這條規則與既有 Minimum Sufficient Effort 綁定。
+
+應同時優化：
+
+- 解法路徑
+- Model
+- Effort
+- Test Scope
+- Token 成本
+
+禁止：
+
+「用更高模型／更多 Token 掩蓋錯誤架構或錯誤路徑。」
+
+若更簡單的 B／C 方案可以以較低模型、較少修改、較少測試達成同等正確性，應優先採用較小方案。
+
+GitHub 落盤：依 PROJECT_RULES §27 同步 PROJECT_RULES.md、docs/DECISIONS.md、docs/HANDOFF.md。完成後新 session 只讀 GitHub 就要能知道「遇到問題時必須先比較多路徑，而不是單一路徑原地試錯」。
+```
+
+- **落點**：規則 → `PROJECT_RULES.md` 第 29 節（條文化重述，與原文不一致以本 fence 為準）；`PROJECT_RULES.md` 第 9.1 節 cross-reference；索引 → `docs/HANDOFF.md` 頂部「新永久規則」指標。
+- **與其他規則的關係（append-only，撰寫組讀法，單組，⚠️ 未經第二組驗證）**：Minimum Sufficient Model／Effort／Test Scope（DEC-059／078，第 9.1／17 節）**同向綁定**；Silent Autonomous Cruise／Hard Output Gate（DEC-104／118）**正交**（內部比較不輸出，僅 6 種情形回報）；`CLAUDE.md` §-2、§8.4 step 4、v3 §03「嚴禁拋選擇題」**併用**——回報 3 方案必須附 AI 總管推薦方案與原因；**不放寬**任何 Decision Gate／Model Change Gate／Stop Conditions。
+- **衝突檢查**：撰寫組僅讀既有第 3、9、17 節相關條文，未發現與本 DEC 牴觸之處（單組、非窮舉）；無舊條文需加刪除線。
+- **效力邊界（⛔ 不是實作授權）**：不改 `src/`／`tests/`／`shared/`／`app.py`；不新增資料來源、公式、門檻；不啟動任何 Batch。
