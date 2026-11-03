@@ -1708,3 +1708,42 @@
 - **新守衛（現綠）**：`tests/test_ui2_guards.py` `check_axis_separation`／`check_ui2_dev_not_auth`＋`test_dec130_*`（defense-in-depth AST，不窮舉）；**新 strict xfail**：`T_new_8`（P6）、`T_new_9`（P1）。
 - **仍殘留的撰寫組暫定（非 (a)(b)(c)）**：Level 1／2 預設展開或收合、Level 3 遮罩嚴於客戶原文、`⛔ 來源不可用` 顏色、🎯 跨季趨勢是否保留——見 Active Contract §11。
 - **限制**：單組撰寫、未經第二組獨立驗證；T_new_8 DOM 標記名暫擬；`ui2_dev` 的 AppTest 於 Streamlit 1.56 floor 未驗（1.59.2 已驗）。
+
+
+#### 📌 #1007 記錄與下一批候選（2026-11-04；docs-only；append-only；docs 組單組撰寫、待總管複驗）
+
+**1. #1007 實際狀態（據實記錄）**
+
+- `NEWUI2_UI_DATA_EVIDENCE_MAPPING_PLAN_2026-11-04.md`（docs-only、1 檔）由 ChatGPT 撰寫；總管獨立 QA：**無 P0**；1 個 P1（事實錯誤）＝台股歷史主圖／MA 描述；P2：冷啟動與廣度不足兩種狀態混成一句、Digest Stage 標錯（G→F）、A/B/C 字母多重定義、Stop Gate 未對照、候選因子描述無程式依據、💼 能力漏列（換股／兩套刻度／235 燈／策略分布／建議持股水位）、跨頁同源未明文、🎯 缺 W-4 Risk Cap 列、E7 分類錯置。已以 **12 項最小文字勘誤（commit `c4b31a63`）** 修正；CI 綠（head `c4b31a63`）；squash merge＝`6cb588d7`。
+- 勘誤時發現的事實偏差：舊 mapping 的 **H3 是「目前曝險」不是「建議持股水位」**，故計畫中新增的「建議持股水位」列原編號寫「—」（不掛 H 號）。
+- **該計畫不是新客戶 Decision、不是 Real Feed 授權、不是施工授權**；只有 TWII 最新收盤、Regime 市場位階是已接 Real Feed 事實。
+- **未驗限制（如實）**：QA 未執行 service runtime 驗證；未窮舉 caller；計畫中的「候選讀點」只是 grep／讀碼層級的候選，不代表可讀、已 PORT 或已獲授權；與 FINAL_UI_CAPABILITY_MAP 的編號體系不同（計畫 §開頭已自註）。
+- 本批（docs 組）**未改** `src/`、`shared/`、`tests/`、`app.py`；Audit Checklist 未新增自勾項。
+
+**2. 登記 QA 發現的未處理項（P3；新增 2 個＋1 個本批查證出的張力＋2 個既有只交叉參照）**
+
+| ID | 優先級 | 內容 | status | dependency | next action | 驗證組數 |
+|---|---|---|---|---|---|---|
+| **NUI2-PLAN1007-CAPMAP-UNCOVERED** | P3 | #1007 計畫自述「只列 Active Contract／執行附件明列的區塊」，FINAL_UI_CAPABILITY_MAP 的 MIGRATE／退場項（如 M13–M16／M18、T04／T07／T16／T19–T20／T22／T24–T30、H11／H13／H16、E04／E12／E14–E17）**不在計畫內，且不等於已退場**。計畫的 M／T／H／E 號是 REAL_FEED_MAPPING §4 列號，與 CapMap 號衝突（例：CapMap E11＝System Information、舊 mapping E11＝Decision Digest） | open | P2～P6 各批施工前 | 每批接線前逐項對照 CapMap 與 REAL_FEED_MAPPING，並在 PR 列出「本批未涵蓋的 CapMap 項」；不得因計畫沒寫就當作取消（同 `NUI2-EXEC-SPEC-UNCOVERED-DETAILS` 精神） | 0 |
+| **NUI2-PLAN1007-METADATA-NO-L3** | P3 | `data_cache/metadata.json` 只有 L1 reader，**無 L3 wrapper**（計畫 §5 資料新鮮度列已註「接線需先建 L3」）。P6 資料健康度若要顯示新鮮度，須先有 L3 唯讀入口；L5／UI2 不得直讀 L1（EX-PASSTHRU-1 不涵蓋此情形）。`market_twii_view_service` 內部讀 `metadata.json` 屬 L3 內部實作，不等於已有通用 reader | open（接線前提；未驗證有無其他 caller） | P6 | P6 施工前由總管判定 L3 入口形態（新增 thin L3＝新 service，須獨立 QA；同 SG-12 精神）；不在 presentation 批夾帶 | 0 |
+| **NUI2-PLAN1007-P3-T1B-TENSION** | P3 | 本批查證出的張力（單組，未經第二組）：P3 批次表要求「VM `sections` 一字不動」（T-new-4），但 `tests/test_ui2_contract_teeth_pending.py::test_T_new_1b_human_vm_sections_are_not_l2_l3`（strict xfail）斷言三個投資頁 `context.sections` 內**無 `level∈{L2,L3}`**。兩者字面不可同時滿足：要轉綠必須改 VM `level` 值（VM 內容變更）或把這些區塊移出 `context.sections`（搬去 Evidence projection，與 P6 相依），或修改該測試斷言（不得以弱化守衛達成）。T-new-1（expander 標籤＋結構判準）則不受影響，UI 移除即可轉綠 | open | P3 | P3 施工前由總管判定處置路徑（不得 xfail／skip 隱藏、不得弱化守衛、不得靜默改 VM）；若須動 VM schema／`level` 語意→先過 Gate | 0 |
+| `NUI2-TWII-TWO-PATHS`（**既有，不重登**） | P3 | BACKLOG 已有獨立條目（本檔 §5.1.x 表內，另在 REAL_FEED_MAPPING 登記）。任務原假設「BACKLOG 無獨立條目」**與實況不符**（本批 grep 查證）；僅補交叉參照：#1007 計畫 §4 末句與 §2 台股歷史主圖列均指向它，接線前須擇一（readiness `taiex` vs `twii_ohlcv.parquet`） | open（原樣） | `NUI2-PORT-READINESS-L3` | 同原條目 | — |
+| `NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER`（**既有，不重登**） | P3 | Active Contract §3.1 vs Wireframes §2.1 風險／行動順序不一致，已登記（見上方 EXEC-SPEC 補記表）；#1007 計畫未處理它。P2 施工前須判定（見下方候選 B 的前置） | open（原樣） | P2 | P2 施工前由總管判定 | — |
+
+**3. 下一批候選（供客戶選擇；非授權）**
+
+> ⛔ 本節**不是**授權、**不替客戶選定**、不新增客戶裁示、不升格 Pending 四項（Level 1／2 預設展開或收合、Level 3 遮罩嚴於客戶原文、`⛔` 顏色、🎯 跨季趨勢是否保留，仍 Pending）。列出的是「可獨立驗收、不需新 canonical contract、能讓既有 strict xfail 轉綠」的三項，依 #1007 計畫的 Ready／Blocked 與本節上方 P1～P7 批次表整理。**每批 ≤3 項、一次只做一批；客戶選定前不動工。**
+
+| 候選 | 範圍（≤3 項） | 依賴／前置 Gate | Model×Effort | 驗收證據 | 風險 | 對應 |
+|---|---|---|---|---|---|---|
+| **A＝P3 移除各頁 L2／L3 expander＋測試同步** | ① views 的 `render_sections` 不再畫 L2／L3（VM `sections` 一字不動）② 依「測試改動清單」更新過期斷言並新增 T-new-4（Human VM 移除的欄位在 Evidence projection 仍存在且值相等）③ L0 位階完整說明於 P6 到位前**留在 VM、UI 不顯示**（已知過渡狀態，PR 須揭露） | Active Contract 已核准移除（DEC-128，客戶 (13)）→**無新版型，不另出線框**；若實作中出現 Active Contract 未載的版面變動→停手先出文字線框（v3 §03-2 ①）。前置：處置 `NUI2-PLAN1007-P3-T1B-TENSION`；PR 證明 VM `sections`／canonical／L0 常數逐字未動 | 純 presentation＝Sonnet 5.5＋Medium（若須改 VM `level`／schema→STOP，Opus 5.5＋High／Gate） | 390／1440 截圖（四頁×代表場景，Streamlit 1.59.2＋1.56.0 floor 各一輪，沿用 `measure_viewport`）；`T_new_1`（三頁）轉綠並移除 xfail；`T_new_1b` 依處置結果（不得隱藏）；`PENDING_UI_CORRECTION_TESTS` 同步移除；`test_ui2_guards.py` 全 KEEP；mutation：放回 expander→T_new_1 紅 | 使用者暫時看不到位階完整說明（過渡）；T-new-1b 張力；舊測試改動面最大（T1～T10） | #1007 計畫 §2–§4「不畫 L2 expander」；SG：無（不接資料） |
+| **B＝P2（①②）📊 OneBrain 位置＋Primary 台股主圖槽與 SPEC 行** | ① 🤖 OneBrain Outlook 槽移到今日主要風險之後、卡片之前 ② Primary 台股主圖**空槽**＋單行 SPEC（標的／區間／頻率／單位／資料日／缺值處理；honest `⬜`，**不接真資料、不畫假圖**）。（原批次表 ③ micro-tag 欄位統一牽涉短狀態語意，**本候選不含**，留待另批） | 前置：**P2 施工前先判定** `NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER`（順序不一致）＋`NUI2-EXEC-SPEC-UNCOVERED-DETAILS` 對照；主圖槽若在 Wireframes §2.1 未明列位置／尺寸→先出文字線框（v3 §03-2 ①）。圖表接真資料（`get_twii_trend_view(n)` 序列、MA）＝#1007 計畫分類 B／C，**不在本候選**（Opus 5.5＋High、SG-14 邊界、MA 無正式序列） | 純 presentation＝Sonnet 5.5＋Medium | 390／1440 截圖；`T_new_6`（`SPEC｜` 行）轉綠並移除 xfail；DOM 順序測試（OneBrain 在主要風險之後）；`test_ui2_guards.py` 全 KEEP；mutation：拿掉 SPEC 行→T_new_6 紅 | 空槽讓客戶誤以為即將有圖（文案須誠實：此項尚未開放）；SPEC 行內容在無資料時不得編造頻率／期間 | #1007 計畫 §2 台股歷史主圖列、§6 Data Contract；SG：無（不接資料） |
+| **C＝P7 桌機左側 Account Area 版面（僅殼）** | ① 桌機 Navigation Rail 加 compact Account Area（Product／Logo → 登入入口＋狀態 → 四頁）；手機仍四格 ② 狀態僅顯示 `⬜ 尚未登入`／FAKE 場景，**不實作 auth、不讀 URL／`ui2_dev` 推論登入** | **必須先出文字線框給客戶拍板**（v3 §03-2 ①，版面與動線變更）；`NUI2-AUTH-CONTRACT-GATE`（repo 無 New UI2 auth contract）→狀態來源在 Gate 通過前**永遠是「未接線」**，不得讓使用者以為已能登入 | 純殼＝Sonnet 5.5＋Medium；接真 auth 狀態＝Opus 5.5＋High／Gate（SG-11） | 390／1440 截圖；`T_new_7` 轉綠並移除 xfail；`check_ui2_dev_not_auth` 與 AST「不得用 query_params 猜登入」保持綠；mutation：以 query param 控制登入字樣→紅 | **誤導風險最高**：在無 auth contract 時顯示「登入」按鈕／狀態可能被讀成可用；按鈕須 disabled 並誠實說明；與 P6 的 👤 重複連線卡移除有版面交互 | #1007 計畫 §5 桌機 rail 列；SG-11 |
+
+**三路徑比較（PROJECT_RULES §29，簡述）**：路徑 1＝只做不需新資料契約的 presentation（A、B 純 UI、C 僅殼）；路徑 2＝把舊 L5／session 運算 PORT 成正式 L3 service 後接真資料（P4／P5／P6 欄位新增、圖表接線，須 Opus 5.5＋High 與獨立 QA，且多數撞 SG-02～SG-14）；路徑 3＝新 API／新資料源（需新來源 Gate，目前無客戶授權）。依 §29 排序（正確性與風險 → 完成速度 → Token 成本 → 修改範圍）：**路徑 1 風險最低，且能直接讓 strict xfail 轉綠**；路徑 2／3 在 SG 未裁示前為 Blocked。
+
+**推薦（僅供客戶參考，客戶可全改）**：A（P3）優先——改動最確定、正面消除「舊 L2／L3 expander 仍在」的已知偏離，且轉綠 `T_new_1`；唯須先處置 T-new-1b 張力。B 次之（先判定風險順序不一致）。C 最後：需先看文字線框，且 auth 未接線，價值主要是版面。**這是推薦，不是選定；不得據此逕行施工。**
+
+**Ready／Blocked／Need Decision 摘要（沿 #1007 計畫分類）**：Ready（純 presentation）＝A、B、C 殼；Blocked（SG／新契約）＝利差（SG-02）、PMI（SG-03）、候選因子（SG-04／13）、曝險分母（SG-05）、Risk Cap（SG-06）、System Action（SG-07）、Forward EPS（SG-08）、OneBrain／Digest（SG-09）、位階 as_of（SG-10）、OAuth（SG-11）、五桶 thin L3（SG-12）、新公式／門檻（SG-14）；Need Decision＝`NUI2-PLAN1007-P3-T1B-TENSION`、`NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER`、`NUI2-TWII-TWO-PATHS`／`NUI2-VIX-TWO-PATHS`（擇一入口）。
+
+**限制（如實）**：本節由 docs 組單組撰寫，未經第二組獨立驗證；「Ready」是文件層級判斷，未跑 runtime；T-new-1b 張力為讀測試碼所得，未實際以 P3 實作驗證；候選的 Model×Effort 為建議，依 DEC-084 仍須在施工時 Model×Effort Check。

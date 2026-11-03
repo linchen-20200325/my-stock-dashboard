@@ -879,3 +879,19 @@ DEC-086 規則已於 main，本表已落地。
 | 仍禁止（不變） | ⛔ 依舊 L2／L3 expander 施工；⛔ 刪 canonical／VM `sections`／RuleIDs／provenance（UI 移除 ≠ 刪資料）；⛔ 用 xfail／skip 隱藏仍斷言舊 presentation 的測試；⛔ 降低資料／語意安全守衛；⛔ 改 auth／OAuth 本體、Decision Digest schema、Risk Cap、System Action、新資料 contract／公式／門檻／source；⛔ 把 `ui2_dev`（或任何 URL／query）當登入／授權證據；⛔ OneBrain／Digest runtime；⛔ 切 production default；⛔ 刪 Old UI／Legacy New UI；⛔ 把 `.streamlit/config.toml` 改成隱藏工具列（會影響 Legacy app；cutover Gate）；⛔ 自行切換 Model／Effort；⛔ 擴張至 P2～P7（每批 ≤3 項）。 |
 
 - **P1 QA 修正補記（2026-11-03；append；現行 Safe Handoff 表不變，僅更新其「known limitations」與驗證）**：兩組獨立 QA（無 P0／P1）之 P2／P3 已修或登記（BACKLOG §5.1.26「P1 QA 修正補記」、PROJECT_STATE §61 末條）：三軸文案、錯誤型別名不上畫面（`NUI2-P1-ERROR-TYPE-NAMES` 結案）、FAKE microtag／詞彙擴充、雙箭頭、來源 chip 換行、`REGIME_SEE_WHY` 前提測試、`shown()` 警告；`NUI2-P1-REAL-LOOKUP-SUMMARY-DUP` 查證為 P1 前既有。**下一個唯一安全工作不變**（總管複驗→push→PR→CI；之後 P3）。`NUI2-P1-L0-EXPLAIN-WITHHELD` 維持 P6 決定；撰寫組暫定四項維持 Pending。
+
+- **#1007 記錄與 Safe Handoff 更新（2026-11-04；docs-only；append；docs 組單組、待總管複驗）**：PR #1007（ChatGPT 撰寫，docs-only 1 檔 `docs/vnext/NEWUI2_UI_DATA_EVIDENCE_MAPPING_PLAN_2026-11-04.md`）經總管獨立 QA（無 P0；1 個 P1＝台股歷史主圖／MA 事實錯誤；9 項 P2）以 12 項最小文字勘誤（`c4b31a63`）修正，CI 綠，squash merge `6cb588d7`。**不是新客戶 Decision、不是 Real Feed 授權、不是施工授權**；只有 TWII 最新收盤與 Regime 位階是已接 Real Feed。未驗限制：QA 未執行 service runtime 驗證、未窮舉 caller。勘誤時發現舊 mapping H3＝「目前曝險」非「建議持股水位」（新列編號「—」）。
+
+- **Safe Handoff（2026-11-04 #1007 記錄＋下一批候選；現行；docs 組單組、待總管複驗）**（決策者 客戶；本表**取代**上方 P1 Safe Handoff 表的「下一個唯一安全工作」格，其餘格內容仍有效）
+
+| 欄位（C1） | 內容 |
+|---|---|
+| live GitHub state | 分支 `ccr-a0b4e085-ijdaio`（含 P1 程式、#1006 `de5f272e`、#1007 `6cb588d7` 的 merge）；P1 PR 尚待總管複驗→push→PR→CI（以 GitHub 實況為準） |
+| current Stage／exact safe stopping point | P1 完成（待複驗／獨立 QA／客戶驗收）；#1007 計畫已合併為**接線規劃附件**（非授權）；P2～P7 未動 |
+| 待客戶裁示 | **從下方候選 A／B／C 中選一批**（或指定其他批次或否決）；撰寫組暫定四項（Level 1／2 預設展開或收合、Level 3 遮罩嚴於客戶原文、`⛔` 顏色、🎯 跨季趨勢是否保留）**維持 Pending**，未升格 |
+| known limitations／blockers | 同 P1 表；另：#1007 計畫未經 runtime 驗證、未窮舉 caller；`NUI2-PLAN1007-P3-T1B-TENSION`（P3 的「VM sections 不動」與 T_new_1b 字面衝突）待處置；`NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER` 須在 P2 前判定；`NUI2-AUTH-CONTRACT-GATE` 未通過 |
+| **下一個唯一安全工作** | **P1 PR 合併後，待客戶從 BACKLOG §5.1.26 末「下一批候選（供客戶選擇；非授權）」A（P3 移除 L2／L3 expander）／B（P2①② OneBrain 位置＋主圖空槽 SPEC）／C（P7 桌機 Account Area 殼，須先出文字線框）中選一批。客戶未選定前不動工、不替客戶選。** 選定後：總管先處置該批前置（A＝T-new-1b 張力；B＝風險順序不一致；C＝文字線框），再派工；每批 ≤3 項、獨立 QA |
+| required Model×Effort for resume | A／B／C 純 presentation＝Sonnet 5.5＋Medium；接真資料、改 VM schema／`level` 語意、auth 狀態、Risk Cap／System Action、資料健康度新增欄位＝STOP → Opus 5.5＋High／Gate |
+| 正式文件索引 | 候選與新 ID：`docs/BACKLOG.md` §5.1.26 末「#1007 記錄與下一批候選」；狀態 `docs/PROJECT_STATE.md` §61 末條；計畫 `docs/vnext/NEWUI2_UI_DATA_EVIDENCE_MAPPING_PLAN_2026-11-04.md`；施工附件 `docs/vnext/NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md`；規格 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`；驗收 Audit Checklist §22（**未自勾**） |
+| 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Decision＝無；新 Rule＝無；Backlog＝3 個新 ID（`NUI2-PLAN1007-CAPMAP-UNCOVERED`／`-METADATA-NO-L3`／`-P3-T1B-TENSION`）已寫入 BACKLOG；Audit Checklist 無新自勾項 |
+| 仍禁止（不變） | 同上方 P1 表「仍禁止」全部維持（⛔ 依舊 L2／L3 expander 施工；⛔ 刪 canonical／VM `sections`／RuleIDs／provenance；⛔ 以 xfail／skip 隱藏舊測試；⛔ 降低守衛；⛔ 改 auth／Digest schema／Risk Cap／System Action／新 contract／公式／門檻／source；⛔ `ui2_dev`／URL 當登入證據；⛔ OneBrain／Digest runtime；⛔ 切 production default；⛔ 刪 Old UI／Legacy；⛔ 改 `.streamlit/config.toml`；⛔ 自行切換 Model／Effort；⛔ 一批超過 3 項）；另：⛔ 把 #1007 計畫當 Real Feed 授權；⛔ 替客戶選定候選 |
