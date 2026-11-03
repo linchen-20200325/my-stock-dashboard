@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-02T19:41:35.152193+00:00",
+  "updated_at": "2026-11-03T17:14:44.801431+00:00",
   "window_size": 20,
   "n_trading_days_used": 20,
   "n_days_tpex_ok": 20,
@@ -9,10 +9,10 @@
   "sectors": [
     {
       "sector": "半導體業",
-      "x_yi": -477.68125115,
-      "y_yi": 274.80600532000005,
-      "size_yi": 6578.13172705,
-      "quadrant": "觀望",
+      "x_yi": -1311.4328936,
+      "y_yi": -83.57307375999994,
+      "size_yi": 7266.22276515,
+      "quadrant": "退潮",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
@@ -24,10 +24,10 @@
     },
     {
       "sector": "ETF",
-      "x_yi": -1444.36808649,
-      "y_yi": 3.788480907999997,
-      "size_yi": 5781.687894680001,
-      "quadrant": "觀望",
+      "x_yi": -1949.2159874500003,
+      "y_yi": -71.04949910000005,
+      "size_yi": 6489.66695454,
+      "quadrant": "退潮",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
@@ -40,9 +40,9 @@
     },
     {
       "sector": "電子零組件業",
-      "x_yi": -668.2364777900001,
-      "y_yi": 4.799898735999989,
-      "size_yi": 1085.3154984100004,
+      "x_yi": -710.1956116900002,
+      "y_yi": 0.6953723780000018,
+      "size_yi": 1467.94081846,
       "quadrant": "觀望",
       "n_days": 20,
       "insufficient": false,
@@ -55,9 +55,9 @@
     },
     {
       "sector": "金融保險",
-      "x_yi": 149.57607325,
-      "y_yi": -1.2006697799999984,
-      "size_yi": 660.7257786700001,
+      "x_yi": 121.20170310000002,
+      "y_yi": -1.0264551099999935,
+      "size_yi": 699.8284432300001,
       "quadrant": "輪動",
       "n_days": 20,
       "insufficient": false,
@@ -70,25 +70,10 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "光電業",
-      "x_yi": -43.70608055000001,
-      "y_yi": -7.36029932,
-      "size_yi": 344.3522274,
-      "quadrant": "退潮",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "光電業"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
       "sector": "航運業",
-      "x_yi": 81.91232518000001,
-      "y_yi": 5.535457410000001,
-      "size_yi": 317.95525250000003,
+      "x_yi": 82.20303513000002,
+      "y_yi": 10.902220876000001,
+      "size_yi": 334.4726026700001,
       "quadrant": "漲潮",
       "n_days": 20,
       "insufficient": false,
@@ -100,10 +85,25 @@
       "n_member_absent_days": 0
     },
     {
+      "sector": "光電業",
+      "x_yi": -32.048478620000004,
+      "y_yi": 0.7738421260000017,
+      "size_yi": 277.37774572,
+      "quadrant": "觀望",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "光電業"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
       "sector": "其他電子業",
-      "x_yi": 140.38336951999997,
-      "y_yi": 29.187273573999995,
-      "size_yi": 276.95760183000004,
+      "x_yi": 111.9512067,
+      "y_yi": 24.254787686000004,
+      "size_yi": 272.10128548000006,
       "quadrant": "漲潮",
       "n_days": 20,
       "insufficient": false,
@@ -116,25 +116,10 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "文化創意業",
-      "x_yi": 14.276946899999999,
-      "y_yi": 0.20331214999999947,
-      "size_yi": 99.18095075000001,
-      "quadrant": "漲潮",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "文化創意業"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
       "sector": "鋼鐵工業",
-      "x_yi": 12.10595962,
-      "y_yi": -5.609789602000001,
-      "size_yi": 91.02129437000002,
+      "x_yi": 8.54644845,
+      "y_yi": -4.489438262,
+      "size_yi": 100.29534850000003,
       "quadrant": "輪動",
       "n_days": 20,
       "insufficient": false,
@@ -147,9 +132,9 @@
     },
     {
       "sector": "食品工業",
-      "x_yi": 15.23698461,
-      "y_yi": 0.3462214939999999,
-      "size_yi": 79.43677400000001,
+      "x_yi": 15.769902209999998,
+      "y_yi": 0.2472042059999997,
+      "size_yi": 85.73977140000001,
       "quadrant": "漲潮",
       "n_days": 20,
       "insufficient": false,
@@ -161,11 +146,56 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "通信網路業",
-      "x_yi": 15.44351981000001,
-      "y_yi": 5.658139882000002,
-      "size_yi": 75.18831311999999,
+      "sector": "電腦及週邊設備業",
+      "x_yi": -89.52390355000001,
+      "y_yi": -74.15717998,
+      "size_yi": 78.36848281,
+      "quadrant": "退潮",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "電腦及週邊設備業"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
+      "sector": "玻璃陶瓷",
+      "x_yi": 35.976048000000006,
+      "y_yi": 9.885616418000003,
+      "size_yi": 72.50500185,
       "quadrant": "漲潮",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "玻璃陶瓷"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
+      "sector": "文化創意業",
+      "x_yi": 14.21479095,
+      "y_yi": 0.3582062500000003,
+      "size_yi": 66.92128955,
+      "quadrant": "漲潮",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "文化創意業"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
+      "sector": "通信網路業",
+      "x_yi": -19.06711348999999,
+      "y_yi": -6.1139698179999975,
+      "size_yi": 61.684053320000004,
+      "quadrant": "退潮",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
@@ -176,25 +206,10 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "貿易百貨",
-      "x_yi": 7.271391010000001,
-      "y_yi": -3.699409548,
-      "size_yi": 59.40481041000002,
-      "quadrant": "輪動",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "貿易百貨"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
       "sector": "紡織纖維",
-      "x_yi": 2.4229969100000006,
-      "y_yi": -0.9957521580000002,
-      "size_yi": 57.91205581,
+      "x_yi": 2.7740948400000005,
+      "y_yi": -0.18850984800000015,
+      "size_yi": 60.99637280000002,
       "quadrant": "輪動",
       "n_days": 20,
       "insufficient": false,
@@ -206,55 +221,55 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "電子通路業",
-      "x_yi": -0.04602280000000114,
-      "y_yi": -1.1511127500000005,
-      "size_yi": 41.05450390000001,
+      "sector": "貿易百貨",
+      "x_yi": 6.272971650000001,
+      "y_yi": -2.1117657519999997,
+      "size_yi": 59.76545179000001,
+      "quadrant": "輪動",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "貿易百貨"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
+      "sector": "塑膠工業",
+      "x_yi": -104.24051882000002,
+      "y_yi": -8.658630018,
+      "size_yi": 53.63296308000008,
       "quadrant": "退潮",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
       "n_missing_days": 0,
       "members": [
-        "電子通路業"
+        "塑膠工業"
       ],
       "n_member_absent_days": 0
     },
     {
-      "sector": "電機機械",
-      "x_yi": 10.494090000000002,
-      "y_yi": -3.9308165399999995,
-      "size_yi": 37.63383062999999,
-      "quadrant": "輪動",
+      "sector": "生技醫療業",
+      "x_yi": 22.800815650000004,
+      "y_yi": 4.122382444000001,
+      "size_yi": 49.232826730000006,
+      "quadrant": "漲潮",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
       "n_missing_days": 0,
       "members": [
-        "電機機械"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
-      "sector": "油電燃氣業",
-      "x_yi": 5.754454550000001,
-      "y_yi": -3.9682399200000003,
-      "size_yi": 35.20850025,
-      "quadrant": "輪動",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "油電燃氣業"
+        "生技醫療業"
       ],
       "n_member_absent_days": 0
     },
     {
       "sector": "水泥工業",
-      "x_yi": 3.1477513000000004,
-      "y_yi": -3.2836844899999997,
-      "size_yi": 35.0114414,
+      "x_yi": 8.2503369,
+      "y_yi": -0.8781205399999996,
+      "size_yi": 46.103473550000004,
       "quadrant": "輪動",
       "n_days": 20,
       "insufficient": false,
@@ -266,25 +281,25 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "電腦及週邊設備業",
-      "x_yi": 1.5224653499999903,
-      "y_yi": -53.765088010000014,
-      "size_yi": 29.42814885999998,
+      "sector": "油電燃氣業",
+      "x_yi": 5.89929435,
+      "y_yi": -0.8455501700000001,
+      "size_yi": 43.245314799999996,
       "quadrant": "輪動",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
       "n_missing_days": 0,
       "members": [
-        "電腦及週邊設備業"
+        "油電燃氣業"
       ],
       "n_member_absent_days": 0
     },
     {
       "sector": "運動休閒",
-      "x_yi": 5.21628845,
-      "y_yi": 0.00498154999999989,
-      "size_yi": 24.93955145,
+      "x_yi": 7.401483450000001,
+      "y_yi": 0.9127155299999999,
+      "size_yi": 29.07132165,
       "quadrant": "漲潮",
       "n_days": 20,
       "insufficient": false,
@@ -298,10 +313,10 @@
     },
     {
       "sector": "建材營造",
-      "x_yi": 11.08721469,
-      "y_yi": 0.5027912859999999,
-      "size_yi": 23.94277851,
-      "quadrant": "漲潮",
+      "x_yi": 3.3781074599999994,
+      "y_yi": -2.433057686,
+      "size_yi": 28.170473330000004,
+      "quadrant": "輪動",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
@@ -312,26 +327,41 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "玻璃陶瓷",
-      "x_yi": -22.819496690000005,
-      "y_yi": -6.386705997999999,
-      "size_yi": 20.85460705,
+      "sector": "其他",
+      "x_yi": 8.81130785,
+      "y_yi": 0.5264055679999999,
+      "size_yi": 23.725571610000003,
+      "quadrant": "漲潮",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "其他"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
+      "sector": "電子通路業",
+      "x_yi": -13.070828100000002,
+      "y_yi": -5.319134590000001,
+      "size_yi": 23.32095350000001,
       "quadrant": "退潮",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
       "n_missing_days": 0,
       "members": [
-        "玻璃陶瓷"
+        "電子通路業"
       ],
       "n_member_absent_days": 0
     },
     {
       "sector": "汽車工業",
-      "x_yi": 2.9984641399999994,
-      "y_yi": 0.22463047799999986,
-      "size_yi": 18.80227039,
-      "quadrant": "漲潮",
+      "x_yi": 1.2779949999999998,
+      "y_yi": -0.396500048,
+      "size_yi": 20.091305990000002,
+      "quadrant": "輪動",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
@@ -343,9 +373,9 @@
     },
     {
       "sector": "居家生活",
-      "x_yi": 4.60405008,
-      "y_yi": 0.1760842039999999,
-      "size_yi": 16.995073689999998,
+      "x_yi": 4.26573205,
+      "y_yi": 0.373310204,
+      "size_yi": 18.22390119,
       "quadrant": "漲潮",
       "n_days": 20,
       "insufficient": false,
@@ -358,70 +388,10 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "生技醫療業",
-      "x_yi": 10.456043230000002,
-      "y_yi": 1.5061711400000006,
-      "size_yi": 16.89032986,
-      "quadrant": "漲潮",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "生技醫療業"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
-      "sector": "電器電纜",
-      "x_yi": -0.5455759500000008,
-      "y_yi": 0.17497135999999955,
-      "size_yi": 16.457036150000004,
-      "quadrant": "觀望",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "電器電纜"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
-      "sector": "其他",
-      "x_yi": 10.55047076,
-      "y_yi": 1.8803022919999999,
-      "size_yi": 15.441563600000002,
-      "quadrant": "漲潮",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "其他"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
-      "sector": "資訊服務業",
-      "x_yi": -5.14342555,
-      "y_yi": -3.1273651399999998,
-      "size_yi": 14.0976262,
-      "quadrant": "退潮",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "資訊服務業"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
       "sector": "橡膠工業",
-      "x_yi": -1.2727730000000004,
-      "y_yi": -1.26458081,
-      "size_yi": 12.2398362,
+      "x_yi": -0.3241019500000001,
+      "y_yi": -0.38762228000000004,
+      "size_yi": 13.5163281,
       "quadrant": "退潮",
       "n_days": 20,
       "insufficient": false,
@@ -433,41 +403,10 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "觀光餐旅",
-      "x_yi": 1.7666674000000002,
-      "y_yi": -0.01829516800000003,
-      "size_yi": 11.549054139999999,
-      "quadrant": "輪動",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "觀光餐旅"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
-      "sector": "綠能環保",
-      "x_yi": -1.0788695999999998,
-      "y_yi": -0.5842578700000001,
-      "size_yi": 10.837374750000002,
-      "quadrant": "退潮",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "綠能環保",
-        "綠能環保類"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
       "sector": "數位雲端",
-      "x_yi": 2.5335540500000002,
-      "y_yi": -0.4300518099999999,
-      "size_yi": 9.8322549,
+      "x_yi": 3.4556793000000003,
+      "y_yi": -0.13330989999999998,
+      "size_yi": 11.4757467,
       "quadrant": "輪動",
       "n_days": 20,
       "insufficient": false,
@@ -480,11 +419,26 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "化學工業",
-      "x_yi": 0.7882496999999999,
-      "y_yi": 0.18014231000000014,
-      "size_yi": 9.112841500000002,
+      "sector": "觀光餐旅",
+      "x_yi": 1.6847855900000002,
+      "y_yi": 0.05713134000000003,
+      "size_yi": 11.42558228,
       "quadrant": "漲潮",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "觀光餐旅"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
+      "sector": "化學工業",
+      "x_yi": -0.7623139000000001,
+      "y_yi": 0.4329223700000002,
+      "size_yi": 11.334953500000003,
+      "quadrant": "觀望",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
@@ -495,25 +449,71 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "塑膠工業",
-      "x_yi": -29.72523120000002,
-      "y_yi": 14.943655658000004,
-      "size_yi": 5.567803110000054,
-      "quadrant": "觀望",
+      "sector": "電器電纜",
+      "x_yi": -7.484507800000001,
+      "y_yi": -0.42312344000000013,
+      "size_yi": 10.693463900000005,
+      "quadrant": "退潮",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
       "n_missing_days": 0,
       "members": [
-        "塑膠工業"
+        "電器電纜"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
+      "sector": "資訊服務業",
+      "x_yi": -7.679276200000001,
+      "y_yi": -2.6650466900000005,
+      "size_yi": 9.784592500000002,
+      "quadrant": "退潮",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "資訊服務業"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
+      "sector": "綠能環保",
+      "x_yi": -2.7438846999999997,
+      "y_yi": -1.2767861100000002,
+      "size_yi": 9.089152050000004,
+      "quadrant": "退潮",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "綠能環保",
+        "綠能環保類"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
+      "sector": "電機機械",
+      "x_yi": -22.012257350000002,
+      "y_yi": -9.64897521,
+      "size_yi": 5.356105579999994,
+      "quadrant": "退潮",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "電機機械"
       ],
       "n_member_absent_days": 0
     },
     {
       "sector": "存託憑證",
-      "x_yi": -0.42307551,
-      "y_yi": 0.10043349399999998,
-      "size_yi": 1.8897153300000007,
+      "x_yi": -0.31639944,
+      "y_yi": 0.10767367800000004,
+      "size_yi": 2.086481530000001,
       "quadrant": "觀望",
       "n_days": 20,
       "insufficient": false,
@@ -525,10 +525,25 @@
       "n_member_absent_days": 0
     },
     {
+      "sector": "造紙工業",
+      "x_yi": -0.08775809999999999,
+      "y_yi": 0.05854718,
+      "size_yi": 1.4331025000000004,
+      "quadrant": "觀望",
+      "n_days": 20,
+      "insufficient": false,
+      "unavailable": false,
+      "n_missing_days": 0,
+      "members": [
+        "造紙工業"
+      ],
+      "n_member_absent_days": 0
+    },
+    {
       "sector": "ETN",
-      "x_yi": -0.27554250000000013,
-      "y_yi": 0.0076151799999999645,
-      "size_yi": 0.9445641,
+      "x_yi": -0.30249840000000017,
+      "y_yi": 0.012702119999999976,
+      "size_yi": 1.2537748,
       "quadrant": "觀望",
       "n_days": 20,
       "insufficient": false,
@@ -541,26 +556,11 @@
       "n_member_absent_days": 0
     },
     {
-      "sector": "造紙工業",
-      "x_yi": 0.07774945000000005,
-      "y_yi": 0.12299006,
-      "size_yi": 0.6907579499999997,
-      "quadrant": "漲潮",
-      "n_days": 20,
-      "insufficient": false,
-      "unavailable": false,
-      "n_missing_days": 0,
-      "members": [
-        "造紙工業"
-      ],
-      "n_member_absent_days": 0
-    },
-    {
       "sector": "農業科技業",
-      "x_yi": -0.0039698,
-      "y_yi": 0.0004801,
-      "size_yi": 0.0183553,
-      "quadrant": "觀望",
+      "x_yi": -0.009705799999999999,
+      "y_yi": -0.0009265999999999999,
+      "size_yi": 0.02416735,
+      "quadrant": "退潮",
       "n_days": 20,
       "insufficient": false,
       "unavailable": false,
@@ -572,9 +572,9 @@
     },
     {
       "sector": "受益證券",
-      "x_yi": 0.0091841,
-      "y_yi": 0.00243468,
-      "size_yi": 0.0054664,
+      "x_yi": 0.0090427,
+      "y_yi": 0.0026451400000000003,
+      "size_yi": 0.0034568999999999997,
       "quadrant": "漲潮",
       "n_days": 20,
       "insufficient": false,
