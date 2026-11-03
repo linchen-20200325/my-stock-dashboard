@@ -1,5 +1,7 @@
 # New UI2 Real Feed：Canonical Read Path Mapping（NUI2-REAL-FEED A1；2026-11-03）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——M1b「位階說明（L2 `why` 區）」、M15「位階理由／反證／新鮮度／來源（L2）」、M16「指標明細 16 項（L3）」、M17「原始資料表（L3）」、E13 Data Freshness、E14 System Information 的**落點**（MIGRATE→👤 資料健康度／Evidence；canonical 來源與值不變）；§11-6「🎯 W-4／市場環境的指引改為『說明見 📊 市場頁「為什麼（L2）」』」（REMOVE；指引改指 👤 資料健康度或刪）；§11-9「Real 模式殼 expander『Preview 控制（資料來源）』」的位置（SUPERSEDE→開發面，S33）。**其餘（四頁 canonical 對映、跨頁一致性、白名單、no-write proof）全部仍有效**。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
+
 - **狀態**：實作組產出（A1 mapping＋A2 adapter＋A3 shadow acceptance 同批），**待總管複驗／獨立 QA／客戶驗收**。
 - **依據**：客戶 2026-11-03 指示 (11)（NUI2-REAL-FEED；選 A；本批 ≤3 項 A1／A2／A3；禁止清單；Stop／Decision Gate 規則）。
   **本批無新客戶裁示 ⇒ 無新 DEC**；下文標「AI 總管內部判準（可推翻）」者皆屬 `CLAUDE.md` v3 §03-1 內部自決。

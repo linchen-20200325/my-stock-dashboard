@@ -1,5 +1,7 @@
 # 新 UI Stage B 設計草稿（IA／頁面責任／線框／互動／Coverage 收斂／Decision Gates）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（對 New UI2；DEC-128 S44，客戶 2026-11-03）**：本檔屬 **Legacy New UI／Old UI 時代**文件；其中頁內 L2／L3 摺疊、「查看依據」、指標明細等 presentation 條文**對 New UI2 一律不是現行規則**。New UI2 現行唯一有效讀法＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128／DEC-129。對 Legacy 本檔照舊（凍結，不刪不改）；舊文一字未刪。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；單組判讀。）
+
 - **日期**：2026-10-26
 - **基準**：main `0ad07fd7`（程式碼與文件唯讀基準；Stage A v2 = `docs/vnext/INTERACTION_COVERAGE_MATRIX_2026-10-25.md` §12）
 - **流程位置**：DEC-082 的 Stage B（草稿）。之後才是 Stage C（客戶 Decision Gate）、Stage D（施工）。

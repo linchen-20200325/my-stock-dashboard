@@ -1,5 +1,7 @@
 # OneBrain AI Architecture vNext（AI Reasoning & Orchestration Layer）
 
+> 📌 **DEC-128 交叉參照（2026-11-03；補充、非取代）**：Decision Digest／OneBrain Context 是 Complete Evidence Layer 的**完整 projection**，與 Human UI ViewModel 互不決定對方（永久 invariant：**UI 沒顯示的資料，不代表 OneBrain 不得讀；OneBrain 能讀的資料，也不代表 UI 必須全部呈現**）；OneBrain 必須讀完整 Digest、不是 UI Summary Bot，並整合 data health／freshness。**本註不新增任何 Digest schema 欄位**——Digest 是否補 data health／freshness 區塊＝`NUI2-DIGEST-DATAHEALTH-XREF`（`docs/BACKLOG.md` §5.1.26，需另案 Opus 5.5＋High Gate）。見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §7～§8。
+
 - **狀態**：正式方向紀錄／Architecture & Governance only；本輪禁止大規模 runtime 實作。
 - **日期**：2026-10-31
 - **GitHub 基準**：開工前 `origin/main = 4c1546b5797e94c3fa8c5e91a6da7ded15e9e225`（PR #984 merge）；另有 Draft PR #985（P4-2）在 `ccr-c8ef17de-9tw7yt`，本文件分支不碰其 WIP。

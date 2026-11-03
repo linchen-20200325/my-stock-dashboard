@@ -1,5 +1,7 @@
 # Phase 5 步驟 0｜🎯 標的頁：現況重測＋能力盤點＋文字線框＋客戶決策表
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（對 New UI2；DEC-128 S26／S30 的 Legacy 時代同源條文；客戶 2026-11-03）**：本檔屬 **Legacy New UI（`src/ui_v2`，DEC-123 後凍結）時代**文件；其中「頁內 L2／L3 摺疊」「▸ 為什麼／來源／限制／去哪補」「查看依據」「指標明細（16 項）」等 presentation 條文**對 New UI2 一律不是現行規則**。New UI2 的現行唯一有效讀法＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128。對 Legacy New UI／Old UI 本檔照舊（凍結，不刪不改）；舊文一字未刪。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；單組判讀，掃描範圍見 DEC-128 §六。）
+
 - **狀態（2026-10-31 更新）**：**客戶已裁示 Q1=A／Q2=B／Q3=A（DEC-121）；UI 尚未開始**。~~草稿 rev1，待客戶拍板~~（Customer Decision Gate Q1～Q3，見 §6）。⛔ 客戶核准前**不得寫任何 Phase 5 UI code**（`src/ui/views/page_target.py`、`_target_blocks.py`、`compact.py`／`_ui_kit.py` 的頁面掛載、`app.py`、Phase 5 的 tests 改寫）。
 - **日期／基準**：2026-10-31；origin/main `0369285b9af684b9e04919761140fefd87999e1b`（Phase 4 結案同步 #988）。本批只新增 `docs/`；`src/`、`tests/`、`app.py`、`requirements.txt`、`shared/` 0 diff。量測日一律 2026-10-31，不寫行號（`CLAUDE.md` §8.2.A.0 規則 1）。
 - **決策來源**：W3～W6＝契約 §22／Migration Plan §20（`P1R-WF-FOLD-LABEL`、`P1R-P5-WF-SCREEN-COND`、`P1R-P5-WF-POINTS`）；標的頁既有客戶裁示＝DEC-092（Q5 排序依據句）、DEC-107（1A／2A／3A／4A／5A）、DEC-099；契約＝DEC-109 十二（Top-N、候選提前）；已裁示可類推之先例＝DEC-117（Q2／Q3，**只限 📊 市場頁**）、DEC-118（輸出硬限制）、DEC-119／120（**不繼承**）。

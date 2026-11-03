@@ -1,5 +1,7 @@
 # D2.5-A 指定版四主頁規格（📊市場／🎯標的／💼持股／👤我的）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（對 New UI2；DEC-128 S26／S30 的 Legacy 時代同源條文；客戶 2026-11-03）**：本檔屬 **Legacy New UI（`src/ui_v2`，DEC-123 後凍結）時代**文件；其中「頁內 L2／L3 摺疊」「▸ 為什麼／來源／限制／去哪補」「查看依據」「指標明細（16 項）」等 presentation 條文**對 New UI2 一律不是現行規則**。New UI2 的現行唯一有效讀法＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128。對 Legacy New UI／Old UI 本檔照舊（凍結，不刪不改）；舊文一字未刪。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；單組判讀，掃描範圍見 DEC-128 §六。）
+
 - **日期**：2026-10-27　**基準**：main `a4ab3450`
 - **狀態**：Customer Design Gate **已裁示（DEC-092）**；本文件仍只做規格化與資料盤點，**0 程式碼、0 導覽變更、0 舊版變更；裁示不等於實作授權**。
 > **【Customer Design Gate 已裁示（DEC-092，2026-10-27）】** 客戶已逐題裁示 Q1–Q6（原文逐字見 `docs/DECISIONS.md` DEC-092，具約束力）。**設計方向已核准（DEC-092）**：固定四主導航（📊市場／🎯標的／💼持股／👤我的）、🤖 One AI Brain 為全站共用而非第五主頁、圖表優先、每張圖上方有白話說明、Level 1 結論→Level 2 圖表／原因→Level 3 依據／原始資料、手機優先、💼持股分 🌱存股／📈資本利得／未分類、ETF／個股不得自動等同策略分類、AI 不創造數字／門檻／missing／趨勢／標的、EPS×PE 保留 Research Framework（正式公式仍需 High Gate）。**現有 wireframe（`docs/vnext/d25_wireframes/`）為後續 UI 的視覺基準，不重新發明 IA。**本檔其餘「待裁示／推薦／請回覆」字樣，一律依 DEC-092 改讀（已裁示者以裁示取代推薦）；「四態（續抱／注意／減碼／換股候選）」在本檔只指**客戶先前期望的、未啟用的判斷語意，定義待核准**，第一版不實作。裁示**不等於實作授權**：實作批次與 Gate 見 `NEWUI_D25_PLAN_2026-10-27.md` §5。

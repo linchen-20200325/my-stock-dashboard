@@ -1,5 +1,7 @@
 # New UI2 四頁 Textual Wireframe（Mobile-first）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——§0.1 三層定義；§2.1／§2.2 的 `▸ 為什麼（L2）`／`▸ 指標明細（16 項）（L3）`／`▸ 原始資料表／工程診斷（L3）`；§3.1 `▸ 完整 6 欄表／跨季趨勢（L3）`／`▸ 產業趨勢（L2）` 的 L2／L3 標籤；§3.2 `L1 摘要／▸ L2 明細`、`▸ 完整分析（L3）`；§3.3；§4.1／§4.2 `▸ L2：…rule IDs…`／`▸ L3：原始明細`；§5.1／§5.2 `▸ L2／L3：Digest raw snapshot、Registry 明細、工程診斷`（S30；ASCII 線框的其餘版面〔順序、CTA 位置、tile、W-1～W-11、DEC-127、W-4〕仍有效；ASCII 區塊內不加刪除線以免破壞版面，一律以本橫幅與各節橫幅為準）。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
+
 - **狀態**：**客戶核准（Q3，2026-11-02；逐字見 DEC-123「客戶裁示 Q1～Q4」）**，附 W-4／W-5／W-9／W-10／W-11 條件（**§9**，與本檔他處衝突時以 §9 為準）；隨 #997 獨立稽核＋合併凍結。⛔ UI2 頁面 code 仍須待 Architecture 凍結並經 🟡 Model／Effort Change Gate。（2026-11-02 客戶裁示 Q1～Q4 後更新；有意識的更新，不是漏刪；決策者 客戶（DEC-123 裁示）；原文刪除線保留）<br>原文：~~**待客戶核准**（2026-11-02 獨立稽核 PASS with fixes 後改版：F3 ⚡ N 來源＝W-10、F5 W-5 計入範圍、F6 持股桌機對齊 Freeze＝W-11；客戶 (5)-13「four-page wireframe approved」；`CLAUDE.md` v3 §03-2 ① 草稿先行——**核准前 ⛔ 寫任何 UI2 頁面 code**）。隨 `docs/vnext/NEWUI2_ARCHITECTURE_GATE_2026-11-02.md` 一併送審。~~
 - **日期**：2026-11-02　**基準**：工作樹＝PR #996 head `139e315b`；`origin/main`＝`c1e10a62`（撰寫組 `git fetch` 實查；以當下為準）。
 - **決策來源**：客戶 2026-11-02 裁示 (5)（逐字見 `docs/DECISIONS.md` DEC-123）：(5)-7 四頁 IA 固定、(5)-8 簡化 UI 不簡化 Decision Context、(5)-9 Mobile-first 第一屏四問「**禁止先做 desktop 再縮手機**」。**語意一律取自 `docs/vnext/FINAL_UI_CONTRACT_FREEZE_2026-11-02.md`（下稱 Freeze）**，本檔只畫版面、不新增投資語意。
@@ -12,6 +14,9 @@
 ## §0 共通約定
 
 ### §0.1 層級
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：L1／L2（摺疊）／L3（展開）三層定義中的 L2／L3 頁內摺疊層。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 - **L1**＝結論與狀態（第一眼）；**L2**＝為什麼、反證、freshness、source（第二眼，摺疊）；**L3**＝raw table、完整明細、工程診斷（需要時才展開）〔Fz §2.0〕。**L1 ≠ 第一屏**：L1 可延伸到第一屏下方，但第一屏必須放得下該頁「不用滑」項目。
 - **每張資料卡四欄**：value／short state／as_of／source〔Fz §9〕；⛔ 共用假的全域更新時間；頁首按鈕時間只能標「按更新時間」。
@@ -38,6 +43,9 @@
 
 ### §0.4 導覽（W-1，AI 總管暫定）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-129 S36，部分）：本節「桌機：左側欄 4 項…UI2 只重做元件，不改導覽結構」中**桌機左側只有 4 項**的部分已被取代——桌機左側 Navigation Rail 改為「Product／Logo → Login／Auth Status（compact Account Area）→ 📊🎯💼👤」（Account Area 不算第五頁、不增第五個主導航；Authentication State 須來自正式 auth contract、⛔ 由 URL／query 猜）。**手機底部固定四格、四頁固定、Audit／標的雙模式不是導覽項全部維持。** 現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` §2.5 與 `docs/DECISIONS.md` DEC-129。
+
+
 - 四頁固定：📊 市場／🎯 標的／💼 持股／👤 我的〔客戶 (5)-7〕；⛔ 第五頁。
 - 手機：**底部固定列 4 格**（約 53px，計入第一屏扣除）；桌機：**左側欄 4 項**——沿用現行四頁導覽的外觀習慣（DEC-097 已核准形態），UI2 只重做元件，不改導覽結構。
 - Audit 是 👤 我的頁內區塊、標的雙模式是 🎯 頁內切換，⛔ 變成導覽項。
@@ -61,6 +69,9 @@
 ## §2 📊 市場（頁責任：「現在市場環境如何？風險多大？目前可以多積極？」〔Fz §2.1〕）
 
 ### §2.1 手機 390×844（先）
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：下方線框的 `▸ 為什麼（L2）`／`▸ 指標明細（16 項）（L3）`／`▸ 原始資料表／工程診斷（L3）` 三行（含「標題逐字不改（DEC-117 Q2）」「指標危險度指路句保留」）**不得施工**；內容 MIGRATE→資料健康度／Evidence。其餘版面（含 DEC-127 CTA 順序）維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 ```
 ┌──────────────────────────────┐ y≈0
@@ -101,6 +112,9 @@
 
 ### §2.2 桌機 1440×900（手機順序的放寬）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：下方線框的 `▸ 為什麼（L2）`／`▸ 指標明細（16 項）（L3）`／`▸ 原始資料表／工程診斷（L3）` 三行（含「標題逐字不改（DEC-117 Q2）」「指標危險度指路句保留」）**不得施工**；內容 MIGRATE→資料健康度／Evidence。其餘版面（含 DEC-127 CTA 順序）維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ 📊 市場  現在市場環境如何？風險多大？目前可以多積極？   [🚀 更新今日戰情] │
@@ -126,6 +140,9 @@
 ## §3 🎯 標的（頁責任：「A. 系統替我找；B. 我指定一檔研究。必須明確切開。」〔Fz §2.2〕）
 
 ### §3.1 手機 390×844（先）——市場精選模式（預設）
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：`▸ 選股條件`、`▸ 產業趨勢 ⬜ 尚未建置（L2）`、`▸ 完整 6 欄表／跨季趨勢（L3）` 的 L2／L3 標籤不得施工；選股條件一行摘要、查看全部候選／CSV／查看此檔（使用者功能）維持；產業趨勢⬜ 改為短一行 limitation。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 ```
 ┌──────────────────────────────┐
@@ -153,6 +170,9 @@
 ```
 
 ### §3.2 手機 390×844（先）——即時查一檔模式（送出查詢後；精選自動收合）
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：`基本面（L1 摘要／▸ L2 明細）`、`▸ 完整分析（L3）` 的 L2／L3 摺疊不得施工；L1 摘要改精簡 chart-first 卡。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 ```
 ┌──────────────────────────────┐
@@ -187,6 +207,9 @@
 
 ### §3.3 桌機 1440×900
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：`↓ L2：基本面 → 估值 → …` 的 L2 標籤不得施工；順序（基本面→估值→籌碼→產業→風險→研究解釋）維持為精簡卡序。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ 🎯 標的  系統替我找／我指定一檔研究                                      │
@@ -206,6 +229,9 @@
 ## §4 💼 持股（頁責任：Phase 6 最重要頁；第一屏先看到 Portfolio Risk Cap、目前曝險、System Action State、今日需處理〔Fz §2.3〕）
 
 ### §4.1 手機 390×844（先）
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：`▸ L2：基本面、風險、籌碼、證據、rule IDs…`、`▸ L3：原始明細` 不得施工；evidence／rule IDs→Decision Digest／Evidence；原始明細→backend。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 ```
 ┌──────────────────────────────┐
@@ -244,6 +270,9 @@
 
 ### §4.2 桌機 1440×900（**對齊 Freeze §16.3 已拍板線框＝W-11 推薦**）
 
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：`↓ … ▸ L2 明細 → ▸ L3 原始` 不得施工（同 §4.1）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ 💼 持股  組合：<名稱> · 12 檔 · 資料日 10/31 · 判得出 10／12   [🚀 更新] │
@@ -263,13 +292,16 @@
 - **W-11（持股桌機第一屏）**：**推薦對齊 Freeze §16.3**——第一屏＝三格（Risk Cap／目前曝險／組合狀態）＋今日需處理一行＋OneBrain 槽＋Primary 圖與 ⑤ 已核准建議持股區間，Holdings Table 在第一屏下方。**備選（待客戶核准才採用）**：Holdings Table 優先放第一屏、Primary 圖下移。 📌 **客戶已核准（Q3，2026-11-02）**：W-10＝transitional contract、W-11＝依 Freeze（備選不採用）、W-5＝A；核准條件以 **§9** 為準（2026-11-02 #997 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）。
 
 - **W-5**：「加／留／換／減」分組外觀**與計入範圍**（Fz §0.1.5-2：分組為總管提案；分支名原名照寫）。**請客戶確認哪幾組計入「今日需處理」**：「留」組＝巡航、🟢 續抱、**暫停加碼**、高溢價、🟡 留意。**A（推薦）**：「加／換／減」＋**暫停加碼**計入「今日需處理」（理由：暫停加碼是 `RULE_ID_ALLOWLIST` 的正式行動 id `pause_add`〔`dividend_station.ACTION_PAUSE_ADD`〕）；巡航／續抱／高溢價／🟡 留意只做分布。**B**：只計「加／換／減」（則只有暫停加碼或 🟡 留意的日子，會顯示「今日無需調整」）。兩者皆：「今日無需調整」只在計入組皆 0 且 0 個未評估時出現。建議分組（沿 Fz §20 Q2 A 題文，**⛔ 讀成新規則**）：加＝加碼；留＝巡航、🟢 續抱、暫停加碼、高溢價、🟡 留意；換＝🔴 換出；減＝強制停利（>+3σ）、分批停利（>+2σ）、汰弱；⚪ 資料不足＝`⬜ 尚未評估`。 📌 **客戶已核准（Q3，2026-11-02）**：W-10＝transitional contract、W-11＝依 Freeze（備選不採用）、W-5＝A；核准條件以 **§9** 為準（2026-11-02 #997 獨立稽核 PASS with fixes 後更新；有意識的更新，不是漏刪；決策者 AI 總管〔稽核修正〕；原文刪除線保留）。
-- **W-6**：Holdings Table 手機 4 欄＋展開、桌機八欄〔客戶 §22〕；DEC-089 G6=A 其餘欄下沉 L2（supersede map S12）。
+- **W-6**：Holdings Table 手機 4 欄＋展開、桌機八欄〔客戶 §22〕；DEC-089 G6=A ~~其餘欄下沉 L2~~（supersede map S12）。 ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S43）：「下沉 L2」的頁內落點已取代→其餘欄屬 Evidence／使用者分析精簡卡，見 Active Contract §3.3。
 
 ---
 
 ## §5 👤 我的（頁責任：設定＋管理＋追溯〔Fz §2.4〕）
 
 ### §5.1 手機 390×844（先）
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：`▸ L2／L3：Digest raw snapshot、Registry 明細、工程診斷` 不得施工；Data Freshness／System Information／raw／工程診斷→👤 資料健康度（Level 1／2／3）；Audit 入口（Digest Viewer L1、Rule Registry 唯讀）維持為稽核面（⚠ PROVISIONAL）。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 ```
 ┌──────────────────────────────┐
@@ -300,6 +332,9 @@
 ```
 
 ### §5.2 桌機 1440×900
+
+> ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-128 S30）：同 §5.1；桌機兩欄版面維持。現行見 `docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`。本節其餘（不含上述範圍）仍有效。
+
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -332,7 +367,7 @@
 
 | # | 點 | 推薦 | 依據 |
 |---|---|---|---|
-| W-1 | 導覽：手機底部 4 格、桌機左側欄 4 項（沿用現行形態） | 沿用 | DEC-097；(5)-7 |
+| W-1 | 導覽：手機底部 4 格、~~桌機左側欄 4 項~~ ⛔ SUPERSEDED / HISTORICAL — NOT ACTIVE（DEC-129 S36）：桌機左側 Navigation Rail＝Product／Logo → Login／Auth Status（compact Account Area）→ 四頁；手機四格不變（沿用現行形態） | 沿用 | DEC-097；(5)-7 |
 | W-2 | 市場手機第一屏：今日結論＋市場目前狀態＋Risk Cap＋是否需要行動＋主 CTA；今日主要風險緊接其後 | 照 Q3=A；放不下交 Gate | Fz §0.1.6 |
 | W-3 | 標的搜尋框兩模式都外露；送出即切換並收合精選 | 照 Fz §3.1-2 | AI 總管暫定 |
 | W-4 | 標的頁第一屏一行市場 context（位階＋Risk Cap） | 加 | 客戶 §38 |

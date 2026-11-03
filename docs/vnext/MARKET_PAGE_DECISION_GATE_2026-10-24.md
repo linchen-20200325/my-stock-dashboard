@@ -1,5 +1,7 @@
 # 📊 大盤頁 Decision Gate（文字線框草稿＋舊→新能力覆蓋矩陣）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（對 New UI2；DEC-128 S44，客戶 2026-11-03）**：本檔屬 **Legacy New UI／Old UI 時代**文件；其中頁內 L2／L3 摺疊、「查看依據」、指標明細等 presentation 條文**對 New UI2 一律不是現行規則**。New UI2 現行唯一有效讀法＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128／DEC-129。對 Legacy 本檔照舊（凍結，不刪不改）；舊文一字未刪。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；單組判讀。）
+
 - 日期：2026-10-24｜基準：`main` @ `ea176b8d`（#920）｜撰寫：產品／IA 撰寫組（AI 總管派工）
 - 版本：**v4**（2026-10-24；v2／v3／v4 依第一～三輪獨立複驗修訂；修了哪些見附錄 C）
 - 對應待辦：`VN1-MT-IA`（大盤頁線框）、`VN1-MT-HOME`、`UIM-MAPPING`／`UIM-COVERAGE-MATRIX`（大盤頁部分的初版）

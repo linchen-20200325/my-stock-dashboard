@@ -1,5 +1,7 @@
 # 👤 我的 —— Stage B 新版設計草稿（文字線框＋舊→新能力對照＋7 題裁示）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（部分；DEC-128，客戶 2026-11-03）**：本檔下列範圍**已不是現行規則**——「資料健康→🩺 資料中心」的歸屬（S34；歷史草稿，整份為 HISTORICAL）——資料健康度的現行落點＝👤 我的·資料健康度。**現行唯一有效讀法**＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128；與本檔衝突時以該文件為準。**本檔其餘條文仍有效**；舊文一字未刪（歷史證據）；⛔ 不得依本檔被取代的範圍施工。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）。）
+
 - 日期：2026-10-25｜基準：`286e0075`（#922）；本檔撰寫時工作分支 `claude/determined-euler-32xqjn` @ `cebb19e6`，與 `286e0075` 之間只差 4 份文件（`git diff --stat 286e0075 cebb19e6`：`docs/BACKLOG.md`／`DECISIONS.md`／`HANDOFF.md`／`PROJECT_STATE.md`），**程式碼相同，下文行號兩邊通用**｜撰寫：產品／IA 撰寫組（AI 總管派工）
 - 📌 **狀態：已裁示（`docs/DECISIONS.md` DEC-083）**（2026-10-25 有意識的更新，不是漏刪，決策者 客戶；DEC-083）：Stage C 客戶裁示 Q1～Q7 全採 A。下一步依 DEC-083 H 段：Sheet Safety 修復批（B1～B5，High）→ 獨立 QA → CI／merge／main verification → 👤 我的 P1（Stage D）。本檔盤點／線框／對照原文**不改**，只改本狀態行、§0「是否已核准」、§2 F8、§4 M08、§6 S5 與 §7 逐題加註。
 - 治理依據：`docs/DECISIONS.md` **DEC-082**（Stage A 唯讀盤點 → **Stage B 草稿（本檔）** → Stage C 客戶裁示 → Stage D 實作）；DEC-081 第 7 點（互動控制完整性）、第 8 點（Sheet CRUD 單一 SSOT、⛔ 不刪舊 CRUD）、第 9 點（OAuth／credential／Sheet 寫入／權限模型／L3 → High）

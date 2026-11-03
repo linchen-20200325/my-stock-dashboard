@@ -1,5 +1,7 @@
 # 舊 UI → 新 UI 互動控制覆蓋矩陣（Interaction Coverage Matrix，初稿）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（對 New UI2；DEC-128 S44，客戶 2026-11-03）**：本檔屬 **Legacy New UI／Old UI 時代**文件；其中頁內 L2／L3 摺疊、「查看依據」、指標明細等 presentation 條文**對 New UI2 一律不是現行規則**。New UI2 現行唯一有效讀法＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128／DEC-129。對 Legacy 本檔照舊（凍結，不刪不改）；舊文一字未刪。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；單組判讀。）
+
 - 日期：2026-10-25｜撰寫：文件撰寫組（AI 總管派工）
 - 對應待辦：`docs/BACKLOG.md` 5.1.13 `UIX-INTERACTION-COVERAGE`（並供 `UIX-ME-SHEET-SSOT`、`UIX-HOLD-DEADEND`、`UIX-FIND-INPUTS`、`UIX-DATACENTER-CONTROLS`、`UIX-ACTION-PAGE` 引用）
 - 裁示依據：`docs/DECISIONS.md` **DEC-081** 第 7 點（客戶原文：「新版不能只『看』，必須能『操作』」）

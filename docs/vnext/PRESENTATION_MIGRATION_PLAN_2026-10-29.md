@@ -1,5 +1,7 @@
 # Presentation Migration Plan（Phase 2→7 施工計畫＋舊 presentation contract 盤點）
 
+> ⛔ **SUPERSEDED / HISTORICAL — NOT ACTIVE（對 New UI2；DEC-128 S26／S30 的 Legacy 時代同源條文；客戶 2026-11-03）**：本檔屬 **Legacy New UI（`src/ui_v2`，DEC-123 後凍結）時代**文件；其中「頁內 L2／L3 摺疊」「▸ 為什麼／來源／限制／去哪補」「查看依據」「指標明細（16 項）」等 presentation 條文**對 New UI2 一律不是現行規則**。New UI2 的現行唯一有效讀法＝`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md` 與 `docs/DECISIONS.md` DEC-128。對 Legacy New UI／Old UI 本檔照舊（凍結，不刪不改）；舊文一字未刪。（有意識的政策變更，不是漏刪；決策者 **客戶**（DEC-128）；單組判讀，掃描範圍見 DEC-128 §六。）
+
 - **狀態**：正式／現行（施工計畫）
 - **日期**：2026-10-29　**基準**：PR base＝main `978ecedc`（`src/`、`tests/` 與 main 相同）
 - **決策來源**：Phase 1～7 劃分與「Decision Digest contract 未凍結前不得寫新 LLM prompt／glue」「舊 test 改驗資訊沒有遺失／可取得／可展開／provenance 可追溯／Missing 語意未改」「Model × Effort：規格凍結後 common components／chips／expander／layout／chart arrangement／routing／mechanical migration 推薦切 Sonnet 5.5＋Medium」＝**客戶 2026-10-29（DEC-109 七、三十一、三十二，逐字）**；具體步驟、DoD、還原鏈處理、Model／Effort 建議（R19）＝**AI 總管內部決定（DEC-110）**。

@@ -158,7 +158,7 @@ def test_every_page_switches_and_renders_in_every_scenario(at, scenario):
         blob = _blob(at)
         assert PREVIEW_BANNER_TEXT in blob, f"{page}/{scenario}: 缺 Preview fake 標示"
         assert PAGE4_LABELS[page] in blob, f"{page}/{scenario}: 缺頁標題"
-        assert "② 是否需要行動" in blob and "ui2-cta" in blob
+        assert "是否需要行動" in blob and "ui2-cta" in blob      # DEC-129：不強制可見題號「②」
     at.radio(key="ui2_page").set_value(PAGE_IDS[0]).run(timeout=60)
 
 
