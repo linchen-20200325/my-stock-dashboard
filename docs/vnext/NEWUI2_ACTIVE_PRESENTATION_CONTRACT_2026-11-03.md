@@ -151,6 +151,7 @@ SPEC｜日頻｜FRED｜單位 %｜資料日 11/02（T+1）｜缺值不補     �
 - FAKE／Real 與場景維度（loaded／cold／missing／stale／unavailable／not_evaluated）、帳戶三態**保留供測試**，不屬 production presentation contract；cutover 前移除（`NUI2-PREVIEW-CONTROL-AXES` 不變）。
 - 橫幅（「New UI2 Preview（fake data）」／Real 版）屬 Preview 標示，保留至 cutover（客戶 (11) A3）。
 - ⚠ 未驗：AppTest `query_params` 在 Streamlit 1.56／1.59 的支援；Cloud 上 Streamlit Deploy／⋮ 按鈕可見性。
+- 📌 **2026-11-03 UI Correction P1 已實作本節**（`src/ui2/shell/app.py`：`?ui2_dev=1` 開發面；預設 0 控制）；AppTest `query_params` 於 1.56.0／1.59.2 與真瀏覽器（Chromium）皆已實測可用；**Cloud 上 Deploy／⋮ 可見性仍未驗**（UI2 CSS 已隱藏，本機實測不可見；`NUI2-P1-TOOLBAR-CLOUD-UNVERIFIED`）。上一條「未驗」為 P1 前原文（有意識的更新，不是漏刪；決策者 AI 總管〔事實更新〕）。
 
 ## §7 `🤖 OneBrain Outlook` 區塊
 
@@ -191,6 +192,7 @@ Data / Sources → Validation / Normalization → Domain / Deterministic Logic
 
 > 來源：兩份獨立 Gap Audit（2026-11-03；組 A 讀碼、組 B Playwright 24 態＋74 張截圖；皆單組、未驗 FAKE 非 loaded 場景、Safari／iOS、Cloud）。**本批不修**；由 `docs/BACKLOG.md` §5.1.26 的 P1～P6 修正。
 
+- 📌 **P1（2026-11-03）已修下列「首屏工程字樣」「題號鷹架可見」「Preview 控制 expander 畫在頁面內」「Streamlit Deploy／⋮ 外露」四項（以 `docs/BACKLOG.md` §5.1.26「P1 完成補記」為準）；其餘仍為快照。**
 - 四頁共有：L2／L3 expander（📊 3、🎯 2～3、💼 2、👤 4〔Audit〕）；Real 模式 expander 內可見約 437 字（📊）；首屏工程字樣（Real：📊 13／32、👤 27／39 個 jargon token，手機／桌機）；題號鷹架可見；Preview 控制 expander 畫在頁面內（四頁皆是）；Streamlit Deploy／⋮ 外露。
 - 📊 缺 Primary 圖／VIX／國際圖槽（只能先放 honest `⬜` 槽）；🤖 OneBrain 槽位置偏後。🎯 缺「查看全部候選」入口。💼 CTA 位置偏後、缺持股表／建議水位卡；桌機 W-11 三 tile 未實作。👤 重複連線卡／CTA、桌機兩欄未實作。
 - ⚠ 缺的圖／持股表／候選清單需要資料或 VM 欄位，**不是純 presentation**（只能先放 honest `⬜` 槽；功能留在 `NUI2-COMPONENT-GAP` 與各 PORT 項）。

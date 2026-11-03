@@ -180,7 +180,11 @@ class FirstScreenVM:
 
 @dataclass(frozen=True)
 class SectionVM:
-    """L2／L3 摺疊區塊。`mode`＝所屬模式（🎯 標的頁雙模式；None＝與模式無關）。"""
+    """頁面區塊（Human UI 全量的一部分）。`level` 是**呈現層級標記**（"L1" | "L2" | "L3"），不是資料的重要性。
+
+    ⚠ Active Contract（DEC-128）：四個主要投資頁**不承載**完整 L2／L3 diagnostics 的摺疊區塊；L2／L3 區塊的移除屬
+    UI correction P3，且移除只是 render policy（本型別與其內容**不得刪**，仍供 Evidence／資料健康度／Digest 取用）。
+    `mode`＝所屬模式（🎯 標的頁雙模式；None＝與模式無關）。"""
 
     section_id: str
     title: str
@@ -227,8 +231,9 @@ class ModeOptionVM:
 class TargetVM:
     """🎯 標的頁：雙模式（市場精選／即時查一檔）＋搜尋框＋查一檔 FAKE 結果。
 
-    兩個模式的內容**都在 context**（完整 Decision Context 不因呈現切換而減少）；
-    哪一個展開只由 `PresentationSlice.active_mode` 決定（Presentation Slice ≠ Decision Context）。
+    兩個模式的內容**都在 `PageContext`**（Human UI 全量；**不是** Decision Context——Decision Digest 由 canonical
+    services headless 組裝，Active Contract §8）；哪一個展開只由 `PresentationSlice.active_mode` 決定
+    （Presentation Slice ≠ 全量 context）。
     """
 
     modes: tuple[ModeOptionVM, ...]
@@ -251,12 +256,16 @@ class AccountVM:
 
 @dataclass(frozen=True)
 class PageContext:
-    """全量 Decision Context —— 與任何 UI 切片（Top-N／收合／tab）無關。"""
+    """Human UI **全量**（與任何 UI 切片〔Top-N／收合／tab〕無關）。
+
+    ⚠ 這**不是** Decision Context：Decision Digest／OneBrain 讀的完整 Evidence 由 canonical services 組裝
+    （Active Contract §8、`docs/vnext/NEWUI2_ACTIVE_PRESENTATION_CONTRACT_2026-11-03.md`）；UI 沒顯示的資料不代表
+    OneBrain 不得讀，OneBrain 能讀的也不代表 UI 必須全部呈現。"""
 
     first_screen: FirstScreenVM
     cards: tuple[CardVM, ...] = ()
     sections: tuple[SectionVM, ...] = ()
-    #: 📊 市場頁「今日主要風險」：L1，緊接第一屏之後、⛔ 被 L2／L3 插隊（Freeze §0.1.6-3）。
+    #: 📊 市場頁「今日主要風險」：L1，緊接第一屏之後、⛔ 被其他區塊插隊（Freeze §0.1.6-3）。
     main_risk: FieldVM | None = None
     target: TargetVM | None = None          # 🎯 標的頁專用
     account: AccountVM | None = None        # 👤 我的頁專用

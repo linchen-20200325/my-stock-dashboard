@@ -8,9 +8,18 @@ CSS = """
 <style>
 .block-container{padding-top:2.75rem !important;padding-bottom:2rem !important}
 @media (max-width:640px){.block-container{padding-left:.9rem !important;padding-right:.9rem !important}}
-.ui2-banner{border:1px dashed currentColor;border-radius:8px;padding:8px 12px;margin:0 0 12px 0;
-  background:rgba(128,128,128,.10);font-size:.9rem;line-height:1.4}
-.ui2-banner__note{display:block;opacity:.8;font-size:.8rem}
+/* P1：單行標示（示意資料／Real-data）；note 與標示同一行（窄螢幕才折行） */
+.ui2-banner{border:1px dashed currentColor;border-radius:8px;padding:4px 10px;margin:0 0 8px 0;
+  background:rgba(128,128,128,.10);font-size:.8rem;line-height:1.4}
+.ui2-banner__note{display:inline;opacity:.8;font-size:.72rem;margin-left:.5em}
+@media (max-width:640px){.ui2-banner__note--wide{display:none}}   /* 手機：長標示（Real-data）不再附說明，維持單行 */
+/* P1：UI2 專用——隱藏 Streamlit 開發者工具列（Deploy／⋮）；只作用於本入口（app_ui2.py）載入的 CSS，不動 .streamlit/config.toml。
+   ⚠ Streamlit Cloud 上是否本來就不顯示／是否能被此規則隱藏：未驗（BACKLOG NUI2-PREVIEW-DEV-SURFACE）。 */
+[data-testid="stToolbar"],[data-testid="stAppDeployButton"],.stAppDeployButton,[data-testid="stMainMenu"]{display:none !important}
+/* P1：開發／測試工具區（僅 ?ui2_dev=1）——虛線框＋等寬字，與產品元件明顯區隔 */
+.st-key-ui2_dev_surface{border:2px dashed currentColor;border-radius:8px;padding:8px 12px;margin:24px 0 8px 0;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:rgba(128,128,128,.08)}
+.ui2-dev__head{font-weight:700;font-size:.85rem;margin:0 0 4px 0}
 .ui2-pagetitle{font-size:1.35rem;font-weight:700;margin:4px 0 8px 0;line-height:1.3}
 .ui2-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:8px 0}
 .ui2-card{border:1px solid rgba(128,128,128,.4);border-radius:10px;padding:10px 12px;min-width:0;

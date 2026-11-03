@@ -1,0 +1,394 @@
+[
+ {
+  "snap": "loaded",
+  "vp": "mobile",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "loaded",
+  "vp": "mobile",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "loaded",
+  "vp": "mobile",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "loaded",
+  "vp": "mobile",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "loaded",
+  "vp": "desktop",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "loaded",
+  "vp": "desktop",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "loaded",
+  "vp": "desktop",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "loaded",
+  "vp": "desktop",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unloaded",
+  "vp": "mobile",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unloaded",
+  "vp": "mobile",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unloaded",
+  "vp": "mobile",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unloaded",
+  "vp": "mobile",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unloaded",
+  "vp": "desktop",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unloaded",
+  "vp": "desktop",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unloaded",
+  "vp": "desktop",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unloaded",
+  "vp": "desktop",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unevaluated",
+  "vp": "mobile",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unevaluated",
+  "vp": "mobile",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unevaluated",
+  "vp": "mobile",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unevaluated",
+  "vp": "mobile",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unevaluated",
+  "vp": "desktop",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unevaluated",
+  "vp": "desktop",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unevaluated",
+  "vp": "desktop",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unevaluated",
+  "vp": "desktop",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "stale",
+  "vp": "mobile",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "stale",
+  "vp": "mobile",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "stale",
+  "vp": "mobile",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "stale",
+  "vp": "mobile",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "stale",
+  "vp": "desktop",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "stale",
+  "vp": "desktop",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "stale",
+  "vp": "desktop",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "stale",
+  "vp": "desktop",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "missing",
+  "vp": "mobile",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "missing",
+  "vp": "mobile",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "missing",
+  "vp": "mobile",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "missing",
+  "vp": "mobile",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "missing",
+  "vp": "desktop",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "missing",
+  "vp": "desktop",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "missing",
+  "vp": "desktop",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "missing",
+  "vp": "desktop",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unavailable",
+  "vp": "mobile",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unavailable",
+  "vp": "mobile",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unavailable",
+  "vp": "mobile",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unavailable",
+  "vp": "mobile",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unavailable",
+  "vp": "desktop",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unavailable",
+  "vp": "desktop",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unavailable",
+  "vp": "desktop",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "unavailable",
+  "vp": "desktop",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "contract_error",
+  "vp": "mobile",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "contract_error",
+  "vp": "mobile",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "contract_error",
+  "vp": "mobile",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "contract_error",
+  "vp": "mobile",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "contract_error",
+  "vp": "desktop",
+  "page": "p4_market",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "contract_error",
+  "vp": "desktop",
+  "page": "p4_target",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "contract_error",
+  "vp": "desktop",
+  "page": "p4_hold",
+  "pass": true,
+  "failures": {}
+ },
+ {
+  "snap": "contract_error",
+  "vp": "desktop",
+  "page": "p4_me",
+  "pass": true,
+  "failures": {}
+ }
+]

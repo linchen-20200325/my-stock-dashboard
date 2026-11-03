@@ -14,6 +14,10 @@ Freeze §16／Architecture Gate §3：手機第一屏可用高 = 844 − 底部�
 本腳本是 Preview 層量測；預設 `--feed fake`（場景全為 FAKE）。`--feed real`（NUI2-REAL-FEED A3，2026-11-03）
 切到 Real-data Preview（唯讀 feed：本地 git 追蹤快取＋本地狀態檔；不觸發更新）量四頁第一屏與 banner。
 
+P1（New UI2 UI Correction，2026-11-03）：Preview 控制（資料來源／場景／帳戶）改在 `?ui2_dev=1` 開發面（虛線框「🧪 開發／測試工具（非產品內容）」，
+`.st-key-ui2_dev_surface`），預設道 0 個控制。本腳本一律以 `?ui2_dev=1` 開頁來切場景（仍是純 UI 操作）；量測「頁底內容」時排除開發面區塊
+（它不是產品內容）；截圖預設把開發面暫時隱藏（`--keep-dev` 才保留），所以截圖＝產品畫面，與預設道逐像素等價於版面（開發面在頁尾、不影響上方）。
+
 Batch 3 擴充（2026-11-03）：📊 今日結論／今日主要風險（位置與不被插隊）、🎯 模式切換／搜尋框／
 W-4 context 行／模式互斥、👤 三種帳戶狀態；🎯 每場景另量「即時查一檔」模式、👤 另量 signed-out／unavailable。
 """
@@ -103,6 +107,15 @@ THRESHOLDS: list[dict[str, str]] = [
              "另：👤 我的在 real 模式不讀帳戶（account＝None，路徑 C 擋）⇒ `me_account_state_first_screen` 改判"
              "『不得出現帳戶動作列（不假裝已登入／未登入）、主 CTA 仍在第一屏』。",
      "source": "客戶 (11) A3（Preview 明確標示 Real-data Preview／非正式 production default）；Freeze §16（可用高）"},
+    {"id": "p1_human_text_clean",
+     "rule": "（P1）產品畫面可見文字（排除 `?ui2_dev=1` 開發面、導覽 chrome、CSS）不含具名工程詞彙清單"
+             "（`tests/test_ui2_p1_human_text.py::ENGINEERING_VOCAB`）、層級字樣（L1～L6）與可見題號「①②③④」；"
+             "唯一放行：客戶要求的 Real-data 單行標示 `REAL_PREVIEW_BANNER_TEXT`。",
+     "source": "客戶 2026-11-03 (16) P1 第 2 項；Active Presentation Contract §9／§11（題號與工程字樣）"},
+    {"id": "p1_banner_single_line",
+     "rule": "（P1）頂部標示（FAKE 示意資料／Real-data Preview）為單行：banner 高度 ≤ 1 行行高 + 上下 padding 12px"
+             "（行高由頁內 `getComputedStyle(.ui2-banner).lineHeight` 現場量）。",
+     "source": "客戶 2026-11-03 (16) P1：Real banner『縮為單行』；手機窄螢幕折行 → 判紅"},
     {"id": "no_title_overlap",
      "rule": "頁面標題不與 Preview banner、第一屏區塊重疊（上下緣依序不交疊）。",
      "source": "客戶 (9) 手機截圖目視項（標題無重疊）轉為可量測條件"},
@@ -184,7 +197,22 @@ def evaluate(m: dict) -> dict[str, list[str]]:
         out["no_title_overlap"].append("標題與 banner 重疊")
     if t["qa_top"] is not None and t["qa_top"] < t["bottom"] - 0.5:
         out["no_title_overlap"].append("標題與第一屏區塊重疊")
+    _evaluate_p1(m, out)
     return out
+
+
+def _evaluate_p1(m: dict, out: dict[str, list[str]]) -> None:
+    """P1 兩條判定（可單獨測試）：產品畫面可見文字乾淨、頂部標示單行。舊版量測 dict 無對應鍵 → 略過（向下相容）。"""
+    pt = m.get("product_text")                      # 舊版量測 dict 無此鍵 → 略過（向下相容）
+    if pt is not None:
+        from tests.test_ui2_p1_human_text import hits_in
+        h = hits_in(pt)
+        if h:
+            out["p1_human_text_clean"].append(f"產品畫面可見文字含工程詞彙／題號／層級字樣：{h}")
+    bb = m.get("banner_box")
+    if bb:
+        if bb["height"] > bb["lineHeight"] + 12.5:
+            out["p1_banner_single_line"].append(f"banner 高 {bb['height']:.0f}px > 1 行（行高 {bb['lineHeight']:.0f}+12）：折行")
 
 
 def evaluate_stress(m: dict) -> dict[str, list[str]]:
@@ -337,10 +365,10 @@ _JS = r"""
   const title = document.querySelector('.ui2-pagetitle');
   const banner = document.querySelector('.ui2-banner');
   const sc = el => ({scrollWidth: el.scrollWidth, clientWidth: el.clientWidth});
-  // 頁底內容：捲到底後最後一個 ui2 內容元素（Preview 控制 expander）
+  // 頁底內容：捲到底後最後一個 ui2 產品內容元素（P1 起 Preview 控制在 `?ui2_dev=1` 開發面，不算產品內容 → 排除）
   const prev = main.scrollTop; main.scrollTo({top: main.scrollHeight, behavior: 'instant'});
   const blocks = [...document.querySelectorAll('.stMainBlockContainer [data-testid="stElementContainer"], .block-container [data-testid="stElementContainer"]')]
-    .filter(e => R(e).height > 1 && (!e.checkVisibility || e.checkVisibility()) && (!nav || (!nav.contains(e) && !e.contains(nav))));   // 排除導覽本身與其 0 高的外層包裝
+    .filter(e => R(e).height > 1 && (!e.checkVisibility || e.checkVisibility()) && (!nav || (!nav.contains(e) && !e.contains(nav))) && !e.closest('.st-key-ui2_dev_surface'));   // 排除導覽本身與其 0 高的外層包裝、開發面
   const lastEl = blocks.length ? blocks[blocks.length-1] : null;
   const last = lastEl ? R(lastEl) : {bottom:0,left:0};
   // 捲到底後的真實內容底緣（block-container 底緣扣掉底部 padding＝保留量之上）與今日主要風險位置
@@ -362,9 +390,18 @@ _JS = r"""
   const accEl = document.querySelector('[data-ui2-l1="account_actions"]');
   const snap = [...document.querySelectorAll('.ui2-snapshot [data-dim]')].map(e => e.dataset.dim);
   const pageEl = document.querySelector('.ui2-pagetitle');
+  // P1：產品畫面可見文字（排除開發面、導覽、<style>）——供 p1_human_text_clean 判定
+  const bcEl = document.querySelector('.block-container') || document.body;
+  const clone = bcEl.cloneNode(true);
+  clone.querySelectorAll('.st-key-ui2_dev_surface, .st-key-ui2_nav, style, script').forEach(e => e.remove());
+  const productText = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+  const bn = document.querySelector('.ui2-banner');
+  const bannerBox = bn ? {height: R(bn).height, lineHeight: parseFloat(getComputedStyle(bn).lineHeight), fontSize: parseFloat(getComputedStyle(bn).fontSize)} : null;
   const riskLH = riskEl ? parseFloat(getComputedStyle(riskEl).lineHeight) : null;
   return {
     page: pageEl ? pageEl.dataset.ui2Page : null,
+    product_text: productText, banner_box: bannerBox,
+    dev_surface_present: !!document.querySelector('.st-key-ui2_dev_surface'),
     banner_text: banner ? banner.innerText.replace(/\s+/g,' ').trim() : null,
     scroll_end_bottom: scrollEndBottom, risk_bottom_at_scroll_end: riskBottomAtEnd, risk_line_height: riskLH,
     risk: riskEl ? {...R(riskEl), inside_l1: !!(l1 && l1.contains(riskEl)), text: riskEl.innerText.replace(/\s+/g,' ').trim()} : null,
@@ -517,13 +554,13 @@ def run_measurements(url: str, out: Path | None, shots: str = "all", server_pyth
 
     def shot(page, vp_name, pid, scenario, suffix=""):
         if out is not None and _want_shot(shots, vp_name, scenario):
-            page.screenshot(path=str(out / f"{vp_name}_{pid}_{scenario}{suffix}.png"))
+            _screenshot(page, out / f"{vp_name}_{pid}_{scenario}{suffix}.png")
 
     with sync_playwright() as p:
         browser = launch_chromium(p)
         for vp_name, (vw, vh) in VIEWPORTS.items():
             page = browser.new_page(viewport={"width": vw, "height": vh})
-            page.goto(url)
+            page.goto(_dev_url(url))
             page.wait_for_selector(".ui2-qa", timeout=40000)
             nav_click = lambda pid: page.locator(
                 ".st-key-ui2_nav [role='radiogroup'] > label", has_text=PAGE4_LABELS[pid]).click()
@@ -583,7 +620,7 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
         browser = launch_chromium(p)
         for vp_name, (vw, vh) in VIEWPORTS.items():
             page = browser.new_page(viewport={"width": vw, "height": vh})
-            page.goto(url)
+            page.goto(_dev_url(url))
             page.wait_for_selector(".ui2-qa", timeout=40000)
             _select_box(page, "資料來源", _FEED_LABELS[FEED_REAL], f'[data-ui2-scenario="{SCENARIO_REAL}"]')
             for pid in PAGE_IDS:
@@ -593,7 +630,7 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
                 results.append(_record(page, vp_name, vw, vh, pid, SCENARIO_REAL,
                                        mode="curated" if pid == P4_TARGET else None, feed="real"))
                 if out is not None and shots != "none":
-                    page.screenshot(path=str(out / f"{vp_name}_{pid}_real.png"))
+                    _screenshot(page, out / f"{vp_name}_{pid}_real.png")
                 if pid == P4_MARKET and vw <= MOBILE_MAX_W:
                     results.append(_record_stress(page, vp_name, vw, vh, SCENARIO_REAL, feed="real"))
                 if pid == P4_TARGET:
@@ -603,7 +640,7 @@ def _run_real(url: str, out: Path | None, shots: str, server_python: str | None,
                     page.wait_for_timeout(300)
                     results.append(_record(page, vp_name, vw, vh, pid, SCENARIO_REAL, mode=MODE_LOOKUP, feed="real"))
                     if out is not None and shots != "none":
-                        page.screenshot(path=str(out / f"{vp_name}_{pid}_real_lookup.png"))
+                        _screenshot(page, out / f"{vp_name}_{pid}_real_lookup.png")
             page.close()
         streamlit_version = streamlit_version or _streamlit_version(server_python)
         browser.close()
@@ -635,16 +672,37 @@ def _streamlit_version(python: str | None = None) -> str:
         [python, "-c", "import streamlit;print(streamlit.__version__)"], text=True).strip()
 
 
+#: 截圖時是否保留開發面（預設隱藏＝截產品畫面）。`--keep-dev` 設為 True。
+KEEP_DEV_IN_SHOTS = False
+
+
+def _dev_url(url: str) -> str:
+    """量測要切場景／帳戶／資料來源，所以一律以 `?ui2_dev=1` 開頁（開發面旗標；不是登入證據）。"""
+    return url + ("&" if "?" in url else "?") + "ui2_dev=1"
+
+
+def _screenshot(page, path) -> None:
+    """截圖。預設暫時隱藏開發面（`.st-key-ui2_dev_surface`）→ 截到的是產品畫面；截完還原。"""
+    if KEEP_DEV_IN_SHOTS:
+        page.screenshot(path=str(path))
+        return
+    page.evaluate("() => { const e = document.querySelector('.st-key-ui2_dev_surface'); if (e) e.style.display = 'none'; }")
+    try:
+        page.screenshot(path=str(path))
+    finally:
+        page.evaluate("() => { const e = document.querySelector('.st-key-ui2_dev_surface'); if (e) e.style.display = ''; }")
+
+
 def _select_box(page, name: str, option_label: str, anchor: str) -> None:
-    """展開『Preview 控制』並在名為 `name` 的 selectbox 選 `option_label`（⛔ 動 app 程式；純用 UI 操作）。"""
-    exp = page.locator('[data-testid="stExpander"]', has_text="Preview 控制").first
-    if exp.locator("details[open]").count() == 0:
-        exp.locator("summary").click()
-    page.wait_for_function(
-        "() => { const e = document.querySelector('[data-testid=\"stSelectbox\"]'); "
-        "return e && e.getBoundingClientRect().height > 10; }", timeout=10000)
-    page.wait_for_timeout(500)          # 展開動畫
-    box = page.get_by_role("combobox", name=re.compile(re.escape(name)))
+    """在開發面（`?ui2_dev=1`）名為 `name` 的 selectbox 選 `option_label`（⛔ 動 app 程式；純用 UI 操作）。"""
+    page.wait_for_selector(".st-key-ui2_dev_surface [data-testid=\"stSelectbox\"]", timeout=15000)
+    # 置中捲動：開發面在頁尾，只「捲到可見」會落在手機底部固定導覽之後（點擊被導覽攔截；1.56 實測）
+    page.evaluate("() => document.querySelector('.st-key-ui2_dev_surface').scrollIntoView({block: 'center'})")
+    page.wait_for_timeout(200)
+    # 以 selectbox 的 label（開頭比對）定位，不靠 combobox 的 accessible name：Streamlit 1.56（BaseWeb）的 combobox 名稱含目前選中的值
+    # （例「FAKE 場景（預設）」含「場景」）→ 會誤選到資料來源那一格。
+    box = page.locator('.st-key-ui2_dev_surface [data-testid="stSelectbox"]',
+                       has=page.locator("label", has_text=re.compile(rf"^\s*{re.escape(name)}"))).get_by_role("combobox")
     box.first.click()
     page.wait_for_timeout(250)
     if box.first.get_attribute("aria-expanded") != "true":      # Streamlit 1.59（react-aria）click 不一定展開 → 鍵盤展開
@@ -662,9 +720,13 @@ def main() -> int:
     ap.add_argument("--python", default=None, help="用此 python 起 streamlit server（例：/tmp/v156/bin/python 驗 floor 1.56）")
     ap.add_argument("--streamlit-version", default=None, help="搭配 --url：被量測 server 的 streamlit 版本標示")
     ap.add_argument("--json-name", default="viewport_measurements.json")
+    ap.add_argument("--keep-dev", action="store_true",
+                    help="截圖保留 `?ui2_dev=1` 開發面（預設暫時隱藏，截產品畫面）")
     ap.add_argument("--feed", default="fake", choices=("fake", "real"),
                     help="real＝Real-data Preview（NUI2-REAL-FEED；唯讀 feed）")
     a = ap.parse_args()
+    global KEEP_DEV_IN_SHOTS
+    KEEP_DEV_IN_SHOTS = a.keep_dev
     repo = Path(__file__).resolve().parents[2]
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

@@ -139,7 +139,7 @@ def test_twii_parquet_is_the_real_local_cache_and_feed_reads_it_without_hardcodi
      FieldState.STALE, "⚠ 過期 3 天", "快取超過 3 天"),
     (_twii_view(is_stale=True, age_days=None), None, FieldState.STALE, T.TEXT_STALE_UNKNOWN, None),
     (_twii_view(is_stale=None, age_days=None), None, FieldState.STALE, T.TEXT_STALE_UNKNOWN, "新鮮度未判定"),
-    (_twii_view(is_stale=False, upstream_error="HTTP 500"), None, FieldState.OK, None, "上游最近一次抓取失敗（詳見 log）"),
+    (_twii_view(is_stale=False, upstream_error="HTTP 500"), None, FieldState.OK, None, "上游最近一次抓取失敗"),
 ])
 def test_twii_states_are_mapped_without_inventing_values(monkeypatch, view, exc, state, status, detail_has):
     snap = _feed(monkeypatch, twii=view, twii_exc=exc)
@@ -164,11 +164,11 @@ def test_twii_unknown_freshness_is_never_ok(monkeypatch):
     _twii_view(is_stale="yes"),
 ])
 def test_twii_broken_contract_is_loud_and_isolated(monkeypatch, capsys, bad):
-    """契約違反：讀取期接住 → 該欄紅色 Unavailable「canonical 契約違反」＋log；位階照常（⛔ 默默落態、⛔ 整頁崩）。"""
+    """契約違反：讀取期接住 → 該欄紅色 Unavailable「資料格式異常，暫時無法顯示」＋log（P1：去掉「契約」等工程字樣）；位階照常（⛔ 默默落態、⛔ 整頁崩）。"""
     snap = _feed(monkeypatch, twii=bad, regime=_regime("bull", RA.SOURCE_BULL_SCORE, True))
     assert snap.twii is None and snap.twii_error == RC.CONTRACT_ERROR
     f = _twii_field(snap)
-    assert f.state is FieldState.UNAVAILABLE and "契約違反" in f.detail and f.value_text is None
+    assert f.state is FieldState.UNAVAILABLE and "資料格式異常" in f.detail and f.value_text is None
     assert "RealFeedContractError" in capsys.readouterr().out                 # 全文進 log
     assert _vms(snap)[P4_MARKET].context.first_screen.current_state.value_text == REGIME_LABEL["bull"]
 
@@ -281,7 +281,7 @@ def test_regime_unknown_or_contradictory_contract_is_loud_and_isolated(monkeypat
     assert "RealFeedContractError" in capsys.readouterr().out
     vms = _vms(snap)
     for f in _regime_triplet(vms):
-        assert f.state is FieldState.UNAVAILABLE and "契約違反" in f.detail          # ⛔ 默默落成未評估
+        assert f.state is FieldState.UNAVAILABLE and "資料格式異常" in f.detail          # ⛔ 默默落成未評估
     assert vms[P4_MARKET].context.cards[0].field.state is FieldState.OK            # 台股照常（隔離）
 
 
@@ -515,13 +515,17 @@ def session_write_log(monkeypatch):
     return log
 
 
-def _at():
+def _at(dev: bool = False):
+    """`dev=True`：開啟開發面（`?ui2_dev=1`），才有資料來源／場景／帳戶控制可操作（P1）。"""
     from streamlit.testing.v1 import AppTest
-    return AppTest.from_file(str(APP_UI2), default_timeout=60).run(timeout=60)
+    a = AppTest.from_file(str(APP_UI2), default_timeout=60)
+    if dev:
+        a.query_params["ui2_dev"] = "1"
+    return a.run(timeout=60)
 
 
 def test_runtime_real_mode_writes_no_session_state_beyond_listed_ui2_keys(session_write_log):
-    at = _at()
+    at = _at(dev=True)
     # 紀錄器確實掛在 AppTest runtime 上：殼首跑寫入的預設 ui2_ 鍵必須被記到（否則下面的「0 次」不算數）
     assert ("__setitem__", "ui2_feed") in session_write_log and ("__setitem__", "ui2_page") in session_write_log
     assert {k for _, k in session_write_log} <= ALLOWED_UI2_WRITES, session_write_log
@@ -583,7 +587,7 @@ def test_filesystem_unchanged_by_real_feed_and_real_mode_pages(monkeypatch):
     monkeypatch.chdir(ROOT)
     before = _fs_fingerprint()
     RF.read_real_snapshot()
-    at = _at()
+    at = _at(dev=True)
     at.selectbox(key="ui2_feed").set_value("real").run(timeout=60)
     for p in PAGE_IDS:
         at.radio(key="ui2_page").set_value(p).run(timeout=60)
@@ -644,7 +648,7 @@ def test_real_mode_renders_every_page_with_the_real_banner(monkeypatch):
         n["reads"] += 1
         return orig()
     monkeypatch.setattr(shell, "read_real_snapshot", counted)
-    at = _at()
+    at = _at(dev=True)
     assert n["reads"] == 0                                     # FAKE 預設：不讀真資料
     at.selectbox(key="ui2_feed").set_value("real").run(timeout=60)
     for p in PAGE_IDS:
@@ -655,16 +659,18 @@ def test_real_mode_renders_every_page_with_the_real_banner(monkeypatch):
         assert not at.exception
         assert T.REAL_PREVIEW_BANNER_TEXT in blob and T.REAL_PREVIEW_BANNER_NOTE in blob
         assert T.PREVIEW_BANNER_TEXT not in blob and "FAKE" not in blob
+        assert blob.count('class="ui2-banner"') == 1           # P1：單行標示，只此一個
         assert f'data-ui2-scenario="{SCENARIO_REAL}"' in blob
     at.radio(key="ui2_page").set_value(P4_MARKET).run(timeout=60)
     assert 'data-card-id="twii"' in _blob(at)
     assert at.selectbox(key="ui2_scenario").disabled and at.selectbox(key="ui2_account").disabled
     # Real 模式：Preview 控制標題與（disabled）帳戶 widget 不顯示 fake 字樣（QA P3）
-    ctrl = [e.label for e in at.expander if e.label.startswith("Preview 控制")]
-    # DEC-128／129：舊版強制 expander 標題 == 「Preview 控制（資料來源）」（保護已失效的「Preview 控制是頁面 expander」）——
-    # 已改為不強制位置／標題，只保留 Real 模式不得顯示 fake 字樣（資料誠實性）。新位置規則見 tests/test_ui2_contract_teeth_pending.py。
-    assert all("fake" not in c.lower() for c in ctrl), ctrl
-    assert "fake" not in at.selectbox(key="ui2_account").label.lower()
+    # P1：Preview 控制已不是頁面 expander，而是 `?ui2_dev=1` 的開發面（虛線框區塊）；舊斷言「expander 標題」已隨之改為斷言
+    # 開發面標題與控制 label：Real 模式不得顯示 fake 字樣（資料誠實性）。位置規則見 tests/test_ui2_contract_teeth_pending.py。
+    assert [e.label for e in at.expander if e.label.startswith("Preview 控制")] == []
+    assert "開發／測試工具（非產品內容）" in _blob(at)
+    labels = [at.selectbox(key=k).label for k in ("ui2_feed", "ui2_scenario", "ui2_account")]
+    assert all("fake" not in lb.lower() for lb in labels), labels
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -918,7 +924,7 @@ def test_error_details_never_reach_the_screen_but_are_logged(monkeypatch, capsys
 
 def test_upstream_error_is_shown_as_a_fixed_sentence(monkeypatch):
     f = _twii_field(_feed(monkeypatch, twii=_twii_view(upstream_error="x" * 5000)))
-    assert f.detail == "上游最近一次抓取失敗（詳見 log）" and f.state is FieldState.OK
+    assert f.detail == "上游最近一次抓取失敗" and f.state is FieldState.OK
 
 
 def test_on_screen_error_text_is_bounded_even_for_huge_messages(monkeypatch):
