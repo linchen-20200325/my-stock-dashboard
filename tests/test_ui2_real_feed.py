@@ -23,8 +23,10 @@ import dataclasses
 import hashlib
 import math
 import pathlib
+import re
 import socket
 
+import numpy as np
 import pytest
 
 from shared import regime_arbiter as RA
@@ -181,6 +183,19 @@ def test_pure_converter_still_raises_on_a_bad_fact(bad):
                             regime_error="")
     with pytest.raises(RC.RealFeedContractError):
         get_real_page_vm(P4_MARKET, snap)
+
+
+@pytest.mark.parametrize("is_stale", [1, 1.0, 0, "yes", np.True_, np.False_])
+def test_twii_is_stale_must_be_exactly_true_false_or_none(monkeypatch, is_stale):
+    """複驗 P2-1：`1`／`1.0`／`np.True_`／`0` 會被 `== True／False` 當真；只認 `True`／`False`／`None` 本身。"""
+    snap = _feed(monkeypatch, twii=_twii_view(is_stale=is_stale))
+    assert snap.twii is None and snap.twii_error == RC.CONTRACT_ERROR
+    assert _twii_field(snap).state is FieldState.UNAVAILABLE
+
+
+def test_twii_ok_and_failed_together_is_a_contract_violation(monkeypatch):
+    snap = _feed(monkeypatch, twii=_twii_view(ok=True, failed=True, error="OSError: x"))
+    assert snap.twii is None and snap.twii_error == RC.CONTRACT_ERROR
 
 
 def test_twii_takes_the_last_close_when_several_are_returned(monkeypatch):
@@ -470,8 +485,12 @@ def test_snapshot_requires_exactly_value_or_error():
         RealFeedSnapshot(twii=tw, twii_error="x", regime=rg, regime_error="")
     with pytest.raises(TypeError):
         RC.real_canonical(P4_MARKET, {"twii": None})
-    with pytest.raises(ValueError):                           # 錯誤代碼只能是型別名（⛔ 訊息原文進 snapshot）
+    with pytest.raises(ValueError):                           # 直接建構給壞代碼＝程式錯誤（fail loud）
         RealFeedSnapshot(twii=None, twii_error="OSError: /home/x token=SECRET", regime=rg, regime_error="")
+    # 複驗 P3-4：feed 的建構入口 `of()` 降為 "Exception"（⛔ 在 try 外 raise 讓整頁崩、⛔ 原文進 snapshot）
+    sn = RealFeedSnapshot.of(None, "OSError: /home/x token=SECRET", rg, "")
+    assert sn.twii_error == "Exception" and "SECRET" not in repr(sn)
+    assert RealFeedSnapshot.of(None, "x" * 200, rg, "").twii_error == "Exception"
     with pytest.raises(ValueError):
         TwiiFact(False, (), None, None, "", None, False, "OSError: token=SECRET", True, "s")
 
@@ -725,51 +744,72 @@ def test_real_me_evaluator_rejects_a_pretend_account():
 # ════════════════════════════════════════════════════════════════════
 # §9 只有已接事實可帶值（白名單不變量；QA 2026-11-03 必修 1）——跑在注入組合上，不只 sandbox 實況
 # ════════════════════════════════════════════════════════════════════
-#: 允許帶「資料」（value／source／as_of／資料語意或判定態）的欄位：(頁, label)。
-WIRED_FIELDS = frozenset({
-    (P4_MARKET, "台股"), (P4_MARKET, "市場目前狀態"), (P4_MARKET, "位階說明"),
-    (P4_TARGET, "市場位階"), (P4_TARGET, "市場環境"),
+#: 允許帶「資料」（value／source／as_of／資料語意或判定態）的欄位：以 **VM 位置路徑**判斷（⛔ 用 label；複驗 P3-2）。
+WIRED_PATHS = frozenset({
+    (P4_MARKET, "cards/twii"), (P4_MARKET, "first/current_state"), (P4_MARKET, "sections/why/0"),
+    (P4_TARGET, "first/context_rows/0"), (P4_TARGET, "lookup/snapshot/5"),
 })
+#: 契約固定欄（位置 → 期望態／字樣）；無值、無 source／as_of。
+FIXED_PATHS: dict[tuple[str, str], tuple[object, str]] = {
+    (P4_MARKET, "first/context_rows/0"): (JudgementState.UNDETERMINABLE, T.TEXT_RISK_CAP_UNDETERMINABLE),
+    (P4_TARGET, "first/context_rows/1"): (JudgementState.UNDETERMINABLE, T.TEXT_RISK_CAP_UNDETERMINABLE),
+    (P4_HOLD, "first/context_rows/0"): (JudgementState.UNDETERMINABLE, T.TEXT_RISK_CAP_UNDETERMINABLE),
+    (P4_HOLD, "first/context_rows/1"): (FieldState.MISSING, T.TEXT_MISSING_NOT_READY),
+    (P4_TARGET, "lookup/snapshot/3"): (FieldState.NOT_EVALUATED, T.TEXT_NOT_DEFINED),
+    (P4_TARGET, "lookup/snapshot/4"): (FieldState.NOT_EVALUATED, T.TEXT_NOT_DEFINED),
+}
+#: 未接線欄位的原因句不得出現數字樣式（防「把捏造值藏進原因句」）；原因句的合法數字（如「Top 10」「末 6 碼」）不是小數／百分比。
+_NUMBER_LIKE = re.compile(r"\d+\.\d+|\d+\s*[%％]")
 
 
-def _fixed_ok(page: str, f: FieldVM) -> bool:
-    """契約固定欄（明列）：無值、無 source／as_of、固定態與字樣。"""
-    blank = f.value_text is None and f.freshness.source is None and f.freshness.as_of is None
-    if f.label == "Risk Cap" and page in (P4_MARKET, P4_TARGET, P4_HOLD):
-        return blank and f.state is JudgementState.UNDETERMINABLE and f.status_text == T.TEXT_RISK_CAP_UNDETERMINABLE
-    if f.label == "目前曝險" and page == P4_HOLD:
-        return blank and f.state is FieldState.MISSING and f.status_text == T.TEXT_MISSING_NOT_READY
-    if f.label in ("趨勢", "產業") and page == P4_TARGET:
-        return blank and f.state is FieldState.NOT_EVALUATED and f.status_text == T.TEXT_NOT_DEFINED
-    return False
-
-
-def _page_fields(vm: PageVM) -> list[FieldVM]:
-    fields = list(_all_fields(vm))
+def _paths(vm: PageVM):
+    fs = vm.context.first_screen
+    yield "first/current_state", fs.current_state
+    yield "first/action_needed", fs.action_needed
+    yield "first/next_step", fs.next_step
+    for i, f in enumerate(fs.context_rows):
+        yield f"first/context_rows/{i}", f
+    if fs.conclusion is not None:
+        yield "first/conclusion", fs.conclusion
+    if vm.context.main_risk is not None:
+        yield "main_risk", vm.context.main_risk
+    for c in vm.context.cards:
+        yield f"cards/{c.card_id}", c.field
+    for sec in vm.context.sections:
+        for i, f in enumerate(sec.fields):
+            yield f"sections/{sec.section_id}/{i}", f
     t = vm.context.target
-    if t is not None:        # `_all_fields` 已含 search／lookup；再補 lookup 區塊（防漏）
-        fields += [f for s_ in t.lookup.sections for f in s_.fields]
-    return fields
+    if t is not None:
+        yield "search/name_search", t.search.name_search
+        yield "lookup/summary", t.lookup.summary
+        for i, f in enumerate(t.lookup.snapshot):
+            yield f"lookup/snapshot/{i}", f
+        for sec in t.lookup.sections:
+            for i, f in enumerate(sec.fields):
+                yield f"lookup/sections/{sec.section_id}/{i}", f
 
 
 def check_only_wired_fields_carry_data(vms: dict[str, PageVM]) -> list[str]:
     bad: list[str] = []
     for page, vm in vms.items():
         for c in vm.context.cards:
-            if c.chips and (page, c.field.label) not in WIRED_FIELDS:
-                bad.append(f"{page}/{c.title}: 未接線卡帶 chip")
-        for f in _page_fields(vm):
-            carries = (f.value_text is not None or f.freshness.source is not None or f.freshness.as_of is not None
-                       or f.capability is CapabilityState.PROVIDED)
-            if (page, f.label) in WIRED_FIELDS or not carries:
-                if (page, f.label) not in WIRED_FIELDS:
-                    if not (f.capability is CapabilityState.NOT_PROVIDED and f.detail):
-                        bad.append(f"{page}/{f.label}: 未接線欄位必須是 `⬜ 尚未提供`＋原因")
+            if c.chips and (page, f"cards/{c.card_id}") not in WIRED_PATHS:
+                bad.append(f"{page}/cards/{c.card_id}: 未接線卡帶 chip")
+        for path, f in _paths(vm):
+            key = (page, path)
+            if key in WIRED_PATHS:
                 continue
-            if _fixed_ok(page, f):
+            blank = f.value_text is None and f.freshness.source is None and f.freshness.as_of is None
+            if key in FIXED_PATHS:
+                st_, txt = FIXED_PATHS[key]
+                if not (blank and f.state is st_ and f.status_text == txt):
+                    bad.append(f"{page}/{path}（{f.label}）: 契約固定欄被改（state={f.state!r} value={f.value_text!r}）")
                 continue
-            bad.append(f"{page}/{f.label}: 未接線欄位帶資料（value={f.value_text!r} source={f.freshness.source!r} "
-                       f"as_of={f.freshness.as_of!r} state={f.state!r}）")
+            if not (blank and f.capability is CapabilityState.NOT_PROVIDED and f.detail):
+                bad.append(f"{page}/{path}（{f.label}）: 未接線欄位帶資料或缺原因（value={f.value_text!r} "
+                           f"source={f.freshness.source!r} as_of={f.freshness.as_of!r} state={f.state!r}）")
+            elif _NUMBER_LIKE.search(f.detail):
+                bad.append(f"{page}/{path}（{f.label}）: 未接線欄位原因句含數字樣式 {f.detail!r}")
     return bad
 
 
@@ -818,6 +858,31 @@ def test_whitelist_checker_has_teeth_against_a_fabricated_vix(monkeypatch, fake_
     assert any("VIX" in b for b in bad), bad
 
 
+def test_whitelist_checker_is_by_position_not_label(monkeypatch):
+    """複驗 P3-2：把未接線卡改名成「台股」也騙不過（以位置判斷）。"""
+    orig = RC._market
+
+    def relabeled(snap):
+        c = orig(snap)
+        c["cards"] = [({"key": "vix", "label": "台股", "value": "18.20", "as_of": "2026-11-02", "source": "x"}
+                       if x["key"] == "vix" else x) for x in c["cards"]]
+        return c
+    monkeypatch.setattr(RC, "_market", relabeled)
+    assert any("cards/vix" in b for b in check_only_wired_fields_carry_data(_vms(_feed(monkeypatch))))
+
+
+@pytest.mark.parametrize("hidden", ["VIX 約 18.20", "利差 0.5%", "PMI 50.0"])
+def test_whitelist_checker_rejects_numbers_hidden_in_reasons(monkeypatch, hidden):
+    orig = RC._market
+
+    def sneaky(snap):
+        c = orig(snap)
+        c["cards"] = [({**x, "reason": f"尚未接線（{hidden}）"} if x["key"] == "vix" else x) for x in c["cards"]]
+        return c
+    monkeypatch.setattr(RC, "_market", sneaky)
+    assert any("數字樣式" in b for b in check_only_wired_fields_carry_data(_vms(_feed(monkeypatch))))
+
+
 def test_whitelist_checker_has_teeth_against_a_valued_fixed_field(monkeypatch):
     orig = RC._risk_cap_row
     monkeypatch.setattr(RC, "_risk_cap_row", lambda: {**orig(), "value": "50%", "state": None})
@@ -859,3 +924,18 @@ def test_on_screen_error_text_is_bounded_even_for_huge_messages(monkeypatch):
     vms = _vms(_feed(monkeypatch, twii_exc=RuntimeError("y" * 10000), regime_exc=OSError("z" * 10000)))
     for f in (vms[P4_MARKET].context.cards[0].field, vms[P4_MARKET].context.first_screen.current_state):
         assert f.state is FieldState.UNAVAILABLE and len(f.detail) < 80 and "yyy" not in f.detail
+
+
+def test_service_error_type_is_bounded_and_regex_checked():
+    assert RF._type_of_service_error("OSError: disk") == "OSError"
+    assert RF._type_of_service_error("bad name: x") == "ServiceError"
+    assert RF._type_of_service_error("A" * 200 + ": x") == "ServiceError"
+    assert RF._type_of_service_error("") == "ServiceError"
+
+
+def test_exception_code_uses_class_name_without_dunder_access():
+    import json as _json
+    assert RC.exception_code(RuntimeError("x")) == "RuntimeError"
+    assert RC.exception_code(_json.JSONDecodeError("m", "d", 0)) == "JSONDecodeError"
+    assert RC.exception_code(RC.RealFeedContractError("x")) == RC.CONTRACT_ERROR == RC.RealFeedContractError.__name__
+

@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 from src.services.ui2.real_canonical import (
-    CONTRACT_ERROR, RealFeedContractError, RealFeedSnapshot, RegimeFact, TwiiFact, validate_regime_fact,
+    ERROR_CODE_RE, RealFeedSnapshot, RegimeFact, TwiiFact, exception_code, validate_regime_fact,
     validate_twii_fact,
 )
 
@@ -32,13 +32,13 @@ TWII_CARD_DAYS = 1
 
 def _code(e: BaseException) -> str:
     """畫面／snapshot 只留例外型別名；契約違反＝固定代碼。訊息全文只進 log（⛔ token／路徑上畫面）。"""
-    return CONTRACT_ERROR if isinstance(e, RealFeedContractError) else type(e).__name__
+    return exception_code(e)
 
 
 def _type_of_service_error(text: str) -> str:
-    """service 的 `error`（`"{型別}: {訊息}"`）→ 只取型別名；取不到 → `Exception`。"""
+    """service 的 `error`（`"{型別}: {訊息}"`）→ 只取型別名（正規式＋長度上限）；不符 → `ServiceError`。"""
     head = (text or "").split(":", 1)[0].strip()
-    return head if head.isidentifier() else "Exception"
+    return head if ERROR_CODE_RE.match(head) else "ServiceError"
 
 
 def _read_twii() -> tuple[TwiiFact | None, str]:
@@ -58,7 +58,7 @@ def _read_twii() -> tuple[TwiiFact | None, str]:
         validate_twii_fact(fact)                # 讀取期驗契約：違反 → 本事實 Unavailable，另一事實照常
         return fact, ""
     except Exception as e:  # noqa: BLE001 — 讀不到就講出來（§1）：log 全文、畫面只放型別名
-        print(f"[ui2.real_feed] 台股加權指數讀取失敗：{type(e).__name__}: {e}")
+        print(f"[ui2.real_feed] 台股加權指數讀取失敗：{exception_code(e)}: {e}")
         return None, _code(e)
 
 
@@ -73,7 +73,7 @@ def _read_regime() -> tuple[RegimeFact | None, str]:
         validate_regime_fact(fact)              # 讀取期驗契約
         return fact, ""
     except Exception as e:  # noqa: BLE001 — strict：讀壞了 ≠ 未評估；log 全文、畫面只放型別名
-        print(f"[ui2.real_feed] 市場位階讀取失敗：{type(e).__name__}: {e}")
+        print(f"[ui2.real_feed] 市場位階讀取失敗：{exception_code(e)}: {e}")
         return None, _code(e)
 
 
@@ -81,4 +81,4 @@ def read_real_snapshot() -> RealFeedSnapshot:
     """一次 rerun 的真資料快照（唯讀；兩個事實各自隔離）。"""
     twii, twii_err = _read_twii()
     regime, regime_err = _read_regime()
-    return RealFeedSnapshot(twii=twii, twii_error=twii_err, regime=regime, regime_error=regime_err)
+    return RealFeedSnapshot.of(twii, twii_err, regime, regime_err)

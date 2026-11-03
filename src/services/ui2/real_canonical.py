@@ -69,8 +69,24 @@ class RealFeedContractError(ValueError):
 
 #: 錯誤代碼只允許「例外型別名」這種識別字（⛔ 例外訊息／路徑／URL 進 snapshot；全文只進 log）。
 _ERR_CODE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+#: 對外（feed 用）同一條正規式（⛔ 另寫一份）。
+ERROR_CODE_RE = _ERR_CODE_RE
 #: 錯誤代碼：canonical 契約違反（`RealFeedContractError`）。
-CONTRACT_ERROR = RealFeedContractError.__name__
+CONTRACT_ERROR = "RealFeedContractError"     # ＝類別名（測試鎖定；⛔ dunder 屬性，G2／G2F 通用禁令）
+
+
+def exception_code(e: BaseException) -> str:
+    """例外 → 錯誤代碼（類別名；契約違反＝`CONTRACT_ERROR`）。不經 dunder 屬性：由 `repr(type(e))`
+    （`<class 'pkg.Cls'>`）取最後一段；不符正規式 → `Exception`。⛔ 訊息原文。"""
+    if isinstance(e, RealFeedContractError):
+        return CONTRACT_ERROR
+    r = repr(type(e))
+    name = r.split("'")[1].rsplit(".", 1)[-1] if r.count("'") >= 2 else ""
+    return name if _ERR_CODE_RE.match(name) else "Exception"
+
+
+def _safe_code(err: str) -> str:
+    return err if (not err or _ERR_CODE_RE.match(err)) else "Exception"
 
 
 @dataclass(frozen=True)
@@ -115,7 +131,8 @@ class RegimeFact:
 
 @dataclass(frozen=True)
 class RealFeedSnapshot:
-    """一次 rerun 的真資料快照。每個事實恰為「有值」或「有錯誤代碼」其一；錯誤代碼必為識別字（例外型別名）。"""
+    """一次 rerun 的真資料快照。每個事實恰為「有值」或「有錯誤代碼」其一；錯誤代碼必為識別字（例外型別名）。
+    feed 經 `of()` 建構（不符者降為 `"Exception"`）。"""
 
     twii: TwiiFact | None
     twii_error: str
@@ -127,7 +144,15 @@ class RealFeedSnapshot:
             if (fact is None) == (not err):
                 raise ValueError(f"{name}: 必須恰為『有值』或『有錯誤代碼』其一（收到 fact={fact!r}, error={err!r}）")
             if err and not _ERR_CODE_RE.match(err):
-                raise ValueError(f"{name}: 錯誤代碼只能是例外型別名（識別字；⛔ 訊息原文），收到 {err!r}")
+                raise ValueError(f"{name}: 錯誤代碼只能是例外型別名（識別字；⛔ 訊息原文），收到 {err!r}"
+                                 "（feed 一律經 `RealFeedSnapshot.of()`，不符者降為 `Exception`）")
+
+    @classmethod
+    def of(cls, twii: "TwiiFact | None", twii_error: str, regime: "RegimeFact | None",
+           regime_error: str) -> "RealFeedSnapshot":
+        """feed 唯一的建構入口：錯誤代碼不符正規式 → 降為 `Exception`（複驗 P3-4：⛔ 在 feed 的 try 之外 raise
+        讓整頁崩、⛔ 原文進 snapshot）。直接呼叫建構子給壞代碼仍 raise（程式錯誤，fail loud）。"""
+        return cls(twii=twii, twii_error=_safe_code(twii_error), regime=regime, regime_error=_safe_code(regime_error))
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -172,8 +197,11 @@ def validate_regime_fact(f: RegimeFact) -> None:
 
 def validate_twii_fact(t: TwiiFact) -> None:
     """台股契約自洽檢查（純）。違反 → `RealFeedContractError`。"""
-    if t.is_stale not in (True, False, None):
+    # 身分比較（⛔ `in (True, False, None)`：`1`／`1.0`／`np.True_` 會被 `==` 當成 True 而漏網；複驗 P2-1）
+    if not (t.is_stale is True or t.is_stale is False or t.is_stale is None):
         raise RealFeedContractError(f"台股：is_stale 不是 True／False／None：{t.is_stale!r}")
+    if t.ok and t.failed:
+        raise RealFeedContractError("台股：ok=True 與 failed=True 矛盾")
     if t.ok:
         if not t.close:
             raise RealFeedContractError("台股：ok=True 但沒有收盤值")
@@ -405,7 +433,7 @@ def real_canonical(page_id: str, snap: RealFeedSnapshot) -> dict:
     if page_id not in PAGE_IDS:
         raise ValueError(f"unknown page {page_id!r}")
     if not isinstance(snap, RealFeedSnapshot):
-        raise TypeError(f"需要 RealFeedSnapshot，收到 {type(snap).__name__}")
+        raise TypeError(f"需要 RealFeedSnapshot，收到 {type(snap)!r}")
     c = {P4_MARKET: lambda: _market(snap), P4_TARGET: lambda: _target(snap),
          P4_HOLD: _hold, P4_ME: _me}[page_id]()
     c["scenario"] = SCENARIO_REAL

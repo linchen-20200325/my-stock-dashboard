@@ -73,6 +73,29 @@ def _relative_imports(tree: ast.AST) -> list[str]:
             for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.level > 0]
 
 
+#: 通用禁令（複驗 2026-11-03 P2-3；加性、低成本；**defense-in-depth，非窮舉**——AST 無法窮舉所有繞過，
+#: 主要 no-write 證明是 runtime session 紀錄器＋socket guard＋檔案指紋，見 tests/test_ui2_real_feed.py §6）。
+_DYNAMIC_NAMES = {"importlib", "__import__", "exec", "eval"}
+_CLOCK_ATTRS = {"now", "utcnow", "today"}
+_PANDAS_IO_ATTRS = {"read_csv", "read_parquet", "read_json", "read_pickle", "read_sql", "read_excel",
+                    "to_csv", "to_parquet", "to_json", "to_pickle", "to_sql", "to_excel"}
+
+
+def _generic_bans(tree: ast.AST, *, attrs: frozenset[str] = frozenset()) -> list[str]:
+    """dunder 屬性（`x.__dict__`、`type(e).__name__`…）、動態 import／exec／eval，以及 `attrs` 指定的屬性名。"""
+    bad: list[str] = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Attribute) and (n.attr.startswith("__") or n.attr in attrs):
+            bad.append(f"L{n.lineno}: 禁止屬性 .{n.attr}")
+        elif isinstance(n, ast.Name) and n.id in _DYNAMIC_NAMES:
+            bad.append(f"L{n.lineno}: 禁止動態 import／執行 {n.id}")
+        elif isinstance(n, (ast.Import, ast.ImportFrom)):
+            mods = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module or ""]
+            if any(_mod_match(m, "importlib") for m in mods):
+                bad.append(f"L{n.lineno}: 禁止 import importlib")
+    return bad
+
+
 def _is_session_state(node: ast.AST) -> bool:
     return ((isinstance(node, ast.Attribute) and node.attr == "session_state")
             or (isinstance(node, ast.Name) and node.id == "session_state"))
@@ -96,6 +119,7 @@ _CLOCK_CALLS = {("datetime", "now"), ("datetime", "utcnow"), ("datetime", "today
 def check_vm_purity(source: str) -> list[str]:
     tree = ast.parse(source)
     bad: list[str] = list(_relative_imports(tree))      # NUI2-REAL-FEED QA（加性）：相對 import 一律違規
+    bad += _generic_bans(tree, attrs=frozenset(_CLOCK_ATTRS | _PANDAS_IO_ATTRS))   # 複驗 P2-3（加性）
     for ln, mod in _imports(tree):
         if any(_mod_match(mod, b) for b in _G2_BANNED_IMPORTS):
             bad.append(f"L{ln}: 禁止 import {mod}")
@@ -134,6 +158,8 @@ def test_g2_vm_layer_is_pure(path):
     "x = open('f.txt')\n",
     "from .real_feed import read_real_snapshot\n",           # 相對 import 繞過（QA 2026-11-03）
     "from ..allocation_service import get_allocation\n",
+    # 複驗 P2-3 通用禁令（代表例，非窮舉）
+    "x = obj.__class__\n", "m = __import__('os')\n", "df.to_parquet('x')\n", "from datetime import date as D\nx = D.today()\n",
 ])
 def test_g2_guard_has_teeth(injected):
     """mutation：對乾淨檔注入單一違規，檢查器必須回報（否則守衛是裝飾品）。"""
@@ -154,7 +180,10 @@ G2F_IMPORT_ALLOWLIST: dict[str, frozenset[str] | None] = {
     "__future__": frozenset({"annotations"}),
     "src.services.market_twii_view_service": frozenset({"get_twii_trend_view"}),
     "src.services.allocation_service": frozenset({"get_macro_regime"}),
-    "src.services.ui2.real_canonical": None,
+    # 複驗 P2-3：改具名（不再 None）
+    "src.services.ui2.real_canonical": frozenset({
+        "ERROR_CODE_RE", "RealFeedSnapshot", "RegimeFact", "TwiiFact", "exception_code",
+        "validate_regime_fact", "validate_twii_fact"}),
     # 明列的 shared 模組：目前無（需要時逐一具名加入）。
 }
 #: feed 內任何位置（Name／Attribute／import 名稱）都不得出現的識別字：動態取用、反射、檔案／序列化、producer、寫入。
@@ -182,7 +211,7 @@ def _g2f_name_banned(name: str) -> bool:
 
 def check_feed_boundary(source: str) -> list[str]:
     tree = ast.parse(source)
-    bad: list[str] = list(_relative_imports(tree))
+    bad: list[str] = list(_relative_imports(tree)) + _generic_bans(tree)   # 複驗 P2-3：dunder／動態 import
     for n in ast.walk(tree):
         if isinstance(n, ast.Import):
             bad += [f"L{n.lineno}: feed 禁止 `import {a.name}`（只准具名 from-import）" for a in n.names]
@@ -264,6 +293,8 @@ def test_g2f_feed_respects_boundary(path):
     "from src.services.market_twii_view_service import *\n",
     "from shared.secret_scrub import scrub_secrets\n",
     "p.write_text('x')\n",
+    # 複驗 P2-3（代表例，非窮舉）
+    "x = type(e).__name__\n", "from src.services.ui2.real_canonical import real_canonical\n",
 ])
 def test_g2f_guard_has_teeth(injected):
     clean = FEED_FILES[0].read_text(encoding="utf-8")
@@ -415,7 +446,10 @@ def _session_state_misuse(tree: ast.AST, consts: dict[str, str]) -> list[str]:
 def check_not_a_producer(source: str) -> list[str]:
     tree = ast.parse(source)
     consts = _const_str_map(tree)
-    bad: list[str] = list(_relative_imports(tree)) + _session_state_misuse(tree, consts)
+    bad: list[str] = list(_relative_imports(tree)) + _session_state_misuse(tree, consts) + _generic_bans(tree)
+    for ln, mod in _imports(tree):                      # 複驗 P2-3：⛔ 直接碰 streamlit runtime（繞過 session_state 規則）
+        if _mod_match(mod, "streamlit.runtime"):
+            bad.append(f"L{ln}: 禁止 import {mod}")
 
     def need_ui2(node: ast.AST, what: str) -> None:
         k = _key_of(node, consts)
@@ -495,6 +529,9 @@ def test_g9_ui2_is_not_a_producer(path):
     "from streamlit import session_state as ss\nss['x'] = 1\n",
     "import streamlit as st\nx = st.session_state.get\n",
     "from .views import VIEWS\n",
+    # 複驗 P2-3（代表例，非窮舉）
+    "from streamlit.runtime.scriptrunner import get_script_run_ctx\n",
+    "import streamlit as st\nx = st.__dict__\n",
 ])
 def test_g9_guard_has_teeth(injected):
     clean = (L5_DIR / "shell" / "app.py").read_text(encoding="utf-8")
