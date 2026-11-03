@@ -2,6 +2,9 @@
 
 > ## ⛔ 讀我先：這是**現行唯一有效**的 New UI2 presentation contract
 >
+> **現行四頁逐區塊施工附件（乾淨、無舊 expander 施工句）**：[`NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md`](NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md)。施工時讀**本 Active Contract＋該附件**；2026-11-02 舊 Wireframes 只作歷史／不衝突細節的查核，**不可直接當新 UI2 的施工腳本**。附件不是新的客戶 Decision，所有 Pending／Gate 仍有效。
+
+>
 > **與其他文件衝突時，以本文件與 `docs/DECISIONS.md` DEC-128 為準。** 不得要求任何 session 自己猜「哪一段比較新」：下列舊條文**全部已降為 `SUPERSEDED / HISTORICAL — NOT ACTIVE`**（歷史證據保留、原文一字不刪），其清單見 §10 與 DEC-128 §二（S21～S35）。**⛔ 不得依舊 Wireframes／Freeze／Presentation Contract 內「▸ 為什麼（L2）」「▸ 指標明細（16 項）（L3）」「▸ 原始資料表／工程診斷（L3）」等 L2／L3 expander 條文施工。**
 >
 > ### Active interpretation（11 點；客戶 2026-11-03 (14) §4；新 session 只能得到這一套）
