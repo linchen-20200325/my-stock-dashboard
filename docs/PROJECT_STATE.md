@@ -1072,3 +1072,11 @@
 - **測試**：新 `tests/test_ui2_p2_primary_slot.py`；`T_new_6` 畢業、strict xfail 4→3；viewport 判定器加 `p2_onebrain_primary_slot_order`／`p2_nav_margin_160`；每項新守衛附 mutation 實測轉紅後還原（見 BACKLOG 補記）。
 - **實測**：viewport FAKE 70／Real 11 全綠（Streamlit 1.59.2 與 1.56.0 各一輪）＋Real 固定 snapshot 5 態各 11 態（loaded／stale／missing／unavailable／contract_error）（兩種口徑勿混：①**Real 固定 snapshot＝九態**〔loaded／unloaded／unevaluated／stale／stale_unknown／missing／upstream_error／unavailable／contract_error，`tests/test_ui2_p1_human_text.py::_snapshots`；AppTest 與渲染層測試用〕；②viewport 量測的「Real 11」＝**活 Real feed 的 11 個量測態**〔4 頁×2 viewport＋🎯 查一檔模式＋手機壓力態〕。本批 viewport 另以其中 5 個 snapshot〔loaded／stale／missing／unavailable／contract_error〕各跑 11 態＝55 態）；手機導覽餘裕 stale／unavailable＝181.6／162.5px（≥160）；證據 `docs/vnext/newui2_p2/`。
 - **§27 檢查**：新 Decision＝DEC-133；新 Rule＝無；Backlog＝1 項結案＋限制記錄；Audit Checklist §25 新節（未自勾）。
+
+## 65. New UI2 P6 資料健康度／手機抽屜 文字線框（2026-11-04；docs-only；append-only；單組撰寫＋一組獨立 QA）
+
+- **已產出**：`docs/vnext/NEWUI2_P6_DATA_HEALTH_TEXT_WIREFRAME_2026-11-04.md`、`docs/vnext/NEWUI2_MOBILE_DRAWER_TEXT_WIREFRAME_2026-11-04.md`（零程式碼、零測試變更）。狀態＝已過獨立 QA，待 ChatGPT／客戶線框審查；**尚未取得客戶核准**。
+- **P6／抽屜施工未授權**（客戶 (20)）；P7、auth 契約 Gate（`NUI2-AUTH-CONTRACT-GATE`，Opus 5.5＋High）未動。H-11（P6）與 J-6（抽屜）為同一題，措辭已對齊。
+- **撰寫組推薦（非裁示）**：抽屜實作採 C（CSS-only checkbox），B 為備案。
+- **未驗**：iOS／Android 真機、Streamlit Community Cloud（含 Manage app 浮層）、VoiceOver／TalkBack；僅 Chromium headless × Streamlit 1.56.0／1.59.2 實驗。欄位盤點以讀碼為準，未對各 service 實呼叫。
+- **§27 檢查**：新 Decision＝無；新 Rule＝無；Backlog＝新增 `NUI2-P6-VOCAB-VS-CAPABILITY-TEXT`、`NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS`；Audit Checklist §26 新節（未自勾）。
