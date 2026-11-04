@@ -641,6 +641,7 @@ Effort：Low / Medium / High
 - 👤 我的：登入、Sheet 綁定、個人設定、目前使用中的組合／觀察清單。
 - 🩺 資料中心：資料來源、資料健康、freshness、缺值與可用性。
   - 📌 **MIGRATE BY DEC-128（S23；2026-11-03 有意識的更新，不是漏刪；決策者 客戶）**：「資料中心」不是第五頁（DEC-092），其責任方向（資料來源、資料健康、freshness、缺值與可用性）的落點＝**👤 我的·資料健康度**（第 30 節第 5 點）；四個投資頁只留 micro-tag 與一行狀態入口。
+  - 📌 **2026-11-04 pointer（append；有意識的更新，不是漏刪；決策者 客戶〔DEC-135〕；本行不改上文任何字句）**：頁數上限部分由 DEC-135 取代；不代表已新增頁；新增頁須獨立任務＋線框＋資料契約＋核准。
 
 可以優化畫面與元件，但不得因小功能增加就反覆改變主要頁面責任與導航定位。重大 IA／頁面責任變更仍屬客戶 Decision Gate。
 
@@ -1047,6 +1048,7 @@ GitHub 實況 > code／tests 實際輸出 > 正式文件 > `docs/HANDOFF.md` > `
 
 1. **簡化原則**：**Presentation Compression ≠ Information Loss**——UI 越簡潔，Decision Context 不能越少；簡單，但不能失去判讀能力。New UI2 Human UI＝簡潔、Chart-first、關鍵判斷優先、少量必要 evidence、source／as_of／freshness micro-tag、⛔ 不堆完整資料清單；完整資料仍保存在 backend Evidence／Decision Context。
 2. **四頁正式 Human UI 與優先順序**：正式主頁只有 📊 市場、🎯 標的、💼 持股、👤 我的（⛔ 第五頁）。每頁優先順序：①狀態／結論 ②是否需注意／正式 Action State ③主要圖表 ④關鍵 evidence ⑤必要數字 ⑥簡短 source／as_of／limitation。（四問是資訊需求，不要求 DOM 逐字 1→2→3→4；DEC-127 不變。）
+   - 📌 **2026-11-04 pointer（append；有意識的更新，不是漏刪；決策者 客戶〔DEC-135〕；本行不改上文任何字句）**：頁數上限部分由 DEC-135 取代；不代表已新增頁；新增頁須獨立任務＋線框＋資料契約＋核准。
 3. **一般四頁不得再顯示完整 L2／L3**：「為什麼」完整 evidence expander、指標完整清單、raw data、完整 provenance、engineering／provider diagnostic、raw JSON、debug dump、大量 Missing 清單、開發者資訊——若用途主要是 OneBrain input／Audit／engineering，從四個投資頁的 Human Presentation 移除。**「從 UI 移除」≠ 刪除資料**。**⛔ 不得因此刪**：adapter、canonical data、deterministic result、health result、provenance、source、as_of、retrieved_at、freshness、Missing／Stale／Unavailable、tests、RuleIDs、Risk Cap evidence、System Action evidence、Decision Context、未來 Decision Digest input、OneBrain 未來需要的 evidence。機制：只改 views 的 render policy，**不改** VM `sections`／canonical（見 Active Contract §8）。
 4. **Chart-first＋Chart SPEC**：能用圖表清楚表達趨勢、比較、強弱、歷史位置、配置、風險時優先用圖。⛔ 為漂亮新增無正式語意的圖、⛔ 不同單位硬疊、⛔ 雙軸造成誤導、⛔ 讓圖表自行產生 investment semantics。每個主要 chart 附**一行精簡 SPEC**（例：`SPEC｜日頻｜TWSE｜資料日 11/03｜缺值不補`；可含標的、期間、normalized base、單位、頻率、最新資料日、Missing handling、comparison rule、source；欄位值只取自 `FieldVM.freshness`／既有 SSOT，⛔ 手寫日期）。
 5. **資料健康度（👤 我的）與分層**：完整資料診斷集中至 👤 我的·資料健康度（涵蓋台股大盤、國際市場、VIX、利率／殖利率／利差、DXY、PMI／景氣、市場廣度、產業、法人／籌碼／融資、個股價格、基本面、估值、持股／portfolio、Risk Cap inputs、System Action inputs、Sheet／settings、其他正式 canonical sources）。三層：**Level 1** 使用者可讀摘要（`✅ 正常`／`◷ 可能過期`／`◇ 資料未備`／`⛔ 來源不可用`／`⬜ 尚未接線`）；**Level 2** 來源／日期／provenance／freshness；**Level 3** developer diagnostics，預設收合。**⛔ 不得一般曝光**：API key、secret、env var 名、raw exception、traceback、module path、credential detail、internal stack。**Active（DEC-130，客戶 (15)(a) 有條件同意；~~⚠ PROVISIONAL~~ 已升格）**：Level 1 符號僅為資料健康度面的**別名**，**只有四個對映 Data State**（`✅`→OK、`◷`→Stale、`◇`→Missing、`⛔`→Unavailable）；**Data State 仍只有五態（OK／Missing／Stale／Unavailable／Not Evaluated），不得新增第六態，Not Evaluated 保留原有正式語意（另以既有字樣呈現，不併入 `⬜`）**；**`⬜ 尚未接線` 不是 Data State，屬 Capability／Implementation Availability 軸，⛔ 映射成 Not Evaluated／Missing／Unavailable／任何第六態**；同一列同時需要兩者時**必須拆成不同欄位**（`狀態(Data State)`／`接線(Capability)`），⛔ 混成單一 status。不改全站 DEC-124／Freeze §5 字樣與其 guard；`⛔` 在該面以「來源不可用」為準、**不外溢**（Freeze §5.3 舊義不變）。稽核面（Audit／Digest Viewer／Rule Registry）保留在 👤、**預設收合、不搶主 UI**；🎯 的選股條件／查看全部候選／CSV／查看此檔為使用者功能，須維持精簡（選股條件只顯示人類可讀版本、完整 rule detail 不上主頁、全部候選／CSV 次層、不得做成資料牆）。
