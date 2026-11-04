@@ -281,5 +281,7 @@
 3. [ ] `NUI2-P3-FULL-TABLE-HIDDEN` 與 Active Contract §11：🎯 跨季趨勢＝**設計候選／仍 Pending／非核准功能**；未恢復 L3 expander；未新增公式。
 4. [ ] Digest evidence coverage 缺口維持 open；全部文件無「OneBrain 可讀完整資料」宣稱。
 5. [ ] P2 線框文件含 A–G 七節與「待客戶驗收／不授權實作」宣告；`NUI2-ACTIVE-CONTRACT-VS-WIREFRAME-RISK-ORDER` 結論以客戶原文及已核准 Wireframes 為準，未自行變更頁面責任。
-6. [ ] 客戶判斷項：線框是否驗收；G-1 空槽高度、G-2 SPEC 頻率欄。
-7. [ ] 未宣稱 P2 已實作、未宣稱歷史序列／MA 已接、未宣稱獨立 QA 完成。
+6. [ ] 客戶判斷項：線框是否驗收（含排序結論一併確認）；G-1 空槽高度、G-2 SPEC 欄位（省略頻率欄）、G-3 手機指標卡下移。
+7. [ ] （施工後）手機 stale／unavailable 導覽餘裕 ≥160px；不達則已停手回報。
+8. [ ] 本節所有項目維持未自勾（docs 測試守衛：§24 區段內不得出現已勾選記號）。
+9. [ ] 未宣稱 P2 已實作、未宣稱歷史序列／MA 已接、未宣稱獨立 QA 完成。

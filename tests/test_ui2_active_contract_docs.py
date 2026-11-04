@@ -761,3 +761,13 @@ def test_no_document_claims_onebrain_can_read_complete_data():
         w = _read(rel)
         for bad in ("OneBrain 可讀完整資料已", "evidence 已在 Digest", "Digest 已涵蓋"):
             assert bad not in w, (rel, bad)
+
+
+def test_audit_checklist_section_24_is_not_self_checked_and_wireframe_discloses_g3():
+    c = _read("docs/vnext/NEWUI2_AUDIT_ACCEPTANCE_CHECKLIST_2026-11-02.md")
+    sec = c[c.index("## §24 DEC-132"):]
+    assert "[ ]" in sec and not re.search(r"\[[xX]\]", sec), "§24 不得自勾"
+    w = _read(P2_WIREFRAME_REL)
+    assert "G-3" in w and "≥160px" in w and "第一屏不增不減」不實" in w
+    # G-2：頻率欄預設省略，「日頻」須明示同意（自相矛盾已修）
+    assert "推薦 B**" in w and "沉默不等於同意" in w

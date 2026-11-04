@@ -66,6 +66,7 @@
 
 > **以 Wireframes §2.1（手機）／§2.2（桌機）＋DEC-122 Q3=A＋DEC-127＋DEC-117 Q1／Q5 桌機部分為準。無兩處客戶原文互相矛盾，故不列為待客戶裁示。**
 > 手機：…→ Risk Cap → 是否需要行動 → 下一步 → 今日主要風險 → **（P2）OneBrain → Primary 槽** → 指標卡；桌機：…→ 三 tile → 是否需要行動 → 下一步 → **（P2）OneBrain → Primary 槽** → 指標卡。
+> 佐證：DEC-127 是客戶對 #1001 的整體接受，而 #1001 的手機順序即現行順序（是否需要行動在前、今日主要風險緊接其後）。本結論為**單組判斷、待客戶確認**（併入 G 開頭的線框確認）。
 > 頁面責任不變；**P2 不改上述任何順序**（只在今日主要風險之後插入 OneBrain 與 Primary 槽）。
 
 ### B.4 最小勘誤提案（**僅提案，未套用到 Active Contract**）
@@ -99,8 +100,8 @@ Active Contract §3.1 為 AI 整理文件、且屬扁平轉述（非單純筆誤
 │                        │        │  ⬜ 尚未提供            │
 │                        │        │  此項目尚未開放         │
 │                        │        │  （灰底說明，無走勢線） │
-│                        │        │ SPEC｜日頻｜<來源>｜    │
-│                        │        │  資料日 <MM/DD>｜缺值不補│
+│                        │        │ SPEC｜<來源>｜資料日    │
+│                        │        │  資料日 <日期>｜缺值不補│
 │ 台股 │ VIX             │        │ 台股 │ VIX             │
 │ US10Y│ 利差            │        │ US10Y│ 利差            │
 │ DXY  │ PMI／景氣       │        │ DXY  │ PMI／景氣       │
@@ -123,7 +124,7 @@ Active Contract §3.1 為 AI 整理文件、且屬扁平轉述（非單純筆誤
 │                                          │   │ 🤖 OneBrain Outlook ⬜ 尚未提供            │ ◀ 移動
 │                                          │   │ ┌🇹🇼 台股趨勢 ⬜ 尚未提供 · 此項目尚未開放┐ │ ◀ 新增
 │                                          │   │ │ （灰底說明，無走勢線）                  │ │   （空槽，全寬）
-│                                          │   │ │ SPEC｜日頻｜<來源>｜資料日 <MM/DD>｜缺值不補│ │
+│                                          │   │ │ SPEC｜<來源>｜資料日 <日期>｜缺值不補      │ │
 │                                          │   │ └────────────────────────────────────┘ │
 │ 台股 VIX US10Y 利差 DXY PMI／景氣 (卡列)   │   │ 台股 VIX US10Y 利差 DXY PMI／景氣 (卡列)   │
 │ 🤖 OneBrain Outlook ⬜ 尚未提供            │   │ （已上移）                                  │
@@ -150,8 +151,8 @@ Active Contract §3.1 為 AI 整理文件、且屬扁平轉述（非單純筆誤
 | 尺寸原則 | **不自創 px**。條文已有者：真圖時手機約 220px（DEC-119／DEC-117 Q4 註），桌機上緣入第一屏（Wireframes §2.2）；**空槽本批依內容高度**（標題＋一行說明＋SPEC 行），不預留 220px 空框（避免把「尚未提供」畫成「載入中的圖」）；≥769px 全寬 | 條文引用；空槽高度是否採內容高度＝**G-1 待確認** |
 | 標題 | 「🇹🇼 台股趨勢」（客戶 DEC-117 Q4 原詞：「🇹🇼 台股趨勢＝Primary Visual」；「Primary」為內部詞，不上畫面） | DEC-117 Q4 |
 | 空槽文案 | 狀態用既有 Capability 字樣 **`⬜ 尚未提供`**（`TEXT_NOT_PROVIDED`）＋既有原因句家族「此項目尚未開放」（同 `scenarios._R_EMPTY`／`real_canonical._R_PORT`）；**灰底說明，⛔ 紅**（Wireframes §6 冷啟動「圖槽灰底說明（⛔ 紅）」）；**不新造字樣**；⛔ 不畫假走勢線／假 sparkline／假 MA；⛔ 用 `⬜ 資料未取得`（那是資料語意 Missing，與 Capability 正交，DEC-124／DEC-130） | `shared/ui2_contract/text.py`；Wireframes §6；DEC-124 |
-| SPEC 行格式 | `SPEC｜日頻｜<來源>｜資料日 <MM/DD>｜缺值不補`（範式取 Active Contract §4 範例 1：`SPEC｜日頻｜TWSE｜資料日 11/03｜缺值不補`）。**欄位值只取 TWII 指標卡既有 `freshness`**：`<來源>`＝卡的 `freshness.source`；`<MM/DD>`＝卡的 `freshness.as_of`（缺 → 顯示 `⬜ 資料日未提供`，TEXT_ASOF_MISSING）；⛔ 手寫日期、⛔ 寫服務名冒充資料源 | Active Contract §4；`html.freshness_html` |
-| ⚠ 與範例的兩處差異（據實） | (a) **來源不是「TWSE」**：範例的 `TWSE` 只是範式；TWII 卡實際 source＝`TWII_SOURCE_TEXT`＝「本地加權指數歷史快取（來源 Yahoo，每日更新）」（`src/services/market_twii_view_service.py:23`），SPEC 必須照卡原樣帶出，⛔ 改寫成 TWSE。(b) **「日頻」**：卡沒有頻率欄；依據＝service 註解「parquet 每一列就是一個交易日」＋`TWII_SOURCE_TEXT`「每日更新」。是否以固定字樣「日頻」呈現＝**G-2 待確認**（備選＝本批省略頻率欄，只有 `SPEC｜<來源>｜資料日｜缺值不補`） | 驗證：讀 `market_twii_view_service.py:23,68-98` |
+| SPEC 行格式 | `SPEC｜<來源>｜資料日 <日期>｜缺值不補`（範式取 Active Contract §4 最小集 `SPEC｜<頻率>｜<來源>｜資料日 <MM/DD>｜<缺值處理>`，**本批省略頻率欄**，見 G-2）。**規則：欄位值只取 TWII 指標卡既有 `freshness`，無正式欄位的值不手寫**：`<來源>`＝卡的 `freshness.source`；`<日期>`＝卡的 `freshness.as_of`（缺 → `⬜ 資料日未提供`，`TEXT_ASOF_MISSING`）；「缺值不補」是政策字樣（非資料值）；⛔ 手寫日期、⛔ 寫服務名冒充資料源。**`<來源>` 缺值**（FAKE 冷啟動時 TWII 卡 source＝None）：`shared/ui2_contract/text.py` **沒有**「來源缺值」既有字樣（`TEXT_ASOF_MISSING` 只管資料日），故**不自創**——列為 G-2 待確認；確認前的最小處理＝該欄整段省略（與 `freshness_html` 對缺 source 的現行處理一致：不畫來源 chip），⛔ 補預設來源。**日期格式**：卡的 as_of 是 ISO `YYYY-MM-DD`（`market_twii_view_service._iso`），`freshness_html` 現行原樣顯示；範例的 `MM/DD` 只是範式。本線框採**原樣帶出 ISO、不轉換**（與卡一致、避免第二套日期格式）；若要轉 `MM/DD`，轉換規則由施工決定，並**列入 G-2 讓客戶確認** | Active Contract §4；`html.freshness_html` |
+| ⚠ 與範例的兩處差異（據實） | (a) **來源不是「TWSE」**：範例的 `TWSE` 只是範式；TWII 卡實際 source＝`TWII_SOURCE_TEXT`＝「本地加權指數歷史快取（來源 Yahoo，每日更新）」（`src/services/market_twii_view_service.py:23`），SPEC 必須照卡原樣帶出，⛔ 改寫成 TWSE。(b) **「日頻」不採用為預設**：卡沒有頻率欄；佐證只有 service 註解「parquet 每一列就是一個交易日」＋`TWII_SOURCE_TEXT`「每日更新」，不是正式欄位，依本節規則（無正式欄位的值不手寫）**本批省略頻率欄**；手寫「日頻」須客戶於 G-2 **明示同意**（沉默不等於同意） | 驗證：讀 `market_twii_view_service.py:23,68-98` |
 | 空槽的 SPEC 在說什麼 | SPEC 描述的是**這個槽將使用的正式資料來源／資料日**（取自已接線的 TWII 最新收盤事實），**不代表歷史序列已接**；空槽本體文案已明講 `⬜ 尚未提供`。避免誤導：SPEC 行不得出現「近 N 日」「MA」等區間／指標欄位（本批沒有序列，不自造） | `TWII 最新收盤值≠歷史圖表資料`（客戶 (18) 三） |
 | TWII 冷啟動／失敗時 | 卡為 Missing／Unavailable 時，SPEC 的來源／資料日依卡原樣（缺 → `⬜ 資料日未提供`）；槽本體仍是 `⬜ 尚未提供`；不因卡 Unavailable 把槽改紅（槽是 Capability，與卡的 Data State 正交） | DEC-124／DEC-130 |
 | **不含（本批不做）** | 歷史序列、MA 參考線、y 軸、圖例、護欄句（Wireframes §2.1「加權＋MA『參考線』＋護欄句」＝真圖才有）；國際 small multiples／VIX 門檻帶／Macro mini／圖 C 空槽（VM 無區塊，非 P2 兩項）；micro-tag 統一（原批次表 ③）；coverage chip | 客戶 (18) 二「本次只規劃」兩項 |
@@ -165,7 +166,7 @@ Active Contract §3.1 為 AI 整理文件、且屬扁平轉述（非單純筆誤
 | 已核准市場頁首屏順序（頁首→CTA→今日結論→…） | **未動** | P2 只在 `market_l1_html` 容器**之後**插入；容器內 DOM／CSS 不改（`html.py:178-231`、`css.py:120-131` 不在變更集） |
 | 主 CTA（🚀 更新今日戰情；位置、不可用原因同列） | **未動** | 同上 |
 | 市場目前狀態／Risk Cap `⬜ 無法判定`／是否需要行動／今日主要風險（含 DEC-117 Q6 退化句、W-10 transitional） | **未動** | 同上；VM／canonical 0 變更 |
-| 既有圖表／卡片／資訊層級（指標卡 6 張、每卡值·短狀態·as_of·源） | **未動**（僅其**上方**多出兩個區塊，卡片相對順序與樣式不變） | `render_cards` 不改 |
+| 既有圖表／卡片／資訊層級（指標卡 6 張、每卡值·短狀態·as_of·源） | 卡片本身與其相對順序、樣式**未動**；⚠ **但手機上卡片的垂直位置會下移**（上方多出 OneBrain＋空槽）：QA 實測原型——手機 cold 指標卡 grid 頂緣 560→798px（>導覽上緣 791，約 +240px，卡片被推到第一屏之下）；桌機 475→688px 仍在第一屏；stale／unavailable 導覽餘裕 166.5→162.5px（逼近 160px 底線，空槽高度會再縮餘裕）。→ **「第一屏不增不減」不實，已更正**，列 **G-3 待客戶確認** | `render_cards` 不改；位置變化為獨立 QA 原型實測（本檔未重測） |
 | 手機底部四格導航、桌機左側 Rail（含 compact Account Area 的現況） | **未動** | shell 不在變更集；DEC-127 導覽餘裕判定器須維持綠（見 F） |
 | 沒有正式歷史圖表資料時不繪製假走勢線 | **遵守**：空槽 0 個 svg／vega／polyline／canvas | F 的新守衛 |
 | Single Action Authority／Risk Cap／System Action／Digest／OAuth | **未動** | 變更集不含 `src/services`、`shared`（選項 ii）；見 E |
@@ -183,7 +184,9 @@ Active Contract §3.1 為 AI 整理文件、且屬扁平轉述（非單純筆誤
 | Primary 槽標題＋`⬜ 尚未提供`＋原因句 | **無對應 VM 欄**（Capability 標記，非資料） | 無 | 純 presentation 空槽 | 實作二選一見 F-5；不新增資料來源 |
 | SPEC 資料日 | `CardVM(card_id="twii").field.freshness.as_of`（`html.freshness_html`）；來源鏈 `twii_card_spec` ← `TwiiFact.as_of` ← `TwiiTrendView.as_of` | `market_twii_view_service.get_twii_trend_view`（`:68`；新鮮度取自 `load_twii_close().attrs`） | **A 已接** | 缺 → `⬜ 資料日未提供`；⛔ 補今天 |
 | SPEC 來源 | `…field.freshness.source` ← `TwiiFact.source` ← `TWII_SOURCE_TEXT`（`market_twii_view_service.py:23`） | 同上 | **A 已接** | 內容為「本地加權指數歷史快取（來源 Yahoo，每日更新）」，非 TWSE |
-| SPEC 頻率「日頻」 | **無欄位** | service 註解「parquet 每一列就是一個交易日」；來源字串「每日更新」 | D（無正式欄，僅註解佐證） | **G-2**；不新增來源 |
+| SPEC 頻率 | **無欄位** | service 註解「parquet 每一列就是一個交易日」；來源字串「每日更新」 | D（無正式欄，僅註解佐證） | **本批省略頻率欄**；手寫「日頻」須客戶明示同意（G-2）；不新增來源 |
+| SPEC 來源缺值字樣 | 卡 `freshness.source=None`（FAKE 冷啟動） | — | D（無既有字樣） | 不自創；待 G-2；暫以整欄省略 |
+| SPEC 日期格式 | 卡 `freshness.as_of`＝ISO `YYYY-MM-DD` | `_iso()` | A | 原樣帶出；轉 MM/DD 列 G-2 |
 | SPEC「缺值不補」 | 政策字樣（Active Contract §4），非資料 | — | 政策字樣 | 與 §1 Fail Loud 同向；不產生數值 |
 | **歷史序列 xs／close** | `TwiiFact.close`（目前長度 1） | `get_twii_trend_view(n)` **已能回 n 日 xs/close**（`TwiiTrendView.xs/close`）；UI2 `real_feed.TWII_CARD_DAYS = 1`（`real_feed.py:30`）只呼叫 n=1 | **B 已有 service 未接** | **本批不接**：改 n、或把序列放進 VM＝接線批（依 #1007 §7／REAL_FEED_MAPPING；`NUI2-TWII-TWO-PATHS` 須先擇一：`twii_ohlcv.parquet` vs readiness `taiex`）；**TWII 最新收盤值≠歷史圖表資料**（客戶 (18) 三） |
 | **MA（MA5／60／120／200）** | **無** | Legacy 圖 A 的 MA 是 `market_strategy.get_market_assessment` 算好、經 session `mkt_info` 傳入的**最新純量**水平參考線，非滾動序列（`src/ui/views/_market_blocks.py:224-226, 622`）；來源在 session，未 PORT | **C PORT** | **本批不接、不自造滾動算法**；若要新增滾動 MA＝新公式（SG-14，Opus High／Gate） |
@@ -198,9 +201,9 @@ Active Contract §3.1 為 AI 整理文件、且屬扁平轉述（非單純筆誤
 
 1. **T_new_6 現況**：`tests/test_ui2_contract_teeth_pending.py::test_T_new_6_main_chart_has_short_spec_line`（`@_xfail("P2")`，strict）＝ `at = _at(); assert "SPEC｜" in _blob(at)`——只檢查**預設頁（📊 FAKE 冷啟動）任一 markdown 含 `SPEC｜`**。施工後該字串出現 → strict XPASS → 轉紅 → **必須移除 xfail、畢業到 `GRADUATED_TEETH`**（`test_ui2_active_contract_docs.py` 的 xfail 計數斷言 `n == 4` 同步改 `3`，非降守衛）。
    **建議加強（不弱化）**：T_new_6 保持原斷言不放寬，另加具名測試鎖定 (a) `SPEC｜` 行的 DOM 位置**在 OneBrain 之後、指標卡 `ui2-grid` 之前**；(b) SPEC 行的 `<來源>`／`<資料日>` 與 TWII 卡 `freshness` **字面相等**（FAKE 與 Real 固定 snapshot 各一）；(c) 空槽 0 個 `svg／polyline／canvas／vega`、且含 `⬜ 尚未提供`。
-2. **順序守衛**：新增 DOM 順序測試——`ui2-m-l1`（內含 CTA→結論→…→今日主要風險）< 🤖 OneBrain < `🇹🇼 台股趨勢`槽 < `ui2-grid`；既有 `tests/test_ui2_batch3.py::test_main_risk_is_not_interleaved_by_expanders_in_the_real_page`（`m-l1 < ui2-grid`、L1 之後首個元素非 expander）預期**不需改**仍綠（驗證：讀測試碼；施工時以實跑為準）。`tests/test_ui2_p1_human_text.py::test_market_page_has_each_first_screen_label_once_and_keeps_anchors`（`OneBrain Outlook` 只出現一次）須仍綠——OneBrain 移位不可造成重複渲染（實作注意：`render_sections` 不得再重畫已上移的 `onebrain` section）。
-3. **第一屏必要項不得退化（W-2）**：手機 390px 第一屏「今日結論＋狀態＋Risk Cap＋是否需要行動＋主 CTA」及其後「今日主要風險緊接」維持；P2 內容全在其**下方**，第一屏不增不減。`tests/ui2_viewport/measure_viewport.py` 既有判定（含 DEC-127 導覽餘裕、`p3_no_evidence_expander`）須維持全綠（FAKE 70 態＋Real 11 態；Streamlit 1.59.2 與 1.56.0 floor 各一輪）。
-4. **截圖**：真實 390px 與 1440px 截圖（📊 × FAKE 冷啟動／已載入／Unavailable／Stale ＋ Real），**不只依 DOM**；目視確認：OneBrain 位置、空槽無走勢線、灰底非紅、SPEC 單行不撐破 390px（SPEC 長度上限依 Active Contract §4 以 390px 實測決定，不釘死數字）、指標卡未被推出導覽可點區。
+2. **順序守衛**：新增 DOM 順序測試——`ui2-m-l1`（內含 CTA→結論→…→今日主要風險）< 🤖 OneBrain < `🇹🇼 台股趨勢`槽 < `ui2-grid`；既有 `tests/test_ui2_batch3.py::test_main_risk_is_not_interleaved_by_expanders_in_the_real_page`（`m-l1 < ui2-grid`、L1 之後首個元素非 expander）預期**不需改**仍綠（驗證：讀測試碼；施工時以實跑為準）。`tests/test_ui2_p1_human_text.py::test_market_page_has_each_first_screen_label_once_and_keeps_anchors`（`OneBrain Outlook` 只出現一次）須仍綠——OneBrain 移位不可造成重複渲染（實作注意：`render_sections` 不得再重畫已上移的 `onebrain` section；施工時 `market.render` **須保留對 `render_sections` 的呼叫**〔可加 skip 參數〕，否則 `tests/test_ui2_p3_evidence_preservation.py::test_render_policy_guard_has_teeth` 失去牙）。
+3. **第一屏必要項不得退化（W-2）**：手機 390px 第一屏「今日結論＋狀態＋Risk Cap＋是否需要行動＋主 CTA」及其後「今日主要風險緊接」維持；**四必要項與今日結論不變**，但手機指標卡會被推到第一屏之下（見 D 表與 G-3）；**W-2／Wireframes §2.1 是否把指標卡算進第一屏必要項**——據實查證：W-2 與 §1 第一屏四問表列的必要項是「今日結論＋市場目前狀態＋Risk Cap＋是否需要行動＋主 CTA」（今日主要風險緊接其後），**未列指標卡**；Wireframes §2.1 的「第一屏底（≈791）」線畫在「是否需要行動」之後、今日主要風險之前，即連今日主要風險與其後的指標卡在該草稿中本就在第一屏線之下；DEC-117 Q7 亦接受 Primary 在手機第一屏下方。據此指標卡下移**看似**不違反條文，但這是單組讀法、**不自行定論**，交 G-3 由客戶確認。**新增驗收條件**：手機 stale／unavailable 導覽餘裕 **≥160px**，若施工後不達須**停手回報**，不得以縮字或刪資訊硬塞。`tests/ui2_viewport/measure_viewport.py` 既有判定（含 DEC-127 導覽餘裕、`p3_no_evidence_expander`）須維持全綠（FAKE 70 態＋Real 11 態；Streamlit 1.59.2 與 1.56.0 floor 各一輪）。
+4. **截圖**：真實 390px 與 1440px 截圖（📊 × FAKE 冷啟動／已載入／Unavailable／Stale ＋ Real），**不只依 DOM**；目視確認：OneBrain 位置、空槽無走勢線、灰底非紅、SPEC 允許換行、**不橫向捲動**（SPEC 長度上限依 Active Contract §4 以 390px 實測決定，不釘死數字）、指標卡未被推出導覽可點區。
 5. **實作形態（內部技術決策，§-1.5.A-4，不需客戶裁示；此處只登記推薦）**：(ii)（推薦）`views/market.py` 內以既有常數（`TEXT_NOT_PROVIDED`、既有原因句家族）組空槽，SPEC 從 TWII 卡 `freshness` 組；VM／canonical／scenarios／baseline **0 變更**，P3 evidence-preservation baseline 與 sha256 釘值不動；(i) 在 VM 新增 L1 section 承載空槽＝VM 內容變更，須重跑 baseline 並說明——較大改動面，不推薦。兩者畫面相同。無論哪種，`tests/test_ui2_guards.py`（G2／G2F／G4／G9／no-write／禁用字樣）須全綠。
 6. **mutation（施工時必附，實測轉紅後還原）**：拿掉 SPEC 行 → T_new_6 紅；把 OneBrain 放回卡片之後 → 順序測試紅；空槽畫入 `<svg>`／`<polyline>` → 無假圖守衛紅；SPEC 來源改寫死 `TWSE` → 與卡 freshness 相等測試紅。
 7. **需更新的測試（預期）**：`test_ui2_contract_teeth_pending.py`（T_new_6 去 xfail）、`test_ui2_active_contract_docs.py`（`GRADUATED_TEETH`＋1、xfail 計數 4→3、本批 DEC-132／線框文件守衛已先加）；其餘既有測試預期不改（不得改弱）。`PENDING_UI_CORRECTION_TESTS` 不受影響。
@@ -211,13 +214,13 @@ Active Contract §3.1 為 AI 整理文件、且屬扁平轉述（非單純筆誤
 
 ## G. 待客戶確認項
 
-**順序／頁面責任**：**無需新裁示**（B 節：現行實作與已核准契約一致；P2 不改任何既有順序，OneBrain 位置亦與 Wireframes §2.1／§2.2 一致）。若同意，請直接確認「線框 OK，進入 P2 施工」。
+**順序／頁面責任**：**無需新裁示**（B 節：現行實作與已核准契約一致；P2 不改任何既有順序，OneBrain 位置亦與 Wireframes §2.1／§2.2 一致）。⚠ 請注意：你確認「線框 OK」即**一併確認** B 節結論「以 Wireframes §2.1／§2.2＋DEC-122 Q3=A＋DEC-127 為準」——該結論為**單組判斷、待客戶確認**。若同意，請確認「線框 OK，進入 P2 施工」。
 
-僅以下兩點，Wireframes／Active Contract **沒有條文可直接套用**，請一句話確認（回覆「G-1 A、G-2 A」即可；沒回覆則以推薦進行）：
+以下三點，Wireframes／Active Contract **沒有條文可直接套用**，請一句話確認（回覆如「G-1 A、G-2 B、G-3 A」）。**沉默不等於同意**：G-2 的 A 選項（手寫值）與 G-3 的接受須客戶明示；未回覆時只採 G-1 推薦與 G-2 B：
 
 1. **G-1 空槽高度**：A＝依內容高度（標題＋一行說明＋SPEC 行）｜B＝預留手機約 220px／桌機與真圖同高的灰框。**推薦 A**：B 會把「尚未提供」畫成像載入中的圖、並把指標卡推下，違反誠實與第一屏後續可讀性；真圖接線批再採約 220px（DEC-119）。
-2. **G-2 SPEC 頻率欄**：A＝顯示固定字樣「日頻」（依據：service 註解＋來源字串「每日更新」）｜B＝本批省略頻率欄，SPEC 只含 `來源｜資料日｜缺值不補`，頻率於接線批有正式欄位時再補。**推薦 A**（貼近 Active Contract §4 範例格式；來源與資料日仍照 TWII 卡原樣）；若您認為「日頻」未有正式欄位支撐，選 B。
-
+2. **G-2 SPEC 欄位**：A＝顯示固定字樣「日頻」（依據：service 註解＋來源字串「每日更新」；屬手寫值，**須您明示同意**）｜B＝本批省略頻率欄，SPEC 只含 `來源｜資料日｜缺值不補`。**推薦 B**：本檔自定規則是「SPEC 欄位值只取卡 freshness、無正式欄位的值不手寫」，A 會自我矛盾；頻率於接線批有正式欄位時再補。附帶兩小點（施工預設已寫於 C.4，可不回覆）：(i) TWII 卡來源缺值時，既有字樣表沒有對應字樣，預設整欄省略、不自創；(ii) 日期預設原樣帶 ISO `YYYY-MM-DD`，若要改 `MM/DD` 請說明。
+3. **G-3 手機指標卡下移**：P2 會把手機指標卡推到第一屏之下（QA 原型實測：cold 時卡片頂緣 560→798px，導覽上緣 791px；stale／unavailable 導覽餘裕 166.5→162.5px，須 ≥160px）；四必要項與今日結論不變；依 Wireframes §2.1 的第一屏線與 DEC-117 Q7，Primary 可在第一屏下方（W-2 未把指標卡列為第一屏必要項，單組讀法）。請選：A＝接受（OneBrain＋空槽如線框）｜B＝壓縮空槽高度（更貼近內容、仍在指標卡之前）｜C＝Primary 空槽放指標卡之後（OneBrain 仍上移）。**推薦 A**：位置與已核准草稿一致（Wireframes §2.1 Primary 在卡片前）、不縮字不刪資訊；B／C 偏離草稿順序或僅微幅改善。若餘裕實測 <160px，施工停手回報，屆時才考慮 B。
 ---
 
 ## 限制與未驗（據實）

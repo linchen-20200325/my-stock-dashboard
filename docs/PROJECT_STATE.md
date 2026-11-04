@@ -1061,5 +1061,5 @@
 
 - **範圍**：docs-only（`docs/DECISIONS.md` DEC-132、`docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md`、BACKLOG／PROJECT_STATE／HANDOFF／Audit Checklist §24／Active Contract §11 與施工附件指標、`tests/test_ui2_active_contract_docs.py` 加性守衛）。**0 行 src／shared／app／既有 tests 行為變更**；不授權任何實作。
 - **裁定**：(1) 👤 Data Freshness／System Information 維持不在四頁一般 Human UI，由 P6 資料健康度承接，不得刪 VM／資料來源／provenance／Evidence；(2) 🎯 跨季趨勢與完整分析暫不恢復舊 L3 expander，保留為設計候選（精簡圖卡優先；資料來源／EPS 口徑／版型另行驗證；**仍 Pending，不是核准功能**）；(3) VM 保存≠Digest 已有，`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` 維持 open，未證實前不得宣稱 OneBrain 可讀完整資料；(4) P2 採文字線框先行，本輪僅線框與資料欄位驗證。
-- **P2 線框**（待客戶驗收）：OneBrain 上移至今日主要風險之後／Primary 槽之前；台股 Primary 誠實空槽＋一行 SPEC（來源／資料日取 TWII 卡 freshness）；歷史序列／MA 不接。排序核對結論：以 Wireframes／DEC-122 Q3=A／DEC-127 為準，不需客戶裁示。
+- **P2 線框**（待客戶驗收；QA 勘誤已套用）：OneBrain 上移至今日主要風險之後／Primary 槽之前；台股 Primary 誠實空槽＋一行 SPEC（來源／資料日取 TWII 卡 freshness，**省略頻率欄**）；歷史序列／MA 不接。**披露**：手機指標卡會被推到第一屏之下（QA 原型：560→798px；餘裕 166.5→162.5px，須 ≥160px），待客戶確認 G-3。待客戶確認 3 點：G-1 空槽高度、G-2 SPEC 欄位、G-3 手機指標卡下移。排序核對結論：以 Wireframes／DEC-122 Q3=A／DEC-127 為準，不需客戶裁示。
 - **§27 檢查**：新 Decision＝DEC-132；新 Rule＝文件措辭規則；Backlog＝既有 ID 狀態更新；Audit §24 新節未自勾。

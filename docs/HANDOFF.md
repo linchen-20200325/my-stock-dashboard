@@ -917,7 +917,7 @@ DEC-086 規則已於 main，本表已落地。
 |---|---|
 | live GitHub state | 分支 `ccr-a0b4e085-ijdaio`，基準 `origin/main` `cac19304`（#1009 P3 已合併）；本批 docs-only commit 未 push、未開 PR（push／PR 由總管）；以當下 `git fetch` 為準 |
 | current Stage／exact safe stopping point | DEC-132 已落盤；P2 文字線框 `docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md` 已交付，**待客戶驗收**；P2 程式**未動**；P6／P7 未動 |
-| 待客戶裁示 | 驗收 P2 線框；G-1 空槽高度（推薦 A 內容高度）、G-2 SPEC 頻率欄（推薦 A「日頻」）。排序差異**不需**裁示（以 Wireframes／DEC-122 Q3=A／DEC-127 為準） |
+| 待客戶裁示 | 驗收 P2 線框（含一併確認排序結論：以 Wireframes／DEC-122 Q3=A／DEC-127 為準，單組判斷）；**3 點**：G-1 空槽高度（推薦 A 內容高度）、G-2 SPEC 欄位（推薦 B 省略頻率欄；手寫「日頻」須明示同意）、G-3 手機指標卡下移（推薦 A 接受；施工須手機 stale／unavailable 導覽餘裕 ≥160px，不達停手回報） |
 | **下一個唯一安全工作** | **客戶驗收 P2 文字線框。驗收通過前不得實作**；通過後才由總管派 P2 施工（Sonnet 5.5＋Medium，範圍僅 ①OneBrain 位置 ②台股 Primary 誠實空槽＋SPEC；驗收依線框 §F） |
 | Pending／設計候選清單（同步） | 撰寫組暫定三項**仍 Pending**：資料健康度 Level 1／2 預設展開或收合、Level 3 遮罩嚴於客戶原文、`⛔ 來源不可用` 顏色。「🎯 跨季趨勢使用者功能」＝**設計候選**（客戶 (18)：暫不恢復舊 L3 expander；資料來源／EPS 口徑／版型另行驗證）——**不是核准功能**。👤 Data Freshness／System Information＝客戶裁示維持隱藏，由 P6 承接 |
 | known limitations／blockers | Digest evidence coverage 缺口維持登記（`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`；**VM 保存≠Digest 已有**，不得宣稱 OneBrain 可讀完整資料）；線框無 px 實測；單組撰寫；`get_twii_trend_view(n)` 序列與 MA 本批不接（`NUI2-TWII-TWO-PATHS` 待擇一） |
