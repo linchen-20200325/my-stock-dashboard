@@ -52,3 +52,10 @@
 - CSS-only drawer 的原型僅 Chromium 模擬，未在 Android／iOS／Streamlit Cloud 與 Manage app overlay 進行實機覆驗。
 - 本 docs QA 不等於 P6、Drawer 實作已獲驗收；CI、真機、accessibility 仍是後續交付必要條件。
 - 有關已合併 main `f106a6af` 的 workflow checks，在本次 GitHub 查詢仍 in_progress；不將其說成獨立核實 success。
+
+## 6. 與 #1015 既有文字的差異與同步點（驗證補記）
+
+- 本文件 H-11／J-6 建議 **B**（「⬜ 尚未提供」）；#1015 兩份線框、BACKLOG `NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS`／`NUI2-AUTH-STATUS-TEXT-GUARD` 補註仍寫推薦 **A**（「⬜ 尚未登入」）。H-11／J-6 仍是**待客戶裁示**題，本文件是建議、不是客戶裁示；客戶未回答前 BACKLOG 該列維持 `blocked-on-customer`。
+- 已在兩份線框的 H-11 列與 J 表第 6 列補「以 #1016 為準（建議層級）」註記，推薦 A 原文未刪。兩份線框內 ASCII 示意圖仍畫「⬜ 尚未登入」，屬 A 方案示意，採 B 時於施工批改為「⬜ 尚未提供」。
+- 若採 B：「⬜ 尚未提供」字樣已存在於 Real 模式，`NUI2-AUTH-STATUS-TEXT-GUARD` 擴字樣表不再是前置；若採 A 仍須先擴表。
+- BACKLOG／PROJECT_STATE §65／HANDOFF 對「H-11 與 J-6 同一題、措辭一致」的敘述在 A、B 兩案下皆成立，未改。
