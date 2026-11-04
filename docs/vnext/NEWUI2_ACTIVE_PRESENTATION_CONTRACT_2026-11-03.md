@@ -2,6 +2,9 @@
 
 > ## ⛔ 讀我先：這是**現行唯一有效**的 New UI2 presentation contract
 >
+> 📌 **2026-11-04 較新客戶導航裁示（DEC-134）**：手機由「固定底部四格為唯一導航」改為「☰ 可收合左側抽屜四頁導航＋Google 登入入口」（正式細節待線框 Gate），桌機固定左 rail 不變。此較新裁示取代本檔與歷史 Wireframes 內**手機固定底部四格的定位／呈現規則**；四頁資訊架構仍然只有四頁。詳見 [NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md](NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md)。原文歷史保留、不因旧文仍在而恢復底部四格。
+
+>
 > **現行四頁逐區塊施工附件（乾淨、無舊 expander 施工句）**：[`NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md`](NEWUI2_UI_EXECUTION_SPEC_2026-11-04.md)。施工時讀**本 Active Contract＋該附件**；2026-11-02 舊 Wireframes 只作歷史／不衝突細節的查核，**不可直接當新 UI2 的施工腳本**。附件不是新的客戶 Decision，所有 Pending／Gate 仍有效。
 >
 >
