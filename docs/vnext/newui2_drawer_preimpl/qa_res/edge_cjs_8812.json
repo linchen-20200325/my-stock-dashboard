@@ -1,0 +1,249 @@
+{
+ "A_click_current_page": {
+  "focus": "INPUT.st-be[radio:on]",
+  "inNav": true,
+  "navLeft": 0,
+  "navW": 320,
+  "vis": "visible",
+  "open": true,
+  "chk": true,
+  "pop": null,
+  "page": "p4_market",
+  "jsruns": 1,
+  "escs": 0,
+  "hs": false
+ },
+ "B_latency_samples": [
+  [
+   0.29,
+   true,
+   "p4_target",
+   "INPUT.st-be[ra"
+  ],
+  [
+   0.54,
+   false,
+   "p4_target",
+   "BODY"
+  ],
+  [
+   0.8,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   1.05,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   1.31,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   1.56,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   1.82,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   2.07,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   2.33,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   2.58,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   2.83,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   3.09,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   3.34,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ],
+  [
+   3.6,
+   false,
+   "p4_target",
+   "INPUT#qa-t.qa-"
+  ]
+ ],
+ "C_rapid_switch_final": {
+  "focus": "INPUT#qa-t.qa-toggle[role=switch][checkbox:off]",
+  "inNav": false,
+  "navLeft": -336,
+  "navW": 320,
+  "vis": "hidden",
+  "open": false,
+  "chk": false,
+  "pop": null,
+  "page": "p4_hold",
+  "jsruns": 3,
+  "escs": 0,
+  "hs": false
+ },
+ "C_visible_title": "💼 持股",
+ "D_9_rapid_taps": {
+  "focus": "INPUT.st-be[radio:on]",
+  "inNav": true,
+  "navLeft": 0,
+  "navW": 320,
+  "vis": "visible",
+  "open": true,
+  "chk": true,
+  "pop": null,
+  "page": "p4_market",
+  "jsruns": 1,
+  "escs": 0,
+  "hs": false
+ },
+ "D2_after_4_esc": {
+  "focus": "INPUT#qa-t.qa-toggle[role=switch][checkbox:off]",
+  "inNav": false,
+  "navLeft": -336,
+  "navW": 320,
+  "vis": "hidden",
+  "open": false,
+  "chk": false,
+  "pop": null,
+  "page": "p4_market",
+  "jsruns": 1,
+  "escs": 1,
+  "hs": false
+ },
+ "E_land_init": {
+  "focus": "BODY",
+  "inNav": false,
+  "navLeft": 0,
+  "navW": 176,
+  "vis": "visible",
+  "open": true,
+  "chk": false,
+  "pop": null,
+  "page": "p4_market",
+  "jsruns": 1,
+  "escs": 0,
+  "hs": false
+ },
+ "E_land_open": {
+  "focus": "SECTION.stMain",
+  "inNav": false,
+  "navLeft": 0,
+  "navW": 176,
+  "vis": "visible",
+  "open": true,
+  "chk": false,
+  "pop": null,
+  "page": "p4_market",
+  "jsruns": 1,
+  "escs": 0,
+  "hs": false
+ },
+ "E_land_nav": {
+  "top": 0,
+  "bottom": 390,
+  "h": 390,
+  "labelBottoms": [
+   0,
+   103,
+   141,
+   180,
+   219
+  ],
+  "vh": 390,
+  "scrollable": false
+ },
+ "E2_back_portrait_state": {
+  "focus": "SECTION.stMain",
+  "inNav": false,
+  "navLeft": -336,
+  "navW": 320,
+  "vis": "hidden",
+  "open": false,
+  "chk": false,
+  "pop": null,
+  "page": "p4_market",
+  "jsruns": 1,
+  "escs": 0,
+  "hs": false
+ },
+ "E3_rot_again": {
+  "focus": "SECTION.stMain",
+  "inNav": false,
+  "navLeft": 0,
+  "navW": 176,
+  "vis": "visible",
+  "open": true,
+  "chk": false,
+  "pop": null,
+  "page": "p4_market",
+  "jsruns": 1,
+  "escs": 0,
+  "hs": false
+ },
+ "F_desktop": {
+  "btnVisible": false,
+  "toggleVisible": false,
+  "scrimVisible": false,
+  "navLeft": 0,
+  "navW": 176,
+  "navTop": 0,
+  "navBottom": 900,
+  "vis": "visible",
+  "tf": "none",
+  "hs": false,
+  "labels": [
+   0,
+   64,
+   103,
+   141,
+   180
+  ],
+  "pt": "200px"
+ },
+ "F_desktop_switch": {
+  "focus": "INPUT.st-be[radio:on]",
+  "inNav": true,
+  "navLeft": 0,
+  "navW": 176,
+  "vis": "visible",
+  "open": true,
+  "chk": false,
+  "pop": null,
+  "page": "p4_target",
+  "jsruns": 2,
+  "escs": 0,
+  "hs": false
+ }
+}
