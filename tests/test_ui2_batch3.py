@@ -964,9 +964,12 @@ def test_nav_margin_content_bottom_reserve_covers_nav_height_and_safe_area():
                   r"\{padding-bottom:calc\((\d+(?:\.\d+)?)rem \+ env\(safe-area-inset-bottom,0px\)\) !important\}", css)
     assert m, "手機 block-container padding-bottom 必須含 env(safe-area-inset-bottom)（@supports 覆寫；基礎 5rem 規則保留）"
     assert ".block-container{padding-bottom:5rem !important}" in css      # 基礎規則（無 env 支援時的後備）不動
-    nav_h = int(re.search(r"\.st-key-ui2_nav\{left:0;right:0;bottom:0;height:(\d+)px", css).group(1))
-    assert float(m.group(1)) * 16 >= nav_h + 16, "保留量至少要多於導覽高一個基本間距（16px）"
-    assert nav_h == MV.NAV_MOBILE_H
+    # D-9（DEC-137 改寫，等價）：底部固定導覽已由抽屜取代，53px 改為「底部保留帶」（Manage app／家的指示條）；
+    # 保留量仍須 ≥ 保留帶 53 + 16px。不再覆蓋的舊斷言：從 CSS 解析 `.st-key-ui2_nav{…bottom:0;height:53px` 的導覽高（該規則已不存在，
+    # 且其不存在本身由 test_ui2_batch2.check_mobile_drawer_css 守）。
+    assert not re.search(r"\.st-key-ui2_nav\{[^}]*bottom:0;height:\d+px", css)
+    assert float(m.group(1)) * 16 >= MV.NAV_MOBILE_H + 16, "保留量至少要多於底部保留帶一個基本間距（16px）"
+    assert MV.NAV_MOBILE_H == 53
 
 
 def test_nav_margin_cta_row_puts_reason_beside_button_not_below():
