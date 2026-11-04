@@ -1833,3 +1833,20 @@
 |---|---|---|---|---|---|---|
 | **NUI2-DRAWER-PREIMPL-VERIFICATION** | P2 | 抽屜施工前驗證結果入庫（Chromium headless×Streamlit 1.56／1.59；非真機；iOS／Android／Cloud Manage app／VoiceOver／TalkBack 未驗） | open（證據已入庫） | 抽屜線框獲核准 | 施工批沿用 §6 測試改寫清單，不得只刪守衛 | 2 |
 | **NUI2-DRAWER-NEW-JS-GATE** | P2 | 是否核准 `st.html(unsafe_allow_javascript=True)` 約 25 行與其安全白名單 Gate（AST 單處常數字串、禁用清單＋雜湊、raw 互動 HTML 白名單、Playwright 行為測試先 strict xfail） | open（blocked-on-governance） | 治理／客戶裁示；J-6 字樣（同 `NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS`） | 等裁示；未裁示不得自開抽屜／P6 程式批 | 0 |
+
+#### 手機抽屜統一施工規格／JS 安全設計／測試與驗收規格 登記（2026-11-04；docs-only；append；單組撰寫＋待獨立 QA；不授權施工）
+
+- 三份新文件：`docs/vnext/NEWUI2_MOBILE_DRAWER_UNIFIED_BUILD_SPEC_2026-11-04.md`（含「過期條文對照表」S-1～S-13）、`docs/vnext/NEWUI2_MOBILE_DRAWER_JS_SAFETY_DESIGN_2026-11-04.md`（候選 JS_V3 全文，規範化常數 sha256 `24050f1b81c4fed6441d8dad082c90ab0b94ce10d032f42ce36524842e606cd3`）、`docs/vnext/NEWUI2_MOBILE_DRAWER_TEST_AND_ACCEPTANCE_SPEC_2026-11-04.md`。
+- **本輪治理採用**（來源＝治理方向（ChatGPT／客戶側經總管轉達），**非客戶視覺驗收**（使用者在 #1016 自述看不到圖片）、**DEC 尚未落盤**（落盤與否由 ChatGPT／客戶決定，本批未新增 DEC））：① 抽屜開啟時背景不可被 Tab／輔助科技操作，採精準作用範圍 inert；② 點目前所在頁也收合；③ C+JS 為首選施工候選，**正式 JS 尚未核准**；④ J-6 採 B「⬜ 尚未提供」歸 Capability 軸；⑤ ☰ `top:0;left:0`、44px、占既有 `padding-top:2.75rem`，第一屏餘裕 ≥160px（基準距舊導覽線 791），52px／8px 配置（unavailable 154.5）不可用；⑥ 正式圖表、OneBrain、Risk Cap、System Action、OAuth、Digest 契約不變。
+- 舊線框主檔／P6 線框檔頭／J 表處已**只追加**註記指向統一施工規格，原文一字未動。
+
+| ID | 優先級 | 內容 | status | dependency | next action | 驗證組數 |
+|---|---|---|---|---|---|---|
+| **NUI2-DRAWER-UNIFIED-BUILD-SPEC** | P2 | 抽屜統一施工規格入庫（行為 R-01～R-16、a11y A-1～A-8、尺寸／160px 定義、殘餘缺口 L-1～L-10、驗證矩陣、Decision Gate 清單、過期條文對照表） | open（docs 已入庫，待獨立 QA） | 獨立 QA；線框驗收；JS Gate | 獨立 QA 複驗；不授權施工 | 1（單組撰寫） |
+| **NUI2-DRAWER-JS-SAFETY-DESIGN** | P2 | JS 安全設計文件入庫（JS_V3 全文＋sha256、DOM 範圍、API 白名單〔regex 非 parser，雜湊為最後防線〕、AST 判準、兩範圍全域掃描、雜湊紅＝重過 JS Gate、變異清單） | open（docs 已入庫，待獨立 QA） | 同上 | 設計附件，**禁止執行、不得進 repo 任何可執行檔** | 1（單組撰寫；原型結果為研究組單組） |
+| **NUI2-DRAWER-TEST-ACCEPTANCE-SPEC** | P2 | 抽屜測試與驗收規格入庫（既有守衛依賴清單 D-1～D-18、CI 強制 Gate 方式比較、測試清單 T-01～T-20、突變 teeth） | open（docs 已入庫，待獨立 QA） | 同上 | 施工批同 PR 改寫舊守衛，不得只刪 | 1（單組撰寫） |
+| **NUI2-DRAWER-CI-BROWSER-LANE** | P2 | 讓 CI 真的跑 Playwright 並禁止 skip 當通過（建議 A＋D：pr-check.yml 新增 `ui2-browser` matrix 1.56.0／1.59.2＋固定名稱 gate job；`UI2_BROWSER_LANE=required`、`ui2_browser` marker、junit 解析、meta 守衛、playwright pin、證據 JSON 加 git_sha／source_hash） | open（blocked-on-governance；**required check 需 user 在 GitHub 設定**） | 治理核准；user 設 required check | 等治理；修改 workflow／marker／conftest／measure_viewport 屬施工，不在本批 | 1（單組研究；runner 耗時未驗） |
+| **NUI2-DRAWER-CLOSED-A11Y-RESIDUAL** | P3 | 關閉態抽屜的帳戶區塊與「📊 市場」文字仍在 a11y tree（emotion class 使 `visibility:visible`）；零 JS 修法 `.st-key-ui2_nav *{visibility:inherit !important}`（研究組單組實測有效，需施工時重驗開啟態與 CSS 字串守衛） | open | 抽屜施工批 | 併入施工批；不得宣稱前人「關閉時抽屜不在 a11y tree」對帳戶區塊成立 | 1（單組） |
+
+- **`NUI2-DRAWER-NEW-JS-GATE`（補註，原列未動）**：候選 JS 全文與安全設計已入庫（JS 安全設計文件，46 行／規範化常數 sha256 見上），**仍 open（blocked-on-governance）**；「約 25 行」「`__ui2drJS2`」已過時（現為 `__ui2drJS3`）。未裁示不得自開抽屜／P6 程式批；JS 一旦核准，須與抽屜殼同批施工（統一施工規格 S-3）。
+- **`NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS`（補註，原列未動）**：H-11／J-6 的 **#1016 建議 B**（「⬜ 尚未提供」）已被本輪治理方向採用（Capability 軸歸屬；`TEXT_NOT_PROVIDED` 已存在，B 不需擴字樣表，`NUI2-AUTH-STATUS-TEXT-GUARD` 對 B 不是前置）；**客戶仍未裁示**，status 維持 blocked-on-customer；DEC-129 的「⬜ 尚未登入」字面僅正式 auth contract 具備後適用，未撤銷。

@@ -308,3 +308,14 @@
 4. [ ] BACKLOG 已登記 `NUI2-P6-VOCAB-VS-CAPABILITY-TEXT`、`NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS`，並對 `NUI2-AUTH-STATUS-TEXT-GUARD` 補註。
 5. [ ] 未宣稱 iOS／Android 真機、Streamlit Cloud、VoiceOver／TalkBack 已驗。
 6. [ ] 客戶判斷項：H-11／H-12；抽屜 J-2／3／4／6／8／9／10。
+
+## §27 手機抽屜統一施工規格／JS 安全設計／測試與驗收規格 驗收項（2026-11-04；docs-only；append-only；單組撰寫＋待獨立 QA，**待總管／ChatGPT／客戶勾選——本節未自勾**）
+
+1. [ ] 三份新文件存在於 `docs/vnext/`，檔頭標明「治理採用的施工規格（單組撰寫＋獨立 QA）；正式 JS 未核准；本批不授權施工；非客戶視覺驗收」。
+2. [ ] 統一施工規格 §2「過期條文對照表」涵蓋：純 C 推薦、Esc／焦點先不做、JS 不併入第一批、☰ (8,8)／52px、點當前頁不收合、狀態字樣推薦 A、B.3 的 199.5／183.5 數字（距線 791 實為 146.5／130.5）、`aria-controls` 無效、關閉態 a11y；舊文未刪，舊檔僅追加註記。
+3. [ ] JS 安全設計文件的 JS_V3 全文自 code block 取出、規範化後 sha256 ＝ `24050f1b81c4fed6441d8dad082c90ab0b94ce10d032f42ce36524842e606cd3`。
+4. [ ] 候選 JS 未出現於任何 `.py`／`.js`／`.html`／workflow；本批 diff 僅含 `docs/**` 與 `PROJECT_RULES.md` 追加兩行 pointer。
+5. [ ] 未宣稱客戶視覺驗收、JS 已核准、DEC 已落盤；未新增 DEC；DEC-128..134 與 Active Contract 一字未動。
+6. [ ] 未宣稱 iOS／Android 真機、Cloud／Manage app、CSP、VoiceOver／TalkBack、Firefox／WebKit 已驗；未宣稱瀏覽器數字經撰寫組重跑。
+7. [ ] 獨立 QA：挑戰「過期條文表是否漏列」「測試依賴清單是否漏列」「CI 方式比較」「全稱句」。
+8. [ ] 客戶／治理判斷項：JS Gate；線框驗收；DEC 落盤；J-6／H-11；CI required check（user 在 GitHub 設定）。

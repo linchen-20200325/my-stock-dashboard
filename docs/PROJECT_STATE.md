@@ -1088,3 +1088,11 @@
 - **施工未授權**；前置：治理／客戶核准線框與新 JS Gate、J-6 字樣、施工 PR 同批改寫 4 個 CSS 測試與 harness。P7、`NUI2-AUTH-CONTRACT-GATE` 未動。
 - **未驗**：iOS／Android 真機、Cloud Manage app、VoiceOver／TalkBack、Firefox／WebKit、Cloud CSP 對 `st.html` JS。
 - **§27 檢查**：新 Decision＝無；新 Rule＝無；Backlog＝新增 `NUI2-DRAWER-PREIMPL-VERIFICATION`、`NUI2-DRAWER-NEW-JS-GATE`；Audit Checklist 未自勾。
+
+## 67. New UI2 手機抽屜統一施工規格／JS 安全設計／測試與驗收規格（2026-11-04；docs-only；append-only；單組撰寫＋待獨立 QA）
+
+- **已入庫**：`docs/vnext/NEWUI2_MOBILE_DRAWER_UNIFIED_BUILD_SPEC_2026-11-04.md`、`docs/vnext/NEWUI2_MOBILE_DRAWER_JS_SAFETY_DESIGN_2026-11-04.md`、`docs/vnext/NEWUI2_MOBILE_DRAWER_TEST_AND_ACCEPTANCE_SPEC_2026-11-04.md`（零程式碼、零測試、零 workflow 變更）。另在舊線框主檔、P6 線框檔頭、J 表處**只追加**指向註記。
+- **本輪治理採用**：inert（精準範圍）、點當前頁收合、C+JS 首選候選（**正式 JS 未核准**）、J-6 採 B（Capability 軸）、☰ top:0/left:0/44px 占既有頂部保留帶（52px／8px 配置不可用）。來源＝治理方向（ChatGPT／客戶側經總管轉達），**非客戶視覺驗收**（使用者在 #1016 自述看不到圖片）、**DEC 尚未落盤**（落盤與否由 ChatGPT／客戶決定，本批未新增 DEC）。
+- **未授權**：抽屜／P6 施工、JS、workflow 變更；P7、`NUI2-AUTH-CONTRACT-GATE`（Opus 5.5＋High）未動；DEC-128..134 與 Active Contract 一字未動。
+- **未驗**：iOS／Android 真機、Streamlit Cloud／Manage app、CSP、VoiceOver／TalkBack、Firefox／WebKit、GitHub Actions runner 耗時；瀏覽器數字皆研究組單組 Chromium 結果，撰寫組未重跑。
+- **§27 檢查**：新 Decision＝無（DEC 落盤由 ChatGPT／客戶決定）；新 Rule＝無；Backlog＝新增 `NUI2-DRAWER-UNIFIED-BUILD-SPEC`、`NUI2-DRAWER-JS-SAFETY-DESIGN`、`NUI2-DRAWER-TEST-ACCEPTANCE-SPEC`、`NUI2-DRAWER-CI-BROWSER-LANE`、`NUI2-DRAWER-CLOSED-A11Y-RESIDUAL`，並對 `NUI2-DRAWER-NEW-JS-GATE`／`NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS` 補註；Audit Checklist §27 新節（未自勾）。

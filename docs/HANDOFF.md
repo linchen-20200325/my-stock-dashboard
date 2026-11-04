@@ -960,3 +960,14 @@ DEC-086 規則已於 main，本表已落地。
 | 正式文件索引 | `docs/vnext/NEWUI2_MOBILE_DRAWER_PREIMPLEMENTATION_VERIFICATION_2026-11-04.md`；證據 `docs/vnext/newui2_drawer_preimpl/`；`docs/BACKLOG.md` 末「手機抽屜施工前驗證入庫」；`docs/PROJECT_STATE.md` §66；Audit Checklist 未自勾 |
 | 未驗 | iOS／Android 真機、Cloud Manage app、VoiceOver／TalkBack、Firefox／WebKit、Cloud CSP 對 st.html JS |
 | 仍禁止（不變） | 同上方各 Safe Handoff「仍禁止」全部維持；另 ⛔ 把驗證推薦（C+JS）當客戶／治理裁示；⛔ 宣稱已解決 Manage app 遮擋；⛔ 施工 PR 只刪守衛 |
+
+- **Safe Handoff（2026-11-04 抽屜統一施工規格／JS 安全設計／測試與驗收規格入庫；現行；docs 組單組撰寫、待獨立 QA）**（本表**取代**上方 Safe Handoff 表的「下一個唯一安全工作」格，其餘格內容仍有效）
+
+| 欄位 | 內容 |
+|---|---|
+| **下一個唯一安全工作** | 等 **ChatGPT／客戶**裁示：① 新 JS Gate（`NUI2-DRAWER-NEW-JS-GATE`）；② 抽屜線框驗收；③ 本輪治理採用項是否落成 DEC；④ J 表客戶可答項（J-2／3／4／6／8／9／10；H-11 與 J-6 同一題）；⑤ 治理核准 CI 瀏覽器 lane 後由 **user 在 GitHub 設定 required check**（`NUI2-DRAWER-CI-BROWSER-LANE`）。**不得自開抽屜／P6 程式批；不得改 workflow** |
+| 本輪治理採用（記錄） | inert 精準範圍、點當前頁收合、C+JS 首選候選（**正式 JS 未核准**）、J-6 採 B「⬜ 尚未提供」歸 Capability 軸、☰ top:0/left:0/44px 占既有頂部保留帶（餘裕 ≥160px，基準距線 791；52px／8px 配置不可用）。**來源＝治理方向，非客戶視覺驗收，DEC 尚未落盤** |
+| 未動 | P7（桌機 Account Area 殼）、`NUI2-AUTH-CONTRACT-GATE`（Opus 5.5＋High）；零程式碼、零測試、零 workflow 變更；DEC 圍欄與 Active Contract 不動 |
+| 正式文件索引 | `docs/vnext/NEWUI2_MOBILE_DRAWER_UNIFIED_BUILD_SPEC_2026-11-04.md`、`…JS_SAFETY_DESIGN_2026-11-04.md`、`…TEST_AND_ACCEPTANCE_SPEC_2026-11-04.md`；`docs/BACKLOG.md` 末「手機抽屜統一施工規格…登記」；`docs/PROJECT_STATE.md` §67；Audit Checklist §27（**未自勾**） |
+| 未驗 | iOS／Android 真機、Cloud Manage app、CSP、VoiceOver／TalkBack、Firefox／WebKit、Actions runner 耗時；瀏覽器數字為研究組單組 Chromium 結果 |
+| 仍禁止（不變） | 同上方各 Safe Handoff「仍禁止」全部維持；另 ⛔ 把候選 JS 當已核准或放進任何可執行檔；⛔ 把治理採用當客戶視覺驗收或 DEC；⛔ 宣稱已解決 Manage app 遮擋；⛔ 施工 PR 只刪守衛；⛔ 52px／8px ☰ 配置 |
