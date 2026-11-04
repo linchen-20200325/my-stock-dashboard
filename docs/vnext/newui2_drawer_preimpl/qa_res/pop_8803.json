@@ -1,0 +1,103 @@
+{
+ "attrs": {
+  "btn": [
+   "type=button",
+   "class=qa-btn",
+   "popovertarget=qa-pop",
+   "aria-label=主選單"
+  ],
+  "pop": [
+   "id=qa-pop",
+   "class=qa-pop",
+   "popover="
+  ],
+  "popSupported": true
+ },
+ "open": {
+  "focus": "BUTTON.qa-btn[button]",
+  "inNav": false,
+  "navLeft": 0,
+  "navW": 320,
+  "vis": "visible",
+  "open": true,
+  "chk": null,
+  "pop": true,
+  "page": "p4_market",
+  "jsruns": null,
+  "escs": null,
+  "hs": false
+ },
+ "tab_in": {
+  "focus": "INPUT[radio:on]",
+  "inNav": true,
+  "navLeft": 0,
+  "navW": 320,
+  "vis": "visible",
+  "open": true,
+  "chk": null,
+  "pop": true,
+  "page": "p4_market",
+  "jsruns": null,
+  "escs": null,
+  "hs": false
+ },
+ "esc_inside": {
+  "focus": "BODY",
+  "inNav": false,
+  "navLeft": -336,
+  "navW": 320,
+  "vis": "hidden",
+  "open": false,
+  "chk": null,
+  "pop": false,
+  "page": "p4_market",
+  "jsruns": null,
+  "escs": null,
+  "hs": false
+ },
+ "click_current_page": {
+  "focus": "BODY",
+  "inNav": false,
+  "navLeft": -336,
+  "navW": 320,
+  "vis": "hidden",
+  "open": false,
+  "chk": null,
+  "pop": false,
+  "page": "p4_market",
+  "jsruns": null,
+  "escs": null,
+  "hs": false
+ },
+ "scrim_tap": {
+  "before": true,
+  "after": {
+   "focus": "SECTION.stMain",
+   "inNav": false,
+   "navLeft": -336,
+   "navW": 320,
+   "vis": "hidden",
+   "open": false,
+   "chk": null,
+   "pop": false,
+   "page": "p4_market",
+   "jsruns": null,
+   "escs": null,
+   "hs": false
+  }
+ },
+ "double_tap_btn": {
+  "focus": "BUTTON.qa-btn[button]",
+  "inNav": false,
+  "navLeft": -336,
+  "navW": 320,
+  "vis": "hidden",
+  "open": false,
+  "chk": null,
+  "pop": false,
+  "page": "p4_market",
+  "jsruns": null,
+  "escs": null,
+  "hs": false
+ }
+}

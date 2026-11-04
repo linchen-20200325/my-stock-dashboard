@@ -1080,3 +1080,11 @@
 - **撰寫組推薦（非裁示）**：抽屜實作採 C（CSS-only checkbox），B 為備案。
 - **未驗**：iOS／Android 真機、Streamlit Community Cloud（含 Manage app 浮層）、VoiceOver／TalkBack；僅 Chromium headless × Streamlit 1.56.0／1.59.2 實驗。欄位盤點以讀碼為準，未對各 service 實呼叫。
 - **§27 檢查**：新 Decision＝無；新 Rule＝無；Backlog＝新增 `NUI2-P6-VOCAB-VS-CAPABILITY-TEXT`、`NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS`；Audit Checklist §26 新節（未自勾）。
+
+## 66. New UI2 手機抽屜施工前驗證（2026-11-04；docs-only；append-only；單組撰寫＋一組獨立複驗）
+
+- **已入庫**：`docs/vnext/NEWUI2_MOBILE_DRAWER_PREIMPLEMENTATION_VERIFICATION_2026-11-04.md`＋證據 `docs/vnext/newui2_drawer_preimpl/`。環境 Chromium headless×Streamlit 1.56.0／1.59.2，非真機。
+- **結論（非裁示）**：推薦 C+JS（需新 JS＋安全白名單 Gate），否則 C-pop（(5) 部分）；A 不可行；B 無優勢；Auth Gate 不需要。線框「☰ 8px＋44px」使 unavailable 餘裕 154.5<160，須改占既有 44px 保留帶（162.5）。
+- **施工未授權**；前置：治理／客戶核准線框與新 JS Gate、J-6 字樣、施工 PR 同批改寫 4 個 CSS 測試與 harness。P7、`NUI2-AUTH-CONTRACT-GATE` 未動。
+- **未驗**：iOS／Android 真機、Cloud Manage app、VoiceOver／TalkBack、Firefox／WebKit、Cloud CSP 對 `st.html` JS。
+- **§27 檢查**：新 Decision＝無；新 Rule＝無；Backlog＝新增 `NUI2-DRAWER-PREIMPL-VERIFICATION`、`NUI2-DRAWER-NEW-JS-GATE`；Audit Checklist 未自勾。

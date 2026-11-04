@@ -950,3 +950,13 @@ DEC-086 規則已於 main，本表已落地。
 | 正式文件索引 | `docs/vnext/NEWUI2_P6_DATA_HEALTH_TEXT_WIREFRAME_2026-11-04.md`；`docs/vnext/NEWUI2_MOBILE_DRAWER_TEXT_WIREFRAME_2026-11-04.md`；`docs/BACKLOG.md` §5.1.26 末「P6 資料健康度＋手機抽屜 文字線框登記」；`docs/PROJECT_STATE.md` §65；Audit Checklist §26（**未自勾**） |
 | 未驗 | iOS／Android 真機、Streamlit Cloud Manage app、VoiceOver／TalkBack |
 | 仍禁止（不變） | 同上方各 Safe Handoff「仍禁止」全部維持；另 ⛔ 把撰寫組推薦（抽屜 C 案）當客戶裁示；⛔ 宣稱客戶已核准線框 |
+
+- **Safe Handoff（2026-11-04 抽屜施工前驗證入庫；現行；docs 組單組撰寫＋一組獨立複驗、待總管複驗）**（本表**取代**上方 Safe Handoff 表的「下一個唯一安全工作」格，其餘格內容仍有效）
+
+| 欄位 | 內容 |
+|---|---|
+| **下一個唯一安全工作** | 等 ChatGPT 審查驗證結果＋客戶／治理對「新 JS Gate」與 J-6 字樣裁示。**不得自開抽屜／P6 程式批次**；未核准不動工 |
+| 未動 | P7、`NUI2-AUTH-CONTRACT-GATE`（Opus 5.5＋High）均未動；零程式碼、零測試變更；DEC 圍欄不動 |
+| 正式文件索引 | `docs/vnext/NEWUI2_MOBILE_DRAWER_PREIMPLEMENTATION_VERIFICATION_2026-11-04.md`；證據 `docs/vnext/newui2_drawer_preimpl/`；`docs/BACKLOG.md` 末「手機抽屜施工前驗證入庫」；`docs/PROJECT_STATE.md` §66；Audit Checklist 未自勾 |
+| 未驗 | iOS／Android 真機、Cloud Manage app、VoiceOver／TalkBack、Firefox／WebKit、Cloud CSP 對 st.html JS |
+| 仍禁止（不變） | 同上方各 Safe Handoff「仍禁止」全部維持；另 ⛔ 把驗證推薦（C+JS）當客戶／治理裁示；⛔ 宣稱已解決 Manage app 遮擋；⛔ 施工 PR 只刪守衛 |

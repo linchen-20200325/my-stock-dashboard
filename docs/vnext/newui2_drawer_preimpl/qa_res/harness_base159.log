@@ -1,0 +1,66 @@
+2026-11-04 13:10:54.337 
+Warning: the config option 'server.enableCORS=false' is not compatible with
+'server.enableXsrfProtection=true'.
+As a result, 'server.enableCORS' is being overridden to 'true'.
+
+More information:
+In order to protect against CSRF attacks, we send a cookie with each request.
+To do so, we must specify allowable origins, which places a restriction on
+cross-origin resource sharing.
+
+If cross origin resource sharing is required, please disable server.enableXsrfProtection.
+            
+2026-11-04 13:10:54.640 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.641 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.670 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.671 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.672 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.673 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.675 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.675 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.676 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.676 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.677 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.677 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.678 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.678 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.679 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.680 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.681 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.683 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.683 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.684 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.685 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.686 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.686 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.687 No runtime found, using MemoryCacheStorageManager
+/tmp/claude-0/-home-user-my-stock-dashboard/63bda950-423d-54ee-a3a0-c173e0eb3d47/scratchpad/drawer_qa/repo/src/data/core/data_loader.py:24: UserWarning: FinMind DataLoader 無法載入（raw HTTP API 仍可用）：FinMind=No module named 'FinMind' / finmind=No module named 'finmind'
+  warnings.warn(f"FinMind DataLoader 無法載入（raw HTTP API 仍可用）："
+2026-11-04 13:10:54.792 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.795 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.797 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.802 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.802 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.803 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.804 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.810 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.811 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.812 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.812 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.813 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.814 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.821 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.822 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.822 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.823 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.824 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.825 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.826 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.827 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.828 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.831 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.831 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.832 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.833 No runtime found, using MemoryCacheStorageManager
+2026-11-04 13:10:54.836 No runtime found, using MemoryCacheStorageManager
+states=70 passed=70 failed=[]

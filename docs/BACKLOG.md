@@ -1824,3 +1824,12 @@
 | **NUI2-AUTH-STATUS-TEXT-GUARD**（補註） | P2 | 既有項補註：H-11／J-6 若採「⬜ 尚未登入」，**須先擴字樣表**並過本守衛，才可施工；Real 模式今天顯示「⬜ 尚未提供」 | open | — | 先擴字樣表 | 0 |
 
 - 抽屜實作方案推薦 C（CSS-only，B 自訂 session 控制為備案）為**撰寫組推薦，非客戶裁示**；P7、`NUI2-AUTH-CONTRACT-GATE`（Opus 5.5＋High）未動。
+
+#### 手機抽屜施工前驗證入庫（2026-11-04；docs-only；append；單組撰寫＋一組獨立複驗；不授權施工）
+
+- 驗證結果：`docs/vnext/NEWUI2_MOBILE_DRAWER_PREIMPLEMENTATION_VERIFICATION_2026-11-04.md`（證據 `docs/vnext/newui2_drawer_preimpl/`）。結論：C 純 CSS 做不到 Esc／焦點；推薦 C+JS（需新 JS Gate），治理不接受 JS 則 C-pop（條件 (5) 部分）；A 不可行、B 無優勢；☰ 須占既有 44px 頂部保留帶才守住 160px 餘裕。**非客戶核准。**
+
+| ID | 優先級 | 內容 | status | dependency | next action | 驗證組數 |
+|---|---|---|---|---|---|---|
+| **NUI2-DRAWER-PREIMPL-VERIFICATION** | P2 | 抽屜施工前驗證結果入庫（Chromium headless×Streamlit 1.56／1.59；非真機；iOS／Android／Cloud Manage app／VoiceOver／TalkBack 未驗） | open（證據已入庫） | 抽屜線框獲核准 | 施工批沿用 §6 測試改寫清單，不得只刪守衛 | 2 |
+| **NUI2-DRAWER-NEW-JS-GATE** | P2 | 是否核准 `st.html(unsafe_allow_javascript=True)` 約 25 行與其安全白名單 Gate（AST 單處常數字串、禁用清單＋雜湊、raw 互動 HTML 白名單、Playwright 行為測試先 strict xfail） | open（blocked-on-governance） | 治理／客戶裁示；J-6 字樣（同 `NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS`） | 等裁示；未裁示不得自開抽屜／P6 程式批 | 0 |
