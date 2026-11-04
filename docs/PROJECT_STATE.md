@@ -1056,3 +1056,10 @@
 - **§27 檢查**：新 Decision＝DEC-131（客戶 (17) 逐字）；新 Rule＝無；Audit finding／Limitation／Backlog＝5 個新 ID 已寫 BACKLOG；Audit Checklist §23 新節（未自勾）。
 - **P3 QA 修正（2026-11-04；實作組單組、待複驗）**：兩組獨立 QA 無 P0／P1。已修：baseline 指紋擴大鎖定（內文雜湊）＋baseline sha256 釘值、RuleID 現況鎖定（VM 尚無 RuleID 欄位）、Digest 過度宣稱更正、`_evaluate_p3` 缺鍵判紅＋單元測試；登記 `NUI2-P3-CONDITIONS-TITLE-PAREN`、`NUI2-P3-DIGEST-DYNAMIC-IMPORT-BLIND`。細節見 BACKLOG「P3 QA 修正補記」、DEC-131 §六。全量 not slow＝37219 passed、0 failed、46 skipped、186 deselected、4 xfailed；slow 1 passed；viewport 1.59.2／1.56.0 各 FAKE 70＋Real 11 全綠。§27：新 Decision＝無；新 Rule＝無；Backlog＝2 新 ID；Audit §23 加第 9 項（未自勾）。
 
+
+## 63. DEC-132：客戶覆核 (18)——#1009 兩灰區裁定落盤＋P2「文字線框先行」交付（客戶 2026-11-04；2026-11-04；docs-only；append-only；docs 組單組、待總管複驗）
+
+- **範圍**：docs-only（`docs/DECISIONS.md` DEC-132、`docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md`、BACKLOG／PROJECT_STATE／HANDOFF／Audit Checklist §24／Active Contract §11 與施工附件指標、`tests/test_ui2_active_contract_docs.py` 加性守衛）。**0 行 src／shared／app／既有 tests 行為變更**；不授權任何實作。
+- **裁定**：(1) 👤 Data Freshness／System Information 維持不在四頁一般 Human UI，由 P6 資料健康度承接，不得刪 VM／資料來源／provenance／Evidence；(2) 🎯 跨季趨勢與完整分析暫不恢復舊 L3 expander，保留為設計候選（精簡圖卡優先；資料來源／EPS 口徑／版型另行驗證；**仍 Pending，不是核准功能**）；(3) VM 保存≠Digest 已有，`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY` 維持 open，未證實前不得宣稱 OneBrain 可讀完整資料；(4) P2 採文字線框先行，本輪僅線框與資料欄位驗證。
+- **P2 線框**（待客戶驗收）：OneBrain 上移至今日主要風險之後／Primary 槽之前；台股 Primary 誠實空槽＋一行 SPEC（來源／資料日取 TWII 卡 freshness）；歷史序列／MA 不接。排序核對結論：以 Wireframes／DEC-122 Q3=A／DEC-127 為準，不需客戶裁示。
+- **§27 檢查**：新 Decision＝DEC-132；新 Rule＝文件措辭規則；Backlog＝既有 ID 狀態更新；Audit §24 新節未自勾。

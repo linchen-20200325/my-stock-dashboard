@@ -7420,3 +7420,100 @@ Silent Autonomous Cruise；只有真正需要客戶裁示或整批完成才回�
 - **Digest 宣稱更正**：§四「此期間仍可由 VM／Digest 取得」過度宣稱，已以刪除線＋📌 更正（實測 Digest builder 不含位階完整說明、指標明細、lookup 基本面／估值；是否涵蓋未驗）。
 - viewport 判定器：真瀏覽器量測 dict 缺 `expanders` 鍵改判紅；允許標題改為判定器自有常數（與 pytest `EXPECTED_SHOWN_FOLDS` 的一致性由單元測試守）。
 
+
+
+---
+
+### DEC-132｜客戶正式覆核 (18)：#1009 兩灰區裁定（👤 Data Freshness／System Information 維持不在四頁一般 Human UI；🎯 跨季趨勢與完整分析暫不恢復舊 L3 expander、保留為設計候選）＋Digest 缺口維持登記＋P2 採「文字線框先行」、本輪不授權實作（客戶 2026-11-04）
+
+> 2026-11-04 補登（ID 取下一個未用號；落盤前 `grep -rn "DEC-132" docs PROJECT_RULES.md tests` 0 命中，DEC-131 為上一號）。**編號**：repo 慣例是「每一則客戶指示訊息一個 DEC」，(18) 是 (17)（P3）之後的**獨立正式覆核**，故另立 DEC-132；DEC-128～131 原文不動（append-only）。**來源類別 D：客戶 2026-11-04 正式覆核 (18)，經總管轉交；下方 fence 逐字收錄，未改一字**（docs 組未見客戶原訊息本身，只見總管轉交之全文；若有出入以原訊息為準）。
+
+- **決策者**：**客戶**（2026-11-04）。｜**效力日期**：2026-11-04 起。｜**範圍**：治理＋文件（兩項灰區裁定落盤、P2 文字線框交付）；**0 行 src／shared／app／tests 行為變更**（僅 docs 一致性測試加性擴充）。
+- **狀態**：**客戶裁示生效**（兩項裁定、Digest 缺口維持、P2 採文字線框先行）；**P2 線框待客戶驗收，本 DEC 不授權任何實作**。
+- **客戶原文（逐字，fence 內未改一字；具約束力；sha256 釘住於 `tests/test_ui2_active_contract_docs.py`）**：
+
+```
+正式覆核 #1009 後，下一批選 P2，但採「文字線框先行」方式。
+
+先完成 GitHub Verification Gate，以最新 main／PR／CI／正式規格為準。
+
+一、兩項裁定
+
+1. 👤 Data Freshness、System Information 維持不在四頁一般 Human UI 顯示，未來由 P6「資料健康度」承接。不得刪 VM、資料來源、provenance 或其他 Evidence。
+
+2. 🎯 跨季趨勢與完整分析暫不恢復舊 L3 expander。保留為後續使用者分析能力的設計候選，以精簡圖卡為優先；資料來源、EPS 口徑、版型先另行驗證，不自行開工或新增公式。
+
+重要：VM 保存不等於 Digest 已有。 請維持 Digest evidence coverage 缺口登記，未證實之前不得宣稱 OneBrain 可讀完整資料。
+
+二、P2 文字線框先行
+
+依既有已核准 New UI2 草稿，提出手機 390px、桌機 1440px 的最小差異文字線框。
+
+本次只規劃：
+
+1. 🤖 OneBrain Outlook 位置調整。
+2. 台股 Primary 主圖區塊及短 SPEC 的誠實空槽。
+
+要求保留：
+
+- 已核准的市場頁首屏順序及主 CTA。
+- 市場狀態、Risk Cap、是否需要行動、今日主要風險。
+- 既有圖表、卡片與資訊層級。
+- 手機四格導航、桌機原有布局。
+- 沒有正式歷史圖表資料時，不繪製假走勢線。
+
+請特別核對 Active Contract §3.1 與 Wireframes §2.1 的「今日主要風險／是否需要行動」排序差異，以最新客戶裁示及已核准視覺契約為準，不自行變更頁面責任。
+
+完成文字線框與資料位置對照後，先回報供我驗收。
+
+本輪只授權提出線框與驗證資料欄位，不授權直接實作新版面。
+
+若線框已符合既有核准版型、無需新裁示，再由我確認後進入 P2 程式施工。
+
+三、資料串接邊界
+
+對照已合併 #1007 的 UI × Data × Evidence 規劃：
+
+- TWII 最新收盤值不等於歷史圖表資料。
+- 不新增資料來源、MA 公式或未核准的圖表判斷。
+- 不修改 Risk Cap、System Action、Digest schema、OAuth。
+- 不以 UI ViewModel 取代完整 Decision Digest。
+
+將此次兩個灰區及 P2 線框依既有治理要求寫進 GitHub 正式紀錄，歷史 Decision 維持 append-only。
+
+完成後一次精簡回報，無需中途反覆說明。
+
+Model：Claude Sonnet 5.5  Effort：Medium
+```
+
+#### 一、裁定 1：👤 Data Freshness／System Information（客戶 (18) 一.1）
+
+- **客戶裁示**：維持**不在四頁一般 Human UI 顯示**，**未來由 P6「資料健康度」承接**；**不得刪 VM、資料來源、provenance 或其他 Evidence**。
+- **對 #1009 登記的影響**：BACKLOG `NUI2-P3-FRESH-SYSINFO-HIDDEN` 原寫「實作組讀法，可由總管／客戶推翻」＝**可推翻的讀法**；DEC-131 §三第 3 點同。自本 DEC 起該讀法**升為客戶裁示**（BACKLOG 該列以刪除線＋📌 保留原文，不刪；DEC-131 原文**不改**，以本 DEC 為準）。
+- **實作意涵（不是新施工）**：`SHOWN_FOLDS` 維持現狀（不含 `("p4_me","fresh")`／`("p4_me","sysinfo")`）；VM `fresh`／`sysinfo` sections、`first_screen`／freshness／source／as_of／provenance 一字不動。這兩區的**可見落點**＝P6 資料健康度 Level 1／2（Active Contract §3.4／§5），P6 到位前使用者看不到它們（過渡期限制，同 DEC-131 §四）。
+- **仍 Pending（不因本 DEC 升格）**：資料健康度 Level 1／2 預設展開或收合、Level 3 是否限遮罩後診斷碼、`⛔ 來源不可用` 顏色（Active Contract §11 撰寫組暫定）。
+
+#### 二、裁定 2：🎯 跨季趨勢與完整分析（客戶 (18) 一.2）
+
+- **客戶裁示**：**暫不恢復舊 L3 expander**；**保留為後續使用者分析能力的設計候選**，**以精簡圖卡為優先**；**資料來源、EPS 口徑、版型先另行驗證，不自行開工或新增公式**。
+- **狀態寫準確（⛔ 不得寫成核准功能）**：「🎯 跨季趨勢使用者功能」＝**仍 Pending／設計候選，不是核准功能**。本 DEC **不是**「核准恢復」、**不是**「核准新增功能入口」、**不是**開工授權；Active Contract §11 撰寫組暫定四項因此由「是否保留為使用者功能」改為「設計候選（客戶 (18)：暫不恢復舊 L3 expander）」，其餘三項（Level 1／2 預設、Level 3 遮罩、`⛔` 顏色）**維持 Pending**。
+- **BACKLOG `NUI2-P3-FULL-TABLE-HIDDEN`** 同步：🎯 `完整 6 欄表／跨季趨勢` 維持不渲染（客戶裁示）；VM 保留；該項由「P2 新增使用者功能入口時另行分類」改為「**不在 P2 範圍**；設計候選待資料來源／EPS 口徑／版型另行驗證後由客戶決定」。
+- **邊界**：不新增公式、不新增資料來源、不新增 Human UI expander；EPS 口徑與資料來源驗證屬**另案**（需客戶另行授權，且涉口徑者依 PROJECT_RULES 第 29 節多路徑比較）。
+
+#### 三、重申：VM 保存 ≠ Digest 已有（客戶 (18) 一 末段）
+
+- **客戶原文**：「**VM 保存不等於 Digest 已有。請維持 Digest evidence coverage 缺口登記，未證實之前不得宣稱 OneBrain 可讀完整資料。**」
+- **落盤**：`NUI2-P3-DIGEST-CLOSURE-STATIC-ONLY`（AST 靜態閉包只證明「Digest 輸入不依賴 UI2 渲染」，**未**證明 Digest 內容涵蓋 UI evidence）**維持 open（未驗）**，不因本 DEC 或 P2 線框結案；實測 Digest builder 不含位階完整說明、指標明細、lookup 基本面／估值（QA 2026-11-04）仍為最新已知事實。
+- **文件措辭規則（新增、自本 DEC 起）**：任何文件、PR、回報**不得**寫「OneBrain 可讀完整資料／evidence 已在 Digest」；只能寫「evidence 保留於 VM／canonical；Digest 是否涵蓋＝未驗」。P2 線框中的 OneBrain 槽只是**位置調整的誠實佔位**，**不是** Digest／OneBrain 已存在的證據。
+
+#### 四、P2 採「文字線框先行」；本輪不授權實作（客戶 (18) 二、三）
+
+- **客戶裁示**：下一批選 P2，**但文字線框先行**；本次只規劃①🤖 OneBrain Outlook 位置調整、②台股 Primary 主圖區塊＋短 SPEC 的**誠實空槽**；**只授權提出線框與驗證資料欄位，不授權直接實作新版面**；線框完成後**先回報供客戶驗收**，「若線框已符合既有核准版型、無需新裁示」再由客戶確認後進入 P2 程式施工。
+- **交付**：`docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md`（A 現況首屏／B 風險順序核對／C P2 最小差異／D 保留清單／E 資料位置對照／F 驗收準則與施工邊界／G 待客戶確認項）。**狀態＝待客戶驗收**。
+- **「今日主要風險／是否需要行動」排序差異核對**（客戶要求「以最新客戶裁示及已核准視覺契約為準，不自行變更頁面責任」）：結論與證據見該文件 §B；摘要＝**以 Wireframes §2.1／§2.2（客戶 Q3 核准）＋DEC-122 Q3=A＋DEC-127 為準**（手機：是否需要行動 → 今日主要風險；桌機：三 tile〔狀態／Risk Cap／今日主要風險〕→ 是否需要行動）；Active Contract §3.1 該格是桌機三 tile 排法的**扁平轉述**，其表頭自述「順序依 Wireframes §2.1／§2.2 與 DEC-127」，**頁面責任不因整理而變**。最小勘誤僅提案、未套用。
+- **資料串接邊界（客戶 (18) 三，逐字見 fence）**：TWII 最新收盤值**不等於**歷史圖表資料；不新增資料來源、MA 公式或未核准的圖表判斷；不修改 Risk Cap、System Action、Digest schema、OAuth；不以 UI ViewModel 取代完整 Decision Digest。
+- **回報格式**：客戶要求「完成後一次精簡回報，無需中途反覆說明」；需客戶一句話確認的點集中於線框文件 §G（≤3 題、每題 A／B 加推薦）。
+
+#### 五、揭露與效力邊界
+
+docs 組單組撰寫、待總管複驗。**不授權**：任何 `src/`／`shared/`／`app*.py`／既有 tests 的變更；P2 程式施工（待客戶驗收線框）；P6／P7；OneBrain／Digest runtime；Digest schema／Risk Cap／System Action／OAuth／資料層／公式／門檻／來源；新增 Human UI expander；把「設計候選」當核准功能。舊 DEC（DEC-081／117／118／122／127～131）**一字不改**。
