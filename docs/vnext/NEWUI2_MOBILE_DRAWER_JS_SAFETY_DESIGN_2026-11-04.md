@@ -133,6 +133,7 @@
 ### 5.2 API 白名單（安全守衛主依據）
 
 - **全域識別字**：`window document Set Date MutationObserver requestAnimationFrame setTimeout RegExp`。
+  - 註：白名單列了 `RegExp`，但 JS 只使用正則**字面值**（`/^(Arrow|Enter$| $)/`），未使用 `new RegExp`；多列無害。白名單不因此改動，雜湊與 JS 全文不變。
 - **成員名**：`matchMedia matches querySelector closest parentElement children checked focus inert held ret q forEach push now add has addEventListener observe activeElement body key target test __ui2drJS3`。
 - **事件名**：`keydown change click`（＋ MutationObserver）。
 - **字串字面值**：僅限上述事件名、`Escape`、`childList`、`subtree`、`(max-width: 768px)` 與 §4 白名單 selector。
@@ -207,6 +208,8 @@ JS 的 `(max-width: 768px)` 與 CSS 的 `@media (max-width:768px)` 是**兩處�
 | 頁面重載（開啟中） | inert 0（狀態不持久） |
 | 開啟中視窗改 1440 | toggle 取消勾選、inert 0、背景可互動；縮回 390 抽屜為關閉 |
 | pageerror | 全程 0 |
+
+> 註：被 inert 的元素數在研究組報告中有 10（手機基準，§4）、11–13（開啟開發面 `?ui2_dev=1` 時）與 12（rerun 測試）等不同數字，**口徑不同（推測為是否含開發面或 rerun 後狀態，研究組報告未逐項說明），數值待施工測試釘死**。
 
 ## 12. 行為矩陣（1.56／1.59 結果相同；研究組單組）
 

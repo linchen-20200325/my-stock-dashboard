@@ -40,6 +40,7 @@
 | S-11 | VER §7／BACKLOG `NUI2-DRAWER-NEW-JS-GATE`「約 25 行」「`window.__ui2drJS2`」 | 候選 JS 現為 **46 行／3592 bytes**，去重旗標為 `window.__ui2drJS3`；JS_V3 全文與 sha256 見 JS 安全設計 §1 | JS 設計 §1 |
 | S-12 | WF §H 表「新增：抽屜行為（Playwright）」「先 xfail strict」未規定如何**強制 CI 真的跑瀏覽器** | 現況 CI 兩個 job 都沒裝 playwright，現有真瀏覽器測試是 `@slow`＋`importorskip`＋缺 Chromium 時 `pytest.skip`＝**永遠不阻擋**。skip≠PASS 要靠強制 lane | 測試規格 §2 |
 | S-13 | WF §J 表 J-6 列推薦 A、REV §1 H-11／J-6 列 B 的「建議層級」字樣 | REV 的 B 是建議；本輪治理已**採用** B（仍非客戶裁示、DEC 未落盤） | §1、§7 |
+| S-14 | WF 的「✕ 關閉鈕」（§C-2 ASCII 約 :80、C-3 ③ 約 :98、C-5 關閉方式清單約 :104、§G 觸控目標表約 :170）與 `NEWUI2_MOBILE_DRAWER_NAV_CONTRACT_2026-11-04.md` 的「[×]」；VER §4 末句「☰ 列 52px／占既有 44px」措辭自相矛盾（52px 是已證不合格的舊配置，占既有 44px 才是現行） | 現行 R-01／R-06 的關閉方式**不含 ✕**，JS_V3 也無 ✕ 處理；「52px」不再使用 | 以 R-01～R-10 與 §5（☰ 高 44px、占既有保留帶）為準。**是否保留 ✕ 屬線框驗收項，施工前須定案，不得默默加入** |
 
 > **處置方式**：舊線框主檔、P6 線框檔頭與 J 表處已**只追加**註記指向本規格；原文一字未動。若發現本表漏列過期條文，請**追加**列，不得改舊文。
 
@@ -47,7 +48,7 @@
 
 - **首選施工候選：C+JS**＝CSS checkbox 抽屜（沿用單一 `st.container(key="ui2_nav")`＋單一 `st.radio(key="ui2_page")`，手機＝抽屜、桌機＝176px rail，同一份 DOM）＋ `st.html(DRAWER_JS_HTML, unsafe_allow_javascript=True)` 一段固定常數 JS。
 - **JS 狀態**：候選 JS_V3 全文與安全設計在 JS 設計文件；**正式 JS 未核准**。核准前不得進入 repo 的任何可執行檔（`.py`／`.js`／`.html`）。
-- **核准條件**（`NUI2-DRAWER-NEW-JS-GATE`）：治理／客戶裁示 ＋ 該文件 §7 的 Gate 清單（白名單差異、1.56／1.59 行為矩陣、殘留測試、獨立 QA）。
+- **核准條件**（`NUI2-DRAWER-NEW-JS-GATE`）：治理／客戶裁示 ＋ 該文件 §8 第 3 點的 Gate 清單（§7 是全域掃描規則）（白名單差異、1.56／1.59 行為矩陣、殘留測試、獨立 QA）。
 - **降級（只在 JS 被擋時）**：保留「換包裝標籤」輪替 hack（切頁後 React 重建 checkbox → 收合）。此時**沒有** Esc、焦點管理、inert、點當前頁收合——**不滿足 G-1／G-2 及必要行為 R-02／R-05／R-07／R-08／R-09**。因此 JS 被擋＝**STOP 並回報治理**，不得把降級狀態當作「已完成」交付。VER 提過的 C-pop（Popover，零 JS，條件 (5) 部分達成）是治理若不接受 JS 時的**另一條需重新裁示的路線**，本規格不預設採用。
 - 其他方案（A 原生 sidebar、B session 控制、popover、dialog、`st.navigation`）不採，理由見 VER §3.5／WF §B.1；B 會觸發 G9 與 `ALLOWED_UI2_WRITES` 變更，無優勢。
 
