@@ -940,3 +940,13 @@ DEC-086 規則已於 main，本表已落地。
 | 正式文件索引 | `docs/DECISIONS.md` DEC-133；`docs/BACKLOG.md` §5.1.26「P2 完成補記」；`docs/PROJECT_STATE.md` §64；Audit Checklist §25（**未自勾**）；線框 `docs/vnext/NEWUI2_P2_TEXT_WIREFRAME_2026-11-04.md`（已通過）；證據 `docs/vnext/newui2_p2/` |
 | 永久收尾 Gate | 已檢查（`PROJECT_RULES.md` 第 27 節）：新 Decision＝DEC-133；新 Rule＝無；Backlog＝既有 ID 結案＋限制記錄；Audit §25 新節 |
 | 仍禁止（不變） | 同上方各 Safe Handoff「仍禁止」全部維持；另 ⛔ 歷史序列／MA／假走勢線；⛔ 空槽顯示非 `⬜ 尚未提供` 的數值；⛔ SPEC 寫「日頻」或未標「最新收盤參考」；⛔ 把設計候選當核准功能；⛔ 宣稱主圖已有歷史資料或 OneBrain 可讀完整資料；⛔ 改 Risk Cap／System Action／Digest schema／OAuth；⛔ 以 skip／xfail 隱藏守衛 |
+
+- **Safe Handoff（2026-11-04 P6／手機抽屜文字線框交付；現行；docs 組單組撰寫＋一組獨立 QA、待總管複驗）**（本表**取代**上方 Safe Handoff 表的「下一個唯一安全工作」格，其餘格內容仍有效）
+
+| 欄位 | 內容 |
+|---|---|
+| **下一個唯一安全工作** | 等 ChatGPT 獨立審查兩份線框＋客戶回答待裁示項（P6 H-11／H-12；抽屜 J-2／3／4／6／8／9／10；H-11 與 J-6 同一題）。**不得自行開 P6 或導覽（抽屜）程式批次**；客戶未核准不動工 |
+| 未動 | P7（桌機 Account Area 殼）、`NUI2-AUTH-CONTRACT-GATE`（Opus 5.5＋High）均未動 |
+| 正式文件索引 | `docs/vnext/NEWUI2_P6_DATA_HEALTH_TEXT_WIREFRAME_2026-11-04.md`；`docs/vnext/NEWUI2_MOBILE_DRAWER_TEXT_WIREFRAME_2026-11-04.md`；`docs/BACKLOG.md` §5.1.26 末「P6 資料健康度＋手機抽屜 文字線框登記」；`docs/PROJECT_STATE.md` §65；Audit Checklist §26（**未自勾**） |
+| 未驗 | iOS／Android 真機、Streamlit Cloud Manage app、VoiceOver／TalkBack |
+| 仍禁止（不變） | 同上方各 Safe Handoff「仍禁止」全部維持；另 ⛔ 把撰寫組推薦（抽屜 C 案）當客戶裁示；⛔ 宣稱客戶已核准線框 |

@@ -299,3 +299,12 @@
 9. viewport：FAKE 70＋Real 11（1.59.2 與 1.56.0 各一輪）＋Real 固定 snapshot 5 態（各 11 態）全綠（兩種口徑勿混：①**Real 固定 snapshot＝九態**〔loaded／unloaded／unevaluated／stale／stale_unknown／missing／upstream_error／unavailable／contract_error，`tests/test_ui2_p1_human_text.py::_snapshots`；AppTest 與渲染層測試用〕；②viewport 量測的「Real 11」＝**活 Real feed 的 11 個量測態**〔4 頁×2 viewport＋🎯 查一檔模式＋手機壓力態〕。本批 viewport 另以其中 5 個 snapshot〔loaded／stale／missing／unavailable／contract_error〕各跑 11 態＝55 態）；截圖目視（手機 ≥8、桌機 ≥4；`docs/vnext/newui2_p2/`）：OneBrain 位置、空槽無走勢線、灰底非紅、SPEC 可換行、不橫向捲動。
 10. 未宣稱歷史序列／MA 已接、主圖已有歷史資料、獨立 QA 完成；未宣稱 Safari／真機／Cloud 已驗。
 11. 客戶判斷項：無新增（G-1／G-2／G-3 已由客戶 (19) 裁定）；下一批 P6／P7 由客戶選。
+
+## §26 P6 資料健康度／手機抽屜 文字線框驗收項（2026-11-04；docs-only；append-only；單組撰寫＋一組獨立 QA，**待總管／ChatGPT／客戶勾選——本節未自勾**）
+
+1. [ ] 兩份線框存在於 `docs/vnext/NEWUI2_P6_DATA_HEALTH_TEXT_WIREFRAME_2026-11-04.md`、`docs/vnext/NEWUI2_MOBILE_DRAWER_TEXT_WIREFRAME_2026-11-04.md`，檔頭狀態為「已過獨立 QA，待 ChatGPT／客戶線框審查；本輪不授權施工」，未宣稱客戶已核准。
+2. [ ] P6 H-11 與抽屜 J-6 為同一題、固定占位規則與備案措辭一致。
+3. [ ] 本批 diff 僅含 `docs/`，零程式碼、零測試檔變更；DEC-128..134 圍欄文字未動。
+4. [ ] BACKLOG 已登記 `NUI2-P6-VOCAB-VS-CAPABILITY-TEXT`、`NUI2-P6-WIREFRAME-CUSTOMER-DECISIONS`，並對 `NUI2-AUTH-STATUS-TEXT-GUARD` 補註。
+5. [ ] 未宣稱 iOS／Android 真機、Streamlit Cloud、VoiceOver／TalkBack 已驗。
+6. [ ] 客戶判斷項：H-11／H-12；抽屜 J-2／3／4／6／8／9／10。
