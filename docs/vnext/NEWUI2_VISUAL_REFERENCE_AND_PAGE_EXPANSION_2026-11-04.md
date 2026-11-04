@@ -57,3 +57,21 @@
 ## 6. 來源與限制
 
 來源：2026-11-04 本對話客戶提交的四頁視覺參考圖及補充「如果四個頁面不夠，可以多加頁面」；附圖應視為**視覺設計參考**，不會自動轉成 GitHub 內圖片資產。若後續施工需精確配色、間距、區塊比例，須提供可讀視覺參考或按 repo 規格出線框；不能宣稱只靠這份文字可達 pixel parity。
+
+## 7. 客戶再次確認的兩條獨立驗收主線（2026-11-04）
+
+> 客戶：「UI設計我想以這為模板為主，但內容部份以完整的給Onebrian，我們說好了 UI簡化，但Onebrian需要吃全部資料給出建議」；並再次確認「沒錯，這也是我們之前討論過的」。**本段重申既有雙投影原則，並指定視覺參考優先，不是授權啟用 OneBrain runtime。**
+
+### 驗收 A：視覺呈現／人類操作
+
+- 以客戶上傳的四頁儀表板圖片為**主要視覺模板**，以已核准 New UI2 資訊架構和後出的手機抽屜決策為約束；保留卡片式、Chart-first、結論／風險／正式行動權威優先、短來源與資料日。
+- 可簡化 UI 上顯示的區塊、合併重複大小圖、以少量關鍵圖卡取代原始表；但不能把畫面隱藏誤當資料刪除。手機與桌機分別做視覺驗收，不能以文字線框或 AppTest 取代實際畫面。
+- 此圖是**外觀模板**，非圖中範例數值、RuleID、Risk Cap 或 AI 結論的事實來源。完整圖像目前仍是聊天附件，未落成 repo 圖片資產；若需 pixel parity，需另外取得可用圖檔並完成版型 Gate。
+
+### 驗收 B：完整資料與 OneBrain 決策證據（不可被 UI 縮減）
+
+- **正式 Data／Validation／Deterministic／Risk Cap／System Action／Complete Evidence → UI ViewModel 與 headless Decision Digest 兩個獨立投影**。OneBrain 只能透過完整、可追溯且已核准的 Decision Digest 消費正式證據，不能只讀 UI 卡片、選中期間、當前頁面、Top N、FAKE 資料、渲染文字或本次視覺模板。
+- 所謂「全部資料」指**所有已獲核准、在正式資料層可取得且經過驗證的決策相關欄位、規則結果、完整反證、source/as_of/freshness、Missing/Stale/Unavailable/Not Evaluated 與 coverage 限制**；並不代表將未驗 raw blob、credential、隱私敏感內容或無關資料一股腦傳送給模型。
+- OneBrain 目標是基於完整證據提供具體、可追溯的投資分析與建議；但**不得自創事實、補缺值、另立 Rule／Risk Cap／System Action、越權買賣、將未評估當安全**。正式 Action Authority 不可被 LLM 覆蓋；資料不齊時要明示「無法判定」與阻塞理由，而非強行給買賣動作。
+- **VM 完整 ≠ Digest 完整**。當前已知位階完整說明、16 項明細、個股基本面及估值等 Digest coverage 尚未驗／存在缺口；必須在 OneBrain 啟用前建立 `canonical field → normalized evidence → Digest field → OneBrain consumer` 的逐項 coverage matrix、缺欄 Gate 與回歸測試。禁止因 UI 視覺驗收 PASS 就宣稱 OneBrain 資料已備齊。
+- 兩條驗收必須**分別 PASS**。A 的修訂不准移除 B 的資料，B 的補齊不准把 raw Evidence 重新塞回主要 Human UI；後續每批應分別報告 Visual Fidelity 與 Digest Coverage 的已驗、缺口、不可判定。
